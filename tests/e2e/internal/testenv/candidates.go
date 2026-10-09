@@ -309,7 +309,7 @@ func CandidateAcceptance(s *Scenario) {
 	ae, be := aw.Domain.Executions[0], bw.Domain.Executions[0]
 	for _, e := range []executionmodel.ExecutionRecord{ae, be} {
 		if e.Backend == "orca" {
-			s.Must(evidence.OrcaReadiness(e))
+			s.Must(evidence.OrcaNativeBusiness(e))
 		}
 	}
 	as, err := ExecutionSession(ae)

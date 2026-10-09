@@ -25,6 +25,12 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 [Spec](product-simplification-04-conversation-recovery.spec.md) · [Plan](product-simplification-04-conversation-recovery.plan.md) · [验收](../acceptance/product-simplification-04-conversation-recovery.md)
 
+## 停机对账修复
+
+#87 Worker 停机对账与恢复一致性修复：由安装现场 101 的停止操作未知引出的系统性修复，已由本聊天直接交付，[PR #260](https://github.com/erranliu/SteerLine/pull/260) 已真实合并，WSR-A1–A8 自动通过；精确验证范围见专属记录。由 worker 声明并冻结停服行为，本地停止/Orca 继续；应用恢复只消费 worker 规范事实，覆盖原运行、待答和离线完成。复用既有分类/幂等，与 #84 共享接线有序集成，不改变正式排期。
+
+[草稿](../roadmap/drafts/worker-stop-recovery.md) · [Spec](worker-stop-recovery.spec.md) · [Plan](worker-stop-recovery.plan.md) · [专属验收](../acceptance/worker-stop-recovery.md)
+
 ## 已确认 Codex 执行规划
 
 当前剩余按 #84→#45→#44 推进；#83 已合入，保留完成记录导航。启动时核对本地执行前置及实际 Spec/Plan commit。#84 先交付一期新流程与状态字段，#44最终交付依赖#45真实联调。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。

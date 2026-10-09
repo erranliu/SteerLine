@@ -12,7 +12,7 @@ import (
 
 // A crash can happen after a native request is journaled but before its
 // Decision reaches SQLite. Replay only requests not completed or persisted.
-type appServerRecoveryResult struct {
+type workerRecoveryResult struct {
 	runID     string
 	attemptID string
 	request   executionbackend.LifecycleRequest
@@ -24,9 +24,9 @@ type appServerRecoveryResult struct {
 	err       error
 }
 
-func recoverAppServerExecution(ctx context.Context, lifecycle executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, execution executionmodel.ExecutionRecord) appServerRecoveryResult {
+func recoverWorkerExecution(ctx context.Context, lifecycle executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, execution executionmodel.ExecutionRecord) workerRecoveryResult {
 	receipt, observer, err := lifecycle.Reconcile(ctx, request.Clone())
-	result := appServerRecoveryResult{
+	result := workerRecoveryResult{
 		runID: request.Snapshot.Session.WorkflowRunID, attemptID: request.Snapshot.Session.AttemptID,
 		request: request.Clone(), receipt: receipt.Clone(), execution: execution, completed: receipt.State.TurnCompleted,
 		dead: receipt.State.WorkerAbsent, err: err,
@@ -50,9 +50,9 @@ func recoverAppServerExecution(ctx context.Context, lifecycle executionbackend.L
 // Probe every unsettled local Execution at once. Results are applied only by
 // the service writer, so one slow or unavailable endpoint cannot serialize
 // the identity checks for unrelated tasks.
-func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
+func (s *Service) resumeWorkerObservers(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
-	results := make(chan appServerRecoveryResult, len(s.runs))
+	results := make(chan workerRecoveryResult, len(s.runs))
 	var probes sync.WaitGroup
 	defer func() {
 		cancel()
@@ -66,7 +66,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 	}()
 	count := 0
 	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != executionmodel.Version || s.workers[run.RunID] != nil || s.lifecycleEffectPending(run.RunID) || s.appServerRecovering[run.RunID] {
+		if run == nil || run.WorkflowVersion != executionmodel.Version || s.workers[run.RunID] != nil || s.lifecycleEffectPending(run.RunID) || s.workerRecovering[run.RunID] {
 			continue
 		}
 		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
@@ -90,9 +90,14 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		if lifecycle == nil || lifecycle.PolicyCapabilities().ResumeActiveObservation {
 			continue
 		}
+		if handled, err := s.reconcileWorkerStops(ctx, run, lifecycle); err != nil {
+			return err
+		} else if handled {
+			continue
+		}
 		request, requestErr := s.originalLifecycleRequest(run, fixed)
 		if requestErr != nil {
-			if err := s.waitWorkerFlow(run, "Original app-server operation cannot be reconciled: "+requestErr.Error()); err != nil {
+			if err := s.waitWorkerFlow(run, "Original worker operation cannot be reconciled: "+requestErr.Error()); err != nil {
 				return err
 			}
 			continue
@@ -100,14 +105,14 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		runID, executionCopy := run.RunID, *execution
 		executionCopy.PendingQuestions = clonePendingQuestions(execution.PendingQuestions)
 		if s.State.Service.Ready && s.signalQueue != nil {
-			if s.appServerRecovering == nil {
-				s.appServerRecovering = make(map[string]bool)
+			if s.workerRecovering == nil {
+				s.workerRecovering = make(map[string]bool)
 			}
-			s.appServerRecovering[run.RunID] = true
+			s.workerRecovering[run.RunID] = true
 			s.forwarders.Add(1)
 			go func() {
 				defer s.forwarders.Done()
-				result := recoverAppServerExecution(s.runContext, lifecycle, request, executionCopy)
+				result := recoverWorkerExecution(s.runContext, lifecycle, request, executionCopy)
 				select {
 				case s.signalQueue <- Signal{runID: runID, recovery: &result}:
 				case <-s.runContext.Done():
@@ -122,7 +127,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		probes.Add(1)
 		go func() {
 			defer probes.Done()
-			results <- recoverAppServerExecution(ctx, lifecycle, request, executionCopy)
+			results <- recoverWorkerExecution(ctx, lifecycle, request, executionCopy)
 		}()
 	}
 	for i := 0; i < count; i++ {
@@ -135,7 +140,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 			}
 			i--
 		case result := <-results:
-			if err := s.applyAppServerRecovery(result); err != nil {
+			if err := s.applyWorkerRecovery(result); err != nil {
 				return err
 			}
 		}
@@ -143,12 +148,16 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
+func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 	defer func() {
 		if result.worker != nil && s.workers[result.runID] != result.worker {
 			_ = result.worker.detachLocalObservation(context.Background())
 		}
 	}()
+	if result.err != nil && s.runContext != nil && s.runContext.Err() != nil {
+		return nil
+	}
+
 	var run *reconstructiontypes.RunView
 	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == result.runID {
@@ -157,7 +166,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		}
 	}
 	if run == nil {
-		return errors.New("app-server recovery lost its fixed workflow run")
+		return errors.New("worker recovery lost its fixed workflow run")
 	}
 	if run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
@@ -168,7 +177,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	}
 	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || execution.ExecutionID != result.execution.ExecutionID {
-		return errors.New("app-server recovery changed the fixed execution")
+		return errors.New("worker recovery changed the fixed execution")
 	}
 	if err := result.receipt.ValidateFor(result.request); err != nil {
 		return err
@@ -182,25 +191,34 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		return nil // A late probe cannot change a new Attempt or stop the service.
 	}
 	if err := mergeLifecycleExecutionReceipt(execution, result.receipt); err != nil {
-		return s.waitWorkerFlow(run, "Original app-server binding failed verification")
+		return s.waitWorkerFlow(run, "Original worker binding failed verification")
+	}
+	// Persist proof of the original input before aggregating uncertainty. Tree
+	// exit alone never confirms a start/send; native acceptance/completion can.
+	if result.receipt.Disposition == executionbackend.OperationConfirmed && (result.receipt.State.InputAccepted || result.receipt.State.TurnStarted || result.receipt.State.TurnCompleted) {
+		if op := s.operationByKey(result.request.Operation.IdempotencyKey); op != nil && op.Status != "confirmed" {
+			if err := s.setOperationState(op.OperationID, "confirmed", result.receipt.State.TurnID, mustJSON(result.receipt), result.receipt.Diagnostic); err != nil {
+				return err
+			}
+			if err := s.commitWorker(run, op.OperationID); err != nil {
+				return err
+			}
+		}
 	}
 	s.refreshRun(run)
 	if result.dead {
-		if owned := s.ownedProcesses[run.RunID]; owned != nil {
-			if owned.Identity() != *execution.Process {
-				return s.waitWorkerFlow(run, "Original managed process identity changed during recovery")
-			}
-			owned.Close()
-			delete(s.ownedProcesses, run.RunID)
-		}
-		if !s.resources.WorkerTreeAbsent(*execution.Process) {
+		if !result.receipt.State.WritersAbsent {
 			execution.RecoveryState = string(executionmodel.RecoveryUnverified)
-			return s.waitWorkerFlow(run, "Original worker descendants may still write to the worktree")
+			return s.waitWorkerFlow(run, "Original worker writers may still modify the worktree")
 		}
-		execution.RecoveryState = string(executionmodel.ClassifyRecovery(executionmodel.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: result.completed}))
+		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: result.completed}, result.receipt.State.SessionAvailable)
+		if execution.RecoveryState == string(executionmodel.RecoveryUnverified) {
+			execution.Status = "blocked"
+			return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; reconcile its original request before continuing")
+		}
 		if result.completed {
 			if execution.SessionID == "" || execution.SessionGeneration == "" {
-				return s.waitWorkerFlow(run, "Original app-server session identity could not be committed")
+				return s.waitWorkerFlow(run, "Original worker session identity could not be committed")
 			}
 			if execution.PendingTurnID == "" {
 				execution.PendingTurnID = result.execution.PendingTurnID
@@ -244,22 +262,21 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	if result.err != nil {
 		execution.RecoveryState = string(executionmodel.RecoveryUnverified)
 		execution.Status = "blocked"
-		return s.waitWorkerFlow(run, "Original app-server turn cannot be reconciled: "+result.err.Error())
+		return s.waitWorkerFlow(run, "Original worker turn cannot be reconciled: "+result.err.Error())
 	}
 	if execution.SessionID != "" && execution.SessionID != result.execution.SessionID {
-		return s.waitWorkerFlow(run, "Original app-server thread identity changed during recovery")
+		return s.waitWorkerFlow(run, "Original worker session identity changed during recovery")
 	}
 	execution.SessionID, execution.SessionGeneration = result.execution.SessionID, result.execution.SessionGeneration
 	for _, envelope := range result.execution.ImplementationData {
 		if err := putImplementationEnvelope(execution, envelope); err != nil {
-			return s.waitWorkerFlow(run, "Original app-server binding could not be committed")
+			return s.waitWorkerFlow(run, "Original worker binding could not be committed")
 		}
 	}
 	if result.execution.Process != nil {
 		process := *result.execution.Process
 		execution.Process = &process
 	}
-	execution.RecoveryState = string(executionmodel.ClassifyRecovery(executionmodel.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}))
 	s.refreshRun(run)
 	if execution.PendingCommandID != "" {
 		execution.PendingTurnID = result.execution.PendingTurnID
@@ -274,6 +291,8 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	if err := s.reconcileSavedLifecycleQuestionAnswer(context.Background(), run); err != nil {
 		return s.waitWorkerFlow(run, "Original worker answer cannot be reconciled: "+err.Error())
 	}
+	s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}, result.receipt.State.SessionAvailable)
+	s.refreshRun(run)
 	if run.Decision != nil && run.Decision.Status == "answer_saved" {
 		if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.QuestionRoute != nil, "服务重开后保留了旧答案；请重新确认后才投递。 "); err != nil {
 			return err
@@ -282,6 +301,14 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	workflow, execution = s.workflowRecords(run)
 	if result.completed {
 		return s.finishWorkerFlowFor(run, nil)
+	}
+	if execution.RecoveryState == "unverified" {
+		execution.Status = "blocked"
+		if err := s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; observation continues without sending input"); err != nil {
+			return err
+		}
+		s.registerWorker(run, result.worker)
+		return nil
 	}
 	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil {
 		// A prior connection failure is no longer a reason to request post-turn

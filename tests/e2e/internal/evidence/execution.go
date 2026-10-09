@@ -132,18 +132,17 @@ func Session(e executionmodel.ExecutionRecord) (string, error) {
 	return "", errors.New("missing native session binding")
 }
 
-func OrcaReadiness(e executionmodel.ExecutionRecord) error {
+func OrcaNativeBusiness(e executionmodel.ExecutionRecord) error {
 	state, err := orcaState(e)
 	if err != nil {
 		return err
 	}
-	if len(state.Turns) != 2 || e.Environment == nil || !e.Environment.Ready || e.Environment.Preparation == nil || !e.Environment.Preparation.Verified {
-		return errors.New("real Orca readiness/business continuity missing")
+	if len(state.Turns) == 0 || uint64(len(state.Turns)) != e.TurnNumber || e.Process == nil || e.CurrentTurnID == "" || e.CurrentTurnID != e.LastStoppedTurnID {
+		return errors.New("original native business turn is not settled")
 	}
-	for _, turn := range state.Turns {
-		if !turn.Settled || turn.Outcome != "succeeded" {
-			return errors.New("real Orca turn did not succeed")
-		}
+	turn := state.Turns[len(state.Turns)-1]
+	if turn.Purpose != "business" || !turn.Settled || turn.Outcome != "succeeded" || turn.TurnID != e.CurrentTurnID || turn.TaskID != e.Process.Task || turn.DispatchID != e.Process.Dispatch {
+		return errors.New("original native Task/Dispatch/business outcome differs")
 	}
 	return nil
 }

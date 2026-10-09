@@ -37,13 +37,13 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 	result := appServerRecoveryFixture(t, service, run)
 	result.dead = true
 	result.receipt.State.WorkerAbsent, result.receipt.State.WritersAbsent = true, true
-	require(t, service.applyAppServerRecovery(result))
+	require(t, service.applyWorkerRecovery(result))
 	if run.Decision == nil || run.Decision.Status != "pending" || execution.RecoveryState != "interrupted" {
 		t.Fatal("dead worker did not create a recovery decision")
 	}
 	decisionID, decisionVersion, count := run.Decision.ID, run.Decision.Version, len(service.domain.Decisions)
 	for i := 0; i < 2; i++ {
-		require(t, service.applyAppServerRecovery(result))
+		require(t, service.applyWorkerRecovery(result))
 		if run.Decision.ID != decisionID || run.Decision.Version != decisionVersion || len(service.domain.Decisions) != count {
 			t.Fatal("repeated recovery probe replaced the displayed decision")
 		}
@@ -61,13 +61,13 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 	execution = service.executionRecord(run)
 	service.refreshRun(run)
 	require(t, service.commitWorker(run))
-	require(t, service.applyAppServerRecovery(result))
+	require(t, service.applyWorkerRecovery(result))
 	if run.Decision.ID != decisionID || run.Decision.Status != "answer_saved" || len(service.domain.Decisions) != count {
 		t.Fatal("recovery probe superseded the fresh manual answer")
 	}
 	result.attemptID = newID() // An observer from a different generation is late.
 	result.execution.Process = nil
-	require(t, service.applyAppServerRecovery(result))
+	require(t, service.applyWorkerRecovery(result))
 	if execution.Process == nil || *execution.Process != identity || run.Decision.ID != decisionID {
 		t.Fatal("late recovery result changed the current Attempt")
 	}
@@ -82,7 +82,7 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 
 // Recovery observations must carry the same durable original operation as a
 // real lifecycle reconciliation, even when the external observer is a fixture.
-func appServerRecoveryFixture(t *testing.T, service *Service, run *reconstructiontypes.RunView) appServerRecoveryResult {
+func appServerRecoveryFixture(t *testing.T, service *Service, run *reconstructiontypes.RunView) workerRecoveryResult {
 	t.Helper()
 	execution := service.executionRecord(run)
 	input := executionbackend.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
@@ -93,7 +93,7 @@ func appServerRecoveryFixture(t *testing.T, service *Service, run *reconstructio
 	request, err := service.originalLifecycleRequest(run, fixed)
 	require(t, err)
 	execution = service.executionRecord(run)
-	return appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: *execution, request: request,
+	return workerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: *execution, request: request,
 		receipt: executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed,
-			State: executionbackend.LifecycleStateFacts{SessionID: execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnID: execution.CurrentTurnID}}}
+			State: executionbackend.LifecycleStateFacts{SessionAvailable: true, TurnStarted: true, SessionID: execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnID: execution.CurrentTurnID}}}
 }

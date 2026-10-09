@@ -110,7 +110,7 @@ func (p *additionalPort) PreflightLifecycle(_ context.Context, setup executionba
 func (p *additionalPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
 	// The injected builder binds a read-only policy envelope with no write
 	// roots. Session creation still needs this original resource receipt.
-	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.ContinueExecutionOnServiceStop, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
 
 func (p *additionalPort) Next(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
@@ -183,7 +183,7 @@ func (p *additionalPort) Execute(ctx context.Context, request executionbackend.L
 		receipt.Implementation = []executionbackend.ImplementationDataEnvelope{binding}
 		receipt.Disposition = executionbackend.OperationConfirmed
 		receipt.Process = &value.Process
-		receipt.State = executionbackend.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation}
+		receipt.State = executionbackend.LifecycleStateFacts{WorkerLive: true, SessionAvailable: true, SessionID: value.Session, SessionGeneration: value.Generation}
 	case executionbackend.LifecycleStartTurn:
 		if value.Session != request.Snapshot.Session.SessionID || value.Generation != request.Snapshot.Session.Generation {
 			return receipt, nil, errors.New("fixture lost original session/generation")
@@ -198,7 +198,7 @@ func (p *additionalPort) Execute(ctx context.Context, request executionbackend.L
 		}
 		receipt.Disposition = executionbackend.OperationAccepted
 		receipt.Process = &value.Process
-		receipt.State = executionbackend.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn.CommandID, InputAccepted: true, TurnStarted: true}
+		receipt.State = executionbackend.LifecycleStateFacts{WorkerLive: true, SessionAvailable: true, SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn.CommandID, InputAccepted: true, TurnStarted: true}
 	case executionbackend.LifecycleDeliverFeedback:
 		if request.Snapshot.QuestionRoute == nil || request.Input.Feedback.QuestionID != request.Snapshot.QuestionRoute.QuestionID {
 			return receipt, nil, errors.New("fixture answer changed original question")
@@ -288,10 +288,10 @@ func (p *additionalPort) ObserveLifecycle(_ context.Context, snapshot executionb
 	if value.Settled {
 		turn := snapshot.Session.CurrentTurnID
 		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &value.Process,
-			State:        executionbackend.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn, TurnCompleted: true},
+			State:        executionbackend.LifecycleStateFacts{WorkerLive: true, SessionAvailable: true, SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn, TurnCompleted: true},
 			TurnEvidence: &executionbackend.TurnEvidence{SourcePath: p.ledger.path, SessionID: value.Session, TurnID: turn, CommandID: turn, Started: true, Completed: true, Succeeded: true, PRCandidates: append([]string(nil), value.PRCandidates...)}}, nil, nil
 	}
-	return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &value.Process, State: executionbackend.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: snapshot.Session.CurrentTurnID}}, p.observer(snapshot, value, snapshot.Session.CurrentTurnID), nil
+	return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &value.Process, State: executionbackend.LifecycleStateFacts{WorkerLive: true, SessionAvailable: true, SessionID: value.Session, SessionGeneration: value.Generation, TurnID: snapshot.Session.CurrentTurnID}}, p.observer(snapshot, value, snapshot.Session.CurrentTurnID), nil
 }
 
 func (p *additionalPort) VerifyManualRecovery(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
@@ -425,4 +425,8 @@ func (additionalSources) DiscoverHistory(context.Context, conversationtypes.Conv
 
 func (additionalSources) ReadHistory(context.Context, conversationtypes.ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (conversationtypes.ConversationHistoryBatch, error) {
 	return conversationtypes.ConversationHistoryBatch{}, fmt.Errorf("fixture history reading is unsupported")
+}
+
+func (p *additionalPort) ShutdownLifecycle(context.Context, executionbackend.LifecycleSnapshot, executionbackend.StopHandle) (executionbackend.LifecycleStateFacts, error) {
+	return executionbackend.LifecycleStateFacts{}, nil
 }

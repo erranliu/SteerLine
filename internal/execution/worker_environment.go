@@ -161,6 +161,9 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *reconstruct
 // Preparation owns one persisted budget spanning resource creation and host
 // settlement. Each actor pass performs bounded work; restarts reuse its intent.
 func (s *Service) advanceWorkerPreparation(ctx context.Context, run *reconstructiontypes.RunView) error {
+	if s.State.Service.Status == "stopping" {
+		return nil
+	}
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}

@@ -112,6 +112,10 @@ git rev-parse HEAD
 `
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "implement.ps1"), []byte(implement), 0600))
 	spec += "In implement.execute, run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once to write, verify and commit the candidate locally. Do not push or invoke publish.ps1 in implement.execute or implement.report. implement.report only summarizes its supplied source facts. publish.ps1 is reserved for the single publish step, which must return the JSON result contract in its native final reply.\n"
+
+	if s.ID == "recovery.orca-codex" {
+		spec += "\n## Original-execution recovery window\n\nBefore writing the recovery marker, send one native `status` message to the original Run mailbox using `orca orchestration send --from <injected-worker-handle> --to run:<injected-run-id> --type status --subject recovery-window --body original-execution-started --task-id <injected-task-id> --dispatch-id <injected-dispatch-id>`. Use the exact IDs from the Orca preamble. This is actual progress in this same original round; a platform heartbeat alone need not be delivered as ordinary coordinator mail. Before writing result.txt or publishing, run one shell command that writes `.e2e-recovery-started.txt` in this assigned worktree, waits until `.e2e-recovery-release.txt` exists, then removes both files. Use `Set-Content -LiteralPath .e2e-recovery-started.txt -Value waiting; while (-not (Test-Path -LiteralPath .e2e-recovery-release.txt)) { Start-Sleep -Milliseconds 250 }; Remove-Item -LiteralPath .e2e-recovery-started.txt,.e2e-recovery-release.txt`. The test driver releases the existing command; it does not send another prompt. These two files are temporary fixture controls: do not stage or commit them. After release, finish the original task and its publication in this same original round.\n"
+	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the frozen candidate and create the PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
@@ -278,6 +282,9 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	p.CreateTasks()
 	p.StartService()
 	p.Claim("a")
+	if restart && chain == "orca-codex" {
+		verifyContinuingWorkerServiceRecovery(s, p)
+	}
 	before := p.WaitPhase("waiting_pr_merge")
 	p.Record("open", before)
 	if before.Helper.PR.State != "open" {
@@ -376,4 +383,83 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	s.orcaUsageUnavailable = chain == "orca-codex"
 	s.Must(s.finishBody())
 	p.StopService()
+}
+
+// The original worker remains inside its original native command while the
+// center disconnects. Releasing an owned fixture file is not a new business turn.
+func verifyContinuingWorkerServiceRecovery(s *Scenario, p *Project) {
+	s.t.Helper()
+	var original Snapshot
+	s.Wait("original Orca business command reached its recovery window", func() (bool, error) {
+		snap, err := p.Snapshot()
+		if err != nil {
+			return false, err
+		}
+		if len(snap.Domain.Executions) != 1 {
+			return false, nil
+		}
+		e := snap.Domain.Executions[0]
+		if e.Workspace.Worktree == "" || e.CurrentTurnID == "" || e.CurrentTurnID == e.LastStoppedTurnID {
+			return false, nil
+		}
+		if _, err := os.Stat(filepath.Join(e.Workspace.Worktree, ".e2e-recovery-started.txt")); os.IsNotExist(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+		original = snap
+		return true, nil
+	})
+	e := original.Domain.Executions[0]
+	if original.Domain.WorkflowRuns[0].ExecutionProfile.ServiceStopBehavior != "continue_execution" {
+		s.t.Fatal("Orca worker did not freeze its continuing service-stop behavior")
+	}
+	originalSession, err := ExecutionSession(e)
+	s.Must(err)
+	p.Record("original-active-before-stop", original)
+	p.RestartService()
+	var reopened Snapshot
+	s.Wait("original active Orca execution reattached", func() (bool, error) {
+		snap, err := p.Snapshot()
+		if err != nil {
+			return false, err
+		}
+		if len(snap.Domain.Executions) != 1 {
+			return false, nil
+		}
+		current := snap.Domain.Executions[0]
+		if current.RecoveryState != "running" && current.RecoveryState != "live" && current.RecoveryState != "question" {
+			return false, nil
+		}
+		session, err := ExecutionSession(current)
+		if err != nil {
+			return false, err
+		}
+		if current.ExecutionID != e.ExecutionID || current.CurrentAttemptID != e.CurrentAttemptID || current.CurrentTurnID != e.CurrentTurnID || current.TurnNumber != e.TurnNumber || session != originalSession || current.Process == nil || e.Process == nil || *current.Process != *e.Process {
+			return false, errors.New("service restart replaced the active original Orca worker")
+		}
+		reopened = snap
+		return true, nil
+	})
+	p.Record("original-active-after-restart", reopened)
+	p.StopService()
+	s.Must(os.WriteFile(filepath.Join(e.Workspace.Worktree, ".e2e-recovery-release.txt"), []byte("release original execution\n"), 0600))
+	// The real worker must produce its original output and PR while the service is
+	// offline. The loopback provider receipt is an independent publication fact.
+	s.Wait("original worker published while center offline", func() (bool, error) {
+		provider, err := controlled.Read(p.Provider)
+		if err != nil {
+			return false, err
+		}
+		return provider.PR.URL != "" && provider.PR.State == "open", nil
+	})
+	p.StartService()
+	after := p.WaitPhase("waiting_pr_merge")
+	current := after.Domain.Executions[0]
+	session, err := ExecutionSession(current)
+	s.Must(err)
+	if current.CurrentAttemptID != e.CurrentAttemptID || current.CurrentTurnID != e.CurrentTurnID || current.TurnNumber != e.TurnNumber || session != originalSession || current.LastStoppedTurnID != e.CurrentTurnID || len(after.Domain.Attempts) != len(original.Domain.Attempts) || current.RecoveryState != "completed" {
+		s.t.Fatal("offline original completion was lost, duplicated, or left unverified")
+	}
+	p.Record("original-completed-after-offline-window", after)
 }

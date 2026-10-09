@@ -38,7 +38,7 @@ func additionalDirectory(t *testing.T, ledger *additionalLedger) *execution.Exec
 	port := func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 		return &additionalPort{setup: setup.Clone(), ledger: ledger}, nil
 	}
-	entry := execution.ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{additionalKey}, QuestionCodecKey: additionalKey, QuestionCodecVersion: 1, Host: "fixture",
+	entry := execution.ExecutionRegistration{ServiceStopBehavior: executionbackend.ContinueExecutionOnServiceStop, Key: key, ProfileKey: "fixture/stream-v1", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{additionalKey}, QuestionCodecKey: additionalKey, QuestionCodecVersion: 1, Host: "fixture",
 		Lifecycle: port, Target: func(execution.Config) executionbackend.ExecutionTarget {
 			return executionbackend.ExecutionTarget{ID: "fixture:fixed"}
 		}, Backend: func(execution.Config) executionbackend.ExecutionBackend { return &additionalPort{ledger: ledger} },

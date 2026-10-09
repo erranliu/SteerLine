@@ -42,11 +42,15 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 			receipt.State.TurnCompleted = true
 			receipt.TurnEvidence = nativeTurnEvidence(snapshot, *turn)
 			receipt.TurnEvidence.FinalNativeSessionID = SessionID(identity)
+			if terminal, inspectErr := l.inspectObservationTerminal(ctx, snapshot); inspectErr == nil {
+				receipt.State.SessionAvailable = !terminal.Exited()
+				receipt.State.WorkerLive = !terminal.Exited()
+			}
 			receipt.Implementation, err = l.targetEnvelope(snapshot, snapshot.Ref.Target, identity, state)
 			return receipt, nil, err
 		}
 	}
-	terminal, showErr := ShowTerminal(ctx, l.client.MetaCall, identity.Terminal)
+	terminal, showErr := l.inspectObservationTerminal(ctx, snapshot)
 	if showErr != nil {
 		receipt.Diagnostic = showErr.Error()
 		return receipt, nil, nativeCallError(showErr)
@@ -54,10 +58,11 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 	if terminal.RuntimeID != identity.RuntimeID || terminal.IncarnationID != identity.Incarnation || terminal.WorktreeID != identity.WorktreeID {
 		return receipt, nil, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "original native Orca terminal or incarnation changed"}
 	}
-	if terminal.Exited() && turn.DoneMessageID == "" {
-		receipt.Diagnostic = "original Orca terminal exited without a persisted worker_done message"
-		return receipt, nil, nil
-	}
+	// The original coordinator can contain a done message received while the
+	// service was offline. Its observer drains that inbox before declaring an
+	// exited terminal unknown; it never sends a replacement business input.
+	receipt.State.WorkerLive = !terminal.Exited()
+	receipt.State.SessionAvailable = !terminal.Exited()
 	receipt.Disposition = executionbackend.OperationAccepted
 	return receipt, newNativeObserver(ctx, l, snapshot), nil
 }
@@ -202,6 +207,20 @@ func (o *nativeLifecycleObserver) observe(ctx context.Context) {
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
+}
+
+// Observation may inspect an exited original terminal, unlike mutation paths
+// which require a live target. Never weaken those live-terminal validators.
+func (l *ExecutionLifecycle) inspectObservationTerminal(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (Terminal, error) {
+	identity := snapshot.Ref.External
+	terminal, err := l.client.InspectBoundTerminal(ctx, snapshot.Ref.Target, identity)
+	if err != nil {
+		return terminal, err
+	}
+	if terminal.WorktreeID != identity.WorktreeID || terminal.Orphaned || !terminal.Connected && !terminal.Exited() {
+		return terminal, errors.New("original observation terminal worktree or connection cannot be verified")
+	}
+	return terminal, nil
 }
 
 func (o *nativeLifecycleObserver) processInbox(ctx context.Context) error {

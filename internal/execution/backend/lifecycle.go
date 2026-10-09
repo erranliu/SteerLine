@@ -366,6 +366,8 @@ type LifecycleReceipt struct {
 // omits native outcome fields, which each implementation resolves to these
 // values before returning a receipt.
 type LifecycleStateFacts struct {
+	WorkerLive        bool   `json:"worker_live,omitempty"`
+	SessionAvailable  bool   `json:"session_available,omitempty"`
 	SessionID         string `json:"session_id,omitempty"`
 	SessionGeneration string `json:"session_generation,omitempty"`
 	TurnID            string `json:"turn_id,omitempty"`
@@ -683,6 +685,24 @@ type LifecycleRecoveryEvidence struct {
 	SessionAvailable bool
 	ManagedProcess   bool
 	ProcessAbsent    bool
+	WritersAbsent    bool
+}
+
+// ServiceStopBehavior is frozen with the worker, independently of whether its
+// original observation can be reattached. It never asserts actual liveness.
+type ServiceStopBehavior string
+
+const (
+	StopExecutionOnServiceStop     ServiceStopBehavior = "stop_execution"
+	ContinueExecutionOnServiceStop ServiceStopBehavior = "continue_execution"
+)
+
+func (b ServiceStopBehavior) Valid() bool {
+	return b == StopExecutionOnServiceStop || b == ContinueExecutionOnServiceStop
+}
+
+type LifecycleServicePort interface {
+	ShutdownLifecycle(context.Context, LifecycleSnapshot, StopHandle) (LifecycleStateFacts, error)
 }
 
 type LifecycleWorkspacePort interface {
@@ -698,6 +718,7 @@ type LifecyclePolicyCapabilities struct {
 	StructuredFinalEvidence bool
 	// Empty means frozen native permissions; compare report facts.
 	ReportToolPolicy          string
+	ServiceStopBehavior       ServiceStopBehavior
 	ActiveTurnFeedback        bool
 	LinkedWorkspaceWriteRoots bool
 	SeparateTurnStart         bool
@@ -712,6 +733,7 @@ type LifecyclePolicyPort interface {
 // mutation receives one already-persisted operation; reconciliation is a
 // separate read-only method so an unknown operation can never be resubmitted.
 type LifecyclePort interface {
+	LifecycleServicePort
 	LifecycleProbePort
 	LifecyclePlanPort
 	LifecycleExecutePort
@@ -737,6 +759,8 @@ type LifecycleSetup struct {
 	AcceptedConfigVersion string
 
 	ProcessHost        ManagedProcessHost
+	OwnedProcess       StopHandle
+	WorkerTreeAbsent   func(ProcessIdentity) bool
 	RepositoryPath     string
 	RunDirectory       string
 	CommandTimeout     time.Duration

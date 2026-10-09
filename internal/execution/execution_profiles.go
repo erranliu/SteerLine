@@ -13,7 +13,7 @@ import (
 )
 
 const ProjectExecutionProfileID = "project-default"
-const fixedExecutionProfileVersion = 8
+const fixedExecutionProfileVersion = 9
 
 // ExecutionProfile is one app catalog entry. It contains serialized profile
 // inputs and derived values, but no directory, process host or profile catalog.
@@ -77,10 +77,15 @@ func (p ExecutionProfile) Freeze(args ...any) executionmodel.FixedExecutionProfi
 		accepted = "unaccepted-profile-input"
 	}
 	data, display, _ := directory.NormalizeProfile(p.ImplementationConfigs, p.Host, p.Agent, projectID, p.ID, accepted)
+	entry, err := directory.Resolve(Config{Host: p.Host, Agent: p.Agent})
+	if err != nil || !entry.ServiceStopBehavior.Valid() {
+		return executionmodel.FixedExecutionProfile{}
+	}
 
 	p.Publication = clonePublicationSettings(p.Publication)
 	fixed := executionmodel.FixedExecutionProfile{
-		Version: fixedExecutionProfileVersion, ImplementationVersion: directory.Version(),
+		ServiceStopBehavior: entry.ServiceStopBehavior,
+		Version:             fixedExecutionProfileVersion, ImplementationVersion: directory.Version(),
 		ImplementationKey: profileImplementationKey(directory, p.Host, p.Agent), ImplementationData: CloneImplementationData(data),
 		ImplementationDisplay: slices.Clone(display),
 
@@ -105,7 +110,7 @@ func VerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directo
 		return false
 	}
 	entry, err := directory.Resolve(Config{Host: p.Host, Agent: p.Agent})
-	if err != nil || entry.ValidatePublicationPolicy(p.PublicationPolicy, publication.Config(p.Publication.Provider)) != nil {
+	if err != nil || !p.ServiceStopBehavior.Valid() || p.ServiceStopBehavior != entry.ServiceStopBehavior || entry.ValidatePublicationPolicy(p.PublicationPolicy, publication.Config(p.Publication.Provider)) != nil {
 		return false
 	}
 	if len(p.ImplementationData) == 0 {

@@ -20,7 +20,8 @@ type Signal struct {
 	event            *WorkerEvent
 	done             bool
 	err              error
-	recovery         *appServerRecoveryResult
+	recovery         *workerRecoveryResult
+	qualification    *workerQualificationResult
 }
 
 func (s *Service) registerWorker(run *reconstructiontypes.RunView, worker *Worker) {
@@ -104,10 +105,12 @@ func rejectUndeliveredWorkerEvent(event WorkerEvent, err error) {
 	}
 }
 
-func (s *Service) drainWorkerMessages() {
-	for s.signalQueue != nil {
+func (s *Service) drainWorkerMessages() { s.drainWorkerMessagesFrom(s.signalQueue) }
+
+func (s *Service) drainWorkerMessagesFrom(messages <-chan Signal) {
+	for messages != nil {
 		select {
-		case message := <-s.signalQueue:
+		case message := <-messages:
 			if err := s.handleWorkerMessage(message); err != nil {
 				s.setError(err)
 			}
@@ -169,8 +172,12 @@ func (s *Service) handleWorkerMessage(message Signal) error {
 		return nil
 	}
 	if message.recovery != nil {
-		delete(s.appServerRecovering, message.runID)
-		return s.applyAppServerRecovery(*message.recovery)
+		delete(s.workerRecovering, message.runID)
+		return s.applyWorkerRecovery(*message.recovery)
+	}
+	if message.qualification != nil {
+		delete(s.workerRecovering, message.runID)
+		return s.applyWorkerQualification(*message.qualification)
 	}
 	if s.workers[message.runID] != message.worker {
 		if message.event != nil {

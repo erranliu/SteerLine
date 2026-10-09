@@ -225,7 +225,7 @@ func (s *Service) EndActor(stop *productapi.ControlRequest, acceptedAt *time.Tim
 	// Preserve the original best-effort stopping publication and ensure the stop receipt before owned resources detach.
 	s.publishCheckpoint()
 	prior = errors.Join(prior, s.ensureStopApplyingReceipt())
-	s.shutdown()
+	prior = errors.Join(prior, s.shutdown())
 	if s.State.Control.Operation != nil {
 		prior = errors.Join(prior, s.recoverControlOperation())
 	}

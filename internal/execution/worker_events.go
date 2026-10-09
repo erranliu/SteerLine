@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -55,7 +56,16 @@ func (s *Service) recordWorkerTurnStarted(run *reconstructiontypes.RunView, work
 	if operation.Status == "confirmed" {
 		return operation.OperationID, nil
 	}
-	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": sessionID, "turn_id": turnID}), "")
+	// A started event confirms the original input; it does not replace the
+	// accepted native receipt or its request identity with a synthetic summary.
+	receipt, requestID := operation.Receipt, operation.PlatformRequestID
+	if len(receipt) == 0 {
+		receipt = mustJSON(map[string]string{"session_id": sessionID, "turn_id": turnID})
+	}
+	if requestID == "" {
+		requestID = turnID
+	}
+	return operation.OperationID, TransitionOperation(operation, "confirmed", requestID, receipt, "")
 }
 
 func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev WorkerEvent) (resultErr error) {
@@ -174,6 +184,25 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 					return errors.New("execution reply completed without the original saved answer intent")
 				}
 				s.setDecisionStatus(run, "reply_accepted")
+				if execution.RecoveryRequired {
+					// A late exact reply can resolve the original send uncertainty
+					// while observation remains attached. Revalidate through the
+					// worker so other unknown actions still retain their gate.
+					lifecycle, fixed, err := s.lifecycleForRun(run)
+					if err != nil {
+						return err
+					}
+					snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, execution, fixed.attempt, nil)
+					if err != nil {
+						return err
+					}
+					probeCtx, probeCancel := context.WithTimeout(context.Background(), min(positiveDuration(fixed.config.CommandTimeout, 30*time.Second), 10*time.Second))
+					evidence, err := lifecycle.VerifyManualRecovery(probeCtx, snapshot)
+					probeCancel()
+					if err == nil {
+						s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerLive: evidence.ManagedProcess && !evidence.ProcessAbsent, WorkerAbsent: evidence.ProcessAbsent, WritersAbsent: evidence.WritersAbsent, Completed: settledOriginalWorkerTurn(execution), QuestionPending: len(execution.PendingQuestions) > 0}, evidence.SessionAvailable)
+					}
+				}
 				if err := s.commitWorker(run, operationIDs...); err != nil {
 					return err
 				}

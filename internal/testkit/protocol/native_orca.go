@@ -25,6 +25,7 @@ type NativeOrcaState struct {
 	StartDelay                                                       time.Duration
 	StartOutcome                                                     string
 	CompletionPRURL                                                  string
+	AgentExited                                                      bool
 	EnvironmentMode                                                  bool
 	EndReadinessOnBusiness                                           bool
 	ReadinessMode                                                    string
@@ -124,7 +125,13 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			if state.HoldFixedAgentIdentity {
 				agent = ""
 			}
-			return map[string]any{"handle": handle, "title": title, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": agent, "agentWait": state.HostWait}
+			value := map[string]any{"handle": handle, "title": title, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": agent, "agentWait": state.HostWait}
+			if state.AgentExited {
+				value["status"] = "exited"
+				value["connected"] = false
+				value["exitCause"] = map[string]any{"kind": "exited", "exitCode": 0}
+			}
+			return value
 		}
 		return map[string]any{"handle": handle, "incarnationId": "inc-coordinator", "worktreeId": "fake-repo::" + filepath.ToSlash(state.Repo), "worktreePath": filepath.ToSlash(state.Repo), "branch": "refs/heads/main", "connected": true}
 	}
@@ -330,6 +337,12 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				rows = append(rows, map[string]any{"id": fmt.Sprintf("task-%d", i+1), "run_id": "run-fake", "spec": spec, "created_by_terminal_handle": "term-coordinator"})
 			}
 			return nativeOrcaOK(map[string]any{"runId": "run-fake", "tasks": rows, "count": len(rows)})
+		case "request-show":
+			id := nativeArg(args, "--request")
+			if prior := state.NativeRequests[id]; len(prior) > 0 {
+				return nativeOrcaOK(map[string]any{"requestId": id, "state": "completed", "method": "orchestration.workerStart", "receipt": json.RawMessage(prior)})
+			}
+			return nativeOrcaOK(map[string]any{"requestId": id, "state": "absent"})
 		case "worker-start":
 			request := nativeArg(args, "--retry-request")
 			if state.NativeRequests == nil {
@@ -483,12 +496,16 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				}
 				readiness := strings.HasPrefix(state.Tasks[n-1], "Readiness preparation only.")
 				id := fmt.Sprintf("env-delivery-%d", n)
+				if !readiness && state.BusinessActive {
+					id = fmt.Sprintf("env-active-delivery-%d", n)
+				}
 				if state.Acked[id] || readiness && (state.ReadinessMode == "hold" || state.ReadinessMode == "tool_failure") {
 					return nativeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
 				}
 				kind, outcome := "worker_done", "succeeded"
 				if !readiness && state.BusinessActive {
 					kind = "status"
+					id = fmt.Sprintf("env-active-delivery-%d", n)
 				}
 				if readiness && state.ReadinessMode == "failed_settlement" {
 					outcome = "failed"
@@ -498,7 +515,11 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				if !readiness && state.CompletionPRURL != "" {
 					body += " " + state.CompletionPRURL
 				}
-				message := map[string]any{"id": fmt.Sprintf("env-message-%d", n), "from_handle": "term-agent", "type": kind, "body": body, "payload": string(payload)}
+				messageID := fmt.Sprintf("env-message-%d", n)
+				if !readiness && state.BusinessActive {
+					messageID = fmt.Sprintf("env-active-message-%d", n)
+				}
+				message := map[string]any{"id": messageID, "from_handle": "term-agent", "type": kind, "body": body, "payload": string(payload)}
 				return nativeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": id, "messages": []any{message}})
 			}
 			if state.RelayMode {
@@ -592,7 +613,7 @@ func FakeNativeOrca(stateDir string, args []string) int {
 					status = "failed"
 				}
 			}
-			stage := "injected"
+			stage := "context_only"
 			if state.NativeWorkers {
 				stage = "input_accepted"
 			}
@@ -600,7 +621,7 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			if state.ReleasedAgent {
 				releaseState = "released"
 			}
-			return nativeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": stage, "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent"), "terminalResource": map[string]any{"terminalHandle": "term-agent", "worktreeId": worktreeID(), "ownerDispatchId": fmt.Sprintf("ctx-%d", n), "originDispatchId": fmt.Sprintf("ctx-%d", n), "releaseState": releaseState}})
+			return nativeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": stage, "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent"), "observation": map[string]any{"exactWorker": true}, "terminalResource": map[string]any{"terminalHandle": "term-agent", "worktreeId": worktreeID(), "ownerDispatchId": fmt.Sprintf("ctx-%d", n), "originDispatchId": fmt.Sprintf("ctx-%d", n), "releaseState": releaseState}})
 		}
 	}
 	return nativeOrcaErr("invalid_argument", "unhandled native Orca fixture command: "+strings.Join(args, " "))

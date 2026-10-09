@@ -44,6 +44,9 @@ func (l *ExecutionLifecycle) startTurn(ctx context.Context, request executionbac
 	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
 	receipt.State.TurnID, receipt.State.InputAccepted = turn.TurnID, true
 	receipt.State.TurnStarted = turn.Started
+	if started.State == "outcome_unknown" {
+		receipt.Diagnostic = "Original input was accepted; native turn start has not yet been observed"
+	}
 	receipt.State.ResourceID = turn.DispatchID
 	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, target, process, state)
 	if err != nil {
@@ -110,15 +113,19 @@ func (l *ExecutionLifecycle) reconcileStart(ctx context.Context, request executi
 	if request.Operation.Ref != nil {
 		original.Ref = *request.Operation.Ref
 	}
-	result, started, process, err := l.startNativeWorker(ctx, original, state, *turn, request.Operation.ID)
+	result, started, process, err := l.reconcileNativeWorkerStart(ctx, original, state, *turn, request.Operation.ID)
 	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
 	receipt.RequestID = nativeRequestID(request.Operation.ID)
 	if err != nil {
-		recovered, recoverErr := l.recoverFailedStart(ctx, request, state, started, result, err)
+		recovered, recoverErr := l.reconcileFailedStart(ctx, request, state, started, result, err)
 		return recovered, nil, recoverErr
 	}
 	id, run := started.DispatchID, started.RunID
 	turn.Started = started.TurnStart == "observed"
+	receipt.State.TurnStarted = turn.Started
+	if started.State == "outcome_unknown" {
+		receipt.Diagnostic = "Original input was accepted; native turn start has not yet been observed"
+	}
 	process.OrchestrationRun = run
 	turn.DispatchID = id
 	state.AgentBound = true
@@ -492,7 +499,7 @@ func (l *ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot 
 		}
 		if state.PartialWorker != nil {
 			released, _, err := originalResourceReleased(ctx, l.client.MetaCall, state.PartialWorker.identity(snapshot.Ref.Target.WorktreeID))
-			return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: released}, err
+			return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: released, WritersAbsent: released}, err
 		}
 		for _, op := range snapshot.Operations {
 			if op.Action == string(executionbackend.LifecycleStartTurn) && op.Status != executionbackend.OperationConfirmed && op.Status != executionbackend.OperationRejected {
@@ -507,6 +514,11 @@ func (l *ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot 
 	}
 	if terminal.RuntimeID != identity.RuntimeID || terminal.IncarnationID != identity.Incarnation || terminal.WorktreeID != identity.WorktreeID {
 		return executionbackend.LifecycleRecoveryEvidence{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca recovery terminal identity changed"}
+	}
+	if terminal.Exited() {
+		// An exited original terminal prevents session continuation, but cannot
+		// invalidate a previously verified completed Dispatch/result.
+		return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: true, SessionAvailable: false}, nil
 	}
 	if err := VerifyAgentTerminal(ctx, l.client.MetaCall, identity, snapshot.Workspace.Path, snapshot.Workspace.Branch, snapshot.Ref.Agent.Name); err != nil {
 		return executionbackend.LifecycleRecoveryEvidence{}, err

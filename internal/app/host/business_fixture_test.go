@@ -85,7 +85,7 @@ func neutralCodecs() []execution.ImplementationProfileCodec {
 func newNeutralDirectory(agents ...string) (*execution.ExecutionDirectory, error) {
 	var directory *execution.ExecutionDirectory
 	key := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: "fixture"}
-	entry := execution.ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", Host: "local", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{neutralProfileKey}, QuestionCodecKey: neutralQuestionKey, QuestionCodecVersion: 1,
+	entry := execution.ExecutionRegistration{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop, Key: key, ProfileKey: "fixture/stream-v1", Host: "local", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{neutralProfileKey}, QuestionCodecKey: neutralQuestionKey, QuestionCodecVersion: 1,
 		Target: func(c execution.Config) executionbackend.ExecutionTarget {
 			target := neutralProfileSettings(c).Target
 			if target.ID == "" {

@@ -16,9 +16,27 @@ import (
 )
 
 type childProcess struct {
-	mu       sync.Mutex
-	job      windows.Handle
-	identity executionbackend.ProcessIdentity
+	mu            sync.Mutex
+	job           windows.Handle
+	identity      executionbackend.ProcessIdentity
+	writersAbsent bool
+}
+
+func (p *childProcess) WritersAbsent() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.job == 0 {
+		return p.writersAbsent
+	}
+	var info struct {
+		TotalUserTime, TotalKernelTime, ThisPeriodTotalUserTime, ThisPeriodTotalKernelTime int64
+		TotalPageFaultCount, TotalProcesses, ActiveProcesses, TotalTerminatedProcesses     uint32
+	}
+	err := windows.QueryInformationJobObject(p.job, windows.JobObjectBasicAccountingInformation, uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), nil)
+	if err == nil && info.ActiveProcesses == 0 {
+		p.writersAbsent = true
+	}
+	return p.writersAbsent
 }
 
 func (p *childProcess) Identity() executionbackend.ProcessIdentity { return p.identity }

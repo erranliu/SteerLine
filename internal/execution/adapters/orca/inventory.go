@@ -71,7 +71,7 @@ type Result struct {
 
 type MetaCall func(context.Context, ...string) (Result, error)
 
-var ErrDispatchIdentity = errors.New("recovered Orca Dispatch has no exact injected worker identity")
+var ErrDispatchIdentity = errors.New("recovered Orca Dispatch has no exact original worker identity")
 
 type DispatchIdentity struct {
 	DispatchID  string
@@ -97,7 +97,6 @@ func VerifyRecoveredDispatch(ctx context.Context, call MetaCall, expected Dispat
 		} `json:"dispatch"`
 		Worker struct {
 			DispatchID    string `json:"dispatchId"`
-			Stage         string `json:"stage"`
 			AgentTerminal string `json:"agentTerminalHandle"`
 		} `json:"worker"`
 		Terminal struct {
@@ -105,11 +104,14 @@ func VerifyRecoveredDispatch(ctx context.Context, call MetaCall, expected Dispat
 			Incarnation string `json:"incarnationId"`
 			WorktreeID  string `json:"worktreeId"`
 		} `json:"terminal"`
+		Observation struct {
+			ExactWorker bool `json:"exactWorker"`
+		} `json:"observation"`
 	}
 	if err := json.Unmarshal(envelope.Payload, &result); err != nil {
 		return err
 	}
-	if envelope.RuntimeID != expected.RuntimeID || result.Dispatch.ID != expected.DispatchID || result.Dispatch.TaskID != expected.TaskID || result.Dispatch.RunID != expected.RunID || result.Worker.DispatchID != expected.DispatchID || (result.Worker.Stage != "injected" && result.Worker.Stage != "input_accepted") || result.Worker.AgentTerminal != expected.Terminal || result.Terminal.Handle != expected.Terminal || result.Terminal.Incarnation != expected.Incarnation || result.Terminal.WorktreeID != expected.WorktreeID {
+	if envelope.RuntimeID != expected.RuntimeID || result.Dispatch.ID != expected.DispatchID || result.Dispatch.TaskID != expected.TaskID || result.Dispatch.RunID != expected.RunID || result.Worker.DispatchID != expected.DispatchID || !result.Observation.ExactWorker || result.Worker.AgentTerminal != expected.Terminal || result.Terminal.Handle != expected.Terminal || result.Terminal.Incarnation != expected.Incarnation || result.Terminal.WorktreeID != expected.WorktreeID {
 		return ErrDispatchIdentity
 	}
 	return nil

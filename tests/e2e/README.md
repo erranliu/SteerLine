@@ -41,7 +41,7 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核实真实 trash、CLI/控制台查询、重启及无关任务启动 |
 | L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `delivery.orca-remote-codex` | 真实配对 Windows Orca，正式领取与双轮反馈、同会话/工作区、真实 GitHub PR 合并与唯一交付、Orca 精确公开输出和 owned 清理 |
-| L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
+| L3 live | `recovery.local-codex` / `recovery.orca-codex` | local 在等待合并后重启保持原身份；Orca 增加活动停服重接及原轮次离线完成，保持原 Attempt/Dispatch/terminal，再核验已完成后重启不增 usage 与唯一交付 |
 | L3 live | `candidates.local` | manifest 固定本地 Codex + 本机 Orca，两候选真实反馈/PR/唯一交付与后继；使用真实 SteerlineTest GitHub PR |
 
 候选唯一入口 `candidates.local` 使用 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG`，格式见[本机候选 manifest](#本机候选-manifest)，历史现场结论见 [#39](../../docs/validation/candidate-acceptance.md)。runner 在清除继承 STEERLINE 环境时将该输入的绝对路径保存在 Run 中；manifest 的源码 commit 必须匹配实际 HEAD，只选择本机 Orca 与本地 Codex 两套 profile。chain 字段用于 runner live 枚举，实际两份 profile 在 manifest/规范 SQLite snapshot 中逐一核验。
