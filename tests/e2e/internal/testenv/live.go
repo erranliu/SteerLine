@@ -1,10 +1,12 @@
 package testenv
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -140,7 +142,7 @@ Write-Output $receipt.url
 	}
 
 	if s.ID == "recovery.orca-codex" {
-		spec += "\n## Original-execution recovery window\n\nBefore writing result.txt or publishing, run one shell command that writes `.e2e-recovery-started.txt` in this assigned worktree, waits until `.e2e-recovery-release.txt` exists, then removes both files. Use `Set-Content -LiteralPath .e2e-recovery-started.txt -Value waiting; while (-not (Test-Path -LiteralPath .e2e-recovery-release.txt)) { Start-Sleep -Milliseconds 250 }; Remove-Item -LiteralPath .e2e-recovery-started.txt,.e2e-recovery-release.txt`. The test driver releases the existing command; it does not send another prompt. These two files are temporary fixture controls: do not stage or commit them. After release, finish the original task and its publication in this same original round.\n"
+		spec += "\n## Original-execution recovery window\n\nBefore writing the recovery marker, send one native heartbeat to the original coordinator using the exact injected worker handle, Task ID and Dispatch ID from the Orca preamble. This proves progress in this same original round. Before writing result.txt or publishing, run one shell command that writes `.e2e-recovery-started.txt` in this assigned worktree, waits until `.e2e-recovery-release.txt` exists, then removes both files. Use `Set-Content -LiteralPath .e2e-recovery-started.txt -Value waiting; while (-not (Test-Path -LiteralPath .e2e-recovery-release.txt)) { Start-Sleep -Milliseconds 250 }; Remove-Item -LiteralPath .e2e-recovery-started.txt,.e2e-recovery-release.txt`. The test driver releases the existing command; it does not send another prompt. These two files are temporary fixture controls: do not stage or commit them. After release, finish the original task and its publication in this same original round.\n"
 	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
@@ -284,21 +286,34 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		}
 		u, usageEvidence, err = native.AppServerTurnUsage(raw, session, e.CurrentTurnID)
 	} else {
-		// Only this project's home is scanned. Exactly one root native session must
-		// match; guardian/subagent logs sharing its cwd are separate executions.
+		// Orca owns its agent home. Read only metadata until a root session
+		// matches this exact owned worktree; never read unrelated session bodies.
+		hostHome, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return u, homeErr
+		}
+		sessionRoot := filepath.Join(hostHome, ".codex", "sessions")
 		matches := 0
-		err = filepath.WalkDir(filepath.Join(p.Home, "codex", "sessions"), func(path string, d os.DirEntry, walkErr error) error {
+		err = filepath.WalkDir(sessionRoot, func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
 			if d.IsDir() || filepath.Ext(path) != ".jsonl" {
 				return nil
 			}
-			raw, readErr := os.ReadFile(path)
-			if readErr != nil {
+			file, openErr := os.Open(path)
+			if openErr != nil {
+				return openErr
+			}
+			header, readErr := bufio.NewReader(file).ReadBytes('\n')
+			closeErr := file.Close()
+			if readErr != nil && readErr != io.EOF {
 				return readErr
 			}
-			matched, matchErr := native.BusinessRolloutMatches(raw, e.Workspace.Worktree)
+			if closeErr != nil {
+				return closeErr
+			}
+			matched, matchErr := native.BusinessRolloutMatches(header, e.Workspace.Worktree)
 			if matchErr != nil {
 				return matchErr
 			}
@@ -306,6 +321,10 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 				return nil
 			}
 			matches++
+			raw, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
 			var parseErr error
 			u, usageEvidence, parseErr = native.RolloutUsage(raw, e.Workspace.Worktree)
 			return parseErr
@@ -348,7 +367,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	if chain == "orca-codex" {
 		s.Must(evidence.OrcaExplicitEmptyArgs(before.Domain))
-		s.Must(evidence.OrcaReadiness(e))
+		s.Must(evidence.OrcaNativeBusiness(e))
 	}
 	for _, task := range before.Page.Tasks {
 		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {

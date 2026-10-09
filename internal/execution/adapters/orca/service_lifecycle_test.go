@@ -2,6 +2,7 @@ package orcaworker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -154,5 +155,49 @@ func TestServiceRecoveryNativeStartUsesOnlyOriginalReceipt(t *testing.T) {
 	receipt, observer, err := port.reconcileStart(context.Background(), request)
 	if err == nil || observer != nil || receipt.Disposition != executionbackend.OperationUnknown || receipt.State.InputAccepted || receipt.State.TurnStarted {
 		t.Fatal("locally persisted unsent intent became a worker")
+	}
+}
+
+func TestServiceRecoveryAcceptedInputWaitsForNativeStart(t *testing.T) {
+	for _, changed := range []string{"accepted", "request", "incarnation", "effect", "runtime", "transport", "canceled"} {
+		t.Run(changed, func(t *testing.T) {
+			snapshot, state := nativeTestSnapshot(t, "agent")
+			requestID := nativeRequestID("original-operation")
+			promptID, inc, effectState, runtimeID := requestID, "inc", "accepted", "runtime"
+			switch changed {
+			case "request":
+				promptID = "another-request"
+			case "incarnation":
+				inc = "replacement"
+			case "effect":
+				effectState = "unknown"
+			case "runtime":
+				runtimeID = "replacement-runtime"
+			}
+			payload, _ := json.Marshal(map[string]any{"runId": "run", "taskId": "task", "dispatchId": "dispatch", "state": "outcome_unknown", "stage": "turn_start_unobserved", "turnStart": "unobserved", "mode": map[string]string{"mode": "terminal"}, "launch": map[string]any{"effective": map[string]string{"agent": "agent", "model": "opaque-model", "effort": "medium"}}, "prompt": map[string]any{"requestId": promptID, "processIncarnation": inc, "stages": []string{"input_accepted"}}, "mutation": map[string]string{"requestId": requestID}, "effects": []any{map[string]string{"kind": "dispatch_input", "role": "agent", "id": "terminal", "state": effectState}}})
+			result := Result{RuntimeID: runtimeID, Payload: payload, CallUncertain: changed == "transport"}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if changed == "canceled" {
+				cancel()
+			}
+			calls := 0
+			port := ExecutionLifecycle{orca: ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m", Model: "opaque-model", ReasoningEffort: "medium"}, client: New(Config{Output: func(_ context.Context, _ time.Duration, args ...string) ([]byte, error) {
+				calls++
+				if args[1] != "worker-show" {
+					t.Fatalf("accepted input issued a mutation: %v", args)
+				}
+				terminal := Terminal{Handle: "terminal", IncarnationID: "inc", WorktreeID: "workspace", WorktreePath: snapshot.Workspace.Path, Branch: "branch", AgentIdentity: "agent", Connected: true, Status: "running"}
+				return nativeTestEnvelope(t, map[string]any{"dispatch": map[string]string{"id": "dispatch", "runId": "run", "taskId": "task"}, "worker": map[string]string{"dispatchId": "dispatch", "agentTerminalHandle": "terminal"}, "terminal": terminal}), nil
+			}})}
+			_, started, process, err := port.bindNativeWorkerStart(ctx, snapshot, state, NativeTurnState{TaskID: "task"}, result, errors.New("nonzero CLI exit"), requestID)
+			if changed == "accepted" {
+				if err != nil || process.Terminal != "terminal" || started.TurnStart != "unobserved" || started.State != "outcome_unknown" || calls != 1 {
+					t.Fatalf("accepted input was stopped or promoted to started: %+v %+v %v", started, process, err)
+				}
+			} else if err == nil {
+				t.Fatalf("%s uncertainty was accepted", changed)
+			}
+		})
 	}
 }

@@ -44,6 +44,9 @@ func (l *ExecutionLifecycle) startTurn(ctx context.Context, request executionbac
 	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
 	receipt.State.TurnID, receipt.State.InputAccepted = turn.TurnID, true
 	receipt.State.TurnStarted = turn.Started
+	if started.State == "outcome_unknown" {
+		receipt.Diagnostic = "Original input was accepted; native turn start has not yet been observed"
+	}
 	receipt.State.ResourceID = turn.DispatchID
 	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, target, process, state)
 	if err != nil {
@@ -82,6 +85,10 @@ func (l *ExecutionLifecycle) reconcileStart(ctx context.Context, request executi
 	}
 	id, run := started.DispatchID, started.RunID
 	turn.Started = started.TurnStart == "observed"
+	receipt.State.TurnStarted = turn.Started
+	if started.State == "outcome_unknown" {
+		receipt.Diagnostic = "Original input was accepted; native turn start has not yet been observed"
+	}
 	process.OrchestrationRun = run
 	turn.DispatchID = id
 	state.AgentBound = true

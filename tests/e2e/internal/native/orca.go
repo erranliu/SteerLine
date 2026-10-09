@@ -86,15 +86,78 @@ func OrcaMain(args []string) error {
 	// The installed CLI may leave a long injected prompt as a bracketed paste
 	// in Codex's composer. Finish that same accepted input once; never resend
 	// the prompt or manufacture a started/settled receipt.
-	if err == nil && len(args) > 1 && args[0] == "orchestration" && args[1] == "dispatch" {
+	if len(args) > 1 && args[0] == "orchestration" && (args[1] == "dispatch" || args[1] == "worker-start") {
 		var reply struct {
 			OK     bool `json:"ok"`
 			Result struct {
 				Terminal struct{ Handle, IncarnationID, AgentIdentity string } `json:"terminal"`
+				State    string                                                `json:"state"`
+				Stage    string                                                `json:"stage"`
+				Effects  []struct{ Kind, Role, ID, State string }              `json:"effects"`
+				Prompt   struct {
+					RequestID          string   `json:"requestId"`
+					ProcessIncarnation string   `json:"processIncarnation"`
+					Stages             []string `json:"stages"`
+				} `json:"prompt"`
 			} `json:"result"`
 		}
 		if json.Unmarshal([]byte(out.String()), &reply) == nil && reply.OK {
 			terminal := reply.Result.Terminal.Handle
+			if args[1] == "worker-start" {
+				accepted := false
+				for _, stage := range reply.Result.Prompt.Stages {
+					accepted = accepted || stage == "input_accepted"
+				}
+				requestID := ""
+				for i, arg := range args {
+					if arg == "--retry-request" && i+1 < len(args) {
+						requestID = args[i+1]
+					}
+				}
+				if reply.Result.State != "outcome_unknown" || reply.Result.Stage != "turn_start_unobserved" || !accepted || requestID == "" || reply.Result.Prompt.RequestID != requestID {
+					goto nativeEvidence
+				}
+				for _, effect := range reply.Result.Effects {
+					if effect.Kind == "dispatch_input" && effect.Role == "agent" && effect.State == "accepted" {
+						if terminal != "" && terminal != effect.ID {
+							return fmt.Errorf("original native input has ambiguous terminal effects")
+						}
+						terminal = effect.ID
+					}
+				}
+				if terminal == "" {
+					return fmt.Errorf("original native acceptance lacks terminal identity")
+				}
+				var shown strings.Builder
+				show := exec.Command(c.Executable, "terminal", "show", "--terminal", terminal, "--json")
+				show.Stdout = &shown
+				if showErr := testprocess.Run(ctx, show); showErr != nil {
+					return showErr
+				}
+				var binding struct {
+					Result struct {
+						Terminal struct {
+							Handle      string `json:"handle"`
+							Incarnation string `json:"incarnationId"`
+							WorktreeID  string `json:"worktreeId"`
+						} `json:"terminal"`
+					} `json:"result"`
+				}
+				worktree := ""
+				for i, arg := range args {
+					if arg == "--worktree" && i+1 < len(args) {
+						worktree = strings.TrimPrefix(args[i+1], "id:")
+					}
+				}
+				if json.Unmarshal([]byte(shown.String()), &binding) != nil || binding.Result.Terminal.Handle != terminal || binding.Result.Terminal.Incarnation != reply.Result.Prompt.ProcessIncarnation || worktree == "" || binding.Result.Terminal.WorktreeID != worktree {
+					return fmt.Errorf("native accepted input terminal binding differs")
+				}
+				// Mount only this exact owned terminal so its original composer can be observed.
+				mount := exec.Command(c.Executable, "terminal", "switch", "--terminal", terminal, "--json")
+				if mountErr := testprocess.Run(ctx, mount); mountErr != nil {
+					return mountErr
+				}
+			}
 			if terminal == "" {
 				for i, arg := range args {
 					if arg == "--to" && i+1 < len(args) {
@@ -106,7 +169,7 @@ func OrcaMain(args []string) error {
 				return fmt.Errorf("native Dispatch terminal missing")
 			}
 			var screen strings.Builder
-			read := exec.Command(c.Executable, "terminal", "read", "--terminal", terminal, "--limit", "50", "--json")
+			read := exec.Command(c.Executable, "terminal", "read", "--terminal", terminal, "--screen", "--limit", "50", "--json")
 			read.Stdout = &screen
 			// The UI input queue is asynchronous: an accepted RPC may precede
 			// the composer update. Observe without injecting any new text.
@@ -115,7 +178,7 @@ func OrcaMain(args []string) error {
 			stableSince := time.Now()
 			for {
 				screen.Reset()
-				read = exec.Command(c.Executable, "terminal", "read", "--terminal", terminal, "--limit", "50", "--json")
+				read = exec.Command(c.Executable, "terminal", "read", "--terminal", terminal, "--screen", "--limit", "50", "--json")
 				read.Stdout = &screen
 				if readErr := testprocess.Run(ctx, read); readErr != nil {
 					return readErr
@@ -204,6 +267,7 @@ func OrcaMain(args []string) error {
 			}
 		}
 	}
+nativeEvidence:
 	// Mutating call evidence includes exact returned IDs for failed preparation cleanup.
 	if len(args) > 1 && (args[1] == "create" || args[1] == "rm" || args[1] == "close" || args[1] == "dispatch" || args[1] == "worker-start") {
 		record, _ := json.Marshal(map[string]any{"command": append([]string{c.Executable}, args...), "stdout": out.String(), "stderr": stderr.String(), "error": fmt.Sprint(err)})

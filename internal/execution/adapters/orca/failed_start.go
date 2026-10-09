@@ -18,7 +18,10 @@ type partialWorker struct {
 // A failed composite start can already have injected input. Preserve and
 // recover its exact native resource, without inventing a terminal or session.
 func (l *ExecutionLifecycle) recoverFailedStart(ctx context.Context, request executionbackend.LifecycleRequest, state NativeExecutionState, started workerStartReceipt, result Result, reason error) (executionbackend.LifecycleReceipt, error) {
-	return l.failedStartReceipt(ctx, request, state, started, result, reason, true)
+	// A not-yet-observed turn can already own accepted input. Keep its original
+	// resource and uncertainty; the observer/operator must inspect it, not cleanup.
+	cleanup := started.State != "outcome_unknown" || started.Stage != "turn_start_unobserved"
+	return l.failedStartReceipt(ctx, request, state, started, result, reason, cleanup)
 }
 
 func (l *ExecutionLifecycle) reconcileFailedStart(ctx context.Context, request executionbackend.LifecycleRequest, state NativeExecutionState, started workerStartReceipt, result Result, reason error) (executionbackend.LifecycleReceipt, error) {
