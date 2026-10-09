@@ -286,3 +286,54 @@ func TestWorkerPreparationStopDoesNotJournalUnsentBusinessTurn(t *testing.T) {
 		t.Fatal("accepted preparation owner was lost after resolver failure")
 	}
 }
+
+type shutdownAckPort struct {
+	executionbackend.LifecyclePort
+	entered, release chan struct{}
+}
+
+func (p shutdownAckPort) Execute(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	close(p.entered)
+	<-p.release
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed}, nil, ctx.Err()
+}
+
+func TestWorkerShutdownDrainsCommittedDeliveryAck(t *testing.T) {
+	s, run := waitingDecisionService(t)
+	t.Cleanup(func() { _ = s.Close() })
+	e := s.executionRecord(run)
+	e.PendingDeliveryID = "original-committed-delivery"
+	require(t, s.commitWorker(run))
+	port, fixed, err := s.lifecycleForRun(run)
+	require(t, err)
+	input := executionbackend.LifecycleInput{Ack: &executionbackend.AcknowledgeInput{DeliveryID: e.PendingDeliveryID}}
+	op, _, err := s.originalLifecycleOperation(run, string(executionbackend.LifecycleAcknowledge), "worker-delivery-ack:"+e.ExecutionID+":"+e.PendingDeliveryID, input.Ack)
+	require(t, err)
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	require(t, err)
+	request, err := checkedLifecycleRequest(snapshot, op, executionbackend.LifecycleAcknowledge, input)
+	require(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.runContext, s.signalQueue = ctx, make(chan Signal, 1)
+	entered, release := make(chan struct{}), make(chan struct{})
+	applied := false
+	err = s.dispatchLifecycleEffect(context.Background(), run, shutdownAckPort{port, entered, release}, request, false, func(_ *reconstructiontypes.RunView, result lifecycleEffectResult) error {
+		if result.err != nil {
+			return result.err
+		}
+		applied = true
+		return s.setOperationState(op.OperationID, "confirmed", "original-committed-delivery", mustJSON(result.receipt), "")
+	})
+	if !errors.Is(err, errLifecycleEffectPending) {
+		t.Fatal(err)
+	}
+	<-entered
+	cancel()
+	close(release)
+	s.State.Service.Status = "stopping"
+	require(t, s.shutdown())
+	if !applied || s.operationByKey(op.IdempotencyKey).Status != "confirmed" {
+		t.Fatal("service cancellation lost the committed message's acknowledgement receipt")
+	}
+}
