@@ -117,6 +117,8 @@ L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTe
 
 L3 live 使用 loopback Git/PR provider，两条链路均执行真实模型；与无 token 环境分别选择。Orca 使用真实 CLI 创建、绑定、结算、清理资源。测试 CLI 适配器为新建终端注入隔离环境；当前版本长文本注入若明确停在 Pasted Content 输入框，则完成该原终端的一次 Enter，不重发文本。readiness 探针、业务命令和结算都需要真实模型及原生证据，不合成权限或成功回执。
 
+L3 delivery/recovery 的本机 Orca usage 按 [#84 明确调整的验收条件](../../docs/acceptance/worker-staged-flow.md) 登记：公开接口不提供 token usage，场景必须记录 `usage_verified=false`、`orca_usage_status=not_exposed_by_orca`，逐轮仍绑定原 Command/Dispatch/final source；真实业务与清理必须通过。该能力记录不代表 token 验证通过，不替代 local、完整 L2、其他 suite 或远端各自的门槛。
+
 长提示提交前先等待原终端的粘贴草稿稳定至少一秒，并记录提交后状态；accepted/bytesWritten 不代表 agent 已启动。readiness 的 JavaScript exec wrapper 必须保留完整原生工具结果 JSON，不能只打印 stdout 或手写 exit 文本。原输入目标短暂未就绪时，场景可通过正式 recheck_environment 一次检查原环境，保持原 Task/terminal/Dispatch，不能重发旧业务输入。
 
 L3 Orca 发布脚本使用 origin 的正式仓库身份，仅对单次 push 以 Git `url.insteadOf` 路由到本项目 loopback 服务；不改仓库级配置，以免影响正式 remote 校验。工作分支为 PR head，main 为 PR base，脚本禁止直接向 main 推送。
