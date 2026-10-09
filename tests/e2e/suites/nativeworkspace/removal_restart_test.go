@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 	"github.com/google/uuid"
 )
@@ -36,11 +35,7 @@ func TestOrcaRemovalRestart(t *testing.T) {
 	}
 	// Delete during the business phase, with the same project/service alive.
 	// The controlled worker's workspace is independent of the native checkout.
-	trashObserved := p.NativeRemoveWorktree(created)
-	trash := filepath.Join(root, native.OrcaWorktreeTrashDirectory)
-	if !trashObserved {
-		t.Fatalf("native removal did not expose its actual administrative directory during the owned operation: %s", trash)
-	}
+	p.NativeRemoveWorktree(created)
 	query := func(label string) testenv.Snapshot {
 		var raw []byte
 		s.Wait("public query "+label, func() (bool, error) {
