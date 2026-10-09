@@ -155,6 +155,9 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 			})
 			return recoveryInspection(result), err
 		},
+		OpenNativeSession: func(ctx context.Context, target productapi.NativeSessionTarget) error {
+			return openNativeSession(ctx, c, target)
+		},
 	}, nil
 }
 

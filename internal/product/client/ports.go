@@ -57,6 +57,7 @@ type Resources struct {
 	TaskSnapshot                        func(context.Context) (*api.TaskCandidates, error)
 	ResolveStartTask                    func(context.Context, string, string) (api.ControlPayload, error)
 	InspectRecovery                     func(context.Context, string) (api.RecoveryInspection, error)
+	OpenNativeSession                   func(context.Context, api.NativeSessionTarget) error
 	Close                               func() error
 }
 
