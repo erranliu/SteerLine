@@ -63,7 +63,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes
 		if saved.Status == executionbackend.OperationConfirmed {
 			e := s.executionRecord(run)
 			e.ResourceStopOperationID, e.ResourceStoppedAt = saved.ID, ptr(now())
-			if s.workflowRecord(run).Phase != "completed" {
+			if s.workflowRecord(run).Status != "completed" {
 				e.Status = "stopped"
 			}
 			s.refreshRun(run)

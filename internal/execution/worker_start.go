@@ -142,7 +142,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.Tas
 	if fixed.execution.Environment != nil {
 		return nil
 	}
-	if run.Decision != nil || fixed.workflow.Phase != "queued" {
+	if run.Decision != nil || fixed.workflow.Status != "queued" {
 		return nil
 	}
 	return s.startInitialWorkerFlowTurn(ctx, task, run)
@@ -206,6 +206,16 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 	}
 
 	prompt += publicationTargetInstruction(c)
+	if !readinessTurn {
+		if workflow.FlowRef != executionmodel.DevelopmentFlow || !executionmodel.ModelStep(workflow.StepID) {
+			return errors.New("unknown fixed flow or model step")
+		}
+		if stageInput(workflow, turnID) == nil {
+			workflow.InputVersion++
+			workflow.StageInputs = append(workflow.StageInputs, executionmodel.StageInput{CommandID: turnID, AttemptID: attempt.AttemptID, StepID: workflow.StepID, Version: workflow.InputVersion, Prompt: prompt, CandidateSHA: workflow.CandidateSHA})
+		}
+		workflow.Status = "queued"
+	}
 	execution.PendingTurnID, execution.PendingCommandID = "", turnID
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {

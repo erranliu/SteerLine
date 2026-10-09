@@ -2,8 +2,8 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 
@@ -13,7 +13,16 @@ import (
 )
 
 func publicationTargetInstruction(c Config) string {
-	return fmt.Sprintf("\nFixed publication responsibility: %s. Provider: %s %s/%s. Git remote: %s (%s). Target branch: %s. Use these original targets throughout this execution; report a mismatch before publishing.\n", c.PublicationPolicy.Publisher, c.PR.Kind, c.PR.BaseURL, c.PR.Repository, c.Remote, c.publicationRemoteURL, c.Branch)
+	facts, _ := json.Marshal(struct {
+		Publisher   string `json:"publisher"`
+		Provider    string `json:"provider"`
+		ProviderURL string `json:"provider_url"`
+		Repository  string `json:"repository"`
+		Remote      string `json:"remote"`
+		RemoteURL   string `json:"remote_url"`
+		BaseBranch  string `json:"base_branch"`
+	}{string(c.PublicationPolicy.Publisher), c.PR.Kind, c.PR.BaseURL, c.PR.Repository, c.Remote, c.publicationRemoteURL, c.Branch})
+	return "\nFixed publication target:\n" + string(facts) + "\n"
 }
 
 func (c Config) publicationSettings() executionmodel.PublicationSettings {

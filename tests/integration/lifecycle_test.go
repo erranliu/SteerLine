@@ -387,7 +387,7 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	require(t, os.MkdirAll(filepath.Dir(steerlineapp.GlobalExecutionConfigPath()), 0700))
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), globalData, 0600))
 	projectData, err := json.Marshal(map[string]any{
-		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1",
+		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2",
 		"task_poll": "1s", "pr_poll": "1m", "heartbeat": "1s", "command_timeout": "30s", "shutdown_grace": "5s",
 		"claimant": "integration", "git": executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}},
 		"executable_types":   []string{"task"},
@@ -824,7 +824,7 @@ func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config steerlinea
 	defer reader.Close()
 	page, err := productquery.NewService(reader, config.Identity()).ShowNativeTask(ctx, taskID)
 	require(t, err)
-	if len(page.Tasks) != 1 || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Phase != phase {
+	if len(page.Tasks) != 1 || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Status != phase {
 		t.Fatalf("public task query phase=%+v, want %s", page.Tasks, phase)
 	}
 }

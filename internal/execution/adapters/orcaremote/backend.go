@@ -74,7 +74,7 @@ func (b Backend) InspectWorkspace(ctx context.Context, ref executionbackend.Exec
 		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "supervised workspace preflight failed", Cause: err}
 	}
 	value, err := New(b.config).InspectWorktree(ctx, pair, ref.External.WorktreeID, ref.WorkspacePath, ref.WorkspaceBranch, ref.BaseCommit, "")
-	return executionbackend.WorkspaceInspection(value), err
+	return executionbackend.WorkspaceInspection{Repository: value.Repository, Worktree: value.Worktree, Branch: value.Branch, Base: value.Base, Head: value.Head, Dirty: value.Dirty, CheckedAt: value.CheckedAt}, err
 }
 
 func NewBackend(c Config) Backend { return Backend{config: c} }

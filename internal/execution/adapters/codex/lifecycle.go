@@ -296,7 +296,7 @@ func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot execu
 			receipt.Disposition = executionbackend.OperationConfirmed
 			receipt.State.TurnCompleted = true
 			receipt.TurnEvidence = &executionbackend.TurnEvidence{
-				SourcePath: path, TurnID: recovered.TurnID, CommandID: commandID, SessionID: outcome.SessionID,
+				FinalNativeSessionID: outcome.SessionID, FinalNativeTurnID: recovered.TurnID, FinalSource: outcome.FinalSource, FinalItemID: outcome.FinalItemID, FinalVerified: outcome.FinalVerified, SourcePath: path, TurnID: recovered.TurnID, CommandID: commandID, SessionID: outcome.SessionID,
 				Started: outcome.Started, Completed: outcome.Completed, Succeeded: outcome.Succeeded,
 				LastMessage: outcome.LastMessage, Failure: outcome.Failure, PRCandidates: append([]string(nil), outcome.PRCandidates...),
 			}

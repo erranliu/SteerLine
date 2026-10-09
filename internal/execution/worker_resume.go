@@ -30,7 +30,7 @@ func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.Tas
 			return false, s.waitWorkerFlow(run, "Original worker process identity cannot be verified; its session and files are retained")
 		}
 	}
-	if workflow.Phase != "queued" {
+	if workflow.Status != "queued" {
 		return true, nil
 	}
 	if execution.RecoveryRequired {

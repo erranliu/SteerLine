@@ -54,17 +54,17 @@ func finishStatus(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRun
 	switch {
 	case workflow.Abandonment != nil:
 		return "abandoned"
-	case task.Status == "closed" && workflow.Phase == "blocked":
+	case task.Status == "closed" && workflow.Status == "blocked":
 		return "blocked"
-	case workflow.Phase == "completed":
+	case workflow.Status == "completed":
 		return "completed"
 	case task.Status == "closed":
 		return "not_selected"
-	case workflow.Phase == "waiting_pr_merge":
+	case workflow.Status == "waiting_external":
 		return "waiting_pr_merge"
-	case workflow.Phase == "waiting_decision":
+	case workflow.Status == "waiting_input":
 		return "waiting_decision"
-	case workflow.Phase == "blocked" || task.Status == "discarded":
+	case workflow.Status == "blocked" || task.Status == "discarded":
 		return "blocked"
 	default:
 		return "pending"

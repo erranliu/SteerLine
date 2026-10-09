@@ -211,7 +211,7 @@ func (s *Service) confirmLifecycleQuestionAnswer(run *reconstructiontypes.RunVie
 			return err
 		}
 		s.setRunDecision(run, decision)
-	} else if workflow.Phase == "waiting_decision" {
+	} else if workflow.Status == "waiting_input" {
 		if err := ContinueWorkerQuestion(workflow, execution, execution.CurrentTurnID); err != nil {
 			return err
 		}

@@ -259,6 +259,32 @@ func RolloutUsage(raw []byte, cwd string) (Usage, []byte, error) {
 	}
 	return u, evidence.Bytes(), u.Tokens.Validate()
 }
+
+// RolloutTurnUsage selects one native completed turn from the original root
+// rollout, retaining its preceding model and cumulative usage facts.
+func RolloutTurnUsage(raw []byte, cwd, turn string) (Usage, []byte, error) {
+	if turn == "" {
+		return Usage{}, nil, errors.New("selected native turn identity missing")
+	}
+	offset := 0
+	for _, line := range bytes.SplitAfter(raw, []byte("\n")) {
+		offset += len(line)
+		var e struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Type string `json:"type"`
+				Turn string `json:"turn_id"`
+			} `json:"payload"`
+		}
+		if json.Unmarshal(bytes.TrimSpace(line), &e) != nil {
+			continue
+		}
+		if e.Type == "event_msg" && e.Payload.Type == "task_complete" && e.Payload.Turn == turn {
+			return RolloutUsage(raw[:offset], cwd)
+		}
+	}
+	return Usage{}, nil, ErrNativeTurnPending
+}
 func samePath(a, b string) bool {
 	return strings.EqualFold(filepath.Clean(filepath.FromSlash(a)), filepath.Clean(filepath.FromSlash(b)))
 }

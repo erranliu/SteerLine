@@ -65,12 +65,9 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 			}
 		}
 	}
-	workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
+	workflow.Status, workflow.UpdatedAt = "waiting_input", now()
 	if unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
-		workflow.Phase = "executing"
-		if execution.CurrentTurnID == "" || execution.CurrentTurnID == execution.LastStoppedTurnID {
-			workflow.Phase = "queued"
-		}
+		workflow.Status = "reconciling"
 	}
 	if execution.Status == "active" && !facts.PreserveActiveStatus {
 		execution.Status = "idle"
@@ -78,7 +75,7 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 	execution.UpdatedAt = now()
 	execution.Error = ptr(clip(reason, 2000))
 	s.refreshRun(run)
-	if unresolvedNativeTurn && workflow.Phase != "waiting_decision" {
+	if unresolvedNativeTurn && workflow.Status != "waiting_input" {
 		s.note(run, "steer", "worker", "unknown", "original worker turn needs reconciliation", reason, nil)
 	} else {
 		s.note(run, "steer", "decision", "pending", "worker needs input", reason, decisionMeta(run))
@@ -99,7 +96,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 		return nil
 	}
 	workflow, execution := s.workflowRecords(run)
-	if workflow == nil || execution == nil || workflow.Phase != "waiting_decision" && workflow.Phase != "waiting_pr_merge" {
+	if workflow == nil || execution == nil || workflow.Status != "waiting_input" && workflow.Status != "waiting_external" && workflow.Status != "blocked" {
 		return errors.New("saved feedback no longer belongs to a waiting worker flow")
 	}
 	config, err := s.executionConfigForRun(run)
@@ -132,7 +129,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 		execution.RecoveryState = "unverified"
 		return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; no recovery input was sent")
 	}
-	if workflow.Phase == "waiting_pr_merge" {
+	if workflow.Status == "waiting_external" {
 		decision := s.decisionRecord(run)
 		if decision == nil || s.store == nil || snapshotWorkflow(&s.committed, workflow.WorkflowRunID) == nil || recordFingerprint(*snapshotWorkflow(&s.committed, workflow.WorkflowRunID)) != recordFingerprint(*workflow) {
 			return errors.New("worker feedback phase has unpublished or missing actor state")
@@ -151,7 +148,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 			return err
 		}
 		workflow, execution = s.workflowRecords(run)
-		if workflow == nil || execution == nil || run.ControlRevision != workflow.ControlRevision || run.FinishTaskStatus != "waiting_decision" {
+		if workflow == nil || execution == nil || run.ControlRevision != workflow.ControlRevision || run.FinishTaskStatus != "waiting_input" {
 			return errors.New("committed worker feedback phase could not be projected")
 		}
 	}
@@ -160,11 +157,12 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 			if execution.SessionID == "" {
 				return s.waitWorkerFlow(run, "The original session is unavailable; recovery cannot create a replacement worker")
 			}
-			prompt := "The previous worker process stopped. Inspect the current worktree, Git status, existing work, and persistent task history before continuing. Do not replay an earlier request blindly.\n\n" + workerFeedbackText(answer, run.Decision.Request)
+			prompt := workerFeedbackText(answer, run.Decision.Request)
 			if err := s.beginLocalRecoveryAttempt(ctx, run, answer.OptionID); err != nil {
 				return s.waitWorkerFlow(run, "Manual execution recovery did not pass its original identity checks: "+err.Error())
 			}
-			return s.startWorkerFlowTurn(ctx, run, prompt, command.CommandID)
+			_ = prompt
+			return s.startStageFeedback(ctx, run, answer, command.CommandID)
 		}
 		if execution.RecoveryState != "live" && execution.RecoveryState != "running" && execution.RecoveryState != "question" {
 			return nil

@@ -75,6 +75,15 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 			continue
 		}
 		lifecycle, fixed, err := s.lifecycleForRun(run)
+		// The next frozen flow input is committed before any native operation.
+		// With no original operation there is no external outcome to reconcile.
+		// Same-instance dispatch consumes this queue; restart retains its manual
+		// recovery gate and cannot automatically submit the saved input.
+		if execution.PendingCommandID != "" && stageInput(workflow, execution.PendingCommandID) != nil &&
+			s.operationByKey("worker-turn:"+execution.ExecutionID+":"+execution.PendingCommandID) == nil &&
+			s.operationByKey("worker-session:"+execution.ExecutionID+":"+execution.PendingCommandID) == nil {
+			continue
+		}
 		if err != nil {
 			continue
 		}
@@ -287,7 +296,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	execution.Status, execution.Error = "active", nil
 	s.refreshRun(run)
 	if run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved" {
-		workflow.Phase = "executing"
+		workflow.Status = "running"
 		s.refreshRun(run)
 	}
 	if err := s.commitWorker(run); err != nil {

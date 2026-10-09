@@ -174,6 +174,17 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 			return true, nil
 		}
 	}
+	if fixed.workflow.Status == "blocked" || fixed.workflow.Status == "reconciling" {
+		if execution.PendingCommandID != "" && s.operationByKey("worker-turn:"+execution.ExecutionID+":"+execution.PendingCommandID) == nil && s.operationByKey("worker-session:"+execution.ExecutionID+":"+execution.PendingCommandID) == nil {
+			return true, nil
+		}
+	}
+	if fixed.workflow.Status == "reconciling" && execution.PendingCommandID == "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
+		return true, s.reconcileStageFacts(ctx, run)
+	}
+	if handled, err := s.dispatchQueuedStage(ctx, run); handled || err != nil {
+		return true, err
+	}
 	if !execution.RecoveryRequired && execution.PendingCommandID != "" && (execution.Environment == nil || execution.Environment.Blocker == nil) && s.workers[run.RunID] == nil {
 		saved := s.operationByKey("worker-input-value:" + execution.ExecutionID + ":" + execution.PendingCommandID)
 		if saved != nil {
@@ -199,7 +210,7 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 			}
 			return true, s.resumeLifecycleObservation(ctx, run, lifecycle)
 		}
-		if !execution.Environment.Ready || execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" &&
+		if !execution.Environment.Ready || fixed.workflow.StepID == executionmodel.StepImplement && len(fixed.workflow.StageInputs) == 0 && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" &&
 			(run.Decision == nil || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied") {
 			return true, s.advanceWorkerPreparation(ctx, run)
 		}
@@ -250,7 +261,7 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 		}
 		// An optional feedback decision cannot replace a verified PR's merge gate
 		// merely because the completed worker process disappeared during restart.
-		if execution.RecoveryState == "completed" && fixed.workflow.Phase != "waiting_pr_merge" && run.Decision != nil && run.Decision.Status == "pending" {
+		if execution.RecoveryState == "completed" && fixed.workflow.Status != "waiting_external" && run.Decision != nil && run.Decision.Status == "pending" {
 			if record := s.decisionRecord(run); record != nil && (record.RecoveryVersion != execution.RecoveryVersion || record.RecoveryState != execution.RecoveryState) {
 				oldID := record.DecisionID
 				s.setDecisionStatus(run, "superseded")
@@ -270,7 +281,7 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 		}
 		return true, nil
 	}
-	if fixed.workflow.Phase != "queued" {
+	if fixed.workflow.Status != "queued" {
 		return true, nil
 	}
 	return false, s.prepareWorkerFlow(ctx, *task, run)
@@ -372,7 +383,7 @@ func lifecycleSnapshot(run *reconstructiontypes.RunView, workflow *executionmode
 		PendingCommandID: execution.PendingCommandID,
 	}
 	snapshot := executionbackend.LifecycleSnapshot{
-		Ref: ref, Session: session, TaskTitle: run.Title, WorkflowPhase: workflow.Phase, TaskDelivered: run.TaskStatus == "closed",
+		Ref: ref, Session: session, TaskTitle: run.Title, WorkflowPhase: workflow.Status, TaskDelivered: run.TaskStatus == "closed",
 		ConfigurationDigest: execution.ConfigurationDigest,
 		ResourceGeneration:  execution.Generation,
 		Implementation:      CloneImplementationData(execution.ImplementationData),
@@ -712,10 +723,17 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 		return errors.New("worker lifecycle configuration identity differs from the accepted profile")
 	}
 	input := lifecycleTurnInput(commandID, prompt, nil)
+	if binding := stageInput(fixed.workflow, commandID); binding != nil {
+		input.StepID, input.InputVersion = binding.StepID, binding.Version
+		input.ReportToolPolicy = binding.ReportToolPolicy
+	}
 	if fixed.execution.Environment != nil && fixed.execution.Environment.Preparation != nil && fixed.execution.Environment.Preparation.TurnID == commandID {
 		input.Purpose = "readiness"
 	}
 	policyCapabilities := lifecycle.PolicyCapabilities()
+	if input.StepID == executionmodel.StepReport && policyCapabilities.ReportToolPolicy != "" && input.ReportToolPolicy != policyCapabilities.ReportToolPolicy {
+		return errors.New("report native policy changed after its input was frozen")
+	}
 	if policyCapabilities.LinkedWorkspaceWriteRoots {
 		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, fixed.execution.Workspace.Worktree)
 		if err != nil {
@@ -788,7 +806,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 		if !resourceStep && !turnStep {
 			break
 		}
-		if candidate.Input.Turn != nil && (candidate.Input.Turn.CommandID != input.CommandID || candidate.Input.Turn.Prompt != input.Prompt || !slices.Equal(candidate.Input.Turn.LinkedWorktreeArgs, input.LinkedWorktreeArgs)) {
+		if candidate.Input.Turn != nil && (candidate.Input.Turn.CommandID != input.CommandID || candidate.Input.Turn.Prompt != input.Prompt || candidate.Input.Turn.Purpose != input.Purpose || candidate.Input.Turn.StepID != input.StepID || candidate.Input.Turn.InputVersion != input.InputVersion || candidate.Input.Turn.ReportToolPolicy != input.ReportToolPolicy || !slices.Equal(candidate.Input.Turn.LinkedWorktreeArgs, input.LinkedWorktreeArgs)) {
 			return errors.New("lifecycle planner changed the saved business input or resource grant")
 		}
 		if err := s.executeLifecycleStep(ctx, run, lifecycle, candidate); err != nil {
@@ -801,7 +819,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 			return nil
 		}
 	}
-	if candidate.Input.Turn == nil || candidate.Input.Turn.CommandID != input.CommandID || candidate.Input.Turn.Prompt != input.Prompt ||
+	if candidate.Input.Turn == nil || candidate.Input.Turn.CommandID != input.CommandID || candidate.Input.Turn.Prompt != input.Prompt || candidate.Input.Turn.Purpose != input.Purpose || candidate.Input.Turn.StepID != input.StepID || candidate.Input.Turn.InputVersion != input.InputVersion || candidate.Input.Turn.ReportToolPolicy != input.ReportToolPolicy ||
 		!slices.Equal(candidate.Input.Turn.LinkedWorktreeArgs, input.LinkedWorktreeArgs) {
 		return errors.New("lifecycle planner changed the saved business input or resource grant")
 	}

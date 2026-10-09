@@ -7,14 +7,14 @@
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
-| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 待执行 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
-| 45 | 本机客户端协议与历史查询 | 无 | 待执行 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 未验；[记录](../acceptance/phase2-local-api.md) |
+| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 执行中 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
+| 45 | 本机客户端协议与历史查询 | 无 | 执行中；PR #249 修复 / 待新独立复审 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) 在途，API2 历史失败未闭合；[记录](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
 ## 推进顺序
 
-1. #83 已合入；剩余按 #84 → #45 → #44 串行推进。启动时使用已提交且执行工作区可读取的 Spec/Plan commit 和路径，并核对最新默认主干；本次纳入清单不等于已经启动。
-2. #84 与 #45 无新增业务硬依赖，共同状态/存储/宿主/客户端接线按上述顺序集成，#45 复核 #84 的实际字段与接口版本。#44 仍以 #45 为硬前置；#45 经复审、必要验证和真实合并，结果同步且成果进入最新主干后启动 #44。已有在途执行先核对原 run 与固定契约，不因清单编辑自动中断或切换规格。
+1. #83 已合入；最新用户授权 #84 与 #45 独立并行实施，共享接线按 #84 → #45 集成，#44 继续等待 #45。启动时使用已提交且执行工作区可读取的 Spec/Plan commit 和路径，并核对最新默认主干；本次纳入清单不等于已经启动。
+2. #84 与 #45 无新增业务硬依赖，共同状态/存储/宿主/客户端接线由 #84 负责语义并按 #84 后 #45 集成，#45 复核 #84 的实际字段与接口版本。#44 仍以 #45 为硬前置；#45 经复审、必要验证和真实合并，结果同步且成果进入最新主干后启动 #44。已有在途执行先核对原 run 与固定契约，不因清单编辑自动中断或切换规格。
 3. 后续界面任务留在[草稿](drafts/roadmap.md)，原型确认后再纳入。
 
 ## 待人工验收
@@ -28,6 +28,9 @@
 自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [Orca原生编排](../acceptance/worker-flow-orca-native.md) · [Orca安全重建](../acceptance/worker-service-recovery.md)。
 
 ## 执行记录
+
+2026-10-09 最新授权：“rebase，#84任务可以并行执行了, #84用 GPT6.1 Sol High”。#84 开发聊天使用 gpt-6.1-sol/high（产品 E2E 仍按固定 Plan 的原模型/原生权限），与 #45 独立并行；共享主干接线先 #84 后 #45，#44 硬前置保持。#84 固定 Spec/Plan commit `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5`，代码起点同 SHA，工作树 b123、分支 codex/task-84-worker-staged-flow；实现/验证进行中，尚未独立复审或合并。#45 原执行者仍处理 PR #249，API2 失败未闭合，不由本任务接管。此前串行纳入记录是历史安排，不覆盖本段最新授权。
+
 
 2026-10-09，用户确认将 #84 纳入 execution-map，沿用已预留身份及独立 Spec/Plan/专属验收。状态为待执行、尚未启动，产品自动与人工项仍未验；#83 已合入，无未完成硬前置。按一期收尾安排，剩余串行顺序为 #84→#45→#44；#45→#44 的硬依赖保持，共享接线排期不新增业务依赖。文档版本在实际启动前提交并固定，不创建外部 SteerLine Task/DAG。
 

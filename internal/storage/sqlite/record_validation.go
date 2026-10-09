@@ -10,7 +10,7 @@ func validStepAttemptStatus(v string) bool {
 
 func validWorkflowPhase(v string) bool {
 	switch v {
-	case "queued", "executing", "waiting_decision", "waiting_pr_merge", "completing", "completed", "blocked", "abandoned":
+	case "queued", "running", "waiting_input", "waiting_external", "reconciling", "completed", "blocked", "abandoned", "executing", "waiting_decision", "waiting_pr_merge", "completing":
 		return true
 	}
 	return false

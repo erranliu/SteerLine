@@ -1,6 +1,6 @@
 # Worker 阶段流程验收规划
 
-任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，尚未启动实现，产品自动/人工项待验收；已完成的文档静态检查不证明产品能力。#83 已合入，作为隔离基线复用。
+任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，实现与验证执行中，最终精确候选的产品自动/人工结果待登记；已完成的文档静态检查不证明产品能力。#83 已合入，作为隔离基线复用。
 
 ## 最小验证安排
 
@@ -50,3 +50,9 @@
 2026-10-09 纳入执行规划：用户确认 #84 进入 execution-map，沿用原 ID/名称和独立 Spec/Plan，状态为待执行；无未完成硬前置。剩余顺序为 #84→#45→#44，共同接线顺序集成，#44 依赖 #45 保持；WFS-M1 可后置至一期组合验收，人工窗口待安排。Spec/Plan、草稿及导航已同步纳入状态，未启动实现、未创建外部产品 Task/DAG，产品自动/人工项仍待验收。静态检查通过：269 个 Markdown、1732 个本地链接零错误，85 个身份文件、10 条草稿/4 条正式行；差异、#84 成员/状态及 Plan 验收映射核对通过。证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-worker84-admission-a467151c855c47d1a728356d363286e8/`。以上只证明文档纳入与一致性，不是产品功能通过。
 
 后续结果记录实际源码/二进制/流程摘要、环境、原步骤/输入/PR 绑定与证据定位；实际启动或开始验收后，按真实 PR/验证结果同步 execution-map。产品测试中的原 Task/DAG/交付回执仍按真实接口核对。
+
+## 2026-10-09 开发启动与当前验证
+
+固定契约：`c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` 内 worker-staged-flow.spec.md / worker-staged-flow.plan.md；代码起点同 SHA。原工作树 b123 干净，远端 main 同 SHA，分支 codex/task-84-worker-staged-flow。用户指定开发模型 gpt-6.1-sol/high，仅覆盖执行聊天；产品 live 使用原 gpt-6-luna/medium 及固定原生权限。草稿选择 docs/roadmap/drafts/roadmap.md，不修改固定 Spec/Plan。
+
+开发期 dirty tree 的 A1 规则/提交用例、console 定向用例，以及双 adapter controlled 正常三轮/重开检查已实际运行；这些是开发诊断，最终 clean candidate 验收另行登记。首次 L1 +定向 A1 通过，原始报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261009T025901.138445000Z/summary.json`。此前三轮受控用例暴露的未提交原生操作误走对账问题已修复；失败输出保留在原聊天，不能算为最终通过。WFS-A4 两条 live 尚未执行，WFS-M1 保持待验。

@@ -56,7 +56,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		t.Cleanup(func() { _ = s.Close() })
 		s.lifecycleResolver = recoveryOnlyResolver{}
 		execution, workflow := s.executionRecord(run), s.workflowRecord(run)
-		workflow.Phase, workflow.SelectedResult, workflow.PRURL, workflow.PRState = "waiting_pr_merge", execution.ExecutionID, "https://git.example/org/repo/pulls/8", "open"
+		workflow.Status, workflow.SelectedResult, workflow.PRURL, workflow.PRState = "waiting_external", execution.ExecutionID, "https://git.example/org/repo/pulls/8", "open"
 		execution.SessionID = "completed-original-session"
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
 		execution.Workspace = executionmodel.WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
@@ -70,7 +70,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		if handled, err := s.resumeLifecycleWorkerFlow(context.Background(), nil, run); err != nil || !handled {
 			t.Fatalf("completed worker recovery failed: handled=%v err=%v", handled, err)
 		}
-		if workflow.Phase != "waiting_pr_merge" || workflow.PRURL != "https://git.example/org/repo/pulls/8" || workflow.SelectedResult != execution.ExecutionID || run.Decision == nil || run.Decision.ID != decisionID || run.Decision.Status != "pending" || execution.SessionID != sessionID || execution.CurrentAttemptID != attemptID || execution.Workspace != workspace || execution.RecoveryState != "completed" {
+		if workflow.Status != "waiting_external" || workflow.PRURL != "https://git.example/org/repo/pulls/8" || workflow.SelectedResult != execution.ExecutionID || run.Decision == nil || run.Decision.ID != decisionID || run.Decision.Status != "pending" || execution.SessionID != sessionID || execution.CurrentAttemptID != attemptID || execution.Workspace != workspace || execution.RecoveryState != "completed" {
 			t.Fatal("completed worker recovery replaced its PR merge gate, feedback or fixed identity")
 		}
 	})

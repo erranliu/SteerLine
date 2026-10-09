@@ -56,16 +56,21 @@ func (f ToolReplyFact) MatchesAnswers(expected map[string][]string) bool {
 }
 
 type TurnEvidence struct {
-	SourcePath   string
-	TurnID       string
-	CommandID    string
-	SessionID    string
-	Started      bool
-	Completed    bool
-	Succeeded    bool
-	LastMessage  string
-	Failure      string
-	PRCandidates []string
+	FinalNativeSessionID string
+	FinalNativeTurnID    string
+	FinalSource          string
+	FinalItemID          string
+	FinalVerified        bool
+	SourcePath           string
+	TurnID               string
+	CommandID            string
+	SessionID            string
+	Started              bool
+	Completed            bool
+	Succeeded            bool
+	LastMessage          string
+	Failure              string
+	PRCandidates         []string
 }
 
 // EventFact contains verified execution facts. Empty fields convey no evidence.

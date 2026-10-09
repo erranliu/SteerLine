@@ -36,7 +36,7 @@ func (s *Service) recordWorkerTurnStarted(run *reconstructiontypes.RunView, work
 		return "", err
 	}
 	if execution.Environment != nil && execution.Environment.Blocker != nil {
-		workflow.Phase = "waiting_decision"
+		workflow.Status = "waiting_input"
 	}
 	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
 	if fresh {

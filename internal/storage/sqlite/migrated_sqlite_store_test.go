@@ -141,7 +141,7 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "17", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
-		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: "minimal-v1", Phase: "executing"}); err != nil {
+		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: "minimal-v1", Status: "running"}); err != nil {
 			return err
 		}
 		for _, id := range []string{"exec-a"} {
@@ -184,7 +184,7 @@ func TestSQLiteTransactionRollsBackAllDomainWrites(t *testing.T) {
 		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "task-a", Status: "open", Version: 1}); err != nil {
 			return err
 		}
-		return tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-bad", TaskID: "missing-task", Phase: "queued"})
+		return tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-bad", TaskID: "missing-task", Status: "queued"})
 	})
 	if err == nil {
 		t.Fatal("expected FK violation")

@@ -693,6 +693,8 @@ type LifecycleRecoveryPort interface {
 }
 
 type LifecyclePolicyCapabilities struct {
+	// Empty means frozen native permissions; compare report facts.
+	ReportToolPolicy          string
 	ActiveTurnFeedback        bool
 	LinkedWorkspaceWriteRoots bool
 	SeparateTurnStart         bool

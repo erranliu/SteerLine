@@ -26,11 +26,12 @@ type WorkspaceIntent struct {
 }
 
 type WorkspaceInspection struct {
-	Repository string    `json:"repository"`
-	Worktree   string    `json:"worktree"`
-	Branch     string    `json:"branch"`
-	Base       string    `json:"base"`
-	Head       string    `json:"head"`
-	Dirty      bool      `json:"dirty"`
-	CheckedAt  time.Time `json:"checked_at"`
+	ContentDigest string    `json:"content_digest"`
+	Repository    string    `json:"repository"`
+	Worktree      string    `json:"worktree"`
+	Branch        string    `json:"branch"`
+	Base          string    `json:"base"`
+	Head          string    `json:"head"`
+	Dirty         bool      `json:"dirty"`
+	CheckedAt     time.Time `json:"checked_at"`
 }

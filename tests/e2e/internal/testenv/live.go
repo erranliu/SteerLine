@@ -96,9 +96,6 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
 $env:GH_TOKEN = (Get-Content -LiteralPath '%s' -Raw).Trim()
-git add -- result.txt
-git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'SteerLine real E2E delivery'
-if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
 $branch = git symbolic-ref --short HEAD
 # The shell credential helper cannot run in the unelevated Windows sandbox.
 # Keep the test token out of argv/config/logs and scope its header to this remote.
@@ -115,17 +112,13 @@ gh pr create --repo '%s' --base '%s' --head $branch --draft --title 'SteerLine E
 if ($LASTEXITCODE -ne 0) { throw 'PR create failed' }
 `, filepath.Join(p.Home, "github-token"), githubRepository, p.BaseBranch, s.ID)
 		s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
-		spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It commits, pushes to the real test repository and creates a real GitHub draft PR. Copy its returned URL verbatim into your final reply and completion relay body, including the repository owner. The URL must have the form https://github.com/erranliu/SteerlineTest/pull/<number>; do not shorten or reconstruct it.\n"
+		spec += "You own publication. Only in the publish step, after the local candidate is committed, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It pushes to the real test repository and creates a real GitHub draft PR. Copy its returned URL verbatim into your final reply and completion relay body, including the repository owner. The URL must have the form https://github.com/erranliu/SteerlineTest/pull/<number>; do not shorten or reconstruct it.\n"
 	} else {
 		state, err := controlled.Read(p.Provider)
 		s.Must(err)
 		base := strings.TrimSuffix(state.GitURL, "/e2e/project.git")
 		script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
-git add -- result.txt
-if ($LASTEXITCODE -ne 0) { throw 'stage failed' }
-git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'Real model delivery'
-if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
 $branch = git symbolic-ref --short HEAD
 if ($branch -ceq 'main') { throw 'publication must push the assigned PR head, not the base branch' }
 $head = git rev-parse HEAD
@@ -136,11 +129,22 @@ $receipt = Invoke-RestMethod -Method Post -Uri '%s/__e2e/pull' -ContentType 'app
 Write-Output $receipt.url
 `, state.GitURL, base)
 		s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
-		spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. The assigned working branch is the PR HEAD; main in the dispatch is the PR BASE, never a request to push to main. The origin URL remains the dispatch's https://github.com/e2e/project.git identity; only the script's single push command uses url.insteadOf to route its transport to the loopback server. This does not change repository config or the remote identity seen by task validation. The explicitly authorized loopback PR endpoint represents that same fixture provider. The script commits, pushes origin's assigned head and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
+		spec += "You own publication. Only in the publish step, after the local candidate is committed, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. The assigned working branch is the PR HEAD; main in the dispatch is the PR BASE, never a request to push to main. The origin URL remains the dispatch's https://github.com/e2e/project.git identity; only the script's single push command uses url.insteadOf to route its transport to the loopback server. This does not change repository config or the remote identity seen by task validation. The explicitly authorized loopback PR endpoint represents that same fixture provider. The script pushes origin's assigned head and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
 	}
+	implement := `$ErrorActionPreference = 'Stop'
+[IO.File]::WriteAllText((Join-Path (Get-Location) 'result.txt'), "real model delivery" + [char]10, [Text.UTF8Encoding]::new($false))
+if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
+git add -- result.txt
+if ($LASTEXITCODE -ne 0) { throw 'stage failed' }
+git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'Real model candidate'
+if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
+git rev-parse HEAD
+`
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "implement.ps1"), []byte(implement), 0600))
+	spec += "In implement.execute, run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once to write, verify and commit the candidate locally. Do not push or invoke publish.ps1 in implement.execute or implement.report. implement.report only summarizes its supplied source facts. publish.ps1 is reserved for the single publish step, which must return the JSON result contract in its native final reply.\n"
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
-	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. Write and verify result.txt, then publish according to its instructions.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the frozen candidate and create the PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
@@ -300,7 +304,13 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 			}
 			matches++
 			var parseErr error
-			u, usageEvidence, parseErr = native.RolloutUsage(raw, e.Workspace.Worktree)
+			nativeTurn := ""
+			for _, result := range snap.Domain.WorkflowRuns[0].StageResults {
+				if result.CommandID == e.CurrentCommandID {
+					nativeTurn = result.FinalNativeTurnID
+				}
+			}
+			u, usageEvidence, parseErr = native.RolloutTurnUsage(raw, e.Workspace.Worktree, nativeTurn)
 			return parseErr
 		})
 		if err == nil && matches != 1 {
@@ -332,8 +342,9 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		s.t.Fatal("native worker did not publish fixture PR")
 	}
 	e := before.Domain.Executions[0]
+	p.AssertStagedFlow(before)
 	p.AssertFixedNativeLaunch(before)
-	if e.Process == nil || e.Workspace.Worktree == "" || e.TurnNumber != 1 {
+	if e.Process == nil || e.Workspace.Worktree == "" || e.TurnNumber != 3 {
 		s.t.Fatal("native execution identity/turn missing")
 	}
 	if chain == "orca-codex" {

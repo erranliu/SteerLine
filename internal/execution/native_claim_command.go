@@ -45,7 +45,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return executionmodel.TaskClaimReceipt{}, nativeErr("authority_mismatch", "claim requires the configured native project")
 	}
 	if config.WorkflowProtocol != executionmodel.Version {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("unsupported_schema", "only worker-flow-v1 may claim a task")
+		return executionmodel.TaskClaimReceipt{}, nativeErr("unsupported_schema", "only worker-flow-v2 may claim a task")
 	}
 	if err := validateWorkflowConfig(config, c.runtime.Directory); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
@@ -247,7 +247,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if workflowRunID == "" {
 		workflowRunID = newID()
 	}
-	wfr := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, ConfigDigest: config.acceptedConfigVersion, Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
+	wfr := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, ConfigDigest: config.acceptedConfigVersion, Status: "queued", FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepImplement, Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
 	fixed := *options.ExecutionProfile
 	wfr.ExecutionProfile = &fixed
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, Generation: newID(), ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: executionmodel.WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}

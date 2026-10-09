@@ -39,7 +39,7 @@ func CandidateDiscardFacts(workflows []WorkflowRunRecord, executions []Execution
 		if run.PRURL != "" && (run.PRState == "" || run.PRState == "unknown") {
 			plan.UncertainPR = true
 		}
-		if run.PRURL == "" && run.PRCandidateURL == "" && run.Phase != "queued" {
+		if run.PRURL == "" && run.PRCandidateURL == "" && run.Status != "queued" {
 			// A started worker may have published a PR before the center saw a
 			// link. Discard cannot assume that no external PR exists.
 			plan.UncertainPR = true

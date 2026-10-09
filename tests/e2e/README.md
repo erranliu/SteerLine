@@ -133,3 +133,7 @@ Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_met
 4. Plan 的测试计划列出验收项 ID/任务专属文档链接、级别、组/场景 ID、环境、命令、时点、通过条件及证据/结果登记位置，覆盖本任务全部自动验收项；可以共用场景，必要回归另标。新增驱动/环境能力列入实施步骤或明确前置，实际验收前完成实现/登记，不把规划入口说成已存在；未选相关组简述原因，不默认要求 full 或所有层级。
 
 基础设施定向入口：`go test ./cmd/test-feedback ./tests/e2e/internal/... -count=1`。`go test -tags=e2e ./tests/e2e/internal/... -count=1` 按需验证双项目隔离/部分准备清理。直接运行场景包缺少运行配置会失败，统一入口负责构建、枚举登记测试和精确选择。
+
+## Worker 分步交付断言
+
+delivery.local-codex / delivery.orca-codex 的最小材料将 implement.ps1 的本地候选提交与 publish.ps1 的推送/PR 分开。两场景核对三次业务轮次、同会话/Attempt、Command/输入版本/规范 final 来源、每步骤正数原生 usage、报告前后工作区/绑定 PR 事实，以及 PR head 等于冻结候选。readiness 独立计入原生现场，不冒充业务轮次。缺逐轮工具限制的现有后端记录 fact_comparison_only，不能将提示词算作强只读权限保证。

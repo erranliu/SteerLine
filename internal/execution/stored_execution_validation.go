@@ -10,8 +10,8 @@ import (
 
 func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot, directory *ExecutionDirectory) error {
 	for _, workflow := range snapshot.WorkflowRuns {
-		if workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*workflow.ExecutionProfile, directory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
-			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old WorkflowRun; preserve the original state and external session")
+		if workflow.WorkflowVersion != executionmodel.Version || workflow.FlowRef != executionmodel.DevelopmentFlow || workflow.StepID == "" || !executionmodel.ValidFlowStatus(workflow.Status) || workflow.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*workflow.ExecutionProfile, directory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
+			return nativeErr("unsupported_schema", "worker-flow-v2 refuses an old WorkflowRun; preserve the original state and external session")
 		}
 	}
 	for _, execution := range snapshot.Executions {

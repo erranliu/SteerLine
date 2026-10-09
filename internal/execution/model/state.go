@@ -8,27 +8,27 @@ import (
 	"time"
 )
 
-const Version = "worker-flow-v1"
+const Version = "worker-flow-v2"
 
 var ErrTurnStale = errors.New("worker turn is no longer current")
 
 // State is a transient view of the authoritative workflow and execution.
 type State struct {
-	WorkflowRunID, TaskID, WorkflowVersion, Phase string
-	PRURL, PRState                                string
-	WorkflowUpdatedAt                             time.Time
-	ExecutionID, ExecutionWorkflowRunID           string
-	SessionID, PendingTurnID, CurrentTurnID       string
-	LastStoppedTurnID, ExecutionStatus            string
-	TurnNumber                                    uint64
-	ExecutionUpdatedAt                            time.Time
+	WorkflowRunID, TaskID, WorkflowVersion, Status string
+	PRURL, PRState                                 string
+	WorkflowUpdatedAt                              time.Time
+	ExecutionID, ExecutionWorkflowRunID            string
+	SessionID, PendingTurnID, CurrentTurnID        string
+	LastStoppedTurnID, ExecutionStatus             string
+	TurnNumber                                     uint64
+	ExecutionUpdatedAt                             time.Time
 }
 
 func (s State) validBinding() error {
 	if s.WorkflowVersion != Version || s.WorkflowRunID == "" || s.ExecutionID == "" || s.ExecutionWorkflowRunID != s.WorkflowRunID {
 		return errors.New("worker flow has no fixed workflow and execution binding")
 	}
-	if s.Phase == "completed" || s.Phase == "abandoned" {
+	if s.Status == "completed" || s.Status == "abandoned" {
 		return errors.New("terminal worker flow cannot resume")
 	}
 	return nil
@@ -58,10 +58,10 @@ func BeginTurn(s State, sessionID, turnID string, at time.Time) (State, error) {
 	if s.CurrentTurnID != "" && s.LastStoppedTurnID != s.CurrentTurnID {
 		return s, errors.New("previous worker turn has not stopped")
 	}
-	switch s.Phase {
-	case "queued", "waiting_decision", "waiting_pr_merge":
+	switch s.Status {
+	case "queued", "waiting_input", "waiting_external":
 	default:
-		return s, fmt.Errorf("worker turn cannot start from %s", s.Phase)
+		return s, fmt.Errorf("worker turn cannot start from %s", s.Status)
 	}
 	s.SessionID = sessionID
 	s.PendingTurnID = ""
@@ -69,7 +69,7 @@ func BeginTurn(s State, sessionID, turnID string, at time.Time) (State, error) {
 	s.TurnNumber++
 	s.ExecutionStatus = "active"
 	s.ExecutionUpdatedAt = at
-	s.Phase = "executing"
+	s.Status = "running"
 	s.WorkflowUpdatedAt = at
 	return s, nil
 }
@@ -81,10 +81,10 @@ func NoteQuestion(s State, turnID string, at time.Time) (State, error) {
 	if turnID == "" || s.CurrentTurnID != turnID || s.LastStoppedTurnID == turnID {
 		return s, ErrTurnStale
 	}
-	if s.Phase != "executing" && s.Phase != "waiting_decision" {
-		return s, fmt.Errorf("worker question cannot arrive in %s", s.Phase)
+	if s.Status != "running" && s.Status != "waiting_input" {
+		return s, fmt.Errorf("worker question cannot arrive in %s", s.Status)
 	}
-	s.Phase = "waiting_decision"
+	s.Status = "waiting_input"
 	s.WorkflowUpdatedAt = at
 	return s, nil
 }
@@ -96,10 +96,10 @@ func ContinueQuestion(s State, turnID string, at time.Time) (State, error) {
 	if turnID == "" || s.CurrentTurnID != turnID || s.LastStoppedTurnID == turnID {
 		return s, ErrTurnStale
 	}
-	if s.Phase != "waiting_decision" {
-		return s, fmt.Errorf("worker question is not waiting in %s", s.Phase)
+	if s.Status != "waiting_input" {
+		return s, fmt.Errorf("worker question is not waiting in %s", s.Status)
 	}
-	s.Phase = "executing"
+	s.Status = "running"
 	s.WorkflowUpdatedAt = at
 	return s, nil
 }
@@ -114,16 +114,17 @@ func StopTurn(s State, turnID string, pendingQuestion bool, at time.Time) (State
 	if s.LastStoppedTurnID == turnID {
 		return s, nil
 	}
-	if s.Phase != "executing" && s.Phase != "waiting_decision" {
-		return s, fmt.Errorf("worker turn cannot stop from %s", s.Phase)
+	if s.Status != "running" && s.Status != "waiting_input" {
+		return s, fmt.Errorf("worker turn cannot stop from %s", s.Status)
 	}
 	s.LastStoppedTurnID = turnID
 	s.ExecutionStatus = "idle"
 	s.ExecutionUpdatedAt = at
-	if pendingQuestion || s.PRURL == "" || s.PRState != "open" && s.PRState != "merged" {
-		s.Phase = "waiting_decision"
-	} else {
-		s.Phase = "waiting_pr_merge"
+	// Native stop is not business completion. The bound flow decides what
+	// follows after its result and artifact checks.
+	s.Status = "blocked"
+	if pendingQuestion {
+		s.Status = "waiting_input"
 	}
 	s.WorkflowUpdatedAt = at
 	return s, nil
@@ -138,15 +139,6 @@ func BindPR(s State, url, state string, pendingQuestion bool, at time.Time) (Sta
 		return s, errors.New("another PR is already bound to this execution")
 	}
 	s.PRURL, s.PRState = url, state
-	if s.CurrentTurnID != "" && s.LastStoppedTurnID != s.CurrentTurnID {
-		if s.Phase != "waiting_decision" || !pendingQuestion {
-			s.Phase = "executing"
-		}
-	} else if pendingQuestion || state == "closed_unmerged" {
-		s.Phase = "waiting_decision"
-	} else {
-		s.Phase = "waiting_pr_merge"
-	}
 	s.WorkflowUpdatedAt = at
 	return s, nil
 }
@@ -163,13 +155,13 @@ func Complete(s State, taskID, taskStatus string, delivery Delivery, at time.Tim
 		delivery.MergeCommit == "" || delivery.MergedAt.IsZero() {
 		return s, errors.New("completed worker flow requires committed matching delivery")
 	}
-	if s.Phase == "completed" {
+	if s.Status == "completed" {
 		return s, nil
 	}
-	if s.Phase == "abandoned" {
+	if s.Status == "abandoned" {
 		return s, errors.New("discarded worker flow cannot become completed")
 	}
-	s.Phase = "completed"
+	s.Status = "completed"
 	s.PRState = "merged"
 	s.WorkflowUpdatedAt = at
 	return s, nil

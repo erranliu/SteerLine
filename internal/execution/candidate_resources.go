@@ -37,7 +37,7 @@ func (s *Service) applyRetiredLifecycleReceipt(run *reconstructiontypes.RunView,
 	}
 	// The selected Delivery freezes its execution identity. In-flight resource
 	// receipts for that winner still remain in the original Operation and event.
-	if fixed.workflow.Phase != "completed" {
+	if fixed.workflow.Status != "completed" {
 		if err := mergeLifecycleExecutionReceipt(fixed.execution, receipt); err != nil {
 			return err
 		}
@@ -47,7 +47,7 @@ func (s *Service) applyRetiredLifecycleReceipt(run *reconstructiontypes.RunView,
 			fixed.attempt.Status = "dispatched"
 		}
 	}
-	if fixed.workflow.Phase == "completed" && receipt.TurnEvidence != nil {
+	if fixed.workflow.Status == "completed" && receipt.TurnEvidence != nil {
 		evidence := receipt.TurnEvidence
 		if evidence.SessionID != fixed.execution.SessionID || evidence.TurnID != fixed.execution.CurrentTurnID && evidence.TurnID != fixed.execution.PendingTurnID {
 			return executionmodel.ErrTurnStale
@@ -62,7 +62,7 @@ func (s *Service) applyRetiredLifecycleReceipt(run *reconstructiontypes.RunView,
 			s.ownedProcesses[run.RunID] = owned
 		}
 	}
-	if fixed.workflow.Phase != "completed" && fixed.execution.ResourceStoppedAt != nil && fixed.execution.ResourceStopOperationID != "" {
+	if fixed.workflow.Status != "completed" && fixed.execution.ResourceStoppedAt != nil && fixed.execution.ResourceStopOperationID != "" {
 		fixed.execution.Status = "stopped"
 	}
 	s.refreshRun(run)
@@ -95,7 +95,7 @@ func (s *Service) recordRetiredWorkerEvent(run *reconstructiontypes.RunView, ev 
 		s.recordActivity(run, ev.Activity)
 	}
 	var operations []string
-	if w.Phase != "completed" {
+	if w.Status != "completed" {
 		for _, envelope := range ev.Implementation {
 			if err := envelope.ValidateResourceIdentity(e.ProjectIdentity, e.ExecutionID, e.CurrentAttemptID, e.Generation, e.ConfigurationDigest); err != nil {
 				return err
@@ -105,7 +105,7 @@ func (s *Service) recordRetiredWorkerEvent(run *reconstructiontypes.RunView, ev 
 			}
 		}
 		if ev.Fact.Kind == executionbackend.EventStarted && ev.Fact.StartedTurnID != "" {
-			phase, updated := w.Phase, w.UpdatedAt
+			phase, updated := w.Status, w.UpdatedAt
 			commandID := e.PendingCommandID
 			if commandID == "" {
 				commandID = e.CurrentCommandID
@@ -121,7 +121,7 @@ func (s *Service) recordRetiredWorkerEvent(run *reconstructiontypes.RunView, ev 
 			if err := s.setOperationState(op.OperationID, "confirmed", ev.Fact.StartedTurnID, mustJSON(ev.Fact), ""); err != nil {
 				return err
 			}
-			w.Phase, w.UpdatedAt = phase, updated
+			w.Status, w.UpdatedAt = phase, updated
 			operations = append(operations, op.OperationID)
 		}
 		if ev.DeliveryFinal && ev.DeliveryID != "" {
@@ -131,14 +131,14 @@ func (s *Service) recordRetiredWorkerEvent(run *reconstructiontypes.RunView, ev 
 			e.LastEvent = ptr(ev.Summary)
 		}
 	}
-	if w.Phase != "completed" && e.ResourceStoppedAt != nil && e.ResourceStopOperationID != "" {
+	if w.Status != "completed" && e.ResourceStoppedAt != nil && e.ResourceStopOperationID != "" {
 		e.Status = "stopped"
 	}
 	s.refreshRun(run)
 	if err := s.commitWorker(run, operations...); err != nil {
 		return err
 	}
-	if w.Phase != "completed" && ev.Candidate != nil {
+	if w.Status != "completed" && ev.Candidate != nil {
 		candidate := ev.Candidate.Clone()
 		if candidate.Action != executionbackend.LifecycleReportCompletion || candidate.Input.Completion == nil || candidate.Input.Completion.TurnID != e.CurrentTurnID && candidate.Input.Completion.TurnID != e.PendingTurnID {
 			return executionmodel.ErrTurnStale
@@ -151,7 +151,7 @@ func (s *Service) recordRetiredWorkerEvent(run *reconstructiontypes.RunView, ev 
 			return err
 		}
 	}
-	if w.Phase != "completed" && ev.DeliveryFinal && ev.DeliveryID != "" {
+	if w.Status != "completed" && ev.DeliveryFinal && ev.DeliveryID != "" {
 		return s.acknowledgeLifecycleDelivery(run, ev.DeliveryID)
 	}
 	return nil
@@ -174,14 +174,14 @@ func (s *Service) finishRetiredCandidate(run *reconstructiontypes.RunView, lifec
 		s.registerWorker(run, workerFromLifecycle(run.RunID, run.AttemptID, observer))
 		return nil
 	}
-	if fixed.workflow.Phase == "completed" && receipt.TurnEvidence != nil {
+	if fixed.workflow.Status == "completed" && receipt.TurnEvidence != nil {
 		evidence := receipt.TurnEvidence
 		if evidence.SessionID != fixed.execution.SessionID || evidence.TurnID != fixed.execution.CurrentTurnID && evidence.TurnID != fixed.execution.PendingTurnID {
 			return executionmodel.ErrTurnStale
 		}
 		fixed.execution.Summary = ptr(evidence.LastMessage)
 	}
-	if fixed.workflow.Phase != "completed" {
+	if fixed.workflow.Status != "completed" {
 		if err := mergeLifecycleExecutionReceipt(fixed.execution, receipt); err != nil {
 			return err
 		}
@@ -202,7 +202,7 @@ func (s *Service) finishRetiredCandidate(run *reconstructiontypes.RunView, lifec
 			}
 		}
 	}
-	if fixed.workflow.Phase != "completed" && fixed.execution.ResourceStoppedAt != nil && fixed.execution.ResourceStopOperationID != "" {
+	if fixed.workflow.Status != "completed" && fixed.execution.ResourceStoppedAt != nil && fixed.execution.ResourceStopOperationID != "" {
 		fixed.execution.Status = "stopped"
 	}
 	s.refreshRun(run)
@@ -218,7 +218,7 @@ func (s *Service) resumeRetiredCandidate(ctx context.Context, run *reconstructio
 	if err != nil {
 		return err
 	}
-	if fixed.workflow.Phase == "completed" {
+	if fixed.workflow.Status == "completed" {
 		return nil
 	}
 	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)

@@ -27,9 +27,15 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 		settled, settleErr := Settlement(ctx, l.client.MetaCall, nativeDispatchIdentity(snapshot, *turn), turn.Outcome)
 		if settleErr == nil {
 			turn.Settled, turn.Outcome = true, settled
+			if turn.Purpose == "business" {
+				if finalErr := l.readNativeFinal(ctx, snapshot, turn, &state); finalErr != nil {
+					receipt.Diagnostic = finalErr.Error()
+				}
+			}
 			receipt.Disposition = executionbackend.OperationConfirmed
 			receipt.State.TurnCompleted = true
 			receipt.TurnEvidence = nativeTurnEvidence(snapshot, *turn)
+			receipt.TurnEvidence.FinalNativeSessionID = state.ProviderSessionID
 			receipt.Implementation, err = l.targetEnvelope(snapshot, snapshot.Ref.Target, identity, state)
 			return receipt, nil, err
 		}
@@ -93,7 +99,7 @@ func nativeTurnEvidence(snapshot executionbackend.LifecycleSnapshot, turn Native
 		started = true
 	}
 	return &executionbackend.TurnEvidence{TurnID: turn.TurnID, CommandID: turn.TurnID, SessionID: SessionID(snapshot.Ref.External),
-		Started: started, Completed: true, Succeeded: turn.Outcome == "succeeded", LastMessage: turn.LastMessage,
+		FinalSource: turn.FinalSource, FinalItemID: turn.FinalItemID, FinalVerified: turn.FinalVerified, FinalNativeTurnID: turn.FinalNativeTurnID, Started: started, Completed: true, Succeeded: turn.Outcome == "succeeded", LastMessage: turn.FinalText,
 		Failure: map[bool]string{true: turn.LastMessage, false: ""}[turn.Outcome == "failed"], PRCandidates: append([]string(nil), turn.PRCandidates...)}
 }
 

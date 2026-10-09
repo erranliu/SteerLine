@@ -281,7 +281,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	s.Must(controlled.Write(p.Provider, controlled.State{GitURL: "http://" + address + "/e2e/project.git"}))
 	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider}}
 	s.Must(controlled.Write(p.Config, map[string]any{
-		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
+		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
 		"publication_policy": map[string]any{"publisher": "worker"},
 		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
 	}))
@@ -607,6 +607,12 @@ func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 }
 
 func (p *Project) WaitPhase(phase string) Snapshot {
+	if phase == "waiting_pr_merge" {
+		phase = "waiting_external"
+	}
+	if phase == "waiting_decision" {
+		phase = "waiting_input"
+	}
 	var result Snapshot
 	lastPhase := ""
 	rechecked := false
@@ -617,12 +623,12 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 			return false, err
 		}
 		if p.Chain != "" && len(snap.Domain.WorkflowRuns) == 1 {
-			current := snap.Domain.WorkflowRuns[0].Phase
+			current := snap.Domain.WorkflowRuns[0].Status
 			if current != lastPhase {
 				p.Record("latest-phase", snap)
 				lastPhase = current
 			}
-			if current == "waiting_decision" && len(snap.Domain.Executions) == 1 {
+			if (current == "waiting_input" || current == "blocked" || current == "reconciling") && len(snap.Domain.Executions) == 1 {
 				e := snap.Domain.Executions[0]
 				if e.Environment == nil || e.Environment.Blocker == nil {
 					message := "pending decision"
@@ -655,7 +661,7 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 				}
 			}
 		}
-		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Phase == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
+		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Status == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
 	})
 	return result
 }

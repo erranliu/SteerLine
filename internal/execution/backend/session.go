@@ -59,6 +59,9 @@ type SessionContext struct {
 // TurnInput identifies a fixed input operation; accepting it does not prove
 // that its native turn has started. The native session route is bound separately.
 type TurnInput struct {
+	StepID             string `json:"step_id,omitempty"`
+	InputVersion       uint64 `json:"input_version,omitempty"`
+	ReportToolPolicy   string `json:"report_tool_policy,omitempty"`
 	CommandID          string
 	Prompt             string
 	Purpose            string

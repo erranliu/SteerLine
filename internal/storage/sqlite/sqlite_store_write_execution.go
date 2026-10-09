@@ -11,14 +11,14 @@ import (
 )
 
 func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
-	if v.ProjectIdentity == "" || v.WorkflowRunID == "" || v.TaskID == "" || v.Phase == "" {
+	if v.ProjectIdentity == "" || v.WorkflowRunID == "" || v.TaskID == "" || v.Status == "" {
 		return errors.New("workflow run identity, task and phase are required")
 	}
-	if !validWorkflowPhase(v.Phase) {
-		return fmt.Errorf("invalid workflow run phase %q", v.Phase)
+	if !validWorkflowPhase(v.Status) {
+		return fmt.Errorf("invalid workflow run phase %q", v.Status)
 	}
-	if v.WorkflowVersion == executionmodel.Version && v.Phase != "queued" && v.Phase != "executing" && v.Phase != "waiting_decision" && v.Phase != "waiting_pr_merge" && v.Phase != "completed" {
-		return fmt.Errorf("invalid worker flow phase %q", v.Phase)
+	if v.WorkflowVersion == executionmodel.Version && !executionmodel.ValidFlowStatus(v.Status) {
+		return fmt.Errorf("invalid worker flow status %q", v.Status)
 	}
 	var authority string
 	authorityErr := t.tx.QueryRowContext(t.ctx, `SELECT authority FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&authority)
@@ -43,6 +43,19 @@ func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
 			}
 			if old.ProjectIdentity != v.ProjectIdentity || old.WorkflowRunID != v.WorkflowRunID || old.TaskID != v.TaskID || !old.CreatedAt.Equal(v.CreatedAt) || !bytes.Equal(oldPin, newPin) || old.SelectedResult != "" && old.SelectedResult != v.SelectedResult {
 				return nativeErr("immutable_task", "native workflow identity, definition, runner and selected result are fixed")
+			}
+			if v.InputVersion < old.InputVersion || len(v.StageInputs) < len(old.StageInputs) || len(v.StageResults) < len(old.StageResults) {
+				return nativeErr("immutable_task", "stage input/result history cannot be removed or rewound")
+			}
+			for i, input := range old.StageInputs {
+				if recordFingerprint(input) != recordFingerprint(v.StageInputs[i]) {
+					return nativeErr("immutable_task", "frozen stage input cannot be replaced")
+				}
+			}
+			for i, result := range old.StageResults {
+				if recordFingerprint(result) != recordFingerprint(v.StageResults[i]) {
+					return nativeErr("immutable_task", "accepted stage result is first-wins")
+				}
 			}
 			if old.WorkflowVersion == executionmodel.Version && old.PRURL != "" && old.PRURL != v.PRURL && old.PRState != "closed_unmerged" {
 				return nativeErr("immutable_task", "bound worker PR cannot change before it is closed unmerged")
@@ -69,13 +82,13 @@ func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
 					return nativeErr("immutable_task", "replaced worker PR must remain in history")
 				}
 			}
-			if old.Phase == "completed" && (v.Phase != old.Phase || v.PendingDecisions != old.PendingDecisions || !v.UpdatedAt.Equal(old.UpdatedAt)) {
+			if old.Status == "completed" && (v.Status != old.Status || v.PendingDecisions != old.PendingDecisions || !v.UpdatedAt.Equal(old.UpdatedAt)) {
 				return nativeErr("immutable_task", "completed native workflow history cannot be changed")
 			}
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return err
 		}
-		if v.Phase == "completed" {
+		if v.Status == "completed" {
 			var deliveries int
 			if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=? AND selected_workflow_run_id=?`, v.ProjectIdentity, v.TaskID, v.WorkflowRunID).Scan(&deliveries); err != nil {
 				return err
@@ -104,7 +117,7 @@ func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
 	if err != nil {
 		return err
 	}
-	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?) ON CONFLICT(project_identity,workflow_run_id) DO UPDATE SET phase=excluded.phase,payload=excluded.payload WHERE workflow_runs.task_id=excluded.task_id`, v.ProjectIdentity, v.WorkflowRunID, v.TaskID, v.Phase, b)
+	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?) ON CONFLICT(project_identity,workflow_run_id) DO UPDATE SET phase=excluded.phase,payload=excluded.payload WHERE workflow_runs.task_id=excluded.task_id`, v.ProjectIdentity, v.WorkflowRunID, v.TaskID, v.Status, b)
 	return requireIdentityWrite(result, err, "workflow identity cannot be rebound to another task")
 }
 
@@ -116,6 +129,7 @@ func nativeWorkflowPin(v executionmodel.WorkflowRunRecord) ([]byte, error) {
 		implementationKey = v.ExecutionProfile.ImplementationKey
 	}
 	return encodePayload(struct {
+		FlowRef           string
 		WorkflowVersion   string
 		ConfigDigest      string
 		ProfileDigest     string
@@ -123,7 +137,7 @@ func nativeWorkflowPin(v executionmodel.WorkflowRunRecord) ([]byte, error) {
 		ImplementationKey string
 		Repository        string
 		Branch            string
-	}{v.WorkflowVersion, v.ConfigDigest, profileDigest, v.ExecutionProfile, implementationKey, v.Repository, v.Branch})
+	}{v.FlowRef, v.WorkflowVersion, v.ConfigDigest, profileDigest, v.ExecutionProfile, implementationKey, v.Repository, v.Branch})
 }
 
 func (t *sqliteTx) PutExecution(v executionmodel.ExecutionRecord) error {
