@@ -316,7 +316,9 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 			}
 			matched, matchErr := native.BusinessRolloutMatches(header, e.Workspace.Worktree)
 			if matchErr != nil {
-				return matchErr
+				// An empty/in-progress unrelated metadata header proves no
+				// ownership. Never read that session's body or fail our fixture.
+				return nil
 			}
 			if !matched {
 				return nil

@@ -62,7 +62,7 @@ func TestOrcaAcceptedUnobservedStartPreservesWorker(t *testing.T) {
 
 func unobservedStart(operation string) map[string]any {
 	return map[string]any{"runId": "run", "taskId": "task", "dispatchId": "dispatch", "state": "outcome_unknown", "stage": "turn_start_unobserved", "turnStart": "unobserved",
-		"prompt": map[string]any{"requestId": nativeRequestID(operation), "stages": []string{"input_accepted"}}, "mode": map[string]string{"mode": "terminal"}, "launch": map[string]any{"effective": map[string]string{"agent": "agent"}}}
+		"prompt": map[string]any{"requestId": nativeRequestID(operation), "processIncarnation": "inc", "stages": []string{"input_accepted"}}, "mutation": map[string]string{"requestId": nativeRequestID(operation)}, "effects": []any{map[string]string{"kind": "dispatch_input", "role": "agent", "id": "terminal", "state": "accepted"}}, "mode": map[string]string{"mode": "terminal"}, "launch": map[string]any{"effective": map[string]string{"agent": "agent"}}}
 }
 
 func TestOrcaUnobservedStartRequiresDurableAcceptance(t *testing.T) {
