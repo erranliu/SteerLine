@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | API1 | 已验收 | 真实 listener 上缺/错凭证、错 Host/Origin、错路由项目/信封项目/实例及轮换后旧凭证均拒绝；原传输/control/SQLite 请求和 revision/paused facts 不变。轮换后的新凭证成功执行真实 pause/resume，控制 revision 只增加一次。非回环源由 loopback-only 绑定及 `TestAPIIdentityAndAuthentication` 中源地址拒绝断言覆盖。 |
 | API2 | 验收失败 | `GET /presentation` 返回真实非默认 profile；客户端发起 start_candidate 后，受控 backend 实际生成该 profile 的 turn/Decision，正式 request 的查询 digest 与 claim 冻结 digest 分别核对（值不同符合 claim-time remote verification）；正式 provider merge 后，HTTP ShowTask/Snapshot 的 PRURL/workflow/execution/mergedAt 与同库 native Query 一致。旧 `TestAPIQueryParity` 的 SQLite `-shm` `Access is denied` 真实失败仍未精确复现/归因；sidecar 有界重查、持续 ACL 拒绝和真实 WAL 生命周期回归通过，当前 QueryParity 重跑通过不抹除原失败。等待新 reviewer 裁定历史故障，不作环境豁免。 |
-| API3 | 已验收 | 真实 HTTP + app `ControlInboxPort` + service actor 覆盖 transport 已登记但发送前取消/同信封补交、正式请求已发布但响应丢失/重连 GET 与 retry、正式消费者迟到竞争、8 个并发 duplicate、异版本同 ID conflict。检查正式 request/receipt、原信封与真实 control revision；每个合法 request 只生效一次，外国 revision receipt 不覆盖原请求。round 2 首次 test 断言过严及调整记录见下。 |
-| API4 | 已验收 | 重连回到同一服务实例；unsupported 保留为 rejected 回执；未知、SQLite 读取错误和 control 回执读取错误保持不同事实。定向和真实服务 `TestAPIReconnectAndUnsupported` 通过。 |
+| API3 | 验收失败 | 第三轮正式 configured service 持仓库锁时，合法 `discard_task` 返回 `read_failed: repository already locked: service lock is held`，Task 未丢弃；原锁释放后的原生同请求成功。该正式 service 消费接线由原执行者修复，本轮不处理。以下已通过的 control 原请求分项证据保留： 真实 HTTP + app `ControlInboxPort` + service actor 覆盖 transport 已登记但发送前取消/同信封补交、正式请求已发布但响应丢失/重连 GET 与 retry、正式消费者迟到竞争、8 个并发 duplicate、异版本同 ID conflict。检查正式 request/receipt、原信封与真实 control revision；每个合法 request 只生效一次，外国 revision receipt 不覆盖原请求。round 2 首次 test 断言过严及调整记录见下。 |
+| API4 | 验收失败 | 第三轮 600,243-byte 合法 unknown envelope 写出 1,201,014-byte rejection，超过 1,081,344-byte reader 上限，原 ID GET 与 preflight 失败。持久聚合边界本轮局部修复，精确源码定向验证已通过，待后续独立复审与最终组合核验；以下旧小请求通过证据保留： 重连回到同一服务实例；unsupported 保留为 rejected 回执；未知、SQLite 读取错误和 control 回执读取错误保持不同事实。定向和真实服务 `TestAPIReconnectAndUnsupported` 通过。 |
 | API5 | 已验收 | 真实应用服务恢复后发布发现/ready 身份、正常关闭与端口冲突诊断通过；配置服务路径不启动替代实例。定向 `TestAPIServiceLifecycle` 与真实服务 `TestAPIServiceLifecycle`、`TestAPIConfiguredServicePublishesDiscovery` 通过。 |
 
 无独立人工验收门槛；真实 UI 操作仍由 2.1 节点安排，不计入本任务自动结果。
@@ -115,7 +115,7 @@ API2 仍保留 `验收失败`；本次 main 合并未改变其诊断结论或授
 
 | 范围 | 命令/结果 | 原始证据 |
 | --- | --- | --- |
-| 非默认 profile 经 HTTP 到真实 backend | `go test ./tests/integration -run '^TestAPIQueryParity$' -count=1 -v`：通过。fixture 同时提供默认 `fixture` 与非默认 `fixture-alt`；HTTP 展示所选 ID/digest，原生 control request 使用所选 profile，实际 controlled backend 产生 alt 的 turn/Decision；冻结 ImplementationData 为 alt Model/ReasoningEffort。查询 digest `e89b6bc4…` 与 claim 后 frozen digest `6c7a18fe…` 分别记录且不要求相等；execution config digest 与 WorkflowRun 冻结 digest 一致。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-nondefault-profile-retry2-6a3157a132f047de8deb2dfab0efe9cd\api-query-nondefault-profile.log` |
+| 非默认 profile 经 HTTP 到真实 backend | `go test ./tests/integration -run '^TestAPIQueryParity$' -count=1 -v`：通过。fixture 同时提供默认 `fixture` 与非默认 `fixture-alt`；HTTP 展示所选 ID/digest，原生 control request 使用所选 profile，实际 controlled backend 产生 alt 的 turn/Decision；冻结 ImplementationData 为 alt Model/ReasoningEffort。查询 digest `19226c57…` 与 claim 后 frozen digest `464e05a9…` 分别记录且不要求相等；execution config digest 与 WorkflowRun 冻结 digest 一致。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-nondefault-profile-retry2-6a3157a132f047de8deb2dfab0efe9cd\api-query-nondefault-profile.log` |
 | 真实持久 PR/Delivery HTTP 查询 | `go test ./tests/integration -run '^TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer$' -count=1 -v`：通过。沿受控正式 provider merge 流程产生持久 TaskDelivery，HTTP ShowTask 与 Snapshot 的 PRURL/workflow/execution/mergedAt 与同一 SQLite native Query 投影一致；未插入 TaskDelivery 或 transport record、未请求外部真实 PR。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-final-delivery-c978654e3be5494aabff70462a980030\api-delivery-query.log` |
 | Host native-state/Orca target 组合 | `go test ./internal/app/host -run '^TestNative(StatePreservesWorktreeMetadata|StateMetadataExceptionIsScopedToRealWorktreeDirectory|StateRejectsMetadataJunction|PreflightRejectsSharedSQLiteBeforeValidator)$' -count=1 -v`、`go test ./internal/app -run '^(TestOrcaSelectedTargetMatchesRestoredLifecycle|TestOrcaWorktreeMetadataKeepsNativeQueriesReadOnly)$' -count=1 -v`、`go test ./internal/execution/adapters/orca -run '^TestNativeLifecyclePlansCommittedResourcesAndSeparateInput$' -count=1 -v` 均通过。API configured service discovery 也在新 preflight 组合下通过。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-main-host-2180c84f62eb422f857b623d3d8045d6\native-state.log`；`C:\Users\lmas1\AppData\Local\Temp\steerline-api45-main-app-orca-b4bb4582232940039d85e5299e3cd92d\orca-target-and-metadata.log`；`C:\Users\lmas1\AppData\Local\Temp\steerline-api45-main-orca-lifecycle-06a94f8112e9424092b40f18c744f267\orca-lifecycle.log`；`C:\Users\lmas1\AppData\Local\Temp\steerline-api45-main-api-service-dc8fdeedeafc4241a622280738fd6696\api-configured-service.log` |
 | Host/app/Orca static | `go vet ./internal/app/... ./internal/execution/adapters/orca`：通过。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-main-vet-all-621ca00957de42909e9296e101fa6f3a\vet.log` |
@@ -126,3 +126,33 @@ API2 仍保留 `验收失败`；本次 main 合并未改变其诊断结论或授
 初次加入 alternate profile 后，测试 fixture 重新 `LoadConfig` 未再次 `ResolveIdentity`，真实 discovery client 按错项目拒绝；保留日志 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-nondefault-profile-44c4db0155c74dd9a828f40d06c049c3\api-query-nondefault-profile.log`，修复了 fixture identity 初始化。第二次断言在 ExecutionRecord 查 ImplementationData，未找到实际存放于 WorkflowRun 冻结 profile 的载荷；保留日志 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-nondefault-profile-retry-bb4810d10d494369bf4713bd480dcde2\api-query-nondefault-profile.log`，随后改为核验原 RunView.ExecutionProfile 并通过。二者均为测试夹具/观察点错误，最终真实后端 turn 与选定 profile payload 已验证；不隐藏历史失败。
 
 API2 的 SHM 原始失败及“可能 sidecar delete-pending”仍是推断而非已证实 root cause；新增 profile 与 PR/Delivery 证据不改变 API2 状态。待新 independent reviewer 同时审完整 latest main 候选和历史诊断判定；PR #249 未合并，#44 仍等待 #45。
+
+## round 3 独立复审失败范围
+
+复审 head `99fd50342dca491a09c25227e7fd197010230467`、base/main `692a784e05479b11e5818fb5a209971949e3064a`。真实 configured service `discard_task` 的仓库锁重入失败属于 P1；服务本身持有原锁，HTTP 原生 mutation 再次取得该锁而失败。P2 是 reader/writer 聚合边界不一致：600,243-byte unknown 请求 rejection 的 Envelope 与 Response.Original 重复存储，使 1,201,014-byte 文件不能正式回读；同时阻断项目 preflight 与服务重启。两者都属于固定通过条件内的真实失败，不以旧定向/L1 通过覆盖。
+
+保留原始证据根 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-round3-review-a10c27bf69a4460b8f60d8c545dab95f`：`configured-discard.log`、`large-rejection.log`、`httpapi.log`；第三轮 15 个 httpapi 顶层测试通过，而新增独立正式服务 discard 与大 rejection 探针失败。本轮只修 P2 的 httpapi 持久边界，不绕锁、不修改 discard service 接线；P1 仍失败并由原执行者后续补齐。API2 合法 sidecar 生命周期实际命中 AccessDenied 后由有界重查恢复的 syscall/现场证据仍缺失，历史 SHM 根因未闭合，继续保持失败。
+
+profile digest 摘要勘误：上表按原始 `api-query-nondefault-profile.log` 修为查询 `19226c57…`、claim 冻结 `464e05a9…`；仅修正摘要，不改变测试通过事实，也不作为 SHM 根因证明。
+
+## round 3 P2 局部修复与精确源码验证
+
+实现/协议提交 `34e9e0ee8ea83d2d60b568a4525a0fe368ae6795`，source tree `2c0c0d4c7afd7fdc02e2b54aefef5025eff8623d`、httpapi subtree `48c7e689f65c1e57ac5fc7ba06f3bdec76d22908`；后续 acceptance/execution-map 提交仅映射结果，不改变该受验源码或固定 Spec/Plan。所有以下产品命令执行时 HEAD 精确为该实现提交，工作区只有未提交的两份结果文档；没有实现/测试源码差异。
+
+首次 unique 登记和后续 atomic 更新共用聚合编码 guard，保留 reader 原 1 MiB + 32 KiB 上限；完整 envelope、digest、created_at 和实际 mapped control/normalized decision/discard intent 在副作用前核验不含结果的 1,064,960-byte budget。结果只持久有界 transport outcome；Original 从原信封恢复，typed request/receipt 仍由现有正式 authority 完整查询，后续大回执不扩张 arbitration 文件。超限新请求明确 HTTP 413 / `request_record_too_large`，不登记、不 submit，不截断原 payload/映射意图，不增加旧格式迁移/双读/回退。code/diagnostic 的持久摘要有明确截断标记。Windows private writer/DACL、immutable 原信封与完整 mapped intent binding 继续保留；未修改 host/锁/domain/schema。
+
+证据根：`C:\Users\lmas1\AppData\Local\Temp\steerline-api45-record-boundary-34e9e0ee`。
+
+| 范围 | 精确命令与结果 | 原始证据 |
+| --- | --- | --- |
+| P2 + API 协议/绑定/private preflight 定向回归 | `go test ./internal/product/httpapi -run '^TestAPI' -count=1 -v`：18 顶层测试通过、0 skip，8.073s。新增 `TestAPIRequestRecordSizeBoundary`（7 子场景）、`TestAPIRequestRecordBoundedRejection`、`TestAPIRequestRecordAtomicSizeGuard` 全部通过；正式 HTTP listener、实际文件、正式 reader 和 `ValidateStateDirectory`，不是仅比较 sizeof helper。 | `httpapi.log` |
+| API3 真实控制计数、API4 重连/unsupported | `go test ./tests/integration -run '^TestAPI(OriginalCommandReceipt\|ReconnectAndUnsupported)$' -count=1 -v`：2 项通过、0 skip，66.067s；沿临时 Git/SQLite、正式 control request/receipt、服务 actor 核对真实 revision 与原 ID，不声明 configured discard 已修复。 | `integration.log` |
+| httpapi 静态 | `go vet ./internal/product/httpapi`：exit 0，无诊断。 | `vet.log` |
+
+边界实测：原复现 wire **600,243 bytes** → rejection 文件 **600,540 bytes**，unsupported 后 GET 与 private preflight 正常；wire **1,048,576 bytes**（恰好 1 MiB）→ rejection 文件 **1,048,873 bytes**；mapped control wire **530,283** → 文件 **1,060,849**；normalized decision wire **530,532** → 文件 **1,061,243**。正向保存完整原 envelope/实际映射意图，late duplicate 不改文件；异内容同 ID conflict。超预算 control/decision、规范化额外扩张均 413，transport 文件/正式 control authority/受控 decision authority/实际 submit counter 保持原值，原 ID 权威未登记；每种情况随后合法 pause 仍可发布。
+
+后续 1 MiB typed control receipt 沿正式 query 完整返回，arbitration 不追加重复内容；删除仅此 fixture 所属正式 request 后，GET/duplicate 保留原 envelope 并返回 outcome_unknown、submit 次数仍为 1。近边界 supported rejection 的超长诊断和最坏 JSON 转义也通过实际 writer/reader/preflight。control 正向使用正式 host immutable publisher，profile resolver 和 decision normalizer/receipt 由受控测试 port 提供大型映射；此边界验证不宣称大型业务输入绕过领域约束或已由 service actor 执行业务。真实临时服务/actor 原 ID计数由独立集成组补充。所有新测试资源由各自临时 fixture 清理，无生产测试写口、无用户安装/凭证或他人服务操作。
+
+未重跑 Full/L1/live；现有 `f82c7387` L1 证据原样保留，不作为本次变更的精确源码结果。本轮 P2 局部定向通过不等于独立最终审核，API4 旧失败保留并等待新复审及最终组合结果；P1/Task 丢弃与 API2 历史 SHM/合法瞬态 denial 证据仍未闭合，PR 未合并，#45 未完成，#44 不释放。
+
+结果文档静态：`python scripts/check_doc_links.py` 266 Markdown/1681 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 84 identity files（9 draft/3 formal）通过；`git diff --check` 通过。原始输出分别为同证据根 `doc-links.log`、`task-ids.log`、`diff-check.log`。
