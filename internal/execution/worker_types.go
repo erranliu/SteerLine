@@ -79,9 +79,14 @@ func workerFromLifecycle(runID, attemptID string, observer executionbackend.Life
 				RunID: runID, AttemptID: attemptID, Source: "execution", Summary: value.Summary,
 				Activity: executionvalues.ActivityEvent{Source: "execution", Kind: value.Kind, Status: value.Status, Title: value.Title},
 				Fact:     value.Fact, Implementation: CloneImplementationData(value.Implementation),
-				Candidate:  value.Candidate,
+				Candidate: value.Candidate,
+				InputWait: value.InputWait, Diagnostic: value.Diagnostic,
+				SourceEventID: value.Fact.SourceEventID, SourceIdentity: value.Fact.SourceIdentity, SourceSegment: value.Fact.SourceSegment, Session: value.Fact.SessionID, SourceGap: value.Fact.Gap,
 				DeliveryID: value.DeliveryID, DeliveryFinal: value.DeliveryFinal,
 				Persisted: value.Persisted, Processed: value.Processed,
+			}
+			if value.Fact.Source != "" {
+				event.Source = value.Fact.Source
 			}
 			select {
 			case w.Events <- event:

@@ -57,16 +57,6 @@ func (s *Service) reconcileDiscardedExecutionStops(ctx context.Context) error {
 					continue
 				}
 				if op.Status != executionbackend.OperationConfirmed {
-					backend := BackendFor(config, s.runtime.Directory)
-					observation, observeErr := backend.Observe(ctx, *op.Ref)
-					if observeErr != nil || observation.Liveness != "exited" {
-						s.executionRecord(run).Error = ptr("discarded task worker stop is awaiting confirmed process absence")
-						s.refreshRun(run)
-						if commitErr := s.commitWorker(run); commitErr != nil {
-							return commitErr
-						}
-						continue
-					}
 					confirmed, confirmErr := s.confirmExecutionStop(op)
 					if !confirmed {
 						s.executionRecord(run).Error = ptr("discarded task worker stop is not confirmed: " + clip(fmt.Sprint(confirmErr), 1000))
@@ -131,8 +121,7 @@ func (s *Service) recordNativeStopReceipt(ctx context.Context, taskID, stopItem 
 	if configErr != nil {
 		return configErr
 	}
-	backend := BackendFor(config, s.runtime.Directory)
-	observation, err := backend.Observe(ctx, *op.Ref)
+	observation, err := s.originalStoppedObservation(ctx, config, persisted)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed execution is not confirmed absent"))
 	}
@@ -181,6 +170,17 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, st
 	if err != nil {
 		return err
 	}
+	entry, err := registrationFor(config, s.runtime.Directory)
+	if err != nil {
+		return err
+	}
+	if entry.HostManagedPermissions {
+		op, err := s.stopRunExecution(ctx, s.find(workflowRunID), nil)
+		if err != nil {
+			return err
+		}
+		return s.recordNativeStopReceipt(ctx, taskID, stopItem, op)
+	}
 	backend := BackendFor(config, s.runtime.Directory)
 	observation, err := backend.Observe(ctx, ref)
 	if err != nil || observation.Liveness != "exited" {
@@ -219,4 +219,20 @@ func nativeExecutionIDForAttempt(attempts []executionmodel.StepAttemptRecord, at
 		}
 	}
 	return ""
+}
+
+// Confirmed host-owned receipts prove the original resource was stopped or
+// released; a removed terminal cannot provide a second liveness observation.
+func (s *Service) originalStoppedObservation(ctx context.Context, config Config, op executionbackend.Operation) (executionbackend.Observation, error) {
+	entry, err := registrationFor(config, s.runtime.Directory)
+	if err != nil {
+		return executionbackend.Observation{}, err
+	}
+	if !entry.HostManagedPermissions {
+		return BackendFor(config, s.runtime.Directory).Observe(ctx, *op.Ref)
+	}
+	if op.Status != executionbackend.OperationConfirmed || op.Ref == nil || len(op.Receipt) == 0 {
+		return executionbackend.Observation{}, nativeErr("outcome_unknown", "native resource stop lacks its durable original receipt")
+	}
+	return executionbackend.Observation{Liveness: "exited", Connection: "closed", Source: "original_lifecycle_stop_receipt", ObservedAt: op.UpdatedAt, Diagnostic: op.Diagnostic}, nil
 }

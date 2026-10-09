@@ -33,6 +33,8 @@ type NativeExecutionState struct {
 }
 
 type NativeTurnState struct {
+	HostWait               *executionbackend.HostFact   `json:"host_wait,omitempty"`
+	HostWaitSequence       uint64                       `json:"host_wait_sequence,omitempty"`
 	Started                bool                         `json:"started,omitempty"`
 	RelayReported          bool                         `json:"relay_reported,omitempty"`
 	ToolContext            executionbackend.ToolContext `json:"tool_context,omitempty"`

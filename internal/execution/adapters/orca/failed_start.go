@@ -32,7 +32,14 @@ func (l *ExecutionLifecycle) recoverFailedStart(ctx context.Context, request exe
 	target.Dispatch, target.ExternalTask = partial.DispatchID, partial.TaskID
 	receipt.Target = &target
 	identity := partial.identity(target.WorktreeID)
-	if released, proof, observeErr := originalResourceReleased(ctx, l.client.MetaCall, identity); observeErr == nil && released {
+	shown, proof, observeErr := observeOriginalWorkerResource(ctx, l.client.MetaCall, identity)
+	if observeErr != nil {
+		receipt.Diagnostic += "; partial resource ownership is unverified: " + observeErr.Error()
+		receipt.Operation.Receipt, _ = json.Marshal(map[string]json.RawMessage{"start": result.Payload, "resource_observation": proof})
+		receipt.Implementation, observeErr = l.targetEnvelope(request.Snapshot, target, request.Snapshot.Ref.External, state)
+		return receipt, errors.Join(reason, observeErr)
+	}
+	if shown.Resource.ReleaseState == "released" {
 		state.PartialWorker = nil
 		state.FailedStartReleased = true
 		receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
@@ -41,9 +48,19 @@ func (l *ExecutionLifecycle) recoverFailedStart(ctx context.Context, request exe
 		receipt.Implementation, observeErr = l.targetEnvelope(request.Snapshot, target, request.Snapshot.Ref.External, state)
 		return receipt, errors.Join(reason, observeErr)
 	}
-	stop, stopProof, stopErr := workerResourceAction(ctx, l.client.MetaCall, identity, "worker-stop", request.Operation.ID+":failed-start-stop")
-	effects := map[string]json.RawMessage{"start": result.Payload, "stop": stop.Payload}
-	if stopErr == nil && (stopProof.State == "stopped" || stopProof.AlreadySettled) {
+	effects := map[string]json.RawMessage{"start": result.Payload, "resource_observation": proof}
+	stopped := shown.Worker.State == "stopped"
+	if !stopped {
+		stop, stopProof, stopErr := workerResourceAction(ctx, l.client.MetaCall, identity, "worker-stop", request.Operation.ID+":failed-start-stop")
+		effects["stop"] = stop.Payload
+		stopped = stopErr == nil && (stopProof.State == "stopped" || stopProof.AlreadySettled)
+		if !stopped {
+			proven, raw, err := originalWorkerStopped(ctx, l.client.MetaCall, identity)
+			effects["stop_observation"] = raw
+			stopped = err == nil && proven
+		}
+	}
+	if stopped {
 		released, releaseProof, releaseErr := workerResourceAction(ctx, l.client.MetaCall, identity, "worker-release", request.Operation.ID+":failed-start-release")
 		effects["release"] = released.Payload
 		if releaseErr == nil && workerReleased(releaseProof) {

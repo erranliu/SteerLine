@@ -65,6 +65,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes
 			return executionmodel.ErrTurnStale
 		}
 		saved.Status, saved.Diagnostic, saved.UpdatedAt = result.receipt.Disposition, result.receipt.Diagnostic, now()
+		saved.Receipt = append([]byte(nil), result.receipt.Operation.Receipt...)
 		if result.err != nil {
 			saved.Status, saved.Diagnostic = executionbackend.OperationUnknown, result.err.Error()
 		}
@@ -85,7 +86,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes
 }
 
 func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.RunView, worker *Worker) (executionbackend.Operation, error) {
-	if r == nil || worker == nil || worker.proc == nil {
+	if r == nil {
 		return executionbackend.Operation{}, errors.New("there is no active execution to stop")
 	}
 	config, configErr := s.executionConfigForRun(r)
@@ -103,6 +104,9 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 	entry, registryErr := registrationFor(config, s.runtime.Directory)
 	if registryErr != nil {
 		return executionbackend.Operation{}, registryErr
+	}
+	if (worker == nil || worker.proc == nil) && !entry.HostManagedPermissions {
+		return executionbackend.Operation{}, errors.New("there is no original local handle to stop")
 	}
 	if entry.Key.Backend != ref.Backend || entry.Key.Protocol != ref.Protocol || entry.Key.Agent != ref.Agent.Name {
 		return executionbackend.Operation{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
@@ -148,7 +152,11 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 	if entry.HostManagedPermissions {
 		stopper = nil
 	}
-	port := lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: worker.proc, stopper: stopper, operation: op}
+	var handle executionbackend.StopHandle
+	if worker != nil {
+		handle = worker.proc
+	}
+	port := lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: handle, stopper: stopper, operation: op}
 	err = s.dispatchLifecycleEffect(ctx, r, port, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
@@ -160,6 +168,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 		expected := recordFingerprint(saved)
 		status, diagnostic := lifecycleOutcome(result.receipt, result.err)
 		saved.Status, saved.Diagnostic, saved.UpdatedAt = executionbackend.OperationStatus(status), diagnostic, now()
+		saved.Receipt = append([]byte(nil), result.receipt.Operation.Receipt...)
 		if result.err != nil || saved.Status != executionbackend.OperationConfirmed && saved.Status != executionbackend.OperationAccepted && saved.Status != executionbackend.OperationRejected {
 			saved.Status = executionbackend.OperationUnknown
 		}
@@ -231,6 +240,7 @@ func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, err
 			err = receipt.ValidateFor(request)
 		}
 		op.Status, op.Diagnostic, op.UpdatedAt = receipt.Disposition, receipt.Diagnostic, now()
+		op.Receipt = append([]byte(nil), receipt.Operation.Receipt...)
 		if err != nil || op.Status != executionbackend.OperationConfirmed {
 			op.Status = executionbackend.OperationUnknown
 			if err != nil {

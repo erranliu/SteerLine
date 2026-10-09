@@ -371,15 +371,34 @@ func (l *ExecutionLifecycle) StopLifecycle(ctx context.Context, request executio
 		return nativeReceipt(request, executionbackend.OperationRejected), executionbackend.UnsupportedAdapterOperation(request.Operation.Action, "native Orca stop has no original terminal")
 	}
 	receipt := nativeReceipt(request, executionbackend.OperationUnknown)
-	identity := request.Snapshot.Ref.External
+	if request.Operation.Ref == nil {
+		return receipt, errors.New("native stop lacks its saved resource identity")
+	}
+	identity := request.Operation.Ref.External
 	if identity.Terminal == "" {
 		state, _, err := l.readState(request.Snapshot)
 		if err != nil || state.PartialWorker == nil {
 			return receipt, errors.Join(err, errors.New("native Orca stop has no original worker"))
 		}
-		identity = state.PartialWorker.identity(request.Snapshot.Ref.Target.WorktreeID)
-	} else if err := l.verifyAgent(ctx, request.Snapshot, identity); err != nil {
-		return receipt, err
+		if state.PartialWorker.DispatchID != request.Operation.Ref.Target.Dispatch || state.PartialWorker.TaskID != request.Operation.Ref.Target.ExternalTask || state.PartialWorker.RunID != request.Operation.Ref.Target.OrchestrationRun {
+			return receipt, errors.New("partial stop changed its original resource")
+		}
+		identity = state.PartialWorker.identity(request.Operation.Ref.Target.WorktreeID)
+	}
+	shown, raw, observeErr := observeOriginalWorkerResource(ctx, l.client.MetaCall, identity)
+	receipt.Operation.Receipt = append([]byte(nil), raw...)
+	if observeErr != nil {
+		return receipt, observeErr
+	}
+	if shown.Resource.ReleaseState == "released" {
+		receipt.Disposition = executionbackend.OperationConfirmed
+		receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
+		return receipt, nil
+	}
+	if identity.Terminal != "" && shown.Worker.State != "succeeded" && shown.Worker.State != "failed" && shown.Worker.State != "stopped" {
+		if err := l.verifyAgent(ctx, request.Snapshot, identity); err != nil {
+			return receipt, err
+		}
 	}
 	result, proof, err := workerResourceAction(ctx, l.client.MetaCall, identity, "worker-stop", request.Operation.ID)
 	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
@@ -392,7 +411,29 @@ func (l *ExecutionLifecycle) StopLifecycle(ctx context.Context, request executio
 		receipt.State.Stopped = true
 	}
 	if proof.AlreadySettled {
-		receipt.Diagnostic = "Dispatch is already settled; worker resource release is still required"
+		state, _, stateErr := l.readState(request.Snapshot)
+		if stateErr != nil {
+			return receipt, stateErr
+		}
+		for _, turn := range state.Turns {
+			if turn.DispatchID == identity.Dispatch {
+				if freezeErr := l.freezeOriginalOutput(ctx, request.Snapshot, turn); freezeErr != nil {
+					receipt.Diagnostic = "canonical output unavailable: " + freezeErr.Error()
+				}
+				break
+			}
+		}
+		released, releaseProof, releaseErr := workerResourceAction(ctx, l.client.MetaCall, identity, "worker-release", request.Operation.ID+":settled-release")
+		receipt.Operation.Receipt, _ = json.Marshal(map[string]json.RawMessage{"stop": result.Payload, "release": released.Payload})
+		if releaseErr != nil {
+			return receipt, releaseErr
+		}
+		if workerReleased(releaseProof) {
+			receipt.Disposition = executionbackend.OperationConfirmed
+			receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
+		} else {
+			receipt.Diagnostic += "; original settled worker release remains " + releaseProof.State + "; " + releaseProof.LastError + "; recovery=" + string(releaseProof.Recovery)
+		}
 	}
 
 	return receipt, nil

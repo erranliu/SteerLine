@@ -54,3 +54,30 @@ A3 保持失败/环境受阻，M1 保持未验。本变更不加入 roadmap、�
 独立只读 reviewer `/root/review_orca_code` 多轮检查并确认全部必须修复项已处理，最终未发现新必须修复问题；原停止对账文件 SHA-256 `b1be248641b9009605b68e1fdc37bf510dbd14f844c287b5b47fb710e4a7d6f4`。审核确认源码正确性不替代 A3 真实模型闭环。A1 / A2 以受控及正式服务已测范围通过，A3 继续保持环境受阻，M1 未验。
 
 `python scripts/check_doc_links.py` 通过（274文件、1751本地链接），`python scripts/roadmap_task_id.py check` 通过（86身份文件、10草稿行、4正式行、next88）。旧84文档的修改仅撤回本聊天先前添加的86前置，保持原在途固定契约；未改变84工作区。
+
+## 2026-10-09 用户要求质量审计、直接修复并提 PR
+
+整合最新默认主干 `e20c28ef`，合并 commit `e755e899` 保留 PR #255 的远端 Orca opaque agent、独立 codec/原生资源和 L3 场景。以下修复在该合并后的工作区执行，无外部 worker、安装或共享后台变更：
+
+- 部分启动清理在任何停止/释放前严格核原 runtime/Run/Task/Dispatch/owner/worktree；不可达或身份变化保持 unknown，不执行副作用。持久 stopped 可继续原 release，不被旧 stop_unknown 回放困住。
+- 正式停止保存原生回执；discard 的有/无句柄路径都按原生命周期证明清除实际 StopPending。重启后首次 discard 可以持久化原 Dispatch 停止意图并执行一次；已有未知意图不重发。已结算的持续 worker 通过原 worker-release 收尾，pending/retained 不成为 absence；已结算且 terminal 已退出时不要求虚构 live handle。
+- 正常观察与 Done 已保存的恢复分支统一验证完整输出。冻结材料版本2的摘要与 conversation cursor 包含 outcome；只改成功/失败也被拒绝。JSON预算覆盖六倍转义膨胀，合法正文不会在冻结后变成不可读。
+- 坏 binding 或未知 Attempt 只产生可信所属执行的局部 gap，不阻断健康来源；已知历史 Attempt 保留原身份和 Ended，取消立即停止。
+- 运行期间的原生 agentWait 经生命周期桥接保存宿主等待事实，不生成业务问题。缺失字段与显式 null 区分；未知保留旧 wait，发生序号在原 turn 持久化，相同等待再次发生不被去重。
+- native worker-start 的 CLI 传输预算至少覆盖原生 readiness 等待和30秒回执余量，仍使用同一保存 UUID。产品会话设计文档已纠正专属历史读取描述。
+
+本轮验证（base `e755e899` 加上述未提交修复，证据不冒称 clean-source/live）：
+
+| 范围 | 实际命令 / 结果 |
+| --- | --- |
+| Orca adapter及审计回归 | `go test ./internal/execution/adapters/orca -count=1` 通过（最终6.775秒）；live opt-in默认skip，不计A3 |
+| 正式停止/丢弃 | `go test ./internal/execution -run '^TestHostManagedStopRecoveryUsesOriginalLifecycleProof$' -count=1 -v` sync/background/first-discard 三场景通过（29.59秒），实际StopPending清除且一次原stop、零通用Kill |
+| 等待桥接与原停止边界 | `go test ./internal/execution -run 'Test(LifecycleHostWait|HostInputWait|HostManagedStopRecovery|ExecutionStopIntent|PS3StopReceipt)' -count=1` 通过（40.711秒；随后新增first-discard另行通过） |
+| 配置 / 权限 / 冻结 | `go test ./internal/app -run 'Test(.*Orca|.*Profile|.*Configuration|.*Global|PS2)' -count=1` 通过（52.337秒） |
+| 原会话多轮恢复 | `go test ./tests/integration -run '^TestCD67AdditionalImplementation$/^supported_terminal_recovery_and_original_identity$' -count=1 -v` 通过（141.15秒）；随后原生stop和等待边界由上述专属回归验证 |
+| L1 | `go run ./cmd/test-feedback -level=L1` 通过（148.7秒）；`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261009T060246.138759900Z/summary.json`。L1之后结算terminal无需live的最终补丁由adapter最终回归覆盖，不宣称重新跑全量 |
+| 主干集成 / local保留 | remote adapter/backend 包通过（2.846/0.638秒）；`go test -tags ps2native ./internal/app -run '^$'` 编译通过；local原生权限回归通过（0.867秒），app构建通过 |
+
+独立只读审计者 `/root/review_orca_code` 与 `/root/review_orca_plan` 提出的全部已确认问题已修复并复核。最终专项复核未发现新必须修复问题；所审停止实现 SHA-256 `62f6910f027fea6f670e7167585a444f2146bff031e60c51a1f3349fe78a405d`。原始首轮回归失败属于新增断言揭示的旧缺口或fixture缺乏正确原生资源回执，均修后复验，不把失败当通过。
+
+ONW-A1/A2 保持上述自动范围通过；ONW-A3 仍为前文 Orca1.4.209 launcher readiness 真实环境阻塞，当前审计不运行模型、不宣称真机闭环通过。ONW-M1 未验。PR用于代码审阅，尚未合并或部署；历史86不进入 roadmap、不阻塞84。

@@ -187,6 +187,9 @@ func TestFailedCompositeStartStopsItsExactPartialWorker(t *testing.T) {
 			t.Fatal("partial cleanup targeted another Dispatch")
 		}
 		calls = append(calls, args[1])
+		if args[1] == "worker-show" {
+			return nativeTestEnvelope(t, auditWorkerResource("original-dispatch", "original-task", "runtime", "workspace", "original-dispatch", "active", "retained")), nil
+		}
 		status := "stopped"
 		if args[1] == "worker-release" {
 			status = "released"

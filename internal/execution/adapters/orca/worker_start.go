@@ -62,7 +62,12 @@ func (l *ExecutionLifecycle) startNativeWorker(ctx context.Context, snapshot exe
 		}
 		args = append(args, "--terminal", previous.Terminal)
 	}
-	result, callErr := l.client.MetaCall(ctx, args...)
+	wait := positiveDuration(l.orca.WaitTimeout, 2*time.Minute)
+	timeout := max(positiveDuration(l.client.config.CommandTimeout, 30*time.Second), wait)
+	if wait <= time.Duration(1<<63-1)-30*time.Second {
+		timeout = max(timeout, wait+30*time.Second)
+	}
+	result, callErr := l.client.metaCallTimeout(ctx, timeout, args...)
 	var started workerStartReceipt
 	parseErr := json.Unmarshal(result.Payload, &started)
 	if callErr != nil || parseErr != nil {

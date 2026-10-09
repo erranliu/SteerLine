@@ -36,11 +36,22 @@ func (*ConversationAdapter) DiscoverHistory(ctx context.Context, discovery conve
 				return result, err
 			}
 			binding, err := readOutputBinding(path)
-			if err != nil {
-				return result, err
+			if err == nil && (binding.ProjectID != base.ProjectID || binding.WorkflowID != base.WorkflowID || binding.ExecutionID != base.ExecutionID || !samePath(binding.Workspace, run.Workspace)) {
+				err = errors.New("Orca output binding changed its original execution/workspace")
 			}
-			if binding.ProjectID != base.ProjectID || binding.WorkflowID != base.WorkflowID || binding.ExecutionID != base.ExecutionID || !samePath(binding.Workspace, run.Workspace) {
-				return result, errors.New("Orca output binding changed its original execution/workspace")
+			known, ended := binding.AttemptID == base.AttemptID, false
+			for _, attempt := range run.Attempts {
+				if attempt.AttemptID == binding.AttemptID {
+					known, ended = true, attempt.Ended
+					break
+				}
+			}
+			if err == nil && !known {
+				err = errors.New("Orca output binding has no known original attempt")
+			}
+			if err != nil {
+				result.Writes = append(result.Writes, outputBindingGap(base, path, err))
+				continue
 			}
 			event := base
 			event.AttemptID = binding.AttemptID
@@ -48,7 +59,7 @@ func (*ConversationAdapter) DiscoverHistory(ctx context.Context, discovery conve
 			event.SourceSegment = event.SourceIdentity
 			event.TurnID, event.TurnQuality = binding.TurnID, executionmodel.IdentityDerived
 			event.SessionID, event.SessionQuality = SessionID(binding.Process), executionmodel.IdentityDerived
-			result.Sources = append(result.Sources, conversationtypes.ConversationHistorySource{Identity: event.SourceIdentity, BindingPath: path, Workspace: binding.Workspace, Event: event})
+			result.Sources = append(result.Sources, conversationtypes.ConversationHistorySource{Identity: event.SourceIdentity, BindingPath: path, Workspace: binding.Workspace, Event: event, Ended: ended})
 		}
 	}
 	return result, nil
@@ -118,7 +129,7 @@ func (*ConversationAdapter) ReadHistory(ctx context.Context, request conversatio
 	if material == nil {
 		return conversationtypes.ConversationHistoryBatch{Cursor: request.Cursor}, nil
 	}
-	digest := digestValue(*material)
+	digest := settledOutputDigest(*material, material.Outcome)
 	if request.Cursor != "" && request.Cursor != digest {
 		return conversationtypes.ConversationHistoryBatch{}, errors.New("settled worker output material was modified")
 	}
@@ -161,4 +172,18 @@ func managedConversationOutput(command *exec.Cmd, start func(*exec.Cmd) (executi
 	defer handle.Close()
 	err = command.Wait()
 	return []byte(output.String()), err
+}
+
+func outputBindingGap(base executionmodel.ConversationEvent, path string, cause error) executionmodel.ConversationWrite {
+	event := base
+	event.Version, event.ReceivedAt = executionmodel.ConversationVersion, time.Now().UTC()
+	event.Type, event.Status = executionmodel.ConversationGap, "binding_unavailable"
+	event.Phase = executionmodel.MessagePhaseUnknown
+	event.Source, event.SourceRole = outputSource, executionmodel.ConversationSourceFallback
+	event.SourceIdentity = "orca-output-gap:" + digestValue(path)
+	event.SourceSegment, event.SourceEventID = event.SourceIdentity, "binding-gap:"+digestValue(struct{ Path, Diagnostic string }{path, cause.Error()})
+	event.SourceEventQuality = executionmodel.IdentityDerived
+	event.SessionQuality, event.TurnQuality, event.ItemQuality = executionmodel.IdentityUnknown, executionmodel.IdentityUnknown, executionmodel.IdentityUnknown
+	event.Diagnostic = cause.Error()
+	return executionmodel.ConversationWrite{Event: event}
 }

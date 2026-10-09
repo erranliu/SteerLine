@@ -17,6 +17,9 @@ import (
 
 const outputDirectory = ".steerline-output"
 
+// JSON strings can expand each source byte to a six-byte escape.
+const maxOutputJSONBytes = 6*executionmodel.MaxConversationBodyBytes + 65536
+
 // OutputMaterial is an explicit worker-declared response, not an inferred
 // provider message phase. Only its exact original Dispatch can settle it.
 type OutputMaterial struct {
@@ -95,11 +98,11 @@ func readOutputMaterial(ctx context.Context, call MetaCall, binding outputBindin
 		return nil, err
 	}
 	defer file.Close()
-	raw, err := io.ReadAll(io.LimitReader(file, 2*executionmodel.MaxConversationBodyBytes+65537))
+	raw, err := io.ReadAll(io.LimitReader(file, maxOutputJSONBytes+1))
 	if err != nil {
 		return nil, err
 	}
-	if len(raw) > 2*executionmodel.MaxConversationBodyBytes+65536 {
+	if len(raw) > maxOutputJSONBytes {
 		return nil, errors.New("worker output material exceeds its read budget")
 	}
 	var material OutputMaterial

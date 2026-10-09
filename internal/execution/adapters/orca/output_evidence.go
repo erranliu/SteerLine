@@ -40,10 +40,10 @@ func readSettledOutput(path string, binding outputBinding) (*OutputMaterial, err
 	if err != nil {
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || info.Size() > 2*executionmodel.MaxConversationBodyBytes+65536 {
+	if !info.Mode().IsRegular() || info.Size() > maxOutputJSONBytes {
 		return nil, errors.New("settled output evidence is not a bounded regular file")
 	}
-	raw, err := io.ReadAll(io.LimitReader(file, 2*executionmodel.MaxConversationBodyBytes+65537))
+	raw, err := io.ReadAll(io.LimitReader(file, maxOutputJSONBytes+1))
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func readSettledOutput(path string, binding outputBinding) (*OutputMaterial, err
 		return nil, err
 	}
 	material := evidence.Material
-	if evidence.Version != 1 || evidence.Binding != outputBindingIdentity(binding) || evidence.Digest != digestValue(material) || evidence.Outcome != "completed" && evidence.Outcome != "failed" || material.WorkflowRunID != binding.WorkflowID || material.TurnID != binding.TurnID || material.TaskID != binding.Process.Task || material.DispatchID != binding.Process.Dispatch || material.Body == "" || len(material.Body) > executionmodel.MaxConversationBodyBytes {
+	if evidence.Version != 2 || evidence.Binding != outputBindingIdentity(binding) || evidence.Digest != settledOutputDigest(material, evidence.Outcome) || evidence.Outcome != "completed" && evidence.Outcome != "failed" || material.WorkflowRunID != binding.WorkflowID || material.TurnID != binding.TurnID || material.TaskID != binding.Process.Task || material.DispatchID != binding.Process.Dispatch || material.Body == "" || len(material.Body) > executionmodel.MaxConversationBodyBytes {
 		return nil, errors.New("settled output evidence changed its original binding or body")
 	}
 	material.Outcome = evidence.Outcome
@@ -60,7 +60,7 @@ func readSettledOutput(path string, binding outputBinding) (*OutputMaterial, err
 }
 
 func freezeSettledOutput(path string, binding outputBinding, material OutputMaterial) error {
-	evidence := settledOutputEvidence{Version: 1, Binding: outputBindingIdentity(binding), Digest: digestValue(material), Outcome: material.Outcome, Material: material}
+	evidence := settledOutputEvidence{Version: 2, Binding: outputBindingIdentity(binding), Digest: settledOutputDigest(material, material.Outcome), Outcome: material.Outcome, Material: material}
 	raw, err := json.Marshal(evidence)
 	if err != nil {
 		return err
@@ -119,4 +119,11 @@ func (l *ExecutionLifecycle) freezeOriginalOutput(ctx context.Context, snapshot 
 		return errors.New("original settled worker lacks complete output material; no canonical final is available")
 	}
 	return freezeSettledOutput(path, binding, *material)
+}
+
+func settledOutputDigest(material OutputMaterial, outcome string) string {
+	return digestValue(struct {
+		Material OutputMaterial
+		Outcome  string
+	}{material, outcome})
 }

@@ -61,7 +61,14 @@ func ObserveHost(ctx context.Context, call MetaCall, identity TerminalIdentity) 
 	if t.Orphaned || !t.Connected {
 		return fact, errors.New("original terminal observation is disconnected")
 	}
-	if t.AgentWait != nil && string(*t.AgentWait) != "null" && len(*t.AgentWait) <= 4096 {
+	if t.AgentWait == nil {
+		fact.Reason, fact.Confidence, fact.Detail = "host_observation_unverified", "unverified", "Orca did not report agentWait"
+		return fact, nil
+	}
+	if string(*t.AgentWait) != "null" {
+		if len(*t.AgentWait) > 4096 {
+			return fact, errors.New("terminal agentWait exceeds its observation budget")
+		}
 		var wait struct {
 			Kind   string `json:"kind"`
 			Source string `json:"source"`
