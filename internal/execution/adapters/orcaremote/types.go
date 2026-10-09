@@ -24,8 +24,8 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	if c.Call == nil || c.Origin == nil || c.Settings.ConnectionID == "" || c.Settings.EnvironmentID == "" || c.Settings.RepositorySelector == "" || c.Settings.CoordinatorTerminal == "" {
-		return errors.New("remote Orca requires fixed connection, environment, repository and coordinator")
+	if c.Call == nil || c.Origin == nil || c.Settings.ConnectionID == "" || c.Settings.EnvironmentID == "" || c.Settings.RepositorySelector == "" {
+		return errors.New("remote Orca requires fixed connection, environment and repository")
 	}
 	return nil
 }

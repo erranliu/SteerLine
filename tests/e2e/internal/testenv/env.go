@@ -25,10 +25,11 @@ import (
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, SourceCommit, SourceDirty string }
+type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
 	bodyFinishedAt          time.Time
 	bodyContextErr          error
@@ -46,6 +47,9 @@ type Scenario struct {
 }
 
 type Project struct {
+	RemoteBranches                                                                    []string
+	RemoteCleanupFailed                                                               bool
+	RemoteOrca                                                                        *native.RemoteOrca
 	Scenario                                                                          *Scenario
 	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider, Executable string
 	ProjectID, DatabaseID                                                             string
@@ -96,7 +100,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.HasPrefix(id, "candidates.") {
+	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.Contains(id, "orca-remote-codex") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
 	}
 	if strings.HasPrefix(id, "candidates.") {
@@ -601,7 +605,7 @@ func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	}
 	snap.Helper, err = controlled.Read(p.Provider)
 	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
-		snap.Helper.PR, err = p.githubPR(snap)
+		snap.Helper.PR, err = p.githubPRContext(ctx, snap)
 	}
 	return snap, err
 }
@@ -747,6 +751,12 @@ func (s *Scenario) cleanup() {
 		}
 	}
 	for _, p := range s.projects {
+		if p.RemoteOrca != nil {
+			if err := p.cleanupRemoteOrca(); err != nil {
+				failures = append(failures, err.Error())
+				p.RemoteCleanupFailed = true
+			}
+		}
 		if p.OrcaExecutable != "" {
 			if err := p.cleanupOrca(); err != nil {
 				failures = append(failures, err.Error())
@@ -754,14 +764,20 @@ func (s *Scenario) cleanup() {
 		}
 	}
 	for _, p := range s.projects {
-		if p.RealPR {
+		if p.RealPR && !p.RemoteCleanupFailed {
 			if err := p.cleanupGitHub(); err != nil {
 				failures = append(failures, err.Error())
 			}
 		}
 	}
-	if err := RemoveOwned(s.Run.Scratch, s.Root); err != nil {
-		failures = append(failures, err.Error())
+	preserveScratch := false
+	for _, p := range s.projects {
+		preserveScratch = preserveScratch || p.RemoteCleanupFailed
+	}
+	if !preserveScratch {
+		if err := RemoveOwned(s.Run.Scratch, s.Root); err != nil {
+			failures = append(failures, err.Error())
+		}
 	}
 	if len(failures) > 0 {
 		s.t.Errorf("E2E cleanup: %s", strings.Join(failures, "; "))

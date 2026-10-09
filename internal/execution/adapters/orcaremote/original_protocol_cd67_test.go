@@ -31,6 +31,17 @@ func TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily(t *testing.T)
 	}
 }
 
+func TestSupervisedOrcaProbePreservesClaimedTarget(t *testing.T) {
+	c := supervisedFixtureConfig(t)
+	target := targetFor(c)
+	target.Branch = "isolated/base"
+	target.BaseRevision = strings.Repeat("a", 40)
+	report, err := remote.NewBackend(c).Probe(context.Background(), target, executionbackend.AgentSpec{Name: "codex"})
+	if err != nil || report.Target != target {
+		t.Fatalf("remote probe erased fixed claim fields: target=%+v err=%v", report.Target, err)
+	}
+}
+
 func TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift(t *testing.T) {
 	c := supervisedFixtureConfig(t)
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_REMOTE_VERSION", "1.5.0")

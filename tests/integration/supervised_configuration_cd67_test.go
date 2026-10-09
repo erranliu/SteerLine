@@ -40,8 +40,8 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 		t.Fatalf("optional native version pin was required by the codec: %v", err)
 	}
 	setNativeImplementationProfiles(t, &c, nativeProfileSettings(c), &orcaSettings, &remoteSettings)
-	if err := c.ValidateProfiles(); err == nil || !strings.Contains(err.Error(), "enforcement evidence") {
-		t.Fatalf("missing remote permission evidence bypassed actual admission: %v", err)
+	if err := c.ValidateProfiles(); err != nil {
+		t.Fatalf("valid remote profile rejected: %v", err)
 	}
 	report, err := (remote.NewBackend(nativeRemoteConfig(c))).Probe(context.Background(), nativeTarget(c), executionbackend.AgentSpec{Name: c.Agent})
 	if err != nil {

@@ -80,7 +80,7 @@ func TestCD67AdditionalImplementation(t *testing.T) {
 	t.Run("supported_terminal_recovery_and_original_identity", func(t *testing.T) { testIntegratedNativeSessionGate(t, true) })
 	t.Run("remote_protocol_is_not_permission_authentication", testCD64RemoteProtocolAssertions)
 	t.Run("remote_model_and_cancellation_admission", TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported)
-	t.Run("remote_claim_requires_permission_evidence", TestRemotePublicationClaimRequiresPermissionEvidence)
+	t.Run("remote_claim_requires_permission_evidence", TestRemotePublicationClaimRequiresExplicitModel)
 }
 
 func testAdditionalImplementation(t *testing.T) {

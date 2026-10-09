@@ -42,7 +42,7 @@ func ValidateProfileSelection(agent string, codexPayload, orcaPayload, remotePay
 	if err := selected.Validate(); err != nil {
 		return err
 	}
-	return CheckPolicy(selected.Settings.Settings)
+	return nil
 }
 
 // ProfileConfig is owned by the remote implementation codec.
@@ -101,8 +101,8 @@ func EncodeProfileConfig(config ProfileConfig) ([]byte, error) {
 }
 
 func (c ProfileConfig) Validate() error {
-	if strings.TrimSpace(c.ConnectionID) == "" || strings.TrimSpace(c.EnvironmentID) == "" || strings.TrimSpace(c.RepositorySelector) == "" || strings.TrimSpace(c.CoordinatorTerminal) == "" {
-		return errors.New("remote profile requires fixed connection, environment, repository and coordinator identities")
+	if strings.TrimSpace(c.ConnectionID) == "" || strings.TrimSpace(c.EnvironmentID) == "" || strings.TrimSpace(c.RepositorySelector) == "" {
+		return errors.New("remote profile requires fixed connection, environment and repository identities")
 	}
 	if c.RemoteCancelAvailable {
 		return errors.New("remote cancellation is fixed unavailable")

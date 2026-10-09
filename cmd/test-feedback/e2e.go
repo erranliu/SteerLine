@@ -98,7 +98,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live" && entry.Env != "native") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex") || (entry.Env == "native" && (entry.Level != "L3" || entry.Chain != "")) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live" && entry.Env != "native") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex" && entry.Chain != "orca-remote-codex") || (entry.Env == "native" && (entry.Level != "L3" || entry.Chain != "")) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -195,6 +195,12 @@ func runE2E(opts options) (code int) {
 	}
 	if opts.e2eEnv == "live" {
 		note = "native gpt-6-luna/medium; loopback provider"
+		for _, scenario := range selected {
+			if scenario.Chain == "orca-remote-codex" {
+				note = "native gpt-6-luna/medium; selected providers; remote Orca uses real SteerlineTest PRs"
+				break
+			}
+		}
 		if opts.suite == "candidates" {
 			note = "native gpt-6-luna/medium; exact multi-profile admission; real SteerlineTest PRs"
 		}
@@ -304,7 +310,14 @@ func runE2E(opts options) (code int) {
 			return fail(err)
 		}
 	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
+	remoteConfig := os.Getenv("STEERLINE_REMOTE_ACCEPTANCE_CONFIG")
+	if remoteConfig != "" {
+		remoteConfig, err = filepath.Abs(remoteConfig)
+		if err != nil {
+			return fail(err)
+		}
+	}
+	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "RemoteConfig": remoteConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}
@@ -484,7 +497,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		if e.Env == "native" && (!evidence.NativeWorkspaceVerified || evidence.UsageVerified || evidence.RealPR != nil) {
 			return fmt.Errorf("native no-model workspace evidence missing or mixed with model/PR evidence for %s", e.ID)
 		}
-		if e.Level == "L2" && e.Env == "live" && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
+		if (e.Level == "L2" && e.Env == "live" || e.Chain == "orca-remote-codex") && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
 			return fmt.Errorf("real merged SteerlineTest PR evidence missing for %s", e.ID)
 		}
 	}

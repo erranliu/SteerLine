@@ -18,11 +18,14 @@ func (b Backend) Probe(ctx context.Context, target executionbackend.ExecutionTar
 	if agent.Name != "codex" || !SameBaseTarget(target, fixedTarget) {
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "supervised Orca probe target or agent differs from fixed configuration"}
 	}
-	target = fixedTarget
 	pair, err := Preflight(ctx, b.config)
 	if err != nil {
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "supervised Orca target preflight failed", Cause: err}
 	}
+	return b.report(target, agent, pair), nil
+}
+
+func (b Backend) report(target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, pair PreflightResult) executionbackend.CapabilityReport {
 	report := capabilityReport(executionbackend.BackendOrca, executionbackend.ProtocolOrcaSupervised, target, agent, pair.RemoteVersion)
 	report.CenterVersion = pair.CenterVersion
 	report.ExpectedAgentVersion = b.config.Settings.ExpectedCodexVersion
@@ -38,7 +41,7 @@ func (b Backend) Probe(ctx context.Context, target executionbackend.ExecutionTar
 			report.Capabilities[i].Status = executionbackend.CapabilityNotTested
 		}
 	}
-	return report, nil
+	return report
 }
 
 func (b Backend) Observe(ctx context.Context, ref executionbackend.ExecutionRef) (result executionbackend.Observation, retErr error) {

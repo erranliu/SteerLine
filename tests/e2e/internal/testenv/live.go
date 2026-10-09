@@ -254,6 +254,9 @@ func (p *Project) cleanupOrca() error {
 }
 
 func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error) {
+	if p.RemoteOrca != nil {
+		return p.remoteUsage(context.Background(), snap, label)
+	}
 	var u native.Usage
 	if len(snap.Domain.Executions) != 1 || len(snap.Domain.WorkflowRuns) != 1 {
 		return u, errors.New("usage needs one bound execution")

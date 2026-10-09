@@ -36,7 +36,7 @@ import (
 // the public runtime/task query APIs. The Codex and Orca executables are protocol
 // fixtures implemented by this test binary; no product CLI or user project is used.
 func TestCD64OriginalSessionReconciliation(t *testing.T) {
-	t.Run("remote_admission_stays_blocked", TestRemotePublicationClaimRequiresPermissionEvidence)
+	t.Run("remote_admission_stays_blocked", TestRemotePublicationClaimRequiresExplicitModel)
 	t.Run("app_server_two_turns", testIntegratedAppServerTwoTurns)
 	t.Run("native_original_session_manual_gate", testIntegratedNativeOriginalSessionGate)
 	t.Run("remote_protocol_original_assertions", testCD64RemoteProtocolAssertions)

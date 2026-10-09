@@ -28,8 +28,8 @@ func (c Selection) Validate() error {
 		return errors.New("orca_supervised requires an explicit orca.supervised configuration")
 	}
 	supervised := c.Settings
-	if strings.TrimSpace(supervised.ConnectionID) == "" || strings.TrimSpace(supervised.EnvironmentID) == "" || strings.TrimSpace(supervised.RepositorySelector) == "" || strings.TrimSpace(supervised.CoordinatorTerminal) == "" {
-		return errors.New("orca.supervised requires fixed connection_id, environment_id, repository_selector, and coordinator_terminal")
+	if strings.TrimSpace(supervised.ConnectionID) == "" || strings.TrimSpace(supervised.EnvironmentID) == "" || strings.TrimSpace(supervised.RepositorySelector) == "" {
+		return errors.New("orca.supervised requires fixed connection_id, environment_id, and repository_selector")
 	}
 	if supervised.RemoteCancelAvailable {
 		return errors.New("orca_supervised remote cancellation is fixed unavailable")

@@ -129,12 +129,10 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			PrepareClaim: func(ctx context.Context, c execution.Config) (execution.ClaimPreparation, error) {
 				return prepareSupervisedClaim(ctx, c, directory, processHost)
 			},
-			ReadinessRequired:    func(execution.Config) bool { return false },
-			BuildPolicyResource:  buildPolicyResource,
-			VerifyPolicyResource: verifyPolicyResource,
-			LinkedWorktreeWriteArgs: func(ctx context.Context, c execution.Config, path string) ([]string, error) {
-				return linkedWorktreeWriteArgs(ctx, c, path, processHost)
-			},
+			ReadinessRequired:         func(execution.Config) bool { return false },
+			BuildPolicyResource:       buildRemotePolicyResource,
+			VerifyPolicyResource:      verifyRemotePolicyResource,
+			LinkedWorktreeWriteArgs:   func(context.Context, execution.Config, string) ([]string, error) { return nil, nil },
 			ValidTurnID:               executionbackend.StableExecutionID,
 			ValidateRef:               validateCatalogRef,
 			CleanupCapabilities:       []string{"start", "observe", "workspace_inspection", "output_reading", "message_inbox", "resource_settlement"},
@@ -343,8 +341,11 @@ func terminalReadinessRequired(c execution.Config, directories ...*execution.Exe
 }
 
 func prepareSupervisedClaim(ctx context.Context, c execution.Config, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost) (execution.ClaimPreparation, error) {
-	_, err := policyToolVersion(ctx, c, directory, processHost)
-	return execution.ClaimPreparation{}, err
+	// Orca launches the agent on the paired host using that host's native
+	// settings. A center-local Codex binary cannot attest the remote launch.
+	// The mandatory capability preflight follows PrepareClaim in the claim
+	// application; do not repeat all remote calls in the same control request.
+	return execution.ClaimPreparation{}, nil
 }
 
 func mustTerminalSettings(c execution.Config, directory *execution.ExecutionDirectory) orcaworker.ProfileConfig {

@@ -89,6 +89,10 @@ func (p *Project) gh(ctx context.Context, args ...string) ([]byte, error) {
 }
 
 func (p *Project) githubPR(snap Snapshot) (executionmodel.PRInfo, error) {
+	return p.githubPRContext(p.Scenario.Context, snap)
+}
+
+func (p *Project) githubPRContext(ctx context.Context, snap Snapshot) (executionmodel.PRInfo, error) {
 	var info executionmodel.PRInfo
 	if len(snap.Domain.WorkflowRuns) != 1 || snap.Domain.WorkflowRuns[0].PRURL == "" {
 		return info, nil
@@ -97,7 +101,7 @@ func (p *Project) githubPR(snap Snapshot) (executionmodel.PRInfo, error) {
 	if !strings.HasPrefix(url, "https://github.com/"+githubRepository+"/pull/") {
 		return info, errors.New("PR escaped the authorized test repository")
 	}
-	raw, err := p.gh(p.Scenario.Context, "pr", "view", url, "--repo", githubRepository, "--json", githubFields, "--jq", githubInfoQuery)
+	raw, err := p.gh(ctx, "pr", "view", url, "--repo", githubRepository, "--json", githubFields, "--jq", githubInfoQuery)
 	if err != nil {
 		return info, err
 	}
@@ -144,6 +148,12 @@ func (p *Project) cleanupGitHub() error {
 		return errors.New("GitHub cleanup inventory may be truncated")
 	}
 	branches := map[string]bool{p.BaseBranch: true}
+	for _, branch := range p.RemoteBranches {
+		if branch == p.DefaultBranch || branch == p.BaseBranch {
+			return errors.New("refuse unowned remote branch cleanup")
+		}
+		branches[branch] = true
+	}
 	// A push can succeed before PR creation fails. This single-branch clone
 	// contained only main initially; other local heads belong to this fixture.
 	heads, err := controlled.Git(ctx, p.Repo, "for-each-ref", "--format=%(refname:short)", "refs/heads")

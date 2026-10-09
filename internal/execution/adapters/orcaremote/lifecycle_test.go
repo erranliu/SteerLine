@@ -143,16 +143,21 @@ func TestLifecyclePlanPersistsWorkspaceAndResourceBoundaries(t *testing.T) {
 	}
 }
 
-func TestLifecyclePreflightRetainsRemotePermissionGate(t *testing.T) {
+func TestLifecyclePreflightChecksRemoteBeforeLaunching(t *testing.T) {
 	setup, _ := remoteLifecycleSetup(t)
 	port, err := NewExecutionLifecycle(setup)
 	if err != nil {
 		t.Fatal(err)
 	}
+	lifecycle := port.(*ExecutionLifecycle)
+	calls := 0
+	lifecycle.config.Call = func(context.Context, time.Duration, ...string) ([]byte, error) {
+		calls++
+		return nil, errors.New("remote unavailable")
+	}
 	_, err = port.PreflightLifecycle(context.Background(), setup)
-	var backendErr *executionbackend.BackendError
-	if !errors.As(err, &backendErr) || backendErr.Code != executionbackend.BackendUnsupported {
-		t.Fatalf("remote lifecycle preflight inferred permission evidence: %v", err)
+	if err == nil || calls != 1 {
+		t.Fatalf("preflight failed to probe fixed remote: calls=%d err=%v", calls, err)
 	}
 }
 

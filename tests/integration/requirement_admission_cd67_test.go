@@ -28,9 +28,9 @@ func TestPS2FixedConfigurationKeepsMandatoryChecks(t *testing.T) {
 	orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}
 	remoteSettings := &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
 	worker := nativeProfileSettings(c)
-	worker.Model, worker.ReasoningEffort = "fixture-model", "high"
+	worker.Model, worker.ReasoningEffort = "", "high"
 	setNativeImplementationProfiles(t, &c, worker, orca, remoteSettings)
-	if err := requireNativeFlowCapabilities(context.Background(), c); err == nil || !strings.Contains(err.Error(), "enforcement evidence") {
-		t.Fatalf("empty requirements bypassed remote policy: %v", err)
+	if err := requireNativeFlowCapabilities(context.Background(), c); err == nil || !strings.Contains(err.Error(), "explicit model") {
+		t.Fatalf("empty requirements bypassed remote launch selection: %v", err)
 	}
 }
