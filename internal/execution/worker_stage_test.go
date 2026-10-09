@@ -86,6 +86,9 @@ func TestWorkerStageTransitions(t *testing.T) {
 	if !strings.Contains(w.StageInputs[1].ReportToolPolicy, "fact_comparison_only") {
 		t.Fatal("missing honest native permission guarantee")
 	}
+	if !strings.Contains(w.StageInputs[1].Prompt, `"original_goal":"implement only"`) || !strings.Contains(w.StageInputs[1].Prompt, `"goal_truncated":false`) {
+		t.Fatal("report lost the frozen original stage goal or its evidence boundary")
+	}
 	startQueuedStage(t, s, run)
 	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"implemented"}`, true))
 	if s.workflowRecord(run).StepID != executionmodel.StepPublish || s.workflowRecord(run).CandidateSHA != port.workspace.Head {

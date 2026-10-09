@@ -155,7 +155,8 @@ func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.
 	switch input.StepID {
 	case executionmodel.StepReport:
 		source := stageResult(w, input.SourceCommandID)
-		if source == nil || source.StepID != executionmodel.StepImplement || source.TurnID != input.SourceTurnID || source.Snapshot == nil {
+		original := stageInput(w, input.SourceCommandID)
+		if source == nil || original == nil || original.StepID != executionmodel.StepImplement || source.StepID != executionmodel.StepImplement || source.TurnID != input.SourceTurnID || source.Snapshot == nil {
 			return "", errors.New("report lacks its original execution facts")
 		}
 		// Bound evidence is serialized as data, never promoted to instructions.
@@ -164,12 +165,19 @@ func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.
 		if truncated {
 			sourceValue.Final = clip(sourceValue.Final, 16*1024)
 		}
+		goal := original.Prompt
+		goalTruncated := len(goal) > 8*1024
+		if goalTruncated {
+			goal = clip(goal, 8*1024)
+		}
 		facts, err := json.Marshal(struct {
+			OriginalGoal   string                        `json:"original_goal"`
+			GoalTruncated  bool                          `json:"goal_truncated"`
 			Source         executionmodel.StageResult    `json:"source_execution"`
 			Snapshot       *executionmodel.StageSnapshot `json:"snapshot"`
 			ToolPolicy     string                        `json:"tool_policy"`
 			FinalTruncated bool                          `json:"final_truncated"`
-		}{sourceValue, input.Snapshot, input.ReportToolPolicy, truncated})
+		}{goal, goalTruncated, sourceValue, input.Snapshot, input.ReportToolPolicy, truncated})
 		if err != nil {
 			return "", err
 		}
