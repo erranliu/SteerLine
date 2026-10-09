@@ -141,8 +141,8 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *reconstruct
 		}
 	}
 	env := execution.Environment
-	if env.Blocker != nil && wf.Status != "waiting_pr_merge" && wf.Status != "waiting_decision" {
-		wf.Status = "waiting_decision"
+	if env.Blocker != nil && wf.Status != "waiting_external" && wf.Status != "waiting_input" {
+		wf.Status = "waiting_input"
 		if err := s.commitWorker(run); err != nil {
 			return err
 		}

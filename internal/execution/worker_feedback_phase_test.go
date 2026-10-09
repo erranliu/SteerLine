@@ -55,12 +55,12 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	committed := nextWorkflow
 	committed.ControlRevision = result.ControlRevision
 	require(t, err)
-	if committed.Status != "waiting_decision" || committed.ControlRevision != expectedWorkflow.ControlRevision+1 {
+	if committed.Status != "waiting_input" || committed.ControlRevision != expectedWorkflow.ControlRevision+1 {
 		t.Fatalf("feedback phase was not committed once: %+v", committed)
 	}
 	loaded, err := loadFixtureRuntime(service.Config)
 	require(t, err)
-	if len(loaded.WorkflowRuns) != 1 || loaded.WorkflowRuns[0].Status != "waiting_decision" || loaded.Runs[0].Decision.Status != "answer_saved" {
+	if len(loaded.WorkflowRuns) != 1 || loaded.WorkflowRuns[0].Status != "waiting_input" || loaded.Runs[0].Decision.Status != "answer_saved" {
 		t.Fatalf("coherent read missed the committed feedback phase: %+v", loaded.Runs)
 	}
 	afterCheckpoint, _, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
@@ -81,7 +81,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	if err = service.applyWorkerFlowDecision(ctx, run); !isNativeErrorCode(err, "stale_revision") {
 		t.Fatalf("stale actor reached feedback delivery: %v", err)
 	}
-	if len(service.domain.Operations) != beforeOperations || service.workflowRecord(run).Status != "waiting_pr_merge" {
+	if len(service.domain.Operations) != beforeOperations || service.workflowRecord(run).Status != "waiting_external" {
 		t.Fatal("stale feedback transition changed actor state or started an operation")
 	}
 	_, afterRevision, err := service.domainStore.DatabaseVersion(ctx)
@@ -100,7 +100,7 @@ func TestWaitingPRFeedbackIsOptionalAndDoesNotRepeatTurns(t *testing.T) {
 	beforeOperations, beforeTurn := len(service.domain.Operations), execution.TurnNumber
 	require(t, service.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{}))
 	decisionID := run.Decision.ID
-	if run.Decision.Request.Question != workerPRFeedbackQuestion || len(run.Decision.Request.Options) != 0 || !run.Decision.Request.AllowFreeText || !workerContinuationPrompt(run.Decision.Request) {
+	if run.Decision.Request.Question != workerPRFeedbackQuestion || len(run.Decision.Request.Options) != 2 || !run.Decision.Request.AllowFreeText || !workerContinuationPrompt(run.Decision.Request) {
 		t.Fatal("waiting PR retained a default continuation choice", run.Decision.Request)
 	}
 	for i := 0; i < 3; i++ {

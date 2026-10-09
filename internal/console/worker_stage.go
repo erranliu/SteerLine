@@ -11,14 +11,22 @@ func workerStagePresentation(run *api.CandidateSummary) []string {
 	}
 	lines := []string{"步骤：" + safeTerminalText(run.StepID) + " · 状态：" + safeTerminalText(run.BusinessStatus)}
 	var sourceFailed, reportGenerated bool
+	var implementationBody string
 	for _, result := range run.StageResults {
 		if result.StepID == "implement.execute" {
 			sourceFailed = !result.Succeeded || result.Failure != ""
 			reportGenerated = false
+			implementationBody = ""
+			if result.FinalSource != "" {
+				implementationBody = result.Final
+			}
 		}
 		if result.StepID == "implement.report" && result.Succeeded && result.FinalSource != "" {
 			reportGenerated = true
 		}
+	}
+	if implementationBody != "" && run.StepID != "implement.execute" {
+		lines = append(lines, "原实现正文："+safeTerminalText(implementationBody))
 	}
 	if sourceFailed && reportGenerated {
 		lines = append(lines, "执行失败，报告已生成；原失败仍需处理")

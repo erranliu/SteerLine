@@ -18,8 +18,11 @@ import (
 func TestWorkerStageLocalRoundTrip(t *testing.T) { testWorkerStageRoundTrip(t, "local") }
 func TestWorkerStageOrcaRoundTrip(t *testing.T)  { testWorkerStageRoundTrip(t, "orca") }
 
-func testWorkerStageRoundTrip(t *testing.T, host string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+func TestWorkerStageOrcaUnknownReport(t *testing.T) { testWorkerStageRun(t, "orca", true) }
+
+func testWorkerStageRoundTrip(t *testing.T, host string) { testWorkerStageRun(t, host, false) }
+func testWorkerStageRun(t *testing.T, host string, unknown bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	f := newLifecycleProjectBase(t, host, false)
 	provider := filepath.Join(filepath.Dir(f.configPath), "stage-provider.json")
@@ -38,13 +41,38 @@ func testWorkerStageRoundTrip(t *testing.T, host string) {
 	require(t, err)
 	require(t, project.Close())
 	if host == "orca" {
-		require(t, testprotocol.WriteNativeOrcaState(f.nativeStateDir, testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 2, LoseDispatchAt: 3, StageProvider: provider, StageRemote: f.bareRemote, StageTranscript: filepath.Join(f.nativeStateDir, "stage-transcript.jsonl")}))
+		state := testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 2, StageProvider: provider, StageRemote: f.bareRemote, StageTranscript: filepath.Join(f.nativeStateDir, "stage-transcript.jsonl")}
+		if unknown {
+			state.LoseDispatchAt = 3
+		}
+		require(t, testprotocol.WriteNativeOrcaState(f.nativeStateDir, state))
 	}
 	createIntegrationTask(t, ctx, f, 901)
 	resolver := &integrationLifecycleResolver{}
 	service := startIntegrationService(t, ctx, f.config, resolver)
 	defer service.stop(t)
 	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
+	if unknown {
+		stopped := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.StepID == executionmodel.StepPublish && run.BusinessStatus == "waiting_input" && e.CurrentTurnID == e.LastStoppedTurnID
+		})
+		w := stopped.runtime.WorkflowRuns[0]
+		if stopped.execution.TurnNumber != 2 || len(w.StageResults) != 2 || len(w.StageInputs) != 3 || w.StageInputs[2].StepID != executionmodel.StepPublish {
+			t.Fatal("unknown report skipped facts or automatically published")
+		}
+		service.stop(t)
+		service = startIntegrationService(t, ctx, f.config, resolver)
+		defer service.stop(t)
+		recovered := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return e.RecoveryRequired && run.StepID == executionmodel.StepPublish
+		})
+		native, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+		require(t, err)
+		if native.Dispatches != 3 || recovered.execution.TurnNumber != 2 || len(recovered.runtime.Attempts) != 1 {
+			t.Fatal("reopen blindly reinjected an unknown or queued input")
+		}
+		return
+	}
 	ready := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
 		return run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge
 	})

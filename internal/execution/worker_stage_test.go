@@ -145,7 +145,7 @@ func TestWorkerStageResultBinding(t *testing.T) {
 }
 
 func TestWorkerStageReportRound(t *testing.T) {
-	for _, scenario := range []string{"source_failed", "report_invalid", "report_write", "unknown", "publish_invalid", "publish_partial"} {
+	for _, scenario := range []string{"source_failed", "report_invalid", "report_write", "unknown", "needs_input", "publish_invalid", "publish_partial"} {
 		t.Run(scenario, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			require(t, acceptTestStage(t, s, run, port, "implementation facts", scenario != "source_failed"))
@@ -156,6 +156,8 @@ func TestWorkerStageReportRound(t *testing.T) {
 				body = "not JSON"
 			case "report_write":
 				port.workspace.ContentDigest = strings.Repeat("e", 64)
+			case "needs_input":
+				body = `{"outcome":"needs_input","summary":"decision needed","question":"Which original target should be completed?"}`
 			case "unknown":
 				body = `{"outcome":"blocked","summary":"unknown","blocker":{"category":"unknown_external","action":"original command","error":"response lost"}}`
 			}
@@ -169,6 +171,10 @@ func TestWorkerStageReportRound(t *testing.T) {
 			case "report_write":
 				if w.Status != "blocked" || w.StepID != executionmodel.StepReport || w.ReportRetry != 0 {
 					t.Fatal("report write escaped artifact gate")
+				}
+			case "needs_input":
+				if w.Status != "waiting_input" || w.StepID != executionmodel.StepReport || run.Decision == nil || run.Decision.Request.Question != "Which original target should be completed?" {
+					t.Fatal("structured question did not bind the original report step")
 				}
 			case "unknown":
 				if w.Status != "reconciling" || len(w.StageInputs) != 2 {
@@ -211,6 +217,23 @@ func TestWorkerStageAtomicCommitFailure(t *testing.T) {
 	require(t, err)
 	if recordFingerprint(before) != recordFingerprint(after) || len(s.workflowRecord(run).StageResults) != 0 || len(s.workflowRecord(run).StageInputs) != 1 {
 		t.Fatal("result/transition/next intent committed partially")
+	}
+}
+
+func TestWorkerStageReopenedSourceQueuesOnlyReport(t *testing.T) {
+	s, run, port := workerStageFixture(t)
+	e := s.executionRecord(run)
+	e.RecoveryRequired, e.RecoveryState, e.RecoveryVersion = true, "completed", 1
+	e.OwnerServiceInstanceID = "prior-service"
+	e.RecoveryMarkedAt = ptr(now())
+	require(t, s.commitWorker(run))
+	require(t, acceptTestStage(t, s, run, port, "original implementation completed before restart", true))
+	w := s.workflowRecord(run)
+	if w.StepID != executionmodel.StepReport || w.Status != "waiting_input" || len(w.StageInputs) != 2 || len(w.StageResults) != 1 || w.StageInputs[1].SourceCommandID != w.StageInputs[0].CommandID || s.executionRecord(run).PendingCommandID != w.StageInputs[1].CommandID {
+		t.Fatal("reopened source recreated implementation or automatically sent a report")
+	}
+	if run.Decision == nil || run.Decision.Status != "pending" {
+		t.Fatal("reopened queued report lacks a fresh manual gate")
 	}
 }
 

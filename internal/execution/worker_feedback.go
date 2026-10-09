@@ -148,7 +148,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 			return err
 		}
 		workflow, execution = s.workflowRecords(run)
-		if workflow == nil || execution == nil || run.ControlRevision != workflow.ControlRevision || run.FinishTaskStatus != "waiting_input" {
+		if workflow == nil || execution == nil || run.ControlRevision != workflow.ControlRevision || run.BusinessStatus != "waiting_input" {
 			return errors.New("committed worker feedback phase could not be projected")
 		}
 	}
@@ -157,12 +157,11 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 			if execution.SessionID == "" {
 				return s.waitWorkerFlow(run, "The original session is unavailable; recovery cannot create a replacement worker")
 			}
-			prompt := workerFeedbackText(answer, run.Decision.Request)
+			request := run.Decision.Request
 			if err := s.beginLocalRecoveryAttempt(ctx, run, answer.OptionID); err != nil {
 				return s.waitWorkerFlow(run, "Manual execution recovery did not pass its original identity checks: "+err.Error())
 			}
-			_ = prompt
-			return s.startStageFeedback(ctx, run, answer, command.CommandID)
+			return s.startStageFeedback(ctx, run, answer, command.CommandID, request)
 		}
 		if execution.RecoveryState != "live" && execution.RecoveryState != "running" && execution.RecoveryState != "question" {
 			return nil

@@ -45,11 +45,11 @@ func TestWorkerPRBindingUsesProviderAndRetainsSession(t *testing.T) {
 		t.Fatalf("unowned PR was bound: %v", err)
 	}
 	branch = "worker/task-8"
-	if err := bind(); err != nil || workflow.PRURL != url || workflow.Status != "waiting_external" {
+	if err := bind(); err != nil || workflow.PRURL != url || workflow.Status != "running" {
 		t.Fatalf("provider-verified PR was not bound: %+v / %v", workflow, err)
 	}
 	state = "closed"
-	if err := bind(); err != nil || workflow.PRState != "closed_unmerged" || workflow.Status != "waiting_input" || execution.CurrentTurnID != "turn-8" || execution.SessionID != "original-session" {
+	if err := bind(); err != nil || workflow.PRState != "closed_unmerged" || workflow.Status != "running" || execution.CurrentTurnID != "turn-8" || execution.SessionID != "original-session" {
 		t.Fatalf("closed unmerged PR lost the original session: %+v / %+v / %v", workflow, execution, err)
 	}
 }

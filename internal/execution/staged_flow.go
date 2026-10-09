@@ -31,10 +31,18 @@ func firstNonemptyStage(a, b string) string {
 	return b
 }
 
-func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontypes.RunView, answer executionmodel.DecisionAnswer, commandID string) error {
+func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontypes.RunView, answer executionmodel.DecisionAnswer, commandID string, requests ...executionmodel.DecisionRequest) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
+	}
+	request := executionmodel.DecisionRequest{}
+	if len(requests) > 0 {
+		request = requests[0]
+	} else if run.Decision != nil {
+		request = run.Decision.Request
+	} else {
+		return errors.New("feedback lost its original request")
 	}
 	w := fixed.workflow
 	if w.Status == "reconciling" || s.hasUnknownWorkerOperation(run) {
@@ -60,7 +68,7 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 		Type       string `json:"type"`
 		Answer     string `json:"answer"`
 		Diagnostic string `json:"blocker,omitempty"`
-	}{"feedback", workerFeedbackText(answer, run.Decision.Request), w.StageDiagnostic})
+	}{"feedback", workerFeedbackText(answer, request), w.StageDiagnostic})
 	if err != nil {
 		return err
 	}
@@ -151,11 +159,17 @@ func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.
 			return "", errors.New("report lacks its original execution facts")
 		}
 		// Bound evidence is serialized as data, never promoted to instructions.
+		sourceValue := *source
+		truncated := len(sourceValue.Final) > 16*1024
+		if truncated {
+			sourceValue.Final = clip(sourceValue.Final, 16*1024)
+		}
 		facts, err := json.Marshal(struct {
-			Source     executionmodel.StageResult    `json:"source_execution"`
-			Snapshot   *executionmodel.StageSnapshot `json:"snapshot"`
-			ToolPolicy string                        `json:"tool_policy"`
-		}{*source, input.Snapshot, input.ReportToolPolicy})
+			Source         executionmodel.StageResult    `json:"source_execution"`
+			Snapshot       *executionmodel.StageSnapshot `json:"snapshot"`
+			ToolPolicy     string                        `json:"tool_policy"`
+			FinalTruncated bool                          `json:"final_truncated"`
+		}{sourceValue, input.Snapshot, input.ReportToolPolicy, truncated})
 		if err != nil {
 			return "", err
 		}
@@ -177,7 +191,7 @@ func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.
 
 // queueStage changes the one business authority and freezes the next input
 // intent inside the same worker commit as the accepted source result.
-func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, input executionmodel.StageInput, fixed workerFlowContext) error {
+func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, input executionmodel.StageInput, fixed workerFlowContext, manualReason ...string) error {
 	input.CommandID, input.AttemptID = newID(), fixed.attempt.AttemptID
 	w.InputVersion++
 	input.Version = w.InputVersion
@@ -190,6 +204,20 @@ func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel
 	w.StageDiagnostic = ""
 	w.StageInputs = append(w.StageInputs, input)
 	e.PendingCommandID, e.PendingTurnID = input.CommandID, ""
+	if len(manualReason) > 0 && manualReason[0] != "" {
+		w.Status, w.StageDiagnostic = "waiting_input", manualReason[0]
+		if run.Decision == nil || run.Decision.Status != "answer_saved" {
+			decision, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{Question: "Confirm continuation of the original step", Context: manualReason[0], Options: []executionbackend.DecisionOption{{ID: "continue", Label: "Continue the original step"}}, AllowFreeText: true})
+			if err != nil {
+				return err
+			}
+			s.setRunDecision(run, decision)
+			if record := s.decisionRecord(run); record != nil {
+				record.RecoveryVersion = e.RecoveryVersion
+				record.RecoveryState = e.RecoveryState
+			}
+		}
+	}
 	s.refreshRun(run)
 	return s.commitWorker(run)
 }
@@ -202,7 +230,7 @@ func (s *Service) stageWait(run *reconstructiontypes.RunView, w *executionmodel.
 	}
 	if report != nil {
 		e.Summary = ptr(report.Summary)
-		if status == "waiting_input" || status == "blocked" {
+		if (status == "waiting_input" || status == "blocked") && (run.Decision == nil || run.Decision.Status != "answer_saved") {
 			decision, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{Question: firstNonemptyStage(report.Question, "Resolve the current step blocker"), Context: report.Summary, Options: []executionbackend.DecisionOption{{ID: "continue", Label: "Continue this same step"}, {ID: "implement", Label: "Apply code feedback in implement"}}, AllowFreeText: true})
 			if err != nil {
 				return err
@@ -246,15 +274,16 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if inspectErr != nil {
 		return s.stageWait(run, w, e, "reconciling", "workspace/publication facts unknown: "+inspectErr.Error(), nil)
 	}
+	manualReason := ""
 	if e.RecoveryRequired || e.OwnerServiceInstanceID != s.State.Service.InstanceID || len(e.PendingQuestions) != 0 || s.hasUnknownWorkerOperation(run) || e.Environment != nil && (!e.Environment.Ready || e.Environment.Blocker != nil) || run.Decision != nil && run.Decision.Status == "answer_saved" {
-		return s.stageWait(run, w, e, "blocked", "original session cannot safely receive the next input", nil)
+		manualReason = "original session or prior-service input requires explicit continuation; no automatic next turn"
 	}
 	if input.StepID == executionmodel.StepImplement {
 		policy := lifecycle.PolicyCapabilities().ReportToolPolicy
 		if policy == "" {
 			policy = "frozen_native_permissions; fact_comparison_only; external_writes_not_strongly_isolated"
 		}
-		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepReport, SourceCommandID: input.CommandID, SourceTurnID: evidence.TurnID, Snapshot: facts, ReportToolPolicy: policy}, fixed)
+		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepReport, SourceCommandID: input.CommandID, SourceTurnID: evidence.TurnID, Snapshot: facts, ReportToolPolicy: policy}, fixed, manualReason)
 	}
 	if input.StepID == executionmodel.StepReport && !sameStageSnapshot(input.Snapshot, facts) {
 		return s.stageWait(run, w, e, "blocked", "artifact_mismatch: report changed workspace or bound publication facts", nil)
@@ -280,7 +309,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 		}
 		if input.StepID == executionmodel.StepReport && w.ReportRetry == 0 {
 			w.ReportRetry = 1
-			return s.queueStage(run, w, e, executionmodel.StageInput{StepID: input.StepID, SourceCommandID: input.SourceCommandID, SourceTurnID: input.SourceTurnID, Snapshot: input.Snapshot, ReportToolPolicy: input.ReportToolPolicy}, fixed)
+			return s.queueStage(run, w, e, executionmodel.StageInput{StepID: input.StepID, SourceCommandID: input.SourceCommandID, SourceTurnID: input.SourceTurnID, Snapshot: input.Snapshot, ReportToolPolicy: input.ReportToolPolicy}, fixed, manualReason)
 		}
 		return s.stageWait(run, w, e, "blocked", reason, nil)
 	}
@@ -311,7 +340,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 		}
 		w.CandidateSHA = report.Outputs.CandidateSHA
 		e.Summary = ptr(report.Summary)
-		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublish, CandidateSHA: w.CandidateSHA, Snapshot: facts}, fixed)
+		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublish, CandidateSHA: w.CandidateSHA, Snapshot: facts}, fixed, manualReason)
 	}
 	info, queryErr := publicationClient(fixed.config, s.runtime.ProcessHost).Query(ctx, report.Outputs.PRURL)
 	if queryErr != nil {

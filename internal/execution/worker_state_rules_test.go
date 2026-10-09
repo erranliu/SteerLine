@@ -19,38 +19,39 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 	}
 	begin := func(turn string) {
 		t.Helper()
+		wf.Status = "queued"
 		if err := BeginWorkerTurn(&wf, &exec, "session-8", turn); err != nil {
 			t.Fatal(err)
 		}
 	}
 	begin("turn-1")
-	if err := BindWorkerPR(&wf, &exec, pr("pr-8", "open"), "pr-8", "o/r", false); err != nil || wf.Status != "executing" {
+	if err := BindWorkerPR(&wf, &exec, pr("pr-8", "open"), "pr-8", "o/r", false); err != nil || wf.Status != "running" {
 		t.Fatalf("early PR interrupted the worker: phase=%s error=%v", wf.Status, err)
 	}
-	if err := NoteWorkerQuestion(&wf, &exec, "turn-1"); err != nil || wf.Status != "waiting_decision" || exec.Status != "active" {
+	if err := NoteWorkerQuestion(&wf, &exec, "turn-1"); err != nil || wf.Status != "waiting_input" || exec.Status != "active" {
 		t.Fatalf("question did not take precedence: phase=%s execution=%s error=%v", wf.Status, exec.Status, err)
 	}
-	if err := ContinueWorkerQuestion(&wf, &exec, "turn-1"); err != nil || wf.Status != "executing" {
+	if err := ContinueWorkerQuestion(&wf, &exec, "turn-1"); err != nil || wf.Status != "running" {
 		t.Fatalf("same-turn reply replaced the turn: phase=%s error=%v", wf.Status, err)
 	}
-	if err := StopWorkerTurn(&wf, &exec, "turn-1", false); err != nil || wf.Status != "waiting_pr_merge" {
+	if err := StopWorkerTurn(&wf, &exec, "turn-1", false); err != nil || wf.Status != "blocked" {
 		t.Fatalf("stopped turn did not await PR merge: phase=%s error=%v", wf.Status, err)
 	}
 	begin("turn-2")
-	if wf.Status != "executing" || exec.TurnNumber != 2 {
+	if wf.Status != "running" || exec.TurnNumber != 2 {
 		t.Fatalf("feedback changed execution identity: workflow=%+v execution=%+v", wf, exec)
 	}
 	if err := BindWorkerPR(&wf, &exec, pr("pr-8", "closed_unmerged"), "pr-8", "o/r", false); err != nil {
 		t.Fatal(err)
 	}
-	if err := StopWorkerTurn(&wf, &exec, "turn-2", false); err != nil || wf.Status != "waiting_decision" {
+	if err := StopWorkerTurn(&wf, &exec, "turn-2", false); err != nil || wf.Status != "blocked" {
 		t.Fatalf("closed PR did not lead to the unified decision state: phase=%s error=%v", wf.Status, err)
 	}
-	if err := BindWorkerPR(&wf, &exec, pr("pr-9", "open"), "pr-9", "o/r", false); err != nil || wf.Status != "waiting_pr_merge" {
+	if err := BindWorkerPR(&wf, &exec, pr("pr-9", "open"), "pr-9", "o/r", false); err != nil || wf.Status != "blocked" {
 		t.Fatalf("new PR after closure was not associated: phase=%s error=%v", wf.Status, err)
 	}
 	begin("turn-3")
-	if err := StopWorkerTurn(&wf, &exec, "turn-3", false); err != nil || wf.Status != "waiting_pr_merge" {
+	if err := StopWorkerTurn(&wf, &exec, "turn-3", false); err != nil || wf.Status != "blocked" {
 		t.Fatal(err)
 	}
 	mergedAt := time.Now().UTC()
@@ -75,6 +76,7 @@ func TestWorkerFlowRejectsReplacementsAndLateTurns(t *testing.T) {
 	if err := StopWorkerTurn(&wf, &exec, "turn-1", false); err != nil {
 		t.Fatal(err)
 	}
+	wf.Status = "queued"
 	if err := BeginWorkerTurn(&wf, &exec, "session", "turn-2"); err != nil {
 		t.Fatal(err)
 	}
