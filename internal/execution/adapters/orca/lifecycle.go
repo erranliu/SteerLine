@@ -82,7 +82,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 }
 
 func (l *ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true, ActiveTurnFeedback: true, ResumeActiveObservation: true}
+	return executionbackend.LifecyclePolicyCapabilities{ReportToolPolicy: "orca_managed_permissions; fact_comparison_only; per_turn_read_only_policy_unverified; external_writes_not_strongly_isolated", StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true, ActiveTurnFeedback: true, ResumeActiveObservation: true}
 }
 
 func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {

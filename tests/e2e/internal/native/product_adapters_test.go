@@ -8,6 +8,12 @@ import (
 func TestWorkerConfigsPreserveNativeModelAndChainSettings(t *testing.T) {
 	for _, orca := range []map[string]any{nil, {"executable": "isolated-orca", "wait_timeout": "4m"}} {
 		configs := WorkerImplementationConfigs("isolated-codex", orca)
+		if orca != nil {
+			if len(configs) != 1 || configs[0]["implementation_key"] != "orca.worker-profile" || configs[0]["payload"].(map[string]any)["executable"] != "isolated-orca" || configs[0]["payload"].(map[string]any)["wait_timeout"] != "4m" {
+				t.Fatal("native Orca profile retained a different implementation's codec")
+			}
+			continue
+		}
 		codex := configs[0]["payload"].(map[string]any)
 		if codex["executable"] != "isolated-codex" || codex["model"] != Model || codex["reasoning_effort"] != Effort || codex["windows_sandbox"] != nil || codex["args"] != nil {
 			t.Fatal("native model/permission configuration changed")
@@ -16,8 +22,6 @@ func TestWorkerConfigsPreserveNativeModelAndChainSettings(t *testing.T) {
 			if len(configs) != 1 || codex["args"] != nil {
 				t.Fatal("local profile changed")
 			}
-		} else if len(configs) != 2 || configs[1]["payload"].(map[string]any)["executable"] != "isolated-orca" || configs[1]["payload"].(map[string]any)["wait_timeout"] != "4m" {
-			t.Fatal("Orca profile changed")
 		}
 	}
 }
