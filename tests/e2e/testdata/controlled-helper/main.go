@@ -10,6 +10,13 @@ import (
 )
 
 func main() {
+	if filepath.Base(os.Args[0]) == "orca-remote-trace.exe" {
+		if err := native.RemoteTraceMain(os.Args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "candidate" {
 		if err := driver.MainCandidate(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, err)

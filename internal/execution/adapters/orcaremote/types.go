@@ -13,9 +13,10 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-type Settings struct{ ConnectionID, EnvironmentID, RepositorySelector, CoordinatorTerminal, ExpectedCodexVersion, PollInterval string }
+type Settings struct{ ConnectionID, EnvironmentID, RepositorySelector, CoordinatorTerminal, PollInterval string }
 
 type Config struct {
+	CoordinatorShell                                                     string
 	ExpectedRemoteRuntime                                                string
 	Settings                                                             Settings
 	Repository, ProjectID, Agent, Model, ReasoningEffort, CommandTimeout string
@@ -24,8 +25,8 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	if c.Call == nil || c.Origin == nil || c.Settings.ConnectionID == "" || c.Settings.EnvironmentID == "" || c.Settings.RepositorySelector == "" || c.Settings.CoordinatorTerminal == "" {
-		return errors.New("remote Orca requires fixed connection, environment, repository and coordinator")
+	if c.Call == nil || c.Origin == nil || c.Settings.ConnectionID == "" || c.Settings.EnvironmentID == "" || c.Settings.RepositorySelector == "" {
+		return errors.New("remote Orca requires fixed connection, environment and repository")
 	}
 	return nil
 }
