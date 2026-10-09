@@ -139,15 +139,16 @@ type TaskCandidate struct{ TaskID, Title, Type, Summary string }
 // CandidateSummary is the selected worker's page, not an execution record.
 // Session identity and revisions are explicit so commands cannot guess a run.
 type StageResultSummary struct {
-	StepID       string `json:"step_id"`
-	CommandID    string `json:"command_id"`
-	TurnID       string `json:"turn_id"`
-	InputVersion uint64 `json:"input_version"`
-	Succeeded    bool   `json:"succeeded"`
-	Final        string `json:"final,omitempty"`
-	FinalSource  string `json:"final_source,omitempty"`
-	Failure      string `json:"failure,omitempty"`
-	Outcome      string `json:"outcome,omitempty"`
+	StepID        string `json:"step_id"`
+	CommandID     string `json:"command_id"`
+	TurnID        string `json:"turn_id"`
+	InputVersion  uint64 `json:"input_version"`
+	Succeeded     bool   `json:"succeeded"`
+	FinalVerified bool   `json:"final_verified"`
+	Final         string `json:"final,omitempty"`
+	FinalSource   string `json:"final_source,omitempty"`
+	Failure       string `json:"failure,omitempty"`
+	Outcome       string `json:"outcome,omitempty"`
 }
 
 type CandidateSummary struct {
