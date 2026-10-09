@@ -81,3 +81,24 @@ A6 完整命令 `go run ./cmd/test-feedback -- ./tests/integration -run '^TestWo
 最终 L1：`a4d7e263` clean，`20261009T062130.133828700Z/summary.json` PASS，preparation 0.3s/execution 96.3s。未跑 full/L2，未扩大原生 suite。
 
 A8 驱动增量 `932919e3`：同一正式 control 请求的原产品准入期限仍为2m。驱动等待真正最终 applied 回执最多6m（父 helper390s，仍受场景 context 约束），让已经 claim_reserved 的原生准备可在准入期限后完成；未重新发送请求、未把 applying 当已执行/已交付，未延长产品准入。当前串行复验，结果待登记。
+
+## 原生 worker 主干整合与新的真实故障定位
+
+`f6fcd757` 整合最新默认主干 `ade7042b`，包含 #86 原生 Orca worker-start、宿主管理权限、显式完整输出材料与释放后 canonical evidence，以及控制台 PR links。继续型停服标识、退出 terminal 的原 inbox 接回、规范 session/live/writers 事实保留。`40fd0235` 只调整原生测试 profile：Orca 使用独立 codec 与 native model/effort，不再继承客户端 Codex sandbox 配置。
+
+`20261009T063140.957081500Z/summary.json` 的完整 A6 四个受控分支均 PASS，261.95s；两个 adapter facts 子项因新 main 校验冻结 Agent 后测试构造缺 setup 而 FAIL，不算总通过。修正测试的原冻结 setup 后，adapter 全包（明确不选择 opt-in smoke）在 `41897854` 的 `20261009T064010.773284000Z/summary.json` PASS，5.829s；其一个独立 CLI fixture skip 不算真实验收。L1 `40fd0235` clean，`20261009T063411.524734700Z/summary.json` PASS，106.1s。随后只读原 startup 回执增量的 native mutation/丢回执服务回归 `TestNativeOrcaMutationRecoveryPreservesOriginalSession` 在 `20261009T064944.872519500Z/summary.json` PASS，126.25s。
+
+独立 reviewer 确认新 main 的 reconcileStart 会再次调用 worker-start；原 UUID 幂等不能证明重开零输入。`41897854` 改为只读 request-show：原 UUID/runtime/method=orchestration.workerStart/state=completed/receipt 全部吻合才绑定旧 native 回执。absent/pending 保持 unknown，不发 worker-start；partial 的 Reconcile 也只观察，不 stop/release。新增未到平台的原意图负例；reviewer 已复核闭环。曾报告 completed-exited validator 必须 live 的问题已核对真实代码并撤回，不列为未修复问题。
+
+真实 A8 新增失败仍完整保留：
+
+- `20261009T062543.292280000Z` / `932919e3`：仍在旧 readiness 管线等待原 control 最终回执超时（429.99s，清理成功）；延长等待没有解决该旧路径，未算通过。
+- `20261009T064018.421443700Z` / `41897854`：真实 native worker-start 在 agent_readiness 返回 `Agent startup blocked: agent-update-prompt`，140.63s/清理成功，未进入业务停服窗口。
+- 原生观察只创建本任务新的 launcher fixture repo `1eb389a7-b18a-4e64-863f-b02228f9f676`。观察终端证实 Codex0.159.2提示0.162.0更新；普通Skip只消除当前启动。2026-10-09 用户明确批准 Skip until next version；已核实 `dismissed_version=0.162.0`，没有升级CLI或变更Agent Permissions。通过 computer-use/Orca CLI操作新建终端；两个自有worktree与terminal及注册setup已精确清理，临时Git根保留。用户中断期间Orca runtime发生换代，旧native local日志 `steerline-87-local-native-main-final-20261009.jsonl` 无terminal PASS/FAIL，明确不算通过。
+- `20261009T070140.212275000Z` / `41897854`：不再被更新提示挡住；native result明确原输入accepted，但state=outcome_unknown/turn_start_unobserved。当前实现把未observed当失败并stop/release，137.74s/清理成功，不能算活动恢复通过。
+- `dabae8f3` 对这条精确原UUID、accepted effect/原terminal及incarnation、原runtime/Run/Task/Dispatch/worktree/agent/model完整证据，分别承认 InputAccepted 而保持 TurnStarted=false；保留原diagnostic/state/observer，不生成ready/completed。transport/cancel/缺证据各负例拒绝；此stage即使身份校验失败也保留partial未知、不误停可能已接输入者。driver只完成自有原稳定paste的一次bare Enter，原JSON/exit保持，不重发prompt。独立复审认可边界；实际业务是否开始仍需原消息/started证据。
+- `20261009T072852.169782400Z` / `dabae8f3`：模型真实提交并执行，在原hold等release；真实 heartbeat `msg_372c9c90eca0` 的全部原Task/Dispatch/terminal吻合，但未进入普通coordinator check流，中心仍pending，control最终超时；470.36s/清理成功。fixture改为模型向原Run发status实际进度，不注入状态。
+
+`dabae8f3` owner最小回归 `20261009T073242.807876000Z/summary.json` PASS，68.55s。独立reviewer另确认真实started会把原accepted receipt覆盖为只有session/turn的摘要，导致native launch证据丢失；`9c984748` 在通用确认中保留原receipt与原PlatformRequestID，空时才生成摘要；原started/重复started/保存答案真实transition回归通过。E2E model/launch/业务证据与#86原生路径一致，真实usage先只匹配host-owned home下根session metadata的唯一自有worktree，再读匹配session正文，不读取其他session正文，不把缺usage当通过。
+
+当前 PR #260 仍为草稿；新的完整真实 A8 在 `9c984748` 执行中，未登记通过或实现完成。无 installed101 修复、安装替换或长期组合签收结论。
