@@ -7,7 +7,7 @@
 | 项目 | 结果 | 已覆盖行为与证据 |
 | --- | --- | --- |
 | API1 | 已验收 | 真实 listener 上缺/错凭证、错 Host/Origin、错路由项目/信封项目/实例及轮换后旧凭证均拒绝；原传输/control/SQLite 请求和 revision/paused facts 不变。轮换后的新凭证成功执行真实 pause/resume，控制 revision 只增加一次。非回环源由 loopback-only 绑定及 `TestAPIIdentityAndAuthentication` 中源地址拒绝断言覆盖。 |
-| API2 | 验收失败 | `GET /presentation` 返回真实非默认 profile；客户端发起 start_candidate 后，受控 backend 实际生成该 profile 的 turn/Decision，正式 request 的查询 digest 与 claim 冻结 digest 分别核对（值不同符合 claim-time remote verification）；正式 provider merge 后，HTTP ShowTask/Snapshot 的 PRURL/workflow/execution/mergedAt 与同库 native Query 一致。旧 `TestAPIQueryParity` 的 SQLite `-shm` `Access is denied` 真实失败仍未精确复现/归因；sidecar 有界重查、持续 ACL 拒绝和真实 WAL 生命周期回归通过，当前 QueryParity 重跑通过不抹除原失败。Round 4 reviewer 核验了当前重试组合，但没有证据证明旧失败命中了可恢复的 CreateFile denial 类；API2 仍失败，不作环境豁免或人工后置。 |
+| API2 | 验收失败 | `GET /presentation` 返回真实非默认 profile；客户端发起 start_candidate 后，受控 backend 实际生成该 profile 的 turn/Decision，正式 request 的查询 digest 与 claim 冻结 digest 分别核对（值不同符合 claim-time remote verification）；正式 provider merge 后，HTTP ShowTask/Snapshot 的 PRURL/workflow/execution/mergedAt 与同库 native Query 一致。旧 `TestAPIQueryParity` 的 SQLite `-shm` `Access is denied` 真实失败仍未精确复现/归因；sidecar 有界重查、持续 ACL 拒绝和真实 WAL 生命周期回归通过，当前 QueryParity 重跑通过不抹除原失败。Round 4 reviewer 核验了当前重试组合，但没有证据证明旧失败命中了可恢复的 CreateFile denial 类。用户现已批准对该有限根因/瞬态可用性风险的条件接受；API2 自动验收仍失败，只有 #84 组合集成与最终门禁通过后才可单独登记 `accepted_exception`，当前不作通过或豁免。 |
 | API3 | 已验收 | 真实 HTTP + app `ControlInboxPort` + service actor 覆盖 transport 已登记但发送前取消/同信封补交、正式请求已发布但响应丢失/重连 GET 与 retry、正式消费者迟到竞争、8 个并发 duplicate、异版本同 ID conflict；每个合法 request 只生效一次。复审发现的 configured-service discard 重入锁由 `TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter` 修复并真实验证：writer 沿同一 service actor 工作，原仓库锁全程保持；重连回执、同 envelope duplicate、异内容同 ID 冲突和无重复业务变更均通过。第三轮原始 lock failure 保留见后文。 |
 | API4 | 已验收 | 第三轮 600,243-byte 合法 unknown envelope 曾写出 1,201,014-byte rejection，超过 reader 上限并阻断原 ID GET/preflight。持久聚合边界已在 rebase 后源码 `d2a0bce0` 修复；其后 `internal/product/httpapi` 源码未改变，18 项 HTTP/API 定向、真实原 ID 计数/重连 2 项与 vet 通过，第三轮原始失败保留见后文。 |
 | API5 | 已验收 | 真实应用服务恢复后发布发现/ready 身份、正常关闭与端口冲突诊断通过；配置服务路径不启动替代实例。定向 `TestAPIServiceLifecycle` 与真实服务 `TestAPIServiceLifecycle`、`TestAPIConfiguredServicePublishesDiscovery` 通过。 |
@@ -188,8 +188,16 @@ Independent reviewer `/root/review45_round4` reviewed exact source candidate `c1
 
 Round 4 L1 的初始 output path 参数是字面量 `$reviewOut`。runner 停止后，reviewer 核验原始绝对路径并将对应 artifacts 放入上列临时 evidence root；`summary.json` 原始 path 字段未改写，当前实际文件按其相对后缀对应到 `quick-*/...`。原 JSON 与移动后文件均保留，不把 `$reviewOut` 当作可直接打开的绝对路径。
 
-Review 复核当前重试实现时补正边界：`retryFileInspection` 对 `CreateFile` 的 access/sharing denial 最多 20 calls、19×5ms；#45 sidecar 外层最多 5 rounds，另有 1+2+3+4ms。持续 `CreateFile ERROR_ACCESS_DENIED` 的组合上限为 100 calls / 485ms planned wait，不含 OS overhead；`GetFileInformationByHandle` 阶段没有内层重试，只有外层 round 间隔。以上是当前 main 与 #45 的组合实现，不是历史 SHM failure 的 syscall 归因或恢复证明。Review 仍保留 API2 `验收失败`：原 QueryParity failure 的具体阶段/ACL/close-delete 时序未知，当前有界 fail-closed 行为和 L1 不能将其转成通过；需要新的、确实命中合法 denial 的阶段证据或其他可核验的同故障类证据。没有环境豁免、人工后置或用户风险批准。
+Review 复核当前重试实现时补正边界：`retryFileInspection` 对 `CreateFile` 的 access/sharing denial 最多 20 calls、19×5ms；#45 sidecar 外层最多 5 rounds，另有 1+2+3+4ms。持续 `CreateFile ERROR_ACCESS_DENIED` 的组合上限为 100 calls / 485ms planned wait，不含 OS overhead；`GetFileInformationByHandle` 阶段没有内层重试，只有外层 round 间隔。以上是当前 main 与 #45 的组合实现，不是历史 SHM failure 的 syscall 归因或恢复证明。Review 保留 API2 `验收失败`：原 QueryParity failure 的具体阶段/ACL/close-delete 时序未知，当前有界 fail-closed 行为和 L1 不能将其转成通过。用户随后明确批准了有限、带条件的剩余风险，原话及生效门槛见下节；在门槛满足前不记 `accepted_exception`。
 
 当前 source review 已完成，PR #249 仍因 API2 未闭合而 OPEN、未合并。#84 的实际 worker 状态/格式组合尚未发生；本轮 review 不授权提前集成，也不改变 #44 对 #45 真实合并的等待条件。相对已审源码 `c126560f`，本轮仅修改本验收记录和 `docs/roadmap/execution-map.md`，未改代码。
 
 Round 4 文档同步静态：`python scripts/check_doc_links.py` 271 Markdown/1741 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 85 identity files（10 draft/4 formal），next ID 87；`git diff --check` 通过。原始输出在 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-round4-docs-609b3f28a5a34a1e96097022cf50a2de`。本轮未分配或修改任何 Task ID。
+
+## 用户对 API2 有限剩余风险的条件接受
+
+2026-10-09，用户对如下完整问题明确回复“接受”：“是否接受 #45 的 SHM 根因未证实、可能暂时误拒绝查询或启动的风险，保留未验记录，并在 #84 集成复核及最终门禁通过后合并？”协调已将原话、范围和条件记录在原 run 授权及 [PR #249 评论](https://github.com/erranliu/SteerLine/pull/249#issuecomment-6073688681)。
+
+该接受范围仅限历史 API2 合法 SQLite SHM `Access is denied` 的根因/syscall 证据缺口，以及合法瞬态 denial 可能在有界窗口外暂时拒绝查询或启动的可用性风险。原自动验收失败、syscall 阶段未知和现场不可复现仍保留；不改写为自动通过，不改成待人工验收，不扩大到其他缺陷或风险，也不作为当前 `c126560f` 候选的合并许可。
+
+只有待 #84 实现进入主干后，#45 按真实状态/格式/接口完成必要共享集成，组合验证、独立复核及最终平台门禁全部通过，才按用户已给授权将该 API2 事项单独记为 `accepted_exception` 并进入合并流程。在此之前 API2 仍显示“验收失败”，#45 等待 #84 共享集成，PR 不合并；#44 继续等待 #45 真实合入。
