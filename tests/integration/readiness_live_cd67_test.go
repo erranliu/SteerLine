@@ -29,6 +29,7 @@ import (
 // The original opt-in requires a registered isolated repository and pinned
 // smoke contract. Every action uses public application/task/query ports.
 func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
+	t.Skip("retained legacy local Orca live fixture: product registration is disconnected")
 	repo, commit, worker := os.Getenv("STEERLINE_READINESS_LIVE_REPO"), os.Getenv("STEERLINE_READINESS_LIVE_COMMIT"), os.Getenv("STEERLINE_READINESS_LIVE_CODEX")
 	if repo == "" || commit == "" || worker == "" {
 		t.Skip("isolated native readiness acceptance was not selected")

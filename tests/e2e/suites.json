@@ -1,19 +1,11 @@
 [
   {"id":"smoke.delivery","level":"L2","suite":"smoke","package":"./tests/e2e/smoke","test":"TestDeliverySmoke","env":"controlled"},
   {"id":"smoke.local-codex","level":"L2","suite":"smoke","package":"./tests/e2e/live","test":"TestSmokeLocalCodex","env":"live","chain":"local-codex"},
-  {"id":"smoke.orca-codex","level":"L2","suite":"smoke","package":"./tests/e2e/live","test":"TestSmokeOrcaCodex","env":"live","chain":"orca-codex"},
   {"id":"delivery.basic","level":"L3","suite":"delivery","package":"./tests/e2e/suites/delivery","test":"TestBasicDelivery","env":"controlled"},
   {"id":"delivery.local-codex","level":"L3","suite":"delivery","package":"./tests/e2e/live","test":"TestDeliveryLocalCodex","env":"live","chain":"local-codex"},
-  {"id":"delivery.orca-codex","level":"L3","suite":"delivery","package":"./tests/e2e/live","test":"TestDeliveryOrcaCodex","env":"live","chain":"orca-codex"},
   {"id":"delivery.orca-remote-codex","level":"L3","suite":"delivery","package":"./tests/e2e/remote","test":"TestDeliveryRemoteOrcaCodex","env":"live","chain":"orca-remote-codex"},
   {"id":"recovery.waiting-merge-restart","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestWaitingMergeRestart","env":"controlled"},
-  {"id":"recovery.orca-startup.slow","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestOrcaStartupSlow","env":"controlled"},
-  {"id":"recovery.orca-startup.unobserved","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestOrcaStartupUnobserved","env":"controlled"},
-  {"id":"recovery.orca-startup.lost","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestOrcaStartupLost","env":"controlled"},
-  {"id":"recovery.orca-startup.failed","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestOrcaStartupFailed","env":"controlled"},
   {"id":"recovery.local-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryLocalCodex","env":"live","chain":"local-codex"},
-  {"id":"recovery.orca-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryOrcaCodex","env":"live","chain":"orca-codex"},
   {"id":"runtime.installed-debug-isolation","level":"L3","suite":"runtime","package":"./tests/e2e/suites/runtime","test":"TestInstalledDebugIsolation","env":"controlled"},
-  {"id":"workspace.orca-removal-restart","level":"L3","suite":"workspace","package":"./tests/e2e/suites/nativeworkspace","test":"TestOrcaRemovalRestart","env":"native"},
-  {"id":"candidates.local","level":"L3","suite":"candidates","package":"./tests/e2e/suites/candidates","test":"TestCandidateLocal","env":"live","chain":"local-codex"}
+  {"id":"workspace.orca-removal-restart","level":"L3","suite":"workspace","package":"./tests/e2e/suites/nativeworkspace","test":"TestOrcaRemovalRestart","env":"native"}
 ]

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
@@ -36,13 +37,26 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 	if centerStatus.State != "ready" || !centerStatus.Reachable || centerStatus.RuntimeID == "" {
 		return PreflightResult{}, errors.New("center Orca runtime is not ready")
 	}
+	if c.local() && centerStatus.TargetKind != "local" {
+		return PreflightResult{}, errors.New("local Orca supervised target was redirected or omitted its target identity; clear ambient Orca remote routing")
+	}
 	if centerStatus.AppVersion != "" && !SameVersionFamily(centerVersion, centerStatus.AppVersion) {
 		return PreflightResult{}, errors.New("center Orca CLI and runtime versions are from different major.minor families")
 	}
 
-	remoteStatus, err := supervisedRuntimeStatus(ctx, client, sc.EnvironmentID)
-	if err != nil {
-		return PreflightResult{}, fmt.Errorf("remote Orca status: %w", err)
+	remoteStatus := centerStatus
+	repoSelector := sc.RepositorySelector
+	if c.local() {
+		repoID, findErr := orcaworker.FindRepo(ctx, client.centerPayload(centerStatus.RuntimeID), c.Repository)
+		if findErr != nil {
+			return PreflightResult{}, fmt.Errorf("local Orca repository lookup: %w", findErr)
+		}
+		repoSelector = "id:" + repoID
+	} else {
+		remoteStatus, err = supervisedRuntimeStatus(ctx, client, sc.EnvironmentID)
+		if err != nil {
+			return PreflightResult{}, fmt.Errorf("remote Orca status: %w", err)
+		}
 	}
 	if remoteStatus.State != "ready" || !remoteStatus.Reachable || remoteStatus.RuntimeID == "" || remoteStatus.AppVersion == "" {
 		return PreflightResult{}, errors.New("remote Orca runtime is not ready or omitted its version/identity")
@@ -53,14 +67,20 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 	if !SameVersionFamily(centerVersion, remoteStatus.AppVersion) {
 		return PreflightResult{}, fmt.Errorf("Orca version-family mismatch: center=%s remote=%s", centerVersion, remoteStatus.AppVersion)
 	}
-	if err = requireOrcaCapabilities(remoteStatus.Capabilities); err != nil {
-		return PreflightResult{}, fmt.Errorf("remote Orca lacks required supervised capabilities: %w", err)
-	}
-	if err = verifySavedEnvironment(ctx, client, sc.EnvironmentID, sc.ConnectionID, remoteStatus.RuntimeID); err != nil {
-		return PreflightResult{}, err
+	if !c.local() {
+		if err = requireOrcaCapabilities(remoteStatus.Capabilities); err != nil {
+			return PreflightResult{}, fmt.Errorf("remote Orca lacks required supervised capabilities: %w", err)
+		}
+		if err = verifySavedEnvironment(ctx, client, sc.EnvironmentID, sc.ConnectionID, remoteStatus.RuntimeID); err != nil {
+			return PreflightResult{}, err
+		}
 	}
 
-	repoBytes, err := client.config.Call(ctx, timeout, "repo", "show", "--repo", sc.RepositorySelector, "--environment", sc.EnvironmentID, "--json")
+	repoArgs := []string{"repo", "show", "--repo", repoSelector, "--json"}
+	if !c.local() {
+		repoArgs = append(repoArgs, "--environment", sc.EnvironmentID)
+	}
+	repoBytes, err := client.config.Call(ctx, timeout, repoArgs...)
 	if err != nil {
 		return PreflightResult{}, fmt.Errorf("remote repository lookup: %w", err)
 	}
@@ -84,6 +104,9 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 	if repoResult.Repo.ID == "" || repoResult.Repo.Kind != "git" || repoResult.Repo.GitRemoteIdentity.RemoteURL == "" {
 		return PreflightResult{}, errors.New("remote repository response lacks a Git identity")
 	}
+	if c.local() && (repoEnvelope.Meta.RuntimeID != remoteStatus.RuntimeID || "id:"+repoResult.Repo.ID != repoSelector) {
+		return PreflightResult{}, errors.New("Orca repository response came from a different execution runtime")
+	}
 	localRemote, err := c.Origin(ctx)
 	if err != nil {
 		return PreflightResult{}, fmt.Errorf("local repository remote lookup: %w", err)
@@ -95,7 +118,7 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 	// A new Execution creates its own coordinator. An optional configured
 	// bootstrap handle is checked only when explicitly supplied.
 	if sc.CoordinatorTerminal == "" {
-		return PreflightResult{CenterVersion: centerVersion, RemoteVersion: remoteStatus.AppVersion, CenterRuntime: centerStatus.RuntimeID, RemoteRuntime: remoteStatus.RuntimeID, EnvironmentID: sc.EnvironmentID, RepositoryID: repoResult.Repo.ID, RepositoryURL: repoResult.Repo.GitRemoteIdentity.RemoteURL}, nil
+		return PreflightResult{CenterVersion: centerVersion, RemoteVersion: remoteStatus.AppVersion, CenterRuntime: centerStatus.RuntimeID, RemoteRuntime: remoteStatus.RuntimeID, EnvironmentID: c.executionHost(), RepositoryID: repoResult.Repo.ID, RepositoryURL: repoResult.Repo.GitRemoteIdentity.RemoteURL}, nil
 	}
 	terminalBytes, err := client.config.Call(ctx, timeout, "terminal", "show", "--terminal", sc.CoordinatorTerminal, "--json")
 	if err != nil {
@@ -118,7 +141,7 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 	if terminalResult.Terminal.Handle != sc.CoordinatorTerminal || !terminalResult.Terminal.Connected || terminalResult.Terminal.Orphaned || terminalEnvelope.Meta.RuntimeID != centerStatus.RuntimeID {
 		return PreflightResult{}, errors.New("coordinator terminal is not connected to the current center runtime")
 	}
-	return PreflightResult{CenterVersion: centerVersion, RemoteVersion: remoteStatus.AppVersion, CenterRuntime: centerStatus.RuntimeID, RemoteRuntime: remoteStatus.RuntimeID, EnvironmentID: sc.EnvironmentID, RepositoryID: repoResult.Repo.ID, RepositoryURL: repoResult.Repo.GitRemoteIdentity.RemoteURL, Coordinator: sc.CoordinatorTerminal}, nil
+	return PreflightResult{CenterVersion: centerVersion, RemoteVersion: remoteStatus.AppVersion, CenterRuntime: centerStatus.RuntimeID, RemoteRuntime: remoteStatus.RuntimeID, EnvironmentID: c.executionHost(), RepositoryID: repoResult.Repo.ID, RepositoryURL: repoResult.Repo.GitRemoteIdentity.RemoteURL, Coordinator: sc.CoordinatorTerminal}, nil
 }
 
 func supervisedRuntimeStatus(ctx context.Context, client Client, environment string) (orcaRuntimeStatus, error) {
@@ -135,12 +158,14 @@ func supervisedRuntimeStatus(ctx context.Context, client Client, environment str
 		return orcaRuntimeStatus{}, err
 	}
 	var result struct {
-		Runtime orcaRuntimeStatus `json:"runtime"`
+		Runtime orcaRuntimeStatus     `json:"runtime"`
+		Target  struct{ Kind string } `json:"target"`
 	}
 	if err = json.Unmarshal(envelope.Result, &result); err != nil {
 		return orcaRuntimeStatus{}, err
 	}
 	status := result.Runtime
+	status.TargetKind = result.Target.Kind
 	if envelope.Meta.RuntimeID == "" || status.RuntimeID != "" && status.RuntimeID != envelope.Meta.RuntimeID {
 		return orcaRuntimeStatus{}, errors.New("Orca status envelope/runtime identity mismatch")
 	}

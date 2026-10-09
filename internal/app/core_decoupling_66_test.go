@@ -215,7 +215,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 			host, publisher string
 			provider        publication.Config
 			supported       bool
-		}{{"local", "host_service", github, false}, {"local", "worker", github, true}, {"local", "worker", gitea, true}, {"local", "host_service", gitea, false}, {"orca", "worker", github, true}, {"orca", "worker", gitea, true}, {"orca", "host_service", github, false}, {"orca_supervised", "worker", gitea, true}, {"orca_supervised", "host_service", github, false}, {"other", "worker", github, false}, {"orca", "", github, false}, {"orca", "automatic", github, false}, {"orca", "worker", publication.Config{Kind: "command", BaseURL: github.BaseURL, Repository: github.Repository}, false}} {
+		}{{"local", "host_service", github, false}, {"local", "worker", github, true}, {"local", "worker", gitea, true}, {"local", "host_service", gitea, false}, {"orca_supervised", "worker", github, true}, {"orca_supervised", "worker", gitea, true}, {"orca_supervised", "host_service", github, false}, {"orca_supervised", "worker", gitea, true}, {"orca_supervised", "host_service", github, false}, {"other", "worker", github, false}, {"orca_supervised", "", github, false}, {"orca_supervised", "automatic", github, false}, {"orca_supervised", "worker", publication.Config{Kind: "command", BaseURL: github.BaseURL, Repository: github.Repository}, false}} {
 			selected, err := directory.Resolve(execution.Config{Host: row.host, Agent: "codex"})
 			if err == nil {
 				err = selected.ValidatePublicationPolicy(executionbackend.PublicationPolicy{Publisher: row.publisher}, row.provider)

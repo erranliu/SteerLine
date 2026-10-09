@@ -18,6 +18,9 @@ func NormalizeProfilePayload(payload []byte) ([]byte, []string, error) {
 		return nil, nil, err
 	}
 	encoded, err := EncodeProfileConfig(settings)
+	if settings.Target == "local" {
+		return encoded, []string{"目标：本机 Orca supervised", "权限：由 Orca 原生设置管理"}, err
+	}
 	return encoded, []string{"目标环境：" + settings.EnvironmentID, "连接：" + settings.ConnectionID}, err
 }
 
@@ -31,6 +34,7 @@ func ValidateProfileSelection(agent string, remotePayload []byte) error {
 
 // ProfileConfig is owned by the remote implementation codec.
 type ProfileConfig struct {
+	Target          string   `json:"target,omitempty"`
 	Executable      string   `json:"executable"`
 	Args            []string `json:"args,omitempty"`
 	Shell           string   `json:"shell"`
@@ -48,6 +52,7 @@ type ProfileConfig struct {
 }
 
 type profileConfigWire struct {
+	Target          string   `json:"target,omitempty"`
 	Executable      string   `json:"executable"`
 	Args            []string `json:"args,omitempty"`
 	Shell           string   `json:"shell"`
@@ -72,7 +77,7 @@ func (c *ProfileConfig) UnmarshalJSON(data []byte) error {
 	if wire.RemoteCancelAvailable == nil {
 		return errors.New("remote_cancel_available must be explicitly set to false")
 	}
-	*c = ProfileConfig{Executable: wire.Executable, Args: wire.Args, Shell: wire.Shell, WaitTimeout: wire.WaitTimeout, Model: wire.Model, ReasoningEffort: wire.ReasoningEffort, ConnectionID: wire.ConnectionID, EnvironmentID: wire.EnvironmentID, RepositorySelector: wire.RepositorySelector,
+	*c = ProfileConfig{Target: wire.Target, Executable: wire.Executable, Args: wire.Args, Shell: wire.Shell, WaitTimeout: wire.WaitTimeout, Model: wire.Model, ReasoningEffort: wire.ReasoningEffort, ConnectionID: wire.ConnectionID, EnvironmentID: wire.EnvironmentID, RepositorySelector: wire.RepositorySelector,
 		CoordinatorTerminal: wire.CoordinatorTerminal, PollInterval: wire.PollInterval,
 		CapabilityReportVersion: wire.CapabilityReportVersion, RemoteCancelAvailable: *wire.RemoteCancelAvailable}
 	return c.Validate()
@@ -115,8 +120,8 @@ func (c ProfileConfig) Validate() error {
 		}
 	}
 
-	if strings.TrimSpace(c.ConnectionID) == "" || strings.TrimSpace(c.EnvironmentID) == "" || strings.TrimSpace(c.RepositorySelector) == "" {
-		return errors.New("remote profile requires fixed connection, environment and repository identities")
+	if err := (Settings{Target: c.Target, ConnectionID: c.ConnectionID, EnvironmentID: c.EnvironmentID, RepositorySelector: c.RepositorySelector}).validateTarget(); err != nil {
+		return err
 	}
 	if c.RemoteCancelAvailable {
 		return errors.New("remote cancellation is fixed unavailable")

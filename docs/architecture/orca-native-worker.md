@@ -1,5 +1,7 @@
 # 本机 Orca 原生通用 worker 调整记录
 
+当前接线已改为 `host=orca_supervised` 的 local/environment 双目标，保持原远端功能。原 `host=orca`、terminal codec/协议和独立正文读取入口已切断，以下原本机实现源码与历史记录保留。当前范围见[Plan](../spec/orca-supervised-targets.plan.md)和[验收](../acceptance/orca-supervised-targets.md)。
+
 2026-10-09 用户明确撤回本变更的 roadmap 身份，改由当前聊天直接实现。历史预留 ID 86 只用于追溯，不复用、不进入执行 DAG、不作为 #84 的前置或等待项。本变更采用 Orca 自己管理的宽松启动权限，本机 Orca 路径中的 agent 只作为配置值；SteerLine 不启动、配置或解释具体 agent。不改变外部 SteerlineTest 的 102 Task、数据库或冻结执行。
 
 用户最新指令为直接实现，不创建新的 roadmap 执行聊天。当前 Orca 原生模式以 Terminal + YOLO 为执行环境前置；structured worker 的完整同会话支持等待 Orca 通用接续接口，不建立特定agent分支。

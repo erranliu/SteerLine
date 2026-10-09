@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	"os"
 	"path/filepath"
 	"slices"
@@ -37,18 +37,18 @@ func TestFiveGlobalLunaProfilesLoadAndFreeze(t *testing.T) {
 	want := []struct{ id, host, effort string }{
 		{"local-luna-medium", "local", "medium"},
 		{"local-luna-xhigh", "local", "xhigh"},
-		{"orca-local-luna-xhigh", "orca", "xhigh"},
-		{"orca-local-luna-medium", "orca", "medium"},
-		{"orca-local-luna-high", "orca", "high"},
+		{"orca-local-luna-xhigh", "orca_supervised", "xhigh"},
+		{"orca-local-luna-medium", "orca_supervised", "medium"},
+		{"orca-local-luna-high", "orca_supervised", "high"},
 	}
 	for i, expected := range want {
 		profile := profiles[i]
 		model, effort := "", ""
-		if profile.Host == "orca" {
-			native, decodeErr := orcaworker.DecodeProfileConfig(profile.ImplementationConfigs[0].Payload)
+		if profile.Host == "orca_supervised" {
+			native, decodeErr := remote.DecodeProfileConfig(profile.ImplementationConfigs[0].Payload)
 			require(t, decodeErr)
 			model, effort = native.Model, native.ReasoningEffort
-			if len(profile.ImplementationConfigs) != 1 || profile.ImplementationConfigs[0].ImplementationKey != orcaworker.ProfileCodecKey {
+			if len(profile.ImplementationConfigs) != 1 || profile.ImplementationConfigs[0].ImplementationKey != remote.ProfileCodecKey {
 				t.Fatal("Orca example includes agent-specific configuration")
 			}
 		} else {

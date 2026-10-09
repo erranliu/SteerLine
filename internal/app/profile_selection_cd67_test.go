@@ -20,7 +20,7 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	}
 	base, _ := nativeTaskFixture(t)
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	localOrca := testExecutionProfile(t, "orca-local", "Orca 本机", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"})
+	localOrca := testExecutionProfile(t, "orca-local", "Orca 本机", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"})
 	remoteOrca := testExecutionProfile(t, "orca-remote", "Orca 远程", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: "codex", Model: "chosen-model", ReasoningEffort: "xhigh"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}, &remote.ProfileConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1})
 	local := testExecutionProfile(t, "local", "本地", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)
 	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")

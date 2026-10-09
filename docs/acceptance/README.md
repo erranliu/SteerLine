@@ -13,6 +13,7 @@
 | 控制台 Codex CLI 入口 | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
 | Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
 | Orca状态同步修复 | [延迟启动活动推进状态](orca-delayed-start-status-2026-10-09.md)，原 Dispatch 在完成前同步开始事实，源码定向验证通过 |
+| Orca supervised 双目标 | [本机目标与旧入口切断](orca-supervised-targets.md)，同一原远端生命周期，功能范围保持 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
 | 测试维护 | [测试代码精简](test-code-simplification.md) |

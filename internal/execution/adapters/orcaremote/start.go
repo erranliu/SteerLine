@@ -22,7 +22,10 @@ func (b Client) StartTask(ctx context.Context, runID, taskID, worktreeID string,
 	if b.config.Settings.CoordinatorTerminal == "" {
 		return StartReceipt{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "worker start requires the Execution's committed coordinator"}
 	}
-	args := []string{"orchestration", "worker-start", "--task", taskID, "--on", b.config.Settings.EnvironmentID, "--worktree", "id:" + worktreeID, "--run", runID, "--from", b.config.Settings.CoordinatorTerminal, "--json"}
+	args := []string{"orchestration", "worker-start", "--task", taskID, "--worktree", "id:" + worktreeID, "--run", runID, "--from", b.config.Settings.CoordinatorTerminal, "--json"}
+	if !b.config.local() {
+		args = append(args, "--on", b.config.Settings.EnvironmentID)
+	}
 	reuse := previous != nil
 	if reuse {
 		if previous.Kind != "orca_supervised" || previous.RuntimeID != pair.RemoteRuntime || previous.CoordinatorRuntimeID != pair.CenterRuntime || previous.ExecutionHost != pair.EnvironmentID || previous.WorktreeID != worktreeID || previous.Terminal == "" || previous.Incarnation == "" {
@@ -35,7 +38,9 @@ func (b Client) StartTask(ctx context.Context, runID, taskID, worktreeID string,
 		if original.Identity != *previous || original.Liveness != "live" {
 			return StartReceipt{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote continuation requires the original live agent incarnation"}
 		}
-		if _, err := b.Settlement(ctx, Ref{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaSupervised, Target: executionbackend.ExecutionTarget{ID: "orca-supervised:" + b.config.Settings.ConnectionID, ConnectionID: b.config.Settings.ConnectionID, ExternalRuntime: pair.EnvironmentID, OrchestrationRun: previous.OrchestrationRun, ExternalTask: previous.Task, Dispatch: previous.Dispatch, ExecutionHost: previous.ExecutionHost, WorktreeID: worktreeID}, External: *previous}, ""); err != nil {
+		target := b.config.Target()
+		target.OrchestrationRun, target.ExternalTask, target.Dispatch, target.ExecutionHost, target.WorktreeID = previous.OrchestrationRun, previous.Task, previous.Dispatch, previous.ExecutionHost, worktreeID
+		if _, err := b.Settlement(ctx, Ref{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaSupervised, Target: target, External: *previous}, ""); err != nil {
 			return StartReceipt{}, err
 		}
 		args = append(args, "--terminal", previous.Terminal)

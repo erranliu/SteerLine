@@ -7,13 +7,38 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-type Settings struct{ ConnectionID, EnvironmentID, RepositorySelector, CoordinatorTerminal, PollInterval string }
+type Settings struct{ Target, ConnectionID, EnvironmentID, RepositorySelector, CoordinatorTerminal, PollInterval string }
+
+func (s Settings) validateTarget() error {
+	switch s.Target {
+	case "local":
+		if s.ConnectionID != "" || s.EnvironmentID != "" || s.RepositorySelector != "" {
+			return errors.New("local Orca supervised target cannot include remote placement fields")
+		}
+	case "", "environment":
+		if strings.TrimSpace(s.ConnectionID) == "" || strings.TrimSpace(s.EnvironmentID) == "" || strings.TrimSpace(s.RepositorySelector) == "" {
+			return errors.New("environment Orca supervised requires fixed connection, environment and repository")
+		}
+	default:
+		return errors.New("Orca supervised target must be local or environment")
+	}
+	return nil
+}
+
+func (c Config) local() bool { return c.Settings.Target == "local" }
+func (c Config) executionHost() string {
+	if c.local() {
+		return "local"
+	}
+	return c.Settings.EnvironmentID
+}
 
 type Config struct {
 	CoordinatorShell                                                     string
@@ -25,10 +50,10 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	if c.Call == nil || c.Origin == nil || c.Settings.ConnectionID == "" || c.Settings.EnvironmentID == "" || c.Settings.RepositorySelector == "" {
-		return errors.New("remote Orca requires fixed connection, environment and repository")
+	if c.Call == nil || c.Origin == nil || c.local() && c.Repository == "" {
+		return errors.New("Orca supervised requires command/origin access and a local repository for local placement")
 	}
-	return nil
+	return c.Settings.validateTarget()
 }
 
 type Client struct{ config Config }
@@ -84,7 +109,7 @@ var stableID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 func stableExecutionID(s string) bool { return stableID.MatchString(s) }
 
 func validateSupervisedRef(c Config, ref Ref) error {
-	if ref.Backend != executionbackend.BackendOrca || ref.Protocol != executionbackend.ProtocolOrcaSupervised || ref.Target.ID != "orca-supervised:"+c.Settings.ConnectionID || ref.Target.ConnectionID != c.Settings.ConnectionID || ref.Target.ExternalRuntime != c.Settings.EnvironmentID || ref.Target.OrchestrationRun != ref.External.OrchestrationRun || ref.Target.ExternalTask != ref.External.Task || ref.Target.Dispatch != ref.External.Dispatch || ref.Target.ExecutionHost != ref.External.ExecutionHost || ref.Target.WorktreeID != ref.External.WorktreeID || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.CoordinatorRuntimeID == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost != c.Settings.EnvironmentID || ref.External.WorktreeID == "" {
+	if ref.Backend != executionbackend.BackendOrca || ref.Protocol != executionbackend.ProtocolOrcaSupervised || !SameBaseTarget(ref.Target, c.Target()) || ref.Target.OrchestrationRun != ref.External.OrchestrationRun || ref.Target.ExternalTask != ref.External.Task || ref.Target.Dispatch != ref.External.Dispatch || ref.Target.ExecutionHost != ref.External.ExecutionHost || ref.Target.WorktreeID != ref.External.WorktreeID || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.CoordinatorRuntimeID == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost != c.executionHost() || ref.External.WorktreeID == "" || c.local() && ref.External.RuntimeID != ref.External.CoordinatorRuntimeID {
 		return &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote Orca reference differs from its fixed target/Dispatch"}
 	}
 	return nil
@@ -162,6 +187,7 @@ type Delivery struct {
 }
 
 type orcaRuntimeStatus struct {
+	TargetKind   string   `json:"-"`
 	State        string   `json:"state"`
 	Reachable    bool     `json:"reachable"`
 	RuntimeID    string   `json:"runtimeId"`
