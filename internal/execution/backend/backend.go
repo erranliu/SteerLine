@@ -72,6 +72,13 @@ type ExecutionStopper interface {
 	StopExecution(context.Context, ExecutionRef, Operation, StopHandle) (StopReceipt, error)
 }
 
+// ProcessTreeHandle can prove all writers in the exact owned resource exited.
+// Root-process liveness alone is insufficient while its owner still exists.
+type ProcessTreeHandle interface {
+	StopHandle
+	WritersAbsent() bool
+}
+
 // ManagedProcessHost is a small host-owned process boundary. Implementations
 // receive a fixed command constructed by an execution adapter; they never
 // receive a Service, Run, or persistence handle.

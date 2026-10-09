@@ -1,0 +1,165 @@
+package execution
+
+import (
+	"context"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"os/exec"
+	"strings"
+	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+)
+
+func stoppedWorkerFixture(t *testing.T) (*Service, *reconstructiontypes.RunView, workerRecoveryResult) {
+	t.Helper()
+	s, run := neutralAuditService(t)
+	t.Cleanup(func() { _ = s.Close() })
+	cmd := exec.Command(os.Args[0], "--fake", "sleep")
+	owned, err := resourceprocess.StartManaged(cmd)
+	require(t, err)
+	identity := owned.Identity()
+	owned.Close()
+	_ = cmd.Wait()
+	workflow, e := s.workflowRecords(run)
+	e.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, e.Workspace.Worktree, e)
+	e.Process = &identity
+	setNeutralBinding(t, e, "retained-original-endpoint", "generation", workerFlowMockSession)
+	e.CurrentTurnID, e.CurrentCommandID, e.TurnNumber = "00000000-0000-0000-0000-000000000001", newID(), 1
+	e.Status, workflow.Phase = "active", "executing"
+	s.refreshRun(run)
+	require(t, s.markServiceRecoveryGate())
+	result := appServerRecoveryFixture(t, s, run)
+	result.dead = true
+	result.receipt.State.WorkerAbsent, result.receipt.State.WritersAbsent = true, true
+	return s, run, result
+}
+
+type stopProofLifecycle struct {
+	executionbackend.LifecyclePort
+	calls *int
+}
+
+func (p stopProofLifecycle) Reconcile(_ context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	*p.calls++
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, RequestID: request.Operation.ID, Disposition: executionbackend.OperationConfirmed,
+		State: executionbackend.LifecycleStateFacts{WorkerAbsent: true, WritersAbsent: true, Stopped: true}, Diagnostic: "original writer tree exited; historical interrupt outcome unknown"}, nil, nil
+}
+
+func TestWorkerServiceStopRecovery(t *testing.T) {
+	t.Run("frozen_behavior_and_version_reject_changes", func(t *testing.T) {
+		s, run := neutralAuditService(t)
+		t.Cleanup(func() { _ = s.Close() })
+		fixed := *s.workflowRecord(run).ExecutionProfile
+		if fixed.ServiceStopBehavior != executionbackend.StopExecutionOnServiceStop || !VerifyFixedExecutionProfile(fixed, s.runtime.Directory) {
+			t.Fatal("worker behavior was not frozen")
+		}
+		for _, value := range []executionbackend.ServiceStopBehavior{"", "edited", executionbackend.ContinueExecutionOnServiceStop} {
+			changed := fixed
+			changed.ServiceStopBehavior = value
+			changed.Digest = fixedExecutionProfileDigest(changed)
+			if VerifyFixedExecutionProfile(changed, s.runtime.Directory) {
+				t.Fatalf("unsupported worker behavior %q accepted even with a recomputed digest", value)
+			}
+		}
+		fixed.Version--
+		fixed.Digest = fixedExecutionProfileDigest(fixed)
+		if VerifyFixedExecutionProfile(fixed, s.runtime.Directory) {
+			t.Fatal("old frozen worker version was accepted")
+		}
+	})
+	t.Run("original_stop_target_settles_without_repeating_rpc", func(t *testing.T) {
+		s, run, result := stoppedWorkerFixture(t)
+		e := s.executionRecord(run)
+		id, err := s.startWorkerOperation(run, "stop_worker_observation", "worker-stop-observation:"+e.ExecutionID+":"+e.CurrentTurnID, &executionbackend.StopInput{TurnID: e.CurrentTurnID})
+		require(t, err)
+		require(t, s.setOperationState(id, "outcome_unknown", id, nil, "original connection refused"))
+		require(t, s.commitWorker(run, id))
+		port, _, err := s.lifecycleForRun(run)
+		require(t, err)
+		calls := 0
+		handled, err := s.reconcileWorkerStops(context.Background(), run, stopProofLifecycle{LifecyclePort: port, calls: &calls})
+		require(t, err)
+		if !handled || calls != 1 || s.operationByKey("worker-stop-observation:"+e.ExecutionID+":"+e.CurrentTurnID).Status != "confirmed" {
+			t.Fatal("original stop receipt was omitted or not committed")
+		}
+		require(t, s.applyWorkerRecovery(result))
+		if s.executionRecord(run).RecoveryState != "interrupted" || run.Decision == nil || len(run.Decision.Request.Options) != 1 || len(s.domain.Attempts) != 1 {
+			t.Fatal("verified stop failed to expose one original-session continuation")
+		}
+		handled, err = s.reconcileWorkerStops(context.Background(), run, stopProofLifecycle{LifecyclePort: port, calls: &calls})
+		require(t, err)
+		if handled || calls != 1 {
+			t.Fatal("confirmed stop was reconciled again")
+		}
+	})
+	t.Run("writer_absence_is_required", func(t *testing.T) {
+		s, run, result := stoppedWorkerFixture(t)
+		result.receipt.State.WritersAbsent = false
+		require(t, s.applyWorkerRecovery(result))
+		if s.executionRecord(run).RecoveryState != "unverified" || len(run.Decision.Request.Options) != 0 || len(s.domain.Attempts) != 1 {
+			t.Fatal("root exit was treated as proof that all writers exited")
+		}
+	})
+	t.Run("tree_exit_does_not_confirm_unknown_business_start", func(t *testing.T) {
+		s, run, result := stoppedWorkerFixture(t)
+		result.receipt.Disposition = executionbackend.OperationUnknown
+		result.receipt.State.TurnStarted = false
+		require(t, s.applyWorkerRecovery(result))
+		if s.executionRecord(run).RecoveryState != "unverified" || len(run.Decision.Request.Options) != 0 {
+			t.Fatal("worker exit bypassed its unknown business input")
+		}
+	})
+	t.Run("unknown_publication_blocks_and_poll_is_stable", func(t *testing.T) {
+		s, run, result := stoppedWorkerFixture(t)
+		_, err := s.startWorkerOperation(run, "publish_local_worker", "local-publish:"+run.RunID+":"+result.execution.CurrentTurnID, map[string]string{"run_id": run.RunID})
+		require(t, err)
+		require(t, s.applyWorkerRecovery(result))
+		if s.executionRecord(run).RecoveryState != "unverified" || len(run.Decision.Request.Options) != 0 {
+			t.Fatal("unknown publication was omitted from the displayed recovery gate")
+		}
+		before, events := recordFingerprint(s.domain), len(s.pendingEvents)
+		for i := 0; i < 2; i++ {
+			require(t, s.applyWorkerRecovery(result))
+		}
+		if before != recordFingerprint(s.domain) || events != len(s.pendingEvents) {
+			t.Fatal("identical unknown probes changed decisions, versions, or activity")
+		}
+	})
+	t.Run("unknown_answer_keeps_original_request_without_recursion", func(t *testing.T) {
+		s, run := waitingDecisionService(t)
+		t.Cleanup(func() { _ = s.Close() })
+		e := s.executionRecord(run)
+		e.RecoveryRequired, e.RecoveryState = true, "unverified"
+		s.setDecisionStatus(run, "answer_saved")
+		id, err := s.startWorkerOperation(run, "reply_execution_question", "worker-question-answer:"+e.ExecutionID+":"+run.Decision.ID, map[string]string{"execution_id": e.ExecutionID})
+		require(t, err)
+		require(t, s.waitWorkerFlow(run, "original answer delivery remains unknown", id))
+		if run.Decision.Status != "answer_saved" || s.operationByKey("worker-question-answer:"+e.ExecutionID+":"+run.Decision.ID).Status != "in_flight" {
+			t.Fatal("unknown original answer was replaced or resent")
+		}
+	})
+}
+
+// Recovery can validate generic identity/epochs, but native resource facts must
+// remain in the worker implementation. This also guards dead-observer fallbacks.
+func TestWorkerServiceStopBoundary(t *testing.T) {
+	for _, path := range []string{"service_shutdown.go", "worker_lifecycle_recovery.go", "worker_recovery.go", "worker_resume.go"} {
+		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		require(t, err)
+		ast.Inspect(f, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if selector, ok := call.Fun.(*ast.SelectorExpr); ok && (selector.Sel.Name == "InspectProcess" || selector.Sel.Name == "WorkerTreeAbsent" || strings.Contains(selector.Sel.Name, "AppServer")) {
+				t.Errorf("%s directly calls implementation-specific recovery %s", path, selector.Sel.Name)
+			}
+			return true
+		})
+	}
+}

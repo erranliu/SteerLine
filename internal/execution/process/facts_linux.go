@@ -26,6 +26,8 @@ func (p *childProcess) Kill() { syscall.Kill(-p.identity.PID, syscall.SIGKILL) }
 
 func (p *childProcess) Close() { p.Kill() }
 
+func (p *childProcess) WritersAbsent() bool { return WorkerTreeAbsent(p.identity) }
+
 func StartManaged(cmd *exec.Cmd) (*childProcess, error) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	if e := cmd.Start(); e != nil {

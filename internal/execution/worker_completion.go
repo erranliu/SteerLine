@@ -87,6 +87,9 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 		execution.CurrentCommandID != evidence.CommandID && execution.PendingCommandID != evidence.CommandID {
 		return s.waitWorkerFlow(run, "the original turn receipt differs from its fixed execution input")
 	}
+	if execution.RecoveryRequired {
+		execution.RecoverySessionAvailable = ptr(receipt.State.SessionAvailable)
+	}
 	if execution.CurrentTurnID == "" {
 		if err := BeginWorkerTurn(workflow, execution, evidence.SessionID, evidence.TurnID); err != nil {
 			return s.waitWorkerFlow(run, "original turn start could not be reconciled: "+err.Error())

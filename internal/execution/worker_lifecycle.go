@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -113,10 +112,20 @@ func (s *Service) lifecycleForRun(run *reconstructiontypes.RunView) (executionba
 	if err != nil {
 		return nil, workerFlowContext{}, err
 	}
-	port, err := s.lifecycleResolver.ResolveLifecycle(lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot).Clone())
+	setup := lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot)
+	setup.OwnedProcess = s.ownedProcesses[run.RunID]
+	setup.WorkerTreeAbsent = s.resources.WorkerTreeAbsent
+	port, err := s.lifecycleResolver.ResolveLifecycle(setup.Clone())
 	if err != nil {
 		return nil, workerFlowContext{}, err
 	}
+	if port.PolicyCapabilities().ServiceStopBehavior != fixed.workflow.ExecutionProfile.ServiceStopBehavior {
+		return nil, workerFlowContext{}, errors.New("worker service-stop behavior differs from the frozen execution")
+	}
+	if s.workerServiceOwners == nil {
+		s.workerServiceOwners = make(map[string]workerServiceOwner)
+	}
+	s.workerServiceOwners[run.RunID] = workerServiceOwner{port: port, snapshot: snapshot.Clone()}
 	return port, fixed, nil
 }
 
@@ -166,6 +175,9 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 	if lifecycle, _, resolveErr := s.lifecycleForRun(run); resolveErr != nil {
 		return true, resolveErr
 	} else if capabilities := lifecycle.PolicyCapabilities(); capabilities.ResumeActiveObservation || capabilities.SeparateTurnStart {
+		if handled, err := s.reconcileWorkerStops(ctx, run, lifecycle); handled || err != nil {
+			return true, err
+		}
 		handled, reconcileErr := s.reconcilePendingLifecycleSteps(ctx, run, lifecycle)
 		if reconcileErr != nil {
 			return true, reconcileErr
@@ -215,6 +227,11 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 		if lifecycleErr != nil {
 			return true, lifecycleErr
 		}
+		// A continuing worker can have completed while this service was offline.
+		// Read its original result/observation before applying manual-restart gates.
+		if lifecycle.PolicyCapabilities().ResumeActiveObservation && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID) {
+			return true, s.resumeLifecycleObservation(ctx, run, lifecycle)
+		}
 		snapshot, snapshotErr := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 		if snapshotErr != nil {
 			return true, snapshotErr
@@ -224,25 +241,20 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 			execution.RecoveryState = "unverified"
 			return true, s.waitWorkerFlow(run, "Original worker identity cannot be verified: "+verifyErr.Error())
 		}
-		if !evidence.SessionAvailable || execution.SessionID == "" {
+		beforeRecovery := recordFingerprint(*execution)
+		completed := settledOriginalWorkerTurn(execution)
+		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerLive: evidence.ManagedProcess && !evidence.ProcessAbsent, WorkerAbsent: evidence.ProcessAbsent, WritersAbsent: evidence.WritersAbsent, Completed: completed}, evidence.SessionAvailable)
+		if !completed && (!evidence.SessionAvailable || execution.SessionID == "") {
 			execution.RecoveryState = "unverified"
 			return true, s.waitWorkerFlow(run, "The original session is unavailable. Handle the original execution manually; recovery cannot create a replacement session.")
 		}
-		switch {
-		case evidence.ManagedProcess && !evidence.ProcessAbsent:
-			execution.RecoveryState = "live"
-		case evidence.ProcessAbsent && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID:
-			execution.RecoveryState = "completed"
-		case evidence.ProcessAbsent:
-			execution.RecoveryState = "interrupted"
-		default:
-			execution.RecoveryState = "unverified"
-		}
 		s.refreshRun(run)
-		if err := s.commitWorker(run); err != nil {
-			return true, err
+		if beforeRecovery != recordFingerprint(*execution) {
+			if err := s.commitWorker(run); err != nil {
+				return true, err
+			}
 		}
-		if evidence.ManagedProcess && !evidence.ProcessAbsent && lifecycle.PolicyCapabilities().ResumeActiveObservation {
+		if !completed && evidence.ManagedProcess && !evidence.ProcessAbsent && lifecycle.PolicyCapabilities().ResumeActiveObservation {
 			return true, s.resumeLifecycleObservation(ctx, run, lifecycle)
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
@@ -294,6 +306,25 @@ func (s *Service) resumeLifecycleObservation(ctx context.Context, run *reconstru
 			_ = observer.Close(context.Background())
 			return err
 		}
+		if fixed.execution.RecoveryRequired {
+			facts := executionmodel.RecoveryFacts{WorkerLive: receipt.State.WorkerLive, QuestionPending: fixed.execution.DecisionID != "" && run.Decision != nil && run.Decision.Request.QuestionRoute != nil, OutcomeUncertain: s.hasUnknownWorkerOperation(run) || !receipt.State.WorkerLive}
+			s.setWorkerRecoveryFacts(run, facts, receipt.State.SessionAvailable)
+			if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil {
+				record := s.decisionRecord(run)
+				if record != nil && (record.RecoveryVersion != fixed.execution.RecoveryVersion || record.RecoveryState != fixed.execution.RecoveryState) {
+					record.RecoveryVersion, record.RecoveryState = fixed.execution.RecoveryVersion, fixed.execution.RecoveryState
+					record.Version++
+					s.markWorkerDecisionWrite(record.DecisionID)
+					s.refreshRun(run)
+				}
+			}
+			if run.Decision != nil && run.Decision.Status == "answer_saved" {
+				if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.QuestionRoute != nil, "服务重开后请确认保留的旧答案，再向原 worker 投递。"); err != nil {
+					_ = observer.Close(context.Background())
+					return err
+				}
+			}
+		}
 		if err := s.commitWorker(run); err != nil {
 			_ = observer.Close(context.Background())
 			return err
@@ -302,6 +333,9 @@ func (s *Service) resumeLifecycleObservation(ctx context.Context, run *reconstru
 		return nil
 	}
 	if receipt.TurnEvidence != nil && receipt.TurnEvidence.Completed {
+		if err := mergeLifecycleExecutionReceipt(fixed.execution, receipt); err != nil {
+			return err
+		}
 		return s.finishWorkerFlowFor(run, nil)
 	}
 	reason := receipt.Diagnostic
@@ -428,7 +462,8 @@ func (s *Service) lifecycleSnapshot(run *reconstructiontypes.RunView, workflow *
 			!strings.HasPrefix(record.IdempotencyKey, "worker-turn:") &&
 			!strings.HasPrefix(record.IdempotencyKey, "worker-input:") &&
 			!strings.HasPrefix(record.IdempotencyKey, "worker-question-answer:") &&
-			!strings.HasPrefix(record.IdempotencyKey, "worker-delivery-ack:") {
+			!strings.HasPrefix(record.IdempotencyKey, "worker-delivery-ack:") &&
+			!strings.HasPrefix(record.IdempotencyKey, "worker-stop-observation:") {
 			continue
 		}
 		action := executionbackend.LifecycleAction(record.Kind)
@@ -443,6 +478,8 @@ func (s *Service) lifecycleSnapshot(run *reconstructiontypes.RunView, workflow *
 			action = executionbackend.LifecycleReportCompletion
 		case "reply_execution_question":
 			action = executionbackend.LifecycleDeliverFeedback
+		case "stop_worker_observation":
+			action = executionbackend.LifecycleStopObservation
 		case "worker_delivery_ack":
 			action = executionbackend.LifecycleAcknowledge
 		}
@@ -829,64 +866,6 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 		return nil
 	}
 	return err
-}
-
-func (s *Service) interruptOwnedLocalTurn(runID string, owned executionbackend.StopHandle) {
-	if owned == nil {
-		return
-	}
-	var run *reconstructiontypes.RunView
-	for _, candidate := range s.runs {
-		if candidate != nil && candidate.RunID == runID {
-			run = candidate
-			break
-		}
-	}
-	if run == nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
-		return
-	}
-	execution := s.executionRecord(run)
-	if execution == nil || execution.Process == nil || *execution.Process != owned.Identity() || execution.CurrentTurnID == "" || execution.CurrentTurnID == execution.LastStoppedTurnID {
-		return
-	}
-	lifecycle, fixed, err := s.lifecycleForRun(run)
-	if err != nil {
-		return
-	}
-	key := "worker-stop-observation:" + execution.ExecutionID + ":" + execution.CurrentTurnID
-	if operation := s.operationByKey(key); operation != nil {
-		// Even an unknown stop is reconciled later; shutdown never resends its interrupt.
-		return
-	}
-	input := executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: execution.CurrentTurnID}}
-	opID, err := s.startWorkerOperation(run, "stop_worker_observation", key, input.Stop)
-	if err != nil {
-		return
-	}
-	operation := s.operationByKey(key)
-	if operation == nil || operation.OperationID != opID || validateSavedLifecycleOperation(operation, executionbackend.LifecycleStopObservation, input) != nil {
-		return
-	}
-	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, execution, fixed.attempt, nil)
-	if err != nil {
-		return
-	}
-	request := lifecycleRequest(snapshot, *operation, executionbackend.LifecycleStopObservation, input)
-	ctx, cancel := context.WithTimeout(context.Background(), positiveDuration(s.runtimeSettings.ShutdownGrace.String(), 5*time.Second))
-	defer cancel()
-	_ = s.dispatchLifecycleEffect(ctx, run, lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: owned}, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
-		if err := result.receipt.ValidateFor(request); err != nil {
-			return err
-		}
-		status := string(result.receipt.Disposition)
-		if result.err != nil || status != "accepted" && status != "confirmed" {
-			status = "outcome_unknown"
-		}
-		if err := s.setOperationState(opID, status, result.receipt.RequestID, mustJSON(result.receipt), result.receipt.Diagnostic); err != nil {
-			return err
-		}
-		return s.commitWorker(run, opID)
-	})
 }
 
 func validateSavedLifecycleOperation(operation *executionmodel.OperationRecord, action executionbackend.LifecycleAction, input executionbackend.LifecycleInput) error {

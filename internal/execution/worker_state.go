@@ -134,6 +134,10 @@ func (s *Service) stopVerifiedWorkerTurn(run *reconstructiontypes.RunView, workf
 	}
 	execution.TurnEndedAt = ptr(now())
 	execution.LastTurnOutcome = outcome
+	if execution.RecoveryRequired {
+		available := execution.RecoverySessionAvailable != nil && *execution.RecoverySessionAvailable
+		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{Completed: true}, available)
+	}
 	s.refreshRun(run)
 	return nil
 }

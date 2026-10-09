@@ -77,7 +77,7 @@ func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 		View   reconstruction.Runtime
 		Domain reconstruction.Snapshot
 	}{service.State, service.domain})
-	if err := service.resumeAppServerWorkers(context.Background()); err != nil {
+	if err := service.resumeWorkerObservers(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if before != digestValue(struct {
@@ -139,7 +139,7 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	close(worker.observationDone)
 	result := appServerRecoveryFixture(t, service, run)
 	result.worker = worker
-	if err := service.applyAppServerRecovery(result); err != nil {
+	if err := service.applyWorkerRecovery(result); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = service.workflowRecords(run)
@@ -175,13 +175,13 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	defer cancel()
 	service.runContext, service.signalQueue, service.State.Service.Ready = ctx, make(chan Signal, 4), true
 	started := time.Now()
-	if err := service.resumeAppServerWorkers(ctx); err != nil {
+	if err := service.resumeWorkerObservers(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if time.Since(started) > time.Second || !service.appServerRecovering[run.RunID] {
+	if time.Since(started) > time.Second || !service.workerRecovering[run.RunID] {
 		t.Fatal("slow recovery blocked the service writer")
 	}
-	if err := service.resumeAppServerWorkers(ctx); err != nil {
+	if err := service.resumeWorkerObservers(ctx); err != nil {
 		t.Fatal(err)
 	}
 	select {

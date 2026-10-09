@@ -18,7 +18,7 @@ type Signal struct {
 	event    *WorkerEvent
 	done     bool
 	err      error
-	recovery *appServerRecoveryResult
+	recovery *workerRecoveryResult
 }
 
 func (s *Service) registerWorker(run *reconstructiontypes.RunView, worker *Worker) {
@@ -161,8 +161,8 @@ func (s *Service) handleWorkerMessage(message Signal) error {
 		return nil
 	}
 	if message.recovery != nil {
-		delete(s.appServerRecovering, message.runID)
-		return s.applyAppServerRecovery(*message.recovery)
+		delete(s.workerRecovering, message.runID)
+		return s.applyWorkerRecovery(*message.recovery)
 	}
 	if s.workers[message.runID] != message.worker {
 		if message.event != nil {

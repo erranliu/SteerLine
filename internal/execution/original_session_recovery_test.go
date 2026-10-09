@@ -27,7 +27,7 @@ func TestRecoveryCannotSelectReplacementSession(t *testing.T) {
 	execution := service.executionRecord(run)
 	execution.RecoveryRequired, execution.RecoveryState = true, "interrupted"
 	beforeExecution, beforeAttempts := recordFingerprint(*execution), len(service.domain.Attempts)
-	if err := service.beginLocalRecoveryAttempt(context.Background(), run, "new_session"); err == nil {
+	if err := service.beginWorkerRecoveryAttempt(context.Background(), run, "new_session"); err == nil {
 		t.Fatal("replacement session recovery was accepted")
 	}
 	if recordFingerprint(*execution) != beforeExecution || len(service.domain.Attempts) != beforeAttempts {

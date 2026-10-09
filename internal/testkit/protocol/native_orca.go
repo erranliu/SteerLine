@@ -20,6 +20,7 @@ func sha256Hex(data []byte) string { sum := sha256.Sum256(data); return hex.Enco
 
 type NativeOrcaState struct {
 	CompletionPRURL                                                  string
+	AgentExited                                                      bool
 	EnvironmentMode                                                  bool
 	EndReadinessOnBusiness                                           bool
 	ReadinessMode                                                    string
@@ -116,7 +117,13 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			if state.HoldFixedAgentIdentity {
 				agent = ""
 			}
-			return map[string]any{"handle": handle, "title": title, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": agent, "agentWait": state.HostWait}
+			value := map[string]any{"handle": handle, "title": title, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": agent, "agentWait": state.HostWait}
+			if state.AgentExited {
+				value["status"] = "exited"
+				value["connected"] = false
+				value["exitCause"] = map[string]any{"kind": "exited", "exitCode": 0}
+			}
+			return value
 		}
 		return map[string]any{"handle": handle, "incarnationId": "inc-coordinator", "worktreeId": "fake-repo::" + filepath.ToSlash(state.Repo), "worktreePath": filepath.ToSlash(state.Repo), "branch": "refs/heads/main", "connected": true}
 	}
@@ -385,12 +392,16 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				}
 				readiness := strings.HasPrefix(state.Tasks[n-1], "Readiness preparation only.")
 				id := fmt.Sprintf("env-delivery-%d", n)
+				if !readiness && state.BusinessActive {
+					id = fmt.Sprintf("env-active-delivery-%d", n)
+				}
 				if state.Acked[id] || readiness && (state.ReadinessMode == "hold" || state.ReadinessMode == "tool_failure") {
 					return nativeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
 				}
 				kind, outcome := "worker_done", "succeeded"
 				if !readiness && state.BusinessActive {
 					kind = "status"
+					id = fmt.Sprintf("env-active-delivery-%d", n)
 				}
 				if readiness && state.ReadinessMode == "failed_settlement" {
 					outcome = "failed"
@@ -400,7 +411,11 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				if !readiness && state.CompletionPRURL != "" {
 					body += " " + state.CompletionPRURL
 				}
-				message := map[string]any{"id": fmt.Sprintf("env-message-%d", n), "from_handle": "term-agent", "type": kind, "body": body, "payload": string(payload)}
+				messageID := fmt.Sprintf("env-message-%d", n)
+				if !readiness && state.BusinessActive {
+					messageID = fmt.Sprintf("env-active-message-%d", n)
+				}
+				message := map[string]any{"id": messageID, "from_handle": "term-agent", "type": kind, "body": body, "payload": string(payload)}
 				return nativeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": id, "messages": []any{message}})
 			}
 			if state.RelayMode {

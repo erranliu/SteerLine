@@ -12,6 +12,8 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
+const ServiceStopBehavior = executionbackend.ContinueExecutionOnServiceStop
+
 // ExecutionLifecycle owns supervised resource creation, dispatch, messages,
 // settlement, and reconciliation. It receives only immutable setup and one
 // center-persisted operation at a time.
@@ -25,7 +27,7 @@ type ExecutionLifecycle struct {
 }
 
 func (l *ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{ResumeActiveObservation: true, ActiveTurnFeedback: true}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
 
 func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
@@ -319,6 +321,7 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 	}
 	receipt.Disposition = executionbackend.OperationAccepted
 	receipt.Handle = &remoteStopHandle{identity: snapshot.Ref.External}
+	receipt.State.WorkerLive, receipt.State.SessionAvailable = true, true
 	return receipt, newLifecycleObserver(ctx, l, snapshot), nil
 }
 

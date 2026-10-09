@@ -14,6 +14,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
+const ServiceStopBehavior = executionbackend.StopExecutionOnServiceStop
+
 // ExecutionLifecycle owns app-server session setup, turn input, observation,
 // and reconciliation. Every mutating call receives one center-persisted
 // operation; the returned binding must be committed before another step.
@@ -26,7 +28,7 @@ type ExecutionLifecycle struct {
 }
 
 func (l ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, LinkedWorkspaceWriteRoots: true}
 }
 
 func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
@@ -235,6 +237,9 @@ func (l ExecutionLifecycle) Reconcile(ctx context.Context, request executionback
 		return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown, Diagnostic: err.Error()}, nil, err
 	}
 	snapshot := request.Snapshot.Clone()
+	if executionbackend.LifecycleAction(request.Operation.Action) == executionbackend.LifecycleStopObservation {
+		return l.reconcileStoppedObservation(ctx, request)
+	}
 	if executionbackend.LifecycleAction(request.Operation.Action) == executionbackend.LifecycleDeliverFeedback {
 		return l.reconcileFeedback(ctx, request)
 	}
@@ -255,7 +260,11 @@ func (l ExecutionLifecycle) Reconcile(ctx context.Context, request executionback
 	receipt.State.SessionGeneration = recovered.Binding.Generation
 	receipt.State.TurnID = recovered.TurnID
 	receipt.State.TurnCompleted = recovered.Completed
+	receipt.State.SessionAvailable = ValidNativeID(recovered.Binding.SessionID)
 	receipt.State.WorkerAbsent = recovered.Dead
+	receipt.State.WritersAbsent = l.writersAbsent(recovered.Binding)
+	receipt.State.SessionAvailable = ValidNativeID(recovered.Binding.SessionID)
+	receipt.State.WorkerLive = recovered.Observer != nil
 	if reconcileErr != nil {
 		receipt.Disposition = executionbackend.OperationUnknown
 		receipt.Diagnostic = reconcileErr.Error()
@@ -290,6 +299,7 @@ func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot execu
 	receipt.State.SessionID, receipt.State.TurnID = recovered.Binding.SessionID, recovered.TurnID
 	receipt.State.SessionGeneration = recovered.Binding.Generation
 	receipt.State.TurnCompleted = recovered.Completed
+	receipt.State.SessionAvailable = ValidNativeID(recovered.Binding.SessionID)
 	if commandID != "" && recovered.Binding.SessionID != "" && recovered.TurnID != "" {
 		path := filepath.Join(l.Backend.Config.RunDir, "runs", snapshot.Session.WorkflowRunID, "turns", commandID, "appserver.jsonl")
 		if outcome, outcomeErr := ReadAppServerOutcome(path, recovered.Binding.SessionID, recovered.TurnID); outcomeErr == nil && outcome.Started && outcome.Completed {
@@ -417,7 +427,7 @@ func (l ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot e
 		return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: false}, nil
 	}
 	managed, absent := l.Backend.ManagedProcessState(binding)
-	return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: true, ManagedProcess: managed, ProcessAbsent: absent}, nil
+	return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: true, ManagedProcess: managed, ProcessAbsent: absent, WritersAbsent: l.writersAbsent(binding)}, nil
 }
 
 func (l ExecutionLifecycle) BindRecovery(ctx context.Context, previous, next executionbackend.LifecycleSnapshot) (executionbackend.ImplementationDataEnvelope, error) {

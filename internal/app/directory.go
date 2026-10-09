@@ -24,7 +24,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
-const executionDirectoryVersion = "builtin-execution-v3"
+const executionDirectoryVersion = "builtin-execution-v4"
 
 // NewBuiltinDirectory constructs this application's fixed implementation
 // catalog. Every returned directory is independent and immutable.
@@ -49,7 +49,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 	supervisedKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "codex", Protocol: executionbackend.ProtocolOrcaSupervised}
 	entries := []execution.ExecutionRegistration{
 		{
-			Key: localKey, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey},
+			ServiceStopBehavior: codexworker.ServiceStopBehavior, Key: localKey, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey},
 			QuestionCodecKey: codexworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "local",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return localExecutionBackend{config: c, target: localTarget(), host: processHost, directory: directory}
@@ -79,7 +79,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			ValidatePublicationPolicy: validateLocalPublicationPolicy,
 		},
 		{
-			Key: terminalKey, ProfileKey: "orca/orca_terminal_v2/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey},
+			ServiceStopBehavior: orcaworker.ServiceStopBehavior, Key: terminalKey, ProfileKey: "orca/orca_terminal_v2/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey},
 			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return orcaworker.NewBackend(nativeTerminalConfig(c, terminalTarget(c, terminalKey, directory), processHost, directory))
@@ -109,7 +109,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			ValidatePublicationPolicy: validateWorkerPublicationPolicy,
 		},
 		{
-			Key: supervisedKey, ProfileKey: "orca/orca_supervised/codex", WorkspaceBranchPrefix: "codex", ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey, remote.ProfileCodecKey},
+			ServiceStopBehavior: remote.ServiceStopBehavior, Key: supervisedKey, ProfileKey: "orca/orca_supervised/codex", WorkspaceBranchPrefix: "codex", ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey, remote.ProfileCodecKey},
 			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca_supervised",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return remote.NewBackend(remoteWorkerConfig(c, processHost, directory))

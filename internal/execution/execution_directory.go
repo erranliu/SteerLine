@@ -71,6 +71,7 @@ type PolicyResourceBuildResult struct {
 // ExecutionRegistration binds generic service ports to one fixed execution
 // identity. The application supplies all factories and platform behavior.
 type ExecutionRegistration struct {
+	ServiceStopBehavior   executionbackend.ServiceStopBehavior
 	Key                   ExecutionRegistrationKey
 	ProfileKey            string
 	WorkspaceBranchPrefix string
@@ -146,7 +147,7 @@ func NewExecutionDirectory(version string, codecs []ImplementationProfileCodec, 
 			return nil, fmt.Errorf("duplicate implementation profile key %q", entry.ProfileKey)
 		}
 		profileKeys[entry.ProfileKey] = true
-		if key.Backend == "" || key.Agent == "" || key.Protocol == "" || entry.Host == "" || entry.ProfileKey == "" || entry.WorkspaceBranchPrefix == "" || entry.ValidTurnID == nil || len(entry.CleanupCapabilities) == 0 {
+		if !entry.ServiceStopBehavior.Valid() || key.Backend == "" || key.Agent == "" || key.Protocol == "" || entry.Host == "" || entry.ProfileKey == "" || entry.WorkspaceBranchPrefix == "" || entry.ValidTurnID == nil || len(entry.CleanupCapabilities) == 0 {
 			return nil, fmt.Errorf("execution directory contains an incomplete identity: %+v", key)
 		}
 		if _, exists := directory.entries[key]; exists {
@@ -337,7 +338,14 @@ func (directory *ExecutionDirectory) ResolveLifecycle(setup executionbackend.Lif
 	if err != nil {
 		return nil, err
 	}
-	return entry.Lifecycle(setup.Clone())
+	port, err := entry.Lifecycle(setup.Clone())
+	if err != nil {
+		return nil, err
+	}
+	if port == nil || port.PolicyCapabilities().ServiceStopBehavior != entry.ServiceStopBehavior {
+		return nil, errors.New("worker service-stop behavior differs from its registered declaration")
+	}
+	return port, nil
 }
 
 func equalImplementationData(a, b []executionbackend.ImplementationDataEnvelope) bool {
