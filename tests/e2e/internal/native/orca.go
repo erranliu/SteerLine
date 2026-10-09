@@ -205,7 +205,7 @@ func OrcaMain(args []string) error {
 		}
 	}
 	// Mutating call evidence includes exact returned IDs for failed preparation cleanup.
-	if len(args) > 1 && (args[1] == "create" || args[1] == "rm" || args[1] == "close" || args[1] == "dispatch") {
+	if len(args) > 1 && (args[1] == "create" || args[1] == "rm" || args[1] == "close" || args[1] == "dispatch" || args[1] == "worker-start") {
 		record, _ := json.Marshal(map[string]any{"command": append([]string{c.Executable}, args...), "stdout": out.String(), "stderr": stderr.String(), "error": fmt.Sprint(err)})
 		if logErr := os.WriteFile(filepath.Join(c.LogDir, fmt.Sprintf("orca-%d.json", time.Now().UnixNano())), record, 0600); logErr != nil {
 			return logErr
