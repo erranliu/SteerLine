@@ -8,12 +8,12 @@
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
 | 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 执行中 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | PR #253 规划内容已合并；独立实现已开始，尚无实现 PR/交付。WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
-| 45 | 本机客户端协议与历史查询 | 无 | 执行中 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) OPEN；base `c4bcbec0`；round 4 reviewed source `c126560f`（tree `95800604`）无新代码问题。P1 discard、P2 record boundary、HTTP18、configured-service discard、L1 12组/458 passed/0fail/0skip及 vet 均有精确证据。API2 仍 `验收失败`，历史 SHM syscall 阶段未知。用户已接受仅该根因/瞬态误拒风险的条件例外；在 #84 共享集成、组合复核和最终门禁通过前，不标 `accepted_exception`、不合并。该接线顺序不是 #45 独立实现的硬任务依赖；#44 继续等待 #45 实际合入；[记录与条件](../acceptance/phase2-local-api.md) |
+| 45 | 本机客户端协议与历史查询 | 无 | 执行中 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) OPEN；source base `c4bcbec0`；remote main 后续已由 PR #254 前进至 `d8d66d6c`，本轮未集成。Round 4 reviewed source `c126560f`（tree `95800604`）无新代码问题。P1 discard、P2 record boundary、HTTP18、configured-service discard、L1 12组/458 passed/0fail/0skip及 vet 均有精确证据。API2 仍 `验收失败`，历史 SHM syscall 阶段未知。用户已接受仅该根因/瞬态误拒风险的条件例外；在 #84 共享集成、组合复核和最终门禁通过前，不标 `accepted_exception`、不合并。该接线顺序不是 #45 独立实现的硬任务依赖；#44 继续等待 #45 实际合入；[记录与条件](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
 ## 推进顺序
 
-1. #83 已合入；用户于 2026-10-09 授权 #84 与 #45 在独立 worktree 并行实现。#84 已进入执行中，规划 PR #253 已合入，新的实现 PR 尚未交付。#45 round 4 独立复审已完成；用户现对历史 API2 残余风险作了有限条件接受，但仍须完成 #84 共享集成及最终门禁。#45 继续执行，PR 尚未合并。启动/恢复使用各自固定 Spec/Plan commit 和路径，核对最新主干及当前状态。
+1. #83 已合入；用户于 2026-10-09 授权 #84 与 #45 在独立 worktree 并行实现。#84 已进入执行中，规划 PR #253 已合入，新的实现 PR 尚未交付。#45 round 4 独立复审已完成；用户现对历史 API2 残余风险作了有限条件接受，但仍须完成 #84 共享集成及最终门禁。remote main 已由 PR #254 前进至 `d8d66d6c`；#45 source candidate 仍是基于 c4b 的 c126，本轮没有集成 d8d66。#45 继续执行，PR 尚未合并。
 2. #84 拥有 worker 业务状态、步骤与持久格式语义；#45 拥有本机 HTTP 协议及 configured-service discard 接线，不创建第二业务状态权威。两项可独立实现与验证；共同主干字段/组装/客户端集成须先等 #84 实现 PR 合入，再由 #45 使用实际字段/接口并验证组合；这只约束共享集成，不新增 #45 独立实现的任务硬前置。API2 只有在组合复核和最终门禁通过后，才按用户本次授权登记为 `accepted_exception`；之前始终保留验收失败。#44 仍以 #45 为硬前置；#45 真实 PR 合并且成果进入最新主干后才启动 #44。已有在途执行保持原身份和固定契约。
 3. 后续界面任务留在[草稿](drafts/roadmap.md)，原型确认后再纳入。
 
@@ -28,6 +28,8 @@
 自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [Orca原生编排](../acceptance/worker-flow-orca-native.md) · [Orca安全重建](../acceptance/worker-service-recovery.md)。
 
 ## 执行记录
+
+2026-10-09，风险条件接受及文档同步期间，remote main 因 PR #254 前进到 `d8d66d6c5696f41d7df1ed3ff50d4b3ae77b9da3`。Task #45 已审源码及 tree 仍为 c4b 基线上的 `c126560f` / `95800604c072dc75cc9f44096ddf9f1e3135770f`；本轮只同步文档，未集成 d8d66。#84 仍在 b123 独立实现中、尚无实现 PR；共享集成按约定等待 #84 实际合入及后续明确指示。
 
 2026-10-09，round 4 independent review 对 Task #45 精确源码 `c126560f0315b9e686e68e3cb82cf65359e66894`（tree `95800604c072dc75cc9f44096ddf9f1e3135770f`；base `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5`）未发现新代码缺陷或固定需求遗漏。P1/P2 修复证据得到支持；当前 L1 12 组/458 passed/0 fail/0 skip，HTTP/API 18 项和 configured-service discard 1 项通过，vet 通过。用户随后明确接受 API2 仅限历史根因/瞬态可用性风险的条件例外，原自动失败和未知阶段仍保留；该例外须等 #84 共享集成、组合复核和最终门禁通过后才生效。#45 独立实现没有新增 #84 硬前置；共享集成按排程等待 #84 合入后进行。#44 继续等待 #45 真实合入。[验收与原始证据](../acceptance/phase2-local-api.md#round-4-独立复审与当前候选证据)；[review comment](https://github.com/erranliu/SteerLine/pull/249#issuecomment-6073460856)。
 

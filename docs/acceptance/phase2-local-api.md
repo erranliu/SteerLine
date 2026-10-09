@@ -1,6 +1,6 @@
 # 任务 #45 验收记录：本机客户端协议与历史查询
 
-唯一归属 #45；启动固定来源为 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`。Spec 未改；Plan 原路径保持，已有实现期测试场景补充见后续提交。本轮不改两份规格文档。最新主干 `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` 已含 PR #252/#253；Task #45 实现 PR #249 基于该主干继续修复。P1 service-owned discard 源码提交 `cab6b6dc5e80fa8021316d0e7a5132ff25cbd478`；P2 record-boundary 源码提交经 rebase 为 `d2a0bce0`。此前 main `04c62ee5ddb10637a68745baa4fc4f811123ffa9`、`7ffc6a39197366b1177e104eb75cbc453ccee78a`、`692a784e05479b11e5818fb5a209971949e3064a` 的 console state/feedback、host native-state/Orca target 改动仍在当前整合历史中。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
+唯一归属 #45；启动固定来源为 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`。Spec 未改；Plan 原路径保持，已有实现期测试场景补充见后续提交。本轮不改两份规格文档。PR #249 的最近代码 rebase 起点 `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` 含 PR #252/#253；remote main 随后已由 PR #254 前进到 `d8d66d6c5696f41d7df1ed3ff50d4b3ae77b9da3`。round 4 审阅源码 `c126560f0315b9e686e68e3cb82cf65359e66894` 仍基于 c4b；本轮仅文档同步，未集成 d8d66。P1 service-owned discard 源码提交 `cab6b6dc5e80fa8021316d0e7a5132ff25cbd478`；P2 record-boundary 源码提交经 rebase 为 `d2a0bce0`。此前 main `04c62ee5ddb10637a68745baa4fc4f811123ffa9`、`7ffc6a39197366b1177e104eb75cbc453ccee78a`、`692a784e05479b11e5818fb5a209971949e3064a` 的 console state/feedback、host native-state/Orca target 改动仍在当前整合历史中。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
 
 ## 自动验收
 
@@ -192,7 +192,7 @@ Review 复核当前重试实现时补正边界：`retryFileInspection` 对 `Crea
 
 当前 source review 已完成，PR #249 仍因 API2 未闭合而 OPEN、未合并。#84 的实际 worker 状态/格式组合尚未发生；本轮 review 不授权提前集成，也不改变 #44 对 #45 真实合并的等待条件。相对已审源码 `c126560f`，本轮仅修改本验收记录和 `docs/roadmap/execution-map.md`，未改代码。
 
-Round 4 文档同步静态：`python scripts/check_doc_links.py` 271 Markdown/1741 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 85 identity files（10 draft/4 formal），next ID 87；`git diff --check` 通过。原始输出在 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-risk-approval-docs-52d61592ac4443ca99c335df5d03f2db`。本轮未分配或修改任何 Task ID。
+Round 4 文档同步静态：`python scripts/check_doc_links.py` 271 Markdown/1741 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 85 identity files（10 draft/4 formal），next ID 87；`git diff --check` 通过。原始输出在 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-latest-main-docs-19fa0c5869d043b0ae9ffe993f658edd`。本轮未分配或修改任何 Task ID。
 
 ## 用户对 API2 有限剩余风险的条件接受
 
