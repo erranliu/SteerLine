@@ -61,13 +61,6 @@ func (s *Service) injectControlFault(point string) {
 	}
 }
 
-func (s *Service) activeControlRequestID() string {
-	if s.explicitDispatch && s.State.Control.Operation != nil {
-		return s.State.Control.Operation.RequestID
-	}
-	return ""
-}
-
 func (s *Service) slotReason(ignoreRequestID string) string {
 	return s.executionSlotReason(ignoreRequestID, false)
 }

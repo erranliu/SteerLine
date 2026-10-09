@@ -76,7 +76,7 @@ type neutralReceiptResolver struct {
 }
 
 func (r neutralReceiptResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-	return neutralReceiptPort{LifecyclePort: &neutralLifecycle{setup: setup}, resolver: r}, nil
+	return neutralReceiptPort{LifecyclePort: &neutralLifecycle{Setup: setup}, resolver: r}, nil
 }
 
 type neutralReceiptPort struct {

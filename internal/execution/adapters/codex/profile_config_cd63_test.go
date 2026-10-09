@@ -5,7 +5,6 @@ import (
 )
 
 func TestCD63CodecIdentityAndVersion(t *testing.T) {
-	t.Run("shared_question_envelope", TestCD62NativeFactsAndQuestionRoute)
 	t.Run("binding endpoint validated before connection", func(t *testing.T) {
 		identity := AppServerBindingIdentity{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Generation: "resources", ConfigDigest: "snapshot"}
 		for _, endpoint := range []string{"ws://outside.example:80", "ws://127.0.0.1:0", "ws://127.0.0.1:70000"} {

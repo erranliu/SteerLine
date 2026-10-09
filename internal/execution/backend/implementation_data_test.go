@@ -8,8 +8,6 @@ import (
 )
 
 func TestCD63CodecIdentityAndVersion(t *testing.T) {
-	t.Run("profile envelope scope and deep copy", TestImplementationDataEnvelopeBindsScopeAndCopiesPayload)
-	t.Run("resource envelope identity and bounds", TestImplementationDataEnvelopeRejectsBadIdentityVersionAndSize)
 	t.Run("formatted JSON round trip", testImplementationDataFormattedRoundTrip)
 }
 

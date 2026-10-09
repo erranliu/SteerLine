@@ -183,6 +183,19 @@ func NewExecutionDirectory(version string, codecs []ImplementationProfileCodec, 
 
 func directoryRoute(host, agent string) string { return host + "\x00" + agent }
 
+// A host-owned opaque agent route delegates agent interpretation to that host.
+// Exact registrations retain priority and returned identities bind the actual name.
+func (directory *ExecutionDirectory) route(host, agent string) (ExecutionRegistrationKey, bool) {
+	if strings.TrimSpace(agent) == "" || agent == "*" {
+		return ExecutionRegistrationKey{}, false
+	}
+	key, ok := directory.routes[directoryRoute(host, agent)]
+	if !ok {
+		key, ok = directory.routes[directoryRoute(host, "*")]
+	}
+	return key, ok
+}
+
 func (directory *ExecutionDirectory) Version() string {
 	if directory == nil {
 		return ""
@@ -194,11 +207,12 @@ func (directory *ExecutionDirectory) Resolve(c Config) (ExecutionRegistration, e
 	if directory == nil {
 		return ExecutionRegistration{}, errors.New("execution directory is required")
 	}
-	key, ok := directory.routes[directoryRoute(c.hostName(), c.agentName())]
+	key, ok := directory.route(c.hostName(), c.agentName())
 	if !ok {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", c.hostName(), c.agentName())}
 	}
 	entry := directory.entries[key]
+	entry.Key.Agent = c.agentName()
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
 	return entry, nil
@@ -209,9 +223,15 @@ func (directory *ExecutionDirectory) ResolveIdentity(key ExecutionRegistrationKe
 		return ExecutionRegistration{}, errors.New("execution directory is required")
 	}
 	entry, ok := directory.entries[key]
+	if !ok && strings.TrimSpace(key.Agent) != "" && key.Agent != "*" {
+		wildcard := key
+		wildcard.Agent = "*"
+		entry, ok = directory.entries[wildcard]
+	}
 	if !ok {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "no implementation is registered for the fixed execution identity"}
 	}
+	entry.Key.Agent = key.Agent
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
 	return entry, nil
@@ -236,7 +256,7 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 	if projectID == "" || profileID == "" || acceptedVersion == "" {
 		return nil, nil, errors.New("implementation configuration is missing project, profile or accepted version")
 	}
-	entryKey, ok := directory.routes[directoryRoute(host, agent)]
+	entryKey, ok := directory.route(host, agent)
 	if !ok {
 		return nil, nil, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", host, agent)}
 	}

@@ -43,12 +43,6 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	}
 	for _, profile := range loaded.AvailableExecutionProfiles() {
 		selected, chosen, err := loaded.ResolveExecutionProfile(profile.ID, profile.Digest())
-		if profile.Host == "orca_supervised" {
-			if err == nil || !strings.Contains(err.Error(), "remote worker-start enforcement evidence") || profile.StaticUnavailableReason() == "" {
-				t.Fatalf("unverified remote enforcement was accepted: %v", err)
-			}
-			continue
-		}
 		if err != nil || selected.Host != profile.Host {
 			t.Fatalf("Orca profile changed route: %+v / %v", chosen, err)
 		}

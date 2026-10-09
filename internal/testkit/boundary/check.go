@@ -23,6 +23,7 @@ const module = "github.com/erranliu/SteerLine"
 
 const core = module + "/internal/app/host"
 const execution = module + "/internal/execution"
+const sharedFixtures = module + "/internal/testkit/fixtures"
 
 var platformText = regexp.MustCompile(`(?i)codex|orca`)
 
@@ -359,6 +360,11 @@ func ScanSource(root string) (Report, error) {
 			if err != nil {
 				return err
 			}
+			// Shared adapters are available only to these two test owners. Keep
+			// their dependency edge so transitive forbidden imports remain visible.
+			if value == sharedFixtures && !(strings.HasSuffix(entry.Name(), "_test.go") && (pkg == core || pkg == execution)) {
+				report.Violations = append(report.Violations, "test fixture dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
 			graph[pkg] = append(graph[pkg], value)
 			if pkg == productQuery && !strings.HasSuffix(entry.Name(), "_test.go") && !productQueryImportAllowed(value) {
 				report.Violations = append(report.Violations, "product query forbidden dependency: "+filepath.ToSlash(path)+" -> "+value)
@@ -439,7 +445,7 @@ func ScanSource(root string) (Report, error) {
 	}
 	for _, seed := range append([]string{core, execution}, purePackages...) {
 		visitGraph(graph, seed, func(path []string) {
-			if forbidden(path[len(path)-1]) {
+			if forbidden(path[len(path)-1]) && !((seed == core || seed == execution) && path[len(path)-1] == sharedFixtures) {
 				report.Violations = append(report.Violations, "forbidden dependency: "+strings.Join(path, " -> "))
 			}
 		})

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -235,7 +236,7 @@ func (p transientQualificationLifecycle) VerifyManualRecovery(ctx context.Contex
 type transientQualificationResolver struct{ fail *bool }
 
 func (r transientQualificationResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-	return transientQualificationLifecycle{neutralLifecycle: &neutralLifecycle{setup: setup}, fail: r.fail}, nil
+	return transientQualificationLifecycle{neutralLifecycle: &neutralLifecycle{Setup: setup}, fail: r.fail}, nil
 }
 
 type unavailableOwnerResolver struct{}
@@ -276,6 +277,10 @@ func TestWorkerPreparationStopDoesNotJournalUnsentBusinessTurn(t *testing.T) {
 	s.lifecycleResolver = unavailableOwnerResolver{}
 	if err := s.shutdown(); err == nil {
 		t.Fatal("resolver failure was not reported")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for resourceprocess.InspectProcess(&identity) != "process absent" && !owned.WritersAbsent() && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
 	}
 	if resourceprocess.InspectProcess(&identity) != "process absent" && !owned.WritersAbsent() {
 		t.Fatal("accepted preparation owner was lost after resolver failure")

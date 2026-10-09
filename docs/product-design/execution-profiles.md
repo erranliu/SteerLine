@@ -1,6 +1,6 @@
 # 全局执行配置
 
-第一阶段使用本地 Codex和本机Orca。多后端、远端协议和多候选仍保留；远端缺证阻断保持，不以本机验证推断远端支持。
+第一阶段包含本地 Codex、本机 Orca 与远端路径交付。多后端和多候选保留；远端缺证阻断保持，不以本机验证推断远端支持。
 
 所有项目共享 `<STEERLINE_HOME>/execution.json`，全局文件格式2，每个方案仍有独立host/agent/model/reasoning_effort及实现codec。多套执行方案与默认方案选择保留。项目负责仓库、Git/PR provider、任务与publication_policy，不再提供权限模式或附加需求。
 
@@ -38,7 +38,7 @@ SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改�
 
 ## 项目发布责任
 
-项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，并保留 PR/worktree/分支，由人处置。当前本地 Codex/本机 Orca 使用这个责任边界；保留远端设计沿用同一边界，但不纳入一期运行或验收。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
+项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，并保留 PR/worktree/分支，由人处置。本地 Codex、本机 Orca 与远端路径均使用这个发布责任边界。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
 
 worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中心的 token_env 只用于查询，不自动下发给 worker。仅有 query 或成功创建会话不能证明发布能力。worker 的成功、URL 和 worker_done 均不代替 provider 的真实 merged 证据。
 

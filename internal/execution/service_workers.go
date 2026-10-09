@@ -12,14 +12,16 @@ import (
 // Signal is delivered to the single service state machine. Worker
 // observers may run concurrently, but only that state machine changes runs.
 type Signal struct {
-	effect        *lifecycleEffectResult
-	runID         string
-	worker        *Worker
-	event         *WorkerEvent
-	done          bool
-	err           error
-	recovery      *workerRecoveryResult
-	qualification *workerQualificationResult
+	workerStartCheck *workerStartCheckResult
+	startCheck       *taskStartCheckResult
+	effect           *lifecycleEffectResult
+	runID            string
+	worker           *Worker
+	event            *WorkerEvent
+	done             bool
+	err              error
+	recovery         *workerRecoveryResult
+	qualification    *workerQualificationResult
 }
 
 func (s *Service) registerWorker(run *reconstructiontypes.RunView, worker *Worker) {
@@ -129,6 +131,12 @@ forwarded:
 }
 
 func (s *Service) handleWorkerMessage(message Signal) error {
+	if message.workerStartCheck != nil {
+		return s.applyWorkerStartCheck(*message.workerStartCheck)
+	}
+	if message.startCheck != nil {
+		return s.applyTaskStartCheck(*message.startCheck)
+	}
 	if message.effect != nil {
 		if err := s.applyLifecycleEffect(message.runID, *message.effect); err != nil {
 			if errors.Is(err, executionmodel.ErrTurnStale) {

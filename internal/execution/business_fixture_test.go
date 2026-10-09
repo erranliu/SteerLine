@@ -72,9 +72,9 @@ func newNeutralDirectory(agents ...string) (*ExecutionDirectory, error) {
 			}
 			return target
 		},
-		Backend: func(c Config) executionbackend.ExecutionBackend { return neutralBackend{config: c} },
+		Backend: func(c Config) executionbackend.ExecutionBackend { return newNeutralBackend(c) },
 		Lifecycle: func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-			return &neutralLifecycle{setup: setup.Clone()}, nil
+			return &neutralLifecycle{Setup: setup.Clone()}, nil
 		},
 
 		ValidateConfig: func(context.Context, Config) error { return nil }, Preflight: func(context.Context, Config) error { return nil }, PrepareClaim: func(context.Context, Config) (ClaimPreparation, error) { return ClaimPreparation{}, nil }, ReadinessRequired: func(Config) bool { return false },
