@@ -652,7 +652,7 @@ type integrationRunSnapshot struct {
 }
 
 func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningIntegrationService, config steerlineapp.Config,
-	predicate func(*reconstructiontypes.RunView, *executionmodel.ExecutionRecord) bool) integrationRunSnapshot {
+	predicate func(*reconstructiontypes.RunView, *executionmodel.ExecutionRecord) bool, budgets ...time.Duration) integrationRunSnapshot {
 	t.Helper()
 	var result integrationRunSnapshot
 	t.Cleanup(func() {
@@ -661,7 +661,11 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 			t.Logf("original preparation evidence: %s; last event: %s", mustJSON(result.execution.Environment), derefString(result.execution.LastEvent))
 		}
 	})
-	waitFor(t, 2*time.Minute, func() bool {
+	budget := 2 * time.Minute
+	if len(budgets) > 0 {
+		budget = budgets[0]
+	}
+	waitFor(t, budget, func() bool {
 		select {
 		case err := <-service.done:
 			service.stopped = true

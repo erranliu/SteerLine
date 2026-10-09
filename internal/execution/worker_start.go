@@ -37,6 +37,9 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if err != nil {
 		return err
 	}
+	if !lifecycle.PolicyCapabilities().StructuredFinalEvidence {
+		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow requires original bound final provenance before preparing or sending input"}
+	}
 	report, err := lifecycle.PreflightLifecycle(ctx, lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot))
 	if err != nil {
 		return err

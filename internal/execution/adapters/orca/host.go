@@ -119,11 +119,6 @@ func (l *ExecutionLifecycle) ReadWorkerOutput(ctx context.Context, snapshot exec
 	if err != nil {
 		return executionbackend.HostOutput{}, executionbackend.ImplementationDataEnvelope{}, err
 	}
-	if result.Source == "transcript" && result.SourceExact && result.Provider == "codex" {
-		if pinErr := pinNativeTranscript(result, &state, snapshot.Ref.WorkspacePath); pinErr != nil {
-			turn.FinalReadError = pinErr.Error()
-		}
-	}
 	cursor := result.NextCursor
 	if cursor == "" {
 		cursor = result.Cursor

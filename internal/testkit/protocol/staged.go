@@ -71,7 +71,7 @@ func AppendStagedTranscript(path, cwd, task, turn, final string) (string, error)
 	}
 	var events []any
 	if stat.Size() == 0 {
-		events = append(events, map[string]any{"type": "session_meta", "payload": map[string]any{"id": "stage-provider-session", "cwd": cwd}})
+		events = append(events, map[string]any{"type": "session_meta", "payload": map[string]any{"id": "00000000-0000-0000-0000-000000000901", "cwd": cwd}})
 	}
 	events = append(events,
 		map[string]any{"type": "event_msg", "payload": map[string]any{"type": "task_started", "turn_id": turn}},
@@ -84,5 +84,44 @@ func AppendStagedTranscript(path, cwd, task, turn, final string) (string, error)
 			return "", err
 		}
 	}
+	if historyPath := os.Getenv("STEERLINE_INTEGRATION_HISTORY_FILE"); historyPath != "" {
+		var history struct {
+			Cwd   string           `json:"cwd"`
+			Turns []map[string]any `json:"turns"`
+		}
+		old, _ := os.ReadFile(historyPath)
+		_ = json.Unmarshal(old, &history)
+		history.Cwd = cwd
+		history.Turns = append(history.Turns, map[string]any{"id": turn, "status": "completed", "completedAt": 1, "items": []any{map[string]any{"id": "user-" + turn, "type": "userMessage", "content": []any{map[string]string{"type": "text", "text": "Your task ID is: " + task}}}, map[string]any{"id": "final-" + turn, "type": "agentMessage", "phase": "final_answer", "text": final}}})
+		raw, _ := json.Marshal(history)
+		if err := os.WriteFile(historyPath, raw, 0600); err != nil {
+			return "", err
+		}
+	}
 	return path + ":00000000000000000000", file.Sync()
+}
+
+func StagedHistoryBinding(command string) error {
+	_, rest, ok := strings.Cut(command, "'-config' '")
+	if !ok {
+		return errors.New("staged launcher missing original config")
+	}
+	path := strings.SplitN(rest, "'", 2)[0]
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var launch struct {
+		Binding     map[string]any `json:"binding"`
+		BindingPath string         `json:"binding_path"`
+	}
+	if err := json.Unmarshal(raw, &launch); err != nil {
+		return err
+	}
+	launch.Binding["session_id"] = "00000000-0000-0000-0000-000000000901"
+	encoded, err := json.Marshal(launch.Binding)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(launch.BindingPath, encoded, 0600)
 }

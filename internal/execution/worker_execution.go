@@ -25,6 +25,9 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, di
 	if probeErr != nil {
 		return probeErr
 	}
+	if !lifecycle.PolicyCapabilities().StructuredFinalEvidence {
+		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow requires bound structured final evidence; this adapter has no verified staged-result source"}
+	}
 	report, probeErr := lifecycle.PreflightLifecycle(ctx, setup.Clone())
 	if probeErr != nil {
 		return probeErr

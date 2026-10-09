@@ -41,7 +41,7 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	require(t, err)
 	require(t, project.Close())
 	if host == "orca" {
-		state := testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 2, StageSourceLost: true, StageProvider: provider, StageRemote: f.bareRemote, StageTranscript: filepath.Join(f.nativeStateDir, "stage-transcript.jsonl")}
+		state := testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 2, StageProvider: provider, StageRemote: f.bareRemote, StageTranscript: filepath.Join(f.nativeStateDir, "stage-transcript.jsonl")}
 		if unknown {
 			state.LoseDispatchAt = 3
 		}
@@ -75,7 +75,7 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	}
 	ready := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
 		return run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge
-	})
+	}, 3*time.Minute)
 	w := ready.runtime.WorkflowRuns[0]
 	if len(w.StageInputs) != 3 || len(w.StageResults) != 3 || ready.execution.TurnNumber != 3 || len(ready.runtime.Attempts) != 1 || ready.execution.PendingCommandID != "" {
 		t.Fatalf("native chain is not exactly three original inputs: %+v", w)

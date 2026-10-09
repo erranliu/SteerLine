@@ -693,6 +693,7 @@ type LifecycleRecoveryPort interface {
 }
 
 type LifecyclePolicyCapabilities struct {
+	StructuredFinalEvidence bool
 	// Empty means frozen native permissions; compare report facts.
 	ReportToolPolicy          string
 	ActiveTurnFeedback        bool

@@ -172,6 +172,11 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				state.FixedAgentTerminalCreated = true
 				state.Agent = "codex"
 				state.FixedAgentTitle, state.FixedAgentCommand = nativeArg(args, "--title"), nativeArg(args, "--command")
+				if state.StageProvider != "" {
+					if err := StagedHistoryBinding(state.FixedAgentCommand); err != nil {
+						return nativeOrcaErr("stage_binding", err.Error())
+					}
+				}
 				created := terminal("term-agent")
 				if state.RenameFixedAgentAfterCreate {
 					state.FixedAgentCurrentTitle = state.Name
