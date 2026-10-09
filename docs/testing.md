@@ -1,6 +1,6 @@
 # 测试总入口
 
-当前产品入口为本地 Codex 与 Orca supervised（local/environment）。原本机 `host=orca` 已停用；远端路径由 `delivery.orca-remote-codex` 独立验收，结果见[专属记录](acceptance/orca-remote-l3.md)。supervised 本机目标当前采用[定向验收](acceptance/orca-supervised-targets.md)，旧本机场景不计当前覆盖。
+当前产品入口为本地 Codex 与 Orca supervised（local/environment）。原本机 `host=orca` 已停用。supervised 目标注册/路由采用[定向验收](acceptance/orca-supervised-targets.md)，但当前开发流程所需的原生 final 来源尚未补齐；旧单轮远端场景也已退役，能力缺口与历史结果见[专属记录](acceptance/orca-remote-l3.md#当前分步流程能力缺口)。这些旧场景不计当前交付覆盖。
 
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
 
@@ -30,7 +30,7 @@ git diff --check
 | L2 controlled | 只检查 smoke 的无 token 门槛 | 本地隔离项目与 loopback Git/PR provider；不构成完整 L2 |
 | 完整 L2 | 门槛通过后，本地 Codex 真实交付链路 | 消耗 token；在 SteerlineTest 创建、转 ready、合并真实 PR，并清理本次分支 |
 | L3 controlled | 独立选择交付、等待合并后重启等受控场景 | 无 token；本地隔离项目与 loopback provider |
-| L3 live | 本地 Codex 交付/恢复与 Orca 远端交付 | 消耗 token；本地使用 loopback provider，远端使用真实 SteerlineTest PR |
+| L3 live | 本地 Codex 交付与恢复 | 消耗 token；使用 loopback provider |
 | L3 native | Orca 工作区删除与重启 | 无模型；创建、删除本次隔离工作区 |
 | E2E 基础设施 | 测试环境、driver、codec、证据和清理 | 无真实模型 |
 | 编译检查 | 检查包与带 tag 场景能否编译 | 不执行场景，不构成测试通过证据 |
@@ -82,7 +82,7 @@ go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidat
 
 L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；live 使用真实 Codex/Orca。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
 
-本地 live 需要已登录的 `codex-cli 0.159.2`；Orca 远端链路还需要已配对环境及精确 manifest。完整 L2 和远端交付需要 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用隔离测试项目；本地不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
+本地 live 需要已登录的 `codex-cli 0.159.2`；完整 L2 需要 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用隔离测试项目；本地不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
 
 ```powershell
 # 固定 L2：先 controlled，再本地真实链路；门槛失败不进入真实阶段
@@ -97,8 +97,6 @@ go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery,runtime' -env=con
 # 每个真实场景可以独立运行
 go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.local-codex'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
-# 远端先按 E2E 指南设置本次 STEERLINE_REMOTE_ACCEPTANCE_CONFIG
-go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-remote-codex'
 go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native
 ```
 
@@ -109,7 +107,7 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native
 | L3 | controlled | delivery | `delivery.basic` |
 | L3 | controlled | recovery | `recovery.waiting-merge-restart` |
 | L3 | controlled | runtime | `runtime.installed-debug-isolation` |
-| L3 | live | delivery | `delivery.local-codex`、`delivery.orca-remote-codex` |
+| L3 | live | delivery | `delivery.local-codex` |
 | L3 | live | recovery | `recovery.local-codex` |
 | L3 | native | workspace | `workspace.orca-removal-restart` |
 

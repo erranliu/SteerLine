@@ -1,8 +1,8 @@
 # 分级测试与 E2E 环境
 
-当前产品入口为本地 Codex 和 Orca supervised（local/environment）；原本机 `host=orca` 已停用，源码保留。`delivery.orca-remote-codex` 保持原远端交付场景，新的 supervised 本机目标当前使用[定向验收](../../docs/acceptance/orca-supervised-targets.md)。
+当前产品入口为本地 Codex 和 Orca supervised（local/environment）；原本机 `host=orca` 已停用，源码保留。旧单轮 `delivery.orca-remote-codex` 已退役；supervised 分步开发缺少原生 final 来源，暂不计真实交付覆盖，详见[能力缺口](../../docs/acceptance/orca-remote-l3.md#当前分步流程能力缺口)。supervised 目标注册/路由使用[定向验收](../../docs/acceptance/orca-supervised-targets.md)。
 
-远端交付通过 L3 场景 `delivery.orca-remote-codex` 执行；旧 `orca-codex` 三项 live、四项 `recovery.orca-startup.*` 与 `candidates.local` 已移出 suites.json，驱动留档，不计当前验收。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
+以下旧场景均已移出当前登记：单轮远端 `delivery.orca-remote-codex`、旧 `orca-codex` 三项 live、四项 `recovery.orca-startup.*` 与 `candidates.local` 已移出 suites.json，驱动留档，不计当前验收。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
 
 全项目测试范围、L1/Full/定向入口、独立原生验收和产物导航见[测试总入口](../../docs/testing.md)。本文维护 E2E 环境、场景和扩展的具体约定。
 
@@ -17,8 +17,6 @@ go run ./cmd/test-feedback -level=L2 -env=controlled
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled
 go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
-# 远端先按本文 manifest 说明设置 STEERLINE_REMOTE_ACCEPTANCE_CONFIG
-go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-remote-codex'
 # 原生工作区生命周期，不启动模型
 go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=workspace.orca-removal-restart'
 ```
@@ -38,7 +36,6 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、console/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
 | L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核实真实 trash、CLI/控制台查询、重启及无关任务启动 |
 | L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
-| L3 live | `delivery.orca-remote-codex` | 真实配对 Windows Orca，正式领取与双轮反馈、同会话/工作区、真实 GitHub PR 合并与唯一交付、Orca 精确公开输出和 owned 清理 |
 | L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
 
 原候选入口 `candidates.local` 已随旧本机 Orca 路径移出当前登记。下面的 manifest 与驱动说明保留历史参考，不能用它声明当前本机 supervised 已完成真实候选验收。
@@ -112,7 +109,7 @@ L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTe
 
 真实 GitHub 发布脚本为本次 push 设置仅限 SteerlineTest remote 的 HTTP 认证环境，并清除 shell credential helper；推送后清除这些环境项。测试 token 不写入 argv、Git 配置文件或日志，避免依赖 unelevated Windows 沙箱中无法启动的 Git Bash credential helper。该适配仅用于测试 fixture，产品权限和凭据来源不变。
 
-当前 L3 local-codex 使用 loopback Git/PR provider，远端交付使用真实 SteerlineTest GitHub PR；均执行真实模型，与无 token 环境分别选择。旧本机 Orca 驱动保留的 Enter、readiness 和隔离环境机制仅供历史取证，不证明当前 supervised 本机目标已验收。
+当前 L3 local-codex 使用 loopback Git/PR provider 并执行真实模型，与无 token 环境分别选择。旧远端驱动使用真实 SteerlineTest PR，保留作历史取证，不能作为当前分步流程入口。旧本机 Orca 驱动保留的 Enter、readiness 和隔离环境机制仅供历史取证，不证明当前 supervised 本机目标已验收。
 
 L3 delivery/recovery 的本机 Orca usage 按 [#84 明确调整的验收条件](../../docs/acceptance/worker-staged-flow.md) 登记：公开接口不提供 token usage，场景必须记录 `usage_verified=false`、`orca_usage_status=not_exposed_by_orca`，逐轮仍绑定原 Command/Dispatch/final source；真实业务与清理必须通过。该能力记录不代表 token 验证通过，不替代 local、完整 L2、其他 suite 或远端各自的门槛。
 
@@ -122,7 +119,7 @@ L3 Orca 发布脚本使用 origin 的正式仓库身份，仅对单次 push 以 
 
 ## 产物与失败
 
-远端场景需 `STEERLINE_REMOTE_ACCEPTANCE_CONFIG` 指向绝对路径的无凭据 manifest：
+以下为已退役单轮远端驱动的历史 manifest 格式。重新准入前必须补齐可验证的原生 final 和三轮场景；此配置不能使当前不支持的开发流程通过。旧驱动要求 `STEERLINE_REMOTE_ACCEPTANCE_CONFIG` 指向绝对路径的无凭据 manifest：
 
 ```json
 {
@@ -137,10 +134,7 @@ L3 Orca 发布脚本使用 origin 的正式仓库身份，仅对单次 push 以 
 
 用 `orca environment list --json`、`orca repo list --environment <环境> --json` 取得精确身份。远端预先准备自身 Codex/GitHub 登录；测试不下发中心认证，不修改 Orca 全局启动设置。runner 将 manifest 路径保存于 Run，再清除继承的 STEERLINE 环境。合同与脚本由独立 GitHub base branch 同步到远端，helper 仅在本次精确目标创建；远端只通过 Orca worker-read 查询精确 transcript/sourceIdentity/provider，核验原输出源和 PR 正文，不读取 agent 私有文件或运行 agent CLI。当前 Orca 公开接口无 token usage，报告 remote_usage_status=not_exposed_by_orca、usage_verified=false；远端场景必须有 remote_public_output_verified=true，不能因此宣称 token 已验。缺少 manifest、能力、认证或原生证据明确失败。
 
-```powershell
-$env:STEERLINE_REMOTE_ACCEPTANCE_CONFIG = '<manifest 绝对路径>'
-go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-remote-codex'
-```
+旧 `delivery.orca-remote-codex` 选择会被当前 runner 拒绝；不保留可直接执行的旧命令。
 
 远端测试使用真实 SteerlineTest PR，驱动只自动合并本次精确 head/base，保留 PR 历史并清理本次分支。业务期限 10 分钟，成功/失败分别记录资源清理；直接 CLI 探针不代替正式产品场景。
 

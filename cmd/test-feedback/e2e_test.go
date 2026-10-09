@@ -145,13 +145,14 @@ func TestL3ExactScenarioSelectionRejectsWrongEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"delivery.local-codex", "delivery.orca-remote-codex"} {
+	for _, id := range []string{"delivery.local-codex"} {
 		entries, err := selectE2E(root, options{level: "L3", suite: "delivery", e2eEnv: "live", scenario: id})
 		if err != nil || len(entries) != 1 || entries[0].ID != id {
 			t.Fatalf("independent selection %s: %v %v", id, entries, err)
 		}
 	}
 	for _, opts := range []options{
+		{level: "L3", suite: "delivery", e2eEnv: "live", scenario: "delivery.orca-remote-codex"},
 		{level: "L3", suite: "delivery", e2eEnv: "controlled", scenario: "delivery.local-codex"},
 		{level: "L3", suite: "recovery", e2eEnv: "live", scenario: "delivery.local-codex"},
 		{level: "L3", suite: "delivery", e2eEnv: "live", scenario: "delivery.local-codex,delivery.local-codex"},

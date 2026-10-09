@@ -775,7 +775,8 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config ste
 	deadline := time.NewTimer(30 * time.Second)
 	defer deadline.Stop()
 	for {
-		_, _, err := steerlineapp.SubmitDecisionAnswer(ctx, config, answer)
+		command, created, err := steerlineapp.SubmitDecisionAnswer(ctx, config, answer)
+		t.Logf("original answer submission: decision=%s version=%d command=%s created=%t status=%s error=%v", answer.DecisionID, answer.ExpectedVersion, command.CommandID, created, command.Status, err)
 		if err == nil {
 			return
 		}
