@@ -21,11 +21,9 @@ func TestWorkerStageUnverifiedImplementationCannotPublish(t *testing.T) {
 	evidence := workerStageEvidence(s, run, "unverified projection with plausible source labels", true)
 	evidence.FinalVerified = false
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
-	startQueuedStage(t, s, run)
-	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported"}`, true))
 	w := s.workflowRecord(run)
-	if w.StepID != executionmodel.StepReport || w.Status != "reconciling" || w.CandidateSHA != "" || w.StageResults[0].FinalVerified {
-		t.Fatal("unverified implementation source was promoted by its report")
+	if w.StepID != executionmodel.StepImplement || w.Status != "reconciling" || w.CandidateSHA != "" || len(w.StageResults) != 0 || len(w.StageInputs) != 1 {
+		t.Fatal("unverified implementation source started another model step")
 	}
 }
 

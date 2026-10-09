@@ -279,7 +279,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if err := s.stopVerifiedWorkerTurn(run, w, e, evidence.TurnID, map[bool]string{true: "succeeded", false: "failed"}[evidence.Succeeded], false); err != nil {
 		return err
 	}
-	if input.StepID != executionmodel.StepImplement && (!evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "") {
+	if (input.StepID != executionmodel.StepImplement || evidence.Succeeded) && (!evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "") {
 		return s.stageWait(run, w, e, "reconciling", "original stopped turn lacks verified final provenance: "+evidence.FinalDiagnostic, nil)
 	}
 	result := executionmodel.StageResult{CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, FinalVerified: evidence.FinalVerified, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
