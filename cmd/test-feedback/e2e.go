@@ -98,7 +98,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex") || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live" && entry.Env != "native") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex") || (entry.Env == "native" && (entry.Level != "L3" || entry.Chain != "")) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -106,7 +106,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 		}
 		ids[entry.ID], tests[key] = true, true
 		if env, ok := packageEnvs[entry.Package]; ok && env != entry.Env {
-			return nil, errors.New("one E2E package cannot mix controlled/live environments")
+			return nil, errors.New("one E2E package cannot mix environments")
 		}
 		packageEnvs[entry.Package] = entry.Env
 		if entry.Level == opts.level && (entry.Env == opts.e2eEnv || opts.e2eEnv == "gated") && (opts.level == "L2" || requested[entry.Suite]) {
@@ -190,6 +190,9 @@ func runE2E(opts options) (code int) {
 		return 2
 	}
 	note, coverage := "controlled worker/provider; no model requests", "selected-L3"
+	if opts.e2eEnv == "native" {
+		note = "native Orca workspace operations; controlled worker/provider; no model requests"
+	}
 	if opts.e2eEnv == "live" {
 		note = "native gpt-6-luna/medium; loopback provider"
 		if opts.suite == "candidates" {
@@ -457,12 +460,13 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			return fmt.Errorf("scenario %s completed %d times", e.ID, seen[e.Test])
 		}
 		var evidence struct {
-			ID            string           `json:"id"`
-			Passed        bool             `json:"passed"`
-			Cleanup       bool             `json:"cleanup_complete"`
-			Resources     []map[string]any `json:"resources"`
-			UsageVerified bool             `json:"usage_verified"`
-			RealPR        *struct {
+			ID                      string           `json:"id"`
+			Passed                  bool             `json:"passed"`
+			Cleanup                 bool             `json:"cleanup_complete"`
+			Resources               []map[string]any `json:"resources"`
+			UsageVerified           bool             `json:"usage_verified"`
+			NativeWorkspaceVerified bool             `json:"native_workspace_verified"`
+			RealPR                  *struct {
 				URL, State, Repository string
 				Merged                 bool
 			} `json:"real_pr,omitempty"`
@@ -476,6 +480,9 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		}
 		if e.Env == "live" && !evidence.UsageVerified {
 			return fmt.Errorf("native token usage not verified for %s", e.ID)
+		}
+		if e.Env == "native" && (!evidence.NativeWorkspaceVerified || evidence.UsageVerified || evidence.RealPR != nil) {
+			return fmt.Errorf("native no-model workspace evidence missing or mixed with model/PR evidence for %s", e.ID)
 		}
 		if e.Level == "L2" && e.Env == "live" && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
 			return fmt.Errorf("real merged SteerlineTest PR evidence missing for %s", e.ID)

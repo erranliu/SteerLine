@@ -75,10 +75,11 @@ func Main(args []string) error {
 		if err != nil {
 			return err
 		}
-		if s.PR.URL == "" {
-			return fmt.Errorf("controlled PR not published")
+		pr, err := ProviderPR(s, argument(args, "--pr-url"))
+		if err != nil {
+			return err
 		}
-		return json.NewEncoder(os.Stdout).Encode(s.PR)
+		return json.NewEncoder(os.Stdout).Encode(pr)
 	}
 	mu := &sync.Mutex{}
 	handle := func(raw []byte, send func(any) error) error {
@@ -157,6 +158,12 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if params.Cwd == "" {
 			return fmt.Errorf("missing assigned workspace")
 		}
+		if s.Session != "" {
+			if s.Threads == nil {
+				s.Threads = map[string]ThreadState{}
+			}
+			s.Threads[s.Session] = ThreadState{Cwd: s.Cwd, Turns: s.Turns}
+		}
 		s.Cwd, s.Session = params.Cwd, uuid.NewString()
 		s.Sessions++
 		s.Turns = nil
@@ -171,14 +178,19 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if err := json.Unmarshal(message.Params, &params); err != nil {
 			return err
 		}
+		thread := ThreadState{Cwd: s.Cwd, Turns: s.Turns}
 		if s.Session == "" || params.ThreadID != s.Session {
-			return fmt.Errorf("unknown controlled session")
+			var ok bool
+			thread, ok = s.Threads[params.ThreadID]
+			if !ok {
+				return fmt.Errorf("unknown controlled session")
+			}
 		}
-		if message.Method == "thread/resume" && len(s.Turns) == 0 {
-			response["error"] = map[string]any{"code": -32600, "message": "no rollout found for thread id " + s.Session}
+		if message.Method == "thread/resume" && len(thread.Turns) == 0 {
+			response["error"] = map[string]any{"code": -32600, "message": "no rollout found for thread id " + params.ThreadID}
 			break
 		}
-		response["result"] = map[string]any{"thread": map[string]any{"id": s.Session, "cwd": s.Cwd, "turns": s.Turns}}
+		response["result"] = map[string]any{"thread": map[string]any{"id": params.ThreadID, "cwd": thread.Cwd, "turns": thread.Turns}}
 	case "turn/start":
 		var params struct {
 			ThreadID string `json:"threadId"`
@@ -192,7 +204,7 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if s.Session == "" || params.ThreadID != s.Session || len(params.Input) == 0 {
 			return fmt.Errorf("invalid controlled dispatch")
 		}
-		if s.Dispatches != 0 {
+		if len(s.Turns) != 0 {
 			return fmt.Errorf("unexpected duplicate business dispatch")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -221,6 +233,7 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 			return err
 		}
 		s.PR = published.PR
+		s.PRs = published.PRs
 		s.Dispatches++
 		turnID := uuid.NewString()
 		item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": "Published by worker: " + s.PR.URL}

@@ -93,6 +93,30 @@ func OrcaReadiness(e executionmodel.ExecutionRecord) error {
 	return nil
 }
 
+func OrcaExplicitEmptyArgs(domain reconstruction.Snapshot) error {
+	if len(domain.WorkflowRuns) != 1 || len(domain.Executions) != 1 || domain.WorkflowRuns[0].ExecutionProfile == nil {
+		return errors.New("explicit Orca args evidence needs one fixed execution")
+	}
+	profile := domain.WorkflowRuns[0].ExecutionProfile
+	for _, data := range profile.ImplementationData {
+		if data.ImplementationKey != orcaworker.ProfileCodecKey {
+			continue
+		}
+		if err := data.ValidateProfileIdentity(domain.Executions[0].ProjectIdentity, profile.ID, profile.AcceptedConfigVersion); err != nil {
+			return err
+		}
+		settings, err := orcaworker.DecodeProfileConfig(data.Payload)
+		if err != nil {
+			return err
+		}
+		if settings.Args == nil || len(settings.Args) != 0 {
+			return errors.New("Orca smoke did not freeze explicit args=[]")
+		}
+		return nil
+	}
+	return errors.New("missing frozen Orca profile")
+}
+
 func orcaState(e executionmodel.ExecutionRecord) (orcaworker.NativeExecutionState, error) {
 	if e.Process == nil {
 		return orcaworker.NativeExecutionState{}, errors.New("missing native Orca process")

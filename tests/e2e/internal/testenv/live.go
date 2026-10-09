@@ -76,7 +76,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, Home: p.Home, LogDir: logDir, PowerShellDir: filepath.Dir(pwsh)}))
 		// This deadline covers native terminal creation, metadata binding, model
 		// readiness tools and settlement, not one CLI call (bounded separately).
-		orcaConfig = map[string]any{"executable": shim, "shell": "powershell.exe", "wait_timeout": "4m"}
+		orcaConfig = native.OrcaWorkerProfile(shim, "4m")
 	}
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)
@@ -337,6 +337,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		s.t.Fatal("native execution identity/turn missing")
 	}
 	if chain == "orca-codex" {
+		s.Must(evidence.OrcaExplicitEmptyArgs(before.Domain))
 		s.Must(evidence.OrcaReadiness(e))
 	}
 	for _, task := range before.Page.Tasks {

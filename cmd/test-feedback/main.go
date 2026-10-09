@@ -247,7 +247,7 @@ func parseOptions(args []string) (options, error) {
 	flags.IntVar(&opts.workers, "workers", 1, "suite processes: 1 or 3; L1/quick defaults to 3")
 	flags.StringVar(&opts.level, "level", "", "test level: L1, L2 or L3")
 	flags.StringVar(&opts.suite, "suite", "", "comma-separated L3 suites")
-	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled, live (L3), gated (L2 default)")
+	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled, live/native (L3), gated (L2 default)")
 	flags.StringVar(&opts.scenario, "scenario", "", "comma-separated L3 scenario IDs")
 	if err := flags.Parse(toolArgs); err != nil {
 		return opts, fmt.Errorf("test-feedback options: %w", err)
@@ -295,7 +295,7 @@ func parseOptions(args []string) (options, error) {
 		if opts.e2eEnv == "" && opts.level == "L2" {
 			opts.e2eEnv = "gated"
 		}
-		if opts.e2eEnv != "controlled" && !(opts.level == "L2" && opts.e2eEnv == "gated") && !(opts.level == "L3" && opts.e2eEnv == "live") {
+		if opts.e2eEnv != "controlled" && !(opts.level == "L2" && opts.e2eEnv == "gated") && !(opts.level == "L3" && (opts.e2eEnv == "live" || opts.e2eEnv == "native")) {
 			return opts, fmt.Errorf("unsupported E2E environment %q", opts.e2eEnv)
 		}
 	default:

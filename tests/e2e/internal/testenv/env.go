@@ -30,18 +30,19 @@ import (
 
 type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
-	bodyFinishedAt   time.Time
-	bodyContextErr   error
-	Run              Run
-	ID, Root, Output string
-	Context          context.Context
-	cancel           context.CancelFunc
-	t                *testing.T
-	projects         []*Project
-	processes        []*testprocess.Process
-	files            []*os.File
-	resources        []map[string]any
-	usageVerified    bool
+	bodyFinishedAt          time.Time
+	bodyContextErr          error
+	Run                     Run
+	ID, Root, Output        string
+	Context                 context.Context
+	cancel                  context.CancelFunc
+	t                       *testing.T
+	projects                []*Project
+	processes               []*testprocess.Process
+	files                   []*os.File
+	resources               []map[string]any
+	usageVerified           bool
+	nativeWorkspaceVerified bool
 }
 
 type Project struct {
@@ -142,6 +143,8 @@ func (s *Scenario) register(kind, path string, pid int) {
 }
 
 func (s *Scenario) RecordResource(kind, path string, pid int) { s.register(kind, path, pid) }
+
+func (s *Scenario) VerifyNativeWorkspaceLifecycle() { s.nativeWorkspaceVerified = true }
 
 func (s *Scenario) start(cmd *exec.Cmd, name string) *testprocess.Process {
 	s.t.Helper()
@@ -394,6 +397,14 @@ func (s *Scenario) Wait(label string, condition func() (bool, error)) {
 }
 
 func (p *Project) CreateTasks() {
+	p.createTasks([]string{"a", "b"})
+}
+
+func (p *Project) CreateTasksWithIndependentTask() {
+	p.createTasks([]string{"a", "b", "c"})
+}
+
+func (p *Project) createTasks(keys []string) {
 	s := p.Scenario
 	s.t.Helper()
 	head := p.git(p.Repo, "rev-parse", "HEAD")
@@ -406,7 +417,7 @@ func (p *Project) CreateTasks() {
 	spec, plan := ref("task.spec.md"), ref("task.plan.md")
 	// task validate is the product's project initialization and validation path.
 	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion}
-	for i, key := range []string{"a", "b"} {
+	for i, key := range keys {
 		contract := taskmodel.TaskContract{ContractID: "e2e-" + key, Repository: p.RemoteURL, Remote: "origin", Branch: p.BaseBranch, SpecRef: spec, PlanRef: plan, CommonRefs: []taskmodel.FileReference{}, AcceptanceRefs: []taskmodel.FileReference{spec}}
 		digest, err := taskmodel.ContractDigest(contract)
 		s.Must(err)
@@ -767,7 +778,7 @@ func (s *Scenario) cleanup() {
 			realPR = p.RealPRProof
 		}
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "native_workspace_verified": s.nativeWorkspaceVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
 	if err := controlled.Write(filepath.Join(s.Output, "scenario.json"), evidence); err != nil {
 		s.t.Errorf("write scenario evidence: %v", err)
 	}

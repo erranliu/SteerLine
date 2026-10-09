@@ -9,5 +9,6 @@
   {"id":"recovery.local-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryLocalCodex","env":"live","chain":"local-codex"},
   {"id":"recovery.orca-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryOrcaCodex","env":"live","chain":"orca-codex"},
   {"id":"runtime.installed-debug-isolation","level":"L3","suite":"runtime","package":"./tests/e2e/suites/runtime","test":"TestInstalledDebugIsolation","env":"controlled"},
+  {"id":"workspace.orca-removal-restart","level":"L3","suite":"workspace","package":"./tests/e2e/suites/nativeworkspace","test":"TestOrcaRemovalRestart","env":"native"},
   {"id":"candidates.local","level":"L3","suite":"candidates","package":"./tests/e2e/suites/candidates","test":"TestCandidateLocal","env":"live","chain":"local-codex"}
 ]

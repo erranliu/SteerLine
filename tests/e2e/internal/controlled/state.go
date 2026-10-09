@@ -16,13 +16,20 @@ import (
 )
 
 type State struct {
-	GitURL     string                `json:"git_url"`
-	Cwd        string                `json:"cwd"`
-	Session    string                `json:"session"`
-	Sessions   int                   `json:"sessions"`
-	Dispatches int                   `json:"dispatches"`
-	Turns      []map[string]any      `json:"turns"`
-	PR         executionmodel.PRInfo `json:"pr"`
+	Threads    map[string]ThreadState           `json:"threads,omitempty"`
+	GitURL     string                           `json:"git_url"`
+	Cwd        string                           `json:"cwd"`
+	Session    string                           `json:"session"`
+	Sessions   int                              `json:"sessions"`
+	Dispatches int                              `json:"dispatches"`
+	Turns      []map[string]any                 `json:"turns"`
+	PR         executionmodel.PRInfo            `json:"pr"`
+	PRs        map[string]executionmodel.PRInfo `json:"prs,omitempty"`
+}
+
+type ThreadState struct {
+	Cwd   string           `json:"cwd"`
+	Turns []map[string]any `json:"turns"`
 }
 
 func Read(path string) (State, error) {

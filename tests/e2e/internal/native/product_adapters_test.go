@@ -22,6 +22,21 @@ func TestWorkerConfigsPreserveNativeModelAndChainSettings(t *testing.T) {
 	}
 }
 
+func TestOrcaSmokeProfileUsesExplicitEmptyArgs(t *testing.T) {
+	profile := OrcaWorkerProfile("isolated-orca", "4m")
+	raw, err := json.Marshal(profile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if string(fields["args"]) != "[]" {
+		t.Fatalf("Orca smoke omitted its regression-triggering args: %s", raw)
+	}
+}
+
 func TestOrcaInventoryPreservesOwnershipAndRejectsIncompleteEvidence(t *testing.T) {
 	raw, err := OrcaPayload([]byte(`{"ok":true,"result":{"worktrees":[{"id":"worktree","repoId":"repo","path":"C:/owned"}]}}`))
 	if err != nil {

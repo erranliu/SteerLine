@@ -89,6 +89,19 @@ func TestExecutionEvidencePreservesBoundIdentityAndAuthority(t *testing.T) {
 	}
 }
 
+func TestExplicitOrcaArgsEvidenceRejectsUncoveredVariants(t *testing.T) {
+	for _, args := range []string{"null", "[]", `["--native"]`} {
+		d := fixture(t)
+		profile := d.WorkflowRuns[0].ExecutionProfile
+		payload := []byte(`{"executable":"orca","args":` + args + `,"shell":"powershell.exe","wait_timeout":"4m"}`)
+		data, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: orcaworker.ProfileCodecKey, ProjectID: d.Executions[0].ProjectIdentity, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion}, payload)
+		profile.ImplementationData = append(profile.ImplementationData, must(t, data, err))
+		if err := OrcaExplicitEmptyArgs(d); (err == nil) != (args == "[]") {
+			t.Fatalf("args=%s evidence result=%v", args, err)
+		}
+	}
+}
+
 func orcaFixture(t *testing.T, succeeded bool) executionmodel.ExecutionRecord {
 	e := fixture(t).Executions[0]
 	e.Protocol = string(executionbackend.ProtocolOrcaTerminalV2)

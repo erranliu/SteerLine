@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,8 +25,14 @@ func githubCommand(path string, args []string) error {
 		return json.NewEncoder(os.Stdout).Encode(result)
 	}
 	if len(args) > 1 && args[0] == "pr" && args[1] == "create" {
-		if s.PR.State != "" {
+		branchRequest := argument(args, "--head")
+		if s.PR.State != "" && s.PR.HeadBranch == branchRequest {
 			return fmt.Errorf("duplicate PR creation")
+		}
+		for _, pr := range s.PRs {
+			if pr.HeadBranch == branchRequest {
+				return fmt.Errorf("duplicate PR creation")
+			}
 		}
 		if argument(args, "--repo") != "e2e/project" || argument(args, "--base") != "main" {
 			return fmt.Errorf("unexpected PR target")
@@ -51,7 +58,14 @@ func githubCommand(path string, args []string) error {
 		if err != nil || !strings.HasPrefix(remoteHead, head) {
 			return fmt.Errorf("PR branch was not pushed: %v", err)
 		}
-		s.PR = executionmodel.PRInfo{URL: "https://github.com/e2e/project/pull/1", Repository: "e2e/project", BaseBranch: "main", HeadRepository: "e2e/project", HeadBranch: branch, HeadRevision: head, State: "open"}
+		if s.PRs == nil {
+			s.PRs = map[string]executionmodel.PRInfo{}
+		}
+		if s.PR.URL != "" {
+			s.PRs[s.PR.URL] = s.PR
+		}
+		s.PR = executionmodel.PRInfo{URL: "https://github.com/e2e/project/pull/" + strconv.Itoa(len(s.PRs)+1), Repository: "e2e/project", BaseBranch: "main", HeadRepository: "e2e/project", HeadBranch: branch, HeadRevision: head, State: "open"}
+		s.PRs[s.PR.URL] = s.PR
 		if err := Write(path, s); err != nil {
 			return err
 		}
@@ -59,4 +73,17 @@ func githubCommand(path string, args []string) error {
 		return nil
 	}
 	return fmt.Errorf("unsupported controlled GitHub command")
+}
+
+func ProviderPR(s State, url string) (executionmodel.PRInfo, error) {
+	if url == "" || url == s.PR.URL {
+		if s.PR.URL == "" {
+			return executionmodel.PRInfo{}, fmt.Errorf("controlled PR not published")
+		}
+		return s.PR, nil
+	}
+	if pr, ok := s.PRs[url]; ok {
+		return pr, nil
+	}
+	return executionmodel.PRInfo{}, fmt.Errorf("unknown controlled PR URL")
 }
