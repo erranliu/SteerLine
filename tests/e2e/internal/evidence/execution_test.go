@@ -148,6 +148,9 @@ func TestNativeOrcaLaunchRequiresOriginalAcceptedReceipt(t *testing.T) {
 	e.PolicyResources = nil
 	e.Process = &executionbackend.ProcessIdentity{Kind: "orca", RuntimeID: "runtime", Terminal: "terminal", Incarnation: "inc", WorktreeID: "worktree", OrchestrationRun: "run", Task: "task", Dispatch: "dispatch"}
 	e.CurrentTurnID = "original-command"
+	state := orcaworker.NativeExecutionState{Turns: []orcaworker.NativeTurnState{{TurnID: e.CurrentTurnID, TaskID: e.Process.Task, DispatchID: e.Process.Dispatch}}}
+	data, err := orcaworker.NewExecutionStateEnvelope(orcaworker.ExecutionStateIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, state)
+	e.ImplementationData = []executionbackend.ImplementationDataEnvelope{must(t, data, err)}
 	profile := d.WorkflowRuns[0].ExecutionProfile
 	profile.Host = "orca"
 	payload, _ := json.Marshal(orcaworker.ProfileConfig{Executable: "orca", Model: "gpt-6-luna", ReasoningEffort: "medium"})
