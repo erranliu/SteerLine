@@ -119,4 +119,4 @@ Codex 开发的正式交付依赖维护于 execution-map；SteerLine产品自身
 
 ## #84 / #45 当前交接
 
-用户于 2026-10-09 明确允许 #84 与 #45 独立并行实现；共享状态、格式、流程语义由 #84 交付，主干集成先 #84 后 #45，#45 的 HTTP/client discard 接线仍由原执行者负责。#84 提供 WorkflowRun `status/flow_ref/step_id`、输入/结果版本绑定，产品 CandidateSummary 的同快照步骤、源执行事实及报告权限边界；SQLite schema 18、runtime 20、worker-flow-v2、Orca execution-state codec 10。#45 后续消费真实字段和结果，不复制转移逻辑；#44 仍等待 #45。完整状态按 [execution-map](../roadmap/execution-map.md)核对。
+用户于 2026-10-09 明确允许 #84 与 #45 独立并行实现；共享状态、格式、流程语义由 #84 交付，主干集成先 #84 后 #45，#45 的 HTTP/client discard 接线仍由原执行者负责。#84 提供 WorkflowRun `status/flow_ref/step_id`、输入/结果版本绑定，产品 CandidateSummary 的同快照步骤、源执行事实及报告权限边界；SQLite schema 18、runtime 20、worker-flow-v2、Orca execution-state codec 11。#45 后续消费真实字段和结果，不复制转移逻辑；#44 仍等待 #45。完整状态按 [execution-map](../roadmap/execution-map.md)核对。

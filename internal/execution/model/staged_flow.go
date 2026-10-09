@@ -44,6 +44,7 @@ type StageResult struct {
 	Final                string         `json:"final,omitempty"`
 	FinalNativeSessionID string         `json:"final_native_session_id,omitempty"`
 	FinalNativeTurnID    string         `json:"final_native_turn_id,omitempty"`
+	FinalDiagnostic      string         `json:"final_diagnostic,omitempty"`
 	FinalSource          string         `json:"final_source,omitempty"`
 	FinalItemID          string         `json:"final_item_id,omitempty"`
 	Failure              string         `json:"failure,omitempty"`

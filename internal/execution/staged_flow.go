@@ -263,7 +263,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if err := s.stopVerifiedWorkerTurn(run, w, e, evidence.TurnID, map[bool]string{true: "succeeded", false: "failed"}[evidence.Succeeded], false); err != nil {
 		return err
 	}
-	result := executionmodel.StageResult{CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
+	result := executionmodel.StageResult{CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
 	facts, inspectErr := s.inspectStage(ctx, run, lifecycle, fixed)
 	result.Snapshot = facts
 	if facts != nil {
@@ -293,7 +293,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	}
 	report, err := decodeStageReport(evidence.LastMessage, input.StepID)
 	if !evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "" {
-		err = errors.New("result lacks verified native final provenance")
+		err = errors.New("result lacks verified native final provenance: " + evidence.FinalDiagnostic)
 	}
 	if err == nil && input.StepID == executionmodel.StepPublish && report.Outputs.PRURL != "" {
 		w.PRCandidateURL = report.Outputs.PRURL

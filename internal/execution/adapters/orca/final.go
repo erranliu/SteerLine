@@ -21,42 +21,26 @@ import (
 // the provider's final_answer + task_complete facts. Never use worker_done's
 // summary, a terminal tail, commentary or tool stdout as the business final.
 func (l *ExecutionLifecycle) readNativeFinal(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, turn *NativeTurnState, state *NativeExecutionState) error {
-	output, _, err := ReadWorkerOutput(ctx, l.client.MetaCall, turn.DispatchID, "", state.Coordinator.RuntimeID)
-	if err != nil {
-		return err
-	}
-	if output.Source != "transcript" || !output.SourceExact || output.Provider != "codex" || output.SourceIdentity == "" {
-		return errors.New("native final has no exact Codex transcript source")
-	}
-	var data struct {
-		Messages []transcriptMessage `json:"messages"`
-	}
-	if err := json.Unmarshal(output.Transcript, &data); err != nil {
-		return err
-	}
-	var path string
-	for _, message := range data.Messages {
-		if message.Source != "transcript" {
-			continue
+	path := state.ProviderTranscriptPath
+	output, _, readErr := ReadWorkerOutput(ctx, l.client.MetaCall, turn.DispatchID, "", state.Coordinator.RuntimeID)
+	if readErr == nil {
+		if output.Source == "transcript" && output.SourceExact && output.Provider == "codex" && output.SourceIdentity != "" {
+			if err := pinNativeTranscript(output, state, snapshot.Ref.WorkspacePath); err != nil {
+				return err
+			}
+			path = state.ProviderTranscriptPath
+		} else if path == "" {
+			return errors.New("native final has no exact or original pinned transcript source")
 		}
-		colon := strings.LastIndexByte(message.ID, ':')
-		if colon < 1 {
-			continue
-		}
-		if _, err := strconv.ParseInt(message.ID[colon+1:], 10, 64); err != nil {
-			continue
-		}
-		candidate := message.ID[:colon]
-		if !filepath.IsAbs(candidate) || filepath.Ext(candidate) != ".jsonl" {
-			continue
-		}
-		if path != "" && path != candidate {
-			return errors.New("native output changed original transcript file")
-		}
-		path = candidate
+	} else if path == "" {
+		return readErr
 	}
 	if path == "" {
-		return errors.New("native transcript file identity unavailable")
+		return errors.New("original exact provider transcript is not pinned")
+	}
+	root, err := transcriptRootSession(path, snapshot.Ref.WorkspacePath)
+	if err != nil || root != state.ProviderSessionID {
+		return errors.New("pinned original provider session changed or is unavailable")
 	}
 	file, err := os.Open(path)
 	if err != nil {
@@ -85,6 +69,93 @@ func (l *ExecutionLifecycle) readNativeFinal(ctx context.Context, snapshot execu
 	state.ProviderSessionID = session
 	turn.FinalSource, turn.FinalItemID, turn.FinalNativeTurnID = "orca.codex.transcript.final_answer", path+":"+item, nativeTurn
 	turn.FinalVerified, turn.FinalText = true, final
+	return nil
+}
+
+func exactTranscriptPath(output WorkerOutput) (string, error) {
+	if output.Source != "transcript" || !output.SourceExact || output.Provider != "codex" || output.SourceIdentity == "" {
+		return "", errors.New("native final has no exact Codex transcript source")
+	}
+	var data struct {
+		Messages []transcriptMessage `json:"messages"`
+	}
+	if err := json.Unmarshal(output.Transcript, &data); err != nil {
+		return "", err
+	}
+	var path string
+	for _, message := range data.Messages {
+		if message.Source != "transcript" {
+			continue
+		}
+		colon := strings.LastIndexByte(message.ID, ':')
+		if colon < 1 {
+			continue
+		}
+		if _, err := strconv.ParseInt(message.ID[colon+1:], 10, 64); err != nil {
+			continue
+		}
+		candidate := message.ID[:colon]
+		if !filepath.IsAbs(candidate) || filepath.Ext(candidate) != ".jsonl" {
+			continue
+		}
+		if path != "" && path != candidate {
+			return "", errors.New("native output changed original transcript file")
+		}
+		path = candidate
+	}
+	if path == "" {
+		return "", errors.New("native transcript file identity unavailable")
+	}
+	return path, nil
+}
+
+func transcriptRootSession(path, cwd string) (string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+	reader := bufio.NewReaderSize(file, 64*1024)
+	line, err := reader.ReadSlice('\n')
+	if err != nil {
+		return "", err
+	}
+	var event struct {
+		Type    string `json:"type"`
+		Payload struct {
+			ID     string          `json:"id"`
+			Cwd    string          `json:"cwd"`
+			Parent string          `json:"parent_thread_id"`
+			Source json.RawMessage `json:"source"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(line, &event); err != nil {
+		return "", err
+	}
+	p := event.Payload
+	var origin struct {
+		Subagent json.RawMessage `json:"subagent"`
+	}
+	_ = json.Unmarshal(p.Source, &origin)
+	if event.Type != "session_meta" || p.ID == "" || p.Parent != "" || !strings.EqualFold(filepath.Clean(p.Cwd), filepath.Clean(cwd)) || len(origin.Subagent) > 0 && string(origin.Subagent) != "null" {
+		return "", errors.New("transcript is not the original root session/workspace")
+	}
+	return p.ID, nil
+}
+
+func pinNativeTranscript(output WorkerOutput, state *NativeExecutionState, cwd string) error {
+	path, err := exactTranscriptPath(output)
+	if err != nil {
+		return err
+	}
+	session, err := transcriptRootSession(path, cwd)
+	if err != nil {
+		return err
+	}
+	if state.ProviderTranscriptPath != "" && state.ProviderTranscriptPath != path || state.ProviderSessionID != "" && state.ProviderSessionID != session {
+		return errors.New("original native provider transcript binding changed")
+	}
+	state.ProviderTranscriptPath, state.ProviderSessionID = path, session
 	return nil
 }
 

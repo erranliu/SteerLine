@@ -41,7 +41,7 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	require(t, err)
 	require(t, project.Close())
 	if host == "orca" {
-		state := testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 2, StageProvider: provider, StageRemote: f.bareRemote, StageTranscript: filepath.Join(f.nativeStateDir, "stage-transcript.jsonl")}
+		state := testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 2, StageSourceLost: true, StageProvider: provider, StageRemote: f.bareRemote, StageTranscript: filepath.Join(f.nativeStateDir, "stage-transcript.jsonl")}
 		if unknown {
 			state.LoseDispatchAt = 3
 		}

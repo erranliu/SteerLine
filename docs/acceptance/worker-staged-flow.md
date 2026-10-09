@@ -56,3 +56,11 @@
 固定契约：`c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` 内 worker-staged-flow.spec.md / worker-staged-flow.plan.md；代码起点同 SHA。原工作树 b123 干净，远端 main 同 SHA，分支 codex/task-84-worker-staged-flow。用户指定开发模型 gpt-6.1-sol/high，仅覆盖执行聊天；产品 live 使用原 gpt-6-luna/medium 及固定原生权限。草稿选择 docs/roadmap/drafts/roadmap.md，不修改固定 Spec/Plan。
 
 开发期 dirty tree 的 A1 规则/提交用例、console 定向用例，以及双 adapter controlled 正常三轮/重开检查已实际运行；这些是开发诊断，最终 clean candidate 验收另行登记。首次 L1 +定向 A1 通过，原始报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261009T025901.138445000Z/summary.json`。此前三轮受控用例暴露的未提交原生操作误走对账问题已修复；失败输出保留在原聊天，不能算为最终通过。WFS-A4 两条 live 尚未执行，WFS-M1 保持待验。
+
+### e74 精确候选与双 live 首轮
+
+源码 `e74f1ec881661064e5b616e42e6fa06cec923d5d`，tree `67da2fb04605fddc07ec99bbcaee2b571f91f973`，clean tree。L1 + A1：475 tests / 0 skip / 13 groups，报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261009T033430.204647100Z/summary.json`；A2：18 tests / 0 skip，报告 `.../20261009T033431.183657300Z/summary.json`；A3：双正常三轮及 Orca 未知报告/重开共 3 tests / 0 skip，报告 `.../20261009T033431.009393200Z/summary.json`。这些结果仅对应 e74，不冒充后续修改的通过。
+
+WFS-A4 首轮目录 `C:/Users/lmas1/AppData/Local/Temp/steerline-worker84-evidence-a214d3a014c74100a2ad8d2b933199cb/live-e74/`：local-codex 真实三轮、唯一交付、原生 usage 与清理通过（163.52 秒）；orca-codex 失败，汇总 passed=false。两场景 scenario.json 均 cleanup_complete=true。Orca 后续 Dispatch 的精确 worker-read 返回 session_not_reported，原生 rollout 实际含正确 Task 头、final_answer 与完成；旧接线未保存准备时的根 transcript，故拒绝结果并耗尽一次报告重试。这是自动验收失败，不归人工后置。原始记录、规范快照、保存的 rollout 和 archived-read 诊断保留；local 结果不覆盖 Orca 失败。usage 文件是各绑定轮次的原生累计快照，不相加计费。
+
+协调通知 PR #254 已进入 main `d8d66d6c5696f41d7df1ed3ff50d4b3ae77b9da3`。原 worker 在 live 已退出且清理核实后，用 merge commit `bf64c1429782903a0eceae4831e26571950b889d` 集成，保留 e74 测试来源；console 操作进度/原回执修复与步骤投影均保留，无冲突。固定 Spec/Plan 仍在 c4bcbec。后续候选将修复原来源冻结、复验 affected console / controlled / 双 live，未将本段失败写成通过。
