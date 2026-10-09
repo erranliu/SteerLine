@@ -11,25 +11,29 @@ import (
 
 const ExecutionStateCodecKey = "orca.execution-state"
 
-const ExecutionStateCodecVersion = 9
+const ExecutionStateCodecVersion = 10
 
 // NativeExecutionState contains provider identities and observation positions.
 // WorkflowRun, Decision and Operation remain the authorities for business state.
 type NativeExecutionState struct {
-	RemoteRuntimeID    string                           `json:"remote_runtime_id,omitempty"`
-	RepositoryID       string                           `json:"repository_id,omitempty"`
-	Coordinator        executionbackend.ProcessIdentity `json:"coordinator"`
-	Turns              []NativeTurnState                `json:"turns,omitempty"`
-	DeliveryID         string                           `json:"delivery_id,omitempty"`
-	SeenMessages       []string                         `json:"seen_messages,omitempty"`
-	CoordinatorClosed  bool                             `json:"coordinator_closed,omitempty"`
-	AgentClosed        bool                             `json:"agent_closed,omitempty"`
-	RelayIgnored       bool                             `json:"relay_ignored,omitempty"`
-	AgentBound         bool                             `json:"agent_bound,omitempty"`
-	AgentLaunchCommand string                           `json:"agent_launch_command,omitempty"`
+	PartialWorker       *partialWorker                   `json:"partial_worker,omitempty"`
+	FailedStartReleased bool                             `json:"failed_start_released,omitempty"`
+	LocalRuntimeID      string                           `json:"local_runtime_id,omitempty"`
+	RemoteRuntimeID     string                           `json:"remote_runtime_id,omitempty"`
+	RepositoryID        string                           `json:"repository_id,omitempty"`
+	Coordinator         executionbackend.ProcessIdentity `json:"coordinator"`
+	Turns               []NativeTurnState                `json:"turns,omitempty"`
+	DeliveryID          string                           `json:"delivery_id,omitempty"`
+	SeenMessages        []string                         `json:"seen_messages,omitempty"`
+	CoordinatorClosed   bool                             `json:"coordinator_closed,omitempty"`
+	AgentClosed         bool                             `json:"agent_closed,omitempty"`
+	RelayIgnored        bool                             `json:"relay_ignored,omitempty"`
+	AgentBound          bool                             `json:"agent_bound,omitempty"`
+	AgentLaunchCommand  string                           `json:"agent_launch_command,omitempty"`
 }
 
 type NativeTurnState struct {
+	Started                bool                         `json:"started,omitempty"`
 	RelayReported          bool                         `json:"relay_reported,omitempty"`
 	ToolContext            executionbackend.ToolContext `json:"tool_context,omitempty"`
 	InjectionAttempts      int                          `json:"injection_attempts,omitempty"`

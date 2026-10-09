@@ -10,8 +10,6 @@
 
 local Codex 与 Orca 均长期正式支持。backend、agent、execution target 和协议版本分开；未来远端扩展也不能把本地路径用作远程故障的隐式替代。Orca terminal v2 与 supervised 可采用不同协议实现，共用业务边界和契约测试。
 
-已确认的 [#86 本机 Orca 接入调整](../spec/orca-native-worker.spec.md)要求 SteerLine 的 Orca 路径只依赖 Orca 原生接口，agent 只为配置值，不包含具体 agent 的启动、权限、会话、工具或 TUI 解析代码；差异由 Orca 自己处理。第一步使用 Orca 的宽松权限及 Terminal 模式，不自建隔离框架；后续收紧权限仍归 Orca 执行环境。本条是待实现的规划约束，本轮未改运行实现；本地 Codex adapter 继续拥有自身原生策略。
-
 ## 业务权威与执行边界
 
 SteerLine 负责任务领取、工作区与 worker 关联、五个主阶段、完整反馈送达、原会话重接、PR 关联和真实合并结项。worker 负责实现、提交、创建 PR；测试、修复、审查由任务 Spec/Plan 约定。中心不再维护项目五步编排、检查清单、修复轮次或脏目录门槛。UI/CLI 使用同一 Query/Command，复用唯一业务写者。

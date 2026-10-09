@@ -9,6 +9,7 @@
 | 一期签收 | 待验；[一期活动](phase1.md) |
 | 二期节点 | [导航](phase2.md)：[2.1执行UI](phase2-execution.md)、[2.2草稿/人工事项](phase2-planning.md)、[2.3主agent](phase2-main-agent.md)均为节点验收规划，尚未完整排入 |
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[Orca](worker-flow-orca-native.md)、[停服恢复](worker-service-recovery.md) |
+| Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
 | 历史结果与旧方案 | [归档索引](archive/README.md) |
@@ -21,7 +22,6 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 | --- | --- |
 | #83 本机安装与调试路径隔离 | [验收](local-runtime-isolation.md) |
 | #84 Worker 分步执行与结构化状态推进，已纳入执行规划 | [验收](worker-staged-flow.md) |
-| #86 本机 Orca 原生通用 worker 与权限委托 | [验收](orca-native-worker.md) |
 | #45 本机客户端协议与历史查询 | [验收](phase2-local-api.md) |
 | #44 WinUI基座与原生输入 | [验收](phase2-winui-foundation.md) |
 | #49 DAG与任务原生浏览，待原型 | [验收](phase2-roadmap-ui.md) |

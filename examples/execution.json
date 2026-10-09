@@ -43,21 +43,14 @@
       "agent": "codex",
       "implementation_configs": [
         {
-          "implementation_key": "codex.worker-profile",
-          "codec_version": 2,
-          "payload": {
-            "executable": "codex.exe",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "xhigh"
-          }
-        },
-        {
           "implementation_key": "orca.worker-profile",
           "codec_version": 1,
           "payload": {
             "executable": "orca.exe",
             "shell": "powershell.exe",
-            "wait_timeout": "15m"
+            "wait_timeout": "15m",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "xhigh"
           }
         }
       ]
@@ -69,21 +62,14 @@
       "agent": "codex",
       "implementation_configs": [
         {
-          "implementation_key": "codex.worker-profile",
-          "codec_version": 2,
-          "payload": {
-            "executable": "codex.exe",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "medium"
-          }
-        },
-        {
           "implementation_key": "orca.worker-profile",
           "codec_version": 1,
           "payload": {
             "executable": "orca.exe",
             "shell": "powershell.exe",
-            "wait_timeout": "15m"
+            "wait_timeout": "15m",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium"
           }
         }
       ]
@@ -95,21 +81,14 @@
       "agent": "codex",
       "implementation_configs": [
         {
-          "implementation_key": "codex.worker-profile",
-          "codec_version": 2,
-          "payload": {
-            "executable": "codex.exe",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "high"
-          }
-        },
-        {
           "implementation_key": "orca.worker-profile",
           "codec_version": 1,
           "payload": {
             "executable": "orca.exe",
             "shell": "powershell.exe",
-            "wait_timeout": "15m"
+            "wait_timeout": "15m",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "high"
           }
         }
       ]

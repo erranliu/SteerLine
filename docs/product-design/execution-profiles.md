@@ -4,7 +4,7 @@
 
 所有项目共享 `<STEERLINE_HOME>/execution.json`，全局文件格式2，每个方案仍有独立host/agent/model/reasoning_effort及实现codec。多套执行方案与默认方案选择保留。项目负责仓库、Git/PR provider、任务与publication_policy，不再提供权限模式或附加需求。
 
-复制[全局示例](../../examples/execution.json)到execution.json，按机器环境修改；项目文件见[项目示例](../../examples/config.json)。Codex profile codec格式2只接受executable、model、reasoning_effort。旧args/profile/windows_sandbox及审批覆盖即使为空也拒绝；Git/PR executable/argv与Orca shell/连接设置继续保留。local的effort省略时仍为high；Orca的model/effort省略时保留原生默认语义。
+复制[全局示例](../../examples/execution.json)到execution.json，按机器环境修改；项目文件见[项目示例](../../examples/config.json)。Codex profile codec格式2只接受executable、model、reasoning_effort。旧args/profile/windows_sandbox及审批覆盖即使为空也拒绝；Git/PR executable/argv与Orca连接设置继续保留。local的effort省略时仍为high；Orca的model/effort省略时保留原生默认语义。
 
 ```json
 {
@@ -22,11 +22,19 @@
 
 ## Windows 本地 Codex 沙箱
 
-Windows local及本机Orca托管Codex采用唯一原生方案：workspace-write、windows.sandbox=unelevated、approval_policy=on-request、approvals_reviewer=auto_review、工具网络allow。adapter生成这些设置；全局或项目不能覆盖。Orca/Codex受管命令使用独立原生进程与同一设置，首轮、反馈和恢复保持原绑定。
+Windows local Codex采用唯一原生方案：workspace-write、windows.sandbox=unelevated、approval_policy=on-request、approvals_reviewer=auto_review、工具网络allow。adapter生成这些设置；全局或项目不能覆盖。local Codex受管命令使用独立原生进程与同一设置，首轮、反馈和恢复保持原绑定。
 
 候选工作区及必要Git对象/refs/logs/自身worktree admin根由现有资源准备一次绑定；隐式TMP/TEMP及slash tmp写入仍排除，不授权项目总目录、共同Git总目录或兄弟候选目录。普通操作在原生沙箱内执行；需要批准时交给原生自动reviewer。审核拒绝、不可用或启动失败沿原反馈/环境阻断报告原因，不增加SteerLine审批器、人工审批队列、自动修复、elevated或full-access回退。自动审核不保证全部放行，也不能批准Windows UAC。
 
 SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改写、ACL修复或通用缓存发现。依据[原生自动审核](https://learn.chatgpt.com/docs/sandboxing/auto-review)与[Windows沙箱](https://learn.chatgpt.com/docs/windows/windows-sandbox)；本机验收见[第二批记录](../acceptance/archive/completed/product-simplification-02-configuration/README.md)。其他agent、非Windows和远端不套用不适用的参数，沿原adapter支持范围及目标/回执检查。
+
+## 本机 Orca 原生权限
+
+本机 `host: orca` 的 `agent` 是 Orca 原生 launcher 选择值；SteerLine 不包含按该值分支的特定模型引擎代码。仅接受 `orca.worker-profile` 格式1，payload 包含 Orca executable、超时及通用 model / reasoning_effort 偏好，不接受 local Codex codec 或权限字段。后续新增受 Orca 支持的 agent 时复用同一原生流程；实际可用能力以 Orca 回执为准。
+
+权限统一由 Orca 的 Agent Permissions 设置管理。当前跑通阶段在 Orca 中选择 Terminal 模式和 YOLO；SteerLine 不覆盖 native launcher 参数、不创建自己的审批层。首次 `worker-start` 传 agent/model/effort，续轮只传原 terminal，停止和释放均使用原 Dispatch。组合启动失败时保留已有副作用并按原生身份回收，未知回执只对账原请求。
+
+规范正文采用 [Orca通用输出材料协议](../spec/orca-native-worker.spec.md)，同时要求原 Dispatch 真实结算；完整材料冻结在应用运行目录，原生释放之后查询仍可用。实际启动与权限的 [live 验证记录](../acceptance/orca-native-worker.md) 独立登记，失败不能视为已跑通。
 
 ## 项目策略与配置受理
 

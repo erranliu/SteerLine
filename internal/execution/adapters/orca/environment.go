@@ -4,81 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-// InspectAgentInput qualifies only a new input, not readiness or settlement.
-// A stale agentIdentity can outlive Codex and refer to its parent shell. Keep
-// source limitations explicit rather than injecting into a startup trust menu.
+// InspectAgentInput relies on Orca's agent-independent TUI readiness gate.
 func InspectAgentInput(ctx context.Context, call MetaCall, identity TerminalIdentity) (executionbackend.HostFact, bool, error) {
 	fact, err := ObserveHost(ctx, call, identity)
 	if err != nil || fact.Reason != "" {
 		return fact, false, err
 	}
-	envelope, err := call(ctx, "terminal", "read", "--terminal", identity.Handle, "--screen", "--json")
+	result, err := call(ctx, "terminal", "wait", "--terminal", identity.Handle, "--for", "tui-idle", "--timeout-ms", "1", "--json")
 	if err != nil {
 		return fact, false, err
 	}
-	var result struct {
-		Terminal struct {
-			Handle string   `json:"handle"`
-			Source string   `json:"source"`
-			Tail   []string `json:"tail"`
-		} `json:"terminal"`
+	var observed struct {
+		Wait struct {
+			Satisfied bool `json:"satisfied"`
+		} `json:"wait"`
 	}
-	if json.Unmarshal(envelope.Payload, &result) != nil || envelope.RuntimeID != identity.RuntimeID || result.Terminal.Handle != identity.Handle {
-		return fact, false, errors.New("agent input observation changed original identity")
+	if json.Unmarshal(result.Payload, &observed) != nil || result.RuntimeID != identity.RuntimeID {
+		return fact, false, errors.New("Orca input readiness changed its runtime identity")
 	}
-	fact.Source = "orca.terminal.read.input-screen"
-	if result.Terminal.Source == "screen" {
-		text := strings.ToLower(strings.Join(result.Terminal.Tail, "\n"))
-		if strings.Contains(text, "trust and continue") && strings.Contains(text, "quit") {
-			fact.Reason, fact.Confidence, fact.Detail = "host_wait", "suspected", "原 Codex 显示目录信任菜单；请在原生界面处理。"
-			return fact, false, nil
-		}
-		busy := strings.Contains(text, "esc to interrupt") || strings.Contains(text, "working (") || strings.Contains(text, "running hook")
-		codexChrome := strings.Contains(text, "? for shortcuts") || strings.Contains(text, "gpt-")
-		for _, line := range result.Terminal.Tail {
-			if !busy && codexChrome && strings.HasPrefix(strings.TrimSpace(line), "› ") {
-				return fact, true, nil
-			}
-		}
+	if !observed.Wait.Satisfied {
+		fact.Reason, fact.Confidence = "agent_input_unverified", "unverified"
 	}
-	fact.Reason, fact.Confidence, fact.Detail = "agent_input_unverified", "unverified", "原 terminal 的当前 Codex 输入入口尚未核实；不会向 shell 或启动菜单注入。"
-	return fact, false, nil
-}
-
-// ObserveTurnRunning reports only explicit busy markers in the original Codex screen.
-// A Dispatch acceptance or an idle prompt alone is not a turn-start receipt.
-func ObserveTurnRunning(ctx context.Context, call MetaCall, identity TerminalIdentity) (bool, error) {
-	fact, err := ObserveHost(ctx, call, identity)
-	if err != nil {
-		return false, err
-	}
-	if fact.Reason != "" {
-		return false, &PlatformError{Code: "identity_mismatch", Diagnostic: fact.Reason}
-	}
-	envelope, err := call(ctx, "terminal", "read", "--terminal", identity.Handle, "--screen", "--json")
-	if err != nil {
-		return false, err
-	}
-	var result struct {
-		Terminal struct {
-			Handle string   `json:"handle"`
-			Source string   `json:"source"`
-			Tail   []string `json:"tail"`
-		} `json:"terminal"`
-	}
-	if json.Unmarshal(envelope.Payload, &result) != nil || envelope.RuntimeID != identity.RuntimeID || result.Terminal.Handle != identity.Handle {
-		return false, errors.New("turn-start observation changed original terminal identity")
-	}
-	if result.Terminal.Source != "screen" {
-		return false, nil
-	}
-	text := strings.ToLower(strings.Join(result.Terminal.Tail, "\n"))
-	return strings.Contains(text, "esc to interrupt") || strings.Contains(text, "working (") || strings.Contains(text, "running hook"), nil
+	return fact, observed.Wait.Satisfied, nil
 }
 
 // ObserveHost keeps exit and waiting facts even when sending is impossible.

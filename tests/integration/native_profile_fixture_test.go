@@ -59,9 +59,15 @@ func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworke
 	profile := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
 	payload, err := codexworker.EncodeProfileConfig(worker)
 	require(t, err)
-	profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload})
+	if c.Host != "orca" {
+		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload})
+	}
 	if terminal != nil {
-		payload, err = orcaworker.EncodeProfileConfig(*terminal)
+		native := *terminal
+		if c.Host == "orca" {
+			native.Model, native.ReasoningEffort = worker.Model, worker.ReasoningEffort
+		}
+		payload, err = orcaworker.EncodeProfileConfig(native)
 		require(t, err)
 		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
 	}

@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -107,10 +106,10 @@ func TestConfigRejectsRetiredBeadsExecutionFields(t *testing.T) {
 	}
 }
 
-func TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority(t *testing.T) {
+func TestOrcaNativeProfileKeepsFrozenAuthority(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	profile := testExecutionProfile(t, "orca", "Orca", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
-	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "medium"})
+	payload, err := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m", Model: "gpt-6-luna", ReasoningEffort: "medium"})
 	require(t, err)
 	profile.ImplementationConfigs[0].Payload = payload
 	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "orca")
@@ -123,7 +122,7 @@ func TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority(t *testing.T) {
 	require(t, config.ResolveIdentity(context.Background()))
 	selected, accepted, err := config.ResolveExecutionProfile("orca", "")
 	require(t, err)
-	if err := validateTerminalConfig(context.Background(), selected, config.ExecutionDirectory); err != nil || terminalReadinessRequired(selected, config.ExecutionDirectory) != (runtime.GOOS == "windows") {
+	if err := validateTerminalConfig(context.Background(), selected, config.ExecutionDirectory); err != nil || terminalReadinessRequired(selected, config.ExecutionDirectory) {
 		t.Fatalf("fixed native launch lost admission or readiness: %v", err)
 	}
 	fixed := accepted.Freeze(config.ExecutionDirectory, config.Identity())

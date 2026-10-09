@@ -171,20 +171,8 @@ func (o *nativeLifecycleObserver) observe(ctx context.Context) {
 				return
 			}
 		}
-		if turn != nil && !turn.RelayReported {
-			if !o.reportRelay(ctx, turn) {
-				return
-			}
-		}
-		if !o.readinessTurn() && !o.started() {
-			running, err := ObserveTurnRunning(ctx, o.lifecycle.client.MetaCall, workerTerminalIdentity(o.snapshot.Ref.External))
-			if err != nil {
-				o.done <- nativeCallError(err)
-				return
-			}
-			if running && !o.ensureStarted(ctx) {
-				return
-			}
+		if turn != nil && turn.Started && !o.started() && !o.ensureStarted(ctx) {
+			return
 		}
 		if turn == nil || turn.DoneMessageID == "" {
 			terminal, err := ShowTerminal(ctx, o.lifecycle.client.MetaCall, o.snapshot.Ref.External.Terminal)
@@ -260,50 +248,6 @@ func (o *nativeLifecycleObserver) processInbox(ctx context.Context) error {
 	return nil
 }
 
-func (o *nativeLifecycleObserver) reportRelay(ctx context.Context, turn *NativeTurnState) bool {
-	if turn == nil || turn.DispatchID == "" || o.snapshot.Workspace.Path == "" {
-		return true
-	}
-	path, err := RelayPath(o.snapshot.Workspace.Path, o.snapshot.Session.WorkflowRunID, turn.TurnID)
-	if err != nil {
-		o.done <- err
-		return false
-	}
-	relay, err := ReadDoneRequest(path, o.snapshot.Workspace.Path, o.snapshot.Session.WorkflowRunID, turn.TurnID, turn.TaskID, turn.DispatchID)
-	if err != nil {
-		o.done <- err
-		return false
-	}
-	if relay == nil {
-		return true
-	}
-	if !o.readinessTurn() && !o.ensureStarted(ctx) {
-		return false
-	}
-	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleReportCompletion,
-		Input: executionbackend.LifecycleInput{Completion: &executionbackend.CompletionInput{TurnID: turn.TurnID,
-			Outcome: relay.Outcome, Subject: relay.Subject, Body: relay.Body}}}
-	if err := candidate.Validate(); err != nil {
-		o.done <- err
-		return false
-	}
-	fact := executionbackend.EventFact{Kind: executionbackend.EventStatus, Source: "native_orca_relay", SourceEventID: "relay:" + turn.TurnID,
-		Matched: true, LastMessage: relay.Subject}
-	envelopes, err := o.lifecycle.targetEnvelope(o.snapshot, o.snapshot.Ref.Target, o.snapshot.Ref.External, o.state)
-	if err != nil {
-		o.done <- err
-		return false
-	}
-	event := executionbackend.LifecycleEvent{Fact: fact, Implementation: envelopes, Candidate: &candidate,
-		Summary: "native Orca completion report is ready", Kind: "execution", Status: "completion_report",
-		Title: "Worker completion report", Persisted: make(chan error, 1), Processed: make(chan error, 1)}
-	if !o.sendAndWait(ctx, event) {
-		return false
-	}
-	turn.RelayReported = true
-	return true
-}
-
 func (o *nativeLifecycleObserver) started() bool {
 	return o.snapshot.Session.CurrentTurnID == o.turn.TurnID
 }
@@ -326,6 +270,10 @@ func (o *nativeLifecycleObserver) ensureStarted(ctx context.Context) bool {
 }
 
 func (o *nativeLifecycleObserver) emitSettlement(ctx context.Context, turn NativeTurnState) bool {
+	if err := o.lifecycle.freezeOriginalOutput(ctx, o.snapshot, turn); err != nil {
+		o.done <- err
+		return false
+	}
 	envelopes, err := o.lifecycle.targetEnvelope(o.snapshot, o.snapshot.Ref.Target, o.snapshot.Ref.External, o.state)
 	if err != nil {
 		o.done <- err

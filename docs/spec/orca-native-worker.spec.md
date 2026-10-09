@@ -1,6 +1,6 @@
 # Spec：本机 Orca 原生通用 worker 与权限委托
 
-任务 ID：86；任务名称：本机 Orca 原生通用 worker 与权限委托。配套 [Plan](orca-native-worker.plan.md)、[草稿](../roadmap/drafts/orca-native-worker.md)和[专属验收](../acceptance/orca-native-worker.md)。用户在 2026-10-09 本会话确认以下方案范围，并明确本轮只调整规划文档，不创建执行聊天或启动实现。
+变更：本机 Orca 原生通用 worker 与权限委托。历史预留 ID 86 仅追溯，已按用户最新指令退出 roadmap；由当前聊天直接实现，不作为 #84 的前置，不创建新的执行聊天。配套 [Plan](orca-native-worker.plan.md)、[调整记录](../architecture/orca-native-worker.md)和[专属验收](../acceptance/orca-native-worker.md)。#84 在途执行使用其原固定版本，本变更不改写其 Spec/Plan 或阻塞交付。
 
 ## 目标与所有权
 
@@ -27,13 +27,13 @@ SteerLine 本机 Orca 路径只依赖 Orca 的原生启动、worker、消息、�
 
 ## 就绪、观察与结果
 
-移除 SteerLine 本机 Orca 的 Codex 沙箱探针、特定 TUI 字符匹配和专属工具证据门槛。最小就绪由 Orca 原生 worker/输入回执核验；真实工作区操作在产品自动场景验证，不增加独立模型准备轮次。
+移除 SteerLine 本机 Orca 的 Codex 沙箱探针、特定 TUI 字符匹配、文件IPC relay和专属工具证据门槛。最小就绪由 Orca 原生 worker/输入回执核验；真实工作区操作在产品自动场景验证，不增加独立模型准备轮次。
 
-统一读取 Orca worker-show / worker-read 与 Run inbox 的事实。原生 agentWait、连接、状态、输入接受和轮次启动分别表达，缺失字段保持未知。final/结构化结果通过 Orca 统一 transcript/结算材料采集，不能直接访问 Codex/Claude 原始日志；terminal tail 不当成完整 final。
+统一读取 Orca worker-show / worker-read 与 Run inbox 的事实。原生 agentWait、连接、状态、输入接受和轮次启动分别表达，缺失字段保持未知。当前 Orca 通用 transcript 缺少严格 final 标记。采用显式通用输出材料：worker 在工作区 .steerline-output/<workflow>/<turn>.json 写入原 workflow/turn/Orca Task/Dispatch 和完整 body，之后通过 Orca 原生 worker_done 结算。中心以原 Dispatch 身份、实际结算和完整材料建立应用定义的规范结果来源，证据标记 worker_declared，不声称 Orca 原生 phase 已保留，也不据此认定工具成功或 TaskDelivery。材料限长、严格格式、原身份及未修改正文；原结算时将正文及绑定摘要冻结在应用运行目录，资源释放后仍查询该不可变材料，缺失材料明确诊断而不宣告规范结果完整；不直接访问具体 agent 的原始日志，terminal tail 不当成完整 final。
 
 worker_done 由 worker 使用 Orca 原生消息接口发送；不再为了 Codex Windows 沙箱 IPC 限制注入 SteerLine 文件 relay。中心继续核验原 Task/Dispatch 和真实结算，再由既有 worker 流程及 Git/PR/provider 核验业务产物。worker_done、轮次结束或自然语言成功均不直接完成 TaskDelivery。当前持续 worker 的规范 final 采集须可用，未来 #84 的结构化报告消费该通用来源；本任务不提前实现其分步流程。
 
-反馈、停服恢复、原身份验证、退出及资源清理保持已有通用业务要求。监督 worker 的停止、结算后释放与保留分别使用 Orca worker-stop / worker-release / worker-retain 的原生能力；绑定原 Dispatch、请求和资源身份，未知回执沿原请求核实。不能把既有 terminal-close 当作所有 worker 的停止/释放证明。原目标不可核实时阻断，不能创建替代会话或把静默视为成功。特定 agent 的启动菜单、工具失败和会话解析归 Orca；SteerLine 保存 Orca 给出的诊断。
+反馈、停服恢复、原身份验证、退出及资源清理保持已有通用业务要求。监督 worker 的停止与结算后释放分别使用 Orca worker-stop / worker-release 的原生能力；绑定原 Dispatch、请求和资源身份，未知回执沿原请求核实。不能把既有 terminal-close 当作所有 worker 的停止/释放证明。原目标不可核实时阻断，不能创建替代会话或把静默视为成功。特定 agent 的启动菜单、工具失败和会话解析归 Orca；SteerLine 保存 Orca 给出的诊断。
 
 ## 验收
 

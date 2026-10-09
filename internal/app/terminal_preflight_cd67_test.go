@@ -118,33 +118,19 @@ func TestLocalObservationRejectsReusedPIDIdentity(t *testing.T) {
 	}
 }
 
-func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
+func TestOrcaPreflightDoesNotProbeAgentExecutable(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
 	stateDir := t.TempDir()
 	missing := filepath.Join(stateDir, "missing-worker.exe")
 	c.Host, c.Agent = "orca", "codex"
 	c.PublicationPolicy = executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
 	c.PR.Query = executionbackend.Command{Executable: os.Args[0]}
-	terminal := &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--terminal-fixture", stateDir}, Shell: "powershell.exe", WaitTimeout: "5s"}
-	applyProfile := func(worker codexworker.ProfileConfig) {
-		profile := testExecutionProfile(t, "terminal", "Terminal", "orca", "codex", worker, terminal)
-		c.ExecutionProfiles, c.DefaultExecutionProfile = []ExecutionProfile{profile}, profile.ID
-		c = c.ApplyExecutionProfile(profile)
-	}
-	applyProfile(codexworker.ProfileConfig{Executable: missing})
-	if err := Preflight(context.Background(), &c, false); err == nil || !strings.Contains(err.Error(), "missing-worker.exe") {
-		t.Fatalf("native policy mapping did not require its fixed tool: %v", err)
-	}
-	// A fixed model actually requires the configured local tool. Probe the
-	// production registration so an unrelated profile-format error cannot
-	// satisfy the rejection assertion.
-	applyProfile(codexworker.ProfileConfig{Executable: missing, Model: "fixture-fixed-model", ReasoningEffort: "high"})
-	require(t, c.ValidateProfiles())
-	entry, err := c.ExecutionDirectory.Resolve(c.executionConfig())
-	require(t, err)
-	executionConfig := c.executionConfig()
-	_, err = entry.Backend(executionConfig).Probe(context.Background(), entry.Target(executionConfig), executionbackend.AgentSpec{Name: c.Agent})
-	if err == nil || !strings.Contains(err.Error(), "missing-worker.exe") {
-		t.Fatalf("fixed local tool was not required by the native backend: %v", err)
+	terminal := &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--terminal-fixture", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
+	profile := testExecutionProfile(t, "terminal", "Terminal", "orca", "codex", codexworker.ProfileConfig{Executable: missing, Model: "fixture-model", ReasoningEffort: "high"}, terminal)
+	c.ExecutionProfiles, c.DefaultExecutionProfile = []ExecutionProfile{profile}, profile.ID
+	c = c.ApplyExecutionProfile(profile)
+	require(t, Preflight(context.Background(), &c, false))
+	if len(profile.ImplementationConfigs) != 1 || profile.ImplementationConfigs[0].ImplementationKey != orcaworker.ProfileCodecKey {
+		t.Fatal("Orca preflight retained agent-owned executable configuration")
 	}
 }

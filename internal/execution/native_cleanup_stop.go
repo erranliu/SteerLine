@@ -44,7 +44,15 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes
 	requestOp.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOp, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
 	records := s.records
-	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config, s.runtime.Directory), ref: *op.Ref}, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
+	entry, err := registrationFor(fixed.config, s.runtime.Directory)
+	if err != nil {
+		return err
+	}
+	var reconciliation executionbackend.LifecyclePort = stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config, s.runtime.Directory), ref: *op.Ref}
+	if entry.HostManagedPermissions {
+		reconciliation = lifecycle
+	}
+	err = s.dispatchLifecycleEffect(ctx, run, reconciliation, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}
@@ -137,6 +145,9 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 	requestOperation.Action = string(executionbackend.LifecycleStopExecution)
 	requestOperation.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOperation, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
+	if entry.HostManagedPermissions {
+		stopper = nil
+	}
 	port := lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: worker.proc, stopper: stopper, operation: op}
 	err = s.dispatchLifecycleEffect(ctx, r, port, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
@@ -197,6 +208,37 @@ func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, err
 			return false, err
 		}
 		ref = &loaded
+	}
+	entry, resolveErr := registrationFor(config, s.runtime.Directory)
+	if resolveErr != nil {
+		return false, resolveErr
+	}
+	if entry.HostManagedPermissions {
+		lifecycle, fixed, err := s.lifecycleForRun(run)
+		if err != nil {
+			return false, err
+		}
+		snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+		if err != nil {
+			return false, err
+		}
+		requestOp := op
+		requestOp.Action = string(executionbackend.LifecycleStopExecution)
+		requestOp.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *ref}
+		request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOp, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
+		receipt, _, err := lifecycle.Reconcile(context.Background(), request)
+		if err == nil {
+			err = receipt.ValidateFor(request)
+		}
+		op.Status, op.Diagnostic, op.UpdatedAt = receipt.Disposition, receipt.Diagnostic, now()
+		if err != nil || op.Status != executionbackend.OperationConfirmed {
+			op.Status = executionbackend.OperationUnknown
+			if err != nil {
+				op.Diagnostic = err.Error()
+			}
+		}
+		saveErr := s.commitExecutionOperation(run, op, expected)
+		return op.Status == executionbackend.OperationConfirmed && saveErr == nil, errors.Join(err, saveErr)
 	}
 	backend := BackendFor(config, s.runtime.Directory)
 	obs, err := backend.Observe(context.Background(), *ref)

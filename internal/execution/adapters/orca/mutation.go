@@ -6,7 +6,6 @@ import (
 	"errors"
 	"path/filepath"
 	"strings"
-	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
@@ -105,29 +104,6 @@ func NoAgentDetected(result Result) bool {
 		Reason string `json:"reason"`
 	}
 	return json.Unmarshal(result.ErrorData, &rejected) == nil && rejected.Reason == "no_agent_detected"
-}
-
-func DispatchToAgent(ctx context.Context, call MetaCall, taskID, runID, coordinator string, identity executionbackend.ProcessIdentity, path, branch, agent string, timeout time.Duration, managed bool, coordinatorIdentity executionbackend.ProcessIdentity, repository string) (Result, error) {
-	deadline := time.Now().Add(timeout)
-	for {
-		result, err := Dispatch(ctx, call, taskID, identity.Terminal, runID, coordinator)
-		if err == nil || !NoAgentDetected(result) || managed || time.Now().After(deadline) {
-			return result, err
-		}
-		if err := VerifyAgentTerminal(ctx, call, identity, path, branch, agent); err != nil {
-			return result, err
-		}
-		if coordinatorIdentity.Terminal != "" {
-			if err := VerifyCoordinatorTerminal(ctx, call, coordinatorIdentity, repository); err != nil {
-				return result, err
-			}
-		}
-		select {
-		case <-ctx.Done():
-			return result, ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
 }
 
 func FeedbackDispatchInactive(err error) bool {

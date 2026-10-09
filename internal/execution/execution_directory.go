@@ -75,12 +75,14 @@ type ExecutionRegistration struct {
 	ProfileKey            string
 	WorkspaceBranchPrefix string
 	LocalWorkspace        bool
-	ProfileCodecKeys      []string
-	QuestionCodecKey      string
-	QuestionCodecVersion  int
-	Host                  string
-	Backend               func(Config) executionbackend.ExecutionBackend
-	Target                func(Config) executionbackend.ExecutionTarget
+	// HostManagedPermissions delegates launch permissions to the native host; no client policy roots are bound.
+	HostManagedPermissions bool
+	ProfileCodecKeys       []string
+	QuestionCodecKey       string
+	QuestionCodecVersion   int
+	Host                   string
+	Backend                func(Config) executionbackend.ExecutionBackend
+	Target                 func(Config) executionbackend.ExecutionTarget
 
 	Lifecycle                 func(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error)
 	ValidateProfileSelection  func(string, map[string][]byte) error
@@ -195,9 +197,15 @@ func (directory *ExecutionDirectory) Resolve(c Config) (ExecutionRegistration, e
 	}
 	key, ok := directory.routes[directoryRoute(c.hostName(), c.agentName())]
 	if !ok {
+		key, ok = directory.routes[directoryRoute(c.hostName(), "*")]
+	}
+	if !ok {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", c.hostName(), c.agentName())}
 	}
 	entry := directory.entries[key]
+	if entry.Key.Agent == "*" {
+		entry.Key.Agent = c.agentName()
+	}
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
 	return entry, nil
@@ -209,7 +217,15 @@ func (directory *ExecutionDirectory) ResolveIdentity(key ExecutionRegistrationKe
 	}
 	entry, ok := directory.entries[key]
 	if !ok {
+		generic := key
+		generic.Agent = "*"
+		entry, ok = directory.entries[generic]
+	}
+	if !ok {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "no implementation is registered for the fixed execution identity"}
+	}
+	if entry.Key.Agent == "*" {
+		entry.Key.Agent = key.Agent
 	}
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
@@ -237,6 +253,9 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 	}
 	entryKey, ok := directory.routes[directoryRoute(host, agent)]
 	if !ok {
+		entryKey, ok = directory.routes[directoryRoute(host, "*")]
+	}
+	if !ok {
 		return nil, nil, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", host, agent)}
 	}
 	entry := directory.entries[entryKey]
@@ -249,6 +268,9 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 	data := make([]executionbackend.ImplementationDataEnvelope, 0, len(inputs))
 	display := []string{}
 	for _, input := range inputs {
+		if !slices.Contains(entry.ProfileCodecKeys, input.ImplementationKey) {
+			return nil, nil, fmt.Errorf("implementation codec %q is not owned by the selected host", input.ImplementationKey)
+		}
 		codec, exists := directory.codecs[input.ImplementationKey]
 		if !exists || input.CodecVersion != codec.Version || seen[input.ImplementationKey] {
 			return nil, nil, fmt.Errorf("unknown, duplicate or unsupported implementation codec %q/%d", input.ImplementationKey, input.CodecVersion)
