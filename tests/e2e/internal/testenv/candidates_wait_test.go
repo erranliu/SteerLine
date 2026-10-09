@@ -7,7 +7,7 @@ import (
 )
 
 func TestCandidatePublicationFailureRequiresCompletedOriginalFeedback(t *testing.T) {
-	w := executionmodel.WorkflowRunRecord{Status: "waiting_input"}
+	w := executionmodel.WorkflowRunRecord{Status: "waiting_decision"}
 	e := executionmodel.ExecutionRecord{Status: "idle", CurrentCommandID: "feedback", CurrentTurnID: "turn", LastStoppedTurnID: "turn"}
 	if !candidatePublicationEndedWithoutPR(w, e, "feedback") {
 		t.Fatal("completed original feedback without PR was not diagnosed")
