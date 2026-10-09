@@ -11,6 +11,8 @@
 | 45 | 本机客户端协议与历史查询 | 无 | 待执行 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 未验；[记录](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
+| 87 | Worker 停机对账与恢复一致性修复 | 无未交付业务硬前置；消费当前已合入 worker 基线 | 执行中 | [Spec](../spec/worker-stop-recovery.spec.md) · [Plan](../spec/worker-stop-recovery.plan.md) | 用户于 2026-10-09 明确授权本聊天直接执行，不经 roadmap-runner；WSR-A1–A8 待验；[专属记录](../acceptance/worker-stop-recovery.md) |
+
 ## 推进顺序
 
 1. #83 已合入；剩余按 #84 → #45 → #44 串行推进。启动时使用已提交且执行工作区可读取的 Spec/Plan commit 和路径，并核对最新默认主干；本次纳入清单不等于已经启动。
@@ -50,3 +52,5 @@
 2026-10-09，round 4 局部修复生产 commit `9aeed603d46bf7d566b2daf183855dc3c8316fc4` 拒绝 SQLite DB/WAL/SHM/journal 共享硬链接，Windows 真实 link count 在 app/host/reader/writer SQLite 打开前核验。最终干净候选 `92eaf9b8163f71be0554265ddba85ee0708855ee`（仅场景时点调整，tree `28f8395f90b71d3f8a7d0dc139c43d17dbbd2345`）完整 L3 runtime 1 test/0 skip/262.63 秒通过并清理；六条产品 CLI/debug wrapper 硬链接负例在副作用前明确拒绝，哨兵与全部 SQLite 快照逐次不变，普通单链接仍可用。`9aeed603` 定向 9 个顶层测试、L1 12 groups/426 tests/0 skip、Linux/amd64 编译通过；之后生产 Go 无变化，回归精确映射复用；旧 `f838dcf` delivery 只保留原范围。首轮 runtime 的运行中 installed DB 字节比较失败及清理证据保留，新的独立目录复验通过。LI3-A 已按新证据修正为已验收；[明细](../acceptance/local-runtime-isolation.md#2026-10-09-round-4-局部修复与精确候选复验)。PR #247 仍未合并，#83 执行中并等待新独立复审，不释放后继。
 
 2026-10-09，第五轮独立 reviewer `/root/review83_round5` 未发现新产品问题或固定需求遗漏，协调核对候选、实际生产路径和精确验证映射并在 [PR 评论](https://github.com/erranliu/SteerLine/pull/247#issuecomment-6065781425)登记。GitHub 确认 [PR #247](https://github.com/erranliu/SteerLine/pull/247) 在北京时间 2026-10-09 01:50:18 合并，审核 head `2ce81db45d7bff32a1ffb6134210995529f01b84`，merge commit `f7c6f1d05c78172fe8133f7c1763718df0165fe1`，成果已进入默认主干。#83 实现完成；自动验收 LI1-A–LI4-A 已通过，无任务人工项。一期组合/24小时/同构建恢复签收仍待安排，未宣称完成。可选文件符号链接负例未运行，复审临时探针清理被自动审批拒绝而残留三个合成文件的事实分别见[验收明细](../acceptance/local-runtime-isolation.md#2026-10-09-交付结算与独立复审)。本结算记录进入主干后按原序启动#45；不提前启动等待#45的#44，也不扩大到草稿任务。
+
+2026-10-09，用户明确授权本聊天直接执行 #87，不经 roadmap-runner。沿用原预留身份及本轮 worker 停服行为/统一恢复 Spec/Plan；原生事实由 worker 实现核实，应用只消费规范事实。无未交付硬前置，当前主干包含 #84 代码基线（PR #253）；本任务不改其历史验收汇总。启动时提交并固定文档版本，分支 codex/worker-stop-recovery，代码起点 d8d66d6c；安装数据与服务不纳入修改范围。
