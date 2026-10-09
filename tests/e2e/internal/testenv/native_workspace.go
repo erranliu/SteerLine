@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
@@ -109,11 +111,33 @@ func (p *Project) assertNativeWorkspaceOwned(w native.OrcaWorktree) {
 	}
 }
 
-func (p *Project) NativeRemoveWorktree(w native.OrcaWorktree) {
+func (p *Project) NativeRemoveWorktree(w native.OrcaWorktree) bool {
 	p.assertNativeWorkspaceOwned(w)
 	s := p.Scenario
 	_, err := p.orca(s.Context, "terminal", "close", "--worktree", "id:"+w.ID, "--all", "--json")
 	s.Must(err)
+	// Orca removes asynchronously and may clean its administrative directory
+	// before the final Git query returns. Observe the real directory throughout
+	// this owned removal instead of requiring it to remain after completion.
+	trash := filepath.Join(filepath.Dir(filepath.FromSlash(w.Path)), native.OrcaWorktreeTrashDirectory)
+	var observed atomic.Bool
+	stop, done := make(chan struct{}), make(chan struct{})
+	go func() {
+		defer close(done)
+		ticker := time.NewTicker(5 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			if info, err := os.Stat(trash); err == nil && info.IsDir() {
+				observed.Store(true)
+			}
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	defer func() { close(stop); <-done }()
 	_, err = p.orca(s.Context, "worktree", "rm", "--worktree", "id:"+w.ID, "--force", "--json")
 	s.Must(err)
 	s.Wait("native worktree removal", func() (bool, error) {
@@ -125,4 +149,6 @@ func (p *Project) NativeRemoveWorktree(w native.OrcaWorktree) {
 			s.t.Fatal("native removal retained its Git worktree registration")
 		}
 	}
+	s.Must(controlled.Write(filepath.Join(s.Output, "native-removal-observation.json"), map[string]any{"worktree_id": w.ID, "path": w.Path, "trash": trash, "trash_observed": observed.Load()}))
+	return observed.Load()
 }

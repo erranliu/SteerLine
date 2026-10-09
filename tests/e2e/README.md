@@ -34,7 +34,7 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L3 controlled | `delivery.basic` | 验证 A 唯一 Delivery 解锁 B；B dependency-ready 且未创建 WorkflowRun |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
 | L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、console/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
-| L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核实真实 trash、CLI/控制台查询、重启及无关任务启动 |
+| L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；在 owned 删除期间观察真实 trash（允许原生异步清理后消失）、CLI/控制台查询、重启及无关任务启动 |
 | L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
 
@@ -72,11 +72,11 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 
-受控场景业务上限 5 分钟，真实场景 10 分钟；多轮 `candidates` 组为 30 分钟（多个真实业务回合、Orca readiness 和自动审核，覆盖双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒，原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
+一般受控场景业务上限 5 分钟；安装/调试隔离包含两次构建、双服务与两条分步工作流，单独为 10 分钟。真实场景 10 分钟；多轮 `candidates` 组为 30 分钟（多个真实业务回合、Orca readiness 和自动审核，覆盖双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒，原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
 
 ## 真实环境
 
-L3 `native` 环境仅要求本机 Git、运行中的 Orca 及其 CLI，不复制 Codex 认证、不传 `--agent` 或业务 prompt，也不校验模型 usage。工作区操作使用真实 Orca，任务 worker 和 PR provider 使用 controlled helper。创建/删除回执、实际 trash、原项目/数据库/执行身份、删除后查询和重启均须核实；不能创建同名目录冒充原生删除。此环境仅用于 L3，不能替代 L2 的真实交付链路。覆盖和结果见 [Orca E2E 记录](../../docs/acceptance/orca-e2e-coverage.md)。
+L3 `native` 环境仅要求本机 Git、运行中的 Orca 及其 CLI，不复制 Codex 认证、不传 `--agent` 或业务 prompt，也不校验模型 usage。工作区操作使用真实 Orca，任务 worker 和 PR provider 使用 controlled helper。创建/删除回执、删除期间观察到的实际 trash、原项目/数据库/执行身份、删除后查询和重启均须核实；不能创建同名目录冒充原生删除。此环境仅用于 L3，不能替代 L2 的真实交付链路。覆盖和结果见 [Orca E2E 记录](../../docs/acceptance/orca-e2e-coverage.md)。
 
 L2/L3与controlled/live使用当前固定Windows Codex方案：workspace-write、unelevated、on-request、auto_review、network allow。真实执行仍固定gpt-6-luna/medium。隔离Codex home只复制认证并写入本次仓库信任，不复制sandbox账号或全局项目配置，不需要管理员初始化。受管命令由adapter生成，用户不配置raw args或权限覆盖；恢复核对原冻结配置、精确根和资源。worker不继承启动它的Codex App会话权限。
 
