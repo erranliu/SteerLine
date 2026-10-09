@@ -7,7 +7,7 @@
 | 项目 | 结果 | 已覆盖行为与证据 |
 | --- | --- | --- |
 | API1 | 已验收 | 真实 listener 上缺/错凭证、错 Host/Origin、错路由项目/信封项目/实例及轮换后旧凭证均拒绝；原传输/control/SQLite 请求和 revision/paused facts 不变。轮换后的新凭证成功执行真实 pause/resume，控制 revision 只增加一次。非回环源由 loopback-only 绑定及 `TestAPIIdentityAndAuthentication` 中源地址拒绝断言覆盖。 |
-| API2 | 验收失败 | `GET /presentation` 返回真实非默认 profile；客户端发起 start_candidate 后，受控 backend 实际生成该 profile 的 turn/Decision，正式 request 的查询 digest 与 claim 冻结 digest 分别核对（值不同符合 claim-time remote verification）；正式 provider merge 后，HTTP ShowTask/Snapshot 的 PRURL/workflow/execution/mergedAt 与同库 native Query 一致。旧 `TestAPIQueryParity` 的 SQLite `-shm` `Access is denied` 真实失败仍未精确复现/归因；sidecar 有界重查、持续 ACL 拒绝和真实 WAL 生命周期回归通过，当前 QueryParity 重跑通过不抹除原失败。等待新 reviewer 裁定历史故障，不作环境豁免。 |
+| API2 | 验收失败 | `GET /presentation` 返回真实非默认 profile；客户端发起 start_candidate 后，受控 backend 实际生成该 profile 的 turn/Decision，正式 request 的查询 digest 与 claim 冻结 digest 分别核对（值不同符合 claim-time remote verification）；正式 provider merge 后，HTTP ShowTask/Snapshot 的 PRURL/workflow/execution/mergedAt 与同库 native Query 一致。旧 `TestAPIQueryParity` 的 SQLite `-shm` `Access is denied` 真实失败仍未精确复现/归因；sidecar 有界重查、持续 ACL 拒绝和真实 WAL 生命周期回归通过，当前 QueryParity 重跑通过不抹除原失败。Round 4 reviewer 核验了当前重试组合，但没有证据证明旧失败命中了可恢复的 CreateFile denial 类；API2 仍失败，不作环境豁免或人工后置。 |
 | API3 | 已验收 | 真实 HTTP + app `ControlInboxPort` + service actor 覆盖 transport 已登记但发送前取消/同信封补交、正式请求已发布但响应丢失/重连 GET 与 retry、正式消费者迟到竞争、8 个并发 duplicate、异版本同 ID conflict；每个合法 request 只生效一次。复审发现的 configured-service discard 重入锁由 `TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter` 修复并真实验证：writer 沿同一 service actor 工作，原仓库锁全程保持；重连回执、同 envelope duplicate、异内容同 ID 冲突和无重复业务变更均通过。第三轮原始 lock failure 保留见后文。 |
 | API4 | 已验收 | 第三轮 600,243-byte 合法 unknown envelope 曾写出 1,201,014-byte rejection，超过 reader 上限并阻断原 ID GET/preflight。持久聚合边界已在 rebase 后源码 `d2a0bce0` 修复；其后 `internal/product/httpapi` 源码未改变，18 项 HTTP/API 定向、真实原 ID 计数/重连 2 项与 vet 通过，第三轮原始失败保留见后文。 |
 | API5 | 已验收 | 真实应用服务恢复后发布发现/ready 身份、正常关闭与端口冲突诊断通过；配置服务路径不启动替代实例。定向 `TestAPIServiceLifecycle` 与真实服务 `TestAPIServiceLifecycle`、`TestAPIConfiguredServicePublishesDiscovery` 通过。 |
@@ -77,7 +77,9 @@ PR 与合并核验待登记；本记录只覆盖候选实现和上述自动验�
 
 round 0 的最终正文读取曾由 `pathguard.RejectSharedSQLiteFiles` 返回 `inspect ... steerline.db-shm: Access is denied`，旧实现未标明错误来自 Windows `CreateFile` 还是 `GetFileInformationByHandle`，原始日志保留在前述失败轮证据目录。检查了实际依赖 `modernc.org/sqlite v1.38.2` 的 Windows `_winShmPurge`：最后引用释放后先关闭 SHM handle，再调用 `_winDelete`；Windows `CreateFile` 文档说明 delete-pending 文件可能返回 `ERROR_ACCESS_DENIED`。这是与观测相符的可能竞态，但旧失败现场未保存系统调用阶段，也未能在复验中直接重现，故不能把根因写成已证实。
 
-当前实现只对 `-wal/-shm/-journal` 的 `ERROR_ACCESS_DENIED` 做最多 5 次、总计 10ms 的短重查；稳定 ACL denial 在回归中仍失败，hardlink 检查未放宽。真实 SQLite sidecar open/close stress、API2 全组及 `QueryParity -count=3` 均通过。由于原始错误的精确系统调用与现场状态不可恢复，API2 仍保留 `验收失败`；新 reviewer 需决定上述有界处理与当前回归是否足以关闭该历史故障，不能按环境波动或重跑通过自动销项。
+此前本段只记录 pathguard 对 `-wal/-shm/-journal` 的外层有界重查，现补齐当前 main 组合：`internal/pathguard/transient_windows.go` 的 `retryFileInspection` 对 Windows `CreateFile` 的 `ERROR_ACCESS_DENIED` / `ERROR_SHARING_VIOLATION` 最多 20 次调用，19 次间隔各 5ms（每次进入内层最多计划等待 95ms）。`internal/pathguard/link_windows.go` 对 sidecar 另有 5 个外层 round，间隔为 1+2+3+4ms，总计 10ms。若持续 `CreateFile ERROR_ACCESS_DENIED`，按最坏路径最多 100 次 CreateFile、485ms 计划等待（5×95ms + 10ms；不含 OS 调用开销）。`GetFileInformationByHandle` 在成功 CreateFile 后单独执行，不走这段内层重试；若 denial 出现在该阶段，只有外层最多 5 round / 10ms，不包含 95ms 内层等待。
+
+持续 ACL denial 的回归仍失败，hardlink 检查未放宽。真实 SQLite sidecar open/close stress、API2 全组及 `QueryParity -count=3` 通过，不代表真实合法瞬态 denial 已命中并恢复，也不证明历史失败发生在 CreateFile 阶段。旧日志没有保存具体 syscall、原 handle/path/ACL 与 close-delete 时序，round 4 复核仍无法还原；API2 继续为 `验收失败`，没有按 retry 窗口或重跑结果豁免。
 
 ### 保留的 round 2 失败
 
@@ -171,3 +173,23 @@ Task #45 分支基于 `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` rebase；#45 Sp
 曾启动 `go test ./internal/execution ./internal/product/client ./internal/app`，在无输出且未完成时为避免扩大为 package-wide rerun 而中断；该命令不记通过或失败。没有重跑 L1/Full/L2/L3/live，既有 `f82c7387` L1 仅保留其历史源码范围。最终 P1 结论只依据上面的真实 configured-service 集成和当前 vet；P2 的 `internal/product/httpapi` 源码自精确 18 项验证后未改变。新候选待独立复审；API2 历史 `-shm AccessDenied` 的系统阶段仍未知，保持验收失败、不作环境豁免；PR #249 未合并，#44 继续等待 #45。
 
 文档静态：`python scripts/check_doc_links.py` 271 Markdown/1740 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 85 identity files（10 draft/4 formal）通过；`git diff --check` 通过。原始输出在 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-final-docs-72f22ca79349478d908e740bfffc05f6`。
+
+## Round 4 独立复审与当前候选证据
+
+Independent reviewer `/root/review45_round4` reviewed exact source candidate `c126560f0315b9e686e68e3cb82cf65359e66894` (tree `95800604c072dc75cc9f44096ddf9f1e3135770f`; base `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5`; PR #249 OPEN) and found no newly confirmed local code defect or fixed-requirement omission. The reviewer traced the configured-service lifetime, writer/actor signal, HTTP arbitration, Windows ACL/preflight and Query/Delivery paths; confirmed the P1/P2 fixes against source and test evidence; and explicitly did not treat API2 as closed or this review as #84 combination proof. The review report is `C:\Users\lmas1\.codex\task-state\roadmap-runner\roadmap-steerline-20261008-01a11a74\review45-round4.md`; the PR record is [round 4 review comment](https://github.com/erranliu/SteerLine/pull/249#issuecomment-6073460856).
+
+| 范围 | 精确命令与结果 | 当前证据位置 |
+| --- | --- | --- |
+| HTTP/API 与 P2 边界 | `go test ./internal/product/httpapi -run '^TestAPI' -count=1 -v`：18 顶层测试、0 fail/0 skip，6.739s。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-review4-targeted-653dd425c05944ab9d0e882b68dbf865\httpapi.log` |
+| P1 configured-service 持锁 discard | `go test ./tests/integration -run '^TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter$' -count=1 -v`：1 test、0 skip，测试 73.51s / package 78.676s。原仓库锁保留、typed receipt/重连/重复/冲突/无重复 revision/ready/control/停服释放均通过。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-review4-targeted-653dd425c05944ab9d0e882b68dbf865\configured-discard.log` |
+| 当前源码 L1 | `go run ./cmd/test-feedback -level=L1`：exact source `c126560f`，12 groups / 458 passed / 0 fail / 0 skip，`complete=true`, `passed=true`，3 workers，111.775s execution。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-review4-bc29830a550841ba968719ddcec654c7\summary.json`；该根目录下 `quick-*/test.jsonl` 与 `quick-*/stderr.txt` |
+| 当前源码 Go vet | `go vet ./internal/product/httpapi ./internal/app/... ./internal/execution ./internal/product/client`：exit 0。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-review4-targeted-653dd425c05944ab9d0e882b68dbf865\vet.log` |
+| 差异格式 | `git diff --check`：通过；review tree clean。 | round 4 review record and current branch state |
+
+Round 4 L1 的初始 output path 参数是字面量 `$reviewOut`。runner 停止后，reviewer 核验原始绝对路径并将对应 artifacts 放入上列临时 evidence root；`summary.json` 原始 path 字段未改写，当前实际文件按其相对后缀对应到 `quick-*/...`。原 JSON 与移动后文件均保留，不把 `$reviewOut` 当作可直接打开的绝对路径。
+
+Review 复核当前重试实现时补正边界：`retryFileInspection` 对 `CreateFile` 的 access/sharing denial 最多 20 calls、19×5ms；#45 sidecar 外层最多 5 rounds，另有 1+2+3+4ms。持续 `CreateFile ERROR_ACCESS_DENIED` 的组合上限为 100 calls / 485ms planned wait，不含 OS overhead；`GetFileInformationByHandle` 阶段没有内层重试，只有外层 round 间隔。以上是当前 main 与 #45 的组合实现，不是历史 SHM failure 的 syscall 归因或恢复证明。Review 仍保留 API2 `验收失败`：原 QueryParity failure 的具体阶段/ACL/close-delete 时序未知，当前有界 fail-closed 行为和 L1 不能将其转成通过；需要新的、确实命中合法 denial 的阶段证据或其他可核验的同故障类证据。没有环境豁免、人工后置或用户风险批准。
+
+当前 source review 已完成，PR #249 仍因 API2 未闭合而 OPEN、未合并。#84 的实际 worker 状态/格式组合尚未发生；本轮 review 不授权提前集成，也不改变 #44 对 #45 真实合并的等待条件。相对已审源码 `c126560f`，本轮仅修改本验收记录和 `docs/roadmap/execution-map.md`，未改代码。
+
+Round 4 文档同步静态：`python scripts/check_doc_links.py` 271 Markdown/1741 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 85 identity files（10 draft/4 formal），next ID 87；`git diff --check` 通过。原始输出在 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-round4-docs-609b3f28a5a34a1e96097022cf50a2de`。本轮未分配或修改任何 Task ID。
