@@ -71,7 +71,7 @@ func fileAttributes(path string) (uint32, error) {
 	if err != nil {
 		return 0, err
 	}
-	return windows.GetFileAttributes(name)
+	return retryFileInspection(func() (uint32, error) { return windows.GetFileAttributes(name) })
 }
 
 func finalPath(path string) (string, error) {
