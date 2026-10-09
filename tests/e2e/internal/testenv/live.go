@@ -43,9 +43,17 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		}
 		p.OrcaExecutable, err = exec.LookPath(command)
 		s.Must(err)
-		// Orca owns agent launch and permissions. Use the original public native
-		// worker interface, without managed Codex launch/hook/environment rewriting.
-		orcaConfig = native.OrcaWorkerProfile(p.OrcaExecutable, "4m")
+		// The existing native fixture forwards the original public start receipt
+		// unchanged. For its verified, stable paste preview it completes only
+		// that same input's UI submission; it never injects another prompt.
+		shim := filepath.Join(p.Home, "bin", "orca-env.exe")
+		binary, readErr := os.ReadFile(s.Run.Helper)
+		s.Must(readErr)
+		s.Must(os.WriteFile(shim, binary, 0700))
+		logDir := filepath.Join(s.Output, name+"-orca")
+		s.Must(os.MkdirAll(logDir, 0700))
+		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, Home: p.Home, LogDir: logDir}))
+		orcaConfig = native.OrcaWorkerProfile(shim, "4m")
 	}
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)
