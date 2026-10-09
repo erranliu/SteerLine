@@ -651,13 +651,26 @@ func TestMain(m *testing.M) {
 		}
 		os.Exit(fakeCodexWebSocket(os.Args[1:]))
 	}
+	// Direct go test runs must not write fixture profiles into the real runtime.
+	fixtureHome, err := os.MkdirTemp("", "steerline-integration-home-")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	if err = os.Setenv("STEERLINE_HOME", fixtureHome); err != nil {
+		_ = os.RemoveAll(fixtureHome)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	cleanup, err := prepareIntegrationCLI()
 	if err != nil {
+		_ = os.RemoveAll(fixtureHome)
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 	code := m.Run()
 	cleanup()
+	_ = os.RemoveAll(fixtureHome)
 	os.Exit(code)
 }
 func arg(args []string, key string) string {

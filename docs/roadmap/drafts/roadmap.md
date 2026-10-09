@@ -1,6 +1,6 @@
 # SteerLine 草稿 Roadmap
 
-本页为本轮选定草稿，用于一期收尾及二期三节点规划。编号/文档不产生执行授权。用户已确认的#45/#44列入[execution-map](../execution-map.md)，由 roadmap-runner 直接调度 Codex，启动前核对当前状态、依赖与固定 Spec/Plan。已合入的安装/调试隔离能力见[交付验收记录](../../acceptance/local-runtime-isolation.md)，对应完成条目已从本草稿移除。
+本页为本轮选定草稿，用于一期收尾及二期三节点规划。编号/文档不产生执行授权。用户已确认的 #84/#45/#44 列入[execution-map](../execution-map.md)，由 roadmap-runner 直接调度 Codex，启动前核对当前状态、依赖与固定 Spec/Plan。已合入的安装/调试隔离能力见[交付验收记录](../../acceptance/local-runtime-isolation.md)，对应完成条目已从本草稿移除。
 
 规划按[RoadmapGuide](../RoadmapGuide.md)和[并行开发指南](../../architecture/parallel-development.md)。开发执行范围与依赖由用户确认后维护于 execution-map；本文不改变外部产品 Task/DAG。每个执行任务保持独立 Spec/Plan、一个实现 PR及专属 acceptance。
 
@@ -9,6 +9,16 @@
 一期只交付/验收本地 Codex与本机 Orca；远端存量实现及历史试验不构成一期门槛。已具备持续 worker、同任务人工多候选、独立原会话反馈、恢复、真实PR核验、唯一TaskDelivery及后继base。默认一个候选，开始时参与数达5拒绝，不建严格名额、自动评分/融合或实验调度器。
 
 已交付一个本机安装版本与源码调试共存的路径隔离、实际 exe/home/config 传递和受控共存验证；不建设 stable/dev 双 channel、提升或跨开发格式兼容。人工组织的一期组合/24小时/同构建恢复见[一期活动](../../acceptance/phase1.md)，仍待签收，不是任务，不阻塞无关二期研发。
+
+### 新 worker 流程实现
+
+| 任务 ID | 任务名称 | 交付范围 / 所有者 | 剩余拟议前置 | 执行规格 | 专属验收 |
+| --- | --- | --- | --- | --- | --- |
+| 84 | Worker 分步执行与结构化状态推进 | execution：状态/步骤、三个短模板、双 adapter 及查询/TUI 接线；implement 两轮、publish 单轮 | 无；#83 已进入主干 | [Spec](../../spec/worker-staged-flow.spec.md) · [Plan](../../spec/worker-staged-flow.plan.md) | [验收](../../acceptance/worker-staged-flow.md) |
+
+一期收尾顺序为：已合入的 #83 隔离基线 → #84 实现及最小自动验证 → 固定新安装构建 → 组合链/24 小时/同构建恢复 → 一期签收。#83 不重新进入草稿待执行表，历史候选证据不证明新流程通过。#84 是一个完整实现任务和一个 PR，复用现有 worker/生命周期端口，以普通代码定义步骤与转移，不增加 DSL、事件框架、第三 adapter 或额外演示流程。
+
+#84 已经用户确认纳入 execution-map，当前状态与启动资格以正式清单为准；保留本草稿讨论范围，实施完成后再移除。剩余按 #84→#45→#44 推进，#45→#44 的硬依赖保持。#45/#50 涉及的公共状态/步骤字段须协调生产者与消费者，同快照投影和接线只保留一套；已有执行使用其固定 Spec/Plan，新字段影响在 #84 集成时核对。原生适配差异归 adapter，实际恢复只继续原会话；不可核验时人工处理，不提供新会话替代。
 
 定向待补仍见[app-server race](../../acceptance/local-codex-app-server.md)、[Orca活动输入/故障/生命周期](../../acceptance/worker-flow-orca-native.md)、[停服恢复](../../acceptance/worker-service-recovery.md)。按当前支持及产品精简核对适用范围；完整transcript阅读不再作为新界面交付要求，未验证的执行/恢复风险不能因此略过。
 
@@ -62,6 +72,6 @@
 
 ## 推进与人工安排
 
-近期按 #45 → #44 推进；#49/#50仍等待原型确认和用户纳入执行。同期继续2.1原型和2.2/2.3流程讨论；一期24小时不作传递硬前置。人工后验收、必要前置与artifact交互先用代表流程推导，见[2.2验收规划](../../acceptance/phase2-planning.md)，不立通用事项/审批/提醒引擎。
+近期已确认任务按 #84 → #45 → #44 推进，共同存储/宿主/客户端接线顺序集成；#49/#50仍等待原型确认和用户纳入执行。人工一期窗口不作为二期传递硬前置。同期继续2.1原型和2.2/2.3流程讨论；人工后验收、必要前置与artifact交互先用代表流程推导，见[2.2验收规划](../../acceptance/phase2-planning.md)，不立通用事项/审批/提醒引擎。
 
 允许后置人工项登记参与人/窗口或待安排、截止节点及阻塞范围；真实失败/关键能力缺口不得后置。启动前核对 execution-map 的依赖交付与固定 Spec/Plan。#40/#41完整版本管理继续延期；#42/#53人工活动旧编号不复用。
