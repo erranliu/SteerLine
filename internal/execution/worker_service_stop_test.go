@@ -247,6 +247,7 @@ func TestWorkerPreparationStopDoesNotJournalUnsentBusinessTurn(t *testing.T) {
 	s, run := neutralAuditService(t)
 	t.Cleanup(func() { _ = s.Close() })
 	_, e := s.workflowRecords(run)
+	e.Workspace = executionmodel.WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
 	e.PolicyResources = neutralPolicyReceipt(s.workflowRecord(run).ExecutionProfile.Digest, e.Workspace.Worktree, e)
 	cmd := exec.Command(os.Args[0], "--fake", "sleep")
 	owned, err := resourceprocess.StartManaged(cmd)
