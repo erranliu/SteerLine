@@ -750,7 +750,7 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config steerline
 		t.Fatal("public answer submission lacks the displayed pending decision")
 	}
 	option := "continue"
-	if run.Decision.Request.QuestionRoute != nil {
+	if run.Decision.Request.QuestionRoute != nil || len(run.Decision.Request.Options) == 0 {
 		option = ""
 	}
 	submitIntegrationAnswerOption(t, ctx, config, run, option)

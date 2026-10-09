@@ -90,3 +90,23 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 		t.Fatal("stale feedback transition changed the database")
 	}
 }
+
+func TestWaitingPRFeedbackIsOptionalAndDoesNotRepeatTurns(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	t.Cleanup(func() { _ = service.Close() })
+	workflow, execution := service.workflowRecords(run)
+	workflow.Phase, workflow.PRURL, workflow.PRState = "waiting_pr_merge", "https://git.example/org/repo/pulls/8", "open"
+	service.setDecisionStatus(run, "superseded")
+	beforeOperations, beforeTurn := len(service.domain.Operations), execution.TurnNumber
+	require(t, service.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{}))
+	decisionID := run.Decision.ID
+	if run.Decision.Request.Question != workerPRFeedbackQuestion || len(run.Decision.Request.Options) != 0 || !run.Decision.Request.AllowFreeText || !workerContinuationPrompt(run.Decision.Request) {
+		t.Fatal("waiting PR retained a default continuation choice", run.Decision.Request)
+	}
+	for i := 0; i < 3; i++ {
+		require(t, service.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{}))
+	}
+	if workflow.Phase != "waiting_pr_merge" || run.Decision.ID != decisionID || len(service.domain.Operations) != beforeOperations || execution.TurnNumber != beforeTurn {
+		t.Fatal("observing a waiting PR created a new decision or execution turn")
+	}
+}

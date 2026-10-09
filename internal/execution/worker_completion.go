@@ -155,7 +155,7 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 		issue = strings.TrimSpace(issue + "; several PR links were reported: " + strings.Join(evidence.PRCandidates, ", "))
 	}
 	question := len(evidence.PRCandidates) > 1
-	if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?" {
+	if run.Decision != nil && run.Decision.Status == "pending" && !workerContinuationPrompt(run.Decision.Request) {
 		question = true
 	}
 	turnOutcome := "failed"

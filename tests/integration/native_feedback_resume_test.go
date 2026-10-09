@@ -1,9 +1,9 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"encoding/json"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"testing"
 	"time"
@@ -23,7 +23,12 @@ func TestNativeOrcaOpenPRFeedbackResumesSavedTask(t *testing.T) {
 }
 
 func testNativeOrcaConsecutiveFeedback(t *testing.T, openPR bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	timeout := 4 * time.Minute
+	if openPR {
+		// This case adds a service restart to the two feedback dispatches.
+		timeout = 6 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	f := newLifecycleProjectBase(t, "orca", !openPR)
 	initial := testprotocol.NativeOrcaState{EnvironmentMode: true, ReadinessMode: "success"}

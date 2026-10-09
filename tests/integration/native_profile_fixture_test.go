@@ -94,6 +94,30 @@ func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworke
 	return loaded
 }
 
+func TestNativeProfileFixturePreservesRuntimeCatalog(t *testing.T) {
+	if runtimePath := os.Getenv("STEERLINE_PROFILE_ISOLATION_PROBE"); runtimePath != "" {
+		c := nativeRequirementConfig(t)
+		if steerlineapp.HomeDir() == filepath.Dir(runtimePath) || len(c.ExecutionProfiles) != 1 {
+			t.Fatal("fixture reused the inherited runtime home")
+		}
+		return
+	}
+	runtimeHome := t.TempDir()
+	runtimeCatalog := []byte(`{"version":2,"default_execution_profile":"real-runtime"}`)
+	runtimePath := filepath.Join(runtimeHome, "execution.json")
+	require(t, os.WriteFile(runtimePath, runtimeCatalog, 0600))
+	command := exec.Command(os.Args[0], "-test.run=^TestNativeProfileFixturePreservesRuntimeCatalog$", "-test.count=1")
+	command.Env = append(withSteerlineHome(os.Environ(), runtimeHome), "STEERLINE_PROFILE_ISOLATION_PROBE="+runtimePath)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("isolated fixture process failed: %v: %s", err, output)
+	}
+	actual, err := os.ReadFile(runtimePath)
+	require(t, err)
+	if string(actual) != string(runtimeCatalog) {
+		t.Fatalf("fixture changed the runtime catalog: %s", actual)
+	}
+}
+
 func nonEmpty(value, fallback string) string {
 	if value != "" {
 		return value

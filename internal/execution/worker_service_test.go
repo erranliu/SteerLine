@@ -117,6 +117,9 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		if run.FinishTaskStatus != expected || run.Decision == nil || run.Decision.Status != "pending" {
 			t.Fatalf("stopped worker did not reach the unified decision: %+v", run)
 		}
+		if expected == "waiting_pr_merge" && (run.Decision.Request.Question != workerPRFeedbackQuestion || len(run.Decision.Request.Options) != 0) {
+			t.Fatal("a completed PR turn required a default continuation", run.Decision.Request)
+		}
 	}
 	finishTurn("waiting_decision")
 	if run.Process != nil {

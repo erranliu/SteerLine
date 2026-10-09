@@ -5,11 +5,16 @@ import (
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
+
+const workerPRFeedbackQuestion = "追加修改（可选）"
+
+func workerContinuationPrompt(request executionmodel.DecisionRequest) bool {
+	return request.QuestionRoute == nil && (request.Question == "The worker stopped. What should it do next?" || request.Question == workerPRFeedbackQuestion)
+}
 
 func (s *Service) offerWorkerPRFeedback(run *reconstructiontypes.RunView, url string) error {
 	if s.candidateBusinessClosed(run) {
@@ -22,9 +27,9 @@ func (s *Service) offerWorkerPRFeedback(run *reconstructiontypes.RunView, url st
 		return nil
 	}
 	decision, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{
-		Question: "The worker stopped. What should it do next?",
-		Context:  "PR 已核实并等待合并。本轮已结束，提交反馈后将在原 worker 会话开始下一轮。",
-		Options:  []executionbackend.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true,
+		Question:      workerPRFeedbackQuestion,
+		Context:       "执行已结束，PR 已核实并等待人工合并。当前无需继续执行；仅在需要追加修改时填写反馈，提交后在原 worker 会话开始下一轮。",
+		AllowFreeText: true,
 	})
 	if err != nil {
 		return err
@@ -92,7 +97,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 		}
 		return s.commitWorker(run)
 	}
-	pendingQuestion := execution.PendingCommandID != "" || execution.PendingTurnID != "" || run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?")
+	pendingQuestion := execution.PendingCommandID != "" || execution.PendingTurnID != "" || run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "pending" && !workerContinuationPrompt(run.Decision.Request))
 	previousPRURL := workflow.PRURL
 	if err := BindWorkerPR(workflow, execution, info, url, c.PR.Repository, pendingQuestion); err != nil {
 		return s.waitWorkerFlow(run, "Several PRs or conflicting PR identities need a user decision: "+err.Error())

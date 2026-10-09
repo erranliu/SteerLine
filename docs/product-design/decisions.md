@@ -6,7 +6,7 @@ SteerLine 当前使用 `worker-flow-v1`。SQLite 中的 Decision、Command、Ope
 
 ## 问题与答案
 
-local Codex 在活动轮次内调用 `steerline_ask`，或本机 Orca 在当前 Dispatch 中发来原生 question 时，中心为原 WorkflowRun、Execution 和固定 worker attempt 创建 pending Decision，提示“提交后继续当前轮次”。轮次结束后若需要反馈，中心创建另一类 Decision，提示“提交后在原会话开始下一轮”。PR 已核实并等待合并时，也可向原会话追加反馈。
+local Codex 在活动轮次内调用 `steerline_ask`，或本机 Orca 在当前 Dispatch 中发来原生 question 时，中心为原 WorkflowRun、Execution 和固定 worker attempt 创建 pending Decision，提示“提交后继续当前轮次”。轮次结束后若需要反馈，中心创建另一类 Decision，提示“提交后在原会话开始下一轮”。PR 已核实并等待合并时，默认显示待合并，无需继续执行；保留自由文字反馈 Decision，但不提供默认 Continue 选项，不计为待交互。用户按 a 主动追加修改，填写非空反馈并明确提交后，才在原会话开始下一轮；Enter 只转到运行与反馈区域。原生问题、恢复及环境阻断仍按各自门槛处理。
 
 每个 Decision 有独立 `decision_id` 和版本。请求保存完整问题、上下文、选项与详情，始终允许自由文字。local 运行中请求还保存 app-server 代次、thread、turn、call 与 JSON-RPC 请求 ID；Orca 问题保存 Run、Task、Dispatch 和原 message ID。多题答案按问题 ID 保存。单题可提交纯文字或“选项＋备注”，多题在备注中提交按问题 ID 键控的 JSON。中心不解释“继续”为重派某个技术步骤。
 
