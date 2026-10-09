@@ -12,6 +12,5 @@ type Config struct {
 	Repository, CommandTimeout string
 	Target                     executionbackend.ExecutionTarget
 	Output                     func(context.Context, time.Duration, ...string) ([]byte, error)
-	AgentVersion               func(context.Context) (string, error)
 	InspectWorkspace           func(context.Context, executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error)
 }

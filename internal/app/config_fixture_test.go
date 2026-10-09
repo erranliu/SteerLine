@@ -52,11 +52,18 @@ func testExecutionProfile(t *testing.T, id, name, host, agent string, worker cod
 	payload, err := codexworker.EncodeProfileConfig(worker)
 	require(t, err)
 	p := ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}}
+	if host == "orca" {
+		p.ImplementationConfigs = nil
+	}
 	if host != "local" {
 		if terminal == nil {
 			t.Fatal("terminal profile settings missing")
 		}
-		payload, err := orcaworker.EncodeProfileConfig(*terminal)
+		native := *terminal
+		if host == "orca" {
+			native.Model, native.ReasoningEffort = worker.Model, worker.ReasoningEffort
+		}
+		payload, err := orcaworker.EncodeProfileConfig(native)
 		require(t, err)
 		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
 	}
@@ -76,6 +83,10 @@ func localGlobalExecutionFixture(t *testing.T) {
 }
 
 func codexProfileSettings(c execution.Config, directories ...*execution.ExecutionDirectory) codexworker.ProfileConfig {
+	if c.Host == "orca" {
+		native, _ := terminalSettings(c, directories...)
+		return codexworker.ProfileConfig{Model: native.Model, ReasoningEffort: native.ReasoningEffort}
+	}
 	value, _ := codexSettings(c, directories...)
 	return value
 }
@@ -94,10 +105,6 @@ func testVerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile) boo
 	host := NewProcessHost(time.Second)
 	directory, err := NewBuiltinDirectory(host)
 	return err == nil && (Config{ExecutionDirectory: directory}).CheckFixedProfile(p) == nil
-}
-
-func nativeOrcaFixedAgentCommand(c execution.Config, directories ...*execution.ExecutionDirectory) (string, error) {
-	return managedTerminalCommand(c, "", nil, directories...)
 }
 
 func mustJSON(value any) []byte {

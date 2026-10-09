@@ -56,6 +56,10 @@ func (s *Service) executionConfigForRun(run *reconstructiontypes.RunView) (Confi
 		if err := validateWorkflowConfig(config, s.runtime.Directory); err != nil {
 			return Config{}, err
 		}
+		entry, err := registrationFor(config, s.runtime.Directory)
+		if err != nil {
+			return Config{}, err
+		}
 		for i := range s.domain.Executions {
 			e := &s.domain.Executions[i]
 			if e.WorkflowRunID == workflow.WorkflowRunID {
@@ -66,7 +70,7 @@ func (s *Service) executionConfigForRun(run *reconstructiontypes.RunView) (Confi
 					return Config{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed implementation binding failed verification", Cause: err}
 				}
 			}
-			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources == nil && (e.Process != nil || e.SessionID != "") && !awaitingRecoveryResources(e) {
+			if e.WorkflowRunID == workflow.WorkflowRunID && !entry.HostManagedPermissions && e.PolicyResources == nil && (e.Process != nil || e.SessionID != "") && !awaitingRecoveryResources(e) {
 				return Config{}, errors.New("bound execution lost its original policy resource snapshot")
 			}
 			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources != nil {
@@ -89,7 +93,7 @@ func (s *Service) executionConfigForRun(run *reconstructiontypes.RunView) (Confi
 		if workflow.WorkflowVersion != executionmodel.Version {
 			return Config{}, fmt.Errorf("fixed execution profile uses an unsupported workflow version")
 		}
-		entry, err := registrationFor(config, s.runtime.Directory)
+		entry, err = registrationFor(config, s.runtime.Directory)
 		backend, protocol := executionbackend.BackendKind(""), executionbackend.ExecutionProtocol("")
 		if err == nil {
 			backend, protocol = entry.Key.Backend, entry.Key.Protocol

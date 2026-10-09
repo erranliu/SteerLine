@@ -1,7 +1,6 @@
 package app
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
@@ -21,12 +20,6 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 		profile = boundProfile(base, profile)
 		base.ExecutionProfiles = []ExecutionProfile{profile}
 		err := base.ValidateProfiles()
-		if agent == "opencode" {
-			if err == nil || !strings.Contains(err.Error(), "no implementation is configured") {
-				t.Fatalf("unregistered native agent was admitted: %v", err)
-			}
-			continue
-		}
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -54,7 +54,7 @@ type slowStartResolver struct {
 }
 
 func (r slowStartResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-	return slowStartPort{mcPort: mcPort{&neutralLifecycle{setup: setup}}, gate: r.gate, action: r.action}, nil
+	return slowStartPort{mcPort: mcPort{&neutralLifecycle{Setup: setup}}, gate: r.gate, action: r.action}, nil
 }
 
 type slowStartPort struct {

@@ -75,12 +75,14 @@ type ExecutionRegistration struct {
 	ProfileKey            string
 	WorkspaceBranchPrefix string
 	LocalWorkspace        bool
-	ProfileCodecKeys      []string
-	QuestionCodecKey      string
-	QuestionCodecVersion  int
-	Host                  string
-	Backend               func(Config) executionbackend.ExecutionBackend
-	Target                func(Config) executionbackend.ExecutionTarget
+	// HostManagedPermissions delegates launch permissions to the native host; no client policy roots are bound.
+	HostManagedPermissions bool
+	ProfileCodecKeys       []string
+	QuestionCodecKey       string
+	QuestionCodecVersion   int
+	Host                   string
+	Backend                func(Config) executionbackend.ExecutionBackend
+	Target                 func(Config) executionbackend.ExecutionTarget
 
 	Lifecycle                 func(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error)
 	ValidateProfileSelection  func(string, map[string][]byte) error
@@ -269,6 +271,10 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 	data := make([]executionbackend.ImplementationDataEnvelope, 0, len(inputs))
 	display := []string{}
 	for _, input := range inputs {
+		if !slices.Contains(entry.ProfileCodecKeys, input.ImplementationKey) {
+			return nil, nil, fmt.Errorf("profile codec %q is not owned by the selected execution implementation", input.ImplementationKey)
+		}
+
 		codec, exists := directory.codecs[input.ImplementationKey]
 		if !exists || input.CodecVersion != codec.Version || seen[input.ImplementationKey] {
 			return nil, nil, fmt.Errorf("unknown, duplicate or unsupported implementation codec %q/%d", input.ImplementationKey, input.CodecVersion)

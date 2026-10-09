@@ -37,7 +37,11 @@ func (c Client) Raw(ctx context.Context, timeout time.Duration, args ...string) 
 }
 
 func (c Client) MetaCall(ctx context.Context, args ...string) (Result, error) {
-	out, callErr := c.Raw(ctx, positiveDuration(c.config.CommandTimeout, 30*time.Second), args...)
+	return c.metaCallTimeout(ctx, positiveDuration(c.config.CommandTimeout, 30*time.Second), args...)
+}
+
+func (c Client) metaCallTimeout(ctx context.Context, timeout time.Duration, args ...string) (Result, error) {
+	out, callErr := c.Raw(ctx, timeout, args...)
 	env, parseErr := ParseEnvelope(out)
 	result := Result{Payload: env.Result, RuntimeID: env.Meta.RuntimeID}
 	// A completed nonzero CLI exit may carry a valid platform rejection. A
