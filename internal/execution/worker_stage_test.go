@@ -19,6 +19,26 @@ type stageTestPort struct {
 	err       error
 }
 
+type unsupportedStageResolver struct {
+	port executionbackend.LifecyclePort
+}
+
+func (r unsupportedStageResolver) ResolveLifecycle(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
+	return r.port, nil
+}
+
+func TestWorkerStageUnsupportedBeforeNativeProbe(t *testing.T) {
+	s, _, port := workerStageFixture(t)
+	before := recordFingerprint(s.domain)
+	// The embedded port is nil: any accidental native preflight, preparation
+	// or model operation panics instead of turning this guard into a fake pass.
+	err := requireWorkerFlowCapabilitiesWithResolver(context.Background(), s.Config, s.runtime.Directory, s.runtime.ProcessHost, unsupportedStageResolver{port: port})
+	blocked, ok := err.(*executionbackend.BackendError)
+	if !ok || blocked.Code != executionbackend.BackendUnsupported || recordFingerprint(s.domain) != before {
+		t.Fatalf("unsupported final source reached native effects or changed authority: %v", err)
+	}
+}
+
 func (p *stageTestPort) InspectLifecycleWorkspace(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.WorkspaceInspection, error) {
 	return p.workspace, p.err
 }

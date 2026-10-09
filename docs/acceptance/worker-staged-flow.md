@@ -1,6 +1,6 @@
 # Worker 阶段流程验收规划
 
-任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，实现与验证执行中，最终精确候选的产品自动/人工结果待登记；已完成的文档静态检查不证明产品能力。#83 已合入，作为隔离基线复用。
+任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，已形成草稿候选；WFS-A1–A3 按下文 source 与增量范围通过，WFS-A4 local 通过、Orca 原生启动阻塞，WFS-M1 未验；尚未独立复审或合并。#83 已合入，作为隔离基线复用。
 
 ## 最小验证安排
 
@@ -9,10 +9,10 @@
 | 项 / 级别 | 场景与环境 / 命令 | 时点与通过条件 | 状态 / 证据 |
 | --- | --- | --- | --- |
 | WFS-DOC：文档静态 | 导航、身份、差异；`python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check` | #84 身份、独立 Spec/Plan 及专属验收一致；旧流程正文转为 Spec 不重复，主 roadmap 收尾顺序明确；流程/步骤两层和三个短模板保持 | 本轮静态结果见下文；产品能力仅规划 |
-| WFS-A1：L1 与纯规则/提交 | 拟新增 `TestWorkerStageTransitions`、`TestWorkerStageResultBinding`、`TestWorkerStageReportRound`；`go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestWorkerStage' -count=1` | 有效结果经业务核验原子改变 status/step_id/投递意图；开发流程正常三轮；无事实证明的 done 不推进，unknown 只对账，失败/格式/缺能力保持阻断；重试/旧来源不重复推进 | 待验收；runner 默认临时目录 |
-| WFS-A2：结构化输入与 UI | 拟新增 `TestWorkerStagePresentation`；`go run ./cmd/test-feedback -- ./internal/console -run 'TestWorkerStage\|TestWaitingPR' -count=1`，输入冻结测试归 A1 | 步骤位置与 status 同快照，三段短模板/结果契约固定且不随 backend 分叉；内部身份由程序绑定，源失败不被报告成功覆盖，publish 无虚构 report、待合并无 Continue | 待验收；临时输入快照及报告 |
-| WFS-A3：双 adapter controlled 接线 | 拟新增 `TestWorkerStageLocalRoundTrip`、`TestWorkerStageOrcaRoundTrip`；`go run ./cmd/test-feedback -- ./tests/integration -run '^TestWorkerStage' -count=1`，串行隔离 | 同一开发流程经两个现有 adapter 正常三轮；规范 final 来源/原生 purpose 映射、能力不足阻断、步骤边界重开和未知对账一致。复用既有 fixture 及少量端口替身断言，不实现第三 adapter 或另一套模拟框架 | 待验收；原生 fixture 回执与 SQLite/输入结果定位 |
-| WFS-A4：双本机 live 抽样 | 本地 Codex、本机 Orca 各一条；复用 L3 delivery.local-codex / delivery.orca-codex；`go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.local-codex,delivery.orca-codex'`，沿 Plan 更新材料/断言 | 真实 implement 两轮和 publish 单轮、产物/PR 身份及真实 usage；实现报告无业务写入，工具限制能力据实记录。重开/未知分支主要归 A3，不强制在每条 live 链重复故障矩阵 | 待验收；实际构建、配置及原生准备待固定；临时现场证据 |
+| WFS-A1：L1 与纯规则/提交 | 拟新增 `TestWorkerStageTransitions`、`TestWorkerStageResultBinding`、`TestWorkerStageReportRound`；`go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestWorkerStage' -count=1` | 有效结果经业务核验原子改变 status/step_id/投递意图；开发流程正常三轮；无事实证明的 done 不推进，unknown 只对账，失败/格式/缺能力保持阻断；重试/旧来源不重复推进 | 通过；source 与增量对应见末段 |
+| WFS-A2：结构化输入与 UI | 拟新增 `TestWorkerStagePresentation`；`go run ./cmd/test-feedback -- ./internal/console -run 'TestWorkerStage\|TestWaitingPR' -count=1`，输入冻结测试归 A1 | 步骤位置与 status 同快照，三段短模板/结果契约固定且不随 backend 分叉；内部身份由程序绑定，源失败不被报告成功覆盖，publish 无虚构 report、待合并无 Continue | 通过；23 项 console 与冻结输入/目标定向，见末段 |
+| WFS-A3：双 adapter controlled 接线 | 拟新增 `TestWorkerStageLocalRoundTrip`、`TestWorkerStageOrcaRoundTrip`；`go run ./cmd/test-feedback -- ./tests/integration -run '^TestWorkerStage' -count=1`，串行隔离 | 同一开发流程经两个现有 adapter 正常三轮；规范 final 来源/原生 purpose 映射、能力不足阻断、步骤边界重开和未知对账一致。复用既有 fixture 及少量端口替身断言，不实现第三 adapter 或另一套模拟框架 | 双正常三轮与未知报告/重开通过；缺能力前置阻断通过；真实启动单列 A4 |
+| WFS-A4：双本机 live 抽样 | 本地 Codex、本机 Orca 各一条；复用 L3 delivery.local-codex / delivery.orca-codex；`go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.local-codex,delivery.orca-codex'`，沿 Plan 更新材料/断言 | 真实 implement 两轮和 publish 单轮、产物/PR 身份及 local 原生 usage；Orca usage 按用户明确调整登记不可用；实现报告无业务写入，工具限制能力据实记录。重开/未知分支主要归 A3，不强制在每条 live 链重复故障矩阵 | local 通过；Orca 原生 turn_start_unobserved 阻塞，整体未通过；证据见末段 |
 | WFS-M1：人工审阅/合并 | A4 的隔离现场；参与人/窗口待安排 | 发布核验后辨认阶段/阻断，人工合并后核验唯一交付与正确后继资格 | 待验收；可后置至组合验收，不进执行 DAG |
 
 权限失败分支归 A3 的定向受控测试：原发布命令需要审核时沿原请求处理；拒绝/不可用保持 blocked，不换工具绕过。A4 据实记录实际触发的审核与工具约束，未触发不记该分支通过；发现真实缺口保留待验，不强制增加完整权限故障矩阵。
@@ -77,3 +77,21 @@ WFS-A4 首轮目录 `C:/Users/lmas1/AppData/Local/Temp/steerline-worker84-eviden
 新版最小验证：clean `38653b5c` 的 L1+A1 490 tests / 0 skip / 13 groups（20261009T064532.351292900Z）；console 步骤/等待PR/操作进度回执/PR链接 23 tests / 0 skip（20261009T064502.288447500Z）；规范输出及模型选择定向 21 tests / 0 skip（20261009T064502.915077600Z）。报告均在 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/`。新版 controlled 的 local 和 Orca 正常三轮分别通过；同轮 unknown 用例的原先一次性丢回执被原生缓存立即对账，旧等待断言失败，未把失败记通过。
 
 将 unknown 故障保持至原服务退出后，真正揭示 BeginTurn 拒收 reconciling 下原输入开始事实的缺口。规则修复仅允许匹配原已接受 pending turn 的开始观察，不授予新发送资格。定向规则 1 test / 0 skip（20261009T065323.802469800Z）及实际 Orca 丢回执/重开场景 1 test / 0 skip（20261009T065326.171509600Z，64.979 秒）通过：原服务未发布，恢复原两轮结果、一个 Attempt、三个冻结输入，publish 保持 waiting_input，native Dispatch 仍恰好两次。原失败记录 20261009T065106.138101900Z 保留。新 native launch 证据断言 6 tests / 0 skip（20261009T064831.408077100Z）核验实际保存的首轮原 Task/Dispatch/agent/model/effort，任一身份/选择变化拒绝。这些增量测试在 `38653b5c` 加对应明确修改的工作区执行；下一 clean 源码/构建及 live 报告另行登记，不能把本段称为该后续完整矩阵。
+### 草稿交付：真实 live 结果与当前阻塞
+
+2026-10-09 用户明确选择“先提交草稿 PR，登记阻塞”。本候选供独立审阅，未标记实现完成、未合并；未将 A4 自动失败改为 M1 人工后置，也未改变主干失败启动停止/释放契约。下一步须修复原生启动入口，或另行明确调整原生启动对账契约后补验原三轮；不恢复退役 Codex launcher，不替换当前未知输入为新身份。
+
+固定 c4bcbec Spec/Plan 不变。干净 source `71ba6ba7d525c1e964120b23507bb19f6b7adf6a`、tree `ca4ae391a12d8fb093daeb0057972a19715dee50` 补上报告的原冻结阶段目标及截断标志，33 项步骤规则/来源/恢复/native输出/原生模型选择定向通过、0 skip（20261009T070102.326836500Z）。L1 490 项与 console 23 项保留前文 clean 38653b5c 的来源；其后源码差异是原输入开始对账、报告目标、Orca 报告权限描述/live profile/test fixture 与诊断，分别以明确增量测试和 live 检查覆盖，没有把旧完整矩阵伪装成最终全量重跑。
+
+live 证据根：`C:/Users/lmas1/AppData/Local/Temp/steerline-worker84-evidence-a214d3a014c74100a2ad8d2b933199cb/`。
+
+| 场景 / source | 真实结果 | 定位与限制 |
+| --- | --- | --- |
+| 首次 873bd0cb 运行 | 被 turn abort 中断，不计验收；Orca 未开始 | `live-873bd0cb/interrupted.json` 与 `interrupted-db-read.json`：原登记进程已退出，原现场 workflow/execution/attempt 均 0；无模型输入，保留产物，不伪造完整 runner summary |
+| delivery.local-codex / clean 71ba6ba7 | PASS 193.62 秒；三输入/三结果/一个 Attempt、同一原会话、报告前后事实一致、固定候选/PR head、唯一 TaskDelivery、B ready 未启动、cleanup_complete=true | `live-71ba6ba7/summary.json` 总体仍 false（另一场景失败）；`scenarios/delivery.local-codex/scenario.json`、`live-staged-flow.json`、`live-completed.json` 及逐轮 usage。原会话 `01a11f7a-e8b3-7360-9f65-698771a3a83e`；逐轮原生累计 totals 68876 → 90315 → 182475，不相加计费；轮次分别独立绑定，最终/清理 usage 没有增加 |
+| delivery.orca-codex / clean 71ba6ba7 | FAIL 30.44 秒；任务创建前拒绝未归属该实现的 codex.worker-profile；0 native model turn；cleanup_complete=true | 同目录 Orca scenario/final 原始记录保留。修复仅在 live fixture 移除退役 Codex codec，Orca 模型/effort 由自身 profile 固定 |
+| delivery.orca-codex / clean 7d1a26985892e57449c2e3d0b6e791309a6034be | FAIL 177.25 秒；原生首轮 state=outcome_unknown、stage=turn_start_unobserved，未核实原三轮；cleanup_complete=true | `live-7d1a2698-orca/summary.json` 与场景 live-final/scenario。原 Run `run_cb9b7d147840`、Task `task_b1a8aa5262be`、Dispatch `ctx_b967ff0c1490`，mode=terminal（user_default）。源码保留该原输入/未知意图，未起替代 worker；native failure-start 原回执证明 worker_absent/writers_absent/stopped，精确 original worker-show 保存为 `orca-7d1a-original-worker-show.json`，state=stopped、Dispatch failed；本场景没有可证明的规范 final/PR/交付，不能说模型未执行或三轮成功 |
+
+7d1a2698 的变化只涉及 Orca fixture profile 与诚实的 report tool policy；local 成功证据不重跑、不覆盖 Orca 失败。其定向 10 tests / 0 skip（20261009T070940.955644400Z）通过。后续最小自查补齐“缺规范 final 能力时，在任何原生 probe/准备/输入前 unsupported 且不写业务权威”的正式入站检查，1 test / 0 skip（20261009T072114.199550500Z）；并在同原 runtime/Run/Task/Dispatch 可核对时将 native worker-start state/stage 规范化进诊断，原生对账定向 1 test / 0 skip（20261009T072317.268246300Z）。两项为 7d1a2698 加相应明确源码修改的增量，不改变启动/清理行为，也不声称新的 live 通过。
+
+WFS-M1 保持未验：本任务自动能力/Orca 原生入口落实后，参与人和窗口待安排；现场辨认实现执行/报告/发布/等待合并、源执行失败与报告成功、反馈目标，再人工合并核验唯一交付和后继资格。它可与一期 P1A1-M 集中开展，分别登记；阻塞本任务人工体验签收和一期固定安装构建签收，不新增 #45/#44 的业务依赖。短时 live 未覆盖 24 小时、安装入口或同构建长期恢复；一期活动仍按 phase1.md 保持待验。

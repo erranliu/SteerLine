@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -71,7 +72,11 @@ func (l *ExecutionLifecycle) startNativeWorker(ctx context.Context, snapshot exe
 	var started workerStartReceipt
 	parseErr := json.Unmarshal(result.Payload, &started)
 	if callErr != nil || parseErr != nil {
-		return result, started, previous, &CallError{Cause: errors.Join(callErr, parseErr), Result: result}
+		cause := errors.Join(callErr, parseErr)
+		if parseErr == nil && result.RuntimeID == state.Coordinator.RuntimeID && started.RunID == snapshot.Ref.Target.OrchestrationRun && started.TaskID == turn.TaskID && started.DispatchID != "" {
+			cause = fmt.Errorf("original Orca worker-start returned state=%q stage=%q: %w", started.State, started.Stage, cause)
+		}
+		return result, started, previous, &CallError{Cause: cause, Result: result}
 	}
 	if result.RuntimeID != state.Coordinator.RuntimeID || started.RunID != snapshot.Ref.Target.OrchestrationRun || started.TaskID != turn.TaskID || started.DispatchID == "" {
 		return result, started, previous, errors.New("Orca worker-start receipt changed its original Run/Task/runtime")
