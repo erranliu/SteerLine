@@ -90,13 +90,17 @@ func (c *Client) runWithTimeout(ctx context.Context, timeout time.Duration, bina
 }
 
 func (c *Client) Control(ctx context.Context, helper, action, taskID string) error {
+	return c.ControlExpectedStatus(ctx, helper, action, taskID, "applied")
+}
+
+func (c *Client) ControlExpectedStatus(ctx context.Context, helper, action, taskID, expectedStatus string) error {
 	profile := c.Profile
 	if profile == "" {
 		profile = "controlled"
 	}
 	// Admission expires on the original product request. An admitted claim can
 	// still be applying native preparation; await that same receipt without resend.
-	_, err := c.runWithTimeout(ctx, 390*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile)
+	_, err := c.runWithTimeout(ctx, 390*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile, "-expected-status", expectedStatus)
 	return err
 }
 
@@ -119,11 +123,15 @@ func MainControl(args []string) error {
 	taskID := fs.String("task-id", "", "task ID")
 	profileID := fs.String("profile", "controlled", "execution profile ID")
 	expectedInstance := fs.String("expected-instance", "", "displayed service instance ID; rejects stale targets")
+	expectedStatus := fs.String("expected-status", "applied", "required product receipt status")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *action != "resume_dispatch" && *action != "start_task" {
 		return fmt.Errorf("unsupported E2E control action")
+	}
+	if *expectedStatus != "applied" && !(*action == "start_task" && *expectedStatus == "failed") {
+		return fmt.Errorf("unsupported E2E control status expectation")
 	}
 	c, err := steerlineapp.LoadConfig(*config)
 	if err != nil {
@@ -168,7 +176,7 @@ func MainControl(args []string) error {
 	if err := json.NewEncoder(os.Stdout).Encode(receipt); err != nil {
 		return err
 	}
-	if receipt.Status != "applied" {
+	if receipt.Status != *expectedStatus {
 		return fmt.Errorf("control %s: %s: %s", receipt.Status, receipt.Code, receipt.Message)
 	}
 	return nil

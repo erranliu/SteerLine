@@ -378,7 +378,9 @@ func runE2E(opts options) (code int) {
 		for _, e := range packages[pkg] {
 			tests = append(tests, e.Test)
 		}
-		timeout := "6m"
+		// Each controlled scenario owns a 5m business deadline and cleanup.
+		// A package selecting several independent scenarios needs their sum.
+		timeout := fmt.Sprintf("%dm", 6*len(packages[pkg]))
 		if packages[pkg][0].Env == "live" {
 			timeout = "35m"
 		}

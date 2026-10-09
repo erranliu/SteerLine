@@ -1073,6 +1073,18 @@ func (s *Service) applyLifecycleStepReceipt(run *reconstructiontypes.RunView, re
 		applyWorkflowWorkspaceEvidence(run, fixed.execution, fixed.execution.Workspace)
 	}
 	status, diagnostic := lifecycleOutcome(receipt, callErr)
+	failedStart := candidate.Action == executionbackend.LifecycleStartTurn && status == "rejected" &&
+		receipt.State.Stopped && receipt.State.WorkerAbsent && receipt.State.WritersAbsent
+	if failedStart {
+		// The adapter proved the original start's resources were stopped and
+		// released. Retain the intent/effects, but stop retrying its pending input.
+		fixed.execution.PendingCommandID, fixed.execution.PendingTurnID = "", ""
+		fixed.execution.Status = "blocked"
+		fixed.execution.RecoveryRequired, fixed.execution.RecoveryState = true, "unverified"
+		fixed.execution.RecoveryVersion++
+		fixed.execution.RecoveryMarkedAt = ptr(now())
+		fixed.attempt.Status, fixed.attempt.UpdatedAt = "failed", now()
+	}
 	if callErr == nil && status == "accepted" && receipt.State.ResourceID == "" && receipt.State.WorktreeID == "" && receipt.Process == nil {
 		status, diagnostic = "outcome_unknown", "resource lifecycle receipt did not identify its accepted resource"
 	}
@@ -1127,7 +1139,7 @@ func (s *Service) applyLifecycleStepReceipt(run *reconstructiontypes.RunView, re
 	if status == "accepted" && receipt.State.ResourcePending && candidate.Action == executionbackend.LifecycleCreateResource {
 		return errLifecycleResourcePending
 	}
-	if hadUnknownMutation && fixed.execution.Environment != nil {
+	if hadUnknownMutation && fixed.execution.Environment != nil && !failedStart {
 		// The original identity can be reconciled while still preserving the
 		// explicit host recheck which an uncertain preparation requires.
 		if err := s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "lifecycle.reconciliation", Detail: "Original operation was reconciled after losing its mutation receipt; confirm the retained environment before more input."}); err != nil {

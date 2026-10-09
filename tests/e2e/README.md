@@ -15,6 +15,8 @@ go run ./cmd/test-feedback -level=L2
 go run ./cmd/test-feedback -level=L2 -env=controlled
 # L3 环境分开，不自动串跑
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled
+# Orca 启动异常：慢响应、开始未确认、回执丢失与失败释放后的重启收敛
+go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=recovery.orca-startup.slow,recovery.orca-startup.unobserved,recovery.orca-startup.lost,recovery.orca-startup.failed'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.orca-codex'
 go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-codex'
@@ -34,6 +36,7 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L2 live | `smoke.local-codex` / `smoke.orca-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
 | L3 controlled | `delivery.basic` | 验证 A 唯一 Delivery 解锁 B；B dependency-ready 且未创建 WorkflowRun |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
+| L3 controlled | `recovery.orca-startup.slow` / `.unobserved` / `.lost` / `.failed` | 四个独立外部 Orca CLI fixture 场景：慢启动、已接受但开始未确认、回执丢失和确定失败；核验原输入保留、精确释放、终态收敛及重启不重派 |
 | L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、console/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
 | L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核实真实 trash、CLI/控制台查询、重启及无关任务启动 |
 | L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
