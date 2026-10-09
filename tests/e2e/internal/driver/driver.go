@@ -4,6 +4,7 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	executionreconstruction "github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -98,10 +99,7 @@ func (c *Client) ControlExpectedStatus(ctx context.Context, helper, action, task
 	if profile == "" {
 		profile = "controlled"
 	}
-	// ResolveIdentity is bounded at 25s; the product control request has a 2m
-	// lifetime. Native preparation must get that same receipt window, without
-	// submitting another request when a terminal is still starting.
-	_, err := c.runWithTimeout(ctx, 150*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile, "-expected-status", expectedStatus)
+	_, err := c.runWithTimeout(ctx, controlObservationTimeout(action), helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile, "-expected-status", expectedStatus)
 	return err
 }
 
@@ -110,7 +108,7 @@ func (c *Client) ControlTargeted(ctx context.Context, helper, action, taskID, ex
 	if profile == "" {
 		profile = "controlled"
 	}
-	_, err := c.runWithTimeout(ctx, 150*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID,
+	_, err := c.runWithTimeout(ctx, controlObservationTimeout(action), helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID,
 		"-profile", profile, "-expected-instance", expectedInstance)
 	return err
 }
@@ -169,6 +167,16 @@ func MainControl(args []string) error {
 	ctx, cancel := context.WithDeadline(context.Background(), request.ExpiresAt)
 	defer cancel()
 	receipt, err := steerline.WaitControlReceipt(ctx, hostConfig, request.RequestID, 100*time.Millisecond)
+	if errors.Is(err, context.DeadlineExceeded) {
+		accepted, readErr := steerline.ReadVerifiedControlReceipt(hostConfig, request.RequestID)
+		if readErr == nil && mayObserveAcceptedStart(request, accepted) {
+			// ExpiresAt bounds admission. A durably accepted native startup can
+			// exceed it; observe the same request, never submit a replacement.
+			observation, stop := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer stop()
+			receipt, err = steerline.WaitControlReceipt(observation, hostConfig, request.RequestID, 100*time.Millisecond)
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -179,6 +187,17 @@ func MainControl(args []string) error {
 		return fmt.Errorf("control %s: %s: %s", receipt.Status, receipt.Code, receipt.Message)
 	}
 	return nil
+}
+
+func controlObservationTimeout(action string) time.Duration {
+	if action == "start_task" {
+		return 8 * time.Minute
+	}
+	return 150 * time.Second
+}
+
+func mayObserveAcceptedStart(request productapi.ControlRequest, receipt *productapi.ControlReceipt) bool {
+	return request.Action == "start_task" && receipt != nil && receipt.Action == request.Action && receipt.RequestID == request.RequestID && receipt.InstanceID == request.InstanceID && receipt.Status == "applying" && receipt.AcceptedAt != nil && receipt.RunID != "" && receipt.AttemptID != ""
 }
 
 func (c *Client) Tasks(ctx context.Context) (storageports.NativeTaskPage, error) {
