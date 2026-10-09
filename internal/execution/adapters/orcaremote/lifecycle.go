@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
@@ -19,8 +18,6 @@ type ExecutionLifecycle struct {
 	setup         executionbackend.LifecycleSetup
 	config        Config
 	client        Client
-	codexPayload  []byte
-	orcaPayload   []byte
 	remotePayload []byte
 }
 
@@ -31,7 +28,7 @@ func (l *ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePoli
 func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	setup = setup.Clone()
 	snapshot := setup.Snapshot
-	if snapshot.Ref.Backend != executionbackend.BackendOrca || snapshot.Ref.Protocol != executionbackend.ProtocolOrcaSupervised || snapshot.Ref.Agent.Name != "codex" || setup.ProcessHost == nil {
+	if snapshot.Ref.Backend != executionbackend.BackendOrca || snapshot.Ref.Protocol != executionbackend.ProtocolOrcaSupervised || strings.TrimSpace(snapshot.Ref.Agent.Name) == "" || setup.ProcessHost == nil {
 		return nil, &Error{Code: executionbackend.BackendUnsupported, Diagnostic: "supervised lifecycle setup differs from its fixed implementation target"}
 	}
 	decode := func(key string) ([]byte, error) {
@@ -51,30 +48,10 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 		if err := found.ValidateProfileIdentity(snapshot.Session.ProjectID, setup.ProfileID, setup.AcceptedConfigVersion); err != nil {
 			return nil, err
 		}
-		version := 1
-		if key == codexworker.ProfileCodecKey {
-			version = codexworker.ProfileCodecVersion
-		}
-		if found.CodecVersion != version || found.Purpose != executionbackend.ImplementationConfigPurpose {
-			return nil, fmt.Errorf("unsupported supervised profile envelope %q", key)
+		if found.CodecVersion != ProfileCodecVersion || found.Purpose != executionbackend.ImplementationConfigPurpose {
+			return nil, fmt.Errorf("unsupported remote profile envelope %q", key)
 		}
 		return append([]byte(nil), found.Payload...), nil
-	}
-	codexPayload, err := decode(codexworker.ProfileCodecKey)
-	if err != nil {
-		return nil, err
-	}
-	codex, err := codexworker.DecodeProfileConfig(codexPayload)
-	if err != nil {
-		return nil, err
-	}
-	orcaPayload, err := decode(orcaworker.ProfileCodecKey)
-	if err != nil {
-		return nil, err
-	}
-	orca, err := orcaworker.DecodeProfileConfig(orcaPayload)
-	if err != nil {
-		return nil, err
 	}
 	remotePayload, err := decode(ProfileCodecKey)
 	if err != nil {
@@ -84,8 +61,8 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 	if err != nil {
 		return nil, err
 	}
-	executable := orca.Executable
-	args := append([]string(nil), orca.Args...)
+	executable := profile.Executable
+	args := append([]string(nil), profile.Args...)
 	commandTimeout := setup.CommandTimeout
 	if commandTimeout <= 0 {
 		commandTimeout = 30 * time.Second
@@ -114,25 +91,24 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 	}
 	config := Config{
 		Repository: setup.RepositoryPath, ProjectID: snapshot.Session.ProjectID, Agent: snapshot.Ref.Agent.Name,
-		Model: codex.Model, ReasoningEffort: codex.ReasoningEffort, CommandTimeout: commandTimeout.String(),
+		Model: profile.Model, ReasoningEffort: profile.ReasoningEffort, CommandTimeout: commandTimeout.String(),
 		ExpectedRemoteRuntime: snapshot.Ref.External.RuntimeID,
 		Settings: Settings{ConnectionID: profile.ConnectionID, EnvironmentID: profile.EnvironmentID,
 			RepositorySelector: profile.RepositorySelector, CoordinatorTerminal: profile.CoordinatorTerminal,
-			ExpectedCodexVersion: profile.ExpectedCodexVersion, PollInterval: profile.PollInterval},
-		Call: call, Origin: origin,
+			PollInterval: profile.PollInterval},
+		Call: call, Origin: origin, CoordinatorShell: profile.Shell,
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &ExecutionLifecycle{setup: setup, config: config, client: New(config), codexPayload: codexPayload,
-		orcaPayload: orcaPayload, remotePayload: remotePayload}, nil
+	return &ExecutionLifecycle{setup: setup, config: config, client: New(config), remotePayload: remotePayload}, nil
 }
 
 func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
 	if err := sameLifecycleTarget(l.setup.Snapshot.Ref, setup.Snapshot.Ref); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	if err := ValidateProfileSelection(setup.Snapshot.Ref.Agent.Name, l.codexPayload, l.orcaPayload, l.remotePayload); err != nil {
+	if err := ValidateProfileSelection(setup.Snapshot.Ref.Agent.Name, l.remotePayload); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
 	pair, err := Preflight(ctx, l.config)

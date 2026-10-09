@@ -37,7 +37,7 @@ func (s *Scenario) newRemoteProject() *Project {
 	p.OrcaExecutable = executable
 	p.enableGitHub()
 	// Contracts travel through the isolated Git base. Worker credentials remain
-	// on the paired host; no center auth, absolute temp path or Codex home is sent.
+	// on the paired host; no center auth, absolute temp path or private agent home is sent.
 	publish := `$ErrorActionPreference='Stop'
 git add -- result.txt
 if ($LASTEXITCODE -ne 0) { throw 'stage failed' }
@@ -57,9 +57,9 @@ if ($prs.Count -eq 1) { Write-Output $prs[0].url } else {
 }
 `
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(publish), 0600))
-	agents := "# Isolated remote Orca fixture\n\nOnly perform the bound business task in this worktree. Preserve original Spec/Plan files. Use the remote host's native tools and authentication. Follow the original Orca preamble to report worker_done exactly once; writing a file or saying done is insufficient. Never request other agents, reset the worktree, change global Orca/Codex settings or push to main.\n"
+	agents := "# Isolated remote Orca fixture\n\nOnly perform the bound business task in this worktree. Preserve original Spec/Plan files. Use the remote host's native tools and authentication. Follow the original Orca preamble to report worker_done exactly once; writing a file or saying done is insufficient. Never request other agents, reset the worktree, change global host or agent settings or push to main.\n"
 	spec := "# Remote live delivery\n\nCreate result.txt containing exactly `remote first turn` followed by one newline, UTF-8 without BOM. Verify its exact content, then run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. This commits, pushes the assigned head and creates the real isolated GitHub PR. Report its complete URL in final and in Orca worker_done. Subsequent feedback uses the same script to update the same PR.\n\n## Acceptance\n\nThe first result matches the contract and the original agent completes feedback on the same branch before merge.\n"
-	plan := "# Remote fixture plan\n\nRead the original Spec. Write and verify result.txt; execute publish.ps1 once; report the PR URL through Orca.\n\n## Test plan\n\nCompare the exact file content. The harness verifies both commits, remote session/model/usage, PR head/base and unique delivery after merge.\n"
+	plan := "# Remote fixture plan\n\nRead the original Spec. Write and verify result.txt; execute publish.ps1 once; report the PR URL through Orca.\n\n## Test plan\n\nCompare the exact file content. The harness verifies both commits, original Orca public output source, launch selection, PR head/base and unique delivery after merge.\n"
 	for name, content := range map[string]string{"AGENTS.md": agents, "docs/spec/task.spec.md": spec, "docs/spec/task.plan.md": plan} {
 		s.Must(os.WriteFile(filepath.Join(p.Repo, filepath.FromSlash(name)), []byte(content), 0600))
 	}
@@ -68,7 +68,7 @@ if ($prs.Count -eq 1) { Write-Output $prs[0].url } else {
 	p.git(p.Repo, "push", "--quiet", "origin", p.BaseBranch)
 	base := p.git(p.Repo, "rev-parse", "HEAD")
 	bootstrap := peer.Pair.RepositoryID + "::" + peer.RepoPath
-	_, err = peer.Shell(s.Context, bootstrap, requestID(), `gh api user --jq .login | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'remote GitHub authentication unavailable' }; codex --version | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'remote Codex unavailable' }; git -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags origin `+native.PSQuote("refs/heads/"+p.BaseBranch)+`; if ($LASTEXITCODE -ne 0) { throw 'remote base fetch failed' }; $head=(git rev-parse FETCH_HEAD).Trim(); if ($head -cne `+native.PSQuote(base)+`) {throw 'remote fetched another base'}; @{base=$head;ready=$true}`)
+	_, err = peer.Shell(s.Context, bootstrap, requestID(), `gh api user --jq .login | Out-Null; if ($LASTEXITCODE -ne 0) { throw 'remote GitHub authentication unavailable' }; git -c credential.helper= -c 'credential.helper=!gh auth git-credential' fetch --no-tags origin `+native.PSQuote("refs/heads/"+p.BaseBranch)+`; if ($LASTEXITCODE -ne 0) { throw 'remote base fetch failed' }; $head=(git rev-parse FETCH_HEAD).Trim(); if ($head -cne `+native.PSQuote(base)+`) {throw 'remote fetched another base'}; @{base=$head;ready=$true}`)
 	s.Must(err)
 	// Register the independent center checkout solely for its coordinator shell.
 	_, err = p.orca(s.Context, "repo", "add", "--path", p.Repo, "--json")
@@ -91,51 +91,27 @@ if ($prs.Count -eq 1) { Write-Output $prs[0].url } else {
 	return p
 }
 
-func (p *Project) remoteUsage(ctx context.Context, snap Snapshot, label string) (native.Usage, error) {
-	var usage native.Usage
+func (p *Project) remoteOutput(ctx context.Context, snap Snapshot, label string) (native.RemoteOutputEvidence, error) {
+	var output native.RemoteOutputEvidence
 	if p.RemoteOrca == nil || len(snap.Domain.Executions) != 1 {
-		return usage, errors.New("remote usage needs exact execution")
+		return output, errors.New("public remote output needs one exact execution")
 	}
 	e := snap.Domain.Executions[0]
 	if e.Process == nil || e.Process.ExecutionHost != p.RemoteOrca.Manifest.EnvironmentID || e.Process.RuntimeID != p.RemoteOrca.Pair.RemoteRuntime {
-		return usage, errors.New("remote usage host binding differs")
+		return output, errors.New("remote public output target mismatch")
 	}
-	settings, err := evidence.ModelSelection(snap.Domain)
+	settings, err := evidence.RemoteModelSelection(snap.Domain)
 	if err != nil || settings.Model != native.Model || settings.Effort != native.Effort {
-		return usage, errors.New("remote frozen model differs")
+		return output, errors.New("frozen Orca launch selection differs")
 	}
-	script := `$cwd=` + native.PSQuote(e.Workspace.Worktree) + `; $homePath=$env:CODEX_HOME; if (!$homePath) {$homePath=Join-Path $env:USERPROFILE '.codex'}; $leaf=Split-Path $cwd -Leaf; $matches=@(); foreach ($f in (Get-ChildItem -LiteralPath (Join-Path $homePath 'sessions') -Filter '*.jsonl' -File -Recurse)) {
- $first=Get-Content -LiteralPath $f.FullName -TotalCount 1 -Encoding UTF8
- if (!$first.Contains($leaf)) {continue}
- try {$meta=$first|ConvertFrom-Json} catch {throw 'bound remote session header malformed'}
- if ($meta.type -eq 'session_meta' -and $meta.payload.cwd.Replace('/','\').TrimEnd('\') -ieq $cwd.Replace('/','\').TrimEnd('\') -and !$meta.payload.parent_thread_id -and !$meta.payload.source.subagent) {$matches+=,$f}
-}; if ($matches.Count -ne 1) {throw ('remote root session matches='+$matches.Count)}
-$lines=@(); foreach ($line in (Get-Content -LiteralPath $matches[0].FullName -Encoding UTF8)) {
- try {$event=$line|ConvertFrom-Json} catch {throw 'bound remote session event malformed'}
- if ($event.type -eq 'session_meta') {$selected=@{type=$event.type;payload=@{id=$event.payload.id;cwd=$event.payload.cwd;source=$event.payload.source;parent_thread_id=$event.payload.parent_thread_id}}; $lines+=,($selected|ConvertTo-Json -Depth 8 -Compress)}
- elseif ($event.type -eq 'turn_context') {$selected=@{type=$event.type;payload=@{turn_id=$event.payload.turn_id;model=$event.payload.model;effort=$event.payload.effort;reasoning_effort=$event.payload.reasoning_effort}}; $lines+=,($selected|ConvertTo-Json -Compress)}
- elseif ($event.type -eq 'event_msg' -and $event.payload.type -in @('token_count','task_started','task_complete')) {$selected=@{type=$event.type;payload=@{type=$event.payload.type;turn_id=$event.payload.turn_id;info=@{total_token_usage=$event.payload.info.total_token_usage}}};$lines+=,($selected|ConvertTo-Json -Depth 6 -Compress)}
-}; @{raw=($lines -join "` + "`n" + `");cwd=$cwd}`
-	raw, err := p.RemoteOrca.Shell(ctx, e.Process.WorktreeID, requestID(), script)
-	if err != nil {
-		return usage, err
+	output, err = p.RemoteOrca.Output(ctx, e.Process.Dispatch, snap.Helper.PR.URL)
+	if output.Provider != e.Agent {
+		return output, errors.New("Orca provider differs from opaque selected agent")
 	}
-	var result struct{ Raw, Cwd string }
-	if json.Unmarshal(raw, &result) != nil || result.Cwd != e.Workspace.Worktree {
-		return usage, errors.New("remote usage receipt changed cwd")
+	if writeErr := controlled.Write(filepath.Join(p.Scenario.Output, "remote-"+label+"-public-output.json"), output); writeErr != nil {
+		return output, writeErr
 	}
-	matched, err := native.BusinessRolloutMatches([]byte(result.Raw), result.Cwd)
-	if err != nil || !matched {
-		return usage, errors.New("remote usage did not select original root session")
-	}
-	usage, filtered, err := native.RolloutUsage([]byte(result.Raw), result.Cwd)
-	if writeErr := os.WriteFile(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.jsonl"), filtered, 0600); writeErr != nil {
-		return usage, writeErr
-	}
-	if writeErr := controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.json"), usage); writeErr != nil {
-		return usage, writeErr
-	}
-	return usage, err
+	return output, err
 }
 
 func RemoteDelivery(s *Scenario) {
@@ -154,7 +130,7 @@ func RemoteDelivery(s *Scenario) {
 	}
 	s.register("orca-remote-worktree", original.Process.WorktreeID, 0)
 	p.verifyRemoteFile(first, "remote first turn")
-	firstUsage, err := p.remoteUsage(s.Context, first, "first")
+	firstOutput, err := p.remoteOutput(s.Context, first, "first")
 	s.Must(err)
 	for _, task := range first.Page.Tasks {
 		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) != 0) {
@@ -204,10 +180,10 @@ func RemoteDelivery(s *Scenario) {
 		s.t.Fatal("remote feedback replaced session/workspace or failed to update original PR")
 	}
 	p.verifyRemoteFile(second, "remote second turn")
-	secondUsage, err := p.remoteUsage(s.Context, second, "second")
+	secondOutput, err := p.remoteOutput(s.Context, second, "second")
 	s.Must(err)
-	if secondUsage.Session != firstUsage.Session || secondUsage.Turn == firstUsage.Turn || secondUsage.Tokens.Total <= firstUsage.Tokens.Total {
-		s.t.Fatal("remote feedback session/usage continuity missing")
+	if secondOutput.SourceIdentity != firstOutput.SourceIdentity || secondOutput.DispatchID == firstOutput.DispatchID {
+		s.t.Fatal("remote feedback public output continuity missing")
 	}
 	p.Merge()
 	done := p.WaitPhase("completed")
@@ -223,14 +199,14 @@ func RemoteDelivery(s *Scenario) {
 			s.t.Fatal("remote successor not ready and unstarted")
 		}
 	}
-	finalUsage, err := p.remoteUsage(s.Context, done, "final")
+	finalOutput, err := p.remoteOutput(s.Context, done, "final")
 	s.Must(err)
-	if finalUsage != secondUsage {
-		s.t.Fatal("merge/polling started another model turn")
+	if finalOutput != secondOutput {
+		s.t.Fatal("merge/polling changed original public output")
 	}
 	proof := done.Helper.PR
 	p.RealPRProof = &proof
-	s.usageVerified = true
+	s.remoteOutputVerified = true
 	s.Must(s.finishBody())
 	p.StopService()
 }

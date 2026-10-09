@@ -15,7 +15,7 @@ func (b Backend) Identity() (executionbackend.BackendKind, executionbackend.Exec
 
 func (b Backend) Probe(ctx context.Context, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec) (executionbackend.CapabilityReport, error) {
 	fixedTarget := b.config.Target()
-	if agent.Name != "codex" || !SameBaseTarget(target, fixedTarget) {
+	if agent.Name != b.config.Agent || !SameBaseTarget(target, fixedTarget) {
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "supervised Orca probe target or agent differs from fixed configuration"}
 	}
 	pair, err := Preflight(ctx, b.config)
@@ -28,7 +28,6 @@ func (b Backend) Probe(ctx context.Context, target executionbackend.ExecutionTar
 func (b Backend) report(target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, pair PreflightResult) executionbackend.CapabilityReport {
 	report := capabilityReport(executionbackend.BackendOrca, executionbackend.ProtocolOrcaSupervised, target, agent, pair.RemoteVersion)
 	report.CenterVersion = pair.CenterVersion
-	report.ExpectedAgentVersion = b.config.Settings.ExpectedCodexVersion
 	report.Capabilities = append(report.Capabilities,
 		executionbackend.Capability{Name: "message_inbox", Status: executionbackend.CapabilityNotTested},
 		executionbackend.Capability{Name: "remote_cancellation", Status: executionbackend.CapabilityUnsupported, Evidence: "Spec 03 fixes remote_cancel_available=false"},

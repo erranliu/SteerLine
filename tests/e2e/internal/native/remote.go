@@ -216,8 +216,72 @@ func (r *RemoteOrca) Shell(ctx context.Context, worktreeID, nonce, script string
 }
 
 func RemoteProfileConfigs(executable string, m RemoteManifest) ([]executionbackend.ImplementationConfigInput, error) {
-	worker, _ := json.Marshal(map[string]string{"executable": "codex", "model": Model, "reasoning_effort": Effort})
-	terminal, _ := json.Marshal(orcaworker.ProfileConfig{Executable: executable, Shell: "powershell.exe", WaitTimeout: "4m"})
-	peer, err := remote.EncodeProfileConfig(remote.ProfileConfig{ConnectionID: m.ConnectionID, EnvironmentID: m.EnvironmentID, RepositorySelector: m.RepositorySelector, PollInterval: "1s", CapabilityReportVersion: 1})
-	return []executionbackend.ImplementationConfigInput{{ImplementationKey: "codex.worker-profile", CodecVersion: 2, Payload: worker}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: terminal}, {ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: peer}}, err
+	peer, err := remote.EncodeProfileConfig(remote.ProfileConfig{Executable: executable, Shell: "powershell.exe", WaitTimeout: "4m", Model: Model, ReasoningEffort: Effort, ConnectionID: m.ConnectionID, EnvironmentID: m.EnvironmentID, RepositorySelector: m.RepositorySelector, PollInterval: "1s", CapabilityReportVersion: 1})
+	return []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileCodecKey, CodecVersion: remote.ProfileCodecVersion, Payload: peer}}, err
+}
+
+// RemoteOutputEvidence uses only Orca's public, identity-pinned output pages.
+// Source identity is opaque; provider files and session formats are never read.
+type RemoteOutputEvidence struct {
+	DispatchID, Source, SourceIdentity, Provider string
+	SourceExact                                  bool
+	Messages                                     int
+	UsageStatus                                  string
+}
+
+func (r *RemoteOrca) Output(ctx context.Context, dispatchID, prURL string) (RemoteOutputEvidence, error) {
+	evidence := RemoteOutputEvidence{DispatchID: dispatchID, UsageStatus: "not_exposed_by_orca"}
+	cursor := ""
+	foundPR := false
+	for page := 0; page < 100; page++ {
+		args := []string{"orchestration", "worker-read", "--dispatch", dispatchID, "--source", "auto", "--limit", "100", "--json"}
+		if cursor != "" {
+			args = append(args, "--cursor", cursor)
+		}
+		env, err := r.Raw(ctx, args...)
+		if err != nil {
+			return evidence, err
+		}
+		var output struct {
+			DispatchID, Source, SourceIdentity, Provider string
+			SourceExact                                  bool
+			Transcript                                   struct {
+				Messages []struct {
+					Role   string
+					Blocks []struct{ Type, Text string }
+				}
+				Limited    bool
+				NextCursor string
+			}
+		}
+		if json.Unmarshal(env.Result, &output) != nil || env.Meta.RuntimeID != r.Pair.CenterRuntime || output.DispatchID != dispatchID || output.Source != "transcript" || !output.SourceExact || output.SourceIdentity == "" {
+			return evidence, errors.New("Orca exact public transcript unavailable")
+		}
+		if evidence.SourceIdentity != "" && (evidence.SourceIdentity != output.SourceIdentity || evidence.Provider != output.Provider) {
+			return evidence, errors.New("Orca public output changed source")
+		}
+		evidence.Source, evidence.SourceIdentity, evidence.Provider, evidence.SourceExact = output.Source, output.SourceIdentity, output.Provider, output.SourceExact
+		evidence.Messages += len(output.Transcript.Messages)
+		for _, message := range output.Transcript.Messages {
+			if message.Role == "assistant" {
+				for _, block := range message.Blocks {
+					if block.Type == "text" && strings.Contains(block.Text, prURL) {
+						foundPR = true
+					}
+				}
+			}
+		}
+		if !output.Transcript.Limited {
+			if evidence.Messages == 0 || !foundPR {
+				return evidence, errors.New("public worker output lacks original assistant PR report")
+			}
+			return evidence, nil
+		}
+		next := output.Transcript.NextCursor
+		if next == "" || next == cursor {
+			return evidence, errors.New("Orca public transcript cursor did not advance")
+		}
+		cursor = next
+	}
+	return evidence, errors.New("public transcript pagination exceeded bound")
 }

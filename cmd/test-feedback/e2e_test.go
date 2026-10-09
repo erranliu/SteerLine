@@ -209,3 +209,46 @@ func TestNativeWorkspaceRequiresItsOwnEvidenceWithoutModelUsage(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoteResultRequiresPublicOutputAndHonestUsageStatus(t *testing.T) {
+	entry := e2eScenario{ID: "delivery.orca-remote-codex", Test: "TestRemote", Env: "live", Level: "L3", Chain: "orca-remote-codex"}
+	out := t.TempDir()
+	dir := filepath.Join(out, "scenarios", entry.ID)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	log := ""
+	for _, event := range []struct{ action, test string }{{"start", ""}, {"run", entry.Test}, {"pass", entry.Test}, {"pass", ""}} {
+		raw, err := json.Marshal(map[string]any{"Time": "2026-10-09T00:00:00Z", "Elapsed": 0, "Action": event.action, "Package": "p", "Test": event.test})
+		if err != nil {
+			t.Fatal(err)
+		}
+		log += string(raw) + "\n"
+	}
+	g := scopedGroup{ID: "remote", Packages: []string{"p"}, Summary: testfeedback.Parse([]byte(log), 0)}
+	for _, tc := range []struct {
+		name           string
+		public, usage  bool
+		status         string
+		mergedPR, pass bool
+	}{
+		{"missing public output", false, false, "not_exposed_by_orca", true, false},
+		{"missing usage status", true, false, "", true, false},
+		{"claimed token verification", true, true, "not_exposed_by_orca", true, false},
+		{"missing merge", true, false, "not_exposed_by_orca", false, false},
+		{"complete public evidence", true, false, "not_exposed_by_orca", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			evidence := map[string]any{"id": entry.ID, "passed": true, "cleanup_complete": true, "resources": []any{map[string]string{"kind": "project"}}, "remote_public_output_verified": tc.public, "usage_verified": tc.usage, "remote_usage_status": tc.status}
+			if tc.mergedPR {
+				evidence["real_pr"] = map[string]any{"url": "https://github.com/erranliu/SteerlineTest/pull/168", "state": "merged", "repository": "erranliu/SteerlineTest", "merged": true}
+			}
+			if err := writeJSON(filepath.Join(dir, "scenario.json"), evidence); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkE2EGroup(g, []e2eScenario{entry}, out); (err == nil) != tc.pass {
+				t.Fatalf("unexpected evidence gate result: %v", err)
+			}
+		})
+	}
+}

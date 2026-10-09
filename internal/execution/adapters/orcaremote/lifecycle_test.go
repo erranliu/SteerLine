@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
@@ -34,15 +33,7 @@ func (lifecycleTestHost) OutputCommand(context.Context, executionbackend.LaunchC
 func remoteLifecycleSetup(t *testing.T) (executionbackend.LifecycleSetup, executionbackend.LifecycleSnapshot) {
 	t.Helper()
 	const accepted = "accepted-profile-v1"
-	codexPayload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "pinned-model", ReasoningEffort: "high"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	orcaPayload, err := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "2m"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	remotePayload, err := EncodeProfileConfig(ProfileConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "configured-coordinator", PollInterval: "1s", CapabilityReportVersion: 1})
+	remotePayload, err := EncodeProfileConfig(ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "2m", Model: "pinned-model", ReasoningEffort: "high", ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "configured-coordinator", PollInterval: "1s", CapabilityReportVersion: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,11 +41,8 @@ func remoteLifecycleSetup(t *testing.T) (executionbackend.LifecycleSetup, execut
 	for _, item := range []struct {
 		key     string
 		payload []byte
-	}{{codexworker.ProfileCodecKey, codexPayload}, {orcaworker.ProfileCodecKey, orcaPayload}, {ProfileCodecKey, remotePayload}} {
-		version := 1
-		if item.key == codexworker.ProfileCodecKey {
-			version = codexworker.ProfileCodecVersion
-		}
+	}{{ProfileCodecKey, remotePayload}} {
+		version := ProfileCodecVersion
 		envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
 			CodecVersion: version, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: item.key,
 			ProjectID: "project", ProfileID: "remote", AcceptedConfigVersion: accepted,

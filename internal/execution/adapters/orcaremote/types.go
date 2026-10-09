@@ -13,9 +13,10 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-type Settings struct{ ConnectionID, EnvironmentID, RepositorySelector, CoordinatorTerminal, ExpectedCodexVersion, PollInterval string }
+type Settings struct{ ConnectionID, EnvironmentID, RepositorySelector, CoordinatorTerminal, PollInterval string }
 
 type Config struct {
+	CoordinatorShell                                                     string
 	ExpectedRemoteRuntime                                                string
 	Settings                                                             Settings
 	Repository, ProjectID, Agent, Model, ReasoningEffort, CommandTimeout string

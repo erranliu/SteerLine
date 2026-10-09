@@ -40,13 +40,13 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 		{Key: orcaworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, host, _ string) ([]byte, []string, error) {
 			return orcaworker.NormalizeProfilePayload(payload, host)
 		}},
-		{Key: remote.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _, _ string) ([]byte, []string, error) {
+		{Key: remote.ProfileCodecKey, Version: remote.ProfileCodecVersion, Normalize: func(payload []byte, _, _ string) ([]byte, []string, error) {
 			return remote.NormalizeProfilePayload(payload)
 		}},
 	}
 	localKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendLocal, Agent: "codex", Protocol: executionbackend.ProtocolLocalCodexAppServer}
 	terminalKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "codex", Protocol: executionbackend.ProtocolOrcaTerminalV2}
-	supervisedKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "codex", Protocol: executionbackend.ProtocolOrcaSupervised}
+	supervisedKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "*", Protocol: executionbackend.ProtocolOrcaSupervised}
 	entries := []execution.ExecutionRegistration{
 		{
 			Key: localKey, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey},
@@ -109,7 +109,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			ValidatePublicationPolicy: validateWorkerPublicationPolicy,
 		},
 		{
-			Key: supervisedKey, ProfileKey: "orca/orca_supervised/codex", WorkspaceBranchPrefix: "codex", ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey, remote.ProfileCodecKey},
+			Key: supervisedKey, ProfileKey: "orca/orca_supervised", WorkspaceBranchPrefix: "worker", ProfileCodecKeys: []string{remote.ProfileCodecKey},
 			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca_supervised",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return remote.NewBackend(remoteWorkerConfig(c, processHost, directory))
@@ -198,7 +198,7 @@ func validateTerminalProfileSelection(agent string, payloads map[string][]byte) 
 }
 
 func validateSupervisedProfileSelection(agent string, payloads map[string][]byte) error {
-	return remote.ValidateProfileSelection(agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey], payloads[remote.ProfileCodecKey])
+	return remote.ValidateProfileSelection(agent, payloads[remote.ProfileCodecKey])
 }
 
 func validateLocalConfig(_ context.Context, c execution.Config, directory *execution.ExecutionDirectory) error {
@@ -423,18 +423,16 @@ func nativeTerminalConfig(c execution.Config, target executionbackend.ExecutionT
 }
 
 func remoteWorkerConfig(c execution.Config, processHost executionbackend.ManagedProcessHost, directory *execution.ExecutionDirectory) remote.Config {
-	worker, _ := codexSettings(c, directory)
 	settings, _ := remoteSettings(c, directory)
-	client := orcaworker.New(nativeTerminalConfig(c, executionbackend.ExecutionTarget{}, processHost, directory))
-	config := remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: worker.Model,
-		ReasoningEffort: worker.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: client.Raw,
+	call := func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
+		all := append(append([]string(nil), settings.Args...), args...)
+		return (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: settings.Executable}, all...)
+	}
+	return remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: settings.Model, ReasoningEffort: settings.ReasoningEffort, CoordinatorShell: settings.Shell, CommandTimeout: c.CommandTimeout, Call: call,
+		Settings: remote.Settings{ConnectionID: settings.ConnectionID, EnvironmentID: settings.EnvironmentID, RepositorySelector: settings.RepositorySelector, CoordinatorTerminal: settings.CoordinatorTerminal, PollInterval: settings.PollInterval},
 		Origin: func(ctx context.Context) ([]byte, error) {
 			return (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
 		}}
-	config.Settings = remote.Settings{ConnectionID: settings.ConnectionID, EnvironmentID: settings.EnvironmentID,
-		RepositorySelector: settings.RepositorySelector, CoordinatorTerminal: settings.CoordinatorTerminal,
-		ExpectedCodexVersion: settings.ExpectedCodexVersion, PollInterval: settings.PollInterval}
-	return config
 }
 
 func buildPolicyResource(ctx context.Context, request execution.PolicyResourceBuildRequest) (execution.PolicyResourceBuildResult, error) {

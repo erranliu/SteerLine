@@ -473,13 +473,15 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			return fmt.Errorf("scenario %s completed %d times", e.ID, seen[e.Test])
 		}
 		var evidence struct {
-			ID                      string           `json:"id"`
-			Passed                  bool             `json:"passed"`
-			Cleanup                 bool             `json:"cleanup_complete"`
-			Resources               []map[string]any `json:"resources"`
-			UsageVerified           bool             `json:"usage_verified"`
-			NativeWorkspaceVerified bool             `json:"native_workspace_verified"`
-			RealPR                  *struct {
+			ID                         string           `json:"id"`
+			Passed                     bool             `json:"passed"`
+			Cleanup                    bool             `json:"cleanup_complete"`
+			Resources                  []map[string]any `json:"resources"`
+			RemotePublicOutputVerified bool             `json:"remote_public_output_verified"`
+			RemoteUsageStatus          string           `json:"remote_usage_status"`
+			UsageVerified              bool             `json:"usage_verified"`
+			NativeWorkspaceVerified    bool             `json:"native_workspace_verified"`
+			RealPR                     *struct {
 				URL, State, Repository string
 				Merged                 bool
 			} `json:"real_pr,omitempty"`
@@ -491,8 +493,11 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		if err = json.Unmarshal(raw, &evidence); err != nil || evidence.ID != e.ID || !evidence.Passed || !evidence.Cleanup || len(evidence.Resources) == 0 {
 			return fmt.Errorf("invalid or incomplete evidence for %s", e.ID)
 		}
-		if e.Env == "live" && !evidence.UsageVerified {
+		if e.Env == "live" && e.Chain != "orca-remote-codex" && !evidence.UsageVerified {
 			return fmt.Errorf("native token usage not verified for %s", e.ID)
+		}
+		if e.Chain == "orca-remote-codex" && (!evidence.RemotePublicOutputVerified || evidence.UsageVerified || evidence.RemoteUsageStatus != "not_exposed_by_orca") {
+			return fmt.Errorf("remote public output evidence missing or private usage claimed for %s", e.ID)
 		}
 		if e.Env == "native" && (!evidence.NativeWorkspaceVerified || evidence.UsageVerified || evidence.RealPR != nil) {
 			return fmt.Errorf("native no-model workspace evidence missing or mixed with model/PR evidence for %s", e.ID)

@@ -16,8 +16,8 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 		return PreflightResult{}, err
 	}
 	sc := &c.Settings
-	if c.Model == "" || c.ReasoningEffort == "" || c.Agent != "codex" {
-		return PreflightResult{}, errors.New("supervised Orca requires an explicit Codex model and reasoning effort")
+	if strings.TrimSpace(c.Agent) == "" || (c.ReasoningEffort != "" && c.Model == "") {
+		return PreflightResult{}, errors.New("remote Orca agent/launch selection is incomplete")
 	}
 	client := Client{config: c}
 	timeout := positiveDuration(c.CommandTimeout, 30*time.Second)

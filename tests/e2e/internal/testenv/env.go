@@ -31,6 +31,7 @@ import (
 
 type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
+	remoteOutputVerified    bool
 	bodyFinishedAt          time.Time
 	bodyContextErr          error
 	Run                     Run
@@ -718,7 +719,7 @@ func (s *Scenario) cleanup() {
 		if err != nil {
 			_ = controlled.Write(filepath.Join(s.Output, p.Name+"-diagnostic.json"), map[string]string{"error": err.Error()})
 		}
-		if p.Chain != "" {
+		if p.Chain != "" && p.RemoteOrca == nil {
 			if err := p.captureNativeDiagnostics(); err != nil {
 				failures = append(failures, "native diagnostics: "+err.Error())
 			}
@@ -794,7 +795,7 @@ func (s *Scenario) cleanup() {
 			realPR = p.RealPRProof
 		}
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "native_workspace_verified": s.nativeWorkspaceVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "remote_public_output_verified": s.remoteOutputVerified, "remote_usage_status": map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.remoteOutputVerified], "native_workspace_verified": s.nativeWorkspaceVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
 	if err := controlled.Write(filepath.Join(s.Output, "scenario.json"), evidence); err != nil {
 		s.t.Errorf("write scenario evidence: %v", err)
 	}

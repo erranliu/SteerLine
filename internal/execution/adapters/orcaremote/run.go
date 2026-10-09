@@ -31,7 +31,7 @@ func (b Client) FindRun(ctx context.Context, objective, centerRuntime, coordinat
 }
 
 func (b Client) CreateCoordinator(ctx context.Context, workflowRunID, centerRuntime string) (string, error) {
-	out, callErr := b.config.Call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "terminal", "create", "--worktree", "path:"+b.config.Repository, "--shell", "powershell", "--title", "SteerLine coordinator "+workflowRunID, "--json")
+	out, callErr := b.config.Call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "terminal", "create", "--worktree", "path:"+b.config.Repository, "--shell", b.config.CoordinatorShell, "--title", "SteerLine coordinator "+workflowRunID, "--json")
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
 		return "", &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "per-Run coordinator creation is uncertain; inspect the original WorkflowRun before retry", Cause: errors.Join(callErr, parseErr)}

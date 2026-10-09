@@ -40,7 +40,13 @@ func (b Client) StartTask(ctx context.Context, runID, taskID, worktreeID string,
 		}
 		args = append(args, "--terminal", previous.Terminal)
 	} else {
-		args = append(args, "--agent", "codex", "--model", b.config.Model, "--effort", b.config.ReasoningEffort)
+		args = append(args, "--agent", b.config.Agent)
+		if b.config.Model != "" {
+			args = append(args, "--model", b.config.Model)
+		}
+		if b.config.ReasoningEffort != "" {
+			args = append(args, "--effort", b.config.ReasoningEffort)
+		}
 	}
 	return b.start(ctx, args, pair, runID, worktreeID, taskID, reuse)
 }
@@ -98,7 +104,7 @@ func (b Client) start(ctx context.Context, args []string, pair PreflightResult, 
 		return StartReceipt{}, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "supervised worker start receipt is malformed", Cause: err}
 	}
 	startReceipt := StartReceipt{RunID: result.RunID, TaskID: result.TaskID, DispatchID: result.DispatchID, WorktreeID: result.Worker.WorktreeID, CenterRuntimeID: pair.CenterRuntime, PlatformRequestID: result.Mutation.RequestID, State: result.State, Stage: result.Stage}
-	if result.RunID != workflowRunID || result.TaskID == "" || result.DispatchID == "" || result.Server.EnvironmentID != b.config.Settings.EnvironmentID || (!reuse && (result.Launch.Effective.Agent != "codex" || result.Launch.Effective.Model != b.config.Model || result.Launch.Effective.Effort != b.config.ReasoningEffort)) || (expectedTask != "" && result.TaskID != expectedTask) {
+	if result.RunID != workflowRunID || result.TaskID == "" || result.DispatchID == "" || result.Server.EnvironmentID != b.config.Settings.EnvironmentID || (!reuse && (result.Launch.Effective.Agent != b.config.Agent || (b.config.Model != "" && result.Launch.Effective.Model != b.config.Model) || (b.config.ReasoningEffort != "" && result.Launch.Effective.Effort != b.config.ReasoningEffort))) || (expectedTask != "" && result.TaskID != expectedTask) {
 		return startReceipt, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "supervised worker start receipt does not match the fixed Run/environment/launch identity"}
 	}
 	if result.Mutation.RequestID == "" {

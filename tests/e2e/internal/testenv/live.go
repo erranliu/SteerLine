@@ -255,7 +255,7 @@ func (p *Project) cleanupOrca() error {
 
 func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error) {
 	if p.RemoteOrca != nil {
-		return p.remoteUsage(context.Background(), snap, label)
+		return native.Usage{}, errors.New("token usage is not exposed by the Orca public interface")
 	}
 	var u native.Usage
 	if len(snap.Domain.Executions) != 1 || len(snap.Domain.WorkflowRuns) != 1 {

@@ -37,7 +37,7 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、console/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
 | L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核实真实 trash、CLI/控制台查询、重启及无关任务启动 |
 | L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
-| L3 live | `delivery.orca-remote-codex` | 真实配对 Windows Orca，正式领取与双轮反馈、同会话/工作区、真实 GitHub PR 合并与唯一交付、远端 usage 和 owned 清理 |
+| L3 live | `delivery.orca-remote-codex` | 真实配对 Windows Orca，正式领取与双轮反馈、同会话/工作区、真实 GitHub PR 合并与唯一交付、Orca 精确公开输出和 owned 清理 |
 | L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
 | L3 live | `candidates.local` | manifest 固定本地 Codex + 本机 Orca，两候选真实反馈/PR/唯一交付与后继；使用真实 SteerlineTest GitHub PR |
 
@@ -133,7 +133,7 @@ L3 Orca 发布脚本使用 origin 的正式仓库身份，仅对单次 push 以 
 }
 ```
 
-用 `orca environment list --json`、`orca repo list --environment <环境> --json` 取得精确身份。远端预先准备自身 Codex/GitHub 登录；测试不下发中心认证，不修改 Orca 全局启动设置。runner 将 manifest 路径保存于 Run，再清除继承的 STEERLINE 环境。合同与脚本由独立 GitHub base branch 同步到远端，helper 仅在本次精确目标创建；原生 usage 从该远端按唯一 root session/cwd 读取，不读取本机副本来证明远端模型执行。缺少 manifest、能力、认证或原生证据明确失败。
+用 `orca environment list --json`、`orca repo list --environment <环境> --json` 取得精确身份。远端预先准备自身 Codex/GitHub 登录；测试不下发中心认证，不修改 Orca 全局启动设置。runner 将 manifest 路径保存于 Run，再清除继承的 STEERLINE 环境。合同与脚本由独立 GitHub base branch 同步到远端，helper 仅在本次精确目标创建；远端只通过 Orca worker-read 查询精确 transcript/sourceIdentity/provider，核验原输出源和 PR 正文，不读取 agent 私有文件或运行 agent CLI。当前 Orca 公开接口无 token usage，报告 remote_usage_status=not_exposed_by_orca、usage_verified=false；远端场景必须有 remote_public_output_verified=true，不能因此宣称 token 已验。缺少 manifest、能力、认证或原生证据明确失败。
 
 ```powershell
 $env:STEERLINE_REMOTE_ACCEPTANCE_CONFIG = '<manifest 绝对路径>'
