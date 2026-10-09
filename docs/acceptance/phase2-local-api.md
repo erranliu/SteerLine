@@ -1,6 +1,6 @@
 # 任务 #45 验收记录：本机客户端协议与历史查询
 
-唯一归属 #45；固定范围依据 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`，未改 Spec。Plan 的实现期补充只细化 API1–API5 的真实集成场景、命令与证据位置，不扩大通过条件。最新整合候选 `8cd4199034502642a35576b88226d3ada5ac2583`，tree `9372f76a4d57c3f0be3517d8cf5f722c86ebb62d`；API/HTTP 源码候选 `99c98e2bd02b3c0f75fbdea4919ce54e59927745`，tree `d8b7fad5eff3db07cdb7b5f544c0b68c2509a36c`；新增真实 profile/Delivery 验证提交 `f82c73876e9d1dfae8be380348bd7f5d7db27fc9`，tree `77d296303f5caba8e327e7c21dada626bd0d3c24`。依次合入 main `04c62ee5ddb10637a68745baa4fc4f811123ffa9`、`7ffc6a39197366b1177e104eb75cbc453ccee78a`、`692a784e05479b11e5818fb5a209971949e3064a` 的 console state/feedback、host native-state/Orca target 改动。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
+唯一归属 #45；启动固定来源为 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`。Spec 未改；Plan 原路径保持，已有实现期测试场景补充见后续提交。本轮不改两份规格文档。最新主干 `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` 已含 PR #252/#253；Task #45 实现 PR #249 基于该主干继续修复。P1 service-owned discard 源码提交 `cab6b6dc5e80fa8021316d0e7a5132ff25cbd478`；P2 record-boundary 源码提交经 rebase 为 `d2a0bce0`。此前 main `04c62ee5ddb10637a68745baa4fc4f811123ffa9`、`7ffc6a39197366b1177e104eb75cbc453ccee78a`、`692a784e05479b11e5818fb5a209971949e3064a` 的 console state/feedback、host native-state/Orca target 改动仍在当前整合历史中。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
 
 ## 自动验收
 
@@ -8,8 +8,8 @@
 | --- | --- | --- |
 | API1 | 已验收 | 真实 listener 上缺/错凭证、错 Host/Origin、错路由项目/信封项目/实例及轮换后旧凭证均拒绝；原传输/control/SQLite 请求和 revision/paused facts 不变。轮换后的新凭证成功执行真实 pause/resume，控制 revision 只增加一次。非回环源由 loopback-only 绑定及 `TestAPIIdentityAndAuthentication` 中源地址拒绝断言覆盖。 |
 | API2 | 验收失败 | `GET /presentation` 返回真实非默认 profile；客户端发起 start_candidate 后，受控 backend 实际生成该 profile 的 turn/Decision，正式 request 的查询 digest 与 claim 冻结 digest 分别核对（值不同符合 claim-time remote verification）；正式 provider merge 后，HTTP ShowTask/Snapshot 的 PRURL/workflow/execution/mergedAt 与同库 native Query 一致。旧 `TestAPIQueryParity` 的 SQLite `-shm` `Access is denied` 真实失败仍未精确复现/归因；sidecar 有界重查、持续 ACL 拒绝和真实 WAL 生命周期回归通过，当前 QueryParity 重跑通过不抹除原失败。等待新 reviewer 裁定历史故障，不作环境豁免。 |
-| API3 | 验收失败 | 第三轮正式 configured service 持仓库锁时，合法 `discard_task` 返回 `read_failed: repository already locked: service lock is held`，Task 未丢弃；原锁释放后的原生同请求成功。该正式 service 消费接线由原执行者修复，本轮不处理。以下已通过的 control 原请求分项证据保留： 真实 HTTP + app `ControlInboxPort` + service actor 覆盖 transport 已登记但发送前取消/同信封补交、正式请求已发布但响应丢失/重连 GET 与 retry、正式消费者迟到竞争、8 个并发 duplicate、异版本同 ID conflict。检查正式 request/receipt、原信封与真实 control revision；每个合法 request 只生效一次，外国 revision receipt 不覆盖原请求。round 2 首次 test 断言过严及调整记录见下。 |
-| API4 | 验收失败 | 第三轮 600,243-byte 合法 unknown envelope 写出 1,201,014-byte rejection，超过 1,081,344-byte reader 上限，原 ID GET 与 preflight 失败。持久聚合边界本轮局部修复，精确源码定向验证已通过，待后续独立复审与最终组合核验；以下旧小请求通过证据保留： 重连回到同一服务实例；unsupported 保留为 rejected 回执；未知、SQLite 读取错误和 control 回执读取错误保持不同事实。定向和真实服务 `TestAPIReconnectAndUnsupported` 通过。 |
+| API3 | 已验收 | 真实 HTTP + app `ControlInboxPort` + service actor 覆盖 transport 已登记但发送前取消/同信封补交、正式请求已发布但响应丢失/重连 GET 与 retry、正式消费者迟到竞争、8 个并发 duplicate、异版本同 ID conflict；每个合法 request 只生效一次。复审发现的 configured-service discard 重入锁由 `TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter` 修复并真实验证：writer 沿同一 service actor 工作，原仓库锁全程保持；重连回执、同 envelope duplicate、异内容同 ID 冲突和无重复业务变更均通过。第三轮原始 lock failure 保留见后文。 |
+| API4 | 已验收 | 第三轮 600,243-byte 合法 unknown envelope 曾写出 1,201,014-byte rejection，超过 reader 上限并阻断原 ID GET/preflight。持久聚合边界已在 rebase 后源码 `d2a0bce0` 修复；其后 `internal/product/httpapi` 源码未改变，18 项 HTTP/API 定向、真实原 ID 计数/重连 2 项与 vet 通过，第三轮原始失败保留见后文。 |
 | API5 | 已验收 | 真实应用服务恢复后发布发现/ready 身份、正常关闭与端口冲突诊断通过；配置服务路径不启动替代实例。定向 `TestAPIServiceLifecycle` 与真实服务 `TestAPIServiceLifecycle`、`TestAPIConfiguredServicePublishesDiscovery` 通过。 |
 
 无独立人工验收门槛；真实 UI 操作仍由 2.1 节点安排，不计入本任务自动结果。
@@ -156,3 +156,18 @@ profile digest 摘要勘误：上表按原始 `api-query-nondefault-profile.log`
 未重跑 Full/L1/live；现有 `f82c7387` L1 证据原样保留，不作为本次变更的精确源码结果。本轮 P2 局部定向通过不等于独立最终审核，API4 旧失败保留并等待新复审及最终组合结果；P1/Task 丢弃与 API2 历史 SHM/合法瞬态 denial 证据仍未闭合，PR 未合并，#45 未完成，#44 不释放。
 
 结果文档静态：`python scripts/check_doc_links.py` 266 Markdown/1681 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 84 identity files（9 draft/3 formal）通过；`git diff --check` 通过。原始输出分别为同证据根 `doc-links.log`、`task-ids.log`、`diff-check.log`。
+
+## rebase 后 configured-service P1 修复
+
+Task #45 分支基于 `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` rebase；#45 Spec/Plan 的两个 Git blob 与启动固定提交 `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 完全一致。实现提交 `cab6b6dc5e80fa8021316d0e7a5132ff25cbd478` 将 HTTP 产品客户端的 discard port 绑定到配置服务自己的 `execution.Service`。discard 作为类型化 `Signal` 排入服务已有 actor queue，再由 service-owned `CommandService.DiscardNativeTask` 和已持有的 command store 执行；服务不重新打开 writer、不释放锁、不新增 SQL 写入口或测试专用生产 seam。普通独立客户端仍使用原 TaskCommands 写入端口。
+
+固定 Plan 的 API3 控制故障行保持不变；下面是针对第三轮发现的 configured-service 锁重入缺陷增加的最小补充场景。产品状态及字段仍只由原 native task authority 管理。
+
+| 范围 / 场景 | 命令与结果 | 原始证据 |
+| --- | --- | --- |
+| API3 P1：configured service 持仓库锁时 discard | `go test ./tests/integration -run '^TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter$' -count=1 -v`：1 项通过、0 skip；测试耗时 64.76s。正式 `RunConfiguredService` ready 后先验证 repository lock 被占用；HTTP discard 成功并返回原 envelope 与 typed receipt。关闭并重连后 GET 回原回执，同 envelope retry 不重复变更；同 request ID 异 payload 得到 409 `request_id_conflict`，Task version/authority/graph revision 均不变。服务保持 ready，后续 pause control 仍成功，discard/duplicate/conflict/control 后原仓库锁仍被占用；停服后 discovery 移除且锁可取得。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-configured-discard-e0581348aee744dea00b3b6c130fba9d\api-configured-discard.log` |
+| 受影响 Go 静态 | `go vet ./internal/app ./internal/execution ./internal/product/client`：通过，无诊断。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-p1-vet-feb634e528024a9c9ce7704fa77a56c7\vet.log` |
+
+曾启动 `go test ./internal/execution ./internal/product/client ./internal/app`，在无输出且未完成时为避免扩大为 package-wide rerun 而中断；该命令不记通过或失败。没有重跑 L1/Full/L2/L3/live，既有 `f82c7387` L1 仅保留其历史源码范围。最终 P1 结论只依据上面的真实 configured-service 集成和当前 vet；P2 的 `internal/product/httpapi` 源码自精确 18 项验证后未改变。新候选待独立复审；API2 历史 `-shm AccessDenied` 的系统阶段仍未知，保持验收失败、不作环境豁免；PR #249 未合并，#44 继续等待 #45。
+
+文档静态：`python scripts/check_doc_links.py` 271 Markdown/1740 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 85 identity files（10 draft/4 formal）通过；`git diff --check` 通过。原始输出在 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-final-docs-72f22ca79349478d908e740bfffc05f6`。

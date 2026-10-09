@@ -7,14 +7,14 @@
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
-| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 待执行 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
-| 45 | 本机客户端协议与历史查询 | 无 | 待复审/合并 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) OPEN；第三轮复审 head `99fd5034`、base/main `692a784e`；P2 局部源码提交 `34e9e0ee`（tree `2c0c0d4c`）。API1/API5 已通过；API3 正式 configured service 的 Task 丢弃因原仓库锁重入失败（P1），由原执行者补接线；API4 合法大 unknown rejection 超 reader 上限并阻断原 ID GET/preflight（P2），本轮已修持久聚合边界，精确源码 httpapi 18 项、真实原 ID计数/重连 2 项与 vet 通过；旧失败保留，待新独立复审及最终组合核验。API2 profile/Delivery parity 分项通过，但旧 `-shm` AccessDenied 根因及合法瞬态 denial 恢复证据仍未闭合，保持验收失败。既有 L1 `f82c7387` 12 组/458 项/0 skip 不覆盖本轮新缺陷；#44 等待 #45 修复、复审及真实合并；[记录与证据](../acceptance/phase2-local-api.md) |
+| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 待执行 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 用户已授权与 #45 分开 worktree 并行实现；PR #253 规划内容已合并，尚无 #84 实现交付，故状态仍为待执行。产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
+| 45 | 本机客户端协议与历史查询 | 无 | 待复审/合并 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) OPEN；已 rebase 到 `c4bcbec0`。P1 实现提交 `cab6b6dc` 通过真实 configured-service discard：服务持仓库锁时仍由同一 service actor writer 丢弃 Task；重连/重复/异内容 conflict、无重复状态变化、持续 ready 和 lock retained 均已验。API4 P2 的持久聚合边界修复在 `d2a0bce0`；原 18 项 HTTP 定向、2 项正式集成计数/重连及 vet 证据对应的 httpapi 源码未改变。API1/API3/API4/API5 现有行为证据通过；API2 保留旧 `-shm AccessDenied` 验收失败及未知 syscall 阶段，未作豁免。未重跑 L1/Full；须新独立复审及最终组合核验；#44 继续等待 #45 实际合入；[记录与证据](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
 ## 推进顺序
 
-1. #83 已合入；剩余按 #84 → #45 → #44 串行推进。启动时使用已提交且执行工作区可读取的 Spec/Plan commit 和路径，并核对最新默认主干；本次纳入清单不等于已经启动。
-2. #84 与 #45 无新增业务硬依赖，共同状态/存储/宿主/客户端接线按上述顺序集成，#45 复核 #84 的实际字段与接口版本。#44 仍以 #45 为硬前置；#45 经复审、必要验证和真实合并，结果同步且成果进入最新主干后启动 #44。已有在途执行先核对原 run 与固定契约，不因清单编辑自动中断或切换规格。
+1. #83 已合入；用户于 2026-10-09 授权 #84 与 #45 在独立 worktree 并行实现。#84 当前仍待执行：规划 PR #253 已合入，但尚无 #84 实现交付。启动时使用各自固定 Spec/Plan commit 和路径，核对最新主干及当前状态。
+2. #84 拥有 worker 业务状态、步骤与持久格式语义；#45 拥有本机 HTTP 协议及 configured-service discard 接线，不创建第二业务状态权威。两项可独立实现与验证；共同主干字段/组装/客户端集成须先等 #84 实现 PR 合入，再由 #45 使用实际字段/接口并验证组合。#44 仍以 #45 为硬前置；#45 经独立复审、必要验证和真实 PR 合并且结果进入最新主干后才启动 #44。已有在途执行保持原身份和固定契约。
 3. 后续界面任务留在[草稿](drafts/roadmap.md)，原型确认后再纳入。
 
 ## 待人工验收
@@ -28,6 +28,8 @@
 自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [Orca原生编排](../acceptance/worker-flow-orca-native.md) · [Orca安全重建](../acceptance/worker-service-recovery.md)。
 
 ## 执行记录
+
+2026-10-09，用户确认 #84 与 #45 可在独立 worktree 并行实现，并指定共享主干集成须先合入 #84、再由 #45 对接实际字段/接口；#44 仍等待 #45。#84 的规划 PR #253 已于 `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` 合并，但没有 #84 实现交付，保持待执行。#45 当前在同 PR #249 修复 configured-service discard 锁重入，待新独立复审；固定 #45 Spec/Plan commit/path 不变，API2 历史 `-shm AccessDenied` 仍是验收失败。
 
 2026-10-09，用户确认将 #84 纳入 execution-map，沿用已预留身份及独立 Spec/Plan/专属验收。状态为待执行、尚未启动，产品自动与人工项仍未验；#83 已合入，无未完成硬前置。按一期收尾安排，剩余串行顺序为 #84→#45→#44；#45→#44 的硬依赖保持，共享接线排期不新增业务依赖。文档版本在实际启动前提交并固定，不创建外部 SteerLine Task/DAG。
 
