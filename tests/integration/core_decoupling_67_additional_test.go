@@ -17,6 +17,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -200,6 +201,37 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	require(t, err)
 	if view.SelectedTask == nil || view.SelectedTask.Delivery == nil || view.SelectedTask.Delivery.SelectedWorkflowRunID != first.run.RunID || view.SelectedTask.Delivery.MergeCommit != fixture.commit || view.SelectedTask.Delivery.PRURL != ledger.publicationURL {
 		t.Fatal("product task page lost its original selected workflow/provider delivery")
+	}
+	// Drive the production HTTP server through the application product client
+	// after the controlled provider has persisted its real merge/Delivery fact.
+	httpProduct, err := steerlineapp.OpenClient(ctx, fixture.configPath)
+	require(t, err)
+	httpEndpoint, httpClient, err := newIntegrationHTTPAPI(ctx, fixture, service2, httpProduct)
+	require(t, err)
+	defer httpEndpoint.Close(context.Background())
+	defer httpClient.Close()
+	defer httpProduct.Close()
+	expectedPage := productquery.TaskPage(delivered)
+	if len(expectedPage.Tasks) != 1 || expectedPage.Tasks[0].Delivery == nil {
+		t.Fatalf("native Query source omitted the persisted Delivery: %+v", expectedPage)
+	}
+	httpTaskPage, err := httpClient.ShowTask(ctx, "901")
+	require(t, err)
+	if len(httpTaskPage.Tasks) != 1 || httpTaskPage.Tasks[0].Delivery == nil ||
+		httpTaskPage.Tasks[0].Delivery.PRURL != expectedPage.Tasks[0].Delivery.PRURL ||
+		httpTaskPage.Tasks[0].Delivery.WorkflowRunID != expectedPage.Tasks[0].Delivery.WorkflowRunID ||
+		httpTaskPage.Tasks[0].Delivery.ExecutionID != expectedPage.Tasks[0].Delivery.ExecutionID ||
+		!httpTaskPage.Tasks[0].Delivery.MergedAt.Equal(expectedPage.Tasks[0].Delivery.MergedAt) {
+		t.Fatalf("HTTP task query differed from the native Query PR/Delivery projection: http=%+v native=%+v", httpTaskPage, expectedPage)
+	}
+	httpSnapshot, err := httpClient.Snapshot(ctx, "901")
+	require(t, err)
+	if httpSnapshot.SelectedNative == nil || httpSnapshot.SelectedNative.Delivery == nil ||
+		httpSnapshot.SelectedNative.Delivery.PRURL != expectedPage.Tasks[0].Delivery.PRURL ||
+		httpSnapshot.SelectedNative.Delivery.WorkflowRunID != expectedPage.Tasks[0].Delivery.WorkflowRunID ||
+		httpSnapshot.SelectedNative.Delivery.ExecutionID != expectedPage.Tasks[0].Delivery.ExecutionID ||
+		!httpSnapshot.SelectedNative.Delivery.MergedAt.Equal(expectedPage.Tasks[0].Delivery.MergedAt) {
+		t.Fatalf("HTTP project snapshot differed from the same persisted Query Delivery: http=%+v native=%+v", httpSnapshot.SelectedNative, expectedPage.Tasks[0])
 	}
 	observed, err := steerlineapp.LoadDatabaseRuntime(config2)
 	require(t, err)

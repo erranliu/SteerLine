@@ -20,11 +20,14 @@ import (
 	"time"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
+	"github.com/erranliu/SteerLine/internal/execution"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 )
 
 // These tests use a temporary Git project, the real app service and SQLite
@@ -394,6 +397,7 @@ func TestAPIQueryParity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
+	addAlternateLocalProfile(t, &fixture)
 	createIntegrationTask(t, ctx, fixture, 901)
 	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
 	defer service.stop(t)
@@ -423,25 +427,34 @@ func TestAPIQueryParity(t *testing.T) {
 	}
 	presentation, err := client.ProjectPresentation(ctx)
 	require(t, err)
-	profileID := presentation.Presentation.DefaultProfileID
-	if presentation.ProjectID != httpapi.ProjectID(fixture.config.Identity()) || profileID == "" {
+	defaultProfileID := presentation.Presentation.DefaultProfileID
+	profileID := "fixture-alt"
+	if presentation.ProjectID != httpapi.ProjectID(fixture.config.Identity()) || defaultProfileID != "fixture" || defaultProfileID == profileID {
 		t.Fatalf("HTTP presentation omitted project identity or configured default profile: %+v", presentation)
 	}
-	var selectedProfile *api.ExecutionProfileSummary
+	var selectedProfile, defaultProfile *api.ExecutionProfileSummary
 	for i := range presentation.Presentation.Profiles {
 		if presentation.Presentation.Profiles[i].ID == profileID {
 			selectedProfile = &presentation.Presentation.Profiles[i]
-			break
+		}
+		if presentation.Presentation.Profiles[i].ID == defaultProfileID {
+			defaultProfile = &presentation.Presentation.Profiles[i]
 		}
 	}
-	if selectedProfile == nil || selectedProfile.UnavailableReason != "" || selectedProfile.Digest == "" || selectedProfile.Name == "" {
-		t.Fatalf("HTTP presentation did not expose the usable selected profile summary: %+v", presentation.Presentation)
+	if selectedProfile == nil || defaultProfile == nil || selectedProfile.UnavailableReason != "" || selectedProfile.Digest == "" || selectedProfile.Name == "" {
+		t.Fatalf("HTTP presentation did not expose both default and usable nondefault profiles: %+v", presentation.Presentation)
+	}
+	for _, configured := range fixture.config.AvailableExecutionProfiles() {
+		if configured.ID == profileID && configured.Digest(fixture.config.ExecutionDirectory) != selectedProfile.Digest {
+			t.Fatal("HTTP profile digest differs from the existing application profile query")
+		}
 	}
 
-	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
+	claimIntegrationTaskWithProfile(t, ctx, fixture, 901, service.instanceID, defaultProfileID)
 	run := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
 		return run.TaskID == "901" && run.Decision != nil && run.Decision.Status == "pending" && execution.CurrentTurnID == execution.LastStoppedTurnID
 	})
+	firstRunID := run.run.RunID
 	projectSnapshot, err := client.Snapshot(ctx, "901")
 	require(t, err)
 	if projectSnapshot.History == nil || len(projectSnapshot.History.Decisions) == 0 {
@@ -480,6 +493,32 @@ func TestAPIQueryParity(t *testing.T) {
 	if started.ControlRequest == nil {
 		t.Fatalf("second native candidate did not publish its original control request: %+v", started)
 	}
+	var postedProfile api.ControlPayload
+	require(t, json.Unmarshal(started.ControlRequest.Payload, &postedProfile))
+	if postedProfile.ExecutionProfileID != profileID || postedProfile.ExecutionProfileDigest != selectedProfile.Digest {
+		t.Fatalf("HTTP start did not preserve the selected nondefault profile ID/digest: %+v", postedProfile)
+	}
+	second := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+		return run.TaskID == "901" && run.RunID != firstRunID && run.Decision != nil && run.Decision.Status == "pending" &&
+			e.CurrentTurnID != "" && e.CurrentTurnID == e.LastStoppedTurnID
+	})
+	if second.run.ExecutionProfile == nil || second.run.ExecutionProfile.ID != profileID || second.run.ExecutionProfile.Digest == "" ||
+		second.execution.ConfigurationDigest != second.run.ExecutionProfile.Digest {
+		t.Fatalf("nondefault execution did not persist its own frozen profile identity: profile=%+v execution=%+v", second.run.ExecutionProfile, second.execution)
+	}
+	var selectedWorkerConfig *codexworker.ProfileConfig
+	for _, envelope := range second.run.ExecutionProfile.ImplementationData {
+		if envelope.ImplementationKey != codexworker.ProfileCodecKey {
+			continue
+		}
+		settings, decodeErr := codexworker.DecodeProfileConfig(envelope.Payload)
+		require(t, decodeErr)
+		selectedWorkerConfig = &settings
+	}
+	if selectedWorkerConfig == nil || selectedWorkerConfig.Model != "fixture-alt-model" || selectedWorkerConfig.ReasoningEffort != "high" {
+		t.Fatalf("actual backend turn did not use the selected nondefault implementation: %+v", selectedWorkerConfig)
+	}
+	t.Logf("profile query/request digest=%s; claim-frozen profile digest=%s", selectedProfile.Digest, second.run.ExecutionProfile.Digest)
 	var candidateRuns []api.CandidateSummary
 	waitFor(t, 30*time.Second, func() bool {
 		fresh, readErr := client.Snapshot(ctx, "901")
@@ -497,6 +536,75 @@ func TestAPIQueryParity(t *testing.T) {
 	if len(candidateRuns) != 2 || candidateRuns[0].RunID == candidateRuns[1].RunID || candidateRuns[0].ExecutionID == candidateRuns[1].ExecutionID || candidateRuns[0].AttemptID == candidateRuns[1].AttemptID {
 		t.Fatalf("HTTP query merged the two local candidates or their identities: %+v", candidateRuns)
 	}
+}
+
+func addAlternateLocalProfile(t *testing.T, fixture *integrationFixture) {
+	t.Helper()
+	profiles := fixture.config.AvailableExecutionProfiles()
+	if len(profiles) != 1 || profiles[0].ID != "fixture" {
+		t.Fatalf("fixture profile catalog changed before adding the alternate: %+v", profiles)
+	}
+	alternate := profiles[0]
+	alternate.ID, alternate.Name = "fixture-alt", "Integration alternate"
+	alternate.ImplementationConfigs = append(alternate.ImplementationConfigs[:0:0], alternate.ImplementationConfigs...)
+	found := false
+	for i := range alternate.ImplementationConfigs {
+		if alternate.ImplementationConfigs[i].ImplementationKey != codexworker.ProfileCodecKey {
+			continue
+		}
+		settings, err := codexworker.DecodeProfileConfig(alternate.ImplementationConfigs[i].Payload)
+		require(t, err)
+		settings.Model, settings.ReasoningEffort = "fixture-alt-model", "high"
+		alternate.ImplementationConfigs[i].Payload, err = codexworker.EncodeProfileConfig(settings)
+		require(t, err)
+		found = true
+	}
+	if !found {
+		t.Fatal("fixture did not have a Codex implementation profile to vary")
+	}
+	globalPath := steerlineapp.GlobalExecutionConfigPath()
+	data, err := os.ReadFile(globalPath)
+	require(t, err)
+	var global map[string]json.RawMessage
+	require(t, json.Unmarshal(data, &global))
+	var configured []execution.ExecutionProfile
+	require(t, json.Unmarshal(global["execution_profiles"], &configured))
+	configured = append(configured, alternate)
+	global["execution_profiles"] = mustJSON(configured)
+	require(t, os.WriteFile(globalPath, mustJSON(global), 0600))
+	fixture.config, err = steerlineapp.LoadConfig(fixture.configPath)
+	require(t, err)
+	require(t, fixture.config.ResolveIdentity(context.Background()))
+	if fixture.config.DefaultProfileID() != "fixture" || len(fixture.config.AvailableExecutionProfiles()) != 2 {
+		t.Fatalf("alternate profile changed the configured default or catalog size: default=%q profiles=%+v", fixture.config.DefaultProfileID(), fixture.config.AvailableExecutionProfiles())
+	}
+}
+
+func claimIntegrationTaskWithProfile(t *testing.T, ctx context.Context, fixture integrationFixture, taskID int64, serviceInstanceID, profileID string) {
+	t.Helper()
+	store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &fixture.config)
+	require(t, err)
+	commands := appExecutionCommands(t, store, fixture.config)
+	page, err := productquery.NewService(store, fixture.config.Identity()).ShowNativeTask(ctx, fmt.Sprint(taskID))
+	require(t, err)
+	var fixed *executionmodel.FixedExecutionProfile
+	for _, profile := range fixture.config.AvailableExecutionProfiles() {
+		if profile.ID == profileID {
+			value := profile.Freeze(fixture.config.ExecutionDirectory, fixture.config.Identity())
+			fixed = &value
+			break
+		}
+	}
+	if fixed == nil || len(page.Tasks) != 1 {
+		t.Fatalf("fixture task/profile not found: tasks=%d profile=%q", len(page.Tasks), profileID)
+	}
+	_, err = commands.ClaimNativeTask(ctx, fixture.config.ExecutionConfig(), execution.TaskClaimOptions{
+		TaskID: fmt.Sprint(taskID), RequestID: randomRequestID(t), ExpectedTaskVersion: page.Tasks[0].Version,
+		ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "operator", Explicit: true,
+		ExecutionProfile: fixed, ServiceInstanceID: serviceInstanceID,
+	})
+	require(t, err)
+	require(t, store.Close())
 }
 
 func TestAPIOriginalCommandReceipt(t *testing.T) {
