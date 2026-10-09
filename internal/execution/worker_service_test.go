@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/scheduler"
 )
@@ -19,7 +20,7 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 	}{
 		{"free_text", "", "Continue in the same worktree"},
 		{"option_with_note", "continue", "Keep the existing commit and continue"},
-		{"open_pr_feedback", "continue", "Add one more change before merge"},
+		{"open_pr_feedback", "implement", "Add one more change before merge"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			testWorkerFlowServiceFirstFeedback(t, test.option, test.note, test.name == "open_pr_feedback")
@@ -31,6 +32,8 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent = executionmodel.Version, "local", "fixture"
+	provider := t.TempDir()
+	c.PR = executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"mc-provider", provider, "{number}"}}}
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	if err := c.PrepareWorktreeRoot(); err != nil {
 		t.Fatal(err)
@@ -97,23 +100,22 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if firstWorktree == "" {
 		t.Fatal("worker preparation lost its worktree")
 	}
+	partial := filepath.Join(firstWorktree, "partial.txt")
+	if err := os.WriteFile(partial, []byte("partially committed\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"-C", firstWorktree, "add", "partial.txt"}, {"-C", firstWorktree, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "partial"}} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("record partial commit: %v: %s", err, out)
+		}
+	}
+	head, err := exec.Command("git", "-C", firstWorktree, "rev-parse", "HEAD").Output()
+	if err != nil || strings.TrimSpace(string(head)) == receipt.BaseCommit {
+		t.Fatal("partial commit did not advance HEAD")
+	}
 	finishTurn := func(expected string) {
 		t.Helper()
-		worker := service.workers[run.RunID]
-		if worker == nil {
-			_, execution := service.workflowRecords(run)
-			t.Fatalf("original worker observer is missing: task=%s execution_status=%s pending_command=%s reason=%q", run.TaskID, execution.Status, execution.PendingCommandID, deref(run.Error))
-		}
-		for event := range worker.Events {
-			if err := service.eventForRun(run, event); err != nil {
-				t.Fatal(err)
-			}
-		}
-		workerErr := <-worker.Done
-		delete(service.workers, run.RunID)
-		if err := service.finishedForRun(run, worker, workerErr); err != nil {
-			t.Fatal(err)
-		}
+		mcFinishTurn(t, service, run)
 		if run.FinishTaskStatus != expected || run.Decision == nil || run.Decision.Status != "pending" {
 			t.Fatalf("stopped worker did not reach the unified decision: %+v", run)
 		}
@@ -122,7 +124,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		}
 	}
 	finishTurn("waiting_decision")
-	initialExecution := service.executionRecord(run)
+	initialExecution := *service.executionRecord(run)
 	initialPrompt, err := os.ReadFile(filepath.Join(c.RunDir, "runs", run.RunID, "turns", initialExecution.CurrentCommandID, "prompt.txt"))
 	if err != nil {
 		t.Fatal(err)
@@ -142,17 +144,25 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	if openPR {
 		workflow, execution := service.workflowRecords(run)
-		url := "https://git.example/org/repo/pulls/8"
-		info := executionmodel.PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: *run.WorktreeBranch, HeadRevision: receipt.BaseCommit, State: "open"}
-		if err := BindWorkerPR(workflow, execution, info, url, "org/repo", false); err != nil {
+		url := "https://github.com/owner/repo/pull/8"
+		info := executionmodel.PRInfo{URL: url, Repository: "owner/repo", BaseBranch: "main", HeadRepository: "owner/repo", HeadBranch: *run.WorktreeBranch, HeadRevision: strings.TrimSpace(string(head)), State: "open"}
+		require(t, os.WriteFile(filepath.Join(provider, "8.json"), mustJSON(info), 0600))
+		if err := BindWorkerPR(workflow, execution, info, url, "owner/repo", false); err != nil {
 			t.Fatal(err)
 		}
-		run.FinishTaskStatus, run.PR.URL, run.PR.State = "waiting_pr_merge", ptr(url), "open"
+		workflow.StepID, workflow.CandidateSHA, workflow.Status = executionmodel.StepAwaitMerge, info.HeadRevision, "waiting_external"
+		service.setDecisionStatus(run, "superseded")
+		service.refreshRun(run)
+		require(t, service.offerWorkerPRFeedback(run, url))
 		if err := service.commitWorker(run); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if len(run.Decision.Request.Options) != 1 || run.Decision.Request.Options[0].ID != "continue" || !run.Decision.Request.AllowFreeText {
+	wantOptions := 1
+	if openPR {
+		wantOptions = 2
+	}
+	if len(run.Decision.Request.Options) != wantOptions || !run.Decision.Request.AllowFreeText {
 		t.Fatalf("unified decision cannot accept both feedback forms: %+v", run.Decision.Request)
 	}
 	firstSession := service.executionRecord(run).SessionID
@@ -166,19 +176,6 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	run = service.find("8")
 	if run == nil || run.RunID != receipt.WorkflowRunID || run.ExecutionID != receipt.ExecutionID || service.executionRecord(run).SessionID != firstSession || run.Decision == nil || run.Decision.Status != "pending" {
 		t.Fatalf("current-format restart lost the waiting worker: run=%+v", run)
-	}
-	partial := filepath.Join(firstWorktree, "partial.txt")
-	if err := os.WriteFile(partial, []byte("partially committed\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for _, args := range [][]string{{"-C", firstWorktree, "add", "partial.txt"}, {"-C", firstWorktree, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "partial"}} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("record partial commit: %v: %s", err, out)
-		}
-	}
-	head, err := exec.Command("git", "-C", firstWorktree, "rev-parse", "HEAD").Output()
-	if err != nil || strings.TrimSpace(string(head)) == receipt.BaseCommit {
-		t.Fatal("partial commit did not advance HEAD")
 	}
 	service.State.Service.Ready = true
 	service.State.Service.Status = "running"
@@ -223,17 +220,14 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	_, currentExecution := service.workflowRecords(run)
 	workspaceInstruction, err := workerWorkspaceInstruction(currentExecution.Workspace)
 	require(t, err)
-	fullPrompt := feedbackPrompt + workspaceInstruction + publicationTargetInstruction(fixedConfig)
 	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
 	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
-	if err != nil || string(savedPrompt) != fullPrompt {
-		t.Fatalf("full feedback text was not sent: prompt=%q err=%v", savedPrompt, err)
+	encodedNote, _ := json.Marshal(feedbackPrompt)
+	if err != nil || !strings.Contains(string(savedPrompt), string(encodedNote)) || !strings.Contains(string(savedPrompt), workspaceInstruction) || !strings.Contains(string(savedPrompt), publicationTargetInstruction(fixedConfig)) {
+		t.Fatalf("bound staged feedback text was not sent: prompt=%q err=%v", savedPrompt, err)
 	}
-	if openPR {
-		finishTurn("waiting_pr_merge")
-	} else {
-		finishTurn("waiting_decision")
-	}
+	fullPrompt := string(savedPrompt)
+	finishTurn("waiting_decision")
 	events, err := os.ReadFile(filepath.Join(feedbackDir, "fixture-input.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -243,8 +237,9 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatalf("worker did not receive the full feedback: %q", events)
 	}
 	workflow, execution := service.workflowRecords(run)
+	turnsAfterFeedback := execution.TurnNumber
 	if workflow == nil || execution == nil || workflow.WorkflowRunID != receipt.WorkflowRunID || execution.ExecutionID != receipt.ExecutionID ||
-		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber != 2 ||
+		run.AttemptID != receipt.AttemptID || execution.SessionID != workerFlowMockSession || execution.TurnNumber <= initialExecution.TurnNumber ||
 		canonical(deref(run.WorktreePath)) != canonical(firstWorktree) || len(service.domain.Attempts) != 1 {
 		t.Fatalf("feedback replaced the fixed worker: workflow=%q/%q execution=%q/%q session=%q turn=%d attempt=%q/%q worktree=%q/%q attempts=%d", workflow.WorkflowRunID, receipt.WorkflowRunID, execution.ExecutionID, receipt.ExecutionID, execution.SessionID, execution.TurnNumber, run.AttemptID, receipt.AttemptID, deref(run.WorktreePath), firstWorktree, len(service.domain.Attempts))
 	}
@@ -286,7 +281,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 			t.Fatal(err)
 		}
 	}
-	if len(service.domain.Operations) != before || service.workers[run.RunID] != nil || execution.TurnNumber != 2 || run.Error == nil || !strings.Contains(*run.Error, "no duplicate message") {
+	if len(service.domain.Operations) != before || service.workers[run.RunID] != nil || execution.TurnNumber != turnsAfterFeedback || run.Error == nil || !strings.Contains(*run.Error, "no duplicate message") {
 		t.Fatalf("uncertain feedback was resent or lost: operations=%d/%d worker=%t turn=%d decision=%s error=%q", before, len(service.domain.Operations), service.workers[run.RunID] != nil, execution.TurnNumber, run.Decision.Status, deref(run.Error))
 	}
 }

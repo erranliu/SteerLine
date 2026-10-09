@@ -174,7 +174,7 @@ func TestWorkerLateReplyReleasesOnlyItsOriginalUncertainty(t *testing.T) {
 			t.Cleanup(func() { _ = s.Close() })
 			workflow, e := s.workflowRecords(run)
 			e.CurrentTurnID, e.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
-			e.Status, workflow.Status = "active", "waiting_decision"
+			e.Status, workflow.Status = "active", "waiting_input"
 			setNeutralBinding(t, e, "retained-endpoint", "generation", workerFlowMockSession)
 			e.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, e.Workspace.Worktree, e)
 			fixed := *workerSessionContext(run, e)

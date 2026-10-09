@@ -112,9 +112,16 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 		}
 		return s.deliverLifecycleActiveFeedback(ctx, run, answer, commandID, run.Decision.Request, s.decisionRecord(run))
 	}
-	if execution.PendingCommandID != "" || s.workers[run.RunID] != nil {
+	if s.workers[run.RunID] != nil {
 		return nil
-	} // Preserve input while the original start is pending.
+	}
+	if pending := execution.PendingCommandID; pending != "" {
+		if stageInput(s.workflowRecord(run), pending) == nil || s.operationByKey("worker-turn:"+execution.ExecutionID+":"+pending) != nil || s.operationByKey("worker-session:"+execution.ExecutionID+":"+pending) != nil {
+			return nil // Preserve input while its original native start is pending.
+		}
+		// A frozen next step may be waiting for explicit continuation before any
+		// native submission. Let the accepted feedback replace that unsent input.
+	}
 	return s.startStageFeedback(ctx, run, answer, commandID)
 }
 
