@@ -140,8 +140,8 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 				chains[e.Chain] = true
 			}
 		}
-		if !chains["controlled"] || !chains["local-codex"] || !chains["orca-codex"] {
-			return nil, errors.New("L2 requires controlled gate and both live chains")
+		if len(selected) != 2 || !chains["controlled"] || !chains["local-codex"] {
+			return nil, errors.New("L2 requires its controlled gate and current local Codex live chain")
 		}
 	}
 	return selected, nil
@@ -209,7 +209,7 @@ func runE2E(opts options) (code int) {
 		coverage = "gate-only"
 	}
 	if opts.e2eEnv == "gated" {
-		note = "controlled gate, then native gpt-6-luna/medium on both chains with real SteerlineTest GitHub PRs"
+		note = "controlled gate, then native gpt-6-luna/medium on the current local Codex chain with real SteerlineTest GitHub PRs"
 		coverage = "full-L2"
 	}
 	report := e2eReport{Scope: "e2e", Coverage: coverage, Level: opts.level, Env: opts.e2eEnv, Selected: selected, Builds: map[string]string{}, Errors: []string{}, Started: time.Now().UTC().Format(time.RFC3339Nano), Environment: collectEnvironment(opts.cacheCondition, note, out, nil)}

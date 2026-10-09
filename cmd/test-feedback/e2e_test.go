@@ -38,6 +38,17 @@ func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
 	}
 }
 
+func TestL2GatedSelectionUsesCurrentRegisteredChain(t *testing.T) {
+	root, err := e2eRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := selectE2E(root, options{level: "L2", e2eEnv: "gated"})
+	if err != nil || len(selected) != 2 || selected[0].ID != "smoke.delivery" || selected[1].ID != "smoke.local-codex" {
+		t.Fatalf("fixed current L2 selection: %+v %v", selected, err)
+	}
+}
+
 func TestManifestRejectsMissingDuplicateAndUnknownSelection(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, "tests", "e2e"), 0700); err != nil {
