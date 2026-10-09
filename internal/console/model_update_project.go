@@ -16,6 +16,7 @@ func (m Model) updateWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 func (m Model) updateTick() (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	now := m.clock.Now()
+	tickInterval := 500 * time.Millisecond
 	for i := range m.projects {
 		state := &m.projects[i]
 		interval := 5 * time.Second
@@ -26,6 +27,9 @@ func (m Model) updateTick() (tea.Model, tea.Cmd) {
 			cmds = append(cmds, m.readProject(i))
 		}
 		for _, action := range state.actions {
+			if !action.Resolved && action.Status != "indeterminate" && now.Before(state.actionPollUntil) {
+				tickInterval = 100 * time.Millisecond
+			}
 			if !action.InFlight && !action.Resolved && action.Status != "submitting" {
 				action.InFlight = true
 				cmds = append(cmds, m.pollAction(i, action))
@@ -40,7 +44,7 @@ func (m Model) updateTick() (tea.Model, tea.Cmd) {
 		}
 
 	}
-	cmds = append(cmds, waitTick(m.clock, 500*time.Millisecond))
+	cmds = append(cmds, waitTick(m.clock, tickInterval))
 	return m, tea.Batch(cmds...)
 }
 

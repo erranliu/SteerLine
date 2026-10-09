@@ -85,7 +85,9 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 	}
 	if row.run == nil {
 		lines = append(lines, "任务 "+safeTerminalInlineText(row.taskID+" · "+row.title))
-		if state.candidates[row.taskID] != "" {
+		if action := rowOperation(state, *row); action != nil {
+			lines = append(lines, stateText(operationProgress(action)))
+		} else if state.candidates[row.taskID] != "" {
 			lines = append(lines, "原候选暂不可读取/未核实")
 		} else {
 			lines = append(lines, "暂无候选")
@@ -101,7 +103,7 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 		lines = append(lines, styleWaiting.Render("离线/缓存/未核实 · "+sampleTime(state.snapshot)))
 	}
 	lines = append(lines, "Task "+safeTerminalInlineText(row.taskID+" · "+row.title), "当前 "+candidateLabel(state, run)+" · "+candidateStrip(state, row, width))
-	lines = append(lines, "任务 "+rowTaskStatus(*row)+" · "+stateText(displayExecutionStatus(run))+" · "+stateText(candidateHumanStatus(state, run)))
+	lines = append(lines, "任务 "+rowTaskStatus(*row)+" · "+stateText(rowExecutionProgress(state, *row))+" · "+stateText(candidateHumanStatus(state, run)))
 	if run.EnvironmentBlocker != nil {
 		lines = append(lines, "环境阻断："+safeTerminalInlineText(run.EnvironmentBlocker.Fact.Reason))
 	}
