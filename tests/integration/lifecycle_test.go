@@ -45,7 +45,7 @@ func testIntegratedAppServerTwoTurns(t *testing.T) {
 	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
 
 	first := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		return run.Decision != nil && run.Decision.Status == "pending" && execution.TurnNumber == 1 && execution.CurrentTurnID == execution.LastStoppedTurnID
+		return run.Decision != nil && run.Decision.Status == "pending" && execution.TurnNumber == 2 && execution.CurrentTurnID == execution.LastStoppedTurnID
 	})
 	if first.run.Process == nil {
 		t.Fatal("first app-server receipt omitted its process identity")
@@ -54,11 +54,11 @@ func testIntegratedAppServerTwoTurns(t *testing.T) {
 	if firstSession != integrationAppServerSession || firstProcess.Kind != "os" || firstTurn == "" {
 		t.Fatalf("first app-server receipt lost its original session/process/turn: session=%q process=%+v turn=%q", firstSession, firstProcess, firstTurn)
 	}
-	assertQueriedTaskPhase(t, ctx, fixture.config, "901", "waiting_decision")
+	assertQueriedTaskStatus(t, ctx, fixture.config, "901", "waiting_input")
 	submitIntegrationAnswer(t, ctx, fixture.config, first.run)
 
 	second := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		return execution.TurnNumber == 2 && execution.CurrentTurnID != firstTurn && execution.CurrentTurnID == execution.LastStoppedTurnID &&
+		return execution.TurnNumber == 3 && execution.CurrentTurnID != firstTurn && execution.CurrentTurnID == execution.LastStoppedTurnID &&
 			run.Decision != nil && run.Decision.Status == "pending"
 	})
 	if second.execution.SessionID != firstSession || second.run.Process == nil || *second.run.Process != firstProcess {
@@ -66,11 +66,11 @@ func testIntegratedAppServerTwoTurns(t *testing.T) {
 	}
 	starts := lifecycleOperations(second.runtime, "start_worker_turn")
 	prepares := lifecycleOperations(second.runtime, "prepare_worker_session")
-	if len(starts) != 2 || len(prepares) != 1 {
-		t.Fatalf("app-server operation receipts = prepare:%d start:%d, want one original session and two turns", len(prepares), len(starts))
+	if len(starts) != 3 || len(prepares) != 1 {
+		t.Fatalf("app-server operation receipts = prepare:%d start:%d, want one original session and execute/report/feedback turns", len(prepares), len(starts))
 	}
 	assertNoTaskDelivery(t, second.runtime, second.run)
-	assertQueriedTaskPhase(t, ctx, fixture.config, "901", "waiting_decision")
+	assertQueriedTaskStatus(t, ctx, fixture.config, "901", "waiting_input")
 	if resolver.count(executionbackend.ProtocolLocalCodexAppServer) == 0 {
 		t.Fatal("public service flow never resolved the app-server lifecycle adapter")
 	}
@@ -159,7 +159,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 	if state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir); err != nil || state.Dispatches != 1 || state.Replies != 0 || state.Sends != 0 {
 		t.Fatalf("restart crossed the manual input gate: state=%+v err=%v", state, err)
 	}
-	assertQueriedTaskPhase(t, ctx, fixture.config, "902", "waiting_decision")
+	assertQueriedTaskStatus(t, ctx, fixture.config, "902", "waiting_input")
 	submitIntegrationAnswer(t, ctx, fixture.config, recovered.run)
 
 	settled := waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
@@ -182,7 +182,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 		t.Fatalf("original native question answer lacks its confirmed receipt: decision=%+v operations=%+v", settled.runtime.Decisions, lifecycleOperations(settled.runtime, "reply_execution_question"))
 	}
 	assertNoTaskDelivery(t, settled.runtime, settled.run)
-	assertQueriedTaskPhase(t, ctx, fixture.config, "902", "waiting_decision")
+	assertQueriedTaskStatus(t, ctx, fixture.config, "902", "waiting_input")
 	if !mutations {
 		secondService.stop(t)
 		return
@@ -813,7 +813,7 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config ste
 	}
 }
 
-func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config steerlineapp.Config, taskID, phase string) {
+func assertQueriedTaskStatus(t *testing.T, ctx context.Context, config steerlineapp.Config, taskID, phase string) {
 	t.Helper()
 	reader, err := steerlineapp.OpenNativeTaskReader(ctx, &config)
 	require(t, err)

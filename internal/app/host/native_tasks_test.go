@@ -273,7 +273,7 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.UpdateNativeTaskCAS(closed, 2) }); err == nil {
 		t.Fatal("unverified delivery closed a task")
 	}
-	run := executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: executionmodel.Version, Status: "waiting_external", SelectedResult: "exec-7", PRURL: "https://forge.invalid/org/repo/pulls/4", CreatedAt: created, UpdatedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: executionmodel.Version, FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepAwaitMerge, Status: "waiting_external", SelectedResult: "exec-7", PRURL: "https://forge.invalid/org/repo/pulls/4", CreatedAt: created, UpdatedAt: created}
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", CurrentAttemptID: "attempt-7", WorkflowRunID: "wf-7", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-7"}, Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {

@@ -142,7 +142,7 @@ func TestPS1InlineConsoleWiring(t *testing.T) {
 			return false
 		}
 		for _, run := range page.Observation.Page.Runs {
-			if run.RunID == primary.RunID && run.TurnNumber >= 2 {
+			if run.RunID == primary.RunID && run.TurnNumber > primary.TurnNumber {
 				return true
 			}
 		}

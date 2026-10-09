@@ -13,6 +13,7 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
@@ -40,6 +41,7 @@ type additionalSaved struct {
 	Generation   string                                       `json:"generation"`
 	Process      executionbackend.ProcessIdentity             `json:"process"`
 	Inputs       map[string]executionbackend.TurnInput        `json:"inputs"`
+	Finals       map[string]string                            `json:"finals"`
 	Receipts     map[string]executionbackend.LifecycleReceipt `json:"receipts"`
 	Answers      map[string]executionbackend.FeedbackInput    `json:"answers"`
 	Settled      bool                                         `json:"settled"`
@@ -58,7 +60,7 @@ func (l *additionalLedger) read() (additionalSaved, error) {
 	var value additionalSaved
 	data, err := os.ReadFile(l.path)
 	if os.IsNotExist(err) {
-		return additionalSaved{Inputs: map[string]executionbackend.TurnInput{}, Receipts: map[string]executionbackend.LifecycleReceipt{}, Answers: map[string]executionbackend.FeedbackInput{}}, nil
+		return additionalSaved{Inputs: map[string]executionbackend.TurnInput{}, Finals: map[string]string{}, Receipts: map[string]executionbackend.LifecycleReceipt{}, Answers: map[string]executionbackend.FeedbackInput{}}, nil
 	}
 	if err != nil {
 		return value, err
@@ -110,7 +112,7 @@ func (p *additionalPort) PreflightLifecycle(_ context.Context, setup executionba
 func (p *additionalPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
 	// The injected builder binds a read-only policy envelope with no write
 	// roots. Session creation still needs this original resource receipt.
-	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.ContinueExecutionOnServiceStop, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.ContinueExecutionOnServiceStop, StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true, ReportToolPolicy: "fixture.read_only"}
 }
 
 func (p *additionalPort) Next(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
@@ -196,6 +198,26 @@ func (p *additionalPort) Execute(ctx context.Context, request executionbackend.L
 		if p.ledger.publicationURL != "" {
 			value.PRCandidates = []string{p.ledger.publicationURL}
 		}
+		// The deterministic worker stores each actual fixture final once. The
+		// protocol owner only returns that original turn's bound output.
+		final := "Original fixture execution completed"
+		value.Settled = false
+		switch turn.StepID {
+		case executionmodel.StepReport:
+			facts, err := p.InspectLifecycleWorkspace(ctx, request.Snapshot)
+			if err != nil {
+				return receipt, nil, err
+			}
+			final = string(mustJSON(map[string]any{"outcome": "done", "outputs": map[string]string{"candidate_sha": facts.Head}, "summary": "Original fixture execute result reported"}))
+			value.Settled = true
+		case executionmodel.StepPublish:
+			if len(value.PRCandidates) != 1 {
+				return receipt, nil, errors.New("fixture has no unique original publication target")
+			}
+			final = string(mustJSON(map[string]any{"outcome": "done", "outputs": map[string]string{"pr_url": value.PRCandidates[0]}, "summary": "Original fixture PR published"}))
+			value.Settled = true
+		}
+		value.Finals[turn.CommandID] = final
 		receipt.Disposition = executionbackend.OperationAccepted
 		receipt.Process = &value.Process
 		receipt.State = executionbackend.LifecycleStateFacts{WorkerLive: true, SessionAvailable: true, SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn.CommandID, InputAccepted: true, TurnStarted: true}
@@ -289,7 +311,7 @@ func (p *additionalPort) ObserveLifecycle(_ context.Context, snapshot executionb
 		turn := snapshot.Session.CurrentTurnID
 		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &value.Process,
 			State:        executionbackend.LifecycleStateFacts{WorkerLive: true, SessionAvailable: true, SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn, TurnCompleted: true},
-			TurnEvidence: &executionbackend.TurnEvidence{SourcePath: p.ledger.path, SessionID: value.Session, TurnID: turn, CommandID: turn, Started: true, Completed: true, Succeeded: true, PRCandidates: append([]string(nil), value.PRCandidates...)}}, nil, nil
+			TurnEvidence: &executionbackend.TurnEvidence{SourcePath: p.ledger.path, SessionID: value.Session, TurnID: turn, CommandID: turn, Started: true, Completed: true, Succeeded: true, LastMessage: value.Finals[turn], FinalVerified: true, FinalSource: "fixture.original_ledger", FinalItemID: "final:" + turn, PRCandidates: append([]string(nil), value.PRCandidates...)}}, nil, nil
 	}
 	return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &value.Process, State: executionbackend.LifecycleStateFacts{WorkerLive: true, SessionAvailable: true, SessionID: value.Session, SessionGeneration: value.Generation, TurnID: snapshot.Session.CurrentTurnID}}, p.observer(snapshot, value, snapshot.Session.CurrentTurnID), nil
 }
@@ -373,7 +395,11 @@ func (p *additionalPort) observer(snapshot executionbackend.LifecycleSnapshot, v
 	question := executionbackend.Question{ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID, Generation: value.Generation, TurnID: turn, ID: "fixture-choice", Header: "Fixture", Question: "Continue the original input?", Options: []executionbackend.DecisionOption{{ID: "continue", Label: "Continue"}}, AllowFreeText: true}
 	go func() {
 		defer close(o.events)
-		for _, fact := range []executionbackend.EventFact{{Kind: executionbackend.EventStarted, SessionID: value.Session, StartedTurnID: turn}, {Kind: executionbackend.EventQuestion, QuestionRoute: &route, Questions: []executionbackend.Question{question}}} {
+		facts := []executionbackend.EventFact{{Kind: executionbackend.EventStarted, SessionID: value.Session, StartedTurnID: turn}}
+		if value.Inputs[turn].StepID == executionmodel.StepImplement {
+			facts = append(facts, executionbackend.EventFact{Kind: executionbackend.EventQuestion, QuestionRoute: &route, Questions: []executionbackend.Question{question}})
+		}
+		for _, fact := range facts {
 			ack := make(chan error, 1)
 			select {
 			case o.events <- executionbackend.LifecycleEvent{Fact: fact, Kind: string(fact.Kind), Status: "observed", Title: "Fixture " + string(fact.Kind), Persisted: ack}:
@@ -390,7 +416,7 @@ func (p *additionalPort) observer(snapshot executionbackend.LifecycleSnapshot, v
 				return
 			}
 		}
-		if _, answered := value.Answers[route.QuestionID]; answered {
+		if _, answered := value.Answers[route.QuestionID]; answered || value.Settled {
 			o.finish()
 		}
 		select {
@@ -400,7 +426,7 @@ func (p *additionalPort) observer(snapshot executionbackend.LifecycleSnapshot, v
 		}
 		ack := make(chan error, 1)
 		select {
-		case o.events <- executionbackend.LifecycleEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventCompleted, Completed: true, Matched: true, Outcome: "completed", PRCandidates: append([]string(nil), value.PRCandidates...)}, Kind: "completed", Status: "completed", Title: "Fixture completed", Persisted: ack}:
+		case o.events <- executionbackend.LifecycleEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventCompleted, Completed: true, Matched: true, Outcome: "completed", LastMessage: value.Finals[turn], PRCandidates: append([]string(nil), value.PRCandidates...)}, Kind: "completed", Status: "completed", Title: "Fixture completed", Persisted: ack}:
 		case <-o.closed:
 			return
 		}

@@ -240,14 +240,14 @@ func TestMC3(t *testing.T) {
 	b, _ := f.start(t, service.instanceID)
 	ready := func(id string) integrationRunSnapshot {
 		return waitIntegrationRun(t, f.ctx, service, f.f.config, func(r *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-			return r.RunID == id && r.Decision != nil && r.Decision.Status == "pending" && e.TurnNumber == 1 && e.CurrentTurnID == e.LastStoppedTurnID
+			return r.RunID == id && r.Decision != nil && r.Decision.Status == "pending" && e.TurnNumber == 2 && e.CurrentTurnID == e.LastStoppedTurnID
 		})
 	}
 	first := ready(a.WorkflowRunID)
 	second := ready(b.WorkflowRunID)
 	submitIntegrationAnswer(t, f.ctx, f.f.config, second.run)
 	after := waitIntegrationRun(t, f.ctx, service, f.f.config, func(r *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-		return r.RunID == b.WorkflowRunID && e.TurnNumber == 2 && e.CurrentTurnID == e.LastStoppedTurnID
+		return r.RunID == b.WorkflowRunID && e.TurnNumber == 3 && e.CurrentTurnID == e.LastStoppedTurnID
 	})
 	if after.execution.SessionID != second.execution.SessionID || after.run.Process == nil || *after.run.Process != *second.run.Process {
 		t.Fatal("selected feedback replaced original session/process")
@@ -255,7 +255,7 @@ func TestMC3(t *testing.T) {
 	snapshot, err := f.store.Query(f.ctx, f.f.config.Identity())
 	require(t, err)
 	for _, e := range snapshot.Executions {
-		if e.ExecutionID == a.ExecutionID && (e.TurnNumber != 1 || e.CurrentTurnID != first.execution.CurrentTurnID) {
+		if e.ExecutionID == a.ExecutionID && (e.TurnNumber != 2 || e.CurrentTurnID != first.execution.CurrentTurnID) {
 			t.Fatal("candidate B feedback crossed to candidate A")
 		}
 	}

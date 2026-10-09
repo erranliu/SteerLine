@@ -53,7 +53,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	if _, err := service.recordWorkerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
-	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Status != "waiting_input" || run.FinishTaskStatus != "waiting_input" {
+	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Status != "waiting_input" || run.FinishTaskStatus != "waiting_decision" {
 		t.Fatalf("start replay accepted an unsent answer or changed the waiting state: turns=%d decision=%s phase=%s finish=%s", execution.TurnNumber, run.Decision.Status, workflow.Status, run.FinishTaskStatus)
 	}
 }

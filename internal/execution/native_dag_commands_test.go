@@ -560,7 +560,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}
 	task := page.Tasks[0].TaskRecord
 	created := time.Now().UTC()
-	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: executionmodel.Version, Status: "waiting_external", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: executionmodel.Version, FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepAwaitMerge, Status: "waiting_external", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", CurrentAttemptID: "attempt-120", WorkflowRunID: "wf-120", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "succeeded", CurrentStep: "worker", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-120"}, CreatedAt: created, UpdatedAt: created}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	mergeCommit := strings.Repeat("f", 40)
