@@ -41,6 +41,7 @@ type StageResult struct {
 	TurnID               string         `json:"turn_id"`
 	SessionID            string         `json:"session_id"`
 	Succeeded            bool           `json:"succeeded"`
+	FinalVerified        bool           `json:"final_verified"`
 	Final                string         `json:"final,omitempty"`
 	FinalNativeSessionID string         `json:"final_native_session_id,omitempty"`
 	FinalNativeTurnID    string         `json:"final_native_turn_id,omitempty"`

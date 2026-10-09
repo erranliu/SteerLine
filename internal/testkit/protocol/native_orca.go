@@ -20,11 +20,8 @@ import (
 func sha256Hex(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 
 type NativeOrcaState struct {
-	StageSourceLost                                                  bool
 	StageProvider                                                    string
 	StageRemote                                                      string
-	StageTranscript                                                  string
-	StageFinals                                                      map[int]string
 	StartDelay                                                       time.Duration
 	StartOutcome                                                     string
 	CompletionPRURL                                                  string
@@ -178,11 +175,6 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				state.FixedAgentTerminalCreated = true
 				state.Agent = "codex"
 				state.FixedAgentTitle, state.FixedAgentCommand = nativeArg(args, "--title"), nativeArg(args, "--command")
-				if state.StageProvider != "" {
-					if err := StagedHistoryBinding(state.FixedAgentCommand); err != nil {
-						return nativeOrcaErr("stage_binding", err.Error())
-					}
-				}
 				created := terminal("term-agent")
 				if state.RenameFixedAgentAfterCreate {
 					state.FixedAgentCurrentTitle = state.Name
@@ -454,25 +446,6 @@ func FakeNativeOrca(stateDir string, args []string) int {
 					_ = os.WriteFile(filepath.Join(probeDir, "receipt.json"), receipt, 0600)
 				}
 			}
-			if state.StageProvider != "" && !strings.HasPrefix(state.Tasks[len(state.Tasks)-1], "Readiness preparation only.") {
-				text, err := StagedBusiness(state.Path, state.Tasks[len(state.Tasks)-1], state.StageProvider, state.StageRemote)
-				if err != nil {
-					return nativeOrcaErr("stage_failure", err.Error())
-				}
-				if state.StageFinals == nil {
-					state.StageFinals = map[int]string{}
-				}
-				state.StageFinals[state.Dispatches] = text
-				if _, err := AppendStagedTranscript(state.StageTranscript, state.Path, fmt.Sprintf("task-%d", state.Dispatches), fmt.Sprintf("provider-turn-%d", state.Dispatches), text); err != nil {
-					return nativeOrcaErr("stage_failure", err.Error())
-				}
-			}
-			if state.StageProvider != "" && strings.HasPrefix(state.Tasks[len(state.Tasks)-1], "Readiness preparation only.") {
-				if _, err := AppendStagedTranscript(state.StageTranscript, state.Path, fmt.Sprintf("task-%d", state.Dispatches), fmt.Sprintf("provider-turn-%d", state.Dispatches), "readiness completed"); err != nil {
-					return nativeOrcaErr("stage_failure", err.Error())
-				}
-			}
-
 			save()
 			n := state.Dispatches
 			if n == state.LoseDispatchAt {
@@ -564,20 +537,9 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			return nativeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
 		case "worker-read":
 			n, _ := strconv.Atoi(strings.TrimPrefix(nativeArg(args, "--dispatch"), "ctx-"))
-			if state.StageProvider != "" && state.StageFinals[n] != "" && state.StageSourceLost {
-				return nativeOrcaOK(map[string]any{"dispatchId": nativeArg(args, "--dispatch"), "source": "terminal", "sourceExact": false, "contentComplete": false, "fallbackReason": "session_not_reported"})
-			}
-			if state.StageProvider != "" && state.StageFinals[n] != "" {
-				return nativeOrcaOK(map[string]any{"dispatchId": nativeArg(args, "--dispatch"), "source": "transcript", "provider": "codex", "sourceIdentity": "stage-source", "sourceExact": true, "contentComplete": true, "nextCursor": "stage-cursor", "transcript": map[string]any{"messages": []any{map[string]any{"id": state.StageTranscript + ":00000000000000000000", "role": "assistant", "source": "transcript", "blocks": []any{map[string]string{"type": "text", "text": state.StageFinals[n]}}}}}})
-			}
 			if state.EnvironmentMode && n > 0 && strings.HasPrefix(state.Tasks[n-1], "Readiness preparation only.") {
 				invocation, _ := json.Marshal(map[string]any{"cmd": state.ProbeCommand})
-				blocks := []any{map[string]any{"id": func() string {
-					if state.StageProvider != "" {
-						return state.StageTranscript + ":00000000000000000000"
-					}
-					return "call"
-				}(), "role": "assistant", "source": "transcript", "blocks": []any{map[string]any{"type": "tool-call", "name": "exec_command", "callId": "probe-call", "input": string(invocation)}}}}
+				blocks := []any{map[string]any{"id": "call", "role": "assistant", "source": "transcript", "blocks": []any{map[string]any{"type": "tool-call", "name": "exec_command", "callId": "probe-call", "input": string(invocation)}}}}
 				result, _ := json.Marshal(map[string]any{"exit_code": 0, "output": "SLREADINESS:" + state.ProbeNonce + ":" + state.ProbeDigest})
 				resultText := string(result)
 				if state.ReadinessMode == "tool_failure" {

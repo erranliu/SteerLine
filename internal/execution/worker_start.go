@@ -215,11 +215,18 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 		return err
 	}
 
-	workspaceInstruction, err := workerWorkspaceInstruction(execution.Workspace)
-	if err != nil {
-		return err
+	frozen := stageInput(workflow, turnID)
+	if !readinessTurn && frozen != nil {
+		if frozen.Prompt != prompt || frozen.StepID != workflow.StepID || frozen.Version != workflow.InputVersion {
+			return errors.New("native input differs from the frozen stage prompt")
+		}
+	} else {
+		workspaceInstruction, err := workerWorkspaceInstruction(execution.Workspace)
+		if err != nil {
+			return err
+		}
+		prompt += workspaceInstruction + publicationTargetInstruction(c)
 	}
-	prompt += workspaceInstruction + publicationTargetInstruction(c)
 	if !readinessTurn {
 		if workflow.FlowRef != executionmodel.DevelopmentFlow || !executionmodel.ModelStep(workflow.StepID) {
 			return errors.New("unknown fixed flow or model step")

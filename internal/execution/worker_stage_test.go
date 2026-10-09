@@ -17,6 +17,8 @@ type stageTestPort struct {
 	executionbackend.LifecyclePort
 	workspace executionbackend.WorkspaceInspection
 	err       error
+	evidence  *executionbackend.TurnEvidence
+	observed  int
 }
 
 type unsupportedStageResolver struct {
@@ -46,9 +48,21 @@ func (p *stageTestPort) PolicyCapabilities() executionbackend.LifecyclePolicyCap
 	return executionbackend.LifecyclePolicyCapabilities{}
 }
 
-func workerStageFixture(t *testing.T) (*Service, *reconstructiontypes.RunView, *stageTestPort) {
+func (p *stageTestPort) ObserveLifecycle(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	p.observed++
+	return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, TurnEvidence: p.evidence}, nil, nil
+}
+func (p *stageTestPort) Next(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
+	return executionbackend.LifecycleCandidate{Done: true}, nil
+}
+
+func workerStageFixture(t *testing.T, configure ...func(*Config)) (*Service, *reconstructiontypes.RunView, *stageTestPort) {
 	t.Helper()
-	s, run := neutralAuditService(t)
+	var setup func(*Config)
+	if len(configure) > 0 {
+		setup = configure[0]
+	}
+	s, run := neutralAuditServiceWithConfig(t, setup)
 	w, e := s.workflowRecords(run)
 	e.SessionID, e.SessionGeneration = "original-session", "original-generation"
 	e.OwnerServiceInstanceID = s.State.Service.InstanceID

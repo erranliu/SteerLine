@@ -104,9 +104,13 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 	}
 	w.InputVersion++
 	input.Version = w.InputVersion
-	input.Prompt = prompt + "\n" + string(feedback) + publicationTargetInstruction(fixed.config)
+	workspaceInstruction, err := workerWorkspaceInstruction(fixed.execution.Workspace)
+	if err != nil {
+		return err
+	}
+	input.Prompt = prompt + "\n" + string(feedback) + workspaceInstruction + publicationTargetInstruction(fixed.config)
 	w.StageInputs = append(w.StageInputs, input)
-	return s.startWorkerFlowTurn(ctx, run, prompt+"\n"+string(feedback), commandID)
+	return s.startWorkerFlowTurn(ctx, run, input.Prompt, commandID)
 }
 
 func stageResult(w *executionmodel.WorkflowRunRecord, command string) *executionmodel.StageResult {
@@ -207,7 +211,11 @@ func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel
 	if err != nil {
 		return err
 	}
-	input.Prompt = prompt + publicationTargetInstruction(fixed.config)
+	workspaceInstruction, err := workerWorkspaceInstruction(fixed.execution.Workspace)
+	if err != nil {
+		return err
+	}
+	input.Prompt = prompt + workspaceInstruction + publicationTargetInstruction(fixed.config)
 	w.StepID, w.Status, w.UpdatedAt = input.StepID, "queued", now()
 	w.StageDiagnostic = ""
 	w.StageInputs = append(w.StageInputs, input)
@@ -255,7 +263,7 @@ func (s *Service) stageWait(run *reconstructiontypes.RunView, w *executionmodel.
 func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, evidence executionbackend.TurnEvidence) error {
 	w, e := fixed.workflow, fixed.execution
 	if previous := stageResult(w, evidence.CommandID); previous != nil {
-		if previous.TurnID != evidence.TurnID || previous.SessionID != evidence.SessionID || previous.Final != evidence.LastMessage || previous.Succeeded != evidence.Succeeded || previous.FinalSource != evidence.FinalSource || previous.FinalItemID != evidence.FinalItemID {
+		if previous.TurnID != evidence.TurnID || previous.SessionID != evidence.SessionID || previous.Final != evidence.LastMessage || previous.Succeeded != evidence.Succeeded || previous.FinalSource != evidence.FinalSource || previous.FinalItemID != evidence.FinalItemID || previous.FinalVerified != evidence.FinalVerified || previous.FinalNativeSessionID != evidence.FinalNativeSessionID || previous.FinalNativeTurnID != evidence.FinalNativeTurnID || previous.Failure != evidence.Failure || previous.FinalDiagnostic != evidence.FinalDiagnostic {
 			return errors.New("conflicting duplicate stage result")
 		}
 		return nil // first-wins, including a replay after the step advanced
@@ -271,17 +279,20 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if err := s.stopVerifiedWorkerTurn(run, w, e, evidence.TurnID, map[bool]string{true: "succeeded", false: "failed"}[evidence.Succeeded], false); err != nil {
 		return err
 	}
-	result := executionmodel.StageResult{CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
+	if input.StepID != executionmodel.StepImplement && (!evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "") {
+		return s.stageWait(run, w, e, "reconciling", "original stopped turn lacks verified final provenance: "+evidence.FinalDiagnostic, nil)
+	}
+	result := executionmodel.StageResult{CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, FinalVerified: evidence.FinalVerified, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
 	facts, inspectErr := s.inspectStage(ctx, run, lifecycle, fixed)
 	result.Snapshot = facts
 	if facts != nil {
 		workspace := facts.Workspace
 		applyWorkflowWorkspaceEvidence(run, e, executionmodel.WorkspaceEvidence{Repository: workspace.Repository, Worktree: workspace.Worktree, Branch: workspace.Branch, Base: workspace.Base, Head: workspace.Head, Dirty: workspace.Dirty, VerifiedAt: workspace.CheckedAt})
 	}
-	w.StageResults = append(w.StageResults, result)
 	if inspectErr != nil {
 		return s.stageWait(run, w, e, "reconciling", "workspace/publication facts unknown: "+inspectErr.Error(), nil)
 	}
+	w.StageResults = append(w.StageResults, result)
 	manualReason := ""
 	if e.RecoveryRequired || e.OwnerServiceInstanceID != s.State.Service.InstanceID || len(e.PendingQuestions) != 0 || s.hasUnknownWorkerOperation(run) || e.Environment != nil && (!e.Environment.Ready || e.Environment.Blocker != nil) || run.Decision != nil && run.Decision.Status == "answer_saved" {
 		manualReason = "original session or prior-service input requires explicit continuation; no automatic next turn"
@@ -340,7 +351,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 		if source == nil || source.TurnID != input.SourceTurnID || !source.Succeeded || source.Failure != "" {
 			return s.stageWait(run, w, e, "blocked", "source execution failed; report generated, original failure retained", &report)
 		}
-		if source.FinalSource == "" || source.FinalItemID == "" {
+		if !source.FinalVerified || source.FinalSource == "" || source.FinalItemID == "" {
 			return s.stageWait(run, w, e, "reconciling", "source final provenance is unavailable; report generated, evidence gap retained", &report)
 		}
 		if source.Snapshot == nil || !sameStageSnapshot(source.Snapshot, facts) || report.Outputs.CandidateSHA != facts.Workspace.Head || facts.Workspace.Dirty {
@@ -353,6 +364,14 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	info, queryErr := publicationClient(fixed.config, s.runtime.ProcessHost).Query(ctx, report.Outputs.PRURL)
 	if queryErr != nil {
 		return s.stageWait(run, w, e, "reconciling", "publication result unknown: "+queryErr.Error(), &report)
+	}
+	return s.acceptStagePublication(run, fixed, input, facts, report, info)
+}
+
+func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed workerFlowContext, input *executionmodel.StageInput, facts *executionmodel.StageSnapshot, report stageReport, info executionmodel.PRInfo) error {
+	w, e := fixed.workflow, fixed.execution
+	if facts.Workspace.Head != input.CandidateSHA || facts.Workspace.Dirty || s.hasUnknownWorkerOperation(run) {
+		return s.stageWait(run, w, e, "reconciling", "original publication cannot settle while candidate or native operation facts differ", &report)
 	}
 	if err := publication.ValidateWorkerPRIdentity(info, report.Outputs.PRURL, fixed.config.PR.Repository, w.Branch, facts.Workspace.Branch); err != nil || info.HeadRevision != input.CandidateSHA || info.State != "open" && info.State != "merged" {
 		return s.stageWait(run, w, e, "blocked", "artifact_mismatch: PR repository, branch, base or candidate differs", &report)
@@ -428,6 +447,24 @@ func (s *Service) reconcileStageFacts(ctx context.Context, run *reconstructionty
 		return nil
 	}
 	w.PRQueriedAt = ptr(now())
+	// An unavailable observation is not an accepted result. Re-read only the
+	// original stopped native turn; no new input or changed source is allowed.
+	if stageResult(w, e.CurrentCommandID) == nil && stageInput(w, e.CurrentCommandID) != nil {
+		snapshot, err := s.lifecycleSnapshot(run, w, e, fixed.attempt, nil)
+		if err != nil {
+			return err
+		}
+		receipt, observer, readErr := lifecycle.ObserveLifecycle(ctx, snapshot)
+		if observer != nil {
+			_ = observer.Close(ctx)
+		}
+		if readErr == nil && receipt.TurnEvidence != nil && receipt.TurnEvidence.Completed {
+			return s.acceptStageTurn(ctx, run, lifecycle, fixed, *receipt.TurnEvidence)
+		}
+		w.StageDiagnostic = "original stopped turn remains unavailable: " + firstNonemptyStage(receipt.Diagnostic, fmt.Sprint(readErr))
+		s.refreshRun(run)
+		return s.commitWorker(run)
+	}
 	facts, err := s.inspectStage(ctx, run, lifecycle, fixed)
 	if err != nil {
 		w.StageDiagnostic = "read-only reconciliation: " + err.Error()
@@ -448,6 +485,13 @@ func (s *Service) reconcileStageFacts(ctx context.Context, run *reconstructionty
 		}
 		w.PRState, w.PRQueryError = info.State, nil
 		w.StageDiagnostic = "original publication observed by read-only reconciliation; original outcome retained"
+		result, input := stageResult(w, e.CurrentCommandID), stageInput(w, e.CurrentCommandID)
+		if result != nil && input != nil && result.StepID == executionmodel.StepPublish && result.Succeeded && result.FinalVerified && result.Outcome == "done" {
+			report, decodeErr := decodeStageReport(result.Final, executionmodel.StepPublish)
+			if decodeErr == nil && report.Outputs.PRURL == w.PRCandidateURL {
+				return s.acceptStagePublication(run, fixed, input, facts, report, info)
+			}
+		}
 		if info.Merged && info.State == "merged" && info.MergedAt != nil && info.MergeCommit != nil {
 			if err := BindWorkerPR(w, e, info, w.PRCandidateURL, fixed.config.PR.Repository, false); err != nil {
 				return err
