@@ -140,7 +140,7 @@ func (m Model) createActionWithProfile(action, taskID string, profile *api.Execu
 		return m, nil
 	}
 	for _, pending := range state.actions {
-		if pending.Action == action && !pending.Resolved && pending.Status != "applied" && pending.Status != "rejected" && pending.Status != "failed" {
+		if pendingActionBlocks(pending, action, taskID) {
 			m.status = "此操作已有请求在跟踪 · request " + pending.RequestID
 			return m, nil
 		}
@@ -232,7 +232,7 @@ func (m Model) beginAction(projectKey, instance string, revision uint64, action,
 func (m Model) createActionWithID(index int, action, taskID, requestID, instance string, revision uint64) (tea.Model, tea.Cmd) {
 	state := &m.projects[index]
 	for _, pending := range state.actions {
-		if pending.Action == action && !pending.Resolved && pending.Status != "applied" && pending.Status != "rejected" && pending.Status != "failed" {
+		if pendingActionBlocks(pending, action, taskID) {
 			m.status = "此操作已有请求在跟踪 · request " + pending.RequestID
 			return m, nil
 		}
@@ -259,6 +259,16 @@ func hasCapability(runtimeState *api.ServicePage, action string) bool {
 		}
 	}
 	return false
+}
+
+func pendingActionBlocks(pending *actionState, action, taskID string) bool {
+	if pending.Action != action || pending.Status == "applied" || pending.Status == "rejected" || pending.Status == "failed" {
+		return false
+	}
+	if action == "start_task" {
+		return pending.TaskID == taskID
+	}
+	return !pending.Resolved
 }
 
 func candidateActionReason(state projectState, now time.Time) string {
