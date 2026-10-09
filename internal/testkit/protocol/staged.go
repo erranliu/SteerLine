@@ -21,7 +21,7 @@ func StagedBusiness(cwd, prompt, provider, remote string) (string, error) {
 		return strings.TrimSpace(string(data)), nil
 	}
 	switch {
-	case strings.Contains(prompt, "Current step: implement.execute"):
+	case strings.HasPrefix(strings.TrimSpace(prompt), "Current step: implement.execute"):
 		if err := os.WriteFile(filepath.Join(cwd, "stage-result.txt"), []byte("staged fixture result\n"), 0600); err != nil {
 			return "", err
 		}
@@ -32,13 +32,13 @@ func StagedBusiness(cwd, prompt, provider, remote string) (string, error) {
 			return "", err
 		}
 		return "Implemented, verified the fixture result and committed the local candidate; no publication performed.", nil
-	case strings.Contains(prompt, "Current step: implement.report"):
+	case strings.HasPrefix(strings.TrimSpace(prompt), "Current step: implement.report"):
 		head, err := git("rev-parse", "HEAD")
 		if err != nil {
 			return "", err
 		}
 		return `{"outcome":"done","outputs":{"candidate_sha":"` + head + `"},"summary":"source implementation completed"}`, nil
-	case strings.Contains(prompt, "Current step: publish"):
+	case strings.HasPrefix(strings.TrimSpace(prompt), "Current step: publish"):
 		head, err := git("rev-parse", "HEAD")
 		if err != nil {
 			return "", err
