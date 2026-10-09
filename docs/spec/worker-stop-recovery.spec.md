@@ -2,7 +2,7 @@
 
 任务 ID：87；任务名称：Worker 停机对账与恢复一致性修复。
 
-状态：已获用户授权由本聊天直接执行，未实现。[草稿](../roadmap/drafts/worker-stop-recovery.md) · [Plan](worker-stop-recovery.plan.md) · [验收](../acceptance/worker-stop-recovery.md)。原会话规则沿用[现行契约](product-simplification-04-conversation-recovery.spec.md)。
+状态：已获用户授权由本聊天直接执行；固定启动版本和实际交付结果见专属验收。[草稿](../roadmap/drafts/worker-stop-recovery.md) · [Plan](worker-stop-recovery.plan.md) · [验收](../acceptance/worker-stop-recovery.md)。原会话规则沿用[现行契约](product-simplification-04-conversation-recovery.spec.md)。
 
 ## 1. Worker 声明停服行为
 

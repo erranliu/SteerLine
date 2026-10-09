@@ -25,9 +25,9 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 [Spec](product-simplification-04-conversation-recovery.spec.md) · [Plan](product-simplification-04-conversation-recovery.plan.md) · [验收](../acceptance/product-simplification-04-conversation-recovery.md)
 
-## 停机对账修复候选
+## 停机对账修复
 
-#87 Worker 停机对账与恢复一致性修复：由安装现场 101 的停止操作未知引出的系统性修复方案，未纳入执行、未实现。由 worker 声明并冻结停服行为，本地停止/Orca 继续；应用恢复只消费 worker 规范事实，覆盖原运行、待答和离线完成。复用既有分类/幂等，与 #84 共享接线有序集成，不改变正式排期。
+#87 Worker 停机对账与恢复一致性修复：由安装现场 101 的停止操作未知引出的系统性修复，已获用户授权由本聊天直接执行；实现与验收结果见专属记录。由 worker 声明并冻结停服行为，本地停止/Orca 继续；应用恢复只消费 worker 规范事实，覆盖原运行、待答和离线完成。复用既有分类/幂等，与 #84 共享接线有序集成，不改变正式排期。
 
 [草稿](../roadmap/drafts/worker-stop-recovery.md) · [Spec](worker-stop-recovery.spec.md) · [Plan](worker-stop-recovery.plan.md) · [专属验收](../acceptance/worker-stop-recovery.md)
 
