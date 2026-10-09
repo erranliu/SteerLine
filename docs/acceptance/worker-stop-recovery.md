@@ -20,13 +20,13 @@
 
 | ID / 方法 | 行为与最小通过条件 | 入口 / 环境 | 状态 |
 | --- | --- | --- | --- |
-| WSR-A1 / 自动 | 两种 ServiceStopBehavior 由 worker 声明、随执行冻结；缺值/非法/能力变化及旧格式在副作用前拒绝。无 live observer 时仍可构造原 worker 入口；应用只消费规范事实，不解析实现身份或按 backend/protocol 恢复 | Plan owner/boundary 表驱动与冻结/版本负例 | 待验收 |
-| WSR-A2 / 自动 | local 先门槛后精确 owned 树停止，零 interrupt/新 stop observation；Orca 只 detach，零平台关闭/停止，原 worker 能继续。准备晚到不漏资源，一个错误不漏兄弟，关闭 observer 不被当 worker 已停 | Plan owner +双 worker adapter 事实测试 | 待验收 |
-| WSR-A3 / 自动 | 预期标识不覆盖实际事实；旧写者未排除/身份变化保持 unknown；支持格式原 stop 仅凭精确事实收尾，保留 RPC 未知，不伪造 completed；未知 start/input/reply/publication 不因进程退出消失 | Plan owner/adapter、既有 unknown publication 回归 | 待验收 |
-| WSR-A4 / 自动 | 单次完整分类，展示/受理/投递资格一致；fresh answer 只消费一次，接管/实质改变保留旧答案关联新确认；未知发送只对账；相同 poll 不换状态/Decision/版本/活动，重复命令不多 Attempt | Plan owner +正式 Command 受控集成 | 待验收 |
-| WSR-A5 / 自动 | 继续型 worker 的原运行/待答/停服期间 completed 均可接回；原结果/ack/业务结算不重复、不补发 worker_done，不把结果当 TaskDelivery；晚到不改新 Attempt/兄弟，unknown 不饿死无关执行；Query 反映中心离线与实际 worker 状态 | Plan owner/adapter 与双路径 Query 集成 | 待验收 |
-| WSR-A6 / 自动 | 同构建受控双 worker：local 停止后重开不发送，正式继续同会话新 Attempt；Orca 原运行/待答/离线完成接回原 Attempt/session/Dispatch；重复命令/再次重开不重派、误停止或重复结算，清理完整 | TestWorkerServiceStopRecoveryControlled，复用 integration 的双 helper 和正式接口 | 待验收 |
-| WSR-A7 / 自动 | Windows 真 local 正常停服实际结束旧树，重开不新 turn；正式 continue 复用原 thread/workspace、新进程/Attempt/turn 真实完成；host-exit 原分支和清理保持 | 现有 TestLocalCodexManualRecoveryLive 扩展正常停服，命令见 Plan | 待验收 |
+| WSR-A1 / 自动 | 两种 ServiceStopBehavior 由 worker 声明、随执行冻结；缺值/非法/能力变化及旧格式在副作用前拒绝。无 live observer 时仍可构造原 worker 入口；应用只消费规范事实，不解析实现身份或按 backend/protocol 恢复 | Plan owner/boundary 表驱动与冻结/版本负例 | 通过；精确候选/映射见结果登记 |
+| WSR-A2 / 自动 | local 先门槛后精确 owned 树停止，零 interrupt/新 stop observation；Orca 只 detach，零平台关闭/停止，原 worker 能继续。准备晚到不漏资源，一个错误不漏兄弟，关闭 observer 不被当 worker 已停 | Plan owner +双 worker adapter 事实测试 | 通过；精确候选/映射见结果登记 |
+| WSR-A3 / 自动 | 预期标识不覆盖实际事实；旧写者未排除/身份变化保持 unknown；支持格式原 stop 仅凭精确事实收尾，保留 RPC 未知，不伪造 completed；未知 start/input/reply/publication 不因进程退出消失 | Plan owner/adapter、既有 unknown publication 回归 | 通过；精确候选/映射见结果登记 |
+| WSR-A4 / 自动 | 单次完整分类，展示/受理/投递资格一致；fresh answer 只消费一次，接管/实质改变保留旧答案关联新确认；未知发送只对账；相同 poll 不换状态/Decision/版本/活动，重复命令不多 Attempt | Plan owner +正式 Command 受控集成 | 通过；精确候选/映射见结果登记 |
+| WSR-A5 / 自动 | 继续型 worker 的原运行/待答/停服期间 completed 均可接回；原结果/ack/业务结算不重复、不补发 worker_done，不把结果当 TaskDelivery；晚到不改新 Attempt/兄弟，unknown 不饿死无关执行；Query 反映中心离线与实际 worker 状态 | Plan owner/adapter 与双路径 Query 集成 | 通过；精确候选/映射见结果登记 |
+| WSR-A6 / 自动 | 同构建受控双 worker：local 停止后重开不发送，正式继续同会话新 Attempt；Orca 原运行/待答/离线完成接回原 Attempt/session/Dispatch；重复命令/再次重开不重派、误停止或重复结算，清理完整 | TestWorkerServiceStopRecoveryControlled，复用 integration 的双 helper 和正式接口 | 通过；精确候选/映射见结果登记 |
+| WSR-A7 / 自动 | Windows 真 local 正常停服实际结束旧树，重开不新 turn；正式 continue 复用原 thread/workspace、新进程/Attempt/turn 真实完成；host-exit 原分支和清理保持 | 现有 TestLocalCodexManualRecoveryLive 扩展正常停服，命令见 Plan | 通过；精确候选/映射见结果登记 |
 | WSR-A8 / 自动 | 本机 Orca 真活动停服不停止原 worker，重开接回原 Attempt/terminal/Dispatch；再次停服让原轮次真实完成，重开接回输出及结算一次，零新增业务输入/替代执行，所有原生证据及清理通过 | 现有 L3 live recovery.orca-codex 扩展活动/离线完成，命令见 Plan | 待验收 |
 
 准备：用户确认纳入/固定文档；实现冻结标识及版本、worker 统一入口、各拟新增测试和现有测试分支；按 Plan 补 controlled 离线行为和 Orca 最小等待窗口。A7/A8 需要本机目标工具/认证/当前权限，独立 scratch/owned 资源，禁止操作安装 101 或现有 Orca 终端。缺场景、skip、零匹配或缺证据不算通过，自动失败阻塞对应交付。
@@ -69,3 +69,15 @@ A8 的原轮次离线继续允许 usage 增长；通过条件是身份/原轮次
 独立 reviewer `/root/review87` 对 `8e6fb839` 与主干集成/Orca 身份候选 `df21916a` 均未发现新确认问题；此前确认的问题已逐项修复。`5bc3f7fa` 定向 `TestWorker(ShutdownDrainsCommittedDeliveryAck|PreparationStopDoesNotJournalUnsentBusinessTurn|ServiceStopRecovery|ServiceStopBoundary|LateReplyReleasesOnlyItsOriginalUncertainty)` 在 `steerline-test-feedback/20261009T061433.356999900Z/summary.json` 通过（107.45s）；独立 reviewer 亦确认此有界 ack 增量 clean。Linux/amd64 `go build ./cmd/steerline` 通过，隔离临时产物 SHA256 `F727727D15020C3C43C2D93F3CA441E4ACF307FC05EC8F482D7FD148E43C4D78`。新完整受控与真实 Orca 验证仍在进行；未记实现完成或 A8 通过，PR 与实际合并核验待完成。原安装 101 及一期长期验收不在本次通过范围。
 
 A8 补充失败：`steerline-test-feedback/20261009T061152.020964900Z/summary.json`（`df21916a`、265.46s、cleanup_complete=true）在正式 `control start_task` 的驱动期限内超时；最终快照仅 readiness start/submit accepted，尚未进入活动停服窗口。不据此宣称 A8 通过，也未将超时断言为已定位的环境或产品原因；待结束并行受控验证后串行复验当前完整生产候选。
+
+## 最终生产增量与受控闭环
+
+生产候选 `5bc3f7fa`（后续至 `932919e3` 只改文档/测试）：13 个定向测试 0 skip 通过，原消息 ack 取消仍有界完成并消费原回执，尚未知 ack 只 Reconcile 不重新 Execute，提交失败不 ack；独立复审 clean。A1–A5 的基线与增量证据共同覆盖冻结拒绝、worker 架构边界、精确 owned writers、原停止对账、未知 start/publication/answer、晚答核实重试、取消/准备 owner、同事实 poll 幂等及兄弟隔离。Orca 当前 exactWorker 负例为 `TestRecoveredDispatchRequiresExactOriginalIdentity`，其独立 Go 定向通过；标识与分类不替代实际身份或业务提交证明。
+
+A6 完整命令 `go run ./cmd/test-feedback -- ./tests/integration -run '^TestWorkerServiceStopRecoveryControlled$' -count=1 -timeout=20m`，`20261009T061423.147599900Z/summary.json`，`5bc3f7fa`，507.86s。local（88.74s）、completed live 原会话下一轮（133.96s）、原待问题/丢 ack 和 reply 回执（137.70s）PASS；Orca 活动重接→离线完成→再次重开全部行为断言通过，但 TempDir 删除 SQLite 文件时报告占用，子项 FAIL，不能把本次总结果登记为通过。没有改称清理成功或覆写原结果。
+
+`a4d7e263096233e68bce25a8bf745c6c857bdb78` clean source，仅去掉该子项末尾重复打开数据库的独立 Query：使用已验证同一公开最终 snapshot 断言无新增 Attempt/Delivery并显式 stop；不删行为或身份/计数断言。`go run ./cmd/test-feedback -- ./tests/integration -run '^TestWorkerServiceStopRecoveryControlled$/^orca_continues_and_recovers_completion_after_terminal_exit$' -count=1 -timeout=6m`，`20261009T062319.664347200Z/summary.json` PASS，101.63s/0 skip，临时目录清理成功。A6 各子项由上述精确同生产版本结果共同验收通过；不宣称重新跑了另一遍完整 suite。至此受控 local 1→2 Attempts、Orca 原 Attempt/session/Dispatch、二次完成重启零额外 Dispatch/reply/send/ack、同 live session下一轮只新增1 Dispatch，原问题只回复1次，均有正式接口与计数断言。
+
+最终 L1：`a4d7e263` clean，`20261009T062130.133828700Z/summary.json` PASS，preparation 0.3s/execution 96.3s。未跑 full/L2，未扩大原生 suite。
+
+A8 驱动增量 `932919e3`：同一正式 control 请求的原产品准入期限仍为2m。驱动等待真正最终 applied 回执最多6m（父 helper390s，仍受场景 context 约束），让已经 claim_reserved 的原生准备可在准入期限后完成；未重新发送请求、未把 applying 当已执行/已交付，未延长产品准入。当前串行复验，结果待登记。

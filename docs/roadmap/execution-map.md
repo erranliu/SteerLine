@@ -10,7 +10,7 @@
 | 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 待执行 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
 | 45 | 本机客户端协议与历史查询 | 无 | 待执行 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 未验；[记录](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
-| 87 | Worker 停机对账与恢复一致性修复 | 无未交付业务硬前置；消费当前已合入 worker 基线 | 执行中 | [Spec](../spec/worker-stop-recovery.spec.md) · [Plan](../spec/worker-stop-recovery.plan.md) | 用户于 2026-10-09 明确授权本聊天直接执行，不经 roadmap-runner；WSR-A1–A8 待验；[专属记录](../acceptance/worker-stop-recovery.md) |
+| 87 | Worker 停机对账与恢复一致性修复 | 无未交付业务硬前置；消费当前已合入 worker 基线 | 执行中 | [Spec](../spec/worker-stop-recovery.spec.md) · [Plan](../spec/worker-stop-recovery.plan.md) | 用户于 2026-10-09 明确授权本聊天直接执行，不经 roadmap-runner；[PR #260](https://github.com/erranliu/SteerLine/pull/260) 草稿；WSR-A1–A7 已按精确候选验证，A8 最终串行复验中；[专属记录](../acceptance/worker-stop-recovery.md) |
 
 ## 推进顺序
 
