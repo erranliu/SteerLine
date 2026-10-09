@@ -13,8 +13,6 @@ import (
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
-var errClaimConflict = errors.New("native task claim conflict")
-
 var errTaskNotReady = errors.New("target task is no longer ready")
 
 func checkpointControlReceipt(receipt productapi.ControlReceipt) executionmodel.ControlReceipt {
@@ -141,7 +139,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	if err != nil || req == nil {
 		return err
 	}
-	if replay, err := s.replayCandidateControl(ctx, *req, digest); replay || err != nil {
+	if replay, err := s.replayTaskControl(ctx, *req, digest); replay || err != nil {
 		return err
 	}
 	checkedAt := now()
@@ -176,6 +174,9 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	if s.State.Control.Operation != nil {
 		return s.rejectControl(*req, digest, "slot_busy", errors.New("another control operation has not settled"))
 	}
+	if req.Action == "start_task" {
+		return s.processTaskStartControl(ctx, *req, payload, digest)
+	}
 	switch req.Action {
 	case "open_terminal", "recheck_environment":
 		if payload.Environment == nil {
@@ -185,30 +186,6 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 		run := s.find(target.RunID)
 		if run == nil || run.RunID != target.RunID || run.ExecutionID != target.ExecutionID || run.AttemptID != target.AttemptID {
 			return s.rejectControl(*req, digest, "stale_target", executionmodel.ErrTurnStale)
-		}
-	case "start_task":
-		profileID := payload.ExecutionProfileID
-		if profileID == "" {
-			if s.runtime.Profiles.HasMultipleProfiles() {
-				return s.rejectControl(*req, digest, "invalid_request", errors.New("start_task requires an execution profile selection"))
-			}
-			profileID = s.runtime.Profiles.DefaultProfileID()
-		}
-		if _, _, profileErr := s.runtime.Profiles.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest); profileErr != nil {
-			return s.rejectControl(*req, digest, "stale_profile", profileErr)
-		}
-		if s.State.Control.DispatchMode != "manual" {
-			return s.rejectControl(*req, digest, "wrong_mode", errors.New("start_task requires manual dispatch mode"))
-		}
-		if s.State.Control.DispatchPaused {
-			return s.rejectControl(*req, digest, "dispatch_paused", errors.New("dispatch is paused"))
-		}
-		if err = s.validateReadyTarget(ctx, payload.TaskID); err != nil {
-			code := "task_not_ready"
-			if errors.Is(err, errAlreadyManaged) {
-				code = "already_managed"
-			}
-			return s.rejectControl(*req, digest, code, err)
 		}
 	case "set_dispatch_mode":
 		if payload.Mode == "auto" && s.runtime.Profiles.DefaultProfileID() == "" {
@@ -236,9 +213,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 		return nil
 	}
 	var runID string
-	if req.Action == "start_task" {
-		runID = newID()
-	} else if payload.Environment != nil {
+	if payload.Environment != nil {
 		runID = payload.Environment.RunID
 	}
 	attemptID := runID
@@ -267,37 +242,18 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	if err = s.applyControlAction(ctx, *req, payload, op, &result); errors.Is(err, errLifecycleEffectPending) {
 		return nil
 	} else if err != nil {
-		if errors.Is(err, errClaimConflict) {
-			result.Status, result.Code, result.Message = "rejected", "claim_conflict", err.Error()
-		} else if errors.Is(err, errAlreadyManaged) {
+		if errors.Is(err, errAlreadyManaged) {
 			result.Status, result.Code, result.Message = "rejected", "already_managed", err.Error()
 		} else if errors.Is(err, errTaskNotReady) {
 			result.Status, result.Code, result.Message = "rejected", "task_not_ready", err.Error()
 		} else {
 			result.Status, result.Code, result.Message = "failed", controlFailureCode(err), err.Error()
 		}
-		if runID != "" {
-			r := s.find(payload.TaskID)
-			if r == nil || r.RunID != runID {
-				if errors.Is(err, context.Canceled) {
-					result.Status, result.Code, result.Message = "failed", "failed", "cancelled before a run was reserved"
-				}
-			} else if r.ExecutionStatus == "unknown" || r.TaskStatus == "in_progress" && r.ExecutionStatus == "pending" {
-				reason := "start_task side effects require manual reconciliation; request will not be replayed: " + err.Error()
-				s.State.Control.Blockers = append(s.State.Control.Blockers, reconstructiontypes.ControlBlocker{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, RunID: runID, AttemptID: runID, Reason: reason})
-				s.State.SlotOccupied = true
-				result.Status, result.Code, result.Message = "indeterminate", "indeterminate", reason
-			}
-		}
-		if runID != "" {
-			result.RunID = runID
-			result.AttemptID = runID
-		}
 	}
 	if runID != "" {
 		result.RunID = runID
-		result.AttemptID = runID
-		if r := s.find(payload.TaskID); r != nil && r.RunID == runID {
+		result.AttemptID = attemptID
+		if r := s.find(runID); r != nil {
 			result.RunRevision = r.ControlRevision
 		}
 	}
@@ -308,7 +264,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 // repeating its action. Keep supervision and stop handling alive while the
 // receipt destination is unavailable, but do not accept further mutations.
 func (s *Service) pollControl(ctx context.Context, cancel context.CancelFunc) error {
-	if err := s.pollCandidateControlReceipts(ctx); err != nil {
+	if err := s.pollTaskControlReceipts(ctx); err != nil {
 		return err
 	}
 	if op := s.State.Control.Operation; op != nil && op.Phase == "applying" {
@@ -422,86 +378,6 @@ func (s *Service) applyControlAction(ctx context.Context, req productapi.Control
 			return err
 		}
 		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = updated.DispatchMode, updated.DispatchPaused, updated.AuthorityVersion
-	case "start_task":
-		profileID := payload.ExecutionProfileID
-		if profileID == "" {
-			profileID = s.runtime.Profiles.DefaultProfileID()
-		}
-		if run := s.find(op.RunID); run != nil {
-			if s.lifecycleEffectPending(run.RunID) {
-				return errLifecycleEffectPending
-			}
-			if run.RunID != op.RunID {
-				return errAlreadyManaged
-			}
-			if s.candidateBusinessClosed(run) {
-				result.Message = "original start reservation retained; candidate no longer participates"
-				return nil
-			}
-			workflow, execution := s.workflowRecords(run)
-			if workflow == nil || workflow.ExecutionProfile != nil && (workflow.ExecutionProfile.ID != profileID) {
-				return nativeErr("contract_mismatch", "reserved start request differs from the fixed execution profile")
-			}
-			if _, err := s.executionConfigForRun(run); err != nil {
-				return err
-			}
-			if s.workers[run.RunID] != nil {
-				result.Message = "native task worker identity is persisted and running"
-				return nil
-			}
-			task := nativeTaskRecord(s.domain.Tasks, payload.TaskID)
-			attempt := s.workflowAttempt(run, run.AttemptID)
-			if task == nil || workflow == nil || execution == nil || attempt == nil {
-				return nativeErr("inconsistent_delivery", "reserved native start request cannot be recovered from center records")
-			}
-			if execution.TurnNumber > 0 && execution.SessionID != "" && execution.Process != nil {
-				started := s.operationByKey("worker-turn:" + execution.ExecutionID + ":" + execution.CurrentCommandID)
-				if started != nil && started.Status == "confirmed" {
-					result.Message = "original worker start is durably confirmed"
-					return nil
-				}
-			}
-			if attempt.Status != "planned" {
-				return nativeErr("outcome_unknown", "reserved native start request has no replayable planned attempt; fixed worker identity is retained")
-			}
-			if workflow.WorkflowVersion != executionmodel.Version || attempt.StepID != "worker" {
-				return nativeErr("unsupported_schema", "reserved start request has an unsupported workflow")
-			}
-			err := s.resumeWorkerFlow(ctx)
-			if err != nil {
-				return err
-			}
-			if s.lifecycleEffectPending(run.RunID) {
-				return errLifecycleEffectPending
-			}
-			result.Message = "native task worker reservation was resumed"
-			return nil
-		}
-		if err := s.selectDispatchProfile(profileID, payload.ExecutionProfileDigest); err != nil {
-			return err
-		}
-		if err := s.validateReadyTarget(ctx, payload.TaskID); err != nil {
-			return err
-		}
-		s.targetTask, s.lastDispatched, s.explicitDispatch, s.reservedRunID = payload.TaskID, "", true, op.RunID
-		defer func() { s.targetTask = ""; s.explicitDispatch = false; s.reservedRunID = "" }()
-		if err := s.dispatch(ctx); err != nil {
-			return err
-		}
-		if run := s.find(payload.TaskID); run != nil && s.lifecycleEffectPending(run.RunID) {
-			return errLifecycleEffectPending
-		}
-		if s.lastDispatched != payload.TaskID {
-			if run := s.find(payload.TaskID); run != nil && run.RunID == op.RunID {
-				return fmt.Errorf("target execution failed after reservation: %s", deref(run.Error))
-			}
-			observedRun := ""
-			if run := s.find(payload.TaskID); run != nil {
-				observedRun = run.RunID
-			}
-			return fmt.Errorf("%w: requested native task %s was not dispatched (last_dispatched=%q observed_run=%q reserved_run=%q slot_occupied=%t)", errClaimConflict, payload.TaskID, s.lastDispatched, observedRun, op.RunID, s.State.SlotOccupied)
-		}
-		result.Message = "native task claimed, prepared and worker started"
 	default:
 		return errors.New("unsupported control action")
 	}
@@ -541,16 +417,6 @@ func (s *Service) recoverControlOperation() error {
 	} else if _, receiptErr := s.host.ReadControlReceipt(op.RequestID); os.IsNotExist(receiptErr) && !hasRunEvidence {
 
 		code, message, status = "persistence_failed", "applying receipt was not published; action was not dispatched", "failed"
-	}
-	if op.Action == "start_task" {
-		taskID := op.TaskID
-		if payload, e := DecodeControlPayload(req); e == nil {
-			taskID = payload.TaskID
-		}
-		if status == "indeterminate" {
-			s.State.Control.Blockers = append(s.State.Control.Blockers, reconstructiontypes.ControlBlocker{RequestID: op.RequestID, Action: op.Action, TaskID: taskID, RunID: op.RunID, AttemptID: op.AttemptID, Reason: message})
-			s.State.SlotOccupied = true
-		}
 	}
 	nowAt := now()
 	receipt := s.baseReceipt(req, op.RequestDigest, status, code, message)
