@@ -6,6 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	testprotocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,8 +21,7 @@ import (
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -28,19 +30,7 @@ import (
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
-
-// This suite starts the production service with its formal resolver injection,
-// claims an isolated native task through CommandService, and observes it through
-// the public runtime/task query APIs. The Codex and Orca executables are protocol
-// fixtures implemented by this test binary; no product CLI or user project is used.
-func TestCD64OriginalSessionReconciliation(t *testing.T) {
-	t.Run("remote_admission_stays_blocked", TestRemotePublicationClaimRejectsUnreachableOrca)
-	t.Run("app_server_two_turns", testIntegratedAppServerTwoTurns)
-	t.Run("native_original_session_manual_gate", testIntegratedNativeOriginalSessionGate)
-	t.Run("remote_protocol_original_assertions", testCD64RemoteProtocolAssertions)
-}
 
 func testIntegratedAppServerTwoTurns(t *testing.T) {
 	// Include project setup, first-turn persistence and a second original turn

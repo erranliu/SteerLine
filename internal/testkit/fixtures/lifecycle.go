@@ -1,0 +1,299 @@
+// Package fixtures contains shared test adapters; production code must not import it.
+package fixtures
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sync"
+	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/execution/workspace"
+)
+
+type Backend struct {
+	Inspect func(context.Context, executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error)
+}
+
+func (b Backend) Identity() (executionbackend.BackendKind, executionbackend.ExecutionProtocol) {
+	return executionbackend.BackendLocal, Protocol
+}
+
+func (b Backend) Probe(_ context.Context, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec) (executionbackend.CapabilityReport, error) {
+	return CapabilityReport(executionbackend.BackendLocal, Protocol, target, agent, "fixture-version-1"), nil
+}
+
+func (b Backend) Observe(_ context.Context, ref executionbackend.ExecutionRef) (executionbackend.Observation, error) {
+	live := "live"
+	if ref.External.Kind == "os" {
+		label := resourceprocess.InspectProcess(&ref.External)
+		if label == "process absent" {
+			live = "exited"
+		} else if label != "matching process still exists" {
+			return executionbackend.Observation{}, errors.New("original fixture process differs")
+		}
+	}
+	return executionbackend.Observation{Liveness: live, Connection: "connected", ObservedAt: time.Now().UTC(), Source: "neutral-fixture"}, nil
+}
+
+func (b Backend) InspectWorkspace(ctx context.Context, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
+	return b.Inspect(ctx, ref)
+}
+
+func (b Backend) StopExecution(ctx context.Context, ref executionbackend.ExecutionRef, _ executionbackend.Operation, handle executionbackend.StopHandle) (executionbackend.StopReceipt, error) {
+	obs, err := b.Observe(ctx, ref)
+	if err != nil {
+		return executionbackend.StopReceipt{}, err
+	}
+	if obs.Liveness == "exited" {
+		return executionbackend.StopReceipt{Disposition: "confirmed"}, nil
+	}
+	if handle == nil || handle.Identity() != ref.External {
+		return executionbackend.StopReceipt{}, errors.New("original fixture stop handle differs")
+	}
+	handle.Kill()
+	return executionbackend.StopReceipt{Disposition: "accepted"}, nil
+}
+
+type Lifecycle struct {
+	Setup executionbackend.LifecycleSetup
+}
+
+type neutralCompletionReceipt struct {
+	Evidence           executionbackend.TurnEvidence
+	Process            executionbackend.ProcessIdentity
+	Target             executionbackend.ExecutionTarget
+	ExecutionID        string
+	AttemptID          string
+	ResourceGeneration string
+}
+
+func (p *Lifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
+	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
+}
+
+func (p *Lifecycle) PreflightLifecycle(_ context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
+	r := CapabilityReport(setup.Snapshot.Ref.Backend, setup.Snapshot.Ref.Protocol, setup.Snapshot.Ref.Target, setup.Snapshot.Ref.Agent, "fixture-version-1")
+	r.Capabilities[0].Status = executionbackend.CapabilityVerified
+	r.Capabilities[0].Evidence = "isolated fake start only; no native permission evidence"
+	return r, nil
+}
+
+func (p *Lifecycle) Next(_ context.Context, s executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
+	if s.Workspace.Path == "" {
+		intent := s.WorkspacePlan
+		return executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}, nil
+	}
+	if s.PendingTurn == nil {
+		return executionbackend.LifecycleCandidate{Done: true}, nil
+	}
+	turn := *s.PendingTurn
+	action := executionbackend.LifecycleStartTurn
+	if s.Session.SessionID == "" {
+		action = executionbackend.LifecyclePrepareSession
+	}
+	return executionbackend.LifecycleCandidate{Action: action, Input: executionbackend.LifecycleInput{Turn: &turn}}, nil
+}
+
+func (p *Lifecycle) Execute(ctx context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	receipt := executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationUnknown}
+	if err := r.Validate(); err != nil {
+		return receipt, nil, err
+	}
+	if r.Input.Workspace != nil {
+		git := workspace.Git{Command: executionbackend.LaunchCommand{Executable: p.Setup.GitExecutable, Args: p.Setup.GitArgs}, Timeout: p.Setup.CommandTimeout, Start: p.Setup.ProcessHost.StartManaged}
+		value, err := workspace.Prepare(ctx, git, workspace.Repository{Path: p.Setup.RepositoryPath, CommonDir: r.Snapshot.Session.ProjectID}, filepath.Dir(r.Input.Workspace.Path), r.Input.Workspace)
+		receipt.Disposition, receipt.Workspace = value.Status, value.Inspection
+		return receipt, nil, err
+	}
+	process := r.Snapshot.Ref.External
+	if process.Kind == "" {
+		process = executionbackend.ProcessIdentity{Kind: "fixture", RuntimeID: r.Snapshot.Session.ExecutionID, Incarnation: r.Snapshot.ResourceGeneration}
+	}
+	session, generation := r.Snapshot.Session.SessionID, r.Snapshot.Session.Generation
+	if session == "" {
+		session = Session
+		generation = r.Snapshot.ResourceGeneration
+	}
+	receipt.Process = &process
+	receipt.State.SessionID, receipt.State.SessionGeneration = session, generation
+	switch executionbackend.LifecycleAction(r.Operation.Action) {
+	case executionbackend.LifecyclePrepareSession:
+		receipt.Disposition = executionbackend.OperationConfirmed
+	case executionbackend.LifecycleStartTurn:
+		receipt.Disposition = executionbackend.OperationAccepted
+		receipt.State.TurnID = r.Input.Turn.CommandID
+		receipt.State.InputAccepted, receipt.State.TurnStarted = true, true
+		// Record only the value actually delivered to this single-step port.
+		// Both the received text and serialized request retain the exact original input.
+		path := filepath.Join(p.Setup.RunDirectory, "runs", r.Operation.RunID, "turns", r.Input.Turn.CommandID, "fixture-input.json")
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			return receipt, nil, err
+		}
+		if err := os.WriteFile(filepath.Join(filepath.Dir(path), "prompt.txt"), []byte(r.Input.Turn.Prompt), 0600); err != nil {
+			return receipt, nil, err
+		}
+		if err := os.WriteFile(path, mustJSON(r.Input.Turn.Prompt), 0600); err != nil {
+			return receipt, nil, err
+		}
+		return receipt, newNeutralObserver(process, session, r.Input.Turn.CommandID, func() error {
+			return os.WriteFile(filepath.Join(filepath.Dir(path), "fixture-completed.json"), mustJSON(neutralCompletionReceipt{Evidence: executionbackend.TurnEvidence{SessionID: session, TurnID: r.Input.Turn.CommandID, CommandID: r.Input.Turn.CommandID, Started: true, Completed: true, Succeeded: true, LastMessage: "neutral turn completed"}, Process: process, Target: r.Snapshot.Ref.Target, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, ResourceGeneration: r.Snapshot.ResourceGeneration}), 0600)
+		}), nil
+	case executionbackend.LifecycleDeliverFeedback:
+		receipt.Disposition = executionbackend.OperationConfirmed
+		receipt.State.InputAccepted = true
+	default:
+		return receipt, nil, executionbackend.UnsupportedAdapterOperation(r.Operation.Action, "neutral fixture action unsupported")
+	}
+	return receipt, nil, nil
+}
+
+func (p *Lifecycle) Reconcile(_ context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationUnknown}, nil, nil
+}
+
+func (p *Lifecycle) ObserveLifecycle(_ context.Context, s executionbackend.LifecycleSnapshot) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	path := filepath.Join(p.Setup.RunDirectory, "runs", s.Ref.RunID, "turns", s.Session.CurrentCommandID, "fixture-completed.json")
+	if data, err := os.ReadFile(path); err == nil {
+		var saved neutralCompletionReceipt
+		if err := decode(data, &saved); err != nil {
+			return executionbackend.LifecycleReceipt{}, nil, err
+		}
+		evidence := saved.Evidence
+		if saved.Process != s.Ref.External || saved.Target != s.Ref.Target || saved.ExecutionID != s.Session.ExecutionID || saved.AttemptID != s.Session.AttemptID || saved.ResourceGeneration != s.ResourceGeneration || evidence.SessionID != s.Session.SessionID || evidence.TurnID != s.Session.CurrentTurnID || evidence.CommandID != s.Session.CurrentCommandID {
+			return executionbackend.LifecycleReceipt{}, nil, errors.New("original fixture completion identity differs")
+		}
+		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &s.Ref.External, TurnEvidence: &evidence, State: executionbackend.LifecycleStateFacts{SessionID: evidence.SessionID, SessionGeneration: s.Session.Generation, TurnID: evidence.TurnID, TurnCompleted: true}}, nil, nil
+	} else if !os.IsNotExist(err) {
+		return executionbackend.LifecycleReceipt{}, nil, err
+	}
+	receipt := executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &s.Ref.External, State: executionbackend.LifecycleStateFacts{SessionID: s.Session.SessionID, SessionGeneration: s.Session.Generation, TurnID: s.Session.CurrentTurnID, TurnCompleted: s.Session.CurrentTurnID != "" && s.Session.CurrentTurnID == s.Session.LastStoppedTurnID}}
+	if receipt.State.TurnCompleted {
+		return receipt, nil, nil
+	}
+	return receipt, newNeutralObserver(s.Ref.External, s.Session.SessionID, s.Session.CurrentTurnID), nil
+}
+
+func (p *Lifecycle) StopLifecycle(_ context.Context, r executionbackend.LifecycleRequest, h executionbackend.StopHandle) (executionbackend.LifecycleReceipt, error) {
+	if h != nil {
+		h.Kill()
+	}
+	return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationAccepted}, nil
+}
+
+func (p *Lifecycle) CleanupLifecycle(_ context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, error) {
+	return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationConfirmed, State: executionbackend.LifecycleStateFacts{WorkerAbsent: true, WritersAbsent: true}}, nil
+}
+
+func (p *Lifecycle) VerifyManualRecovery(_ context.Context, s executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
+	absent := false
+	if s.Ref.External.Kind == "os" {
+		absent = resourceprocess.InspectProcess(&s.Ref.External) == "process absent"
+	}
+	return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: absent, SessionAvailable: s.Session.SessionID != ""}, nil
+}
+
+func (p *Lifecycle) BindRecovery(_ context.Context, old, next executionbackend.LifecycleSnapshot) (executionbackend.ImplementationDataEnvelope, error) {
+	return executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: BindingKey, CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: next.Session.ProjectID, ExecutionID: next.Session.ExecutionID, AttemptID: next.Session.AttemptID, Generation: next.ResourceGeneration, ConfigDigest: next.ConfigurationDigest}, mustJSON(struct {
+		Generation string `json:"generation,omitempty"`
+		SessionID  string `json:"session_id,omitempty"`
+	}{old.Session.Generation, old.Session.SessionID}))
+}
+
+func (p *Lifecycle) InspectLifecycleWorkspace(ctx context.Context, s executionbackend.LifecycleSnapshot) (executionbackend.WorkspaceInspection, error) {
+	return workspace.InspectLifecycleWorkspace(ctx, p.Setup, s)
+}
+
+type neutralHandle struct {
+	identity executionbackend.ProcessIdentity
+}
+
+func (h neutralHandle) Identity() executionbackend.ProcessIdentity { return h.identity }
+
+func (neutralHandle) Kill() {}
+
+func (neutralHandle) Close() {}
+
+type neutralObserver struct {
+	events chan executionbackend.LifecycleEvent
+	done   chan error
+	stop   chan struct{}
+	once   sync.Once
+	handle neutralHandle
+}
+
+func newNeutralObserver(identity executionbackend.ProcessIdentity, session, turn string, completed ...func() error) *neutralObserver {
+	o := &neutralObserver{events: make(chan executionbackend.LifecycleEvent, 2), done: make(chan error, 1), stop: make(chan struct{}), handle: neutralHandle{identity}}
+	go func() {
+		defer close(o.events)
+		for _, fact := range []executionbackend.EventFact{{Kind: executionbackend.EventStarted, SessionID: session, StartedTurnID: turn}, {Kind: executionbackend.EventCompleted, Completed: true, Matched: true, Outcome: "completed", LastMessage: "neutral turn completed"}} {
+			ack := make(chan error, 1)
+			select {
+			case o.events <- executionbackend.LifecycleEvent{Fact: fact, Kind: string(fact.Kind), Persisted: ack}:
+			case <-o.stop:
+				return
+			}
+			select {
+			case err := <-ack:
+				if err != nil {
+					o.done <- err
+					return
+				}
+			case <-o.stop:
+				return
+			}
+		}
+		if len(completed) > 0 {
+			o.done <- completed[0]()
+			return
+		}
+		o.done <- nil
+	}()
+	return o
+}
+
+func (o *neutralObserver) Events() <-chan executionbackend.LifecycleEvent { return o.events }
+
+func (o *neutralObserver) Done() <-chan error { return o.done }
+
+func (o *neutralObserver) StopHandle() executionbackend.StopHandle { return o.handle }
+
+func (o *neutralObserver) Close(context.Context) error {
+	o.once.Do(func() { close(o.stop) })
+	return nil
+}
+
+type ConversationSources struct{}
+
+func (ConversationSources) DiscoverHistory(context.Context, conversationtypes.ConversationDiscovery) (conversationtypes.ConversationDiscoveryResult, error) {
+	return conversationtypes.ConversationDiscoveryResult{}, nil
+}
+
+func (ConversationSources) ReadHistory(context.Context, conversationtypes.ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (conversationtypes.ConversationHistoryBatch, error) {
+	return conversationtypes.ConversationHistoryBatch{}, errors.New("fixture history unsupported")
+}
+
+const Protocol executionbackend.ExecutionProtocol = "fixture_stream_v1"
+const BindingKey = "fixture.binding"
+const Session = "00000000-0000-0000-0000-000000000008"
+
+func mustJSON(value any) []byte { data, _ := json.Marshal(value); return data }
+func decode(data []byte, value any) error {
+	return executionbackend.DecodeStrictJSON(bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf}), value, "expected exactly one JSON value")
+}
+
+func CapabilityReport(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, version string) executionbackend.CapabilityReport {
+	names := []string{"start", "observe", "stop", "detach_observation", "operation_reconciliation", "workspace_inspection", "output_reading", "output_turns", "output_final_answer", "resource_settlement"}
+	caps := make([]executionbackend.Capability, 0, len(names))
+	for _, name := range names {
+		caps = append(caps, executionbackend.Capability{Name: name, Status: executionbackend.CapabilityNotTested})
+	}
+	return executionbackend.CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: time.Now().UTC(), Capabilities: caps}
+}

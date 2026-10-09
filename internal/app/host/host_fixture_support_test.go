@@ -30,7 +30,7 @@ func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
 }
 func fullFixtureTaskService(reader taskCommandStorage, c execution.Config) taskapp.Service {
 	commands := NewTaskCommands(reader, c)
-	return taskapp.Service{Reader: taskCommandStore{store: reader}, Input: commands.Input, Documents: commands.Documents}
+	return taskapp.Service{Reader: taskCommandStore{Store: reader}, Input: commands.Input, Documents: commands.Documents}
 }
 func putFixtureImplementationEnvelope(record *executionmodel.ExecutionRecord, envelope executionbackend.ImplementationDataEnvelope) error {
 	if record == nil {

@@ -12,6 +12,7 @@
 | Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
+| 测试维护 | [测试代码精简](test-code-simplification.md) |
 | 历史结果与旧方案 | [归档索引](archive/README.md) |
 
 execution-map维护执行/验收汇总并链接未验事项；开发任务状态与依赖以execution-map为准，真实PR和验证证据由runner核对；SteerLine产品业务状态按其工具回执核对。

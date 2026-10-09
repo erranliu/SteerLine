@@ -79,6 +79,48 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 	})
 }
 
+func TestSharedFixturesRemainTestOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name, owner, file, fixtureImport string
+		allowed                          bool
+	}{
+		{"execution_test", "internal/execution", "edge_linux_test.go", "", true},
+		{"host_test", "internal/app/host", "edge_linux_test.go", "", true},
+		{"execution_production", "internal/execution", "edge_plan9.go", "", false},
+		{"host_production", "internal/app/host", "edge_plan9.go", "", false},
+		{"indirect_helper", "internal/helper", "edge_plan9.go", "", false},
+		{"fixture_cannot_hide_adapter", "internal/execution", "edge_linux_test.go", execution + "/adapters/codex", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			write := func(dir, file, dependency string) {
+				t.Helper()
+				path := filepath.Join(root, dir, file)
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte("package fixture\nimport _ \""+dependency+"\"\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			write(tc.owner, tc.file, sharedFixtures)
+			if tc.owner == "internal/helper" {
+				write("internal/execution", "edge_linux_test.go", module+"/internal/helper")
+			}
+			if tc.fixtureImport != "" {
+				write("internal/testkit/fixtures", "edge_plan9.go", tc.fixtureImport)
+			}
+			report, err := ScanSource(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (len(report.Violations) == 0) != tc.allowed {
+				t.Fatalf("test fixture boundary: allowed=%v violations=%v", tc.allowed, report.Violations)
+			}
+		})
+	}
+}
+
 func TestTM08AppHostBoundary(t *testing.T) {
 	t.Run("transitive_execution_workspace", func(t *testing.T) {
 		graph := map[string][]string{

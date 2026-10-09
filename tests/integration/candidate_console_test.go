@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/console"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
@@ -278,15 +279,6 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	if len(snap.Observation.Page.Runs) != 5 {
 		t.Fatal("duplicate request created another candidate")
 	}
-	// A sixth start is rejected by the real service before exit (the UI test above
-	// exercises its display); merged-PR authoritative guard is covered below.
-	t.Run("merged_PR_service_guard", func(t *testing.T) { testCandidateConsoleMergedGuard(t) })
 }
 
 func containsConsoleText(text, want string) bool { return strings.Contains(text, want) }
-
-func testCandidateConsoleMergedGuard(t *testing.T) {
-	// Retain the existing real application/provider delivery path rather than
-	// manufacturing a merged flag in the business database.
-	testAdditionalImplementationWithCandidateGuard(t, true)
-}

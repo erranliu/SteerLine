@@ -1,8 +1,8 @@
 # 分级测试与 E2E 环境
 
-第一阶段只交付和验收本地 Codex/本机 Orca，`orca-codex` 是本机后端。当前必需 smoke、delivery、recovery 和 candidates 不要求远端目标、远端权限回执或混合远端场景；保留的远端代码/探针不代表一期支持。
+第一阶段包含本地 Codex、本机 Orca 与远端路径交付。`orca-codex` 是本机后端；`delivery.orca-remote-codex` 是远端交付场景。
 
-独立远端扩展为 `delivery.orca-remote-codex`，不加入本机 L2 默认门槛。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
+远端交付通过 L3 场景 `delivery.orca-remote-codex` 执行；L2 默认选择仍为本机双链路。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
 
 全项目测试范围、L1/Full/定向入口、独立原生验收和产物导航见[测试总入口](../../docs/testing.md)。本文维护 E2E 环境、场景和扩展的具体约定。
 

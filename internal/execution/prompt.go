@@ -6,8 +6,16 @@ import (
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
+
+func workerWorkspaceInstruction(workspace executionmodel.WorkspaceEvidence) (string, error) {
+	if workspace.Worktree == "" || workspace.Branch == "" || !commitHash.MatchString(workspace.Base) {
+		return "", errors.New("worker instruction requires its prepared workspace, assigned branch and fixed base")
+	}
+	return fmt.Sprintf("\nFixed assigned worktree: %s\nFixed assigned branch: %s\nFixed base commit: %s\nUse these current execution identities for verification and publication. Existing evidence from earlier runs is not the authority for this execution. The PR target branch is separate from this assigned working branch.\n", workspace.Worktree, workspace.Branch, workspace.Base), nil
+}
 
 func Prompt(task taskmodel.TaskRecord, contract taskmodel.TaskContract, workflowRunID string, policy executionbackend.PublicationPolicy) (string, error) {
 	if task.TaskID == "" || task.Title == "" || contract.ContractID == "" || contract.SpecRef.Path == "" || contract.PlanRef.Path == "" || !executionbackend.StableExecutionID(workflowRunID) {

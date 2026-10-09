@@ -70,14 +70,14 @@ func (s *Service) processCandidateControl(ctx context.Context, req productapi.Co
 	return nil
 }
 
-// Recover a committed candidate command before checking a new request's
+// Recover a committed task/candidate command before checking a new request's
 // expiry/instance/revision. The full immutable inbox digest prevents retargeting.
-func (s *Service) replayCandidateControl(ctx context.Context, req productapi.ControlRequest, digest string) (bool, error) {
+func (s *Service) replayTaskControl(ctx context.Context, req productapi.ControlRequest, digest string) (bool, error) {
 	if s.commandStore == nil {
 		return false, nil
 	}
 	old, found, err := s.commandStore.LookupCommand(ctx, s.Config.identity, req.RequestID)
-	if err != nil || !found || old.Kind != "start_candidate" && old.Kind != "abandon_candidate" {
+	if err != nil || !found || old.Kind != "claim_task" && old.Kind != "start_candidate" && old.Kind != "abandon_candidate" {
 		return false, err
 	}
 	var binding struct {
@@ -86,8 +86,12 @@ func (s *Service) replayCandidateControl(ctx context.Context, req productapi.Con
 	if err := json.Unmarshal(old.Payload, &binding); err != nil {
 		return true, err
 	}
-	if binding.Digest != digest || old.Kind != req.Action {
-		return true, s.rejectControl(req, digest, "idempotency_conflict", errors.New("original candidate control request content changed"))
+	action := old.Kind
+	if action == "claim_task" {
+		action = "start_task"
+	}
+	if binding.Digest != digest || action != req.Action {
+		return true, s.rejectControl(req, digest, "idempotency_conflict", errors.New("original task control request content changed"))
 	}
 	if old.Kind == "abandon_candidate" {
 		payload, err := DecodeControlPayload(req)
@@ -97,13 +101,16 @@ func (s *Service) replayCandidateControl(ctx context.Context, req productapi.Con
 		return true, s.processCandidateControl(ctx, req, payload, digest)
 	}
 	if old.Status != "accepted" {
-		return true, nativeErr("outcome_unknown", "original candidate start command has no committed reservation")
+		return true, nativeErr("outcome_unknown", "original start command has no committed reservation")
 	}
 	var saved executionmodel.TaskClaimReceipt
 	if err := json.Unmarshal(old.Result, &saved); err != nil {
 		return true, err
 	}
 	result := s.baseReceipt(req, digest, "applying", "candidate_reserved", "original candidate reservation recovered; no replacement was started")
+	if req.Action == "start_task" {
+		result.Code, result.Message = "claim_reserved", "original task reservation recovered; no replacement was started"
+	}
 	result.AcceptedAt, result.RunID, result.AttemptID = ptr(old.CreatedAt), saved.WorkflowRunID, saved.AttemptID
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return true, err
@@ -119,7 +126,7 @@ func (s *Service) replayCandidateControl(ctx context.Context, req productapi.Con
 	return true, nil
 }
 
-func (s *Service) pollCandidateControlReceipts(ctx context.Context) error {
+func (s *Service) pollTaskControlReceipts(ctx context.Context) error {
 	ids, err := s.host.ControlRequestIDs()
 	if err != nil {
 		return err
@@ -132,7 +139,7 @@ func (s *Service) pollCandidateControlReceipts(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if receipt.Status != "applying" || receipt.Action != "start_candidate" && receipt.Action != "abandon_candidate" {
+		if receipt.Status != "applying" || receipt.Action != "start_task" && receipt.Action != "start_candidate" && receipt.Action != "abandon_candidate" {
 			continue
 		}
 		req, err := s.host.ReadControlRequest(id)
@@ -140,7 +147,7 @@ func (s *Service) pollCandidateControlReceipts(ctx context.Context) error {
 			return err
 		}
 		if req.RequestID != id || s.host.ControlRequestDigest(id) != receipt.RequestDigest {
-			return errors.New("candidate request archive changed after admission")
+			return errors.New("task control request archive changed after admission")
 		}
 		if req.Action == "abandon_candidate" {
 			p, err := DecodeControlPayload(req)
@@ -158,14 +165,22 @@ func (s *Service) pollCandidateControlReceipts(ctx context.Context) error {
 			continue
 		}
 		e := s.executionRecord(run)
-		if s.candidateBusinessClosed(run) {
-			receipt.Status, receipt.Code, receipt.Message = "applied", "candidate_reserved", "original candidate reservation retained; business progression ended"
-		} else if e != nil && e.SessionID != "" && e.TurnNumber > 0 {
+		started := false
+		if e != nil && e.SessionID != "" && e.TurnNumber > 0 && (receipt.Action != "start_task" || e.Process != nil) {
 			op := s.operationByKey("worker-turn:" + e.ExecutionID + ":" + e.CurrentCommandID)
-			if op == nil || op.Status != "confirmed" {
-				continue
-			}
+			started = op != nil && op.Status == "confirmed"
+		}
+		if started {
 			receipt.Status, receipt.Code, receipt.Message = "applied", "applied", "original candidate worker start is durably confirmed"
+			if receipt.Action == "start_task" {
+				receipt.Message = "original task worker start is durably confirmed"
+			}
+		} else if receipt.Action == "start_task" && (e == nil || e.Status == "unknown" || s.hasUnknownWorkerOperation(run) && !s.lifecycleEffectPending(run.RunID)) {
+			receipt.Status, receipt.Code, receipt.Message = "indeterminate", "indeterminate", "original worker start needs reconciliation; no replacement was started"
+		} else if receipt.Action == "start_task" && (s.candidateBusinessClosed(run) || e.Status == "failed" || e.Status == "blocked" && e.Environment == nil) {
+			receipt.Status, receipt.Code, receipt.Message = "failed", "failed", firstNonEmpty(deref(run.Error), "task ended before its worker start was confirmed")
+		} else if s.candidateBusinessClosed(run) {
+			receipt.Status, receipt.Code, receipt.Message = "applied", "candidate_reserved", "original candidate reservation retained; business progression ended"
 		} else {
 			continue
 		}

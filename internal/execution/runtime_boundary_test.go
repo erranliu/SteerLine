@@ -99,7 +99,7 @@ type ownedStopResolver struct {
 }
 
 func (r *ownedStopResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-	return ownedStopLifecycle{LifecyclePort: &neutralLifecycle{setup: setup}, owner: r}, nil
+	return ownedStopLifecycle{LifecyclePort: &neutralLifecycle{Setup: setup}, owner: r}, nil
 }
 
 type ownedStopLifecycle struct {

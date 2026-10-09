@@ -3,7 +3,6 @@ package orcaworker
 import "testing"
 
 func TestCD63CodecIdentityAndVersion(t *testing.T) {
-	t.Run("shared_question_envelope", TestCD62NativeFactsAndQuestionRoute)
 	payload := []byte(`{"executable":"orca.exe","args":[],"shell":"powershell.exe","wait_timeout":"15m"}`)
 	settings, err := DecodeProfileConfig(payload)
 	if err != nil || settings.Executable != "orca.exe" || settings.Shell != "powershell.exe" {

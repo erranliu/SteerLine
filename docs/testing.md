@@ -1,6 +1,6 @@
 # 测试总入口
 
-第一阶段的真实执行/验收仅包含本地 Codex 与本机 Orca；`orca-codex` 场景指本机 Orca。存量远端 opt-in 探针只作单独的历史/实验工具，不在一期必需门槛中；静态构建、协议拒绝和依赖守卫可以继续覆盖现有远端代码，不声明远端可运行。
+第一阶段包含本地 Codex、本机 Orca 与远端路径交付。`orca-codex` 场景指本机 Orca，远端路径由 `delivery.orca-remote-codex` 独立验收，结果见[专属记录](acceptance/orca-remote-l3.md)。
 
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
 
@@ -69,7 +69,7 @@ L1/quick 默认 `-workers=3`，最多三个分组命令并发；各分组保持 
 go run ./cmd/test-feedback -level=L1 -- ./tests/integration -run '^TestTM04ExecutionWiring$/^intent_binding_and_two_original_turns$' -count=1
 
 # 修改 Orca 恢复或冻结配置时，追加配置改变后的原身份恢复验证
-go run ./cmd/test-feedback -level=L1 -- ./tests/integration -run '^TestCD67AdditionalImplementation$/^supported_terminal_recovery_and_original_identity$' -count=1
+go run ./cmd/test-feedback -level=L1 -- ./tests/integration -run '^TestCD66FixedProfileRecovery$/^changed_config_keeps_native_original_identity_and_manual_gate$' -count=1
 
 # 修改候选调度时，追加被影响的两个回归
 go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidate(OpenPRPollPreservesOriginalPendingInput|ResumeErrorDoesNotStarveSibling)$' -count=1
@@ -139,7 +139,7 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 | 检查 | 前置与范围 | 测试来源 |
 | --- | --- | --- |
 | 本地 Orca host wait | `STEERLINE_ORCA_HOST_WAIT_PROBE` 指向包含原 workspace/terminal/runtime/incarnation 的隔离现场 JSON；检查原终端等待事实 | [TestOrcaNativeHostWait](../internal/execution/adapters/orca/host_wait_live_cd67_test.go) |
-| 历史/实验：Orca 远端 P10 reply gate（非一期） | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate](../internal/execution/adapters/orcaremote/p10_live_cd67_test.go) |
+| Orca 远端 P10 reply gate | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate](../internal/execution/adapters/orcaremote/p10_live_cd67_test.go) |
 | 原运行恢复预览 | `STEERLINE_REAL_RECOVERY_CONFIG` / `STEERLINE_REAL_RECOVERY_RUN_ID`；读取隔离原现场 | [TestRealIsolatedRecoveryPreview](../internal/app/host/recovery_real_probe_test.go) |
 | Windows 服务窗口 / Ctrl+C helper | 只由绑定原进程、启动回执和报告路径的专门探针调用 | [Windows 平台测试](../internal/app/host/platform_windows_test.go) |
 | elevated sandbox 凭据检查与设置 | 为显式需要 elevated 的开发场景使用；无 token 的检查和可能触发 UAC 的初始化是两步 | [E2E 指南的 sandbox 工具](../tests/e2e/README.md#真实环境)、[设置脚本](../scripts/setup-e2e-sandbox.ps1) |
@@ -172,3 +172,5 @@ L1 报告的 `workers`、各组 `started_at` / `finished_at` 和 `wall_seconds` 
 [分级体系 Spec](archive/spec/completed/tiered-e2e-testing.spec.md) · [真实模型接入 Spec](archive/spec/completed/live-tiered-e2e.spec.md) · [依赖边界 Spec](archive/spec/completed/e2e-dependency-boundaries.spec.md)
 
 固定 L1 已包含 task/model 与 task 应用测试；历史迁包映射从固定 Git 快照取证，不默认启用 Full/L2/L3/live。
+
+公共测试适配器位于 `internal/testkit/fixtures`，仅允许 execution 与 app/host 的测试文件直接引用；生产依赖、其他测试所有者和经 helper 的间接引用仍受边界守卫约束。同一业务场景只保留一个执行入口，历史任务的聚合测试不再重复调用已被 Go 自动发现的顶层测试。双回合接线保留在 `TestTM04ExecutionWiring/intent_binding_and_two_original_turns`；冻结配置改变后的原身份恢复保留在上面的 CD66 定向入口。

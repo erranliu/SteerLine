@@ -24,11 +24,6 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if fixed.execution.RecoveryRequired {
 		return errors.New("existing worker execution requires a fresh manual recovery decision")
 	}
-	c := fixed.config
-
-	if err := c.BindPublicationTarget(ctx, s.runtime.ProcessHost); err != nil {
-		return err
-	}
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
@@ -37,17 +32,29 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if err != nil {
 		return err
 	}
-	report, err := lifecycle.PreflightLifecycle(ctx, lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot))
-	if err != nil {
+	setup := lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot).Clone()
+	if s.signalQueue != nil {
+		return s.scheduleWorkerStartCheck(ctx, run, fixed.config, lifecycle, setup)
+	}
+	if err := checkWorkerStart(ctx, fixed.config, lifecycle, setup); err != nil {
 		return err
 	}
-	if err := validateLifecycleStartCapability(snapshot.Ref, report); err != nil {
+	return s.prepareWorkerFlowResources(ctx, run)
+}
+
+func (s *Service) prepareWorkerFlowResources(ctx context.Context, run *reconstructiontypes.RunView) error {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
 		return err
 	}
 	if fixed.execution.Environment != nil {
 		return s.advanceWorkerPreparation(ctx, run)
 	}
-	return s.prepareWorkerWorkspace(ctx, task, run)
+	task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
+	if task == nil {
+		return nativeErr("inconsistent_delivery", "worker preparation lost its claimed task")
+	}
+	return s.prepareWorkerWorkspace(ctx, *task, run)
 }
 
 func validateLifecycleStartCapability(ref executionbackend.ExecutionRef, report executionbackend.CapabilityReport) error {
@@ -205,7 +212,11 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 		return err
 	}
 
-	prompt += publicationTargetInstruction(c)
+	workspaceInstruction, err := workerWorkspaceInstruction(execution.Workspace)
+	if err != nil {
+		return err
+	}
+	prompt += workspaceInstruction + publicationTargetInstruction(c)
 	execution.PendingTurnID, execution.PendingCommandID = "", turnID
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
