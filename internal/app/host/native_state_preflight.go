@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -52,7 +53,7 @@ func preflightNativeStatePath(c Config) error {
 		return nativeErr("authority_mismatch", err.Error())
 	}
 	if _, err := os.Stat(path); err == nil {
-		if err := ensureNativeStateFilesAllowed(c.RunDir); err != nil {
+		if err := ensureNativeStateFilesAllowed(c.RunDir, c.WorktreeMetadataDirectories); err != nil {
 			return err
 		}
 		if c.ValidateNativeStore == nil {
@@ -152,7 +153,7 @@ func ensureNativeStateClean(runDir, repository string) error {
 	return nil
 }
 
-func ensureNativeStateFilesAllowed(runDir string) error {
+func ensureNativeStateFilesAllowed(runDir string, worktreeMetadata []string) error {
 	entries, err := os.ReadDir(runDir)
 	if err != nil {
 		return err
@@ -184,7 +185,11 @@ func ensureNativeStateFilesAllowed(runDir string) error {
 				return err
 			}
 		case "runs", "worktrees":
-			if err := validateNativeRunDirectories(filepath.Join(runDir, entry.Name())); err != nil {
+			var metadata []string
+			if entry.Name() == "worktrees" {
+				metadata = worktreeMetadata
+			}
+			if err := validateNativeRunDirectories(filepath.Join(runDir, entry.Name()), metadata); err != nil {
 				return err
 			}
 		default:
@@ -289,7 +294,7 @@ func validateNativeControlTree(runDir string) error {
 	return nil
 }
 
-func validateNativeRunDirectories(root string) error {
+func validateNativeRunDirectories(root string, metadata []string) error {
 	if err := ensureNativePathWithin(filepath.Dir(root), root, "native run/worktree root"); err != nil {
 		return err
 	}
@@ -309,12 +314,17 @@ func validateNativeRunDirectories(root string) error {
 		if err := ensureNativePathWithin(root, childPath, "native run/worktree directory"); err != nil {
 			return err
 		}
-		if !executionbackend.StableExecutionID(entry.Name()) || !entry.IsDir() {
-			return nativeErr("authority_mismatch", "native run/worktree state contains an unknown identity: "+entry.Name())
-		}
 		childInfo, statErr := os.Lstat(childPath)
 		if statErr != nil || !childInfo.IsDir() || childInfo.Mode()&os.ModeSymlink != 0 {
 			return nativeErr("authority_mismatch", "native run/worktree identity is not a real directory: "+entry.Name())
+		}
+		if slices.Contains(metadata, entry.Name()) {
+			// The native host owns this administrative directory. Preserve it and
+			// never interpret them as active workflow or execution identities.
+			continue
+		}
+		if !executionbackend.StableExecutionID(entry.Name()) {
+			return nativeErr("authority_mismatch", "native run/worktree state contains an unknown identity: "+entry.Name())
 		}
 	}
 	return nil

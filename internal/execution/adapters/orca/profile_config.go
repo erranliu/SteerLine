@@ -60,6 +60,15 @@ type ProfileConfig struct {
 	Activate     bool     `json:"activate"`
 }
 
+// NativeTargetID is shared by target freezing and lifecycle validation. Empty
+// and omitted argument lists describe the same command, including after cloning.
+func NativeTargetID(config ProfileConfig) string {
+	return "orca:" + digestValue(struct {
+		Executable string
+		Args       []string
+	}{config.Executable, append([]string(nil), config.Args...)})[:24]
+}
+
 func DecodeProfileConfig(payload []byte) (ProfileConfig, error) {
 	var config ProfileConfig
 	if err := executionbackend.DecodeStrictJSON(payload, &config, "Orca profile configuration has trailing JSON"); err != nil {

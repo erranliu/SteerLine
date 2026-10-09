@@ -38,7 +38,7 @@ func TestCleanupProgressRequiresConfirmedOriginalResource(t *testing.T) {
 func TestNativeLifecyclePlansCommittedResourcesAndSeparateInput(t *testing.T) {
 	project, workflow, execution, attempt := stableIDValue(1), stableIDValue(2), stableIDValue(3), stableIDValue(4)
 	config := ProfileConfig{Executable: "orca", Args: []string{"--native"}, Shell: "powershell.exe", WaitTimeout: "1m"}
-	target := executionbackend.ExecutionTarget{ID: nativeTargetID(config)}
+	target := executionbackend.ExecutionTarget{ID: NativeTargetID(config)}
 	snapshot := executionbackend.LifecycleSnapshot{
 		Ref: executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendOrca,
 			Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: target, Agent: executionbackend.AgentSpec{Name: "codex"},

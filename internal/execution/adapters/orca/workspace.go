@@ -12,6 +12,8 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
+const WorktreeTrashDirectory = ".orca-worktree-trash"
+
 func WorkerWorktreeName(taskID, workflowRunID string) (string, error) {
 	number, err := strconv.ParseUint(taskID, 10, 64)
 	if err != nil || number == 0 || strconv.FormatUint(number, 10) != taskID || !executionbackend.StableExecutionID(workflowRunID) {

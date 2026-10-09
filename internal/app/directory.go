@@ -155,15 +155,12 @@ func localTarget() executionbackend.ExecutionTarget {
 	return executionbackend.ExecutionTarget{ID: "local:" + runtime.GOOS + ":" + hostname}
 }
 
-func terminalTarget(c execution.Config, key execution.ExecutionRegistrationKey, directory *execution.ExecutionDirectory) executionbackend.ExecutionTarget {
+func terminalTarget(c execution.Config, _ execution.ExecutionRegistrationKey, directory *execution.ExecutionDirectory) executionbackend.ExecutionTarget {
 	settings, err := terminalSettings(c, directory)
 	if err != nil {
 		return executionbackend.ExecutionTarget{}
 	}
-	return executionbackend.ExecutionTarget{ID: string(key.Backend) + ":" + shortDigest(struct {
-		Executable string
-		Args       []string
-	}{settings.Executable, settings.Args})[:24]}
+	return executionbackend.ExecutionTarget{ID: orcaworker.NativeTargetID(settings)}
 }
 
 func supervisedTarget(c execution.Config, _ execution.ExecutionRegistrationKey, directory *execution.ExecutionDirectory) executionbackend.ExecutionTarget {
