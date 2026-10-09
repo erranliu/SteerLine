@@ -5,6 +5,7 @@
   {"id":"delivery.basic","level":"L3","suite":"delivery","package":"./tests/e2e/suites/delivery","test":"TestBasicDelivery","env":"controlled"},
   {"id":"delivery.local-codex","level":"L3","suite":"delivery","package":"./tests/e2e/live","test":"TestDeliveryLocalCodex","env":"live","chain":"local-codex"},
   {"id":"delivery.orca-codex","level":"L3","suite":"delivery","package":"./tests/e2e/live","test":"TestDeliveryOrcaCodex","env":"live","chain":"orca-codex"},
+  {"id":"delivery.orca-remote-codex","level":"L3","suite":"delivery","package":"./tests/e2e/remote","test":"TestDeliveryRemoteOrcaCodex","env":"live","chain":"orca-remote-codex"},
   {"id":"recovery.waiting-merge-restart","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestWaitingMergeRestart","env":"controlled"},
   {"id":"recovery.local-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryLocalCodex","env":"live","chain":"local-codex"},
   {"id":"recovery.orca-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryOrcaCodex","env":"live","chain":"orca-codex"},

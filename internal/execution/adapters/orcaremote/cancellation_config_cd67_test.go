@@ -7,7 +7,7 @@ import (
 )
 
 func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
-	value := ProfileConfig{ConnectionID: "peer", EnvironmentID: "env", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
+	value := ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "2m", ConnectionID: "peer", EnvironmentID: "env", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
 	raw, err := EncodeProfileConfig(value)
 	if err != nil {
 		t.Fatal(err)

@@ -34,6 +34,21 @@ func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
 
 func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteConfig ...*remote.ProfileConfig) ExecutionProfile {
 	t.Helper()
+	if host == "orca_supervised" {
+		if len(remoteConfig) == 0 || remoteConfig[0] == nil || terminal == nil {
+			t.Fatal("remote fixture configuration missing")
+		}
+		r := *remoteConfig[0]
+		r.Executable = terminal.Executable
+		r.Args = terminal.Args
+		r.Shell = terminal.Shell
+		r.WaitTimeout = terminal.WaitTimeout
+		r.Model = worker.Model
+		r.ReasoningEffort = worker.ReasoningEffort
+		payload, err := remote.EncodeProfileConfig(r)
+		require(t, err)
+		return ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileCodecKey, CodecVersion: remote.ProfileCodecVersion, Payload: payload}}}
+	}
 	payload, err := codexworker.EncodeProfileConfig(worker)
 	require(t, err)
 	p := ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}}
@@ -44,14 +59,6 @@ func testExecutionProfile(t *testing.T, id, name, host, agent string, worker cod
 		payload, err := orcaworker.EncodeProfileConfig(*terminal)
 		require(t, err)
 		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-	}
-	if host == "orca_supervised" {
-		if len(remoteConfig) == 0 || remoteConfig[0] == nil {
-			t.Fatal("remote settings missing")
-		}
-		payload, err := remote.EncodeProfileConfig(*remoteConfig[0])
-		require(t, err)
-		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: payload})
 	}
 	return p
 }

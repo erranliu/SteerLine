@@ -7,6 +7,7 @@ import (
 
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -65,6 +66,9 @@ func FixedNativeLaunch(domain reconstruction.Snapshot) error {
 }
 
 func Session(e executionmodel.ExecutionRecord) (string, error) {
+	if e.Protocol == string(executionbackend.ProtocolOrcaSupervised) && e.Process != nil {
+		return remote.SessionID(*e.Process), nil
+	}
 	if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV2) && e.Process != nil {
 		return orcaworker.SessionID(*e.Process), nil
 	}

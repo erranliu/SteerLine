@@ -16,8 +16,8 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 		return PreflightResult{}, err
 	}
 	sc := &c.Settings
-	if c.Model == "" || c.ReasoningEffort == "" || c.Agent != "codex" {
-		return PreflightResult{}, errors.New("supervised Orca requires an explicit Codex model and reasoning effort")
+	if strings.TrimSpace(c.Agent) == "" || (c.ReasoningEffort != "" && c.Model == "") {
+		return PreflightResult{}, errors.New("remote Orca agent/launch selection is incomplete")
 	}
 	client := Client{config: c}
 	timeout := positiveDuration(c.CommandTimeout, 30*time.Second)
@@ -92,6 +92,11 @@ func Preflight(ctx context.Context, c Config) (PreflightResult, error) {
 		return PreflightResult{}, errors.New("remote repository origin differs from the configured local repository")
 	}
 
+	// A new Execution creates its own coordinator. An optional configured
+	// bootstrap handle is checked only when explicitly supplied.
+	if sc.CoordinatorTerminal == "" {
+		return PreflightResult{CenterVersion: centerVersion, RemoteVersion: remoteStatus.AppVersion, CenterRuntime: centerStatus.RuntimeID, RemoteRuntime: remoteStatus.RuntimeID, EnvironmentID: sc.EnvironmentID, RepositoryID: repoResult.Repo.ID, RepositoryURL: repoResult.Repo.GitRemoteIdentity.RemoteURL}, nil
+	}
 	terminalBytes, err := client.config.Call(ctx, timeout, "terminal", "show", "--terminal", sc.CoordinatorTerminal, "--json")
 	if err != nil {
 		return PreflightResult{}, fmt.Errorf("coordinator terminal lookup: %w", err)
