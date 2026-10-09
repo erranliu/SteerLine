@@ -482,6 +482,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			RemotePublicOutputVerified bool             `json:"remote_public_output_verified"`
 			RemoteUsageStatus          string           `json:"remote_usage_status"`
 			UsageVerified              bool             `json:"usage_verified"`
+			OrcaUsageStatus            string           `json:"orca_usage_status"`
 			NativeWorkspaceVerified    bool             `json:"native_workspace_verified"`
 			RealPR                     *struct {
 				URL, State, Repository string
@@ -495,7 +496,13 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		if err = json.Unmarshal(raw, &evidence); err != nil || evidence.ID != e.ID || !evidence.Passed || !evidence.Cleanup || len(evidence.Resources) == 0 {
 			return fmt.Errorf("invalid or incomplete evidence for %s", e.ID)
 		}
-		if e.Env == "live" && e.Chain != "orca-remote-codex" && !evidence.UsageVerified {
+		// Task 84's L3 native Orca acceptance records the public interface's
+		// unavailable usage capability. Keep other suites and L2's gate intact.
+		orcaPublicUsage := e.Env == "live" && e.Level == "L3" && e.Chain == "orca-codex" && (e.Suite == "delivery" || e.Suite == "recovery")
+		if orcaPublicUsage && (evidence.UsageVerified || evidence.OrcaUsageStatus != "not_exposed_by_orca") {
+			return fmt.Errorf("native Orca public usage capability missing or token verification claimed for %s", e.ID)
+		}
+		if e.Env == "live" && e.Chain != "orca-remote-codex" && !orcaPublicUsage && !evidence.UsageVerified {
 			return fmt.Errorf("native token usage not verified for %s", e.ID)
 		}
 		if e.Chain == "orca-remote-codex" && (!evidence.RemotePublicOutputVerified || evidence.UsageVerified || evidence.RemoteUsageStatus != "not_exposed_by_orca") {

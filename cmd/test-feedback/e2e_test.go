@@ -252,3 +252,48 @@ func TestRemoteResultRequiresPublicOutputAndHonestUsageStatus(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeOrcaL3RequiresHonestPublicUsageCapability(t *testing.T) {
+	for _, tc := range []struct {
+		name, level, suite, chain, status string
+		usage, completed, cleanup, pass   bool
+	}{
+		{"delivery", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, true, true, true},
+		{"recovery", "L3", "recovery", "orca-codex", "not_exposed_by_orca", false, true, true, true},
+		{"missing capability", "L3", "delivery", "orca-codex", "", false, true, true, false},
+		{"wrong capability", "L3", "delivery", "orca-codex", "not_applicable", false, true, true, false},
+		{"claimed tokens", "L3", "delivery", "orca-codex", "not_exposed_by_orca", true, true, true, false},
+		{"failed business", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, false, true, false},
+		{"failed cleanup", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, true, false, false},
+		{"local still requires tokens", "L3", "delivery", "local-codex", "not_exposed_by_orca", false, true, true, false},
+		{"local tokens", "L3", "delivery", "local-codex", "not_applicable", true, true, true, true},
+		{"L2 unchanged", "L2", "delivery", "orca-codex", "not_exposed_by_orca", false, true, true, false},
+		{"other suite unchanged", "L3", "candidates", "orca-codex", "not_exposed_by_orca", false, true, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := e2eScenario{ID: "delivery.one", Test: "TestOne", Env: "live", Level: tc.level, Suite: tc.suite, Chain: tc.chain}
+			out := t.TempDir()
+			dir := filepath.Join(out, "scenarios", entry.ID)
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			var log strings.Builder
+			for _, event := range []struct{ action, test string }{{"start", ""}, {"run", entry.Test}, {"pass", entry.Test}, {"pass", ""}} {
+				raw, err := json.Marshal(map[string]any{"Time": "2026-10-09T00:00:00Z", "Elapsed": 0, "Action": event.action, "Package": "p", "Test": event.test})
+				if err != nil {
+					t.Fatal(err)
+				}
+				log.Write(raw)
+				log.WriteByte('\n')
+			}
+			group := scopedGroup{Packages: []string{"p"}, Summary: testfeedback.Parse([]byte(log.String()), 0)}
+			evidence := map[string]any{"id": entry.ID, "passed": tc.completed, "cleanup_complete": tc.cleanup, "resources": []any{map[string]string{"kind": "project"}}, "usage_verified": tc.usage, "orca_usage_status": tc.status}
+			if err := writeJSON(filepath.Join(dir, "scenario.json"), evidence); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkE2EGroup(group, []e2eScenario{entry}, out); (err == nil) != tc.pass {
+				t.Fatalf("unexpected acceptance result: %v", err)
+			}
+		})
+	}
+}
