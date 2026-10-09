@@ -17,7 +17,7 @@ type neutralOutputPort struct {
 }
 
 func (r *neutralOutputResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-	return neutralOutputPort{LifecyclePort: &neutralLifecycle{setup: setup.Clone()}, changed: r.changed}, nil
+	return neutralOutputPort{LifecyclePort: &neutralLifecycle{Setup: setup.Clone()}, changed: r.changed}, nil
 }
 
 func (p neutralOutputPort) PreparationBudget() time.Duration { return time.Minute }

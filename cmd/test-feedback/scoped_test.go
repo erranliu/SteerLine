@@ -107,7 +107,7 @@ func TestQuickIntegrationSelectionKeepsClaimAndGuardsWithoutLongFlows(t *testing
 			t.Fatalf("required coverage excluded: %s", name)
 		}
 	}
-	for _, name := range []string{"TestTM04ExecutionWiring/intent_binding_and_two_original_turns", "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery", "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers", "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity"} {
+	for _, name := range []string{"TestTM04ExecutionWiring/intent_binding_and_two_original_turns", "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery", "TestCD66FixedProfileRecovery/changed_config_keeps_native_original_identity_and_manual_gate", "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer"} {
 		levels := strings.Split(name, "/")
 		if top.MatchString(levels[0]) && sub.MatchString(levels[1]) {
 			t.Fatalf("long flow still selected: %s", name)

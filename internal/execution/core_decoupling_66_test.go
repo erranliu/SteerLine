@@ -13,7 +13,6 @@ import (
 )
 
 func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
-	t.Run("resource_candidates", TestCD66CandidateResourceIdentityAndCommitRollback)
 	t.Run("missing_readiness_rejects_before_reopen_write", func(t *testing.T) {
 		service, run := neutralAuditService(t)
 		entry, err := registrationFor(service.Config, service.runtime.Directory)

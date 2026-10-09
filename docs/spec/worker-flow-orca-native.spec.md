@@ -1,6 +1,6 @@
 # Spec：本机 Orca 原生编排接入单 worker
 
-维护说明：本页保留原交付/试验契约与证据定位。当前第一阶段只验本地 Codex/本机 Orca，远端相关历史条目不构成当前一期研发或验收前置；活动任务范围见[一期共同约束](phase1-delivery-constraints.md)。
+维护说明：本页保留原交付/试验契约与证据定位。活动任务范围见[一期共同约束](phase1-delivery-constraints.md)。
 
 适用说明（2026-09-30）：中心重开后的新输入须经[停服恢复 Spec](worker-service-recovery.spec.md)的人工确认；已核实的原 `worker_done` 仍可结算。终端身份无法核实或缺少安全新建证据时，保持不可继续并显示原因。
 

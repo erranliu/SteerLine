@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"os"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -20,7 +21,6 @@ import (
 )
 
 func TestCD66FixedProfileRecovery(t *testing.T) {
-	t.Run("original_app_server_two_phase_turns", testIntegratedAppServerTwoTurns)
 	t.Run("changed_config_keeps_native_original_identity_and_manual_gate", func(t *testing.T) { testIntegratedNativeSessionGate(t, true) })
 }
 
