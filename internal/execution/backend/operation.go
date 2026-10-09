@@ -61,4 +61,7 @@ type LaunchCommand struct {
 	Args             []string
 	WorkingDirectory string
 	EnvironmentRefs  []string
+	// Timeout overrides the host's ordinary command budget for this operation.
+	// The caller's context can still cancel it earlier.
+	Timeout time.Duration
 }

@@ -74,7 +74,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 		}
 		all := append(append([]string(nil), orca.Args...), args...)
 		return setup.ProcessHost.OutputCommand(ctx, executionbackend.LaunchCommand{
-			Executable: orca.Executable, Args: all, WorkingDirectory: setup.RepositoryPath,
+			Executable: orca.Executable, Args: all, WorkingDirectory: setup.RepositoryPath, Timeout: commandTimeout,
 		})
 	}
 	config := Config{Repository: setup.RepositoryPath, CommandTimeout: timeout.String(), Target: ref.Target, Output: output}

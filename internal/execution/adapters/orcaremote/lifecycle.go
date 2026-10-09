@@ -74,7 +74,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		all := append(append([]string(nil), args...), cliArgs...)
-		return setup.ProcessHost.OutputCommand(ctx, executionbackend.LaunchCommand{Executable: executable, Args: all, WorkingDirectory: setup.RepositoryPath})
+		return setup.ProcessHost.OutputCommand(ctx, executionbackend.LaunchCommand{Executable: executable, Args: all, WorkingDirectory: setup.RepositoryPath, Timeout: timeout})
 	}
 	gitExecutable := setup.GitExecutable
 	if gitExecutable == "" {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strconv"
 	"time"
 
@@ -70,13 +71,18 @@ func (l *ExecutionLifecycle) startNativeWorker(ctx context.Context, snapshot exe
 	result, callErr := l.client.metaCallTimeout(ctx, timeout, args...)
 	var started workerStartReceipt
 	parseErr := json.Unmarshal(result.Payload, &started)
-	if callErr != nil || parseErr != nil {
+	// A durable input receipt may report an unobserved turn with a nonzero CLI
+	// exit. It is accepted input, not proof of a failed or dead worker.
+	acceptedUnobserved := started.State == "outcome_unknown" && started.Stage == "turn_start_unobserved" &&
+		started.TurnStart == "unobserved" && started.Prompt.RequestID == nativeRequestID(operationID) &&
+		slices.Contains(started.Prompt.Stages, "input_accepted")
+	if parseErr != nil || callErr != nil && (!acceptedUnobserved || result.CallUncertain) {
 		return result, started, previous, &CallError{Cause: errors.Join(callErr, parseErr), Result: result}
 	}
 	if result.RuntimeID != state.Coordinator.RuntimeID || started.RunID != snapshot.Ref.Target.OrchestrationRun || started.TaskID != turn.TaskID || started.DispatchID == "" {
 		return result, started, previous, errors.New("Orca worker-start receipt changed its original Run/Task/runtime")
 	}
-	if started.State != "ready" || started.Stage != "input_accepted" {
+	if !acceptedUnobserved && (started.State != "ready" || started.Stage != "input_accepted") {
 		return result, started, previous, errors.New("original Orca worker input acceptance is unverified; reconcile the saved request")
 	}
 	if started.Mode.Mode != "terminal" {

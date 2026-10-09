@@ -69,6 +69,43 @@ func (l *ExecutionLifecycle) reconcileStart(ctx context.Context, request executi
 	if turn == nil || turn.TaskID == "" {
 		return receipt, nil, errors.New("original Orca Task is not committed")
 	}
+	if state.FailedStartReleased || state.PartialWorker != nil {
+		identity := partialWorker{RunID: request.Snapshot.Ref.Target.OrchestrationRun, TaskID: turn.TaskID,
+			DispatchID: request.Snapshot.Ref.Target.Dispatch, RuntimeID: state.Coordinator.RuntimeID}
+		if state.PartialWorker != nil {
+			identity = *state.PartialWorker
+		}
+		if identity.RunID != request.Snapshot.Ref.Target.OrchestrationRun || identity.TaskID != turn.TaskID ||
+			identity.DispatchID == "" || identity.DispatchID != request.Snapshot.Ref.Target.Dispatch || identity.RuntimeID != state.Coordinator.RuntimeID {
+			return receipt, nil, errors.New("failed start lost its original resource identity")
+		}
+		shown, proof, observeErr := observeOriginalWorkerResource(ctx, l.client.MetaCall, identity.identity(request.Snapshot.Ref.Target.WorktreeID))
+		// Keep the saved native effects without nesting the whole prior lifecycle
+		// receipt on every unavailable observation.
+		receipt.Operation.Receipt = nil
+		var prior executionbackend.LifecycleReceipt
+		if json.Unmarshal(request.Operation.Receipt, &prior) == nil && prior.Operation.ID == request.Operation.ID {
+			receipt.Operation.Receipt = prior.Operation.Receipt
+		}
+		receipt.RequestID = nativeRequestID(request.Operation.ID)
+		if observeErr != nil {
+			return receipt, nil, observeErr
+		}
+		if shown.Resource.ReleaseState == "released" {
+			effects := map[string]json.RawMessage{"release_observation": proof}
+			if len(receipt.Operation.Receipt) > 0 {
+				effects["original_start"] = receipt.Operation.Receipt
+			}
+			receipt.Operation.Receipt, _ = json.Marshal(effects)
+			receipt.Disposition = executionbackend.OperationRejected
+			receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
+			receipt.Diagnostic = "Original Orca worker start failed and its exact resource was released; handle this execution manually."
+			return receipt, nil, nil
+		}
+		if state.FailedStartReleased {
+			return receipt, nil, errors.New("original failed-start release is no longer verifiable")
+		}
+	}
 	original := request.Snapshot.Clone()
 	if request.Operation.Ref != nil {
 		original.Ref = *request.Operation.Ref

@@ -106,6 +106,7 @@ go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recove
 | L2 | live | smoke | `smoke.local-codex`、`smoke.orca-codex` |
 | L3 | controlled | delivery | `delivery.basic` |
 | L3 | controlled | recovery | `recovery.waiting-merge-restart` |
+| L3 | controlled | recovery | `recovery.orca-startup.slow`、`.unobserved`、`.lost`、`.failed` |
 | L3 | live | delivery | `delivery.local-codex`、`delivery.orca-codex` |
 | L3 | live | recovery | `recovery.local-codex`、`recovery.orca-codex` |
 

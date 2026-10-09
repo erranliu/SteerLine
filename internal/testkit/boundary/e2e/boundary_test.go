@@ -161,8 +161,9 @@ func TestProductionSourcesUseOnlyOwnedTestkitSupport(t *testing.T) {
 			feedback: true,
 			process:  true,
 		},
-		module + "/tests/e2e/cmd/sandbox-setup":   {process: true},
-		module + "/tests/e2e/internal/controlled": {process: true},
+		module + "/tests/e2e/cmd/sandbox-setup": {process: true},
+		// Controlled external CLI fixtures share protocol behavior with integration.
+		module + "/tests/e2e/internal/controlled": {process: true, module + "/internal/testkit/protocol": true},
 		module + "/tests/e2e/internal/driver":     {process: true},
 		module + "/tests/e2e/internal/native":     {process: true},
 		module + "/tests/e2e/internal/testenv":    {process: true},
