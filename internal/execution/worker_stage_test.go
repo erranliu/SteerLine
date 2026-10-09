@@ -45,7 +45,7 @@ func (p *stageTestPort) InspectLifecycleWorkspace(context.Context, executionback
 	return p.workspace, p.err
 }
 func (p *stageTestPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop}
 }
 
 func (p *stageTestPort) ObserveLifecycle(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
