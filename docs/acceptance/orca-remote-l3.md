@@ -45,3 +45,7 @@
 最终产品与测试主体已按真实结果验证；之后仅修正 runner 的 native_acceptance_note，避免把远端真实 GitHub provider 标为 loopback，并定向回归 runner；不改写原报告的既有文本。未执行 L2/full/恢复/断联/取消竞争/ask-reply，也不据此宣称这些扩展通过。本聊天按用户授权提交实现 PR；普通开发不修改其他 execution-map 任务。
 
 最终运行后的补充回收尝试：删除旧失败运行的本地 scratch `steerline-e2e-613773971/delivery.orca-remote-codex` 与 `steerline-e2e-4134180205/delivery.orca-remote-codex` 被自动审批拒绝（blocked by policy），未执行，两个目录保留；对应远端资源与测试 base/head 已核实回收。此事实不改变最终独立运行自身 cleanup_complete=true。
+
+## 提交 PR 前的主干集成
+
+提交前集成主干 #252/#253 的 native 无模型场景与可选 PR 反馈，并保留两种环境的登记/报告校验。远端第二轮反馈改为正式纯文字输入，不再指定已移除的 continue 选项。owner/app/integration 定向、runner/E2E 支持/boundary、两条反馈阶段回归、e2e tag 场景枚举和文档链接检查通过；未重复调用真实模型，前述 live 证据仍绑定原构建和范围。随后集成 #254 的独立 console 改动，无本任务文件冲突或接线变化。
