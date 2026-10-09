@@ -8,6 +8,9 @@ import (
 )
 
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if key.String() == "ctrl+n" && m.confirm == nil && m.profileChoice == nil && !m.help {
+		return m.openNativeSession()
+	}
 	if m.operationDetails {
 		return m.handleOperationDetails(key)
 	}
