@@ -184,6 +184,19 @@ func NewExecutionDirectory(version string, codecs []ImplementationProfileCodec, 
 
 func directoryRoute(host, agent string) string { return host + "\x00" + agent }
 
+// A host-owned opaque agent route delegates agent interpretation to that host.
+// Exact registrations retain priority and returned identities bind the actual name.
+func (directory *ExecutionDirectory) route(host, agent string) (ExecutionRegistrationKey, bool) {
+	if strings.TrimSpace(agent) == "" || agent == "*" {
+		return ExecutionRegistrationKey{}, false
+	}
+	key, ok := directory.routes[directoryRoute(host, agent)]
+	if !ok {
+		key, ok = directory.routes[directoryRoute(host, "*")]
+	}
+	return key, ok
+}
+
 func (directory *ExecutionDirectory) Version() string {
 	if directory == nil {
 		return ""
@@ -195,17 +208,12 @@ func (directory *ExecutionDirectory) Resolve(c Config) (ExecutionRegistration, e
 	if directory == nil {
 		return ExecutionRegistration{}, errors.New("execution directory is required")
 	}
-	key, ok := directory.routes[directoryRoute(c.hostName(), c.agentName())]
-	if !ok {
-		key, ok = directory.routes[directoryRoute(c.hostName(), "*")]
-	}
+	key, ok := directory.route(c.hostName(), c.agentName())
 	if !ok {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", c.hostName(), c.agentName())}
 	}
 	entry := directory.entries[key]
-	if entry.Key.Agent == "*" {
-		entry.Key.Agent = c.agentName()
-	}
+	entry.Key.Agent = c.agentName()
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
 	return entry, nil
@@ -216,17 +224,15 @@ func (directory *ExecutionDirectory) ResolveIdentity(key ExecutionRegistrationKe
 		return ExecutionRegistration{}, errors.New("execution directory is required")
 	}
 	entry, ok := directory.entries[key]
-	if !ok {
-		generic := key
-		generic.Agent = "*"
-		entry, ok = directory.entries[generic]
+	if !ok && strings.TrimSpace(key.Agent) != "" && key.Agent != "*" {
+		wildcard := key
+		wildcard.Agent = "*"
+		entry, ok = directory.entries[wildcard]
 	}
 	if !ok {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "no implementation is registered for the fixed execution identity"}
 	}
-	if entry.Key.Agent == "*" {
-		entry.Key.Agent = key.Agent
-	}
+	entry.Key.Agent = key.Agent
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
 	return entry, nil
@@ -251,10 +257,7 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 	if projectID == "" || profileID == "" || acceptedVersion == "" {
 		return nil, nil, errors.New("implementation configuration is missing project, profile or accepted version")
 	}
-	entryKey, ok := directory.routes[directoryRoute(host, agent)]
-	if !ok {
-		entryKey, ok = directory.routes[directoryRoute(host, "*")]
-	}
+	entryKey, ok := directory.route(host, agent)
 	if !ok {
 		return nil, nil, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", host, agent)}
 	}
@@ -269,8 +272,9 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 	display := []string{}
 	for _, input := range inputs {
 		if !slices.Contains(entry.ProfileCodecKeys, input.ImplementationKey) {
-			return nil, nil, fmt.Errorf("implementation codec %q is not owned by the selected host", input.ImplementationKey)
+			return nil, nil, fmt.Errorf("profile codec %q is not owned by the selected execution implementation", input.ImplementationKey)
 		}
+
 		codec, exists := directory.codecs[input.ImplementationKey]
 		if !exists || input.CodecVersion != codec.Version || seen[input.ImplementationKey] {
 			return nil, nil, fmt.Errorf("unknown, duplicate or unsupported implementation codec %q/%d", input.ImplementationKey, input.CodecVersion)

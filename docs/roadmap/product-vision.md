@@ -6,7 +6,7 @@ SteerLine 是一款带有研究性质的开发工具，长期远景是通往**�
 
 当前产品方向以 roadmap 为中心：把选定的目标转为有依赖的任务，连接本机 Codex 或 Orca worker，围绕原会话传递用户反馈并记录真实 PR 交付。worker 负责实现、提交和创建 PR，测试、修复、审查要求由任务 Spec/Plan 约定。人决定产品取舍、处理待决策事项并合并 PR；SteerLine 核验实际合并后才认定交付完成。草稿任务可以提前取得唯一 Task ID，正式准入沿用该身份；在产品中受控纳入正式任务时创建对应中心 Task 并进入 DAG，规格和依赖随之固定。草稿编号本身不入图或启动执行。PR 合并前可受控丢弃正式任务，后续规划不能暗中改写已创建的任务。持续会话与简化主流程由 #36 交付，产品方向不代表已实现。
 
-具体底层能力与实施顺序见[草稿 roadmap](drafts/roadmap.md)。本文件定义产品交付节点；仓库开发由 roadmap-runner 直接使用 Codex，以[正式执行清单](execution-map.md)管理用户确认的任务与依赖，流程见[RoadmapGuide](RoadmapGuide.md)。
+具体底层能力与实施顺序见[草稿 roadmap](drafts/roadmap.md)。本文件定义产品交付节点；普通开发由当前聊天直接实现；明确要求 roadmap 调度时，由 roadmap-runner 使用[正式执行清单](execution-map.md)管理已确认的任务与依赖，流程见[RoadmapGuide](RoadmapGuide.md)。
 
 ## 交付节点
 

@@ -103,7 +103,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 				taskStatus = "缓存"
 			}
 		}
-		line := renderWorkspaceRow(row.taskID, row.title, taskStatus, rowExecutionStatus(row), taskAttention(state, row.taskID), max(1, width-2))
+		line := renderWorkspaceRow(row.taskID, row.title, taskStatus, rowExecutionProgress(state, row), taskAttention(state, row.taskID), max(1, width-2))
 		if row.key == state.selectedKey {
 			if state.focus == 0 {
 				line = styleSelected.Render("▸ " + line)

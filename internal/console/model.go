@@ -98,11 +98,12 @@ type projectState struct {
 	ref    ProjectRef
 	view   ProjectView
 
-	snapshot       ProjectSnapshot
-	snapshotLoaded bool
-	refreshing     bool
-	refreshID      uint64
-	lastRefresh    time.Time
+	snapshot        ProjectSnapshot
+	snapshotLoaded  bool
+	refreshing      bool
+	refreshID       uint64
+	lastRefresh     time.Time
+	actionPollUntil time.Time
 
 	selectedKey        string
 	selectionHold      bool

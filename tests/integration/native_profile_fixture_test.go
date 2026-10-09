@@ -57,24 +57,38 @@ func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworke
 		}
 	}
 	profile := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
-	payload, err := codexworker.EncodeProfileConfig(worker)
-	require(t, err)
-	if c.Host != "orca" {
-		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload})
-	}
-	if terminal != nil {
-		native := *terminal
-		if c.Host == "orca" {
-			native.Model, native.ReasoningEffort = worker.Model, worker.ReasoningEffort
+	var payload []byte
+	var err error
+	if c.Host == "orca_supervised" {
+		if terminal == nil || len(remoteSettings) == 0 || remoteSettings[0] == nil {
+			t.Fatal("remote fixture settings missing")
 		}
-		payload, err = orcaworker.EncodeProfileConfig(native)
+		r := *remoteSettings[0]
+		r.Executable = terminal.Executable
+		r.Args = terminal.Args
+		r.Shell = terminal.Shell
+		r.WaitTimeout = terminal.WaitTimeout
+		r.Model = worker.Model
+		r.ReasoningEffort = worker.ReasoningEffort
+		payload, err = remote.EncodeProfileConfig(r)
 		require(t, err)
-		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-	}
-	if len(remoteSettings) > 0 && remoteSettings[0] != nil {
-		payload, err = remote.EncodeProfileConfig(*remoteSettings[0])
+		profile.ImplementationConfigs = []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileCodecKey, CodecVersion: remote.ProfileCodecVersion, Payload: payload}}
+	} else {
+		payload, err = codexworker.EncodeProfileConfig(worker)
 		require(t, err)
-		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: payload})
+		if c.Host != "orca" {
+			profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload})
+		}
+		if terminal != nil {
+			native := *terminal
+			if c.Host == "orca" {
+				native.Model, native.ReasoningEffort = worker.Model, worker.ReasoningEffort
+			}
+			payload, err = orcaworker.EncodeProfileConfig(native)
+			require(t, err)
+			profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
+		}
+
 	}
 	global, err := json.Marshal(map[string]any{"version": 2, "default_execution_profile": profile.ID, "execution_profiles": []execution.ExecutionProfile{profile}})
 	require(t, err)

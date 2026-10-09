@@ -16,32 +16,35 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) {
+func TestSupervisedOrcaAcceptsNativeDefaultsAndKeepsStopUnsupported(t *testing.T) {
 	c := supervisedAdmissionConfig(t)
-	codexSettings := nativeProfileSettings(c)
-	codexSettings.Model = ""
-	setNativeProfile(t, &c, codexSettings)
-	if err := c.ValidateProfiles(); err == nil {
-		t.Fatal("missing model unexpectedly accepted")
+	settings := nativeRemoteSettings(c)
+	invalid := settings
+	invalid.Model = ""
+	invalid.ReasoningEffort = "high"
+	if _, err := remote.EncodeProfileConfig(invalid); err == nil {
+		t.Fatal("Orca effort without model accepted")
 	}
-	codexSettings.Model = "gpt-6-luna"
-	setNativeProfile(t, &c, codexSettings)
+	inherited := settings
+	inherited.Model = ""
+	inherited.ReasoningEffort = ""
+	if _, err := remote.EncodeProfileConfig(inherited); err != nil {
+		t.Fatal(err)
+	}
 	remoteSettings := nativeRemoteSettings(c)
 	remoteSettings.RemoteCancelAvailable = true
-	orcaSettings := nativeTerminalSettings(c)
 	if _, err := remote.EncodeProfileConfig(remoteSettings); err == nil || !strings.Contains(err.Error(), "fixed unavailable") {
 		t.Fatalf("remote cancellation was enabled by its codec: %v", err)
 	}
 	remoteSettings = nativeRemoteSettings(c)
 	remoteSettings.RemoteCancelAvailable = false
-	remoteSettings.ExpectedCodexVersion = ""
-	orcaSettings = nativeTerminalSettings(c)
+	orcaSettings := orcaworker.ProfileConfig{Executable: settings.Executable, Args: settings.Args, Shell: settings.Shell, WaitTimeout: settings.WaitTimeout}
 	if _, err := remote.EncodeProfileConfig(remoteSettings); err != nil {
-		t.Fatalf("optional native version pin was required by the codec: %v", err)
+		t.Fatalf("valid Orca profile was rejected: %v", err)
 	}
-	setNativeImplementationProfiles(t, &c, nativeProfileSettings(c), &orcaSettings, &remoteSettings)
-	if err := c.ValidateProfiles(); err == nil || !strings.Contains(err.Error(), "enforcement evidence") {
-		t.Fatalf("missing remote permission evidence bypassed actual admission: %v", err)
+	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "unused", Model: settings.Model, ReasoningEffort: settings.ReasoningEffort}, &orcaSettings, &remoteSettings)
+	if err := c.ValidateProfiles(); err != nil {
+		t.Fatalf("valid remote profile rejected: %v", err)
 	}
 	report, err := (remote.NewBackend(nativeRemoteConfig(c))).Probe(context.Background(), nativeTarget(c), executionbackend.AgentSpec{Name: c.Agent})
 	if err != nil {
@@ -105,13 +108,13 @@ func nativeRemoteSettings(c steerlineapp.Config) remote.ProfileConfig {
 }
 
 func nativeRemoteConfig(c steerlineapp.Config) remote.Config {
-	w, o, r := nativeProfileSettings(c), nativeTerminalSettings(c), nativeRemoteSettings(c)
+	r := nativeRemoteSettings(c)
 	client := orcaworker.New(orcaworker.Config{Repository: c.Repository, CommandTimeout: c.CommandTimeout, Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 		ctx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		return exec.CommandContext(ctx, os.Args[0], append([]string{"--fake-supervised"}, args...)...).Output()
 	}})
-	return remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: w.Model, ReasoningEffort: w.ReasoningEffort, Settings: remote.Settings{ConnectionID: r.ConnectionID, EnvironmentID: r.EnvironmentID, RepositorySelector: r.RepositorySelector, CoordinatorTerminal: r.CoordinatorTerminal, ExpectedCodexVersion: r.ExpectedCodexVersion, PollInterval: r.PollInterval}, Call: client.Raw, Origin: func(context.Context) ([]byte, error) { return []byte("https://git.example/owner/repo.git"), nil }, CommandTimeout: o.WaitTimeout}
+	return remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: r.Model, ReasoningEffort: r.ReasoningEffort, Settings: remote.Settings{ConnectionID: r.ConnectionID, EnvironmentID: r.EnvironmentID, RepositorySelector: r.RepositorySelector, CoordinatorTerminal: r.CoordinatorTerminal, PollInterval: r.PollInterval}, Call: client.Raw, Origin: func(context.Context) ([]byte, error) { return []byte("https://git.example/owner/repo.git"), nil }, CommandTimeout: r.WaitTimeout}
 }
 
 func declaredCapabilityStatus(r executionbackend.CapabilityReport, name string) executionbackend.CapabilityStatus {

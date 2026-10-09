@@ -267,6 +267,9 @@ func (m *Model) leaveAnswerSaved() bool {
 }
 
 func taskAttention(s projectState, id string) string {
+	if action := taskOperation(s, id); action != nil {
+		return operationProgress(action)
+	}
 	best, priority := "", 0
 	for _, r := range candidateRuns(s, id) {
 		if historicalFailedRun(r) {
@@ -305,6 +308,9 @@ func shortPR(raw string) string {
 func nextAction(m Model, s projectState, row *consoleRow) string {
 	if row == nil {
 		return "请选择任务"
+	}
+	if action := rowOperation(s, *row); action != nil {
+		return operationProgress(action) + " · 正在跟踪原请求回执"
 	}
 	if row.run == nil {
 		if s.candidates[row.taskID] != "" {
@@ -371,7 +377,7 @@ func receiptSummary(s projectState, row *consoleRow) []string {
 			}
 			continue
 		}
-		if a.TaskID == row.taskID && (run == "" || row.run != nil && run == row.run.RunID) {
+		if a.TaskID == row.taskID && (run == "" || row.run != nil && run == row.run.RunID || row.run == nil && a.Action == "start_task") {
 			items = append(items, a)
 		}
 	}

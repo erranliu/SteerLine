@@ -283,7 +283,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 					result.Status, result.Code, result.Message = "failed", "failed", "cancelled before a run was reserved"
 				}
 			} else if r.ExecutionStatus == "unknown" || r.TaskStatus == "in_progress" && r.ExecutionStatus == "pending" {
-				reason := "start_task side effects require manual reconciliation; request will not be replayed"
+				reason := "start_task side effects require manual reconciliation; request will not be replayed: " + err.Error()
 				s.State.Control.Blockers = append(s.State.Control.Blockers, reconstructiontypes.ControlBlocker{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, RunID: runID, AttemptID: runID, Reason: reason})
 				s.State.SlotOccupied = true
 				result.Status, result.Code, result.Message = "indeterminate", "indeterminate", reason
