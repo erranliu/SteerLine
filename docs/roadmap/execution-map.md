@@ -8,21 +8,21 @@
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
 | 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 待执行 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
-| 86 | 本机 Orca 原生通用 worker 与权限委托 | 无未完成硬前置；复用当前主干 #83/#84 成果 | 待执行 | [Spec](../spec/orca-native-worker.spec.md) · [Plan](../spec/orca-native-worker.plan.md) | ONW-A1–A3 自动未验；ONW-M1 后置；[专属记录](../acceptance/orca-native-worker.md) |
+| 86 | 本机 Orca 原生通用 worker 与权限委托 | 无未完成实现硬前置；执行前准备 Orca Terminal + YOLO，复用 #83 和当前持续 worker | 待执行（本轮仅规划） | [Spec](../spec/orca-native-worker.spec.md) · [Plan](../spec/orca-native-worker.plan.md) | ONW-A1–A3 自动未验；ONW-M1 后置；[专属记录](../acceptance/orca-native-worker.md) |
 | 45 | 本机客户端协议与历史查询 | 无 | 待执行 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 未验；[记录](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
 ## 推进顺序
 
-1. #83 已合入；剩余按 #84 → #45 → #44 串行推进。启动时使用已提交且执行工作区可读取的 Spec/Plan commit 和路径，并核对最新默认主干；本次纳入清单不等于已经启动。
-2. #84 与 #45 无新增业务硬依赖，共同状态/存储/宿主/客户端接线按上述顺序集成，#45 复核 #84 的实际字段与接口版本。#44 仍以 #45 为硬前置；#45 经复审、必要验证和真实合并，结果同步且成果进入最新主干后启动 #44。已有在途执行先核对原 run 与固定契约，不因清单编辑自动中断或切换规格。
+1. #83 已合入；剩余按 #86 → #84 → #45 → #44 串行集成。#84 的 PR #253 合入规划文档，不代表流程实现，#84 仍为待执行。#86 本轮只调整规划文档、未启动；其原生能力和环境前置仍须按 Plan 落实。启动时使用已提交且执行工作区可读取的 Spec/Plan commit 和路径，并核对最新默认主干；纳入清单不等于已经启动。
+2. #84/#86 与 #45 无新增业务硬依赖，共同状态/存储/宿主/客户端接线按上述顺序集成，#45 复核 #84/#86 的实际字段与接口版本。#44 仍以 #45 为硬前置；#45 经复审、必要验证和真实合并，结果同步且成果进入最新主干后启动 #44。已有在途执行先核对原 run 与固定契约，不因清单编辑自动中断或切换规格。
 3. 后续界面任务留在[草稿](drafts/roadmap.md)，原型确认后再纳入。
 
 ## 待人工验收
 
 | 范围 | 状态 / 安排 | 明细 |
 | --- | --- | --- |
-| 一期单安装版签收 | 隔离能力 #83 已合入；待 #84 交付及最小自动验证、固定新安装构建并满足原生准备条件后，组织组合/24小时/同构建恢复人工签收；窗口待安排 | [一期活动](../acceptance/phase1.md) |
+| 一期单安装版签收 | 隔离能力 #83 已合入；待 #86/#84 交付及最小自动验证、固定新安装构建并满足原生准备条件后，组织组合/24小时/同构建恢复人工签收；窗口待安排 | [一期活动](../acceptance/phase1.md) |
 | #84 步骤辨识与反馈/合并 | WFS-M1 待验；本任务自动能力交付后，可与一期 P1A1-M 同一现场集中验收，分别登记结果；不阻塞无关二期研发 | [专属记录](../acceptance/worker-staged-flow.md) |
 | #44原生输入与可达性 | #44已排入；交付后验UI2-M/UI4-M，最迟2.1签收 | [记录](../acceptance/phase2-winui-foundation.md) |
 
@@ -30,7 +30,7 @@
 
 ## 执行记录
 
-2026-10-09，用户在本会话确认“按你建议调整”：新增 #86，采用本机 Orca 原生通用启动及生命周期，宽松权限由 Orca 自己持有，agent 只作为配置字段；移除 SteerLine 本机 Orca 路径的 Codex 专属实现。选定[草稿](drafts/orca-native-worker.md)，完整 Spec/Plan/专属验收已准备；启动前固定实际文档 commit。本轮只执行 #86，不启动其他清单任务，不覆盖安装 runtime 或改写 SteerlineTest 102。当前源码 HEAD 已包含 #84 的 PR #253 合入，本任务使用该实际基线；#84 原任务的验收/清单结算由原执行流程核对，不以本记录代为宣告完成。与 #45 共享接线按 #86 先集成处理。
+2026-10-09，用户在本会话确认“按你建议调整”，并明确本轮只调整规划文档：新增 #86，采用本机 Orca 原生通用启动及生命周期，宽松权限由 Orca 自己持有，agent 只作为配置字段；计划移除 SteerLine 本机 Orca 路径的 Codex 专属实现。选定[草稿](drafts/orca-native-worker.md)，完整 Spec/Plan/专属验收已准备；实施启动前固定最终文档 commit。本轮不创建执行聊天、不启动实现，不覆盖安装 runtime 或改写 SteerlineTest 102。核对 PR #253 的实际 diff，#84 仅规划合入、仍未实现；本任务不依赖其未来流程。共同接线调整为 #86→#84→#45→#44，#45→#44 硬依赖保持。
 
 2026-10-09，用户确认将 #84 纳入 execution-map，沿用已预留身份及独立 Spec/Plan/专属验收。状态为待执行、尚未启动，产品自动与人工项仍未验；#83 已合入，无未完成硬前置。按一期收尾安排，剩余串行顺序为 #84→#45→#44；#45→#44 的硬依赖保持，共享接线排期不新增业务依赖。文档版本在实际启动前提交并固定，不创建外部 SteerLine Task/DAG。
 

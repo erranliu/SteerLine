@@ -2,9 +2,11 @@
 
 本轮选定草稿。2026-10-09 用户确认按本会话建议调整：先使用 Orca 自己管理的宽松启动权限跑通，本机 Orca 路径中的 agent 只作为配置值；SteerLine 不启动、配置或解释具体 agent。任务身份沿用下表，不改变外部 SteerlineTest 的 102 Task、数据库或冻结执行。
 
+用户明确本轮只调整规划文档，未授权创建执行聊天或启动实现。当前 Orca 原生模式以 Terminal + YOLO 为执行环境前置；structured worker 的完整同会话支持等待 Orca 通用接续接口，不建立特定agent分支。
+
 | 任务 ID | 任务名称 | 成果 / 所有者 | 前置与集成 | Spec / Plan | 专属验收 |
 | --- | --- | --- | --- | --- | --- |
-| 86 | 本机 Orca 原生通用 worker 与权限委托 | execution/adapters/orca 与 app 接线；原生 agent 启动、worker-start、通用观察和反馈、Orca 权限所有权 | 无未完成实现硬前置；复用当前主干已合入的 #83/#84；与 #45 共享配置/查询接线，应先集成本任务 | [Spec](../../spec/orca-native-worker.spec.md) · [Plan](../../spec/orca-native-worker.plan.md) | [记录](../../acceptance/orca-native-worker.md) |
+| 86 | 本机 Orca 原生通用 worker 与权限委托 | execution/adapters/orca 与 app 接线；原生 agent 启动、worker-start、通用观察和反馈、Orca 权限所有权 | 无未完成实现硬前置；复用已合入 #83 和当前持续 worker；与 #84/#45 共享接线，应先集成本任务 | [Spec](../../spec/orca-native-worker.spec.md) · [Plan](../../spec/orca-native-worker.plan.md) | [记录](../../acceptance/orca-native-worker.md) |
 
 一个实现任务、一个实现 PR；不拆出新的权限框架、Claude adapter 或人工 DAG 任务。未来 agent 的权限与启动差异由 Orca 内部处理。原生 Windows 的无沙箱运行不冒充统一隔离已经实现。
 

@@ -4,6 +4,8 @@
 
 本文由已确认的流程草稿转为本任务唯一的流程/提示词正文，采用现有 worker、简单步骤序列和 adapter；仅 implement 分执行/报告轮，publish 单轮。具体验收安排及结果归[专属验收规划](../acceptance/worker-staged-flow.md)。无未完成硬前置；#83 已通过 PR #247 进入主干，隔离能力作为基线复用，不重新派发。复用已有持续会话、工作区、投递/恢复及唯一交付能力。本文及编号不改变当前 worker-flow-v1 或正在运行的任务。
 
+2026-10-09 规划协调：共享 adapter 接线先集成 [#86 Orca通用接入](orca-native-worker.spec.md)，本机 Orca 的 agent 仅为配置值，权限/启动/会话差异归 Orca，#84 不增加具体 agent 代码。本地 Codex 仍使用自己的原生策略。两任务串行集成，不新增业务 DAG 硬依赖；#84 开始前固定更新后的实际 Spec/Plan，消费 #86 已核验的原会话和规范输出接口，不推定 structured 续轮能力。本轮仍只调整规划。
+
 ## 1. 职责与规模
 
 Spec/Plan 定义任务做什么、实现范围、测试和验收要求。SteerLine 管理阶段及推进，worker 按当前阶段短提示词执行具体动作；继续由 worker commit/push/创建 PR。第一版只有两个业务模型阶段：implement 分为 execute（执行）和 report（结果整理），publish 用一轮完成发布和结构化收尾，复用原会话、工作区、反馈和恢复机制：

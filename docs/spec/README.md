@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地Codex与本机Orca。#83/#84/#45/#44已纳入[正式执行规划](../roadmap/execution-map.md)，由 roadmap-runner 直接调度 Codex；#83已通过 PR #247 合入、#84/#45待执行、#44等待#45，其余材料见[草稿](../roadmap/drafts/roadmap.md)。日常派发核对用户确认范围、状态、依赖和固定文档版本，草稿或编号不作为执行来源。
+本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地Codex与本机Orca。#83/#84/#86/#45/#44已纳入[正式执行规划](../roadmap/execution-map.md)，由 roadmap-runner 直接调度 Codex；#83已通过 PR #247 合入、#84/#45待执行、#86本轮仅规划、#44等待#45，其余材料见[草稿](../roadmap/drafts/roadmap.md)。日常派发核对用户确认范围、状态、依赖和固定文档版本，草稿或编号不作为执行来源。
 
 Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在纳入执行或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不作为执行任务；少量人工项按允许范围后置。
 
@@ -27,14 +27,15 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 ## 已确认 Codex 执行规划
 
-本轮新增 #86 [本机 Orca 原生通用 worker Spec](orca-native-worker.spec.md) / [Plan](orca-native-worker.plan.md)，采用 Orca 自己的宽松启动设置、agent 配置透传和原生生命周期；[专属验收](../acceptance/orca-native-worker.md)。与 #45 共享接线先集成 #86；本轮授权不启动其他任务。#84 已在当前源码合入，但原验收/清单结算另核对。
+本轮新增 #86 [本机 Orca 原生通用 worker Spec](orca-native-worker.spec.md) / [Plan](orca-native-worker.plan.md)，采用 Orca 自己的宽松启动设置、agent 配置透传和原生生命周期；[专属验收](../acceptance/orca-native-worker.md)。与 #84/#45 共享接线先集成 #86；本轮只调整规划文档，不启动实现。#84 仍待执行，PR #253 只合入其规划。
 
-当前剩余按 #84→#45→#44 推进；#83 已合入，保留完成记录导航。启动时核对本地执行前置及实际 Spec/Plan commit。#84 先交付一期新流程与状态字段，#44最终交付依赖#45真实联调。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
+当前按 #86→#84→#45→#44 串行集成；#83 已合入，保留完成记录导航。#86 本轮只调整规划、未启动。启动时核对本地执行前置及实际 Spec/Plan commit。#86 先收口本机 Orca 通用接入，#84 后续提供一期流程与状态字段，#44最终交付依赖#45真实联调。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
 
 | 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | [Spec](local-runtime-isolation.spec.md) | [Plan](local-runtime-isolation.plan.md) |
 | 84 | Worker 分步执行与结构化状态推进 | 无；#83 已进入主干 | [Spec](worker-staged-flow.spec.md) | [Plan](worker-staged-flow.plan.md) |
+| 86 | 本机 Orca 原生通用 worker 与权限委托 | 无未完成实现硬前置；原生能力/环境须落实 | [Spec](orca-native-worker.spec.md) | [Plan](orca-native-worker.plan.md) |
 | 45 | 本机客户端协议与历史查询 | 无 | [Spec](phase2-local-api.spec.md) | [Plan](phase2-local-api.plan.md) |
 | 44 | WinUI 基座与原生输入 | #45 | [Spec](phase2-winui-foundation.spec.md) | [Plan](phase2-winui-foundation.plan.md) |
 
