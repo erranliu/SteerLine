@@ -220,7 +220,9 @@ func TestInstalledDebugIsolation(t *testing.T) {
 
 	mirror := s.NewHomeForProject(debug, "same-repository-other-home", debugExe)
 	lockCommand := mirror.Command(debugExe, "run", "-config", mirror.Config, "-dispatch", "manual", "-console", "off")
-	lockOutput, lockErr := s.RunCommandFor(lockCommand, "same-repository-second-writer", 10*time.Second)
+	// Config/project preflight precedes the lock rejection; use the ordinary
+	// CLI command bound rather than a shorter ten-second startup allowance.
+	lockOutput, lockErr := s.RunCommandFor(lockCommand, "same-repository-second-writer", 30*time.Second)
 	if lockErr == nil || !strings.Contains(string(lockOutput), "repository already locked") {
 		t.Fatalf("same-clone second home did not preserve repository lock: err=%v output=%s", lockErr, lockOutput)
 	}

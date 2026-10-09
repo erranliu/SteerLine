@@ -116,13 +116,11 @@ func (p *Project) NativeRemoveWorktree(w native.OrcaWorktree) {
 	s.Must(err)
 	raw, err := p.orca(s.Context, "worktree", "rm", "--worktree", "id:"+w.ID, "--force", "--json")
 	var receipt struct {
-		Result struct {
-			Removed bool `json:"removed"`
-		} `json:"result"`
+		Removed bool `json:"removed"`
 	}
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &receipt))
-	if !receipt.Result.Removed {
+	if !receipt.Removed {
 		s.t.Fatal("native CLI did not accept this owned worktree removal")
 	}
 	s.Must(err)
@@ -144,5 +142,5 @@ func (p *Project) NativeRemoveWorktree(w native.OrcaWorktree) {
 	if trashPresent && !info.IsDir() {
 		s.t.Fatal("native administrative path is not a directory")
 	}
-	s.Must(controlled.Write(filepath.Join(s.Output, "native-removal-observation.json"), map[string]any{"worktree_id": w.ID, "path": w.Path, "removed": receipt.Result.Removed, "git_unregistered": true, "trash": trash, "trash_present_after_removal": trashPresent}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "native-removal-observation.json"), map[string]any{"worktree_id": w.ID, "path": w.Path, "removed": receipt.Removed, "git_unregistered": true, "trash": trash, "trash_present_after_removal": trashPresent}))
 }
