@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -111,12 +110,12 @@ func TestWorkerServiceStopRecoveryControlled(t *testing.T) {
 			t.Fatal("repeated completion restart replayed platform operations")
 		}
 
-		// Query from the same persisted authority cannot claim TaskDelivery from done.
-		page, err := steerlineapp.LoadDatabaseRuntime(f.config)
-		require(t, err)
-		if len(page.Attempts) != len(active.runtime.Attempts) {
+		// The same final public snapshot still has no delivery or extra attempt.
+		assertNoTaskDelivery(t, repeated.runtime, repeated.run)
+		if len(repeated.runtime.Attempts) != len(active.runtime.Attempts) {
 			t.Fatal("completion invented another Attempt")
 		}
+		service.stop(t)
 	})
 
 	t.Run("completed_live_orca_session_accepts_fresh_next_round", func(t *testing.T) {
