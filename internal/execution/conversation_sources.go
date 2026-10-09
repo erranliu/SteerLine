@@ -31,7 +31,7 @@ func (s *Service) discoverConversationHistory(ctx context.Context) ([]conversati
 			SessionQuality: executionmodel.IdentityUnknown, TurnQuality: executionmodel.IdentityUnknown, ItemQuality: executionmodel.IdentityUnknown}
 		runSource := conversationtypes.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath), WorkerFlow: run.WorkflowVersion == executionmodel.Version, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
-			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" {
+			if attempt.ExecutionID != run.ExecutionID {
 				continue
 			}
 			ended := attempt.AttemptID != run.AttemptID || run.EndedAt != nil

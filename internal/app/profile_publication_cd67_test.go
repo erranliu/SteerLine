@@ -27,6 +27,15 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	}
 	profiles := mixedPublicationProfiles()
 	for i := range profiles {
+		if profiles[i].Host == "orca" {
+			native, err := orcaworker.DecodeProfileConfig(profiles[i].ImplementationConfigs[0].Payload)
+			require(t, err)
+			native.Executable = os.Args[0]
+			payload, err := orcaworker.EncodeProfileConfig(native)
+			require(t, err)
+			profiles[i].ImplementationConfigs[0].Payload = payload
+			continue
+		}
 		settings := codexProfileFromInputs(profiles[i].ImplementationConfigs)
 		settings.Executable = os.Args[0]
 		payload, err := codexworker.EncodeProfileConfig(settings)
@@ -67,11 +76,10 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 
 func mixedPublicationProfiles() []ExecutionProfile {
 	localCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe"})
-	orcaCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe"})
 	orcaOptions, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca.exe", Shell: "powershell.exe", WaitTimeout: "15m"})
 	return []ExecutionProfile{
 		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: localCodex}}},
-		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: orcaCodex}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
+		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
 	}
 }
 

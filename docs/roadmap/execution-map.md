@@ -7,7 +7,7 @@
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
-| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 待执行 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
+| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 执行中（用户确认） | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
 | 45 | 本机客户端协议与历史查询 | 无 | 待执行 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 未验；[记录](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 | 87 | Worker 停机对账与恢复一致性修复 | 无未交付业务硬前置；消费当前已合入 worker 基线 | 执行中 | [Spec](../spec/worker-stop-recovery.spec.md) · [Plan](../spec/worker-stop-recovery.plan.md) | 用户于 2026-10-09 明确授权本聊天直接执行，不经 roadmap-runner；[PR #260](https://github.com/erranliu/SteerLine/pull/260) 草稿；WSR-A1–A7 已按精确候选验证，A8 最终串行复验中；[专属记录](../acceptance/worker-stop-recovery.md) |
@@ -29,6 +29,8 @@
 自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [Orca原生编排](../acceptance/worker-flow-orca-native.md) · [Orca安全重建](../acceptance/worker-service-recovery.md)。
 
 ## 执行记录
+
+2026-10-09，用户明确“86不进roadmap，你直接实现”：历史预留 #86 已撤出当前任务与草稿队列，编号保留不复用；Orca路径调整由当前聊天直接实施，见[调整记录](../architecture/orca-native-worker.md)。#84 的在途执行按原固定文档继续，不等待该调整、不被重定契约；本分支不改其原执行事实。共享接口仅在最终集成时核对。当前聊天源码及受控/服务定向验证已完成；真实 Orca launcher readiness 仍环境受阻，详细[验证范围与原生失败](../acceptance/orca-native-worker.md)单列，不作为 #84 的等待边。
 
 2026-10-09，用户确认将 #84 纳入 execution-map，沿用已预留身份及独立 Spec/Plan/专属验收。状态为待执行、尚未启动，产品自动与人工项仍未验；#83 已合入，无未完成硬前置。按一期收尾安排，剩余串行顺序为 #84→#45→#44；#45→#44 的硬依赖保持，共享接线排期不新增业务依赖。文档版本在实际启动前提交并固定，不创建外部 SteerLine Task/DAG。
 

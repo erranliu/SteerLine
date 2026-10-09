@@ -220,11 +220,11 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	}
 	lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 	if run.PR.URL != nil {
-		lines = append(lines, "PR 地址："+safeTerminalText(*run.PR.URL))
+		lines = append(lines, "PR 地址："+prLink(*run.PR.URL, *run.PR.URL))
 	}
 	for _, url := range run.PRHistory {
 		if run.PR.URL == nil || url != *run.PR.URL {
-			lines = append(lines, "历史 PR 地址："+safeTerminalText(url))
+			lines = append(lines, "历史 PR 地址："+prLink(url, url))
 		}
 	}
 	lines = append(lines, "PR 状态："+safeTerminalText(firstText(run.PR.State, "未核验")))

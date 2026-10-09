@@ -613,6 +613,8 @@ func cloneAnswers(values map[string][]string) map[string][]string {
 }
 
 type LifecycleEvent struct {
+	InputWait      bool
+	Diagnostic     string
 	Fact           EventFact
 	Implementation []ImplementationDataEnvelope
 	Candidate      *LifecycleCandidate

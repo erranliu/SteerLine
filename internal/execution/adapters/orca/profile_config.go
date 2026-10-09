@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 const ProfileCodecKey = "orca.worker-profile"
+const ProfileCodecVersion = 1
 
 func NormalizeProfilePayload(payload []byte, host string) ([]byte, []string, error) {
 	settings, err := DecodeProfileConfig(payload)
@@ -26,38 +26,30 @@ func NormalizeProfilePayload(payload []byte, host string) ([]byte, []string, err
 		}
 	}
 	encoded, err := EncodeProfileConfig(settings)
-	return encoded, nil, err
+	return encoded, []string{"权限：由 Orca 原生 Agent Permissions 设置管理"}, err
 }
 
-func ValidateProfileSelection(agent string, codexPayload, orcaPayload []byte) error {
-	codex, err := codexworker.DecodeProfileConfig(codexPayload)
+func ValidateProfileSelection(agent string, payload []byte) error {
+	if strings.TrimSpace(agent) == "" || agent != strings.TrimSpace(agent) || strings.HasPrefix(agent, "-") || strings.ContainsAny(agent, " \t\r\n") {
+		return errors.New("Orca agent must be a nonempty configuration value")
+	}
+	profile, err := DecodeProfileConfig(payload)
 	if err != nil {
 		return err
 	}
-	orca, err := DecodeProfileConfig(orcaPayload)
-	if err != nil {
-		return err
-	}
-	if agent != "codex" && (codex.Model != "" || codex.ReasoningEffort != "") {
-		return errors.New("Orca model, profile and reasoning_effort overrides require agent=codex")
-	}
-	if codex.Model != "" && orca.Shell != "powershell.exe" && orca.Shell != "pwsh.exe" {
-		return errors.New("fixed Orca Codex launch requires powershell.exe or pwsh.exe")
-	}
-	if codex.Model != "" && codex.Executable == "" {
-		return errors.New("fixed Orca Codex launch requires codex.executable")
-	}
-	return nil
+	return profile.Validate()
 }
 
 // ProfileConfig is the native Orca command configuration accepted by its codec.
 type ProfileConfig struct {
-	Executable   string   `json:"executable"`
-	Args         []string `json:"args"`
-	Shell        string   `json:"shell"`
-	WaitTimeout  string   `json:"wait_timeout"`
-	KeepTerminal bool     `json:"keep_terminal"`
-	Activate     bool     `json:"activate"`
+	Model           string   `json:"model,omitempty"`
+	ReasoningEffort string   `json:"reasoning_effort,omitempty"`
+	Executable      string   `json:"executable"`
+	Args            []string `json:"args"`
+	Shell           string   `json:"shell"`
+	WaitTimeout     string   `json:"wait_timeout"`
+	KeepTerminal    bool     `json:"keep_terminal"`
+	Activate        bool     `json:"activate"`
 }
 
 // NativeTargetID is shared by target freezing and lifecycle validation. Empty
@@ -82,6 +74,12 @@ func EncodeProfileConfig(config ProfileConfig) ([]byte, error) {
 }
 
 func (c ProfileConfig) Validate() error {
+	if c.Model != strings.TrimSpace(c.Model) || c.ReasoningEffort != strings.TrimSpace(c.ReasoningEffort) || strings.HasPrefix(c.Model, "-") || strings.HasPrefix(c.ReasoningEffort, "-") {
+		return errors.New("Orca launch preferences must be literal option values")
+	}
+	if c.ReasoningEffort != "" && c.Model == "" {
+		return errors.New("Orca reasoning_effort requires model")
+	}
 	if c.Executable == "" || c.Shell == "" {
 		return errors.New("orca.executable and orca.shell are required")
 	}

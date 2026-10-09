@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,6 +41,9 @@ type NativeOrcaState struct {
 	LoseRunOnce                                                      bool
 	Tasks                                                            []string
 	Dispatches                                                       int
+	NativeRequests                                                   map[string]json.RawMessage
+	NativeWorkers                                                    bool
+	ReleasedAgent                                                    bool
 	FirstBusinessDispatch                                            int
 	LoseDispatchAt                                                   int
 	LoseTaskAt                                                       int
@@ -329,6 +333,73 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				rows = append(rows, map[string]any{"id": fmt.Sprintf("task-%d", i+1), "run_id": "run-fake", "spec": spec, "created_by_terminal_handle": "term-coordinator"})
 			}
 			return nativeOrcaOK(map[string]any{"runId": "run-fake", "tasks": rows, "count": len(rows)})
+		case "worker-start":
+			request := nativeArg(args, "--retry-request")
+			if state.NativeRequests == nil {
+				state.NativeRequests = map[string]json.RawMessage{}
+			}
+			if prior := state.NativeRequests[request]; len(prior) > 0 {
+				var result map[string]any
+				_ = json.Unmarshal(prior, &result)
+				return nativeOrcaOK(result)
+			}
+			if request == "" || nativeArg(args, "--run") != "run-fake" || nativeArg(args, "--task") != fmt.Sprintf("task-%d", len(state.Tasks)) || nativeArg(args, "--from") != "term-coordinator" {
+				return nativeOrcaErr("invalid_argument", "wrong original native worker identity")
+			}
+			if state.Dispatches == 0 {
+				state.Agent = nativeArg(args, "--agent")
+				if state.Agent == "" || nativeArg(args, "--terminal") != "" {
+					return nativeOrcaErr("invalid_argument", "missing opaque agent")
+				}
+				state.FixedAgentTerminalCreated = true
+			} else if nativeArg(args, "--terminal") != "term-agent" || nativeArg(args, "--agent") != "" || nativeArg(args, "--model") != "" || nativeArg(args, "--effort") != "" {
+				return nativeOrcaErr("invalid_argument", "continuation replaced native session")
+			}
+			state.NativeWorkers = true
+			state.Dispatches++
+			n := state.Dispatches
+			result := map[string]any{"runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "dispatchId": fmt.Sprintf("ctx-%d", n), "state": "ready", "stage": "input_accepted", "turnStart": "observed", "mode": map[string]any{"mode": "terminal"}, "launch": map[string]any{"effective": map[string]any{"agent": state.Agent, "model": nativeArg(args, "--model"), "effort": nativeArg(args, "--effort")}}, "mutation": map[string]any{"requestId": request}}
+			raw, _ := json.Marshal(result)
+			state.NativeRequests[request] = raw
+			match := regexp.MustCompile(`\.steerline-output/([a-f0-9]{32})/([a-f0-9]{32})\.json`).FindStringSubmatch(state.Tasks[len(state.Tasks)-1])
+			if len(match) != 3 {
+				return nativeOrcaErr("invalid_argument", "missing explicit output instruction")
+			}
+			outputPath := filepath.Join(state.Path, ".steerline-output", match[1], match[2]+".json")
+			body := fmt.Sprintf("DONE %d", n)
+			if state.CompletionPRURL != "" {
+				body += " " + state.CompletionPRURL
+			}
+			material, _ := json.Marshal(map[string]any{"workflow_run_id": match[1], "turn_id": match[2], "orca_task_id": fmt.Sprintf("task-%d", n), "dispatch_id": fmt.Sprintf("ctx-%d", n), "body": body})
+			if err := os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
+				return nativeOrcaErr("runtime_unavailable", err.Error())
+			}
+			if err := os.WriteFile(outputPath, material, 0600); err != nil {
+				return nativeOrcaErr("runtime_unavailable", err.Error())
+			}
+			save()
+			if n == state.LoseDispatchAt {
+				return nativeOrcaErr("runtime_unavailable", "native worker started but response lost")
+			}
+			return nativeOrcaOK(result)
+		case "worker-stop", "worker-release":
+			dispatch := nativeArg(args, "--dispatch")
+			if dispatch != fmt.Sprintf("ctx-%d", state.Dispatches) || nativeArg(args, "--retry-request") == "" {
+				return nativeOrcaErr("invalid_argument", "wrong original resource")
+			}
+			resourceState := "stopped"
+			state.ClosedAgent = true
+			if args[1] == "worker-release" {
+				resourceState = "released"
+				state.ReleasedAgent = true
+			}
+			lost := state.LoseCloseOnce
+			state.LoseCloseOnce = false
+			save()
+			if lost {
+				return nativeOrcaErr("runtime_unavailable", "resource mutation response lost")
+			}
+			return nativeOrcaOK(map[string]any{"dispatchId": dispatch, "state": resourceState, "processAction": "terminated"})
 		case "dispatch":
 			if nativeArg(args, "--to") != "term-agent" || nativeArg(args, "--task") != fmt.Sprintf("task-%d", len(state.Tasks)) {
 				return nativeOrcaErr("invalid_argument", "wrong target")
@@ -509,7 +580,15 @@ func FakeNativeOrca(stateDir string, args []string) int {
 					status = "failed"
 				}
 			}
-			return nativeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": "context_only", "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent"), "observation": map[string]any{"exactWorker": true}})
+			stage := "context_only"
+			if state.NativeWorkers {
+				stage = "input_accepted"
+			}
+			releaseState := "retained"
+			if state.ReleasedAgent {
+				releaseState = "released"
+			}
+			return nativeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": stage, "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent"), "observation": map[string]any{"exactWorker": true}, "terminalResource": map[string]any{"terminalHandle": "term-agent", "worktreeId": worktreeID(), "ownerDispatchId": fmt.Sprintf("ctx-%d", n), "originDispatchId": fmt.Sprintf("ctx-%d", n), "releaseState": releaseState}})
 		}
 	}
 	return nativeOrcaErr("invalid_argument", "unhandled native Orca fixture command: "+strings.Join(args, " "))
