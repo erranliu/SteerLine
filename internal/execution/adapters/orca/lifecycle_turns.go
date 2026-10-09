@@ -547,6 +547,11 @@ func (l *ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot 
 	if terminal.RuntimeID != identity.RuntimeID || terminal.IncarnationID != identity.Incarnation || terminal.WorktreeID != identity.WorktreeID {
 		return executionbackend.LifecycleRecoveryEvidence{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca recovery terminal identity changed"}
 	}
+	if terminal.Exited() {
+		// An exited original terminal prevents session continuation, but cannot
+		// invalidate a previously verified completed Dispatch/result.
+		return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: true, SessionAvailable: false}, nil
+	}
 	if err := VerifyAgentTerminal(ctx, l.client.MetaCall, identity, snapshot.Workspace.Path, snapshot.Workspace.Branch, "codex"); err != nil {
 		return executionbackend.LifecycleRecoveryEvidence{}, err
 	}

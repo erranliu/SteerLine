@@ -173,6 +173,27 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 			if execution.SessionID == "" {
 				return s.waitWorkerFlow(run, "The original session is unavailable; recovery cannot create a replacement worker")
 			}
+			lifecycle, fixed, err := s.lifecycleForRun(run)
+			if err != nil {
+				return err
+			}
+			snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, execution, fixed.attempt, nil)
+			if err != nil {
+				return err
+			}
+			evidence, err := lifecycle.VerifyManualRecovery(ctx, snapshot)
+			if err != nil || !evidence.SessionAvailable {
+				return s.waitWorkerFlow(run, "The original worker session cannot be verified for continuation")
+			}
+			if evidence.ManagedProcess && !evidence.ProcessAbsent {
+				// A completed round can retain a live original session. Consent
+				// starts its next round without inventing a replacement Attempt.
+				execution.RecoveryRequired = false
+				if err := s.commitWorker(run); err != nil {
+					return err
+				}
+				return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID)
+			}
 			prompt := "The previous worker process stopped. Inspect the current worktree, Git status, existing work, and persistent task history before continuing. Do not replay an earlier request blindly.\n\n" + workerFeedbackText(answer, run.Decision.Request)
 			if err := s.beginWorkerRecoveryAttempt(ctx, run, answer.OptionID); err != nil {
 				return s.waitWorkerFlow(run, "Manual execution recovery did not pass its original identity checks: "+err.Error())

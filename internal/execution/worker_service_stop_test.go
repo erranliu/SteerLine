@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
@@ -160,6 +161,52 @@ func TestWorkerServiceStopBoundary(t *testing.T) {
 				t.Errorf("%s directly calls implementation-specific recovery %s", path, selector.Sel.Name)
 			}
 			return true
+		})
+	}
+}
+
+func TestWorkerLateReplyReleasesOnlyItsOriginalUncertainty(t *testing.T) {
+	for _, remainingPublication := range []bool{false, true} {
+		t.Run(map[bool]string{false: "reply_resolved", true: "publication_still_unknown"}[remainingPublication], func(t *testing.T) {
+			s, run := neutralAuditService(t)
+			t.Cleanup(func() { _ = s.Close() })
+			workflow, e := s.workflowRecords(run)
+			e.CurrentTurnID, e.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
+			e.Status, workflow.Phase = "active", "waiting_decision"
+			setNeutralBinding(t, e, "retained-endpoint", "generation", workerFlowMockSession)
+			e.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, e.Workspace.Worktree, e)
+			fixed := *workerSessionContext(run, e)
+			fixed.ProjectID = s.Config.identity
+			request := neutralDecisionFixture(t, fixed, "original-call", []executionbackend.Question{{ID: "choice", Header: "Choice", Question: "A?", AllowFreeText: true}})
+			decision, err := WriteDecisionRequest(run, request)
+			require(t, err)
+			s.setRunDecision(run, decision)
+			record := s.decisionRecord(run)
+			record.Status = "answer_saved"
+			answer := executionmodel.DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "operator", AnsweredAt: now()}
+			record.Answer = mustJSON(answer)
+			s.refreshRun(run)
+			replyID, err := s.startWorkerOperation(run, "reply_execution_question", "worker-question-answer:"+e.ExecutionID+":"+run.Decision.ID, &executionbackend.FeedbackInput{DecisionID: run.Decision.ID, QuestionID: request.QuestionRoute.QuestionID, Answer: &executionbackend.Answer{Answers: answer.Answers}})
+			require(t, err)
+			require(t, s.setOperationState(replyID, "outcome_unknown", request.QuestionRoute.QuestionID, nil, "response lost"))
+			require(t, s.commitWorker(run, replyID))
+			if remainingPublication {
+				_, err = s.startWorkerOperation(run, "publish_local_worker", "local-publish:"+run.RunID+":"+e.CurrentTurnID, map[string]string{"run_id": run.RunID})
+				require(t, err)
+			}
+			e.RecoveryRequired, e.RecoveryState = true, "unverified"
+			require(t, s.commitWorker(run))
+			beforeAttempts := len(s.domain.Attempts)
+			success := true
+			event := WorkerEvent{Fact: executionbackend.EventFact{ToolReply: &executionbackend.ToolReplyFact{CallID: request.QuestionRoute.QuestionID, ThreadID: e.SessionID, TurnID: e.CurrentTurnID, Status: "completed", Success: &success, Answers: []map[string][]string{answer.Answers}}}}
+			require(t, s.eventWorkerFlowFor(run, event))
+			expected := "running"
+			if remainingPublication {
+				expected = "unverified"
+			}
+			if e.RecoveryState != expected || s.operationByKey("worker-question-answer:"+e.ExecutionID+":"+record.DecisionID).Status != "confirmed" || len(s.domain.Attempts) != beforeAttempts {
+				t.Fatalf("late original reply qualification: state=%s want=%s", e.RecoveryState, expected)
+			}
 		})
 	}
 }

@@ -118,6 +118,39 @@ func TestWorkerServiceStopRecoveryControlled(t *testing.T) {
 			t.Fatal("completion invented another Attempt")
 		}
 	})
+
+	t.Run("completed_live_orca_session_accepts_fresh_next_round", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+		defer cancel()
+		f := newLifecycleProjectBase(t, "orca", true)
+		require(t, testprotocol.WriteNativeOrcaState(f.nativeStateDir, testprotocol.NativeOrcaState{EnvironmentMode: true, ReadinessMode: "success"}))
+		createIntegrationTask(t, ctx, f, 901)
+		service := startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
+		defer func() { service.stop(t) }()
+		claimIntegrationTask(t, ctx, f, 901, service.instanceID)
+		complete := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return e.TurnNumber == 1 && e.CurrentTurnID == e.LastStoppedTurnID && run.Decision != nil && run.Decision.Status == "pending"
+		})
+		oldAttempt, oldSession, oldProcess := complete.run.AttemptID, complete.execution.SessionID, *complete.execution.Process
+		state, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+		require(t, err)
+		oldDispatches := state.Dispatches
+		service.stop(t)
+		service = startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
+		recovered := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return e.RecoveryState == "completed" && run.Decision != nil && run.Decision.Status == "pending" && len(run.Decision.Request.Options) > 0
+		})
+		submitIntegrationAnswerOption(t, ctx, f.config, recovered.run, "continue")
+		next := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return e.TurnNumber == 2 && e.CurrentTurnID == e.LastStoppedTurnID
+		})
+		state, err = testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+		require(t, err)
+		if next.run.AttemptID != oldAttempt || next.execution.SessionID != oldSession || (next.execution.Process.Terminal != oldProcess.Terminal || next.execution.Process.RuntimeID != oldProcess.RuntimeID || next.execution.Process.Incarnation != oldProcess.Incarnation) || len(next.runtime.Attempts) != len(complete.runtime.Attempts) || state.Dispatches != oldDispatches+1 {
+			t.Fatal("fresh feedback rebuilt a live original worker or duplicated the next Dispatch")
+		}
+	})
+
 	t.Run("orca_original_pending_question_and_answer_receipt", func(t *testing.T) { testIntegratedNativeSessionGateWithMutations(t, false, false) })
 
 }
