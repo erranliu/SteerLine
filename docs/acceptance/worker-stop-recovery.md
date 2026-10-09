@@ -39,7 +39,7 @@ A8 的原轮次离线继续允许 usage 增长；通过条件是身份/原轮次
 
 执行后逐项记录 actual commit/dirty/tree、exe/CLI/构建摘要、冻结 worker 标识及版本、精确命令/子场景匹配、日期/结果/清理、原/新通用身份、原生证据、start/send/stop/settlement 计数和临时产物目录。未知回执与后续核实分别留证，失败不覆盖，原始日志不入仓库。
 
-纳入执行后同步 execution-map 的结果/待验链接，PR 合并与产品验收分开。本任务已纳入并正在执行；历史 101 证据保持原基线。
+纳入执行后同步 execution-map 的结果/待验链接，PR 合并与产品验收分开。本任务已实现完成，WSR-A1–A8 自动通过，实际合并事实见末尾交付结算；历史 101 证据保持原基线。
 
 ## 2026-10-09 直接执行与验证过程
 
@@ -105,7 +105,7 @@ A8 驱动增量 `932919e3`：同一正式 control 请求的原产品准入期限
 
 ## 最终自动验收闭环（2026-10-09）
 
-最终生产候选 `399c448508371c4e08e85f82688929ccde71531d`，tree `b1d35b51c3b97a1a8d6babf9f77880b56d8c63eb`，Windows/amd64 clean source；含最新主干 `8001fc94`（#263 启动预算/失败回执与原生资源对账），保留本任务更严格的原UUID、effect、terminal/incarnation与全部绑定门槛。独立 reviewer `/root/review87` 对此集成及Started回执保留修复复核 clean，无未修复确认问题。以下是自动验收结果；尚待 PR #260 真实合并核验，未记实现完成。
+最终生产候选 `399c448508371c4e08e85f82688929ccde71531d`，tree `b1d35b51c3b97a1a8d6babf9f77880b56d8c63eb`，Windows/amd64 clean source；含最新主干 `8001fc94`（#263 启动预算/失败回执与原生资源对账），保留本任务更严格的原UUID、effect、terminal/incarnation与全部绑定门槛。独立 reviewer `/root/review87` 对此集成及Started回执保留修复复核 clean，无未修复确认问题。以下自动验收结果在合并前登记，当时尚待 PR #260 真实合并核验；最终结算另记于末尾。
 
 | 范围 / 精确验证 | 结果及证据 |
 | --- | --- |
@@ -126,3 +126,9 @@ A8 精确原身份：execution `1b4864482da1d46d8e98761d95da91bc`、Attempt `39c
 WSR-A1–A8自动项通过，无新增人工项；未运行Full或扩大为完整L2/L3。历史101未知停止/跨构建失败未修改，安装版及现有用户Orca终端未处理。#84后续新分步流程、一期单安装/24小时组合签收仍是独立未验范围。本任务只包含用户明确批准的0.162.0更新提示偏好，未升级Codex/Orca、未变更Agent Permissions。PR #260 合并与仓库状态汇总另记真实回执。
 
 最终证据复审：reviewer对final summary/scenario、原五快照、三份native usage和local日志逐项只读核对；确认生产399 clean、A8 1 test/0 skip及完整清理、A7 220.83s、owner14 tests/0 skip、L1精确141.673s。四包定向的241加测试dirty与四个skip已明确，历史“当时在跑”不作为当前未验状态。没有新增产品问题，所有自动项按上述真实证据闭合。
+
+## 2026-10-09 真实合并与交付结算
+
+GitHub 确认 [PR #260](https://github.com/erranliu/SteerLine/pull/260) 为 MERGED，mergedAt=`2026-10-09T08:39:52Z`（北京时间16:39:52），审核 head `187dd098b9c2c2b11912770fdc70fdfce6f06255`，merge commit `d951ca8729d5854b8429b7790fef8ff75feaa750`。已 fetch 默认主干并以 `git merge-base --is-ancestor` 核验该 head 已进入主干。最终证据精度修订 `187dd098` 的独立复审 clean；从真实验收候选 `399c4485` 到审核 head 仅修改结果文档，没有生产/测试代码变化。
+
+#87 实现完成；WSR-A1–A8 自动项通过，无任务人工项。执行清单、Spec/验收导航已同步，已完成草稿任务条目移除但永久身份与能力摘要保留。本次合并后结算仅修改文档并执行文档链接、任务身份和 diff 静态检查，不宣称重新运行产品验收。历史失败、skip、各自测试基线及未重跑范围均保留；安装101、安装替换、#84新流程及一期长期签收不因此变为通过。
