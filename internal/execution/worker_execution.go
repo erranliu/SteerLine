@@ -25,6 +25,9 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, di
 	if probeErr != nil {
 		return probeErr
 	}
+	if lifecycle.PolicyCapabilities().ServiceStopBehavior != entry.ServiceStopBehavior {
+		return errors.New("worker service-stop behavior differs from its registered declaration")
+	}
 	report, probeErr := lifecycle.PreflightLifecycle(ctx, setup.Clone())
 	if probeErr != nil {
 		return probeErr

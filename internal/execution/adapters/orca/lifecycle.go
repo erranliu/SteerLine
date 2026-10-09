@@ -11,6 +11,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
+const ServiceStopBehavior = executionbackend.ContinueExecutionOnServiceStop
+
 // ExecutionLifecycle owns native Orca requests and interprets their receipts.
 // It receives only immutable setup and one center-persisted action at a time.
 type ExecutionLifecycle struct {
@@ -82,7 +84,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 }
 
 func (l *ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true, ActiveTurnFeedback: true, ResumeActiveObservation: true}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true, ActiveTurnFeedback: true, ResumeActiveObservation: true}
 }
 
 func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {

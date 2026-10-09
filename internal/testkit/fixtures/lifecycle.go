@@ -76,7 +76,7 @@ type neutralCompletionReceipt struct {
 }
 
 func (p *Lifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
 
 func (p *Lifecycle) PreflightLifecycle(_ context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
@@ -170,11 +170,11 @@ func (p *Lifecycle) ObserveLifecycle(_ context.Context, s executionbackend.Lifec
 		if saved.Process != s.Ref.External || saved.Target != s.Ref.Target || saved.ExecutionID != s.Session.ExecutionID || saved.AttemptID != s.Session.AttemptID || saved.ResourceGeneration != s.ResourceGeneration || evidence.SessionID != s.Session.SessionID || evidence.TurnID != s.Session.CurrentTurnID || evidence.CommandID != s.Session.CurrentCommandID {
 			return executionbackend.LifecycleReceipt{}, nil, errors.New("original fixture completion identity differs")
 		}
-		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &s.Ref.External, TurnEvidence: &evidence, State: executionbackend.LifecycleStateFacts{SessionID: evidence.SessionID, SessionGeneration: s.Session.Generation, TurnID: evidence.TurnID, TurnCompleted: true}}, nil, nil
+		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &s.Ref.External, TurnEvidence: &evidence, State: executionbackend.LifecycleStateFacts{SessionID: evidence.SessionID, SessionGeneration: s.Session.Generation, TurnID: evidence.TurnID, TurnCompleted: true, SessionAvailable: true}}, nil, nil
 	} else if !os.IsNotExist(err) {
 		return executionbackend.LifecycleReceipt{}, nil, err
 	}
-	receipt := executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &s.Ref.External, State: executionbackend.LifecycleStateFacts{SessionID: s.Session.SessionID, SessionGeneration: s.Session.Generation, TurnID: s.Session.CurrentTurnID, TurnCompleted: s.Session.CurrentTurnID != "" && s.Session.CurrentTurnID == s.Session.LastStoppedTurnID}}
+	receipt := executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &s.Ref.External, State: executionbackend.LifecycleStateFacts{WorkerLive: true, SessionAvailable: true, SessionID: s.Session.SessionID, SessionGeneration: s.Session.Generation, TurnID: s.Session.CurrentTurnID, TurnCompleted: s.Session.CurrentTurnID != "" && s.Session.CurrentTurnID == s.Session.LastStoppedTurnID}}
 	if receipt.State.TurnCompleted {
 		return receipt, nil, nil
 	}
@@ -197,7 +197,7 @@ func (p *Lifecycle) VerifyManualRecovery(_ context.Context, s executionbackend.L
 	if s.Ref.External.Kind == "os" {
 		absent = resourceprocess.InspectProcess(&s.Ref.External) == "process absent"
 	}
-	return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: absent, SessionAvailable: s.Session.SessionID != ""}, nil
+	return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: absent, WritersAbsent: absent && resourceprocess.WorkerTreeAbsent(s.Ref.External), SessionAvailable: s.Session.SessionID != ""}, nil
 }
 
 func (p *Lifecycle) BindRecovery(_ context.Context, old, next executionbackend.LifecycleSnapshot) (executionbackend.ImplementationDataEnvelope, error) {
@@ -296,4 +296,14 @@ func CapabilityReport(backend executionbackend.BackendKind, protocol executionba
 		caps = append(caps, executionbackend.Capability{Name: name, Status: executionbackend.CapabilityNotTested})
 	}
 	return executionbackend.CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: time.Now().UTC(), Capabilities: caps}
+}
+
+func (p *Lifecycle) ShutdownLifecycle(_ context.Context, s executionbackend.LifecycleSnapshot, h executionbackend.StopHandle) (executionbackend.LifecycleStateFacts, error) {
+	if h != nil {
+		if s.Ref.External.Kind != "" && h.Identity() != s.Ref.External {
+			return executionbackend.LifecycleStateFacts{}, errors.New("owned worker identity differs")
+		}
+		h.Close()
+	}
+	return executionbackend.LifecycleStateFacts{}, nil
 }

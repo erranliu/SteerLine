@@ -87,6 +87,9 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 		execution.CurrentCommandID != evidence.CommandID && execution.PendingCommandID != evidence.CommandID {
 		return s.waitWorkerFlow(run, "the original turn receipt differs from its fixed execution input")
 	}
+	if execution.RecoveryRequired {
+		execution.RecoverySessionAvailable = ptr(receipt.State.SessionAvailable)
+	}
 	if execution.CurrentTurnID == "" {
 		if err := BeginWorkerTurn(workflow, execution, evidence.SessionID, evidence.TurnID); err != nil {
 			return s.waitWorkerFlow(run, "original turn start could not be reconciled: "+err.Error())
@@ -112,6 +115,16 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 		execution.Status = "blocked"
 		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "the original worker exited without a confirmed completed turn; its output and session are retained")
+	}
+	if record := s.decisionRecord(run); execution.RecoveryRequired && record != nil && record.Status == "pending" && record.RecoveryState == "unverified" &&
+		run.Decision.Request.QuestionRoute == nil && len(run.Decision.Request.Options) == 0 && !s.hasUnknownWorkerOperation(run) {
+		// This was an observation gap, not a business question. Its trusted
+		// original completion must return to the normal PR/feedback resolution.
+		s.setDecisionStatus(run, "superseded")
+		if err := s.commitWorker(run); err != nil {
+			return err
+		}
+		s.setRunDecision(run, nil)
 	}
 	if len(execution.PendingQuestions) > 0 {
 		execution.PendingQuestions = nil

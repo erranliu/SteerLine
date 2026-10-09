@@ -45,9 +45,10 @@ type Service struct {
 	// workers owns live observers by authoritative workflow run ID.
 	workers                   map[string]*Worker
 	ownedProcesses            map[string]executionbackend.StopHandle
+	workerServiceOwners       map[string]workerServiceOwner
 	lifecycleEffects          map[string]pendingLifecycleEffect
 	lifecycleMessages         map[string][]Signal
-	appServerRecovering       map[string]bool
+	workerRecovering          map[string]bool
 	signalQueue               chan Signal
 	runContext                context.Context
 	forwarders                sync.WaitGroup

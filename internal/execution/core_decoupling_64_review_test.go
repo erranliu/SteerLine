@@ -12,7 +12,7 @@ import (
 type recoveryOnlyLifecycle struct{ executionbackend.LifecyclePort }
 
 func (recoveryOnlyLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop}
 }
 
 func (recoveryOnlyLifecycle) VerifyManualRecovery(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
@@ -29,6 +29,10 @@ type inspectionLifecycle struct {
 	executionbackend.LifecyclePort
 	want executionbackend.ProcessIdentity
 	ref  executionbackend.LifecycleSnapshot
+}
+
+func (p *inspectionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop}
 }
 
 func (p *inspectionLifecycle) VerifyManualRecovery(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {

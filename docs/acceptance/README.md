@@ -24,6 +24,7 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 | --- | --- |
 | #83 本机安装与调试路径隔离 | [验收](local-runtime-isolation.md) |
 | #84 Worker 分步执行与结构化状态推进，已纳入执行规划 | [验收](worker-staged-flow.md) |
+| #87 Worker 停机对账与恢复一致性修复，由本聊天直接执行 | [验收](worker-stop-recovery.md) |
 | #45 本机客户端协议与历史查询 | [验收](phase2-local-api.md) |
 | #44 WinUI基座与原生输入 | [验收](phase2-winui-foundation.md) |
 | #49 DAG与任务原生浏览，待原型 | [验收](phase2-roadmap-ui.md) |

@@ -1,10 +1,12 @@
 package testenv
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -138,6 +140,10 @@ Write-Output $receipt.url
 `, state.GitURL, base)
 		s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
 		spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. The assigned working branch is the PR HEAD; main in the dispatch is the PR BASE, never a request to push to main. The origin URL remains the dispatch's https://github.com/e2e/project.git identity; only the script's single push command uses url.insteadOf to route its transport to the loopback server. This does not change repository config or the remote identity seen by task validation. The explicitly authorized loopback PR endpoint represents that same fixture provider. The script commits, pushes origin's assigned head and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
+	}
+
+	if s.ID == "recovery.orca-codex" {
+		spec += "\n## Original-execution recovery window\n\nBefore writing the recovery marker, send one native `status` message to the original Run mailbox using `orca orchestration send --from <injected-worker-handle> --to run:<injected-run-id> --type status --subject recovery-window --body original-execution-started --task-id <injected-task-id> --dispatch-id <injected-dispatch-id>`. Use the exact IDs from the Orca preamble. This is actual progress in this same original round; a platform heartbeat alone need not be delivered as ordinary coordinator mail. Before writing result.txt or publishing, run one shell command that writes `.e2e-recovery-started.txt` in this assigned worktree, waits until `.e2e-recovery-release.txt` exists, then removes both files. Use `Set-Content -LiteralPath .e2e-recovery-started.txt -Value waiting; while (-not (Test-Path -LiteralPath .e2e-recovery-release.txt)) { Start-Sleep -Milliseconds 250 }; Remove-Item -LiteralPath .e2e-recovery-started.txt,.e2e-recovery-release.txt`. The test driver releases the existing command; it does not send another prompt. These two files are temporary fixture controls: do not stage or commit them. After release, finish the original task and its publication in this same original round.\n"
 	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
@@ -281,28 +287,47 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		}
 		u, usageEvidence, err = native.AppServerTurnUsage(raw, session, e.CurrentTurnID)
 	} else {
-		// Only this project's home is scanned. Exactly one root native session must
-		// match; guardian/subagent logs sharing its cwd are separate executions.
+		// Orca owns its agent home. Read only metadata until a root session
+		// matches this exact owned worktree; never read unrelated session bodies.
+		hostHome, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return u, homeErr
+		}
+		sessionRoot := filepath.Join(hostHome, ".codex", "sessions")
 		matches := 0
-		err = filepath.WalkDir(filepath.Join(p.Home, "codex", "sessions"), func(path string, d os.DirEntry, walkErr error) error {
+		err = filepath.WalkDir(sessionRoot, func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
 			if d.IsDir() || filepath.Ext(path) != ".jsonl" {
 				return nil
 			}
-			raw, readErr := os.ReadFile(path)
-			if readErr != nil {
+			file, openErr := os.Open(path)
+			if openErr != nil {
+				return openErr
+			}
+			header, readErr := bufio.NewReader(file).ReadBytes('\n')
+			closeErr := file.Close()
+			if readErr != nil && readErr != io.EOF {
 				return readErr
 			}
-			matched, matchErr := native.BusinessRolloutMatches(raw, e.Workspace.Worktree)
+			if closeErr != nil {
+				return closeErr
+			}
+			matched, matchErr := native.BusinessRolloutMatches(header, e.Workspace.Worktree)
 			if matchErr != nil {
-				return matchErr
+				// An empty/in-progress unrelated metadata header proves no
+				// ownership. Never read that session's body or fail our fixture.
+				return nil
 			}
 			if !matched {
 				return nil
 			}
 			matches++
+			raw, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
 			var parseErr error
 			u, usageEvidence, parseErr = native.RolloutUsage(raw, e.Workspace.Worktree)
 			return parseErr
@@ -330,6 +355,9 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	p.CreateTasks()
 	p.StartService()
 	p.Claim("a")
+	if restart && chain == "orca-codex" {
+		verifyContinuingWorkerServiceRecovery(s, p)
+	}
 	before := p.WaitPhase("waiting_pr_merge")
 	p.Record("open", before)
 	if before.Helper.PR.State != "open" {
@@ -342,7 +370,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	if chain == "orca-codex" {
 		s.Must(evidence.OrcaExplicitEmptyArgs(before.Domain))
-		s.Must(evidence.OrcaReadiness(e))
+		s.Must(evidence.OrcaNativeBusiness(e))
 	}
 	for _, task := range before.Page.Tasks {
 		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {
@@ -420,4 +448,83 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	s.usageVerified = true
 	s.Must(s.finishBody())
 	p.StopService()
+}
+
+// The original worker remains inside its original native command while the
+// center disconnects. Releasing an owned fixture file is not a new business turn.
+func verifyContinuingWorkerServiceRecovery(s *Scenario, p *Project) {
+	s.t.Helper()
+	var original Snapshot
+	s.Wait("original Orca business command reached its recovery window", func() (bool, error) {
+		snap, err := p.Snapshot()
+		if err != nil {
+			return false, err
+		}
+		if len(snap.Domain.Executions) != 1 {
+			return false, nil
+		}
+		e := snap.Domain.Executions[0]
+		if e.Workspace.Worktree == "" || e.CurrentTurnID == "" || e.CurrentTurnID == e.LastStoppedTurnID {
+			return false, nil
+		}
+		if _, err := os.Stat(filepath.Join(e.Workspace.Worktree, ".e2e-recovery-started.txt")); os.IsNotExist(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
+		original = snap
+		return true, nil
+	})
+	e := original.Domain.Executions[0]
+	if original.Domain.WorkflowRuns[0].ExecutionProfile.ServiceStopBehavior != "continue_execution" {
+		s.t.Fatal("Orca worker did not freeze its continuing service-stop behavior")
+	}
+	originalSession, err := ExecutionSession(e)
+	s.Must(err)
+	p.Record("original-active-before-stop", original)
+	p.RestartService()
+	var reopened Snapshot
+	s.Wait("original active Orca execution reattached", func() (bool, error) {
+		snap, err := p.Snapshot()
+		if err != nil {
+			return false, err
+		}
+		if len(snap.Domain.Executions) != 1 {
+			return false, nil
+		}
+		current := snap.Domain.Executions[0]
+		if current.RecoveryState != "running" && current.RecoveryState != "live" && current.RecoveryState != "question" {
+			return false, nil
+		}
+		session, err := ExecutionSession(current)
+		if err != nil {
+			return false, err
+		}
+		if current.ExecutionID != e.ExecutionID || current.CurrentAttemptID != e.CurrentAttemptID || current.CurrentTurnID != e.CurrentTurnID || current.TurnNumber != e.TurnNumber || session != originalSession || current.Process == nil || e.Process == nil || *current.Process != *e.Process {
+			return false, errors.New("service restart replaced the active original Orca worker")
+		}
+		reopened = snap
+		return true, nil
+	})
+	p.Record("original-active-after-restart", reopened)
+	p.StopService()
+	s.Must(os.WriteFile(filepath.Join(e.Workspace.Worktree, ".e2e-recovery-release.txt"), []byte("release original execution\n"), 0600))
+	// The real worker must produce its original output and PR while the service is
+	// offline. The loopback provider receipt is an independent publication fact.
+	s.Wait("original worker published while center offline", func() (bool, error) {
+		provider, err := controlled.Read(p.Provider)
+		if err != nil {
+			return false, err
+		}
+		return provider.PR.URL != "" && provider.PR.State == "open", nil
+	})
+	p.StartService()
+	after := p.WaitPhase("waiting_pr_merge")
+	current := after.Domain.Executions[0]
+	session, err := ExecutionSession(current)
+	s.Must(err)
+	if current.CurrentAttemptID != e.CurrentAttemptID || current.CurrentTurnID != e.CurrentTurnID || current.TurnNumber != e.TurnNumber || session != originalSession || current.LastStoppedTurnID != e.CurrentTurnID || len(after.Domain.Attempts) != len(original.Domain.Attempts) || current.RecoveryState != "completed" {
+		s.t.Fatal("offline original completion was lost, duplicated, or left unverified")
+	}
+	p.Record("original-completed-after-offline-window", after)
 }

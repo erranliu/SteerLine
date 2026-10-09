@@ -18,6 +18,17 @@ type partialWorker struct {
 // A failed composite start can already have injected input. Preserve and
 // recover its exact native resource, without inventing a terminal or session.
 func (l *ExecutionLifecycle) recoverFailedStart(ctx context.Context, request executionbackend.LifecycleRequest, state NativeExecutionState, started workerStartReceipt, result Result, reason error) (executionbackend.LifecycleReceipt, error) {
+	// A not-yet-observed turn can already own accepted input. Keep its original
+	// resource and uncertainty; the observer/operator must inspect it, not cleanup.
+	cleanup := started.State != "outcome_unknown" || started.Stage != "turn_start_unobserved"
+	return l.failedStartReceipt(ctx, request, state, started, result, reason, cleanup)
+}
+
+func (l *ExecutionLifecycle) reconcileFailedStart(ctx context.Context, request executionbackend.LifecycleRequest, state NativeExecutionState, started workerStartReceipt, result Result, reason error) (executionbackend.LifecycleReceipt, error) {
+	return l.failedStartReceipt(ctx, request, state, started, result, reason, false)
+}
+
+func (l *ExecutionLifecycle) failedStartReceipt(ctx context.Context, request executionbackend.LifecycleRequest, state NativeExecutionState, started workerStartReceipt, result Result, reason error, cleanup bool) (executionbackend.LifecycleReceipt, error) {
 	receipt := nativeReceipt(request, executionbackend.OperationUnknown)
 	receipt.RequestID = nativeRequestID(request.Operation.ID)
 	receipt.Diagnostic = reason.Error()
@@ -46,6 +57,11 @@ func (l *ExecutionLifecycle) recoverFailedStart(ctx context.Context, request exe
 		receipt.Disposition = executionbackend.OperationRejected
 		receipt.Operation.Receipt, _ = json.Marshal(map[string]json.RawMessage{"start": result.Payload, "release_observation": proof})
 		receipt.Diagnostic += "; original partial worker release proven by persistent Orca resource"
+		receipt.Implementation, observeErr = l.targetEnvelope(request.Snapshot, target, request.Snapshot.Ref.External, state)
+		return receipt, errors.Join(reason, observeErr)
+	}
+	if !cleanup {
+		receipt.Operation.Receipt, _ = json.Marshal(map[string]json.RawMessage{"start": result.Payload, "resource_observation": proof})
 		receipt.Implementation, observeErr = l.targetEnvelope(request.Snapshot, target, request.Snapshot.Ref.External, state)
 		return receipt, errors.Join(reason, observeErr)
 	}

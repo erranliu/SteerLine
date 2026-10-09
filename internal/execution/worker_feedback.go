@@ -17,6 +17,19 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
+	if execution.RecoveryRequired && execution.RecoveryState == "unverified" && run.Decision != nil && run.Decision.Status == "answer_saved" {
+		send := s.operationByKey("worker-question-answer:" + execution.ExecutionID + ":" + run.Decision.ID)
+		if send == nil || send.Status == "confirmed" || send.Status == "rejected" {
+			return s.refreshSavedRecoveryDecision(run, false, reason)
+		}
+	}
+	if deref(execution.Error) == clip(reason, 2000) && workflow.Phase == "waiting_decision" && run.Decision != nil &&
+		(run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
+		record := s.decisionRecord(run)
+		if !execution.RecoveryRequired || record != nil && record.RecoveryState == execution.RecoveryState && record.RecoveryVersion == execution.RecoveryVersion {
+			return nil
+		}
+	}
 	priorRecoveryDecision := ""
 	if execution.RecoveryRequired && (execution.RecoveryState == "unverified" || execution.SessionID == "") {
 		if record := s.decisionRecord(run); record != nil && record.Status == "pending" &&
@@ -33,7 +46,7 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 	if execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
 		facts.ContextPrefix = "The previous turn ended. Further input will use the same fixed execution session.\n\n"
 	}
-	if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && execution.Process != nil && execution.SessionID != "" {
+	if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && execution.Process != nil && execution.SessionID != "" && (execution.RecoverySessionAvailable == nil || *execution.RecoverySessionAvailable) {
 		facts.Options = []executionbackend.DecisionOption{{ID: "continue", Label: "Continue the original session", Detail: "Verify and resume the original session identity"}}
 	} else if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") {
 		facts.Options = []executionbackend.DecisionOption{}
@@ -160,8 +173,29 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 			if execution.SessionID == "" {
 				return s.waitWorkerFlow(run, "The original session is unavailable; recovery cannot create a replacement worker")
 			}
+			lifecycle, fixed, err := s.lifecycleForRun(run)
+			if err != nil {
+				return err
+			}
+			snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, execution, fixed.attempt, nil)
+			if err != nil {
+				return err
+			}
+			evidence, err := lifecycle.VerifyManualRecovery(ctx, snapshot)
+			if err != nil || !evidence.SessionAvailable {
+				return s.waitWorkerFlow(run, "The original worker session cannot be verified for continuation")
+			}
+			if evidence.ManagedProcess && !evidence.ProcessAbsent {
+				// A completed round can retain a live original session. Consent
+				// starts its next round without inventing a replacement Attempt.
+				execution.RecoveryRequired = false
+				if err := s.commitWorker(run); err != nil {
+					return err
+				}
+				return s.deliverResumableWorkerFeedback(ctx, run, execution, answer, command.CommandID)
+			}
 			prompt := "The previous worker process stopped. Inspect the current worktree, Git status, existing work, and persistent task history before continuing. Do not replay an earlier request blindly.\n\n" + workerFeedbackText(answer, run.Decision.Request)
-			if err := s.beginLocalRecoveryAttempt(ctx, run, answer.OptionID); err != nil {
+			if err := s.beginWorkerRecoveryAttempt(ctx, run, answer.OptionID); err != nil {
 				return s.waitWorkerFlow(run, "Manual execution recovery did not pass its original identity checks: "+err.Error())
 			}
 			return s.startWorkerFlowTurn(ctx, run, prompt, command.CommandID)

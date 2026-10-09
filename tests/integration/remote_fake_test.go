@@ -224,6 +224,16 @@ func fakeCodexWebSocket(args []string) int {
 		return 22
 	}
 	state := &integrationAppServerState{}
+	if path := os.Getenv("STEERLINE_INTEGRATION_HISTORY_FILE"); path != "" {
+		if raw, err := os.ReadFile(path); err == nil {
+			var saved struct {
+				Turns []map[string]any `json:"turns"`
+			}
+			if json.Unmarshal(raw, &saved) == nil {
+				state.turns = saved.Turns
+			}
+		}
+	}
 	for {
 		connection, err := listener.Accept()
 		if err != nil {
@@ -325,6 +335,10 @@ func integrationAppServerConnection(connection net.Conn, state *integrationAppSe
 			}
 			item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": text}
 			turn := map[string]any{"id": turnID, "status": "completed", "completedAt": len(state.turns) + 1, "items": []any{item}}
+			hold := os.Getenv("STEERLINE_INTEGRATION_HOLD_FIRST_TURN") == "1" && len(state.turns) == 0
+			if hold {
+				turn = map[string]any{"id": turnID, "status": "inProgress", "items": []any{}}
+			}
 			state.turns = append(state.turns, turn)
 			cwd, _ := os.Getwd()
 			if err := withIntegrationHistoryFile(func(path string) error {
@@ -339,6 +353,12 @@ func integrationAppServerConnection(connection net.Conn, state *integrationAppSe
 			}
 			state.mu.Unlock()
 			response["result"] = map[string]any{"turn": map[string]any{"id": turnID, "status": "inProgress"}}
+			if hold {
+				if send(response) != nil || send(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": integrationAppServerSession, "turn": map[string]any{"id": turnID}}}) != nil {
+					return
+				}
+				continue
+			}
 			if send(response) != nil || send(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": integrationAppServerSession, "turn": map[string]any{"id": turnID}}}) != nil ||
 				send(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": integrationAppServerSession, "turnId": turnID, "item": item}}) != nil ||
 				send(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": integrationAppServerSession, "turn": turn}}) != nil {

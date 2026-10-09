@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"slices"
 	"strconv"
 	"time"
 
@@ -29,13 +28,18 @@ type workerStartReceipt struct {
 		} `json:"effective"`
 	} `json:"launch"`
 	Prompt struct {
-		RequestID string   `json:"requestId"`
-		Stages    []string `json:"stages"`
+		RequestID          string   `json:"requestId"`
+		Stages             []string `json:"stages"`
+		ProcessIncarnation string   `json:"processIncarnation"`
 	} `json:"prompt"`
+	Mutation struct {
+		RequestID string `json:"requestId"`
+	} `json:"mutation"`
 	Effects []struct {
-		Kind string `json:"kind"`
-		Role string `json:"role"`
-		ID   string `json:"id"`
+		Kind  string `json:"kind"`
+		Role  string `json:"role"`
+		ID    string `json:"id"`
+		State string `json:"state"`
 	} `json:"effects"`
 }
 
@@ -69,20 +73,23 @@ func (l *ExecutionLifecycle) startNativeWorker(ctx context.Context, snapshot exe
 		timeout = max(timeout, wait+30*time.Second)
 	}
 	result, callErr := l.client.metaCallTimeout(ctx, timeout, args...)
+	return l.bindNativeWorkerStart(ctx, snapshot, state, turn, result, callErr, nativeRequestID(operationID))
+}
+
+// Binding and observation consume one original native start receipt.
+func (l *ExecutionLifecycle) bindNativeWorkerStart(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, state NativeExecutionState, turn NativeTurnState, result Result, callErr error, requestID string) (Result, workerStartReceipt, executionbackend.ProcessIdentity, error) {
+	previous := snapshot.Ref.External
+	first := previous.Terminal == ""
 	var started workerStartReceipt
 	parseErr := json.Unmarshal(result.Payload, &started)
-	// A durable input receipt may report an unobserved turn with a nonzero CLI
-	// exit. It is accepted input, not proof of a failed or dead worker.
-	acceptedUnobserved := started.State == "outcome_unknown" && started.Stage == "turn_start_unobserved" &&
-		started.TurnStart == "unobserved" && started.Prompt.RequestID == nativeRequestID(operationID) &&
-		slices.Contains(started.Prompt.Stages, "input_accepted")
-	if parseErr != nil || callErr != nil && (!acceptedUnobserved || result.CallUncertain) {
+	acceptedUnobserved := parseErr == nil && ctx.Err() == nil && !result.CallUncertain && result.ErrorCode == "" && started.acceptedUnobserved(requestID)
+	if parseErr != nil || callErr != nil && !acceptedUnobserved {
 		return result, started, previous, &CallError{Cause: errors.Join(callErr, parseErr), Result: result}
 	}
 	if result.RuntimeID != state.Coordinator.RuntimeID || started.RunID != snapshot.Ref.Target.OrchestrationRun || started.TaskID != turn.TaskID || started.DispatchID == "" {
 		return result, started, previous, errors.New("Orca worker-start receipt changed its original Run/Task/runtime")
 	}
-	if !acceptedUnobserved && (started.State != "ready" || started.Stage != "input_accepted") {
+	if (started.State != "ready" || started.Stage != "input_accepted") && !acceptedUnobserved {
 		return result, started, previous, errors.New("original Orca worker input acceptance is unverified; reconcile the saved request")
 	}
 	if started.Mode.Mode != "terminal" {
@@ -111,6 +118,9 @@ func (l *ExecutionLifecycle) startNativeWorker(ctx context.Context, snapshot exe
 		return result, started, previous, errors.New("native worker-start has no exact original terminal receipt")
 	}
 	terminal := *shown.Terminal
+	if acceptedUnobserved && (terminal.IncarnationID != started.Prompt.ProcessIncarnation || !started.acceptedByTerminal(terminal.Handle)) {
+		return result, started, previous, errors.New("accepted original input changed its terminal incarnation or acceptance effect")
+	}
 	terminal.RuntimeID = envelope.RuntimeID
 	if err := ValidateWorkspaceTerminal(terminal, snapshot.Workspace.Path, snapshot.Workspace.Branch); err != nil {
 		return result, started, previous, err
@@ -124,4 +134,45 @@ func (l *ExecutionLifecycle) startNativeWorker(ctx context.Context, snapshot exe
 		return result, started, process, errors.New("continuation replaced the original worker session")
 	}
 	return result, started, process, nil
+}
+
+// Read-only reconciliation never invokes the composite creation/retry entry point.
+func (l *ExecutionLifecycle) reconcileNativeWorkerStart(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, state NativeExecutionState, turn NativeTurnState, operationID string) (Result, workerStartReceipt, executionbackend.ProcessIdentity, error) {
+	requestID := nativeRequestID(operationID)
+	observed, err := l.client.MetaCall(ctx, "orchestration", "request-show", "--request", requestID, "--json")
+	if err != nil {
+		return observed, workerStartReceipt{}, snapshot.Ref.External, err
+	}
+	var saved struct {
+		RequestID string          `json:"requestId"`
+		State     string          `json:"state"`
+		Method    string          `json:"method"`
+		Receipt   json.RawMessage `json:"receipt"`
+	}
+	if json.Unmarshal(observed.Payload, &saved) != nil || observed.RuntimeID != state.Coordinator.RuntimeID || saved.RequestID != requestID || saved.State != "completed" || saved.Method != "orchestration.workerStart" || len(saved.Receipt) == 0 {
+		return observed, workerStartReceipt{}, snapshot.Ref.External, errors.New("original native worker-start receipt is unverified; no execution input was sent")
+	}
+	original := Result{RuntimeID: observed.RuntimeID, Payload: saved.Receipt}
+	return l.bindNativeWorkerStart(ctx, snapshot, state, turn, original, nil, requestID)
+}
+
+func (r workerStartReceipt) acceptedUnobserved(requestID string) bool {
+	if requestID == "" || r.State != "outcome_unknown" || r.Stage != "turn_start_unobserved" || r.TurnStart != "unobserved" || r.Mutation.RequestID != requestID || r.Prompt.RequestID != requestID || r.Prompt.ProcessIncarnation == "" {
+		return false
+	}
+	for _, stage := range r.Prompt.Stages {
+		if stage == "input_accepted" {
+			return true
+		}
+	}
+	return false
+}
+
+func (r workerStartReceipt) acceptedByTerminal(handle string) bool {
+	for _, effect := range r.Effects {
+		if effect.Kind == "dispatch_input" && effect.Role == "agent" && effect.ID == handle && effect.State == "accepted" {
+			return true
+		}
+	}
+	return false
 }

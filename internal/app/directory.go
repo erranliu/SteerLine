@@ -49,7 +49,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 	supervisedKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "*", Protocol: executionbackend.ProtocolOrcaSupervised}
 	entries := []execution.ExecutionRegistration{
 		{
-			Key: localKey, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey},
+			ServiceStopBehavior: codexworker.ServiceStopBehavior, Key: localKey, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey},
 			QuestionCodecKey: codexworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "local",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return localExecutionBackend{config: c, target: localTarget(), host: processHost, directory: directory}
@@ -79,8 +79,8 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			ValidatePublicationPolicy: validateLocalPublicationPolicy,
 		},
 		{
-			HostManagedPermissions: true,
-			Key:                    terminalKey, ProfileKey: "orca/orca_terminal_v2/*", WorkspaceBranchPrefix: "orca", LocalWorkspace: true, ProfileCodecKeys: []string{orcaworker.ProfileCodecKey},
+			HostManagedPermissions: true, ServiceStopBehavior: orcaworker.ServiceStopBehavior,
+			Key: terminalKey, ProfileKey: "orca/orca_terminal_v2/*", WorkspaceBranchPrefix: "orca", LocalWorkspace: true, ProfileCodecKeys: []string{orcaworker.ProfileCodecKey},
 			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return orcaworker.NewBackend(nativeTerminalConfig(c, terminalTarget(c, terminalKey, directory), processHost, directory))
@@ -110,7 +110,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			ValidatePublicationPolicy: validateWorkerPublicationPolicy,
 		},
 		{
-			Key: supervisedKey, ProfileKey: "orca/orca_supervised", WorkspaceBranchPrefix: "worker", ProfileCodecKeys: []string{remote.ProfileCodecKey},
+			ServiceStopBehavior: remote.ServiceStopBehavior, Key: supervisedKey, ProfileKey: "orca/orca_supervised", WorkspaceBranchPrefix: "worker", ProfileCodecKeys: []string{remote.ProfileCodecKey},
 			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca_supervised",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return remote.NewBackend(remoteWorkerConfig(c, processHost, directory))

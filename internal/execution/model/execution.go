@@ -5,6 +5,7 @@ import (
 )
 
 type FixedExecutionProfile struct {
+	ServiceStopBehavior   executionbackend.ServiceStopBehavior          `json:"service_stop_behavior"`
 	ImplementationVersion string                                        `json:"implementation_version"`
 	ImplementationKey     string                                        `json:"implementation_key"`
 	ImplementationData    []executionbackend.ImplementationDataEnvelope `json:"implementation_data"`
