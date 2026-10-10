@@ -396,7 +396,7 @@ func (l *Lifecycle) observeOnce(ctx context.Context, s b.LifecycleSnapshot) (b.L
 		return receipt, nil, err
 	}
 	turn := turnFor(&state, command(s))
-	if turn == nil {
+	if turn == nil || !turn.Attempted {
 		return receipt, nil, nil
 	}
 	receipt.Process = &state.Process

@@ -54,6 +54,12 @@ func testWorkerStageRun(t *testing.T, host string) {
 		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "opaque-worker", Incarnation: "original"})))
 		f.config.Host, f.config.Agent = "orca", "opaque-worker"
 		setNativeImplementationProfiles(t, &f.config, codexworker.ProfileConfig{}, &terminal.Profile{Executable: os.Args[0], Args: []string{"--fake", "terminal-orca", f.nativeStateDir}, RepositorySelector: "id:fixture", Environment: environment, WaitTimeout: "5s"})
+		t.Cleanup(func() {
+			if t.Failed() {
+				data, _ := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
+				t.Logf("original terminal fixture: %s", data)
+			}
+		})
 	}
 	project, err := steerlineapp.OpenNativeTaskProject(ctx, &f.config)
 	require(t, err)

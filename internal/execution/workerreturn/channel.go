@@ -194,6 +194,9 @@ func (s *Scan) Append(text, command string) {
 		}
 		data = suffix[len(frameEnd):]
 		var wire WireReply
+		// Wire fields contain only ASCII tokens/base64. Remove display wrapping
+		// before ownership validation as it can split the command nonce too.
+		raw = []byte(strings.Join(strings.Fields(string(raw)), ""))
 		// Ignore unrelated rounds without interpreting their outcome.
 		var owner struct {
 			Nonce string `json:"nonce"`
@@ -201,7 +204,6 @@ func (s *Scan) Append(text, command string) {
 		if json.Unmarshal(raw, &owner) != nil || owner.Nonce != command {
 			continue
 		}
-		raw = []byte(strings.Join(strings.Fields(string(raw)), ""))
 		var decoded []byte
 		decodeErr := Decode(raw, &wire)
 		if decodeErr == nil {

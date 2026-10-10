@@ -19,6 +19,7 @@ type fakeHost struct {
 	calls                         [][]string
 	lines                         []string
 	writeReply, unknown, clipped  bool
+	screen                        bool
 }
 
 func (f *fakeHost) StartManaged(*exec.Cmd) (b.StopHandle, error) {
@@ -58,6 +59,10 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 	case "terminal wait":
 		result = map[string]any{"wait": map[string]any{"satisfied": true}}
 	case "terminal read":
+		if f.screen {
+			result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "screen", "tail": f.lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0", "truncated": true}}
+			break
+		}
 		cursor := 0
 		if arg("--cursor") != "" {
 			cursor, _ = strconv.Atoi(arg("--cursor"))
@@ -276,5 +281,32 @@ func TestTerminalClippedOutputCannotComplete(t *testing.T) {
 	r, _, err = l.observeOnce(context.Background(), s)
 	if err != nil || r.TurnEvidence != nil || r.Diagnostic == "" {
 		t.Fatal("clipped result completed", r, err)
+	}
+}
+
+func TestScreenReplyDoesNotRequireOffscreenHistory(t *testing.T) {
+	l, f, s := fixture(t)
+	f.screen = true
+	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	s, input := prepared(t, l, s, strings.Repeat("c", 32))
+	if _, observer, err := l.ObserveLifecycle(context.Background(), s); err != nil || observer != nil {
+		t.Fatal("prepared input was observed as a submitted turn", err)
+	}
+	f.writeReply = true
+	r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
+	if observer != nil {
+		_ = observer.Close(context.Background())
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	r, _, err = l.observeOnce(context.Background(), s)
+	if err != nil || r.TurnEvidence == nil || r.TurnEvidence.LastMessage != `{"summary":"original result"}` {
+		t.Fatal("complete visible frame was lost to offscreen history", r, err)
 	}
 }

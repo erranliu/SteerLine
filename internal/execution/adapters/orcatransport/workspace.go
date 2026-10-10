@@ -22,7 +22,7 @@ func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, 
 		return receipt, errors.New("original workspace creation has no exact saved agent receipt; no worktree/agent was recreated")
 	}
 	name := "sl-" + s.Session.TaskID + "-" + s.Session.WorkflowRunID
-	result, err := l.client.MetaCall(ctx, "worktree", "create", "--repo", l.profile.RepositorySelector, "--name", name, "--base-branch", r.Input.Workspace.BaseCommit, "--no-parent", "--setup", "skip", "--agent", s.Ref.Agent.Name, "--json")
+	result, err := l.client.MetaCall(ctx, "worktree", "create", "--repo", l.profile.RepositorySelector, "--name", name, "--base-branch", r.Input.Workspace.BaseCommit, "--no-parent", "--setup", "skip", "--agent", s.Ref.Agent.Name, "--activate", "--json")
 	if err != nil {
 		return receipt, err
 	}

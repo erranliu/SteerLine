@@ -71,10 +71,11 @@ func TestTerminalFrameScreenWrapPreservesExactReply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	position := strings.Index(frame, "reply_b64") + 25
-	var scan Scan
-	scan.Append(frame[:position]+"  "+frame[position:], command)
-	if scan.Result == nil || *scan.Result != reply {
-		t.Fatal("display indentation changed reply", scan)
+	for _, position := range []int{strings.Index(frame, command) + 8, strings.Index(frame, "reply_b64") + 25} {
+		var scan Scan
+		scan.Append(frame[:position]+"  "+frame[position:], command)
+		if scan.Result == nil || *scan.Result != reply {
+			t.Fatal("display indentation changed reply", scan)
+		}
 	}
 }

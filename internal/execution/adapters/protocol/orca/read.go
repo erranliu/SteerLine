@@ -29,8 +29,11 @@ func ValidCursor(value string) bool {
 	return err == nil && value != ""
 }
 
-func (c Client) stream(ctx context.Context, p b.ProcessIdentity, cursor string, limit int) (StreamPage, error) {
+func (c Client) read(ctx context.Context, p b.ProcessIdentity, cursor string, limit int, screen bool) (StreamPage, error) {
 	args := []string{"terminal", "read", "--terminal", p.Terminal, "--limit", strconv.Itoa(limit), "--json"}
+	if screen {
+		args = append(args, "--screen")
+	}
 	if cursor != "" {
 		args = append(args, "--cursor", cursor)
 	}
@@ -54,21 +57,23 @@ func (c Client) stream(ctx context.Context, p b.ProcessIdentity, cursor string, 
 
 // CaptureOutput fixes the public CLI output source for this original turn.
 func (c Client) CaptureOutput(ctx context.Context, p b.ProcessIdentity) (StreamPage, error) {
-	return c.stream(ctx, p, "", 256)
+	return c.read(ctx, p, "", 256, false)
 }
 func (c Client) CaptureCursor(ctx context.Context, p b.ProcessIdentity) (string, error) {
-	page, err := c.stream(ctx, p, "0", 1)
+	page, err := c.read(ctx, p, "0", 1, false)
 	return page.LatestCursor, err
 }
 func (c Client) ReadScreen(ctx context.Context, p b.ProcessIdentity) (StreamPage, error) {
-	page, err := c.stream(ctx, p, "", 256)
+	page, err := c.read(ctx, p, "", 256, true)
 	if err != nil {
 		return page, err
 	}
 	if page.Source != "screen" {
 		return page, errors.New("original output source changed")
 	}
-	if page.Truncated || page.Limited {
+	// A screen is a bounded view, not a transcript. Off-screen history does not
+	// invalidate a complete command-bound frame visible in this view.
+	if page.Limited {
 		return page, ErrStreamGap
 	}
 	return page, nil
@@ -79,7 +84,7 @@ func (c Client) ReadAfter(ctx context.Context, p b.ProcessIdentity, cursor strin
 	if !ValidCursor(cursor) {
 		return StreamPage{}, errors.New("missing original output cursor")
 	}
-	page, err := c.stream(ctx, p, cursor, 256)
+	page, err := c.read(ctx, p, cursor, 256, false)
 	if err != nil {
 		return page, err
 	}
