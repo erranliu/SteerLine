@@ -40,7 +40,7 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 
 | Owner | Responsibility |
 | --- | --- |
-| `internal/app` | Config loading, profile and adapter construction, SQLite binding, command/client composition and close ownership. |
+| `internal/app` | Config loading, profile and adapter construction, SQLite binding, command/client composition and close ownership. Builtin catalog composition stays in `directory.go`; local Codex and Orca supervised registrations/codecs and implementation helpers live in their respective owner files. |
 | `internal/app/host` | Service process hosting, startup identity, locks, file control requests/receipts, heartbeat, exact instance/revision routing and shutdown observation. `internal/execution/scheduler` contains the timer loop over the injected actor interface. |
 | `internal/task` | Fixed task contract validation, selection and task-owned claim/result/discard declarations through narrow ports. |
 | `internal/task/model` | Task values, fixed contract, DAG, eligibility and normalized delivery facts. |
@@ -52,11 +52,15 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 | `internal/product/api` | Serializable product pages, user commands, request targets and receipts. It contains no Runtime, Config, SQL record, or Go handle. |
 | `internal/product/client` | The single injected product client for CLI/TUI consumers. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
 | `internal/product/query` | Read-only projections and composition of product pages from storage ports. No SQL or business writer. |
-| `internal/console` | TUI navigation and view state; consumes only product API values and injected client interfaces. |
+| `internal/console` | TUI navigation and view state; consumes only product API values and injected client interfaces. A named `finalReplyReader` owns final index/body/preview state and read acceptance; Model owns candidate selection, step query facts, scrolling/recovery and native session opening. |
 | `internal/storage/ports` and `internal/storage/sqlite` | Consumer-owned narrow read/commit declarations; one SQLite implementation owns schema, SQL, WAL, CAS and transactions. |
 | `internal/testkit` and `tests/integration`, `tests/e2e` | Test-only boundary guards, Go test feedback, process ownership and protocol fixtures; real application composition tests; registered controlled/native E2E scenarios. Product production imports are forbidden. |
 
 The former `internal/steerline` host/facade, `internal/steerlineapp`, `internal/steerline/contracts` and `internal/steerlineintegration` packages have no production or test import path. Tests moved to their owner or to `tests/integration`; no forwarding aliases remain.
+
+Within app, [`directory.go`](../../internal/app/directory.go) explicitly combines two registration/codec pairs and binds one independent catalog. [`directory_local.go`](../../internal/app/directory_local.go) owns local Codex configuration, preflight/claim, policy resources and `localExecutionBackend`; [`directory_supervised.go`](../../internal/app/directory_supervised.go) owns the single Orca supervised implementation with local/environment placement. Placement does not create another registration or lifecycle; the retired terminal route remains disconnected. Backend-local changes normally stay in the owner file; catalog-wide identity/policy changes still require coordination.
+
+Within console, [`final_reader.go`](../../internal/console/final_reader.go) owns the final index, selection/pin, body and bounded preview with separate generations. Its operations take `ConversationQueries`, context/time values and fixed target facts, without Model, projectState or control/native-session capabilities. [`final_replies.go`](../../internal/console/final_replies.go) and [`final_preview.go`](../../internal/console/final_preview.go) route host selection/mode and results; Model resets its own scrolling/recovery when the reader reports a binding or body-selection change. Existing historical/current-turn rules remain distinct. These are source ownership boundaries inside the same Go packages, not compile isolation or a reusable UI framework.
 
 ## Current package inventory
 

@@ -179,7 +179,7 @@ func renderDetail(m Model, state projectState, row *consoleRow, width, height in
 	if m.detailExpanded {
 		switch m.detailSection {
 		case "final":
-			return scrollLines(wrapLines(finalReplyLines(state), width), state.detailScroll, height)
+			return scrollLines(wrapLines(finalReplyLines(state.final), width), state.detailScroll, height)
 		case "history":
 			return renderDecisionHistory(state, row, width, height, m.clock.Now())
 		case "inspection":
@@ -277,7 +277,7 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 		}
 	}
 	lines = append(lines, "过程记录请手动查看原生会话/诊断文件；没有通用打开入口时不能推定可用。", "f 完整最终回复 · v 历史决策 · u 只读核验")
-	return append(lines, finalReplyLines(state)...)
+	return append(lines, finalReplyLines(state.final)...)
 }
 
 func nativeDetailForTask(state projectState, taskID string) *api.TaskDetail {

@@ -122,8 +122,8 @@ func TestCPWCurrentActivityWinsOverOldFinalAndReceipts(t *testing.T) {
 	r.CurrentTurnID = "new-turn"
 	e := finalFixture(m, 1, "old-turn", "old", "上一轮结果")
 	s := &m.projects[0]
-	s.previewEvent = &e
-	s.previewText = "上一轮结果"
+	s.final.previewEvent = &e
+	s.final.previewText = "上一轮结果"
 	s.recentActivity = []activitySummary{{Title: "本轮正在运行"}}
 	s.actions["old"] = &actionState{RequestID: "old", TaskID: r.TaskID, RunID: r.RunID, Action: "answer_decision", Resolved: true, Status: "applied", Message: "旧答案已保存"}
 	view := strings.Join(feedbackLines(m, *s, m.selectedRow(0)), "\n")
@@ -162,7 +162,7 @@ func TestCPWFinalPreviewBoundedAndHistoricalReaderIndependent(t *testing.T) {
 	late := cmd()
 	next, _ = m.Update(late)
 	m = next.(Model)
-	if len([]rune(m.projects[0].previewText)) > 800 || len(strings.Split(m.projects[0].previewText, "\n")) > 6 || m.projects[0].bodyRef != nil || !strings.Contains(m.View(), "最终回复预览") {
+	if len([]rune(m.projects[0].final.previewText)) > 800 || len(strings.Split(m.projects[0].final.previewText, "\n")) > 6 || m.projects[0].final.bodyRef != nil || !strings.Contains(m.View(), "最终回复预览") {
 		t.Fatal("unbounded preview or shared full body", m.View())
 	}
 	r.Summary = new(string)
@@ -173,7 +173,7 @@ func TestCPWFinalPreviewBoundedAndHistoricalReaderIndependent(t *testing.T) {
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyF7})
 	next, _ = m.Update(late)
 	m = next.(Model)
-	if m.projects[0].previewText != "" {
+	if m.projects[0].final.previewText != "" {
 		t.Fatal("late preview crossed candidate")
 	}
 }

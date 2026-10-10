@@ -587,9 +587,7 @@ func (m Model) handleReaderKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "r":
 		if m.detailSection == "final" {
-			s := &m.projects[m.selected]
-			s.finalPinned = false
-			return m, m.readFinalReplies(m.selected)
+			return m, m.readFinalReplies(m.selected, true)
 		}
 		return m, m.readProject(m.selected)
 	}

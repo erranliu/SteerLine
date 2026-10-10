@@ -16,9 +16,9 @@ func mergeFeedbackFixture(t *testing.T, count int) (Model, *testControlClient) {
 	url := "https://github.com/erranliu/SteerlineTest/pull/156"
 	r.PR.URL, r.PR.State = &url, "open"
 	r.Decision.Request.Question = "The worker stopped. What should it do next?"
-	m.projects[0].previewText = "已提交证据并创建 PR"
-	event := finalFixture(m, 1, r.CurrentTurnID, "final", m.projects[0].previewText)
-	m.projects[0].previewEvent = &event
+	m.projects[0].final.previewText = "已提交证据并创建 PR"
+	event := finalFixture(m, 1, r.CurrentTurnID, "final", m.projects[0].final.previewText)
+	m.projects[0].final.previewEvent = &event
 	return m, c
 }
 

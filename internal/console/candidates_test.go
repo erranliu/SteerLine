@@ -79,19 +79,19 @@ func TestCC1(t *testing.T) {
 func TestCC2(t *testing.T) {
 	m, _ := ccFixture(t, 2)
 	m, _ = m.refreshFinalReplies(0)
-	oldKey, oldGeneration := m.projects[0].finalKey, m.projects[0].finalGeneration
-	m.projects[0].bodyText = "A正文"
+	oldKey, oldGeneration := m.projects[0].final.finalKey, m.projects[0].final.finalGeneration
+	m.projects[0].final.bodyText = "A正文"
 	m, _ = ccKey(m, runeKey('a'))
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyTab})
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("候选甲草稿")})
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	m, _ = ccKey(m, runeKey('}'))
-	if m.selectedRow(0).run.RunID != "candidate-1" || m.projects[0].bodyText != "" {
+	if m.selectedRow(0).run.RunID != "candidate-1" || m.projects[0].final.bodyText != "" {
 		t.Fatal("candidate switch crossed final body")
 	}
 	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: oldKey, generation: oldGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{{EventID: 1}}}})
 	m = next.(Model)
-	if len(m.projects[0].finalEvents) != 0 {
+	if len(m.projects[0].final.finalEvents) != 0 {
 		t.Fatal("late response crossed candidates")
 	}
 	runs := m.projects[0].snapshot.Observation.Page.Runs

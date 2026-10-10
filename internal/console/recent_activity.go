@@ -141,16 +141,16 @@ func feedbackLines(m Model, state projectState, row *consoleRow) []string {
 	}
 	active := run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "pending"
 	if !active && !runNeedsAttention(run) {
-		if state.previewEvent != nil && state.previewEvent.AttemptID == run.AttemptID && (run.CurrentTurnID == "" || state.previewEvent.TurnID == run.CurrentTurnID) && state.previewText != "" {
-			lines = append(lines, "最终回复预览（截断） · turn "+safeTerminalInlineText(state.previewEvent.TurnID), "最终回复报告（非独立测试验收）：", safeTerminalText(state.previewText))
+		if state.final.previewEvent != nil && state.final.previewEvent.AttemptID == run.AttemptID && (run.CurrentTurnID == "" || state.final.previewEvent.TurnID == run.CurrentTurnID) && state.final.previewText != "" {
+			lines = append(lines, "最终回复预览（截断） · turn "+safeTerminalInlineText(state.final.previewEvent.TurnID), "最终回复报告（非独立测试验收）：", safeTerminalText(state.final.previewText))
 		} else {
 			lines = append(lines, "本轮 final 预览未采集/尚未核实；f 按需完整读取")
 		}
-		if state.previewError != "" {
-			lines = append(lines, "采集缺口："+safeTerminalText(state.previewError))
+		if state.final.previewError != "" {
+			lines = append(lines, "采集缺口："+safeTerminalText(state.final.previewError))
 		}
-		if state.finalError != "" && state.finalError != state.previewError {
-			lines = append(lines, "采集缺口："+safeTerminalText(state.finalError))
+		if state.final.finalError != "" && state.final.finalError != state.final.previewError {
+			lines = append(lines, "采集缺口："+safeTerminalText(state.final.finalError))
 		}
 		if run.PR.URL != nil {
 			lines = append(lines, "PR："+prLink(*run.PR.URL, shortPR(*run.PR.URL))+" · "+safeTerminalInlineText(run.PR.State))

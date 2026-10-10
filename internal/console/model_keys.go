@@ -168,7 +168,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.inspectSelectedRecovery()
 		}
 		state.lastRefresh = time.Time{}
-		state.finalReadAt = time.Time{}
+		state.final.retry()
 		return m, m.readProject(m.selected)
 	case "enter":
 		if row := m.selectedRow(m.selected); row != nil && pendingDecision(row.run) && waitingForDecision(row.run) && !feedbackInProgress(*state, row.run) {
