@@ -7,14 +7,14 @@
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
-| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | PR Ready for review；待独立复审与合并 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 质量自查修复完成；WFS-A1–A4 按 source/增量与用户明确调整的 Orca usage 条件通过：local 原生 usage 核实，Orca 原三轮/PR/唯一交付/清理通过，公开 usage 不可用；原总报告误判失败及只读复核均保留。[PR #262](https://github.com/erranliu/SteerLine/pull/262) 按授权转 Ready，尚未独立复审或合并；WFS-M1 未验可后置；[专属计划与记录](../acceptance/worker-staged-flow.md) |
+| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 实现完成 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | [PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并，merge `267858f0`；2026-10-10 合入后独立复审无已确认缺陷，34 项定向检查通过。WFS-A1–A4 按历史精确来源与已授权 Orca usage 条件结算；WFS-M1 待人工验收。后续 PR #266 改换 Orca 路线后的规范 final 能力缺口单列，不以旧链通过覆盖当前路线；[记录、待验及当前限制](../acceptance/worker-staged-flow.md#2026-10-10-真实合并与合入后独立复审) |
 | 45 | 本机客户端协议与历史查询 | 无 | 执行中；PR #249 修复 / 待新独立复审 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) 在途，API2 历史失败未闭合；[记录](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 | 87 | Worker 停机对账与恢复一致性修复 | 无未交付业务硬前置；消费当前已合入 worker 基线 | 实现完成 | 用户授权本聊天直接执行，不经 roadmap-runner；[Spec](../spec/worker-stop-recovery.spec.md) · [Plan](../spec/worker-stop-recovery.plan.md) | [PR #260](https://github.com/erranliu/SteerLine/pull/260) 已真实合并，merge `d951ca87`；独立复审 clean，WSR-A1–A8 自动通过（含双真实路径），无任务人工项；[专属记录](../acceptance/worker-stop-recovery.md) |
 
 ## 推进顺序
 
-1. #83 已合入；最新用户授权 #84 与 #45 独立并行实施，共享接线按 #84 → #45 集成，#44 继续等待 #45。启动时使用已提交且执行工作区可读取的 Spec/Plan commit 和路径，并核对最新默认主干；本次纳入清单不等于已经启动。
+1. #83/#84 已合入；#45 原执行者继续集成最新主干及 #84 实际字段/接口，必要验证和独立终审完成后才合入 #45；#44 继续等待 #45。固定 Spec/Plan 与实际代码起点分别核对。原 #84/#45 并行实施授权保留为历史，已合入任务不重新派发。
 2. #84 与 #45 无新增业务硬依赖，共同状态/存储/宿主/客户端接线由 #84 负责语义并按 #84 后 #45 集成，#45 复核 #84 的实际字段与接口版本。#44 仍以 #45 为硬前置；#45 经复审、必要验证和真实合并，结果同步且成果进入最新主干后启动 #44。已有在途执行先核对原 run 与固定契约，不因清单编辑自动中断或切换规格。
 3. 后续界面任务留在[草稿](drafts/roadmap.md)，原型确认后再纳入。
 
