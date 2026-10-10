@@ -6,7 +6,8 @@ import (
 )
 
 // The retained Terminal adapter has no product registration. Supervised workers
-// use their current completion-message behavior for both execution targets.
+// publish verified declared finals directly through the center's conversation
+// store for both targets; no external history reader is required for them.
 func newConversationSources() conversationtypes.ConversationSourcePort {
 	return codexworker.NewConversationAdapter()
 }

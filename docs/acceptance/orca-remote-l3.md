@@ -2,11 +2,13 @@
 
 ## 当前分步流程能力缺口
 
-2026-10-09 全项目回归发现：下文的双轮交付成功仅证明记录的旧构建，不证明当前 `worker-flow-v2` 分步流程。当前 supervised adapter 的 `PolicyCapabilities` 未声明 `StructuredFinalEvidence`，`ObserveLifecycle` 只提供 `worker_done` 摘要，没有规范 final 的来源、item 和验证事实。正式开发流程因此在原生探测/领取副作用前明确拒绝；这项拒绝有独立 integration 回归，并核对未写入 WorkflowRun/Execution/Operation。
+2026-10-10 更新：[单消息结果接线](orca-supervised-results.md)已补齐 worker_declared 来源、原 Command/Dispatch 绑定、结果冻结、结算核验与正文入库，并开放 StructuredFinalEvidence。新增定向正式领取回归验证通过；本机/远端公开接口见[原生探针](orca-supervised-result-probe-2026-10-10.md)。真实 execute/report/publish/反馈 L3 驱动尚未重新准入，下面历史交付结果不代表当前分步链路已获完整真实验收。
+
+2026-10-09 的历史阻塞：当时 supervised adapter 未声明 StructuredFinalEvidence，ObserveLifecycle 只提供 worker_done 摘要；正式开发流程在原生探测/领取副作用前明确拒绝。该行为已由本次结果接线替代，无副作用的能力拒绝仍由通用不支持实现与原生不可达回归保留。
 
 用户已要求删除或更新过期测试。本次维护将旧单轮 `delivery.orca-remote-codex` 移出 suites.json，保留驱动并显式 retired/skip；runner 拒绝选择旧 ID。当前注册范围不含远端交付，不把该退役或历史成功算作当前能力通过。supervised local/environment 注册与配置回归仍运行。
 
-RO2-A–RO6-A 当前待补：需要原 Task/Dispatch/Command 绑定、可核实的规范 final 来源，再更新 execute/report/publish 及反馈场景并重新准入。不能仅开启能力布尔值，也不能用 `worker_done` 摘要、最后一段 transcript 文本或私有 agent 文件替代规范 final。不扩张本次维护为原生协议新功能；主线的 structured 延期安排见[双目标 Plan](../spec/orca-supervised-targets.plan.md)。
+RO2-A–RO6-A 的当前真实验收仍待补 execute/report/publish 及反馈场景。消息结果来源已接线，但 worker_done 摘要、最后一段 transcript 或私有 agent 文件仍不作为完整结果。Orca 的 structured worker 模式与本次 JSON 结果协议是不同能力，其原会话接续仍按[双目标范围](../spec/orca-supervised-targets.plan.md)及实际平台能力处理。
 
 以下表格与原始记录保持历史范围；新的回归结果归本次全项目维护记录。
 

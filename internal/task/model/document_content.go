@@ -30,5 +30,5 @@ func IsAcceptanceReference(refs []FileReference, target FileReference) bool {
 }
 
 func HasAcceptanceHeading(body []byte) bool {
-	return regexp.MustCompile(`(?im)^#{1,6}[ \t]+[^\r\n]*(验收|acceptance)[^\r\n]*$`).Match(body)
+	return regexp.MustCompile(`(?im)^#{1,6}[ \t]+[^\r\n]*(验收|acceptance)[^\r\n]*\r?$`).Match(body)
 }

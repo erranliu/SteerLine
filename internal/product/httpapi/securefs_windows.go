@@ -130,8 +130,23 @@ func setAndVerifyPrivateACL(path string) error {
 	if err != nil {
 		return err
 	}
-	flags := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION | windows.OWNER_SECURITY_INFORMATION)
-	if err = windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, flags, sid, nil, dacl, nil); err != nil {
+	current, err := windows.GetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION)
+	if err != nil {
+		return fmt.Errorf("read local API owner before securing ACL: %w", err)
+	}
+	owner, _, err := current.Owner()
+	if err != nil {
+		return err
+	}
+	flags := windows.SECURITY_INFORMATION(windows.DACL_SECURITY_INFORMATION | windows.PROTECTED_DACL_SECURITY_INFORMATION)
+	var nextOwner *windows.SID
+	if owner == nil || !owner.Equals(sid) {
+		flags |= windows.OWNER_SECURITY_INFORMATION
+		nextOwner = sid
+	}
+	// An existing owner has implicit WRITE_DAC, not WRITE_OWNER. Do not
+	// demand ownership reassignment on a normal Modify-access directory.
+	if err = windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, flags, nextOwner, nil, dacl, nil); err != nil {
 		return fmt.Errorf("restrict local API ACL to current Windows user: %w", err)
 	}
 	return verifyPrivateACL(path, sid)

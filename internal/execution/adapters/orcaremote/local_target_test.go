@@ -258,10 +258,10 @@ func TestSupervisedLocalTargetQuestionCompletionAndRecovery(t *testing.T) {
 			payload := map[string]any{"taskId": "task", "dispatchId": "dispatch", "question": body}
 			if checks > 1 {
 				kind, id, body = "worker_done", "done", "Complete supervised response"
-				payload = map[string]any{"taskId": "task", "dispatchId": "dispatch", "outcome": "succeeded"}
+				payload = map[string]any{"taskId": "task", "dispatchId": "dispatch", "outcome": "succeeded", "steerline_result": declaredResult{Version: 1, CommandID: "00000000000000000000000000000007", InputVersion: 1, Body: body}}
 			}
 			raw, _ := json.Marshal(payload)
-			return wire("local-runtime", map[string]any{"runId": "run", "deliveryId": id + "-delivery", "messages": []Message{{ID: id, Type: kind, FromHandle: "agent", Body: body, Payload: raw}}}), nil
+			return wire("local-runtime", map[string]any{"runId": "run", "deliveryId": id + "-delivery", "messages": []Message{{ID: id, RunID: "run", ToHandle: "run:run", Type: kind, FromHandle: "agent", Body: body, Payload: raw}}}), nil
 		case "reply":
 			replies++
 			if flag(args, "--id") != "question" || flag(args, "--body") != "yes" {
@@ -287,7 +287,7 @@ func TestSupervisedLocalTargetQuestionCompletionAndRecovery(t *testing.T) {
 	snapshot.Ref.WorkspaceBranch = "worker"
 	snapshot.Session.CurrentTurnID = "00000000000000000000000000000007"
 	snapshot.Session.Generation = "inc"
-	state := orcaworker.NativeExecutionState{RemoteRuntimeID: "local-runtime", Coordinator: b.ProcessIdentity{Terminal: "coordinator", RuntimeID: "local-runtime", Incarnation: "coord-inc"}, Turns: []orcaworker.NativeTurnState{{TurnID: snapshot.Session.CurrentTurnID, TaskID: "task", DispatchID: "dispatch", Purpose: "business"}}}
+	state := orcaworker.NativeExecutionState{RemoteRuntimeID: "local-runtime", Coordinator: b.ProcessIdentity{Terminal: "coordinator", RuntimeID: "local-runtime", Incarnation: "coord-inc"}, Turns: []orcaworker.NativeTurnState{{TurnID: snapshot.Session.CurrentTurnID, InputVersion: 1, ResultProcess: &snapshot.Ref.External, TaskID: "task", DispatchID: "dispatch", Purpose: "business"}}}
 	setup.Snapshot = snapshot
 	port := &ExecutionLifecycle{setup: setup, config: config, client: New(config)}
 	var err error
@@ -341,7 +341,7 @@ observed:
 		t.Fatalf("local supervised events %v replies=%d", kinds, replies)
 	}
 	receipt, recoveredObserver, err := port.ObserveLifecycle(ctx, snapshot)
-	if err != nil || recoveredObserver != nil || !receipt.State.TurnCompleted || receipt.TurnEvidence == nil || receipt.TurnEvidence.LastMessage != "Complete supervised response" {
+	if err != nil || recoveredObserver != nil || !receipt.State.TurnCompleted || receipt.TurnEvidence == nil || !receipt.TurnEvidence.FinalVerified || receipt.TurnEvidence.LastMessage != "Complete supervised response" {
 		t.Fatalf("restore did not use original completed Dispatch: %+v %v", receipt, err)
 	}
 }

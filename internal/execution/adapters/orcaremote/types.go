@@ -174,6 +174,7 @@ type WorkerObservation struct {
 	Identity       executionbackend.ProcessIdentity
 	Liveness       string
 	DispatchState  string
+	WorkerState    string
 	AgentWaitState string
 	WorktreePath   string
 	Branch         string

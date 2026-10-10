@@ -9,6 +9,8 @@ import (
 
 type Message struct {
 	ID         string          `json:"id"`
+	RunID      string          `json:"run_id,omitempty"`
+	ToHandle   string          `json:"to_handle,omitempty"`
 	FromHandle string          `json:"from_handle,omitempty"`
 	Type       string          `json:"type"`
 	Subject    string          `json:"subject"`

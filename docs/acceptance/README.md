@@ -14,6 +14,8 @@
 | Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
 | Orca状态同步修复 | [延迟启动活动推进状态](orca-delayed-start-status-2026-10-09.md)，原 Dispatch 在完成前同步开始事实，源码定向验证通过 |
 | Orca supervised 双目标 | [本机目标与旧入口切断](orca-supervised-targets.md)，同一原远端生命周期，功能范围保持 |
+| Orca supervised 结果修复前置 | [单消息结果协议审计与原生探针](orca-supervised-result-probe-2026-10-10.md)，本机/远端接口前置验证通过，后续实现见下项 |
+| Orca supervised 结果修复 | [分步结果、恢复与正文接线](orca-supervised-results.md)，定向实现验证与运行版安装记录 |
 | Orca 分步开发缺口 | [规范 final 与新场景待补](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮场景退役，不计当前交付覆盖 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
