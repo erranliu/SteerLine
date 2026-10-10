@@ -91,6 +91,8 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 		lines = append(lines, styleWaiting.Render("离线/缓存 · 采样 "+sampleTime(state.snapshot)))
 	}
 	if row.run == nil {
+		lines = append(lines, "task_status:      "+workerValue("task_status", taskRowRawStatus(*row), true), "任务提示："+taskRowHint(m, state, *row))
+		lines = append(lines, taskBlockerLines(*row)...)
 		if state.candidates[row.taskID] != "" {
 			lines = append(lines, "原候选暂不可读取/未核实")
 		} else {
@@ -104,7 +106,10 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 	}
 	run := row.run
 	lines = append(lines, "当前 "+candidateLabel(state, run)+" · F6/F7 候选")
-	lines = append(lines, workerStateLines(run, width >= 55)...)
+	current := *run
+	current.TaskStatus = taskRowRawStatus(*row)
+	lines = append(lines, workerStateLines(&current, width >= 55)...)
+	lines = append(lines, taskBlockerLines(*row)...)
 	if p := fixedRunExecutionProfile(state, run); p != nil {
 		summary := firstText(p.Name, p.ID) + " · " + p.Host + " / " + p.Agent
 		if len(p.ImplementationDisplay) > 0 {
@@ -118,7 +123,7 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 	if notice := workerResultNotice(run); notice != "" {
 		lines = append(lines, styleAlert.Render(notice))
 	}
-	if diagnostic := workerDiagnostic(run); diagnostic != "" {
+	if diagnostic := workerDiagnostic(run); diagnostic != "" && !diagnosticInWorkerTimeline(state.workerTransitions, run, diagnostic) {
 		lines = append(lines, "原因："+safeTerminalText(shortSummary(diagnostic, 160)))
 	}
 	lines = append(lines, "下一步："+nextAction(m, state, row))

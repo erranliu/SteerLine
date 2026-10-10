@@ -106,7 +106,7 @@ func TestCompletedTaskShowsRawStateAndHistoricalExecution(t *testing.T) {
 		t.Fatalf("closed task columns: %+v", rows)
 	}
 	list := strings.Join(renderRows(m, m.projects[0], listPanelWidth(m), 12), "\n")
-	for _, want := range []string{"[closed]", "人工"} {
+	for _, want := range []string{"已关闭 · closed", "人工"} {
 		if !strings.Contains(list, want) {
 			t.Fatalf("compact list lost %q: %s", want, list)
 		}
@@ -168,8 +168,9 @@ func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
 	}
 }
 
-func TestOpenTaskDisplaysAsBlockedWithoutChangingPendingExecution(t *testing.T) {
-	if displayTaskStatus("open") != "阻塞" || displayExecutionStatus(&api.CandidateSummary{ExecutionStatus: "pending"}) != "待开始" {
+func TestOpenTaskNeedsFactsToDisplayBlockedWithoutChangingPendingExecution(t *testing.T) {
+	row := consoleRow{native: &api.TaskDetail{TaskSummary: api.TaskSummary{Status: "open"}, StartupBlockers: []string{"dispatch_paused"}}}
+	if rowTaskStatus(row) != "阻塞" || displayTaskStatus("open") != "未开始" || displayExecutionStatus(&api.CandidateSummary{ExecutionStatus: "pending"}) != "待开始" {
 		t.Fatal("task and execution statuses were conflated")
 	}
 }

@@ -235,6 +235,8 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.changeFilter(5)
 	case "7":
 		return m.changeFilter(6)
+	case "8":
+		return m.changeFilter(7)
 	case "?":
 		if !m.leaveAnswerSaved() {
 			return m, nil
