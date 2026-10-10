@@ -116,14 +116,14 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	finishTurn := func(expected string) {
 		t.Helper()
 		mcFinishTurn(t, service, run)
-		if run.FinishTaskStatus != expected || run.Decision == nil || run.Decision.Status != "pending" {
+		if run.WorkflowStatus != expected || run.Decision == nil || run.Decision.Status != "pending" {
 			t.Fatalf("stopped worker did not reach the unified decision: %+v", run)
 		}
-		if expected == "waiting_pr_merge" && (run.Decision.Request.Question != workerPRFeedbackQuestion || len(run.Decision.Request.Options) != 0) {
+		if expected == "waiting_external" && (run.Decision.Request.Question != workerPRFeedbackQuestion || len(run.Decision.Request.Options) != 0) {
 			t.Fatal("a completed PR turn required a default continuation", run.Decision.Request)
 		}
 	}
-	finishTurn("waiting_decision")
+	finishTurn("waiting_input")
 	initialExecution := *service.executionRecord(run)
 	initialPrompt, err := os.ReadFile(filepath.Join(c.RunDir, "runs", run.RunID, "turns", initialExecution.CurrentCommandID, "prompt.txt"))
 	if err != nil {
@@ -233,7 +233,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		t.Fatalf("bound staged feedback text was not sent: prompt=%q err=%v", savedPrompt, err)
 	}
 	fullPrompt := string(savedPrompt)
-	finishTurn("waiting_decision")
+	finishTurn("waiting_input")
 	events, err := os.ReadFile(filepath.Join(feedbackDir, "fixture-input.json"))
 	if err != nil {
 		t.Fatal(err)

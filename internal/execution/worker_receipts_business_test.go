@@ -49,12 +49,12 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	request := neutralDecisionFixture(t, fixed, "pending", []executionbackend.Question{{ID: "choice", Question: "Continue?", AllowFreeText: true}})
 	service.setRunDecision(run, &executionmodel.DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: request})
 	workflow.Status = "waiting_input"
-	run.FinishTaskStatus = "waiting_decision"
+	run.WorkflowStatus = "waiting_input"
 	if _, err := service.recordWorkerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
-	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Status != "waiting_input" || run.FinishTaskStatus != "waiting_decision" {
-		t.Fatalf("start replay accepted an unsent answer or changed the waiting state: turns=%d decision=%s phase=%s finish=%s", execution.TurnNumber, run.Decision.Status, workflow.Status, run.FinishTaskStatus)
+	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Status != "waiting_input" || run.WorkflowStatus != "waiting_input" {
+		t.Fatalf("start replay accepted an unsent answer or changed the waiting state: turns=%d decision=%s phase=%s finish=%s", execution.TurnNumber, run.Decision.Status, workflow.Status, run.WorkflowStatus)
 	}
 }
 
@@ -212,7 +212,7 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	workflow, execution := service.workflowRecords(run)
 	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
 	execution.Status, workflow.Status = "active", "waiting_input"
-	run.FinishTaskStatus, run.ExecutionStatus = "waiting_decision", "running"
+	run.WorkflowStatus, run.ExecutionStatus = "waiting_input", "running"
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.CurrentCommandID = newID()

@@ -757,7 +757,7 @@ func TestAPIWorkerStageQueryProjection(t *testing.T) {
 	defer service.stop(t)
 	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
 	ready := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-		return run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge
+		return run.WorkflowStatus == "waiting_external" && run.WorkflowStage == executionmodel.StepAwaitMerge
 	}, 3*time.Minute)
 	if len(ready.run.StageResults) != 3 || ready.run.ReportToolPolicy == "" || ready.run.StageDiagnostic != "" {
 		t.Fatalf("controlled worker did not produce the expected real staged query facts: %+v", ready.run)
@@ -789,7 +789,7 @@ func TestAPIWorkerStageQueryProjection(t *testing.T) {
 
 func assertWorkerStageProjection(t *testing.T, source *reconstructiontypes.RunView, got api.CandidateSummary, query string) {
 	t.Helper()
-	if got.FlowRef != source.FlowRef || got.StepID != source.StepID || got.BusinessStatus != source.BusinessStatus ||
+	if got.FlowRef != source.FlowRef || got.WorkflowStage != source.WorkflowStage || got.WorkflowStatus != source.WorkflowStatus ||
 		got.StageDiagnostic != source.StageDiagnostic || got.ReportToolPolicy != source.ReportToolPolicy || len(got.StageResults) != len(source.StageResults) {
 		t.Fatalf("%s changed stage identity/status/policy: source=%+v got=%+v", query, source, got)
 	}

@@ -1,5 +1,7 @@
 # Spec：任务列表与流程状态可读性
 
+本次命名增量以[状态命名 Spec](state-naming.spec.md)为准：候选快照与活动的业务字段改为 workflow_stage/workflow_status，内部领域步骤保持；原布局和事件事务保持；当前主干阶段变化只显示流程消息，阶段不变才显示状态消息，字段改名不恢复旧双消息规则。
+
 用户直接授权的普通开发，接续[原始状态保留](console-worker-state.spec.md)。配套 [Plan](console-flow-state-readability.plan.md)、[专属验收](../acceptance/console-flow-state-readability.md)。不改变任务或 worker 状态机，不改变原始记录格式及操作资格。
 
 任务列表默认每 Task 一行，固定 ID、任务提示、标题三列，按终端显示宽度处理中文、emoji 与 ANSI 样式；标题及过长摘要省略，完整原值在所选详情中保留。状态提示基于原字段和事实：已有执行优先采用其 TaskStatus，未执行采用 TaskDetail.Status；open 有明确未满足前置或启动阻塞时显示“阻塞 · open”，没有事实的 open 不猜成阻塞；新鲜 Ready 候选显示“可开始”，缓存明确标注；已有 worker 的业务 blocked 或环境阻断也显示阻塞。终态任务不被历史 worker 失败改成阻塞。列表显示当前序号/总数，8 增加阻塞筛选，刷新保留原选择、焦点及固定行高，不按状态变化重排。右上对齐 task_status、step_id、status、execution_status，展示原阻塞原因及前置 ID；长原值换行，中文仍为字段/确切值固定映射。

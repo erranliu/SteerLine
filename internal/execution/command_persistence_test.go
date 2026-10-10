@@ -26,7 +26,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	s := openDomainTestStore(t)
 	project := "repo:commands"
 	request := executionmodel.DecisionRequest{Question: "choose", AllowFreeText: true}
-	run := &reconstructiontypes.RunView{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "unregistered", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &executionmodel.DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
+	run := &reconstructiontypes.RunView{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "unregistered", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", WorkflowStatus: "waiting_input", Decision: &executionmodel.DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
 	projection := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Revision: 1, Repository: storageports.CheckpointRepository{Identity: project}, Service: storageports.CheckpointServiceState{InstanceID: "service", Status: "running", Ready: true}}
 	err := s.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {

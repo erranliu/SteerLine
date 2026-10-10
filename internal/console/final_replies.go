@@ -9,9 +9,9 @@ func (m Model) finalQueryScope(index int) (full bool, attempt, turn string) {
 	if !full {
 		if row := m.selectedRow(index); row != nil && row.run != nil {
 			attempt, turn = row.run.AttemptID, row.run.CurrentTurnID
-			if row.run.StepID == "implement.report" || row.run.StepID == "publish.report" {
+			if row.run.WorkflowStage == "implement.report" || row.run.WorkflowStage == "publish.report" {
 				sourceStep := "implement.execute"
-				if row.run.StepID == "publish.report" {
+				if row.run.WorkflowStage == "publish.report" {
 					sourceStep = "publish"
 				}
 				for i := len(row.run.StageResults) - 1; i >= 0; i-- {

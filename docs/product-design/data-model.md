@@ -106,3 +106,5 @@ Execution 的 `environment` 保存领取时的 Profile digest、准备 turn/nonc
 Decision 的实现问题路由也复用同一 64 KiB 封套，以 answer purpose 固定原 WorkflowRun、Execution、Attempt、generation、turn 和 question；回答路由不能冒充配置或资源封套。
 
 Task 丢弃只保存 stop_pending 原执行停止待办。中心没有 PR 关闭、工作区/分支删除或资源清理进度/结算；停止回执沿固定身份原子更新 Task/Execution/Attempt，未知结果保留原请求。PR/工作区历史定位仍由原 WorkflowRun/Execution 保存。图分页协议为 native-task-graph/v2、cursor v2，仅按项目读取，不支持状态/邻域过滤和专用文件导出。
+
+候选只读快照、历史 WorkflowSummary 和 worker_state 变化字段使用 `workflow_stage/workflow_status`，由领域记录 `StepID/Status` 明确映射；不保留 `finish_task_status` 派生枚举。恢复检查同样直接携带流程阶段/状态。内部 stage_inputs/stage_results 的 step_id 及任务/执行/决策对象内 status 保持。见[状态命名 Spec](../spec/state-naming.spec.md)。

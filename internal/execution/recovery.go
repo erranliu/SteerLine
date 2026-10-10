@@ -38,7 +38,7 @@ func InspectRecovery(ctx context.Context, c Config, dependencies RuntimeDependen
 	if run == nil {
 		return RecoveryInspection{}, fmt.Errorf("run %s not found", runID)
 	}
-	inspection := RecoveryInspection{Version: 1, SampledAt: now(), RunID: run.RunID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, ServiceStatus: runtimeState.Service.Status, DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, SlotOccupied: runtimeState.SlotOccupied, TaskID: run.TaskID, ExecutionStatus: run.ExecutionStatus, DeliveryStatus: run.FinishTaskStatus, Backend: run.Backend, Protocol: run.Protocol, Target: run.Target, ProcessCheck: "not inspected", Blockers: append([]reconstruction.ControlBlocker(nil), runtimeState.Control.Blockers...)}
+	inspection := RecoveryInspection{Version: 1, SampledAt: now(), RunID: run.RunID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, ServiceStatus: runtimeState.Service.Status, DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, SlotOccupied: runtimeState.SlotOccupied, TaskID: run.TaskID, ExecutionStatus: run.ExecutionStatus, WorkflowStage: run.WorkflowStage, WorkflowStatus: run.WorkflowStatus, Backend: run.Backend, Protocol: run.Protocol, Target: run.Target, ProcessCheck: "not inspected", Blockers: append([]reconstruction.ControlBlocker(nil), runtimeState.Control.Blockers...)}
 	if run.Decision != nil {
 		inspection.DecisionID, inspection.DecisionStatus = run.Decision.ID, run.Decision.Status
 	}

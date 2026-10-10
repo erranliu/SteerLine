@@ -195,10 +195,10 @@ func TestFinalStageQueryPreservesReportAndHistoryScopes(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			m, _ := ccFixture(t, 1)
 			run := m.selectedRow(0).run
-			run.CurrentTurnID, run.StepID = "report-turn", "implement.report"
+			run.CurrentTurnID, run.WorkflowStage = "report-turn", "implement.report"
 			run.StageResults = []api.StageResultSummary{{StepID: "implement.execute", TurnID: "old-implementation"}, {StepID: "implement.execute", TurnID: "original-implementation"}}
 			if mode == "publish-report" {
-				run.StepID = "publish.report"
+				run.WorkflowStage = "publish.report"
 				run.StageResults = append(run.StageResults, api.StageResultSummary{StepID: "publish", TurnID: "original-publication"})
 			}
 			if mode == "report-without-implementation" {

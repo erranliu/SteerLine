@@ -1,5 +1,7 @@
 # Spec：Worker 原始状态与控制台精简
 
+本次命名增量以[状态命名 Spec](state-naming.spec.md)为准：候选快照与活动的业务字段改为 workflow_stage/workflow_status，内部领域步骤保持；原布局和事件事务保持；当前主干阶段变化只显示流程消息，阶段不变才显示状态消息，字段改名不恢复旧双消息规则。
+
 用户直接授权；普通开发，不新增 roadmap 任务。配套 [Plan](console-worker-state.plan.md)、[验收](../acceptance/console-worker-state.md)。保留前一项[三轮流程恢复](worker-prompt-convergence.spec.md)。
 
 本文记录原始状态保留的首轮实现；用户后续确认的列表单行与流程/状态投影，以[可读性收敛 Spec](console-flow-state-readability.spec.md) 为当前展示契约，原持久化字段及事务规则不变。

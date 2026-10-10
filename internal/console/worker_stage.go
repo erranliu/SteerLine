@@ -27,7 +27,7 @@ func workerStagePresentation(run *api.CandidateSummary) []string {
 			reportGenerated = true
 		}
 	}
-	if implementationBody != "" && run.StepID != "implement.execute" {
+	if implementationBody != "" && run.WorkflowStage != "implement.execute" {
 		lines = append(lines, "原实现正文："+safeTerminalText(implementationBody))
 	}
 	if sourceFailed && reportGenerated {

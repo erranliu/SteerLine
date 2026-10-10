@@ -95,7 +95,7 @@ func TestCompletedTaskShowsRawStateAndHistoricalExecution(t *testing.T) {
 	ref := testProject("steer")
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks = nil
-	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", Title: "人工决策与恢复闭环", TaskStatus: "closed", ExecutionStatus: "failed", FinishTaskStatus: "blocked", EndedAt: &now}
+	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", Title: "人工决策与恢复闭环", TaskStatus: "closed", ExecutionStatus: "failed", WorkflowStatus: "blocked", EndedAt: &now}
 	snapshot.Observation.Page.Runs = []*api.CandidateSummary{run}
 	snapshot.NativeTasks = &api.TaskPage{Tasks: []api.TaskDetail{{TaskSummary: api.TaskSummary{TaskID: "3", Title: run.Title, Status: "closed"}}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
@@ -128,7 +128,7 @@ func TestCompletedTaskShowsRawStateAndHistoricalExecution(t *testing.T) {
 	if attention != 0 || filterAllows(5, rowRun, run) || !filterAllows(6, rowRun, run) || taskNextAction(run) != "无" {
 		t.Fatalf("settled historical failure still needs action: attention=%d", attention)
 	}
-	if run.ExecutionStatus != "failed" || run.FinishTaskStatus != "blocked" {
+	if run.ExecutionStatus != "failed" || run.WorkflowStatus != "blocked" {
 		t.Fatal("historical execution facts were rewritten")
 	}
 }
@@ -192,7 +192,7 @@ func TestPendingDecisionPreviewHidesRunIdentity(t *testing.T) {
 
 func TestClosedTaskWithUncertainExecutionStillNeedsAttention(t *testing.T) {
 	now := time.Now().UTC()
-	run := &api.CandidateSummary{TaskStatus: "closed", ExecutionStatus: "unknown", FinishTaskStatus: "blocked"}
+	run := &api.CandidateSummary{TaskStatus: "closed", ExecutionStatus: "unknown", WorkflowStatus: "blocked"}
 	if !runNeedsAttention(run) || !filterAllows(5, rowRun, run) || filterAllows(6, rowRun, run) {
 		t.Fatal("unknown execution disappeared from attention")
 	}

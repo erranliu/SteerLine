@@ -12,8 +12,8 @@ func mergeFeedbackFixture(t *testing.T, count int) (Model, *testControlClient) {
 	t.Helper()
 	m, c := ccFixture(t, count)
 	r := m.selectedRow(0).run
-	r.FinishTaskStatus, r.ExecutionStatus, r.ResourceStatus = "waiting_pr_merge", "succeeded", "idle"
-	r.StepID, r.BusinessStatus = "await_merge", "waiting_external"
+	r.ExecutionStatus, r.ResourceStatus = "succeeded", "idle"
+	r.WorkflowStage, r.WorkflowStatus = "await_merge", "waiting_external"
 	url := "https://github.com/erranliu/SteerlineTest/pull/156"
 	r.PR.URL, r.PR.State = &url, "open"
 	r.Decision.Request.Question = "The worker stopped. What should it do next?"
@@ -77,7 +77,7 @@ func TestWaitingPRMergeFeedbackRemainsExplicit(t *testing.T) {
 	if m.answer == nil || m.answer.runID != r.RunID || m.answer.decisionID != r.Decision.ID {
 		t.Fatal("explicit feedback lost original identity")
 	}
-	if !strings.Contains(m.View(), "可选反馈") || r.FinishTaskStatus != "waiting_pr_merge" || r.Decision.Status != "pending" {
+	if !strings.Contains(m.View(), "可选反馈") || r.WorkflowStatus != "waiting_external" || r.Decision.Status != "pending" {
 		t.Fatal("opening optional feedback rewrote business state or hid its purpose")
 	}
 	m, cmd = ccKey(m, tea.KeyMsg{Type: tea.KeyF2})
@@ -153,7 +153,7 @@ func TestWaitingPRMergeTerminalCandidatesDoNotRequestInput(t *testing.T) {
 	}{
 		{"closed task", func(r *api.CandidateSummary) { r.TaskStatus = "closed" }},
 		{"discarded task", func(r *api.CandidateSummary) { r.TaskStatus = "discarded" }},
-		{"completed workflow", func(r *api.CandidateSummary) { r.FinishTaskStatus = "completed" }},
+		{"completed workflow", func(r *api.CandidateSummary) { r.WorkflowStatus = "completed" }},
 		{"abandoned candidate", func(r *api.CandidateSummary) { r.Abandonment = &api.AbandonmentSummary{} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -161,7 +161,8 @@ func TestWaitingPRMergeTerminalCandidatesDoNotRequestInput(t *testing.T) {
 			r := m.selectedRow(0).run
 			tc.change(r)
 			_, _, _, decision, merge, _ := projectCounts(m.projects[0], m.clock.Now())
-			if decision != 0 || merge != 0 || filterAllows(3, rowRun, r) || filterAllows(4, rowRun, r) || taskAttention(m.projects[0], r.TaskID) != "" {
+			attention := taskAttention(m.projects[0], r.TaskID)
+			if decision != 0 || merge != 0 || filterAllows(3, rowRun, r) || filterAllows(4, rowRun, r) || strings.Contains(attention, "待回答") || strings.Contains(attention, "待合并") {
 				t.Fatal("stale optional question resurrected a terminal candidate")
 			}
 			if strings.Contains(candidateHeadline(m.projects[0], m.selectedRow(0)), "待交互 1") {
@@ -181,7 +182,7 @@ func TestWaitingPRMergePhaseDeterminesWhetherFeedbackIsRequired(t *testing.T) {
 	}
 	// Keep the same question and identity: changing the business phase, rather
 	// than matching its English wording, makes further input mandatory.
-	r.FinishTaskStatus = "waiting_decision"
+	r.WorkflowStatus = "waiting_input"
 	if !waitingForDecision(r) || waitingForMerge(r) || candidateHumanStatus(m.projects[0], r) != "待交互" {
 		t.Fatal("workflow transition did not restore required interaction")
 	}

@@ -71,7 +71,7 @@ func TestCPWAuditIndexFailureInvalidatesFinalPreview(t *testing.T) {
 			r := m.selectedRow(0).run
 			r.Decision = nil
 			r.CurrentTurnID = "turn"
-			r.FinishTaskStatus = "waiting_pr_merge"
+			r.WorkflowStage, r.WorkflowStatus = "await_merge", "waiting_external"
 			m, _ = m.refreshFinalReplies(0)
 			e := finalFixture(m, 1, "turn", "final", "旧的成功预览")
 			m.projects[0].client.(*testClient).query.bodies = map[string]string{"final": "旧的成功预览"}
@@ -146,7 +146,7 @@ func TestCPWAuditGapRemainsVisibleWithValidFinal(t *testing.T) {
 	r := m.selectedRow(0).run
 	r.Decision = nil
 	r.CurrentTurnID = "turn"
-	r.FinishTaskStatus = "waiting_pr_merge"
+	r.WorkflowStage, r.WorkflowStatus = "await_merge", "waiting_external"
 	m, _ = m.refreshFinalReplies(0)
 	e := finalFixture(m, 1, "turn", "final", "已采集的规范回复")
 	m.projects[0].client.(*testClient).query.bodies = map[string]string{"final": "已采集的规范回复"}

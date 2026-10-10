@@ -156,7 +156,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	}
 	submitIntegrationAnswer(t, ctx, config2, recovered.run)
 	settled := waitIntegrationRun(t, ctx, service2, config2, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-		return e.TurnNumber == 3 && e.CurrentTurnID == e.LastStoppedTurnID && !e.RecoveryRequired && run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil
+		return e.TurnNumber == 3 && e.CurrentTurnID == e.LastStoppedTurnID && !e.RecoveryRequired && run.WorkflowStatus == "waiting_external" && run.WorkflowStage == executionmodel.StepAwaitMerge && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil
 	})
 	ledger2.mu.Lock()
 	saved, err = ledger2.read()

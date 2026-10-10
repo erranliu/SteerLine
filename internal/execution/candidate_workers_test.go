@@ -454,7 +454,7 @@ func TestMC5(t *testing.T) {
 	if len(ready) != 1 || ready[0].TaskID != "9" || len(f.s.domain.Deliveries) != 1 {
 		t.Fatal("unique delivery did not unlock successor once")
 	}
-	if f.first.ExecutionStatus == "stopped" || f.first.FinishTaskStatus != "not_selected" {
+	if f.first.ExecutionStatus == "stopped" || f.first.TaskStatus != "closed" || f.first.WorkflowStatus == "completed" || f.s.domain.Deliveries[0].SelectedWorkflowRunID == f.first.RunID {
 		t.Fatal("loser falsely settled its resources")
 	}
 	// The winner's immutable delivery and subsequent physical stop are separate

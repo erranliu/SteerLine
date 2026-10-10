@@ -10,7 +10,7 @@ func TestAsyncQuestionConsoleOffersOptionsWhileRunning(t *testing.T) {
 	now := time.Now()
 	ref := testProject("async")
 	snapshot, run := decisionSnapshot(ref, now)
-	run.BusinessStatus, run.FinishTaskStatus, run.ExecutionStatus = "running", "pending", "running"
+	run.WorkflowStatus, run.ExecutionStatus = "running", "running"
 	run.Decision.Request.InteractionKind = "async"
 	run.Decision.Request.BlocksProgress = false
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)

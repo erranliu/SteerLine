@@ -15,7 +15,7 @@ func TestUX1ParallelNumbersAndPrimarySurface(t *testing.T) {
 	m, _ := ccFixture(t, 5)
 	m.rows(0)
 	view := m.View()
-	for _, want := range []string{"当前 P1", "F6/F7", "step_id:", "status:", "execution_status:"} {
+	for _, want := range []string{"当前 P1", "F6/F7", "workflow_stage:", "workflow_status:", "execution_status:"} {
 		if !strings.Contains(view, want) {
 			t.Fatal(want, view)
 		}

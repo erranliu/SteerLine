@@ -16,7 +16,7 @@ func TestWorkerStateActivityUsesOriginalFields(t *testing.T) {
 	ended := e
 	ended.Status, ended.LastTurnOutcome = "idle", "failed"
 	event, changed := WorkerStateActivity(&w, &e, next, ended, time.Now())
-	if !changed || event.Meta["from"].(WorkerStateFields).Status != "running" || event.Meta["to"].(WorkerStateFields).StepID != StepReport || event.Meta["to"].(WorkerStateFields).ExecutionStatus != "failed" {
+	if !changed || event.Meta["from"].(WorkerStateFields).WorkflowStatus != "running" || event.Meta["to"].(WorkerStateFields).WorkflowStage != StepReport || event.Meta["to"].(WorkerStateFields).ExecutionStatus != "failed" {
 		t.Fatal("state names or original failure were replaced", event)
 	}
 	replay, _ := WorkerStateActivity(&w, &e, next, ended, time.Now().Add(time.Minute))

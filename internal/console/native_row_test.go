@@ -13,7 +13,7 @@ func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 	ref.Presentation.TaskAuthority = "native"
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = []api.TaskCandidate{{TaskID: "102", Title: "Native branch A"}}
-	run := &api.CandidateSummary{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &api.WorkerLocation{Terminal: "term-native-102"}}
+	run := &api.CandidateSummary{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", WorkflowStatus: "running", Process: &api.WorkerLocation{Terminal: "term-native-102"}}
 	snapshot.Observation.Page.Runs = []*api.CandidateSummary{run}
 	snapshot.NativeTasks = &api.TaskPage{Tasks: []api.TaskDetail{
 		{TaskSummary: api.TaskSummary{TaskID: "102", Title: "Native branch A", Status: "in_progress"}, Successors: []string{"104"}},

@@ -86,7 +86,7 @@ func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *api.Cand
 	for i := range options {
 		options[i] = api.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
 	}
-	run := &api.CandidateSummary{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: fixtureWorkflowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Agent: "codex", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &api.DecisionSummary{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: api.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
+	run := &api.CandidateSummary{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: fixtureWorkflowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Agent: "codex", Backend: "local", Protocol: "local_process", WorkflowStatus: "waiting_input", ExecutionStatus: "succeeded", Decision: &api.DecisionSummary{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: api.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
 	runtime.Runs = []*api.CandidateSummary{run}
 	snapshot.DecisionReasons[run.RunID] = "提交后核对原会话接收与工作轮次开始"
 	snapshot.Connection.Snapshot.Page = runtime
@@ -493,12 +493,12 @@ func TestRunStatusKeepsBusinessExecutionAndUnknownAxesSeparate(t *testing.T) {
 		run  *api.CandidateSummary
 		want string
 	}{
-		{&api.CandidateSummary{ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision"}, "待决策"},
-		{&api.CandidateSummary{ExecutionStatus: "running", FinishTaskStatus: "waiting_pr_merge"}, "待合并"},
-		{&api.CandidateSummary{ExecutionStatus: "unknown", FinishTaskStatus: "completed"}, "需处理"},
-		{&api.CandidateSummary{ExecutionStatus: "failed", FinishTaskStatus: "completed"}, "需处理"},
-		{&api.CandidateSummary{ExecutionStatus: "succeeded", FinishTaskStatus: "completed", PR: api.PRSummary{QueryError: stringPointer("provider unavailable")}}, "需处理"},
-		{&api.CandidateSummary{ExecutionStatus: "succeeded", FinishTaskStatus: "completed"}, "completed"},
+		{&api.CandidateSummary{ExecutionStatus: "succeeded", WorkflowStatus: "waiting_input"}, "待决策"},
+		{&api.CandidateSummary{ExecutionStatus: "running", WorkflowStage: "await_merge", WorkflowStatus: "waiting_external"}, "待合并"},
+		{&api.CandidateSummary{ExecutionStatus: "unknown", WorkflowStatus: "completed"}, "需处理"},
+		{&api.CandidateSummary{ExecutionStatus: "failed", WorkflowStatus: "completed"}, "需处理"},
+		{&api.CandidateSummary{ExecutionStatus: "succeeded", WorkflowStatus: "completed", PR: api.PRSummary{QueryError: stringPointer("provider unavailable")}}, "需处理"},
+		{&api.CandidateSummary{ExecutionStatus: "succeeded", WorkflowStatus: "completed"}, "completed"},
 	}
 	for _, tc := range cases {
 		if got := runStatus(tc.run); !strings.HasPrefix(got, tc.want) {
@@ -775,7 +775,7 @@ func TestUnicodeLongErrorFitsNarrowAndWidePanels(t *testing.T) {
 	snapshot := readySnapshot(ref, now)
 	longError := strings.Repeat("错误🙂路径过长，", 40) + "\x1b[2J"
 	snapshot.Tasks.Tasks = nil
-	snapshot.Observation.Page.Runs = []*api.CandidateSummary{{TaskID: "任务-一", RunID: "run-unicode", ExecutionID: "execution-unicode", AttemptID: "attempt-unicode", Title: strings.Repeat("中文标题🙂", 30), ExecutionStatus: "failed", FinishTaskStatus: "blocked", Error: &longError}}
+	snapshot.Observation.Page.Runs = []*api.CandidateSummary{{TaskID: "任务-一", RunID: "run-unicode", ExecutionID: "execution-unicode", AttemptID: "attempt-unicode", Title: strings.Repeat("中文标题🙂", 30), ExecutionStatus: "failed", WorkflowStatus: "blocked", Error: &longError}}
 	snapshot.Connection.Snapshot.Page = snapshot.Observation.Page
 	for _, width := range []int{80, 170} {
 		m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)

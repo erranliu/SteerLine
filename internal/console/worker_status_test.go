@@ -15,27 +15,27 @@ func TestWorkerStatusRawFieldsAndFixedLabels(t *testing.T) {
 	previous := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(termenv.TrueColor)
 	t.Cleanup(func() { lipgloss.SetColorProfile(previous) })
-	if got := workerValue("status", "future失败", true); got != "future失败" {
+	if got := workerValue("workflow_status", "future失败", true); got != "future失败" {
 		t.Fatal("unknown value acquired inferred color or label", got)
 	}
-	if got := workerValue("status", "running", true); !strings.Contains(got, "running（运行中）") {
+	if got := workerValue("workflow_status", "running", true); !strings.Contains(got, "running（运行中）") {
 		t.Fatal("raw value was replaced", got)
 	}
-	if strings.Contains(workerValue("step_id", "running", true), "运行中") {
+	if strings.Contains(workerValue("workflow_stage", "running", true), "运行中") {
 		t.Fatal("mapping crossed field namespaces")
 	}
-	if got := workerValue("status", "in_progress", true); got != "in_progress" {
+	if got := workerValue("workflow_status", "in_progress", true); got != "in_progress" {
 		t.Fatal("foreign field value acquired a guessed style", got)
 	}
-	if got := workerValue("step_id", "publish.report", true); !strings.Contains(got, "publish.report（发布报告）") {
+	if got := workerValue("workflow_stage", "publish.report", true); !strings.Contains(got, "publish.report（发布报告）") {
 		t.Fatal("publication report label missing", got)
 	}
 	m, _ := ccFixture(t, 1)
 	run := m.selectedRow(0).run
-	run.StepID, run.BusinessStatus, run.ExecutionStatus = "implement.report", "future_state_with_a_very_long_name", "running"
+	run.WorkflowStage, run.WorkflowStatus, run.ExecutionStatus = "implement.report", "future_state_with_a_very_long_name", "running"
 	lines := candidateOverviewLines(m, m.projects[0], m.selectedRow(0), 28)
 	plain := strings.ReplaceAll(strings.Join(lines, ""), " ", "")
-	for _, raw := range []string{"implement.report", run.BusinessStatus, "execution_status:"} {
+	for _, raw := range []string{"implement.report", run.WorkflowStatus, "execution_status:"} {
 		if !strings.Contains(plain, raw) {
 			t.Fatal("raw field was truncated instead of wrapped", raw, lines)
 		}
@@ -51,12 +51,12 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 	m, _ := ccFixture(t, 1)
 	m.width, m.height = 160, 40
 	run := m.selectedRow(0).run
-	run.StepID, run.BusinessStatus = "implement.report", "running"
+	run.WorkflowStage, run.WorkflowStatus = "implement.report", "running"
 	m, _ = m.refreshRecentActivity(0)
 	state := m.projects[0]
 	state.lowerScroll = 2
 	m.projects[0].lowerScroll = 2
-	raw := map[string]any{"from": map[string]any{"step_id": "implement.execute", "status": "running", "execution_status": "running"}, "to": map[string]any{"step_id": "implement.report", "status": "queued", "execution_status": "succeeded", "input_version": 2}}
+	raw := map[string]any{"from": map[string]any{"workflow_stage": "implement.execute", "workflow_status": "running", "execution_status": "running"}, "to": map[string]any{"workflow_stage": "implement.report", "workflow_status": "queued", "execution_status": "succeeded", "input_version": 2}}
 	event := api.ActivityEvent{Kind: "worker_state", Seq: 1, TS: time.Now(), Meta: raw, Title: "do not infer state from this title"}
 	batch := api.LogBatch{Cursor: api.ActivityCursor{RunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Initialized: true}, Activity: []api.ActivityEvent{event}}
 	msg := recentActivityMsg{state.ref.Key, state.ref.Identity, state.activityKey, state.activityGeneration, batch, nil}
@@ -98,7 +98,7 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 		t.Fatal("pending question hid the activity gap")
 	}
 	run.Decision = nil
-	run.StepID, run.BusinessStatus, run.ExecutionStatus, run.FinishTaskStatus = "delivered", "completed", "succeeded", "completed"
+	run.WorkflowStage, run.WorkflowStatus, run.ExecutionStatus = "delivered", "completed", "succeeded"
 	if !strings.Contains(strings.Join(feedbackLines(m, m.projects[0], m.selectedRow(0)), "\n"), "流程与状态") {
 		t.Fatal("terminal state hid transition history")
 	}
@@ -117,7 +117,7 @@ func TestWorkerStatusSingleRowsKeepSelectionVisible(t *testing.T) {
 	s.snapshot.Observation.Page.Runs = nil
 	s.snapshot.NativeTasks.Tasks = nil
 	for i := 0; i < 5; i++ {
-		run := &api.CandidateSummary{TaskID: fmt.Sprint(i), RunID: "run-" + fmt.Sprint(i), Title: "title", TaskStatus: "in_progress", StepID: "implement.report", BusinessStatus: "waiting_external", ExecutionStatus: "running"}
+		run := &api.CandidateSummary{TaskID: fmt.Sprint(i), RunID: "run-" + fmt.Sprint(i), Title: "title", TaskStatus: "in_progress", WorkflowStage: "implement.report", WorkflowStatus: "waiting_external", ExecutionStatus: "running"}
 		s.snapshot.Observation.Page.Runs = append(s.snapshot.Observation.Page.Runs, run)
 		s.snapshot.NativeTasks.Tasks = append(s.snapshot.NativeTasks.Tasks, api.TaskDetail{TaskSummary: api.TaskSummary{TaskID: run.TaskID, Status: run.TaskStatus}})
 	}
@@ -132,7 +132,7 @@ func TestWorkerStatusSingleRowsKeepSelectionVisible(t *testing.T) {
 func TestWorkerStatusCompactOverviewDoesNotRepeatDiagnostics(t *testing.T) {
 	m, _ := ccFixture(t, 1)
 	run := m.selectedRow(0).run
-	run.StepID, run.BusinessStatus = "publish", "blocked"
+	run.WorkflowStage, run.WorkflowStatus = "publish", "blocked"
 	run.StageDiagnostic = "original publishing failure"
 	run.Error = &run.StageDiagnostic
 	overview := strings.Join(candidateOverviewLines(m, m.projects[0], m.selectedRow(0), 80), "\n")
@@ -144,7 +144,7 @@ func TestWorkerStatusCompactOverviewDoesNotRepeatDiagnostics(t *testing.T) {
 		m.width, m.height = size[0], size[1]
 		m.projects[0].focus = 1
 		view := m.View()
-		for _, want := range []string{"step_id:", "publish", "status:", "blocked", "execution_status:"} {
+		for _, want := range []string{"workflow_stage:", "publish", "workflow_status:", "blocked", "execution_status:"} {
 			if !strings.Contains(view, want) {
 				t.Fatal("main surface hid current raw state", size, want, view)
 			}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
@@ -42,6 +43,17 @@ func ProjectActivity(project, run, execution, attempt string, cursor api.Activit
 		if len(e.Payload) == 0 || json.Unmarshal(e.Payload, &v) != nil {
 			batch.Diagnostics = append(batch.Diagnostics, "规范活动尚未完整采集；原始文件仅供手动诊断")
 			continue
+		}
+		if v.Kind == "worker_state" {
+			var transition struct {
+				From executionmodel.WorkerStateFields `json:"from"`
+				To   executionmodel.WorkerStateFields `json:"to"`
+			}
+			raw, err := json.Marshal(v.Meta)
+			if err != nil || json.Unmarshal(raw, &transition) != nil || transition.To.WorkflowStage == "" || transition.To.WorkflowStatus == "" {
+				batch.Diagnostics = append(batch.Diagnostics, "规范流程变化字段损坏或缺少 workflow_stage/workflow_status；原始记录保留，不补画")
+				continue
+			}
 		}
 		v.Seq = uint64(e.EventID)
 		batch.Activity = append(batch.Activity, v)

@@ -10,7 +10,7 @@
 
 ## 主界面与候选
 
-2026-10-10 当前精简：列表每 Task 一行，以固定 ID/任务提示/标题列对齐；明确阻塞事实显示“阻塞 · open”，不把所有 open 推断为阻塞。8 筛选阻塞任务，列表显示当前序号/总数；长标题和摘要省略，完整原值在详情。右上对齐 task_status/step_id/status/execution_status，中文与颜色只按字段和确切枚举映射；未知原值保留，详情长值换行。右下优先原问题/回执、三行结果预览，固定显示当前流程/状态；变化只显示 step_id 流程或业务 status 状态，一条一种信息，两者同时变化拆两条，最新在上、最多五条可见消息。技术字段变化及其他活动移到 d 原始详情，turn ID 不进入默认区；原记录仍完整保留。短屏概览放入可滚动右下，原操作校验保持。见[Spec](../spec/console-flow-state-readability.spec.md)、[验收](../acceptance/console-flow-state-readability.md)。
+2026-10-10 当前精简：列表每 Task 一行，以固定 ID/任务提示/标题列对齐；明确阻塞事实显示“阻塞 · open”，不把所有 open 推断为阻塞。8 筛选阻塞任务，列表显示当前序号/总数；长标题和摘要省略，完整原值在详情。右上对齐 task_status/workflow_stage/workflow_status/execution_status，中文与颜色只按字段和确切枚举映射；未知原值保留，详情长值换行。右下优先原问题/回执、三行结果预览，固定显示当前流程/状态；变化只显示 workflow_stage 流程阶段或 workflow_status 流程状态，一条一种信息，阶段变化时只显示流程变化，阶段不变才显示状态变化，最新在上、最多五条可见消息。技术字段变化及其他活动移到 d 原始详情，turn ID 不进入默认区；原记录仍完整保留。短屏概览放入可滚动右下，原操作校验保持。见[Spec](../spec/console-flow-state-readability.spec.md)、[验收](../acceptance/console-flow-state-readability.md)。
 
 宽屏左侧是任务摘要列表，右上是所选候选、冻结方案、原始状态、阻塞原因、PR 与下一步；右下承接方案选择、放弃确认、回答、核验摘要、流程/状态变化和有界结果预览。普通 Enter 转到右下或激活当前问题，详细阅读才切页。窄屏按焦点切换列表与右侧区域，所有编辑/选择仍属于同一主界面；完整身份与资源定位通过只读详情展开。
 
@@ -67,4 +67,4 @@ CLI 窗口用于查看原会话的过程及实时输出。它是 Codex 的交互
 
 ## 步骤与原执行事实
 
-同一产品快照显示 `flow_ref/step_id/status` 及三个步骤的结果绑定。implement 执行 final 是正文；report 的结构化说明与原执行终态分开，源失败显示“执行失败，报告已生成”。publish 不展示虚构报告轮，await_merge 仍无必答 Continue。报告的原生权限保证缺口据实展示；活动正文、颜色和焦点规则沿既有入口。
+同一产品快照显示 `flow_ref/workflow_stage/workflow_status` 及三个步骤的结果绑定。implement 执行 final 是正文；report 的结构化说明与原执行终态分开，源失败显示“执行失败，报告已生成”。publish 不展示虚构报告轮，await_merge 仍无必答 Continue。报告的原生权限保证缺口据实展示；活动正文、颜色和焦点规则沿既有入口。

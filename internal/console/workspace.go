@@ -449,7 +449,7 @@ func recoverySummary(s projectState, row *consoleRow) []string {
 	if recoveryStale(s, row) {
 		lines = append(lines, styleWaiting.Render("报告已过期，不能证明当前操作资格；r 重新核验"))
 	}
-	lines = append(lines, "采样 "+r.SampledAt.Local().Format(timeLayout), "执行/交付："+safeTerminalInlineText(r.ExecutionStatus+" / "+r.DeliveryStatus), "原进程："+safeTerminalInlineText(r.ProcessCheck))
+	lines = append(lines, "采样 "+r.SampledAt.Local().Format(timeLayout), "执行/流程："+safeTerminalInlineText(r.ExecutionStatus+" / "+r.WorkflowStage+" / "+r.WorkflowStatus), "原进程："+safeTerminalInlineText(r.ProcessCheck))
 	for _, part := range []struct {
 		name, err string
 		present   bool

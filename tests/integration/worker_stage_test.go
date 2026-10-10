@@ -72,7 +72,7 @@ func testWorkerStageRun(t *testing.T, host string) {
 	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
 
 	ready := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-		return run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge
+		return run.WorkflowStatus == "waiting_external" && run.WorkflowStage == executionmodel.StepAwaitMerge
 	}, 3*time.Minute)
 	w := ready.runtime.WorkflowRuns[0]
 	if len(w.StageInputs) != turns || len(w.StageResults) != turns || ready.execution.TurnNumber != uint64(turns) || len(ready.runtime.Attempts) != 1 || ready.execution.PendingCommandID != "" {
@@ -113,7 +113,7 @@ func testWorkerStageRun(t *testing.T, host string) {
 	service = startIntegrationService(t, ctx, f.config, resolver)
 	defer service.stop(t)
 	after := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-		return run.BusinessStatus == "waiting_external"
+		return run.WorkflowStatus == "waiting_external"
 	})
 	if after.execution.TurnNumber != uint64(turns) || len(after.runtime.WorkflowRuns[0].StageInputs) != turns || len(after.runtime.Attempts) != 1 {
 		t.Fatal("service restart automatically sent another stage")

@@ -53,7 +53,7 @@ func TestPS1RecentActivityReadsLatestTenFromExactAttempt(t *testing.T) {
 	}
 	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for i := 0; i < 6; i++ {
-			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("state-%d", i), Meta: map[string]any{"from": map[string]any{"step_id": "implement.report", "status": "running"}, "to": map[string]any{"step_id": "publish", "status": "queued"}}})
+			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("state-%d", i), Meta: map[string]any{"from": map[string]any{"workflow_stage": "implement.report", "workflow_status": "running"}, "to": map[string]any{"workflow_stage": "publish", "workflow_status": "queued"}}})
 			_, err := tx.AppendEvent(ports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "state", ExternalID: fmt.Sprint(i), Type: "activity.worker_state", Payload: payload})
 			if err != nil {
 				return err
@@ -75,7 +75,7 @@ func TestPS1RecentActivityReadsLatestTenFromExactAttempt(t *testing.T) {
 	}
 	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for i := 0; i < 20; i++ {
-			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("technical-%d", i), Meta: map[string]any{"from": map[string]any{"step_id": "publish", "status": "queued", "current_turn_id": "old", "resource_status": "idle"}, "to": map[string]any{"step_id": "publish", "status": "queued", "current_turn_id": fmt.Sprint(i), "resource_status": "pending"}}})
+			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("technical-%d", i), Meta: map[string]any{"from": map[string]any{"workflow_stage": "publish", "workflow_status": "queued", "current_turn_id": "old", "resource_status": "idle"}, "to": map[string]any{"workflow_stage": "publish", "workflow_status": "queued", "current_turn_id": fmt.Sprint(i), "resource_status": "pending"}}})
 			if _, err := tx.AppendEvent(ports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "technical", ExternalID: fmt.Sprint(i), Type: "activity.worker_state", Payload: payload}); err != nil {
 				return err
 			}
@@ -89,7 +89,7 @@ func TestPS1RecentActivityReadsLatestTenFromExactAttempt(t *testing.T) {
 	}
 	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for i := 0; i < 5; i++ {
-			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("large-technical-%d", i), Detail: strings.Repeat("x", 400000), Meta: map[string]any{"from": map[string]any{"step_id": "publish", "status": "queued", "resource_status": "idle"}, "to": map[string]any{"step_id": "publish", "status": "queued", "resource_status": "pending"}}})
+			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("large-technical-%d", i), Detail: strings.Repeat("x", 400000), Meta: map[string]any{"from": map[string]any{"workflow_stage": "publish", "workflow_status": "queued", "resource_status": "idle"}, "to": map[string]any{"workflow_stage": "publish", "workflow_status": "queued", "resource_status": "pending"}}})
 			if _, err := tx.AppendEvent(ports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "budget", ExternalID: fmt.Sprint(i), Type: "activity.worker_state", Payload: payload}); err != nil {
 				return err
 			}

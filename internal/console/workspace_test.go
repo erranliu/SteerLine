@@ -117,9 +117,9 @@ func TestCPWCurrentActivityWinsOverOldFinalAndReceipts(t *testing.T) {
 	m, _ := ccFixture(t, 1)
 	r := m.selectedRow(0).run
 	r.Decision = nil
-	r.FinishTaskStatus = "pending"
+	r.WorkflowStatus = "running"
 	r.ExecutionStatus = "running"
-	r.StepID, r.BusinessStatus = "implement.execute", "running"
+	r.WorkflowStage, r.WorkflowStatus = "implement.execute", "running"
 	r.CurrentTurnID = "new-turn"
 	e := finalFixture(m, 1, "old-turn", "old", "上一轮结果")
 	s := &m.projects[0]
@@ -134,7 +134,7 @@ func TestCPWCurrentActivityWinsOverOldFinalAndReceipts(t *testing.T) {
 	r.TaskStatus = "closed"
 	r.EndedAt = &s.lastRefresh
 	r.ExecutionStatus = "failed"
-	r.FinishTaskStatus = "blocked"
+	r.WorkflowStatus = "blocked"
 	if taskAttention(*s, r.TaskID) != "" {
 		t.Fatal("historical failure became actionable")
 	}
@@ -149,7 +149,7 @@ func TestCPWFinalPreviewBoundedAndHistoricalReaderIndependent(t *testing.T) {
 	r := m.selectedRow(0).run
 	r.Decision = nil
 	r.CurrentTurnID = "turn"
-	r.FinishTaskStatus = "waiting_pr_merge"
+	r.WorkflowStage, r.WorkflowStatus = "await_merge", "waiting_external"
 	m, _ = m.refreshFinalReplies(0)
 	text := strings.Repeat("中文正文\n", 20000)
 	query := m.projects[0].client.(*testClient).query

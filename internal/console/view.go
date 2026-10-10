@@ -220,7 +220,7 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 		}
 		lines = append(lines, "决策阶段："+decisionStatusLabel(run.Decision.Status), "当前答案："+safeTerminalText(DecisionAnswerSummary(run)))
 		lines = append(lines, decisionAnswerStatusLines(state, row)...)
-	} else if run.FinishTaskStatus == "waiting_decision" {
+	} else if candidateBusinessOpen(run) && run.WorkflowStatus == "waiting_input" {
 		lines = append(lines, "当前问题尚未同步，不能提交答案。")
 	}
 	if run.Abandonment != nil || run.TaskStatus == "discarded" || run.TaskStatus == "closed" {
@@ -228,7 +228,7 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	}
 	lines = append(lines, "采样于 "+sampleTime(state.snapshot))
 	if m.detailExpanded {
-		lines = append(lines, "run_id："+safeTerminalText(run.RunID), "execution/session："+safeTerminalText(run.ExecutionID+" / "+run.SessionID), "attempt_id："+safeTerminalText(run.AttemptID), "执行："+safeTerminalText(run.ExecutionStatus)+" · 交付："+safeTerminalText(run.FinishTaskStatus))
+		lines = append(lines, "run_id："+safeTerminalText(run.RunID), "execution/session："+safeTerminalText(run.ExecutionID+" / "+run.SessionID), "attempt_id："+safeTerminalText(run.AttemptID), "执行："+safeTerminalText(run.ExecutionStatus)+" · 流程："+safeTerminalText(run.WorkflowStatus))
 		lines = append(lines, "工作目录："+safeTerminalText(firstText(stringValue(run.WorktreePath), run.Target.WorktreeID)), "分支："+safeTerminalText(firstText(stringValue(run.WorktreeBranch), run.Target.Branch)), "原生定位："+safeTerminalText(run.Backend+" / "+run.Protocol+" / "+run.Target.ID))
 		if run.Process != nil {
 			lines = append(lines, "宿主终端标识："+safeTerminalText(run.Process.Terminal))
@@ -560,7 +560,7 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 		"run revision："+strconv.FormatUint(report.RunRevision, 10)+" · 采样时间："+report.SampledAt.Local().Format(timeLayout),
 		"service instance/status："+safeTerminalText(report.ServiceInstanceID)+" / "+safeTerminalText(report.ServiceStatus),
 		"dispatch："+safeTerminalText(report.DispatchMode)+" · paused："+fmt.Sprint(report.DispatchPaused)+" · slot occupied："+fmt.Sprint(report.SlotOccupied),
-		"执行/交付："+safeTerminalText(report.ExecutionStatus)+" / "+safeTerminalText(report.DeliveryStatus),
+		"执行/流程："+safeTerminalText(report.ExecutionStatus)+" / "+safeTerminalText(report.WorkflowStage+" / "+report.WorkflowStatus),
 		"decision："+safeTerminalText(displayDash(report.DecisionID))+" · "+safeTerminalText(displayDash(report.DecisionStatus)),
 		"后端/协议/目标："+safeTerminalText(report.Backend+" / "+report.Protocol+" / "+report.Target.ID),
 		"宿主/终端核验："+safeTerminalText(report.ProcessCheck),

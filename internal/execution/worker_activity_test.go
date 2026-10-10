@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	m "github.com/erranliu/SteerLine/internal/execution/model"
@@ -58,6 +59,13 @@ func TestWorkerStateActivityCommitAndRollback(t *testing.T) {
 			found := false
 			for _, event := range batch.Activity {
 				if event.Kind == "worker_state" && event.Status == "blocked" {
+					raw, err := json.Marshal(event.Meta["to"])
+					require(t, err)
+					var fields map[string]json.RawMessage
+					require(t, json.Unmarshal(raw, &fields))
+					if string(fields["workflow_stage"]) != `"implement.report"` || string(fields["workflow_status"]) != `"blocked"` || fields["step_id"] != nil || fields["status"] != nil {
+						t.Fatalf("durable query exposed obsolete workflow fields: %s", raw)
+					}
 					found = true
 				}
 			}

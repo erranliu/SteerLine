@@ -69,8 +69,8 @@ func (s Reader) ReadRecentActivityView(ctx context.Context, project, workflow, e
 		SELECT event_id FROM events
 		WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND attempt_id=? AND type='activity.worker_state'
 		AND CASE WHEN json_valid(payload) THEN
-			COALESCE(json_extract(payload,'$.meta.from.step_id'),'') <> COALESCE(json_extract(payload,'$.meta.to.step_id'),'')
-			OR COALESCE(json_extract(payload,'$.meta.from.status'),'') <> COALESCE(json_extract(payload,'$.meta.to.status'),'')
+			COALESCE(json_extract(payload,'$.meta.from.workflow_stage'),'') <> COALESCE(json_extract(payload,'$.meta.to.workflow_stage'),'')
+			OR COALESCE(json_extract(payload,'$.meta.from.workflow_status'),'') <> COALESCE(json_extract(payload,'$.meta.to.workflow_status'),'')
 		ELSE 0 END
 		ORDER BY event_id DESC LIMIT 5
 	), batch AS (

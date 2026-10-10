@@ -90,7 +90,7 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 		}
 	}
 	for _, run := range s.runs {
-		if run != nil && !s.candidateBusinessClosed(run) && !resumingDecision && run.FinishTaskStatus == "waiting_decision" {
+		if run != nil && !s.candidateBusinessClosed(run) && !resumingDecision && run.WorkflowStatus == "waiting_input" {
 			return "waiting for a human decision"
 		}
 	}
