@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -103,6 +104,26 @@ func acceptTestStage(t *testing.T, s *Service, run *reconstructiontypes.RunView,
 	fixed, err := s.workerFlowContext(run)
 	require(t, err)
 	return s.acceptStageTurn(context.Background(), run, port, fixed, workerStageEvidence(s, run, body, success))
+}
+
+func TestWorkerStagePublicationMismatchShowsActualBranch(t *testing.T) {
+	s, run, port := workerStageFixture(t)
+	require(t, acceptTestStage(t, s, run, port, "implemented", true))
+	startQueuedStage(t, s, run)
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","summary":"implemented"}`, true))
+	startQueuedStage(t, s, run)
+	fixed, err := s.workerFlowContext(run)
+	require(t, err)
+	const url = "https://git.example/org/repo/pulls/1"
+	actualBranch := port.workspace.Branch + "-wrong"
+	info := executionmodel.PRInfo{URL: url, Repository: fixed.config.PR.Repository, BaseBranch: fixed.workflow.Branch, HeadRepository: fixed.config.PR.Repository, HeadBranch: actualBranch, HeadRevision: port.workspace.Head, State: "open"}
+	input := &fixed.workflow.StageInputs[len(fixed.workflow.StageInputs)-1]
+	require(t, s.acceptStagePublication(run, fixed, input, &executionmodel.StageSnapshot{Workspace: port.workspace}, stageReport{Outcome: "done", Summary: "published", Outputs: stageOutputs{PRURL: url}}, info))
+	w, e := s.workflowRecords(run)
+	want := fmt.Sprintf("head_branch: expected=%q, actual=%q", port.workspace.Branch, actualBranch)
+	if w.Status != "blocked" || !strings.Contains(w.StageDiagnostic, want) || e.Error == nil || !strings.Contains(*e.Error, want) {
+		t.Fatalf("missing blocked branch diagnostic: status=%s diagnostic=%s error=%v", w.Status, w.StageDiagnostic, e.Error)
+	}
 }
 
 func TestWorkerStageTransitions(t *testing.T) {

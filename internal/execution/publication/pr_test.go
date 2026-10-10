@@ -87,6 +87,39 @@ func TestWorkerPRIdentityRequiresExecutionBranch(t *testing.T) {
 	}
 }
 
+func TestWorkerPublicationReportsAllMismatchedFields(t *testing.T) {
+	url := "https://git.example/o/r/pulls/8"
+	head := strings.Repeat("a", 40)
+	info := executionmodel.PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "codex/101-short", HeadRevision: head, State: "open"}
+	if err := ValidateWorkerPublication(info, url, "o/r", "main", "codex/101-short", head); err != nil {
+		t.Fatal(err)
+	}
+	info.HeadBranch = "codex/101-full-run-id"
+	info.Repository = "o/other"
+	info.BaseBranch = "develop"
+	info.HeadRepository = "fork/r"
+	info.HeadRevision = strings.Repeat("b", 40)
+	info.URL = "https://git.example/o/other/pulls/9"
+	info.State = "closed_unmerged"
+	err := ValidateWorkerPublication(info, url, "o/r", "main", "codex/101-short", head)
+	if !errors.Is(err, ErrPRIdentity) {
+		t.Fatalf("lost PR identity error: %v", err)
+	}
+	for _, want := range []string{
+		`url: expected="` + url + `", actual="` + info.URL + `"`,
+		`repository: expected="o/r", actual="o/other"`,
+		`base_branch: expected="main", actual="develop"`,
+		`head_repository: expected="o/r", actual="fork/r"`,
+		`head_branch: expected="codex/101-short", actual="codex/101-full-run-id"`,
+		`head_revision: expected="` + head + `", actual="` + info.HeadRevision + `"`,
+		`state: expected=open|merged, actual="closed_unmerged"`,
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("missing mismatch %q: %v", want, err)
+		}
+	}
+}
+
 func TestGiteaQueryReadsPRHeadIdentity(t *testing.T) {
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
