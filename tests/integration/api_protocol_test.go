@@ -779,7 +779,7 @@ func TestAPIWorkerStageQueryProjection(t *testing.T) {
 	assertWorkerStageProjection(t, ready.run, *fromPage, "HTTP page query")
 }
 
-func assertWorkerStageProjection(t *testing.T, source reconstructiontypes.RunView, got api.CandidateSummary, query string) {
+func assertWorkerStageProjection(t *testing.T, source *reconstructiontypes.RunView, got api.CandidateSummary, query string) {
 	t.Helper()
 	if got.FlowRef != source.FlowRef || got.StepID != source.StepID || got.BusinessStatus != source.BusinessStatus ||
 		got.StageDiagnostic != source.StageDiagnostic || got.ReportToolPolicy != source.ReportToolPolicy || len(got.StageResults) != len(source.StageResults) {
