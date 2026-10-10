@@ -2,17 +2,17 @@
 
 唯一归属 #44；固定 [Spec](../spec/phase2-winui-foundation.spec.md)、[Plan](../spec/phase2-winui-foundation.plan.md) 和 [二期共同约束](../spec/phase2-constraints.md) 均取自 commit `550234ab0fb0aa74a3676ff09dde6e4bd4325295`。硬前置 #45 已交付并包含在代码起点；未调用 SteerLine 中心准入或创建外部 Task/DAG。
 
-当前实现候选为 `74326ae26c4423305e7d708a2c3acc55d8d38e5d`（tree `2f3855e4eb4554c1e8a90e94091eb4be631d6d4e`），从最新 `origin/main` commit `fbde4163a42639d5570dbe718b32cd42e95dc676` 集成开始；原工作树基线为 `550234ab0fb0aa74a3676ff09dde6e4bd4325295`。[PR #273](https://github.com/erranliu/SteerLine/pull/273) 已打开，当前等待独立复审与合并；本次结果不将后置人工项记为通过。
+当前实现候选为 `c5c9eb470835c6ab28f7343b40b41f3648f086cf`（tree `b4a7a265c03a7aaecc9a749ba3d5eebab36f7df0`），已集成最新 `origin/main` `eb76c50d69637212b66ddb60990ff68415d67a11`；最初实现基于 `fbde4163a42639d5570dbe718b32cd42e95dc676`，随后纳入 PR #272、#274、#275、#276。固定 Spec/Plan/共同约束仍取自 commit `550234ab0fb0aa74a3676ff09dde6e4bd4325295`。[PR #273](https://github.com/erranliu/SteerLine/pull/273) 保持 OPEN，未合并；UI2-M、UI4-M 和 UI5 生命周期留待人工验收。
 
 ## 自动验收
 
 | 项目 | 结果 | 证据与范围 |
 | --- | --- | --- |
-| UI1 | 已通过 | Windows 11 x64 上以固定 .NET SDK 8.0.416 / Windows App SDK 1.8.260921001 构建 self-contained `win-x64` 应用，并启动真实 WinUI 窗口。系统为 Windows 11 Home 10.0.26200；项目目标 `net8.0-windows10.0.19041.0`。restore/build 日志及 exe hash 见 final package 的 `evidence/dotnet-restore-app.log`、`dotnet-build-ui.log`、`task44-environment.json`。 |
-| UI2-A | 已通过 | 10 个定向测试通过，0 失败、0 跳过；覆盖无目标时禁用输入、显式本地意图不调用业务命令、目标草稿隔离、异步保存期间切目标和迟到响应保护。真实窗口 UIA 另验证 Task 1/2 切换期间编辑框立即绑定新目标，详情返回不覆盖输入，回切后恢复原草稿。 |
-| UI3 | 已通过 | final package 的受控 Windows 服务和 SQLite 中 Task 1/2 的状态均为 `open`。WinUI 客户端核验 `steerline-client/v1`、仓库身份、哈希 project ID、实例、PID/创建时间、可执行文件、loopback 地址及当前 SID 的 discovery/credentials ACL；公开 `/v1/identity` 与任务/详情查询均返回 HTTP 200，客户端显示两项真实任务及实际阻塞。任务页 `project_id` 按实际 DTO 表达仓库身份路径，已按公开响应核验。 |
-| UI4-A | 已通过 | 10 个定向测试中可访问名称、输入状态断言通过；UIA 在实际 WinUI 窗口读取到配置、项目、任务列表、状态、多行输入和本地意图控件名称。无任务目标时输入框和意图按钮均禁用。 |
-| UI5 | 已通过 | 两次关闭实际窗口均通过 `CloseMainWindow` 正常退出；关闭后服务 discovery 的实例 `ac600258a76472e69be2304f67b1630d`、PID 31180 保持 ready，HTTP identity/tasks 查询仍为 200，Task 1/2 状态不变。第二次启动窗口后重新读取 identity 与任务列表，仍为同一服务实例；两个任务的本地草稿均恢复。UI 没有 stop 或其他业务命令路由。 |
+| UI1 | 已通过 | 最终候选 commit `c5c9eb470835c6ab28f7343b40b41f3648f086cf` 在 Windows 11 Home 10.0.26200 x64 上以 .NET SDK 8.0.416 / Windows App SDK 1.8.260921001 构建 self-contained `win-x64` 并启动真实 WinUI 窗口。restore/build 日志、manifest 与 exe SHA-256 见包 `dev-20261010-122449-c5c9eb47/evidence/`。 |
+| UI2-A | 已通过 | 最终候选的 15 个定向测试通过，0 失败、0 跳过；覆盖无目标时禁用输入、本地意图不调用业务命令、目标草稿隔离、异步保存期间切目标和迟到响应保护。真实中文 IME 组词行为仍留给 UI2-M。 |
+| UI3 | 已通过 | 包 `dev-20261010-122449-c5c9eb47` 中，WinUI 使用配置的 Git executable/args 连接现有 `steerline-client/v1` 服务并显示公开任务查询；受控 worker 运行时 Task 1 为 `in_progress`、Task 2 为 `open`。协议、仓库身份、project ID、实例、PID、当前 SID 私有 ACL 与详情目标均核验。TaskPage `project_id` 表示仓库身份路径。未读取 SQLite 或私有日志。 |
+| UI4-A | 已通过 | 15 个定向测试中的可访问名称和输入状态断言通过；最终真实 WinUI 窗口可访问树显示配置、项目、任务列表、状态、多行输入和本地意图控件。 |
+| UI5 | 待人工验收 | 最终候选在受控 worker 运行期间成功连接并显示 Task 1；本次没有确认正常关闭 WinUI 后服务与 worker 的原 instance/PID 持续不变，因此不记自动通过。按用户指示留待人工检查。 |
 
 最终代码候选测试命令：
 
@@ -22,13 +22,13 @@ dotnet test ui/SteerLine.Windows.Tests/SteerLine.Windows.Tests.csproj -c Debug
 dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug
 ```
 
-结果为 restore exit 0；tests 10 passed / 0 failed / 0 skipped；build exit 0 / 0 warnings / 0 errors。实际 exe 为 `ui/SteerLine.Windows/bin/Debug/net8.0-windows10.0.19041.0/win-x64/SteerLine.Windows.exe`，SHA-256 `4fc7f44ec2d0a018f5137d5313bd8766df2dc40abcc1a83c8abc8a876bffcf96`。NuGet 缓存隔离在本次包的 `nuget-cache/`；精确 transitive 依赖保存在三个 `packages.lock.json` 中，Windows SDK BuildTools 为 `10.0.26100.4654`。未改用户全局 NuGet 配置、安装依赖或 `C:\SteerlineRuntime`。
+最终同源日志：app/tests restore exit 0；WinUI tests 15 passed / 0 failed / 0 skipped；WinUI build exit 0 / 0 warnings / 0 errors；`go test ./internal/product/httpapi ./internal/task/model ./internal/execution/adapters/codex ./internal/execution/process` 通过。exe SHA-256 `249a7f7238fc6db052f5d2b7bf28d12567b61afc60a0be3df0ca4b18d3ef5a71`。日志、NuGet 缓存和锁定依赖位于 `dev-20261010-122449-c5c9eb47/evidence/` 与 `nuget-cache/`；未改全局 NuGet 配置、安装依赖或 `C:\SteerlineRuntime`。
 
-真实联调使用统一生成器创建的 final package `C:\SteerlineDebug\dev-74326ae2-20261010-110711`，manifest `source_commit=74326ae26c4423305e7d708a2c3acc55d8d38e5d`、`source_dirty=false`、状态 `ready`；实际运行命令 `start.bat --simulate --no-pause`，首次启动后冻结为 simulate。配置与仓库均位于该包，SQLite 路径是其 `home\state\SteerlineTest-ccbb16af2c06\steerline.db`；受控 Git helper、服务、worker（未启动）均绑定此包。无 live 模型、真实 PR 或用户凭证请求。
+真实联调使用统一生成器按时间优先命名创建 final package `C:\SteerlineDebug\dev-20261010-122449-c5c9eb47`；manifest `source_commit=c5c9eb470835c6ab28f7343b40b41f3648f086cf`、`source_dirty=false`。运行 `start.bat --simulate --no-pause`，方案冻结为 simulate。服务 instance `8ee753591f5548ca244a34fb1a67f374` / PID 12660；受控 worker PID 49340 是该服务的子进程，使用 simulate profile。WinUI PID 39452 连接并显示任务详情。没有 live 模型或外部 PR。
 
-原始日志、manifest 对账、UIA/HTTP 查询、窗口生命周期和清理回执位于该包 `evidence/`，包括 `task44-environment.json`、`task44-ui-integration.json`、`task44-ui-reopen.json` 与 `task44-cleanup.json`。UI 关闭后才按生成器持有的 console 生命周期发起最终服务清理；原 stop receipt 为 `applied`，进程退出且锁释放。测试包保留任务定义、契约和 Git/provider 事实，未执行重置。
+最终包的生成日志、manifest、WinUI 截图、身份/任务查询、受控 worker start/resume/stop 回执和清理结果位于 `C:\SteerlineDebug\dev-20261010-122449-c5c9eb47\evidence\`。stop receipt `applied`，服务和 worker 退出、discovery 删除、锁可独占打开；任务定义与 provider/Git 事实仍在，未调用 reset。该包中 UI5 的正常关闭时点没有核验，详见 `task44-ui-reopen.json`，并转列人工验收。
 
-独立复审发现 `task44-ui-integration.json` 的 `implementation_tree` 曾有转录错误。已根据不可变 commit `74326ae26c4423305e7d708a2c3acc55d8d38e5d` 核对为 `2f3855e4eb4554c1e8a90e94091eb4be631d6d4e`，并与 `task44-environment.json` 一致；原始记录保留为 `task44-ui-integration-original.json`，修正后的 JSON 内含原值、核验值和修正原因。该修正只涉及证据元数据，不改变构建、测试、窗口或服务运行事实。
+较早包 `dev-74326ae2-20261010-110711` 的 `task44-ui-integration.json` tree hash 转录错误已修正；原始文件和修正记录均保留在该包 evidence。最终候选 `c5c9eb470835c6ab28f7343b40b41f3648f086cf` 的 tree 为 `b4a7a265c03a7aaecc9a749ba3d5eebab36f7df0`。
 
 ## 待人工验收
 
@@ -36,8 +36,9 @@ dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug
 | --- | --- | --- | --- |
 | UI2-M：中文 IME 和原生编辑 | 待验；参与人/真实 Windows IME 窗口待安排；最迟 2.1 签收前 | 对已选 Task 在中文 IME 组词期间按 Enter，确认只确认候选、不记录/发送意图；再验证粘贴多行、选区、撤销、Enter 换行、显式按钮只显示“未发送业务命令”，Task 1/2 草稿不串线。 | 阻塞 2.1 原生输入签收；不阻塞无关开发。 |
 | UI4-M：键盘与常用缩放/窄窗 | 待验；参与人/真实 Windows 窗口待安排；最迟 2.1 签收前 | 用键盘 Tab/Shift+Tab 到达项目配置、任务列表、输入框和显式按钮；在常用显示缩放和窄窗口下确认任务/状态/输入/按钮仍可操作、可见名称准确。 | 阻塞 2.1 可达性签收；不阻塞无关开发。 |
+| UI5-M：受控 worker 生命周期 | 待验；参与人/窗口待安排；最迟 2.1 签收前 | 在新建 simulate 包中记下 service instance/PID，启动受控 Task worker 并记录 worker PID/parent PID。WinUI 连接并查询任务后正常关闭窗口；核对没有 stop 请求、原 service/worker 仍运行且 instance/PID 不变，并用公开 identity/tasks GET 返回 200 复核。重开 UI 再查同一身份；最后通过包 console 停服并核对 applied receipt、进程退出和锁释放。 | 阻塞 2.1 生命周期签收；不阻塞 PR 交付或无关开发。 |
 
-普通 Enter 的实际窗口测试确认文本框产生 CR 换行且意图状态不变；这不替代中文 IME 组词验收。人工项仍为待验，不作通过声明。阶段验收引用本记录，不扩大 #44 范围。
+普通 Enter 的观察不替代中文 IME 组词验收。UI2-M、UI4-M 和 UI5 生命周期均待人工验收；按用户 2026-10-10 指示先交付 PR，三项最迟在 2.1 签收前完成，仅阻塞 2.1 签收，不阻塞 PR 交付或无关后续开发。
 
 ## 调试准备中的修复记录
 
