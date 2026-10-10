@@ -331,23 +331,36 @@ public sealed record ProjectConfiguration(
         var repository = ReadString(root, "repository");
         if (string.IsNullOrWhiteSpace(repository))
             throw new LocalServiceException("config_invalid", "项目配置缺少 repository 路径。");
-        if (!root.TryGetProperty("git", out var git) || git.ValueKind != JsonValueKind.Object)
-            throw new LocalServiceException("config_invalid", "项目配置缺少 Git 命令对象。");
-        var gitExecutable = ReadString(git, "executable");
-        if (string.IsNullOrWhiteSpace(gitExecutable))
-            throw new LocalServiceException("config_invalid", "项目配置缺少 Git executable。");
+        var gitExecutable = "git";
         var gitArgs = new List<string>();
-        if (git.TryGetProperty("args", out var args))
+        if (root.TryGetProperty("git", out var git) && git.ValueKind != JsonValueKind.Null)
         {
-            if (args.ValueKind != JsonValueKind.Array)
-                throw new LocalServiceException("config_invalid", "项目配置中的 Git args 必须是字符串数组。");
-            foreach (var argument in args.EnumerateArray())
+            if (git.ValueKind != JsonValueKind.Object)
+                throw new LocalServiceException("config_invalid", "项目配置中的 Git 命令必须是对象。");
+            if (git.TryGetProperty("executable", out var executable))
             {
-                if (argument.ValueKind != JsonValueKind.String)
+                if (executable.ValueKind == JsonValueKind.String)
+                    gitExecutable = executable.GetString()!;
+                else if (executable.ValueKind != JsonValueKind.Null)
+                    throw new LocalServiceException("config_invalid", "项目配置中的 Git executable 必须是字符串。");
+            }
+            if (git.TryGetProperty("args", out var args) && args.ValueKind != JsonValueKind.Null)
+            {
+                if (args.ValueKind != JsonValueKind.Array)
                     throw new LocalServiceException("config_invalid", "项目配置中的 Git args 必须是字符串数组。");
-                gitArgs.Add(argument.GetString()!);
+                foreach (var argument in args.EnumerateArray())
+                {
+                    if (argument.ValueKind == JsonValueKind.String)
+                        gitArgs.Add(argument.GetString()!);
+                    else if (argument.ValueKind == JsonValueKind.Null)
+                        gitArgs.Add(string.Empty);
+                    else
+                        throw new LocalServiceException("config_invalid", "项目配置中的 Git args 必须是字符串数组。");
+                }
             }
         }
+        if (string.IsNullOrWhiteSpace(gitExecutable))
+            throw new LocalServiceException("config_invalid", "项目配置缺少 Git executable。");
         var configDirectory = Path.GetDirectoryName(fullConfigPath)!;
         var repositoryPath = Path.GetFullPath(Path.IsPathRooted(repository) ? repository : Path.Combine(configDirectory, repository));
         if (!Directory.Exists(repositoryPath))
