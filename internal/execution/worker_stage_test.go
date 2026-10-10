@@ -120,8 +120,8 @@ func TestWorkerStageTransitions(t *testing.T) {
 	if !strings.Contains(w.StageInputs[1].ReportToolPolicy, "fact_comparison_only") {
 		t.Fatal("missing honest native permission guarantee")
 	}
-	if !strings.Contains(w.StageInputs[1].Prompt, `"task_id":"fixed-task"`) || !strings.Contains(w.StageInputs[1].Prompt, `"reply_truncated":false`) {
-		t.Fatal("report lost the frozen original stage goal or its evidence boundary")
+	if strings.Contains(w.StageInputs[1].Prompt, "task_id") || strings.Contains(w.StageInputs[1].Prompt, initial.LastMessage) {
+		t.Fatal("report repeats task identity or the preceding reply")
 	}
 	startQueuedStage(t, s, run)
 	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"implemented"}`, true))
@@ -182,13 +182,17 @@ func TestWorkerStageResultBinding(t *testing.T) {
 }
 
 func TestWorkerStageReportRound(t *testing.T) {
-	for _, scenario := range []string{"source_failed", "report_invalid", "report_write", "unknown", "needs_input", "publish_invalid", "publish_partial"} {
+	for _, scenario := range []string{"snapshot_candidate", "candidate_mismatch", "source_failed", "report_invalid", "report_write", "unknown", "needs_input", "publish_invalid", "publish_partial"} {
 		t.Run(scenario, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			require(t, acceptTestStage(t, s, run, port, "implementation facts", scenario != "source_failed"))
 			startQueuedStage(t, s, run)
 			body := `{"outcome":"done","outputs":{"candidate_sha":"` + port.workspace.Head + `"},"summary":"reported"}`
 			switch scenario {
+			case "snapshot_candidate":
+				body = `{"outcome":"done","summary":"reported"}`
+			case "candidate_mismatch":
+				body = `{"outcome":"done","outputs":{"candidate_sha":"` + strings.Repeat("b", 40) + `"},"summary":"reported"}`
 			case "report_invalid":
 				body = "not JSON"
 			case "report_write":
@@ -201,6 +205,14 @@ func TestWorkerStageReportRound(t *testing.T) {
 			require(t, acceptTestStage(t, s, run, port, body, true))
 			w := s.workflowRecord(run)
 			switch scenario {
+			case "snapshot_candidate":
+				if w.StepID != executionmodel.StepPublish || w.CandidateSHA != port.workspace.Head {
+					t.Fatal("candidate was not bound from verified snapshot")
+				}
+			case "candidate_mismatch":
+				if w.Status != "blocked" || w.StepID != executionmodel.StepReport {
+					t.Fatal("model candidate bypassed snapshot validation")
+				}
 			case "source_failed":
 				if w.Status != "blocked" || len(w.StageResults) != 2 || w.StageResults[0].Succeeded {
 					t.Fatal("report overwrote source failure")
@@ -326,7 +338,7 @@ func TestWorkerStagePublishReport(t *testing.T) {
 			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, original))
 			w := s.workflowRecord(run)
 			input := w.StageInputs[3]
-			if w.StepID != executionmodel.StepPublishReport || len(w.StageInputs) != 4 || len(w.StageResults) != 3 || input.SourceCommandID != original.CommandID || input.SourceTurnID != original.TurnID || input.CandidateSHA != port.workspace.Head || !strings.Contains(input.Prompt, "Do not push") || !strings.Contains(input.ReportToolPolicy, "fact_comparison_only") {
+			if w.StepID != executionmodel.StepPublishReport || len(w.StageInputs) != 4 || len(w.StageResults) != 3 || input.SourceCommandID != original.CommandID || input.SourceTurnID != original.TurnID || input.CandidateSHA != port.workspace.Head || !strings.HasPrefix(input.Prompt, publishReportPrompt) || !strings.Contains(input.ReportToolPolicy, "fact_comparison_only") {
 				t.Fatal("publication report lost its source, candidate or read-only instruction")
 			}
 			if scenario == "recovery" {

@@ -226,11 +226,10 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 			return errors.New("native input differs from the frozen stage prompt")
 		}
 	} else {
-		workspaceInstruction, err := workerWorkspaceInstruction(execution.Workspace)
-		if err != nil {
+		if err := validateWorkerWorkspace(execution.Workspace); err != nil {
 			return err
 		}
-		prompt += workspaceInstruction + publicationTargetInstruction(c)
+		prompt += stagePublicationInstruction(workflow.StepID, c)
 	}
 	if !readinessTurn {
 		if workflow.FlowRef != executionmodel.DevelopmentFlow || !executionmodel.ModelStep(workflow.StepID) {

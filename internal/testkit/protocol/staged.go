@@ -21,7 +21,7 @@ func StagedBusiness(cwd, prompt, provider, remote string) (string, error) {
 		return strings.TrimSpace(string(data)), nil
 	}
 	switch {
-	case strings.HasPrefix(strings.TrimSpace(prompt), "Current step: implement.execute"):
+	case strings.HasPrefix(strings.TrimSpace(prompt), "Implement the following Spec and Plan."):
 		if err := os.WriteFile(filepath.Join(cwd, "stage-result.txt"), []byte("staged fixture result\n"), 0600); err != nil {
 			return "", err
 		}
@@ -32,34 +32,28 @@ func StagedBusiness(cwd, prompt, provider, remote string) (string, error) {
 			return "", err
 		}
 		return "Implemented, verified the fixture result and committed the local candidate; no publication performed.", nil
-	case strings.HasPrefix(strings.TrimSpace(prompt), "Current step: implement.report"):
-		head, err := git("rev-parse", "HEAD")
+	case strings.HasPrefix(strings.TrimSpace(prompt), "Format the preceding implementation result as JSON."):
+		return `{"outcome":"done","summary":"source implementation completed"}`, nil
+	case strings.HasPrefix(strings.TrimSpace(prompt), "Format the preceding publication result as JSON."):
+		// Fixture model memory comes from the provider artifact of its preceding turn.
+		data, err := os.ReadFile(provider)
 		if err != nil {
 			return "", err
 		}
-		return `{"outcome":"done","outputs":{"candidate_sha":"` + head + `"},"summary":"source implementation completed"}`, nil
-	case strings.HasPrefix(strings.TrimSpace(prompt), "Current step: publish.report."):
-		// Report only the supplied reply; no Git or provider writes/checks.
-		const marker = "\nFacts:\n"
-		_, facts, ok := strings.Cut(prompt, marker)
-		if !ok {
-			return "", errors.New("publication report has no facts")
+		var result struct {
+			URL string `json:"url"`
 		}
-		var input struct {
-			Source struct {
-				Reply string `json:"reply"`
-			} `json:"source_execution"`
-		}
-		if err := json.NewDecoder(strings.NewReader(facts)).Decode(&input); err != nil {
+		if err := json.Unmarshal(data, &result); err != nil {
 			return "", err
 		}
-		url := strings.TrimPrefix(input.Source.Reply, "Published PR: ")
-		if url == input.Source.Reply || url == "" {
+		url := result.URL
+		if url == "" {
 			return "", errors.New("publication report has no original PR URL")
 		}
+
 		body, err := json.Marshal(map[string]any{"outcome": "done", "outputs": map[string]string{"pr_url": url}, "summary": "original publication reported"})
 		return string(body), err
-	case strings.HasPrefix(strings.TrimSpace(prompt), "Current step: publish."):
+	case strings.HasPrefix(strings.TrimSpace(prompt), "Push and create or reuse a PR."):
 		head, err := git("rev-parse", "HEAD")
 		if err != nil {
 			return "", err

@@ -143,7 +143,7 @@ func TestWorkerStageFeedbackUsesExactFrozenNativePrompt(t *testing.T) {
 	}
 	var native executionbackend.TurnInput
 	require(t, json.Unmarshal(operation.Request, &native))
-	if native.Prompt != input.Prompt || strings.Count(input.Prompt, "Fixed publication target:") != 1 || strings.Count(input.Prompt, "Fixed workspace:") != 1 {
+	if native.Prompt != input.Prompt || strings.Contains(input.Prompt, "Fixed publication target:") || strings.Contains(input.Prompt, "Fixed workspace:") {
 		t.Fatal("native feedback prompt changed after freezing or duplicated fixed instructions")
 	}
 }

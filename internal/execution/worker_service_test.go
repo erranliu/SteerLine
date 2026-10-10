@@ -129,9 +129,9 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, identity := range []string{"Fixed assigned worktree: " + firstWorktree, "Fixed assigned branch: " + initialExecution.Workspace.Branch, "Fixed base commit: " + receipt.BaseCommit} {
-		if !strings.Contains(string(initialPrompt), identity) {
-			t.Fatalf("initial dispatched prompt lacks %q: %s", identity, initialPrompt)
+	for _, identity := range []string{firstWorktree, initialExecution.Workspace.Branch, receipt.BaseCommit} {
+		if strings.Contains(string(initialPrompt), identity) {
+			t.Fatalf("initial dispatched prompt repeats native identity %q: %s", identity, initialPrompt)
 		}
 	}
 	if run.Process != nil {
@@ -214,16 +214,22 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
-	fixedConfig, err := service.executionConfigForRun(run)
+	selectedAnswer := ""
+	for _, option := range run.Decision.Request.Options {
+		if option.ID == answer.OptionID {
+			selectedAnswer = option.Label
+			break
+		}
+	}
+	_, err = service.executionConfigForRun(run)
 	require(t, err)
 	_, currentExecution := service.workflowRecords(run)
-	workspaceInstruction, err := workerWorkspaceInstruction(currentExecution.Workspace)
+	err = validateWorkerWorkspace(currentExecution.Workspace)
 	require(t, err)
 	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
 	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
-	encodedNote, _ := json.Marshal(feedbackPrompt)
-	if err != nil || !strings.Contains(string(savedPrompt), string(encodedNote)) || !strings.Contains(string(savedPrompt), workspaceInstruction) || !strings.Contains(string(savedPrompt), publicationTargetInstruction(fixedConfig)) {
+	encodedNote, _ := json.Marshal(answer.Note)
+	if err != nil || !strings.Contains(string(savedPrompt), string(encodedNote)) || strings.Contains(string(savedPrompt), "Fixed workspace:") || (selectedAnswer != "" && !strings.Contains(string(savedPrompt), selectedAnswer)) {
 		t.Fatalf("bound staged feedback text was not sent: prompt=%q err=%v", savedPrompt, err)
 	}
 	fullPrompt := string(savedPrompt)
