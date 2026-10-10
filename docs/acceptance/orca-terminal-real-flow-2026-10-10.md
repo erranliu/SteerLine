@@ -2,6 +2,8 @@
 
 本页只归属 [Orca 终端收敛](orca-terminal-transport.md)，覆盖 OTT-A5–A9；普通开发，不更新 roadmap。源代码已 rebase `872dba44`，实现 PR [SteerLine #284](https://github.com/erranliu/SteerLine/pull/284)。真实环境由 `scripts/new-debug-release.ps1 -Orca` 生成，仅使用 SteerlineTest 的专属 base/head，未使用或修改 `C:/SteerlineRuntime`。
 
+后续状态：#284 已合并，用户升级远端 CLI 后的[独立复测](orca-terminal-remote-retest-2026-10-10.md)已通过已准备目录中的产品闭环。本页的远端失败保持首次调试历史，不作为当前最新结论。
+
 ## 本机产品闭环：通过有限样本
 
 包：`C:/SteerlineDebug/dev-20261010-180722-4b23fdcc-dirty`，包含随后提交为 `468ea11b` 的 screen/激活修复；最后增加的 draft 拒绝保护另有单元及两目标受控回归，不把它冒充已重新跑过真机。
@@ -19,7 +21,7 @@
 
 可复核材料：包 `evidence/current.json`（三轮输入/结果/封套）、`merged.json`（PR 真值、TaskDelivery、后继）、`test-pr-201.json`、原生 screen 与关闭回执；`logs/live-flow.log` 为产品阶段迁移。#284 本身未合并。
 
-## 远端产品闭环：未通过
+## 升级前远端产品闭环：未通过（历史）
 
 环境 `e68f4edf-8a83-42c2-a9da-6d404d3aa3d8`（台式机64g），runtime `95d30a41-2f86-43ae-ac0d-9c304b5f1f90`，Orca 1.4.223。所有调用仍来自同一个本机 CLI，只增加 environment；原生 project setup-clone 准备远端仓库，不需要远端访问中心。
 
