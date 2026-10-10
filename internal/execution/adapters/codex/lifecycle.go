@@ -60,7 +60,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 			Profile: "", Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox,
 			Model: profile.Model, ReasoningEffort: profile.ReasoningEffort, Workspace: snapshot.Ref.WorkspacePath,
 			RunDir: setup.RunDirectory, RunID: snapshot.Session.WorkflowRunID, ServerDir: serverDir,
-			Environment: processEnv,
+			Environment: processEnv, WorkerRuntime: true,
 		},
 		Process: ProcessPort{
 			Start: setup.ProcessHost.StartManaged, Inspect: setup.ProcessHost.InspectProcess,
