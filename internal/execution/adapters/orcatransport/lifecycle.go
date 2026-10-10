@@ -281,6 +281,17 @@ func (l *Lifecycle) ready(ctx context.Context, s b.LifecycleSnapshot) error {
 		return err
 	}
 	_, err = l.original(ctx, s)
+	if err != nil {
+		return err
+	}
+	page, err := l.client.ReadScreen(ctx, s.Ref.External)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(page.Draft) != "" {
+		return errors.New("original Orca composer is not empty; finish native session preparation before starting; no input was sent")
+	}
+	_, err = l.original(ctx, s)
 	return err
 }
 
@@ -483,7 +494,7 @@ func (l *Lifecycle) collectOutput(ctx context.Context, process b.ProcessIdentity
 		previous := turn.Cursor
 		turn.Cursor = page.NextCursor
 		if turn.OutputSource == "screen" || page.NextCursor == page.LatestCursor {
-			return true, nil
+			return strings.TrimSpace(page.Draft) == "", nil
 		}
 		if turn.Cursor == previous {
 			return false, nil

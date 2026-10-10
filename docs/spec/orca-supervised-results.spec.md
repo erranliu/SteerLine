@@ -1,5 +1,7 @@
 # Spec：Orca supervised 分步结果接线
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 当前规则由用户直接授权的[提示词收敛 Spec](worker-prompt-convergence.spec.md)、[Plan](worker-prompt-convergence.plan.md)恢复；不占号、不进入 roadmap。原 payload 方案的 [Plan](orca-supervised-results.plan.md)、[原生探针](../acceptance/orca-supervised-result-probe-2026-10-10.md)与[验收](../acceptance/orca-supervised-results.md)保留历史结果，不能作为当前传输协议。
 
 本机和远端共用 supervised lifecycle。每轮 worker_done 保持 Orca 原生摘要和身份/结果字段，仅结算生命周期；不要求模型包装 steerline_result。中心通过公开 worker-read 采集本次输入段的回复：implement 普通说明，report/publish 为业务结果 JSON。身份由程序绑定，业务模板与后端无关。

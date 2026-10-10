@@ -20,6 +20,7 @@ type fakeHost struct {
 	lines                         []string
 	writeReply, unknown, clipped  bool
 	screen                        bool
+	draft                         string
 }
 
 func (f *fakeHost) StartManaged(*exec.Cmd) (b.StopHandle, error) {
@@ -59,8 +60,8 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 	case "terminal wait":
 		result = map[string]any{"wait": map[string]any{"satisfied": true}}
 	case "terminal read":
-		if f.screen {
-			result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "screen", "tail": f.lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0", "truncated": true}}
+		if f.screen || strings.Contains(strings.Join(c.Args, " "), "--screen") {
+			result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "screen", "tail": f.lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0", "truncated": true, "draft": f.draft}}
 			break
 		}
 		cursor := 0
@@ -308,5 +309,32 @@ func TestScreenReplyDoesNotRequireOffscreenHistory(t *testing.T) {
 	r, _, err = l.observeOnce(context.Background(), s)
 	if err != nil || r.TurnEvidence == nil || r.TurnEvidence.LastMessage != `{"summary":"original result"}` {
 		t.Fatal("complete visible frame was lost to offscreen history", r, err)
+	}
+}
+
+func TestComposerDraftBlocksPreparationAndSubmission(t *testing.T) {
+	l, f, s := fixture(t)
+	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	text, _ := workerreturn.Prompt("Implement the bound Spec.", strings.Repeat("c", 32))
+	input := b.TurnInput{CommandID: strings.Repeat("c", 32), Prompt: text}
+	s.PendingTurn = &input
+	f.draft = "native setup input"
+	if _, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareSession, b.LifecycleInput{Turn: &input})); err == nil {
+		t.Fatal("preparation accepted an occupied composer")
+	}
+	f.draft = ""
+	s, input = prepared(t, l, s, input.CommandID)
+	f.draft = "another UI input arrived after preparation"
+	if _, _, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input})); err == nil {
+		t.Fatal("submission appended business input to a native draft")
+	}
+	for _, call := range f.calls {
+		if call[1] == "send" {
+			t.Fatal("occupied composer mutated", call)
+		}
 	}
 }

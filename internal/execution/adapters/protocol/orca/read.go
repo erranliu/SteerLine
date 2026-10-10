@@ -22,6 +22,7 @@ type StreamPage struct {
 	LatestCursor string   `json:"latestCursor"`
 	Limited      bool     `json:"limited"`
 	Truncated    bool     `json:"truncated"`
+	Draft        string   `json:"draft"`
 }
 
 func ValidCursor(value string) bool {

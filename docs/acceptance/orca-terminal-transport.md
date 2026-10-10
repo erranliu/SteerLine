@@ -2,7 +2,7 @@
 
 本记录仅归属用户直接授权的 Orca adapter 收敛工作，不进入 roadmap。2026-10-10 用户确认：共用 SteerLine worker 上层流程；Orca 移除 worker-start 和 Run/Task/Dispatch/coordinator/preamble/worker_done；底层只准备会话、投递、观察、停止和清理。先验证无需 Dispatch 的原回合结果读取，能力不足时另行确认共用结果通道，不先删除当前入口交付一条只有输入的路径。
 
-当前状态：单终端 CLI 实现已接线；用户 2026-10-10 要求直接实施、不执行验证。新版输入/结果传输未验收。下方 OTT-A1–A4 为先前公开能力探针历史，不能当作新版稳定性证明。HTTP 与文件/辅助终端方案已撤回。
+当前状态：单终端 CLI 实现已接线；用户最新要求提 PR 并验证本机/远端真实流程，取代先前不验证安排。最小回归通过，本机真实三阶段与 PR 合并交付通过；远端整条产品流程未通过，原生启动/默认模型前置仍有缺口。[本次详细记录](orca-terminal-real-flow-2026-10-10.md)。下方 OTT-A1–A4 为先前公开能力探针历史，不能当作新版稳定性证明。HTTP 与文件/辅助终端方案已撤回。
 
 ## 环境与最小入口
 
@@ -35,14 +35,14 @@ CLI/runtime 1.4.224；runtime `fb7953d3-29a6-4f81-b6b9-fa257bb98d04`。独立 re
 
 ## 当前单终端实施与待验明细
 
-最新基线 `03df9d14`；[Spec](../spec/orca-terminal-transport.spec.md) / [Plan](../spec/orca-terminal-transport.plan.md)。只使用同一 agent 终端、本机 CLI 和 environment 路由；先保存原游标、原样发短输入、沿每轮固定来源读有界结果。旧 supervised 及本次 HTTP/文件回传原型删除。长文本、全文和 native final 不属于新方案承诺。
+已 rebase 主干 `872dba44`；[Spec](../spec/orca-terminal-transport.spec.md) / [Plan](../spec/orca-terminal-transport.plan.md)。只使用同一 agent 终端、本机 CLI 和 environment 路由；先保存原来源/游标、原样发短输入、沿每轮固定来源读有界 base64 结果。准备与发送前拒绝公共 screen 的非空 draft。旧 supervised 及本次 HTTP/文件回传原型删除。长文本、全文和 native final 不属于新方案承诺。
 
 | ID | 当前自动项 | 状态 |
 | --- | --- | --- |
-| OTT-A5 | 紧凑帧、原 Command、回显/歧义/超限边界 | 已实现，未运行验证 |
-| OTT-A6 | 原终端身份、每轮游标持久化、一次投递与只读对账 | 已实现，未运行验证 |
-| OTT-A7 | 本机/远端相同 CLI 端口、连续阶段与恢复 | 已实现，未运行验证 |
-| OTT-A8 | 共用 worker 接线、旧 codec/回调字段拒绝、结构化 PR URL | 已实现，未运行验证 |
-| OTT-A9 | 真机本机和远端单终端短输入/紧凑结果闭环 | 未运行，后续安排 |
+| OTT-A5 | 紧凑帧、原 Command、回显/歧义/超限边界 | 单元通过；软换行分别落在 nonce/base64 内仍保持原业务正文。`C:/SteerlineDebug/orca-final-unit.log` |
+| OTT-A6 | 原终端身份、每轮游标持久化、一次投递与只读对账 | 单元通过：身份替换、stream 缺口拒绝、screen 可见完整帧、准备未投递不建观察器；非空 draft 在准备和发送两处零 send。相同单元日志 |
+| OTT-A7 | 本机/远端相同 CLI 端口、连续阶段与恢复 | 受控两场景通过：最后一轮 85.60s / 77.74s，总 168.431s；三阶段原终端，重启不重发。是真实进程/Git、模型替身，非远端真机验收 |
+| OTT-A8 | 共用 worker 接线、旧 codec/回调字段拒绝、结构化 PR URL | app/console 选定组、execution Declared、受控完整阶段均通过。本机真机 PR #201 URL/candidate/head/base 经中心核实后交付 |
+| OTT-A9 | 真机本机和远端单终端短输入/紧凑结果闭环 | 部分通过。本机三阶段、PR #201 合并、TaskDelivery 和后继 ready 已实测。远端默认模型拒绝；准备期间 draft 与业务输入竞争的产品场景未通过。独立原生会话仅本会话调整模型后，短输入及紧凑结果探针通过。两者不可互相替代 |
 
-实施过程中之前的 HTTP 本机三轮与 CLI 材料传输探针均为已撤回方案的实验。它们不覆盖本表；辅助终端实验结束时已有 ptyKilled 清理回执。远端模型拒绝/网络回调超时只说明当时环境，不能转记为新单终端路径的通过或失败。本次不运行测试、探针、完整编译验证或真实 PR 调试，不修改安装运行环境。
+实施过程中之前的 HTTP 本机三轮与 CLI 材料传输探针均为已撤回方案的实验。它们不覆盖本表。此次所有 debug 服务及自建 agent/probe 终端已停止，保存原身份和 ptyKilled 回执；独立包保留证据，未修改安装环境。远端缺少通用可信的原生启动就绪信号，不能靠解析特定 agent 菜单或自动补 Enter 将失败转成通过；PR 保留草稿，并记录此限制。

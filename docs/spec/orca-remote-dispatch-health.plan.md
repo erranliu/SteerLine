@@ -1,5 +1,7 @@
 # 远端 Dispatch 健康检查修复 Plan
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 依据 [Spec](orca-remote-dispatch-health.spec.md)。普通直接开发，不改变执行 DAG。
 
 1. 读取现场原终端与 Dispatch，核对第二个 Codex 的同 conversation 占用现象；保留现场，不重发 101。

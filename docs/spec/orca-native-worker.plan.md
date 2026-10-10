@@ -1,5 +1,7 @@
 # Plan：本机 Orca 原生通用 worker 与权限委托
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 本聊天直接实现本机 Orca 接入调整，历史预留 ID 86 已退出 roadmap，保留编号不复用。依据 [Spec](orca-native-worker.spec.md)，结果归[专属记录](../acceptance/orca-native-worker.md)；当前用户指令是直接实现，不创建 roadmap 执行聊天、不阻塞 #84 或改写其固定文档。
 
 ## 实施步骤

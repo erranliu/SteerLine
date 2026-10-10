@@ -1,5 +1,7 @@
 # 远端 Orca 正式路径与 L3 实现 Plan
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 绑定[Spec](orca-remote-l3.spec.md)，直接在当前聊天实现；此前保留的 #85 不构成 roadmap 调度。结果记录于[专属验收](../acceptance/orca-remote-l3.md)。
 
 ## 实施

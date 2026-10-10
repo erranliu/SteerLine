@@ -65,6 +65,10 @@ func fakeTerminalOrca(directory string, args []string) int {
 		case "terminal wait":
 			result = map[string]any{"wait": map[string]any{"satisfied": true}}
 		case "terminal read":
+			if strings.Contains(strings.Join(args, " "), "--screen") {
+				result = map[string]any{"terminal": map[string]any{"handle": "original", "source": "screen", "tail": state.Lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0"}}
+				break
+			}
 			cursor := 0
 			if value := arg(args, "--cursor"); value != "" {
 				cursor, err = strconv.Atoi(value)
