@@ -1,6 +1,6 @@
 # Activity 契约：数据库事件与服务控制台
 
-中心活动只随业务状态写入 SQLite events。控制台右下仅通过RecentActivity读取所选候选当前Attempt的最新10条活动短摘要，不提供时间线、工具正文展开或历史翻页。服务窗口输出、规范活动采集和诊断读取仍保留。产品 Activity 查询绑定明确的项目/Run/Execution/Attempt，以数据库 EventID 排序和推进游标；没有中心 activity.jsonl 镜像、文件 seq 恢复、格式探测或 raw fallback。
+中心活动只随业务状态写入 SQLite events。控制台通过 RecentActivity 读取所选候选当前 Attempt 的最近五条流程/状态变化、五条最近原始变化及十条其他活动；重合事件去重，共用原 1 MiB 预算，可读变化优先。右下默认只投影最多五条流程/状态消息，技术变化及其他活动摘要放入 d 详情；不提供工具正文展开或历史翻页。服务窗口输出、规范活动采集和诊断读取仍保留。产品 Activity 查询绑定明确的项目/Run/Execution/Attempt，以数据库 EventID 排序和推进游标；没有中心 activity.jsonl 镜像、文件 seq 恢复、格式探测或 raw fallback。
 
 ## 活动记录
 
@@ -24,6 +24,6 @@
 
 ## 三窗运行与反馈
 
-右上显示候选/冻结方案/状态/环境/PR；右下优先显示当前问题或答案预览与回执，没有问题时显示运行状态和最多10条短摘要。RecentActivity在同一读取事务中核验项目/Workflow/Execution/Attempt并选择最新活动，命令等非活动事件不占摘要数量；按字节预算拒绝补画过大/缺失payload。UI不保存原始meta/工具全文，候选或Attempt变化清空样本并拒绝旧响应。
+右上显示候选/冻结方案/原始状态/阻塞原因/PR；右下优先显示当前问题或答案预览与回执，再显示当前 step_id/status 与变化，一条消息仅表示流程或状态，未变化的流程只作为状态消息上下文。execution_status/resource_status、turn ID、输入版本和恢复字段不作为默认消息。RecentActivity 在同一读取事务中核验项目/Workflow/Execution/Attempt；按预算拒绝补画过大/缺失 payload。UI 有界保留原始变化字段和诊断供详情读取，不保存工具全文，候选或 Attempt 变化清空样本并拒绝旧响应。具体规则及验收见[可读性收敛](../spec/console-flow-state-readability.spec.md)。
 
 右下按a激活既有Unicode编辑器，Tab循环列表/选项/输入，Enter换行，F2单次提交。长背景用F8只读查看，完整最终回复用f；普通回答不切整页详情。

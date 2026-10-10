@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -52,7 +53,7 @@ func TestPS1RecentActivityReadsLatestTenFromExactAttempt(t *testing.T) {
 	}
 	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for i := 0; i < 6; i++ {
-			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("state-%d", i)})
+			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("state-%d", i), Meta: map[string]any{"from": map[string]any{"step_id": "implement.report", "status": "running"}, "to": map[string]any{"step_id": "publish", "status": "queued"}}})
 			_, err := tx.AppendEvent(ports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "state", ExternalID: fmt.Sprint(i), Type: "activity.worker_state", Payload: payload})
 			if err != nil {
 				return err
@@ -71,5 +72,41 @@ func TestPS1RecentActivityReadsLatestTenFromExactAttempt(t *testing.T) {
 	require(t, err)
 	if len(batch.Activity) != 15 || batch.Activity[0].Title != "state-1" || batch.Activity[4].Title != "state-5" || batch.Activity[14].Title != "tool-19" {
 		t.Fatal("tool activity hid recent state changes", batch.Activity)
+	}
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		for i := 0; i < 20; i++ {
+			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("technical-%d", i), Meta: map[string]any{"from": map[string]any{"step_id": "publish", "status": "queued", "current_turn_id": "old", "resource_status": "idle"}, "to": map[string]any{"step_id": "publish", "status": "queued", "current_turn_id": fmt.Sprint(i), "resource_status": "pending"}}})
+			if _, err := tx.AppendEvent(ports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "technical", ExternalID: fmt.Sprint(i), Type: "activity.worker_state", Payload: payload}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	batch, err = NewQueryService(store, project).ReadRecentActivity(ctx, "run", "execution", "attempt")
+	require(t, err)
+	if len(batch.Activity) != 20 || batch.Activity[0].Title != "state-1" || batch.Activity[4].Title != "state-5" || batch.Activity[19].Title != "technical-19" {
+		t.Fatal("technical-only changes hid visible history or lost recent raw records", batch.Activity)
+	}
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		for i := 0; i < 5; i++ {
+			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("large-technical-%d", i), Detail: strings.Repeat("x", 400000), Meta: map[string]any{"from": map[string]any{"step_id": "publish", "status": "queued", "resource_status": "idle"}, "to": map[string]any{"step_id": "publish", "status": "queued", "resource_status": "pending"}}})
+			if _, err := tx.AppendEvent(ports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "budget", ExternalID: fmt.Sprint(i), Type: "activity.worker_state", Payload: payload}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	_, events, err := store.ReadRecentActivityView(ctx, project, "run", "execution", "attempt")
+	require(t, err)
+	total, visible := 0, 0
+	for _, event := range events {
+		total += len(event.Payload)
+		var activity api.ActivityEvent
+		if json.Unmarshal(event.Payload, &activity) == nil && strings.HasPrefix(activity.Title, "state-") {
+			visible++
+		}
+	}
+	if total > 1048576 || visible != 5 {
+		t.Fatal("raw payload budget displaced visible transitions", total, visible)
 	}
 }

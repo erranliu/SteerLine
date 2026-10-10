@@ -65,7 +65,7 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 		t.Fatal("repeated activity duplicated changes or moved focus")
 	}
 	text := strings.Join(feedbackLines(m, m.projects[0], m.selectedRow(0)), "\n")
-	for _, want := range []string{"问题：", "状态变化", "implement.execute", "implement.report", "queued", "execution_status:"} {
+	for _, want := range []string{"问题：", "流程与状态", "implement.execute", "implement.report", "queued", "当前流程："} {
 		if !strings.Contains(text, want) {
 			t.Fatal("question or original transition fields were hidden", want, text)
 		}
@@ -73,6 +73,14 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 	if strings.Contains(text, event.Title) {
 		t.Fatal("display inferred state from prose")
 	}
+	if strings.Contains(text, "execution_status:") || strings.Contains(text, "input_version:") {
+		t.Fatal("technical changes leaked into default timeline", text)
+	}
+	m.detailExpanded = true
+	if raw := strings.Join(candidateDetailLines(m, m.projects[0], m.selectedRow(0)), "\n"); !strings.Contains(raw, "execution_status:") || !strings.Contains(raw, "input_version:") {
+		t.Fatal("raw fields disappeared from details", raw)
+	}
+	m.detailExpanded = false
 	malformed := msg
 	malformed.batch.Activity = []api.ActivityEvent{{Kind: "worker_state", Seq: 2, Meta: map[string]any{"to": "invalid fields"}}}
 	next, _ = m.Update(malformed)
@@ -88,7 +96,7 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 	}
 	run.Decision = nil
 	run.StepID, run.BusinessStatus, run.ExecutionStatus, run.FinishTaskStatus = "delivered", "completed", "succeeded", "completed"
-	if !strings.Contains(strings.Join(feedbackLines(m, m.projects[0], m.selectedRow(0)), "\n"), "状态变化") {
+	if !strings.Contains(strings.Join(feedbackLines(m, m.projects[0], m.selectedRow(0)), "\n"), "流程与状态") {
 		t.Fatal("terminal state hid transition history")
 	}
 	run.AttemptID = "another-attempt"
@@ -100,7 +108,7 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 	}
 }
 
-func TestWorkerStatusWrappedRowsKeepSelectionVisible(t *testing.T) {
+func TestWorkerStatusSingleRowsKeepSelectionVisible(t *testing.T) {
 	m, _ := ccFixture(t, 1)
 	s := &m.projects[0]
 	s.snapshot.Observation.Page.Runs = nil
@@ -113,8 +121,8 @@ func TestWorkerStatusWrappedRowsKeepSelectionVisible(t *testing.T) {
 	s.selectedKey = "task:3"
 	lines := renderRows(m, *s, 26, 7)
 	text := strings.Join(lines, "\n")
-	if len(lines) > 7 || !strings.Contains(text, "▸ 3") || !strings.Contains(strings.ReplaceAll(strings.ReplaceAll(text, "\n", ""), " ", ""), "waiting_external") {
-		t.Fatal("wrapped predecessor hid selected row or raw status", lines)
+	if len(lines) > 7 || !strings.Contains(text, "▸ 3") || strings.Contains(text, "waiting_external") {
+		t.Fatal("list lost selected row or leaked worker details", lines)
 	}
 }
 

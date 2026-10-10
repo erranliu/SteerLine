@@ -723,6 +723,18 @@ func preserveLastGood(previous, next ProjectSnapshot) ProjectSnapshot {
 }
 
 func (m Model) rows(index int) []consoleRow {
+	if index >= 0 && index < len(m.projects) && m.projects[index].filter == 7 {
+		local := m
+		local.projects = append([]projectState(nil), m.projects...)
+		local.projects[index].filter = 0
+		var blocked []consoleRow
+		for _, row := range local.rows(index) {
+			if taskRowBlocked(row) {
+				blocked = append(blocked, row)
+			}
+		}
+		return blocked
+	}
 	if index < 0 || index >= len(m.projects) {
 		return nil
 	}
@@ -845,6 +857,8 @@ func filterIndex(name string) int {
 		return 5
 	case "history":
 		return 6
+	case "blocked":
+		return 7
 	}
 	return 0
 }
@@ -869,6 +883,8 @@ func filterName(index int) string {
 	case 6:
 
 		return "history"
+	case 7:
+		return "blocked"
 	}
 
 	return "all"
