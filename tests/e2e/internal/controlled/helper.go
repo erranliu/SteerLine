@@ -204,7 +204,7 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if s.Session == "" || params.ThreadID != s.Session || len(params.Input) == 0 {
 			return fmt.Errorf("invalid controlled dispatch")
 		}
-		steps := []string{"Implement the following Spec and Plan.", "Format the preceding implementation result as JSON.", "Push and create or reuse a PR."}
+		steps := []string{"Implement the following Spec and Plan.", "Format the preceding implementation result as JSON.", "Push and create or reuse a PR using the current checked-out branch."}
 		index := len(s.Turns)
 		if index >= len(steps) || !strings.HasPrefix(params.Input[0].Text, steps[index]) {
 			return fmt.Errorf("unexpected duplicate or out-of-order staged dispatch")
