@@ -1,5 +1,7 @@
 # Plan：Orca supervised 分步结果接线
 
+本页为 PR #274 的历史 payload 实施安排。2026-10-10 用户直接授权恢复 #84 三轮设计，当前实施与测试安排由[提示词收敛 Plan](worker-prompt-convergence.plan.md)替代；下列原验收项及结果只归属历史构建。
+
 绑定 [Spec](orca-supervised-results.spec.md)；普通直接开发，测试结果只登记[专属验收](../acceptance/orca-supervised-results.md)，不维护 roadmap。
 
 1. 在 supervised adapter 添加结果指令和严格消息 decoder（包括外层重复字段/精确结果字段名、原生字符串 payload）；使用现有 NativeTurnState 保存输入版本、原进程绑定、消息摘要和完整结果。变更状态 codec，不提供旧格式迁移。

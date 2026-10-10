@@ -164,7 +164,7 @@ func (l *ExecutionLifecycle) Next(_ context.Context, snapshot executionbackend.L
 	}
 	turn := findTurn(&state, snapshot.PendingTurn.CommandID)
 	if turn == nil || turn.TaskID == "" {
-		candidate := resourceCandidate("conversation", snapshot.Session.TaskID, resultPrompt(*snapshot.PendingTurn))
+		candidate := resourceCandidate("conversation", snapshot.Session.TaskID, snapshot.PendingTurn.Prompt)
 		candidate.Input.Resource.TurnID = snapshot.PendingTurn.CommandID
 		candidate.Input.Resource.InputVersion = snapshot.PendingTurn.InputVersion
 		return candidate, candidate.Validate()
@@ -250,7 +250,7 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 	if turn == nil || turn.DispatchID == "" || snapshot.Ref.External.Dispatch == "" {
 		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationUnknown, Diagnostic: "supervised observation has no original Dispatch"}, nil, nil
 	}
-	if turn.Settled {
+	if turn.Settled && turn.FinalVerified {
 		evidence, err := settledResult(snapshot, turn)
 		if err != nil {
 			return executionbackend.LifecycleReceipt{}, nil, err
@@ -273,6 +273,9 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 	outcome, settleErr := settlementOutcome(observation.DispatchState, observation.WorkerState, turn.Outcome)
 	if settleErr == nil && turn.DoneMessageID != "" {
 		turn.Settled, turn.Outcome = true, outcome
+		if turn.FinalReadError == "" || !strings.HasPrefix(turn.FinalReadError, "completion:") {
+			l.client.captureReply(ctx, turn)
+		}
 		receipt.Disposition = executionbackend.OperationConfirmed
 		receipt.State.TurnCompleted = true
 		evidence, resultErr := settledResult(snapshot, turn)

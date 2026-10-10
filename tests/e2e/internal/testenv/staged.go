@@ -16,7 +16,7 @@ func (p *Project) AssertStagedFlow(snapshot Snapshot) {
 		p.Scenario.t.Fatal("staged chain lacks one original workflow/execution/Attempt")
 	}
 	w, e := snapshot.Domain.WorkflowRuns[0], snapshot.Domain.Executions[0]
-	if w.FlowRef != "development/v1" || w.StepID != "await_merge" || w.Status != "waiting_external" || len(w.StageInputs) != 3 || len(w.StageResults) != 3 || e.TurnNumber != 3 || w.CandidateSHA != snapshot.Helper.PR.HeadRevision {
+	if w.FlowRef != "development/v2" || w.StepID != "await_merge" || w.Status != "waiting_external" || len(w.StageInputs) != 3 || len(w.StageResults) != 3 || e.TurnNumber != 3 || w.CandidateSHA != snapshot.Helper.PR.HeadRevision {
 		p.Scenario.t.Fatal("staged flow/head/count mismatch")
 	}
 	for i, step := range []string{"implement.execute", "implement.report", "publish"} {

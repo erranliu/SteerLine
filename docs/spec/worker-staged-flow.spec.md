@@ -55,6 +55,8 @@ Spec/Plan 定义任务做什么、实现范围、测试和验收要求。SteerLi
 
 ## 3. 最小提示词与输入
 
+2026-10-10 用户直接授权恢复此设计。当前实现使用 development/v2；首次/反馈/恢复共用三个模板，报告轮不嵌入整个旧 prompt。源执行已核实结束时，缺少完整正文以未知事实送入 report，不阻止整理；报告/发布结果仍须核对原输入和实际产物。当前接线及最小验证见[恢复 Spec](worker-prompt-convergence.spec.md)、[验收](../acceptance/worker-prompt-convergence.md)。
+
 implement 执行轮只注入固定事实和短提示词，不要求 JSON 或内部身份回填；其报告轮另带紧凑事实包和结果契约。publish 单轮带固定发布输入、短提示词和同一结果契约。任务规则与测试要求不复制到 common 长模板，权限配置不转写成常驻说明。
 
 **Implement**

@@ -247,6 +247,8 @@ func TestSupervisedLocalTargetQuestionCompletionAndRecovery(t *testing.T) {
 		switch args[1] {
 		case "run-show":
 			return wire("local-runtime", map[string]any{"run": map[string]string{"id": "run", "coordinator_handle": "coordinator"}}), nil
+		case "worker-read":
+			return wire("local-runtime", replyOutput("Complete supervised response")), nil
 		case "worker-show":
 			return wire("local-runtime", localWorker("task", "dispatch", "succeeded")), nil
 		case "check":
@@ -258,7 +260,7 @@ func TestSupervisedLocalTargetQuestionCompletionAndRecovery(t *testing.T) {
 			payload := map[string]any{"taskId": "task", "dispatchId": "dispatch", "question": body}
 			if checks > 1 {
 				kind, id, body = "worker_done", "done", "Complete supervised response"
-				payload = map[string]any{"taskId": "task", "dispatchId": "dispatch", "outcome": "succeeded", "steerline_result": declaredResult{Version: 1, CommandID: "00000000000000000000000000000007", InputVersion: 1, Body: body}}
+				payload = map[string]any{"taskId": "task", "dispatchId": "dispatch", "outcome": "succeeded"}
 			}
 			raw, _ := json.Marshal(payload)
 			return wire("local-runtime", map[string]any{"runId": "run", "deliveryId": id + "-delivery", "messages": []Message{{ID: id, RunID: "run", ToHandle: "run:run", Type: kind, FromHandle: "agent", Body: body, Payload: raw}}}), nil

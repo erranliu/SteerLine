@@ -18,7 +18,7 @@ func TestWorkerWorkspaceInstructionUsesPreparedRemoteIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, expected := range []string{"Fixed assigned worktree: D:/remote/sl-101", "Fixed assigned branch: remote/sl-101", "Fixed base commit: " + workspace.Base, "Existing evidence from earlier runs is not the authority"} {
+	for _, expected := range []string{`"worktree":"D:/remote/sl-101"`, `"branch":"remote/sl-101"`, `"base":"` + workspace.Base + `"`} {
 		if !strings.Contains(prompt, expected) {
 			t.Fatalf("prepared workspace context missing %q: %s", expected, prompt)
 		}
@@ -41,14 +41,16 @@ func TestWorkerFlowPromptBindsFixedTaskContract(t *testing.T) {
 	if err != nil || !strings.HasPrefix(prompt, "Current step: implement.execute.") || !strings.Contains(prompt, "Do not publish in this step.") {
 		t.Fatalf("worker prompt omitted its current step boundary: %q / %v", prompt, err)
 	}
-	_, body, found := strings.Cut(prompt, "\nFixed facts:\n")
+	_, body, found := strings.Cut(prompt, "\nFacts:\n")
 	var facts struct {
-		TaskID string                  `json:"task_id"`
-		Title  string                  `json:"title"`
-		Spec   taskmodel.FileReference `json:"spec"`
-		Plan   taskmodel.FileReference `json:"plan"`
+		Task struct {
+			TaskID string                  `json:"task_id"`
+			Title  string                  `json:"title"`
+			Spec   taskmodel.FileReference `json:"spec"`
+			Plan   taskmodel.FileReference `json:"plan"`
+		} `json:"task"`
 	}
-	if !found || json.Unmarshal([]byte(body), &facts) != nil || facts.TaskID != task.TaskID || facts.Title != task.Title || facts.Spec != contract.SpecRef || facts.Plan != contract.PlanRef {
+	if !found || json.Unmarshal([]byte(body), &facts) != nil || facts.Task.TaskID != task.TaskID || facts.Task.Title != task.Title || facts.Task.Spec != contract.SpecRef || facts.Task.Plan != contract.PlanRef {
 		t.Fatal("worker prompt changed its fixed task or committed Spec/Plan references")
 	}
 	if _, err := Prompt(task, contract, "", executionbackend.PublicationPolicy{Publisher: "worker"}); err == nil {

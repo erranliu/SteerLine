@@ -1,6 +1,6 @@
 # 测试总入口
 
-当前产品入口为本地 Codex 与 Orca supervised（local/environment）。原本机 `host=orca` 已停用。supervised 目标注册/路由采用[定向验收](acceptance/orca-supervised-targets.md)，分步结果已接入[单消息声明结果及定向验收](acceptance/orca-supervised-results.md)。旧单轮远端场景仍已退役，未恢复为当前交付覆盖；真实分步 L3 仍须建立专用驱动，历史结果见[专属记录](acceptance/orca-remote-l3.md#当前分步流程能力缺口)。
+当前产品入口为本地 Codex 与 Orca supervised（local/environment）。原本机 `host=orca` 已停用。supervised 目标注册/路由采用[定向验收](acceptance/orca-supervised-targets.md)，当前分步结果恢复为[统一模板和原生回复采集](acceptance/worker-prompt-convergence.md)，原[单消息声明结果](acceptance/orca-supervised-results.md)保留历史。旧单轮远端场景仍已退役，未恢复为当前交付覆盖；真实分步 L3 仍须建立专用驱动，历史结果见[专属记录](acceptance/orca-remote-l3.md#当前分步流程能力缺口)。
 
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
 

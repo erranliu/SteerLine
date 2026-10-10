@@ -15,7 +15,7 @@ func TestUX1ParallelNumbersAndPrimarySurface(t *testing.T) {
 	m, _ := ccFixture(t, 5)
 	m.rows(0)
 	view := m.View()
-	for _, want := range []string{"并行 5 · 待交互 5 · 当前 P1", "F6/F7", "[P1] 待交互"} {
+	for _, want := range []string{"当前 P1", "F6/F7", "step_id:", "status:", "execution_status:"} {
 		if !strings.Contains(view, want) {
 			t.Fatal(want, view)
 		}
@@ -124,7 +124,7 @@ func TestUX2PreviewSubmitEndsCurrentHumanInteraction(t *testing.T) {
 	if cmd == nil || m.answer != nil || m.projects[0].focus != 1 {
 		t.Fatal("F2 did not return to original session")
 	}
-	if !strings.Contains(m.View(), "待交互 4") || run.Decision.Status != "pending" {
+	if !feedbackInProgress(m.projects[0], run) || run.Decision.Status != "pending" {
 		t.Fatal("UI submission count rewrote business Decision or retained current input prompt")
 	}
 	m, _ = ccKey(m, runeKey('a'))
@@ -140,7 +140,7 @@ func TestUX2PreviewSubmitEndsCurrentHumanInteraction(t *testing.T) {
 	d := *run.Decision
 	d.ID = "next-question"
 	run.Decision = &d
-	if !strings.Contains(m.View(), "待交互 5") {
+	if feedbackInProgress(m.projects[0], run) || !strings.Contains(m.View(), "问题：") {
 		t.Fatal("new question was hidden by previous receipt")
 	}
 	m, _ = ccKey(m, runeKey('a'))

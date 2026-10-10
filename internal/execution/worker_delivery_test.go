@@ -189,6 +189,10 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, c.Identity(), "8").Scan(&deliveries); err != nil || deliveries != 1 {
 		t.Fatalf("merge wrote %d deliveries: %v", deliveries, err)
 	}
+	var stateChanges int
+	if err := store.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events WHERE project_identity=? AND workflow_run_id=? AND type='activity.worker_state'`, c.Identity(), wf.WorkflowRunID).Scan(&stateChanges); err != nil || stateChanges != 1 {
+		t.Fatalf("delivery replay duplicated or lost its state change: %d %v", stateChanges, err)
+	}
 	ready, err := (query.NewService(store, c.Identity())).ReadyNativeTasks(ctx)
 	if err != nil || len(ready) != 1 || ready[0].TaskID != "9" {
 		t.Fatalf("merge did not unlock successor once: ready=%+v err=%v", ready, err)

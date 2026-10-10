@@ -1,8 +1,12 @@
 package model
 
-import executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+import (
+	"encoding/json"
 
-const DevelopmentFlow = "development/v1"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+)
+
+const DevelopmentFlow = "development/v2"
 
 const (
 	StepImplement  = "implement.execute"
@@ -15,16 +19,17 @@ const (
 // StageInput is the frozen business binding of a native input. Native transport
 // purpose remains business/readiness; it is not the business step identifier.
 type StageInput struct {
-	CommandID        string         `json:"command_id"`
-	AttemptID        string         `json:"attempt_id"`
-	StepID           string         `json:"step_id"`
-	Version          uint64         `json:"version"`
-	Prompt           string         `json:"prompt"`
-	SourceCommandID  string         `json:"source_command_id,omitempty"`
-	SourceTurnID     string         `json:"source_turn_id,omitempty"`
-	Snapshot         *StageSnapshot `json:"snapshot,omitempty"`
-	CandidateSHA     string         `json:"candidate_sha,omitempty"`
-	ReportToolPolicy string         `json:"report_tool_policy,omitempty"`
+	CommandID        string          `json:"command_id"`
+	AttemptID        string          `json:"attempt_id"`
+	StepID           string          `json:"step_id"`
+	Version          uint64          `json:"version"`
+	Prompt           string          `json:"prompt"`
+	TaskFacts        json.RawMessage `json:"task_facts,omitempty"`
+	SourceCommandID  string          `json:"source_command_id,omitempty"`
+	SourceTurnID     string          `json:"source_turn_id,omitempty"`
+	Snapshot         *StageSnapshot  `json:"snapshot,omitempty"`
+	CandidateSHA     string          `json:"candidate_sha,omitempty"`
+	ReportToolPolicy string          `json:"report_tool_policy,omitempty"`
 }
 
 // StageSnapshot is evidence, not an independently writable state machine.

@@ -11,7 +11,7 @@ import (
 
 const ExecutionStateCodecKey = "orca.execution-state"
 
-const ExecutionStateCodecVersion = 12
+const ExecutionStateCodecVersion = 13
 
 // NativeExecutionState contains provider identities and observation positions.
 // WorkflowRun, Decision and Operation remain the authorities for business state.
@@ -33,6 +33,8 @@ type NativeExecutionState struct {
 }
 
 type NativeTurnState struct {
+	InputAnchorID          string                            `json:"input_anchor_id,omitempty"`
+	OutputSourceIdentity   string                            `json:"output_source_identity,omitempty"`
 	InputVersion           uint64                            `json:"input_version,omitempty"`
 	ResultProcess          *executionbackend.ProcessIdentity `json:"result_process,omitempty"`
 	ResultMessageDigest    string                            `json:"result_message_digest,omitempty"`

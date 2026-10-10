@@ -138,6 +138,9 @@ func (s *SQLiteStore) CommitTaskClaim(ctx context.Context, commit storageports.C
 		if e = tx.PutStepAttempt(commit.Attempt); e != nil {
 			return e
 		}
+		if e = tx.appendWorkerStateActivity(nil, nil, commit.Workflow, commit.Execution); e != nil {
+			return e
+		}
 		receipt = executionmodel.TaskClaimReceipt{RequestID: commit.Command.CommandID, TaskID: commit.Before.TaskID, TaskVersion: commit.After.Version, WorkflowRunID: commit.Workflow.WorkflowRunID, ExecutionID: commit.Execution.ExecutionID, AttemptID: commit.Attempt.AttemptID, BaseCommit: commit.Execution.Workspace.Base, Status: "claim_reserved", StartTaskApplied: false}
 		command.Result, _ = json.Marshal(receipt)
 		command.Status = "accepted"

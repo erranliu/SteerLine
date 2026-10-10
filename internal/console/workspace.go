@@ -109,7 +109,10 @@ func (m Model) workspaceHeights(height int) (int, int) {
 		return 0, height
 	}
 	overview := candidateOverviewLines(m, m.projects[m.selected], m.selectedRow(m.selected), max(1, detailPanelWidth(m)-2))
-	top := min(len(overview)+1, height-minimum)
+	top := len(overview) + 2
+	if top > height-minimum {
+		return 0, height
+	}
 	return top, height - top
 }
 

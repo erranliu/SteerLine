@@ -50,4 +50,26 @@ func TestPS1RecentActivityReadsLatestTenFromExactAttempt(t *testing.T) {
 	if _, err := NewQueryService(store, project).ReadRecentActivity(ctx, "run", "execution", "old-attempt"); err == nil {
 		t.Fatal("foreign attempt accepted")
 	}
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		for i := 0; i < 6; i++ {
+			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker_state", Title: fmt.Sprintf("state-%d", i)})
+			_, err := tx.AppendEvent(ports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "state", ExternalID: fmt.Sprint(i), Type: "activity.worker_state", Payload: payload})
+			if err != nil {
+				return err
+			}
+		}
+		for i := 0; i < 20; i++ {
+			payload, _ := json.Marshal(api.ActivityEvent{Kind: "worker", Title: fmt.Sprintf("tool-%d", i)})
+			_, err := tx.AppendEvent(ports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "tool", ExternalID: fmt.Sprint(i), Type: "activity.worker", Payload: payload})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	batch, err = NewQueryService(store, project).ReadRecentActivity(ctx, "run", "execution", "attempt")
+	require(t, err)
+	if len(batch.Activity) != 15 || batch.Activity[0].Title != "state-1" || batch.Activity[4].Title != "state-5" || batch.Activity[14].Title != "tool-19" {
+		t.Fatal("tool activity hid recent state changes", batch.Activity)
+	}
 }

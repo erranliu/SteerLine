@@ -126,7 +126,7 @@ func TestProjectionRetainsDeliveryAndReservationRules(t *testing.T) {
 func TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics(t *testing.T) {
 	execution := executionmodel.ExecutionRecord{Backend: string(executionbackend.BackendOrca), Protocol: string(executionbackend.ProtocolOrcaSupervised), Target: executionbackend.ExecutionTarget{ConnectionID: "peer", ExternalRuntime: "remote"}, WorkspaceIntent: &executionbackend.WorkspaceIntent{Path: "service-local-path", Branch: "codex/task"}, Status: "idle", LastTurnOutcome: " "}
 	run := Execution(RunView{}, execution)
-	if run.WorktreePath != nil || *run.WorktreeBranch != "codex/task" || executionViewStatus(execution) != " " || workflowExecutionHost(executionmodel.WorkflowRunRecord{ExecutionProfile: &executionmodel.FixedExecutionProfile{Host: "orca_supervised"}}) != "orca_supervised" {
+	if run.WorktreePath != nil || *run.WorktreeBranch != "codex/task" || executionmodel.ExecutionViewStatus(execution) != " " || workflowExecutionHost(executionmodel.WorkflowRunRecord{ExecutionProfile: &executionmodel.FixedExecutionProfile{Host: "orca_supervised"}}) != "orca_supervised" {
 		t.Fatal("remote intent was shown as an actual local workspace or whitespace fallback changed")
 	}
 }

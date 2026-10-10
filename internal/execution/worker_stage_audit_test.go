@@ -14,16 +14,23 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func TestWorkerStageUnverifiedImplementationCannotPublish(t *testing.T) {
+func TestWorkerStageUnverifiedImplementationEntersReport(t *testing.T) {
 	s, run, port := workerStageFixture(t)
 	fixed, err := s.workerFlowContext(run)
 	require(t, err)
 	evidence := workerStageEvidence(s, run, "unverified projection with plausible source labels", true)
 	evidence.FinalVerified = false
+	evidence.FinalSource, evidence.FinalItemID, evidence.LastMessage = "", "", ""
+	evidence.FinalDiagnostic = "implementation reply unavailable"
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
 	w := s.workflowRecord(run)
-	if w.StepID != executionmodel.StepImplement || w.Status != "reconciling" || w.CandidateSHA != "" || len(w.StageResults) != 0 || len(w.StageInputs) != 1 {
-		t.Fatal("unverified implementation source started another model step")
+	if w.StepID != executionmodel.StepReport || w.Status != "queued" || w.CandidateSHA != "" || len(w.StageResults) != 1 || len(w.StageInputs) != 2 {
+		t.Fatal("stopped implementation without full reply did not enter report")
+	}
+	startQueuedStage(t, s, run)
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported from supplied facts"}`, true))
+	if w.StepID != executionmodel.StepPublish || w.CandidateSHA != port.workspace.Head || w.StageResults[0].FinalVerified {
+		t.Fatal("verified report did not advance, or rewrote original missing reply")
 	}
 }
 
@@ -122,7 +129,7 @@ func TestWorkerStageFeedbackUsesExactFrozenNativePrompt(t *testing.T) {
 	}
 	var native executionbackend.TurnInput
 	require(t, json.Unmarshal(operation.Request, &native))
-	if native.Prompt != input.Prompt || strings.Count(input.Prompt, "Fixed publication target:") != 1 || strings.Count(input.Prompt, "Fixed assigned worktree:") != 1 {
+	if native.Prompt != input.Prompt || strings.Count(input.Prompt, "Fixed publication target:") != 1 || strings.Count(input.Prompt, "Fixed workspace:") != 1 {
 		t.Fatal("native feedback prompt changed after freezing or duplicated fixed instructions")
 	}
 }

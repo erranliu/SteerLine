@@ -2,7 +2,7 @@
 
 临时/AI 自动调试须先运行 `scripts/new-debug-release.ps1`，使用生成的 SteerlineTest 环境；安装目录不得作为现场。独立包定向验证为 `scripts/test-debug-release.ps1`，显式 `-Live` 验证真实 SteerlineTest PR；所有日志留在生成包 evidence。既有分级回归保留自己的隔离夹具，见[独立调试验收](../../docs/acceptance/debug-environment.md)。
 
-当前产品入口为本地 Codex 和 Orca supervised（local/environment）；原本机 `host=orca` 已停用，源码保留。supervised 分步结果已接入[单消息声明结果](../../docs/acceptance/orca-supervised-results.md)，通过定向回归。旧单轮 `delivery.orca-remote-codex` 仍已退役；真实分步交付驱动尚待建立，暂不计完整 L3 覆盖，详见[当前边界](../../docs/acceptance/orca-remote-l3.md#当前分步流程能力缺口)。supervised 目标注册/路由使用[定向验收](../../docs/acceptance/orca-supervised-targets.md)。
+当前产品入口为本地 Codex 和 Orca supervised（local/environment）；原本机 `host=orca` 已停用，源码保留。supervised 当前结果接线为[统一模板和原生回复采集](../../docs/acceptance/worker-prompt-convergence.md)，原[单消息声明结果](../../docs/acceptance/orca-supervised-results.md)保留历史。旧单轮 `delivery.orca-remote-codex` 仍已退役；真实分步交付驱动尚待建立，暂不计完整 L3 覆盖，详见[当前边界](../../docs/acceptance/orca-remote-l3.md#当前分步流程能力缺口)。supervised 目标注册/路由使用[定向验收](../../docs/acceptance/orca-supervised-targets.md)。
 
 以下旧场景均已移出当前登记：单轮远端 `delivery.orca-remote-codex`、旧 `orca-codex` 三项 live、四项 `recovery.orca-startup.*` 与 `candidates.local` 已移出 suites.json，驱动留档，不计当前验收。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
 

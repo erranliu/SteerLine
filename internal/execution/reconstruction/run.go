@@ -31,7 +31,7 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 	}
 	run := RunView{FlowRef: workflow.FlowRef, StepID: workflow.StepID, BusinessStatus: workflow.Status, StageDiagnostic: workflow.StageDiagnostic, StageResults: executionmodel.CloneStageResults(workflow.StageResults), TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
 		CandidateTiming: "wall_since_reservation",
-		ResourceStatus:  execution.Status,
+		ResourceStatus:  executionmodel.ExecutionResourceStatus(execution),
 		SessionID:       execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnNumber: execution.TurnNumber, CurrentTurnID: execution.CurrentTurnID,
 		Abandonment: workflow.Abandonment, ExecutionProfile: workflow.ExecutionProfile, PRHistory: workflow.PRHistory, CandidateCreatedAt: workflow.CreatedAt,
 		RecoveryRequired: execution.RecoveryRequired, RecoveryState: execution.RecoveryState, RecoveryVersion: execution.RecoveryVersion,
@@ -41,7 +41,7 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 		Agent: execution.Agent, Target: execution.Target, Process: execution.Process, WorkspaceIntent: execution.WorkspaceIntent,
 		StartedAt: copyPtr(execution.TurnStartedAt), EndedAt: copyPtr(execution.TurnEndedAt), LogPath: copyPtr(execution.LogPath),
 		LastEvent: copyPtr(execution.LastEvent), Summary: copyPtr(execution.Summary), Error: copyPtr(execution.Error), ManualStop: copyPtr(execution.ManualStop),
-		FinishTaskStatus: finishStatus(task, workflow), ExecutionStatus: executionViewStatus(execution),
+		FinishTaskStatus: finishStatus(task, workflow), ExecutionStatus: executionmodel.ExecutionViewStatus(execution),
 		PR: executionmodel.PRState{State: nonEmpty(workflow.PRState, "unknown"), QueriedAt: copyPtr(workflow.PRQueriedAt),
 			QueryError: copyPtr(workflow.PRQueryError), MergedAt: copyPtr(workflow.PRMergedAt), MergeCommit: copyPtr(workflow.PRMergeCommit)}}
 	if attempt := CurrentAttempt(attempts, &execution); attempt != nil {
@@ -52,9 +52,6 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 	}
 	if workflow.Abandonment != nil {
 		run.CandidateEndedAt = ptr(workflow.Abandonment.At)
-	}
-	if execution.ResourceStoppedAt != nil && execution.ResourceStopOperationID != "" {
-		run.ResourceStatus = "stopped"
 	}
 	if execution.Environment != nil && execution.Environment.Blocker != nil {
 		blocker := *execution.Environment.Blocker
@@ -100,21 +97,6 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 		}
 	}
 	return run, nil
-}
-
-func executionViewStatus(e executionmodel.ExecutionRecord) string {
-	switch e.Status {
-	case "active":
-		return "running"
-	case "pending":
-		return "pending"
-	case "idle", "succeeded", "stopped":
-		return nonEmpty(e.LastTurnOutcome, "succeeded")
-	case "failed":
-		return "failed"
-	default:
-		return "unknown"
-	}
 }
 
 func workflowExecutionHost(workflow executionmodel.WorkflowRunRecord) string {

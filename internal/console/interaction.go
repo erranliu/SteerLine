@@ -237,7 +237,7 @@ func renderInteractionSummary(state projectState, row *consoleRow) []string {
 	lines = append(lines, renderCandidateOverview(state, row)...)
 	lines = append(lines, renderRunExecutionProfileSummary(state, row.run)...)
 	status := candidateHumanStatus(state, row.run)
-	lines = append(lines, "当前状态："+status)
+	lines = append(lines, workerStateLines(row.run, false)...)
 	if status == "待交互" || status == "交互受阻" {
 		lines = append(lines, "问题："+safeTerminalText(row.run.Decision.Request.Question))
 	}
