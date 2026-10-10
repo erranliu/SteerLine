@@ -26,3 +26,12 @@ L1：`go run ./cmd/test-feedback -level=L1` passed=true，execution=177.8s；报
 验证过程中修正了 native state 路径派生、服务 readiness/await_merge 的等待，以及 SQLite SHM 在路径扫描中消失或共享锁冲突的竞态；最终扫描使用 Windows 元数据句柄，不读取活动 SHM 内容。生成的 PowerShell 文件使用 UTF-8 BOM，确保 Windows PowerShell 5 正确解析中文路径。
 
 人工项：用户在方便时检查 live 控制台与真实 Codex 体验，不阻塞本次自动验证。真实模型交付与原生 token/会话验收仍使用既有 live 场景，不能由模拟或脚本 PR 证明。
+
+## 2026-10-10 最新主干自动入口重验证
+
+基线 `fbde4163a42639d5570dbe718b32cd42e95dc676`，分支 `codex/sandbox-git-runtime-fix`。首次生成因 CRLF 验收标题未识别而失败；修正后重跑发现服务无条件重设当前目录所有者，要求了不必要的 WRITE_OWNER。两项均修复，后者继续核验当前用户所有权和私有 DACL，不放宽 ACL。
+
+- DBG-01、DBG-04 定向验证：`go test ./internal/task ./internal/task/model -run 'AcceptanceHeading|DocumentContent' -count=1` 通过，实际执行了 task 的验收标题测试；model 本次过滤无匹配用例。`go test ./internal/product/httpapi -run 'APIPrivate|StateDirectory|Secure|Permission' -count=1` 通过，覆盖缺少 WRITE_OWNER 的目录、私有临时文件和错误 ACL 拒绝。
+- DBG-01–04 完整入口：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-debug-release.ps1` 返回 passed=true、live=false。生成两个独立包；`TestDebugReleaseRuntime` PASS，122.60 秒，完成模拟三步 worker、真实 Git/HTTP 推送、交付/依赖释放及锁/重置/隔离检查。
+- 通过证据：`C:\SteerlineDebug\中文 verification-740f77d06d9d435eb2edf1378e300190\dev-fbde4163-dirty-20261010-103259\evidence\generation-test.json`、同目录 `runtime-test.log`、`controlled-delivery.json`。第二包为同父目录的 `dev-fbde4163-dirty-20261010-103326`。各 manifest 标记 dirty，保存产物与模板摘要；此次只修复调试入口，不代表 Codex 沙箱修复已实施。
+- 此次未重跑 DBG-05，未启动真实模型、创建真实 PR 或修改安装环境。现有 live 封装以认证头绕过用户 GitHub shell credential helper；后续沙箱修复验收必须另覆盖真实 worker 和原 helper 链，不能用该封装或 simulate 冒充现场问题修复。

@@ -11,6 +11,7 @@
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[Orca](worker-flow-orca-native.md)、[停服恢复](worker-service-recovery.md) |
 | Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
 | 控制台 Codex CLI 入口 | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
+| Codex 沙箱 Git 修复 | [真实 worker / SteerlineTest 无人值守验收](codex-sandbox-git.md)，普通开发，专属 base/head 验证 |
 | Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
 | Orca状态同步修复 | [延迟启动活动推进状态](orca-delayed-start-status-2026-10-09.md)，原 Dispatch 在完成前同步开始事实，源码定向验证通过 |
 | Orca supervised 双目标 | [本机目标与旧入口切断](orca-supervised-targets.md)，同一原远端生命周期，功能范围保持 |

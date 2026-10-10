@@ -469,6 +469,27 @@ func (d *debugRelease) prepareSelected(mode string) error {
 				return e
 			}
 		}
+		// The product deliberately strips center GH_TOKEN/Git header variables
+		// before starting workers. Provision the package's own gh login instead;
+		// never change the user's config or credential-manager/keychain entries.
+		if _, err = os.Stat(filepath.Join(d.home, "gh", "hosts.yml")); os.IsNotExist(err) {
+			token, e := os.ReadFile(filepath.Join(d.home, "github-token"))
+			if e != nil {
+				return e
+			}
+			cmd := exec.Command("gh", "auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--with-token", "--insecure-storage")
+			for _, entry := range os.Environ() {
+				key, _, _ := strings.Cut(entry, "=")
+				if !strings.EqualFold(key, "GH_TOKEN") && !strings.EqualFold(key, "GITHUB_TOKEN") && !strings.EqualFold(key, "GH_CONFIG_DIR") {
+					cmd.Env = append(cmd.Env, entry)
+				}
+			}
+			cmd.Env = append(cmd.Env, "GH_CONFIG_DIR="+filepath.Join(d.home, "gh"))
+			cmd.Stdin = strings.NewReader(strings.TrimSpace(string(token)) + "\n")
+			if _, e := cmd.CombinedOutput(); e != nil {
+				return errors.New("cannot provision package-owned GitHub login")
+			}
+		}
 	} else {
 		remote := filepath.Join(d.root, "remotes", filepath.FromSlash(debugRepository)+".git")
 		if _, err = os.Stat(remote); os.IsNotExist(err) {

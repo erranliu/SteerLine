@@ -9,6 +9,7 @@
 3. 包内运行封装实现首次方案选择、隔离认证、本地模拟服务、真实 SteerlineTest base 分支发布。
 4. helper 实现任务状态重置和锁检查，无备份、不回退 Git 或 PR；增加独立环境驱动和定向测试。
 5. 更新 AGENTS、调试文档及测试入口，已有自动测试生成现场接到统一入口。
+6. 保证 Windows 普通用户可自动生成和启动：验收标题识别 LF/CRLF；本地 API 路径已属当前用户时仅收紧 DACL，不额外要求 WRITE_OWNER，继续核验当前用户所有权和私有 ACL。
 
 ## 测试计划
 
@@ -16,6 +17,7 @@
 
 | 验收项 | 级别/场景 | 环境/命令 | 时点、通过条件 |
 | --- | --- | --- | --- |
+| DBG-01、DBG-04 | 定向规则与 Windows ACL | Windows；`go test ./internal/task -run AcceptanceHeading -count=1`；`go test ./internal/product/httpapi -run APIPrivate -count=1` | 完整生成测试前，LF/CRLF 中英文验收标题可识别；已属当前用户且缺少 WRITE_OWNER 的目录可安全收紧 DACL；不放宽私有 ACL；证据登记在专属验收文档 |
 | DBG-01、DBG-04 | 定向脚本 `debug.release-generation` | Windows controlled；`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-debug-release.ps1` | 生成完成后，两包独立、污染环境不影响、拒绝链接/冲突，无安装写入 |
 | DBG-02、DBG-03 | 定向 Go `debug.release-runtime` | Windows controlled；`go test ./tests/e2e/internal/driver -run DebugRelease -count=1` | runtime/reset 完成后，模拟三轮真实 Git/PR 事实，锁阻止重置，停服后清除状态且保留任务/依赖/Git，无备份 |
 | DBG-05 | 显式真实 PR `debug.release-live` | Windows live；`powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-debug-release.ps1 -Live` | controlled 通过后，生成新包、发布独立 SteerlineTest base 和 PR，核对并清理精确分支；不默认调用模型 |
