@@ -9,12 +9,12 @@
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
 | 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 实现完成 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | [PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并，merge `267858f0`；2026-10-10 合入后独立复审无已确认缺陷，34 项定向检查通过。WFS-A1–A4 按历史精确来源与已授权 Orca usage 条件结算；WFS-M1 待人工验收。后续 PR #266 改换 Orca 路线后的规范 final 能力缺口单列，不以旧链通过覆盖当前路线；[记录、待验及当前限制](../acceptance/worker-staged-flow.md#2026-10-10-真实合并与合入后独立复审) |
 | 45 | 本机客户端协议与历史查询 | 无 | 实现完成 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) 已真实合并，head `73ef956f`、merge `4786934a`；第五轮独立终审无新确认缺陷。当前映射 L1 479 项、HTTP 18 项、服务 8 项及反馈组合通过，独立 actor/stop/stage 补验通过。API2 历史 SHM 自动失败保留，仅该根因/瞬态可用性风险按真人原授权登记 `accepted_exception`；当前 Orca 规范 final 缺口仍如实 unsupported，不在例外范围；[结算、证据与限制](../acceptance/phase2-local-api.md#2026-10-10-第五轮独立终审与真实合并结算) |
-| 44 | WinUI 基座与原生输入 | #45（已交付） | 待复审/合并 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | [PR #273](https://github.com/erranliu/SteerLine/pull/273) OPEN；最新合并主干 `eb76c50d`，实现候选 `c5c9eb470835c6ab28f7343b40b41f3648f086cf`（tree `b4a7a265c03a7aaecc9a749ba3d5eebab36f7df0`）。UI1/UI2-A/UI3/UI4-A 自动验收通过（WinUI 定向测试 15 pass/0 skip；受影响 Go 包定向测试通过；构建 0 warning/error）。UI2-M/UI4-M/UI5 生命周期按用户指示待人工验收，最迟 2.1 签收；仅阻塞 2.1、不阻塞 PR 交付；[专属记录与证据](../acceptance/phase2-winui-foundation.md) |
+| 44 | WinUI 基座与原生输入 | #45（已交付） | 实现完成 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | [PR #273](https://github.com/erranliu/SteerLine/pull/273) 已真实合并，head `b3b52c24`、merge `f04fdf08`；独立复审发现关闭草稿竞态，局部修复后新终审无阻塞缺陷。当前映射 19 tests/0 fail/0 skip、WinUI build 通过；旧 c5c9 真实运行证据保留来源。UI2-M/UI4-M/UI5-M 待人工，最迟 2.1 签收；[结算、证据与限制](../acceptance/phase2-winui-foundation.md#2026-10-10-真实合并与交付结算) |
 | 87 | Worker 停机对账与恢复一致性修复 | 无未交付业务硬前置；消费当前已合入 worker 基线 | 实现完成 | 用户授权本聊天直接执行，不经 roadmap-runner；[Spec](../spec/worker-stop-recovery.spec.md) · [Plan](../spec/worker-stop-recovery.plan.md) | [PR #260](https://github.com/erranliu/SteerLine/pull/260) 已真实合并，merge `d951ca87`；独立复审 clean，WSR-A1–A8 自动通过（含双真实路径），无任务人工项；[专属记录](../acceptance/worker-stop-recovery.md) |
 
 ## 推进顺序
 
-1. #83/#84/#45 已真实合入并完成各自独立核验与交付结算。#45 已消费实际 worker-flow-v2 字段、feedback/resume 和当前 Orca unsupported 路径；SHM 限定风险接受来源与未验事实保留。剩余 #44 启动前重新核对当前 Spec/Plan、最新主干和明确前置；已合入任务不重新派发。
+1. 本轮用户授权 #83/#84/#45/#44 均已实现、独立核验并真实合入。已合入任务不重新派发；SHM 限定风险接受、历史失败及人工未验事实保留。后续任务须另经用户确认。
 2. #84 与 #45 无新增业务硬依赖，共同状态/存储/宿主/客户端接线由 #84 负责语义并按 #84 后 #45 集成，#45 复核 #84 的实际字段与接口版本。#44 仍以 #45 为硬前置；#45 经复审、必要验证和真实合并，结果同步且成果进入最新主干后启动 #44。已有在途执行先核对原 run 与固定契约，不因清单编辑自动中断或切换规格。
 3. 后续界面任务留在[草稿](drafts/roadmap.md)，原型确认后再纳入。
 
@@ -24,11 +24,13 @@
 | --- | --- | --- |
 | 一期单安装版签收 | #83/#84 历史实现已交付；仍待当前支持路线实际能力及原生准备条件落实、固定新安装构建，再组织组合/24小时/同构建恢复人工签收；窗口待安排。当前 Orca 规范 final 缺口见 [#84 当前限制](../acceptance/worker-staged-flow.md#后续主干-orca-路线的当前能力缺口)，不能以历史通过覆盖或改称人工豁免 | [一期活动](../acceptance/phase1.md) |
 | #84 步骤辨识与反馈/合并 | WFS-M1 待验；本任务自动能力交付后，可与一期 P1A1-M 同一现场集中验收，分别登记结果；不阻塞无关二期研发 | [专属记录](../acceptance/worker-staged-flow.md) |
-| #44原生输入与可达性 | #44已排入；交付后验UI2-M/UI4-M，最迟2.1签收 | [记录](../acceptance/phase2-winui-foundation.md) |
+| #44原生输入与可达性 | #44已交付；UI2-M/UI4-M/UI5-M待人工，最迟2.1签收 | [记录](../acceptance/phase2-winui-foundation.md) |
 
 自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [Orca原生编排](../acceptance/worker-flow-orca-native.md) · [Orca安全重建](../acceptance/worker-service-recovery.md)。
 
 ## 执行记录
+
+2026-10-10，#44 已经实现、独立复审、局部修复及新的独立终审，PR #273 于 UTC 05:54:56 真实合并；head `b3b52c24fba2a96a1746d3249756518dbf1f9d3b`、merge `f04fdf089a58723909279d44c497377427b868dd`。关闭草稿竞态由 `/root/fix44_round1` 修复于 source `f1846b9bd628f43603658d265db0364e1cb87750`，`/root/review44_round2` 终审无新确认阻塞缺陷；[实际审核记录](https://github.com/erranliu/SteerLine/pull/273#issuecomment-6094396874)。新编译定向测试 19/0/0、WinUI 构建 0 warning/error，独立复跑现有编译测试 19/0/0；不是新 source 真实窗口验证。历史 `c5c9eb47` 窗口、公共查询与清理证据保留原来源。UI2-M/UI4-M/UI5-M 按用户指示待人工、最迟 2.1 签收，登记 `passed_with_manual_pending`，未宣称全部验收完成。 [专属记录](../acceptance/phase2-winui-foundation.md)。
 
 2026-10-10，#44 按固定 Spec/Plan/共同约束 commit `550234ab0fb0aa74a3676ff09dde6e4bd4325295` 启动，初始集成 base `fbde4163a42639d5570dbe718b32cd42e95dc676`；随后将最新 `origin/main` `eb76c50d69637212b66ddb60990ff68415d67a11`（含 PR #275/#276）合入。最终实现候选 `c5c9eb470835c6ab28f7343b40b41f3648f086cf`（tree `b4a7a265c03a7aaecc9a749ba3d5eebab36f7df0`）。[PR #273](https://github.com/erranliu/SteerLine/pull/273) OPEN，未合并、不移除草稿任务。时间优先生成包 `C:\SteerlineDebug\dev-20261010-122449-c5c9eb47` source clean、冻结 simulate；真实 WinUI 使用配置 Git helper 连接公开 identity/tasks/detail API，并显示受控 worker 下 Task 1 `in_progress`。定向 WinUI 测试 15/0/0，HTTP API、task model、Codex runtime、process Go 包测试通过，构建 0 warning/0 error。UI2-M/UI4-M 和 UI5 worker close/reopen 同身份步骤按用户指示列为待人工，最迟 2.1 签收；当前证据不把 UI5 记为自动通过，不阻塞 PR 交付。final 包 console stop receipt `applied`，进程退出/锁释放，task/provider/Git facts 保留且未 reset；[验收与限制](../acceptance/phase2-winui-foundation.md)。
 
