@@ -251,4 +251,4 @@ GitHub 确认 [PR #249](https://github.com/erranliu/SteerLine/pull/249) 于北�
 
 ## 2026-10-10 后续单终端接线范围
 
-上述 supervised 能力缺口属于 #45 结算时点，之后该实现已被 PR #284 取代。当前共用紧凑 worker 声明结果，验证范围见[单终端验收](orca-terminal-transport.md)与[真实记录](orca-terminal-real-flow-2026-10-10.md)：本机有限样本闭环通过，最终 draft 保护未重新跑真机，远端产品闭环未通过；不承诺原生 turn/final 全文。本次只是汇总校准，不重新结算 API2、不扩大 SHM 例外、不增加原生验收通过项。
+上述 supervised 能力缺口属于 #45 结算时点，之后该实现已被 PR #284 取代。当前共用紧凑 worker 声明结果，验证范围见[单终端验收](orca-terminal-transport.md)与[真实记录](orca-terminal-remote-retest-2026-10-10.md)：本机有限样本闭环通过，本机最终 draft 保护未重新跑真机；远端升级 CLI/预先确认目录信任后有限样本闭环通过，首次信任阻塞后原任务自动继续未通过；不承诺原生 turn/final 全文。本次只是汇总校准，不重新结算 API2、不扩大 SHM 例外、不增加原生验收通过项。

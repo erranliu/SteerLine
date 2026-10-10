@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-10，源码基线 d77c399f 加本次身份残留清理。本文描述当前源码树。第一阶段目标包含本地 Codex、本机 Orca 与远端路径交付；当前 Orca 的本机有限样本、最终保护未跑真机及远端未通过范围见[单终端验收](../acceptance/orca-terminal-transport.md)。
+核对日期：2026-10-10，提 PR 集成基线 6d4b4fa2 加本次身份残留清理。本文描述当前源码树。第一阶段目标包含本地 Codex、本机 Orca 与远端路径交付；当前 Orca 的本机有限样本及本机最终保护未跑真机、远端已准备环境有限样本通过与首次信任阻塞后原任务自动继续未通过范围见[单终端验收](../acceptance/orca-terminal-transport.md)。
 
 ## 系统边界
 
@@ -50,7 +50,7 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 | `internal/execution` | Unique actor, dispatch, worker sessions, decisions, recovery, delivery and cleanup. Host calls the actor through `execution.HostPort` and scheduling callbacks; adapters do not mutate domain state. |
 | `internal/execution/model`, `internal/execution/backend` and `internal/execution/conversation` | Execution records and rules; backend-neutral adapter values and implementation evidence; conversation source and mapper ports with their discovery/history requests. |
 | `internal/execution/reconstruction` | Pure reconstruction of `Runtime` and `RunView` from a committed checkpoint and the sampled task/execution records. It performs no I/O. |
-| `internal/execution/adapters` | Codex app-server, Orca single-terminal local/environment implementation, and their public protocol codecs. Orca target routing shares code; real remote delivery remains unverified. |
+| `internal/execution/adapters` | Codex app-server, Orca single-terminal local/environment implementation, and their public protocol codecs. Orca target routing shares code; remote delivery has a finite real sample after native CLI upgrade and directory trust preparation; automatic continuation of the initially rejected task remains unverified. |
 | `internal/execution/workspace`, `publication`, `process` | Git workspace, provider/PR operations, managed worker processes and file resource facts. The app injects process facts into the host. |
 | `internal/product/api` | Serializable product pages, user commands, request targets and receipts. It contains no Runtime, Config, SQL record, or Go handle. |
 | `internal/product/client` | The single injected product client for CLI/TUI consumers. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |

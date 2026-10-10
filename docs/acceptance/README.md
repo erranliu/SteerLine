@@ -20,7 +20,7 @@
 | Worker 提示词与三轮恢复 | [统一模板与原生回复采集](worker-prompt-convergence.md)，用户直接授权恢复 #84 设计 |
 | Worker 状态与控制台精简 | [原字段、变化记录与主界面回归](console-worker-state.md)，普通开发 |
 | Orca 提示词最小探针 | [输入通道与 worker-start 对照](orca-input-minimal-probe-2026-10-10.md)，1.4.224 原生 worker-start 仍复现未提交；基础 500/7500 字符 6/6，约12K输入未通过；历史1.4.223结果另列 |
-| Orca 单终端通信 | [实施与待验项](orca-terminal-transport.md) · [真实记录](orca-terminal-real-flow-2026-10-10.md)，本机有限样本通过、最终 draft 保护未重新跑真机，远端产品闭环未通过；两目标受控回归不代替原生验收 |
+| Orca 单终端通信 | [实施与待验项](orca-terminal-transport.md) · [真实记录](orca-terminal-remote-retest-2026-10-10.md)，本机有限样本通过、本机最终 draft 保护未重新跑真机；远端升级 CLI/预先确认目录信任后有限样本通过，首次信任阻塞后原任务自动继续未通过；两目标受控回归不代替原生验收 |
 | Orca 分步开发缺口 | [当前远端待补与历史来源](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮/supervised 场景退役，不计单终端交付覆盖 |
 | 旧 Orca 身份残留清理 | [专属记录](retired-orca-identity-cleanup.md)，当前字段/受控接线与文档校准，不增加原生验收通过项 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |

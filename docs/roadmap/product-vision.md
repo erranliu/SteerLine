@@ -14,7 +14,7 @@ SteerLine 是一款带有研究性质的开发工具，长期远景是通往**�
 
 人在 Codex 中规划和维护 roadmap；项目 skill 将选定范围连同任务 ID 整理为 Spec/Plan 与任务 DAG，提交给 SteerLine 校验并创建入图。SteerLine 负责启动与观察 worker、统一待决策和反馈、真实 PR 合并核验及后继释放。本阶段认为输入roadmap及任务契约已稳定。同一项目已支持不同任务人工并行；同任务分叉用于人工对比不同执行方案，默认一个候选、人工逐个新增，开始时参与数已达5个即拒绝，接受竞态偶尔超出，不建设严格名额或调度器。每个候选独立冻结配置、会话、工作区和PR；合并前可放弃退出实验，资源停止另按事实记录，PR合并后不支持放弃。人选择合并结果，中心核验唯一交付，不做自动评分或成果融合。交付结果由人带回 Codex 继续规划；此版不提供 SteerLine 内的 roadmap 规划或 Roadmap UI。
 
-第一阶段目标范围包含本地 Codex、本机 Orca 与远端路径交付。远端历史契约与结果见[远端 Spec](../spec/orca-remote-l3.spec.md)及[专属验收](../acceptance/orca-remote-l3.md)；当前单终端的本机有限样本及远端未通过范围见[最新验收](../acceptance/orca-terminal-real-flow-2026-10-10.md)，目标范围不代表已验收支持。
+第一阶段目标范围包含本地 Codex、本机 Orca 与远端路径交付。远端历史契约与结果见[远端 Spec](../spec/orca-remote-l3.spec.md)及[专属验收](../acceptance/orca-remote-l3.md)；当前单终端的本机有限样本与远端升级后已准备环境的有限样本通过及首次信任限制见[最新验收](../acceptance/orca-terminal-remote-retest-2026-10-10.md)，目标范围不代表已验收支持。
 
 此版采用一个本机安装版本持续工作，源码调试以独立 exe/home 和测试 clone 共存。服务、控制台及任务命令明确显示并使用各自实际路径和构建来源；日常 build 不覆盖安装版。完整 stable/dev 双 channel、不可变版本库及受控提升延后，维护仍采用人工停止、安装和启动，不承诺跨构建接管活动任务或旧开发格式兼容。剩余任务与推进顺序见[草稿 roadmap](drafts/roadmap.md)，最小隔离由 #83 的独立 Spec 承接，组合验收见[一期活动](../acceptance/phase1.md)，不另维护平行交付清单。
 

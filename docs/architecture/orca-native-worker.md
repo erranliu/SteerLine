@@ -6,6 +6,6 @@
 
 没有辅助终端、文件回传、HTTP 回调、Orca Run / Task / Dispatch / coordinator / worker_done，也不读取代理私有日志或构造代理模型命令。完整全文与原生强制只读不在该路径能力内；报告只比较两个主机均能由 CLI 获得的 revision 事实。旧 supervised 实现和专属夹具直接删除。
 
-当前验证范围见[真实调试记录](../acceptance/orca-terminal-real-flow-2026-10-10.md)：本机三阶段/真实 PR 合并/唯一交付仅有限样本通过，最后的 draft 保护由单元和两目标受控回归覆盖，未重新跑真机；远端产品闭环未通过，启动信任/模型准备仍有缺口。紧凑回传是绑定 Command 的 worker 声明结果，不是原生 turn/final 全文。历史 supervised 的规范 final 缺口不再作为当前单终端能力描述，但其原始失败保留。
+当前验证范围见[真实调试记录](../acceptance/orca-terminal-remote-retest-2026-10-10.md)：本机三阶段/真实 PR 合并/唯一交付仅有限样本通过，本机最后的 draft 保护由单元和两目标受控回归覆盖，未重新跑本机真机；远端升级 Codex CLI 并预先确认目录信任后，有限样本三阶段/中心重启/真实合并交付通过。首次目录信任正确阻塞零业务投递，但被拒绝原任务的自动继续仍未通过。紧凑回传是绑定 Command 的 worker 声明结果，不是原生 turn/final 全文。历史 supervised 的规范 final 缺口不再作为当前单终端能力描述，但其原始失败保留。
 
 [Spec](../spec/orca-terminal-transport.spec.md) · [Plan](../spec/orca-terminal-transport.plan.md) · [验收与待验项](../acceptance/orca-terminal-transport.md)。普通开发由当前聊天实施，不进入 roadmap，也不改安装环境。
