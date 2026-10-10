@@ -20,7 +20,7 @@ type taskCommandStore = fixtures.TaskStore
 func NewTaskCommands(store taskCommandStorage, config execution.Config) taskapp.Commands {
 	timeout, _ := time.ParseDuration(config.CommandTimeout)
 	dependencies := hostFixtureRuntime(config)
-	return taskapp.Commands{Store: taskCommandStore{store}, Documents: taskDocumentsForPorts(func(ctx context.Context) (string, error) {
+	return taskapp.Commands{Store: taskCommandStore{Store: store}, Documents: taskDocumentsForPorts(func(ctx context.Context) (string, error) {
 		return config.TaskRepositoryTarget(ctx, dependencies.ProcessHost)
 	}, config.Repository, config.Git, timeout, dependencies.ProcessHost), Input: taskapp.Input{Project: config.Identity(), Authority: "native", Remote: config.Remote, Branch: config.Branch, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, DefaultRequestedBy: DefaultRequestedBy()}}
 }

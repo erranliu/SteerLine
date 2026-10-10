@@ -89,6 +89,55 @@ func SubmitControlTargeted(c Config, action string, payload any, requestedBy, re
 	return submitControlSnapshotWithID(c, rt, action, payload, requestedBy, requestID)
 }
 
+// SubmitControlInbox publishes an immutable, version-bound control request.
+// The running scheduler rechecks instance, revision, capability and
+// action-specific qualification before any side effect.
+func SubmitControlInbox(c Config, input productapi.ControlInput) (productapi.ControlRequest, error) {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
+		return productapi.ControlRequest{}, err
+	}
+	if err := c.ValidateTaskCommandConfiguration(); err != nil {
+		return productapi.ControlRequest{}, err
+	}
+	if err := c.ResolveIdentity(context.Background()); err != nil {
+		return productapi.ControlRequest{}, err
+	}
+	if !controlIDPattern.MatchString(input.RequestID) {
+		return productapi.ControlRequest{}, errors.New("request ID must be 32 lowercase hexadecimal characters")
+	}
+	if input.InstanceID == "" || c.ControlValidation == nil || !c.ControlValidation.ValidAction(string(input.Action)) {
+		return productapi.ControlRequest{}, errors.New("control action or target instance is invalid")
+	}
+	if input.Action != "stop_service" && input.ExpectedRevision == nil {
+		return productapi.ControlRequest{}, errors.New("control request requires the displayed control revision")
+	}
+	if input.RequestedBy == "" {
+		input.RequestedBy = DefaultRequestedBy()
+	}
+	var raw json.RawMessage
+	if input.Payload != (productapi.ControlPayload{}) {
+		body, err := json.Marshal(input.Payload)
+		if err != nil {
+			return productapi.ControlRequest{}, err
+		}
+		raw = body
+	}
+	created := now().UTC()
+	request := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: input.RequestID,
+		RepositoryIdentity: c.Identity(), InstanceID: input.InstanceID, Action: string(input.Action), Payload: raw,
+		RequestedBy: input.RequestedBy, CreatedAt: created, ExpiresAt: created.Add(2 * time.Minute)}
+	if input.ExpectedRevision != nil && input.Action != "stop_service" {
+		request.ExpectedControlRevision = *input.ExpectedRevision
+	}
+	if _, err := c.ControlValidation.DecodePayload(request); err != nil {
+		return productapi.ControlRequest{}, err
+	}
+	if err := publishControlRequest(c.RunDir, request); err != nil {
+		return productapi.ControlRequest{}, err
+	}
+	return request, nil
+}
+
 // The caller has validated this snapshot. Keep its instance/revision unchanged:
 // a restart between observation and publication must reject, never retarget.
 func submitControlSnapshot(c Config, rt *reconstructiontypes.Runtime, action string, payload any, requestedBy string) (productapi.ControlRequest, error) {

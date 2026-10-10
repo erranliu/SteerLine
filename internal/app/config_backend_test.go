@@ -123,6 +123,10 @@ func TestOrcaNativeProfileKeepsFrozenAuthority(t *testing.T) {
 	require(t, config.ResolveIdentity(context.Background()))
 	selected, accepted, err := config.ResolveExecutionProfile("orca", "")
 	require(t, err)
+	presentation := projectPresentation(config)
+	if len(presentation.Profiles) != 1 || presentation.Profiles[0].ID != "orca" || !strings.Contains(presentation.Profiles[0].UnavailableReason, "structured final evidence") {
+		t.Fatalf("profile presentation claimed unsupported supervised route was available: %+v", presentation.Profiles)
+	}
 	if err := validateSupervisedConfig(context.Background(), selected, config.ExecutionDirectory); err != nil {
 		t.Fatalf("fixed native launch lost admission or readiness: %v", err)
 	}

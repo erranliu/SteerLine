@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"strings"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -320,6 +321,10 @@ func (s *Service) retainControlPublicationFailure(err error) error {
 func controlFailureCode(err error) string {
 	if errors.Is(err, context.Canceled) {
 		return "failed"
+	}
+	var backendErr *executionbackend.BackendError
+	if errors.As(err, &backendErr) && backendErr.Code == executionbackend.BackendUnsupported || executionbackend.IsAdapterError(err, executionbackend.AdapterUnsupported) || isNativeErrorCode(err, "unsupported") {
+		return "unsupported"
 	}
 	if strings.Contains(err.Error(), "critical runtime persistence") || strings.Contains(err.Error(), "receipt") {
 		return "persistence_failed"

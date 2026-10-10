@@ -16,6 +16,9 @@ flowchart LR
     TUI[internal/console] --> Client[internal/product/client]
     CLI --> Client
     App --> Client
+    Native[Native client] --> HTTP[127.0.0.1 HTTP]
+    HTTP --> HTTPAPI[internal/product/httpapi]
+    HTTPAPI --> Client
     App --> Host[internal/app/host]
     Host -. Scheduler port .-> Exec[internal/execution actor]
     App --> Task[internal/task]
@@ -52,6 +55,7 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 | `internal/product/api` | Serializable product pages, user commands, request targets and receipts. It contains no Runtime, Config, SQL record, or Go handle. |
 | `internal/product/client` | The single injected product client for CLI/TUI consumers. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
 | `internal/product/query` | Read-only projections and composition of product pages from storage ports. No SQL or business writer. |
+| `internal/product/httpapi` | Loopback HTTP discovery/authentication and DTO/action transport over the product client. It stores immutable request envelopes/transport receipts; it does not open SQL or own business transitions. |
 | `internal/console` | TUI navigation and view state; consumes only product API values and injected client interfaces. |
 | `internal/storage/ports` and `internal/storage/sqlite` | Consumer-owned narrow read/commit declarations; one SQLite implementation owns schema, SQL, WAL, CAS and transactions. |
 | `internal/testkit` and `tests/integration`, `tests/e2e` | Test-only boundary guards, Go test feedback, process ownership and protocol fixtures; real application composition tests; registered controlled/native E2E scenarios. Product production imports are forbidden. |
@@ -60,7 +64,7 @@ The former `internal/steerline` host/facade, `internal/steerlineapp`, `internal/
 
 ## Current package inventory
 
-At the #82 source commit, Windows `go list ./...` enumerates 42 packages. This includes the `docs/validation` helper package; it is not a product dependency. E2E scenario files use the `e2e` build tag, so their packages are listed separately from the default Go inventory below. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
+At the #82 source commit, Windows `go list ./...` enumerates 42 packages. #45 adds `internal/product/httpapi`, bringing the default inventory to 43. The count includes the `docs/validation` helper package; it is not a product dependency. E2E scenario files use the `e2e` build tag, so their packages are listed separately from the default Go inventory below. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
 
 | Owner / purpose | Current packages |
 | --- | --- |
@@ -71,7 +75,7 @@ At the #82 source commit, Windows `go list ./...` enumerates 42 packages. This i
 | Task | `internal/task`, `internal/task/model` |
 | Execution actor and pure values | `internal/execution`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
 | Execution effects | `internal/execution/adapters/codex`, `internal/execution/adapters/orca`, `internal/execution/adapters/orcaremote`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
-| Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph` |
+| Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph`, `internal/product/httpapi` |
 | Storage | `internal/storage/ports`, `internal/storage/sqlite` |
 | Test support | `internal/testkit/boundary`, `internal/testkit/boundary/e2e`, `internal/testkit/feedback`, `internal/testkit/process`, `internal/testkit/protocol` |
 | Integration and E2E helpers | `tests/integration`, `tests/e2e/cmd/sandbox-setup`, `tests/e2e/internal/controlled`, `tests/e2e/internal/driver`, `tests/e2e/internal/evidence`, `tests/e2e/internal/native`, `tests/e2e/internal/testenv` |
@@ -86,6 +90,7 @@ The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e
 | Execution records and neutral adapter values | `internal/execution/model` and `internal/execution/backend`; the unique `execution.Service` / `execution.CommandService` own dispatch, recovery, delivery and cleanup. |
 | Host calls into execution | `execution.HostPort` and scheduler callbacks in `internal/execution`; `internal/app/host` uses injected ports and does not implement domain transitions. |
 | Serializable product surface | `internal/product/api`; `internal/product/client` is the one injected Go client; `internal/product/query` projects read-only storage values. |
+| Local native client transport | `internal/product/httpapi` adapts the serializable product client to `steerline-client/v1`; `internal/app` starts it within the existing locked service lifetime. |
 | Atomic persistence declarations | `internal/storage/ports`; `internal/storage/sqlite` is the sole SQL/schema/transaction implementation. |
 | Composition inputs | `internal/app.Config`, `LoadConfig`, `NewService` and the app wiring files bind the concrete adapters, ports and SQLite owner. |
 | Main executable | `cmd/steerline/main.go` routes `console`, `run`/`start-service`, task and product commands. |
@@ -117,6 +122,8 @@ These files are selected by Go OS/build constraints and remain in their actual o
 
 SQLite remains the only persistent business authority. Claim, task result, unique delivery, discard, command receipt and their checkpoint changes still validate original identity and versions in their existing transaction boundaries. External Git or provider facts remain independent observations; no cross-system atomicity is inferred.
 
+The local HTTP transport keeps its discovery, current-user credential and immutable request envelopes under the existing `run_dir/local-api/` tree. These transport records arbitrate HTTP request IDs and report recovery status; task/execution transitions and command receipts remain in the existing host inbox or SQLite command authority.
+
 Execution recovery reads the service checkpoint together with task authority/graph and execution records using the existing storage read ports. `execution/reconstruction` rebuilds the read-only Runtime from that sample; persisted control-operation receipts use execution-owned checkpoint values and convert to product DTOs at the host transport. `ApplicationProjectSnapshot` still composes product project values and execution facts in one SQLite read transaction; the Go client classifies heartbeat/process freshness from the sampled Runtime rather than combining separately sampled versions. E2E `SnapshotContext` also reconstructs from that same `ApplicationProjectSnapshot` database sample.
 
 Complete final reply writes and their native-history checkpoints still commit atomically; raw/process transcripts and the separate JSONL conversation replay are retired. Query pages expose `product/api` DTOs; raw source cursors, implementation attributes and persisted event values remain execution-owned. Host heartbeat writes service metadata only. Stopping the service does not imply that an external worker exited.
@@ -138,6 +145,7 @@ Test-only support has one owner under [`internal/testkit`](../../internal/testki
 | Execution actor and ports | [`internal/execution/service_construction.go`](../../internal/execution/service_construction.go), [`internal/execution/host_ports.go`](../../internal/execution/host_ports.go), [`internal/execution/service_commit.go`](../../internal/execution/service_commit.go) |
 | Runtime reconstruction | [`internal/execution/reconstruction/runtime.go`](../../internal/execution/reconstruction/runtime.go), [`internal/execution/reconstruction/run.go`](../../internal/execution/reconstruction/run.go) |
 | Product reads and client | [`internal/product/query/project_page.go`](../../internal/product/query/project_page.go), [`internal/product/client/client.go`](../../internal/product/client/client.go), [`internal/console/interfaces.go`](../../internal/console/interfaces.go) |
+| Local HTTP client protocol | [`internal/product/httpapi`](../../internal/product/httpapi), [protocol contract](../product-design/local-client-protocol.md), [`internal/app/execution_service_wiring.go`](../../internal/app/execution_service_wiring.go) |
 | Storage ports and SQLite | [`internal/storage/ports`](../../internal/storage/ports), [`internal/storage/sqlite`](../../internal/storage/sqlite) |
 | Test feedback and process support | [`internal/testkit/feedback`](../../internal/testkit/feedback), [`internal/testkit/process`](../../internal/testkit/process), [`internal/testkit/protocol`](../../internal/testkit/protocol) |
 | Boundary guards and integration tests | [`internal/testkit/boundary`](../../internal/testkit/boundary), [`internal/testkit/boundary/e2e`](../../internal/testkit/boundary/e2e), [`tests/integration`](../../tests/integration) |

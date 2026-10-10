@@ -158,6 +158,13 @@ func (c *Client) CreateTaskBatch(ctx context.Context, in api.CreateInput) (api.T
 }
 
 func (c *Client) DiscardTask(ctx context.Context, in api.DiscardInput) (api.TaskDiscardReceipt, error) {
+	if c.resources.Discard != nil {
+		if err := c.begin(ctx); err != nil {
+			return api.TaskDiscardReceipt{}, err
+		}
+		defer c.mu.RUnlock()
+		return c.resources.Discard.Discard(ctx, in)
+	}
 	return command(ctx, c, true, func(r TaskCommands) (api.TaskDiscardReceipt, error) { return r.Discard(ctx, in) })
 }
 
@@ -168,8 +175,12 @@ func (c *Client) AddPredecessors(ctx context.Context, in api.TaskPredecessorAddI
 }
 
 func (c *Client) Conversation(ctx context.Context, filter api.ConversationFilter, cursor string) (api.ConversationPage, error) {
+	return c.ConversationPage(ctx, filter, cursor, 1000)
+}
+
+func (c *Client) ConversationPage(ctx context.Context, filter api.ConversationFilter, cursor string, limit int) (api.ConversationPage, error) {
 	return read(ctx, c, func(r Reader) (api.ConversationPage, error) {
-		return r.Conversation(ctx, filter, cursor, 1000)
+		return r.Conversation(ctx, filter, cursor, limit)
 	})
 }
 
@@ -249,6 +260,37 @@ func (c *Client) SubmitControl(ctx context.Context, in api.ControlInput) (api.Co
 	return c.resources.Control.Submit(ctx, in)
 }
 
+func (c *Client) SubmitControlInbox(ctx context.Context, in api.ControlInput) (api.ControlRequest, error) {
+	if err := c.begin(ctx); err != nil {
+		return api.ControlRequest{}, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Control == nil {
+		return api.ControlRequest{}, unsupported("control")
+	}
+	port, ok := c.resources.Control.(ControlInboxPort)
+	if !ok {
+		return api.ControlRequest{}, unsupported("control request inbox")
+	}
+	if in.RequestID == "" {
+		return api.ControlRequest{}, errors.New("control requires a stable request ID before submission")
+	}
+	if in.RequestedBy == "" {
+		in.RequestedBy = c.resources.DefaultRequestedBy
+	}
+	if in.Payload.Environment != nil {
+		target := *in.Payload.Environment
+		in.Payload.Environment = &target
+	}
+	if in.InstanceID == "" {
+		return api.ControlRequest{}, &api.Error{Kind: api.IdentityConflict, Message: "control request requires the discovered instance identity"}
+	}
+	if in.Action != api.StopService && in.ExpectedRevision == nil {
+		return api.ControlRequest{}, &api.Error{Kind: api.IdentityConflict, Message: "control request requires its displayed revision"}
+	}
+	return port.SubmitInbox(ctx, in)
+}
+
 func (c *Client) Receipt(ctx context.Context, id string) (*api.ControlReceipt, error) {
 	if err := c.begin(ctx); err != nil {
 		return nil, err
@@ -323,6 +365,19 @@ func (c *Client) DecisionEligibility(ctx context.Context, run *api.CandidateSumm
 		return unsupported("decision commands")
 	}
 	return c.resources.Decision.Eligibility(ctx, run)
+}
+
+// NormalizeDecision maps the original answer through the existing domain adapter
+// before HTTP records its immutable submission. It performs no mutation.
+func (c *Client) NormalizeDecision(ctx context.Context, in api.DecisionInput) (api.DecisionInput, error) {
+	if err := c.begin(ctx); err != nil {
+		return in, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Decision == nil {
+		return in, unsupported("decision commands")
+	}
+	return c.resources.Decision.Normalize(ctx, in)
 }
 
 func (c *Client) SubmitDecision(ctx context.Context, in api.DecisionInput) (api.CommandReceipt, bool, error) {
@@ -402,6 +457,10 @@ func (c *Client) ReadProject(ctx context.Context, selected string, previous api.
 
 func (c *Client) RecentActivity(ctx context.Context, run, execution, attempt string) (api.LogBatch, error) {
 	return read(ctx, c, func(r Reader) (api.LogBatch, error) { return r.RecentActivity(ctx, run, execution, attempt) })
+}
+
+func (c *Client) Activity(ctx context.Context, run, execution, attempt string, cursor api.ActivityCursor) (api.LogBatch, error) {
+	return read(ctx, c, func(r Reader) (api.LogBatch, error) { return r.Activity(ctx, run, execution, attempt, cursor) })
 }
 
 func (c *Client) InspectRecovery(ctx context.Context, id string) (api.RecoveryInspection, error) {

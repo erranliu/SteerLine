@@ -79,6 +79,20 @@ func allowedType(value string, accepted []string) bool {
 
 func CommandReceipt(r storageports.CommandRecord) api.CommandReceipt {
 	p := api.CommandReceipt{ProjectIdentity: r.ProjectIdentity, CommandID: r.CommandID, Kind: r.Kind, TargetID: r.TargetID, ExpectedVersion: r.ExpectedVersion, RequestedBy: r.RequestedBy, Status: r.Status, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
+	switch r.Kind {
+	case "answer_decision":
+		var answer api.DecisionAnswer
+		if json.Unmarshal(r.Payload, &answer) == nil {
+			p.DecisionAnswer = &answer
+		}
+	case "discard_task":
+		var request api.DiscardInput
+		if json.Unmarshal(r.Payload, &request) == nil {
+			request.RequestID = r.CommandID
+			p.DiscardRequest = &request
+		}
+	}
+
 	if len(r.Result) > 0 {
 		var result struct {
 			Code  string `json:"code"`
@@ -86,6 +100,12 @@ func CommandReceipt(r storageports.CommandRecord) api.CommandReceipt {
 		}
 		if err := json.Unmarshal(r.Result, &result); err == nil {
 			p.ResultCode, p.ResultError = result.Code, result.Error
+		}
+		if r.Kind == "discard_task" {
+			var discard api.TaskDiscardReceipt
+			if err := json.Unmarshal(r.Result, &discard); err == nil && discard.RequestID == r.CommandID {
+				p.Discard = &discard
+			}
 		}
 	}
 	return p

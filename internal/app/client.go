@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -33,6 +34,30 @@ func OpenClient(ctx context.Context, path string) (*productclient.Client, error)
 
 func openProjectClient(ctx context.Context, ref productapi.ProjectRef) (*productclient.Client, error) {
 	return productclient.Open(ctx, ref, ClientResources)
+}
+
+// openServiceProjectClient binds the configured service's own task-discard
+// command port into its local HTTP product client. Other clients retain the
+// ordinary repository-locking TaskCommands writer.
+func openServiceProjectClient(ctx context.Context, config Config, service *execution.Service) (*productclient.Client, error) {
+	absolute, err := filepath.Abs(config.ConfigPath)
+	if err != nil {
+		return nil, err
+	}
+	ref := productapi.ProjectRef{ConfigPath: absolute}
+	return productclient.Open(ctx, ref, func(ctx context.Context, ref productapi.ProjectRef) (productclient.Resources, error) {
+		bound := config
+		bound.ConfigPath = absolute
+		if err := bound.ResolveIdentity(ctx); err != nil {
+			return productclient.Resources{}, err
+		}
+		resources, err := clientResources(ctx, bound, ref)
+		if err != nil {
+			return productclient.Resources{}, err
+		}
+		resources.Discard = &clientDiscardCommands{service: service, config: bound}
+		return resources, nil
+	})
 }
 
 // ClientResources is the application construction seam. It binds one immutable
@@ -82,12 +107,7 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 			return productapi.ProjectSnapshot{SelectedTaskID: selected, Observation: obs, Connection: connection, TaskError: readErr.Error(), NativeTaskError: readErr.Error(), HistoryError: readErr.Error()}
 		},
 		OpenReader: func(ctx context.Context) (productclient.Reader, error) {
-			cfg := c
-			s, err := OpenNativeTaskReader(ctx, &cfg)
-			if err != nil {
-				return nil, err
-			}
-			return &clientReader{Service: query.NewService(s, c.Identity()), ConversationService: query.NewConversationService(s, c.Identity()), store: s, project: c.Identity(), config: c, executableTypes: append([]string(nil), c.ExecutableTypes...), freshness: freshness}, nil
+			return openClientReader(ctx, c, freshness)
 		},
 		OpenCommands: func(ctx context.Context, mutation bool) (productclient.TaskCommands, error) {
 			cfg := c
@@ -122,22 +142,19 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 		},
 		Control: clientControl{config: c}, Decision: clientDecision{config: c},
 		TaskSnapshot: func(ctx context.Context) (*productapi.TaskCandidates, error) {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			reader, err := OpenNativeTaskReader(ctx, &c)
+			reader, err := openClientReader(ctx, c, freshness)
 			if err != nil {
 				return nil, err
 			}
 			defer reader.Close()
-			view, err := query.NewService(reader, c.Identity()).ReadProjectView(ctx, "", 500)
-			if err != nil {
-				return nil, err
-			}
-			if view.Ready == nil {
+			project := reader.ReadProject(ctx, "", productapi.ProjectSnapshot{})
+			if project.Tasks == nil || project.TaskError != "" {
+				if project.TaskError != "" {
+					return nil, errors.New(project.TaskError)
+				}
 				return nil, errors.New("canonical task candidate snapshot is unavailable")
 			}
-			return query.ReadyCandidates(*view.Ready, view.SampledAt, productapi.ServiceConnection{}, c.ExecutableTypes), nil
+			return project.Tasks, nil
 		},
 		ResolveStartTask: func(ctx context.Context, id, profileID string) (productapi.ControlPayload, error) {
 			if profileID == "" {
@@ -174,6 +191,19 @@ type clientReader struct {
 	config          Config
 	executableTypes []string
 	freshness       time.Duration
+}
+
+func openClientReader(ctx context.Context, config Config, freshness time.Duration) (*clientReader, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	c := config
+	store, err := OpenNativeTaskReader(ctx, &c)
+	if err != nil {
+		return nil, err
+	}
+	return &clientReader{Service: query.NewService(store, c.Identity()), ConversationService: query.NewConversationService(store, c.Identity()),
+		store: store, project: c.Identity(), config: c, executableTypes: append([]string(nil), c.ExecutableTypes...), freshness: freshness}, nil
 }
 
 func (r *clientReader) Close() error { return r.store.Close() }
@@ -256,6 +286,10 @@ func (r *clientReader) RecentActivity(ctx context.Context, run, execution, attem
 	return r.Service.ReadRecentActivity(ctx, run, execution, attempt)
 }
 
+func (r *clientReader) Activity(ctx context.Context, run, execution, attempt string, cursor productapi.ActivityCursor) (productapi.LogBatch, error) {
+	return r.Service.ReadActivity(ctx, run, execution, attempt, cursor)
+}
+
 func (r *clientReader) Command(ctx context.Context, id string) (productapi.CommandReceipt, error) {
 	record, err := r.store.Command(ctx, r.project, id)
 	if errors.Is(err, storageports.ErrNotFound) {
@@ -286,6 +320,17 @@ func (r clientControl) Submit(ctx context.Context, in productapi.ControlInput) (
 		return productapi.ControlRequest{}, err
 	}
 	return steerline.SubmitControlTargeted(hostConfig, string(in.Action), payload, in.RequestedBy, in.RequestID, in.InstanceID, in.ExpectedRevision)
+}
+
+func (r clientControl) SubmitInbox(ctx context.Context, in productapi.ControlInput) (productapi.ControlRequest, error) {
+	if err := ctx.Err(); err != nil {
+		return productapi.ControlRequest{}, err
+	}
+	hostConfig, err := hostRuntimeConfig(ctx, r.config)
+	if err != nil {
+		return productapi.ControlRequest{}, err
+	}
+	return steerline.SubmitControlInbox(hostConfig, in)
 }
 
 func (r clientControl) Receipt(ctx context.Context, id string) (*productapi.ControlReceipt, error) {
@@ -331,6 +376,47 @@ func (r clientDecision) Eligibility(ctx context.Context, run *productapi.Candida
 	return execution.DecisionReplyEligibility(ctx, r.config.executionConfig(), runtimeDecisionFacts(run))
 }
 
+func (r clientDecision) Normalize(ctx context.Context, in productapi.DecisionInput) (productapi.DecisionInput, error) {
+	snapshot, err := readConfiguredRuntime(ctx, r.config)
+	if err != nil {
+		return in, err
+	}
+	if snapshot == nil {
+		return in, errors.New("no runtime snapshot")
+	}
+	run := runtimeRunByID(snapshot, in.Answer.RunID)
+	if run == nil || run.Decision == nil || run.Decision.ID != in.Answer.DecisionID {
+		return in, errors.New("decision is missing from its original run")
+	}
+	return normalizeDecisionInput(in, &run.Decision.Request)
+}
+
+func normalizeDecisionInput(in productapi.DecisionInput, request *executionmodel.DecisionRequest) (productapi.DecisionInput, error) {
+	body, err := json.Marshal(in.Answer)
+	if err != nil {
+		return in, err
+	}
+	var answer executionmodel.DecisionAnswer
+	if err = json.Unmarshal(body, &answer); err != nil {
+		return in, err
+	}
+	answer.OptionID = strings.TrimSpace(answer.OptionID)
+	if len(executionmodel.DecisionQuestions(request)) > 0 {
+		if err = execution.NormalizeNativeDecisionAnswer(request, &answer); err != nil {
+			return in, err
+		}
+	}
+	if err = executionmodel.ValidateDecisionAnswer(request, &answer); err != nil {
+		return in, err
+	}
+	body, err = json.Marshal(answer)
+	if err != nil {
+		return in, err
+	}
+	err = json.Unmarshal(body, &in.Answer)
+	return in, err
+}
+
 func (r clientDecision) Submit(ctx context.Context, in productapi.DecisionInput) (productapi.CommandReceipt, bool, error) {
 	config, store, err := openDecisionStore(ctx, r.config)
 	if err != nil {
@@ -338,7 +424,8 @@ func (r clientDecision) Submit(ctx context.Context, in productapi.DecisionInput)
 	}
 	defer store.Close()
 	a := in.Answer
-	record, submitted, err := SubmitAnswerDecision(ctx, config, a.RunID, a.DecisionID, a.OptionID, a.Note, in.RequestedBy, a.ExpectedDecisionVersion, a.ExpectedRunRevision, a.ServiceInstanceID, in.CommandID, a.Answers)
+	record, submitted, err := SubmitAnswerDecisionBound(ctx, config, a.RunID, a.DecisionID, a.OptionID, a.Note, in.RequestedBy,
+		a.ExpectedDecisionVersion, a.ExpectedRunRevision, a.ServiceInstanceID, in.CommandID, a.SourceAttemptID, a.ExpectedRecoveryVersion, a.Answers)
 	return query.CommandReceipt(record), submitted, err
 }
 
@@ -480,8 +567,11 @@ func projectPresentation(c Config) productapi.ProjectPresentation {
 	for _, p := range c.AvailableExecutionProfiles() {
 		reason := p.StaticUnavailableReason(c.ExecutionDirectory)
 		if reason == "" {
-			if _, _, err := c.ResolveExecutionProfile(p.ID, p.Digest(c.ExecutionDirectory)); err != nil {
+			selected, _, err := c.ResolveExecutionProfile(p.ID, p.Digest(c.ExecutionDirectory))
+			if err != nil {
 				reason = err.Error()
+			} else if capabilityErr := execution.WorkerFlowCapabilityError(selected, c.ExecutionDirectory, c.ProcessHost); capabilityErr != nil {
+				reason = capabilityErr.Error()
 			}
 		}
 		fixed := executionmodel.FixedExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Digest: p.Digest(c.ExecutionDirectory), AcceptedConfigVersion: p.AcceptedConfigVersion, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ImplementationDisplay: append([]string(nil), p.ImplementationDisplay...)}

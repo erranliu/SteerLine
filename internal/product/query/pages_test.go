@@ -100,6 +100,23 @@ func TestTM05PageProjection(t *testing.T) {
 	})
 }
 
+func TestCommandReceiptProjectsTypedDiscardResult(t *testing.T) {
+	discard := api.TaskDiscardReceipt{RequestID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", TaskID: "8", Status: "discarded", GraphRevision: 12}
+	result, err := json.Marshal(discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := CommandReceipt(storageports.CommandRecord{ProjectIdentity: "project", CommandID: discard.RequestID, Kind: "discard_task",
+		TargetID: discard.TaskID, ExpectedVersion: 4, RequestedBy: "operator", Status: "accepted", Result: result})
+	if command.Discard == nil || command.Discard.RequestID != discard.RequestID || command.Discard.GraphRevision != 12 || command.ResultCode != "" {
+		t.Fatalf("discard command lost its typed receipt: %+v", command)
+	}
+	other := CommandReceipt(storageports.CommandRecord{ProjectIdentity: "project", CommandID: discard.RequestID, Kind: "answer_decision", Result: result})
+	if other.Discard != nil {
+		t.Fatalf("non-discard command exposed an unrelated result: %+v", other)
+	}
+}
+
 // This original client assertion follows the unique ready-candidate projector.
 func TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage(t *testing.T) {
 	at := time.Now().UTC()
@@ -110,5 +127,28 @@ func TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage(t *testing.T)
 	snapshot := ReadyCandidates(ready, at, api.ServiceConnection{State: api.ConnectionConnected}, []string{"task"})
 	if len(snapshot.Tasks) != 501 || snapshot.Tasks[0].TaskID != "501" || snapshot.Tasks[500].TaskID != "1" {
 		t.Fatalf("ready candidates were truncated or reordered by task ID: %d", len(snapshot.Tasks))
+	}
+}
+
+func TestCommandReceiptProjectsTypedRequestIdentity(t *testing.T) {
+	answer := api.DecisionAnswer{RunID: "original-run", DecisionID: "original-decision", OptionID: "yes", Note: "original text", Answers: map[string][]string{"q": {"choice", "remarks"}}, ExpectedDecisionVersion: 3, ExpectedRunRevision: 7, SourceAttemptID: "original-attempt", ExpectedRecoveryVersion: 2, ServiceInstanceID: "original-instance", AnsweredBy: "operator"}
+	body, _ := json.Marshal(answer)
+	receipt := CommandReceipt(storageports.CommandRecord{ProjectIdentity: "project", CommandID: "command", Kind: "answer_decision", TargetID: answer.DecisionID, ExpectedVersion: 3, Payload: body})
+	if receipt.DecisionAnswer == nil || receipt.DecisionAnswer.ServiceInstanceID != answer.ServiceInstanceID || receipt.DecisionAnswer.SourceAttemptID != answer.SourceAttemptID || receipt.DecisionAnswer.ExpectedRecoveryVersion != 2 || receipt.DecisionAnswer.Answers["q"][1] != "remarks" {
+		t.Fatalf("lost original answer identities/content: %+v", receipt)
+	}
+	receipt.DecisionAnswer.Answers["q"][1] = "changed"
+	if string(body) == "changed" || answer.Answers["q"][1] != "remarks" {
+		t.Fatal("receipt mutation changed authority input")
+	}
+	discard := api.DiscardInput{TaskID: "8", Reason: "original reason", RequestedBy: "operator", ExpectedVersion: 4}
+	body, _ = json.Marshal(discard)
+	receipt = CommandReceipt(storageports.CommandRecord{ProjectIdentity: "project", CommandID: "command", Kind: "discard_task", TargetID: "8", ExpectedVersion: 4, Payload: body})
+	if receipt.DiscardRequest == nil || receipt.DiscardRequest.RequestID != "command" || receipt.DiscardRequest.Reason != discard.Reason || receipt.DiscardRequest.ExpectedVersion != 4 {
+		t.Fatalf("lost discard request: %+v", receipt)
+	}
+	receipt = CommandReceipt(storageports.CommandRecord{Kind: "answer_decision", Payload: []byte("invalid")})
+	if receipt.DecisionAnswer != nil {
+		t.Fatal("malformed request was treated as verified content")
 	}
 }

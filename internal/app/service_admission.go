@@ -43,7 +43,7 @@ func (a serviceAdmission) ValidateStateLocation(input host.Config) error {
 	}
 	// This read-only gate rejects Beads and unsupported files/formats before the
 	// host publishes startup.json or opens the service log.
-	return host.PreflightNativeStatePath(input)
+	return PreflightNativeStatePath(*a.config)
 }
 
 func (a serviceAdmission) Preflight(ctx context.Context, input host.Config, checkSkills bool) (host.Config, error) {

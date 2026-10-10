@@ -18,7 +18,7 @@ type taskCommandStore = fixtures.TaskStore
 // NewTaskCommands extracts only fixed task input and injects narrow I/O ports.
 
 func NewTaskCommands(store taskCommandStorage, config Config) taskapp.Commands {
-	return taskapp.Commands{Store: taskCommandStore{store}, Documents: taskDocumentsForTest(config), Input: taskInputForTest(config)}
+	return taskapp.Commands{Store: taskCommandStore{Store: store}, Documents: taskDocumentsForTest(config), Input: taskInputForTest(config)}
 }
 
 func taskDocumentsForTest(config Config) taskapp.Documents {
