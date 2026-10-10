@@ -53,3 +53,11 @@ dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug
 首轮 550 基线调试包暴露两个准备缺陷：Windows CRLF/文本归一化使 fixture contract hash 与已提交内容不一致；包根继承 ACL 缺少服务收紧 discovery ACL 所需权限。最终实现包含按 Git commit blob 计算 pinned hash、fixture `.gitattributes` 固定 Markdown LF，以及生成包根目录仅授予当前 SID 的 ACL。此前 failed/临时包均保留在 `C:\SteerlineDebug\`，其中故障日志和根因见各包 `evidence/init.log`、`evidence/task44-environment.json`；最终 clean package 已真实启动、联调并清理通过。
 
 UI 迭代中还保留了 helper Git 参数、#45 TaskPage `project_id` 实际表示仓库身份、nil blocker slices、延迟草稿保存、连接时隐式首任务选择等失败记录；修复后均在 final candidate 自动/真实窗口验收中复核。早期失败 JSON 见 final package 之外的 source-550/source-dirty 调试包 `evidence/task44-development-attempts.json`、`task44-public-api-probe.json`、`task44-ui-detail-null-list-failure.json`、`task44-draft-race-failure.json`、`task44-editor-late-assignment-failure.json` 和 `task44-connect-target-race-failure.json`。这些记录保留原失败，不改变 final package 的最终通过结论。
+
+## 2026-10-10 独立复审第一轮局部修复
+
+复审指出最后窗口的 `Closed` 异步保存可能晚于应用退出。修复 source commit `f1846b9bd628f43603658d265db0364e1cb87750`（tree `23c940561d2a86f4254a5fb2a19874f3a3c53d93`）改为在 `AppWindow.Closing` 取消实际关闭，禁用编辑区域，等待草稿保存成功再关闭。重复关闭不重复保存；保存失败保留窗口、草稿和客户端观察连接，显示失败与重试提示，不发送服务 stop。
+
+本轮仅补 UI2-A 草稿生命周期定向验证：`dotnet test ui/SteerLine.Windows.Tests/SteerLine.Windows.Tests.csproj -c Debug --no-restore` exit 0，重新编译并运行 19 passed / 0 failed / 0 skipped；`dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug --no-restore` exit 0，0 warnings / 0 errors。新增用例覆盖延迟保存前不能关闭、重复关闭、失败保留草稿/连接与可见提示、成功重试。实际 WinUI 关闭事件的接线经真实工程编译，尚未执行本轮真实窗口关闭观察。
+
+日志与修复报告位于 `C:/Users/lmas1/.codex/task-state/roadmap-runner/roadmap-steerline-20261008-01a11a74/fix44-round1-evidence/` 和同级 `fix44-round1.md`。前文 c5c9 包的真实窗口/UI3 与历史联调证据保留，只支持其原 source；不据此声称本轮 source 已完成真实 UI 验收。UI2-M、UI4-M、UI5-M 仍人工待验且最迟 2.1 签收，UI5 正常关闭 service/worker 连续性未经本轮验证。未运行 Full、Go L1、live 模型；未创建后端或调试包、未触安装环境。需协调 push 与新独立终审后再结算交付。
