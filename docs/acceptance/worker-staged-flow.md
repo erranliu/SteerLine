@@ -1,6 +1,6 @@
 # Worker 阶段流程验收规划
 
-任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，质量审计修复后交付 PR #262 Ready for review；WFS-A1–A4 按下文 source、增量和明确授权的 Orca usage 条件通过，WFS-M1 未验；尚未独立复审或合并。#83 已合入，作为隔离基线复用。
+任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，[PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并；2026-10-10 合入后独立复审未发现原 PR 的已确认缺陷，#84 实现完成。历史 WFS-A1–A4 按下文精确 source、受影响增量和明确授权的 Orca usage 调整条件结算，WFS-M1 仍待人工验收；[当前 Orca 路线能力缺口](#后续主干-orca-路线的当前能力缺口)独立保留，不以历史通过证明当前所有路线通过。#83 已合入，作为隔离基线复用。
 
 ## 最小验证安排
 
