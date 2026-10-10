@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -143,8 +144,12 @@ func (p *Lifecycle) Execute(ctx context.Context, r executionbackend.LifecycleReq
 		if err := os.WriteFile(path, mustJSON(r.Input.Turn.Prompt), 0600); err != nil {
 			return receipt, nil, err
 		}
-		return receipt, newNeutralObserver(process, session, r.Input.Turn.CommandID, func() error {
-			return os.WriteFile(filepath.Join(filepath.Dir(path), "fixture-completed.json"), mustJSON(neutralCompletionReceipt{Evidence: executionbackend.TurnEvidence{SessionID: session, TurnID: r.Input.Turn.CommandID, CommandID: r.Input.Turn.CommandID, Started: true, Completed: true, Succeeded: true, LastMessage: "neutral turn completed"}, Process: process, Target: r.Snapshot.Ref.Target, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, ResourceGeneration: r.Snapshot.ResourceGeneration}), 0600)
+		final := "neutral turn completed"
+		if strings.HasPrefix(r.Input.Turn.Prompt, "Current step: implement.report.") {
+			final = `{"outcome":"needs_input","summary":"Neutral fixture awaits explicit feedback","question":"What should this candidate do next?"}`
+		}
+		return receipt, newNeutralObserver(process, session, r.Input.Turn.CommandID, final, func() error {
+			return os.WriteFile(filepath.Join(filepath.Dir(path), "fixture-completed.json"), mustJSON(neutralCompletionReceipt{Evidence: executionbackend.TurnEvidence{SessionID: session, TurnID: r.Input.Turn.CommandID, CommandID: r.Input.Turn.CommandID, Started: true, Completed: true, Succeeded: true, LastMessage: final, FinalVerified: true, FinalSource: "fixture.original_completion", FinalItemID: "final:" + r.Input.Turn.CommandID}, Process: process, Target: r.Snapshot.Ref.Target, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, ResourceGeneration: r.Snapshot.ResourceGeneration}), 0600)
 		}), nil
 	case executionbackend.LifecycleDeliverFeedback:
 		receipt.Disposition = executionbackend.OperationConfirmed
@@ -178,7 +183,7 @@ func (p *Lifecycle) ObserveLifecycle(_ context.Context, s executionbackend.Lifec
 	if receipt.State.TurnCompleted {
 		return receipt, nil, nil
 	}
-	return receipt, newNeutralObserver(s.Ref.External, s.Session.SessionID, s.Session.CurrentTurnID), nil
+	return receipt, newNeutralObserver(s.Ref.External, s.Session.SessionID, s.Session.CurrentTurnID, "neutral turn completed"), nil
 }
 
 func (p *Lifecycle) StopLifecycle(_ context.Context, r executionbackend.LifecycleRequest, h executionbackend.StopHandle) (executionbackend.LifecycleReceipt, error) {
@@ -229,11 +234,11 @@ type neutralObserver struct {
 	handle neutralHandle
 }
 
-func newNeutralObserver(identity executionbackend.ProcessIdentity, session, turn string, completed ...func() error) *neutralObserver {
+func newNeutralObserver(identity executionbackend.ProcessIdentity, session, turn, final string, completed ...func() error) *neutralObserver {
 	o := &neutralObserver{events: make(chan executionbackend.LifecycleEvent, 2), done: make(chan error, 1), stop: make(chan struct{}), handle: neutralHandle{identity}}
 	go func() {
 		defer close(o.events)
-		for _, fact := range []executionbackend.EventFact{{Kind: executionbackend.EventStarted, SessionID: session, StartedTurnID: turn}, {Kind: executionbackend.EventCompleted, Completed: true, Matched: true, Outcome: "completed", LastMessage: "neutral turn completed"}} {
+		for _, fact := range []executionbackend.EventFact{{Kind: executionbackend.EventStarted, SessionID: session, StartedTurnID: turn}, {Kind: executionbackend.EventCompleted, Completed: true, Matched: true, Outcome: "completed", LastMessage: final}} {
 			ack := make(chan error, 1)
 			select {
 			case o.events <- executionbackend.LifecycleEvent{Fact: fact, Kind: string(fact.Kind), Persisted: ack}:

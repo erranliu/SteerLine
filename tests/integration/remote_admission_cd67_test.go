@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -28,14 +29,13 @@ func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 	c.Host = "local"
 	c.PublicationPolicy.Publisher = "worker"
 	c.PR = hostPublicationProviderFixture()
-	settings := nativeProfileSettings(c)
-	setNativeProfile(t, &c, settings)
+	setNativeProfile(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"})
 	if err := nativeConfigError(c); err != nil {
 		t.Fatalf("valid fixed local configuration rejected: %v", err)
 	}
 }
 
-func TestRemotePublicationClaimRejectsUnreachableOrca(t *testing.T) {
+func TestRemoteDevelopmentFlowRejectsMissingFinalBeforeNativeProbe(t *testing.T) {
 	fixture := newLifecycleProjectBase(t, "local", false)
 	c := fixture.config
 	c.Host, c.Agent = "orca_supervised", "codex"
@@ -49,15 +49,17 @@ func TestRemotePublicationClaimRejectsUnreachableOrca(t *testing.T) {
 	store, err := steerlineapp.OpenNativeTaskCommandStore(context.Background(), &c)
 	require(t, err)
 	defer store.Close()
-	// An unreachable Orca CLI rejects before reserving the claim.
+	// Missing original final provenance rejects before the unreachable native
+	// CLI can be probed or any claim/operation can be reserved.
 	entry, err := c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	require(t, err)
 	require(t, entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)))
 	before, err := store.Query(context.Background(), c.Identity())
 	require(t, err)
 	_, err = (appExecutionCommands(t, store, c)).ClaimNativeTask(context.Background(), c.ExecutionConfig(), execution.TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
-	if err == nil || !strings.Contains(err.Error(), "Orca version probe") {
-		t.Fatalf("remote publication bypassed its target admission gate: %v", err)
+	var unsupported *executionbackend.BackendError
+	if !errors.As(err, &unsupported) || unsupported.Code != executionbackend.BackendUnsupported || !strings.Contains(unsupported.Diagnostic, "structured final evidence") {
+		t.Fatalf("remote development flow bypassed its original final capability gate: %v", err)
 	}
 	after, queryErr := store.Query(context.Background(), c.Identity())
 	require(t, queryErr)

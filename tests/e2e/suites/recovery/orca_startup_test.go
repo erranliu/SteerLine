@@ -10,11 +10,8 @@ import (
 	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 )
 
-func TestOrcaStartupSlow(t *testing.T)       { runOrcaStartupScenario(t, "slow") }
-func TestOrcaStartupUnobserved(t *testing.T) { runOrcaStartupScenario(t, "unobserved") }
-func TestOrcaStartupLost(t *testing.T)       { runOrcaStartupScenario(t, "lost") }
-func TestOrcaStartupFailed(t *testing.T)     { runOrcaStartupScenario(t, "failed") }
-
+// Retired legacy driver retained for history; there are no discovered startup
+// tests until a current supervised scenario is implemented and registered.
 func runOrcaStartupScenario(t *testing.T, mode string) {
 	s := testenv.NewScenario(t, "recovery.orca-startup."+mode)
 	p := s.NewProject(mode)

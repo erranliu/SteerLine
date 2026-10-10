@@ -204,40 +204,65 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if s.Session == "" || params.ThreadID != s.Session || len(params.Input) == 0 {
 			return fmt.Errorf("invalid controlled dispatch")
 		}
-		if len(s.Turns) != 0 {
-			return fmt.Errorf("unexpected duplicate business dispatch")
+		steps := []string{"implement.execute", "implement.report", "publish"}
+		index := len(s.Turns)
+		if index >= len(steps) || !strings.HasPrefix(params.Input[0].Text, "Current step: "+steps[index]+".") {
+			return fmt.Errorf("unexpected duplicate or out-of-order staged dispatch")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		if err := os.WriteFile(filepath.Join(s.Cwd, "result.txt"), []byte("controlled E2E result\n"), 0600); err != nil {
-			return err
+		final := "Controlled candidate implemented and committed locally; no publication performed."
+		candidateSHA := ""
+		switch index {
+		case 0:
+			if err := os.WriteFile(filepath.Join(s.Cwd, "result.txt"), []byte("controlled E2E result\n"), 0600); err != nil {
+				return err
+			}
+			if _, err := Git(ctx, s.Cwd, "add", "result.txt"); err != nil {
+				return err
+			}
+			if _, err := Git(ctx, s.Cwd, "commit", "-m", "controlled worker candidate"); err != nil {
+				return err
+			}
+			var err error
+			candidateSHA, err = Git(ctx, s.Cwd, "rev-parse", "HEAD")
+			if err != nil {
+				return err
+			}
+		case 1:
+			// Report only the already recorded execute result; do no business I/O.
+			candidateSHA, _ = s.Turns[0]["fixture_candidate_sha"].(string)
+			if candidateSHA == "" {
+				return fmt.Errorf("source candidate missing")
+			}
+			raw, _ := json.Marshal(map[string]any{"outcome": "done", "outputs": map[string]string{"candidate_sha": candidateSHA}, "summary": "Controlled source implementation completed"})
+			final = string(raw)
+		case 2:
+			branch, err := Git(ctx, s.Cwd, "symbolic-ref", "--short", "HEAD")
+			if err != nil {
+				return err
+			}
+			if _, err := Git(ctx, s.Cwd, "push", "origin", branch); err != nil {
+				return err
+			}
+			if err := githubCommand(path, []string{"pr", "create", "--repo", "e2e/project", "--base", "main", "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}); err != nil {
+				return err
+			}
+			published, err := Read(path)
+			if err != nil {
+				return err
+			}
+			s.PR, s.PRs = published.PR, published.PRs
+			raw, _ := json.Marshal(map[string]any{"outcome": "done", "outputs": map[string]string{"pr_url": s.PR.URL}, "summary": "Controlled candidate pushed and PR created"})
+			final = string(raw)
 		}
-		if _, err := Git(ctx, s.Cwd, "add", "result.txt"); err != nil {
-			return err
-		}
-		if _, err := Git(ctx, s.Cwd, "commit", "-m", "controlled worker result"); err != nil {
-			return err
-		}
-		branch, err := Git(ctx, s.Cwd, "symbolic-ref", "--short", "HEAD")
-		if err != nil {
-			return err
-		}
-		if _, err := Git(ctx, s.Cwd, "push", "origin", branch); err != nil {
-			return err
-		}
-		if err := githubCommand(path, []string{"pr", "create", "--repo", "e2e/project", "--base", "main", "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}); err != nil {
-			return err
-		}
-		published, err := Read(path)
-		if err != nil {
-			return err
-		}
-		s.PR = published.PR
-		s.PRs = published.PRs
 		s.Dispatches++
 		turnID := uuid.NewString()
-		item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": "Published by worker: " + s.PR.URL}
-		turn := map[string]any{"id": turnID, "status": "completed", "completedAt": time.Now().Unix(), "items": []any{item}}
+		item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": final}
+		turn := map[string]any{"id": turnID, "status": "completed", "completedAt": time.Now().Unix(), "items": []any{item}, "fixture_step": steps[index]}
+		if candidateSHA != "" {
+			turn["fixture_candidate_sha"] = candidateSHA
+		}
 		s.Turns = append(s.Turns, turn)
 		if err := Write(path, s); err != nil {
 			return err

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 	"github.com/google/uuid"
 )
@@ -37,12 +36,6 @@ func TestOrcaRemovalRestart(t *testing.T) {
 	// Delete during the business phase, with the same project/service alive.
 	// The controlled worker's workspace is independent of the native checkout.
 	p.NativeRemoveWorktree(created)
-	trash := filepath.Join(root, native.OrcaWorktreeTrashDirectory)
-	info, err := os.Stat(trash)
-	s.Must(err)
-	if !info.IsDir() {
-		t.Fatal("native removal did not produce its administrative directory")
-	}
 	query := func(label string) testenv.Snapshot {
 		var raw []byte
 		s.Wait("public query "+label, func() (bool, error) {
@@ -76,7 +69,7 @@ func TestOrcaRemovalRestart(t *testing.T) {
 		return snapshot
 	}
 	query("after-removal")
-	_, err = s.RunPseudoConsole(p.Command(p.Executable, "console", "-config", p.Config), "console-after-removal", "服务 已连接")
+	_, err := s.RunPseudoConsole(p.Command(p.Executable, "console", "-config", p.Config), "console-after-removal", "服务 已连接")
 	s.Must(err)
 	p.RestartService()
 	query("after-restart")

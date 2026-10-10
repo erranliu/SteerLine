@@ -1,5 +1,15 @@
 # 远端 Orca 正式路径与 L3 验收
 
+## 当前分步流程能力缺口
+
+2026-10-09 全项目回归发现：下文的双轮交付成功仅证明记录的旧构建，不证明当前 `worker-flow-v2` 分步流程。当前 supervised adapter 的 `PolicyCapabilities` 未声明 `StructuredFinalEvidence`，`ObserveLifecycle` 只提供 `worker_done` 摘要，没有规范 final 的来源、item 和验证事实。正式开发流程因此在原生探测/领取副作用前明确拒绝；这项拒绝有独立 integration 回归，并核对未写入 WorkflowRun/Execution/Operation。
+
+用户已要求删除或更新过期测试。本次维护将旧单轮 `delivery.orca-remote-codex` 移出 suites.json，保留驱动并显式 retired/skip；runner 拒绝选择旧 ID。当前注册范围不含远端交付，不把该退役或历史成功算作当前能力通过。supervised local/environment 注册与配置回归仍运行。
+
+RO2-A–RO6-A 当前待补：需要原 Task/Dispatch/Command 绑定、可核实的规范 final 来源，再更新 execute/report/publish 及反馈场景并重新准入。不能仅开启能力布尔值，也不能用 `worker_done` 摘要、最后一段 transcript 文本或私有 agent 文件替代规范 final。不扩张本次维护为原生协议新功能；主线的 structured 延期安排见[双目标 Plan](../spec/orca-supervised-targets.plan.md)。
+
+以下表格与原始记录保持历史范围；新的回归结果归本次全项目维护记录。
+
 唯一归属：[远端 Orca 正式路径与 L3 Spec](../spec/orca-remote-l3.spec.md)及[Plan](../spec/orca-remote-l3.plan.md)。本聊天直接开发；此前已分配 #85 保留，不纳入 roadmap 调度。
 
 | 验收项 | 方法/安排 | 状态 | 通过条件/证据 |

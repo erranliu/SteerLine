@@ -276,7 +276,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	require(t, reopened.eventForRun(run, <-worker.Events))
 	answerNeutralEnvironment(t, reopened, run, "recheck_environment", "")
 	e = reopened.executionRecord(run)
-	if e.Environment.Blocker != nil || reopened.workflowRecord(run).Status != "executing" || len(resolver.inputs) != 1 || e.CurrentTurnID != business {
+	if e.Environment.Blocker != nil || reopened.workflowRecord(run).Status != "running" || len(resolver.inputs) != 1 || e.CurrentTurnID != business {
 		t.Fatal("business start reconciliation repeated or replaced input")
 	}
 	reopened.shutdown()

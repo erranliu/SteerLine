@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -32,15 +33,23 @@ func TestWorkerWorkspaceInstructionUsesPreparedRemoteIdentity(t *testing.T) {
 	}
 }
 
-func TestWorkerFlowPromptIncludesFixedWorkflowRunID(t *testing.T) {
+func TestWorkerFlowPromptBindsFixedTaskContract(t *testing.T) {
 	task := taskmodel.TaskRecord{TaskID: "102", Title: "Native branch A"}
-	contract := taskmodel.TaskContract{ContractID: "fixed", Branch: "main", SpecRef: taskmodel.FileReference{Path: "docs/spec/task.spec.md"}, PlanRef: taskmodel.FileReference{Path: "docs/spec/task.plan.md"}}
+	contract := taskmodel.TaskContract{ContractID: "fixed", Branch: "main", SpecRef: taskmodel.FileReference{Path: "docs/spec/task.spec.md", Commit: strings.Repeat("b", 40), SHA256: strings.Repeat("c", 64)}, PlanRef: taskmodel.FileReference{Path: "docs/spec/task.plan.md", Commit: strings.Repeat("d", 40), SHA256: strings.Repeat("e", 64)}}
 	runID := strings.Repeat("a", 32)
-	for _, publisher := range []string{"worker"} {
-		prompt, err := Prompt(task, contract, runID, executionbackend.PublicationPolicy{Publisher: publisher})
-		if err != nil || !strings.Contains(prompt, "Fixed SteerLine workflow_run_id: "+runID) || strings.Contains(prompt, "SteerLine will commit") != (publisher == "host_service") {
-			t.Fatalf("worker prompt omitted its fixed center identity: %q / %v", prompt, err)
-		}
+	prompt, err := Prompt(task, contract, runID, executionbackend.PublicationPolicy{Publisher: "worker"})
+	if err != nil || !strings.HasPrefix(prompt, "Current step: implement.execute.") || !strings.Contains(prompt, "Do not publish in this step.") {
+		t.Fatalf("worker prompt omitted its current step boundary: %q / %v", prompt, err)
+	}
+	_, body, found := strings.Cut(prompt, "\nFixed facts:\n")
+	var facts struct {
+		TaskID string                  `json:"task_id"`
+		Title  string                  `json:"title"`
+		Spec   taskmodel.FileReference `json:"spec"`
+		Plan   taskmodel.FileReference `json:"plan"`
+	}
+	if !found || json.Unmarshal([]byte(body), &facts) != nil || facts.TaskID != task.TaskID || facts.Title != task.Title || facts.Spec != contract.SpecRef || facts.Plan != contract.PlanRef {
+		t.Fatal("worker prompt changed its fixed task or committed Spec/Plan references")
 	}
 	if _, err := Prompt(task, contract, "", executionbackend.PublicationPolicy{Publisher: "worker"}); err == nil {
 		t.Fatal("worker prompt accepted a missing workflow run ID")

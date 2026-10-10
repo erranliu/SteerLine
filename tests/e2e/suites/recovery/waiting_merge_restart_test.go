@@ -18,7 +18,7 @@ func TestWaitingMergeRestart(t *testing.T) {
 	before := p.WaitPhase("waiting_pr_merge")
 	p.AssertFixedNativeLaunch(before)
 	p.Record("before-restart", before)
-	if before.Helper.Sessions != 1 || before.Helper.Dispatches != 1 || before.Helper.PR.State != "open" {
+	if before.Helper.Sessions != 1 || before.Helper.Dispatches != 3 || before.Helper.PR.State != "open" {
 		t.Fatal("business turn was not completed with open PR")
 	}
 	p.RestartService()
@@ -72,7 +72,7 @@ func TestWaitingMergeRestart(t *testing.T) {
 			}
 		}
 	}
-	if len(again.Domain.WorkflowRuns) != 1 || again.Helper.Sessions != 1 || again.Helper.Dispatches != 1 {
+	if len(again.Domain.WorkflowRuns) != 1 || again.Helper.Sessions != 1 || again.Helper.Dispatches != 3 {
 		t.Fatal("repeated reconciliation duplicated execution")
 	}
 	p.StopService()

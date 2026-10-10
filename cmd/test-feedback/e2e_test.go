@@ -12,6 +12,17 @@ import (
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
+func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
+	ordinary := e2eScenario{ID: "delivery.basic", Env: "controlled"}
+	heavy := e2eScenario{ID: "runtime.installed-debug-isolation", Env: "controlled"}
+	if e2ePackageGoTimeout([]e2eScenario{ordinary}) != "6m" || e2ePackageGoTimeout([]e2eScenario{heavy}) != "11m" || e2ePackageGoTimeout([]e2eScenario{ordinary, heavy}) != "17m" {
+		t.Fatal("Go parent deadline clips a selected business scene or its cleanup")
+	}
+	if e2ePackageGoTimeout([]e2eScenario{{Env: "live"}}) != "35m" {
+		t.Fatal("live package deadline changed")
+	}
+}
+
 func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
 	for _, args := range [][]string{{"-level=L4"}, {"-env=controlled"}, {"-level=L1", "-quick"}, {"-level=L1", "-suite=recovery"}, {"-level=L2", "-suite=smoke"}, {"-level=L3"}, {"-level=L2", "-workers=1"}, {"-level=L2", "-build-only=false"}, {"-level=L2", "-env=native"}, {"-level=L2", "--", "./..."}, {"-level=L2", "-level=L3"}} {
 		if _, err := parseOptions(args); err == nil {
@@ -35,6 +46,17 @@ func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
 		if err != nil || opts.e2eEnv != expected {
 			t.Fatalf("%v: %v", args, err)
 		}
+	}
+}
+
+func TestL2GatedSelectionUsesCurrentRegisteredChain(t *testing.T) {
+	root, err := e2eRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := selectE2E(root, options{level: "L2", e2eEnv: "gated"})
+	if err != nil || len(selected) != 2 || selected[0].ID != "smoke.delivery" || selected[1].ID != "smoke.local-codex" {
+		t.Fatalf("fixed current L2 selection: %+v %v", selected, err)
 	}
 }
 
@@ -145,13 +167,14 @@ func TestL3ExactScenarioSelectionRejectsWrongEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"delivery.local-codex", "delivery.orca-remote-codex"} {
+	for _, id := range []string{"delivery.local-codex"} {
 		entries, err := selectE2E(root, options{level: "L3", suite: "delivery", e2eEnv: "live", scenario: id})
 		if err != nil || len(entries) != 1 || entries[0].ID != id {
 			t.Fatalf("independent selection %s: %v %v", id, entries, err)
 		}
 	}
 	for _, opts := range []options{
+		{level: "L3", suite: "delivery", e2eEnv: "live", scenario: "delivery.orca-remote-codex"},
 		{level: "L3", suite: "delivery", e2eEnv: "controlled", scenario: "delivery.local-codex"},
 		{level: "L3", suite: "recovery", e2eEnv: "live", scenario: "delivery.local-codex"},
 		{level: "L3", suite: "delivery", e2eEnv: "live", scenario: "delivery.local-codex,delivery.local-codex"},

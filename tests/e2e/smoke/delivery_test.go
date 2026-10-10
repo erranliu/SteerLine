@@ -17,7 +17,7 @@ func TestDeliverySmoke(t *testing.T) {
 	p.Claim("a")
 	open := p.WaitPhase("waiting_pr_merge")
 	p.Record("open", open)
-	if len(open.Page.Tasks) != 2 || open.Helper.Sessions != 1 || open.Helper.Dispatches != 1 || open.Helper.PR.State != "open" {
+	if len(open.Page.Tasks) != 2 || open.Helper.Sessions != 1 || open.Helper.Dispatches != 3 || open.Helper.PR.State != "open" {
 		t.Fatalf("incomplete controlled execution: %+v", open)
 	}
 	for _, task := range open.Page.Tasks {
@@ -62,7 +62,7 @@ func TestDeliverySmoke(t *testing.T) {
 			}
 		}
 	}
-	if len(again.Domain.WorkflowRuns) != 1 || again.Helper.Dispatches != 1 {
+	if len(again.Domain.WorkflowRuns) != 1 || again.Helper.Dispatches != 3 {
 		t.Fatal("duplicate execution after delivery")
 	}
 	p.StopService()

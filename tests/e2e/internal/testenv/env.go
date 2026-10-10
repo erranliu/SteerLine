@@ -102,6 +102,11 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
+	if id == "runtime.installed-debug-isolation" {
+		// Two source builds, two isolated service lifecycles, path refusals and
+		// two staged workflows share this bound; command limits stay unchanged.
+		timeout = 10 * time.Minute
+	}
 	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.Contains(id, "orca-remote-codex") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
 	}

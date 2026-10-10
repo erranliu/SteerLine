@@ -339,6 +339,9 @@ func integrationAppServerConnection(connection net.Conn, state *integrationAppSe
 			text := "completed integration turn"
 			if len(params.Input) != 0 {
 				text = "completed: " + params.Input[0].Text
+				if strings.HasPrefix(params.Input[0].Text, "Current step: implement.report.") {
+					text = `{"outcome":"needs_input","summary":"Original fixture execution completed","question":"Continue this original candidate?"}`
+				}
 			}
 			if os.Getenv("STEERLINE_STAGE_PROVIDER") != "" && len(params.Input) != 0 {
 				cwd, _ := os.Getwd()

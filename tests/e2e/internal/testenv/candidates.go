@@ -176,7 +176,7 @@ func (p *Project) WaitCandidateCommand(c Candidate, phase, commandID string) Sna
 			return false, fmt.Errorf("original candidate environment blocker %s (no automatic feedback replay)", e.Environment.Blocker.Fact.Reason)
 		}
 		w := result.Domain.WorkflowRuns[0]
-		if phase == "waiting_pr_merge" && w.Status == "waiting_decision" && w.PRQueryError != nil {
+		if phase == "waiting_pr_merge" && w.Status == "waiting_input" && w.PRQueryError != nil {
 			p.Scenario.t.Fatalf("candidate PR verification failed: %s; see exact original snapshot", *w.PRQueryError)
 		}
 		if phase == "waiting_pr_merge" && candidatePublicationEndedWithoutPR(w, e, commandID) {
@@ -192,7 +192,7 @@ func (p *Project) WaitCandidateCommand(c Candidate, phase, commandID string) Sna
 }
 
 func candidatePublicationEndedWithoutPR(w executionmodel.WorkflowRunRecord, e executionmodel.ExecutionRecord, commandID string) bool {
-	return commandID != "" && e.CurrentCommandID == commandID && w.Status == "waiting_decision" && e.Status == "idle" &&
+	return commandID != "" && e.CurrentCommandID == commandID && w.Status == "waiting_input" && e.Status == "idle" &&
 		e.PendingCommandID == "" && e.PendingTurnID == "" && e.CurrentTurnID != "" && e.CurrentTurnID == e.LastStoppedTurnID
 }
 func (p *Project) Feedback(c Candidate, marker string) driver.CandidateCommand {

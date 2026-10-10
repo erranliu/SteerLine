@@ -140,8 +140,8 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 				chains[e.Chain] = true
 			}
 		}
-		if !chains["controlled"] || !chains["local-codex"] || !chains["orca-codex"] {
-			return nil, errors.New("L2 requires controlled gate and both live chains")
+		if len(selected) != 2 || !chains["controlled"] || !chains["local-codex"] {
+			return nil, errors.New("L2 requires its controlled gate and current local Codex live chain")
 		}
 	}
 	return selected, nil
@@ -209,7 +209,7 @@ func runE2E(opts options) (code int) {
 		coverage = "gate-only"
 	}
 	if opts.e2eEnv == "gated" {
-		note = "controlled gate, then native gpt-6-luna/medium on both chains with real SteerlineTest GitHub PRs"
+		note = "controlled gate, then native gpt-6-luna/medium on the current local Codex chain with real SteerlineTest GitHub PRs"
 		coverage = "full-L2"
 	}
 	report := e2eReport{Scope: "e2e", Coverage: coverage, Level: opts.level, Env: opts.e2eEnv, Selected: selected, Builds: map[string]string{}, Errors: []string{}, Started: time.Now().UTC().Format(time.RFC3339Nano), Environment: collectEnvironment(opts.cacheCondition, note, out, nil)}
@@ -378,12 +378,7 @@ func runE2E(opts options) (code int) {
 		for _, e := range packages[pkg] {
 			tests = append(tests, e.Test)
 		}
-		// Each controlled scenario owns a 5m business deadline and cleanup.
-		// A package selecting several independent scenarios needs their sum.
-		timeout := fmt.Sprintf("%dm", 6*len(packages[pkg]))
-		if packages[pkg][0].Env == "live" {
-			timeout = "35m"
-		}
+		timeout := e2ePackageGoTimeout(packages[pkg])
 		args := []string{"test", "-tags=e2e", "-json", "-count=1", "-p=1", "-parallel=1", "-timeout=" + timeout, "-run=" + exactPattern(tests), pkg}
 		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{"go"}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
 		stdout, err := os.Create(g.StdoutLog)
@@ -428,6 +423,23 @@ func runE2E(opts options) (code int) {
 		report.Errors = append(report.Errors, "not all selected packages completed")
 	}
 	return 0
+}
+
+func e2ePackageGoTimeout(entries []e2eScenario) string {
+	if len(entries) > 0 && entries[0].Env == "live" {
+		return "35m"
+	}
+	minutes := 0
+	for _, entry := range entries {
+		// Ordinary controlled/native business is 5m plus independent cleanup.
+		// Runtime isolation has a 10m body; its parent must not cut it at 6m.
+		if entry.ID == "runtime.installed-debug-isolation" {
+			minutes += 11
+		} else {
+			minutes += 6
+		}
+	}
+	return fmt.Sprintf("%dm", minutes)
 }
 
 func e2eCommandOutput(dir, executable string, args ...string) (string, error) {
