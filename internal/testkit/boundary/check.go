@@ -174,6 +174,11 @@ func adapterForbidden(pkg string) bool {
 	if pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
 		return true
 	}
+	// The shared terminal reply contract is pure protocol, not an application
+	// use case. Its dependencies are still traversed and checked below.
+	if pkg == execution+"/workerreturn" {
+		return false
+	}
 	if pkg == execution || strings.HasPrefix(pkg, execution+"/") {
 		for _, allowed := range []string{
 			execution + "/backend", execution + "/model", execution + "/conversation", execution + "/adapters",
