@@ -139,7 +139,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	service2 := startIntegrationServiceWithSources(t, ctx, config2, directory2, additionalSources{})
 	defer service2.stop(t)
 	recovered := waitIntegrationRun(t, ctx, service2, config2, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-		return e.RecoveryRequired && e.RecoveryState == "live" && run.Decision != nil && run.Decision.Status == "pending"
+		return e.RecoveryRequired && e.RecoveryState == "question" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil
 	})
 	ledger2.mu.Lock()
 	saved, err := ledger2.read()
@@ -156,14 +156,18 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	}
 	submitIntegrationAnswer(t, ctx, config2, recovered.run)
 	settled := waitIntegrationRun(t, ctx, service2, config2, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-		return e.LastStoppedTurnID == first.execution.CurrentTurnID && !e.RecoveryRequired && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil
+		return e.TurnNumber == 3 && e.CurrentTurnID == e.LastStoppedTurnID && !e.RecoveryRequired && run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil
 	})
 	ledger2.mu.Lock()
 	saved, err = ledger2.read()
 	ledger2.mu.Unlock()
 	require(t, err)
-	if len(saved.Inputs) != 1 || len(saved.Answers) != 1 || settled.execution.TurnNumber != 1 || settled.execution.SessionID != first.execution.SessionID || *settled.run.Process != oldProcess || !decisionWasAccepted(settled.runtime, recovered.run.Decision.ID) {
+	if len(saved.Inputs) != 3 || len(saved.Finals) != 3 || len(saved.Answers) != 1 || settled.execution.SessionID != first.execution.SessionID || settled.run.AttemptID != oldAttempt || *settled.run.Process != oldProcess || !decisionWasAccepted(settled.runtime, recovered.run.Decision.ID) {
 		t.Fatal("manual answer repeated input or lost its original receipt")
+	}
+	results := settled.runtime.WorkflowRuns[0].StageResults
+	if len(results) != 3 || results[0].TurnID != first.execution.CurrentTurnID || results[0].StepID != executionmodel.StepImplement {
+		t.Fatal("staged continuation lost its original execute result")
 	}
 	assertNoTaskDelivery(t, settled.runtime, settled.run)
 	provider.mu.Lock()
@@ -238,7 +242,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	saved, err = ledger2.read()
 	ledger2.mu.Unlock()
 	require(t, err)
-	if saved.CleanupCount != 1 || len(saved.Inputs) != 1 || len(saved.Answers) != 1 {
+	if saved.CleanupCount != 1 || len(saved.Inputs) != 3 || len(saved.Finals) != 3 || len(saved.Answers) != 1 {
 		t.Fatal("delivery cleanup duplicated an external mutation or lost original input")
 	}
 	provider.mu.Lock()

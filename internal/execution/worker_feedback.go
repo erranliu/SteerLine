@@ -23,7 +23,7 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 			return s.refreshSavedRecoveryDecision(run, false, reason)
 		}
 	}
-	if deref(execution.Error) == clip(reason, 2000) && workflow.Status == "waiting_decision" && run.Decision != nil &&
+	if len(operationIDs) == 0 && deref(execution.Error) == clip(reason, 2000) && workflow.Status == "waiting_input" && run.Decision != nil &&
 		(run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
 		record := s.decisionRecord(run)
 		if !execution.RecoveryRequired || record != nil && record.RecoveryState == execution.RecoveryState && record.RecoveryVersion == execution.RecoveryVersion {

@@ -251,7 +251,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	waitFor(t, time.Minute, func() bool {
 		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
 		for _, r := range snap.Observation.Page.Runs {
-			if r.RunID == primary.RunID && r.TurnNumber >= 2 {
+			if r.RunID == primary.RunID && r.TurnNumber > primary.TurnNumber {
 				return true
 			}
 		}

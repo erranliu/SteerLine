@@ -9,6 +9,36 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
+func TestRepeatedWorkerWaitPreservesDecisionRevision(t *testing.T) {
+	service, run := waitingDecisionService(t)
+	reason := deref(service.executionRecord(run).Error)
+	before := recordFingerprint(service.domain)
+	decisionID, revision := run.Decision.ID, run.ControlRevision
+	for i := 0; i < 3; i++ {
+		require(t, service.waitWorkerFlow(run, reason))
+	}
+	if run.Decision.ID != decisionID || run.ControlRevision != revision || recordFingerprint(service.domain) != before {
+		t.Fatal("repeated unchanged worker wait invalidated the original pending feedback revision")
+	}
+	key := "wait-receipt:" + run.RunID
+	operation, err := service.startWorkerOperation(run, "reply_execution_question", key, map[string]string{"execution_id": run.ExecutionID})
+	require(t, err)
+	receipt := []byte(`{"accepted":true}`)
+	require(t, service.setOperationState(operation, "confirmed", "original-request", receipt, ""))
+	require(t, service.waitWorkerFlow(run, reason, operation))
+	loaded, err := testSQLite(service).Query(context.Background(), service.Config.Identity())
+	require(t, err)
+	for _, saved := range loaded.Operations {
+		if saved.OperationID == operation {
+			if saved.Status != "confirmed" || !bytes.Equal(saved.Receipt, receipt) {
+				t.Fatal("unchanged wait suppressed a new original operation receipt")
+			}
+			return
+		}
+	}
+	t.Fatal("original wait operation was not persisted")
+}
+
 func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	t.Cleanup(func() { _ = service.Close() })

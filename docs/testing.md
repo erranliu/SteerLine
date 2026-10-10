@@ -1,6 +1,6 @@
 # 测试总入口
 
-第一阶段包含本地 Codex、本机 Orca 与远端路径交付。`orca-codex` 场景指本机 Orca，远端路径由 `delivery.orca-remote-codex` 独立验收，结果见[专属记录](acceptance/orca-remote-l3.md)。
+当前产品入口为本地 Codex 与 Orca supervised（local/environment）。原本机 `host=orca` 已停用。supervised 目标注册/路由采用[定向验收](acceptance/orca-supervised-targets.md)，但当前开发流程所需的原生 final 来源尚未补齐；旧单轮远端场景也已退役，能力缺口与历史结果见[专属记录](acceptance/orca-remote-l3.md#当前分步流程能力缺口)。这些旧场景不计当前交付覆盖。
 
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
 
@@ -28,9 +28,10 @@ git diff --check
 | 定向 Go 回归 | 指定包或测试，定位受影响行为 | 普通用例无真实模型；显式原生验收另行配置 |
 | Full | 全部未启用 e2e tag 的确定性 Go 回归，包含受控进程、Git、SQLite 和接线测试 | 默认无真实模型；登记的原生 opt-in 用例会跳过 |
 | L2 controlled | 只检查 smoke 的无 token 门槛 | 本地隔离项目与 loopback Git/PR provider；不构成完整 L2 |
-| 完整 L2 | 门槛通过后，本地 Codex 和 Orca + Codex 两条真实交付链路 | 消耗 token；在 SteerlineTest 创建、转 ready、合并真实 PR，并清理本次分支 |
+| 完整 L2 | 门槛通过后，本地 Codex 真实交付链路 | 消耗 token；在 SteerlineTest 创建、转 ready、合并真实 PR，并清理本次分支 |
 | L3 controlled | 独立选择交付、等待合并后重启等受控场景 | 无 token；本地隔离项目与 loopback provider |
-| L3 live | 独立选择本地/Orca 的真实交付或恢复 | 消耗 token；使用 loopback Git/PR provider |
+| L3 live | 本地 Codex 交付与恢复 | 消耗 token；使用 loopback provider |
+| L3 native | Orca 工作区删除与重启 | 无模型；创建、删除本次隔离工作区 |
 | E2E 基础设施 | 测试环境、driver、codec、证据和清理 | 无真实模型 |
 | 编译检查 | 检查包与带 tag 场景能否编译 | 不执行场景，不构成测试通过证据 |
 
@@ -81,34 +82,34 @@ go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidat
 
 L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；live 使用真实 Codex/Orca。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
 
-live 需要本机已登录的 `codex-cli 0.159.2`；Orca 链路另需本地 Orca。完整 L2 还需要 `gh` 对 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用独立 Codex home 和测试项目，不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
+本地 live 需要已登录的 `codex-cli 0.159.2`；完整 L2 需要 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用隔离测试项目；本地不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
 
 ```powershell
-# 固定 L2：先 controlled，再两条真实链路；门槛失败不进入真实阶段
+# 固定 L2：先 controlled，再本地真实链路；门槛失败不进入真实阶段
 go run ./cmd/test-feedback -level=L2
 
 # 只诊断门槛，无 token，报告为 gate-only
 go run ./cmd/test-feedback -level=L2 -env=controlled
 
 # L3 的 controlled 与 live 分开选择
-go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery' -env=controlled
+go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery,runtime' -env=controlled
 
 # 每个真实场景可以独立运行
 go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.local-codex'
-go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-codex'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
-go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.orca-codex'
+go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native
 ```
 
 | 级别 | 环境 | 组 | 场景 ID |
 | --- | --- | --- | --- |
 | L2 | controlled | smoke | `smoke.delivery` |
-| L2 | live | smoke | `smoke.local-codex`、`smoke.orca-codex` |
+| L2 | live | smoke | `smoke.local-codex` |
 | L3 | controlled | delivery | `delivery.basic` |
 | L3 | controlled | recovery | `recovery.waiting-merge-restart` |
-| L3 | controlled | recovery | `recovery.orca-startup.slow`、`.unobserved`、`.lost`、`.failed` |
-| L3 | live | delivery | `delivery.local-codex`、`delivery.orca-codex` |
-| L3 | live | recovery | `recovery.local-codex`、`recovery.orca-codex` |
+| L3 | controlled | runtime | `runtime.installed-debug-isolation` |
+| L3 | live | delivery | `delivery.local-codex` |
+| L3 | live | recovery | `recovery.local-codex` |
+| L3 | native | workspace | `workspace.orca-removal-restart` |
 
 注册表 [suites.json](../tests/e2e/suites.json) 是场景 ID、包、测试名和环境的来源。L3 的 `-suite` / `-scenario` 支持逗号多选；省略场景 ID 时运行所选组和环境下的全部场景。PowerShell 中含点的场景参数应整体加引号。L2 是固定选择，不接受按场景挑选或直接选择 live；L2/L3 不与 `-workers`、`-quick`、`-build-only` 或原始 Go 参数混用。
 
@@ -162,7 +163,7 @@ L1 报告的 `workers`、各组 `started_at` / `finished_at` 和 `wall_seconds` 
 
 失败、超时、证据/清理缺失、零匹配或报告不完整都不能算通过；runner 不自动重试。重新运行使用新目录和新现场，保留前次失败。每次原始报告和失败诊断保留在本次输出目录；仓库只提交最小验收摘要和仍必要的结果索引，避免提交完整日志、认证、数据库、原始 prompt 或 dispatch capability。测试样本维护在对应包的 testdata。
 
-历史结果只证明报告中记录的候选版本。[最近完整重跑](acceptance/archive/completed/all-tests-after-243-2026-10-08.md)注明逐次源码与 skip，不能替代当前改动的验证。此前保留的[历史基线](acceptance/archive/completed/latest-baseline.md)和更早[固定 Git 快照](acceptance/archive/completed/history.md#历史取证)继续按原范围读取。
+历史结果只证明报告中记录的候选版本。[最近完整重跑](acceptance/archive/completed/all-tests-after-266-2026-10-10.md)注明逐次源码、skip 与当前能力缺口，不能替代后续改动的验证。此前保留的[历史基线](acceptance/archive/completed/latest-baseline.md)和更早[固定 Git 快照](acceptance/archive/completed/history.md#历史取证)继续按原范围读取。
 
 ## 扩展与 Plan
 

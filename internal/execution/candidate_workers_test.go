@@ -110,16 +110,29 @@ func mcStartTurn(t *testing.T, s *Service, run *reconstructiontypes.RunView) {
 
 func mcFinishTurn(t *testing.T, s *Service, run *reconstructiontypes.RunView) {
 	t.Helper()
-	w := s.workers[run.RunID]
-	if w == nil {
-		t.Fatal("original candidate observer missing")
+	for stage := 0; stage < 3; stage++ {
+		w := s.workers[run.RunID]
+		if w == nil {
+			workflow, execution := s.workflowRecords(run)
+			t.Fatalf("original candidate observer missing: step=%s status=%s pending=%s reason=%s", workflow.StepID, workflow.Status, execution.PendingCommandID, deref(execution.Error))
+		}
+		for ev := range w.Events {
+			require(t, s.eventForRun(run, ev))
+		}
+		err := <-w.Done
+		delete(s.workers, run.RunID)
+		require(t, s.finishedForRun(run, w, err))
+		workflow, execution := s.workflowRecords(run)
+		if workflow.Status != "queued" || execution.PendingCommandID == "" {
+			return
+		}
+		dispatched, err := s.dispatchQueuedStage(context.Background(), run)
+		require(t, err)
+		if !dispatched {
+			t.Fatal("queued candidate stage was not dispatched")
+		}
 	}
-	for ev := range w.Events {
-		require(t, s.eventForRun(run, ev))
-	}
-	err := <-w.Done
-	delete(s.workers, run.RunID)
-	require(t, s.finishedForRun(run, w, err))
+	t.Fatal("candidate fixture exceeded its staged turn limit")
 }
 
 func (f mcFixture) abandon(t *testing.T, run *reconstructiontypes.RunView, id string) CandidateAbandonReceipt {
@@ -149,6 +162,7 @@ func (f mcFixture) bind(t *testing.T, run *reconstructiontypes.RunView, number i
 	info := f.proof(t, run, number, state)
 	w, e := f.s.workflowRecords(run)
 	require(t, BindWorkerPR(w, e, info, info.URL, info.Repository, false))
+	w.StepID, w.CandidateSHA, w.Status = executionmodel.StepAwaitMerge, info.HeadRevision, "waiting_external"
 	f.s.refreshRun(run)
 	require(t, f.s.commitWorker(run))
 	t.Logf("candidate PR proof: %s", mustJSON(info))
@@ -372,14 +386,15 @@ func TestMC4(t *testing.T) {
 		}
 		w := f.s.workflowRecord(run)
 		w.PRCandidateURL = strings.TrimSpace(string(output))
+		head, err := exec.Command("git", "-C", deref(run.WorktreePath), "rev-parse", "HEAD").Output()
+		require(t, err)
+		w.StepID, w.CandidateSHA, w.Status = executionmodel.StepAwaitMerge, strings.TrimSpace(string(head)), "waiting_external"
 		require(t, f.s.commitWorker(run))
 		task := nativeTaskRecord(f.s.domain.Tasks, "8")
 		require(t, f.s.pollWorkerFlowPR(context.Background(), run, task, w))
 		if run.PR.URL == nil || run.PR.State != "open" {
 			t.Fatal("worker PR was not bound by real provider query")
 		}
-		head, err := exec.Command("git", "-C", deref(run.WorktreePath), "rev-parse", "HEAD").Output()
-		require(t, err)
 		remote, err := exec.Command("git", "-C", f.c.Repository, "ls-remote", "origin", deref(run.WorktreeBranch)).Output()
 		require(t, err)
 		if strings.TrimSpace(string(head)) == deref(run.BaseCommit) || !strings.Contains(string(remote), strings.TrimSpace(string(head))) {

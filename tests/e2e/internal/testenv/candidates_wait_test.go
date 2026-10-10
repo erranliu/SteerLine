@@ -31,7 +31,7 @@ func TestCandidatePublicationFailureRequiresCompletedOriginalFeedback(t *testing
 			e.CurrentTurnID, e.LastStoppedTurnID = "", ""
 		}},
 		{"verified PR", func(w *executionmodel.WorkflowRunRecord, _ *executionmodel.ExecutionRecord) {
-			w.Status = "waiting_pr_merge"
+			w.Status = "waiting_external"
 		}},
 	} {
 		t.Run(test.name, func(t *testing.T) {

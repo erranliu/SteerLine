@@ -28,12 +28,17 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 	defer service.stop(t)
 	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
 	run := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		return run.Decision != nil && run.Decision.Status == "pending" && execution.TurnNumber == 1 && execution.CurrentTurnID == execution.LastStoppedTurnID
+		return run.Decision != nil && run.Decision.Status == "pending" && execution.TurnNumber == 2 && execution.CurrentTurnID == execution.LastStoppedTurnID
 	})
 	if run.run.Process == nil || run.execution.SessionID != integrationAppServerSession {
 		t.Fatalf("history source lost the original session/process identity: %+v", run)
 	}
-	filter := productdto.ConversationFilter{ExecutionID: run.execution.ExecutionID, AttemptID: run.run.AttemptID, Source: "codex-app-server"}
+	// Select the original execute turn; report has its own source facts and
+	// must not inflate this one-turn history assertion.
+	if len(run.runtime.WorkflowRuns[0].StageResults) != 2 {
+		t.Fatal("fixture did not complete its execute and report steps")
+	}
+	filter := productdto.ConversationFilter{ExecutionID: run.execution.ExecutionID, AttemptID: run.run.AttemptID, TurnID: run.runtime.WorkflowRuns[0].StageResults[0].TurnID, Source: "codex-app-server"}
 	query := productquery.NewConversationService(service.reader, fixture.config.Identity())
 	var page productdto.ConversationPage
 	var pageError error
@@ -86,15 +91,15 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 			}
 		}
 	}
-	if sessions != 1 || starts != 1 || finals != 1 || completed != 1 {
-		t.Fatalf("history page did not retain the one-turn source facts: session=%d starts=%d finals=%d completed=%d events=%+v", sessions, starts, finals, completed, page.Events)
+	if sessions != 0 || starts != 1 || finals != 1 || completed != 1 {
+		t.Fatalf("turn-filtered history lost its original source facts or included a session-wide event: session=%d starts=%d finals=%d completed=%d events=%+v", sessions, starts, finals, completed, page.Events)
 	}
 	checkpoint, err := service.reader.ConversationCheckpoint(ctx, fixture.config.Identity(), run.execution.ExecutionID, run.run.AttemptID, "codex-app-server", sourceSegment)
 	require(t, err)
 	if checkpoint.Cursor == "" || checkpoint.LocalSeq == 0 {
 		t.Fatal("conversation source checkpoint was not committed with its mapped batch")
 	}
-	assertQueriedTaskPhase(t, ctx, fixture.config, "901", "waiting_decision")
+	assertQueriedTaskStatus(t, ctx, fixture.config, "901", "waiting_input")
 	if run.run.Decision == nil || run.run.Decision.Status != "pending" {
 		t.Fatal("history collection advanced the pending business decision")
 	}
