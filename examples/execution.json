@@ -38,7 +38,7 @@
     },
     {
       "id": "orca-local",
-      "name": "本机 Orca 原生配置",
+      "name": "本机 Orca · GPT-6-Luna high",
       "host": "orca",
       "agent": "codex",
       "implementation_configs": [
@@ -52,11 +52,45 @@
             "wait_timeout": "30s"
           }
         }
-      ]
+      ],
+      "agent_launch": {
+        "executable": "codex",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "high",
+        "args": [
+          "--dangerously-bypass-approvals-and-sandbox"
+        ]
+      }
+    },
+    {
+      "id": "orca-local-xhigh",
+      "name": "本机 Orca · GPT-6-Luna xhigh",
+      "host": "orca",
+      "agent": "codex",
+      "implementation_configs": [
+        {
+          "implementation_key": "orca.terminal-profile",
+          "codec_version": 2,
+          "payload": {
+            "executable": "orca.exe",
+            "environment": "",
+            "repository_selector": "path:__LOCAL_ORCA_REPOSITORY__",
+            "wait_timeout": "30s"
+          }
+        }
+      ],
+      "agent_launch": {
+        "executable": "codex",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "xhigh",
+        "args": [
+          "--dangerously-bypass-approvals-and-sandbox"
+        ]
+      }
     },
     {
       "id": "orca-environment",
-      "name": "远端 Orca 原生配置",
+      "name": "远端 Orca · GPT-6-Luna high",
       "host": "orca",
       "agent": "codex",
       "implementation_configs": [
@@ -70,7 +104,41 @@
             "wait_timeout": "30s"
           }
         }
-      ]
+      ],
+      "agent_launch": {
+        "executable": "codex",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "high",
+        "args": [
+          "--dangerously-bypass-approvals-and-sandbox"
+        ]
+      }
+    },
+    {
+      "id": "orca-environment-xhigh",
+      "name": "远端 Orca · GPT-6-Luna xhigh",
+      "host": "orca",
+      "agent": "codex",
+      "implementation_configs": [
+        {
+          "implementation_key": "orca.terminal-profile",
+          "codec_version": 2,
+          "payload": {
+            "executable": "orca.exe",
+            "environment": "__ORCA_ENVIRONMENT__",
+            "repository_selector": "id:__REMOTE_ORCA_REPOSITORY__",
+            "wait_timeout": "30s"
+          }
+        }
+      ],
+      "agent_launch": {
+        "executable": "codex",
+        "model": "gpt-6-luna",
+        "reasoning_effort": "xhigh",
+        "args": [
+          "--dangerously-bypass-approvals-and-sandbox"
+        ]
+      }
     }
   ]
 }

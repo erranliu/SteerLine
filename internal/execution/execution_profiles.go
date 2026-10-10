@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/execution/agentlaunch"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
@@ -28,10 +29,11 @@ type ExecutionProfile struct {
 	ImplementationDisplay []string                                      `json:"-"`
 	AcceptedConfigVersion string                                        `json:"-"`
 
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	Host            string `json:"host"`
-	Agent           string `json:"agent"`
+	ID              string              `json:"id"`
+	Name            string              `json:"name"`
+	Host            string              `json:"host"`
+	Agent           string              `json:"agent"`
+	AgentLaunch     *agentlaunch.Config `json:"agent_launch,omitempty"`
 	projectIdentity string
 }
 
@@ -77,6 +79,11 @@ func (p ExecutionProfile) Freeze(args ...any) executionmodel.FixedExecutionProfi
 		accepted = "unaccepted-profile-input"
 	}
 	data, display, _ := directory.NormalizeProfile(p.ImplementationConfigs, p.Host, p.Agent, projectID, p.ID, accepted)
+	launchCommand, launchErr := p.AgentLaunch.Command(p.Agent)
+	if launchErr != nil || p.AgentLaunch != nil && p.Host != "orca" {
+		return executionmodel.FixedExecutionProfile{}
+	}
+	display = append(display, p.AgentLaunch.Display()...)
 	entry, err := directory.Resolve(Config{Host: p.Host, Agent: p.Agent})
 	if err != nil || !entry.ServiceStopBehavior.Valid() {
 		return executionmodel.FixedExecutionProfile{}
@@ -92,6 +99,7 @@ func (p ExecutionProfile) Freeze(args ...any) executionmodel.FixedExecutionProfi
 		PublicationPolicy: p.PublicationPolicy, Publication: p.Publication,
 		AcceptedConfigVersion: accepted,
 		ID:                    p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent,
+		AgentLaunch: p.AgentLaunch.Clone(), AgentLaunchCommand: launchCommand,
 	}
 	fixed.Digest = fixedExecutionProfileDigest(fixed)
 	return fixed
@@ -125,6 +133,11 @@ func VerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directo
 		inputs = append(inputs, executionbackend.ImplementationConfigInput{ImplementationKey: envelope.ImplementationKey, CodecVersion: envelope.CodecVersion, Payload: append([]byte(nil), envelope.Payload...)})
 	}
 	data, display, err := directory.NormalizeProfile(inputs, p.Host, p.Agent, projectID, p.ID, p.AcceptedConfigVersion)
+	command, launchErr := p.AgentLaunch.Command(p.Agent)
+	if launchErr != nil || command != p.AgentLaunchCommand || p.AgentLaunch != nil && p.Host != "orca" {
+		return false
+	}
+	display = append(display, p.AgentLaunch.Display()...)
 	if err != nil || digestValue(data) != digestValue(p.ImplementationData) || digestValue(display) != digestValue(p.ImplementationDisplay) {
 		return false
 	}
@@ -137,6 +150,8 @@ func (c Config) ApplyFixedExecutionProfile(p executionmodel.FixedExecutionProfil
 	c.PublicationPolicy = p.PublicationPolicy
 	c.PR, c.Git, c.Remote, c.publicationRemoteURL, c.Branch = p.Publication.Provider, p.Publication.Git, p.Publication.Remote, p.Publication.RemoteURL, p.Publication.BaseBranch
 	c.Host, c.Agent = p.Host, p.Agent
+	c.AgentLaunch = p.AgentLaunch.Clone()
+	c.AgentLaunchCommand = p.AgentLaunchCommand
 	if directory != nil {
 		if entry, err := directory.Resolve(Config{Host: p.Host, Agent: p.Agent}); err == nil {
 			c.WorkspaceBranchPrefix = entry.WorkspaceBranchPrefix
@@ -189,6 +204,12 @@ func (p ExecutionProfile) StaticUnavailableReason(directories ...*ExecutionDirec
 	if directory == nil {
 		return "execution directory is required"
 	}
+	if _, err := p.AgentLaunch.Command(p.Agent); err != nil {
+		return err.Error()
+	}
+	if p.AgentLaunch != nil && p.Host != "orca" {
+		return "agent_launch requires a terminal host"
+	}
 
 	entry, err := directory.Resolve(Config{Host: p.Host, Agent: p.Agent})
 	if err != nil {
@@ -217,6 +238,7 @@ func (p ExecutionProfile) StaticUnavailableReason(directories ...*ExecutionDirec
 func (c ProfileCatalog) bindProjectConfiguration(p ExecutionProfile) ExecutionProfile {
 	p.directory = c.Directory
 	p.ImplementationConfigs = cloneImplementationInputs(p.ImplementationConfigs)
+	p.AgentLaunch = p.AgentLaunch.Clone()
 
 	p.PublicationPolicy = c.Base.PublicationPolicy
 	p.Publication = clonePublicationSettings(c.Base.publicationSettings())
@@ -230,6 +252,7 @@ func (c ProfileCatalog) bindProjectConfiguration(p ExecutionProfile) ExecutionPr
 		data, display, err := c.Directory.NormalizeProfileInputs(p.ImplementationConfigs, p.Host, p.Agent, p.projectIdentity, p.ID, p.AcceptedConfigVersion)
 		if err == nil {
 			p.ImplementationData, p.ImplementationDisplay = data, display
+			p.ImplementationDisplay = append(p.ImplementationDisplay, p.AgentLaunch.Display()...)
 		}
 	}
 	return p
@@ -304,6 +327,8 @@ func (c ProfileCatalog) SelectExecutionProfile(id string) (Config, ExecutionProf
 		selected.PR, selected.Git = profile.Publication.Provider, profile.Publication.Git
 		selected.Remote, selected.Branch, selected.publicationRemoteURL = profile.Publication.Remote, profile.Publication.BaseBranch, profile.Publication.RemoteURL
 		selected.Host, selected.Agent = profile.Host, profile.Agent
+		selected.AgentLaunch = profile.AgentLaunch.Clone()
+		selected.AgentLaunchCommand, _ = profile.AgentLaunch.Command(profile.Agent)
 		selected.ImplementationData = CloneImplementationData(profile.ImplementationData)
 		selected.ImplementationDisplay = slices.Clone(profile.ImplementationDisplay)
 		selected.selectedProfileID = profile.ID

@@ -756,6 +756,7 @@ type LifecycleResolver interface {
 // LifecycleSetup carries only fixed, non-secret values needed to construct an
 // implementation port. It is not a center record or a write capability.
 type LifecycleSetup struct {
+	AgentLaunchCommand    string
 	Snapshot              LifecycleSnapshot
 	ProfileData           []ImplementationDataEnvelope
 	ProfileID             string

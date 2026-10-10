@@ -4,7 +4,10 @@ param(
     [string]$OrcaEnvironment = '',
     [string]$OrcaAgent = 'codex',
     [string]$OrcaExecutable = 'orca',
-    [string]$OrcaRepositorySelector = ''
+    [string]$OrcaRepositorySelector = '',
+    [string]$AgentModel = '',
+    [string]$AgentExecutable = '',
+    [ValidateSet('','high','xhigh')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
 
@@ -106,6 +109,11 @@ try {
             id='live';name='Orca single-terminal debug';host='orca';agent=$OrcaAgent;
             implementation_configs=@(@{implementation_key='orca.terminal-profile';codec_version=2;payload=$payload})
         })}
+		if ($AgentModel -or $AgentReasoningEffort) {
+			if (-not $AgentModel) { throw 'AgentReasoningEffort requires AgentModel' }
+			$launchExecutable = if ($AgentExecutable) { $AgentExecutable } else { $OrcaAgent }
+			$catalog.execution_profiles[0].agent_launch=@{executable=$launchExecutable;model=$AgentModel;reasoning_effort=$AgentReasoningEffort;args=@('--dangerously-bypass-approvals-and-sandbox')}
+		}
         [IO.File]::WriteAllText((Join-Path $target 'home\execution.json'), ($catalog | ConvertTo-Json -Depth 10), $utf8)
         $manifest.execution_host='orca'
         $manifest.execution_environment=$OrcaEnvironment

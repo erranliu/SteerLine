@@ -3,6 +3,7 @@ package execution
 import (
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution/agentlaunch"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
@@ -26,6 +27,8 @@ type Config struct {
 	PR                    executionmodel.PRProviderConfig               `json:"pr"`
 	Host                  string                                        `json:"host"`
 	Agent                 string                                        `json:"agent"`
+	AgentLaunch           *agentlaunch.Config                           `json:"-"`
+	AgentLaunchCommand    string                                        `json:"-"`
 	WorkspaceBranchPrefix string                                        `json:"-"`
 
 	identity              string

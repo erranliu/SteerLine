@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	terminaltransport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
+	"github.com/erranliu/SteerLine/internal/execution/agentlaunch"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -57,6 +58,9 @@ func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworke
 		}
 	}
 	profile := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
+	if c.Host == "orca" && os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1" {
+		profile.AgentLaunch = &agentlaunch.Config{Executable: "opaque-worker", Args: []string{"--fixture-start"}}
+	}
 	var payload []byte
 	var err error
 	if c.Host == "orca" {

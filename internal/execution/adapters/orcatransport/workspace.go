@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -22,7 +23,11 @@ func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, 
 		return receipt, errors.New("original workspace creation has no exact saved agent receipt; no worktree/agent was recreated")
 	}
 	name := "sl-" + s.Session.TaskID + "-" + s.Session.WorkflowRunID
-	result, err := l.client.MetaCall(ctx, "worktree", "create", "--repo", l.profile.RepositorySelector, "--name", name, "--base-branch", r.Input.Workspace.BaseCommit, "--no-parent", "--setup", "skip", "--agent", s.Ref.Agent.Name, "--activate", "--json")
+	args := []string{"worktree", "create", "--repo", l.profile.RepositorySelector, "--name", name, "--base-branch", r.Input.Workspace.BaseCommit, "--no-parent", "--setup", "skip", "--activate", "--json"}
+	if l.setup.AgentLaunchCommand == "" {
+		args = append(args, "--agent", s.Ref.Agent.Name)
+	}
+	result, err := l.client.MetaCall(ctx, args...)
 	if err != nil {
 		return receipt, err
 	}
@@ -42,15 +47,27 @@ func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, 
 	if handle == "" {
 		handle = created.StartupTerminal.Handle
 	}
-	if handle == "" {
-		return receipt, errors.New("agent launch did not provide a supported terminal handle; no task was injected")
+	if handle == "" || l.setup.AgentLaunchCommand != "" {
+		if l.setup.AgentLaunchCommand == "" {
+			return receipt, errors.New("agent launch did not provide a supported terminal handle; no task was injected")
+		}
+		sole, inventoryErr := l.soleWorkspaceTerminal(ctx, worktree.ID, result.RuntimeID)
+		err = inventoryErr
+		if err != nil {
+			return receipt, err
+		}
+		if handle != "" && handle != sole {
+			return receipt, errors.New("creation handle differs from the sole original terminal")
+		}
+		handle = sole
 	}
 	term, err := l.client.ShowTerminal(ctx, handle)
 	if err != nil {
 		return receipt, err
 	}
-	if term.RuntimeID != result.RuntimeID || term.WorktreeID != worktree.ID || term.WorktreePath != worktree.Path || term.IncarnationID == "" || term.AgentIdentity != s.Ref.Agent.Name || strings.TrimPrefix(term.Branch, "refs/heads/") != strings.TrimPrefix(worktree.Branch, "refs/heads/") {
-		return receipt, errors.New("original agent/worktree binding unverified")
+	initializing := l.setup.AgentLaunchCommand != ""
+	if term.RuntimeID != result.RuntimeID || term.WorktreeID != worktree.ID || term.WorktreePath != worktree.Path || term.IncarnationID == "" || !initializing && term.AgentIdentity != s.Ref.Agent.Name || initializing && term.AgentIdentity != "" || strings.TrimPrefix(term.Branch, "refs/heads/") != strings.TrimPrefix(worktree.Branch, "refs/heads/") && !(initializing && term.Branch == "") {
+		return receipt, fmt.Errorf("original agent/worktree binding unverified (runtime=%q/%q worktree=%q/%q path=%q/%q incarnation=%q agent=%q initializing=%t branch=%q/%q)", term.RuntimeID, result.RuntimeID, term.WorktreeID, worktree.ID, term.WorktreePath, worktree.Path, term.IncarnationID, term.AgentIdentity, initializing, term.Branch, worktree.Branch)
 	}
 	p := b.ProcessIdentity{Kind: "orca_terminal", Executable: l.profile.Executable, RuntimeID: term.RuntimeID, Terminal: handle, Incarnation: term.IncarnationID, WorktreeID: worktree.ID, ExecutionHost: l.profile.Target().ExecutionHost}
 	workspace := b.WorkspaceInspection{InspectionScope: "revision", Repository: s.Session.ProjectID, Worktree: worktree.Path, Branch: strings.TrimPrefix(worktree.Branch, "refs/heads/"), Base: r.Input.Workspace.BaseCommit, Head: worktree.Head, CheckedAt: time.Now().UTC()}
@@ -61,7 +78,7 @@ func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, 
 	target.Branch = workspace.Branch
 	target.BaseRevision = workspace.Base
 	receipt.Target = &target
-	receipt.State = b.LifecycleStateFacts{SessionID: SessionID(p), SessionGeneration: p.Incarnation, SessionAvailable: true, WorkerLive: true, WorktreeID: worktree.ID}
+	receipt.State = b.LifecycleStateFacts{SessionID: SessionID(p), SessionGeneration: p.Incarnation, SessionAvailable: !initializing, WorkerLive: !initializing, WorktreeID: worktree.ID}
 	receipt.Implementation, err = l.envelope(s, State{Process: p})
 	if err == nil {
 		receipt.Disposition = b.OperationConfirmed

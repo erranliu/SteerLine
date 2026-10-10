@@ -62,10 +62,12 @@ func (s *Service) acceptStartedWorkerTurn(run *reconstructiontypes.RunView, work
 }
 
 func lifecycleSetupForRun(run *reconstructiontypes.RunView, fixed workerFlowContext, processHost executionbackend.ManagedProcessHost, snapshot executionbackend.LifecycleSnapshot) executionbackend.LifecycleSetup {
+	launchCommand := fixed.config.AgentLaunchCommand
 	blocked := append([]string(nil), fixed.config.publicationSettings().AuthenticationRefs...)
 	blocked = append(blocked, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
 	return executionbackend.LifecycleSetup{
-		Snapshot: snapshot.Clone(), ProfileData: CloneImplementationData(fixed.config.ImplementationData),
+		AgentLaunchCommand: launchCommand,
+		Snapshot:           snapshot.Clone(), ProfileData: CloneImplementationData(fixed.config.ImplementationData),
 		ProfileID: fixed.config.selectedProfileID, AcceptedConfigVersion: fixed.config.acceptedConfigVersion,
 		ProcessHost: processHost, RepositoryPath: fixed.config.Repository,
 		RunDirectory: fixed.config.RunDir, CommandTimeout: duration(fixed.config.CommandTimeout),
@@ -76,6 +78,7 @@ func lifecycleSetupForRun(run *reconstructiontypes.RunView, fixed workerFlowCont
 }
 
 func lifecycleSetupForConfig(c Config, entry ExecutionRegistration, processHost executionbackend.ManagedProcessHost) (executionbackend.LifecycleSetup, error) {
+	launchCommand := c.AgentLaunchCommand
 	if c.identity == "" {
 		return executionbackend.LifecycleSetup{}, errors.New("app-resolved repository identity is required")
 	}
@@ -95,7 +98,8 @@ func lifecycleSetupForConfig(c Config, entry ExecutionRegistration, processHost 
 	blocked := append([]string(nil), c.publicationSettings().AuthenticationRefs...)
 	blocked = append(blocked, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
 	return executionbackend.LifecycleSetup{
-		Snapshot: snapshot, ProfileData: CloneImplementationData(c.ImplementationData),
+		AgentLaunchCommand: launchCommand,
+		Snapshot:           snapshot, ProfileData: CloneImplementationData(c.ImplementationData),
 		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion,
 		ProcessHost:    processHost,
 		RepositoryPath: c.Repository, RunDirectory: c.RunDir, CommandTimeout: duration(c.CommandTimeout),

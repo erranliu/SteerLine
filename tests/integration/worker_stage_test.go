@@ -51,7 +51,7 @@ func testWorkerStageRun(t *testing.T, host string) {
 			environment = "paired-fixture"
 		}
 		require(t, os.MkdirAll(f.nativeStateDir, 0700))
-		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "opaque-worker", Incarnation: "original"})))
+		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "opaque-worker", Incarnation: "original", CommandMode: os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1"})))
 		f.config.Host, f.config.Agent = "orca", "opaque-worker"
 		setNativeImplementationProfiles(t, &f.config, codexworker.ProfileConfig{}, &terminal.Profile{Executable: os.Args[0], Args: []string{"--fake", "terminal-orca", f.nativeStateDir}, RepositorySelector: "id:fixture", Environment: environment, WaitTimeout: "5s"})
 		t.Cleanup(func() {
@@ -120,9 +120,26 @@ func testWorkerStageRun(t *testing.T, host string) {
 	}
 
 	assertNoTaskDelivery(t, after.runtime, after.run)
+	if os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1" {
+		raw, err := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
+		require(t, err)
+		var state terminalFixture
+		require(t, json.Unmarshal(raw, &state))
+		if state.Launches != 1 || state.Sends != turns {
+			t.Fatal("startup or business input repeated", state.Launches, state.Sends)
+		}
+	}
 }
 
 func TestWorkerStageOrcaTerminalRoundTrip(t *testing.T) { testWorkerStageRoundTrip(t, "orca") }
 func TestWorkerStageOrcaEnvironmentRoundTrip(t *testing.T) {
+	testWorkerStageRoundTrip(t, "orca-environment")
+}
+func TestWorkerStageOrcaAgentLaunchLocalRoundTrip(t *testing.T) {
+	t.Setenv("STEERLINE_STAGE_AGENT_LAUNCH", "1")
+	testWorkerStageRoundTrip(t, "orca")
+}
+func TestWorkerStageOrcaAgentLaunchEnvironmentRoundTrip(t *testing.T) {
+	t.Setenv("STEERLINE_STAGE_AGENT_LAUNCH", "1")
 	testWorkerStageRoundTrip(t, "orca-environment")
 }
