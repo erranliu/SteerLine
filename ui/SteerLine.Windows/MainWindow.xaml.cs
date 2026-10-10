@@ -48,6 +48,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnConnectClick(object sender, RoutedEventArgs e)
     {
+        ViewModel.UpdateDraft(DraftEditor.Text);
         ConnectButton.IsEnabled = false;
         TasksList.IsEnabled = false;
         _suppressTaskSelectionEvents = true;
@@ -67,6 +68,7 @@ public sealed partial class MainWindow : Window
 
     private async void OnRefreshClick(object sender, RoutedEventArgs e)
     {
+        ViewModel.UpdateDraft(DraftEditor.Text);
         RefreshButton.IsEnabled = false;
         TasksList.IsEnabled = false;
         _suppressTaskSelectionEvents = true;
@@ -88,6 +90,7 @@ public sealed partial class MainWindow : Window
     {
         if (_suppressTaskSelectionEvents)
             return;
+        ViewModel.UpdateDraft(DraftEditor.Text);
         var selection = ViewModel.SelectTaskAsync(TasksList.SelectedItem as TaskSummary);
         DraftEditor.Text = ViewModel.CurrentDraft;
         await selection;
@@ -97,5 +100,9 @@ public sealed partial class MainWindow : Window
 
     private void OnRecordIntentClick(object sender, RoutedEventArgs e) => ViewModel.RecordLocalIntent();
 
-    private async void OnWindowClosed(object sender, WindowEventArgs args) => await ViewModel.DisposeAsync();
+    private async void OnWindowClosed(object sender, WindowEventArgs args)
+    {
+        ViewModel.UpdateDraft(DraftEditor.Text);
+        await ViewModel.DisposeAsync();
+    }
 }
