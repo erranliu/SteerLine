@@ -13,7 +13,7 @@ func TestPS3RetainedResourceDetailUsesSavedNativeLocation(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("retained")
 	snapshot := readySnapshot(ref, now)
-	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", TaskStatus: "discarded", ExecutionStatus: "active", FinishTaskStatus: "blocked", Backend: "orca-remote", Protocol: "remote-v1", Target: api.TargetSummary{ID: "original-target", WorktreeID: "original-native-tree", Branch: "original-branch"}, PR: api.PRSummary{State: "unknown"}, PRHistory: []string{"https://example.invalid/pull/3"}}
+	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", TaskStatus: "discarded", ExecutionStatus: "active", WorkflowStatus: "blocked", Backend: "orca-remote", Protocol: "remote-v1", Target: api.TargetSummary{ID: "original-target", WorktreeID: "original-native-tree", Branch: "original-branch"}, PR: api.PRSummary{State: "unknown"}, PRHistory: []string{"https://example.invalid/pull/3"}}
 	snapshot.Tasks = nil
 	snapshot.Observation.Page.Runs = []*api.CandidateSummary{run}
 	snapshot.NativeTasks = &api.TaskPage{Tasks: []api.TaskDetail{{TaskSummary: api.TaskSummary{TaskID: "3", Status: "discarded"}, StopPending: []string{"execution_stop_manual:original"}}}}
@@ -38,7 +38,7 @@ func TestPS3DiscardedCandidateRejectsStaleQuestionAndMergeHints(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("discarded")
 	snapshot := readySnapshot(ref, now)
-	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", TaskStatus: "discarded", ExecutionStatus: "active", FinishTaskStatus: "waiting_decision", Decision: &api.DecisionSummary{ID: "decision-3", Status: "pending", Version: 1}, PR: api.PRSummary{State: "merged"}}
+	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", TaskStatus: "discarded", ExecutionStatus: "active", WorkflowStatus: "waiting_input", Decision: &api.DecisionSummary{ID: "decision-3", Status: "pending", Version: 1}, PR: api.PRSummary{State: "merged"}}
 	snapshot.Tasks = nil
 	snapshot.Observation.Page.Runs = []*api.CandidateSummary{run}
 	snapshot.Connection.Snapshot.Page = snapshot.Observation.Page
@@ -61,7 +61,7 @@ func TestPS3DiscardedCandidateRejectsStaleQuestionAndMergeHints(t *testing.T) {
 	if !strings.Contains(nextAction(m, state, &rows[0]), "冲突") || strings.Contains(taskNextAction(run), "回答") {
 		t.Fatal("discarded task suggested business input")
 	}
-	run.FinishTaskStatus = "waiting_pr_merge"
+	run.WorkflowStage, run.WorkflowStatus = "await_merge", "waiting_external"
 	if strings.Contains(nextAction(m, state, &rows[0]), "人工合并") {
 		t.Fatal("discarded task suggested normal delivery")
 	}
@@ -78,7 +78,7 @@ func TestPS3AuditFinalSubmitRejectsDiscardedTaskEvenWithUnchangedDecision(t *tes
 	now := time.Now().UTC()
 	ref := testProject("audit-submit")
 	snapshot := readySnapshot(ref, now)
-	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", TaskStatus: "in_progress", ExecutionStatus: "waiting_decision", FinishTaskStatus: "waiting_decision", ControlRevision: 7, Decision: &api.DecisionSummary{ID: "decision-3", Status: "pending", Version: 1, Request: api.DecisionRequest{Question: "original question"}}}
+	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", TaskStatus: "in_progress", ExecutionStatus: "waiting_decision", WorkflowStatus: "waiting_input", ControlRevision: 7, Decision: &api.DecisionSummary{ID: "decision-3", Status: "pending", Version: 1, Request: api.DecisionRequest{Question: "original question"}}}
 	snapshot.Tasks = nil
 	snapshot.Observation.Page.Runs = []*api.CandidateSummary{run}
 	snapshot.Connection.Snapshot.Page = snapshot.Observation.Page

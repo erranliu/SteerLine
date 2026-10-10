@@ -29,7 +29,7 @@ func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	if view == run {
 		t.Fatal("public Run aliases the working actor projection")
 	}
-	view.FinishTaskStatus, view.ExecutionStatus, view.Decision.Status = "completed", "failed", "superseded"
+	view.WorkflowStatus, view.ExecutionStatus, view.Decision.Status = "completed", "failed", "superseded"
 	view.WorkspaceIntent.Path = "view-only-path"
 	view.PR.URL = ptr("view-only-pr")
 	service.State.Executions[0].WorkspaceIntent.Path = "record-view-only"
@@ -42,7 +42,7 @@ func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	if service.executionRecord(run).LastEvent != nil && *service.executionRecord(run).LastEvent == "new diagnostic" {
 		t.Fatal("checkpoint publication committed a worker candidate")
 	}
-	if run.FinishTaskStatus != "waiting_decision" || run.ExecutionStatus != "succeeded" || run.Decision.Status != "pending" || run.PR.URL != nil || *run.WorkspaceIntent != originalIntent || run.ControlRevision != revision {
+	if run.WorkflowStatus != "waiting_input" || run.ExecutionStatus != "succeeded" || run.Decision.Status != "pending" || run.PR.URL != nil || *run.WorkspaceIntent != originalIntent || run.ControlRevision != revision {
 		t.Fatalf("view became authority or diagnostic changed revision: %+v", run)
 	}
 	payload, _, err := testSQLite(service).LoadProjection(context.Background(), service.Config.Identity())

@@ -12,9 +12,9 @@ import (
 
 func TestFlowStateTimelineShowsOnlyFlowOnStepChangeAndHidesTechnicalNoise(t *testing.T) {
 	at := time.Date(2026, 10, 10, 6, 52, 38, 0, time.UTC)
-	changes := []workerTransition{{Time: at, From: workerTransitionFields{StepID: "implement.report", Status: "running"}, To: workerTransitionFields{StepID: "publish", Status: "queued"}}}
+	changes := []workerTransition{{Time: at, From: workerTransitionFields{WorkflowStage: "implement.report", WorkflowStatus: "running"}, To: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "queued"}}}
 	for i := 0; i < 20; i++ {
-		changes = append(changes, workerTransition{Time: at.Add(time.Duration(i+1) * time.Second), From: workerTransitionFields{StepID: "publish", Status: "queued", ResourceStatus: "idle", CurrentTurnID: "old", InputVersion: 2}, To: workerTransitionFields{StepID: "publish", Status: "queued", ResourceStatus: "pending", CurrentTurnID: fmt.Sprint(i), InputVersion: 3}})
+		changes = append(changes, workerTransition{Time: at.Add(time.Duration(i+1) * time.Second), From: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "queued", ResourceStatus: "idle", CurrentTurnID: "old", InputVersion: 2}, To: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "queued", ResourceStatus: "pending", CurrentTurnID: fmt.Sprint(i), InputVersion: 3}})
 	}
 	lines := workerTransitionLines(changes)
 	if len(lines) != 2 || !strings.Contains(lines[1], "流程  implement.report → publish") || strings.Contains(lines[1], "running") || strings.Contains(lines[1], "queued") {
@@ -28,7 +28,7 @@ func TestFlowStateTimelineShowsOnlyFlowOnStepChangeAndHidesTechnicalNoise(t *tes
 	if raw := strings.Join(workerRawTransitionLines(changes), "\n"); !strings.Contains(raw, "current_turn_id:") || !strings.Contains(raw, "resource_status:") || !strings.Contains(raw, "input_version:") {
 		t.Fatal("raw changes lost", raw)
 	}
-	changes = append(changes, workerTransition{Time: at.Add(time.Minute), From: workerTransitionFields{StepID: "publish", Status: "running"}, To: workerTransitionFields{StepID: "publish", Status: "blocked"}, Detail: "result_invalid: invalid JSON"})
+	changes = append(changes, workerTransition{Time: at.Add(time.Minute), From: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "running"}, To: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "blocked"}, Detail: "result_invalid: invalid JSON"})
 	lines = workerTransitionLines(changes)
 	if !strings.Contains(lines[1], "running → blocked") || !strings.Contains(lines[2], "原因：result_invalid") || strings.Contains(lines[1], "publish → publish") {
 		t.Fatal("unchanged step repeated or blocker lost", lines)
@@ -38,20 +38,20 @@ func TestFlowStateTimelineShowsOnlyFlowOnStepChangeAndHidesTechnicalNoise(t *tes
 func TestFlowStateTimelineCountsVisibleMessagesAndKeepsCurrentSnapshot(t *testing.T) {
 	var changes []workerTransition
 	for i := 0; i < 6; i++ {
-		changes = append(changes, workerTransition{From: workerTransitionFields{StepID: fmt.Sprintf("step-%d", i), Status: "running"}, To: workerTransitionFields{StepID: "publish", Status: "queued"}, Detail: fmt.Sprintf("reason-%d", i)})
+		changes = append(changes, workerTransition{From: workerTransitionFields{WorkflowStage: fmt.Sprintf("step-%d", i), WorkflowStatus: "running"}, To: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "queued"}, Detail: fmt.Sprintf("reason-%d", i)})
 	}
 	lines := workerTransitionLines(changes)
 	if len(lines) != 11 || !strings.Contains(lines[9], "step-1 → publish") || strings.Contains(strings.Join(lines, "\n"), "step-0") {
 		t.Fatal("limit did not retain the latest five flow changes with reasons", lines)
 	}
-	candidate := &api.CandidateSummary{StepID: "publish", BusinessStatus: "queued"}
+	candidate := &api.CandidateSummary{WorkflowStage: "publish", WorkflowStatus: "queued"}
 	if !diagnosticInWorkerTimeline(changes, candidate, "reason-1") || diagnosticInWorkerTimeline(changes, candidate, "reason-0") {
 		t.Fatal("diagnostic visibility disagreed with the five displayed flow changes")
 	}
 	m, _ := ccFixture(t, 1)
 	run := m.selectedRow(0).run
-	run.StepID, run.BusinessStatus = "publish", "future_status"
-	m.projects[0].workerTransitions = []workerTransition{{From: workerTransitionFields{StepID: "publish", Status: "future_status", CurrentTurnID: "old"}, To: workerTransitionFields{StepID: "publish", Status: "future_status", CurrentTurnID: "new"}}}
+	run.WorkflowStage, run.WorkflowStatus = "publish", "future_status"
+	m.projects[0].workerTransitions = []workerTransition{{From: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "future_status", CurrentTurnID: "old"}, To: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "future_status", CurrentTurnID: "new"}}}
 	text := strings.Join(feedbackLines(m, m.projects[0], m.selectedRow(0)), "\n")
 	if !strings.Contains(text, "当前流程：publish") || !strings.Contains(text, "当前状态：future_status") || strings.Contains(text, "current_turn_id") || strings.Contains(text, "流程与状态") {
 		t.Fatal("current snapshot missing or technical event presented as a change", text)
@@ -115,7 +115,7 @@ func TestTaskListUsesBlockerFactsAndAlignedSingleRows(t *testing.T) {
 		t.Fatal("blocked filter identity drifted")
 	}
 	active := rows[0]
-	active.run = &api.CandidateSummary{TaskStatus: "in_progress", BusinessStatus: "running"}
+	active.run = &api.CandidateSummary{TaskStatus: "in_progress", WorkflowStatus: "running"}
 	if taskRowBlocked(active) || len(taskBlockerLines(active)) != 0 {
 		t.Fatal("old admission blockers replaced an active worker state")
 	}
@@ -124,7 +124,7 @@ func TestTaskListUsesBlockerFactsAndAlignedSingleRows(t *testing.T) {
 func TestFlowStateReadableSampleAcrossWindowSizes(t *testing.T) {
 	m, _ := ccFixture(t, 1)
 	run := m.selectedRow(0).run
-	run.StepID, run.BusinessStatus, run.ExecutionStatus = "publish", "blocked", "succeeded"
+	run.WorkflowStage, run.WorkflowStatus, run.ExecutionStatus = "publish", "blocked", "succeeded"
 	run.Title = "Worker 流程重构"
 	run.ResourceStatus, run.CurrentTurnID = "idle", "hidden-current-turn"
 	run.StageDiagnostic = "result_invalid: invalid character 'P' looking for beginning of value"
@@ -135,9 +135,9 @@ func TestFlowStateReadableSampleAcrossWindowSizes(t *testing.T) {
 		s.snapshot.NativeTasks.Tasks = append(s.snapshot.NativeTasks.Tasks, api.TaskDetail{TaskSummary: api.TaskSummary{TaskID: fmt.Sprint(100 + i), Title: fmt.Sprintf("任务 %d 中文标题示例", i), Status: "open"}, UnmetPredecessors: []api.DependencySummary{{TaskID: "84", Blocker: "predecessor_not_delivered"}}})
 	}
 	s.workerTransitions = []workerTransition{
-		{Time: time.Now().Add(-time.Minute), From: workerTransitionFields{StepID: "implement.report", Status: "running"}, To: workerTransitionFields{StepID: "publish", Status: "queued"}},
-		{Time: time.Now().Add(-30 * time.Second), From: workerTransitionFields{StepID: "publish", Status: "queued"}, To: workerTransitionFields{StepID: "publish", Status: "running"}},
-		{Time: time.Now(), From: workerTransitionFields{StepID: "publish", Status: "running", ResourceStatus: "active"}, To: workerTransitionFields{StepID: "publish", Status: "blocked", ResourceStatus: "idle"}, Detail: run.StageDiagnostic},
+		{Time: time.Now().Add(-time.Minute), From: workerTransitionFields{WorkflowStage: "implement.report", WorkflowStatus: "running"}, To: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "queued"}},
+		{Time: time.Now().Add(-30 * time.Second), From: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "queued"}, To: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "running"}},
+		{Time: time.Now(), From: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "running", ResourceStatus: "active"}, To: workerTransitionFields{WorkflowStage: "publish", WorkflowStatus: "blocked", ResourceStatus: "idle"}, Detail: run.StageDiagnostic},
 	}
 	for _, size := range [][2]int{{160, 40}, {120, 30}, {80, 24}} {
 		m.width, m.height = size[0], size[1]

@@ -201,7 +201,7 @@ func taskRowBlocked(row consoleRow) bool {
 	if status == "closed" || status == "discarded" {
 		return false
 	}
-	if row.run != nil && (row.run.BusinessStatus == "blocked" || row.run.EnvironmentBlocker != nil) {
+	if row.run != nil && (row.run.WorkflowStatus == "blocked" || row.run.EnvironmentBlocker != nil) {
 		return true
 	}
 	if row.native != nil && status == "open" {
@@ -426,8 +426,14 @@ func runStatus(run *api.CandidateSummary) string {
 	if recoveryNeedsAttention(run) {
 		return "需处理 · 恢复待核实"
 	}
-	if run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" {
-		return "需处理 · " + firstText(run.ExecutionStatus, run.FinishTaskStatus)
+	if run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" {
+		return "需处理 · " + run.ExecutionStatus
+	}
+	if run.WorkflowStatus == "blocked" {
+		return "需处理 · blocked"
+	}
+	if run.TaskStatus == "discarded" {
+		return "需处理 · discarded"
 	}
 	if run.Error != nil && strings.TrimSpace(*run.Error) != "" {
 		return "需处理 · error"
@@ -438,15 +444,15 @@ func runStatus(run *api.CandidateSummary) string {
 	if waitingForMerge(run) {
 		return "待合并"
 	}
-	if run.FinishTaskStatus == "completed" {
+	if run.WorkflowStatus == "completed" {
 		return "completed"
 	}
 	if run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
 
 		return "进行中"
 	}
-	if run.FinishTaskStatus != "" {
-		return run.FinishTaskStatus
+	if run.WorkflowStatus != "" {
+		return run.WorkflowStatus
 	}
 	return firstText(run.ExecutionStatus, "unknown")
 }
@@ -483,7 +489,7 @@ func runNeedsAttention(run *api.CandidateSummary) bool {
 	if run.TaskStatus == "closed" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
 		return true
 	}
-	return waitingForDecision(run) || run.EnvironmentBlocker != nil || recoveryNeedsAttention(run) || run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" || (run.Error != nil && strings.TrimSpace(*run.Error) != "") || (run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "")
+	return waitingForDecision(run) || run.EnvironmentBlocker != nil || recoveryNeedsAttention(run) || run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.WorkflowStatus == "blocked" || run.TaskStatus == "discarded" || (run.Error != nil && strings.TrimSpace(*run.Error) != "") || (run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "")
 }
 
 func recoveryNeedsAttention(run *api.CandidateSummary) bool {
@@ -494,7 +500,7 @@ func historicalFailedRun(run *api.CandidateSummary) bool {
 	return run != nil &&
 		run.TaskStatus == "closed" && run.EndedAt != nil &&
 		(run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked") &&
-		run.FinishTaskStatus == "blocked" && run.Decision == nil &&
+		run.WorkflowStatus == "blocked" && run.Decision == nil &&
 		(run.Error == nil || strings.TrimSpace(*run.Error) == "") &&
 		(run.PR.QueryError == nil || strings.TrimSpace(*run.PR.QueryError) == "")
 }

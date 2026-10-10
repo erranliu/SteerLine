@@ -106,7 +106,7 @@ func candidateStartReason(s projectState, row *consoleRow, now time.Time) string
 	}
 	count := 0
 	for _, r := range candidateRuns(s, row.taskID) {
-		if r.Abandonment == nil && r.FinishTaskStatus != "completed" {
+		if candidateBusinessOpen(r) {
 			count++
 		}
 	}
@@ -142,11 +142,11 @@ func candidateAbandonReason(s projectState, row *consoleRow) string {
 	if s.snapshot.NativeTaskError != "" || s.snapshot.HistoryError != "" {
 		return "当前候选/Task版本查询不可用；请刷新"
 	}
-	if row.run.Abandonment != nil {
+	if row.run.Abandonment != nil || row.run.WorkflowStatus == "abandoned" {
 
 		return "候选已退出实验"
 	}
-	if row.run.TaskStatus != "in_progress" || row.run.FinishTaskStatus == "completed" {
+	if row.run.TaskStatus != "in_progress" || row.run.WorkflowStatus == "completed" {
 		return "任务已完成，不能放弃"
 	}
 	for _, r := range candidateRuns(s, row.taskID) {
@@ -243,7 +243,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 				loser = true
 			}
 		}
-		if r.FinishTaskStatus == "waiting_decision" {
+		if candidateBusinessOpen(r) && r.WorkflowStatus == "waiting_input" {
 			outcome += " · 待决策/冲突请看原问题"
 		}
 		if r.PR.State == "merged" {

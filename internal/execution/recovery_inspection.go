@@ -13,21 +13,21 @@ import (
 // facts to the versioned product/API summary; no product package enters the
 // execution service.
 type RecoveryInspection struct {
-	Version                                                                                int
-	SampledAt                                                                              time.Time
-	RunID                                                                                  string
-	RunRevision                                                                            uint64
-	ServiceInstanceID, ServiceStatus, DispatchMode                                         string
-	DispatchPaused, SlotOccupied                                                           bool
-	TaskID, DecisionID, DecisionStatus, ExecutionStatus, DeliveryStatus, Backend, Protocol string
-	Target                                                                                 executionbackend.ExecutionTarget
-	ProcessCheck                                                                           string
-	Workspace                                                                              *executionbackend.WorkspaceInspection
-	WorkspaceError                                                                         string
-	NativeClaim                                                                            *taskmodel.TaskRecord
-	ClaimError                                                                             string
-	PR                                                                                     *executionmodel.PRInfo
-	PRError                                                                                string
-	Blockers                                                                               []reconstructiontypes.ControlBlocker
-	ConcurrentActionReason                                                                 string
+	Version                                                                                               int
+	SampledAt                                                                                             time.Time
+	RunID                                                                                                 string
+	RunRevision                                                                                           uint64
+	ServiceInstanceID, ServiceStatus, DispatchMode                                                        string
+	DispatchPaused, SlotOccupied                                                                          bool
+	TaskID, DecisionID, DecisionStatus, ExecutionStatus, WorkflowStage, WorkflowStatus, Backend, Protocol string
+	Target                                                                                                executionbackend.ExecutionTarget
+	ProcessCheck                                                                                          string
+	Workspace                                                                                             *executionbackend.WorkspaceInspection
+	WorkspaceError                                                                                        string
+	NativeClaim                                                                                           *taskmodel.TaskRecord
+	ClaimError                                                                                            string
+	PR                                                                                                    *executionmodel.PRInfo
+	PRError                                                                                               string
+	Blockers                                                                                              []reconstructiontypes.ControlBlocker
+	ConcurrentActionReason                                                                                string
 }

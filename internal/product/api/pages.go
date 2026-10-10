@@ -153,8 +153,8 @@ type StageResultSummary struct {
 
 type CandidateSummary struct {
 	FlowRef          string               `json:"flow_ref"`
-	StepID           string               `json:"step_id"`
-	BusinessStatus   string               `json:"status"`
+	WorkflowStage    string               `json:"workflow_stage"`
+	WorkflowStatus   string               `json:"workflow_status"`
 	StageDiagnostic  string               `json:"stage_diagnostic,omitempty"`
 	StageResults     []StageResultSummary `json:"stage_results,omitempty"`
 	ReportToolPolicy string               `json:"report_tool_policy,omitempty"`
@@ -191,7 +191,6 @@ type CandidateSummary struct {
 	Target             TargetSummary            `json:"target"`
 	TaskStatus         string                   `json:"task_status"`
 	ExecutionStatus    string                   `json:"execution_status"`
-	FinishTaskStatus   string                   `json:"finish_task_status"`
 	Process            *WorkerLocation          `json:"process"`
 	StartedAt          *time.Time               `json:"started_at"`
 	EndedAt            *time.Time               `json:"ended_at"`
@@ -288,8 +287,8 @@ type HistorySummary struct {
 }
 type WorkflowSummary struct {
 	FlowRef          string                   `json:"flow_ref"`
-	StepID           string                   `json:"step_id"`
-	Status           string                   `json:"status"`
+	WorkflowStage    string                   `json:"workflow_stage"`
+	WorkflowStatus   string                   `json:"workflow_status"`
 	WorkflowRunID    string                   `json:"workflow_run_id"`
 	TaskID           string                   `json:"task_id"`
 	CreatedAt        time.Time                `json:"created_at"`
@@ -414,7 +413,8 @@ type RecoveryInspection struct {
 	DecisionID             string             `json:"decision_id"`
 	DecisionStatus         string             `json:"decision_status"`
 	ExecutionStatus        string             `json:"execution_status"`
-	DeliveryStatus         string             `json:"delivery_status"`
+	WorkflowStage          string             `json:"workflow_stage"`
+	WorkflowStatus         string             `json:"workflow_status"`
 	Backend                string             `json:"backend"`
 	Protocol               string             `json:"protocol"`
 	Target                 TargetSummary      `json:"target"`

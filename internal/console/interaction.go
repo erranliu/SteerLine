@@ -93,11 +93,11 @@ func feedbackReceiptStatus(state projectState, a *actionState) string {
 }
 
 func candidateBusinessOpen(run *api.CandidateSummary) bool {
-	return run != nil && run.Abandonment == nil && run.TaskStatus != "closed" && run.TaskStatus != "completed" && run.TaskStatus != "discarded" && run.FinishTaskStatus != "completed"
+	return run != nil && run.Abandonment == nil && run.TaskStatus != "closed" && run.TaskStatus != "completed" && run.TaskStatus != "discarded" && run.WorkflowStatus != "completed" && run.WorkflowStatus != "abandoned"
 }
 
 func waitingForMerge(run *api.CandidateSummary) bool {
-	return candidateBusinessOpen(run) && run.FinishTaskStatus == "waiting_pr_merge"
+	return candidateBusinessOpen(run) && run.WorkflowStage == "await_merge" && run.WorkflowStatus == "waiting_external"
 }
 
 func pendingDecision(run *api.CandidateSummary) bool {
@@ -107,7 +107,7 @@ func pendingDecision(run *api.CandidateSummary) bool {
 // The workflow phase determines whether input is required. A merge-waiting
 // worker may offer another feedback turn without blocking PR delivery.
 func waitingForDecision(run *api.CandidateSummary) bool {
-	return candidateBusinessOpen(run) && (run.FinishTaskStatus == "waiting_decision" || pendingDecision(run) && run.Decision.Request.InteractionKind != "async" && !waitingForMerge(run))
+	return candidateBusinessOpen(run) && (run.WorkflowStatus == "waiting_input" || pendingDecision(run) && run.Decision.Request.InteractionKind != "async" && !waitingForMerge(run))
 }
 
 func candidateHumanStatus(state projectState, run *api.CandidateSummary) string {
@@ -151,9 +151,9 @@ func candidateHumanStatus(state projectState, run *api.CandidateSummary) string 
 	}
 	if pendingDecision(run) {
 		if run.Decision.Request.InteractionKind == "async" && !run.Decision.Request.BlocksProgress {
-			label := workerLabels["status"][run.BusinessStatus]
+			label := workerLabels["workflow_status"][run.WorkflowStatus]
 			if label == "" {
-				label = safeTerminalInlineText(run.BusinessStatus)
+				label = safeTerminalInlineText(run.WorkflowStatus)
 			}
 			return label + " · 有待回答问题"
 		}

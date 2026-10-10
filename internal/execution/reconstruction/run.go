@@ -29,7 +29,7 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 			return RunView{}, errors.New("worker flow has no worker attempt identity")
 		}
 	}
-	run := RunView{FlowRef: workflow.FlowRef, StepID: workflow.StepID, BusinessStatus: workflow.Status, StageDiagnostic: workflow.StageDiagnostic, StageResults: executionmodel.CloneStageResults(workflow.StageResults), TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
+	run := RunView{FlowRef: workflow.FlowRef, WorkflowStage: workflow.StepID, WorkflowStatus: workflow.Status, StageDiagnostic: workflow.StageDiagnostic, StageResults: executionmodel.CloneStageResults(workflow.StageResults), TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
 		CandidateTiming: "wall_since_reservation",
 		ResourceStatus:  executionmodel.ExecutionResourceStatus(execution),
 		SessionID:       execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnNumber: execution.TurnNumber, CurrentTurnID: execution.CurrentTurnID,
@@ -41,7 +41,7 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 		Agent: execution.Agent, Target: execution.Target, Process: execution.Process, WorkspaceIntent: execution.WorkspaceIntent,
 		StartedAt: copyPtr(execution.TurnStartedAt), EndedAt: copyPtr(execution.TurnEndedAt), LogPath: copyPtr(execution.LogPath),
 		LastEvent: copyPtr(execution.LastEvent), Summary: copyPtr(execution.Summary), Error: copyPtr(execution.Error), ManualStop: copyPtr(execution.ManualStop),
-		FinishTaskStatus: finishStatus(task, workflow), ExecutionStatus: executionmodel.ExecutionViewStatus(execution),
+		ExecutionStatus: executionmodel.ExecutionViewStatus(execution),
 		PR: executionmodel.PRState{State: nonEmpty(workflow.PRState, "unknown"), QueriedAt: copyPtr(workflow.PRQueriedAt),
 			QueryError: copyPtr(workflow.PRQueryError), MergedAt: copyPtr(workflow.PRMergedAt), MergeCommit: copyPtr(workflow.PRMergeCommit)}}
 	if attempt := CurrentAttempt(attempts, &execution); attempt != nil {

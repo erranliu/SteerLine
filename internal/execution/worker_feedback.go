@@ -161,7 +161,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 			return err
 		}
 		workflow, execution = s.workflowRecords(run)
-		if workflow == nil || execution == nil || run.ControlRevision != workflow.ControlRevision || run.BusinessStatus != "waiting_input" {
+		if workflow == nil || execution == nil || run.ControlRevision != workflow.ControlRevision || run.WorkflowStatus != "waiting_input" {
 			return errors.New("committed worker feedback phase could not be projected")
 		}
 	}

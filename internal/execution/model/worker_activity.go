@@ -10,8 +10,8 @@ import (
 // WorkerStateFields uses the same field names and projection as the public
 // worker snapshot. It records facts, not a second state machine.
 type WorkerStateFields struct {
-	StepID            string `json:"step_id"`
-	Status            string `json:"status"`
+	WorkflowStage     string `json:"workflow_stage"`
+	WorkflowStatus    string `json:"workflow_status"`
 	ExecutionStatus   string `json:"execution_status"`
 	ResourceStatus    string `json:"resource_status"`
 	CurrentTurnID     string `json:"current_turn_id"`
@@ -50,7 +50,7 @@ func workerStateFields(w *WorkflowRunRecord, e *ExecutionRecord) WorkerStateFiel
 	if w == nil || e == nil {
 		return WorkerStateFields{}
 	}
-	v := WorkerStateFields{StepID: w.StepID, Status: w.Status, ExecutionStatus: ExecutionViewStatus(*e), ResourceStatus: ExecutionResourceStatus(*e), CurrentTurnID: e.CurrentTurnID, InputVersion: w.InputVersion, RecoveryRequired: e.RecoveryRequired, RecoveryState: e.RecoveryState}
+	v := WorkerStateFields{WorkflowStage: w.StepID, WorkflowStatus: w.Status, ExecutionStatus: ExecutionViewStatus(*e), ResourceStatus: ExecutionResourceStatus(*e), CurrentTurnID: e.CurrentTurnID, InputVersion: w.InputVersion, RecoveryRequired: e.RecoveryRequired, RecoveryState: e.RecoveryState}
 	if w.StepID == StepDelivered && w.Status == "completed" {
 		v.ExecutionStatus = "succeeded"
 	}
@@ -75,8 +75,8 @@ func WorkerStateActivity(beforeW *WorkflowRunRecord, beforeE *ExecutionRecord, w
 	}{from, to, version})
 	digest := sha256.Sum256(raw)
 	ev := ActivityEvent{V: 1, TS: at, Source: "steer", Kind: "worker_state", RunID: w.WorkflowRunID, TaskID: w.TaskID,
-		ItemID: fmt.Sprintf("worker-state:%x", digest[:16]), Status: to.Status,
-		Title:  "step_id/status: " + from.StepID + " / " + from.Status + " → " + to.StepID + " / " + to.Status,
+		ItemID: fmt.Sprintf("worker-state:%x", digest[:16]), Status: to.WorkflowStatus,
+		Title:  "workflow_stage/workflow_status: " + from.WorkflowStage + " / " + from.WorkflowStatus + " → " + to.WorkflowStage + " / " + to.WorkflowStatus,
 		Detail: w.StageDiagnostic, Meta: map[string]any{"from": from, "to": to, "execution_id": e.ExecutionID, "attempt_id": e.CurrentAttemptID}}
 	if ev.Detail == "" && e.Error != nil {
 		ev.Detail = *e.Error

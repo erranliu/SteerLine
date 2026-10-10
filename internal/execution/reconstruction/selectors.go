@@ -2,7 +2,6 @@ package reconstruction
 
 import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func LatestWorkflow(workflows []executionmodel.WorkflowRunRecord, taskID string) *executionmodel.WorkflowRunRecord {
@@ -48,25 +47,4 @@ func CurrentAttempt(attempts []executionmodel.StepAttemptRecord, execution *exec
 		}
 	}
 	return latest
-}
-
-func finishStatus(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord) string {
-	switch {
-	case workflow.Abandonment != nil:
-		return "abandoned"
-	case task.Status == "closed" && workflow.Status == "blocked":
-		return "blocked"
-	case workflow.Status == "completed":
-		return "completed"
-	case task.Status == "closed":
-		return "not_selected"
-	case workflow.Status == "waiting_external":
-		return "waiting_pr_merge"
-	case workflow.Status == "waiting_input":
-		return "waiting_decision"
-	case workflow.Status == "blocked" || task.Status == "discarded":
-		return "blocked"
-	default:
-		return "pending"
-	}
 }

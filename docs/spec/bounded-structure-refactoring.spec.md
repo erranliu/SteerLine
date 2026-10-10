@@ -14,7 +14,7 @@
 
 ## 后端组装
 
-入口：[directory.go](../../internal/app/directory.go)；所属实现：[directory_local.go](../../internal/app/directory_local.go)、[directory_supervised.go](../../internal/app/directory_supervised.go)。保持一个 app Go 包，采用普通私有函数和文件归属：
+入口：[directory.go](../../internal/app/directory.go)；所属实现：[directory_local.go](../../internal/app/directory_local.go)、[directory_supervised.go（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/app/directory_supervised.go)。保持一个 app Go 包，采用普通私有函数和文件归属：
 
 - local Codex、Orca supervised 两个实现单元分别收拢 registration/codec、特有配置/target、preflight/claim 和 factory；localExecutionBackend 随 local 单元迁入，不只拆登记表。supervised 的 `target: local/environment` 是同一实现的配置分支，不拆成两个 registration、组装单元或生命周期。
 - NewBuiltinDirectory 只保留版本、显式组合及当前实例的一次性目录绑定。新后端仍需显式接线；既有后端局部行为变化通常不用改中央函数。

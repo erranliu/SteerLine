@@ -90,8 +90,8 @@ func DecisionRequest(r model.DecisionRequest) api.DecisionRequest {
 // CandidateView is the bounded product projection input prepared by the
 // application edge. The query package never receives or reconstructs Runtime.
 type CandidateView struct {
-	FlowRef, StepID, BusinessStatus, StageDiagnostic, ReportToolPolicy string
-	StageResults                                                       []model.StageResult
+	FlowRef, WorkflowStage, WorkflowStatus, StageDiagnostic, ReportToolPolicy string
+	StageResults                                                              []model.StageResult
 
 	SessionID, SessionGeneration, CurrentTurnID    string
 	TurnNumber                                     uint64
@@ -107,7 +107,7 @@ type CandidateView struct {
 	ControlRevision                                uint64
 	Claimant, Host, Backend, Protocol, Agent       string
 	Target                                         backend.ExecutionTarget
-	TaskStatus, ExecutionStatus, FinishTaskStatus  string
+	TaskStatus, ExecutionStatus                    string
 	StartedAt, EndedAt                             *time.Time
 	WorktreePath, WorktreeBranch, BaseCommit       *string
 	LastEvent, LogPath, ResultPath, Summary, Error *string
@@ -137,7 +137,7 @@ func Candidate(r *CandidateView) *api.CandidateSummary {
 	if r == nil {
 		return nil
 	}
-	p := &api.CandidateSummary{FlowRef: r.FlowRef, StepID: r.StepID, BusinessStatus: r.BusinessStatus, StageDiagnostic: r.StageDiagnostic, ReportToolPolicy: r.ReportToolPolicy, SessionID: r.SessionID, SessionGeneration: r.SessionGeneration, CurrentTurnID: r.CurrentTurnID, TurnNumber: r.TurnNumber, PRHistory: append([]string(nil), r.PRHistory...), CandidateCreatedAt: r.CandidateCreatedAt, CandidateEndedAt: copyValue(r.CandidateEndedAt), CandidateTiming: r.CandidateTiming, ResourceStatus: r.ResourceStatus, RecoveryRequired: r.RecoveryRequired, RecoveryState: r.RecoveryState, RecoveryVersion: r.RecoveryVersion, TaskID: r.TaskID, DomainTaskID: r.DomainTaskID, WorkflowVersion: r.WorkflowVersion, ExecutionID: r.ExecutionID, Title: r.Title, RunID: r.RunID, AttemptID: r.AttemptID, ControlRevision: r.ControlRevision, Claimant: r.Claimant, Host: r.Host, Backend: r.Backend, Protocol: r.Protocol, Agent: r.Agent, Target: api.TargetSummary{ID: r.Target.ID, WorktreeID: r.Target.WorktreeID, Branch: r.Target.Branch}, TaskStatus: r.TaskStatus, ExecutionStatus: r.ExecutionStatus, FinishTaskStatus: r.FinishTaskStatus, StartedAt: copyValue(r.StartedAt), EndedAt: copyValue(r.EndedAt), WorktreePath: copyValue(r.WorktreePath), WorktreeBranch: copyValue(r.WorktreeBranch), BaseCommit: copyValue(r.BaseCommit), LastEvent: copyValue(r.LastEvent), LogPath: copyValue(r.LogPath), ResultPath: copyValue(r.ResultPath), Summary: copyValue(r.Summary), Error: copyValue(r.Error), PR: api.PRSummary{URL: copyValue(r.PR.URL), HeadRevision: copyValue(r.PR.HeadRevision), MergeCommit: copyValue(r.PR.MergeCommit), QueryError: copyValue(r.PR.QueryError), State: r.PR.State, MergedAt: copyValue(r.PR.MergedAt), QueriedAt: copyValue(r.PR.QueriedAt)}}
+	p := &api.CandidateSummary{FlowRef: r.FlowRef, WorkflowStage: r.WorkflowStage, WorkflowStatus: r.WorkflowStatus, StageDiagnostic: r.StageDiagnostic, ReportToolPolicy: r.ReportToolPolicy, SessionID: r.SessionID, SessionGeneration: r.SessionGeneration, CurrentTurnID: r.CurrentTurnID, TurnNumber: r.TurnNumber, PRHistory: append([]string(nil), r.PRHistory...), CandidateCreatedAt: r.CandidateCreatedAt, CandidateEndedAt: copyValue(r.CandidateEndedAt), CandidateTiming: r.CandidateTiming, ResourceStatus: r.ResourceStatus, RecoveryRequired: r.RecoveryRequired, RecoveryState: r.RecoveryState, RecoveryVersion: r.RecoveryVersion, TaskID: r.TaskID, DomainTaskID: r.DomainTaskID, WorkflowVersion: r.WorkflowVersion, ExecutionID: r.ExecutionID, Title: r.Title, RunID: r.RunID, AttemptID: r.AttemptID, ControlRevision: r.ControlRevision, Claimant: r.Claimant, Host: r.Host, Backend: r.Backend, Protocol: r.Protocol, Agent: r.Agent, Target: api.TargetSummary{ID: r.Target.ID, WorktreeID: r.Target.WorktreeID, Branch: r.Target.Branch}, TaskStatus: r.TaskStatus, ExecutionStatus: r.ExecutionStatus, StartedAt: copyValue(r.StartedAt), EndedAt: copyValue(r.EndedAt), WorktreePath: copyValue(r.WorktreePath), WorktreeBranch: copyValue(r.WorktreeBranch), BaseCommit: copyValue(r.BaseCommit), LastEvent: copyValue(r.LastEvent), LogPath: copyValue(r.LogPath), ResultPath: copyValue(r.ResultPath), Summary: copyValue(r.Summary), Error: copyValue(r.Error), PR: api.PRSummary{URL: copyValue(r.PR.URL), HeadRevision: copyValue(r.PR.HeadRevision), MergeCommit: copyValue(r.PR.MergeCommit), QueryError: copyValue(r.PR.QueryError), State: r.PR.State, MergedAt: copyValue(r.PR.MergedAt), QueriedAt: copyValue(r.PR.QueriedAt)}}
 	for _, result := range r.StageResults {
 		p.StageResults = append(p.StageResults, api.StageResultSummary{StepID: result.StepID, CommandID: result.CommandID, TurnID: result.TurnID, InputVersion: result.InputVersion, Succeeded: result.Succeeded, FinalVerified: result.FinalVerified, Final: result.Final, FinalSource: result.FinalSource, Failure: result.Failure, Outcome: result.Outcome})
 	}
@@ -157,7 +157,7 @@ func Candidate(r *CandidateView) *api.CandidateSummary {
 	if d := r.Decision; d != nil {
 		p.Decision = &api.DecisionSummary{ID: d.ID, AttemptID: d.AttemptID, Status: d.Status, Version: d.Version, Request: DecisionRequest(d.Request), OptionID: d.OptionID, Note: d.Note, AnsweredBy: d.AnsweredBy, AnsweredAt: copyValue(d.AnsweredAt), AppliedAt: copyValue(d.AppliedAt)}
 		if d.Request.InteractionKind == "async" {
-			p.Decision.Request.BlocksProgress = r.BusinessStatus == "waiting_input" || r.BusinessStatus == "blocked"
+			p.Decision.Request.BlocksProgress = r.WorkflowStatus == "waiting_input" || r.WorkflowStatus == "blocked"
 		}
 	}
 	return p
@@ -201,7 +201,7 @@ func ServicePage(rt *ServiceView) *api.ServicePage {
 }
 
 func workflowSummary(w model.WorkflowRunRecord) api.WorkflowSummary {
-	p := api.WorkflowSummary{FlowRef: w.FlowRef, StepID: w.StepID, Status: w.Status, WorkflowRunID: w.WorkflowRunID, TaskID: w.TaskID, CreatedAt: w.CreatedAt}
+	p := api.WorkflowSummary{FlowRef: w.FlowRef, WorkflowStage: w.StepID, WorkflowStatus: w.Status, WorkflowRunID: w.WorkflowRunID, TaskID: w.TaskID, CreatedAt: w.CreatedAt}
 	if w.ExecutionProfile != nil {
 		v := Profile(*w.ExecutionProfile)
 		p.ExecutionProfile = &v

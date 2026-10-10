@@ -10,6 +10,8 @@
 
 完整消息正文和 raw 证据归 ConversationEvent 的正文/修订引用，活动摘要不代替会话正文。不同 Run/Attempt 和晚到原 Attempt 的事实保持原归属，不能以 task_id 改选另一个运行。
 
+worker_state 的 from/to 业务字段为 workflow_stage/workflow_status，原领域记录仍用对象内 StepID/Status；缺少新目标字段的事件登记采集诊断，不读取旧字段补画。候选快照和历史 WorkflowSummary 同名，finish_task_status 已删除。详见[状态命名 Spec](../spec/state-naming.spec.md)。
+
 ## 原始取证与采集
 
 原始 events.jsonl、实现的 history/source/mapper 和会话文件采集保留。通用 JSONL framing 只消费完整记录，保留 UTF-8/CRLF、物理 offset、文件截断/替换、扫描/记录预算与超长行后的继续采集；不解释活动 seq。数据库或采集错误明确返回，产品不从旧镜像补画。
@@ -24,6 +26,6 @@
 
 ## 三窗运行与反馈
 
-右上显示候选/冻结方案/原始状态/阻塞原因/PR；右下优先显示当前问题或答案预览与回执，再显示当前 step_id/status 与变化，一条消息仅表示流程或状态，未变化的流程只作为状态消息上下文。execution_status/resource_status、turn ID、输入版本和恢复字段不作为默认消息。RecentActivity 在同一读取事务中核验项目/Workflow/Execution/Attempt；按预算拒绝补画过大/缺失 payload。UI 有界保留原始变化字段和诊断供详情读取，不保存工具全文，候选或 Attempt 变化清空样本并拒绝旧响应。具体规则及验收见[可读性收敛](../spec/console-flow-state-readability.spec.md)。
+右上显示候选/冻结方案/原始状态/阻塞原因/PR；右下优先显示当前问题或答案预览与回执，再显示当前 workflow_stage/workflow_status 与变化，一条消息仅表示流程或状态，未变化的流程只作为状态消息上下文。execution_status/resource_status、turn ID、输入版本和恢复字段不作为默认消息。RecentActivity 在同一读取事务中核验项目/Workflow/Execution/Attempt；按预算拒绝补画过大/缺失 payload。UI 有界保留原始变化字段和诊断供详情读取，不保存工具全文，候选或 Attempt 变化清空样本并拒绝旧响应。具体规则及验收见[可读性收敛](../spec/console-flow-state-readability.spec.md)。
 
 右下按a激活既有Unicode编辑器，Tab循环列表/选项/输入，Enter换行，F2单次提交。长背景用F8只读查看，完整最终回复用f；普通回答不切整页详情。

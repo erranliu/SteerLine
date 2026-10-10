@@ -140,7 +140,7 @@ func feedbackLines(m Model, state projectState, row *consoleRow) []string {
 		lines = append(lines, currentWorkerLines(run)...)
 		return append(lines, workerTransitionLines(state.workerTransitions)...)
 	}
-	active := run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.BusinessStatus == "running" || run.BusinessStatus == "queued"
+	active := run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.WorkflowStatus == "running" || run.WorkflowStatus == "queued"
 	if !active && !runNeedsAttention(run) {
 		if state.final.previewEvent != nil && state.final.previewEvent.AttemptID == run.AttemptID && (run.CurrentTurnID == "" || state.final.previewEvent.TurnID == run.CurrentTurnID) && state.final.previewText != "" {
 			lines = append(lines, "最终回复预览（截断，非独立测试验收）")

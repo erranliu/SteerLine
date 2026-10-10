@@ -48,7 +48,7 @@ Orca 先读现有 `worker_done` relay、原终端核验、Run/Task/Dispatch/消�
 
 ## 5. Orca 适配与统一人工入口
 
-在 [Orca worker 证据](../../internal/execution/adapters/orca/inventory.go)、[native 接线](../../internal/execution/adapters/orca/lifecycle_observation.go)、[结果 relay](../../internal/execution/adapters/orca/worker_resources.go)和 worker 恢复路由中对齐共享事实分类。native 与 supervised 各自保留原协议，不套用 Codex 的 thread/turn 或 PID 规则。
+在 [Orca worker 证据（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/execution/adapters/orca/inventory.go)、[native 接线（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/execution/adapters/orca/lifecycle_observation.go)、[结果 relay（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/execution/adapters/orca/worker_resources.go)和 worker 恢复路由中对齐共享事实分类。native 与 supervised 各自保留原协议，不套用 Codex 的 thread/turn 或 PID 规则。
 
 原 terminal/Dispatch 活动时接回观察；终端已退出但 `worker_done`/结算证据可信时仍结算原结果。runtime/incarnation 变化或资源缺失仅证明身份不可用时保持未知，不能直接重建。需要补报或重新派发等外部写操作的恢复分支由人工命令授权后执行，读到的既有回执可直接确认。
 

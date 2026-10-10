@@ -140,8 +140,8 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 
 | 检查 | 前置与范围 | 测试来源 |
 | --- | --- | --- |
-| 本地 Orca host wait | `STEERLINE_ORCA_HOST_WAIT_PROBE` 指向包含原 workspace/terminal/runtime/incarnation 的隔离现场 JSON；检查原终端等待事实 | [TestOrcaNativeHostWait](../internal/execution/adapters/orca/host_wait_live_cd67_test.go) |
-| Orca 远端 P10 reply gate | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate](../internal/execution/adapters/orcaremote/p10_live_cd67_test.go) |
+| 本地 Orca host wait | `STEERLINE_ORCA_HOST_WAIT_PROBE` 指向包含原 workspace/terminal/runtime/incarnation 的隔离现场 JSON；检查原终端等待事实 | [TestOrcaNativeHostWait（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/execution/adapters/orca/host_wait_live_cd67_test.go) |
+| Orca 远端 P10 reply gate | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/execution/adapters/orcaremote/p10_live_cd67_test.go) |
 | 原运行恢复预览 | `STEERLINE_REAL_RECOVERY_CONFIG` / `STEERLINE_REAL_RECOVERY_RUN_ID`；读取隔离原现场 | [TestRealIsolatedRecoveryPreview](../internal/app/host/recovery_real_probe_test.go) |
 | Windows 服务窗口 / Ctrl+C helper | 只由绑定原进程、启动回执和报告路径的专门探针调用 | [Windows 平台测试](../internal/app/host/platform_windows_test.go) |
 | elevated sandbox 凭据检查与设置 | 为显式需要 elevated 的开发场景使用；无 token 的检查和可能触发 UAC 的初始化是两步 | [E2E 指南的 sandbox 工具](../tests/e2e/README.md#真实环境)、[设置脚本](../scripts/setup-e2e-sandbox.ps1) |
