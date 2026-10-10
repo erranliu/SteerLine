@@ -174,7 +174,7 @@ L1 报告的 `workers`、各组 `started_at` / `finished_at` 和 `wall_seconds` 
 
 失败、超时、证据/清理缺失、零匹配或报告不完整都不能算通过；runner 不自动重试。重新运行使用新目录和新现场，保留前次失败。每次原始报告和失败诊断保留在本次输出目录；仓库只提交最小验收摘要和仍必要的结果索引，避免提交完整日志、认证、数据库、原始 prompt 或 dispatch capability。测试样本维护在对应包的 testdata。
 
-历史结果只证明报告中记录的候选版本。[最近完整重跑](acceptance/archive/completed/all-tests-after-266-2026-10-10.md)注明逐次源码、skip 与当前能力缺口，不能替代后续改动的验证。此前保留的[历史基线](acceptance/archive/completed/latest-baseline.md)和更早[固定 Git 快照](acceptance/archive/completed/history.md#历史取证)继续按原范围读取。
+历史结果只证明报告中记录的候选版本。[最近完整重跑](acceptance/archive/completed/all-tests-after-288-2026-10-10.md)注明逐次源码、skip 与原生自动审核拒绝，不宣称所有入口通过，也不能替代后续改动的验证。此前保留的[历史基线](acceptance/archive/completed/latest-baseline.md)和更早[固定 Git 快照](acceptance/archive/completed/history.md#历史取证)继续按原范围读取。
 
 ## 扩展与 Plan
 
