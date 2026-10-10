@@ -41,9 +41,9 @@ try {
     (Get-Item -LiteralPath $alias).Delete()
     $collisionRoot = Join-Path $testRoot 'collision'
     $now = [TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, [TimeZoneInfo]::FindSystemTimeZoneById('China Standard Time'))
-    $prefix = $first.release -replace '\d{8}-\d{6}$', ''
+    $suffix = $first.release -replace '^dev-\d{8}-\d{6}', ''
     # Preoccupy the immediate timestamp window, so the real generator must refuse before building.
-    foreach ($offset in 0..10) { New-Item -ItemType Directory -Path (Join-Path $collisionRoot ($prefix + $now.AddSeconds($offset).ToString('yyyyMMdd-HHmmss'))) -Force | Out-Null }
+    foreach ($offset in 0..10) { New-Item -ItemType Directory -Path (Join-Path $collisionRoot ('dev-' + $now.AddSeconds($offset).ToString('yyyyMMdd-HHmmss') + $suffix)) -Force | Out-Null }
     $refused = $false
     try { & $generator -DebugRoot $collisionRoot | Out-Null } catch { $refused = $true }
     if (-not $refused) { throw 'Existing timestamp directory was accepted' }
