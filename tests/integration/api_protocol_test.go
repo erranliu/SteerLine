@@ -23,6 +23,7 @@ import (
 	steerlinehost "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcasupervised "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -586,6 +587,7 @@ func TestAPIQueryParity(t *testing.T) {
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
 	addAlternateLocalProfile(t, &fixture)
+	addUnsupportedOrcaProfile(t, &fixture)
 	createIntegrationTask(t, ctx, fixture, 901)
 	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
 	defer service.stop(t)
@@ -620,7 +622,7 @@ func TestAPIQueryParity(t *testing.T) {
 	if presentation.ProjectID != httpapi.ProjectID(fixture.config.Identity()) || defaultProfileID != "fixture" || defaultProfileID == profileID {
 		t.Fatalf("HTTP presentation omitted project identity or configured default profile: %+v", presentation)
 	}
-	var selectedProfile, defaultProfile *api.ExecutionProfileSummary
+	var selectedProfile, defaultProfile, unsupportedOrcaProfile *api.ExecutionProfileSummary
 	for i := range presentation.Presentation.Profiles {
 		if presentation.Presentation.Profiles[i].ID == profileID {
 			selectedProfile = &presentation.Presentation.Profiles[i]
@@ -628,9 +630,15 @@ func TestAPIQueryParity(t *testing.T) {
 		if presentation.Presentation.Profiles[i].ID == defaultProfileID {
 			defaultProfile = &presentation.Presentation.Profiles[i]
 		}
+		if presentation.Presentation.Profiles[i].ID == "orca-supervised" {
+			unsupportedOrcaProfile = &presentation.Presentation.Profiles[i]
+		}
 	}
 	if selectedProfile == nil || defaultProfile == nil || selectedProfile.UnavailableReason != "" || selectedProfile.Digest == "" || selectedProfile.Name == "" {
 		t.Fatalf("HTTP presentation did not expose both default and usable nondefault profiles: %+v", presentation.Presentation)
+	}
+	if unsupportedOrcaProfile == nil || !strings.Contains(unsupportedOrcaProfile.UnavailableReason, "unsupported") || !strings.Contains(unsupportedOrcaProfile.UnavailableReason, "structured final evidence") {
+		t.Fatalf("HTTP presentation claimed the current supervised Orca route can satisfy staged final evidence: %+v", presentation.Presentation.Profiles)
 	}
 	for _, configured := range fixture.config.AvailableExecutionProfiles() {
 		if configured.ID == profileID && configured.Digest(fixture.config.ExecutionDirectory) != selectedProfile.Digest {
@@ -835,6 +843,28 @@ func addAlternateLocalProfile(t *testing.T, fixture *integrationFixture) {
 	if fixture.config.DefaultProfileID() != "fixture" || len(fixture.config.AvailableExecutionProfiles()) != 2 {
 		t.Fatalf("alternate profile changed the configured default or catalog size: default=%q profiles=%+v", fixture.config.DefaultProfileID(), fixture.config.AvailableExecutionProfiles())
 	}
+}
+
+func addUnsupportedOrcaProfile(t *testing.T, fixture *integrationFixture) {
+	t.Helper()
+	globalPath := steerlineapp.GlobalExecutionConfigPath()
+	data, err := os.ReadFile(globalPath)
+	require(t, err)
+	var global map[string]json.RawMessage
+	require(t, json.Unmarshal(data, &global))
+	var profiles []execution.ExecutionProfile
+	require(t, json.Unmarshal(global["execution_profiles"], &profiles))
+	payload, err := orcasupervised.EncodeProfileConfig(orcasupervised.ProfileConfig{
+		Target: "local", Executable: os.Args[0], Shell: "powershell.exe", WaitTimeout: "2m", PollInterval: "1s", CapabilityReportVersion: 1,
+	})
+	require(t, err)
+	profiles = append(profiles, execution.ExecutionProfile{ID: "orca-supervised", Name: "Current supervised Orca", Host: "orca_supervised", Agent: "codex",
+		ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: orcasupervised.ProfileCodecKey, CodecVersion: orcasupervised.ProfileCodecVersion, Payload: payload}}})
+	global["execution_profiles"] = mustJSON(profiles)
+	require(t, os.WriteFile(globalPath, mustJSON(global), 0600))
+	fixture.config, err = steerlineapp.LoadConfig(fixture.configPath)
+	require(t, err)
+	require(t, fixture.config.ResolveIdentity(context.Background()))
 }
 
 func claimIntegrationTaskWithProfile(t *testing.T, ctx context.Context, fixture integrationFixture, taskID int64, serviceInstanceID, profileID string) {

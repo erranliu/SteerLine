@@ -567,8 +567,11 @@ func projectPresentation(c Config) productapi.ProjectPresentation {
 	for _, p := range c.AvailableExecutionProfiles() {
 		reason := p.StaticUnavailableReason(c.ExecutionDirectory)
 		if reason == "" {
-			if _, _, err := c.ResolveExecutionProfile(p.ID, p.Digest(c.ExecutionDirectory)); err != nil {
+			selected, _, err := c.ResolveExecutionProfile(p.ID, p.Digest(c.ExecutionDirectory))
+			if err != nil {
 				reason = err.Error()
+			} else if capabilityErr := execution.WorkerFlowCapabilityError(selected, c.ExecutionDirectory, c.ProcessHost); capabilityErr != nil {
+				reason = capabilityErr.Error()
 			}
 		}
 		fixed := executionmodel.FixedExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Digest: p.Digest(c.ExecutionDirectory), AcceptedConfigVersion: p.AcceptedConfigVersion, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ImplementationDisplay: append([]string(nil), p.ImplementationDisplay...)}

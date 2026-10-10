@@ -235,6 +235,21 @@ func TestTaskStartControlRejectsStaleDisplayedTaskVersion(t *testing.T) {
 	}
 }
 
+func TestTaskStartControlReportsUnsupportedCapabilityInReceipt(t *testing.T) {
+	s, c := newTaskStartFixture(t)
+	request := startControlRequest(t, s, "101", "first")
+	digest := s.host.ControlRequestDigest(request.RequestID)
+	s.startChecks = map[string]productapi.ControlRequest{request.RequestID: request}
+	err := s.applyTaskStartCheck(taskStartCheckResult{request: request, digest: digest,
+		err: &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow has no verified structured final source"}})
+	require(t, err)
+	receipt, err := ReadControlReceipt(c, request.RequestID)
+	require(t, err)
+	if receipt.Status != "rejected" || receipt.Code != "unsupported" || len(s.domain.Executions) != 0 {
+		t.Fatalf("unsupported staged route was not exposed as a rejected capability: receipt=%+v executions=%d", receipt, len(s.domain.Executions))
+	}
+}
+
 func TestTaskStartControlRecoversReservationsWithoutReplay(t *testing.T) {
 	s, c := newTaskStartFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
