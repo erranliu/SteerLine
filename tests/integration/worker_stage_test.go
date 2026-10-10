@@ -18,10 +18,20 @@ import (
 func TestWorkerStageLocalRoundTrip(t *testing.T) { testWorkerStageRoundTrip(t, "local") }
 func TestWorkerStageOrcaRoundTrip(t *testing.T)  { testWorkerStageRoundTrip(t, "orca") }
 
+func TestWorkerStageLocalPublishReport(t *testing.T) {
+	t.Setenv("STEERLINE_STAGE_PUBLISH_PLAIN", "1")
+	testWorkerStageRun(t, "local", false)
+}
+
 func TestWorkerStageOrcaUnknownReport(t *testing.T) { testWorkerStageRun(t, "orca", true) }
 
 func testWorkerStageRoundTrip(t *testing.T, host string) { testWorkerStageRun(t, host, false) }
 func testWorkerStageRun(t *testing.T, host string, unknown bool) {
+	steps := []string{executionmodel.StepImplement, executionmodel.StepReport, executionmodel.StepPublish}
+	if os.Getenv("STEERLINE_STAGE_PUBLISH_PLAIN") == "1" {
+		steps = append(steps, executionmodel.StepPublishReport)
+	}
+	turns := len(steps)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	f := newLifecycleProjectBase(t, host, false)
@@ -86,10 +96,10 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 		return run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge
 	}, 3*time.Minute)
 	w := ready.runtime.WorkflowRuns[0]
-	if len(w.StageInputs) != 3 || len(w.StageResults) != 3 || ready.execution.TurnNumber != 3 || len(ready.runtime.Attempts) != 1 || ready.execution.PendingCommandID != "" {
-		t.Fatalf("native chain is not exactly three original inputs: %+v", w)
+	if len(w.StageInputs) != turns || len(w.StageResults) != turns || ready.execution.TurnNumber != uint64(turns) || len(ready.runtime.Attempts) != 1 || ready.execution.PendingCommandID != "" {
+		t.Fatalf("native chain has unexpected input count: %+v", w)
 	}
-	for i, step := range []string{executionmodel.StepImplement, executionmodel.StepReport, executionmodel.StepPublish} {
+	for i, step := range steps {
 		input, result := w.StageInputs[i], w.StageResults[i]
 		inputValues := 0
 		for _, operation := range ready.runtime.Operations {
@@ -116,6 +126,9 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	if w.CandidateSHA != fixtureGitOutput(t, "--git-dir", f.bareRemote, "rev-parse", "refs/heads/"+ready.execution.Workspace.Branch) {
 		t.Fatal("published head differs from frozen candidate")
 	}
+	if turns == 4 && (w.StageInputs[3].SourceCommandID != w.StageResults[2].CommandID || w.StageInputs[3].SourceTurnID != w.StageResults[2].TurnID || w.StageInputs[3].CandidateSHA != w.CandidateSHA || w.StageResults[2].Snapshot.Workspace.ContentDigest != w.StageResults[3].Snapshot.Workspace.ContentDigest) {
+		t.Fatal("publication report lost original binding or changed workspace")
+	}
 	// Restart the completed input chain: neither backend may replay a stage.
 	service.stop(t)
 	service = startIntegrationService(t, ctx, f.config, resolver)
@@ -123,13 +136,13 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	after := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
 		return run.BusinessStatus == "waiting_external"
 	})
-	if after.execution.TurnNumber != 3 || len(after.runtime.WorkflowRuns[0].StageInputs) != 3 || len(after.runtime.Attempts) != 1 {
+	if after.execution.TurnNumber != uint64(turns) || len(after.runtime.WorkflowRuns[0].StageInputs) != turns || len(after.runtime.Attempts) != 1 {
 		t.Fatal("service restart automatically sent another stage")
 	}
 	if host == "orca" {
 		native, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
 		require(t, err)
-		if native.Dispatches != 3 || len(native.Tasks) != 3 {
+		if native.Dispatches != turns || len(native.Tasks) != turns {
 			t.Fatal("unknown report Dispatch was blindly reinjected")
 		}
 	}

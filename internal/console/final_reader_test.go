@@ -191,12 +191,16 @@ func (c finalStageClient) Body(ctx context.Context, ref api.ConversationBodyRef,
 }
 
 func TestFinalStageQueryPreservesReportAndHistoryScopes(t *testing.T) {
-	for _, mode := range []string{"report", "report-without-implementation", "history"} {
+	for _, mode := range []string{"report", "report-without-implementation", "history", "publish-report"} {
 		t.Run(mode, func(t *testing.T) {
 			m, _ := ccFixture(t, 1)
 			run := m.selectedRow(0).run
 			run.CurrentTurnID, run.StepID = "report-turn", "implement.report"
 			run.StageResults = []api.StageResultSummary{{StepID: "implement.execute", TurnID: "old-implementation"}, {StepID: "implement.execute", TurnID: "original-implementation"}}
+			if mode == "publish-report" {
+				run.StepID = "publish.report"
+				run.StageResults = append(run.StageResults, api.StageResultSummary{StepID: "publish", TurnID: "original-publication"})
+			}
 			if mode == "report-without-implementation" {
 				run.StageResults = nil
 			}
@@ -210,6 +214,9 @@ func TestFinalStageQueryPreservesReportAndHistoryScopes(t *testing.T) {
 			wantTurn, wantAttempt := "original-implementation", run.AttemptID
 			if mode == "report-without-implementation" {
 				wantTurn = "report-turn"
+			}
+			if mode == "publish-report" {
+				wantTurn = "original-publication"
 			}
 			if mode == "history" {
 				wantTurn, wantAttempt = "", ""

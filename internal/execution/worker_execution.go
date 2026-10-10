@@ -130,7 +130,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 	}
 	priorStatus := s.operationByKey("worker-live-feedback:" + execution.ExecutionID + ":" + commandID)
 	liveTurn := execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID && execution.PendingCommandID == "" && (execution.Status == "active" || execution.Status == "running" || s.workers[run.RunID] != nil)
-	if liveTurn && s.workflowRecord(run).StepID == executionmodel.StepReport {
+	if liveTurn && executionmodel.ReportStep(s.workflowRecord(run).StepID) {
 		return nil
 	}
 	if priorStatus != nil || liveTurn {

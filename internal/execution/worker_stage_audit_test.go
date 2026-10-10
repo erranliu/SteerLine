@@ -67,6 +67,14 @@ func TestWorkerStageTransientFactsReconcileOriginalTurn(t *testing.T) {
 }
 
 func TestWorkerStagePublicationReadRetrySettlesOpenPR(t *testing.T) {
+	testWorkerStagePublicationReadRetry(t, false)
+}
+
+func TestWorkerStagePublicationReportReadRetrySettlesOpenPR(t *testing.T) {
+	testWorkerStagePublicationReadRetry(t, true)
+}
+
+func testWorkerStagePublicationReadRetry(t *testing.T, report bool) {
 	queryFile := filepath.Join(t.TempDir(), "query.json")
 	t.Setenv("STEERLINE_STAGE_QUERY_FILE", queryFile)
 	const url = "https://github.com/owner/repo/pull/84"
@@ -79,6 +87,12 @@ func TestWorkerStagePublicationReadRetrySettlesOpenPR(t *testing.T) {
 	startQueuedStage(t, s, run)
 	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported"}`, true))
 	startQueuedStage(t, s, run)
+	turns := 3
+	if report {
+		require(t, acceptTestStage(t, s, run, port, "Published PR: "+url, true))
+		startQueuedStage(t, s, run)
+		turns = 4
+	}
 	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"pr_url":"`+url+`"},"summary":"published"}`, true))
 	if s.workflowRecord(run).Status != "reconciling" {
 		t.Fatal("provider failure was ignored")
@@ -88,7 +102,7 @@ func TestWorkerStagePublicationReadRetrySettlesOpenPR(t *testing.T) {
 	require(t, os.WriteFile(queryFile, proof, 0600))
 	require(t, s.reconcileStageFacts(context.Background(), run))
 	w := s.workflowRecord(run)
-	if w.StepID != executionmodel.StepAwaitMerge || w.Status != "waiting_external" || w.PRURL == "" || len(w.StageInputs) != 3 || len(w.StageResults) != 3 || s.executionRecord(run).TurnNumber != 3 {
+	if w.StepID != executionmodel.StepAwaitMerge || w.Status != "waiting_external" || w.PRURL == "" || len(w.StageInputs) != turns || len(w.StageResults) != turns || s.executionRecord(run).TurnNumber != uint64(turns) {
 		t.Fatalf("original successful publication remained stuck or was reexecuted: step=%s status=%s diagnostic=%s query=%v", w.StepID, w.Status, w.StageDiagnostic, w.PRQueryError)
 	}
 }

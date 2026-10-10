@@ -46,4 +46,4 @@ Windows 中心由用户从安装入口打开的可见服务窗口承载，可最
 
 ## Worker 分步流程
 
-当前开发流程 `development/v1` 在现有 worker 内用普通代码定义 `implement.execute → implement.report → publish → await_merge → delivered`。实现正文自由输出，报告与发布使用严格结果；正常三个业务模型轮次共用原会话/Attempt。WorkflowRun 的 `status/flow_ref/step_id` 是唯一业务状态权威，Execution.Status 保留原生事实。结果、转移与下一输入意图同事务提交；adapter 只提供规范事实/能力，不解析业务 JSON 或选择下一步。候选与 PR head 经真实事实核验，真实合并仍走唯一 TaskDelivery。完整契约见 [分步 Spec](spec/worker-staged-flow.spec.md)，原始验收见 [专属记录](acceptance/worker-staged-flow.md)。
+当前开发流程 `development/v2` 在现有 worker 内用普通代码定义 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`。实现正文自由输出，报告与发布使用严格结果；合法发布结果直接推进；发布结果格式错误时只增加一次 publish.report，禁止重做发布动作，见[发布补报](spec/worker-publish-report.spec.md)。业务模型轮次共用原会话/Attempt。WorkflowRun 的 `status/flow_ref/step_id` 是唯一业务状态权威，Execution.Status 保留原生事实。结果、转移与下一输入意图同事务提交；adapter 只提供规范事实/能力，不解析业务 JSON 或选择下一步。候选与 PR head 经真实事实核验，真实合并仍走唯一 TaskDelivery。完整契约见 [分步 Spec](spec/worker-staged-flow.spec.md)，原始验收见 [专属记录](acceptance/worker-staged-flow.md)。

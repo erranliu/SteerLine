@@ -9,11 +9,12 @@ import (
 const DevelopmentFlow = "development/v2"
 
 const (
-	StepImplement  = "implement.execute"
-	StepReport     = "implement.report"
-	StepPublish    = "publish"
-	StepAwaitMerge = "await_merge"
-	StepDelivered  = "delivered"
+	StepImplement     = "implement.execute"
+	StepReport        = "implement.report"
+	StepPublish       = "publish"
+	StepPublishReport = "publish.report"
+	StepAwaitMerge    = "await_merge"
+	StepDelivered     = "delivered"
 )
 
 // StageInput is the frozen business binding of a native input. Native transport
@@ -59,8 +60,12 @@ type StageResult struct {
 }
 
 func ModelStep(step string) bool {
-	return step == StepImplement || step == StepReport || step == StepPublish
+	return step == StepImplement || ReportStep(step) || step == StepPublish
 }
+
+func ReportStep(step string) bool { return step == StepReport || step == StepPublishReport }
+
+func PublicationStep(step string) bool { return step == StepPublish || step == StepPublishReport }
 
 func CloneStageResults(results []StageResult) []StageResult {
 	copyResults := append([]StageResult(nil), results...)

@@ -14,8 +14,13 @@ func TestWorkerPromptUsesOnlyStepTemplateAndBusinessFacts(t *testing.T) {
 	task := json.RawMessage(`{"task_id":"84","spec":{"path":"bound.spec.md"},"plan":{"path":"bound.plan.md"}}`)
 	snapshot := &m.StageSnapshot{Workspace: b.WorkspaceInspection{Head: strings.Repeat("a", 40), ContentDigest: "fixed"}}
 	w := &m.WorkflowRunRecord{StageInputs: []m.StageInput{{CommandID: "execute", StepID: m.StepImplement, TaskFacts: task, Prompt: "old adapter instructions must not be replayed"}}, StageResults: []m.StageResult{{CommandID: "execute", TurnID: "original-turn", StepID: m.StepImplement, Succeeded: true, Snapshot: snapshot, Final: "checks completed"}}}
-	for _, step := range []string{m.StepImplement, m.StepReport, m.StepPublish} {
+	for _, step := range []string{m.StepImplement, m.StepReport, m.StepPublish, m.StepPublishReport} {
 		input := m.StageInput{StepID: step, TaskFacts: task, SourceCommandID: "execute", SourceTurnID: "original-turn", Snapshot: snapshot, CandidateSHA: snapshot.Workspace.Head, ReportToolPolicy: "codex_native_permissions"}
+		if step == m.StepPublishReport {
+			w.StageInputs = append(w.StageInputs, m.StageInput{CommandID: "publish", StepID: m.StepPublish, CandidateSHA: snapshot.Workspace.Head})
+			w.StageResults = append(w.StageResults, m.StageResult{CommandID: "publish", StepID: m.StepPublish, TurnID: "publication-turn", Snapshot: snapshot, Final: "Published PR"})
+			input.SourceCommandID, input.SourceTurnID = "publish", "publication-turn"
+		}
 		first, err := renderStageInput(w, input)
 		require(t, err)
 		input.CommandID, input.ReportToolPolicy = "different-command", "orca_managed_permissions"

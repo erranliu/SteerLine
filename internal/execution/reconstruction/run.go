@@ -59,7 +59,7 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 	}
 
 	for _, input := range workflow.StageInputs {
-		if input.StepID == executionmodel.StepReport {
+		if executionmodel.ReportStep(input.StepID) {
 			run.ReportToolPolicy = input.ReportToolPolicy
 		}
 	}
