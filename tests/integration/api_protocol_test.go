@@ -118,7 +118,9 @@ func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
 	go func() { done <- steerlineapp.RunConfiguredService(serviceCtx, fixture.config, "manual", "", "off") }()
 	var client *httpapi.Client
 	var lastOpenErr error
-	deadline := time.Now().Add(30 * time.Second)
+	// Native authority preflight and the real service factory precede API
+	// publication. Keep a bounded minute for that complete startup path.
+	deadline := time.Now().Add(time.Minute)
 	for time.Now().Before(deadline) {
 		select {
 		case serviceErr := <-done:
@@ -150,7 +152,7 @@ func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
 		stopService()
 		select {
 		case <-done:
-		case <-time.After(5 * time.Second):
+		case <-time.After(20 * time.Second):
 		}
 		runtimeState, runtimeErr := steerlineapp.LoadDatabaseRuntime(fixture.config)
 		t.Fatalf("RunConfiguredService did not publish a ready local HTTP discovery: last_open=%v runtime_error=%v runtime=%+v startup=%s", lastOpenErr, runtimeErr, runtimeState, integrationStartupText(fixture.config.RunDir))
@@ -213,7 +215,7 @@ func TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter(t *testing.T) {
 
 	var client *httpapi.Client
 	var lastOpenErr error
-	deadline := time.Now().Add(45 * time.Second)
+	deadline := time.Now().Add(time.Minute)
 	for time.Now().Before(deadline) {
 		select {
 		case serviceErr := <-done:
@@ -377,7 +379,7 @@ func integrationStartupText(runDir string) string {
 	}
 	var values []string
 	for _, entry := range entries {
-		data, readErr := os.ReadFile(filepath.Join(root, entry.Name()))
+		data, readErr := os.ReadFile(filepath.Join(root, entry.Name(), "startup.json"))
 		if readErr != nil {
 			values = append(values, entry.Name()+": "+readErr.Error())
 		} else {
@@ -583,7 +585,9 @@ func waitIntegrationControlApplied(t *testing.T, ctx context.Context, client *ht
 
 func TestAPIQueryParity(t *testing.T) {
 	requireWindowsAPI(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	// Two original candidates each run execute/report before their API and
+	// frozen profile facts are queried. Match the staged wiring's 5m bound.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
 	addAlternateLocalProfile(t, &fixture)

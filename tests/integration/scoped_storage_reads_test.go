@@ -46,8 +46,18 @@ func TestTM07ScopedActivityAndWorkflowReaders(t *testing.T) {
 	}
 	activity, err := query.ReadActivity(f.ctx, a.WorkflowRunID, a.ExecutionID, a.AttemptID, api.ActivityCursor{})
 	require(t, err)
-	if activity.Cursor.RunID != a.WorkflowRunID || activity.Cursor.ExecutionID != a.ExecutionID || activity.Cursor.AttemptID != a.AttemptID || len(activity.Diagnostics) == 0 {
-		t.Fatalf("activity reader failed to return the selected empty event page: %+v", activity)
+	if activity.Cursor.RunID != a.WorkflowRunID || activity.Cursor.ExecutionID != a.ExecutionID || activity.Cursor.AttemptID != a.AttemptID || !activity.Cursor.Initialized || len(activity.Activity) == 0 {
+		t.Fatalf("activity reader failed to return the selected candidate's persisted state events: %+v", activity)
+	}
+	for _, event := range activity.Activity {
+		if event.RunID != a.WorkflowRunID || event.Meta["execution_id"] != a.ExecutionID || event.Meta["attempt_id"] != a.AttemptID {
+			t.Fatalf("activity reader returned a foreign candidate event: %+v", event)
+		}
+	}
+	tail, err := query.ReadActivity(f.ctx, a.WorkflowRunID, a.ExecutionID, a.AttemptID, activity.Cursor)
+	require(t, err)
+	if len(tail.Activity) != 0 || tail.Reset || tail.Cursor != activity.Cursor {
+		t.Fatalf("unchanged selected activity was repeated or reset at its original cursor: %+v", tail)
 	}
 }
 
