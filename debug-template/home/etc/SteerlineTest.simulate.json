@@ -1,0 +1,10 @@
+{
+  "repository": "__ROOT__/projects/SteerlineTest", "remote": "origin", "branch": "__BASE__",
+  "task_authority": "native", "workflow_protocol": "worker-flow-v2",
+  "worktree_root": "__ROOT__/home/worktrees",
+  "git": {"executable": "__ROOT__/bin/debug-helper.exe", "args": ["git"]},
+  "publication_policy": {"publisher": "worker"},
+  "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "shutdown_grace": "5s",
+  "pr": {"kind": "command", "base_url": "https://github.com", "repository": "erranliu/SteerlineTest",
+    "query": {"executable": "__ROOT__/bin/debug-helper.exe", "args": ["provider", "--e2e-state", "__ROOT__/provider/state.json"]}}
+}

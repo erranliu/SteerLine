@@ -20,7 +20,7 @@ func githubCommand(path string, args []string) error {
 	if len(args) > 1 && args[0] == "api" && strings.Contains(args[1], "?state=all&head=") {
 		result := []any{}
 		if s.PR.State == "open" {
-			result = append(result, map[string]any{"html_url": s.PR.URL, "state": "open", "head": map[string]any{"ref": s.PR.HeadBranch, "sha": s.PR.HeadRevision, "repo": map[string]string{"full_name": s.PR.Repository}}, "base": map[string]string{"ref": "main"}})
+			result = append(result, map[string]any{"html_url": s.PR.URL, "state": "open", "head": map[string]any{"ref": s.PR.HeadBranch, "sha": s.PR.HeadRevision, "repo": map[string]string{"full_name": s.PR.Repository}}, "base": map[string]string{"ref": s.BranchName()}})
 		}
 		return json.NewEncoder(os.Stdout).Encode(result)
 	}
@@ -34,7 +34,7 @@ func githubCommand(path string, args []string) error {
 				return fmt.Errorf("duplicate PR creation")
 			}
 		}
-		if argument(args, "--repo") != "e2e/project" || argument(args, "--base") != "main" {
+		if argument(args, "--repo") != s.RepositoryName() || argument(args, "--base") != s.BranchName() {
 			return fmt.Errorf("unexpected PR target")
 		}
 		cwd, err := os.Getwd()
@@ -64,7 +64,7 @@ func githubCommand(path string, args []string) error {
 		if s.PR.URL != "" {
 			s.PRs[s.PR.URL] = s.PR
 		}
-		s.PR = executionmodel.PRInfo{URL: "https://github.com/e2e/project/pull/" + strconv.Itoa(len(s.PRs)+1), Repository: "e2e/project", BaseBranch: "main", HeadRepository: "e2e/project", HeadBranch: branch, HeadRevision: head, State: "open"}
+		s.PR = executionmodel.PRInfo{URL: "https://github.com/" + s.RepositoryName() + "/pull/" + strconv.Itoa(len(s.PRs)+1), Repository: s.RepositoryName(), BaseBranch: s.BranchName(), HeadRepository: s.RepositoryName(), HeadBranch: branch, HeadRevision: head, State: "open"}
 		s.PRs[s.PR.URL] = s.PR
 		if err := Write(path, s); err != nil {
 			return err

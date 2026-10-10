@@ -1,0 +1,12 @@
+{
+  "repository": "erranliu/SteerlineTest",
+  "base_branch": "__BASE__",
+  "result_text": "SteerlineTest debug result\n",
+  "git_url": "",
+  "cwd": "",
+  "session": "",
+  "sessions": 0,
+  "dispatches": 0,
+  "turns": [],
+  "pr": {}
+}

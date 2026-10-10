@@ -215,7 +215,11 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		candidateSHA := ""
 		switch index {
 		case 0:
-			if err := os.WriteFile(filepath.Join(s.Cwd, "result.txt"), []byte("controlled E2E result\n"), 0600); err != nil {
+			result := s.ResultText
+			if result == "" {
+				result = "controlled E2E result\n"
+			}
+			if err := os.WriteFile(filepath.Join(s.Cwd, "result.txt"), []byte(result), 0600); err != nil {
 				return err
 			}
 			if _, err := Git(ctx, s.Cwd, "add", "result.txt"); err != nil {
@@ -245,7 +249,7 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 			if _, err := Git(ctx, s.Cwd, "push", "origin", branch); err != nil {
 				return err
 			}
-			if err := githubCommand(path, []string{"pr", "create", "--repo", "e2e/project", "--base", "main", "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}); err != nil {
+			if err := githubCommand(path, []string{"pr", "create", "--repo", s.RepositoryName(), "--base", s.BranchName(), "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}); err != nil {
 				return err
 			}
 			published, err := Read(path)

@@ -1,3 +1,5 @@
+# Source-isolation regression fixture only. Ordinary and AI debugging must use
+# scripts/new-debug-release.ps1 and its complete generated SteerlineTest package.
 param(
     [Parameter(Mandatory = $true)]
     [string]$DebugHome,

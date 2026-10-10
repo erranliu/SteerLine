@@ -56,12 +56,12 @@ func gitServer(root, addressFile, statePath string) error {
 				http.Error(w, "invalid or duplicate PR", 409)
 				return
 			}
-			head, err := Git(ctx, root, "--git-dir", filepath.Join(root, "e2e", "project.git"), "rev-parse", "refs/heads/"+input.Branch)
+			head, err := Git(ctx, root, "--git-dir", filepath.Join(root, filepath.FromSlash(state.RepositoryName())+".git"), "rev-parse", "refs/heads/"+input.Branch)
 			if err != nil || head != input.Head {
 				http.Error(w, "PR head was not pushed", 409)
 				return
 			}
-			state.PR = executionmodel.PRInfo{URL: "https://github.com/e2e/project/pull/1", Repository: "e2e/project", BaseBranch: "main", HeadRepository: "e2e/project", HeadBranch: input.Branch, HeadRevision: head, State: "open"}
+			state.PR = executionmodel.PRInfo{URL: "https://github.com/" + state.RepositoryName() + "/pull/1", Repository: state.RepositoryName(), BaseBranch: state.BranchName(), HeadRepository: state.RepositoryName(), HeadBranch: input.Branch, HeadRevision: head, State: "open"}
 			if err := Write(statePath, state); err != nil {
 				http.Error(w, err.Error(), 500)
 				return
