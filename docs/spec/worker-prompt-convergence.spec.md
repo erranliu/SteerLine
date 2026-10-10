@@ -24,7 +24,7 @@ Orca 原生 worker_done 只结算生命周期，摘要不替代业务正文。�
 | --- | --- |
 | implement.execute | `Implement the following Spec and Plan.`；Spec/Plan 路径和去重的其他契约文档路径 |
 | implement.report | `Format the preceding implementation result as JSON.`；实现报告格式 |
-| publish | `Push and create or reuse a PR.`；配置指定的 remote 和 PR base，不要求 JSON |
+| publish | `Push and create or reuse a PR.`；配置指定的 remote 和 PR base，要求严格 JSON；done 必须含 `outputs.pr_url` |
 | publish.report | `Format the preceding publication result as JSON.`；发布报告格式 |
 
-正常报告利用原会话，不重复正文、文档引用、任务身份、工作区、当前分支、base、候选 SHA、摘要校验值或快照。内部冻结引用与核验保持。实现报告不要求模型抄写候选 SHA，程序从核实快照绑定；发布报告要求实际 PR URL。两个报告格式分别列必要字段及 done/needs_input/blocked。源执行失败或正文证据缺口才补诊断；报告重试时上一回复是失败报告，补绑定的原执行正文（最多 16 KiB，截断标缺口）。反馈仅提供原问题、相关上下文、选中答案文字、用户文字/答案和具体阻断，不发送内部恢复状态、全部选项或重复 Git/PR 事实。最小验收为 [WPC-A5](../acceptance/worker-prompt-convergence.md)。
+正常报告利用原会话，不重复正文、文档引用、任务身份、工作区、当前分支、base、候选 SHA、摘要校验值或快照。内部冻结引用与核验保持。实现报告不要求模型抄写候选 SHA，程序从核实快照绑定；发布及发布报告要求结构化实际 PR URL。结果格式列必要字段及 done/needs_input/blocked。源执行失败或正文证据缺口才补诊断；报告重试时上一回复是失败报告，补绑定的原执行正文（最多 16 KiB，截断标缺口）。反馈仅提供原问题、相关上下文、选中答案文字、用户文字/答案和具体阻断，不发送内部恢复状态、全部选项或重复 Git/PR 事实。最小验收为 [WPC-A5](../acceptance/worker-prompt-convergence.md)。

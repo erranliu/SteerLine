@@ -33,8 +33,11 @@ func TestWorkerPromptUsesOnlyStepTemplateAndBusinessFacts(t *testing.T) {
 		if first != second || (strings.Contains(first, "bound.spec.md") != (step == m.StepImplement)) || strings.Contains(first, "old adapter instructions") || strings.Contains(first, "original-turn") || strings.Contains(first, "native_permissions") || strings.Contains(first, "managed_permissions") {
 			t.Fatalf("%s changed its business prompt with transport identities or policy", step)
 		}
-		if (step == m.StepReport || step == m.StepPublishReport) != strings.Contains(first, stageResultContract) {
+		if (step != m.StepImplement) != strings.Contains(first, stageResultContract) {
 			t.Fatalf("%s carries the wrong result contract", step)
+		}
+		if m.PublicationStep(step) != strings.Contains(first, `For done add outputs: {"pr_url":"actual PR URL"}.`) {
+			t.Fatalf("%s carries the wrong publication output contract", step)
 		}
 	}
 }

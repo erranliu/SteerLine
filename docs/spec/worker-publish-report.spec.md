@@ -12,4 +12,4 @@
 
 自动验收项见专属验收记录。本次无独立人工验收门槛。
 
-当前模型输入按 [提示词精简](worker-prompt-convergence.spec.md#2026-10-10-当前提示词精简)裁剪：补报正常利用原会话，不重复正文/快照/候选；内部来源和候选绑定保持。publish 不再要求结构化回复；真实回复若符合契约仍直接处理，否则按本文资格补报。
+当前模型输入按 [提示词精简](worker-prompt-convergence.spec.md#2026-10-10-当前提示词精简)裁剪：补报正常利用原会话，不重复正文/快照/候选；内部来源和候选绑定保持。publish 要求严格 JSON，done 必须含结构化 `outputs.pr_url`，与发布补报共用结果契约。合法成功结果查询并核验实际 PR 后直接进入 await_merge，不增加 publish.report；缺失或格式错误仍按本文资格补报。最小验证见 [WPR-A5](../acceptance/worker-publish-report.md)。
