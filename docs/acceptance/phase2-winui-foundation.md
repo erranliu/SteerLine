@@ -2,14 +2,14 @@
 
 唯一归属 #44；固定 [Spec](../spec/phase2-winui-foundation.spec.md)、[Plan](../spec/phase2-winui-foundation.plan.md) 和 [二期共同约束](../spec/phase2-constraints.md) 均取自 commit `550234ab0fb0aa74a3676ff09dde6e4bd4325295`。硬前置 #45 已交付并包含在代码起点；未调用 SteerLine 中心准入或创建外部 Task/DAG。
 
-当前实现候选为 `c5c9eb470835c6ab28f7343b40b41f3648f086cf`（tree `b4a7a265c03a7aaecc9a749ba3d5eebab36f7df0`），已集成最新 `origin/main` `eb76c50d69637212b66ddb60990ff68415d67a11`；最初实现基于 `fbde4163a42639d5570dbe718b32cd42e95dc676`，随后纳入 PR #272、#274、#275、#276。固定 Spec/Plan/共同约束仍取自 commit `550234ab0fb0aa74a3676ff09dde6e4bd4325295`。[PR #273](https://github.com/erranliu/SteerLine/pull/273) 保持 OPEN，未合并；UI2-M、UI4-M 和 UI5 生命周期留待人工验收。
+2026-10-10，#44 已经实现、独立复审、局部修复及新的独立终审，PR #273 于 UTC 05:54:56 真实合并；head `b3b52c24fba2a96a1746d3249756518dbf1f9d3b`、merge `f04fdf089a58723909279d44c497377427b868dd`。关闭草稿竞态由 `/root/fix44_round1` 修复于 source `f1846b9bd628f43603658d265db0364e1cb87750`，`/root/review44_round2` 终审无新确认阻塞缺陷；[实际审核记录](https://github.com/erranliu/SteerLine/pull/273#issuecomment-6094396874)。新编译定向测试 19/0/0、WinUI 构建 0 warning/error，独立复跑现有编译测试 19/0/0；不是新 source 真实窗口验证。历史 `c5c9eb47` 窗口、公共查询与清理证据保留原来源。UI2-M/UI4-M/UI5-M 按用户指示待人工、最迟 2.1 签收，登记 `passed_with_manual_pending`，未宣称全部验收完成。 固定契约仍为 `550234ab`；原始实现和实际主干集成历史保留如下。
 
 ## 自动验收
 
 | 项目 | 结果 | 证据与范围 |
 | --- | --- | --- |
-| UI1 | 已通过 | 最终候选 commit `c5c9eb470835c6ab28f7343b40b41f3648f086cf` 在 Windows 11 Home 10.0.26200 x64 上以 .NET SDK 8.0.416 / Windows App SDK 1.8.260921001 构建 self-contained `win-x64` 并启动真实 WinUI 窗口。restore/build 日志、manifest 与 exe SHA-256 见包 `dev-20261010-122449-c5c9eb47/evidence/`。 |
-| UI2-A | 已通过 | 最终候选的 15 个定向测试通过，0 失败、0 跳过；覆盖无目标时禁用输入、本地意图不调用业务命令、目标草稿隔离、异步保存期间切目标和迟到响应保护。真实中文 IME 组词行为仍留给 UI2-M。 |
+| UI1 | 已通过 | 历史运行候选 commit `c5c9eb470835c6ab28f7343b40b41f3648f086cf` 在 Windows 11 Home 10.0.26200 x64 上以 .NET SDK 8.0.416 / Windows App SDK 1.8.260921001 构建 self-contained `win-x64` 并启动真实 WinUI 窗口。restore/build 日志、manifest 与 exe SHA-256 见包 `dev-20261010-122449-c5c9eb47/evidence/`。 |
+| UI2-A | 已通过 | 历史 c5c9 候选的 15 个定向测试通过，0 失败、0 跳过；覆盖无目标时禁用输入、本地意图不调用业务命令、目标草稿隔离、异步保存期间切目标和迟到响应保护。真实中文 IME 组词行为仍留给 UI2-M。 |
 | UI3 | 已通过 | 包 `dev-20261010-122449-c5c9eb47` 中，WinUI 使用配置的 Git executable/args 连接现有 `steerline-client/v1` 服务并显示公开任务查询；受控 worker 运行时 Task 1 为 `in_progress`、Task 2 为 `open`。协议、仓库身份、project ID、实例、PID、当前 SID 私有 ACL 与详情目标均核验。TaskPage `project_id` 表示仓库身份路径。未读取 SQLite 或私有日志。 |
 | UI4-A | 已通过 | 15 个定向测试中的可访问名称和输入状态断言通过；最终真实 WinUI 窗口可访问树显示配置、项目、任务列表、状态、多行输入和本地意图控件。 |
 | UI5 | 待人工验收 | 最终候选在受控 worker 运行期间成功连接并显示 Task 1；本次没有确认正常关闭 WinUI 后服务与 worker 的原 instance/PID 持续不变，因此不记自动通过。按用户指示留待人工检查。 |
@@ -61,3 +61,10 @@ UI 迭代中还保留了 helper Git 参数、#45 TaskPage `project_id` 实际表
 本轮仅补 UI2-A 草稿生命周期定向验证：`dotnet test ui/SteerLine.Windows.Tests/SteerLine.Windows.Tests.csproj -c Debug --no-restore` exit 0，重新编译并运行 19 passed / 0 failed / 0 skipped；`dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug --no-restore` exit 0，0 warnings / 0 errors。新增用例覆盖延迟保存前不能关闭、重复关闭、失败保留草稿/连接与可见提示、成功重试。实际 WinUI 关闭事件的接线经真实工程编译，尚未执行本轮真实窗口关闭观察。
 
 日志与修复报告位于 `C:/Users/lmas1/.codex/task-state/roadmap-runner/roadmap-steerline-20261008-01a11a74/fix44-round1-evidence/` 和同级 `fix44-round1.md`。前文 c5c9 包的真实窗口/UI3 与历史联调证据保留，只支持其原 source；不据此声称本轮 source 已完成真实 UI 验收。UI2-M、UI4-M、UI5-M 仍人工待验且最迟 2.1 签收，UI5 正常关闭 service/worker 连续性未经本轮验证。未运行 Full、Go L1、live 模型；未创建后端或调试包、未触安装环境。需协调 push 与新独立终审后再结算交付。
+
+
+## 2026-10-10 真实合并与交付结算
+
+2026-10-10，#44 已经实现、独立复审、局部修复及新的独立终审，PR #273 于 UTC 05:54:56 真实合并；head `b3b52c24fba2a96a1746d3249756518dbf1f9d3b`、merge `f04fdf089a58723909279d44c497377427b868dd`。关闭草稿竞态由 `/root/fix44_round1` 修复于 source `f1846b9bd628f43603658d265db0364e1cb87750`，`/root/review44_round2` 终审无新确认阻塞缺陷；[实际审核记录](https://github.com/erranliu/SteerLine/pull/273#issuecomment-6094396874)。新编译定向测试 19/0/0、WinUI 构建 0 warning/error，独立复跑现有编译测试 19/0/0；不是新 source 真实窗口验证。历史 `c5c9eb47` 窗口、公共查询与清理证据保留原来源。UI2-M/UI4-M/UI5-M 按用户指示待人工、最迟 2.1 签收，登记 `passed_with_manual_pending`，未宣称全部验收完成。
+
+人工安排来源：原执行聊天 `01a12391-bf38-7f41-8b15-44ed43cddf19` 真人消息 `01a1240c-879b-7a60-9608-174e3c08d28d`：“这边在验收什么，效率太低了，可以考虑留给人工验收，先交付pr”。仅调整当前 UI5 观察时点；保存原条件、未验事实与 2.1 门槛，不豁免已知缺陷、清理失败或未知副作用。参与人和窗口待安排，具体步骤见本页人工验收表。
