@@ -22,3 +22,5 @@
 - `git diff --check` 通过。未执行 full、真实模型或真实 PR；AQ-M1 保持待验。
 
 以上证据根为 `C:/SteerlineDebug/dev-20261010-163230-97ece424/evidence/`。保留每次原始 Go JSON 日志、stderr、源码状态和 summary.json；早期实现中失败的定向尝试已用于发现存储准入及测试现场准备缺口，不作为通过证据。
+
+提 PR 前同步最新主干 `03df9d14`，无冲突。重验 `TestWorkerPrompt.*` 与 `TestWorkerStageTransitions`：4 项通过、0 skip，14.87 秒；证据 `async-pr-rebase/summary.json`。
