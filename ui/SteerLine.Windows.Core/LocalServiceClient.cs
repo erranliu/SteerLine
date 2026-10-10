@@ -28,7 +28,6 @@ public interface ILocalServiceFactory
 public sealed class LocalServiceFactory : ILocalServiceFactory
 {
     private const string ClientProtocol = "steerline-client/v1";
-    private const string TaskProtocol = "native-tasks/v1";
     private const int MaxDiscoveryBytes = 64 * 1024;
     private const int MaxResponseBytes = 32 * 1024 * 1024;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = false };
@@ -112,22 +111,7 @@ public sealed class LocalServiceFactory : ILocalServiceFactory
 
     private static async Task<string> ResolveCommonDirectoryAsync(ProjectConfiguration configuration, CancellationToken cancellationToken)
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "git",
-            WorkingDirectory = configuration.RepositoryPath,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-        foreach (var key in startInfo.Environment.Keys.Where(key => key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase)).ToArray())
-            startInfo.Environment.Remove(key);
-        startInfo.ArgumentList.Add("-C");
-        startInfo.ArgumentList.Add(configuration.RepositoryPath);
-        startInfo.ArgumentList.Add("rev-parse");
-        startInfo.ArgumentList.Add("--path-format=absolute");
-        startInfo.ArgumentList.Add("--git-common-dir");
+        var startInfo = ProjectConfiguration.CreateIdentityStartInfo(configuration);
 
         using var process = new Process { StartInfo = startInfo };
         try
@@ -137,7 +121,7 @@ public sealed class LocalServiceFactory : ILocalServiceFactory
         }
         catch (Exception exception) when (exception is not LocalServiceException)
         {
-            throw new LocalServiceException("project_identity_unavailable", $"无法启动 PATH 中的 Git：{exception.Message}");
+            throw new LocalServiceException("project_identity_unavailable", $"无法启动配置指定的 Git：{exception.Message}");
         }
 
         var stdout = process.StandardOutput.ReadToEndAsync(cancellationToken);
@@ -250,8 +234,7 @@ public sealed class LocalServiceFactory : ILocalServiceFactory
         {
             await RefreshIdentityAsync(cancellationToken).ConfigureAwait(false);
             var page = await GetProjectAsync<TaskPage>("/tasks?limit=500", cancellationToken).ConfigureAwait(false);
-            if (page.Protocol != TaskProtocol || !PathEquals(page.RepositoryIdentity, discovery.RepositoryIdentity))
-                throw new LocalServiceException("identity_conflict", "任务列表响应的协议或仓库身份与当前实例不匹配。");
+            TaskPageGuard.Verify(page, discovery.RepositoryIdentity);
             return page;
         }
 
@@ -259,8 +242,7 @@ public sealed class LocalServiceFactory : ILocalServiceFactory
         {
             await RefreshIdentityAsync(cancellationToken).ConfigureAwait(false);
             var page = await GetProjectAsync<TaskDetailPage>($"/tasks/{Uri.EscapeDataString(taskId)}", cancellationToken).ConfigureAwait(false);
-            if (!PathEquals(page.RepositoryIdentity, discovery.RepositoryIdentity) || page.Tasks is not { Count: 1 } || page.Tasks[0].TaskId != taskId)
-                throw new LocalServiceException("identity_conflict", "任务详情响应与当前项目或所选目标不匹配。");
+            TaskPageGuard.Verify(page, discovery.RepositoryIdentity, taskId);
             return page;
         }
 
@@ -331,7 +313,13 @@ public static class IdentityGuard
             Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase);
 }
 
-public sealed record ProjectConfiguration(string ConfigPath, string HomeDirectory, string RepositoryPath, string? RunDirectory)
+public sealed record ProjectConfiguration(
+    string ConfigPath,
+    string HomeDirectory,
+    string RepositoryPath,
+    string? RunDirectory,
+    string GitExecutable,
+    IReadOnlyList<string> GitArgs)
 {
     public static ProjectConfiguration Read(string configPath)
     {
@@ -343,6 +331,23 @@ public sealed record ProjectConfiguration(string ConfigPath, string HomeDirector
         var repository = ReadString(root, "repository");
         if (string.IsNullOrWhiteSpace(repository))
             throw new LocalServiceException("config_invalid", "项目配置缺少 repository 路径。");
+        if (!root.TryGetProperty("git", out var git) || git.ValueKind != JsonValueKind.Object)
+            throw new LocalServiceException("config_invalid", "项目配置缺少 Git 命令对象。");
+        var gitExecutable = ReadString(git, "executable");
+        if (string.IsNullOrWhiteSpace(gitExecutable))
+            throw new LocalServiceException("config_invalid", "项目配置缺少 Git executable。");
+        var gitArgs = new List<string>();
+        if (git.TryGetProperty("args", out var args))
+        {
+            if (args.ValueKind != JsonValueKind.Array)
+                throw new LocalServiceException("config_invalid", "项目配置中的 Git args 必须是字符串数组。");
+            foreach (var argument in args.EnumerateArray())
+            {
+                if (argument.ValueKind != JsonValueKind.String)
+                    throw new LocalServiceException("config_invalid", "项目配置中的 Git args 必须是字符串数组。");
+                gitArgs.Add(argument.GetString()!);
+            }
+        }
         var configDirectory = Path.GetDirectoryName(fullConfigPath)!;
         var repositoryPath = Path.GetFullPath(Path.IsPathRooted(repository) ? repository : Path.Combine(configDirectory, repository));
         if (!Directory.Exists(repositoryPath))
@@ -351,7 +356,28 @@ public sealed record ProjectConfiguration(string ConfigPath, string HomeDirector
         var runDirectory = ReadString(root, "run_dir");
         if (!string.IsNullOrWhiteSpace(runDirectory))
             runDirectory = Path.GetFullPath(Path.IsPathRooted(runDirectory) ? runDirectory : Path.Combine(configDirectory, runDirectory));
-        return new ProjectConfiguration(fullConfigPath, Path.GetFullPath(homeDirectory), repositoryPath, runDirectory);
+        return new ProjectConfiguration(fullConfigPath, Path.GetFullPath(homeDirectory), repositoryPath, runDirectory, gitExecutable, gitArgs);
+    }
+
+    internal static ProcessStartInfo CreateIdentityStartInfo(ProjectConfiguration configuration)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = configuration.GitExecutable,
+            WorkingDirectory = configuration.RepositoryPath,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+        foreach (var key in startInfo.Environment.Keys.Where(key => key.StartsWith("GIT_", StringComparison.OrdinalIgnoreCase)).ToArray())
+            startInfo.Environment.Remove(key);
+        foreach (var argument in configuration.GitArgs)
+            startInfo.ArgumentList.Add(argument);
+        startInfo.ArgumentList.Add("rev-parse");
+        startInfo.ArgumentList.Add("--path-format=absolute");
+        startInfo.ArgumentList.Add("--git-common-dir");
+        return startInfo;
     }
 
     private static string? ReadString(JsonElement root, string property) =>

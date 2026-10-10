@@ -103,3 +103,21 @@ public sealed class LocalServiceException(string code, string message) : Excepti
 {
     public string Code { get; } = code;
 }
+
+public static class TaskPageGuard
+{
+    private const string Protocol = "native-tasks/v1";
+
+    public static void Verify(TaskPage page, string expectedRepositoryIdentity)
+    {
+        if (page.Protocol != Protocol || !IdentityGuard.RepositoryEquals(page.RepositoryIdentity, expectedRepositoryIdentity))
+            throw new LocalServiceException("identity_conflict", "任务列表响应不属于当前仓库身份或 native-tasks/v1。");
+    }
+
+    public static void Verify(TaskDetailPage page, string expectedRepositoryIdentity, string expectedTaskId)
+    {
+        if (page.Protocol != Protocol || !IdentityGuard.RepositoryEquals(page.RepositoryIdentity, expectedRepositoryIdentity) ||
+            page.Tasks is not { Count: 1 } || page.Tasks[0].TaskId != expectedTaskId)
+            throw new LocalServiceException("identity_conflict", "任务详情响应不属于当前仓库身份、native-tasks/v1 或所选目标。");
+    }
+}

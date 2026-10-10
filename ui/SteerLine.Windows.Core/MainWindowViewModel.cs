@@ -71,7 +71,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
             var page = await service.ListTasksAsync(cancellationToken);
             if (generation != _selectionGeneration || !ReferenceEquals(_service, service))
                 return;
-            ValidateTaskPage(service.Identity.RepositoryIdentity, page);
+            TaskPageGuard.Verify(page, service.Identity.RepositoryIdentity);
             foreach (var task in page.Tasks)
                 Tasks.Add(task);
             IsConnected = true;
@@ -111,7 +111,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
             var page = await service.ListTasksAsync(_selectionCancellation!.Token);
             if (generation != _selectionGeneration || !ReferenceEquals(_service, service))
                 return;
-            ValidateTaskPage(service.Identity.RepositoryIdentity, page);
+            TaskPageGuard.Verify(page, service.Identity.RepositoryIdentity);
             Tasks.Clear();
             foreach (var task in page.Tasks)
                 Tasks.Add(task);
@@ -170,8 +170,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
             var page = await service.ShowTaskAsync(task.TaskId, _selectionCancellation!.Token);
             if (generation != _selectionGeneration || !ReferenceEquals(_service, service) || _selectedTask?.TaskId != task.TaskId)
                 return;
-            if (!IdentityGuard.RepositoryEquals(page.RepositoryIdentity, service.Identity.RepositoryIdentity) || page.Tasks is not { Count: 1 } || page.Tasks[0].TaskId != task.TaskId)
-                throw new LocalServiceException("identity_conflict", "目标任务响应与当前项目或所选 Task 不匹配。");
+            TaskPageGuard.Verify(page, service.Identity.RepositoryIdentity, task.TaskId);
             SelectedTaskDetail = page.Tasks[0];
             var blockers = (SelectedTaskDetail.StartupBlockers ?? []).Concat((SelectedTaskDetail.UnmetPredecessors ?? []).Select(p => p.Blocker))
                 .Where(s => !string.IsNullOrWhiteSpace(s));
@@ -232,12 +231,6 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
         _selectionCancellation?.Dispose();
         _selectionCancellation = new CancellationTokenSource();
         return ++_selectionGeneration;
-    }
-
-    private static void ValidateTaskPage(string expectedRepositoryIdentity, TaskPage page)
-    {
-        if (!IdentityGuard.RepositoryEquals(page.RepositoryIdentity, expectedRepositoryIdentity) || page.Protocol != "native-tasks/v1")
-            throw new LocalServiceException("identity_conflict", "任务列表响应不属于当前仓库身份或 native-tasks/v1。");
     }
 
     private static string FormatError(Exception exception) => exception is LocalServiceException local
