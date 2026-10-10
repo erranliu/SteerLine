@@ -1,6 +1,6 @@
 # Worker 阶段流程验收规划
 
-任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，质量审计修复后交付 PR #262 Ready for review；WFS-A1–A4 按下文 source、增量和明确授权的 Orca usage 条件通过，WFS-M1 未验；尚未独立复审或合并。#83 已合入，作为隔离基线复用。
+任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。PR #262 已真实合并（head `be4488aeedfb2a1a4f01623c2514e764742fa291`，merge `267858f017a0393c217c5ce003bc7bedf5d6a561`，2026-10-09 11:21:48Z）；WFS-A1–A4 按下文 source、增量和明确授权的 Orca usage 条件通过，WFS-M1 未验，post-merge 独立审计进行中，故仍待结算且不释放后继。#83 已合入，作为隔离基线复用。
 
 ## 最小验证安排
 
@@ -134,3 +134,7 @@ clean `d1d73346` 的 `audit-live-d1d73346-orca` 已有真实原三轮到 await_m
 没有重写上述原总报告或重复模型调用。以提交后 `08eb832a3a08b5bbc70001cbeb16ebc90ce7b049` 的真实 `checkE2EGroup` 对原完整 Go 日志和 scenario.json **只读复核通过**（1 test / 0 skip，`20261009T103049.857235500Z`；临时 Go overlay 位于证据根，不写入仓库或业务数据）。复核文件 `audit-live-main265-orca-revalidation.json` 保存原总报告 SHA256 `3732629b7b0d2aacd3304ba6ae6edf3890c4c63acf14ac4a6215364d21d5d3f7`、场景 SHA256 `544b03ed6c8faa30866de2e5b1e83477b0611f5aebdae0592360fec9d117c92a`、真实 live/validator 两个 source 及原错误；`audit-live-main265-orca-proof.json` 为身份/结果/交付摘要，原快照、逐轮 usage-capability 和清理回执不变。由该实际场景加修正后复核，WFS-A4 按用户授权的 usage 条件通过；没有声称 Orca token 计数已验证。
 
 PR #262 按用户授权转 Ready for review，未合并；实现者质量审计完成，独立复审仍待办理，任务不记“实现完成”、不释放后继。WFS-M1 及一期安装/长期验收仍未验。最终只同步验收/清单/PR 描述，后续文档提交不改变上述已验代码与构建范围。
+
+## 2026-10-10 合并事实与 post-merge 审计
+
+GitHub 已核实 PR #262 的 head `be4488aeedfb2a1a4f01623c2514e764742fa291` 于 `2026-10-09T11:21:48Z` 合并，merge commit `267858f017a0393c217c5ce003bc7bedf5d6a561`。成果已包含于最新 main `21d9735057f990f9fb83a678c5293eca8c8c520c`。现有 WFS-A1–A4 的通过结论只覆盖本记录对应的源、增量和 Orca usage 条件；WFS-M1 仍待人工验收。post-merge read-only 独立审计 `/root/review84_postmerge_round1` 尚未结束，因此本任务不登记实现完成、不释放 #45 的 DAG 状态，也不更改固定 Spec/Plan。#45 的共享消费与组合验证单独记在 [#45 验收记录](phase2-local-api.md#2026-10-10-84-合并后的共享接线)。

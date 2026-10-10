@@ -1,6 +1,6 @@
 # 任务 #45 验收记录：本机客户端协议与历史查询
 
-唯一归属 #45；启动固定来源为 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`。Spec 未改；Plan 原路径保持，已有实现期测试场景补充见后续提交。本轮不改两份规格文档。PR #249 的最近代码 rebase 起点 `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5` 含 PR #252/#253；remote main 随后已由 PR #254 前进到 `d8d66d6c5696f41d7df1ed3ff50d4b3ae77b9da3`。round 4 审阅源码 `c126560f0315b9e686e68e3cb82cf65359e66894` 仍基于 c4b；本轮仅文档同步，未集成 d8d66。P1 service-owned discard 源码提交 `cab6b6dc5e80fa8021316d0e7a5132ff25cbd478`；P2 record-boundary 源码提交经 rebase 为 `d2a0bce0`。此前 main `04c62ee5ddb10637a68745baa4fc4f811123ffa9`、`7ffc6a39197366b1177e104eb75cbc453ccee78a`、`692a784e05479b11e5818fb5a209971949e3064a` 的 console state/feedback、host native-state/Orca target 改动仍在当前整合历史中。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
+唯一归属 #45；启动固定来源为 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`。Spec 未改；Plan 原路径保持，已有实现期测试场景补充见后续提交。此前 round 4 精确审阅源码为 `c126560f0315b9e686e68e3cb82cf65359e66894`（tree `95800604c072dc75cc9f44096ddf9f1e3135770f`）；它的 P1 service-owned discard 和 P2 record-boundary 证据继续按原候选映射。本轮已将 #249 分支合入最新 main `21d9735057f990f9fb83a678c5293eca8c8c520c`，其中包含真实合并的 #84 worker-flow-v2。#84 merge、组合映射、版本消费缺口修复和本轮验证见文末。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-10（Asia/Shanghai）。
 
 ## 自动验收
 
@@ -201,3 +201,25 @@ Round 4 文档同步静态：`python scripts/check_doc_links.py` 271 Markdown/17
 该接受范围仅限历史 API2 合法 SQLite SHM `Access is denied` 的根因/syscall 证据缺口，以及合法瞬态 denial 可能在有界窗口外暂时拒绝查询或启动的可用性风险。原自动验收失败、syscall 阶段未知和现场不可复现仍保留；不改写为自动通过，不改成待人工验收，不扩大到其他缺陷或风险，也不作为当前 `c126560f` 候选的合并许可。
 
 只有待 #84 实现进入主干后，#45 按真实状态/格式/接口完成必要共享集成，组合验证、独立复核及最终平台门禁全部通过，才按用户已给授权将该 API2 事项单独记为 `accepted_exception` 并进入合并流程。在此之前 API2 仍显示“验收失败”，#45 等待 #84 共享集成，PR 不合并；#44 继续等待 #45 真实合入。
+
+## 2026-10-10 #84 合并后的共享接线
+
+GitHub 已核实 #84 PR #262 的 head `be4488aeedfb2a1a4f01623c2514e764742fa291` 于 `2026-10-09T11:21:48Z` 合并，merge commit 为 `267858f017a0393c217c5ce003bc7bedf5d6a561`。该交付进入最新 main `21d9735057f990f9fb83a678c5293eca8c8c520c`；post-merge 独立审计仍在进行，WFS-M1 仍未验。本段不将 #84 标为实现完成。
+
+#45 已将该 main 合入原 PR 分支，并按实际 `worker-flow-v2` 结构核对 stage 查询映射：`WorkflowRunRecord` 的 `FlowRef`、`StepID`、`Status`、`StageDiagnostic`、`StageResults` 和报告策略，经 `RunView`、product query、HTTP `CandidateSummary`、HTTP client 与页面快照消费。公开结果逐项保留步骤、原 Command/Turn、输入版本、成功/最终核验、最终正文/来源、失败事实和结构化 outcome；不从旧 summary 推导 stage 状态。
+
+集成时发现 `start_task` 的 HTTP envelope 已映射 `expected_task_version`，但 main 新 actor admission 忽略该字段并一律取当前 graph 版本。#45 已修复为：显式旧版本在 admission 时返回 `stale_version`，省略版本的既有内部调用仍使用当前版本；新增真实 service control inbox regression 覆盖旧版本不会创建 worker claim。另新增受控三阶段本地 worker 通过真实 HTTP run 查询与 task page 对比全部公开 stage 字段的 producer-to-consumer 场景。
+
+本轮精确接线源码为 `8f95b1f7084631c5d64c9532c694386dc5080117`（tree `6b9a1ac4a5ea7bc5e5ecbca11fbbe12c8ba2d492`），基于 merge commit `78355a5a8a7fa6396d1dccede45939f8fadded5d`。执行回归、HTTP/API、服务集成和静态检查通过；精确命令与日志如下。后续仅两处测试 fixture keyed-literal 清理提交 `968c26afbb5697b0517e3d75109801a73b55debf` 后完成 vet；该提交不改产品代码或测试行为。
+
+| 范围 | 命令 / 结果 | 原始证据 |
+| --- | --- | --- |
+| `start_task` 版本消费与 actor 生命周期 | `go test ./internal/execution -run '^Test(TaskStartControlRejectsStaleDisplayedTaskVersion\|TaskStartControlDoesNotSerializeIndependentTasks\|TaskStartControlRecoversReservationsWithoutReplay\|TaskStartControlRejectsAuthorityChangedDuringPreflight)$' -count=1 -v`：4 顶层测试、0 skip；5 个独立 worker 阶段、stale version 拒绝、reservation recovery 和 authority recheck 全部通过，150.918 秒。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-84-combo-20261010\execution-targeted.log`（源码内容已提交为 `a4a0d32f`） |
+| HTTP/API 协议、intent 和持久边界 | `go test ./internal/product/httpapi -run '^TestAPI' -count=1 -v`：18 顶层测试、0 skip，包括 expected version/payload mapping、request intent 绑定、SQLite 回执和 size-boundary。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-84-combo-20261010\httpapi.log`（源码 `8f95b1f7`） |
+| API stage producer-to-consumer | `go test ./tests/integration -run '^Test(APIConfiguredServiceDiscardsTaskThroughOwnedWriter\|APIQueryParity\|APIWorkerStageQueryProjection)$' -count=1 -v`：3 项、0 skip、206.293 秒。Configured-service discard 和既有 QueryParity 通过；新增受控本地 worker 三阶段真实持久结果经 HTTP `/runs/{id}` 与 `/snapshot` task page 对照 native `RunView`，FlowRef、StepID、status、StageDiagnostic、report policy 及每条 StageResult 字段相符。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-84-combo-20261010\api-integration-retry.log`（源码 `8f95b1f7`）。首次测试编译错误已修正，原日志保留在同目录 `api-integration.log`；不计通过。 |
+| API1/API3/API5 服务路径 | `go test ./tests/integration -run '^Test(APIServiceLifecycle\|APIConfiguredServicePublishesDiscovery\|APIIdentityAndAuthentication\|APIOriginalCommandReceipt\|APIReconnectAndUnsupported)$' -count=1 -v`：5 项、0 skip、142.567 秒。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-84-combo-20261010\api-service-integration.log`（源码 `8f95b1f7`） |
+| Vet | `go vet ./internal/product/httpapi ./internal/product/client ./internal/product/query ./internal/app/... ./internal/execution`：提交 `968c26af` 后通过、无诊断。首次 vet 发现两个主干合入的 fixture unkeyed literal，按字段名修复；失败与通过日志分别保留。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-84-combo-20261010\vet.log`、`vet-retry.log` |
+| 文档/身份静态 | `python scripts/check_doc_links.py`：294 Markdown、1832 本地链接、0 errors；`python scripts/roadmap_task_id.py check`：88 identity files、10 draft、5 formal rows、next ID 91；`git diff --check` 通过。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-84-combo-20261010\doc-links-final-pre-l1.log`、`task-ids-final-pre-l1.log`、`diff-check-final-pre-l1.log` |
+| L1 | 最新合入/最终实现候选的固定 L1 尚待本节记录；当前不据此宣称本轮 L1 通过。 | 待运行 |
+
+API2 的历史 SHM failure 与 syscall 阶段未知仍保留为 `验收失败`；用户授权的限定 `accepted_exception` 门槛尚未满足。PR #249 仍 OPEN，不合并；#44 不启动。
