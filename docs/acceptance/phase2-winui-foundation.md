@@ -2,7 +2,7 @@
 
 唯一归属 #44；固定 [Spec](../spec/phase2-winui-foundation.spec.md)、[Plan](../spec/phase2-winui-foundation.plan.md) 和 [二期共同约束](../spec/phase2-constraints.md) 均取自 commit `550234ab0fb0aa74a3676ff09dde6e4bd4325295`。硬前置 #45 已交付并包含在代码起点；未调用 SteerLine 中心准入或创建外部 Task/DAG。
 
-当前实现候选为 `74326ae26c4423305e7d708a2c3acc55d8d38e5d`（tree `2f3855e4eb4554c1e8a90e94091eb4be631d6d4e`），从最新 `origin/main` commit `fbde4163a42639d5570dbe718b32cd42e95dc676` 集成开始；原工作树基线为 `550234ab0fb0aa74a3676ff09dde6e4bd4325295`。实现 PR 尚待创建并独立复审。本次结果不将后置人工项记为通过。
+当前实现候选为 `74326ae26c4423305e7d708a2c3acc55d8d38e5d`（tree `2f3855e4eb4554c1e8a90e94091eb4be631d6d4e`），从最新 `origin/main` commit `fbde4163a42639d5570dbe718b32cd42e95dc676` 集成开始；原工作树基线为 `550234ab0fb0aa74a3676ff09dde6e4bd4325295`。[PR #273](https://github.com/erranliu/SteerLine/pull/273) 已打开，当前等待独立复审与合并；本次结果不将后置人工项记为通过。
 
 ## 自动验收
 
