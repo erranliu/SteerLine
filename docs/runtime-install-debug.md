@@ -8,7 +8,7 @@
 .\scripts\new-debug-release.ps1
 ```
 
-生成只有单一流程：复制仓库 `debug-template/`，构建本次产品/helper，初始化自己的 `projects\SteerlineTest` Git 仓库和任务数据库，写入版本记录。默认输出 `C:\SteerlineDebug\dev-<短commit>[-dirty]-yyyyMMdd-HHmmss\`，时间为北京时间、精确到秒。成功 stdout 返回 JSON，包括 root/start/console；已有目录、源码/安装目录重叠和目录链接被拒绝。失败目录保留日志、manifest 标为 failed，不可运行。
+生成只有单一流程：复制仓库 `debug-template/`，构建本次产品/helper，初始化自己的 `projects\SteerlineTest` Git 仓库和任务数据库，写入版本记录。默认输出 `C:\SteerlineDebug\dev-yyyyMMdd-HHmmss-<短commit>[-dirty]\`，时间为北京时间、精确到秒，按目录名称升序即可按创建时间排列。成功 stdout 返回 JSON，包括 root/start/console；已有目录、源码/安装目录重叠和目录链接被拒绝。失败目录保留日志、manifest 标为 failed，不可运行。
 
 数据库按产品 Git common-dir 身份派生到 `home\state\SteerlineTest-<hash>\steerline.db`，不从安装版或模板复制已有数据库。初始任务来自 `seed\tasks.json`，由正式 task validate/create 创建；默认 A → B。生成过程不调用模型，不发布分支或 PR。生成需要 Go、Git；运行不需要 Go 或 Python。源码及复制源更新后重新生成，已有包保持自己的程序和配置。
 
