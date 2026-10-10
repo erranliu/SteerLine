@@ -8,6 +8,7 @@ namespace SteerLine.Windows;
 
 public sealed partial class MainWindow : Window
 {
+    private bool _suppressTaskSelectionEvents;
     public MainWindowViewModel ViewModel { get; } = new(new LocalServiceFactory(), new FileDraftStore());
 
     public MainWindow()
@@ -48,6 +49,8 @@ public sealed partial class MainWindow : Window
     private async void OnConnectClick(object sender, RoutedEventArgs e)
     {
         ConnectButton.IsEnabled = false;
+        TasksList.IsEnabled = false;
+        _suppressTaskSelectionEvents = true;
         try
         {
             await ViewModel.ConnectAsync(ConfigPathBox.Text, ProjectPathBox.Text);
@@ -56,6 +59,8 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            _suppressTaskSelectionEvents = false;
+            TasksList.IsEnabled = true;
             ConnectButton.IsEnabled = true;
         }
     }
@@ -63,6 +68,8 @@ public sealed partial class MainWindow : Window
     private async void OnRefreshClick(object sender, RoutedEventArgs e)
     {
         RefreshButton.IsEnabled = false;
+        TasksList.IsEnabled = false;
+        _suppressTaskSelectionEvents = true;
         try
         {
             await ViewModel.RefreshAsync();
@@ -71,12 +78,16 @@ public sealed partial class MainWindow : Window
         }
         finally
         {
+            _suppressTaskSelectionEvents = false;
+            TasksList.IsEnabled = true;
             RefreshButton.IsEnabled = true;
         }
     }
 
     private async void OnTaskSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_suppressTaskSelectionEvents)
+            return;
         var selection = ViewModel.SelectTaskAsync(TasksList.SelectedItem as TaskSummary);
         DraftEditor.Text = ViewModel.CurrentDraft;
         await selection;

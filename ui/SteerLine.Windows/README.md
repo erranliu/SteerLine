@@ -26,7 +26,7 @@ The executable is written to:
 ui/SteerLine.Windows/bin/Debug/net8.0-windows10.0.19041.0/win-x64/SteerLine.Windows.exe
 ```
 
-Launch the executable, select a project configuration under the chosen SteerLine home and the exact repository directory named by that configuration, then choose **连接现有服务**. The client verifies the discovered protocol, project, instance, process, credential and current-user ACL before refreshing tasks. It never falls back to cached tasks or starts a replacement service.
+Launch the executable, select a project configuration under the chosen SteerLine home and the exact repository directory named by that configuration, then choose **连接现有服务**. The client verifies the discovered protocol, project, instance, process, credential and current-user ACL before refreshing tasks. It never falls back to cached tasks or starts a replacement service. Select a task explicitly before editing; the composer and local-intent button stay disabled until a target is selected.
 
 For task-specific controlled service testing, first create an isolated package with `scripts/new-debug-release.ps1`, then start its generated `start.bat --simulate` entry. See [the independent debug environment guide](../../docs/runtime-install-debug.md). Do not point tests at `C:\SteerlineRuntime`.
 

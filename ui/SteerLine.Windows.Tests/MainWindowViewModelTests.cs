@@ -22,6 +22,7 @@ public sealed class MainWindowViewModelTests
         };
         var viewModel = ViewModel(service);
         await viewModel.ConnectAsync("config.json", "C:\\repo");
+        await viewModel.SelectTaskAsync(a);
 
         var oldTargetRequest = viewModel.SelectTaskAsync(b);
         var currentTargetRequest = viewModel.SelectTaskAsync(a);
@@ -55,6 +56,7 @@ public sealed class MainWindowViewModelTests
         var service = new FakeService("project-a", [TaskSummaryFor("a"), TaskSummaryFor("b")]);
         var viewModel = new MainWindowViewModel(new FakeFactory(service), store);
         await viewModel.ConnectAsync("config.json", "C:\\repo");
+        await viewModel.SelectTaskAsync(TaskSummaryFor("a"));
         viewModel.UpdateDraft("draft for a");
         await viewModel.SelectTaskAsync(TaskSummaryFor("b"));
         viewModel.UpdateDraft("draft for b");
@@ -76,6 +78,7 @@ public sealed class MainWindowViewModelTests
         var store = new DelayedDraftStore();
         var viewModel = new MainWindowViewModel(new FakeFactory(service), store);
         await viewModel.ConnectAsync("config.json", "C:\\repo");
+        await viewModel.SelectTaskAsync(a);
         viewModel.UpdateDraft("draft for a");
 
         var switchTask = viewModel.SelectTaskAsync(b);
@@ -124,6 +127,10 @@ public sealed class MainWindowViewModelTests
         var service = new FakeService("project-a", [TaskSummaryFor("a")]);
         var viewModel = ViewModel(service);
         await viewModel.ConnectAsync("config.json", "C:\\repo");
+        Assert.False(viewModel.HasSelectedTarget);
+        viewModel.RecordLocalIntent();
+        Assert.Contains("选择一个实际任务", viewModel.IntentStatus, StringComparison.Ordinal);
+        await viewModel.SelectTaskAsync(TaskSummaryFor("a"));
         viewModel.UpdateDraft("请继续检查");
 
         viewModel.RecordLocalIntent();

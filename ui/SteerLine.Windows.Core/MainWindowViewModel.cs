@@ -26,6 +26,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
     public string IntentStatus { get => _intentStatus; private set => Set(ref _intentStatus, value); }
     public string ProjectId => _service?.Identity.ProjectId ?? string.Empty;
     public bool IsConnected { get => _isConnected; private set => Set(ref _isConnected, value); }
+    public bool HasSelectedTarget => _service is not null && _selectedTask is not null;
     public TaskSummary? SelectedTask => _selectedTask;
     public TaskDetail? SelectedTaskDetail { get => _selectedTaskDetail; private set => Set(ref _selectedTaskDetail, value); }
     public string ConfigPathLabel => UiLabels.ConfigPath;
@@ -44,6 +45,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
         if (previous is not null && _selectedTask is not null)
             draftStore.Set(previous.Identity.ProjectId, _selectedTask.TaskId, CurrentDraft);
         _service = null;
+        OnPropertyChanged(nameof(HasSelectedTarget));
         IsConnected = false;
         Tasks.Clear();
         _selectedTask = null;
@@ -64,6 +66,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
                 return;
             }
             _service = service;
+            OnPropertyChanged(nameof(HasSelectedTarget));
             await draftStore.LoadAsync(service.HomeDirectory, cancellationToken);
             var page = await service.ListTasksAsync(cancellationToken);
             if (generation != _selectionGeneration || !ReferenceEquals(_service, service))
@@ -75,8 +78,6 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
             ConnectionStatus = service.Identity.Ready
                 ? $"已连接 · {service.Identity.RepositoryIdentity} · 实例 {service.Identity.InstanceId} · PID {service.Identity.Process.Pid}"
                 : $"服务身份已核验但未就绪 · {service.Identity.Status} · {service.Identity.Diagnostic ?? "无诊断"}";
-            if (Tasks.Count > 0)
-                await SelectTaskAsync(Tasks[0], cancellationToken);
         }
         catch (Exception exception)
         {
@@ -84,6 +85,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
                 return;
             _service?.Dispose();
             _service = null;
+            OnPropertyChanged(nameof(HasSelectedTarget));
             IsConnected = false;
             Tasks.Clear();
             _selectedTask = null;
@@ -118,10 +120,14 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
                 : $"服务未就绪 · {service.Identity.Status} · {service.Identity.Diagnostic ?? "无诊断"}";
             if (_selectedTask is not null && Tasks.FirstOrDefault(t => t.TaskId == _selectedTask.TaskId) is { } refreshed)
                 await SelectTaskAsync(refreshed, _selectionCancellation.Token);
-            else if (Tasks.Count > 0)
-                await SelectTaskAsync(Tasks[0], _selectionCancellation.Token);
-            else
+            else if (_selectedTask is not null)
                 await SelectTaskAsync(null, _selectionCancellation.Token);
+            else
+            {
+                SelectedTaskDetail = null;
+                CurrentDraft = string.Empty;
+                TargetStatus = "尚未选择任务。";
+            }
         }
         catch (Exception exception)
         {
@@ -147,6 +153,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
         var generation = BeginSelection();
         _selectedTask = task;
         OnPropertyChanged(nameof(SelectedTask));
+        OnPropertyChanged(nameof(HasSelectedTarget));
         SelectedTaskDetail = null;
         CurrentDraft = task is null || service is null ? string.Empty : draftStore.Get(service.Identity.ProjectId, task.TaskId);
         if (savePreviousDraft)
@@ -215,6 +222,7 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
         await SaveDraftsAsync().ConfigureAwait(false);
         _service?.Dispose();
         _service = null;
+        OnPropertyChanged(nameof(HasSelectedTarget));
         IsConnected = false;
     }
 

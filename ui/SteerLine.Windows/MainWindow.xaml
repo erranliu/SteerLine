@@ -64,9 +64,11 @@
 
             <TextBlock Text="未发送输入" Style="{ThemeResource SubtitleTextBlockStyle}" />
             <TextBox x:Name="DraftEditor" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="140"
+                     IsEnabled="{x:Bind ViewModel.HasSelectedTarget, Mode=OneWay}"
                      ScrollViewer.VerticalScrollBarVisibility="Auto" PlaceholderText="输入内容；Enter 换行，组词确认不会提交。"
                      TextChanged="OnDraftTextChanged" AutomationProperties.Name="{x:Bind ViewModel.InputLabel}" />
             <Button Content="记录本地提交意图" Click="OnRecordIntentClick"
+                    IsEnabled="{x:Bind ViewModel.HasSelectedTarget, Mode=OneWay}"
                     AutomationProperties.Name="{x:Bind ViewModel.SubmitIntentLabel}" />
             <TextBlock Text="本地提交状态" Style="{ThemeResource CaptionTextBlockStyle}"
                        AutomationProperties.Name="{x:Bind ViewModel.IntentStatusLabel}" />
