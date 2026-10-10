@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -106,8 +107,10 @@ func acceptTestStage(t *testing.T, s *Service, run *reconstructiontypes.RunView,
 
 func TestWorkerStageTransitions(t *testing.T) {
 	s, run, port := workerStageFixture(t)
+	var queries atomic.Int32
 	var server *httptest.Server
 	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries.Add(1)
 		_ = json.NewEncoder(w).Encode(map[string]any{"html_url": server.URL + "/org/repo/pulls/1", "number": 1, "state": "open", "merged": false, "base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "org/repo"}}, "head": map[string]any{"ref": port.workspace.Branch, "sha": port.workspace.Head, "repo": map[string]string{"full_name": "org/repo"}}})
 	}))
 	defer server.Close()
@@ -137,6 +140,9 @@ func TestWorkerStageTransitions(t *testing.T) {
 	w = s.workflowRecord(run)
 	if w.Status != "waiting_external" || w.StepID != executionmodel.StepAwaitMerge || len(w.StageInputs) != 3 || len(w.StageResults) != 3 || s.executionRecord(run).PendingCommandID != "" {
 		t.Fatal("publish added a report or failed to wait externally")
+	}
+	if queries.Load() != 1 || w.PRCandidateURL != url || w.PRURL != url {
+		t.Fatal("publication did not query and retain the structured PR URL")
 	}
 	fingerprint := recordFingerprint(*w)
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, initial))
@@ -299,7 +305,7 @@ func TestWorkerStageStrictResult(t *testing.T) {
 }
 
 func TestWorkerStagePublishReport(t *testing.T) {
-	for _, scenario := range []string{"success", "missing", "invalid_report", "source_failed", "unknown", "write", "wrong_pr", "query_unavailable", "recovery"} {
+	for _, scenario := range []string{"success", "missing", "missing_pr_url", "invalid_report", "source_failed", "unknown", "write", "wrong_pr", "query_unavailable", "recovery"} {
 		t.Run(scenario, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			require(t, acceptTestStage(t, s, run, port, "implementation facts", true))
@@ -326,6 +332,9 @@ func TestWorkerStagePublishReport(t *testing.T) {
 			}
 			if scenario == "missing" {
 				original.LastMessage = ""
+			}
+			if scenario == "missing_pr_url" {
+				original.LastMessage = `{"outcome":"done","summary":"Published PR: ` + url + `"}`
 			}
 			if scenario == "recovery" {
 				e := s.executionRecord(run)

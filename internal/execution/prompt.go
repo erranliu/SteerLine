@@ -55,7 +55,7 @@ func renderWorkerPrompt(step string, facts any) (string, error) {
 	} else if string(raw) != "{}" && string(raw) != "null" {
 		text += "\nDiagnostics:\n" + string(raw)
 	}
-	if step == executionmodel.StepReport || step == executionmodel.StepPublishReport {
+	if step == executionmodel.StepReport || executionmodel.PublicationStep(step) {
 		text += "\n" + stageResultInstruction(step)
 	}
 	return text, nil

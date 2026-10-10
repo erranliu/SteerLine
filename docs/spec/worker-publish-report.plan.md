@@ -16,3 +16,9 @@
 | integration / [WPR-A4](../acceptance/worker-publish-report.md) | `go run ./cmd/test-feedback -- ./tests/integration -run '^TestWorkerStageLocal(PublishReport|RoundTrip)$' -count=1` | 既有隔离 Git/home/SQLite/controlled app-server；定向规则通过后 | 三轮直接路径及四轮补报共用会话/Attempt，候选与远端一致，报告来源固定，重启不重投；runner 证据登记专属记录 |
 
 不跑 full/L2/L3/live：本次业务转移由规则测试及受控原生接线验证，不修改双后端原生协议或权限实现；不依赖真实模型按概率触发格式错误。不新增人工等待步骤。
+
+## 2026-10-10 发布结构化 URL 补充
+
+publish 提示词附加现有发布结果契约，done 要求 `outputs.pr_url`；保留既有实际 PR 核验和格式错误补报路径。同步提示词断言，增强直接成功路径的查询/URL 断言，并覆盖 URL 仅在 summary 中时的补报。
+
+测试计划：[WPR-A5](../acceptance/worker-publish-report.md)，定向 Go 场景 `TestWorkerPrompt*`、`TestWorkerStageTransitions`、`TestWorkerStagePublishReport`；实现后执行 `go run ./cmd/test-feedback -- ./internal/execution -run '^(TestWorkerPrompt|TestWorkerStageTransitions$|TestWorkerStagePublishReport$)' -count=1`。环境为既有隔离 SQLite/HTTP 夹具。通过条件：发布输入要求结构化 URL，合法结果查询核验后三轮直达 await_merge，URL 缺字段仍仅补报一次，补报失败/错误 PR 等原保护通过。runner summary/JSONL 证据登记在专属验收 WPR-A5。纯提示词契约调整，不改 adapter 或 PR 核验实现，不重跑 console、integration、full/L2/L3/live；无新增人工项。
