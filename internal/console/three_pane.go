@@ -1,7 +1,6 @@
 package console
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -66,6 +65,10 @@ func renderRightPanes(m Model, state projectState, width, height int) []string {
 	default:
 		lower = feedbackLines(m, state, row)
 	}
+	if topHeight == 0 && len(lower) > 0 && m.answer == nil && m.profileChoice == nil && m.confirm == nil && !state.recoveryActive {
+		body := append(candidateOverviewLines(m, state, row, width-2)[1:], lower[1:]...)
+		lower = append([]string{lower[0]}, body...)
+	}
 	if len(lower) > 0 {
 		header := lower[0]
 		body := wrapLines(lower[1:], max(1, width-2))
@@ -83,59 +86,41 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 	if row == nil {
 		return append(lines, renderEmptySelection(state)...)
 	}
+	lines = append(lines, "Task "+safeTerminalInlineText(row.taskID)+" · "+truncate(safeTerminalInlineText(row.title), max(1, width-12)))
+	if state.snapshot.Connection.State != api.ConnectionConnected || state.snapshot.Observation.State != api.SnapshotValid {
+		lines = append(lines, styleWaiting.Render("离线/缓存 · 采样 "+sampleTime(state.snapshot)))
+	}
 	if row.run == nil {
-		lines = append(lines, "任务 "+safeTerminalInlineText(row.taskID+" · "+row.title))
-		if action := rowOperation(state, *row); action != nil {
-			lines = append(lines, stateText(operationProgress(action)))
-		} else if state.candidates[row.taskID] != "" {
+		if state.candidates[row.taskID] != "" {
 			lines = append(lines, "原候选暂不可读取/未核实")
 		} else {
-			lines = append(lines, "暂无候选")
+			lines = append(lines, "worker: —")
 		}
-		lines = append(lines, safeTerminalInlineText("下一步："+nextAction(m, state, row)))
-		if row.native != nil {
-			lines = append(lines, renderNativeTaskRelations(state, *row.native)...)
+		if action := rowOperation(state, *row); action != nil {
+			lines = append(lines, "request status: "+safeTerminalInlineText(action.Status)+" · "+operationProgress(action))
 		}
-		return lines
+		lines = append(lines, "下一步："+nextAction(m, state, row))
+		return append([]string{lines[0]}, wrapLines(lines[1:], width)...)
 	}
 	run := row.run
-	if state.snapshot.Connection.State != api.ConnectionConnected || state.snapshot.Observation.State != api.SnapshotValid {
-		lines = append(lines, styleWaiting.Render("离线/缓存/未核实 · "+sampleTime(state.snapshot)))
-	}
-	lines = append(lines, "Task "+safeTerminalInlineText(row.taskID+" · "+row.title), "当前 "+candidateLabel(state, run)+" · "+candidateStrip(state, row, width))
-	lines = append(lines, "任务 "+rowTaskStatus(*row)+" · "+stateText(rowExecutionProgress(state, *row))+" · "+stateText(candidateHumanStatus(state, run)))
-	if run.EnvironmentBlocker != nil {
-		lines = append(lines, "环境阻断："+safeTerminalInlineText(run.EnvironmentBlocker.Fact.Reason))
+	lines = append(lines, "当前 "+candidateLabel(state, run)+" · F6/F7 候选")
+	lines = append(lines, workerStateLines(run, width >= 55)...)
+	if p := fixedRunExecutionProfile(state, run); p != nil {
+		summary := firstText(p.Name, p.ID) + " · " + p.Host + " / " + p.Agent
+		if len(p.ImplementationDisplay) > 0 {
+			summary += " · " + strings.Join(p.ImplementationDisplay, " · ")
+		}
+		lines = append(lines, truncate("执行方案："+safeTerminalInlineText(summary), width))
 	}
 	if run.PR.URL != nil {
 		lines = append(lines, "PR："+prLink(*run.PR.URL, shortPR(*run.PR.URL))+" · "+safeTerminalInlineText(run.PR.State))
-	} else {
-		lines = append(lines, "PR：尚未核验绑定")
 	}
-	if run.Error != nil {
-		lines = append(lines, "错误："+safeTerminalInlineText(*run.Error))
+	if notice := workerResultNotice(run); notice != "" {
+		lines = append(lines, styleAlert.Render(notice))
 	}
-	if run.PR.QueryError != nil {
-		lines = append(lines, "PR 查询失败："+safeTerminalInlineText(*run.PR.QueryError))
+	if diagnostic := workerDiagnostic(run); diagnostic != "" {
+		lines = append(lines, "原因："+safeTerminalText(shortSummary(diagnostic, 160)))
 	}
-	lines = append(lines, styleHead.Render(safeTerminalInlineText("下一步："+nextAction(m, state, row))))
-
-	if p := fixedRunExecutionProfile(state, run); p != nil {
-		lines = append(lines, profileProductLines(*p)...)
-	} else {
-		lines = append(lines, "冻结方案未核实")
-	}
-	elapsed := "未知"
-	if !run.CandidateCreatedAt.IsZero() {
-		end := m.clock.Now()
-		if run.CandidateEndedAt != nil {
-			end = *run.CandidateEndedAt
-		}
-		elapsed = fmt.Sprint(max(0, end.Sub(run.CandidateCreatedAt)).Round(1e9))
-	}
-	lines = append(lines, "耗时 "+elapsed+" · 资源 "+firstText(run.ResourceStatus, "未核实"), "采样 "+sampleTime(state.snapshot))
-	for i, line := range lines {
-		lines[i] = truncate(line, width)
-	}
-	return lines
+	lines = append(lines, "下一步："+nextAction(m, state, row))
+	return append([]string{lines[0]}, wrapLines(lines[1:], width)...)
 }

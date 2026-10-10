@@ -117,6 +117,7 @@ type projectState struct {
 	activityBusy       bool
 	activityReadAt     time.Time
 	recentActivity     []activitySummary
+	workerTransitions  []workerTransition
 	activityError      string
 
 	actions map[string]*actionState

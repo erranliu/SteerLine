@@ -1,5 +1,7 @@
 # Orca supervised 分步结果接线验收
 
+2026-10-10 后续用户直接授权恢复 #84 的统一提示词设计，当前改动归[恢复验收](worker-prompt-convergence.md)。本页 payload 协议、探针和安装记录保留为历史构建事实，不能推定当前原生回复采集或真实交付已经通过。
+
 归属：用户直接授权的 Orca supervised 结果修复；[Spec](../spec/orca-supervised-results.spec.md)、[Plan](../spec/orca-supervised-results.plan.md)。前置已验证范围见[原生消息探针](orca-supervised-result-probe-2026-10-10.md)。
 
 | ID | 自动验收 / 条件 | 状态 / 证据 |

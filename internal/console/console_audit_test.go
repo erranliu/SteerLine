@@ -101,7 +101,7 @@ func TestPS1AuditOverviewKeepsBlockerAndPRVisible(t *testing.T) {
 	for _, size := range [][2]int{{160, 24}, {120, 22}} {
 		m.width, m.height = size[0], size[1]
 		view := m.View()
-		for _, want := range []string{"执行方案", "环境阻断", "PR："} {
+		for _, want := range []string{"执行方案", "权限待核验", "PR："} {
 			if !strings.Contains(view, want) {
 				t.Fatalf("%dx%d overview lost %s: %s", size[0], size[1], want, view)
 			}

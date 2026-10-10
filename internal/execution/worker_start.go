@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -172,10 +173,14 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task taskmodel
 	if err != nil {
 		return s.waitWorkerFlow(run, err.Error())
 	}
-	return s.startWorkerFlowTurn(ctx, run, prompt, newID())
+	facts, err := workerTaskFacts(task, contract)
+	if err != nil {
+		return err
+	}
+	return s.startWorkerFlowTurn(ctx, run, prompt, newID(), facts)
 }
 
-func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructiontypes.RunView, prompt, turnID string) error {
+func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructiontypes.RunView, prompt, turnID string, taskFacts ...json.RawMessage) error {
 	if s.candidateBusinessClosed(run) {
 		return nativeErr("candidate_inactive", "candidate no longer accepts business input")
 	}
@@ -233,7 +238,11 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 		}
 		if stageInput(workflow, turnID) == nil {
 			workflow.InputVersion++
-			workflow.StageInputs = append(workflow.StageInputs, executionmodel.StageInput{CommandID: turnID, AttemptID: attempt.AttemptID, StepID: workflow.StepID, Version: workflow.InputVersion, Prompt: prompt, CandidateSHA: workflow.CandidateSHA})
+			input := executionmodel.StageInput{CommandID: turnID, AttemptID: attempt.AttemptID, StepID: workflow.StepID, Version: workflow.InputVersion, Prompt: prompt, CandidateSHA: workflow.CandidateSHA}
+			if len(taskFacts) > 0 {
+				input.TaskFacts = append(json.RawMessage(nil), taskFacts[0]...)
+			}
+			workflow.StageInputs = append(workflow.StageInputs, input)
 		}
 		workflow.Status = "queued"
 	}

@@ -9,7 +9,7 @@ func workerStagePresentation(run *api.CandidateSummary) []string {
 	if run == nil || run.FlowRef == "" {
 		return nil
 	}
-	lines := []string{"步骤：" + safeTerminalText(run.StepID) + " · 状态：" + safeTerminalText(run.BusinessStatus)}
+	lines := workerStateLines(run, true)
 	var sourceFailed, reportGenerated bool
 	var implementationBody string
 	for _, result := range run.StageResults {
@@ -40,4 +40,23 @@ func workerStagePresentation(run *api.CandidateSummary) []string {
 		lines = append(lines, "报告沿用原生权限；按事实比对核验工作区及绑定 PR，无法保证拦截全部外部写入")
 	}
 	return lines
+}
+
+func workerResultNotice(run *api.CandidateSummary) string {
+	if run == nil {
+		return ""
+	}
+	failed, reported := false, false
+	for _, result := range run.StageResults {
+		if result.StepID == "implement.execute" {
+			failed, reported = !result.Succeeded || result.Failure != "", false
+		}
+		if result.StepID == "implement.report" && result.Succeeded && result.FinalVerified && result.FinalSource != "" {
+			reported = true
+		}
+	}
+	if failed && reported {
+		return "执行失败，报告已生成；原失败仍需处理"
+	}
+	return ""
 }

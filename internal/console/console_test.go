@@ -632,7 +632,7 @@ func TestNarrowConsoleKeepsDetailAndSelectionEntryReachable(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
 	m.width, m.height = 80, 24
 	view := m.View()
-	for _, want := range []string{"任务列表", "▸", "Build B", "d 完整详情", "s 选方案"} {
+	for _, want := range []string{"任务列表", "▸", "Build B", "d 详情", "s 选方案"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("narrow console lost %q:\n%s", want, view)
 		}
@@ -683,10 +683,10 @@ func TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].filter = 2
 	empty := strings.Join(renderRows(m, m.projects[0], 80, 8), "\n")
-	if !strings.Contains(empty, "3 进行中") || !strings.Contains(empty, "1全部") || !strings.Contains(empty, "5待合并") || !strings.Contains(empty, "按 1 查看全部任务") || strings.Contains(empty, "当前没有 Ready 任务") {
+	if !strings.Contains(empty, "3 进行中") || !strings.Contains(empty, "按 1 查看全部任务") || strings.Contains(empty, "当前没有 Ready 任务") {
 		t.Fatalf("empty filtered list implied the task data disappeared: %q", empty)
 	}
-	if !strings.Contains(renderFooter(m, m.projects[0]), "1–7 筛选") || !strings.Contains(strings.Join(renderHelp(m.projects[0]), "\n"), "5 待合并") {
+	if !strings.Contains(renderFooter(m, m.projects[0]), "? 帮助") || !strings.Contains(strings.Join(renderHelp(m.projects[0]), "\n"), "5 待合并") {
 		t.Fatal("the persistent footer and help omitted the filter shortcuts")
 	}
 	m.projects[0].filter = 0

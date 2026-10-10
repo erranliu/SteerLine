@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"github.com/charmbracelet/lipgloss"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"strings"
 	"time"
@@ -42,9 +43,6 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 func renderRows(m Model, state projectState, width, height int) []string {
 	rows := m.rows(m.selected)
 	out := []string{styleLabel.Render(fmt.Sprintf("任务列表 · %d 项 · %d %s", len(rows), state.filter+1, filterDisplayName(state.filter)))}
-	if height >= 6 {
-		out = append(out, styleDim.Render("筛选 1全部  2Ready  3进行中  4待决策"), styleDim.Render("     5待合并  6需处理  7历史"))
-	}
 	if state.ref.Error != "" {
 		out = append(out, styleAlert.Render("配置错误："+safeTerminalText(state.ref.Error)))
 		return out
@@ -86,38 +84,76 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	if len(out) >= height {
 		out = out[:max(0, height-1)]
 	}
-	if len(out)+1 < height {
-		taskHeader, executionHeader := "任务状态", "执行状态"
-		if width-2 < 48 {
-			taskHeader, executionHeader = "状态", "执行"
-		}
-		out = append(out, renderWorkspaceRow("编号", "任务名称", taskHeader, executionHeader, "待处理", max(1, width-2)))
+
+	available := max(1, height-len(out))
+	if available < 2 && len(out) > 1 {
+		out = out[:1]
+		available = max(1, height-1)
 	}
-	visible := contentWindow(rows, state.selectedKey, max(1, height-len(out)))
-	for _, row := range visible {
-		taskStatus := rowTaskStatus(row)
-		if row.kind == rowReady {
-			if valid, _ := state.client.CandidateAvailability(state.snapshot, m.clock.Now()); valid {
-				taskStatus = "可开始"
-			} else {
-				taskStatus = "缓存"
-			}
-		}
-		line := renderWorkspaceRow(row.taskID, row.title, taskStatus, rowExecutionProgress(state, row), taskAttention(state, row.taskID), max(1, width-2))
+	entries := make([][]string, len(rows))
+	selected := 0
+	for i, row := range rows {
+		entries[i] = compactTaskRow(m, state, row, width)
 		if row.key == state.selectedKey {
-			if state.focus == 0 {
-				line = styleSelected.Render("▸ " + line)
-			} else {
-				line = styleHead.Render("▸ " + line)
-			}
-		} else if row.kind == rowReady && taskStatus == "缓存" {
-			line = "  " + styleDim.Render(line)
-		} else {
-			line = "  " + line
+			selected = i
 		}
-		out = append(out, line)
 	}
-	return out
+	if len(entries[selected]) > available && len(out) > 1 {
+		out = out[:1]
+		available = max(1, height-len(out))
+	}
+	start := selected
+	used := len(entries[selected])
+	for start > 0 && used+len(entries[start-1]) <= available {
+		start--
+		used += len(entries[start])
+	}
+	for index := start; index < len(rows); index++ {
+		entry, row := entries[index], rows[index]
+		if len(out)+len(entry) > height && index != selected {
+			break
+		}
+		for i, line := range entry {
+			prefix := "  "
+			if i == 0 && row.key == state.selectedKey {
+				prefix = "▸ "
+			}
+			if row.key == state.selectedKey {
+				if state.focus == 0 {
+					line = styleSelected.Render(line)
+				} else {
+					line = styleHead.Render(line)
+				}
+			}
+			out = append(out, prefix+line)
+		}
+	}
+	return out[:min(len(out), height)]
+}
+
+func compactTaskRow(m Model, state projectState, row consoleRow, width int) []string {
+	status := ""
+	if row.run != nil {
+		status = row.run.TaskStatus
+	} else if row.native != nil {
+		status = row.native.Status
+	}
+	suffix := ""
+	if status != "" {
+		suffix = " [" + workerValue("task_status", status, false) + "]"
+	}
+	if row.kind == rowReady {
+		if valid, _ := state.client.CandidateAvailability(state.snapshot, m.clock.Now()); valid {
+			suffix += " · Ready"
+		} else {
+			suffix += " · Ready（缓存）"
+		}
+	}
+	titleWidth := max(1, width-4-lipgloss.Width(row.taskID)-lipgloss.Width(suffix))
+	first := safeTerminalInlineText(row.taskID) + " " + truncate(safeTerminalInlineText(row.title), titleWidth) + suffix
+	body := wrapLines([]string{compactWorkerSummary(row.run)}, max(1, width-4))
+	entry := append(wrapLines([]string{first}, max(1, width-4)), body...)
+	return entry
 }
 
 func renderTaskListRow(id, title, taskStatus, executionStatus string, width int) string {

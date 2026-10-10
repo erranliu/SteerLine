@@ -42,6 +42,7 @@ func (m Model) refreshRecentActivity(index int) (Model, tea.Cmd) {
 		state.activityBusy = false
 		state.activityReadAt = time.Time{}
 		state.recentActivity = nil
+		state.workerTransitions = nil
 		state.activityError = ""
 		state.lowerScroll = 0
 	}
@@ -83,9 +84,23 @@ func (m Model) updateRecentActivity(msg recentActivityMsg) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 	state.recentActivity = nil
+	state.workerTransitions = nil
 	events := msg.batch.Activity
-	for _, event := range events[max(0, len(events)-10):] {
-		state.recentActivity = append(state.recentActivity, activitySummary{event.TS, shortSummary(event.Title, 100), shortSummary(event.Status, 40), shortSummary(event.Detail, 160)})
+	for _, event := range events {
+		if transition, ok := decodeWorkerTransition(event); ok {
+			state.workerTransitions = append(state.workerTransitions, transition)
+		}
+	}
+	if len(state.workerTransitions) > 5 {
+		state.workerTransitions = state.workerTransitions[len(state.workerTransitions)-5:]
+	}
+	for _, event := range events {
+		if event.Kind != "worker_state" {
+			state.recentActivity = append(state.recentActivity, activitySummary{event.TS, shortSummary(event.Title, 100), shortSummary(event.Status, 40), shortSummary(event.Detail, 160)})
+		}
+	}
+	if len(state.recentActivity) > 10 {
+		state.recentActivity = state.recentActivity[len(state.recentActivity)-10:]
 	}
 	state.activityError = strings.Join(msg.batch.Diagnostics, "；")
 	return m, nil
@@ -105,70 +120,47 @@ func feedbackLines(m Model, state projectState, row *consoleRow) []string {
 	if row == nil {
 		return append(lines, renderEmptySelection(state)...)
 	}
-	lines = append(lines, "Task "+safeTerminalInlineText(row.taskID)+" / "+candidateLabel(state, row.run))
 	lines = append(lines, receiptSummary(state, row)...)
 	if row.run == nil {
-		return append(lines, "下一步："+nextAction(m, state, row))
+		return lines
 	}
 	run := row.run
-	lines = append(lines, stateText(safeTerminalInlineText(displayExecutionStatus(run)+" · "+candidateHumanStatus(state, run))))
-	if run.EnvironmentBlocker != nil {
-		lines = append(lines, styleAlert.Render("环境阻断："+safeTerminalText(run.EnvironmentBlocker.Fact.Reason)), safeTerminalText(run.EnvironmentBlocker.Fact.Detail), "下一步："+nextAction(m, state, row))
-		if rt := state.snapshot.Connection.Snapshot.Page; rt != nil {
-			for _, a := range []string{"recheck_environment", "open_terminal"} {
-				if !hasCapability(rt, a) {
-					label := "Ctrl+E 重查环境"
-					if a == "open_terminal" {
-						label = "Ctrl+O 原终端"
-					}
-					lines = append(lines, label+"不可用：服务未声明能力")
-				}
-			}
-		}
-	}
-	if run.Error != nil {
-		lines = append(lines, styleAlert.Render("错误："+safeTerminalText(*run.Error)), "u 只读核验 · d 完整诊断")
-	}
-	if run.PR.QueryError != nil {
-		lines = append(lines, styleAlert.Render("PR 查询失败："+safeTerminalText(*run.PR.QueryError)))
-	}
 	if pendingDecision(run) && waitingForDecision(run) {
 		lines = append(lines, styleHead.Render("问题："+safeTerminalText(run.Decision.Request.Question)))
 		for i, option := range run.Decision.Request.Options {
 			lines = append(lines, fmt.Sprintf("%d. %s", i+1, safeTerminalInlineText(option.Label)))
 		}
-		return append(lines, "a 在此编辑 · F2 提交 · F8 完整背景")
+		lines = append(lines, "a 在此编辑 · F2 提交 · F8 完整背景")
+		if state.activityError != "" {
+			lines = append(lines, "活动采集："+safeTerminalText(shortSummary(state.activityError, 160)))
+		}
+		return append(lines, workerTransitionLines(state.workerTransitions)...)
 	}
-	active := run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "pending"
+	active := run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.BusinessStatus == "running" || run.BusinessStatus == "queued"
 	if !active && !runNeedsAttention(run) {
 		if state.final.previewEvent != nil && state.final.previewEvent.AttemptID == run.AttemptID && (run.CurrentTurnID == "" || state.final.previewEvent.TurnID == run.CurrentTurnID) && state.final.previewText != "" {
-			lines = append(lines, "最终回复预览（截断） · turn "+safeTerminalInlineText(state.final.previewEvent.TurnID), "最终回复报告（非独立测试验收）：", safeTerminalText(state.final.previewText))
-		} else {
-			lines = append(lines, "本轮 final 预览未采集/尚未核实；f 按需完整读取")
+			lines = append(lines, "最终回复预览（截断，非独立测试验收）")
+			lines = append(lines, shortResultPreview(state.final.previewText)...)
 		}
-		if state.final.previewError != "" {
-			lines = append(lines, "采集缺口："+safeTerminalText(state.final.previewError))
+		if gap := firstText(state.final.previewError, state.final.finalError); gap != "" {
+			lines = append(lines, "采集缺口："+safeTerminalText(shortSummary(gap, 160)))
 		}
-		if state.final.finalError != "" && state.final.finalError != state.final.previewError {
-			lines = append(lines, "采集缺口："+safeTerminalText(state.final.finalError))
-		}
-		if run.PR.URL != nil {
-			lines = append(lines, "PR："+prLink(*run.PR.URL, shortPR(*run.PR.URL))+" · "+safeTerminalInlineText(run.PR.State))
-		}
-		return append(lines, "下一步："+nextAction(m, state, row))
 	}
+	lines = append(lines, workerTransitionLines(state.workerTransitions)...)
 	if state.activityError != "" {
-		lines = append(lines, "规范活动："+safeTerminalText(state.activityError))
+		lines = append(lines, "活动采集："+safeTerminalText(shortSummary(state.activityError, 160)))
 	}
-	if len(state.recentActivity) == 0 {
-		lines = append(lines, "尚无已采集活动摘要；不会从原始终端补画。")
+	if len(state.recentActivity) == 0 && len(state.workerTransitions) == 0 {
+		lines = append(lines, "尚无已采集活动摘要")
 	}
-	for _, summary := range state.recentActivity {
-		stamp := "未提供时间"
-		if !summary.Time.IsZero() {
-			stamp = summary.Time.Local().Format("15:04:05")
+	if active || runNeedsAttention(run) {
+		for _, summary := range state.recentActivity[max(0, len(state.recentActivity)-3):] {
+			stamp := "未提供时间"
+			if !summary.Time.IsZero() {
+				stamp = summary.Time.Local().Format("15:04:05")
+			}
+			lines = append(lines, stamp+" · "+safeTerminalText(summary.Title+" · "+summary.Status+" · "+summary.Detail))
 		}
-		lines = append(lines, styleDim.Render(stamp)+" · "+safeTerminalText(summary.Title+" · "+summary.Status+" · "+summary.Detail))
 	}
-	return append(lines, "采样于 "+sampleTime(state.snapshot)+" · f 完整最终回复")
+	return lines
 }

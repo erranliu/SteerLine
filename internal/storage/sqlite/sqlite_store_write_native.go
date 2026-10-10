@@ -454,8 +454,12 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 		if completeErr != nil {
 			return completeErr
 		}
+		previous := run
 		run.Status, run.PRState, run.UpdatedAt = next.Status, next.PRState, next.WorkflowUpdatedAt
 		run.StepID = executionmodel.StepDelivered
+		if err := t.appendWorkerStateActivity(&previous, &execution, run, execution); err != nil {
+			return err
+		}
 		return t.PutWorkflowRun(run)
 	}
 	return nativeErr("unsupported_schema", "delivery completion requires worker-flow-v2")

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -14,105 +13,174 @@ import (
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
+const replyBody = "完整结果🙂\n\"quoted\" \\ $() \x60literal\x60"
+
+func TestSupervisedResultPromptIsUnchanged(t *testing.T) {
+	snapshot, state := remoteSnapshotForTest(t)
+	state.Turns = nil
+	input := b.TurnInput{CommandID: "00000000000000000000000000000004", InputVersion: 1, Prompt: "Current step: implement.report.\nFixed business facts"}
+	snapshot.PendingTurn = &input
+	port := &ExecutionLifecycle{setup: b.LifecycleSetup{Snapshot: snapshot}, config: lifecycleRemoteTestConfig(nil)}
+	var err error
+	snapshot.Implementation, err = port.stateEnvelopes(snapshot, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := port.Next(context.Background(), snapshot)
+	if err != nil || next.Input.Resource == nil || next.Input.Resource.Objective != input.Prompt {
+		t.Fatalf("adapter decorated the original prompt: %+v %v", next, err)
+	}
+}
+
 func resultFixture(t *testing.T) (b.LifecycleSnapshot, orcaworker.NativeTurnState, Message) {
 	t.Helper()
 	snapshot, _ := remoteSnapshotForTest(t)
 	snapshot.Session.CurrentTurnID, snapshot.Session.CurrentCommandID = "00000000000000000000000000000004", "00000000000000000000000000000004"
 	turn := orcaworker.NativeTurnState{TurnID: snapshot.Session.CurrentTurnID, InputVersion: 3, TaskID: "task", DispatchID: "dispatch", ResultProcess: &snapshot.Ref.External}
-	raw, _ := json.Marshal(map[string]any{"taskId": "task", "dispatchId": "dispatch", "outcome": "succeeded", "steerline_result": declaredResult{Version: 1, CommandID: turn.TurnID, InputVersion: 3, Body: "完整结果🙂\n\"quoted\" \\ $() `literal`"}})
+	raw, _ := json.Marshal(map[string]any{"taskId": "task", "dispatchId": "dispatch", "outcome": "succeeded"})
 	return snapshot, turn, Message{ID: "done", RunID: "run", ToHandle: "run:run", Type: "worker_done", FromHandle: "agent-terminal", Body: "Summary only.", Payload: raw}
 }
-
+func transcriptText(id, role, text string) map[string]any {
+	return map[string]any{"id": id, "role": role, "blocks": []map[string]string{{"type": "text", "text": text}}}
+}
+func replyOutput(body string) map[string]any {
+	return map[string]any{"dispatchId": "dispatch", "source": "transcript", "sourceIdentity": "original-transcript", "sourceExact": true, "contentComplete": false, "clipping": []string{"transcript_payload"}, "remoteRuntimeEpoch": "remote-epoch", "transcript": map[string]any{"messages": []any{
+		transcriptText("old", "assistant", "old result must not be used"),
+		transcriptText("anchor", "user", "You are working inside Orca, a multi-agent IDE. You are a dispatched worker.\nYour task ID is: task\n"),
+		map[string]any{"id": "tool", "role": "tool", "blocks": []map[string]string{{"type": "tool-result", "output": "fake business JSON"}}},
+		transcriptText("reply", "assistant", body),
+	}}}
+}
+func replyClient(output map[string]any) Client {
+	return New(lifecycleRemoteTestConfig(func(_ context.Context, _ time.Duration, args ...string) ([]byte, error) {
+		if args[1] != "worker-read" || flag(args, "--dispatch") != "dispatch" || flag(args, "--source") != "transcript" {
+			return nil, errors.New("unexpected result read")
+		}
+		return remoteEnvelope("center-runtime", output), nil
+	}))
+}
 func TestSupervisedResultContract(t *testing.T) {
 	snapshot, turn, message := resultFixture(t)
 	captureResult(&turn, message, snapshot.Ref.External, "succeeded")
-	if turn.FinalVerified || turn.FinalReadError != "" || !strings.Contains(turn.FinalText, "🙂") || turn.FinalText == message.Body {
-		t.Fatalf("unsettled message or summary became final: %+v", turn)
+	if turn.FinalVerified || turn.FinalText != "" || turn.FinalReadError != "" {
+		t.Fatal("completion summary became business result")
 	}
+	replyClient(replyOutput(replyBody)).captureReply(context.Background(), &turn)
 	turn.Settled = true
 	evidence, err := settledResult(snapshot, &turn)
-	if err != nil || !evidence.FinalVerified || evidence.FinalItemID != message.ID || evidence.FinalOrigin != "worker_declared" || evidence.FinalNativeTurnID != "dispatch" {
-		t.Fatalf("original declared final was lost: %+v %v", evidence, err)
+	if err != nil || !evidence.FinalVerified || evidence.LastMessage != replyBody || evidence.FinalItemID != "reply" {
+		t.Fatalf("bound reply lost: %+v %v", evidence, err)
 	}
-	before := turn
 	captureResult(&turn, message, snapshot.Ref.External, "succeeded")
-	if turn.FinalText != before.FinalText || turn.ResultMessageDigest != before.ResultMessageDigest || !turn.FinalVerified {
-		t.Fatal("same-message replay changed the frozen final")
+	if !turn.FinalVerified {
+		t.Fatal("replay changed frozen reply")
 	}
-	message.Body = "changed original message"
+	message.Body = "conflicting"
 	captureResult(&turn, message, snapshot.Ref.External, "succeeded")
-	if evidence, err := settledResult(snapshot, &turn); err != nil || evidence.FinalVerified || !strings.Contains(evidence.FinalDiagnostic, "conflicting") || evidence.LastMessage != before.FinalText {
-		t.Fatal("conflicting completion overwrote the original result")
+	evidence, err = settledResult(snapshot, &turn)
+	if err == nil || evidence.FinalVerified || !strings.Contains(err.Error(), "conflicting") {
+		t.Fatal("completion conflict ignored")
 	}
 }
 
-func TestSupervisedResultStringPayload(t *testing.T) {
-	snapshot, turn, message := resultFixture(t)
-	message.Payload, _ = json.Marshal(string(message.Payload))
-	captureResult(&turn, message, snapshot.Ref.External, "succeeded")
-	turn.Settled = true
-	evidence, err := settledResult(snapshot, &turn)
-	if err != nil || !evidence.FinalVerified || evidence.LastMessage != "完整结果🙂\n\"quoted\" \\ $() `literal`" {
-		t.Fatalf("native string payload lost complete result: %+v %v", evidence, err)
-	}
-}
-
-func TestSupervisedResultRejectsUnboundOrIncomplete(t *testing.T) {
-	for _, bad := range []string{"missing", "unknown_field", "duplicate_field", "outer_duplicate", "outer_case", "outer_duplicate_identity", "version", "command", "input", "body", "sender", "run", "recipient", "task", "summary_size", "result_size", "process"} {
+func TestSupervisedResultCompletionRejectsUnbound(t *testing.T) {
+	for _, bad := range []string{"sender", "recipient", "task", "duplicate_payload", "process"} {
 		t.Run(bad, func(t *testing.T) {
 			snapshot, turn, message := resultFixture(t)
-			var payload map[string]any
-			_ = json.Unmarshal(message.Payload, &payload)
-			result := payload["steerline_result"].(map[string]any)
 			switch bad {
-			case "missing":
-				delete(payload, "steerline_result")
-			case "unknown_field":
-				result["unexpected"] = true
-			case "duplicate_field":
-				payload["steerline_result"] = json.RawMessage(`{"version":2,"version":1,"command_id":"` + turn.TurnID + `","input_version":3,"body":"x"}`)
-			case "version":
-				result["version"] = 2
-			case "command":
-				result["command_id"] = "other"
-			case "input":
-				result["input_version"] = 4
-			case "body":
-				result["body"] = " \n"
 			case "sender":
-				message.FromHandle = "other"
-			case "run":
-				message.RunID = "other"
+				message.FromHandle = "replacement-worker"
 			case "recipient":
-				message.ToHandle = "run:other"
+				message.ToHandle = "run:another"
 			case "task":
-				payload["taskId"] = "old-task"
-			case "summary_size":
-				message.Body = strings.Repeat("x", MaxMessageBytes)
-			case "result_size":
-				result["body"] = strings.Repeat("中", MaxMessageBytes)
+				message.Payload = json.RawMessage(`{"taskId":"other","dispatchId":"dispatch","outcome":"succeeded"}`)
+			case "duplicate_payload":
+				message.Payload = json.RawMessage(`{"taskId":"other","taskId":"task","dispatchId":"dispatch","outcome":"succeeded"}`)
 			case "process":
 				changed := *turn.ResultProcess
 				changed.Incarnation = "replacement"
 				turn.ResultProcess = &changed
 			}
-			message.Payload, _ = json.Marshal(payload)
-			resultJSON, _ := json.Marshal(payload["steerline_result"])
-			switch bad {
-			case "outer_duplicate":
-				message.Payload = []byte(fmt.Sprintf(`{"taskId":"task","dispatchId":"dispatch","outcome":"succeeded","steerline_result":{},"steerline_result":%s}`, resultJSON))
-			case "outer_case":
-				message.Payload = []byte(fmt.Sprintf(`{"taskId":"task","dispatchId":"dispatch","outcome":"succeeded","STEERLINE_RESULT":%s}`, resultJSON))
-			case "outer_duplicate_identity":
-				message.Payload = []byte(fmt.Sprintf(`{"taskId":"other","taskId":"task","dispatchId":"dispatch","outcome":"succeeded","steerline_result":%s}`, resultJSON))
-			}
 			captureResult(&turn, message, snapshot.Ref.External, "succeeded")
 			turn.Settled = true
-			evidence, err := settledResult(snapshot, &turn)
-			if err == nil && (evidence.FinalVerified || evidence.FinalDiagnostic == "") {
-				t.Fatal("unbound or incomplete result was accepted")
+			if _, err := settledResult(snapshot, &turn); err == nil {
+				t.Fatal("invalid completion supplied a stopped execution")
 			}
 		})
+	}
+}
+func TestSupervisedResultRejectsUnboundOrIncomplete(t *testing.T) {
+	for _, bad := range []string{"dispatch", "source", "exact", "runtime", "anchor", "next_task", "new_user_input", "clipped", "pending_tool", "source_changed"} {
+		t.Run(bad, func(t *testing.T) {
+			snapshot, turn, message := resultFixture(t)
+			captureResult(&turn, message, snapshot.Ref.External, "succeeded")
+			output := replyOutput(replyBody)
+			transcript := output["transcript"].(map[string]any)
+			messages := transcript["messages"].([]any)
+			switch bad {
+			case "dispatch":
+				output["dispatchId"] = "other"
+			case "source":
+				output["source"] = "terminal"
+			case "exact":
+				output["sourceExact"] = false
+			case "runtime":
+				output["remoteRuntimeEpoch"] = "replacement"
+			case "anchor":
+				messages[1] = transcriptText("anchor", "user", "no native input")
+			case "next_task":
+				messages = append(messages, transcriptText("next", "user", "You are working inside Orca, a multi-agent IDE. You are a dispatched worker.\nYour task ID is: another\n"))
+			case "new_user_input":
+				messages = append(messages, transcriptText("next-user", "user", "unrelated manual work"), transcriptText("next-reply", "assistant", "a different result"))
+			case "clipped":
+				messages[3] = transcriptText("reply", "assistant", "reply\n… (truncated)")
+			case "pending_tool":
+				messages = messages[:3]
+			case "source_changed":
+				turn.OutputSourceIdentity = "old-source"
+			}
+			transcript["messages"] = messages
+			replyClient(output).captureReply(context.Background(), &turn)
+			turn.Settled = true
+			evidence, err := settledResult(snapshot, &turn)
+			if err != nil || evidence.FinalVerified || evidence.FinalDiagnostic == "" {
+				t.Fatalf("invalid reply verified: %+v %v", evidence, err)
+			}
+		})
+	}
+}
+func TestSupervisedResultPaginationAndDelayedReply(t *testing.T) {
+	_, turn, _ := resultFixture(t)
+	calls := 0
+	client := New(lifecycleRemoteTestConfig(func(_ context.Context, _ time.Duration, args ...string) ([]byte, error) {
+		calls++
+		output := replyOutput(replyBody)
+		transcript := output["transcript"].(map[string]any)
+		messages := transcript["messages"].([]any)
+		if flag(args, "--cursor") == "" {
+			transcript["messages"], transcript["nextCursor"] = messages[:3], "page-2"
+		} else {
+			transcript["messages"] = messages[3:]
+		}
+		return remoteEnvelope("center-runtime", output), nil
+	}))
+	client.captureReply(context.Background(), &turn)
+	if calls != 2 || turn.FinalText != replyBody {
+		t.Fatalf("pagination lost reply: %+v", turn)
+	}
+	_, turn, _ = resultFixture(t)
+	output := replyOutput(replyBody)
+	transcript := output["transcript"].(map[string]any)
+	messages := transcript["messages"].([]any)
+	transcript["messages"] = messages[:3]
+	replyClient(output).captureReply(context.Background(), &turn)
+	if turn.FinalReadError == "" || turn.InputAnchorID != "anchor" {
+		t.Fatal("missing reply boundary lost")
+	}
+	transcript["messages"] = messages
+	replyClient(output).captureReply(context.Background(), &turn)
+	if turn.FinalReadError != "" || turn.FinalText != replyBody {
+		t.Fatal("delayed reply not collected")
 	}
 }
 
@@ -155,6 +223,10 @@ func TestSupervisedResultObserverPersistenceAndRestore(t *testing.T) {
 					return remoteEnvelope(runtime, map[string]any{"terminal": map[string]any{"handle": "coordinator", "incarnationId": state.Coordinator.Incarnation, "connected": true}}), nil
 				case "check":
 					return remoteEnvelope(runtime, map[string]any{"runId": "run", "deliveryId": "delivery", "messages": []Message{message}}), nil
+				case "worker-read":
+					output := replyOutput(replyBody)
+					output["remoteRuntimeEpoch"] = snapshot.Ref.External.RuntimeID
+					return remoteEnvelope(runtime, output), nil
 				case "worker-show":
 					return remoteEnvelope(runtime, worker), nil
 				default:

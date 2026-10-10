@@ -199,6 +199,17 @@ func (s *Service) discardWorkerCandidates(operationIDs ...string) {
 }
 
 func (s *Service) commitDeclared(request storageports.WorkerCommit) error {
+	var stateEvent *executionmodel.ActivityEvent
+	if request.Workflow != nil && request.Execution != nil {
+		if event, changed := executionmodel.WorkerStateActivity(request.Workflow.Before, request.Execution.Before, request.Workflow.After, request.Execution.After, now()); changed {
+			payload, err := json.Marshal(event)
+			if err != nil {
+				return err
+			}
+			request.Events = append(request.Events, storageports.DomainEvent{ProjectIdentity: request.Project, TaskID: request.TaskID, WorkflowRunID: request.WorkflowID, ExecutionID: request.ExecutionID, AttemptID: request.AttemptID, ExternalSource: "center:" + request.WorkflowID, ExternalID: event.ItemID, Type: "activity.worker_state", ReceivedAt: event.TS, Payload: payload})
+			stateEvent = &event
+		}
+	}
 	request.Checkpoint.UpdatedAt, request.Checkpoint.HeartbeatAt = now(), now()
 	result, err := s.store.commitWorker(request)
 	if err != nil {
@@ -210,6 +221,9 @@ func (s *Service) commitDeclared(request storageports.WorkerCommit) error {
 		}
 		s.discardWorkerCandidates(operationIDs...)
 		return err
+	}
+	if stateEvent != nil {
+		s.emitConsole(*stateEvent)
 	}
 	committed, copyErr := copyExecutionSnapshot(s.committed)
 	if copyErr != nil {

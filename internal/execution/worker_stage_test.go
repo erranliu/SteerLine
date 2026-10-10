@@ -71,7 +71,7 @@ func workerStageFixture(t *testing.T, configure ...func(*Config)) (*Service, *re
 	e.PolicyResources = neutralPolicyReceipt(w.ExecutionProfile.Digest, e.Workspace.Worktree, e)
 	w.StepID, w.InputVersion = executionmodel.StepImplement, 1
 	command := newID()
-	w.StageInputs = []executionmodel.StageInput{{CommandID: command, AttemptID: run.AttemptID, StepID: w.StepID, Version: 1, Prompt: "implement only"}}
+	w.StageInputs = []executionmodel.StageInput{{CommandID: command, AttemptID: run.AttemptID, StepID: w.StepID, Version: 1, Prompt: "implement only", TaskFacts: json.RawMessage(`{"task_id":"fixed-task","title":"bound goal"}`)}}
 	e.CurrentCommandID, e.CurrentTurnID, e.Status = command, "native-turn-1", "active"
 	e.TurnNumber = 1
 	w.Status = "running"
@@ -120,7 +120,7 @@ func TestWorkerStageTransitions(t *testing.T) {
 	if !strings.Contains(w.StageInputs[1].ReportToolPolicy, "fact_comparison_only") {
 		t.Fatal("missing honest native permission guarantee")
 	}
-	if !strings.Contains(w.StageInputs[1].Prompt, `"original_goal":"implement only"`) || !strings.Contains(w.StageInputs[1].Prompt, `"goal_truncated":false`) {
+	if !strings.Contains(w.StageInputs[1].Prompt, `"task_id":"fixed-task"`) || !strings.Contains(w.StageInputs[1].Prompt, `"reply_truncated":false`) {
 		t.Fatal("report lost the frozen original stage goal or its evidence boundary")
 	}
 	startQueuedStage(t, s, run)

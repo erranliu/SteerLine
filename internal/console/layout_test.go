@@ -90,7 +90,7 @@ func TestColumnsAlignWithChineseAndLongTaskTitles(t *testing.T) {
 	}
 }
 
-func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
+func TestCompletedTaskShowsRawStateAndHistoricalExecution(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("steer")
 	snapshot := readySnapshot(ref, now)
@@ -106,20 +106,14 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 		t.Fatalf("closed task columns: %+v", rows)
 	}
 	list := strings.Join(renderRows(m, m.projects[0], listPanelWidth(m), 12), "\n")
-	for _, want := range []string{"编号", "状态", "执行", "任务名称", "已完成", "失败", "人工"} {
+	for _, want := range []string{"[closed]", "人工"} {
 		if !strings.Contains(list, want) {
-			t.Fatalf("four-column list lost %q:\n%s", want, list)
+			t.Fatalf("compact list lost %q: %s", want, list)
 		}
 	}
-	header := ""
-	for _, line := range strings.Split(list, "\n") {
-		if strings.Contains(line, "编号") {
-			header = line
-			break
-		}
-	}
-	if !(strings.Index(header, "编号") < strings.Index(header, "状态") && strings.Index(header, "状态") < strings.Index(header, "执行") && strings.Index(header, "执行") < strings.Index(header, "任务名称")) {
-		t.Fatalf("list columns are out of order: %q", header)
+	overview := strings.Join(candidateOverviewLines(m, m.projects[0], &rows[0], 80), "\n")
+	if !strings.Contains(overview, "execution_status: failed") {
+		t.Fatal("historical raw execution state was hidden", overview)
 	}
 	detail := strings.Join(renderDetail(m, m.projects[0], &rows[0], 80, 80), "\n")
 	for _, want := range []string{"任务状态：已完成", "执行状态：失败（历史）", "需要你操作：无"} {

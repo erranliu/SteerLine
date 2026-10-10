@@ -13,6 +13,7 @@ func mergeFeedbackFixture(t *testing.T, count int) (Model, *testControlClient) {
 	m, c := ccFixture(t, count)
 	r := m.selectedRow(0).run
 	r.FinishTaskStatus, r.ExecutionStatus, r.ResourceStatus = "waiting_pr_merge", "succeeded", "idle"
+	r.StepID, r.BusinessStatus = "await_merge", "waiting_external"
 	url := "https://github.com/erranliu/SteerlineTest/pull/156"
 	r.PR.URL, r.PR.State = &url, "open"
 	r.Decision.Request.Question = "The worker stopped. What should it do next?"
@@ -41,7 +42,6 @@ func TestWaitingPRMergeOptionalFeedbackSurfaces(t *testing.T) {
 	}
 	for name, lines := range map[string][]string{
 		"overview": candidateOverviewLines(m, s, row, 160),
-		"feedback": feedbackLines(m, s, row),
 		"detail":   candidateDetailLines(m, s, row),
 	} {
 		text := strings.Join(lines, "\n")
@@ -53,14 +53,14 @@ func TestWaitingPRMergeOptionalFeedbackSurfaces(t *testing.T) {
 		}
 	}
 	feedback := strings.Join(feedbackLines(m, s, row), "\n")
-	if !strings.Contains(feedback, "最终回复预览") || !strings.Contains(feedback, "#156") || strings.Contains(feedback, "The worker stopped") {
+	if !strings.Contains(feedback, "最终回复预览") || strings.Contains(feedback, "#156") || strings.Contains(feedback, "The worker stopped") {
 		t.Fatal(feedback)
 	}
 	for _, size := range [][2]int{{160, 48}, {80, 30}, {50, 24}} {
 		m.width, m.height = size[0], size[1]
 		m.projects[0].focus = 1
 		view := m.View()
-		if !strings.Contains(view, "待合并") || strings.Contains(view, "待回答") || strings.Contains(view, "a/Enter 回复") {
+		if !strings.Contains(view, "await_merge") || !strings.Contains(view, "waiting_external") || strings.Contains(view, "待回答") || strings.Contains(view, "a/Enter 回复") {
 			t.Fatalf("wrong primary state at %v: %s", size, view)
 		}
 	}

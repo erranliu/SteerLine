@@ -45,6 +45,7 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 		return errors.New("feedback lost its original request")
 	}
 	w := fixed.workflow
+	previousCandidate, previousPR := w.CandidateSHA, w.PRURL
 	if w.Status == "reconciling" || s.hasUnknownWorkerOperation(run) {
 		return errors.New("unknown original outcomes require read-only reconciliation")
 	}
@@ -65,17 +66,22 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 		}
 	}
 	feedback, err := json.Marshal(struct {
-		Type       string `json:"type"`
-		Answer     string `json:"answer"`
-		Diagnostic string `json:"blocker,omitempty"`
-	}{"feedback", workerFeedbackText(answer, request), w.StageDiagnostic})
+		Type       string                            `json:"type"`
+		Question   string                            `json:"question"`
+		Context    string                            `json:"context,omitempty"`
+		Options    []executionbackend.DecisionOption `json:"options,omitempty"`
+		OptionID   string                            `json:"selected_option,omitempty"`
+		Note       string                            `json:"user_text,omitempty"`
+		Answers    map[string][]string               `json:"answers,omitempty"`
+		Diagnostic string                            `json:"blocker,omitempty"`
+		Resume     *stageResumeFacts                 `json:"resume,omitempty"`
+		Candidate  string                            `json:"existing_candidate_sha,omitempty"`
+		PR         string                            `json:"existing_pr_url,omitempty"`
+	}{"feedback", request.Question, request.Context, request.Options, answer.OptionID, answer.Note, answer.Answers, w.StageDiagnostic, resumeFacts(fixed.execution), previousCandidate, previousPR})
 	if err != nil {
 		return err
 	}
-	if w.StepID == executionmodel.StepImplement {
-		return s.startWorkerFlowTurn(ctx, run, "Current step: implement.execute. Apply the accepted feedback to the original fixed Spec/Plan. Complete implementation, required checks, self-review and a local candidate commit; do not publish. End normally, without JSON.\n"+string(feedback), commandID)
-	}
-	input := executionmodel.StageInput{CommandID: commandID, AttemptID: fixed.attempt.AttemptID, StepID: w.StepID, CandidateSHA: w.CandidateSHA}
+	input := executionmodel.StageInput{CommandID: commandID, AttemptID: fixed.attempt.AttemptID, StepID: w.StepID, CandidateSHA: w.CandidateSHA, TaskFacts: stageTaskFacts(w)}
 	if w.StepID == executionmodel.StepReport {
 		for i := len(w.StageInputs) - 1; i >= 0; i-- {
 			if w.StageInputs[i].StepID == executionmodel.StepReport {
@@ -108,9 +114,31 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 	if err != nil {
 		return err
 	}
-	input.Prompt = prompt + "\n" + string(feedback) + workspaceInstruction + publicationTargetInstruction(fixed.config)
+	input.Prompt = prompt + "\nAdditional data:\n" + string(feedback) + workspaceInstruction + publicationTargetInstruction(fixed.config)
 	w.StageInputs = append(w.StageInputs, input)
 	return s.startWorkerFlowTurn(ctx, run, input.Prompt, commandID)
+}
+
+type stageResumeFacts struct {
+	State           string                           `json:"state"`
+	PreviousOutcome string                           `json:"previous_outcome,omitempty"`
+	Workspace       executionmodel.WorkspaceEvidence `json:"workspace"`
+}
+
+func resumeFacts(e *executionmodel.ExecutionRecord) *stageResumeFacts {
+	if e.RecoveryMarkedAt == nil {
+		return nil
+	}
+	return &stageResumeFacts{State: e.RecoveryState, PreviousOutcome: e.LastTurnOutcome, Workspace: e.Workspace}
+}
+
+func stageTaskFacts(w *executionmodel.WorkflowRunRecord) json.RawMessage {
+	for _, input := range w.StageInputs {
+		if len(input.TaskFacts) > 0 {
+			return append(json.RawMessage(nil), input.TaskFacts...)
+		}
+	}
+	return nil
 }
 
 func stageResult(w *executionmodel.WorkflowRunRecord, command string) *executionmodel.StageResult {
@@ -155,56 +183,53 @@ func (s *Service) inspectStage(ctx context.Context, run *reconstructiontypes.Run
 }
 
 func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.StageInput) (string, error) {
-	var text string
+	facts := struct {
+		Task         json.RawMessage               `json:"task,omitempty"`
+		Source       any                           `json:"source_execution,omitempty"`
+		Snapshot     *executionmodel.StageSnapshot `json:"snapshot,omitempty"`
+		CandidateSHA string                        `json:"candidate_sha,omitempty"`
+	}{Task: input.TaskFacts}
+	if len(facts.Task) == 0 {
+		facts.Task = stageTaskFacts(w)
+	}
 	switch input.StepID {
+	case executionmodel.StepImplement:
 	case executionmodel.StepReport:
 		source := stageResult(w, input.SourceCommandID)
 		original := stageInput(w, input.SourceCommandID)
 		if source == nil || original == nil || original.StepID != executionmodel.StepImplement || source.StepID != executionmodel.StepImplement || source.TurnID != input.SourceTurnID || source.Snapshot == nil {
 			return "", errors.New("report lacks its original execution facts")
 		}
-		// Bound evidence is serialized as data, never promoted to instructions.
-		sourceValue := *source
-		truncated := len(sourceValue.Final) > 16*1024
+		final := source.Final
+		truncated := len(final) > 16*1024
 		if truncated {
-			sourceValue.Final = clip(sourceValue.Final, 16*1024)
+			final = clip(final, 16*1024)
 		}
-		goal := original.Prompt
-		goalTruncated := len(goal) > 8*1024
-		if goalTruncated {
-			goal = clip(goal, 8*1024)
-		}
-		facts, err := json.Marshal(struct {
-			OriginalGoal   string                        `json:"original_goal"`
-			GoalTruncated  bool                          `json:"goal_truncated"`
-			Source         executionmodel.StageResult    `json:"source_execution"`
-			Snapshot       *executionmodel.StageSnapshot `json:"snapshot"`
-			ToolPolicy     string                        `json:"tool_policy"`
-			FinalTruncated bool                          `json:"final_truncated"`
-		}{goal, goalTruncated, sourceValue, input.Snapshot, input.ReportToolPolicy, truncated})
-		if err != nil {
-			return "", err
-		}
-		text = "Current step: implement.report. Only summarize the supplied original execution, existing outputs and failures. Do not change code, retry commands or perform additional checks. Unknown evidence must remain unknown. Report generation does not make the source execution successful.\nFacts:\n" + string(facts)
+		facts.Source = struct {
+			Succeeded       bool   `json:"succeeded"`
+			Failure         string `json:"failure,omitempty"`
+			Reply           string `json:"reply,omitempty"`
+			ReplyVerified   bool   `json:"reply_verified"`
+			ReplyDiagnostic string `json:"reply_diagnostic,omitempty"`
+			ReplyTruncated  bool   `json:"reply_truncated"`
+		}{source.Succeeded, source.Failure, final, source.FinalVerified, source.FinalDiagnostic, truncated}
+		facts.Snapshot = input.Snapshot
 	case executionmodel.StepPublish:
-		facts, err := json.Marshal(struct {
-			CandidateSHA string                        `json:"candidate_sha"`
-			Snapshot     *executionmodel.StageSnapshot `json:"snapshot"`
-		}{input.CandidateSHA, input.Snapshot})
-		if err != nil || !stageSHA.MatchString(input.CandidateSHA) {
+		if !stageSHA.MatchString(input.CandidateSHA) {
 			return "", errors.New("publish lacks its frozen candidate")
 		}
-		text = "Current step: publish. Publish the specified candidate SHA to the fixed target, create or reuse its matching PR. Do not modify the candidate code or create another commit. First query existing branch/PR results before completing unfinished actions. Return the actual PR URL or partial results, blockers and unresolved actions in this same turn.\nFacts:\n" + string(facts)
+		facts.CandidateSHA, facts.Snapshot = input.CandidateSHA, input.Snapshot
 	default:
 		return "", errors.New("no automatic prompt for this step")
 	}
-	return text + "\n" + stageResultContract, nil
+	return renderWorkerPrompt(input.StepID, facts)
 }
 
 // queueStage changes the one business authority and freezes the next input
 // intent inside the same worker commit as the accepted source result.
 func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, input executionmodel.StageInput, fixed workerFlowContext, manualReason ...string) error {
 	input.CommandID, input.AttemptID = newID(), fixed.attempt.AttemptID
+	input.TaskFacts = stageTaskFacts(w)
 	w.InputVersion++
 	input.Version = w.InputVersion
 	prompt, err := renderStageInput(w, input)
@@ -282,7 +307,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if err := s.stopVerifiedWorkerTurn(run, w, e, evidence.TurnID, map[bool]string{true: "succeeded", false: "failed"}[evidence.Succeeded], false); err != nil {
 		return err
 	}
-	if (evidence.FinalOrigin == "worker_declared" || input.StepID != executionmodel.StepImplement || evidence.Succeeded) && (!evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "") {
+	if input.StepID != executionmodel.StepImplement && (!evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "") {
 		return s.stageWait(run, w, e, "reconciling", "original stopped turn lacks verified final provenance: "+evidence.FinalDiagnostic, nil)
 	}
 	result := executionmodel.StageResult{CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, FinalVerified: evidence.FinalVerified, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
@@ -353,9 +378,6 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 		source := stageResult(w, input.SourceCommandID)
 		if source == nil || source.TurnID != input.SourceTurnID || !source.Succeeded || source.Failure != "" {
 			return s.stageWait(run, w, e, "blocked", "source execution failed; report generated, original failure retained", &report)
-		}
-		if !source.FinalVerified || source.FinalSource == "" || source.FinalItemID == "" {
-			return s.stageWait(run, w, e, "reconciling", "source final provenance is unavailable; report generated, evidence gap retained", &report)
 		}
 		if source.Snapshot == nil || !sameStageSnapshot(source.Snapshot, facts) || report.Outputs.CandidateSHA != facts.Workspace.Head || facts.Workspace.Dirty {
 			return s.stageWait(run, w, e, "blocked", "artifact_mismatch: candidate does not match source execution snapshot", &report)
@@ -460,6 +482,11 @@ func (s *Service) reconcileStageFacts(ctx context.Context, run *reconstructionty
 		receipt, observer, readErr := lifecycle.ObserveLifecycle(ctx, snapshot)
 		if observer != nil {
 			_ = observer.Close(ctx)
+		}
+		if readErr == nil {
+			if err := mergeLifecycleExecutionReceipt(e, receipt); err != nil {
+				return err
+			}
 		}
 		if readErr == nil && receipt.TurnEvidence != nil && receipt.TurnEvidence.Completed {
 			return s.acceptStageTurn(ctx, run, lifecycle, fixed, *receipt.TurnEvidence)

@@ -32,9 +32,6 @@ func render(m Model) string {
 		return header + "\n" + renderEmptyProjects(m.applicationEtc)
 	}
 	state := &m.projects[m.selected]
-	if headline := candidateHeadline(*state, m.selectedRow(m.selected)); headline != "" {
-		header = styleHead.Render(truncate(headline, m.width))
-	}
 	projects := renderProjectStrip(m)
 	status := renderStatusLine(m, *state)
 	footerLines := workspaceFooter(m, *state)
@@ -93,79 +90,34 @@ func renderStatusLine(m Model, state projectState) string {
 	if runtimeState == nil {
 		runtimeState = state.snapshot.Observation.Page
 	}
-	service := projectStatus(state.ref, state.snapshot)
-	mode, paused, slot := "未知", false, ""
+	mode := ""
 	if runtimeState != nil {
 		mode = runtimeState.Control.DispatchMode
-		paused = runtimeState.Control.DispatchPaused
-		if runtimeState.SlotOccupied {
-			active := 0
-			for _, run := range runtimeState.Runs {
-				if candidateBusinessOpen(run) && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || waitingForDecision(run)) {
-					active++
-				}
-			}
-			if mode == "manual" {
-				if active > 0 {
-					slot = fmt.Sprintf("活动 %d", active)
-				} else {
-					slot = "执行待核实"
-				}
-			} else if active > 1 {
-				slot = fmt.Sprintf("等待活动 %d", active)
-			} else {
-				slot = "执行 " + stringValue(runtimeState.CurrentTask)
-			}
-		}
 	}
-	if paused {
-		mode += " · 已暂停"
+	parts := []string{"connection: " + safeTerminalInlineText(string(state.snapshot.Connection.State)), "dispatch_mode: " + safeTerminalInlineText(displayDash(mode))}
+	if runtimeState != nil && runtimeState.Control.DispatchPaused {
+		parts = append(parts, "dispatch_paused: true")
 	}
-	switch strings.TrimSuffix(mode, " · 已暂停") {
-	case "manual":
-		mode = strings.Replace(mode, "manual", "手动", 1)
-	case "auto":
-		mode = strings.Replace(mode, "auto", "自动", 1)
+	ready, cached, _, _, _, attention := projectCounts(state, m.clock.Now())
+	if ready > 0 {
+		parts = append(parts, fmt.Sprintf("Ready %d", ready))
 	}
-	ready, cached, running, decision, merge, attention := projectCounts(state, m.clock.Now())
-	if candidateHeadline(state, m.selectedRow(m.selected)) != "" {
-		parts := []string{"服务 " + service, "派发 " + mode}
-		if m.status != "" {
-			parts = append(parts, safeTerminalInlineText(m.status))
-		}
-		if executionConfigMismatch(state.ref, state.snapshot) {
-			parts = append(parts, "执行配置待核对")
-		}
-		if diagnostic := state.snapshot.Connection.Diagnostic; diagnostic != "" {
-			parts = append(parts, safeTerminalText(diagnostic))
-		}
-		return truncate(strings.Join(parts, " · "), m.width)
+	if cached > 0 {
+		parts = append(parts, fmt.Sprintf("缓存 %d", cached))
 	}
-	parts := []string{"服务 " + service, "派发 " + mode, fmt.Sprintf("Ready %d", ready)}
+	if attention > 0 {
+		parts = append(parts, fmt.Sprintf("需处理 %d", attention))
+	}
 	if executionConfigMismatch(state.ref, state.snapshot) {
 		parts = append(parts, "执行配置待核对")
 	}
-	if slot != "" {
-		parts = append(parts, slot)
-	}
-	for _, item := range []struct {
-		count int
-		label string
-	}{{cached, "缓存"}, {running, "进行中"}, {decision, "待决策"}, {merge, "待合并"}, {attention, "需处理"}} {
-		if item.count > 0 {
-			parts = append(parts, fmt.Sprintf("%s %d", item.label, item.count))
-		}
-	}
-	if state.snapshot.Connection.State != api.ConnectionConnected && !state.snapshot.Observation.SampledAt.IsZero() {
-		parts = append(parts, "采样于 "+sampleTime(state.snapshot))
-	}
 	if m.status != "" {
-		parts = append([]string{"提示 " + safeTerminalInlineText(m.status)}, parts...)
+		parts = append(parts, safeTerminalInlineText(m.status))
 	}
 	if diagnostic := state.snapshot.Connection.Diagnostic; diagnostic != "" {
-		parts = append(parts, "连接诊断 "+safeTerminalText(diagnostic))
+		parts = append(parts, safeTerminalInlineText(diagnostic))
 	}
-	return truncate(strings.Join(parts, "  ·  "), m.width)
+	return truncate(strings.Join(parts, " · "), m.width)
 }
 
 func renderNarrowPanel(m Model, state projectState, height int) []string {
@@ -808,7 +760,7 @@ func renderFooter(m Model, state projectState) string {
 	if state.focus != 0 {
 		move = "↑↓ 滚动"
 	}
-	return "Tab 列表/反馈 · " + move + " · " + action + " · d 完整详情\nF6/F7 候选 · 1–7 筛选 · f 完整回复 · ? 更多 · q 退出"
+	return "Tab 切换 · " + move + " · " + action + " · d 详情 · f 回复 · ? 帮助"
 }
 
 func renderHelp(state projectState) []string {
