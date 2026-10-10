@@ -13,7 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
-const executionDirectoryVersion = "builtin-execution-v4"
+const executionDirectoryVersion = "builtin-execution-v6"
 
 // NewBuiltinDirectory constructs independent catalogs. The instance is bound
 // once, before any registration callback can run.
@@ -24,11 +24,11 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 	var directory *execution.ExecutionDirectory
 	bound := func() *execution.ExecutionDirectory { return directory }
 	localCodec, local := localExecutionRegistration(processHost, bound)
-	supervisedCodec, supervised := supervisedExecutionRegistration(processHost, bound)
+	terminalCodec, terminal := terminalExecutionRegistration(processHost, bound)
 	var err error
 	directory, err = execution.NewExecutionDirectory(executionDirectoryVersion,
-		[]execution.ImplementationProfileCodec{localCodec, supervisedCodec},
-		[]execution.ExecutionRegistration{local, supervised})
+		[]execution.ImplementationProfileCodec{localCodec, terminalCodec},
+		[]execution.ExecutionRegistration{local, terminal})
 	return directory, err
 }
 
@@ -66,10 +66,11 @@ func validateCatalogRef(ref executionbackend.ExecutionRef) error {
 		if ref.Backend != executionbackend.BackendLocal || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
 			return errors.New("local resource lacks its fixed process identity")
 		}
-	case executionbackend.ProtocolOrcaSupervised:
-		if ref.Backend != executionbackend.BackendOrca || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.OrchestrationRun == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost == "" || ref.External.WorktreeID == "" {
-			return errors.New("supervised resource lacks its fixed run/task/dispatch/host/worktree")
+	case executionbackend.ProtocolOrcaTerminalV3:
+		if ref.Backend != executionbackend.BackendOrca || ref.External.Kind != "orca_terminal" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" || ref.External.WorktreeID == "" || ref.External.ExecutionHost != ref.Target.ExecutionHost {
+			return errors.New("terminal resource lacks its exact original binding")
 		}
+
 	default:
 		return errors.New("unsupported resource protocol")
 	}

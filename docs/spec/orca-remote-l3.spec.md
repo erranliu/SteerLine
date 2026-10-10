@@ -1,5 +1,7 @@
 # 远端 Orca 正式路径与 L3 双轮交付
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 本聊天直接授权开发；不由 roadmap-runner 调度，不改变已有 execution-map 的任务顺序。此前已分配 #85，保留该身份。本 Spec 扩展既有远端适配的当前支持范围，不合并本机 terminal-v2 与远端 supervised 两条协议。原一期默认测试范围仍保持本机。
 
 ## 正式执行契约

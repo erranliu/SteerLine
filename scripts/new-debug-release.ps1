@@ -1,4 +1,11 @@
-param([string]$DebugRoot = 'C:\SteerlineDebug')
+param(
+    [string]$DebugRoot = 'C:\SteerlineDebug',
+    [switch]$Orca,
+    [string]$OrcaEnvironment = '',
+    [string]$OrcaAgent = 'codex',
+    [string]$OrcaExecutable = 'orca',
+    [string]$OrcaRepositorySelector = ''
+)
 $ErrorActionPreference = 'Stop'
 
 function Assert-PlainPath([string]$Path) {
@@ -77,6 +84,31 @@ try {
         $encoding = $utf8
         if ($item.Extension -eq '.ps1') { $encoding = New-Object Text.UTF8Encoding $true }
         [IO.File]::WriteAllText($output, $content, $encoding)
+    }
+    if ($Orca) {
+        foreach ($mapping in @(
+            @('task.spec.md', 'projects\SteerlineTest\docs\spec\task.spec.md'),
+            @('task.plan.md', 'projects\SteerlineTest\docs\spec\task.plan.md'),
+            @('AGENTS.md', 'projects\SteerlineTest\AGENTS.md'),
+            @('publish.ps1', 'projects\SteerlineTest\publish.ps1')
+        )) {
+            $source = Join-Path (Join-Path $template 'orca') $mapping[0]
+            $destination = Join-Path $target $mapping[1]
+            $content = [IO.File]::ReadAllText($source).Replace('__BASE__', $baseBranch)
+            $overlayEncoding = if ($mapping[0] -eq 'publish.ps1') { New-Object Text.UTF8Encoding $true } else { $utf8 }
+            [IO.File]::WriteAllText($destination, $content, $overlayEncoding)
+        }
+        $selector = $OrcaRepositorySelector
+        if (-not $selector) { $selector = 'path:' + (Join-Path $target 'projects\SteerlineTest').Replace('\','/') }
+        $payload = @{executable=$OrcaExecutable;repository_selector=$selector;wait_timeout='30s'}
+        if ($OrcaEnvironment) { $payload.environment=$OrcaEnvironment }
+        $catalog = @{version=2;default_execution_profile='live';execution_profiles=@(@{
+            id='live';name='Orca single-terminal debug';host='orca';agent=$OrcaAgent;
+            implementation_configs=@(@{implementation_key='orca.terminal-profile';codec_version=2;payload=$payload})
+        })}
+        [IO.File]::WriteAllText((Join-Path $target 'home\execution.json'), ($catalog | ConvertTo-Json -Depth 10), $utf8)
+        $manifest.execution_host='orca'
+        $manifest.execution_environment=$OrcaEnvironment
     }
     $manifest.template_sha256 = $templateHashes
     $manifest.generator_sha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()

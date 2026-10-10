@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
@@ -36,7 +35,7 @@ func TestCD63BindingCodecIsolation(t *testing.T) {
 	})
 	t.Run("codec must belong to protocol", func(t *testing.T) {
 		copy := record
-		foreign, err := orcaworker.NewExecutionStateEnvelope(stateIdentity(&copy), orcaworker.NativeExecutionState{RepositoryID: "repo"})
+		foreign, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ImplementationKey: "orca.terminal-state", ProjectID: copy.ProjectIdentity, ExecutionID: copy.ExecutionID, AttemptID: copy.CurrentAttemptID, Generation: copy.Generation, ConfigDigest: copy.ConfigurationDigest}, []byte(`{"process":{}}`))
 		require(t, err)
 		copy.ImplementationData = []executionbackend.ImplementationDataEnvelope{foreign}
 		if _, err := (codexworker.ExecutionLifecycle{}).Next(context.Background(), snapshotFor(&copy)); err == nil {
@@ -65,17 +64,7 @@ func TestCD63BindingCodecIsolation(t *testing.T) {
 			t.Fatalf("recovery seed authorized replacing its missing original process receipt: receipt=%+v err=%v start_called=%v", receipt, err, startCalled)
 		}
 	})
-	t.Run("native coordinator must match the target", func(t *testing.T) {
-		copy := record
-		copy.Protocol = string(executionbackend.ProtocolOrcaTerminalV2)
-		copy.Target.CoordinatorTerminal = "original-coordinator"
-		foreign, err := orcaworker.NewExecutionStateEnvelope(stateIdentity(&copy), orcaworker.NativeExecutionState{Coordinator: executionbackend.ProcessIdentity{Terminal: "replacement-coordinator", RuntimeID: "runtime"}})
-		require(t, err)
-		copy.ImplementationData = []executionbackend.ImplementationDataEnvelope{foreign}
-		if _, err := orcaworker.DecodeExecutionStateEnvelope(foreign, stateIdentity(&copy)); err == nil {
-			t.Fatal("Orca implementation accepted a different native coordinator target")
-		}
-	})
+
 }
 
 type bindingRecord struct {
@@ -109,14 +98,6 @@ func setBinding(t *testing.T, e *bindingRecord, endpoint, generation, session st
 	require(t, err)
 	e.ImplementationData = []executionbackend.ImplementationDataEnvelope{env}
 	e.SessionID, e.SessionGeneration = session, generation
-}
-
-func stateIdentity(e *bindingRecord) orcaworker.ExecutionStateIdentity {
-	process := executionbackend.ProcessIdentity{}
-	if e.Process != nil {
-		process = *e.Process
-	}
-	return orcaworker.ExecutionStateIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest, Protocol: executionbackend.ExecutionProtocol(e.Protocol), Process: process, CoordinatorTerminal: e.Target.CoordinatorTerminal}
 }
 
 func removeEnvelope(e *bindingRecord, key string) {

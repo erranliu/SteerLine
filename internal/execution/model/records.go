@@ -119,13 +119,14 @@ func (e *ExecutionRecord) UnmarshalJSON(data []byte) error {
 }
 
 type WorkspaceEvidence struct {
-	Repository string    `json:"repository,omitempty"`
-	Worktree   string    `json:"worktree,omitempty"`
-	Branch     string    `json:"branch,omitempty"`
-	Base       string    `json:"base,omitempty"`
-	Head       string    `json:"head,omitempty"`
-	Dirty      bool      `json:"dirty,omitempty"`
-	VerifiedAt time.Time `json:"verified_at,omitempty"`
+	InspectionScope string    `json:"inspection_scope,omitempty"`
+	Repository      string    `json:"repository,omitempty"`
+	Worktree        string    `json:"worktree,omitempty"`
+	Branch          string    `json:"branch,omitempty"`
+	Base            string    `json:"base,omitempty"`
+	Head            string    `json:"head,omitempty"`
+	Dirty           bool      `json:"dirty,omitempty"`
+	VerifiedAt      time.Time `json:"verified_at,omitempty"`
 }
 
 type StepAttemptRecord struct {

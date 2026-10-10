@@ -1,15 +1,9 @@
-# 本机 Orca 原生通用 worker 调整记录
+# Orca 单终端 worker
 
-当前接线已改为 `host=orca_supervised` 的 local/environment 双目标，保持原远端功能。原 `host=orca`、terminal codec/协议和独立正文读取入口已切断，以下原本机实现源码与历史记录保留。当前范围见[Plan](../spec/orca-supervised-targets.plan.md)和[验收](../acceptance/orca-supervised-targets.md)。
+2026-10-10 的当前接线使用 host=orca 与 orca_terminal_v3。本机与 environment 的能力相同；Orca 只承载 worktree / terminal 原语，上层共用 development/v2 的短提示词、报告、发布及交付检查。
 
-2026-10-09 用户明确撤回本变更的 roadmap 身份，改由当前聊天直接实现。历史预留 ID 86 只用于追溯，不复用、不进入执行 DAG、不作为 #84 的前置或等待项。本变更采用 Orca 自己管理的宽松启动权限，本机 Orca 路径中的 agent 只作为配置值；SteerLine 不启动、配置或解释具体 agent。不改变外部 SteerlineTest 的 102 Task、数据库或冻结执行。
+工作区创建时激活唯一原 agent 终端，不投递提示词；每回合先保存输入摘要、实际输出来源及游标，再一次 terminal send --enter。CLI 按固定来源读取带 Command 标识的紧凑 base64 结果，原终端空闲、输入框无 draft 且完整结果匹配后交由上层。stream 要求游标连续；screen 要求完整结果帧可见，不承诺会话全文。身份变化、来源改变、实际缺口或冲突保持未核实，不补 Enter、不重发或寻找替代终端。准备与发送前均拒绝非空原生 draft；主机原生目录信任、模型和账号仍须准备好。
 
-用户最新指令为直接实现，不创建新的 roadmap 执行聊天。当前 Orca 原生模式以 Terminal + YOLO 为执行环境前置；structured worker 的完整同会话支持等待 Orca 通用接续接口，不建立特定agent分支。
+没有辅助终端、文件回传、HTTP 回调、Orca Run / Task / Dispatch / coordinator / worker_done，也不读取代理私有日志或构造代理模型命令。完整全文与原生强制只读不在该路径能力内；报告只比较两个主机均能由 CLI 获得的 revision 事实。旧 supervised 实现和专属夹具直接删除。
 
-设计依据：[Spec](../spec/orca-native-worker.spec.md) · [Plan](../spec/orca-native-worker.plan.md) · [验收记录](../acceptance/orca-native-worker.md)。所有者为 Orca adapter 与 app 的 Orca 接线；#84 按原固定 Spec/Plan 继续，不等待本变更。双方在最终集成时核对规范输出和生命周期接口，不静默改写在途契约。
-
-本聊天直接实施并分别登记通过范围和真实启动阻塞；不拆出新的权限框架、Claude adapter 或人工 DAG 任务。未来 agent 的权限与启动差异由 Orca 内部处理。原生 Windows 的无沙箱运行不冒充统一隔离已经实现。
-
-当前安装 Orca 的原生 launcher 已有统一 Agent Permissions / YOLO，未配置的新 agent 默认参数由 Orca 自己选择。CLI worker-start 支持通用 agent/model/effort 与原 terminal 复用，没有 permission-profile 参数。产品采用 Orca 原生设置，不新增虚构参数；验收现场确认实际宽松模式，不改用户全局设置来伪造成功。
-
-自动验证覆盖边界、原身份/原请求、两种配置 agent 的同一路径和原生最小闭环；可后置人工项仅为用户在安装入口确认 Orca 权限显示，不作为自动失败或能力缺失的替代。当前实现与验证结果维护于专属记录，不进入 roadmap 执行队列。
+[Spec](../spec/orca-terminal-transport.spec.md) · [Plan](../spec/orca-terminal-transport.plan.md) · [验收与待验项](../acceptance/orca-terminal-transport.md)。普通开发由当前聊天实施，不进入 roadmap，也不改安装环境。

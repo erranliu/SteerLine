@@ -108,34 +108,6 @@ func TestHistoryDiscoveryRejectsWorkspaceReplacementAndKeepsSourceAttempts(t *te
 	}
 }
 
-func TestHistoryDiscoveryDeclaresHostVersionRequirement(t *testing.T) {
-	root, workspace := t.TempDir(), t.TempDir()
-	workflowID, executionID, attemptID := strings.Repeat("1", 32), strings.Repeat("2", 32), strings.Repeat("3", 32)
-	runDirectory := filepath.Join(root, "runs", workflowID)
-	if err := os.MkdirAll(runDirectory, 0700); err != nil {
-		t.Fatal(err)
-	}
-	eventPath := filepath.Join(runDirectory, "events.jsonl")
-	if err := os.WriteFile(eventPath, []byte("{}\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	binding := historyFixtureBinding(workspace, workflowID, executionID, attemptID, "00000000-0000-0000-0000-000000000004")
-	binding.Backend, binding.Protocol, binding.ExternalRef = executionbackend.BackendOrca, executionbackend.ProtocolOrcaTerminalV2, "terminal:original@generation"
-	path := filepath.Join(runDirectory, historyBindingFile)
-	if err := WriteHistoryBinding(path, binding, func(path string, data []byte) error { return os.WriteFile(path, data, 0600) }); err != nil {
-		t.Fatal(err)
-	}
-	base := binding.Event()
-	discovery := conversationtypes.ConversationDiscovery{ProjectID: binding.ProjectID, RunDirectory: root, Runs: []conversationtypes.ConversationRunSource{{
-		Base: base, RunDirectory: runDirectory, Workspace: workspace,
-		Attempts: []conversationtypes.ConversationAttemptSource{{AttemptID: attemptID, EventPath: eventPath}},
-	}}}
-	result, err := NewConversationAdapter().DiscoverHistory(context.Background(), discovery)
-	if err != nil || len(result.Sources) != 1 || !result.Sources[0].RequiresPlatformVersion {
-		t.Fatalf("host-backed history did not request its implementation version: sources=%+v err=%v", result.Sources, err)
-	}
-}
-
 func TestHistoryAdapterRejectsOversizedNativeCursor(t *testing.T) {
 	workspace, bindingsDir := t.TempDir(), t.TempDir()
 	t.Setenv("STEERLINE_CONVERSATION_HISTORY_MOCK", "1")

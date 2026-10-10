@@ -1,5 +1,7 @@
 # Spec：本机 Orca 原生编排接入单 worker
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 维护说明：本页保留原交付/试验契约与证据定位。活动任务范围见[一期共同约束](phase1-delivery-constraints.md)。
 
 适用说明（2026-09-30）：中心重开后的新输入须经[停服恢复 Spec](worker-service-recovery.spec.md)的人工确认；已核实的原 `worker_done` 仍可结算。终端身份无法核实或缺少安全新建证据时，保持不可继续并显示原因。

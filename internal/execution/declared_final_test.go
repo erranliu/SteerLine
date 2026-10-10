@@ -11,7 +11,7 @@ import (
 func TestDeclaredFinalStoredExactlyAndReplaySafe(t *testing.T) {
 	s, run, _ := workerStageFixture(t)
 	evidence := workerStageEvidence(s, run, "完整正文🙂\n\"quoted\"\\", true)
-	evidence.FinalOrigin, evidence.FinalNativeTurnID = "worker_declared", "original-dispatch"
+	evidence.FinalOrigin = "worker_declared"
 	ctx := context.Background()
 	require(t, s.recordDeclaredFinal(ctx, run, evidence))
 	require(t, s.recordDeclaredFinal(ctx, run, evidence))
@@ -44,7 +44,7 @@ func TestDeclaredFinalStoredExactlyAndReplaySafe(t *testing.T) {
 	}
 }
 
-func TestDeclaredFinalMissingProvenanceCannotAdvanceFailedImplement(t *testing.T) {
+func TestDeclaredFinalMissingProvenanceStoresNoCanonicalBody(t *testing.T) {
 	s, run, port := workerStageFixture(t)
 	evidence := workerStageEvidence(s, run, "unverified summary", false)
 	evidence.FinalOrigin, evidence.FinalVerified, evidence.FinalDiagnostic = "worker_declared", false, "missing result"
@@ -52,12 +52,22 @@ func TestDeclaredFinalMissingProvenanceCannotAdvanceFailedImplement(t *testing.T
 	require(t, err)
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
 	w := s.workflowRecord(run)
-	if w.Status != "reconciling" || w.StepID != m.StepImplement || len(w.StageResults) != 0 {
-		t.Fatal("missing result advanced a step")
+	if w.StepID != m.StepReport || len(w.StageResults) != 1 || w.StageResults[0].FinalVerified {
+		t.Fatal("failed native implementation lost its unverified source facts")
 	}
 	page, err := newFixtureConversationQuery(s.conversationStore, s.Config.identity).ReadConversation(context.Background(), api.ConversationFilter{ExecutionID: run.ExecutionID}, "", 10)
 	require(t, err)
 	if len(page.Events) != 0 {
 		t.Fatal("unverified summary became a canonical body")
+	}
+}
+
+func TestDeclaredReplyCannotInventNativeProvenance(t *testing.T) {
+	s, run, _ := workerStageFixture(t)
+	e := workerStageEvidence(s, run, "original", true)
+	e.FinalOrigin = "worker_declared"
+	e.FinalNativeTurnID = "invented"
+	if s.recordDeclaredFinal(context.Background(), run, e) == nil {
+		t.Fatal("worker declaration became native provenance")
 	}
 }

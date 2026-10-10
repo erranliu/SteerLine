@@ -1,5 +1,7 @@
 # Plan：在 Orca 中查看执行会话
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 普通开发直接实施，基于最新主干 `42f36428`，无 roadmap 调度。
 
 沿用候选 Ctrl+N 与原生查看端口，保留 Codex CLI。Orca supervised 的 local/environment 均从原 WorkflowRun 的冻结 profile 及原候选 session/attempt 解析目标，核验原 Dispatch、runtime、worktree、terminal、incarnation 和 agent。所有 Orca 子命令移除继承的远端路由变量；查看不启动、恢复、发送输入或停止 agent。

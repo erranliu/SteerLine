@@ -79,7 +79,7 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *reconstruct
 	if inspection.Worktree != snapshot.Ref.WorkspacePath || inspection.Branch != snapshot.Ref.WorkspaceBranch || inspection.Base != snapshot.Ref.BaseCommit || !revisionPattern.MatchString(inspection.Head) {
 		return executionmodel.WorkspaceEvidence{}, nativeErr("contract_mismatch", "workspace inspection differs from its committed identity")
 	}
-	return executionmodel.WorkspaceEvidence{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
+	return executionmodel.WorkspaceEvidence{InspectionScope: inspection.InspectionScope, Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
 }
 
 func applyWorkflowWorkspaceEvidence(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, workspace executionmodel.WorkspaceEvidence) {

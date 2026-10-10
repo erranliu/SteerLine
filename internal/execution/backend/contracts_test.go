@@ -8,12 +8,12 @@ import (
 )
 
 func TestExecutionRecordsKeepWireIdentity(t *testing.T) {
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV2, Target: ExecutionTarget{ID: "target"}, Agent: AgentSpec{Name: "codex"}, RunID: "run", AttemptID: "attempt", External: ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV3, Target: ExecutionTarget{ID: "target"}, Agent: AgentSpec{Name: "codex"}, RunID: "run", AttemptID: "attempt", External: ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}}
 	data, err := json.Marshal(ref)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"version":1,"backend":"orca","protocol":"orca_terminal_v2","target":{"id":"target"},"agent":{"name":"codex"},"run_id":"run","attempt_id":"attempt","external":{"kind":"orca","terminal":"terminal","runtime_id":"runtime","incarnation":"incarnation"}}`
+	want := `{"version":1,"backend":"orca","protocol":"orca_terminal_v3","target":{"id":"target"},"agent":{"name":"codex"},"run_id":"run","attempt_id":"attempt","external":{"kind":"orca","terminal":"terminal","runtime_id":"runtime","incarnation":"incarnation"}}`
 	if string(data) != want {
 		t.Fatalf("binding representation changed: %s", data)
 	}
@@ -28,7 +28,7 @@ func TestExecutionRecordsKeepWireIdentity(t *testing.T) {
 			t.Fatal(err)
 		}
 		if status == OperationAccepted {
-			wantOperation := `{"version":1,"id":"stop-attempt","run_id":"run","attempt_id":"attempt","backend":"orca","protocol":"orca_terminal_v2","target":{"id":"target"},"action":"stop","payload_digest":"fixed","status":"accepted","started_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z","ref":` + want + `}`
+			wantOperation := `{"version":1,"id":"stop-attempt","run_id":"run","attempt_id":"attempt","backend":"orca","protocol":"orca_terminal_v3","target":{"id":"target"},"action":"stop","payload_digest":"fixed","status":"accepted","started_at":"0001-01-01T00:00:00Z","updated_at":"0001-01-01T00:00:00Z","ref":` + want + `}`
 			if string(data) != wantOperation {
 				t.Fatalf("operation representation changed: %s", data)
 			}

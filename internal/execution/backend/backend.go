@@ -17,8 +17,7 @@ const (
 	BackendOrca                 BackendKind       = "orca"
 	ProtocolLocalProcess        ExecutionProtocol = "local_process"
 	ProtocolLocalCodexAppServer ExecutionProtocol = "local_codex_app_server_v1"
-	ProtocolOrcaTerminalV2      ExecutionProtocol = "orca_terminal_v2"
-	ProtocolOrcaSupervised      ExecutionProtocol = "orca_supervised"
+	ProtocolOrcaTerminalV3      ExecutionProtocol = "orca_terminal_v3"
 	ExecutionRecordVersion                        = 1
 )
 

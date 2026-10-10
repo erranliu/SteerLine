@@ -1,5 +1,7 @@
 # 远端 Dispatch 失效与固定执行上下文修复
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 本聊天直接授权修复产品问题，不恢复或重发现场 101，不纳入 roadmap。
 
 现场 101 的远端原 Codex 已运行，但提示缺少 assigned branch/base；worker 向 Orca 提问与上报失败，中心 worker-show 返回 identity_changed，协调 inbox 无消息，SteerLine 留在 pending。同一 worktree 另有第二个 Codex 打开相同 conversation 并报占用冲突。第二个会话的创建来源尚未证明，不能归因于 SteerLine 重复启动；现场只记录一次 worker-start。

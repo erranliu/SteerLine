@@ -19,6 +19,8 @@
 | Orca supervised 结果修复 | [分步结果、恢复与正文接线](orca-supervised-results.md)，定向实现验证与运行版安装记录 |
 | Worker 提示词与三轮恢复 | [统一模板与原生回复采集](worker-prompt-convergence.md)，用户直接授权恢复 #84 设计 |
 | Worker 状态与控制台精简 | [原字段、变化记录与主界面回归](console-worker-state.md)，普通开发 |
+| Orca 提示词最小探针 | [输入通道与 worker-start 对照](orca-input-minimal-probe-2026-10-10.md)，1.4.224 原生 worker-start 仍复现未提交；基础 500/7500 字符 6/6，约12K输入未通过；历史1.4.223结果另列 |
+| Orca 单终端通信 | [实施与待验项](orca-terminal-transport.md)，本机/远端共用短输入、原游标和紧凑结果；按用户要求未运行新版验证 |
 | Orca 分步开发缺口 | [规范 final 与新场景待补](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮场景退役，不计当前交付覆盖 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |

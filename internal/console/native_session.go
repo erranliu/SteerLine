@@ -19,11 +19,11 @@ type nativeSessionOpenedMsg struct {
 }
 
 func nativeSessionAvailable(run *api.CandidateSummary) bool {
-	return run != nil && (run.Host == "local" && run.Agent == "codex" || run.Host == "orca_supervised") && run.SessionID != "" && run.SessionGeneration != "" && run.CurrentTurnID != ""
+	return run != nil && (run.Host == "local" && run.Agent == "codex" || run.Host == "orca") && run.SessionID != "" && run.SessionGeneration != "" && (run.Host == "orca" || run.CurrentTurnID != "")
 }
 
 func nativeSessionLabel(run *api.CandidateSummary) string {
-	if run != nil && run.Host == "orca_supervised" {
+	if run != nil && run.Host == "orca" {
 		return "Orca"
 	}
 	return "Codex CLI"
@@ -36,7 +36,7 @@ func (m Model) openNativeSession() (tea.Model, tea.Cmd) {
 	state := &m.projects[m.selected]
 	row := m.selectedRow(m.selected)
 	if row == nil || !nativeSessionAvailable(row.run) {
-		m.status = "会话查看不可用：请选择已开始原生执行轮次的 Codex 或 Orca 候选"
+		m.status = "会话查看不可用：请选择已有原生会话的 Codex 或 Orca 候选"
 		return m, nil
 	}
 	opener, ok := state.client.(nativeSessionOpener)

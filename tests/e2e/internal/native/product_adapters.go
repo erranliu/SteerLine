@@ -6,7 +6,8 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	transport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 )
 
 const SupportedCodexVersion = codexworker.PolicyCodexVersion
@@ -16,13 +17,13 @@ var ErrOrcaRepoUnavailable = orcaworker.ErrRepoUnavailable
 
 func CodexExecutable(command string) (string, error) { return codexworker.NativeExecutable(command) }
 
-func OrcaWorkerProfile(executable, waitTimeout string) map[string]any {
-	return map[string]any{"executable": executable, "args": []string{}, "shell": "powershell.exe", "wait_timeout": waitTimeout, "model": Model, "reasoning_effort": Effort}
+func OrcaWorkerProfile(executable, repository, waitTimeout string) map[string]any {
+	return map[string]any{"executable": executable, "args": []string{}, "repository_selector": "path:" + repository, "wait_timeout": waitTimeout}
 }
 
 func WorkerImplementationConfigs(executable string, orca map[string]any) []map[string]any {
 	if orca != nil {
-		return []map[string]any{{"implementation_key": orcaworker.ProfileCodecKey, "codec_version": orcaworker.ProfileCodecVersion, "payload": orca}}
+		return []map[string]any{{"implementation_key": transport.ProfileKey, "codec_version": transport.ProfileVersion, "payload": orca}}
 	}
 	codex := map[string]any{"executable": executable, "model": Model, "reasoning_effort": Effort}
 	configs := []map[string]any{{"implementation_key": codexworker.ProfileCodecKey, "codec_version": codexworker.ProfileCodecVersion, "payload": codex}}

@@ -37,70 +37,37 @@
       ]
     },
     {
-      "id": "orca-local-luna-xhigh",
-      "name": "本机 Orca + Codex Luna xhigh",
-      "host": "orca_supervised",
+      "id": "orca-local",
+      "name": "本机 Orca 原生配置",
+      "host": "orca",
       "agent": "codex",
       "implementation_configs": [
         {
-          "implementation_key": "orca.supervised-profile",
+          "implementation_key": "orca.terminal-profile",
           "codec_version": 2,
           "payload": {
             "executable": "orca.exe",
-            "shell": "powershell.exe",
-            "wait_timeout": "15m",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "xhigh",
-            "target": "local",
-            "poll_interval": "1s",
-            "capability_report_version": 1,
-            "remote_cancel_available": false
+            "environment": "",
+            "repository_selector": "path:__LOCAL_ORCA_REPOSITORY__",
+            "wait_timeout": "30s"
           }
         }
       ]
     },
     {
-      "id": "orca-local-luna-medium",
-      "name": "本机 Orca + Codex Luna medium",
-      "host": "orca_supervised",
+      "id": "orca-environment",
+      "name": "远端 Orca 原生配置",
+      "host": "orca",
       "agent": "codex",
       "implementation_configs": [
         {
-          "implementation_key": "orca.supervised-profile",
+          "implementation_key": "orca.terminal-profile",
           "codec_version": 2,
           "payload": {
             "executable": "orca.exe",
-            "shell": "powershell.exe",
-            "wait_timeout": "15m",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "medium",
-            "target": "local",
-            "poll_interval": "1s",
-            "capability_report_version": 1,
-            "remote_cancel_available": false
-          }
-        }
-      ]
-    },
-    {
-      "id": "orca-local-luna-high",
-      "name": "本机 Orca + Codex Luna high",
-      "host": "orca_supervised",
-      "agent": "codex",
-      "implementation_configs": [
-        {
-          "implementation_key": "orca.supervised-profile",
-          "codec_version": 2,
-          "payload": {
-            "executable": "orca.exe",
-            "shell": "powershell.exe",
-            "wait_timeout": "15m",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "high",
-            "target": "local",
-            "poll_interval": "1s",
-            "capability_report_version": 1,
-            "remote_cancel_available": false
+            "environment": "__ORCA_ENVIRONMENT__",
+            "repository_selector": "id:__REMOTE_ORCA_REPOSITORY__",
+            "wait_timeout": "30s"
           }
         }
       ]

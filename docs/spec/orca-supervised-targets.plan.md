@@ -1,5 +1,7 @@
 # Plan：Orca supervised 增加本机目标
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 本聊天直接实施，无 roadmap Task ID。用户确认以现有 orcaremote 功能为标准，增加本机目标；原本机 Orca 源码保留，切断产品注册、配置 codec 和原 conversation 接线。structured 已推迟，不属于本次。
 
 ## 范围与实施

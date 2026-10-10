@@ -147,7 +147,7 @@ func Inspect(ctx context.Context, git Git, repository Repository, intent *execut
 		digest.Write([]byte{0})
 		digest.Write(data)
 	}
-	return executionbackend.WorkspaceInspection{ContentDigest: hex.EncodeToString(digest.Sum(nil)), Repository: repository.Path, Worktree: intent.Path, Branch: intent.Branch, Base: intent.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: len(status) != 0, CheckedAt: time.Now().UTC()}, nil
+	return executionbackend.WorkspaceInspection{InspectionScope: "working_tree", ContentDigest: hex.EncodeToString(digest.Sum(nil)), Repository: repository.Path, Worktree: intent.Path, Branch: intent.Branch, Base: intent.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: len(status) != 0, CheckedAt: time.Now().UTC()}, nil
 }
 
 // ValidateRoot resolves existing symlink ancestors before applying the original

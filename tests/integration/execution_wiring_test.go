@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
+
 	"strings"
 	"sync"
 	"testing"
@@ -17,6 +17,7 @@ import (
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	terminal "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -374,7 +375,6 @@ func TestTM04ExecutionWiring(t *testing.T) {
 		}
 	})
 	t.Run("intent_binding_and_two_original_turns", testIntegratedAppServerTwoTurns)
-	t.Run("original_request_ack_and_manual_recovery", testIntegratedNativeOriginalSessionGate)
 }
 
 func TestTM08AppHostWiring(t *testing.T) {
@@ -451,7 +451,7 @@ func TestTM06ResourceWiring(t *testing.T) {
 		host, wantProtocol, factory, backendPackage string
 	}{
 		{"local", string(executionbackend.ProtocolLocalCodexAppServer), "github.com/erranliu/SteerLine/internal/execution/adapters/codex.NewExecutionLifecycle", ""},
-		{"orca_supervised", string(executionbackend.ProtocolOrcaSupervised), "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote.NewExecutionLifecycle", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"},
+		{"orca", string(executionbackend.ProtocolOrcaTerminalV3), "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport.NewLifecycle", "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"},
 	} {
 		config := execution.Config{Host: test.host, Agent: "codex"}
 		entry, err := directory.Resolve(config)
@@ -483,9 +483,18 @@ func TestTM06ResourceWiring(t *testing.T) {
 			}
 			continue
 		}
-		factory := runtime.FuncForPC(reflect.ValueOf(entry.Lifecycle).Pointer())
-		if factory == nil || !strings.Contains(factory.Name(), test.factory) {
-			t.Fatalf("%s lifecycle factory resolves outside its adapter package: %v", test.host, factory)
+		p := terminal.Profile{Executable: "orca", RepositorySelector: "id:repo", WaitTimeout: "30s"}
+		envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: terminal.ProfileVersion, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: terminal.ProfileKey, ProjectID: "project", ProfileID: "profile", AcceptedConfigVersion: "accepted"}, mustJSON(p))
+		require(t, err)
+		lifecycle, err := entry.Lifecycle(executionbackend.LifecycleSetup{Snapshot: executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV3, Target: p.Target(), Agent: executionbackend.AgentSpec{Name: "opaque"}}, Session: executionbackend.SessionContext{ProjectID: "project"}}, ProfileData: []executionbackend.ImplementationDataEnvelope{envelope}, ProfileID: "profile", AcceptedConfigVersion: "accepted"})
+		require(t, err)
+		typ := reflect.TypeOf(lifecycle)
+		for typ.Kind() == reflect.Pointer {
+			typ = typ.Elem()
 		}
+		if typ.PkgPath() != test.backendPackage {
+			t.Fatalf("Orca lifecycle outside adapter: %T", lifecycle)
+		}
+
 	}
 }

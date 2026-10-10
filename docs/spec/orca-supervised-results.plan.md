@@ -1,5 +1,7 @@
 # Plan：Orca supervised 分步结果接线
 
+> 历史方案（2026-10-10 退役）：本页仅保留原契约与证据。当前 Orca 路径统一由 [单终端 Spec](orca-terminal-transport.spec.md) / [Plan](orca-terminal-transport.plan.md) 定义，旧 supervised、worker-start、Dispatch 及回传路径均已删除。
+
 本页为 PR #274 的历史 payload 实施安排。2026-10-10 用户直接授权恢复 #84 三轮设计，当前实施与测试安排由[提示词收敛 Plan](worker-prompt-convergence.plan.md)替代；下列原验收项及结果只归属历史构建。
 
 绑定 [Spec](orca-supervised-results.spec.md)；普通直接开发，测试结果只登记[专属验收](../acceptance/orca-supervised-results.md)，不维护 roadmap。

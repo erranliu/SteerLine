@@ -7,8 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
-	testprotocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
+
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -76,234 +75,6 @@ func testIntegratedAppServerTwoTurns(t *testing.T) {
 	}
 }
 
-func testIntegratedNativeOriginalSessionGate(t *testing.T) { testIntegratedNativeSessionGate(t, false) }
-
-func testIntegratedNativeSessionGate(t *testing.T, changeConfig bool) {
-	testIntegratedNativeSessionGateWithMutations(t, changeConfig, true)
-}
-
-// The narrow product regression stops after reconnecting the original terminal
-// and answering its original question. Existing mutation-loss tests keep their
-// full scope and unchanged deadlines.
-func TestOriginalTerminalReconnectAndFeedback(t *testing.T) {
-	testIntegratedNativeSessionGateWithMutations(t, true, false)
-}
-
-func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mutations bool) {
-	if runtime.GOOS != "windows" {
-		t.Skip("native Orca protocol fixture uses the Windows host contract")
-	}
-	// Five native Dispatches, service restart and mutation-loss reconciliation
-	// precede the final incarnation rejection; bound the entire fixture flow.
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
-	defer cancel()
-	fixture := newLifecycleProject(t, "orca")
-	initial := testprotocol.NativeOrcaState{FirstBusinessDispatch: 1, LoseQuestionAckOnce: true, LoseReplyOnce: true}
-	require(t, testprotocol.WriteNativeOrcaState(fixture.nativeStateDir, initial))
-	createIntegrationTask(t, ctx, fixture, 902)
-	resolver := &integrationLifecycleResolver{beforeNativeExecute: func(request executionbackend.LifecycleRequest) error {
-		if request.Operation.Action == string(executionbackend.LifecycleCreateResource) && request.Input.Resource != nil && request.Input.Resource.Purpose == "conversation" {
-			return testprotocol.UpdateNativeOrcaState(fixture.nativeStateDir, func(state *testprotocol.NativeOrcaState) {
-				if len(state.Tasks) == 4 {
-					state.AgentIncarnation = "replaced-agent"
-				}
-			})
-		}
-		return nil
-	}}
-	firstService := startIntegrationService(t, ctx, fixture.config, resolver)
-	claimIntegrationTask(t, ctx, fixture, 902, firstService.instanceID)
-	first := waitIntegrationRun(t, ctx, firstService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		return run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil &&
-			execution.CurrentTurnID != "" && execution.Target.Dispatch == "ctx-1" && execution.TurnNumber == 1
-	})
-	if first.run.Process == nil {
-		t.Fatal("native receipt omitted its process identity")
-	}
-	original := *first.run.Process
-	sessionID, sessionGeneration := first.execution.SessionID, first.execution.SessionGeneration
-	workspace, runID, dispatchID := derefString(first.run.WorktreePath), first.run.Target.OrchestrationRun, first.run.Target.Dispatch
-	questionID := first.run.Decision.Request.QuestionRoute.QuestionID
-	questionDecisionID := first.run.Decision.ID
-	if original.Kind != "orca" || original.Terminal == "" || original.Incarnation == "" || sessionID == "" || sessionGeneration != original.Incarnation || runID != "run-fake" || dispatchID != "ctx-1" {
-		t.Fatalf("native receipt omitted the original Run/Task/Dispatch/session identity: process=%+v session=%q/%q target=%+v", original, sessionID, sessionGeneration, first.run.Target)
-	}
-	acknowledged := waitIntegrationRun(t, ctx, firstService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		return execution.PendingDeliveryID == ""
-	})
-	if !hasAcknowledgement(acknowledged.runtime, "delivery-ask-1", "confirmed") {
-		t.Fatalf("original inbox acknowledgement was not reconciled: %+v", lifecycleOperations(acknowledged.runtime, "acknowledge_delivery"))
-	}
-	if acknowledged.run.Target.Dispatch != dispatchID || acknowledged.run.Decision.Request.QuestionRoute.QuestionID != questionID {
-		t.Fatal("question consumption changed the original Dispatch or question")
-	}
-	firstService.stop(t)
-	if changeConfig {
-		fixture.config = changedIntegrationConfig(t, fixture)
-	}
-	secondService := startIntegrationService(t, ctx, fixture.config, resolver)
-	defer secondService.stop(t)
-	recovered := waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		return execution.RecoveryRequired && run.Decision != nil && run.Decision.Status == "pending" &&
-			run.Decision.Request.QuestionRoute != nil && run.Decision.Request.QuestionRoute.QuestionID == questionID &&
-			(execution.RecoveryState == "live" || execution.RecoveryState == "question")
-	})
-	if recovered.run.Process == nil || recovered.run.Process.Terminal != original.Terminal || recovered.run.Process.Incarnation != original.Incarnation ||
-		recovered.execution.SessionID != sessionID || recovered.execution.SessionGeneration != sessionGeneration ||
-		derefString(recovered.run.WorktreePath) != workspace || recovered.run.Target.OrchestrationRun != runID || recovered.run.Target.Dispatch != dispatchID {
-		t.Fatalf("service restart replaced the original native resources: run=%+v execution=%+v", recovered.run, recovered.execution)
-	}
-	if changeConfig && string(integrationFixedProfileJSON(t, first.runtime, first.run.RunID)) != string(integrationFixedProfileJSON(t, recovered.runtime, recovered.run.RunID)) {
-		t.Fatal("changed current config rewrote the original frozen key, codec, target or policy")
-	}
-	if state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir); err != nil || state.Dispatches != 1 || state.Replies != 0 || state.Sends != 0 {
-		t.Fatalf("restart crossed the manual input gate: state=%+v err=%v", state, err)
-	}
-	assertQueriedTaskStatus(t, ctx, fixture.config, "902", "waiting_input")
-	submitIntegrationAnswer(t, ctx, fixture.config, recovered.run)
-
-	settled := waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		return run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil &&
-			execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.Target.Dispatch == dispatchID
-	})
-	if settled.run.Process == nil || settled.run.Process.Terminal != original.Terminal || settled.run.Process.Incarnation != original.Incarnation ||
-		settled.execution.SessionID != sessionID || derefString(settled.run.WorktreePath) != workspace || settled.run.Target.OrchestrationRun != runID || settled.run.Target.Dispatch != dispatchID {
-		t.Fatalf("original native question did not settle on its original resources: run=%+v execution=%+v", settled.run, settled.execution)
-	}
-	state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
-	require(t, err)
-	if state.Dispatches != 1 || state.Replies != 1 || state.Sends != 0 || !state.Acked["delivery-ask-1"] || !state.QuestionAckLossArmed || state.LoseAckOnce || state.LoseReplyOnce {
-		t.Fatalf("native dispatch/reply/ack was repeated or changed route: %+v", state)
-	}
-	if resolver.count(executionbackend.ProtocolOrcaTerminalV2) == 0 {
-		t.Fatal("public service flow never resolved the native Orca lifecycle adapter")
-	}
-	if !decisionWasAccepted(settled.runtime, questionDecisionID) || !hasOperationStatus(lifecycleOperations(settled.runtime, "reply_execution_question"), "reply_execution_question", "confirmed") {
-		t.Fatalf("original native question answer lacks its confirmed receipt: decision=%+v operations=%+v", settled.runtime.Decisions, lifecycleOperations(settled.runtime, "reply_execution_question"))
-	}
-	assertNoTaskDelivery(t, settled.runtime, settled.run)
-	assertQueriedTaskStatus(t, ctx, fixture.config, "902", "waiting_input")
-	if !mutations {
-		secondService.stop(t)
-		return
-	}
-	// Preserve the original native producer regressions, using public answers
-	// rather than the removed private actor methods.
-	current := settled
-	for _, next := range []struct {
-		dispatch int
-		loss     string
-	}{{2, "dispatch"}, {3, "send"}, {4, "task"}} {
-		t.Logf("native original mutation case: %s", next.loss)
-		require(t, testprotocol.UpdateNativeOrcaState(fixture.nativeStateDir, func(state *testprotocol.NativeOrcaState) {
-			switch next.loss {
-			case "dispatch":
-				state.LoseDispatchAt = next.dispatch
-			case "send":
-				state.EscalationAt, state.LoseSendOnce = next.dispatch, true
-			case "task":
-				state.LoseTaskAt = next.dispatch
-			}
-		}))
-		submitIntegrationAnswer(t, ctx, fixture.config, current.run)
-		answeredHosts := map[string]bool{}
-		current = waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-			if run.EnvironmentBlocker != nil && !answeredHosts[run.EnvironmentBlocker.ID] {
-				answeredHosts[run.EnvironmentBlocker.ID] = true
-				submitIntegrationAnswerOption(t, ctx, fixture.config, run, "recheck_environment")
-			}
-			if next.loss == "send" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil && run.EnvironmentBlocker == nil && execution.Target.Dispatch == "ctx-3" && execution.CurrentTurnID != execution.LastStoppedTurnID && !answeredHosts[run.Decision.ID] {
-				answeredHosts[run.Decision.ID] = true
-				submitIntegrationAnswer(t, ctx, fixture.config, run)
-			}
-			return execution.Target.Dispatch == fmt.Sprintf("ctx-%d", next.dispatch) && execution.CurrentTurnID == execution.LastStoppedTurnID &&
-				run.Decision != nil && run.Decision.Status == "pending" && run.EnvironmentBlocker == nil && run.Decision.Request.QuestionRoute == nil
-		})
-		state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
-		require(t, err)
-		if state.Dispatches != next.dispatch || len(state.Tasks) != next.dispatch || state.Replies != 1 || current.run.Process == nil || !sameNativePhysicalProcess(*current.run.Process, original) || current.execution.SessionID != sessionID || derefString(current.run.WorktreePath) != workspace {
-			t.Fatalf("native %s recovery repeated a mutation or replaced the original binding: state=%+v execution=%+v", next.loss, state, current.execution)
-		}
-		if next.loss == "send" && (state.Sends != 1 || state.LoseSendOnce) {
-			t.Fatalf("native status feedback lost its original one-write reconciliation: %+v", state)
-		}
-		assertNoTaskDelivery(t, current.runtime, current.run)
-	}
-	state, err = testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
-	require(t, err)
-	submitIntegrationAnswer(t, ctx, fixture.config, current.run)
-	rejected := waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
-		require(t, err)
-		return state.AgentIncarnation == "replaced-agent" && (execution.Error != nil || execution.Environment != nil && execution.Environment.Blocker != nil)
-	})
-	preserved := false
-	for _, decision := range rejected.runtime.Decisions {
-		if decision.DecisionID == current.run.Decision.ID && decision.Status == "answer_saved" {
-			preserved = true
-		}
-	}
-	if !preserved {
-		t.Fatal("replaced incarnation discarded its original accepted answer")
-	}
-	state, err = testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
-	require(t, err)
-	if state.AgentIncarnation != "replaced-agent" || len(state.Tasks) != 4 || state.Dispatches != 4 || state.Replies != 1 || state.Sends != 1 || rejected.execution.Target.Dispatch != "ctx-4" || rejected.run.Process == nil || !sameNativePhysicalProcess(*rejected.run.Process, original) {
-		t.Fatal("replaced native incarnation consumed saved input or changed the original resources")
-	}
-	// Protocol cleanup after stopping the fixture verifies the exact saved
-	// terminals. It does not fabricate a merged PR or a TaskDelivery.
-	secondService.stop(t)
-	require(t, testprotocol.UpdateNativeOrcaState(fixture.nativeStateDir, func(state *testprotocol.NativeOrcaState) { state.AgentIncarnation = ""; state.LoseCloseOnce = true }))
-	client := orcaworker.New(orcaworker.Config{Repository: fixture.repository, CommandTimeout: "10s", Target: rejected.execution.Target,
-		Output: func(callContext context.Context, timeout time.Duration, args ...string) ([]byte, error) {
-			callContext, cancel := context.WithTimeout(callContext, timeout)
-			defer cancel()
-			command := exec.CommandContext(callContext, os.Args[0], append([]string{"--fake", "native-orca", fixture.nativeStateDir}, args...)...)
-			command.Dir = fixture.repository
-			return command.CombinedOutput()
-		}})
-	if _, err := client.CloseTerminalChecked(ctx, original.Terminal, original.RuntimeID); err == nil {
-		t.Fatal("lost native close receipt was guessed as confirmed")
-	}
-	absent, err := orcaworker.InspectCleanupTerminal(ctx, client.MetaCall, original, fixture.repository, "agent", true)
-	require(t, err)
-	if !absent {
-		t.Fatal("original agent close could not be reconciled read-only")
-	}
-	var coordinator executionbackend.ProcessIdentity
-	for _, envelope := range rejected.execution.ImplementationData {
-		if envelope.ImplementationKey == orcaworker.ExecutionStateCodecKey {
-			saved, err := orcaworker.DecodeExecutionStateEnvelope(envelope, orcaworker.ExecutionStateIdentity{
-				ProjectID: fixture.config.Identity(), ExecutionID: rejected.execution.ExecutionID, AttemptID: rejected.execution.CurrentAttemptID,
-				Generation: rejected.execution.Generation, ConfigDigest: rejected.execution.ConfigurationDigest, Protocol: executionbackend.ProtocolOrcaTerminalV2,
-				Process: *rejected.execution.Process, CoordinatorTerminal: rejected.execution.Target.CoordinatorTerminal})
-			require(t, err)
-			coordinator = saved.Coordinator
-		}
-	}
-	if coordinator.Terminal == "" {
-		t.Fatal("cleanup lost its original coordinator binding")
-	}
-	closed, err := client.CloseTerminalChecked(ctx, coordinator.Terminal, coordinator.RuntimeID)
-	require(t, err)
-	if closed.Disposition != "confirmed" {
-		t.Fatal("original coordinator close was not confirmed")
-	}
-	state, err = testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
-	require(t, err)
-	if !state.ClosedAgent || !state.ClosedCoordinator || len(state.CloseRequests) != 2 || state.CloseRequests[0] != original.Terminal || state.CloseRequests[1] != coordinator.Terminal {
-		t.Fatalf("native cleanup repeated close or chose other resources: %+v", state)
-	}
-	assertNoTaskDelivery(t, rejected.runtime, rejected.run)
-}
-
-func sameNativePhysicalProcess(a, b executionbackend.ProcessIdentity) bool {
-	// Task/Dispatch identify successive turns; all physical resource fields stay fixed.
-	a.Task, a.Dispatch, b.Task, b.Dispatch = "", "", "", ""
-	return a == b
-}
-
 type integrationFixture struct {
 	configPath     string
 	config         steerlineapp.Config
@@ -321,8 +92,8 @@ func newLifecycleProject(t *testing.T, host string) integrationFixture {
 // Some catalog fixtures bind their final provider before opening authority.
 func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) integrationFixture {
 	t.Helper()
-	if host == "orca" {
-		t.Skip("retained legacy local Orca integration: product registration is disconnected; supervised local coverage is in its adapter/app tests")
+	if host != "local" {
+		t.Fatal("shared fixture only models local app-server; terminal transport has its own fixture")
 	}
 	root := t.TempDir()
 	t.Setenv("STEERLINE_INTEGRATION_HISTORY_FILE", filepath.Join(root, "app-server-history.json"))
@@ -353,28 +124,16 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", bare)
 
 	publisher := executionbackend.PublisherWorker
-	if host == "orca" {
-		publisher = executionbackend.PublisherWorker
-	}
+
 	codexProfile := codexworker.ProfileConfig{Executable: os.Args[0]}
 	if runtime.GOOS == "windows" && (host == "local" || host == "orca") {
 	}
 	codexPayload, err := codexworker.EncodeProfileConfig(codexProfile)
 	require(t, err)
 	implementationConfigs := []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: codexPayload}}
-	if host == "orca" {
-		implementationConfigs = nil
-	}
+
 	stateDir := filepath.Join(root, "native-protocol")
-	if host == "orca" {
-		// This positive fixture checks original binding, not deadline expiry;
-		// its real helper/tool processes also run under Full's parallel load.
-		orcaPayload, encodeErr := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{
-			Executable: os.Args[0], Args: []string{"--fake", "native-orca", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m",
-		})
-		require(t, encodeErr)
-		implementationConfigs = append(implementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaPayload})
-	}
+
 	globalData, err := json.Marshal(map[string]any{
 		"version": 2, "default_execution_profile": "fixture",
 		"execution_profiles": []any{map[string]any{"id": "fixture", "name": "Integration fixture", "host": host, "agent": "codex", "implementation_configs": implementationConfigs}},
@@ -526,7 +285,7 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionbackend.L
 	switch setup.Snapshot.Ref.Protocol {
 	case executionbackend.ProtocolLocalCodexAppServer:
 		return port, nil
-	case executionbackend.ProtocolOrcaTerminalV2:
+	case executionbackend.ProtocolOrcaTerminalV3:
 		if r.beforeNativeExecute != nil {
 			return integrationFaultLifecycle{LifecyclePort: port, before: r.beforeNativeExecute}, nil
 		}
@@ -888,6 +647,3 @@ func derefString(value *string) string {
 
 // Keep native multi-turn mutation-loss coverage explicit when broad aggregate
 // fixture cases are simplified on main.
-func TestNativeOrcaMutationRecoveryPreservesOriginalSession(t *testing.T) {
-	testIntegratedNativeSessionGate(t, true)
-}

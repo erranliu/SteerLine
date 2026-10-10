@@ -93,7 +93,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 	})
 
 	t.Run("console_negative_all_tags_production_and_tests", func(t *testing.T) {
-		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/app/host", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/storage/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/app"} {
+		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/app/host", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/storage/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/app"} {
 			t.Run(dependency, func(t *testing.T) {
 				for _, file := range []string{"edge_plan9.go", "edge_linux_test.go"} {
 					root := t.TempDir()

@@ -19,7 +19,7 @@ func (s *Service) recordDeclaredFinal(ctx context.Context, run *r.RunView, evide
 	if execution == nil || evidence.CommandID != execution.CurrentCommandID || evidence.TurnID != execution.CurrentTurnID || evidence.SessionID != execution.SessionID {
 		return m.ErrTurnStale
 	}
-	if !evidence.Completed || evidence.FinalItemID == "" || evidence.FinalSource == "" || evidence.LastMessage == "" || evidence.FinalNativeTurnID == "" {
+	if !evidence.Started || !evidence.Completed || evidence.FinalItemID == "" || evidence.FinalSource == "" || evidence.LastMessage == "" || evidence.FinalNativeTurnID != "" || evidence.FinalNativeSessionID != "" {
 		return errors.New("declared final lacks its complete settled provenance")
 	}
 	event := m.ConversationEvent{Version: m.ConversationVersion, ProjectID: execution.ProjectIdentity,
@@ -28,15 +28,15 @@ func (s *Service) recordDeclaredFinal(ctx context.Context, run *r.RunView, evide
 		Source: evidence.FinalSource, SourceRole: m.ConversationSourceCanonical,
 		SourceIdentity: evidence.SessionID, SourceSegment: evidence.TurnID,
 		SessionID: evidence.SessionID, SessionQuality: m.IdentityDerived, TurnID: evidence.TurnID, TurnQuality: m.IdentityDerived,
-		ItemID: evidence.FinalItemID, ItemQuality: m.IdentityNative, SourceEventID: evidence.FinalItemID, SourceEventQuality: m.IdentityNative,
+		ItemID: evidence.FinalItemID, ItemQuality: m.IdentityDerived, SourceEventID: evidence.FinalItemID, SourceEventQuality: m.IdentityDerived,
 		Type: m.ConversationMessageComplete, Phase: m.MessagePhaseFinalAnswer, FinalAvailability: m.FinalAvailable, ReceivedAt: now(),
-		Evidence: map[string]string{"phase_origin": "worker_declared", "settlement": "original_dispatch", "native_turn_id": evidence.FinalNativeTurnID}}
+		Evidence: map[string]string{"phase_origin": "worker_declared", "settlement": "bound_worker_reply", "command_id": evidence.CommandID}}
 	event.ItemKey = event.ItemIdentity()
 	event.Body = &m.ConversationBodyRef{ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, ItemKey: event.ItemKey, Revision: 1, Source: event.Source, Completeness: m.BodyComplete}
 	complete := event
 	complete.Body, complete.ItemID, complete.ItemKey = nil, "", ""
 	complete.ItemQuality = m.IdentityUnknown
-	complete.SourceEventID = "settled:" + evidence.FinalNativeTurnID
+	complete.SourceEventID = "settled:" + evidence.FinalItemID
 	complete.Type, complete.Phase = m.ConversationTurnCompleted, m.MessagePhaseUnknown
 	complete.Status = "succeeded"
 	if !evidence.Succeeded {

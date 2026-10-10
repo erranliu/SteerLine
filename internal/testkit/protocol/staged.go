@@ -53,7 +53,7 @@ func StagedBusiness(cwd, prompt, provider, remote string) (string, error) {
 
 		body, err := json.Marshal(map[string]any{"outcome": "done", "outputs": map[string]string{"pr_url": url}, "summary": "original publication reported"})
 		return string(body), err
-	case strings.HasPrefix(strings.TrimSpace(prompt), "Push and create or reuse a PR."):
+	case strings.HasPrefix(strings.TrimSpace(prompt), "Push and create or reuse a PR using the current checked-out branch."):
 		head, err := git("rev-parse", "HEAD")
 		if err != nil {
 			return "", err

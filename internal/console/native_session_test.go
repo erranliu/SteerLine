@@ -58,11 +58,11 @@ func TestNativeSessionShortcutOpensSelectedCandidateAndReportsFailure(t *testing
 		t.Fatal("empty native history opened")
 	}
 	run.CurrentTurnID = "original-turn"
-	run.Host = "orca"
+	run.Host = "orca_supervised"
 	if _, cmd := updated.(Model).openNativeSession(); cmd != nil {
 		t.Fatal("nonlocal task opened")
 	}
-	run.Host = "orca_supervised"
+	run.Host = "orca"
 	run.Agent = "claude"
 	client.err = nil
 	updated, cmd = updated.(Model).openNativeSession()

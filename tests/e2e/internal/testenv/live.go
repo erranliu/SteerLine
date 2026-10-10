@@ -25,8 +25,10 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	}
 	p := s.NewProject(name)
 	p.Chain = chain
-	s.Must(native.SeedAuth(s.Run.AuthHome, filepath.Join(p.Home, "codex"), "unelevated"))
-	s.Must(native.TrustProject(filepath.Join(p.Home, "codex"), p.Repo))
+	if chain == "local-codex" {
+		s.Must(native.SeedAuth(s.Run.AuthHome, filepath.Join(p.Home, "codex"), "unelevated"))
+		s.Must(native.TrustProject(filepath.Join(p.Home, "codex"), p.Repo))
+	}
 	if strings.HasPrefix(s.ID, "smoke.") || strings.HasPrefix(s.ID, "candidates.") {
 		p.enableGitHub()
 	}
@@ -43,17 +45,15 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		}
 		p.OrcaExecutable, err = exec.LookPath(command)
 		s.Must(err)
-		// The existing native fixture forwards the original public start receipt
-		// unchanged. For its verified, stable paste preview it completes only
-		// that same input's UI submission; it never injects another prompt.
+		// The fixture preserves native argv and receipts without injecting agent settings.
 		shim := filepath.Join(p.Home, "bin", "orca-env.exe")
 		binary, readErr := os.ReadFile(s.Run.Helper)
 		s.Must(readErr)
 		s.Must(os.WriteFile(shim, binary, 0700))
 		logDir := filepath.Join(s.Output, name+"-orca")
 		s.Must(os.MkdirAll(logDir, 0700))
-		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, Home: p.Home, LogDir: logDir}))
-		orcaConfig = native.OrcaWorkerProfile(shim, "4m")
+		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, LogDir: logDir}))
+		orcaConfig = native.OrcaWorkerProfile(shim, p.Repo, "30s")
 	}
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)
@@ -122,7 +122,7 @@ git rev-parse HEAD
 	spec += "In implement.execute, run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once to write, verify and commit the candidate locally. Do not push or invoke publish.ps1 in implement.execute or implement.report. implement.report only summarizes its supplied source facts. publish.ps1 is reserved for the single publish step, which must return the JSON result contract in its native final reply.\n"
 
 	if s.ID == "recovery.orca-codex" {
-		spec += "\n## Original-execution recovery window\n\nBefore writing the recovery marker, send one native `status` message to the original Run mailbox using `orca orchestration send --from <injected-worker-handle> --to run:<injected-run-id> --type status --subject recovery-window --body original-execution-started --task-id <injected-task-id> --dispatch-id <injected-dispatch-id>`. Use the exact IDs from the Orca preamble. This is actual progress in this same original round; a platform heartbeat alone need not be delivered as ordinary coordinator mail. Before writing result.txt or publishing, run one shell command that writes `.e2e-recovery-started.txt` in this assigned worktree, waits until `.e2e-recovery-release.txt` exists, then removes both files. Use `Set-Content -LiteralPath .e2e-recovery-started.txt -Value waiting; while (-not (Test-Path -LiteralPath .e2e-recovery-release.txt)) { Start-Sleep -Milliseconds 250 }; Remove-Item -LiteralPath .e2e-recovery-started.txt,.e2e-recovery-release.txt`. The test driver releases the existing command; it does not send another prompt. These two files are temporary fixture controls: do not stage or commit them. After release, finish the original task and its publication in this same original round.\n"
+		spec += "\n## Original-execution recovery window\n\nBefore writing result.txt or publishing, run one shell command that writes `.e2e-recovery-started.txt` in this assigned worktree, waits until `.e2e-recovery-release.txt` exists, then removes both files. Use `Set-Content -LiteralPath .e2e-recovery-started.txt -Value waiting; while (-not (Test-Path -LiteralPath .e2e-recovery-release.txt)) { Start-Sleep -Milliseconds 250 }; Remove-Item -LiteralPath .e2e-recovery-started.txt,.e2e-recovery-release.txt`. The test driver releases the existing command; it does not send another prompt. These two files are temporary fixture controls: do not stage or commit them. After release, finish the original task and its publication in this same original round.\n"
 	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
@@ -240,15 +240,13 @@ func (p *Project) cleanupOrca() error {
 }
 
 func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error) {
-	if p.RemoteOrca != nil {
-		return native.Usage{}, errors.New("token usage is not exposed by the Orca public interface")
-	}
+
 	var u native.Usage
 	if len(snap.Domain.Executions) != 1 || len(snap.Domain.WorkflowRuns) != 1 {
 		return u, errors.New("usage needs one bound execution")
 	}
 	e := snap.Domain.Executions[0]
-	if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV2) {
+	if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV3) {
 		return u, errors.New("token usage is not exposed by the Orca public interface")
 	}
 	profile, profileErr := evidence.ModelSelection(snap.Domain)

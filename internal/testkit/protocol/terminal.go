@@ -281,3 +281,12 @@ func writeTerminalFile(path string, value []byte) error {
 	}
 	return os.Rename(temporary, path)
 }
+
+func nativeArg(args []string, key string) string {
+	for i, arg := range args {
+		if arg == key && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
