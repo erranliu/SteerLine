@@ -1,6 +1,6 @@
 # Worker 阶段流程验收规划
 
-任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，[PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并；2026-10-10 合入后独立复审未发现原 PR 的已确认缺陷，#84 实现完成。历史 WFS-A1–A4 按下文精确 source、受影响增量和明确授权的 Orca usage 调整条件结算，WFS-M1 仍待人工验收；[当前 Orca 路线能力缺口](#后续主干-orca-路线的当前能力缺口)独立保留，不以历史通过证明当前所有路线通过。#83 已合入，作为隔离基线复用。
+任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，[PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并；2026-10-10 合入后独立复审未发现原 PR 的已确认缺陷，#84 实现完成。历史 WFS-A1–A4 按下文精确 source、受影响增量和明确授权的 Orca usage 调整条件结算，WFS-M1 仍待人工验收；[旧 supervised 能力缺口](#后续主干-orca-路线的当前能力缺口)保留历史，[当前单终端范围](orca-terminal-real-flow-2026-10-10.md)单列，不以历史通过证明当前所有路线通过。#83 已合入，作为隔离基线复用。
 
 ## 最小验证安排
 
@@ -154,6 +154,10 @@ GitHub 确认 [PR #262](https://github.com/erranliu/SteerLine/pull/262) 于北�
 合计 34 项（含子测试），未增加 live 模型调用、Full 或完整 L2。WFS-A1–A4 按原精确来源、受影响增量及真人限定 usage 条件结算；#84 实现完成。WFS-M1 仍待人工验收，按前述步骤、参与人/窗口待安排与阻塞范围保留；一期安装入口、24 小时和同构建长期恢复仍未验。
 
 ### 后续主干 Orca 路线的当前能力缺口
+
+本节是 PR #266 / #45 结算时的 supervised 历史缺口，保留原章节锚点供旧证据引用；其后该实现已被 PR #284 单终端方案取代，不作为当前接线结论。当前结果见[单终端验收](orca-terminal-transport.md)及[真实调试](orca-terminal-real-flow-2026-10-10.md)：本机有限样本通过，最终 draft 保护未重新跑真机，远端产品闭环未通过。紧凑 worker 声明结果不等于原生 final 全文；一期组合/24小时/同构建恢复与 WFS-M1 仍待验。
+
+以下两段保留原时点的能力诊断。
 
 PR #266（main `21d97350`）在 #84 合入后移除原 Terminal registration/profile codec/conversation source，改由 supervised 路线承载本机目标；该路线没有声明或实现 `StructuredFinalEvidence`。当前分步流程严格入站检查因而返回 unsupported，不能用旧 Terminal 的三轮通过证明新路线可用。这是后续平台改动的组合能力缺口，不能归为 PR #262 原 diff 的失败，也不能改称人工待验或悄悄恢复旧入口。
 

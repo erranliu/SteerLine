@@ -247,4 +247,8 @@ GitHub 确认 [PR #249](https://github.com/erranliu/SteerLine/pull/249) 于北�
 
 用户原风险问题及“接受”回复见[条件授权](#用户对-api2-有限剩余风险的条件接受)和 [PR 授权记录](https://github.com/erranliu/SteerLine/pull/249#issuecomment-6073688681)。#84 实际合入与独立核验/文档同步、#45 最新组合验证/独立终审及最终门禁均已完成，故本次将且仅将历史 API2 SHM 根因/syscall 缺口、合法瞬态超出有界窗口而暂时误拒查询或启动的风险登记为 `accepted_exception`。原自动失败、未知根因和原始日志继续保留，不改为 passed 或人工 pending；不豁免任何新缺陷、权限/能力、清理失败或未知副作用。组合重试仍最多 100 CreateFile 调用/485ms 计划等待（不含 OS），不是历史根因证明。
 
-当前 supervised Orca 不支持规范 staged final 的能力缺口继续通过 profile `unavailable_reason` 与 rejected/unsupported control receipt 如实暴露，既不是本任务自动通过项，也不在 SHM 例外范围。#45 实现完成，无本任务独立人工项；#44 可在本结算进入主干后消费真实接口并按自身 Spec/Plan 启动，输入/窗口人工项仍归 #44/2.1。
+本次 #45 结算时，supervised Orca 不支持规范 staged final 的能力缺口通过 profile `unavailable_reason` 与 rejected/unsupported control receipt 如实暴露，既不是本任务自动通过项，也不在 SHM 例外范围。#45 实现完成，无本任务独立人工项；#44 可在本结算进入主干后消费真实接口并按自身 Spec/Plan 启动，输入/窗口人工项仍归 #44/2.1。
+
+## 2026-10-10 后续单终端接线范围
+
+上述 supervised 能力缺口属于 #45 结算时点，之后该实现已被 PR #284 取代。当前共用紧凑 worker 声明结果，验证范围见[单终端验收](orca-terminal-transport.md)与[真实记录](orca-terminal-real-flow-2026-10-10.md)：本机有限样本闭环通过，最终 draft 保护未重新跑真机，远端产品闭环未通过；不承诺原生 turn/final 全文。本次只是汇总校准，不重新结算 API2、不扩大 SHM 例外、不增加原生验收通过项。

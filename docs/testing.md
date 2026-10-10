@@ -1,6 +1,6 @@
 # 测试总入口
 
-当前产品入口为本地 Codex 与 Orca supervised（local/environment）。原本机 `host=orca` 已停用。supervised 目标注册/路由采用[定向验收](acceptance/orca-supervised-targets.md)，当前分步结果恢复为[统一模板和原生回复采集](acceptance/worker-prompt-convergence.md)，原[单消息声明结果](acceptance/orca-supervised-results.md)保留历史。旧单轮远端场景仍已退役，未恢复为当前交付覆盖；真实分步 L3 仍须建立专用驱动，历史结果见[专属记录](acceptance/orca-remote-l3.md#当前分步流程能力缺口)。
+当前产品入口为本地 Codex 与 Orca 单终端 `host=orca` / `orca_terminal_v3`（local/environment），supervised 已退役。当前通信及验证范围见[单终端验收](acceptance/orca-terminal-transport.md)与[真实调试记录](acceptance/orca-terminal-real-flow-2026-10-10.md)：本机有限样本三阶段交付通过，最终 draft 保护未重新跑真机，远端产品闭环未通过。两目标受控回归不代替远端真机。旧单轮远端场景仍已退役，正式注册表不含新版远端交付；旧 supervised、统一模板及单消息接线证据保留各自历史范围。
 
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
 
@@ -136,7 +136,7 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 
 ## 独立原生验收
 
-这些检查绑定专门的原生现场，不属于固定 L2/L3 注册表。先阅读各测试的前置字段、原身份和实际效果，再只运行选定测试；不要批量开启所有 `STEERLINE_*` 开关。未配置而跳过，表示未验收。
+这些检查绑定专门的原生现场，不属于固定 L2/L3 注册表。先阅读各测试的前置字段、原身份和实际效果，再只运行选定测试；不要批量开启所有 `STEERLINE_*` 开关。未配置而跳过，表示未验收。下表标注“历史”的旧 Orca 测试已经随旧 adapter 删除，不能在当前源码执行；当前单终端原生范围见上方专属验收。
 
 | 检查 | 前置与范围 | 测试来源 |
 | --- | --- | --- |
@@ -146,7 +146,7 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 | Windows 服务窗口 / Ctrl+C helper | 只由绑定原进程、启动回执和报告路径的专门探针调用 | [Windows 平台测试](../internal/app/host/platform_windows_test.go) |
 | elevated sandbox 凭据检查与设置 | 为显式需要 elevated 的开发场景使用；无 token 的检查和可能触发 UAC 的初始化是两步 | [E2E 指南的 sandbox 工具](../tests/e2e/README.md#真实环境)、[设置脚本](../scripts/setup-e2e-sandbox.ps1) |
 
-示例：已按源码准备好 host-wait probe 后，运行 `go test ./internal/execution/adapters/orca -run '^TestOrcaNativeHostWait$' -count=1 -v`。报告该原生测试的结果，不把其他 opt-in 测试的 skip 算作通过。
+原 host-wait probe 命令仅可从表中固定历史源码取证，当前没有旧 adapter 的可执行入口。现有原生测试按其源码前置独立运行，不把其他 opt-in 测试的 skip 算作通过。
 
 ## 产物与判断
 

@@ -669,7 +669,7 @@ func mergeLifecycleExecutionCandidate(execution *executionmodel.ExecutionRecord,
 			return executionmodel.ErrTurnStale
 		}
 		for _, field := range [][2]string{{current.WorktreeID, next.WorktreeID},
-			{current.CoordinatorTerminal, next.CoordinatorTerminal}, {current.OrchestrationRun, next.OrchestrationRun}, {current.ExecutionHost, next.ExecutionHost}} {
+			{current.ExecutionHost, next.ExecutionHost}} {
 			if field[0] != "" && field[0] != field[1] {
 				return executionmodel.ErrTurnStale
 			}
@@ -759,7 +759,7 @@ func mergeLifecycleExecutionCandidate(execution *executionmodel.ExecutionRecord,
 func sameExecutionSessionProcess(a, b executionbackend.ProcessIdentity) bool {
 	return a.Kind == b.Kind && a.PID == b.PID && a.Created == b.Created && a.Executable == b.Executable &&
 		a.Terminal == b.Terminal && a.RuntimeID == b.RuntimeID && a.Incarnation == b.Incarnation &&
-		a.CoordinatorRuntimeID == b.CoordinatorRuntimeID && a.ExecutionHost == b.ExecutionHost && a.WorktreeID == b.WorktreeID
+		a.ExecutionHost == b.ExecutionHost && a.WorktreeID == b.WorktreeID
 }
 
 func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, commandID, prompt string) error {

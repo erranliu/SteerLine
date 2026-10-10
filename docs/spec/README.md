@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段包含本地 Codex、本机 Orca 与远端路径交付。#83/#84/#45/#44已纳入[正式执行规划](../roadmap/execution-map.md)，由 roadmap-runner 直接调度 Codex；#83已通过 PR #247 合入、#84/#45待执行、#44等待#45，其余材料见[草稿](../roadmap/drafts/roadmap.md)。日常派发核对用户确认范围、状态、依赖和固定文档版本，草稿或编号不作为执行来源。
+本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段包含本地 Codex、本机 Orca 与远端路径交付。#83/#84/#45/#44已按[正式执行规划](../roadmap/execution-map.md)实现并合入，历史规格和交付记录保留；一期签收及 #84/#44 的人工项仍待验。后续候选材料见[草稿](../roadmap/drafts/roadmap.md)，不重新派发已交付任务。日常派发核对用户确认范围、状态、依赖和固定文档版本，草稿或编号不作为执行来源。
 
 Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在纳入执行或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不作为执行任务；少量人工项按允许范围后置。
 
@@ -18,6 +18,10 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 | 控制台主界面与可读性 | [Spec](console-primary-workspace.spec.md) · [Plan](console-primary-workspace.plan.md) | [记录](../acceptance/archive/completed/console-primary-workspace.md) |
 
 任务Plan逐项或按明确ID范围覆盖全部自动验收项，列场景/命令、环境、时点、通过条件与专属登记位置；缺驱动/场景/环境能力须在实施中补齐或明确前置。必要回归与产品自动验收分别标记，静态检查不代替业务/原生证据。
+
+## 旧 Orca 编排身份残留清理（普通开发规格）
+
+删除当前后端不再使用的 Run/Task/Dispatch/coordinator 字段、旧条件及 host 死函数，校准当前能力汇总；保留准备/恢复/流程机制。[Spec](retired-orca-identity-cleanup.spec.md) · [Plan](retired-orca-identity-cleanup.plan.md) · [专属验收](../acceptance/retired-orca-identity-cleanup.md)。
 
 ## 状态命名收敛（普通开发规格）
 
@@ -37,7 +41,7 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 ## 已确认 Codex 执行规划
 
-当前剩余按 #84→#45→#44 推进；#83 已合入，保留完成记录导航。启动时核对本地执行前置及实际 Spec/Plan commit。#84 先交付一期新流程与状态字段，#44最终交付依赖#45真实联调。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
+#83/#84/#45/#44 均已实现并合入，下面只保留已交付任务的规格及原依赖导航，当前没有由本表派发的剩余任务。实际待验与当前能力限制见 execution-map 和专属 acceptance，不由历史 Spec 推定最新构建已通过。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
 
 | 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |

@@ -213,7 +213,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *reconstruct
 	}
 	prepareCtx, cancel := context.WithTimeout(ctx, min(remaining, positiveDuration(fixed.config.CommandTimeout, 10*time.Second)))
 	defer cancel()
-	if execution.Workspace.Worktree == "" || execution.Process == nil || execution.Target.CoordinatorTerminal == "" || execution.Target.OrchestrationRun == "" {
+	if execution.Workspace.Worktree == "" || execution.Process == nil {
 		task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
 		if task == nil {
 			return errors.New("readiness execution lost its fixed task")

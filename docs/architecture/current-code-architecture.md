@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-06。本文描述当前候选源码树。第一阶段包含本地 Codex、本机 Orca 与远端路径交付。
+核对日期：2026-10-10，源码基线 d77c399f 加本次身份残留清理。本文描述当前源码树。第一阶段目标包含本地 Codex、本机 Orca 与远端路径交付；当前 Orca 的本机有限样本、最终保护未跑真机及远端未通过范围见[单终端验收](../acceptance/orca-terminal-transport.md)。
 
 ## 系统边界
 
@@ -50,7 +50,7 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 | `internal/execution` | Unique actor, dispatch, worker sessions, decisions, recovery, delivery and cleanup. Host calls the actor through `execution.HostPort` and scheduling callbacks; adapters do not mutate domain state. |
 | `internal/execution/model`, `internal/execution/backend` and `internal/execution/conversation` | Execution records and rules; backend-neutral adapter values and implementation evidence; conversation source and mapper ports with their discovery/history requests. |
 | `internal/execution/reconstruction` | Pure reconstruction of `Runtime` and `RunView` from a committed checkpoint and the sampled task/execution records. It performs no I/O. |
-| `internal/execution/adapters` | Codex, local Orca, retained remote protocol implementation and shared Codex codec. Remote protocol retention does not authorize remote execution. |
+| `internal/execution/adapters` | Codex app-server, Orca single-terminal local/environment implementation, and their public protocol codecs. Orca target routing shares code; real remote delivery remains unverified. |
 | `internal/execution/workspace`, `publication`, `process` | Git workspace, provider/PR operations, managed worker processes and file resource facts. The app injects process facts into the host. |
 | `internal/product/api` | Serializable product pages, user commands, request targets and receipts. It contains no Runtime, Config, SQL record, or Go handle. |
 | `internal/product/client` | The single injected product client for CLI/TUI consumers. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
@@ -68,23 +68,23 @@ Within console, [`final_reader.go`](../../internal/console/final_reader.go) owns
 
 ## Current package inventory
 
-At the #82 source commit, Windows `go list ./...` enumerates 42 packages. #45 adds `internal/product/httpapi`, bringing the default inventory to 43. The count includes the `docs/validation` helper package; it is not a product dependency. E2E scenario files use the `e2e` build tag, so their packages are listed separately from the default Go inventory below. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
+At d77c399f, Windows `go list ./...` enumerates 45 packages. The current inventory includes the public Orca CLI codec, compact worker return contract, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
 
 | Owner / purpose | Current packages |
 | --- | --- |
 | Product commands and runner | `cmd/orca-probe`, `cmd/steerline`, `cmd/test-feedback` |
-| Validation helper | `docs/validation` |
 | Composition and host | `internal/app`, `internal/app/host` |
 | Console | `internal/console`, `internal/console/activityrender` |
 | Task | `internal/task`, `internal/task/model` |
 | Execution actor and pure values | `internal/execution`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
-| Execution effects | `internal/execution/adapters/codex`, `internal/execution/adapters/orca`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
+| Execution effects and compact reply contract | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace`, `internal/execution/workerreturn` |
+| Filesystem guards | `internal/pathguard` |
 | Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph`, `internal/product/httpapi` |
 | Storage | `internal/storage/ports`, `internal/storage/sqlite` |
-| Test support | `internal/testkit/boundary`, `internal/testkit/boundary/e2e`, `internal/testkit/feedback`, `internal/testkit/process`, `internal/testkit/protocol` |
+| Test support | `internal/testkit/boundary`, `internal/testkit/boundary/e2e`, `internal/testkit/feedback`, `internal/testkit/fixtures`, `internal/testkit/process`, `internal/testkit/protocol` |
 | Integration and E2E helpers | `tests/integration`, `tests/e2e/cmd/sandbox-setup`, `tests/e2e/internal/controlled`, `tests/e2e/internal/driver`, `tests/e2e/internal/evidence`, `tests/e2e/internal/native`, `tests/e2e/internal/testenv` |
 
-The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e2e/suites/{candidates,delivery,recovery}`. IDs, levels, environments and exact top-level tests remain owned by [`tests/e2e/suites.json`](../../tests/e2e/suites.json) and the [E2E guide](../../tests/e2e/README.md). Integration tests own real app composition; they may not import `tests/e2e/internal`.
+The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e2e/suites/{candidates,delivery,recovery,runtime,nativeworkspace}`. Source presence does not imply current runner registration: IDs, levels, environments and exact top-level tests remain owned by [`tests/e2e/suites.json`](../../tests/e2e/suites.json) and the [E2E guide](../../tests/e2e/README.md). Integration tests own real app composition; they may not import `tests/e2e/internal`.
 
 ## Public boundaries and entry points
 
@@ -105,7 +105,7 @@ Historical migration ledgers and source inventories are available from the [fixe
 
 ## Build, install and launch sources
 
-The repository-root [`build.ps1`](../../build.ps1) builds `./cmd/steerline` to `bin/steerline.exe` on Windows; [`build.bat`](../../build.bat) is its double-click wrapper. They build only and do not install or switch a running service. `steerline install` copies the running executable through `internal/app.InstallSelf` to the configured application home. `steerline launchers` calls `internal/app/host.InstallLaunchers`, which writes the embedded `console.bat`, `service-window.bat` and launcher README into that home. The service process enters through `cmd/steerline` and `internal/app/host`; there is no separate legacy root host package. Installation/debug path isolation is the current planned increment; full stable/dev version management is outside the current roadmap.
+The repository-root [`build.ps1`](../../build.ps1) builds `./cmd/steerline` to `bin/steerline.exe` on Windows; [`build.bat`](../../build.bat) is its double-click wrapper. They build only and do not install or switch a running service. `steerline install` copies the running executable through `internal/app.InstallSelf` to the configured application home. `steerline launchers` calls `internal/app/host.InstallLaunchers`, which writes the embedded `console.bat`, `service-window.bat` and launcher README into that home. The service process enters through `cmd/steerline` and `internal/app/host`; there is no separate legacy root host package. Installation/debug path isolation was delivered by #83; phase-one combined/24-hour/same-build recovery acceptance remains pending. Full stable/dev version management is outside the current roadmap.
 
 ## Platform-specific source owners
 

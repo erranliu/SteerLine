@@ -8,20 +8,21 @@
 | --- | --- |
 | 一期签收 | 待验；[一期活动](phase1.md) |
 | 二期节点 | [导航](phase2.md)：[2.1执行UI](phase2-execution.md)、[2.2草稿/人工事项](phase2-planning.md)、[2.3主agent](phase2-main-agent.md)均为节点验收规划，尚未完整排入 |
-| 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[Orca](worker-flow-orca-native.md)、[停服恢复](worker-service-recovery.md) |
+| 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[当前 Orca 单终端](orca-terminal-transport.md)；旧 Orca 活动输入/恢复记录保留历史，按当前路线重新核对适用性 |
 | Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
 | 控制台 Codex CLI 入口 | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
 | Codex 沙箱 Git 修复 | [真实 worker / SteerlineTest 无人值守验收](codex-sandbox-git.md)，普通开发，专属 base/head 验证 |
 | Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
 | Orca状态同步修复 | [延迟启动活动推进状态](orca-delayed-start-status-2026-10-09.md)，原 Dispatch 在完成前同步开始事实，源码定向验证通过 |
-| Orca supervised 双目标 | [本机目标与旧入口切断](orca-supervised-targets.md)，同一原远端生命周期，功能范围保持 |
-| Orca supervised 结果修复前置 | [单消息结果协议审计与原生探针](orca-supervised-result-probe-2026-10-10.md)，本机/远端接口前置验证通过，后续实现见下项 |
-| Orca supervised 结果修复 | [分步结果、恢复与正文接线](orca-supervised-results.md)，定向实现验证与运行版安装记录 |
+| Orca supervised 双目标（历史） | [本机目标与旧入口切断](orca-supervised-targets.md)，同一原远端生命周期；该实现已退役 |
+| Orca supervised 结果修复前置（历史） | [单消息结果协议审计与原生探针](orca-supervised-result-probe-2026-10-10.md)，只证明原路线的接口前置，不覆盖单终端 |
+| Orca supervised 结果修复（历史） | [分步结果、恢复与正文接线](orca-supervised-results.md)，保留原定向验证与安装记录，不作当前接线说明 |
 | Worker 提示词与三轮恢复 | [统一模板与原生回复采集](worker-prompt-convergence.md)，用户直接授权恢复 #84 设计 |
 | Worker 状态与控制台精简 | [原字段、变化记录与主界面回归](console-worker-state.md)，普通开发 |
 | Orca 提示词最小探针 | [输入通道与 worker-start 对照](orca-input-minimal-probe-2026-10-10.md)，1.4.224 原生 worker-start 仍复现未提交；基础 500/7500 字符 6/6，约12K输入未通过；历史1.4.223结果另列 |
-| Orca 单终端通信 | [实施与待验项](orca-terminal-transport.md)，本机/远端共用短输入、原游标和紧凑结果；按用户要求未运行新版验证 |
-| Orca 分步开发缺口 | [规范 final 与新场景待补](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮场景退役，不计当前交付覆盖 |
+| Orca 单终端通信 | [实施与待验项](orca-terminal-transport.md) · [真实记录](orca-terminal-real-flow-2026-10-10.md)，本机有限样本通过、最终 draft 保护未重新跑真机，远端产品闭环未通过；两目标受控回归不代替原生验收 |
+| Orca 分步开发缺口 | [当前远端待补与历史来源](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮/supervised 场景退役，不计单终端交付覆盖 |
+| 旧 Orca 身份残留清理 | [专属记录](retired-orca-identity-cleanup.md)，当前字段/受控接线与文档校准，不增加原生验收通过项 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
 | 测试维护 | [测试代码精简](test-code-simplification.md) |
