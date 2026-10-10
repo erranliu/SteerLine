@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
@@ -21,11 +20,7 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 	} else if err != nil {
 		return err
 	}
-	hostConfig, err := hostRuntimeConfig(ctx, c)
-	if err != nil {
-		return err
-	}
-	if err := steerline.PreflightNativeStatePath(hostConfig); err != nil {
+	if err := PreflightNativeStatePath(c); err != nil {
 		return err
 	}
 	reader, err := OpenNativeTaskReader(ctx, &c)

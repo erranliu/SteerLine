@@ -78,15 +78,22 @@ func runConfiguredService(ctx context.Context, config Config, mode, startupID, c
 		if err := admission.syncHostFacts(input); err != nil {
 			return nil, err
 		}
-		service, err := newConfiguredServiceWithHost(config, hostPort)
+		localAPI := &serviceLocalAPI{runDir: input.RunDir, projectID: input.RepositoryIdentity}
+		service, err := newConfiguredServiceWithHost(config, serviceHTTPHost{HostPort: hostPort, localAPI: localAPI})
 		if err != nil {
 			return nil, err
 		}
+		localAPI.capabilities = append([]string(nil), service.State.Service.Capabilities...)
+		product, err := openServiceProjectClient(context.Background(), config, service)
+		if err != nil {
+			return nil, errors.Join(err, service.Close())
+		}
+		localAPI.product = product
 		if onConstruct != nil {
 			onConstruct(service)
 		}
 		service.SetStartupMetadata(id)
-		return executionServiceLifetime{service: service, config: input, mode: mode}, nil
+		return executionServiceLifetime{service: service, config: input, mode: mode, product: product, localAPI: localAPI}, nil
 	}
 	return steerline.RunConfiguredService(ctx, hostConfig, mode, startupID, console, factory, admission, consoleActivityFormatter{})
 }

@@ -17,13 +17,13 @@ type workerServiceOwner struct {
 // native turn or guesses whether an external execution survives.
 func (s *Service) shutdown() error {
 	// Final persistence/ack is drained by the actor, not a canceled run queue.
-	if s.runContext != nil && s.runContext.Err() != nil {
+	_, actorContext := s.signalTransport()
+	if actorContext != nil && actorContext.Err() != nil {
 		s.forwarders.Wait()
-		pendingQueue := s.signalQueue
-		s.signalQueue = nil
+		pendingQueue := s.clearSignalTransport()
 		s.drainWorkerMessagesFrom(pendingQueue)
 	} else {
-		s.signalQueue = nil
+		s.clearSignalTransport()
 	}
 	for _, messages := range s.lifecycleMessages {
 		for _, message := range messages {
@@ -33,7 +33,6 @@ func (s *Service) shutdown() error {
 		}
 	}
 	s.lifecycleMessages, s.lifecycleEffects = nil, nil
-	s.signalQueue = nil
 	var failures []error
 	for _, run := range s.runs {
 		if run == nil {

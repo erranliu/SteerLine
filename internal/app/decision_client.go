@@ -31,10 +31,39 @@ type AnswerOptions struct {
 // SubmitAnswerDecision publishes one immutable answer command to the live
 // service's SQLite authority. It never falls back to a file or offline writer.
 func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
-	return submitAnswerDecisionWithStore(ctx, c, nil, runID, decisionID, optionID, note, requestedBy, expectedDecisionVersion, expectedRunRevision, expectedInstance, commandID, answers...)
+	return submitAnswerDecisionWithStoreBound(ctx, c, nil, runID, decisionID, optionID, note, requestedBy, expectedDecisionVersion, expectedRunRevision, expectedInstance, commandID, answerBinding{}, answers...)
 }
 
 func submitAnswerDecisionWithStore(ctx context.Context, c Config, store *sqlite.SQLiteStore, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
+	return submitAnswerDecisionWithStoreBound(ctx, c, store, runID, decisionID, optionID, note, requestedBy, expectedDecisionVersion, expectedRunRevision, expectedInstance, commandID, answerBinding{}, answers...)
+}
+
+type answerBinding struct {
+	AttemptID       string
+	RecoveryVersion uint64
+}
+
+func validateAnswerBinding(run *reconstructiontypes.RunView, binding answerBinding) error {
+	if binding.AttemptID != "" && (run == nil || run.AttemptID != binding.AttemptID || run.RecoveryVersion != binding.RecoveryVersion) {
+		return errors.New("stale_recovery: source Attempt or recovery version changed; refresh before answering")
+	}
+	return nil
+}
+
+// SubmitAnswerDecisionBound consumes the run/attempt/recovery identity shown
+// by the HTTP client. The same SQLite transaction path still owns the actual
+// answer command and acceptance rules.
+func SubmitAnswerDecisionBound(ctx context.Context, c Config, runID, decisionID, optionID, note, requestedBy string,
+	expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID, expectedAttemptID string,
+	expectedRecoveryVersion uint64, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
+	return submitAnswerDecisionWithStoreBound(ctx, c, nil, runID, decisionID, optionID, note, requestedBy,
+		expectedDecisionVersion, expectedRunRevision, expectedInstance, commandID,
+		answerBinding{AttemptID: expectedAttemptID, RecoveryVersion: expectedRecoveryVersion}, answers...)
+}
+
+func submitAnswerDecisionWithStoreBound(ctx context.Context, c Config, store *sqlite.SQLiteStore, runID, decisionID, optionID, note, requestedBy string,
+	expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, binding answerBinding,
+	answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
 	if strings.TrimSpace(runID) == "" {
 		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID")
 	}
@@ -57,6 +86,9 @@ func submitAnswerDecisionWithStore(ctx context.Context, c Config, store *sqlite.
 	run := runtimeRunByID(snapshot, runID)
 	if run == nil {
 		return storageports.CommandRecord{}, false, fmt.Errorf("run %s not found", runID)
+	}
+	if err = validateAnswerBinding(run, binding); err != nil {
+		return storageports.CommandRecord{}, false, err
 	}
 	if run.Decision != nil && (run.Decision.RequestPath != "" || run.Decision.AnswerPath != "") {
 		return storageports.CommandRecord{}, false, errors.New("decision uses the removed sidecar-answer format; preserve state and do not import answer files")

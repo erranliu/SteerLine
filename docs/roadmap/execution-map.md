@@ -7,14 +7,14 @@
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
-| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | PR Ready for review；待独立复审与合并 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 质量自查修复完成；WFS-A1–A4 按 source/增量与用户明确调整的 Orca usage 条件通过：local 原生 usage 核实，Orca 原三轮/PR/唯一交付/清理通过，公开 usage 不可用；原总报告误判失败及只读复核均保留。[PR #262](https://github.com/erranliu/SteerLine/pull/262) 按授权转 Ready，尚未独立复审或合并；WFS-M1 未验可后置；[专属计划与记录](../acceptance/worker-staged-flow.md) |
-| 45 | 本机客户端协议与历史查询 | 无 | 执行中；PR #249 修复 / 待新独立复审 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) 在途，API2 历史失败未闭合；[记录](../acceptance/phase2-local-api.md) |
+| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 实现完成 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | [PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并，merge `267858f0`；2026-10-10 合入后独立复审无已确认缺陷，34 项定向检查通过。WFS-A1–A4 按历史精确来源与已授权 Orca usage 条件结算；WFS-M1 待人工验收。后续 PR #266 改换 Orca 路线后的规范 final 能力缺口单列，不以旧链通过覆盖当前路线；[记录、待验及当前限制](../acceptance/worker-staged-flow.md#2026-10-10-真实合并与合入后独立复审) |
+| 45 | 本机客户端协议与历史查询 | 无 | 执行中；PR #249 待新独立终审 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) OPEN；已 merge latest main `40446a671badc901bcf868872a383b421d646803`（merge `5bee8ded64a79982e4c39688c3e2cff595800be1`）。精确候选 `21fb131f` L1 12 组/479 通过/0失败/0跳过；18 HTTP/API tests、8 API service integration cases、staged API query+feedback、unsupported Orca profile/receipt、vet 通过。#84 current Orca `StructuredFinalEvidence` 缺口由 profile `unavailable_reason` 和 `unsupported` receipt 显示；无假造 run/final。API2 历史 SHM 仍 `验收失败`，限定例外需等 #45 独立终审后才可记；[记录与证据](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 | 87 | Worker 停机对账与恢复一致性修复 | 无未交付业务硬前置；消费当前已合入 worker 基线 | 实现完成 | 用户授权本聊天直接执行，不经 roadmap-runner；[Spec](../spec/worker-stop-recovery.spec.md) · [Plan](../spec/worker-stop-recovery.plan.md) | [PR #260](https://github.com/erranliu/SteerLine/pull/260) 已真实合并，merge `d951ca87`；独立复审 clean，WSR-A1–A8 自动通过（含双真实路径），无任务人工项；[专属记录](../acceptance/worker-stop-recovery.md) |
 
 ## 推进顺序
 
-1. #83 已合入；最新用户授权 #84 与 #45 独立并行实施，共享接线按 #84 → #45 集成，#44 继续等待 #45。启动时使用已提交且执行工作区可读取的 Spec/Plan commit 和路径，并核对最新默认主干；本次纳入清单不等于已经启动。
+1. #83/#84 已合入并完成 #84 独立 post-merge 结算；#45 已集成 latest main 的实际 worker-flow-v2 字段、feedback/resume 和当前 Orca unsupported 路径，定向验证、vet 与 L1 通过，等待新的独立终审后再决定合入。#44 继续等待 #45 真实合入。固定 Spec/Plan 与代码起点已核对；已合入任务不重新派发。
 2. #84 与 #45 无新增业务硬依赖，共同状态/存储/宿主/客户端接线由 #84 负责语义并按 #84 后 #45 集成，#45 复核 #84 的实际字段与接口版本。#44 仍以 #45 为硬前置；#45 经复审、必要验证和真实合并，结果同步且成果进入最新主干后启动 #44。已有在途执行先核对原 run 与固定契约，不因清单编辑自动中断或切换规格。
 3. 后续界面任务留在[草稿](drafts/roadmap.md)，原型确认后再纳入。
 
@@ -22,13 +22,15 @@
 
 | 范围 | 状态 / 安排 | 明细 |
 | --- | --- | --- |
-| 一期单安装版签收 | 隔离能力 #83 已合入；待 #84 交付及最小自动验证、固定新安装构建并满足原生准备条件后，组织组合/24小时/同构建恢复人工签收；窗口待安排 | [一期活动](../acceptance/phase1.md) |
+| 一期单安装版签收 | #83/#84 历史实现已交付；仍待当前支持路线实际能力及原生准备条件落实、固定新安装构建，再组织组合/24小时/同构建恢复人工签收；窗口待安排。当前 Orca 规范 final 缺口见 [#84 当前限制](../acceptance/worker-staged-flow.md#后续主干-orca-路线的当前能力缺口)，不能以历史通过覆盖或改称人工豁免 | [一期活动](../acceptance/phase1.md) |
 | #84 步骤辨识与反馈/合并 | WFS-M1 待验；本任务自动能力交付后，可与一期 P1A1-M 同一现场集中验收，分别登记结果；不阻塞无关二期研发 | [专属记录](../acceptance/worker-staged-flow.md) |
 | #44原生输入与可达性 | #44已排入；交付后验UI2-M/UI4-M，最迟2.1签收 | [记录](../acceptance/phase2-winui-foundation.md) |
 
 自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [Orca原生编排](../acceptance/worker-flow-orca-native.md) · [Orca安全重建](../acceptance/worker-service-recovery.md)。
 
 ## 执行记录
+
+2026-10-10，#84 post-merge 独立审计确认 PR #262 历史交付无阻塞缺陷；main 已通过 PR #268 在 execution-map/验收中登记 #84 实现完成，WFS-M1 和后续 Orca supervised 规范 final 能力缺口仍分别待人工/技术补齐。#45 将最新 main `40446a671badc901bcf868872a383b421d646803` 以 merge `5bee8ded64a79982e4c39688c3e2cff595800be1` 集入原 PR 分支；精确候选 `21fb131f6b89cc6e04c3b85a4a9e3de232c2b613`。stale task version、unsupported profile/receipt、18 HTTP/API、8 服务集成、staged query/feedback、vet 及 L1（12组/479通过/0失败/0跳过）通过。API2 原始 SHM failure 仍 `验收失败`；限定风险接受未生效，等待 #45 新独立终审。PR #249 保持 OPEN，#44 不启动。
 
 2026-10-09 #84 集成主干原生 Orca 改动（PR #259，主干 ade7042b），沿原固定 c4bcbec Spec/Plan 实现通用步骤，未恢复退役 launcher。用户明确调整 Orca usage 验收为公开接口不可用如实登记，真实三轮/原身份/PR/清理仍必验；[专属记录](../acceptance/worker-staged-flow.md)同步原失败与新验证范围。历史预留 #86 保留身份但不进入 DAG，主干直接实施结果见[原生 Orca 调整](../architecture/orca-native-worker.md)，不作为 #84 等待边。
 

@@ -55,9 +55,16 @@ func (s *Service) processTaskStartControl(ctx context.Context, req productapi.Co
 	if !found {
 		return s.rejectControl(req, digest, "task_not_ready", errTaskNotReady)
 	}
+	expectedTaskVersion := payload.ExpectedTaskVersion
+	if expectedTaskVersion != 0 && expectedTaskVersion != task.Version {
+		return s.rejectControl(req, digest, "stale_version", nativeErr("stale_version", "start_task task version changed before admission"))
+	}
+	if expectedTaskVersion == 0 {
+		expectedTaskVersion = task.Version
+	}
 	req.Payload = append([]byte(nil), req.Payload...)
 	commands := s.commandService(s.Config.identity)
-	options := TaskClaimOptions{TaskID: payload.TaskID, RequestID: req.RequestID, WorkflowRunID: req.RequestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: req.ExpectedControlRevision, RequestedBy: req.RequestedBy, Explicit: true, ExecutionProfile: &profile, ServiceInstanceID: req.InstanceID, controlRequestDigest: digest}
+	options := TaskClaimOptions{TaskID: payload.TaskID, RequestID: req.RequestID, WorkflowRunID: req.RequestID, ExpectedTaskVersion: expectedTaskVersion, ExpectedAuthorityVersion: req.ExpectedControlRevision, RequestedBy: req.RequestedBy, Explicit: true, ExecutionProfile: &profile, ServiceInstanceID: req.InstanceID, controlRequestDigest: digest}
 	check := func(checkCtx context.Context) taskStartCheckResult {
 		prepared, err := commands.prepareNativeTaskClaim(checkCtx, config, options)
 		return taskStartCheckResult{request: req, digest: digest, prepared: prepared, err: err}

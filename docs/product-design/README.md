@@ -13,6 +13,7 @@
 | [执行控制台](execution-console.md) | 当前 TUI 的任务/候选布局、原地反馈、能力展示与操作速查 |
 | [Worker 步骤流程 Spec](../spec/worker-staged-flow.spec.md) | #84 已纳入一期收尾执行规划：现有 worker、简单步骤序列和 adapter；状态判断、三个短提示词及源码改造范围，implement 两轮/publish 单轮；尚未实现 |
 | [规划与原生客户端架构](planning-architecture.md) | 拟议的 Go 服务、WinUI 客户端及 Codex 规划会话边界 |
+| [本机客户端协议 v1](local-client-protocol.md) | 当前回环 HTTP 发现/认证、查询路由、action/DTO 和原请求恢复契约 |
 | [规划与原生界面交互](planning-ui.md) | 拟议的规划对话、草稿审阅、DAG、执行与待处理页面 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |
 

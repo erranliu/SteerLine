@@ -112,12 +112,16 @@ func newTaskStartFixture(t *testing.T) (*Service, Config) {
 	return s, c
 }
 
-func startControlRequest(t *testing.T, s *Service, taskID, profileID string) productapi.ControlRequest {
+func startControlRequest(t *testing.T, s *Service, taskID, profileID string, expectedVersion ...uint64) productapi.ControlRequest {
 	t.Helper()
 	_, profile, err := s.runtime.Profiles.ResolveExecutionProfile(profileID, "")
 	require(t, err)
 	at := now()
-	req := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: s.Config.Identity(), InstanceID: s.State.Service.InstanceID, ExpectedControlRevision: s.State.Control.Revision, Action: "start_task", Payload: mustJSON(productapi.ControlPayload{TaskID: taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}), RequestedBy: "operator", CreatedAt: at, ExpiresAt: at.Add(2 * time.Minute)}
+	payload := productapi.ControlPayload{TaskID: taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}
+	if len(expectedVersion) > 0 {
+		payload.ExpectedTaskVersion = expectedVersion[0]
+	}
+	req := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: s.Config.Identity(), InstanceID: s.State.Service.InstanceID, ExpectedControlRevision: s.State.Control.Revision, Action: "start_task", Payload: mustJSON(payload), RequestedBy: "operator", CreatedAt: at, ExpiresAt: at.Add(2 * time.Minute)}
 	require(t, publishControlRequest(s.Config.RunDir, req))
 	return req
 }
@@ -215,6 +219,34 @@ func TestTaskStartControlDoesNotSerializeIndependentTasks(t *testing.T) {
 				t.Fatal("startup mixed identities/profiles or repeated the original effect")
 			}
 		})
+	}
+}
+
+func TestTaskStartControlRejectsStaleDisplayedTaskVersion(t *testing.T) {
+	s, c := newTaskStartFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	request := startControlRequest(t, s, "101", "first", 999)
+	require(t, s.pollControl(ctx, cancel))
+	receipt, err := ReadControlReceipt(c, request.RequestID)
+	require(t, err)
+	if receipt.Status != "rejected" || receipt.Code != "stale_version" || len(s.domain.Executions) != 0 {
+		t.Fatalf("stale displayed task version was silently retargeted: receipt=%+v executions=%d", receipt, len(s.domain.Executions))
+	}
+}
+
+func TestTaskStartControlReportsUnsupportedCapabilityInReceipt(t *testing.T) {
+	s, c := newTaskStartFixture(t)
+	request := startControlRequest(t, s, "101", "first")
+	digest := s.host.ControlRequestDigest(request.RequestID)
+	s.startChecks = map[string]productapi.ControlRequest{request.RequestID: request}
+	err := s.applyTaskStartCheck(taskStartCheckResult{request: request, digest: digest,
+		err: &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow has no verified structured final source"}})
+	require(t, err)
+	receipt, err := ReadControlReceipt(c, request.RequestID)
+	require(t, err)
+	if receipt.Status != "rejected" || receipt.Code != "unsupported" || len(s.domain.Executions) != 0 {
+		t.Fatalf("unsupported staged route was not exposed as a rejected capability: receipt=%+v executions=%d", receipt, len(s.domain.Executions))
 	}
 }
 

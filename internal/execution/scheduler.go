@@ -13,8 +13,7 @@ import (
 )
 
 func (s *Service) BeginActor(ctx context.Context) error {
-	s.runContext = ctx
-	s.signalQueue = make(chan Signal, 128)
+	s.setSignalTransport(ctx, make(chan Signal, 128))
 	for runID, worker := range s.workers {
 		s.forwardWorker(ctx, runID, worker)
 	}
@@ -146,9 +145,12 @@ func (s *Service) RecoverAdmission() (bool, error) {
 }
 func (s *Service) SetStartupMetadata(id string) { s.State.Service.StartupID = ptr(id) }
 func (s *Service) Heartbeat() error             { return s.store.Heartbeat() }
-func (s *Service) Signals() <-chan Signal       { return s.signalQueue }
+func (s *Service) Signals() <-chan Signal       { return s.signalChannel() }
 func (s *Service) HistoryErrors() <-chan error  { return s.conversationHistoryErrors }
 func (s *Service) HandleSignal(message Signal) error {
+	if message.discard != nil {
+		return s.handleDiscardTask(message.discard)
+	}
 	err := s.handleWorkerMessage(message)
 	if errors.Is(err, executionmodel.ErrTurnStale) {
 		return nil

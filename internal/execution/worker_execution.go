@@ -9,6 +9,37 @@ import (
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
+const workerFlowStructuredFinalDiagnostic = "fixed development flow requires bound structured final evidence; this adapter has no verified staged-result source"
+
+// WorkerFlowCapabilityError reports static adapter capability without running
+// a native preflight or starting a worker. Product profile queries use it to
+// avoid presenting a route as usable when the current staged flow cannot
+// verify its final result.
+func WorkerFlowCapabilityError(c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost) error {
+	if c.WorkflowProtocol != executionmodel.Version {
+		return nil
+	}
+	entry, err := registrationFor(c, directory)
+	if err != nil {
+		return err
+	}
+	setup, err := lifecycleSetupForConfig(c, entry, processHost)
+	if err != nil {
+		return err
+	}
+	lifecycle, err := entry.Lifecycle(setup.Clone())
+	if err != nil {
+		return err
+	}
+	if lifecycle == nil {
+		return errors.New("execution adapter returned no lifecycle capability port")
+	}
+	if !lifecycle.PolicyCapabilities().StructuredFinalEvidence {
+		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: workerFlowStructuredFinalDiagnostic}
+	}
+	return nil
+}
+
 func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, resolver executionbackend.LifecycleResolver) error {
 	if err := validateWorkflowConfig(c, directory); err != nil {
 		return err
@@ -26,7 +57,7 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, di
 		return probeErr
 	}
 	if !lifecycle.PolicyCapabilities().StructuredFinalEvidence {
-		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow requires bound structured final evidence; this adapter has no verified staged-result source"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: workerFlowStructuredFinalDiagnostic}
 	}
 	if lifecycle.PolicyCapabilities().ServiceStopBehavior != entry.ServiceStopBehavior {
 		return errors.New("worker service-stop behavior differs from its registered declaration")
@@ -81,7 +112,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 		return s.commitWorker(run)
 	}
 	if run.Decision.Request.QuestionRoute != nil {
-		if s.signalQueue != nil && s.workers[run.RunID] == nil {
+		if s.signalChannel() != nil && s.workers[run.RunID] == nil {
 			return nil // Recovery must attach the original observer before replying.
 		}
 		return s.deliverLifecycleQuestionAnswer(ctx, run, execution, answer)

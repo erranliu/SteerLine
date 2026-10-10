@@ -1,6 +1,6 @@
 # Worker 阶段流程验收规划
 
-任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，质量审计修复后交付 PR #262 Ready for review；WFS-A1–A4 按下文 source、增量和明确授权的 Orca usage 条件通过，WFS-M1 未验；尚未独立复审或合并。#83 已合入，作为隔离基线复用。
+任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。以 [Spec](../spec/worker-staged-flow.spec.md) 为流程/提示词唯一正文，实施及测试选择见 [Plan](../spec/worker-staged-flow.plan.md)，一期顺序见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，[PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并；2026-10-10 合入后独立复审未发现原 PR 的已确认缺陷，#84 实现完成。历史 WFS-A1–A4 按下文精确 source、受影响增量和明确授权的 Orca usage 调整条件结算，WFS-M1 仍待人工验收；[当前 Orca 路线能力缺口](#后续主干-orca-路线的当前能力缺口)独立保留，不以历史通过证明当前所有路线通过。#83 已合入，作为隔离基线复用。
 
 ## 最小验证安排
 
@@ -134,3 +134,27 @@ clean `d1d73346` 的 `audit-live-d1d73346-orca` 已有真实原三轮到 await_m
 没有重写上述原总报告或重复模型调用。以提交后 `08eb832a3a08b5bbc70001cbeb16ebc90ce7b049` 的真实 `checkE2EGroup` 对原完整 Go 日志和 scenario.json **只读复核通过**（1 test / 0 skip，`20261009T103049.857235500Z`；临时 Go overlay 位于证据根，不写入仓库或业务数据）。复核文件 `audit-live-main265-orca-revalidation.json` 保存原总报告 SHA256 `3732629b7b0d2aacd3304ba6ae6edf3890c4c63acf14ac4a6215364d21d5d3f7`、场景 SHA256 `544b03ed6c8faa30866de2e5b1e83477b0611f5aebdae0592360fec9d117c92a`、真实 live/validator 两个 source 及原错误；`audit-live-main265-orca-proof.json` 为身份/结果/交付摘要，原快照、逐轮 usage-capability 和清理回执不变。由该实际场景加修正后复核，WFS-A4 按用户授权的 usage 条件通过；没有声称 Orca token 计数已验证。
 
 PR #262 按用户授权转 Ready for review，未合并；实现者质量审计完成，独立复审仍待办理，任务不记“实现完成”、不释放后继。WFS-M1 及一期安装/长期验收仍未验。最终只同步验收/清单/PR 描述，后续文档提交不改变上述已验代码与构建范围。
+
+## 2026-10-10 真实合并与合入后独立复审
+
+GitHub 确认 [PR #262](https://github.com/erranliu/SteerLine/pull/262) 于北京时间 2026-10-09 19:21:48（UTC 11:21:48）实际合并，head `be4488aeedfb2a1a4f01623c2514e764742fa291`、base `8244e6f797c78c97fc49ccc33991c5340d53522c`、merge `267858f017a0393c217c5ce003bc7bedf5d6a561`。协调 fetch 后确认成果在最新默认主干。上述 Ready/未合并是当时记录；本次合并由外部完成，不能登记为合并前已独立复审或本 runner 执行了 expected-head 合并门禁。
+
+新的只读 reviewer `/root/review84_postmerge_round1` 在合入后核对实际 base→head 的完整变更、固定 c4bcbec Spec/Plan、已授权的 Orca usage 调整、生产来源/冻结输入/FinalVerified/原子提交/对账/反馈/唯一交付及原始验收文件，未发现阻止本任务历史交付结算的已确认缺陷。工作树始终为精确 head be4488、干净。[PR 独立复审记录](https://github.com/erranliu/SteerLine/pull/262#issuecomment-6091877178)与仓库外报告 `C:/Users/lmas1/.codex/task-state/roadmap-runner/roadmap-steerline-84-20261009-01a11a74/review84-postmerge-round1.md` 保留实际来源。
+
+独立复核重新计算原 Orca summary/scenario 的 SHA256，与前文登记一致；实际 Go 事件唯一 `TestDeliveryOrcaCodex` pass 464.66 秒、0 skip，三个原输入/结果及 FinalVerified、原 Dispatch、报告前后事实、PR head、唯一 Delivery 与后续精确清理均可核实。原总报告 false 及 token 不可用事实保留，限定 validator 的只读复核真实通过。086452fc→be4488 的生产代码完全一致。Local c105b4f0 原三轮累计 usage 为 68517→88144→238903，最终及清理仍 238903；后续受影响恢复/生命周期变化由已登记 controlled/增量检查覆盖，没有声称最终候选重新跑了全部 live 或 Full。
+
+本次 exact be4488 独立无模型定向验证如下，均通过、0 skip：
+
+| 范围 | 命令与实际计数 | 原始证据 |
+| --- | --- | --- |
+| 原结果/未知/输入/原子提交 | `go run ./cmd/test-feedback -out <独立绝对目录> -- ./internal/execution -run '^TestWorkerStage(UnverifiedImplementationCannotPublish\|TransientFactsReconcileOriginalTurn\|PublicationReadRetrySettlesOpenPR\|FeedbackUsesExactFrozenNativePrompt\|AtomicCommitFailure\|ResultBinding\|StrictResult)$' -count=1`：14 tests，134.877 秒 | `C:/Users/lmas1/AppData/Local/Temp/review84-postmerge-round1-stage-audit-20261010/summary.json` |
+| Orca 原 settled final | `go run ./cmd/test-feedback -out <独立绝对目录> -- ./internal/execution/adapters/orca -run '^TestWorkerStageNativeFinalUsesOriginalSettledMaterial$' -count=1`：8 tests | `C:/Users/lmas1/AppData/Local/Temp/review84-postmerge-round1-final-evidence-20261010/summary.json` |
+| 限定 usage 能力检查 | `go run ./cmd/test-feedback -out <独立绝对目录> -- ./cmd/test-feedback -run '^TestNativeOrcaL3RequiresHonestPublicUsageCapability$' -count=1`：12 tests | `C:/Users/lmas1/AppData/Local/Temp/review84-postmerge-round1-usage-validator-20261010/summary.json` |
+
+合计 34 项（含子测试），未增加 live 模型调用、Full 或完整 L2。WFS-A1–A4 按原精确来源、受影响增量及真人限定 usage 条件结算；#84 实现完成。WFS-M1 仍待人工验收，按前述步骤、参与人/窗口待安排与阻塞范围保留；一期安装入口、24 小时和同构建长期恢复仍未验。
+
+### 后续主干 Orca 路线的当前能力缺口
+
+PR #266（main `21d97350`）在 #84 合入后移除原 Terminal registration/profile codec/conversation source，改由 supervised 路线承载本机目标；该路线没有声明或实现 `StructuredFinalEvidence`。当前分步流程严格入站检查因而返回 unsupported，不能用旧 Terminal 的三轮通过证明新路线可用。这是后续平台改动的组合能力缺口，不能归为 PR #262 原 diff 的失败，也不能改称人工待验或悄悄恢复旧入口。
+
+#45 继续消费实际通用 flow/step/status/StageResults，并如实呈现缺能力；新的 Orca 路线若要执行三轮，须补齐真实 producer/consumer 的规范 final 及对应验证，不得只置能力 flag 或用 worker_done summary 冒充。当前主干另有[规范 final 与新场景待补](orca-remote-l3.md#当前分步流程能力缺口)记录。本次不启动范围外任务，不把历史 #84 验收结算写成当前 Orca 全路线通过。

@@ -1,6 +1,6 @@
 # Plan：后端组装与最终回复状态收敛
 
-唯一依据：[Spec](bounded-structure-refactoring.spec.md)。无编号普通开发计划，不进入 roadmap、不创建执行聊天、不派发任务。2026-10-10 用户授权本聊天实施及质量审计后提 PR，交付一个实现 PR。提 PR 前集成基线 `8e292172d84c902e93cedb9870a658e90a9db0c4`；实时验收归[专属记录](../acceptance/bounded-structure-refactoring.md)。
+唯一依据：[Spec](bounded-structure-refactoring.spec.md)。无编号普通开发计划，不进入 roadmap、不创建执行聊天、不派发任务。2026-10-10 用户授权本聊天实施及质量审计后提 PR，交付一个实现 PR。首次提 PR 集成基线 `8e292172d84c902e93cedb9870a658e90a9db0c4`，冲突解决合入 `4786934a2ab6a9be7e38d520c8efb2a7f65fedc0`；实时验收归[专属记录](../acceptance/bounded-structure-refactoring.md)。
 
 ## 实施步骤
 
@@ -10,11 +10,11 @@
 4. **薄接线与缺口测试。** 调整 final 键位/渲染/refresh/update，旧测试只适配状态位置、保留行为断言。新增 TestBuiltinComposition* 验证目录独立、原 keys/能力/停服字段、双目标的配置/工厂绑定及构造零 probe/start；沿用 TestSupervisedTargetsShareRegistrationAndRetiredLocalIsDisconnected 的旧入口拒绝断言。新增 TestFinalReader* 以小查询 stub/独立组件验证重置、乱序/历史范围、gap/预览/正文；用最小 Model 查询 stub 补报告阶段选择原 implement Turn、无匹配 StageResult 时沿 CurrentTurn、完整历史不过滤的接线缺口，归 TestFinalStageQuery*。宿主保留步骤事实派生、workerStagePresentation、nativeSessionOpening/原会话打开接线；不扩大组件端口。已有覆盖不复制，不新建共同模拟框架。
 5. **交付收口。** 按下表验证并登记同一真实候选 SHA/dirty、枚举/命令/结果/临时证据。更新 current-code-architecture.md、parallel-development.md 受影响 app/console 行。此 PR 自行收口，清理旧规划导航、不恢复编号执行表。自查与正常独立复审核对旧状态/逻辑删除及无不必要层；实际实现、提交/PR 按后续用户授权处理。
 
-两项可分别实施、在一个 PR 交付，不维护跨任务公共接线所有权。不改公共 DTO/backend/schema/runner。消费已合入 #84 的实际步骤字段，#45 的共同文件在最新主干集成时核对；不暂停其他执行、不新增依赖或提前建兼容路径，不代改正式清单中的过时状态。
+两项可分别实施、在一个 PR 交付，不维护跨任务公共接线所有权。本次重构不改公共 DTO/backend/schema/runner；集成主干的既有契约变化按真实来源保留。消费已合入 #84 的步骤字段与 #45 的客户端接线，不暂停其他执行、不新增依赖或提前建兼容路径，不代改正式清单状态。
 
 ## 测试计划
 
-覆盖全部 [BS-A1–BS-A5](../acceptance/bounded-structure-refactoring.md)。Windows/amd64，Go/Git、隔离 home/clone/SQLite、现有 app/integration executable fixture，无模型 opt-in。runner 每次默认独立临时 evidence，执行前枚举新增入口，必须非零匹配、不能靠 skip。
+覆盖全部 [BS-A1–BS-A5](../acceptance/bounded-structure-refactoring.md)。Windows/amd64，Go/Git、隔离 home/clone/SQLite、现有 app/integration executable fixture，无模型 opt-in。每次 runner 使用独立临时 evidence；并发启动多个 runner 时，显式加 `-out` 指向各自不同的新空临时目录，避免系统时钟粒度导致默认目录重名。执行前枚举新增入口，必须非零匹配、不能靠 skip。
 
 | 验收项 / 级别、组或场景 | 命令 | 时点 / 通过条件 | 证据位置 |
 | --- | --- | --- | --- |

@@ -60,3 +60,19 @@
 实现提交：`a5c5fbf9a5f5b77553a547b731568cca6ce32e8c`，分支 `codex/bounded-structure-refactoring`。该提交的全部受影响 Go blob 与上述审计后验证清单一致；验证仍如实记录为提交前 dirty tree 运行，不伪称重新运行了干净提交二进制。提交后只同步本段 PR 元数据，源码保持。
 
 [PR #269](https://github.com/erranliu/SteerLine/pull/269) 已创建并附到当前聊天；GitHub 核实 OPEN、非 draft、base main、head 为上述实现提交且 MERGEABLE。当前没有平台 check run；本聊天自审和本机自动通过不冒充独立 PR 复审或已合并。独立 PR 复审/合并待进行，不修改 execution-map 或分配任务编号。
+
+## 2026-10-10 合入 #45 与冲突解决
+
+用户授权解决 PR #269 冲突。保留实现分支历史，将主干 `4786934a2ab6a9be7e38d520c8efb2a7f65fedc0`（含 PR #249 / #45）合入 `ca09824027f0009e072b196976f9bcaa5bb4ef9e`。仅两份架构文档冲突：源码索引同时保留 httpapi owner/传输图和 finalReplyReader owner；并行开发指南保留主干产品客户端传输说明及本 PR 的 final/后端组装归属。源码自动合并，无手工 Go 冲突修复；本 PR 的 19 个 Go blob 与原审计指纹一致。Spec/Plan 仅同步实际集成基线与显式独立 evidence 安排，范围保持。
+
+验证候选为上述两个父提交的合并工作树，`source_dirty=true`；Windows/amd64、Go 1.26.4，无 native/live 模型开关。测试启动后仅修改文档，全部 917 份 tracked Go 文件的 LF 归一化指纹清单位于 L1 evidence 的 `conflict-merged-go-manifest.txt`，清单 SHA-256 为 `eab1d42bc50474d3d25a0a0c4272d3db9f5b10cff23cd875108713d1630feb17`，提交时核对相同 Go blob。
+
+| 覆盖 | 实际命令与结果 | evidence |
+| --- | --- | --- |
+| BS-A1/A2 | Plan 的 app 完整定向选择，加 `-out` 指定独立目录；31 项通过、0 skip，44.662 秒 | `C:/Users/lmas1/AppData/Local/Temp/steerline-conflict-app-1aed7db4161e4efc9bc3bcbc9052c1e3/summary.json` |
+| BS-A3/A4/A5 | `go run ./cmd/test-feedback -level=L1`，passed/complete=true；12 组/487 项、0 skip，execution 162.9 秒；console 120 顶层/164 项全部通过，L1 的各组 JSONL 逐行解析完整 | `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261010T015754.059581000Z/summary.json` |
+| BS-A5 | `go run ./cmd/test-feedback -out <独立目录> -- ./tests/integration -run '^TestWorkerStageLocalRoundTrip$' -count=1`；1 项通过、0 skip，125.804 秒，当前 app/客户端组合下原三轮及重启不重投保持 | `C:/Users/lmas1/AppData/Local/Temp/steerline-conflict-integration-081ce0d3724d442d8654124c46d1d91a/summary.json` |
+
+首次并行调用的默认 evidence 目录发生时钟重名，app/integration 的 `go-test.jsonl` 输出混写，两份定向报告返回 incomplete，未计为通过；原混写日志保留在上述默认 L1 目录。L1 使用各组独立子目录，分组日志未混写、最终 summary 为 quick 的完整通过结果，已另核验所有组 JSONL。两项定向验证改用不同 UUID 目录重跑并通过，未修改 runner 或降低报告完整性门槛。
+
+文档链接检查：299 份 Markdown/1868 条本地导航，0 错误；91 份身份、9 条草稿、5 条正式记录检查通过，next ID 仍为 91；未解冲突/标记与 `git diff --check` 检查通过。未追加 Full/L2/L3/live/native；这次只证明既有重构与合入客户端成果的最小组合，不替代 #45 独立验收或 PR #269 独立复审。

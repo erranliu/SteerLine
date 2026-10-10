@@ -49,6 +49,7 @@ type Service struct {
 	lifecycleEffects          map[string]pendingLifecycleEffect
 	lifecycleMessages         map[string][]Signal
 	workerRecovering          map[string]bool
+	signalMu                  sync.RWMutex
 	signalQueue               chan Signal
 	runContext                context.Context
 	forwarders                sync.WaitGroup
@@ -63,4 +64,30 @@ type Service struct {
 	stopAcceptedAt    *time.Time
 	controlFault      func(string)
 	startupID         string
+}
+
+func (s *Service) signalChannel() chan Signal {
+	s.signalMu.RLock()
+	defer s.signalMu.RUnlock()
+	return s.signalQueue
+}
+
+func (s *Service) signalTransport() (chan Signal, context.Context) {
+	s.signalMu.RLock()
+	defer s.signalMu.RUnlock()
+	return s.signalQueue, s.runContext
+}
+
+func (s *Service) setSignalTransport(ctx context.Context, queue chan Signal) {
+	s.signalMu.Lock()
+	s.runContext, s.signalQueue = ctx, queue
+	s.signalMu.Unlock()
+}
+
+func (s *Service) clearSignalTransport() chan Signal {
+	s.signalMu.Lock()
+	queue := s.signalQueue
+	s.signalQueue = nil
+	s.signalMu.Unlock()
+	return queue
 }

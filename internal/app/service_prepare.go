@@ -3,8 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
 )
 
 // PrepareServiceConfig performs center-owned admission and recovery checks
@@ -18,11 +16,7 @@ func PrepareServiceConfig(c Config) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	hostConfig, err := hostRuntimeConfig(context.Background(), c)
-	if err != nil {
-		return c, err
-	}
-	if err := steerline.PreflightNativeStatePath(hostConfig); err != nil {
+	if err := PreflightNativeStatePath(c); err != nil {
 		return c, err
 	}
 	if err := preflightWorkerFlowState(context.Background(), c); err != nil {

@@ -15,6 +15,7 @@ type Reader interface {
 	Close() error
 	ReadProject(context.Context, string, api.ProjectSnapshot) api.ProjectSnapshot
 	RecentActivity(context.Context, string, string, string) (api.LogBatch, error)
+	Activity(context.Context, string, string, string, api.ActivityCursor) (api.LogBatch, error)
 	ShowTask(context.Context, string) (api.TaskPage, error)
 	ListTasks(context.Context, string, int) (api.TaskPage, error)
 	TaskGraph(context.Context, string, int) (api.GraphPage, error)
@@ -38,7 +39,21 @@ type ControlPort interface {
 	Stop(context.Context, string, time.Duration) (api.ServiceStopResult, error)
 }
 
+// ControlInboxPort publishes an immutable request bound to the client's
+// displayed instance/revision. The running service rechecks qualification.
+type ControlInboxPort interface {
+	SubmitInbox(context.Context, api.ControlInput) (api.ControlRequest, error)
+}
+
+// TaskDiscardPort lets the configured service consume a discard through its
+// existing command owner while it holds the repository lock. Standalone
+// clients continue to use TaskCommands when no service-owned port is present.
+type TaskDiscardPort interface {
+	Discard(context.Context, api.DiscardInput) (api.TaskDiscardReceipt, error)
+}
+
 type DecisionPort interface {
+	Normalize(context.Context, api.DecisionInput) (api.DecisionInput, error)
 	Eligibility(context.Context, *api.CandidateSummary) error
 	Submit(context.Context, api.DecisionInput) (api.CommandReceipt, bool, error)
 	Answer(context.Context, api.AnswerInput) (api.CommandReceipt, bool, error)
@@ -52,6 +67,7 @@ type Resources struct {
 	OpenReader                          func(context.Context) (Reader, error)
 	ReadFailure                         func(context.Context, string, error) api.ProjectSnapshot
 	OpenCommands                        func(context.Context, bool) (TaskCommands, error)
+	Discard                             TaskDiscardPort
 	Control                             ControlPort
 	Decision                            DecisionPort
 	TaskSnapshot                        func(context.Context) (*api.TaskCandidates, error)
