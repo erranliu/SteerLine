@@ -34,9 +34,16 @@ type stageReport struct {
 	Blocker  *stageBlocker `json:"blocker,omitempty"`
 }
 
-const stageResultContract = `Return exactly one JSON object, with no Markdown or surrounding text:
-{"outcome":"done|needs_input|blocked","outputs":{"candidate_sha":"optional full SHA","pr_url":"optional actual PR URL","branch":"optional known branch"},"summary":"actual result","question":"required only for needs_input","blocker":{"category":"failure|unknown_external|permission|prerequisite","action":"actual action","error":"actual error","known":"optional known result","unknown":"optional unresolved result"}}
-Omit question/blocker when not applicable. done requires candidate_sha for implement.report, pr_url for publish and publish.report. Never fill an invented SHA or URL. A failed original execution cannot be done. Unknown external outcomes must use blocker.category=unknown_external.`
+const stageResultContract = `Return one JSON object:
+{"outcome":"done|needs_input|blocked","summary":"result"}
+For needs_input add question. For blocked add blocker: {"category":"failure|unknown_external|permission|prerequisite","action":"action","error":"error","known":"optional","unknown":"optional"}.`
+
+func stageResultInstruction(step string) string {
+	if step == executionmodel.StepReport {
+		return stageResultContract
+	}
+	return stageResultContract + "\nFor done add outputs: {\"pr_url\":\"actual PR URL\"}."
+}
 
 var stageSHA = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
@@ -112,7 +119,7 @@ func decodeStageReport(body, step string) (stageReport, error) {
 	}
 	switch value.Outcome {
 	case "done":
-		if value.Question != "" || value.Blocker != nil || step == executionmodel.StepReport && value.Outputs.CandidateSHA == "" || executionmodel.PublicationStep(step) && value.Outputs.PRURL == "" {
+		if value.Question != "" || value.Blocker != nil || executionmodel.PublicationStep(step) && value.Outputs.PRURL == "" {
 			return value, errors.New("done result has inconsistent fields")
 		}
 	case "needs_input":

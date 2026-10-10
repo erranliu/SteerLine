@@ -145,7 +145,7 @@ func (p *Lifecycle) Execute(ctx context.Context, r executionbackend.LifecycleReq
 			return receipt, nil, err
 		}
 		final := "neutral turn completed"
-		if strings.HasPrefix(r.Input.Turn.Prompt, "Current step: implement.report.") {
+		if strings.HasPrefix(r.Input.Turn.Prompt, "Format the preceding implementation result as JSON.") {
 			final = `{"outcome":"needs_input","summary":"Neutral fixture awaits explicit feedback","question":"What should this candidate do next?"}`
 		}
 		return receipt, newNeutralObserver(process, session, r.Input.Turn.CommandID, final, func() error {

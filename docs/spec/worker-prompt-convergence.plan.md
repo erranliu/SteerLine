@@ -1,5 +1,7 @@
 # Plan：恢复 Worker 三轮流程与统一提示词
 
+当前提示词以本文末尾的 2026-10-10 精简补充为准，发布补报流程见 [Spec](../spec/worker-publish-report.spec.md)。
+
 绑定 [Spec](worker-prompt-convergence.spec.md)。直接在当前聊天实现，不调用 roadmap-runner；结果登记[专属验收](../acceptance/worker-prompt-convergence.md)。
 
 1. 在 prompt.go 集中三个短模板与结果契约入口，StageInput 冻结任务事实；首次/反馈/恢复/重试共用渲染。报告改为紧凑业务事实，原生权限仅保留控制元数据。
@@ -19,3 +21,11 @@
 | WPC-A4 | 定向 integration：`go test ./tests/integration -run '^Test(WorkerStage\|SupervisedDevelopmentFlow)' -count=1 -timeout=5m`；`go test ./internal/app ./internal/console -run '^Test(Supervised\|WorkerStage)' -count=1`；`go test ./internal/testkit/boundary/... ./tests/e2e/internal/controlled ./tests/e2e/internal/evidence ./tests/e2e/internal/testenv -count=1`；`go run ./cmd/test-feedback -level=L3 -suite=delivery -env=controlled '-scenario=delivery.basic'`；`go vet` 受影响包、`go build ./cmd/steerline`、文档链接、diff 检查 | 交付前；公共领取/local 三轮推进及消费接线、supervised adapter/app 定向通过，既有退役场景保留 skip，不计三轮覆盖；源码可构建、导航无错误 | acceptance WPC-A4、临时证据日志与 runner summary.json |
 
 表格中的正则竖线仅为 Markdown 转义，命令使用普通 `|`。不默认 Full、完整 L2/L3或 live：本次恢复已有设计，结果传输不新增外部接口或模型任务，隔离定向回归足以验证改动。没有本任务新增人工项；既有真实交付待验记录不因此算作通过。
+
+## 当前精简实施与测试计划（2026-10-10）
+
+裁剪四阶段输入，保留内部 TaskFacts/StageInput/StageSnapshot 绑定和核验；workspace 改为纯校验，发布参数只在 publish 提供。执行轮不携带 JSON 契约，实现报告由程序绑定快照候选，发布报告返回 PR URL。同步协议模拟夹具，不恢复阶段 ID 文本。
+
+[WPC-A5](../acceptance/worker-prompt-convergence.md)：Windows、现有临时 Git/SQLite/协议夹具。修改后运行 `go test ./internal/execution -run 'TestWorkerPrompt|TestWorkerWorkspaceInstruction|TestWorkerFlowPrompt|TestWorkerStage|TestWorkerFlowServiceFirstFeedback' -count=1 -timeout=5m`；覆盖字段裁剪、源绑定、反馈、补报、重试和产物核验。夹具同步后运行 `go test ./tests/integration -run '^TestWorkerStageLocal(RoundTrip|PublishReport)$' -count=1 -timeout=5m` 与 `go test ./tests/e2e/internal/controlled -count=1 -timeout=2m`。交付前 go vet 改动包及 git diff --check。通过条件：场景通过、执行轮无 JSON、正常报告不重复正文/内部快照、仅发布轮带目标。证据登记本聊天工具输出及 acceptance WPC-A5 小节。
+
+没有 adapter 采集/传输改动，WPC-A3 不重跑；WPC-A1/A2/A4 的受影响输入、状态和夹具由上述定向覆盖。历史全范围记录不改写为本次结果。不选择 Full、live 或完整 L2/L3；没有新增人工项。

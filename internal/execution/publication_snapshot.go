@@ -13,16 +13,19 @@ import (
 )
 
 func publicationTargetInstruction(c Config) string {
+	// The current branch and repository are available from the native workspace.
 	facts, _ := json.Marshal(struct {
-		Publisher   string `json:"publisher"`
-		Provider    string `json:"provider"`
-		ProviderURL string `json:"provider_url"`
-		Repository  string `json:"repository"`
-		Remote      string `json:"remote"`
-		RemoteURL   string `json:"remote_url"`
-		BaseBranch  string `json:"base_branch"`
-	}{string(c.PublicationPolicy.Publisher), c.PR.Kind, c.PR.BaseURL, c.PR.Repository, c.Remote, c.publicationRemoteURL, c.Branch})
-	return "\nFixed publication target:\n" + string(facts) + "\n"
+		Remote     string `json:"remote"`
+		BaseBranch string `json:"base_branch"`
+	}{c.Remote, c.Branch})
+	return "\nPR target: " + string(facts) + "\n"
+}
+
+func stagePublicationInstruction(step string, c Config) string {
+	if step != executionmodel.StepPublish {
+		return ""
+	}
+	return publicationTargetInstruction(c)
 }
 
 func (c Config) publicationSettings() executionmodel.PublicationSettings {

@@ -44,7 +44,7 @@ func TestControlledStagesCommitReportAndPublishSeparately(t *testing.T) {
 	t.Setenv("STEERLINE_E2E_CONTROLLED_STATE", path)
 	t.Chdir(repo)
 	dispatch := func(step string) error {
-		raw, _ := json.Marshal(map[string]any{"id": 1, "method": "turn/start", "params": map[string]any{"threadId": "original", "input": []any{map[string]string{"text": "Current step: " + step + ". Bound fixture input"}}}})
+		raw, _ := json.Marshal(map[string]any{"id": 1, "method": "turn/start", "params": map[string]any{"threadId": "original", "input": []any{map[string]string{"text": map[string]string{"implement.execute": "Implement the following Spec and Plan.", "implement.report": "Format the preceding implementation result as JSON.", "publish": "Push and create or reuse a PR."}[step]}}}})
 		return handleRPC(path, raw, func(any) error { return nil })
 	}
 	if err := dispatch("implement.execute"); err != nil {

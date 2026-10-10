@@ -204,9 +204,9 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if s.Session == "" || params.ThreadID != s.Session || len(params.Input) == 0 {
 			return fmt.Errorf("invalid controlled dispatch")
 		}
-		steps := []string{"implement.execute", "implement.report", "publish"}
+		steps := []string{"Implement the following Spec and Plan.", "Format the preceding implementation result as JSON.", "Push and create or reuse a PR."}
 		index := len(s.Turns)
-		if index >= len(steps) || !strings.HasPrefix(params.Input[0].Text, "Current step: "+steps[index]+".") {
+		if index >= len(steps) || !strings.HasPrefix(params.Input[0].Text, steps[index]) {
 			return fmt.Errorf("unexpected duplicate or out-of-order staged dispatch")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -239,7 +239,7 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 			if candidateSHA == "" {
 				return fmt.Errorf("source candidate missing")
 			}
-			raw, _ := json.Marshal(map[string]any{"outcome": "done", "outputs": map[string]string{"candidate_sha": candidateSHA}, "summary": "Controlled source implementation completed"})
+			raw, _ := json.Marshal(map[string]any{"outcome": "done", "summary": "Controlled source implementation completed"})
 			final = string(raw)
 		case 2:
 			branch, err := Git(ctx, s.Cwd, "symbolic-ref", "--short", "HEAD")
