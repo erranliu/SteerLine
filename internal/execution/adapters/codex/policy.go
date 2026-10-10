@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-const PolicyContract = "codex-policy-v2:0.159.2:unelevated:explicit-roots:no-temp:auto_review"
+const PolicyContract = "codex-policy-v3:0.159.2:unelevated:explicit-roots:admin-temp:native-shell:git-no-maintenance:auto_review"
 const PolicyCodexVersion = "codex-cli 0.159.2"
 
 type Permissions struct {
@@ -33,6 +33,7 @@ func VerifyPolicyVersion(version string) error {
 }
 func (p Permissions) Args() []string {
 	return []string{"--config", "sandbox_mode=" + p.Sandbox, "--config", "windows.sandbox=" + p.WindowsSandbox,
+		"--config", "allow_login_shell=false",
 		"--config", "approval_policy=" + p.ApprovalPolicy, "--config", "approvals_reviewer=" + p.ApprovalsReviewer,
 		"--config", "sandbox_workspace_write.writable_roots=[]", "--config", "sandbox_workspace_write.exclude_tmpdir_env_var=true",
 		"--config", "sandbox_workspace_write.exclude_slash_tmp=true", "--config", "sandbox_workspace_write.network_access=true"}

@@ -54,6 +54,14 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 
 两条命令都先通过生成脚本创建两套新包；结果/日志保留在包内 evidence。范围和结果见 [Plan](plans/debug-release.plan.md)、[验收](acceptance/debug-environment.md)。现有 `debug-runtime.ps1` 只用于既有源码隔离回归，不是日常或 AI 调试入口。
 
+真实 Codex 沙箱及 GitHub credential-helper 无人值守回归：
+
+```powershell
+.\scripts\test-codex-sandbox.ps1
+```
+
+先运行上述 controlled 门槛，再生成新的 live 包；真实 worker 运行探针、提交并经 gh shell helper 发布两个专属 PR，驱动在核验 base/head/SHA 后合并到本包 base，验证交付与依赖释放，并清理本次分支。必要越界走原生 auto_review，不依赖 Ctrl+N。首次准备将 gh 登录写入包内 `home/gh`，不改用户全局配置或凭据管理器；中心环境认证仍不自动传给 worker。结果见 [沙箱 Git 验收](acceptance/codex-sandbox-git.md)。
+
 ## 安装版人工更新
 
 更新安装版前先结算外部 worker/PR/会话事实，停止服务，再替换安装 exe；不要用调试包接管安装版活动执行，不迁移或清空旧数据库。此操作独立于调试环境生成。

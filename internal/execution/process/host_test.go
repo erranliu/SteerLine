@@ -19,6 +19,17 @@ func TestProcessHostCommandHelper(t *testing.T) {
 	}
 	time.Sleep(200 * time.Millisecond)
 	fmt.Println("command completed")
+	fmt.Println("routing=" + os.Getenv("ORCA_ENVIRONMENT"))
+	fmt.Println("kept=" + os.Getenv("STEERLINE_VIEWER_TEST_KEEP"))
+}
+
+func TestProcessHostBlocksAmbientRoutingOnly(t *testing.T) {
+	t.Setenv("ORCA_ENVIRONMENT", "foreign-host")
+	t.Setenv("STEERLINE_VIEWER_TEST_KEEP", "original")
+	out, err := New(5*time.Second).OutputCommand(context.Background(), executionbackend.LaunchCommand{Executable: os.Args[0], Args: []string{"-test.run=^TestProcessHostCommandHelper$"}, BlockedEnvironment: []string{"orca_environment"}})
+	if err != nil || strings.Contains(string(out), "foreign-host") || !strings.Contains(string(out), "kept=original") || os.Getenv("ORCA_ENVIRONMENT") != "foreign-host" {
+		t.Fatalf("routing filtering changed parent/unrelated environment: %s / %v", out, err)
+	}
 }
 
 func TestProcessHostOperationBudget(t *testing.T) {

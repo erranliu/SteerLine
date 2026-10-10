@@ -19,6 +19,7 @@ type Config struct {
 	RunID           string
 	ServerDir       string
 	Environment     func([]string) []string
+	WorkerRuntime   bool
 }
 
 func ValidReasoningEffort(value string) bool {

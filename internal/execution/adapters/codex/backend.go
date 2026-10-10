@@ -91,6 +91,13 @@ func (b Backend) PrepareSession(ctx context.Context, fixed Binding, input execut
 			return nil, receipt, err
 		}
 	}
+	var workerSetup *workerRuntime
+	if b.Config.WorkerRuntime {
+		workerSetup, err = prepareWorkerRuntime(b.Config.Workspace, input.LinkedWorktreeArgs)
+		if err != nil {
+			return nil, receipt, err
+		}
+	}
 	paths, err := PrepareTurn(b.Config.RunDir, b.Config.RunID, input.CommandID, b.Config.ServerDir, input.Prompt, b.Process.WriteAtomic)
 	if err != nil {
 		return nil, receipt, err
@@ -116,7 +123,7 @@ func (b Backend) PrepareSession(ctx context.Context, fixed Binding, input execut
 		}
 	} else {
 		var endpoint string
-		h.process, _, endpoint, err = LaunchServer(LaunchConfig{Executable: b.Config.Executable, Args: b.Config.Args, Profile: b.Config.Profile, Sandbox: b.Config.Sandbox, WindowsSandbox: b.Config.WindowsSandbox, Workspace: b.Config.Workspace, ServerDir: b.Config.ServerDir}, b.Process.Start, b.Config.Environment)
+		h.process, _, endpoint, err = LaunchServer(LaunchConfig{Executable: b.Config.Executable, Args: b.Config.Args, Profile: b.Config.Profile, Sandbox: b.Config.Sandbox, WindowsSandbox: b.Config.WindowsSandbox, Workspace: b.Config.Workspace, ServerDir: b.Config.ServerDir, Runtime: workerSetup}, b.Process.Start, b.Config.Environment)
 		if err != nil {
 			return nil, receipt, err
 		}
@@ -139,6 +146,9 @@ func (b Backend) PrepareSession(ctx context.Context, fixed Binding, input execut
 		params, paramErr := ThreadParams(b.Config.Workspace, b.Config.Sandbox, b.Config.Model, []any{codexapp.AskDynamicTool()})
 		if paramErr != nil {
 			return nil, receipt, paramErr
+		}
+		if workerSetup != nil {
+			params["developerInstructions"] = workerSetup.instructions()
 		}
 		response, startErr := StartThread(ctx, h.client, params, b.Config.Workspace)
 		if startErr != nil {

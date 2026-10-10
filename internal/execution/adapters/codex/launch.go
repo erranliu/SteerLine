@@ -16,6 +16,7 @@ type LaunchConfig struct {
 	ServerDir      string
 	Sandbox        string
 	WindowsSandbox string
+	Runtime        *workerRuntime
 }
 
 // LaunchServer starts the fixed native app-server. The caller supplies its
@@ -51,6 +52,13 @@ func LaunchServer[T any](config LaunchConfig, start func(*exec.Cmd) (T, error), 
 	cmd := exec.Command(launch.Executable, launch.Args...)
 	cmd.Dir = launch.WorkingDirectory
 	cmd.Env = environment(cmd.Environ())
+	if config.Runtime != nil {
+		cmd.Env, err = config.Runtime.environment(cmd.Env)
+		if err != nil {
+			_ = output.Close()
+			return identity, nil, "", err
+		}
+	}
 	cmd.Stdout, cmd.Stderr = output, output
 	identity, err = start(cmd)
 	_ = output.Close()
