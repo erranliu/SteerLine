@@ -36,6 +36,10 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 
 #43不再独立安排；#46/#47/#48/#51/#52旧计划已归档为待重定参考，不是当前验收计划。2.2/2.3任务范围成熟后补建各自当前专属记录，草稿仍链接原参考便于追溯。
 
+## 普通开发重构计划
+
+[后端组装与最终回复状态收敛](bounded-structure-refactoring.md)仅归属一个无编号合并重构，2026-10-10 用户授权本聊天实施后，BS-A1–BS-A5 自动验证与结构自查通过，提交/PR 及独立复审/合并状态见专属记录。其[Spec](../spec/bounded-structure-refactoring.spec.md) / [Plan](../spec/bounded-structure-refactoring.plan.md)按 `8e292172` 提 PR 集成基线收紧；不进入 roadmap 调度，不再维护三项独立编号验收。
+
 ## 归档流程
 
 1. 已结算验收/维护活动移入 archive/completed/；历史失败、skip和限制随记录保留。

@@ -464,16 +464,16 @@ func TestLateFinalReclassifiesSameItemAndOlderRevisionCannotOverwrite(t *testing
 	m, _ = m.refreshFinalReplies(0)
 	event := finalFixture(m, 1, "turn", "item", "完整回复")
 	event.SourceRevision = 2
-	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].finalKey, generation: m.projects[0].finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{event}}})
+	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].final.finalKey, generation: m.projects[0].final.finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{event}}})
 	m = next.(Model)
 	older := event
 	older.SourceRevision = 1
 	older.EventID = 9
 	older.Body = nil
-	next, _ = m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].finalKey, generation: m.projects[0].finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{older}}})
+	next, _ = m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].final.finalKey, generation: m.projects[0].final.finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{older}}})
 	m = next.(Model)
-	if len(m.projects[0].finalEvents) != 1 || m.projects[0].finalEvents[0].SourceRevision != 2 || m.projects[0].finalEvents[0].Body == nil {
-		t.Fatal("older revision replaced final", m.projects[0].finalEvents)
+	if len(m.projects[0].final.finalEvents) != 1 || m.projects[0].final.finalEvents[0].SourceRevision != 2 || m.projects[0].final.finalEvents[0].Body == nil {
+		t.Fatal("older revision replaced final", m.projects[0].final.finalEvents)
 	}
 }
 
@@ -482,8 +482,8 @@ func TestFinalPhaseDoesNotPromoteNonMessageEvents(t *testing.T) {
 	m, _ = m.refreshFinalReplies(0)
 	event := finalFixture(m, 1, "turn", "tool", "not a final")
 	event.Type = api.ConversationEventType("tool.completed")
-	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].finalKey, generation: m.projects[0].finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{event}}})
-	if len(next.(Model).projects[0].finalEvents) != 0 {
+	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].final.finalKey, generation: m.projects[0].final.finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{event}}})
+	if len(next.(Model).projects[0].final.finalEvents) != 0 {
 		t.Fatal("tool promoted to final")
 	}
 }
@@ -618,8 +618,8 @@ func TestConsoleTextEscapesTerminalControlCharacters(t *testing.T) {
 		t.Fatalf("unsafe text: %q", got)
 	}
 	m, _ := ccFixture(t, 1)
-	m.projects[0].bodyText = "工具输出\x1b[2J危险"
-	rendered := strings.Join(finalReplyLines(m.projects[0]), "\n")
+	m.projects[0].final.bodyText = "工具输出\x1b[2J危险"
+	rendered := strings.Join(finalReplyLines(m.projects[0].final), "\n")
 	if strings.ContainsRune(rendered, '\x1b') {
 		t.Fatal("terminal control reached renderer")
 	}

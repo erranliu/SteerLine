@@ -86,6 +86,10 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 | 本机 Orca 原生编排 | [Spec](worker-flow-orca-native.spec.md) · [Plan](worker-flow-orca-native.plan.md) | 活动轮次输入、消息竞争/故障、完整输出和独立生命周期仍按原 ON 场景核验；见[验收边界](../acceptance/worker-flow-orca-native.md) |
 | worker 停服恢复 | [Spec](worker-service-recovery.spec.md) · [Plan](worker-service-recovery.plan.md) | local 闭环已验证，Orca 新 agent 安全重建仍缺真机证据；见[验证记录](../acceptance/worker-service-recovery.md) |
 
+## 普通开发重构规划
+
+后端组装与最终回复状态两项收紧、合并为一份[Spec](bounded-structure-refactoring.spec.md) / [Plan](bounded-structure-refactoring.plan.md)。2026-10-10 基于 `21d97350` 实施并在质量自审后集成 `8e292172`，自动验证及 PR/独立复审状态见[专属记录](../acceptance/bounded-structure-refactoring.md)。不分配/派发任务编号、不进入 execution-map；执行器提取暂缓。审计及旧编号追溯见[范围收敛记录](../roadmap/drafts/bounded-refactoring.md)。
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)：当前持续 worker、单写者、身份、反馈与真实交付边界。

@@ -121,26 +121,7 @@ type projectState struct {
 
 	actions map[string]*actionState
 
-	finalKey             string
-	finalFilter          api.ConversationFilter
-	finalEvents          []api.ConversationEvent
-	finalError           string
-	finalBusy            bool
-	finalReadAt          time.Time
-	finalGeneration      uint64
-	finalSelected        string
-	finalPinned          bool
-	bodyRef              *api.ConversationBodyRef
-	bodyText             string
-	bodyError            string
-	bodyBusy             bool
-	bodyGeneration       uint64
-	previewEvent         *api.ConversationEvent
-	previewText          string
-	previewError         string
-	previewGeneration    uint64
-	previewBusy          bool
-	previewReady         bool
+	final                finalReplyReader
 	detailScroll         int
 	candidates           map[string]string
 	recoveryRunID        string
@@ -926,34 +907,20 @@ func (m Model) refreshFinalReplies(index int) (Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[index]
-	row := m.selectedRow(index)
 	key := ""
-	if row != nil && row.run != nil {
+	filter := api.ConversationFilter{}
+	if row := m.selectedRow(index); row != nil && row.run != nil {
 		key = candidateIdentity(row.run)
+		filter = api.ConversationFilter{WorkflowID: row.run.RunID, ExecutionID: row.run.ExecutionID, SessionID: row.run.SessionID, FinalsOnly: true}
 	}
-	if key != state.finalKey {
-		state.finalGeneration++
-		state.bodyGeneration++
-		state.finalKey, state.finalReadAt = key, time.Time{}
-		state.finalEvents, state.finalError, state.finalSelected = nil, "", ""
-		state.finalPinned, state.finalBusy, state.bodyBusy = false, false, false
-		state.bodyRef, state.bodyText, state.bodyError = nil, "", ""
-		state.previewEvent, state.previewText, state.previewError = nil, "", ""
-		state.previewBusy, state.previewReady = false, false
-		state.previewGeneration++
+	full, attempt, turn := m.finalQueryScope(index)
+	changed, cmd := state.final.refresh(m.ctx, state.client, m.clock.Now(), finalReplyRoute{state.ref.Key, state.ref.Identity}, key, filter, full, attempt, turn)
+	if changed {
 		state.detailScroll = 0
 		state.recoveryGeneration++
 		state.recoveryReport, state.recoveryError, state.recoveryBusy = nil, "", false
 	}
-	if key == "" || state.finalBusy || !state.finalReadAt.IsZero() && m.clock.Now().Sub(state.finalReadAt) < 5*time.Second {
-		return m, nil
-	}
-	if row.run.ExecutionID == "" {
-		state.finalError = "当前候选缺少 execution_id，无法核验最终回复"
-		return m, nil
-	}
-	state.finalFilter = api.ConversationFilter{WorkflowID: row.run.RunID, ExecutionID: row.run.ExecutionID, SessionID: row.run.SessionID, FinalsOnly: true}
-	return m, m.readFinalReplies(index)
+	return m, cmd
 }
 
 func (m *Model) saveProjectView(index int) error {

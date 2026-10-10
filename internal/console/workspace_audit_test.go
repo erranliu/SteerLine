@@ -91,7 +91,7 @@ func TestCPWAuditIndexFailureInvalidatesFinalPreview(t *testing.T) {
 			}
 			next, _ = m.Update(msg)
 			m = next.(Model)
-			if m.projects[0].previewText != "" || strings.Contains(m.View(), "旧的成功预览") {
+			if m.projects[0].final.previewText != "" || strings.Contains(m.View(), "旧的成功预览") {
 				t.Fatal("stale final remained visible after", kind)
 			}
 		})
@@ -112,7 +112,8 @@ func TestCPWAuditIgnoredPreviewIsNotCachedAsCompleted(t *testing.T) {
 	next, _ = m.Update(late)
 	m = next.(Model)
 	r.CurrentTurnID = "turn"
-	if m.readFinalPreview(0, e) == nil {
+	state := &m.projects[0]
+	if state.final.readPreview(m.ctx, state.client, finalReplyRoute{state.ref.Key, state.ref.Identity}, e) == nil {
 		t.Fatal("ignored response became a permanent cache hit")
 	}
 }

@@ -22,7 +22,7 @@ func finalFixture(m Model, id int64, turn, item, text string) api.ConversationEv
 
 func finalResult(m Model, events ...api.ConversationEvent) finalRepliesMsg {
 	s := m.projects[0]
-	return finalRepliesMsg{projectKey: s.ref.Key, identity: s.ref.Identity, key: s.finalKey, generation: s.finalGeneration, page: api.ConversationPage{Events: events}}
+	return finalRepliesMsg{projectKey: s.ref.Key, identity: s.ref.Identity, key: s.final.finalKey, generation: s.final.finalGeneration, page: api.ConversationPage{Events: events}}
 }
 
 func TestPS1CompleteFinalAndHistoryAreCandidateBound(t *testing.T) {
@@ -43,27 +43,27 @@ func TestPS1CompleteFinalAndHistoryAreCandidateBound(t *testing.T) {
 	late := cmd()
 	next, _ = m.Update(late)
 	m = next.(Model)
-	if m.projects[0].bodyText != text || m.projects[0].bodyBusy || m.projects[0].bodyError != "" {
-		t.Fatal("long final was not loaded in full", m.projects[0].bodyError)
+	if m.projects[0].final.bodyText != text || m.projects[0].final.bodyBusy || m.projects[0].final.bodyError != "" {
+		t.Fatal("long final was not loaded in full", m.projects[0].final.bodyError)
 	}
 	m, cmd = ccKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}})
 	next, _ = m.Update(cmd())
 	m = next.(Model)
-	if m.projects[0].bodyText != "历史回复" {
+	if m.projects[0].final.bodyText != "历史回复" {
 		t.Fatal("history selection lost exact body")
 	}
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyF7})
 	next, _ = m.Update(late)
 	m = next.(Model)
-	if m.projects[0].bodyText != "" || len(m.projects[0].finalEvents) != 0 {
+	if m.projects[0].final.bodyText != "" || len(m.projects[0].final.finalEvents) != 0 {
 		t.Fatal("late A body reached B")
 	}
 	foreign := second
 	foreign.ExecutionID = "other"
 	next, _ = m.Update(finalResult(m, foreign))
 	m = next.(Model)
-	if m.projects[0].finalError == "" || len(m.projects[0].finalEvents) != 0 {
+	if m.projects[0].final.finalError == "" || len(m.projects[0].final.finalEvents) != 0 {
 		t.Fatal("foreign final accepted")
 	}
 }
@@ -82,7 +82,7 @@ func TestPS1FinalRejectsUnknownPhaseAndBadBody(t *testing.T) {
 	gap.Diagnostic = "原来源尚未采集"
 	next, _ := m.Update(finalResult(m, process, unknown, gap))
 	m = next.(Model)
-	if len(m.projects[0].finalEvents) != 0 || !strings.Contains(m.projects[0].finalError, "尚未采集") {
+	if len(m.projects[0].final.finalEvents) != 0 || !strings.Contains(m.projects[0].final.finalError, "尚未采集") {
 		t.Fatal("process/unknown promoted or gap hidden")
 	}
 	final := finalFixture(m, 3, "turn", "final", "内容")
@@ -93,7 +93,7 @@ func TestPS1FinalRejectsUnknownPhaseAndBadBody(t *testing.T) {
 	m = next.(Model)
 	next, _ = m.Update(cmd())
 	m = next.(Model)
-	if m.projects[0].bodyText != "" || m.projects[0].bodyError == "" {
+	if m.projects[0].final.bodyText != "" || m.projects[0].final.bodyError == "" {
 		t.Fatal("failed read showed complete final")
 	}
 }
@@ -203,17 +203,17 @@ func TestPS1BackgroundProjectBodyStaysWithOriginalProject(t *testing.T) {
 	second := first
 	second.ref.Key = "other-project"
 	second.ref.Identity = "other-identity"
-	second.bodyRef = nil
-	second.bodyText = ""
+	second.final.bodyRef = nil
+	second.final.bodyText = ""
 	m.projects = append(m.projects, second)
 	m.selected = 1
-	msg := bodyMsg{projectKey: first.ref.Key, identity: first.ref.Identity, key: first.finalKey, generation: m.projects[0].bodyGeneration, body: *event.Body, text: "原项目正文"}
+	msg := bodyMsg{projectKey: first.ref.Key, identity: first.ref.Identity, key: first.final.finalKey, generation: m.projects[0].final.bodyGeneration, body: *event.Body, text: "原项目正文"}
 	if cmd == nil {
 		t.Fatal("body was not scheduled")
 	}
 	next, _ = m.Update(msg)
 	m = next.(Model)
-	if m.projects[0].bodyText != "原项目正文" || m.projects[1].bodyText != "" {
+	if m.projects[0].final.bodyText != "原项目正文" || m.projects[1].final.bodyText != "" {
 		t.Fatal("background response crossed projects")
 	}
 }
