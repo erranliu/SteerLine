@@ -30,3 +30,5 @@
 用户授权审计、修复并提 PR。本聊天复核输入冻结、三轮/反馈/恢复及采集/保存边界。发现 transcript 收集只识别后续 Task preamble，可能把无绑定的后续 user 输入之回复当成原轮结果；现在拒绝跨越未绑定的 user 输入，不根据文本猜测其归属。新增该负例并通过 adapter 全包（2.308s）；正文及结果仍只归原 Task 输入段，没有新协议包装提示词。
 
 本次仍未运行真实 Orca 三轮交付；公开 transcript 缺少原生 final phase，来源继续标明应用绑定的 step reply。对未知来源/正文、未核实工作区内容等事实维持对账，不补造来源或内容摘要，不以本次无模型回归推定原生交付通过。
+
+最终集成候选基线 `origin/main f04fdf089a58723909279d44c497377427b868dd`，主体提交 `49b2546f3a740bce538fef10f500520ff3382916`。全部受影响 execution 定向通过（179.015s），双 Orca adapter 全包通过（orcaremote 3.096s、orca 5.431s），query/SQLite/boundary 与模型重建通过，app 原会话查看定向通过；vet、构建、文档导航通过。主体代码测试后只补控制台诊断和验收文字，不改变三轮规则。原始记录见本聊天及 `C:/Users/lmas1/AppData/Local/Temp/steerline-worker-console-pr-audit-20261010-141126/`；不把以前的未提交/未安装快照改成已验现场。

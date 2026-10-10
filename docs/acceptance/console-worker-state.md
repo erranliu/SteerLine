@@ -29,3 +29,7 @@
 用户授权审计、修复并提 PR。本聊天复核全部前述改动，未另行调度 agent。发现并修复：列表原来按固定两行估算视口，状态换行时可能把选中项挤出；改为按实际渲染高度选择窗口，保留选中项。待回答问题的提前返回曾隐藏活动采集缺口；现在问题和缺口共同显示。新增换行视口/问题下缺口回归通过，console 全包 1.822s、Orca adapter 全包 2.308s 通过；输出见本聊天。
 
 最新主干新增 Orca 原会话查看和 WinUI 基座，PR 提交前集成主干，保留原新能力入口与本次精简界面；最终精确候选和验证见后续记录。本段不改旧构建结果或安装事实。
+
+集成后复核补齐一项诊断：字段损坏的 worker_state 活动曾被解析跳过，界面却不提示缺口；现在保留 seq 定位的采集诊断，不从 title 推断状态。对应坏字段负例通过，当前问题不会再遮住该缺口。
+
+最终代码候选以 `origin/main f04fdf089a58723909279d44c497377427b868dd` 为基线，主体提交 `49b2546f3a740bce538fef10f500520ff3382916`，之后补上坏字段诊断增量。console 全包增量 2.115s 通过。集成候选的 console/activityrender、model/reconstruction、双 Orca adapter、query、SQLite 全包和 boundary 通过；execution 定向 WorkerStage/WorkerPrompt/WorkerStateActivity/WorkerFlowProviderDelivery/Claim/WorkspaceInstruction 通过（179.015s）。保留主干 Ctrl+N 本机/远端 Orca 入口，相关 app 定向通过（1.586s）。vet、构建、316 Markdown/1928 导航链接及 diff 检查通过。日志见本聊天与 `C:/Users/lmas1/AppData/Local/Temp/steerline-worker-console-pr-audit-20261010-141126/`。此前“未提交”属于当时快照；当前进入 PR 交付，不改安装版。

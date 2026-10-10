@@ -73,6 +73,15 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 	if strings.Contains(text, event.Title) {
 		t.Fatal("display inferred state from prose")
 	}
+	malformed := msg
+	malformed.batch.Activity = []api.ActivityEvent{{Kind: "worker_state", Seq: 2, Meta: map[string]any{"to": "invalid fields"}}}
+	next, _ = m.Update(malformed)
+	m = next.(Model)
+	if !strings.Contains(m.projects[0].activityError, "seq=2") || len(m.projects[0].workerTransitions) != 0 {
+		t.Fatal("malformed state transition disappeared without a diagnostic")
+	}
+	next, _ = m.Update(msg)
+	m = next.(Model)
 	m.projects[0].activityError = "original activity source gap"
 	if !strings.Contains(strings.Join(feedbackLines(m, m.projects[0], m.selectedRow(0)), "\n"), "original activity source gap") {
 		t.Fatal("pending question hid the activity gap")

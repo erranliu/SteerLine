@@ -86,9 +86,12 @@ func (m Model) updateRecentActivity(msg recentActivityMsg) (tea.Model, tea.Cmd) 
 	state.recentActivity = nil
 	state.workerTransitions = nil
 	events := msg.batch.Activity
+	diagnostics := append([]string(nil), msg.batch.Diagnostics...)
 	for _, event := range events {
 		if transition, ok := decodeWorkerTransition(event); ok {
 			state.workerTransitions = append(state.workerTransitions, transition)
+		} else if event.Kind == "worker_state" {
+			diagnostics = append(diagnostics, fmt.Sprintf("状态变化记录字段不完整 · seq=%d", event.Seq))
 		}
 	}
 	if len(state.workerTransitions) > 5 {
@@ -102,7 +105,7 @@ func (m Model) updateRecentActivity(msg recentActivityMsg) (tea.Model, tea.Cmd) 
 	if len(state.recentActivity) > 10 {
 		state.recentActivity = state.recentActivity[len(state.recentActivity)-10:]
 	}
-	state.activityError = strings.Join(msg.batch.Diagnostics, "；")
+	state.activityError = strings.Join(diagnostics, "；")
 	return m, nil
 }
 
