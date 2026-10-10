@@ -81,6 +81,9 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 		if stop != nil {
 			request = &stop.Request
 			acceptedAt = &stop.At
+			if cancellationOnly(retErr) {
+				retErr = nil // An accepted stop may cancel an in-flight actor poll.
+			}
 		}
 		retErr = actor.EndActor(request, acceptedAt, retErr)
 	}()
@@ -143,6 +146,30 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 			}
 		}
 	}
+}
+
+// A joined persistence/business error must survive an accepted stop. Only the
+// cancellation caused by that stop is a successful scheduler exit.
+func cancellationOnly(err error) bool {
+	if err == context.Canceled {
+		return true
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		children := joined.Unwrap()
+		if len(children) == 0 {
+			return false
+		}
+		for _, child := range children {
+			if !cancellationOnly(child) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		return cancellationOnly(wrapped.Unwrap())
+	}
+	return false
 }
 
 type Schedule struct {

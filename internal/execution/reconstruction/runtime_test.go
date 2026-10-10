@@ -29,7 +29,7 @@ func projectionFixture(t *testing.T) (Snapshot, Metadata) {
 	snapshot := Snapshot{
 		ProjectIdentity: "project",
 		Tasks:           []taskmodel.TaskRecord{{TaskID: "task", Title: "Task", Status: "in_progress"}},
-		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: "run", TaskID: "task", WorkflowVersion: executionmodel.Version, SelectedResult: "execution", Phase: "waiting_decision", ControlRevision: 42,
+		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: "run", TaskID: "task", WorkflowVersion: executionmodel.Version, SelectedResult: "execution", Status: "waiting_input", ControlRevision: 42,
 			ExecutionProfile: &executionmodel.FixedExecutionProfile{Version: 5, Host: "local", ImplementationData: []executionbackend.ImplementationDataEnvelope{implementationData}}}},
 		Executions: []executionmodel.ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", CurrentStep: "worker", CurrentAttemptID: "attempt", Backend: string(executionbackend.BackendLocal), Protocol: string(executionbackend.ProtocolLocalCodexAppServer), Agent: "codex", Status: "active", DecisionID: "decision",
 			Process: &executionbackend.ProcessIdentity{Kind: "codex", PID: 12}, WorkspaceIntent: &executionbackend.WorkspaceIntent{Path: "/work/tree", Branch: "codex/task"}, TurnStartedAt: &at}},
@@ -110,7 +110,7 @@ func TestProjectionRetainsDeliveryAndReservationRules(t *testing.T) {
 	if err != nil || view.Runs[0].ExecutionStatus != "succeeded" || view.Runs[0].PR.State != "merged" || *view.Runs[0].PR.MergeCommit != "merged" {
 		t.Fatalf("delivery facts changed: %+v %v", view, err)
 	}
-	snapshot.Tasks[0].Status, snapshot.WorkflowRuns[0].Phase = "discarded", "abandoned"
+	snapshot.Tasks[0].Status, snapshot.WorkflowRuns[0].Status = "discarded", "abandoned"
 	view, err = Build(snapshot, Metadata{Checkpoint: metadata.Checkpoint})
 	if err != nil || len(view.Runs) != 0 {
 		t.Fatalf("settled discarded run retained: %+v %v", view, err)

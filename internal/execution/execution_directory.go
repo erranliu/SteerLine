@@ -71,16 +71,19 @@ type PolicyResourceBuildResult struct {
 // ExecutionRegistration binds generic service ports to one fixed execution
 // identity. The application supplies all factories and platform behavior.
 type ExecutionRegistration struct {
+	ServiceStopBehavior   executionbackend.ServiceStopBehavior
 	Key                   ExecutionRegistrationKey
 	ProfileKey            string
 	WorkspaceBranchPrefix string
 	LocalWorkspace        bool
-	ProfileCodecKeys      []string
-	QuestionCodecKey      string
-	QuestionCodecVersion  int
-	Host                  string
-	Backend               func(Config) executionbackend.ExecutionBackend
-	Target                func(Config) executionbackend.ExecutionTarget
+	// HostManagedPermissions delegates launch permissions to the native host; no client policy roots are bound.
+	HostManagedPermissions bool
+	ProfileCodecKeys       []string
+	QuestionCodecKey       string
+	QuestionCodecVersion   int
+	Host                   string
+	Backend                func(Config) executionbackend.ExecutionBackend
+	Target                 func(Config) executionbackend.ExecutionTarget
 
 	Lifecycle                 func(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error)
 	ValidateProfileSelection  func(string, map[string][]byte) error
@@ -146,7 +149,7 @@ func NewExecutionDirectory(version string, codecs []ImplementationProfileCodec, 
 			return nil, fmt.Errorf("duplicate implementation profile key %q", entry.ProfileKey)
 		}
 		profileKeys[entry.ProfileKey] = true
-		if key.Backend == "" || key.Agent == "" || key.Protocol == "" || entry.Host == "" || entry.ProfileKey == "" || entry.WorkspaceBranchPrefix == "" || entry.ValidTurnID == nil || len(entry.CleanupCapabilities) == 0 {
+		if !entry.ServiceStopBehavior.Valid() || key.Backend == "" || key.Agent == "" || key.Protocol == "" || entry.Host == "" || entry.ProfileKey == "" || entry.WorkspaceBranchPrefix == "" || entry.ValidTurnID == nil || len(entry.CleanupCapabilities) == 0 {
 			return nil, fmt.Errorf("execution directory contains an incomplete identity: %+v", key)
 		}
 		if _, exists := directory.entries[key]; exists {
@@ -182,6 +185,19 @@ func NewExecutionDirectory(version string, codecs []ImplementationProfileCodec, 
 
 func directoryRoute(host, agent string) string { return host + "\x00" + agent }
 
+// A host-owned opaque agent route delegates agent interpretation to that host.
+// Exact registrations retain priority and returned identities bind the actual name.
+func (directory *ExecutionDirectory) route(host, agent string) (ExecutionRegistrationKey, bool) {
+	if strings.TrimSpace(agent) == "" || agent == "*" {
+		return ExecutionRegistrationKey{}, false
+	}
+	key, ok := directory.routes[directoryRoute(host, agent)]
+	if !ok {
+		key, ok = directory.routes[directoryRoute(host, "*")]
+	}
+	return key, ok
+}
+
 func (directory *ExecutionDirectory) Version() string {
 	if directory == nil {
 		return ""
@@ -193,11 +209,12 @@ func (directory *ExecutionDirectory) Resolve(c Config) (ExecutionRegistration, e
 	if directory == nil {
 		return ExecutionRegistration{}, errors.New("execution directory is required")
 	}
-	key, ok := directory.routes[directoryRoute(c.hostName(), c.agentName())]
+	key, ok := directory.route(c.hostName(), c.agentName())
 	if !ok {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", c.hostName(), c.agentName())}
 	}
 	entry := directory.entries[key]
+	entry.Key.Agent = c.agentName()
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
 	return entry, nil
@@ -208,9 +225,15 @@ func (directory *ExecutionDirectory) ResolveIdentity(key ExecutionRegistrationKe
 		return ExecutionRegistration{}, errors.New("execution directory is required")
 	}
 	entry, ok := directory.entries[key]
+	if !ok && strings.TrimSpace(key.Agent) != "" && key.Agent != "*" {
+		wildcard := key
+		wildcard.Agent = "*"
+		entry, ok = directory.entries[wildcard]
+	}
 	if !ok {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "no implementation is registered for the fixed execution identity"}
 	}
+	entry.Key.Agent = key.Agent
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
 	return entry, nil
@@ -235,7 +258,7 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 	if projectID == "" || profileID == "" || acceptedVersion == "" {
 		return nil, nil, errors.New("implementation configuration is missing project, profile or accepted version")
 	}
-	entryKey, ok := directory.routes[directoryRoute(host, agent)]
+	entryKey, ok := directory.route(host, agent)
 	if !ok {
 		return nil, nil, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", host, agent)}
 	}
@@ -249,6 +272,10 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 	data := make([]executionbackend.ImplementationDataEnvelope, 0, len(inputs))
 	display := []string{}
 	for _, input := range inputs {
+		if !slices.Contains(entry.ProfileCodecKeys, input.ImplementationKey) {
+			return nil, nil, fmt.Errorf("profile codec %q is not owned by the selected execution implementation", input.ImplementationKey)
+		}
+
 		codec, exists := directory.codecs[input.ImplementationKey]
 		if !exists || input.CodecVersion != codec.Version || seen[input.ImplementationKey] {
 			return nil, nil, fmt.Errorf("unknown, duplicate or unsupported implementation codec %q/%d", input.ImplementationKey, input.CodecVersion)
@@ -337,7 +364,14 @@ func (directory *ExecutionDirectory) ResolveLifecycle(setup executionbackend.Lif
 	if err != nil {
 		return nil, err
 	}
-	return entry.Lifecycle(setup.Clone())
+	port, err := entry.Lifecycle(setup.Clone())
+	if err != nil {
+		return nil, err
+	}
+	if port == nil || port.PolicyCapabilities().ServiceStopBehavior != entry.ServiceStopBehavior {
+		return nil, errors.New("worker service-stop behavior differs from its registered declaration")
+	}
+	return port, nil
 }
 
 func equalImplementationData(a, b []executionbackend.ImplementationDataEnvelope) bool {

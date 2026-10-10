@@ -98,7 +98,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live" && entry.Env != "native") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex") || (entry.Env == "native" && (entry.Level != "L3" || entry.Chain != "")) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live" && entry.Env != "native") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex" && entry.Chain != "orca-remote-codex") || (entry.Env == "native" && (entry.Level != "L3" || entry.Chain != "")) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -195,6 +195,12 @@ func runE2E(opts options) (code int) {
 	}
 	if opts.e2eEnv == "live" {
 		note = "native gpt-6-luna/medium; loopback provider"
+		for _, scenario := range selected {
+			if scenario.Chain == "orca-remote-codex" {
+				note = "native gpt-6-luna/medium; selected providers; remote Orca uses real SteerlineTest PRs"
+				break
+			}
+		}
 		if opts.suite == "candidates" {
 			note = "native gpt-6-luna/medium; exact multi-profile admission; real SteerlineTest PRs"
 		}
@@ -304,7 +310,14 @@ func runE2E(opts options) (code int) {
 			return fail(err)
 		}
 	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
+	remoteConfig := os.Getenv("STEERLINE_REMOTE_ACCEPTANCE_CONFIG")
+	if remoteConfig != "" {
+		remoteConfig, err = filepath.Abs(remoteConfig)
+		if err != nil {
+			return fail(err)
+		}
+	}
+	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "RemoteConfig": remoteConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}
@@ -365,7 +378,9 @@ func runE2E(opts options) (code int) {
 		for _, e := range packages[pkg] {
 			tests = append(tests, e.Test)
 		}
-		timeout := "6m"
+		// Each controlled scenario owns a 5m business deadline and cleanup.
+		// A package selecting several independent scenarios needs their sum.
+		timeout := fmt.Sprintf("%dm", 6*len(packages[pkg]))
 		if packages[pkg][0].Env == "live" {
 			timeout = "35m"
 		}
@@ -460,13 +475,16 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			return fmt.Errorf("scenario %s completed %d times", e.ID, seen[e.Test])
 		}
 		var evidence struct {
-			ID                      string           `json:"id"`
-			Passed                  bool             `json:"passed"`
-			Cleanup                 bool             `json:"cleanup_complete"`
-			Resources               []map[string]any `json:"resources"`
-			UsageVerified           bool             `json:"usage_verified"`
-			NativeWorkspaceVerified bool             `json:"native_workspace_verified"`
-			RealPR                  *struct {
+			ID                         string           `json:"id"`
+			Passed                     bool             `json:"passed"`
+			Cleanup                    bool             `json:"cleanup_complete"`
+			Resources                  []map[string]any `json:"resources"`
+			RemotePublicOutputVerified bool             `json:"remote_public_output_verified"`
+			RemoteUsageStatus          string           `json:"remote_usage_status"`
+			UsageVerified              bool             `json:"usage_verified"`
+			OrcaUsageStatus            string           `json:"orca_usage_status"`
+			NativeWorkspaceVerified    bool             `json:"native_workspace_verified"`
+			RealPR                     *struct {
 				URL, State, Repository string
 				Merged                 bool
 			} `json:"real_pr,omitempty"`
@@ -478,13 +496,22 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		if err = json.Unmarshal(raw, &evidence); err != nil || evidence.ID != e.ID || !evidence.Passed || !evidence.Cleanup || len(evidence.Resources) == 0 {
 			return fmt.Errorf("invalid or incomplete evidence for %s", e.ID)
 		}
-		if e.Env == "live" && !evidence.UsageVerified {
+		// Task 84's L3 native Orca acceptance records the public interface's
+		// unavailable usage capability. Keep other suites and L2's gate intact.
+		orcaPublicUsage := e.Env == "live" && e.Level == "L3" && e.Chain == "orca-codex" && (e.Suite == "delivery" || e.Suite == "recovery")
+		if orcaPublicUsage && (evidence.UsageVerified || evidence.OrcaUsageStatus != "not_exposed_by_orca") {
+			return fmt.Errorf("native Orca public usage capability missing or token verification claimed for %s", e.ID)
+		}
+		if e.Env == "live" && e.Chain != "orca-remote-codex" && !orcaPublicUsage && !evidence.UsageVerified {
 			return fmt.Errorf("native token usage not verified for %s", e.ID)
+		}
+		if e.Chain == "orca-remote-codex" && (!evidence.RemotePublicOutputVerified || evidence.UsageVerified || evidence.RemoteUsageStatus != "not_exposed_by_orca") {
+			return fmt.Errorf("remote public output evidence missing or private usage claimed for %s", e.ID)
 		}
 		if e.Env == "native" && (!evidence.NativeWorkspaceVerified || evidence.UsageVerified || evidence.RealPR != nil) {
 			return fmt.Errorf("native no-model workspace evidence missing or mixed with model/PR evidence for %s", e.ID)
 		}
-		if e.Level == "L2" && e.Env == "live" && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
+		if (e.Level == "L2" && e.Env == "live" || e.Chain == "orca-remote-codex") && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
 			return fmt.Errorf("real merged SteerlineTest PR evidence missing for %s", e.ID)
 		}
 	}

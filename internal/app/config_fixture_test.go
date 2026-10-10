@@ -34,24 +34,41 @@ func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
 
 func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteConfig ...*remote.ProfileConfig) ExecutionProfile {
 	t.Helper()
+	if host == "orca_supervised" {
+		if terminal == nil {
+			t.Fatal("supervised fixture configuration missing")
+		}
+		r := remote.ProfileConfig{Target: "local", PollInterval: "1s", CapabilityReportVersion: 1}
+		if len(remoteConfig) > 0 && remoteConfig[0] != nil {
+			r = *remoteConfig[0]
+		}
+		r.Executable = terminal.Executable
+		r.Args = terminal.Args
+		r.Shell = terminal.Shell
+		r.WaitTimeout = terminal.WaitTimeout
+		r.Model = worker.Model
+		r.ReasoningEffort = worker.ReasoningEffort
+		payload, err := remote.EncodeProfileConfig(r)
+		require(t, err)
+		return ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileCodecKey, CodecVersion: remote.ProfileCodecVersion, Payload: payload}}}
+	}
 	payload, err := codexworker.EncodeProfileConfig(worker)
 	require(t, err)
 	p := ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}}
+	if host == "orca" {
+		p.ImplementationConfigs = nil
+	}
 	if host != "local" {
 		if terminal == nil {
 			t.Fatal("terminal profile settings missing")
 		}
-		payload, err := orcaworker.EncodeProfileConfig(*terminal)
+		native := *terminal
+		if host == "orca" {
+			native.Model, native.ReasoningEffort = worker.Model, worker.ReasoningEffort
+		}
+		payload, err := orcaworker.EncodeProfileConfig(native)
 		require(t, err)
 		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-	}
-	if host == "orca_supervised" {
-		if len(remoteConfig) == 0 || remoteConfig[0] == nil {
-			t.Fatal("remote settings missing")
-		}
-		payload, err := remote.EncodeProfileConfig(*remoteConfig[0])
-		require(t, err)
-		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: payload})
 	}
 	return p
 }
@@ -69,6 +86,10 @@ func localGlobalExecutionFixture(t *testing.T) {
 }
 
 func codexProfileSettings(c execution.Config, directories ...*execution.ExecutionDirectory) codexworker.ProfileConfig {
+	if c.Host == "orca_supervised" {
+		native, _ := remoteSettings(c, directories...)
+		return codexworker.ProfileConfig{Model: native.Model, ReasoningEffort: native.ReasoningEffort}
+	}
 	value, _ := codexSettings(c, directories...)
 	return value
 }
@@ -87,10 +108,6 @@ func testVerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile) boo
 	host := NewProcessHost(time.Second)
 	directory, err := NewBuiltinDirectory(host)
 	return err == nil && (Config{ExecutionDirectory: directory}).CheckFixedProfile(p) == nil
-}
-
-func nativeOrcaFixedAgentCommand(c execution.Config, directories ...*execution.ExecutionDirectory) (string, error) {
-	return managedTerminalCommand(c, "", nil, directories...)
 }
 
 func mustJSON(value any) []byte {
@@ -201,8 +218,8 @@ func setTestCodexProfile(t *testing.T, c *Config, worker codexworker.ProfileConf
 	t.Helper()
 	var terminal *orcaworker.ProfileConfig
 	if c.Host != "local" {
-		settings, _ := terminalSettings(c.executionConfig(), c.ExecutionDirectory)
-		terminal = &settings
+		settings, _ := remoteSettings(c.executionConfig(), c.ExecutionDirectory)
+		terminal = &orcaworker.ProfileConfig{Executable: settings.Executable, Args: settings.Args, Shell: settings.Shell, WaitTimeout: settings.WaitTimeout}
 	}
 	setTestImplementationProfiles(t, c, worker, terminal)
 }

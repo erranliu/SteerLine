@@ -6,12 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 )
 
 func configTestRepository(t *testing.T) string {
@@ -30,7 +30,7 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		t.Helper()
 		codex := codexworker.ProfileConfig{Executable: "codex"}
 		orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}
-		if host == "orca" {
+		if host == "orca_supervised" {
 			orca.Shell = "powershell.exe"
 		}
 		profile := testExecutionProfile(t, "selected", "Selected", host, "codex", codex, orca)
@@ -48,7 +48,7 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		}
 		return cfg
 	}
-	orca := write("orca")
+	orca := write("orca_supervised")
 	if codexProfileSettings(orca.executionConfig()).ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion {
 		t.Fatalf("Orca worker flow acquired old project steps or a local model default: %+v", orca)
 	}
@@ -107,10 +107,10 @@ func TestConfigRejectsRetiredBeadsExecutionFields(t *testing.T) {
 	}
 }
 
-func TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority(t *testing.T) {
+func TestOrcaNativeProfileKeepsFrozenAuthority(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	profile := testExecutionProfile(t, "orca", "Orca", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
-	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "medium"})
+	profile := testExecutionProfile(t, "orca", "Orca", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+	payload, err := remote.EncodeProfileConfig(remote.ProfileConfig{Target: "local", Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m", Model: "gpt-6-luna", ReasoningEffort: "medium", PollInterval: "1s", CapabilityReportVersion: 1})
 	require(t, err)
 	profile.ImplementationConfigs[0].Payload = payload
 	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "orca")
@@ -123,7 +123,7 @@ func TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority(t *testing.T) {
 	require(t, config.ResolveIdentity(context.Background()))
 	selected, accepted, err := config.ResolveExecutionProfile("orca", "")
 	require(t, err)
-	if err := validateTerminalConfig(context.Background(), selected, config.ExecutionDirectory); err != nil || terminalReadinessRequired(selected, config.ExecutionDirectory) != (runtime.GOOS == "windows") {
+	if err := validateSupervisedConfig(context.Background(), selected, config.ExecutionDirectory); err != nil {
 		t.Fatalf("fixed native launch lost admission or readiness: %v", err)
 	}
 	fixed := accepted.Freeze(config.ExecutionDirectory, config.Identity())

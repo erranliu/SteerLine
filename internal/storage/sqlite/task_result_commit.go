@@ -172,7 +172,7 @@ func readTaskResult(ctx context.Context, q interface {
 func mustResultJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 func validateResultGates(record taskmodel.TaskRecord, contract taskmodel.TaskContract, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord) (string, error) {
 	session, _ := executionSessionFacts(&execution)
-	url, err := executionmodel.DeliveryPR(record.TaskID, record.ContractID, contract.ContractID, contract.Digest, executionmodel.DeliveryGate{WorkflowVersion: workflow.WorkflowVersion, WorkflowTaskID: workflow.TaskID, SelectedExecutionID: workflow.SelectedResult, ExecutionID: execution.ExecutionID, ExecutionWorkflowID: execution.WorkflowRunID, WorkflowRunID: workflow.WorkflowRunID, PRURL: workflow.PRURL, SessionID: session, WorkspaceBranch: execution.Workspace.Branch, Phase: workflow.Phase}, executionmodel.Version)
+	url, err := executionmodel.DeliveryPR(record.TaskID, record.ContractID, contract.ContractID, contract.Digest, executionmodel.DeliveryGate{WorkflowVersion: workflow.WorkflowVersion, WorkflowTaskID: workflow.TaskID, SelectedExecutionID: workflow.SelectedResult, ExecutionID: execution.ExecutionID, ExecutionWorkflowID: execution.WorkflowRunID, WorkflowRunID: workflow.WorkflowRunID, PRURL: workflow.PRURL, SessionID: session, WorkspaceBranch: execution.Workspace.Branch, Status: workflow.Status, StepID: workflow.StepID, CandidateSHA: workflow.CandidateSHA}, executionmodel.Version)
 	if err != nil {
 		var e *executionmodel.ResultError
 		if errors.As(err, &e) {

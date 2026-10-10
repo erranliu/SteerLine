@@ -2,7 +2,7 @@
 
 SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 roadmap 组织规划、任务依赖与 AI 执行，让人掌握产品目标、关键决策和 PR 合并。
 
-长期目标是让 AI 能自主完成普通人需要长期借助 AI 才能开发的复杂软件项目。项目目前尚未发布。第一阶段只支持和验收本地 Codex 与本机 Orca；远程执行及本机/远端混合流程后续另行规划，不作为当前交付门槛。
+长期目标是让 AI 能自主完成普通人需要长期借助 AI 才能开发的复杂软件项目。项目目前尚未发布。第一阶段包含本地 Codex、本机 Orca 与远端路径交付。
 
 [文档入口](docs/README.md) · [产品愿景](docs/roadmap/product-vision.md) · [RoadmapGuide](docs/roadmap/RoadmapGuide.md) · [正式执行清单](docs/roadmap/execution-map.md) · [当前代码架构图](docs/architecture/current-code-architecture.md) · [测试总入口](docs/testing.md)
 
@@ -19,3 +19,5 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 运行 `steerline console` 打开当前 TUI，默认枚举 `<STEERLINE_HOME>/etc/*.json` 项目并加载全局 execution.json；`-config <path>` 打开明确项目，`-run-id <run-id|task-id>` 定位已有运行。Windows console.bat 进入同一控制台；中心服务由用户从 service-window.bat 独立启动，退出控制台不会停止服务或 worker。
 
 当前控制台使用任务列表、候选摘要和运行/反馈三窗，支持候选切换、原地输入和完整最终回复的只读详情。目标选择、操作键位、草稿及重开语义统一见[执行控制台设计与操作](docs/product-design/execution-console.md)；配置和权限见[执行方案](docs/product-design/execution-profiles.md)，生命周期见[整体架构](docs/architecture.md)。中心仅采集完整最终回复、问题及必要执行事实；完整过程在原生工具查看。恢复仅继续原会话，原会话不可核实时由人处理，详见[会话与恢复精简](docs/spec/product-simplification-04-conversation-recovery.spec.md)。
+
+Windows 控制台选中已开始原生执行轮次的本机 Codex 候选后，按 `Ctrl+N` 可用 Codex CLI 打开原 app-server 会话，实时查看执行过程；任务操作仍通过 SteerLine。

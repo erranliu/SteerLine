@@ -17,7 +17,7 @@ func TestSQLiteApplicationProjectSnapshotSharesTransactionAcrossWriterCommit(t *
 	task := tasks[0]
 	task.Status, task.Claimant, task.Version = "in_progress", "operator", task.Version+1
 	created := time.Now().UTC()
-	workflow := executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "snapshot-run", TaskID: task.TaskID, WorkflowVersion: "minimal-v1", Phase: "executing", SelectedResult: "snapshot-execution", CreatedAt: created, UpdatedAt: created}
+	workflow := executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "snapshot-run", TaskID: task.TaskID, WorkflowVersion: "minimal-v1", Status: "running", SelectedResult: "snapshot-execution", CreatedAt: created, UpdatedAt: created}
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: "snapshot-execution", CurrentAttemptID: "snapshot-attempt", WorkflowRunID: workflow.WorkflowRunID, Status: "active", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
 	attempt := executionmodel.StepAttemptRecord{ProjectIdentity: project, AttemptID: "snapshot-attempt", ExecutionID: execution.ExecutionID, StepID: "worker", AttemptNumber: 1, Status: "running", CreatedAt: created, UpdatedAt: created}
 	require(t, writer.transactSQLite(ctx, func(tx *sqliteTx) error {

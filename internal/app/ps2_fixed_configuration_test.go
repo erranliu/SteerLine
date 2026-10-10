@@ -9,11 +9,11 @@ import (
 )
 
 func TestPS2FixedWindowsProfilesFreezeAndRestore(t *testing.T) {
-	for _, host := range []string{"local", "orca"} {
+	for _, host := range []string{"local", "orca_supervised"} {
 		t.Run(host, func(t *testing.T) {
 			config := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Host: host, Agent: "codex", Repository: "repo", Branch: "main"}
 			var terminal *orcaworker.ProfileConfig
-			if host == "orca" {
+			if host == "orca_supervised" {
 				terminal = &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"}
 			}
 			setTestImplementationProfiles(t, &config, codexworker.ProfileConfig{Executable: "codex", Model: "original"}, terminal)
@@ -21,7 +21,11 @@ func TestPS2FixedWindowsProfilesFreezeAndRestore(t *testing.T) {
 			if !testVerifyFixedExecutionProfile(fixed) {
 				t.Fatal("valid frozen profile rejected")
 			}
-			for _, setting := range []string{"workspace-write", "unelevated", "on-request", "auto_review"} {
+			settings := []string{"workspace-write", "unelevated", "on-request", "auto_review"}
+			if host == "orca_supervised" {
+				settings = []string{"Orca"}
+			}
+			for _, setting := range settings {
 				if !strings.Contains(strings.Join(fixed.ImplementationDisplay, " "), setting) {
 					t.Fatal("missing fixed native setting", setting)
 				}

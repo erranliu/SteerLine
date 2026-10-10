@@ -2,10 +2,10 @@ package app
 
 import (
 	"encoding/json"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"testing"
 )
 
@@ -37,25 +37,30 @@ func TestFiveGlobalLunaProfilesLoadAndFreeze(t *testing.T) {
 	want := []struct{ id, host, effort string }{
 		{"local-luna-medium", "local", "medium"},
 		{"local-luna-xhigh", "local", "xhigh"},
-		{"orca-local-luna-xhigh", "orca", "xhigh"},
-		{"orca-local-luna-medium", "orca", "medium"},
-		{"orca-local-luna-high", "orca", "high"},
+		{"orca-local-luna-xhigh", "orca_supervised", "xhigh"},
+		{"orca-local-luna-medium", "orca_supervised", "medium"},
+		{"orca-local-luna-high", "orca_supervised", "high"},
 	}
 	for i, expected := range want {
 		profile := profiles[i]
-		codex := codexProfileFromInputs(profile.ImplementationConfigs)
-		if profile.ID != expected.id || profile.Host != expected.host || profile.Agent != "codex" || codex.Model != "gpt-6-luna" || codex.ReasoningEffort != expected.effort || !slices.Contains(profile.ImplementationDisplay, "权限：workspace-write") || !testVerifyFixedExecutionProfile(profile.Freeze()) {
+		model, effort := "", ""
+		if profile.Host == "orca_supervised" {
+			native, decodeErr := remote.DecodeProfileConfig(profile.ImplementationConfigs[0].Payload)
+			require(t, decodeErr)
+			model, effort = native.Model, native.ReasoningEffort
+			if len(profile.ImplementationConfigs) != 1 || profile.ImplementationConfigs[0].ImplementationKey != remote.ProfileCodecKey {
+				t.Fatal("Orca example includes agent-specific configuration")
+			}
+		} else {
+			local := codexProfileFromInputs(profile.ImplementationConfigs)
+			model, effort = local.Model, local.ReasoningEffort
+			if !slices.Contains(profile.ImplementationDisplay, "权限：workspace-write") {
+				t.Fatal("local policy display was lost")
+			}
+		}
+		if profile.ID != expected.id || profile.Host != expected.host || profile.Agent != "codex" || model != "gpt-6-luna" || effort != expected.effort || !testVerifyFixedExecutionProfile(profile.Freeze()) {
 			t.Fatalf("profile %d = %+v", i, profile)
 		}
-		if profile.Host == "orca" {
-			selected, _, err := config.ResolveExecutionProfile(profile.ID, profile.Digest())
-			if err != nil {
-				t.Fatal(err)
-			}
-			command, err := nativeOrcaFixedAgentCommand(selected)
-			if err != nil || !strings.Contains(command, "'gpt-6-luna'") || !strings.Contains(command, "'model_reasoning_effort="+expected.effort+"'") {
-				t.Fatalf("fixed Orca launch %q: %v", command, err)
-			}
-		}
+
 	}
 }

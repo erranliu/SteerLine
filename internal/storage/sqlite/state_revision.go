@@ -24,11 +24,15 @@ func controlFingerprint(value any) string {
 	switch v := value.(type) {
 	case executionmodel.WorkflowRunRecord:
 		return recordFingerprint(struct {
-			Phase, Selected, PRURL, PRState string
-			Pending                         int
-			Exit                            any
-			History                         []string
-		}{v.Phase, v.SelectedResult, v.PRURL, v.PRState, v.PendingDecisions, v.Abandonment, v.PRHistory})
+			Status, Selected, PRURL, PRState string
+			Pending                          int
+			Exit                             any
+			History                          []string
+			FlowRef, StepID, CandidateSHA    string
+			InputVersion                     uint64
+			Inputs                           []executionmodel.StageInput
+			Results                          []executionmodel.StageResult
+		}{v.Status, v.SelectedResult, v.PRURL, v.PRState, v.PendingDecisions, v.Abandonment, v.PRHistory, v.FlowRef, v.StepID, v.CandidateSHA, v.InputVersion, v.StageInputs, v.StageResults})
 	case executionmodel.ExecutionRecord:
 		return recordFingerprint(struct {
 			Status, Outcome, Decision, Step                                       string

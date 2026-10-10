@@ -13,14 +13,17 @@ import (
 // Signal is delivered to the single service state machine. Worker
 // observers may run concurrently, but only that state machine changes runs.
 type Signal struct {
-	discard  *taskDiscardSignal
-	effect   *lifecycleEffectResult
-	runID    string
-	worker   *Worker
-	event    *WorkerEvent
-	done     bool
-	err      error
-	recovery *appServerRecoveryResult
+	discard          *taskDiscardSignal
+	workerStartCheck *workerStartCheckResult
+	startCheck       *taskStartCheckResult
+	effect           *lifecycleEffectResult
+	runID            string
+	worker           *Worker
+	event            *WorkerEvent
+	done             bool
+	err              error
+	recovery         *workerRecoveryResult
+	qualification    *workerQualificationResult
 }
 
 func (s *Service) registerWorker(run *reconstructiontypes.RunView, worker *Worker) {
@@ -45,7 +48,7 @@ func (s *Service) registerWorker(run *reconstructiontypes.RunView, worker *Worke
 
 func (s *Service) forwardWorker(ctx context.Context, runID string, worker *Worker) {
 	queue := s.signalChannel()
-	if queue == nil {
+	if queue == nil || ctx == nil {
 		return
 	}
 	s.forwarders.Add(1)
@@ -109,14 +112,12 @@ func rejectUndeliveredWorkerEvent(event WorkerEvent, err error) {
 	}
 }
 
-func (s *Service) drainWorkerMessages() {
-	s.drainSignalQueue(s.signalChannel())
-}
+func (s *Service) drainWorkerMessages() { s.drainWorkerMessagesFrom(s.signalChannel()) }
 
-func (s *Service) drainSignalQueue(queue chan Signal) {
-	for queue != nil {
+func (s *Service) drainWorkerMessagesFrom(messages <-chan Signal) {
+	for messages != nil {
 		select {
-		case message := <-queue:
+		case message := <-messages:
 			if message.discard != nil {
 				completeDiscardTask(message.discard, taskmodel.TaskDiscardReceipt{}, nativeErr("service_not_ready", "service stopped before the queued discard began"))
 				continue
@@ -141,6 +142,12 @@ forwarded:
 }
 
 func (s *Service) handleWorkerMessage(message Signal) error {
+	if message.workerStartCheck != nil {
+		return s.applyWorkerStartCheck(*message.workerStartCheck)
+	}
+	if message.startCheck != nil {
+		return s.applyTaskStartCheck(*message.startCheck)
+	}
 	if message.effect != nil {
 		if err := s.applyLifecycleEffect(message.runID, *message.effect); err != nil {
 			if errors.Is(err, executionmodel.ErrTurnStale) {
@@ -176,8 +183,12 @@ func (s *Service) handleWorkerMessage(message Signal) error {
 		return nil
 	}
 	if message.recovery != nil {
-		delete(s.appServerRecovering, message.runID)
-		return s.applyAppServerRecovery(*message.recovery)
+		delete(s.workerRecovering, message.runID)
+		return s.applyWorkerRecovery(*message.recovery)
+	}
+	if message.qualification != nil {
+		delete(s.workerRecovering, message.runID)
+		return s.applyWorkerQualification(*message.qualification)
 	}
 	if s.workers[message.runID] != message.worker {
 		if message.event != nil {

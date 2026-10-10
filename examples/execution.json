@@ -39,25 +39,22 @@
     {
       "id": "orca-local-luna-xhigh",
       "name": "本机 Orca + Codex Luna xhigh",
-      "host": "orca",
+      "host": "orca_supervised",
       "agent": "codex",
       "implementation_configs": [
         {
-          "implementation_key": "codex.worker-profile",
+          "implementation_key": "orca.supervised-profile",
           "codec_version": 2,
-          "payload": {
-            "executable": "codex.exe",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "xhigh"
-          }
-        },
-        {
-          "implementation_key": "orca.worker-profile",
-          "codec_version": 1,
           "payload": {
             "executable": "orca.exe",
             "shell": "powershell.exe",
-            "wait_timeout": "15m"
+            "wait_timeout": "15m",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "xhigh",
+            "target": "local",
+            "poll_interval": "1s",
+            "capability_report_version": 1,
+            "remote_cancel_available": false
           }
         }
       ]
@@ -65,25 +62,22 @@
     {
       "id": "orca-local-luna-medium",
       "name": "本机 Orca + Codex Luna medium",
-      "host": "orca",
+      "host": "orca_supervised",
       "agent": "codex",
       "implementation_configs": [
         {
-          "implementation_key": "codex.worker-profile",
+          "implementation_key": "orca.supervised-profile",
           "codec_version": 2,
-          "payload": {
-            "executable": "codex.exe",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "medium"
-          }
-        },
-        {
-          "implementation_key": "orca.worker-profile",
-          "codec_version": 1,
           "payload": {
             "executable": "orca.exe",
             "shell": "powershell.exe",
-            "wait_timeout": "15m"
+            "wait_timeout": "15m",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium",
+            "target": "local",
+            "poll_interval": "1s",
+            "capability_report_version": 1,
+            "remote_cancel_available": false
           }
         }
       ]
@@ -91,25 +85,22 @@
     {
       "id": "orca-local-luna-high",
       "name": "本机 Orca + Codex Luna high",
-      "host": "orca",
+      "host": "orca_supervised",
       "agent": "codex",
       "implementation_configs": [
         {
-          "implementation_key": "codex.worker-profile",
+          "implementation_key": "orca.supervised-profile",
           "codec_version": 2,
-          "payload": {
-            "executable": "codex.exe",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "high"
-          }
-        },
-        {
-          "implementation_key": "orca.worker-profile",
-          "codec_version": 1,
           "payload": {
             "executable": "orca.exe",
             "shell": "powershell.exe",
-            "wait_timeout": "15m"
+            "wait_timeout": "15m",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "high",
+            "target": "local",
+            "poll_interval": "1s",
+            "capability_report_version": 1,
+            "remote_cancel_available": false
           }
         }
       ]

@@ -29,3 +29,22 @@ type TerminalExitCause struct {
 func (t Terminal) Exited() bool {
 	return t.Status == "exited" || t.ExitCause != nil && t.ExitCause.Kind == "exited"
 }
+
+// An evaluated null wait differs from a field the native host did not report.
+func (t *Terminal) UnmarshalJSON(raw []byte) error {
+	type plain Terminal
+	var value plain
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	if wait, ok := fields["agentWait"]; ok {
+		copy := append(json.RawMessage(nil), wait...)
+		value.AgentWait = &copy
+	}
+	*t = Terminal(value)
+	return nil
+}

@@ -14,7 +14,7 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 	for _, test := range []struct {
 		host string
 		want executionbackend.ExecutionProtocol
-	}{{"local", executionbackend.ProtocolLocalCodexAppServer}, {"orca", executionbackend.ProtocolOrcaTerminalV2}, {"orca_supervised", executionbackend.ProtocolOrcaSupervised}} {
+	}{{"local", executionbackend.ProtocolLocalCodexAppServer}, {"orca_supervised", executionbackend.ProtocolOrcaSupervised}} {
 		t.Run(test.host, func(t *testing.T) {
 			entry, err := d.Resolve(execution.Config{Host: test.host, Agent: "codex"})
 			require(t, err)

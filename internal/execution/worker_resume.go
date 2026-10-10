@@ -20,17 +20,29 @@ func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.Tas
 		return true, s.waitWorkerFlow(run, "原 worker 尚无可核实的进程或 terminal；重开服务不会自动准备工作区或发起执行")
 	}
 	if execution.Process != nil && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
-		switch s.runtime.ProcessHost.InspectProcess(execution.Process) {
-		case "matching process still exists":
-			return false, nil // A live original process cannot be restarted.
-		case "process absent":
-			return false, s.finishWorkerFlowFor(run, nil)
-		default:
-			execution.Status = "blocked"
-			return false, s.waitWorkerFlow(run, "Original worker process identity cannot be verified; its session and files are retained")
+		lifecycle, _, err := s.lifecycleForRun(run)
+		if err != nil {
+			return false, err
 		}
+		snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+		if err != nil {
+			return false, err
+		}
+		evidence, err := lifecycle.VerifyManualRecovery(ctx, snapshot)
+		if err != nil {
+			execution.RecoveryState = "unverified"
+			return true, s.waitWorkerFlow(run, "Original worker identity cannot be verified: "+err.Error())
+		}
+		if evidence.ManagedProcess && !evidence.ProcessAbsent {
+			return false, nil
+		}
+		if evidence.ProcessAbsent && evidence.WritersAbsent {
+			return false, nil
+		} // the original recovery owner reconciles its result
+		execution.RecoveryState = "unverified"
+		return true, s.waitWorkerFlow(run, "Original worker writers cannot be verified; the original session and files are retained")
 	}
-	if workflow.Phase != "queued" {
+	if workflow.Status != "queued" {
 		return true, nil
 	}
 	if execution.RecoveryRequired {

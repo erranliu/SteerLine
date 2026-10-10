@@ -93,7 +93,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 		return config, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
 	if config.WorkflowProtocol != executionmodel.Version {
-		return config, errors.New("workflow_protocol must be worker-flow-v1; older configurations are unsupported and their state is preserved")
+		return config, errors.New("workflow_protocol must be worker-flow-v2; older configurations are unsupported and their state is preserved")
 	}
 
 	if err := config.PublicationPolicy.Validate(); err != nil {

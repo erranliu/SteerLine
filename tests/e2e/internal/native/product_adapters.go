@@ -17,15 +17,15 @@ var ErrOrcaRepoUnavailable = orcaworker.ErrRepoUnavailable
 func CodexExecutable(command string) (string, error) { return codexworker.NativeExecutable(command) }
 
 func OrcaWorkerProfile(executable, waitTimeout string) map[string]any {
-	return map[string]any{"executable": executable, "args": []string{}, "shell": "powershell.exe", "wait_timeout": waitTimeout}
+	return map[string]any{"executable": executable, "args": []string{}, "shell": "powershell.exe", "wait_timeout": waitTimeout, "model": Model, "reasoning_effort": Effort}
 }
 
 func WorkerImplementationConfigs(executable string, orca map[string]any) []map[string]any {
+	if orca != nil {
+		return []map[string]any{{"implementation_key": orcaworker.ProfileCodecKey, "codec_version": orcaworker.ProfileCodecVersion, "payload": orca}}
+	}
 	codex := map[string]any{"executable": executable, "model": Model, "reasoning_effort": Effort}
 	configs := []map[string]any{{"implementation_key": codexworker.ProfileCodecKey, "codec_version": codexworker.ProfileCodecVersion, "payload": codex}}
-	if orca != nil {
-		configs = append(configs, map[string]any{"implementation_key": orcaworker.ProfileCodecKey, "codec_version": 1, "payload": orca})
-	}
 	return configs
 }
 

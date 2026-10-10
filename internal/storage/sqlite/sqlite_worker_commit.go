@@ -150,13 +150,13 @@ func (s *SQLiteStore) CommitWorker(ctx context.Context, request storageports.Wor
 				// Completed/discarded tasks may retain diagnostic and cleanup
 				// receipts, but cannot restart business work or replace evidence.
 
-				if v := request.Workflow; workflow.Phase == "completed" && v != nil && recordWriteChanged(*v) {
+				if v := request.Workflow; workflow.Status == "completed" && v != nil && recordWriteChanged(*v) {
 					return nativeErr("task_not_active", "worker workflow is frozen after task settlement")
 				}
-				if v := request.Execution; workflow.Phase == "completed" && v != nil && (v.Before == nil || deliveredExecutionFingerprint(*v.Before) != deliveredExecutionFingerprint(v.After)) {
+				if v := request.Execution; workflow.Status == "completed" && v != nil && (v.Before == nil || deliveredExecutionFingerprint(*v.Before) != deliveredExecutionFingerprint(v.After)) {
 					return nativeErr("task_not_active", "worker execution is frozen after task settlement")
 				}
-				if v := request.Attempt; workflow.Phase == "completed" && v != nil && recordWriteChanged(*v) {
+				if v := request.Attempt; workflow.Status == "completed" && v != nil && recordWriteChanged(*v) {
 					return nativeErr("task_not_active", "worker attempt is frozen after task settlement")
 				}
 				for _, v := range request.Decisions {

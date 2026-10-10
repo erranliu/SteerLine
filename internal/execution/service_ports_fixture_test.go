@@ -164,7 +164,7 @@ func loadFixtureConfig(path string) (Config, error) {
 		input.Git.Executable = "git"
 	}
 	if input.WorkflowProtocol != executionmodel.Version {
-		return c, errors.New("workflow_protocol must be worker-flow-v1")
+		return c, errors.New("workflow_protocol must be worker-flow-v2")
 	}
 
 	if err := publication.ValidateNonSecret(publication.Config(input.PR), input.Git); err != nil {

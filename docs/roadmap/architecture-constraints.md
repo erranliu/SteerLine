@@ -4,21 +4,21 @@
 
 ## 第一阶段平台范围
 
-第一阶段统一只交付和验收本地 Codex 与本机 Orca。远程准入、派发、反馈、恢复、取消及本机/远端混合流程暂移出一期，也不列作一期阻塞或待补验；后续另行规划。保留既有远端代码、协议定义及历史证据，不将它们声明为当前支持或完成条件。Git remote 和托管 PR 发布仍属于本机交付链。
+第一阶段包含本地 Codex、本机 Orca 与远端路径交付。远端路径按[专属 Spec](../spec/orca-remote-l3.spec.md)与[验收记录](../acceptance/orca-remote-l3.md)核对实际能力和结果。
 
 ## 长期双执行路径
 
-local Codex 与 Orca 均长期正式支持。backend、agent、execution target 和协议版本分开；未来远端扩展也不能把本地路径用作远程故障的隐式替代。Orca terminal v2 与 supervised 可采用不同协议实现，共用业务边界和契约测试。
+local Codex 与 Orca 均长期正式支持。backend、agent、execution target 和协议版本分开；远端路径也不能把本地路径用作远程故障的隐式替代。Orca terminal v2 与 supervised 可采用不同协议实现，共用业务边界和契约测试。
 
 ## 业务权威与执行边界
 
-SteerLine 负责任务领取、工作区与 worker 关联、五个主阶段、完整反馈送达、原会话重接、PR 关联和真实合并结项。worker 负责实现、提交、创建 PR；测试、修复、审查由任务 Spec/Plan 约定。中心不再维护项目五步编排、检查清单、修复轮次或脏目录门槛。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
+SteerLine 负责任务领取、工作区与 worker 关联、固定流程/步骤与统一 status、完整反馈送达、原会话重接、PR 关联和真实合并结项。worker 负责实现、提交、创建 PR；测试、修复、审查由任务 Spec/Plan 约定。开发流程以普通代码管理 implement.execute/report、publish、await_merge 和 delivered；不固定增加项目验证/审查循环。候选和报告前后事实核验按 [#84 契约](../spec/worker-staged-flow.spec.md)执行。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
 
 中心停止监督与取消执行分开；本机路径的生命周期策略明确表达。
 
 ## 身份与扩展
 
-Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身份分别保留归属。任务领取与结项属于任务级；agent、工作区、输出和反馈属于具体会话。业务步骤不构成worker分派状态机。每个WorkflowRun 只有一条持续 worker 会话；同 Task 的本机多候选已使用多个独立 WorkflowRun，不为同一候选的反馈重建 worker，中心仍只记录一个 TaskDelivery。
+Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身份分别保留归属。任务领取与结项属于任务级；agent、工作区、输出和反馈属于具体会话。业务流程在 worker 内控制下一输入，adapter 不管理业务步骤或决定下一阶段。每个WorkflowRun 只有一条持续 worker 会话；同 Task 的本机多候选已使用多个独立 WorkflowRun，不为同一候选的反馈重建 worker，中心仍只记录一个 TaskDelivery。
 
 历史操作固定到派发时的目标及代次，配置变化和迟到消息不能重定向原执行。完成由中心按选用结果和真实交付核验。
 
@@ -28,9 +28,9 @@ Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身�
 
 用户可通过 Codex 分析并人工处置任务与成果，系统不承诺自动修复任意人工改动。当前格式重启先核验原请求及执行事实；仍存活的原会话可接回观察，已终止的本地 worker 由用户明确选择后在新 Attempt 继续。原 thread 无法核实时需人工处理；恢复不在原 Execution 中创建替代会话。关系视图和UI均不成为业务写者；未核实原执行或其他写者时保留未知状态，不自动创建替代worker。
 
-## 后续远端设计边界
+## 远端设计边界
 
-以下仅保留后续设计约束，不纳入一期交付或验收：远端只需 Orca、agent 和仓库工具，不要求部署 SteerLine 服务或共享中心磁盘；远端路径属于其目标，不能当作本机文件。远端失联也不能自动改投本机；必须独立规划其权限、原身份和恢复/取消能力。
+远端只需 Orca、agent 和仓库工具，不要求部署 SteerLine 服务或共享中心磁盘；远端路径属于其目标，不能当作本机文件。远端失联也不能自动改投本机；必须独立规划其权限、原身份和恢复/取消能力。
 
 ## 未发布版本的兼容策略
 

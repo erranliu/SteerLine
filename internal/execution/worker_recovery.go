@@ -17,7 +17,7 @@ func (s *Service) hasUnknownWorkerOperation(run *reconstructiontypes.RunView) bo
 		if op.Kind == "worker_input_value" {
 			continue
 		} // This journal has no external outcome to reconcile.
-		if op.Status != "outcome_unknown" && op.Status != "in_flight" {
+		if op.Status != "outcome_unknown" && op.Status != "in_flight" && !(op.Kind == "stop_worker_observation" && op.Status == "accepted") {
 			continue
 		}
 		var target struct {
@@ -37,10 +37,10 @@ func (s *Service) hasUnknownWorkerOperation(run *reconstructiontypes.RunView) bo
 	return false
 }
 
-// beginLocalRecoveryAttempt advances the worker generation in one service
+// beginWorkerRecoveryAttempt advances the worker generation in one service
 // write. The prior process and session stay on the retired Attempt; its
 // process receipt and execution binding stay at their original paths.
-func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstructiontypes.RunView, mode string) error {
+func (s *Service) beginWorkerRecoveryAttempt(ctx context.Context, run *reconstructiontypes.RunView, mode string) error {
 	if mode != "continue" {
 		return errors.New("recovery requires explicit continuation of the original session")
 	}
@@ -54,7 +54,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstruc
 	}
 	if !execution.RecoveryRequired ||
 		(execution.RecoveryState != "interrupted" && execution.RecoveryState != "completed") ||
-		execution.Process == nil || s.runtime.ProcessHost.InspectProcess(execution.Process) != "process absent" {
+		execution.Process == nil {
 		return errors.New("the original worker process and its descendants are not confirmed stopped")
 	}
 	if execution.Workspace.Worktree == "" || run.WorktreePath == nil || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
@@ -73,21 +73,11 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstruc
 	if err != nil {
 		return err
 	}
-	if !recovery.ManagedProcess || !recovery.ProcessAbsent {
+	if !recovery.ManagedProcess || !recovery.ProcessAbsent || !recovery.WritersAbsent {
 		return errors.New("the original process tree is not proven to be service managed")
 	}
 	if !recovery.SessionAvailable || execution.SessionID == "" {
 		return errors.New("the original session identity is unavailable; handle the original execution manually")
-	}
-	if owned := s.ownedProcesses[run.RunID]; owned != nil {
-		if owned.Identity() != *execution.Process {
-			return errors.New("owned process identity changed before recovery")
-		}
-		owned.Close()
-		delete(s.ownedProcesses, run.RunID)
-	}
-	if !s.resources.WorkerTreeAbsent(*execution.Process) {
-		return errors.New("original worker descendants may still write to the worktree")
 	}
 	if s.hasUnknownWorkerOperation(run) {
 		return errors.New("an earlier external operation has an unknown outcome; reconcile it before continuing")
@@ -150,7 +140,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *reconstructiontypes.RunView,
 	if execution == nil {
 		return errors.New("saved recovery answer lost its execution")
 	}
-	if old.SourceAttemptID == run.AttemptID && old.RecoveryVersion == execution.RecoveryVersion &&
+	if old.SourceAttemptID == run.AttemptID && old.RecoveryVersion == execution.RecoveryVersion && s.decisionRecord(run) != nil && s.decisionRecord(run).RecoveryState == execution.RecoveryState &&
 		execution.RecoveryMarkedAt != nil && old.AnsweredAt != nil && old.AnsweredAt.After(*execution.RecoveryMarkedAt) {
 		return nil // This answer already authorizes the current recovery revision.
 	}
@@ -211,7 +201,7 @@ func (s *Service) markServiceRecoveryGateForPriorOwner() error {
 			continue
 		}
 		workflow, execution := s.workflowRecords(run)
-		if workflow == nil || execution == nil || workflow.Phase == "completed" || workflow.Phase == "abandoned" {
+		if workflow == nil || execution == nil || workflow.Status == "completed" || workflow.Status == "abandoned" {
 			continue
 		}
 		if execution.OwnerServiceInstanceID != s.State.Service.InstanceID {
@@ -244,16 +234,48 @@ func (s *Service) markOneServiceRecoveryGate(run *reconstructiontypes.RunView) {
 	}
 	task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 	workflow, execution := s.workflowRecords(run)
-	if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" || workflow.Phase == "abandoned" {
+	if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Status == "completed" || workflow.Status == "abandoned" {
 		return
+	}
+	if s.pristineTaskStartReservation(run) {
+		return // A committed claim with no worker effect can resume its own intent.
 	}
 	execution.RecoveryRequired = true
 	execution.RecoveryVersion++
 	execution.RecoveryState = "unverified"
+	execution.RecoverySessionAvailable = nil
 	marked := now()
 	execution.RecoveryMarkedAt = &marked
 	execution.UpdatedAt = marked
 	s.refreshRun(run)
+}
+
+func (s *Service) pristineTaskStartReservation(run *reconstructiontypes.RunView) bool {
+	w, e := s.workflowRecords(run)
+	a := s.workflowAttempt(run, run.AttemptID)
+	if w == nil || e == nil || a == nil || w.Status != "queued" || e.Status != "pending" || a.Status != "planned" || e.Process != nil || e.SessionID != "" || e.TurnNumber != 0 || e.PendingCommandID != "" || e.Workspace.Worktree != "" || e.RecoveryRequired {
+		return false
+	}
+	reserved := false
+	for _, op := range s.domain.Operations {
+		if op.Kind == "claim_task" && op.OperationID == run.RunID {
+			reserved = true
+			continue
+		}
+		for _, identity := range strings.Split(op.IdempotencyKey, ":") {
+			if identity == run.ExecutionID || identity == run.RunID {
+				return false
+			}
+		}
+		var target struct {
+			ExecutionID   string `json:"execution_id"`
+			WorkflowRunID string `json:"workflow_run_id"`
+		}
+		if json.Unmarshal(op.Request, &target) == nil && (target.ExecutionID == run.ExecutionID || target.WorkflowRunID == run.RunID) {
+			return false
+		}
+	}
+	return reserved
 }
 
 func (s *Service) resumeConfiguredWork(ctx context.Context) error {
@@ -265,7 +287,7 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 			continue
 		}
 		workflow, execution := s.workflowRecords(run)
-		if workflow == nil || execution == nil || workflow.Phase != "completed" {
+		if workflow == nil || execution == nil || workflow.Status != "completed" {
 			continue
 		}
 		var cleanupErr error
@@ -287,7 +309,10 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 }
 
 func (s *Service) resumeWorkerFlow(ctx context.Context) error {
-	if err := s.resumeAppServerWorkers(ctx); err != nil {
+	if ctx.Err() != nil {
+		return nil
+	}
+	if err := s.resumeWorkerObservers(ctx); err != nil {
 		return err
 	}
 	// An unavailable candidate must not prevent its siblings' saved work from
@@ -304,11 +329,16 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 			continue
 		}
 		if s.workers[run.RunID] != nil {
+			if e := s.executionRecord(run); e != nil && e.RecoveryRequired && e.RecoveryState == "unverified" {
+				if err := s.recheckWorkerQualification(ctx, run); err != nil {
+					resumeErr = errors.Join(resumeErr, err)
+				}
+			}
 			continue
 		}
 		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 		workflow, execution := s.workflowRecords(run)
-		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" {
+		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Status == "completed" {
 			continue
 		}
 		adapter, err := s.workerFlowRegistration(run)

@@ -1,8 +1,8 @@
 # 整体架构与职责边界
 
-SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。当前运行与验收范围是本地 Codex 和本机 Orca；保留的远端适配和历史试验不表示当前支持。后续目标见[产品愿景](roadmap/product-vision.md)，源码归属见[代码架构](architecture/current-code-architecture.md)。
+SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。一期包含本地 Codex、本机 Orca 与远端路径交付。后续目标见[产品愿景](roadmap/product-vision.md)，源码归属见[代码架构](architecture/current-code-architecture.md)。
 
-本文描述 SteerLine 产品运行的业务权威。仓库开发由 roadmap-runner 直接调度 Codex，以[execution-map](roadmap/execution-map.md)管理任务与依赖；开发流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。
+本文描述 SteerLine 产品运行的业务权威。普通开发由当前聊天直接实现；用户明确要求 roadmap 调度时，才由 roadmap-runner 使用[execution-map](roadmap/execution-map.md)管理已确认的任务与依赖。roadmap 流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。
 
 ## 职责与权威
 
@@ -10,7 +10,7 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 | --- | --- |
 | 人 | 决定目标与任务范围、处理产品取舍和权限问题、审阅并合并 PR |
 | 任务应用 | 核验固定任务契约、DAG、领取资格与核验后的任务结果 |
-| 执行应用 | 准备工作区、派发并观察原 worker 会话、传递反馈、核验交付和结算资源 |
+| 执行应用 | 准备工作区、管理固定流程的步骤/status、派发并观察原会话、传递反馈、核验交付和结算资源 |
 | worker | 按任务 Spec/Plan 实现、测试、修复、提交和创建 PR；不写中心业务状态 |
 | 执行后端 | 提供真实进程、终端、原生会话/轮次、平台消息和资源事实 |
 | PR 平台 | 提供 PR 身份、head/base 和实际合并事实 |
@@ -43,3 +43,7 @@ Windows 中心由用户从安装入口打开的可见服务窗口承载，可最
 技术架构的主要工程目标是提高 AI 开发的有效并行吞吐，使功能能按明确契约独立理解、实现、验证和交付，减少共享修改、等待与返工。上述业务权威、权限、恢复和唯一交付边界保持。每次规划先读[RoadmapGuide](roadmap/RoadmapGuide.md)，再用[并行开发指南](architecture/parallel-development.md)核对功能所有者、共享冲突及开工/集成条件；模块多或任务多本身不代表有效并行。
 
 本文维护项目整体职责和原则。具体配置、数据、反馈、会话和 UI 设计归[产品设计](product-design/README.md)；代码文件、当前模块与接口归[源码索引](architecture/current-code-architecture.md)。产品管理的任务执行要求以独立 Spec/Plan 和中心固定契约为准，产品说明不直接改变派发资格。测试方法见[测试指南](testing.md)。
+
+## Worker 分步流程
+
+当前开发流程 `development/v1` 在现有 worker 内用普通代码定义 `implement.execute → implement.report → publish → await_merge → delivered`。实现正文自由输出，报告与发布使用严格结果；正常三个业务模型轮次共用原会话/Attempt。WorkflowRun 的 `status/flow_ref/step_id` 是唯一业务状态权威，Execution.Status 保留原生事实。结果、转移与下一输入意图同事务提交；adapter 只提供规范事实/能力，不解析业务 JSON 或选择下一步。候选与 PR head 经真实事实核验，真实合并仍走唯一 TaskDelivery。完整契约见 [分步 Spec](spec/worker-staged-flow.spec.md)，原始验收见 [专属记录](acceptance/worker-staged-flow.md)。

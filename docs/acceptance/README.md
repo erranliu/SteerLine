@@ -9,8 +9,14 @@
 | 一期签收 | 待验；[一期活动](phase1.md) |
 | 二期节点 | [导航](phase2.md)：[2.1执行UI](phase2-execution.md)、[2.2草稿/人工事项](phase2-planning.md)、[2.3主agent](phase2-main-agent.md)均为节点验收规划，尚未完整排入 |
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[Orca](worker-flow-orca-native.md)、[停服恢复](worker-service-recovery.md) |
+| Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
+| 控制台 Codex CLI 入口 | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
+| Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
+| Orca状态同步修复 | [延迟启动活动推进状态](orca-delayed-start-status-2026-10-09.md)，原 Dispatch 在完成前同步开始事实，源码定向验证通过 |
+| Orca supervised 双目标 | [本机目标与旧入口切断](orca-supervised-targets.md)，同一原远端生命周期，功能范围保持 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
+| 测试维护 | [测试代码精简](test-code-simplification.md) |
 | 历史结果与旧方案 | [归档索引](archive/README.md) |
 
 execution-map维护执行/验收汇总并链接未验事项；开发任务状态与依赖以execution-map为准，真实PR和验证证据由runner核对；SteerLine产品业务状态按其工具回执核对。
@@ -21,6 +27,7 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 | --- | --- |
 | #83 本机安装与调试路径隔离 | [验收](local-runtime-isolation.md) |
 | #84 Worker 分步执行与结构化状态推进，已纳入执行规划 | [验收](worker-staged-flow.md) |
+| #87 Worker 停机对账与恢复一致性修复，已合入；WSR-A1–A8 自动通过 | [验收及真实合并记录](worker-stop-recovery.md) |
 | #45 本机客户端协议与历史查询 | [验收](phase2-local-api.md) |
 | #44 WinUI基座与原生输入 | [验收](phase2-winui-foundation.md) |
 | #49 DAG与任务原生浏览，待原型 | [验收](phase2-roadmap-ui.md) |

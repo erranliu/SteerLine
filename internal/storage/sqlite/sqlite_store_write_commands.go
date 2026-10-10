@@ -300,7 +300,7 @@ func (t *sqliteTx) AcceptDecisionAnswer(command storageports.CommandRecord, answ
 	if err = decode(executionBytes, &execution); err != nil {
 		return record, false, err
 	}
-	if revision != answer.ExpectedRunRevision || phase != "waiting_decision" && phase != "waiting_pr_merge" || execution.DecisionID != record.DecisionID || record.WorkflowRunID != answer.RunID || execution.CurrentStep != "worker" {
+	if revision != answer.ExpectedRunRevision || phase != "waiting_input" && phase != "waiting_external" && phase != "blocked" || execution.DecisionID != record.DecisionID || record.WorkflowRunID != answer.RunID || execution.CurrentStep != "worker" {
 		return record, false, errors.New("stale_revision: decision or run identity changed; refresh before answering")
 	}
 	var currentAttempt string

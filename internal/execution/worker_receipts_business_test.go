@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -19,7 +20,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	first, second := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	commandID := newID()
 	run := &reconstruction.RunView{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &executionmodel.DecisionState{Status: "answer_saved", Request: executionmodel.DecisionRequest{FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true}}}
-	workflow := &executionmodel.WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Phase: "waiting_decision"}
+	workflow := &executionmodel.WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Status: "waiting_input"}
 	execution := &executionmodel.ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentAttemptID: run.AttemptID, CurrentStep: "worker", CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	service := &Service{domain: reconstruction.Snapshot{Operations: []executionmodel.OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
@@ -29,6 +30,9 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	service.domain.Attempts = []executionmodel.StepAttemptRecord{{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, StepID: "worker", AttemptNumber: 1}}
 	service.domain.WorkflowRuns, service.domain.Executions = []executionmodel.WorkflowRunRecord{*workflow}, []executionmodel.ExecutionRecord{*execution}
 	workflow, execution = &service.domain.WorkflowRuns[0], &service.domain.Executions[0]
+	originalReceipt := mustJSON(executionbackend.LifecycleReceipt{Operation: executionbackend.Operation{Receipt: []byte(`{"launch":{"effective":{"agent":"original-agent"}}}`)}, State: executionbackend.LifecycleStateFacts{InputAccepted: true, SessionID: workerFlowMockSession, TurnID: second}})
+	service.domain.Operations[0].Receipt = append([]byte(nil), originalReceipt...)
+	service.domain.Operations[0].PlatformRequestID = "original-native-request"
 	run.Decision.ID, run.Decision.Version = newID(), 1
 	run.Decision.AttemptID = run.AttemptID
 	service.setRunDecision(run, run.Decision)
@@ -38,16 +42,19 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.domain.Operations[0].Status != "confirmed" {
 		t.Fatalf("second turn receipt was not applied: execution=%+v decision=%+v", execution, run.Decision)
 	}
+	if !bytes.Equal(service.domain.Operations[0].Receipt, originalReceipt) || service.domain.Operations[0].PlatformRequestID != "original-native-request" {
+		t.Fatal("started confirmation replaced the original accepted/native receipt")
+	}
 	fixed := executionbackend.SessionContext{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, SessionID: workerFlowMockSession, Generation: execution.SessionGeneration, CurrentTurnID: second}
 	request := neutralDecisionFixture(t, fixed, "pending", []executionbackend.Question{{ID: "choice", Question: "Continue?", AllowFreeText: true}})
 	service.setRunDecision(run, &executionmodel.DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: request})
-	workflow.Phase = "waiting_decision"
+	workflow.Status = "waiting_input"
 	run.FinishTaskStatus = "waiting_decision"
 	if _, err := service.recordWorkerTurnStarted(run, workflow, execution, second); err != nil {
 		t.Fatal(err)
 	}
-	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Phase != "waiting_decision" || run.FinishTaskStatus != "waiting_decision" {
-		t.Fatalf("start replay accepted an unsent answer or changed the waiting state: turns=%d decision=%s phase=%s finish=%s", execution.TurnNumber, run.Decision.Status, workflow.Phase, run.FinishTaskStatus)
+	if execution.TurnNumber != 2 || run.Decision.Status != "answer_saved" || workflow.Status != "waiting_input" || run.FinishTaskStatus != "waiting_input" {
+		t.Fatalf("start replay accepted an unsent answer or changed the waiting state: turns=%d decision=%s phase=%s finish=%s", execution.TurnNumber, run.Decision.Status, workflow.Status, run.FinishTaskStatus)
 	}
 }
 
@@ -70,14 +77,14 @@ func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 	run := &reconstruction.RunView{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(neutralProtocol), WorkflowVersion: executionmodel.Version}
 	service := &Service{lifecycleEffects: map[string]pendingLifecycleEffect{newID(): {runID: run.RunID}}, State: reconstruction.Runtime{}, domain: reconstruction.Snapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "8", Status: "in_progress"}},
-		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Phase: "queued"}},
+		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Status: "queued"}},
 		Executions:   []executionmodel.ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*reconstruction.RunView{run},
 	}
 	before := digestValue(struct {
 		View   reconstruction.Runtime
 		Domain reconstruction.Snapshot
 	}{service.State, service.domain})
-	if err := service.resumeAppServerWorkers(context.Background()); err != nil {
+	if err := service.resumeWorkerObservers(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if before != digestValue(struct {
@@ -127,7 +134,7 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
-	execution.Status, workflow.Phase = "blocked", "executing"
+	execution.Status, workflow.Status = "blocked", "running"
 	run.ExecutionStatus = "unknown"
 	if err := service.waitWorkerFlow(run, "observation disconnected"); err != nil {
 		t.Fatal(err)
@@ -139,11 +146,11 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	close(worker.observationDone)
 	result := appServerRecoveryFixture(t, service, run)
 	result.worker = worker
-	if err := service.applyAppServerRecovery(result); err != nil {
+	if err := service.applyWorkerRecovery(result); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = service.workflowRecords(run)
-	if execution.Status != "active" || run.ExecutionStatus != "running" || workflow.Phase != "executing" || run.Error != nil {
+	if execution.Status != "active" || run.ExecutionStatus != "running" || workflow.Status != "running" || run.Error != nil {
 		t.Fatalf("recovered active turn retained its blocked state: %+v %+v", execution, run)
 	}
 	delete(service.workers, run.RunID)
@@ -163,7 +170,7 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	setNeutralBinding(t, execution, endpoint, "generation", workerFlowMockSession)
 	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
-	execution.Status, workflow.Phase = "active", "executing"
+	execution.Status, workflow.Status = "active", "running"
 	input := executionbackend.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
 	if _, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+input.CommandID, &input); err != nil {
 		t.Fatal(err)
@@ -175,13 +182,13 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	defer cancel()
 	service.runContext, service.signalQueue, service.State.Service.Ready = ctx, make(chan Signal, 4), true
 	started := time.Now()
-	if err := service.resumeAppServerWorkers(ctx); err != nil {
+	if err := service.resumeWorkerObservers(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if time.Since(started) > time.Second || !service.appServerRecovering[run.RunID] {
+	if time.Since(started) > time.Second || !service.workerRecovering[run.RunID] {
 		t.Fatal("slow recovery blocked the service writer")
 	}
-	if err := service.resumeAppServerWorkers(ctx); err != nil {
+	if err := service.resumeWorkerObservers(ctx); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -204,7 +211,7 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	service, run := neutralAuditService(t)
 	workflow, execution := service.workflowRecords(run)
 	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
-	execution.Status, workflow.Phase = "active", "waiting_decision"
+	execution.Status, workflow.Status = "active", "waiting_input"
 	run.FinishTaskStatus, run.ExecutionStatus = "waiting_decision", "running"
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)

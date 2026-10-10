@@ -24,7 +24,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
-const executionDirectoryVersion = "builtin-execution-v3"
+const executionDirectoryVersion = "builtin-execution-v4"
 
 // NewBuiltinDirectory constructs this application's fixed implementation
 // catalog. Every returned directory is independent and immutable.
@@ -37,19 +37,15 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 		{Key: codexworker.ProfileCodecKey, Version: codexworker.ProfileCodecVersion, Normalize: func(payload []byte, host, agent string) ([]byte, []string, error) {
 			return codexworker.NormalizeProfilePayload(payload, runtime.GOOS, host, agent)
 		}},
-		{Key: orcaworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, host, _ string) ([]byte, []string, error) {
-			return orcaworker.NormalizeProfilePayload(payload, host)
-		}},
-		{Key: remote.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _, _ string) ([]byte, []string, error) {
+		{Key: remote.ProfileCodecKey, Version: remote.ProfileCodecVersion, Normalize: func(payload []byte, _, _ string) ([]byte, []string, error) {
 			return remote.NormalizeProfilePayload(payload)
 		}},
 	}
 	localKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendLocal, Agent: "codex", Protocol: executionbackend.ProtocolLocalCodexAppServer}
-	terminalKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "codex", Protocol: executionbackend.ProtocolOrcaTerminalV2}
-	supervisedKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "codex", Protocol: executionbackend.ProtocolOrcaSupervised}
+	supervisedKey := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "*", Protocol: executionbackend.ProtocolOrcaSupervised}
 	entries := []execution.ExecutionRegistration{
 		{
-			Key: localKey, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey},
+			ServiceStopBehavior: codexworker.ServiceStopBehavior, Key: localKey, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey},
 			QuestionCodecKey: codexworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "local",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return localExecutionBackend{config: c, target: localTarget(), host: processHost, directory: directory}
@@ -79,37 +75,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			ValidatePublicationPolicy: validateLocalPublicationPolicy,
 		},
 		{
-			Key: terminalKey, ProfileKey: "orca/orca_terminal_v2/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey},
-			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca",
-			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
-				return orcaworker.NewBackend(nativeTerminalConfig(c, terminalTarget(c, terminalKey, directory), processHost, directory))
-			},
-			Target: func(c execution.Config) executionbackend.ExecutionTarget {
-				return terminalTarget(c, terminalKey, directory)
-			},
-
-			Lifecycle:                orcaworker.NewExecutionLifecycle,
-			ValidateProfileSelection: validateTerminalProfileSelection,
-			ValidateConfig:           func(ctx context.Context, c execution.Config) error { return validateTerminalConfig(ctx, c, directory) },
-			Preflight: func(ctx context.Context, c execution.Config) error {
-				return preflightTerminalConfig(ctx, c, directory, processHost)
-			},
-			PrepareClaim: func(ctx context.Context, c execution.Config) (execution.ClaimPreparation, error) {
-				return prepareTerminalClaim(ctx, c, directory, processHost)
-			},
-			ReadinessRequired:    func(c execution.Config) bool { return terminalReadinessRequired(c, directory) },
-			BuildPolicyResource:  buildPolicyResource,
-			VerifyPolicyResource: verifyPolicyResource,
-			LinkedWorktreeWriteArgs: func(ctx context.Context, c execution.Config, path string) ([]string, error) {
-				return linkedWorktreeWriteArgs(ctx, c, path, processHost)
-			},
-			ValidTurnID:               executionbackend.StableExecutionID,
-			ValidateRef:               validateCatalogRef,
-			CleanupCapabilities:       []string{"start", "observe", "stop", "workspace_inspection", "output_reading"},
-			ValidatePublicationPolicy: validateWorkerPublicationPolicy,
-		},
-		{
-			Key: supervisedKey, ProfileKey: "orca/orca_supervised/codex", WorkspaceBranchPrefix: "codex", ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey, remote.ProfileCodecKey},
+			ServiceStopBehavior: remote.ServiceStopBehavior, Key: supervisedKey, ProfileKey: "orca/orca_supervised", WorkspaceBranchPrefix: "worker", ProfileCodecKeys: []string{remote.ProfileCodecKey},
 			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca_supervised",
 			Backend: func(c execution.Config) executionbackend.ExecutionBackend {
 				return remote.NewBackend(remoteWorkerConfig(c, processHost, directory))
@@ -129,12 +95,10 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			PrepareClaim: func(ctx context.Context, c execution.Config) (execution.ClaimPreparation, error) {
 				return prepareSupervisedClaim(ctx, c, directory, processHost)
 			},
-			ReadinessRequired:    func(execution.Config) bool { return false },
-			BuildPolicyResource:  buildPolicyResource,
-			VerifyPolicyResource: verifyPolicyResource,
-			LinkedWorktreeWriteArgs: func(ctx context.Context, c execution.Config, path string) ([]string, error) {
-				return linkedWorktreeWriteArgs(ctx, c, path, processHost)
-			},
+			ReadinessRequired:         func(execution.Config) bool { return false },
+			BuildPolicyResource:       buildRemotePolicyResource,
+			VerifyPolicyResource:      verifyRemotePolicyResource,
+			LinkedWorktreeWriteArgs:   func(context.Context, execution.Config, string) ([]string, error) { return nil, nil },
 			ValidTurnID:               executionbackend.StableExecutionID,
 			ValidateRef:               validateCatalogRef,
 			CleanupCapabilities:       []string{"start", "observe", "workspace_inspection", "output_reading", "message_inbox", "resource_settlement"},
@@ -155,20 +119,12 @@ func localTarget() executionbackend.ExecutionTarget {
 	return executionbackend.ExecutionTarget{ID: "local:" + runtime.GOOS + ":" + hostname}
 }
 
-func terminalTarget(c execution.Config, _ execution.ExecutionRegistrationKey, directory *execution.ExecutionDirectory) executionbackend.ExecutionTarget {
-	settings, err := terminalSettings(c, directory)
+func supervisedTarget(c execution.Config, _ execution.ExecutionRegistrationKey, directory *execution.ExecutionDirectory) executionbackend.ExecutionTarget {
+	settings, err := remoteSettings(c, directory)
 	if err != nil {
 		return executionbackend.ExecutionTarget{}
 	}
-	return executionbackend.ExecutionTarget{ID: orcaworker.NativeTargetID(settings)}
-}
-
-func supervisedTarget(c execution.Config, _ execution.ExecutionRegistrationKey, directory *execution.ExecutionDirectory) executionbackend.ExecutionTarget {
-	settings, err := remoteSettings(c, directory)
-	if err != nil || settings.ConnectionID == "" {
-		return executionbackend.ExecutionTarget{}
-	}
-	return executionbackend.ExecutionTarget{ID: "orca-supervised:" + settings.ConnectionID, ConnectionID: settings.ConnectionID, ExternalRuntime: settings.EnvironmentID}
+	return (remote.Config{Settings: remote.Settings{Target: settings.Target, ConnectionID: settings.ConnectionID, EnvironmentID: settings.EnvironmentID}}).Target()
 }
 
 func codexSettings(c execution.Config, directories ...*execution.ExecutionDirectory) (codexworker.ProfileConfig, error) {
@@ -179,14 +135,6 @@ func codexSettings(c execution.Config, directories ...*execution.ExecutionDirect
 	return codexworker.DecodeProfileConfig(payload)
 }
 
-func terminalSettings(c execution.Config, directories ...*execution.ExecutionDirectory) (orcaworker.ProfileConfig, error) {
-	payload, err := c.DecodeImplementationConfig(orcaworker.ProfileCodecKey, directories...)
-	if err != nil {
-		return orcaworker.ProfileConfig{}, err
-	}
-	return orcaworker.DecodeProfileConfig(payload)
-}
-
 func remoteSettings(c execution.Config, directories ...*execution.ExecutionDirectory) (remote.ProfileConfig, error) {
 	payload, err := c.DecodeImplementationConfig(remote.ProfileCodecKey, directories...)
 	if err != nil {
@@ -195,12 +143,8 @@ func remoteSettings(c execution.Config, directories ...*execution.ExecutionDirec
 	return remote.DecodeProfileConfig(payload)
 }
 
-func validateTerminalProfileSelection(agent string, payloads map[string][]byte) error {
-	return orcaworker.ValidateProfileSelection(agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey])
-}
-
 func validateSupervisedProfileSelection(agent string, payloads map[string][]byte) error {
-	return remote.ValidateProfileSelection(agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey], payloads[remote.ProfileCodecKey])
+	return remote.ValidateProfileSelection(agent, payloads[remote.ProfileCodecKey])
 }
 
 func validateLocalConfig(_ context.Context, c execution.Config, directory *execution.ExecutionDirectory) error {
@@ -213,18 +157,6 @@ func validateLocalConfig(_ context.Context, c execution.Config, directory *execu
 		return err
 	}
 	return (codexworker.Config{Args: nil, Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox, ReasoningEffort: settings.ReasoningEffort}).Validate(runtime.GOOS)
-}
-
-func validateTerminalConfig(_ context.Context, c execution.Config, directories ...*execution.ExecutionDirectory) error {
-	var directory *execution.ExecutionDirectory
-	if len(directories) > 0 {
-		directory = directories[0]
-	}
-	_, err := codexSettings(c, directory)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func validateSupervisedConfig(_ context.Context, c execution.Config, directory *execution.ExecutionDirectory) error {
@@ -279,25 +211,6 @@ func preflightLocalConfig(ctx context.Context, c execution.Config, directory *ex
 	})
 }
 
-func preflightTerminalConfig(ctx context.Context, c execution.Config, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost) error {
-	if _, err := prepareTerminalClaim(ctx, c, directory, processHost); err != nil {
-		return err
-	}
-	settings, err := terminalSettings(c, directory)
-	if err != nil {
-		return err
-	}
-	if _, err := (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: settings.Args}, "status", "--json"); err != nil {
-		return fmt.Errorf("terminal host is not reachable: %w", err)
-	}
-	client := orcaworker.New(nativeTerminalConfig(c, terminalTarget(c, execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca}, directory), processHost, directory))
-	_, err = orcaworker.FindRepo(ctx, client.Call, c.Repository)
-	if errors.Is(err, orcaworker.ErrRepoUnavailable) {
-		return executionbackend.UnsupportedAdapterOperation("Preflight", "the fixed repository is not registered on the selected terminal host")
-	}
-	return err
-}
-
 func preflightSupervisedConfig(ctx context.Context, c execution.Config, processHost executionbackend.ManagedProcessHost, directory *execution.ExecutionDirectory) error {
 	_, err := remote.Preflight(ctx, remoteWorkerConfig(c, processHost, directory))
 	if err != nil {
@@ -314,42 +227,12 @@ func prepareLocalClaim(ctx context.Context, c execution.Config, directory *execu
 	return execution.ClaimPreparation{}, err
 }
 
-func prepareTerminalClaim(ctx context.Context, c execution.Config, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost) (execution.ClaimPreparation, error) {
-	if _, err := policyToolVersion(ctx, c, directory, processHost); err != nil {
-		return execution.ClaimPreparation{}, err
-	}
-	if !terminalReadinessRequired(c, directory) {
-		return execution.ClaimPreparation{}, nil
-	}
-	if _, err := managedTerminalCommand(c, "", nil, directory); err != nil {
-		return execution.ClaimPreparation{}, err
-	}
-	timeout, err := time.ParseDuration(mustTerminalSettings(c, directory).WaitTimeout)
-	if err != nil || timeout <= 0 {
-		timeout = 2 * time.Minute
-	}
-	return execution.ClaimPreparation{RequiresReadiness: true, WaitTimeout: timeout}, nil
-}
-
-// A pure fixed-profile requirement shared by claim and persisted-state
-// preflight. Reopening must reject missing readiness evidence before writing.
-func terminalReadinessRequired(c execution.Config, directories ...*execution.ExecutionDirectory) bool {
-	var directory *execution.ExecutionDirectory
-	if len(directories) > 0 {
-		directory = directories[0]
-	}
-	_, err := codexSettings(c, directory)
-	return err == nil && runtime.GOOS == "windows" && c.Agent == "codex"
-}
-
 func prepareSupervisedClaim(ctx context.Context, c execution.Config, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost) (execution.ClaimPreparation, error) {
-	_, err := policyToolVersion(ctx, c, directory, processHost)
-	return execution.ClaimPreparation{}, err
-}
-
-func mustTerminalSettings(c execution.Config, directory *execution.ExecutionDirectory) orcaworker.ProfileConfig {
-	settings, _ := terminalSettings(c, directory)
-	return settings
+	// Orca launches the agent on the paired host using that host's native
+	// settings. A center-local Codex binary cannot attest the remote launch.
+	// The mandatory capability preflight follows PrepareClaim in the claim
+	// application; do not repeat all remote calls in the same control request.
+	return execution.ClaimPreparation{}, nil
 }
 
 func policyToolVersion(ctx context.Context, c execution.Config, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost) (string, error) {
@@ -369,71 +252,17 @@ func policyToolVersion(ctx context.Context, c execution.Config, directory *execu
 	return version, codexworker.VerifyPolicyVersion(version)
 }
 
-func managedTerminalCommand(c execution.Config, path string, roots []string, directories ...*execution.ExecutionDirectory) (string, error) {
-	var directory *execution.ExecutionDirectory
-	if len(directories) > 0 {
-		directory = directories[0]
-	}
-	worker, err := codexSettings(c, directory)
-	if err != nil {
-		return "", err
-	}
-	terminal, err := terminalSettings(c, directory)
-	if err != nil {
-		return "", err
-	}
-	permissions, err := codexworker.NativePermissions(runtime.GOOS, c.Host, c.Agent)
-	if err != nil {
-		return "", err
-	}
-	if path != "" {
-		native, err := codexworker.NativeExecutable(worker.Executable)
-		if err != nil {
-			return "", err
-		}
-		worker.Executable = native
-	}
-	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{
-		WorkingDirectory: path, WriteRoots: roots, Host: c.Host, Agent: c.Agent, Model: worker.Model,
-		ReasoningEffort: worker.ReasoningEffort, Executable: worker.Executable, Args: nil,
-		Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox})
-	if err != nil {
-		return "", err
-	}
-	return orcaworker.WrapAgentCommand(command, terminal.Shell)
-}
-
-func nativeTerminalConfig(c execution.Config, target executionbackend.ExecutionTarget, processHost executionbackend.ManagedProcessHost, directory *execution.ExecutionDirectory) orcaworker.Config {
-	terminal, _ := terminalSettings(c, directory)
-	worker, _ := codexSettings(c, directory)
-	config := orcaworker.Config{Repository: c.Repository, CommandTimeout: c.CommandTimeout, Target: target,
-		Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
-			return (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: terminal.Executable, Args: terminal.Args}, args...)
-		}, InspectWorkspace: func(ctx context.Context, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
-			return inspectBoundWorkspace(ctx, c, ref, processHost)
-		}}
-	if runtime.GOOS == "windows" || worker.Model != "" || worker.ReasoningEffort != "" {
-		config.AgentVersion = func(ctx context.Context) (string, error) {
-			out, err := (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: worker.Executable, Args: nil}, "--version")
-			return string(out), err
-		}
-	}
-	return config
-}
-
 func remoteWorkerConfig(c execution.Config, processHost executionbackend.ManagedProcessHost, directory *execution.ExecutionDirectory) remote.Config {
-	worker, _ := codexSettings(c, directory)
 	settings, _ := remoteSettings(c, directory)
-	client := orcaworker.New(nativeTerminalConfig(c, executionbackend.ExecutionTarget{}, processHost, directory))
-	config := remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: worker.Model,
-		ReasoningEffort: worker.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: client.Raw,
+	call := func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
+		all := append(append([]string(nil), settings.Args...), args...)
+		return (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: settings.Executable}, all...)
+	}
+	return remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: settings.Model, ReasoningEffort: settings.ReasoningEffort, CoordinatorShell: settings.Shell, CommandTimeout: c.CommandTimeout, Call: call,
+		Settings: remote.Settings{Target: settings.Target, ConnectionID: settings.ConnectionID, EnvironmentID: settings.EnvironmentID, RepositorySelector: settings.RepositorySelector, CoordinatorTerminal: settings.CoordinatorTerminal, PollInterval: settings.PollInterval},
 		Origin: func(ctx context.Context) ([]byte, error) {
 			return (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
 		}}
-	config.Settings = remote.Settings{ConnectionID: settings.ConnectionID, EnvironmentID: settings.EnvironmentID,
-		RepositorySelector: settings.RepositorySelector, CoordinatorTerminal: settings.CoordinatorTerminal,
-		ExpectedCodexVersion: settings.ExpectedCodexVersion, PollInterval: settings.PollInterval}
-	return config
 }
 
 func buildPolicyResource(ctx context.Context, request execution.PolicyResourceBuildRequest) (execution.PolicyResourceBuildResult, error) {
@@ -465,7 +294,7 @@ func verifyPolicyResource(envelope executionbackend.ImplementationDataEnvelope, 
 }
 
 func linkedWorktreeWriteArgs(ctx context.Context, c execution.Config, worktreePath string, processHost executionbackend.ManagedProcessHost) ([]string, error) {
-	if c.Host != "local" && c.Host != "orca" {
+	if c.Host != "local" {
 		return nil, executionbackend.UnsupportedAdapterOperation("PrepareWorkspace", "this implementation does not expose local linked-worktree metadata")
 	}
 	if c.Identity() == "" {
@@ -636,10 +465,6 @@ func validateCatalogRef(ref executionbackend.ExecutionRef) error {
 	case executionbackend.ProtocolLocalCodexAppServer, executionbackend.ProtocolLocalProcess:
 		if ref.Backend != executionbackend.BackendLocal || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
 			return errors.New("local resource lacks its fixed process identity")
-		}
-	case executionbackend.ProtocolOrcaTerminalV2:
-		if ref.Backend != executionbackend.BackendOrca || ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
-			return errors.New("terminal resource lacks its fixed runtime/terminal/incarnation")
 		}
 	case executionbackend.ProtocolOrcaSupervised:
 		if ref.Backend != executionbackend.BackendOrca || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.OrchestrationRun == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost == "" || ref.External.WorktreeID == "" {

@@ -8,7 +8,6 @@ import (
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
@@ -156,7 +155,7 @@ func NewService(config Config) (*execution.Service, error) {
 // NewServiceWithLifecycleResolver permits an explicit decorator around the
 // same catalog's lifecycle ports, while preserving all other app wiring.
 func NewServiceWithLifecycleResolver(config Config, resolver executionbackend.LifecycleResolver) (*execution.Service, error) {
-	return NewServiceWithPorts(config, resolver, codexworker.NewConversationAdapter())
+	return NewServiceWithPorts(config, resolver, newConversationSources())
 }
 
 // NewServiceWithPorts composes explicitly supplied execution and history ports
@@ -166,7 +165,7 @@ func NewServiceWithPorts(config Config, resolver executionbackend.LifecycleResol
 }
 
 func newConfiguredServiceWithHost(config Config, host hostport.HostPort) (*execution.Service, error) {
-	return newServiceWithHost(config, config.ExecutionDirectory, codexworker.NewConversationAdapter(), host)
+	return newServiceWithHost(config, config.ExecutionDirectory, newConversationSources(), host)
 }
 
 func newServiceWithHost(config Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host hostport.HostPort) (*execution.Service, error) {

@@ -1,8 +1,8 @@
 # 任务、执行与交付数据模型
 
-当前第一阶段仅运行和验收本地 Codex/本机 Orca。保留的远端身份/协议定义不表示当前支持，不构成一期前置；本文 repository 的 `remote` 指 Git 托管来源，仍用于本机 PR 交付。
+第一阶段包含本地 Codex、本机 Orca 与远端路径交付。本文 repository 的 `remote` 指 Git 托管来源。
 
-SteerLine 尚未发布。当前生产配置必须显式设置 `"task_authority":"native"` 和 `"workflow_protocol":"worker-flow-v1"`。旧 `minimal-v1` 配置及 `workflow_definition`、`project_steps`、`workspace_dirty_ignore` 不属于生产协议。配置加载与正式服务入口在启动外部 worker 前拒绝旧协议；不导入、迁移、双写或覆盖旧现场。
+SteerLine 尚未发布。当前生产配置必须显式设置 `"task_authority":"native"` 和 `"workflow_protocol":"worker-flow-v2"`。旧 `minimal-v1` 配置及 `workflow_definition`、`project_steps`、`workspace_dirty_ignore` 不属于生产协议。配置加载与正式服务入口在启动外部 worker 前拒绝旧协议；不导入、迁移、双写或覆盖旧现场。
 
 ## 权威与身份
 
@@ -12,19 +12,25 @@ SQLite 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Attem
 
 工作区准备意图、轮次观察及当前决策绑定由 Execution 保存。回答事务校验 WorkflowRun 的持久控制版本；服务心跳和日志更新不改变该版本，不能把观察刷新当作业务反馈授权或新的请求身份。
 
-TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其他引用的 commit/SHA-256。领取前再次核验 Task 版本、依赖就绪、项目 authority、目标仓库和前置合并已进入当前 base。领取事务预留一个 Task、WorkflowRun、Execution 与固定 `worker` attempt；不生成 implement／verify／review／publish_pr 链。
+TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其他引用的 commit/SHA-256。领取前再次核验 Task 版本、依赖就绪、项目 authority、目标仓库和前置合并已进入当前 base。领取事务预留一个 Task、WorkflowRun、Execution 与固定 `worker` Attempt，并固定开发流程的 implement.execute 起点；模型步骤不新增 DAG Task。
 
-| WorkflowRun 主阶段 | 条件 |
+WorkflowRun 在原记录中保存唯一 `status/flow_ref/step_id`，不并存旧 Phase；`flow_ref=development/v1` 冻结步骤、模板与结果契约。`stage_inputs` 保存实际输入、Command、Attempt、输入版本和报告源轮次/快照；`stage_results` 保存原生终态、规范 final 来源、输入绑定、快照和 outcome。输入/已接受结果不可替换，重复 first-wins。正常三个模型步骤复用固定 `worker` Attempt；该名称是原生执行角色，不是另一份可写业务位置。
+
+| status | 条件 |
 | --- | --- |
-| `queued` | 领取已落盘，准备工作区或首次会话 |
-| `executing` | 原 worker 正处理任务或反馈轮次 |
-| `waiting_decision` | Codex 原轮次正在等待工具问题的回答，或轮次结束后需要反馈／外部结果无法自动核实 |
-| `waiting_pr_merge` | 有已核实的 PR，worker 当前轮次已停下 |
-| `completed` | 真实合并已核验，TaskDelivery 和 Task closed 已同事务提交 |
+| `queued` | 已保存指定步骤的冻结输入意图，尚未证实原生开始 |
+| `running` | 原生开始已证实 |
+| `waiting_input` | 原目标有明确问题/反馈等待答案 |
+| `blocked` | 已知失败、缺能力或前置不满足 |
+| `reconciling` | 原输入、结果或外部副作用未知；只读对账 |
+| `waiting_external` | 本开发流程的 PR 已核验，等待真实合并 |
+| `completed` / `abandoned` | 经唯一交付核验的完成 / 已退出候选 |
+
+开发步骤为 `implement.execute → implement.report → publish → await_merge → delivered`。实现自由 final 不能作为结构化结果，报告绑定原执行，发布直接消费本轮严格结果。源失败不被报告成功覆盖；报告最多自动重试一次，发布不为补 JSON 重做副作用。报告目前沿用双后端冻结权限，按实际 HEAD/索引/工作区内容摘要和已绑定 PR 前后对比；此能力不能保证拦截全部外部写入。
 
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 
-Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；Windows Orca Codex 使用冻结权限的受管命令启动。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。远端身份/反馈定义仅作保留协议资料，第一阶段不派发或验收该流程。
+Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；Windows Orca Codex 使用冻结权限的受管命令启动。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。
 
 ## 人工候选实验
 
@@ -52,9 +58,9 @@ STEERLINE_HOME 的默认值和路径解析由 [app/config.go](../../internal/app
 
 | 格式 | 当前值 | 源码 |
 | --- | --- | --- |
-| 工作流协议 | worker-flow-v1 | [model/state.go](../../internal/execution/model/state.go) |
-| SQLite schema | 17 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
-| 服务 checkpoint / runtime | 19 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
+| 工作流协议 | worker-flow-v2 | [model/state.go](../../internal/execution/model/state.go) |
+| SQLite schema | 18 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| 服务 checkpoint / runtime | 20 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
 | FixedExecutionProfile | 8 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
 | ConversationEvent | 3 | [model/conversation.go](../../internal/execution/model/conversation.go) |
 | 全局执行配置 | 2 | [app/config.go](../../internal/app/config.go) |
@@ -82,7 +88,7 @@ worker 或用户提供的 URL 只是线索。中心经配置的 provider 查询�
 
 ## 控制入口
 
-`steerline task list/show/graph/export` 只读中心权威；validate/create/discard/add-predecessors 通过固定版本与请求 ID 操作。控制台或 CLI 的 `answer_decision` 共享 CommandService 提交路径。正式服务入口只运行 `worker-flow-v1`；旧五步的 retry、mark-stopped、task reopen 和项目步骤验证器没有当前 CLI 入口。旧状态保留供人工核实，当前入口不读取或迁移旧业务数据。
+`steerline task list/show/graph/export` 只读中心权威；validate/create/discard/add-predecessors 通过固定版本与请求 ID 操作。控制台或 CLI 的 `answer_decision` 共享 CommandService 提交路径。正式服务入口只运行 `worker-flow-v2`；旧五步的 retry、mark-stopped、task reopen 和项目步骤验证器没有当前 CLI 入口。旧状态保留供人工核实，当前入口不读取或迁移旧业务数据。
 
 
 ## Windows Orca Codex 环境事实

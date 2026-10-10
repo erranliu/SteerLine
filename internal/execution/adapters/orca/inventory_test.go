@@ -1,6 +1,7 @@
 package orcaworker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,14 +34,24 @@ func TestFindTaskRejectsIncompleteInventory(t *testing.T) {
 	}
 }
 
-func TestRecoveredDispatchRequiresExactInjectedIdentity(t *testing.T) {
+func TestRecoveredDispatchRequiresExactOriginalIdentity(t *testing.T) {
 	expected := DispatchIdentity{DispatchID: "dispatch", TaskID: "task", RunID: "run", RuntimeID: "runtime", Terminal: "terminal", Incarnation: "incarnation", WorktreeID: "worktree"}
 	call := func(context.Context, ...string) (Result, error) {
-		return Result{RuntimeID: "runtime", Payload: json.RawMessage(`{"dispatch":{"id":"dispatch","taskId":"task","runId":"run"},"worker":{"dispatchId":"dispatch","stage":"injected","agentTerminalHandle":"terminal"},"terminal":{"handle":"terminal","incarnationId":"incarnation","worktreeId":"worktree"}}`)}, nil
+		return Result{RuntimeID: "runtime", Payload: json.RawMessage(`{"dispatch":{"id":"dispatch","taskId":"task","runId":"run"},"worker":{"dispatchId":"dispatch","stage":"context_only","agentTerminalHandle":"terminal"},"terminal":{"handle":"terminal","incarnationId":"incarnation","worktreeId":"worktree"},"observation":{"exactWorker":true}}`)}, nil
 	}
 	if err := VerifyRecoveredDispatch(context.Background(), call, expected); err != nil {
 		t.Fatal(err)
 	}
+	unverified := call
+	call = func(ctx context.Context, args ...string) (Result, error) {
+		result, err := unverified(ctx, args...)
+		result.Payload = bytes.ReplaceAll(result.Payload, []byte(`"exactWorker":true`), []byte(`"exactWorker":false`))
+		return result, err
+	}
+	if err := VerifyRecoveredDispatch(context.Background(), call, expected); !errors.Is(err, ErrDispatchIdentity) {
+		t.Fatalf("unproven original attachment accepted: %v", err)
+	}
+	call = unverified
 	expected.Incarnation = "replacement"
 	if err := VerifyRecoveredDispatch(context.Background(), call, expected); !errors.Is(err, ErrDispatchIdentity) {
 		t.Fatalf("replaced worker terminal was accepted: %v", err)

@@ -21,7 +21,7 @@ func (s *Service) pollRetiredCandidatePRs(ctx context.Context, run *reconstructi
 		if err := publication.ValidateWorkerPRIdentity(info, url, c.PR.Repository, w.Branch, e.Workspace.Branch); err != nil {
 			continue
 		}
-		if w.Phase != "completed" && (url == w.PRURL || w.PRURL == "") {
+		if w.Status != "completed" && (url == w.PRURL || w.PRURL == "") {
 			w.PRURL, w.PRState, w.PRMergedAt, w.PRMergeCommit, w.PRQueriedAt = info.URL, info.State, info.MergedAt, info.MergeCommit, ptr(now())
 			s.refreshRun(run)
 			if err := s.commitWorker(run); err != nil {

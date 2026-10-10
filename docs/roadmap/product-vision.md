@@ -6,7 +6,7 @@ SteerLine 是一款带有研究性质的开发工具，长期远景是通往**�
 
 当前产品方向以 roadmap 为中心：把选定的目标转为有依赖的任务，连接本机 Codex 或 Orca worker，围绕原会话传递用户反馈并记录真实 PR 交付。worker 负责实现、提交和创建 PR，测试、修复、审查要求由任务 Spec/Plan 约定。人决定产品取舍、处理待决策事项并合并 PR；SteerLine 核验实际合并后才认定交付完成。草稿任务可以提前取得唯一 Task ID，正式准入沿用该身份；在产品中受控纳入正式任务时创建对应中心 Task 并进入 DAG，规格和依赖随之固定。草稿编号本身不入图或启动执行。PR 合并前可受控丢弃正式任务，后续规划不能暗中改写已创建的任务。持续会话与简化主流程由 #36 交付，产品方向不代表已实现。
 
-具体底层能力与实施顺序见[草稿 roadmap](drafts/roadmap.md)。本文件定义产品交付节点；仓库开发由 roadmap-runner 直接使用 Codex，以[正式执行清单](execution-map.md)管理用户确认的任务与依赖，流程见[RoadmapGuide](RoadmapGuide.md)。
+具体底层能力与实施顺序见[草稿 roadmap](drafts/roadmap.md)。本文件定义产品交付节点；普通开发由当前聊天直接实现；明确要求 roadmap 调度时，由 roadmap-runner 使用[正式执行清单](execution-map.md)管理已确认的任务与依赖，流程见[RoadmapGuide](RoadmapGuide.md)。
 
 ## 交付节点
 
@@ -14,7 +14,7 @@ SteerLine 是一款带有研究性质的开发工具，长期远景是通往**�
 
 人在 Codex 中规划和维护 roadmap；项目 skill 将选定范围连同任务 ID 整理为 Spec/Plan 与任务 DAG，提交给 SteerLine 校验并创建入图。SteerLine 负责启动与观察 worker、统一待决策和反馈、真实 PR 合并核验及后继释放。本阶段认为输入roadmap及任务契约已稳定。同一项目已支持不同任务人工并行；同任务分叉用于人工对比不同执行方案，默认一个候选、人工逐个新增，开始时参与数已达5个即拒绝，接受竞态偶尔超出，不建设严格名额或调度器。每个候选独立冻结配置、会话、工作区和PR；合并前可放弃退出实验，资源停止另按事实记录，PR合并后不支持放弃。人选择合并结果，中心核验唯一交付，不做自动评分或成果融合。交付结果由人带回 Codex 继续规划；此版不提供 SteerLine 内的 roadmap 规划或 Roadmap UI。
 
-当前第一阶段执行范围仅为本地 Codex 与本机 Orca；远程执行及本机/远端混合流程留在后续规划，不作为本版交付门槛。
+第一阶段执行范围包含本地 Codex、本机 Orca 与远端路径交付。远端路径的契约与结果见[远端 Spec](../spec/orca-remote-l3.spec.md)及[专属验收](../acceptance/orca-remote-l3.md)。
 
 此版采用一个本机安装版本持续工作，源码调试以独立 exe/home 和测试 clone 共存。服务、控制台及任务命令明确显示并使用各自实际路径和构建来源；日常 build 不覆盖安装版。完整 stable/dev 双 channel、不可变版本库及受控提升延后，维护仍采用人工停止、安装和启动，不承诺跨构建接管活动任务或旧开发格式兼容。剩余任务与推进顺序见[草稿 roadmap](drafts/roadmap.md)，最小隔离由 #83 的独立 Spec 承接，组合验收见[一期活动](../acceptance/phase1.md)，不另维护平行交付清单。
 

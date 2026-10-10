@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,9 +32,33 @@ func terminalBackendConfig(t *testing.T, dir string) orcaworker.Config {
 		Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 			ctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
+			workerStop := len(args) > 1 && args[0] == "orchestration" && args[1] == "worker-stop"
+			originalArgs := args
+			if workerStop {
+				var dispatch string
+				for i, arg := range args {
+					if arg == "--dispatch" && i+1 < len(args) {
+						dispatch = args[i+1]
+					}
+				}
+				args = []string{"terminal", "close", "--terminal", strings.TrimPrefix(dispatch, "dispatch:"), "--json"}
+			}
 			cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"--terminal-fixture", dir}, args...)...)
 			cmd.Dir = dir
-			return cmd.Output()
+			out, err := cmd.Output()
+			if workerStop {
+				var dispatch string
+				for i, arg := range originalArgs {
+					if arg == "--dispatch" && i+1 < len(originalArgs) {
+						dispatch = originalArgs[i+1]
+					}
+				}
+				if err != nil {
+					return out, err
+				}
+				return []byte(fmt.Sprintf(`{"ok":true,"_meta":{"runtimeId":"fake-runtime"},"result":{"dispatchId":%q,"state":"stopped","processAction":"closed_agent_terminal"}}`, dispatch)), nil
+			}
+			return out, err
 		},
 	}
 }
@@ -72,6 +97,7 @@ func TestOrcaStopExecutionConfirmsFixedTerminalExit(t *testing.T) {
 	}
 	runID, attemptID := strings.Repeat("a", 32), strings.Repeat("b", 32)
 	ref := executionbackend.ExecutionRef{Version: 1, Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: cfg.Target, Agent: executionbackend.AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: executionbackend.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: os.Args[0]}}
+	ref.External.Dispatch, ref.External.Task, ref.External.OrchestrationRun = "dispatch:"+handle, "task", "run"
 	backend := orcaworker.NewBackend(cfg)
 	observer := &orcaStopHandleFixture{identity: ref.External}
 	receipt, err := backend.StopExecution(context.Background(), ref, executionbackend.Operation{ID: "stop-" + attemptID}, observer)
@@ -95,8 +121,9 @@ func TestOrcaStopFailureDoesNotConfirmExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: cfg.Target, External: executionbackend.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-failure"}}
+	ref.External.Dispatch, ref.External.Task, ref.External.OrchestrationRun = "dispatch:"+handle, "task", "run"
 	t.Setenv("STEERLINE_FAKE_ORCA_CLOSE_FAIL", "1")
-	receipt, err := (orcaworker.NewBackend(cfg)).StopExecution(context.Background(), ref, executionbackend.Operation{}, nil)
+	receipt, err := (orcaworker.NewBackend(cfg)).StopExecution(context.Background(), ref, executionbackend.Operation{ID: "stop-original"}, nil)
 	var backendErr *executionbackend.BackendError
 	if receipt.Disposition == "confirmed" || !errors.As(err, &backendErr) || backendErr.Code != executionbackend.BackendOutcomeUnknown {
 		t.Fatalf("stop failure was misconfirmed: %#v, %v", receipt, err)
@@ -114,7 +141,7 @@ func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	backend := orcaworker.NewBackend(cfg)
 	refFor := func(handle string) executionbackend.ExecutionRef {
 		t.Helper()
-		identity := executionbackend.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-" + handle}
+		identity := executionbackend.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-" + handle, Dispatch: "dispatch:" + handle, Task: "task", OrchestrationRun: "run"}
 		if err := testprotocol.WriteTerminalFixtureState(dir, testprotocol.TerminalFixtureState{Handle: handle, Incarnation: identity.Incarnation}); err != nil {
 			t.Fatal(err)
 		}
@@ -142,7 +169,7 @@ func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	stopCtx, cancelStop := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancelStop()
 	started := time.Now()
-	receipt, err := backend.StopExecution(stopCtx, stopped, executionbackend.Operation{}, nil)
+	receipt, err := backend.StopExecution(stopCtx, stopped, executionbackend.Operation{ID: "stop-original"}, nil)
 	if err != nil || receipt.Disposition != "confirmed" || time.Since(started) >= 3*time.Second {
 		t.Fatalf("other ref stop waited for slow observation: %#v %v", receipt, err)
 	}

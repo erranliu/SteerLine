@@ -15,17 +15,19 @@ func (b Backend) Identity() (executionbackend.BackendKind, executionbackend.Exec
 
 func (b Backend) Probe(ctx context.Context, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec) (executionbackend.CapabilityReport, error) {
 	fixedTarget := b.config.Target()
-	if agent.Name != "codex" || !SameBaseTarget(target, fixedTarget) {
+	if agent.Name != b.config.Agent || !SameBaseTarget(target, fixedTarget) {
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "supervised Orca probe target or agent differs from fixed configuration"}
 	}
-	target = fixedTarget
 	pair, err := Preflight(ctx, b.config)
 	if err != nil {
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "supervised Orca target preflight failed", Cause: err}
 	}
+	return b.report(target, agent, pair), nil
+}
+
+func (b Backend) report(target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, pair PreflightResult) executionbackend.CapabilityReport {
 	report := capabilityReport(executionbackend.BackendOrca, executionbackend.ProtocolOrcaSupervised, target, agent, pair.RemoteVersion)
 	report.CenterVersion = pair.CenterVersion
-	report.ExpectedAgentVersion = b.config.Settings.ExpectedCodexVersion
 	report.Capabilities = append(report.Capabilities,
 		executionbackend.Capability{Name: "message_inbox", Status: executionbackend.CapabilityNotTested},
 		executionbackend.Capability{Name: "remote_cancellation", Status: executionbackend.CapabilityUnsupported, Evidence: "Spec 03 fixes remote_cancel_available=false"},
@@ -38,7 +40,7 @@ func (b Backend) Probe(ctx context.Context, target executionbackend.ExecutionTar
 			report.Capabilities[i].Status = executionbackend.CapabilityNotTested
 		}
 	}
-	return report, nil
+	return report
 }
 
 func (b Backend) Observe(ctx context.Context, ref executionbackend.ExecutionRef) (result executionbackend.Observation, retErr error) {
@@ -74,12 +76,15 @@ func (b Backend) InspectWorkspace(ctx context.Context, ref executionbackend.Exec
 		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "supervised workspace preflight failed", Cause: err}
 	}
 	value, err := New(b.config).InspectWorktree(ctx, pair, ref.External.WorktreeID, ref.WorkspacePath, ref.WorkspaceBranch, ref.BaseCommit, "")
-	return executionbackend.WorkspaceInspection(value), err
+	return executionbackend.WorkspaceInspection{Repository: value.Repository, Worktree: value.Worktree, Branch: value.Branch, Base: value.Base, Head: value.Head, Dirty: value.Dirty, CheckedAt: value.CheckedAt}, err
 }
 
 func NewBackend(c Config) Backend { return Backend{config: c} }
 
 func (c Config) Target() executionbackend.ExecutionTarget {
+	if c.local() {
+		return executionbackend.ExecutionTarget{ID: "orca-supervised-local"}
+	}
 	return executionbackend.ExecutionTarget{ID: "orca-supervised:" + c.Settings.ConnectionID, ConnectionID: c.Settings.ConnectionID, ExternalRuntime: c.Settings.EnvironmentID}
 }
 

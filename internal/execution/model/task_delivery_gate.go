@@ -10,7 +10,9 @@ type DeliveryGate struct {
 	PRURL               string
 	SessionID           string
 	WorkspaceBranch     string
-	Phase               string
+	Status              string
+	StepID              string
+	CandidateSHA        string
 }
 
 // DeliveryPR checks the selected worker identity before external merge proof is read.
@@ -23,7 +25,7 @@ func DeliveryPR(taskID, recordContractID, contractID, contractDigest string, gat
 	}
 	if gate.WorkflowTaskID != taskID || gate.SelectedExecutionID != gate.ExecutionID || gate.ExecutionWorkflowID != gate.WorkflowRunID ||
 		gate.PRURL == "" || gate.SessionID == "" || gate.WorkspaceBranch == "" ||
-		gate.Phase != "executing" && gate.Phase != "waiting_decision" && gate.Phase != "waiting_pr_merge" {
+		gate.Status != "waiting_external" || gate.StepID != StepAwaitMerge || gate.CandidateSHA == "" {
 		return "", boundaryError("task_not_ready", "selected worker flow has no bound session, execution branch or PR")
 	}
 	return gate.PRURL, nil

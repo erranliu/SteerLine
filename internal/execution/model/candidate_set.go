@@ -13,10 +13,12 @@ import (
 // not alter this binding comparison; new candidates, PRs or exits do.
 func CandidateBindings(workflows []WorkflowRunRecord, executions []ExecutionRecord, taskID string) string {
 	type binding struct {
-		ID, Selected, PR, Proposed, Profile string
-		Execution                           string
-		History                             []string
-		Exit                                *CandidateAbandonment
+		ID, Selected, PR, Proposed, Profile   string
+		Execution                             string
+		FlowRef, StepID, Status, CandidateSHA string
+		InputVersion                          uint64
+		History                               []string
+		Exit                                  *CandidateAbandonment
 	}
 	values := []binding{}
 	for _, w := range workflows {
@@ -34,7 +36,7 @@ func CandidateBindings(workflows []WorkflowRunRecord, executions []ExecutionReco
 					break
 				}
 			}
-			values = append(values, binding{ID: w.WorkflowRunID, Selected: w.SelectedResult, PR: w.PRURL, Proposed: w.PRCandidateURL, Profile: bindingDigest(w.ExecutionProfile), Execution: identity, History: w.PRHistory, Exit: w.Abandonment})
+			values = append(values, binding{FlowRef: w.FlowRef, StepID: w.StepID, Status: w.Status, CandidateSHA: w.CandidateSHA, InputVersion: w.InputVersion, ID: w.WorkflowRunID, Selected: w.SelectedResult, PR: w.PRURL, Proposed: w.PRCandidateURL, Profile: bindingDigest(w.ExecutionProfile), Execution: identity, History: w.PRHistory, Exit: w.Abandonment})
 		}
 	}
 	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })

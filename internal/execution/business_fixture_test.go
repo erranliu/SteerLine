@@ -64,7 +64,7 @@ func neutralCodecs() []ImplementationProfileCodec {
 func newNeutralDirectory(agents ...string) (*ExecutionDirectory, error) {
 	var directory *ExecutionDirectory
 	key := ExecutionRegistrationKey{Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: "fixture"}
-	entry := ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", Host: "local", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{neutralProfileKey}, QuestionCodecKey: neutralQuestionKey, QuestionCodecVersion: 1,
+	entry := ExecutionRegistration{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop, Key: key, ProfileKey: "fixture/stream-v1", Host: "local", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{neutralProfileKey}, QuestionCodecKey: neutralQuestionKey, QuestionCodecVersion: 1,
 		Target: func(c Config) executionbackend.ExecutionTarget {
 			target := neutralProfileSettings(c).Target
 			if target.ID == "" {
@@ -72,9 +72,9 @@ func newNeutralDirectory(agents ...string) (*ExecutionDirectory, error) {
 			}
 			return target
 		},
-		Backend: func(c Config) executionbackend.ExecutionBackend { return neutralBackend{config: c} },
+		Backend: func(c Config) executionbackend.ExecutionBackend { return newNeutralBackend(c) },
 		Lifecycle: func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-			return &neutralLifecycle{setup: setup.Clone()}, nil
+			return &neutralLifecycle{Setup: setup.Clone()}, nil
 		},
 
 		ValidateConfig: func(context.Context, Config) error { return nil }, Preflight: func(context.Context, Config) error { return nil }, PrepareClaim: func(context.Context, Config) (ClaimPreparation, error) { return ClaimPreparation{}, nil }, ReadinessRequired: func(Config) bool { return false },

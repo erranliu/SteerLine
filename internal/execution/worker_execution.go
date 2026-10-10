@@ -25,6 +25,12 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, di
 	if probeErr != nil {
 		return probeErr
 	}
+	if !lifecycle.PolicyCapabilities().StructuredFinalEvidence {
+		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow requires bound structured final evidence; this adapter has no verified staged-result source"}
+	}
+	if lifecycle.PolicyCapabilities().ServiceStopBehavior != entry.ServiceStopBehavior {
+		return errors.New("worker service-stop behavior differs from its registered declaration")
+	}
 	report, probeErr := lifecycle.PreflightLifecycle(ctx, setup.Clone())
 	if probeErr != nil {
 		return probeErr
@@ -93,6 +99,9 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 	}
 	priorStatus := s.operationByKey("worker-live-feedback:" + execution.ExecutionID + ":" + commandID)
 	liveTurn := execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID && execution.PendingCommandID == "" && (execution.Status == "active" || execution.Status == "running" || s.workers[run.RunID] != nil)
+	if liveTurn && s.workflowRecord(run).StepID == executionmodel.StepReport {
+		return nil
+	}
 	if priorStatus != nil || liveTurn {
 		lifecycle, _, err := s.lifecycleForRun(run)
 		if err != nil {
@@ -106,7 +115,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 	if execution.PendingCommandID != "" || s.workers[run.RunID] != nil {
 		return nil
 	} // Preserve input while the original start is pending.
-	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), commandID)
+	return s.startStageFeedback(ctx, run, answer, commandID)
 }
 
 func workerFeedbackText(answer executionmodel.DecisionAnswer, request executionmodel.DecisionRequest) string {

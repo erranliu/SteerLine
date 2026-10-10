@@ -5,6 +5,7 @@ import (
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -28,6 +29,7 @@ func (s *Service) offerWorkerPRFeedback(run *reconstructiontypes.RunView, url st
 	}
 	decision, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{
 		Question:      workerPRFeedbackQuestion,
+		Options:       []executionbackend.DecisionOption{{ID: "implement", Label: "修改候选代码"}, {ID: "publish", Label: "修复发布或 PR 元数据"}},
 		Context:       "执行已结束，PR 已核实并等待人工合并。当前无需继续执行；仅在需要追加修改时填写反馈，提交后在原 worker 会话开始下一轮。",
 		AllowFreeText: true,
 	})
@@ -42,6 +44,10 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	fixed, contextErr := s.workerFlowContext(run)
 	if contextErr != nil {
 		return contextErr
+	}
+	// Clues and old PRs cannot advance an implementation/report/publish step.
+	if workflow != nil && workflow.StepID != executionmodel.StepAwaitMerge {
+		return nil
 	}
 	c := fixed.config
 	if run == nil || task == nil || workflow == nil || workflow.WorkflowVersion != executionmodel.Version {
@@ -80,7 +86,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if err != nil {
 		workflow.PRQueryError = ptr(clip(err.Error(), 1000))
 		s.refreshRun(run)
-		if workflow.PRURL == "" && workflow.Phase != "executing" {
+		if workflow.PRURL == "" && workflow.Status != "running" {
 			return s.waitWorkerFlow(run, "PR link could not be verified; the center will retry: "+err.Error())
 		}
 		return s.commitWorker(run)
@@ -89,10 +95,10 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if execution == nil {
 		return nativeErr("inconsistent_delivery", "linked PR has no selected worker execution")
 	}
-	if err := publication.ValidateWorkerPRIdentity(info, url, c.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
+	if err := publication.ValidateWorkerPRIdentity(info, url, c.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil || info.HeadRevision != workflow.CandidateSHA {
 		workflow.PRQueryError = ptr("PR does not belong to the fixed task execution branch")
 		s.refreshRun(run)
-		if workflow.Phase != "executing" {
+		if workflow.Status != "running" {
 			return s.waitWorkerFlow(run, "PR link is for a different repository, base or worker branch")
 		}
 		return s.commitWorker(run)
@@ -102,10 +108,10 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if err := BindWorkerPR(workflow, execution, info, url, c.PR.Repository, pendingQuestion); err != nil {
 		return s.waitWorkerFlow(run, "Several PRs or conflicting PR identities need a user decision: "+err.Error())
 	}
-	if run.Decision != nil && run.Decision.Status == "pending" && !pendingQuestion && previousPRURL != info.URL && workflow.Phase != "waiting_decision" {
+	if run.Decision != nil && run.Decision.Status == "pending" && !pendingQuestion && previousPRURL != info.URL && workflow.Status != "waiting_input" {
 		s.setDecisionStatus(run, "superseded")
 	}
-	if workflow.Phase == "waiting_pr_merge" && execution.Status != "active" {
+	if workflow.Status == "waiting_external" && execution.Status != "active" {
 		if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {
 			return err
 		}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,7 +20,12 @@ import (
 func sha256Hex(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 
 type NativeOrcaState struct {
+	StageProvider                                                    string
+	StageRemote                                                      string
+	StartDelay                                                       time.Duration
+	StartOutcome                                                     string
 	CompletionPRURL                                                  string
+	AgentExited                                                      bool
 	EnvironmentMode                                                  bool
 	EndReadinessOnBusiness                                           bool
 	ReadinessMode                                                    string
@@ -39,6 +45,9 @@ type NativeOrcaState struct {
 	LoseRunOnce                                                      bool
 	Tasks                                                            []string
 	Dispatches                                                       int
+	NativeRequests                                                   map[string]json.RawMessage
+	NativeWorkers                                                    bool
+	ReleasedAgent                                                    bool
 	FirstBusinessDispatch                                            int
 	LoseDispatchAt                                                   int
 	LoseTaskAt                                                       int
@@ -116,7 +125,13 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			if state.HoldFixedAgentIdentity {
 				agent = ""
 			}
-			return map[string]any{"handle": handle, "title": title, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": agent, "agentWait": state.HostWait}
+			value := map[string]any{"handle": handle, "title": title, "incarnationId": incarnation, "worktreeId": worktreeID(), "worktreePath": filepath.ToSlash(state.Path), "branch": "refs/heads/" + state.Branch, "connected": true, "agentIdentity": agent, "agentWait": state.HostWait}
+			if state.AgentExited {
+				value["status"] = "exited"
+				value["connected"] = false
+				value["exitCause"] = map[string]any{"kind": "exited", "exitCode": 0}
+			}
+			return value
 		}
 		return map[string]any{"handle": handle, "incarnationId": "inc-coordinator", "worktreeId": "fake-repo::" + filepath.ToSlash(state.Repo), "worktreePath": filepath.ToSlash(state.Repo), "branch": "refs/heads/main", "connected": true}
 	}
@@ -322,6 +337,105 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				rows = append(rows, map[string]any{"id": fmt.Sprintf("task-%d", i+1), "run_id": "run-fake", "spec": spec, "created_by_terminal_handle": "term-coordinator"})
 			}
 			return nativeOrcaOK(map[string]any{"runId": "run-fake", "tasks": rows, "count": len(rows)})
+		case "request-show":
+			id := nativeArg(args, "--request")
+			if state.StageProvider != "" && state.LoseDispatchAt == state.Dispatches {
+				return nativeOrcaOK(map[string]any{"requestId": id, "state": "pending", "method": "orchestration.workerStart"})
+			}
+			if prior := state.NativeRequests[id]; len(prior) > 0 {
+				return nativeOrcaOK(map[string]any{"requestId": id, "state": "completed", "method": "orchestration.workerStart", "receipt": json.RawMessage(prior)})
+			}
+			return nativeOrcaOK(map[string]any{"requestId": id, "state": "absent"})
+		case "worker-start":
+			request := nativeArg(args, "--retry-request")
+			if state.NativeRequests == nil {
+				state.NativeRequests = map[string]json.RawMessage{}
+			}
+			if prior := state.NativeRequests[request]; len(prior) > 0 {
+				if state.StageProvider != "" && state.LoseDispatchAt == state.Dispatches {
+					return nativeOrcaErr("runtime_unavailable", "original worker-start response remains unavailable")
+				}
+				var result map[string]any
+				_ = json.Unmarshal(prior, &result)
+				return nativeOrcaOK(result)
+			}
+			if request == "" || nativeArg(args, "--run") != "run-fake" || nativeArg(args, "--task") != fmt.Sprintf("task-%d", len(state.Tasks)) || nativeArg(args, "--from") != "term-coordinator" {
+				return nativeOrcaErr("invalid_argument", "wrong original native worker identity")
+			}
+			if state.Dispatches == 0 {
+				state.Agent = nativeArg(args, "--agent")
+				if state.Agent == "" || nativeArg(args, "--terminal") != "" {
+					return nativeOrcaErr("invalid_argument", "missing opaque agent")
+				}
+				state.FixedAgentTerminalCreated = true
+			} else if nativeArg(args, "--terminal") != "term-agent" || nativeArg(args, "--agent") != "" || nativeArg(args, "--model") != "" || nativeArg(args, "--effort") != "" {
+				return nativeOrcaErr("invalid_argument", "continuation replaced native session")
+			}
+			state.NativeWorkers = true
+			state.Dispatches++
+			n := state.Dispatches
+			result := map[string]any{"runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "dispatchId": fmt.Sprintf("ctx-%d", n), "state": "ready", "stage": "input_accepted", "turnStart": "observed", "mode": map[string]any{"mode": "terminal"}, "launch": map[string]any{"effective": map[string]any{"agent": state.Agent, "model": nativeArg(args, "--model"), "effort": nativeArg(args, "--effort")}}, "mutation": map[string]any{"requestId": request}}
+			if state.StartOutcome == "unobserved" {
+				result["state"], result["stage"], result["turnStart"] = "outcome_unknown", "turn_start_unobserved", "unobserved"
+				result["prompt"] = map[string]any{"requestId": request, "stages": []string{"input_accepted"}}
+			} else if state.StartOutcome == "failed" {
+				result["state"], result["stage"] = "failed", "agent_launch_failed"
+			}
+			raw, _ := json.Marshal(result)
+			state.NativeRequests[request] = raw
+			match := regexp.MustCompile(`\.steerline-output/([a-f0-9]{32})/([a-f0-9]{32})\.json`).FindStringSubmatch(state.Tasks[len(state.Tasks)-1])
+			if len(match) != 3 {
+				return nativeOrcaErr("invalid_argument", "missing explicit output instruction")
+			}
+			outputPath := filepath.Join(state.Path, ".steerline-output", match[1], match[2]+".json")
+			body := fmt.Sprintf("DONE %d", n)
+			if state.StageProvider != "" {
+				var err error
+				body, err = StagedBusiness(state.Path, state.Tasks[len(state.Tasks)-1], state.StageProvider, state.StageRemote)
+				if err != nil {
+					return nativeOrcaErr("stage_failure", err.Error())
+				}
+			}
+			if state.CompletionPRURL != "" {
+				body += " " + state.CompletionPRURL
+			}
+			material, _ := json.Marshal(map[string]any{"workflow_run_id": match[1], "turn_id": match[2], "orca_task_id": fmt.Sprintf("task-%d", n), "dispatch_id": fmt.Sprintf("ctx-%d", n), "body": body})
+			if err := os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
+				return nativeOrcaErr("runtime_unavailable", err.Error())
+			}
+			if err := os.WriteFile(outputPath, material, 0600); err != nil {
+				return nativeOrcaErr("runtime_unavailable", err.Error())
+			}
+			save()
+			if state.StartDelay > 0 {
+				time.Sleep(state.StartDelay)
+			}
+			if n == state.LoseDispatchAt {
+				return nativeOrcaErr("runtime_unavailable", "native worker started but response lost")
+			}
+			if state.StartOutcome == "unobserved" || state.StartOutcome == "failed" {
+				nativeOrcaOK(result)
+				return 1
+			}
+			return nativeOrcaOK(result)
+		case "worker-stop", "worker-release":
+			dispatch := nativeArg(args, "--dispatch")
+			if dispatch != fmt.Sprintf("ctx-%d", state.Dispatches) || nativeArg(args, "--retry-request") == "" {
+				return nativeOrcaErr("invalid_argument", "wrong original resource")
+			}
+			resourceState := "stopped"
+			state.ClosedAgent = true
+			if args[1] == "worker-release" {
+				resourceState = "released"
+				state.ReleasedAgent = true
+			}
+			lost := state.LoseCloseOnce
+			state.LoseCloseOnce = false
+			save()
+			if lost {
+				return nativeOrcaErr("runtime_unavailable", "resource mutation response lost")
+			}
+			return nativeOrcaOK(map[string]any{"dispatchId": dispatch, "state": resourceState, "processAction": "terminated"})
 		case "dispatch":
 			if nativeArg(args, "--to") != "term-agent" || nativeArg(args, "--task") != fmt.Sprintf("task-%d", len(state.Tasks)) {
 				return nativeOrcaErr("invalid_argument", "wrong target")
@@ -385,12 +499,16 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				}
 				readiness := strings.HasPrefix(state.Tasks[n-1], "Readiness preparation only.")
 				id := fmt.Sprintf("env-delivery-%d", n)
+				if !readiness && state.BusinessActive {
+					id = fmt.Sprintf("env-active-delivery-%d", n)
+				}
 				if state.Acked[id] || readiness && (state.ReadinessMode == "hold" || state.ReadinessMode == "tool_failure") {
 					return nativeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
 				}
 				kind, outcome := "worker_done", "succeeded"
 				if !readiness && state.BusinessActive {
 					kind = "status"
+					id = fmt.Sprintf("env-active-delivery-%d", n)
 				}
 				if readiness && state.ReadinessMode == "failed_settlement" {
 					outcome = "failed"
@@ -400,7 +518,11 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				if !readiness && state.CompletionPRURL != "" {
 					body += " " + state.CompletionPRURL
 				}
-				message := map[string]any{"id": fmt.Sprintf("env-message-%d", n), "from_handle": "term-agent", "type": kind, "body": body, "payload": string(payload)}
+				messageID := fmt.Sprintf("env-message-%d", n)
+				if !readiness && state.BusinessActive {
+					messageID = fmt.Sprintf("env-active-message-%d", n)
+				}
+				message := map[string]any{"id": messageID, "from_handle": "term-agent", "type": kind, "body": body, "payload": string(payload)}
 				return nativeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": id, "messages": []any{message}})
 			}
 			if state.RelayMode {
@@ -416,7 +538,7 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				}
 				return nativeOrcaOK(map[string]any{"runId": "run-fake", "messages": []any{}})
 			}
-			if state.Dispatches == firstBusinessDispatch && state.Replies == 0 && !state.Acked["delivery-ask-1"] {
+			if state.StartOutcome == "" && state.Dispatches == firstBusinessDispatch && state.Replies == 0 && !state.Acked["delivery-ask-1"] {
 				if state.LoseQuestionAckOnce && !state.QuestionAckLossArmed {
 					state.QuestionAckLossArmed, state.LoseAckOnce = true, true
 					save()
@@ -430,7 +552,7 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				message := map[string]any{"id": fmt.Sprintf("msg-escalation-%d", n), "from_handle": fmt.Sprintf("dispatch:ctx-%d", n), "type": "escalation", "subject": "Need more guidance", "body": "Send guidance to the current Dispatch"}
 				return nativeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": fmt.Sprintf("delivery-escalation-%d", n), "messages": []any{message}})
 			}
-			if state.Dispatches > 0 && (state.Dispatches > firstBusinessDispatch || state.Replies > 0) && (state.Dispatches != state.EscalationAt || state.Sends > 0) && !state.Acked[fmt.Sprintf("delivery-done-%d", state.Dispatches)] {
+			if state.Dispatches > 0 && (state.StartOutcome != "" || state.Dispatches > firstBusinessDispatch || state.Replies > 0) && (state.Dispatches != state.EscalationAt || state.Sends > 0) && !state.Acked[fmt.Sprintf("delivery-done-%d", state.Dispatches)] {
 				n := state.Dispatches
 				payload, _ := json.Marshal(map[string]any{"taskId": fmt.Sprintf("task-%d", n), "dispatchId": fmt.Sprintf("ctx-%d", n), "outcome": "succeeded"})
 				message := map[string]any{"id": fmt.Sprintf("msg-%d", n), "from_handle": "term-agent", "type": "worker_done", "body": fmt.Sprintf("DONE %d", n), "payload": string(payload)}
@@ -473,7 +595,7 @@ func FakeNativeOrca(stateDir string, args []string) int {
 		case "worker-show":
 			n, _ := strconv.Atoi(strings.TrimPrefix(nativeArg(args, "--dispatch"), "ctx-"))
 			status := "completed"
-			if !state.EnvironmentMode && (n == firstBusinessDispatch && state.Replies == 0 || state.EscalationAt > 0 && n == state.EscalationAt && state.Sends == 0) {
+			if state.StartOutcome == "" && !state.EnvironmentMode && (n == firstBusinessDispatch && state.Replies == 0 || state.EscalationAt > 0 && n == state.EscalationAt && state.Sends == 0) {
 				status = "dispatched"
 			}
 			if state.EnvironmentMode && n > 0 {
@@ -494,7 +616,15 @@ func FakeNativeOrca(stateDir string, args []string) int {
 					status = "failed"
 				}
 			}
-			return nativeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": "injected", "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent")})
+			stage := "context_only"
+			if state.NativeWorkers {
+				stage = "input_accepted"
+			}
+			releaseState := "retained"
+			if state.ReleasedAgent {
+				releaseState = "released"
+			}
+			return nativeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": stage, "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent"), "observation": map[string]any{"exactWorker": true}, "terminalResource": map[string]any{"terminalHandle": "term-agent", "worktreeId": worktreeID(), "ownerDispatchId": fmt.Sprintf("ctx-%d", n), "originDispatchId": fmt.Sprintf("ctx-%d", n), "releaseState": releaseState}})
 		}
 	}
 	return nativeOrcaErr("invalid_argument", "unhandled native Orca fixture command: "+strings.Join(args, " "))

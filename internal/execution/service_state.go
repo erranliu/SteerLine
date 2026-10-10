@@ -45,9 +45,10 @@ type Service struct {
 	// workers owns live observers by authoritative workflow run ID.
 	workers                   map[string]*Worker
 	ownedProcesses            map[string]executionbackend.StopHandle
+	workerServiceOwners       map[string]workerServiceOwner
 	lifecycleEffects          map[string]pendingLifecycleEffect
 	lifecycleMessages         map[string][]Signal
-	appServerRecovering       map[string]bool
+	workerRecovering          map[string]bool
 	signalMu                  sync.RWMutex
 	signalQueue               chan Signal
 	runContext                context.Context
@@ -57,13 +58,10 @@ type Service struct {
 	conversationHistoryErrors chan error
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
 	controlSeen       map[string]string
+	startChecks       map[string]productapi.ControlRequest
+	workerStartChecks map[string]workerStartCheckState
 	stopControl       *productapi.ControlRequest
 	stopAcceptedAt    *time.Time
-	targetTask        string
-	targetTaskVersion uint64
-	lastDispatched    string
-	reservedRunID     string
-	explicitDispatch  bool
 	controlFault      func(string)
 	startupID         string
 }

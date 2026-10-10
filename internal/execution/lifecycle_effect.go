@@ -123,10 +123,18 @@ func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *reconstructi
 		jobCtx = ctx
 	}
 	deliveryCtx := jobCtx
+	acknowledgement := executionbackend.LifecycleAction(request.Operation.Action) == executionbackend.LifecycleAcknowledge
 	deadline, bounded := ctx.Deadline()
 	s.forwarders.Add(1)
 	go func() {
 		defer s.forwarders.Done()
+		if acknowledgement {
+			// Its message already passed the persistence barrier. Service cancellation
+			// must not strand an unsent acknowledgement behind a mutation intent.
+			var cancel context.CancelFunc
+			jobCtx, cancel = context.WithTimeout(context.Background(), s.runtimeSettings.ShutdownGrace)
+			defer cancel()
+		}
 		if bounded {
 			var cancel context.CancelFunc
 			jobCtx, cancel = context.WithDeadline(jobCtx, deadline)
@@ -136,6 +144,13 @@ func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *reconstructi
 		select {
 		case messages <- Signal{runID: runID, effect: &result}:
 		case <-deliveryCtx.Done():
+			if acknowledgement {
+				// The stopping actor drains these original immutable receipts too.
+				s.forwardMu.Lock()
+				s.forwardedDone = append(s.forwardedDone, Signal{runID: runID, effect: &result})
+				s.forwardMu.Unlock()
+				return
+			}
 			if result.observer != nil {
 				_ = result.observer.Close(context.Background())
 			}

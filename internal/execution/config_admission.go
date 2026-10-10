@@ -12,7 +12,7 @@ import (
 // authority, project file identity and the profile catalog are admitted by app.
 func (c Config) ValidateAdmission(directory *ExecutionDirectory) error {
 	if c.WorkflowProtocol != executionmodel.Version {
-		return nativeErr("unsupported_schema", "only worker-flow-v1 may start a service; preserve older execution state")
+		return nativeErr("unsupported_schema", "only worker-flow-v2 may start a service; preserve older execution state")
 	}
 	return validateWorkflowConfig(c, directory)
 }

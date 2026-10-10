@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -28,6 +29,57 @@ func TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily(t *testing.T)
 	}
 	if got := targetFor(c); got.ID != "orca-supervised:home-connection" || got.ExternalRuntime != "env-home" {
 		t.Fatalf("target = %+v", got)
+	}
+}
+
+func TestSupervisedOrcaProbePreservesClaimedTarget(t *testing.T) {
+	c := supervisedFixtureConfig(t)
+	target := targetFor(c)
+	target.Branch = "isolated/base"
+	target.BaseRevision = strings.Repeat("a", 40)
+	report, err := remote.NewBackend(c).Probe(context.Background(), target, executionbackend.AgentSpec{Name: "codex"})
+	if err != nil || report.Target != target {
+		t.Fatalf("remote probe erased fixed claim fields: target=%+v err=%v", report.Target, err)
+	}
+}
+
+func TestSupervisedOrcaAgentNameIsPassedThrough(t *testing.T) {
+	c := supervisedFixtureConfig(t)
+	c.Agent = "custom-agent"
+	originalCall := c.Call
+	c.Call = func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
+		if len(args) < 2 || args[0] != "orchestration" || args[1] != "worker-start" {
+			return originalCall(ctx, timeout, args...)
+		}
+		clone := append([]string(nil), args...)
+		found := false
+		for i := range clone {
+			if clone[i] == "--agent" && i+1 < len(clone) {
+				if clone[i+1] != c.Agent {
+					t.Fatalf("agent was rewritten: %v", args)
+				}
+				found = true
+				clone[i+1] = "codex"
+			}
+		}
+		if !found {
+			t.Fatal("opaque agent not supplied to Orca")
+		}
+		raw, err := originalCall(ctx, timeout, clone...)
+		if err != nil {
+			return raw, err
+		}
+		var env map[string]any
+		if err = json.Unmarshal(raw, &env); err != nil {
+			return nil, err
+		}
+		env["result"].(map[string]any)["launch"].(map[string]any)["effective"].(map[string]any)["agent"] = c.Agent
+		env["result"].(map[string]any)["worker"].(map[string]any)["worktreeId"] = "repo-test::C:/remote/spec03-test"
+		return json.Marshal(env)
+	}
+	_, err := remote.New(c).StartTask(context.Background(), "orca-run-test", "task-test", "repo-test::C:/remote/spec03-test", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -197,7 +249,7 @@ func supervisedFixtureConfig(t *testing.T) remote.Config {
 	remoteURL := "https://git.example/owner/repo.git"
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_REMOTE_URL", remoteURL)
 	return remote.Config{Repository: t.TempDir(), ProjectID: "fixture-project", Agent: "codex", Model: "gpt-6-luna", ReasoningEffort: "high", CommandTimeout: "5s",
-		Settings: remote.Settings{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", ExpectedCodexVersion: "codex-cli 0.156.1", PollInterval: "2s"},
+		Settings: remote.Settings{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "2s"},
 		Origin:   func(context.Context) ([]byte, error) { return []byte(remoteURL), nil },
 		Call: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 			ctx, cancel := context.WithTimeout(ctx, timeout)

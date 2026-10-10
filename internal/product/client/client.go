@@ -474,6 +474,20 @@ func (c *Client) InspectRecovery(ctx context.Context, id string) (api.RecoveryIn
 	return c.resources.InspectRecovery(ctx, id)
 }
 
+func (c *Client) OpenNativeSession(ctx context.Context, target api.NativeSessionTarget) error {
+	if err := c.begin(ctx); err != nil {
+		return err
+	}
+	defer c.mu.RUnlock()
+	if target.RunID == "" || target.ExecutionID == "" || target.AttemptID == "" || target.SessionID == "" || target.SessionGeneration == "" {
+		return &api.Error{Kind: api.IdentityConflict, Message: "原生会话身份不完整；刷新后重试"}
+	}
+	if c.resources.OpenNativeSession == nil {
+		return unsupported("native session viewer")
+	}
+	return classify(c.resources.OpenNativeSession(ctx, target))
+}
+
 func (c *Client) CandidateAvailability(snapshot api.ProjectSnapshot, now time.Time) (bool, string) {
 	if err := c.begin(context.Background()); err != nil {
 		return false, err.Error()

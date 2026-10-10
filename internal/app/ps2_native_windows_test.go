@@ -15,7 +15,6 @@ import (
 	"time"
 
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -23,8 +22,8 @@ import (
 
 func TestPS2NativeDeveloperAndAutomaticReview(t *testing.T) {
 	host, executable, output := os.Getenv("STEERLINE_PS2_HOST"), os.Getenv("STEERLINE_PS2_CODEX"), os.Getenv("STEERLINE_PS2_OUTPUT")
-	if (host != "local" && host != "orca") || executable == "" || output == "" {
-		t.Fatal("explicit PS2 native host/executable/output are required")
+	if host != "local" || executable == "" || output == "" {
+		t.Fatal("explicit local PS2 native executable/output are required; Orca uses TestOrcaNativeWorkerSmoke")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
@@ -64,92 +63,20 @@ func TestPS2NativeDeveloperAndAutomaticReview(t *testing.T) {
 	git(repo, "add", "README.md")
 	git(repo, "commit", "--quiet", "-m", "PS2 fixture")
 	c := Config{Repository: repo, Branch: "main", RunDir: filepath.Join(root, "state"), WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "codex", Git: executionbackend.Command{Executable: "git"}, CommandTimeout: "45s"}
-	var terminalConfig *orcaworker.ProfileConfig
-	if host == "orca" {
-		terminalConfig = &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"}
-	}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: executable, Model: "gpt-6-luna", ReasoningEffort: "medium"}, terminalConfig)
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: executable, Model: "gpt-6-luna", ReasoningEffort: "medium"}, nil)
 	require(t, c.ResolveIdentity(ctx))
 	profile := unitProjectProfile(c).Freeze(c.Identity())
 	c = c.ApplyFixedExecutionProfile(profile)
 	config := c.executionConfig()
 	e := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), WorkflowRunID: nativePolicyID(), ExecutionID: nativePolicyID(), CurrentAttemptID: nativePolicyID(), Generation: nativePolicyID(), ConfigurationDigest: profile.Digest, Target: nativePolicyTarget(config, c.ExecutionDirectory)}
 	path := filepath.Join(root, "candidate")
-	client := orcaworker.New(nativeTerminalConfig(config, e.Target, c.ProcessHost, c.ExecutionDirectory))
-	var worktree orcaworker.Worktree
-	var terminal orcaworker.Terminal
-	if host == "local" {
-		git(repo, "worktree", "add", "--quiet", "-b", "ps2-candidate", path, "HEAD")
-	} else {
-		_, err := client.MetaCall(ctx, "repo", "add", "--path", repo, "--json")
-		require(t, err)
-		repoID, err := orcaworker.FindRepo(ctx, client.Call, repo)
-		require(t, err)
-		name, base := "ps2-"+e.ExecutionID[:12], git(repo, "rev-parse", "HEAD")
-		raw, err := orcaworker.CreateFixedWorktree(ctx, client.MetaCall, repoID, name, base, "PS2 isolated native verification")
-		require(t, err)
-		worktree, err = orcaworker.ParseFixedWorktreeReceipt(raw, name, repoID, base)
-		require(t, err)
-		path = filepath.FromSlash(worktree.Path)
-	}
+	git(repo, "worktree", "add", "--quiet", "-b", "ps2-candidate", path, "HEAD")
 	e.Workspace = executionmodel.WorkspaceEvidence{Repository: c.Identity(), Worktree: path, Branch: git(path, "branch", "--show-current")}
 	linked, err := linkedWorktreeWriteArgs(ctx, config, path, c.ProcessHost)
 	require(t, err)
 	require(t, bindNativePolicyProbeResources(ctx, config, c.ExecutionDirectory, c.ProcessHost, &e, path, linked))
 	trust := "[projects.'" + repo + "']\ntrust_level = \"trusted\"\n[projects.'" + path + "']\ntrust_level = \"trusted\"\n"
 	require(t, os.WriteFile(filepath.Join(codexHome, "config.toml"), []byte(trust), 0600))
-	if host == "orca" {
-		t.Log("owned Orca worktree", worktree.ID, path)
-		command, err := managedTerminalCommand(config, path, e.PolicyResources.WriteRoots, c.ExecutionDirectory)
-		require(t, err)
-		command = "$env:CODEX_HOME='" + strings.ReplaceAll(codexHome, "'", "''") + "'; " + command
-		title := "PS2 native " + e.ExecutionID
-		raw, err := orcaworker.CreateFixedAgentTerminal(ctx, client.MetaCall, worktree.ID, title, terminalConfig.Shell, command)
-		require(t, err)
-		terminal, err = orcaworker.ParseFixedAgentTerminalReceipt(raw, worktree.ID, title)
-		require(t, err)
-		e.Process = &executionbackend.ProcessIdentity{Kind: "orca", Terminal: terminal.Handle, RuntimeID: raw.RuntimeID, Incarnation: terminal.IncarnationID, WorktreeID: worktree.ID}
-		defer func() {
-			for _, command := range []string{"show", "read"} {
-				args := []string{"terminal", command, "--terminal", terminal.Handle}
-				if command == "read" {
-					args = append(args, "--screen")
-				}
-				args = append(args, "--json")
-				if result, err := client.MetaCall(context.Background(), args...); err == nil {
-					if err := os.WriteFile(filepath.Join(output, "terminal-"+command+".json"), result.Payload, 0600); err != nil {
-						t.Error(err)
-					}
-				}
-			}
-			_, closeErr := client.MetaCall(context.Background(), "terminal", "close", "--terminal", terminal.Handle, "--json")
-			if closeErr != nil {
-				t.Error(closeErr)
-			}
-		}()
-		_, err = client.MetaCall(ctx, "terminal", "switch", "--terminal", terminal.Handle, "--json")
-		if err != nil && strings.Contains(err.Error(), "terminal_handle_stale") {
-			listing, listErr := client.MetaCall(ctx, "terminal", "list", "--worktree", "id:"+worktree.ID, "--json")
-			require(t, listErr)
-			var result struct {
-				Terminals []orcaworker.Terminal `json:"terminals"`
-			}
-			require(t, json.Unmarshal(listing.Payload, &result))
-			matches := 0
-			for _, candidate := range result.Terminals {
-				if candidate.IncarnationID == terminal.IncarnationID && candidate.WorktreeID == worktree.ID {
-					terminal = candidate
-					matches++
-				}
-			}
-			if matches != 1 {
-				t.Fatal("stale handle did not resolve to the original owned incarnation")
-			}
-			_, err = client.MetaCall(ctx, "terminal", "switch", "--terminal", terminal.Handle, "--json")
-		}
-		require(t, err)
-
-	}
 	remote := filepath.Join(root, "receive.git")
 	git(path, "init", "--bare", "--quiet", remote)
 	git(remote, "config", "http.receivepack", "true")
@@ -199,91 +126,23 @@ if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
 			}
 		}
 	}()
-	if host == "local" {
-		run := &reconstructiontypes.RunView{RunID: e.WorkflowRunID, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, WorktreePath: &path}
-		backend := nativePolicyBackend(t, c, run, &e, profile)
-		input := executionbackend.TurnInput{CommandID: nativePolicyID(), Prompt: prompt}
-		session, binding, err := backend.PrepareSession(ctx, codexworker.Binding{}, input)
-		require(t, err)
-		defer session.Close()
-		e.Process = binding.Process
-		observer, turn, err := backend.StartTurn(ctx, session, input, linked)
-		require(t, err)
-		defer func() { observer.Cancel(); <-observer.Finished; observer.Process.Kill(); observer.Process.Close() }()
-		journal = session.Paths.JournalPath
-		receipt["turn_id"], receipt["execution"] = turn, e
-		writeEvidence()
-		for event := range observer.Events {
-			event.Persisted <- nil
-		}
-		require(t, <-observer.Done)
-	} else {
-		waitInput := func() {
-			for {
-				fact, idle, err := orcaworker.InspectAgentInput(ctx, client.MetaCall, orcaworker.TerminalIdentity{Kind: e.Process.Kind, Handle: e.Process.Terminal, RuntimeID: e.Process.RuntimeID, Incarnation: e.Process.Incarnation})
-				require(t, err)
-				if idle {
-					return
-				}
-				if fact.Reason == "host_wait" {
-					t.Fatalf("native host blocked: %+v", fact)
-				}
-				require(t, ctx.Err())
-				time.Sleep(time.Second)
-			}
-		}
-		waitInput()
-		sent, err := client.MetaCall(ctx, "terminal", "send", "--terminal", terminal.Handle, "--text", prompt, "--enter", "--wait-submit", "30", "--json")
-		require(t, err)
-		receipt["send_receipt"] = sent.Payload
-		writeEvidence()
-		for {
-			if _, err := os.Stat(filepath.Join(path, "ps2-result.json")); err == nil {
-				break
-			}
-			require(t, ctx.Err())
-			time.Sleep(time.Second)
-		}
-		for {
-			journal, err = ps2NativeCLIJournal(codexHome, path)
-			require(t, err)
-			if journal != "" {
-				records, err := os.ReadFile(journal)
-				require(t, err)
-				if strings.Contains(string(records), `"type":"task_complete"`) {
-					break
-				}
-			}
-			require(t, ctx.Err())
-			time.Sleep(time.Second)
-		}
-		waitInput()
-		// Reconstruct from the original serialized records, then verify the live
-		// original native resource through the production recovery port.
-		old := mustJSON(struct {
-			Profile   executionmodel.FixedExecutionProfile
-			Execution executionmodel.ExecutionRecord
-		}{profile, e})
-		var saved struct {
-			Profile   executionmodel.FixedExecutionProfile
-			Execution executionmodel.ExecutionRecord
-		}
-		require(t, json.Unmarshal(old, &saved))
-		setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: executable, Model: "changed-after-start"}, terminalConfig)
-		restored := c.ApplyFixedExecutionProfile(saved.Profile).executionConfig()
-		require(t, verifyNativePolicyProbeResources(restored, c.ExecutionDirectory, &saved.Execution, saved.Profile.Digest, path))
-		entry, err := c.ExecutionDirectory.Resolve(restored)
-		require(t, err)
-		snapshot := executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Agent: executionbackend.AgentSpec{Name: "codex"}, Target: e.Target, External: *e.Process, WorkspacePath: path, WorkspaceBranch: e.Workspace.Branch}, Session: executionbackend.SessionContext{ProjectID: e.ProjectIdentity, TaskID: "1", WorkflowRunID: e.WorkflowRunID, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Agent: executionbackend.AgentSpec{Name: "codex"}}, Workspace: executionbackend.WorkspaceIntent{Path: path, Branch: e.Workspace.Branch}, ConfigurationDigest: e.ConfigurationDigest, ResourceGeneration: e.Generation, PolicyResources: &e.PolicyResources.ImplementationData}
-		port, err := entry.Lifecycle(executionbackend.LifecycleSetup{Snapshot: snapshot, ProfileData: restored.ImplementationData, ProfileID: saved.Profile.ID, AcceptedConfigVersion: saved.Profile.AcceptedConfigVersion, ProcessHost: c.ProcessHost, RepositoryPath: repo, RunDirectory: c.RunDir, CommandTimeout: 45 * time.Second})
-		require(t, err)
-		recovery, err := port.(executionbackend.LifecycleRecoveryPort).VerifyManualRecovery(ctx, snapshot)
-		require(t, err)
-		if !recovery.ManagedProcess || !recovery.SessionAvailable || recovery.ProcessAbsent {
-			t.Fatal("original native recovery resource unavailable")
-		}
-		receipt["recovery"] = recovery
+	run := &reconstructiontypes.RunView{RunID: e.WorkflowRunID, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, WorktreePath: &path}
+	backend := nativePolicyBackend(t, c, run, &e, profile)
+	input := executionbackend.TurnInput{CommandID: nativePolicyID(), Prompt: prompt}
+	session, binding, err := backend.PrepareSession(ctx, codexworker.Binding{}, input)
+	require(t, err)
+	defer session.Close()
+	e.Process = binding.Process
+	observer, turn, err := backend.StartTurn(ctx, session, input, linked)
+	require(t, err)
+	defer func() { observer.Cancel(); <-observer.Finished; observer.Process.Kill(); observer.Process.Close() }()
+	journal = session.Paths.JournalPath
+	receipt["turn_id"], receipt["execution"] = turn, e
+	writeEvidence()
+	for event := range observer.Events {
+		event.Persisted <- nil
 	}
+	require(t, <-observer.Done)
 	raw, err := os.ReadFile(filepath.Join(path, "ps2-result.json"))
 	require(t, err)
 	var result struct {
@@ -313,43 +172,4 @@ if ($LASTEXITCODE -ne 0) { throw 'git push failed' }
 		receipt["review_marker_written"] = false
 	}
 	writeEvidence()
-}
-
-func ps2NativeCLIJournal(home, workspace string) (string, error) {
-	var found string
-	err := filepath.WalkDir(filepath.Join(home, "sessions"), func(path string, entry os.DirEntry, err error) error {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() || !strings.HasSuffix(path, ".jsonl") {
-			return nil
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		line, _, _ := strings.Cut(string(raw), "\n")
-		var meta struct {
-			Payload struct {
-				Cwd    string          `json:"cwd"`
-				Source json.RawMessage `json:"source"`
-			} `json:"payload"`
-		}
-		if json.Unmarshal([]byte(line), &meta) != nil {
-			return nil
-		}
-		var source string
-		if json.Unmarshal(meta.Payload.Source, &source) != nil || source != "cli" || nativePolicyCanonical(meta.Payload.Cwd) != nativePolicyCanonical(workspace) {
-			return nil
-		}
-		if found != "" {
-			return os.ErrExist
-		}
-		found = path
-		return nil
-	})
-	return found, err
 }

@@ -61,16 +61,23 @@ func FakeTerminal(stateDir string, argv []string) int {
 		return 1
 	}
 	if argv[0] == "--version" {
-		fmt.Println("fake-orca/1")
+		fmt.Println("1.4.223")
 		return 0
 	}
 	switch argv[0] {
 	case "status":
-		return fakeOrcaOK(map[string]any{})
+		return fakeOrcaOK(map[string]any{"target": map[string]string{"kind": "local"}, "runtime": map[string]any{"state": "ready", "reachable": true, "runtimeId": "fake-runtime", "appVersion": "1.4.223"}})
 	case "repo":
 		if len(argv) > 1 && argv[1] == "list" {
 			cwd, _ := os.Getwd()
 			return fakeOrcaOK(map[string]any{"repos": []any{map[string]any{"id": "fake-repo", "path": filepath.ToSlash(cwd), "kind": "git"}}})
+		}
+		if len(argv) > 1 && argv[1] == "show" {
+			url, err := exec.Command("git", "remote", "get-url", "origin").Output()
+			if err != nil {
+				return fakeOrcaErr("repo_origin_missing", err.Error())
+			}
+			return fakeOrcaOK(map[string]any{"repo": map[string]any{"id": "fake-repo", "kind": "git", "gitRemoteIdentity": map[string]string{"remoteUrl": strings.TrimSpace(string(url))}}})
 		}
 	case "worktree":
 		if len(argv) < 2 {

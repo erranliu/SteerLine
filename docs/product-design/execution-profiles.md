@@ -1,10 +1,10 @@
 # 全局执行配置
 
-第一阶段使用本地 Codex和本机Orca。多后端、远端协议和多候选仍保留；远端缺证阻断保持，不以本机验证推断远端支持。
+第一阶段包含本地 Codex、本机 Orca 与远端路径交付。多后端和多候选保留；远端缺证阻断保持，不以本机验证推断远端支持。
 
 所有项目共享 `<STEERLINE_HOME>/execution.json`，全局文件格式2，每个方案仍有独立host/agent/model/reasoning_effort及实现codec。多套执行方案与默认方案选择保留。项目负责仓库、Git/PR provider、任务与publication_policy，不再提供权限模式或附加需求。
 
-复制[全局示例](../../examples/execution.json)到execution.json，按机器环境修改；项目文件见[项目示例](../../examples/config.json)。Codex profile codec格式2只接受executable、model、reasoning_effort。旧args/profile/windows_sandbox及审批覆盖即使为空也拒绝；Git/PR executable/argv与Orca shell/连接设置继续保留。local的effort省略时仍为high；Orca的model/effort省略时保留原生默认语义。
+复制[全局示例](../../examples/execution.json)到execution.json，按机器环境修改；项目文件见[项目示例](../../examples/config.json)。Codex profile codec格式2只接受executable、model、reasoning_effort。旧args/profile/windows_sandbox及审批覆盖即使为空也拒绝；Git/PR executable/argv与Orca连接设置继续保留。local的effort省略时仍为high；Orca的model/effort省略时保留原生默认语义。
 
 ```json
 {
@@ -22,11 +22,35 @@
 
 ## Windows 本地 Codex 沙箱
 
-Windows local及本机Orca托管Codex采用唯一原生方案：workspace-write、windows.sandbox=unelevated、approval_policy=on-request、approvals_reviewer=auto_review、工具网络allow。adapter生成这些设置；全局或项目不能覆盖。Orca/Codex受管命令使用独立原生进程与同一设置，首轮、反馈和恢复保持原绑定。
+Windows local Codex采用唯一原生方案：workspace-write、windows.sandbox=unelevated、approval_policy=on-request、approvals_reviewer=auto_review、工具网络allow。adapter生成这些设置；全局或项目不能覆盖。local Codex受管命令使用独立原生进程与同一设置，首轮、反馈和恢复保持原绑定。
 
 候选工作区及必要Git对象/refs/logs/自身worktree admin根由现有资源准备一次绑定；隐式TMP/TEMP及slash tmp写入仍排除，不授权项目总目录、共同Git总目录或兄弟候选目录。普通操作在原生沙箱内执行；需要批准时交给原生自动reviewer。审核拒绝、不可用或启动失败沿原反馈/环境阻断报告原因，不增加SteerLine审批器、人工审批队列、自动修复、elevated或full-access回退。自动审核不保证全部放行，也不能批准Windows UAC。
 
 SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改写、ACL修复或通用缓存发现。依据[原生自动审核](https://learn.chatgpt.com/docs/sandboxing/auto-review)与[Windows沙箱](https://learn.chatgpt.com/docs/windows/windows-sandbox)；本机验收见[第二批记录](../acceptance/archive/completed/product-simplification-02-configuration/README.md)。其他agent、非Windows和远端不套用不适用的参数，沿原adapter支持范围及目标/回执检查。
+
+## Orca supervised 本机与远端目标
+
+Orca 当前仅注册 `host: orca_supervised`，使用 `orca.supervised-profile` 格式2，`agent` 是 Orca launcher 配置值。payload 的 `target: local` 使用本机 Orca 和项目仓库；`target: environment` 使用保存的 environment/connection/repository_selector，现有远端配置省略 target 仍表示 environment。两目标共用现有 supervised 生命周期；实际能力以 Orca 回执为准，不按 agent 编写特定模型引擎。
+
+权限与 Terminal 启动方式由 Orca 原生设置管理。首次 worker-start 传 agent/model/effort，后续复用原 terminal；远端增加 on，workspace 查询显式 environment，Run/inbox/coordinator 留在中心。本机不携带这些远端路由字段，控制和执行 runtime 相同。失联或错误身份不改投其他目标，未知启动按原 Task/Dispatch 对账。
+
+两目标均保持原远端功能：完成凭据使用 worker_done 正文与原 Dispatch 结算；取消不支持；交付后保留会话/工作区，中心停服只解除观察。没有增加原本机路径的完整结果文件冻结或自动释放能力。原 `host: orca`、`orca.worker-profile` 和 `orca_terminal_v2` 已切断产品注册/历史读取接线，adapter 源码及其独立测试保留；不自动转换原配置或原执行。当前实现与验证见[双目标 Plan](../spec/orca-supervised-targets.plan.md)和[验收记录](../acceptance/orca-supervised-targets.md)。
+
+本机 payload 示例（implementation_key 为 `orca.supervised-profile`、codec_version 为 2）：
+
+```json
+{
+  "target": "local",
+  "executable": "orca.exe",
+  "shell": "powershell.exe",
+  "wait_timeout": "2m",
+  "poll_interval": "1s",
+  "capability_report_version": 1,
+  "remote_cancel_available": false
+}
+```
+
+远端将 target 改为 environment 并填写 `environment_id`、`connection_id`、`repository_selector`；本机不接受这三个字段。model/reasoning_effort 可选且由 Orca 解释。structured 方案已推迟，与当前链路无关。
 
 ## 项目策略与配置受理
 
@@ -38,7 +62,7 @@ SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改�
 
 ## 项目发布责任
 
-项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，并保留 PR/worktree/分支，由人处置。当前本地 Codex/本机 Orca 使用这个责任边界；保留远端设计沿用同一边界，但不纳入一期运行或验收。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
+项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，并保留 PR/worktree/分支，由人处置。本地 Codex、本机 Orca 与远端路径均使用这个发布责任边界。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
 
 worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中心的 token_env 只用于查询，不自动下发给 worker。仅有 query 或成功创建会话不能证明发布能力。worker 的成功、URL 和 worker_done 均不代替 provider 的真实 merged 证据。
 

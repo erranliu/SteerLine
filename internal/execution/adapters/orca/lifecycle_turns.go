@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
@@ -21,43 +20,21 @@ func (l *ExecutionLifecycle) startTurn(ctx context.Context, request executionbac
 		return receipt, nil, err
 	}
 	turn := nativeTurn(&state, input.CommandID)
-	if turn == nil || turn.TaskID == "" || turn.DispatchID != "" || turn.Settled || !state.AgentBound || !state.RelayIgnored {
-		return nativeReceipt(request, executionbackend.OperationRejected), nil, errors.New("native Orca Dispatch lacks a committed Task, agent binding or relay path")
+	if turn == nil || turn.TaskID == "" || turn.DispatchID != "" || turn.Settled || state.Coordinator.Terminal == "" || request.Snapshot.Ref.Target.OrchestrationRun == "" {
+		return nativeReceipt(request, executionbackend.OperationRejected), nil, errors.New("native Orca start lacks its original Task/Run/coordinator")
 	}
-	process := request.Snapshot.Ref.External
-	if err := l.verifyAgent(ctx, request.Snapshot, process); err != nil {
-		return receipt, nil, err
-	}
-	if state.Coordinator.Terminal == "" || request.Snapshot.Ref.Target.OrchestrationRun == "" {
-		return receipt, nil, errors.New("native Orca Dispatch has no committed Run/coordinator")
-	}
-	identity := DispatchIdentity{TaskID: turn.TaskID, RunID: request.Snapshot.Ref.Target.OrchestrationRun,
-		RuntimeID: process.RuntimeID, Terminal: process.Terminal, Incarnation: process.Incarnation, WorktreeID: process.WorktreeID}
-	result, err := DispatchToAgent(ctx, l.client.MetaCall, turn.TaskID, request.Snapshot.Ref.Target.OrchestrationRun,
-		state.Coordinator.Terminal, process, request.Snapshot.Workspace.Path, request.Snapshot.Workspace.Branch,
-		"codex", positiveDuration(l.orca.WaitTimeout, 2*time.Minute), false, state.Coordinator, l.setup.RepositoryPath)
+	result, started, process, err := l.startNativeWorker(ctx, request.Snapshot, state, *turn, request.Operation.ID)
+	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
 	if err != nil {
-		if NoAgentDetected(result) {
-			receipt.Disposition = executionbackend.OperationRejected
-		} else {
-			receipt.Disposition = executionbackend.OperationUnknown
-		}
-		receipt.Diagnostic = err.Error()
-		return receipt, nil, nativeCallError(err)
+		recovered, recoverErr := l.recoverFailedStart(ctx, request, state, started, result, err)
+		return recovered, nil, nativeCallError(recoverErr)
 	}
-	created, err := DispatchReceipt(result, turn.TaskID, request.Snapshot.Ref.Target.OrchestrationRun, state.Coordinator.RuntimeID)
-	if err != nil {
-		receipt.Diagnostic = err.Error()
-		return receipt, nil, err
-	}
-	identity.DispatchID = created.ID
-	if err := VerifyRecoveredDispatch(ctx, l.client.MetaCall, identity); err != nil {
-		receipt.Diagnostic = err.Error()
-		return receipt, nil, err
-	}
+	created := MutationReceipt{ID: started.DispatchID, RequestID: nativeRequestID(request.Operation.ID), Payload: result.Payload}
 	turn.DispatchID, turn.DispatchRequestID = created.ID, created.RequestID
-	turn.InputSubmissionPending = PromptAwaitingSubmission(created.Payload, process.Incarnation)
-	process = l.boundProcess(request.Snapshot, request.Snapshot.Ref.Target, turn)
+	turn.InputSubmissionPending = false
+	state.AgentBound = true
+	turn.Started = started.TurnStart == "observed"
+	process.Task, process.Dispatch, process.OrchestrationRun = turn.TaskID, turn.DispatchID, request.Snapshot.Ref.Target.OrchestrationRun
 	target := request.Snapshot.Ref.Target
 	target.ExternalTask, target.Dispatch = turn.TaskID, turn.DispatchID
 	target.OrchestrationRun = request.Snapshot.Ref.Target.OrchestrationRun
@@ -66,13 +43,17 @@ func (l *ExecutionLifecycle) startTurn(ctx context.Context, request executionbac
 	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
 	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
 	receipt.State.TurnID, receipt.State.InputAccepted = turn.TurnID, true
+	receipt.State.TurnStarted = turn.Started
+	if started.State == "outcome_unknown" {
+		receipt.Diagnostic = "Original input was accepted; native turn start has not yet been observed"
+	}
 	receipt.State.ResourceID = turn.DispatchID
 	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, target, process, state)
 	if err != nil {
 		return receipt, nil, err
 	}
-	if turn.InputSubmissionPending {
-		return receipt, nil, nil
+	if err := l.saveOutputBinding(request.Snapshot, process, *turn); err != nil {
+		return receipt, nil, err
 	}
 	return receipt, newNativeObserver(ctx, l, l.boundSnapshot(request.Snapshot, target, process, state)), nil
 }
@@ -81,7 +62,7 @@ func (l *ExecutionLifecycle) reconcileStart(ctx context.Context, request executi
 	receipt := nativeReceipt(request, executionbackend.OperationUnknown)
 	input := request.Input.Turn
 	if input == nil {
-		return receipt, nil, errors.New("native Orca Dispatch reconciliation lost its original input")
+		return receipt, nil, errors.New("original worker input is missing")
 	}
 	state, _, err := l.readState(request.Snapshot)
 	if err != nil {
@@ -91,172 +72,78 @@ func (l *ExecutionLifecycle) reconcileStart(ctx context.Context, request executi
 	if turn == nil || turn.TaskID == "" {
 		return receipt, nil, errors.New("original Orca Task is not committed")
 	}
-	process := request.Snapshot.Ref.External
-	if err := l.verifyAgent(ctx, request.Snapshot, process); err != nil {
+	if state.FailedStartReleased || state.PartialWorker != nil {
+		identity := partialWorker{RunID: request.Snapshot.Ref.Target.OrchestrationRun, TaskID: turn.TaskID,
+			DispatchID: request.Snapshot.Ref.Target.Dispatch, RuntimeID: state.Coordinator.RuntimeID}
+		if state.PartialWorker != nil {
+			identity = *state.PartialWorker
+		}
+		if identity.RunID != request.Snapshot.Ref.Target.OrchestrationRun || identity.TaskID != turn.TaskID ||
+			identity.DispatchID == "" || identity.DispatchID != request.Snapshot.Ref.Target.Dispatch || identity.RuntimeID != state.Coordinator.RuntimeID {
+			return receipt, nil, errors.New("failed start lost its original resource identity")
+		}
+		shown, proof, observeErr := observeOriginalWorkerResource(ctx, l.client.MetaCall, identity.identity(request.Snapshot.Ref.Target.WorktreeID))
+		// Keep the saved native effects without nesting the whole prior lifecycle
+		// receipt on every unavailable observation.
+		receipt.Operation.Receipt = nil
+		var prior executionbackend.LifecycleReceipt
+		if json.Unmarshal(request.Operation.Receipt, &prior) == nil && prior.Operation.ID == request.Operation.ID {
+			receipt.Operation.Receipt = prior.Operation.Receipt
+		}
+		receipt.RequestID = nativeRequestID(request.Operation.ID)
+		if observeErr != nil {
+			return receipt, nil, observeErr
+		}
+		if shown.Resource.ReleaseState == "released" {
+			effects := map[string]json.RawMessage{"release_observation": proof}
+			if len(receipt.Operation.Receipt) > 0 {
+				effects["original_start"] = receipt.Operation.Receipt
+			}
+			receipt.Operation.Receipt, _ = json.Marshal(effects)
+			receipt.Disposition = executionbackend.OperationRejected
+			receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
+			receipt.Diagnostic = "Original Orca worker start failed and its exact resource was released; handle this execution manually."
+			return receipt, nil, nil
+		}
+		if state.FailedStartReleased {
+			return receipt, nil, errors.New("original failed-start release is no longer verifiable")
+		}
+	}
+	original := request.Snapshot.Clone()
+	if request.Operation.Ref != nil {
+		original.Ref = *request.Operation.Ref
+	}
+	result, started, process, err := l.reconcileNativeWorkerStart(ctx, original, state, *turn, request.Operation.ID)
+	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
+	receipt.RequestID = nativeRequestID(request.Operation.ID)
+	if err != nil {
+		recovered, recoverErr := l.reconcileFailedStart(ctx, request, state, started, result, err)
+		return recovered, nil, recoverErr
+	}
+	id, run := started.DispatchID, started.RunID
+	turn.Started = started.TurnStart == "observed"
+	receipt.State.TurnStarted = turn.Started
+	if started.State == "outcome_unknown" {
+		receipt.Diagnostic = "Original input was accepted; native turn start has not yet been observed"
+	}
+	process.OrchestrationRun = run
+	turn.DispatchID = id
+	state.AgentBound = true
+	target := request.Snapshot.Ref.Target
+	target.ExternalTask, target.Dispatch = turn.TaskID, id
+	receipt.Target, receipt.Process = &target, &process
+	receipt.RequestID = nativeRequestID(request.Operation.ID)
+	receipt.Disposition = executionbackend.OperationConfirmed
+	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
+	receipt.State.TurnID, receipt.State.InputAccepted, receipt.State.ResourceID = turn.TurnID, true, id
+	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, target, process, state)
+	if err != nil {
 		return receipt, nil, err
 	}
-	dispatchID, err := RecoverDispatch(ctx, l.client.MetaCall, turn.TaskID, request.Snapshot.Ref.Target.OrchestrationRun, process)
-	if err != nil {
-		return receipt, nil, nativeCallError(err)
-	}
-	turn.DispatchID = dispatchID
-	turn.DispatchRequestID = request.Operation.ID
-	turn.InputSubmissionPending = PromptAwaitingSubmission(savedNativePayload(request.Operation), process.Incarnation)
-	if !turn.InputSubmissionPending {
-		pending, inspectErr := InspectPendingPaste(ctx, l.client.MetaCall, workerTerminalIdentity(process))
-		if inspectErr != nil {
-			return receipt, nil, nativeCallError(inspectErr)
-		}
-		turn.InputSubmissionPending = pending
-	}
-	process = l.boundProcess(request.Snapshot, request.Snapshot.Ref.Target, turn)
-	target := request.Snapshot.Ref.Target
-	target.ExternalTask, target.Dispatch = turn.TaskID, turn.DispatchID
-	receipt.Target, receipt.Process = &target, &process
-	receipt.RequestID, receipt.Disposition = turn.DispatchRequestID, executionbackend.OperationAccepted
-	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
-	receipt.State.TurnID, receipt.State.InputAccepted, receipt.State.ResourceID = turn.TurnID, true, turn.DispatchID
-	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, target, process, state)
-	if err != nil || turn.InputSubmissionPending {
+	if err = l.saveOutputBinding(request.Snapshot, process, *turn); err != nil {
 		return receipt, nil, err
 	}
 	return receipt, newNativeObserver(ctx, l, l.boundSnapshot(request.Snapshot, target, process, state)), nil
-}
-
-func (l *ExecutionLifecycle) submitInput(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
-	receipt := nativeReceipt(request, executionbackend.OperationUnknown)
-	input := request.Input.Turn
-	if input == nil {
-		return nativeReceipt(request, executionbackend.OperationRejected), nil, errors.New("native Orca input submission is missing its turn")
-	}
-	state, _, err := l.readState(request.Snapshot)
-	if err != nil {
-		return receipt, nil, err
-	}
-	turn := nativeTurn(&state, input.CommandID)
-	process := request.Snapshot.Ref.External
-	if turn == nil || turn.DispatchID == "" || !turn.InputSubmissionPending {
-		return nativeReceipt(request, executionbackend.OperationRejected), nil, errors.New("native Orca has no committed pending paste submission")
-	}
-	if err := l.verifyAgent(ctx, request.Snapshot, process); err != nil {
-		return receipt, nil, err
-	}
-	_, err = SubmitPendingPaste(ctx, l.client.MetaCall, workerTerminalIdentity(process))
-	if err != nil {
-		receipt.Diagnostic = err.Error()
-		return receipt, nil, nativeCallError(err)
-	}
-	turn.InputSubmissionPending = false
-	process = l.boundProcess(request.Snapshot, request.Snapshot.Ref.Target, turn)
-	receipt.Process = &process
-	receipt.RequestID, receipt.Disposition = turn.DispatchRequestID, executionbackend.OperationAccepted
-	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
-	receipt.State.TurnID, receipt.State.InputAccepted, receipt.State.ResourceID = turn.TurnID, true, turn.DispatchID
-	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, request.Snapshot.Ref.Target, process, state)
-	if err != nil {
-		return receipt, nil, err
-	}
-	return receipt, newNativeObserver(ctx, l, l.boundSnapshot(request.Snapshot, request.Snapshot.Ref.Target, process, state)), nil
-}
-
-func (l *ExecutionLifecycle) reconcileInput(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
-	receipt := nativeReceipt(request, executionbackend.OperationUnknown)
-	input := request.Input.Turn
-	state, _, err := l.readState(request.Snapshot)
-	if err != nil || input == nil {
-		return receipt, nil, errors.Join(err, errors.New("native Orca input reconciliation lost its fixed turn"))
-	}
-	turn := nativeTurn(&state, input.CommandID)
-	process := request.Snapshot.Ref.External
-	if turn == nil || turn.DispatchID == "" {
-		return receipt, nil, errors.New("native Orca input reconciliation has no original Dispatch")
-	}
-	if err := l.verifyAgent(ctx, request.Snapshot, process); err != nil {
-		return receipt, nil, err
-	}
-	pending, err := InspectPendingPaste(ctx, l.client.MetaCall, workerTerminalIdentity(process))
-	if err != nil {
-		return receipt, nil, nativeCallError(err)
-	}
-	if pending {
-		receipt.Diagnostic = "the original paste remains visible; an unknown Enter is never resent"
-		return receipt, nil, nil
-	}
-	turn.InputSubmissionPending = false
-	process = l.boundProcess(request.Snapshot, request.Snapshot.Ref.Target, turn)
-	receipt.Process = &process
-	receipt.RequestID, receipt.Disposition = turn.DispatchRequestID, executionbackend.OperationConfirmed
-	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
-	receipt.State.TurnID, receipt.State.InputAccepted, receipt.State.ResourceID = turn.TurnID, true, turn.DispatchID
-	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, request.Snapshot.Ref.Target, process, state)
-	if err != nil {
-		return receipt, nil, err
-	}
-	return receipt, newNativeObserver(ctx, l, l.boundSnapshot(request.Snapshot, request.Snapshot.Ref.Target, process, state)), nil
-}
-
-func (l *ExecutionLifecycle) reportCompletion(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, error) {
-	receipt := nativeReceipt(request, executionbackend.OperationUnknown)
-	input := request.Input.Completion
-	state, _, err := l.readState(request.Snapshot)
-	if err != nil || input == nil {
-		return receipt, errors.Join(err, errors.New("native Orca completion report lost its fixed input"))
-	}
-	turn := nativeTurn(&state, input.TurnID)
-	process := request.Snapshot.Ref.External
-	if turn == nil || turn.DispatchID == "" || process.Terminal == "" {
-		return nativeReceipt(request, executionbackend.OperationRejected), errors.New("native Orca completion report has no fixed Dispatch")
-	}
-	path, err := RelayPath(request.Snapshot.Workspace.Path, request.Snapshot.Session.WorkflowRunID, turn.TurnID)
-	if err != nil {
-		return receipt, err
-	}
-	relay, err := ReadDoneRequest(path, request.Snapshot.Workspace.Path, request.Snapshot.Session.WorkflowRunID, turn.TurnID, turn.TaskID, turn.DispatchID)
-	if err != nil || relay == nil {
-		return receipt, errors.Join(err, errors.New("native Orca relay request is unavailable"))
-	}
-	if relay.Outcome != input.Outcome || relay.Subject != input.Subject || relay.Body != input.Body {
-		return nativeReceipt(request, executionbackend.OperationRejected), errors.New("native Orca completion changed the saved relay body")
-	}
-	dispatch := DispatchIdentity{DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: request.Snapshot.Ref.Target.OrchestrationRun,
-		RuntimeID: process.RuntimeID, Terminal: process.Terminal, Incarnation: process.Incarnation, WorktreeID: process.WorktreeID}
-	status, err := VerifyActiveDispatch(ctx, l.client.MetaCall, dispatch)
-	if err != nil || status != "dispatched" {
-		return receipt, errors.Join(err, errors.New("native Orca relay is not bound to a live Dispatch"))
-	}
-	report, err := SendDone(ctx, l.client.MetaCall, *relay, request.Snapshot.Ref.Target.OrchestrationRun, process.Terminal, process.RuntimeID)
-	if err != nil {
-		return receipt, nativeCallError(err)
-	}
-	turn.RelayReported = true
-	receipt.Disposition, receipt.RequestID = executionbackend.OperationAccepted, report.RequestID
-	receipt.Operation.Receipt = append([]byte(nil), report.Payload...)
-	receipt.State.ResourceID = report.ID
-	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, request.Snapshot.Ref.Target, process, state)
-	return receipt, err
-}
-
-func (l *ExecutionLifecycle) reconcileCompletion(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
-	receipt := nativeReceipt(request, executionbackend.OperationUnknown)
-	input := request.Input.Completion
-	state, _, err := l.readState(request.Snapshot)
-	if err != nil || input == nil {
-		return receipt, nil, errors.Join(err, errors.New("native Orca completion reconciliation lost its fixed input"))
-	}
-	turn := nativeTurn(&state, input.TurnID)
-	if turn == nil {
-		return receipt, nil, errors.New("native Orca completion reconciliation has no original turn")
-	}
-	id, err := FindDone(ctx, l.client.Call, request.Snapshot.Ref.Target.OrchestrationRun, request.Snapshot.Ref.External.Terminal,
-		turn.TaskID, turn.DispatchID, input.Subject, input.Body, input.Outcome)
-	if err != nil || id == "" {
-		return receipt, nil, err
-	}
-	turn.RelayReported = true
-	receipt.Disposition, receipt.RequestID = executionbackend.OperationConfirmed, id
-	receipt.State.ResourceID = id
-	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, request.Snapshot.Ref.Target, request.Snapshot.Ref.External, state)
-	return receipt, nil, err
 }
 
 func (l *ExecutionLifecycle) deliverFeedback(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, error) {
@@ -415,7 +302,7 @@ func (l *ExecutionLifecycle) verifyAgent(ctx context.Context, snapshot execution
 	if identity.Kind != "orca" || identity.Terminal == "" || identity.RuntimeID == "" || identity.Incarnation == "" || identity.WorktreeID != snapshot.Ref.Target.WorktreeID {
 		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca agent binding is incomplete"}
 	}
-	return VerifyAgentTerminal(ctx, l.client.MetaCall, identity, snapshot.Workspace.Path, snapshot.Workspace.Branch, "codex")
+	return VerifyAgentTerminal(ctx, l.client.MetaCall, identity, snapshot.Workspace.Path, snapshot.Workspace.Branch, snapshot.Ref.Agent.Name)
 }
 
 func (l *ExecutionLifecycle) boundSnapshot(snapshot executionbackend.LifecycleSnapshot, target executionbackend.ExecutionTarget,
@@ -446,7 +333,7 @@ func (l *ExecutionLifecycle) cleanup(ctx context.Context, request executionbacke
 		}
 		state.CoordinatorClosed = true
 	} else if identity == request.Snapshot.Ref.External {
-		state.AgentClosed = true
+		return l.releaseOriginalWorker(ctx, request, state)
 	} else {
 		return nativeReceipt(request, executionbackend.OperationRejected), &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca cleanup differs from the fixed resource list"}
 	}
@@ -481,14 +368,27 @@ func (l *ExecutionLifecycle) reconcileCleanup(ctx context.Context, request execu
 		return receipt, nil, err
 	}
 	identity := request.Input.Cleanup.Resources[0]
-	role := "agent"
-	if identity == state.Coordinator {
-		role = "coordinator"
-		if err := InboxDrained(ctx, l.client.MetaCall, state.Coordinator.Terminal, state.Coordinator.RuntimeID, request.Snapshot.Ref.Target.OrchestrationRun); err != nil {
+	role := "coordinator"
+	if identity == request.Snapshot.Ref.External {
+		released, proof, err := originalResourceReleased(ctx, l.client.MetaCall, identity)
+		if err != nil {
 			return receipt, nil, err
 		}
-	} else if identity != request.Snapshot.Ref.External {
-		return nativeReceipt(request, executionbackend.OperationRejected), nil, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca cleanup reconciliation changed its original terminal"}
+		if !released {
+			receipt.Diagnostic = "original worker release is not yet proven; preserve the original mutation and native recovery instructions"
+			return receipt, nil, nil
+		}
+		state.AgentClosed = true
+		receipt.Disposition, receipt.RequestID = executionbackend.OperationConfirmed, nativeRequestID(request.Operation.ID)
+		receipt.Operation.Receipt = append([]byte(nil), proof...)
+		receipt.Implementation, err = l.targetEnvelope(request.Snapshot, request.Snapshot.Ref.Target, identity, state)
+		return receipt, nil, err
+	}
+	if identity != state.Coordinator {
+		return nativeReceipt(request, executionbackend.OperationRejected), nil, errors.New("cleanup reconciliation changed its original coordinator")
+	}
+	if err := InboxDrained(ctx, l.client.MetaCall, state.Coordinator.Terminal, state.Coordinator.RuntimeID, request.Snapshot.Ref.Target.OrchestrationRun); err != nil {
+		return receipt, nil, err
 	}
 	absent, err := InspectCleanupTerminal(ctx, l.client.MetaCall, identity, l.setup.RepositoryPath, role, true)
 	if err != nil || !absent {
@@ -511,20 +411,75 @@ func (l *ExecutionLifecycle) StopLifecycle(ctx context.Context, request executio
 	if request.Operation.Action == string(executionbackend.LifecycleStopObservation) {
 		return nativeReceipt(request, executionbackend.OperationConfirmed), nil
 	}
-	if request.Operation.Action != string(executionbackend.LifecycleStopExecution) || request.Snapshot.Ref.External.Terminal == "" {
+	if request.Operation.Action != string(executionbackend.LifecycleStopExecution) {
 		return nativeReceipt(request, executionbackend.OperationRejected), executionbackend.UnsupportedAdapterOperation(request.Operation.Action, "native Orca stop has no original terminal")
 	}
 	receipt := nativeReceipt(request, executionbackend.OperationUnknown)
-	if err := l.verifyAgent(ctx, request.Snapshot, request.Snapshot.Ref.External); err != nil {
+	if request.Operation.Ref == nil {
+		return receipt, errors.New("native stop lacks its saved resource identity")
+	}
+	identity := request.Operation.Ref.External
+	if identity.Terminal == "" {
+		state, _, err := l.readState(request.Snapshot)
+		if err != nil || state.PartialWorker == nil {
+			return receipt, errors.Join(err, errors.New("native Orca stop has no original worker"))
+		}
+		if state.PartialWorker.DispatchID != request.Operation.Ref.Target.Dispatch || state.PartialWorker.TaskID != request.Operation.Ref.Target.ExternalTask || state.PartialWorker.RunID != request.Operation.Ref.Target.OrchestrationRun {
+			return receipt, errors.New("partial stop changed its original resource")
+		}
+		identity = state.PartialWorker.identity(request.Operation.Ref.Target.WorktreeID)
+	}
+	shown, raw, observeErr := observeOriginalWorkerResource(ctx, l.client.MetaCall, identity)
+	receipt.Operation.Receipt = append([]byte(nil), raw...)
+	if observeErr != nil {
+		return receipt, observeErr
+	}
+	if shown.Resource.ReleaseState == "released" {
+		receipt.Disposition = executionbackend.OperationConfirmed
+		receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
+		return receipt, nil
+	}
+	if identity.Terminal != "" && shown.Worker.State != "succeeded" && shown.Worker.State != "failed" && shown.Worker.State != "stopped" {
+		if err := l.verifyAgent(ctx, request.Snapshot, identity); err != nil {
+			return receipt, err
+		}
+	}
+	result, proof, err := workerResourceAction(ctx, l.client.MetaCall, identity, "worker-stop", request.Operation.ID)
+	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
+	receipt.RequestID = nativeRequestID(request.Operation.ID)
+	if err != nil {
 		return receipt, err
 	}
-	closed, err := l.client.CloseTerminalChecked(ctx, request.Snapshot.Ref.External.Terminal, request.Snapshot.Ref.External.RuntimeID)
-	if err != nil {
-		return receipt, nativeCallError(err)
+	if proof.State == "stopped" {
+		receipt.Disposition = executionbackend.OperationConfirmed
+		receipt.State.Stopped = true
 	}
-	receipt.Disposition = executionbackend.OperationStatus(closed.Disposition)
-	receipt.Diagnostic = closed.Diagnostic
-	receipt.RequestID = request.Snapshot.Ref.External.Terminal
+	if proof.AlreadySettled {
+		state, _, stateErr := l.readState(request.Snapshot)
+		if stateErr != nil {
+			return receipt, stateErr
+		}
+		for _, turn := range state.Turns {
+			if turn.DispatchID == identity.Dispatch {
+				if freezeErr := l.freezeOriginalOutput(ctx, request.Snapshot, turn); freezeErr != nil {
+					receipt.Diagnostic = "canonical output unavailable: " + freezeErr.Error()
+				}
+				break
+			}
+		}
+		released, releaseProof, releaseErr := workerResourceAction(ctx, l.client.MetaCall, identity, "worker-release", request.Operation.ID+":settled-release")
+		receipt.Operation.Receipt, _ = json.Marshal(map[string]json.RawMessage{"stop": result.Payload, "release": released.Payload})
+		if releaseErr != nil {
+			return receipt, releaseErr
+		}
+		if workerReleased(releaseProof) {
+			receipt.Disposition = executionbackend.OperationConfirmed
+			receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
+		} else {
+			receipt.Diagnostic += "; original settled worker release remains " + releaseProof.State + "; " + releaseProof.LastError + "; recovery=" + string(releaseProof.Recovery)
+		}
+	}
+
 	return receipt, nil
 }
 
@@ -538,6 +493,19 @@ func (l *ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot 
 	}
 	identity := snapshot.Ref.External
 	if identity.Terminal == "" {
+		state, _, err := l.readState(snapshot)
+		if err != nil {
+			return executionbackend.LifecycleRecoveryEvidence{}, err
+		}
+		if state.PartialWorker != nil {
+			released, _, err := originalResourceReleased(ctx, l.client.MetaCall, state.PartialWorker.identity(snapshot.Ref.Target.WorktreeID))
+			return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: released, WritersAbsent: released}, err
+		}
+		for _, op := range snapshot.Operations {
+			if op.Action == string(executionbackend.LifecycleStartTurn) && op.Status != executionbackend.OperationConfirmed && op.Status != executionbackend.OperationRejected {
+				return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true}, errors.New("original native worker-start is unresolved; absence cannot be proven without its saved request receipt")
+			}
+		}
 		return executionbackend.LifecycleRecoveryEvidence{ProcessAbsent: true}, nil
 	}
 	terminal, err := l.client.ShowTerminal(ctx, identity.Terminal)
@@ -547,7 +515,12 @@ func (l *ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot 
 	if terminal.RuntimeID != identity.RuntimeID || terminal.IncarnationID != identity.Incarnation || terminal.WorktreeID != identity.WorktreeID {
 		return executionbackend.LifecycleRecoveryEvidence{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca recovery terminal identity changed"}
 	}
-	if err := VerifyAgentTerminal(ctx, l.client.MetaCall, identity, snapshot.Workspace.Path, snapshot.Workspace.Branch, "codex"); err != nil {
+	if terminal.Exited() {
+		// An exited original terminal prevents session continuation, but cannot
+		// invalidate a previously verified completed Dispatch/result.
+		return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: true, SessionAvailable: false}, nil
+	}
+	if err := VerifyAgentTerminal(ctx, l.client.MetaCall, identity, snapshot.Workspace.Path, snapshot.Workspace.Branch, snapshot.Ref.Agent.Name); err != nil {
 		return executionbackend.LifecycleRecoveryEvidence{}, err
 	}
 	return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: terminal.Exited(), SessionAvailable: !terminal.Exited()}, nil
@@ -564,7 +537,7 @@ func (l *ExecutionLifecycle) BindRecovery(ctx context.Context, previous, next ex
 	if identity.Terminal == "" {
 		return executionbackend.ImplementationDataEnvelope{}, errors.New("native Orca recovery has no original agent terminal")
 	}
-	if err := VerifyAgentTerminal(ctx, l.client.MetaCall, identity, previous.Workspace.Path, previous.Workspace.Branch, "codex"); err != nil {
+	if err := VerifyAgentTerminal(ctx, l.client.MetaCall, identity, previous.Workspace.Path, previous.Workspace.Branch, previous.Ref.Agent.Name); err != nil {
 		return executionbackend.ImplementationDataEnvelope{}, err
 	}
 	state, found, err := l.readState(previous)

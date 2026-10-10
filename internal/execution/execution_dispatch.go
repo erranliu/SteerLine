@@ -3,37 +3,26 @@ package execution
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func (s *Service) dispatchNative(ctx context.Context) error {
-	if !s.explicitDispatch && s.hasActiveWorkers() {
+	// Manual starts reserve their own commands; this path only schedules auto.
+	if s.hasActiveWorkers() {
 		return nil
 	}
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
-	if !s.explicitDispatch && (s.State.Control.DispatchMode != "auto" || s.State.Control.DispatchPaused) {
+	if s.State.Control.DispatchMode != "auto" || s.State.Control.DispatchPaused || s.State.SlotOccupied {
 		return nil
 	}
-	if !s.explicitDispatch && s.State.SlotOccupied && s.activeControlRequestID() == "" {
-		return nil
+	if reason := s.slotReason(""); reason != "" {
+		return errors.New(reason)
 	}
-	if !s.explicitDispatch {
-		if reason := s.slotReason(s.activeControlRequestID()); reason != "" {
-			return errors.New(reason)
-		}
-	}
-	if !s.explicitDispatch {
-		if err := s.selectDefaultDispatchProfile(); err != nil {
-			return err
-		}
-	} else if s.dispatchProfile == nil {
-		if err := s.selectDispatchProfile(s.runtime.Profiles.DefaultProfileID(), ""); err != nil {
-			return err
-		}
+	if err := s.selectDefaultDispatchProfile(); err != nil {
+		return err
 	}
 	if s.dispatchConfig == nil {
 		return errors.New("native dispatch has no selected execution profile")
@@ -60,30 +49,13 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if !s.taskWork.CanExecuteType(task.Type) {
 			continue
 		}
-		if s.targetTask != "" && s.targetTask != task.TaskID {
-			continue
-		}
-		if s.explicitDispatch && s.targetTaskVersion != 0 && task.TaskID == s.targetTask && task.Version != s.targetTaskVersion {
-			return nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", s.targetTaskVersion, task.Version))
-		}
 		authority, authErr := s.domainStore.NativeAuthority(ctx, c.identity)
 		if authErr != nil {
 			return authErr
 		}
-		requestID := newID()
-		if s.explicitDispatch && s.activeControlRequestID() != "" {
-			requestID = s.activeControlRequestID()
-		}
-		workflowRunID := ""
-		if s.reservedRunID != "" {
-			workflowRunID = s.reservedRunID
-		}
-		receipt, claimErr := (s.commandService(c.identity)).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: s.taskWork.DefaultRequestedBy(), Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile, ServiceInstanceID: s.State.Service.InstanceID})
+		receipt, claimErr := (s.commandService(c.identity)).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: newID(), ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: s.taskWork.DefaultRequestedBy(), ExecutionProfile: s.dispatchProfile, ServiceInstanceID: s.State.Service.InstanceID})
 		if claimErr != nil {
 			if isNativeErrorCode(claimErr, "task_not_ready", "stale_version", "slot_busy", "dispatch_paused", "wrong_mode", "task_discarded") {
-				if s.targetTask != "" {
-					return claimErr
-				}
 				continue
 			}
 			return claimErr
@@ -123,14 +95,10 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if err = s.commitWorker(run); err != nil {
 			return err
 		}
-		s.lastDispatched = task.TaskID
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		return s.prepareWorkerFlow(ctx, task, run)
-	}
-	if s.targetTask != "" {
-		return fmt.Errorf("%w: %s is not in the current ready native task set", errTaskNotReady, s.targetTask)
 	}
 	return nil
 }

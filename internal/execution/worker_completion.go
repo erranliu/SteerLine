@@ -87,6 +87,9 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 		execution.CurrentCommandID != evidence.CommandID && execution.PendingCommandID != evidence.CommandID {
 		return s.waitWorkerFlow(run, "the original turn receipt differs from its fixed execution input")
 	}
+	if execution.RecoveryRequired {
+		execution.RecoverySessionAvailable = ptr(receipt.State.SessionAvailable)
+	}
 	if execution.CurrentTurnID == "" {
 		if err := BeginWorkerTurn(workflow, execution, evidence.SessionID, evidence.TurnID); err != nil {
 			return s.waitWorkerFlow(run, "original turn start could not be reconciled: "+err.Error())
@@ -113,6 +116,16 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 		s.refreshRun(run)
 		return s.waitWorkerFlow(run, "the original worker exited without a confirmed completed turn; its output and session are retained")
 	}
+	if record := s.decisionRecord(run); execution.RecoveryRequired && record != nil && record.Status == "pending" && record.RecoveryState == "unverified" &&
+		run.Decision.Request.QuestionRoute == nil && len(run.Decision.Request.Options) == 0 && !s.hasUnknownWorkerOperation(run) {
+		// This was an observation gap, not a business question. Its trusted
+		// original completion must return to the normal PR/feedback resolution.
+		s.setDecisionStatus(run, "superseded")
+		if err := s.commitWorker(run); err != nil {
+			return err
+		}
+		s.setRunDecision(run, nil)
+	}
 	if len(execution.PendingQuestions) > 0 {
 		execution.PendingQuestions = nil
 	}
@@ -134,37 +147,8 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 			return s.commitWorker(run)
 		}
 	}
-	issue := ""
 	if workerErr != nil {
-		issue = workerErr.Error()
+		evidence.Failure = strings.TrimSpace(evidence.Failure + "; " + workerErr.Error())
 	}
-	if evidence.Failure != "" {
-		issue = strings.TrimSpace(issue + "; " + evidence.Failure)
-	}
-	if len(evidence.PRCandidates) == 1 {
-		candidate := evidence.PRCandidates[0]
-		workflow.PRCandidateURL = candidate
-		info, queryErr := publicationClient(fixed.config, s.runtime.ProcessHost).Query(context.Background(), candidate)
-		if queryErr == nil {
-			queryErr = BindWorkerPR(workflow, execution, info, candidate, fixed.config.PR.Repository, false)
-		}
-		if queryErr != nil {
-			issue = strings.TrimSpace(issue + "; PR link is not verified: " + queryErr.Error())
-		}
-	} else if len(evidence.PRCandidates) > 1 {
-		issue = strings.TrimSpace(issue + "; several PR links were reported: " + strings.Join(evidence.PRCandidates, ", "))
-	}
-	question := len(evidence.PRCandidates) > 1
-	if run.Decision != nil && run.Decision.Status == "pending" && !workerContinuationPrompt(run.Decision.Request) {
-		question = true
-	}
-	turnOutcome := "failed"
-	if evidence.Succeeded {
-		turnOutcome = "succeeded"
-	}
-	if err := s.stopVerifiedWorkerTurn(run, workflow, execution, evidence.TurnID, turnOutcome, question); err != nil {
-		return err
-	}
-
-	return s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: evidence.TurnID, LastMessage: evidence.LastMessage, Issue: issue, Question: question, RecordPRStop: true})
+	return s.acceptStageTurn(ctx, run, lifecycle, fixed, evidence.TurnEvidence)
 }

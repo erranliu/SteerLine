@@ -261,7 +261,6 @@ func TestMC3(t *testing.T) {
 	}
 }
 
-func TestMC5(t *testing.T) { testAdditionalImplementation(t) }
 func TestMC6(t *testing.T) { testAdditionalImplementationWithCandidateGuard(t, true) }
 
 type delayedAppResolver struct {
@@ -452,7 +451,6 @@ func TestTM06ResourceWiring(t *testing.T) {
 		host, wantProtocol, factory, backendPackage string
 	}{
 		{"local", string(executionbackend.ProtocolLocalCodexAppServer), "github.com/erranliu/SteerLine/internal/execution/adapters/codex.NewExecutionLifecycle", ""},
-		{"orca", string(executionbackend.ProtocolOrcaTerminalV2), "github.com/erranliu/SteerLine/internal/execution/adapters/orca.NewExecutionLifecycle", "github.com/erranliu/SteerLine/internal/execution/adapters/orca"},
 		{"orca_supervised", string(executionbackend.ProtocolOrcaSupervised), "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote.NewExecutionLifecycle", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"},
 	} {
 		config := execution.Config{Host: test.host, Agent: "codex"}

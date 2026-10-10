@@ -220,11 +220,11 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	}
 	lines = append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 	if run.PR.URL != nil {
-		lines = append(lines, "PR 地址："+safeTerminalText(*run.PR.URL))
+		lines = append(lines, "PR 地址："+prLink(*run.PR.URL, *run.PR.URL))
 	}
 	for _, url := range run.PRHistory {
 		if run.PR.URL == nil || url != *run.PR.URL {
-			lines = append(lines, "历史 PR 地址："+safeTerminalText(url))
+			lines = append(lines, "历史 PR 地址："+prLink(url, url))
 		}
 	}
 	lines = append(lines, "PR 状态："+safeTerminalText(firstText(run.PR.State, "未核验")))
@@ -234,9 +234,13 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	if run.EnvironmentBlocker != nil {
 		lines = append(lines, "环境阻断："+safeTerminalText(run.EnvironmentBlocker.Fact.Reason+" · "+run.EnvironmentBlocker.Fact.Detail), "Ctrl+E 重新检查 · Ctrl+O 打开原终端（能力及原身份须核实）；解除不补投")
 	}
+	if nativeSessionAvailable(run) {
+		lines = append(lines, "Ctrl+N 用 Codex CLI 打开原会话 · 实时查看；任务操作请通过 SteerLine")
+	}
 	if run.Error != nil {
 		lines = append(lines, "错误："+safeTerminalText(*run.Error))
 	}
+	lines = append(lines, workerStagePresentation(run)...)
 	if run.Summary != nil {
 		lines = append(lines, "摘要："+safeTerminalText(*run.Summary))
 	}
@@ -404,6 +408,8 @@ func actionStatusLabel(status string) string {
 	case "submitting":
 
 		return "提交中"
+	case "submitted":
+		return "已提交，待受理"
 	case "pending", "in_flight", "applying":
 
 		return "处理中"
@@ -795,6 +801,9 @@ func renderFooter(m Model, state projectState) string {
 	if state.recoveryActive {
 		action = "u/r 核验 · F8 报告 · Esc 动态"
 	}
+	if row != nil && nativeSessionAvailable(row.run) {
+		action += " · Ctrl+N Codex CLI"
+	}
 	move := "↑↓ 选任务"
 	if state.focus != 0 {
 		move = "↑↓ 滚动"
@@ -803,7 +812,7 @@ func renderFooter(m Model, state projectState) string {
 }
 
 func renderHelp(state projectState) []string {
-	return []string{"快捷键", "←/→ 切换项目 · Tab 列表/选项/输入", "↑/↓ 或 PgUp/PgDn 选择/滚动", "Enter 到右下或当前问题 · d 完整详情 · Esc 返回", "F6/F7（或 { / }）切换候选 · b 新增 · z 退出实验", "s 选择方案（Enter 明确确认开始）", "a 右下原地回复 · Enter 换行 · F2 明确提交 · F8 完整背景/身份", "f 最终回复 · [ / ] 历史业务轮次", "v 历史决策 · u 右下只读核验（r 重读/F8 全文）", "Ctrl+E 重新检查环境 · Ctrl+O 原终端（需能力）", "1 全部 · 2 Ready · 3 进行中 · 4 待决策 · 5 待合并 · 6 需处理 · 7 历史", "m 派发模式 · x 停止服务", "q 只退出控制台；服务继续运行"}
+	return []string{"快捷键", "←/→ 切换项目 · Tab 列表/选项/输入", "↑/↓ 或 PgUp/PgDn 选择/滚动", "Enter 到右下或当前问题 · d 完整详情 · Esc 返回", "F6/F7（或 { / }）切换候选 · b 新增 · z 退出实验", "s 选择方案（Enter 明确确认开始）", "a 右下原地回复 · Enter 换行 · F2 明确提交 · F8 完整背景/身份", "f 最终回复 · [ / ] 历史业务轮次", "v 历史决策 · u 右下只读核验（r 重读/F8 全文）", "Ctrl+N 用 Codex CLI 打开本机候选（实时查看；任务操作通过 SteerLine）", "Ctrl+E 重新检查环境 · Ctrl+O 原终端（需能力）", "1 全部 · 2 Ready · 3 进行中 · 4 待决策 · 5 待合并 · 6 需处理 · 7 历史", "m 派发模式 · x 停止服务", "q 只退出控制台；服务继续运行"}
 }
 
 func joinLines(left, right []string, leftWidth, height int) string {

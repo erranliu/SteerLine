@@ -1,10 +1,12 @@
 # 分级测试与 E2E 环境
 
-第一阶段只交付和验收本地 Codex/本机 Orca，`orca-codex` 是本机后端。当前必需 smoke、delivery、recovery 和 candidates 不要求远端目标、远端权限回执或混合远端场景；保留的远端代码/探针不代表一期支持。
+当前产品入口为本地 Codex 和 Orca supervised（local/environment）；原本机 `host=orca` 已停用，源码保留。`delivery.orca-remote-codex` 保持原远端交付场景，新的 supervised 本机目标当前使用[定向验收](../../docs/acceptance/orca-supervised-targets.md)。
+
+远端交付通过 L3 场景 `delivery.orca-remote-codex` 执行；旧 `orca-codex` 三项 live、四项 `recovery.orca-startup.*` 与 `candidates.local` 已移出 suites.json，驱动留档，不计当前验收。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
 
 全项目测试范围、L1/Full/定向入口、独立原生验收和产物导航见[测试总入口](../../docs/testing.md)。本文维护 E2E 环境、场景和扩展的具体约定。
 
-L1 是精简固定 quick 加按改动选择的定向回归，默认最多三个独立进程并发；`-workers=1` 可串行诊断。固定集成保留架构边界、领取事务回滚/幂等与 SQLite 接线，复杂恢复、多回合和候选调度按改动定向执行，具体命令见[测试总入口](../../docs/testing.md)。L2 是无 token 门槛加双真实交付 smoke；Orca 链路显式使用 `args=[]`，核验冻结配置及真实启动交付。L3 按业务组、环境和场景选择，每个测试可以独立运行。Plan 按最小必要范围选择，不自动串跑所有级别。
+L1 是精简固定 quick 加按改动选择的定向回归，默认最多三个独立进程并发；`-workers=1` 可串行诊断。固定集成保留架构边界、领取事务回滚/幂等与 SQLite 接线，复杂恢复、多回合和候选调度按改动定向执行，具体命令见[测试总入口](../../docs/testing.md)。L2 当前登记无 token 门槛与本地 Codex smoke；旧 Orca smoke 不再选择。L3 按业务组、环境和场景选择，每个测试可以独立运行。Plan 按最小必要范围选择，不自动串跑所有级别。
 
 ```powershell
 go run ./cmd/test-feedback -level=L1
@@ -13,6 +15,8 @@ go run ./cmd/test-feedback -level=L2
 go run ./cmd/test-feedback -level=L2 -env=controlled
 # L3 环境分开，不自动串跑
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled
+# Orca 启动异常：慢响应、开始未确认、回执丢失与失败释放后的重启收敛
+go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=recovery.orca-startup.slow,recovery.orca-startup.unobserved,recovery.orca-startup.lost,recovery.orca-startup.failed'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.orca-codex'
 go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-codex'
@@ -29,16 +33,16 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | 级别/环境 | 场景 ID | 验证 |
 | --- | --- | --- |
 | L2 controlled | `smoke.delivery` | 正式创建/领取 A、发布 PR、合并前 B 阻塞，合并后原 A 交付且 B 就绪但未启动 |
-| L2 live | `smoke.local-codex` / `smoke.orca-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
+| L2 live | `smoke.local-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
 | L3 controlled | `delivery.basic` | 验证 A 唯一 Delivery 解锁 B；B dependency-ready 且未创建 WorkflowRun |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
 | L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、console/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
 | L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核实真实 trash、CLI/控制台查询、重启及无关任务启动 |
-| L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
-| L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
-| L3 live | `candidates.local` | manifest 固定本地 Codex + 本机 Orca，两候选真实反馈/PR/唯一交付与后继；使用真实 SteerlineTest GitHub PR |
+| L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
+| L3 live | `delivery.orca-remote-codex` | 真实配对 Windows Orca，正式领取与双轮反馈、同会话/工作区、真实 GitHub PR 合并与唯一交付、Orca 精确公开输出和 owned 清理 |
+| L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
 
-候选唯一入口 `candidates.local` 使用 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG`，格式见[本机候选 manifest](#本机候选-manifest)，历史现场结论见 [#39](../../docs/validation/candidate-acceptance.md)。runner 在清除继承 STEERLINE 环境时将该输入的绝对路径保存在 Run 中；manifest 的源码 commit 必须匹配实际 HEAD，只选择本机 Orca 与本地 Codex 两套 profile。chain 字段用于 runner live 枚举，实际两份 profile 在 manifest/规范 SQLite snapshot 中逐一核验。
+原候选入口 `candidates.local` 已随旧本机 Orca 路径移出当前登记。下面的 manifest 与驱动说明保留历史参考，不能用它声明当前本机 supervised 已完成真实候选验收。
 
 ## 本机候选 manifest
 
@@ -111,11 +115,35 @@ L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTe
 
 L3 live 使用 loopback Git/PR provider，两条链路均执行真实模型；与无 token 环境分别选择。Orca 使用真实 CLI 创建、绑定、结算、清理资源。测试 CLI 适配器为新建终端注入隔离环境；当前版本长文本注入若明确停在 Pasted Content 输入框，则完成该原终端的一次 Enter，不重发文本。readiness 探针、业务命令和结算都需要真实模型及原生证据，不合成权限或成功回执。
 
+L3 delivery/recovery 的本机 Orca usage 按 [#84 明确调整的验收条件](../../docs/acceptance/worker-staged-flow.md) 登记：公开接口不提供 token usage，场景必须记录 `usage_verified=false`、`orca_usage_status=not_exposed_by_orca`，逐轮仍绑定原 Command/Dispatch/final source；真实业务与清理必须通过。该能力记录不代表 token 验证通过，不替代 local、完整 L2、其他 suite 或远端各自的门槛。
+
 长提示提交前先等待原终端的粘贴草稿稳定至少一秒，并记录提交后状态；accepted/bytesWritten 不代表 agent 已启动。readiness 的 JavaScript exec wrapper 必须保留完整原生工具结果 JSON，不能只打印 stdout 或手写 exit 文本。原输入目标短暂未就绪时，场景可通过正式 recheck_environment 一次检查原环境，保持原 Task/terminal/Dispatch，不能重发旧业务输入。
 
 L3 Orca 发布脚本使用 origin 的正式仓库身份，仅对单次 push 以 Git `url.insteadOf` 路由到本项目 loopback 服务；不改仓库级配置，以免影响正式 remote 校验。工作分支为 PR head，main 为 PR base，脚本禁止直接向 main 推送。
 
 ## 产物与失败
+
+远端场景需 `STEERLINE_REMOTE_ACCEPTANCE_CONFIG` 指向绝对路径的无凭据 manifest：
+
+```json
+{
+  "version": 1,
+  "source_commit": "<实际 HEAD 的 40 位 commit>",
+  "environment_id": "<已保存环境的 ID>",
+  "connection_id": "<该环境的 pairedDeviceId>",
+  "repository_selector": "id:<远端已注册 SteerlineTest repo ID>",
+  "repository": "erranliu/SteerlineTest"
+}
+```
+
+用 `orca environment list --json`、`orca repo list --environment <环境> --json` 取得精确身份。远端预先准备自身 Codex/GitHub 登录；测试不下发中心认证，不修改 Orca 全局启动设置。runner 将 manifest 路径保存于 Run，再清除继承的 STEERLINE 环境。合同与脚本由独立 GitHub base branch 同步到远端，helper 仅在本次精确目标创建；远端只通过 Orca worker-read 查询精确 transcript/sourceIdentity/provider，核验原输出源和 PR 正文，不读取 agent 私有文件或运行 agent CLI。当前 Orca 公开接口无 token usage，报告 remote_usage_status=not_exposed_by_orca、usage_verified=false；远端场景必须有 remote_public_output_verified=true，不能因此宣称 token 已验。缺少 manifest、能力、认证或原生证据明确失败。
+
+```powershell
+$env:STEERLINE_REMOTE_ACCEPTANCE_CONFIG = '<manifest 绝对路径>'
+go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-remote-codex'
+```
+
+远端测试使用真实 SteerlineTest PR，驱动只自动合并本次精确 head/base，保留 PR 历史并清理本次分支。业务期限 10 分钟，成功/失败分别记录资源清理；直接 CLI 探针不代替正式产品场景。
 
 summary.json 保存源码/工作树、构建 SHA-256、精确选择、命令、耗时、coverage、清理和 blocked_scenarios；各组保留原始 Go JSON 日志及 stderr。scenarios/<id> 保存公开状态、命令回执、服务日志、资源清单及 scenario.json。L2 live 还须报告真实已合并 PR 的 URL/仓库/状态，否则不能通过。
 
@@ -133,3 +161,7 @@ Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_met
 4. Plan 的测试计划列出验收项 ID/任务专属文档链接、级别、组/场景 ID、环境、命令、时点、通过条件及证据/结果登记位置，覆盖本任务全部自动验收项；可以共用场景，必要回归另标。新增驱动/环境能力列入实施步骤或明确前置，实际验收前完成实现/登记，不把规划入口说成已存在；未选相关组简述原因，不默认要求 full 或所有层级。
 
 基础设施定向入口：`go test ./cmd/test-feedback ./tests/e2e/internal/... -count=1`。`go test -tags=e2e ./tests/e2e/internal/... -count=1` 按需验证双项目隔离/部分准备清理。直接运行场景包缺少运行配置会失败，统一入口负责构建、枚举登记测试和精确选择。
+
+## Worker 分步交付断言
+
+delivery.local-codex / delivery.orca-codex 的最小材料将 implement.ps1 的本地候选提交与 publish.ps1 的推送/PR 分开。两场景核对三次业务轮次、同会话/Attempt、Command/输入版本/规范 final 来源、每步骤正数原生 usage、报告前后工作区/绑定 PR 事实，以及 PR head 等于冻结候选。readiness 独立计入原生现场，不冒充业务轮次。缺逐轮工具限制的现有后端记录 fact_comparison_only，不能将提示词算作强只读权限保证。

@@ -162,7 +162,7 @@ func Runs(snapshot Snapshot) ([]*RunView, error) {
 		if !found {
 			return nil, errors.New("workflow has no task record")
 		}
-		if task.Status == "discarded" && workflow.Phase == "abandoned" {
+		if task.Status == "discarded" && workflow.Status == "abandoned" {
 			continue
 		}
 		execution := LatestExecution(snapshot.Executions, workflow.WorkflowRunID)

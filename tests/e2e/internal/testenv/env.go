@@ -25,11 +25,14 @@ import (
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, SourceCommit, SourceDirty string }
+type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
+	orcaUsageUnavailable    bool
+	remoteOutputVerified    bool
 	bodyFinishedAt          time.Time
 	bodyContextErr          error
 	Run                     Run
@@ -46,6 +49,9 @@ type Scenario struct {
 }
 
 type Project struct {
+	RemoteBranches                                                                    []string
+	RemoteCleanupFailed                                                               bool
+	RemoteOrca                                                                        *native.RemoteOrca
 	Scenario                                                                          *Scenario
 	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider, Executable string
 	ProjectID, DatabaseID                                                             string
@@ -96,7 +102,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.HasPrefix(id, "candidates.") {
+	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.Contains(id, "orca-remote-codex") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
 	}
 	if strings.HasPrefix(id, "candidates.") {
@@ -281,7 +287,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	s.Must(controlled.Write(p.Provider, controlled.State{GitURL: "http://" + address + "/e2e/project.git"}))
 	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider}}
 	s.Must(controlled.Write(p.Config, map[string]any{
-		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
+		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
 		"publication_policy": map[string]any{"publisher": "worker"},
 		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
 	}))
@@ -539,9 +545,13 @@ func (p *Project) StopService() {
 func (p *Project) RestartService() { p.StopService(); p.StartService() }
 
 func (p *Project) Claim(key string) {
+	p.ClaimExpectedStatus(key, "applied")
+}
+
+func (p *Project) ClaimExpectedStatus(key, status string) {
 	p.Scenario.t.Helper()
 	p.Scenario.Must(p.Driver.Control(p.Scenario.Context, p.Scenario.Run.Helper, "resume_dispatch", ""))
-	p.Scenario.Must(p.Driver.Control(p.Scenario.Context, p.Scenario.Run.Helper, "start_task", p.Tasks[key].ID))
+	p.Scenario.Must(p.Driver.ControlExpectedStatus(p.Scenario.Context, p.Scenario.Run.Helper, "start_task", p.Tasks[key].ID, status))
 }
 
 func (p *Project) Snapshot() (Snapshot, error) {
@@ -601,12 +611,18 @@ func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	}
 	snap.Helper, err = controlled.Read(p.Provider)
 	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
-		snap.Helper.PR, err = p.githubPR(snap)
+		snap.Helper.PR, err = p.githubPRContext(ctx, snap)
 	}
 	return snap, err
 }
 
 func (p *Project) WaitPhase(phase string) Snapshot {
+	if phase == "waiting_pr_merge" {
+		phase = "waiting_external"
+	}
+	if phase == "waiting_decision" {
+		phase = "waiting_input"
+	}
 	var result Snapshot
 	lastPhase := ""
 	rechecked := false
@@ -617,12 +633,12 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 			return false, err
 		}
 		if p.Chain != "" && len(snap.Domain.WorkflowRuns) == 1 {
-			current := snap.Domain.WorkflowRuns[0].Phase
+			current := snap.Domain.WorkflowRuns[0].Status
 			if current != lastPhase {
 				p.Record("latest-phase", snap)
 				lastPhase = current
 			}
-			if current == "waiting_decision" && len(snap.Domain.Executions) == 1 {
+			if (current == "waiting_input" || current == "blocked" || current == "reconciling") && len(snap.Domain.Executions) == 1 {
 				e := snap.Domain.Executions[0]
 				if e.Environment == nil || e.Environment.Blocker == nil {
 					message := "pending decision"
@@ -655,7 +671,7 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 				}
 			}
 		}
-		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Phase == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
+		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Status == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
 	})
 	return result
 }
@@ -714,7 +730,7 @@ func (s *Scenario) cleanup() {
 		if err != nil {
 			_ = controlled.Write(filepath.Join(s.Output, p.Name+"-diagnostic.json"), map[string]string{"error": err.Error()})
 		}
-		if p.Chain != "" {
+		if p.Chain != "" && p.RemoteOrca == nil {
 			if err := p.captureNativeDiagnostics(); err != nil {
 				failures = append(failures, "native diagnostics: "+err.Error())
 			}
@@ -747,6 +763,12 @@ func (s *Scenario) cleanup() {
 		}
 	}
 	for _, p := range s.projects {
+		if p.RemoteOrca != nil {
+			if err := p.cleanupRemoteOrca(); err != nil {
+				failures = append(failures, err.Error())
+				p.RemoteCleanupFailed = true
+			}
+		}
 		if p.OrcaExecutable != "" {
 			if err := p.cleanupOrca(); err != nil {
 				failures = append(failures, err.Error())
@@ -754,14 +776,20 @@ func (s *Scenario) cleanup() {
 		}
 	}
 	for _, p := range s.projects {
-		if p.RealPR {
+		if p.RealPR && !p.RemoteCleanupFailed {
 			if err := p.cleanupGitHub(); err != nil {
 				failures = append(failures, err.Error())
 			}
 		}
 	}
-	if err := RemoveOwned(s.Run.Scratch, s.Root); err != nil {
-		failures = append(failures, err.Error())
+	preserveScratch := false
+	for _, p := range s.projects {
+		preserveScratch = preserveScratch || p.RemoteCleanupFailed
+	}
+	if !preserveScratch {
+		if err := RemoveOwned(s.Run.Scratch, s.Root); err != nil {
+			failures = append(failures, err.Error())
+		}
 	}
 	if len(failures) > 0 {
 		s.t.Errorf("E2E cleanup: %s", strings.Join(failures, "; "))
@@ -778,7 +806,8 @@ func (s *Scenario) cleanup() {
 			realPR = p.RealPRProof
 		}
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "native_workspace_verified": s.nativeWorkspaceVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "remote_public_output_verified": s.remoteOutputVerified, "remote_usage_status": map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.remoteOutputVerified], "native_workspace_verified": s.nativeWorkspaceVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
+	evidence["orca_usage_status"] = map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.orcaUsageUnavailable]
 	if err := controlled.Write(filepath.Join(s.Output, "scenario.json"), evidence); err != nil {
 		s.t.Errorf("write scenario evidence: %v", err)
 	}

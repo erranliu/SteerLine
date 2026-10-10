@@ -1061,7 +1061,7 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 		return err
 	}
 	if c.WorkflowProtocol != executionmodel.Version {
-		return nativeErr("unsupported_schema", "only worker-flow-v1 is supported")
+		return nativeErr("unsupported_schema", "only worker-flow-v2 is supported")
 	}
 	if mode != "manual" && mode != "auto" {
 		return errors.New("dispatch mode must be manual or auto")

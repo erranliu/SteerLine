@@ -90,14 +90,17 @@ func (c *Client) runWithTimeout(ctx context.Context, timeout time.Duration, bina
 }
 
 func (c *Client) Control(ctx context.Context, helper, action, taskID string) error {
+	return c.ControlExpectedStatus(ctx, helper, action, taskID, "applied")
+}
+
+func (c *Client) ControlExpectedStatus(ctx context.Context, helper, action, taskID, expectedStatus string) error {
 	profile := c.Profile
 	if profile == "" {
 		profile = "controlled"
 	}
-	// ResolveIdentity is bounded at 25s; the product control request has a 2m
-	// lifetime. Native preparation must get that same receipt window, without
-	// submitting another request when a terminal is still starting.
-	_, err := c.runWithTimeout(ctx, 150*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile)
+	// Admission expires on the original product request. An admitted claim can
+	// still be applying native preparation; await that same receipt without resend.
+	_, err := c.runWithTimeout(ctx, 390*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile, "-expected-status", expectedStatus)
 	return err
 }
 
@@ -106,7 +109,7 @@ func (c *Client) ControlTargeted(ctx context.Context, helper, action, taskID, ex
 	if profile == "" {
 		profile = "controlled"
 	}
-	_, err := c.runWithTimeout(ctx, 150*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID,
+	_, err := c.runWithTimeout(ctx, 390*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID,
 		"-profile", profile, "-expected-instance", expectedInstance)
 	return err
 }
@@ -120,11 +123,15 @@ func MainControl(args []string) error {
 	taskID := fs.String("task-id", "", "task ID")
 	profileID := fs.String("profile", "controlled", "execution profile ID")
 	expectedInstance := fs.String("expected-instance", "", "displayed service instance ID; rejects stale targets")
+	expectedStatus := fs.String("expected-status", "applied", "required product receipt status")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *action != "resume_dispatch" && *action != "start_task" {
 		return fmt.Errorf("unsupported E2E control action")
+	}
+	if *expectedStatus != "applied" && !(*action == "start_task" && *expectedStatus == "failed") {
+		return fmt.Errorf("unsupported E2E control status expectation")
 	}
 	c, err := steerlineapp.LoadConfig(*config)
 	if err != nil {
@@ -158,7 +165,9 @@ func MainControl(args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), request.ExpiresAt)
+	// Request expiration guards admission in the product. A verified applying
+	// reservation is already durable; completion can arrive after that deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	receipt, err := steerline.WaitControlReceipt(ctx, hostConfig, request.RequestID, 100*time.Millisecond)
 	if err != nil {
@@ -167,7 +176,7 @@ func MainControl(args []string) error {
 	if err := json.NewEncoder(os.Stdout).Encode(receipt); err != nil {
 		return err
 	}
-	if receipt.Status != "applied" {
+	if receipt.Status != *expectedStatus {
 		return fmt.Errorf("control %s: %s: %s", receipt.Status, receipt.Code, receipt.Message)
 	}
 	return nil

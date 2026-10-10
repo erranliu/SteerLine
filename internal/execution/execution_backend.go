@@ -50,7 +50,7 @@ type executionRecords struct {
 
 func (s *Service) readRunWorkspace(ctx context.Context, run *reconstructiontypes.RunView) (executionbackend.WorkspaceInspection, error) {
 	if run == nil || run.WorkflowVersion != executionmodel.Version {
-		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace inspection requires its fixed worker-flow-v1 identity"}
+		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace inspection requires its fixed worker-flow-v2 identity"}
 	}
 	w, err := s.inspectWorkflowWorkspace(ctx, run)
 	return executionbackend.WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err

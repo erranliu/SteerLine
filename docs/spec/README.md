@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地Codex与本机Orca。#83/#84/#45/#44已纳入[正式执行规划](../roadmap/execution-map.md)，由 roadmap-runner 直接调度 Codex；#83已通过 PR #247 合入、#84/#45待执行、#44等待#45，其余材料见[草稿](../roadmap/drafts/roadmap.md)。日常派发核对用户确认范围、状态、依赖和固定文档版本，草稿或编号不作为执行来源。
+本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段包含本地 Codex、本机 Orca 与远端路径交付。#83/#84/#45/#44已纳入[正式执行规划](../roadmap/execution-map.md)，由 roadmap-runner 直接调度 Codex；#83已通过 PR #247 合入、#84/#45待执行、#44等待#45，其余材料见[草稿](../roadmap/drafts/roadmap.md)。日常派发核对用户确认范围、状态、依赖和固定文档版本，草稿或编号不作为执行来源。
 
 Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在纳入执行或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不作为执行任务；少量人工项按允许范围后置。
 
@@ -24,6 +24,12 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 第四批已完成工作区实现及最小自动验收，待 PR 评审；未创建外部 Task/DAG。中心只保存完整 final、问题与必要事实，恢复只继续原会话；多后端、多候选及反馈格式保持。旧构建的故障与实际验证范围由专属验收记录区分。
 
 [Spec](product-simplification-04-conversation-recovery.spec.md) · [Plan](product-simplification-04-conversation-recovery.plan.md) · [验收](../acceptance/product-simplification-04-conversation-recovery.md)
+
+## 停机对账修复
+
+#87 Worker 停机对账与恢复一致性修复：由安装现场 101 的停止操作未知引出的系统性修复，已由本聊天直接交付，[PR #260](https://github.com/erranliu/SteerLine/pull/260) 已真实合并，WSR-A1–A8 自动通过；精确验证范围见专属记录。由 worker 声明并冻结停服行为，本地停止/Orca 继续；应用恢复只消费 worker 规范事实，覆盖原运行、待答和离线完成。复用既有分类/幂等，与 #84 共享接线有序集成，不改变正式排期。
+
+[草稿](../roadmap/drafts/worker-stop-recovery.md) · [Spec](worker-stop-recovery.spec.md) · [Plan](worker-stop-recovery.plan.md) · [专属验收](../acceptance/worker-stop-recovery.md)
 
 ## 已确认 Codex 执行规划
 

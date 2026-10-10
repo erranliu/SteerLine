@@ -3,6 +3,7 @@ package orcaworker
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -26,15 +27,30 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 	if turn.DoneMessageID != "" {
 		settled, settleErr := Settlement(ctx, l.client.MetaCall, nativeDispatchIdentity(snapshot, *turn), turn.Outcome)
 		if settleErr == nil {
+			if freezeErr := l.freezeOriginalOutput(ctx, snapshot, *turn); freezeErr != nil {
+				receipt.Diagnostic = freezeErr.Error()
+				return receipt, nil, freezeErr
+			}
 			turn.Settled, turn.Outcome = true, settled
+			if turn.Purpose == "business" {
+				if finalErr := l.readNativeFinal(ctx, snapshot, turn, &state); finalErr != nil {
+					receipt.Diagnostic = finalErr.Error()
+					turn.FinalReadError = finalErr.Error()
+				}
+			}
 			receipt.Disposition = executionbackend.OperationConfirmed
 			receipt.State.TurnCompleted = true
 			receipt.TurnEvidence = nativeTurnEvidence(snapshot, *turn)
+			receipt.TurnEvidence.FinalNativeSessionID = SessionID(identity)
+			if terminal, inspectErr := l.inspectObservationTerminal(ctx, snapshot); inspectErr == nil {
+				receipt.State.SessionAvailable = !terminal.Exited()
+				receipt.State.WorkerLive = !terminal.Exited()
+			}
 			receipt.Implementation, err = l.targetEnvelope(snapshot, snapshot.Ref.Target, identity, state)
 			return receipt, nil, err
 		}
 	}
-	terminal, showErr := ShowTerminal(ctx, l.client.MetaCall, identity.Terminal)
+	terminal, showErr := l.inspectObservationTerminal(ctx, snapshot)
 	if showErr != nil {
 		receipt.Diagnostic = showErr.Error()
 		return receipt, nil, nativeCallError(showErr)
@@ -42,10 +58,11 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 	if terminal.RuntimeID != identity.RuntimeID || terminal.IncarnationID != identity.Incarnation || terminal.WorktreeID != identity.WorktreeID {
 		return receipt, nil, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "original native Orca terminal or incarnation changed"}
 	}
-	if terminal.Exited() && turn.DoneMessageID == "" {
-		receipt.Diagnostic = "original Orca terminal exited without a persisted worker_done message"
-		return receipt, nil, nil
-	}
+	// The original coordinator can contain a done message received while the
+	// service was offline. Its observer drains that inbox before declaring an
+	// exited terminal unknown; it never sends a replacement business input.
+	receipt.State.WorkerLive = !terminal.Exited()
+	receipt.State.SessionAvailable = !terminal.Exited()
 	receipt.Disposition = executionbackend.OperationAccepted
 	return receipt, newNativeObserver(ctx, l, snapshot), nil
 }
@@ -93,7 +110,7 @@ func nativeTurnEvidence(snapshot executionbackend.LifecycleSnapshot, turn Native
 		started = true
 	}
 	return &executionbackend.TurnEvidence{TurnID: turn.TurnID, CommandID: turn.TurnID, SessionID: SessionID(snapshot.Ref.External),
-		Started: started, Completed: true, Succeeded: turn.Outcome == "succeeded", LastMessage: turn.LastMessage,
+		FinalDiagnostic: turn.FinalReadError, FinalSource: turn.FinalSource, FinalItemID: turn.FinalItemID, FinalVerified: turn.FinalVerified, FinalNativeTurnID: turn.FinalNativeTurnID, Started: started, Completed: true, Succeeded: turn.Outcome == "succeeded", LastMessage: turn.FinalText,
 		Failure: map[bool]string{true: turn.LastMessage, false: ""}[turn.Outcome == "failed"], PRCandidates: append([]string(nil), turn.PRCandidates...)}
 }
 
@@ -108,15 +125,17 @@ func (*nativeStopHandle) Kill() {}
 func (*nativeStopHandle) Close() {}
 
 type nativeLifecycleObserver struct {
-	lifecycle *ExecutionLifecycle
-	snapshot  executionbackend.LifecycleSnapshot
-	state     NativeExecutionState
-	turn      NativeTurnState
-	stop      *nativeStopHandle
-	cancel    context.CancelFunc
-	events    chan executionbackend.LifecycleEvent
-	done      chan error
-	closed    chan struct{}
+	lifecycle    *ExecutionLifecycle
+	snapshot     executionbackend.LifecycleSnapshot
+	state        NativeExecutionState
+	turn         NativeTurnState
+	lastHostWait *executionbackend.HostFact
+	lastHostGap  string
+	stop         *nativeStopHandle
+	cancel       context.CancelFunc
+	events       chan executionbackend.LifecycleEvent
+	done         chan error
+	closed       chan struct{}
 }
 
 func newNativeObserver(parent context.Context, lifecycle *ExecutionLifecycle, snapshot executionbackend.LifecycleSnapshot) executionbackend.LifecycleObserver {
@@ -140,6 +159,7 @@ func newNativeObserver(parent context.Context, lifecycle *ExecutionLifecycle, sn
 		return observer
 	}
 	observer.turn = *turn
+	observer.lastHostWait = turn.HostWait
 	go observer.observe(ctx)
 	return observer
 }
@@ -160,6 +180,16 @@ func (o *nativeLifecycleObserver) observe(ctx context.Context) {
 			return
 		}
 		turn := nativeTurn(&o.state, o.turn.TurnID)
+		if turn != nil && !turn.Started && !o.started() && turn.DoneMessageID == "" {
+			started, err := ObserveWorkerStarted(ctx, o.lifecycle.client.MetaCall, nativeDispatchIdentity(o.snapshot, *turn), turn.IntentAt)
+			if err != nil {
+				o.done <- err
+				return
+			}
+			if started && !o.ensureStarted(ctx) {
+				return
+			}
+		}
 		if turn != nil && turn.DoneMessageID != "" {
 			outcome, err := Settlement(ctx, o.lifecycle.client.MetaCall, nativeDispatchIdentity(o.snapshot, *turn), turn.Outcome)
 			if err == nil {
@@ -171,34 +201,36 @@ func (o *nativeLifecycleObserver) observe(ctx context.Context) {
 				return
 			}
 		}
-		if turn != nil && !turn.RelayReported {
-			if !o.reportRelay(ctx, turn) {
-				return
-			}
-		}
-		if !o.readinessTurn() && !o.started() {
-			running, err := ObserveTurnRunning(ctx, o.lifecycle.client.MetaCall, workerTerminalIdentity(o.snapshot.Ref.External))
-			if err != nil {
-				o.done <- nativeCallError(err)
-				return
-			}
-			if running && !o.ensureStarted(ctx) {
-				return
-			}
+		if turn != nil && turn.Started && !o.started() && !o.ensureStarted(ctx) {
+			return
 		}
 		if turn == nil || turn.DoneMessageID == "" {
-			terminal, err := ShowTerminal(ctx, o.lifecycle.client.MetaCall, o.snapshot.Ref.External.Terminal)
-			if err == nil && terminal.Exited() {
-				o.done <- errors.New("original Orca terminal exited before worker_done was committed")
+			if err := o.observeNativeHost(ctx); err != nil {
+				o.done <- err
 				return
 			}
 		}
+
 		select {
 		case <-ctx.Done():
 			return
 		case <-time.After(250 * time.Millisecond):
 		}
 	}
+}
+
+// Observation may inspect an exited original terminal, unlike mutation paths
+// which require a live target. Never weaken those live-terminal validators.
+func (l *ExecutionLifecycle) inspectObservationTerminal(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (Terminal, error) {
+	identity := snapshot.Ref.External
+	terminal, err := l.client.InspectBoundTerminal(ctx, snapshot.Ref.Target, identity)
+	if err != nil {
+		return terminal, err
+	}
+	if terminal.WorktreeID != identity.WorktreeID || terminal.Orphaned || !terminal.Connected && !terminal.Exited() {
+		return terminal, errors.New("original observation terminal worktree or connection cannot be verified")
+	}
+	return terminal, nil
 }
 
 func (o *nativeLifecycleObserver) processInbox(ctx context.Context) error {
@@ -260,50 +292,6 @@ func (o *nativeLifecycleObserver) processInbox(ctx context.Context) error {
 	return nil
 }
 
-func (o *nativeLifecycleObserver) reportRelay(ctx context.Context, turn *NativeTurnState) bool {
-	if turn == nil || turn.DispatchID == "" || o.snapshot.Workspace.Path == "" {
-		return true
-	}
-	path, err := RelayPath(o.snapshot.Workspace.Path, o.snapshot.Session.WorkflowRunID, turn.TurnID)
-	if err != nil {
-		o.done <- err
-		return false
-	}
-	relay, err := ReadDoneRequest(path, o.snapshot.Workspace.Path, o.snapshot.Session.WorkflowRunID, turn.TurnID, turn.TaskID, turn.DispatchID)
-	if err != nil {
-		o.done <- err
-		return false
-	}
-	if relay == nil {
-		return true
-	}
-	if !o.readinessTurn() && !o.ensureStarted(ctx) {
-		return false
-	}
-	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleReportCompletion,
-		Input: executionbackend.LifecycleInput{Completion: &executionbackend.CompletionInput{TurnID: turn.TurnID,
-			Outcome: relay.Outcome, Subject: relay.Subject, Body: relay.Body}}}
-	if err := candidate.Validate(); err != nil {
-		o.done <- err
-		return false
-	}
-	fact := executionbackend.EventFact{Kind: executionbackend.EventStatus, Source: "native_orca_relay", SourceEventID: "relay:" + turn.TurnID,
-		Matched: true, LastMessage: relay.Subject}
-	envelopes, err := o.lifecycle.targetEnvelope(o.snapshot, o.snapshot.Ref.Target, o.snapshot.Ref.External, o.state)
-	if err != nil {
-		o.done <- err
-		return false
-	}
-	event := executionbackend.LifecycleEvent{Fact: fact, Implementation: envelopes, Candidate: &candidate,
-		Summary: "native Orca completion report is ready", Kind: "execution", Status: "completion_report",
-		Title: "Worker completion report", Persisted: make(chan error, 1), Processed: make(chan error, 1)}
-	if !o.sendAndWait(ctx, event) {
-		return false
-	}
-	turn.RelayReported = true
-	return true
-}
-
 func (o *nativeLifecycleObserver) started() bool {
 	return o.snapshot.Session.CurrentTurnID == o.turn.TurnID
 }
@@ -314,9 +302,21 @@ func (o *nativeLifecycleObserver) ensureStarted(ctx context.Context) bool {
 	if o.started() {
 		return true
 	}
+	turn := nativeTurn(&o.state, o.turn.TurnID)
+	if turn == nil {
+		o.done <- errors.New("native Orca turn start lost its original turn")
+		return false
+	}
+	turn.Started = true
+	envelopes, err := o.lifecycle.targetEnvelope(o.snapshot, o.snapshot.Ref.Target, o.snapshot.Ref.External, o.state)
+	if err != nil {
+		o.done <- err
+		return false
+	}
 	event := executionbackend.LifecycleEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventStarted,
 		StartedTurnID: o.turn.TurnID, SessionID: SessionID(o.snapshot.Ref.External)},
-		Summary: "native Orca turn start observed", Kind: "execution", Status: "started", Title: "Worker turn started",
+		Implementation: envelopes,
+		Summary:        "native Orca turn start observed", Kind: "execution", Status: "started", Title: "Worker turn started",
 		Persisted: make(chan error, 1), Processed: make(chan error, 1)}
 	if !o.sendAndWait(ctx, event) {
 		return false
@@ -326,6 +326,10 @@ func (o *nativeLifecycleObserver) ensureStarted(ctx context.Context) bool {
 }
 
 func (o *nativeLifecycleObserver) emitSettlement(ctx context.Context, turn NativeTurnState) bool {
+	if err := o.lifecycle.freezeOriginalOutput(ctx, o.snapshot, turn); err != nil {
+		o.done <- err
+		return false
+	}
 	envelopes, err := o.lifecycle.targetEnvelope(o.snapshot, o.snapshot.Ref.Target, o.snapshot.Ref.External, o.state)
 	if err != nil {
 		o.done <- err
@@ -409,3 +413,66 @@ func (o *nativeLifecycleObserver) Close(ctx context.Context) error {
 }
 
 var _ executionbackend.LifecycleObserver = (*nativeLifecycleObserver)(nil)
+
+func (o *nativeLifecycleObserver) observeNativeHost(ctx context.Context) error {
+	p := o.snapshot.Ref.External
+	fact, err := ObserveHost(ctx, o.lifecycle.client.MetaCall, TerminalIdentity{Kind: p.Kind, Handle: p.Terminal, RuntimeID: p.RuntimeID, Incarnation: p.Incarnation})
+	if err != nil {
+		return err
+	}
+	if fact.Reason == "terminal_exited" || fact.Reason == "identity_mismatch" {
+		return errors.New("original Orca terminal is unavailable: " + fact.Reason)
+	}
+	if fact.Reason == "host_observation_unverified" {
+		gapID := "host-gap:" + o.turn.TurnID + ":" + digestValue(fact)
+		if o.lastHostGap == gapID {
+			return nil
+		}
+		event := executionbackend.LifecycleEvent{Diagnostic: fact.Detail, Fact: executionbackend.EventFact{Kind: executionbackend.EventGap, Gap: true, Source: fact.Source, SourceEventID: gapID, SourceIdentity: SessionID(p), SourceSegment: p.Incarnation}, Summary: fact.Detail, Kind: "execution", Status: "unknown", Title: "Orca host observation unavailable", Persisted: make(chan error, 1), Processed: make(chan error, 1)}
+		if !o.sendAndWait(ctx, event) {
+			return errors.New("host observation gap was not committed")
+		}
+		o.lastHostGap = gapID
+		return nil
+	}
+	o.lastHostGap = ""
+	if fact.Reason != "host_wait" {
+		if o.lastHostWait != nil {
+			event := executionbackend.LifecycleEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventStatus, Source: "orca.host-observation", SourceEventID: "wait-cleared:" + o.turn.TurnID + ":" + digestValue(*o.lastHostWait), SourceIdentity: SessionID(p), SessionID: SessionID(p)}, Summary: "Orca host wait cleared", Kind: "execution", Status: "observing", Title: "Worker resumed", Persisted: make(chan error, 1), Processed: make(chan error, 1)}
+			if err := o.bindHostWait(&event, nil); err != nil {
+				return err
+			}
+			if !o.sendAndWait(ctx, event) {
+				return errors.New("host wait clearing was not committed")
+			}
+			o.lastHostWait = nil
+		}
+		return nil
+	}
+	fact.Turn = o.turn.TurnID
+	if o.lastHostWait != nil && *o.lastHostWait == fact {
+		return nil
+	}
+	event := executionbackend.LifecycleEvent{InputWait: true, Diagnostic: fact.Confidence + ": " + fact.Detail, Fact: executionbackend.EventFact{Kind: executionbackend.EventStatus, Source: fact.Source, SourceIdentity: SessionID(p), SourceSegment: p.Incarnation, SourceEventID: "host-wait:" + digestValue(fact), SessionID: SessionID(p), LastMessage: fact.Detail}, Summary: "Orca is waiting for host input: " + fact.Detail, Kind: "execution", Status: "waiting", Title: "Orca host input wait", Persisted: make(chan error, 1), Processed: make(chan error, 1)}
+	if err := o.bindHostWait(&event, &fact); err != nil {
+		return err
+	}
+	if !o.sendAndWait(ctx, event) {
+		return errors.New("native host wait was not committed")
+	}
+	o.lastHostWait = &fact
+	return nil
+}
+
+func (o *nativeLifecycleObserver) bindHostWait(event *executionbackend.LifecycleEvent, fact *executionbackend.HostFact) error {
+	turn := nativeTurn(&o.state, o.turn.TurnID)
+	if turn == nil {
+		return errors.New("host wait lacks original turn")
+	}
+	turn.HostWaitSequence++
+	turn.HostWait = fact
+	event.Fact.SourceEventID = "host-observation:" + turn.TurnID + ":" + strconv.FormatUint(turn.HostWaitSequence, 10)
+	envelopes, err := o.lifecycle.targetEnvelope(o.snapshot, o.snapshot.Ref.Target, o.snapshot.Ref.External, o.state)
+	event.Implementation = envelopes
+	return err
+}

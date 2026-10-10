@@ -33,16 +33,33 @@ type appServerHostExitReceipt struct {
 	TurnID     string                           `json:"turn_id"`
 	CallID     string                           `json:"call_id"`
 	Workspace  string                           `json:"workspace"`
+	CodexHome  string                           `json:"codex_home"`
 }
 
 func newNativeLiveRecoveryProject(t *testing.T) integrationFixture {
 	t.Helper()
 	f := newLifecycleProjectBase(t, "local", false)
+
+	authHome := os.Getenv("CODEX_HOME")
+	if authHome == "" {
+		userHome, err := os.UserHomeDir()
+		require(t, err)
+		authHome = filepath.Join(userHome, ".codex")
+	}
+	auth, err := os.ReadFile(filepath.Join(authHome, "auth.json"))
+	require(t, err)
+	codexHome := filepath.Join(t.TempDir(), "codex")
+	require(t, os.MkdirAll(codexHome, 0700))
+	require(t, os.WriteFile(filepath.Join(codexHome, "auth.json"), auth, 0600))
+	require(t, os.WriteFile(filepath.Join(codexHome, "config.toml"), []byte(fmt.Sprintf("[projects.%q]\ntrust_level = \"trusted\"\n", filepath.ToSlash(f.repository))), 0600))
+	t.Setenv("CODEX_HOME", codexHome)
 	var global map[string]json.RawMessage
 	raw, err := os.ReadFile(steerlineapp.GlobalExecutionConfigPath())
 	require(t, err)
 	require(t, json.Unmarshal(raw, &global))
-	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "low"})
+	nativeExecutable, err := codexworker.NativeExecutable("codex")
+	require(t, err)
+	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: nativeExecutable, Model: "gpt-6-luna", ReasoningEffort: "low"})
 	require(t, err)
 	global["execution_profiles"] = mustJSON([]map[string]any{{"id": "fixture", "name": "Native recovery", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}}})
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(global), 0600))
@@ -153,12 +170,20 @@ func TestAppServerHostExitHelper(t *testing.T) {
 	if question.execution.Process == nil {
 		t.Fatal("native app-server has no durable process identity")
 	}
-	receipt := appServerHostExitReceipt{Config: f.config, ConfigPath: f.configPath, Home: os.Getenv("STEERLINE_HOME"), RunID: question.run.RunID, Process: *question.execution.Process, ThreadID: question.execution.SessionID, TurnID: question.execution.CurrentTurnID, CallID: question.run.Decision.Request.QuestionRoute.QuestionID, Workspace: question.execution.Workspace.Worktree}
+	receipt := appServerHostExitReceipt{Config: f.config, ConfigPath: f.configPath, Home: os.Getenv("STEERLINE_HOME"), RunID: question.run.RunID, Process: *question.execution.Process, ThreadID: question.execution.SessionID, TurnID: question.execution.CurrentTurnID, CallID: question.run.Decision.Request.QuestionRoute.QuestionID, Workspace: question.execution.Workspace.Worktree, CodexHome: os.Getenv("CODEX_HOME")}
 	require(t, f.config.ProcessHost.WriteExecutionFile(filepath.Join(root, "host-exit-receipt.json"), mustJSON(receipt)))
 	os.Exit(0)
 }
 
 func TestLocalCodexManualRecoveryLive(t *testing.T) {
+	if os.Getenv("STEERLINE_WORKER_RECOVERY_LIVE") != "1" {
+		t.Skip("real local worker recovery is opt-in")
+	}
+	t.Run("host_exit", testLocalCodexHostExitRecovery)
+	t.Run("normal_service_stop", testLocalCodexNormalStopRecovery)
+}
+
+func testLocalCodexHostExitRecovery(t *testing.T) {
 	if os.Getenv("STEERLINE_WORKER_RECOVERY_LIVE") != "1" {
 		t.Skip("real local Codex recovery is opt-in")
 	}
@@ -167,6 +192,9 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	receipt := nativeHostExitHelper(t, ctx, t.TempDir())
 	waitFor(t, 5*time.Second, func() bool { return nativeLiveProcessState(&receipt.Process) == "process absent" })
 	t.Setenv("STEERLINE_HOME", receipt.Home)
+	t.Setenv("CODEX_HOME", receipt.CodexHome)
+	t.Setenv("STEERLINE_TEST_REMOTE_URL", fixtureGitOutput(t, "-C", receipt.Config.Repository, "remote", "get-url", "origin"))
+	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", filepath.Join(filepath.Dir(receipt.Config.Repository), "origin.git"))
 	config, err := steerlineapp.LoadConfig(receipt.ConfigPath)
 	require(t, err)
 	service := startIntegrationService(t, ctx, config, config.ExecutionDirectory)
@@ -281,4 +309,43 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 	if feedback.execution.SessionID != firstThread || feedback.execution.Workspace.Worktree != firstWorkspace {
 		t.Fatal("post-turn feedback replaced the original thread/worktree")
 	}
+}
+
+func testLocalCodexNormalStopRecovery(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	f := newNativeLiveRecoveryProject(t)
+	createNativeLiveTask(t, ctx, &f, 901, liveNativeQuestion)
+	service := startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
+	defer func() { service.stop(t) }()
+	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
+	question := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+		return run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil
+	})
+	oldProcess, oldAttempt, oldSession, oldWorkspace := *question.execution.Process, question.run.AttemptID, question.execution.SessionID, question.execution.Workspace.Worktree
+	if question.runtime.WorkflowRuns[0].ExecutionProfile.ServiceStopBehavior != executionbackend.StopExecutionOnServiceStop {
+		t.Fatal("wrong frozen worker shutdown behavior")
+	}
+	service.stop(t)
+	waitFor(t, 5*time.Second, func() bool { return nativeLiveProcessState(&oldProcess) == "process absent" })
+	service = startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
+	recovered := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+		return e.RecoveryRequired && e.RecoveryState == "interrupted" && run.Decision != nil && run.Decision.Status == "pending"
+	})
+	if recovered.run.AttemptID != oldAttempt || recovered.execution.SessionID != oldSession || recovered.execution.Workspace.Worktree != oldWorkspace || recovered.execution.TurnNumber != 1 {
+		t.Fatal("normal reopen replaced the original execution before consent")
+	}
+	for _, op := range recovered.runtime.Operations {
+		if op.Kind == "stop_worker_observation" {
+			t.Fatal("service shutdown journaled an interrupt RPC")
+		}
+	}
+	nativeLiveAnswer(t, ctx, f.config, recovered.run, "continue", "The prior question asked A or B. Choose A; inspect existing work first, then answer A only.")
+	settled := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+		return run.AttemptID != oldAttempt && e.LastStoppedTurnID != "" && e.TurnNumber >= 2
+	})
+	if settled.execution.SessionID != oldSession || settled.execution.Workspace.Worktree != oldWorkspace || *settled.execution.Process == oldProcess || len(settled.runtime.Attempts) != 2 {
+		t.Fatal("normal-stop recovery lost its original session or duplicated the replacement Attempt")
+	}
+	t.Logf("normal worker service stop: old_pid=%d new_pid=%d thread=%s old_attempt=%s new_attempt=%s old_turn=%s new_turn=%s", oldProcess.PID, settled.execution.Process.PID, oldSession, oldAttempt, settled.run.AttemptID, question.execution.CurrentTurnID, settled.execution.LastStoppedTurnID)
 }

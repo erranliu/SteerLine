@@ -124,7 +124,7 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	require(t, s.commitWorker(run))
 	resolver.fact = executionbackend.HostFact{Reason: "host_wait", Confidence: "suspected", Source: "fixture-host", Turn: e.CurrentTurnID}
 	require(t, s.observeWorkerEnvironment(context.Background(), run))
-	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Confidence != "suspected" || workflow.Phase != "waiting_decision" || run.Decision == nil || run.Decision.ID != question.ID {
+	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Confidence != "suspected" || workflow.Status != "waiting_input" || run.Decision == nil || run.Decision.ID != question.ID {
 		t.Fatal("host evidence or original question lost")
 	}
 	count := len(s.State.Decisions)
@@ -151,12 +151,12 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 		t.Fatal("recheck injected refused feedback or lost the original question")
 	}
 	workflow, _ = s.workflowRecords(run)
-	workflow.Phase = "waiting_pr_merge"
+	workflow.Status = "waiting_external"
 	e.Environment.Blocker = nil
 	resolver.fact = executionbackend.HostFact{Reason: "host_wait", Confidence: "suspected", Source: "fixture-host"}
 	require(t, s.commitWorker(run))
 	require(t, s.observeWorkerEnvironment(context.Background(), run))
-	if workflow.Phase != "waiting_pr_merge" {
+	if workflow.Status != "waiting_external" {
 		t.Fatal("late host diagnostic reopened PR merge waiting")
 	}
 }
@@ -276,7 +276,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	require(t, reopened.eventForRun(run, <-worker.Events))
 	answerNeutralEnvironment(t, reopened, run, "recheck_environment", "")
 	e = reopened.executionRecord(run)
-	if e.Environment.Blocker != nil || reopened.workflowRecord(run).Phase != "executing" || len(resolver.inputs) != 1 || e.CurrentTurnID != business {
+	if e.Environment.Blocker != nil || reopened.workflowRecord(run).Status != "executing" || len(resolver.inputs) != 1 || e.CurrentTurnID != business {
 		t.Fatal("business start reconciliation repeated or replaced input")
 	}
 	reopened.shutdown()

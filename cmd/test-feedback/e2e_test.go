@@ -145,7 +145,7 @@ func TestL3ExactScenarioSelectionRejectsWrongEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"delivery.local-codex", "delivery.orca-codex"} {
+	for _, id := range []string{"delivery.local-codex", "delivery.orca-remote-codex"} {
 		entries, err := selectE2E(root, options{level: "L3", suite: "delivery", e2eEnv: "live", scenario: id})
 		if err != nil || len(entries) != 1 || entries[0].ID != id {
 			t.Fatalf("independent selection %s: %v %v", id, entries, err)
@@ -207,5 +207,93 @@ func TestNativeWorkspaceRequiresItsOwnEvidenceWithoutModelUsage(t *testing.T) {
 		if err := checkE2EGroup(g, []e2eScenario{entry}, out); (err == nil) != tc.pass {
 			t.Fatalf("evidence=%+v result=%v", tc, err)
 		}
+	}
+}
+
+func TestRemoteResultRequiresPublicOutputAndHonestUsageStatus(t *testing.T) {
+	entry := e2eScenario{ID: "delivery.orca-remote-codex", Test: "TestRemote", Env: "live", Level: "L3", Chain: "orca-remote-codex"}
+	out := t.TempDir()
+	dir := filepath.Join(out, "scenarios", entry.ID)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	log := ""
+	for _, event := range []struct{ action, test string }{{"start", ""}, {"run", entry.Test}, {"pass", entry.Test}, {"pass", ""}} {
+		raw, err := json.Marshal(map[string]any{"Time": "2026-10-09T00:00:00Z", "Elapsed": 0, "Action": event.action, "Package": "p", "Test": event.test})
+		if err != nil {
+			t.Fatal(err)
+		}
+		log += string(raw) + "\n"
+	}
+	g := scopedGroup{ID: "remote", Packages: []string{"p"}, Summary: testfeedback.Parse([]byte(log), 0)}
+	for _, tc := range []struct {
+		name           string
+		public, usage  bool
+		status         string
+		mergedPR, pass bool
+	}{
+		{"missing public output", false, false, "not_exposed_by_orca", true, false},
+		{"missing usage status", true, false, "", true, false},
+		{"claimed token verification", true, true, "not_exposed_by_orca", true, false},
+		{"missing merge", true, false, "not_exposed_by_orca", false, false},
+		{"complete public evidence", true, false, "not_exposed_by_orca", true, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			evidence := map[string]any{"id": entry.ID, "passed": true, "cleanup_complete": true, "resources": []any{map[string]string{"kind": "project"}}, "remote_public_output_verified": tc.public, "usage_verified": tc.usage, "remote_usage_status": tc.status}
+			if tc.mergedPR {
+				evidence["real_pr"] = map[string]any{"url": "https://github.com/erranliu/SteerlineTest/pull/168", "state": "merged", "repository": "erranliu/SteerlineTest", "merged": true}
+			}
+			if err := writeJSON(filepath.Join(dir, "scenario.json"), evidence); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkE2EGroup(g, []e2eScenario{entry}, out); (err == nil) != tc.pass {
+				t.Fatalf("unexpected evidence gate result: %v", err)
+			}
+		})
+	}
+}
+
+func TestNativeOrcaL3RequiresHonestPublicUsageCapability(t *testing.T) {
+	for _, tc := range []struct {
+		name, level, suite, chain, status string
+		usage, completed, cleanup, pass   bool
+	}{
+		{"delivery", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, true, true, true},
+		{"recovery", "L3", "recovery", "orca-codex", "not_exposed_by_orca", false, true, true, true},
+		{"missing capability", "L3", "delivery", "orca-codex", "", false, true, true, false},
+		{"wrong capability", "L3", "delivery", "orca-codex", "not_applicable", false, true, true, false},
+		{"claimed tokens", "L3", "delivery", "orca-codex", "not_exposed_by_orca", true, true, true, false},
+		{"failed business", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, false, true, false},
+		{"failed cleanup", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, true, false, false},
+		{"local still requires tokens", "L3", "delivery", "local-codex", "not_exposed_by_orca", false, true, true, false},
+		{"local tokens", "L3", "delivery", "local-codex", "not_applicable", true, true, true, true},
+		{"L2 unchanged", "L2", "delivery", "orca-codex", "not_exposed_by_orca", false, true, true, false},
+		{"other suite unchanged", "L3", "candidates", "orca-codex", "not_exposed_by_orca", false, true, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			entry := e2eScenario{ID: "delivery.one", Test: "TestOne", Env: "live", Level: tc.level, Suite: tc.suite, Chain: tc.chain}
+			out := t.TempDir()
+			dir := filepath.Join(out, "scenarios", entry.ID)
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				t.Fatal(err)
+			}
+			var log strings.Builder
+			for _, event := range []struct{ action, test string }{{"start", ""}, {"run", entry.Test}, {"pass", entry.Test}, {"pass", ""}} {
+				raw, err := json.Marshal(map[string]any{"Time": "2026-10-09T00:00:00Z", "Elapsed": 0, "Action": event.action, "Package": "p", "Test": event.test})
+				if err != nil {
+					t.Fatal(err)
+				}
+				log.Write(raw)
+				log.WriteByte('\n')
+			}
+			group := scopedGroup{Packages: []string{"p"}, Summary: testfeedback.Parse([]byte(log.String()), 0)}
+			evidence := map[string]any{"id": entry.ID, "passed": tc.completed, "cleanup_complete": tc.cleanup, "resources": []any{map[string]string{"kind": "project"}}, "usage_verified": tc.usage, "orca_usage_status": tc.status}
+			if err := writeJSON(filepath.Join(dir, "scenario.json"), evidence); err != nil {
+				t.Fatal(err)
+			}
+			if err := checkE2EGroup(group, []e2eScenario{entry}, out); (err == nil) != tc.pass {
+				t.Fatalf("unexpected acceptance result: %v", err)
+			}
+		})
 	}
 }

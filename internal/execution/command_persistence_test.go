@@ -32,7 +32,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
-		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf", TaskID: "task", Phase: "waiting_decision"}); err != nil {
+		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf", TaskID: "task", Status: "waiting_input"}); err != nil {
 			return err
 		}
 		if err := tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec", WorkflowRunID: "wf", Status: "idle", CurrentStep: "worker", DecisionID: "decision"}); err != nil {
@@ -273,12 +273,12 @@ func seedNativeDecision(t *testing.T, db *sqliteFixture, project, runID, decisio
 		if _, err = raw.ExecContext(ctx, `INSERT INTO task_batches(project_identity,batch_id,schema_version,payload_digest,created_at,command_id,task_ids) VALUES(?,?,?,?,?,?,?)`, project, task.BatchID, "task-batch/v1", strings.Repeat("b", 64), nowTime.UTC().Format(time.RFC3339Nano), strings.Repeat("c", 32), batchIDs); err != nil {
 			return err
 		}
-		workflow := executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_decision", CreatedAt: nowTime, UpdatedAt: nowTime}
+		workflow := executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Status: "waiting_input", CreatedAt: nowTime, UpdatedAt: nowTime}
 		workflowPayload, err := json.Marshal(workflow)
 		if err != nil {
 			return err
 		}
-		if _, err = raw.ExecContext(ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?)`, project, runID, "1", workflow.Phase, workflowPayload); err != nil {
+		if _, err = raw.ExecContext(ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?)`, project, runID, "1", workflow.Status, workflowPayload); err != nil {
 			return err
 		}
 		execution := executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: runID, WorkflowRunID: runID, Status: "waiting_decision", CurrentStep: "decision", CreatedAt: nowTime, UpdatedAt: nowTime}
