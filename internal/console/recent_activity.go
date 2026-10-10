@@ -94,8 +94,8 @@ func (m Model) updateRecentActivity(msg recentActivityMsg) (tea.Model, tea.Cmd) 
 			diagnostics = append(diagnostics, fmt.Sprintf("状态变化记录字段不完整 · seq=%d", event.Seq))
 		}
 	}
-	if len(state.workerTransitions) > 5 {
-		state.workerTransitions = state.workerTransitions[len(state.workerTransitions)-5:]
+	if len(state.workerTransitions) > 10 {
+		state.workerTransitions = state.workerTransitions[len(state.workerTransitions)-10:]
 	}
 	for _, event := range events {
 		if event.Kind != "worker_state" {
@@ -137,6 +137,7 @@ func feedbackLines(m Model, state projectState, row *consoleRow) []string {
 		if state.activityError != "" {
 			lines = append(lines, "活动采集："+safeTerminalText(shortSummary(state.activityError, 160)))
 		}
+		lines = append(lines, currentWorkerLines(run)...)
 		return append(lines, workerTransitionLines(state.workerTransitions)...)
 	}
 	active := run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.BusinessStatus == "running" || run.BusinessStatus == "queued"
@@ -149,21 +150,14 @@ func feedbackLines(m Model, state projectState, row *consoleRow) []string {
 			lines = append(lines, "采集缺口："+safeTerminalText(shortSummary(gap, 160)))
 		}
 	}
-	lines = append(lines, workerTransitionLines(state.workerTransitions)...)
+	lines = append(lines, currentWorkerLines(run)...)
+	transitions := workerTransitionLines(state.workerTransitions)
+	lines = append(lines, transitions...)
 	if state.activityError != "" {
 		lines = append(lines, "活动采集："+safeTerminalText(shortSummary(state.activityError, 160)))
 	}
-	if len(state.recentActivity) == 0 && len(state.workerTransitions) == 0 {
-		lines = append(lines, "尚无已采集活动摘要")
-	}
-	if active || runNeedsAttention(run) {
-		for _, summary := range state.recentActivity[max(0, len(state.recentActivity)-3):] {
-			stamp := "未提供时间"
-			if !summary.Time.IsZero() {
-				stamp = summary.Time.Local().Format("15:04:05")
-			}
-			lines = append(lines, stamp+" · "+safeTerminalText(summary.Title+" · "+summary.Status+" · "+summary.Detail))
-		}
+	if len(transitions) == 0 {
+		lines = append(lines, "尚无流程或状态变化 · d 查看原始记录")
 	}
 	return lines
 }

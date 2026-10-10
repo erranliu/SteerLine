@@ -24,3 +24,7 @@
 | WPR-A4 | `TestWorkerStageLocalRoundTrip`、`TestWorkerStageLocalPublishReport`：2 项通过，213.489 秒；原三轮/补报四轮、来源与候选、同会话/Attempt、重启不重投通过 | `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261010T071835.549153700Z` |
 
 集成测试首次编译发现测试断言中的 int/uint64 类型不一致，已修正；上表为修正后的通过证据。未运行 full/L2/L3/live，原因见 Plan。
+
+## 主干冲突解决验证
+
+合入 `origin/main`（`3e6d4fde`）后，保留主干 blocked 显示“阻塞”与本任务 publish.report 显示“发布报告”。`go run ./cmd/test-feedback -- ./internal/console -count=1` 全部 173 项通过，0 失败、0 skip，5.398 秒。证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261010T072928.625370300Z`。未改变 execution 发布补报规则。

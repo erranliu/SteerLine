@@ -2,7 +2,6 @@ package console
 
 import (
 	"fmt"
-	"github.com/charmbracelet/lipgloss"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"strings"
 	"time"
@@ -42,7 +41,13 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 
 func renderRows(m Model, state projectState, width, height int) []string {
 	rows := m.rows(m.selected)
-	out := []string{styleLabel.Render(fmt.Sprintf("任务列表 · %d 项 · %d %s", len(rows), state.filter+1, filterDisplayName(state.filter)))}
+	selected := 0
+	for i, row := range rows {
+		if row.key == state.selectedKey {
+			selected = i
+		}
+	}
+	out := []string{styleLabel.Render(fmt.Sprintf("任务列表 · %d/%d · %d %s", min(selected+1, len(rows)), len(rows), state.filter+1, filterDisplayName(state.filter)))}
 	if state.ref.Error != "" {
 		out = append(out, styleAlert.Render("配置错误："+safeTerminalText(state.ref.Error)))
 		return out
@@ -84,6 +89,10 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	if len(out) >= height {
 		out = out[:max(0, height-1)]
 	}
+	if height-len(out) > 2 {
+		idWidth, statusWidth := taskListWidths(width)
+		out = append(out, "  "+truncate(padDisplay("ID", idWidth)+" "+padDisplay("任务提示", statusWidth)+" 标题", max(1, width-2)))
+	}
 
 	available := max(1, height-len(out))
 	if available < 2 && len(out) > 1 {
@@ -91,7 +100,6 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		available = max(1, height-1)
 	}
 	entries := make([][]string, len(rows))
-	selected := 0
 	for i, row := range rows {
 		entries[i] = compactTaskRow(m, state, row, width)
 		if row.key == state.selectedKey {
@@ -119,6 +127,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 				prefix = "▸ "
 			}
 			if row.key == state.selectedKey {
+				line = padDisplay(line, max(1, width-2))
 				if state.focus == 0 {
 					line = styleSelected.Render(line)
 				} else {
@@ -132,28 +141,96 @@ func renderRows(m Model, state projectState, width, height int) []string {
 }
 
 func compactTaskRow(m Model, state projectState, row consoleRow, width int) []string {
-	status := ""
-	if row.run != nil {
-		status = row.run.TaskStatus
-	} else if row.native != nil {
-		status = row.native.Status
+	available := max(1, width-2)
+	idWidth, statusWidth := taskListWidths(width)
+	hint := taskRowHint(m, state, row)
+	status := taskRowRawStatus(row)
+	cell := safeTerminalInlineText(hint + " · " + firstText(status, "—"))
+	if hint == "阻塞" {
+		cell = styleAlert.Render(padDisplay(truncate(cell, statusWidth), statusWidth))
+	} else {
+		cell = padDisplay(truncate(cell, statusWidth), statusWidth)
 	}
-	suffix := ""
-	if status != "" {
-		suffix = " [" + workerValue("task_status", status, false) + "]"
+	line := padDisplay(truncate(safeTerminalInlineText(row.taskID), idWidth), idWidth) + " " + cell + " " + safeTerminalInlineText(row.title)
+	return []string{truncate(line, available)}
+}
+
+func taskListWidths(width int) (int, int) {
+	available := max(1, width-2)
+	if available < 42 {
+		return 5, min(18, max(1, available-9))
+	}
+	return 8, 22
+}
+
+func taskBlockerLines(row consoleRow) []string {
+	var lines []string
+	if row.native == nil || taskRowRawStatus(row) != "open" {
+		return lines
+	}
+	task := row.native
+	blockers := task.UnmetPredecessors
+	if len(blockers) == 0 {
+		blockers = task.Predecessors
+	}
+	for _, p := range blockers {
+		if len(task.UnmetPredecessors) > 0 || !p.Delivered && p.Blocker != "" {
+			lines = append(lines, "依赖阻塞：Task "+safeTerminalInlineText(p.TaskID)+" · "+safeTerminalInlineText(firstText(p.Blocker, "未提供阻塞原因"))+" · status="+safeTerminalInlineText(firstText(p.Status, "—")))
+		}
+	}
+	if task.Status == "open" {
+		for _, reason := range task.StartupBlockers {
+			lines = append(lines, "启动阻塞："+safeTerminalInlineText(reason))
+		}
+	}
+	return lines
+}
+
+func taskRowRawStatus(row consoleRow) string {
+	if row.run != nil && row.run.TaskStatus != "" {
+		return row.run.TaskStatus
+	}
+	if row.native != nil {
+		return row.native.Status
+	}
+	return ""
+}
+
+func taskRowBlocked(row consoleRow) bool {
+	status := taskRowRawStatus(row)
+	if status == "closed" || status == "discarded" {
+		return false
+	}
+	if row.run != nil && (row.run.BusinessStatus == "blocked" || row.run.EnvironmentBlocker != nil) {
+		return true
+	}
+	if row.native != nil && status == "open" {
+		if len(row.native.UnmetPredecessors) > 0 || len(row.native.StartupBlockers) > 0 {
+			return true
+		}
+		for _, p := range row.native.Predecessors {
+			if !p.Delivered && p.Blocker != "" {
+				return true
+			}
+		}
+	}
+	return status == "blocked"
+}
+
+func taskRowHint(m Model, state projectState, row consoleRow) string {
+	if taskRowBlocked(row) {
+		return "阻塞"
 	}
 	if row.kind == rowReady {
 		if valid, _ := state.client.CandidateAvailability(state.snapshot, m.clock.Now()); valid {
-			suffix += " · Ready"
-		} else {
-			suffix += " · Ready（缓存）"
+			return "可开始"
 		}
+		return "候选缓存"
 	}
-	titleWidth := max(1, width-4-lipgloss.Width(row.taskID)-lipgloss.Width(suffix))
-	first := safeTerminalInlineText(row.taskID) + " " + truncate(safeTerminalInlineText(row.title), titleWidth) + suffix
-	body := wrapLines([]string{compactWorkerSummary(row.run)}, max(1, width-4))
-	entry := append(wrapLines([]string{first}, max(1, width-4)), body...)
-	return entry
+	if label := workerLabels["task_status"][taskRowRawStatus(row)]; label != "" {
+		return label
+	}
+	return "未核实"
 }
 
 func renderTaskListRow(id, title, taskStatus, executionStatus string, width int) string {
@@ -204,6 +281,12 @@ func renderWorkspaceRow(id, title, task, execution, attention string, width int)
 }
 
 func rowTaskStatus(row consoleRow) string {
+	if taskRowBlocked(row) {
+		return "阻塞"
+	}
+	if row.kind == rowReady {
+		return "可开始"
+	}
 	if row.run != nil && row.run.TaskStatus != "" {
 		return displayTaskStatus(row.run.TaskStatus)
 	}
@@ -281,7 +364,7 @@ func displayTaskStatus(status string) string {
 		return "可开始"
 	case "open":
 
-		return "阻塞"
+		return "未开始"
 	case "in_progress":
 
 		return "进行中"
@@ -417,5 +500,5 @@ func historicalFailedRun(run *api.CandidateSummary) bool {
 }
 
 func filterDisplayName(index int) string {
-	return []string{"全部", "Ready", "进行中", "待决策", "待合并", "需处理", "历史"}[min(max(index, 0), 6)]
+	return []string{"全部", "Ready", "进行中", "待决策", "待合并", "需处理", "历史", "阻塞"}[min(max(index, 0), 7)]
 }

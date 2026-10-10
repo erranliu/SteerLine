@@ -119,6 +119,7 @@ func TestCPWCurrentActivityWinsOverOldFinalAndReceipts(t *testing.T) {
 	r.Decision = nil
 	r.FinishTaskStatus = "pending"
 	r.ExecutionStatus = "running"
+	r.StepID, r.BusinessStatus = "implement.execute", "running"
 	r.CurrentTurnID = "new-turn"
 	e := finalFixture(m, 1, "old-turn", "old", "上一轮结果")
 	s := &m.projects[0]
@@ -127,7 +128,7 @@ func TestCPWCurrentActivityWinsOverOldFinalAndReceipts(t *testing.T) {
 	s.recentActivity = []activitySummary{{Title: "本轮正在运行"}}
 	s.actions["old"] = &actionState{RequestID: "old", TaskID: r.TaskID, RunID: r.RunID, Action: "answer_decision", Resolved: true, Status: "applied", Message: "旧答案已保存"}
 	view := strings.Join(feedbackLines(m, *s, m.selectedRow(0)), "\n")
-	if !strings.Contains(view, "本轮正在运行") || strings.Contains(view, "上一轮结果") {
+	if !strings.Contains(view, "当前流程：implement.execute") || !strings.Contains(view, "当前状态：running") || strings.Contains(view, "本轮正在运行") || strings.Contains(view, "上一轮结果") {
 		t.Fatal(view)
 	}
 	r.TaskStatus = "closed"

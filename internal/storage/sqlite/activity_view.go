@@ -42,8 +42,8 @@ func readActivityView(ctx context.Context, db graphSnapshotQuery, project, workf
 	return binding, events, nil
 }
 
-// ReadRecentActivityView keeps five state changes alongside ten other activity
-// summaries in one snapshot, so frequent tool events cannot hide transitions.
+// ReadRecentActivityView retains five flow/status changes and five recent raw
+// changes alongside ten other summaries in the original snapshot and budget.
 func (s Reader) ReadRecentActivityView(ctx context.Context, project, workflow, execution, attempt string) (storageports.ActivityBinding, []storageports.DomainEvent, error) {
 	if s.db == nil {
 		return storageports.ActivityBinding{}, nil, errors.New("activity view reader is required")
@@ -65,14 +65,22 @@ func (s Reader) ReadRecentActivityView(ctx context.Context, project, workflow, e
 		SELECT event_id FROM events
 		WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND attempt_id=? AND type='activity.worker_state'
 		ORDER BY event_id DESC LIMIT 5
+	), visible_changes AS (
+		SELECT event_id FROM events
+		WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND attempt_id=? AND type='activity.worker_state'
+		AND CASE WHEN json_valid(payload) THEN
+			COALESCE(json_extract(payload,'$.meta.from.step_id'),'') <> COALESCE(json_extract(payload,'$.meta.to.step_id'),'')
+			OR COALESCE(json_extract(payload,'$.meta.from.status'),'') <> COALESCE(json_extract(payload,'$.meta.to.status'),'')
+		ELSE 0 END
+		ORDER BY event_id DESC LIMIT 5
 	), batch AS (
 		SELECT event_id,payload_bytes,type FROM events
-		WHERE event_id IN (SELECT event_id FROM recent UNION SELECT event_id FROM changes)
+		WHERE event_id IN (SELECT event_id FROM recent UNION SELECT event_id FROM changes UNION SELECT event_id FROM visible_changes)
 	), bounded AS (
-		SELECT event_id,SUM(CASE WHEN payload_bytes<=1048576 THEN payload_bytes ELSE 0 END) OVER (ORDER BY CASE WHEN type='activity.worker_state' THEN 0 ELSE 1 END,event_id DESC) AS inline_bytes FROM batch
+		SELECT event_id,SUM(CASE WHEN payload_bytes<=1048576 THEN payload_bytes ELSE 0 END) OVER (ORDER BY CASE WHEN event_id IN (SELECT event_id FROM visible_changes) THEN 0 WHEN type='activity.worker_state' THEN 1 ELSE 2 END,event_id DESC) AS inline_bytes FROM batch
 	) SELECT e.event_id,e.project_identity,e.task_id,e.workflow_run_id,e.execution_id,e.attempt_id,e.external_source,e.external_id,e.type,e.received_at,e.payload_bytes,e.payload_digest,
 		CASE WHEN e.payload_bytes<=1048576 AND b.inline_bytes<=1048576 THEN e.payload ELSE X'' END
-		FROM bounded b JOIN events e ON e.event_id=b.event_id ORDER BY e.event_id`, project, workflow, execution, attempt, project, workflow, execution, attempt)
+		FROM bounded b JOIN events e ON e.event_id=b.event_id ORDER BY e.event_id`, project, workflow, execution, attempt, project, workflow, execution, attempt, project, workflow, execution, attempt)
 	if err != nil {
 		return storageports.ActivityBinding{}, nil, err
 	}

@@ -2,6 +2,8 @@
 
 绑定 [Spec](console-worker-state.spec.md)，结果登记[验收](../acceptance/console-worker-state.md)。直接在当前聊天实现，不修改 roadmap。
 
+本 Plan 为已交付首轮实现；后续可读性收敛使用[独立 Plan](console-flow-state-readability.plan.md) 和专属验收，不覆盖此处历史测试结果。
+
 1. 在 model 定义仅含原字段的 Activity 数据并复用原查询的执行/资源映射。worker commit 在同一请求附加状态变化，成功后才通知；领取、交付复用同一数据构造器写入各自事务。覆盖普通执行、反馈、恢复、停止及终态，不新建状态表或事件框架。
 2. RecentActivity 保留最近五条状态变化和十条其他活动，同快照绑定、原字节预算与类型部分索引。
 3. 控制台集中原值/固定中文/颜色映射，更新列表、概览、活动、窄屏和上下文提示。长原值换行，完整诊断在详情；问题、草稿、回执及视图身份规则保持。
