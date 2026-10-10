@@ -1,4 +1,6 @@
 /bin/
+/ui/**/bin/
+/ui/**/obj/
 /.steerline/
 *.local.json
 *.test.exe

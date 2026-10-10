@@ -302,9 +302,14 @@ func (d *debugRelease) initialize() error {
 	}
 	reference := func(name string) (taskmodel.FileReference, error) {
 		p := "docs/spec/" + name
-		b, e := os.ReadFile(filepath.Join(d.repo, filepath.FromSlash(p)))
+		// Pin committed bytes so Windows checkout line-ending conversion cannot change the contract hash.
+		cmd := d.command("git", "-C", d.repo, "show", head+":"+p)
+		b, e := cmd.Output()
+		if e != nil {
+			return taskmodel.FileReference{}, fmt.Errorf("read committed contract %s: %w", p, e)
+		}
 		sum := sha256.Sum256(b)
-		return taskmodel.FileReference{Path: p, Commit: head, SHA256: hex.EncodeToString(sum[:])}, e
+		return taskmodel.FileReference{Path: p, Commit: head, SHA256: hex.EncodeToString(sum[:])}, nil
 	}
 	spec, err := reference("task.spec.md")
 	if err != nil {

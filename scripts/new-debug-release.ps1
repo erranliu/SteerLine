@@ -50,6 +50,18 @@ $manifest = [ordered]@{ version = 1; release = $release; source_commit = $commit
 function Write-Manifest { [IO.File]::WriteAllText((Join-Path $target 'manifest.json'), ($manifest | ConvertTo-Json -Depth 10), $utf8) }
 Write-Manifest
 try {
+    $packageAcl = Get-Acl -LiteralPath $target
+    $packageAcl.SetAccessRuleProtection($true, $false)
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent().User
+    $packageRule = [Security.AccessControl.FileSystemAccessRule]::new(
+        $currentUser,
+        [Security.AccessControl.FileSystemRights]::FullControl,
+        [Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [Security.AccessControl.InheritanceFlags]::ObjectInherit,
+        [Security.AccessControl.PropagationFlags]::None,
+        [Security.AccessControl.AccessControlType]::Allow
+    )
+    $packageAcl.SetAccessRule($packageRule)
+    Set-Acl -LiteralPath $target -AclObject $packageAcl
     foreach ($item in Get-ChildItem -LiteralPath $template -Force) { Copy-Item -LiteralPath $item.FullName -Destination $target -Recurse }
     foreach ($dir in @('bin', 'logs', 'evidence', 'provider', 'remotes', 'home\temp', 'home\codex', 'home\gh', 'home\state', 'home\ui\views')) {
         New-Item -ItemType Directory -Path (Join-Path $target $dir) -Force | Out-Null
