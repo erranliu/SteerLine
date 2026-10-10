@@ -54,7 +54,7 @@ func (c Client) stream(ctx context.Context, p b.ProcessIdentity, cursor string, 
 
 // CaptureCursor discards pre-input display content, including any clipped history.
 func (c Client) CaptureCursor(ctx context.Context, p b.ProcessIdentity) (string, error) {
-	page, err := c.stream(ctx, p, "", 1)
+	page, err := c.stream(ctx, p, "0", 1)
 	return page.LatestCursor, err
 }
 

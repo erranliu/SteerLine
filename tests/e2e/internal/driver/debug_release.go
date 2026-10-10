@@ -431,38 +431,40 @@ func (d *debugRelease) prepareSelected(mode string) error {
 	}
 	catalog["execution_profiles"] = selected
 	if mode == "live" {
-		authSource := os.Getenv("CODEX_HOME")
-		if authSource == "" {
-			user, err := os.UserHomeDir()
+		if selected[0].(map[string]any)["host"] == "local" {
+			authSource := os.Getenv("CODEX_HOME")
+			if authSource == "" {
+				user, err := os.UserHomeDir()
+				if err != nil {
+					return err
+				}
+				authSource = filepath.Join(user, ".codex")
+			}
+			if pathWithin(`C:\SteerlineRuntime`, authSource) {
+				return errors.New("cannot provision debug authentication from installed runtime")
+			}
+			if resolved, e := filepath.EvalSymlinks(authSource); e == nil && pathWithin(`C:\SteerlineRuntime`, resolved) {
+				return errors.New("cannot provision authentication through an installed-runtime alias")
+			}
+			if _, err = os.Stat(filepath.Join(d.home, "codex", "auth.json")); os.IsNotExist(err) {
+				if err = native.SeedAuth(authSource, filepath.Join(d.home, "codex"), "unelevated"); err != nil {
+					return err
+				}
+				// Model/effort come only from the copied execution catalog, not a second config default.
+				if err = os.WriteFile(filepath.Join(d.home, "codex", "config.toml"), nil, 0600); err != nil {
+					return err
+				}
+				if err = native.TrustProject(filepath.Join(d.home, "codex"), d.repo); err != nil {
+					return err
+				}
+			}
+			codex, err := native.CodexExecutable("codex")
 			if err != nil {
 				return err
 			}
-			authSource = filepath.Join(user, ".codex")
+			configs := selected[0].(map[string]any)["implementation_configs"].([]any)
+			configs[0].(map[string]any)["payload"].(map[string]any)["executable"] = codex
 		}
-		if pathWithin(`C:\SteerlineRuntime`, authSource) {
-			return errors.New("cannot provision debug authentication from installed runtime")
-		}
-		if resolved, e := filepath.EvalSymlinks(authSource); e == nil && pathWithin(`C:\SteerlineRuntime`, resolved) {
-			return errors.New("cannot provision authentication through an installed-runtime alias")
-		}
-		if _, err = os.Stat(filepath.Join(d.home, "codex", "auth.json")); os.IsNotExist(err) {
-			if err = native.SeedAuth(authSource, filepath.Join(d.home, "codex"), "unelevated"); err != nil {
-				return err
-			}
-			// Model/effort come only from the copied execution catalog, not a second config default.
-			if err = os.WriteFile(filepath.Join(d.home, "codex", "config.toml"), nil, 0600); err != nil {
-				return err
-			}
-			if err = native.TrustProject(filepath.Join(d.home, "codex"), d.repo); err != nil {
-				return err
-			}
-		}
-		codex, err := native.CodexExecutable("codex")
-		if err != nil {
-			return err
-		}
-		configs := selected[0].(map[string]any)["implementation_configs"].([]any)
-		configs[0].(map[string]any)["payload"].(map[string]any)["executable"] = codex
 		// Capture authentication privately, never in command/evidence output.
 		if _, err = os.Stat(filepath.Join(d.home, "github-token")); os.IsNotExist(err) {
 			cmd := exec.Command("gh", "auth", "token", "--hostname", "github.com")
