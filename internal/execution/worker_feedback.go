@@ -109,7 +109,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 		return nil
 	}
 	workflow, execution := s.workflowRecords(run)
-	if workflow == nil || execution == nil || workflow.Status != "waiting_input" && workflow.Status != "waiting_external" && workflow.Status != "blocked" {
+	if workflow == nil || execution == nil || workflow.Status != "waiting_input" && workflow.Status != "waiting_external" && workflow.Status != "blocked" && run.Decision.Request.InteractionKind != "async" {
 		return errors.New("saved feedback no longer belongs to a waiting worker flow")
 	}
 	config, err := s.executionConfigForRun(run)
@@ -203,6 +203,23 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 		execution.RecoveryRequired = false
 		if err := s.commitWorker(run); err != nil {
 			return err
+		}
+	}
+	if run.Decision.Request.InteractionKind == "async" {
+		route := run.Decision.Request.QuestionRoute
+		if route == nil {
+			return errors.New("async answer lost original question route")
+		}
+		if execution.CurrentTurnID != execution.LastStoppedTurnID {
+			if execution.CurrentTurnID != route.TurnID {
+				return nil
+			} // Never steer a report or a later stage.
+		} else {
+			if workflow.Status != "waiting_input" {
+				return nil
+			}
+			request := run.Decision.Request
+			return s.startStageFeedback(ctx, run, answer, command.CommandID, request)
 		}
 	}
 	if run.Decision.Request.QuestionRoute != nil {

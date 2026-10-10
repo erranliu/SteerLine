@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -224,6 +225,19 @@ func (l ExecutionLifecycle) deliverFeedback(ctx context.Context, request executi
 	if err := l.Backend.ValidateReply(binding, ask.Generation, ask.ThreadID, ask.TurnID, snapshot.Session.CurrentTurnID, snapshot.Session.LastStoppedTurnID); err != nil {
 		return receipt, err
 	}
+	if ask.Delivery == "async" {
+		client, err := codexapp.Open(ctx, binding.Endpoint)
+		if err != nil {
+			return receipt, err
+		}
+		defer client.Close()
+		if err := SteerAsyncAnswer(ctx, client, ask.ThreadID, snapshot.Ref.WorkspacePath, ask.TurnID, request.Operation.ID, input.Message); err != nil {
+			return receipt, err
+		}
+		receipt.Disposition, receipt.RequestID = executionbackend.OperationConfirmed, request.Operation.ID
+		receipt.State.SessionID, receipt.State.SessionGeneration, receipt.State.InputAccepted = binding.SessionID, binding.Generation, true
+		return receipt, nil
+	}
 	err = SendAskReply(ctx, AskReply{
 		Endpoint: binding.Endpoint, Workspace: snapshot.Ref.WorkspacePath, ThreadID: ask.ThreadID,
 		RequestID: ask.RequestID, Answer: *input.Answer,
@@ -356,8 +370,34 @@ func (l ExecutionLifecycle) reconcileFeedback(ctx context.Context, request execu
 	if err != nil {
 		return receipt, nil, err
 	}
-	path := filepath.Join(l.Backend.Config.RunDir, "runs", snapshot.Session.WorkflowRunID, "turns", snapshot.Session.CurrentCommandID, "appserver.jsonl")
-	confirmed, err := AnswerEvidence(path, ask.ThreadID, ask.TurnID, ask.CallID, input.Answer.Answers)
+	command := snapshot.Session.CurrentCommandID
+	if ask.Delivery == "async" {
+		command = ask.SourceCommandID
+	}
+	path := filepath.Join(l.Backend.Config.RunDir, "runs", snapshot.Session.WorkflowRunID, "turns", command, "appserver.jsonl")
+	var confirmed bool
+	if ask.Delivery == "async" {
+		confirmed, err = AsyncAnswerEvidence(path, ask.ThreadID, ask.TurnID, request.Operation.ID, input.Message)
+		if err == nil && !confirmed {
+			client, openErr := codexapp.Open(ctx, binding.Endpoint)
+			if openErr != nil {
+				return receipt, nil, openErr
+			}
+			defer client.Close()
+			turn, readErr := ReadTurnSnapshot(ctx, client, ask.ThreadID, snapshot.Ref.WorkspacePath, ask.TurnID)
+			if readErr != nil {
+				return receipt, nil, readErr
+			}
+			for _, raw := range turn.Items {
+				if asyncAnswerItem(raw, request.Operation.ID, input.Message) {
+					confirmed = true
+					break
+				}
+			}
+		}
+	} else {
+		confirmed, err = AnswerEvidence(path, ask.ThreadID, ask.TurnID, ask.CallID, input.Answer.Answers)
+	}
 	if err != nil {
 		receipt.Diagnostic = err.Error()
 		return receipt, nil, err
@@ -683,6 +723,9 @@ func cloneTurn(turn *executionbackend.TurnInput) *executionbackend.TurnInput {
 func lifecycleSession(snapshot executionbackend.LifecycleSnapshot, sessionID, turnID string) executionbackend.SessionContext {
 	fixed := snapshot.Session
 	fixed.SessionID, fixed.CurrentTurnID = sessionID, turnID
+	if fixed.PendingCommandID != "" {
+		fixed.CurrentCommandID = fixed.PendingCommandID
+	}
 	return fixed
 }
 

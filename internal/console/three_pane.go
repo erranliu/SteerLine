@@ -105,6 +105,16 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 		return append([]string{lines[0]}, wrapLines(lines[1:], width)...)
 	}
 	run := row.run
+	if run.Decision != nil && run.Decision.Request.InteractionKind == "async" && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
+		text := "异步问答 · 有待回答问题（执行可继续）"
+		if run.Decision.Request.BlocksProgress {
+			text = "异步问答 · 执行已停止，等待回答"
+		}
+		if run.Decision.Status == "answer_saved" {
+			text += " · 答案已保存"
+		}
+		lines = append(lines, text)
+	}
 	lines = append(lines, "当前 "+candidateLabel(state, run)+" · F6/F7 候选")
 	current := *run
 	current.TaskStatus = taskRowRawStatus(*row)

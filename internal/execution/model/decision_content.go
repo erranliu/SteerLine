@@ -73,8 +73,14 @@ func ValidateDecisionRequest(req *DecisionRequest) error {
 	if err := NormalizeDecisionText(req); err != nil {
 		return err
 	}
+	if req.InteractionKind != "" && req.InteractionKind != "sync" && req.InteractionKind != "async" {
+		return errors.New("unsupported decision interaction kind")
+	}
 	if req.FormatVersion != DecisionRequestFormatVersion {
 		return errors.New("decision request has an unsupported format version")
+	}
+	if req.InteractionKind == "async" && req.QuestionRoute == nil {
+		return errors.New("async question requires its original implementation route")
 	}
 	if req.QuestionRoute == nil {
 		if len(req.Questions) != 0 {

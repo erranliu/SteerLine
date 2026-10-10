@@ -44,8 +44,18 @@ func (s *Service) recordWorkerTurnStarted(run *reconstructiontypes.RunView, work
 		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
-		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil {
+		if run.Decision != nil && run.Decision.Status == "answer_saved" && (run.Decision.Request.QuestionRoute == nil || run.Decision.Request.InteractionKind == "async" && stageInput(workflow, commandID) != nil && stageInput(workflow, commandID).FeedbackDecisionID == run.Decision.ID) {
+			async := run.Decision.Request.InteractionKind == "async"
 			s.setDecisionStatus(run, "reply_accepted")
+			if async && len(execution.PendingQuestions) > 0 {
+				next := execution.PendingQuestions[0]
+				execution.PendingQuestions = execution.PendingQuestions[1:]
+				decision, err := WriteDecisionRequest(run, DecisionRequestFromEventFact(executionbackend.EventFact{InteractionKind: next.InteractionKind, Questions: next.Questions, QuestionRoute: &next.Route}))
+				if err != nil {
+					return "", err
+				}
+				s.setRunDecision(run, decision)
+			}
 		}
 
 		execution.Status, execution.Error = "active", nil
@@ -128,7 +138,7 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 		}
 		if !seen {
 			if run.Decision != nil && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
-				execution.PendingQuestions = append(execution.PendingQuestions, executionmodel.PendingQuestion{Questions: cloneExecutionQuestions(fact.Questions), Route: fact.QuestionRoute.Clone()})
+				execution.PendingQuestions = append(execution.PendingQuestions, executionmodel.PendingQuestion{InteractionKind: fact.InteractionKind, Questions: cloneExecutionQuestions(fact.Questions), Route: fact.QuestionRoute.Clone()})
 			} else {
 				decision, err := WriteDecisionRequest(run, DecisionRequestFromEventFact(fact))
 				if err != nil {
@@ -137,11 +147,17 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 				s.setRunDecision(run, decision)
 			}
 		}
-		if err := NoteWorkerQuestion(workflow, execution, fact.QuestionRoute.TurnID); err != nil {
-			return err
+		if fact.InteractionKind != "async" {
+			if err := NoteWorkerQuestion(workflow, execution, fact.QuestionRoute.TurnID); err != nil {
+				return err
+			}
 		}
 		s.refreshRun(run)
-		s.note(run, "steer", "decision", "pending", "Execution is waiting for an answer", routeID, decisionMeta(run))
+		title := "Execution is waiting for an answer"
+		if fact.InteractionKind == "async" {
+			title = "Execution has an asynchronous question; work may continue"
+		}
+		s.note(run, "steer", "decision", "pending", title, routeID, decisionMeta(run))
 	}
 	if fact.Kind == executionbackend.EventEscalation && fact.Matched && fact.SourceEventID != "" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID &&
 		(run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") &&
@@ -211,7 +227,7 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 				if len(execution.PendingQuestions) > 0 {
 					next := execution.PendingQuestions[0]
 					execution.PendingQuestions = execution.PendingQuestions[1:]
-					queued := executionbackend.EventFact{Questions: cloneExecutionQuestions(next.Questions), QuestionRoute: ptr(next.Route.Clone())}
+					queued := executionbackend.EventFact{InteractionKind: next.InteractionKind, Questions: cloneExecutionQuestions(next.Questions), QuestionRoute: ptr(next.Route.Clone())}
 					decision, err := WriteDecisionRequest(run, DecisionRequestFromEventFact(queued))
 					if err != nil {
 						return err

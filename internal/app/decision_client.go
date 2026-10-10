@@ -192,7 +192,7 @@ func submitAnswerDecisionWithStoreBound(ctx context.Context, c Config, store *sq
 		}
 		return storageports.CommandRecord{}, false, fmt.Errorf("decision is already %s but its original idempotency command is missing", decisionRecord.Status)
 	}
-	if run.FinishTaskStatus != "waiting_decision" && !(run.WorkflowVersion == executionmodel.Version && run.FinishTaskStatus == "waiting_pr_merge") || run.Decision == nil {
+	if run.FinishTaskStatus != "waiting_decision" && !(run.WorkflowVersion == executionmodel.Version && run.FinishTaskStatus == "waiting_pr_merge") && !(run.Decision != nil && run.Decision.Request.InteractionKind == "async") || run.Decision == nil {
 		return storageports.CommandRecord{}, false, fmt.Errorf("run %s is not waiting for a decision (status %s)", run.TaskID, run.FinishTaskStatus)
 	}
 	if expectedInstance != "" && serviceRuntime.Service.InstanceID != expectedInstance {

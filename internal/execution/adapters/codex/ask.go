@@ -25,11 +25,13 @@ type AskEnvelope struct {
 const QuestionRouteImplementationKey = "codex.appserver"
 
 type AskRouteData struct {
-	RequestID  json.RawMessage `json:"request_id"`
-	ThreadID   string          `json:"thread_id"`
-	TurnID     string          `json:"turn_id"`
-	CallID     string          `json:"call_id"`
-	Generation string          `json:"-"`
+	RequestID       json.RawMessage `json:"request_id,omitempty"`
+	Delivery        string          `json:"delivery,omitempty"`
+	SourceCommandID string          `json:"source_command_id,omitempty"`
+	ThreadID        string          `json:"thread_id"`
+	TurnID          string          `json:"turn_id"`
+	CallID          string          `json:"call_id"`
+	Generation      string          `json:"-"`
 }
 
 type AskCall struct {
@@ -67,6 +69,9 @@ func ParseAskEnvelope(envelope codexapp.Envelope, expectedThread, expectedTurn s
 }
 
 func ParseAskCall(envelope codexapp.Envelope, threadID, turnID string) (AskCall, error) {
+	if IsAsyncQuestion(envelope) {
+		return ParseAsyncAsk(envelope, threadID, turnID)
+	}
 	wire, err := ParseAskEnvelope(envelope, threadID, turnID)
 	if err != nil {
 		return AskCall{}, err
@@ -143,8 +148,17 @@ func NewQuestionRoute(call AskCall, fixed executionbackend.SessionContext) (exec
 		fixedTurn = fixed.PendingTurnID
 	}
 	if !ValidNativeID(call.Route.ThreadID) || !ValidNativeID(call.Route.TurnID) || call.Route.CallID == "" ||
-		!json.Valid(call.Route.RequestID) || call.Route.ThreadID != fixed.SessionID || call.Route.TurnID != fixedTurn {
+		(call.Route.Delivery != "async" && !json.Valid(call.Route.RequestID)) || call.Route.ThreadID != fixed.SessionID || call.Route.TurnID != fixedTurn {
 		return executionbackend.ImplementationDataEnvelope{}, errors.New("native question route differs from its fixed session or turn")
+	}
+	if call.Route.Delivery == "async" {
+		call.Route.SourceCommandID = fixed.CurrentCommandID
+		if call.Route.SourceCommandID == "" {
+			call.Route.SourceCommandID = fixed.PendingCommandID
+		}
+	}
+	if call.Route.Delivery == "async" && !executionbackend.StableExecutionID(call.Route.SourceCommandID) {
+		return executionbackend.ImplementationDataEnvelope{}, errors.New("async question lacks its original input command")
 	}
 	payload, err := json.Marshal(call.Route)
 	if err != nil {
@@ -171,8 +185,11 @@ func DecodeQuestionRoute(route executionbackend.ImplementationDataEnvelope, fixe
 		return AskRouteData{}, err
 	}
 	if !ValidNativeID(data.ThreadID) || !ValidNativeID(data.TurnID) || data.ThreadID != fixed.SessionID ||
-		data.TurnID != route.TurnID || data.CallID != route.QuestionID || len(data.RequestID) == 0 || !json.Valid(data.RequestID) {
+		data.TurnID != route.TurnID || data.CallID != route.QuestionID || (data.Delivery != "async" && (len(data.RequestID) == 0 || !json.Valid(data.RequestID))) || (data.Delivery != "" && data.Delivery != "async") {
 		return AskRouteData{}, errors.New("native question route payload changed its original request identity")
+	}
+	if data.Delivery == "async" && !executionbackend.StableExecutionID(data.SourceCommandID) {
+		return AskRouteData{}, errors.New("async question route lacks its original input command")
 	}
 	data.RequestID = append(json.RawMessage(nil), data.RequestID...)
 	data.Generation = route.Generation

@@ -46,10 +46,12 @@ func Observe(ctx context.Context, client *codexapp.Client, journal *os.File, thr
 				return false, err
 			}
 			event := ObservationEvent{Envelope: envelope, Summary: envelope.Method, Forward: true}
-			if envelope.Method == "item/tool/call" {
+			if envelope.Method == "item/tool/call" || IsAsyncQuestion(envelope) {
 				if err := validateAsk(envelope); err != nil {
-					if rejectErr := client.RejectRequest(envelope.ID, "SteerLine rejected an unsupported or malformed native question"); rejectErr != nil {
-						return false, errors.Join(err, rejectErr)
+					if len(envelope.ID) != 0 {
+						if rejectErr := client.RejectRequest(envelope.ID, "SteerLine rejected an unsupported or malformed native question"); rejectErr != nil {
+							return false, errors.Join(err, rejectErr)
+						}
 					}
 					event.Forward = false
 					event.Kind, event.Status, event.Title = "question", "rejected", "Unsupported Codex question"
@@ -81,6 +83,10 @@ func Observe(ctx context.Context, client *codexapp.Client, journal *os.File, thr
 			case "item/tool/call":
 				event.Kind, event.Status, event.Title = "question", "pending", "Codex needs a decision"
 			case "item/completed":
+				if IsAsyncQuestion(envelope) {
+					event.Kind, event.Status, event.Title = "question", "pending", "Codex async question"
+					break
+				}
 				var params struct {
 					Item struct {
 						Type string `json:"type"`
