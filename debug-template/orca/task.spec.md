@@ -1,8 +1,8 @@
 # SteerlineTest Orca single-terminal debug
 
-In implement.execute write result.txt with exactly `SteerlineTest Orca debug result` and one trailing LF in UTF-8. Read it back, then stage and commit only result.txt locally. Use Git user.name=SteerLine Debug and user.email=debug@example.invalid for this commit if the host has no Git identity. Do not push or publish during implementation. Do not change other tracked files.
+Implement this task: write result.txt with exactly `SteerlineTest Orca debug result` and one trailing LF in UTF-8. Read it back, then stage and commit only result.txt locally. Use Git user.name=SteerLine Debug and user.email=debug@example.invalid for this commit if the host has no Git identity. Do not push or publish during implementation. Do not change other tracked files.
 
-In implement.report report the preceding implementation result without changing files. In publish run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1`. Copy its verified full PR URL into the required result JSON. Use the execution host's existing launcher, permissions and GitHub authentication; do not modify global settings, credentials or permissions.
+Do not publish as part of implementing this Spec. Only when a later input explicitly asks to push and create/reuse a PR, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1`. Use the execution host's existing launcher, permissions and GitHub authentication; do not modify global settings, credentials or permissions.
 
 ## Acceptance
 

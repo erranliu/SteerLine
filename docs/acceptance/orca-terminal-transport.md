@@ -35,7 +35,7 @@ CLI/runtime 1.4.224；runtime `fb7953d3-29a6-4f81-b6b9-fa257bb98d04`。独立 re
 
 ## 当前单终端实施与待验明细
 
-最新基线 `03df9d14`；[Spec](../spec/orca-terminal-transport.spec.md) / [Plan](../spec/orca-terminal-transport.plan.md)。只使用同一 agent 终端、本机 CLI 和 environment 路由；先保存原游标、原样发短输入、沿原 stream 读有界结果。旧 supervised 及本次 HTTP/文件回传原型删除。长文本、全文和 native final 不属于新方案承诺。
+最新基线 `03df9d14`；[Spec](../spec/orca-terminal-transport.spec.md) / [Plan](../spec/orca-terminal-transport.plan.md)。只使用同一 agent 终端、本机 CLI 和 environment 路由；先保存原游标、原样发短输入、沿每轮固定来源读有界结果。旧 supervised 及本次 HTTP/文件回传原型删除。长文本、全文和 native final 不属于新方案承诺。
 
 | ID | 当前自动项 | 状态 |
 | --- | --- | --- |

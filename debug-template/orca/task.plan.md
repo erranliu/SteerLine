@@ -1,6 +1,6 @@
 # Orca debug plan
 
-Write and verify result.txt, commit only that file, then report without writes. Publish once using publish.ps1 and return the exact verified PR URL. Follow each short worker input in the same original terminal.
+Write and verify result.txt, commit only that file, then stop and report. Do not publish until a later input explicitly asks for publication; that input may use publish.ps1. Follow each short worker input in the same original terminal.
 
 ## Test plan
 

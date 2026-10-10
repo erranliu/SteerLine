@@ -186,6 +186,9 @@ func (c Client) CloseTerminalChecked(ctx context.Context, handle, runtime string
 
 func (c Client) WaitIdle(ctx context.Context, p b.ProcessIdentity, timeout time.Duration) (bool, error) {
 	r, err := c.MetaCall(ctx, "terminal", "wait", "--terminal", p.Terminal, "--for", "tui-idle", "--timeout-ms", strconv.FormatInt(timeout.Milliseconds(), 10), "--json")
+	if r.ErrorCode == "timeout" && !r.CallUncertain {
+		return false, nil
+	}
 	var value struct {
 		Wait struct {
 			Satisfied     bool   `json:"satisfied"`

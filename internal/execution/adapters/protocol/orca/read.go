@@ -41,7 +41,7 @@ func (c Client) stream(ctx context.Context, p b.ProcessIdentity, cursor string, 
 	var value struct {
 		Terminal StreamPage `json:"terminal"`
 	}
-	if json.Unmarshal(r.Payload, &value) != nil || r.RuntimeID != p.RuntimeID || value.Terminal.Handle != p.Terminal || value.Terminal.Source != "stream" || !ValidCursor(value.Terminal.NextCursor) || !ValidCursor(value.Terminal.LatestCursor) || !ValidCursor(value.Terminal.OldestCursor) {
+	if json.Unmarshal(r.Payload, &value) != nil || r.RuntimeID != p.RuntimeID || value.Terminal.Handle != p.Terminal || value.Terminal.Source != "stream" && value.Terminal.Source != "screen" || !ValidCursor(value.Terminal.NextCursor) || !ValidCursor(value.Terminal.LatestCursor) || !ValidCursor(value.Terminal.OldestCursor) {
 		return StreamPage{}, errors.New("original Orca terminal stream identity/cursor is unverified")
 	}
 	for _, line := range value.Terminal.Tail {
@@ -52,10 +52,26 @@ func (c Client) stream(ctx context.Context, p b.ProcessIdentity, cursor string, 
 	return value.Terminal, nil
 }
 
-// CaptureCursor discards pre-input display content, including any clipped history.
+// CaptureOutput fixes the public CLI output source for this original turn.
+func (c Client) CaptureOutput(ctx context.Context, p b.ProcessIdentity) (StreamPage, error) {
+	return c.stream(ctx, p, "", 256)
+}
 func (c Client) CaptureCursor(ctx context.Context, p b.ProcessIdentity) (string, error) {
 	page, err := c.stream(ctx, p, "0", 1)
 	return page.LatestCursor, err
+}
+func (c Client) ReadScreen(ctx context.Context, p b.ProcessIdentity) (StreamPage, error) {
+	page, err := c.stream(ctx, p, "", 256)
+	if err != nil {
+		return page, err
+	}
+	if page.Source != "screen" {
+		return page, errors.New("original output source changed")
+	}
+	if page.Truncated || page.Limited {
+		return page, ErrStreamGap
+	}
+	return page, nil
 }
 
 // ReadAfter never falls back to a screen snapshot or another output source.
@@ -71,6 +87,9 @@ func (c Client) ReadAfter(ctx context.Context, p b.ProcessIdentity, cursor strin
 	next, _ := strconv.ParseUint(page.NextCursor, 10, 64)
 	latest, _ := strconv.ParseUint(page.LatestCursor, 10, 64)
 	oldest, _ := strconv.ParseUint(page.OldestCursor, 10, 64)
+	if page.Source != "stream" {
+		return page, errors.New("original output source changed")
+	}
 	if page.Truncated || oldest > previous || next < previous || latest < next || !page.Limited && next != latest || page.Limited && next == previous && next != latest {
 		return page, ErrStreamGap
 	}

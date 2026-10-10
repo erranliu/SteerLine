@@ -12,11 +12,11 @@ host=orca 本机与 environment 使用相同能力。全部调用由本机显式
 
 共用 worker 根据 CompactTerminalReply 能力为输入增加简短结果约定，冻结实际 TurnInput 后交给 adapter 原样发送。输入连同约定最多 2000 字符，超限拒绝，不截断、分批向 agent 粘贴或改用文件。Spec / Plan 本来位于固定工作区，由 agent 自己阅读。
 
-最终回复是有界的单行 SL_RESULT / SL_END JSON 帧，包含本轮 Command 作为 nonce、succeeded/failed 和业务回复文本 reply；含定界符的整帧最多 2048 UTF-8 字节。指令没有完整有效帧示例，输入回显不当作结果。JSON 拒绝重复/未知字段和非法 outcome；不同轮次忽略，同轮不同结果保持冲突未核实。模型报告 JSON 原样作为 reply 文本交给上层既有解析器。
+最终回复是有界的单行 SL_RESULT / SL_END JSON 帧，包含本轮 Command 作为 nonce、succeeded/failed 和业务回复 UTF-8 正文的 base64 reply_b64；含定界符的整帧最多 2048 UTF-8 字节。指令没有完整有效帧示例，输入回显不当作结果。JSON 拒绝重复/未知字段和非法 outcome；不同轮次忽略，同轮不同结果保持冲突未核实。模型报告 JSON 原样作为 reply 文本交给上层既有解析器。
 
 每轮只读 PrepareSession 保存原输出游标与实际输入摘要，再进行一次 terminal send --enter --wait-submit --retry-request。accepted 不等于 turn_started。服务恢复沿用已保存的游标，不重新捕获 latest、不补 Enter、不重发输入，也不根据标题查找替代终端。
 
-通过 terminal read 的原 stream 游标分页读取，拒绝 screen/source 替换、游标重置、缺口和裁剪。只保存有界未完成帧、唯一结果及读取游标；原 runtime / terminal / incarnation / agent / worktree / branch 在读取前后均一致，完整帧匹配且原终端 idle 后才归一化为 worker_declared 结果。它不冒充 Orca 原生 session/turn/final。已结算正文随既有资源封套与业务事务持久化，不再依赖 live 终端或外部文件。
+通过 terminal read 的每轮固定来源读取，固定每轮初始 source；stream 按原游标分页，screen 按完整当前快照读取；拒绝 source 替换、游标重置、缺口和裁剪。只保存有界未完成帧、唯一结果及读取游标；原 runtime / terminal / incarnation / agent / worktree / branch 在读取前后均一致，完整帧匹配且原终端 idle 后才归一化为 worker_declared 结果。它不冒充 Orca 原生 session/turn/final。已结算正文随既有资源封套与业务事务持久化，不再依赖 live 终端或外部文件。
 
 ## 能力边界
 

@@ -63,3 +63,18 @@ func TestTerminalFrameRejectsForeignAndAmbiguousResults(t *testing.T) {
 		t.Fatal("oversized input accepted")
 	}
 }
+
+func TestTerminalFrameScreenWrapPreservesExactReply(t *testing.T) {
+	command := strings.Repeat("c", 32)
+	reply := Reply{Outcome: "succeeded", Text: `{"outcome":"done","outputs":{"pr_url":"https://github.com/erranliu/SteerlineTest/pull/199"},"summary":"完整 reply"}`}
+	frame, err := Encode(command, reply)
+	if err != nil {
+		t.Fatal(err)
+	}
+	position := strings.Index(frame, "reply_b64") + 25
+	var scan Scan
+	scan.Append(frame[:position]+"  "+frame[position:], command)
+	if scan.Result == nil || *scan.Result != reply {
+		t.Fatal("display indentation changed reply", scan)
+	}
+}

@@ -5,6 +5,7 @@ package workerreturn
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -39,8 +40,13 @@ func (r Reply) Validate() error {
 }
 
 type WireReply struct {
-	Nonce string `json:"nonce"`
-	Reply
+	Nonce   string `json:"nonce"`
+	Outcome string `json:"outcome"`
+	Body    string `json:"reply_b64"`
+}
+
+func wireReply(command string, reply Reply) WireReply {
+	return WireReply{Nonce: command, Outcome: reply.Outcome, Body: base64.StdEncoding.EncodeToString([]byte(reply.Text))}
 }
 
 func Digest(data []byte) string { value := sha256.Sum256(data); return hex.EncodeToString(value[:]) }
@@ -55,7 +61,7 @@ func Prompt(prompt, command string) (string, error) {
 	if !validID(command) || !utf8.ValidString(prompt) || strings.TrimSpace(prompt) == "" {
 		return "", errors.New("invalid compact worker input")
 	}
-	instruction := fmt.Sprintf("\nFinal reply: one line, prefix SL_RESULT, then compact JSON with nonce=%q, outcome=succeeded or failed, reply=the required step reply encoded as text, then suffix SL_END. Keep the whole frame within %d UTF-8 bytes. No other final text.", command, MaxFrameBytes)
+	instruction := fmt.Sprintf("\nFinal reply: one line, prefix SL_RESULT, then compact JSON with nonce=%q, outcome=succeeded or failed, reply_b64=base64 of the exact UTF-8 step reply (encode in memory, no files), then suffix SL_END. Keep the whole frame within %d UTF-8 bytes. No other final text.", command, MaxFrameBytes)
 	text := prompt
 	if !strings.HasSuffix(prompt, instruction) {
 		text += instruction
@@ -72,7 +78,7 @@ func Encode(command string, reply Reply) (string, error) {
 	if err := reply.Validate(); err != nil {
 		return "", err
 	}
-	data, err := json.Marshal(WireReply{Nonce: command, Reply: reply})
+	data, err := json.Marshal(wireReply(command, reply))
 	if err != nil {
 		return "", err
 	}
@@ -195,7 +201,14 @@ func (s *Scan) Append(text, command string) {
 		if json.Unmarshal(raw, &owner) != nil || owner.Nonce != command {
 			continue
 		}
-		if len(raw)+len(frameStart)+len(frameEnd)+2 > MaxFrameBytes || Decode(raw, &wire) != nil || wire.Reply.Validate() != nil {
+		raw = []byte(strings.Join(strings.Fields(string(raw)), ""))
+		var decoded []byte
+		decodeErr := Decode(raw, &wire)
+		if decodeErr == nil {
+			decoded, decodeErr = base64.StdEncoding.DecodeString(wire.Body)
+		}
+		reply := Reply{Outcome: wire.Outcome, Text: string(decoded)}
+		if len(raw)+len(frameStart)+len(frameEnd)+2 > MaxFrameBytes || decodeErr != nil || reply.Validate() != nil {
 			s.Problem = "original compact result is invalid or oversized"
 			return
 		}
@@ -205,7 +218,6 @@ func (s *Scan) Append(text, command string) {
 			s.Problem = "original input produced conflicting compact results"
 			return
 		}
-		reply := wire.Reply
 		s.Result = &reply
 		s.Digest = digest
 	}
@@ -223,7 +235,7 @@ func (s Scan) Validate(command string) error {
 	if err := s.Result.Validate(); err != nil {
 		return err
 	}
-	data, _ := json.Marshal(WireReply{Nonce: command, Reply: *s.Result})
+	data, _ := json.Marshal(wireReply(command, *s.Result))
 	if len(data)+len(frameStart)+len(frameEnd)+2 > MaxFrameBytes || s.Digest != Digest(data) {
 		return errors.New("saved compact result changed")
 	}

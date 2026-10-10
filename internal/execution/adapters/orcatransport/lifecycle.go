@@ -16,15 +16,16 @@ import (
 )
 
 type Turn struct {
-	Command     string            `json:"command"`
-	Request     string            `json:"request,omitempty"`
-	InputDigest string            `json:"input_digest"`
-	Cursor      string            `json:"cursor"`
-	Attempted   bool              `json:"attempted"`
-	Accepted    bool              `json:"accepted"`
-	Started     bool              `json:"started"`
-	Settled     bool              `json:"settled"`
-	Scan        workerreturn.Scan `json:"scan"`
+	Command      string            `json:"command"`
+	Request      string            `json:"request,omitempty"`
+	InputDigest  string            `json:"input_digest"`
+	OutputSource string            `json:"output_source"`
+	Cursor       string            `json:"cursor"`
+	Attempted    bool              `json:"attempted"`
+	Accepted     bool              `json:"accepted"`
+	Started      bool              `json:"started"`
+	Settled      bool              `json:"settled"`
+	Scan         workerreturn.Scan `json:"scan"`
 }
 type State struct {
 	Process b.ProcessIdentity `json:"process"`
@@ -113,7 +114,7 @@ func (l *Lifecycle) state(s b.LifecycleSnapshot) (State, error) {
 	}
 	seen := map[string]bool{}
 	for _, turn := range state.Turns {
-		if !b.StableExecutionID(turn.Command) || seen[turn.Command] || len(turn.InputDigest) != 64 || !native.ValidCursor(turn.Cursor) || turn.Request != "" && !b.StableExecutionID(strings.ReplaceAll(turn.Request, "-", "")) || turn.Started && !turn.Accepted || turn.Accepted && !turn.Attempted || turn.Settled && (turn.Scan.Result == nil || turn.Scan.Problem != "") {
+		if !b.StableExecutionID(turn.Command) || seen[turn.Command] || len(turn.InputDigest) != 64 || (turn.OutputSource != "stream" && turn.OutputSource != "screen") || !native.ValidCursor(turn.Cursor) || turn.Request != "" && !b.StableExecutionID(strings.ReplaceAll(turn.Request, "-", "")) || turn.Started && !turn.Accepted || turn.Accepted && !turn.Attempted || turn.Settled && (turn.Scan.Result == nil || turn.Scan.Problem != "") {
 			return state, errors.New("invalid original terminal input binding")
 		}
 		seen[turn.Command] = true
@@ -310,14 +311,14 @@ func (l *Lifecycle) prepareInput(ctx context.Context, r b.LifecycleRequest) (b.L
 		if err = l.ready(ctx, s); err != nil {
 			return receipt, err
 		}
-		cursor, readErr := l.client.CaptureCursor(ctx, s.Ref.External)
+		page, readErr := l.client.CaptureOutput(ctx, s.Ref.External)
 		if readErr != nil {
 			return receipt, readErr
 		}
 		if _, err = l.original(ctx, s); err != nil {
 			return receipt, err
 		}
-		state.Turns = append(state.Turns, Turn{Command: input.CommandID, InputDigest: digest, Cursor: cursor})
+		state.Turns = append(state.Turns, Turn{Command: input.CommandID, InputDigest: digest, Cursor: page.LatestCursor, OutputSource: page.Source})
 	}
 	receipt.Process = &state.Process
 	receipt.State = b.LifecycleStateFacts{SessionID: SessionID(state.Process), SessionGeneration: state.Process.Incarnation, SessionAvailable: true, WorkerLive: true}
@@ -359,6 +360,7 @@ func (l *Lifecycle) submit(ctx context.Context, r b.LifecycleRequest) (b.Lifecyc
 	}
 	receipt.State = b.LifecycleStateFacts{SessionID: SessionID(state.Process), SessionGeneration: state.Process.Incarnation, TurnID: input.CommandID, SessionAvailable: true, WorkerLive: true}
 	result, callErr := l.client.MetaCall(ctx, "terminal", "send", "--terminal", state.Process.Terminal, "--text", input.Prompt, "--enter", "--wait-submit", "30", "--retry-request", turn.Request, "--json")
+	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
 	var sent struct {
 		Send struct {
 			Handle   string `json:"handle"`
@@ -460,7 +462,13 @@ func (l *Lifecycle) observeOnce(ctx context.Context, s b.LifecycleSnapshot) (b.L
 
 func (l *Lifecycle) collectOutput(ctx context.Context, process b.ProcessIdentity, turn *Turn) (bool, error) {
 	for count := 0; count < 8 && turn.Scan.Problem == ""; count++ {
-		page, err := l.client.ReadAfter(ctx, process, turn.Cursor)
+		var page native.StreamPage
+		var err error
+		if turn.OutputSource == "screen" {
+			page, err = l.client.ReadScreen(ctx, process)
+		} else {
+			page, err = l.client.ReadAfter(ctx, process, turn.Cursor)
+		}
 		if err != nil {
 			if !errors.Is(err, native.ErrStreamGap) {
 				return false, err
@@ -468,10 +476,13 @@ func (l *Lifecycle) collectOutput(ctx context.Context, process b.ProcessIdentity
 			turn.Scan.Problem = err.Error()
 			return false, nil
 		}
+		if turn.OutputSource == "screen" {
+			turn.Scan.Pending = ""
+		}
 		turn.Scan.Append(page.Text(), turn.Command)
 		previous := turn.Cursor
 		turn.Cursor = page.NextCursor
-		if page.NextCursor == page.LatestCursor {
+		if turn.OutputSource == "screen" || page.NextCursor == page.LatestCursor {
 			return true, nil
 		}
 		if turn.Cursor == previous {
