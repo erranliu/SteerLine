@@ -57,4 +57,6 @@
 
 最终源码与上述运行后的逐文件指纹一致：app evidence 中 `bounded-source-manifest.txt` 的 SHA-256 为 `434a44cf364a49cab100aba069592355cef012dcd0ed1c76d05a38b1b149914a`，覆盖全部 19 份新增/改动 Go 文件；原 directory_remote.go 的删除另由 Git diff 记录。验后只改文档，提交时按这些 Go blob 映射候选，不将旧基线结果写成最新通过。静态检查：298 份 Markdown/1864 条本地导航，0 错误；91 份历史身份/10 条草稿/5 条正式记录检查通过；`git diff --check` 通过。Full/L2/L3/live/native/ps1terminal 未选，范围与 Plan 一致。
 
-独立 PR 复审与合并尚未进行；本聊天自审和上述自动通过不表示已合并。创建 PR 后在此登记实际链接及实现提交，不修改 execution-map 或分配任务编号。
+实现提交：`a5c5fbf9a5f5b77553a547b731568cca6ce32e8c`，分支 `codex/bounded-structure-refactoring`。该提交的全部受影响 Go blob 与上述审计后验证清单一致；验证仍如实记录为提交前 dirty tree 运行，不伪称重新运行了干净提交二进制。提交后只同步本段 PR 元数据，源码保持。
+
+[PR #269](https://github.com/erranliu/SteerLine/pull/269) 已创建并附到当前聊天；GitHub 核实 OPEN、非 draft、base main、head 为上述实现提交且 MERGEABLE。当前没有平台 check run；本聊天自审和本机自动通过不冒充独立 PR 复审或已合并。独立 PR 复审/合并待进行，不修改 execution-map 或分配任务编号。
