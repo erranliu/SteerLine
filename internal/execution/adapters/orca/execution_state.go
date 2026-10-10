@@ -11,7 +11,7 @@ import (
 
 const ExecutionStateCodecKey = "orca.execution-state"
 
-const ExecutionStateCodecVersion = 11
+const ExecutionStateCodecVersion = 12
 
 // NativeExecutionState contains provider identities and observation positions.
 // WorkflowRun, Decision and Operation remain the authorities for business state.
@@ -33,38 +33,41 @@ type NativeExecutionState struct {
 }
 
 type NativeTurnState struct {
-	FinalReadError         string                       `json:"final_read_error,omitempty"`
-	FinalText              string                       `json:"final_text,omitempty"`
-	FinalSource            string                       `json:"final_source,omitempty"`
-	FinalItemID            string                       `json:"final_item_id,omitempty"`
-	FinalNativeTurnID      string                       `json:"final_native_turn_id,omitempty"`
-	FinalVerified          bool                         `json:"final_verified,omitempty"`
-	HostWait               *executionbackend.HostFact   `json:"host_wait,omitempty"`
-	HostWaitSequence       uint64                       `json:"host_wait_sequence,omitempty"`
-	Started                bool                         `json:"started,omitempty"`
-	RelayReported          bool                         `json:"relay_reported,omitempty"`
-	ToolContext            executionbackend.ToolContext `json:"tool_context,omitempty"`
-	InjectionAttempts      int                          `json:"injection_attempts,omitempty"`
-	Purpose                string                       `json:"purpose,omitempty"`
-	IntentAt               time.Time                    `json:"intent_at"`
-	Settled                bool                         `json:"settled,omitempty"`
-	Released               bool                         `json:"released,omitempty"`
-	InputSubmissionPending bool                         `json:"input_submission_pending,omitempty"`
-	TurnID                 string                       `json:"turn_id"`
-	TaskID                 string                       `json:"task_id"`
-	DispatchID             string                       `json:"dispatch_id"`
-	TaskRequestID          string                       `json:"task_request_id,omitempty"`
-	DispatchRequestID      string                       `json:"dispatch_request_id,omitempty"`
-	DoneMessageID          string                       `json:"done_message_id,omitempty"`
-	Outcome                string                       `json:"outcome,omitempty"`
-	LastMessage            string                       `json:"last_message,omitempty"`
-	PRCandidates           []string                     `json:"pr_candidates,omitempty"`
-	OutputSource           string                       `json:"output_source,omitempty"`
-	OutputCursor           string                       `json:"output_cursor,omitempty"`
-	OutputComplete         bool                         `json:"output_complete,omitempty"`
-	OutputClipping         []string                     `json:"output_clipping,omitempty"`
-	OutputFallbackReason   string                       `json:"output_fallback_reason,omitempty"`
-	OutputDigest           string                       `json:"output_digest,omitempty"`
+	InputVersion           uint64                            `json:"input_version,omitempty"`
+	ResultProcess          *executionbackend.ProcessIdentity `json:"result_process,omitempty"`
+	ResultMessageDigest    string                            `json:"result_message_digest,omitempty"`
+	FinalReadError         string                            `json:"final_read_error,omitempty"`
+	FinalText              string                            `json:"final_text,omitempty"`
+	FinalSource            string                            `json:"final_source,omitempty"`
+	FinalItemID            string                            `json:"final_item_id,omitempty"`
+	FinalNativeTurnID      string                            `json:"final_native_turn_id,omitempty"`
+	FinalVerified          bool                              `json:"final_verified,omitempty"`
+	HostWait               *executionbackend.HostFact        `json:"host_wait,omitempty"`
+	HostWaitSequence       uint64                            `json:"host_wait_sequence,omitempty"`
+	Started                bool                              `json:"started,omitempty"`
+	RelayReported          bool                              `json:"relay_reported,omitempty"`
+	ToolContext            executionbackend.ToolContext      `json:"tool_context,omitempty"`
+	InjectionAttempts      int                               `json:"injection_attempts,omitempty"`
+	Purpose                string                            `json:"purpose,omitempty"`
+	IntentAt               time.Time                         `json:"intent_at"`
+	Settled                bool                              `json:"settled,omitempty"`
+	Released               bool                              `json:"released,omitempty"`
+	InputSubmissionPending bool                              `json:"input_submission_pending,omitempty"`
+	TurnID                 string                            `json:"turn_id"`
+	TaskID                 string                            `json:"task_id"`
+	DispatchID             string                            `json:"dispatch_id"`
+	TaskRequestID          string                            `json:"task_request_id,omitempty"`
+	DispatchRequestID      string                            `json:"dispatch_request_id,omitempty"`
+	DoneMessageID          string                            `json:"done_message_id,omitempty"`
+	Outcome                string                            `json:"outcome,omitempty"`
+	LastMessage            string                            `json:"last_message,omitempty"`
+	PRCandidates           []string                          `json:"pr_candidates,omitempty"`
+	OutputSource           string                            `json:"output_source,omitempty"`
+	OutputCursor           string                            `json:"output_cursor,omitempty"`
+	OutputComplete         bool                              `json:"output_complete,omitempty"`
+	OutputClipping         []string                          `json:"output_clipping,omitempty"`
+	OutputFallbackReason   string                            `json:"output_fallback_reason,omitempty"`
+	OutputDigest           string                            `json:"output_digest,omitempty"`
 }
 
 type ExecutionStateIdentity struct {

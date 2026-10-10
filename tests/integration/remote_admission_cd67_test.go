@@ -2,7 +2,7 @@ package integration
 
 import (
 	"context"
-	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -14,6 +14,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 )
 
 func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
@@ -35,7 +36,7 @@ func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 	}
 }
 
-func TestRemoteDevelopmentFlowRejectsMissingFinalBeforeNativeProbe(t *testing.T) {
+func TestSupervisedDevelopmentFlowRejectsUnreachableNativeBeforeClaim(t *testing.T) {
 	fixture := newLifecycleProjectBase(t, "local", false)
 	c := fixture.config
 	c.Host, c.Agent = "orca_supervised", "codex"
@@ -49,21 +50,51 @@ func TestRemoteDevelopmentFlowRejectsMissingFinalBeforeNativeProbe(t *testing.T)
 	store, err := steerlineapp.OpenNativeTaskCommandStore(context.Background(), &c)
 	require(t, err)
 	defer store.Close()
-	// Missing original final provenance rejects before the unreachable native
-	// CLI can be probed or any claim/operation can be reserved.
+	// The implementation now supports declared finals. Native preflight still
+	// rejects an unreachable executable before reserving a claim or operation.
 	entry, err := c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	require(t, err)
 	require(t, entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)))
 	before, err := store.Query(context.Background(), c.Identity())
 	require(t, err)
 	_, err = (appExecutionCommands(t, store, c)).ClaimNativeTask(context.Background(), c.ExecutionConfig(), execution.TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
-	var unsupported *executionbackend.BackendError
-	if !errors.As(err, &unsupported) || unsupported.Code != executionbackend.BackendUnsupported || !strings.Contains(unsupported.Diagnostic, "structured final evidence") {
-		t.Fatalf("remote development flow bypassed its original final capability gate: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "center Orca version probe") {
+		t.Fatalf("supervised development flow bypassed native preflight: %v", err)
 	}
 	after, queryErr := store.Query(context.Background(), c.Identity())
 	require(t, queryErr)
 	if digestValue(before.WorkflowRuns) != digestValue(after.WorkflowRuns) || digestValue(before.Executions) != digestValue(after.Executions) || digestValue(before.Operations) != digestValue(after.Operations) {
 		t.Fatal("rejected remote policy wrote claim or operation state")
+	}
+}
+
+func TestSupervisedDevelopmentFlowClaimsWithDeclaredFinalCapability(t *testing.T) {
+	fixture := newLifecycleProjectBase(t, "local", false)
+	c := fixture.config
+	c.Host, c.Agent = "orca_supervised", "codex"
+	c.PublicationPolicy.Publisher = executionbackend.PublisherWorker
+	c.PR = executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}
+	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "unused"}, &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--fake-supervised"}, Shell: "cmd.exe", WaitTimeout: "10s"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "1s", CapabilityReportVersion: 1})
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_REMOTE_URL", "https://forge.invalid/org/repo.git")
+	t.Setenv("STEERLINE_TEST_REMOTE_URL", "https://forge.invalid/org/repo.git")
+	project, err := steerlineapp.OpenNativeTaskProject(context.Background(), &c)
+	require(t, err)
+	require(t, project.Close())
+	fixture.config, fixture.remoteURL = c, "https://forge.invalid/org/repo.git"
+	createIntegrationTask(t, context.Background(), fixture, 60)
+	store, err := steerlineapp.OpenNativeTaskCommandStore(context.Background(), &c)
+	require(t, err)
+	defer store.Close()
+	before, err := store.Query(context.Background(), c.Identity())
+	require(t, err)
+	page, err := productquery.NewService(store, c.Identity()).ShowNativeTask(context.Background(), "60")
+	require(t, err)
+	profile := c.AvailableExecutionProfiles()[0].Freeze(c.ExecutionDirectory, c.Identity())
+	_, err = appExecutionCommands(t, store, c).ClaimNativeTask(context.Background(), c.ExecutionConfig(), execution.TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, ExecutionProfile: &profile, Explicit: true, RequestedBy: "operator"})
+	require(t, err)
+	after, err := store.Query(context.Background(), c.Identity())
+	require(t, err)
+	if len(after.WorkflowRuns) != len(before.WorkflowRuns)+1 || len(after.Executions) != len(before.Executions)+1 {
+		t.Fatal("supported supervised claim did not persist one workflow/execution")
 	}
 }

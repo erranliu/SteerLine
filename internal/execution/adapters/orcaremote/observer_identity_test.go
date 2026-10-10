@@ -49,7 +49,7 @@ func TestRemoteEmptyInboxDetectsLostDispatchWithoutRelaunch(t *testing.T) {
 						exact := changed != "attachment" && (changed != "after_healthy_poll" || shows == 1)
 						return remoteEnvelope("center-runtime", map[string]any{
 							"dispatch":   map[string]string{"id": "dispatch", "runId": "run", "taskId": "task", "status": "dispatched"},
-							"worker":     map[string]string{"dispatchId": "dispatch", "worktreeId": "repo::worktree"},
+							"worker":     map[string]string{"dispatchId": "dispatch", "worktreeId": "repo::worktree", "agentTerminalHandle": "agent-terminal"},
 							"projection": map[string]any{"host": map[string]string{"id": "environment"}, "liveness": map[string]string{"verdict": "live"}},
 							"server":     map[string]string{"environmentId": "environment"}, "remoteRuntimeEpoch": remoteRuntime,
 							"terminal": terminal, "observation": map[string]any{"exactWorker": exact},

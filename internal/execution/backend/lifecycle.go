@@ -57,12 +57,13 @@ type FeedbackInput struct {
 // ResourceIntent describes one generic resource creation. Purpose is a closed
 // implementation-owned value interpreted only by the selected lifecycle port.
 type ResourceIntent struct {
-	Purpose     string `json:"purpose"`
-	Name        string `json:"name,omitempty"`
-	Objective   string `json:"objective,omitempty"`
-	Base        string `json:"base,omitempty"`
-	TurnID      string `json:"turn_id,omitempty"`
-	TurnPurpose string `json:"turn_purpose,omitempty"`
+	Purpose      string `json:"purpose"`
+	Name         string `json:"name,omitempty"`
+	Objective    string `json:"objective,omitempty"`
+	Base         string `json:"base,omitempty"`
+	TurnID       string `json:"turn_id,omitempty"`
+	InputVersion uint64 `json:"input_version,omitempty"`
+	TurnPurpose  string `json:"turn_purpose,omitempty"`
 }
 
 type CompletionInput struct {
