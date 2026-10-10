@@ -28,6 +28,8 @@ dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug
 
 原始日志、manifest 对账、UIA/HTTP 查询、窗口生命周期和清理回执位于该包 `evidence/`，包括 `task44-environment.json`、`task44-ui-integration.json`、`task44-ui-reopen.json` 与 `task44-cleanup.json`。UI 关闭后才按生成器持有的 console 生命周期发起最终服务清理；原 stop receipt 为 `applied`，进程退出且锁释放。测试包保留任务定义、契约和 Git/provider 事实，未执行重置。
 
+独立复审发现 `task44-ui-integration.json` 的 `implementation_tree` 曾有转录错误。已根据不可变 commit `74326ae26c4423305e7d708a2c3acc55d8d38e5d` 核对为 `2f3855e4eb4554c1e8a90e94091eb4be631d6d4e`，并与 `task44-environment.json` 一致；原始记录保留为 `task44-ui-integration-original.json`，修正后的 JSON 内含原值、核验值和修正原因。该修正只涉及证据元数据，不改变构建、测试、窗口或服务运行事实。
+
 ## 待人工验收
 
 | 项目 | 状态与参与安排 | 步骤和通过条件 | 阻塞范围 |
