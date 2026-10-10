@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -54,6 +55,9 @@ func (host Host) OutputCommand(ctx context.Context, command executionbackend.Lau
 	}
 	cmd := exec.Command(command.Executable, command.Args...)
 	cmd.Dir = command.WorkingDirectory
+	if len(command.BlockedEnvironment) > 0 {
+		cmd.Env = FilteredEnvironment(command.BlockedEnvironment)
+	}
 	output, diagnostics := boundedBuffer{max: 16 << 20}, boundedBuffer{max: 1 << 20}
 	cmd.Stdout, cmd.Stderr = &output, &diagnostics
 	owned, err := host.StartManaged(cmd)
@@ -74,6 +78,21 @@ func (host Host) OutputCommand(ctx context.Context, command executionbackend.Lau
 		return output.Bytes(), fmt.Errorf("%s failed: %w (%s)", command.Executable, err, diagnostics.String())
 	}
 	return output.Bytes(), nil
+}
+
+func FilteredEnvironment(names []string) []string {
+	environment := []string{}
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		blocked := false
+		for _, name := range names {
+			blocked = blocked || strings.EqualFold(key, name)
+		}
+		if !blocked {
+			environment = append(environment, entry)
+		}
+	}
+	return environment
 }
 
 type boundedBuffer struct {

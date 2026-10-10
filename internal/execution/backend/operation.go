@@ -61,6 +61,8 @@ type LaunchCommand struct {
 	Args             []string
 	WorkingDirectory string
 	EnvironmentRefs  []string
+	// BlockedEnvironment removes ambient routing from commands with a fixed host.
+	BlockedEnvironment []string
 	// Timeout overrides the host's ordinary command budget for this operation.
 	// The caller's context can still cancel it earlier.
 	Timeout time.Duration
