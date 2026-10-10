@@ -5,6 +5,56 @@ namespace SteerLine.Windows.Tests;
 public sealed class MainWindowViewModelTests
 {
     [Fact]
+    public async Task ClosingWaitsForDraftPersistenceBeforeDisposingObservation()
+    {
+        var service = new FakeService("project-a", [TaskSummaryFor("a")]);
+        var store = new DelayedDraftStore();
+        var viewModel = new MainWindowViewModel(new FakeFactory(service), store);
+        await viewModel.ConnectAsync("config.json", "C:\\repo");
+        await viewModel.SelectTaskAsync(TaskSummaryFor("a"));
+        viewModel.UpdateDraft("last unsent draft");
+        var guard = new WindowCloseGuard();
+
+        var closing = guard.PrepareAsync(() => viewModel.DisposeAsync().AsTask(), _ => Assert.Fail("Save failed"));
+        Assert.False(guard.CanClose);
+        Assert.False(service.Disposed);
+        Assert.Equal("last unsent draft", store.Get("project-a", "a"));
+        store.ReleaseSave.SetResult();
+        Assert.True(await closing);
+        Assert.True(service.Disposed);
+    }
+
+    [Fact]
+    public async Task ClosingSaveFailureRetainsDraftAndObservationUntilRetrySucceeds()
+    {
+        var service = new FakeService("project-a", [TaskSummaryFor("a")]);
+        var store = new DelayedDraftStore();
+        var viewModel = new MainWindowViewModel(new FakeFactory(service), store);
+        await viewModel.ConnectAsync("config.json", "C:\\repo");
+        await viewModel.SelectTaskAsync(TaskSummaryFor("a"));
+        viewModel.UpdateDraft("keep me");
+        var guard = new WindowCloseGuard();
+        Exception? reported = null;
+        var closing = guard.PrepareAsync(() => viewModel.DisposeAsync().AsTask(), e =>
+        {
+            reported = e;
+            viewModel.ReportCloseSaveError(e);
+        });
+        store.ReleaseSave.SetException(new IOException("disk full"));
+
+        Assert.False(await closing);
+        Assert.IsType<IOException>(reported);
+        Assert.Contains("窗口未关闭", viewModel.IntentStatus, StringComparison.Ordinal);
+        Assert.Contains("disk full", viewModel.IntentStatus, StringComparison.Ordinal);
+        Assert.False(service.Disposed);
+        Assert.True(viewModel.IsConnected);
+        Assert.Equal("keep me", viewModel.CurrentDraft);
+        Assert.Equal("keep me", store.Get("project-a", "a"));
+        Assert.True(await guard.PrepareAsync(() => viewModel.DisposeAsync().AsTask(), _ => Assert.Fail("Retry failed")));
+        Assert.True(service.Disposed);
+    }
+
+    [Fact]
     public async Task ATargetSwitchDoesNotApplyALateDetailResponse()
     {
         var a = TaskSummaryFor("a");
@@ -191,6 +241,7 @@ public sealed class MainWindowViewModelTests
         public string? ListRepositoryIdentity { get; set; }
         public int ListCalls { get; private set; }
         public int ShowCalls => _showCalls;
+        public bool Disposed { get; private set; }
         public Func<string, int, Task<TaskDetailPage>>? ShowHandler { get; set; }
 
         public Task<TaskPage> ListTasksAsync(CancellationToken cancellationToken)
@@ -205,6 +256,6 @@ public sealed class MainWindowViewModelTests
             return ShowHandler is null ? Task.FromResult(DetailPage("C:\\repo\\.git", Detail(taskId, 1))) : ShowHandler(taskId, call);
         }
 
-        public void Dispose() { }
+        public void Dispose() => Disposed = true;
     }
 }

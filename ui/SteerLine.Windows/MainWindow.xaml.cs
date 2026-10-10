@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Windowing;
 using SteerLine.Windows.Core;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
@@ -9,12 +10,13 @@ namespace SteerLine.Windows;
 public sealed partial class MainWindow : Window
 {
     private bool _suppressTaskSelectionEvents;
+    private readonly WindowCloseGuard _closeGuard = new();
     public MainWindowViewModel ViewModel { get; } = new(new LocalServiceFactory(), new FileDraftStore());
 
     public MainWindow()
     {
         InitializeComponent();
-        Closed += OnWindowClosed;
+        AppWindow.Closing += OnWindowClosing;
     }
 
     private async void OnChooseConfigClick(object sender, RoutedEventArgs e)
@@ -100,9 +102,23 @@ public sealed partial class MainWindow : Window
 
     private void OnRecordIntentClick(object sender, RoutedEventArgs e) => ViewModel.RecordLocalIntent();
 
-    private async void OnWindowClosed(object sender, WindowEventArgs args)
+    private async void OnWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
-        ViewModel.UpdateDraft(DraftEditor.Text);
-        await ViewModel.DisposeAsync();
+        if (_closeGuard.CanClose)
+            return;
+        args.Cancel = true;
+        if (_closeGuard.IsSaving)
+            return;
+        var root = (Control)Content;
+        root.IsEnabled = false;
+        var ready = await _closeGuard.PrepareAsync(async () =>
+        {
+            ViewModel.UpdateDraft(DraftEditor.Text);
+            await ViewModel.DisposeAsync();
+        }, ViewModel.ReportCloseSaveError);
+        if (ready)
+            Close();
+        else
+            root.IsEnabled = true;
     }
 }

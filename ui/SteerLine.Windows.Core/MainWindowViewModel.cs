@@ -213,12 +213,16 @@ public sealed class MainWindowViewModel(ILocalServiceFactory serviceFactory, IDr
 
     public void SetSelectionError(string message) => ConnectionStatus = $"项目配置错误 · {message}";
 
+    public void ReportCloseSaveError(Exception exception) =>
+        IntentStatus = $"草稿保存失败，窗口未关闭；请重试关闭。{exception.Message}";
+
     public async ValueTask DisposeAsync()
     {
         BeginSelection();
         if (_service is not null && _selectedTask is not null)
             draftStore.Set(_service.Identity.ProjectId, _selectedTask.TaskId, CurrentDraft);
-        await SaveDraftsAsync().ConfigureAwait(false);
+        // Closing must observe failure and keep the window/draft available for retry.
+        await draftStore.SaveAsync(CancellationToken.None).ConfigureAwait(true);
         _service?.Dispose();
         _service = null;
         OnPropertyChanged(nameof(HasSelectedTarget));
