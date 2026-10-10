@@ -23,6 +23,11 @@ func openNativeSession(ctx context.Context, config Config, target api.NativeSess
 	if err = errors.Join(err, closeErr); err != nil {
 		return err
 	}
+	for _, execution := range snapshot.Records.Executions {
+		if execution.ExecutionID == target.ExecutionID && execution.Protocol == string(executionbackend.ProtocolOrcaSupervised) {
+			return openOrcaSession(ctx, config, snapshot.Records, target)
+		}
+	}
 	command, binding, process, err := nativeSessionCommand(snapshot.Records, config.Identity(), target)
 	if err != nil {
 		return err

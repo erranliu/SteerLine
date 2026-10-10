@@ -70,6 +70,11 @@ func run() error {
 	if command == "codex-session-launch" {
 		return steerlineapp.RunSessionLauncher(context.Background(), *config, steerlineapp.NewProcessHost(30*time.Second))
 	}
+	if command == "orca-session-view" {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		return steerlineapp.RunOrcaSessionViewer(ctx, *config, os.Stdout)
+	}
 	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "control" && command != "answer" && command != "home" && command != "install" && command != "launchers" {
 		return fmt.Errorf("unknown command %q", command)
 	}

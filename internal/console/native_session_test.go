@@ -62,4 +62,15 @@ func TestNativeSessionShortcutOpensSelectedCandidateAndReportsFailure(t *testing
 	if _, cmd := updated.(Model).openNativeSession(); cmd != nil {
 		t.Fatal("nonlocal task opened")
 	}
+	run.Host = "orca_supervised"
+	run.Agent = "claude"
+	client.err = nil
+	updated, cmd = updated.(Model).openNativeSession()
+	if cmd == nil {
+		t.Fatal("Orca candidate could not open its native viewer")
+	}
+	updated, _ = updated.(Model).Update(cmd())
+	if !strings.Contains(updated.(Model).status, "已打开 Orca") {
+		t.Fatal("Orca viewer reported Codex")
+	}
 }
