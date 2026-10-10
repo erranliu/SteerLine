@@ -53,6 +53,22 @@ func DecodeEvent(envelope codexapp.Envelope, fixed executionbackend.SessionConte
 		fact.EventFact.Questions = call.Questions
 		fact.QuestionRoute = &route
 	case "item/completed":
+		if IsAsyncQuestion(envelope) {
+			call, err := ParseAsyncAsk(envelope, threadID, turnID)
+			if err != nil {
+				return fact, err
+			}
+			route, err := NewQuestionRoute(call, fixed)
+			if err != nil {
+				return fact, err
+			}
+			for i := range call.Questions {
+				q := &call.Questions[i]
+				q.ExecutionID, q.AttemptID, q.Generation, q.TurnID = fixed.ExecutionID, fixed.AttemptID, fixed.Generation, turnID
+			}
+			fact.Kind, fact.InteractionKind, fact.Questions, fact.QuestionRoute = executionbackend.EventQuestion, "async", call.Questions, &route
+			return fact, nil
+		}
 		if !inspectReply {
 			return fact, nil
 		}

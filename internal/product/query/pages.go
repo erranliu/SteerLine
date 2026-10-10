@@ -80,7 +80,7 @@ func TaskGraphPage(p taskview.Page) api.GraphPage {
 }
 
 func DecisionRequest(r model.DecisionRequest) api.DecisionRequest {
-	p := api.DecisionRequest{Question: r.Question, Context: r.Context, Recommended: r.Recommended, AllowFreeText: r.AllowFreeText, HasNativeQuestions: len(r.Questions) > 0 || r.QuestionRoute != nil}
+	p := api.DecisionRequest{InteractionKind: r.InteractionKind, BlocksProgress: r.BlocksProgress, Question: r.Question, Context: r.Context, Recommended: r.Recommended, AllowFreeText: r.AllowFreeText, HasNativeQuestions: len(r.Questions) > 0 || r.QuestionRoute != nil}
 	for _, o := range r.Options {
 		p.Options = append(p.Options, api.DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
 	}
@@ -156,6 +156,9 @@ func Candidate(r *CandidateView) *api.CandidateSummary {
 	}
 	if d := r.Decision; d != nil {
 		p.Decision = &api.DecisionSummary{ID: d.ID, AttemptID: d.AttemptID, Status: d.Status, Version: d.Version, Request: DecisionRequest(d.Request), OptionID: d.OptionID, Note: d.Note, AnsweredBy: d.AnsweredBy, AnsweredAt: copyValue(d.AnsweredAt), AppliedAt: copyValue(d.AppliedAt)}
+		if d.Request.InteractionKind == "async" {
+			p.Decision.Request.BlocksProgress = r.BusinessStatus == "waiting_input" || r.BusinessStatus == "blocked"
+		}
 	}
 	return p
 }

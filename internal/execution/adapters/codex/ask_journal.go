@@ -101,6 +101,13 @@ func ReadAskJournal(path, threadID, turnID string, validate func(codexapp.Envelo
 			}
 			journal.Calls = append(journal.Calls, event)
 		case "item/completed":
+			if IsAsyncQuestion(event) {
+				if err := validate(event); err != nil {
+					return AskJournal{}, err
+				}
+				journal.Calls = append(journal.Calls, event)
+				continue
+			}
 			var params struct {
 				ThreadID string `json:"threadId"`
 				TurnID   string `json:"turnId"`

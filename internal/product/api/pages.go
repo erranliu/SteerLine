@@ -237,6 +237,8 @@ type PRSummary struct {
 
 type DecisionOption struct{ ID, Label, Detail string }
 type DecisionRequest struct {
+	InteractionKind    string           `json:"interaction_kind"`
+	BlocksProgress     bool             `json:"blocks_progress"`
 	Question           string           `json:"question"`
 	Context            string           `json:"context"`
 	Recommended        string           `json:"recommended"`

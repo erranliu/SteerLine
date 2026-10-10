@@ -253,15 +253,16 @@ func MapHistoryTurn(base executionvalues.ConversationEvent, turn HistoryTurn, se
 	finalSeen, unknownPhase, missingFinal := false, false, false
 	for _, raw := range turn.Items {
 		var item struct {
-			ID    string  `json:"id"`
-			Type  string  `json:"type"`
-			Text  *string `json:"text"`
-			Phase string  `json:"phase"`
+			ID       string  `json:"id"`
+			Type     string  `json:"type"`
+			Text     *string `json:"text"`
+			Phase    string  `json:"phase"`
+			Delivery string  `json:"delivery"`
 		}
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return nil, err
 		}
-		if item.Type != "agentMessage" {
+		if item.Type != "agentMessage" || item.Delivery == "async" {
 			continue
 		}
 		if item.Phase != string(executionvalues.MessagePhaseFinalAnswer) {
@@ -420,14 +421,15 @@ func InspectHistoryTurn(turn HistoryTurn) (HistoryTurnFacts, error) {
 	facts := HistoryTurnFacts{Terminal: turn.CompletedAt != nil && (turn.Status == "completed" || turn.Status == "failed" || turn.Status == "interrupted")}
 	for _, raw := range turn.Items {
 		var item struct {
-			Type  string  `json:"type"`
-			Phase string  `json:"phase"`
-			Text  *string `json:"text"`
+			Type     string  `json:"type"`
+			Phase    string  `json:"phase"`
+			Delivery string  `json:"delivery"`
+			Text     *string `json:"text"`
 		}
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return facts, err
 		}
-		if item.Type == "agentMessage" {
+		if item.Type == "agentMessage" && item.Delivery != "async" {
 			facts.HasPhase = facts.HasPhase || item.Phase == string(executionvalues.MessagePhaseCommentary) || item.Phase == string(executionvalues.MessagePhaseFinalAnswer)
 			if item.Phase == string(executionvalues.MessagePhaseFinalAnswer) && item.Text != nil {
 				facts.HasFinal = true

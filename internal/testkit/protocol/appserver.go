@@ -165,6 +165,31 @@ func MockAppServerConnection(conn net.Conn, state *AppServerState) {
 			state.mu.Lock()
 			response["result"] = map[string]any{"thread": map[string]any{"id": AppServerSession, "cwd": state.Cwd, "turns": append([]map[string]any(nil), state.Turns...)}}
 			state.mu.Unlock()
+		case "turn/steer":
+			var params struct {
+				ThreadID string           `json:"threadId"`
+				Expected string           `json:"expectedTurnId"`
+				ClientID string           `json:"clientUserMessageId"`
+				Input    []map[string]any `json:"input"`
+			}
+			_ = json.Unmarshal(message.Params, &params)
+			state.mu.Lock()
+			if len(state.Turns) == 0 || params.ThreadID != AppServerSession || state.Turns[len(state.Turns)-1]["id"] != params.Expected || state.Turns[len(state.Turns)-1]["status"] != "inProgress" || params.ClientID == "" {
+				state.mu.Unlock()
+				response["error"] = map[string]any{"code": -32600, "message": "original turn is not active"}
+				break
+			}
+			turn := state.Turns[len(state.Turns)-1]
+			user := map[string]any{"type": "userMessage", "id": "answer", "clientId": params.ClientID, "content": params.Input}
+			final := map[string]any{"type": "agentMessage", "id": "normal-final", "phase": "final_answer", "text": "done after answer"}
+			turn["items"] = append(turn["items"].([]any), user, final)
+			turn["status"], turn["completedAt"] = "completed", 1
+			state.mu.Unlock()
+			response["result"] = map[string]any{"turnId": params.Expected}
+			if send(response) != nil || send(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": AppServerSession, "turnId": params.Expected, "item": user}}) != nil || send(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": AppServerSession, "turnId": params.Expected, "item": final}}) != nil || send(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": AppServerSession, "turn": turn}}) != nil {
+				return
+			}
+			continue
 		case "turn/start":
 			var params struct {
 				Input []struct {
@@ -180,6 +205,17 @@ func MockAppServerConnection(conn net.Conn, state *AppServerState) {
 			}
 			item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": text}
 			turn := map[string]any{"id": turnID, "status": "completed", "completedAt": 1, "items": []any{item}}
+			if os.Getenv("STEERLINE_WORKER_FLOW_ASYNC") == "1" {
+				item = map[string]any{"type": "agentMessage", "id": "async-question", "phase": "final_answer", "delivery": "async", "text": "Choose publisher", "questions": []any{map[string]any{"title": "Choose publisher", "options": []string{"worker", "host_service"}}}}
+				turn = map[string]any{"id": turnID, "status": "inProgress", "items": []any{item}}
+				state.Turns = append(state.Turns, turn)
+				state.mu.Unlock()
+				response["result"] = map[string]any{"turn": map[string]any{"id": turnID, "status": "inProgress"}}
+				if send(response) != nil || send(map[string]any{"method": "turn/started", "params": map[string]any{"threadId": AppServerSession, "turn": map[string]any{"id": turnID}}}) != nil || send(map[string]any{"method": "item/completed", "params": map[string]any{"threadId": AppServerSession, "turnId": turnID, "item": item}}) != nil {
+					return
+				}
+				continue
+			}
 			state.Turns = append(state.Turns, turn)
 			state.mu.Unlock()
 			response["result"] = map[string]any{"turn": map[string]any{"id": turnID, "status": "inProgress"}}

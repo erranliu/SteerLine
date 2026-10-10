@@ -126,10 +126,14 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 		}
 		s.setRunDecision(run, nil)
 	}
-	if len(execution.PendingQuestions) > 0 {
-		execution.PendingQuestions = nil
+	pending := execution.PendingQuestions[:0]
+	for _, q := range execution.PendingQuestions {
+		if q.InteractionKind == "async" {
+			pending = append(pending, q)
+		}
 	}
-	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
+	execution.PendingQuestions = pending
+	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil && run.Decision.Request.InteractionKind != "async" {
 		if run.Decision.Status == "pending" {
 			s.setDecisionStatus(run, "superseded")
 			if err := s.commitWorker(run); err != nil {

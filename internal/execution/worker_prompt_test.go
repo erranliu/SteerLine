@@ -67,10 +67,13 @@ func TestWorkerPromptReportAddsOnlyMissingEvidenceAndRetrySource(t *testing.T) {
 }
 
 func TestWorkerPromptPublicationTargetOnlyForPublication(t *testing.T) {
-	c := Config{Remote: "delivery", Branch: "release"}
+	c := Config{Remote: "delivery", Branch: "release", PublicationPolicy: b.PublicationPolicy{Publisher: "worker"}}
 	for _, step := range []string{m.StepImplement, m.StepReport, m.StepPublish, m.StepPublishReport} {
 		prompt := stagePublicationInstruction(step, c)
-		if (step == m.StepPublish) != (prompt != "") {
+		if !strings.Contains(prompt, `"publication_policy":{"publisher":"worker"}`) {
+			t.Fatal("fixed publisher missing from model step")
+		}
+		if (step == m.StepPublish) != strings.Contains(prompt, "PR target:") {
 			t.Fatalf("unexpected target on %s: %s", step, prompt)
 		}
 		if step == m.StepPublish && (!strings.Contains(prompt, "delivery") || !strings.Contains(prompt, "release")) {

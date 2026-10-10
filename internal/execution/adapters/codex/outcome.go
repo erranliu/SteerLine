@@ -51,16 +51,17 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 				ThreadID string `json:"threadId"`
 				TurnID   string `json:"turnId"`
 				Item     struct {
-					ID    string `json:"id"`
-					Type  string `json:"type"`
-					Text  string `json:"text"`
-					Phase string `json:"phase"`
+					ID       string `json:"id"`
+					Type     string `json:"type"`
+					Text     string `json:"text"`
+					Phase    string `json:"phase"`
+					Delivery string `json:"delivery"`
 				} `json:"item"`
 			}
 			if json.Unmarshal(event.Params, &p) != nil || p.ThreadID != threadID || p.TurnID != turnID {
 				return outcome, errors.New("app-server item completion identity mismatch")
 			}
-			if p.Item.Type == "agentMessage" {
+			if p.Item.Type == "agentMessage" && p.Item.Delivery != "async" {
 				addPR(p.Item.Text)
 				if p.Item.Phase == "final_answer" {
 					outcome.LastMessage = p.Item.Text
@@ -87,10 +88,11 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 					Status string          `json:"status"`
 					Error  json.RawMessage `json:"error"`
 					Items  []struct {
-						ID    string `json:"id"`
-						Type  string `json:"type"`
-						Text  string `json:"text"`
-						Phase string `json:"phase"`
+						ID       string `json:"id"`
+						Type     string `json:"type"`
+						Text     string `json:"text"`
+						Phase    string `json:"phase"`
+						Delivery string `json:"delivery"`
 					} `json:"items"`
 				} `json:"turn"`
 			}
@@ -105,7 +107,7 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 				outcome.Failure = "native turn ended with status " + p.Turn.Status
 			}
 			for _, item := range p.Turn.Items {
-				if item.Type == "agentMessage" {
+				if item.Type == "agentMessage" && item.Delivery != "async" {
 					addPR(item.Text)
 					if item.Phase == "final_answer" {
 						outcome.LastMessage = item.Text

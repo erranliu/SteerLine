@@ -9,8 +9,9 @@ import (
 const DecisionRequestFormatVersion = 2
 
 type PendingQuestion struct {
-	Questions []executionbackend.Question                 `json:"questions"`
-	Route     executionbackend.ImplementationDataEnvelope `json:"route"`
+	InteractionKind string                                      `json:"interaction_kind,omitempty"`
+	Questions       []executionbackend.Question                 `json:"questions"`
+	Route           executionbackend.ImplementationDataEnvelope `json:"route"`
 }
 
 // A human-confirmed stop settles the resource uncertainty, not the outcome of
@@ -22,16 +23,18 @@ type ManualStopConfirmation struct {
 	Basis       string    `json:"basis,omitempty"`
 }
 
-// DecisionRequest is the structured question carried in an R-a result.
+// DecisionRequest binds a human question independently of workflow progress.
 type DecisionRequest struct {
-	FormatVersion int                                          `json:"format_version"`
-	Question      string                                       `json:"question"`
-	Context       string                                       `json:"context,omitempty"`
-	Options       []executionbackend.DecisionOption            `json:"options"`
-	Questions     []executionbackend.Question                  `json:"questions,omitempty"`
-	QuestionRoute *executionbackend.ImplementationDataEnvelope `json:"question_route,omitempty"`
-	Recommended   string                                       `json:"recommended,omitempty"`
-	AllowFreeText bool                                         `json:"allow_free_text,omitempty"`
+	InteractionKind string                                       `json:"interaction_kind,omitempty"`
+	BlocksProgress  bool                                         `json:"blocks_progress"`
+	FormatVersion   int                                          `json:"format_version"`
+	Question        string                                       `json:"question"`
+	Context         string                                       `json:"context,omitempty"`
+	Options         []executionbackend.DecisionOption            `json:"options"`
+	Questions       []executionbackend.Question                  `json:"questions,omitempty"`
+	QuestionRoute   *executionbackend.ImplementationDataEnvelope `json:"question_route,omitempty"`
+	Recommended     string                                       `json:"recommended,omitempty"`
+	AllowFreeText   bool                                         `json:"allow_free_text,omitempty"`
 }
 
 // DecisionState is the runtime projection of one decision. SQLite owns the

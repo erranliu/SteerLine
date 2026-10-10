@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -111,7 +112,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
-	if run.Decision.Request.QuestionRoute != nil {
+	if run.Decision.Request.QuestionRoute != nil && run.Decision.Request.InteractionKind != "async" {
 		if s.signalChannel() != nil && s.workers[run.RunID] == nil {
 			return nil // Recovery must attach the original observer before replying.
 		}
@@ -157,6 +158,10 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 }
 
 func workerFeedbackText(answer executionmodel.DecisionAnswer, request executionmodel.DecisionRequest) string {
+	if request.InteractionKind == "async" {
+		raw, _ := json.Marshal(map[string]any{"question_id": request.QuestionRoute.QuestionID, "source_turn_id": request.QuestionRoute.TurnID, "questions": request.Questions, "answers": answer.Answers})
+		return "Answer to the original asynchronous question:\n" + string(raw)
+	}
 	if answer.OptionID == "" {
 		return answer.Note
 	}

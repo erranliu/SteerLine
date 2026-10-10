@@ -18,7 +18,7 @@ func WriteDecisionRequest(r *reconstructiontypes.RunView, req executionmodel.Dec
 }
 
 func DecisionRequestFromEventFact(fact executionbackend.EventFact) executionmodel.DecisionRequest {
-	request := executionmodel.DecisionRequest{FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: fact.QuestionText,
+	request := executionmodel.DecisionRequest{InteractionKind: fact.InteractionKind, BlocksProgress: fact.InteractionKind != "async", FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: fact.QuestionText,
 		Context: fact.QuestionContext, Options: append([]executionbackend.DecisionOption(nil), fact.QuestionOptions...), AllowFreeText: fact.AllowFreeText}
 	if len(fact.Questions) == 0 {
 		return request
@@ -70,6 +70,12 @@ func writeDecisionRequestWithID(r *reconstructiontypes.RunView, req executionmod
 		return nil, errors.New("decision requires a run and stable ID")
 	}
 	req.FormatVersion = executionmodel.DecisionRequestFormatVersion
+	if req.InteractionKind == "" {
+		req.InteractionKind = "sync"
+	}
+	if req.InteractionKind != "async" {
+		req.BlocksProgress = true
+	}
 	if e := executionmodel.ValidateDecisionRequest(&req); e != nil {
 		return nil, e
 	}
@@ -193,7 +199,7 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *reconstruction
 	}
 
 	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
-		run.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil) {
+		run.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil && run.Decision.Request.InteractionKind != "async") {
 		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
 	}
 	return ctx.Err()
@@ -204,7 +210,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		return err
 	}
 	for _, run := range s.runs {
-		if run == nil || run.FinishTaskStatus != "waiting_decision" && run.FinishTaskStatus != "waiting_pr_merge" && run.BusinessStatus != "blocked" || run.Decision == nil || run.Decision.Status != "answer_saved" {
+		if run == nil || run.FinishTaskStatus != "waiting_decision" && run.FinishTaskStatus != "waiting_pr_merge" && run.BusinessStatus != "blocked" && !(run.Decision != nil && run.Decision.Request.InteractionKind == "async") || run.Decision == nil || run.Decision.Status != "answer_saved" {
 			continue
 		}
 		blocked := false

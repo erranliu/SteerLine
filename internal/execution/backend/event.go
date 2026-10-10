@@ -88,6 +88,7 @@ type EventFact struct {
 	SourceLength    int64
 	SessionID       string
 	StartedTurnID   string
+	InteractionKind string
 	Questions       []Question
 	QuestionRoute   *ImplementationDataEnvelope
 	QuestionText    string

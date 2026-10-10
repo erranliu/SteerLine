@@ -69,7 +69,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 			if run := s.findDecision(command.TargetID); run != nil {
 				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired &&
 					(execution.RecoveryState == "unverified" || execution.RecoveryState == "" ||
-						execution.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil) {
+						execution.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil && run.Decision.Request.InteractionKind != "async") {
 					result, _ := json.Marshal(map[string]string{"code": "recovery_unverified", "error": "the original worker or request is not verified for this answer; review the recovery decision"})
 					if err := service.SetStatus(ctx, command, "rejected", result); err != nil {
 						return err

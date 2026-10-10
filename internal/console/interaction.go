@@ -107,7 +107,7 @@ func pendingDecision(run *api.CandidateSummary) bool {
 // The workflow phase determines whether input is required. A merge-waiting
 // worker may offer another feedback turn without blocking PR delivery.
 func waitingForDecision(run *api.CandidateSummary) bool {
-	return candidateBusinessOpen(run) && (run.FinishTaskStatus == "waiting_decision" || pendingDecision(run) && !waitingForMerge(run))
+	return candidateBusinessOpen(run) && (run.FinishTaskStatus == "waiting_decision" || pendingDecision(run) && run.Decision.Request.InteractionKind != "async" && !waitingForMerge(run))
 }
 
 func candidateHumanStatus(state projectState, run *api.CandidateSummary) string {
@@ -150,6 +150,13 @@ func candidateHumanStatus(state projectState, run *api.CandidateSummary) string 
 		}
 	}
 	if pendingDecision(run) {
+		if run.Decision.Request.InteractionKind == "async" && !run.Decision.Request.BlocksProgress {
+			label := workerLabels["status"][run.BusinessStatus]
+			if label == "" {
+				label = safeTerminalInlineText(run.BusinessStatus)
+			}
+			return label + " · 有待回答问题"
+		}
 		return "待交互"
 	}
 	return runStatus(run)

@@ -300,7 +300,11 @@ func (t *sqliteTx) AcceptDecisionAnswer(command storageports.CommandRecord, answ
 	if err = decode(executionBytes, &execution); err != nil {
 		return record, false, err
 	}
-	if revision != answer.ExpectedRunRevision || phase != "waiting_input" && phase != "waiting_external" && phase != "blocked" || execution.DecisionID != record.DecisionID || record.WorkflowRunID != answer.RunID || execution.CurrentStep != "worker" {
+	var request executionmodel.DecisionRequest
+	if err = decode(record.Request, &request); err != nil {
+		return record, false, err
+	}
+	if revision != answer.ExpectedRunRevision || phase != "waiting_input" && phase != "waiting_external" && phase != "blocked" && !(request.InteractionKind == "async" && (phase == "running" || phase == "queued")) || execution.DecisionID != record.DecisionID || record.WorkflowRunID != answer.RunID || execution.CurrentStep != "worker" {
 		return record, false, errors.New("stale_revision: decision or run identity changed; refresh before answering")
 	}
 	var currentAttempt string
@@ -309,10 +313,6 @@ func (t *sqliteTx) AcceptDecisionAnswer(command storageports.CommandRecord, answ
 	}
 	if err != nil || currentAttempt != record.AttemptID {
 		return record, false, errors.New("stale_revision: decision attempt changed")
-	}
-	var request executionmodel.DecisionRequest
-	if err = decode(record.Request, &request); err != nil {
-		return record, false, err
 	}
 	if err = executionmodel.ValidateDecisionAnswer(&request, &answer); err != nil {
 		return record, false, err

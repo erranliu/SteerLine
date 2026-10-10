@@ -45,6 +45,13 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 		return errors.New("feedback lost its original request")
 	}
 	w := fixed.workflow
+	if request.InteractionKind == "async" {
+		step, err := asyncContinuationStep(w, request)
+		if err != nil {
+			return err
+		}
+		w.StepID = step
+	}
 	if w.Status == "reconciling" || s.hasUnknownWorkerOperation(run) {
 		return errors.New("unknown original outcomes require read-only reconciliation")
 	}
@@ -75,18 +82,24 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 	if diagnostic == request.Context {
 		diagnostic = ""
 	}
+	questionID, sourceTurnID := "", ""
+	if request.QuestionRoute != nil {
+		questionID, sourceTurnID = request.QuestionRoute.QuestionID, request.QuestionRoute.TurnID
+	}
 	feedback, err := json.Marshal(struct {
-		Question   string              `json:"question"`
-		Context    string              `json:"context,omitempty"`
-		Selected   string              `json:"selected_answer,omitempty"`
-		Note       string              `json:"user_text,omitempty"`
-		Answers    map[string][]string `json:"answers,omitempty"`
-		Diagnostic string              `json:"blocker,omitempty"`
-	}{request.Question, request.Context, selected, answer.Note, answer.Answers, diagnostic})
+		Question     string              `json:"question"`
+		Context      string              `json:"context,omitempty"`
+		Selected     string              `json:"selected_answer,omitempty"`
+		Note         string              `json:"user_text,omitempty"`
+		Answers      map[string][]string `json:"answers,omitempty"`
+		Diagnostic   string              `json:"blocker,omitempty"`
+		QuestionID   string              `json:"question_id,omitempty"`
+		SourceTurnID string              `json:"source_turn_id,omitempty"`
+	}{request.Question, request.Context, selected, answer.Note, answer.Answers, diagnostic, questionID, sourceTurnID})
 	if err != nil {
 		return err
 	}
-	input := executionmodel.StageInput{CommandID: commandID, AttemptID: fixed.attempt.AttemptID, StepID: w.StepID, CandidateSHA: w.CandidateSHA, TaskFacts: stageTaskFacts(w)}
+	input := executionmodel.StageInput{FeedbackDecisionID: answer.DecisionID, CommandID: commandID, AttemptID: fixed.attempt.AttemptID, StepID: w.StepID, CandidateSHA: w.CandidateSHA, TaskFacts: stageTaskFacts(w)}
 	if executionmodel.ReportStep(w.StepID) {
 		for i := len(w.StageInputs) - 1; i >= 0; i-- {
 			if w.StageInputs[i].StepID == w.StepID {
@@ -241,6 +254,10 @@ func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel
 	if err := validateWorkerWorkspace(fixed.execution.Workspace); err != nil {
 		return err
 	}
+	if executionmodel.ReportStep(input.StepID) && unresolvedAsyncDecision(run) {
+		questions, _ := json.Marshal(run.Decision.Request.Questions)
+		prompt += "\nOriginal unresolved asynchronous questions: " + string(questions) + "\nAssess whether these answers are still required. If required return needs_input; do not issue duplicate questions. Return done only when the work is complete without these answers."
+	}
 	input.Prompt = prompt + stagePublicationInstruction(input.StepID, fixed.config)
 	w.StepID, w.Status, w.UpdatedAt = input.StepID, "queued", now()
 	w.StageDiagnostic = ""
@@ -248,7 +265,7 @@ func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel
 	e.PendingCommandID, e.PendingTurnID = input.CommandID, ""
 	if len(manualReason) > 0 && manualReason[0] != "" {
 		w.Status, w.StageDiagnostic = "waiting_input", manualReason[0]
-		if run.Decision == nil || run.Decision.Status != "answer_saved" {
+		if !unresolvedAsyncDecision(run) && (run.Decision == nil || run.Decision.Status != "answer_saved") {
 			decision, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{Question: "Confirm continuation of the original step", Context: manualReason[0], Options: []executionbackend.DecisionOption{{ID: "continue", Label: "Continue the original step"}}, AllowFreeText: true})
 			if err != nil {
 				return err
@@ -272,7 +289,8 @@ func (s *Service) stageWait(run *reconstructiontypes.RunView, w *executionmodel.
 	}
 	if report != nil {
 		e.Summary = ptr(report.Summary)
-		if (status == "waiting_input" || status == "blocked") && (run.Decision == nil || run.Decision.Status != "answer_saved") {
+		// Keep unresolved async questions immutable; workflow status supplies their current blocking fact.
+		if (status == "waiting_input" || status == "blocked") && !unresolvedAsyncDecision(run) && (run.Decision == nil || run.Decision.Status != "answer_saved") {
 			decision, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{Question: firstNonemptyStage(report.Question, "Resolve the current step blocker"), Context: report.Summary, Options: []executionbackend.DecisionOption{{ID: "continue", Label: "Continue this same step"}, {ID: "implement", Label: "Apply code feedback in implement"}}, AllowFreeText: true})
 			if err != nil {
 				return err
@@ -323,7 +341,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	}
 	w.StageResults = append(w.StageResults, result)
 	manualReason := ""
-	if e.RecoveryRequired || e.OwnerServiceInstanceID != s.State.Service.InstanceID || len(e.PendingQuestions) != 0 || s.hasUnknownWorkerOperation(run) || e.Environment != nil && (!e.Environment.Ready || e.Environment.Blocker != nil) || run.Decision != nil && run.Decision.Status == "answer_saved" {
+	if e.RecoveryRequired || e.OwnerServiceInstanceID != s.State.Service.InstanceID || hasBlockingPendingQuestions(e) || s.hasUnknownWorkerOperation(run) || e.Environment != nil && (!e.Environment.Ready || e.Environment.Blocker != nil) || run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.InteractionKind != "async" {
 		manualReason = "original session or prior-service input requires explicit continuation; no automatic next turn"
 	}
 	if input.StepID == executionmodel.StepImplement {
@@ -390,6 +408,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 		if source.Snapshot == nil || !sameStageSnapshot(source.Snapshot, facts) || !stageSHA.MatchString(facts.Workspace.Head) || (report.Outputs.CandidateSHA != "" && report.Outputs.CandidateSHA != facts.Workspace.Head) || facts.Workspace.Dirty {
 			return s.stageWait(run, w, e, "blocked", "artifact_mismatch: candidate does not match source execution snapshot", &report)
 		}
+		s.expireAsyncQuestions(run, e)
 		w.CandidateSHA = facts.Workspace.Head
 		e.Summary = ptr(report.Summary)
 		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublish, CandidateSHA: w.CandidateSHA, Snapshot: facts}, fixed, manualReason)
@@ -425,6 +444,7 @@ func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed
 	if err := BindWorkerPR(w, e, info, report.Outputs.PRURL, fixed.config.PR.Repository, false); err != nil {
 		return s.stageWait(run, w, e, "reconciling", err.Error(), &report)
 	}
+	s.expireAsyncQuestions(run, e)
 	w.StepID, w.Status, w.StageDiagnostic, w.UpdatedAt = executionmodel.StepAwaitMerge, "waiting_external", "", now()
 	e.Summary, e.Error = ptr(report.Summary), nil
 	if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {

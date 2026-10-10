@@ -198,20 +198,29 @@ func (s *Service) confirmLifecycleQuestionAnswer(run *reconstructiontypes.RunVie
 	if err := s.setOperationState(request.Operation.ID, "confirmed", receipt.RequestID, mustJSON(receipt), ""); err != nil {
 		return err
 	}
+	wasAsync := run.Decision.Request.InteractionKind == "async"
 	s.setDecisionStatus(run, "reply_accepted")
 	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil {
 		return errors.New("confirmed answer lost its original execution")
 	}
+	if wasAsync && workflow.Status == "waiting_input" && workflow.StageDiagnostic == "original session or prior-service input requires explicit continuation; no automatic next turn" &&
+		execution.OwnerServiceInstanceID == s.State.Service.InstanceID && !execution.RecoveryRequired && !s.hasUnknownWorkerOperation(run) &&
+		(execution.Environment == nil || execution.Environment.Ready && execution.Environment.Blocker == nil) {
+		pending := stageInput(workflow, execution.PendingCommandID)
+		if pending != nil && executionmodel.ReportStep(pending.StepID) && request.Snapshot.QuestionRoute != nil && pending.SourceTurnID == request.Snapshot.QuestionRoute.TurnID {
+			workflow.Status, workflow.StageDiagnostic = "queued", ""
+		}
+	}
 	if len(execution.PendingQuestions) > 0 {
 		next := execution.PendingQuestions[0]
 		execution.PendingQuestions = execution.PendingQuestions[1:]
-		decision, err := WriteDecisionRequest(run, DecisionRequestFromEventFact(executionbackend.EventFact{Questions: next.Questions, QuestionRoute: &next.Route}))
+		decision, err := WriteDecisionRequest(run, DecisionRequestFromEventFact(executionbackend.EventFact{InteractionKind: next.InteractionKind, Questions: next.Questions, QuestionRoute: &next.Route}))
 		if err != nil {
 			return err
 		}
 		s.setRunDecision(run, decision)
-	} else if workflow.Status == "waiting_input" {
+	} else if workflow.Status == "waiting_input" && run.Decision.Request.InteractionKind != "async" {
 		if err := ContinueWorkerQuestion(workflow, execution, execution.CurrentTurnID); err != nil {
 			return err
 		}

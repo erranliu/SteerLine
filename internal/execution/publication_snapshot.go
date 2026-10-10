@@ -22,10 +22,12 @@ func publicationTargetInstruction(c Config) string {
 }
 
 func stagePublicationInstruction(step string, c Config) string {
-	if step != executionmodel.StepPublish {
-		return ""
+	facts, _ := json.Marshal(map[string]any{"publication_policy": c.PublicationPolicy})
+	context := "\nFixed execution facts: " + string(facts) + "\n"
+	if step == executionmodel.StepPublish {
+		context += publicationTargetInstruction(c)
 	}
-	return publicationTargetInstruction(c)
+	return context
 }
 
 func (c Config) publicationSettings() executionmodel.PublicationSettings {

@@ -528,7 +528,7 @@ func runtimeDecisionFacts(run *productapi.CandidateSummary) *reconstruction.RunV
 	}
 	if run.Decision != nil {
 		d := run.Decision.Request
-		request := executionmodel.DecisionRequest{Question: d.Question, Context: d.Context, Recommended: d.Recommended, AllowFreeText: d.AllowFreeText}
+		request := executionmodel.DecisionRequest{InteractionKind: d.InteractionKind, BlocksProgress: d.BlocksProgress, Question: d.Question, Context: d.Context, Recommended: d.Recommended, AllowFreeText: d.AllowFreeText}
 		for _, o := range d.Options {
 			request.Options = append(request.Options, executionbackend.DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
 		}
