@@ -34,10 +34,10 @@ func (b HistoryBinding) Validate() error {
 	if b.Version != 1 || b.ProjectID == "" || b.ExecutionID == "" || b.AttemptID == "" || b.WorkflowID == "" || !filepath.IsAbs(b.Workspace) || b.Command.Executable == "" || !ValidNativeID(b.SessionID) {
 		return errors.New("Codex conversation binding is incomplete")
 	}
-	if b.Backend != executionbackend.BackendLocal && b.Backend != executionbackend.BackendOrca {
+	if b.Backend != executionbackend.BackendLocal {
 		return errors.New("Codex history backend is unsupported")
 	}
-	if b.Backend == executionbackend.BackendLocal && b.Protocol != executionbackend.ProtocolLocalProcess && b.Protocol != executionbackend.ProtocolLocalCodexAppServer || b.Backend == executionbackend.BackendOrca && b.Protocol != executionbackend.ProtocolOrcaTerminalV2 {
+	if b.Protocol != executionbackend.ProtocolLocalProcess && b.Protocol != executionbackend.ProtocolLocalCodexAppServer {
 		return errors.New("Codex history protocol does not match backend")
 	}
 	return nil

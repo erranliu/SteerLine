@@ -11,15 +11,15 @@ func TestWorkerConfigsPreserveNativeModelAndChainSettings(t *testing.T) {
 	if len(local) != 1 || codex["executable"] != "isolated-codex" || codex["model"] != Model || codex["reasoning_effort"] != Effort || codex["windows_sandbox"] != nil || codex["args"] != nil {
 		t.Fatal("local model/permission profile changed")
 	}
-	orca := OrcaWorkerProfile("isolated-orca", "4m")
+	orca := OrcaWorkerProfile("isolated-orca", "C:/owned", "30s")
 	configs := WorkerImplementationConfigs("isolated-codex", orca)
-	if len(configs) != 1 || configs[0]["payload"].(map[string]any)["executable"] != "isolated-orca" || orca["model"] != Model || orca["reasoning_effort"] != Effort || orca["windows_sandbox"] != nil {
+	if len(configs) != 1 || configs[0]["payload"].(map[string]any)["executable"] != "isolated-orca" || orca["model"] != nil || orca["reasoning_effort"] != nil || orca["repository_selector"] != "path:C:/owned" || orca["windows_sandbox"] != nil {
 		t.Fatal("Orca native launch inherited the client Codex configuration")
 	}
 }
 
 func TestOrcaSmokeProfileUsesExplicitEmptyArgs(t *testing.T) {
-	profile := OrcaWorkerProfile("isolated-orca", "4m")
+	profile := OrcaWorkerProfile("isolated-orca", "C:/owned", "30s")
 	raw, err := json.Marshal(profile)
 	if err != nil {
 		t.Fatal(err)

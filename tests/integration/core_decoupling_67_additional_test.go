@@ -77,7 +77,6 @@ func additionalDirectory(t *testing.T, ledger *additionalLedger) *execution.Exec
 
 func TestCD67AdditionalImplementation(t *testing.T) {
 	t.Run("neutral_fixed_input_restart_and_fresh_manual_answer", testAdditionalImplementation)
-	t.Run("remote_protocol_is_not_permission_authentication", testCD64RemoteProtocolAssertions)
 }
 
 func testAdditionalImplementation(t *testing.T) {

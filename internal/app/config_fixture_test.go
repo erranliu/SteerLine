@@ -12,8 +12,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
-	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	transport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
@@ -32,45 +31,25 @@ func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
 	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: "gh"}}
 }
 
-func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteConfig ...*remote.ProfileConfig) ExecutionProfile {
+type terminalFixtureProfile struct {
+	Executable, Shell, WaitTimeout, Model, ReasoningEffort string
+	Args                                                   []string
+	KeepTerminal, Activate                                 bool
+}
+
+func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *terminalFixtureProfile) ExecutionProfile {
 	t.Helper()
-	if host == "orca_supervised" {
+	if host == "orca" {
 		if terminal == nil {
-			t.Fatal("supervised fixture configuration missing")
+			t.Fatal("terminal fixture missing")
 		}
-		r := remote.ProfileConfig{Target: "local", PollInterval: "1s", CapabilityReportVersion: 1}
-		if len(remoteConfig) > 0 && remoteConfig[0] != nil {
-			r = *remoteConfig[0]
-		}
-		r.Executable = terminal.Executable
-		r.Args = terminal.Args
-		r.Shell = terminal.Shell
-		r.WaitTimeout = terminal.WaitTimeout
-		r.Model = worker.Model
-		r.ReasoningEffort = worker.ReasoningEffort
-		payload, err := remote.EncodeProfileConfig(r)
+		payload, err := json.Marshal(transport.Profile{Executable: terminal.Executable, Args: terminal.Args, RepositorySelector: "id:repo", WaitTimeout: "5s"})
 		require(t, err)
-		return ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileCodecKey, CodecVersion: remote.ProfileCodecVersion, Payload: payload}}}
+		return ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: transport.ProfileKey, CodecVersion: transport.ProfileVersion, Payload: payload}}}
 	}
 	payload, err := codexworker.EncodeProfileConfig(worker)
 	require(t, err)
-	p := ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}}
-	if host == "orca" {
-		p.ImplementationConfigs = nil
-	}
-	if host != "local" {
-		if terminal == nil {
-			t.Fatal("terminal profile settings missing")
-		}
-		native := *terminal
-		if host == "orca" {
-			native.Model, native.ReasoningEffort = worker.Model, worker.ReasoningEffort
-		}
-		payload, err := orcaworker.EncodeProfileConfig(native)
-		require(t, err)
-		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-	}
-	return p
+	return ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: codexworker.ProfileCodecVersion, Payload: payload}}}
 }
 
 func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defaultID string) {
@@ -86,10 +65,7 @@ func localGlobalExecutionFixture(t *testing.T) {
 }
 
 func codexProfileSettings(c execution.Config, directories ...*execution.ExecutionDirectory) codexworker.ProfileConfig {
-	if c.Host == "orca_supervised" {
-		native, _ := remoteSettings(c, directories...)
-		return codexworker.ProfileConfig{Model: native.Model, ReasoningEffort: native.ReasoningEffort}
-	}
+
 	value, _ := codexSettings(c, directories...)
 	return value
 }
@@ -205,21 +181,24 @@ func unitProjectProfile(c Config) ExecutionProfile {
 	return boundProfile(c, ExecutionProfile{ID: ProjectExecutionProfileID, Name: "Project default", Host: c.Host, Agent: c.Agent, ImplementationConfigs: inputs})
 }
 
-func setTestImplementationProfiles(t *testing.T, c *Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteConfig ...*remote.ProfileConfig) {
+func setTestImplementationProfiles(t *testing.T, c *Config, worker codexworker.ProfileConfig, terminal *terminalFixtureProfile) {
 	t.Helper()
 	if c.ExecutionDirectory == nil {
 		*c = bindUnitDirectory(t, *c)
 	}
-	p := testExecutionProfile(t, ProjectExecutionProfileID, "Project default", c.Host, c.Agent, worker, terminal, remoteConfig...)
+	p := testExecutionProfile(t, ProjectExecutionProfileID, "Project default", c.Host, c.Agent, worker, terminal)
 	*c = c.ApplyExecutionProfile(p)
 }
 
 func setTestCodexProfile(t *testing.T, c *Config, worker codexworker.ProfileConfig) {
 	t.Helper()
-	var terminal *orcaworker.ProfileConfig
+	var terminal *terminalFixtureProfile
 	if c.Host != "local" {
-		settings, _ := remoteSettings(c.executionConfig(), c.ExecutionDirectory)
-		terminal = &orcaworker.ProfileConfig{Executable: settings.Executable, Args: settings.Args, Shell: settings.Shell, WaitTimeout: settings.WaitTimeout}
+		raw, err := c.executionConfig().DecodeImplementationConfig(transport.ProfileKey, c.ExecutionDirectory)
+		require(t, err)
+		settings, err := transport.DecodeProfile(raw)
+		require(t, err)
+		terminal = &terminalFixtureProfile{Executable: settings.Executable, Args: settings.Args, WaitTimeout: settings.WaitTimeout}
 	}
 	setTestImplementationProfiles(t, c, worker, terminal)
 }

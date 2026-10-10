@@ -48,7 +48,7 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 			defer store.Close()
 			base := executionvalues.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: sample.Backend, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", Source: "codex-app-server", SourceSegment: "native", SourceIdentity: "native", SessionID: sample.Thread.ID}
 			if sample.Backend == executionbackend.BackendOrca {
-				base.Protocol = executionbackend.ProtocolOrcaTerminalV2
+				base.Protocol = executionbackend.ProtocolOrcaTerminalV3
 			}
 			var all []executionvalues.ConversationWrite
 			for _, turn := range sample.Thread.Turns {

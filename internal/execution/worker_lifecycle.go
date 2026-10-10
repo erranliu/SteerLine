@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 	"slices"
 	"strings"
 
@@ -689,7 +690,7 @@ func mergeLifecycleExecutionCandidate(execution *executionmodel.ExecutionRecord,
 		if workspace.Worktree == "" || workspace.Branch == "" || workspace.Base == "" || workspace.Head == "" {
 			return errors.New("lifecycle workspace receipt is incomplete")
 		}
-		execution.Workspace = executionmodel.WorkspaceEvidence{Repository: workspace.Repository, Worktree: workspace.Worktree, Branch: workspace.Branch,
+		execution.Workspace = executionmodel.WorkspaceEvidence{InspectionScope: workspace.InspectionScope, Repository: workspace.Repository, Worktree: workspace.Worktree, Branch: workspace.Branch,
 			Base: workspace.Base, Head: workspace.Head, Dirty: workspace.Dirty, VerifiedAt: workspace.CheckedAt}
 	}
 	if receipt.State.WorktreeID != "" {
@@ -777,6 +778,13 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 		input.Purpose = "readiness"
 	}
 	policyCapabilities := lifecycle.PolicyCapabilities()
+	if policyCapabilities.CompactTerminalReply {
+		delivered, promptErr := workerreturn.Prompt(input.Prompt, input.CommandID)
+		if promptErr != nil {
+			return promptErr
+		}
+		input.Prompt = delivered
+	}
 	if executionmodel.ReportStep(input.StepID) && policyCapabilities.ReportToolPolicy != "" && input.ReportToolPolicy != policyCapabilities.ReportToolPolicy {
 		return errors.New("report native policy changed after its input was frozen")
 	}

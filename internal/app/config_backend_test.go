@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
-	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	transport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
 )
 
 func configTestRepository(t *testing.T) string {
@@ -29,8 +28,8 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 	write := func(host string) Config {
 		t.Helper()
 		codex := codexworker.ProfileConfig{Executable: "codex"}
-		orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}
-		if host == "orca_supervised" {
+		orca := &terminalFixtureProfile{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}
+		if host == "orca" {
 			orca.Shell = "powershell.exe"
 		}
 		profile := testExecutionProfile(t, "selected", "Selected", host, "codex", codex, orca)
@@ -48,7 +47,7 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		}
 		return cfg
 	}
-	orca := write("orca_supervised")
+	orca := write("orca")
 	if codexProfileSettings(orca.executionConfig()).ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion {
 		t.Fatalf("Orca worker flow acquired old project steps or a local model default: %+v", orca)
 	}
@@ -109,8 +108,8 @@ func TestConfigRejectsRetiredBeadsExecutionFields(t *testing.T) {
 
 func TestOrcaNativeProfileKeepsFrozenAuthority(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	profile := testExecutionProfile(t, "orca", "Orca", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
-	payload, err := remote.EncodeProfileConfig(remote.ProfileConfig{Target: "local", Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m", Model: "gpt-6-luna", ReasoningEffort: "medium", PollInterval: "1s", CapabilityReportVersion: 1})
+	profile := testExecutionProfile(t, "orca", "Orca", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &terminalFixtureProfile{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+	payload, err := json.Marshal(transport.Profile{Executable: "orca", WaitTimeout: "30s", RepositorySelector: "id:repo"})
 	require(t, err)
 	profile.ImplementationConfigs[0].Payload = payload
 	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "orca")
@@ -124,10 +123,12 @@ func TestOrcaNativeProfileKeepsFrozenAuthority(t *testing.T) {
 	selected, accepted, err := config.ResolveExecutionProfile("orca", "")
 	require(t, err)
 	presentation := projectPresentation(config)
-	if len(presentation.Profiles) != 1 || presentation.Profiles[0].ID != "orca" || !strings.Contains(presentation.Profiles[0].UnavailableReason, "structured final evidence") {
+	if len(presentation.Profiles) != 1 || presentation.Profiles[0].ID != "orca" || presentation.Profiles[0].UnavailableReason != "" {
 		t.Fatalf("profile presentation claimed unsupported supervised route was available: %+v", presentation.Profiles)
 	}
-	if err := validateSupervisedConfig(context.Background(), selected, config.ExecutionDirectory); err != nil {
+	entry, resolveErr := config.ExecutionDirectory.Resolve(selected)
+	require(t, resolveErr)
+	if err := entry.ValidateConfig(context.Background(), selected); err != nil {
 		t.Fatalf("fixed native launch lost admission or readiness: %v", err)
 	}
 	fixed := accepted.Freeze(config.ExecutionDirectory, config.Identity())

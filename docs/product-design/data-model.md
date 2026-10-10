@@ -30,7 +30,7 @@ WorkflowRun 在原记录中保存唯一 `status/flow_ref/step_id`，不并存旧
 
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 
-Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；Windows Orca Codex 使用冻结权限的受管命令启动。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。
+Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。Orca 的本机 / 远端附加身份均为原 runtime、agent terminal/incarnation 和 worktree，协议为 `orca_terminal_v3`；每轮保存 Command、原输出游标和有界紧凑结果，启动与权限由执行主机的 Orca 管理。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。
 
 ## 人工候选实验
 

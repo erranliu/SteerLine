@@ -14,8 +14,7 @@ import (
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
-	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	terminaltransport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -24,11 +23,9 @@ import (
 // builtinFixtureConfig loads an app-owned project config with an injected
 // implementation directory. Lower execution APIs receive only its selected
 // frozen profile through Config.ExecutionConfig().
-func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) steerlineapp.Config {
+func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworker.ProfileConfig, terminal *terminaltransport.Profile) steerlineapp.Config {
 	t.Helper()
-	if c.Host == "orca" {
-		t.Skip("retained legacy local Orca integration: product registration is disconnected; adapter unit tests remain available")
-	}
+
 	if c.Repository == "" {
 		c.Repository = filepath.Join(t.TempDir(), "repository")
 		require(t, os.MkdirAll(c.Repository, 0700))
@@ -62,37 +59,19 @@ func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworke
 	profile := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
 	var payload []byte
 	var err error
-	if c.Host == "orca_supervised" {
-		if terminal == nil || len(remoteSettings) == 0 || remoteSettings[0] == nil {
-			t.Fatal("remote fixture settings missing")
+	if c.Host == "orca" {
+		if terminal == nil {
+			t.Fatal("terminal settings missing")
 		}
-		r := *remoteSettings[0]
-		r.Executable = terminal.Executable
-		r.Args = terminal.Args
-		r.Shell = terminal.Shell
-		r.WaitTimeout = terminal.WaitTimeout
-		r.Model = worker.Model
-		r.ReasoningEffort = worker.ReasoningEffort
-		payload, err = remote.EncodeProfileConfig(r)
+		payload, err = json.Marshal(*terminal)
 		require(t, err)
-		profile.ImplementationConfigs = []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileCodecKey, CodecVersion: remote.ProfileCodecVersion, Payload: payload}}
+		profile.ImplementationConfigs = []executionbackend.ImplementationConfigInput{{ImplementationKey: terminaltransport.ProfileKey, CodecVersion: terminaltransport.ProfileVersion, Payload: payload}}
 	} else {
 		payload, err = codexworker.EncodeProfileConfig(worker)
 		require(t, err)
-		if c.Host != "orca" {
-			profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload})
-		}
-		if terminal != nil {
-			native := *terminal
-			if c.Host == "orca" {
-				native.Model, native.ReasoningEffort = worker.Model, worker.ReasoningEffort
-			}
-			payload, err = orcaworker.EncodeProfileConfig(native)
-			require(t, err)
-			profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-		}
-
+		profile.ImplementationConfigs = []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}
 	}
+
 	global, err := json.Marshal(map[string]any{"version": 2, "default_execution_profile": profile.ID, "execution_profiles": []execution.ExecutionProfile{profile}})
 	require(t, err)
 	globalPath := steerlineapp.GlobalExecutionConfigPath()
@@ -177,25 +156,11 @@ func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
 	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: "git", Args: []string{"status"}}}
 }
 
-func setNativeImplementationProfiles(t *testing.T, c *steerlineapp.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remotes ...*remote.ProfileConfig) {
+func setNativeImplementationProfiles(t *testing.T, c *steerlineapp.Config, worker codexworker.ProfileConfig, terminal *terminaltransport.Profile) {
 	if c == nil {
 		t.Fatal("app config is required")
 	}
-	*c = builtinFixtureConfig(t, *c, worker, terminal, remotes...)
-}
-
-func setNativeProfile(t *testing.T, c *steerlineapp.Config, worker codexworker.ProfileConfig) {
-	var terminal *orcaworker.ProfileConfig
-	var remoteSettings []*remote.ProfileConfig
-	if c.Host != "local" {
-		settings := orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "5s"}
-		terminal = &settings
-	}
-	if c.Host == "orca_supervised" {
-		settings := remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "2s", CapabilityReportVersion: 1}
-		remoteSettings = append(remoteSettings, &settings)
-	}
-	setNativeImplementationProfiles(t, c, worker, terminal, remoteSettings...)
+	*c = builtinFixtureConfig(t, *c, worker, terminal)
 }
 
 func nativeAdmissionFixture(t *testing.T) (steerlineapp.Config, string, *sqlite.SQLiteStore) {
@@ -260,4 +225,12 @@ func requireNativeFlowCapabilities(ctx context.Context, c steerlineapp.Config) e
 		return err
 	}
 	return entry.Preflight(ctx, config)
+}
+
+func setNativeProfile(t *testing.T, c *steerlineapp.Config, worker codexworker.ProfileConfig) {
+	var terminal *terminaltransport.Profile
+	if c.Host == "orca" {
+		terminal = &terminaltransport.Profile{Executable: "orca", RepositorySelector: "id:fixture", WaitTimeout: "5s"}
+	}
+	setNativeImplementationProfiles(t, c, worker, terminal)
 }

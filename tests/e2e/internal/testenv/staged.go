@@ -27,7 +27,7 @@ func (p *Project) AssertStagedFlow(snapshot Snapshot) {
 		if input.Snapshot != nil && result.Snapshot == nil {
 			p.Scenario.t.Fatal("stage snapshot lost")
 		}
-		if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV2) {
+		if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV3) {
 			p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, fmt.Sprintf("step-%d-usage-capability.json", i)), map[string]any{"status": "not_exposed_by_orca", "step_id": step, "command_id": result.CommandID, "session_id": result.SessionID, "dispatch_id": result.FinalNativeTurnID, "final_source": result.FinalSource}))
 			continue
 		}

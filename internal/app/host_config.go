@@ -8,7 +8,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/pathguard"

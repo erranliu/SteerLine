@@ -23,7 +23,7 @@ import (
 	steerlinehost "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	orcasupervised "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	transport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -630,15 +630,15 @@ func TestAPIQueryParity(t *testing.T) {
 		if presentation.Presentation.Profiles[i].ID == defaultProfileID {
 			defaultProfile = &presentation.Presentation.Profiles[i]
 		}
-		if presentation.Presentation.Profiles[i].ID == "orca-supervised" {
+		if presentation.Presentation.Profiles[i].ID == "orca-terminal" {
 			unsupportedOrcaProfile = &presentation.Presentation.Profiles[i]
 		}
 	}
 	if selectedProfile == nil || defaultProfile == nil || selectedProfile.UnavailableReason != "" || selectedProfile.Digest == "" || selectedProfile.Name == "" {
 		t.Fatalf("HTTP presentation did not expose both default and usable nondefault profiles: %+v", presentation.Presentation)
 	}
-	if unsupportedOrcaProfile == nil || !strings.Contains(unsupportedOrcaProfile.UnavailableReason, "unsupported") || !strings.Contains(unsupportedOrcaProfile.UnavailableReason, "structured final evidence") {
-		t.Fatalf("HTTP presentation claimed the current supervised Orca route can satisfy staged final evidence: %+v", presentation.Presentation.Profiles)
+	if unsupportedOrcaProfile == nil || unsupportedOrcaProfile.UnavailableReason != "" {
+		t.Fatalf("HTTP presentation rejected the terminal route before native preflight: %+v", presentation.Presentation.Profiles)
 	}
 	for _, configured := range fixture.config.AvailableExecutionProfiles() {
 		if configured.ID == profileID && configured.Digest(fixture.config.ExecutionDirectory) != selectedProfile.Digest {
@@ -854,12 +854,10 @@ func addUnsupportedOrcaProfile(t *testing.T, fixture *integrationFixture) {
 	require(t, json.Unmarshal(data, &global))
 	var profiles []execution.ExecutionProfile
 	require(t, json.Unmarshal(global["execution_profiles"], &profiles))
-	payload, err := orcasupervised.EncodeProfileConfig(orcasupervised.ProfileConfig{
-		Target: "local", Executable: os.Args[0], Shell: "powershell.exe", WaitTimeout: "2m", PollInterval: "1s", CapabilityReportVersion: 1,
-	})
+	payload, err := json.Marshal(transport.Profile{Executable: "missing-orca-executable", RepositorySelector: "id:repo", WaitTimeout: "30s"})
 	require(t, err)
-	profiles = append(profiles, execution.ExecutionProfile{ID: "orca-supervised", Name: "Current supervised Orca", Host: "orca_supervised", Agent: "codex",
-		ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: orcasupervised.ProfileCodecKey, CodecVersion: orcasupervised.ProfileCodecVersion, Payload: payload}}})
+	profiles = append(profiles, execution.ExecutionProfile{ID: "orca-terminal", Name: "Orca terminal", Host: "orca", Agent: "opaque-agent", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: transport.ProfileKey, CodecVersion: transport.ProfileVersion, Payload: payload}}})
+
 	global["execution_profiles"] = mustJSON(profiles)
 	require(t, os.WriteFile(globalPath, mustJSON(global), 0600))
 	fixture.config, err = steerlineapp.LoadConfig(fixture.configPath)

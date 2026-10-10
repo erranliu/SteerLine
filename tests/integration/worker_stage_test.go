@@ -9,24 +9,22 @@ import (
 	"time"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	terminal "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	testprotocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 func TestWorkerStageLocalRoundTrip(t *testing.T) { testWorkerStageRoundTrip(t, "local") }
-func TestWorkerStageOrcaRoundTrip(t *testing.T)  { testWorkerStageRoundTrip(t, "orca") }
 
 func TestWorkerStageLocalPublishReport(t *testing.T) {
 	t.Setenv("STEERLINE_STAGE_PUBLISH_PLAIN", "1")
-	testWorkerStageRun(t, "local", false)
+	testWorkerStageRun(t, "local")
 }
 
-func TestWorkerStageOrcaUnknownReport(t *testing.T) { testWorkerStageRun(t, "orca", true) }
-
-func testWorkerStageRoundTrip(t *testing.T, host string) { testWorkerStageRun(t, host, false) }
-func testWorkerStageRun(t *testing.T, host string, unknown bool) {
+func testWorkerStageRoundTrip(t *testing.T, host string) { testWorkerStageRun(t, host) }
+func testWorkerStageRun(t *testing.T, host string) {
 	steps := []string{executionmodel.StepImplement, executionmodel.StepReport, executionmodel.StepPublish}
 	if os.Getenv("STEERLINE_STAGE_PUBLISH_PLAIN") == "1" {
 		steps = append(steps, executionmodel.StepPublishReport)
@@ -34,7 +32,7 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	turns := len(steps)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	f := newLifecycleProjectBase(t, host, false)
+	f := newLifecycleProjectBase(t, "local", false)
 	provider := filepath.Join(filepath.Dir(f.configPath), "stage-provider.json")
 	t.Setenv("STEERLINE_STAGE_PROVIDER", provider)
 	raw, err := os.ReadFile(f.configPath)
@@ -47,51 +45,26 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	require(t, os.WriteFile(f.configPath, raw, 0600))
 	f.config, err = steerlineapp.LoadConfig(f.configPath)
 	require(t, err)
+	if host != "local" {
+		environment := ""
+		if host == "orca-environment" {
+			environment = "paired-fixture"
+		}
+		require(t, os.MkdirAll(f.nativeStateDir, 0700))
+		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "opaque-worker", Incarnation: "original"})))
+		f.config.Host, f.config.Agent = "orca", "opaque-worker"
+		setNativeImplementationProfiles(t, &f.config, codexworker.ProfileConfig{}, &terminal.Profile{Executable: os.Args[0], Args: []string{"--fake", "terminal-orca", f.nativeStateDir}, RepositorySelector: "id:fixture", Environment: environment, WaitTimeout: "5s"})
+	}
 	project, err := steerlineapp.OpenNativeTaskProject(ctx, &f.config)
 	require(t, err)
 	require(t, project.Close())
-	if host == "orca" {
-		state := testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 1, StageProvider: provider, StageRemote: f.bareRemote}
-		if unknown {
-			state.LoseDispatchAt = 2
-		}
-		require(t, testprotocol.WriteNativeOrcaState(f.nativeStateDir, state))
-	}
+
 	createIntegrationTask(t, ctx, f, 901)
 	resolver := &integrationLifecycleResolver{}
 	service := startIntegrationService(t, ctx, f.config, resolver)
 	defer service.stop(t)
 	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
-	if unknown {
-		stopped := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-			return run.StepID == executionmodel.StepReport && (run.BusinessStatus == "reconciling" || run.BusinessStatus == "waiting_input") && e.PendingCommandID != ""
-		})
-		w := stopped.runtime.WorkflowRuns[0]
-		if len(w.StageResults) != 1 || len(w.StageInputs) != 2 || w.StageInputs[1].StepID != executionmodel.StepReport {
-			t.Fatal("unknown report skipped facts or automatically published")
-		}
-		service.stop(t)
-		native, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
-		require(t, err)
-		if native.Dispatches != 2 {
-			t.Fatal("unknown original report was reinjected")
-		}
-		// The original receipt becomes queryable only after the old service exits.
-		// Its same request UUID returns the original worker, never another input.
-		native.LoseDispatchAt = 0
-		require(t, testprotocol.WriteNativeOrcaState(f.nativeStateDir, native))
-		service = startIntegrationService(t, ctx, f.config, resolver)
-		defer service.stop(t)
-		recovered := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-			return e.RecoveryRequired && run.StepID == executionmodel.StepPublish
-		})
-		native, err = testprotocol.ReadNativeOrcaState(f.nativeStateDir)
-		require(t, err)
-		if native.Dispatches != 2 || recovered.execution.TurnNumber != 2 || len(recovered.runtime.Attempts) != 1 || len(recovered.runtime.WorkflowRuns[0].StageResults) != 2 || len(recovered.runtime.WorkflowRuns[0].StageInputs) != 3 || recovered.run.BusinessStatus != "waiting_input" {
-			t.Fatal("reopen blindly reinjected an unknown or queued input")
-		}
-		return
-	}
+
 	ready := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
 		return run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge
 	}, 3*time.Minute)
@@ -139,12 +112,11 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	if after.execution.TurnNumber != uint64(turns) || len(after.runtime.WorkflowRuns[0].StageInputs) != turns || len(after.runtime.Attempts) != 1 {
 		t.Fatal("service restart automatically sent another stage")
 	}
-	if host == "orca" {
-		native, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
-		require(t, err)
-		if native.Dispatches != turns || len(native.Tasks) != turns {
-			t.Fatal("unknown report Dispatch was blindly reinjected")
-		}
-	}
+
 	assertNoTaskDelivery(t, after.runtime, after.run)
+}
+
+func TestWorkerStageOrcaTerminalRoundTrip(t *testing.T) { testWorkerStageRoundTrip(t, "orca") }
+func TestWorkerStageOrcaEnvironmentRoundTrip(t *testing.T) {
+	testWorkerStageRoundTrip(t, "orca-environment")
 }

@@ -334,7 +334,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	result.Snapshot = facts
 	if facts != nil {
 		workspace := facts.Workspace
-		applyWorkflowWorkspaceEvidence(run, e, executionmodel.WorkspaceEvidence{Repository: workspace.Repository, Worktree: workspace.Worktree, Branch: workspace.Branch, Base: workspace.Base, Head: workspace.Head, Dirty: workspace.Dirty, VerifiedAt: workspace.CheckedAt})
+		applyWorkflowWorkspaceEvidence(run, e, executionmodel.WorkspaceEvidence{InspectionScope: workspace.InspectionScope, Repository: workspace.Repository, Worktree: workspace.Worktree, Branch: workspace.Branch, Base: workspace.Base, Head: workspace.Head, Dirty: workspace.Dirty, VerifiedAt: workspace.CheckedAt})
 	}
 	if inspectErr != nil {
 		return s.stageWait(run, w, e, "reconciling", "workspace/publication facts unknown: "+inspectErr.Error(), nil)

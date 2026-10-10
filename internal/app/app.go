@@ -8,7 +8,6 @@ import (
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
@@ -96,13 +95,6 @@ func runConfiguredService(ctx context.Context, config Config, mode, startupID, c
 		return executionServiceLifetime{service: service, config: input, mode: mode, product: product, localAPI: localAPI}, nil
 	}
 	return steerline.RunConfiguredService(ctx, hostConfig, mode, startupID, console, factory, admission, consoleActivityFormatter{})
-}
-
-func RunSessionLauncher(ctx context.Context, requestPath string, processHost executionbackend.ManagedProcessHost) error {
-	if processHost == nil {
-		return errors.New("managed process host is required")
-	}
-	return codexworker.RunSessionLauncher(ctx, requestPath, processHost.StartManaged, processHost.WriteExecutionFile)
 }
 
 func InstallLaunchers() ([]string, error) { return steerline.InstallLaunchers(HomeDir()) }

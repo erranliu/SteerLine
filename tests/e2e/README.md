@@ -2,9 +2,9 @@
 
 临时/AI 自动调试须先运行 `scripts/new-debug-release.ps1`，使用生成的 SteerlineTest 环境；安装目录不得作为现场。独立包定向验证为 `scripts/test-debug-release.ps1`，显式 `-Live` 验证真实 SteerlineTest PR；所有日志留在生成包 evidence。既有分级回归保留自己的隔离夹具，见[独立调试验收](../../docs/acceptance/debug-environment.md)。
 
-当前产品入口为本地 Codex 和 Orca supervised（local/environment）；原本机 `host=orca` 已停用，源码保留。supervised 当前结果接线为[统一模板和原生回复采集](../../docs/acceptance/worker-prompt-convergence.md)，原[单消息声明结果](../../docs/acceptance/orca-supervised-results.md)保留历史。旧单轮 `delivery.orca-remote-codex` 仍已退役；真实分步交付驱动尚待建立，暂不计完整 L3 覆盖，详见[当前边界](../../docs/acceptance/orca-remote-l3.md#当前分步流程能力缺口)。supervised 目标注册/路由使用[定向验收](../../docs/acceptance/orca-supervised-targets.md)。
+当前产品入口为本地 Codex 与 `host=orca`（本机 / environment 同能力）。Orca 使用一个 agent 终端，由本机 CLI 直接投递短输入并按原游标读取紧凑结果；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[单终端验收](../../docs/acceptance/orca-terminal-transport.md)。
 
-以下旧场景均已移出当前登记：单轮远端 `delivery.orca-remote-codex`、旧 `orca-codex` 三项 live、四项 `recovery.orca-startup.*` 与 `candidates.local` 已移出 suites.json，驱动留档，不计当前验收。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
+旧单轮远端、旧 Orca live / startup / candidate 场景不计入当前验收；supervised 专属实现与夹具已删除。下面的旧驱动说明仅保留历史参考。
 
 全项目测试范围、L1/Full/定向入口、独立原生验收和产物导航见[测试总入口](../../docs/testing.md)。本文维护 E2E 环境、场景和扩展的具体约定。
 
@@ -40,7 +40,7 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
 
-原候选入口 `candidates.local` 已随旧本机 Orca 路径移出当前登记。下面的 manifest 与驱动说明保留历史参考，不能用它声明当前本机 supervised 已完成真实候选验收。
+原候选入口 `candidates.local` 已随旧本机 Orca 路径移出当前登记。下面的 manifest 与驱动说明保留历史参考，不能用它声明当前单终端路径已验收。
 
 ## 本机候选 manifest
 
@@ -111,7 +111,7 @@ L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTe
 
 真实 GitHub 发布脚本为本次 push 设置仅限 SteerlineTest remote 的 HTTP 认证环境，并清除 shell credential helper；推送后清除这些环境项。测试 token 不写入 argv、Git 配置文件或日志，避免依赖 unelevated Windows 沙箱中无法启动的 Git Bash credential helper。该适配仅用于测试 fixture，产品权限和凭据来源不变。
 
-当前 L3 local-codex 使用 loopback Git/PR provider 并执行真实模型，与无 token 环境分别选择。旧远端驱动使用真实 SteerlineTest PR，保留作历史取证，不能作为当前分步流程入口。旧本机 Orca 驱动保留的 Enter、readiness 和隔离环境机制仅供历史取证，不证明当前 supervised 本机目标已验收。
+当前 L3 local-codex 使用 loopback Git/PR provider 并执行真实模型，与无 token 环境分别选择。旧远端驱动使用真实 SteerlineTest PR，保留作历史取证，不能作为当前分步流程入口。当前 Orca 驱动不补 Enter、不注入 agent 专用环境，使用原生主机设置。
 
 L3 delivery/recovery 的本机 Orca usage 按 [#84 明确调整的验收条件](../../docs/acceptance/worker-staged-flow.md) 登记：公开接口不提供 token usage，场景必须记录 `usage_verified=false`、`orca_usage_status=not_exposed_by_orca`，逐轮仍绑定原 Command/Dispatch/final source；真实业务与清理必须通过。该能力记录不代表 token 验证通过，不替代 local、完整 L2、其他 suite 或远端各自的门槛。
 

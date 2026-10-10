@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/testkit/protocol"
+
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,10 +15,8 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
-	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 func TestMain(m *testing.M) {
@@ -69,16 +69,16 @@ func TestMain(m *testing.M) {
 
 func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 	t.Setenv("STEERLINE_APP_VERSION_FIXTURE", "1")
-	for _, name := range []string{"local", "orca_supervised"} {
+	for _, name := range []string{"local", "orca"} {
 		c := bindUnitDirectory(t, Config{Host: name, Agent: "codex", Repository: t.TempDir(), CommandTimeout: "2s"})
-		var terminal *orcaworker.ProfileConfig
-		if name == "orca_supervised" {
+		var terminal *terminalFixtureProfile
+		if name == "orca" {
 			c.Repository = configTestRepository(t)
 			fixtureGit(t, c.Repository, "remote", "add", "origin", "https://github.com/owner/repo.git")
 			c.Git = executionbackend.Command{Executable: "git"}
 			c.Remote = "origin"
 			c.PublicationPolicy = executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
-			terminal = &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--terminal-fixture", t.TempDir()}, Shell: "powershell.exe", WaitTimeout: "2s"}
+			terminal = &terminalFixtureProfile{Executable: os.Args[0], Args: []string{"--terminal-fixture", t.TempDir()}, Shell: "powershell.exe", WaitTimeout: "2s"}
 		}
 		profile := boundProfile(c, testExecutionProfile(t, "probe", "Probe", name, "codex", codexworker.ProfileConfig{Executable: os.Args[0]}, terminal))
 		if reason := profile.StaticUnavailableReason(); reason != "" {
@@ -132,15 +132,15 @@ func TestOrcaPreflightDoesNotProbeAgentExecutable(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
 	stateDir := t.TempDir()
 	missing := filepath.Join(stateDir, "missing-worker.exe")
-	c.Host, c.Agent = "orca_supervised", "codex"
+	c.Host, c.Agent = "orca", "codex"
 	c.PublicationPolicy = executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
 	c.PR.Query = executionbackend.Command{Executable: os.Args[0]}
-	terminal := &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--terminal-fixture", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
-	profile := testExecutionProfile(t, "terminal", "Terminal", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: missing, Model: "fixture-model", ReasoningEffort: "high"}, terminal)
+	terminal := &terminalFixtureProfile{Executable: os.Args[0], Args: []string{"--terminal-fixture", stateDir}, Shell: "cmd.exe", WaitTimeout: "5s"}
+	profile := testExecutionProfile(t, "terminal", "Terminal", "orca", "codex", codexworker.ProfileConfig{Executable: missing, Model: "fixture-model", ReasoningEffort: "high"}, terminal)
 	c.ExecutionProfiles, c.DefaultExecutionProfile = []ExecutionProfile{profile}, profile.ID
 	c = c.ApplyExecutionProfile(profile)
 	require(t, Preflight(context.Background(), &c, false))
-	if len(profile.ImplementationConfigs) != 1 || profile.ImplementationConfigs[0].ImplementationKey != remote.ProfileCodecKey {
+	if len(profile.ImplementationConfigs) != 1 || profile.ImplementationConfigs[0].ImplementationKey != "orca.terminal-profile" {
 		t.Fatal("Orca preflight retained agent-owned executable configuration")
 	}
 }

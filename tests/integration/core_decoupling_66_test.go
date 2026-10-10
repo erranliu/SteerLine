@@ -20,10 +20,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-func TestCD66FixedProfileRecovery(t *testing.T) {
-	t.Run("changed_config_keeps_native_original_identity_and_manual_gate", func(t *testing.T) { testIntegratedNativeSessionGate(t, true) })
-}
-
 func changedIntegrationConfig(t *testing.T, fixture integrationFixture) steerlineapp.Config {
 	t.Helper()
 	raw, err := os.ReadFile(steerlineapp.GlobalExecutionConfigPath())

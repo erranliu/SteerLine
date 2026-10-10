@@ -53,7 +53,7 @@ func (s *Service) readRunWorkspace(ctx context.Context, run *reconstructiontypes
 		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace inspection requires its fixed worker-flow-v2 identity"}
 	}
 	w, err := s.inspectWorkflowWorkspace(ctx, run)
-	return executionbackend.WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
+	return executionbackend.WorkspaceInspection{InspectionScope: w.InspectionScope, Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
 }
 
 func (s *Service) inspectRunProcess(run *reconstructiontypes.RunView) string {

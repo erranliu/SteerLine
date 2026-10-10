@@ -25,7 +25,6 @@ import (
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 	"github.com/google/uuid"
 )
 
@@ -51,7 +50,6 @@ type Scenario struct {
 type Project struct {
 	RemoteBranches                                                                    []string
 	RemoteCleanupFailed                                                               bool
-	RemoteOrca                                                                        *native.RemoteOrca
 	Scenario                                                                          *Scenario
 	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider, Executable string
 	ProjectID, DatabaseID                                                             string
@@ -735,7 +733,7 @@ func (s *Scenario) cleanup() {
 		if err != nil {
 			_ = controlled.Write(filepath.Join(s.Output, p.Name+"-diagnostic.json"), map[string]string{"error": err.Error()})
 		}
-		if p.Chain != "" && p.RemoteOrca == nil {
+		if p.Chain != "" {
 			if err := p.captureNativeDiagnostics(); err != nil {
 				failures = append(failures, "native diagnostics: "+err.Error())
 			}
@@ -768,12 +766,7 @@ func (s *Scenario) cleanup() {
 		}
 	}
 	for _, p := range s.projects {
-		if p.RemoteOrca != nil {
-			if err := p.cleanupRemoteOrca(); err != nil {
-				failures = append(failures, err.Error())
-				p.RemoteCleanupFailed = true
-			}
-		}
+
 		if p.OrcaExecutable != "" {
 			if err := p.cleanupOrca(); err != nil {
 				failures = append(failures, err.Error())
