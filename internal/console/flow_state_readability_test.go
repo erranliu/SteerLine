@@ -10,15 +10,15 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
-func TestFlowStateTimelineSeparatesMessagesAndHidesTechnicalNoise(t *testing.T) {
+func TestFlowStateTimelineShowsOnlyFlowOnStepChangeAndHidesTechnicalNoise(t *testing.T) {
 	at := time.Date(2026, 10, 10, 6, 52, 38, 0, time.UTC)
 	changes := []workerTransition{{Time: at, From: workerTransitionFields{StepID: "implement.report", Status: "running"}, To: workerTransitionFields{StepID: "publish", Status: "queued"}}}
 	for i := 0; i < 20; i++ {
 		changes = append(changes, workerTransition{Time: at.Add(time.Duration(i+1) * time.Second), From: workerTransitionFields{StepID: "publish", Status: "queued", ResourceStatus: "idle", CurrentTurnID: "old", InputVersion: 2}, To: workerTransitionFields{StepID: "publish", Status: "queued", ResourceStatus: "pending", CurrentTurnID: fmt.Sprint(i), InputVersion: 3}})
 	}
 	lines := workerTransitionLines(changes)
-	if len(lines) != 3 || !strings.Contains(lines[1], "状态  publish") || !strings.Contains(lines[1], "running → queued") || !strings.Contains(lines[2], "流程  implement.report → publish") {
-		t.Fatal("technical noise displaced or combined messages", lines)
+	if len(lines) != 2 || !strings.Contains(lines[1], "流程  implement.report → publish") || strings.Contains(lines[1], "running") || strings.Contains(lines[1], "queued") {
+		t.Fatal("step change displayed status or technical noise displaced flow", lines)
 	}
 	for _, field := range []string{"resource_status", "current_turn_id", "input_version", "execution_status"} {
 		if strings.Contains(strings.Join(lines, "\n"), field) {
@@ -37,11 +37,16 @@ func TestFlowStateTimelineSeparatesMessagesAndHidesTechnicalNoise(t *testing.T) 
 
 func TestFlowStateTimelineCountsVisibleMessagesAndKeepsCurrentSnapshot(t *testing.T) {
 	var changes []workerTransition
-	for i := 0; i < 5; i++ {
-		changes = append(changes, workerTransition{From: workerTransitionFields{StepID: "implement.execute", Status: "queued"}, To: workerTransitionFields{StepID: "implement.report", Status: "running"}})
+	for i := 0; i < 6; i++ {
+		changes = append(changes, workerTransition{From: workerTransitionFields{StepID: fmt.Sprintf("step-%d", i), Status: "running"}, To: workerTransitionFields{StepID: "publish", Status: "queued"}, Detail: fmt.Sprintf("reason-%d", i)})
 	}
-	if lines := workerTransitionLines(changes); len(lines) != 6 {
-		t.Fatal("limit counted raw events instead of messages", lines)
+	lines := workerTransitionLines(changes)
+	if len(lines) != 11 || !strings.Contains(lines[9], "step-1 → publish") || strings.Contains(strings.Join(lines, "\n"), "step-0") {
+		t.Fatal("limit did not retain the latest five flow changes with reasons", lines)
+	}
+	candidate := &api.CandidateSummary{StepID: "publish", BusinessStatus: "queued"}
+	if !diagnosticInWorkerTimeline(changes, candidate, "reason-1") || diagnosticInWorkerTimeline(changes, candidate, "reason-0") {
+		t.Fatal("diagnostic visibility disagreed with the five displayed flow changes")
 	}
 	m, _ := ccFixture(t, 1)
 	run := m.selectedRow(0).run

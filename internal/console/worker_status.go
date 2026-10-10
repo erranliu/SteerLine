@@ -107,11 +107,10 @@ func workerTransitionLines(changes []workerTransition) []string {
 			stamp = change.Time.Local().Format("15:04:05")
 		}
 		var current []message
-		if change.From.Status != change.To.Status {
-			current = append(current, message{stamp + "  状态  " + padDisplay(safeTerminalInlineText(change.To.StepID), stepWidth) + "  " + workerValue("status", change.From.Status, false) + " → " + workerValue("status", change.To.Status, false), shortSummary(change.Detail, 120)})
-		}
 		if change.From.StepID != change.To.StepID {
-			current = append(current, message{stamp + "  流程  " + workerValue("step_id", change.From.StepID, false) + " → " + workerValue("step_id", change.To.StepID, false), ""})
+			current = append(current, message{stamp + "  流程  " + workerValue("step_id", change.From.StepID, false) + " → " + workerValue("step_id", change.To.StepID, false), shortSummary(change.Detail, 120)})
+		} else if change.From.Status != change.To.Status {
+			current = append(current, message{stamp + "  状态  " + padDisplay(safeTerminalInlineText(change.To.StepID), stepWidth) + "  " + workerValue("status", change.From.Status, false) + " → " + workerValue("status", change.To.Status, false), shortSummary(change.Detail, 120)})
 		}
 		messages = append(messages, current...)
 		if len(messages) >= 5 {
@@ -140,14 +139,11 @@ func diagnosticInWorkerTimeline(changes []workerTransition, run *api.CandidateSu
 	visible := 0
 	for i := len(changes) - 1; i >= 0; i-- {
 		change := changes[i]
-		if change.From.Status != change.To.Status {
+		if change.From.StepID != change.To.StepID || change.From.Status != change.To.Status {
 			visible++
 			if visible <= 5 && change.To.StepID == run.StepID && change.To.Status == run.BusinessStatus && change.Detail == diagnostic {
 				return true
 			}
-		}
-		if change.From.StepID != change.To.StepID {
-			visible++
 		}
 		if visible >= 5 {
 			break

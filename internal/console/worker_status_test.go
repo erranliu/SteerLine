@@ -68,7 +68,7 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 		t.Fatal("repeated activity duplicated changes or moved focus")
 	}
 	text := strings.Join(feedbackLines(m, m.projects[0], m.selectedRow(0)), "\n")
-	for _, want := range []string{"问题：", "流程与状态", "implement.execute", "implement.report", "queued", "当前流程："} {
+	for _, want := range []string{"问题：", "流程与状态", "implement.execute → implement.report", "当前状态：running", "当前流程："} {
 		if !strings.Contains(text, want) {
 			t.Fatal("question or original transition fields were hidden", want, text)
 		}
@@ -76,7 +76,7 @@ func TestWorkerStatusActivityPreservesFieldsAndFocus(t *testing.T) {
 	if strings.Contains(text, event.Title) {
 		t.Fatal("display inferred state from prose")
 	}
-	if strings.Contains(text, "execution_status:") || strings.Contains(text, "input_version:") {
+	if strings.Contains(text, "execution_status:") || strings.Contains(text, "input_version:") || strings.Contains(text, "running → queued") {
 		t.Fatal("technical changes leaked into default timeline", text)
 	}
 	m.detailExpanded = true
