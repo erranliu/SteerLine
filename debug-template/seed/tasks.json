@@ -1,0 +1,1 @@
+{"tasks":[{"key":"a","id":1,"title":"SteerlineTest 独立调试任务 A"},{"key":"b","id":2,"title":"SteerlineTest 后继任务 B"}],"dependencies":[{"predecessor":"a","successor":"b"}]}

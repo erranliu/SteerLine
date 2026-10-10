@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "default_execution_profile": "live",
+  "execution_profiles": [
+    {
+      "id": "live", "name": "Live SteerlineTest", "host": "local", "agent": "codex",
+      "implementation_configs": [{"implementation_key": "codex.worker-profile", "codec_version": 2,
+        "payload": {"executable": "codex", "model": "gpt-6-luna", "reasoning_effort": "medium"}}]
+    },
+    {
+      "id": "simulate", "name": "Simulated SteerlineTest (AI debug)", "host": "local", "agent": "codex",
+      "implementation_configs": [{"implementation_key": "codex.worker-profile", "codec_version": 2,
+        "payload": {"executable": "__ROOT__/bin/debug-helper.exe"}}]
+    }
+  ]
+}

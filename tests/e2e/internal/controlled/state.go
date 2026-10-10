@@ -16,6 +16,9 @@ import (
 )
 
 type State struct {
+	Repository string                           `json:"repository,omitempty"`
+	BaseBranch string                           `json:"base_branch,omitempty"`
+	ResultText string                           `json:"result_text,omitempty"`
 	Threads    map[string]ThreadState           `json:"threads,omitempty"`
 	GitURL     string                           `json:"git_url"`
 	Cwd        string                           `json:"cwd"`
@@ -26,6 +29,20 @@ type State struct {
 	PR         executionmodel.PRInfo            `json:"pr"`
 	PRs        map[string]executionmodel.PRInfo `json:"prs,omitempty"`
 }
+
+func (s State) RepositoryName() string {
+	if s.Repository != "" {
+		return s.Repository
+	}
+	return "e2e/project"
+}
+func (s State) BranchName() string {
+	if s.BaseBranch != "" {
+		return s.BaseBranch
+	}
+	return "main"
+}
+func (s State) RemoteIdentity() string { return "https://github.com/" + s.RepositoryName() + ".git" }
 
 type ThreadState struct {
 	Cwd   string           `json:"cwd"`
@@ -76,7 +93,7 @@ func gitBytes(ctx context.Context, dir string, args ...string) ([]byte, error) {
 			return nil, err
 		}
 		if state.GitURL != "" && !isRemoteIdentityQuery(args) {
-			argv = append([]string{"-c", "url." + state.GitURL + ".insteadOf=https://github.com/e2e/project.git"}, argv...)
+			argv = append([]string{"-c", "url." + state.GitURL + ".insteadOf=" + state.RemoteIdentity()}, argv...)
 		}
 	}
 	command := exec.Command("git", argv...)
@@ -118,8 +135,8 @@ func Merge(ctx context.Context, path, repo string) error {
 	if s.PR.State != "open" || s.PR.HeadBranch == "" {
 		return fmt.Errorf("no open controlled PR")
 	}
-	for _, args := range [][]string{{"fetch", "origin"}, {"merge", "--no-ff", "--no-edit", "origin/" + s.PR.HeadBranch}, {"push", "origin", "main"}} {
-		if _, err = Git(ctx, repo, append([]string{"-c", "url." + s.GitURL + ".insteadOf=https://github.com/e2e/project.git"}, args...)...); err != nil {
+	for _, args := range [][]string{{"fetch", "origin"}, {"merge", "--no-ff", "--no-edit", "origin/" + s.PR.HeadBranch}, {"push", "origin", s.BranchName()}} {
+		if _, err = Git(ctx, repo, append([]string{"-c", "url." + s.GitURL + ".insteadOf=" + s.RemoteIdentity()}, args...)...); err != nil {
 			return err
 		}
 	}
