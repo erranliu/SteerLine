@@ -69,11 +69,11 @@ func TestOrcaRemovalRestart(t *testing.T) {
 		return snapshot
 	}
 	query("after-removal")
-	_, err := s.RunPseudoConsole(p.Command(p.Executable, "console", "-config", p.Config), "console-after-removal", "服务 已连接")
+	_, err := s.RunPseudoConsole(p.Command(p.Executable, "console", "-config", p.Config), "console-after-removal", "connection: connected")
 	s.Must(err)
 	p.RestartService()
 	query("after-restart")
-	_, err = s.RunPseudoConsole(p.Command(p.Executable, "console", "-config", p.Config), "console-after-restart", "服务 已连接")
+	_, err = s.RunPseudoConsole(p.Command(p.Executable, "console", "-config", p.Config), "console-after-restart", "connection: connected")
 	s.Must(err)
 	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "start_task", p.Tasks["c"].ID))
 	s.Wait("unrelated task starts after native cleanup", func() (bool, error) {
