@@ -37,10 +37,9 @@ foreach ($command in @('git', 'go')) { Get-Command $command -ErrorAction Stop | 
 $commit = (& git -C $repo rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve source commit' }
 $dirty = -not [string]::IsNullOrWhiteSpace((& git -C $repo status --porcelain | Out-String))
-$version = 'dev-' + $commit.Substring(0, 8)
-if ($dirty) { $version += '-dirty' }
 $created = [TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, [TimeZoneInfo]::FindSystemTimeZoneById('China Standard Time'))
-$release = $version + '-' + $created.ToString('yyyyMMdd-HHmmss')
+$release = 'dev-' + $created.ToString('yyyyMMdd-HHmmss') + '-' + $commit.Substring(0, 8)
+if ($dirty) { $release += '-dirty' }
 $target = Join-Path $debugBase $release
 if (Test-Path -LiteralPath $target) { throw "Debug release already exists: $target" }
 New-Item -ItemType Directory -Path $debugBase -Force | Out-Null

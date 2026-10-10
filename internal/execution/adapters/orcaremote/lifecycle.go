@@ -24,7 +24,7 @@ type ExecutionLifecycle struct {
 }
 
 func (l *ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, ResumeActiveObservation: true, ActiveTurnFeedback: true, SeparateTurnStart: true, LinkedWorkspaceWriteRoots: true}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, ReportToolPolicy: "orca_managed_permissions; fact_comparison_only; per_turn_read_only_policy_unverified; external_writes_not_strongly_isolated", ResumeActiveObservation: true, ActiveTurnFeedback: true, SeparateTurnStart: true, LinkedWorkspaceWriteRoots: true}
 }
 
 func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
@@ -164,8 +164,9 @@ func (l *ExecutionLifecycle) Next(_ context.Context, snapshot executionbackend.L
 	}
 	turn := findTurn(&state, snapshot.PendingTurn.CommandID)
 	if turn == nil || turn.TaskID == "" {
-		candidate := resourceCandidate("conversation", snapshot.Session.TaskID, snapshot.PendingTurn.Prompt)
+		candidate := resourceCandidate("conversation", snapshot.Session.TaskID, resultPrompt(*snapshot.PendingTurn))
 		candidate.Input.Resource.TurnID = snapshot.PendingTurn.CommandID
+		candidate.Input.Resource.InputVersion = snapshot.PendingTurn.InputVersion
 		return candidate, candidate.Validate()
 	}
 	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleStartTurn, Input: executionbackend.LifecycleInput{Turn: cloneLifecycleTurn(snapshot.PendingTurn)}}
@@ -249,7 +250,13 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 	if turn == nil || turn.DispatchID == "" || snapshot.Ref.External.Dispatch == "" {
 		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationUnknown, Diagnostic: "supervised observation has no original Dispatch"}, nil, nil
 	}
-	ref := RemoteRef(snapshot.Ref)
+	if turn.Settled {
+		evidence, err := settledResult(snapshot, turn)
+		if err != nil {
+			return executionbackend.LifecycleReceipt{}, nil, err
+		}
+		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, State: executionbackend.LifecycleStateFacts{SessionID: evidence.SessionID, SessionGeneration: snapshot.Ref.External.Incarnation, TurnID: turn.TurnID, TurnCompleted: true}, TurnEvidence: &evidence}, nil, nil
+	}
 	observation, showErr := l.client.Show(ctx, StartReceipt{RunID: snapshot.Ref.External.OrchestrationRun, TaskID: snapshot.Ref.External.Task,
 		DispatchID: snapshot.Ref.External.Dispatch, WorktreeID: snapshot.Ref.External.WorktreeID, CenterRuntimeID: snapshot.Ref.External.CoordinatorRuntimeID})
 	receipt := executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationUnknown,
@@ -259,16 +266,28 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 		receipt.Diagnostic = showErr.Error()
 		return receipt, nil, showErr
 	}
-	outcome, settleErr := l.client.Settlement(ctx, ref, turn.Outcome)
+	if observation.Identity != snapshot.Ref.External || observation.WorktreePath != snapshot.Ref.WorkspacePath || observation.Branch != snapshot.Ref.WorkspaceBranch {
+		return receipt, nil, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "original supervised worker/terminal/incarnation/workspace changed"}
+	}
+	// Identity and settlement come from the same native snapshot.
+	outcome, settleErr := settlementOutcome(observation.DispatchState, observation.WorkerState, turn.Outcome)
 	if settleErr == nil && turn.DoneMessageID != "" {
 		turn.Settled, turn.Outcome = true, outcome
 		receipt.Disposition = executionbackend.OperationConfirmed
 		receipt.State.TurnCompleted = true
-		receipt.TurnEvidence = &executionbackend.TurnEvidence{TurnID: turn.TurnID, CommandID: turn.TurnID, SessionID: SessionID(snapshot.Ref.External), Started: true, Completed: true, Succeeded: outcome == "succeeded", LastMessage: turn.LastMessage, PRCandidates: append([]string(nil), turn.PRCandidates...)}
+		evidence, resultErr := settledResult(snapshot, turn)
+		if resultErr != nil {
+			return receipt, nil, resultErr
+		}
+		receipt.TurnEvidence = &evidence
 		receipt.Implementation, err = l.stateEnvelopes(snapshot, state)
 		if err != nil {
 			return receipt, nil, err
 		}
+		return receipt, nil, nil
+	}
+	if turn.DoneMessageID != "" && settleErr != nil {
+		receipt.Diagnostic = "original worker_done settlement remains unverified: " + settleErr.Error()
 		return receipt, nil, nil
 	}
 	if observation.Liveness != "live" && settleErr != nil {
@@ -454,7 +473,7 @@ func (l *ExecutionLifecycle) createResource(ctx context.Context, request executi
 			receipt.Disposition, receipt.Diagnostic = executionbackend.OperationUnknown, callErr.Error()
 			return receipt, backendError(callErr)
 		}
-		state.Turns = append(state.Turns, orcaworker.NativeTurnState{TurnID: resource.TurnID, TaskID: created.ID,
+		state.Turns = append(state.Turns, orcaworker.NativeTurnState{TurnID: resource.TurnID, InputVersion: resource.InputVersion, TaskID: created.ID,
 			TaskRequestID: created.RequestID, Purpose: "business", IntentAt: time.Now().UTC()})
 		receipt.State.ResourceID, receipt.RequestID = created.ID, created.RequestID
 	default:
@@ -516,7 +535,7 @@ func (l *ExecutionLifecycle) reconcileResource(ctx context.Context, request exec
 		if resource.TurnID == "" {
 			return receipt, nil, errors.New("original conversation recovery lost its saved turn identity")
 		}
-		state.Turns = append(state.Turns, orcaworker.NativeTurnState{TurnID: resource.TurnID, TaskID: id,
+		state.Turns = append(state.Turns, orcaworker.NativeTurnState{TurnID: resource.TurnID, InputVersion: resource.InputVersion, TaskID: id,
 			Purpose: "business", IntentAt: request.Operation.StartedAt})
 		receipt.State.ResourceID = id
 	default:
@@ -562,6 +581,7 @@ func (l *ExecutionLifecycle) startTurn(ctx context.Context, request executionbac
 		return receipt, nil, backendError(err)
 	}
 	turn.DispatchID, turn.DispatchRequestID = started.DispatchID, started.PlatformRequestID
+	turn.ResultProcess = &identity
 	target := request.Snapshot.Ref.Target
 	target.ExternalTask, target.Dispatch = started.TaskID, started.DispatchID
 	target.OrchestrationRun, target.OrchestrationRunRequestID = started.RunID, started.PlatformRequestID
@@ -612,6 +632,7 @@ func (l *ExecutionLifecycle) reconcileStart(ctx context.Context, request executi
 		return receipt, nil, backendError(err)
 	}
 	turn.DispatchID, turn.DispatchRequestID = started.DispatchID, started.PlatformRequestID
+	turn.ResultProcess = &identity
 	target := request.Snapshot.Ref.Target
 	target.ExternalTask, target.Dispatch, target.OrchestrationRun = started.TaskID, started.DispatchID, started.RunID
 	target.OrchestrationRunRequestID, target.ExecutionHost, target.WorktreeID = started.PlatformRequestID, identity.ExecutionHost, identity.WorktreeID
@@ -1113,7 +1134,7 @@ func (o *remoteLifecycleObserver) observe(ctx context.Context) {
 		for i, fact := range batch.Facts {
 			if fact.Kind == executionbackend.EventCompleted {
 				if turn := findTurn(&o.state, o.turn.TurnID); turn != nil {
-					turn.DoneMessageID, turn.Outcome, turn.LastMessage = fact.SourceEventID, fact.Outcome, fact.LastMessage
+					captureResult(turn, delivery.Messages[i], o.snapshot.Ref.External, fact.Outcome)
 					turn.PRCandidates = append([]string(nil), fact.PRCandidates...)
 					completed = true
 				}

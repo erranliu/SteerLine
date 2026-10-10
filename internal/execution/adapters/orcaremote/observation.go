@@ -27,9 +27,11 @@ func (b Client) Show(ctx context.Context, expected StartReceipt) (WorkerObservat
 			Status string `json:"status"`
 		} `json:"dispatch"`
 		Worker struct {
-			DispatchID   string `json:"dispatchId"`
-			WorktreeID   string `json:"worktreeId"`
-			RuntimeEpoch string `json:"runtimeEpoch"`
+			DispatchID          string `json:"dispatchId"`
+			State               string `json:"state"`
+			WorktreeID          string `json:"worktreeId"`
+			RuntimeEpoch        string `json:"runtimeEpoch"`
+			AgentTerminalHandle string `json:"agentTerminalHandle"`
 		} `json:"worker"`
 		Projection struct {
 			Liveness struct {
@@ -72,6 +74,9 @@ func (b Client) Show(ctx context.Context, expected StartReceipt) (WorkerObservat
 	if result.Terminal.Handle == "" || result.Terminal.IncarnationID == "" || result.Terminal.WorktreePath == "" || result.Terminal.Branch == "" {
 		return WorkerObservation{}, &Error{Code: executionbackend.BackendProtocolInvalid, Diagnostic: "supervised agent terminal or workspace identity is incomplete"}
 	}
+	if result.Worker.AgentTerminalHandle != result.Terminal.Handle {
+		return WorkerObservation{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "supervised worker points to a different agent terminal"}
+	}
 	identity := executionbackend.ProcessIdentity{Kind: "orca_supervised", RuntimeID: result.RemoteRuntimeEpoch, CoordinatorRuntimeID: expected.CenterRuntimeID, Terminal: result.Terminal.Handle, Incarnation: result.Terminal.IncarnationID, OrchestrationRun: expected.RunID, Task: expected.TaskID, Dispatch: expected.DispatchID, ExecutionHost: result.Projection.Host.ID, WorktreeID: expected.WorktreeID}
 	wait := result.Observation.AgentWait
 	if len(wait) == 0 {
@@ -84,7 +89,7 @@ func (b Client) Show(ctx context.Context, expected StartReceipt) (WorkerObservat
 			waitState = "none"
 		}
 	}
-	return WorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
+	return WorkerObservation{Identity: identity, Liveness: result.Projection.Liveness.Verdict, DispatchState: result.Dispatch.Status, WorkerState: result.Worker.State, AgentWaitState: waitState, WorktreePath: result.Terminal.WorktreePath, Branch: strings.TrimPrefix(result.Terminal.Branch, "refs/heads/"), ObservedAt: now()}, nil
 }
 
 func (b Client) Settlement(ctx context.Context, ref Ref, outcome string) (string, error) {
@@ -127,11 +132,15 @@ func (b Client) Settlement(ctx context.Context, ref Ref, outcome string) (string
 	if env.Meta.RuntimeID != ref.External.CoordinatorRuntimeID || result.Dispatch.ID != ref.External.Dispatch || result.Dispatch.RunID != ref.External.OrchestrationRun || result.Dispatch.TaskID != ref.External.Task || result.Worker.DispatchID != ref.External.Dispatch || result.Worker.WorktreeID != ref.External.WorktreeID || result.Worker.AgentTerminalHandle != ref.External.Terminal || result.Server.EnvironmentID != ref.External.ExecutionHost || result.Projection.Host.ID != ref.External.ExecutionHost || result.RemoteRuntimeEpoch != ref.External.RuntimeID {
 		return "", &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "settled Dispatch differs from the original Run, worker, host, or terminal binding"}
 	}
+	return settlementOutcome(result.Dispatch.Status, result.Worker.State, outcome)
+}
+
+func settlementOutcome(dispatchStatus, workerState, outcome string) (string, error) {
 	state := ""
 	switch {
-	case result.Dispatch.Status == "completed" && result.Worker.State == "succeeded":
+	case dispatchStatus == "completed" && workerState == "succeeded":
 		state = "succeeded"
-	case result.Dispatch.Status == "failed" && result.Worker.State == "failed":
+	case dispatchStatus == "failed" && workerState == "failed":
 		state = "failed"
 	default:
 		return "", &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "original supervised Dispatch has not settled conclusively"}

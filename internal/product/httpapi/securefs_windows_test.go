@@ -62,3 +62,31 @@ func TestAPIPrivateTemporaryACLRejectsUnsafeEntry(t *testing.T) {
 		t.Fatal("temporary file with unauthorized reader passed preflight")
 	}
 }
+
+func TestAPIPrivateDirectoryOwnedWithModifyAccess(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "normal-owned-directory")
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	sid, err := currentUserSID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sd, err := windows.SecurityDescriptorFromString("D:P(A;;0x1301bf;;;" + sid.String() + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dacl, _, err := sd.DACL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := windows.SetNamedSecurityInfo(path, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensurePrivateDirectory(path); err != nil {
+		t.Fatalf("current owner needed WRITE_OWNER to secure its DACL: %v", err)
+	}
+	if err := verifyPrivateDirectory(path); err != nil {
+		t.Fatal(err)
+	}
+}
