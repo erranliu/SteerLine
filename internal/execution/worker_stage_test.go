@@ -233,7 +233,11 @@ func TestWorkerStageReportRound(t *testing.T) {
 					body = `{"outcome":"blocked","outputs":{"candidate_sha":"` + port.workspace.Head + `","branch":"` + port.workspace.Branch + `"},"summary":"push succeeded; PR failed","blocker":{"category":"failure","action":"create PR","error":"rejected","known":"branch pushed"}}`
 				}
 				require(t, acceptTestStage(t, s, run, port, body, true))
-				if s.workflowRecord(run).Status != "blocked" || s.workflowRecord(run).StepID != executionmodel.StepPublish || len(s.workflowRecord(run).StageInputs) != 3 {
+				expectedStep, expectedStatus, inputs := executionmodel.StepPublish, "blocked", 3
+				if scenario == "publish_invalid" {
+					expectedStep, expectedStatus, inputs = executionmodel.StepPublishReport, "queued", 4
+				}
+				if s.workflowRecord(run).Status != expectedStatus || s.workflowRecord(run).StepID != expectedStep || len(s.workflowRecord(run).StageInputs) != inputs {
 					t.Fatal("publish reran side effects to repair JSON")
 				}
 			}
@@ -279,5 +283,95 @@ func TestWorkerStageStrictResult(t *testing.T) {
 		if _, err := decodeStageReport(body, executionmodel.StepReport); err == nil {
 			t.Fatalf("accepted invalid result %q", body)
 		}
+	}
+}
+
+func TestWorkerStagePublishReport(t *testing.T) {
+	for _, scenario := range []string{"success", "missing", "invalid_report", "source_failed", "unknown", "write", "wrong_pr", "query_unavailable", "recovery"} {
+		t.Run(scenario, func(t *testing.T) {
+			s, run, port := workerStageFixture(t)
+			require(t, acceptTestStage(t, s, run, port, "implementation facts", true))
+			startQueuedStage(t, s, run)
+			require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"implemented"}`, true))
+			startQueuedStage(t, s, run)
+			var server *httptest.Server
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if scenario == "query_unavailable" {
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+				head := port.workspace.Head
+				if scenario == "wrong_pr" {
+					head = strings.Repeat("b", 40)
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"html_url": server.URL + "/org/repo/pulls/1", "number": 1, "state": "open", "merged": false, "base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "org/repo"}}, "head": map[string]any{"ref": port.workspace.Branch, "sha": head, "repo": map[string]string{"full_name": "org/repo"}}})
+			}))
+			defer server.Close()
+			url := server.URL + "/org/repo/pulls/1"
+			original := workerStageEvidence(s, run, "Published candidate; PR: "+url, scenario != "source_failed")
+			if scenario == "source_failed" {
+				original.Failure = "original command failed"
+			}
+			if scenario == "missing" {
+				original.LastMessage = ""
+			}
+			if scenario == "recovery" {
+				e := s.executionRecord(run)
+				e.RecoveryRequired, e.RecoveryState, e.RecoveryVersion = true, "completed", 1
+				e.OwnerServiceInstanceID = "prior-service"
+				e.RecoveryMarkedAt = ptr(now())
+			}
+			fixed, err := s.workerFlowContext(run)
+			require(t, err)
+			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, original))
+			w := s.workflowRecord(run)
+			input := w.StageInputs[3]
+			if w.StepID != executionmodel.StepPublishReport || len(w.StageInputs) != 4 || len(w.StageResults) != 3 || input.SourceCommandID != original.CommandID || input.SourceTurnID != original.TurnID || input.CandidateSHA != port.workspace.Head || !strings.Contains(input.Prompt, "Do not push") || !strings.Contains(input.ReportToolPolicy, "fact_comparison_only") {
+				t.Fatal("publication report lost its source, candidate or read-only instruction")
+			}
+			if scenario == "recovery" {
+				if w.Status != "waiting_input" || run.Decision == nil {
+					t.Fatal("recovered publication automatically dispatched report")
+				}
+				return
+			}
+			// Duplicate original results cannot queue a second report.
+			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, original))
+			if len(s.workflowRecord(run).StageInputs) != 4 {
+				t.Fatal("original result was replayed")
+			}
+			startQueuedStage(t, s, run)
+			body := `{"outcome":"done","outputs":{"pr_url":"` + url + `"},"summary":"publication reported"}`
+			if scenario == "invalid_report" {
+				body = "invalid again"
+			}
+			if scenario == "unknown" {
+				body = `{"outcome":"blocked","outputs":{"pr_url":"` + url + `"},"summary":"result unknown","blocker":{"category":"unknown_external","action":"publish","error":"response lost"}}`
+			}
+			if scenario == "write" {
+				port.workspace.ContentDigest = strings.Repeat("e", 64)
+			}
+			fixed, err = s.workerFlowContext(run)
+			require(t, err)
+			fixed.config.PR.Kind, fixed.config.PR.BaseURL, fixed.config.PR.Repository = "gitea", server.URL, "org/repo"
+			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, workerStageEvidence(s, run, body, true)))
+			w = s.workflowRecord(run)
+			want := "waiting_external"
+			switch scenario {
+			case "invalid_report", "write", "wrong_pr":
+				want = "blocked"
+			case "source_failed", "unknown", "query_unavailable":
+				want = "reconciling"
+			}
+			if w.Status != want || len(w.StageInputs) != 4 || len(w.StageResults) != 4 || s.executionRecord(run).PendingCommandID != "" {
+				t.Fatalf("report was retried or accepted incorrectly: %s", w.Status)
+			}
+			if want == "waiting_external" && (w.StepID != executionmodel.StepAwaitMerge || w.PRURL != url) {
+				t.Fatal("report did not verify and bind PR")
+			}
+			if scenario == "source_failed" && (w.StageResults[2].Succeeded || w.StageResults[2].Failure != original.Failure || w.PRURL != "") {
+				t.Fatal("report upgraded original publication failure")
+			}
+		})
 	}
 }

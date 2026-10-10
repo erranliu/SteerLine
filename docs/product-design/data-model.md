@@ -26,7 +26,7 @@ WorkflowRun 在原记录中保存唯一 `status/flow_ref/step_id`，不并存旧
 | `waiting_external` | 本开发流程的 PR 已核验，等待真实合并 |
 | `completed` / `abandoned` | 经唯一交付核验的完成 / 已退出候选 |
 
-开发步骤为 `implement.execute → implement.report → publish → await_merge → delivered`。实现自由 final 不能作为结构化结果，报告绑定原执行，发布直接消费本轮严格结果。源失败不被报告成功覆盖；报告最多自动重试一次，发布不为补 JSON 重做副作用。报告目前沿用双后端冻结权限，按实际 HEAD/索引/工作区内容摘要和已绑定 PR 前后对比；此能力不能保证拦截全部外部写入。
+开发步骤为 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`。实现自由 final 不能作为结构化结果，报告绑定原执行，发布有合法结果时直接消费；缺结果或格式错误仅补一次 publish.report，绑定原发布及冻结候选，见[发布补报契约](../spec/worker-publish-report.spec.md)。源失败不被报告成功覆盖；报告最多自动重试一次，发布不为补 JSON 重做副作用。报告目前沿用双后端冻结权限，按实际 HEAD/索引/工作区内容摘要和已绑定 PR 前后对比；此能力不能保证拦截全部外部写入。
 
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 

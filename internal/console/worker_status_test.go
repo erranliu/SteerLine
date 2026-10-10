@@ -27,6 +27,9 @@ func TestWorkerStatusRawFieldsAndFixedLabels(t *testing.T) {
 	if got := workerValue("status", "in_progress", true); got != "in_progress" {
 		t.Fatal("foreign field value acquired a guessed style", got)
 	}
+	if got := workerValue("step_id", "publish.report", true); !strings.Contains(got, "publish.report（发布报告）") {
+		t.Fatal("publication report label missing", got)
+	}
 	m, _ := ccFixture(t, 1)
 	run := m.selectedRow(0).run
 	run.StepID, run.BusinessStatus, run.ExecutionStatus = "implement.report", "future_state_with_a_very_long_name", "running"

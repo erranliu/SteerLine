@@ -777,7 +777,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 		input.Purpose = "readiness"
 	}
 	policyCapabilities := lifecycle.PolicyCapabilities()
-	if input.StepID == executionmodel.StepReport && policyCapabilities.ReportToolPolicy != "" && input.ReportToolPolicy != policyCapabilities.ReportToolPolicy {
+	if executionmodel.ReportStep(input.StepID) && policyCapabilities.ReportToolPolicy != "" && input.ReportToolPolicy != policyCapabilities.ReportToolPolicy {
 		return errors.New("report native policy changed after its input was frozen")
 	}
 	if policyCapabilities.LinkedWorkspaceWriteRoots {

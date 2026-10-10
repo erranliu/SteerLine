@@ -12,6 +12,7 @@ import (
 const implementPrompt = "Current step: implement.execute. Follow the bound Spec/Plan and project instructions. Read references from their listed Git commits and check SHA-256. Use the supplied existing results and accepted feedback to complete unfinished implementation, required tests, self-review and a local candidate commit. Do not publish in this step. End with a normal explanation of work, checks and unresolved issues; no JSON is required."
 const reportPrompt = "Current step: implement.report. Only summarize the supplied original execution, existing outputs and failures. Do not change code, retry commands or perform additional checks. Unknown evidence must remain unknown. Report generation does not make the source execution successful."
 const publishPrompt = "Current step: publish. Publish the specified candidate SHA to the fixed target, create or reuse its matching PR. Do not modify the candidate code or create another commit. First query existing branch/PR results before completing unfinished actions. Return the actual PR URL or partial results, blockers and unresolved actions in this same turn."
+const publishReportPrompt = "Current step: publish.report. Only summarize the supplied original publication, existing outputs and failures. Do not push, create or change a PR, change code, create a commit, retry commands or perform additional checks. Use only the original publication evidence; unknown external outcomes must remain unknown. Report generation does not make the source publication successful."
 
 func renderWorkerPrompt(step string, facts any) (string, error) {
 	text := ""
@@ -22,6 +23,8 @@ func renderWorkerPrompt(step string, facts any) (string, error) {
 		text = reportPrompt
 	case executionmodel.StepPublish:
 		text = publishPrompt
+	case executionmodel.StepPublishReport:
+		text = publishReportPrompt
 	default:
 		return "", errors.New("no automatic prompt for this step")
 	}

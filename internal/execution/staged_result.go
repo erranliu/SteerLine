@@ -36,7 +36,7 @@ type stageReport struct {
 
 const stageResultContract = `Return exactly one JSON object, with no Markdown or surrounding text:
 {"outcome":"done|needs_input|blocked","outputs":{"candidate_sha":"optional full SHA","pr_url":"optional actual PR URL","branch":"optional known branch"},"summary":"actual result","question":"required only for needs_input","blocker":{"category":"failure|unknown_external|permission|prerequisite","action":"actual action","error":"actual error","known":"optional known result","unknown":"optional unresolved result"}}
-Omit question/blocker when not applicable. done requires candidate_sha for implement.report, pr_url for publish. Never fill an invented SHA or URL. A failed original execution cannot be done. Unknown external outcomes must use blocker.category=unknown_external.`
+Omit question/blocker when not applicable. done requires candidate_sha for implement.report, pr_url for publish and publish.report. Never fill an invented SHA or URL. A failed original execution cannot be done. Unknown external outcomes must use blocker.category=unknown_external.`
 
 var stageSHA = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
@@ -112,7 +112,7 @@ func decodeStageReport(body, step string) (stageReport, error) {
 	}
 	switch value.Outcome {
 	case "done":
-		if value.Question != "" || value.Blocker != nil || step == executionmodel.StepReport && value.Outputs.CandidateSHA == "" || step == executionmodel.StepPublish && value.Outputs.PRURL == "" {
+		if value.Question != "" || value.Blocker != nil || step == executionmodel.StepReport && value.Outputs.CandidateSHA == "" || executionmodel.PublicationStep(step) && value.Outputs.PRURL == "" {
 			return value, errors.New("done result has inconsistent fields")
 		}
 	case "needs_input":
