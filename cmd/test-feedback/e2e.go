@@ -432,8 +432,9 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 	minutes := 0
 	for _, entry := range entries {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
-		// Runtime isolation has a 10m body; its parent must not cut it at 6m.
-		if entry.ID == "runtime.installed-debug-isolation" {
+		// Heavy isolation/native restart has a 10m body; its parent must not
+		// cut the selected scene at the ordinary 6m package bound.
+		if entry.ID == "runtime.installed-debug-isolation" || entry.ID == "workspace.orca-removal-restart" {
 			minutes += 11
 		} else {
 			minutes += 6
