@@ -23,6 +23,7 @@ import (
 	steerlinehost "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	api "github.com/erranliu/SteerLine/internal/product/api"
@@ -722,6 +723,75 @@ func TestAPIQueryParity(t *testing.T) {
 	})
 	if len(candidateRuns) != 2 || candidateRuns[0].RunID == candidateRuns[1].RunID || candidateRuns[0].ExecutionID == candidateRuns[1].ExecutionID || candidateRuns[0].AttemptID == candidateRuns[1].AttemptID {
 		t.Fatalf("HTTP query merged the two local candidates or their identities: %+v", candidateRuns)
+	}
+}
+
+func TestAPIWorkerStageQueryProjection(t *testing.T) {
+	requireWindowsAPI(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	provider := filepath.Join(filepath.Dir(fixture.configPath), "stage-provider.json")
+	t.Setenv("STEERLINE_STAGE_PROVIDER", provider)
+	raw, err := os.ReadFile(fixture.configPath)
+	require(t, err)
+	var config map[string]any
+	require(t, json.Unmarshal(raw, &config))
+	config["pr"] = map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "owner/repo", "query": executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "staged-pr"}}}
+	raw, err = json.Marshal(config)
+	require(t, err)
+	require(t, os.WriteFile(fixture.configPath, raw, 0600))
+	fixture.config, err = steerlineapp.LoadConfig(fixture.configPath)
+	require(t, err)
+	require(t, fixture.config.ResolveIdentity(ctx))
+	createIntegrationTask(t, ctx, fixture, 901)
+	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
+	defer service.stop(t)
+	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
+	ready := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+		return run.BusinessStatus == "waiting_external" && run.StepID == executionmodel.StepAwaitMerge
+	}, 3*time.Minute)
+	if len(ready.run.StageResults) != 3 || ready.run.ReportToolPolicy == "" || ready.run.StageDiagnostic != "" {
+		t.Fatalf("controlled worker did not produce the expected real staged query facts: %+v", ready.run)
+	}
+	endpoint, client, product := startIntegrationHTTPAPI(t, ctx, fixture, service)
+	defer endpoint.Close(context.Background())
+	defer client.Close()
+	defer product.Close()
+	byRunID, err := client.Run(ctx, ready.run.RunID)
+	require(t, err)
+	assertWorkerStageProjection(t, ready.run, byRunID, "HTTP run query")
+	snapshot, err := client.Snapshot(ctx, "901")
+	require(t, err)
+	if snapshot.Connection.Snapshot.Page == nil {
+		t.Fatal("HTTP project snapshot omitted its native page")
+	}
+	var fromPage *api.CandidateSummary
+	for _, candidate := range snapshot.Connection.Snapshot.Page.Runs {
+		if candidate != nil && candidate.RunID == ready.run.RunID {
+			fromPage = candidate
+			break
+		}
+	}
+	if fromPage == nil {
+		t.Fatal("HTTP page query omitted the staged run")
+	}
+	assertWorkerStageProjection(t, ready.run, *fromPage, "HTTP page query")
+}
+
+func assertWorkerStageProjection(t *testing.T, source reconstructiontypes.RunView, got api.CandidateSummary, query string) {
+	t.Helper()
+	if got.FlowRef != source.FlowRef || got.StepID != source.StepID || got.BusinessStatus != source.BusinessStatus ||
+		got.StageDiagnostic != source.StageDiagnostic || got.ReportToolPolicy != source.ReportToolPolicy || len(got.StageResults) != len(source.StageResults) {
+		t.Fatalf("%s changed stage identity/status/policy: source=%+v got=%+v", query, source, got)
+	}
+	for i, result := range source.StageResults {
+		mapped := got.StageResults[i]
+		if mapped.StepID != result.StepID || mapped.CommandID != result.CommandID || mapped.TurnID != result.TurnID || mapped.InputVersion != result.InputVersion ||
+			mapped.Succeeded != result.Succeeded || mapped.FinalVerified != result.FinalVerified || mapped.Final != result.Final ||
+			mapped.FinalSource != result.FinalSource || mapped.Failure != result.Failure || mapped.Outcome != result.Outcome {
+			t.Fatalf("%s changed staged result %d: source=%+v mapped=%+v", query, i, result, mapped)
+		}
 	}
 }
 
