@@ -438,8 +438,8 @@ func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed
 	if facts.Workspace.Head != input.CandidateSHA || facts.Workspace.Dirty || s.hasUnknownWorkerOperation(run) {
 		return s.stageWait(run, w, e, "reconciling", "original publication cannot settle while candidate or native operation facts differ", &report)
 	}
-	if err := publication.ValidateWorkerPRIdentity(info, report.Outputs.PRURL, fixed.config.PR.Repository, w.Branch, facts.Workspace.Branch); err != nil || info.HeadRevision != input.CandidateSHA || info.State != "open" && info.State != "merged" {
-		return s.stageWait(run, w, e, "blocked", "artifact_mismatch: PR repository, branch, base or candidate differs", &report)
+	if err := publication.ValidateWorkerPublication(info, report.Outputs.PRURL, fixed.config.PR.Repository, w.Branch, facts.Workspace.Branch, input.CandidateSHA); err != nil {
+		return s.stageWait(run, w, e, "blocked", "artifact_mismatch: "+err.Error(), &report)
 	}
 	if err := BindWorkerPR(w, e, info, report.Outputs.PRURL, fixed.config.PR.Repository, false); err != nil {
 		return s.stageWait(run, w, e, "reconciling", err.Error(), &report)
@@ -549,8 +549,12 @@ func (s *Service) reconcileStageFacts(ctx context.Context, run *reconstructionty
 			s.refreshRun(run)
 			return s.commitWorker(run)
 		}
-		if err := publication.ValidateWorkerPRIdentity(info, w.PRCandidateURL, fixed.config.PR.Repository, w.Branch, facts.Workspace.Branch); err != nil || info.HeadRevision != w.CandidateSHA {
-			w.StageDiagnostic = "artifact_mismatch in read-only publication reconciliation"
+		identityErr := publication.ValidateWorkerPRIdentity(info, w.PRCandidateURL, fixed.config.PR.Repository, w.Branch, facts.Workspace.Branch)
+		if info.HeadRevision != w.CandidateSHA {
+			identityErr = errors.Join(identityErr, fmt.Errorf("head_revision: expected=%q, actual=%q", w.CandidateSHA, info.HeadRevision))
+		}
+		if identityErr != nil {
+			w.StageDiagnostic = "artifact_mismatch in read-only publication reconciliation: " + identityErr.Error()
 			s.refreshRun(run)
 			return s.commitWorker(run)
 		}

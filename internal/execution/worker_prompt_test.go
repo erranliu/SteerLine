@@ -39,6 +39,13 @@ func TestWorkerPromptUsesOnlyStepTemplateAndBusinessFacts(t *testing.T) {
 		if m.PublicationStep(step) != strings.Contains(first, `For done add outputs: {"pr_url":"actual PR URL"}.`) {
 			t.Fatalf("%s carries the wrong publication output contract", step)
 		}
+		if step == m.StepPublish {
+			for _, instruction := range []string{"git branch --show-current", "same name for the remote branch and PR head", "Do not reconstruct the branch name"} {
+				if !strings.Contains(first, instruction) {
+					t.Fatalf("publication prompt missing %q: %s", instruction, first)
+				}
+			}
+		}
 	}
 }
 
