@@ -69,8 +69,8 @@ L1/quick 默认 `-workers=3`，最多三个分组命令并发；各分组保持 
 # 修改 Codex 会话/回执接线时，只追加一处双回合验证
 go run ./cmd/test-feedback -level=L1 -- ./tests/integration -run '^TestTM04ExecutionWiring$/^intent_binding_and_two_original_turns$' -count=1
 
-# 修改 Orca 恢复或冻结配置时，追加配置改变后的原身份恢复验证
-go run ./cmd/test-feedback -level=L1 -- ./tests/integration -run '^TestCD66FixedProfileRecovery$/^changed_config_keeps_native_original_identity_and_manual_gate$' -count=1
+# 修改 Orca 原输入恢复时，追加未知提交只观察原终端的回归
+go run ./cmd/test-feedback -level=L1 -- ./internal/execution/adapters/orcatransport -run '^TestTerminalUnknownSubmissionOnlyObservesOriginal$' -count=1
 
 # 修改候选调度时，追加被影响的两个回归
 go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidate(OpenPRPollPreservesOriginalPendingInput|ResumeErrorDoesNotStarveSibling)$' -count=1
@@ -80,7 +80,7 @@ go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidat
 
 ## L2 与 L3
 
-L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；live 使用真实 Codex/Orca。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
+L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；当前登记的 live 使用真实 Codex。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
 
 本地 live 需要已登录的 `codex-cli 0.159.2`；完整 L2 需要 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用隔离测试项目；本地不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
 
@@ -134,19 +134,30 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 
 带 tag 的场景包应通过分级 runner 执行；直接运行缺少 runner 环境的场景会失败。编译成功不证明业务断言、原生证据或清理通过。
 
+## Windows 客户端及独立调试验证
+
+WinUI 客户端的测试不属于 Go Full。从仓库根目录运行：
+
+```powershell
+dotnet test ui/SteerLine.Windows.Tests/SteerLine.Windows.Tests.csproj -c Release
+dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug
+```
+
+单元测试验证客户端核心逻辑；工程编译不证明真实窗口操作已经验收，人工项见[WinUI 验收](acceptance/phase2-winui-foundation.md)。
+
+独立调试自动入口使用生成的 `C:\SteerlineDebug` 包和 SteerlineTest，不能使用安装环境。生成/模拟/隔离/重置与脚本 PR 分别由 `scripts/test-debug-release.ps1`、其 `-Live` 参数验证；真实 Codex 沙箱与 Git 工具回归由 `scripts/test-codex-sandbox.ps1` 验证。各入口的前置、外部效果和证据见[调试环境验收](acceptance/debug-environment.md)与[沙箱验收](acceptance/codex-sandbox-git.md)。
+
 ## 独立原生验收
 
-这些检查绑定专门的原生现场，不属于固定 L2/L3 注册表。先阅读各测试的前置字段、原身份和实际效果，再只运行选定测试；不要批量开启所有 `STEERLINE_*` 开关。未配置而跳过，表示未验收。下表标注“历史”的旧 Orca 测试已经随旧 adapter 删除，不能在当前源码执行；当前单终端原生范围见上方专属验收。
+这些检查绑定专门的原生现场，不属于固定 L2/L3 注册表。先阅读各测试的前置字段、原身份和实际效果，再只运行选定测试；不要批量开启所有 `STEERLINE_*` 开关。未配置而跳过，表示未验收。旧 Orca 测试已经随旧 adapter 删除，不能在当前源码执行；当前单终端原生范围见上方专属验收。
 
 | 检查 | 前置与范围 | 测试来源 |
 | --- | --- | --- |
-| 本地 Orca host wait | `STEERLINE_ORCA_HOST_WAIT_PROBE` 指向包含原 workspace/terminal/runtime/incarnation 的隔离现场 JSON；检查原终端等待事实 | [TestOrcaNativeHostWait（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/execution/adapters/orca/host_wait_live_cd67_test.go) |
-| Orca 远端 P10 reply gate | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/execution/adapters/orcaremote/p10_live_cd67_test.go) |
 | 原运行恢复预览 | `STEERLINE_REAL_RECOVERY_CONFIG` / `STEERLINE_REAL_RECOVERY_RUN_ID`；读取隔离原现场 | [TestRealIsolatedRecoveryPreview](../internal/app/host/recovery_real_probe_test.go) |
 | Windows 服务窗口 / Ctrl+C helper | 只由绑定原进程、启动回执和报告路径的专门探针调用 | [Windows 平台测试](../internal/app/host/platform_windows_test.go) |
 | elevated sandbox 凭据检查与设置 | 为显式需要 elevated 的开发场景使用；无 token 的检查和可能触发 UAC 的初始化是两步 | [E2E 指南的 sandbox 工具](../tests/e2e/README.md#真实环境)、[设置脚本](../scripts/setup-e2e-sandbox.ps1) |
 
-原 host-wait probe 命令仅可从表中固定历史源码取证，当前没有旧 adapter 的可执行入口。现有原生测试按其源码前置独立运行，不把其他 opt-in 测试的 skip 算作通过。
+已删除的旧 Orca host-wait 与 supervised P10 探针只保留[固定源码历史](https://github.com/erranliu/SteerLine/tree/872dba4462a4f659d7685eb2a397211a1653c632/internal/execution/adapters)，不能在当前包路径执行。当前原生检查必须按现存源码准备隔离现场；其他 opt-in 测试的 skip 不算通过。
 
 ## 产物与判断
 
@@ -175,4 +186,4 @@ L1 报告的 `workers`、各组 `started_at` / `finished_at` 和 `wall_seconds` 
 
 固定 L1 已包含 task/model 与 task 应用测试；历史迁包映射从固定 Git 快照取证，不默认启用 Full/L2/L3/live。
 
-公共测试适配器位于 `internal/testkit/fixtures`，仅允许 execution 与 app/host 的测试文件直接引用；生产依赖、其他测试所有者和经 helper 的间接引用仍受边界守卫约束。同一业务场景只保留一个执行入口，历史任务的聚合测试不再重复调用已被 Go 自动发现的顶层测试。双回合接线保留在 `TestTM04ExecutionWiring/intent_binding_and_two_original_turns`；冻结配置改变后的原身份恢复保留在上面的 CD66 定向入口。
+公共测试适配器位于 `internal/testkit/fixtures`，仅允许 execution 与 app/host 的测试文件直接引用；生产依赖、其他测试所有者和经 helper 的间接引用仍受边界守卫约束。同一业务场景只保留一个执行入口，历史任务的聚合测试不再重复调用已被 Go 自动发现的顶层测试。双回合接线保留在 `TestTM04ExecutionWiring/intent_binding_and_two_original_turns`；Orca 未知提交后的原终端观察恢复保留在上面的定向入口。
