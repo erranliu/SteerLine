@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 	testprotocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
@@ -19,6 +18,7 @@ type terminalFixture struct {
 	Lines                                                                     []string
 	CommandMode                                                               bool
 	Launches                                                                  int
+	Prompts                                                                   []string
 }
 
 func fakeTerminalOrca(directory string, args []string) int {
@@ -98,23 +98,15 @@ func fakeTerminalOrca(directory string, args []string) int {
 				result = map[string]any{"send": map[string]any{"handle": "original", "accepted": true, "prompt": map[string]any{"requestId": arg(args, "--retry-request"), "processIncarnation": state.Incarnation}}}
 				break
 			}
-			if strings.Contains(text, "Fetch ") || !strings.Contains(text, "Final reply:") {
+			if strings.Contains(text, "Fetch ") || strings.Contains(text, "SL_RESULT") || strings.Contains(text, "reply_b64") {
 				return fail(fmt.Errorf("unexpected transport contract"))
 			}
 			final, modelErr := testprotocol.StagedBusiness(state.Worktree, text, os.Getenv("STEERLINE_STAGE_PROVIDER"), os.Getenv("STEERLINE_FAKE_GIT_FETCH_REMOTE"))
 			if modelErr != nil {
 				return fail(modelErr)
 			}
-			pieces := strings.Split(text, "nonce=\"")
-			if len(pieces) != 2 {
-				return fail(fmt.Errorf("missing command nonce"))
-			}
-			nonce := strings.Split(pieces[1], "\"")[0]
-			frame, encodeErr := workerreturn.Encode(nonce, workerreturn.Reply{Outcome: "succeeded", Text: final})
-			if encodeErr != nil {
-				return fail(encodeErr)
-			}
-			state.Lines = append(state.Lines, text, frame)
+			state.Lines = append(state.Lines, "› "+text, "• "+final, "  Worked for "+strconv.Itoa(state.Sends+1)+"s • 18:50", "› Ask Codex to do anything")
+			state.Prompts = append(state.Prompts, text)
 			state.Sends++
 			result = map[string]any{"send": map[string]any{"handle": "original", "accepted": true, "prompt": map[string]any{"requestId": arg(args, "--retry-request"), "processIncarnation": state.Incarnation, "stages": []string{"input_accepted", "turn_started"}}}}
 		case "terminal close":

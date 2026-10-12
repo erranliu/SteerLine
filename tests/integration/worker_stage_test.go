@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,8 +52,8 @@ func testWorkerStageRun(t *testing.T, host string) {
 			environment = "paired-fixture"
 		}
 		require(t, os.MkdirAll(f.nativeStateDir, 0700))
-		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "opaque-worker", Incarnation: "original", CommandMode: os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1"})))
-		f.config.Host, f.config.Agent = "orca", "opaque-worker"
+		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "codex", Incarnation: "original", CommandMode: os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1"})))
+		f.config.Host, f.config.Agent = "orca", "codex"
 		setNativeImplementationProfiles(t, &f.config, codexworker.ProfileConfig{}, &terminal.Profile{Executable: os.Args[0], Args: []string{"--fake", "terminal-orca", f.nativeStateDir}, RepositorySelector: "id:fixture", Environment: environment, WaitTimeout: "5s"})
 		t.Cleanup(func() {
 			if t.Failed() {
@@ -108,6 +109,22 @@ func testWorkerStageRun(t *testing.T, host string) {
 	if turns == 4 && (w.StageInputs[3].SourceCommandID != w.StageResults[2].CommandID || w.StageInputs[3].SourceTurnID != w.StageResults[2].TurnID || w.StageInputs[3].CandidateSHA != w.CandidateSHA || w.StageResults[2].Snapshot.Workspace.ContentDigest != w.StageResults[3].Snapshot.Workspace.ContentDigest) {
 		t.Fatal("publication report lost original binding or changed workspace")
 	}
+	if strings.HasPrefix(host, "orca") {
+		var captured terminalFixture
+		raw, err := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
+		require(t, err)
+		require(t, json.Unmarshal(raw, &captured))
+		inputs := ready.runtime.WorkflowRuns[0].StageInputs
+		if len(captured.Prompts) != len(inputs) {
+			t.Fatal("transport input count changed")
+		}
+		for i, prompt := range captured.Prompts {
+			if prompt != inputs[i].Prompt {
+				t.Fatalf("Orca changed worker stage %s prompt", inputs[i].StepID)
+			}
+		}
+	}
+
 	// Restart the completed input chain: neither backend may replay a stage.
 	service.stop(t)
 	service = startIntegrationService(t, ctx, f.config, resolver)

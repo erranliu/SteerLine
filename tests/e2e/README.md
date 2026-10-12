@@ -2,7 +2,7 @@
 
 临时/AI 自动调试须先运行 `scripts/new-debug-release.ps1`，使用生成的 SteerlineTest 环境；安装目录不得作为现场。独立包定向验证为 `scripts/test-debug-release.ps1`，显式 `-Live` 验证真实 SteerlineTest PR；所有日志留在生成包 evidence。既有分级回归保留自己的隔离夹具，见[独立调试验收](../../docs/acceptance/debug-environment.md)。
 
-当前产品入口为本地 Codex 与 `host=orca`（本机 / environment 同能力）。Orca 使用一个 agent 终端，由本机 CLI 直接投递短输入并按原游标读取紧凑结果；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[单终端验收](../../docs/acceptance/orca-terminal-transport.md)。
+当前产品入口为本地 Codex 与 `host=orca`（本机 / environment 同能力）。Orca 使用一个 agent 终端，由本机 CLI 原样投递统一阶段提示词，并由适配层采集普通终端回复；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[统一提示词验收](../../docs/acceptance/orca-unified-worker-prompts.md)。
 
 旧单轮远端、旧 Orca live / startup / candidate 场景不计入当前验收；supervised 专属实现与夹具已删除。下面的旧驱动说明仅保留历史参考。
 

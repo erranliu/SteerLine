@@ -717,8 +717,6 @@ type LifecycleRecoveryPort interface {
 
 type LifecyclePolicyCapabilities struct {
 	StructuredFinalEvidence bool
-	// CompactTerminalReply requests the shared bounded reply envelope in the upper worker input.
-	CompactTerminalReply bool
 	// Empty means frozen native permissions; compare report facts.
 	ReportToolPolicy          string
 	ServiceStopBehavior       ServiceStopBehavior

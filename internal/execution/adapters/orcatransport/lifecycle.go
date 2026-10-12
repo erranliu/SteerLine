@@ -12,20 +12,22 @@ import (
 
 	native "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 )
 
 type Turn struct {
-	Command      string            `json:"command"`
-	Request      string            `json:"request,omitempty"`
-	InputDigest  string            `json:"input_digest"`
-	OutputSource string            `json:"output_source"`
-	Cursor       string            `json:"cursor"`
-	Attempted    bool              `json:"attempted"`
-	Accepted     bool              `json:"accepted"`
-	Started      bool              `json:"started"`
-	Settled      bool              `json:"settled"`
-	Scan         workerreturn.Scan `json:"scan"`
+	Command     string    `json:"command"`
+	Request     string    `json:"request,omitempty"`
+	InputDigest string    `json:"input_digest"`
+	Attempted   bool      `json:"attempted"`
+	Accepted    bool      `json:"accepted"`
+	Started     bool      `json:"started"`
+	Settled     bool      `json:"settled"`
+	Prompt      string    `json:"prompt"`
+	Baseline    string    `json:"baseline"`
+	Reply       string    `json:"reply,omitempty"`
+	ReplyDigest string    `json:"reply_digest,omitempty"`
+	Candidate   string    `json:"candidate,omitempty"`
+	CandidateAt time.Time `json:"candidate_at,omitempty"`
 }
 type State struct {
 	Process         b.ProcessIdentity `json:"process"`
@@ -80,7 +82,7 @@ func NewLifecycle(setup b.LifecycleSetup) (b.LifecyclePort, error) {
 }
 
 func (l *Lifecycle) PolicyCapabilities() b.LifecyclePolicyCapabilities {
-	return b.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, CompactTerminalReply: true, ReportToolPolicy: "host_managed_permissions; business_read_only_is_prompt_policy; revision_comparison_only", ResumeActiveObservation: true, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true}
+	return b.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, ReportToolPolicy: "host_managed_permissions; business_read_only_is_prompt_policy; revision_comparison_only", ResumeActiveObservation: true, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true}
 }
 
 func (l *Lifecycle) validate(s b.LifecycleSnapshot) error {
@@ -102,7 +104,7 @@ func (l *Lifecycle) state(s b.LifecycleSnapshot) (State, error) {
 	found := false
 	for _, e := range s.Implementation {
 		if e.ImplementationKey == StateKey {
-			if found || e.CodecVersion != 1 {
+			if found || e.CodecVersion != 2 {
 				return state, errors.New("unsupported terminal state")
 			}
 			found = true
@@ -117,20 +119,20 @@ func (l *Lifecycle) state(s b.LifecycleSnapshot) (State, error) {
 	if state.Process.Terminal != "" && state.Process != s.Ref.External {
 		return state, errors.New("saved original terminal differs from current resource")
 	}
-	if state.LaunchAttempted && (state.LaunchDigest != workerreturn.Digest([]byte(l.setup.AgentLaunchCommand)) || state.LaunchRequest == "") || state.LaunchAccepted && !state.LaunchAttempted || state.LaunchConfirmed && !state.LaunchAccepted {
+	if state.LaunchAttempted && (state.LaunchDigest != digest([]byte(l.setup.AgentLaunchCommand)) || state.LaunchRequest == "") || state.LaunchAccepted && !state.LaunchAttempted || state.LaunchConfirmed && !state.LaunchAccepted {
 		return state, errors.New("original agent launch binding changed")
 	}
 	seen := map[string]bool{}
 	for _, turn := range state.Turns {
-		if !b.StableExecutionID(turn.Command) || seen[turn.Command] || len(turn.InputDigest) != 64 || (turn.OutputSource != "stream" && turn.OutputSource != "screen") || !native.ValidCursor(turn.Cursor) || turn.Request != "" && !b.StableExecutionID(strings.ReplaceAll(turn.Request, "-", "")) || turn.Started && !turn.Accepted || turn.Accepted && !turn.Attempted || turn.Settled && (turn.Scan.Result == nil || turn.Scan.Problem != "") {
+		if !b.StableExecutionID(turn.Command) || seen[turn.Command] || len(turn.InputDigest) != 64 || turn.Request != "" && !b.StableExecutionID(strings.ReplaceAll(turn.Request, "-", "")) || turn.Started && !turn.Accepted || turn.Accepted && !turn.Attempted || turn.Settled && (turn.Reply == "" || turn.ReplyDigest != digest([]byte(turn.Reply))) {
 			return state, errors.New("invalid original terminal input binding")
 		}
 		seen[turn.Command] = true
-		if s.PendingTurn != nil && s.PendingTurn.CommandID == turn.Command && turn.InputDigest != workerreturn.Digest([]byte(s.PendingTurn.Prompt)) {
+		if s.PendingTurn != nil && s.PendingTurn.CommandID == turn.Command && turn.InputDigest != digest([]byte(s.PendingTurn.Prompt)) {
 			return state, errors.New("saved terminal input differs from original command")
 		}
-		if err := turn.Scan.Validate(turn.Command); err != nil {
-			return state, err
+		if turn.InputDigest != digest([]byte(turn.Prompt)) || len(turn.Reply) > maxReplyBytes || len(turn.Baseline) != 64 {
+			return state, errors.New("invalid saved terminal reply binding")
 		}
 	}
 	return state, nil
@@ -141,7 +143,7 @@ func (l *Lifecycle) envelope(s b.LifecycleSnapshot, state State) ([]b.Implementa
 	if err != nil {
 		return nil, err
 	}
-	e, err := b.NewImplementationDataEnvelope(b.ImplementationDataEnvelope{CodecVersion: 1, Purpose: b.ImplementationResourcePurpose, ImplementationKey: StateKey, ProjectID: s.Session.ProjectID, ExecutionID: s.Session.ExecutionID, AttemptID: s.Session.AttemptID, Generation: s.ResourceGeneration, ConfigDigest: s.ConfigurationDigest}, raw)
+	e, err := b.NewImplementationDataEnvelope(b.ImplementationDataEnvelope{CodecVersion: 2, Purpose: b.ImplementationResourcePurpose, ImplementationKey: StateKey, ProjectID: s.Session.ProjectID, ExecutionID: s.Session.ExecutionID, AttemptID: s.Session.AttemptID, Generation: s.ResourceGeneration, ConfigDigest: s.ConfigurationDigest}, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -192,6 +194,9 @@ func (l *Lifecycle) PreflightLifecycle(ctx context.Context, setup b.LifecycleSet
 	if err := l.validate(setup.Snapshot); err != nil {
 		return b.CapabilityReport{}, err
 	}
+	if setup.Snapshot.Ref.Agent.Name != "codex" {
+		return b.CapabilityReport{}, errors.New("Orca rendered reply collection is currently verified only for the Codex terminal renderer")
+	}
 	r, err := l.client.MetaCall(ctx, "status", "--json")
 	if err != nil {
 		return b.CapabilityReport{}, fmt.Errorf("Orca terminal preflight: %w", err)
@@ -215,7 +220,7 @@ func (l *Lifecycle) PreflightLifecycle(ctx context.Context, setup b.LifecycleSet
 	if !supported {
 		return b.CapabilityReport{}, errors.New("Orca prompt identity/replay capability is unavailable")
 	}
-	return b.CapabilityReport{Version: 1, Backend: b.BackendOrca, Protocol: b.ProtocolOrcaTerminalV3, Target: setup.Snapshot.Ref.Target, Agent: setup.Snapshot.Ref.Agent, PlatformVersion: status.Runtime.AppVersion, CheckedAt: time.Now().UTC(), Capabilities: []b.Capability{{Name: "start", Status: b.CapabilityVerified}, {Name: "observe", Status: b.CapabilityVerified}, {Name: "output_final_answer", Status: b.CapabilityVerified, Evidence: "bound SteerLine worker return contract"}}}, nil
+	return b.CapabilityReport{Version: 1, Backend: b.BackendOrca, Protocol: b.ProtocolOrcaTerminalV3, Target: setup.Snapshot.Ref.Target, Agent: setup.Snapshot.Ref.Agent, PlatformVersion: status.Runtime.AppVersion, CheckedAt: time.Now().UTC(), Capabilities: []b.Capability{{Name: "start", Status: b.CapabilityVerified}, {Name: "observe", Status: b.CapabilityVerified}, {Name: "output_final_answer", Status: b.CapabilityVerified, Evidence: "original submitted input and rendered Codex reply boundary"}}}, nil
 }
 
 func (l *Lifecycle) Next(_ context.Context, s b.LifecycleSnapshot) (b.LifecycleCandidate, error) {
@@ -320,12 +325,12 @@ func (l *Lifecycle) ready(ctx context.Context, s b.LifecycleSnapshot) error {
 }
 
 func nativeRequest(operation string) string {
-	value := workerreturn.Digest([]byte(operation))[:32]
+	value := digest([]byte(operation))[:32]
 	return value[:8] + "-" + value[8:12] + "-" + value[12:16] + "-" + value[16:20] + "-" + value[20:]
 }
 
-// Persist the original stream cursor through a read-only preparation operation.
-// A service crash after send cannot replace that cursor with the latest display.
+// Persist the original input and rendered completion baseline before submission.
+// Recovery cannot reinterpret an old visible reply as a new response.
 func (l *Lifecycle) prepareInput(ctx context.Context, r b.LifecycleRequest) (b.LifecycleReceipt, error) {
 	s := r.Snapshot
 	receipt := b.LifecycleReceipt{Operation: r.Operation, Disposition: b.OperationRejected}
@@ -340,23 +345,23 @@ func (l *Lifecycle) prepareInput(ctx context.Context, r b.LifecycleRequest) (b.L
 	if input == nil || !b.StableExecutionID(input.CommandID) {
 		return receipt, errors.New("missing original worker input")
 	}
-	digest := workerreturn.Digest([]byte(input.Prompt))
+	inputDigest := digest([]byte(input.Prompt))
 	if turn := turnFor(&state, input.CommandID); turn != nil {
-		if turn.InputDigest != digest {
+		if turn.InputDigest != inputDigest {
 			return receipt, errors.New("prepared worker input changed")
 		}
 	} else {
 		if err = l.ready(ctx, s); err != nil {
 			return receipt, err
 		}
-		page, readErr := l.client.CaptureOutput(ctx, s.Ref.External)
+		page, readErr := l.client.ReadScreen(ctx, s.Ref.External)
 		if readErr != nil {
 			return receipt, readErr
 		}
 		if _, err = l.original(ctx, s); err != nil {
 			return receipt, err
 		}
-		state.Turns = append(state.Turns, Turn{Command: input.CommandID, InputDigest: digest, Cursor: page.LatestCursor, OutputSource: page.Source})
+		state.Turns = append(state.Turns, Turn{Command: input.CommandID, Prompt: input.Prompt, InputDigest: inputDigest, Baseline: screenBaseline(page.Tail)})
 	}
 	receipt.Process = &state.Process
 	receipt.State = b.LifecycleStateFacts{SessionID: SessionID(state.Process), SessionGeneration: state.Process.Incarnation, SessionAvailable: true, WorkerLive: true}
@@ -381,8 +386,8 @@ func (l *Lifecycle) submit(ctx context.Context, r b.LifecycleRequest) (b.Lifecyc
 		return receipt, errors.New("missing original worker input")
 	}
 	turn := turnFor(&state, input.CommandID)
-	if turn == nil || turn.InputDigest != workerreturn.Digest([]byte(input.Prompt)) {
-		return receipt, errors.New("original input has no committed output cursor")
+	if turn == nil || turn.InputDigest != digest([]byte(input.Prompt)) {
+		return receipt, errors.New("original input has no committed output baseline")
 	}
 	if turn.Attempted {
 		return receipt, errors.New("original terminal input was already attempted; reconcile only")
@@ -446,47 +451,35 @@ func (l *Lifecycle) observeOnce(ctx context.Context, s b.LifecycleSnapshot) (b.L
 		if _, err = l.original(ctx, s); err != nil {
 			return receipt, nil, err
 		}
-		caughtUp, readErr := l.collectOutput(ctx, state.Process, turn)
+		idle, waitErr := l.client.WaitIdle(ctx, state.Process, 5*time.Second)
+		if waitErr != nil {
+			return receipt, nil, waitErr
+		}
+		page, readErr := l.client.ReadScreen(ctx, state.Process)
 		if readErr != nil {
 			return receipt, nil, readErr
 		}
-
 		if _, err = l.original(ctx, s); err != nil {
 			return receipt, nil, err
 		}
-		if turn.Scan.Problem != "" {
-			receipt.Diagnostic = "Original worker result is unverified: " + turn.Scan.Problem
+		text, fingerprint, problem := renderedReply(s.Ref.Agent.Name, page.Tail, turn.Prompt)
+		if idle && turn.Accepted && turn.Started && strings.TrimSpace(page.Draft) == "" && problem == "" && fingerprint != turn.Baseline {
+			if turn.Candidate != fingerprint {
+				turn.Candidate, turn.CandidateAt = fingerprint, time.Now().UTC()
+			} else if time.Since(turn.CandidateAt) >= time.Second {
+				turn.Reply, turn.ReplyDigest, turn.Settled = text, digest([]byte(text)), true
+			}
 		} else {
-			// The native terminal quiet predicate needs a three-second sampling
-			// window in command-launched sessions; a one-second call can never
-			// settle it. Keep the native predicate, with a bounded five-second wait.
-			idle, waitErr := l.client.WaitIdle(ctx, state.Process, 5*time.Second)
-			if waitErr != nil {
-				return receipt, nil, waitErr
-			}
-			if _, err = l.original(ctx, s); err != nil {
-				return receipt, nil, err
-			}
-			if idle && caughtUp && turn.Scan.Result != nil {
-				// Drain any final repaint which became visible during the idle observation.
-				caughtUp, err = l.collectOutput(ctx, state.Process, turn)
-				if err != nil {
-					return receipt, nil, err
+			turn.Candidate, turn.CandidateAt = "", time.Time{}
+			if idle {
+				if problem == "" {
+					problem = "original submission/start or new output is unverified, or composer is occupied"
 				}
-				if _, err = l.original(ctx, s); err != nil {
-					return receipt, nil, err
-				}
-				if caughtUp && turn.Scan.Problem == "" {
-					turn.Attempted, turn.Accepted, turn.Started, turn.Settled = true, true, true, true
-				}
-			} else if idle {
-				receipt.Diagnostic = "Original terminal is idle but no complete compact result matches this input. Inspect the original session; no Enter or input was repeated."
+				receipt.Diagnostic = "Original terminal reply is unverified: " + problem + "; original submission/start and complete visible reply are required; no input was repeated"
 			}
 		}
 	}
-	if turn.Scan.Problem != "" {
-		receipt.Diagnostic = "Original worker result is unverified: " + turn.Scan.Problem
-	}
+
 	receipt.Implementation, err = l.envelope(s, state)
 	if err != nil {
 		return receipt, nil, err
@@ -497,46 +490,13 @@ func (l *Lifecycle) observeOnce(ctx context.Context, s b.LifecycleSnapshot) (b.L
 	if !turn.Settled {
 		return receipt, nil, nil
 	}
-	reply := turn.Scan.Result
 	receipt.Disposition = b.OperationConfirmed
 	receipt.State.TurnCompleted = true
-	receipt.TurnEvidence = &b.TurnEvidence{FinalOrigin: "worker_declared", FinalSource: workerreturn.Source, FinalItemID: turn.Scan.Digest, FinalVerified: true, TurnID: turn.Command, CommandID: turn.Command, SessionID: SessionID(state.Process), Started: true, Completed: true, Succeeded: reply.Outcome == "succeeded", LastMessage: reply.Text}
+	receipt.TurnEvidence = &b.TurnEvidence{FinalOrigin: "terminal_observed", FinalSource: replySource, FinalItemID: turn.ReplyDigest, FinalVerified: true, TurnID: turn.Command, CommandID: turn.Command, SessionID: SessionID(state.Process), Started: true, Completed: true, Succeeded: true, LastMessage: turn.Reply}
 	return receipt, nil, nil
 }
 
-func (l *Lifecycle) collectOutput(ctx context.Context, process b.ProcessIdentity, turn *Turn) (bool, error) {
-	for count := 0; count < 8 && turn.Scan.Problem == ""; count++ {
-		var page native.StreamPage
-		var err error
-		if turn.OutputSource == "screen" {
-			page, err = l.client.ReadScreen(ctx, process)
-		} else {
-			page, err = l.client.ReadAfter(ctx, process, turn.Cursor)
-		}
-		if err != nil {
-			if !errors.Is(err, native.ErrStreamGap) {
-				return false, err
-			}
-			turn.Scan.Problem = err.Error()
-			return false, nil
-		}
-		if turn.OutputSource == "screen" {
-			turn.Scan.Pending = ""
-		}
-		turn.Scan.Append(page.Text(), turn.Command)
-		previous := turn.Cursor
-		turn.Cursor = page.NextCursor
-		if turn.OutputSource == "screen" || page.NextCursor == page.LatestCursor {
-			return strings.TrimSpace(page.Draft) == "", nil
-		}
-		if turn.Cursor == previous {
-			return false, nil
-		}
-	}
-	return false, nil
-}
-
-// Recovery resumes observation of the same resource and saved cursor only.
+// Recovery resumes observation of the same resource and saved input/baseline only.
 func (l *Lifecycle) ObserveLifecycle(ctx context.Context, s b.LifecycleSnapshot) (b.LifecycleReceipt, b.LifecycleObserver, error) {
 	receipt, _, err := l.observeOnce(ctx, s)
 	if err != nil || receipt.TurnEvidence != nil || !receipt.State.WorkerLive {

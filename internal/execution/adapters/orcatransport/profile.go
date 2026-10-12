@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 	"strings"
 	"time"
 )
@@ -51,7 +50,7 @@ func NormalizeProfile(data []byte) ([]byte, []string, error) {
 	if p.Environment != "" {
 		target = p.Environment
 	}
-	return raw, []string{"Orca：终端通信 · " + target, "启动与权限：由执行主机的 Orca 原生设置管理", "结果：同一终端的紧凑回复"}, err
+	return raw, []string{"Orca：终端通信 · " + target, "启动与权限：由执行主机的 Orca 原生设置管理", "结果：同一终端的普通回复"}, err
 }
 func (p Profile) Target() b.ExecutionTarget {
 	wire, _ := json.Marshal(struct {
@@ -63,5 +62,5 @@ func (p Profile) Target() b.ExecutionTarget {
 	if host == "" {
 		host = "local"
 	}
-	return b.ExecutionTarget{ID: "orca-terminal:" + workerreturn.Digest(wire)[:24], ExternalRuntime: p.Environment, ExecutionHost: host}
+	return b.ExecutionTarget{ID: "orca-terminal:" + digest(wire)[:24], ExternalRuntime: p.Environment, ExecutionHost: host}
 }

@@ -11,7 +11,7 @@ import (
 func TestDeclaredFinalStoredExactlyAndReplaySafe(t *testing.T) {
 	s, run, _ := workerStageFixture(t)
 	evidence := workerStageEvidence(s, run, "完整正文🙂\n\"quoted\"\\", true)
-	evidence.FinalOrigin = "worker_declared"
+	evidence.FinalOrigin = "terminal_observed"
 	ctx := context.Background()
 	require(t, s.recordDeclaredFinal(ctx, run, evidence))
 	require(t, s.recordDeclaredFinal(ctx, run, evidence))
@@ -47,7 +47,7 @@ func TestDeclaredFinalStoredExactlyAndReplaySafe(t *testing.T) {
 func TestDeclaredFinalMissingProvenanceStoresNoCanonicalBody(t *testing.T) {
 	s, run, port := workerStageFixture(t)
 	evidence := workerStageEvidence(s, run, "unverified summary", false)
-	evidence.FinalOrigin, evidence.FinalVerified, evidence.FinalDiagnostic = "worker_declared", false, "missing result"
+	evidence.FinalOrigin, evidence.FinalVerified, evidence.FinalDiagnostic = "terminal_observed", false, "missing result"
 	fixed, err := s.workerFlowContext(run)
 	require(t, err)
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
@@ -65,7 +65,7 @@ func TestDeclaredFinalMissingProvenanceStoresNoCanonicalBody(t *testing.T) {
 func TestDeclaredReplyCannotInventNativeProvenance(t *testing.T) {
 	s, run, _ := workerStageFixture(t)
 	e := workerStageEvidence(s, run, "original", true)
-	e.FinalOrigin = "worker_declared"
+	e.FinalOrigin = "terminal_observed"
 	e.FinalNativeTurnID = "invented"
 	if s.recordDeclaredFinal(context.Background(), run, e) == nil {
 		t.Fatal("worker declaration became native provenance")

@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 type fakeHost struct {
@@ -20,6 +20,7 @@ type fakeHost struct {
 	lines                         []string
 	writeReply, unknown, clipped  bool
 	screen                        bool
+	unstarted, busy               bool
 	draft                         string
 	commandMode, launched         bool
 	delayLaunchIdentity           bool
@@ -52,7 +53,7 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 	if f.nativePath != "" {
 		path = f.nativePath
 	}
-	terminal := map[string]any{"handle": "terminal", "incarnationId": f.incarnation, "worktreeId": "repo::" + path, "worktreePath": path, "branch": "worker", "connected": true, "agentIdentity": "opaque-agent", "status": "running"}
+	terminal := map[string]any{"handle": "terminal", "incarnationId": f.incarnation, "worktreeId": "repo::" + path, "worktreePath": path, "branch": "worker", "connected": true, "agentIdentity": "codex", "status": "running"}
 	if f.commandMode && (!f.launched || f.delayLaunchIdentity) {
 		terminal["agentIdentity"] = ""
 	}
@@ -65,10 +66,10 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 	case "terminal list":
 		result = map[string]any{"terminals": []any{terminal}}
 	case "terminal wait":
-		result = map[string]any{"wait": map[string]any{"satisfied": true}}
+		result = map[string]any{"wait": map[string]any{"satisfied": !f.busy}}
 	case "terminal read":
 		if f.screen || strings.Contains(strings.Join(c.Args, " "), "--screen") {
-			result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "screen", "tail": f.lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0", "truncated": true, "draft": f.draft}}
+			result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "screen", "tail": f.lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0", "truncated": true, "limited": f.clipped, "draft": f.draft}}
 			break
 		}
 		cursor := 0
@@ -84,24 +85,24 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 			return nil, errors.New("lost response")
 		}
 		text := arg("--text")
-		if f.commandMode && !strings.Contains(text, "Final reply:") {
+		if f.commandMode && !f.launched {
 			f.launched = true
 			result = map[string]any{"send": map[string]any{"handle": "terminal", "accepted": true, "prompt": map[string]any{"requestId": arg("--retry-request"), "processIncarnation": f.incarnation}}}
 			break
 		}
-		if !strings.Contains(text, "Final reply:") || strings.Contains(text, "Fetch ") {
-			return nil, errors.New("unexpected input contract")
+		if strings.Contains(text, "SL_RESULT") || strings.Contains(text, "reply_b64") || strings.Contains(text, "nonce=") {
+			return nil, errors.New("transport changed the worker prompt")
 		}
-		f.lines = append(f.lines, text)
+		f.lines = append(f.lines, "› "+text)
 		if f.writeReply {
-			command := strings.Split(strings.Split(text, "nonce=\"")[1], "\"")[0]
-			frame, err := workerreturn.Encode(command, workerreturn.Reply{Outcome: "succeeded", Text: `{"summary":"original result"}`})
-			if err != nil {
-				return nil, err
-			}
-			f.lines = append(f.lines, frame)
+			f.lines = append(f.lines, `• {"summary":"original result"}`, "  Worked for "+strconv.Itoa(len(f.lines))+"s • 18:50", "› Ask Codex to do anything")
 		}
-		result = map[string]any{"send": map[string]any{"handle": "terminal", "accepted": true, "prompt": map[string]any{"requestId": arg("--retry-request"), "processIncarnation": f.incarnation, "stages": []string{"input_accepted"}}}}
+
+		stages := []string{"input_accepted", "turn_started"}
+		if f.unstarted {
+			stages = stages[:1]
+		}
+		result = map[string]any{"send": map[string]any{"handle": "terminal", "accepted": true, "prompt": map[string]any{"requestId": arg("--retry-request"), "processIncarnation": f.incarnation, "stages": stages}}}
 	case "terminal close":
 		result = map[string]any{"close": map[string]any{"handle": "terminal", "ptyKilled": true}}
 	default:
@@ -151,7 +152,7 @@ func TestAgentLaunchSingleTerminalAndReadonlyReconciliation(t *testing.T) {
 				t.Fatal(err)
 			}
 			bind(&s, r)
-			if r, _, err = l.observeOnce(context.Background(), s); err != nil || r.TurnEvidence == nil {
+			if r, _, err = settled(t, l, s); err != nil || r.TurnEvidence == nil {
 				t.Fatal(r, err)
 			}
 			creates, launches, inputs := 0, 0, 0
@@ -219,7 +220,7 @@ func fixtureOn(t *testing.T, environment string) (*Lifecycle, *fakeHost, b.Lifec
 	}
 	p := Profile{Executable: "orca.exe", RepositorySelector: "id:repo", WaitTimeout: "1s", Environment: environment}
 	raw, _ := json.Marshal(p)
-	s := b.LifecycleSnapshot{Ref: b.ExecutionRef{Backend: b.BackendOrca, Protocol: b.ProtocolOrcaTerminalV3, Target: p.Target(), Agent: b.AgentSpec{Name: "opaque-agent"}, RunID: strings.Repeat("d", 32), AttemptID: strings.Repeat("b", 32)}, Session: b.SessionContext{ProjectID: "project", ExecutionID: strings.Repeat("a", 32), AttemptID: strings.Repeat("b", 32), WorkflowRunID: strings.Repeat("d", 32), TaskID: "1"}, ConfigurationDigest: "config", ResourceGeneration: "generation", WorkspacePlan: b.WorkspaceIntent{BaseCommit: strings.Repeat("e", 40)}}
+	s := b.LifecycleSnapshot{Ref: b.ExecutionRef{Backend: b.BackendOrca, Protocol: b.ProtocolOrcaTerminalV3, Target: p.Target(), Agent: b.AgentSpec{Name: "codex"}, RunID: strings.Repeat("d", 32), AttemptID: strings.Repeat("b", 32)}, Session: b.SessionContext{ProjectID: "project", ExecutionID: strings.Repeat("a", 32), AttemptID: strings.Repeat("b", 32), WorkflowRunID: strings.Repeat("d", 32), TaskID: "1"}, ConfigurationDigest: "config", ResourceGeneration: "generation", WorkspacePlan: b.WorkspaceIntent{BaseCommit: strings.Repeat("e", 40)}}
 	data, err := b.NewImplementationDataEnvelope(b.ImplementationDataEnvelope{CodecVersion: ProfileVersion, Purpose: b.ImplementationConfigPurpose, ImplementationKey: ProfileKey, ProjectID: "project", ProfileID: "profile", AcceptedConfigVersion: "accepted"}, raw)
 	if err != nil {
 		t.Fatal(err)
@@ -255,10 +256,7 @@ func bind(s *b.LifecycleSnapshot, r b.LifecycleReceipt) {
 }
 func prepared(t *testing.T, l *Lifecycle, s b.LifecycleSnapshot, cmd string) (b.LifecycleSnapshot, b.TurnInput) {
 	t.Helper()
-	text, err := workerreturn.Prompt("Implement the bound Spec and Plan.", cmd)
-	if err != nil {
-		t.Fatal(err)
-	}
+	text := "Implement the bound Spec and Plan."
 	input := b.TurnInput{CommandID: cmd, Prompt: text}
 	s.PendingTurn = &input
 	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareSession, b.LifecycleInput{Turn: &input}))
@@ -283,11 +281,11 @@ func TestTerminalLifecycleReplyReuseAndExactStop(t *testing.T) {
 		if observer != nil {
 			_ = observer.Close(context.Background())
 		}
-		if err != nil || !r.State.InputAccepted || r.State.TurnStarted {
+		if err != nil || !r.State.InputAccepted || !r.State.TurnStarted {
 			t.Fatal("acceptance confused with start", err)
 		}
 		bind(&s, r)
-		r, _, err = l.observeOnce(context.Background(), s)
+		r, _, err = settled(t, l, s)
 		if err != nil || r.TurnEvidence == nil || !r.TurnEvidence.Completed || r.TurnEvidence.FinalNativeTurnID != "" {
 			t.Fatal(r, err)
 		}
@@ -356,7 +354,7 @@ func TestTerminalLocalAndRemoteUseIdenticalReturnAndNativePorts(t *testing.T) {
 				t.Fatal(err)
 			}
 			bind(&s, r)
-			r, _, err = l.observeOnce(context.Background(), s)
+			r, _, err = settled(t, l, s)
 			if err != nil || r.TurnEvidence == nil {
 				t.Fatal("missing result", err)
 			}
@@ -392,9 +390,9 @@ func TestTerminalClippedOutputCannotComplete(t *testing.T) {
 	}
 	bind(&s, r)
 	f.clipped = true
-	r, _, err = l.observeOnce(context.Background(), s)
-	if err != nil || r.TurnEvidence != nil || r.Diagnostic == "" {
-		t.Fatal("clipped result completed", r, err)
+	r, _, err = settled(t, l, s)
+	if err == nil || r.TurnEvidence != nil {
+		t.Fatal("clipped result completed", r.Diagnostic, err)
 	}
 }
 
@@ -419,7 +417,7 @@ func TestScreenReplyDoesNotRequireOffscreenHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	bind(&s, r)
-	r, _, err = l.observeOnce(context.Background(), s)
+	r, _, err = settled(t, l, s)
 	if err != nil || r.TurnEvidence == nil || r.TurnEvidence.LastMessage != `{"summary":"original result"}` {
 		t.Fatal("complete visible frame was lost to offscreen history", r, err)
 	}
@@ -432,7 +430,7 @@ func TestComposerDraftBlocksPreparationAndSubmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	bind(&s, r)
-	text, _ := workerreturn.Prompt("Implement the bound Spec.", strings.Repeat("c", 32))
+	text := "Implement the bound Spec."
 	input := b.TurnInput{CommandID: strings.Repeat("c", 32), Prompt: text}
 	s.PendingTurn = &input
 	f.draft = "native setup input"
@@ -449,5 +447,100 @@ func TestComposerDraftBlocksPreparationAndSubmission(t *testing.T) {
 		if call[1] == "send" {
 			t.Fatal("occupied composer mutated", call)
 		}
+	}
+}
+
+func settled(t *testing.T, l *Lifecycle, s b.LifecycleSnapshot) (b.LifecycleReceipt, b.LifecycleObserver, error) {
+	t.Helper()
+	r, o, err := l.observeOnce(context.Background(), s)
+	if err != nil || r.TurnEvidence != nil || r.Diagnostic != "" {
+		return r, o, err
+	}
+	bind(&s, r)
+	time.Sleep(1100 * time.Millisecond)
+	return l.observeOnce(context.Background(), s)
+}
+
+func TestTerminalReplyRequiresOriginalStartedAndStableIdle(t *testing.T) {
+	for _, mode := range []string{"unstarted", "busy", "draft", "changing"} {
+		t.Run(mode, func(t *testing.T) {
+			l, f, s := fixture(t)
+			r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bind(&s, r)
+			f.writeReply, f.unstarted = true, mode == "unstarted"
+			s, input := prepared(t, l, s, strings.Repeat("c", 32))
+			r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
+			if observer != nil {
+				_ = observer.Close(context.Background())
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			bind(&s, r)
+			f.busy = mode == "busy"
+			if mode == "draft" {
+				f.draft = "another input"
+			}
+			r, _, err = l.observeOnce(context.Background(), s)
+			if err != nil || r.TurnEvidence != nil {
+				t.Fatal("premature completion", err)
+			}
+			bind(&s, r)
+			if mode == "changing" {
+				f.lines[len(f.lines)-3] = `• {"summary":"changed result"}`
+			}
+			r, _, err = l.observeOnce(context.Background(), s)
+			if err != nil || r.TurnEvidence != nil {
+				t.Fatal("unverified completion", err)
+			}
+		})
+	}
+}
+
+func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
+	l, f, s := fixture(t)
+	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	f.writeReply = true
+	s, input := prepared(t, l, s, strings.Repeat("c", 32))
+	r, o, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
+	if o != nil {
+		_ = o.Close(context.Background())
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	r, _, err = l.observeOnce(context.Background(), s)
+	if err != nil || r.TurnEvidence != nil {
+		t.Fatal("candidate was not staged", err)
+	}
+	bind(&s, r)
+	time.Sleep(1100 * time.Millisecond)
+	// Reconstruct the adapter from only its frozen setup and persisted snapshot.
+	setup := l.setup.Clone()
+	setup.Snapshot = s.Clone()
+	recovered, err := NewLifecycle(setup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, _, err = recovered.(*Lifecycle).observeOnce(context.Background(), s)
+	if err != nil || r.TurnEvidence == nil || r.TurnEvidence.LastMessage != `{"summary":"original result"}` {
+		t.Fatal("saved candidate did not resume", err)
+	}
+	sends := 0
+	for _, call := range f.calls {
+		if call[0] == "terminal" && call[1] == "send" {
+			sends++
+		}
+	}
+	if sends != 1 {
+		t.Fatal("recovery repeated input", sends)
 	}
 }

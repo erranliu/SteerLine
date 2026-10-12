@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 	"slices"
 	"strings"
 
@@ -782,13 +781,6 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 		input.Purpose = "readiness"
 	}
 	policyCapabilities := lifecycle.PolicyCapabilities()
-	if policyCapabilities.CompactTerminalReply {
-		delivered, promptErr := workerreturn.Prompt(input.Prompt, input.CommandID)
-		if promptErr != nil {
-			return promptErr
-		}
-		input.Prompt = delivered
-	}
 	if executionmodel.ReportStep(input.StepID) && policyCapabilities.ReportToolPolicy != "" && input.ReportToolPolicy != policyCapabilities.ReportToolPolicy {
 		return errors.New("report native policy changed after its input was frozen")
 	}
