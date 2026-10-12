@@ -182,6 +182,7 @@ func TestTM04ConsoleQueryBoundary(t *testing.T) {
 func TestTM06AdapterBoundary(t *testing.T) {
 	for _, dependency := range []string{
 		module + "/internal/execution",
+		execution + "/agentlaunch/helper",
 		module + "/internal/task",
 		module + "/internal/storage/ports",
 		"database/sql",
@@ -242,7 +243,7 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 			t.Fatal(err)
 		}
-		source := "package codexworker\nimport (_ \"" + execution + "/backend\"; _ \"" + execution + "/model\"; _ \"" + execution + "/conversation\"; _ \"" + execution + "/workspace\"; _ \"" + execution + "/workerreturn\"; _ \"" + execution + "/adapters/protocol/codexapp\")\n"
+		source := "package codexworker\nimport (_ \"" + execution + "/backend\"; _ \"" + execution + "/model\"; _ \"" + execution + "/conversation\"; _ \"" + execution + "/workspace\"; _ \"" + execution + "/workerreturn\"; _ \"" + execution + "/agentlaunch\"; _ \"" + execution + "/adapters/protocol/codexapp\")\n"
 		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -256,30 +257,35 @@ func TestTM06AdapterBoundary(t *testing.T) {
 			}
 		}
 	})
-	for _, dependency := range []string{"database/sql", execution, module + "/internal/task", productQuery} {
-		t.Run("worker_return_cannot_hide/"+strings.TrimPrefix(dependency, module+"/internal/"), func(t *testing.T) {
-			root := t.TempDir()
-			files := map[string]string{
-				"internal/execution/adapters/orcatransport/edge.go": "package orcatransport\nimport _ \"" + execution + "/workerreturn\"\n",
-				"internal/execution/workerreturn/edge_plan9.go":     "//go:build never_enabled\n\npackage workerreturn\nimport _ \"" + dependency + "\"\n",
-			}
-			for name, source := range files {
-				path := filepath.Join(root, name)
-				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	for _, contract := range []string{"workerreturn", "agentlaunch"} {
+		for _, dependency := range []string{"database/sql", execution, module + "/internal/task", productQuery} {
+			t.Run(contract+"_cannot_hide/"+strings.TrimPrefix(dependency, module+"/internal/"), func(t *testing.T) {
+				root := t.TempDir()
+				files := map[string]string{
+					"internal/execution/adapters/orcatransport/edge.go": "package orcatransport\nimport _ \"" + execution + "/" + contract + "\"\n",
+					"internal/execution/" + contract + "/edge_plan9.go": "//go:build never_enabled\n\npackage " + contract + "\nimport _ \"" + dependency + "\"\n",
+				}
+				for name, source := range files {
+					path := filepath.Join(root, name)
+					if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				report, err := ScanSource(root)
+				if err != nil {
 					t.Fatal(err)
 				}
-				if err := os.WriteFile(path, []byte(source), 0600); err != nil {
-					t.Fatal(err)
+				if !strings.Contains(strings.Join(report.Violations, "\n"), "execution adapter forbidden dependency") {
+					t.Fatalf("execution value contract hid a forbidden transitive dependency: %+v", report)
 				}
-			}
-			report, err := ScanSource(root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !strings.Contains(strings.Join(report.Violations, "\n"), "execution adapter forbidden dependency") {
-				t.Fatalf("worker reply contract hid a forbidden transitive dependency: %+v", report)
-			}
-		})
+				if contract == "agentlaunch" && !strings.Contains(strings.Join(report.Violations, "\n"), "pure ownership dependency") {
+					t.Fatalf("agent launch configuration accepted an impure dependency: %+v", report)
+				}
+			})
+		}
 	}
 }
 
