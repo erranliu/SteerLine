@@ -45,6 +45,8 @@ type Scenario struct {
 	resources               []map[string]any
 	usageVerified           bool
 	nativeWorkspaceVerified bool
+	debugSandboxRoot        string
+	debugSandboxResult      map[string]any
 }
 
 type Project struct {
@@ -117,6 +119,10 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		// Real business turns plus Orca readiness and automatic review
 		// share this deadline; keep each operation's own bound unchanged.
 		timeout = 30 * time.Minute
+	}
+	if id == "runtime.sandbox-git.local-codex" {
+		// Package generation plus two native three-stage tasks and real merges.
+		timeout = 25 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}
@@ -770,6 +776,9 @@ func (s *Scenario) cleanup() {
 			failures = append(failures, err.Error())
 		}
 	}
+	if err := s.cleanupDebugSandbox(); err != nil {
+		failures = append(failures, err.Error())
+	}
 	for _, p := range s.projects {
 
 		if p.OrcaExecutable != "" {
@@ -810,6 +819,10 @@ func (s *Scenario) cleanup() {
 		}
 	}
 	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "remote_public_output_verified": s.remoteOutputVerified, "remote_usage_status": map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.remoteOutputVerified], "native_workspace_verified": s.nativeWorkspaceVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
+	if s.debugSandboxResult != nil {
+		evidence["components"] = map[string]string{"worker": "local-codex", "provider": "github/" + githubRepository}
+		evidence["debug_sandbox"] = s.debugSandboxResult
+	}
 	evidence["orca_usage_status"] = map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.orcaUsageUnavailable]
 	if err := controlled.Write(filepath.Join(s.Output, "scenario.json"), evidence); err != nil {
 		s.t.Errorf("write scenario evidence: %v", err)

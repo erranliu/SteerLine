@@ -6,5 +6,6 @@
   {"id":"recovery.waiting-merge-restart","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestWaitingMergeRestart","env":"controlled"},
   {"id":"recovery.local-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryLocalCodex","env":"live","chain":"local-codex"},
   {"id":"runtime.installed-debug-isolation","level":"L3","suite":"runtime","package":"./tests/e2e/suites/runtime","test":"TestInstalledDebugIsolation","env":"controlled"},
-  {"id":"workspace.orca-removal-restart","level":"L3","suite":"workspace","package":"./tests/e2e/suites/nativeworkspace","test":"TestOrcaRemovalRestart","env":"native"}
+  {"id":"workspace.orca-removal-restart","level":"L3","suite":"workspace","package":"./tests/e2e/suites/nativeworkspace","test":"TestOrcaRemovalRestart","env":"native"},
+  {"id":"runtime.sandbox-git.local-codex","level":"L3","suite":"runtime","package":"./tests/e2e/suites/sandbox","test":"TestCodexSandboxGit","env":"live","chain":"local-codex"}
 ]
