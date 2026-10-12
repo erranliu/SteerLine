@@ -1,0 +1,235 @@
+{
+  "date": "2026-10-12",
+  "scenario": "runtime.sandbox-git.local-codex",
+  "level": "L3",
+  "env": "live",
+  "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=live '-scenario=runtime.sandbox-git.local-codex'",
+  "tested_commit": "90278d32b02b4f3964bf1d6a9a78c0a37ffc0045",
+  "source_dirty": false,
+  "out": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-l3-sandbox-20261012-103811434",
+  "wall_seconds": 395.96,
+  "passed": true,
+  "cleanup_complete": true,
+  "usage_verified": true,
+  "generated_package_removed": true,
+  "proof": {
+    "candidates": [
+      {
+        "candidate_sha": "506a4dcdda511e699848451132e20e33d618f731",
+        "escalation_requests": 1,
+        "merged_pr": {
+          "baseRefName": "codex/debug/dev-20261012-103831-90278d32/base",
+          "headRefOid": "506a4dcdda511e699848451132e20e33d618f731",
+          "mergeCommit": {
+            "oid": "a809f67a9e350f8e5859534abd0c817ab687118f"
+          },
+          "mergedAt": "2026-10-12T02:42:05Z",
+          "state": "MERGED",
+          "url": "https://github.com/erranliu/SteerlineTest/pull/218"
+        },
+        "native_stages": 3,
+        "pr": {
+          "URL": "https://github.com/erranliu/SteerlineTest/pull/218",
+          "State": "OPEN",
+          "HeadRefOid": "506a4dcdda511e699848451132e20e33d618f731",
+          "HeadRefName": "codex/1-30ba16eca716",
+          "BaseRefName": "codex/debug/dev-20261012-103831-90278d32/base"
+        },
+        "run_id": "30ba16eca7165483d2f2d1ea8bfdedf1",
+        "sandbox_probe": {
+          "gc": "0",
+          "maintenance": "false",
+          "passed": true,
+          "powershell": "5.1.26100.9444",
+          "project_check": true,
+          "sibling_write_denied": true,
+          "temp_in_admin": true
+        },
+        "session_id": "01a12dfb-69aa-7d01-afec-06f4453a6e2e",
+        "task_id": "1",
+        "usage": [
+          {
+            "source": "app-server/thread/tokenUsage/updated",
+            "session_id": "01a12dfb-69aa-7d01-afec-06f4453a6e2e",
+            "turn_id": "01a12dfb-6f91-7e23-ac3a-f06bca0ba42c",
+            "cwd": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32\\home\\worktrees\\30ba16eca7165483d2f2d1ea8bfdedf1",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium",
+            "tokens": {
+              "input_tokens": 106669,
+              "cached_input_tokens": 88576,
+              "output_tokens": 1307,
+              "reasoning_output_tokens": 242,
+              "total_tokens": 107976
+            }
+          },
+          {
+            "source": "app-server/thread/tokenUsage/updated",
+            "session_id": "01a12dfb-69aa-7d01-afec-06f4453a6e2e",
+            "turn_id": "01a12dfc-2fed-7df3-ad4b-749ec566e6be",
+            "cwd": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32\\home\\worktrees\\30ba16eca7165483d2f2d1ea8bfdedf1",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium",
+            "tokens": {
+              "input_tokens": 127607,
+              "cached_input_tokens": 106752,
+              "output_tokens": 1364,
+              "reasoning_output_tokens": 242,
+              "total_tokens": 128971
+            }
+          },
+          {
+            "source": "app-server/thread/tokenUsage/updated",
+            "session_id": "01a12dfb-69aa-7d01-afec-06f4453a6e2e",
+            "turn_id": "01a12dfc-6238-73a0-9d32-f1a43ba20fac",
+            "cwd": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32\\home\\worktrees\\30ba16eca7165483d2f2d1ea8bfdedf1",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium",
+            "tokens": {
+              "input_tokens": 214427,
+              "cached_input_tokens": 186624,
+              "output_tokens": 2149,
+              "reasoning_output_tokens": 328,
+              "total_tokens": 216576
+            }
+          }
+        ],
+        "worktree": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32\\home\\worktrees\\30ba16eca7165483d2f2d1ea8bfdedf1"
+      },
+      {
+        "candidate_sha": "ccaa621c9b2c3a8af61a503e9c8c93e7a4038047",
+        "escalation_requests": 1,
+        "merged_pr": {
+          "baseRefName": "codex/debug/dev-20261012-103831-90278d32/base",
+          "headRefOid": "ccaa621c9b2c3a8af61a503e9c8c93e7a4038047",
+          "mergeCommit": {
+            "oid": "70b55f44806ea2e97b19af5ce318335a2d683711"
+          },
+          "mergedAt": "2026-10-12T02:44:16Z",
+          "state": "MERGED",
+          "url": "https://github.com/erranliu/SteerlineTest/pull/219"
+        },
+        "native_stages": 3,
+        "pr": {
+          "URL": "https://github.com/erranliu/SteerlineTest/pull/219",
+          "State": "OPEN",
+          "HeadRefOid": "ccaa621c9b2c3a8af61a503e9c8c93e7a4038047",
+          "HeadRefName": "codex/2-b6a9f880a557",
+          "BaseRefName": "codex/debug/dev-20261012-103831-90278d32/base"
+        },
+        "run_id": "b6a9f880a557dccc6c99ce8a89ee292a",
+        "sandbox_probe": {
+          "gc": "0",
+          "maintenance": "false",
+          "passed": true,
+          "powershell": "5.1.26100.9444",
+          "project_check": true,
+          "sibling_write_denied": true,
+          "temp_in_admin": true
+        },
+        "session_id": "01a12dfd-b0be-7630-b026-4511bcadf14b",
+        "task_id": "2",
+        "usage": [
+          {
+            "source": "app-server/thread/tokenUsage/updated",
+            "session_id": "01a12dfd-b0be-7630-b026-4511bcadf14b",
+            "turn_id": "01a12dfd-b1d2-74f3-ac98-a88d72fdb01d",
+            "cwd": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32\\home\\worktrees\\b6a9f880a557dccc6c99ce8a89ee292a",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium",
+            "tokens": {
+              "input_tokens": 88288,
+              "cached_input_tokens": 66560,
+              "output_tokens": 1128,
+              "reasoning_output_tokens": 129,
+              "total_tokens": 89416
+            }
+          },
+          {
+            "source": "app-server/thread/tokenUsage/updated",
+            "session_id": "01a12dfd-b0be-7630-b026-4511bcadf14b",
+            "turn_id": "01a12dfe-5345-79d3-b0d9-3799d924282a",
+            "cwd": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32\\home\\worktrees\\b6a9f880a557dccc6c99ce8a89ee292a",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium",
+            "tokens": {
+              "input_tokens": 109050,
+              "cached_input_tokens": 84736,
+              "output_tokens": 1205,
+              "reasoning_output_tokens": 129,
+              "total_tokens": 110255
+            }
+          },
+          {
+            "source": "app-server/thread/tokenUsage/updated",
+            "session_id": "01a12dfd-b0be-7630-b026-4511bcadf14b",
+            "turn_id": "01a12dfe-7e35-7133-9241-b595ff3d7dde",
+            "cwd": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32\\home\\worktrees\\b6a9f880a557dccc6c99ce8a89ee292a",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium",
+            "tokens": {
+              "input_tokens": 195142,
+              "cached_input_tokens": 166656,
+              "output_tokens": 1865,
+              "reasoning_output_tokens": 146,
+              "total_tokens": 197007
+            }
+          }
+        ],
+        "worktree": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32\\home\\worktrees\\b6a9f880a557dccc6c99ce8a89ee292a"
+      }
+    ],
+    "cleanup_complete": true,
+    "cleanup_error": "<nil>",
+    "deliveries": 2,
+    "error": "<nil>",
+    "manual_confirmation": false,
+    "passed": true,
+    "pr_urls": [
+      "https://github.com/erranliu/SteerlineTest/pull/218",
+      "https://github.com/erranliu/SteerlineTest/pull/219"
+    ],
+    "root": "C:\\SteerlineDebug\\l3-46edd52d-c7be-4d47-9918-10427680a695\\dev-20261012-103831-90278d32",
+    "service_pid": 8584,
+    "sibling_unchanged": true,
+    "usage_verified": true
+  },
+  "previous_attempts": [
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-l3-sandbox-20261012-103015602\\summary.json",
+      "passed": false,
+      "cleanup_complete": true,
+      "reason": "Windows PowerShell 5 inherited PowerShell 7 module path; package generation failed before native worker.",
+      "sha256": "9d07886c4ce4e8ac6a96ae2d336732f7d66b8d457535206be58a36a47183042d"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-l3-sandbox-20261012-103224122\\summary.json",
+      "passed": false,
+      "cleanup_complete": true,
+      "reason": "Original admitted start_task was clipped by the newly introduced 30s command limit; restored existing control client 390s bound without resending.",
+      "sha256": "85db32fe46a5895679a7c9cd2fceebfb08b7215c4d35f8410203aff1fe98742f"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-l3-sandbox-20261012-103811434\\summary.json",
+      "sha256": "fd4241024d8af9fe210b1ec4e682129a7e6aeab7c2167ccd5e1edd5635256752"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-l3-sandbox-20261012-103811434\\scenarios\\runtime.sandbox-git.local-codex\\scenario.json",
+      "sha256": "ce8462b599630ace54ae205a6b570bd17966fd21783efde2ab3a53df1cc2f315"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-l3-sandbox-20261012-103811434\\scenarios\\runtime.sandbox-git.local-codex\\debug-manifest.json",
+      "sha256": "bed2c4e160cf8c4d8db8266338000c8e2605fe6909626473269d973364cab14a"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-l3-sandbox-20261012-103811434\\scenarios\\runtime.sandbox-git.local-codex\\debug-sandbox.json",
+      "sha256": "25ba04a27ccc941bcc17156396ef85a82051b9d50be814d585bf14eab91cc7ca"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-l3-sandbox-20261012-103811434\\e2e-1.jsonl",
+      "sha256": "8c20ac368d0cd646dc104312968e9e8903b8ab73bc45a193da045dd59f4a0bb0"
+    }
+  ]
+}

@@ -46,6 +46,21 @@ PR 分支已 rebase 到 `42f36428`。主干 `e84447cc` 已包含等价的 CRLF �
 
 两次普通沙箱发布仍遇到凭据获取失败，各自一次同命令原生自动审核获批后才发布；未放宽权限、代答或重试被拒动作。本次样本验证闭环完成，不保证未来审核总会批准，也不宣称普通沙箱凭据问题已经消失。远端核验本次专属 base/两个 head 均已删除，包内服务/helper 进程为零；原始证据及 hash 见[结果索引](codex-sandbox-git-2026-10-12.json)。本次没有登记新的 L3 场景，不把历史失败、其他 opt-in skip 或未运行项目算作通过。
 
+## 2026-10-12 纳入正式 L3
+
+当前场景注册为 `runtime.sandbox-git.local-codex`，L3/runtime/live，独立场景包 `tests/e2e/suites/sandbox`。独立脚本和场景都调用共享 driver，不互相调用测试函数；L2 固定门槛及 L1/Full 选择不变。L3 自动生成新的 C:\SteerlineDebug 包，核对生成 manifest 的源码/工作树与 runner 选择，读取实际冻结模型/权限和三个原回合的正数 usage；自动审核/子会话不作为原始业务 usage。各轮累计值独立记录，不相加为 token 总量。
+
+命令：`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=live -scenario=runtime.sandbox-git.local-codex`。干净验证提交 `90278d32b02b4f3964bf1d6a9a78c0a37ffc0045`，测试 `TestCodexSandboxGit` PASS，395.96 秒。统一 summary 的 selected-L3/live、passed/cleanup_complete=true；scenario 的 passed/cleanup_complete/usage_verified=true，provider=github/erranliu/SteerlineTest，deliveries=2。精确结果、三轮 usage、manifest 和报告 hash 见[本次 L3 索引](codex-sandbox-l3-2026-10-12.json)。
+
+| 任务 | workflow / candidate | GitHub 事实 |
+| --- | --- | --- |
+| 1 | `30ba16eca7165483d2f2d1ea8bfdedf1`；`506a4dcdda511e699848451132e20e33d618f731` | [PR #218](https://github.com/erranliu/SteerlineTest/pull/218) MERGED；merge `a809f67a9e350f8e5859534abd0c817ab687118f` |
+| 2 | `b6a9f880a557dccc6c99ce8a89ee292a`；`ccaa621c9b2c3a8af61a503e9c8c93e7a4038047` | [PR #219](https://github.com/erranliu/SteerlineTest/pull/219) MERGED；merge `70b55f44806ea2e97b19af5ce318335a2d683711` |
+
+本次专属 base/两个 head 均已删除，服务/helper 已停止，成功后 evidence/manifest 已归档，生成包及 nonce 父目录已删除。失败时保留私有包供原始 journal 检查，仍清理服务/远端资源；清理失败、报告缺失或仅完成一项都不通过。两次普通沙箱发布失败后，各一次同命令原生审核获批，权限没有放宽。
+
+首次接入的两次失败均保留：`bb8c7393` 的 Windows PowerShell 5 误继承 PowerShell 7 模块路径，生成包失败，后改为子进程使用自身模块默认值；`0fd50c7a` 的领取请求被新加的普通命令 30 秒限截断，后恢复现有控制客户端等待原回执的 390 秒界限，没有重发领取。两份失败 summary 均 cleanup_complete=true，不计通过。最终 runner 全包回归、场景/证据负例、阶段命令检查、失败包保留测试、带 e2e tag 的 testenv 回归、E2E 边界、编译及文档静态检查通过；本次不重跑 Full 或其他 L3 场景，新增正式注册表共九项不代表九项在本次全部重跑。
+
 ## 早期失败现场和边界
 
 - 初次驱动把未准备的隔离 CODEX_HOME 当认证源；随后负向夹具放错 worktree 根，被产品未知身份校验拒绝。已修正驱动，无放宽产品准入。
