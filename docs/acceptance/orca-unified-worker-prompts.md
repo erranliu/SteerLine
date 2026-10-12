@@ -27,3 +27,17 @@
 当前普通回复采集只对 Codex 的公开终端渲染边界验证；其他 renderer 的 preflight 显式 unsupported。远端原生主机本次未重跑，environment 受控三阶段通过不代表远端主机启动或模型就绪已通过。
 
 配置与控制台接线定向检查通过：`go test ./internal/app ./internal/console -run 'Terminal|Orca|CurrentExample' -count=1`；app 33.273s / console 0.878s。最终包 `evidence/config-console-unit.log`。
+
+## 2026-10-12 提 PR 前主干整合
+
+本次提交先重放 `1bc42284`，保留远端旧帧方案复测证据及工作流状态命名；主干随后合并 #291，再重放 `5809c3e1`，保留冻结 agent_launch 命令、唯一原 shell 终端及原生五秒 idle 观察窗口。agent 启动输入与业务 StageInput 分开，三个 worker 阶段提示词不变；新启动路径复用同一 adapter 的普通回复采集。无旧帧读取/迁移。
+
+本轮仅使用原有隔离回归夹具，日志保存 `C:/SteerlineDebug/pr-unified-worker-prompts-20261012/`：
+
+- `worker-unit.log`：WorkerPrompt / DeclaredFinal / DeclaredReply 定向通过，36.379s。
+- `stage-integration.log`：Codex、本机 Orca、environment 原生默认启动三阶段与重启通过，261.572s（重放第一批主干后）。
+- `launch-adapter-unit-final.log`：包含启动命令只投递一次、未知启动只读对账及普通回复采集；adapter 9.427s / agentlaunch 0.573s，通过（重放 #291 后）。
+- `launch-stage-integration.log`：本机及 environment 的显式 agent_launch 三阶段、同一原终端、冻结业务提示词与重启不重发通过，112.566s。
+- `launch-config-unit.log`：AgentLaunch / Terminal / Orca / CurrentExample 配置及控制台接线通过，app 20.877s / console 0.776s。
+
+合并主干后没有重新执行真实模型/远端真机；前述 10 月 10 日本机真实样本保持原代码基线标注，不冒充本轮真机证据。安装目录未改动。
