@@ -65,7 +65,8 @@ func TestPS1InlineConsoleWiring(t *testing.T) {
 	step(key('s'))
 	step(tea.KeyMsg{Type: tea.KeyEnter})
 	var primary *api.CandidateSummary
-	waitFor(t, 45*time.Second, func() bool {
+	// Each candidate must finish both execute/report rounds before feedback.
+	waitFor(t, 2*time.Minute, func() bool {
 		page := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
 		if page.Observation.Page == nil {
 			return false
@@ -82,7 +83,7 @@ func TestPS1InlineConsoleWiring(t *testing.T) {
 	step(key('b'))
 	step(tea.KeyMsg{Type: tea.KeyDown})
 	step(tea.KeyMsg{Type: tea.KeyEnter})
-	waitFor(t, 45*time.Second, func() bool {
+	waitFor(t, 2*time.Minute, func() bool {
 		page := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
 		if page.Observation.Page == nil || len(page.Observation.Page.Runs) != 2 {
 			return false

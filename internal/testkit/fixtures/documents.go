@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"strings"
 
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -21,7 +22,10 @@ func (a TaskDocuments) ReadCommittedRegularFile(ctx context.Context, ref taskmod
 		return nil, err
 	}
 	resolved, err := a.Output(ctx, "rev-parse", "--verify", ref.Commit+"^{commit}")
-	if err != nil || strings.TrimSpace(string(resolved)) != ref.Commit {
+	if err != nil {
+		return nil, taskDocumentError(fmt.Sprintf("cannot verify pinned Git commit %s: %v", ref.Commit, err))
+	}
+	if strings.TrimSpace(string(resolved)) != ref.Commit {
 		return nil, taskDocumentError("pinned Git commit is missing or is not a full canonical commit: " + ref.Commit)
 	}
 	tree, err := a.Output(ctx, "ls-tree", "-z", ref.Commit, "--", ref.Path)

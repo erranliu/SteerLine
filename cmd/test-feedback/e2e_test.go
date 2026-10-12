@@ -15,8 +15,12 @@ import (
 func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
 	ordinary := e2eScenario{ID: "delivery.basic", Env: "controlled"}
 	heavy := e2eScenario{ID: "runtime.installed-debug-isolation", Env: "controlled"}
+	native := e2eScenario{ID: "workspace.orca-removal-restart", Env: "native"}
 	if e2ePackageGoTimeout([]e2eScenario{ordinary}) != "6m" || e2ePackageGoTimeout([]e2eScenario{heavy}) != "11m" || e2ePackageGoTimeout([]e2eScenario{ordinary, heavy}) != "17m" {
 		t.Fatal("Go parent deadline clips a selected business scene or its cleanup")
+	}
+	if e2ePackageGoTimeout([]e2eScenario{native}) != "11m" {
+		t.Fatal("Go parent deadline clips native removal/restart and its second workflow")
 	}
 	if e2ePackageGoTimeout([]e2eScenario{{Env: "live"}}) != "35m" {
 		t.Fatal("live package deadline changed")

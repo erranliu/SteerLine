@@ -60,7 +60,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	case module + "/internal/task":
 		return dependency == module+"/internal/task/model"
 	case module + "/internal/execution/model":
-		return dependency == module+"/internal/execution/backend"
+		return dependency == module+"/internal/execution/backend" || dependency == execution+"/agentlaunch"
 	case module + "/internal/execution/conversation":
 		return dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
 	case module + "/internal/storage/ports":
@@ -69,7 +69,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/execution/conversation", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/execution/conversation", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -173,6 +173,11 @@ func adapterForbidden(pkg string) bool {
 	}
 	if pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
 		return true
+	}
+	// Terminal reply and agent launch configuration are pure execution values,
+	// not application use cases. Their dependencies are still traversed.
+	if pkg == execution+"/workerreturn" || pkg == execution+"/agentlaunch" {
+		return false
 	}
 	if pkg == execution || strings.HasPrefix(pkg, execution+"/") {
 		for _, allowed := range []string{

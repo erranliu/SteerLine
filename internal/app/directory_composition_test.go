@@ -40,7 +40,7 @@ func TestBuiltinCompositionIndependentCatalogsAndHosts(t *testing.T) {
 	require(t, err)
 	d2, err := NewBuiltinDirectory(second)
 	require(t, err)
-	if d1 == d2 || d1.Version() != "builtin-execution-v5" || d2.Version() != d1.Version() || first.starts+second.starts+first.inspections+second.inspections != 0 {
+	if d1 == d2 || d1.Version() != "builtin-execution-v6" || d2.Version() != d1.Version() || first.starts+second.starts+first.inspections+second.inspections != 0 {
 		t.Fatal("construction probed a backend or reused its catalog")
 	}
 	if _, err := NewBuiltinDirectory(nil); err == nil {

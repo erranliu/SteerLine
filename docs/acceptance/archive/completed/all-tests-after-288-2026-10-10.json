@@ -1,0 +1,415 @@
+{
+  "schema_version": 1,
+  "rebased_main": "6d4b4fa2d67b77156eeda64d103ce71c95f3450b",
+  "tested_commit": "7164baba9309dc1f19635beb521de8fda5220b3f",
+  "raw_root": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643",
+  "runs": [
+    {
+      "run": "full-verified",
+      "scope": "full",
+      "source_commit": "7164baba9309dc1f19635beb521de8fda5220b3f",
+      "passed": true,
+      "complete": true,
+      "test_records": 1360,
+      "skipped_tests": 17,
+      "skipped": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/app/host",
+          "name": "TestDesktopOpenHelper",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/app/host",
+          "name": "TestRealIsolatedRecoveryPreview",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/execution/adapters/codex",
+          "name": "TestServiceStopWorkerHelper",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/execution/process",
+          "name": "TestProcessHostCommandHelper",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+          "name": "TestDebugReleaseCodexSandbox",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+          "name": "TestDebugReleaseRuntime",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+          "name": "TestSandboxReadinessExistingAccounts",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestAppServerHostExitHelper",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestCodexAppServerNativeQuestionLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestCodexHistoryNativeAcceptance",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestCodexHistoryRealFailedAcceptance",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestCodexHistoryRealSourceReplacement",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestStartServiceReportsPreflightFailureAndPendingHandshake",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestStartServiceSerializesSameConfig",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestAppServerServiceParallelRecoveryLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestAppServerHostExitRecoveryLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestLocalCodexManualRecoveryLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        }
+      ],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\full-verified\\summary.json",
+      "sha256": "bafa6ef89613d4a2a6f907389abb729b1afb2369c47defdce4fad7057960a197"
+    },
+    {
+      "run": "infra-serial",
+      "scope": "targeted",
+      "source_commit": "cbb982039b2803b74e5a5edcb3aae90721ed31d2",
+      "passed": true,
+      "complete": true,
+      "test_records": 202,
+      "skipped_tests": 3,
+      "skipped": [
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+          "name": "TestDebugReleaseCodexSandbox",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+          "name": "TestDebugReleaseRuntime",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+          "name": "TestSandboxReadinessExistingAccounts",
+          "status": "skip",
+          "elapsed_seconds": 0
+        }
+      ],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\infra-serial\\summary.json",
+      "sha256": "e3556ef62c5a2cd8cc0033b24ae9ba6cc6e68736ba1f4b18ad4e7c9aeb0137e5"
+    },
+    {
+      "run": "l1-current",
+      "scope": "quick",
+      "source_commit": "38ab65ce799ae3506d2940e3f7546fc4c9cde416",
+      "passed": true,
+      "complete": true,
+      "test_records": 523,
+      "skipped_tests": 0,
+      "skipped": [],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l1-current\\summary.json",
+      "sha256": "cf5b4d0c30103115b7045097bce40069e68274d4715451bef22c07973b08d54f"
+    },
+    {
+      "run": "l2-current",
+      "scope": "e2e",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "complete": true,
+      "test_records": 2,
+      "skipped_tests": 0,
+      "skipped": [],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l2-current\\summary.json",
+      "sha256": "380454924c477a0450113e00e66bf4b2882446836128907f280fe652079df3d8"
+    },
+    {
+      "run": "l3-controlled",
+      "scope": "e2e",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "complete": true,
+      "test_records": 3,
+      "skipped_tests": 0,
+      "skipped": [],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-controlled\\summary.json",
+      "sha256": "3fd72eb03afdd65b9d43e739e4998c9f7b248a22681bffc81bacdd0163fee749"
+    },
+    {
+      "run": "l3-live",
+      "scope": "e2e",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "complete": true,
+      "test_records": 2,
+      "skipped_tests": 0,
+      "skipped": [],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-live\\summary.json",
+      "sha256": "01c1077f3aaf7d0ad341a5052498d64c227eb5b32345fc8ff365084f734b8b2f"
+    },
+    {
+      "run": "l3-native-final",
+      "scope": "e2e",
+      "source_commit": "7164baba9309dc1f19635beb521de8fda5220b3f",
+      "passed": true,
+      "complete": true,
+      "test_records": 1,
+      "skipped_tests": 0,
+      "skipped": [],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-native-final\\summary.json",
+      "sha256": "072f3f17fa281d4683446da8264794b2d022ed1ab7093eab782123a7ab853590"
+    },
+    {
+      "run": "powershell-paths",
+      "source_commit": "7164baba9309dc1f19635beb521de8fda5220b3f",
+      "passed": true,
+      "cases": 10,
+      "symbolic_links_selected": false,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\powershell-paths\\summary.json",
+      "sha256": "c693987b450aee2d7f069da60ad09ffe8da1e533eaeffd78959d8b8d2aa58446"
+    },
+    {
+      "run": "windows-tests",
+      "source_commit": "6d4b4fa2d67b77156eeda64d103ce71c95f3450b",
+      "passed": true,
+      "cases": 19,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\windows-tests\\windows-tests.trx",
+      "sha256": "2e21cb753dc50a25847cc171ae1ab8b2e154baa86c8292abe9e2c56a9b023d90"
+    },
+    {
+      "run": "winui-build",
+      "source_commit": "6d4b4fa2d67b77156eeda64d103ce71c95f3450b",
+      "passed": true,
+      "test_evidence": false,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\winui-build.log",
+      "sha256": "2fcb1b4611b86c7553d8a92ff0747411353b1da17aabb4c7353ce0efd3828078"
+    },
+    {
+      "run": "python-runner",
+      "source_commit": "6d4b4fa2d67b77156eeda64d103ce71c95f3450b",
+      "passed": true,
+      "cases": 18,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\python-runner.log",
+      "sha256": "8cd05e8f9d84375ca47823c5f23f1bccc90825545ffda14dae46df77c7c934bd"
+    },
+    {
+      "run": "python-task-ids",
+      "source_commit": "6d4b4fa2d67b77156eeda64d103ce71c95f3450b",
+      "passed": true,
+      "cases": 10,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\python-task-ids.log",
+      "sha256": "4ed1209245dab6d055f27fa6af932cc671ce5bc8110396c75eb41c930851c2a3"
+    },
+    {
+      "run": "debug-release-live",
+      "source_commit": "7164baba9309dc1f19635beb521de8fda5220b3f",
+      "passed": true,
+      "roots": [
+        "C:\\SteerlineDebug\\中文 verification-4f839b5bc7b94e5690b5478c2f860fb8\\dev-20261010-221533-7164baba",
+        "C:\\SteerlineDebug\\中文 verification-4f839b5bc7b94e5690b5478c2f860fb8\\dev-20261010-221557-7164baba"
+      ],
+      "report": "C:\\SteerlineDebug\\中文 verification-4f839b5bc7b94e5690b5478c2f860fb8\\dev-20261010-221533-7164baba\\evidence\\generation-test.json",
+      "sha256": "2a1cd75db7a2e989e57ceb287e06d4b3a32a564a7208e4909e1d0b8d768fc3bf",
+      "log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\debug-release-live.log",
+      "log_sha256": "e370561eccf9f4704cc8a5ebe38748e3588cdb4346521fb1ff91042e6272f786"
+    },
+    {
+      "run": "codex-sandbox",
+      "source_commit": "7164baba9309dc1f19635beb521de8fda5220b3f",
+      "passed": false,
+      "cases_completed": 1,
+      "status": "second_task_blocked_by_native_auto_review",
+      "root": "C:\\SteerlineDebug\\dev-20261010-222122-7164baba",
+      "report": "C:\\SteerlineDebug\\dev-20261010-222122-7164baba\\evidence\\sandbox-live.json",
+      "sha256": "699c0eb8e027eaddce6457ca6d5060e613f7e0a6bcf4ca7f8f5b16d6a490ce39",
+      "first_pr": "https://github.com/erranliu/SteerlineTest/pull/214",
+      "first_pr_verified_state": "MERGED",
+      "first_merge_commit": "d3163c87f90fe72cc58c703af56ffb79935ecf33",
+      "reason": "Second model attempted publication in implement.execute; native auto-review denied the retry because the GitHub destination and payload were not accepted as authorized sensitive-data egress. Its report correctly returned blocked. No retry, answer injection or permission change was performed."
+    }
+  ],
+  "registry": {
+    "expected": [
+      "smoke.delivery",
+      "smoke.local-codex",
+      "delivery.basic",
+      "delivery.local-codex",
+      "recovery.waiting-merge-restart",
+      "recovery.local-codex",
+      "runtime.installed-debug-isolation",
+      "workspace.orca-removal-restart"
+    ],
+    "passed": [
+      "smoke.delivery",
+      "smoke.local-codex",
+      "delivery.basic",
+      "recovery.waiting-merge-restart",
+      "runtime.installed-debug-isolation",
+      "delivery.local-codex",
+      "recovery.local-codex",
+      "workspace.orca-removal-restart"
+    ],
+    "sha256": "54cc9c6c2fbaa2e51de5f6a64eb5d779e2dfcc11995e0ca21923923aaffcc2d7"
+  },
+  "scenarios": [
+    {
+      "id": "smoke.delivery",
+      "env": "controlled",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "native_workspace_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l2-current\\scenarios\\smoke.delivery\\scenario.json",
+      "sha256": "42cb08265b21a9b30d4e157a63c7729b7d6b869ef3bb5a5e98d71c42abe60419"
+    },
+    {
+      "id": "smoke.local-codex",
+      "env": "live",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "native_workspace_verified": false,
+      "real_pr": {
+        "url": "https://github.com/erranliu/SteerlineTest/pull/212",
+        "repository": "erranliu/SteerlineTest",
+        "base_branch": "codex/e2e/f1dd646c97b54913a7976923d16939e4/smoke.local-codex/base",
+        "head_repository": "erranliu/SteerlineTest",
+        "head_branch": "codex/1-caec4453c6f2",
+        "head_revision": "9a4e2a3ba04b714a4664254071f1ff2f10fe1df1",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-10T13:31:54Z",
+        "merge_commit": "18b84593e335a454cd457cd1aa01324cecb62a9c"
+      },
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l2-current\\scenarios\\smoke.local-codex\\scenario.json",
+      "sha256": "69c551a5036752ab563f8ad104397a72855301ac57e5b7e937ce168511a72e5b"
+    },
+    {
+      "id": "delivery.basic",
+      "env": "controlled",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "native_workspace_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-controlled\\scenarios\\delivery.basic\\scenario.json",
+      "sha256": "e3da9eec2ca83de7e669a9ee76947c5cd97ea2c497dbcbd2b710d18f0b48bda8"
+    },
+    {
+      "id": "recovery.waiting-merge-restart",
+      "env": "controlled",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "native_workspace_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-controlled\\scenarios\\recovery.waiting-merge-restart\\scenario.json",
+      "sha256": "cf208e823f77faee8a8c68595aeb0af2e722a7db41bcd94c3d4a67d241c44c07"
+    },
+    {
+      "id": "runtime.installed-debug-isolation",
+      "env": "controlled",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "native_workspace_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-controlled\\scenarios\\runtime.installed-debug-isolation\\scenario.json",
+      "sha256": "375a1739d7e833eebe9f460ad4b65762351e8407ba87656786d1fbf3ebdea30a"
+    },
+    {
+      "id": "delivery.local-codex",
+      "env": "live",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "native_workspace_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-live\\scenarios\\delivery.local-codex\\scenario.json",
+      "sha256": "b63212ff0f1ecfe4d2819f94cda16d074cf0cee31fd445d2796d6d6fed38ebf7"
+    },
+    {
+      "id": "recovery.local-codex",
+      "env": "live",
+      "source_commit": "4ca00a3f54f4d3c0610d82c27cd470c799ffb524",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "native_workspace_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-live\\scenarios\\recovery.local-codex\\scenario.json",
+      "sha256": "181d59a4586b4f9baffc3f3dc04c9f72625332b06b3d20e50e593af4cc2b7d24"
+    },
+    {
+      "id": "workspace.orca-removal-restart",
+      "env": "native",
+      "source_commit": "7164baba9309dc1f19635beb521de8fda5220b3f",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "native_workspace_verified": true,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261010-190239643\\l3-native-final\\scenarios\\workspace.orca-removal-restart\\scenario.json",
+      "sha256": "bdeae3474a6284ad31c7ad2370e0fee9674ab6e4280764e61eedcf360b5f9d41"
+    }
+  ],
+  "source_note": "Each report records its exact clean source and hash. Full is on tested_commit; earlier passed E2E/L1/infrastructure and Windows/Python sources differ only by test infrastructure, test assertions, fixtures and documentation. Product runtime and UI code are unchanged from rebased_main. Codex sandbox is explicitly failed on the second task native-policy rejection, not a pass. Default skips and manual UI activity are not acceptance passes."
+}

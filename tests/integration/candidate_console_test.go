@@ -86,12 +86,20 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	step(tea.KeyMsg{Type: tea.KeyEnter})
 	t.Logf("first explicit start UI: %s", m.View())
 	var primary *productapi.CandidateSummary
-	// Native fixture startup can exceed 30 seconds under Full's parallel load.
-	waitFor(t, time.Minute, func() bool {
+	var firstRuns []*productapi.CandidateSummary
+	defer func() {
+		if t.Failed() {
+			t.Logf("last original candidates at first readiness: %s", mustJSON(firstRuns))
+		}
+	}()
+	// A Decision follows execute and report, not merely native process startup.
+	// Both original rounds must settle before the UI can open feedback.
+	waitFor(t, 2*time.Minute, func() bool {
 		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
 		if snap.Observation.Page == nil {
 			return false
 		}
+		firstRuns = snap.Observation.Page.Runs
 		for _, r := range snap.Observation.Page.Runs {
 			if r.Decision != nil && r.SessionID != "" {
 				primary = r

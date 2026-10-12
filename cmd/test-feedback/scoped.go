@@ -82,7 +82,6 @@ var quickRulePackages = append(append([]string{}, taskRulePackages...), []string
 	"github.com/erranliu/SteerLine/internal/product/query",
 	"github.com/erranliu/SteerLine/internal/product/query/taskgraph",
 	"github.com/erranliu/SteerLine/internal/storage/ports",
-	"github.com/erranliu/SteerLine/internal/testkit/protocol",
 	"github.com/erranliu/SteerLine/internal/execution/scheduler",
 	"github.com/erranliu/SteerLine/internal/execution/model",
 	"github.com/erranliu/SteerLine/internal/execution/backend",
