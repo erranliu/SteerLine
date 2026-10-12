@@ -14,9 +14,9 @@ host=orca 本机与 environment 使用相同能力。全部调用由本机显式
 
 准备和投递前核对原生 idle、精确终端身份及公共 screen draft。PrepareSession 保存本轮原输入及发送前最近完成区段摘要；StartTurn 一次原样投递，记录 Orca 的 request、input_accepted 与 turn_started 事实。accepted 不等于开始，未知投递不通过重新输入恢复。
 
-当前普通回复采集只验证 Codex TUI 的公开渲染边界：完整本轮输入回显、其后的最终 assistant 区段、Worked for 完成行及原终端 idle。两次间隔至少一秒的 idle 观察具有相同区段摘要、composer 空且开始已确认后，冻结回复。旧区段、错误输入、折叠/裁剪或缺少边界、未知 renderer 均不能证明完成。原生主机缺乏 session/turn/final 接口，因此来源记为 terminal_observed、身份为 derived，不冒充原生 canonical final；普通输出显示归一化后由同一 development/v2 业务流程解析。
+当前普通回复采集只验证 Codex TUI 的公开渲染边界：可见用户消息标记、其后的最终 assistant 区段、Worked for 完成行及原终端 idle。用户消息标记只划分区段，提示词可折叠，不核对回显全文；输入归属由持久化原请求/输入摘要及发送/开始回执验证。两次间隔至少一秒的 idle 观察具有相同区段摘要、composer 空且开始已确认后，冻结回复。旧完成区段、最终正文折叠/裁剪或缺少边界、未知 renderer 均不能证明完成，前置工具历史裁剪不阻断完整回复。原生主机缺乏 session/turn/final 接口，因此来源记为 terminal_observed、身份为 derived，不冒充原生 canonical final；普通输出显示归一化后由同一 development/v2 业务流程解析。本次门槛修订见[折叠输入 Spec](orca-collapsed-input.spec.md)、[Plan](orca-collapsed-input.plan.md)与[验收](../acceptance/orca-collapsed-input.md)。
 
-适配层保留正文空格、中文和 JSON 转义，JSON 键及 URL 字符串内的显示折行拼接，正文字符串的显示换行转义保留，避免因 CLI 去掉行末空格而连接单词；JSON 结构外换行保留。screen 不提供软/硬换行元数据；若正文歧义、原输入或最终回复不完全可见，保持未核实。正文最多 32 KiB，是读取层资源上限，不注入业务提示词。恢复只读同一终端并使用已持久的输入/基线/候选/回复，不发送额外输入、不补 Enter、不替换终端。
+适配层保留正文空格、中文和 JSON 转义，JSON 键及 URL 字符串内的显示折行拼接，正文字符串的显示换行转义保留，避免因 CLI 去掉行末空格而连接单词；JSON 结构外换行保留。screen 不提供软/硬换行元数据；若正文歧义、用户消息边界缺失或最终回复不完全可见，保持未核实。正文最多 32 KiB，是读取层资源上限，不注入业务提示词。恢复只读同一终端并使用已持久的输入/基线/候选/回复，不发送额外输入、不补 Enter、不替换终端。
 
 这次状态 codec 为 2，旧紧凑结果帧/扫描状态删除，无旧版读取或迁移。当前验收见[统一提示词专属记录](../acceptance/orca-unified-worker-prompts.md)。
 
