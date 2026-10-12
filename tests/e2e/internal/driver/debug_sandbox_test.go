@@ -213,6 +213,16 @@ func TestDebugReleaseCodexSandbox(t *testing.T) {
 		if err != nil || files != "result.txt" {
 			t.Fatalf("candidate files: %q %v", files, err)
 		}
+		result, err := output(d.command("git", "-C", d.repo, "show", run.CandidateSHA+":result.txt"))
+		if err != nil || strings.ReplaceAll(string(result), "\r\n", "\n") != "SteerlineTest debug result\n"+execution.Workspace.Branch+"\n" {
+			t.Fatalf("candidate result does not identify its own branch: %q %v", result, err)
+		}
+		for _, stage := range run.StageResults {
+			journal := filepath.Join(d.stateDir(), "runs", run.WorkflowRunID, "turns", stage.CommandID, "appserver.jsonl")
+			if err := debugSandboxStageCommands(journal, stage.StepID); err != nil {
+				t.Fatal(err)
+			}
+		}
 		probe, escalations, err := debugSandboxNativeEvidence(d, run.WorkflowRunID, execution.SessionID)
 		if err != nil {
 			t.Fatal(err)
@@ -257,6 +267,87 @@ func TestDebugReleaseCodexSandbox(t *testing.T) {
 	}
 	if err := controlled.Write(filepath.Join(root, "evidence", "sandbox-live.json"), map[string]any{"passed": true, "candidates": proofs, "deliveries": 2, "sibling_unchanged": true, "manual_confirmation": false}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Check the original native tool events, rather than trusting a model's claim
+// that it has advanced to publication while still handling implementation.
+func debugSandboxStageCommands(journal, step string) error {
+	raw, err := os.ReadFile(journal)
+	if err != nil {
+		return err
+	}
+	publication := false
+	for _, line := range strings.Split(string(raw), "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var event struct {
+			Method string
+			Params struct {
+				Item struct{ Type, Command string }
+			}
+		}
+		if err := json.Unmarshal([]byte(line), &event); err != nil {
+			return fmt.Errorf("invalid %s native journal: %w", step, err)
+		}
+		if event.Method != "item/started" && event.Method != "item/completed" || event.Params.Item.Type != "commandExecution" {
+			continue
+		}
+		command := strings.ToLower(strings.ReplaceAll(event.Params.Item.Command, "\\", "/"))
+		publishes := strings.Contains(command, "-file ./publish.ps1") ||
+			(strings.Contains(command, "git ") && strings.Contains(command, " push ")) ||
+			strings.Contains(command, "gh pr create ")
+		if step == executionmodel.StepReport {
+			return fmt.Errorf("report used a command instead of formatting existing evidence: %s", journal)
+		}
+		if publishes && step != executionmodel.StepPublish {
+			return fmt.Errorf("publication attempted during %s: %s", step, journal)
+		}
+		publication = publication || publishes
+	}
+	if step == executionmodel.StepPublish && !publication {
+		return fmt.Errorf("publication stage has no original publish command: %s", journal)
+	}
+	return nil
+}
+
+func TestDebugSandboxStageCommands(t *testing.T) {
+	for _, tc := range []struct {
+		name, step, command string
+		wantError           bool
+	}{
+		{"ordinary_probe", executionmodel.StepImplement, "powershell.exe -NoProfile -File ./sandbox-check.ps1", false},
+		{"read_publication_script", executionmodel.StepImplement, "Get-Content ./publish.ps1", false},
+		{"premature_script", executionmodel.StepImplement, "pwsh -Command 'powershell.exe -NoProfile -File ./publish.ps1'", true},
+		{"premature_windows_script", executionmodel.StepImplement, `powershell.exe -File .\publish.ps1`, true},
+		{"premature_git_push", executionmodel.StepImplement, "git -c credential.helper= push origin HEAD:refs/heads/codex/task", true},
+		{"premature_pr", executionmodel.StepImplement, "gh pr create --repo erranliu/SteerlineTest", true},
+		{"report_without_tools", executionmodel.StepReport, "", false},
+		{"report_with_tools", executionmodel.StepReport, "git status --short", true},
+		{"publication_without_tools", executionmodel.StepPublish, "", true},
+		{"publication", executionmodel.StepPublish, "powershell.exe -NoProfile -File ./publish.ps1", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			journal := filepath.Join(t.TempDir(), "appserver.jsonl")
+			raw, err := json.Marshal(map[string]any{"method": "item/completed", "params": map[string]any{"item": map[string]any{"type": "agentMessage", "text": "I am moving to publication now."}}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.command != "" {
+				command, err := json.Marshal(map[string]any{"method": "item/started", "params": map[string]any{"item": map[string]any{"type": "commandExecution", "command": tc.command}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				raw = append(append(raw, '\n'), command...)
+			}
+			if err := os.WriteFile(journal, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := debugSandboxStageCommands(journal, tc.step); (err != nil) != tc.wantError {
+				t.Fatalf("stage evidence error=%v, wantError=%v", err, tc.wantError)
+			}
+		})
 	}
 }
 
