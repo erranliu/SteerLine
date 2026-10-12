@@ -25,6 +25,14 @@ func DebugSandbox(s *Scenario) {
 	s.RecordResource("debug-package-parent", base, 0)
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", filepath.Join(s.Run.Root, "scripts", "new-debug-release.ps1"), "-DebugRoot", base)
 	cmd.Dir = s.Run.Root
+	// A Go child does not perform pwsh's Windows PowerShell module-path
+	// conversion. Let PowerShell 5 establish its own native module defaults.
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if !strings.EqualFold(key, "PSModulePath") {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
 	raw, err := s.RunCommandFor(cmd, "debug-package-generation", 3*time.Minute)
 	s.Must(err)
 	var release struct{ Root string }
@@ -59,6 +67,18 @@ func DebugSandbox(s *Scenario) {
 }
 
 func archiveDebugSandbox(root, output string) error {
+	if manifest, err := os.ReadFile(filepath.Join(root, "manifest.json")); err == nil {
+		if err := os.WriteFile(filepath.Join(output, "debug-manifest.json"), manifest, 0600); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(root, "evidence")); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
 	return filepath.WalkDir(filepath.Join(root, "evidence"), func(path string, entry os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -93,10 +113,8 @@ func (s *Scenario) cleanupDebugSandbox() error {
 			continue
 		}
 		root := filepath.Join(s.debugSandboxRoot, entry.Name())
-		if _, err := os.Stat(filepath.Join(root, "evidence")); err == nil {
-			if err := archiveDebugSandbox(root, s.Output); err != nil {
-				return err
-			}
+		if err := archiveDebugSandbox(root, s.Output); err != nil {
+			return err
 		}
 	}
 	if s.debugSandboxResult != nil && s.debugSandboxResult["cleanup_complete"] != true {
