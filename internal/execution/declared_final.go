@@ -9,10 +9,10 @@ import (
 	r "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
-// Explicit worker result protocols can supply canonical content without a
-// provider history reader. The same settled evidence drives steps and the UI.
+// Adapter-settled replies can supply content without a provider history reader.
+// Keep their declared/rendered provenance; do not invent native turn identities.
 func (s *Service) recordDeclaredFinal(ctx context.Context, run *r.RunView, evidence b.TurnEvidence) error {
-	if evidence.FinalOrigin != "worker_declared" || !evidence.FinalVerified {
+	if (evidence.FinalOrigin != "worker_declared" && evidence.FinalOrigin != "terminal_observed") || !evidence.FinalVerified {
 		return nil
 	}
 	_, execution := s.workflowRecords(run)
@@ -30,7 +30,7 @@ func (s *Service) recordDeclaredFinal(ctx context.Context, run *r.RunView, evide
 		SessionID: evidence.SessionID, SessionQuality: m.IdentityDerived, TurnID: evidence.TurnID, TurnQuality: m.IdentityDerived,
 		ItemID: evidence.FinalItemID, ItemQuality: m.IdentityDerived, SourceEventID: evidence.FinalItemID, SourceEventQuality: m.IdentityDerived,
 		Type: m.ConversationMessageComplete, Phase: m.MessagePhaseFinalAnswer, FinalAvailability: m.FinalAvailable, ReceivedAt: now(),
-		Evidence: map[string]string{"phase_origin": "worker_declared", "settlement": "bound_worker_reply", "command_id": evidence.CommandID}}
+		Evidence: map[string]string{"phase_origin": evidence.FinalOrigin, "settlement": "bound_worker_reply", "command_id": evidence.CommandID}}
 	event.ItemKey = event.ItemIdentity()
 	event.Body = &m.ConversationBodyRef{ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, ItemKey: event.ItemKey, Revision: 1, Source: event.Source, Completeness: m.BodyComplete}
 	complete := event

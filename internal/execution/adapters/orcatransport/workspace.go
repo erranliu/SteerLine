@@ -10,7 +10,6 @@ import (
 
 	native "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 )
 
 func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, reconcile bool) (b.LifecycleReceipt, error) {
@@ -101,6 +100,6 @@ func InspectWorkspace(ctx context.Context, client native.Client, ref b.Execution
 	// filesystem access or fictitious remote working-tree cleanliness is used.
 	value := b.WorkspaceInspection{InspectionScope: "revision", Repository: project, Worktree: shown.Worktree.Path, Branch: ref.WorkspaceBranch, Base: ref.BaseCommit, Head: shown.Worktree.Head, CheckedAt: time.Now().UTC()}
 	wire, _ := json.Marshal(struct{ Scope, Worktree, Branch, Base, Head string }{value.InspectionScope, ref.External.WorktreeID, value.Branch, value.Base, value.Head})
-	value.ContentDigest = workerreturn.Digest(wire)
+	value.ContentDigest = digest(wire)
 	return value, nil
 }

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 )
 
 type observer struct {
@@ -97,7 +96,7 @@ func (l *Lifecycle) observe(s b.LifecycleSnapshot) b.LifecycleObserver {
 				committed = true
 			}
 			if receipt.State.TurnStarted && !started {
-				if !send(b.LifecycleEvent{Fact: b.EventFact{Kind: b.EventStarted, Source: workerreturn.Source, SourceIdentity: SessionID(s.Ref.External), SourceSegment: command(s), SourceEventID: command(s) + ":started", SessionID: SessionID(s.Ref.External), StartedTurnID: command(s), InputAccepted: true, Matched: true}, Implementation: receipt.Implementation}) {
+				if !send(b.LifecycleEvent{Fact: b.EventFact{Kind: b.EventStarted, Source: replySource, SourceIdentity: SessionID(s.Ref.External), SourceSegment: command(s), SourceEventID: command(s) + ":started", SessionID: SessionID(s.Ref.External), StartedTurnID: command(s), InputAccepted: true, Matched: true}, Implementation: receipt.Implementation}) {
 					return
 				}
 				started = true
@@ -108,7 +107,7 @@ func (l *Lifecycle) observe(s b.LifecycleSnapshot) b.LifecycleObserver {
 				if evidence.Succeeded {
 					outcome = "succeeded"
 				}
-				if !send(b.LifecycleEvent{Fact: b.EventFact{Kind: b.EventCompleted, Source: workerreturn.Source, SourceIdentity: SessionID(s.Ref.External), SourceSegment: command(s), SourceEventID: evidence.FinalItemID, SessionID: SessionID(s.Ref.External), StartedTurnID: command(s), Completed: true, Matched: true, Outcome: outcome, LastMessage: evidence.LastMessage}, Implementation: receipt.Implementation}) {
+				if !send(b.LifecycleEvent{Fact: b.EventFact{Kind: b.EventCompleted, Source: replySource, SourceIdentity: SessionID(s.Ref.External), SourceSegment: command(s), SourceEventID: evidence.FinalItemID, SessionID: SessionID(s.Ref.External), StartedTurnID: command(s), Completed: true, Matched: true, Outcome: outcome, LastMessage: evidence.LastMessage}, Implementation: receipt.Implementation}) {
 					return
 				}
 				o.done <- nil
@@ -122,7 +121,7 @@ func (l *Lifecycle) observe(s b.LifecycleSnapshot) b.LifecycleObserver {
 					return
 				}
 				turn := turnFor(&state, command(s))
-				if turn != nil && !send(b.LifecycleEvent{Fact: b.EventFact{Kind: b.EventStatus, Source: "orca.terminal.read", SourceIdentity: SessionID(s.Ref.External), SourceSegment: command(s), SourceCursor: turn.Cursor, SourceEventID: command(s) + ":" + turn.Cursor + ":" + workerreturn.Digest(after), SessionID: SessionID(s.Ref.External)}, Implementation: receipt.Implementation}) {
+				if turn != nil && !send(b.LifecycleEvent{Fact: b.EventFact{Kind: b.EventStatus, Source: "orca.terminal.read", SourceIdentity: SessionID(s.Ref.External), SourceSegment: command(s), SourceEventID: command(s) + ":" + digest(after), SessionID: SessionID(s.Ref.External)}, Implementation: receipt.Implementation}) {
 					return
 				}
 			}

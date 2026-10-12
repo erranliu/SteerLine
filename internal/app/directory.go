@@ -13,7 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
-const executionDirectoryVersion = "builtin-execution-v6"
+const executionDirectoryVersion = "builtin-execution-v7"
 
 // NewBuiltinDirectory constructs independent catalogs. The instance is bound
 // once, before any registration callback can run.

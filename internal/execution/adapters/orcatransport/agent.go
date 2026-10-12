@@ -7,7 +7,6 @@ import (
 	"time"
 
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/workerreturn"
 )
 
 // A bare workspace can materialize its sole terminal asynchronously. Selection
@@ -72,7 +71,7 @@ func (l *Lifecycle) launchAgent(ctx context.Context, r b.LifecycleRequest, recon
 		if state.LaunchAttempted {
 			return receipt, errors.New("original agent launch was already attempted; reconcile only")
 		}
-		state.LaunchDigest = workerreturn.Digest([]byte(l.setup.AgentLaunchCommand))
+		state.LaunchDigest = digest([]byte(l.setup.AgentLaunchCommand))
 		state.LaunchRequest = nativeRequest(r.Operation.ID)
 		state.LaunchAttempted = true
 		receipt.Implementation, err = l.envelope(r.Snapshot, state)

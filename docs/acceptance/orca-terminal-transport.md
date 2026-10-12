@@ -2,7 +2,9 @@
 
 本记录仅归属用户直接授权的 Orca adapter 收敛工作，不进入 roadmap。2026-10-10 用户确认：共用 SteerLine worker 上层流程；Orca 移除 worker-start 和 Run/Task/Dispatch/coordinator/preamble/worker_done；底层只准备会话、投递、观察、停止和清理。先验证无需 Dispatch 的原回合结果读取，能力不足时另行确认共用结果通道，不先删除当前入口交付一条只有输入的路径。
 
-当前状态：单终端 CLI 实现已接线，PR #284 已合并。最小回归通过，本机真实三阶段与 PR 合并交付通过；远端 CLI 升级后，在已准备好目录信任的环境中也通过三阶段、中心重启不重发、真实合并交付和后继释放。[首次调试记录](orca-terminal-real-flow-2026-10-10.md)保留升级前失败；[升级后复测](orca-terminal-remote-retest-2026-10-10.md)记录通过条件和首次信任阻塞。下方 OTT-A1–A4 是早期公开能力探针历史，不能当作新版稳定性证明。HTTP 与文件/辅助终端方案已撤回。
+下方紧凑结果帧为旧方案历史。当前方案改为与 Codex 相同的 worker 提示词、适配层普通回复采集，见[最新专属验收](orca-unified-worker-prompts.md)。
+
+旧帧方案当时状态：单终端 CLI 实现已接线，PR #284 已合并。最小回归通过，本机真实三阶段与 PR 合并交付通过；远端 CLI 升级后，在已准备好目录信任的环境中也通过三阶段、中心重启不重发、真实合并交付和后继释放。[首次调试记录](orca-terminal-real-flow-2026-10-10.md)保留升级前失败；[升级后复测](orca-terminal-remote-retest-2026-10-10.md)记录通过条件和首次信任阻塞。下方 OTT-A1–A4 是早期公开能力探针历史，不能当作新版稳定性证明。HTTP 与文件/辅助终端方案已撤回。
 
 ## 环境与最小入口
 
