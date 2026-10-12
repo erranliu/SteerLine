@@ -1,0 +1,124 @@
+{
+  "date": "2026-10-12",
+  "rebased_main": "d54b51f7",
+  "tested_commit": "31cded931538decbd4ec146335244a41dc8042e3",
+  "source_dirty": false,
+  "root": "C:\\SteerlineDebug\\dev-20261012-100406-31cded93",
+  "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-codex-sandbox.ps1",
+  "test": "TestDebugReleaseCodexSandbox",
+  "wall_seconds": 335.68,
+  "passed": true,
+  "proof": {
+    "candidates": [
+      {
+        "candidate_sha": "d1e9b2a29f39c5ff1624ca759050f7c796f75488",
+        "escalation_requests": 1,
+        "merged_pr": {
+          "baseRefName": "codex/debug/dev-20261012-100406-31cded93/base",
+          "headRefOid": "d1e9b2a29f39c5ff1624ca759050f7c796f75488",
+          "mergeCommit": {
+            "oid": "16be10fb9b9c0a9b9998b9817efac101fdd47ca9"
+          },
+          "mergedAt": "2026-10-12T02:07:02Z",
+          "state": "MERGED",
+          "url": "https://github.com/erranliu/SteerlineTest/pull/215"
+        },
+        "native_stages": 3,
+        "pr": {
+          "URL": "https://github.com/erranliu/SteerlineTest/pull/215",
+          "State": "OPEN",
+          "HeadRefOid": "d1e9b2a29f39c5ff1624ca759050f7c796f75488",
+          "HeadRefName": "codex/1-213d62a12451",
+          "BaseRefName": "codex/debug/dev-20261012-100406-31cded93/base"
+        },
+        "run_id": "213d62a12451adc517638053f8736701",
+        "sandbox_probe": {
+          "gc": "0",
+          "maintenance": "false",
+          "passed": true,
+          "powershell": "5.1.26100.9444",
+          "project_check": true,
+          "sibling_write_denied": true,
+          "temp_in_admin": true
+        },
+        "session_id": "01a12ddb-a23f-7012-972c-0e92f1c54552",
+        "task_id": "1",
+        "worktree": "C:\\SteerlineDebug\\dev-20261012-100406-31cded93\\home\\worktrees\\213d62a12451adc517638053f8736701"
+      },
+      {
+        "candidate_sha": "d70c44ae5896127145d163c21311fd0b721ede06",
+        "escalation_requests": 1,
+        "merged_pr": {
+          "baseRefName": "codex/debug/dev-20261012-100406-31cded93/base",
+          "headRefOid": "d70c44ae5896127145d163c21311fd0b721ede06",
+          "mergeCommit": {
+            "oid": "83ac92312430c39f97cad6e54ae963cb8b7f944b"
+          },
+          "mergedAt": "2026-10-12T02:09:45Z",
+          "state": "MERGED",
+          "url": "https://github.com/erranliu/SteerlineTest/pull/216"
+        },
+        "native_stages": 3,
+        "pr": {
+          "URL": "https://github.com/erranliu/SteerlineTest/pull/216",
+          "State": "OPEN",
+          "HeadRefOid": "d70c44ae5896127145d163c21311fd0b721ede06",
+          "HeadRefName": "codex/2-1346307ef4e0",
+          "BaseRefName": "codex/debug/dev-20261012-100406-31cded93/base"
+        },
+        "run_id": "1346307ef4e027c1614760ebe727b9cd",
+        "sandbox_probe": {
+          "gc": "0",
+          "maintenance": "false",
+          "passed": true,
+          "powershell": "5.1.26100.9444",
+          "project_check": true,
+          "sibling_write_denied": true,
+          "temp_in_admin": true
+        },
+        "session_id": "01a12ddd-ecc0-77b3-97a9-244abb37e2b0",
+        "task_id": "2",
+        "worktree": "C:\\SteerlineDebug\\dev-20261012-100406-31cded93\\home\\worktrees\\1346307ef4e027c1614760ebe727b9cd"
+      }
+    ],
+    "deliveries": 2,
+    "manual_confirmation": false,
+    "passed": true,
+    "sibling_unchanged": true
+  },
+  "cleanup": {
+    "root": "C:\\SteerlineDebug\\dev-20261012-100406-31cded93",
+    "refs_checked": [
+      "refs/heads/codex/debug/dev-20261012-100406-31cded93/base",
+      "refs/heads/codex/1-213d62a12451",
+      "refs/heads/codex/2-1346307ef4e0"
+    ],
+    "remaining_refs": [],
+    "active_service_processes": 0,
+    "passed": true
+  },
+  "evidence": [
+    {
+      "path": "C:\\SteerlineDebug\\dev-20261012-100406-31cded93\\manifest.json",
+      "sha256": "9bfafdb746b634a1ea1383d432af64d4cab2e1e6f6cae86abdc68af419e46559"
+    },
+    {
+      "path": "C:\\SteerlineDebug\\dev-20261012-100406-31cded93\\evidence\\sandbox-test.log",
+      "sha256": "6df390d8c427aab192c3d406fae8c70c355b1c4969838dfd295da48117a89478"
+    },
+    {
+      "path": "C:\\SteerlineDebug\\dev-20261012-100406-31cded93\\evidence\\sandbox-live.json",
+      "sha256": "b58f1f1bca588e55d18bf2b23cc1747530f7f6e04c2494467526987bf2e8ec3e"
+    },
+    {
+      "path": "C:\\SteerlineDebug\\dev-20261012-100406-31cded93\\evidence\\cleanup-verification.json",
+      "sha256": "f7e82d18bb014583618863165c7443410a030a470472b70260d737457d1d33e0"
+    }
+  ],
+  "limits": [
+    "Ordinary sandbox pushes still fail credential acquisition; both same-command native automatic reviews approved publication in this run.",
+    "No permission changes, review answers or denied-action retries.",
+    "This is an independent opt-in test, not newly registered L3 coverage.",
+    "Historical 2026-10-10 failure is preserved; this run does not prove every future review will approve."
+  ]
+}
