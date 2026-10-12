@@ -35,6 +35,12 @@ func TestSandboxScenarioRequiresBothOriginalMergedTasks(t *testing.T) {
 		{"missing_merge_commit", func(p map[string]any) {
 			p["candidates"].([]any)[1].(map[string]any)["merged_pr"].(map[string]any)["mergeCommit"] = map[string]string{"oid": ""}
 		}},
+		{"malformed_merge_time", func(p map[string]any) {
+			p["candidates"].([]any)[1].(map[string]any)["merged_pr"].(map[string]any)["mergedAt"] = "not-a-time"
+		}},
+		{"zero_merge_time", func(p map[string]any) {
+			p["candidates"].([]any)[1].(map[string]any)["merged_pr"].(map[string]any)["mergedAt"] = "0001-01-01T00:00:00Z"
+		}},
 		{"foreign_usage", func(p map[string]any) {
 			p["candidates"].([]any)[1].(map[string]any)["usage"].([]any)[0].(map[string]any)["session_id"] = "1"
 		}},

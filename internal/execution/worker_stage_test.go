@@ -134,6 +134,23 @@ func TestWorkerStagePublicationMismatchShowsActualBranch(t *testing.T) {
 	}
 }
 
+func TestWorkerStageClosedPublicationKeepsPRPolling(t *testing.T) {
+	s, run, port := workerStageFixture(t)
+	require(t, acceptTestStage(t, s, run, port, "implemented", true))
+	startQueuedStage(t, s, run)
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","summary":"implemented"}`, true))
+	startQueuedStage(t, s, run)
+	fixed, err := s.workerFlowContext(run)
+	require(t, err)
+	info := executionmodel.PRInfo{URL: "https://git.example/org/repo/pulls/1", Repository: fixed.config.PR.Repository, BaseBranch: fixed.workflow.Branch, HeadRepository: fixed.config.PR.Repository, HeadBranch: port.workspace.Branch, State: "closed_unmerged"}
+	require(t, s.stopVerifiedWorkerTurn(run, fixed.workflow, fixed.execution, fixed.execution.CurrentTurnID, "succeeded", false))
+	require(t, s.acceptStagePublication(run, fixed, stageReport{Outcome: "done", Summary: "published", Outputs: stageOutputs{PRURL: info.URL}}, info))
+	w := s.workflowRecord(run)
+	if w.StepID != executionmodel.StepAwaitMerge || w.Status != "waiting_input" || w.PRURL != info.URL || run.Decision == nil || !workerContinuationPrompt(run.Decision.Request) {
+		t.Fatalf("closed bound PR lost polling or usable continuation: step=%s status=%s pr=%s decision=%s diagnostic=%s", w.StepID, w.Status, w.PRURL, mustJSON(run.Decision), w.StageDiagnostic)
+	}
+}
+
 func TestWorkerStageTransitions(t *testing.T) {
 	s, run, port := workerStageFixture(t)
 	var queries atomic.Int32

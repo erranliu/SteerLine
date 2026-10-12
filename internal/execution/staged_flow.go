@@ -380,14 +380,16 @@ func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed
 	if err := BindWorkerPR(w, e, info, report.Outputs.PRURL, fixed.config.PR.Repository, false); err != nil {
 		return s.stageWait(run, w, e, "reconciling", err.Error(), &report)
 	}
-	if info.State == "closed_unmerged" {
-		return s.stageWait(run, w, e, "waiting_input", "PR closed without merge; explicit feedback is required", &report)
-	}
 	s.expireAsyncQuestions(run, e)
 	w.StepID, w.Status, w.StageDiagnostic, w.UpdatedAt = executionmodel.StepAwaitMerge, "waiting_external", "", now()
 	e.Summary, e.Error = ptr(report.Summary), nil
-	if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {
-		return err
+	if info.State == "closed_unmerged" {
+		return s.waitWorkerFlow(run, "PR closed without merge; explicitly reopen the original PR or handle this execution.")
+	}
+	if info.State == "open" {
+		if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {
+			return err
+		}
 	}
 	s.refreshRun(run)
 	return s.commitWorker(run)
@@ -467,6 +469,9 @@ func (s *Service) reconcileStageFacts(ctx context.Context, run *reconstructionty
 		return s.commitWorker(run)
 	}
 	if executionmodel.PublicationStep(w.StepID) && w.PRCandidateURL != "" {
+		if w.PRURL != "" && w.PRURL != w.PRCandidateURL {
+			return s.stageWait(run, w, e, "blocked", "pr_identity_mismatch: publication must reuse the original PR", nil)
+		}
 		info, err := publicationClient(fixed.config, s.runtime.ProcessHost).Query(ctx, w.PRCandidateURL)
 		if err != nil {
 			w.PRQueryError = ptr(err.Error())

@@ -36,3 +36,22 @@
 | `go test ./... -run '^$'`、删除审计、`git diff --check` | 全仓编译与检查通过；编译不记作业务测试；compile-final.log、cleanup-audit.md |
 
 初次阶段单元有两项旧“head 变化应阻断”的断言失败，改为新规则后通过。初次集成将反馈放在重开服务后，正确触发既有恢复确认；原组合命令随后因总 8 分钟期限中断 environment，不计整组通过。夹具调整为反馈→重启→合并，local 与 environment 分开重验通过。初次 console 旧事实比对文案断言失败，修正后通过；原失败日志保留，test-results.json 汇总实际场景，没有 skip 或零匹配充当通过。
+
+## PR #295 修改质量审计（2026-10-12）
+
+审计基线 67ab146e，直接修复四项：
+
+1. 首次发布查询到 closed_unmerged 时仍留在 publish，PR 后续不被轮询；改为已绑定 PR 在 await_merge 下人工等待。
+2. PR 关闭后业务状态为 waiting_input，后续原 PR 实际合并不能通过交付 gate；空闲且无 pending 输入/真实问题/未知原生操作时恢复外部结算状态并唯一交付。已经合并不再新建可选修改问题；真实 pending 输入与原问题保留。
+3. 两份调试模板只查询 open，关闭/已合并的原分支可能另建 PR；改查 all，明确拒绝把已有关闭/合并 PR 当作新发布。对账路径也统一把另一 URL 作为本候选阻断，保留原结果，不把换绑业务冲突向外抛出。
+4. test-feedback 的合并时间只要求非空；改为 RFC3339Nano 可解析且非零，拒绝伪造时间证据。
+
+证据目录 C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/worker-pr-flow-audit-20261012/。
+
+| 入口与自动项 | 实际结果 |
+| --- | --- |
+| Plan 审计测试命令 worker 定向组，WPF-A2/A3/A4 | 6 个顶层场景通过，77.679s；worker-final.log。随后增加已合并状态下 pending 输入仍保留的断言，两个相关场景重验通过（34.215s，merge-pending-final.log）。涵盖关闭 PR 位置、后续实际合并唯一交付、不新增输入、原 pending 保留、换 PR 拒绝、正常发布/补报查询恢复 |
+| Plan 模板/证据命令，WPF-A2/A5 | 两个顶层测试、6 个模板子场景 + 11 个证据子场景通过；driver 23.901s / feedback 0.830s，template-evidence.log。真实隔离 Git，GitHub stub，无外部写入 |
+| 全仓仅编译、差异检查，WPF-A5/A6 | 编译和 git diff --check 通过；compile.log。未运行 full、真实模型或安装环境 |
+
+初次新增夹具尚未停止 publish 原回合，且 neutral worker 的人工问题/pending report 未清理为正常 PR 等待现场，正确触发保护并失败；夹具改为已核实停止、当前服务下完成原轮次并使用正常 PR 反馈后通过。失败诊断保留，不靠生产代码取消原输入/原问题门槛来通过测试。审计结果没有恢复 SHA 成果锁、兼容路径、新状态或新版本层。

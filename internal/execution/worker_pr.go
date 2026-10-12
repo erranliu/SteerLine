@@ -105,10 +105,16 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if err := BindWorkerPR(workflow, execution, info, url, c.PR.Repository, pendingQuestion); err != nil {
 		return s.waitWorkerFlow(run, "Several PRs or conflicting PR identities need a user decision: "+err.Error())
 	}
+	// A closed PR may merge after explicit handling outside the worker. Settle
+	// that verified merge without inventing a new input or consuming a pending one.
+	canSettleMerge := !pendingQuestion && execution.CurrentTurnID == execution.LastStoppedTurnID && !s.hasUnknownWorkerOperation(run)
+	if info.State == "merged" && canSettleMerge {
+		workflow.Status, workflow.UpdatedAt = "waiting_external", now()
+	}
 	if run.Decision != nil && run.Decision.Status == "pending" && !pendingQuestion && previousPRURL != info.URL && workflow.Status != "waiting_input" {
 		s.setDecisionStatus(run, "superseded")
 	}
-	if workflow.Status == "waiting_external" && execution.Status != "active" {
+	if info.State == "open" && workflow.Status == "waiting_external" && execution.Status != "active" {
 		if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {
 			return err
 		}
@@ -118,7 +124,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
-	if info.State == "merged" {
+	if info.State == "merged" && canSettleMerge {
 		return s.nativeCompleteMergedTask(ctx, run)
 	}
 	if info.State == "closed_unmerged" && execution.Status != "active" {

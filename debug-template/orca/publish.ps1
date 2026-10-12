@@ -5,7 +5,7 @@ $branch = (& git symbolic-ref --short HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $branch -eq $base -or $branch -eq 'main') { throw 'Publish only the assigned candidate' }
 & git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push origin "HEAD:refs/heads/$branch"
 if ($LASTEXITCODE -ne 0) { throw 'Push failed using native host authentication' }
-$raw = & gh pr list --repo $repository --base $base --head $branch --state open --json url
+$raw = & gh pr list --repo $repository --base $base --head $branch --state all --json url
 if ($LASTEXITCODE -ne 0) { throw 'PR query failed' }
 [array]$matches = ConvertFrom-Json -InputObject ($raw -join "`n")
 if ($matches.Count -gt 1) { throw 'Ambiguous matching PRs' }

@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $settings = Get-Content -LiteralPath '__ROOT__/manifest.json' -Raw | ConvertFrom-Json
 $branch = (& git symbolic-ref --short HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $branch -eq $settings.base_branch -or $branch -eq 'main') { throw 'Publish only the assigned candidate head' }
-$existing = & gh pr list --repo erranliu/SteerlineTest --base $settings.base_branch --head $branch --state open --json url
+$existing = & gh pr list --repo erranliu/SteerlineTest --base $settings.base_branch --head $branch --state all --json url
 if ($LASTEXITCODE -ne 0) { throw 'Existing PR query failed' }
 [array]$matches = ConvertFrom-Json -InputObject ($existing -join "`n")
 if ($matches.Count -gt 1) { throw 'Multiple matching PRs' }

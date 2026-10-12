@@ -31,3 +31,15 @@ CandidateBindings 和 PR 换绑规则涉及既有多候选代码，补选 `TestM
 各命令须匹配非零测试，skip 不算通过。每项登记实际命令、场景结果及证据，统一留在本次隔离测试反馈目录；Plan 不维护实时结果。存储场景入口须在实施时补齐后执行，不可用零匹配替代。若需临时原生调试，先运行 scripts/new-debug-release.ps1，AI 模拟方案显式 --simulate。
 
 人工 WPF-M1 由用户在新环境查看步骤与 PR 反馈，窗口待定，可后置，不阻塞自动验收。不修改安装环境或旧 102。
+
+## PR #295 质量审计修复
+
+沿现有流程修正关闭 PR 的位置与结算：已绑定的 closed_unmerged PR 进入 await_merge 下的人工等待，继续查询原 PR；空闲且没有待投递输入/真实问题/未知原生操作时，实际合并可直接唯一交付。对账中的另一 PR URL 按原归属规则阻断，不抛出业务冲突导致候选对账失败。调试模板查询 all 状态，遇到关闭/已合并 PR 不另建；验收证据的合并时间须可解析且非零，不新增 SHA 门槛或状态字段。
+
+测试计划补选（不重跑全量或三路矩阵）：
+
+- [WPF-A2/A3/A4](../acceptance/worker-pr-flow.md)：既有隔离 worker/Git/SQLite/provider，修复后执行 `go test ./internal/execution -run '^(TestWorkerStageClosedPublicationKeepsPRPolling|TestCandidateClosedPRPollDeliversLaterMerge|TestCandidateOpenPRPollPreservesOriginalPendingInput|TestWorkerStageReconcileRejectsReplacementPR|TestWorkerStagePublicationReadRetrySettlesOpenPR|TestWorkerStagePublicationReportReadRetrySettlesOpenPR)$' -count=1 -timeout=4m -v`。要求关闭 PR 保持原绑定和轮询、后续合并不新增输入且唯一交付、原 pending 输入保留、换 PR 阻断、合法只读对账恢复；证据 worker-final.log。
+- [WPF-A2/A5](../acceptance/worker-pr-flow.md)：现有隔离 Git/PowerShell + stub PR，执行 `go test ./tests/e2e/internal/driver ./cmd/test-feedback -run '^(TestDebugPublicationReusesPR|TestSandboxScenarioRequiresBothOriginalMergedTasks)$' -count=1 -timeout=2m -v`。要求两份模板 OPEN 正常复用、CLOSED/MERGED 不另建，非法/零合并时间拒绝；证据 template-evidence.log。
+- [WPF-A5/A6](../acceptance/worker-pr-flow.md)：最终修改后 `go test ./... -run '^$'`、`git diff --check`，要求消费者编译和格式检查通过；证据 compile.log、审计记录。
+
+证据为本次临时测试反馈目录 worker-pr-flow-audit-20261012；实际结果登记 acceptance。沿既有夹具，无安装环境或真实外部 PR 操作。

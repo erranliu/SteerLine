@@ -18,7 +18,7 @@
 2. **实现。** 按 Spec/Plan 实现、最小验证、自查和提交。完成后保存原 final、失败及来源，直接进入报告；阶段 HEAD、dirty、ContentDigest 或 PR 快照不再是推进条件。
 3. **报告。** 只整理原实现结果，不改代码或重跑检查。保留原 Command/Attempt/Turn、输入版本和 SourceCommandID/SourceTurnID；源失败不能被报告 done 覆盖。有效报告直接排队 publish，不采集成果快照或冻结 SHA。
 4. **发布。** worker 在原分支完成必要提交/推送，创建 PR；已有 PR 时继续推送并复用它。结构化成功结果提供 `outputs.pr_url`，不提供 candidate_sha。代码反馈返回实现步骤，不在发布阶段扩展实现范围。
-5. **等待与交付。** 中心通过现有 provider 查询核对 PR：open 等待合并，merged 且证据完整按既有事务交付，closed_unmerged 等待显式处理，查询失败或未知保留 reconciling。交付登记实际 MergeCommit/MergedAt、关闭任务并释放依赖。
+5. **等待与交付。** 中心通过现有 provider 查询核对 PR：open 等待合并，merged 且证据完整按既有事务交付，closed_unmerged 在 await_merge 下等待显式处理并继续查询原 PR；没有待投递输入/真实问题/未知原生操作时，后续实际合并可直接交付。查询失败或未知保留 reconciling。交付登记实际 MergeCommit/MergedAt、关闭任务并释放依赖。
 
 保留已有一次 publish.report 格式补报：只删除候选 SHA/快照资格，仍绑定原发布回合及其结果，不能重做发布、覆盖失败或掩盖未知副作用。结果继续严格解析 done/needs_input/blocked。原生权限按真实能力保留；删除 `fact_comparison_only`、`revision_comparison_only` 等已不成立的报告策略说明，不把提示词宣称为强只读隔离。
 

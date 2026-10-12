@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"regexp"
+	"time"
 )
 
 type sandboxScenarioProof struct {
@@ -47,7 +48,8 @@ func validateSandboxScenarioProof(p *sandboxScenarioProof) error {
 		if c.TaskID != []string{"1", "2"}[i] || c.RunID == "" || c.Session == "" || c.Worktree == "" || c.Stages != 3 || len(c.Usage) != 3 || seenRuns[c.RunID] || seenSessions[c.Session] || seenWorktrees[c.Worktree] {
 			return errors.New("sandbox candidates lack separate original task/run/session/worktree evidence")
 		}
-		if c.MergedPR.State != "MERGED" || !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(c.MergedPR.Commit.OID) || c.MergedPR.MergedAt == "" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(c.MergedPR.URL) || seenPRs[c.MergedPR.URL] {
+		mergedAt, timeErr := time.Parse(time.RFC3339Nano, c.MergedPR.MergedAt)
+		if c.MergedPR.State != "MERGED" || !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(c.MergedPR.Commit.OID) || timeErr != nil || mergedAt.IsZero() || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(c.MergedPR.URL) || seenPRs[c.MergedPR.URL] {
 			return errors.New("sandbox candidate lacks its exact merged SteerlineTest PR")
 		}
 		if c.MergedPR.Base == "" || c.MergedPR.Base != p.Candidates[0].MergedPR.Base {
