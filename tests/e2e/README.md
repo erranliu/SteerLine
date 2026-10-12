@@ -18,6 +18,7 @@ go run ./cmd/test-feedback -level=L2 -env=controlled
 # L3 环境分开，不自动串跑
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled
 go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled
+go run ./cmd/test-feedback -level=L3 -suite=runtime -env=live '-scenario=runtime.sandbox-git.local-codex'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
 # 原生工作区生命周期，不启动模型
 go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=workspace.orca-removal-restart'
@@ -37,6 +38,7 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
 | L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、console/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
 | L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核对正式删除回执、原路径消失和 Git 注销（trash 是否留存如实登记）、CLI/控制台查询、重启及无关任务启动 |
+| L3 live | `runtime.sandbox-git.local-codex` | 新生成 C:\SteerlineDebug 包；两个独立 worktree/session 的普通沙箱探针、原始三阶段命令与 usage、真实 Git helper/自动审核、精确 SteerlineTest PR 合并/交付及清理 |
 | L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
 
@@ -111,7 +113,7 @@ L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTe
 
 真实 GitHub 发布脚本为本次 push 设置仅限 SteerlineTest remote 的 HTTP 认证环境，并清除 shell credential helper；推送后清除这些环境项。测试 token 不写入 argv、Git 配置文件或日志，避免依赖 unelevated Windows 沙箱中无法启动的 Git Bash credential helper。该适配仅用于测试 fixture，产品权限和凭据来源不变。
 
-当前 L3 local-codex 使用 loopback Git/PR provider 并执行真实模型，与无 token 环境分别选择。旧远端驱动使用真实 SteerlineTest PR，保留作历史取证，不能作为当前分步流程入口。当前 Orca 驱动不补 Enter、不注入 agent 专用环境，使用原生主机设置。
+当前 L3 delivery/recovery local-codex 使用 loopback Git/PR provider 并执行真实模型；runtime.sandbox-git.local-codex 使用真实 SteerlineTest GitHub provider 与原生 credential helper，各自显式选择。旧远端驱动使用真实 SteerlineTest PR，保留作历史取证，不能作为当前分步流程入口。当前 Orca 驱动不补 Enter、不注入 agent 专用环境，使用原生主机设置。
 
 L3 delivery/recovery 的本机 Orca usage 按 [#84 明确调整的验收条件](../../docs/acceptance/worker-staged-flow.md) 登记：公开接口不提供 token usage，场景必须记录 `usage_verified=false`、`orca_usage_status=not_exposed_by_orca`，逐轮仍绑定原 Command/Dispatch/final source；真实业务与清理必须通过。该能力记录不代表 token 验证通过，不替代 local、完整 L2、其他 suite 或远端各自的门槛。
 
@@ -147,6 +149,8 @@ summary.json 保存源码/工作树、构建 SHA-256、精确选择、命令、�
 Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_meta` 中有 `parent_thread_id` 或 `source.subagent` 的自动审核/子 agent 日志不作为业务会话证据。不能依据模型名筛掉 root 会话；业务会话的错误模型/effort 仍失败。
 
 成功/失败均保存诊断，停止本次资源，关闭句柄并删除 scratch；证据目录独立保留。native-logs 仅保存本项目原生日志，不复制凭据/私有 SQLite，认证值脱敏。失败、skip、零匹配、缺失/重复/非法/截断日志、超时、证据缺失、清理或报告写入失败均不能通过。断电后的跨运行回收不属当前最小范围。
+
+沙箱双任务场景的业务期限为 25 分钟（包含生成包和两个三阶段任务），独立 live 包 Go 父限 35 分钟；普通命令 30 秒、领取控制等待原回执 390 秒（与现有 Client.Control 相同，不重发请求）、包生成 3 分钟、远端/服务清理使用独立 1 分钟期限。只有本次专属 base/head 可清理；成功后仅归档 evidence 和 manifest，再删除本次生成包，不复制认证、数据库或完整 prompt。失败保留私有生成包和原始 journal 作为诊断；仍清理本次服务和远端资源，清理失败令统一报告失败。缺认证、审核拒绝、零/跨身份 usage 或未完成两项交付均不能通过。
 
 ## 扩展与 Plan
 

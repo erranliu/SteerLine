@@ -177,7 +177,13 @@ func TestL3ExactScenarioSelectionRejectsWrongEnvironment(t *testing.T) {
 			t.Fatalf("independent selection %s: %v %v", id, entries, err)
 		}
 	}
+	entries, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "live", scenario: "runtime.sandbox-git.local-codex"})
+	if err != nil || len(entries) != 1 || entries[0].Chain != "local-codex" || entries[0].Package != "./tests/e2e/suites/sandbox" {
+		t.Fatalf("sandbox live selection: %+v %v", entries, err)
+	}
 	for _, opts := range []options{
+		{level: "L3", suite: "runtime", e2eEnv: "controlled", scenario: "runtime.sandbox-git.local-codex"},
+		{level: "L3", suite: "runtime", e2eEnv: "native", scenario: "runtime.sandbox-git.local-codex"},
 		{level: "L3", suite: "delivery", e2eEnv: "live", scenario: "delivery.orca-remote-codex"},
 		{level: "L3", suite: "delivery", e2eEnv: "controlled", scenario: "delivery.local-codex"},
 		{level: "L3", suite: "recovery", e2eEnv: "live", scenario: "delivery.local-codex"},

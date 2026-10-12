@@ -98,6 +98,9 @@ go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery,runtime' -env=con
 go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.local-codex'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
 go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native
+
+# 独立 debug 包中的双任务真实沙箱与 Git helper 发布
+go run ./cmd/test-feedback -level=L3 -suite=runtime -env=live '-scenario=runtime.sandbox-git.local-codex'
 ```
 
 | 级别 | 环境 | 组 | 场景 ID |
@@ -110,6 +113,7 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native
 | L3 | live | delivery | `delivery.local-codex` |
 | L3 | live | recovery | `recovery.local-codex` |
 | L3 | native | workspace | `workspace.orca-removal-restart` |
+| L3 | live | runtime | `runtime.sandbox-git.local-codex` |
 
 注册表 [suites.json](../tests/e2e/suites.json) 是场景 ID、包、测试名和环境的来源。L3 的 `-suite` / `-scenario` 支持逗号多选；省略场景 ID 时运行所选组和环境下的全部场景。PowerShell 中含点的场景参数应整体加引号。L2 是固定选择，不接受按场景挑选或直接选择 live；L2/L3 不与 `-workers`、`-quick`、`-build-only` 或原始 Go 参数混用。
 
@@ -145,7 +149,7 @@ dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug
 
 单元测试验证客户端核心逻辑；工程编译不证明真实窗口操作已经验收，人工项见[WinUI 验收](acceptance/phase2-winui-foundation.md)。
 
-独立调试自动入口使用生成的 `C:\SteerlineDebug` 包和 SteerlineTest，不能使用安装环境。生成/模拟/隔离/重置与脚本 PR 分别由 `scripts/test-debug-release.ps1`、其 `-Live` 参数验证；真实 Codex 沙箱与 Git 工具回归由 `scripts/test-codex-sandbox.ps1` 验证。各入口的前置、外部效果和证据见[调试环境验收](acceptance/debug-environment.md)与[沙箱验收](acceptance/codex-sandbox-git.md)。
+独立调试自动入口使用生成的 `C:\SteerlineDebug` 包和 SteerlineTest，不能使用安装环境。生成/模拟/隔离/重置与脚本 PR 分别由 `scripts/test-debug-release.ps1`、其 `-Live` 参数验证；真实 Codex 沙箱与 Git 工具回归已登记为上面的 L3 `runtime.sandbox-git.local-codex`；`scripts/test-codex-sandbox.ps1` 保留独立入口，复用相同双任务驱动。各入口的前置、外部效果和证据见[调试环境验收](acceptance/debug-environment.md)与[沙箱验收](acceptance/codex-sandbox-git.md)。
 
 ## 独立原生验收
 

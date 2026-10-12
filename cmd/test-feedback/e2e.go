@@ -196,6 +196,9 @@ func runE2E(opts options) (code int) {
 	if opts.e2eEnv == "live" {
 		note = "native gpt-6-luna/medium; loopback provider"
 		for _, scenario := range selected {
+			if scenario.ID == "runtime.sandbox-git.local-codex" {
+				note = "native gpt-6-luna/medium; selected providers; sandbox uses real SteerlineTest PRs"
+			}
 			if scenario.Chain == "orca-remote-codex" {
 				note = "native gpt-6-luna/medium; selected providers; remote Orca uses real SteerlineTest PRs"
 				break
@@ -501,6 +504,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				URL, State, Repository string
 				Merged                 bool
 			} `json:"real_pr,omitempty"`
+			DebugSandbox *sandboxScenarioProof `json:"debug_sandbox,omitempty"`
 		}
 		raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "scenario.json"))
 		if err != nil {
@@ -523,6 +527,11 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		}
 		if e.Env == "native" && (!evidence.NativeWorkspaceVerified || evidence.UsageVerified || evidence.RealPR != nil) {
 			return fmt.Errorf("native no-model workspace evidence missing or mixed with model/PR evidence for %s", e.ID)
+		}
+		if e.ID == "runtime.sandbox-git.local-codex" {
+			if err := validateSandboxScenarioProof(evidence.DebugSandbox); err != nil {
+				return fmt.Errorf("sandbox evidence for %s: %w", e.ID, err)
+			}
 		}
 		if (e.Level == "L2" && e.Env == "live" || e.Chain == "orca-remote-codex") && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
 			return fmt.Errorf("real merged SteerlineTest PR evidence missing for %s", e.ID)
