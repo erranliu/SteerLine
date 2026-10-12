@@ -16,13 +16,15 @@ type sandboxScenarioProof struct {
 		RunID    string `json:"run_id"`
 		Session  string `json:"session_id"`
 		Worktree string `json:"worktree"`
-		SHA      string `json:"candidate_sha"`
 		Stages   int    `json:"native_stages"`
 		MergedPR struct {
-			URL   string `json:"url"`
-			State string `json:"state"`
-			Head  string `json:"headRefOid"`
-			Base  string `json:"baseRefName"`
+			URL      string `json:"url"`
+			State    string `json:"state"`
+			MergedAt string `json:"mergedAt"`
+			Commit   struct {
+				OID string `json:"oid"`
+			} `json:"mergeCommit"`
+			Base string `json:"baseRefName"`
 		} `json:"merged_pr"`
 		Usage []struct {
 			Session string `json:"session_id"`
@@ -45,7 +47,7 @@ func validateSandboxScenarioProof(p *sandboxScenarioProof) error {
 		if c.TaskID != []string{"1", "2"}[i] || c.RunID == "" || c.Session == "" || c.Worktree == "" || c.Stages != 3 || len(c.Usage) != 3 || seenRuns[c.RunID] || seenSessions[c.Session] || seenWorktrees[c.Worktree] {
 			return errors.New("sandbox candidates lack separate original task/run/session/worktree evidence")
 		}
-		if c.MergedPR.State != "MERGED" || !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(c.SHA) || c.MergedPR.Head != c.SHA || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(c.MergedPR.URL) || seenPRs[c.MergedPR.URL] {
+		if c.MergedPR.State != "MERGED" || !regexp.MustCompile(`^[a-f0-9]{40}$`).MatchString(c.MergedPR.Commit.OID) || c.MergedPR.MergedAt == "" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(c.MergedPR.URL) || seenPRs[c.MergedPR.URL] {
 			return errors.New("sandbox candidate lacks its exact merged SteerlineTest PR")
 		}
 		if c.MergedPR.Base == "" || c.MergedPR.Base != p.Candidates[0].MergedPR.Base {

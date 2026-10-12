@@ -13,12 +13,12 @@ import (
 // not alter this binding comparison; new candidates, PRs or exits do.
 func CandidateBindings(workflows []WorkflowRunRecord, executions []ExecutionRecord, taskID string) string {
 	type binding struct {
-		ID, Selected, PR, Proposed, Profile   string
-		Execution                             string
-		FlowRef, StepID, Status, CandidateSHA string
-		InputVersion                          uint64
-		History                               []string
-		Exit                                  *CandidateAbandonment
+		ID, Selected, PR, Proposed, Profile string
+		Execution                           string
+		FlowRef, StepID, Status             string
+		InputVersion                        uint64
+		History                             []string
+		Exit                                *CandidateAbandonment
 	}
 	values := []binding{}
 	for _, w := range workflows {
@@ -27,16 +27,16 @@ func CandidateBindings(workflows []WorkflowRunRecord, executions []ExecutionReco
 			for _, e := range executions {
 				if e.WorkflowRunID == w.WorkflowRunID && e.ExecutionID == w.SelectedResult {
 					identity = bindingDigest(struct {
-						Project, ID, Workflow, Generation string
-						Workspace                         WorkspaceEvidence
-						Target                            backend.ExecutionTarget
-						Data                              []backend.ImplementationDataEnvelope
-						Policy                            *PolicyResources
-					}{e.ProjectIdentity, e.ExecutionID, e.WorkflowRunID, e.Generation, e.Workspace, e.Target, e.ImplementationData, e.PolicyResources})
+						Project, ID, Workflow, Generation  string
+						Repository, Worktree, Branch, Base string
+						Target                             backend.ExecutionTarget
+						Data                               []backend.ImplementationDataEnvelope
+						Policy                             *PolicyResources
+					}{e.ProjectIdentity, e.ExecutionID, e.WorkflowRunID, e.Generation, e.Workspace.Repository, e.Workspace.Worktree, e.Workspace.Branch, e.Workspace.Base, e.Target, e.ImplementationData, e.PolicyResources})
 					break
 				}
 			}
-			values = append(values, binding{FlowRef: w.FlowRef, StepID: w.StepID, Status: w.Status, CandidateSHA: w.CandidateSHA, InputVersion: w.InputVersion, ID: w.WorkflowRunID, Selected: w.SelectedResult, PR: w.PRURL, Proposed: w.PRCandidateURL, Profile: bindingDigest(w.ExecutionProfile), Execution: identity, History: w.PRHistory, Exit: w.Abandonment})
+			values = append(values, binding{FlowRef: w.FlowRef, StepID: w.StepID, Status: w.Status, InputVersion: w.InputVersion, ID: w.WorkflowRunID, Selected: w.SelectedResult, PR: w.PRURL, Proposed: w.PRCandidateURL, Profile: bindingDigest(w.ExecutionProfile), Execution: identity, History: w.PRHistory, Exit: w.Abandonment})
 		}
 	}
 	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })

@@ -63,7 +63,7 @@ func TestAsyncSavedAnswerKeepsReportAndBindsSourceContinuation(t *testing.T) {
 }
 
 func TestAsyncQuestionWorkerRunningReportRetainsOrExpires(t *testing.T) {
-	for _, outcome := range []string{"needs_input", "done", "artifact_mismatch"} {
+	for _, outcome := range []string{"needs_input", "done"} {
 		t.Run(outcome, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			w, e := s.workflowRecords(run)
@@ -86,13 +86,9 @@ func TestAsyncQuestionWorkerRunningReportRetainsOrExpires(t *testing.T) {
 				t.Fatal("async question blocked report or was replaced")
 			}
 			startQueuedStage(t, s, run)
-			body := `{"outcome":"` + outcome + `","summary":"facts","outputs":{"candidate_sha":"` + port.workspace.Head + `"},"question":"Publisher?"}`
+			body := `{"outcome":"` + outcome + `","summary":"facts","outputs":{},"question":"Publisher?"}`
 			if outcome == "done" {
-				body = `{"outcome":"done","summary":"facts","outputs":{"candidate_sha":"` + port.workspace.Head + `"}}`
-			}
-			if outcome == "artifact_mismatch" {
-				body = `{"outcome":"done","summary":"facts"}`
-				port.workspace.ContentDigest = strings.Repeat("e", 64)
+				body = `{"outcome":"done","summary":"facts","outputs":{}}`
 			}
 			require(t, acceptTestStage(t, s, run, port, body, true))
 			if run.Decision.ID != id || run.Decision.Request.Options[1].Label != "host_service" {
@@ -100,9 +96,6 @@ func TestAsyncQuestionWorkerRunningReportRetainsOrExpires(t *testing.T) {
 			}
 			if outcome == "needs_input" && (w.Status != "waiting_input" || run.Decision.Status != "pending") {
 				t.Fatalf("unanswered required question did not wait: %+v", run)
-			}
-			if outcome == "artifact_mismatch" && (run.Decision.Status != "pending" || w.Status != "blocked") {
-				t.Fatal("unverified completion expired original question")
 			}
 			if outcome == "done" && run.Decision.Status != "superseded" {
 				t.Fatal("obsolete question stayed pending")

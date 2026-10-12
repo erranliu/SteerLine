@@ -22,7 +22,11 @@ func StagedBusiness(cwd, prompt, provider, remote string) (string, error) {
 	}
 	switch {
 	case strings.HasPrefix(strings.TrimSpace(prompt), "Implement the following Spec and Plan."):
-		if err := os.WriteFile(filepath.Join(cwd, "stage-result.txt"), []byte("staged fixture result\n"), 0600); err != nil {
+		content := "staged fixture result\n"
+		if strings.Contains(prompt, "Existing PR:") {
+			content += "updated after feedback\n"
+		}
+		if err := os.WriteFile(filepath.Join(cwd, "stage-result.txt"), []byte(content), 0600); err != nil {
 			return "", err
 		}
 		if _, err := git("add", "--", "stage-result.txt"); err != nil {

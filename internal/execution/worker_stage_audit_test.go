@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,18 +23,18 @@ func TestWorkerStageUnverifiedImplementationEntersReport(t *testing.T) {
 	evidence.FinalDiagnostic = "implementation reply unavailable"
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
 	w := s.workflowRecord(run)
-	if w.StepID != executionmodel.StepReport || w.Status != "queued" || w.CandidateSHA != "" || len(w.StageResults) != 1 || len(w.StageInputs) != 2 {
+	if w.StepID != executionmodel.StepReport || w.Status != "queued" || len(w.StageResults) != 1 || len(w.StageInputs) != 2 {
 		t.Fatal("stopped implementation without full reply did not enter report")
 	}
 	startQueuedStage(t, s, run)
-	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported from supplied facts"}`, true))
-	if w.StepID != executionmodel.StepPublish || w.CandidateSHA != port.workspace.Head || w.StageResults[0].FinalVerified {
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{},"summary":"reported from supplied facts"}`, true))
+	if w.StepID != executionmodel.StepPublish || w.StageResults[0].FinalVerified {
 		t.Fatal("verified report did not advance, or rewrote original missing reply")
 	}
 }
 
 func TestWorkerStageTransientFactsReconcileOriginalTurn(t *testing.T) {
-	for _, problem := range []string{"workspace", "final"} {
+	for _, problem := range []string{"final"} {
 		t.Run(problem, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			s.lifecycleResolver = unsupportedStageResolver{port: port}
@@ -43,12 +42,8 @@ func TestWorkerStageTransientFactsReconcileOriginalTurn(t *testing.T) {
 			startQueuedStage(t, s, run)
 			fixed, err := s.workerFlowContext(run)
 			require(t, err)
-			evidence := workerStageEvidence(s, run, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported"}`, true)
-			if problem == "workspace" {
-				port.err = errors.New("temporary read failure")
-			} else {
-				evidence.FinalVerified = false
-			}
+			evidence := workerStageEvidence(s, run, `{"outcome":"done","outputs":{},"summary":"reported"}`, true)
+			evidence.FinalVerified = false
 			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
 			w := s.workflowRecord(run)
 			if w.Status != "reconciling" || len(w.StageResults) != 1 || len(w.StageInputs) != 2 || w.ReportRetry != 0 {
@@ -85,7 +80,7 @@ func testWorkerStagePublicationReadRetry(t *testing.T, report bool) {
 	s.lifecycleResolver = unsupportedStageResolver{port: port}
 	require(t, acceptTestStage(t, s, run, port, "verified execution", true))
 	startQueuedStage(t, s, run)
-	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported"}`, true))
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{},"summary":"reported"}`, true))
 	startQueuedStage(t, s, run)
 	turns := 3
 	if report {
@@ -129,7 +124,7 @@ func TestWorkerStageFeedbackUsesExactFrozenNativePrompt(t *testing.T) {
 	s.lifecycleResolver = unsupportedStageResolver{port: port}
 	require(t, acceptTestStage(t, s, run, port, "verified execution", true))
 	startQueuedStage(t, s, run)
-	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported"}`, true))
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{},"summary":"reported"}`, true))
 	command := newID()
 	err := s.startStageFeedback(context.Background(), run, executionmodel.DecisionAnswer{OptionID: "continue"}, command, executionmodel.DecisionRequest{Question: "continue publication"})
 	if err == nil {

@@ -141,7 +141,7 @@ func BindPR(s State, url, state string, pendingQuestion bool, at time.Time) (Sta
 	if err := s.validBinding(); err != nil {
 		return s, err
 	}
-	if s.PRURL != "" && s.PRURL != url && s.PRState != "closed_unmerged" {
+	if s.PRURL != "" && s.PRURL != url {
 		return s, errors.New("another PR is already bound to this execution")
 	}
 	s.PRURL, s.PRState = url, state

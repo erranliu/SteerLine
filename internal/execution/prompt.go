@@ -10,9 +10,9 @@ import (
 )
 
 const implementPrompt = "Implement the following Spec and Plan."
-const reportPrompt = "Format the preceding implementation result as JSON."
+const reportPrompt = "Format the preceding implementation result as JSON. Do not change files, run checks or publish."
 const publishPrompt = "Push and create or reuse a PR using the current checked-out branch. Read its exact name with git branch --show-current and use that same name for the remote branch and PR head. Do not reconstruct the branch name from the task ID, workflow run ID, workspace path or previous messages."
-const publishReportPrompt = "Format the preceding publication result as JSON."
+const publishReportPrompt = "Format the preceding publication result as JSON. Do not change files, run checks or publish."
 
 func renderWorkerPrompt(step string, facts any) (string, error) {
 	text := ""

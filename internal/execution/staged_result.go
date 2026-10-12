@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"net/url"
-	"regexp"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -21,9 +20,8 @@ type stageBlocker struct {
 }
 
 type stageOutputs struct {
-	CandidateSHA string `json:"candidate_sha,omitempty"`
-	PRURL        string `json:"pr_url,omitempty"`
-	Branch       string `json:"branch,omitempty"`
+	PRURL  string `json:"pr_url,omitempty"`
+	Branch string `json:"branch,omitempty"`
 }
 
 type stageReport struct {
@@ -44,8 +42,6 @@ func stageResultInstruction(step string) string {
 	}
 	return stageResultContract + "\nFor done add outputs: {\"pr_url\":\"actual PR URL\"}."
 }
-
-var stageSHA = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // Reject duplicate keys at every depth before decoding. encoding/json normally
 // accepts last-wins objects, which is unsuitable for a first-wins result.
@@ -107,9 +103,6 @@ func decodeStageReport(body, step string) (stageReport, error) {
 	}
 	if strings.TrimSpace(value.Summary) == "" {
 		return value, errors.New("result summary missing")
-	}
-	if value.Outputs.CandidateSHA != "" && !stageSHA.MatchString(value.Outputs.CandidateSHA) {
-		return value, errors.New("invalid candidate SHA")
 	}
 	if value.Outputs.PRURL != "" {
 		u, err := url.Parse(value.Outputs.PRURL)

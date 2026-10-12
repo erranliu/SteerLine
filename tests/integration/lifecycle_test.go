@@ -163,7 +163,7 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	return integrationFixture{config: config, configPath: configPath, repository: repository, bareRemote: bare, remoteURL: remoteURL, commit: commit, nativeStateDir: stateDir}
 }
 
-func createIntegrationTask(t *testing.T, ctx context.Context, fixture integrationFixture, id int64) {
+func createIntegrationTask(t *testing.T, ctx context.Context, fixture integrationFixture, id int64, predecessors ...int64) {
 	t.Helper()
 	contract := taskmodel.TaskContract{
 		ContractID: fmt.Sprintf("lifecycle-%d", id), Repository: fixture.remoteURL, Remote: "origin", Branch: "main",
@@ -184,6 +184,9 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: fixture.config.Identity(),
 		Tasks:        []taskmodel.TaskBatchTask{{LocalKey: "fixture", TaskID: id, Title: "Lifecycle integration", Type: "task", Contract: contract}},
 		Dependencies: []taskmodel.TaskBatchEdge{},
+	}
+	for _, predecessor := range predecessors {
+		batch.Dependencies = append(batch.Dependencies, taskmodel.TaskBatchEdge{Predecessor: taskmodel.TaskBatchReference{TaskID: &predecessor}, Successor: taskmodel.TaskBatchReference{LocalKey: "fixture"}})
 	}
 	body, err := json.Marshal(batch)
 	require(t, err)

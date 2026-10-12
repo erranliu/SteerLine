@@ -1,5 +1,7 @@
 # Plan：恢复 Worker 三轮流程与统一提示词
 
+> 2026-10-12：本文保留为原实现的历史契约。当前有效业务规则和实施/测试安排已由 [统一 PR 流程 Spec](worker-pr-flow.spec.md) 与 [Plan](worker-pr-flow.plan.md) 替代；下文的候选 SHA/阶段快照比较不得继续用于当前执行，历史验收结果不改写。
+
 当前提示词以本文末尾的 2026-10-10 精简补充为准，发布补报流程见 [Spec](../spec/worker-publish-report.spec.md)。
 
 绑定 [Spec](worker-prompt-convergence.spec.md)。直接在当前聊天实现，不调用 roadmap-runner；结果登记[专属验收](../acceptance/worker-prompt-convergence.md)。

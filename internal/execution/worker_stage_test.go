@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +22,7 @@ type stageTestPort struct {
 	err       error
 	evidence  *executionbackend.TurnEvidence
 	observed  int
+	inspected int
 }
 
 type unsupportedStageResolver struct {
@@ -33,6 +35,12 @@ func (r unsupportedStageResolver) ResolveLifecycle(executionbackend.LifecycleSet
 
 func TestWorkerStageUnsupportedBeforeNativeProbe(t *testing.T) {
 	s, _, port := workerStageFixture(t)
+	workflow := &s.domain.WorkflowRuns[0]
+	workflow.FlowRef = "development/v2"
+	if err := s.Config.ValidateStoredExecutions(s.domain, s.runtime.Directory); !isNativeErrorCode(err, "unsupported_schema") {
+		t.Fatalf("old business flow accepted: %v", err)
+	}
+	workflow.FlowRef = executionmodel.DevelopmentFlow
 	before := recordFingerprint(s.domain)
 	// The embedded port is nil: any accidental native preflight, preparation
 	// or model operation panics instead of turning this guard into a fake pass.
@@ -44,6 +52,7 @@ func TestWorkerStageUnsupportedBeforeNativeProbe(t *testing.T) {
 }
 
 func (p *stageTestPort) InspectLifecycleWorkspace(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.WorkspaceInspection, error) {
+	p.inspected++
 	return p.workspace, p.err
 }
 func (p *stageTestPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
@@ -78,7 +87,7 @@ func workerStageFixture(t *testing.T, configure ...func(*Config)) (*Service, *re
 	e.TurnNumber = 1
 	w.Status = "running"
 	require(t, s.commitWorker(run))
-	return s, run, &stageTestPort{workspace: executionbackend.WorkspaceInspection{Repository: s.Config.Repository, Base: e.WorkspaceIntent.BaseCommit, Worktree: e.WorkspaceIntent.Path, Branch: e.Workspace.Branch, Head: strings.Repeat("a", 40), ContentDigest: strings.Repeat("d", 64)}}
+	return s, run, &stageTestPort{workspace: executionbackend.WorkspaceInspection{Repository: s.Config.Repository, Base: e.WorkspaceIntent.BaseCommit, Worktree: e.WorkspaceIntent.Path, Branch: e.Workspace.Branch, Head: strings.Repeat("a", 40)}}
 }
 
 func workerStageEvidence(s *Service, run *reconstructiontypes.RunView, body string, success bool) executionbackend.TurnEvidence {
@@ -117,8 +126,7 @@ func TestWorkerStagePublicationMismatchShowsActualBranch(t *testing.T) {
 	const url = "https://git.example/org/repo/pulls/1"
 	actualBranch := port.workspace.Branch + "-wrong"
 	info := executionmodel.PRInfo{URL: url, Repository: fixed.config.PR.Repository, BaseBranch: fixed.workflow.Branch, HeadRepository: fixed.config.PR.Repository, HeadBranch: actualBranch, HeadRevision: port.workspace.Head, State: "open"}
-	input := &fixed.workflow.StageInputs[len(fixed.workflow.StageInputs)-1]
-	require(t, s.acceptStagePublication(run, fixed, input, &executionmodel.StageSnapshot{Workspace: port.workspace}, stageReport{Outcome: "done", Summary: "published", Outputs: stageOutputs{PRURL: url}}, info))
+	require(t, s.acceptStagePublication(run, fixed, stageReport{Outcome: "done", Summary: "published", Outputs: stageOutputs{PRURL: url}}, info))
 	w, e := s.workflowRecords(run)
 	want := fmt.Sprintf("head_branch: expected=%q, actual=%q", port.workspace.Branch, actualBranch)
 	if w.Status != "blocked" || !strings.Contains(w.StageDiagnostic, want) || e.Error == nil || !strings.Contains(*e.Error, want) {
@@ -141,16 +149,16 @@ func TestWorkerStageTransitions(t *testing.T) {
 	if w.StepID != executionmodel.StepReport || len(w.StageResults) != 1 || w.StageInputs[1].SourceCommandID != initial.CommandID || w.StageInputs[1].SourceTurnID != initial.TurnID {
 		t.Fatal("source execution did not bind its report")
 	}
-	if !strings.Contains(w.StageInputs[1].ReportToolPolicy, "fact_comparison_only") {
+	if !strings.Contains(w.StageInputs[1].ReportToolPolicy, "business_read_only_is_prompt_policy") {
 		t.Fatal("missing honest native permission guarantee")
 	}
 	if strings.Contains(w.StageInputs[1].Prompt, "task_id") || strings.Contains(w.StageInputs[1].Prompt, initial.LastMessage) {
 		t.Fatal("report repeats task identity or the preceding reply")
 	}
 	startQueuedStage(t, s, run)
-	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"implemented"}`, true))
-	if s.workflowRecord(run).StepID != executionmodel.StepPublish || s.workflowRecord(run).CandidateSHA != port.workspace.Head {
-		t.Fatal("report did not freeze publication candidate")
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{},"summary":"implemented"}`, true))
+	if s.workflowRecord(run).StepID != executionmodel.StepPublish {
+		t.Fatal("report did not queue publication")
 	}
 	startQueuedStage(t, s, run)
 	fixed, err := s.workerFlowContext(run)
@@ -184,7 +192,7 @@ func TestWorkerStageResultBinding(t *testing.T) {
 			startQueuedStage(t, s, run)
 			fixed, err := s.workerFlowContext(run)
 			require(t, err)
-			evidence := workerStageEvidence(s, run, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"implemented"}`, true)
+			evidence := workerStageEvidence(s, run, `{"outcome":"done","outputs":{},"summary":"implemented"}`, true)
 			switch change {
 			case "command":
 				evidence.CommandID = "old"
@@ -209,21 +217,21 @@ func TestWorkerStageResultBinding(t *testing.T) {
 }
 
 func TestWorkerStageReportRound(t *testing.T) {
-	for _, scenario := range []string{"snapshot_candidate", "candidate_mismatch", "source_failed", "report_invalid", "report_write", "unknown", "needs_input", "publish_invalid", "publish_partial"} {
+	for _, scenario := range []string{"no_snapshot", "unavailable_inspection", "source_failed", "report_invalid", "head_advanced", "unknown", "needs_input", "publish_invalid", "publish_partial"} {
 		t.Run(scenario, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			require(t, acceptTestStage(t, s, run, port, "implementation facts", scenario != "source_failed"))
 			startQueuedStage(t, s, run)
-			body := `{"outcome":"done","outputs":{"candidate_sha":"` + port.workspace.Head + `"},"summary":"reported"}`
+			body := `{"outcome":"done","outputs":{},"summary":"reported"}`
 			switch scenario {
-			case "snapshot_candidate":
+			case "no_snapshot":
 				body = `{"outcome":"done","summary":"reported"}`
-			case "candidate_mismatch":
-				body = `{"outcome":"done","outputs":{"candidate_sha":"` + strings.Repeat("b", 40) + `"},"summary":"reported"}`
+			case "unavailable_inspection":
+				port.err = errors.New("stage inspection unavailable")
 			case "report_invalid":
 				body = "not JSON"
-			case "report_write":
-				port.workspace.ContentDigest = strings.Repeat("e", 64)
+			case "head_advanced":
+				port.workspace.Head, port.workspace.Dirty = strings.Repeat("e", 40), true
 			case "needs_input":
 				body = `{"outcome":"needs_input","summary":"decision needed","question":"Which original target should be completed?"}`
 			case "unknown":
@@ -232,21 +240,13 @@ func TestWorkerStageReportRound(t *testing.T) {
 			require(t, acceptTestStage(t, s, run, port, body, true))
 			w := s.workflowRecord(run)
 			switch scenario {
-			case "snapshot_candidate":
-				if w.StepID != executionmodel.StepPublish || w.CandidateSHA != port.workspace.Head {
-					t.Fatal("candidate was not bound from verified snapshot")
-				}
-			case "candidate_mismatch":
-				if w.Status != "blocked" || w.StepID != executionmodel.StepReport {
-					t.Fatal("model candidate bypassed snapshot validation")
+			case "no_snapshot", "unavailable_inspection", "head_advanced":
+				if w.StepID != executionmodel.StepPublish || w.Status != "queued" || port.inspected != 0 {
+					t.Fatal("report still depends on workspace observations")
 				}
 			case "source_failed":
 				if w.Status != "blocked" || len(w.StageResults) != 2 || w.StageResults[0].Succeeded {
 					t.Fatal("report overwrote source failure")
-				}
-			case "report_write":
-				if w.Status != "blocked" || w.StepID != executionmodel.StepReport || w.ReportRetry != 0 {
-					t.Fatal("report write escaped artifact gate")
 				}
 			case "needs_input":
 				if w.Status != "waiting_input" || w.StepID != executionmodel.StepReport || run.Decision == nil || run.Decision.Request.Question != "Which original target should be completed?" {
@@ -269,7 +269,7 @@ func TestWorkerStageReportRound(t *testing.T) {
 				startQueuedStage(t, s, run)
 				body = "invalid publication JSON"
 				if scenario == "publish_partial" {
-					body = `{"outcome":"blocked","outputs":{"candidate_sha":"` + port.workspace.Head + `","branch":"` + port.workspace.Branch + `"},"summary":"push succeeded; PR failed","blocker":{"category":"failure","action":"create PR","error":"rejected","known":"branch pushed"}}`
+					body = `{"outcome":"blocked","outputs":{"branch":"` + port.workspace.Branch + `"},"summary":"push succeeded; PR failed","blocker":{"category":"failure","action":"create PR","error":"rejected","known":"branch pushed"}}`
 				}
 				require(t, acceptTestStage(t, s, run, port, body, true))
 				expectedStep, expectedStatus, inputs := executionmodel.StepPublish, "blocked", 3
@@ -326,12 +326,12 @@ func TestWorkerStageStrictResult(t *testing.T) {
 }
 
 func TestWorkerStagePublishReport(t *testing.T) {
-	for _, scenario := range []string{"success", "missing", "missing_pr_url", "invalid_report", "source_failed", "unknown", "write", "wrong_pr", "query_unavailable", "recovery"} {
+	for _, scenario := range []string{"success", "missing", "missing_pr_url", "invalid_report", "source_failed", "unknown", "head_advanced", "no_head", "wrong_pr", "query_unavailable", "recovery"} {
 		t.Run(scenario, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			require(t, acceptTestStage(t, s, run, port, "implementation facts", true))
 			startQueuedStage(t, s, run)
-			require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"implemented"}`, true))
+			require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{},"summary":"implemented"}`, true))
 			startQueuedStage(t, s, run)
 			var server *httptest.Server
 			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -339,11 +339,14 @@ func TestWorkerStagePublishReport(t *testing.T) {
 					w.WriteHeader(http.StatusServiceUnavailable)
 					return
 				}
-				head := port.workspace.Head
-				if scenario == "wrong_pr" {
-					head = strings.Repeat("b", 40)
+				head, branch := port.workspace.Head, port.workspace.Branch
+				if scenario == "no_head" {
+					head = ""
 				}
-				_ = json.NewEncoder(w).Encode(map[string]any{"html_url": server.URL + "/org/repo/pulls/1", "number": 1, "state": "open", "merged": false, "base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "org/repo"}}, "head": map[string]any{"ref": port.workspace.Branch, "sha": head, "repo": map[string]string{"full_name": "org/repo"}}})
+				if scenario == "wrong_pr" {
+					branch += "-wrong"
+				}
+				_ = json.NewEncoder(w).Encode(map[string]any{"html_url": server.URL + "/org/repo/pulls/1", "number": 1, "state": "open", "merged": false, "base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "org/repo"}}, "head": map[string]any{"ref": branch, "sha": head, "repo": map[string]string{"full_name": "org/repo"}}})
 			}))
 			defer server.Close()
 			url := server.URL + "/org/repo/pulls/1"
@@ -368,8 +371,8 @@ func TestWorkerStagePublishReport(t *testing.T) {
 			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, original))
 			w := s.workflowRecord(run)
 			input := w.StageInputs[3]
-			if w.StepID != executionmodel.StepPublishReport || len(w.StageInputs) != 4 || len(w.StageResults) != 3 || input.SourceCommandID != original.CommandID || input.SourceTurnID != original.TurnID || input.CandidateSHA != port.workspace.Head || !strings.HasPrefix(input.Prompt, publishReportPrompt) || !strings.Contains(input.ReportToolPolicy, "fact_comparison_only") {
-				t.Fatal("publication report lost its source, candidate or read-only instruction")
+			if w.StepID != executionmodel.StepPublishReport || len(w.StageInputs) != 4 || len(w.StageResults) != 3 || input.SourceCommandID != original.CommandID || input.SourceTurnID != original.TurnID || !strings.HasPrefix(input.Prompt, publishReportPrompt) || !strings.Contains(input.ReportToolPolicy, "business_read_only_is_prompt_policy") {
+				t.Fatal("publication report lost its source or formatting instruction")
 			}
 			if scenario == "recovery" {
 				if w.Status != "waiting_input" || run.Decision == nil {
@@ -390,8 +393,8 @@ func TestWorkerStagePublishReport(t *testing.T) {
 			if scenario == "unknown" {
 				body = `{"outcome":"blocked","outputs":{"pr_url":"` + url + `"},"summary":"result unknown","blocker":{"category":"unknown_external","action":"publish","error":"response lost"}}`
 			}
-			if scenario == "write" {
-				port.workspace.ContentDigest = strings.Repeat("e", 64)
+			if scenario == "head_advanced" {
+				port.workspace.Head, port.workspace.Dirty = strings.Repeat("e", 40), true
 			}
 			fixed, err = s.workerFlowContext(run)
 			require(t, err)
@@ -400,7 +403,7 @@ func TestWorkerStagePublishReport(t *testing.T) {
 			w = s.workflowRecord(run)
 			want := "waiting_external"
 			switch scenario {
-			case "invalid_report", "write", "wrong_pr":
+			case "invalid_report", "wrong_pr":
 				want = "blocked"
 			case "source_failed", "unknown", "query_unavailable":
 				want = "reconciling"

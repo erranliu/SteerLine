@@ -229,8 +229,8 @@ func (p *Project) CandidatePR(c Candidate) executionmodel.PRInfo {
 	info, err := p.githubPR(snap)
 	p.Scenario.Must(err)
 	e := snap.Domain.Executions[0]
-	if info.HeadBranch != e.Workspace.Branch || info.HeadRepository != githubRepository || info.HeadRevision != p.git(e.Workspace.Worktree, "rev-parse", "HEAD") {
-		p.Scenario.t.Fatal("candidate worker PR head/identity mismatch")
+	if info.HeadBranch != e.Workspace.Branch || info.HeadRepository != githubRepository {
+		p.Scenario.t.Fatal("candidate worker PR branch/identity mismatch")
 	}
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, c.RunID+"-pr.json"), info))
 	return info

@@ -237,7 +237,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 		}
 		if stageInput(workflow, turnID) == nil {
 			workflow.InputVersion++
-			input := executionmodel.StageInput{CommandID: turnID, AttemptID: attempt.AttemptID, StepID: workflow.StepID, Version: workflow.InputVersion, Prompt: prompt, CandidateSHA: workflow.CandidateSHA}
+			input := executionmodel.StageInput{CommandID: turnID, AttemptID: attempt.AttemptID, StepID: workflow.StepID, Version: workflow.InputVersion, Prompt: prompt}
 			if len(taskFacts) > 0 {
 				input.TaskFacts = append(json.RawMessage(nil), taskFacts[0]...)
 			}

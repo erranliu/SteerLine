@@ -204,11 +204,7 @@ func (p *additionalPort) Execute(ctx context.Context, request executionbackend.L
 		value.Settled = false
 		switch turn.StepID {
 		case executionmodel.StepReport:
-			facts, err := p.InspectLifecycleWorkspace(ctx, request.Snapshot)
-			if err != nil {
-				return receipt, nil, err
-			}
-			final = string(mustJSON(map[string]any{"outcome": "done", "outputs": map[string]string{"candidate_sha": facts.Head}, "summary": "Original fixture execute result reported"}))
+			final = string(mustJSON(map[string]any{"outcome": "done", "summary": "Original fixture execute result reported"}))
 			value.Settled = true
 		case executionmodel.StepPublish:
 			if len(value.PRCandidates) != 1 {

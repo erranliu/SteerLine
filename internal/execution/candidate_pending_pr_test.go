@@ -14,7 +14,7 @@ func TestCandidateOpenPRPollPreservesOriginalPendingInput(t *testing.T) {
 	mcFinishTurn(t, s, run)
 	info := f.bind(t, run, 81, "open")
 	w, e := s.workflowRecords(run)
-	w.StepID, w.CandidateSHA = executionmodel.StepAwaitMerge, info.HeadRevision
+	w.StepID = executionmodel.StepAwaitMerge
 	require(t, s.offerWorkerPRFeedback(run, info.URL))
 	command := newID()
 	e.PendingCommandID = command

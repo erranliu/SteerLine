@@ -70,9 +70,6 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 		return err
 	}
 	url := workflow.PRURL
-	if workflow.PRCandidateURL != "" && (url == "" || workflow.PRState == "closed_unmerged") {
-		url = workflow.PRCandidateURL
-	}
 	if url == "" {
 		url = workflow.PRCandidateURL
 	}
@@ -95,7 +92,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if execution == nil {
 		return nativeErr("inconsistent_delivery", "linked PR has no selected worker execution")
 	}
-	if err := publication.ValidateWorkerPRIdentity(info, url, c.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil || info.HeadRevision != workflow.CandidateSHA {
+	if err := publication.ValidateWorkerPRIdentity(info, url, c.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
 		workflow.PRQueryError = ptr("PR does not belong to the fixed task execution branch")
 		s.refreshRun(run)
 		if workflow.Status != "running" {

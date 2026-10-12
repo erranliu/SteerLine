@@ -150,7 +150,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		if err := BindWorkerPR(workflow, execution, info, url, "owner/repo", false); err != nil {
 			t.Fatal(err)
 		}
-		workflow.StepID, workflow.CandidateSHA, workflow.Status = executionmodel.StepAwaitMerge, info.HeadRevision, "waiting_external"
+		workflow.StepID, workflow.Status = executionmodel.StepAwaitMerge, "waiting_external"
 		service.setDecisionStatus(run, "superseded")
 		service.refreshRun(run)
 		require(t, service.offerWorkerPRFeedback(run, url))

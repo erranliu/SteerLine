@@ -2,8 +2,6 @@ package workspace
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -122,32 +120,7 @@ func Inspect(ctx context.Context, git Git, repository Repository, intent *execut
 	if err != nil {
 		return executionbackend.WorkspaceInspection{}, err
 	}
-	digest := sha256.New()
-	digest.Write(status)
-	for _, args := range [][]string{{"diff", "--no-ext-diff", "--binary"}, {"diff", "--cached", "--no-ext-diff", "--binary"}} {
-		data, err := git.Output(ctx, intent.Path, args...)
-		if err != nil {
-			return executionbackend.WorkspaceInspection{}, err
-		}
-		digest.Write(data)
-	}
-	untracked, err := git.Output(ctx, intent.Path, "ls-files", "--others", "--exclude-standard", "-z")
-	if err != nil {
-		return executionbackend.WorkspaceInspection{}, err
-	}
-	for _, path := range strings.Split(string(untracked), "\x00") {
-		if path == "" {
-			continue
-		}
-		data, err := git.Output(ctx, intent.Path, "hash-object", "--", path)
-		if err != nil {
-			return executionbackend.WorkspaceInspection{}, err
-		}
-		digest.Write([]byte(path))
-		digest.Write([]byte{0})
-		digest.Write(data)
-	}
-	return executionbackend.WorkspaceInspection{InspectionScope: "working_tree", ContentDigest: hex.EncodeToString(digest.Sum(nil)), Repository: repository.Path, Worktree: intent.Path, Branch: intent.Branch, Base: intent.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: len(status) != 0, CheckedAt: time.Now().UTC()}, nil
+	return executionbackend.WorkspaceInspection{InspectionScope: "working_tree", Repository: repository.Path, Worktree: intent.Path, Branch: intent.Branch, Base: intent.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: len(status) != 0, CheckedAt: time.Now().UTC()}, nil
 }
 
 // ValidateRoot resolves existing symlink ancestors before applying the original

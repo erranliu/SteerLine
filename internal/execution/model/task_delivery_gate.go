@@ -2,6 +2,7 @@ package model
 
 type DeliveryGate struct {
 	WorkflowVersion     string
+	FlowRef             string
 	WorkflowTaskID      string
 	SelectedExecutionID string
 	ExecutionID         string
@@ -12,12 +13,11 @@ type DeliveryGate struct {
 	WorkspaceBranch     string
 	Status              string
 	StepID              string
-	CandidateSHA        string
 }
 
 // DeliveryPR checks the selected worker identity before external merge proof is read.
 func DeliveryPR(taskID, recordContractID, contractID, contractDigest string, gate DeliveryGate, workflowVersion string) (string, error) {
-	if gate.WorkflowVersion != workflowVersion {
+	if gate.WorkflowVersion != workflowVersion || gate.FlowRef != DevelopmentFlow {
 		return "", boundaryError("unsupported_schema", "selected workflow uses an unsupported protocol")
 	}
 	if recordContractID != contractID || contractDigest == "" {
@@ -25,7 +25,7 @@ func DeliveryPR(taskID, recordContractID, contractID, contractDigest string, gat
 	}
 	if gate.WorkflowTaskID != taskID || gate.SelectedExecutionID != gate.ExecutionID || gate.ExecutionWorkflowID != gate.WorkflowRunID ||
 		gate.PRURL == "" || gate.SessionID == "" || gate.WorkspaceBranch == "" ||
-		gate.Status != "waiting_external" || gate.StepID != StepAwaitMerge || gate.CandidateSHA == "" {
+		gate.Status != "waiting_external" || gate.StepID != StepAwaitMerge {
 		return "", boundaryError("task_not_ready", "selected worker flow has no bound session, execution branch or PR")
 	}
 	return gate.PRURL, nil

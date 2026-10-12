@@ -99,7 +99,5 @@ func InspectWorkspace(ctx context.Context, client native.Client, ref b.Execution
 	// This is deliberately revision evidence on BOTH hosts. No center-local
 	// filesystem access or fictitious remote working-tree cleanliness is used.
 	value := b.WorkspaceInspection{InspectionScope: "revision", Repository: project, Worktree: shown.Worktree.Path, Branch: ref.WorkspaceBranch, Base: ref.BaseCommit, Head: shown.Worktree.Head, CheckedAt: time.Now().UTC()}
-	wire, _ := json.Marshal(struct{ Scope, Worktree, Branch, Base, Head string }{value.InspectionScope, ref.External.WorktreeID, value.Branch, value.Base, value.Head})
-	value.ContentDigest = digest(wire)
 	return value, nil
 }

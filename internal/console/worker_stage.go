@@ -2,7 +2,6 @@ package console
 
 import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"strings"
 )
 
 func workerStagePresentation(run *api.CandidateSummary) []string {
@@ -36,8 +35,8 @@ func workerStagePresentation(run *api.CandidateSummary) []string {
 	if run.StageDiagnostic != "" {
 		lines = append(lines, "步骤诊断："+safeTerminalText(run.StageDiagnostic))
 	}
-	if strings.Contains(run.ReportToolPolicy, "fact_comparison_only") {
-		lines = append(lines, "报告沿用原生权限；按事实比对核验工作区及绑定 PR，无法保证拦截全部外部写入")
+	if run.ReportToolPolicy != "" {
+		lines = append(lines, "报告沿用原生权限，仅整理原结果")
 	}
 	return lines
 }

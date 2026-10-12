@@ -13,8 +13,6 @@ var ErrPRIdentity = errors.New("PR identity mismatch")
 
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
-func validCommit(value string) bool { return commitHash.MatchString(value) }
-
 type Config executionmodel.PRProviderConfig
 
 func (c Config) ValidateRemote(remote string) error {
@@ -42,29 +40,8 @@ func ValidateWorkerPRIdentity(info executionmodel.PRInfo, url, repository, baseB
 			differences = append(differences, fmt.Sprintf("%s: expected=%q, actual=%q", field.name, field.expected, field.actual))
 		}
 	}
-	if !validCommit(info.HeadRevision) {
-		differences = append(differences, fmt.Sprintf("head_revision: expected=valid commit SHA, actual=%q", info.HeadRevision))
-	}
 	if info.State != "open" && info.State != "closed_unmerged" && info.State != "merged" {
 		differences = append(differences, fmt.Sprintf("state: expected=open|closed_unmerged|merged, actual=%q", info.State))
-	}
-	if len(differences) > 0 {
-		return fmt.Errorf("%w: %s", ErrPRIdentity, strings.Join(differences, "; "))
-	}
-	return nil
-}
-
-// ValidateWorkerPublication also binds the published revision and state.
-func ValidateWorkerPublication(info executionmodel.PRInfo, url, repository, baseBranch, executionBranch, candidateSHA string) error {
-	var differences []string
-	if err := ValidateWorkerPRIdentity(info, url, repository, baseBranch, executionBranch); err != nil {
-		differences = append(differences, strings.TrimPrefix(err.Error(), ErrPRIdentity.Error()+": "))
-	}
-	if info.HeadRevision != candidateSHA {
-		differences = append(differences, fmt.Sprintf("head_revision: expected=%q, actual=%q", candidateSHA, info.HeadRevision))
-	}
-	if info.State != "open" && info.State != "merged" {
-		differences = append(differences, fmt.Sprintf("state: expected=open|merged, actual=%q", info.State))
 	}
 	if len(differences) > 0 {
 		return fmt.Errorf("%w: %s", ErrPRIdentity, strings.Join(differences, "; "))

@@ -82,7 +82,7 @@ func NewLifecycle(setup b.LifecycleSetup) (b.LifecyclePort, error) {
 }
 
 func (l *Lifecycle) PolicyCapabilities() b.LifecyclePolicyCapabilities {
-	return b.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, ReportToolPolicy: "host_managed_permissions; business_read_only_is_prompt_policy; revision_comparison_only", ResumeActiveObservation: true, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true}
+	return b.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, ReportToolPolicy: "host_managed_permissions; business_read_only_is_prompt_policy", ResumeActiveObservation: true, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true}
 }
 
 func (l *Lifecycle) validate(s b.LifecycleSnapshot) error {

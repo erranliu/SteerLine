@@ -22,7 +22,6 @@ type WorkspaceIntent struct {
 
 type WorkspaceInspection struct {
 	InspectionScope string    `json:"inspection_scope,omitempty"`
-	ContentDigest   string    `json:"content_digest"`
 	Repository      string    `json:"repository"`
 	Worktree        string    `json:"worktree"`
 	Branch          string    `json:"branch"`

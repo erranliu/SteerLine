@@ -2,11 +2,9 @@ package model
 
 import (
 	"encoding/json"
-
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-const DevelopmentFlow = "development/v2"
+const DevelopmentFlow = "development/v3"
 
 const (
 	StepImplement     = "implement.execute"
@@ -29,35 +27,26 @@ type StageInput struct {
 	TaskFacts          json.RawMessage `json:"task_facts,omitempty"`
 	SourceCommandID    string          `json:"source_command_id,omitempty"`
 	SourceTurnID       string          `json:"source_turn_id,omitempty"`
-	Snapshot           *StageSnapshot  `json:"snapshot,omitempty"`
-	CandidateSHA       string          `json:"candidate_sha,omitempty"`
 	ReportToolPolicy   string          `json:"report_tool_policy,omitempty"`
 }
 
-// StageSnapshot is evidence, not an independently writable state machine.
-type StageSnapshot struct {
-	Workspace executionbackend.WorkspaceInspection `json:"workspace"`
-	PR        *PRInfo                              `json:"pr,omitempty"`
-}
-
 type StageResult struct {
-	CommandID            string         `json:"command_id"`
-	AttemptID            string         `json:"attempt_id"`
-	StepID               string         `json:"step_id"`
-	InputVersion         uint64         `json:"input_version"`
-	TurnID               string         `json:"turn_id"`
-	SessionID            string         `json:"session_id"`
-	Succeeded            bool           `json:"succeeded"`
-	FinalVerified        bool           `json:"final_verified"`
-	Final                string         `json:"final,omitempty"`
-	FinalNativeSessionID string         `json:"final_native_session_id,omitempty"`
-	FinalNativeTurnID    string         `json:"final_native_turn_id,omitempty"`
-	FinalDiagnostic      string         `json:"final_diagnostic,omitempty"`
-	FinalSource          string         `json:"final_source,omitempty"`
-	FinalItemID          string         `json:"final_item_id,omitempty"`
-	Failure              string         `json:"failure,omitempty"`
-	Snapshot             *StageSnapshot `json:"snapshot,omitempty"`
-	Outcome              string         `json:"outcome,omitempty"`
+	CommandID            string `json:"command_id"`
+	AttemptID            string `json:"attempt_id"`
+	StepID               string `json:"step_id"`
+	InputVersion         uint64 `json:"input_version"`
+	TurnID               string `json:"turn_id"`
+	SessionID            string `json:"session_id"`
+	Succeeded            bool   `json:"succeeded"`
+	FinalVerified        bool   `json:"final_verified"`
+	Final                string `json:"final,omitempty"`
+	FinalNativeSessionID string `json:"final_native_session_id,omitempty"`
+	FinalNativeTurnID    string `json:"final_native_turn_id,omitempty"`
+	FinalDiagnostic      string `json:"final_diagnostic,omitempty"`
+	FinalSource          string `json:"final_source,omitempty"`
+	FinalItemID          string `json:"final_item_id,omitempty"`
+	Failure              string `json:"failure,omitempty"`
+	Outcome              string `json:"outcome,omitempty"`
 }
 
 func ModelStep(step string) bool {
@@ -69,18 +58,7 @@ func ReportStep(step string) bool { return step == StepReport || step == StepPub
 func PublicationStep(step string) bool { return step == StepPublish || step == StepPublishReport }
 
 func CloneStageResults(results []StageResult) []StageResult {
-	copyResults := append([]StageResult(nil), results...)
-	for i := range copyResults {
-		if results[i].Snapshot != nil {
-			value := *results[i].Snapshot
-			if value.PR != nil {
-				pr := *value.PR
-				value.PR = &pr
-			}
-			copyResults[i].Snapshot = &value
-		}
-	}
-	return copyResults
+	return append([]StageResult(nil), results...)
 }
 
 func ValidFlowStatus(status string) bool {

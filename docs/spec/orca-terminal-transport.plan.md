@@ -4,8 +4,8 @@
 
 1. 删除 worker 的 CompactTerminalReply 分支和共享 workerreturn 帧协议；同一阶段按统一模板冻结原始输入，不按后端添加指令。
 2. Orca 准备阶段固定本轮原提示词、摘要和发送前屏幕基线，投递一次并保存 request/start 事实。状态 codec 更新，不兼容旧扫描记录。
-3. adapter 读取原终端 Codex 渲染边界，核对完整输入回显与最终 assistant 区段；处理显示折行、普通正文和 JSON。开始已确认、两次稳定 idle、无 draft/裁剪/缺失边界后冻结结果；未知 renderer 显式阻断，不依靠模型编码或标记。
-4. 正文以 terminal_observed 来源进入共用阶段结果与会话存储，保留 derived 身份和显示归一化限制；业务 JSON、候选 SHA、PR 与交付仍由共用 worker 判断。
+3. adapter 读取原终端 Codex 渲染边界，用可见用户标记划分最终 assistant 区段；输入归属由原投递/开始回执核对，不比较折叠回显全文；处理显示折行、普通正文和 JSON。开始已确认、两次稳定 idle、无 draft/裁剪/缺失边界后冻结结果；未知 renderer 显式阻断，不依靠模型编码或标记。
+4. 正文以 terminal_observed 来源进入共用阶段结果与会话存储，保留 derived 身份和显示归一化限制；业务 JSON、PR 身份与实际合并交付仍由共用 worker 判断；[统一 PR 流程 Plan](worker-pr-flow.plan.md)清理候选 SHA/阶段快照门槛。
 5. 更新假 CLI 为普通 Codex 终端屏幕，受控三阶段核对真正投递的文本；生成新的独立 Orca 调试包验证真实回复、恢复和发布阶段，不修改安装目录。
 
 ## 测试计划

@@ -67,6 +67,9 @@ func testWorkerStageRun(t *testing.T, host string) {
 	require(t, project.Close())
 
 	createIntegrationTask(t, ctx, f, 901)
+	if host == "local" && turns == 3 {
+		createIntegrationTask(t, ctx, f, 902, 901)
+	}
 	resolver := &integrationLifecycleResolver{}
 	service := startIntegrationService(t, ctx, f.config, resolver)
 	defer service.stop(t)
@@ -100,14 +103,11 @@ func testWorkerStageRun(t *testing.T, host string) {
 			t.Fatalf("input/final provenance differs at %s: %+v / %+v", step, input, result)
 		}
 	}
-	if w.StageInputs[1].SourceCommandID != w.StageResults[0].CommandID || w.StageInputs[1].SourceTurnID != w.StageResults[0].TurnID || w.StageResults[0].Snapshot.Workspace.Head != w.StageResults[1].Snapshot.Workspace.Head || w.StageResults[0].Snapshot.Workspace.ContentDigest != w.StageResults[1].Snapshot.Workspace.ContentDigest {
-		t.Fatal("report was not bound or wrote business artifacts")
+	if w.StageInputs[1].SourceCommandID != w.StageResults[0].CommandID || w.StageInputs[1].SourceTurnID != w.StageResults[0].TurnID {
+		t.Fatal("report lost source binding")
 	}
-	if w.CandidateSHA != fixtureGitOutput(t, "--git-dir", f.bareRemote, "rev-parse", "refs/heads/"+ready.execution.Workspace.Branch) {
-		t.Fatal("published head differs from frozen candidate")
-	}
-	if turns == 4 && (w.StageInputs[3].SourceCommandID != w.StageResults[2].CommandID || w.StageInputs[3].SourceTurnID != w.StageResults[2].TurnID || w.StageInputs[3].CandidateSHA != w.CandidateSHA || w.StageResults[2].Snapshot.Workspace.ContentDigest != w.StageResults[3].Snapshot.Workspace.ContentDigest) {
-		t.Fatal("publication report lost original binding or changed workspace")
+	if turns == 4 && (w.StageInputs[3].SourceCommandID != w.StageResults[2].CommandID || w.StageInputs[3].SourceTurnID != w.StageResults[2].TurnID) {
+		t.Fatal("publication report lost original binding")
 	}
 	if strings.HasPrefix(host, "orca") {
 		var captured terminalFixture
@@ -125,6 +125,29 @@ func testWorkerStageRun(t *testing.T, host string) {
 		}
 	}
 
+	if host == "local" && turns == 3 {
+		branch, prURL, session := ready.execution.Workspace.Branch, ready.runtime.WorkflowRuns[0].PRURL, ready.execution.SessionID
+		firstHead := fixtureGitOutput(t, "--git-dir", f.bareRemote, "rev-parse", "refs/heads/"+branch)
+		if ready.run.Decision == nil || ready.run.Decision.Status != "pending" {
+			t.Fatal("waiting PR lacks optional feedback")
+		}
+		submitIntegrationAnswerOption(t, ctx, f.config, ready.run, "implement")
+		updated := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.WorkflowStatus == "waiting_external" && run.WorkflowStage == executionmodel.StepAwaitMerge && e.TurnNumber == 6
+		})
+		w := updated.runtime.WorkflowRuns[0]
+		secondHead := fixtureGitOutput(t, "--git-dir", f.bareRemote, "rev-parse", "refs/heads/"+branch)
+		if firstHead == secondHead || w.PRURL != prURL || updated.execution.SessionID != session || len(w.StageInputs) != 6 || len(w.StageResults) != 6 || len(updated.runtime.Attempts) != 1 {
+			t.Fatal("feedback did not update the original branch/PR in the original session")
+		}
+		for _, i := range []int{3, 5} {
+			if !strings.Contains(w.StageInputs[i].Prompt, "Existing PR: "+prURL) {
+				t.Fatal("implementation/publication input lost the existing PR")
+			}
+		}
+		turns = 6
+	}
+
 	// Restart the completed input chain: neither backend may replay a stage.
 	service.stop(t)
 	service = startIntegrationService(t, ctx, f.config, resolver)
@@ -137,6 +160,34 @@ func testWorkerStageRun(t *testing.T, host string) {
 	}
 
 	assertNoTaskDelivery(t, after.runtime, after.run)
+	if host == "local" && turns == 6 {
+		branch, prURL := after.execution.Workspace.Branch, after.runtime.WorkflowRuns[0].PRURL
+		secondHead := fixtureGitOutput(t, "--git-dir", f.bareRemote, "rev-parse", "refs/heads/"+branch)
+		// Merge the actual updated branch in this isolated Git repository.
+		fixtureGitCommand(t, "-C", f.repository, "fetch", "--quiet", f.bareRemote, branch)
+		fixtureGitCommand(t, "-C", f.repository, "merge", "--no-ff", "--no-edit", secondHead)
+		mergeCommit := fixtureGitOutput(t, "-C", f.repository, "rev-parse", "HEAD")
+		fixtureGitCommand(t, "-C", f.repository, "push", "--quiet", f.bareRemote, "HEAD:refs/heads/main")
+		raw, err := os.ReadFile(provider)
+		require(t, err)
+		var info executionmodel.PRInfo
+		require(t, json.Unmarshal(raw, &info))
+		mergedAt := time.Now().UTC()
+		info.HeadRevision, info.State, info.Merged = "", "merged", true
+		info.MergedAt, info.MergeCommit = &mergedAt, &mergeCommit
+		require(t, AtomicWrite(provider, mustJSON(info)))
+		completed := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.WorkflowStatus == "completed"
+		})
+		if len(completed.runtime.Deliveries) != 1 || completed.runtime.Deliveries[0].MergeCommit != mergeCommit || completed.runtime.Deliveries[0].PRURL != prURL {
+			t.Fatal("updated PR did not produce its one actual merged delivery")
+		}
+		readyTasks, err := service.queries.ReadyNativeTasks(ctx)
+		require(t, err)
+		if len(readyTasks) != 1 || readyTasks[0].TaskID != "902" || len(completed.runtime.WorkflowRuns) != 1 {
+			t.Fatal("merged delivery did not release the successor without starting it")
+		}
+	}
 	if os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1" {
 		raw, err := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
 		require(t, err)

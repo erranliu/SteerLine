@@ -126,7 +126,7 @@ git rev-parse HEAD
 	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
-	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the frozen candidate and create the PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the working branch and create or update its PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)

@@ -69,7 +69,6 @@ func TestWorkerPRIdentityRequiresExecutionBranch(t *testing.T) {
 		"wrong base":        func(p *executionmodel.PRInfo) { p.BaseBranch = "develop" },
 		"fork head":         func(p *executionmodel.PRInfo) { p.HeadRepository = "other/r" },
 		"other task branch": func(p *executionmodel.PRInfo) { p.HeadBranch = "codex/task-9" },
-		"missing head":      func(p *executionmodel.PRInfo) { p.HeadRevision = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			pr := base
@@ -79,19 +78,20 @@ func TestWorkerPRIdentityRequiresExecutionBranch(t *testing.T) {
 			}
 		})
 	}
-	advanced := base
-	advanced.HeadRevision = strings.Repeat("b", 40)
-	advanced.State = "merged"
-	if err := ValidateWorkerPRIdentity(advanced, url, "o/r", "main", "codex/task-8"); err != nil {
-		t.Fatalf("a later commit on the same PR must remain associated: %v", err)
+	for _, head := range []string{strings.Repeat("b", 40), "", "unavailable"} {
+		advanced := base
+		advanced.HeadRevision = head
+		if err := ValidateWorkerPRIdentity(advanced, url, "o/r", "main", "codex/task-8"); err != nil {
+			t.Fatalf("observed head must not gate the same PR: %v", err)
+		}
 	}
 }
 
-func TestWorkerPublicationReportsAllMismatchedFields(t *testing.T) {
+func TestWorkerPRIdentityReportsAllMismatchedFields(t *testing.T) {
 	url := "https://git.example/o/r/pulls/8"
 	head := strings.Repeat("a", 40)
 	info := executionmodel.PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "codex/101-short", HeadRevision: head, State: "open"}
-	if err := ValidateWorkerPublication(info, url, "o/r", "main", "codex/101-short", head); err != nil {
+	if err := ValidateWorkerPRIdentity(info, url, "o/r", "main", "codex/101-short"); err != nil {
 		t.Fatal(err)
 	}
 	info.HeadBranch = "codex/101-full-run-id"
@@ -101,7 +101,7 @@ func TestWorkerPublicationReportsAllMismatchedFields(t *testing.T) {
 	info.HeadRevision = strings.Repeat("b", 40)
 	info.URL = "https://git.example/o/other/pulls/9"
 	info.State = "closed_unmerged"
-	err := ValidateWorkerPublication(info, url, "o/r", "main", "codex/101-short", head)
+	err := ValidateWorkerPRIdentity(info, url, "o/r", "main", "codex/101-short")
 	if !errors.Is(err, ErrPRIdentity) {
 		t.Fatalf("lost PR identity error: %v", err)
 	}
@@ -111,8 +111,6 @@ func TestWorkerPublicationReportsAllMismatchedFields(t *testing.T) {
 		`base_branch: expected="main", actual="develop"`,
 		`head_repository: expected="o/r", actual="fork/r"`,
 		`head_branch: expected="codex/101-short", actual="codex/101-full-run-id"`,
-		`head_revision: expected="` + head + `", actual="` + info.HeadRevision + `"`,
-		`state: expected=open|merged, actual="closed_unmerged"`,
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("missing mismatch %q: %v", want, err)
