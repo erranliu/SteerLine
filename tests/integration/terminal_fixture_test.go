@@ -17,6 +17,7 @@ type terminalFixture struct {
 	Sends                                                                     int
 	Lines                                                                     []string
 	CommandMode                                                               bool
+	CollapsedInput                                                            bool
 	Launches                                                                  int
 	Prompts                                                                   []string
 }
@@ -105,7 +106,18 @@ func fakeTerminalOrca(directory string, args []string) int {
 			if modelErr != nil {
 				return fail(modelErr)
 			}
-			state.Lines = append(state.Lines, "› "+text, "• "+final, "  Worked for "+strconv.Itoa(state.Sends+1)+"s • 18:50", "› Ask Codex to do anything")
+			echo := text
+			if state.CollapsedInput {
+				echo = strings.Join(strings.Fields(text), " ")
+				if len(echo) > 40 {
+					echo = echo[:40] + "…"
+				}
+			}
+			state.Lines = append(state.Lines, "› "+echo)
+			if state.CollapsedInput {
+				state.Lines = append(state.Lines, "     1 -previous tool output", "    + Show details")
+			}
+			state.Lines = append(state.Lines, "• "+final, "  Worked for "+strconv.Itoa(state.Sends+1)+"s • 18:50", "› Ask Codex to do anything")
 			state.Prompts = append(state.Prompts, text)
 			state.Sends++
 			result = map[string]any{"send": map[string]any{"handle": "original", "accepted": true, "prompt": map[string]any{"requestId": arg(args, "--retry-request"), "processIncarnation": state.Incarnation, "stages": []string{"input_accepted", "turn_started"}}}}

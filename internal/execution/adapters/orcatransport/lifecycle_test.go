@@ -24,6 +24,7 @@ type fakeHost struct {
 	draft                         string
 	commandMode, launched         bool
 	delayLaunchIdentity           bool
+	collapsedEcho                 bool
 }
 
 func (f *fakeHost) StartManaged(*exec.Cmd) (b.StopHandle, error) {
@@ -93,7 +94,11 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 		if strings.Contains(text, "SL_RESULT") || strings.Contains(text, "reply_b64") || strings.Contains(text, "nonce=") {
 			return nil, errors.New("transport changed the worker prompt")
 		}
-		f.lines = append(f.lines, "› "+text)
+		if f.collapsedEcho {
+			f.lines = append(f.lines, "› Implement the bound Spec…", "     1 -previous tool output", "    + Show details")
+		} else {
+			f.lines = append(f.lines, "› "+text)
+		}
 		if f.writeReply {
 			f.lines = append(f.lines, `• {"summary":"original result"}`, "  Worked for "+strconv.Itoa(len(f.lines))+"s • 18:50", "› Ask Codex to do anything")
 		}
@@ -331,6 +336,11 @@ func TestTerminalUnknownSubmissionOnlyObservesOriginal(t *testing.T) {
 			t.Fatal("reconciliation mutated resource", call)
 		}
 	}
+	f.lines = []string{"› Implement…", "• A visible reply.", "  Worked for 1s • 18:50"}
+	observed, _, observeErr := l.observeOnce(context.Background(), s)
+	if observeErr != nil || observed.TurnEvidence != nil {
+		t.Fatal("visible output replaced an unknown send receipt", observed, observeErr)
+	}
 	if _, _, err = l.Execute(context.Background(), req); err == nil {
 		t.Fatal("input repeated")
 	}
@@ -500,7 +510,35 @@ func TestTerminalReplyRequiresOriginalStartedAndStableIdle(t *testing.T) {
 	}
 }
 
-func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
+func TestTerminalPreviousReplyCannotCompleteNewTurn(t *testing.T) {
+	l, f, s := fixture(t)
+	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	old := []string{"› Previous input…", "• Previous reply.", "  Worked for 1s • 18:50", "› Ask Codex to do anything"}
+	f.lines = append([]string(nil), old...)
+	s, input := prepared(t, l, s, strings.Repeat("c", 32))
+	r, o, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
+	if o != nil {
+		_ = o.Close(context.Background())
+	}
+	if err != nil || !r.State.TurnStarted {
+		t.Fatal("new input did not start", err)
+	}
+	bind(&s, r)
+	// An idle screen can still show the previous completion. Unrelated output
+	// outside that completion segment must not turn it into a new reply.
+	f.lines = append([]string{"changed terminal header"}, old...)
+	f.lines = append(f.lines, "changed terminal footer")
+	r, _, err = settled(t, l, s)
+	if err != nil || r.TurnEvidence != nil || r.Diagnostic == "" {
+		t.Fatal("previous completion was attributed to a new turn", r, err)
+	}
+}
+
+func TestTerminalChangedIncarnationCannotComplete(t *testing.T) {
 	l, f, s := fixture(t)
 	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
 	if err != nil {
@@ -508,6 +546,30 @@ func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
 	}
 	bind(&s, r)
 	f.writeReply = true
+	s, input := prepared(t, l, s, strings.Repeat("c", 32))
+	r, o, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
+	if o != nil {
+		_ = o.Close(context.Background())
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	f.incarnation = "replacement-process"
+	r, _, err = l.observeOnce(context.Background(), s)
+	if err == nil || r.TurnEvidence != nil {
+		t.Fatal("replacement terminal supplied a completion", r, err)
+	}
+}
+
+func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
+	l, f, s := fixture(t)
+	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	f.writeReply, f.collapsedEcho = true, true
 	s, input := prepared(t, l, s, strings.Repeat("c", 32))
 	r, o, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 	if o != nil {

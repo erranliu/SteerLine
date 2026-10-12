@@ -52,7 +52,7 @@ func testWorkerStageRun(t *testing.T, host string) {
 			environment = "paired-fixture"
 		}
 		require(t, os.MkdirAll(f.nativeStateDir, 0700))
-		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "codex", Incarnation: "original", CommandMode: os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1"})))
+		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "codex", Incarnation: "original", CommandMode: os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1", CollapsedInput: os.Getenv("STEERLINE_STAGE_COLLAPSED_INPUT") == "1"})))
 		f.config.Host, f.config.Agent = "orca", "codex"
 		setNativeImplementationProfiles(t, &f.config, codexworker.ProfileConfig{}, &terminal.Profile{Executable: os.Args[0], Args: []string{"--fake", "terminal-orca", f.nativeStateDir}, RepositorySelector: "id:fixture", Environment: environment, WaitTimeout: "5s"})
 		t.Cleanup(func() {
@@ -159,4 +159,12 @@ func TestWorkerStageOrcaAgentLaunchLocalRoundTrip(t *testing.T) {
 func TestWorkerStageOrcaAgentLaunchEnvironmentRoundTrip(t *testing.T) {
 	t.Setenv("STEERLINE_STAGE_AGENT_LAUNCH", "1")
 	testWorkerStageRoundTrip(t, "orca-environment")
+}
+
+func TestWorkerStageOrcaCollapsedInputRoundTrip(t *testing.T) {
+	t.Setenv("STEERLINE_STAGE_COLLAPSED_INPUT", "1")
+	t.Setenv("STEERLINE_STAGE_AGENT_LAUNCH", "1")
+	for _, host := range []string{"orca", "orca-environment"} {
+		t.Run(host, func(t *testing.T) { testWorkerStageRoundTrip(t, host) })
+	}
 }

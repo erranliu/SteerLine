@@ -41,33 +41,26 @@ func screenBaseline(lines []string) string {
 	return digest([]byte(strings.Join(lines[user:end+1], "\n")))
 }
 
-func renderedReply(agent string, lines []string, prompt string) (text, fingerprint, problem string) {
+func renderedReply(agent string, lines []string) (text, fingerprint, problem string) {
 	if agent != "codex" {
 		return "", "", "agent rendered reply boundaries are unsupported"
 	}
 	user, end := completionBounds(lines)
 	if user < 0 || end < 0 {
-		return "", "", "complete submitted input and reply boundaries are not visible"
+		return "", "", "visible user-message and completion boundaries are missing"
 	}
-	first, last := -1, -1
+	last := -1
 	for i := user + 1; i < end; i++ {
 		if strings.HasPrefix(lines[i], "• ") || lines[i] == "•" {
-			if first < 0 {
-				first = i
-			}
 			last = i
 		}
 	}
-	if first < 0 {
+	if last < 0 {
 		return "", "", "no assistant reply after the submitted input"
 	}
-	// Input echoes can wrap, but must be completely visible. A collapsed echo is
-	// insufficient to associate a reply with this input and is not guessed.
-	echo := append([]string{strings.TrimPrefix(strings.TrimSpace(lines[user]), "› ")}, lines[user+1:first]...)
-	normalize := func(s string) string { return strings.Join(strings.Fields(s), "") }
-	if normalize(strings.Join(echo, "\n")) != normalize(prompt) {
-		return "", "", "visible input differs from the original submitted prompt"
-	}
+	// The user-message marker delimits the reply, even when the TUI collapses
+	// its text or clips preceding tool history. The lifecycle binds the input
+	// through the original send/start receipt and rejects the pre-send baseline.
 	body := []string{strings.TrimLeft(strings.TrimPrefix(lines[last], "•"), " ")}
 	for _, line := range lines[last+1 : end] {
 		if strings.HasPrefix(strings.TrimSpace(line), "└ Tip:") {

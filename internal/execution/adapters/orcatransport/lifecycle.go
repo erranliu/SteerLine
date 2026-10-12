@@ -462,7 +462,7 @@ func (l *Lifecycle) observeOnce(ctx context.Context, s b.LifecycleSnapshot) (b.L
 		if _, err = l.original(ctx, s); err != nil {
 			return receipt, nil, err
 		}
-		text, fingerprint, problem := renderedReply(s.Ref.Agent.Name, page.Tail, turn.Prompt)
+		text, fingerprint, problem := renderedReply(s.Ref.Agent.Name, page.Tail)
 		if idle && turn.Accepted && turn.Started && strings.TrimSpace(page.Draft) == "" && problem == "" && fingerprint != turn.Baseline {
 			if turn.Candidate != fingerprint {
 				turn.Candidate, turn.CandidateAt = fingerprint, time.Now().UTC()
