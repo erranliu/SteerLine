@@ -7,8 +7,8 @@
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
-| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 实现完成 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | [PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并，merge `267858f0`；2026-10-10 合入后独立复审无已确认缺陷，34 项定向检查通过。WFS-A1–A4 按历史精确来源与已授权 Orca usage 条件结算；WFS-M1 待人工验收。后续 PR #266 改换 Orca 路线后的规范 final 能力缺口单列，不以旧链通过覆盖当前路线；[记录、待验及当前限制](../acceptance/worker-staged-flow.md#2026-10-10-真实合并与合入后独立复审) |
-| 45 | 本机客户端协议与历史查询 | 无 | 实现完成 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) 已真实合并，head `73ef956f`、merge `4786934a`；第五轮独立终审无新确认缺陷。当前映射 L1 479 项、HTTP 18 项、服务 8 项及反馈组合通过，独立 actor/stop/stage 补验通过。API2 历史 SHM 自动失败保留，仅该根因/瞬态可用性风险按真人原授权登记 `accepted_exception`；当前 Orca 规范 final 缺口仍如实 unsupported，不在例外范围；[结算、证据与限制](../acceptance/phase2-local-api.md#2026-10-10-第五轮独立终审与真实合并结算) |
+| 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 实现完成 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | [PR #262](https://github.com/erranliu/SteerLine/pull/262) 已真实合并，merge `267858f0`；2026-10-10 合入后独立复审无已确认缺陷，34 项定向检查通过。WFS-A1–A4 按历史精确来源与已授权 Orca usage 条件结算；WFS-M1 待人工验收。后续 supervised 规范 final 缺口保留历史；当前单终端本机有限样本及本机最终 draft 保护未跑真机、远端已准备环境有限样本通过与首次信任阻塞后原任务自动继续未通过见[最新记录](../acceptance/orca-terminal-remote-retest-2026-10-10.md)，旧证据不覆盖当前全路线；[记录、待验及当前限制](../acceptance/worker-staged-flow.md#2026-10-10-真实合并与合入后独立复审) |
+| 45 | 本机客户端协议与历史查询 | 无 | 实现完成 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) 已真实合并，head `73ef956f`、merge `4786934a`；第五轮独立终审无新确认缺陷。当前映射 L1 479 项、HTTP 18 项、服务 8 项及反馈组合通过，独立 actor/stop/stage 补验通过。API2 历史 SHM 自动失败保留，仅该根因/瞬态可用性风险按真人原授权登记 `accepted_exception`；原结算时点的 supervised final 缺口保留；当前单终端能力与待验见[最新记录](../acceptance/orca-terminal-remote-retest-2026-10-10.md)，不在 SHM 例外范围；[结算、证据与限制](../acceptance/phase2-local-api.md#2026-10-10-第五轮独立终审与真实合并结算) |
 | 44 | WinUI 基座与原生输入 | #45（已交付） | 实现完成 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | [PR #273](https://github.com/erranliu/SteerLine/pull/273) 已真实合并，head `b3b52c24`、merge `f04fdf08`；独立复审发现关闭草稿竞态，局部修复后新终审无阻塞缺陷。当前映射 19 tests/0 fail/0 skip、WinUI build 通过；旧 c5c9 真实运行证据保留来源。UI2-M/UI4-M/UI5-M 待人工，最迟 2.1 签收；[结算、证据与限制](../acceptance/phase2-winui-foundation.md#2026-10-10-真实合并与交付结算) |
 | 87 | Worker 停机对账与恢复一致性修复 | 无未交付业务硬前置；消费当前已合入 worker 基线 | 实现完成 | 用户授权本聊天直接执行，不经 roadmap-runner；[Spec](../spec/worker-stop-recovery.spec.md) · [Plan](../spec/worker-stop-recovery.plan.md) | [PR #260](https://github.com/erranliu/SteerLine/pull/260) 已真实合并，merge `d951ca87`；独立复审 clean，WSR-A1–A8 自动通过（含双真实路径），无任务人工项；[专属记录](../acceptance/worker-stop-recovery.md) |
 
@@ -22,11 +22,11 @@
 
 | 范围 | 状态 / 安排 | 明细 |
 | --- | --- | --- |
-| 一期单安装版签收 | #83/#84 历史实现已交付；仍待当前支持路线实际能力及原生准备条件落实、固定新安装构建，再组织组合/24小时/同构建恢复人工签收；窗口待安排。当前 Orca 规范 final 缺口见 [#84 当前限制](../acceptance/worker-staged-flow.md#后续主干-orca-路线的当前能力缺口)，不能以历史通过覆盖或改称人工豁免 | [一期活动](../acceptance/phase1.md) |
+| 一期单安装版签收 | #83/#84 历史实现已交付；仍待当前支持路线实际能力及原生准备条件落实、固定新安装构建，再组织组合/24小时/同构建恢复人工签收；窗口待安排。当前 Orca 本机只有有限真实样本，本机最终 draft 保护未重新跑真机；远端升级 CLI/预先确认目录信任后有限样本闭环通过，首次信任阻塞后原任务自动继续未通过，见[最新范围](../acceptance/orca-terminal-remote-retest-2026-10-10.md)；旧 supervised 缺口[保留历史](../acceptance/worker-staged-flow.md#后续主干-orca-路线的当前能力缺口)，不以历史通过覆盖或改称人工豁免 | [一期活动](../acceptance/phase1.md) |
 | #84 步骤辨识与反馈/合并 | WFS-M1 待验；本任务自动能力交付后，可与一期 P1A1-M 同一现场集中验收，分别登记结果；不阻塞无关二期研发 | [专属记录](../acceptance/worker-staged-flow.md) |
 | #44原生输入与可达性 | #44已交付；UI2-M/UI4-M/UI5-M待人工，最迟2.1签收 | [记录](../acceptance/phase2-winui-foundation.md) |
 
-自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [Orca原生编排](../acceptance/worker-flow-orca-native.md) · [Orca安全重建](../acceptance/worker-service-recovery.md)。
+自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [当前 Orca 单终端与远端待验](../acceptance/orca-terminal-transport.md)。旧[Orca原生编排](../acceptance/worker-flow-orca-native.md)及[安全重建](../acceptance/worker-service-recovery.md)保留历史来源，适用性须按当前单终端重新核对，不能照旧路线直接执行。
 
 ## 执行记录
 

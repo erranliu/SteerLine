@@ -2,6 +2,12 @@
 
 ## 当前分步流程能力缺口
 
+当前接线已通过 PR #284 改为单终端 local/environment 共用 CLI 原语；结果见[单终端验收](orca-terminal-transport.md)和[真实调试记录](orca-terminal-remote-retest-2026-10-10.md)。本机有限样本三阶段交付通过，本机最终 draft 保护未重新跑真机；远端升级 CLI 并预先确认目录信任后有限样本三阶段/中心重启/真实合并交付通过。首次目录信任正确阻塞零投递，但被拒绝原任务自动继续未通过；任意代理/版本的启动稳定性仍未证明。正式 L3 注册表仍不包含新版远端交付，历史 RO 项的“已验收”不覆盖当前路线。
+
+### supervised 结果接线时点（历史）
+
+下面至原 RO 表均为单终端替换前的来源说明，不表示当前 adapter/驱动仍保留或原生链路已通过。
+
 2026-10-10 更新：[单消息结果接线](orca-supervised-results.md)已补齐 worker_declared 来源、原 Command/Dispatch 绑定、结果冻结、结算核验与正文入库，并开放 StructuredFinalEvidence。新增定向正式领取回归验证通过；本机/远端公开接口见[原生探针](orca-supervised-result-probe-2026-10-10.md)。真实 execute/report/publish/反馈 L3 驱动尚未重新准入，下面历史交付结果不代表当前分步链路已获完整真实验收。
 
 2026-10-09 的历史阻塞：当时 supervised adapter 未声明 StructuredFinalEvidence，ObserveLifecycle 只提供 worker_done 摘要；正式开发流程在原生探测/领取副作用前明确拒绝。该行为已由本次结果接线替代，无副作用的能力拒绝仍由通用不支持实现与原生不可达回归保留。

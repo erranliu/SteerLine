@@ -145,7 +145,7 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 			return err
 		}
 		for _, id := range []string{"exec-a"} {
-			if err := tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: id, WorkflowRunID: "wf-1", Agent: id, Status: "active", CurrentStep: "implement", Target: executionbackend.ExecutionTarget{WorktreeID: "worktree-" + id, Branch: "branch-" + id, Dispatch: "dispatch-" + id}}); err != nil {
+			if err := tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: id, WorkflowRunID: "wf-1", Agent: id, Status: "active", CurrentStep: "implement", Target: executionbackend.ExecutionTarget{WorktreeID: "worktree-" + id, Branch: "branch-" + id}}); err != nil {
 				return err
 			}
 			if err := tx.PutStepAttempt(executionmodel.StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt-" + id, ExecutionID: id, StepID: "implement", AttemptNumber: 1, Status: "running"}); err != nil {

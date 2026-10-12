@@ -22,7 +22,7 @@ type simplifiedCleanupPort struct{ executionbackend.LifecyclePort }
 
 func (p simplifiedCleanupPort) Execute(_ context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	target := request.Snapshot.Ref.Target
-	target.CoordinatorTerminal = "cleanup-private-progress"
+	target.WorktreeID = "cleanup-private-progress"
 	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed, Target: &target}, nil, nil
 }
 

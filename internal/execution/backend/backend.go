@@ -106,17 +106,13 @@ type ProcessFactsPort interface {
 }
 
 type ProcessIdentity struct {
-	Kind                 string `json:"kind,omitempty"`
-	PID                  int    `json:"pid,omitempty"`
-	Created              string `json:"created,omitempty"`
-	Executable           string `json:"executable,omitempty"`
-	Terminal             string `json:"terminal,omitempty"`
-	RuntimeID            string `json:"runtime_id,omitempty"`
-	Incarnation          string `json:"incarnation,omitempty"`
-	CoordinatorRuntimeID string `json:"coordinator_runtime_id,omitempty"`
-	OrchestrationRun     string `json:"orchestration_run,omitempty"`
-	Task                 string `json:"task,omitempty"`
-	Dispatch             string `json:"dispatch,omitempty"`
-	ExecutionHost        string `json:"execution_host,omitempty"`
-	WorktreeID           string `json:"worktree_id,omitempty"`
+	Kind          string `json:"kind,omitempty"`
+	PID           int    `json:"pid,omitempty"`
+	Created       string `json:"created,omitempty"`
+	Executable    string `json:"executable,omitempty"`
+	Terminal      string `json:"terminal,omitempty"`
+	RuntimeID     string `json:"runtime_id,omitempty"`
+	Incarnation   string `json:"incarnation,omitempty"`
+	ExecutionHost string `json:"execution_host,omitempty"`
+	WorktreeID    string `json:"worktree_id,omitempty"`
 }
