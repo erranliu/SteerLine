@@ -51,14 +51,15 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 			result["passed"] = false
 		}
 	}()
-	output := func(cmd *exec.Cmd) ([]byte, error) {
+	outputFor := func(cmd *exec.Cmd, timeout time.Duration) ([]byte, error) {
 		var out bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &out
-		commandCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		commandCtx, cancel := context.WithTimeout(ctx, timeout)
 		defer cancel()
 		err := testprocess.Run(commandCtx, cmd)
 		return out.Bytes(), err
 	}
+	output := func(cmd *exec.Cmd) ([]byte, error) { return outputFor(cmd, 30*time.Second) }
 	prepare := d.command(d.helper, "debug", "prepare")
 	// Only provisioning reads the caller's existing login. Subsequent commands
 	// use the package's isolated homes and privately copied authentication.
@@ -142,7 +143,9 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 		if task != "" {
 			args = append(args, "-task-id", task)
 		}
-		out, err := output(d.command(d.helper, args...))
+		// Match Client.ControlExpectedStatus: admitted native preparation waits
+		// for the original receipt; it is not a 30s command or a new request.
+		out, err := outputFor(d.command(d.helper, args...), 390*time.Second)
 		if err != nil {
 			return fmt.Errorf("%s: %v %s", action, err, out)
 		}

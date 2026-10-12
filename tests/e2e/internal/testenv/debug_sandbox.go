@@ -120,6 +120,13 @@ func (s *Scenario) cleanupDebugSandbox() error {
 	if s.debugSandboxResult != nil && s.debugSandboxResult["cleanup_complete"] != true {
 		return errors.New("debug sandbox cleanup incomplete; preserve its owned package for inspection")
 	}
+	if s.debugSandboxResult != nil && s.debugSandboxResult["passed"] != true {
+		// Services and remote refs have been cleaned, but keep the private
+		// diagnostic package so original failure journals remain inspectable.
+		s.debugSandboxResult["diagnostic_package_preserved"] = true
+		s.resources = append(s.resources, map[string]any{"kind": "diagnostic-package-preserved", "path": s.debugSandboxRoot, "pid": 0})
+		return controlled.Write(filepath.Join(s.Output, "debug-sandbox.json"), s.debugSandboxResult)
+	}
 	// This is the exact nonce parent created by DebugSandbox, verified against
 	// C:\SteerlineDebug before deletion. Installation paths cannot be selected.
 	resolved, err := filepath.EvalSymlinks(s.debugSandboxRoot)
