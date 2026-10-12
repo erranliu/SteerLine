@@ -21,6 +21,8 @@ type fakeHost struct {
 	writeReply, unknown, clipped  bool
 	screen                        bool
 	draft                         string
+	commandMode, launched         bool
+	delayLaunchIdentity           bool
 }
 
 func (f *fakeHost) StartManaged(*exec.Cmd) (b.StopHandle, error) {
@@ -51,12 +53,17 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 		path = f.nativePath
 	}
 	terminal := map[string]any{"handle": "terminal", "incarnationId": f.incarnation, "worktreeId": "repo::" + path, "worktreePath": path, "branch": "worker", "connected": true, "agentIdentity": "opaque-agent", "status": "running"}
+	if f.commandMode && (!f.launched || f.delayLaunchIdentity) {
+		terminal["agentIdentity"] = ""
+	}
 	var result any
 	switch c.Args[0] + " " + c.Args[1] {
 	case "worktree create":
 		result = map[string]any{"worktree": map[string]any{"id": "repo::" + path, "repoId": "repo", "path": path, "branch": "worker", "head": arg("--base-branch"), "baseRef": arg("--base-branch"), "displayName": arg("--name")}, "agentTerminalHandle": "terminal"}
 	case "terminal show":
 		result = map[string]any{"terminal": terminal}
+	case "terminal list":
+		result = map[string]any{"terminals": []any{terminal}}
 	case "terminal wait":
 		result = map[string]any{"wait": map[string]any{"satisfied": true}}
 	case "terminal read":
@@ -77,6 +84,11 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 			return nil, errors.New("lost response")
 		}
 		text := arg("--text")
+		if f.commandMode && !strings.Contains(text, "Final reply:") {
+			f.launched = true
+			result = map[string]any{"send": map[string]any{"handle": "terminal", "accepted": true, "prompt": map[string]any{"requestId": arg("--retry-request"), "processIncarnation": f.incarnation}}}
+			break
+		}
 		if !strings.Contains(text, "Final reply:") || strings.Contains(text, "Fetch ") {
 			return nil, errors.New("unexpected input contract")
 		}
@@ -96,6 +108,107 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 		return nil, errors.New("unexpected resource or orchestration dependency")
 	}
 	return json.Marshal(map[string]any{"ok": true, "result": result, "_meta": map[string]any{"runtimeId": "runtime"}})
+}
+
+func TestAgentLaunchSingleTerminalAndReadonlyReconciliation(t *testing.T) {
+	for _, environment := range []string{"", "paired-worker"} {
+		t.Run(environment, func(t *testing.T) {
+			l, f, s := fixtureOn(t, environment)
+			l.setup.AgentLaunchCommand = "opaque-start --chosen-preferences"
+			f.commandMode, f.delayLaunchIdentity = true, true
+			r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bind(&s, r)
+			candidate, err := l.Next(context.Background(), s)
+			if err != nil || candidate.Action != b.LifecycleCreateResource {
+				t.Fatal(candidate, err)
+			}
+			req := request(s, candidate.Action, candidate.Input)
+			r, _, err = l.Execute(context.Background(), req)
+			if err != nil || r.Disposition != b.OperationAccepted || !r.State.ResourcePending {
+				t.Fatal(r, err)
+			}
+			bind(&s, r)
+			req.Snapshot = s
+			if _, _, err = l.Execute(context.Background(), req); err == nil {
+				t.Fatal("startup command repeated")
+			}
+			f.delayLaunchIdentity = false
+			r, _, err = l.Reconcile(context.Background(), req)
+			if err != nil || r.Disposition != b.OperationConfirmed {
+				t.Fatal(r, err)
+			}
+			bind(&s, r)
+			f.writeReply = true
+			s, input := prepared(t, l, s, strings.Repeat("c", 32))
+			r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
+			if observer != nil {
+				_ = observer.Close(context.Background())
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			bind(&s, r)
+			if r, _, err = l.observeOnce(context.Background(), s); err != nil || r.TurnEvidence == nil {
+				t.Fatal(r, err)
+			}
+			creates, launches, inputs := 0, 0, 0
+			for _, call := range f.calls {
+				if call[0] == "worktree" && call[1] == "create" {
+					creates++
+					if strings.Contains(strings.Join(call, " "), "--agent") {
+						t.Fatal("native default agent also launched")
+					}
+				}
+				if call[0] == "terminal" && call[1] == "create" {
+					t.Fatal("second terminal created")
+				}
+				if call[0] == "terminal" && call[1] == "send" {
+					if strings.Contains(strings.Join(call, " "), "opaque-start") {
+						launches++
+					} else {
+						inputs++
+					}
+				}
+			}
+			if creates != 1 || launches != 1 || inputs != 1 {
+				t.Fatal(creates, launches, inputs)
+			}
+		})
+	}
+}
+
+func TestUnknownAgentLaunchNeverResendsOrAcceptsBusinessInput(t *testing.T) {
+	l, f, s := fixture(t)
+	l.setup.AgentLaunchCommand = "opaque-start"
+	f.commandMode = true
+	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bind(&s, r)
+	candidate, _ := l.Next(context.Background(), s)
+	req := request(s, candidate.Action, candidate.Input)
+	f.unknown = true
+	r, _, err = l.Execute(context.Background(), req)
+	if err == nil || r.Disposition != b.OperationUnknown {
+		t.Fatal(r, err)
+	}
+	bind(&s, r)
+	req.Snapshot = s
+	before := len(f.calls)
+	_, _, _ = l.Reconcile(context.Background(), req)
+	for _, call := range f.calls[before:] {
+		if call[1] == "send" || call[1] == "create" {
+			t.Fatal("unknown startup mutated resources", call)
+		}
+	}
+	input := b.TurnInput{CommandID: strings.Repeat("c", 32), Prompt: "business"}
+	if _, _, err = l.Execute(context.Background(), request(s, b.LifecyclePrepareSession, b.LifecycleInput{Turn: &input})); err == nil {
+		t.Fatal("unknown launch allowed business input")
+	}
 }
 func fixture(t *testing.T) (*Lifecycle, *fakeHost, b.LifecycleSnapshot) { return fixtureOn(t, "") }
 func fixtureOn(t *testing.T, environment string) (*Lifecycle, *fakeHost, b.LifecycleSnapshot) {

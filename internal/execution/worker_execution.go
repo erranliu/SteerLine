@@ -98,6 +98,7 @@ func (s *Service) workerFlowContext(run *reconstructiontypes.RunView) (workerFlo
 }
 
 func copyWorkerFlowConfig(c Config) Config {
+	c.AgentLaunch = c.AgentLaunch.Clone()
 	c.Git.Args = append([]string(nil), c.Git.Args...)
 	c.ImplementationData = CloneImplementationData(c.ImplementationData)
 	c.ImplementationDisplay = append([]string(nil), c.ImplementationDisplay...)

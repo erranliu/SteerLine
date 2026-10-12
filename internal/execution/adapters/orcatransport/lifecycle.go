@@ -28,8 +28,13 @@ type Turn struct {
 	Scan         workerreturn.Scan `json:"scan"`
 }
 type State struct {
-	Process b.ProcessIdentity `json:"process"`
-	Turns   []Turn            `json:"turns"`
+	Process         b.ProcessIdentity `json:"process"`
+	Turns           []Turn            `json:"turns"`
+	LaunchDigest    string            `json:"launch_digest,omitempty"`
+	LaunchRequest   string            `json:"launch_request,omitempty"`
+	LaunchAttempted bool              `json:"launch_attempted,omitempty"`
+	LaunchAccepted  bool              `json:"launch_accepted,omitempty"`
+	LaunchConfirmed bool              `json:"launch_confirmed,omitempty"`
 }
 type Lifecycle struct {
 	setup   b.LifecycleSetup
@@ -112,6 +117,9 @@ func (l *Lifecycle) state(s b.LifecycleSnapshot) (State, error) {
 	if state.Process.Terminal != "" && state.Process != s.Ref.External {
 		return state, errors.New("saved original terminal differs from current resource")
 	}
+	if state.LaunchAttempted && (state.LaunchDigest != workerreturn.Digest([]byte(l.setup.AgentLaunchCommand)) || state.LaunchRequest == "") || state.LaunchAccepted && !state.LaunchAttempted || state.LaunchConfirmed && !state.LaunchAccepted {
+		return state, errors.New("original agent launch binding changed")
+	}
 	seen := map[string]bool{}
 	for _, turn := range state.Turns {
 		if !b.StableExecutionID(turn.Command) || seen[turn.Command] || len(turn.InputDigest) != 64 || (turn.OutputSource != "stream" && turn.OutputSource != "screen") || !native.ValidCursor(turn.Cursor) || turn.Request != "" && !b.StableExecutionID(strings.ReplaceAll(turn.Request, "-", "")) || turn.Started && !turn.Accepted || turn.Accepted && !turn.Attempted || turn.Settled && (turn.Scan.Result == nil || turn.Scan.Problem != "") {
@@ -162,14 +170,19 @@ func command(s b.LifecycleSnapshot) string {
 }
 
 func (l *Lifecycle) original(ctx context.Context, s b.LifecycleSnapshot) (native.Terminal, error) {
+	state, stateErr := l.state(s)
+	if stateErr != nil {
+		return native.Terminal{}, stateErr
+	}
+	initializing := l.setup.AgentLaunchCommand != "" && !state.LaunchConfirmed
 	t, err := l.client.InspectBoundTerminal(ctx, l.profile.Target(), s.Ref.External)
 	if err != nil {
 		return t, err
 	}
-	if t.WorktreePath != s.Workspace.Path || strings.TrimPrefix(t.Branch, "refs/heads/") != s.Workspace.Branch {
+	if t.WorktreePath != s.Workspace.Path || strings.TrimPrefix(t.Branch, "refs/heads/") != s.Workspace.Branch && !(initializing && t.Branch == "") {
 		return t, errors.New("original Orca workspace or branch changed")
 	}
-	if t.WorktreeID != s.Ref.External.WorktreeID || t.AgentIdentity != s.Ref.Agent.Name || t.Orphaned {
+	if t.WorktreeID != s.Ref.External.WorktreeID || t.AgentIdentity != s.Ref.Agent.Name && !(initializing && t.AgentIdentity == "") || t.Orphaned {
 		return t, errors.New("original Orca agent/worktree changed")
 	}
 	return t, nil
@@ -213,6 +226,15 @@ func (l *Lifecycle) Next(_ context.Context, s b.LifecycleSnapshot) (b.LifecycleC
 		intent := s.WorkspacePlan
 		return b.LifecycleCandidate{Action: b.LifecyclePrepareWorkspace, Input: b.LifecycleInput{Workspace: &intent}}, nil
 	}
+	if l.setup.AgentLaunchCommand != "" {
+		state, err := l.state(s)
+		if err != nil {
+			return b.LifecycleCandidate{}, err
+		}
+		if !state.LaunchConfirmed {
+			return b.LifecycleCandidate{Action: b.LifecycleCreateResource, Input: b.LifecycleInput{Resource: &b.ResourceIntent{Purpose: "agent-start", Name: "original-terminal", Objective: l.setup.AgentLaunchCommand}}}, nil
+		}
+	}
 	if s.PendingTurn == nil {
 		return b.LifecycleCandidate{Done: true}, nil
 	}
@@ -242,6 +264,8 @@ func (l *Lifecycle) Execute(ctx context.Context, r b.LifecycleRequest) (b.Lifecy
 	switch b.LifecycleAction(r.Operation.Action) {
 	case b.LifecyclePrepareWorkspace:
 		receipt, err = l.prepareWorkspace(ctx, r, false)
+	case b.LifecycleCreateResource:
+		receipt, err = l.launchAgent(ctx, r, false)
 	case b.LifecyclePrepareSession:
 		receipt, err = l.prepareInput(ctx, r)
 	case b.LifecycleStartTurn, b.LifecycleSubmitInput:
@@ -309,6 +333,9 @@ func (l *Lifecycle) prepareInput(ctx context.Context, r b.LifecycleRequest) (b.L
 	if err != nil {
 		return receipt, err
 	}
+	if l.setup.AgentLaunchCommand != "" && !state.LaunchConfirmed {
+		return receipt, errors.New("original agent launch is not confirmed; no task input was sent")
+	}
 	input := r.Input.Turn
 	if input == nil || !b.StableExecutionID(input.CommandID) {
 		return receipt, errors.New("missing original worker input")
@@ -345,6 +372,9 @@ func (l *Lifecycle) submit(ctx context.Context, r b.LifecycleRequest) (b.Lifecyc
 	state, err := l.state(s)
 	if err != nil {
 		return receipt, err
+	}
+	if l.setup.AgentLaunchCommand != "" && !state.LaunchConfirmed {
+		return receipt, errors.New("original agent launch is not confirmed; no task input was sent")
 	}
 	input := r.Input.Turn
 	if input == nil || !b.StableExecutionID(input.CommandID) {
@@ -427,7 +457,10 @@ func (l *Lifecycle) observeOnce(ctx context.Context, s b.LifecycleSnapshot) (b.L
 		if turn.Scan.Problem != "" {
 			receipt.Diagnostic = "Original worker result is unverified: " + turn.Scan.Problem
 		} else {
-			idle, waitErr := l.client.WaitIdle(ctx, state.Process, time.Second)
+			// The native terminal quiet predicate needs a three-second sampling
+			// window in command-launched sessions; a one-second call can never
+			// settle it. Keep the native predicate, with a bounded five-second wait.
+			idle, waitErr := l.client.WaitIdle(ctx, state.Process, 5*time.Second)
 			if waitErr != nil {
 				return receipt, nil, waitErr
 			}
@@ -524,6 +557,9 @@ func (l *Lifecycle) Reconcile(ctx context.Context, r b.LifecycleRequest) (b.Life
 	switch b.LifecycleAction(r.Operation.Action) {
 	case b.LifecyclePrepareWorkspace:
 		receipt, err := l.prepareWorkspace(ctx, r, true)
+		return receipt, nil, err
+	case b.LifecycleCreateResource:
+		receipt, err := l.launchAgent(ctx, r, true)
 		return receipt, nil, err
 	case b.LifecyclePrepareSession:
 		receipt, err := l.prepareInput(ctx, r)

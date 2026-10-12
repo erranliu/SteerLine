@@ -17,6 +17,8 @@ type terminalFixture struct {
 	Repository, Environment, Agent, Incarnation, Worktree, Branch, Base, Name string
 	Sends                                                                     int
 	Lines                                                                     []string
+	CommandMode                                                               bool
+	Launches                                                                  int
 }
 
 func fakeTerminalOrca(directory string, args []string) int {
@@ -61,7 +63,13 @@ func fakeTerminalOrca(directory string, args []string) int {
 		case "worktree show":
 			result = map[string]any{"worktree": worktree()}
 		case "terminal show":
-			result = map[string]any{"terminal": map[string]any{"handle": "original", "incarnationId": state.Incarnation, "worktreeId": "fixture::" + state.Worktree, "worktreePath": state.Worktree, "branch": state.Branch, "agentIdentity": state.Agent, "connected": true, "status": "running"}}
+			agent := state.Agent
+			if state.CommandMode && state.Launches == 0 {
+				agent = ""
+			}
+			result = map[string]any{"terminal": map[string]any{"handle": "original", "incarnationId": state.Incarnation, "worktreeId": "fixture::" + state.Worktree, "worktreePath": state.Worktree, "branch": state.Branch, "agentIdentity": agent, "connected": true, "status": "running"}}
+		case "terminal list":
+			result = map[string]any{"terminals": []any{map[string]any{"handle": "original", "worktreeId": "fixture::" + state.Worktree}}}
 		case "terminal wait":
 			result = map[string]any{"wait": map[string]any{"satisfied": true}}
 		case "terminal read":
@@ -82,6 +90,14 @@ func fakeTerminalOrca(directory string, args []string) int {
 			result = map[string]any{"terminal": map[string]any{"handle": "original", "source": "stream", "tail": state.Lines[cursor:], "oldestCursor": "0", "nextCursor": strconv.Itoa(len(state.Lines)), "latestCursor": strconv.Itoa(len(state.Lines)), "limited": false, "truncated": false}}
 		case "terminal send":
 			text := arg(args, "--text")
+			if state.CommandMode && strings.HasPrefix(text, "& 'opaque-worker'") {
+				if state.Launches != 0 {
+					return fail(fmt.Errorf("duplicate agent startup"))
+				}
+				state.Launches++
+				result = map[string]any{"send": map[string]any{"handle": "original", "accepted": true, "prompt": map[string]any{"requestId": arg(args, "--retry-request"), "processIncarnation": state.Incarnation}}}
+				break
+			}
 			if strings.Contains(text, "Fetch ") || !strings.Contains(text, "Final reply:") {
 				return fail(fmt.Errorf("unexpected transport contract"))
 			}

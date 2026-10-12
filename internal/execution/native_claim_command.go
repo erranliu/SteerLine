@@ -275,6 +275,7 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 	}
 	wfr := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, ConfigDigest: config.acceptedConfigVersion, Status: "queued", FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepImplement, Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
 	fixed := *options.ExecutionProfile
+	fixed.AgentLaunch = fixed.AgentLaunch.Clone()
 	wfr.ExecutionProfile = &fixed
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, Generation: newID(), ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: executionmodel.WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
 	if claimPreparation.RequiresReadiness {

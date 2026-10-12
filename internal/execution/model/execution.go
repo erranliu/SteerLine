@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/erranliu/SteerLine/internal/execution/agentlaunch"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
@@ -16,11 +17,13 @@ type FixedExecutionProfile struct {
 
 	AcceptedConfigVersion string `json:"accepted_config_version"`
 
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Digest string `json:"digest"`
-	Host   string `json:"host"`
-	Agent  string `json:"agent"`
+	ID                 string              `json:"id"`
+	Name               string              `json:"name"`
+	Digest             string              `json:"digest"`
+	Host               string              `json:"host"`
+	Agent              string              `json:"agent"`
+	AgentLaunch        *agentlaunch.Config `json:"agent_launch,omitempty"`
+	AgentLaunchCommand string              `json:"agent_launch_command,omitempty"`
 }
 
 // PolicyResources is the resource stage of the same execution snapshot.
