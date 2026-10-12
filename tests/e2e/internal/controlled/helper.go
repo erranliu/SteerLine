@@ -212,7 +212,6 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		final := "Controlled candidate implemented and committed locally; no publication performed."
-		candidateSHA := ""
 		switch index {
 		case 0:
 			result := s.ResultText
@@ -228,17 +227,8 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 			if _, err := Git(ctx, s.Cwd, "commit", "-m", "controlled worker candidate"); err != nil {
 				return err
 			}
-			var err error
-			candidateSHA, err = Git(ctx, s.Cwd, "rev-parse", "HEAD")
-			if err != nil {
-				return err
-			}
 		case 1:
 			// Report only the already recorded execute result; do no business I/O.
-			candidateSHA, _ = s.Turns[0]["fixture_candidate_sha"].(string)
-			if candidateSHA == "" {
-				return fmt.Errorf("source candidate missing")
-			}
 			raw, _ := json.Marshal(map[string]any{"outcome": "done", "summary": "Controlled source implementation completed"})
 			final = string(raw)
 		case 2:
@@ -264,9 +254,6 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		turnID := uuid.NewString()
 		item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": final}
 		turn := map[string]any{"id": turnID, "status": "completed", "completedAt": time.Now().Unix(), "items": []any{item}, "fixture_step": steps[index]}
-		if candidateSHA != "" {
-			turn["fixture_candidate_sha"] = candidateSHA
-		}
 		s.Turns = append(s.Turns, turn)
 		if err := Write(path, s); err != nil {
 			return err

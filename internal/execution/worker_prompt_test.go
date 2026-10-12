@@ -11,13 +11,12 @@ import (
 
 func TestWorkerPromptUsesOnlyStepTemplateAndBusinessFacts(t *testing.T) {
 	task := json.RawMessage(`{"task_id":"84","spec":{"path":"bound.spec.md"},"plan":{"path":"bound.plan.md"}}`)
-	snapshot := &m.StageSnapshot{Workspace: b.WorkspaceInspection{Head: strings.Repeat("a", 40), ContentDigest: "fixed"}}
-	w := &m.WorkflowRunRecord{StageInputs: []m.StageInput{{CommandID: "execute", StepID: m.StepImplement, TaskFacts: task, Prompt: "old adapter instructions must not be replayed"}}, StageResults: []m.StageResult{{CommandID: "execute", TurnID: "original-turn", StepID: m.StepImplement, Succeeded: true, FinalVerified: true, Snapshot: snapshot, Final: "checks completed"}}}
+	w := &m.WorkflowRunRecord{StageInputs: []m.StageInput{{CommandID: "execute", StepID: m.StepImplement, TaskFacts: task, Prompt: "old adapter instructions must not be replayed"}}, StageResults: []m.StageResult{{CommandID: "execute", TurnID: "original-turn", StepID: m.StepImplement, Succeeded: true, FinalVerified: true, Final: "checks completed"}}}
 	for _, step := range []string{m.StepImplement, m.StepReport, m.StepPublish, m.StepPublishReport} {
-		input := m.StageInput{StepID: step, TaskFacts: task, SourceCommandID: "execute", SourceTurnID: "original-turn", Snapshot: snapshot, CandidateSHA: snapshot.Workspace.Head, ReportToolPolicy: "codex_native_permissions"}
+		input := m.StageInput{StepID: step, TaskFacts: task, SourceCommandID: "execute", SourceTurnID: "original-turn", ReportToolPolicy: "codex_native_permissions"}
 		if step == m.StepPublishReport {
-			w.StageInputs = append(w.StageInputs, m.StageInput{CommandID: "publish", StepID: m.StepPublish, CandidateSHA: snapshot.Workspace.Head})
-			w.StageResults = append(w.StageResults, m.StageResult{CommandID: "publish", StepID: m.StepPublish, TurnID: "publication-turn", Succeeded: true, FinalVerified: true, Snapshot: snapshot, Final: "Published PR"})
+			w.StageInputs = append(w.StageInputs, m.StageInput{CommandID: "publish", StepID: m.StepPublish})
+			w.StageResults = append(w.StageResults, m.StageResult{CommandID: "publish", StepID: m.StepPublish, TurnID: "publication-turn", Succeeded: true, FinalVerified: true, Final: "Published PR"})
 			input.SourceCommandID, input.SourceTurnID = "publish", "publication-turn"
 		}
 		first, err := renderStageInput(w, input)
@@ -25,7 +24,7 @@ func TestWorkerPromptUsesOnlyStepTemplateAndBusinessFacts(t *testing.T) {
 		input.CommandID, input.ReportToolPolicy = "different-command", "orca_managed_permissions"
 		second, err := renderStageInput(w, input)
 		require(t, err)
-		for _, unwanted := range []string{"task_id", "Current step:", "snapshot", "candidate_sha\":\"" + snapshot.Workspace.Head, "source_execution", "checks completed", "Published PR"} {
+		for _, unwanted := range []string{"task_id", "Current step:", "snapshot", "source_execution", "checks completed", "Published PR"} {
 			if strings.Contains(first, unwanted) {
 				t.Fatalf("%s repeats %q: %s", step, unwanted, first)
 			}
@@ -50,12 +49,11 @@ func TestWorkerPromptUsesOnlyStepTemplateAndBusinessFacts(t *testing.T) {
 }
 
 func TestWorkerPromptReportAddsOnlyMissingEvidenceAndRetrySource(t *testing.T) {
-	snapshot := &m.StageSnapshot{Workspace: b.WorkspaceInspection{Head: strings.Repeat("a", 40), ContentDigest: "fixed"}}
 	w := &m.WorkflowRunRecord{
 		StageInputs:  []m.StageInput{{CommandID: "execute", StepID: m.StepImplement}},
-		StageResults: []m.StageResult{{CommandID: "execute", TurnID: "source-turn", StepID: m.StepImplement, Snapshot: snapshot, Failure: "compiler failed"}},
+		StageResults: []m.StageResult{{CommandID: "execute", TurnID: "source-turn", StepID: m.StepImplement, Failure: "compiler failed"}},
 	}
-	input := m.StageInput{StepID: m.StepReport, SourceCommandID: "execute", SourceTurnID: "source-turn", Snapshot: snapshot}
+	input := m.StageInput{StepID: m.StepReport, SourceCommandID: "execute", SourceTurnID: "source-turn"}
 	prompt, err := renderStageInput(w, input)
 	require(t, err)
 	if !strings.Contains(prompt, "compiler failed") || !strings.Contains(prompt, "evidence_gap") || strings.Contains(prompt, "snapshot") {

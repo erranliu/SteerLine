@@ -1,5 +1,7 @@
 # 发布结果补报实现 Plan
 
+> 2026-10-12：本文保留为原实现的历史契约。当前有效业务规则和实施/测试安排已由 [统一 PR 流程 Spec](worker-pr-flow.spec.md) 与 [Plan](worker-pr-flow.plan.md) 替代；下文的候选 SHA/阶段快照比较不得继续用于当前执行，历史验收结果不改写。
+
 依据 [Spec](worker-publish-report.spec.md)，验收记录：[专属文档](../acceptance/worker-publish-report.md)。
 
 1. 增加 publish.report 步骤/短模板和结果契约，绑定原发布输入/结果与候选；只在 publish 格式错误时排队一次补报。

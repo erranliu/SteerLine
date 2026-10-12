@@ -72,15 +72,7 @@ func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
 				}
 			}
 			if old.PRURL != "" && old.PRURL != v.PRURL {
-				found := false
-				for _, url := range v.PRHistory {
-					if url == old.PRURL {
-						found = true
-					}
-				}
-				if !found {
-					return nativeErr("immutable_task", "replaced worker PR must remain in history")
-				}
+				return nativeErr("immutable_task", "worker execution must retain its original PR")
 			}
 			if old.Status == "completed" && (v.Status != old.Status || v.PendingDecisions != old.PendingDecisions || !v.UpdatedAt.Equal(old.UpdatedAt)) {
 				return nativeErr("immutable_task", "completed native workflow history cannot be changed")

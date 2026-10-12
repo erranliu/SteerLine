@@ -162,7 +162,7 @@ func (f mcFixture) bind(t *testing.T, run *reconstructiontypes.RunView, number i
 	info := f.proof(t, run, number, state)
 	w, e := f.s.workflowRecords(run)
 	require(t, BindWorkerPR(w, e, info, info.URL, info.Repository, false))
-	w.StepID, w.CandidateSHA, w.Status = executionmodel.StepAwaitMerge, info.HeadRevision, "waiting_external"
+	w.StepID, w.Status = executionmodel.StepAwaitMerge, "waiting_external"
 	f.s.refreshRun(run)
 	require(t, f.s.commitWorker(run))
 	t.Logf("candidate PR proof: %s", mustJSON(info))
@@ -388,7 +388,7 @@ func TestMC4(t *testing.T) {
 		w.PRCandidateURL = strings.TrimSpace(string(output))
 		head, err := exec.Command("git", "-C", deref(run.WorktreePath), "rev-parse", "HEAD").Output()
 		require(t, err)
-		w.StepID, w.CandidateSHA, w.Status = executionmodel.StepAwaitMerge, strings.TrimSpace(string(head)), "waiting_external"
+		w.StepID, w.Status = executionmodel.StepAwaitMerge, "waiting_external"
 		require(t, f.s.commitWorker(run))
 		task := nativeTaskRecord(f.s.domain.Tasks, "8")
 		require(t, f.s.pollWorkerFlowPR(context.Background(), run, task, w))
@@ -580,10 +580,20 @@ func TestMC7(t *testing.T) {
 		for i, run := range []*reconstructiontypes.RunView{f.first, second} {
 			mcStartTurn(t, f.s, run)
 			mcFinishTurn(t, f.s, run)
+			if i == 0 {
+				// Seed retained audit facts; current execution never replaces a PR.
+				history := f.proof(t, run, 80, "closed_unmerged")
+				f.s.workflowRecord(run).PRHistory = []string{history.URL}
+			}
 			f.bind(t, run, 81+i, "open")
 		}
 		f.bind(t, f.first, 81, "closed_unmerged")
-		f.bind(t, f.first, 83, "open")
+		other := f.proof(t, f.first, 83, "open")
+		w, e := f.s.workflowRecords(f.first)
+		if err := BindWorkerPR(w, e, other, other.URL, other.Repository, false); err == nil {
+			t.Fatal("closed PR allowed an implicit replacement")
+		}
+		f.bind(t, f.first, 81, "open")
 		if f.abandon(t, f.first, newID()).Status != "abandoned" {
 			t.Fatal("candidate exit failed")
 		}

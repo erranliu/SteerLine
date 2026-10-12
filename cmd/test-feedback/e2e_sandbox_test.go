@@ -13,7 +13,7 @@ func TestSandboxScenarioRequiresBothOriginalMergedTasks(t *testing.T) {
 		for _, turn := range []string{"implement", "report", "publish"} {
 			usage = append(usage, map[string]any{"session_id": task, "turn_id": turn, "model": "gpt-6-luna", "reasoning_effort": "medium", "tokens": map[string]int{"total_tokens": 100}})
 		}
-		candidates = append(candidates, map[string]any{"task_id": task, "run_id": task, "session_id": task, "worktree": task, "candidate_sha": strings.Repeat(task, 40), "native_stages": 3, "usage": usage, "merged_pr": map[string]any{"url": "https://github.com/erranliu/SteerlineTest/pull/" + []string{"215", "216"}[i], "state": "MERGED", "headRefOid": strings.Repeat(task, 40), "baseRefName": "codex/debug/owned/base"}})
+		candidates = append(candidates, map[string]any{"task_id": task, "run_id": task, "session_id": task, "worktree": task, "native_stages": 3, "usage": usage, "merged_pr": map[string]any{"url": "https://github.com/erranliu/SteerlineTest/pull/" + []string{"215", "216"}[i], "state": "MERGED", "mergedAt": "2026-10-12T03:00:00Z", "mergeCommit": map[string]string{"oid": strings.Repeat(task, 40)}, "baseRefName": "codex/debug/owned/base"}})
 	}
 	good := map[string]any{"passed": true, "cleanup_complete": true, "usage_verified": true, "manual_confirmation": false, "deliveries": 2, "candidates": candidates}
 	raw, err := json.Marshal(good)
@@ -32,8 +32,14 @@ func TestSandboxScenarioRequiresBothOriginalMergedTasks(t *testing.T) {
 		{"unmerged", func(p map[string]any) {
 			p["candidates"].([]any)[1].(map[string]any)["merged_pr"].(map[string]any)["state"] = "OPEN"
 		}},
-		{"wrong_sha", func(p map[string]any) {
-			p["candidates"].([]any)[1].(map[string]any)["merged_pr"].(map[string]any)["headRefOid"] = strings.Repeat("a", 40)
+		{"missing_merge_commit", func(p map[string]any) {
+			p["candidates"].([]any)[1].(map[string]any)["merged_pr"].(map[string]any)["mergeCommit"] = map[string]string{"oid": ""}
+		}},
+		{"malformed_merge_time", func(p map[string]any) {
+			p["candidates"].([]any)[1].(map[string]any)["merged_pr"].(map[string]any)["mergedAt"] = "not-a-time"
+		}},
+		{"zero_merge_time", func(p map[string]any) {
+			p["candidates"].([]any)[1].(map[string]any)["merged_pr"].(map[string]any)["mergedAt"] = "0001-01-01T00:00:00Z"
 		}},
 		{"foreign_usage", func(p map[string]any) {
 			p["candidates"].([]any)[1].(map[string]any)["usage"].([]any)[0].(map[string]any)["session_id"] = "1"

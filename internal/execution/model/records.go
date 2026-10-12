@@ -24,7 +24,6 @@ type WorkflowRunRecord struct {
 	InputVersion     uint64                 `json:"input_version"`
 	StageInputs      []StageInput           `json:"stage_inputs,omitempty"`
 	StageResults     []StageResult          `json:"stage_results,omitempty"`
-	CandidateSHA     string                 `json:"candidate_sha,omitempty"`
 	ReportRetry      uint8                  `json:"report_retry,omitempty"`
 	StageDiagnostic  string                 `json:"stage_diagnostic,omitempty"`
 	Repository       string                 `json:"repository,omitempty"`

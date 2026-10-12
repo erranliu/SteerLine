@@ -86,8 +86,8 @@ try {
             $proof = & gh pr view $pr --repo erranliu/SteerlineTest --json url,state,baseRefName,headRefName,headRefOid
             if ($LASTEXITCODE -ne 0) { throw 'Live PR query failed' }
             $facts = $proof | ConvertFrom-Json
-            $sha = (& git -C $project rev-parse HEAD).Trim()
-            if ($facts.baseRefName -ne $base -or $facts.headRefName -ne $head -or $facts.headRefOid -ne $sha -or $facts.state -ne 'OPEN') { throw 'Live PR identity mismatch' }
+
+            if ($facts.baseRefName -ne $base -or $facts.headRefName -ne $head -or $facts.state -ne 'OPEN') { throw 'Live PR identity mismatch' }
             [IO.File]::WriteAllText((Join-Path $second.root 'evidence\live-pr.json'), ($proof | Out-String), [Text.UTF8Encoding]::new($false))
         } finally {
             if ($pr) { & gh pr close $pr --repo erranliu/SteerlineTest; if ($LASTEXITCODE -ne 0) { throw 'PR cleanup failed' } }

@@ -38,7 +38,7 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	}
 	created := time.Now().UTC()
 	url := "https://git.example/o/r/pulls/8"
-	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Status: "waiting_external", FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepAwaitMerge, CandidateSHA: commit, Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Status: "waiting_external", FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepAwaitMerge, Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
 	dependencies, _ := neutralFixtureRuntime(c)
 	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
@@ -128,7 +128,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	task := graph.ByID["8"]
 	at := time.Now().UTC()
 	url := "https://forge.invalid/org/repo/pulls/8"
-	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Status: "waiting_external", FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepAwaitMerge, CandidateSHA: commit, Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
+	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Status: "waiting_external", FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepAwaitMerge, Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
 	dependencies, _ := neutralFixtureRuntime(c)
 	require(t, c.BindPublicationTarget(ctx, dependencies.ProcessHost))
 	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
@@ -177,6 +177,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 		})
 	}
 	verifier.info = good
+	verifier.info.HeadRevision = "" // Observation is unnecessary for verified merge delivery.
 	first, err := commands.CompleteNativeTask(ctx, c, "8", claimed.Version, wf.WorkflowRunID, verifier)
 	if err != nil || first.Status != "closed" {
 		t.Fatalf("verified merge did not complete: receipt=%+v err=%v", first, err)

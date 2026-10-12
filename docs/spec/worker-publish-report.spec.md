@@ -1,5 +1,7 @@
 # 发布结果补报
 
+> 2026-10-12：本文保留为原实现的历史契约。当前有效业务规则和实施/测试安排已由 [统一 PR 流程 Spec](worker-pr-flow.spec.md) 与 [Plan](worker-pr-flow.plan.md) 替代；下文的候选 SHA/阶段快照比较不得继续用于当前执行，历史验收结果不改写。
+
 普通开发，用户直接授权。配套 [Plan](worker-publish-report.plan.md)、[验收](../acceptance/worker-publish-report.md)。本次调整覆盖原分步流程/提示词收敛文档中“publish 不增加报告轮”的限制。
 
 `publish` 返回合法结构化结果时沿用直接处理：done 核验实际 PR 后等待合并，needs_input 等输入，blocked 按已知阻断/未知外部结果处理。已停止、来源核验且工作区可核实的 publish 缺结果或格式不合约时，在同一 worker/session/Attempt 内自动排队一次 `publish.report`；原生终态/正文来源或工作区未知仍先对账，不据此启动新输入。

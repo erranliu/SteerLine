@@ -1,5 +1,7 @@
 # Spec：Worker 分步执行与结构化状态推进
 
+> 2026-10-12：本文保留为原实现的历史契约。当前有效业务规则和实施/测试安排已由 [统一 PR 流程 Spec](worker-pr-flow.spec.md) 与 [Plan](worker-pr-flow.plan.md) 替代；下文的候选 SHA/阶段快照比较不得继续用于当前执行，历史验收结果不改写。
+
 任务 ID：84；任务名称：Worker 分步执行与结构化状态推进；目标：`WORKER-STAGED-FLOW`。配套 [Plan](worker-staged-flow.plan.md)，设计范围见 [roadmap 草稿](../roadmap/drafts/roadmap.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，尚未启动实现；启动时固定本 Spec/Plan 的实际 Git commit/路径，一个独立实现 PR 交付。
 
 本文由已确认的流程草稿转为本任务唯一的流程/提示词正文，采用现有 worker、简单步骤序列和 adapter；仅 implement 分执行/报告轮，publish 单轮。具体验收安排及结果归[专属验收规划](../acceptance/worker-staged-flow.md)。无未完成硬前置；#83 已通过 PR #247 进入主干，隔离能力作为基线复用，不重新派发。复用已有持续会话、工作区、投递/恢复及唯一交付能力。本文及编号不改变当前 worker-flow-v1 或正在运行的任务。

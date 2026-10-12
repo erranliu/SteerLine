@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
@@ -68,7 +67,7 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 		if answer.OptionID == "publish" {
 			w.StepID = executionmodel.StepPublish
 		} else {
-			w.StepID, w.CandidateSHA, w.ReportRetry = executionmodel.StepImplement, "", 0
+			w.StepID, w.ReportRetry = executionmodel.StepImplement, 0
 		}
 	}
 	selected := ""
@@ -99,28 +98,15 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 	if err != nil {
 		return err
 	}
-	input := executionmodel.StageInput{FeedbackDecisionID: answer.DecisionID, CommandID: commandID, AttemptID: fixed.attempt.AttemptID, StepID: w.StepID, CandidateSHA: w.CandidateSHA, TaskFacts: stageTaskFacts(w)}
+	input := executionmodel.StageInput{FeedbackDecisionID: answer.DecisionID, CommandID: commandID, AttemptID: fixed.attempt.AttemptID, StepID: w.StepID, TaskFacts: stageTaskFacts(w)}
 	if executionmodel.ReportStep(w.StepID) {
 		for i := len(w.StageInputs) - 1; i >= 0; i-- {
 			if w.StageInputs[i].StepID == w.StepID {
 				previous := w.StageInputs[i]
-				input.SourceCommandID, input.SourceTurnID, input.Snapshot, input.ReportToolPolicy = previous.SourceCommandID, previous.SourceTurnID, previous.Snapshot, previous.ReportToolPolicy
+				input.SourceCommandID, input.SourceTurnID, input.ReportToolPolicy = previous.SourceCommandID, previous.SourceTurnID, previous.ReportToolPolicy
 				break
 			}
 		}
-	} else if w.StepID == executionmodel.StepPublish {
-		lifecycle, _, err := s.lifecycleForRun(run)
-		if err != nil {
-			return err
-		}
-		facts, err := s.inspectStage(ctx, run, lifecycle, fixed)
-		if err != nil {
-			return err
-		}
-		if facts.Workspace.Head != w.CandidateSHA || facts.Workspace.Dirty {
-			return errors.New("publish continuation candidate changed")
-		}
-		input.Snapshot = facts
 	}
 	prompt, err := renderStageInput(w, input)
 	if err != nil {
@@ -154,38 +140,6 @@ func stageResult(w *executionmodel.WorkflowRunRecord, command string) *execution
 	return nil
 }
 
-func sameStageSnapshot(a, b *executionmodel.StageSnapshot) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	x, y := *a, *b
-	x.Workspace.CheckedAt, y.Workspace.CheckedAt = time.Time{}, time.Time{}
-	return x.Workspace.ContentDigest != "" && reflect.DeepEqual(x, y)
-}
-
-func (s *Service) inspectStage(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext) (*executionmodel.StageSnapshot, error) {
-	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
-	if err != nil {
-		return nil, err
-	}
-	workspace, err := lifecycle.InspectLifecycleWorkspace(ctx, snapshot)
-	if err != nil {
-		return nil, err
-	}
-	if workspace.Head == "" || workspace.Branch != fixed.execution.Workspace.Branch || workspace.ContentDigest == "" {
-		return nil, errors.New("workspace facts are incomplete or changed binding")
-	}
-	value := &executionmodel.StageSnapshot{Workspace: workspace}
-	if fixed.workflow.PRURL != "" {
-		info, err := publicationClient(fixed.config, s.runtime.ProcessHost).Query(ctx, fixed.workflow.PRURL)
-		if err != nil {
-			return nil, err
-		}
-		value.PR = &info
-	}
-	return value, nil
-}
-
 func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.StageInput) (string, error) {
 	facts := map[string]any{}
 	switch input.StepID {
@@ -201,11 +155,8 @@ func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.
 		sourceStep := executionmodel.StepImplement
 		if input.StepID == executionmodel.StepPublishReport {
 			sourceStep = executionmodel.StepPublish
-			if !stageSHA.MatchString(input.CandidateSHA) || original == nil || original.CandidateSHA != input.CandidateSHA {
-				return "", errors.New("publication report lacks its frozen candidate")
-			}
 		}
-		if source == nil || original == nil || original.StepID != sourceStep || source.StepID != sourceStep || source.TurnID != input.SourceTurnID || source.Snapshot == nil {
+		if source == nil || original == nil || original.StepID != sourceStep || source.StepID != sourceStep || source.TurnID != input.SourceTurnID {
 			return "", errors.New("report lacks its original execution facts")
 		}
 		// A retry's preceding reply is the failed report, not its source execution.
@@ -231,13 +182,14 @@ func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.
 		}
 
 	case executionmodel.StepPublish:
-		if !stageSHA.MatchString(input.CandidateSHA) {
-			return "", errors.New("publish lacks its frozen candidate")
-		}
 	default:
 		return "", errors.New("no automatic prompt for this step")
 	}
-	return renderWorkerPrompt(input.StepID, facts)
+	prompt, err := renderWorkerPrompt(input.StepID, facts)
+	if w.PRURL != "" && (input.StepID == executionmodel.StepImplement || input.StepID == executionmodel.StepPublish) {
+		prompt += "\nExisting PR: " + w.PRURL + "\nContinue on the original branch and update this same PR; do not create another PR."
+	}
+	return prompt, err
 }
 
 // queueStage changes the one business authority and freezes the next input
@@ -330,15 +282,6 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 		return s.stageWait(run, w, e, "reconciling", "original stopped turn lacks verified final provenance: "+evidence.FinalDiagnostic, nil)
 	}
 	result := executionmodel.StageResult{CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, FinalVerified: evidence.FinalVerified, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
-	facts, inspectErr := s.inspectStage(ctx, run, lifecycle, fixed)
-	result.Snapshot = facts
-	if facts != nil {
-		workspace := facts.Workspace
-		applyWorkflowWorkspaceEvidence(run, e, executionmodel.WorkspaceEvidence{InspectionScope: workspace.InspectionScope, Repository: workspace.Repository, Worktree: workspace.Worktree, Branch: workspace.Branch, Base: workspace.Base, Head: workspace.Head, Dirty: workspace.Dirty, VerifiedAt: workspace.CheckedAt})
-	}
-	if inspectErr != nil {
-		return s.stageWait(run, w, e, "reconciling", "workspace/publication facts unknown: "+inspectErr.Error(), nil)
-	}
 	w.StageResults = append(w.StageResults, result)
 	manualReason := ""
 	if e.RecoveryRequired || e.OwnerServiceInstanceID != s.State.Service.InstanceID || hasBlockingPendingQuestions(e) || s.hasUnknownWorkerOperation(run) || e.Environment != nil && (!e.Environment.Ready || e.Environment.Blocker != nil) || run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.InteractionKind != "async" {
@@ -347,15 +290,9 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if input.StepID == executionmodel.StepImplement {
 		policy := lifecycle.PolicyCapabilities().ReportToolPolicy
 		if policy == "" {
-			policy = "frozen_native_permissions; fact_comparison_only; external_writes_not_strongly_isolated"
+			policy = "frozen_native_permissions; business_read_only_is_prompt_policy"
 		}
-		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepReport, SourceCommandID: input.CommandID, SourceTurnID: evidence.TurnID, Snapshot: facts, ReportToolPolicy: policy}, fixed, manualReason)
-	}
-	if executionmodel.ReportStep(input.StepID) && !sameStageSnapshot(input.Snapshot, facts) {
-		return s.stageWait(run, w, e, "blocked", "artifact_mismatch: report changed workspace or bound publication facts", nil)
-	}
-	if executionmodel.PublicationStep(input.StepID) && (facts.Workspace.Head != input.CandidateSHA || facts.Workspace.Dirty) {
-		return s.stageWait(run, w, e, "blocked", "artifact_mismatch: publication changed the frozen candidate", nil)
+		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepReport, SourceCommandID: input.CommandID, SourceTurnID: evidence.TurnID, ReportToolPolicy: policy}, fixed, manualReason)
 	}
 	report, err := decodeStageReport(evidence.LastMessage, input.StepID)
 	if !evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "" {
@@ -376,13 +313,13 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 		if err != nil && input.StepID == executionmodel.StepPublish {
 			policy := lifecycle.PolicyCapabilities().ReportToolPolicy
 			if policy == "" {
-				policy = "frozen_native_permissions; fact_comparison_only; external_writes_not_strongly_isolated"
+				policy = "frozen_native_permissions; business_read_only_is_prompt_policy"
 			}
-			return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublishReport, SourceCommandID: input.CommandID, SourceTurnID: evidence.TurnID, CandidateSHA: input.CandidateSHA, Snapshot: facts, ReportToolPolicy: policy}, fixed, manualReason)
+			return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublishReport, SourceCommandID: input.CommandID, SourceTurnID: evidence.TurnID, ReportToolPolicy: policy}, fixed, manualReason)
 		}
 		if input.StepID == executionmodel.StepReport && w.ReportRetry == 0 {
 			w.ReportRetry = 1
-			return s.queueStage(run, w, e, executionmodel.StageInput{StepID: input.StepID, SourceCommandID: input.SourceCommandID, SourceTurnID: input.SourceTurnID, Snapshot: input.Snapshot, ReportToolPolicy: input.ReportToolPolicy}, fixed, manualReason)
+			return s.queueStage(run, w, e, executionmodel.StageInput{StepID: input.StepID, SourceCommandID: input.SourceCommandID, SourceTurnID: input.SourceTurnID, ReportToolPolicy: input.ReportToolPolicy}, fixed, manualReason)
 		}
 		return s.stageWait(run, w, e, "blocked", reason, nil)
 	}
@@ -405,13 +342,9 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 		if source == nil || source.TurnID != input.SourceTurnID || !source.Succeeded || source.Failure != "" {
 			return s.stageWait(run, w, e, "blocked", "source execution failed; report generated, original failure retained", &report)
 		}
-		if source.Snapshot == nil || !sameStageSnapshot(source.Snapshot, facts) || !stageSHA.MatchString(facts.Workspace.Head) || (report.Outputs.CandidateSHA != "" && report.Outputs.CandidateSHA != facts.Workspace.Head) || facts.Workspace.Dirty {
-			return s.stageWait(run, w, e, "blocked", "artifact_mismatch: candidate does not match source execution snapshot", &report)
-		}
 		s.expireAsyncQuestions(run, e)
-		w.CandidateSHA = facts.Workspace.Head
 		e.Summary = ptr(report.Summary)
-		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublish, CandidateSHA: w.CandidateSHA, Snapshot: facts}, fixed, manualReason)
+		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublish}, fixed, manualReason)
 	}
 	if input.StepID == executionmodel.StepPublishReport && !publicationReportSourceSucceeded(w, input) {
 		return s.stageWait(run, w, e, "reconciling", "source publication failed; report generated, original failure retained", &report)
@@ -420,7 +353,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if queryErr != nil {
 		return s.stageWait(run, w, e, "reconciling", "publication result unknown: "+queryErr.Error(), &report)
 	}
-	return s.acceptStagePublication(run, fixed, input, facts, report, info)
+	return s.acceptStagePublication(run, fixed, report, info)
 }
 
 // A report cannot upgrade a failed or differently bound publication. Its URL
@@ -430,16 +363,19 @@ func publicationReportSourceSucceeded(w *executionmodel.WorkflowRunRecord, input
 		return input.StepID == executionmodel.StepPublish
 	}
 	source, original := stageResult(w, input.SourceCommandID), stageInput(w, input.SourceCommandID)
-	return source != nil && original != nil && source.StepID == executionmodel.StepPublish && original.StepID == executionmodel.StepPublish && source.TurnID == input.SourceTurnID && original.CandidateSHA == input.CandidateSHA && source.Succeeded && source.Failure == "" && source.FinalVerified && source.FinalSource != "" && source.FinalItemID != ""
+	return source != nil && original != nil && source.StepID == executionmodel.StepPublish && original.StepID == executionmodel.StepPublish && source.TurnID == input.SourceTurnID && source.Succeeded && source.Failure == "" && source.FinalVerified && source.FinalSource != "" && source.FinalItemID != ""
 }
 
-func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed workerFlowContext, input *executionmodel.StageInput, facts *executionmodel.StageSnapshot, report stageReport, info executionmodel.PRInfo) error {
+func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed workerFlowContext, report stageReport, info executionmodel.PRInfo) error {
 	w, e := fixed.workflow, fixed.execution
-	if facts.Workspace.Head != input.CandidateSHA || facts.Workspace.Dirty || s.hasUnknownWorkerOperation(run) {
-		return s.stageWait(run, w, e, "reconciling", "original publication cannot settle while candidate or native operation facts differ", &report)
+	if s.hasUnknownWorkerOperation(run) {
+		return s.stageWait(run, w, e, "reconciling", "original publication has an unresolved native operation", &report)
 	}
-	if err := publication.ValidateWorkerPublication(info, report.Outputs.PRURL, fixed.config.PR.Repository, w.Branch, facts.Workspace.Branch, input.CandidateSHA); err != nil {
-		return s.stageWait(run, w, e, "blocked", "artifact_mismatch: "+err.Error(), &report)
+	if err := publication.ValidateWorkerPRIdentity(info, report.Outputs.PRURL, fixed.config.PR.Repository, w.Branch, e.Workspace.Branch); err != nil {
+		return s.stageWait(run, w, e, "blocked", "pr_identity_mismatch: "+err.Error(), &report)
+	}
+	if w.PRURL != "" && w.PRURL != report.Outputs.PRURL {
+		return s.stageWait(run, w, e, "blocked", "pr_identity_mismatch: publication must reuse the original PR", &report)
 	}
 	if err := BindWorkerPR(w, e, info, report.Outputs.PRURL, fixed.config.PR.Repository, false); err != nil {
 		return s.stageWait(run, w, e, "reconciling", err.Error(), &report)
@@ -447,8 +383,13 @@ func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed
 	s.expireAsyncQuestions(run, e)
 	w.StepID, w.Status, w.StageDiagnostic, w.UpdatedAt = executionmodel.StepAwaitMerge, "waiting_external", "", now()
 	e.Summary, e.Error = ptr(report.Summary), nil
-	if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {
-		return err
+	if info.State == "closed_unmerged" {
+		return s.waitWorkerFlow(run, "PR closed without merge; explicitly reopen the original PR or handle this execution.")
+	}
+	if info.State == "open" {
+		if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {
+			return err
+		}
 	}
 	s.refreshRun(run)
 	return s.commitWorker(run)
@@ -483,15 +424,6 @@ func (s *Service) dispatchQueuedStage(ctx context.Context, run *reconstructionty
 	if s.operationByKey("worker-turn:"+e.ExecutionID+":"+input.CommandID) == nil && s.operationByKey("worker-session:"+e.ExecutionID+":"+input.CommandID) == nil {
 		if err := verifyPublicationTargetForRun(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, run); err != nil {
 			return true, s.stageWait(run, w, e, "blocked", "fixed publication target changed: "+err.Error(), nil)
-		}
-		if executionmodel.ReportStep(input.StepID) || input.StepID == executionmodel.StepPublish {
-			facts, err := s.inspectStage(ctx, run, lifecycle, fixed)
-			if err != nil {
-				return true, s.stageWait(run, w, e, "reconciling", "pre-dispatch facts unknown: "+err.Error(), nil)
-			}
-			if executionmodel.ReportStep(input.StepID) && !sameStageSnapshot(input.Snapshot, facts) || executionmodel.PublicationStep(input.StepID) && (facts.Workspace.Head != input.CandidateSHA || facts.Workspace.Dirty) {
-				return true, s.stageWait(run, w, e, "blocked", "artifact_mismatch before input dispatch", nil)
-			}
 		}
 	}
 	return true, s.startWorkerLifecycle(ctx, run, lifecycle, fixed, input.CommandID, input.Prompt)
@@ -536,25 +468,19 @@ func (s *Service) reconcileStageFacts(ctx context.Context, run *reconstructionty
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
-	facts, err := s.inspectStage(ctx, run, lifecycle, fixed)
-	if err != nil {
-		w.StageDiagnostic = "read-only reconciliation: " + err.Error()
-		s.refreshRun(run)
-		return s.commitWorker(run)
-	}
 	if executionmodel.PublicationStep(w.StepID) && w.PRCandidateURL != "" {
+		if w.PRURL != "" && w.PRURL != w.PRCandidateURL {
+			return s.stageWait(run, w, e, "blocked", "pr_identity_mismatch: publication must reuse the original PR", nil)
+		}
 		info, err := publicationClient(fixed.config, s.runtime.ProcessHost).Query(ctx, w.PRCandidateURL)
 		if err != nil {
 			w.PRQueryError = ptr(err.Error())
 			s.refreshRun(run)
 			return s.commitWorker(run)
 		}
-		identityErr := publication.ValidateWorkerPRIdentity(info, w.PRCandidateURL, fixed.config.PR.Repository, w.Branch, facts.Workspace.Branch)
-		if info.HeadRevision != w.CandidateSHA {
-			identityErr = errors.Join(identityErr, fmt.Errorf("head_revision: expected=%q, actual=%q", w.CandidateSHA, info.HeadRevision))
-		}
+		identityErr := publication.ValidateWorkerPRIdentity(info, w.PRCandidateURL, fixed.config.PR.Repository, w.Branch, e.Workspace.Branch)
 		if identityErr != nil {
-			w.StageDiagnostic = "artifact_mismatch in read-only publication reconciliation: " + identityErr.Error()
+			w.StageDiagnostic = "pr_identity_mismatch in read-only publication reconciliation: " + identityErr.Error()
 			s.refreshRun(run)
 			return s.commitWorker(run)
 		}
@@ -564,7 +490,7 @@ func (s *Service) reconcileStageFacts(ctx context.Context, run *reconstructionty
 		if result != nil && input != nil && executionmodel.PublicationStep(result.StepID) && result.Succeeded && result.FinalVerified && result.Outcome == "done" && publicationReportSourceSucceeded(w, input) {
 			report, decodeErr := decodeStageReport(result.Final, input.StepID)
 			if decodeErr == nil && report.Outputs.PRURL == w.PRCandidateURL {
-				return s.acceptStagePublication(run, fixed, input, facts, report, info)
+				return s.acceptStagePublication(run, fixed, report, info)
 			}
 		}
 		if info.Merged && info.State == "merged" && info.MergedAt != nil && info.MergeCommit != nil {

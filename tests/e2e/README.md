@@ -163,4 +163,4 @@ Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_met
 
 ## Worker 分步交付断言
 
-当前 delivery.local-codex 及留档 delivery.orca-codex 的最小材料将 implement.ps1 的本地候选提交与 publish.ps1 的推送/PR 分开。当前本地场景核对三次业务轮次、同会话/Attempt、Command/输入版本/规范 final 来源、每步骤正数原生 usage、报告前后工作区/绑定 PR 事实，以及 PR head 等于冻结候选。readiness 独立计入原生现场，不冒充业务轮次。缺逐轮工具限制的现有后端记录 fact_comparison_only，不能将提示词算作强只读权限保证。
+当前 delivery.local-codex 的最小材料将 implement.ps1 的本地提交与 publish.ps1 的推送/PR 分开。development/v3 场景核对业务轮次、同会话/Attempt、Command/输入版本/规范 final 来源、每步骤原生 usage 和正确 PR 实际合并；报告绑定原执行，不比较阶段成果或冻结 PR head。readiness 独立计入原生现场，不冒充业务轮次；报告整理要求不等于强只读权限保证。规则见[统一 PR 流程](../../docs/spec/worker-pr-flow.spec.md)。

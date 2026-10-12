@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,18 +23,18 @@ func TestWorkerStageUnverifiedImplementationEntersReport(t *testing.T) {
 	evidence.FinalDiagnostic = "implementation reply unavailable"
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
 	w := s.workflowRecord(run)
-	if w.StepID != executionmodel.StepReport || w.Status != "queued" || w.CandidateSHA != "" || len(w.StageResults) != 1 || len(w.StageInputs) != 2 {
+	if w.StepID != executionmodel.StepReport || w.Status != "queued" || len(w.StageResults) != 1 || len(w.StageInputs) != 2 {
 		t.Fatal("stopped implementation without full reply did not enter report")
 	}
 	startQueuedStage(t, s, run)
-	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported from supplied facts"}`, true))
-	if w.StepID != executionmodel.StepPublish || w.CandidateSHA != port.workspace.Head || w.StageResults[0].FinalVerified {
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{},"summary":"reported from supplied facts"}`, true))
+	if w.StepID != executionmodel.StepPublish || w.StageResults[0].FinalVerified {
 		t.Fatal("verified report did not advance, or rewrote original missing reply")
 	}
 }
 
 func TestWorkerStageTransientFactsReconcileOriginalTurn(t *testing.T) {
-	for _, problem := range []string{"workspace", "final"} {
+	for _, problem := range []string{"final"} {
 		t.Run(problem, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			s.lifecycleResolver = unsupportedStageResolver{port: port}
@@ -43,12 +42,8 @@ func TestWorkerStageTransientFactsReconcileOriginalTurn(t *testing.T) {
 			startQueuedStage(t, s, run)
 			fixed, err := s.workerFlowContext(run)
 			require(t, err)
-			evidence := workerStageEvidence(s, run, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported"}`, true)
-			if problem == "workspace" {
-				port.err = errors.New("temporary read failure")
-			} else {
-				evidence.FinalVerified = false
-			}
+			evidence := workerStageEvidence(s, run, `{"outcome":"done","outputs":{},"summary":"reported"}`, true)
+			evidence.FinalVerified = false
 			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
 			w := s.workflowRecord(run)
 			if w.Status != "reconciling" || len(w.StageResults) != 1 || len(w.StageInputs) != 2 || w.ReportRetry != 0 {
@@ -85,7 +80,7 @@ func testWorkerStagePublicationReadRetry(t *testing.T, report bool) {
 	s.lifecycleResolver = unsupportedStageResolver{port: port}
 	require(t, acceptTestStage(t, s, run, port, "verified execution", true))
 	startQueuedStage(t, s, run)
-	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported"}`, true))
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{},"summary":"reported"}`, true))
 	startQueuedStage(t, s, run)
 	turns := 3
 	if report {
@@ -120,6 +115,33 @@ func TestWorkerStageProviderCommandFixture(t *testing.T) {
 	os.Exit(0)
 }
 
+func TestWorkerStageReconcileRejectsReplacementPR(t *testing.T) {
+	queryFile := filepath.Join(t.TempDir(), "query.json")
+	t.Setenv("STEERLINE_STAGE_QUERY_FILE", queryFile)
+	s, run, port := workerStageFixture(t, func(c *Config) {
+		c.PR.Kind, c.PR.Repository = "command", "owner/repo"
+		c.PR.Query = executionbackend.Command{Executable: os.Args[0], Args: []string{"-test.run=^TestWorkerStageProviderCommandFixture$"}}
+	})
+	s.lifecycleResolver = unsupportedStageResolver{port: port}
+	require(t, acceptTestStage(t, s, run, port, "implemented", true))
+	startQueuedStage(t, s, run)
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","summary":"reported"}`, true))
+	startQueuedStage(t, s, run)
+	w, e := s.workflowRecords(run)
+	original := executionmodel.PRInfo{URL: "https://github.com/owner/repo/pull/84", Repository: "owner/repo", BaseBranch: w.Branch, HeadRepository: "owner/repo", HeadBranch: e.Workspace.Branch, State: "open"}
+	require(t, BindWorkerPR(w, e, original, original.URL, original.Repository, false))
+	replacement := original
+	replacement.URL, replacement.State, replacement.Merged = "https://github.com/owner/repo/pull/85", "merged", true
+	replacement.MergedAt, replacement.MergeCommit = ptr(now()), ptr(strings.Repeat("a", 40))
+	require(t, os.WriteFile(queryFile, mustJSON(replacement), 0600))
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"blocked","summary":"publication unknown","outputs":{"pr_url":"`+replacement.URL+`"},"blocker":{"category":"unknown_external","action":"publish","error":"response lost"}}`, true))
+	inputs, results := len(w.StageInputs), len(w.StageResults)
+	require(t, s.reconcileStageFacts(context.Background(), run))
+	if w.Status != "blocked" || w.PRURL != original.URL || !strings.Contains(w.StageDiagnostic, "pr_identity_mismatch") || len(w.StageInputs) != inputs || len(w.StageResults) != results || len(s.domain.Deliveries) != 0 {
+		t.Fatal("read-only reconciliation replaced the PR or lost the original result")
+	}
+}
+
 func TestWorkerStageFeedbackUsesExactFrozenNativePrompt(t *testing.T) {
 	s, run, port := workerStageFixture(t)
 	e := s.executionRecord(run)
@@ -129,7 +151,7 @@ func TestWorkerStageFeedbackUsesExactFrozenNativePrompt(t *testing.T) {
 	s.lifecycleResolver = unsupportedStageResolver{port: port}
 	require(t, acceptTestStage(t, s, run, port, "verified execution", true))
 	startQueuedStage(t, s, run)
-	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{"candidate_sha":"`+port.workspace.Head+`"},"summary":"reported"}`, true))
+	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","outputs":{},"summary":"reported"}`, true))
 	command := newID()
 	err := s.startStageFeedback(context.Background(), run, executionmodel.DecisionAnswer{OptionID: "continue"}, command, executionmodel.DecisionRequest{Question: "continue publication"})
 	if err == nil {

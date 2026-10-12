@@ -1,5 +1,7 @@
 # Plan：Worker 分步执行与结构化状态推进
 
+> 2026-10-12：本文保留为原实现的历史契约。当前有效业务规则和实施/测试安排已由 [统一 PR 流程 Spec](worker-pr-flow.spec.md) 与 [Plan](worker-pr-flow.plan.md) 替代；下文的候选 SHA/阶段快照比较不得继续用于当前执行，历史验收结果不改写。
+
 任务 ID：84；任务名称：Worker 分步执行与结构化状态推进。唯一执行依据：[Spec](worker-staged-flow.spec.md)。已由用户确认纳入 [execution-map](../roadmap/execution-map.md)，尚未启动实现；无未完成硬前置，一个独立实现 PR 交付。#83 已通过 PR #247 合入；复用其隔离基线，在一期组合/24 小时验收之前交付新流程。
 
 ## 实施范围与集成

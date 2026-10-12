@@ -121,9 +121,6 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 			break
 		}
 	}
-	if info.HeadRevision != workflow.CandidateSHA {
-		return executionmodel.TaskDeliveryReceipt{}, nativeErr("artifact_mismatch", "PR head differs from the frozen publication candidate")
-	}
 	if info.State == "unknown" {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR provider returned an unknown merge state")
 	} else if !info.Merged || info.State != "merged" {
@@ -234,6 +231,7 @@ func validateNativeDeliveryGates(record taskmodel.TaskRecord, contract taskmodel
 	sessionID, _ := executionSessionFacts(&execution)
 	url, err := executionmodel.DeliveryPR(record.TaskID, record.ContractID, contract.ContractID, contract.Digest, executionmodel.DeliveryGate{
 		WorkflowVersion:     workflow.WorkflowVersion,
+		FlowRef:             workflow.FlowRef,
 		WorkflowTaskID:      workflow.TaskID,
 		SelectedExecutionID: workflow.SelectedResult,
 		ExecutionID:         execution.ExecutionID,
@@ -242,7 +240,7 @@ func validateNativeDeliveryGates(record taskmodel.TaskRecord, contract taskmodel
 		PRURL:               workflow.PRURL,
 		SessionID:           sessionID,
 		WorkspaceBranch:     execution.Workspace.Branch,
-		Status:              workflow.Status, StepID: workflow.StepID, CandidateSHA: workflow.CandidateSHA,
+		Status:              workflow.Status, StepID: workflow.StepID,
 	}, executionmodel.Version)
 	if err != nil {
 		var e *executionmodel.ResultError

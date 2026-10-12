@@ -81,7 +81,7 @@ func verifyPublicationTargetForRun(ctx context.Context, c Config, directory *Exe
 
 func fixedWorkflowPublicationConfig(c Config, w executionmodel.WorkflowRunRecord, directory *ExecutionDirectory) (Config, error) {
 	if w.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*w.ExecutionProfile, directory) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
-		return Config{}, errors.New("publication requires the original v6 execution snapshot; preserve original state")
+		return Config{}, errors.New("publication requires the original fixed execution profile; preserve original state")
 	}
 	c = c.ApplyFixedExecutionProfile(*w.ExecutionProfile, directory)
 	c.Repository = w.Repository
