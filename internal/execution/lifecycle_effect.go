@@ -76,7 +76,14 @@ func invokeLifecycleEffect(ctx context.Context, port executionbackend.LifecycleP
 			_ = result.observer.Close(context.Background())
 			result.observer = nil
 		}
-		receipt, observer, err := port.Reconcile(ctx, request.Clone())
+		reconcileRequest := request.Clone()
+		if request.Operation.Action == string(executionbackend.LifecyclePrepareWorkspace) &&
+			len(result.receipt.Operation.Receipt) > 0 && result.receipt.ValidateFor(request) == nil {
+			// Preserve a successful creation checkpoint during immediate reconciliation,
+			// just as the persisted outer receipt does on the next service pass.
+			reconcileRequest.Operation.Receipt = mustJSON(result.receipt)
+		}
+		receipt, observer, err := port.Reconcile(ctx, reconcileRequest)
 		if err == nil && receipt.ValidateFor(request) == nil && receipt.Disposition != executionbackend.OperationUnknown {
 			result.receipt, result.observer, result.err = receipt, observer, nil
 		} else {
