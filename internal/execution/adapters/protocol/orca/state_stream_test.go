@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -105,6 +106,9 @@ func TestOrcaNativeStateStream(t *testing.T) {
 			if scenario != "subscription-query" {
 				if err == nil {
 					t.Fatal("unverified subscription was accepted")
+				}
+				if (scenario == "wrong-runtime" || scenario == "wrong-request") && !errors.Is(err, ErrStateIdentityChanged) {
+					t.Fatal("native identity conflict was classified as retryable", err)
 				}
 				return
 			}

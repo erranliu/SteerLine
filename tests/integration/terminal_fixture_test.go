@@ -43,7 +43,7 @@ func fakeTerminalOrca(directory string, args []string) int {
 	}
 	worktree := func() map[string]any {
 		head, _ := git(state.Worktree, "rev-parse", "HEAD")
-		return map[string]any{"id": "fixture::" + state.Worktree, "repoId": "fixture", "path": state.Worktree, "branch": state.Branch, "head": head, "baseRef": state.Base, "displayName": state.Name}
+		return map[string]any{"id": "fixture::" + state.Worktree, "instanceId": "fixture-" + state.Name, "repoId": "fixture", "path": state.Worktree, "branch": state.Branch, "head": head, "baseRef": state.Base, "displayName": state.Name}
 	}
 	var result any
 	if len(args) > 0 && args[0] == "status" {

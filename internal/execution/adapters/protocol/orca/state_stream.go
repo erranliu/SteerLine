@@ -209,7 +209,7 @@ func (s *stateSocket) response(data []byte, requestID string) (json.RawMessage, 
 		return nil, nil
 	}
 	if response.ID != requestID || response.Meta.RuntimeID != s.runtime {
-		return nil, errors.New("Orca state request/runtime identity changed")
+		return nil, stateIdentityError("request/runtime identity changed")
 	}
 	if !response.OK {
 		if response.Error != nil {

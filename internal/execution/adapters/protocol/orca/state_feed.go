@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,15 @@ type AgentState struct {
 	} `json:"providerSession"`
 	LastAssistantMessage string `json:"lastAssistantMessage,omitempty"`
 	Interrupted          bool   `json:"interrupted,omitempty"`
+	SessionBoundary      bool   `json:"sessionBoundary,omitempty"`
+	RestoredUnconfirmed  bool   `json:"restoredUnconfirmed,omitempty"`
+	ToolOutput           bool   `json:"lastAssistantMessageIsToolOutput,omitempty"`
+}
+
+var ErrStateIdentityChanged = errors.New("Orca native state identity changed")
+
+func stateIdentityError(message string) error {
+	return fmt.Errorf("%w: %s", ErrStateIdentityChanged, message)
 }
 
 type StateFeed interface {
@@ -62,7 +72,7 @@ func DecodeOriginalState(raw json.RawMessage, p b.ProcessIdentity) (AgentState, 
 		}
 	}
 	if json.Unmarshal(raw, &snapshot) != nil || strings.TrimPrefix(snapshot.Worktree, "id:") != p.WorktreeID {
-		return AgentState{}, errors.New("Orca state snapshot worktree changed")
+		return AgentState{}, stateIdentityError("snapshot worktree changed")
 	}
 	for _, tab := range snapshot.Tabs {
 		if tab.Terminal != p.Terminal {
@@ -72,7 +82,7 @@ func DecodeOriginalState(raw json.RawMessage, p b.ProcessIdentity) (AgentState, 
 		// terminal.show checks bind the PTY incarnation around observation;
 		// session.tabs does not always include that separate metadata field.
 		if tab.IncarnationID != "" && tab.IncarnationID != p.Incarnation {
-			return AgentState{}, errors.New("Orca state terminal incarnation changed")
+			return AgentState{}, stateIdentityError("terminal incarnation changed")
 		}
 		s := AgentState{}
 		if tab.AgentStatus != nil {
@@ -80,15 +90,15 @@ func DecodeOriginalState(raw json.RawMessage, p b.ProcessIdentity) (AgentState, 
 		}
 		pane := tab.ParentTabID + ":" + tab.LeafID
 		if tab.ParentTabID == "" || tab.LeafID == "" {
-			return s, errors.New("Orca state original pane identity missing")
+			return s, stateIdentityError("original pane identity missing")
 		}
 		if s.PaneKey != "" && s.PaneKey != pane {
-			return s, errors.New("Orca state original pane changed")
+			return s, stateIdentityError("original pane changed")
 		}
 		s.PaneKey = pane
 		return s, nil
 	}
-	return AgentState{}, errors.New("Orca state original terminal missing")
+	return AgentState{}, stateIdentityError("original terminal missing")
 }
 
 func DecodeOriginalAgent(raw json.RawMessage, worktree, pane string) (AgentState, error) {
@@ -113,13 +123,13 @@ func DecodeOriginalAgent(raw json.RawMessage, worktree, pane string) (AgentState
 				continue
 			}
 			if agent.ParentPaneKey != "" {
-				return AgentState{}, errors.New("Orca query selected a child agent")
+				return AgentState{}, stateIdentityError("query selected a child agent")
 			}
 			return agent.AgentState, nil
 		}
-		return AgentState{}, errors.New("Orca query original main agent missing")
+		return AgentState{}, errors.New("Orca query original main agent currently unavailable")
 	}
-	return AgentState{}, errors.New("Orca query original worktree absent from page")
+	return AgentState{}, errors.New("Orca query original worktree absent from current page")
 }
 
 type nativeStateFeed struct {
@@ -157,7 +167,7 @@ func OpenStateFeed(ctx context.Context, environment string, p b.ProcessIdentity)
 			f.mu.Lock()
 			if err != nil {
 				if watch.Err() == nil {
-					f.err = errors.New("Orca native state subscription unavailable or original identity changed")
+					f.err = err
 				}
 				f.mu.Unlock()
 				return
@@ -182,27 +192,43 @@ func (f *nativeStateFeed) Drain() ([]AgentState, error) {
 	return updates, f.err
 }
 func (f *nativeStateFeed) Query(ctx context.Context) (AgentState, error) {
+	return QueryOriginalAgent(ctx, f.environment, f.process, f.initial.PaneKey)
+}
+
+// A bounded independent read remains available when the notification stream is
+// disconnected. Its target comes from the persisted original execution only.
+func QueryOriginalAgent(ctx context.Context, environment string, process b.ProcessIdentity, pane string) (AgentState, error) {
 	ctx, cancel := context.WithTimeout(ctx, 40*time.Second)
 	defer cancel()
-	raw, err := QueryWorktreeAgents(ctx, f.environment, f.process.RuntimeID)
+	raw, err := QueryWorktreeAgents(ctx, environment, process.RuntimeID)
 	if err != nil {
 		return AgentState{}, err
 	}
-	s, err := DecodeOriginalAgent(raw, f.process.WorktreeID, f.initial.PaneKey)
+	s, err := DecodeOriginalAgent(raw, process.WorktreeID, pane)
 	if err != nil {
 		return s, err
 	}
 	// This separate read verifies session metadata, not a second completion
 	// source: title-projected done from it is never accepted.
-	metadata, err := QueryState(ctx, f.environment, f.process.RuntimeID, "id:"+f.process.WorktreeID)
+	metadata, err := QueryState(ctx, environment, process.RuntimeID, "id:"+process.WorktreeID)
 	if err != nil {
 		return s, err
 	}
-	current, err := DecodeOriginalState(metadata, f.process)
-	if err != nil || current.PaneKey != s.PaneKey {
-		return s, errors.New("Orca queried original pane metadata changed")
+	current, err := DecodeOriginalState(metadata, process)
+	if err != nil {
+		return s, err
+	}
+	if current.PaneKey != s.PaneKey || s.ProviderSession.ID != "" && current.ProviderSession.ID != "" && current.ProviderSession.ID != s.ProviderSession.ID {
+		return s, stateIdentityError("queried original pane/provider metadata changed")
+	}
+	if current.ProviderSession.ID == "" {
+		return s, errors.New("Orca queried original provider metadata currently unavailable")
 	}
 	s.ProviderSession = current.ProviderSession
+	s.SessionBoundary = s.SessionBoundary || current.SessionBoundary
+	s.RestoredUnconfirmed = s.RestoredUnconfirmed || current.RestoredUnconfirmed
+	s.Interrupted = s.Interrupted || current.Interrupted
+	s.ToolOutput = s.ToolOutput || current.ToolOutput
 	return s, nil
 }
 func (f *nativeStateFeed) Close() { f.once.Do(func() { f.cancel(); f.sub.Close() }) }

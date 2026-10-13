@@ -3,6 +3,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,7 +59,7 @@ func (f *integrationStateFeed) read() (terminalFixture, string, error) {
 		return state, "", err
 	}
 	phase := "reply"
-	if state.NativeGate && state.Sends == 3 {
+	if state.NativeGate && state.Sends == 3 || os.Getenv("STEERLINE_STAGE_QUERY_RESTART") == "1" && state.Sends == 2 {
 		raw, err = os.ReadFile(filepath.Join(f.directory, "gate-phase"))
 		if err != nil {
 			return state, "", err
@@ -73,9 +74,14 @@ func (f *integrationStateFeed) Drain() ([]native.AgentState, error) {
 	if err != nil {
 		return nil, err
 	}
+	if os.Getenv("STEERLINE_STAGE_QUERY_RESTART") == "1" && state.Sends == 2 {
+		return nil, errors.New("fixture notification connection disconnected")
+	}
 	var updates []native.AgentState
 	if state.Sends > f.seen {
-		updates = append(updates, integrationAgentState(state, "working"))
+		if !(os.Getenv("STEERLINE_STAGE_COMPLETION_QUERY") == "1" && state.Sends == 2) {
+			updates = append(updates, integrationAgentState(state, "working"))
+		}
 		f.seen = state.Sends
 		f.phase = ""
 	}
@@ -107,6 +113,9 @@ func (f *integrationStateFeed) Query(context.Context) (native.AgentState, error)
 	}
 	s := integrationAgentState(state, kind)
 	s.Observation = nil
+	if phase == "ended" {
+		s.LastAssistantMessage = ""
+	}
 	return s, nil
 }
 func (*integrationStateFeed) Close() {}
@@ -122,6 +131,9 @@ func integrationStateFactory(directory string, queryHook func()) native.StateFee
 			kind = "working"
 		}
 		f.initial = integrationAgentState(state, kind)
+		if phase == "ended" {
+			f.initial.LastAssistantMessage = ""
+		}
 		f.seen = state.Sends
 		f.phase = phase
 		return f, nil
