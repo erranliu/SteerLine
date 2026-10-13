@@ -21,6 +21,7 @@ type Turn struct {
 	Request     string      `json:"request,omitempty"`
 	InputDigest string      `json:"input_digest"`
 	Attempted   bool        `json:"attempted"`
+	Rejected    bool        `json:"rejected,omitempty"`
 	Accepted    bool        `json:"accepted"`
 	Started     bool        `json:"started"`
 	Settled     bool        `json:"settled"`
@@ -91,14 +92,31 @@ func NewLifecycleWithStateFactory(setup b.LifecycleSetup, factory native.StateFe
 	if !found || setup.Snapshot.Ref.Target.ID != p.Target().ID {
 		return nil, errors.New("terminal profile differs from frozen target")
 	}
+	l := &Lifecycle{setup: setup, profile: p, stateFactory: factory, clock: func() time.Time { return time.Now().UTC() }}
+	var pairedOnce sync.Once
+	var pairedErr error
 	call := func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 		all := append(append([]string(nil), p.Args...), args...)
+		blocked := []string{"ORCA_ENVIRONMENT", "ORCA_PAIRING_CODE", "ORCA_REMOTE_PAIRING"}
 		if p.Environment != "" {
 			all = append(all, "--environment", p.Environment)
+		} else if l.nativeAccess {
+			pairedOnce.Do(func() {
+				runtime, err := native.LocalRuntimeID()
+				if err == nil {
+					_, err = native.QueryWorktreeAgents(ctx, "", runtime)
+				}
+				pairedErr = err
+			})
+			if pairedErr != nil {
+				return nil, pairedErr
+			}
+			blocked = []string{"ORCA_ENVIRONMENT"}
 		}
-		return setup.ProcessHost.OutputCommand(ctx, b.LaunchCommand{Executable: p.Executable, Args: all, WorkingDirectory: setup.RepositoryPath, Timeout: timeout, BlockedEnvironment: []string{"ORCA_ENVIRONMENT", "ORCA_PAIRING_CODE", "ORCA_REMOTE_PAIRING"}})
+		return setup.ProcessHost.OutputCommand(ctx, b.LaunchCommand{Executable: p.Executable, Args: all, WorkingDirectory: setup.RepositoryPath, Timeout: timeout, BlockedEnvironment: blocked})
 	}
-	return &Lifecycle{setup: setup, profile: p, client: native.New(native.Config{CommandTimeout: "40s", Target: p.Target(), Output: call}), stateFactory: factory, clock: func() time.Time { return time.Now().UTC() }}, nil
+	l.client = native.New(native.Config{CommandTimeout: "40s", Target: p.Target(), Output: call})
+	return l, nil
 }
 
 func (l *Lifecycle) PolicyCapabilities() b.LifecyclePolicyCapabilities {
@@ -319,28 +337,31 @@ func (l *Lifecycle) Execute(ctx context.Context, r b.LifecycleRequest) (b.Lifecy
 }
 
 func (l *Lifecycle) ready(ctx context.Context, s b.LifecycleSnapshot) error {
-	if _, err := l.original(ctx, s); err != nil {
-		return err
-	}
 	wait, _ := time.ParseDuration(l.profile.WaitTimeout)
-	r, err := l.client.MetaCall(ctx, "terminal", "wait", "--terminal", s.Ref.External.Terminal, "--for", "tui-idle", "--timeout-ms", strconv.FormatInt(wait.Milliseconds(), 10), "--json")
-
-	var value struct {
-		Wait struct {
-			Satisfied     bool   `json:"satisfied"`
-			BlockedReason string `json:"blockedReason"`
-		} `json:"wait"`
+	for attempt := 0; attempt < 2; attempt++ {
+		if _, err := l.original(ctx, s); err != nil {
+			return err
+		}
+		r, err := l.client.MetaCallWithTimeout(ctx, wait+10*time.Second, "terminal", "wait", "--terminal", s.Ref.External.Terminal, "--for", "tui-idle", "--timeout-ms", strconv.FormatInt(wait.Milliseconds(), 10), "--json")
+		var value struct {
+			Wait struct {
+				Satisfied     bool   `json:"satisfied"`
+				BlockedReason string `json:"blockedReason"`
+			} `json:"wait"`
+		}
+		valid := json.Unmarshal(r.Payload, &value) == nil && r.RuntimeID == s.Ref.External.RuntimeID && !r.CallUncertain && r.ErrorCode == ""
+		if valid && value.Wait.Satisfied && value.Wait.BlockedReason == "" && err == nil {
+			break
+		}
+		timedOut := r.ErrorCode == "timeout" && r.RuntimeID == s.Ref.External.RuntimeID && !r.CallUncertain || valid && !value.Wait.Satisfied && value.Wait.BlockedReason == ""
+		if attempt == 0 && timedOut && ctx.Err() == nil {
+			wait = min(2*wait, time.Minute)
+			continue
+		}
+		cause := errors.Join(err, fmt.Errorf("original Orca readiness is unverified (blocked=%q); no input was sent", value.Wait.BlockedReason))
+		return l.readinessDiagnostic(ctx, s, cause)
 	}
-	if json.Unmarshal(r.Payload, &value) != nil || r.RuntimeID != s.Ref.External.RuntimeID || r.CallUncertain || r.ErrorCode != "" {
-		return errors.Join(err, errors.New("original Orca readiness is unverified; no input was sent"))
-	}
-	if !value.Wait.Satisfied || value.Wait.BlockedReason != "" {
-		return fmt.Errorf("original Orca agent is not ready (%s); no input was sent", value.Wait.BlockedReason)
-	}
-	if err != nil {
-		return err
-	}
-	_, err = l.original(ctx, s)
+	_, err := l.original(ctx, s)
 	if err != nil {
 		return err
 	}
@@ -353,6 +374,26 @@ func (l *Lifecycle) ready(ctx context.Context, s b.LifecycleSnapshot) error {
 	}
 	_, err = l.original(ctx, s)
 	return err
+}
+
+func (l *Lifecycle) readinessDiagnostic(ctx context.Context, s b.LifecycleSnapshot, cause error) error {
+	term, err := l.original(ctx, s)
+	if err != nil {
+		return errors.Join(cause, err)
+	}
+	page, err := l.client.ReadScreen(ctx, s.Ref.External)
+	if err != nil {
+		return errors.Join(cause, fmt.Errorf("readiness screen unavailable: %w", err))
+	}
+	lines := page.Tail
+	if len(lines) > 12 {
+		lines = lines[len(lines)-12:]
+	}
+	preview := []rune(strings.Join(lines, "\n"))
+	if len(preview) > 1200 {
+		preview = preview[len(preview)-1200:]
+	}
+	return fmt.Errorf("%w; terminal=%s status=%s agent=%s screen=%q", cause, term.Handle, term.Status, term.AgentIdentity, string(preview))
 }
 
 func nativeRequest(operation string) string {
@@ -452,12 +493,12 @@ func (l *Lifecycle) submit(ctx context.Context, r b.LifecycleRequest) (b.Lifecyc
 		return receipt, err
 	}
 	receipt.State = b.LifecycleStateFacts{SessionID: SessionID(state.Process), SessionGeneration: state.Process.Incarnation, TurnID: input.CommandID, SessionAvailable: true, WorkerLive: true}
-	result, callErr := l.client.MetaCall(ctx, "terminal", "send", "--terminal", state.Process.Terminal, "--text", input.Prompt, "--enter", "--wait-submit", "30", "--retry-request", turn.Request, "--json")
+	result, callErr := l.client.MetaCallWithTimeout(ctx, 50*time.Second, "terminal", "send", "--terminal", state.Process.Terminal, "--text", input.Prompt, "--enter", "--wait-submit", "30", "--retry-request", turn.Request, "--json")
 	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
 	var sent struct {
 		Send struct {
 			Handle   string `json:"handle"`
-			Accepted bool   `json:"accepted"`
+			Accepted *bool  `json:"accepted"`
 			Prompt   struct {
 				RequestID          string   `json:"requestId"`
 				ProcessIncarnation string   `json:"processIncarnation"`
@@ -465,7 +506,15 @@ func (l *Lifecycle) submit(ctx context.Context, r b.LifecycleRequest) (b.Lifecyc
 			} `json:"prompt"`
 		} `json:"send"`
 	}
-	if json.Unmarshal(result.Payload, &sent) != nil || result.RuntimeID != state.Process.RuntimeID || !sent.Send.Accepted || sent.Send.Handle != state.Process.Terminal || sent.Send.Prompt.RequestID != turn.Request || sent.Send.Prompt.ProcessIncarnation != state.Process.Incarnation || result.CallUncertain || result.ErrorCode != "" {
+	bound := json.Unmarshal(result.Payload, &sent) == nil && result.RuntimeID == state.Process.RuntimeID && sent.Send.Handle == state.Process.Terminal && sent.Send.Prompt.RequestID == turn.Request && sent.Send.Prompt.ProcessIncarnation == state.Process.Incarnation && !result.CallUncertain && result.ErrorCode == ""
+	if bound && sent.Send.Accepted != nil && !*sent.Send.Accepted && len(sent.Send.Prompt.Stages) == 0 {
+		turn.Rejected = true
+		receipt.Disposition = b.OperationRejected
+		receipt.Implementation, err = l.envelope(s, state)
+		l.closeStateFeed()
+		return receipt, errors.Join(err, errors.New("original native input explicitly rejected; no input was accepted"))
+	}
+	if !bound || sent.Send.Accepted == nil || !*sent.Send.Accepted {
 		l.closeStateFeed()
 		return receipt, errors.Join(callErr, errors.New("original terminal input outcome is unknown; do not resend"))
 	}
@@ -590,6 +639,12 @@ func (l *Lifecycle) Reconcile(ctx context.Context, r b.LifecycleRequest) (b.Life
 		receipt, err := l.prepareInput(ctx, r)
 		return receipt, nil, err
 	case b.LifecycleStartTurn, b.LifecycleSubmitInput:
+		state, stateErr := l.state(r.Snapshot)
+		if stateErr == nil {
+			if turn := turnFor(&state, command(r.Snapshot)); turn != nil && turn.Rejected {
+				return b.LifecycleReceipt{Operation: r.Operation, Disposition: b.OperationRejected, Implementation: r.Snapshot.Implementation, Diagnostic: "Original native input was rejected; no input was resent"}, nil, nil
+			}
+		}
 		receipt, _, err := l.observeOnce(ctx, r.Snapshot)
 		receipt.Operation = r.Operation
 		if receipt.TurnEvidence == nil {

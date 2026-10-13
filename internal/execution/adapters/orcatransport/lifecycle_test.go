@@ -27,6 +27,13 @@ type fakeHost struct {
 	commandMode, launched         bool
 	delayLaunchIdentity           bool
 	collapsedEcho                 bool
+	waitFailures                  int
+	waitBlocked                   string
+	rejectInput                   bool
+	rejectWrongRequest            bool
+	rejectUnavailable             bool
+	waitCalls                     int
+	waitBudgets                   []time.Duration
 }
 
 func (f *fakeHost) StartManaged(*exec.Cmd) (b.StopHandle, error) {
@@ -69,7 +76,13 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 	case "terminal list":
 		result = map[string]any{"terminals": []any{terminal}}
 	case "terminal wait":
-		result = map[string]any{"wait": map[string]any{"satisfied": !f.busy}}
+		f.waitCalls++
+		f.waitBudgets = append(f.waitBudgets, c.Timeout)
+		if f.waitFailures > 0 {
+			f.waitFailures--
+			return json.Marshal(map[string]any{"ok": false, "error": map[string]any{"code": "timeout", "message": "timeout"}, "_meta": map[string]any{"runtimeId": "runtime"}})
+		}
+		result = map[string]any{"wait": map[string]any{"satisfied": !f.busy && f.waitBlocked == "", "blockedReason": f.waitBlocked}}
 	case "terminal read":
 		if f.screen || strings.Contains(strings.Join(c.Args, " "), "--screen") {
 			result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "screen", "tail": f.lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0", "truncated": true, "limited": f.clipped, "draft": f.draft}}
@@ -84,6 +97,17 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 		}
 		result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "stream", "tail": f.lines[cursor:], "oldestCursor": "0", "nextCursor": strconv.Itoa(len(f.lines)), "latestCursor": strconv.Itoa(len(f.lines)), "truncated": f.clipped}}
 	case "terminal send":
+		if f.rejectUnavailable {
+			return json.Marshal(map[string]any{"ok": false, "error": map[string]any{"code": "runtime_unavailable", "message": "runtime unavailable"}, "_meta": map[string]any{"runtimeId": "runtime"}})
+		}
+		if f.rejectInput {
+			id := arg("--retry-request")
+			if f.rejectWrongRequest {
+				id = "foreign"
+			}
+			result = map[string]any{"send": map[string]any{"handle": "terminal", "accepted": false, "prompt": map[string]any{"requestId": id, "processIncarnation": f.incarnation}}}
+			break
+		}
 		if f.unknown {
 			return nil, errors.New("lost response")
 		}

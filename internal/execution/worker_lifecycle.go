@@ -1390,6 +1390,9 @@ func (s *Service) applyAppServerSessionReceipt(run *reconstructiontypes.RunView,
 		}
 		execution.Status = "blocked"
 		execution.Error = ptr("Original app-server session preparation is unverified: " + diagnostic)
+		if status == string(executionbackend.OperationRejected) {
+			execution.Error = ptr("Original worker session was not prepared; no task input was sent: " + diagnostic)
+		}
 	}
 	if err := s.setOperationState(request.Operation.ID, status, receipt.State.SessionID, mustJSON(receipt), receipt.Diagnostic); err != nil {
 		return executionbackend.LifecycleRequest{}, false, err
@@ -1485,11 +1488,14 @@ func (s *Service) applyAppServerTurnReceipt(run *reconstructiontypes.RunView, re
 			_ = worker.detachLocalObservation(context.Background())
 		}
 		status, diagnostic := lifecycleOutcome(receipt, executeErr)
-		if executeErr != nil || status == string(executionbackend.OperationAccepted) {
+		if executeErr != nil && receipt.Disposition != executionbackend.OperationRejected || status == string(executionbackend.OperationAccepted) {
 			status = "outcome_unknown"
 		}
 		execution.Status = "blocked"
 		execution.Error = ptr("Original app-server turn start is unverified: " + diagnostic)
+		if status == string(executionbackend.OperationRejected) {
+			execution.Error = ptr("Original worker input was not submitted: " + diagnostic)
+		}
 		if err := s.setOperationState(request.Operation.ID, status, receipt.State.TurnID, mustJSON(receipt), diagnostic); err != nil {
 			return err
 		}
