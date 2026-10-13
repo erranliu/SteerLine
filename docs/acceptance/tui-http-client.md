@@ -1,6 +1,6 @@
 # 任务 #91 验收：TUI 经 HTTP 接入 Go 后端
 
-唯一归属 #91；[Spec](../spec/tui-http-client.spec.md)、[Plan](../spec/tui-http-client.plan.md)。2026-10-13 当前源码已接线，独立复审修复及最终自动复验通过；用户委托的 Windows ConPTY 真终端和 SteerlineTest live 操作已验证。[PR #299](https://github.com/erranliu/SteerLine/pull/299)待本次合并核验；TH-M1 原生查看窗口渲染及人工体验判断仍未验证。汇总归[execution-map](../roadmap/execution-map.md)，不覆盖其他任务历史。
+唯一归属 #91；[Spec](../spec/tui-http-client.spec.md)、[Plan](../spec/tui-http-client.plan.md)。2026-10-13 独立复审修复及最终自动复验通过，[PR #299](https://github.com/erranliu/SteerLine/pull/299)已真实合并，#91 实现完成。用户委托的 Windows ConPTY 真终端和 SteerlineTest live 操作已验证；TH-M1 原生查看窗口渲染及人工体验判断仍未验证。汇总归[execution-map](../roadmap/execution-map.md)，不覆盖其他任务历史。
 
 | ID | 方法/入口 | 最小行为和通过条件 | 当前状态 |
 | --- | --- | --- | --- |
@@ -139,4 +139,6 @@ simulate 的明确采集 gap 与 live 的原生 final 分开计数。已覆盖�
 
 最终新包 `C:\SteerlineDebug\dev-20261013-184448-24cdd7a1` 冻结 simulate；exe SHA-256 `39217a61e5b3469c66bbcb5aeccf277da5fdf8fd929cb9534f4f1d1e91e922a5`。原 run/start `412ff1127729f5b3e3029c7c2db97e38`；Execution `2b7f2a407db5c2da17d9cadfb5682502`，Attempt `6b5279e03ef4902f700ff30412efd56e`；实例 `7888cdacb4c0b6bc5dc264f25eae2e64`，stop `baf431aefcf28fc05fccef569882eebe`。原 applied、原进程退出/两锁释放齐备，Job 无剩余后代。本轮四个调试包均无剩余本次进程（cleanup-final.json），包和失败证据保留。simulate 仍为 final 来源 gap，不替代前述 live 样本或人工体验。
 
-独立复审及自动验证已通过，PR 实际合并事实待本次登记；TH-M1 剩余项继续后置，不宣称全量验收或远程部署通过。
+GitHub 核验 #299 为 MERGED，`mergedAt=2026-10-13T10:55:58Z`；head `5fa28575b5bb23bb3c2fce47e56af0607e1b8ae6`（最终代码加结果文档），实际 merge commit `56552550641dc787c794bc6e486c94d41b90b0ad`。该提交两个父级分别为已核对的 main `0b7652acafe9d0a860c174b7d2f6f40d73261781` 和本 PR head；已 fetch 并核验进入 origin/main。合并使用 `--match-head-commit`，无强制推送或 admin 绕过；最终 head 的平台 CI 诊断返回零 checks/statuses，不冒充平台 CI 通过。本地验证以表内记录为准。
+
+独立复审、必要自动验证和真实合并核验均已完成，roadmap 记实现完成并移除草稿任务行。TH-M1 剩余项继续后置，不宣称全量验收或远程部署通过。合并后只同步结果文档，静态导航/Task ID/差异格式通过，不以文档同步替代产品重测。

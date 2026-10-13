@@ -1,6 +1,6 @@
 # 当前阶段推进边界：TUI 经 HTTP 接入 Go 后端
 
-2026-10-13 用户确认旧二阶段任务清理，当前 roadmap 只交付一个成果：保留 TUI，业务查询/命令统一经 HTTP 到 Go 后端。选定[主草稿](roadmap.md)，唯一任务 #91 的[Spec](../../spec/tui-http-client.spec.md)、[Plan](../../spec/tui-http-client.plan.md)与[验收](../../acceptance/tui-http-client.md)固定范围，状态归[execution-map](../execution-map.md)。
+2026-10-13 用户确认的唯一成果已由 #91 经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 实现、独立复审修复、自动复验及合并核验交付：保留 TUI，业务查询/命令统一经 HTTP 到 Go 后端。[主草稿](roadmap.md)已移除完成任务行，暂无待执行任务；[Spec](../../spec/tui-http-client.spec.md)、[Plan](../../spec/tui-http-client.plan.md)与[验收](../../acceptance/tui-http-client.md)保留范围/证据，状态归[execution-map](../execution-map.md)。
 
 Go Task/Execution/原命令与 SQLite 保持权威，HTTP 适配产品契约。TUI 保留键位/布局，补缺口后切换消费；服务端内部产品适配器保留。删除 #44 工程/专属配置由 #91 实施，原历史与未验不改称通过。
 

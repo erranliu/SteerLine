@@ -37,7 +37,7 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 
 ## 当前任务专属计划
 
-当前唯一工程任务 #91 的[验收](tui-http-client.md)与[Plan](../spec/tui-http-client.plan.md)映射 TH-A1–A6/TH-M1；自动项通过，独立 SteerlineTest live/真终端操作已验，原生查看窗口渲染和桌面人工体验仍待验，PR 待独立复审/合入。#45 的[历史结果/限制](phase2-local-api.md)、一期/平台未闭合项按 execution-map 保留。
+本轮 #91 已独立复审修复、最小自动复验并经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 真实合并，实现完成；[验收](tui-http-client.md)与[Plan](../spec/tui-http-client.plan.md)映射 TH-A1–A6/TH-M1。自动项通过，独立 SteerlineTest live/真终端操作已验，原生查看窗口渲染和桌面人工体验仍待验。#45 的[历史结果/限制](phase2-local-api.md)、一期/平台未闭合项按 execution-map 保留。
 
 旧二阶段/WinUI/延期任务验收退出当前队列，见[归档说明](../archive/roadmap/README.md)。#44 实现已由 #91 删除，原人工项退出要求不算通过；旧候选编号不复用，也不依据归档自动恢复。
 

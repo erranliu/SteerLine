@@ -2,15 +2,17 @@
 
 本表是用户确认的开发任务与依赖权威。2026-10-13 用户确认当前规划收敛到 `TUI → HTTP API → Go 后端`；随后用户直接授权当前聊天实施 #91，不启动 roadmap-runner 或新执行聊天。流程见[RoadmapGuide](RoadmapGuide.md)。
 
-## 当前任务
+当前已确认的本机链路已交付，暂无待执行任务。
+
+## 已交付任务
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 源码/自动验证已交付；待独立复审/合入 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6 通过，真终端/live 操作已验；TH-M1 窗口渲染/人工体验待验；[草稿 PR #299](https://github.com/erranliu/SteerLine/pull/299)，未合并 |
+| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 实现完成；独立复审/自动验证/真实合并已核验 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6 通过，真终端/live 操作已验；TH-M1 窗口渲染/人工体验待验；[PR #299](https://github.com/erranliu/SteerLine/pull/299) 已合并 |
 
 ## 推进边界
 
-当前只有 #91：补齐实际 TUI 的 HTTP 能力、切换客户端接线、删除 #44 WinUI 实现/专属配置、验证本机完整链路。Go 保持业务权威，TUI 界面/执行功能保留；不直接访问业务库或宿主业务文件。
+本轮 #91 已补齐实际 TUI 的 HTTP 能力、切换客户端接线、删除 #44 WinUI 实现/专属配置并验证本机链路。Go 保持业务权威，TUI 界面/执行功能保留；不直接访问业务库或宿主业务文件。
 
 旧二阶段 #43/#46–#52 及延期 #40/#41 退出规划，编号不复用；旧三节点和页面不作为前置。WebUI、SSE、主 Agent 和远程部署不在本轮交付，原型仅参考；后续需要时重新规划，不从归档派发。
 
@@ -18,7 +20,7 @@
 
 ## 待人工验收
 
-最终自动验证固定 commit `708dab2cdad45ee55ee030aa6248a5270e822c5f`（clean）：新独立 simulate 包的真实 TUI/HTTP/Go 场景及 L1（12 组/26 包）通过，真实终端停服的原 HTTP applied、进程退出、两个锁释放齐备。用户委托验收另在 clean 12dbad80 的 SteerlineTest live 包验证原生 final、中文多行反馈、同会话六轮/复用专属 PR；发现的展示锁/离线提示与停服 revision 丢失已修复复验。各版本、simulate 缺口、live 有限样本和剩余原生窗口/人工体验明细归专属验收。独立复审和真实合并未完成，暂不按 roadmap 规则记实现完成，不移除草稿条目。
+最终自动验证固定 clean commit `24cdd7a116912ef43d4aa845b8a5830c552a21a3`：四个消费/API/文件系统包、边界、L1（12 组/26 包）及新独立 simulate TUI/HTTP/Go 场景通过，原 applied/精确退出/两锁释放及 Job 清理齐备。独立复审八项发现全部修复，最后修复复核无新增问题；Windows discovery 竞争经稳定复现及新包复验修正。#299 实际 merge `56552550641dc787c794bc6e486c94d41b90b0ad` 已进入 origin/main，两个父级与已核对的 base/head 一致；实现完成并移除主草稿任务行。12dbad80 的独立 live/ConPTY 有限样本、各版本/失败、simulate 缺口及剩余人工判断继续分别登记在专属验收，不将合并记为全量验收通过。
 
 | 范围 | 状态 / 安排 | 明细 |
 | --- | --- | --- |
