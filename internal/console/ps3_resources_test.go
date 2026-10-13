@@ -15,6 +15,7 @@ func TestPS3RetainedResourceDetailUsesSavedNativeLocation(t *testing.T) {
 	snapshot := readySnapshot(ref, now)
 	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", TaskStatus: "discarded", ExecutionStatus: "active", WorkflowStatus: "blocked", Backend: "orca-remote", Protocol: "remote-v1", Target: api.TargetSummary{ID: "original-target", WorktreeID: "original-native-tree", Branch: "original-branch"}, PR: api.PRSummary{State: "unknown"}, PRHistory: []string{"https://example.invalid/pull/3"}}
 	snapshot.Tasks = nil
+	snapshot.SelectedNative = nil
 	snapshot.Observation.Page.Runs = []*api.CandidateSummary{run}
 	snapshot.NativeTasks = &api.TaskPage{Tasks: []api.TaskDetail{{TaskSummary: api.TaskSummary{TaskID: "3", Status: "discarded"}, StopPending: []string{"execution_stop_manual:original"}}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)

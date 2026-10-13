@@ -147,6 +147,10 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, &protocolError{status: http.StatusBadRequest, code: "request_invalid", reason: err.Error()}, envelope.RequestID)
 		return
 	}
+	if envelope.Action == "open_native_session" {
+		s.openNative(w, r, envelope)
+		return
+	}
 	s.commandMu.Lock()
 	defer s.commandMu.Unlock()
 	canonical, err := json.Marshal(envelope)
@@ -508,12 +512,15 @@ func (s *Server) dispatch(ctx context.Context, envelope CommandEnvelope, record 
 	}
 	response.ControlRequest = &req
 	response.Status = "submitted"
+	if envelope.Action == "stop_service" {
+		s.stopReceipt(ctx, &response)
+	}
 	return response, nil
 }
 
 func (s *Server) controlInput(ctx context.Context, envelope CommandEnvelope, requestedBy string) (api.ControlInput, error) {
 	control := api.ControlInput{RequestID: envelope.RequestID, RequestedBy: requestedBy, InstanceID: envelope.InstanceID}
-	if envelope.Action != "stop_service" {
+	if envelope.Action != "stop_service" || envelope.ExpectedControlRevision != 0 {
 		revision := envelope.ExpectedControlRevision
 		control.ExpectedRevision = &revision
 	}
@@ -609,6 +616,9 @@ func (s *Server) readCommand(w http.ResponseWriter, r *http.Request, requestID s
 }
 
 func (s *Server) lookupAuthoritative(ctx context.Context, requestID string, original *CommandEnvelope, record *requestRecord) (CommandResponse, error) {
+	if original != nil && original.Action == "open_native_session" && record != nil && record.Response != nil {
+		return record.response(), nil
+	}
 	response := CommandResponse{RequestID: requestID, ProjectID: ProjectID(s.options.ProjectIdentity), InstanceID: s.options.InstanceID,
 		Original: original, SampledAt: time.Now().UTC()}
 	controlChecked := false

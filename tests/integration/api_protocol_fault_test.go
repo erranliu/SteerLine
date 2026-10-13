@@ -14,6 +14,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
+	"github.com/erranliu/SteerLine/internal/product/httpclient"
 )
 
 func TestAPIControlRequestFaultRecovery(t *testing.T) {
@@ -273,7 +274,7 @@ func TestAPIControlRequestFaultRecovery(t *testing.T) {
 	}
 }
 
-func reconnectIntegrationAPI(t *testing.T, ctx context.Context, fixture integrationFixture, service *runningIntegrationService, endpoint *httpapi.Server, client *httpapi.Client, product *productclient.Client) (*httpapi.Server, *httpapi.Client) {
+func reconnectIntegrationAPI(t *testing.T, ctx context.Context, fixture integrationFixture, service *runningIntegrationService, endpoint *httpapi.Server, client *httpclient.Client, product *productclient.Client) (*httpapi.Server, *httpclient.Client) {
 	t.Helper()
 	if err := endpoint.Close(context.Background()); err != nil {
 		t.Fatal(err)
@@ -337,6 +338,6 @@ func waitIntegrationControlReceipt(t *testing.T, ctx context.Context, product *p
 }
 
 func integrationClientErrorIs(err error, code string) bool {
-	var clientErr *httpapi.ClientError
+	var clientErr *httpclient.ClientError
 	return errors.As(err, &clientErr) && clientErr.Code == code
 }

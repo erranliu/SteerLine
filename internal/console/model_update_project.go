@@ -70,6 +70,9 @@ func (m Model) updateProject(msg projectMsg) (tea.Model, tea.Cmd) {
 		msg.snapshot.SelectedNative = state.snapshot.SelectedNative
 	}
 	state.snapshot, state.snapshotLoaded = preserveLastGood(state.snapshot, msg.snapshot), true
+	if state.client != nil {
+		state.ref.Presentation = state.client.Project().Presentation
+	}
 	state.lastRefresh = m.clock.Now()
 	rows := m.rows(index)
 	if state.selectedKey == "" && !state.selectionHold {

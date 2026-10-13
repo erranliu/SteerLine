@@ -67,7 +67,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		case !state.snapshotLoaded:
 			out = append(out, "正在读取项目快照…")
 		case snapshot.Connection.State == api.ConnectionOffline || snapshot.Connection.State == api.ConnectionNoRecord:
-			out = append(out, "服务离线；已有运行和日志仍可查看。")
+			out = append(out, "HTTP 服务离线；仅保留本窗口最后观察与草稿，不读取本地业务历史。")
 			out = append(out, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)))
 			out = append(out, "配置："+safeTerminalText(state.ref.ConfigPath))
 		case snapshot.TaskError != "":

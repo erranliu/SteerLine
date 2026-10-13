@@ -12,12 +12,12 @@
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |
 | [执行控制台](execution-console.md) | 当前 TUI 的任务/候选布局、原地反馈、能力展示与操作速查 |
 | [Worker 步骤流程 Spec](../spec/worker-staged-flow.spec.md) | #84 已纳入一期收尾执行规划：现有 worker、简单步骤序列和 adapter；状态判断、三个短提示词及源码改造范围，implement 两轮/publish 单轮；尚未实现 |
-| [规划与原生客户端架构](planning-architecture.md) | 拟议的 Go 服务、WinUI 客户端及 Codex 规划会话边界 |
-| [本机客户端协议 v1](local-client-protocol.md) | 当前回环 HTTP 发现/认证、查询路由、action/DTO 和原请求恢复契约 |
-| [规划与原生界面交互](planning-ui.md) | 拟议的规划对话、草稿审阅、DAG、执行与待处理页面 |
+| [客户端与 Go 服务边界](planning-architecture.md) | 当前 #91 的 TUI/HTTP 源码边界和未来范围 |
+| [本机客户端协议 v1](local-client-protocol.md) | #45 回环协议与 #91 TUI 所需接口 |
+| [规划界面原型参考](planning-ui.md) | 旧页面方向仅参考，不产生当前任务/前置 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |
 
-二期分2.1执行/DAG UI、2.2草稿/artifact/人工事项、2.3主agent三个[验收节点](../acceptance/phase2.md)。2.2/2.3流程及原型仍迭代，近期只固定#83/#45/#44。规划与 UI 的新增方向是自由草稿、独立审核和受控正式准入，见[目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)。现有 Publication/ID 预留细节仍是待对齐的基础方案，不宣称已实现审核协议。选定实施前与独立 Spec/Plan 一并固定；推进顺序见[二期交付边界](../roadmap/drafts/phase2-delivery.md)。
+2026-10-13 用户确认当前规划仅到[任务 #91](../spec/tui-http-client.spec.md)。旧三节点/候选已清理，编号不复用；原型与退役规格不作为前置或派发入口。当前 #45 协议已交付，TUI 已改接 HTTP，#44 工程已删除，验收状态见专属记录，见[推进边界](../roadmap/drafts/phase2-delivery.md)。
 
 整体职责见[架构总览](../architecture.md)，代码与接口归属见[源码索引](../architecture/current-code-architecture.md)，执行要求见[Spec 索引](../spec/README.md)，测试入口见[测试指南](../testing.md)。历史配置与试验只在[归档](../archive/README.md)或[验证证据](../validation)中承接。
 

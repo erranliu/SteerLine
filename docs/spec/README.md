@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段包含本地 Codex、本机 Orca 与远端路径交付。#83/#84/#45/#44已按[正式执行规划](../roadmap/execution-map.md)实现并合入，历史规格和交付记录保留；一期签收及 #84/#44 的人工项仍待验。后续候选材料见[草稿](../roadmap/drafts/roadmap.md)，不重新派发已交付任务。日常派发核对用户确认范围、状态、依赖和固定文档版本，草稿或编号不作为执行来源。
+本目录保留独立 Spec/Plan、未闭合的定向验收和共同约束。当前唯一规划任务为 #91，范围见[正式执行清单](../roadmap/execution-map.md)与[草稿](../roadmap/drafts/roadmap.md)。#83/#84/#45/#44 的历史交付事实保留；一期及 #84 原人工项继续待验，#44 后续人工要求已撤销，原未验不标通过。旧二阶段及延期候选退出规划，编号不复用。派发仍须核对用户授权、任务状态和固定文档版本。
 
 Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在纳入执行或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不作为执行任务；少量人工项按允许范围后置。
 
@@ -39,50 +39,15 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 [草稿](../roadmap/drafts/worker-stop-recovery.md) · [Spec](worker-stop-recovery.spec.md) · [Plan](worker-stop-recovery.plan.md) · [专属验收](../acceptance/worker-stop-recovery.md)
 
-## 已确认 Codex 执行规划
+## 当前已确认规划
 
-#83/#84/#45/#44 均已实现并合入，下面只保留已交付任务的规格及原依赖导航，当前没有由本表派发的剩余任务。实际待验与当前能力限制见 execution-map 和专属 acceptance，不由历史 Spec 推定最新构建已通过。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
+当前只有 #91；2026-10-13 用户确认规划并直接授权实现，源码与自动验证已交付，独立 SteerlineTest live/真终端操作已验，PR 待独立复审/合入，剩余人工体验见[验收](../acceptance/tui-http-client.md)。旧二阶段候选/三节点与延期版本任务退出活动入口，编号保留，材料见[归档](../archive/roadmap/README.md)。#44 实现已由 #91 删除，#45 保留已交付基线。
 
-| 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
-| --- | --- | --- | --- | --- |
-| 83 | 本机安装与调试路径隔离 | 无 | [Spec](local-runtime-isolation.spec.md) | [Plan](local-runtime-isolation.plan.md) |
-| 84 | Worker 分步执行与结构化状态推进 | 无；#83 已进入主干 | [Spec](worker-staged-flow.spec.md) | [Plan](worker-staged-flow.plan.md) |
-| 45 | 本机客户端协议与历史查询 | 无 | [Spec](phase2-local-api.spec.md) | [Plan](phase2-local-api.plan.md) |
-| 44 | WinUI 基座与原生输入 | #45 | [Spec](phase2-winui-foundation.spec.md) | [Plan](phase2-winui-foundation.plan.md) |
+| 任务 ID | 任务名称 | 前置 | Spec | Plan | 验收 |
+| --- | --- | --- | --- | --- | --- |
+| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用 #45 与现有 TUI | [Spec](tui-http-client.spec.md) | [Plan](tui-http-client.plan.md) | [记录](../acceptance/tui-http-client.md) |
 
-#84 的流程正文集中于独立 Spec，配套 Plan 与[专属验收](../acceptance/worker-staged-flow.md)，不维护重复设计草稿。开发流程为 implement 执行/报告两轮、publish 单轮，复用现有 worker 和 adapter。
-
-## 下一批2.1页面候选
-
-纳入执行前确认2.1最小原型，补齐精确页面测试命令。#49移除对#48的草稿依赖，只交付DAG/任务浏览；不宣称外部边已更改。
-
-| 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
-| --- | --- | --- | --- | --- |
-| 49 | DAG 与任务原生浏览 | #44、#45；2.1原型确认 | [Spec](phase2-roadmap-ui.spec.md) | [Plan](phase2-roadmap-ui.plan.md) |
-| 50 | 执行与待处理原生界面 | #44、#45；2.1原型确认 | [Spec](phase2-execution-ui.spec.md) | [Plan](phase2-execution-ui.plan.md) |
-
-## 2.2/2.3待重定参考
-
-下列旧正文不可直接准入；流程/模型/原型成熟后重新固定范围、依赖、实现测试计划和专属验收。新人工事项/artifact能力先推导，不强行套入旧发布任务。
-
-| 任务 ID | 任务名称 | 处理 | Spec | Plan |
-| --- | --- | --- | --- | --- |
-| 46 | 规划提案与受控草稿 | 2.2自由草稿/快照待重定 | [Spec](phase2-planning-drafts.spec.md) | [Plan](phase2-planning-drafts.plan.md) |
-| 48 | 正式文档发布与任务创建 | 2.2/2.3审核/授权准入待重定 | [Spec](phase2-document-publish.spec.md) | [Plan](phase2-document-publish.plan.md) |
-| 52 | 文档审阅与确认原生界面 | 旧发布页面待重定 | [Spec](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |
-| 47 | Codex 规划会话服务 | 2.3接入及必要能力验证待重定 | [Spec](phase2-planning-sessions.spec.md) | [Plan](phase2-planning-sessions.plan.md) |
-| 51 | 规划对话原生界面 | 2.3会话/草稿交互待重定 | [Spec](phase2-conversation-ui.spec.md) | [Plan](phase2-conversation-ui.plan.md) |
-
-#43“Codex规划主agent能力验证”保留身份及[旧Spec](phase2-agent-capabilities.spec.md)/[旧Plan](phase2-agent-capabilities.plan.md)/[旧验收](../acceptance/archive/superseded/phase2-agent-capabilities.md)，不再安排独立完整探测；必要门槛纳入#47产品接入。不是对外部Task的取消操作。
-
-## 延后版本草案
-
-下列任务未交付，但不作为当前执行入口或一期/二期前置；重新启用前须按实际维护需求、当前格式和 #83 已具备能力重定 Spec/Plan 与测试计划。保留身份不代表中心已暂停或丢弃对应 Task。
-
-| 任务 ID | 任务名称 | 原草案硬前置 | Spec | Plan |
-| --- | --- | --- | --- | --- |
-| 40 | 固定版本与双入口 | 无 | [Spec](versioned-runtime.spec.md) | [Plan](versioned-runtime.plan.md) |
-| 41 | dev 隔离与 stable 提升 | `#40`、`#36` | [Spec](runtime-isolation-promotion.spec.md) | [Plan](runtime-isolation-promotion.plan.md) |
+#45 原[Spec](phase2-local-api.spec.md)/[Plan](phase2-local-api.plan.md)保留历史基线，扩展按 #91；#83/#84/#87 已交付与当前未验按[execution-map](../roadmap/execution-map.md)核对，不重新派发。
 
 ## 尚未闭合的定向验收
 
@@ -117,7 +82,7 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 - [执行架构](execution-architecture.spec.md)：当前持续 worker、单写者、身份、反馈与真实交付边界。
 - [原生任务](native-task-constraints.md)：固定契约、DAG、唯一权威和受控命令。
 - [第一阶段](phase1-delivery-constraints.md)：本机候选、安装/调试隔离与单安装版组合验收交接。
-- [第二阶段](phase2-constraints.md)：受控规划、文档发布、原生 UI 和公共传输。
+- [第二阶段](phase2-constraints.md)：当前 TUI/HTTP/Go 边界；仅 #91 在规划中。
 
 当前实现与模块边界见[代码架构](../architecture/current-code-architecture.md)，测试选择见[测试指南](../testing.md)。已完成的执行隔离、主包解耦与三线迁移规格及其阶段约束一并归档，不再列作活动执行入口。
 

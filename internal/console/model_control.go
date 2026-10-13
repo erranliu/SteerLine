@@ -22,6 +22,10 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 		m.status = "不能开始：" + reason
 		return m, nil
 	}
+	if row.native == nil || row.native.Version == 0 {
+		m.status = "正在读取原任务版本；请加载后再选择执行方案"
+		return m, m.readProject(m.selected)
+	}
 	runtimeState := state.snapshot.Connection.Snapshot.Page
 	if len(state.ref.Presentation.Profiles) == 0 {
 		m.status = "没有可用的执行方案"
@@ -146,6 +150,11 @@ func (m Model) createActionWithProfile(action, taskID string, profile *api.Execu
 		}
 	}
 	if action == "start_task" {
+		row := m.selectedRow(m.selected)
+		if row == nil || row.taskID != taskID || row.native == nil || row.native.Version == 0 {
+			m.status = "原任务版本尚未加载；未创建开始请求"
+			return m, m.readProject(m.selected)
+		}
 		if reason := candidateActionReason(*state, m.clock.Now()); reason != "" {
 			m.status = "候选已不可操作：" + reason
 			return m, nil
@@ -175,6 +184,11 @@ func (m Model) createActionWithProfile(action, taskID string, profile *api.Execu
 	instance := runtimeState.Service.InstanceID
 	revision := runtimeState.Control.Revision
 	newAction := &actionState{RequestID: requestID, Action: action, TaskID: taskID, Status: "submitting", Message: "准备提交", TargetInstance: instance, UpdatedAt: m.clock.Now()}
+	if action == "start_task" {
+		if row := m.selectedRow(m.selected); row != nil && row.native != nil {
+			newAction.Payload.ExpectedTaskVersion = row.native.Version
+		}
+	}
 	if profile != nil {
 		newAction.ExecutionProfileID, newAction.ExecutionProfileDigest = profile.ID, profile.Digest
 	}

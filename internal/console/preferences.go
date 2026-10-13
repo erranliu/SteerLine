@@ -285,7 +285,7 @@ func validSavedAction(value string) bool {
 }
 func validSavedActionStatus(value string) bool {
 	switch value {
-	case "submitted", "pending", "in_flight", "applying", "applied", "accepted", "rejected", "failed", "indeterminate", "submitting":
+	case "submitted", "pending", "pending_verification", "in_flight", "applying", "applied", "accepted", "rejected", "failed", "indeterminate", "submitting":
 		return true
 	}
 	return false
