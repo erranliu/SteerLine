@@ -4,48 +4,39 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"time"
+	"fmt"
 
+	native "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 // A bare workspace can materialize its sole terminal asynchronously. Selection
 // is bounded to this exact new workspace; no terminal is created or replaced.
-func (l *Lifecycle) soleWorkspaceTerminal(ctx context.Context, worktree, runtime string) (string, error) {
-	wait, _ := time.ParseDuration(l.profile.WaitTimeout)
-	deadline := time.Now().Add(wait)
+func (l *Lifecycle) soleWorkspaceTerminal(ctx context.Context, worktree, runtime string) (native.Terminal, error) {
 	for {
-		result, err := l.client.MetaCall(ctx, "terminal", "list", "--worktree", "id:"+worktree, "--json")
+		result, err := l.workspaceTerminalQuery(ctx, "terminal", "list", "--worktree", "id:"+worktree, "--json")
 		if err != nil {
-			return "", err
+			return native.Terminal{}, err
 		}
 		var listing struct {
-			Terminals []struct {
-				Handle, WorktreeID string
-				Orphaned           bool
-			}
+			Terminals []native.Terminal
 			Truncated bool
 		}
 		if json.Unmarshal(result.Payload, &listing) != nil || result.RuntimeID != runtime || listing.Truncated {
-			return "", errors.New("original workspace terminal inventory is unverified")
+			return native.Terminal{}, errors.New("original workspace terminal inventory is unverified")
 		}
 		if len(listing.Terminals) > 1 {
-			return "", errors.New("workspace has more than one terminal; no startup command was sent")
+			return native.Terminal{}, errors.New("workspace has more than one terminal; no startup command was sent")
 		}
 		if len(listing.Terminals) == 1 {
 			term := listing.Terminals[0]
-			if term.Handle == "" || term.WorktreeID != worktree || term.Orphaned {
-				return "", errors.New("original workspace terminal differs")
+			if term.Handle == "" || term.IncarnationID == "" || term.WorktreeID != worktree || term.Orphaned {
+				return native.Terminal{}, errors.New("original workspace terminal differs")
 			}
-			return term.Handle, nil
+			return term, nil
 		}
-		if time.Now().After(deadline) {
-			return "", errors.New("original workspace terminal is not available; none was created")
-		}
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-time.After(200 * time.Millisecond):
+		if err := waitWorkspaceTerminal(ctx); err != nil {
+			return native.Terminal{}, fmt.Errorf("original workspace terminal is not available; none was created: %w", err)
 		}
 	}
 }

@@ -103,6 +103,32 @@ func OrcaNativeBusiness(e executionmodel.ExecutionRecord) error {
 	}
 	return nil
 }
+
+func OrcaOriginalWorkingObserved(e executionmodel.ExecutionRecord) bool {
+	turn, err := OrcaOriginalTurn(e)
+	return err == nil && turn.Accepted && turn.Started && turn.Native.WorkingAt > 0 && turn.Native.RootWorkingAt > 0 && turn.Native.Provider != "" && turn.Native.Authority != ""
+}
+
+func OrcaOriginalTurn(e executionmodel.ExecutionRecord) (transport.Turn, error) {
+	if e.Protocol != string(executionbackend.ProtocolOrcaTerminalV3) || e.Process == nil || e.CurrentCommandID == "" {
+		return transport.Turn{}, errors.New("missing original Orca execution binding")
+	}
+	for _, data := range e.ImplementationData {
+		if data.ImplementationKey != transport.StateKey || data.CodecVersion != transport.StateVersion || data.ValidateResourceIdentity(e.ProjectIdentity, e.ExecutionID, e.CurrentAttemptID, e.Generation, e.ConfigurationDigest) != nil {
+			continue
+		}
+		var state transport.State
+		if executionbackend.DecodeStrictJSON(data.Payload, &state, "trailing native fixture state") != nil || state.Process != *e.Process {
+			return transport.Turn{}, errors.New("invalid original Orca resource state")
+		}
+		for _, turn := range state.Turns {
+			if turn.Command == e.CurrentCommandID {
+				return turn, nil
+			}
+		}
+	}
+	return transport.Turn{}, errors.New("missing original Orca command")
+}
 func OrcaStagedContinuity(domain reconstruction.Snapshot) error {
 	if len(domain.Executions) != 1 || len(domain.WorkflowRuns) != 1 {
 		return errors.New("missing original workflow")
@@ -112,7 +138,7 @@ func OrcaStagedContinuity(domain reconstruction.Snapshot) error {
 		return errors.New("missing three settled inputs")
 	}
 	for _, result := range w.StageResults {
-		if !result.Succeeded || result.SessionID != e.SessionID || result.FinalSource != "steerline.worker.terminal-result.v1" || result.FinalNativeTurnID != "" {
+		if !result.Succeeded || result.SessionID != e.SessionID || result.FinalSource != transport.NativeReplySource || result.FinalNativeTurnID != "" {
 			return errors.New("invalid terminal return provenance")
 		}
 	}

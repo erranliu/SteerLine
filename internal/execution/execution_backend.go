@@ -60,7 +60,7 @@ func (s *Service) inspectRunProcess(run *reconstructiontypes.RunView) string {
 	if run == nil || run.Process == nil {
 		return "execution identity unavailable"
 	}
-	lifecycle, fixed, err := s.lifecycleForRun(run)
+	lifecycle, fixed, err := s.lifecycleForInspection(run)
 	if err != nil {
 		return "fixed execution identity unavailable: " + err.Error()
 	}
@@ -74,6 +74,10 @@ func (s *Service) inspectRunProcess(run *reconstructiontypes.RunView) string {
 	ctx, cancel := context.WithTimeout(context.Background(), positiveDuration(fixed.config.CommandTimeout, 30*time.Second))
 	defer cancel()
 	evidence, err := lifecycle.VerifyManualRecovery(ctx, snapshot)
+	return workerProcessCheck(evidence, err)
+}
+
+func workerProcessCheck(evidence executionbackend.LifecycleRecoveryEvidence, err error) string {
 	if err != nil {
 		return "execution identity unverifiable: " + err.Error()
 	}
@@ -82,6 +86,9 @@ func (s *Service) inspectRunProcess(run *reconstructiontypes.RunView) string {
 	}
 	if evidence.ManagedProcess && evidence.SessionAvailable {
 		return "matching process still exists"
+	}
+	if evidence.ResourceAvailable && evidence.SessionAvailable {
+		return "matching original resource still exists"
 	}
 	return "execution identity unverifiable"
 }

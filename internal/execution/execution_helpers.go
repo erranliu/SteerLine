@@ -48,7 +48,7 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *reconstruct
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
 		return executionmodel.WorkspaceEvidence{}, errors.New("worker execution has no recorded workspace")
 	}
-	port, fixed, err := s.lifecycleForRun(run)
+	port, fixed, err := s.lifecycleForInspection(run)
 	if err != nil {
 		return executionmodel.WorkspaceEvidence{}, err
 	}

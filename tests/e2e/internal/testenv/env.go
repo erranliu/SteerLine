@@ -112,7 +112,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		// and two staged workflows share this bound; each command stays bounded.
 		timeout = 10 * time.Minute
 	}
-	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.Contains(id, "orca-remote-codex") || strings.HasPrefix(id, "candidates.") {
+	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.Contains(id, "orca-remote-codex") || strings.HasSuffix(id, "-live") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
 	}
 	if strings.HasPrefix(id, "candidates.") {
@@ -497,7 +497,7 @@ func (p *Project) StartService() {
 		if err != nil {
 			return false, err
 		}
-		return snapshot.Runtime != nil && snapshot.Runtime.Service.Ready, nil
+		return snapshot.Runtime != nil && snapshot.Runtime.Service.Ready && snapshot.Runtime.Service.PID == p.Service.Cmd.Process.Pid && snapshot.Runtime.Service.ProcessIdentity != nil && snapshot.Runtime.Service.ProcessIdentity.PID == p.Service.Cmd.Process.Pid, nil
 	})
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -43,7 +44,38 @@ func InspectRecovery(ctx context.Context, c Config, dependencies RuntimeDependen
 		inspection.DecisionID, inspection.DecisionStatus = run.Decision.ID, run.Decision.Status
 	}
 	service := recoveryService(c, dependencies, *runtimeState)
-	inspection.ProcessCheck = service.inspectRunProcess(run)
+	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	port, fixed, probeErr := service.lifecycleForInspection(run)
+	if probeErr == nil {
+		snapshot, err := service.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+		if err != nil {
+			probeErr = err
+		} else {
+			evidence, err := port.VerifyManualRecovery(probeCtx, snapshot)
+			inspection.ProcessCheck = workerProcessCheck(evidence, err)
+			inspection.SessionCheck = "原会话未核实"
+			if evidence.SessionAvailable {
+				inspection.SessionCheck = "原会话可读取，空闲状态未核实"
+				if evidence.SessionIdle {
+					inspection.SessionCheck = "原会话可读取且空闲"
+				}
+			}
+			inspection.ContinuationCheck = "原会话、资源或旧写者资格尚未核实；" + evidence.Diagnostic
+			if service.hasUnknownWorkerOperation(run) || fixed.workflow.Status == "reconciling" {
+				inspection.ContinuationCheck = "原输入/结果或外部操作未核实；仅对账原请求"
+			}
+			if service.workerContinuationQualified(run, evidence) {
+				inspection.ContinuationCheck = "资源资格允许继续，须提交正式答案并由服务重验"
+			}
+			if err != nil {
+				inspection.ContinuationCheck = "原会话/资源核验失败：" + err.Error()
+			}
+		}
+	}
+	if probeErr != nil {
+		inspection.ProcessCheck = "fixed execution identity unavailable: " + probeErr.Error()
+	}
 	workspace, workspaceErr := service.readRunWorkspace(ctx, run)
 	if workspaceErr == nil {
 		inspection.Workspace = &workspace

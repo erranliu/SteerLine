@@ -65,17 +65,3 @@ func TestTerminalCloseRequiresExactRuntimeHandleAndPtyProof(t *testing.T) {
 		t.Fatal("native rejection lost", err)
 	}
 }
-
-func TestCaptureCursorUsesExplicitStreamBeforeFirstPrompt(t *testing.T) {
-	client := New(Config{Output: func(_ context.Context, _ time.Duration, args ...string) ([]byte, error) {
-		joined := strings.Join(args, " ")
-		if !strings.Contains(joined, "--cursor 0") {
-			t.Fatal("initial read can select the screen snapshot", joined)
-		}
-		return []byte(`{"ok":true,"result":{"terminal":{"handle":"original","source":"stream","oldestCursor":"0","nextCursor":"0","latestCursor":"0","tail":[]}},"_meta":{"runtimeId":"runtime"}}`), nil
-	}})
-	cursor, err := client.CaptureCursor(context.Background(), b.ProcessIdentity{Terminal: "original", RuntimeID: "runtime"})
-	if err != nil || cursor != "0" {
-		t.Fatal(cursor, err)
-	}
-}

@@ -4,13 +4,17 @@
 
 ## 当前入口
 
+Orca 本机输入与就绪：[专属验收](orca-local-input-readiness.md)，配对普通终端、等待预算、失败分类与一个本机真实交付。
+
 | 范围 | 状态 / 入口 |
 | --- | --- |
+| 工作流核验收敛 | [全部核验取舍与 101/105 修复](workflow-verification.md)，原始状态/正文取代屏幕核验；源码自动项与真机待验分开登记 |
 | 一期签收 | 待验；[一期活动](phase1.md) |
 | 当前 TUI/HTTP 交付 | [当前入口](phase2.md)：仅 #91，旧三节点退役 |
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[当前 Orca 单终端](orca-terminal-transport.md)；旧 Orca 活动输入/恢复记录保留历史，按当前路线重新核对适用性 |
 | Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
 | 控制台 Codex CLI 入口 | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
+| Codex / Orca 核心断连恢复 | [首轮能力与 L3 验收规划](worker-disconnect-recovery.md)，2026-10-12 审计收敛；六项功能加一项 worker 解耦验收，三组受控（独立入口）/两条真实链，原观察重接与 Codex 同 thread 恢复，工作树实现及本轮自动验收已完成，未部署 |
 | Codex 沙箱 Git 修复 | [真实 worker / SteerlineTest 无人值守验收](codex-sandbox-git.md)，普通开发，专属 base/head 验证 |
 | Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
 | Orca状态同步修复 | [延迟启动活动推进状态](orca-delayed-start-status-2026-10-09.md)，原 Dispatch 在完成前同步开始事实，源码定向验证通过 |
@@ -24,7 +28,7 @@
 | Orca 分步开发缺口 | [当前远端待补与历史来源](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮/supervised 场景退役，不计单终端交付覆盖 |
 | 旧 Orca 身份残留清理 | [专属记录](retired-orca-identity-cleanup.md)，当前字段/受控接线与文档校准，不增加原生验收通过项 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
-| Orca 原生状态切换（规划） | [专属验收](orca-native-state-transitions.md)，普通单终端状态门槛、一次补查询与旧回复拒绝；三项最小验证，尚未实施 |
+| Orca 原生状态切换 | [专属验收](orca-native-state-transitions.md)，状态门槛、一次补查询与旧回复拒绝已实施；真实范围及取消项如实登记，本机后续交付见[输入与就绪验收](orca-local-input-readiness.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
 | 测试维护 | [测试代码精简](test-code-simplification.md) |
 | 历史结果与旧方案 | [归档索引](archive/README.md) |

@@ -1,11 +1,28 @@
 package orca
 
 import (
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 )
+
+// Bootstrap identity fences local pairing without returning its authentication.
+func LocalRuntimeID() (string, error) {
+	dir, err := stateUserDataDir()
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "orca-runtime.json"))
+	var metadata struct {
+		RuntimeID string `json:"runtimeId"`
+	}
+	if err != nil || json.Unmarshal(data, &metadata) != nil || metadata.RuntimeID == "" {
+		return "", errors.New("local Orca runtime identity is unavailable")
+	}
+	return metadata.RuntimeID, nil
+}
 
 type StateRPCError struct {
 	Code    string

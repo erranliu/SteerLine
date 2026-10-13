@@ -217,7 +217,7 @@ func (b Backend) ManagedProcessState(fixed Binding) (managed, absent bool) {
 		return false, false
 	}
 	state := b.Process.Inspect(fixed.Process)
-	return true, state == "process absent"
+	return state == "matching process still exists" || state == "process absent", state == "process absent"
 }
 
 func (b Backend) ValidateReply(fixed Binding, generation, threadID, turnID, currentTurn, lastStopped string) error {

@@ -44,8 +44,17 @@ func stageResultInstruction(step string) string {
 }
 
 // Reject duplicate keys at every depth before decoding. encoding/json normally
-// accepts last-wins objects, which is unsuitable for a first-wins result.
-func uniqueJSON(dec *json.Decoder) error {
+// accepts last-wins objects and case-insensitive struct fields, which is
+// unsuitable for a first-wins result.
+type resultFields map[string]resultFields
+
+var reportFields = resultFields{
+	"outcome": nil, "summary": nil, "question": nil,
+	"outputs": {"pr_url": nil, "branch": nil},
+	"blocker": {"category": nil, "action": nil, "error": nil, "known": nil, "unknown": nil},
+}
+
+func uniqueJSON(dec *json.Decoder, fields resultFields) error {
 	token, err := dec.Token()
 	if err != nil {
 		return err
@@ -63,17 +72,23 @@ func uniqueJSON(dec *json.Decoder) error {
 				return err
 			}
 			name, ok := key.(string)
+			// Match the struct decoder's aliases only for fields consumed here.
+			// Distinct keys in ignored metadata remain valid JSON.
+			var child resultFields
+			if nested, known := fields[strings.ToLower(name)]; known {
+				name, child = strings.ToLower(name), nested
+			}
 			if !ok || seen[name] {
 				return errors.New("duplicate or invalid result key")
 			}
 			seen[name] = true
-			if err := uniqueJSON(dec); err != nil {
+			if err := uniqueJSON(dec, child); err != nil {
 				return err
 			}
 		}
 	case '[':
 		for dec.More() {
-			if err := uniqueJSON(dec); err != nil {
+			if err := uniqueJSON(dec, nil); err != nil {
 				return err
 			}
 		}
@@ -89,18 +104,32 @@ func decodeStageReport(body, step string) (stageReport, error) {
 	if len(body) == 0 || len(body) > 128*1024 {
 		return value, errors.New("result missing or exceeds bound")
 	}
+	// A complete code fence is presentation. Do not extract JSON from prose
+	// or select one of several objects, which could change the intended outcome.
+	body = strings.TrimSpace(strings.ReplaceAll(body, "\r\n", "\n"))
+	for _, prefix := range []string{"```json\n", "```\n"} {
+		if strings.HasPrefix(body, prefix) && strings.HasSuffix(body, "\n```") {
+			body = strings.TrimSuffix(strings.TrimPrefix(body, prefix), "\n```")
+			break
+		}
+	}
 	check := json.NewDecoder(strings.NewReader(body))
-	if err := uniqueJSON(check); err != nil {
+	if err := uniqueJSON(check, reportFields); err != nil {
 		return value, err
 	}
 	if _, err := check.Token(); err != io.EOF {
 		return value, errors.New("trailing result content")
 	}
 	dec := json.NewDecoder(bytes.NewBufferString(body))
-	dec.DisallowUnknownFields()
+	// Only the known business fields drive the flow. Extra explanatory fields
+	// do not make an otherwise unambiguous result unusable.
 	if err := dec.Decode(&value); err != nil {
 		return value, err
 	}
+	value.Outcome = strings.TrimSpace(value.Outcome)
+	value.Summary = strings.TrimSpace(value.Summary)
+	value.Question = strings.TrimSpace(value.Question)
+	value.Outputs.PRURL = strings.TrimSpace(value.Outputs.PRURL)
 	if strings.TrimSpace(value.Summary) == "" {
 		return value, errors.New("result summary missing")
 	}

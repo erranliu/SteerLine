@@ -32,12 +32,22 @@ type Client struct {
 // Environment replaces project-owned configuration and disables inherited test switches.
 func Environment(base []string, home, state string) []string {
 	result := make([]string, 0, len(base)+6)
+	var pairing struct{ Pairing string }
+	if raw, err := os.ReadFile(filepath.Join(home, "orca-state-fixture.json")); err == nil {
+		_ = json.Unmarshal(raw, &pairing)
+	}
 	for _, v := range base {
 		key := strings.ToUpper(strings.SplitN(v, "=", 2)[0])
+		if pairing.Pairing != "" && (key == "ORCA_PAIRING_CODE" || key == "ORCA_REMOTE_PAIRING" || key == "ORCA_USER_DATA_PATH") {
+			continue
+		}
 		if strings.HasPrefix(key, "STEERLINE_") || key == "TEMP" || key == "TMP" || key == "CODEX_HOME" || strings.HasPrefix(key, "GIT_") || key == "GOFLAGS" || key == "HTTP_PROXY" || key == "HTTPS_PROXY" || key == "ALL_PROXY" || key == "NO_PROXY" {
 			continue
 		}
 		result = append(result, v)
+	}
+	if pairing.Pairing != "" {
+		result = append(result, "ORCA_PAIRING_CODE="+pairing.Pairing, "ORCA_USER_DATA_PATH="+home)
 	}
 	temp := filepath.Join(home, "temp")
 	if token, err := os.ReadFile(filepath.Join(home, "github-token")); err == nil {
@@ -56,6 +66,11 @@ func (c *Client) Command(ctx context.Context, args ...string) *exec.Cmd {
 
 func (c *Client) Run(ctx context.Context, args ...string) ([]byte, error) {
 	return c.run(ctx, c.Binary, args...)
+}
+
+// RunHelper executes a native fixture control with the same isolated environment.
+func (c *Client) RunHelper(ctx context.Context, helper string, args ...string) ([]byte, error) {
+	return c.run(ctx, helper, args...)
 }
 
 func (c *Client) run(ctx context.Context, binary string, args ...string) ([]byte, error) {
@@ -130,7 +145,7 @@ func MainControl(args []string) error {
 	if *action != "resume_dispatch" && *action != "start_task" {
 		return fmt.Errorf("unsupported E2E control action")
 	}
-	if *expectedStatus != "applied" && !(*action == "start_task" && *expectedStatus == "failed") {
+	if *expectedStatus != "applied" && !(*action == "start_task" && (*expectedStatus == "failed" || *expectedStatus == "indeterminate")) {
 		return fmt.Errorf("unsupported E2E control status expectation")
 	}
 	c, err := steerlineapp.LoadConfig(*config)

@@ -22,6 +22,8 @@ import (
 type CandidateCommand struct {
 	Action, RequestID, TaskID, ProfileID, RunID, ExecutionID, DecisionID, Option, Note, InstanceID string
 	TaskVersion, GraphRevision, CandidateVersion, DecisionVersion, RunRevision                     uint64
+	AttemptID                                                                                      string
+	RecoveryVersion                                                                                uint64
 }
 type CandidateReceipt struct {
 	Request *productapi.ControlRequest  `json:"request,omitempty"`
@@ -158,7 +160,7 @@ func MainCandidate(args []string) error {
 		if !matched {
 			return fmt.Errorf("feedback execution/run identity mismatch")
 		}
-		cmd, _, err := steerlineapp.SubmitAnswerDecision(ctx, c, in.RunID, in.DecisionID, in.Option, in.Note, "e2e", in.DecisionVersion, in.RunRevision, in.InstanceID, in.RequestID)
+		cmd, _, err := steerlineapp.SubmitAnswerDecisionBound(ctx, c, in.RunID, in.DecisionID, in.Option, in.Note, "e2e", in.DecisionVersion, in.RunRevision, in.InstanceID, in.RequestID, in.AttemptID, in.RecoveryVersion)
 		if err != nil {
 			return err
 		}

@@ -183,9 +183,9 @@ func adapterForbidden(pkg string) bool {
 	if pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
 		return true
 	}
-	// Terminal reply and agent launch configuration are pure execution values,
+	// Agent launch configuration is a pure execution value,
 	// not application use cases. Their dependencies are still traversed.
-	if pkg == execution+"/workerreturn" || pkg == execution+"/agentlaunch" {
+	if pkg == execution+"/agentlaunch" {
 		return false
 	}
 	if pkg == execution || strings.HasPrefix(pkg, execution+"/") {

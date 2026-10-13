@@ -51,13 +51,25 @@ func OpenHistory(ctx context.Context, command executionbackend.Command, dir, hom
 		input.Close()
 		return nil, err
 	}
-	cmd.Stderr = io.Discard
-	proc, err := start(cmd)
+	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		input.Close()
 		output.Close()
 		return nil, err
 	}
+	proc, err := start(cmd)
+	if err != nil {
+		input.Close()
+		output.Close()
+		stderr.Close()
+		return nil, err
+	}
+	diagnostic := make(chan string, 1)
+	go func() {
+		raw, _ := io.ReadAll(io.LimitReader(stderr, 8192))
+		_, _ = io.Copy(io.Discard, stderr)
+		diagnostic <- strings.TrimSpace(string(raw))
+	}()
 	c := &HistoryClient{input: input, lines: make(chan []byte, 8), done: make(chan struct{}), proc: proc}
 	go func() {
 		defer close(c.done)
@@ -80,6 +92,9 @@ func OpenHistory(ctx context.Context, command executionbackend.Command, dir, hom
 	initialized, initErr := c.call(ctx, "initialize", map[string]any{"clientInfo": map[string]string{"name": "steerline_conversation", "version": "1"}, "capabilities": map[string]bool{"experimentalApi": true}})
 	if initErr != nil {
 		c.Close()
+		if detail := <-diagnostic; detail != "" {
+			return nil, fmt.Errorf("%w: %s", initErr, detail)
+		}
 		return nil, initErr
 	}
 	var metadata struct {
@@ -112,13 +127,17 @@ func CheckHistory(ctx context.Context, command executionbackend.Command, dir str
 
 func (c *HistoryClient) Close() {
 	_ = c.input.Close()
-	c.proc.Kill()
-	// A killed child must not retain a blocked pipe writer while we wait.
+	// Let the public reader close its native stores after stdin EOF. It never
+	// owns a model turn; forced termination is only the bounded fallback.
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
 	for {
 		select {
 		case <-c.lines:
 		case <-c.done:
 			return
+		case <-timer.C:
+			c.proc.Kill()
 		}
 	}
 }
@@ -204,6 +223,46 @@ func (c *HistoryClient) ReadMetadata(ctx context.Context, id, cwd string) error 
 		return errors.New("Codex history session/workspace identity mismatch")
 	}
 	return nil
+}
+
+// ReadThread reads the original durable thread without resuming or starting it.
+func (c *HistoryClient) ReadThread(ctx context.Context, id, cwd string) (HistoryThread, error) {
+	raw, err := c.call(ctx, "thread/read", map[string]any{"threadId": id, "includeTurns": true})
+	if err != nil {
+		return HistoryThread{}, err
+	}
+	var result struct {
+		Thread HistoryThread `json:"thread"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return HistoryThread{}, err
+	}
+	return verifiedHistoryThread(result.Thread, id, cwd)
+}
+
+func verifiedHistoryThread(thread HistoryThread, id, cwd string) (HistoryThread, error) {
+	if thread.ID != id || !sameWorkspace(thread.Cwd, cwd) || len(thread.Turns) > 4096 {
+		return HistoryThread{}, errors.New("Codex recovery thread/workspace or bounded history is unverified")
+	}
+	return thread, nil
+}
+
+func historyThreadIdle(thread HistoryThread, stoppedTurn string) bool {
+	if len(thread.Turns) == 0 {
+		return false
+	}
+	for _, turn := range thread.Turns {
+		// A killed owned tree can leave its exact turn without completion timing,
+		// even after native history labels it interrupted. Other native/manual
+		// turns still require terminal proof; this does not adopt an old result.
+		if turn.ID != "" && turn.ID == stoppedTurn && (turn.Status == "inProgress" || turn.Status == "completed" || turn.Status == "failed" || turn.Status == "interrupted") {
+			continue
+		}
+		if turn.ID == "" || turn.CompletedAt == nil || (turn.Status != "completed" && turn.Status != "failed" && turn.Status != "interrupted") {
+			return false
+		}
+	}
+	return true
 }
 
 func (c *HistoryClient) ReadPage(ctx context.Context, id, cursor string) (HistoryPage, error) {

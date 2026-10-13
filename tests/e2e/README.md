@@ -4,6 +4,8 @@
 
 当前产品入口为本地 Codex 与 `host=orca`（本机 / environment 同能力）。Orca 使用一个 agent 终端，由本机 CLI 原样投递统一阶段提示词，并由适配层采集普通终端回复；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[统一提示词验收](../../docs/acceptance/orca-unified-worker-prompts.md)。
 
+2026-10-13 的[工作流核验收敛](../../docs/acceptance/workflow-verification.md)移除产品的全部屏幕核验：就绪只查原 main-agent，完成只接收原生结束事实和完整正文；不使用 tui-idle、draft、可见标记或屏幕文字比对。下文早期屏幕保护、粘贴稳定和历史驱动描述不再是当前产品准入要求；当前真机复验单列 WV-M1。
+
 旧单轮远端、旧 Orca live / startup / candidate 场景不计入当前验收；supervised 专属实现与夹具已删除。下面的旧驱动说明仅保留历史参考。
 
 全项目测试范围、L1/Full/定向入口、独立原生验收和产物导航见[测试总入口](../../docs/testing.md)。本文维护 E2E 环境、场景和扩展的具体约定。
@@ -43,6 +45,12 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
 
 原候选入口 `candidates.local` 已随旧本机 Orca 路径移出当前登记。下面的 manifest 与驱动说明保留历史参考，不能用它声明当前单终端路径已验收。
+
+## 核心恢复增量
+
+2026-10-12 审计收敛后的 [Codex / Orca 核心断连恢复场景设计](suites/recovery/README.md)实现三组 L3 controlled（依每入口 5 分钟上限拆分）与两条 L3 live，覆盖原观察重接、明确失败收敛、Codex 同 thread 恢复和复用实施核验，以及代表性的未知发送/重复恢复守卫。Orca 本机/远端规则由当前单终端 fake 覆盖，真实链首轮仅本机；旧 supervised 测试不计入覆盖。
+
+新增 ID 已实现并加入 suites.json；2026-10-13 整合主干原生状态判定与 PR 流程后，按受影响范围复验，证据见专属验收；仅补 owned kill、一次断读/丢回执、u 输入及本机单终端 live chain 等所需驱动，不建设全窗口 fault barrier。现有 waiting-merge 保留作必要回归；远端真实故障链、终端重建与硬件断电另行评估，不以受控 kill 宣称已验。范围、通过条件与状态见[专属验收](../../docs/acceptance/worker-disconnect-recovery.md)。
 
 ## 本机候选 manifest
 

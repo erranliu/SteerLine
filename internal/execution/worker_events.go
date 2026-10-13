@@ -216,7 +216,7 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 					evidence, err := lifecycle.VerifyManualRecovery(probeCtx, snapshot)
 					probeCancel()
 					if err == nil {
-						s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerLive: evidence.ManagedProcess && !evidence.ProcessAbsent, WorkerAbsent: evidence.ProcessAbsent, WritersAbsent: evidence.WritersAbsent, Completed: settledOriginalWorkerTurn(execution), QuestionPending: len(execution.PendingQuestions) > 0}, evidence.SessionAvailable)
+						s.setWorkerRecoveryEvidence(run, evidence)
 					}
 				}
 				if err := s.commitWorker(run, operationIDs...); err != nil {
@@ -256,6 +256,10 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 		if err := putImplementationEnvelope(execution, envelope); err != nil {
 			return err
 		}
+	}
+	if ev.InputWait && ev.Diagnostic != "" {
+		execution.Error = ptr(clip("Original worker observation is unverified: "+ev.Diagnostic, 2000))
+		s.refreshRun(run)
 	}
 	if ev.DeliveryFinal && ev.DeliveryID != "" {
 		if execution.PendingDeliveryID != "" && execution.PendingDeliveryID != ev.DeliveryID {

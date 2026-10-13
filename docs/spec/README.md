@@ -63,9 +63,19 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 后端组装与最终回复状态两项收紧、合并为一份[Spec](bounded-structure-refactoring.spec.md) / [Plan](bounded-structure-refactoring.plan.md)。2026-10-10 基于 `21d97350` 实施并在质量自审后集成 `8e292172`，自动验证及 PR/独立复审状态见[专属记录](../acceptance/bounded-structure-refactoring.md)。不分配/派发任务编号、不进入 execution-map；执行器提取暂缓。审计及旧编号追溯见[范围收敛记录](../roadmap/drafts/bounded-refactoring.md)。
 
-## Orca 单终端原生状态切换（普通开发规划）
+## Orca 单终端原生状态切换（普通开发）
 
-只根据原主 agent 的可信状态切换确认执行开始/结束，缺信号时补一次查询，普通回复只用于结果采集。保留原终端和统一提示词，不使用 supervised、模型标记或结构化对话。验证限于本机原生接口样本、定向规则测试及一项受控阶段回归；当前仅规划。[Spec](orca-native-state-transitions.spec.md) · [Plan](orca-native-state-transitions.plan.md) · [专属验收](../acceptance/orca-native-state-transitions.md)。
+只根据原主 agent 的可信状态切换确认执行开始/结束，缺信号时补一次查询，普通回复只用于结果采集。保留原终端和统一提示词，不使用 supervised、模型标记或结构化对话。已实施，自动验证与真实交付范围见[专属验收](../acceptance/orca-native-state-transitions.md)。[Spec](orca-native-state-transitions.spec.md) · [Plan](orca-native-state-transitions.plan.md)。
+
+## Orca 本机输入与就绪（普通开发）
+
+配对普通终端、等待预算与拒绝回执分类；两个只读回合及一个本机真实合并交付已通过。[Spec](orca-local-input-readiness.spec.md) · [Plan](orca-local-input-readiness.plan.md) · [验收](../acceptance/orca-local-input-readiness.md)。
+
+## Codex / Orca 断连恢复规划
+
+2026-10-12 经用户要求审计后收敛为可一次实施的首轮设计：原观察重接、明确失败的继续入口、Codex 原进程退出后同 thread 恢复，人工成果复用 implement 重核；Orca 先支持原终端重接与资源丢失诊断。专用成果接纳、远端真实故障链与全窗口增强延后。用户已授权按收敛范围实施，工作树实现及本轮自动验收已完成，未部署，不部署 Runtime；普通开发，无 Task ID，不进入 execution-map。
+
+[Spec](worker-disconnect-recovery.spec.md) · [Plan / 测试计划](worker-disconnect-recovery.plan.md) · [专属验收](../acceptance/worker-disconnect-recovery.md) · [L3 场景设计](../../tests/e2e/suites/recovery/README.md)。场景已补实现/注册，实时执行状态见专属验收。
 
 ## 共同约束
 
