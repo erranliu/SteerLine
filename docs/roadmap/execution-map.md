@@ -6,7 +6,7 @@
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 源码/自动验证已交付；待独立复审/合入 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6 通过，TH-M1 待验；[草稿 PR #299](https://github.com/erranliu/SteerLine/pull/299)，未合并 |
+| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 源码/自动验证已交付；待独立复审/合入 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6 通过，真终端/live 操作已验；TH-M1 窗口渲染/人工体验待验；[草稿 PR #299](https://github.com/erranliu/SteerLine/pull/299)，未合并 |
 
 ## 推进边界
 
@@ -18,11 +18,11 @@
 
 ## 待人工验收
 
-最终自动验证固定 commit `2c58de3207ab76aeec5e69ee8421787137051183`（clean）：新独立 simulate 包的真实 TUI/HTTP/Go 场景和 L1 均通过。原生 final 明确来源缺口，未验声明保持，完整正文 HTTP 消费另有测试。精确构建/请求/停止与失败修正证据归专属验收。独立复审和真实合并未完成，暂不按 roadmap 规则记实现完成，不移除草稿条目。
+最终自动验证固定 commit `708dab2cdad45ee55ee030aa6248a5270e822c5f`（clean）：新独立 simulate 包的真实 TUI/HTTP/Go 场景及 L1（12 组/26 包）通过，真实终端停服的原 HTTP applied、进程退出、两个锁释放齐备。用户委托验收另在 clean 12dbad80 的 SteerlineTest live 包验证原生 final、中文多行反馈、同会话六轮/复用专属 PR；发现的展示锁/离线提示与停服 revision 丢失已修复复验。各版本、simulate 缺口、live 有限样本和剩余原生窗口/人工体验明细归专属验收。独立复审和真实合并未完成，暂不按 roadmap 规则记实现完成，不移除草稿条目。
 
 | 范围 | 状态 / 安排 | 明细 |
 | --- | --- | --- |
-| #91 TUI 输入与操作 | TH-M1 待验；待自动验证/独立包就绪，参与人/窗口待安排，最迟本任务签收 | [记录](../acceptance/tui-http-client.md) |
+| #91 TUI 输入与操作 | ConPTY 键位/Unicode 多行/候选/反馈/final/恢复/停服已验；TH-M1 原生查看窗口渲染、桌面输入法/字体体验待人工判断，最迟本任务签收 | [记录](../acceptance/tui-http-client.md) |
 | 一期单安装版签收 | 待当前支持路线能力/原生准备、固定新安装构建后组织组合/24小时/同构建恢复；窗口待安排，不新增执行任务或成为 #91 无关前置 | [一期活动](../acceptance/phase1.md) |
 | #84 步骤辨识与反馈/合并 | WFS-M1 待验；可与一期同现场分别登记，不阻塞无关客户端改造 | [记录](../acceptance/worker-staged-flow.md) |
 

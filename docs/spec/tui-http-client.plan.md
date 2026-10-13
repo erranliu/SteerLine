@@ -18,6 +18,7 @@
 - `TestTUIHTTPBoundary`（internal/app）：检查真实 console 构造、直接/传递客户端闭包及禁止文件访问；共用 CLI 的服务端闭包不算客户端违规，也不能掩盖客户端依赖。
 - `TestTUIHTTPContract`（internal/product/httpclient）：httptest/受控客户端核验身份、DTO、原请求、版本/故障，断言正式处理次数。
 - `TestTUIHTTPInteraction`（internal/console）：通过真实 HTTP 适配驱动任务/候选、输入/final、迟到响应和切项目，不能仅测试 API 请求格式。
+- `TestAPIStopPreservesDisplayedRevision`（internal/product/httpapi）：使用正式 host 请求登记入口核对 TUI 携带的停服 revision 保留；提交、回读和重复请求只能登记一次，原实例停服不新增 revision 拒绝条件。与原 `TestAPIMappedControlPayloadBinding` 的异 payload/revision 负例共同验证。
 - `scripts/test-tui-http.ps1 -DebugRoot <root> -OutDir <fresh-dir>`：新增单一受控驱动，先调用现有 new-debug-release.ps1 生成独立 SteerlineTest 包，再显式 `--simulate` 启动/冻结方案。真实服务配受控 worker/PR provider，使用本次专属分支，不创建远端真实 PR或发模型请求。驱动实际 TUI 模型/HTTP/Go 接线，验证开始、关闭后 worker 继续、重开/重复、规范 final 与正常停服/清理。丢响应、旧实例/版本、丢停服回执与恢复/会话错绑定由上述定向测试及服务端 TestTUIHTTPRoutes 注入并断言。
 
 真实原生窗口操作归 TH-M1；受控打开器只验证目标绑定和无新业务轮次，不推定真机支持。新增入口必须非零枚举、实际断言，零匹配/skip 不算通过；过滤名如调整须在交付前同步 Plan/acceptance。
@@ -31,6 +32,7 @@
 | TH-A1 | 定向 Go / 新增 Boundary | Windows 源码；`go test ./internal/app -run '^TestTUIHTTPBoundary$' -count=1 -v` | 接线后；非零检查客户端闭包/文件访问，无业务直连 | `<evidence>/boundary.log`；acceptance TH-A1 |
 | TH-A2–A5 | 定向 Go / 新增 Contract、Interaction | Windows/httptest；`go test ./internal/product/httpclient -run '^TestTUIHTTPContract$' -count=1 -v`；`go test ./internal/console -run '^TestTUIHTTPInteraction$' -count=1 -v` | 接口/消费后；身份/内容/冲突/原请求/停服未知/关闭断言通过 | `<evidence>/contract.log`、`interaction.log`；对应 ID |
 | TH-A4；TH-A2 历史 | 定向 Go / 新增 Routes | Windows/httptest；`go test ./internal/product/httpapi -run '^TestTUIHTTPRoutes$' -count=1 -v` | 路由接线后；恢复只读、错绑定/重复/unknown 查看与跨 Attempt 历史通过 | `<evidence>/routes.log`；TH-A2/TH-A4 |
+| TH-A3、TH-A5 停服原请求 | 定向 Go / 正式 host 登记回归 | Windows/httptest；`go test ./internal/product/httpapi -run '^(TestAPIStopPreservesDisplayedRevision\|TestAPIMappedControlPayloadBinding\|TestAPIAuthoritativeControlBinding)$' -count=1 -v` | 字段映射修正后；原停服 revision 完整保留、重复不重登记、异内容不匹配 | `<evidence>/stop-revision-regression.log`；TH-A3/TH-A5 |
 | TH-A2–A5 | 独立调试 / 新增 `tui-http.local`（专属驱动，非现有 L3 注册项） | Windows/Go/Git；`powershell -NoProfile -File scripts/test-tui-http.ps1 -DebugRoot C:\SteerlineDebug -OutDir <fresh-evidence>` | 定向通过后；真实接线、处理次数/停止证据/重连/清理完整通过 | `<fresh-evidence>/summary.json` 与包 evidence；对应 ID |
 | TH-A6 | 清理/构建 | Windows；`go run ./cmd/test-feedback -build-only -out <fresh-build-evidence>`；删除清单及下行文档命令 | 删除后；无 WinUI 专属工程/入口，原 Go 构建和导航通过 | build summary、删除清单；TH-A6 |
 | TH-A6；本次规划 | 文档静态 | `python scripts/check_doc_links.py`；`python scripts/roadmap_task_id.py check`；`git diff --check` | 规划及实施交付前；导航/身份/格式通过，非业务验收 | 规划见 roadmap-planning；实现见 TH-A6 |
