@@ -1,9 +1,7 @@
 # SteerlineTest Orca single-terminal debug
 
-Implement this task: write result.txt with exactly `SteerlineTest Orca debug result` and one trailing LF in UTF-8. Read it back, then stage and commit only result.txt locally. Use Git user.name=SteerLine Debug and user.email=debug@example.invalid for this commit if the host has no Git identity. Do not push or publish during implementation. Do not change other tracked files.
-
-Do not publish as part of implementing this Spec. Only when a later input explicitly asks to push and create/reuse a PR, run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1`. Use the execution host's existing launcher, permissions and GitHub authentication; do not modify global settings, credentials or permissions.
+Write result.txt in UTF-8 with exactly two lines: `SteerlineTest Orca debug result` and the current Git branch name, followed by a trailing LF. Replace an inherited result.txt so the artifact identifies this checkout. Read it back and verify its bytes. Do not change other tracked files.
 
 ## Acceptance
 
-The original agent terminal completes implementation, report and publication on its assigned branch. The PR targets this debug environment's unique base; its head equals the committed candidate. A merge releases the successor. Keep summaries brief so the requested compact terminal result is complete.
+The file contains the marker and the exact current branch, encoded as UTF-8 with LF line endings.

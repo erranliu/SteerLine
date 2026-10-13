@@ -56,6 +56,7 @@ func (f ToolReplyFact) MatchesAnswers(expected map[string][]string) bool {
 }
 
 type TurnEvidence struct {
+	NativeOutcome        string `json:"native_outcome,omitempty"` // independent of successful result collection
 	FinalOrigin          string `json:"final_origin,omitempty"`
 	FinalDiagnostic      string
 	FinalNativeSessionID string

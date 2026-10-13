@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	terminal "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
+	native "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 
 	"os"
 	"os/exec"
@@ -268,6 +270,7 @@ func fixtureGitOutput(t *testing.T, args ...string) string {
 }
 
 type integrationLifecycleResolver struct {
+	stateFactory        native.StateFeedFactory
 	directory           *execution.ExecutionDirectory
 	mu                  sync.Mutex
 	calls               map[executionbackend.ExecutionProtocol]int
@@ -289,6 +292,27 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionbackend.L
 	case executionbackend.ProtocolLocalCodexAppServer:
 		return port, nil
 	case executionbackend.ProtocolOrcaTerminalV3:
+		factory := r.stateFactory
+		if factory == nil {
+			factory = integrationStateFactory(filepath.Dir(setup.RepositoryPath), nil)
+		}
+		// Fixture arguments bind the source file explicitly; no production
+		// authentication or settings are synthesized by this resolver.
+		for _, data := range setup.ProfileData {
+			if data.ImplementationKey == terminal.ProfileKey {
+				p, e := terminal.DecodeProfile(data.Payload)
+				if e != nil {
+					return nil, e
+				}
+				if r.stateFactory == nil && len(p.Args) >= 3 {
+					factory = integrationStateFactory(p.Args[2], nil)
+				}
+			}
+		}
+		port, err = terminal.NewLifecycleWithStateFactory(setup, factory)
+		if err != nil {
+			return nil, err
+		}
 		if r.beforeNativeExecute != nil {
 			return integrationFaultLifecycle{LifecyclePort: port, before: r.beforeNativeExecute}, nil
 		}

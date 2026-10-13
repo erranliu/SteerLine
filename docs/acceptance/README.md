@@ -24,6 +24,7 @@
 | Orca 分步开发缺口 | [当前远端待补与历史来源](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮/supervised 场景退役，不计单终端交付覆盖 |
 | 旧 Orca 身份残留清理 | [专属记录](retired-orca-identity-cleanup.md)，当前字段/受控接线与文档校准，不增加原生验收通过项 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
+| Orca 原生状态切换（规划） | [专属验收](orca-native-state-transitions.md)，普通单终端状态门槛、一次补查询与旧回复拒绝；三项最小验证，尚未实施 |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
 | 测试维护 | [测试代码精简](test-code-simplification.md) |
 | 历史结果与旧方案 | [归档索引](archive/README.md) |
