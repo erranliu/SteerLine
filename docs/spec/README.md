@@ -6,6 +6,10 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 已执行的 Spec 与配套 Plan 见[已交付归档](../archive/spec/completed/README.md)；退役流程和远端试验见[历史资料](../archive/spec/retired/README.md)。归档中的旧状态文字和路径属于原交付时点，不能当作当前待办。任务 ID 身份记录保留；原始验证数据从[清理前固定 Git 快照](../acceptance/archive/completed/history.md#历史取证)读取。
 
+## 产品正式文档生成规范
+
+[SpecGuide.md](SpecGuide.md) 维护 SteerLine 产品草稿转正时必读的 Spec / Plan 生成规范：避免过度设计，先查现有代码再整合，先做相关任务整体规划，明确执行链路和桥接必要性，并落实最小测试及验收覆盖。[交互设计](../product-design/planning-ui.md)与[原型](../product-design/prototypes/planning-ui/index.html)展示规范入口和受控生成。当前产品流程为原型设计，不改变用户直接授权的普通仓库开发入口。
+
 ## 已交付产品精简与控制台
 
 三批产品精简已分别通过PR #231/#236/#238合入，控制台体验增量通过PR #234合入；验收仍绑定各自原构建/范围，不据此宣称当前重跑。这里保留导航，不进入近期执行任务。
