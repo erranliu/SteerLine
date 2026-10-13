@@ -4,6 +4,8 @@
 
 当前产品入口为本地 Codex 与 `host=orca`（本机 / environment 同能力）。Orca 使用一个 agent 终端，由本机 CLI 原样投递统一阶段提示词，并由适配层采集普通终端回复；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[统一提示词验收](../../docs/acceptance/orca-unified-worker-prompts.md)。
 
+2026-10-13 的[工作流核验收敛](../../docs/acceptance/workflow-verification.md)移除产品的全部屏幕核验：就绪只查原 main-agent，完成只接收原生结束事实和完整正文；不使用 tui-idle、draft、可见标记或屏幕文字比对。下文早期屏幕保护、粘贴稳定和历史驱动描述不再是当前产品准入要求；当前真机复验单列 WV-M1。
+
 旧单轮远端、旧 Orca live / startup / candidate 场景不计入当前验收；supervised 专属实现与夹具已删除。下面的旧驱动说明仅保留历史参考。
 
 全项目测试范围、L1/Full/定向入口、独立原生验收和产物导航见[测试总入口](../../docs/testing.md)。本文维护 E2E 环境、场景和扩展的具体约定。

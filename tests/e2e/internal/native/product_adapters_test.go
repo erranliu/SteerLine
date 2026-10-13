@@ -1,9 +1,62 @@
 package native
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"testing"
+
+	transport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
+	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
+
+type endStateFeed struct {
+	current orcaworker.AgentState
+	err     error
+	closed  bool
+}
+
+func (f *endStateFeed) Initial() orcaworker.AgentState                       { return f.current }
+func (f *endStateFeed) Drain() ([]orcaworker.AgentState, error)              { return nil, nil }
+func (f *endStateFeed) Query(context.Context) (orcaworker.AgentState, error) { return f.current, f.err }
+func (f *endStateFeed) Close()                                               { f.closed = true }
+
+func TestOrcaOriginalEndRequiresBoundNativeFacts(t *testing.T) {
+	for _, fault := range []string{"none", "working", "previous-end", "provider", "pane", "interrupted", "failure", "query-error"} {
+		t.Run(fault, func(t *testing.T) {
+			proof := transport.NativeProof{Pane: "tab:pane", Provider: "provider", WorkingAt: 10}
+			state := orcaworker.AgentState{PaneKey: proof.Pane, AgentType: "codex", UpdatedAt: 20, MainAgent: &orcaworker.MainAgentState{State: "done", StateStartedAt: 20}}
+			state.ProviderSession.ID = proof.Provider
+			feed := &endStateFeed{current: state}
+			switch fault {
+			case "working":
+				feed.current.MainAgent.State = "working"
+			case "previous-end":
+				feed.current.MainAgent.StateStartedAt = 9
+			case "provider":
+				feed.current.ProviderSession.ID = "another"
+			case "pane":
+				feed.current.PaneKey = "another:pane"
+			case "interrupted":
+				feed.current.Interrupted = true
+			case "failure":
+				feed.current.MainAgent.Outcome = "failure"
+			case "query-error":
+				feed.err = errors.New("unavailable")
+			}
+			ended, err := orcaOriginalTurnEnded(context.Background(), "original-host", backend.ProcessIdentity{Terminal: "original"}, proof, func(_ context.Context, host string, process backend.ProcessIdentity) (orcaworker.StateFeed, error) {
+				if host != "original-host" || process.Terminal != "original" {
+					t.Fatal("query changed its source")
+				}
+				return feed, nil
+			})
+			if ended != (fault == "none") || !feed.closed || fault == "none" && err != nil {
+				t.Fatalf("original end attribution failed: %s %t %v", fault, ended, err)
+			}
+		})
+	}
+}
 
 func TestWorkerConfigsPreserveNativeModelAndChainSettings(t *testing.T) {
 	local := WorkerImplementationConfigs("isolated-codex", nil)

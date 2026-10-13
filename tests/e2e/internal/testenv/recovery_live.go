@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 )
 
 func LiveCoreRecovery(s *Scenario, chain string) {
@@ -36,18 +37,10 @@ func LiveCoreRecovery(s *Scenario, chain string) {
 	}
 	s.Must(os.WriteFile(filepath.Join(e.Workspace.Worktree, ".e2e-recovery-release.txt"), []byte("release original input\n"), 0600))
 	if chain == "orca-terminal-local" {
+		turn, err := evidence.OrcaOriginalTurn(e)
+		s.Must(err)
 		s.Wait("original terminal completed while center offline", func() (bool, error) {
-			raw, err := p.orca(s.Context, "terminal", "wait", "--terminal", e.Process.Terminal, "--for", "tui-idle", "--timeout-ms", "1000", "--json")
-			if err != nil {
-				return false, err
-			}
-			var response struct {
-				Wait struct {
-					Satisfied bool `json:"satisfied"`
-				} `json:"wait"`
-			}
-			err = json.Unmarshal(raw, &response)
-			return response.Wait.Satisfied, err
+			return native.OrcaOriginalTurnEnded(s.Context, e.Process.ExecutionHost, *e.Process, turn.Native)
 		})
 	}
 	p.StartService()

@@ -14,7 +14,7 @@ import (
 const thread = "00000000-0000-0000-0000-000000000008"
 
 func TestWorkingEvidenceRejectsOtherCommandOrResource(t *testing.T) {
-	for _, fault := range []string{"none", "command", "process", "generation", "working", "acceptance"} {
+	for _, fault := range []string{"none", "command", "process", "generation", "working", "acceptance", "codec"} {
 		t.Run(fault, func(t *testing.T) {
 			e := fixture(t).Executions[0]
 			e.Protocol, e.CurrentCommandID = string(executionbackend.ProtocolOrcaTerminalV3), "original-command"
@@ -34,9 +34,12 @@ func TestWorkingEvidenceRejectsOtherCommandOrResource(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			data, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 3, ImplementationKey: transport.StateKey, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, raw)
+			data, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: transport.StateVersion, ImplementationKey: transport.StateKey, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, raw)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if fault == "codec" {
+				data.CodecVersion = 3
 			}
 			e.ImplementationData = []executionbackend.ImplementationDataEnvelope{data}
 			if fault == "generation" {
@@ -122,5 +125,20 @@ func TestExecutionEvidencePreservesBoundIdentityAndAuthority(t *testing.T) {
 	domain.Executions[0].PolicyResources = nil
 	if err := FixedNativeLaunch(domain); err == nil {
 		t.Fatal("configured authority accepted without launch evidence")
+	}
+}
+
+func TestOrcaStagedContinuityUsesNativeFinalSource(t *testing.T) {
+	domain := fixture(t)
+	domain.Executions[0].TurnNumber = 3
+	for i := 0; i < 3; i++ {
+		domain.WorkflowRuns[0].StageResults = append(domain.WorkflowRuns[0].StageResults, executionmodel.StageResult{Succeeded: true, SessionID: domain.Executions[0].SessionID, FinalSource: transport.NativeReplySource})
+	}
+	if err := OrcaStagedContinuity(domain); err != nil {
+		t.Fatal("native final source rejected", err)
+	}
+	domain.WorkflowRuns[0].StageResults[1].FinalSource = "orca.terminal.rendered-reply.v1"
+	if err := OrcaStagedContinuity(domain); err == nil {
+		t.Fatal("retired rendered source accepted")
 	}
 }

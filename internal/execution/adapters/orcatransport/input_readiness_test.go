@@ -2,55 +2,63 @@ package orcatransport
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
-	"time"
 
+	native "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestOrcaInputReadiness(t *testing.T) {
-	for _, scenario := range []string{"slow_start", "timeout", "interactive"} {
+	for _, scenario := range []string{"ready", "slow-start", "working", "waiting", "blocked", "missing", "wrong-pane", "query-failure"} {
 		t.Run(scenario, func(t *testing.T) {
 			l, f, s := fixture(t)
-			l.profile.WaitTimeout = "30s"
+			l.profile.WaitTimeout = "1ms"
 			r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
 			if err != nil {
 				t.Fatal(err)
 			}
 			bind(&s, r)
-			if scenario == "slow_start" {
-				f.waitFailures = 1
+			base := fixtureState(10, "previous", "done")
+			current := base
+			switch scenario {
+			case "working", "waiting", "blocked":
+				current = fixtureState(10, "previous", scenario)
+			case "missing":
+				current.MainAgent = nil
+			case "wrong-pane":
+				current.PaneKey = "another:pane"
 			}
-			if scenario == "timeout" {
-				f.waitFailures = 3
+			feed := &controlledStateFeed{initial: base, current: current}
+			if scenario == "slow-start" {
+				l.profile.WaitTimeout = "2s"
+				feed.queryStates = []native.AgentState{fixtureState(11, "initializing", "working"), fixtureState(12, "initializing", "done")}
 			}
-			if scenario == "interactive" {
-				f.waitBlocked = "codex-trust-workspace"
+			if scenario == "query-failure" {
+				feed.err = errors.New("unavailable raw state")
 			}
+			l.stateFactory = func(context.Context, string, b.ProcessIdentity) (native.StateFeed, error) { return feed, nil }
 			input := b.TurnInput{CommandID: strings.Repeat("c", 32), Prompt: "Read only"}
 			s.PendingTurn = &input
 			r, _, err = l.Execute(context.Background(), request(s, b.LifecyclePrepareSession, b.LifecycleInput{Turn: &input}))
-			if scenario == "slow_start" {
-				if err != nil || r.Disposition != b.OperationConfirmed || f.waitCalls != 2 {
-					t.Fatal(r, err, f.waitCalls)
+			if scenario == "ready" || scenario == "slow-start" {
+				if err != nil || r.Disposition != b.OperationConfirmed {
+					t.Fatal(r, err)
 				}
-			} else {
-				want := 2
-				if scenario == "interactive" {
-					want = 1
+				if scenario == "slow-start" && feed.queries != 2 {
+					t.Fatal("initialization was not awaited", feed.queries)
 				}
-				if err == nil || r.Disposition != b.OperationRejected || f.waitCalls != want || !strings.Contains(err.Error(), "screen=") || !strings.Contains(err.Error(), "no input was sent") {
-					t.Fatal(r, err, f.waitCalls)
-				}
-			}
-			for _, budget := range f.waitBudgets {
-				if budget < 40*time.Second {
-					t.Fatal("wait budget truncated server timeout", budget)
-				}
+			} else if err == nil || r.Disposition != b.OperationRejected {
+				t.Fatal("unready raw state accepted", r, err)
 			}
 			if f.nativeSends != 0 {
 				t.Fatal("task input sent during readiness")
+			}
+			for _, call := range f.calls {
+				if call[0] == "terminal" && (call[1] == "read" || call[1] == "wait") {
+					t.Fatal("readiness depended on the screen", call)
+				}
 			}
 		})
 	}

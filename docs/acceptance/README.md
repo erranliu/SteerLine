@@ -8,6 +8,7 @@ Orca 本机输入与就绪：[专属验收](orca-local-input-readiness.md)，配
 
 | 范围 | 状态 / 入口 |
 | --- | --- |
+| 工作流核验收敛 | [全部核验取舍与 101/105 修复](workflow-verification.md)，原始状态/正文取代屏幕核验；源码自动项与真机待验分开登记 |
 | 一期签收 | 待验；[一期活动](phase1.md) |
 | 二期节点 | [导航](phase2.md)：[2.1执行UI](phase2-execution.md)、[2.2草稿/人工事项](phase2-planning.md)、[2.3主agent](phase2-main-agent.md)均为节点验收规划，尚未完整排入 |
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[当前 Orca 单终端](orca-terminal-transport.md)；旧 Orca 活动输入/恢复记录保留历史，按当前路线重新核对适用性 |
