@@ -49,6 +49,9 @@ func (f *hostStateFeed) Query(context.Context) (native.AgentState, error) {
 	f.host.mu.Lock()
 	defer f.host.mu.Unlock()
 	h := f.host
+	if h.nativeSends == 0 {
+		return fixtureState(0, "", "done"), nil
+	}
 	state := "working"
 	seq := h.nativeSends*2 - 1
 	if h.writeReply && !h.busy {
@@ -58,8 +61,7 @@ func (f *hostStateFeed) Query(context.Context) (native.AgentState, error) {
 	s := fixtureState(seq, h.nativePrompt, state)
 	if state == "done" {
 		s.MainAgent.Outcome = "success"
-		text, _, _ := renderedReply("codex", h.lines)
-		s.LastAssistantMessage = text
+		s.LastAssistantMessage = h.nativeReply
 	}
 	return s, nil
 }
