@@ -236,6 +236,13 @@ func (c *Client) Activity(ctx context.Context, runID, executionID, attemptID str
 	return page, err
 }
 
+func (c *Client) RecentActivity(ctx context.Context, runID, executionID, attemptID string) (ActivityPage, error) {
+	query := url.Values{"execution_id": {executionID}, "attempt_id": {attemptID}, "recent": {"true"}}
+	var page ActivityPage
+	err := c.Get(ctx, "/runs/"+url.PathEscape(runID)+"/activity?"+query.Encode(), &page)
+	return page, err
+}
+
 func (c *Client) Conversation(ctx context.Context, runID string, filter api.ConversationFilter, cursor string, limit int) (ConversationPage, error) {
 	query := url.Values{}
 	query.Set("execution_id", filter.ExecutionID)

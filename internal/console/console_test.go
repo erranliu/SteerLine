@@ -102,7 +102,7 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
 	m.profile = &viewProfile{dir: t.TempDir()}
 	m.projects[0].selectedKey = "task:" + run.TaskID
-	updated, cmd := m.answerSelectedDecision()
+	updated, cmd := openDecisionForTest(m)
 	m = updated.(Model)
 	if cmd != nil || m.answer == nil || m.answer.optionIndex != 10 {
 		t.Fatalf("recommended option was not only preselected: dialog=%+v cmd=%v", m.answer, cmd)
@@ -191,7 +191,7 @@ func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
 	m.projects[0].selectedKey = "task:" + run.TaskID
-	updated, _ := m.answerSelectedDecision()
+	updated, _ := openDecisionForTest(m)
 	m = updated.(Model)
 	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m.answer.note = []rune("preserve this answer")
@@ -218,7 +218,7 @@ func TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions(t *testing.T) {
 	run.WorkflowVersion, run.Backend, run.Protocol, run.Host = fixtureWorkflowVersion, "local", "local_process", "local"
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:" + run.TaskID
-	updated, cmd := m.answerSelectedDecision()
+	updated, cmd := openDecisionForTest(m)
 	m = updated.(Model)
 	if cmd != nil || m.answer == nil {
 		t.Fatalf("worker-flow decision was hidden: answer=%+v status=%q", m.answer, m.status)

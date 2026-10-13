@@ -120,7 +120,7 @@ func (c *Console) RecentActivity(ctx context.Context, run, execution, attempt st
 	if err != nil {
 		return api.LogBatch{}, err
 	}
-	page, err := client.Activity(ctx, run, execution, attempt, api.ActivityCursor{})
+	page, err := client.RecentActivity(ctx, run, execution, attempt)
 	return page.Page, err
 }
 func (c *Console) Conversation(ctx context.Context, filter api.ConversationFilter, cursor string) (api.ConversationPage, error) {
@@ -202,9 +202,10 @@ func (c *Console) StartTaskPayload(ctx context.Context, task, profile string) (a
 }
 
 type outgoing struct {
-	Version  int                   `json:"version"`
-	Envelope wire.CommandEnvelope  `json:"envelope"`
-	Response *wire.CommandResponse `json:"response,omitempty"`
+	Version      int                   `json:"version"`
+	Envelope     wire.CommandEnvelope  `json:"envelope"`
+	Response     *wire.CommandResponse `json:"response,omitempty"`
+	StopIdentity *wire.Identity        `json:"stop_identity,omitempty"`
 }
 
 func validateResponse(e wire.CommandEnvelope, r wire.CommandResponse) error {
@@ -261,6 +262,9 @@ func (c *Console) readOutgoing(id string) (outgoing, error) {
 	if err == nil && value.Response != nil {
 		err = validateResponse(value.Envelope, *value.Response)
 	}
+	if err == nil && value.StopIdentity != nil && (value.Envelope.Action != "stop_service" || value.StopIdentity.InstanceID != value.Envelope.InstanceID || value.StopIdentity.ProjectID != value.Envelope.ProjectID || value.StopIdentity.RepositoryIdentity != c.ref.Identity) {
+		err = errors.New("original stop identity does not match outgoing intent")
+	}
 	return value, err
 }
 func (c *Console) saveOutgoing(value outgoing) error {
@@ -273,7 +277,7 @@ func (c *Console) saveOutgoing(value outgoing) error {
 		return previousErr
 	}
 	if previousErr == nil {
-		if !reflect.DeepEqual(previous.Envelope, value.Envelope) {
+		if !reflect.DeepEqual(previous.Envelope, value.Envelope) || !reflect.DeepEqual(previous.StopIdentity, value.StopIdentity) {
 			return errors.New("request ID conflict: durable outgoing intent differs")
 		}
 		if value.Response == nil {
@@ -347,6 +351,13 @@ func (c *Console) submit(ctx context.Context, envelope wire.CommandEnvelope) (wi
 		}
 	} else if os.IsNotExist(err) {
 		stored = outgoing{Version: 1, Envelope: envelope}
+		if envelope.Action == "stop_service" {
+			identity := client.Identity()
+			if identity.InstanceID != envelope.InstanceID {
+				return wire.CommandResponse{}, errors.New("stale_instance: original stop belongs to another service")
+			}
+			stored.StopIdentity = &identity
+		}
 		if err = c.saveOutgoing(stored); err != nil {
 			return wire.CommandResponse{}, err
 		}
@@ -485,10 +496,13 @@ func (c *Console) Receipt(ctx context.Context, id string) (*api.ControlReceipt, 
 		if response.Action == "stop_service" && response.ControlReceipt.Status == "applied" {
 			copy := *response.ControlReceipt
 			c.mu.Lock()
-			identity := c.identity
+			stored, readErr := c.readOutgoing(id)
 			c.mu.Unlock()
-			exited, locks, _ := observeExit(identity)
-			if identity.InstanceID == response.InstanceID && exited && locks {
+			exited, locks := false, false
+			if readErr == nil && stored.StopIdentity != nil {
+				exited, locks, _ = observeExit(*stored.StopIdentity)
+			}
+			if exited && locks {
 				copy.Message = "原停服请求已应用，原进程退出与锁释放已核实"
 			} else {
 				copy.Code = "stop_exit_unverified"

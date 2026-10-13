@@ -219,6 +219,19 @@ func (s *Server) serveActivity(w http.ResponseWriter, r *http.Request, identity 
 		writeProtocolError(w, err, "")
 		return
 	}
+	if queryValues.Get("recent") == "true" {
+		if queryValues.Get("cursor") != "" {
+			writeError(w, http.StatusBadRequest, "cursor_invalid", "recent activity cannot use a stream cursor", "")
+			return
+		}
+		page, err := s.product.RecentActivity(r.Context(), runID, executionID, attemptID)
+		if err != nil {
+			writeProtocolError(w, err, "")
+			return
+		}
+		writeJSON(w, http.StatusOK, ActivityPage{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Page: page})
+		return
+	}
 	cursor := api.ActivityCursor{RunID: runID, ExecutionID: executionID, AttemptID: attemptID}
 	if raw := queryValues.Get("cursor"); raw != "" {
 		if err = decodeStrict([]byte(raw), &cursor); err != nil {

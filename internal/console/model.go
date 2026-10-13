@@ -179,6 +179,7 @@ type Model struct {
 	confirm              *confirmAction
 	profileChoice        *executionProfileChoice
 	answer               *decisionAnswerDialog
+	answerCheck          *decisionEligibilityCheck
 	help                 bool
 	detailSection        string
 	detailExpanded       bool
@@ -420,6 +421,10 @@ func (m Model) submitDecisionCommand(index int, answer api.DecisionAnswer, reque
 }
 
 func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
+	return m.prepareDecisionAnswer(false)
+}
+
+func (m Model) prepareDecisionAnswer(qualified bool) (tea.Model, tea.Cmd) {
 	if m.selected < 0 || m.selected >= len(m.projects) {
 		return m, nil
 	}
@@ -448,14 +453,20 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		m.status = "当前控制客户端不支持决策资格核验"
 		return m, nil
 	}
-	if err := eligibility.DecisionEligibility(m.ctx, row.run); err != nil && row.run.EnvironmentBlocker == nil {
-		m.status = "回答资格核验失败：" + err.Error()
-		return m, nil
-	}
 	runtimeState := state.snapshot.Connection.Snapshot.Page
 	if runtimeState == nil {
 		m.status = "缺少当前服务实例快照"
 		return m, nil
+	}
+	if !qualified {
+		check := decisionEligibilityCheck{ID: newRequestID(), ProjectKey: state.ref.Key, RepositoryIdentity: state.ref.Identity, CandidateIdentity: candidateIdentity(row.run), InstanceID: state.snapshot.Connection.Snapshot.Page.Service.InstanceID, RunID: row.run.RunID, DecisionID: row.run.Decision.ID, RunRevision: row.run.ControlRevision, DecisionVersion: row.run.Decision.Version, AttemptID: row.run.AttemptID, RecoveryVersion: row.run.RecoveryVersion}
+		m.answerCheck = &check
+		m.status = "正在核验原问题的回答资格；可继续导航或取消"
+		candidate := *row.run
+		ctx := m.ctx
+		return m, func() tea.Msg {
+			return decisionEligibilityMsg{check: check, err: eligibility.DecisionEligibility(ctx, &candidate)}
+		}
 	}
 	decision := row.run.Decision
 	m.leaveRecovery()
@@ -654,6 +665,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateRecentActivity(msg)
 	case recoveryInspectionMsg:
 		return m.updateRecoveryInspection(msg)
+	case decisionEligibilityMsg:
+		return m.updateDecisionEligibility(msg)
 	case finalRepliesMsg:
 		return m.updateFinalReplies(msg)
 	case bodyMsg:

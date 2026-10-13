@@ -20,6 +20,7 @@ import (
 )
 
 type apiReader struct {
+	onRecentActivity    func(string, string, string) (api.LogBatch, error)
 	onConversation      func(api.ConversationFilter, string, int) (api.ConversationPage, error)
 	onOpenNative        func(api.NativeSessionTarget) error
 	recoveryReads       int
@@ -40,7 +41,10 @@ func (r *apiReader) Close() error { return nil }
 func (r *apiReader) ReadProject(context.Context, string, api.ProjectSnapshot) api.ProjectSnapshot {
 	return r.snapshot
 }
-func (r *apiReader) RecentActivity(context.Context, string, string, string) (api.LogBatch, error) {
+func (r *apiReader) RecentActivity(_ context.Context, run, execution, attempt string) (api.LogBatch, error) {
+	if r.onRecentActivity != nil {
+		return r.onRecentActivity(run, execution, attempt)
+	}
 	return r.activity, nil
 }
 func (r *apiReader) Activity(_ context.Context, run, execution, attempt string, cursor api.ActivityCursor) (api.LogBatch, error) {

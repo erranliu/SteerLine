@@ -10,6 +10,7 @@ import (
 )
 
 func TestTUIHTTPRoutes(t *testing.T) {
+	t.Run("recent activity advances beyond the stream first page", testTUIHTTPRecentActivity)
 	server, _, reader, _ := newAPIFixture(t)
 	ctx := context.Background()
 	run := &api.CandidateSummary{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), SessionID: "original", SessionGeneration: "generation"}
@@ -104,5 +105,36 @@ func TestTUIHTTPRoutes(t *testing.T) {
 	ref.AttemptID = "foreign"
 	if _, err = client.Body(ctx, run.RunID, ref, 0, 100); err == nil {
 		t.Fatal("foreign historical body accepted")
+	}
+}
+
+func testTUIHTTPRecentActivity(t *testing.T) {
+	server, _, reader, _ := newAPIFixture(t)
+	run := &api.CandidateSummary{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32)}
+	reader.snapshot.Connection.Snapshot.Page.Runs = []*api.CandidateSummary{run}
+	reader.activity = api.LogBatch{Cursor: api.ActivityCursor{RunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, Initialized: true, AfterEventID: 200}}
+	latest := int64(205)
+	reader.onRecentActivity = func(r, e, a string) (api.LogBatch, error) {
+		if r != run.RunID || e != run.ExecutionID || a != run.AttemptID {
+			t.Fatal("recent activity target changed")
+		}
+		page := reader.activity
+		page.Cursor.AfterEventID = latest
+		return page, nil
+	}
+	client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	for _, event := range []int64{205, 230} {
+		latest = event
+		page, err := client.RecentActivity(context.Background(), run.RunID, run.ExecutionID, run.AttemptID)
+		if err != nil || page.Page.Cursor.AfterEventID != event {
+			t.Fatalf("recent activity is stale: %+v %v", page, err)
+		}
+	}
+	if _, err = client.RecentActivity(context.Background(), run.RunID, "wrong", run.AttemptID); err == nil {
+		t.Fatal("foreign recent activity accepted")
 	}
 }
