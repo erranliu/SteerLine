@@ -279,7 +279,7 @@ func writePrivateContents(dir, path string, body io.Reader, exclusive bool) erro
 		if err = os.Remove(tmpName); err != nil {
 			return err
 		}
-	} else if err = os.Rename(tmpName, path); err != nil {
+	} else if err = fs.ReplacePrivateFile(tmpName, path); err != nil {
 		return err
 	}
 	return verifyPrivateFile(path)

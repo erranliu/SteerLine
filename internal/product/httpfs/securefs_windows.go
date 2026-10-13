@@ -9,12 +9,52 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
 
 const fileAllAccess = windows.ACCESS_MASK(0x1F01FF)
+
+// Windows may exclude replacement while a short-lived reader/scanner has the
+// destination open. Retry only known sharing/access failures, preserving atomic
+// replacement and returning persistent permission failures unchanged.
+func ReplacePrivateFile(source, target string) error {
+	var err error
+	for attempt := 0; attempt < 40; attempt++ {
+		err = os.Rename(source, target)
+		if err == nil || (!errors.Is(err, windows.ERROR_SHARING_VIOLATION) && !errors.Is(err, windows.ERROR_ACCESS_DENIED)) {
+			return err
+		}
+		if attempt < 39 {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	return err
+}
+
+// Discovery is atomically replaced while clients observe startup/ready state.
+// Hold a snapshot handle without excluding the writer's rename or deletion.
+func openDiscoveryReader(path string) (*os.File, error) {
+	name, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return nil, err
+	}
+	handle, err := windows.CreateFile(name, windows.GENERIC_READ, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+	if err != nil {
+		return nil, err
+	}
+	var info windows.ByHandleFileInformation
+	if err = windows.GetFileInformationByHandle(handle, &info); err != nil || info.FileAttributes&(windows.FILE_ATTRIBUTE_REPARSE_POINT|windows.FILE_ATTRIBUTE_DIRECTORY) != 0 {
+		windows.CloseHandle(handle)
+		if err == nil {
+			err = errors.New("linked/nonregular discovery file")
+		}
+		return nil, err
+	}
+	return os.NewFile(uintptr(handle), path), nil
+}
 
 // CreatePrivateTemp attaches the protected, current-user-only DACL to the
 // creation itself: preflight can inspect the file immediately after CreateFile.

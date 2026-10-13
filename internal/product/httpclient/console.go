@@ -356,7 +356,7 @@ func (c *Console) saveOutgoing(value outgoing) error {
 		}
 		return nil
 	}
-	return os.Rename(name, path)
+	return fs.ReplacePrivateFile(name, path)
 }
 func notFound(err error) bool {
 	var failure *ClientError
@@ -548,7 +548,7 @@ func (c *Console) Receipt(ctx context.Context, id string) (*api.ControlReceipt, 
 		return response.ControlReceipt, nil
 	}
 	if response.Status == "rejected" || response.Status == "outcome_unknown" {
-		return &api.ControlReceipt{RequestID: id, InstanceID: response.InstanceID, Action: response.Action, Status: response.Status, Code: response.Code, Message: response.Diagnostic}, nil
+		return &api.ControlReceipt{RequestID: id, InstanceID: response.InstanceID, Action: response.Action, Status: consoleOutcomeStatus(response.Status), Code: response.Code, Message: response.Diagnostic}, nil
 	}
 	return nil, os.ErrNotExist
 }
@@ -560,7 +560,7 @@ func (c *Console) Command(ctx context.Context, id string) (api.CommandReceipt, e
 	if response.Command != nil {
 		return *response.Command, nil
 	}
-	return api.CommandReceipt{CommandID: id, ProjectIdentity: c.Project().Identity, Kind: response.Action, TargetID: response.TargetID, ExpectedVersion: response.ExpectedVersion, Status: response.Status, ResultCode: response.Code, ResultError: response.Diagnostic}, nil
+	return api.CommandReceipt{CommandID: id, ProjectIdentity: c.Project().Identity, Kind: response.Action, TargetID: response.TargetID, ExpectedVersion: response.ExpectedVersion, Status: consoleOutcomeStatus(response.Status), ResultCode: response.Code, ResultError: response.Diagnostic}, nil
 }
 func (c *Console) SubmitDecision(ctx context.Context, in api.DecisionInput) (api.CommandReceipt, bool, error) {
 	a := in.Answer
@@ -572,7 +572,14 @@ func (c *Console) SubmitDecision(ctx context.Context, in api.DecisionInput) (api
 	if response.Command != nil {
 		return *response.Command, false, nil
 	}
-	return api.CommandReceipt{CommandID: in.CommandID, ProjectIdentity: c.Project().Identity, Kind: "answer_decision", TargetID: a.DecisionID, ExpectedVersion: a.ExpectedDecisionVersion, Status: response.Status, ResultCode: response.Code, ResultError: response.Diagnostic}, false, nil
+	return api.CommandReceipt{CommandID: in.CommandID, ProjectIdentity: c.Project().Identity, Kind: "answer_decision", TargetID: a.DecisionID, ExpectedVersion: a.ExpectedDecisionVersion, Status: consoleOutcomeStatus(response.Status), ResultCode: response.Code, ResultError: response.Diagnostic}, false, nil
+}
+
+func consoleOutcomeStatus(status string) string {
+	if status == "outcome_unknown" {
+		return "indeterminate"
+	}
+	return status
 }
 func (c *Console) Answer(ctx context.Context, in api.AnswerInput) (api.CommandReceipt, bool, error) {
 	ctx, cancel := c.requestContext(ctx)

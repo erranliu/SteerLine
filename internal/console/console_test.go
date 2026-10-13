@@ -65,6 +65,7 @@ func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
 		Connection:      api.ServiceConnection{State: api.ConnectionConnected, CanControl: true, CanStop: true, IdentityMatched: true, Snapshot: obs},
 		Observation:     obs,
 		DecisionReasons: map[string]string{},
+		SelectedNative:  &api.TaskDetail{TaskSummary: api.TaskSummary{TaskID: "task-B", Status: "open", Version: 1}},
 		Tasks:           &api.TaskCandidates{Version: 1, InstanceID: runtime.Service.InstanceID, RepositoryIdentity: ref.Identity, QueriedAt: now, LastSuccessAt: &last, Tasks: []api.TaskCandidate{{TaskID: "task-B", Title: "Build B"}}},
 	}
 }

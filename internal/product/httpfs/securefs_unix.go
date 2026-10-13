@@ -10,6 +10,10 @@ import (
 	"syscall"
 )
 
+func openDiscoveryReader(path string) (*os.File, error) { return os.Open(path) }
+
+func ReplacePrivateFile(source, target string) error { return os.Rename(source, target) }
+
 func CreatePrivateTemp(dir, prefix string) (*os.File, error) {
 	return os.CreateTemp(dir, prefix+"*.tmp")
 }

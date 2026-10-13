@@ -7,7 +7,6 @@ import (
 	"errors"
 	. "github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -24,7 +23,7 @@ func ReadDiscoveryFile(path string) (Discovery, error) {
 	if err := VerifyPrivateFile(path); err != nil {
 		return discovery, err
 	}
-	file, err := os.Open(path)
+	file, err := openDiscoveryReader(path)
 	if err != nil {
 		return discovery, err
 	}

@@ -16,6 +16,7 @@ import (
 )
 
 func TestTUIHTTPContract(t *testing.T) {
+	t.Run("unknown HTTP outcomes use the restorable domain status", testUnknownOutcomeStatus)
 	t.Run("close cancels owned HTTP queries before waiting for their lock", testConsoleCloseCancelsHTTP)
 	t.Run("render metadata remains responsive during HTTP IO", func(t *testing.T) {
 		entered, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
@@ -190,6 +191,46 @@ func TestTUIHTTPContract(t *testing.T) {
 			t.Fatalf("replacement replayed %d times", posts)
 		}
 	})
+}
+
+func testUnknownOutcomeStatus(t *testing.T) {
+	identity := wire.Identity{ProjectID: wire.ProjectID("repo"), RepositoryIdentity: "repo", InstanceID: "original"}
+	envelope := wire.CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "pause_dispatch", TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
+	envelopes := map[string]wire.CommandEnvelope{envelope.RequestID: envelope}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var e wire.CommandEnvelope
+		if r.Method == http.MethodPost {
+			if err := json.NewDecoder(r.Body).Decode(&e); err != nil {
+				t.Error(err)
+				return
+			}
+			envelopes[e.RequestID] = e
+		} else {
+			var ok bool
+			e, ok = envelopes[filepath.Base(r.URL.Path)]
+			if !ok {
+				w.WriteHeader(404)
+				json.NewEncoder(w).Encode(wire.ErrorResponse{Code: "command_not_found"})
+				return
+			}
+		}
+		json.NewEncoder(w).Encode(wire.CommandResponse{RequestID: e.RequestID, ProjectID: e.ProjectID, InstanceID: e.InstanceID, Action: e.Action, TargetID: e.TargetID, ExpectedVersion: e.ExpectedVersion, Original: &e, Status: "outcome_unknown", Code: "outcome_unknown"})
+	}))
+	defer server.Close()
+	c := &Console{ref: api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}, client: &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}}
+	if err := c.saveOutgoing(outgoing{Version: 1, Envelope: envelope}); err != nil {
+		t.Fatal(err)
+	}
+	if receipt, err := c.Receipt(context.Background(), envelope.RequestID); err != nil || receipt.Status != "indeterminate" {
+		t.Fatalf("unknown control status leaked into the journal: %+v %v", receipt, err)
+	}
+	if command, err := c.Command(context.Background(), envelope.RequestID); err != nil || command.Status != "indeterminate" {
+		t.Fatalf("unknown command status leaked into the journal: %+v %v", command, err)
+	}
+	input := api.DecisionInput{CommandID: strings.Repeat("b", 32), Answer: api.DecisionAnswer{RunID: "run", DecisionID: "decision", ExpectedDecisionVersion: 3, ExpectedRunRevision: 7, SourceAttemptID: "attempt", ServiceInstanceID: identity.InstanceID}}
+	if command, _, err := c.SubmitDecision(context.Background(), input); err != nil || command.Status != "indeterminate" {
+		t.Fatalf("unknown submitted answer status leaked into the journal: %+v %v", command, err)
+	}
 }
 
 func testConsoleCloseCancelsHTTP(t *testing.T) {
