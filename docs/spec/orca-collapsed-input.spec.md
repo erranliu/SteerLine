@@ -1,5 +1,7 @@
 # Spec：Orca 折叠输入回显的回复采集
 
+后续完成判定、状态 codec 与原生认证以[原生状态切换 Spec](orca-native-state-transitions.spec.md)、[Plan](orca-native-state-transitions.plan.md)及[验收](../acceptance/orca-native-state-transitions.md)为准；本文保留该次实现记录。
+
 普通开发，用户于 2026-10-12 授权实现并完成最小验证后提 PR。[Plan](orca-collapsed-input.plan.md) · [验收](../acceptance/orca-collapsed-input.md)。补充并修订[单终端传输 Spec](orca-terminal-transport.spec.md)的可见输入门槛。
 
 105 的 Codex 已完成实现，但公开 screen 将原提示词折叠成带省略号的一行，并显示前次工具输出的末尾。adapter 将这段显示内容与原提示词全文比较，拒绝完整的最终回复，工作流停在 implement.execute。

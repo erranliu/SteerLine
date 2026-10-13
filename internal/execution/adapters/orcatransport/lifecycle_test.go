@@ -14,6 +14,8 @@ import (
 )
 
 type fakeHost struct {
+	nativeSends                   int
+	nativePrompt                  string
 	mu                            sync.Mutex
 	root, nativePath, incarnation string
 	calls                         [][]string
@@ -25,6 +27,13 @@ type fakeHost struct {
 	commandMode, launched         bool
 	delayLaunchIdentity           bool
 	collapsedEcho                 bool
+	waitFailures                  int
+	waitBlocked                   string
+	rejectInput                   bool
+	rejectWrongRequest            bool
+	rejectUnavailable             bool
+	waitCalls                     int
+	waitBudgets                   []time.Duration
 }
 
 func (f *fakeHost) StartManaged(*exec.Cmd) (b.StopHandle, error) {
@@ -67,7 +76,13 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 	case "terminal list":
 		result = map[string]any{"terminals": []any{terminal}}
 	case "terminal wait":
-		result = map[string]any{"wait": map[string]any{"satisfied": !f.busy}}
+		f.waitCalls++
+		f.waitBudgets = append(f.waitBudgets, c.Timeout)
+		if f.waitFailures > 0 {
+			f.waitFailures--
+			return json.Marshal(map[string]any{"ok": false, "error": map[string]any{"code": "timeout", "message": "timeout"}, "_meta": map[string]any{"runtimeId": "runtime"}})
+		}
+		result = map[string]any{"wait": map[string]any{"satisfied": !f.busy && f.waitBlocked == "", "blockedReason": f.waitBlocked}}
 	case "terminal read":
 		if f.screen || strings.Contains(strings.Join(c.Args, " "), "--screen") {
 			result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "screen", "tail": f.lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0", "truncated": true, "limited": f.clipped, "draft": f.draft}}
@@ -82,6 +97,17 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 		}
 		result = map[string]any{"terminal": map[string]any{"handle": "terminal", "source": "stream", "tail": f.lines[cursor:], "oldestCursor": "0", "nextCursor": strconv.Itoa(len(f.lines)), "latestCursor": strconv.Itoa(len(f.lines)), "truncated": f.clipped}}
 	case "terminal send":
+		if f.rejectUnavailable {
+			return json.Marshal(map[string]any{"ok": false, "error": map[string]any{"code": "runtime_unavailable", "message": "runtime unavailable"}, "_meta": map[string]any{"runtimeId": "runtime"}})
+		}
+		if f.rejectInput {
+			id := arg("--retry-request")
+			if f.rejectWrongRequest {
+				id = "foreign"
+			}
+			result = map[string]any{"send": map[string]any{"handle": "terminal", "accepted": false, "prompt": map[string]any{"requestId": id, "processIncarnation": f.incarnation}}}
+			break
+		}
 		if f.unknown {
 			return nil, errors.New("lost response")
 		}
@@ -99,6 +125,8 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 		} else {
 			f.lines = append(f.lines, "› "+text)
 		}
+		f.nativeSends++
+		f.nativePrompt = text
 		if f.writeReply {
 			f.lines = append(f.lines, `• {"summary":"original result"}`, "  Worked for "+strconv.Itoa(len(f.lines))+"s • 18:50", "› Ask Codex to do anything")
 		}
@@ -230,7 +258,7 @@ func fixtureOn(t *testing.T, environment string) (*Lifecycle, *fakeHost, b.Lifec
 	if err != nil {
 		t.Fatal(err)
 	}
-	port, err := NewLifecycle(b.LifecycleSetup{Snapshot: s, ProfileData: []b.ImplementationDataEnvelope{data}, ProfileID: "profile", AcceptedConfigVersion: "accepted", ProcessHost: f, RepositoryPath: f.root, RunDirectory: t.TempDir()})
+	port, err := NewLifecycleWithStateFactory(b.LifecycleSetup{Snapshot: s, ProfileData: []b.ImplementationDataEnvelope{data}, ProfileID: "profile", AcceptedConfigVersion: "accepted", ProcessHost: f, RepositoryPath: f.root, RunDirectory: t.TempDir()}, f.stateFactory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +561,7 @@ func TestTerminalPreviousReplyCannotCompleteNewTurn(t *testing.T) {
 	f.lines = append([]string{"changed terminal header"}, old...)
 	f.lines = append(f.lines, "changed terminal footer")
 	r, _, err = settled(t, l, s)
-	if err != nil || r.TurnEvidence != nil || r.Diagnostic == "" {
+	if err != nil || r.TurnEvidence != nil || !r.State.WorkerLive {
 		t.Fatal("previous completion was attributed to a new turn", r, err)
 	}
 }
@@ -588,7 +616,7 @@ func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
 	// Reconstruct the adapter from only its frozen setup and persisted snapshot.
 	setup := l.setup.Clone()
 	setup.Snapshot = s.Clone()
-	recovered, err := NewLifecycle(setup)
+	recovered, err := NewLifecycleWithStateFactory(setup, f.stateFactory)
 	if err != nil {
 		t.Fatal(err)
 	}

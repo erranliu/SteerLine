@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ func TestWorkerStageLocalPublishReport(t *testing.T) {
 
 func testWorkerStageRoundTrip(t *testing.T, host string) { testWorkerStageRun(t, host) }
 func testWorkerStageRun(t *testing.T, host string) {
+	gate := os.Getenv("STEERLINE_STAGE_NATIVE_GATE") == "1"
 	steps := []string{executionmodel.StepImplement, executionmodel.StepReport, executionmodel.StepPublish}
 	if os.Getenv("STEERLINE_STAGE_PUBLISH_PLAIN") == "1" {
 		steps = append(steps, executionmodel.StepPublishReport)
@@ -52,9 +54,14 @@ func testWorkerStageRun(t *testing.T, host string) {
 			environment = "paired-fixture"
 		}
 		require(t, os.MkdirAll(f.nativeStateDir, 0700))
-		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{Repository: f.repository, Environment: environment, Agent: "codex", Incarnation: "original", CommandMode: os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1", CollapsedInput: os.Getenv("STEERLINE_STAGE_COLLAPSED_INPUT") == "1"})))
+		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{NativeGate: gate, Repository: f.repository, Environment: environment, Agent: "codex", Incarnation: "original", CommandMode: os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1", CollapsedInput: os.Getenv("STEERLINE_STAGE_COLLAPSED_INPUT") == "1"})))
+		if gate {
+			require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "gate-phase"), []byte("working")))
+		}
 		f.config.Host, f.config.Agent = "orca", "codex"
 		setNativeImplementationProfiles(t, &f.config, codexworker.ProfileConfig{}, &terminal.Profile{Executable: os.Args[0], Args: []string{"--fake", "terminal-orca", f.nativeStateDir}, RepositorySelector: "id:fixture", Environment: environment, WaitTimeout: "5s"})
+		f.config.ExecutionDirectory, err = steerlineapp.NewBuiltinDirectoryWithOrcaStateFactory(f.config.ProcessHost, integrationStateFactory(f.nativeStateDir, nil))
+		require(t, err)
 		t.Cleanup(func() {
 			if t.Failed() {
 				data, _ := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
@@ -71,9 +78,47 @@ func testWorkerStageRun(t *testing.T, host string) {
 		createIntegrationTask(t, ctx, f, 902, 901)
 	}
 	resolver := &integrationLifecycleResolver{}
+	var publishQueries atomic.Int32
+	if gate {
+		resolver.stateFactory = integrationStateFactory(f.nativeStateDir, func() {
+			raw, _ := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
+			var state terminalFixture
+			if json.Unmarshal(raw, &state) == nil && state.Sends == 3 {
+				publishQueries.Add(1)
+			}
+		})
+	}
 	service := startIntegrationService(t, ctx, f.config, resolver)
 	defer service.stop(t)
 	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
+	if gate {
+		working := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.WorkflowStage == executionmodel.StepPublish && publishQueries.Load() >= 1 && e.CurrentTurnID != "" && e.CurrentTurnID == e.CurrentCommandID && e.LastStoppedTurnID != e.CurrentTurnID
+		})
+		if len(working.runtime.WorkflowRuns[0].StageInputs) != 3 || len(working.runtime.WorkflowRuns[0].StageResults) != 2 || working.execution.TurnEndedAt != nil {
+			t.Fatal("working publish accepted the old report")
+		}
+		// Let the old screen settle for longer than the removed screen heuristic.
+		select {
+		case <-time.After(2200 * time.Millisecond):
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+		still := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.WorkflowStage == executionmodel.StepPublish
+		})
+		if len(still.runtime.WorkflowRuns[0].StageResults) != 2 || publishQueries.Load() != 1 {
+			t.Fatal("stable old report or duplicate hint advanced/requeried")
+		}
+		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "gate-phase"), []byte("ended")))
+		ended := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.WorkflowStatus == "reconciling" && e.TurnEndedAt != nil && publishQueries.Load() >= 2
+		})
+		if len(ended.runtime.WorkflowRuns[0].StageInputs) != 3 || len(ended.runtime.WorkflowRuns[0].StageResults) != 2 || ended.execution.LastTurnOutcome != "unknown" {
+			t.Fatal("native end froze an old reply or declared success")
+		}
+		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "gate-phase"), []byte("reply")))
+	}
 
 	ready := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
 		return run.WorkflowStatus == "waiting_external" && run.WorkflowStage == executionmodel.StepAwaitMerge
@@ -95,6 +140,9 @@ func testWorkerStageRun(t *testing.T, host string) {
 					}
 				}
 			}
+		}
+		if host != "local" && result.NativeOutcome != "unknown" {
+			t.Fatal("missing native outcome was upgraded to success")
 		}
 		if inputValues != 1 {
 			t.Fatal("actual native input does not have one frozen value")
@@ -196,6 +244,13 @@ func testWorkerStageRun(t *testing.T, host string) {
 		if state.Launches != 1 || state.Sends != turns {
 			t.Fatal("startup or business input repeated", state.Launches, state.Sends)
 		}
+	}
+}
+
+func TestWorkerStageOrcaNativeStateGate(t *testing.T) {
+	t.Setenv("STEERLINE_STAGE_NATIVE_GATE", "1")
+	for _, host := range []string{"orca", "orca-environment"} {
+		t.Run(host, func(t *testing.T) { testWorkerStageRun(t, host) })
 	}
 }
 

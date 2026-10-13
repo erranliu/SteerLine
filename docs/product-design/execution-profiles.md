@@ -30,9 +30,11 @@ SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改�
 
 ## Orca 单终端：本机与远端
 
+本机普通 CLI 操作也使用进程环境中的原生配对认证，发送前匹配本机 bootstrap runtime，避免本机管道 CLI 的 1 秒可达性预检。就绪超时对原终端最多复查一次；明确交互阻塞保留诊断且不发送输入。严格绑定的拒绝回执保留 rejected，投递未知仍不得重发。见[本机输入验收](../acceptance/orca-local-input-readiness.md)。
+
 统一使用 `host: orca`、`orca.terminal-profile` 格式 2 和 `orca_terminal_v3`。agent 是 Orca 注册的原生启动器标识，不由 SteerLine 拼接模型命令。payload 显式指定 CLI、固定 repository_selector 和 wait_timeout；environment 省略表示本机，指定后所有 worktree / terminal 调用都路由到该环境。
 
-本机与远端都只有一个受管 agent 终端。工作区创建时不传 prompt；上层 worker 保存与 Codex 一致的阶段提示词，不添加 SL_RESULT、base64 或 nonce 指令；下层通过 terminal send 原样投递一次，通过原终端 screen、原请求开始事实与可见完成边界采集普通回复。accepted 与 turn_started 分开记录。原 runtime / terminal / incarnation / worktree / branch 不符、输出裁剪、缺失输入/回复边界或未确认开始，均不证明完成，也不改投其他终端或补 Enter。
+本机与远端都只有一个受管 agent 终端。工作区创建时不传 prompt；上层 worker 保存与 Codex 一致的阶段提示词，不添加 SL_RESULT、base64 或 nonce 指令；下层通过 terminal send 原样投递一次，通过原请求回执、原生主代理状态及原终端完整可见回复核验本轮普通结果。accepted 与 turn_started 分开记录。主代理结束由订阅/补查询确认，可见完成行不作为执行结束信号；本轮普通原文与完整可见回复一致后才推进。配对订阅使用原生认证，本机需现有配对环境变量，environment 读取 Orca 保存的认证。原 runtime / terminal / incarnation / worktree / branch 不符、输出裁剪、缺失输入/回复边界或未确认开始，均不证明完成，也不改投其他终端或补 Enter。
 
 不提供 Orca agent 专用日志、模型覆盖、完整会话全文读取、原生提问路由或强制报告只读权限。两端仅通过 worktree show 比较提交与分支；inspection_scope=revision 不代表未提交工作区已经验证干净。业务结果仍经同一 development/v2 与 Git/PR 权威检查，发布 JSON 必须含 PR URL，必要时进入一次 publish.report。停止只关闭原终端，不把 PTY 关闭扩大为所有子进程写入者已消失。
 

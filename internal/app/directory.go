@@ -9,22 +9,29 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
+	native "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
-const executionDirectoryVersion = "builtin-execution-v7"
+const executionDirectoryVersion = "builtin-execution-v8"
 
 // NewBuiltinDirectory constructs independent catalogs. The instance is bound
 // once, before any registration callback can run.
 func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*execution.ExecutionDirectory, error) {
+	return NewBuiltinDirectoryWithOrcaStateFactory(processHost, nil)
+}
+
+// An explicit native state port supports isolated platform fixtures. Normal
+// composition uses the authenticated Orca implementation.
+func NewBuiltinDirectoryWithOrcaStateFactory(processHost executionbackend.ManagedProcessHost, stateFactory native.StateFeedFactory) (*execution.ExecutionDirectory, error) {
 	if processHost == nil {
 		return nil, errors.New("managed process host is required")
 	}
 	var directory *execution.ExecutionDirectory
 	bound := func() *execution.ExecutionDirectory { return directory }
 	localCodec, local := localExecutionRegistration(processHost, bound)
-	terminalCodec, terminal := terminalExecutionRegistration(processHost, bound)
+	terminalCodec, terminal := terminalExecutionRegistration(processHost, bound, stateFactory)
 	var err error
 	directory, err = execution.NewExecutionDirectory(executionDirectoryVersion,
 		[]execution.ImplementationProfileCodec{localCodec, terminalCodec},

@@ -33,7 +33,11 @@ func (h *observationHandle) Close()                      { _ = h.owner.Close(con
 func (l *Lifecycle) observe(s b.LifecycleSnapshot) b.LifecycleObserver {
 	ctx, cancel := context.WithCancel(context.Background())
 	o := &observer{events: make(chan b.LifecycleEvent, 4), done: make(chan error, 1), cancel: cancel, process: s.Ref.External}
+	l.feedMu.Lock()
+	ownedFeed := l.feed
+	l.feedMu.Unlock()
 	go func() {
+		defer l.releaseStateFeed(ownedFeed)
 		defer close(o.events)
 		defer close(o.done)
 		send := func(event b.LifecycleEvent) bool {
@@ -74,7 +78,7 @@ func (l *Lifecycle) observe(s b.LifecycleSnapshot) b.LifecycleObserver {
 			}
 			return true
 		}
-		started, waiting := false, false
+		started, waiting, ended := s.Session.CurrentCommandID == command(s) && s.Session.CurrentTurnID == command(s), false, false
 		for {
 			before, _ := json.Marshal(s.Implementation)
 			receipt, _, err := l.observeOnce(ctx, s)
@@ -102,10 +106,19 @@ func (l *Lifecycle) observe(s b.LifecycleSnapshot) b.LifecycleObserver {
 				started = true
 				committed = true
 			}
+			if receipt.State.TurnCompleted && receipt.TurnEvidence == nil && !ended {
+				if !send(b.LifecycleEvent{Fact: b.EventFact{Kind: b.EventStatus, Source: "orca.native-main-agent", SourceIdentity: SessionID(s.Ref.External), SourceSegment: command(s), SourceEventID: command(s) + ":native-ended", SessionID: SessionID(s.Ref.External), StartedTurnID: command(s), Completed: true, Matched: true, Outcome: "unknown"}, Implementation: receipt.Implementation}) {
+					return
+				}
+				ended, committed = true, true
+			}
 			if evidence := receipt.TurnEvidence; evidence != nil && evidence.Completed {
 				outcome := "failed"
 				if evidence.Succeeded {
 					outcome = "succeeded"
+				}
+				if evidence.NativeOutcome != "" {
+					outcome = evidence.NativeOutcome
 				}
 				if !send(b.LifecycleEvent{Fact: b.EventFact{Kind: b.EventCompleted, Source: replySource, SourceIdentity: SessionID(s.Ref.External), SourceSegment: command(s), SourceEventID: evidence.FinalItemID, SessionID: SessionID(s.Ref.External), StartedTurnID: command(s), Completed: true, Matched: true, Outcome: outcome, LastMessage: evidence.LastMessage}, Implementation: receipt.Implementation}) {
 					return

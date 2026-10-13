@@ -265,6 +265,20 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 		s.refreshRun(run)
 	}
 	var completionCandidate *executionbackend.LifecycleCandidate
+	// An ended turn may still lack a verified ordinary final. Preserve the
+	// stopped fact without a stage result or another input; observation continues.
+	if fact.Kind == executionbackend.EventStatus && fact.Completed && fact.Matched && fact.StartedTurnID != "" {
+		if fact.StartedTurnID != execution.CurrentTurnID {
+			return executionmodel.ErrTurnStale
+		}
+		if execution.LastStoppedTurnID != execution.CurrentTurnID {
+			if err := s.stopVerifiedWorkerTurn(run, workflow, execution, fact.StartedTurnID, "unknown", false); err != nil {
+				return err
+			}
+			workflow.Status, workflow.StageDiagnostic = "reconciling", "Native turn ended; original final reply is not yet verified"
+			s.refreshRun(run)
+		}
+	}
 	if ev.Candidate != nil {
 		candidate := ev.Candidate.Clone()
 		if err := candidate.Validate(); err != nil || candidate.Action != executionbackend.LifecycleReportCompletion || candidate.Input.Completion == nil {

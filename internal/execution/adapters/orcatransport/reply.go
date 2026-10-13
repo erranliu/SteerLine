@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const replySource = "orca.terminal.rendered-reply.v1"
+const replySource = "orca.terminal.native-state-reply.v1"
 const maxReplyBytes = 32 << 10
 
 func digest(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
@@ -60,7 +60,7 @@ func renderedReply(agent string, lines []string) (text, fingerprint, problem str
 	}
 	// The user-message marker delimits the reply, even when the TUI collapses
 	// its text or clips preceding tool history. The lifecycle binds the input
-	// through the original send/start receipt and rejects the pre-send baseline.
+	// through the original send/start receipt and native ended-reply association.
 	body := []string{strings.TrimLeft(strings.TrimPrefix(lines[last], "•"), " ")}
 	for _, line := range lines[last+1 : end] {
 		if strings.HasPrefix(strings.TrimSpace(line), "└ Tip:") {

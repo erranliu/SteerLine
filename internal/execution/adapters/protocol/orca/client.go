@@ -1,4 +1,4 @@
-// Package orca contains only the public CLI wire contract. It knows no tasks,
+// Package orca contains the public CLI and runtime query wire contracts. It knows no tasks,
 // business steps, agent-private logs or orchestration lifecycle.
 package orca
 
@@ -91,6 +91,10 @@ func (c Client) MetaCall(ctx context.Context, args ...string) (Result, error) {
 	if err != nil || timeout <= 0 {
 		timeout = 40 * time.Second
 	}
+	return c.MetaCallWithTimeout(ctx, timeout, args...)
+}
+
+func (c Client) MetaCallWithTimeout(ctx context.Context, timeout time.Duration, args ...string) (Result, error) {
 	raw, callErr := c.Raw(ctx, timeout, args...)
 	envelope, parseErr := ParseEnvelope(raw)
 	var exit *exec.ExitError
