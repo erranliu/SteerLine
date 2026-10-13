@@ -6,7 +6,7 @@
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 执行中，待复审/合入 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：当前代码已接线并删除 WinUI；自动验证进行中，TH-M1 待验，一个实现 PR |
+| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 源码/自动验证已交付；待独立复审/合入 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6 通过，TH-M1 待验；[草稿 PR #299](https://github.com/erranliu/SteerLine/pull/299)，未合并 |
 
 ## 推进边界
 
@@ -17,6 +17,8 @@
 启动需固定已提交的实际 Spec/Plan commit/路径，核对主干与任务状态。本次由用户直接授权实施；Spec/Plan 固定 commit `83a6cc4a7321994a55e5a9ae0f308927eb9fb1b3`，执行起点 `efd492cac9940a50966b3ccdb65d56012931d1d6`，分支 `codex/tui-http-client`。交付后登记自动验收、必要回归、独立复审和真实合并，再更新本表；TH-M1 可按 Plan 后置，不将实现完成写成全部已验。
 
 ## 待人工验收
+
+最终自动验证固定 commit `2c58de3207ab76aeec5e69ee8421787137051183`（clean）：新独立 simulate 包的真实 TUI/HTTP/Go 场景和 L1 均通过。原生 final 明确来源缺口，未验声明保持，完整正文 HTTP 消费另有测试。精确构建/请求/停止与失败修正证据归专属验收。独立复审和真实合并未完成，暂不按 roadmap 规则记实现完成，不移除草稿条目。
 
 | 范围 | 状态 / 安排 | 明细 |
 | --- | --- | --- |

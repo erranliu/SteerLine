@@ -8,7 +8,7 @@
 
 服务先取得现有仓库/运行目录锁并完成恢复，再绑定 `127.0.0.1` 的随机 TCP 端口并开始提供 HTTP。服务不随 UI 窗口退出。实例发现文件位于 `<run_dir>/local-api/discovery.json`，凭证文件位于同目录的 `credentials/` 子目录；文件内容不进入 URL 或日志。Windows 目录和凭证 DACL 仅授予当前 Windows SID，客户端连接前重新核验 DACL。每个服务实例创建新凭证；发现文件包含 `protocol`, `project_id`, `repository_identity`, `instance_id`, `process`, `address`, `credential_path`, `ready` 与诊断，不包含凭证值。端口冲突也会写受限 `ready=false` 发现记录，保留原生绑定错误供客户端显示。
 
-`project_id` 是仓库身份 UTF-8 字节 SHA-256 的小写十六进制路由键；完整仓库身份只通过认证的 identity DTO 返回。客户端不得通过 PATH、超时或旧发现文件启动另一服务。`ready=false` 返回原实例的启动诊断；此时只开放身份/回执读取及针对该实例的停服命令。
+`project_id` 是仓库身份 UTF-8 字节 SHA-256 的小写十六进制路由键；完整仓库身份只通过认证的 identity DTO 返回。客户端不得通过 PATH、超时或旧发现文件启动另一服务。`ready=false` 返回原实例的启动诊断；此时只开放只读查询/回执及针对该实例的停服命令。
 
 每个请求必须携带 `Authorization: Bearer <credential>`，使用精确发现的 `Host`，来源为 IPv4 loopback，且不包含浏览器 `Origin`。服务不启用 CORS。服务身份以 `/v1/identity` 响应中的协议、项目、实例、进程、能力和实时就绪状态为准。`ready=false` 时只提供诊断及只读查询，并允许停掉发现的原实例；业务变更被拒绝并以原 ID 保留 rejection。进程/实例不一致时客户端刷新并停止提交旧目标。
 

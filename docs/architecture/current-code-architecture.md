@@ -75,7 +75,7 @@ Within console, [`final_reader.go`](../../internal/console/final_reader.go) owns
 
 ## Current package inventory
 
-At d77c399f, Windows `go list ./...` enumerates 45 packages. The current inventory includes the public Orca CLI codec, compact worker return contract, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
+At 2c58de32, Windows `go list ./...` enumerates 49 packages. The current inventory includes the four isolated TUI/HTTP consumer owners, public Orca CLI codec, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
 
 | Owner / purpose | Current packages |
 | --- | --- |
@@ -84,7 +84,7 @@ At d77c399f, Windows `go list ./...` enumerates 45 packages. The current invento
 | Console | `internal/console`, `internal/console/activityrender` |
 | Task | `internal/task`, `internal/task/model` |
 | Execution actor and pure values | `internal/execution`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
-| Execution effects and compact reply contract | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace`, `internal/execution/workerreturn` |
+| Execution effects and compact reply contract | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
 | Filesystem guards | `internal/pathguard` |
 | Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph`, `internal/product/httpapi`, `internal/product/httpclient`, `internal/product/httpcontract`, `internal/product/httpfs` |
 | Storage | `internal/storage/ports`, `internal/storage/sqlite` |
