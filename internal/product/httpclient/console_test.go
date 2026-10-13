@@ -16,6 +16,29 @@ import (
 )
 
 func TestTUIHTTPContract(t *testing.T) {
+	t.Run("render metadata remains responsive during HTTP IO", func(t *testing.T) {
+		entered, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			close(entered)
+			<-release
+			json.NewEncoder(w).Encode(api.ProjectSnapshot{})
+		}))
+		defer server.Close()
+		defer close(release)
+		c := &Console{ref: api.ProjectRef{Identity: "repo"}, client: &Client{baseURL: server.URL, project: wire.ProjectID("repo"), http: server.Client()}}
+		go func() { c.ReadProject(context.Background(), "", api.ProjectSnapshot{}); close(finished) }()
+		<-entered
+		metadata := make(chan api.ProjectRef, 1)
+		go func() { metadata <- c.Project() }()
+		select {
+		case ref := <-metadata:
+			if ref.Identity != "repo" {
+				t.Fatal("wrong cached metadata")
+			}
+		case <-time.After(250 * time.Millisecond):
+			t.Fatal("render metadata blocked behind network IO")
+		}
+	})
 	t.Run("all TUI actions retain typed targets and versions", testConsoleActions)
 	t.Run("lost stop receipt remains unverified", testStopUnknown)
 	t.Run("lost response, duplicate and reopened client preserve original intent", func(t *testing.T) {

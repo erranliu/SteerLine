@@ -23,12 +23,13 @@ import (
 // Console is a reconnectable HTTP consumer. Its only persistent files are
 // connection discovery and its own immutable outgoing envelopes/observations.
 type Console struct {
-	mu       sync.Mutex
-	ref      api.ProjectRef
-	client   *Client
-	snapshot api.ProjectSnapshot
-	closed   bool
-	identity wire.Identity
+	mu        sync.Mutex
+	projectMu sync.RWMutex
+	ref       api.ProjectRef
+	client    *Client
+	snapshot  api.ProjectSnapshot
+	closed    bool
+	identity  wire.Identity
 }
 
 func NewConsole(ctx context.Context, ref api.ProjectRef) *Console {
@@ -39,8 +40,10 @@ func NewConsole(ctx context.Context, ref api.ProjectRef) *Console {
 	return c
 }
 func (c *Console) Project() api.ProjectRef {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	// Rendering/input availability reads only cached metadata. Never wait for
+	// an in-flight HTTP query on the Bubble Tea event loop.
+	c.projectMu.RLock()
+	defer c.projectMu.RUnlock()
 	return api.CloneProjectRef(c.ref)
 }
 func (c *Console) Close() error {
@@ -72,9 +75,11 @@ func (c *Console) connect(ctx context.Context) (*Client, error) {
 	}
 	c.client = client
 	c.identity = client.Identity()
+	c.projectMu.Lock()
 	instruction := c.ref.Presentation.ServiceInstruction
 	c.ref.Presentation = presentation.Presentation
 	c.ref.Presentation.ServiceInstruction = instruction
+	c.projectMu.Unlock()
 	return client, nil
 }
 func (c *Console) ReadProject(ctx context.Context, selected string, previous api.ProjectSnapshot) api.ProjectSnapshot {
