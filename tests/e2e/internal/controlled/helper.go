@@ -81,6 +81,12 @@ func Main(args []string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(pr)
 	}
+	if len(args) > 0 && args[0] == "orca-fixture" {
+		return orcaFixture(path, args[1:])
+	}
+	if len(args) > 0 && args[0] == "release-recovery" {
+		return releaseRecovery(path)
+	}
 	mu := &sync.Mutex{}
 	handle := func(raw []byte, send func(any) error) error {
 		mu.Lock()
@@ -147,7 +153,11 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 	}
 	switch message.Method {
 	case "initialize":
-		response["result"] = map[string]string{"userAgent": "controlled-e2e", "codexHome": filepath.Dir(path), "platformOs": "windows"}
+		home := os.Getenv("CODEX_HOME")
+		if home == "" {
+			home = filepath.Dir(path)
+		}
+		response["result"] = map[string]string{"userAgent": "controlled-e2e", "codexHome": home, "platformOs": "windows"}
 	case "thread/start":
 		var params struct {
 			Cwd string `json:"cwd"`
@@ -172,6 +182,10 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		}
 		response["result"] = map[string]any{"thread": map[string]any{"id": s.Session, "cwd": s.Cwd}}
 	case "thread/resume", "thread/read":
+		if s.Recovery != nil && s.Recovery.MissingThread {
+			response["error"] = map[string]any{"code": -32600, "message": "original thread unavailable"}
+			break
+		}
 		var params struct {
 			ThreadID string `json:"threadId"`
 		}
@@ -204,51 +218,19 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if s.Session == "" || params.ThreadID != s.Session || len(params.Input) == 0 {
 			return fmt.Errorf("invalid controlled dispatch")
 		}
-		steps := []string{"Implement the following Spec and Plan.", "Format the preceding implementation result as JSON.", "Push and create or reuse a PR using the current checked-out branch."}
+		if s.Recovery != nil {
+			return recoveryStart(path, s, message.ID, params.ThreadID, params.Input[0].Text, send)
+		}
+		steps := fixtureSteps
 		index := len(s.Turns)
 		if index >= len(steps) || !strings.HasPrefix(params.Input[0].Text, steps[index]) {
 			return fmt.Errorf("unexpected duplicate or out-of-order staged dispatch")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		final := "Controlled candidate implemented and committed locally; no publication performed."
-		switch index {
-		case 0:
-			result := s.ResultText
-			if result == "" {
-				result = "controlled E2E result\n"
-			}
-			if err := os.WriteFile(filepath.Join(s.Cwd, "result.txt"), []byte(result), 0600); err != nil {
-				return err
-			}
-			if _, err := Git(ctx, s.Cwd, "add", "result.txt"); err != nil {
-				return err
-			}
-			if _, err := Git(ctx, s.Cwd, "commit", "-m", "controlled worker candidate"); err != nil {
-				return err
-			}
-		case 1:
-			// Report only the already recorded execute result; do no business I/O.
-			raw, _ := json.Marshal(map[string]any{"outcome": "done", "summary": "Controlled source implementation completed"})
-			final = string(raw)
-		case 2:
-			branch, err := Git(ctx, s.Cwd, "symbolic-ref", "--short", "HEAD")
-			if err != nil {
-				return err
-			}
-			if _, err := Git(ctx, s.Cwd, "push", "origin", branch); err != nil {
-				return err
-			}
-			if err := githubCommand(path, []string{"pr", "create", "--repo", s.RepositoryName(), "--base", s.BranchName(), "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}); err != nil {
-				return err
-			}
-			published, err := Read(path)
-			if err != nil {
-				return err
-			}
-			s.PR, s.PRs = published.PR, published.PRs
-			raw, _ := json.Marshal(map[string]any{"outcome": "done", "outputs": map[string]string{"pr_url": s.PR.URL}, "summary": "Controlled candidate pushed and PR created"})
-			final = string(raw)
+		final, err := executeControlledStage(ctx, path, &s, index)
+		if err != nil {
+			return err
 		}
 		s.Dispatches++
 		turnID := uuid.NewString()
@@ -346,4 +328,51 @@ func websocket(conn net.Conn, handle func([]byte, func(any) error) error) error 
 			return err
 		}
 	}
+}
+
+func executeControlledStage(ctx context.Context, path string, s *State, index int) (string, error) {
+	final := "Controlled candidate implemented and committed locally; no publication performed."
+	switch index {
+	case 0:
+		result := s.ResultText
+		if result == "" {
+			result = "controlled E2E result\n"
+		}
+		if err := os.WriteFile(filepath.Join(s.Cwd, "result.txt"), []byte(result), 0600); err != nil {
+			return "", err
+		}
+		if _, err := Git(ctx, s.Cwd, "add", "result.txt"); err != nil {
+			return "", err
+		}
+		if staged, err := Git(ctx, s.Cwd, "diff", "--cached", "--name-only"); err != nil {
+			return "", err
+		} else if staged != "" {
+			if _, err := Git(ctx, s.Cwd, "commit", "-m", "controlled worker candidate"); err != nil {
+				return "", err
+			}
+		}
+	case 1:
+		// Report only the original execute result; do no business I/O.
+		raw, _ := json.Marshal(map[string]any{"outcome": "done", "summary": "Controlled source implementation completed"})
+		final = string(raw)
+	case 2:
+		branch, err := Git(ctx, s.Cwd, "symbolic-ref", "--short", "HEAD")
+		if err != nil {
+			return "", err
+		}
+		if _, err := Git(ctx, s.Cwd, "push", "origin", branch); err != nil {
+			return "", err
+		}
+		if err := githubCommandOutput(path, []string{"pr", "create", "--repo", s.RepositoryName(), "--base", s.BranchName(), "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}, io.Discard); err != nil {
+			return "", err
+		}
+		published, err := Read(path)
+		if err != nil {
+			return "", err
+		}
+		s.PR, s.PRs = published.PR, published.PRs
+		raw, _ := json.Marshal(map[string]any{"outcome": "done", "outputs": map[string]string{"pr_url": s.PR.URL}, "summary": "Controlled candidate pushed and PR created"})
+		final = string(raw)
+	}
+	return final, nil
 }

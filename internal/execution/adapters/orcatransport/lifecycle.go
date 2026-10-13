@@ -711,8 +711,58 @@ func (l *Lifecycle) InspectLifecycleWorkspace(ctx context.Context, s b.Lifecycle
 	return InspectWorkspace(ctx, l.client, s.Ref, s.Session.ProjectID)
 }
 func (l *Lifecycle) VerifyManualRecovery(ctx context.Context, s b.LifecycleSnapshot) (b.LifecycleRecoveryEvidence, error) {
+	if err := l.validate(s); err != nil {
+		return b.LifecycleRecoveryEvidence{}, err
+	}
 	_, err := l.original(ctx, s)
-	return b.LifecycleRecoveryEvidence{SessionAvailable: err == nil}, err
+	evidence := b.LifecycleRecoveryEvidence{SessionAvailable: err == nil, ResourceAvailable: err == nil}
+	if err != nil {
+		evidence.Diagnostic = "Original terminal unavailable; replacement recovery is unsupported: " + err.Error()
+		return evidence, err
+	}
+	// A rendered idle screen can belong to a previous turn. Qualification uses
+	// the same original native main-agent source as normal observation.
+	feed, err := l.stateFactory(ctx, l.profile.Environment, s.Ref.External)
+	if err != nil {
+		return evidence, err
+	}
+	defer feed.Close()
+	initial := feed.Initial()
+	state, err := l.state(s)
+	if err != nil {
+		return evidence, err
+	}
+	provider, pane := "", ""
+	for _, turn := range state.Turns {
+		if turn.Command == s.Session.CurrentCommandID || turn.Command == s.Session.PendingCommandID {
+			if turn.Native.Provider != "" {
+				provider, pane = turn.Native.Provider, turn.Native.Pane
+			}
+		}
+	}
+	current, err := feed.Query(ctx)
+	if err != nil {
+		return evidence, err
+	}
+	idle := current.PaneKey == initial.PaneKey && initial.PaneKey != "" && current.AgentType == "codex" &&
+		current.ProviderSession.ID != "" && current.ProviderSession.ID == initial.ProviderSession.ID &&
+		(provider == "" || current.ProviderSession.ID == provider) &&
+		(pane == "" || current.PaneKey == pane) &&
+		current.MainAgent != nil && current.MainAgent.State == "done" && current.MainAgent.StateStartedAt > 0 &&
+		current.UpdatedAt >= current.MainAgent.StateStartedAt && !current.Interrupted && (current.MainAgent.Outcome == "" || current.MainAgent.Outcome == "success") &&
+		(initial.MainAgent == nil || current.MainAgent.StateStartedAt >= initial.MainAgent.StateStartedAt)
+	page, err := l.client.ReadScreen(ctx, s.Ref.External)
+	if err != nil {
+		return evidence, err
+	}
+	if _, err := l.original(ctx, s); err != nil {
+		return b.LifecycleRecoveryEvidence{}, err
+	}
+	evidence.SessionIdle = idle && strings.TrimSpace(page.Draft) == ""
+	if !evidence.SessionIdle {
+		evidence.Diagnostic = "Original native main agent is active/unverified or composer has an unsubmitted draft; no recovery input is allowed"
+	}
+	return evidence, nil
 }
 func (l *Lifecycle) BindRecovery(_ context.Context, original, replacement b.LifecycleSnapshot) (b.ImplementationDataEnvelope, error) {
 	return b.ImplementationDataEnvelope{}, errors.New("replacing an Orca session requires a new execution")

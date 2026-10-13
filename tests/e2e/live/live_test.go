@@ -17,3 +17,11 @@ func TestDeliveryLocalCodex(t *testing.T) {
 func TestRecoveryLocalCodex(t *testing.T) {
 	testenv.LiveDelivery(testenv.NewScenario(t, "recovery.local-codex"), "local-codex", true)
 }
+
+func TestCodexResumeLive(t *testing.T) {
+	testenv.LiveCoreRecovery(testenv.NewScenario(t, "recovery.codex-resume-live"), "local-codex")
+}
+
+func TestOrcaLocalReconnectLive(t *testing.T) {
+	testenv.LiveCoreRecovery(testenv.NewScenario(t, "recovery.orca-local-reconnect-live"), "orca-terminal-local")
+}

@@ -16,6 +16,7 @@ import (
 )
 
 type State struct {
+	Recovery   *RecoveryFixture                 `json:"recovery,omitempty"`
 	Repository string                           `json:"repository,omitempty"`
 	BaseBranch string                           `json:"base_branch,omitempty"`
 	ResultText string                           `json:"result_text,omitempty"`

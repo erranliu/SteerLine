@@ -22,6 +22,7 @@ type RecoveryInspection struct {
 	TaskID, DecisionID, DecisionStatus, ExecutionStatus, WorkflowStage, WorkflowStatus, Backend, Protocol string
 	Target                                                                                                executionbackend.ExecutionTarget
 	ProcessCheck                                                                                          string
+	SessionCheck, ContinuationCheck                                                                       string
 	Workspace                                                                                             *executionbackend.WorkspaceInspection
 	WorkspaceError                                                                                        string
 	NativeClaim                                                                                           *taskmodel.TaskRecord

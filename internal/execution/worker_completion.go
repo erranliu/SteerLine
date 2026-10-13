@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -87,8 +86,17 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 		execution.CurrentCommandID != evidence.CommandID && execution.PendingCommandID != evidence.CommandID {
 		return s.waitWorkerFlow(run, "the original turn receipt differs from its fixed execution input")
 	}
-	if execution.RecoveryRequired {
-		execution.RecoverySessionAvailable = ptr(receipt.State.SessionAvailable)
+	// A result receipt proves its original turn, not current session eligibility.
+	// Preserve the shared qualification until its next probe; an omitted native
+	// availability flag must not invalidate consent with a synthetic false fact.
+	if execution.PendingCommandID == evidence.CommandID {
+		opID, err := s.recordWorkerTurnStarted(run, workflow, execution, evidence.TurnID, evidence.SessionID)
+		if err != nil {
+			return s.waitWorkerFlow(run, "original turn start could not be reconciled: "+err.Error())
+		}
+		if err := s.commitWorker(run, opID); err != nil {
+			return err
+		}
 	}
 	if execution.CurrentTurnID == "" {
 		if err := BeginWorkerTurn(workflow, execution, evidence.SessionID, evidence.TurnID); err != nil {
@@ -151,8 +159,7 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 			return s.commitWorker(run)
 		}
 	}
-	if workerErr != nil {
-		evidence.Failure = strings.TrimSpace(evidence.Failure + "; " + workerErr.Error())
-	}
+	// An observer transport failure cannot change a subsequently verified native
+	// result. Missing native evidence was handled above; only the adapter owns outcome.
 	return s.acceptStageTurn(ctx, run, lifecycle, fixed, evidence.TurnEvidence)
 }

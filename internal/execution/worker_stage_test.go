@@ -238,6 +238,13 @@ func TestWorkerStageReportRound(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			require(t, acceptTestStage(t, s, run, port, "implementation facts", scenario != "source_failed"))
+			if scenario == "source_failed" {
+				w := s.workflowRecord(run)
+				if w.Status != "waiting_input" || len(w.StageResults) != 1 || w.StageResults[0].Succeeded || len(w.StageInputs) != 1 || run.Decision == nil {
+					t.Fatal("known source failure was overwritten or started another report")
+				}
+				return
+			}
 			startQueuedStage(t, s, run)
 			body := `{"outcome":"done","outputs":{},"summary":"reported"}`
 			switch scenario {

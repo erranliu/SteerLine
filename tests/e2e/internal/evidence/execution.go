@@ -103,6 +103,27 @@ func OrcaNativeBusiness(e executionmodel.ExecutionRecord) error {
 	}
 	return nil
 }
+
+func OrcaOriginalWorkingObserved(e executionmodel.ExecutionRecord) bool {
+	if e.Protocol != string(executionbackend.ProtocolOrcaTerminalV3) || e.Process == nil || e.CurrentCommandID == "" {
+		return false
+	}
+	for _, data := range e.ImplementationData {
+		if data.ImplementationKey != transport.StateKey || data.CodecVersion != 3 || data.ValidateResourceIdentity(e.ProjectIdentity, e.ExecutionID, e.CurrentAttemptID, e.Generation, e.ConfigurationDigest) != nil {
+			continue
+		}
+		var state transport.State
+		if executionbackend.DecodeStrictJSON(data.Payload, &state, "trailing native fixture state") != nil || state.Process != *e.Process {
+			return false
+		}
+		for _, turn := range state.Turns {
+			if turn.Command == e.CurrentCommandID {
+				return turn.Accepted && turn.Started && turn.Native.WorkingAt > 0 && turn.Native.RootWorkingAt > 0 && turn.Native.Provider != "" && turn.Native.Authority != ""
+			}
+		}
+	}
+	return false
+}
 func OrcaStagedContinuity(domain reconstruction.Snapshot) error {
 	if len(domain.Executions) != 1 || len(domain.WorkflowRuns) != 1 {
 		return errors.New("missing original workflow")
@@ -112,7 +133,7 @@ func OrcaStagedContinuity(domain reconstruction.Snapshot) error {
 		return errors.New("missing three settled inputs")
 	}
 	for _, result := range w.StageResults {
-		if !result.Succeeded || result.SessionID != e.SessionID || result.FinalSource != "steerline.worker.terminal-result.v1" || result.FinalNativeTurnID != "" {
+		if !result.Succeeded || result.SessionID != e.SessionID || result.FinalSource != "orca.terminal.rendered-reply.v1" || result.FinalNativeTurnID != "" {
 			return errors.New("invalid terminal return provenance")
 		}
 	}

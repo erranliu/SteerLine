@@ -564,9 +564,15 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 		"decision："+safeTerminalText(displayDash(report.DecisionID))+" · "+safeTerminalText(displayDash(report.DecisionStatus)),
 		"后端/协议/目标："+safeTerminalText(report.Backend+" / "+report.Protocol+" / "+report.Target.ID),
 		"宿主/终端核验："+safeTerminalText(report.ProcessCheck),
+		"原会话："+safeTerminalText(report.SessionCheck),
+		"继续资格："+safeTerminalText(report.ContinuationCheck),
 	)
 	if report.Workspace != nil {
-		lines = append(lines, "worktree："+safeTerminalText(report.Workspace.Worktree), "base / HEAD："+safeTerminalText(report.Workspace.Base+" / "+report.Workspace.Head), fmt.Sprintf("dirty：%t · 采样：%s", report.Workspace.Dirty, report.Workspace.CheckedAt.Local().Format(timeLayout)))
+		dirty := fmt.Sprintf("dirty：%t", report.Workspace.Dirty)
+		if report.Workspace.InspectionScope == "revision" {
+			dirty = "仅核实版本；未提交内容未核实"
+		}
+		lines = append(lines, "worktree："+safeTerminalText(report.Workspace.Worktree), "base / HEAD："+safeTerminalText(report.Workspace.Base+" / "+report.Workspace.Head), dirty+" · 采样："+report.Workspace.CheckedAt.Local().Format(timeLayout))
 	} else {
 		lines = append(lines, "worktree 核验失败："+safeTerminalText(report.WorkspaceError))
 	}

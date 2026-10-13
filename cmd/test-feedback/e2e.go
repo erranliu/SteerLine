@@ -98,7 +98,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live" && entry.Env != "native") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex" && entry.Chain != "orca-remote-codex") || (entry.Env == "native" && (entry.Level != "L3" || entry.Chain != "")) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live" && entry.Env != "native") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-terminal-local" && entry.Chain != "orca-remote-codex") || (entry.Env == "native" && (entry.Level != "L3" || entry.Chain != "")) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -515,7 +515,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		}
 		// Task 84's L3 native Orca acceptance records the public interface's
 		// unavailable usage capability. Keep other suites and L2's gate intact.
-		orcaPublicUsage := e.Env == "live" && e.Level == "L3" && e.Chain == "orca-codex" && (e.Suite == "delivery" || e.Suite == "recovery")
+		orcaPublicUsage := e.Env == "live" && e.Level == "L3" && e.Chain == "orca-terminal-local" && (e.Suite == "delivery" || e.Suite == "recovery")
 		if orcaPublicUsage && (evidence.UsageVerified || evidence.OrcaUsageStatus != "not_exposed_by_orca") {
 			return fmt.Errorf("native Orca public usage capability missing or token verification claimed for %s", e.ID)
 		}
@@ -533,7 +533,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 				return fmt.Errorf("sandbox evidence for %s: %w", e.ID, err)
 			}
 		}
-		if (e.Level == "L2" && e.Env == "live" || e.Chain == "orca-remote-codex") && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
+		if (e.Level == "L2" && e.Env == "live" || e.Chain == "orca-remote-codex" || e.ID == "recovery.codex-resume-live" || e.ID == "recovery.orca-local-reconnect-live") && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
 			return fmt.Errorf("real merged SteerlineTest PR evidence missing for %s", e.ID)
 		}
 	}

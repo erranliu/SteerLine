@@ -106,6 +106,12 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 配对普通终端、等待预算与拒绝回执分类；两个只读回合及一个本机真实合并交付已通过。[Spec](orca-local-input-readiness.spec.md) · [Plan](orca-local-input-readiness.plan.md) · [验收](../acceptance/orca-local-input-readiness.md)。
 
+## Codex / Orca 断连恢复规划
+
+2026-10-12 经用户要求审计后收敛为可一次实施的首轮设计：原观察重接、明确失败的继续入口、Codex 原进程退出后同 thread 恢复，人工成果复用 implement 重核；Orca 先支持原终端重接与资源丢失诊断。专用成果接纳、远端真实故障链与全窗口增强延后。用户已授权按收敛范围实施，工作树实现及本轮自动验收已完成，未部署，不部署 Runtime；普通开发，无 Task ID，不进入 execution-map。
+
+[Spec](worker-disconnect-recovery.spec.md) · [Plan / 测试计划](worker-disconnect-recovery.plan.md) · [专属验收](../acceptance/worker-disconnect-recovery.md) · [L3 场景设计](../../tests/e2e/suites/recovery/README.md)。场景已补实现/注册，实时执行状态见专属验收。
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)：当前持续 worker、单写者、身份、反馈与真实交付边界。

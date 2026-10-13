@@ -202,7 +202,7 @@ func (p *Lifecycle) VerifyManualRecovery(_ context.Context, s executionbackend.L
 	if s.Ref.External.Kind == "os" {
 		absent = resourceprocess.InspectProcess(&s.Ref.External) == "process absent"
 	}
-	return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: absent, WritersAbsent: absent && resourceprocess.WorkerTreeAbsent(s.Ref.External), SessionAvailable: s.Session.SessionID != ""}, nil
+	return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: absent, WritersAbsent: absent && resourceprocess.WorkerTreeAbsent(s.Ref.External), SessionAvailable: s.Session.SessionID != "", ResourceAvailable: !absent, SessionIdle: absent || s.Session.CurrentTurnID == s.Session.LastStoppedTurnID, SessionRebindable: absent && resourceprocess.WorkerTreeAbsent(s.Ref.External)}, nil
 }
 
 func (p *Lifecycle) BindRecovery(_ context.Context, old, next executionbackend.LifecycleSnapshot) (executionbackend.ImplementationDataEnvelope, error) {
