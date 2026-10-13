@@ -2,12 +2,18 @@ package orca
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestOrcaNativeStateIdentity(t *testing.T) {
+	flags := json.RawMessage(`{"worktrees":[{"worktreeId":"worktree","agents":[{"paneKey":"tab:leaf","sessionBoundary":true,"restoredUnconfirmed":true,"lastAssistantMessageIsToolOutput":true}]}]}`)
+	flagState, flagErr := DecodeOriginalAgent(flags, "worktree", "tab:leaf")
+	if flagErr != nil || !flagState.SessionBoundary || !flagState.RestoredUnconfirmed || !flagState.ToolOutput {
+		t.Fatal("query dropped completion exclusion facts", flagState, flagErr)
+	}
 	p := b.ProcessIdentity{WorktreeID: "worktree", Terminal: "terminal", Incarnation: "original"}
 	for _, incarnation := range []string{"", "original", "replacement"} {
 		raw, _ := json.Marshal(map[string]any{"worktree": "worktree", "tabs": []any{map[string]string{"terminal": "terminal", "incarnationId": incarnation, "parentTabId": "tab", "leafId": "leaf"}}})
@@ -22,10 +28,10 @@ func TestOrcaNativeStateIdentity(t *testing.T) {
 		if (err == nil) != (parent == "") {
 			t.Fatal("child main-agent row was accepted", err)
 		}
-		if _, err := DecodeOriginalAgent(raw, "other-worktree", "tab:leaf"); err == nil {
+		if _, err := DecodeOriginalAgent(raw, "other-worktree", "tab:leaf"); err == nil || errors.Is(err, ErrStateIdentityChanged) {
 			t.Fatal("query selected another worktree")
 		}
-		if _, err := DecodeOriginalAgent(raw, "worktree", "other-pane"); err == nil {
+		if _, err := DecodeOriginalAgent(raw, "worktree", "other-pane"); err == nil || errors.Is(err, ErrStateIdentityChanged) {
 			t.Fatal("query selected another pane")
 		}
 	}

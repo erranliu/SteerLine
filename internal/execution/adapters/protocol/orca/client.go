@@ -54,6 +54,7 @@ type Result struct {
 	Payload       json.RawMessage
 	RuntimeID     string
 	ErrorCode     string
+	ErrorMessage  string
 	CallUncertain bool
 }
 type Envelope struct {
@@ -101,6 +102,7 @@ func (c Client) MetaCallWithTimeout(ctx context.Context, timeout time.Duration, 
 	result := Result{Payload: envelope.Result, RuntimeID: envelope.Meta.RuntimeID, CallUncertain: uncertain}
 	if envelope.Error != nil {
 		result.ErrorCode = envelope.Error.Code
+		result.ErrorMessage = envelope.Error.Message
 	}
 	return result, errors.Join(callErr, parseErr)
 }
@@ -123,6 +125,7 @@ func (t Terminal) Exited() bool { return t.Status == "exited" }
 
 type Worktree struct {
 	ID          string `json:"id"`
+	InstanceID  string `json:"instanceId"`
 	RepoID      string `json:"repoId"`
 	Path        string `json:"path"`
 	Head        string `json:"head"`

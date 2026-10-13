@@ -35,6 +35,7 @@ type fakeHost struct {
 	rejectUnavailable             bool
 	waitCalls                     int
 	waitBudgets                   []time.Duration
+	workspace                     map[string]any
 }
 
 func (f *fakeHost) StartManaged(*exec.Cmd) (b.StopHandle, error) {
@@ -71,7 +72,10 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 	var result any
 	switch c.Args[0] + " " + c.Args[1] {
 	case "worktree create":
-		result = map[string]any{"worktree": map[string]any{"id": "repo::" + path, "repoId": "repo", "path": path, "branch": "worker", "head": arg("--base-branch"), "baseRef": arg("--base-branch"), "displayName": arg("--name")}, "agentTerminalHandle": "terminal"}
+		f.workspace = map[string]any{"id": "repo::" + path, "instanceId": "original-workspace", "repoId": "repo", "path": path, "branch": "worker", "head": arg("--base-branch"), "baseRef": arg("--base-branch"), "displayName": arg("--name")}
+		result = map[string]any{"worktree": f.workspace, "agentTerminalHandle": "terminal"}
+	case "worktree show":
+		result = map[string]any{"worktree": f.workspace}
 	case "terminal show":
 		result = map[string]any{"terminal": terminal}
 	case "terminal list":
