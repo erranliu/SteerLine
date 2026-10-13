@@ -30,12 +30,15 @@ type Console struct {
 	snapshot  api.ProjectSnapshot
 	closed    bool
 	identity  wire.Identity
+	lifetime  context.Context
+	cancel    context.CancelFunc
 }
 
 func NewConsole(ctx context.Context, ref api.ProjectRef) *Console {
-	c := &Console{ref: ref}
+	owned, cancel := context.WithCancel(ctx)
+	c := &Console{ref: ref, lifetime: owned, cancel: cancel}
 	c.mu.Lock()
-	_, _ = c.connect(ctx)
+	_, _ = c.connect(owned)
 	c.mu.Unlock()
 	return c
 }
@@ -47,6 +50,10 @@ func (c *Console) Project() api.ProjectRef {
 	return api.CloneProjectRef(c.ref)
 }
 func (c *Console) Close() error {
+	// Abort owned network work before waiting for its serialization mutex.
+	if c.cancel != nil {
+		c.cancel()
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.closed = true
@@ -54,6 +61,18 @@ func (c *Console) Close() error {
 		return c.client.Close()
 	}
 	return nil
+}
+
+func (c *Console) requestContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if c.lifetime == nil {
+		return ctx, func() {}
+	}
+	request, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(c.lifetime, cancel)
+	if c.lifetime.Err() != nil {
+		cancel()
+	}
+	return request, func() { stop(); cancel() }
 }
 func (c *Console) connect(ctx context.Context) (*Client, error) {
 	if c.closed {
@@ -83,6 +102,8 @@ func (c *Console) connect(ctx context.Context) (*Client, error) {
 	return client, nil
 }
 func (c *Console) ReadProject(ctx context.Context, selected string, previous api.ProjectSnapshot) api.ProjectSnapshot {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	client, err := c.connect(ctx)
@@ -114,6 +135,8 @@ func (c *Console) ReadProject(ctx context.Context, selected string, previous api
 	return snapshot
 }
 func (c *Console) RecentActivity(ctx context.Context, run, execution, attempt string) (api.LogBatch, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	client, err := c.connect(ctx)
@@ -124,6 +147,8 @@ func (c *Console) RecentActivity(ctx context.Context, run, execution, attempt st
 	return page.Page, err
 }
 func (c *Console) Conversation(ctx context.Context, filter api.ConversationFilter, cursor string) (api.ConversationPage, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	client, err := c.connect(ctx)
@@ -134,6 +159,8 @@ func (c *Console) Conversation(ctx context.Context, filter api.ConversationFilte
 	return page.Page, err
 }
 func (c *Console) Body(ctx context.Context, ref api.ConversationBodyRef, offset int64, limit int) (api.ConversationBodyPage, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	client, err := c.connect(ctx)
@@ -156,6 +183,8 @@ func (c *Console) Body(ctx context.Context, ref api.ConversationBodyRef, offset 
 	return api.ConversationBodyPage{}, errors.New("body workflow binding unavailable")
 }
 func (c *Console) InspectRecovery(ctx context.Context, run string) (api.RecoveryInspection, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	client, err := c.connect(ctx)
@@ -180,6 +209,8 @@ func (c *Console) AutoDispatchAvailability(s api.ProjectSnapshot) string {
 	return api.AutoDispatchReason(c.Project(), s)
 }
 func (c *Console) DecisionEligibility(ctx context.Context, run *api.CandidateSummary) error {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	if run == nil {
 		return errors.New("no selected candidate")
 	}
@@ -332,6 +363,8 @@ func notFound(err error) bool {
 	return errors.As(err, &failure) && failure.Code == "command_not_found"
 }
 func (c *Console) submit(ctx context.Context, envelope wire.CommandEnvelope) (wire.CommandResponse, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	client, err := c.connect(ctx)
@@ -383,6 +416,8 @@ func (c *Console) submit(ctx context.Context, envelope wire.CommandEnvelope) (wi
 	return response, err
 }
 func (c *Console) lookup(ctx context.Context, id string) (wire.CommandResponse, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	stored, storedErr := c.readOutgoing(id)
@@ -540,6 +575,8 @@ func (c *Console) SubmitDecision(ctx context.Context, in api.DecisionInput) (api
 	return api.CommandReceipt{CommandID: in.CommandID, ProjectIdentity: c.Project().Identity, Kind: "answer_decision", TargetID: a.DecisionID, ExpectedVersion: a.ExpectedDecisionVersion, Status: response.Status, ResultCode: response.Code, ResultError: response.Diagnostic}, false, nil
 }
 func (c *Console) Answer(ctx context.Context, in api.AnswerInput) (api.CommandReceipt, bool, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	client, err := c.connect(ctx)
 	var run api.CandidateSummary
@@ -553,6 +590,8 @@ func (c *Console) Answer(ctx context.Context, in api.AnswerInput) (api.CommandRe
 	return c.SubmitDecision(ctx, api.DecisionInput{CommandID: in.CommandID, Answer: api.DecisionAnswer{RunID: in.RunID, DecisionID: in.DecisionID, OptionID: in.Option, Note: in.Note, ExpectedDecisionVersion: in.ExpectedVersion, ExpectedRunRevision: run.ControlRevision, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion, ServiceInstanceID: client.Identity().InstanceID}})
 }
 func (c *Console) WaitControl(ctx context.Context, id string, poll time.Duration) (*api.ControlReceipt, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	if poll <= 0 {
 		poll = 100 * time.Millisecond
 	}
@@ -572,6 +611,8 @@ func (c *Console) WaitControl(ctx context.Context, id string, poll time.Duration
 	}
 }
 func (c *Console) WaitCommand(ctx context.Context, id string, timeout time.Duration) (api.CommandReceipt, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	wait, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	for {
@@ -597,6 +638,8 @@ func newID() string {
 	return hex.EncodeToString(b)
 }
 func (c *Console) OpenNativeSession(ctx context.Context, target api.NativeSessionTarget) error {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	client, err := c.connect(ctx)
 	instance := ""
@@ -618,6 +661,8 @@ func (c *Console) OpenNativeSession(ctx context.Context, target api.NativeSessio
 	return nil
 }
 func (c *Console) StopService(ctx context.Context, by string, timeout time.Duration) (api.ServiceStopResult, error) {
+	ctx, cancel := c.requestContext(ctx)
+	defer cancel()
 	c.mu.Lock()
 	client, err := c.connect(ctx)
 	var identity wire.Identity

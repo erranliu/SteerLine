@@ -16,6 +16,7 @@ import (
 )
 
 func TestTUIHTTPContract(t *testing.T) {
+	t.Run("close cancels owned HTTP queries before waiting for their lock", testConsoleCloseCancelsHTTP)
 	t.Run("render metadata remains responsive during HTTP IO", func(t *testing.T) {
 		entered, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,4 +190,53 @@ func TestTUIHTTPContract(t *testing.T) {
 			t.Fatalf("replacement replayed %d times", posts)
 		}
 	})
+}
+
+func testConsoleCloseCancelsHTTP(t *testing.T) {
+	for _, query := range []string{"snapshot", "eligibility"} {
+		t.Run(query, func(t *testing.T) {
+			entered, release := make(chan struct{}), make(chan struct{})
+			server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+				close(entered)
+				select {
+				case <-r.Context().Done():
+				case <-release:
+				}
+			}))
+			defer server.Close()
+			defer close(release)
+			c := NewConsole(context.Background(), api.ProjectRef{Identity: "repo", RunDir: filepath.Join(t.TempDir(), "offline")})
+			defer c.Close()
+			c.client = &Client{baseURL: server.URL, project: wire.ProjectID("repo"), http: server.Client()}
+			finished := make(chan struct{})
+			go func() {
+				if query == "snapshot" {
+					c.ReadProject(context.Background(), "", api.ProjectSnapshot{})
+				} else {
+					_ = c.DecisionEligibility(context.Background(), &api.CandidateSummary{RunID: "run"})
+				}
+				close(finished)
+			}()
+			select {
+			case <-entered:
+			case <-time.After(2 * time.Second):
+				t.Fatal("HTTP request never started")
+			}
+			closed := make(chan error, 1)
+			go func() { closed <- c.Close() }()
+			select {
+			case err := <-closed:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(250 * time.Millisecond):
+				t.Fatal("client Close blocked behind uncancelled HTTP IO")
+			}
+			select {
+			case <-finished:
+			case <-time.After(time.Second):
+				t.Fatal("owned HTTP query remained alive after Close")
+			}
+		})
+	}
 }
