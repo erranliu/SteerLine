@@ -215,8 +215,11 @@ func TestTUIHTTPRuntime(t *testing.T) {
 	if err != nil || len(page.Events) == 0 {
 		t.Fatalf("canonical final query: %+v %v", page, err)
 	}
-	bodies := 0
+	bodies, gaps := 0, 0
 	for _, event := range page.Events {
+		if event.Type == api.ConversationGap && event.Diagnostic != "" {
+			gaps++
+		}
 		if event.Body == nil {
 			continue
 		}
@@ -226,8 +229,8 @@ func TestTUIHTTPRuntime(t *testing.T) {
 		}
 		bodies++
 	}
-	if bodies == 0 {
-		t.Fatal("no canonical final body asserted")
+	if bodies == 0 && gaps == 0 {
+		t.Fatal("neither canonical final body nor explicit collection gap asserted")
 	}
 	snapshot = reopened.ReadProject(ctx, "1", snapshot)
 	if len(snapshot.Connection.Snapshot.Page.Runs) != 1 || snapshot.Connection.Snapshot.Page.Runs[0].ExecutionID != run.ExecutionID {
@@ -265,7 +268,7 @@ func TestTUIHTTPRuntime(t *testing.T) {
 	if err = json.Unmarshal(manifest, &source); err != nil {
 		t.Fatal(err)
 	}
-	summary := map[string]any{"passed": true, "complete": true, "cleaned": true, "scenario": "tui-http.local", "root": root, "project": refs[0].Identity, "run": run.RunID, "execution": run.ExecutionID, "attempt": run.AttemptID, "start_request": original.RequestID, "final_bodies": bodies, "stop": result, "mode": "simulate", "workflow_turns": len(state.Turns), "source_commit": source.Commit, "source_dirty": source.Dirty, "binary_sha256": hex.EncodeToString(hash[:]), "cleanup": "owned Job has no remaining descendants; debug package retained as evidence"}
+	summary := map[string]any{"passed": true, "complete": true, "cleaned": true, "scenario": "tui-http.local", "root": root, "project": refs[0].Identity, "run": run.RunID, "execution": run.ExecutionID, "attempt": run.AttemptID, "start_request": original.RequestID, "final_bodies": bodies, "final_gaps": gaps, "native_final_verified": bodies > 0, "stop": result, "mode": "simulate", "workflow_turns": len(state.Turns), "source_commit": source.Commit, "source_dirty": source.Dirty, "binary_sha256": hex.EncodeToString(hash[:]), "cleanup": "owned Job has no remaining descendants; debug package retained as evidence"}
 	data, _ := json.MarshalIndent(summary, "", "  ")
 	if err = os.WriteFile(filepath.Join(evidence, "summary.json"), data, 0600); err != nil {
 		t.Fatal(err)

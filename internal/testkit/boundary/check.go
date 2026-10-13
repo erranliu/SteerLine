@@ -118,6 +118,15 @@ func consoleForbidden(pkg string) bool {
 	return false
 }
 
+func httpConsumerPackage(pkg string) bool {
+	for _, suffix := range []string{"/internal/consoleapp", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs"} {
+		if pkg == module+suffix {
+			return true
+		}
+	}
+	return false
+}
+
 func hostForbidden(pkg string) bool {
 	if pkg == execution {
 		return true
@@ -456,10 +465,25 @@ func ScanSource(root string) (Report, error) {
 		})
 	}
 	visitGraph(graph, console, func(path []string) {
-		if consoleForbidden(path[len(path)-1]) {
+		// HTTP integration fixtures may exercise the real transport. Production
+		// views still receive interfaces and must not construct their own adapter.
+		if consoleForbidden(path[len(path)-1]) && !httpConsumerPackage(path[len(path)-1]) {
 			report.Violations = append(report.Violations, "console forbidden dependency: "+strings.Join(path, " -> "))
 		}
 	})
+	visitGraph(productionGraph, console, func(path []string) {
+		if consoleForbidden(path[len(path)-1]) {
+			report.Violations = append(report.Violations, "console production forbidden dependency: "+strings.Join(path, " -> "))
+		}
+	})
+	for _, suffix := range []string{"/internal/consoleapp", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs"} {
+		visitGraph(productionGraph, module+suffix, func(path []string) {
+			last := path[len(path)-1]
+			if !httpConsumerPackage(last) && consoleForbidden(last) {
+				report.Violations = append(report.Violations, "HTTP consumer forbidden dependency: "+strings.Join(path, " -> "))
+			}
+		})
+	}
 	for pkg := range graph {
 		if !implementation(pkg) {
 			continue

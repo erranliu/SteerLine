@@ -32,6 +32,37 @@ func checkRepositoryBoundary(t *testing.T) Report {
 }
 
 func TestTM04ExecutionBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		name, file, edge string
+		allowed          bool
+	}{
+		{"HTTP_in_console_test", "internal/console/edge_test.go", "internal/product/httpclient", true},
+		{"HTTP_constructor_in_console_production", "internal/console/edge.go", "internal/product/httpclient", false},
+		{"backend_in_HTTP_consumer", "internal/product/httpclient/edge.go", "internal/product/query", false},
+		{"SQL_in_HTTP_consumer", "internal/product/httpfs/edge.go", "database/sql", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			file := filepath.Join(root, tc.file)
+			if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+				t.Fatal(err)
+			}
+			dependency := tc.edge
+			if strings.HasPrefix(dependency, "internal/") {
+				dependency = module + "/" + dependency
+			}
+			if err := os.WriteFile(file, []byte("package consumer\nimport _ \""+dependency+"\"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			report, err := ScanSource(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (len(report.Violations) == 0) != tc.allowed {
+				t.Fatalf("allowed=%v violations=%v", tc.allowed, report.Violations)
+			}
+		})
+	}
 	for _, fixture := range []struct{ name, path, source, helper string }{
 		{"task_implementation_in_inactive_tag", "edge_plan9.go", "//go:build never_enabled\n\npackage execution\nimport _ \"" + module + "/internal/task\"\n", ""},
 		{"old_host_in_other_os", "edge_freebsd.go", "package execution\nimport _ \"" + core + "\"\n", ""},
