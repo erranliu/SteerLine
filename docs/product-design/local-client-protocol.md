@@ -1,5 +1,7 @@
 # 本机客户端协议 v1
 
+本页描述已交付基线。2026-10-13 用户确认[任务 #91](../spec/tui-http-client.spec.md)将使 TUI 统一接入并补恢复/原会话/停服接口；本次尚未实施，不提前宣称新路由可用。
+
 本协议由 #45 的 `internal/product/httpapi` 提供，供原生客户端按需消费。服务继续拥有 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和唯一交付状态；HTTP 只映射现有 `product/api` DTO 与命令入口。
 
 ## 发现、连接和身份

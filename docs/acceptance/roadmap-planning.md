@@ -25,6 +25,21 @@
 
 主分支同步后最终静态检查：259份Markdown、1642条本地链接、0错误；84身份、10草稿、3正式规划行；git diff origin/main --check通过。40份JSON/JSONL的工作树字节摘要保持，PR差异仅docs/。这些结果不计为产品验收或中心准入。
 
+## 2026-10-13 当前规划收敛为 TUI/HTTP 链路
+
+用户确认保留 TUI，业务访问统一经 HTTP 到 Go 后端；旧二阶段候选/三节点及延期任务退出当前 roadmap，编号不复用。#44 实现删除纳入新任务，不在本次规划修改中删代码；#45 已交付基线保留。独有旧规格/验收与原执行清单移入归档并修复导航，失败、风险接受和原未验事实保持历史含义；#44 后续人工要求撤销，不标通过。
+
+新增唯一任务 #91 的[Spec](../spec/tui-http-client.spec.md)、[Plan](../spec/tui-http-client.plan.md)与[专属验收](tui-http-client.md)，已纳入 execution-map。TH-A1–A6/TH-M1 覆盖真实客户端边界、现有功能映射、原请求/身份、恢复/会话、停服/离线与 WinUI 删除。Plan 明确新增测试/受控驱动、非零断言、独立包 simulate、最小回归及人工后置窗口；新增入口尚未实现，不作为通过证据。
+
+| 检查 | 命令 / 方法 | 实际结果 |
+| --- | --- | --- |
+| 导航 | python scripts/check_doc_links.py | 本地导航 0 错误，最终统计见本聊天工具记录 |
+| 身份/清单 | python scripts/roadmap_task_id.py check | 92身份，1草稿/1正式行，唯一任务91，next ID92；通过 |
+| 差异 | git diff --check；新增 Markdown 空白检查 | 通过，新增/修改文档无替代字符或尾空白 |
+| 范围与映射自查 | 实际表行/ID范围展开、Git变更与原型 hash 核验 | TH-A1–A6/TH-M1 均映射；原已有编号不改，跟踪变更仅 Markdown，原型 HTML 内容未改 |
+
+证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-tui-http-planning-tvo579i0/summary.json`。本次只作规划/导航维护，不运行 Go/.NET/L1/L2/L3/Full、产品服务或模型，不启动实现、runner、聊天/worktree、heartbeat 或 PR；所有产品验收待 #91 实施后按专属记录执行。
+
 ## 2026-10-08 Codex 开发流程简化
 
 范围：项目规则、RoadmapGuide、roadmap-runner 技能/提示及相关导航统一为 Codex 直接开发。用户确认的 execution-map 管理任务与依赖，启动固定文档版本；保留独立复审、必要验证、真实合并、验收同步及防重复恢复。#83/#45待执行，#44等待#45，#49/#50留草稿。SteerLine 产品中心契约与业务实现不变，历史失败和所有未验项保留。

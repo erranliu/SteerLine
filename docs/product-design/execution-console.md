@@ -1,5 +1,7 @@
 # 执行控制台设计与操作
 
+> 2026-10-13 已确认[#91](../spec/tui-http-client.spec.md)保留本页界面/操作并将业务访问改为 HTTP。当前仍用本地适配器，未实施切换；服务离线后不再直接读库的目标行为见该 Spec，不以本次文档宣称已实现。
+
 本文维护当前 CLI/TUI 执行控制台的布局、目标选择和操作方式，支持范围为本地 Codex 与本机 Orca。产品规则分别由[数据模型](data-model.md)、[决策与反馈](decisions.md)和[会话事件](conversation-events.md)维护；拟议原生界面见[规划与界面设计](planning-ui.md)。操作与键位以 [model_keys.go](../../internal/console/model_keys.go) 和[界面帮助](../../internal/console/view.go)的当前实现为准。
 
 ## 打开与连接
