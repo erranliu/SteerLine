@@ -11,7 +11,7 @@ import (
 const ProfileKey = "orca.terminal-profile"
 const ProfileVersion = 2
 const StateKey = "orca.terminal-state"
-const StateVersion = 4
+const StateVersion = 5
 const ServiceStopBehavior = b.ContinueExecutionOnServiceStop
 
 // Environment is routing only; local and paired execution have the same ports.

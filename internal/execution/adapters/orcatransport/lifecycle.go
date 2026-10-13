@@ -42,9 +42,11 @@ type Lifecycle struct {
 	profile      Profile
 	client       native.Client
 	stateFactory native.StateFeedFactory
+	queryNative  func(context.Context, b.ProcessIdentity, string) (native.AgentState, error)
 	feed         native.StateFeed
 	feedProcess  b.ProcessIdentity
 	feedMu       sync.Mutex
+	feedRetryAt  time.Time
 	clock        func() time.Time
 	nativeAccess bool
 }
@@ -53,6 +55,10 @@ func NewLifecycle(setup b.LifecycleSetup) (b.LifecyclePort, error) {
 	port, err := NewLifecycleWithStateFactory(setup, native.OpenStateFeed)
 	if err == nil {
 		port.(*Lifecycle).nativeAccess = true
+		l := port.(*Lifecycle)
+		l.queryNative = func(ctx context.Context, process b.ProcessIdentity, pane string) (native.AgentState, error) {
+			return native.QueryOriginalAgent(ctx, l.profile.Environment, process, pane)
+		}
 	}
 	return port, err
 }
@@ -556,7 +562,11 @@ observed:
 // Recovery resumes observation of the same resource and saved input/baseline only.
 func (l *Lifecycle) ObserveLifecycle(ctx context.Context, s b.LifecycleSnapshot) (b.LifecycleReceipt, b.LifecycleObserver, error) {
 	receipt, _, err := l.observeOnce(ctx, s)
-	if err != nil || receipt.TurnEvidence != nil || receipt.Process == nil {
+	if err != nil {
+		l.closeStateFeed()
+		return receipt, nil, err
+	}
+	if receipt.TurnEvidence != nil || receipt.Process == nil {
 		return receipt, nil, err
 	}
 	snapshot := s.Clone()

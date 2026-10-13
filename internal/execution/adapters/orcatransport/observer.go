@@ -37,7 +37,7 @@ func (l *Lifecycle) observe(s b.LifecycleSnapshot) b.LifecycleObserver {
 	ownedFeed := l.feed
 	l.feedMu.Unlock()
 	go func() {
-		defer l.releaseStateFeed(ownedFeed)
+		defer func() { l.releaseStateFeed(ownedFeed) }()
 		defer close(o.events)
 		defer close(o.done)
 		send := func(event b.LifecycleEvent) bool {
@@ -82,6 +82,14 @@ func (l *Lifecycle) observe(s b.LifecycleSnapshot) b.LifecycleObserver {
 		for {
 			before, _ := json.Marshal(s.Implementation)
 			receipt, _, err := l.observeOnce(ctx, s)
+			// A restored observer may acquire its subscription on a later retry.
+			if ownedFeed == nil {
+				l.feedMu.Lock()
+				if l.feedProcess == o.process {
+					ownedFeed = l.feed
+				}
+				l.feedMu.Unlock()
+			}
 			if err != nil {
 				if ctx.Err() == nil {
 					o.done <- err

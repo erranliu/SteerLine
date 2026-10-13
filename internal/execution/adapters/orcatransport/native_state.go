@@ -28,6 +28,7 @@ type NativeProof struct {
 	ReplyDigest   string    `json:"reply_digest,omitempty"`
 	ReplyBody     string    `json:"reply_body,omitempty"`
 	LastSignal    time.Time `json:"last_signal,omitempty"`
+	LastQuery     time.Time `json:"last_query,omitempty"`
 	Hint          string    `json:"hint,omitempty"`
 	HintPending   bool      `json:"hint_pending,omitempty"`
 	Diagnostic    string    `json:"diagnostic,omitempty"`
@@ -37,7 +38,7 @@ func stateHint(s native.AgentState) string {
 	return s.PaneKey + ":" + s.State + ":" + strconv.FormatInt(s.StateStartedAt, 10) + ":" + strconv.FormatInt(s.UpdatedAt, 10)
 }
 func nativeBaseline(s native.AgentState, now time.Time) NativeProof {
-	p := NativeProof{Pane: s.PaneKey, Provider: s.ProviderSession.ID, LastSignal: now, Hint: stateHint(s)}
+	p := NativeProof{Pane: s.PaneKey, Provider: s.ProviderSession.ID, LastSignal: now, LastQuery: now, Hint: stateHint(s)}
 	if trustedState(s) {
 		p.BaseAuthority = s.Observation.AuthorityID
 		p.BaseRevision = s.Observation.Revision
@@ -85,6 +86,9 @@ func (p *NativeProof) body(message string) {
 	p.ReplyBody = body
 }
 func (p *NativeProof) signal(s native.AgentState, turn *Turn, now time.Time) {
+	if p.Diagnostic != "" && p.Diagnostic != "Native main agent is waiting; no next input was sent" {
+		return
+	}
 	if s.PaneKey != p.Pane {
 		p.Diagnostic = "Native original pane changed"
 		return
@@ -114,7 +118,15 @@ func (p *NativeProof) signal(s native.AgentState, turn *Turn, now time.Time) {
 	if o.Revision <= p.BaseRevision || o.Revision <= p.Revision {
 		return
 	}
+	if p.rejectProvenance(s, turn) {
+		return
+	}
 	if p.WorkingAt == 0 {
+		if s.MainAgent.State == "done" {
+			// Without a streamed start, confirm the retained main-agent record
+			// through the independent query; never promote a tab snapshot alone.
+			return
+		}
 		if s.MainAgent.State != "working" || s.MainAgent.StateStartedAt <= p.BaseRootAt || !turn.Started || s.ProviderSession.ID == "" || s.Prompt != preview(turn.Prompt) {
 			return
 		}
@@ -127,7 +139,7 @@ func (p *NativeProof) signal(s native.AgentState, turn *Turn, now time.Time) {
 	}
 	p.Revision, p.LastSignal = o.Revision, now
 	if s.MainAgent.State == "done" && s.MainAgent.StateStartedAt > p.WorkingAt {
-		p.end(s, now)
+		p.end(s, turn, now)
 	} else if s.MainAgent.State == "waiting" || s.MainAgent.State == "blocked" {
 		// Waiting remains in the current turn; it is not a completion.
 		p.Diagnostic = "Native main agent is waiting; no next input was sent"
@@ -135,8 +147,20 @@ func (p *NativeProof) signal(s native.AgentState, turn *Turn, now time.Time) {
 		p.Diagnostic = ""
 	}
 }
-func (p *NativeProof) end(s native.AgentState, now time.Time) bool {
-	if p.WorkingAt == 0 || s.MainAgent == nil || s.MainAgent.State != "done" || s.AgentType != "codex" || s.PaneKey != p.Pane || s.ProviderSession.ID != p.Provider || s.MainAgent.StateStartedAt <= p.WorkingAt || s.MainAgent.StateStartedAt <= p.BaseRootAt {
+func (p *NativeProof) rejectProvenance(s native.AgentState, turn *Turn) bool {
+	if s.MainAgent != nil && s.MainAgent.StateStartedAt > p.BaseRootAt && (s.MainAgent.State == "working" || s.MainAgent.State == "done") &&
+		(s.SessionBoundary || s.RestoredUnconfirmed || s.Prompt != preview(turn.Prompt)) {
+		p.Diagnostic = "Native original completion/input provenance is unverified"
+		return true
+	}
+	return false
+}
+func (p *NativeProof) end(s native.AgentState, turn *Turn, now time.Time) bool {
+	if !turn.Accepted || !turn.Started || p.Provider == "" || s.MainAgent == nil || s.MainAgent.State != "done" || s.AgentType != "codex" || s.PaneKey != p.Pane || s.ProviderSession.ID != p.Provider || s.MainAgent.StateStartedAt <= p.WorkingAt || s.MainAgent.StateStartedAt <= p.BaseRootAt || p.WorkingAt == 0 && p.BaseRootAt <= 0 {
+		return false
+	}
+	if s.SessionBoundary || s.RestoredUnconfirmed || s.ToolOutput || s.Prompt != preview(turn.Prompt) {
+		p.Diagnostic = "Native original completion/input provenance is unverified"
 		return false
 	}
 	if s.Interrupted || s.MainAgent.Outcome != "" && s.MainAgent.Outcome != "success" {
@@ -161,17 +185,27 @@ func (p *NativeProof) end(s native.AgentState, now time.Time) bool {
 	p.body(s.LastAssistantMessage)
 	return true
 }
-func (p *NativeProof) query(s native.AgentState, now time.Time) bool {
+func (p *NativeProof) query(s native.AgentState, turn *Turn, now time.Time) bool {
 	if p.Diagnostic != "" && p.Diagnostic != "Native main agent is waiting; no next input was sent" {
 		return false
 	}
 	if s.MainAgent == nil || s.UpdatedAt < s.MainAgent.StateStartedAt {
 		return false
 	}
-	return p.end(s, now)
+	if s.ProviderSession.ID == "" {
+		return false // Missing metadata is unavailable evidence, not replacement.
+	}
+	if s.PaneKey != p.Pane || s.ProviderSession.ID != p.Provider {
+		p.Diagnostic = "Native original queried pane/provider changed"
+		return false
+	}
+	if p.rejectProvenance(s, turn) {
+		return false
+	}
+	return p.end(s, turn, now)
 }
 func (p NativeProof) wantsQuery(now time.Time) bool {
-	return p.WorkingAt > 0 && (p.EndedAt == 0 || p.ReplyDigest == "") && (p.HintPending || !now.Before(p.LastSignal.Add(30*time.Second)))
+	return (p.EndedAt == 0 || p.ReplyDigest == "") && (p.HintPending || !now.Before(p.LastQuery.Add(30*time.Second)))
 }
 
 func (l *Lifecycle) stateFeed(ctx context.Context, process b.ProcessIdentity) (native.StateFeed, error) {
@@ -212,39 +246,82 @@ func (l *Lifecycle) releaseStateFeed(feed native.StateFeed) {
 }
 
 func (l *Lifecycle) observeNative(ctx context.Context, snapshot b.LifecycleSnapshot, state *State, turn *Turn) string {
-	feed, err := l.stateFeed(ctx, state.Process)
-	if err != nil {
-		return "Native state subscription is unverified: " + err.Error()
+	// Subscription is a notification source, not a prerequisite for a bounded
+	// authoritative read. Opening a failed stream is retried only on the query
+	// interval, so an offline host cannot create a tight reconnect loop.
+	l.feedMu.Lock()
+	feed := l.feed
+	l.feedMu.Unlock()
+	var streamErr error
+	if feed == nil && !l.clock().Before(l.feedRetryAt) {
+		feed, streamErr = l.stateFeed(ctx, state.Process)
+		if streamErr != nil {
+			l.feedRetryAt = l.clock().Add(30 * time.Second)
+			if errors.Is(streamErr, native.ErrStateIdentityChanged) {
+				turn.Native.Diagnostic = streamErr.Error()
+			}
+		} else {
+			// A reattached stream's initial snapshot can already be done. It
+			// triggers confirmation, not direct completion or a fake working.
+			initial := feed.Initial()
+			if stateHint(initial) != turn.Native.Hint && initial.State == "done" {
+				turn.Native.Hint, turn.Native.HintPending = stateHint(initial), true
+			}
+		}
 	}
-	states, err := feed.Drain()
-	if err != nil {
-		return "Native state subscription is unverified: " + err.Error()
+	drain := func() {
+		if feed == nil {
+			return
+		}
+		states, err := feed.Drain()
+		streamErr = err
+		for _, s := range states {
+			turn.Native.signal(s, turn, l.clock())
+		}
+		if errors.Is(err, native.ErrStateIdentityChanged) {
+			turn.Native.Diagnostic = err.Error()
+		}
 	}
-	for _, s := range states {
-		turn.Native.signal(s, turn, l.clock())
-	}
+	drain()
 	if turn.Native.Diagnostic != "" && turn.Native.Diagnostic != "Native main agent is waiting; no next input was sent" {
 		return turn.Native.Diagnostic
 	}
 	if turn.Native.wantsQuery(l.clock()) {
-		turn.Native.LastSignal = l.clock()
+		turn.Native.LastQuery = l.clock()
 		turn.Native.HintPending = false
-		s, err := feed.Query(ctx)
+		if !turn.Accepted || !turn.Started {
+			return "Original input has no verified start receipt; no input was resent"
+		}
+		var s native.AgentState
+		var err error
+		if l.queryNative != nil {
+			s, err = l.queryNative(ctx, state.Process, turn.Native.Pane)
+		} else if feed != nil {
+			s, err = feed.Query(ctx)
+		} else {
+			err = streamErr
+			if err == nil {
+				err = errors.New("native original query source unavailable")
+			}
+		}
 		if err != nil {
+			if errors.Is(err, native.ErrStateIdentityChanged) {
+				turn.Native.Diagnostic = err.Error()
+			}
 			return "Native main-agent query is unverified: " + err.Error()
 		}
 		// Drain notifications received while the single synchronous query ran.
-		states, err = feed.Drain()
-		if err != nil {
-			return "Native state subscription is unverified: " + err.Error()
-		}
-		for _, update := range states {
-			turn.Native.signal(update, turn, l.clock())
+		drain()
+		if turn.Native.Diagnostic != "" && turn.Native.Diagnostic != "Native main agent is waiting; no next input was sent" {
+			return turn.Native.Diagnostic
 		}
 		if _, err := l.original(ctx, snapshot); err != nil {
 			return err.Error()
 		}
-		turn.Native.query(s, l.clock())
+		turn.Native.query(s, turn, l.clock())
+	}
+	if turn.Native.EndedAt == 0 && streamErr != nil {
+		return "Native state subscription is unverified; original query remains available: " + streamErr.Error()
 	}
 	return turn.Native.Diagnostic
 }

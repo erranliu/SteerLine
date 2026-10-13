@@ -58,8 +58,8 @@ func TestOrcaNativeStateGate(t *testing.T) {
 	if !turn.Native.wantsQuery(now.Add(30 * time.Second)) {
 		t.Fatal("missing silence query")
 	}
-	turn.Native.LastSignal = now.Add(30 * time.Second)
-	if turn.Native.query(start, now.Add(30*time.Second)) || turn.Native.wantsQuery(now.Add(59*time.Second)) || !turn.Native.wantsQuery(now.Add(60*time.Second)) {
+	turn.Native.LastQuery = now.Add(30 * time.Second)
+	if turn.Native.query(start, &turn, now.Add(30*time.Second)) || turn.Native.wantsQuery(now.Add(59*time.Second)) || !turn.Native.wantsQuery(now.Add(60*time.Second)) {
 		t.Fatal("working query completed or bounded retry was lost")
 	}
 	hint := fixtureState(12, turn.Prompt, "done")
@@ -70,19 +70,19 @@ func TestOrcaNativeStateGate(t *testing.T) {
 		t.Fatal("new title done did not trigger confirmation only")
 	}
 	turn.Native.HintPending = false
-	turn.Native.LastSignal = now.Add(61 * time.Second)
+	turn.Native.LastQuery = now.Add(61 * time.Second)
 	turn.Native.signal(hint, &turn, now.Add(62*time.Second))
 	if turn.Native.wantsQuery(now.Add(62 * time.Second)) {
 		t.Fatal("duplicate hint repeated query")
 	}
 	old := base
-	if turn.Native.query(old, now.Add(62*time.Second)) {
+	if turn.Native.query(old, &turn, now.Add(62*time.Second)) {
 		t.Fatal("old done completed the new turn")
 	}
 	end := fixtureState(12, turn.Prompt, "done")
 	end.Observation = nil
 	end.LastAssistantMessage = `{"summary":"本轮结果","url":"https://example.com/pull/1"}`
-	if !turn.Native.query(end, now.Add(63*time.Second)) || turn.Native.Outcome != "unknown" || turn.Native.ReplyDigest == "" {
+	if !turn.Native.query(end, &turn, now.Add(63*time.Second)) || turn.Native.Outcome != "unknown" || turn.Native.ReplyDigest == "" {
 		t.Fatal("fresh native root end was not accepted independently of outcome")
 	}
 	if turn.Native.ReplyDigest != digest([]byte(end.LastAssistantMessage)) {
@@ -107,7 +107,7 @@ func TestOrcaNativeStateGate(t *testing.T) {
 			case "other-pane":
 				s.PaneKey = "other"
 			}
-			if p.query(s, now.Add(time.Minute)) || p.EndedAt != 0 {
+			if p.query(s, &turn, now.Add(time.Minute)) || p.EndedAt != 0 {
 				t.Fatal("unverified main-agent end accepted")
 			}
 		})
@@ -116,7 +116,7 @@ func TestOrcaNativeStateGate(t *testing.T) {
 	cut.signal(start, &turn, now)
 	cutEnd := end
 	cutEnd.LastAssistantMessage = strings.Repeat("x", 8000)
-	if !cut.query(cutEnd, now.Add(time.Minute)) || cut.ReplyDigest != "" {
+	if !cut.query(cutEnd, &turn, now.Add(time.Minute)) || cut.ReplyDigest != "" {
 		t.Fatal("clipped native message treated as complete")
 	}
 }
@@ -143,6 +143,15 @@ func TestOrcaNativeStateLifecycle(t *testing.T) {
 			feed.queries = 0
 			instant := time.Unix(100, 0).UTC()
 			l.clock = func() time.Time { return instant }
+			state, err := l.state(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			turnFor(&state, input.CommandID).Native.LastQuery = instant
+			s.Implementation, err = l.envelope(s, state)
+			if err != nil {
+				t.Fatal(err)
+			}
 			start := fixtureState(11, input.Prompt, "working")
 			feed.events = []native.AgentState{start}
 			feed.current = start

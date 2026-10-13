@@ -1,5 +1,7 @@
 # Spec：Orca 单终端原生状态切换
 
+后续普通终端补查询及无需观察 working 的受理规则以 [Orca 完成补查询 Spec](orca-completion-query.spec.md) 为准；本文保留原实现记录。
+
 日期：2026-10-12。状态：原生配对接入已实现；本机 `worktree.ps.mainAgent` 正常结束补查询验证通过，状态门槛及阶段接线已实施，最小验收通过。普通开发，不占 Task ID，不修改安装环境。
 
 [Plan](orca-native-state-transitions.plan.md) · [专属验收](../acceptance/orca-native-state-transitions.md)
