@@ -1,12 +1,12 @@
 # 任务 #91 验收：TUI 经 HTTP 接入 Go 后端
 
-唯一归属 #91；[Spec](../spec/tui-http-client.spec.md)、[Plan](../spec/tui-http-client.plan.md)。2026-10-13 当前源码已接线，自动项通过；用户委托验收后，Windows ConPTY 真终端和 SteerlineTest live 操作已验证，详见文末。[草稿 PR #299](https://github.com/erranliu/SteerLine/pull/299)待独立复审与真实合并；TH-M1 原生查看窗口的渲染及人工体验判断仍未验证。汇总归[execution-map](../roadmap/execution-map.md)，不覆盖其他任务历史。
+唯一归属 #91；[Spec](../spec/tui-http-client.spec.md)、[Plan](../spec/tui-http-client.plan.md)。2026-10-13 当前源码已接线，独立复审修复及最终自动复验通过；用户委托的 Windows ConPTY 真终端和 SteerlineTest live 操作已验证。[PR #299](https://github.com/erranliu/SteerLine/pull/299)待本次合并核验；TH-M1 原生查看窗口渲染及人工体验判断仍未验证。汇总归[execution-map](../roadmap/execution-map.md)，不覆盖其他任务历史。
 
 | ID | 方法/入口 | 最小行为和通过条件 | 当前状态 |
 | --- | --- | --- | --- |
 | TH-A1 | TestTUIHTTPBoundary、L1 边界和源码访问检查 | 实际 app 委托 consoleapp，HTTP consumer 闭包无 SQL/backend/handler；生产 console 只收端口，客户端无业务文件回退，仅允许连接、自己的窗口/原请求及精确生命周期观察 | 自动通过 |
 | TH-A2 | Contract/Interaction/Routes、tui-http.local | 查询保持正式投影；TUI final reader 经 HTTP 读跨 Attempt 历史、中文多页正文并核对 UTF-8/摘要/revision，拒绝错身份/迟到/失效游标。模拟正式服务明确返回采集 gap | 自动通过；新增 live 原生 final 采集/正文验证，限本次 Codex 样本 |
-| TH-A3 | Contract 6 子场景、原 TUI 开始/反馈版本回归、tui-http.local | 原控制/反馈/环境 target/version/revision/Attempt/recovery 保留；先存原信封再 POST；丢响应、重复、重开、异内容/异目标与换实例被核验。真实 TUI 的原 request 重交仍只有原 run/Execution | 自动通过；live 中文反馈原会话继续，停服 revision 缺陷修正后通过 |
+| TH-A3 | Contract、原 TUI 开始/反馈版本回归、tui-http.local | 原控制/反馈/环境 target/version/revision/Attempt/recovery 保留；先存原信封再 POST；丢响应、重复、重开、异内容/异目标与换实例被核验。真实 TUI 的原 request 重交仍只有原 run/Execution | 自动通过；复审新增资格取消/迟到、未知状态、任务版本加载回归通过 |
 | TH-A4 | TestTUIHTTPRoutes、tui-http.local | 真实原 run 恢复可查，错 Execution/Attempt 提前拒绝；受控打开器绑定 session/generation，重复/unknown 不再调用，不能占用正式 command ID，无新业务轮次 | 自动通过；真实窗口归 TH-M1 |
 | TH-A5 | Contract/Interaction、tui-http.local | 原 HTTP applied、原进程退出与两个锁释放及 Job 清理均核实；丢回执保持未知；TUI 关闭后 worker 继续，重开只观察原执行，断线保留观察并禁写 | 自动通过 |
 | TH-A6 | 24 文件删除清单、build-only、静态检查 | 三个 WinUI 工程及 global.json 已删除，专属 ui bin/obj 忽略项已清除，当前无 .NET 构建入口；Go 构建/导航/身份通过，历史失败/未验保持 | 自动通过 |
@@ -20,7 +20,7 @@ TH-M1 可在自动通过后集中到任务签收前，不阻碍无关合入；�
 
 执行时逐项记日期、源码 commit/tree/dirty、exe摘要、包/服务实例、项目/Task/run/Execution/Attempt/request、实际命令、非零枚举、结果及证据。原始产物放本次新 evidence，仓库只存最小摘要，不提交凭证/DB/完整提示。必要回归另栏登记，不以 L1 代替 TH 自动项。
 
-独立复审和真实合并未完成，roadmap 暂不记实现完成。#44 的用户撤销旧人工要求及工程删除不等于原项通过，见[退役记录](archive/superseded/phase2-winui-foundation.md)；#45 历史失败/风险接受保持。
+下列实施及现场记录形成时尚未独立复审/合并；最终状态见文末复审与合并登记。#44 的用户撤销旧人工要求及工程删除不等于原项通过，见[退役记录](archive/superseded/phase2-winui-foundation.md)；#45 历史失败/风险接受保持。
 
 ## 固定版本与实际现场
 
@@ -109,4 +109,34 @@ simulate 的正式采集诊断为 `Codex app-server identity, version or home is
 | `go run ./cmd/test-feedback -level=L1 -out <postfix-evidence>/l1-stop-final` | 708dab2c clean，12 组/26 包，passed/complete 均 true，223.458 s；同目录 summary.json/log |
 | `powershell -NoProfile -File scripts/test-tui-http.ps1 -OutDir <stop-final-evidence>/runtime` | 708dab2c clean，真实 TUI 模型/HTTP/Go，221.72 s；passed/complete/cleaned 均 true。生成包 dev-20261013-144629-708dab2c，三轮、原 stop `608d0ddc8149bf3be929d4b8dceb17a3`，原 applied/进程退出/锁释放通过；runtime/summary.json、runtime.log |
 
-simulate 的明确采集 gap 与 live 的原生 final 分开计数。已覆盖真终端键位、中文 Unicode 多行、候选/反馈、final、恢复和停服；中文由 ConPTY 注入，未使用桌面输入法。TH-M1 剩余原生查看窗口内容渲染及人工字体/输入法体验判断保持待验，不标为全量人工签收。独立复审与 #299 合并尚未完成。
+simulate 的明确采集 gap 与 live 的原生 final 分开计数。已覆盖真终端键位、中文 Unicode 多行、候选/反馈、final、恢复和停服；中文由 ConPTY 注入，未使用桌面输入法。TH-M1 剩余原生查看窗口内容渲染及人工字体/输入法体验判断保持待验，不标为全量人工签收。该次现场验收结束时独立复审与 #299 合并尚未完成，后续结果如下。
+
+## 独立复审、冲突解决与最终复验（2026-10-13）
+
+用户直接授权复审、修复、验证及合并。独立审查使用无本聊天实现历史的只读 `codex review` 进程；前三轮审查完整 PR 差异，第四轮复核最后修复 commit。只读审查未执行 Go 测试，实际验证由实施聊天执行，不将静态审查说成动态测试通过。原始证据：`C:\Users\lmas1\AppData\Local\Temp\steerline-pr299-review-20261013-174011`。
+
+| 轮次 / 候选 | 发现与结算 | 证据 |
+| --- | --- | --- |
+| 1：641b95c5，base 231fa360 | 三项 P2：活动始终首个 200 条、资格 HTTP 阻塞 Update、重开停服缺原进程代际。9d4f4695 修复，近期活动投影、异步资格及实际子进程停服恢复回归通过 | independent-review-1.log、review-regression.log |
+| 2：9d4f4695，base 231fa360 | 三项 P2：pending_verification 日志不能重开、Close 等待未取消的 HTTP、CM72/CD66 仍用旧本地消费夹具。82dc448c 修复，真实窗口日志重开、阻塞 HTTP 关闭和在线/离线 HTTP 夹具通过 | independent-review-2.log、pending-stop-reopen.log、cli-http-fixture.log、offline-http-fixture.log、review2-client-final.log |
+| 3：82dc448c，base 0b7652ac | 两项 P2：outcome_unknown 直接进入不支持该值的日志、详情未加载时提交零任务版本。24cdd7a1 将 synthetic 控制/命令/反馈 unknown 统一映射为 indeterminate；开始操作等待原任务版本再冻结提交；对应回归通过 | independent-review-3.log、review3-regression-final.log |
+| 4：`codex review --commit 24cdd7a1` | 复核最后两项及 Windows 文件竞争修复，未发现新增可修缺陷；前三轮中未修改的部分仍由原完整差异审查覆盖。八项审查发现均已修复，无未解决项 | independent-review-4.log |
+
+冲突仅在 `worker_lifecycle.go`：保留主干 #302 的共享 frozen 组装与独立只读 inspection，移除旧重复组装，保持 nil 资源不证明外部退出。merge commit `641b95c5` 接入主干 `231fa360`；之后 `ece49c74` 接入主干 #303 的 `0b7652acafe9d0a860c174b7d2f6f40d73261781`，无新增冲突。相关恢复定向 `TestRecoveryInspectionReadsBoundRunWithoutServiceResources`、`TestRecoveryInspectionReadsNativeClaimFromCenter`、`TestWorkerRecovery.*` 通过（324.445 s），证据 lifecycle-integration.log。
+
+首次合并版本 L1 不完整：主干清单仍引用已重命名的 `TestTerminalClippedOutputCannotComplete`。对齐现有 `TestTerminalClippedScreenDoesNotBlockNativeFinal` 后非零运行通过，未跳过该行为（l1-integration/summary.json 保留失败，后续成功另存）。应用组装全包通过（189.056 s，app-regression.log），CM72 根场景通过（128.55 s），CD66 指定离线场景通过（25.09 s），均为隔离夹具，不触及安装环境。
+
+82dc448c 的 runtime-reviewed 为失败：本包 `dev-20261013-181820-82dc448c` 在发布 ready discovery 时遭 Windows `Access is denied`，服务退出；旧普通 Go 读句柄排除删除共享可稳定复现（discovery-lock-repro.log）。共享删除读句柄单独不足以保证 Windows 替换，进一步对已知 sharing/access 错误作最多 40 次、10 ms 间隔的原子替换重试；持续错误仍返回原错误，未降低 ACL 或采用 copy/delete 回退。专属 Windows 测试核对短时持有、旧/新完整快照和持续占用失败保持旧快照（discovery-sharing-regression.log）。
+
+最终测试固定 clean commit `24cdd7a116912ef43d4aa845b8a5830c552a21a3`，tree `92b7dbdeb6fa71678797b358d8dc8594d80c344f`，base `0b7652ac`。后续纯结果文档提交不改变被测生产代码。
+
+| 最终命令 / 范围 | 非零结果与证据 |
+| --- | --- |
+| `go test ./internal/app -run '^TestTUIHTTPBoundary$' -count=1 -v` | 通过，boundary-delivery.log |
+| `go test ./internal/console ./internal/product/httpclient ./internal/product/httpapi ./internal/product/httpfs -count=1` | 四包通过，含全部复审回归/Routes/Contract，consumer-delivery.log |
+| `go run ./cmd/test-feedback -level=L1 -out <evidence>/l1-delivery` | 12 组/26 包，passed/complete=true，172.975 s；l1-delivery/summary.json |
+| `powershell -NoProfile -File scripts/test-tui-http.ps1 -OutDir <evidence>/runtime-delivery` | 真实 TUI 模型→HTTP→Go、原请求/重开/退出客户端后继续/三轮/停服通过；173.81 s；passed/complete/cleaned=true；runtime-delivery/summary.json、runtime.log |
+
+最终新包 `C:\SteerlineDebug\dev-20261013-184448-24cdd7a1` 冻结 simulate；exe SHA-256 `39217a61e5b3469c66bbcb5aeccf277da5fdf8fd929cb9534f4f1d1e91e922a5`。原 run/start `412ff1127729f5b3e3029c7c2db97e38`；Execution `2b7f2a407db5c2da17d9cadfb5682502`，Attempt `6b5279e03ef4902f700ff30412efd56e`；实例 `7888cdacb4c0b6bc5dc264f25eae2e64`，stop `baf431aefcf28fc05fccef569882eebe`。原 applied、原进程退出/两锁释放齐备，Job 无剩余后代。本轮四个调试包均无剩余本次进程（cleanup-final.json），包和失败证据保留。simulate 仍为 final 来源 gap，不替代前述 live 样本或人工体验。
+
+独立复审及自动验证已通过，PR 实际合并事实待本次登记；TH-M1 剩余项继续后置，不宣称全量验收或远程部署通过。
