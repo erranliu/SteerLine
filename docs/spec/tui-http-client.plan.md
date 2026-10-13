@@ -1,6 +1,6 @@
 # Plan：TUI 经 HTTP 接入 Go 后端
 
-任务 ID：91；任务名称：TUI 经 HTTP 接入 Go 后端；目标：`TUI-HTTP-GO`。已确认规划，尚未实施；无未完成硬前置，复用 #45 与现有 TUI，一个实现 PR。范围见 [Spec](tui-http-client.spec.md)，结果归[专属验收](../acceptance/tui-http-client.md)。
+任务 ID：91；任务名称：TUI 经 HTTP 接入 Go 后端；目标：`TUI-HTTP-GO`。按用户直接授权在当前聊天实施；无未完成硬前置，复用 #45 与现有 TUI，一个实现 PR。范围见 [Spec](tui-http-client.spec.md)，结果归[专属验收](../acceptance/tui-http-client.md)。
 
 ## 实施与所有权
 
@@ -13,12 +13,12 @@
 
 ## 测试能力补齐
 
-下列入口目前不存在，由 #91 实施中补齐，非已交付能力：
+下列入口由 #91 补齐；实际运行结果只登记专属验收：
 
 - `TestTUIHTTPBoundary`（internal/app）：检查真实 console 构造、直接/传递客户端闭包及禁止文件访问；共用 CLI 的服务端闭包不算客户端违规，也不能掩盖客户端依赖。
 - `TestTUIHTTPContract`（internal/product/httpclient）：httptest/受控客户端核验身份、DTO、原请求、版本/故障，断言正式处理次数。
 - `TestTUIHTTPInteraction`（internal/console）：通过真实 HTTP 适配驱动任务/候选、输入/final、迟到响应和切项目，不能仅测试 API 请求格式。
-- `scripts/test-tui-http.ps1 -DebugRoot <root> -OutDir <fresh-dir>`：新增单一受控驱动，先调用现有 new-debug-release.ps1 生成独立 SteerlineTest 包，再显式 `--simulate` 启动/冻结方案。真实服务配受控 worker/PR provider，使用本次专属分支，不创建远端真实 PR或发模型请求。驱动实际 TUI 模型/HTTP/Go 接线，注入丢响应、重复、旧实例/版本和关闭/重连；正常停服、丢回执、恢复/会话错绑定、处理次数和清理均有非零断言。
+- `scripts/test-tui-http.ps1 -DebugRoot <root> -OutDir <fresh-dir>`：新增单一受控驱动，先调用现有 new-debug-release.ps1 生成独立 SteerlineTest 包，再显式 `--simulate` 启动/冻结方案。真实服务配受控 worker/PR provider，使用本次专属分支，不创建远端真实 PR或发模型请求。驱动实际 TUI 模型/HTTP/Go 接线，验证开始、关闭后 worker 继续、重开/重复、规范 final 与正常停服/清理。丢响应、旧实例/版本、丢停服回执与恢复/会话错绑定由上述定向测试及服务端 TestTUIHTTPRoutes 注入并断言。
 
 真实原生窗口操作归 TH-M1；受控打开器只验证目标绑定和无新业务轮次，不推定真机支持。新增入口必须非零枚举、实际断言，零匹配/skip 不算通过；过滤名如调整须在交付前同步 Plan/acceptance。
 
@@ -30,6 +30,7 @@
 | --- | --- | --- | --- | --- |
 | TH-A1 | 定向 Go / 新增 Boundary | Windows 源码；`go test ./internal/app -run '^TestTUIHTTPBoundary$' -count=1 -v` | 接线后；非零检查客户端闭包/文件访问，无业务直连 | `<evidence>/boundary.log`；acceptance TH-A1 |
 | TH-A2–A5 | 定向 Go / 新增 Contract、Interaction | Windows/httptest；`go test ./internal/product/httpclient -run '^TestTUIHTTPContract$' -count=1 -v`；`go test ./internal/console -run '^TestTUIHTTPInteraction$' -count=1 -v` | 接口/消费后；身份/内容/冲突/原请求/停服未知/关闭断言通过 | `<evidence>/contract.log`、`interaction.log`；对应 ID |
+| TH-A4；TH-A2 历史 | 定向 Go / 新增 Routes | Windows/httptest；`go test ./internal/product/httpapi -run '^TestTUIHTTPRoutes$' -count=1 -v` | 路由接线后；恢复只读、错绑定/重复/unknown 查看与跨 Attempt 历史通过 | `<evidence>/routes.log`；TH-A2/TH-A4 |
 | TH-A2–A5 | 独立调试 / 新增 `tui-http.local`（专属驱动，非现有 L3 注册项） | Windows/Go/Git；`powershell -NoProfile -File scripts/test-tui-http.ps1 -DebugRoot C:\SteerlineDebug -OutDir <fresh-evidence>` | 定向通过后；真实接线、处理次数/停止证据/重连/清理完整通过 | `<fresh-evidence>/summary.json` 与包 evidence；对应 ID |
 | TH-A6 | 清理/构建 | Windows；`go run ./cmd/test-feedback -build-only -out <fresh-build-evidence>`；删除清单及下行文档命令 | 删除后；无 WinUI 专属工程/入口，原 Go 构建和导航通过 | build summary、删除清单；TH-A6 |
 | TH-A6；本次规划 | 文档静态 | `python scripts/check_doc_links.py`；`python scripts/roadmap_task_id.py check`；`git diff --check` | 规划及实施交付前；导航/身份/格式通过，非业务验收 | 规划见 roadmap-planning；实现见 TH-A6 |
@@ -38,4 +39,4 @@
 
 不选 Full：有界客户端/传输改造。L2/既有 L3/live 不默认运行：现有场景不证明新 TUI 接线，专属受控驱动覆盖本任务；不重跑无关平台模型矩阵。若实际改动产生执行语义风险，按影响补最小场景并同步计划。临时/AI调试先生成 C:\SteerlineDebug 包，不使用、修改或重置 C:\SteerlineRuntime。
 
-本轮仅规划，未执行产品测试。启动时固定实际 Git commit/文档路径；本次确认不启动 runner、实施或外部 PR操作。
+执行基准固定为 `83a6cc4a7321994a55e5a9ae0f308927eb9fb1b3` 的本 Spec/Plan 路径。用户直接授权实施，不启动 roadmap-runner；结果与代码/构建版本只登记 acceptance/execution-map，Plan 不维护实时结果。

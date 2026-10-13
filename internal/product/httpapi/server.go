@@ -144,6 +144,9 @@ func (s *Server) identityView(ctx context.Context) Identity {
 func (s *Server) serveRead(w http.ResponseWriter, r *http.Request, identity Identity, path []string) {
 	ctx := r.Context()
 	queryValues := r.URL.Query()
+	if s.consoleQuery(w, r, path) {
+		return
+	}
 	switch {
 	case len(path) == 1 && path[0] == "tasks":
 		limit, err := parseLimit(queryValues.Get("limit"), 50, 500)
@@ -242,7 +245,7 @@ func (s *Server) serveConversation(w http.ResponseWriter, r *http.Request, ident
 		writeProtocolError(w, err, "")
 		return
 	}
-	executionID, attemptID, err := exactRunIdentity(candidate, queryValues.Get("execution_id"), queryValues.Get("attempt_id"))
+	executionID, attemptID, err := s.conversationIdentity(r.Context(), candidate, queryValues.Get("execution_id"), queryValues.Get("attempt_id"))
 	if err != nil {
 		writeProtocolError(w, err, "")
 		return
@@ -254,7 +257,7 @@ func (s *Server) serveConversation(w http.ResponseWriter, r *http.Request, ident
 	}
 	finalsOnly := queryValues.Get("finals_only") == "true"
 	filter := api.ConversationFilter{WorkflowID: candidate.RunID, ExecutionID: executionID, AttemptID: attemptID,
-		TurnID: queryValues.Get("turn_id"), FinalsOnly: finalsOnly}
+		TurnID: queryValues.Get("turn_id"), SessionID: queryValues.Get("session_id"), Source: queryValues.Get("source"), FinalsOnly: finalsOnly}
 	page, err := s.product.ConversationPage(r.Context(), filter, queryValues.Get("cursor"), limit)
 	if err != nil {
 		writeProtocolError(w, err, "")
@@ -319,8 +322,12 @@ func (s *Server) serveBody(w http.ResponseWriter, r *http.Request, runID string)
 		writeError(w, http.StatusBadRequest, "body_reference_invalid", err.Error(), "")
 		return
 	}
-	if ref.ExecutionID != candidate.ExecutionID || ref.AttemptID != candidate.AttemptID {
-		writeError(w, http.StatusConflict, "target_mismatch", "body reference belongs to another execution or attempt", "")
+	if ref.ExecutionID == "" || ref.AttemptID == "" {
+		writeError(w, http.StatusConflict, "target_mismatch", "body reference requires original execution and attempt", "")
+		return
+	}
+	if _, _, err = s.conversationIdentity(r.Context(), candidate, ref.ExecutionID, ref.AttemptID); err != nil {
+		writeProtocolError(w, err, "")
 		return
 	}
 	offset, err := parseInt64(queryValues.Get("offset"), 0, 1<<62)

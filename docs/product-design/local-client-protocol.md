@@ -1,8 +1,8 @@
 # 本机客户端协议 v1
 
-本页描述已交付基线。2026-10-13 用户确认[任务 #91](../spec/tui-http-client.spec.md)将使 TUI 统一接入并补恢复/原会话/停服接口；本次尚未实施，不提前宣称新路由可用。
+本页描述 #45 基线与[任务 #91](../spec/tui-http-client.spec.md)当前源码。TUI 已统一消费 HTTP；实现/验收/合入事实归专属验收与 execution-map。
 
-本协议由 #45 的 `internal/product/httpapi` 提供，供原生客户端按需消费。服务继续拥有 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和唯一交付状态；HTTP 只映射现有 `product/api` DTO 与命令入口。
+纯契约在 `internal/product/httpcontract`，客户端在 `httpclient`，受限文件能力在 `httpfs`；`httpapi` 提供服务端 handler，TUI 由 `consoleapp` 组装。服务继续拥有 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和唯一交付状态；HTTP 只映射现有 `product/api` DTO 与命令入口。
 
 ## 发现、连接和身份
 
@@ -42,7 +42,7 @@ Go consumers can use `app.OpenHTTPClient(ctx, configPath)`; this only connects t
 
 | 方法与路径 | DTO / 用途 |
 | --- | --- |
-| `GET /v1/identity` | `Identity`：协议、项目、实例、进程、能力、`ready` 与诊断 |
+| `GET /v1/identity` | `Identity`：协议、项目、实例、进程、能力、`ready`、诊断与认证后的两个原锁路径 `lock_paths` |
 | `GET /v1/projects/{project_id}/snapshot?task_id=` | `api.ProjectSnapshot`：连接、服务运行、决策/历史和选中任务 |
 | `GET /v1/projects/{project_id}/tasks?cursor=&limit=` | `api.TaskPage`：有界任务列表 |
 | `GET /v1/projects/{project_id}/tasks/{task_id}` | `api.TaskPage`：任务详情、直接依赖、交付和阻断 |
@@ -51,12 +51,14 @@ Go consumers can use `app.OpenHTTPClient(ctx, configPath)`; this only connects t
 | `GET /v1/projects/{project_id}/presentation` | `ProjectPresentation`：现有安全执行方案摘要、DefaultProfileID、配置 digest 和不可用原因，供客户端选择 start_task/start_candidate 的 profile ID |
 | `GET /v1/projects/{project_id}/runs/{run_id}` | 精确 run 的 `api.CandidateSummary`，含候选、Decision、PR 与交付状态 |
 | `GET /v1/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&cursor=` | `ActivityPage`，只读规范数据库活动，不回退私有日志 |
-| `GET /v1/projects/{project_id}/runs/{run_id}/conversation?execution_id=&attempt_id=&turn_id=&finals_only=&cursor=&limit=` | 有界会话事件页和原正文引用 |
+| `GET /v1/projects/{project_id}/runs/{run_id}/conversation?execution_id=&attempt_id=&session_id=&source=&turn_id=&finals_only=&cursor=&limit=` | 有界会话事件页和原正文引用 |
 | `GET /v1/projects/{project_id}/runs/{run_id}/final` | `FinalReply`，返回 final 事件及不超过 4 MiB 的完整正文；更大的正文使用 body 路由分段读取 |
 | `GET /v1/projects/{project_id}/runs/{run_id}/body?ref=<hex-json>&offset=&limit=` | `api.ConversationBodyPage`，原消息 revision/SHA 校验，单页不超过 256 KiB |
+| `GET /v1/projects/{project_id}/runs/{run_id}/recovery?execution_id=&attempt_id=` | `api.RecoveryInspection`，只读原恢复核验，必须绑定当前 Execution/Attempt，不授予继续资格 |
+| `GET /v1/projects/{project_id}/runs/{run_id}/decision-eligibility?execution_id=&attempt_id=` | 只读原决策资格核验，同样要求精确绑定 |
 | `GET /v1/projects/{project_id}/commands/{request_id}` | 查询原 command/control 回执；没有权威记录才返回 `command_not_found` |
 
-`TaskPage`, `GraphPage`, conversation event/body 和活动 cursor 保留各自实际身份、版本、采样/事件时间。PR、交付和历史 Decision 从现有查询投影返回，不使用 UI 缓存补写。
+`TaskPage`, `GraphPage`, conversation event/body 和活动 cursor 保留各自实际身份、版本、采样/事件时间。PR、交付和历史 Decision 从现有查询投影返回，不使用 UI 缓存补写。conversation 的空 attempt 选择原 run/Execution 的完整历史；指定历史 attempt 时核对正式会话投影归属。body 保留原 Attempt/revision/SHA，不改向当前 Attempt。
 
 ## 命令映射
 
@@ -76,7 +78,8 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 | `set_dispatch_mode` | `dispatch` / control revision | `{"mode":"manual"}` 或 `{"mode":"auto"}` | 原控制命令与 authority CAS |
 | `pause_dispatch`, `resume_dispatch` | `dispatch` / control revision | `{}` | 原控制命令与 authority CAS |
 | `open_terminal`, `recheck_environment` | run ID / blocker version + control revision | `{"target":{"run_id":"...","execution_id":"...","attempt_id":"...","turn_id":"...","blocker_id":"...","version":2}}` | 原宿主 environment control |
-| `stop_service` | 当前 `instance_id` / expected version 0 | `{}` | 原服务停服 control request；返回提交回执，不另启动服务 |
+| `open_native_session` | run ID / expected version 0 | `api.NativeSessionTarget`：run/Execution/Attempt/session/generation | 原冻结路径核验后打开原生查看器；持久标记 unknown 后只调用一次，无新业务轮次 |
+| `stop_service` | 当前 `instance_id` / expected version 0 | `{}` | 原服务停服 control request；退出前在在途 HTTP 请求中等待原 applied 回执，不另启动服务 |
 
 `create_task`, `add_predecessors`, planning、人工验收和自定义前置操作目前返回 `unsupported`。服务把有效 request ID 的 unsupported 拒绝保存在原 envelope 记录中；之后 GET 仍返回 `unsupported` rejection，不会伪装成 `command_not_found`。
 
@@ -91,5 +94,9 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 ```
 
 发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；权威 `command_not_found` 才能按原完整 envelope、原 ID、原 payload 和原版本补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `local-api/commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
+
+TUI 将完整原信封保存在 `<home>/ui/http-requests/<project_id>/<request_id>.json`，POST 前原子发布；该客户端记录不成为业务权威。对原生查看器，HTTP 持久结果只用于防止重复打开；未知结果不重新调用打开器。
+
+停服以原 HTTP applied 回执、认证后的原 OS 进程 generation 退出和两个已有锁释放共同确认。客户端不读取宿主回执文件；缺证据时显示结果未核实。TUI 只结束客户端；断线保留本窗口观察与草稿，禁止变更，重新连接不会生成替代请求。
 
 本协议不提供 SSE、离线查询进程、完整原始过程阅读器、规划 handler 或通用 artifact DTO。

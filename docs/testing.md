@@ -138,16 +138,11 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 
 带 tag 的场景包应通过分级 runner 执行；直接运行缺少 runner 环境的场景会失败。编译成功不证明业务断言、原生证据或清理通过。
 
-## WinUI 历史验证与当前 TUI 改造
+## TUI HTTP 验证与 WinUI 历史
 
-#44 已退役为历史，代码删除由 #91 实施；下面命令仅用于原构建取证，不是当前任务要求。当前 TUI/HTTP 的新增测试/驱动与最小回归以[#91 Plan](spec/tui-http-client.plan.md)为准：
+#91 已删除 #44 三个 WinUI 工程和专属 global.json，当前无需 .NET 构建。历史结果保留在[WinUI 验收](acceptance/archive/superseded/phase2-winui-foundation.md)。
 
-```powershell
-dotnet test ui/SteerLine.Windows.Tests/SteerLine.Windows.Tests.csproj -c Release
-dotnet build ui/SteerLine.Windows/SteerLine.Windows.csproj -c Debug
-```
-
-单元测试验证客户端核心逻辑；工程编译不证明真实窗口操作已经验收，人工项见[WinUI 验收](acceptance/archive/superseded/phase2-winui-foundation.md)。
+当前 TUI/HTTP 新增 Boundary/Contract/Interaction/Routes，以及独立 `scripts/test-tui-http.ps1 -DebugRoot C:\SteerlineDebug -OutDir <fresh-dir>`。后者生成新的 simulate SteerlineTest 包，驱动真实 TUI 模型/HTTP/Go 服务并核验关闭、重复请求、final 与停服退出/锁证据。故障、未知结果、历史正文与错绑定由定向测试覆盖；完整安排见[#91 Plan](spec/tui-http-client.plan.md)，结果见[专属验收](acceptance/tui-http-client.md)。
 
 独立调试自动入口使用生成的 `C:\SteerlineDebug` 包和 SteerlineTest，不能使用安装环境。生成/模拟/隔离/重置与脚本 PR 分别由 `scripts/test-debug-release.ps1`、其 `-Live` 参数验证；真实 Codex 沙箱与 Git 工具回归已登记为上面的 L3 `runtime.sandbox-git.local-codex`；`scripts/test-codex-sandbox.ps1` 保留独立入口，复用相同双任务驱动。各入口的前置、外部效果和证据见[调试环境验收](acceptance/debug-environment.md)与[沙箱验收](acceptance/codex-sandbox-git.md)。
 

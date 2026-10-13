@@ -85,6 +85,8 @@ type decisionAnswerDialog struct {
 	decisionID      string
 	runRevision     uint64
 	decisionVersion uint64
+	sourceAttemptID string
+	recoveryVersion uint64
 	optionIndex     int
 	note            []rune
 	cursor          int
@@ -332,7 +334,8 @@ func (m Model) submitControl(index int, action, taskID, requestID string, instan
 	case "start_task":
 		profile := state.actions[requestID]
 		if profile != nil && profile.ExecutionProfileID != "" {
-			payload = api.ControlPayload{TaskID: taskID, ExecutionProfileID: profile.ExecutionProfileID, ExecutionProfileDigest: profile.ExecutionProfileDigest}
+			payload = profile.Payload
+			payload.TaskID, payload.ExecutionProfileID, payload.ExecutionProfileDigest = taskID, profile.ExecutionProfileID, profile.ExecutionProfileDigest
 		} else {
 			payload = api.ControlPayload{TaskID: taskID}
 		}
@@ -467,7 +470,7 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	m.answer = &decisionAnswerDialog{identity: candidateIdentity(row.run), projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: row.run.RunID, decisionID: decision.ID, runRevision: row.run.ControlRevision, decisionVersion: decision.Version, optionIndex: optionIndex}
+	m.answer = &decisionAnswerDialog{identity: candidateIdentity(row.run), projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: row.run.RunID, decisionID: decision.ID, runRevision: row.run.ControlRevision, decisionVersion: decision.Version, sourceAttemptID: row.run.AttemptID, recoveryVersion: row.run.RecoveryVersion, optionIndex: optionIndex}
 	m.answer.request = decision.Request
 	m.answer.request.Options = append([]api.DecisionOption(nil), decision.Request.Options...)
 	m.answer.noteFocus = len(decision.Request.Options) == 0
@@ -513,6 +516,10 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		dialog.error = "原候选身份已变化或已退出实验；草稿保留"
 		return m, nil
 	}
+	if dialog.sourceAttemptID != run.AttemptID || dialog.recoveryVersion != run.RecoveryVersion {
+		dialog.error = "原 Attempt 或恢复版本已变化；草稿保留，请刷新并核对原问题"
+		return m, nil
+	}
 	if run.EnvironmentBlocker != nil {
 		dialog.error = "环境阻断：" + run.EnvironmentBlocker.Fact.Reason + "；未发送，解除后请重新提交"
 		return m, nil
@@ -546,7 +553,7 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	requestID := newRequestID()
-	answer := api.DecisionAnswer{DecisionID: dialog.decisionID, RunID: dialog.runID, OptionID: optionID, Note: note, ExpectedDecisionVersion: dialog.decisionVersion, ExpectedRunRevision: dialog.runRevision, ServiceInstanceID: dialog.instance}
+	answer := api.DecisionAnswer{DecisionID: dialog.decisionID, RunID: dialog.runID, OptionID: optionID, Note: note, ExpectedDecisionVersion: dialog.decisionVersion, ExpectedRunRevision: dialog.runRevision, SourceAttemptID: dialog.sourceAttemptID, ExpectedRecoveryVersion: dialog.recoveryVersion, ServiceInstanceID: dialog.instance}
 	action := &actionState{RequestID: requestID, Action: "answer_decision", TaskID: run.TaskID, RunID: run.RunID, DecisionID: dialog.decisionID, DecisionIdentity: dialog.identity, DecisionDraftOptionID: optionID, DecisionDraftNote: string(dialog.note), DecisionRevision: dialog.runRevision, DecisionVersion: dialog.decisionVersion, Status: "submitting", Message: "保存 command_id 并提交答案", TargetInstance: dialog.instance, UpdatedAt: m.clock.Now()}
 	state.actions[requestID] = action
 	state.view.Outstanding[requestID] = "decision:" + run.RunID

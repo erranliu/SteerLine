@@ -118,7 +118,11 @@ func (s *Service) lifecycleForRun(run *reconstructiontypes.RunView) (executionba
 	}
 	setup := lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot)
 	setup.OwnedProcess = s.ownedProcesses[run.RunID]
-	setup.WorkerTreeAbsent = s.resources.WorkerTreeAbsent
+	// Read-only recovery inspectors have no owned process-resource manager.
+	// Absence of that manager cannot prove that an external worker tree exited.
+	if s.resources != nil {
+		setup.WorkerTreeAbsent = s.resources.WorkerTreeAbsent
+	}
 	port, err := s.lifecycleResolver.ResolveLifecycle(setup.Clone())
 	if err != nil {
 		return nil, workerFlowContext{}, err

@@ -20,6 +20,9 @@ import (
 )
 
 type apiReader struct {
+	onConversation      func(api.ConversationFilter, string, int) (api.ConversationPage, error)
+	onOpenNative        func(api.NativeSessionTarget) error
+	recoveryReads       int
 	onResolveStart      func(string, string)
 	onNormalizeDecision func(api.DecisionInput) (api.DecisionInput, error)
 	snapshot            api.ProjectSnapshot
@@ -57,7 +60,10 @@ func (r *apiReader) ListTasks(_ context.Context, cursor string, limit int) (api.
 func (r *apiReader) TaskGraph(context.Context, string, int) (api.GraphPage, error) {
 	return r.graph, nil
 }
-func (r *apiReader) Conversation(context.Context, api.ConversationFilter, string, int) (api.ConversationPage, error) {
+func (r *apiReader) Conversation(_ context.Context, filter api.ConversationFilter, cursor string, limit int) (api.ConversationPage, error) {
+	if r.onConversation != nil {
+		return r.onConversation(filter, cursor, limit)
+	}
 	return api.ConversationPage{Events: []api.ConversationEvent{}}, nil
 }
 func (r *apiReader) Body(_ context.Context, ref api.ConversationBodyRef, offset int64, limit int) (api.ConversationBodyPage, error) {
@@ -215,6 +221,16 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 		return productclient.Resources{Project: ref, OpenReader: func(context.Context) (productclient.Reader, error) { return reader, nil },
 			OpenCommands: func(context.Context, bool) (productclient.TaskCommands, error) { return apiCommands{}, nil },
 			Control:      control, Decision: decision, DefaultRequestedBy: "tester",
+			OpenNativeSession: func(_ context.Context, target api.NativeSessionTarget) error {
+				if reader.onOpenNative != nil {
+					return reader.onOpenNative(target)
+				}
+				return errors.New("native fixture unavailable")
+			},
+			InspectRecovery: func(_ context.Context, id string) (api.RecoveryInspection, error) {
+				reader.recoveryReads++
+				return api.RecoveryInspection{RunID: id}, nil
+			},
 			ResolveStartTask: func(_ context.Context, taskID, profileID string) (api.ControlPayload, error) {
 				if reader.onResolveStart != nil {
 					reader.onResolveStart(taskID, profileID)

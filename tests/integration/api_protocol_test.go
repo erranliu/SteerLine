@@ -30,6 +30,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
+	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 )
 
@@ -60,7 +61,7 @@ func TestAPIServiceLifecycle(t *testing.T) {
 	if err = endpoint.Start(); err != nil {
 		t.Fatal(err)
 	}
-	client, err := httpapi.Open(ctx, fixture.config.RunDir, fixture.config.Identity())
+	client, err := httpclient.Open(ctx, fixture.config.RunDir, fixture.config.Identity())
 	require(t, err)
 	if client.Identity().Ready || client.Identity().Diagnostic != "test service not ready" {
 		t.Fatalf("service startup diagnostic was lost: %+v", client.Identity())
@@ -116,7 +117,7 @@ func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
 	serviceCtx, stopService := context.WithCancel(ctx)
 	done := make(chan error, 1)
 	go func() { done <- steerlineapp.RunConfiguredService(serviceCtx, fixture.config, "manual", "", "off") }()
-	var client *httpapi.Client
+	var client *httpclient.Client
 	var lastOpenErr error
 	// Native authority preflight and the real service factory precede API
 	// publication. Keep a bounded minute for that complete startup path.
@@ -213,7 +214,7 @@ func TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter(t *testing.T) {
 	}
 	t.Cleanup(stop)
 
-	var client *httpapi.Client
+	var client *httpclient.Client
 	var lastOpenErr error
 	deadline := time.Now().Add(time.Minute)
 	for time.Now().Before(deadline) {
@@ -324,7 +325,7 @@ func TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter(t *testing.T) {
 	if _, err = client.SubmitCommand(ctx, changed); err == nil {
 		t.Fatal("same request ID with different content was accepted")
 	} else {
-		var clientErr *httpapi.ClientError
+		var clientErr *httpclient.ClientError
 		if !errors.As(err, &clientErr) || clientErr.Status != 409 || clientErr.Code != "request_id_conflict" {
 			t.Fatalf("same-ID content conflict returned the wrong result: %v", err)
 		}
@@ -529,7 +530,7 @@ func postIntegrationCommand(ctx context.Context, address, routeProject, token, h
 	return response.StatusCode, decoded, nil
 }
 
-func integrationDispatchEnvelope(t *testing.T, client *httpapi.Client, revision uint64, paused bool) httpapi.CommandEnvelope {
+func integrationDispatchEnvelope(t *testing.T, client *httpclient.Client, revision uint64, paused bool) httpapi.CommandEnvelope {
 	t.Helper()
 	action := "pause_dispatch"
 	if paused {
@@ -540,7 +541,7 @@ func integrationDispatchEnvelope(t *testing.T, client *httpapi.Client, revision 
 		Action: action, TargetID: "dispatch", ExpectedVersion: revision, ExpectedControlRevision: revision, Payload: []byte(`{}`)}
 }
 
-func integrationControlState(t *testing.T, ctx context.Context, client *httpapi.Client) (uint64, bool) {
+func integrationControlState(t *testing.T, ctx context.Context, client *httpclient.Client) (uint64, bool) {
 	t.Helper()
 	snapshot, err := client.Snapshot(ctx, "")
 	require(t, err)
@@ -567,7 +568,7 @@ func assertNoIntegrationCommandEffect(t *testing.T, ctx context.Context, fixture
 	}
 }
 
-func waitIntegrationControlApplied(t *testing.T, ctx context.Context, client *httpapi.Client, requestID string) httpapi.CommandResponse {
+func waitIntegrationControlApplied(t *testing.T, ctx context.Context, client *httpclient.Client, requestID string) httpapi.CommandResponse {
 	t.Helper()
 	deadline, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
@@ -979,12 +980,12 @@ func TestAPIReconnectAndUnsupported(t *testing.T) {
 	if secondClient.Identity().InstanceID != service.instanceID || !secondClient.Identity().Ready {
 		t.Fatalf("reconnected client did not query the same live instance: %+v", secondClient.Identity())
 	}
-	if _, err = httpapi.Open(ctx, fixture.config.RunDir, fixture.config.Identity()+"/wrong-project"); err == nil || !strings.Contains(err.Error(), "different project") {
+	if _, err = httpclient.Open(ctx, fixture.config.RunDir, fixture.config.Identity()+"/wrong-project"); err == nil || !strings.Contains(err.Error(), "different project") {
 		t.Fatalf("wrong project was accepted by discovery: %v", err)
 	}
 }
 
-func startIntegrationHTTPAPI(t *testing.T, ctx context.Context, fixture integrationFixture, service *runningIntegrationService) (*httpapi.Server, *httpapi.Client, *productclient.Client) {
+func startIntegrationHTTPAPI(t *testing.T, ctx context.Context, fixture integrationFixture, service *runningIntegrationService) (*httpapi.Server, *httpclient.Client, *productclient.Client) {
 	t.Helper()
 	product, err := steerlineapp.OpenClient(ctx, fixture.configPath)
 	require(t, err)
@@ -993,12 +994,12 @@ func startIntegrationHTTPAPI(t *testing.T, ctx context.Context, fixture integrat
 	return server, client, product
 }
 
-func reconnectIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, service *runningIntegrationService, product *productclient.Client) (*httpapi.Server, *httpapi.Client, error) {
+func reconnectIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, service *runningIntegrationService, product *productclient.Client) (*httpapi.Server, *httpclient.Client, error) {
 	server, client, err := newIntegrationHTTPAPI(ctx, fixture, service, product)
 	return server, client, err
 }
 
-func newIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, service *runningIntegrationService, product *productclient.Client) (*httpapi.Server, *httpapi.Client, error) {
+func newIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, service *runningIntegrationService, product *productclient.Client) (*httpapi.Server, *httpclient.Client, error) {
 	identity := service.service.State.Service.ProcessIdentity
 	if identity == nil {
 		return nil, nil, fmt.Errorf("controlled service omitted process identity")
@@ -1015,7 +1016,7 @@ func newIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, serv
 	if err = server.Start(); err != nil {
 		return nil, nil, err
 	}
-	client, err := httpapi.Open(ctx, fixture.config.RunDir, fixture.config.Identity())
+	client, err := httpclient.Open(ctx, fixture.config.RunDir, fixture.config.Identity())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1069,7 +1070,7 @@ func (c *integrationInboxInterceptor) Forwarded(requestID string) int {
 	return c.forwarded[requestID]
 }
 
-func startIntegrationHTTPAPIWithInboxInterceptor(t *testing.T, ctx context.Context, fixture integrationFixture, service *runningIntegrationService) (*httpapi.Server, *httpapi.Client, *productclient.Client, *integrationInboxInterceptor) {
+func startIntegrationHTTPAPIWithInboxInterceptor(t *testing.T, ctx context.Context, fixture integrationFixture, service *runningIntegrationService) (*httpapi.Server, *httpclient.Client, *productclient.Client, *integrationInboxInterceptor) {
 	t.Helper()
 	var interceptor *integrationInboxInterceptor
 	product, err := productclient.Open(ctx, api.ProjectRef{ConfigPath: fixture.configPath}, func(ctx context.Context, ref api.ProjectRef) (productclient.Resources, error) {

@@ -1,8 +1,8 @@
 # 当前代码架构与源码索引
 
-> 当前规划（2026-10-13）：唯一任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，删除 #44 WinUI。源码尚未切换；下文当前包/组装事实不据规划改称已实现。WebUI、SSE 和远程服务不在本轮。
+> 当前源码（2026-10-13）：唯一任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。实际验证与待验项见任务专属验收。WebUI、SSE 和远程服务不在本轮。
 
-核对日期：2026-10-10，提 PR 集成基线 6d4b4fa2 加本次身份残留清理。本文描述当前源码树。第一阶段目标包含本地 Codex、本机 Orca 与远端路径交付；当前 Orca 的本机有限样本及本机最终保护未跑真机、远端已准备环境有限样本通过与首次信任阻塞后原任务自动继续未通过范围见[单终端验收](../acceptance/orca-terminal-transport.md)。
+核对日期：2026-10-13，#91 当前源码；合入状态以 execution-map 为准。本文描述当前源码树。第一阶段目标包含本地 Codex、本机 Orca 与远端路径交付；当前 Orca 的本机有限样本及本机最终保护未跑真机、远端已准备环境有限样本通过与首次信任阻塞后原任务自动继续未通过范围见[单终端验收](../acceptance/orca-terminal-transport.md)。
 
 ## 系统边界
 
@@ -10,15 +10,18 @@
 
 用于拆分 roadmap 任务时，先按[并行开发指南](parallel-development.md)核对功能、契约、共享语义/接线和测试资源；本页的包划分不直接构成并行许可。
 
-CLI 和 TUI 使用同一个产品客户端。`internal/app` 读取配置并组装具体 adapter、SQLite 和各消费者端口；`internal/app/host` 承载服务进程、文件控制协议、启动/退出观察、锁与心跳，并通过注入端口调用 execution actor。任务和执行状态仍由唯一业务 actor 决定，再由 SQLite 专用提交接口校验身份、前值和版本。产品查询只把同一数据库快照投影为 `product/api` 页面。
+TUI 由 `internal/consoleapp` 读取连接配置并注入 `internal/product/httpclient.Console`，全部业务消费经回环 HTTP。`internal/app` 保留 CLI/服务的具体 adapter、SQLite 和端口组装，并将 console 入口委托给 consoleapp；`internal/app/host` 承载服务进程、文件控制协议、启动/退出观察、锁与心跳，并通过注入端口调用 execution actor。任务和执行状态仍由唯一业务 actor 决定，再由 SQLite 专用提交接口校验身份、前值和版本。产品查询只把同一数据库快照投影为 `product/api` 页面。
 
 ```mermaid
 flowchart LR
     CLI[cmd/steerline] --> App[internal/app]
-    TUI[internal/console] --> Client[internal/product/client]
+    TUI[internal/console] --> HC[internal/product/httpclient]
+    Assembly[internal/consoleapp] --> HC
+    HC --> HTTP[127.0.0.1 HTTP]
+    HC --> Contract[internal/product/httpcontract]
     CLI --> Client
     App --> Client
-    Native[Native client] --> HTTP[127.0.0.1 HTTP]
+    HTTPAPI --> Contract
     HTTP --> HTTPAPI[internal/product/httpapi]
     HTTPAPI --> Client
     App --> Host[internal/app/host]
@@ -55,9 +58,11 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 | `internal/execution/adapters` | Codex app-server, Orca single-terminal local/environment implementation, and their public protocol codecs. Orca target routing shares code; remote delivery has a finite real sample after native CLI upgrade and directory trust preparation; automatic continuation of the initially rejected task remains unverified. |
 | `internal/execution/workspace`, `publication`, `process` | Git workspace, provider/PR operations, managed worker processes and file resource facts. The app injects process facts into the host. |
 | `internal/product/api` | Serializable product pages, user commands, request targets and receipts. It contains no Runtime, Config, SQL record, or Go handle. |
-| `internal/product/client` | The single injected product client for CLI/TUI consumers. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
+| `internal/product/client` | The injected internal product client for CLI/service consumers and HTTP handlers. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
 | `internal/product/query` | Read-only projections and composition of product pages from storage ports. No SQL or business writer. |
 | `internal/product/httpapi` | Loopback HTTP discovery/authentication and DTO/action transport over the product client. It stores immutable request envelopes/transport receipts; it does not open SQL or own business transitions. |
+| `internal/consoleapp` | TUI connection-only configuration and HTTP adapter composition, with no execution/query/storage dependencies. |
+| `internal/product/httpclient`, `httpcontract`, `httpfs` | Pure HTTP consumer, serializable wire values, restricted discovery/credential/outgoing files and local OS exit/lock observation. No business-file fallback. |
 | `internal/console` | TUI navigation and view state; consumes only product API values and injected client interfaces. A named `finalReplyReader` owns final index/body/preview state and read acceptance; Model owns candidate selection, step query facts, scrolling/recovery and native session opening. |
 | `internal/storage/ports` and `internal/storage/sqlite` | Consumer-owned narrow read/commit declarations; one SQLite implementation owns schema, SQL, WAL, CAS and transactions. |
 | `internal/testkit` and `tests/integration`, `tests/e2e` | Test-only boundary guards, Go test feedback, process ownership and protocol fixtures; real application composition tests; registered controlled/native E2E scenarios. Product production imports are forbidden. |
@@ -81,7 +86,7 @@ At d77c399f, Windows `go list ./...` enumerates 45 packages. The current invento
 | Execution actor and pure values | `internal/execution`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
 | Execution effects and compact reply contract | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace`, `internal/execution/workerreturn` |
 | Filesystem guards | `internal/pathguard` |
-| Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph`, `internal/product/httpapi` |
+| Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph`, `internal/product/httpapi`, `internal/product/httpclient`, `internal/product/httpcontract`, `internal/product/httpfs` |
 | Storage | `internal/storage/ports`, `internal/storage/sqlite` |
 | Test support | `internal/testkit/boundary`, `internal/testkit/boundary/e2e`, `internal/testkit/feedback`, `internal/testkit/fixtures`, `internal/testkit/process`, `internal/testkit/protocol` |
 | Integration and E2E helpers | `tests/integration`, `tests/e2e/cmd/sandbox-setup`, `tests/e2e/internal/controlled`, `tests/e2e/internal/driver`, `tests/e2e/internal/evidence`, `tests/e2e/internal/native`, `tests/e2e/internal/testenv` |
@@ -96,6 +101,7 @@ The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e
 | Execution records and neutral adapter values | `internal/execution/model` and `internal/execution/backend`; the unique `execution.Service` / `execution.CommandService` own dispatch, recovery, delivery and cleanup. |
 | Host calls into execution | `execution.HostPort` and scheduler callbacks in `internal/execution`; `internal/app/host` uses injected ports and does not implement domain transitions. |
 | Serializable product surface | `internal/product/api`; `internal/product/client` is the one injected Go client; `internal/product/query` projects read-only storage values. |
+| TUI composition | `internal/app.PrepareConsole` delegates to `internal/consoleapp.Prepare`; console consumes the HTTP adapter through its existing ports. |
 | Local native client transport | `internal/product/httpapi` adapts the serializable product client to `steerline-client/v1`; `internal/app` starts it within the existing locked service lifetime. |
 | Atomic persistence declarations | `internal/storage/ports`; `internal/storage/sqlite` is the sole SQL/schema/transaction implementation. |
 | Composition inputs | `internal/app.Config`, `LoadConfig`, `NewService` and the app wiring files bind the concrete adapters, ports and SQLite owner. |

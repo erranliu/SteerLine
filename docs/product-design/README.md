@@ -12,12 +12,12 @@
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |
 | [执行控制台](execution-console.md) | 当前 TUI 的任务/候选布局、原地反馈、能力展示与操作速查 |
 | [Worker 步骤流程 Spec](../spec/worker-staged-flow.spec.md) | #84 已纳入一期收尾执行规划：现有 worker、简单步骤序列和 adapter；状态判断、三个短提示词及源码改造范围，implement 两轮/publish 单轮；尚未实现 |
-| [客户端与 Go 服务边界](planning-architecture.md) | 当前 #91 的 TUI/HTTP 目标边界，明确现状与未实施范围 |
-| [本机客户端协议 v1](local-client-protocol.md) | #45 已交付回环协议，#91 将补 TUI 所需接口 |
+| [客户端与 Go 服务边界](planning-architecture.md) | 当前 #91 的 TUI/HTTP 源码边界和未来范围 |
+| [本机客户端协议 v1](local-client-protocol.md) | #45 回环协议与 #91 TUI 所需接口 |
 | [规划界面原型参考](planning-ui.md) | 旧页面方向仅参考，不产生当前任务/前置 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |
 
-2026-10-13 用户确认当前规划仅到[任务 #91](../spec/tui-http-client.spec.md)。旧三节点/候选已清理，编号不复用；原型与退役规格不作为前置或派发入口。当前 #45 协议已交付，TUI 改接 HTTP 与 #44 删除尚待实施，见[推进边界](../roadmap/drafts/phase2-delivery.md)。
+2026-10-13 用户确认当前规划仅到[任务 #91](../spec/tui-http-client.spec.md)。旧三节点/候选已清理，编号不复用；原型与退役规格不作为前置或派发入口。当前 #45 协议已交付，TUI 已改接 HTTP，#44 工程已删除，验收状态见专属记录，见[推进边界](../roadmap/drafts/phase2-delivery.md)。
 
 整体职责见[架构总览](../architecture.md)，代码与接口归属见[源码索引](../architecture/current-code-architecture.md)，执行要求见[Spec 索引](../spec/README.md)，测试入口见[测试指南](../testing.md)。历史配置与试验只在[归档](../archive/README.md)或[验证证据](../validation)中承接。
 

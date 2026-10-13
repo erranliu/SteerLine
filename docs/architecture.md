@@ -1,6 +1,6 @@
 # 整体架构与职责边界
 
-> 当前规划（2026-10-13）：唯一任务 [#91](spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，删除 #44 WinUI。源码尚未切换；下文当前包/组装事实不据规划改称已实现。WebUI、SSE 和远程服务不在本轮。
+> 当前源码（2026-10-13）：唯一任务 [#91](spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。实际验证与待验项见任务专属验收。WebUI、SSE 和远程服务不在本轮。
 
 SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。一期包含本地 Codex、本机 Orca 与远端路径交付。后续目标见[产品愿景](roadmap/product-vision.md)，源码归属见[代码架构](architecture/current-code-architecture.md)。
 

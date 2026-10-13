@@ -1,6 +1,6 @@
 # 并行开发指南
 
-> 2026-10-13 当前唯一规划任务为[#91](../spec/tui-http-client.spec.md)。旧二阶段候选/规划领域不作为当前待执行队列，功能地图的“拟议”仅说明未来边界。当前源码仍保留本地 TUI 适配器，HTTP 切换待实施。
+> 2026-10-13 当前唯一规划任务为[#91](../spec/tui-http-client.spec.md)。旧二阶段候选/规划领域不作为当前待执行队列，功能地图的“拟议”仅说明未来边界。当前 TUI 已由 consoleapp 注入 HTTP 客户端；执行/验收状态归 execution-map。
 
 本文持续维护 SteerLine 的功能划分、模块所有权、可并行条件和冲突触发点，是设计或调整 roadmap 前的阅读与检查入口。目标是提高 AI 开发的有效吞吐：让更多任务能够独立理解、实现、验证和交付，降低共享修改、等待、返工与集成成本。业务正确性、权限、原请求恢复和唯一交付是必须保持的边界，详见[整体架构](../architecture.md)。
 
@@ -36,7 +36,7 @@
 | 配置、应用组装与服务宿主 / 已有 | app 的 local/terminal 组装单元、app/host | 既有后端的配置/target/preflight/factory 通常只改所属文件；Orca 本机与远端共用单终端实现。稳定宿主/产品端口下的进程控制和入口能力 | 新后端仍改中央显式组合；共同身份/policy、公共构造、配置摘要、exe/home 传递、实例/锁、启动与停服规则改变 | [local 组装](../../internal/app/directory_local.go)、[Orca 单终端组装](../../internal/app/directory_orca_terminal.go)、[组装/宿主源码](current-code-architecture.md#build-install-and-launch-sources) |
 | 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary) |
 | 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 2.2先推导草稿/artifact/人工事项，2.3实际会话接入验证必要权限；成熟后按稳定成果拆分 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../archive/roadmap/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
-| TUI 经 HTTP 接入 / 拟议 #91 | 现有 httpapi 服务端、待拆纯契约/客户端、console 消费 | #45 基线已有；#91 补接口/纯客户端并换 TUI，共享接线由单一任务拥有，不等待 WebUI/SSE | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [本机客户端协议](../product-design/local-client-protocol.md)、[拟议界面](../product-design/planning-ui.md) |
+| TUI 经 HTTP 接入 / #91 当前源码 | httpapi 服务端、httpcontract/httpclient/httpfs、consoleapp 组装和 console 消费 | #45 基线已有；#91 补接口/纯客户端并换 TUI，共享接线由单一任务拥有，不等待 WebUI/SSE | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [本机客户端协议](../product-design/local-client-protocol.md)、[拟议界面](../product-design/planning-ui.md) |
 
 远端能力需独立核对目标权限、身份、观察/恢复/停止与路径所有权，不能从本机成功推定支持。
 

@@ -1,12 +1,12 @@
 # 正式执行 Roadmap
 
-本表是用户确认的开发任务与依赖权威。2026-10-13 用户确认当前规划收敛到 `TUI → HTTP API → Go 后端`；本轮只落地规划，不启动 runner、开发聊天或代码实施。流程见[RoadmapGuide](RoadmapGuide.md)。
+本表是用户确认的开发任务与依赖权威。2026-10-13 用户确认当前规划收敛到 `TUI → HTTP API → Go 后端`；随后用户直接授权当前聊天实施 #91，不启动 roadmap-runner 或新执行聊天。流程见[RoadmapGuide](RoadmapGuide.md)。
 
 ## 当前任务
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 待执行 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6/TH-M1 均待验；一个实现 PR，未实施 |
+| 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 执行中，待复审/合入 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：当前代码已接线并删除 WinUI；自动验证进行中，TH-M1 待验，一个实现 PR |
 
 ## 推进边界
 
@@ -14,7 +14,7 @@
 
 旧二阶段 #43/#46–#52 及延期 #40/#41 退出规划，编号不复用；旧三节点和页面不作为前置。WebUI、SSE、主 Agent 和远程部署不在本轮交付，原型仅参考；后续需要时重新规划，不从归档派发。
 
-启动需固定已提交的实际 Spec/Plan commit/路径，核对主干与任务状态。本次确认规划不启动实施、PR、合并或 heartbeat。交付后登记自动验收、必要回归、独立复审和真实合并，再更新本表；TH-M1 可按 Plan 后置，不将实现完成写成全部已验。
+启动需固定已提交的实际 Spec/Plan commit/路径，核对主干与任务状态。本次由用户直接授权实施；Spec/Plan 固定 commit `83a6cc4a7321994a55e5a9ae0f308927eb9fb1b3`，执行起点 `efd492cac9940a50966b3ccdb65d56012931d1d6`，分支 `codex/tui-http-client`。交付后登记自动验收、必要回归、独立复审和真实合并，再更新本表；TH-M1 可按 Plan 后置，不将实现完成写成全部已验。
 
 ## 待人工验收
 
@@ -28,6 +28,6 @@
 
 #45 HTTP 基线经 PR #249 合入；#83 隔离、#84 分步和 #87 停服恢复保持原交付/限制。原汇总、PR、失败/风险接受及未验事实完整保留在[清理前执行历史](../archive/roadmap/execution-map-before-tui-http.md)，不重新派发。
 
-#44 经 PR #273 的历史交付不撤改；用户决定删除实现，删除由 #91 实施。UI2-M/UI4-M/UI5-M 原未验见[退役记录](../acceptance/archive/superseded/phase2-winui-foundation.md)，退出当前签收要求，不标通过。旧规划见[归档说明](../archive/roadmap/README.md)。
+#44 经 PR #273 的历史交付不撤改；用户决定删除实现，#91 当前源码已删除工程与专属配置。UI2-M/UI4-M/UI5-M 原未验见[退役记录](../acceptance/archive/superseded/phase2-winui-foundation.md)，退出当前签收要求，不标通过。旧规划见[归档说明](../archive/roadmap/README.md)。
 
 自动补验仍归原范围：[Codex race](../acceptance/local-codex-app-server.md) · [当前 Orca 单终端](../acceptance/orca-terminal-transport.md) · [远端有限样本与限制](../acceptance/orca-terminal-remote-retest-2026-10-10.md)。当前 Orca 本机最终 draft 保护未跑真机、远端首次信任阻塞后原任务自动继续未通过；旧证据不覆盖当前全路线，也不证明 #91 或远程服务部署可用。
