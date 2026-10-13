@@ -44,6 +44,12 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 
 原候选入口 `candidates.local` 已随旧本机 Orca 路径移出当前登记。下面的 manifest 与驱动说明保留历史参考，不能用它声明当前单终端路径已验收。
 
+## 核心恢复增量
+
+2026-10-12 审计收敛后的 [Codex / Orca 核心断连恢复场景设计](suites/recovery/README.md)实现三组 L3 controlled（依每入口 5 分钟上限拆分）与两条 L3 live，覆盖原观察重接、明确失败收敛、Codex 同 thread 恢复和复用实施核验，以及代表性的未知发送/重复恢复守卫。Orca 本机/远端规则由当前单终端 fake 覆盖，真实链首轮仅本机；旧 supervised 测试不计入覆盖。
+
+新增 ID 已实现并加入 suites.json；2026-10-13 整合主干原生状态判定与 PR 流程后，按受影响范围复验，证据见专属验收；仅补 owned kill、一次断读/丢回执、u 输入及本机单终端 live chain 等所需驱动，不建设全窗口 fault barrier。现有 waiting-merge 保留作必要回归；远端真实故障链、终端重建与硬件断电另行评估，不以受控 kill 宣称已验。范围、通过条件与状态见[专属验收](../../docs/acceptance/worker-disconnect-recovery.md)。
+
 ## 本机候选 manifest
 
 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG` 指向本次 manifest 的绝对路径，`source_commit` 替换为实际 HEAD 的 40 位 commit；按本机 Orca、本地 Codex 顺序固定两套 profile。重跑创建新现场，不重用历史 manifest。

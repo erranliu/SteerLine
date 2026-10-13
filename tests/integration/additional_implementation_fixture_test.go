@@ -320,7 +320,7 @@ func (p *additionalPort) VerifyManualRecovery(_ context.Context, snapshot execut
 	if err != nil || value.Session != snapshot.Session.SessionID || value.Process != snapshot.Ref.External {
 		return executionbackend.LifecycleRecoveryEvidence{}, errors.New("fixture recovery cannot verify original identity")
 	}
-	return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: true, ManagedProcess: true}, nil
+	return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: true, ResourceAvailable: true, SessionIdle: snapshot.Session.CurrentTurnID == snapshot.Session.LastStoppedTurnID}, nil
 }
 
 func (p *additionalPort) BindRecovery(context.Context, executionbackend.LifecycleSnapshot, executionbackend.LifecycleSnapshot) (executionbackend.ImplementationDataEnvelope, error) {

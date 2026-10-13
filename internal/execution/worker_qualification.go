@@ -5,12 +5,12 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 type workerQualificationResult struct {
 	runID, attemptID, generation, commandID, turnID string
+	pendingCommandID, pendingTurnID                 string
 	version                                         uint64
 	evidence                                        executionbackend.LifecycleRecoveryEvidence
 	err                                             error
@@ -31,7 +31,7 @@ func (s *Service) recheckWorkerQualification(ctx context.Context, run *reconstru
 		return err
 	}
 	e := fixed.execution
-	result := workerQualificationResult{runID: run.RunID, attemptID: run.AttemptID, generation: e.Generation, commandID: e.CurrentCommandID, turnID: e.CurrentTurnID, version: e.RecoveryVersion}
+	result := workerQualificationResult{runID: run.RunID, attemptID: run.AttemptID, generation: e.Generation, commandID: e.CurrentCommandID, turnID: e.CurrentTurnID, pendingCommandID: e.PendingCommandID, pendingTurnID: e.PendingTurnID, version: e.RecoveryVersion}
 	probe := func(parent context.Context) workerQualificationResult {
 		probeCtx, cancel := context.WithTimeout(parent, min(positiveDuration(fixed.config.CommandTimeout, 30*time.Second), 10*time.Second))
 		defer cancel()
@@ -67,19 +67,12 @@ func (s *Service) applyWorkerQualification(result workerQualificationResult) err
 		return nil
 	}
 	e := s.executionRecord(run)
-	if e == nil || !e.RecoveryRequired || run.AttemptID != result.attemptID || e.Generation != result.generation || e.RecoveryVersion != result.version || e.CurrentCommandID != result.commandID || e.CurrentTurnID != result.turnID {
+	if e == nil || !e.RecoveryRequired || run.AttemptID != result.attemptID || e.Generation != result.generation || e.RecoveryVersion != result.version || e.CurrentCommandID != result.commandID || e.CurrentTurnID != result.turnID || e.PendingCommandID != result.pendingCommandID || e.PendingTurnID != result.pendingTurnID {
 		return nil
 	}
-	if result.err != nil {
-		return nil
-	} // Retain uncertainty; a later tick can retry.
-	before := recordFingerprint(*e)
-	facts := executionmodel.RecoveryFacts{WorkerLive: result.evidence.ManagedProcess && !result.evidence.ProcessAbsent, WorkerAbsent: result.evidence.ProcessAbsent, WritersAbsent: result.evidence.WritersAbsent, Completed: settledOriginalWorkerTurn(e), QuestionPending: run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil}
-	s.setWorkerRecoveryFacts(run, facts, result.evidence.SessionAvailable)
-	if before == recordFingerprint(*e) {
-		return nil
+	parent := s.runContext
+	if parent == nil {
+		parent = context.Background()
 	}
-	s.stampPendingRecoveryQuestion(run)
-	s.refreshRun(run)
-	return s.commitWorker(run)
+	return s.acceptWorkerRecoveryQualification(parent, nativeTaskRecord(s.domain.Tasks, run.DomainTaskID), run, result.evidence, result.err)
 }

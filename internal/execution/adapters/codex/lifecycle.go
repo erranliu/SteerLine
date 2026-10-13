@@ -2,12 +2,14 @@ package codexworker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -282,13 +284,17 @@ func (l ExecutionLifecycle) Reconcile(ctx context.Context, request executionback
 	}
 	known := append([]string(nil), snapshot.KnownQuestionIDs...)
 	recovered, reconcileErr := l.Backend.Recover(ctx, binding, commandID, turnID, known)
+	if recovered.Dead && !recovered.Completed {
+		if outcome, readErr := l.readRecoveryOutcome(ctx, snapshot, recovered.Binding, recovered.TurnID); readErr == nil && outcome.Completed {
+			recovered.Completed, reconcileErr = true, nil
+		}
+	}
 	receipt := l.bindingReceipt(snapshot, recovered.Binding)
 	receipt.Operation = request.Operation
 	receipt.State.SessionID = recovered.Binding.SessionID
 	receipt.State.SessionGeneration = recovered.Binding.Generation
 	receipt.State.TurnID = recovered.TurnID
 	receipt.State.TurnCompleted = recovered.Completed
-	receipt.State.SessionAvailable = ValidNativeID(recovered.Binding.SessionID)
 	receipt.State.WorkerAbsent = recovered.Dead
 	receipt.State.WritersAbsent = l.writersAbsent(recovered.Binding)
 	receipt.State.SessionAvailable = ValidNativeID(recovered.Binding.SessionID)
@@ -322,12 +328,13 @@ func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot execu
 	if snapshot.Session.PendingCommandID != "" {
 		commandID, turnID = snapshot.Session.PendingCommandID, snapshot.Session.PendingTurnID
 	}
-	recovered, err := l.Backend.Reattach(ctx, binding, commandID, turnID, snapshot.KnownQuestionIDs)
+	recovered, err := l.Backend.Recover(ctx, binding, commandID, turnID, snapshot.KnownQuestionIDs)
 	receipt := l.bindingReceipt(snapshot, recovered.Binding)
 	receipt.State.SessionID, receipt.State.TurnID = recovered.Binding.SessionID, recovered.TurnID
 	receipt.State.SessionGeneration = recovered.Binding.Generation
 	receipt.State.TurnCompleted = recovered.Completed
 	receipt.State.SessionAvailable = ValidNativeID(recovered.Binding.SessionID)
+	receipt.State.WorkerAbsent, receipt.State.WritersAbsent = recovered.Dead, l.writersAbsent(recovered.Binding)
 	if commandID != "" && recovered.Binding.SessionID != "" && recovered.TurnID != "" {
 		path := filepath.Join(l.Backend.Config.RunDir, "runs", snapshot.Session.WorkflowRunID, "turns", commandID, "appserver.jsonl")
 		if outcome, outcomeErr := ReadAppServerOutcome(path, recovered.Binding.SessionID, recovered.TurnID); outcomeErr == nil && outcome.Started && outcome.Completed {
@@ -339,6 +346,17 @@ func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot execu
 				LastMessage: outcome.LastMessage, Failure: outcome.Failure, PRCandidates: append([]string(nil), outcome.PRCandidates...),
 			}
 			return receipt, nil, nil
+		}
+	}
+	if recovered.Dead {
+		outcome, readErr := l.readRecoveryOutcome(ctx, snapshot, recovered.Binding, recovered.TurnID)
+		if readErr == nil && outcome.Started && outcome.Completed {
+			receipt.Disposition, receipt.State.TurnCompleted = executionbackend.OperationConfirmed, true
+			receipt.TurnEvidence = &executionbackend.TurnEvidence{CommandID: commandID, TurnID: recovered.TurnID, SessionID: outcome.SessionID, Started: true, Completed: true, Succeeded: outcome.Succeeded, LastMessage: outcome.LastMessage, Failure: outcome.Failure, FinalSource: outcome.FinalSource, FinalItemID: outcome.FinalItemID, FinalVerified: outcome.FinalVerified, FinalNativeSessionID: outcome.SessionID, FinalNativeTurnID: recovered.TurnID}
+			return receipt, nil, nil
+		}
+		if readErr != nil {
+			err = readErr
 		}
 	}
 	if err != nil {
@@ -353,6 +371,47 @@ func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot execu
 	}
 	receipt.Disposition = executionbackend.OperationUnknown
 	return receipt, nil, nil
+}
+
+func (l ExecutionLifecycle) readRecoveryOutcome(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, binding Binding, turnID string) (Outcome, error) {
+	thread, err := l.readRecoveryThread(ctx, snapshot, binding)
+	if err != nil {
+		return Outcome{}, err
+	}
+	for _, turn := range thread.Turns {
+		if turn.ID != turnID {
+			continue
+		}
+		facts, err := InspectHistoryTurn(turn)
+		if err != nil {
+			return Outcome{}, err
+		}
+		out := Outcome{SessionID: thread.ID, Started: true, Completed: facts.Terminal, Succeeded: turn.Status == "completed", NativeStatus: turn.Status}
+		if !facts.Terminal {
+			return out, nil
+		}
+		if !out.Succeeded {
+			out.Failure = "native turn ended with status " + turn.Status
+		}
+		for _, raw := range turn.Items {
+			var item struct {
+				ID, Type, Phase, Delivery string
+				Text                      *string
+			}
+			if err := json.Unmarshal(raw, &item); err != nil {
+				return Outcome{}, err
+			}
+			if item.Type != "agentMessage" || item.Phase != "final_answer" || item.Delivery == "async" || item.Text == nil || item.ID == "" {
+				continue
+			}
+			if out.FinalVerified && (out.FinalItemID != item.ID || out.LastMessage != *item.Text) {
+				return Outcome{}, errors.New("conflicting original final items")
+			}
+			out.FinalVerified, out.FinalSource, out.FinalItemID, out.LastMessage = true, "codex.agentMessage.final_answer", item.ID, *item.Text
+		}
+		return out, nil
+	}
+	return Outcome{}, errors.New("original native turn is absent from its fixed thread")
 }
 
 func (l ExecutionLifecycle) reconcileFeedback(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
@@ -481,7 +540,73 @@ func (l ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot e
 		return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: false}, nil
 	}
 	managed, absent := l.Backend.ManagedProcessState(binding)
-	return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: true, ManagedProcess: managed, ProcessAbsent: absent, WritersAbsent: l.writersAbsent(binding)}, nil
+	if !managed {
+		return executionbackend.LifecycleRecoveryEvidence{}, errors.New("original managed process identity is unverified")
+	}
+	evidence := executionbackend.LifecycleRecoveryEvidence{ManagedProcess: managed, ProcessAbsent: absent, WritersAbsent: l.writersAbsent(binding), ResourceAvailable: managed && !absent}
+	thread, err := l.readRecoveryThread(ctx, snapshot, binding)
+	if err != nil {
+		evidence.Diagnostic = err.Error()
+		return evidence, err
+	}
+	stoppedTurn := ""
+	if managed && absent && evidence.WritersAbsent {
+		stoppedTurn = snapshot.Session.CurrentTurnID
+		if stoppedTurn == "" {
+			stoppedTurn = snapshot.Session.PendingTurnID
+		}
+	}
+	evidence.SessionAvailable, evidence.SessionIdle = true, historyThreadIdle(thread, stoppedTurn)
+	evidence.SessionRebindable = managed && absent && evidence.WritersAbsent && evidence.SessionIdle
+	if !evidence.SessionIdle {
+		evidence.Diagnostic = "The original thread has an active or unverified native turn; no recovery input is allowed"
+	}
+	if absent && !evidence.WritersAbsent {
+		evidence.Diagnostic = "Original process is absent but writer absence is unverified"
+	}
+	return evidence, nil
+}
+
+func (l ExecutionLifecycle) readRecoveryThread(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, binding Binding) (HistoryThread, error) {
+	command := snapshot.Session.CurrentCommandID
+	if command == "" {
+		command = snapshot.Session.PendingCommandID
+	}
+	path := localHistoryBindingPath(filepath.Join(l.Backend.Config.RunDir, "runs", snapshot.Session.WorkflowRunID, "turns", command), binding.SessionID)
+	history, err := ReadHistoryBinding(path)
+	if err != nil {
+		return HistoryThread{}, fmt.Errorf("original history binding unavailable: %w", err)
+	}
+	if history.ProjectID != snapshot.Session.ProjectID || history.ExecutionID != snapshot.Session.ExecutionID || history.AttemptID != snapshot.Session.AttemptID || history.WorkflowID != snapshot.Session.WorkflowRunID || history.SessionID != binding.SessionID || !sameWorkspace(history.Workspace, snapshot.Ref.WorkspacePath) || history.Home == "" || !sameWorkspace(history.Home, EnvironmentHome()) || history.Command.Executable != l.HistoryCommand.Executable || !slices.Equal(history.Command.Args, l.HistoryCommand.Args) {
+		return HistoryThread{}, errors.New("original history configuration/home/session binding differs from execution")
+	}
+	managed, absent := l.Backend.ManagedProcessState(binding)
+	if !managed {
+		return HistoryThread{}, errors.New("original managed process identity is unverified")
+	}
+	if managed && !absent {
+		client, err := codexapp.Open(ctx, binding.Endpoint)
+		if err != nil {
+			return HistoryThread{}, err
+		}
+		defer client.Close()
+		var result struct {
+			Thread HistoryThread `json:"thread"`
+		}
+		if err := client.Call(ctx, "thread/read", map[string]any{"threadId": binding.SessionID, "includeTurns": true}, &result); err != nil {
+			return HistoryThread{}, err
+		}
+		return verifiedHistoryThread(result.Thread, binding.SessionID, history.Workspace)
+	}
+	if l.setup.ProcessHost == nil {
+		return HistoryThread{}, errors.New("public history process capability unavailable")
+	}
+	client, err := OpenHistory(ctx, history.Command, history.Workspace, history.Home, l.setup.ProcessHost.StartManaged)
+	if err != nil {
+		return HistoryThread{}, err
+	}
+	defer client.Close()
+	return client.ReadThread(ctx, binding.SessionID, history.Workspace)
 }
 
 func (l ExecutionLifecycle) BindRecovery(ctx context.Context, previous, next executionbackend.LifecycleSnapshot) (executionbackend.ImplementationDataEnvelope, error) {
@@ -593,6 +718,14 @@ func (l *ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionba
 		if binding.Process != nil {
 			process := *binding.Process
 			receipt.Process = &process
+		}
+		return receipt, nil, err
+	}
+	if err := l.writeHistoryBinding(snapshot, binding, handle); err != nil {
+		receipt := l.bindingReceipt(snapshot, binding)
+		receipt.Disposition, receipt.Diagnostic = executionbackend.OperationUnknown, err.Error()
+		if handle != nil {
+			receipt.Handle = handle.Detach()
 		}
 		return receipt, nil, err
 	}

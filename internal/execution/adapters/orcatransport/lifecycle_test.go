@@ -341,6 +341,39 @@ func TestTerminalLifecycleReplyReuseAndExactStop(t *testing.T) {
 		t.Fatal("overstated stop", r, err)
 	}
 }
+
+func TestTerminalRecoveryQualificationIsIndependentOfManagedProcess(t *testing.T) {
+	for _, environment := range []string{"", "owned-environment"} {
+		t.Run(environment, func(t *testing.T) {
+			l, f, s := fixtureOn(t, environment)
+			r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bind(&s, r)
+			f.nativeSends, f.writeReply = 1, true
+			before := len(f.calls)
+			evidence, err := l.VerifyManualRecovery(context.Background(), s)
+			if err != nil || !evidence.ResourceAvailable || !evidence.SessionIdle || !evidence.SessionAvailable || evidence.ManagedProcess || evidence.SessionRebindable {
+				t.Fatalf("original resource qualification: %+v %v", evidence, err)
+			}
+			f.draft = "unsubmitted input"
+			evidence, err = l.VerifyManualRecovery(context.Background(), s)
+			if err != nil || evidence.SessionIdle {
+				t.Fatal("draft ignored by recovery")
+			}
+			f.incarnation = "replacement"
+			if _, err = l.VerifyManualRecovery(context.Background(), s); err == nil {
+				t.Fatal("replacement resource accepted")
+			}
+			for _, call := range f.calls[before:] {
+				if call[0] == "worktree" && call[1] == "create" || call[0] == "terminal" && (call[1] == "send" || call[1] == "close") {
+					t.Fatal("recovery qualification mutated resource", call)
+				}
+			}
+		})
+	}
+}
 func TestTerminalUnknownSubmissionOnlyObservesOriginal(t *testing.T) {
 	l, f, s := fixture(t)
 	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))

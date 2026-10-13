@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -13,6 +14,10 @@ import (
 )
 
 func githubCommand(path string, args []string) error {
+	return githubCommandOutput(path, args, os.Stdout)
+}
+
+func githubCommandOutput(path string, args []string, output io.Writer) error {
 	s, err := Read(path)
 	if err != nil {
 		return err
@@ -22,7 +27,7 @@ func githubCommand(path string, args []string) error {
 		if s.PR.State == "open" {
 			result = append(result, map[string]any{"html_url": s.PR.URL, "state": "open", "head": map[string]any{"ref": s.PR.HeadBranch, "sha": s.PR.HeadRevision, "repo": map[string]string{"full_name": s.PR.Repository}}, "base": map[string]string{"ref": s.BranchName()}})
 		}
-		return json.NewEncoder(os.Stdout).Encode(result)
+		return json.NewEncoder(output).Encode(result)
 	}
 	if len(args) > 1 && args[0] == "pr" && args[1] == "create" {
 		branchRequest := argument(args, "--head")
@@ -37,9 +42,13 @@ func githubCommand(path string, args []string) error {
 		if argument(args, "--repo") != s.RepositoryName() || argument(args, "--base") != s.BranchName() {
 			return fmt.Errorf("unexpected PR target")
 		}
-		cwd, err := os.Getwd()
-		if err != nil {
-			return err
+		cwd := s.Cwd
+		if cwd == "" {
+			var err error
+			cwd, err = os.Getwd()
+			if err != nil {
+				return err
+			}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -69,7 +78,7 @@ func githubCommand(path string, args []string) error {
 		if err := Write(path, s); err != nil {
 			return err
 		}
-		fmt.Println(s.PR.URL)
+		fmt.Fprintln(output, s.PR.URL)
 		return nil
 	}
 	return fmt.Errorf("unsupported controlled GitHub command")

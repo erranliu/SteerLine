@@ -57,6 +57,7 @@ func (f *hostStateFeed) Query(context.Context) (native.AgentState, error) {
 	}
 	s := fixtureState(seq, h.nativePrompt, state)
 	if state == "done" {
+		s.MainAgent.Outcome = "success"
 		text, _, _ := renderedReply("codex", h.lines)
 		s.LastAssistantMessage = text
 	}

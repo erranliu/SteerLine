@@ -25,6 +25,10 @@ const pseudoConsoleWaitTimeout = 0x00000102
 // until the requested UI identity is rendered, sends q, and stores the raw
 // terminal transcript in the scenario evidence directory.
 func (s *Scenario) RunPseudoConsole(command *exec.Cmd, name, readyMarker string) (transcript []byte, resultErr error) {
+	return s.RunPseudoConsoleSteps(command, name, readyMarker)
+}
+
+func (s *Scenario) RunPseudoConsoleSteps(command *exec.Cmd, name, readyMarker string, steps ...ConsoleStep) (transcript []byte, resultErr error) {
 	s.t.Helper()
 	if command == nil || command.Path == "" || len(command.Args) == 0 {
 		return nil, errors.New("interactive console command is incomplete")
@@ -195,6 +199,28 @@ func (s *Scenario) RunPseudoConsole(command *exec.Cmd, name, readyMarker string)
 	if !ready {
 		transcript = currentTranscript(&outputMu, &output)
 		return transcript, fmt.Errorf("interactive console did not render %q before timeout", readyMarker)
+	}
+	for _, step := range steps {
+		if err := windows.WriteFile(inputWrite, []byte(step.Input), nil, nil); err != nil {
+			return currentTranscript(&outputMu, &output), err
+		}
+		deadline := time.Now().Add(20 * time.Second)
+		for step.WaitFor != "" {
+			outputMu.Lock()
+			found := strings.Contains(output.String(), step.WaitFor)
+			outputMu.Unlock()
+			if found {
+				break
+			}
+			if time.Now().After(deadline) {
+				return currentTranscript(&outputMu, &output), fmt.Errorf("console did not render %q", step.WaitFor)
+			}
+			select {
+			case <-s.Context.Done():
+				return currentTranscript(&outputMu, &output), s.Context.Err()
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
 	}
 	if err := windows.WriteFile(inputWrite, []byte("q"), nil, nil); err != nil {
 		transcript = currentTranscript(&outputMu, &output)

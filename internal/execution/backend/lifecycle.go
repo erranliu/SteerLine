@@ -684,9 +684,17 @@ type LifecycleCleanupPort interface {
 
 type LifecycleRecoveryEvidence struct {
 	SessionAvailable bool
-	ManagedProcess   bool
-	ProcessAbsent    bool
-	WritersAbsent    bool
+	// ResourceAvailable is native identity proof, independent of process ownership.
+	ResourceAvailable bool
+	// SessionIdle covers the original session, including any manual native turn.
+	SessionIdle bool
+	// SessionRebindable certifies restoration of that same session after resource loss.
+	// The adapter owns this proof; the worker also requires absence and idle evidence.
+	SessionRebindable bool
+	Diagnostic        string
+	ManagedProcess    bool
+	ProcessAbsent     bool
+	WritersAbsent     bool
 }
 
 // ServiceStopBehavior is frozen with the worker, independently of whether its

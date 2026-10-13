@@ -291,17 +291,17 @@ func TestNativeOrcaL3RequiresHonestPublicUsageCapability(t *testing.T) {
 		name, level, suite, chain, status string
 		usage, completed, cleanup, pass   bool
 	}{
-		{"delivery", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, true, true, true},
-		{"recovery", "L3", "recovery", "orca-codex", "not_exposed_by_orca", false, true, true, true},
-		{"missing capability", "L3", "delivery", "orca-codex", "", false, true, true, false},
-		{"wrong capability", "L3", "delivery", "orca-codex", "not_applicable", false, true, true, false},
-		{"claimed tokens", "L3", "delivery", "orca-codex", "not_exposed_by_orca", true, true, true, false},
-		{"failed business", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, false, true, false},
-		{"failed cleanup", "L3", "delivery", "orca-codex", "not_exposed_by_orca", false, true, false, false},
+		{"delivery", "L3", "delivery", "orca-terminal-local", "not_exposed_by_orca", false, true, true, true},
+		{"recovery", "L3", "recovery", "orca-terminal-local", "not_exposed_by_orca", false, true, true, true},
+		{"missing capability", "L3", "delivery", "orca-terminal-local", "", false, true, true, false},
+		{"wrong capability", "L3", "delivery", "orca-terminal-local", "not_applicable", false, true, true, false},
+		{"claimed tokens", "L3", "delivery", "orca-terminal-local", "not_exposed_by_orca", true, true, true, false},
+		{"failed business", "L3", "delivery", "orca-terminal-local", "not_exposed_by_orca", false, false, true, false},
+		{"failed cleanup", "L3", "delivery", "orca-terminal-local", "not_exposed_by_orca", false, true, false, false},
 		{"local still requires tokens", "L3", "delivery", "local-codex", "not_exposed_by_orca", false, true, true, false},
 		{"local tokens", "L3", "delivery", "local-codex", "not_applicable", true, true, true, true},
-		{"L2 unchanged", "L2", "delivery", "orca-codex", "not_exposed_by_orca", false, true, true, false},
-		{"other suite unchanged", "L3", "candidates", "orca-codex", "not_exposed_by_orca", false, true, true, false},
+		{"L2 unchanged", "L2", "delivery", "orca-terminal-local", "not_exposed_by_orca", false, true, true, false},
+		{"other suite unchanged", "L3", "candidates", "orca-terminal-local", "not_exposed_by_orca", false, true, true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			entry := e2eScenario{ID: "delivery.one", Test: "TestOne", Env: "live", Level: tc.level, Suite: tc.suite, Chain: tc.chain}
