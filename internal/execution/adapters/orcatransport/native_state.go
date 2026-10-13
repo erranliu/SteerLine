@@ -179,7 +179,7 @@ func (p *NativeProof) signal(s native.AgentState, turn *Turn, now time.Time) {
 		return
 	}
 	if p.WorkingAt == 0 {
-		if s.MainAgent.State != "working" || !turn.Started || s.ProviderSession.ID == "" || s.Prompt != preview(turn.Prompt) {
+		if s.MainAgent.State != "working" || s.MainAgent.StateStartedAt <= p.BaseRootAt || !turn.Started || s.ProviderSession.ID == "" || s.Prompt != preview(turn.Prompt) {
 			return
 		}
 		p.Authority, p.Incarnation, p.Provider = o.AuthorityID, o.Incarnation, s.ProviderSession.ID

@@ -36,6 +36,14 @@ func TestOrcaNativeStateGate(t *testing.T) {
 	base := fixtureState(10, "previous", "done")
 	turn.Native = nativeBaseline(base, now)
 	start := fixtureState(11, turn.Prompt, "working")
+	staleRoot := start
+	root := *start.MainAgent
+	root.StateStartedAt = base.MainAgent.StateStartedAt
+	staleRoot.MainAgent = &root
+	turn.Native.signal(staleRoot, &turn, now)
+	if turn.Native.WorkingAt != 0 {
+		t.Fatal("a new observation revision accepted the baseline root working clock")
+	}
 	turn.Native.signal(start, &turn, now)
 	if turn.Native.WorkingAt == 0 || turn.Native.EndedAt != 0 {
 		t.Fatal("long input was not bound to its native start")
