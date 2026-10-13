@@ -520,7 +520,7 @@ func (s *Server) dispatch(ctx context.Context, envelope CommandEnvelope, record 
 
 func (s *Server) controlInput(ctx context.Context, envelope CommandEnvelope, requestedBy string) (api.ControlInput, error) {
 	control := api.ControlInput{RequestID: envelope.RequestID, RequestedBy: requestedBy, InstanceID: envelope.InstanceID}
-	if envelope.Action != "stop_service" {
+	if envelope.Action != "stop_service" || envelope.ExpectedControlRevision != 0 {
 		revision := envelope.ExpectedControlRevision
 		control.ExpectedRevision = &revision
 	}

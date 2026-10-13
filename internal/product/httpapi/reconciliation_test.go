@@ -53,6 +53,32 @@ func saveMappedRecord(t *testing.T, server *Server, envelope CommandEnvelope, co
 	return record
 }
 
+func TestAPIStopPreservesDisplayedRevision(t *testing.T) {
+	server, _, _, control := newAPIFixture(t)
+	client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := host.Config{Repository: "C:/repo", RepositoryIdentity: "C:/repo", Remote: "origin", Branch: "main", RunDir: server.options.RunDir, TaskAuthority: "native", ControlValidation: formalControlValidation{}}
+	control.formalConfig = &config
+	envelope := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "stop_service", TargetID: "instance-a", ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
+	for _, submit := range []bool{true, false, true} {
+		var response CommandResponse
+		var err error
+		if submit {
+			response, err = client.SubmitCommand(context.Background(), envelope)
+		} else {
+			response, err = client.Command(context.Background(), envelope.RequestID)
+		}
+		if err != nil || response.ControlRequest == nil || response.ControlRequest.ExpectedControlRevision != 7 {
+			t.Fatalf("original stop revision was lost: %+v %v", response, err)
+		}
+	}
+	if control.submits != 1 {
+		t.Fatalf("original stop submitted %d times", control.submits)
+	}
+}
+
 func TestAPIAuthoritativeControlBinding(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -142,7 +168,6 @@ func TestAPIMappedControlPayloadBinding(t *testing.T) {
 			case "stop_service":
 				envelope.TargetID = envelope.InstanceID
 				envelope.ExpectedVersion = 0
-				envelope.ExpectedControlRevision = 0
 			}
 			input, err := server.controlInput(context.Background(), envelope, currentActor())
 			if err != nil {
