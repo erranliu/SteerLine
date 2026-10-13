@@ -1,5 +1,7 @@
 # Spec：Orca 单终端短提示词传输
 
+后续完成判定、状态 codec 与原生认证以[原生状态切换 Spec](orca-native-state-transitions.spec.md)、[Plan](orca-native-state-transitions.plan.md)及[验收](../acceptance/orca-native-state-transitions.md)为准；本文保留该次实现记录。
+
 普通开发，由当前聊天直接实施。用户最新确认：Codex 与 Orca 同一 worker 阶段必须使用相同提示词，去掉 SL_RESULT、base64 和 nonce 的额外要求；屏幕换行、回复采集和完成判定属于 Orca adapter。一个终端，不引入辅助终端、远端回调或输入/结果文件。旧 supervised 直接删除。[Plan](orca-terminal-transport.plan.md) · [验收](../acceptance/orca-terminal-transport.md)。提 PR 时已重放主干 `5809c3e1`，保留状态命名、agent_launch 和发布分支核验。
 
 ## 职责与流程

@@ -1,4 +1,4 @@
-// Package orca contains only the public CLI wire contract. It knows no tasks,
+// Package orca contains the public CLI and runtime query wire contracts. It knows no tasks,
 // business steps, agent-private logs or orchestration lifecycle.
 package orca
 

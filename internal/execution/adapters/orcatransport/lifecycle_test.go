@@ -14,6 +14,8 @@ import (
 )
 
 type fakeHost struct {
+	nativeSends                   int
+	nativePrompt                  string
 	mu                            sync.Mutex
 	root, nativePath, incarnation string
 	calls                         [][]string
@@ -99,6 +101,8 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 		} else {
 			f.lines = append(f.lines, "› "+text)
 		}
+		f.nativeSends++
+		f.nativePrompt = text
 		if f.writeReply {
 			f.lines = append(f.lines, `• {"summary":"original result"}`, "  Worked for "+strconv.Itoa(len(f.lines))+"s • 18:50", "› Ask Codex to do anything")
 		}
@@ -230,7 +234,7 @@ func fixtureOn(t *testing.T, environment string) (*Lifecycle, *fakeHost, b.Lifec
 	if err != nil {
 		t.Fatal(err)
 	}
-	port, err := NewLifecycle(b.LifecycleSetup{Snapshot: s, ProfileData: []b.ImplementationDataEnvelope{data}, ProfileID: "profile", AcceptedConfigVersion: "accepted", ProcessHost: f, RepositoryPath: f.root, RunDirectory: t.TempDir()})
+	port, err := NewLifecycleWithStateFactory(b.LifecycleSetup{Snapshot: s, ProfileData: []b.ImplementationDataEnvelope{data}, ProfileID: "profile", AcceptedConfigVersion: "accepted", ProcessHost: f, RepositoryPath: f.root, RunDirectory: t.TempDir()}, f.stateFactory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +537,7 @@ func TestTerminalPreviousReplyCannotCompleteNewTurn(t *testing.T) {
 	f.lines = append([]string{"changed terminal header"}, old...)
 	f.lines = append(f.lines, "changed terminal footer")
 	r, _, err = settled(t, l, s)
-	if err != nil || r.TurnEvidence != nil || r.Diagnostic == "" {
+	if err != nil || r.TurnEvidence != nil || !r.State.WorkerLive {
 		t.Fatal("previous completion was attributed to a new turn", r, err)
 	}
 }
@@ -588,7 +592,7 @@ func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
 	// Reconstruct the adapter from only its frozen setup and persisted snapshot.
 	setup := l.setup.Clone()
 	setup.Snapshot = s.Clone()
-	recovered, err := NewLifecycle(setup)
+	recovered, err := NewLifecycleWithStateFactory(setup, f.stateFactory)
 	if err != nil {
 		t.Fatal(err)
 	}

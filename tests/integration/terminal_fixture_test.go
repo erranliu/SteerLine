@@ -13,6 +13,8 @@ import (
 )
 
 type terminalFixture struct {
+	NativeFinal                                                               string
+	NativeGate                                                                bool
 	Repository, Environment, Agent, Incarnation, Worktree, Branch, Base, Name string
 	Sends                                                                     int
 	Lines                                                                     []string
@@ -74,6 +76,12 @@ func fakeTerminalOrca(directory string, args []string) int {
 		case "terminal wait":
 			result = map[string]any{"wait": map[string]any{"satisfied": true}}
 		case "terminal read":
+			if state.NativeGate && state.Sends == 3 {
+				phase, _ := os.ReadFile(filepath.Join(directory, "gate-phase"))
+				if strings.TrimSpace(string(phase)) == "reply" {
+					state.Lines = append(state.Lines, "› "+state.Prompts[len(state.Prompts)-1], "• "+state.NativeFinal, "  Worked for 3s • 18:50", "› Ask Codex")
+				}
+			}
 			if strings.Contains(strings.Join(args, " "), "--screen") {
 				result = map[string]any{"terminal": map[string]any{"handle": "original", "source": "screen", "tail": state.Lines, "oldestCursor": "0", "nextCursor": "0", "latestCursor": "0"}}
 				break
@@ -106,6 +114,7 @@ func fakeTerminalOrca(directory string, args []string) int {
 			if modelErr != nil {
 				return fail(modelErr)
 			}
+			state.NativeFinal = final
 			echo := text
 			if state.CollapsedInput {
 				echo = strings.Join(strings.Fields(text), " ")
@@ -117,7 +126,14 @@ func fakeTerminalOrca(directory string, args []string) int {
 			if state.CollapsedInput {
 				state.Lines = append(state.Lines, "     1 -previous tool output", "    + Show details")
 			}
-			state.Lines = append(state.Lines, "• "+final, "  Worked for "+strconv.Itoa(state.Sends+1)+"s • 18:50", "› Ask Codex to do anything")
+			if state.NativeGate && state.Sends == 2 {
+				// Preserve an old valid report while its completion footer changes,
+				// reproducing the original screen fingerprint/idle false positive.
+				state.Lines = state.Lines[:len(state.Lines)-1]
+				state.Lines[len(state.Lines)-2] = "  Worked for 90s • 18:50"
+			} else {
+				state.Lines = append(state.Lines, "• "+final, "  Worked for "+strconv.Itoa(state.Sends+1)+"s • 18:50", "› Ask Codex to do anything")
+			}
 			state.Prompts = append(state.Prompts, text)
 			state.Sends++
 			result = map[string]any{"send": map[string]any{"handle": "original", "accepted": true, "prompt": map[string]any{"requestId": arg(args, "--retry-request"), "processIncarnation": state.Incarnation, "stages": []string{"input_accepted", "turn_started"}}}}

@@ -1,7 +1,7 @@
 # Orca debug plan
 
-Write and verify result.txt, commit only that file, then stop and report. Do not publish until a later input explicitly asks for publication; that input may use publish.ps1. Follow each short worker input in the same original terminal.
+Read the current branch, replace result.txt with the two required lines, and verify its bytes. Stage and commit only result.txt locally as the task artifact. Do not publish until the task input requests publication.
 
 ## Test plan
 
-The independent debug driver checks the original terminal, compact replies, staged workflow, candidate/PR identity and merged successor. Test the same contract locally and through the paired Orca environment; no callback or extra terminal is required.
+Read result.txt back and compare its UTF-8 bytes with the expected marker, branch name and LF line endings.

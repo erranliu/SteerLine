@@ -12,7 +12,7 @@ import (
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func terminalExecutionRegistration(host b.ManagedProcessHost, directory func() *execution.ExecutionDirectory) (execution.ImplementationProfileCodec, execution.ExecutionRegistration) {
+func terminalExecutionRegistration(host b.ManagedProcessHost, directory func() *execution.ExecutionDirectory, stateFactory native.StateFeedFactory) (execution.ImplementationProfileCodec, execution.ExecutionRegistration) {
 	settings := func(c execution.Config) (terminal.Profile, error) {
 		raw, err := c.DecodeImplementationConfig(terminal.ProfileKey, directory())
 		if err != nil {
@@ -40,6 +40,9 @@ func terminalExecutionRegistration(host b.ManagedProcessHost, directory func() *
 		},
 		Lifecycle: func(setup b.LifecycleSetup) (b.LifecyclePort, error) {
 			setup.ProcessHost = host
+			if stateFactory != nil {
+				return terminal.NewLifecycleWithStateFactory(setup, stateFactory)
+			}
 			return terminal.NewLifecycle(setup)
 		},
 		ValidateProfileSelection: func(agent string, payloads map[string][]byte) error {
