@@ -28,6 +28,7 @@ func TestWorkerStageLocalPublishReport(t *testing.T) {
 func testWorkerStageRoundTrip(t *testing.T, host string) { testWorkerStageRun(t, host) }
 func testWorkerStageRun(t *testing.T, host string) {
 	gate := os.Getenv("STEERLINE_STAGE_NATIVE_GATE") == "1"
+	queryRestart := os.Getenv("STEERLINE_STAGE_QUERY_RESTART") == "1"
 	steps := []string{executionmodel.StepImplement, executionmodel.StepReport, executionmodel.StepPublish}
 	if os.Getenv("STEERLINE_STAGE_PUBLISH_PLAIN") == "1" {
 		steps = append(steps, executionmodel.StepPublishReport)
@@ -55,7 +56,7 @@ func testWorkerStageRun(t *testing.T, host string) {
 		}
 		require(t, os.MkdirAll(f.nativeStateDir, 0700))
 		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "transport.json"), mustJSON(terminalFixture{NativeGate: gate, Repository: f.repository, Environment: environment, Agent: "codex", Incarnation: "original", CommandMode: os.Getenv("STEERLINE_STAGE_AGENT_LAUNCH") == "1", CollapsedInput: os.Getenv("STEERLINE_STAGE_COLLAPSED_INPUT") == "1"})))
-		if gate {
+		if gate || queryRestart {
 			require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "gate-phase"), []byte("working")))
 		}
 		f.config.Host, f.config.Agent = "orca", "codex"
@@ -79,7 +80,7 @@ func testWorkerStageRun(t *testing.T, host string) {
 	}
 	resolver := &integrationLifecycleResolver{}
 	var publishQueries atomic.Int32
-	if gate {
+	if gate || queryRestart {
 		resolver.stateFactory = integrationStateFactory(f.nativeStateDir, func() {
 			raw, _ := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
 			var state terminalFixture
@@ -91,6 +92,53 @@ func testWorkerStageRun(t *testing.T, host string) {
 	service := startIntegrationService(t, ctx, f.config, resolver)
 	defer service.stop(t)
 	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
+	if queryRestart {
+		active := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.WorkflowStage == executionmodel.StepReport && e.CurrentTurnID != "" && e.CurrentTurnID == e.CurrentCommandID && e.LastStoppedTurnID != e.CurrentTurnID
+		})
+		originalProcess, originalSession, originalAttempt := *active.execution.Process, active.execution.SessionID, active.run.AttemptID
+		originalCommand := active.execution.CurrentCommandID
+		if len(active.runtime.WorkflowRuns[0].StageInputs) != 2 || len(active.runtime.WorkflowRuns[0].StageResults) != 1 || active.execution.TurnEndedAt != nil {
+			t.Fatal("active report accepted a previous done or sent a third input")
+		}
+		if turn := savedOrcaTurn(t, active.execution, originalCommand); turn.Native.WorkingAt != 0 || turn.Native.EndedAt != 0 {
+			t.Fatal("fixture observed report working before restart")
+		}
+		service.stop(t)
+		// The original agent completes while SteerLine is offline. The new
+		// subscription is also disconnected and supplies no working/done hints.
+		require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "gate-phase"), []byte("reply")))
+		service = startIntegrationService(t, ctx, f.config, resolver)
+		defer service.stop(t)
+		recovered := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.WorkflowStage == executionmodel.StepPublish && e.CurrentTurnID == e.LastStoppedTurnID && run.Decision != nil && run.Decision.Status == "pending"
+		}, 3*time.Minute)
+		if *recovered.execution.Process != originalProcess || recovered.execution.SessionID != originalSession || recovered.run.AttemptID != originalAttempt || len(recovered.runtime.WorkflowRuns[0].StageInputs) != 3 || len(recovered.runtime.WorkflowRuns[0].StageResults) != 2 || !recovered.execution.RecoveryRequired {
+			t.Fatal("query recovery replaced the resource/attempt or repeated a stage")
+		}
+		turn := savedOrcaTurn(t, recovered.execution, originalCommand)
+		if turn.Native.WorkingAt != 0 || turn.Native.EndedAt <= turn.Native.BaseRootAt || !turn.Settled {
+			t.Fatal("report was not recovered from a fresh queried done")
+		}
+		// Worker policy still requires consent before the queued next input.
+		// Reopen again to replay the retained completion without repeating it.
+		pendingCommand := recovered.execution.PendingCommandID
+		service.stop(t)
+		service = startIntegrationService(t, ctx, f.config, resolver)
+		defer service.stop(t)
+		again := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
+			return run.WorkflowStage == executionmodel.StepPublish && run.Decision != nil && run.Decision.Status == "pending"
+		})
+		var captured terminalFixture
+		raw, err := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
+		require(t, err)
+		require(t, json.Unmarshal(raw, &captured))
+		if captured.Sends != 2 || again.execution.PendingCommandID != pendingCommand || len(again.runtime.WorkflowRuns[0].StageInputs) != 3 || len(again.runtime.WorkflowRuns[0].StageResults) != 2 || len(again.runtime.Attempts) != 1 || again.execution.TurnNumber != 2 {
+			t.Fatal("second recovery duplicated a result or bypassed next-input consent")
+		}
+		assertNoTaskDelivery(t, again.runtime, again.run)
+		return
+	}
 	if gate {
 		working := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
 			return run.WorkflowStage == executionmodel.StepPublish && publishQueries.Load() >= 1 && e.CurrentTurnID != "" && e.CurrentTurnID == e.CurrentCommandID && e.LastStoppedTurnID != e.CurrentTurnID
@@ -158,6 +206,31 @@ func testWorkerStageRun(t *testing.T, host string) {
 		t.Fatal("publication report lost original binding")
 	}
 	if strings.HasPrefix(host, "orca") {
+		if os.Getenv("STEERLINE_STAGE_COMPLETION_QUERY") == "1" {
+			var saved struct {
+				Turns []struct {
+					Command string `json:"command"`
+					Native  struct {
+						WorkingAt int64 `json:"working_at"`
+						EndedAt   int64 `json:"ended_at"`
+					} `json:"native"`
+				} `json:"turns"`
+			}
+			for _, envelope := range ready.execution.ImplementationData {
+				if envelope.ImplementationKey == terminal.StateKey {
+					require(t, json.Unmarshal(envelope.Payload, &saved))
+				}
+			}
+			found := false
+			for _, turn := range saved.Turns {
+				if turn.Command == w.StageInputs[1].CommandID {
+					found = turn.Native.WorkingAt == 0 && turn.Native.EndedAt > 0
+				}
+			}
+			if !found {
+				t.Fatal("report was not settled without observed working")
+			}
+		}
 		var captured terminalFixture
 		raw, err := os.ReadFile(filepath.Join(f.nativeStateDir, "transport.json"))
 		require(t, err)
@@ -252,6 +325,37 @@ func TestWorkerStageOrcaNativeStateGate(t *testing.T) {
 	for _, host := range []string{"orca", "orca-environment"} {
 		t.Run(host, func(t *testing.T) { testWorkerStageRun(t, host) })
 	}
+}
+
+func TestWorkerStageOrcaCompletionQuery(t *testing.T) {
+	t.Setenv("STEERLINE_STAGE_COMPLETION_QUERY", "1")
+	for _, host := range []string{"orca", "orca-environment"} {
+		t.Run(host, func(t *testing.T) { testWorkerStageRun(t, host) })
+	}
+}
+
+func TestWorkerStageOrcaCompletionQueryRestart(t *testing.T) {
+	t.Setenv("STEERLINE_STAGE_QUERY_RESTART", "1")
+	for _, host := range []string{"orca", "orca-environment"} {
+		t.Run(host, func(t *testing.T) { testWorkerStageRun(t, host) })
+	}
+}
+
+func savedOrcaTurn(t *testing.T, execution *executionmodel.ExecutionRecord, command string) terminal.Turn {
+	t.Helper()
+	for _, envelope := range execution.ImplementationData {
+		if envelope.ImplementationKey == terminal.StateKey {
+			var state terminal.State
+			require(t, json.Unmarshal(envelope.Payload, &state))
+			for _, turn := range state.Turns {
+				if turn.Command == command {
+					return turn
+				}
+			}
+		}
+	}
+	t.Fatal("missing saved original Orca turn", command)
+	return terminal.Turn{}
 }
 
 func TestWorkerStageOrcaTerminalRoundTrip(t *testing.T) { testWorkerStageRoundTrip(t, "orca") }
