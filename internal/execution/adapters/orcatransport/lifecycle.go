@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,8 +27,6 @@ type Turn struct {
 	Prompt      string      `json:"prompt"`
 	Reply       string      `json:"reply,omitempty"`
 	ReplyDigest string      `json:"reply_digest,omitempty"`
-	Candidate   string      `json:"candidate,omitempty"`
-	CandidateAt time.Time   `json:"candidate_at,omitempty"`
 }
 type State struct {
 	Process         b.ProcessIdentity `json:"process"`
@@ -142,7 +139,7 @@ func (l *Lifecycle) state(s b.LifecycleSnapshot) (State, error) {
 	found := false
 	for _, e := range s.Implementation {
 		if e.ImplementationKey == StateKey {
-			if found || e.CodecVersion != 3 {
+			if found || e.CodecVersion != StateVersion {
 				return state, errors.New("unsupported terminal state")
 			}
 			found = true
@@ -172,7 +169,7 @@ func (l *Lifecycle) state(s b.LifecycleSnapshot) (State, error) {
 		if turn.InputDigest != digest([]byte(turn.Prompt)) || len(turn.Reply) > maxReplyBytes {
 			return state, errors.New("invalid saved terminal reply binding")
 		}
-		if turn.Native.Pane == "" || turn.Native.WorkingAt > 0 && (turn.Native.Provider == "" || turn.Native.Authority == "" || turn.Native.Revision <= 0) || turn.Native.EndedAt > 0 && turn.Native.EndedAt <= turn.Native.WorkingAt || turn.Settled && (turn.Native.EndedAt == 0 || turn.Native.ExpectedReply != replyAssociation(turn.Reply)) {
+		if turn.Native.Pane == "" || turn.Native.WorkingAt > 0 && (turn.Native.Provider == "" || turn.Native.Authority == "" || turn.Native.Revision <= 0) || turn.Native.EndedAt > 0 && turn.Native.EndedAt <= turn.Native.WorkingAt || turn.Settled && (turn.Native.EndedAt == 0 || turn.Native.ReplyDigest != digest([]byte(turn.Reply))) {
 			return state, errors.New("invalid original native turn evidence")
 		}
 	}
@@ -184,7 +181,7 @@ func (l *Lifecycle) envelope(s b.LifecycleSnapshot, state State) ([]b.Implementa
 	if err != nil {
 		return nil, err
 	}
-	e, err := b.NewImplementationDataEnvelope(b.ImplementationDataEnvelope{CodecVersion: 3, Purpose: b.ImplementationResourcePurpose, ImplementationKey: StateKey, ProjectID: s.Session.ProjectID, ExecutionID: s.Session.ExecutionID, AttemptID: s.Session.AttemptID, Generation: s.ResourceGeneration, ConfigDigest: s.ConfigurationDigest}, raw)
+	e, err := b.NewImplementationDataEnvelope(b.ImplementationDataEnvelope{CodecVersion: StateVersion, Purpose: b.ImplementationResourcePurpose, ImplementationKey: StateKey, ProjectID: s.Session.ProjectID, ExecutionID: s.Session.ExecutionID, AttemptID: s.Session.AttemptID, Generation: s.ResourceGeneration, ConfigDigest: s.ConfigurationDigest}, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -239,7 +236,7 @@ func (l *Lifecycle) PreflightLifecycle(ctx context.Context, setup b.LifecycleSet
 		return b.CapabilityReport{}, err
 	}
 	if setup.Snapshot.Ref.Agent.Name != "codex" {
-		return b.CapabilityReport{}, errors.New("Orca rendered reply collection is currently verified only for the Codex terminal renderer")
+		return b.CapabilityReport{}, errors.New("Orca native final reply collection currently supports only Codex")
 	}
 	r, err := l.client.MetaCall(ctx, "status", "--json")
 	if err != nil {
@@ -269,7 +266,7 @@ func (l *Lifecycle) PreflightLifecycle(ctx context.Context, setup b.LifecycleSet
 			return b.CapabilityReport{}, fmt.Errorf("Orca native observation authentication/access: %w", err)
 		}
 	}
-	return b.CapabilityReport{Version: 1, Backend: b.BackendOrca, Protocol: b.ProtocolOrcaTerminalV3, Target: setup.Snapshot.Ref.Target, Agent: setup.Snapshot.Ref.Agent, PlatformVersion: status.Runtime.AppVersion, CheckedAt: time.Now().UTC(), Capabilities: []b.Capability{{Name: "start", Status: b.CapabilityVerified}, {Name: "observe", Status: b.CapabilityVerified}, {Name: "output_final_answer", Status: b.CapabilityVerified, Evidence: "original request, native main-agent end and complete ordinary reply association"}}}, nil
+	return b.CapabilityReport{Version: 1, Backend: b.BackendOrca, Protocol: b.ProtocolOrcaTerminalV3, Target: setup.Snapshot.Ref.Target, Agent: setup.Snapshot.Ref.Agent, PlatformVersion: status.Runtime.AppVersion, CheckedAt: time.Now().UTC(), Capabilities: []b.Capability{{Name: "start", Status: b.CapabilityVerified}, {Name: "observe", Status: b.CapabilityVerified}, {Name: "output_final_answer", Status: b.CapabilityVerified, Evidence: "original accepted request, bound native main-agent start/end and complete native final body"}}}, nil
 }
 
 func (l *Lifecycle) Next(_ context.Context, s b.LifecycleSnapshot) (b.LifecycleCandidate, error) {
@@ -336,64 +333,44 @@ func (l *Lifecycle) Execute(ctx context.Context, r b.LifecycleRequest) (b.Lifecy
 	return receipt, nil, err
 }
 
-func (l *Lifecycle) ready(ctx context.Context, s b.LifecycleSnapshot) error {
+// Readiness is a native main-agent fact. Never infer it from a prompt,
+// screen draft, completion decoration or the terminal's title.
+func (l *Lifecycle) ready(ctx context.Context, s b.LifecycleSnapshot) (native.AgentState, error) {
 	wait, _ := time.ParseDuration(l.profile.WaitTimeout)
-	for attempt := 0; attempt < 2; attempt++ {
-		if _, err := l.original(ctx, s); err != nil {
-			return err
-		}
-		r, err := l.client.MetaCallWithTimeout(ctx, wait+10*time.Second, "terminal", "wait", "--terminal", s.Ref.External.Terminal, "--for", "tui-idle", "--timeout-ms", strconv.FormatInt(wait.Milliseconds(), 10), "--json")
-		var value struct {
-			Wait struct {
-				Satisfied     bool   `json:"satisfied"`
-				BlockedReason string `json:"blockedReason"`
-			} `json:"wait"`
-		}
-		valid := json.Unmarshal(r.Payload, &value) == nil && r.RuntimeID == s.Ref.External.RuntimeID && !r.CallUncertain && r.ErrorCode == ""
-		if valid && value.Wait.Satisfied && value.Wait.BlockedReason == "" && err == nil {
-			break
-		}
-		timedOut := r.ErrorCode == "timeout" && r.RuntimeID == s.Ref.External.RuntimeID && !r.CallUncertain || valid && !value.Wait.Satisfied && value.Wait.BlockedReason == ""
-		if attempt == 0 && timedOut && ctx.Err() == nil {
-			wait = min(2*wait, time.Minute)
-			continue
-		}
-		cause := errors.Join(err, fmt.Errorf("original Orca readiness is unverified (blocked=%q); no input was sent", value.Wait.BlockedReason))
-		return l.readinessDiagnostic(ctx, s, cause)
+	readyCtx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
+	if _, err := l.original(readyCtx, s); err != nil {
+		return native.AgentState{}, err
 	}
-	_, err := l.original(ctx, s)
+	feed, err := l.stateFeed(readyCtx, s.Ref.External)
 	if err != nil {
-		return err
+		return native.AgentState{}, err
 	}
-	page, err := l.client.ReadScreen(ctx, s.Ref.External)
-	if err != nil {
-		return err
+	for {
+		current, err := feed.Query(readyCtx)
+		if err != nil {
+			return current, fmt.Errorf("original native readiness unavailable; no input was sent: %w", err)
+		}
+		if _, err := l.original(readyCtx, s); err != nil {
+			return current, err
+		}
+		if current.PaneKey != feed.Initial().PaneKey || current.AgentType != "codex" {
+			return current, errors.New("original native main-agent identity changed; no input was sent")
+		}
+		if current.MainAgent != nil && current.ProviderSession.ID != "" {
+			switch current.MainAgent.State {
+			case "done", "idle":
+				return current, nil
+			case "waiting", "blocked":
+				return current, fmt.Errorf("original native main agent is %s; no input was sent", current.MainAgent.State)
+			}
+		}
+		select {
+		case <-readyCtx.Done():
+			return current, fmt.Errorf("original native main-agent readiness timed out; no input was sent: %w", readyCtx.Err())
+		case <-time.After(200 * time.Millisecond):
+		}
 	}
-	if strings.TrimSpace(page.Draft) != "" {
-		return errors.New("original Orca composer is not empty; finish native session preparation before starting; no input was sent")
-	}
-	_, err = l.original(ctx, s)
-	return err
-}
-
-func (l *Lifecycle) readinessDiagnostic(ctx context.Context, s b.LifecycleSnapshot, cause error) error {
-	term, err := l.original(ctx, s)
-	if err != nil {
-		return errors.Join(cause, err)
-	}
-	page, err := l.client.ReadScreen(ctx, s.Ref.External)
-	if err != nil {
-		return errors.Join(cause, fmt.Errorf("readiness screen unavailable: %w", err))
-	}
-	lines := page.Tail
-	if len(lines) > 12 {
-		lines = lines[len(lines)-12:]
-	}
-	preview := []rune(strings.Join(lines, "\n"))
-	if len(preview) > 1200 {
-		preview = preview[len(preview)-1200:]
-	}
-	return fmt.Errorf("%w; terminal=%s status=%s agent=%s screen=%q", cause, term.Handle, term.Status, term.AgentIdentity, string(preview))
 }
 
 func nativeRequest(operation string) string {
@@ -423,22 +400,12 @@ func (l *Lifecycle) prepareInput(ctx context.Context, r b.LifecycleRequest) (b.L
 			return receipt, errors.New("prepared worker input changed")
 		}
 	} else {
-		if err = l.ready(ctx, s); err != nil {
-			return receipt, err
-		}
-		feed, feedErr := l.stateFeed(ctx, state.Process)
-		if feedErr != nil {
-			return receipt, feedErr
-		}
 		defer l.closeStateFeed()
-		baseline := nativeBaseline(feed.Initial(), l.clock())
-		_, readErr := l.client.ReadScreen(ctx, s.Ref.External)
-		if readErr != nil {
-			return receipt, readErr
+		initial, readyErr := l.ready(ctx, s)
+		if readyErr != nil {
+			return receipt, readyErr
 		}
-		if _, err = l.original(ctx, s); err != nil {
-			return receipt, err
-		}
+		baseline := nativeBaseline(initial, l.clock())
 		state.Turns = append(state.Turns, Turn{Command: input.CommandID, Prompt: input.Prompt, InputDigest: inputDigest, Native: baseline})
 	}
 	receipt.Process = &state.Process
@@ -470,14 +437,11 @@ func (l *Lifecycle) submit(ctx context.Context, r b.LifecycleRequest) (b.Lifecyc
 	if turn.Attempted {
 		return receipt, errors.New("original terminal input was already attempted; reconcile only")
 	}
-	if err = l.ready(ctx, s); err != nil {
-		return receipt, err
+	initial, readyErr := l.ready(ctx, s)
+	if readyErr != nil {
+		l.closeStateFeed()
+		return receipt, readyErr
 	}
-	feed, feedErr := l.stateFeed(ctx, state.Process)
-	if feedErr != nil {
-		return receipt, feedErr
-	}
-	initial := feed.Initial()
 	if initial.PaneKey != turn.Native.Pane || turn.Native.Provider != "" && initial.ProviderSession.ID != turn.Native.Provider {
 		l.closeStateFeed()
 		return receipt, errors.New("native original session changed before submission")
@@ -554,38 +518,18 @@ func (l *Lifecycle) observeOnce(ctx context.Context, s b.LifecycleSnapshot) (b.L
 		if _, err = l.original(ctx, s); err != nil {
 			return receipt, nil, err
 		}
-		if turn.Native.EndedAt == 0 || turn.Native.ExpectedReply == "" || receipt.Diagnostic != "" {
+		if !turn.Accepted || !turn.Started || turn.Native.EndedAt == 0 || turn.Native.ReplyBody == "" || receipt.Diagnostic != "" {
 			goto observed
 		}
-		page, readErr := l.client.ReadScreen(ctx, state.Process)
-		if readErr != nil {
-			return receipt, nil, readErr
-		}
-		if _, err = l.original(ctx, s); err != nil {
-			return receipt, nil, err
-		}
-		text, fingerprint, problem := renderedReply(s.Ref.Agent.Name, page.Tail)
-		if turn.Accepted && turn.Started && strings.TrimSpace(page.Draft) == "" && problem == "" && turn.Native.matchesVisible(text) {
-			if turn.Candidate != fingerprint {
-				turn.Candidate, turn.CandidateAt = fingerprint, time.Now().UTC()
-			} else if time.Since(turn.CandidateAt) >= time.Second {
-				turn.Reply, turn.ReplyDigest, turn.Settled = turn.Native.ReplyBody, digest([]byte(turn.Native.ReplyBody)), true
-				turn.Native.ReplyBody = ""
-			}
-		} else {
-			turn.Candidate, turn.CandidateAt = "", time.Time{}
-			if turn.Native.EndedAt > 0 {
-				if problem == "" {
-					problem = "complete visible reply does not match this native ended turn, or composer is occupied"
-				}
-				receipt.Diagnostic = "Original terminal reply is unverified: " + problem + "; original submission/start and complete visible reply are required; no input was repeated"
-			}
-		}
+		// Native start/end proof already binds this body to the accepted input.
+		// Screen rendering, scroll position and a later draft are not final evidence.
+		turn.Reply, turn.ReplyDigest, turn.Settled = turn.Native.ReplyBody, turn.Native.ReplyDigest, true
+		turn.Native.ReplyBody = ""
 	}
 
 observed:
-	if turn.Native.EndedAt > 0 && !turn.Settled && turn.Candidate == "" && receipt.Diagnostic == "" {
-		receipt.Diagnostic = "Native turn ended; awaiting the complete original ordinary reply"
+	if turn.Native.EndedAt > 0 && !turn.Settled && receipt.Diagnostic == "" {
+		receipt.Diagnostic = "Native turn ended; original final body is missing or reaches Orca's truncation boundary; awaiting a complete native body"
 	}
 	receipt.Implementation, err = l.envelope(s, state)
 	if err != nil {
@@ -605,7 +549,7 @@ observed:
 	if nativeOutcome == "success" {
 		nativeOutcome = "succeeded"
 	}
-	receipt.TurnEvidence = &b.TurnEvidence{NativeOutcome: nativeOutcome, FinalOrigin: "terminal_observed", FinalSource: replySource, FinalItemID: turn.ReplyDigest, FinalVerified: true, TurnID: turn.Command, CommandID: turn.Command, SessionID: SessionID(state.Process), Started: true, Completed: true, Succeeded: true, LastMessage: turn.Reply}
+	receipt.TurnEvidence = &b.TurnEvidence{NativeOutcome: nativeOutcome, FinalOrigin: "terminal_observed", FinalSource: NativeReplySource, FinalItemID: turn.ReplyDigest, FinalVerified: true, TurnID: turn.Command, CommandID: turn.Command, SessionID: SessionID(state.Process), Started: true, Completed: true, Succeeded: true, LastMessage: turn.Reply}
 	return receipt, nil, nil
 }
 
@@ -711,8 +655,54 @@ func (l *Lifecycle) InspectLifecycleWorkspace(ctx context.Context, s b.Lifecycle
 	return InspectWorkspace(ctx, l.client, s.Ref, s.Session.ProjectID)
 }
 func (l *Lifecycle) VerifyManualRecovery(ctx context.Context, s b.LifecycleSnapshot) (b.LifecycleRecoveryEvidence, error) {
+	if err := l.validate(s); err != nil {
+		return b.LifecycleRecoveryEvidence{}, err
+	}
 	_, err := l.original(ctx, s)
-	return b.LifecycleRecoveryEvidence{SessionAvailable: err == nil}, err
+	evidence := b.LifecycleRecoveryEvidence{SessionAvailable: err == nil, ResourceAvailable: err == nil}
+	if err != nil {
+		evidence.Diagnostic = "Original terminal unavailable; replacement recovery is unsupported: " + err.Error()
+		return evidence, err
+	}
+	// A rendered idle screen can belong to a previous turn. Qualification uses
+	// the same original native main-agent source as normal observation.
+	feed, err := l.stateFactory(ctx, l.profile.Environment, s.Ref.External)
+	if err != nil {
+		return evidence, err
+	}
+	defer feed.Close()
+	initial := feed.Initial()
+	state, err := l.state(s)
+	if err != nil {
+		return evidence, err
+	}
+	provider, pane := "", ""
+	for _, turn := range state.Turns {
+		if turn.Command == s.Session.CurrentCommandID || turn.Command == s.Session.PendingCommandID {
+			if turn.Native.Provider != "" {
+				provider, pane = turn.Native.Provider, turn.Native.Pane
+			}
+		}
+	}
+	current, err := feed.Query(ctx)
+	if err != nil {
+		return evidence, err
+	}
+	idle := current.PaneKey == initial.PaneKey && initial.PaneKey != "" && current.AgentType == "codex" &&
+		current.ProviderSession.ID != "" && current.ProviderSession.ID == initial.ProviderSession.ID &&
+		(provider == "" || current.ProviderSession.ID == provider) &&
+		(pane == "" || current.PaneKey == pane) &&
+		current.MainAgent != nil && current.MainAgent.State == "done" && current.MainAgent.StateStartedAt > 0 &&
+		current.UpdatedAt >= current.MainAgent.StateStartedAt && !current.Interrupted && (current.MainAgent.Outcome == "" || current.MainAgent.Outcome == "success") &&
+		(initial.MainAgent == nil || current.MainAgent.StateStartedAt >= initial.MainAgent.StateStartedAt)
+	if _, err := l.original(ctx, s); err != nil {
+		return b.LifecycleRecoveryEvidence{}, err
+	}
+	evidence.SessionIdle = idle
+	if !evidence.SessionIdle {
+		evidence.Diagnostic = "Original native main agent is active/unverified; no recovery input is allowed"
+	}
+	return evidence, nil
 }
 func (l *Lifecycle) BindRecovery(_ context.Context, original, replacement b.LifecycleSnapshot) (b.ImplementationDataEnvelope, error) {
 	return b.ImplementationDataEnvelope{}, errors.New("replacing an Orca session requires a new execution")

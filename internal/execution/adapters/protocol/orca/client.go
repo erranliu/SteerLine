@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 
@@ -186,21 +185,4 @@ func (c Client) CloseTerminalChecked(ctx context.Context, handle, runtime string
 		return b.StopReceipt{Disposition: "confirmed"}, nil
 	}
 	return b.StopReceipt{Disposition: "accepted"}, nil
-}
-
-func (c Client) WaitIdle(ctx context.Context, p b.ProcessIdentity, timeout time.Duration) (bool, error) {
-	r, err := c.MetaCall(ctx, "terminal", "wait", "--terminal", p.Terminal, "--for", "tui-idle", "--timeout-ms", strconv.FormatInt(timeout.Milliseconds(), 10), "--json")
-	if r.ErrorCode == "timeout" && !r.CallUncertain {
-		return false, nil
-	}
-	var value struct {
-		Wait struct {
-			Satisfied     bool   `json:"satisfied"`
-			BlockedReason string `json:"blockedReason"`
-		} `json:"wait"`
-	}
-	if json.Unmarshal(r.Payload, &value) != nil || r.RuntimeID != p.RuntimeID || r.CallUncertain || r.ErrorCode != "" {
-		return false, errors.Join(err, errors.New("original terminal wait is unverified"))
-	}
-	return value.Wait.Satisfied && value.Wait.BlockedReason == "", nil
 }

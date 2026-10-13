@@ -83,9 +83,7 @@ func (s *Service) resumeWorkerObservers(ctx context.Context) error {
 		// With no original operation there is no external outcome to reconcile.
 		// Same-instance dispatch consumes this queue; restart retains its manual
 		// recovery gate and cannot automatically submit the saved input.
-		if execution.PendingCommandID != "" && stageInput(workflow, execution.PendingCommandID) != nil &&
-			s.operationByKey("worker-turn:"+execution.ExecutionID+":"+execution.PendingCommandID) == nil &&
-			s.operationByKey("worker-session:"+execution.ExecutionID+":"+execution.PendingCommandID) == nil {
+		if execution.PendingCommandID != "" && s.workerInputNotSubmitted(run, execution.PendingCommandID) {
 			continue
 		}
 		if err != nil {
@@ -159,6 +157,9 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 		}
 	}()
 	_, actorContext := s.signalTransport()
+	if actorContext == nil {
+		actorContext = context.Background()
+	}
 	if result.err != nil && actorContext != nil && actorContext.Err() != nil {
 		return nil
 	}
@@ -213,15 +214,16 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 	s.refreshRun(run)
 	if result.dead {
 		if !result.receipt.State.WritersAbsent {
-			execution.RecoveryState = string(executionmodel.RecoveryUnverified)
+			s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
 			return s.waitWorkerFlow(run, "Original worker writers may still modify the worktree")
 		}
-		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: result.completed}, result.receipt.State.SessionAvailable)
-		if execution.RecoveryState == string(executionmodel.RecoveryUnverified) {
+		if s.hasUnknownWorkerOperation(run) {
+			s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
 			execution.Status = "blocked"
 			return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; reconcile its original request before continuing")
 		}
 		if result.completed {
+			s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: true}, result.receipt.State.SessionAvailable)
 			if execution.SessionID == "" || execution.SessionGeneration == "" {
 				return s.waitWorkerFlow(run, "Original worker session identity could not be committed")
 			}
@@ -233,15 +235,20 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 			}
 			return s.commitWorker(run)
 		}
+		// Process death settles ownership, not native session eligibility. Preserve
+		// any prior qualification and let the same worker probe verify idle/rebind.
+		if execution.RecoverySessionAvailable == nil {
+			s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
+		}
 		execution.PendingQuestions = nil
 		execution.Status = "blocked"
 		s.refreshRun(run)
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
 			return s.refreshSavedRecoveryDecision(run, false, "原 worker 已退出，旧请求已失效。请确认带入新轮次的输入。")
 		}
-		if record := s.decisionRecord(run); record != nil && record.Status == "pending" &&
+		if record := s.decisionRecord(run); record != nil && record.Status == "pending" && run.Decision.Request.QuestionRoute == nil &&
 			record.RecoveryVersion == execution.RecoveryVersion && record.RecoveryState == execution.RecoveryState {
-			return nil // Repeated probes preserve the displayed recovery decision.
+			return s.recheckWorkerQualification(actorContext, run)
 		}
 		oldDecisionID := ""
 		priorQuestion := ""
@@ -249,9 +256,6 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 			oldDecisionID = run.Decision.ID
 			priorQuestion = run.Decision.Request.Question + "\n" + run.Decision.Request.Context
 			s.setDecisionStatus(run, "superseded")
-			if err := s.commitWorker(run); err != nil {
-				return err
-			}
 			s.setRunDecision(run, nil)
 		}
 		if err := s.waitWorkerFlow(run, "原 worker 已退出，原轮次没有可信完成结果。请核对当前工作区后手动继续。\n\n原问题："+priorQuestion); err != nil {
@@ -260,12 +264,14 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 		if record := s.decisionRecord(run); record != nil && oldDecisionID != "" {
 			record.RecoveryOfDecision = oldDecisionID
 			s.markWorkerDecisionWrite(record.DecisionID)
-			return s.commitWorker(run)
+			if err := s.commitWorker(run); err != nil {
+				return err
+			}
 		}
-		return nil
+		return s.recheckWorkerQualification(actorContext, run)
 	}
 	if result.err != nil {
-		execution.RecoveryState = string(executionmodel.RecoveryUnverified)
+		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
 		execution.Status = "blocked"
 		return s.waitWorkerFlow(run, "Original worker turn cannot be reconciled: "+result.err.Error())
 	}

@@ -542,9 +542,10 @@ func runtimeDecisionFacts(run *productapi.CandidateSummary) *reconstruction.RunV
 
 func recoveryInspection(r execution.RecoveryInspection) productapi.RecoveryInspection {
 	v := productapi.RecoveryInspection{Version: r.Version, SampledAt: r.SampledAt, RunID: r.RunID, RunRevision: r.RunRevision, ServiceInstanceID: r.ServiceInstanceID, ServiceStatus: r.ServiceStatus, DispatchMode: r.DispatchMode, DispatchPaused: r.DispatchPaused, SlotOccupied: r.SlotOccupied, TaskID: r.TaskID, DecisionID: r.DecisionID, DecisionStatus: r.DecisionStatus, ExecutionStatus: r.ExecutionStatus, WorkflowStage: r.WorkflowStage, WorkflowStatus: r.WorkflowStatus, Backend: r.Backend, Protocol: r.Protocol, Target: productapi.TargetSummary{ID: r.Target.ID}, ProcessCheck: r.ProcessCheck, WorkspaceError: r.WorkspaceError, ClaimError: r.ClaimError, PRError: r.PRError, ConcurrentActionReason: r.ConcurrentActionReason}
+	v.SessionCheck, v.ContinuationCheck = r.SessionCheck, r.ContinuationCheck
 	if r.Workspace != nil {
 		w := r.Workspace
-		v.Workspace = &productapi.WorkspaceSummary{Worktree: w.Worktree, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.CheckedAt}
+		v.Workspace = &productapi.WorkspaceSummary{InspectionScope: w.InspectionScope, Worktree: w.Worktree, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.CheckedAt}
 	}
 	if r.NativeClaim != nil {
 		v.NativeClaim = ptr(query.TaskSummary(*r.NativeClaim))

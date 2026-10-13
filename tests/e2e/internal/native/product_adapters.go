@@ -8,12 +8,36 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	transport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
 	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
+	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 const SupportedCodexVersion = codexworker.PolicyCodexVersion
 const OrcaWorktreeTrashDirectory = orcaworker.WorktreeTrashDirectory
 
 var ErrOrcaRepoUnavailable = orcaworker.ErrRepoUnavailable
+
+func OrcaOriginalTurnEnded(ctx context.Context, environment string, process backend.ProcessIdentity, proof transport.NativeProof) (bool, error) {
+	return orcaOriginalTurnEnded(ctx, environment, process, proof, orcaworker.OpenStateFeed)
+}
+
+func orcaOriginalTurnEnded(ctx context.Context, environment string, process backend.ProcessIdentity, proof transport.NativeProof, factory orcaworker.StateFeedFactory) (bool, error) {
+	if proof.WorkingAt <= 0 || proof.Provider == "" || proof.Pane == "" {
+		return false, errors.New("missing original native turn start")
+	}
+	feed, err := factory(ctx, environment, process)
+	if err != nil {
+		return false, err
+	}
+	defer feed.Close()
+	current, err := feed.Query(ctx)
+	if err != nil {
+		return false, err
+	}
+	if current.PaneKey != proof.Pane || current.ProviderSession.ID != proof.Provider || current.AgentType != "codex" {
+		return false, errors.New("original native main-agent identity changed")
+	}
+	return current.MainAgent != nil && current.MainAgent.State == "done" && current.MainAgent.StateStartedAt > proof.WorkingAt && current.UpdatedAt >= current.MainAgent.StateStartedAt && !current.Interrupted && (current.MainAgent.Outcome == "" || current.MainAgent.Outcome == "success"), nil
+}
 
 func CodexExecutable(command string) (string, error) { return codexworker.NativeExecutable(command) }
 

@@ -1,7 +1,7 @@
-param(
+﻿param(
     [string]$DebugRoot = 'C:\SteerlineDebug',
     [switch]$Orca,
-    [string]$OrcaEnvironment = '',
+    [string]$OrcaEnvironment = 'name:asus笔记本',
     [string]$OrcaAgent = 'codex',
     [string]$OrcaExecutable = 'orca',
     [string]$OrcaRepositorySelector = '',

@@ -44,6 +44,27 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 		return errors.New("feedback lost its original request")
 	}
 	w := fixed.workflow
+	if w.Status == "reconciling" || s.hasUnknownWorkerOperation(run) {
+		return errors.New("unknown original outcomes require read-only reconciliation")
+	}
+	// development/v3 no longer stores artifact snapshots. Retrying a submitted
+	// report must reverify implementation in the original session; an unsent
+	// first report can still summarize its successful original source.
+	if (answer.OptionID == "continue" || answer.OptionID == "" && fixed.execution.RecoveryState != "") && w.StepID == executionmodel.StepReport {
+		valid := false
+		for i := len(w.StageInputs) - 1; i >= 0; i-- {
+			previous := w.StageInputs[i]
+			if previous.StepID != executionmodel.StepReport {
+				continue
+			}
+			source := stageResult(w, previous.SourceCommandID)
+			valid = source != nil && source.Succeeded && source.Failure == "" && source.TurnID == previous.SourceTurnID && s.workerInputNotSubmitted(run, previous.CommandID)
+			break
+		}
+		if !valid {
+			w.StepID, w.ReportRetry = executionmodel.StepImplement, 0
+		}
+	}
 	if request.InteractionKind == "async" {
 		step, err := asyncContinuationStep(w, request)
 		if err != nil {
@@ -51,12 +72,9 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 		}
 		w.StepID = step
 	}
-	if w.Status == "reconciling" || s.hasUnknownWorkerOperation(run) {
-		return errors.New("unknown original outcomes require read-only reconciliation")
-	}
 	if e := fixed.execution; e.PendingCommandID != "" {
 		pending := e.PendingCommandID
-		if s.operationByKey("worker-turn:"+e.ExecutionID+":"+pending) != nil || s.operationByKey("worker-session:"+e.ExecutionID+":"+pending) != nil {
+		if !s.workerInputNotSubmitted(run, pending) {
 			return errors.New("original native input must be reconciled before feedback")
 		}
 		// Explicit new feedback supersedes an input proven never submitted.
@@ -285,11 +303,20 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if err := s.stopVerifiedWorkerTurn(run, w, e, evidence.TurnID, nativeOutcome, false); err != nil {
 		return err
 	}
-	if input.StepID != executionmodel.StepImplement && (!evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "") {
+	failedCore := !evidence.Succeeded && (input.StepID == executionmodel.StepImplement || input.StepID == executionmodel.StepReport)
+	if !failedCore && input.StepID != executionmodel.StepImplement && (!evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "") {
 		return s.stageWait(run, w, e, "reconciling", "original stopped turn lacks verified final provenance: "+evidence.FinalDiagnostic, nil)
 	}
 	result := executionmodel.StageResult{NativeOutcome: evidence.NativeOutcome, CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, FinalVerified: evidence.FinalVerified, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
 	w.StageResults = append(w.StageResults, result)
+	if failedCore {
+		s.markWorkerRecoveryRequired(run)
+		w.StageResults[len(w.StageResults)-1].Outcome = "blocked"
+		if s.hasUnknownWorkerOperation(run) {
+			return s.stageWait(run, w, e, "reconciling", "original failed turn has unknown external operations", nil)
+		}
+		return s.waitWorkerFlow(run, "Original turn failed or was interrupted; continue the original session to verify current work: "+evidence.Failure)
+	}
 	manualReason := ""
 	if e.RecoveryRequired || e.OwnerServiceInstanceID != s.State.Service.InstanceID || hasBlockingPendingQuestions(e) || s.hasUnknownWorkerOperation(run) || e.Environment != nil && (!e.Environment.Ready || e.Environment.Blocker != nil) || run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.InteractionKind != "async" {
 		manualReason = "original session or prior-service input requires explicit continuation; no automatic next turn"

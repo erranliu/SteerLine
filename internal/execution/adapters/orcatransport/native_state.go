@@ -2,13 +2,10 @@ package orcatransport
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 	"unicode/utf16"
 
 	native "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
@@ -28,10 +25,9 @@ type NativeProof struct {
 	RootWorkingAt int64     `json:"root_working_at,omitempty"`
 	EndedAt       int64     `json:"ended_at,omitempty"`
 	Outcome       string    `json:"outcome,omitempty"`
-	ExpectedReply string    `json:"expected_reply,omitempty"`
+	ReplyDigest   string    `json:"reply_digest,omitempty"`
 	ReplyBody     string    `json:"reply_body,omitempty"`
 	LastSignal    time.Time `json:"last_signal,omitempty"`
-	Queried       bool      `json:"queried,omitempty"`
 	Hint          string    `json:"hint,omitempty"`
 	HintPending   bool      `json:"hint_pending,omitempty"`
 	Diagnostic    string    `json:"diagnostic,omitempty"`
@@ -72,79 +68,20 @@ func preview(text string) string {
 	return string(runes[:end])
 }
 
-var renderedInlineLink = regexp.MustCompile(`\[([^\]\r\n]+)\]\(([^()\s]+)\)`)
-var renderedInlineCode = regexp.MustCompile("`([^`\\r\\n]+)`")
-var renderedInlineBold = regexp.MustCompile(`\*\*([^*\r\n]+)\*\*`)
-
-func replyAssociation(text string) string {
-	text = strings.TrimSpace(text)
-	if strings.HasPrefix(text, "```json\n") && strings.HasSuffix(text, "\n```") {
-		text = strings.TrimSuffix(strings.TrimPrefix(text, "```json\n"), "\n```")
-	}
-	var value any
-	decoder := json.NewDecoder(strings.NewReader(text))
-	decoder.UseNumber()
-	compact := func(s string) string {
-		return strings.Map(func(r rune) rune {
-			if unicode.IsSpace(r) {
-				return -1
-			}
-			return r
-		}, s)
-	}
-	var fold func(any) any
-	fold = func(v any) any {
-		switch v := v.(type) {
-		case string:
-			return compact(v)
-		case []any:
-			for i := range v {
-				v[i] = fold(v[i])
-			}
-		case map[string]any:
-			for k := range v {
-				v[k] = fold(v[k])
-			}
-		}
-		return v
-	}
-	if json.Valid([]byte(text)) && decoder.Decode(&value) == nil {
-		data, _ := json.Marshal(fold(value))
-		return digest(data)
-	}
-	// Codex renders these inline Markdown forms without their delimiters or
-	// link targets. This is comparison only; persist the native original body.
-	text = renderedInlineLink.ReplaceAllString(text, "$1")
-	text = renderedInlineCode.ReplaceAllString(text, "$1")
-	text = renderedInlineBold.ReplaceAllString(text, "$1")
-	return digest([]byte(compact(text)))
-}
-func (p NativeProof) matchesVisible(text string) bool {
-	if replyAssociation(text) == p.ExpectedReply {
-		return true
-	}
-	// Codex shows non-hyperlinked targets as "label (target)". Compare that
-	// rendering of this exact native body too, without dropping visible words.
-	rendered := renderedInlineLink.ReplaceAllString(p.ReplyBody, "$1 ($2)")
-	return p.ReplyBody != "" && replyAssociation(text) == replyAssociation(rendered)
-}
 func (p *NativeProof) body(message string) {
 	// The public Codex hook field is capped at 8000 UTF-16 code units. Reject
 	// the surrogate-safe truncation boundary too; never treat a prefix as full.
 	if strings.TrimSpace(message) == "" || len(utf16.Encode([]rune(message))) >= 7999 {
 		return
 	}
-	body := strings.TrimSpace(message)
-	if strings.HasPrefix(body, "```json\n") && strings.HasSuffix(body, "\n```") {
-		body = strings.TrimSuffix(strings.TrimPrefix(body, "```json\n"), "\n```")
-	}
-	hash := replyAssociation(body)
-	// Association ignores display wrapping, but the native original is immutable.
-	if p.ExpectedReply != "" && (p.ExpectedReply != hash || p.ReplyBody != body) {
+	body := message
+	hash := digest([]byte(body))
+	// The first complete native original is immutable; no display normalization.
+	if p.ReplyDigest != "" && (p.ReplyDigest != hash || p.ReplyBody != body) {
 		p.Diagnostic = "Native ended reply changed; current result is unverified"
 		return
 	}
-	p.ExpectedReply = hash
+	p.ReplyDigest = hash
 	p.ReplyBody = body
 }
 func (p *NativeProof) signal(s native.AgentState, turn *Turn, now time.Time) {
@@ -160,7 +97,6 @@ func (p *NativeProof) signal(s native.AgentState, turn *Turn, now time.Time) {
 		p.Hint = stateHint(s)
 		if s.State == "done" {
 			p.HintPending = true
-			p.Queried = false
 		}
 	} // hint only; require a main-agent query
 	if !trustedState(s) || !turn.Accepted {
@@ -189,7 +125,7 @@ func (p *NativeProof) signal(s native.AgentState, turn *Turn, now time.Time) {
 		p.Diagnostic = "Another native input boundary makes the original turn unverified"
 		return
 	}
-	p.Revision, p.LastSignal, p.Queried = o.Revision, now, false
+	p.Revision, p.LastSignal = o.Revision, now
 	if s.MainAgent.State == "done" && s.MainAgent.StateStartedAt > p.WorkingAt {
 		p.end(s, now)
 	} else if s.MainAgent.State == "waiting" || s.MainAgent.State == "blocked" {
@@ -214,7 +150,6 @@ func (p *NativeProof) end(s native.AgentState, now time.Time) bool {
 	if p.EndedAt == 0 {
 		p.EndedAt = s.MainAgent.StateStartedAt
 		p.LastSignal = now
-		p.Queried = false
 		p.Outcome = "unknown"
 		if s.MainAgent.Outcome != "" {
 			p.Outcome = s.MainAgent.Outcome
@@ -236,7 +171,7 @@ func (p *NativeProof) query(s native.AgentState, now time.Time) bool {
 	return p.end(s, now)
 }
 func (p NativeProof) wantsQuery(now time.Time) bool {
-	return p.WorkingAt > 0 && (p.EndedAt == 0 || p.ExpectedReply == "") && !p.Queried && (p.HintPending || !now.Before(p.LastSignal.Add(30*time.Second)))
+	return p.WorkingAt > 0 && (p.EndedAt == 0 || p.ReplyDigest == "") && (p.HintPending || !now.Before(p.LastSignal.Add(30*time.Second)))
 }
 
 func (l *Lifecycle) stateFeed(ctx context.Context, process b.ProcessIdentity) (native.StateFeed, error) {
@@ -292,7 +227,7 @@ func (l *Lifecycle) observeNative(ctx context.Context, snapshot b.LifecycleSnaps
 		return turn.Native.Diagnostic
 	}
 	if turn.Native.wantsQuery(l.clock()) {
-		turn.Native.Queried = true
+		turn.Native.LastSignal = l.clock()
 		turn.Native.HintPending = false
 		s, err := feed.Query(ctx)
 		if err != nil {

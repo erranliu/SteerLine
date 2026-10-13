@@ -238,6 +238,13 @@ func TestWorkerStageReportRound(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			require(t, acceptTestStage(t, s, run, port, "implementation facts", scenario != "source_failed"))
+			if scenario == "source_failed" {
+				w := s.workflowRecord(run)
+				if w.Status != "waiting_input" || len(w.StageResults) != 1 || w.StageResults[0].Succeeded || len(w.StageInputs) != 1 || run.Decision == nil {
+					t.Fatal("known source failure was overwritten or started another report")
+				}
+				return
+			}
 			startQueuedStage(t, s, run)
 			body := `{"outcome":"done","outputs":{},"summary":"reported"}`
 			switch scenario {
@@ -335,9 +342,32 @@ func TestWorkerStageReopenedSourceQueuesOnlyReport(t *testing.T) {
 }
 
 func TestWorkerStageStrictResult(t *testing.T) {
-	for _, body := range []string{`{"outcome":"blocked","outcome":"done","summary":"x"}`, `{"outcome":"done","summary":"x","status":"completed"}`, "```json\n{}\n```", `{} {}`, `{"outcome":"done","summary":"x","outputs":{"candidate_sha":"fake"}}`} {
+	for _, body := range []string{
+		`{"outcome":"blocked","Outcome":"done","summary":"x"}`,
+		`{"outcome":"done","summary":"x","outputs":{"pr_url":"https://example.com/pull/1","PR_URL":"https://example.com/pull/2"}}`,
+	} {
+		if _, err := decodeStageReport(body, executionmodel.StepPublish); err == nil {
+			t.Fatalf("case-insensitive duplicate changed result %q", body)
+		}
+	}
+	for _, body := range []string{`{"outcome":"blocked","outcome":"done","summary":"x"}`, "```json\n{}\n```", `{} {}`, `{"outcome":"done","summary":"x","outputs":{"pr_url":1}}`, `{"outcome":"done","summary":"x","outputs":{"pr_url":"https://example.com/pull/1","pr_url":"https://example.com/pull/2"}}`} {
 		if _, err := decodeStageReport(body, executionmodel.StepReport); err == nil {
 			t.Fatalf("accepted invalid result %q", body)
+		}
+	}
+}
+
+func TestWorkerStagePresentationDoesNotBlockResult(t *testing.T) {
+	for _, body := range []string{
+		"```json\r\n{\"outcome\":\"done\",\"summary\":\"ready\"}\r\n```",
+		"```\n{\"outcome\":\"done\",\"summary\":\"ready\"}\n```",
+		`{"outcome":"done","summary":"ready","status":"completed","outputs":{"candidate_sha":"extra"}}`,
+		`{"outcome":"done","summary":"ready","metadata":{"outcome":"note","Outcome":"another note"}}`,
+		`{"outcome":" done ","summary":" ready ","question":" "}`,
+	} {
+		report, err := decodeStageReport(body, executionmodel.StepReport)
+		if err != nil || report.Outcome != "done" || report.Summary != "ready" {
+			t.Fatalf("usable report rejected: %q, %v", body, err)
 		}
 	}
 }

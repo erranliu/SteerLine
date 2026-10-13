@@ -419,6 +419,8 @@ type RecoveryInspection struct {
 	Protocol               string             `json:"protocol"`
 	Target                 TargetSummary      `json:"target"`
 	ProcessCheck           string             `json:"process_check"`
+	SessionCheck           string             `json:"session_check"`
+	ContinuationCheck      string             `json:"continuation_check"`
 	Workspace              *WorkspaceSummary  `json:"workspace"`
 	WorkspaceError         string             `json:"workspace_error"`
 	NativeClaim            *TaskSummary       `json:"native_claim"`
@@ -429,11 +431,12 @@ type RecoveryInspection struct {
 	ConcurrentActionReason string             `json:"concurrent_action_reason"`
 }
 type WorkspaceSummary struct {
-	Worktree  string    `json:"worktree"`
-	Base      string    `json:"base"`
-	Head      string    `json:"head"`
-	Dirty     bool      `json:"dirty"`
-	CheckedAt time.Time `json:"checked_at"`
+	InspectionScope string    `json:"inspection_scope"`
+	Worktree        string    `json:"worktree"`
+	Base            string    `json:"base"`
+	Head            string    `json:"head"`
+	Dirty           bool      `json:"dirty"`
+	CheckedAt       time.Time `json:"checked_at"`
 }
 type RecoveryPRSummary struct{ URL, State, Repository, BaseBranch string }
 

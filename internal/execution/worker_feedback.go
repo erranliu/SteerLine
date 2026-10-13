@@ -179,10 +179,11 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 				return err
 			}
 			evidence, err := lifecycle.VerifyManualRecovery(ctx, snapshot)
-			if err != nil || !evidence.SessionAvailable {
+			if err != nil || !s.workerContinuationQualified(run, evidence) {
+				s.setWorkerRecoveryEvidence(run, evidence)
 				return s.waitWorkerFlow(run, "The original worker session cannot be verified for continuation")
 			}
-			if evidence.ManagedProcess && !evidence.ProcessAbsent {
+			if evidence.ResourceAvailable {
 				// A completed round can retain a live original session. Consent
 				// starts its next round without inventing a replacement Attempt.
 				execution.RecoveryRequired = false

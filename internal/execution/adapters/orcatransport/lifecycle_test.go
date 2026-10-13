@@ -16,6 +16,7 @@ import (
 type fakeHost struct {
 	nativeSends                   int
 	nativePrompt                  string
+	nativeReply                   string
 	mu                            sync.Mutex
 	root, nativePath, incarnation string
 	calls                         [][]string
@@ -128,6 +129,9 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 		f.nativeSends++
 		f.nativePrompt = text
 		if f.writeReply {
+			f.nativeReply = `{"summary":"original result"}`
+		}
+		if f.writeReply {
 			f.lines = append(f.lines, `• {"summary":"original result"}`, "  Worked for "+strconv.Itoa(len(f.lines))+"s • 18:50", "› Ask Codex to do anything")
 		}
 
@@ -177,10 +181,7 @@ func TestAgentLaunchSingleTerminalAndReadonlyReconciliation(t *testing.T) {
 			bind(&s, r)
 			f.writeReply = true
 			s, input := prepared(t, l, s, strings.Repeat("c", 32))
-			r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-			if observer != nil {
-				_ = observer.Close(context.Background())
-			}
+			r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -310,10 +311,7 @@ func TestTerminalLifecycleReplyReuseAndExactStop(t *testing.T) {
 	for _, cmd := range []string{strings.Repeat("c", 32), strings.Repeat("f", 32)} {
 		var input b.TurnInput
 		s, input = prepared(t, l, s, cmd)
-		r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-		if observer != nil {
-			_ = observer.Close(context.Background())
-		}
+		r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 		if err != nil || !r.State.InputAccepted || !r.State.TurnStarted {
 			t.Fatal("acceptance confused with start", err)
 		}
@@ -339,6 +337,39 @@ func TestTerminalLifecycleReplyReuseAndExactStop(t *testing.T) {
 	r, err = l.StopLifecycle(context.Background(), request(s, b.LifecycleStopExecution, b.LifecycleInput{Stop: &b.StopInput{}}), nil)
 	if err != nil || !r.State.WorkerAbsent || r.State.WritersAbsent {
 		t.Fatal("overstated stop", r, err)
+	}
+}
+
+func TestTerminalRecoveryQualificationIsIndependentOfManagedProcess(t *testing.T) {
+	for _, environment := range []string{"", "owned-environment"} {
+		t.Run(environment, func(t *testing.T) {
+			l, f, s := fixtureOn(t, environment)
+			r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bind(&s, r)
+			f.nativeSends, f.writeReply = 1, true
+			before := len(f.calls)
+			evidence, err := l.VerifyManualRecovery(context.Background(), s)
+			if err != nil || !evidence.ResourceAvailable || !evidence.SessionIdle || !evidence.SessionAvailable || evidence.ManagedProcess || evidence.SessionRebindable {
+				t.Fatalf("original resource qualification: %+v %v", evidence, err)
+			}
+			f.draft = "unsubmitted input"
+			evidence, err = l.VerifyManualRecovery(context.Background(), s)
+			if err != nil || !evidence.SessionIdle {
+				t.Fatal("screen draft blocked native recovery qualification")
+			}
+			f.incarnation = "replacement"
+			if _, err = l.VerifyManualRecovery(context.Background(), s); err == nil {
+				t.Fatal("replacement resource accepted")
+			}
+			for _, call := range f.calls[before:] {
+				if call[0] == "worktree" && call[1] == "create" || call[0] == "terminal" && (call[1] == "send" || call[1] == "close" || call[1] == "read" || call[1] == "wait") {
+					t.Fatal("recovery qualification mutated resource", call)
+				}
+			}
+		})
 	}
 }
 func TestTerminalUnknownSubmissionOnlyObservesOriginal(t *testing.T) {
@@ -384,10 +415,7 @@ func TestTerminalLocalAndRemoteUseIdenticalReturnAndNativePorts(t *testing.T) {
 			bind(&s, r)
 			f.writeReply = true
 			s, input := prepared(t, l, s, strings.Repeat("c", 32))
-			r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-			if observer != nil {
-				_ = observer.Close(context.Background())
-			}
+			r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -410,7 +438,7 @@ func TestTerminalLocalAndRemoteUseIdenticalReturnAndNativePorts(t *testing.T) {
 		})
 	}
 }
-func TestTerminalClippedOutputCannotComplete(t *testing.T) {
+func TestTerminalClippedScreenDoesNotBlockNativeFinal(t *testing.T) {
 	l, f, s := fixture(t)
 	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
 	if err != nil {
@@ -419,18 +447,15 @@ func TestTerminalClippedOutputCannotComplete(t *testing.T) {
 	bind(&s, r)
 	f.writeReply = true
 	s, input := prepared(t, l, s, strings.Repeat("c", 32))
-	r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-	if observer != nil {
-		_ = observer.Close(context.Background())
-	}
+	r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bind(&s, r)
 	f.clipped = true
 	r, _, err = settled(t, l, s)
-	if err == nil || r.TurnEvidence != nil {
-		t.Fatal("clipped result completed", r.Diagnostic, err)
+	if err != nil || r.TurnEvidence == nil {
+		t.Fatal("clipped screen blocked a complete native body", r.Diagnostic, err)
 	}
 }
 
@@ -447,10 +472,7 @@ func TestScreenReplyDoesNotRequireOffscreenHistory(t *testing.T) {
 		t.Fatal("prepared input was observed as a submitted turn", err)
 	}
 	f.writeReply = true
-	r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-	if observer != nil {
-		_ = observer.Close(context.Background())
-	}
+	r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -461,46 +483,33 @@ func TestScreenReplyDoesNotRequireOffscreenHistory(t *testing.T) {
 	}
 }
 
-func TestComposerDraftBlocksPreparationAndSubmission(t *testing.T) {
+func TestPreparationAndSubmissionNeverReadScreen(t *testing.T) {
 	l, f, s := fixture(t)
 	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bind(&s, r)
-	text := "Implement the bound Spec."
-	input := b.TurnInput{CommandID: strings.Repeat("c", 32), Prompt: text}
-	s.PendingTurn = &input
-	f.draft = "native setup input"
-	if _, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareSession, b.LifecycleInput{Turn: &input})); err == nil {
-		t.Fatal("preparation accepted an occupied composer")
-	}
-	f.draft = ""
-	s, input = prepared(t, l, s, input.CommandID)
-	f.draft = "another UI input arrived after preparation"
-	if _, _, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input})); err == nil {
-		t.Fatal("submission appended business input to a native draft")
+	f.draft, f.clipped = "unrelated visible draft", true
+	s, input := prepared(t, l, s, strings.Repeat("c", 32))
+	r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
+	if err != nil || !r.State.InputAccepted {
+		t.Fatal("native ready/input receipt rejected by screen content", err)
 	}
 	for _, call := range f.calls {
-		if call[1] == "send" {
-			t.Fatal("occupied composer mutated", call)
+		if call[0] == "terminal" && (call[1] == "read" || call[1] == "wait") {
+			t.Fatal("screen-dependent preparation or submission", call)
 		}
 	}
 }
 
 func settled(t *testing.T, l *Lifecycle, s b.LifecycleSnapshot) (b.LifecycleReceipt, b.LifecycleObserver, error) {
 	t.Helper()
-	r, o, err := l.observeOnce(context.Background(), s)
-	if err != nil || r.TurnEvidence != nil || r.Diagnostic != "" {
-		return r, o, err
-	}
-	bind(&s, r)
-	time.Sleep(1100 * time.Millisecond)
 	return l.observeOnce(context.Background(), s)
 }
 
-func TestTerminalReplyRequiresOriginalStartedAndStableIdle(t *testing.T) {
-	for _, mode := range []string{"unstarted", "busy", "draft", "changing"} {
+func TestTerminalReplyRequiresOriginalStartedAndEnded(t *testing.T) {
+	for _, mode := range []string{"unstarted", "busy"} {
 		t.Run(mode, func(t *testing.T) {
 			l, f, s := fixture(t)
 			r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
@@ -510,26 +519,12 @@ func TestTerminalReplyRequiresOriginalStartedAndStableIdle(t *testing.T) {
 			bind(&s, r)
 			f.writeReply, f.unstarted = true, mode == "unstarted"
 			s, input := prepared(t, l, s, strings.Repeat("c", 32))
-			r, observer, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-			if observer != nil {
-				_ = observer.Close(context.Background())
-			}
+			r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 			if err != nil {
 				t.Fatal(err)
 			}
 			bind(&s, r)
 			f.busy = mode == "busy"
-			if mode == "draft" {
-				f.draft = "another input"
-			}
-			r, _, err = l.observeOnce(context.Background(), s)
-			if err != nil || r.TurnEvidence != nil {
-				t.Fatal("premature completion", err)
-			}
-			bind(&s, r)
-			if mode == "changing" {
-				f.lines[len(f.lines)-3] = `• {"summary":"changed result"}`
-			}
 			r, _, err = l.observeOnce(context.Background(), s)
 			if err != nil || r.TurnEvidence != nil {
 				t.Fatal("unverified completion", err)
@@ -548,10 +543,7 @@ func TestTerminalPreviousReplyCannotCompleteNewTurn(t *testing.T) {
 	old := []string{"› Previous input…", "• Previous reply.", "  Worked for 1s • 18:50", "› Ask Codex to do anything"}
 	f.lines = append([]string(nil), old...)
 	s, input := prepared(t, l, s, strings.Repeat("c", 32))
-	r, o, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-	if o != nil {
-		_ = o.Close(context.Background())
-	}
+	r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 	if err != nil || !r.State.TurnStarted {
 		t.Fatal("new input did not start", err)
 	}
@@ -575,10 +567,7 @@ func TestTerminalChangedIncarnationCannotComplete(t *testing.T) {
 	bind(&s, r)
 	f.writeReply = true
 	s, input := prepared(t, l, s, strings.Repeat("c", 32))
-	r, o, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-	if o != nil {
-		_ = o.Close(context.Background())
-	}
+	r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -590,7 +579,7 @@ func TestTerminalChangedIncarnationCannotComplete(t *testing.T) {
 	}
 }
 
-func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
+func TestTerminalNativeFinalRecoveryNeverReplaysInput(t *testing.T) {
 	l, f, s := fixture(t)
 	r, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
 	if err != nil {
@@ -599,20 +588,25 @@ func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
 	bind(&s, r)
 	f.writeReply, f.collapsedEcho = true, true
 	s, input := prepared(t, l, s, strings.Repeat("c", 32))
-	r, o, err := l.Execute(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
-	if o != nil {
-		_ = o.Close(context.Background())
-	}
+	r, err = l.submit(context.Background(), request(s, b.LifecycleStartTurn, b.LifecycleInput{Turn: &input}))
 	if err != nil {
 		t.Fatal(err)
 	}
 	bind(&s, r)
-	r, _, err = l.observeOnce(context.Background(), s)
-	if err != nil || r.TurnEvidence != nil {
-		t.Fatal("candidate was not staged", err)
+	// Persist the original native start/end and body before settlement.
+	state, err := l.state(s)
+	if err != nil {
+		t.Fatal(err)
 	}
-	bind(&s, r)
-	time.Sleep(1100 * time.Millisecond)
+	turn := turnFor(&state, input.CommandID)
+	if diagnostic := l.observeNative(context.Background(), s, &state, turn); diagnostic != "" {
+		t.Fatal(diagnostic)
+	}
+	s.Implementation, err = l.envelope(s, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.lines, f.draft = nil, "a later user draft"
 	// Reconstruct the adapter from only its frozen setup and persisted snapshot.
 	setup := l.setup.Clone()
 	setup.Snapshot = s.Clone()
@@ -622,7 +616,7 @@ func TestTerminalCandidateRecoveryNeverReplaysInput(t *testing.T) {
 	}
 	r, _, err = recovered.(*Lifecycle).observeOnce(context.Background(), s)
 	if err != nil || r.TurnEvidence == nil || r.TurnEvidence.LastMessage != `{"summary":"original result"}` {
-		t.Fatal("saved candidate did not resume", err)
+		t.Fatal("saved native final did not resume", err)
 	}
 	sends := 0
 	for _, call := range f.calls {

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -48,7 +50,11 @@ func (s *Service) beginWorkerRecoveryAttempt(ctx context.Context, run *reconstru
 	if err != nil {
 		return err
 	}
-	workflow, execution, old := fixed.workflow, fixed.execution, fixed.attempt
+	workflow, old := fixed.workflow, fixed.attempt
+	// Native binding can fail. Prepare the successor off the actor's records so
+	// persisting that diagnostic cannot retire the original Attempt or answer.
+	candidate, candidateRun := *fixed.execution, *run
+	execution := &candidate
 	if execution.SessionID == "" {
 		return errors.New("the original session identity is unavailable; handle the original execution manually")
 	}
@@ -64,7 +70,7 @@ func (s *Service) beginWorkerRecoveryAttempt(ctx context.Context, run *reconstru
 	if err != nil || canonical(workspace.Worktree) != canonical(execution.Workspace.Worktree) || workspace.Branch != execution.Workspace.Branch {
 		return errors.New("the original worktree and branch could not be reverified")
 	}
-	applyWorkflowWorkspaceEvidence(run, execution, workspace)
+	applyWorkflowWorkspaceEvidence(&candidateRun, execution, workspace)
 	previous, err := s.lifecycleSnapshot(run, fixed.workflow, execution, old, nil)
 	if err != nil {
 		return err
@@ -73,8 +79,8 @@ func (s *Service) beginWorkerRecoveryAttempt(ctx context.Context, run *reconstru
 	if err != nil {
 		return err
 	}
-	if !recovery.ManagedProcess || !recovery.ProcessAbsent || !recovery.WritersAbsent {
-		return errors.New("the original process tree is not proven to be service managed")
+	if !recovery.SessionRebindable || !recovery.ProcessAbsent || !recovery.WritersAbsent || !recovery.SessionIdle {
+		return errors.New("the original resource and writers are not proven stopped for same-session restoration")
 	}
 	if !recovery.SessionAvailable || execution.SessionID == "" {
 		return errors.New("the original session identity is unavailable; handle the original execution manually")
@@ -82,21 +88,14 @@ func (s *Service) beginWorkerRecoveryAttempt(ctx context.Context, run *reconstru
 	if s.hasUnknownWorkerOperation(run) {
 		return errors.New("an earlier external operation has an unknown outcome; reconcile it before continuing")
 	}
-	originalSession := execution.SessionID
-	old.WorkerProcess = copyPtr(execution.Process)
-	old.Status, old.UpdatedAt = "stopped", now()
-	if run.Decision != nil {
-		s.setDecisionStatus(run, "applied")
-		s.setRunDecision(run, nil)
-	}
 	created := now()
 	newAttemptID := newID()
-	s.domain.Attempts = append(s.domain.Attempts, executionmodel.StepAttemptRecord{
+	attempt := executionmodel.StepAttemptRecord{
 		ProjectIdentity: old.ProjectIdentity, AttemptID: newAttemptID, ExecutionID: old.ExecutionID,
 		StepID: "worker", AttemptNumber: old.AttemptNumber + 1, Status: "planned",
 		InputRevision: old.InputRevision, ContractDigest: old.ContractDigest,
 		ExternalBinding: old.ExternalBinding, CreatedAt: created, UpdatedAt: created,
-	})
+	}
 	execution.Process = nil
 	execution.CurrentAttemptID = newAttemptID
 	execution.ImplementationData = nil
@@ -110,12 +109,10 @@ func (s *Service) beginWorkerRecoveryAttempt(ctx context.Context, run *reconstru
 	execution.Status, execution.LastTurnOutcome, execution.RecoveryState = "pending", "", "resuming"
 	execution.RecoveryRequired = false
 	execution.Generation = newID()
-	execution.SessionID = originalSession
+	execution.DecisionID = ""
 	execution.UpdatedAt = created
-	s.refreshRun(run)
-	workflow, execution = s.workflowRecords(run)
-	attempt := s.workflowAttempt(run, run.AttemptID)
-	next, err := s.lifecycleSnapshot(run, workflow, execution, attempt, nil)
+	candidateRun.AttemptID, candidateRun.Decision = newAttemptID, nil
+	next, err := lifecycleSnapshot(&candidateRun, workflow, execution, &attempt, nil)
 	if err != nil {
 		return err
 	}
@@ -126,6 +123,14 @@ func (s *Service) beginWorkerRecoveryAttempt(ctx context.Context, run *reconstru
 	if err := putImplementationEnvelope(execution, seed); err != nil {
 		return err
 	}
+	old.WorkerProcess = copyPtr(fixed.execution.Process)
+	old.Status, old.UpdatedAt = "stopped", created
+	if run.Decision != nil {
+		s.setDecisionStatus(run, "applied")
+	}
+	*fixed.execution = candidate
+	s.domain.Attempts = append(s.domain.Attempts, attempt)
+	s.refreshRun(run)
 	return s.commitWorker(run)
 }
 
@@ -352,4 +357,75 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		}
 	}
 	return resumeErr
+}
+
+// reconcileWorkerRecovery owns common eligibility and decisions after native evidence reads.
+func (s *Service) reconcileWorkerRecovery(ctx context.Context, task *taskmodel.TaskRecord, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext) error {
+	snapshot, snapshotErr := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if snapshotErr != nil {
+		return snapshotErr
+	}
+	if s.signalQueue != nil {
+		return s.recheckWorkerQualification(ctx, run)
+	}
+	evidence, verifyErr := lifecycle.VerifyManualRecovery(ctx, snapshot)
+	return s.acceptWorkerRecoveryQualification(ctx, task, run, evidence, verifyErr)
+}
+
+func (s *Service) acceptWorkerRecoveryQualification(ctx context.Context, task *taskmodel.TaskRecord, run *reconstructiontypes.RunView, evidence executionbackend.LifecycleRecoveryEvidence, verifyErr error) error {
+	fixed, err := s.workerFlowContext(run)
+	if err != nil {
+		return err
+	}
+	execution := fixed.execution
+	if verifyErr != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		if s.originalWorkerTurnEnded(run) && fixed.workflow.PRURL != "" && !s.hasUnknownWorkerOperation(run) {
+			return s.pollWorkerFlowPR(ctx, run, task, fixed.workflow)
+		}
+		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
+		return s.waitWorkerFlow(run, "Original worker identity cannot be verified: "+verifyErr.Error())
+	}
+	beforeRecovery := recordFingerprint(*execution)
+	completed := s.originalWorkerTurnEnded(run)
+	s.setWorkerRecoveryEvidence(run, evidence)
+	s.stampPendingRecoveryQuestion(run)
+	if !completed && (!evidence.SessionAvailable || execution.SessionID == "") {
+		execution.RecoveryState = "unverified"
+		return s.waitWorkerFlow(run, "The original session is unavailable. Handle the original execution manually; recovery cannot create a replacement session.")
+	}
+	s.refreshRun(run)
+	// Commit changed eligibility together with its replacement decision. An
+	// intermediate execution-only write would expose stale continuation consent.
+	if run.Decision != nil && run.Decision.Status == "answer_saved" {
+		return s.refreshSavedRecoveryDecision(run, false, "服务重开后请确认旧答案；原轮次不会自动继续。")
+	}
+	originalStopped := completed || evidence.ProcessAbsent && evidence.WritersAbsent && s.workerContinuationQualified(run, evidence)
+	if originalStopped && fixed.workflow.PRURL == "" && fixed.workflow.Status != "waiting_external" && (run.Decision == nil || run.Decision.Request.QuestionRoute == nil) {
+		if record := s.decisionRecord(run); record != nil && record.Status == "pending" && (record.RecoveryVersion != execution.RecoveryVersion || record.RecoveryState != execution.RecoveryState) {
+			s.setDecisionStatus(run, "superseded")
+			s.setRunDecision(run, nil)
+		}
+		return s.waitWorkerFlow(run, "原轮次已结束。继续原会话并核验当前工作区；不可核实的输入或资源不会重试。"+evidence.Diagnostic)
+	}
+	if beforeRecovery != recordFingerprint(*execution) {
+		if err := s.commitWorker(run); err != nil {
+			return err
+		}
+	}
+	if !completed && evidence.ResourceAvailable && s.workers[run.RunID] == nil {
+		lifecycle, _, err := s.lifecycleForRun(run)
+		if err != nil {
+			return err
+		}
+		if lifecycle.PolicyCapabilities().ResumeActiveObservation {
+			return s.resumeLifecycleObservation(ctx, run, lifecycle)
+		}
+	}
+	if completed && fixed.workflow.PRURL != "" && !s.hasUnknownWorkerOperation(run) {
+		return s.pollWorkerFlowPR(ctx, run, task, fixed.workflow)
+	}
+	return nil
 }
