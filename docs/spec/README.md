@@ -10,6 +10,18 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 [SpecGuide.md](SpecGuide.md) 维护 SteerLine 产品草稿转正时必读的 Spec / Plan 生成规范：避免过度设计，先查现有代码再整合，先做相关任务整体规划，明确执行链路和桥接必要性，并落实最小测试及验收覆盖。[交互设计](../product-design/planning-ui.md)与[原型](../product-design/prototypes/planning-ui/index.html)展示规范入口和受控生成。当前产品流程为原型设计，不改变用户直接授权的普通仓库开发入口。
 
+## HTTP 接入后的解耦草稿
+
+2026-10-14 用户授权将审计范围创建为五项草稿，各有独立Spec/Plan与专属验收；未纳入execution-map、未启动实现。任务范围、共享所有者及集成建议见[本轮草稿](../roadmap/drafts/roadmap.md)。
+
+| 任务 ID | 任务名称 | Spec / Plan | 验收 |
+| --- | --- | --- | --- |
+| 92 | HTTP 服务端命令边界收敛 | [Spec](http-command-boundary.spec.md) · [Plan](http-command-boundary.plan.md) | [记录](../acceptance/http-command-boundary.md) |
+| 93 | HTTP 客户端原请求与停服观察解耦 | [Spec](http-client-request-lifecycle.spec.md) · [Plan](http-client-request-lifecycle.plan.md) | [记录](../acceptance/http-client-request-lifecycle.md) |
+| 94 | 固定开发流程规则独立 | [Spec](development-flow-rules.spec.md) · [Plan](development-flow-rules.plan.md) | [记录](../acceptance/development-flow-rules.md) |
+| 95 | 任务最终交付用例独立 | [Spec](task-delivery-usecase.spec.md) · [Plan](task-delivery-usecase.plan.md) | [记录](../acceptance/task-delivery-usecase.md) |
+| 96 | worker 运行时资源所有权收敛 | [Spec](worker-runtime-ownership.spec.md) · [Plan](worker-runtime-ownership.plan.md) | [记录](../acceptance/worker-runtime-ownership.md) |
+
 ## 已交付产品精简与控制台
 
 三批产品精简已分别通过PR #231/#236/#238合入，控制台体验增量通过PR #234合入；验收仍绑定各自原构建/范围，不据此宣称当前重跑。这里保留导航，不进入近期执行任务。
