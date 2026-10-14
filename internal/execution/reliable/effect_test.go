@@ -32,37 +32,47 @@ func originalRequest() b.LifecycleRequest {
 	s.Session = b.SessionContext{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", WorkflowRunID: "association"}
 	s.Ref = b.ExecutionRef{RunID: "association", AttemptID: "attempt"}
 	s.ConfigurationDigest, s.ResourceGeneration = "config", "generation"
-	op := b.Operation{ID: "original", PayloadDigest: "digest", Action: string(b.LifecycleStartTurn), Ref: &s.Ref, LifecycleIdentity: &b.LifecycleOperationIdentity{ProjectID: "project", ExecutionID: "execution", ConfigurationDigest: "config", ResourceGeneration: "generation", InputBindingDigest: b.LifecycleBindingDigest(s), Ref: s.Ref}}
+	op := b.Operation{ID: "original", PayloadDigest: "digest", Action: string(b.LifecycleStartTurn), Status: b.OperationInFlight, Ref: &s.Ref, LifecycleIdentity: &b.LifecycleOperationIdentity{ProjectID: "project", ExecutionID: "execution", ConfigurationDigest: "config", ResourceGeneration: "generation", InputBindingDigest: b.LifecycleBindingDigest(s), Ref: s.Ref}}
 	return b.LifecycleRequest{Snapshot: s, Operation: op, Input: b.LifecycleInput{Turn: s.PendingTurn}}
 }
 func TestReliableUnknownEffectAndGateCannotResubmit(t *testing.T) {
 	p := &effectFixture{preparationFixture: preparationFixture{caps: b.PreparationCapabilities{Workspace: b.MechanismApplicable, Resource: b.MechanismNotApplicable, Session: b.MechanismApplicable}, facts: b.PreparationFacts{Workspace: b.GateReady, Resource: b.GateNotApplicable, Session: b.GateUnverified}}}
 	request := originalRequest()
-	result := Invoke(context.Background(), p, p, request, false)
+	result := Invoke(context.Background(), p, p, request, ExecuteNewIntent)
 	var gap *GateError
 	if !errors.As(result.Err, &gap) || p.executes != 0 {
 		t.Fatal("unknown readiness reached input mutation")
 	}
 	p.caps.Session = b.MechanismUnsupported
 	p.facts.Session = b.GateNotApplicable
-	result = Invoke(context.Background(), p, p, request, false)
+	result = Invoke(context.Background(), p, p, request, ExecuteNewIntent)
 	if !errors.As(result.Err, &gap) || gap.Status != b.GateUnsupported || p.executes != 0 {
 		t.Fatal("unsupported required capability was skipped")
 	}
 	p.caps.Session = b.MechanismApplicable
 	p.facts.Session = b.GateReady
-	first := Invoke(context.Background(), p, p, request, false)
+	first := Invoke(context.Background(), p, p, request, ExecuteNewIntent)
 	if !first.Uncertain || p.executes != 1 {
 		t.Fatal("lost mutation receipt was not unknown")
 	}
 	for i := 0; i < 2; i++ {
-		result = Invoke(context.Background(), p, p, request, true)
+		result = Invoke(context.Background(), p, p, request, ReconcileOriginalIntent)
 		result = ReconciledResult(result, &first)
 		if result.Receipt.State.SessionID != "partial-original" {
 			t.Fatal("partial original binding discarded")
 		}
 	}
-	if p.executes != 1 || p.reconciles != 2 {
+	request.Operation.Status = b.OperationUnknown
+	_ = Invoke(context.Background(), p, p, request, ExecuteNewIntent)
+	if p.executes != 1 || p.reconciles != 3 {
+		t.Fatal("caller bypassed original unknown-operation reconciliation")
+	}
+	request.Operation.Status = b.OperationPending
+	_ = Invoke(context.Background(), p, p, request, ExecuteNewIntent)
+	if p.executes != 1 {
+		t.Fatal("uncommitted pending intent reached the adapter")
+	}
+	if p.executes != 1 || p.reconciles != 3 {
 		t.Fatal("unknown request was resubmitted")
 	}
 }

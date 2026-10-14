@@ -123,6 +123,17 @@ func TestReliableRecoveryAndAuthorization(t *testing.T) {
 	if changed.Version != 5 || changed.State != "unverified" {
 		t.Fatal("unknown effects did not invalidate consent")
 	}
+	for _, tc := range []struct {
+		dead, completed, writers, unknown bool
+		err                               error
+		want                              RecoveryNotice
+	}{
+		{true, false, false, false, nil, RecoveryWritersUnverified}, {true, true, true, true, nil, RecoveryOperationUnknown}, {true, true, true, false, nil, RecoveryOriginalCompleted}, {true, false, true, false, nil, RecoveryOriginalInterrupted}, {false, false, false, false, errors.New("disconnected"), RecoveryObservationUnavailable},
+	} {
+		if got := RecoveryResult(tc.dead, tc.completed, tc.writers, tc.unknown, tc.err); got != tc.want {
+			t.Fatalf("recovery notice=%s want=%s", got, tc.want)
+		}
+	}
 	if !(ContinuationConstraints{PriorOwner: true}).RequiresAuthorization() {
 		t.Fatal("prior service bypassed authority")
 	}

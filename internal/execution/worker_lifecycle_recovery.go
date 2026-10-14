@@ -225,17 +225,18 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 		}
 	}
 	s.refreshRun(run)
+	notice := reliable.RecoveryResult(result.dead, result.completed, result.receipt.State.WritersAbsent, s.hasUnknownWorkerOperation(run), result.err)
 	if result.dead {
-		if !result.receipt.State.WritersAbsent {
+		if notice == reliable.RecoveryWritersUnverified {
 			s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{OutcomeUncertain: true}, false)
 			return s.waitWorkerFlow(run, "Original worker writers may still modify the worktree")
 		}
-		if s.hasUnknownWorkerOperation(run) {
+		if notice == reliable.RecoveryOperationUnknown {
 			s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{OutcomeUncertain: true}, false)
 			execution.Status = "blocked"
 			return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; reconcile its original request before continuing")
 		}
-		if result.completed {
+		if notice == reliable.RecoveryOriginalCompleted {
 			s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: true}, result.receipt.State.SessionAvailable)
 			if execution.SessionID == "" || execution.SessionGeneration == "" {
 				return s.waitWorkerFlow(run, "Original worker session identity could not be committed")
@@ -283,7 +284,7 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 		}
 		return s.recheckWorkerQualification(actorContext, run)
 	}
-	if result.err != nil {
+	if notice == reliable.RecoveryObservationUnavailable {
 		s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{OutcomeUncertain: true}, false)
 		execution.Status = "blocked"
 		return s.waitWorkerFlow(run, "Original worker turn cannot be reconciled: "+result.err.Error())

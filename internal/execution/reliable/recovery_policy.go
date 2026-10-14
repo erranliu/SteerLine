@@ -92,3 +92,41 @@ func StartAccepted(receipt b.LifecycleReceipt, err error, observer bool) bool {
 func FailedStart(receipt b.LifecycleReceipt, status string, action b.LifecycleAction) bool {
 	return action == b.LifecycleStartTurn && status == "rejected" && receipt.State.Stopped && receipt.State.WorkerAbsent && receipt.State.WritersAbsent
 }
+
+type RecoveryNotice string
+
+const (
+	RecoveryWritersUnverified      RecoveryNotice = "writers_unverified"
+	RecoveryOperationUnknown       RecoveryNotice = "operation_unknown"
+	RecoveryOriginalCompleted      RecoveryNotice = "original_completed"
+	RecoveryOriginalInterrupted    RecoveryNotice = "original_interrupted"
+	RecoveryObservationUnavailable RecoveryNotice = "observation_unavailable"
+	RecoveryObservationAttached    RecoveryNotice = "observation_attached"
+)
+
+func RecoveryResult(dead, completed, writersAbsent, unknown bool, readErr error) RecoveryNotice {
+	if dead {
+		if !writersAbsent {
+			return RecoveryWritersUnverified
+		}
+		if unknown {
+			return RecoveryOperationUnknown
+		}
+		if completed {
+			return RecoveryOriginalCompleted
+		}
+		return RecoveryOriginalInterrupted
+	}
+	if readErr != nil {
+		return RecoveryObservationUnavailable
+	}
+	return RecoveryObservationAttached
+}
+
+func ResourceOutcome(receipt b.LifecycleReceipt, callErr error) (string, string) {
+	status, diagnostic := Outcome(receipt, callErr)
+	if callErr == nil && status == "accepted" && receipt.State.ResourceID == "" && receipt.State.WorktreeID == "" && receipt.Process == nil {
+		return "outcome_unknown", "resource lifecycle receipt did not identify its accepted resource"
+	}
+	return status, diagnostic
+}

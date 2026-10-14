@@ -876,7 +876,7 @@ func (s *Service) applyLifecycleStepReceipt(run *reconstructiontypes.RunView, re
 	if receipt.Workspace != nil {
 		applyWorkflowWorkspaceEvidence(run, fixed.execution, fixed.execution.Workspace)
 	}
-	status, diagnostic := reliable.Outcome(receipt, callErr)
+	status, diagnostic := reliable.ResourceOutcome(receipt, callErr)
 	failedStart := reliable.FailedStart(receipt, status, candidate.Action)
 	if failedStart {
 		// The adapter proved the original start's resources were stopped and
@@ -887,9 +887,6 @@ func (s *Service) applyLifecycleStepReceipt(run *reconstructiontypes.RunView, re
 		fixed.execution.RecoveryVersion++
 		fixed.execution.RecoveryMarkedAt = ptr(now())
 		fixed.attempt.Status, fixed.attempt.UpdatedAt = "failed", now()
-	}
-	if callErr == nil && status == "accepted" && receipt.State.ResourceID == "" && receipt.State.WorktreeID == "" && receipt.Process == nil {
-		status, diagnostic = "outcome_unknown", "resource lifecycle receipt did not identify its accepted resource"
 	}
 	if err := s.setOperationState(opID, status, receipt.RequestID, mustJSON(receipt), diagnostic); err != nil {
 		return err

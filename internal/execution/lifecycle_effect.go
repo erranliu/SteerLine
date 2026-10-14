@@ -72,7 +72,11 @@ func reliableEffect(value lifecycleEffectResult) reliable.EffectResult {
 	return reliable.EffectResult{Request: value.request, Receipt: value.receipt, Observer: value.observer, Err: value.err, Uncertain: value.uncertain, Reconciled: value.reconciled}
 }
 func invokeLifecycleEffect(ctx context.Context, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool) lifecycleEffectResult {
-	return actorEffect(reliable.Invoke(ctx, port, port, request, reconcile))
+	mode := reliable.ExecuteNewIntent
+	if reconcile {
+		mode = reliable.ReconcileOriginalIntent
+	}
+	return actorEffect(reliable.Invoke(ctx, port, port, request, mode))
 }
 func reconcileLifecycleResult(result lifecycleEffectResult, original *lifecycleEffectResult) lifecycleEffectResult {
 	var prior *reliable.EffectResult

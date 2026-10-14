@@ -55,7 +55,7 @@ func TestLifecycleEffectForwardsWorkspaceCreationCheckpoint(t *testing.T) {
 		request := b.LifecycleRequest{
 			Snapshot:  b.LifecycleSnapshot{Session: b.SessionContext{ProjectID: "project", ExecutionID: "execution", WorkflowRunID: ref.RunID, AttemptID: ref.AttemptID}, ConfigurationDigest: "config", ResourceGeneration: "generation"},
 			Input:     b.LifecycleInput{Workspace: &b.WorkspaceIntent{BaseCommit: strings.Repeat("c", 40)}},
-			Operation: b.Operation{ID: "original-workspace", Action: string(b.LifecyclePrepareWorkspace), PayloadDigest: "digest", Ref: &ref, LifecycleIdentity: &b.LifecycleOperationIdentity{ProjectID: "project", ExecutionID: "execution", ConfigurationDigest: "config", ResourceGeneration: "generation", InputBindingDigest: "binding", Ref: ref}},
+			Operation: b.Operation{ID: "original-workspace", Status: b.OperationInFlight, Action: string(b.LifecyclePrepareWorkspace), PayloadDigest: "digest", Ref: &ref, LifecycleIdentity: &b.LifecycleOperationIdentity{ProjectID: "project", ExecutionID: "execution", ConfigurationDigest: "config", ResourceGeneration: "generation", InputBindingDigest: "binding", Ref: ref}},
 		}
 		if err := request.Validate(); err != nil {
 			t.Fatal(err)

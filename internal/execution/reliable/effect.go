@@ -15,9 +15,29 @@ type EffectResult struct {
 	Uncertain, Reconciled bool
 }
 
+type InvocationMode string
+
+const (
+	ExecuteNewIntent        InvocationMode = "execute_new_intent"
+	ReconcileOriginalIntent InvocationMode = "reconcile_original_intent"
+)
+
 // Invoke receives an already committed immutable intent. An existing intent
 // has only the reconciliation route, even when acceptance was never observed.
-func Invoke(ctx context.Context, port b.LifecyclePort, reconciler b.LifecycleReconcilePort, request b.LifecycleRequest, reconcile bool) EffectResult {
+func Invoke(ctx context.Context, port b.LifecyclePort, reconciler b.LifecycleReconcilePort, request b.LifecycleRequest, mode InvocationMode) EffectResult {
+	// A caller cannot turn an accepted/unknown/settled operation into a fresh
+	// mutation by requesting Execute. The persisted original status wins.
+	switch request.Operation.Status {
+	case b.OperationAccepted, b.OperationUnknown, b.OperationConfirmed, b.OperationRejected:
+		mode = ReconcileOriginalIntent
+	case b.OperationInFlight:
+	default:
+		return EffectResult{Request: request.Clone(), Receipt: b.LifecycleReceipt{Operation: request.Operation, Disposition: b.OperationRejected}, Err: errors.New("external action has no committed in-flight intent")}
+	}
+	if mode != ExecuteNewIntent && mode != ReconcileOriginalIntent {
+		return EffectResult{Request: request.Clone(), Err: errors.New("external action invocation mode is unverified")}
+	}
+	reconcile := mode == ReconcileOriginalIntent
 	result := EffectResult{Request: request.Clone(), Reconciled: reconcile}
 	if !reconcile {
 		if err := QualifyAction(ctx, port, request); err != nil {

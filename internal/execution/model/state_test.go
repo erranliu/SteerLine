@@ -16,4 +16,3 @@ func TestWorkerPRBindingKeepsOriginalURL(t *testing.T) {
 		}
 	}
 }
-
