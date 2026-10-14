@@ -21,6 +21,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -79,7 +80,14 @@ func (f appCandidateFixture) start(t *testing.T, instance string) (executionmode
 	return receipt, options
 }
 
-func (f appCandidateFixture) abandon(t *testing.T, id string) {
+func integrationStopRequest(project, runID string, revision uint64) (api.ControlRequest, api.ControlPayload, api.ControlReceipt) {
+	at := time.Now().UTC()
+	payload := api.ControlPayload{TaskID: "901", RunID: runID, ExpectedRunRevision: revision}
+	req := api.ControlRequest{ProtocolVersion: 1, RequestID: newID(), RepositoryIdentity: project, InstanceID: "command-fixture", Action: "stop_candidate", Payload: mustJSON(payload), RequestedBy: "operator", CreatedAt: at, ExpiresAt: at.Add(time.Minute)}
+	return req, payload, api.ControlReceipt{Version: 1, RequestID: req.RequestID, InstanceID: req.InstanceID, Action: req.Action, Status: "applied", RunID: runID, AcceptedAt: &at, CompletedAt: &at}
+}
+
+func (f appCandidateFixture) stop(t *testing.T, id string) {
 	t.Helper()
 	snapshot, err := f.store.Query(f.ctx, f.f.config.Identity())
 	require(t, err)
@@ -87,17 +95,11 @@ func (f appCandidateFixture) abandon(t *testing.T, id string) {
 		if w.WorkflowRunID != id {
 			continue
 		}
-		candidateVersion := w.ControlRevision
-		if candidateVersion == 0 {
-			t.Fatal("candidate control revision unavailable from command snapshot or runtime query")
-		}
-		graph, err := f.store.TaskGraphSnapshot(f.ctx, f.f.config.Identity())
+		req, payload, receipt := integrationStopRequest(f.f.config.Identity(), id, w.ControlRevision)
+		r, err := f.commands.StopCandidate(f.ctx, req, payload, receipt)
 		require(t, err)
-		task := graph.ByID["901"]
-		r, err := f.commands.AbandonNativeCandidate(f.ctx, f.f.config.ExecutionConfig(), execution.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: id, RequestID: newID(), ExpectedTaskVersion: task.Version, ExpectedCandidateVersion: candidateVersion, RequestedBy: "operator", Reason: "comparison complete"})
-		require(t, err)
-		if r.Status != "abandoned" {
-			t.Fatalf("exit: %+v", r)
+		if r.Status != "applied" {
+			t.Fatalf("stop: %+v", r)
 		}
 		return
 	}
@@ -192,7 +194,7 @@ func TestMC9(t *testing.T) {
 	if _, err = f.commands.StartNativeCandidate(f.ctx, f.f.config.ExecutionConfig(), options); err == nil || !strings.Contains(err.Error(), "candidate_limit_reached") {
 		t.Fatalf("sixth candidate: %v", err)
 	}
-	f.abandon(t, first.WorkflowRunID)
+	f.stop(t, first.WorkflowRunID)
 	f.start(t, "")
 	p := f.page(t)
 	if p.Tasks[0].Version != 2 || len(p.Tasks[0].WorkflowRuns) != 6 {
@@ -200,7 +202,7 @@ func TestMC9(t *testing.T) {
 	}
 	var participating int
 	for _, w := range p.Tasks[0].WorkflowRuns {
-		if w.Abandonment == nil {
+		if executionmodel.CandidateParticipates(w.Status) {
 			participating++
 		}
 	}
@@ -213,11 +215,20 @@ func TestMC7(t *testing.T) {
 	f := newAppCandidateFixture(t)
 	a, _ := f.start(t, "")
 	b, _ := f.start(t, "")
-	f.abandon(t, a.WorkflowRunID)
-	f.abandon(t, b.WorkflowRunID)
+	f.stop(t, a.WorkflowRunID)
+	snapshot, err := f.store.Query(f.ctx, f.f.config.Identity())
+	require(t, err)
+	for _, w := range snapshot.WorkflowRuns {
+		if w.WorkflowRunID == b.WorkflowRunID {
+			req, payload, receipt := integrationStopRequest(f.f.config.Identity(), b.WorkflowRunID, w.ControlRevision)
+			if _, err = f.commands.StopCandidate(f.ctx, req, payload, receipt); err == nil || !strings.Contains(err.Error(), "last_candidate") {
+				t.Fatal("last participant stopped", err)
+			}
+		}
+	}
 	p := f.page(t)
 	if p.Tasks[0].Status != "in_progress" || p.Tasks[0].Version != 2 {
-		t.Fatal("empty experiment reopened task")
+		t.Fatal("last-participant protection changed task")
 	}
 	// A new app construction reads the same authoritative candidate history.
 	commands, err := steerlineapp.NewCommandService(f.store, f.f.config)
@@ -227,11 +238,18 @@ func TestMC7(t *testing.T) {
 	if next.WorkflowRunID == a.WorkflowRunID || next.WorkflowRunID == b.WorkflowRunID {
 		t.Fatal("restart revived original candidate")
 	}
-	r, err := f.commands.DiscardNativeTask(f.ctx, f.f.config.ExecutionConfig(), "901", newID(), 2, "discard experiment", "operator")
-	require(t, err)
-	if r.Status != "discarded" || f.page(t).Tasks[0].Status != "discarded" {
-		t.Fatal("app discard failed")
+	p = f.page(t)
+	participants := 0
+	for _, w := range p.Tasks[0].WorkflowRuns {
+		if executionmodel.CandidateParticipates(w.Status) {
+			participants++
+		}
 	}
+	if participants != 2 || len(p.Tasks[0].WorkflowRuns) != 3 || p.Tasks[0].Status != "in_progress" || p.Tasks[0].Delivery != nil {
+		t.Fatal("app reconstruction reset or changed the stopped experiment")
+	}
+	// Whole-task discard has separate publication/resource gates; stopping a
+	// candidate does not authorize or imply that operation.
 }
 
 func TestMC3(t *testing.T) {
@@ -307,6 +325,7 @@ func TestMC8(t *testing.T) {
 	defer release.Do(func() { close(resolver.release) })
 	service := startIntegrationService(t, f.ctx, f.f.config, resolver)
 	claimed, _ := f.start(t, service.instanceID)
+	f.start(t, service.instanceID) // Another participant is required for manual stop.
 	var request executionbackend.LifecycleRequest
 	select {
 	case request = <-resolver.entered:
@@ -324,17 +343,44 @@ func TestMC8(t *testing.T) {
 	if !persisted {
 		t.Fatal("external action ran before committed original intent")
 	}
-	f.abandon(t, claimed.WorkflowRunID)
+	client, err := steerlineapp.OpenClient(f.ctx, f.f.configPath)
+	require(t, err)
+	defer client.Close()
+	page := client.ReadProject(f.ctx, "901", api.ProjectSnapshot{})
+	var target *api.CandidateSummary
+	for _, r := range page.Observation.Page.Runs {
+		if r.RunID == claimed.WorkflowRunID {
+			target = r
+		}
+	}
+	if target == nil {
+		t.Fatal("stop target absent")
+	}
+	revision := page.Connection.Snapshot.Page.Control.Revision
+	requestID := newID()
+	_, err = client.SubmitControl(f.ctx, api.ControlInput{Action: api.StopCandidate, RequestID: requestID, InstanceID: service.instanceID, ExpectedRevision: &revision, Payload: api.ControlPayload{TaskID: "901", RunID: target.RunID, ExpectedRunRevision: target.ControlRevision}})
+	require(t, err)
+	stopped, err := client.WaitControl(f.ctx, requestID, 100*time.Millisecond)
+	require(t, err)
+	if stopped.Status != "applied" {
+		t.Fatal("stop rejected", stopped)
+	}
 	// The actor processed exit while the external action was still blocked.
 	release.Do(func() { close(resolver.release) })
 	late := waitIntegrationRun(t, f.ctx, service, f.f.config, func(r *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-		return r.RunID == claimed.WorkflowRunID && e.Process != nil
+		return r.RunID == claimed.WorkflowRunID && e.Process != nil && e.SessionID != ""
 	})
 	if late.execution.ExecutionID != request.Snapshot.Session.ExecutionID || late.execution.CurrentAttemptID != request.Snapshot.Session.AttemptID || late.execution.SessionID == "" {
 		t.Fatal("late receipt replaced the original execution binding")
 	}
 	p := f.page(t)
-	if p.Tasks[0].WorkflowRuns[0].Abandonment == nil || p.Tasks[0].Status != "in_progress" || p.Tasks[0].Delivery != nil {
+	stoppedFound := false
+	for _, w := range p.Tasks[0].WorkflowRuns {
+		if w.WorkflowRunID == claimed.WorkflowRunID && w.CandidateStoppedAt != nil && w.CandidateStopReason == "manual" {
+			stoppedFound = true
+		}
+	}
+	if !stoppedFound || p.Tasks[0].Status != "in_progress" || p.Tasks[0].Delivery != nil {
 		t.Fatal("late action revived abandoned business or fabricated delivery")
 	}
 }
@@ -483,7 +529,7 @@ func TestTM06ResourceWiring(t *testing.T) {
 			}
 			continue
 		}
-		p := terminal.Profile{Executable: "orca", RepositorySelector: "id:repo", WaitTimeout: "30s"}
+		p := terminal.Profile{Executable: "orca", WaitTimeout: "30s"}
 		envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: terminal.ProfileVersion, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: terminal.ProfileKey, ProjectID: "project", ProfileID: "profile", AcceptedConfigVersion: "accepted"}, mustJSON(p))
 		require(t, err)
 		lifecycle, err := entry.Lifecycle(executionbackend.LifecycleSetup{Snapshot: executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV3, Target: p.Target(), Agent: executionbackend.AgentSpec{Name: "opaque"}}, Session: executionbackend.SessionContext{ProjectID: "project"}}, ProfileData: []executionbackend.ImplementationDataEnvelope{envelope}, ProfileID: "profile", AcceptedConfigVersion: "accepted"})

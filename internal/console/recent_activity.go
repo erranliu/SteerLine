@@ -26,7 +26,9 @@ func (m Model) refreshRecentActivity(index int) (Model, tea.Cmd) {
 	row := m.selectedRow(index)
 	key := ""
 	if row != nil && row.run != nil {
-		key = candidateIdentity(row.run) + "\x00" + row.run.AttemptID
+		if row.run.ExecutionID != "" {
+			key = candidateIdentity(row.run) + "\x00" + row.run.AttemptID
+		}
 	}
 	feedbackKey := key
 	if row != nil && row.run != nil && row.run.Decision != nil {

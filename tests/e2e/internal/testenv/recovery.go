@@ -45,8 +45,8 @@ func (p *Project) UseControlledTerminal(environment string, f controlled.Recover
 		store := map[string]any{"environments": []any{map[string]any{"id": environment, "preferredEndpointId": "fixture", "endpoints": []any{map[string]any{"id": "fixture", "endpoint": pairing["endpoint"], "deviceToken": pairing["deviceToken"], "publicKeyB64": pairing["publicKeyB64"]}}}}}
 		p.Scenario.Must(controlled.Write(filepath.Join(p.Home, "orca-environments.json"), store))
 	}
-	payload := map[string]any{"executable": p.Scenario.Run.Helper, "args": []string{"orca-fixture"}, "repository_selector": "path:" + p.Repo, "wait_timeout": "1s", "environment": environment}
-	profile := map[string]any{"id": "controlled", "name": "Controlled single terminal", "host": "orca", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "orca.terminal-profile", "codec_version": 2, "payload": payload}}}
+	payload := map[string]any{"executable": p.Scenario.Run.Helper, "args": []string{"orca-fixture"}, "wait_timeout": "1s", "environment": environment}
+	profile := map[string]any{"id": "controlled", "name": "Controlled single terminal", "host": "orca", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "orca.terminal-profile", "codec_version": 3, "payload": payload}}}
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{profile}, "default_execution_profile": "controlled"}))
 }
 

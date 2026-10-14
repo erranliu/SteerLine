@@ -174,6 +174,19 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 	if run == nil {
 		return errors.New("worker recovery lost its fixed workflow run")
 	}
+	if s.candidateBusinessClosed(run) {
+		if err := s.recordLifecycleReceipt(run, lifecycleEffectResult{request: result.request, receipt: result.receipt, err: result.err}); err != nil {
+			return err
+		}
+		if result.worker != nil {
+			e := s.executionRecord(run)
+			if result.worker.proc == nil || e.Process == nil || result.worker.proc.Identity() != *e.Process {
+				return executionmodel.ErrTurnStale
+			}
+			s.registerWorker(run, result.worker)
+		}
+		return nil
+	}
 	if run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}

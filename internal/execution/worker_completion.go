@@ -11,6 +11,9 @@ import (
 )
 
 func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerErr error) error {
+	if s.candidateBusinessClosed(run) || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
+		return nil
+	}
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
@@ -18,9 +21,6 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != executionmodel.Version {
 		return errors.New("finished worker lacks its fixed execution")
-	}
-	if s.candidateBusinessClosed(run) {
-		return s.finishRetiredCandidate(run, lifecycle, fixed)
 	}
 	snapshot, err := s.lifecycleSnapshot(run, workflow, execution, fixed.attempt, nil)
 	if err != nil {

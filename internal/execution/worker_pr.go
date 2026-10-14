@@ -41,7 +41,7 @@ func (s *Service) offerWorkerPRFeedback(run *reconstructiontypes.RunView, url st
 }
 
 func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes.RunView, task *taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord) error {
-	if run == nil || task == nil || workflow == nil || task.Status == "closed" {
+	if run == nil || task == nil || workflow == nil || task.Status == "closed" || !executionmodel.CandidateParticipates(workflow.Status) {
 		return nil
 	}
 	fixed, contextErr := s.workerFlowContext(run)

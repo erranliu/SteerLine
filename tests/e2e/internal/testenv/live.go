@@ -53,7 +53,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		logDir := filepath.Join(s.Output, name+"-orca")
 		s.Must(os.MkdirAll(logDir, 0700))
 		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, LogDir: logDir}))
-		orcaConfig = native.OrcaWorkerProfile(shim, p.Repo, "30s")
+		orcaConfig = native.OrcaWorkerProfile(shim, "30s")
 	}
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)

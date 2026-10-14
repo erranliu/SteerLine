@@ -112,7 +112,7 @@ func TestOrcaNativeStateLiveLifecycle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := Profile{Executable: executable, Environment: environment, RepositorySelector: "id:" + strings.Split(terminal.WorktreeID, "::")[0], WaitTimeout: "40s"}
+	p := Profile{Executable: executable, Environment: environment + strings.Split(terminal.WorktreeID, "::")[0], WaitTimeout: "40s"}
 	process := b.ProcessIdentity{Kind: "orca_terminal", Executable: executable, Terminal: terminal.Handle, RuntimeID: runtime, Incarnation: terminal.IncarnationID, WorktreeID: terminal.WorktreeID, ExecutionHost: p.Target().ExecutionHost}
 	startup, startupCancel := context.WithTimeout(ctx, 90*time.Second)
 	defer startupCancel()

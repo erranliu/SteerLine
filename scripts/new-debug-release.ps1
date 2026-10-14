@@ -4,7 +4,6 @@
     [string]$OrcaEnvironment = 'name:asus笔记本',
     [string]$OrcaAgent = 'codex',
     [string]$OrcaExecutable = 'orca',
-    [string]$OrcaRepositorySelector = '',
     [string]$AgentModel = '',
     [string]$AgentExecutable = '',
     [ValidateSet('','high','xhigh')][string]$AgentReasoningEffort = ''
@@ -101,13 +100,11 @@ try {
             $overlayEncoding = if ($mapping[0] -eq 'publish.ps1') { New-Object Text.UTF8Encoding $true } else { $utf8 }
             [IO.File]::WriteAllText($destination, $content, $overlayEncoding)
         }
-        $selector = $OrcaRepositorySelector
-        if (-not $selector) { $selector = 'path:' + (Join-Path $target 'projects\SteerlineTest').Replace('\','/') }
-        $payload = @{executable=$OrcaExecutable;repository_selector=$selector;wait_timeout='30s'}
+        $payload = @{executable=$OrcaExecutable;wait_timeout='30s'}
         if ($OrcaEnvironment) { $payload.environment=$OrcaEnvironment }
         $catalog = @{version=2;default_execution_profile='live';execution_profiles=@(@{
             id='live';name='Orca single-terminal debug';host='orca';agent=$OrcaAgent;
-            implementation_configs=@(@{implementation_key='orca.terminal-profile';codec_version=2;payload=$payload})
+            implementation_configs=@(@{implementation_key='orca.terminal-profile';codec_version=3;payload=$payload})
         })}
 		if ($AgentModel -or $AgentReasoningEffort) {
 			if (-not $AgentModel) { throw 'AgentReasoningEffort requires AgentModel' }

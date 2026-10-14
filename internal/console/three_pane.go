@@ -105,7 +105,7 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 		return append([]string{lines[0]}, wrapLines(lines[1:], width)...)
 	}
 	run := row.run
-	if run.Decision != nil && run.Decision.Request.InteractionKind == "async" && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
+	if candidateParticipating(run) && run.Decision != nil && run.Decision.Request.InteractionKind == "async" && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
 		text := "异步问答 · 有待回答问题（执行可继续）"
 		if run.Decision.Request.BlocksProgress {
 			text = "异步问答 · 执行已停止，等待回答"
@@ -116,6 +116,14 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 		lines = append(lines, text)
 	}
 	lines = append(lines, "当前 "+candidateLabel(state, run)+" · F6/F7 候选")
+	if run.WorkflowStatus == "abandoned" {
+		lines = append(lines, candidateHumanStatus(state, run)+" · 原因："+firstText(run.CandidateStopReason, "startup_failed")+" · "+firstText(run.CandidateStoppedBy, "system"), "执行/资源为最后已知事实；停止参与不表示 worker 已停止。")
+	}
+	if reason := candidateStopReason(state, row.taskID, run.RunID, m.clock.Now()); reason != "" {
+		lines = append(lines, "F9 停止不可用："+reason)
+	} else {
+		lines = append(lines, "F9 停止当前候选参与")
+	}
 	current := *run
 	current.TaskStatus = taskRowRawStatus(*row)
 	for _, line := range workerStateLines(&current, width >= 55) {

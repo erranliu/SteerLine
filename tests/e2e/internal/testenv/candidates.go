@@ -99,7 +99,7 @@ func (p *Project) CandidateControl(in driver.CandidateCommand) driver.CandidateR
 	if in.RequestID == "" {
 		in.RequestID = requestID()
 	}
-	if in.Action == "start_candidate" || in.Action == "abandon_candidate" {
+	if in.Action == "start_candidate" || in.Action == "stop_candidate" {
 		snap := mustSnapshot(p)
 		for _, t := range snap.Page.Tasks {
 			if t.TaskID == in.TaskID {
@@ -112,13 +112,14 @@ func (p *Project) CandidateControl(in driver.CandidateCommand) driver.CandidateR
 			if snap.Runtime != nil {
 				for _, run := range snap.Runtime.Runs {
 					if run.RunID == in.RunID {
-						in.CandidateVersion = run.ControlRevision
+						in.RunRevision = run.ControlRevision
 					}
 				}
 			}
 		}
 		if snap.Runtime != nil {
 			in.InstanceID = snap.Runtime.Service.InstanceID
+			in.ControlRevision = snap.Runtime.Control.Revision
 		}
 	}
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, "intent-"+in.RequestID+".json"), in))
@@ -400,12 +401,12 @@ func CandidateAcceptance(s *Scenario) {
 	if aSession != as || afterFaultA.TurnNumber != 3 {
 		s.t.Fatal("sibling connection fault changed surviving worker")
 	}
-	abandoned := p.CandidateControl(driver.CandidateCommand{Action: "abandon_candidate", TaskID: p.Tasks["a"].ID, RunID: b.RunID, Note: "CN8 manual experiment exit after isolated connection fault"})
+	abandoned := p.CandidateControl(driver.CandidateCommand{Action: "stop_candidate", TaskID: p.Tasks["a"].ID, RunID: b.RunID, Note: "CN8 manual experiment exit after isolated connection fault"})
 	if abandoned.Control == nil || abandoned.Control.Status != "applied" {
 		s.t.Fatal("pre-merge candidate exit was not applied")
 	}
 	exited := p.CandidateSnapshot(b)
-	if exited.Domain.WorkflowRuns[0].Abandonment == nil || exited.Domain.WorkflowRuns[0].PRURL != pb.URL {
+	if exited.Domain.WorkflowRuns[0].CandidateStoppedAt == nil || exited.Domain.WorkflowRuns[0].PRURL != pb.URL {
 		s.t.Fatal("candidate exit lost original history/PR")
 	}
 	p.Record("abandoned-resource-facts", exited)
@@ -443,10 +444,10 @@ func CandidateAcceptance(s *Scenario) {
 		s.t.Fatal("unique winning delivery missing")
 	}
 	merge := done.Domain.Deliveries[0].MergeCommit
-	// Submit the actual post-merge command; a hidden UI button is no evidence.
-	rejected := p.CandidateControl(driver.CandidateCommand{Action: "abandon_candidate", TaskID: p.Tasks["a"].ID, RunID: a.RunID, Note: "CN8 actual merged candidate rejection"})
-	if rejected.Control == nil || rejected.Control.Status != "rejected" {
-		s.t.Fatal("merged candidate abandonment was accepted")
+	// The completed candidate keeps its terminal facts; stop is not delivery.
+	retained := p.CandidateControl(driver.CandidateCommand{Action: "stop_candidate", TaskID: p.Tasks["a"].ID, RunID: a.RunID, Note: "CN8 completed candidate retains original facts"})
+	if retained.Control == nil || retained.Control.Status != "applied" || retained.Control.Code != "already_ended" {
+		s.t.Fatal("completed candidate stop changed terminal facts")
 	}
 	loser := p.CandidateSnapshot(b)
 	if loser.Domain.WorkflowRuns[0].PRURL != pb.URL {

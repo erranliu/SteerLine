@@ -34,7 +34,7 @@ if ($identity.protocol -ne 'steerline-client/v1' -or $identity.project_id -ne $d
 }
 ```
 
-Go consumers can use `app.OpenHTTPClient(ctx, configPath)`; this only connects to the discovered instance and never starts one.
+Go HTTP consumers use `httpclient.Open(ctx, runDir, projectIdentity)`; the TUI composition entry is `consoleapp.Prepare`. `app.OpenHTTPClient(ctx, configPath)` remains a CLI/application convenience entry and pulls in the app composition package; it is not the isolated TUI client entry. All three connect to an explicitly started instance and never start a replacement service.
 
 ## 查询路由
 

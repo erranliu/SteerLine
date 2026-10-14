@@ -66,6 +66,9 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	found := false
 	for _, w := range snapshot.WorkflowRuns {
 		if w.WorkflowRunID == workflowRunID && w.TaskID == taskID {
+			if !executionmodel.CandidateParticipates(w.Status) {
+				return executionmodel.TaskDeliveryReceipt{}, nativeErr("candidate_inactive", "selected candidate no longer participates")
+			}
 			config, err = fixedWorkflowPublicationConfig(config, w, c.runtime.Directory)
 			found = true
 			break

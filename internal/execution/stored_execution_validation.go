@@ -16,16 +16,21 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot, direc
 	}
 	for _, execution := range snapshot.Executions {
 		boundSnapshot := false
+		preparing := false
 		var fixedProfile *executionmodel.FixedExecutionProfile
 		for _, workflow := range snapshot.WorkflowRuns {
 			if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ProjectIdentity == execution.ProjectIdentity && workflow.ExecutionProfile != nil && execution.ConfigurationDigest == workflow.ExecutionProfile.Digest {
 				boundSnapshot = true
 				fixedProfile = workflow.ExecutionProfile
+				preparing = workflow.StartPending || !executionmodel.CandidateParticipates(workflow.Status) && execution.WorkspaceIntent == nil
 				break
 			}
 		}
 		if !boundSnapshot {
 			return nativeErr("unsupported_schema", "execution is not bound to its original configuration snapshot")
+		}
+		if preparing && (execution.Process != nil || execution.SessionID != "" || execution.TurnNumber != 0 || execution.WorkspaceIntent != nil || execution.Workspace.Worktree != "" || execution.PendingCommandID != "") {
+			return nativeErr("unsupported_schema", "unprepared candidate contains worker effects")
 		}
 		if err := validateExecutionImplementationData(&execution); err != nil {
 			return nativeErr("unsupported_schema", "execution implementation binding is invalid: "+err.Error())
@@ -52,7 +57,7 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot, direc
 		if entry.HostManagedPermissions && execution.PolicyResources != nil {
 			return nativeErr("unsupported_schema", "host-managed launch cannot contain client permission resources")
 		}
-		if entry.ReadinessRequired(fixedConfig) || execution.Environment != nil {
+		if !preparing && (entry.ReadinessRequired(fixedConfig) || execution.Environment != nil) {
 			env := execution.Environment
 			if env == nil || env.Preparation == nil || !executionbackend.StableExecutionID(env.Preparation.TurnID) || !executionbackend.StableExecutionID(env.Preparation.Nonce) || env.Preparation.StartedAt.IsZero() || !env.Preparation.Deadline.After(env.Preparation.StartedAt) {
 				return nativeErr("unsupported_schema", "execution readiness lacks its frozen preparation intent")

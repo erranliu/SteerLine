@@ -859,7 +859,7 @@ func addUnsupportedOrcaProfile(t *testing.T, fixture *integrationFixture) {
 	require(t, json.Unmarshal(data, &global))
 	var profiles []execution.ExecutionProfile
 	require(t, json.Unmarshal(global["execution_profiles"], &profiles))
-	payload, err := json.Marshal(transport.Profile{Executable: "missing-orca-executable", RepositorySelector: "id:repo", WaitTimeout: "30s"})
+	payload, err := json.Marshal(transport.Profile{Executable: "missing-orca-executable", WaitTimeout: "30s"})
 	require(t, err)
 	profiles = append(profiles, execution.ExecutionProfile{ID: "orca-terminal", Name: "Orca terminal", Host: "orca", Agent: "opaque-agent", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: transport.ProfileKey, CodecVersion: transport.ProfileVersion, Payload: payload}}})
 

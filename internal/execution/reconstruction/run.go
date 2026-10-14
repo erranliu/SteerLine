@@ -33,7 +33,7 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 		CandidateTiming: "wall_since_reservation",
 		ResourceStatus:  executionmodel.ExecutionResourceStatus(execution),
 		SessionID:       execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnNumber: execution.TurnNumber, CurrentTurnID: execution.CurrentTurnID,
-		ExecutionProfile: workflow.ExecutionProfile, PRHistory: workflow.PRHistory, CandidateCreatedAt: workflow.CreatedAt,
+		ExecutionProfile: workflow.ExecutionProfile, PRHistory: workflow.PRHistory, CandidateNumber: workflow.CandidateNumber, CandidateCreatedAt: workflow.CreatedAt,
 		RecoveryRequired: execution.RecoveryRequired, RecoveryState: execution.RecoveryState, RecoveryVersion: execution.RecoveryVersion,
 		RunID: workflow.WorkflowRunID, WorkflowVersion: workflow.WorkflowVersion, WorkflowConfigDigest: workflow.ConfigDigest,
 		ControlRevision: workflow.ControlRevision, ExecutionID: execution.ExecutionID, Claimant: task.Claimant,
@@ -60,6 +60,8 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 			run.ReportToolPolicy = input.ReportToolPolicy
 		}
 	}
+	run.CandidateStopReason, run.CandidateStoppedBy = workflow.CandidateStopReason, workflow.CandidateStoppedBy
+	run.CandidateEndedAt = workflow.CandidateStoppedAt
 	run = Execution(run, execution)
 	if workflow.PRURL != "" {
 		run.PR.URL = ptr(workflow.PRURL)

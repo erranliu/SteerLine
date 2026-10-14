@@ -474,6 +474,9 @@ func (c *Console) SubmitControl(ctx context.Context, in api.ControlInput) (api.C
 	}
 	var payload any = map[string]any{}
 	switch in.Action {
+	case api.StopCandidate:
+		envelope.TargetID, envelope.ExpectedVersion = p.RunID, p.ExpectedRunRevision
+		payload = map[string]any{"task_id": p.TaskID}
 	case api.StartTask, api.StartCandidate:
 		envelope.TargetID = p.TaskID
 		envelope.ExpectedVersion = p.ExpectedTaskVersion

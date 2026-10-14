@@ -16,7 +16,7 @@ func orcaSessionRecords(t *testing.T) (p.ExecutionSnapshot, api.NativeSessionTar
 	t.Helper()
 	i := b.ProcessIdentity{Kind: "orca_terminal", RuntimeID: "peer", Terminal: "original", Incarnation: "inc", ExecutionHost: "local", WorktreeID: "repo::/worker"}
 	target := api.NativeSessionTarget{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", SessionID: remote.SessionID(i), SessionGeneration: i.Incarnation}
-	raw, err := json.Marshal(remote.Profile{Executable: "original-orca", WaitTimeout: "30s", RepositorySelector: "id:repo"})
+	raw, err := json.Marshal(remote.Profile{Executable: "original-orca", WaitTimeout: "30s"})
 	if err != nil {
 		t.Fatal(err)
 	}

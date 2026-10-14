@@ -57,20 +57,20 @@ func TestReleasedWorkerStartConvergesAcrossRestart(t *testing.T) {
 		Diagnostic: "Original worker start failed; exact resource released",
 		State:      executionbackend.LifecycleStateFacts{Stopped: true, WorkerAbsent: true, WritersAbsent: true}}
 	err = s.applyLifecycleStepReceipt(run, request, lifecycleEffectResult{receipt: receipt, uncertain: true})
-	if !errors.Is(err, errLifecycleNeedsReconciliation) {
-		t.Fatalf("failed start did not enter manual handling: %v", err)
+	if err != nil {
+		t.Fatalf("failed start did not settle its candidate: %v", err)
 	}
 	assertFailedStart := func(s *Service) {
 		t.Helper()
 		run = s.find(run.RunID)
 		e := s.executionRecord(run)
-		if e.PendingCommandID != "" || e.PendingTurnID != "" || !e.RecoveryRequired || s.operationByKey(key).Status != "rejected" || run.Decision == nil || run.Decision.Status != "pending" || len(run.Decision.Request.Options) != 0 {
+		if e.PendingCommandID != "" || e.PendingTurnID != "" || s.operationByKey(key).Status != "rejected" || run.WorkflowStatus != "abandoned" || run.WorkflowStage != "start.failed" || run.Decision != nil {
 			t.Fatalf("released start remained pending or offered automatic continuation: %+v / %+v", e, run.Decision)
 		}
 		for i := 0; i < 3; i++ {
-			handled, err := s.resumeLifecycleWorkerFlow(context.Background(), nativeTaskRecord(s.domain.Tasks, run.TaskID), run)
+			err := s.resumeWorkerFlow(context.Background())
 			require(t, err)
-			if !handled || resolver.calls != 0 {
+			if resolver.calls != 0 {
 				t.Fatal("released start was retried by later scheduling")
 			}
 		}

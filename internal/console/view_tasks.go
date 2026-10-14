@@ -233,6 +233,9 @@ func taskRowHint(m Model, state projectState, row consoleRow) string {
 		var merging, input, running, queued, external, uncertain, blocked, failed bool
 		for _, run := range runs {
 			if !candidateBusinessOpen(run) {
+				if run.WorkflowStage == "start.failed" {
+					failed = true
+				}
 				continue
 			}
 			switch {
@@ -387,6 +390,9 @@ func rowExecutionStatus(row consoleRow) string {
 func displayExecutionStatus(run *api.CandidateSummary) string {
 	if run == nil {
 		return "—"
+	}
+	if run.WorkflowStatus == "abandoned" && run.CandidateStopReason == "manual" {
+		return "已停止参与"
 	}
 	if historicalFailedRun(run) {
 		return "失败（历史）"
@@ -559,7 +565,7 @@ func runNeedsAttention(run *api.CandidateSummary) bool {
 	if run == nil {
 		return false
 	}
-	if historicalFailedRun(run) {
+	if historicalFailedRun(run) || run.WorkflowStatus == "abandoned" {
 		return false
 	}
 	if run.TaskStatus == "closed" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {

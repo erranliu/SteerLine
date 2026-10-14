@@ -100,10 +100,16 @@ func (tx *sqliteTx) Task(ctx context.Context, project, id string) (taskmodel.Tas
 	return v, nil
 }
 
+func (tx *sqliteTx) ParticipatingCandidateCount(ctx context.Context, project, task string) (int, error) {
+	var count int
+	err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND task_id=? AND phase NOT IN ('completed','abandoned')`, project, task).Scan(&count)
+	return count, err
+}
+
 func (tx *sqliteTx) Workflow(ctx context.Context, project, id, task string) (executionmodel.WorkflowRunRecord, error) {
 	var payload []byte
 	var v executionmodel.WorkflowRunRecord
-	err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, project, id, task).Scan(&payload)
+	err := tx.tx.QueryRowContext(ctx, `SELECT payload,control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, project, id, task).Scan(&payload, &v.ControlRevision)
 	if err != nil {
 		return v, persistenceError(err)
 	}

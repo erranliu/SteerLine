@@ -14,7 +14,7 @@ SQLite 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Attem
 
 TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其他引用的 commit/SHA-256。领取前再次核验 Task 版本、依赖就绪、项目 authority、目标仓库和前置合并已进入当前 base。领取事务预留一个 Task、WorkflowRun、Execution 与固定 `worker` Attempt，并固定开发流程的 implement.execute 起点；模型步骤不新增 DAG Task。
 
-WorkflowRun 在原记录中保存唯一 `status/flow_ref/step_id`，不并存旧 Phase；`flow_ref=development/v1` 冻结步骤、模板与结果契约。`stage_inputs` 保存实际输入、Command、Attempt、输入版本和报告源轮次/快照；`stage_results` 保存原生终态、规范 final 来源、输入绑定、快照和 outcome。输入/已接受结果不可替换，重复 first-wins。正常三个模型步骤复用固定 `worker` Attempt；该名称是原生执行角色，不是另一份可写业务位置。
+WorkflowRun 在原记录中保存唯一 `status/flow_ref/step_id`，不并存旧 Phase；当前 `flow_ref=development/v3`，与 `worker-flow-v2` 协议版本分别固定。`stage_inputs` 保存实际输入、Command、Attempt、输入版本和报告源 Command/turn；`stage_results` 保存原生终态、规范 final 来源、输入绑定和 outcome，不保存独立 artifact 快照。输入/已接受结果不可替换，重复 first-wins。正常三个模型步骤复用固定 `worker` Attempt；该名称是原生执行角色，不是另一份可写业务位置。规则来源为[model/staged_flow.go](../../internal/execution/model/staged_flow.go)与[staged_flow.go](../../internal/execution/staged_flow.go)。
 
 | status | 条件 |
 | --- | --- |
@@ -26,17 +26,17 @@ WorkflowRun 在原记录中保存唯一 `status/flow_ref/step_id`，不并存旧
 | `waiting_external` | 本开发流程的 PR 已核验，等待真实合并 |
 | `completed` / `abandoned` | 经唯一交付核验的完成 / Task 丢弃后的工作流终态 |
 
-开发步骤为 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`。实现自由 final 不能作为结构化结果，报告绑定原执行，发布有合法结果时直接消费；缺结果或格式错误仅补一次 publish.report，绑定原发布及冻结候选，见[发布补报契约](../spec/worker-publish-report.spec.md)。源失败不被报告成功覆盖；报告最多自动重试一次，发布不为补 JSON 重做副作用。报告目前沿用双后端冻结权限，按实际 HEAD/索引/工作区内容摘要和已绑定 PR 前后对比；此能力不能保证拦截全部外部写入。
+开发步骤为 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`。实现自由 final 不能作为结构化结果，报告绑定原执行，发布有合法结果时直接消费；缺结果或格式错误仅补一次 publish.report，绑定原发布及冻结候选，见[发布补报契约](../spec/worker-publish-report.spec.md)。源失败不被报告成功覆盖；报告最多自动重试一次，发布不为补 JSON 重做副作用。报告沿用冻结权限及该后端实际工作区检查能力，Orca 的 revision 范围不证明未提交内容干净，也不保证拦截外部写入。无 artifact 快照的已提交报告恢复不能沿旧快照重试；必要时回原会话重新核实实现，仍保留原人工恢复门槛。
 
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 
-Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。Orca 的本机 / 远端附加身份均为原 runtime、agent terminal/incarnation 和 worktree，协议为 `orca_terminal_v3`；每轮保存 Command、原输出游标和有界紧凑结果，启动与权限由执行主机的 Orca 管理。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。
+Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。Orca 的本机 / 远端附加身份均为原 runtime、agent terminal/incarnation、worktree、pane 和 provider session，协议为 `orca_terminal_v3`；每轮保存 Command、原输入回执、发送前主代理基线、结束证据及不可替换的完整普通回复，启动与权限由目标主机的 Orca 管理。不存在 Orca Task/Dispatch/coordinator 绑定或模型回传标记。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。
 
 ## 人工候选实验
 
-同一 Task 默认一个候选，人可逐个增加不同冻结配置的候选。每个候选具有独立 WorkflowRun、Execution、会话、工作区、分支、PR 和反馈；开始时观察参与数已达五个就拒绝，接受竞态偶尔超出，不建设硬名额、预留、队列、自动补位或评分融合。
+同一 Task 默认一个候选，人可连续确认增加不同冻结配置的候选。每次确认使用独立请求身份，先持久化 WorkflowRun、Execution、Attempt、编号和所选方案，再检查环境、取得共同基线并启动。尚未准备的候选允许暂缺基线与资源证据，准备完成后固定；重试与重启恢复原身份。每个成功启动的候选具有独立会话、工作区、分支、PR 和反馈。事务内限制最多五个参与候选，准备中的候选计入；明确启动失败的候选保留历史与编号并结束参与，未知效果或仍可能运行的候选继续计入。不自动补位，不建设评分融合。见[候选启动验收](../acceptance/candidate-start-retention.md)。
 
-产品不提供单候选放弃操作，控制台、CLI、API 和服务端均无此入口。Task 丢弃仍按任务级规则执行，原执行停止和资源结算按事实记录。任一已绑定候选 PR 经其冻结提供方核验已合并、仓库/base/head 分支身份与合并证据完整后即可原子提交唯一 TaskDelivery，将 Task 转为 closed 并释放后继；不要求其他候选的 PR 可查询或未合并，不等待已绑定 PR 的追加反馈结束。首个成功提交的交付记录成为获胜候选，不按合并时间排名或融合成果。提交时复核获胜候选自身绑定、任务/图版本以及 PR 不被重复绑定，其他候选阶段推进不阻塞交付。closed 后停止该任务全部候选的 PR 状态查询，重启后仍跳过；界面保留关闭时最后已知的 PR 事实。候选历史、资源与未结算执行保持准确归属。界面选择及草稿隔离见[执行控制台](execution-console.md)。
+控制台与服务器提供 `stop_candidate`，以候选自身 WorkflowRun 的 `completed/abandoned` 终态判定不参与，其他合法状态判定参与；不通过 Task 状态推导。人工停止与明确启动失败复用统一停止声明，保存固定时间、原因和操作者，停止不清理资源、不恢复或补发业务；已有原通道晚到事实继续留档，重启跳过已停止候选。人工停止必须在事务内保护最后一个参与候选，自动明确启动失败例外。停止释放参与名额但不保证物理 worker 数量不超过五个，候选和历史编号不删除，新编号不复用。停止不能交付，交付事务再次核对参与资格；Task closed/discarded 不隐式批量停止候选。见[候选停止 Spec](../spec/candidate-stop.spec.md)和[验收](../acceptance/candidate-stop.md)。Task 丢弃仍按任务级规则执行，原执行停止和资源结算按事实记录。任一已绑定候选 PR 经其冻结提供方核验已合并、仓库/base/head 分支身份与合并证据完整后即可原子提交唯一 TaskDelivery，将 Task 转为 closed 并释放后继；不要求其他候选的 PR 可查询或未合并，不等待已绑定 PR 的追加反馈结束。首个成功提交的交付记录成为获胜候选，不按合并时间排名或融合成果。提交时复核获胜候选自身绑定、任务/图版本以及 PR 不被重复绑定，其他候选阶段推进不阻塞交付。closed 后停止该任务全部候选的 PR 状态查询，重启后仍跳过；界面保留关闭时最后已知的 PR 事实。候选历史、资源与未结算执行保持准确归属。界面选择及草稿隔离见[执行控制台](execution-console.md)。
 
 ## 独立状态与资源位置
 
@@ -59,22 +59,24 @@ STEERLINE_HOME 的默认值和路径解析由 [app/config.go](../../internal/app
 | 格式 | 当前值 | 源码 |
 | --- | --- | --- |
 | 工作流协议 | worker-flow-v2 | [model/state.go](../../internal/execution/model/state.go) |
+| 固定开发流程 | development/v3 | [model/staged_flow.go](../../internal/execution/model/staged_flow.go) |
 | SQLite schema | 19 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 服务 checkpoint / runtime | 21 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
-| FixedExecutionProfile | 8 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
+| FixedExecutionProfile | 9 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
 | ConversationEvent | 3 | [model/conversation.go](../../internal/execution/model/conversation.go) |
 | 全局执行配置 | 2 | [app/config.go](../../internal/app/config.go) |
 | Codex profile codec | 2 | [codex/profile_config.go](../../internal/execution/adapters/codex/profile_config.go) |
 | Codex resource codec | 2 | [codex/policy_resources.go](../../internal/execution/adapters/codex/policy_resources.go) |
+| Orca profile / state codec | 2 / 5 | [orcatransport/profile.go](../../internal/execution/adapters/orcatransport/profile.go) |
 | 内建执行目录 | builtin-execution-v3 | [app/directory.go](../../internal/app/directory.go) |
 
 身份版本、配置格式和某次验收的工具版本不是同一事实。历史报告保留其原版本，不能拿历史格式作为当前入口要求。
 
 ## 工作区与消息
 
-初始工作区在外部创建前保存固定意图。local 路径使用固定 Git worktree 和原生 Codex session；本机 Orca 路径由 Orca 创建 worktree 和 agent terminal，再以新 Task/Dispatch 延续同一 terminal。重启核对原身份，不能按同名标题或路径推断替代会话。工作开始后，中心不会因反馈、dirty 文件、项目检查结果或 PR 出现而 reset、清理或改写 worker 的提交。
+初始工作区在外部创建前保存固定意图。local 路径使用固定 Git worktree 和原生 Codex session；Orca 路径由 Orca 创建 worktree，核实唯一原终端并完成冻结 agent 启动命令；业务回合继续向同一 terminal 投递普通输入。重启核对原身份，不能按同名标题或路径推断替代会话。工作开始后，中心不会因反馈、dirty 文件、项目检查结果或 PR 出现而 reset、清理或改写 worker 的提交。
 
-每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。local 运行中问题用仍有效的 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；本机 Orca 运行中问题按原 message ID `reply`，活动补充向原 Dispatch `send`，结算后反馈在原 terminal 上创建新 Task/Dispatch。服务重开先核验旧执行和回执，旧的未送达输入不自动投递；用户须在统一 Decision 入口重新确认。已终止的 local worker 经核实后可用新受管进程和新 Attempt 恢复原 thread；原 thread 无法核实时需人工处理，不在原 Execution 内新建会话。平台接受回执不等于 agent 已处理。local 通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读；Orca 的 wait/gap 只保存必要事实，终端正文在原工具阅读。回执不明时不更换 ID 重发。详见 [决策与反馈](decisions.md)和[停服恢复 Spec](../spec/worker-service-recovery.spec.md)。
+每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。local 运行中问题用仍有效的 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；Orca 当前不提供原生提问/活动反馈路由，结束后反馈沿原 terminal 投递新业务输入，核验原请求的接受与开始事实。服务重开先核验旧执行和回执，旧的未送达输入不自动投递；用户须在统一 Decision 入口重新确认。已终止的 local worker 经核实后可用新受管进程和新 Attempt 恢复原 thread；原 thread 无法核实时需人工处理，不在原 Execution 内新建会话。平台接受回执不等于 agent 已处理。local 通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读；Orca 保存必要状态/缺口及受理的完整 final，不复制完整终端过程。回执不明时不更换 ID 重发。详见[决策与反馈](decisions.md)、[当前 Orca 边界](../architecture/orca-native-worker.md)和[停服恢复 Spec](../spec/worker-service-recovery.spec.md)。
 
 人工模式允许不同 Task 分别领取；自动模式仍一次占用一个活动执行。暂停派发只限制新领取，不中断当前 worker、待决策反馈或 PR 核验。
 
@@ -91,17 +93,17 @@ worker 或用户提供的 URL 只是线索。中心经配置的 provider 查询�
 `steerline task list/show/graph/export` 只读中心权威；validate/create/discard/add-predecessors 通过固定版本与请求 ID 操作。控制台或 CLI 的 `answer_decision` 共享 CommandService 提交路径。正式服务入口只运行 `worker-flow-v2`；旧五步的 retry、mark-stopped、task reopen 和项目步骤验证器没有当前 CLI 入口。旧状态保留供人工核实，当前入口不读取或迁移旧业务数据。
 
 
-## Windows Orca Codex 环境事实
+## 当前 Orca 环境与恢复事实
 
-Execution 的 `environment` 保存领取时的 Profile digest、准备 turn/nonce、开始及截止时间；资源绑定后追加原 runtime、已确认 terminal/incarnation、允许写入根目录和启动命令。Profile digest 包含受管 approval policy 与权限契约版本。准备轮次标为 `readiness`，业务轮次标为 `business`；准备不改变业务 CurrentTurn/LastStoppedTurn 或计数，同会话只有一个活动或结果未知的 Dispatch。
+Orca 方案冻结 environment 路由、repository selector、CLI 和原生启动命令；认证仍属于目标 runtime 的保存连接，不进入业务封套。worktree/终端准备与业务输入分别保存 Operation 和回执。准备不成为任务成果，每个原终端同时只允许一个 SteerLine 业务输入在途；原输入未知时只对账，不再发下一输入。
 
-准备收据、类型化工具调用/结果证据和原生结算分别持久化，整批 Delivery 先落盘再 ack。宿主 blocker 保存 reason/confidence/source、原身份、时间及绑定目标，通过已有 Decision 与 Operation 提供中心动作；普通文字与原 worker question 分别保存。重复检查共享 blocker 的未完成 Operation；未知投递先读取原 Dispatch 历史。过期文字及问题保留历史，不改投新轮次。
+每轮保存原请求受理/开始事实、发送前有效基线及原主代理身份。订阅提示与独立补查询提供只读事实；已观察的额外输入边界、身份或正文冲突持久保留。worker 重启恢复原基线/请求/查询时间，离线完成可结算一次，后续输入仍受恢复确认门槛约束。事件在 actor 提交事实后确认，adapter 不能写中心状态。
 
-准备超时和首次业务启动观察超时保持原外部事实。晚到准备成功只补历史，需显式重新检查后才能接纳；正常业务执行没有额外总时限。等待 PR 合并的终端诊断不回退主阶段，已提交交付不被迟到观察重开。当前格式拒绝缺少冻结准备/资源事实的受管 Execution，不迁移旧记录。实际验收状态见[环境验收记录](../acceptance/archive/completed/worker-readiness.md)。
+每次有界查询受 CommandTimeout 约束，它不是模型整轮执行期限。未知 native outcome、缺少完整回复和终端写入者缺证分别记录。等待 PR 合并的终端诊断不回退主阶段，已提交交付不被迟到观察重开。当前 codec 直接拒绝旧记录，不迁移；实际验证与限制见[补查询验收](../acceptance/orca-completion-query.md)。旧 supervised 环境准备/nonce/Dispatch/relay 的[历史记录](../acceptance/archive/completed/worker-readiness.md)不定义当前单终端路径。
 
 ## 本地 Windows sandbox 配置冻结
 
-冻结的 FixedExecutionProfile 保存实施 key/version、有界配置封套以及原发布查询/Git/认证引用。Windows local 与 Orca/Codex 使用固定 workspace-write、unelevated、on-request、auto_review；用户输入不包含 sandbox 或审批覆盖。PolicyResources 保存精确 workspace/必要 Git 根及 adapter 生成参数；原生 thread、endpoint、process generation 和 Orca terminal/Dispatch/coordinator 位于各自 binding envelope。恢复读取原冻结 Profile 与绑定，不用当前全局配置改写已开始的 Execution。格式版本见[当前格式来源](#当前格式来源)；格式变化直接拒绝旧数据，无迁移或回填。
+冻结的 FixedExecutionProfile 保存实施 key/version、有界配置封套以及原发布查询/Git/认证引用。Windows local Codex 使用固定 workspace-write、unelevated、on-request、auto_review；用户输入不包含 sandbox 或审批覆盖。Orca 的模型/权限由执行主机原生设置管理，不套用 local 参数。local PolicyResources 保存精确 workspace/必要 Git 根及 adapter 生成参数；原生 thread、endpoint、process generation 和 Orca runtime/terminal/incarnation/pane/provider 位于各自 binding envelope。恢复读取原冻结 Profile 与绑定，不用当前全局配置改写已开始的 Execution。格式版本见[当前格式来源](#当前格式来源)；格式变化直接拒绝旧数据，无迁移或回填。
 
 Decision 的实现问题路由也复用同一 64 KiB 封套，以 answer purpose 固定原 WorkflowRun、Execution、Attempt、generation、turn 和 question；回答路由不能冒充配置或资源封套。
 

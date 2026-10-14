@@ -77,6 +77,9 @@ func (s *SQLiteStore) CommitTaskResult(ctx context.Context, commit storageports.
 		if err != nil {
 			return nativeErr("immutable_task", "selected workflow run changed during PR verification")
 		}
+		if !executionmodel.CandidateParticipates(currentWorkflow.Status) {
+			return nativeErr("candidate_inactive", "selected candidate no longer participates")
+		}
 		currentExecution, err := tx.Execution(ctx, input.ProjectIdentity, commit.Execution.ExecutionID, commit.Workflow.WorkflowRunID)
 		if err != nil {
 			return nativeErr("inconsistent_delivery", "selected execution changed during PR verification")

@@ -14,7 +14,7 @@ func operationProgress(action *actionState) string {
 	switch action.Action {
 	case "start_task", "start_candidate":
 		return "启动中"
-	case "stop_service":
+	case "stop_service", "stop_candidate":
 		return "停止中"
 	case "answer_decision":
 		return "反馈处理中"
@@ -56,9 +56,9 @@ func taskOperation(state projectState, taskID string) *actionState {
 }
 
 func rowExecutionProgress(state projectState, row consoleRow) string {
-	if action := taskOperation(state, row.taskID); action != nil && (action.Action == "start_task" || action.Action == "start_candidate") {
+	if action := rowOperation(state, row); action != nil && (action.Action == "start_task" || action.Action == "start_candidate") {
 		// An additional candidate must not overwrite an existing sibling's status.
-		if row.run == nil || action.RunID == row.run.RunID && row.run.ExecutionStatus == "pending" {
+		if row.run == nil || firstText(action.RunID, action.RequestID) == row.run.RunID && row.run.ExecutionStatus == "pending" {
 			return operationProgress(action)
 		}
 	}
@@ -66,6 +66,24 @@ func rowExecutionProgress(state projectState, row consoleRow) string {
 }
 
 func rowOperation(state projectState, row consoleRow) *actionState {
+	if row.run != nil {
+		for _, a := range state.actions {
+			if a.TaskID != row.taskID {
+				continue
+			}
+			id := a.RunID
+			if a.Action == "start_task" || a.Action == "start_candidate" {
+				id = firstText(id, a.RequestID)
+			}
+			if id != row.run.RunID || a.Resolved || a.Status == "applied" || a.Status == "rejected" || a.Status == "failed" {
+				continue
+			}
+			if page := state.snapshot.Connection.Snapshot.Page; page != nil && a.TargetInstance != page.Service.InstanceID {
+				continue
+			}
+			return a
+		}
+	}
 	action := taskOperation(state, row.taskID)
 	if action == nil || row.run == nil {
 		return action
