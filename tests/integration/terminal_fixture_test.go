@@ -74,7 +74,7 @@ func fakeTerminalOrca(directory string, args []string) int {
 			}
 			result = map[string]any{"terminal": map[string]any{"handle": "original", "incarnationId": state.Incarnation, "worktreeId": "fixture::" + state.Worktree, "worktreePath": state.Worktree, "branch": state.Branch, "agentIdentity": agent, "connected": true, "status": "running"}}
 		case "terminal list":
-			result = map[string]any{"terminals": []any{map[string]any{"handle": "original", "worktreeId": "fixture::" + state.Worktree}}}
+			result = map[string]any{"terminals": []any{map[string]any{"handle": "original", "incarnationId": state.Incarnation, "worktreeId": "fixture::" + state.Worktree}}}
 		case "terminal wait":
 			result = map[string]any{"wait": map[string]any{"satisfied": true}}
 		case "terminal read":

@@ -212,7 +212,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	step(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("接线验证：精确原候选")})
 	for attempt := 0; attempt < 3; attempt++ {
 		step(tea.KeyMsg{Type: tea.KeyF2})
-		if !strings.Contains(m.View(), "stale_instance: SQLite projection does not match the ready service instance") {
+		if !strings.Contains(m.View(), "rejected：stale_instance:") {
 			break
 		}
 		// This API rejection precedes command admission. Simulate a human
