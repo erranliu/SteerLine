@@ -137,14 +137,21 @@ func TestPS1InlineConsoleWiring(t *testing.T) {
 	}
 	// The original feedback turn must be observable under Full's process load;
 	// keep this bounded independently of the five-minute overall fixture.
+	var feedback *api.CandidateSummary
+	t.Cleanup(func() {
+		if t.Failed() && feedback != nil {
+			t.Logf("last original feedback: step=%s status=%s turns=%d recovery=%v/%s decision=%s error=%s", feedback.WorkflowStage, feedback.WorkflowStatus, feedback.TurnNumber, feedback.RecoveryRequired, feedback.RecoveryState, mustJSON(feedback.Decision), derefString(feedback.Error))
+		}
+	})
 	waitFor(t, time.Minute, func() bool {
 		page := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
 		if page.Observation.Page == nil {
 			return false
 		}
 		for _, run := range page.Observation.Page.Runs {
-			if run.RunID == primary.RunID && run.TurnNumber > primary.TurnNumber {
-				return true
+			if run.RunID == primary.RunID {
+				feedback = run
+				return run.TurnNumber > primary.TurnNumber
 			}
 		}
 		return false
