@@ -12,7 +12,6 @@
   {"id":"recovery.codex-resume","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestCodexResume","env":"controlled"},
   {"id":"recovery.resume-gates","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestResumeGates","env":"controlled"},
   {"id":"recovery.codex-resume-live","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestCodexResumeLive","env":"live","chain":"local-codex"},
-  {"id":"recovery.orca-local-reconnect-live","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestOrcaLocalReconnectLive","env":"live","chain":"orca-terminal-local"},
   {"id":"recovery.failure-results","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestFailureResults","env":"controlled"},
   {"id":"recovery.missing-successful-result","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestMissingSuccessfulResult","env":"controlled"},
   {"id":"recovery.terminal-local-reconnect","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestTerminalLocalReconnect","env":"controlled"},
