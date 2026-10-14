@@ -135,16 +135,6 @@ func readRequestRecord(path string) (requestRecord, error) {
 	return record, nil
 }
 
-// These path-based helpers keep private-format boundary tests focused on
-// encoding and atomic publication. Production callers use fileRequestRecordOwner.
-func writeRequestRecord(dir, path string, record requestRecord) error {
-	data, err := marshalRequestRecord(record)
-	if err != nil {
-		return err
-	}
-	return writePrivateAtomic(dir, path, data)
-}
-
 func marshalRequestRecord(record requestRecord) ([]byte, error) {
 	base := record
 	base.Response = nil
