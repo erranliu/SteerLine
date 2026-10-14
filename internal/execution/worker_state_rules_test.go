@@ -11,7 +11,7 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
+func TestWorkerFlowKeepsSessionAndOriginalPRThroughFeedback(t *testing.T) {
 	wf := executionmodel.WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Status: "queued", Branch: "main"}
 	exec := executionmodel.ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: wf.WorkflowRunID, Status: "pending", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-8"}}
 	pr := func(url, state string) executionmodel.PRInfo {
@@ -47,15 +47,22 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 	if err := StopWorkerTurn(&wf, &exec, "turn-2", false); err != nil || wf.Status != "blocked" {
 		t.Fatalf("closed PR did not lead to the unified decision state: phase=%s error=%v", wf.Status, err)
 	}
-	if err := BindWorkerPR(&wf, &exec, pr("pr-9", "open"), "pr-9", "o/r", false); err == nil || wf.Status != "blocked" || wf.PRURL != "pr-8" {
-		t.Fatalf("replacement PR after closure changed original binding: phase=%s error=%v", wf.Status, err)
+	beforeWorkflow, beforeExecution := recordFingerprint(wf), recordFingerprint(exec)
+	if err := BindWorkerPR(&wf, &exec, pr("pr-9", "open"), "pr-9", "o/r", false); err == nil {
+		t.Fatal("closed original PR was replaced by another PR")
+	}
+	if recordFingerprint(wf) != beforeWorkflow || recordFingerprint(exec) != beforeExecution {
+		t.Fatal("rejected replacement PR changed the original workflow or execution")
 	}
 	begin("turn-3")
+	if err := BindWorkerPR(&wf, &exec, pr("pr-8", "open"), "pr-8", "o/r", false); err != nil {
+		t.Fatal(err)
+	}
 	if err := StopWorkerTurn(&wf, &exec, "turn-3", false); err != nil || wf.Status != "blocked" {
 		t.Fatal(err)
 	}
 	mergedAt := time.Now().UTC()
-	delivery := executionmodel.TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-8", MergeCommit: "merge-9", MergedAt: mergedAt}
+	delivery := executionmodel.TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-8", MergeCommit: "merge-8", MergedAt: mergedAt}
 	if err := reconstructiontypes.MarkWorkerDeliveryCommitted(taskmodel.TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Status != "completed" {
 		t.Fatalf("committed delivery did not complete: phase=%s error=%v", wf.Status, err)
 	}
