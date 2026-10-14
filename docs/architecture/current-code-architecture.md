@@ -1,8 +1,8 @@
 # 当前代码架构与源码索引
 
-> 当前源码（2026-10-13）：唯一任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。实际验证与待验项见任务专属验收。WebUI、SSE 和远程服务不在本轮。
+> 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。实际验证与待验项见[专属验收](../acceptance/tui-http-client.md)。WebUI、SSE 和远程 HTTP 服务尚未实现。
 
-核对日期：2026-10-13，#91 当前源码；合入状态以 execution-map 为准。本文描述当前源码树。第一阶段目标包含本地 Codex、本机 Orca 与远端路径交付；当前 Orca 的本机有限样本及本机最终保护未跑真机、远端已准备环境有限样本通过与首次信任阻塞后原任务自动继续未通过范围见[单终端验收](../acceptance/orca-terminal-transport.md)。
+核对基点：2026-10-14，`5a24abec`；本文描述该源码树，不将历史原生样本当作当前版本全量验收。第一阶段目标包含本地 Codex、本机 Orca 与远端执行路径交付；Orca 历史交付范围见[单终端验收](../acceptance/orca-terminal-transport.md)，当前完成补查询的规则、原生短回合及未重跑 PR 范围见[补查询验收](../acceptance/orca-completion-query.md)。远端执行目标与远程 HTTP 客户端是不同能力。
 
 ## 系统边界
 
@@ -19,7 +19,7 @@ flowchart LR
     Assembly[internal/consoleapp] --> HC
     HC --> HTTP[127.0.0.1 HTTP]
     HC --> Contract[internal/product/httpcontract]
-    CLI --> Client
+    CLI --> Client[internal/product/client]
     App --> Client
     HTTPAPI --> Contract
     HTTP --> HTTPAPI[internal/product/httpapi]
@@ -29,7 +29,7 @@ flowchart LR
     App --> Task[internal/task]
     App --> Exec
     App --> Adapters[execution adapters and resources]
-    Adapters --> Exec
+    Exec -. injected backend ports .-> Adapters
     Task --> Ports[internal/storage/ports]
     Exec --> Ports
     Query[internal/product/query] --> Ports
@@ -75,16 +75,16 @@ Within console, [`final_reader.go`](../../internal/console/final_reader.go) owns
 
 ## Current package inventory
 
-At 2c58de32, Windows `go list ./...` enumerates 49 packages. The current inventory includes the four isolated TUI/HTTP consumer owners, public Orca CLI codec, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
+At `5a24abec`, Windows `go list ./...` enumerates 49 packages. The current inventory includes the four isolated TUI/HTTP consumer owners, public Orca protocol codecs, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
 
 | Owner / purpose | Current packages |
 | --- | --- |
 | Product commands and runner | `cmd/orca-probe`, `cmd/steerline`, `cmd/test-feedback` |
-| Composition and host | `internal/app`, `internal/app/host` |
+| Composition and host | `internal/app`, `internal/app/host`, `internal/consoleapp` |
 | Console | `internal/console`, `internal/console/activityrender` |
 | Task | `internal/task`, `internal/task/model` |
-| Execution actor and pure values | `internal/execution`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
-| Execution effects and compact reply contract | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
+| Execution actor and pure values | `internal/execution`, `internal/execution/agentlaunch`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
+| Execution effects and native reply evidence | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
 | Filesystem guards | `internal/pathguard` |
 | Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph`, `internal/product/httpapi`, `internal/product/httpclient`, `internal/product/httpcontract`, `internal/product/httpfs` |
 | Storage | `internal/storage/ports`, `internal/storage/sqlite` |
@@ -157,11 +157,68 @@ Test-only support has one owner under [`internal/testkit`](../../internal/testki
 | Execution actor and ports | [`internal/execution/service_construction.go`](../../internal/execution/service_construction.go), [`internal/execution/host_ports.go`](../../internal/execution/host_ports.go), [`internal/execution/service_commit.go`](../../internal/execution/service_commit.go) |
 | Runtime reconstruction | [`internal/execution/reconstruction/runtime.go`](../../internal/execution/reconstruction/runtime.go), [`internal/execution/reconstruction/run.go`](../../internal/execution/reconstruction/run.go) |
 | Product reads and client | [`internal/product/query/project_page.go`](../../internal/product/query/project_page.go), [`internal/product/client/client.go`](../../internal/product/client/client.go), [`internal/console/interfaces.go`](../../internal/console/interfaces.go) |
-| Local HTTP client protocol | [`internal/product/httpapi`](../../internal/product/httpapi), [protocol contract](../product-design/local-client-protocol.md), [`internal/app/execution_service_wiring.go`](../../internal/app/execution_service_wiring.go) |
+| TUI and HTTP transport | [`internal/consoleapp`](../../internal/consoleapp), [`internal/product/httpclient`](../../internal/product/httpclient), [`internal/product/httpcontract`](../../internal/product/httpcontract), [`internal/product/httpfs`](../../internal/product/httpfs), [`internal/product/httpapi`](../../internal/product/httpapi), [protocol contract](../product-design/local-client-protocol.md), [`internal/app/execution_service_wiring.go`](../../internal/app/execution_service_wiring.go) |
 | Storage ports and SQLite | [`internal/storage/ports`](../../internal/storage/ports), [`internal/storage/sqlite`](../../internal/storage/sqlite) |
 | Test feedback and process support | [`internal/testkit/feedback`](../../internal/testkit/feedback), [`internal/testkit/process`](../../internal/testkit/process), [`internal/testkit/protocol`](../../internal/testkit/protocol) |
 | Boundary guards and integration tests | [`internal/testkit/boundary`](../../internal/testkit/boundary), [`internal/testkit/boundary/e2e`](../../internal/testkit/boundary/e2e), [`tests/integration`](../../tests/integration) |
 
 ## Development flow ownership
 
-`internal/execution/staged_flow.go` owns the single development flow, frozen stage input/source bindings, artifact checks and atomic result/transition/next-input commitment; `staged_result.go` owns strict business JSON decoding. `model/staged_flow.go` contains values and step IDs. Adapters normalize final provenance and retain native business purpose without selecting the next business step. Codex consumes verified app-server final_answer items. Local Orca consumes the original frozen output-material binding and immutable settled response, with exact Command, Task, Dispatch, runtime, terminal/incarnation, attempt and workspace checks. Its final phase comes from the generic output protocol, not an inferred provider phase or worker_done summary. It uses no Codex launcher/history dependency or home/session scan. Missing or conflicting provenance blocks advancement with a diagnostic. Both adapters expose fact comparison for reports without promising strong read-only isolation. Orca retains native permissions and opaque agent identity. Product pages and the TUI consume one persisted workflow snapshot.
+`internal/execution/staged_flow.go` owns the single `development/v3` flow, frozen stage input/source bindings and atomic result/transition/next-input commitment; `staged_result.go` owns strict business JSON decoding. `model/staged_flow.go` contains values and step IDs. The flow no longer stores separate artifact snapshots. Adapters normalize native evidence without selecting the next business step. Codex consumes verified app-server final_answer items. Orca uses one original terminal, exact input acceptance/start receipts, a pre-send main-agent baseline and original runtime/terminal/incarnation/pane/provider identity. Native subscription and independent `worktree.ps` queries verify a new completion and complete ordinary `lastAssistantMessage`; working observation is optional. There is no Task/Dispatch/coordinator, output-material relay, base64 result marker, screen completion heuristic or agent-private history scan. Missing/truncated/conflicting provenance blocks advancement. Current completion supports Codex main-agent evidence only; native outcome may remain unknown independently of the accepted reply and business outcome. Both adapters expose workspace facts without promising strong read-only isolation; Orca's comparison is revision-scoped. Product pages and the TUI consume persisted workflow projections. See [Orca boundary](orca-native-worker.md) and [completion rules](../spec/orca-completion-query.spec.md).
+
+## HTTP 接入后的解耦评估与建议
+
+以下为 `5a24abec` 的代码评估。2026-10-14 经范围审计与用户授权，收紧后的五项已建立[#92–#96草稿及Spec/Plan](../roadmap/drafts/roadmap.md)；随后#92/#93已确认纳入execution-map待执行，#94/#95/#96因Worker三层重构影响继续留草稿。下述为原基线的收益评估，旧流程/runtime owner及集成建议不用于当前开工；三层未合入前不声明其为当前代码。
+
+建议保持同一个 Go 服务，在进程内形成以下职责关系。实线表示调用/事实消费，虚线表示共享的原子提交边界；业务 actor 是唯一状态变更仲裁者。
+
+```mermaid
+flowchart LR
+    TUI[TUI] --> HC[HTTP 客户端]
+    HC --> HTTP[HTTP handler]
+    HTTP --> App[应用查询与命令端口]
+    App --> Query[只读产品查询]
+    App --> Actor[业务 actor / 跨域协调]
+    Actor --> Task[任务契约与 DAG 规则]
+    Actor --> Flow[固定开发流程规则]
+    Actor --> Worker[worker 会话 / 效果运行时]
+    Actor --> Delivery[PR 核验 / 交付用例]
+    Worker --> Codex[本地 Codex adapter]
+    Worker --> Orca[Orca adapter / 本机与 environment 路由]
+    Delivery --> PR[冻结 PR provider]
+    Actor -. 原子提交 .-> Store[SQLite / CAS / 唯一约束]
+    Delivery -. 唯一交付提交 .-> Store
+    Query --> Store
+```
+
+### 已有边界与剩余耦合
+
+| 边界 | 当前程度 | 仍共享的职责 |
+| --- | --- | --- |
+| TUI ↔ HTTP ↔ 服务 | 业务传输已经分开；console 只依赖产品值和消费接口，consoleapp/httpclient 的生产闭包不含业务库、query、execution 或 handler | httpclient.Console 同时负责重连、页面缓存、请求文件、命令对账和本机停服观察；这些职责没有独立注入端口 |
+| HTTP handler ↔ Go 应用 | 不打开 SQL，不推进业务状态 | Server 持有具体 `*productclient.Client`；commands.go 同时实现协议校验、信封文件仲裁、动作映射和双权威对账，openNative 又有专用登记路径 |
+| 任务管理 ↔ 执行 | task 只依赖 task/model；execution 通过 TaskWorkPort/TaskResultPort 调用任务规则，不导入 task 实现 | claim/result/discard/delivery 跨域协调仍在 execution.CommandService；CommandStore 集合较宽，不能将它全部注入每个用途 |
+| 流程 ↔ worker 运行时 | adapter 不解析业务 JSON、不选择下一业务步骤 | staged_flow、worker 生命周期、反馈、恢复、会话采集及提交都是 Service 方法，共享 domain/runs/worker/effect 状态；主要是文件归属，尚无包级隔离 |
+| 本地 Codex ↔ Orca | 两个 adapter 和协议 codec 已分开，核心不导入实现 | 核心仍用聚合 LifecyclePort；部分通用分离启动逻辑仍叫 applyAppServerSessionReceipt/applyAppServerTurnReceipt，需要按真实通用职责建立边界；两端证据和停止能力仍不同 |
+| 存储 ↔ 查询 | SQL 与只读产品查询分包，业务提交已有 CAS/唯一约束 | SQLite 仍引用 query 的少量值/分页辅助，httpapi 也引用 query 的页大小常量；这是可清理的反向知识依赖，并非当前绕过业务权威 |
+
+### 重构收益评估
+
+当前可并行批次只有#92/#93。#94/#96与三层workflow/reliable及actor接线重叠，#95的最终交付抽取仍有剩余收益但当前桥接需重审，见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。以下保留原设计理由，不作为五项实施次序。
+
+1. **高收益：抽出固定流程规则。** 从 [staged_flow.go](../../internal/execution/staged_flow.go) / [staged_result.go](../../internal/execution/staged_result.go) 分离 `development/v3` 的结果解析、步骤决策、报告重试与下一输入构造。规则接收固定值和已核验事实，返回显式变更声明/所需动作，不接收 Service、RunView 可写指针、SQL 或 backend 句柄。I/O 核验仍由 actor/效果层执行，核验结果再交规则判断；结果、转移与下一输入仍一次提交。首先分离 implement/report/publish 规则，不建设通用工作流引擎。
+2. **高收益：收拢 worker 运行时资源所有权。** 首轮 [#96](../spec/worker-runtime-ownership.spec.md)只收拢观察器、原句柄、在途外部调用、取消/关闭和固定结果交接，复用已有后台机制。只接受已持久化 Operation 与冻结资源值，返回原身份事实/回执；不携带可写 RunView/apply闭包。业务 actor 保留步骤、Decision、恢复资格、提交与确认门槛，具体adapter保留证据/停服能力，本机/environment Orca仍共用实现。完整业务恢复拆分不混入首轮。
+3. **高收益：抽出任务最终交付。** [native_delivery_command.go](../../internal/execution/native_delivery_command.go) 当前组合冻结 provider、真实 PR 查询、执行门槛、任务结果和提交。[#95](../spec/task-delivery-usecase.spec.md)仅提取最终交付用例，接收固定候选/任务、带provider身份的PR事实、任务结果声明和提交端口；claim/discard的进一步收窄留后续。沿用 [ResultCommit](../../internal/storage/ports/task_result.go) 的原子提交，不拆唯一TaskDelivery/closed/WorkflowRun/图修订。流程/PR绑定仍由actor负责，未知发布但合法真实合并的原交付路径保持。
+4. **中高收益：分离 HTTP 协议与命令登记/对账。** 为 Server 定义消费方拥有的查询、命令和原生查看端口，消除具体 Client 依赖；将信封登记、同 ID 冲突和 authority lookup 提取为有明确存储端口的登记/对账组件，HTTP 层保留认证、状态码、JSON 和路由。普通业务命令与原生窗口副作用共用登记基础，保留各自重试规则；不把 transport receipt 变成领域权威，也不把 unknown 当成重放许可。这让协议测试无需真实 app/SQLite，新增前端无需复制该套规则。
+5. **中收益：分离客户端原请求与本机观察。** [#93](../spec/http-client-request-lifecycle.spec.md)保留已有Client/Open连接实现，在 [httpclient/console.go](../../internal/product/httpclient/console.go)中收拢journal文件职责、显式注入OS停服observer；Console仍组织原HTTP对账。保留先保存后发送、窗口关闭取消、旧实例禁重放与三份停服证据，不建设新连接框架或远程部署。
+
+上述顺序优先减少共享 Service 的修改范围。HTTP 端口和客户端拆分可独立准备；交付抽取与 worker 抽取都涉及共享模型/接线时应分次落地。每次抽取都应以“消费者无需修改无关 owner，且测试无需完整 Service/真后端”验收，单纯移动文件或接口方法原样转发不算完成解耦。
+
+### 其他值得收窄的功能
+
+- **会话/final 采集与 worker 控制：** 已有 ConversationSourcePort 和存储端口；进一步让采集只持有固定来源、读取游标与提交声明。body/历史读取无需启动/停止/恢复能力，保持 final 与 checkpoint 原子提交及原身份归属。
+- **宿主环境动作与业务反馈：** 原生查看、open_terminal、recheck_environment 属于宿主能力；Decision 答案及新业务 turn 属于流程。复用现有类型化目标，独立消费端口，避免新增宿主入口牵动 staged_flow。
+- **存储与产品投影的公共值：** 将 query 中被 SQLite/httpapi 共用的常量、历史/分页纯值移至真正的契约或消费端口 owner；保持同快照查询，逐步消除 SQLite 对 query 的引用，避免新建万能 common 包。
+- **TUI Model 的读取与输入状态：** finalReplyReader 已经分离，可按同样原则分离项目刷新/旧响应门槛与操作 journal 状态；按具体交互职责拆分，不为每个按键建立抽象。
+
+保持一个 Go 服务、一个业务写入仲裁与一个 SQLite 即可实现上述模块解耦；模块边界不要求独立进程、数据库或服务部署。当前只有一个固定开发流程，不预设插件系统、通用 DSL 或跨版本兼容层。

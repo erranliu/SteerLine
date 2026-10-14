@@ -41,7 +41,17 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 
 旧二阶段/WinUI/延期任务验收退出当前队列，见[归档说明](../archive/roadmap/README.md)。#44 实现已由 #91 删除，原人工项退出要求不算通过；旧候选编号不复用，也不依据归档自动恢复。
 
-## 普通开发重构计划
+## HTTP 接入后解耦草稿验收
+
+2026-10-14 五项[草稿](../roadmap/drafts/roadmap.md)全部保留；#92/#93已确认纳入execution-map、尚未实施/待验收，#94/#95/#96因Worker三层重构影响继续留草稿、暂不安排验收。各项Spec/Plan保留自己的自动ID、最小命令及待新增测试；无新增人工活动，未实施项不登记通过：
+
+- #92 [HTTP 服务端命令边界收敛](http-command-boundary.md)：已纳入，HC92-A1–A3待验。
+- #93 [HTTP 客户端原请求与停服观察解耦](http-client-request-lifecycle.md)：已纳入，CL93-A1–A3待验。
+- #94 [固定开发流程规则独立](development-flow-rules.md)：DF94-A1–A4。
+- #95 [任务最终交付用例独立](task-delivery-usecase.md)：TD95-A1–A4。
+- #96 [worker 运行时资源所有权收敛](worker-runtime-ownership.md)：WR96-A1–A4。
+
+## 普通开发重构历史
 
 [后端组装与最终回复状态收敛](bounded-structure-refactoring.md)仅归属一个无编号合并重构，2026-10-10 用户授权本聊天实施后，BS-A1–BS-A5 自动验证与结构自查通过，提交/PR 及独立复审/合并状态见专属记录。其[Spec](../spec/bounded-structure-refactoring.spec.md) / [Plan](../spec/bounded-structure-refactoring.plan.md)按 `8e292172` 提 PR 集成基线收紧；不进入 roadmap 调度，不再维护三项独立编号验收。
 
