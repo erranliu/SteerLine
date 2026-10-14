@@ -173,17 +173,15 @@ func MainCandidate(args []string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Control: receipt})
 	}
-	if in.Action != "start_candidate" && in.Action != "abandon_candidate" && in.Action != "start_task" {
+	if in.Action != "start_candidate" && in.Action != "start_task" {
 		return fmt.Errorf("unsupported candidate control")
 	}
-	payload := productapi.ControlPayload{TaskID: in.TaskID, WorkflowRunID: in.RunID, ExpectedTaskVersion: in.TaskVersion, ExpectedGraphRevision: in.GraphRevision, ExpectedCandidateVersion: in.CandidateVersion, Reason: in.Note}
-	if in.Action != "abandon_candidate" {
-		_, profile, err := c.ResolveExecutionProfile(in.ProfileID, "")
-		if err != nil {
-			return err
-		}
-		payload.ExecutionProfileID, payload.ExecutionProfileDigest = profile.ID, profile.Digest()
+	payload := productapi.ControlPayload{TaskID: in.TaskID, ExpectedTaskVersion: in.TaskVersion, ExpectedGraphRevision: in.GraphRevision}
+	_, profile, err := c.ResolveExecutionProfile(in.ProfileID, "")
+	if err != nil {
+		return err
 	}
+	payload.ExecutionProfileID, payload.ExecutionProfileDigest = profile.ID, profile.Digest()
 	req, err := steerline.SubmitControlTargeted(hostConfig, in.Action, payload, "e2e", in.RequestID, in.InstanceID, nil)
 	if err != nil {
 		return err
