@@ -48,5 +48,6 @@
 | `TestCandidateStopControlReplayAndLatePreparation`、`TestLifecycleEffectForwardsWorkspaceCreationCheckpoint` | 修正断言后 2 项通过，覆盖停止发生在首次执行后和核验在途期间两种边界；`20261014T055815.894617900Z/summary.json` |
 | 完整控制台、HTTP 服务/客户端、架构边界 | 343 项通过；`20261014T055547.305139700Z/summary.json` |
 | 全项目编译及带 e2e tag 的测试编译 | 通过；E2E 场景未运行 |
+| 同步最新主干后的 `go run ./cmd/test-feedback -level=L1` | 12 组全部通过，132.4 秒；含此前无法编译的集成边界组。源码提交 `617a0329e64d475378a766522e512ae4957dac9b`，基于主干 `5a24abec`；`20261014T060020.699562200Z/summary.json` |
 
 报告均位于上述 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/` 根目录，保留执行时工作区状态；人工 CST-M1 仍待验。

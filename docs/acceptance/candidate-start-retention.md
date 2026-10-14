@@ -28,4 +28,6 @@
 
 2026-10-14 修改质量审计补充 `TestCandidatePendingStartSurvivesJournalReopen`，核对提交前保存的原请求在重开后仍待查询，且不补发请求；完整控制台/HTTP/架构边界 343 项通过，报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261014T055547.305139700Z/summary.json`。
 
+同步最新主干后，在实现提交 `617a0329e64d475378a766522e512ae4957dac9b` 执行 `go run ./cmd/test-feedback -level=L1`，12 组全部通过。报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261014T060020.699562200Z/summary.json`；此前集成组的编译问题已解决。
+
 `go build ./cmd/...`、`git diff --check` 和文档导航检查通过。受控验证不等同真实模型、真实 PR 或人工界面验收；CSR-M1 保持待验。
