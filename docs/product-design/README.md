@@ -7,11 +7,12 @@
 | [数据模型](data-model.md) | Task/DAG、执行、反馈、交付、持久化和独立状态；统一格式源码定位 |
 | [执行配置](execution-profiles.md) | 项目/全局配置、权限冻结、发布责任和需求准入 |
 | [工作区准备](worktree-preparation.md) | 仓库/worktree 身份、准备、锁和失败恢复 |
+| [Worker 流程异常处理与重试](worker-lifecycle.md) | 从领取、初始化、输入发送到交付/清理的节点矩阵；统一异常分类、重试预算、会话变化与恢复边界，区分当前实现和待补能力 |
 | [决策与反馈](decisions.md) | 问题、答案、投递事实、宿主阻断与人工恢复 |
 | [会话事件](conversation-events.md) | 来源、规范事件、完整正文、分页、采集与展示 |
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |
 | [执行控制台](execution-console.md) | 当前 TUI 的任务/候选布局、原地反馈、能力展示与操作速查 |
-| [Worker 步骤流程 Spec](../spec/worker-staged-flow.spec.md) | #84 已纳入一期收尾执行规划：现有 worker、简单步骤序列和 adapter；状态判断、三个短提示词及源码改造范围，implement 两轮/publish 单轮；尚未实现 |
+| [Worker PR 流程契约](../spec/worker-pr-flow.spec.md) | 当前 development/v3 的实现、报告、发布、合并与交付；原 #84 分步契约保留历史追溯 |
 | [客户端与 Go 服务边界](planning-architecture.md) | 当前 #91 的 TUI/HTTP 源码边界和未来范围 |
 | [本机客户端协议 v1](local-client-protocol.md) | #45 回环协议与 #91 TUI 所需接口 |
 | [规划界面原型参考](planning-ui.md) | 旧页面方向仅参考，不产生当前任务/前置 |

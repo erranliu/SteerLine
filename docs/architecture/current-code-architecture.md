@@ -8,6 +8,8 @@
 
 整体职责与生命周期原则见[架构总览](../architecture.md)，本页维护实际代码与端口归属。
 
+Worker 各节点的异常分类、重试预算和恢复边界统一维护于[Worker 流程异常处理与重试](../product-design/worker-lifecycle.md)，该文档同时索引当前实现与待补能力；本页不复制处理矩阵。
+
 用于拆分 roadmap 任务时，先按[并行开发指南](parallel-development.md)核对功能、契约、共享语义/接线和测试资源；本页的包划分不直接构成并行许可。
 
 TUI 由 `internal/consoleapp` 读取连接配置并注入 `internal/product/httpclient.Console`，全部业务消费经回环 HTTP。`internal/app` 保留 CLI/服务的具体 adapter、SQLite 和端口组装，并将 console 入口委托给 consoleapp；`internal/app/host` 承载服务进程、文件控制协议、启动/退出观察、锁与心跳，并通过注入端口调用 execution actor。任务和执行状态仍由唯一业务 actor 决定，再由 SQLite 专用提交接口校验身份、前值和版本。产品查询只把同一数据库快照投影为 `product/api` 页面。

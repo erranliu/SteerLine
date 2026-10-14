@@ -2,7 +2,7 @@
 
 Phase 1 includes local Codex, local Orca and remote delivery paths. Repository Git remote identifies the code/PR destination.
 
-SteerLine owns task claims, execution identities and delivery in the center SQLite database. A project config must set `task_authority` to `native` and `workflow_protocol` to `worker-flow-v1`. The worker uses the prepared worktree and its bound session to implement the task and respond to feedback.
+SteerLine owns task claims, execution identities and delivery in the center SQLite database. A project config must set `task_authority` to `native` and `workflow_protocol` to `worker-flow-v2`. The worker uses the prepared worktree and its bound session to implement the task and respond to feedback. Cross-node failure, retry and recovery rules are maintained in [Worker lifecycle](worker-lifecycle.md); this page owns Git workspace and lock constraints.
 
 ## State and worktree identity
 
@@ -12,7 +12,7 @@ For a claimed task, SQLite records the `WorkflowRun`, `Execution`, worker `StepA
 
 ## Worker flow
 
-The current `worker-flow-v1` claim fixes project, task contract, workflow, execution, worker attempt, repository, branch and base identities. The same worker session can receive feedback and continue on the same task. It cannot write center task state.
+The current `worker-flow-v2` claim fixes project, task contract, workflow, execution, worker attempt, repository, branch and base identities. The same worker session can receive feedback and continue on the same task. It cannot write center task state. Business steps follow the [current PR flow](../spec/worker-pr-flow.spec.md).
 
 The center associates a PR only after querying its repository, target branch and execution branch. A created PR does not complete the task: the center queries the exact PR, then atomically records delivery, closes the native Task and releases ready successors only after real merge evidence matches.
 

@@ -53,6 +53,8 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 
 ## 普通开发重构历史
 
+[Worker 三层职责重构](worker-three-layer.md)归属一个无编号的结构重构，配套 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)。当前只生成设计文档，TL-A01–TL-A07 均待执行；初始化增强和安装现场恢复不纳入本项，不以既有恢复验收声明本轮通过。
+
 [后端组装与最终回复状态收敛](bounded-structure-refactoring.md)仅归属一个无编号合并重构，2026-10-10 用户授权本聊天实施后，BS-A1–BS-A5 自动验证与结构自查通过，提交/PR 及独立复审/合并状态见专属记录。其[Spec](../spec/bounded-structure-refactoring.spec.md) / [Plan](../spec/bounded-structure-refactoring.plan.md)按 `8e292172` 提 PR 集成基线收紧；不进入 roadmap 调度，不再维护三项独立编号验收。
 
 ## 归档流程

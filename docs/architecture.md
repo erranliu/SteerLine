@@ -35,6 +35,8 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 ## 生命周期、反馈与恢复
 
+工作区准备、代理启动/初始化、输入接受/开执行、结果结算及收尾的节点异常和重试规则统一归[Worker 流程异常处理与重试](product-design/worker-lifecycle.md)。具体适配器提供原生事实与能力，worker 执行域决定动作并通过现有单写者提交；文档中的待补设计不代表当前实现已经支持。
+
 关闭控制台或 UI 只结束客户端观察；停止中心服务不证明外部 worker 已退出。停止、清理和释放按精确资源身份、实际后端能力及原 Operation 回执判断。
 
 Windows 中心由用户从安装入口打开的可见服务窗口承载，可最小化；独立控制台不代启后台服务。离线入口显示 window-required 和 service-window.bat 的实际路径。服务窗口关闭结束中心进程；显式停服须同时核对原请求的 applied 回执、原进程退出及仓库/状态锁释放，未知时继续保留诊断，不伪造停止成功。Linux detached 路径按其平台能力展示，不视为 Windows 原生验收证明。当前操作见[执行控制台](product-design/execution-console.md)。
@@ -51,4 +53,4 @@ Windows 中心由用户从安装入口打开的可见服务窗口承载，可最
 
 ## Worker 分步流程
 
-当前开发流程 `development/v3` 在现有 worker 内用普通代码定义 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`；它与配置中的 `worker-flow-v2` 工作流协议是不同版本轴。实现正文自由输出，报告与发布使用严格结果；合法发布结果直接推进；发布结果格式错误时只增加一次 publish.report，禁止重做发布动作，见[发布补报](spec/worker-publish-report.spec.md)。业务模型轮次共用原会话/Attempt。WorkflowRun 的 `status/flow_ref/step_id` 是唯一业务状态权威，Execution.Status 保留原生事实。结果、转移与下一输入意图同事务提交；adapter 只提供规范事实/能力，不解析业务 JSON 或选择下一步。当前流程不保存独立 artifact 快照，报告绑定原输入/结果，无法直接继续的报告恢复需回原会话核实。候选与 PR head 经真实事实核验，真实合并仍走唯一 TaskDelivery。源码规则见 [staged_flow.go](../internal/execution/staged_flow.go) 和 [model/staged_flow.go](../internal/execution/model/staged_flow.go)；历史分步契约及原始验收见 [Spec](spec/worker-staged-flow.spec.md)与[专属记录](acceptance/worker-staged-flow.md)。
+当前开发流程 `development/v3` 在现有 worker 内用普通代码定义 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`；它与配置中的 `worker-flow-v2` 工作流协议是不同版本轴。实现正文自由输出，报告与发布使用严格结果；合法发布结果直接推进；发布结果格式错误时只增加一次 publish.report，禁止重做发布动作。业务模型轮次共用原会话/Attempt。WorkflowRun 的 `status/flow_ref/step_id` 是唯一业务状态权威，Execution.Status 保留原生事实。结果、转移与下一输入意图同事务提交；adapter 只提供规范事实/能力，不解析业务 JSON 或选择下一步。PR 归属与实际合并经 provider 核验，不冻结候选 SHA 或比较阶段成果快照；真实合并仍走唯一 TaskDelivery。完整契约见[统一 PR 流程](spec/worker-pr-flow.spec.md)，原 #84 的[分步 Spec](spec/worker-staged-flow.spec.md)与[验收记录](acceptance/worker-staged-flow.md)保留历史追溯。
