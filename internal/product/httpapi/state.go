@@ -120,6 +120,7 @@ func validateCommandDirectory(path, projectIdentity string) error {
 	if err != nil {
 		return err
 	}
+	records := newFileRequestRecordOwner(path)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			return errors.New("local API command directory contains a nested directory")
@@ -134,7 +135,7 @@ func validateCommandDirectory(path, projectIdentity string) error {
 		if !strings.HasSuffix(entry.Name(), ".json") || !requestIDPattern.MatchString(strings.TrimSuffix(entry.Name(), ".json")) {
 			return fmt.Errorf("local API command directory contains an unsupported file %q", entry.Name())
 		}
-		record, readErr := readRequestRecord(file)
+		record, readErr := records.Read(strings.TrimSuffix(entry.Name(), ".json"))
 		if readErr != nil {
 			return fmt.Errorf("read local API request record %s: %w", entry.Name(), readErr)
 		}

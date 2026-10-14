@@ -18,7 +18,6 @@ import (
 	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	fs "github.com/erranliu/SteerLine/internal/product/httpfs"
 )
 
@@ -34,35 +33,39 @@ type Options struct {
 }
 
 type Server struct {
-	product     *productclient.Client
-	options     Options
-	apiDir      string
-	commandsDir string
-	credential  string
-	token       string
-	leaseID     string
-	listener    net.Listener
-	http        *http.Server
-	identity    Identity
-	discovery   Discovery
-	mu          sync.RWMutex
-	commandMu   sync.Mutex
-	started     bool
-	closed      bool
+	query        QueryPort
+	commands     *commandRegistry
+	activities   ActivityQueryPort
+	conversation ConversationQueryPort
+	recovery     RecoveryQueryPort
+	options      Options
+	apiDir       string
+	commandsDir  string
+	credential   string
+	token        string
+	leaseID      string
+	listener     net.Listener
+	http         *http.Server
+	identity     Identity
+	discovery    Discovery
+	readiness    *readinessState
+	mu           sync.RWMutex
+	started      bool
+	closed       bool
 }
 
 // Prepare binds only the loopback interface and creates the per-instance
 // credential/discovery pair before the service begins accepting commands.
-func Prepare(ctx context.Context, product *productclient.Client, options Options) (*Server, error) {
+func Prepare(ctx context.Context, ports Ports, options Options) (*Server, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if product == nil || options.RunDir == "" {
-		return nil, errors.New("local API requires a product client and run directory")
+	if ports.Query == nil || ports.Commands == nil || ports.Authority == nil || ports.NativeViewer == nil || options.RunDir == "" {
+		return nil, errors.New("local API requires query, command, authority and native viewer ports and a run directory")
 	}
-	project := product.Project()
+	project := ports.Query.Project()
 	if project.Identity == "" || options.ProjectIdentity != "" && options.ProjectIdentity != project.Identity {
-		return nil, &api.Error{Kind: api.IdentityConflict, Message: "local API project identity does not match the product client"}
+		return nil, &api.Error{Kind: api.IdentityConflict, Message: "local API project identity does not match the project query port"}
 	}
 	options.ProjectIdentity = project.Identity
 	if options.InstanceID == "" {
@@ -116,13 +119,16 @@ func Prepare(ctx context.Context, product *productclient.Client, options Options
 		return nil, fmt.Errorf("write local API credential: %w", err)
 	}
 
-	server := &Server{product: product, options: options, apiDir: apiDir, commandsDir: commandsDir,
+	readiness := &readinessState{status: "starting"}
+	server := &Server{query: ports.Query, activities: ports.Query, conversation: ports.Query, recovery: ports.Query,
+		options: options, apiDir: apiDir, commandsDir: commandsDir, readiness: readiness,
 		credential: credential, token: token, leaseID: leaseID, listener: listener,
 		identity: Identity{Protocol: Protocol, ProjectID: ProjectID(project.Identity), RepositoryIdentity: project.Identity,
 			LockPaths:  []string{filepath.Join(project.Identity, "steerline.lock"), filepath.Join(options.RunDir, "steerline.lock")},
 			InstanceID: options.InstanceID, Process: options.Process, Address: listener.Addr().String(), Status: "starting",
 			Capabilities: append([]string(nil), options.Capabilities...), SampledAt: time.Now().UTC()},
 	}
+	server.commands = newCommandRegistry(options, ports, readiness, newFileRequestRecordOwner(commandsDir))
 	server.discovery = Discovery{Version: 1, Protocol: Protocol, ProjectID: server.identity.ProjectID,
 		RepositoryIdentity: project.Identity, InstanceID: options.InstanceID, Process: options.Process,
 		Address: listener.Addr().String(), CredentialPath: credential, Ready: false, Status: "starting",
@@ -155,6 +161,7 @@ func (s *Server) Start() error {
 			s.mu.Lock()
 			s.identity.Ready, s.identity.Status, s.identity.Diagnostic = false, "failed", err.Error()
 			s.discovery.Ready, s.discovery.Status, s.discovery.Diagnostic = false, "failed", err.Error()
+			s.readiness.Set(false, err.Error(), "failed")
 			_ = s.writeDiscoveryLocked()
 			s.mu.Unlock()
 		}
@@ -183,6 +190,7 @@ func (s *Server) SetReady(instanceID string, ready bool, diagnostic string) erro
 	s.identity.Diagnostic, s.identity.SampledAt = diagnostic, time.Now().UTC()
 	s.discovery.InstanceID, s.discovery.Ready, s.discovery.Status = instanceID, ready, status
 	s.discovery.Diagnostic, s.discovery.UpdatedAt = diagnostic, time.Now().UTC()
+	s.readiness.Set(ready, diagnostic, status)
 	return s.writeDiscoveryLocked()
 }
 
@@ -195,6 +203,7 @@ func (s *Server) Close(ctx context.Context) error {
 	s.closed = true
 	s.identity.Ready, s.identity.Status = false, "stopped"
 	s.discovery.Ready, s.discovery.Status, s.discovery.UpdatedAt = false, "stopped", time.Now().UTC()
+	s.readiness.Set(false, s.discovery.Diagnostic, "stopped")
 	httpServer, listener := s.http, s.listener
 	s.mu.Unlock()
 

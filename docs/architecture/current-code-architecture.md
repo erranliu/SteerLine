@@ -23,7 +23,8 @@ flowchart LR
     App --> Client
     HTTPAPI --> Contract
     HTTP --> HTTPAPI[internal/product/httpapi]
-    HTTPAPI --> Client
+    HTTPAPI --> HTTPPorts[httpapi query / command / authority / native ports]
+    Client -. directly satisfies .-> HTTPPorts
     App --> Host[internal/app/host]
     Host -. Scheduler port .-> Exec[internal/execution actor]
     App --> Task[internal/task]
@@ -58,9 +59,9 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 | `internal/execution/adapters` | Codex app-server, Orca single-terminal local/environment implementation, and their public protocol codecs. Orca target routing shares code; remote delivery has a finite real sample after native CLI upgrade and directory trust preparation; automatic continuation of the initially rejected task remains unverified. |
 | `internal/execution/workspace`, `publication`, `process` | Git workspace, provider/PR operations, managed worker processes and file resource facts. The app injects process facts into the host. |
 | `internal/product/api` | Serializable product pages, user commands, request targets and receipts. It contains no Runtime, Config, SQL record, or Go handle. |
-| `internal/product/client` | The injected internal product client for CLI/service consumers and HTTP handlers. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
+| `internal/product/client` | The injected internal product client for CLI/service consumers. At app composition it directly satisfies the HTTP server's query, command, authority and native-viewer ports; the HTTP package does not depend on the concrete client. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
 | `internal/product/query` | Read-only projections and composition of product pages from storage ports. No SQL or business writer. |
-| `internal/product/httpapi` | Loopback HTTP discovery/authentication and DTO/action transport over the product client. It stores immutable request envelopes/transport receipts; it does not open SQL or own business transitions. |
+| `internal/product/httpapi` | Loopback HTTP discovery/authentication and DTO/action transport over narrow query, command, authority and native-viewer ports. `command_registry.go` owns immutable envelope registration and authority reconciliation; `request_records.go` owns the private record format and atomic file access. The package does not open SQL or own business transitions. |
 | `internal/consoleapp` | TUI connection-only configuration and HTTP adapter composition, with no execution/query/storage dependencies. |
 | `internal/product/httpclient`, `httpcontract`, `httpfs` | Pure HTTP consumer, serializable wire values, restricted discovery/credential/outgoing files and local OS exit/lock observation. No business-file fallback. |
 | `internal/console` | TUI navigation and view state; consumes only product API values and injected client interfaces. A named `finalReplyReader` owns final index/body/preview state and read acceptance; Model owns candidate selection, step query facts, scrolling/recovery and native session opening. |
@@ -102,7 +103,7 @@ The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e
 | Host calls into execution | `execution.HostPort` and scheduler callbacks in `internal/execution`; `internal/app/host` uses injected ports and does not implement domain transitions. |
 | Serializable product surface | `internal/product/api`; `internal/product/client` is the one injected Go client; `internal/product/query` projects read-only storage values. |
 | TUI composition | `internal/app.PrepareConsole` delegates to `internal/consoleapp.Prepare`; console consumes the HTTP adapter through its existing ports. |
-| Local native client transport | `internal/product/httpapi` adapts the serializable product client to `steerline-client/v1`; `internal/app` starts it within the existing locked service lifetime. |
+| Local native client transport | `internal/product/httpapi` adapts its consumer ports to `steerline-client/v1`; `internal/app` directly supplies the product client as the port implementation and starts the endpoint within the existing locked service lifetime. |
 | Atomic persistence declarations | `internal/storage/ports`; `internal/storage/sqlite` is the sole SQL/schema/transaction implementation. |
 | Composition inputs | `internal/app.Config`, `LoadConfig`, `NewService` and the app wiring files bind the concrete adapters, ports and SQLite owner. |
 | Main executable | `cmd/steerline/main.go` routes `console`, `run`/`start-service`, task and product commands. |
@@ -196,7 +197,7 @@ flowchart LR
 | 边界 | 当前程度 | 仍共享的职责 |
 | --- | --- | --- |
 | TUI ↔ HTTP ↔ 服务 | 业务传输已经分开；console 只依赖产品值和消费接口，consoleapp/httpclient 的生产闭包不含业务库、query、execution 或 handler | httpclient.Console 同时负责重连、页面缓存、请求文件、命令对账和本机停服观察；这些职责没有独立注入端口 |
-| HTTP handler ↔ Go 应用 | 不打开 SQL，不推进业务状态 | Server 持有具体 `*productclient.Client`；commands.go 同时实现协议校验、信封文件仲裁、动作映射和双权威对账，openNative 又有专用登记路径 |
+| HTTP handler ↔ Go 应用 | Server 通过查询、命令、authority 与原生查看消费端口调用现有应用；不打开 SQL，不推进业务状态 | `command_registry.go` 统一普通命令和原生查看的登记/对账及跨动作仲裁；`request_records.go` 单独持有私有记录格式、大小边界和原子读写。app 将现有 product client 直接接入这些端口 |
 | 任务管理 ↔ 执行 | task 只依赖 task/model；execution 通过 TaskWorkPort/TaskResultPort 调用任务规则，不导入 task 实现 | claim/result/discard/delivery 跨域协调仍在 execution.CommandService；CommandStore 集合较宽，不能将它全部注入每个用途 |
 | 流程 ↔ worker 运行时 | adapter 不解析业务 JSON、不选择下一业务步骤 | staged_flow、worker 生命周期、反馈、恢复、会话采集及提交都是 Service 方法，共享 domain/runs/worker/effect 状态；主要是文件归属，尚无包级隔离 |
 | 本地 Codex ↔ Orca | 两个 adapter 和协议 codec 已分开，核心不导入实现 | 核心仍用聚合 LifecyclePort；部分通用分离启动逻辑仍叫 applyAppServerSessionReceipt/applyAppServerTurnReceipt，需要按真实通用职责建立边界；两端证据和停止能力仍不同 |
@@ -209,7 +210,7 @@ flowchart LR
 1. **高收益：抽出固定流程规则。** 从 [staged_flow.go](../../internal/execution/staged_flow.go) / [staged_result.go](../../internal/execution/staged_result.go) 分离 `development/v3` 的结果解析、步骤决策、报告重试与下一输入构造。规则接收固定值和已核验事实，返回显式变更声明/所需动作，不接收 Service、RunView 可写指针、SQL 或 backend 句柄。I/O 核验仍由 actor/效果层执行，核验结果再交规则判断；结果、转移与下一输入仍一次提交。首先分离 implement/report/publish 规则，不建设通用工作流引擎。
 2. **高收益：收拢 worker 运行时资源所有权。** 首轮 [#96](../spec/worker-runtime-ownership.spec.md)只收拢观察器、原句柄、在途外部调用、取消/关闭和固定结果交接，复用已有后台机制。只接受已持久化 Operation 与冻结资源值，返回原身份事实/回执；不携带可写 RunView/apply闭包。业务 actor 保留步骤、Decision、恢复资格、提交与确认门槛，具体adapter保留证据/停服能力，本机/environment Orca仍共用实现。完整业务恢复拆分不混入首轮。
 3. **高收益：抽出任务最终交付。** [native_delivery_command.go](../../internal/execution/native_delivery_command.go) 当前组合冻结 provider、真实 PR 查询、执行门槛、任务结果和提交。[#95](../spec/task-delivery-usecase.spec.md)仅提取最终交付用例，接收固定候选/任务、带provider身份的PR事实、任务结果声明和提交端口；claim/discard的进一步收窄留后续。沿用 [ResultCommit](../../internal/storage/ports/task_result.go) 的原子提交，不拆唯一TaskDelivery/closed/WorkflowRun/图修订。流程/PR绑定仍由actor负责，未知发布但合法真实合并的原交付路径保持。
-4. **中高收益：分离 HTTP 协议与命令登记/对账。** 为 Server 定义消费方拥有的查询、命令和原生查看端口，消除具体 Client 依赖；将信封登记、同 ID 冲突和 authority lookup 提取为有明确存储端口的登记/对账组件，HTTP 层保留认证、状态码、JSON 和路由。普通业务命令与原生窗口副作用共用登记基础，保留各自重试规则；不把 transport receipt 变成领域权威，也不把 unknown 当成重放许可。这让协议测试无需真实 app/SQLite，新增前端无需复制该套规则。
+4. **中高收益：分离 HTTP 协议与命令登记/对账。** 任务 [#92](../spec/http-command-boundary.spec.md) 的候选实现将 Server 改为消费查询、命令、authority 和原生查看端口，app 直接提供现有 product client；登记 owner 接收固定信封与 OS 调用身份，不接收 Server、Request、ResponseWriter、具体 Client 或数据库连接。普通业务命令与原生窗口副作用共用记录 owner 和跨动作仲裁，保留各自重试规则；HTTP 层保留认证、路由、JSON 上限和状态码映射。不把 transport receipt 变成领域权威，也不把 unknown 当成重放许可。具体行为与验收结果见[专属验收](../acceptance/http-command-boundary.md)。
 5. **中收益：分离客户端原请求与本机观察。** [#93](../spec/http-client-request-lifecycle.spec.md)保留已有Client/Open连接实现，在 [httpclient/console.go](../../internal/product/httpclient/console.go)中收拢journal文件职责、显式注入OS停服observer；Console仍组织原HTTP对账。保留先保存后发送、窗口关闭取消、旧实例禁重放与三份停服证据，不建设新连接框架或远程部署。
 
 上述顺序优先减少共享 Service 的修改范围。HTTP 端口和客户端拆分可独立准备；交付抽取与 worker 抽取都涉及共享模型/接线时应分次落地。每次抽取都应以“消费者无需修改无关 owner，且测试无需完整 Service/真后端”验收，单纯移动文件或接口方法原样转发不算完成解耦。

@@ -14,7 +14,7 @@
 
 | 任务 ID | 任务名称 | 成果 / 主要owner | 硬前置与并行/集成安排 | Spec / Plan | 专属验收 |
 | --- | --- | --- | --- | --- | --- |
-| 92 | HTTP 服务端命令边界收敛 | httpapi消费端口、同包信封登记/对账owner、HTTPendpoint接线 | 已纳入execution-map待执行；无新增硬前置，与93可并行，wire/API冻结 | [Spec](../../spec/http-command-boundary.spec.md) · [Plan](../../spec/http-command-boundary.plan.md) | [验收](../../acceptance/http-command-boundary.md)：HC92-A1–A3，owner/HTTP/真实app定向，无新增人工 |
+| 92 | HTTP 服务端命令边界收敛 | httpapi消费端口；command_registry登记/对账；request_records私有记录owner；HTTP endpoint接线 | 已纳入execution-map待执行；无新增硬前置，与93可并行，wire/API冻结 | [Spec](../../spec/http-command-boundary.spec.md) · [Plan](../../spec/http-command-boundary.plan.md) | [验收](../../acceptance/http-command-boundary.md)：HC92-A1–A3，owner/HTTP/真实app定向，无新增人工 |
 | 93 | HTTP 客户端原请求与停服观察解耦 | httpclient journal/跨进程终态保护、本机observer、consoleapp构造，保留原连接 | 已纳入execution-map待执行；无新增硬前置，与92可并行，新增仲裁仅在私有journal | [Spec](../../spec/http-client-request-lifecycle.spec.md) · [Plan](../../spec/http-client-request-lifecycle.plan.md) | [验收](../../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3，确定性交错/Windows/独立simulate，无新增人工 |
 | 94 | 固定开发流程规则独立 | development/v3纯规则包、原actor规则接线 | 仅保留草稿，暂不纳入；Workflow规则与正在实施的三层重构直接重叠，待成果合入后重审 | [Spec](../../spec/development-flow-rules.spec.md) · [Plan](../../spec/development-flow-rules.plan.md) | [验收](../../acceptance/development-flow-rules.md)：DF94-A1–A4，纯规则/事务/双后端controlled，无新增人工 |
 | 95 | 任务最终交付用例独立 | delivery窄端口用例、CompleteNativeTask薄接线，保留原PR绑定 | 仅保留草稿，暂不纳入；交付抽取有剩余收益，actor/PR桥接与记录映射正在重组，待稳定后重审 | [Spec](../../spec/task-delivery-usecase.spec.md) · [Plan](../../spec/task-delivery-usecase.plan.md) | [验收](../../acceptance/task-delivery-usecase.md)：TD95-A1–A4，用例/原子事务/两条L3 controlled，无新增人工 |

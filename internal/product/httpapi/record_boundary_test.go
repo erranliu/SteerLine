@@ -16,6 +16,16 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
+// writeRequestRecord prepares private-file fixtures for package boundary tests.
+// Production callers publish records only through fileRequestRecordOwner.
+func writeRequestRecord(dir, path string, record requestRecord) error {
+	data, err := marshalRequestRecord(record)
+	if err != nil {
+		return err
+	}
+	return writePrivateAtomic(dir, path, data)
+}
+
 func TestAPIRequestRecordSizeBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		name, action   string
