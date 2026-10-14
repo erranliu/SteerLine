@@ -24,6 +24,9 @@ func reserveStopTestCandidates(t *testing.T, s *Service, count int) []string {
 		require(t, err)
 		config, profile, err := s.runtime.Profiles.ResolveExecutionProfile("first", "")
 		require(t, err)
+		require(t, config.BindPublicationTarget(ctx, s.runtime.ProcessHost))
+		profile = freezeClaimExecutionProfile(profile, config)
+		config.fixedProfileDigest = profile.Digest
 		id := newID()
 		_, err = s.commandService(s.Config.identity).ClaimNativeTask(ctx, config, TaskClaimOptions{
 			TaskID: "101", RequestID: id, WorkflowRunID: id, ExpectedTaskVersion: graph.ByID["101"].Version,

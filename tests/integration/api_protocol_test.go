@@ -111,7 +111,7 @@ func TestAPIServiceLifecycle(t *testing.T) {
 
 func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
 	requireWindowsAPI(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
 	serviceCtx, stopService := context.WithCancel(ctx)
@@ -120,8 +120,8 @@ func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
 	var client *httpclient.Client
 	var lastOpenErr error
 	// Native authority preflight and the real service factory precede API
-	// publication. Keep a bounded minute for that complete startup path.
-	deadline := time.Now().Add(time.Minute)
+	// publication. Allow the complete startup path under Full process load.
+	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		select {
 		case serviceErr := <-done:

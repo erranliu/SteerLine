@@ -18,6 +18,13 @@ type simplifiedSlowPort struct {
 	calls            atomic.Int32
 }
 
+func (p *simplifiedSlowPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
+	return executionbackend.LifecyclePolicyCapabilities{Preparation: executionbackend.PreparationCapabilities{Workspace: executionbackend.MechanismNotApplicable, Resource: executionbackend.MechanismApplicable, Session: executionbackend.MechanismNotApplicable}}
+}
+func (p *simplifiedSlowPort) PreparationFacts(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.PreparationFacts, error) {
+	return executionbackend.PreparationFacts{Workspace: executionbackend.GateNotApplicable, Resource: executionbackend.GateRequired, ResourceRequired: &executionbackend.ResourceIntent{Purpose: "fixture"}, Session: executionbackend.GateNotApplicable}, nil
+}
+
 type simplifiedCleanupPort struct{ executionbackend.LifecyclePort }
 
 func (p simplifiedCleanupPort) Execute(_ context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
