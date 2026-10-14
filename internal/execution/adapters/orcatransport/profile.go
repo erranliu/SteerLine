@@ -9,18 +9,17 @@ import (
 )
 
 const ProfileKey = "orca.terminal-profile"
-const ProfileVersion = 2
+const ProfileVersion = 3
 const StateKey = "orca.terminal-state"
 const StateVersion = 5
 const ServiceStopBehavior = b.ContinueExecutionOnServiceStop
 
 // Environment is routing only; local and paired execution have the same ports.
 type Profile struct {
-	Executable         string   `json:"executable"`
-	Args               []string `json:"args,omitempty"`
-	Environment        string   `json:"environment,omitempty"`
-	RepositorySelector string   `json:"repository_selector"`
-	WaitTimeout        string   `json:"wait_timeout"`
+	Executable  string   `json:"executable"`
+	Args        []string `json:"args,omitempty"`
+	Environment string   `json:"environment,omitempty"`
+	WaitTimeout string   `json:"wait_timeout"`
 }
 
 func DecodeProfile(data []byte) (Profile, error) {
@@ -28,8 +27,8 @@ func DecodeProfile(data []byte) (Profile, error) {
 	if err := b.DecodeStrictJSON(data, &p, "trailing Orca terminal profile"); err != nil {
 		return p, err
 	}
-	if strings.TrimSpace(p.Executable) == "" || strings.TrimSpace(p.RepositorySelector) == "" || strings.ContainsAny(p.Environment+p.RepositorySelector, "\x00\r\n") {
-		return p, errors.New("Orca executable and fixed repository selector are required")
+	if strings.TrimSpace(p.Executable) == "" || strings.ContainsAny(p.Environment, "\x00\r\n") {
+		return p, errors.New("Orca executable is required and environment must be a single line")
 	}
 	if d, err := time.ParseDuration(p.WaitTimeout); err != nil || d <= 0 || d > time.Minute {
 		return p, errors.New("Orca wait_timeout must be positive and at most one minute")
@@ -55,10 +54,10 @@ func NormalizeProfile(data []byte) ([]byte, []string, error) {
 }
 func (p Profile) Target() b.ExecutionTarget {
 	wire, _ := json.Marshal(struct {
-		Executable              string
-		Args                    []string
-		Environment, Repository string
-	}{p.Executable, append([]string(nil), p.Args...), p.Environment, p.RepositorySelector})
+		Executable  string
+		Args        []string
+		Environment string
+	}{p.Executable, append([]string(nil), p.Args...), p.Environment})
 	host := p.Environment
 	if host == "" {
 		host = "local"

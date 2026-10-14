@@ -34,7 +34,7 @@ SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改�
 
 保存连接配置及两端认证访问的验证见[配置验收](../acceptance/orca-pair-configuration.md)。
 
-统一使用 `host: orca`、`orca.terminal-profile` 格式 2 和 `orca_terminal_v3`。agent 是 Orca 注册的原生启动器标识，不由 SteerLine 拼接模型命令。payload 显式指定 CLI、固定 repository_selector 和 wait_timeout；部署方案显式指定 environment，所有 worktree / terminal 调用都路由到该环境。本机方案同样通过自己的保存环境访问本机 runtime。
+统一使用 `host: orca`、`orca.terminal-profile` 格式 3 和 `orca_terminal_v3`。agent 是 Orca 注册的原生启动器标识，不由 SteerLine 拼接模型命令。payload 仅指定 CLI、wait_timeout 和可选 environment，不再指定仓库目录或 ID。同一执行方案可跨项目复用：没有 environment 时直接使用当前项目的仓库路径；指定 environment 时，先列出该环境中已注册的 Git 仓库，按实际路径的最后一级目录名与当前项目仓库匹配，再用唯一匹配的仓库 ID 创建工作区。匹配不使用 Orca 显示名称；没有匹配、重名或列表不完整时在创建前明确拒绝，不选择其他项目。恢复只使用原工作区创建回执，不重新按目录名匹配。
 
 本机与远端都只有一个受管 agent 终端。工作区创建时不传 prompt；上层 worker 保存与 Codex 一致的阶段提示词，不添加 SL_RESULT、base64 或 nonce 指令；下层通过 terminal send 原样投递一次，通过原请求回执、原生主代理状态及原终端完整可见回复核验本轮普通结果。accepted 与 turn_started 分开记录。主代理结束由订阅/补查询确认，可见完成行不作为执行结束信号；本轮普通原文与完整可见回复一致后才推进。配对订阅按固定 environment 读取 Orca 保存的认证。原 runtime / terminal / incarnation / worktree / branch 不符、输出裁剪、缺失输入/回复边界或未确认开始，均不证明完成，也不改投其他终端或补 Enter。
 
@@ -44,9 +44,12 @@ SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改�
 {
   "executable": "orca.exe",
   "environment": "paired-environment-id",
-  "repository_selector": "id:fixed-repository-id",
   "wait_timeout": "30s"
 }
 ```
 
 旧 host=orca_supervised、对应 codec / Run / Task / Dispatch 生命周期与旧 Orca codec 直接删除。没有迁移、兼容读取或回退。当前 [Spec](../spec/orca-terminal-transport.spec.md)、[Plan](../spec/orca-terminal-transport.plan.md) 与[验收](../acceptance/orca-terminal-transport.md)。
+
+2026-10-14 仓库自动选择的实现与验证见[专属验收](../acceptance/orca-project-repository.md)。格式 2 与旧 repository_selector 不再接收，无迁移或兼容读取。
+
+已有安装数据库若冻结了旧格式执行方案，服务会拒绝启动；只改 execution.json 不足以升级。安装更新须先明确处理旧执行状态，不自动改写已冻结方案，也不清除任务/执行记录。没有历史运行状态的新环境直接使用格式 3。

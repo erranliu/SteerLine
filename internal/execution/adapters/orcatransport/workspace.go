@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"strings"
 	"time"
 
@@ -15,11 +16,13 @@ import (
 // Stored inside the existing operation receipt, including on terminal-query failure.
 // No resource is rediscovered by name when its creation response was lost.
 type workspaceCreation struct {
-	RuntimeID           string          `json:"runtime_id"`
-	Worktree            native.Worktree `json:"worktree"`
-	AgentTerminalHandle string          `json:"agentTerminalHandle,omitempty"`
-	StartupTerminal     native.Terminal `json:"startupTerminal"`
-	Terminal            native.Terminal `json:"selected_terminal"`
+	RuntimeID            string          `json:"runtime_id"`
+	ResolvedRepositoryID string          `json:"resolved_repository_id,omitempty"`
+	ResolvedRuntimeID    string          `json:"resolved_runtime_id,omitempty"`
+	Worktree             native.Worktree `json:"worktree"`
+	AgentTerminalHandle  string          `json:"agentTerminalHandle,omitempty"`
+	StartupTerminal      native.Terminal `json:"startupTerminal"`
+	Terminal             native.Terminal `json:"selected_terminal"`
 }
 
 func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, reconcile bool) (receipt b.LifecycleReceipt, err error) {
@@ -40,7 +43,13 @@ func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, 
 		// Keep the checkpoint even when this reconciliation cannot query Orca.
 		receipt.Operation.Receipt = append([]byte(nil), saved.Operation.Receipt...)
 	} else {
-		args := []string{"worktree", "create", "--repo", l.profile.RepositorySelector, "--name", name, "--base-branch", r.Input.Workspace.BaseCommit, "--no-parent", "--setup", "skip", "--activate", "--json"}
+		selector, runtimeID, resolveErr := l.workspaceRepository(ctx)
+		if resolveErr != nil {
+			// Only read-only discovery ran; no creation needs reconciliation.
+			receipt.Disposition = b.OperationRejected
+			return receipt, resolveErr
+		}
+		args := []string{"worktree", "create", "--repo", selector, "--name", name, "--base-branch", r.Input.Workspace.BaseCommit, "--no-parent", "--setup", "skip", "--activate", "--json"}
 		if l.setup.AgentLaunchCommand == "" {
 			args = append(args, "--agent", s.Ref.Agent.Name)
 		}
@@ -56,8 +65,17 @@ func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, 
 			return receipt, err
 		}
 		created.RuntimeID = result.RuntimeID
+		if runtimeID != "" {
+			created.ResolvedRepositoryID = strings.TrimPrefix(selector, "id:")
+			created.ResolvedRuntimeID = runtimeID
+		}
 	}
 	worktree := created.Worktree
+	if l.profile.Environment != "" && (created.ResolvedRuntimeID == "" || created.ResolvedRuntimeID != created.RuntimeID || created.ResolvedRepositoryID == "" || created.ResolvedRepositoryID != worktree.RepoID) {
+		// Keep both the discovery identity and creation response for reconciliation.
+		receipt.Operation.Receipt, _ = json.Marshal(created)
+		return receipt, errors.New("Orca workspace creation changed the resolved repository/runtime")
+	}
 	if created.RuntimeID == "" || worktree.ID == "" || worktree.InstanceID == "" || worktree.Path == "" || worktree.Head != r.Input.Workspace.BaseCommit || worktree.BaseRef != r.Input.Workspace.BaseCommit || worktree.DisplayName != name {
 		return receipt, errors.New("Orca worktree differs from fixed name/base")
 	}
@@ -140,6 +158,55 @@ func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, 
 		receipt.Disposition = b.OperationConfirmed
 	}
 	return receipt, err
+}
+
+// Repository selection belongs to the project, not a reusable execution profile.
+// An environment inventory is matched by directory basename, never displayName.
+func (l *Lifecycle) workspaceRepository(ctx context.Context) (selector, runtimeID string, err error) {
+	repository := l.setup.RepositoryPath
+	if strings.TrimSpace(repository) == "" || strings.ContainsAny(repository, "\x00\r\n") {
+		return "", "", errors.New("missing project repository path")
+	}
+	if l.profile.Environment == "" {
+		return "path:" + repository, "", nil
+	}
+	name := repositoryDirectoryName(repository)
+	if name == "." || name == "/" || name == "" || strings.HasSuffix(name, ":") {
+		return "", "", errors.New("project repository has no directory name")
+	}
+	result, err := l.client.MetaCall(ctx, "repo", "list", "--json")
+	if err != nil {
+		return "", "", fmt.Errorf("cannot find Orca repository directory %q: %w", name, err)
+	}
+	var listing struct {
+		Repos []struct {
+			ID, Path, Kind string
+		} `json:"repos"`
+		Truncated bool `json:"truncated"`
+	}
+	if json.Unmarshal(result.Payload, &listing) != nil || result.RuntimeID == "" || listing.Truncated {
+		return "", "", errors.New("Orca repository inventory is incomplete")
+	}
+	for _, repo := range listing.Repos {
+		if repo.Kind != "git" || !strings.EqualFold(repositoryDirectoryName(repo.Path), name) {
+			continue
+		}
+		if repo.ID == "" {
+			return "", "", errors.New("Orca repository inventory has no repository identity")
+		}
+		if selector != "" {
+			return "", "", fmt.Errorf("multiple Orca Git repositories have directory name %q in environment %q", name, l.profile.Environment)
+		}
+		selector = "id:" + repo.ID
+	}
+	if selector == "" {
+		return "", "", fmt.Errorf("no Orca Git repository has directory name %q in environment %q; register the matching repository first", name, l.profile.Environment)
+	}
+	return selector, result.RuntimeID, nil
+}
+
+func repositoryDirectoryName(repository string) string {
+	return path.Base(strings.TrimRight(strings.ReplaceAll(repository, "\\", "/"), "/"))
 }
 
 // Only the known surface-registration race is retryable. The caller supplies

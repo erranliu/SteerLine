@@ -10,6 +10,10 @@
 
 host=orca 本机与 environment 使用相同能力。全部调用由本机显式 CLI 发起，远端仅增加固定 environment。工作区创建用固定 base、独立 name、setup=skip 和 activate，不传业务 prompt；默认由原生 agent 启动。若上层冻结了 agent_launch 命令，在唯一原 shell 终端启动该命令并核实原 agent 身份；不建 coordinator、Run、Task、Dispatch 或辅助终端。激活用于让原生会话可操作，不创建第二个终端。模型和启动偏好可由上层 agent 编译器冻结为通用命令；Orca adapter 原样执行，不解释模型参数，不改变 worker 提示词。权限由启动命令与执行主机设置决定，不读取代理私有日志。
 
+## 项目仓库选择（2026-10-14）
+
+执行方案不再保存仓库目录或仓库 ID，Orca profile codec 为 3。未指定 environment 时使用当前项目仓库路径；指定 environment 时按当前项目仓库的最后一级目录名，唯一匹配该环境已注册 Git 仓库的实际路径，并以其 ID 创建工作区。目录名匹配忽略大小写、兼容 Windows/Unix 路径分隔符和尾部分隔符，不依据 displayName。无匹配、多个匹配、无仓库 ID 或列表不完整时只返回明确拒绝，零 worktree 创建、零 agent 输入。创建结果必须仍属于查询时的 runtime 和仓库；后续恢复只使用原创建回执，不重新发现或创建。旧 repository_selector 配置直接拒绝。最小自动验证及待验范围见[专属验收](../acceptance/orca-project-repository.md)。
+
 ## 输入与结果
 
 共用 worker 只生成阶段业务提示词和业务 JSON 结果要求。Codex 与 Orca 接收相同阶段的同一原始文本；后端不追加结果帧、编码、nonce 或传输长度指令。Command ID、原请求、runtime / terminal / incarnation 与输入摘要仅在 adapter 内部关联，不要求模型回填。

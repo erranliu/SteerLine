@@ -41,8 +41,8 @@ func orcaOriginalTurnEnded(ctx context.Context, environment string, process back
 
 func CodexExecutable(command string) (string, error) { return codexworker.NativeExecutable(command) }
 
-func OrcaWorkerProfile(executable, repository, waitTimeout string) map[string]any {
-	return map[string]any{"executable": executable, "args": []string{}, "repository_selector": "path:" + repository, "wait_timeout": waitTimeout}
+func OrcaWorkerProfile(executable, waitTimeout string) map[string]any {
+	return map[string]any{"executable": executable, "args": []string{}, "wait_timeout": waitTimeout}
 }
 
 func WorkerImplementationConfigs(executable string, orca map[string]any) []map[string]any {

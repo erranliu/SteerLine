@@ -12,7 +12,7 @@ import (
 
 func mixedPublicationProfiles() []ExecutionProfile {
 	localCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe"})
-	orcaOptions, _ := json.Marshal(remote.Profile{Executable: "orca.exe", RepositorySelector: "id:repo", WaitTimeout: "30s"})
+	orcaOptions, _ := json.Marshal(remote.Profile{Executable: "orca.exe", WaitTimeout: "30s"})
 	return []ExecutionProfile{
 		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: localCodex}}},
 		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileKey, CodecVersion: remote.ProfileVersion, Payload: orcaOptions}}},

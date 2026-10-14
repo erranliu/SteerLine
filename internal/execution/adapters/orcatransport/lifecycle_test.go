@@ -36,6 +36,7 @@ type fakeHost struct {
 	waitCalls                     int
 	waitBudgets                   []time.Duration
 	workspace                     map[string]any
+	repoInventory                 any
 }
 
 func (f *fakeHost) StartManaged(*exec.Cmd) (b.StopHandle, error) {
@@ -71,6 +72,11 @@ func (f *fakeHost) OutputCommand(_ context.Context, c b.LaunchCommand) ([]byte, 
 	}
 	var result any
 	switch c.Args[0] + " " + c.Args[1] {
+	case "repo list":
+		result = f.repoInventory
+		if result == nil {
+			result = map[string]any{"repos": []any{map[string]any{"id": "repo", "kind": "git", "path": "/srv/" + repositoryDirectoryName(f.root)}}}
+		}
 	case "worktree create":
 		f.workspace = map[string]any{"id": "repo::" + path, "instanceId": "original-workspace", "repoId": "repo", "path": path, "branch": "worker", "head": arg("--base-branch"), "baseRef": arg("--base-branch"), "displayName": arg("--name")}
 		result = map[string]any{"worktree": f.workspace, "agentTerminalHandle": "terminal"}
@@ -256,7 +262,7 @@ func fixtureOn(t *testing.T, environment string) (*Lifecycle, *fakeHost, b.Lifec
 	if environment != "" {
 		f.nativePath = "/srv/owned-worker"
 	}
-	p := Profile{Executable: "orca.exe", RepositorySelector: "id:repo", WaitTimeout: "1s", Environment: environment}
+	p := Profile{Executable: "orca.exe", WaitTimeout: "1s", Environment: environment}
 	raw, _ := json.Marshal(p)
 	s := b.LifecycleSnapshot{Ref: b.ExecutionRef{Backend: b.BackendOrca, Protocol: b.ProtocolOrcaTerminalV3, Target: p.Target(), Agent: b.AgentSpec{Name: "codex"}, RunID: strings.Repeat("d", 32), AttemptID: strings.Repeat("b", 32)}, Session: b.SessionContext{ProjectID: "project", ExecutionID: strings.Repeat("a", 32), AttemptID: strings.Repeat("b", 32), WorkflowRunID: strings.Repeat("d", 32), TaskID: "1"}, ConfigurationDigest: "config", ResourceGeneration: "generation", WorkspacePlan: b.WorkspaceIntent{BaseCommit: strings.Repeat("e", 40)}}
 	data, err := b.NewImplementationDataEnvelope(b.ImplementationDataEnvelope{CodecVersion: ProfileVersion, Purpose: b.ImplementationConfigPurpose, ImplementationKey: ProfileKey, ProjectID: "project", ProfileID: "profile", AcceptedConfigVersion: "accepted"}, raw)

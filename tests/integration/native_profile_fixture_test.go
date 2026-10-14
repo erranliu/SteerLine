@@ -234,7 +234,7 @@ func requireNativeFlowCapabilities(ctx context.Context, c steerlineapp.Config) e
 func setNativeProfile(t *testing.T, c *steerlineapp.Config, worker codexworker.ProfileConfig) {
 	var terminal *terminaltransport.Profile
 	if c.Host == "orca" {
-		terminal = &terminaltransport.Profile{Executable: "orca", RepositorySelector: "id:fixture", WaitTimeout: "5s"}
+		terminal = &terminaltransport.Profile{Executable: "orca", WaitTimeout: "5s"}
 	}
 	setNativeImplementationProfiles(t, c, worker, terminal)
 }

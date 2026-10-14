@@ -529,7 +529,7 @@ func TestTM06ResourceWiring(t *testing.T) {
 			}
 			continue
 		}
-		p := terminal.Profile{Executable: "orca", RepositorySelector: "id:repo", WaitTimeout: "30s"}
+		p := terminal.Profile{Executable: "orca", WaitTimeout: "30s"}
 		envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: terminal.ProfileVersion, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: terminal.ProfileKey, ProjectID: "project", ProfileID: "profile", AcceptedConfigVersion: "accepted"}, mustJSON(p))
 		require(t, err)
 		lifecycle, err := entry.Lifecycle(executionbackend.LifecycleSetup{Snapshot: executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV3, Target: p.Target(), Agent: executionbackend.AgentSpec{Name: "opaque"}}, Session: executionbackend.SessionContext{ProjectID: "project"}}, ProfileData: []executionbackend.ImplementationDataEnvelope{envelope}, ProfileID: "profile", AcceptedConfigVersion: "accepted"})

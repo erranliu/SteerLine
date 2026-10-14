@@ -109,7 +109,7 @@ func TestConfigRejectsRetiredBeadsExecutionFields(t *testing.T) {
 func TestOrcaNativeProfileKeepsFrozenAuthority(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	profile := testExecutionProfile(t, "orca", "Orca", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &terminalFixtureProfile{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
-	payload, err := json.Marshal(transport.Profile{Executable: "orca", WaitTimeout: "30s", RepositorySelector: "id:repo"})
+	payload, err := json.Marshal(transport.Profile{Executable: "orca", WaitTimeout: "30s"})
 	require(t, err)
 	profile.ImplementationConfigs[0].Payload = payload
 	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "orca")

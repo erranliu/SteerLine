@@ -185,6 +185,8 @@ func orcaFixture(path string, args []string) error {
 	}
 	var result any
 	switch key {
+	case "repo list":
+		result = map[string]any{"repos": []any{map[string]any{"id": "fixture", "kind": "git", "path": s.Cwd}}}
 	case "status":
 		result = map[string]any{"runtime": map[string]any{"state": "ready", "appVersion": "e2e-terminal", "capabilities": []string{"terminal.prompt-delivery.v1"}}}
 	case "worktree create":

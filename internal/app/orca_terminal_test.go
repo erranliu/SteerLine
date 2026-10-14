@@ -22,7 +22,7 @@ func TestTerminalRegistrationRejectsRetiredRoutesAndAgentPrivateFields(t *testin
 		if entry.Key.Protocol != b.ProtocolOrcaTerminalV3 || entry.LocalWorkspace || !entry.HostManagedPermissions || len(entry.ProfileCodecKeys) != 1 || entry.ProfileCodecKeys[0] != terminal.ProfileKey {
 			t.Fatal("Orca inherited a provider or orchestration route", entry)
 		}
-		payload := mustJSON(terminal.Profile{Executable: "orca.exe", WaitTimeout: "30s", RepositorySelector: "id:repo"})
+		payload := mustJSON(terminal.Profile{Executable: "orca.exe", WaitTimeout: "30s"})
 		_, _, err = d.NormalizeProfile([]b.ImplementationConfigInput{{ImplementationKey: terminal.ProfileKey, CodecVersion: terminal.ProfileVersion, Payload: payload}}, "orca", agent, "project", "profile", "accepted")
 		require(t, err)
 	}
@@ -32,8 +32,8 @@ func TestTerminalRegistrationRejectsRetiredRoutesAndAgentPrivateFields(t *testin
 	if _, err = d.ResolveIdentity(execution.ExecutionRegistrationKey{Backend: b.BackendOrca, Agent: "codex", Protocol: b.ExecutionProtocol("orca_supervised")}); err == nil {
 		t.Fatal("retired frozen execution remained routable")
 	}
-	for _, extra := range []string{`"target":"environment"`, `"model":"model"`, `"reasoning_effort":"high"`, `"return_origin":"http://localhost:1234"`, `"agent_command":"opaque"`} {
-		data := []byte(`{"executable":"orca","repository_selector":"id:repo","wait_timeout":"30s",` + extra + `}`)
+	for _, extra := range []string{`"repository_selector":"id:repo"`, `"target":"environment"`, `"model":"model"`, `"reasoning_effort":"high"`, `"return_origin":"http://localhost:1234"`, `"agent_command":"opaque"`} {
+		data := []byte(`{"executable":"orca","wait_timeout":"30s",` + extra + `}`)
 		if _, err = terminal.DecodeProfile(data); err == nil {
 			t.Fatal("unsupported override was silently ignored", extra)
 		}
@@ -63,11 +63,8 @@ func TestCurrentExampleProfilesFreezeOpaqueOrcaCommands(t *testing.T) {
 		if p.Host == "orca" {
 			payload, err := c.ApplyExecutionProfile(p).executionConfig().DecodeImplementationConfig(terminal.ProfileKey, d)
 			require(t, err)
-			profile, err := terminal.DecodeProfile(payload)
+			_, err = terminal.DecodeProfile(payload)
 			require(t, err)
-			if profile.RepositorySelector == "" {
-				t.Fatal("example lost its explicit user launch selection")
-			}
 			p.Agent = "changed"
 			selected := c.ApplyFixedExecutionProfile(fixed)
 			if selected.Agent != fixed.Agent || selected.Host != "orca" {
@@ -86,7 +83,7 @@ func TestTerminalFactoryKeepsFrozenCommandAndCatalog(t *testing.T) {
 	c := bindUnitDirectory(t, Config{Host: "orca", Agent: "opaque-agent", Repository: t.TempDir()})
 	c.ExecutionDirectory = d
 	c.ProcessHost = first
-	p := ExecutionProfile{ID: "profile", Host: "orca", Agent: c.Agent, ImplementationConfigs: []b.ImplementationConfigInput{{ImplementationKey: terminal.ProfileKey, CodecVersion: terminal.ProfileVersion, Payload: mustJSON(terminal.Profile{Executable: "frozen-orca.exe", Args: []string{"--fixed"}, WaitTimeout: "30s", RepositorySelector: "id:repo"})}}}
+	p := ExecutionProfile{ID: "profile", Host: "orca", Agent: c.Agent, ImplementationConfigs: []b.ImplementationConfigInput{{ImplementationKey: terminal.ProfileKey, CodecVersion: terminal.ProfileVersion, Payload: mustJSON(terminal.Profile{Executable: "frozen-orca.exe", Args: []string{"--fixed"}, WaitTimeout: "30s"})}}}
 	p = boundProfile(c, p)
 	selected := c.ApplyExecutionProfile(p).executionConfig()
 	entry, err := d.Resolve(selected)
