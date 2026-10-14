@@ -76,8 +76,9 @@ ReliableExecution 采用现有非阻塞 actor 节奏：读取不可变执行快�
 
 1. actor 接受中层变化和 Workflow 后继，合成现有 WorkerCommit；同事务保存结果、步骤、下一输入、Decision/Operation/Attempt 关联，不调用两次独立保存。
 2. 持久化意图确认后才执行外部动作；保存失败/旧 revision/Task 终态/服务换代拒绝。外部成功提交失败只重查原操作，原资源由已有 owner 结算。
-3. 更新 `directory_local.go`、`directory_orca_terminal.go`、execution_service_wiring、查询投影及 fixture/集成/driver 的构造。UI/HTTP 只消费原 DTO，不建立新恢复入口。
-4. 保留并迁移必要 commit boundary 用例，补 `TestThreeLayerAtomicCommit`：结果与下一意图一次提交、失败回滚、重放只结算一次、旧 Attempt 不能改变当前/兄弟执行。
+3. 同步既有 controlled Orca worktree 响应的原 instanceId 字段，保持 create/show 同一身份；不省略产品原生身份守卫、不新增模拟开关。
+4. 更新 `directory_local.go`、`directory_orca_terminal.go`、execution_service_wiring、查询投影及 fixture/集成/driver 的构造。UI/HTTP 只消费原 DTO，不建立新恢复入口。
+5. 保留并迁移必要 commit boundary 用例，补 `TestThreeLayerAtomicCommit`：结果与下一意图一次提交、失败回滚、重放只结算一次、旧 Attempt 不能改变当前/兄弟执行。
 
 ### P5 删除旧路径并交付验证
 
