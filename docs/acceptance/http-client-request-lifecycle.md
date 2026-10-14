@@ -33,4 +33,4 @@ CL93-A2的跨进程后续更新/终态保护是本任务新增的小范围修复
 | CL93-A3 / simulate组合 | scripts/test-tui-http.ps1 -OutDir C:\Users\lmas1\AppData\Local\Temp\steerline-cl93-e5c914cd5fbb4f4eba272deebc193daf；passed/complete/cleaned=true，workflow turns=2。停服原applied receipt、原进程退出及两锁释放均为true；canonical final查询记录1 gap、0 body | C:\Users\lmas1\AppData\Local\Temp\steerline-cl93-e5c914cd5fbb4f4eba272deebc193daf\summary.json 与同目录 runtime.log；隔离包 C:\SteerlineDebug\dev-20261014-174645-ab814da9-dirty；二进制SHA-256 faec8ffb32e5508fca987db2bc685747a3e51bf67fbacd89a40b4d1d82080915 |
 | 固定L1回归 | go run ./cmd/test-feedback -level=L1；quick scope完整通过，26包、553测试通过，0失败、0跳过 | C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T095215.852912700Z\summary.json |
 
-simulate包只在 C:\SteerlineDebug 下生成；没有使用 C:\SteerlineRuntime。没有新增人工项；#91桌面体验保持原归属和待验。自动项失败阻止本项交付，未知发送只查原请求，不能为验收重发或更换实例。PR与独立复审/合并状态由execution-map后续同步；本页只归属#93。
+simulate包只在 C:\SteerlineDebug 下生成；没有使用 C:\SteerlineRuntime。没有新增人工项；#91桌面体验保持原归属和待验。自动项失败阻止本项交付，未知发送只查原请求，不能为验收重发或更换实例。实现提交为 7c7bd5c2465d3c503fce623bdbfa8afd776369e0；PR [#312](https://github.com/erranliu/SteerLine/pull/312)已创建，待独立只读复审，本轮不合并。本页只归属#93。
