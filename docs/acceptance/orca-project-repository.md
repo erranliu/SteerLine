@@ -18,4 +18,14 @@
 - 集成阶段往返未执行：整个 `tests/integration` 包因候选弃用旧接口引用无法编译（`AbandonNativeCandidate`、`CandidateAbandonOptions`、`Abandonment`）。用当前 HEAD 原文件 overlay 复核，同样报错；见 `baseline-integration.log`。
 - `tests/e2e/internal/testenv` 无法编译：既有 `driver/candidate.go` 仍使用已移除的 ControlPayload 字段。HEAD overlay 复核相同；见 `baseline-testenv.log`。未修复本次范围外的旧候选夹具。
 - 真实本机/远端工作区、worker 和 PR 链路本次未运行。后置人工核验窗口待定，使用新版本生成的独立 `C:\SteerlineDebug` 包，远端事先注册与本包项目目录同名的 Git 仓库，并同步精确 base commit；不阻塞无关开发。
-- 未部署、修改或重启 `C:\SteerlineRuntime`；任务 20 原失败现场未变。旧 profile 2 及其已冻结执行无兼容读取。
+- 安装更新记录见下节；旧 profile 2 及其已冻结执行无兼容读取。
+
+## 安装版同步更新（2026-10-14）
+
+安装方案同步为 codec 3，删除 repository_selector；移除两项 merge 专属重复方案，去掉远端方案的项目名称前缀，保留 3 个 Codex 和 4 个 Orca 通用方案。模型、effort、剩余方案 ID 及启动命令保持。仅替换程序和目录方案时，旧数据库的冻结 profile 2 导致服务明确拒绝启动（unsupported_schema），未绕过校验或加入兼容读取。
+
+经用户明确允许丢弃旧执行记录并重置 merge 项目执行状态后，使用新版正式 task validate/create 在空状态中重建原定义，核对原 15 个任务、契约及 4 条依赖完全相同，再清除该项目旧执行/控制/UI 状态并安装。任务全部恢复 open/version 1；未备份旧数据库，未改变 Git 工作区或 PR 事实，其他项目保持。执行准备文件和 reset-result.json 位于 `C:\Users\lmas1\AppData\Local\Temp\steerline-installed-profiles-996bgxn3`；程序/方案更新前副本位于 `C:\SteerlineRuntime\backup\orca-project-repository-20261014-115724`。
+
+安装程序实现来源为 commit `3dfa50e3e6c6b2e76fc2cf6806e80e667a93b9bc`。新控制台启动前清除代理进程继承的 NO_COLOR=1 与 TERM=dumb，避免人工可见控制台丢失样式；不修改用户全局终端变量。最终就绪及控制台颜色证据登记 installation-verification.json；本次未启动业务 worker 或发布真实 PR。
+
+最终核验通过：服务 startup 为 started（PID 49188），控制台 PID 27008、可见屏幕有 127 个带颜色的字符格；目录中 7 个方案、4 个 Orca 方案，项目专属标签和 repository_selector 均为零。正式 resume_dispatch 回执 applied；manual/unpaused，15 个任务全部 open，workflow/execution/attempt/delivery/history 为零，无业务任务领取。完整维护证据见上述准备目录的 installation-verification.json。

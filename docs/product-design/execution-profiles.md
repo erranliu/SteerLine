@@ -51,3 +51,5 @@ SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改�
 旧 host=orca_supervised、对应 codec / Run / Task / Dispatch 生命周期与旧 Orca codec 直接删除。没有迁移、兼容读取或回退。当前 [Spec](../spec/orca-terminal-transport.spec.md)、[Plan](../spec/orca-terminal-transport.plan.md) 与[验收](../acceptance/orca-terminal-transport.md)。
 
 2026-10-14 仓库自动选择的实现与验证见[专属验收](../acceptance/orca-project-repository.md)。格式 2 与旧 repository_selector 不再接收，无迁移或兼容读取。
+
+已有安装数据库若冻结了旧格式执行方案，服务会拒绝启动；只改 execution.json 不足以升级。安装更新须先明确处理旧执行状态，不自动改写已冻结方案，也不清除任务/执行记录。没有历史运行状态的新环境直接使用格式 3。
