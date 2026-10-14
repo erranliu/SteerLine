@@ -32,8 +32,8 @@ func QualifyAction(ctx context.Context, port b.LifecyclePreparationPort, request
 		return err
 	}
 	if action == b.LifecyclePrepareWorkspace {
-		if !workspace {
-			return errors.New("workspace preparation has no required original resource")
+		if !workspace || request.Input.Workspace == nil || *request.Input.Workspace != request.Snapshot.WorkspacePlan {
+			return errors.New("workspace preparation differs from the required original intent")
 		}
 		return nil
 	}
@@ -57,13 +57,22 @@ func QualifyAction(ctx context.Context, port b.LifecyclePreparationPort, request
 	if err != nil {
 		return err
 	}
+	if request.Input.Turn == nil || !SameInput(request.Snapshot.PendingTurn, *request.Input.Turn) {
+		return errors.New("native turn action differs from the saved pending input")
+	}
+	if err := QualifyInput(request.Input.Turn, port.PolicyCapabilities()); err != nil {
+		return err
+	}
 	if action == b.LifecyclePrepareSession {
+		if !session {
+			return errors.New("session preparation has no required original mechanism")
+		}
 		return nil
 	}
 	if session {
 		return &GateError{Gate: "session", Status: b.GateRequired}
 	}
-	return QualifyInput(request.Input.Turn, port.PolicyCapabilities())
+	return nil
 }
 
 func QualifyInput(input *b.TurnInput, caps b.LifecyclePolicyCapabilities) error {

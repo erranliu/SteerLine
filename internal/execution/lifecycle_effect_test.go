@@ -52,9 +52,10 @@ func TestLifecycleEffectForwardsWorkspaceCreationCheckpoint(t *testing.T) {
 		checkpoint := scenario.checkpoint
 		port := &creationCheckpointPort{checkpoint: checkpoint, unavailable: scenario.unavailable}
 		ref := b.ExecutionRef{RunID: strings.Repeat("a", 32), AttemptID: strings.Repeat("b", 32)}
+		intent := b.WorkspaceIntent{Path: "original-worktree", Branch: "task", BaseCommit: strings.Repeat("c", 40)}
 		request := b.LifecycleRequest{
-			Snapshot:  b.LifecycleSnapshot{Session: b.SessionContext{ProjectID: "project", ExecutionID: "execution", WorkflowRunID: ref.RunID, AttemptID: ref.AttemptID}, ConfigurationDigest: "config", ResourceGeneration: "generation"},
-			Input:     b.LifecycleInput{Workspace: &b.WorkspaceIntent{BaseCommit: strings.Repeat("c", 40)}},
+			Snapshot:  b.LifecycleSnapshot{Session: b.SessionContext{ProjectID: "project", ExecutionID: "execution", WorkflowRunID: ref.RunID, AttemptID: ref.AttemptID}, ConfigurationDigest: "config", ResourceGeneration: "generation", WorkspacePlan: intent},
+			Input:     b.LifecycleInput{Workspace: &intent},
 			Operation: b.Operation{ID: "original-workspace", Status: b.OperationInFlight, Action: string(b.LifecyclePrepareWorkspace), PayloadDigest: "digest", Ref: &ref, LifecycleIdentity: &b.LifecycleOperationIdentity{ProjectID: "project", ExecutionID: "execution", ConfigurationDigest: "config", ResourceGeneration: "generation", InputBindingDigest: "binding", Ref: ref}},
 		}
 		if err := request.Validate(); err != nil {

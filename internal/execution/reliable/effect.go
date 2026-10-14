@@ -25,6 +25,9 @@ const (
 // Invoke receives an already committed immutable intent. An existing intent
 // has only the reconciliation route, even when acceptance was never observed.
 func Invoke(ctx context.Context, port b.LifecyclePort, reconciler b.LifecycleReconcilePort, request b.LifecycleRequest, mode InvocationMode) EffectResult {
+	if err := request.Validate(); err != nil {
+		return EffectResult{Request: request.Clone(), Receipt: b.LifecycleReceipt{Operation: request.Operation, Disposition: b.OperationRejected}, Err: err}
+	}
 	// A caller cannot turn an accepted/unknown/settled operation into a fresh
 	// mutation by requesting Execute. The persisted original status wins.
 	switch request.Operation.Status {
@@ -40,7 +43,14 @@ func Invoke(ctx context.Context, port b.LifecyclePort, reconciler b.LifecycleRec
 	reconcile := mode == ReconcileOriginalIntent
 	result := EffectResult{Request: request.Clone(), Reconciled: reconcile}
 	if !reconcile {
-		if err := QualifyAction(ctx, port, request); err != nil {
+		err := ctx.Err()
+		if err == nil {
+			err = QualifyAction(ctx, port, request)
+		}
+		if err == nil {
+			err = ctx.Err() // Read-only qualification may have consumed the deadline.
+		}
+		if err != nil {
 			result.Receipt = b.LifecycleReceipt{Operation: request.Operation, Disposition: b.OperationRejected, Diagnostic: err.Error()}
 			result.Err = err
 			return result
@@ -51,8 +61,10 @@ func Invoke(ctx context.Context, port b.LifecyclePort, reconciler b.LifecycleRec
 	} else {
 		result.Receipt, result.Observer, result.Err = port.Execute(ctx, request.Clone())
 	}
-	result.Uncertain = !reconcile && (result.Receipt.Disposition == b.OperationUnknown || result.Err != nil && result.Receipt.Disposition != b.OperationRejected)
 	result.Receipt = result.Receipt.Clone()
+	validationErr := result.Receipt.ValidateFor(result.Request)
+	result.Err = errors.Join(result.Err, validationErr)
+	result.Uncertain = !reconcile && (validationErr != nil || result.Receipt.Disposition == b.OperationUnknown || result.Err != nil && result.Receipt.Disposition != b.OperationRejected)
 	return result
 }
 
@@ -79,6 +91,14 @@ func ReconciledResult(result EffectResult, original *EffectResult) EffectResult 
 
 func Outcome(receipt b.LifecycleReceipt, err error) (string, string) {
 	status, diagnostic := string(receipt.Disposition), receipt.Diagnostic
+	switch receipt.Disposition {
+	case b.OperationAccepted, b.OperationConfirmed, b.OperationRejected, b.OperationUnknown:
+	default:
+		status = string(b.OperationUnknown)
+		if diagnostic == "" {
+			diagnostic = "lifecycle receipt disposition is unverified"
+		}
+	}
 	if err != nil {
 		diagnostic = err.Error()
 		if receipt.Disposition != b.OperationRejected {

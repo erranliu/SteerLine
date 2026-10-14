@@ -129,7 +129,7 @@ go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=recovery.terminal-local-reconnect,recovery.terminal-environment-unknown-send'
 ```
 
-G1 的三层负例和新包测试、G2 的组合提交测试是必需入口；不能运行零匹配后宣称通过。既有用例迁移时保留行为断言，更新真实包/测试名；实施验收前核对 G1–G3 各选定 owner 非零匹配、无失败/意外 skip。R1–R3 每个场景保持已有独立时限，不串入多个新增故障、不扩大期限；driver 如需接新内部类型只修改已有 native/evidence/driver owner。
+G1 的三层负例和新包测试、G2 的组合提交测试是必需入口；不能运行零匹配后宣称通过。既有用例迁移时保留行为断言，更新真实包/测试名；实施验收前核对 G1–G3 各选定 owner 非零匹配、无失败/意外 skip。质量审计补齐 G1 的新动作原意图/必需机制、无效回执原请求对账、foreign intent 零查询和期限核验前后零调用断言；对应 `TestReliableFreshActionKeepsOriginalIntent`、`TestReliableUnverifiedReceiptRequiresOriginalReconciliation`、`TestReliableReconciliationRejectsForeignIntent`、`TestReliableOutcomeCannotTreatMissingReceiptAsSuccess`、`TestReliableExpiredIntentCannotExecute`，覆盖 TL-A02/TL-A03/TL-A04/TL-A05。G2 复验 LifecycleEffect、丢回执、持久输入、原会话恢复与停服；G3 复验两 adapter 的原生契约，最终 L1 携带新增 G1 和原子/关闭门槛。R1–R3 每个场景保持已有独立时限，不串入多个新增故障、不扩大期限；driver 如需接新内部类型只修改已有 native/evidence/driver owner。
 
 关闭后门槛分两处验证：R1 的 provider fixture 用独立追加日志记录实际查询次数，避免覆盖并发会话状态，检查终态后的正常轮询零新查询/输入；G2 用原 SQLite 正式 Delivery 事务和计数 provider，检查 closed 后轮询及从原存储重建的新 actor 的初始化/后续轮询。先验证 open 确实查询 provider，避免计数未接线的假通过。整进程启动/OS preflight 沿已有 R1/R2 服务恢复场景，不在 delivery.basic 的原时限内串入第二次整进程启动；不新增产品统计接口，不扩大任何既有场景期限。
 
