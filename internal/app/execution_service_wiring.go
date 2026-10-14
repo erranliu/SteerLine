@@ -105,7 +105,8 @@ func (s *serviceLocalAPI) Publish(instance string, process *executionbackend.Pro
 		if len(capabilities) == 0 {
 			capabilities = s.capabilities
 		}
-		endpoint, err := httpapi.Prepare(context.Background(), s.product, httpapi.Options{RunDir: s.runDir, ProjectIdentity: s.projectID,
+		endpoint, err := httpapi.Prepare(context.Background(), httpapi.Ports{Query: s.product, Commands: s.product,
+			Authority: s.product, NativeViewer: s.product}, httpapi.Options{RunDir: s.runDir, ProjectIdentity: s.projectID,
 			InstanceID: instance, Process: localAPIProcessIdentity(process), Capabilities: append([]string(nil), capabilities...)})
 		if err != nil {
 			return err

@@ -8,7 +8,7 @@
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 92 | HTTP 服务端命令边界收敛 | 无未完成硬前置；复用#45/#91；与#93独立并行，公开wire/API冻结 | 待执行；用户已确认范围和并行条件 | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md) | [专属验收](../acceptance/http-command-boundary.md)：HC92-A1–A3待验收，无新增人工项；实现时补齐owner测试、定向HTTP/真实app接线及一次固定L1 |
+| 92 | HTTP 服务端命令边界收敛 | 无未完成硬前置；复用#45/#91；与#93独立并行，公开wire/API冻结 | 执行中；固定 Spec/Plan `35d4d65350fa6f6f284e9e91a6bd657ba7abb947`，实现起点 `35d4d65350fa6f6f284e9e91a6bd657ba7abb947` | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md) | [专属验收](../acceptance/http-command-boundary.md)：HC92-A1–A3待验收，无新增人工项；实现时补齐owner测试、定向HTTP/真实app接线及一次固定L1 |
 | 93 | HTTP 客户端原请求与停服观察解耦 | 无未完成硬前置；复用#91；与#92独立并行，新增写入仲裁仅属客户端journal | 待执行；用户已确认范围和并行条件 | [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan](../spec/http-client-request-lifecycle.plan.md) | [专属验收](../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3待验收，无新增人工项；实现时补齐跨进程journal测试、Windows观察/独立simulate及一次固定L1 |
 
 ### 本批并行与开工条件

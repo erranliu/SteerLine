@@ -112,7 +112,7 @@ func (s *Server) identityView(ctx context.Context) Identity {
 		}
 		return identity
 	}
-	snapshot := s.product.ReadProject(ctx, "", api.ProjectSnapshot{})
+	snapshot := s.query.ReadProject(ctx, "", api.ProjectSnapshot{})
 	connection := snapshot.Connection
 	page := connection.Snapshot.Page
 	if page == nil {
@@ -154,10 +154,10 @@ func (s *Server) serveRead(w http.ResponseWriter, r *http.Request, identity Iden
 			writeProtocolError(w, err, "")
 			return
 		}
-		page, err := s.product.ListTasks(ctx, queryValues.Get("cursor"), limit)
+		page, err := s.query.ListTasks(ctx, queryValues.Get("cursor"), limit)
 		writeResult(w, page, err)
 	case len(path) == 2 && path[0] == "tasks":
-		page, err := s.product.ShowTask(ctx, path[1])
+		page, err := s.query.ShowTask(ctx, path[1])
 		writeResult(w, page, err)
 	case len(path) == 1 && path[0] == "graph":
 		limit, err := parseLimit(queryValues.Get("limit"), 100, api.MaxTaskGraphNodes)
@@ -165,16 +165,16 @@ func (s *Server) serveRead(w http.ResponseWriter, r *http.Request, identity Iden
 			writeProtocolError(w, err, "")
 			return
 		}
-		page, err := s.product.TaskGraph(ctx, queryValues.Get("cursor"), limit)
+		page, err := s.query.TaskGraph(ctx, queryValues.Get("cursor"), limit)
 		writeResult(w, page, err)
 	case len(path) == 1 && path[0] == "snapshot":
-		snapshot := s.product.ReadProject(ctx, queryValues.Get("task_id"), api.ProjectSnapshot{})
+		snapshot := s.query.ReadProject(ctx, queryValues.Get("task_id"), api.ProjectSnapshot{})
 		writeJSON(w, http.StatusOK, snapshot)
 	case len(path) == 1 && path[0] == "candidates":
-		candidates, err := s.product.TaskSnapshot(ctx)
+		candidates, err := s.query.TaskSnapshot(ctx)
 		writeResult(w, candidates, err)
 	case len(path) == 1 && path[0] == "presentation":
-		project := s.product.Project()
+		project := s.query.Project()
 		writeJSON(w, http.StatusOK, ProjectPresentation{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Presentation: project.Presentation})
 	case len(path) == 2 && path[0] == "runs":
 		candidate, err := s.candidate(ctx, path[1])
@@ -193,7 +193,7 @@ func (s *Server) serveRead(w http.ResponseWriter, r *http.Request, identity Iden
 }
 
 func (s *Server) candidate(ctx context.Context, runID string) (*api.CandidateSummary, error) {
-	snapshot := s.product.ReadProject(ctx, "", api.ProjectSnapshot{})
+	snapshot := s.query.ReadProject(ctx, "", api.ProjectSnapshot{})
 	page := snapshot.Connection.Snapshot.Page
 	if page == nil {
 		return nil, &api.Error{Kind: api.Unavailable, Message: firstNonempty(snapshot.Connection.Diagnostic, "service runtime snapshot is unavailable")}
@@ -224,7 +224,7 @@ func (s *Server) serveActivity(w http.ResponseWriter, r *http.Request, identity 
 			writeError(w, http.StatusBadRequest, "cursor_invalid", "recent activity cannot use a stream cursor", "")
 			return
 		}
-		page, err := s.product.RecentActivity(r.Context(), runID, executionID, attemptID)
+		page, err := s.activities.RecentActivity(r.Context(), runID, executionID, attemptID)
 		if err != nil {
 			writeProtocolError(w, err, "")
 			return
@@ -243,7 +243,7 @@ func (s *Server) serveActivity(w http.ResponseWriter, r *http.Request, identity 
 			return
 		}
 	}
-	page, err := s.product.Activity(r.Context(), runID, executionID, attemptID, cursor)
+	page, err := s.activities.Activity(r.Context(), runID, executionID, attemptID, cursor)
 	if err != nil {
 		writeProtocolError(w, err, "")
 		return
@@ -271,7 +271,7 @@ func (s *Server) serveConversation(w http.ResponseWriter, r *http.Request, ident
 	finalsOnly := queryValues.Get("finals_only") == "true"
 	filter := api.ConversationFilter{WorkflowID: candidate.RunID, ExecutionID: executionID, AttemptID: attemptID,
 		TurnID: queryValues.Get("turn_id"), SessionID: queryValues.Get("session_id"), Source: queryValues.Get("source"), FinalsOnly: finalsOnly}
-	page, err := s.product.ConversationPage(r.Context(), filter, queryValues.Get("cursor"), limit)
+	page, err := s.conversation.ConversationPage(r.Context(), filter, queryValues.Get("cursor"), limit)
 	if err != nil {
 		writeProtocolError(w, err, "")
 		return
@@ -290,7 +290,7 @@ func (s *Server) serveFinal(w http.ResponseWriter, r *http.Request, identity Ide
 		return
 	}
 	filter := api.ConversationFilter{FinalsOnly: true, WorkflowID: candidate.RunID, ExecutionID: candidate.ExecutionID, AttemptID: candidate.AttemptID}
-	page, err := s.product.ConversationPage(r.Context(), filter, "", query.MaxEventPageSize)
+	page, err := s.conversation.ConversationPage(r.Context(), filter, "", query.MaxEventPageSize)
 	if err != nil {
 		writeProtocolError(w, err, "")
 		return
@@ -353,7 +353,7 @@ func (s *Server) serveBody(w http.ResponseWriter, r *http.Request, runID string)
 		writeProtocolError(w, err, "")
 		return
 	}
-	page, err := s.product.Body(r.Context(), ref, offset, limit)
+	page, err := s.conversation.Body(r.Context(), ref, offset, limit)
 	writeResult(w, page, err)
 }
 
@@ -364,7 +364,7 @@ func (s *Server) readFullBody(ctx context.Context, runID string, ref api.Convers
 	var text strings.Builder
 	var offset int64
 	for offset < ref.Bytes || offset == 0 && ref.Bytes == 0 {
-		page, err := s.product.Body(ctx, ref, offset, 256<<10)
+		page, err := s.conversation.Body(ctx, ref, offset, 256<<10)
 		if err != nil {
 			return FinalBody{}, err
 		}
