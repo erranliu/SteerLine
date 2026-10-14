@@ -95,6 +95,7 @@ var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
 }{
+	{"quick-owner-web", "github.com/erranliu/SteerLine/web/server", []string{"TestWebAuthenticationAndOriginalForwarding", "TestWebOriginHostAndStaticBoundaries", "TestWebTicketsAreSingleUseAndExpire", "TestWebAddressAndPortConflict", "TestWebLauncherPrivateDiscoveryAndInstance", "TestWebBoundedWritesAndNoBrowserStop"}},
 	{"quick-execution", executionPackage, quickExecutionTests},
 	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestTM04ExecutionBoundary", "TestSharedFixturesRemainTestOnly", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary"}},
 	{"quick-owner-orca-terminal", "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport", []string{"TestTerminalLifecycleReplyReuseAndExactStop", "TestTerminalUnknownSubmissionOnlyObservesOriginal", "TestTerminalLocalAndRemoteUseIdenticalReturnAndNativePorts", "TestTerminalClippedScreenDoesNotBlockNativeFinal"}},

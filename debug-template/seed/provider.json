@@ -1,5 +1,6 @@
 {
   "repository": "erranliu/SteerlineTest",
+  "web_feedback": false,
   "base_branch": "__BASE__",
   "result_text": "SteerlineTest debug result\n",
   "git_url": "",

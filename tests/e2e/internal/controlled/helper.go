@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -205,6 +206,51 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 			break
 		}
 		response["result"] = map[string]any{"thread": map[string]any{"id": params.ThreadID, "cwd": thread.Cwd, "turns": thread.Turns}}
+	case "thread/turns/list":
+		var params struct {
+			ThreadID  string `json:"threadId"`
+			Cursor    string `json:"cursor"`
+			Limit     int    `json:"limit"`
+			ItemsView string `json:"itemsView"`
+			Direction string `json:"sortDirection"`
+		}
+		if err := json.Unmarshal(message.Params, &params); err != nil {
+			return err
+		}
+		if params.Limit != 1 || params.ItemsView != "full" || params.Direction != "asc" {
+			return fmt.Errorf("controlled history requires one full ascending turn")
+		}
+		thread := ThreadState{Cwd: s.Cwd, Turns: s.Turns}
+		if params.ThreadID != s.Session {
+			var ok bool
+			thread, ok = s.Threads[params.ThreadID]
+			if !ok {
+				return fmt.Errorf("unknown controlled history thread")
+			}
+		}
+		index := 0
+		if params.Cursor != "" {
+			var err error
+			index, err = strconv.Atoi(params.Cursor)
+			if err != nil || index < 0 || index > len(thread.Turns) {
+				return fmt.Errorf("invalid controlled history cursor")
+			}
+		}
+		data := []any{}
+		var next, backwards any
+		if index < len(thread.Turns) {
+			turn := map[string]any{}
+			for key, value := range thread.Turns[index] {
+				turn[key] = value
+			}
+			turn["itemsView"] = "full"
+			data = append(data, turn)
+			backwards = strconv.Itoa(index)
+			if index+1 < len(thread.Turns) {
+				next = strconv.Itoa(index + 1)
+			}
+		}
+		response["result"] = map[string]any{"data": data, "nextCursor": next, "backwardsCursor": backwards}
 	case "turn/start":
 		var params struct {
 			ThreadID string `json:"threadId"`
@@ -223,19 +269,25 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		}
 		steps := fixtureSteps
 		index := len(s.Turns)
-		if index >= len(steps) || !strings.HasPrefix(params.Input[0].Text, steps[index]) {
+		stageIndex := index
+		// The Web smoke fixture permits exactly one explicit publish-feedback
+		// turn in the original thread; ordinary fixtures remain strictly staged.
+		if s.WebFeedback && index == 3 {
+			stageIndex = 2
+		}
+		if stageIndex >= len(steps) || !strings.HasPrefix(params.Input[0].Text, steps[stageIndex]) {
 			return fmt.Errorf("unexpected duplicate or out-of-order staged dispatch")
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		final, err := executeControlledStage(ctx, path, &s, index)
+		final, err := executeControlledStage(ctx, path, &s, stageIndex)
 		if err != nil {
 			return err
 		}
 		s.Dispatches++
 		turnID := uuid.NewString()
 		item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": final}
-		turn := map[string]any{"id": turnID, "status": "completed", "completedAt": time.Now().Unix(), "items": []any{item}, "fixture_step": steps[index]}
+		turn := map[string]any{"id": turnID, "status": "completed", "completedAt": time.Now().Unix(), "items": []any{item}, "fixture_step": steps[stageIndex]}
 		s.Turns = append(s.Turns, turn)
 		if err := Write(path, s); err != nil {
 			return err
@@ -363,7 +415,14 @@ func executeControlledStage(ctx context.Context, path string, s *State, index in
 		if _, err := Git(ctx, s.Cwd, "push", "origin", branch); err != nil {
 			return "", err
 		}
-		if err := githubCommandOutput(path, []string{"pr", "create", "--repo", s.RepositoryName(), "--base", s.BranchName(), "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}, io.Discard); err != nil {
+		if s.WebFeedback && len(s.Turns) == 3 {
+			// A feedback publication reuses the original candidate PR. It must
+			// not invoke the fixture's deliberately strict duplicate-create path.
+			head, err := Git(ctx, s.Cwd, "rev-parse", "HEAD")
+			if err != nil || s.PR.State != "open" || s.PR.HeadBranch != branch || s.PR.HeadRevision != head || s.PR.Repository != s.RepositoryName() || s.PR.BaseBranch != s.BranchName() {
+				return "", fmt.Errorf("feedback lost the original published PR: %v", err)
+			}
+		} else if err := githubCommandOutput(path, []string{"pr", "create", "--repo", s.RepositoryName(), "--base", s.BranchName(), "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}, io.Discard); err != nil {
 			return "", err
 		}
 		published, err := Read(path)

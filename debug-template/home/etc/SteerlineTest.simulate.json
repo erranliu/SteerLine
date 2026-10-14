@@ -1,6 +1,7 @@
 {
   "repository": "__ROOT__/projects/SteerlineTest", "remote": "origin", "branch": "__BASE__",
   "task_authority": "native", "workflow_protocol": "worker-flow-v2",
+  "web_address": "__WEB_ADDRESS__",
   "worktree_root": "__ROOT__/home/worktrees",
   "git": {"executable": "__ROOT__/bin/debug-helper.exe", "args": ["git"]},
   "publication_policy": {"publisher": "worker"},

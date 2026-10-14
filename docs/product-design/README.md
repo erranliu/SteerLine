@@ -13,6 +13,7 @@
 | [执行控制台](execution-console.md) | 当前 TUI 的任务/候选布局、原地反馈、能力展示与操作速查 |
 | [Worker 步骤流程 Spec](../spec/worker-staged-flow.spec.md) | #84 已纳入一期收尾执行规划：现有 worker、简单步骤序列和 adapter；状态判断、三个短提示词及源码改造范围，implement 两轮/publish 单轮；尚未实现 |
 | [客户端与 Go 服务边界](planning-architecture.md) | 当前 #91 的 TUI/HTTP 源码边界和未来范围 |
+| [Web 前端技术方案](web-frontend.md) | 已确认技术栈与首批 DAG/执行页；独立 web 工程及浏览器接入契约见普通开发 Spec/Plan，实际结果归专属验收 |
 | [本机客户端协议 v1](local-client-protocol.md) | #45 回环协议与 #91 TUI 所需接口 |
 | [规划界面原型参考](planning-ui.md) | 旧页面方向仅参考，不产生当前任务/前置 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |

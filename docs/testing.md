@@ -22,6 +22,8 @@ git diff --check
 
 ## 选择范围
 
+本机 Web 的持续定向入口为 `scripts/test-web.ps1`（构建、`web.client` / `web.input`、Web/native HTTP owner 回归）；传入 `-DebugConfig <新独立simulate包的home/etc/SteerlineTest.json>` 再执行真实 Edge 场景 `web.smoke`。驱动拒绝安装目录和非 simulate 包，证据写本次新空临时目录。准备与具体命令见 [Web 工程](../web/README.md)，本批验收见[记录](acceptance/web-frontend.md)。Go 固定 L1 新增 `quick-owner-web` 的认证/原信封/静态/端口/私有入口反例；前端 npm 与浏览器入口独立选择，不自动扩张 Full/L2/L3。
+
 | 入口 | 用途 | 模型 token / 外部效果 |
 | --- | --- | --- |
 | L1 | 固定领取/事务/SQLite 接线、规则和依赖边界；默认三个独立进程并发，可追加定向用例 | 默认无真实模型 |
