@@ -2,13 +2,13 @@
 
 本表是用户确认的开发任务与依赖权威。2026-10-13 用户确认当前规划收敛到 `TUI → HTTP API → Go 后端`；随后用户直接授权当前聊天实施 #91，不启动 roadmap-runner 或新执行聊天。流程见[RoadmapGuide](RoadmapGuide.md)。
 
-当前已确认的本机链路已交付。2026-10-14 用户确认将HTTP解耦任务#92、#93纳入本表；#92已独立复审、自动验证并经PR #311真实合并，#93待执行。本次runner按#92→#93顺序推进，不改变两项没有业务硬依赖的规划条件。
+当前已确认的本机链路已交付。2026-10-14 用户确认将HTTP解耦任务#92、#93纳入本表；#92已独立复审、自动验证并经PR #311真实合并，#93候选实现通过本地自动验收（A2补强），PR #312待独立只读复审与真实PR合并。本次runner按#92→#93顺序推进，不改变两项没有业务硬依赖的规划条件。
 
 ## 待执行任务
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 93 | HTTP 客户端原请求与停服观察解耦 | 无未完成硬前置；复用#91；与#92独立并行，新增写入仲裁仅属客户端journal | 待执行；用户已确认范围和并行条件 | [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan](../spec/http-client-request-lifecycle.plan.md) | [专属验收](../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3待验收，无新增人工项；实现时补齐跨进程journal测试、Windows观察/独立simulate及一次固定L1 |
+| 93 | HTTP 客户端原请求与停服观察解耦 | 无未完成硬前置；复用#91；与#92独立并行，新增写入仲裁仅属客户端journal | 候选自查及自动验收通过（A2补强后复验），PR待独立复审与合并；代码起点 `ab814da9d5fcec17f3ba46b59827734d171ba6b7`，分支 `codex/http-client-request-lifecycle-93` | [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan](../spec/http-client-request-lifecycle.plan.md) | [专属验收](../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3与固定L1通过；A2已补充真实submitted观察的四种进程交错及mutation反证；无新增人工项；待独立只读复审与PR合并；PR [#312](https://github.com/erranliu/SteerLine/pull/312) |
 
 ### 本批并行与开工条件
 

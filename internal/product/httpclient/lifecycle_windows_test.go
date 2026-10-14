@@ -71,7 +71,7 @@ func TestTUIHTTPStopReopenUsesOriginalProcess(t *testing.T) {
 	}))
 	defer server.Close()
 	ref := api.ProjectRef{Identity: "repo", ApplicationHome: home, RunDir: filepath.Join(home, "offline")}
-	c := &Console{ref: ref, identity: identity, client: &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}}
+	c := newTestConsole(ref, &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}, NewPlatformStopObserver())
 	id := strings.Repeat("a", 32)
 	revision := uint64(7)
 	if _, err = c.SubmitControl(context.Background(), api.ControlInput{Action: api.StopService, RequestID: id, InstanceID: identity.InstanceID, ExpectedRevision: &revision}); err != nil {
@@ -81,7 +81,7 @@ func TestTUIHTTPStopReopenUsesOriginalProcess(t *testing.T) {
 		t.Fatalf("live original process was considered stopped: %+v %v", receipt, err)
 	}
 	c.Close()
-	reopened := NewConsole(context.Background(), ref)
+	reopened := NewConsole(context.Background(), ref, NewPlatformStopObserver())
 	defer reopened.Close()
 	// A replacement connection cannot provide proof for the original process.
 	reopened.identity = wire.Identity{InstanceID: "replacement", Process: wire.ProcessIdentity{Kind: "os", PID: os.Getpid(), Created: "replacement"}}
@@ -96,14 +96,14 @@ func TestTUIHTTPStopReopenUsesOriginalProcess(t *testing.T) {
 	if err != nil || receipt.Code != "applied" || receipt.Message != "原停服请求已应用，原进程退出与锁释放已核实" {
 		t.Fatalf("original process could not be reconciled after reopening: %+v %v", receipt, err)
 	}
-	stored, err := reopened.readOutgoing(id)
+	stored, err := reopened.journal.read(id)
 	if err != nil || stored.StopIdentity == nil || stored.StopIdentity.Process != identity.Process {
 		t.Fatal("original authenticated identity was not persisted", err)
 	}
 	changed := *stored.StopIdentity
 	changed.Process.Created = "different"
 	stored.StopIdentity = &changed
-	if err = reopened.saveOutgoing(stored); err == nil {
+	if _, err = reopened.journal.save(context.Background(), stored); err == nil {
 		t.Fatal("immutable original stop identity was replaced")
 	}
 }

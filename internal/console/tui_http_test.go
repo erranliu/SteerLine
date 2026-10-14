@@ -108,7 +108,7 @@ func TestTUIHTTPInteraction(t *testing.T) {
 	write(token, []byte(strings.Repeat("a", 64)))
 	data, _ := json.Marshal(wire.Discovery{Version: 1, Protocol: wire.Protocol, ProjectID: identity.ProjectID, RepositoryIdentity: ref.Identity, InstanceID: identity.InstanceID, Address: identity.Address, CredentialPath: token, Ready: true, LeaseID: "lease"})
 	write(filepath.Join(apiDir, "discovery.json"), data)
-	client := httpclient.NewConsole(context.Background(), ref)
+	client := httpclient.NewConsole(context.Background(), ref, httpclient.NewPlatformStopObserver())
 	defer client.Close()
 	ref = client.Project()
 	model, err := NewModel(context.Background(), []ProjectRef{ref}, Options{ApplicationHome: home, Clients: map[string]ConsoleClient{ref.Key: client}})

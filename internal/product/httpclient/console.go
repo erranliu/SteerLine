@@ -1,32 +1,30 @@
 package httpclient
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	wire "github.com/erranliu/SteerLine/internal/product/httpcontract"
-	fs "github.com/erranliu/SteerLine/internal/product/httpfs"
 )
 
-// Console is a reconnectable HTTP consumer. Its only persistent files are
-// connection discovery and its own immutable outgoing envelopes/observations.
+// Console is a reconnectable HTTP consumer. Its request journal and stop
+// observer are explicit package capabilities.
 type Console struct {
 	mu        sync.Mutex
 	projectMu sync.RWMutex
 	ref       api.ProjectRef
 	client    *Client
+	journal   *requestJournal
+	observer  StopObserver
 	snapshot  api.ProjectSnapshot
 	closed    bool
 	identity  wire.Identity
@@ -34,9 +32,16 @@ type Console struct {
 	cancel    context.CancelFunc
 }
 
-func NewConsole(ctx context.Context, ref api.ProjectRef) *Console {
+// StopObserver checks the authenticated service process generation and its
+// existing locks. It has no access to HTTP or journal state.
+type StopObserver func(wire.Identity) (processExited, locksReleased bool, err error)
+
+func NewConsole(ctx context.Context, ref api.ProjectRef, observer StopObserver) *Console {
+	if observer == nil {
+		panic("httpclient: stop observer is required")
+	}
 	owned, cancel := context.WithCancel(ctx)
-	c := &Console{ref: ref, lifetime: owned, cancel: cancel}
+	c := &Console{ref: ref, journal: newRequestJournal(ref), observer: observer, lifetime: owned, cancel: cancel}
 	c.mu.Lock()
 	_, _ = c.connect(owned)
 	c.mu.Unlock()
@@ -232,13 +237,6 @@ func (c *Console) StartTaskPayload(ctx context.Context, task, profile string) (a
 	return api.ControlPayload{}, errors.New("profile unavailable")
 }
 
-type outgoing struct {
-	Version      int                   `json:"version"`
-	Envelope     wire.CommandEnvelope  `json:"envelope"`
-	Response     *wire.CommandResponse `json:"response,omitempty"`
-	StopIdentity *wire.Identity        `json:"stop_identity,omitempty"`
-}
-
 func validateResponse(e wire.CommandEnvelope, r wire.CommandResponse) error {
 	if r.RequestID != e.RequestID || r.ProjectID != e.ProjectID || r.InstanceID != e.InstanceID || r.Action != e.Action || r.TargetID != e.TargetID || r.ExpectedVersion != e.ExpectedVersion {
 		return errors.New("HTTP response does not match original request target/version")
@@ -258,106 +256,6 @@ func validateResponse(e wire.CommandEnvelope, r wire.CommandResponse) error {
 	return nil
 }
 
-func (c *Console) outgoingPath(id string) (string, error) {
-	b, err := hex.DecodeString(id)
-	if err != nil || len(b) != 16 || hex.EncodeToString(b) != id {
-		return "", errors.New("invalid request ID")
-	}
-	return filepath.Join(c.ref.ApplicationHome, "ui", "http-requests", wire.ProjectID(c.ref.Identity), id+".json"), nil
-}
-func (c *Console) readOutgoing(id string) (outgoing, error) {
-	var value outgoing
-	path, err := c.outgoingPath(id)
-	if err != nil {
-		return value, err
-	}
-	if err = fs.VerifyPrivateFile(path); err != nil {
-		return value, err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return value, err
-	}
-	if len(data) > 4<<20 {
-		return value, errors.New("outgoing envelope too large")
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&value)
-	if err == nil && decoder.Decode(new(any)) != io.EOF {
-		err = errors.New("outgoing record has trailing JSON")
-	}
-	if err == nil && (value.Version != 1 || value.Envelope.RequestID != id || value.Envelope.ProjectID != wire.ProjectID(c.ref.Identity)) {
-		err = errors.New("outgoing envelope identity/format invalid")
-	}
-	if err == nil && value.Response != nil {
-		err = validateResponse(value.Envelope, *value.Response)
-	}
-	if err == nil && value.StopIdentity != nil && (value.Envelope.Action != "stop_service" || value.StopIdentity.InstanceID != value.Envelope.InstanceID || value.StopIdentity.ProjectID != value.Envelope.ProjectID || value.StopIdentity.RepositoryIdentity != c.ref.Identity) {
-		err = errors.New("original stop identity does not match outgoing intent")
-	}
-	return value, err
-}
-func (c *Console) saveOutgoing(value outgoing) error {
-	path, err := c.outgoingPath(value.Envelope.RequestID)
-	if err != nil {
-		return err
-	}
-	previous, previousErr := c.readOutgoing(value.Envelope.RequestID)
-	if previousErr != nil && !os.IsNotExist(previousErr) {
-		return previousErr
-	}
-	if previousErr == nil {
-		if !reflect.DeepEqual(previous.Envelope, value.Envelope) || !reflect.DeepEqual(previous.StopIdentity, value.StopIdentity) {
-			return errors.New("request ID conflict: durable outgoing intent differs")
-		}
-		if value.Response == nil {
-			return nil
-		}
-		if previous.Response != nil && (previous.Response.Status == "applied" || previous.Response.Status == "rejected") && value.Response.Status != previous.Response.Status {
-			return nil
-		}
-	}
-	data, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-	if len(data) > 4<<20 {
-		return errors.New("outgoing envelope too large")
-	}
-	if err = fs.EnsurePrivateDirectory(filepath.Dir(path)); err != nil {
-		return err
-	}
-	file, err := fs.CreatePrivateTemp(filepath.Dir(path), ".outgoing-")
-	if err != nil {
-		return err
-	}
-	name := file.Name()
-	defer os.Remove(name)
-	if _, err = file.Write(data); err != nil {
-		file.Close()
-		return err
-	}
-	if err = file.Sync(); err != nil {
-		file.Close()
-		return err
-	}
-	if err = file.Close(); err != nil {
-		return err
-	}
-	if os.IsNotExist(previousErr) {
-		// Publish the first immutable intent without replacing another window's
-		// record. The temporary link is removed before this method returns.
-		if err = os.Link(name, path); err != nil {
-			if os.IsExist(err) {
-				return c.saveOutgoing(value)
-			}
-			return err
-		}
-		return nil
-	}
-	return fs.ReplacePrivateFile(name, path)
-}
 func notFound(err error) bool {
 	var failure *ClientError
 	return errors.As(err, &failure) && failure.Code == "command_not_found"
@@ -377,7 +275,7 @@ func (c *Console) submit(ctx context.Context, envelope wire.CommandEnvelope) (wi
 	if envelope.InstanceID == "" {
 		return wire.CommandResponse{}, errors.New("original service instance required")
 	}
-	stored, err := c.readOutgoing(envelope.RequestID)
+	stored, err := c.journal.read(envelope.RequestID)
 	if err == nil {
 		if !reflect.DeepEqual(stored.Envelope, envelope) {
 			return wire.CommandResponse{}, errors.New("request ID conflict: immutable envelope changed")
@@ -391,7 +289,7 @@ func (c *Console) submit(ctx context.Context, envelope wire.CommandEnvelope) (wi
 			}
 			stored.StopIdentity = &identity
 		}
-		if err = c.saveOutgoing(stored); err != nil {
+		if stored, err = c.journal.save(ctx, stored); err != nil {
 			return wire.CommandResponse{}, err
 		}
 	} else {
@@ -409,8 +307,15 @@ func (c *Console) submit(ctx context.Context, envelope wire.CommandEnvelope) (wi
 			return response, err
 		}
 		stored.Response = &response
-		if saveErr := c.saveOutgoing(stored); saveErr != nil {
+		retained, saveErr := c.journal.save(ctx, stored)
+		if saveErr != nil {
+			if retained.Response != nil {
+				response = *retained.Response
+			}
 			return response, saveErr
+		}
+		if retained.Response != nil {
+			response = *retained.Response
 		}
 	}
 	return response, err
@@ -420,7 +325,7 @@ func (c *Console) lookup(ctx context.Context, id string) (wire.CommandResponse, 
 	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	stored, storedErr := c.readOutgoing(id)
+	stored, storedErr := c.journal.read(id)
 	if storedErr != nil && !os.IsNotExist(storedErr) {
 		return wire.CommandResponse{}, storedErr
 	}
@@ -434,12 +339,30 @@ func (c *Console) lookup(ctx context.Context, id string) (wire.CommandResponse, 
 					return result, err
 				}
 				stored.Response = &result
-				if err = c.saveOutgoing(stored); err != nil {
-					return result, err
+				retained, saveErr := c.journal.save(ctx, stored)
+				if saveErr != nil {
+					if retained.Response != nil {
+						result = *retained.Response
+					}
+					return result, saveErr
+				}
+				if retained.Response != nil {
+					result = *retained.Response
 				}
 			}
 			return result, nil
 		}
+	}
+	latest, latestErr := c.journal.read(id)
+	if latestErr == nil {
+		stored, storedErr = latest, nil
+	} else if os.IsNotExist(latestErr) {
+		if storedErr == nil {
+			return wire.CommandResponse{}, latestErr
+		}
+		storedErr = latestErr
+	} else {
+		return wire.CommandResponse{}, latestErr
 	}
 	if storedErr == nil && stored.Response != nil {
 		switch stored.Response.Status {
@@ -457,7 +380,11 @@ func (c *Console) lookup(ctx context.Context, id string) (wire.CommandResponse, 
 				return response, sendErr
 			}
 			stored.Response = &response
-			sendErr = c.saveOutgoing(stored)
+			retained, persistErr := c.journal.save(ctx, stored)
+			sendErr = persistErr
+			if retained.Response != nil {
+				response = *retained.Response
+			}
 		}
 		return response, sendErr
 	}
@@ -529,12 +456,10 @@ func (c *Console) Receipt(ctx context.Context, id string) (*api.ControlReceipt, 
 	if response.ControlReceipt != nil {
 		if response.Action == "stop_service" && response.ControlReceipt.Status == "applied" {
 			copy := *response.ControlReceipt
-			c.mu.Lock()
-			stored, readErr := c.readOutgoing(id)
-			c.mu.Unlock()
+			stored, readErr := c.journal.read(id)
 			exited, locks := false, false
 			if readErr == nil && stored.StopIdentity != nil {
-				exited, locks, _ = observeExit(*stored.StopIdentity)
+				exited, locks, _ = c.observer(*stored.StopIdentity)
 			}
 			if exited && locks {
 				copy.Message = "原停服请求已应用，原进程退出与锁释放已核实"
@@ -701,7 +626,13 @@ func (c *Console) StopService(ctx context.Context, by string, timeout time.Durat
 				return result, nil
 			}
 		}
-		exited, locks, probeErr := observeExit(identity)
+		stored, journalErr := c.journal.read(id)
+		exited, locks, probeErr := false, false, journalErr
+		if journalErr == nil && stored.StopIdentity != nil {
+			exited, locks, probeErr = c.observer(*stored.StopIdentity)
+		} else if journalErr == nil {
+			probeErr = errors.New("original stop identity unavailable")
+		}
 		result.ProcessExited, result.LocksReleased = exited, locks
 		if probeErr != nil {
 			result.Diagnostic = probeErr.Error()
