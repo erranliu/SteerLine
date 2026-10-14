@@ -163,7 +163,7 @@ func TestTUIHTTPRuntime(t *testing.T) {
 	if err = model.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened := httpclient.NewConsole(ctx, refs[0])
+	reopened := httpclient.NewConsole(ctx, refs[0], httpclient.NewPlatformStopObserver())
 	defer reopened.Close()
 	wait("controlled publish", func() bool { state, err := controlled.Read(d.provider); return err == nil && state.PR.State == "open" })
 	state, err := controlled.Read(d.provider)

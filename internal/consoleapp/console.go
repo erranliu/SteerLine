@@ -80,7 +80,7 @@ func Prepare(ctx context.Context, configPath, runID string, paths Paths) ([]api.
 		if refs[i].Error != "" {
 			continue
 		}
-		client := httpclient.NewConsole(ctx, refs[i])
+		client := httpclient.NewConsole(ctx, refs[i], httpclient.NewPlatformStopObserver())
 		refs[i] = client.Project()
 		options.Clients[refs[i].Key] = client
 	}
