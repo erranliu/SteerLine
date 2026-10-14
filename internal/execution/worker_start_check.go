@@ -92,7 +92,7 @@ func (s *Service) applyWorkerStartCheck(result workerStartCheckResult) error {
 		delete(s.workerStartChecks, result.runID)
 		execution.Status = "failed"
 		s.refreshRun(run)
-		return s.waitWorkerFlow(run, "Worker start preflight failed: "+result.err.Error())
+		return s.failReservedStart(run, "Worker start preflight failed: "+result.err.Error())
 	}
 	state.verified = true
 	s.workerStartChecks[result.runID] = state

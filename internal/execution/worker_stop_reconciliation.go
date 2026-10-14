@@ -28,7 +28,7 @@ func (s *Service) reconcileWorkerStops(ctx context.Context, run *reconstructiont
 			return true, err
 		}
 		request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: operation, Input: candidate.Input}
-		err = s.dispatchLifecycleEffect(ctx, run, lifecycle, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
+		err = s.dispatchResourceEffect(ctx, run, lifecycle, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 			if err := result.receipt.ValidateFor(request); err != nil {
 				return err
 			}

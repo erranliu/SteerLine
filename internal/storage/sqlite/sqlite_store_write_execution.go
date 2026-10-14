@@ -41,7 +41,19 @@ func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
 			if pinErr != nil {
 				return pinErr
 			}
-			if old.ProjectIdentity != v.ProjectIdentity || old.WorkflowRunID != v.WorkflowRunID || old.TaskID != v.TaskID || !old.CreatedAt.Equal(v.CreatedAt) || !bytes.Equal(oldPin, newPin) || old.SelectedResult != "" && old.SelectedResult != v.SelectedResult {
+			// Admission freezes the selected profile. Preparation may only add
+			// publication evidence to that same profile, before any worker effect.
+			if old.StartPending && !v.StartPending && old.ExecutionProfile != nil && v.ExecutionProfile != nil {
+				p := *v.ExecutionProfile
+				p.Publication, p.Digest = old.ExecutionProfile.Publication, old.ExecutionProfile.Digest
+				comparison := v
+				comparison.ExecutionProfile = &p
+				newPin, pinErr = nativeWorkflowPin(comparison)
+				if pinErr != nil {
+					return pinErr
+				}
+			}
+			if old.ProjectIdentity != v.ProjectIdentity || old.WorkflowRunID != v.WorkflowRunID || old.TaskID != v.TaskID || old.CandidateNumber != v.CandidateNumber || !old.CreatedAt.Equal(v.CreatedAt) || !bytes.Equal(oldPin, newPin) || old.SelectedResult != "" && old.SelectedResult != v.SelectedResult || !old.StartPending && v.StartPending {
 				return nativeErr("immutable_task", "native workflow identity, definition, runner and selected result are fixed")
 			}
 			if v.InputVersion < old.InputVersion || len(v.StageInputs) < len(old.StageInputs) || len(v.StageResults) < len(old.StageResults) {
@@ -56,6 +68,9 @@ func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
 				if recordFingerprint(result) != recordFingerprint(v.StageResults[i]) {
 					return nativeErr("immutable_task", "accepted stage result is first-wins")
 				}
+			}
+			if old.Status == "abandoned" && (v.Status != old.Status || recordFingerprint(v.CandidateStoppedAt) != recordFingerprint(old.CandidateStoppedAt) || v.CandidateStopReason != old.CandidateStopReason || v.CandidateStoppedBy != old.CandidateStoppedBy || !v.UpdatedAt.Equal(old.UpdatedAt)) {
+				return nativeErr("immutable_task", "stopped candidate facts are fixed")
 			}
 			if old.WorkflowVersion == executionmodel.Version && old.PRURL != "" && old.PRURL != v.PRURL && old.PRState != "closed_unmerged" {
 				return nativeErr("immutable_task", "bound worker PR cannot change before it is closed unmerged")

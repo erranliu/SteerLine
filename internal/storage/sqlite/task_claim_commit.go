@@ -55,14 +55,35 @@ func (s *SQLiteStore) CommitTaskClaim(ctx context.Context, commit storageports.C
 			if executionmodel.CandidatePRBindings(stored.WorkflowRuns, commit.Before.TaskID) != commit.ExpectedPRBindings {
 				return nativeErr("stale_version", "known PR bindings changed during start verification")
 			}
-			storedBase, err := executionmodel.CandidateCommonBase(stored.WorkflowRuns, stored.Executions, commit.Before.TaskID)
-			if err != nil {
-				return err
-			}
-			if storedBase != commit.Execution.Workspace.Base {
-				return nativeErr("contract_mismatch", "experiment common base changed during start verification")
+			if !commit.Workflow.StartPending {
+				storedBase, err := executionmodel.CandidateCommonBase(stored.WorkflowRuns, stored.Executions, commit.Before.TaskID)
+				if err != nil {
+					return err
+				}
+				if storedBase != commit.Execution.Workspace.Base {
+					return nativeErr("contract_mismatch", "experiment common base changed during start verification")
+				}
 			}
 		}
+		// Count reservations inside the write transaction, including starts that
+		// have not prepared their worker yet. Failed history is retained.
+		stored, e := tx.ReadTaskCandidateSnapshot(ctx, commit.Before.ProjectIdentity, commit.Before.TaskID)
+		if e != nil {
+			return e
+		}
+		participating, number := 0, 0
+		for _, w := range stored.WorkflowRuns {
+			if executionmodel.CandidateParticipates(w.Status) {
+				participating++
+			}
+			if w.CandidateNumber > number {
+				number = w.CandidateNumber
+			}
+		}
+		if participating >= 5 {
+			return nativeErr("candidate_limit_reached", "five candidates already participate in this task experiment")
+		}
+		commit.Workflow.CandidateNumber = number + 1
 		currentEligibility := currentTask
 		if commit.Candidate {
 			currentEligibility.Status = "open"

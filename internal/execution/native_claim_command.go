@@ -30,6 +30,8 @@ type TaskClaimOptions struct {
 	ServiceInstanceID        string
 	startCandidate           bool
 	controlRequestDigest     string
+	reserveOnly              bool
+	reservation              *storageports.TaskCandidateSnapshot
 }
 
 // StartNativeCandidate preserves the original claim and fixed experiment base.
@@ -79,8 +81,10 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 	if err != nil {
 		return preparedTaskClaim{}, err
 	}
-	if err := config.PrepareWorktreeRoot(); err != nil {
-		return preparedTaskClaim{}, err
+	if !options.reserveOnly {
+		if err := config.PrepareWorktreeRoot(); err != nil {
+			return preparedTaskClaim{}, err
+		}
 	}
 	if err := taskmodel.ValidateID(options.TaskID); err != nil {
 		return preparedTaskClaim{}, err
@@ -144,27 +148,30 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 	}
 	if old, found, e := sqlite.LookupCommand(ctx, c.Project, options.RequestID); e != nil {
 		return preparedTaskClaim{}, e
-	} else if found {
+	} else if found && options.reservation == nil {
 		receipt, err := replayTaskStart(old, requestPayload, options.TaskID, options.RequestedBy, kind)
 		return preparedTaskClaim{Receipt: receipt}, err
 	}
 
-	claimPreparation, err := entry.PrepareClaim(ctx, config)
-	if err != nil {
-		return preparedTaskClaim{}, err
-	}
-	if err := requireWorkerFlowCapabilitiesWithResolver(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, c.runtime.Directory.LifecycleResolver()); err != nil {
-		return preparedTaskClaim{}, err
-	}
-	if err := config.BindPublicationTarget(ctx, c.runtime.ProcessHost); err != nil {
-		return preparedTaskClaim{}, err
-	}
-	if options.ExecutionProfile != nil {
-		// Keep the request payload's selected profile digest unchanged; only the
-		// persisted frozen profile gains this claim-time evidence snapshot.
-		fixed := freezeClaimExecutionProfile(*options.ExecutionProfile, config)
-		config.fixedProfileDigest = fixed.Digest
-		options.ExecutionProfile = &fixed
+	var claimPreparation ClaimPreparation
+	if !options.reserveOnly {
+		claimPreparation, err = entry.PrepareClaim(ctx, config)
+		if err != nil {
+			return preparedTaskClaim{}, err
+		}
+		if err := requireWorkerFlowCapabilitiesWithResolver(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, c.runtime.Directory.LifecycleResolver()); err != nil {
+			return preparedTaskClaim{}, err
+		}
+		if err := config.BindPublicationTarget(ctx, c.runtime.ProcessHost); err != nil {
+			return preparedTaskClaim{}, err
+		}
+		if options.ExecutionProfile != nil {
+			// Keep the request payload's selected profile digest unchanged; only the
+			// persisted frozen profile gains this claim-time evidence snapshot.
+			fixed := freezeClaimExecutionProfile(*options.ExecutionProfile, config)
+			config.fixedProfileDigest = fixed.Digest
+			options.ExecutionProfile = &fixed
+		}
 	}
 	graph, err := sqlite.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
@@ -176,8 +183,10 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 	if options.startCandidate && (options.ExpectedGraphRevision == 0 || graph.Authority.GraphRevision != options.ExpectedGraphRevision) {
 		return preparedTaskClaim{}, nativeErr("stale_version", "candidate start requires current graph revision")
 	}
-	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority, c.runtime.ProcessHost); err != nil {
-		return preparedTaskClaim{}, err
+	if !options.reserveOnly {
+		if err = validateNativeConfiguredTarget(ctx, config, graph.Authority, c.runtime.ProcessHost); err != nil {
+			return preparedTaskClaim{}, err
+		}
 	}
 	task, exists := graph.ByID[options.TaskID]
 	if !exists {
@@ -202,7 +211,14 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 	if c.Work == nil {
 		return preparedTaskClaim{}, nativeErr("authority_mismatch", "task work port is required")
 	}
-	work, err := c.Work.Fixed(ctx, c.Project, options.TaskID, options.ExpectedTaskVersion, options.startCandidate)
+	var work taskmodel.FixedWork
+	if options.reserveOnly {
+		contract, contractErr := sqlite.TaskContract(ctx, c.Project, task)
+		err = contractErr
+		work = taskmodel.FixedWork{Record: task, Contract: contract, Authority: taskmodel.GraphAuthority{AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision}}
+	} else {
+		work, err = c.Work.Fixed(ctx, c.Project, options.TaskID, options.ExpectedTaskVersion, options.startCandidate)
+	}
 	if err != nil {
 		return preparedTaskClaim{}, err
 	}
@@ -217,8 +233,10 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 	if c.Work == nil {
 		return preparedTaskClaim{}, errors.New("task contract verification port is required")
 	}
-	if err = c.Work.VerifyContractFiles(ctx, contract); err != nil {
-		return preparedTaskClaim{}, err
+	if !options.reserveOnly {
+		if err = c.Work.VerifyContractFiles(ctx, contract); err != nil {
+			return preparedTaskClaim{}, err
+		}
 	}
 	var candidateSnapshot storageports.TaskCandidateSnapshot
 	var commonBase string
@@ -227,41 +245,59 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 		if err != nil {
 			return preparedTaskClaim{}, err
 		}
-		if participatingCandidates(candidateSnapshot.WorkflowRuns, task.TaskID) >= 5 {
+		if options.reservation != nil {
+			var siblings []executionmodel.WorkflowRunRecord
+			for _, w := range candidateSnapshot.WorkflowRuns {
+				if w.WorkflowRunID != options.WorkflowRunID {
+					siblings = append(siblings, w)
+				}
+			}
+			candidateSnapshot.WorkflowRuns = siblings
+		}
+		if options.reservation == nil && participatingCandidates(candidateSnapshot.WorkflowRuns, task.TaskID) >= 5 {
 			return preparedTaskClaim{}, nativeErr("candidate_limit_reached", "five candidates already participate in this task experiment")
 		}
-		commonBase, err = executionmodel.CandidateCommonBase(candidateSnapshot.WorkflowRuns, candidateSnapshot.Executions, task.TaskID)
+		if !options.reserveOnly {
+			commonBase, err = executionmodel.CandidateCommonBase(candidateSnapshot.WorkflowRuns, candidateSnapshot.Executions, task.TaskID)
+			if err != nil {
+				if options.reservation == nil || !isNativeErrorCode(err, "task_not_ready") {
+					return preparedTaskClaim{}, err
+				}
+			}
+			if _, err = verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, candidateSnapshot, task.TaskID, nil); err != nil {
+				return preparedTaskClaim{}, err
+			}
+		}
+	}
+	base := ""
+	if !options.reserveOnly {
+		base, err = acquireNativeBase(ctx, config, c.runtime.ProcessHost)
 		if err != nil {
-			return preparedTaskClaim{}, err
+			return preparedTaskClaim{}, nativeErr("task_not_ready", "fixed target branch base could not be acquired: "+err.Error())
 		}
-		if _, err = verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, candidateSnapshot, task.TaskID, nil); err != nil {
-			return preparedTaskClaim{}, err
-		}
-	}
-	base, err := acquireNativeBase(ctx, config, c.runtime.ProcessHost)
-	if err != nil {
-		return preparedTaskClaim{}, nativeErr("task_not_ready", "fixed target branch base could not be acquired: "+err.Error())
-	}
-	if options.startCandidate {
-		base = commonBase
-		if _, err := (Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: c.runtime.ProcessHost}).Output(ctx, config.Git, "cat-file", "-e", base+"^{commit}"); err != nil {
-			return preparedTaskClaim{}, nativeErr("base_missing_delivery", "selected execution cannot acquire the experiment's common base")
+		if options.startCandidate && commonBase != "" {
+			base = commonBase
+			if _, err := (Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: c.runtime.ProcessHost}).Output(ctx, config.Git, "cat-file", "-e", base+"^{commit}"); err != nil {
+				return preparedTaskClaim{}, nativeErr("base_missing_delivery", "selected execution cannot acquire the experiment's common base")
+			}
 		}
 	}
 	predecessorMerges := map[string]string{}
-	for _, edge := range graph.Edges {
-		if edge.SuccessorID != task.TaskID {
-			continue
-		}
-		pred, ok := graph.ByID[edge.PredecessorID]
-		delivery, delivered := graph.Deliveries[edge.PredecessorID]
-		if !ok || !delivered || pred.Status != "closed" {
-			return preparedTaskClaim{}, nativeErr("task_not_ready", "predecessor delivery changed during claim preflight")
-		}
-		predecessorMerges[edge.PredecessorID] = delivery.MergeCommit
-		r := Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: c.runtime.ProcessHost}
-		if _, e := r.Output(ctx, config.Git, "merge-base", "--is-ancestor", delivery.MergeCommit, base); e != nil {
-			return preparedTaskClaim{}, nativeErr("base_missing_delivery", "acquired branch base does not contain a verified predecessor merge commit")
+	if !options.reserveOnly {
+		for _, edge := range graph.Edges {
+			if edge.SuccessorID != task.TaskID {
+				continue
+			}
+			pred, ok := graph.ByID[edge.PredecessorID]
+			delivery, delivered := graph.Deliveries[edge.PredecessorID]
+			if !ok || !delivered || pred.Status != "closed" {
+				return preparedTaskClaim{}, nativeErr("task_not_ready", "predecessor delivery changed during claim preflight")
+			}
+			predecessorMerges[edge.PredecessorID] = delivery.MergeCommit
+			r := Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: c.runtime.ProcessHost}
+			if _, e := r.Output(ctx, config.Git, "merge-base", "--is-ancestor", delivery.MergeCommit, base); e != nil {
+				return preparedTaskClaim{}, nativeErr("base_missing_delivery", "acquired branch base does not contain a verified predecessor merge commit")
+			}
 		}
 	}
 	backend, protocol := entry.Key.Backend, entry.Key.Protocol
@@ -285,11 +321,25 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 		}
 		execution.Environment = &executionmodel.WorkerEnvironment{ProfileDigest: wfr.ExecutionProfile.Digest, Preparation: &executionmodel.WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: created, Deadline: created.Add(timeout)}}
 	}
-	execution.WorkspaceIntent, err = planWorkspace(config, task.TaskID, workflowRunID, base)
-	if err != nil {
-		return preparedTaskClaim{}, err
+	if !options.reserveOnly {
+		execution.WorkspaceIntent, err = planWorkspace(config, task.TaskID, workflowRunID, base)
+		if err != nil {
+			return preparedTaskClaim{}, err
+		}
 	}
 	attempt := executionmodel.StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "worker", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
+	if options.reserveOnly {
+		wfr.StartPending, wfr.StepID = true, "start.prepare"
+		execution.WorkspaceIntent = nil
+	}
+	if options.reservation != nil {
+		original := options.reservation.WorkflowRuns[0]
+		oldExecution := options.reservation.Executions[0]
+		wfr.CreatedAt, wfr.CandidateNumber = original.CreatedAt, original.CandidateNumber
+		wfr.SelectedResult = oldExecution.ExecutionID
+		execution.ExecutionID, execution.CurrentAttemptID, execution.Generation, execution.CreatedAt = oldExecution.ExecutionID, oldExecution.CurrentAttemptID, oldExecution.Generation, oldExecution.CreatedAt
+		attempt.AttemptID, attempt.ExecutionID, attempt.CreatedAt = oldExecution.CurrentAttemptID, oldExecution.ExecutionID, oldExecution.CreatedAt
+	}
 	nextTask := task
 	if !options.startCandidate {
 		nextTask, err = c.Work.Claim(work, claimant, created)

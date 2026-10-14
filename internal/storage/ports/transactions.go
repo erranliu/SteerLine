@@ -79,12 +79,15 @@ type BatchTx interface {
 }
 
 type CandidateTx interface {
+	ParticipatingCandidateCount(context.Context, string, string) (int, error)
 	commandTx
 	operationTx
 	graphTx
 	workflowTx
 	TaskCandidateReader
 	PutWorkflowRun(executionmodel.WorkflowRunRecord) error
+	PutExecution(executionmodel.ExecutionRecord) error
+	PutStepAttempt(executionmodel.StepAttemptRecord) error
 	UpdateOperation(executionmodel.OperationRecord) error
 }
 
