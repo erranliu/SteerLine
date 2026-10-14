@@ -43,7 +43,7 @@ func testExecutionProfile(t *testing.T, id, name, host, agent string, worker cod
 		if terminal == nil {
 			t.Fatal("terminal fixture missing")
 		}
-		payload, err := json.Marshal(transport.Profile{Executable: terminal.Executable, Args: terminal.Args, RepositorySelector: "id:repo", WaitTimeout: "5s"})
+		payload, err := json.Marshal(transport.Profile{Executable: terminal.Executable, Args: terminal.Args, WaitTimeout: "5s"})
 		require(t, err)
 		return ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: transport.ProfileKey, CodecVersion: transport.ProfileVersion, Payload: payload}}}
 	}

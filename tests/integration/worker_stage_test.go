@@ -60,7 +60,7 @@ func testWorkerStageRun(t *testing.T, host string) {
 			require(t, AtomicWrite(filepath.Join(f.nativeStateDir, "gate-phase"), []byte("working")))
 		}
 		f.config.Host, f.config.Agent = "orca", "codex"
-		setNativeImplementationProfiles(t, &f.config, codexworker.ProfileConfig{}, &terminal.Profile{Executable: os.Args[0], Args: []string{"--fake", "terminal-orca", f.nativeStateDir}, RepositorySelector: "id:fixture", Environment: environment, WaitTimeout: "5s"})
+		setNativeImplementationProfiles(t, &f.config, codexworker.ProfileConfig{}, &terminal.Profile{Executable: os.Args[0], Args: []string{"--fake", "terminal-orca", f.nativeStateDir}, Environment: environment, WaitTimeout: "5s"})
 		f.config.ExecutionDirectory, err = steerlineapp.NewBuiltinDirectoryWithOrcaStateFactory(f.config.ProcessHost, integrationStateFactory(f.nativeStateDir, nil))
 		require(t, err)
 		t.Cleanup(func() {

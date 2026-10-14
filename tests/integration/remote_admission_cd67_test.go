@@ -13,7 +13,7 @@ func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 	c := nativeRequirementConfig(t)
 	c.Host = "orca"
 	c.Agent = "opaque-agent"
-	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{}, &terminal.Profile{Executable: "missing-orca", Environment: "peer", RepositorySelector: "id:repo", WaitTimeout: "5s"})
+	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{}, &terminal.Profile{Executable: "missing-orca", Environment: "peer", WaitTimeout: "5s"})
 	entry, err := c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	require(t, err)
 	require(t, entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)))

@@ -52,6 +52,8 @@ func fakeTerminalOrca(directory string, args []string) int {
 		return 2
 	} else {
 		switch args[0] + " " + args[1] {
+		case "repo list":
+			result = map[string]any{"repos": []any{map[string]any{"id": "fixture", "kind": "git", "path": state.Repository}}}
 		case "worktree create":
 			if state.Worktree != "" {
 				return fail(fmt.Errorf("duplicate create"))

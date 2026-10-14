@@ -27,7 +27,7 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hostPayload, _ := json.Marshal(remote.Profile{Executable: "fixture-host", WaitTimeout: "30s", RepositorySelector: "id:repo"})
+	hostPayload, _ := json.Marshal(remote.Profile{Executable: "fixture-host", WaitTimeout: "30s"})
 	config := Config{
 		Repository: repository, Git: executionbackend.Command{Executable: "git"},
 
