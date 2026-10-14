@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 	"strings"
 	"testing"
 	"time"
@@ -173,7 +174,7 @@ func TestWorkspaceCreationReceiptRecovery(t *testing.T) {
 			}
 			assertWorkspaceReadonly(t, *calls)
 			bind(&s, recovered)
-			candidate, err := restarted.Next(context.Background(), s)
+			candidate, err := reliable.Next(context.Background(), restarted, s)
 			if err != nil || candidate.Action != b.LifecycleCreateResource {
 				t.Fatal("recovery skipped the existing agent-launch step", candidate, err)
 			}

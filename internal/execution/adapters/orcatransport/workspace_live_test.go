@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -171,7 +172,7 @@ func TestOrcaWorkspaceStartupLive(t *testing.T) {
 			l = port.(*Lifecycle)
 			defer l.closeStateFeed()
 			launchCalls := workspaceCalls(l, nil)
-			candidate, err := l.Next(ctx, s)
+			candidate, err := reliable.Next(ctx, l, s)
 			if err != nil || candidate.Action != b.LifecycleCreateResource {
 				t.Fatal(candidate, err)
 			}

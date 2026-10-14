@@ -103,7 +103,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
-	fixed, contextErr := s.workerFlowContext(run)
+	fixed, contextErr := s.workerRecords(run)
 	if contextErr != nil {
 		return contextErr
 	}

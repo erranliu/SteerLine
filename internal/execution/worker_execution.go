@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
+	"github.com/erranliu/SteerLine/internal/execution/workflow"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -38,7 +40,7 @@ func WorkerFlowCapabilityError(c Config, directory *ExecutionDirectory, processH
 	if !lifecycle.PolicyCapabilities().StructuredFinalEvidence {
 		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: workerFlowStructuredFinalDiagnostic}
 	}
-	return nil
+	return reliable.ValidatePreparationCapabilities(lifecycle.PolicyCapabilities().Preparation)
 }
 
 func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, resolver executionbackend.LifecycleResolver) error {
@@ -63,6 +65,9 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, di
 	if lifecycle.PolicyCapabilities().ServiceStopBehavior != entry.ServiceStopBehavior {
 		return errors.New("worker service-stop behavior differs from its registered declaration")
 	}
+	if err := reliable.ValidatePreparationCapabilities(lifecycle.PolicyCapabilities().Preparation); err != nil {
+		return err
+	}
 	report, probeErr := lifecycle.PreflightLifecycle(ctx, setup.Clone())
 	if probeErr != nil {
 		return probeErr
@@ -70,9 +75,9 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, di
 	return validateLifecycleStartCapability(setup.Snapshot.Ref, report)
 }
 
-// workerFlowContext binds one persisted run to its fixed profile and records.
+// workerRecords binds one persisted run to its fixed profile and records.
 // It is resolved for each operation; no mutable "current worker" slot owns it.
-type workerFlowContext struct {
+type workerRecords struct {
 	run       *reconstructiontypes.RunView
 	workflow  *executionmodel.WorkflowRunRecord
 	execution *executionmodel.ExecutionRecord
@@ -80,24 +85,24 @@ type workerFlowContext struct {
 	config    Config
 }
 
-func (s *Service) workerFlowContext(run *reconstructiontypes.RunView) (workerFlowContext, error) {
+func (s *Service) workerRecords(run *reconstructiontypes.RunView) (workerRecords, error) {
 	if run == nil || run.RunID == "" || run.ExecutionID == "" || run.AttemptID == "" {
-		return workerFlowContext{}, errors.New("worker flow has no fixed run identity")
+		return workerRecords{}, errors.New("worker flow has no fixed run identity")
 	}
 	workflow, execution := s.workflowRecords(run)
 	attempt := s.workflowAttempt(run, run.AttemptID)
 	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowRunID != run.RunID ||
 		execution.ExecutionID != run.ExecutionID || execution.WorkflowRunID != run.RunID || attempt.ExecutionID != execution.ExecutionID {
-		return workerFlowContext{}, errors.New("worker flow has no matching persisted execution and attempt")
+		return workerRecords{}, errors.New("worker flow has no matching persisted execution and attempt")
 	}
 	config, err := s.executionConfigForRun(run)
 	if err != nil {
-		return workerFlowContext{}, err
+		return workerRecords{}, err
 	}
-	return workerFlowContext{run: run, workflow: workflow, execution: execution, attempt: attempt, config: copyWorkerFlowConfig(config)}, nil
+	return workerRecords{run: run, workflow: workflow, execution: execution, attempt: attempt, config: copyWorkerConfig(config)}, nil
 }
 
-func copyWorkerFlowConfig(c Config) Config {
+func copyWorkerConfig(c Config) Config {
 	c.AgentLaunch = c.AgentLaunch.Clone()
 	c.Git.Args = append([]string(nil), c.Git.Args...)
 	c.ImplementationData = CloneImplementationData(c.ImplementationData)
@@ -158,56 +163,18 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 	return s.startStageFeedback(ctx, run, answer, commandID)
 }
 
+// Only application record projection remains here; Workflow renders the text.
 func workerFeedbackText(answer executionmodel.DecisionAnswer, request executionmodel.DecisionRequest) string {
+	var async json.RawMessage
 	if request.InteractionKind == "async" {
-		raw, _ := json.Marshal(map[string]any{"question_id": request.QuestionRoute.QuestionID, "source_turn_id": request.QuestionRoute.TurnID, "questions": request.Questions, "answers": answer.Answers})
-		return "Answer to the original asynchronous question:\n" + string(raw)
+		async, _ = json.Marshal(map[string]any{"question_id": request.QuestionRoute.QuestionID, "source_turn_id": request.QuestionRoute.TurnID, "questions": request.Questions, "answers": answer.Answers})
 	}
-	if answer.OptionID == "" {
-		return answer.Note
-	}
-	label := answer.OptionID
+	label := ""
 	for _, option := range request.Options {
 		if option.ID == answer.OptionID {
 			label = option.Label
 			break
 		}
 	}
-	message := "Selected option: " + label
-	if answer.Note != "" {
-		message += "\n\nAdditional instructions:\n" + answer.Note
-	}
-	return message
-}
-
-func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *reconstructiontypes.RunView, opID string) (bool, error) {
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return false, err
-	}
-	execution := fixed.execution
-	preparation, err := prepareWorktree(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, run)
-	if err != nil {
-		status := string(preparation.Status)
-		if status != string(executionbackend.OperationRejected) {
-			status = "outcome_unknown"
-		}
-		_ = s.changeWorkerOperation(run, opID, status, "", mustJSON(preparation), err.Error())
-		execution.Status = "blocked"
-		s.refreshRun(run)
-		return false, s.waitWorkerFlow(run, "Workspace preparation needs reconciliation: "+err.Error())
-	}
-	s.refreshRun(run)
-	workspace, err := s.inspectWorkflowWorkspace(ctx, run)
-	if err != nil {
-		_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
-		execution.Status = "blocked"
-		s.refreshRun(run)
-		return false, s.waitWorkerFlow(run, "Workspace identity could not be verified: "+err.Error())
-	}
-	applyWorkflowWorkspaceEvidence(run, execution, workspace)
-	if err = s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
-		return false, err
-	}
-	return true, nil
+	return workflow.FeedbackText(answer.OptionID, label, answer.Note, async)
 }

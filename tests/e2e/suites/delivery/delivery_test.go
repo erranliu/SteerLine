@@ -31,5 +31,6 @@ func TestBasicDelivery(t *testing.T) {
 			t.Fatal("successor not ready and unstarted")
 		}
 	}
+	p.AssertClosedDeliveryQuiescent(done)
 	p.StopService()
 }

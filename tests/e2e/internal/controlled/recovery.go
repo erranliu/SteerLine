@@ -181,7 +181,7 @@ func orcaFixture(path string, args []string) error {
 	}
 	worktree := func() any {
 		head, _ := Git(context.Background(), o.Worktree, "rev-parse", "HEAD")
-		return map[string]any{"id": "fixture::" + o.Worktree, "repoId": "fixture", "path": o.Worktree, "branch": o.Branch, "baseRef": o.Base, "head": head, "displayName": o.Name}
+		return map[string]any{"id": "fixture::" + o.Worktree, "instanceId": "fixture-original-worktree", "repoId": "fixture", "path": o.Worktree, "branch": o.Branch, "baseRef": o.Base, "head": head, "displayName": o.Name}
 	}
 	var result any
 	switch key {

@@ -44,7 +44,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if run == nil || task == nil || workflow == nil || task.Status == "closed" || !executionmodel.CandidateParticipates(workflow.Status) {
 		return nil
 	}
-	fixed, contextErr := s.workerFlowContext(run)
+	fixed, contextErr := s.workerRecords(run)
 	if contextErr != nil {
 		return contextErr
 	}

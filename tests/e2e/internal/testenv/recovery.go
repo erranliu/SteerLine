@@ -92,26 +92,48 @@ func (p *Project) WaitRecovery(label string, predicate func(Snapshot) bool) Snap
 	return result
 }
 
+// AnswerRecovery exercises formal optimistic concurrency. Only an explicit
+// pre-accept stale_recovery rejection can refresh this test's authorized answer;
+// unknown command outcomes are never retried under a different request ID.
 func (p *Project) AnswerRecovery(snap Snapshot) driver.CandidateCommand {
 	if snap.Runtime == nil || len(snap.Runtime.Runs) != 1 || snap.Runtime.Runs[0].Decision == nil {
 		p.Scenario.t.Fatal("missing formal recovery decision")
 	}
-	r := snap.Runtime.Runs[0]
-	d := r.Decision
-	if d.Status != "pending" || len(d.Request.Options) == 0 || d.Request.Options[0].ID != "continue" {
-		p.Scenario.t.Fatal("original recovery is not qualified for continuation")
-	}
-	in := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: r.RunID, ExecutionID: r.ExecutionID, DecisionID: d.ID, DecisionVersion: d.Version, RunRevision: r.ControlRevision, AttemptID: r.AttemptID, RecoveryVersion: r.RecoveryVersion, InstanceID: snap.Runtime.Service.InstanceID, Option: "continue", Note: "Continue this original session and verify existing work against its original Spec/Plan. Preserve correct changes; finish only the current authorized stage."}
-	_, err := p.Driver.Candidate(p.Scenario.Context, p.Scenario.Run.Helper, in)
-	if err != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if rejected, readErr := p.SnapshotContext(ctx); readErr == nil {
-			p.RecordRecoveryBranch("recovery-answer-rejected", rejected, map[string]any{"error": err.Error()})
+	original := snap.Runtime.Runs[0]
+	for attempt := 0; attempt < 3; attempt++ {
+		if snap.Runtime == nil || len(snap.Runtime.Runs) != 1 {
+			p.Scenario.t.Fatal("recovery refresh lost original execution")
 		}
+		r := snap.Runtime.Runs[0]
+		d := r.Decision
+		if r.RunID != original.RunID || r.ExecutionID != original.ExecutionID || r.AttemptID != original.AttemptID || d == nil || d.Status != "pending" || d.Request.QuestionRoute != nil || len(d.Request.Options) == 0 || d.Request.Options[0].ID != "continue" || r.RecoveryState == "unverified" {
+			p.Scenario.t.Fatal("original recovery is not qualified for continuation")
+		}
+		in := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: r.RunID, ExecutionID: r.ExecutionID, DecisionID: d.ID, DecisionVersion: d.Version, RunRevision: r.ControlRevision, AttemptID: r.AttemptID, RecoveryVersion: r.RecoveryVersion, InstanceID: snap.Runtime.Service.InstanceID, Option: "continue", Note: "Continue this original session and verify existing work against its original Spec/Plan. Preserve correct changes; finish only the current authorized stage."}
+		_, err := p.Driver.Candidate(p.Scenario.Context, p.Scenario.Run.Helper, in)
+		if err == nil {
+			return in
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		rejected, readErr := p.SnapshotContext(ctx)
+		cancel()
+		if readErr == nil {
+			p.RecordRecoveryBranch("recovery-answer-rejected", rejected, map[string]any{"error": err.Error(), "request_id": in.RequestID, "refresh_attempt": attempt})
+		}
+		if attempt == 2 || !strings.Contains(err.Error(), "stale_recovery: source Attempt or recovery version changed") {
+			p.Scenario.Must(err)
+		}
+		snap = p.WaitRecovery("refresh-original-recovery-consent", func(value Snapshot) bool {
+			if value.Runtime == nil || len(value.Runtime.Runs) != 1 {
+				return false
+			}
+			current := value.Runtime.Runs[0]
+			decision := current.Decision
+			return current.RunID == original.RunID && current.ExecutionID == original.ExecutionID && current.AttemptID == original.AttemptID && current.RecoveryState != "unverified" && decision != nil && decision.Status == "pending" && decision.Request.QuestionRoute == nil && len(decision.Request.Options) > 0 && decision.Request.Options[0].ID == "continue"
+		})
 	}
-	p.Scenario.Must(err)
-	return in
+	p.Scenario.t.Fatal("recovery consent refresh exhausted")
+	return driver.CandidateCommand{}
 }
 
 // FinishRecoveredFlow confirms each distinct product decision, never native questions.

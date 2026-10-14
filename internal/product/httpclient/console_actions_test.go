@@ -38,7 +38,8 @@ func testConsoleActions(t *testing.T) {
 		json.NewEncoder(w).Encode(response)
 	}))
 	defer server.Close()
-	c := &Console{ref: api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}, client: &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}}
+	ref := api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}
+	c := newTestConsole(ref, &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}, nil)
 	revision := uint64(21)
 	payload := api.ControlPayload{RunID: "candidate", ExpectedRunRevision: 13, TaskID: "task", ExpectedTaskVersion: 7, ExpectedGraphRevision: 11, Mode: "auto", ExecutionProfileID: "profile", Environment: &api.HostActionTarget{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", BlockerID: "blocker", Version: 17}}
 	cases := []struct {
@@ -108,13 +109,14 @@ func testStopUnknown(t *testing.T) {
 		json.NewEncoder(w).Encode(wire.ErrorResponse{Code: "outcome_unknown"})
 	}))
 	defer server.Close()
-	identity := wire.Identity{ProjectID: wire.ProjectID("repo"), InstanceID: "original"}
-	c := &Console{ref: api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}, client: &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}}
+	ref := api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}
+	identity := wire.Identity{ProjectID: wire.ProjectID("repo"), RepositoryIdentity: ref.Identity, InstanceID: "original"}
+	c := newTestConsole(ref, &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}, nil)
 	// Persist the original request first, then simulate the lost POST independently
 	// of StopService's initial existence query.
 	id := strings.Repeat("c", 32)
 	e := wire.CommandEnvelope{RequestID: id, ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "stop_service", TargetID: identity.InstanceID, Payload: json.RawMessage(`{}`)}
-	if err := c.saveOutgoing(outgoing{Version: 1, Envelope: e}); err != nil {
+	if _, err := c.journal.save(context.Background(), outgoing{Version: 1, Envelope: e, StopIdentity: &identity}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := c.client.SubmitCommand(context.Background(), e); err == nil {

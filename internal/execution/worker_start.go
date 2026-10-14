@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -15,7 +16,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if s.candidateBusinessClosed(run) || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -47,7 +48,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 }
 
 func (s *Service) prepareWorkerFlowResources(ctx context.Context, run *reconstructiontypes.RunView) error {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -100,12 +101,12 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.Tas
 	if err != nil {
 		return err
 	}
-	candidate, pending, err := unresolvedLifecycleCandidate(snapshot)
+	candidate, pending, err := reliable.UnresolvedCandidate(snapshot)
 	if err != nil {
 		return err
 	}
 	if !pending || candidate.Action != executionbackend.LifecyclePrepareWorkspace {
-		candidate, err = lifecycle.Next(ctx, snapshot.Clone())
+		candidate, err = reliable.Next(ctx, lifecycle, snapshot.Clone())
 		if err != nil {
 			return err
 		}
@@ -115,21 +116,10 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.Tas
 	}
 	prepared := false
 	if candidate.Done {
-		if fixed.execution.Workspace.Worktree != "" {
-			prepared = true
-		} else if operation := s.operationByKey("worker-workspace:" + run.ExecutionID); operation != nil {
-			_, resumeErr := s.resumeWorkerWorkspace(ctx, &task, run)
-			return resumeErr
-		} else {
-			opID, startErr := s.startWorkerOperation(run, "prepare_workspace", "worker-workspace:"+run.ExecutionID, input)
-			if startErr != nil {
-				return startErr
-			}
-			if _, err = s.workerFlowContext(run); err != nil {
-				return errors.New("worker claim disappeared after preparation intent was saved")
-			}
-			prepared, err = prepareLocalWorkerWorkspace(s, ctx, run, opID)
+		if fixed.execution.Workspace.Worktree == "" {
+			return errors.New("lifecycle completed without verified original workspace; no local fallback is authorized")
 		}
+		prepared = true
 	} else if candidate.Action == executionbackend.LifecyclePrepareWorkspace {
 		workspaceIntent := executionbackend.WorkspaceIntent{Path: input.Workspace.Path, Branch: input.Workspace.Branch, BaseCommit: input.Workspace.BaseCommit}
 		if candidate.Input.Workspace == nil || *candidate.Input.Workspace != workspaceIntent {
@@ -160,7 +150,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.Tas
 }
 
 func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task taskmodel.TaskRecord, run *reconstructiontypes.RunView) error {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -187,7 +177,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 	if s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}

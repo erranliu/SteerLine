@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 	"os"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -166,7 +167,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 			return err
 		}
 		expected := recordFingerprint(saved)
-		status, diagnostic := lifecycleOutcome(result.receipt, result.err)
+		status, diagnostic := reliable.Outcome(result.receipt, result.err)
 		saved.Status, saved.Diagnostic, saved.UpdatedAt = executionbackend.OperationStatus(status), diagnostic, now()
 		saved.Receipt = append([]byte(nil), result.receipt.Operation.Receipt...)
 		if result.err != nil || saved.Status != executionbackend.OperationConfirmed && saved.Status != executionbackend.OperationAccepted && saved.Status != executionbackend.OperationRejected {

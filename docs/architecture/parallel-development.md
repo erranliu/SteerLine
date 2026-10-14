@@ -1,6 +1,6 @@
 # 并行开发指南
 
-> 2026-10-14：[#91](../spec/tui-http-client.spec.md)已交付 TUI/HTTP接入；[#92](../spec/http-command-boundary.spec.md)经PR #311交付HTTP消费端口、登记/对账与记录owner，已移出[草稿任务表](../roadmap/drafts/roadmap.md)。#93已确认纳入execution-map待执行；#94/#95/#96因Worker三层重构交叉继续留草稿。旧二阶段候选不作为当前队列；拟议owner不代表已实现，执行/验收状态归 execution-map。
+> 2026-10-14：[#91](../spec/tui-http-client.spec.md)已交付 TUI/HTTP接入；[#92](../spec/http-command-boundary.spec.md)经PR #311交付HTTP消费端口、登记/对账与记录owner，已移出[草稿任务表](../roadmap/drafts/roadmap.md)。#93经PR #312交付journal跨进程终态保护与窄observer；#94/#95/#96因Worker三层重构交叉继续留草稿。旧二阶段候选不作为当前队列；拟议owner不代表已实现，执行/验收状态归 execution-map。
 
 本文持续维护 SteerLine 的功能划分、模块所有权、可并行条件和冲突触发点，是设计或调整 roadmap 前的阅读与检查入口。目标是提高 AI 开发的有效吞吐：让更多任务能够独立理解、实现、验证和交付，降低共享修改、等待、返工与集成成本。业务正确性、权限、原请求恢复和唯一交付是必须保持的边界，详见[整体架构](../architecture.md)。
 
@@ -52,7 +52,7 @@
 | #95 [最终交付](../spec/task-delivery-usecase.spec.md) | 保留delivery窄端口用例的剩余收益 | 暂不纳入；三层方案保留任务/PR业务桥接，但actor与记录转换正在重组，旧接线条件须重核 |
 | #96 [运行时资源](../spec/worker-runtime-ownership.spec.md) | 保留原资源/观察/在途owner及确认交接反例 | 暂不纳入；与三层ReliableExecution和actor资源组装交叉，不按旧runtime边界并行开工 |
 
-已确认的#92/#93无相互业务硬依赖；#92已交付，当前#93待执行。正在实施的Worker三层重构覆盖#94流程owner并与#96生命周期/资源接线交叉，#95交付抽取需待actor/PR桥接稳定后重审；三项继续留草稿而非并行线。#92仅修改共享app文件的HTTP endpoint段，三层owner保留worker/adapter组装；后合入者保留双方成果并复验实际app接线。发现公共契约改变时先重核，不默认新增硬依赖。各项自行补owner反例/边界文件及最小组合验证，公共fixture/runner冻结；不另建签名基础、文档代管或集中补测任务。测试资源隔离/串行限制保持，具体命令/能力补齐与专属验收分别归各项Plan及acceptance。
+已确认的#92/#93无相互业务硬依赖；#92/#93均已交付。正在实施的Worker三层重构覆盖#94流程owner并与#96生命周期/资源接线交叉，#95交付抽取需待actor/PR桥接稳定后重审；三项继续留草稿而非并行线。#92仅修改共享app文件的HTTP endpoint段，三层owner保留worker/adapter组装；后合入者保留双方成果并复验实际app接线。发现公共契约改变时先重核，不默认新增硬依赖。各项自行补owner反例/边界文件及最小组合验证，公共fixture/runner冻结；不另建签名基础、文档代管或集中补测任务。测试资源隔离/串行限制保持，具体命令/能力补齐与专属验收分别归各项Plan及acceptance。
 
 #92/#93须完成原入口接线和自己的验收；后合入者在实际最终候选按各自Plan复验TUI/HTTP应用接线，固定L1不代替定向组合。#94/#95/#96的旧未知发布/阶段/清理组合只保留为重审材料，不安排执行、不用三层验收自动补记通过。
 

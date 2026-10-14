@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 	"os/exec"
 	"strings"
 	"testing"
@@ -110,7 +111,7 @@ func TestWorkerRecoveryDistinguishesPreparedRejectedAndUnknownInput(t *testing.T
 				t.Fatal("preparation/rejection was confused with unknown native acceptance")
 			}
 			port := &recoveryStagePort{stageTestPort: stage, recovery: b.LifecycleRecoveryEvidence{SessionAvailable: true, ResourceAvailable: true, SessionIdle: true}}
-			fixed, err := s.workerFlowContext(run)
+			fixed, err := s.workerRecords(run)
 			require(t, err)
 			require(t, s.reconcileWorkerRecovery(context.Background(), nil, run, port, fixed))
 			allowed := run.Decision != nil && len(run.Decision.Request.Options) == 1 && run.Decision.Request.Options[0].ID == "continue"
@@ -199,7 +200,7 @@ func TestWorkerRecoveryResourceQualification(t *testing.T) {
 		{"writers_unknown", b.LifecycleRecoveryEvidence{SessionAvailable: true, SessionIdle: true, SessionRebindable: true, ProcessAbsent: true}, false},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			if got := canContinueOriginalWorker(c.facts); got != c.allowed {
+			if got := reliable.CanContinueOriginal(c.facts); got != c.allowed {
 				t.Fatalf("qualification=%v want %v", got, c.allowed)
 			}
 		})
@@ -215,7 +216,7 @@ func TestWorkerRecoveryFailedReportWithoutFinal(t *testing.T) {
 	s.refreshRun(run)
 	port := &recoveryStagePort{stageTestPort: stage, recovery: b.LifecycleRecoveryEvidence{SessionAvailable: true, ResourceAvailable: true, SessionIdle: true}}
 	s.lifecycleResolver = unsupportedStageResolver{port: port}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	failed := workerStageEvidence(s, run, "", false)
 	failed.FinalVerified, failed.FinalSource, failed.FinalItemID = false, "", ""
@@ -224,7 +225,7 @@ func TestWorkerRecoveryFailedReportWithoutFinal(t *testing.T) {
 	if w.Status == "reconciling" || len(w.StageResults) != 2 || w.StageResults[1].Succeeded || w.StageResults[1].Failure != failed.Failure {
 		t.Fatal("known failed report was lost or remained reconciling")
 	}
-	fixed, err = s.workerFlowContext(run)
+	fixed, err = s.workerRecords(run)
 	require(t, err)
 	beforeRevision := s.State.Revision
 	require(t, s.reconcileWorkerRecovery(context.Background(), nil, run, port, fixed))
@@ -252,7 +253,7 @@ func TestWorkerRecoveryMissingSuccessfulFinalStaysUnverified(t *testing.T) {
 	require(t, acceptTestStage(t, s, run, port, "original implementation", true))
 	startQueuedStage(t, s, run)
 	w := s.workflowRecord(run)
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	evidence := workerStageEvidence(s, run, "", true)
 	evidence.FinalVerified, evidence.FinalSource, evidence.FinalItemID = false, "", ""

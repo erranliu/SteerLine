@@ -15,6 +15,13 @@ import (
 	"time"
 )
 
+func newTestConsole(ref api.ProjectRef, client *Client, observer StopObserver) *Console {
+	if observer == nil {
+		observer = func(wire.Identity) (bool, bool, error) { return false, false, nil }
+	}
+	return &Console{ref: ref, client: client, journal: newRequestJournal(ref), observer: observer}
+}
+
 func TestTUIHTTPContract(t *testing.T) {
 	t.Run("unknown HTTP outcomes use the restorable domain status", testUnknownOutcomeStatus)
 	t.Run("close cancels owned HTTP queries before waiting for their lock", testConsoleCloseCancelsHTTP)
@@ -27,7 +34,7 @@ func TestTUIHTTPContract(t *testing.T) {
 		}))
 		defer server.Close()
 		defer close(release)
-		c := &Console{ref: api.ProjectRef{Identity: "repo"}, client: &Client{baseURL: server.URL, project: wire.ProjectID("repo"), http: server.Client()}}
+		c := newTestConsole(api.ProjectRef{Identity: "repo"}, &Client{baseURL: server.URL, project: wire.ProjectID("repo"), http: server.Client()}, nil)
 		go func() { c.ReadProject(context.Background(), "", api.ProjectSnapshot{}); close(finished) }()
 		<-entered
 		metadata := make(chan api.ProjectRef, 1)
@@ -72,7 +79,7 @@ func TestTUIHTTPContract(t *testing.T) {
 					return
 				}
 				// The server must never see a request before its original intent is durable.
-				path, _ := view.outgoingPath(envelope.RequestID)
+				path, _ := view.journal.recordPath(envelope.RequestID)
 				data, err := os.ReadFile(path)
 				if err != nil || !strings.Contains(string(data), envelope.RequestID) {
 					t.Errorf("POST preceded durable intent: %v", err)
@@ -109,14 +116,14 @@ func TestTUIHTTPContract(t *testing.T) {
 		identity.Address = strings.TrimPrefix(server.URL, "http://")
 		low := &Client{baseURL: server.URL, token: "private", project: identity.ProjectID, identity: identity, http: server.Client()}
 		ref := api.ProjectRef{Identity: "repository", ApplicationHome: home, RunDir: filepath.Join(home, "state")}
-		view = &Console{ref: ref, client: low}
+		view = newTestConsole(ref, low, nil)
 		revision := uint64(9)
 		input := api.ControlInput{RequestID: strings.Repeat("a", 32), Action: api.StartTask, InstanceID: "instance", ExpectedRevision: &revision, Payload: api.ControlPayload{TaskID: "task", ExpectedTaskVersion: 7, ExecutionProfileID: "profile"}}
 		if _, err := view.SubmitControl(ctx, input); err == nil {
 			t.Fatal("lost response reported success")
 		}
 		// Reopening only reads this client's intent, then reconciles through HTTP.
-		reopened := &Console{ref: ref, client: low}
+		reopened := newTestConsole(ref, low, nil)
 		receipt, err := reopened.Receipt(ctx, input.RequestID)
 		if err != nil || receipt == nil || receipt.Status != "applied" {
 			t.Fatalf("original result not recovered: %+v %v", receipt, err)
@@ -144,13 +151,13 @@ func TestTUIHTTPContract(t *testing.T) {
 		if count != 1 {
 			t.Fatalf("side effects = %d", count)
 		}
-		original, _ := reopened.readOutgoing(input.RequestID)
+		original, _ := reopened.journal.read(input.RequestID)
 		if original.Envelope.ExpectedVersion != 7 {
 			t.Fatal("persisted version changed")
 		}
 	})
 	t.Run("offline observation never grants mutation", func(t *testing.T) {
-		c := NewConsole(context.Background(), api.ProjectRef{Identity: "repo", RunDir: filepath.Join(t.TempDir(), "missing"), ApplicationHome: t.TempDir()})
+		c := NewConsole(context.Background(), api.ProjectRef{Identity: "repo", RunDir: filepath.Join(t.TempDir(), "missing"), ApplicationHome: t.TempDir()}, NewPlatformStopObserver())
 		previous := api.ProjectSnapshot{NativeTasks: &api.TaskPage{}, FullReadAt: time.Now(), Connection: api.ServiceConnection{CanControl: true, CanStop: true, State: api.ConnectionConnected}}
 		got := c.ReadProject(context.Background(), "task", previous)
 		if got.NativeTasks != previous.NativeTasks || got.Connection.CanControl || got.Connection.CanStop || got.Connection.State != api.ConnectionOffline {
@@ -179,9 +186,11 @@ func TestTUIHTTPContract(t *testing.T) {
 		}))
 		defer server.Close()
 		identity.Address = strings.TrimPrefix(server.URL, "http://")
-		c := &Console{ref: api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}, client: &Client{baseURL: server.URL, token: "private", identity: identity, project: identity.ProjectID, http: server.Client()}}
+		ref := api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}
+		c := newTestConsole(ref, &Client{baseURL: server.URL, token: "private", identity: identity, project: identity.ProjectID, http: server.Client()}, nil)
 		original := wire.CommandEnvelope{RequestID: strings.Repeat("c", 32), ProjectID: identity.ProjectID, InstanceID: "old", Action: "stop_service", TargetID: "old", Payload: json.RawMessage(`{}`)}
-		if err := c.saveOutgoing(outgoing{Version: 1, Envelope: original}); err != nil {
+		stopIdentity := wire.Identity{ProjectID: identity.ProjectID, RepositoryIdentity: ref.Identity, InstanceID: "old"}
+		if _, err := c.journal.save(context.Background(), outgoing{Version: 1, Envelope: original, StopIdentity: &stopIdentity}); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := c.Request(context.Background(), original.RequestID); err == nil {
@@ -217,8 +226,10 @@ func testUnknownOutcomeStatus(t *testing.T) {
 		json.NewEncoder(w).Encode(wire.CommandResponse{RequestID: e.RequestID, ProjectID: e.ProjectID, InstanceID: e.InstanceID, Action: e.Action, TargetID: e.TargetID, ExpectedVersion: e.ExpectedVersion, Original: &e, Status: "outcome_unknown", Code: "outcome_unknown"})
 	}))
 	defer server.Close()
-	c := &Console{ref: api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}, client: &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}}
-	if err := c.saveOutgoing(outgoing{Version: 1, Envelope: envelope}); err != nil {
+	ref := api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}
+	identity.RepositoryIdentity = ref.Identity
+	c := newTestConsole(ref, &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}, nil)
+	if _, err := c.journal.save(context.Background(), outgoing{Version: 1, Envelope: envelope}); err != nil {
 		t.Fatal(err)
 	}
 	if receipt, err := c.Receipt(context.Background(), envelope.RequestID); err != nil || receipt.Status != "indeterminate" {
@@ -246,7 +257,7 @@ func testConsoleCloseCancelsHTTP(t *testing.T) {
 			}))
 			defer server.Close()
 			defer close(release)
-			c := NewConsole(context.Background(), api.ProjectRef{Identity: "repo", RunDir: filepath.Join(t.TempDir(), "offline")})
+			c := NewConsole(context.Background(), api.ProjectRef{Identity: "repo", RunDir: filepath.Join(t.TempDir(), "offline"), ApplicationHome: t.TempDir()}, NewPlatformStopObserver())
 			defer c.Close()
 			c.client = &Client{baseURL: server.URL, project: wire.ProjectID("repo"), http: server.Client()}
 			finished := make(chan struct{})

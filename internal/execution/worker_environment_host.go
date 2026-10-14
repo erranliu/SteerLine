@@ -10,7 +10,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func (s *Service) hostEnvironmentForRun(run *reconstructiontypes.RunView) (executionbackend.HostEnvironmentPort, executionbackend.LifecyclePort, workerFlowContext, executionbackend.LifecycleSnapshot, error) {
+func (s *Service) hostEnvironmentForRun(run *reconstructiontypes.RunView) (executionbackend.HostEnvironmentPort, executionbackend.LifecyclePort, workerRecords, executionbackend.LifecycleSnapshot, error) {
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return nil, nil, fixed, executionbackend.LifecycleSnapshot{}, err

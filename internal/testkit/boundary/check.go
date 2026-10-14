@@ -380,6 +380,13 @@ func ScanSource(root string) (Report, error) {
 				report.Violations = append(report.Violations, "test fixture dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
 			graph[pkg] = append(graph[pkg], value)
+			if (pkg == execution+"/workflow" || pkg == execution+"/reliable") && !strings.HasSuffix(entry.Name(), "_test.go") && (strings.HasPrefix(value, module+"/") || value == "database/sql" || strings.HasPrefix(value, "modernc.org/sqlite")) {
+				allowed := pkg == execution+"/workflow" && value == execution+"/reliable" || pkg == execution+"/reliable" && value == execution+"/backend"
+				if !allowed {
+					report.Violations = append(report.Violations, "three-layer direct dependency: "+filepath.ToSlash(path)+" -> "+value)
+				}
+			}
+
 			if pkg == productQuery && !strings.HasSuffix(entry.Name(), "_test.go") && !productQueryImportAllowed(value) {
 				report.Violations = append(report.Violations, "product query forbidden dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
@@ -441,6 +448,18 @@ func ScanSource(root string) (Report, error) {
 			report.Violations = append(report.Violations, "execution forbidden dependency: "+strings.Join(path, " -> "))
 		}
 	})
+	for _, seed := range []string{execution + "/workflow", execution + "/reliable"} {
+		visitGraph(productionGraph, seed, func(path []string) {
+			edge := path[len(path)-1]
+			if !strings.HasPrefix(edge, module+"/") && edge != "database/sql" && !strings.HasPrefix(edge, "modernc.org/sqlite") {
+				return
+			}
+			allowed := edge == execution+"/backend" || seed == execution+"/workflow" && edge == execution+"/reliable"
+			if !allowed {
+				report.Violations = append(report.Violations, "three-layer dependency: "+strings.Join(path, " -> "))
+			}
+		})
+	}
 	for pkg := range productionGraph {
 		if !strings.HasPrefix(pkg, executionAdapters+"/") {
 			continue

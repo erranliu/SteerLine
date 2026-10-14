@@ -2,11 +2,13 @@
 
 > 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。用户直接授权的本机 Web 普通开发已新增独立 [web/](../../web/README.md) 工程与最小 app/CLI 接线，实际验证与限制见[Web 验收](../acceptance/web-frontend.md)；#91 见其[原记录](../acceptance/tui-http-client.md)。SSE 和远程浏览器服务仍未实现。
 
-核对基点：2026-10-14，`5a24abec`；本文描述该源码树，不将历史原生样本当作当前版本全量验收。第一阶段目标包含本地 Codex、本机 Orca 与远端执行路径交付；Orca 历史交付范围见[单终端验收](../acceptance/orca-terminal-transport.md)，当前完成补查询的规则、原生短回合及未重跑 PR 范围见[补查询验收](../acceptance/orca-completion-query.md)。远端执行目标与远程 HTTP 客户端是不同能力。
+核对基点：2026-10-14，主干 `ab814da9`＋本次 Worker 三层重构；本文描述该源码树，不将历史原生样本当作当前版本全量验收。第一阶段目标包含本地 Codex、本机 Orca 与远端执行路径交付；Orca 历史交付范围见[单终端验收](../acceptance/orca-terminal-transport.md)，当前完成补查询的规则、原生短回合及未重跑 PR 范围见[补查询验收](../acceptance/orca-completion-query.md)。远端执行目标与远程 HTTP 客户端是不同能力。
 
 ## 系统边界
 
 整体职责与生命周期原则见[架构总览](../architecture.md)，本页维护实际代码与端口归属。
+
+Worker 各节点的异常分类、重试预算和恢复边界统一维护于[Worker 流程异常处理与重试](../product-design/worker-lifecycle.md)，该文档同时索引当前实现与待补能力；本页不复制处理矩阵。
 
 用于拆分 roadmap 任务时，先按[并行开发指南](parallel-development.md)核对功能、契约、共享语义/接线和测试资源；本页的包划分不直接构成并行许可。
 
@@ -64,8 +66,8 @@ Web 的独立所有者为 `web/src`（React 页面、wire 消费、IndexedDB 原
 | `internal/product/client` | The injected internal product client for CLI/service consumers. At app composition it directly satisfies the HTTP server's query, command, authority and native-viewer ports; the HTTP package does not depend on the concrete client. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
 | `internal/product/query` | Read-only projections and composition of product pages from storage ports. No SQL or business writer. |
 | `internal/product/httpapi` | Loopback HTTP discovery/authentication and DTO/action transport over narrow query, command, authority and native-viewer ports. `command_registry.go` owns immutable envelope registration and authority reconciliation; `request_records.go` owns the private record format and atomic file access. The package does not open SQL or own business transitions. |
-| `internal/consoleapp` | TUI connection-only configuration and HTTP adapter composition, with no execution/query/storage dependencies. |
-| `internal/product/httpclient`, `httpcontract`, `httpfs` | Pure HTTP consumer, serializable wire values, restricted discovery/credential/outgoing files and local OS exit/lock observation. No business-file fallback. |
+| `internal/consoleapp` | TUI connection-only configuration and HTTP adapter composition; injects the platform stop observer without execution/query/storage dependencies. |
+| `internal/product/httpclient`, `httpcontract`, `httpfs` | Pure HTTP consumer, serializable wire values, restricted discovery/credential files, the private request journal and an explicit stop-observer port. The journal alone owns outgoing records; the platform observer checks process/lock facts. No business-file fallback. |
 | `internal/console` | TUI navigation and view state; consumes only product API values and injected client interfaces. A named `finalReplyReader` owns final index/body/preview state and read acceptance; Model owns candidate selection, step query facts, scrolling/recovery and native session opening. |
 | `internal/storage/ports` and `internal/storage/sqlite` | Consumer-owned narrow read/commit declarations; one SQLite implementation owns schema, SQL, WAL, CAS and transactions. |
 | `internal/testkit` and `tests/integration`, `tests/e2e` | Test-only boundary guards, Go test feedback, process ownership and protocol fixtures; real application composition tests; registered controlled/native E2E scenarios. Product production imports are forbidden. |
@@ -76,9 +78,11 @@ Within app, [`directory.go`](../../internal/app/directory.go) explicitly combine
 
 Within console, [`final_reader.go`](../../internal/console/final_reader.go) owns the final index, selection/pin, body and bounded preview with separate generations. Its operations take `ConversationQueries`, context/time values and fixed target facts, without Model, projectState or control/native-session capabilities. [`final_replies.go`](../../internal/console/final_replies.go) and [`final_preview.go`](../../internal/console/final_preview.go) route host selection/mode and results; Model resets its own scrolling/recovery when the reader reports a binding or body-selection change. Existing historical/current-turn rules remain distinct. These are source ownership boundaries inside the same Go packages, not compile isolation or a reusable UI framework.
 
+Worker execution is composed as Workflow → ReliableExecution → adapter: `workflow` owns business prompts, source and successor rules; `reliable` owns preparation applicability, original-operation reconciliation, identity/turn facts, deadlines and recovery qualification. The execution root maps durable records and composes one WorkerCommit; it does not inject Service rules into either package. Adapters declare applicability and native facts, with no backend-name branches in reliable. The retired local workspace fallback is deleted. Scope and evidence are maintained in the [three-layer acceptance](../acceptance/worker-three-layer.md).
+
 ## Current package inventory
 
-At `5a24abec`, Windows `go list ./...` enumerates 49 packages. The current inventory includes the four isolated TUI/HTTP consumer owners, public Orca protocol codecs, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
+At the rebased three-layer candidate `715b011f`, Windows `go list ./...` enumerates 51 packages. The current inventory includes the four isolated TUI/HTTP consumer owners, public Orca protocol codecs, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
 
 | Owner / purpose | Current packages |
 | --- | --- |
@@ -86,7 +90,7 @@ At `5a24abec`, Windows `go list ./...` enumerates 49 packages. The current inven
 | Composition and host | `internal/app`, `internal/app/host`, `internal/consoleapp` |
 | Console | `internal/console`, `internal/console/activityrender` |
 | Task | `internal/task`, `internal/task/model` |
-| Execution actor and pure values | `internal/execution`, `internal/execution/agentlaunch`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
+| Execution actor and pure values | `internal/execution`, `internal/execution/agentlaunch`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler`, `internal/execution/workflow`, `internal/execution/reliable` |
 | Execution effects and native reply evidence | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
 | Filesystem guards | `internal/pathguard` |
 | Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph`, `internal/product/httpapi`, `internal/product/httpclient`, `internal/product/httpcontract`, `internal/product/httpfs` |
@@ -167,11 +171,11 @@ Test-only support has one owner under [`internal/testkit`](../../internal/testki
 
 ## Development flow ownership
 
-`internal/execution/staged_flow.go` owns the single `development/v3` flow, frozen stage input/source bindings and atomic result/transition/next-input commitment; `staged_result.go` owns strict business JSON decoding. `model/staged_flow.go` contains values and step IDs. The flow no longer stores separate artifact snapshots. Adapters normalize native evidence without selecting the next business step. Codex consumes verified app-server final_answer items. Orca uses one original terminal, exact input acceptance/start receipts, a pre-send main-agent baseline and original runtime/terminal/incarnation/pane/provider identity. Native subscription and independent `worktree.ps` queries verify a new completion and complete ordinary `lastAssistantMessage`; working observation is optional. There is no Task/Dispatch/coordinator, output-material relay, base64 result marker, screen completion heuristic or agent-private history scan. Missing/truncated/conflicting provenance blocks advancement. Current completion supports Codex main-agent evidence only; native outcome may remain unknown independently of the accepted reply and business outcome. Both adapters expose workspace facts without promising strong read-only isolation; Orca's comparison is revision-scoped. Product pages and the TUI consume persisted workflow projections. See [Orca boundary](orca-native-worker.md) and [completion rules](../spec/orca-completion-query.spec.md).
+`internal/execution/workflow` owns the single `development/v3` business prompts, source/format rules, successor decisions and strict JSON decoding. `reliable` normalizes execution evidence and owns technical qualification/reconciliation/recovery; `staged_flow.go` maps durable records and commits results, transitions and next-input intentions atomically. `model/staged_flow.go` retains persistent wire values and step IDs. The flow no longer stores separate artifact snapshots. Adapters normalize native evidence without selecting the next business step. Codex consumes verified app-server final_answer items. Orca uses one original terminal, exact input acceptance/start receipts, a pre-send main-agent baseline and original runtime/terminal/incarnation/pane/provider identity. Native subscription and independent `worktree.ps` queries verify a new completion and complete ordinary `lastAssistantMessage`; working observation is optional. There is no Task/Dispatch/coordinator, output-material relay, base64 result marker, screen completion heuristic or agent-private history scan. Missing/truncated/conflicting provenance blocks advancement. Current completion supports Codex main-agent evidence only; native outcome may remain unknown independently of the accepted reply and business outcome. Both adapters expose workspace facts without promising strong read-only isolation; Orca's comparison is revision-scoped. Product pages and the TUI consume persisted workflow projections. See [Orca boundary](orca-native-worker.md) and [completion rules](../spec/orca-completion-query.spec.md).
 
 ## HTTP 接入后的解耦评估与建议
 
-以下为 `5a24abec` 的代码评估。2026-10-14，经范围审计与用户授权，五项各自建立Spec/Plan；#92已通过PR #311交付，#93已纳入execution-map待执行，#94/#95/#96因Worker三层重构影响继续留[草稿](../roadmap/drafts/roadmap.md)。下述保留原基线的收益评估及已交付HTTP边界说明，旧流程/runtime owner及集成建议不用于当前开工；三层未合入前不声明其为当前代码。
+以下为 `5a24abec` 的代码评估。2026-10-14，经范围审计与用户授权，五项各自建立Spec/Plan；#92已通过PR #311交付，#93已通过PR #312交付，#94/#95/#96因Worker三层重构影响继续留[草稿](../roadmap/drafts/roadmap.md)。下述保留原基线的收益评估及已交付HTTP边界说明，旧流程/runtime owner及集成建议不用于当前开工；三层未合入前不声明其为当前代码。
 
 建议保持同一个 Go 服务，在进程内形成以下职责关系。实线表示调用/事实消费，虚线表示共享的原子提交边界；业务 actor 是唯一状态变更仲裁者。
 
@@ -198,7 +202,7 @@ flowchart LR
 
 | 边界 | 当前程度 | 仍共享的职责 |
 | --- | --- | --- |
-| TUI ↔ HTTP ↔ 服务 | 业务传输已经分开；console 只依赖产品值和消费接口，consoleapp/httpclient 的生产闭包不含业务库、query、execution 或 handler | httpclient.Console 同时负责重连、页面缓存、请求文件、命令对账和本机停服观察；这些职责没有独立注入端口 |
+| TUI ↔ HTTP ↔ 服务 | 业务传输已经分开；console 只依赖产品值和消费接口，consoleapp/httpclient 的生产闭包不含业务库、query、execution 或 handler；#93已将原请求文件归 requestJournal，并由 consoleapp 显式注入 StopObserver | Console 仍组织 HTTP 对账；journal 用稳定私有 request-ID 锁文件和 Windows 内核锁/Unix flock 串行化全部写入，在锁内重读并校验原信封与 StopIdentity；applied/rejected 首次终态保留完整原回执。observer 只检查已保存原身份的 generation 与两锁，不读 HTTP 或 journal |
 | HTTP handler ↔ Go 应用 | Server 通过查询、命令、authority 与原生查看消费端口调用现有应用；不打开 SQL，不推进业务状态 | `command_registry.go` 统一普通命令和原生查看的登记/对账及跨动作仲裁；`request_records.go` 单独持有私有记录格式、大小边界和原子读写。app 将现有 product client 直接接入这些端口 |
 | 任务管理 ↔ 执行 | task 只依赖 task/model；execution 通过 TaskWorkPort/TaskResultPort 调用任务规则，不导入 task 实现 | claim/result/discard/delivery 跨域协调仍在 execution.CommandService；CommandStore 集合较宽，不能将它全部注入每个用途 |
 | 流程 ↔ worker 运行时 | adapter 不解析业务 JSON、不选择下一业务步骤 | staged_flow、worker 生命周期、反馈、恢复、会话采集及提交都是 Service 方法，共享 domain/runs/worker/effect 状态；主要是文件归属，尚无包级隔离 |
@@ -207,13 +211,13 @@ flowchart LR
 
 ### 重构收益评估
 
-已确认批次#92/#93中，#92已交付，#93待执行。#94/#96与三层workflow/reliable及actor接线重叠，#95的最终交付抽取仍有剩余收益但当前桥接需重审，见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。以下保留原设计理由，不作为五项实施次序。
+已确认批次#92/#93中，#92/#93均已独立复审、验证并真实合并。#94/#96与三层workflow/reliable及actor接线重叠，#95的最终交付抽取仍有剩余收益但当前桥接需重审，见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。以下保留原设计理由，不作为五项实施次序。
 
-1. **高收益：抽出固定流程规则。** 从 [staged_flow.go](../../internal/execution/staged_flow.go) / [staged_result.go](../../internal/execution/staged_result.go) 分离 `development/v3` 的结果解析、步骤决策、报告重试与下一输入构造。规则接收固定值和已核验事实，返回显式变更声明/所需动作，不接收 Service、RunView 可写指针、SQL 或 backend 句柄。I/O 核验仍由 actor/效果层执行，核验结果再交规则判断；结果、转移与下一输入仍一次提交。首先分离 implement/report/publish 规则，不建设通用工作流引擎。
+1. **本次已分离固定流程规则。** [workflow](../../internal/execution/workflow/route.go) 已接收窄业务值和已核验的执行事实，返回显式后继声明；不接收 Service、RunView 可写指针、SQL 或 backend 句柄。严格结果解析归 [workflow/result.go](../../internal/execution/workflow/result.go)，原生 I/O 由 adapter 执行，技术规则由 reliable 决定，结果/转移/下一输入由 actor 一次提交。#94 的重叠调查和后续范围需在启动前与此成果核对，不据此自动改变 roadmap 任务状态。
 2. **高收益：收拢 worker 运行时资源所有权。** 首轮 [#96](../spec/worker-runtime-ownership.spec.md)只收拢观察器、原句柄、在途外部调用、取消/关闭和固定结果交接，复用已有后台机制。只接受已持久化 Operation 与冻结资源值，返回原身份事实/回执；不携带可写 RunView/apply闭包。业务 actor 保留步骤、Decision、恢复资格、提交与确认门槛，具体adapter保留证据/停服能力，本机/environment Orca仍共用实现。完整业务恢复拆分不混入首轮。
 3. **高收益：抽出任务最终交付。** [native_delivery_command.go](../../internal/execution/native_delivery_command.go) 当前组合冻结 provider、真实 PR 查询、执行门槛、任务结果和提交。[#95](../spec/task-delivery-usecase.spec.md)仅提取最终交付用例，接收固定候选/任务、带provider身份的PR事实、任务结果声明和提交端口；claim/discard的进一步收窄留后续。沿用 [ResultCommit](../../internal/storage/ports/task_result.go) 的原子提交，不拆唯一TaskDelivery/closed/WorkflowRun/图修订。流程/PR绑定仍由actor负责，未知发布但合法真实合并的原交付路径保持。
 4. **已交付：分离 HTTP 协议与命令登记/对账。** 任务 [#92](../spec/http-command-boundary.spec.md) 经PR #311将 Server 改为消费查询、命令、authority 和原生查看端口，app 直接提供现有 product client；登记 owner 接收固定信封与 OS 调用身份，不接收 Server、Request、ResponseWriter、具体 Client 或数据库连接。普通业务命令与原生窗口副作用共用记录 owner 和跨动作仲裁，保留各自重试规则；HTTP 层保留认证、路由、JSON 上限和状态码映射。不把 transport receipt 变成领域权威，也不把 unknown 当成重放许可。具体行为与验收结果见[专属验收](../acceptance/http-command-boundary.md)。
-5. **中收益：分离客户端原请求与本机观察。** [#93](../spec/http-client-request-lifecycle.spec.md)保留已有Client/Open连接实现，在 [httpclient/console.go](../../internal/product/httpclient/console.go)中收拢journal文件职责、显式注入OS停服observer；Console仍组织原HTTP对账。保留先保存后发送、窗口关闭取消、旧实例禁重放与三份停服证据，不建设新连接框架或远程部署。
+5. **已交付：分离客户端原请求与本机观察。** [#93](../spec/http-client-request-lifecycle.spec.md)经PR #312保留已有Client/Open连接实现，由同包 `requestJournal` 独占 outgoing 文件职责，按原 request ID 使用稳定私有锁文件；所有写入在跨进程锁内重读完整信封、回执和 StopIdentity，applied/rejected first-wins。`Console` 继续组织原 HTTP 对账，`consoleapp` 显式注入只接收原认证 Identity 的平台 `StopObserver`。保留先保存后发送、窗口关闭取消、旧实例禁重放与原 applied/进程 generation/两锁三证据，不建设新连接框架或远程部署。
 
 上述顺序优先减少共享 Service 的修改范围。HTTP 端口和客户端拆分可独立准备；交付抽取与 worker 抽取都涉及共享模型/接线时应分次落地。每次抽取都应以“消费者无需修改无关 owner，且测试无需完整 Service/真后端”验收，单纯移动文件或接口方法原样转发不算完成解耦。
 

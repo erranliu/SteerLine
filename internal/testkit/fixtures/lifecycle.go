@@ -77,7 +77,7 @@ type neutralCompletionReceipt struct {
 }
 
 func (p *Lifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop, StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
+	return executionbackend.LifecyclePolicyCapabilities{Preparation: executionbackend.PreparationCapabilities{Workspace: executionbackend.MechanismApplicable, Resource: executionbackend.MechanismNotApplicable, Session: executionbackend.MechanismApplicable}, ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop, StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
 
 func (p *Lifecycle) PreflightLifecycle(_ context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
@@ -87,20 +87,15 @@ func (p *Lifecycle) PreflightLifecycle(_ context.Context, setup executionbackend
 	return r, nil
 }
 
-func (p *Lifecycle) Next(_ context.Context, s executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
+func (p *Lifecycle) PreparationFacts(_ context.Context, s executionbackend.LifecycleSnapshot) (executionbackend.PreparationFacts, error) {
+	workspace, session := executionbackend.GateReady, executionbackend.GateRequired
 	if s.Workspace.Path == "" {
-		intent := s.WorkspacePlan
-		return executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}, nil
+		workspace = executionbackend.GateRequired
 	}
-	if s.PendingTurn == nil {
-		return executionbackend.LifecycleCandidate{Done: true}, nil
+	if s.Session.SessionID != "" {
+		session = executionbackend.GateReady
 	}
-	turn := *s.PendingTurn
-	action := executionbackend.LifecycleStartTurn
-	if s.Session.SessionID == "" {
-		action = executionbackend.LifecyclePrepareSession
-	}
-	return executionbackend.LifecycleCandidate{Action: action, Input: executionbackend.LifecycleInput{Turn: &turn}}, nil
+	return executionbackend.PreparationFacts{Workspace: workspace, Resource: executionbackend.GateNotApplicable, Session: session}, nil
 }
 
 func (p *Lifecycle) Execute(ctx context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {

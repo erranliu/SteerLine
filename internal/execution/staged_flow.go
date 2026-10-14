@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
+	workflow "github.com/erranliu/SteerLine/internal/execution/workflow"
 	"strings"
 	"time"
 
@@ -31,7 +33,7 @@ func firstNonemptyStage(a, b string) string {
 }
 
 func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontypes.RunView, answer executionmodel.DecisionAnswer, commandID string, requests ...executionmodel.DecisionRequest) error {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -47,47 +49,31 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 	if w.Status == "reconciling" || s.hasUnknownWorkerOperation(run) {
 		return errors.New("unknown original outcomes require read-only reconciliation")
 	}
-	// development/v3 no longer stores artifact snapshots. Retrying a submitted
-	// report must reverify implementation in the original session; an unsent
-	// first report can still summarize its successful original source.
-	if (answer.OptionID == "continue" || answer.OptionID == "" && fixed.execution.RecoveryState != "") && w.StepID == executionmodel.StepReport {
-		valid := false
-		for i := len(w.StageInputs) - 1; i >= 0; i-- {
-			previous := w.StageInputs[i]
-			if previous.StepID != executionmodel.StepReport {
-				continue
+	intent := workflow.FeedbackIntent{Option: answer.OptionID, Continue: answer.OptionID == "continue" || answer.OptionID == "" && fixed.execution.RecoveryState != "", Async: request.InteractionKind == "async"}
+	if request.QuestionRoute != nil {
+		intent.SourceTurn, intent.SourceAttempt = request.QuestionRoute.TurnID, request.QuestionRoute.AttemptID
+	}
+	// Convert the middle layer's unsent proof; Workflow never reads Operations.
+	for i := len(w.StageInputs) - 1; i >= 0; i-- {
+		previous := w.StageInputs[i]
+		if previous.StepID == executionmodel.StepReport {
+			if s.workerInputNotSubmitted(run, previous.CommandID) {
+				intent.UnsentReportCommand = previous.CommandID
 			}
-			source := stageResult(w, previous.SourceCommandID)
-			valid = source != nil && source.Succeeded && source.Failure == "" && source.TurnID == previous.SourceTurnID && s.workerInputNotSubmitted(run, previous.CommandID)
 			break
 		}
-		if !valid {
-			w.StepID, w.ReportRetry = executionmodel.StepImplement, 0
-		}
 	}
-	if request.InteractionKind == "async" {
-		step, err := asyncContinuationStep(w, request)
-		if err != nil {
-			return err
-		}
-		w.StepID = step
+	step, retry, err := workflow.FeedbackStep(workflowSnapshot(w), intent)
+	if err != nil {
+		return err
 	}
 	if e := fixed.execution; e.PendingCommandID != "" {
-		pending := e.PendingCommandID
-		if !s.workerInputNotSubmitted(run, pending) {
+		if !s.workerInputNotSubmitted(run, e.PendingCommandID) {
 			return errors.New("original native input must be reconciled before feedback")
 		}
-		// Explicit new feedback supersedes an input proven never submitted.
-		// Its immutable history remains; it cannot be replayed by a later tick.
 		e.PendingCommandID, e.PendingTurnID = "", ""
 	}
-	if w.StepID == executionmodel.StepAwaitMerge || answer.OptionID == "implement" {
-		if answer.OptionID == "publish" {
-			w.StepID = executionmodel.StepPublish
-		} else {
-			w.StepID, w.ReportRetry = executionmodel.StepImplement, 0
-		}
-	}
+	w.StepID, w.ReportRetry = step, uint8(retry)
 	selected := ""
 	for _, option := range request.Options {
 		if option.ID == answer.OptionID {
@@ -96,37 +82,17 @@ func (s *Service) startStageFeedback(ctx context.Context, run *reconstructiontyp
 		}
 	}
 	diagnostic := w.StageDiagnostic
-	if diagnostic == request.Context {
-		diagnostic = ""
-	}
 	questionID, sourceTurnID := "", ""
 	if request.QuestionRoute != nil {
 		questionID, sourceTurnID = request.QuestionRoute.QuestionID, request.QuestionRoute.TurnID
 	}
-	feedback, err := json.Marshal(struct {
-		Question     string              `json:"question"`
-		Context      string              `json:"context,omitempty"`
-		Selected     string              `json:"selected_answer,omitempty"`
-		Note         string              `json:"user_text,omitempty"`
-		Answers      map[string][]string `json:"answers,omitempty"`
-		Diagnostic   string              `json:"blocker,omitempty"`
-		QuestionID   string              `json:"question_id,omitempty"`
-		SourceTurnID string              `json:"source_turn_id,omitempty"`
-	}{request.Question, request.Context, selected, answer.Note, answer.Answers, diagnostic, questionID, sourceTurnID})
+	feedback, err := workflow.RenderFeedbackData(workflow.FeedbackData{Question: request.Question, Context: request.Context, Selected: selected, Note: answer.Note, Answers: answer.Answers, Diagnostic: diagnostic, QuestionID: questionID, SourceTurnID: sourceTurnID})
 	if err != nil {
 		return err
 	}
-	input := executionmodel.StageInput{FeedbackDecisionID: answer.DecisionID, CommandID: commandID, AttemptID: fixed.attempt.AttemptID, StepID: w.StepID, TaskFacts: stageTaskFacts(w)}
-	if executionmodel.ReportStep(w.StepID) {
-		for i := len(w.StageInputs) - 1; i >= 0; i-- {
-			if w.StageInputs[i].StepID == w.StepID {
-				previous := w.StageInputs[i]
-				input.SourceCommandID, input.SourceTurnID, input.ReportToolPolicy = previous.SourceCommandID, previous.SourceTurnID, previous.ReportToolPolicy
-				break
-			}
-		}
-	}
-	prompt, err := renderStageInput(w, input)
+	input := executionmodel.StageInput(workflow.FeedbackInput(workflowSnapshot(w)))
+	input.FeedbackDecisionID, input.CommandID, input.AttemptID = answer.DecisionID, commandID, fixed.attempt.AttemptID
+	prompt, err := workflow.RenderInput(workflowSnapshot(w), workflowInput(input))
 	if err != nil {
 		return err
 	}
@@ -158,66 +124,12 @@ func stageResult(w *executionmodel.WorkflowRunRecord, command string) *execution
 	return nil
 }
 
-func renderStageInput(w *executionmodel.WorkflowRunRecord, input executionmodel.StageInput) (string, error) {
-	facts := map[string]any{}
-	switch input.StepID {
-	case executionmodel.StepImplement:
-		task := input.TaskFacts
-		if len(task) == 0 {
-			task = stageTaskFacts(w)
-		}
-		facts["task"] = task
-	case executionmodel.StepReport, executionmodel.StepPublishReport:
-		source := stageResult(w, input.SourceCommandID)
-		original := stageInput(w, input.SourceCommandID)
-		sourceStep := executionmodel.StepImplement
-		if input.StepID == executionmodel.StepPublishReport {
-			sourceStep = executionmodel.StepPublish
-		}
-		if source == nil || original == nil || original.StepID != sourceStep || source.StepID != sourceStep || source.TurnID != input.SourceTurnID {
-			return "", errors.New("report lacks its original execution facts")
-		}
-		// A retry's preceding reply is the failed report, not its source execution.
-		for _, prior := range w.StageInputs {
-			if prior.StepID == input.StepID && prior.SourceCommandID == input.SourceCommandID {
-				if source.FinalVerified && source.Final != "" {
-					facts["original_result"] = clip(source.Final, 16*1024)
-					if len(source.Final) > 16*1024 {
-						facts["evidence_gap"] = "Original result is truncated."
-					}
-				}
-				break
-			}
-		}
-		if !source.Succeeded {
-			facts["execution_failed"] = true
-		}
-		if source.Failure != "" {
-			facts["failure"] = source.Failure
-		}
-		if !source.FinalVerified || source.Final == "" {
-			facts["evidence_gap"] = firstNonemptyStage(source.FinalDiagnostic, "Original final reply is unavailable or unverified.")
-		}
-
-	case executionmodel.StepPublish:
-	default:
-		return "", errors.New("no automatic prompt for this step")
-	}
-	prompt, err := renderWorkerPrompt(input.StepID, facts)
-	if w.PRURL != "" && (input.StepID == executionmodel.StepImplement || input.StepID == executionmodel.StepPublish) {
-		prompt += "\nExisting PR: " + w.PRURL + "\nContinue on the original branch and update this same PR; do not create another PR."
-	}
-	return prompt, err
-}
-
-// queueStage changes the one business authority and freezes the next input
-// intent inside the same worker commit as the accepted source result.
-func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, input executionmodel.StageInput, fixed workerFlowContext, manualReason ...string) error {
+func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, input executionmodel.StageInput, fixed workerRecords, manualReason ...string) error {
 	input.CommandID, input.AttemptID = newID(), fixed.attempt.AttemptID
 	input.TaskFacts = stageTaskFacts(w)
 	w.InputVersion++
 	input.Version = w.InputVersion
-	prompt, err := renderStageInput(w, input)
+	prompt, err := workflow.RenderInput(workflowSnapshot(w), workflowInput(input))
 	if err != nil {
 		return err
 	}
@@ -251,11 +163,11 @@ func (s *Service) queueStage(run *reconstructiontypes.RunView, w *executionmodel
 	return s.commitWorker(run)
 }
 
-func (s *Service) stageWait(run *reconstructiontypes.RunView, w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, status, reason string, report *stageReport) error {
+func (s *Service) stageWait(run *reconstructiontypes.RunView, w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, status, reason string, report *workflow.Report) error {
 	w.Status, w.StageDiagnostic, w.UpdatedAt = status, reason, now()
 	e.Error = ptr(clip(reason, 2000))
 	if report == nil && status == "blocked" {
-		report = &stageReport{Summary: reason}
+		report = &workflow.Report{Summary: reason}
 	}
 	if report != nil {
 		e.Summary = ptr(report.Summary)
@@ -274,13 +186,15 @@ func (s *Service) stageWait(run *reconstructiontypes.RunView, w *executionmodel.
 
 // acceptStageTurn consumes only adapter-normalized, stopped native evidence.
 // The adapter never decodes business JSON or chooses a successor.
-func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, evidence executionbackend.TurnEvidence) error {
+func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerRecords, evidence executionbackend.TurnEvidence) error {
 	w, e := fixed.workflow, fixed.execution
-	if previous := stageResult(w, evidence.CommandID); previous != nil {
-		if previous.TurnID != evidence.TurnID || previous.SessionID != evidence.SessionID || previous.Final != evidence.LastMessage || previous.Succeeded != evidence.Succeeded || previous.FinalSource != evidence.FinalSource || previous.FinalItemID != evidence.FinalItemID || previous.FinalVerified != evidence.FinalVerified || previous.FinalNativeSessionID != evidence.FinalNativeSessionID || previous.FinalNativeTurnID != evidence.FinalNativeTurnID || previous.Failure != evidence.Failure || previous.FinalDiagnostic != evidence.FinalDiagnostic || previous.NativeOutcome != evidence.NativeOutcome {
-			return errors.New("conflicting duplicate stage result")
-		}
-		return nil // first-wins, including a replay after the step advanced
+	var previous *executionbackend.TurnEvidence
+	if stored := stageResult(w, evidence.CommandID); stored != nil {
+		value := storedTurnEvidence(*stored)
+		previous = &value
+	}
+	if accepted, err := reliable.AcceptedResult(previous, evidence); err != nil || accepted {
+		return err
 	}
 	if w.FlowRef != executionmodel.DevelopmentFlow || !executionmodel.ModelStep(w.StepID) {
 		return errors.New("fixed flow/step has no rule")
@@ -293,96 +207,48 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	if err := s.recordDeclaredFinal(ctx, run, evidence); err != nil {
 		return err
 	}
-	nativeOutcome := map[bool]string{true: "succeeded", false: "failed"}[evidence.Succeeded]
-	if evidence.NativeOutcome != "" {
-		nativeOutcome = evidence.NativeOutcome
-		if nativeOutcome != "succeeded" && nativeOutcome != "failed" && nativeOutcome != "cancelled" && nativeOutcome != "unknown" {
-			return errors.New("invalid normalized native outcome")
-		}
-	}
-	if err := s.stopVerifiedWorkerTurn(run, w, e, evidence.TurnID, nativeOutcome, false); err != nil {
+	normalized, err := reliable.NormalizeResult(executionbackend.SessionContext{CurrentCommandID: e.CurrentCommandID, CurrentTurnID: e.CurrentTurnID, SessionID: e.SessionID}, evidence)
+	if err != nil {
 		return err
 	}
-	failedCore := !evidence.Succeeded && (input.StepID == executionmodel.StepImplement || input.StepID == executionmodel.StepReport)
-	if !failedCore && input.StepID != executionmodel.StepImplement && (!evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "") {
-		return s.stageWait(run, w, e, "reconciling", "original stopped turn lacks verified final provenance: "+evidence.FinalDiagnostic, nil)
+	if err := s.stopVerifiedWorkerTurn(run, w, e, evidence.TurnID, normalized.NativeOutcome, false); err != nil {
+		return err
 	}
-	result := executionmodel.StageResult{NativeOutcome: evidence.NativeOutcome, CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, FinalVerified: evidence.FinalVerified, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure}
+	transition := workflow.Route(workflowSnapshot(w), workflowInput(*input), normalized, lifecycle.PolicyCapabilities().ReportToolPolicy)
+	if !transition.AcceptResult {
+		return s.stageWait(run, w, e, transition.Status, transition.Reason, transition.Report)
+	}
+	result := executionmodel.StageResult{NativeOutcome: evidence.NativeOutcome, CommandID: evidence.CommandID, AttemptID: input.AttemptID, StepID: input.StepID, InputVersion: input.Version, TurnID: evidence.TurnID, SessionID: evidence.SessionID, Succeeded: evidence.Succeeded, FinalVerified: evidence.FinalVerified, Final: evidence.LastMessage, FinalNativeSessionID: evidence.FinalNativeSessionID, FinalNativeTurnID: evidence.FinalNativeTurnID, FinalDiagnostic: evidence.FinalDiagnostic, FinalSource: evidence.FinalSource, FinalItemID: evidence.FinalItemID, Failure: evidence.Failure, Outcome: transition.Outcome}
 	w.StageResults = append(w.StageResults, result)
-	if failedCore {
+	w.ReportRetry = uint8(transition.ReportRetry)
+	if transition.PRCandidateURL != "" {
+		w.PRCandidateURL = transition.PRCandidateURL
+	}
+	if transition.RecoverOriginal {
 		s.markWorkerRecoveryRequired(run)
-		w.StageResults[len(w.StageResults)-1].Outcome = "blocked"
 		if s.hasUnknownWorkerOperation(run) {
 			return s.stageWait(run, w, e, "reconciling", "original failed turn has unknown external operations", nil)
 		}
-		return s.waitWorkerFlow(run, "Original turn failed or was interrupted; continue the original session to verify current work: "+evidence.Failure)
+		return s.waitWorkerFlow(run, transition.Reason)
 	}
-	manualReason := ""
-	if e.RecoveryRequired || e.OwnerServiceInstanceID != s.State.Service.InstanceID || hasBlockingPendingQuestions(e) || s.hasUnknownWorkerOperation(run) || e.Environment != nil && (!e.Environment.Ready || e.Environment.Blocker != nil) || run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.InteractionKind != "async" {
-		manualReason = "original session or prior-service input requires explicit continuation; no automatic next turn"
-	}
-	if input.StepID == executionmodel.StepImplement {
-		policy := lifecycle.PolicyCapabilities().ReportToolPolicy
-		if policy == "" {
-			policy = "frozen_native_permissions; business_read_only_is_prompt_policy"
-		}
-		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepReport, SourceCommandID: input.CommandID, SourceTurnID: evidence.TurnID, ReportToolPolicy: policy}, fixed, manualReason)
-	}
-	report, err := decodeStageReport(evidence.LastMessage, input.StepID)
-	if !evidence.FinalVerified || evidence.FinalSource == "" || evidence.FinalItemID == "" {
-		err = errors.New("result lacks verified native final provenance: " + evidence.FinalDiagnostic)
-	}
-	if err == nil && executionmodel.PublicationStep(input.StepID) && report.Outputs.PRURL != "" {
-		w.PRCandidateURL = report.Outputs.PRURL
-	}
-	if err == nil && report.Outcome == "blocked" && report.Blocker.Category == "unknown_external" {
-		w.StageResults[len(w.StageResults)-1].Outcome = report.Outcome
-		return s.stageWait(run, w, e, "reconciling", fmt.Sprintf("unknown_external: %s; %s; known=%s; unknown=%s", report.Blocker.Action, report.Blocker.Error, report.Blocker.Known, report.Blocker.Unknown), &report)
-	}
-	if err != nil || !evidence.Succeeded && report.Outcome == "done" {
-		reason := "result_invalid: " + evidence.Failure
-		if err != nil {
-			reason += "; " + err.Error()
-		}
-		if err != nil && input.StepID == executionmodel.StepPublish {
-			policy := lifecycle.PolicyCapabilities().ReportToolPolicy
-			if policy == "" {
-				policy = "frozen_native_permissions; business_read_only_is_prompt_policy"
-			}
-			return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublishReport, SourceCommandID: input.CommandID, SourceTurnID: evidence.TurnID, ReportToolPolicy: policy}, fixed, manualReason)
-		}
-		if input.StepID == executionmodel.StepReport && w.ReportRetry == 0 {
-			w.ReportRetry = 1
-			return s.queueStage(run, w, e, executionmodel.StageInput{StepID: input.StepID, SourceCommandID: input.SourceCommandID, SourceTurnID: input.SourceTurnID, ReportToolPolicy: input.ReportToolPolicy}, fixed, manualReason)
-		}
-		return s.stageWait(run, w, e, "blocked", reason, nil)
-	}
-	w.StageResults[len(w.StageResults)-1].Outcome = report.Outcome
-	if executionmodel.PublicationStep(input.StepID) && report.Outputs.PRURL != "" {
-		w.PRCandidateURL = report.Outputs.PRURL
-	}
-	if report.Outcome == "needs_input" {
-		return s.stageWait(run, w, e, "waiting_input", report.Question, &report)
-	}
-	if report.Outcome == "blocked" {
-		status := "blocked"
-		if report.Blocker.Category == "unknown_external" {
-			status = "reconciling"
-		}
-		return s.stageWait(run, w, e, status, fmt.Sprintf("%s: %s; %s; known=%s; unknown=%s", report.Blocker.Category, report.Blocker.Action, report.Blocker.Error, report.Blocker.Known, report.Blocker.Unknown), &report)
-	}
-	if input.StepID == executionmodel.StepReport {
-		source := stageResult(w, input.SourceCommandID)
-		if source == nil || source.TurnID != input.SourceTurnID || !source.Succeeded || source.Failure != "" {
-			return s.stageWait(run, w, e, "blocked", "source execution failed; report generated, original failure retained", &report)
-		}
+	if transition.ExpireQuestions {
 		s.expireAsyncQuestions(run, e)
-		e.Summary = ptr(report.Summary)
-		return s.queueStage(run, w, e, executionmodel.StageInput{StepID: executionmodel.StepPublish}, fixed, manualReason)
+		e.Summary = ptr(transition.Report.Summary)
 	}
-	if input.StepID == executionmodel.StepPublishReport && !publicationReportSourceSucceeded(w, input) {
-		return s.stageWait(run, w, e, "reconciling", "source publication failed; report generated, original failure retained", &report)
+	if transition.Next != nil {
+		manualReason := ""
+		if s.workerContinuationConstraints(run).RequiresAuthorization() {
+			manualReason = "original session or prior-service input requires explicit continuation; no automatic next turn"
+		}
+		return s.queueStage(run, w, e, executionmodel.StageInput(*transition.Next), fixed, manualReason)
 	}
+	if transition.Status != "" {
+		return s.stageWait(run, w, e, transition.Status, transition.Reason, transition.Report)
+	}
+	if !transition.Publish {
+		return errors.New("workflow result has no successor")
+	}
+	report := *transition.Report
 	info, queryErr := publicationClient(fixed.config, s.runtime.ProcessHost).Query(ctx, report.Outputs.PRURL)
 	if queryErr != nil {
 		return s.stageWait(run, w, e, "reconciling", "publication result unknown: "+queryErr.Error(), &report)
@@ -390,17 +256,7 @@ func (s *Service) acceptStageTurn(ctx context.Context, run *reconstructiontypes.
 	return s.acceptStagePublication(run, fixed, report, info)
 }
 
-// A report cannot upgrade a failed or differently bound publication. Its URL
-// may still be observed through read-only reconciliation and merged delivery.
-func publicationReportSourceSucceeded(w *executionmodel.WorkflowRunRecord, input *executionmodel.StageInput) bool {
-	if input.StepID != executionmodel.StepPublishReport {
-		return input.StepID == executionmodel.StepPublish
-	}
-	source, original := stageResult(w, input.SourceCommandID), stageInput(w, input.SourceCommandID)
-	return source != nil && original != nil && source.StepID == executionmodel.StepPublish && original.StepID == executionmodel.StepPublish && source.TurnID == input.SourceTurnID && source.Succeeded && source.Failure == "" && source.FinalVerified && source.FinalSource != "" && source.FinalItemID != ""
-}
-
-func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed workerFlowContext, report stageReport, info executionmodel.PRInfo) error {
+func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed workerRecords, report workflow.Report, info executionmodel.PRInfo) error {
 	w, e := fixed.workflow, fixed.execution
 	if s.hasUnknownWorkerOperation(run) {
 		return s.stageWait(run, w, e, "reconciling", "original publication has an unresolved native operation", &report)
@@ -430,7 +286,7 @@ func (s *Service) acceptStagePublication(run *reconstructiontypes.RunView, fixed
 }
 
 func (s *Service) dispatchQueuedStage(ctx context.Context, run *reconstructiontypes.RunView) (bool, error) {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return false, err
 	}
@@ -521,8 +377,8 @@ func (s *Service) reconcileStageFacts(ctx context.Context, run *reconstructionty
 		w.PRState, w.PRQueryError = info.State, nil
 		w.StageDiagnostic = "original publication observed by read-only reconciliation; original outcome retained"
 		result, input := stageResult(w, e.CurrentCommandID), stageInput(w, e.CurrentCommandID)
-		if result != nil && input != nil && executionmodel.PublicationStep(result.StepID) && result.Succeeded && result.FinalVerified && result.Outcome == "done" && publicationReportSourceSucceeded(w, input) {
-			report, decodeErr := decodeStageReport(result.Final, input.StepID)
+		if result != nil && input != nil && executionmodel.PublicationStep(result.StepID) && result.Succeeded && result.FinalVerified && result.Outcome == "done" && workflow.PublicationSourceSucceeded(workflowSnapshot(w), workflowInput(*input)) {
+			report, decodeErr := workflow.DecodeReport(result.Final, input.StepID)
 			if decodeErr == nil && report.Outputs.PRURL == w.PRCandidateURL {
 				return s.acceptStagePublication(run, fixed, report, info)
 			}

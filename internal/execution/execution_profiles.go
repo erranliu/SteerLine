@@ -162,7 +162,7 @@ func (c Config) ApplyFixedExecutionProfile(p executionmodel.FixedExecutionProfil
 	c.selectedProfileID = p.ID
 	c.fixedProfileDigest = p.Digest
 	c.acceptedConfigVersion = p.AcceptedConfigVersion
-	return copyWorkerFlowConfig(c)
+	return copyWorkerConfig(c)
 }
 
 func (p ExecutionProfile) Digest(args ...any) string {
@@ -339,7 +339,7 @@ func (c ProfileCatalog) SelectExecutionProfile(id string) (Config, ExecutionProf
 				selected.WorkspaceBranchPrefix = entry.WorkspaceBranchPrefix
 			}
 		}
-		return copyWorkerFlowConfig(selected), profile, nil
+		return copyWorkerConfig(selected), profile, nil
 	}
 	return Config{}, ExecutionProfile{}, errors.New("execution profile is not configured")
 }
