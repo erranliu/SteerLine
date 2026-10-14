@@ -2,13 +2,12 @@
 
 本表是用户确认的开发任务与依赖权威。2026-10-13 用户确认当前规划收敛到 `TUI → HTTP API → Go 后端`；随后用户直接授权当前聊天实施 #91，不启动 roadmap-runner 或新执行聊天。流程见[RoadmapGuide](RoadmapGuide.md)。
 
-当前已确认的本机链路已交付。2026-10-14 用户确认将可并行推进的HTTP解耦任务#92、#93纳入本表；两项待执行，尚未启动实现。
+当前已确认的本机链路已交付。2026-10-14 用户确认将HTTP解耦任务#92、#93纳入本表；#92已独立复审、自动验证并经PR #311真实合并，#93待执行。本次runner按#92→#93顺序推进，不改变两项没有业务硬依赖的规划条件。
 
 ## 待执行任务
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 92 | HTTP 服务端命令边界收敛 | 无未完成硬前置；复用#45/#91；与#93独立并行，公开wire/API冻结 | 待独立复审/合并；[PR #311](https://github.com/erranliu/SteerLine/pull/311)，本地候选 `01f70460`（原生就绪修复基于 `75177ff1`）；固定 Spec/Plan 与实现起点 `35d4d65350fa6f6f284e9e91a6bd657ba7abb947` | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md) | [专属验收](../acceptance/http-command-boundary.md)：原生就绪11项、A1守卫7项、A2 28项、HTTP60项/app2项及CLI实际console场景3项通过，无失败/跳过；本轮修复遗漏的Prepare consumer并完成全仓调用审计；旧失败保留，仍待新独立复审及真实合并 |
 | 93 | HTTP 客户端原请求与停服观察解耦 | 无未完成硬前置；复用#91；与#92独立并行，新增写入仲裁仅属客户端journal | 待执行；用户已确认范围和并行条件 | [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan](../spec/http-client-request-lifecycle.plan.md) | [专属验收](../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3待验收，无新增人工项；实现时补齐跨进程journal测试、Windows观察/独立simulate及一次固定L1 |
 
 ### 本批并行与开工条件
@@ -25,6 +24,7 @@
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| 92 | HTTP 服务端命令边界收敛 | 复用#45/#91，无未完成硬前置 | 实现完成；[PR #311](https://github.com/erranliu/SteerLine/pull/311)已真实合并，merge `e3010edcb4905977e6244f2f896be140fa718a8f`；三项P2已修复并独立终审通过 | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md)，固定版本及起点 `35d4d65350fa6f6f284e9e91a6bd657ba7abb947` | [专属验收](../acceptance/http-command-boundary.md)：HC92-A1–A3通过；HTTP60项/app2项及clean最终head CLI3项通过，历史固定L1 12组/553项经核验复用，无新增人工项；[复审记录](https://github.com/erranliu/SteerLine/pull/311#issuecomment-6165070946) |
 | 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 实现完成；独立复审/自动验证/真实合并已核验 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6 通过，真终端/live 操作已验；TH-M1 窗口渲染/人工体验待验；[PR #299](https://github.com/erranliu/SteerLine/pull/299) 已合并 |
 
 ## 推进边界

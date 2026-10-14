@@ -41,11 +41,11 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 
 旧二阶段/WinUI/延期任务验收退出当前队列，见[归档说明](../archive/roadmap/README.md)。#44 实现已由 #91 删除，原人工项退出要求不算通过；旧候选编号不复用，也不依据归档自动恢复。
 
-## HTTP 接入后解耦草稿验收
+## HTTP 接入后解耦验收
 
-2026-10-14 五项[草稿](../roadmap/drafts/roadmap.md)全部保留；#92/#93已确认纳入execution-map、尚未实施/待验收，#94/#95/#96因Worker三层重构影响继续留草稿、暂不安排验收。各项Spec/Plan保留自己的自动ID、最小命令及待新增测试；无新增人工活动，未实施项不登记通过：
+2026-10-14，#92已独立复审修复、自动验证并经PR #311真实合并，移出[草稿任务表](../roadmap/drafts/roadmap.md)；#93已纳入execution-map待执行/待验收，#94/#95/#96继续留草稿、暂不安排验收。各项保留独立Spec/Plan与专属记录；无新增人工活动，未实施项不登记通过：
 
-- #92 [HTTP 服务端命令边界收敛](http-command-boundary.md)：已纳入，HC92-A1–A3待验。
+- #92 [HTTP 服务端命令边界收敛](http-command-boundary.md)：实现完成，HC92-A1–A3通过，三项P2修复并终审通过，PR #311已合并；无人工残留。
 - #93 [HTTP 客户端原请求与停服观察解耦](http-client-request-lifecycle.md)：已纳入，CL93-A1–A3待验。
 - #94 [固定开发流程规则独立](development-flow-rules.md)：DF94-A1–A4。
 - #95 [任务最终交付用例独立](task-delivery-usecase.md)：TD95-A1–A4。

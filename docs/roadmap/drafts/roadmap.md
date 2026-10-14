@@ -1,6 +1,6 @@
 # SteerLine 当前 Roadmap 草稿
 
-2026-10-14 按 [RoadmapGuide](../RoadmapGuide.md)选定本页。用户先授权建立五项草稿及Spec/Plan，随后确认保留全部草稿、将可独立并行推进的#92/#93纳入[execution-map](../execution-map.md)。#94/#95/#96因Worker三层重构的职责/接线影响继续留草稿，暂不安排实施。本次只更新执行规划，不创建执行聊天/worktree或外部Task、不实施。永久编号已分配，之后纳入沿用，不复用历史ID。
+2026-10-14 按 [RoadmapGuide](../RoadmapGuide.md)选定本页。原五项均保留Spec/Plan与永久编号；#92/#93已确认纳入[execution-map](../execution-map.md)。#92经[PR #311](https://github.com/erranliu/SteerLine/pull/311)真实合并及验收同步后移出草稿任务表，HTTP命令登记/对账与消费端口成为已交付基线；#93仍待执行。#94/#95/#96因Worker三层重构的职责/接线影响继续留草稿，暂不安排实施；编号不复用。
 
 调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`。规划约束和生成规范按该版本 [RoadmapGuide](../RoadmapGuide.md)、[SpecGuide](../../spec/SpecGuide.md)、[并行指南](../../architecture/parallel-development.md)核对；实际启动另固定已提交Spec/Plan路径/commit，执行起点核对最新主干。任务草稿不维护实时状态，正式任务/依赖及已验/待验汇总归execution-map与专属验收。
 
@@ -14,13 +14,12 @@
 
 | 任务 ID | 任务名称 | 成果 / 主要owner | 硬前置与并行/集成安排 | Spec / Plan | 专属验收 |
 | --- | --- | --- | --- | --- | --- |
-| 92 | HTTP 服务端命令边界收敛 | httpapi消费端口；command_registry登记/对账；request_records私有记录owner；HTTP endpoint接线 | 已纳入execution-map待执行；无新增硬前置，与93可并行，wire/API冻结 | [Spec](../../spec/http-command-boundary.spec.md) · [Plan](../../spec/http-command-boundary.plan.md) | [验收](../../acceptance/http-command-boundary.md)：HC92-A1–A3，owner/HTTP/真实app定向，无新增人工 |
 | 93 | HTTP 客户端原请求与停服观察解耦 | httpclient journal/跨进程终态保护、本机observer、consoleapp构造，保留原连接 | 已纳入execution-map待执行；无新增硬前置，与92可并行，新增仲裁仅在私有journal | [Spec](../../spec/http-client-request-lifecycle.spec.md) · [Plan](../../spec/http-client-request-lifecycle.plan.md) | [验收](../../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3，确定性交错/Windows/独立simulate，无新增人工 |
 | 94 | 固定开发流程规则独立 | development/v3纯规则包、原actor规则接线 | 仅保留草稿，暂不纳入；Workflow规则与正在实施的三层重构直接重叠，待成果合入后重审 | [Spec](../../spec/development-flow-rules.spec.md) · [Plan](../../spec/development-flow-rules.plan.md) | [验收](../../acceptance/development-flow-rules.md)：DF94-A1–A4，纯规则/事务/双后端controlled，无新增人工 |
 | 95 | 任务最终交付用例独立 | delivery窄端口用例、CompleteNativeTask薄接线，保留原PR绑定 | 仅保留草稿，暂不纳入；交付抽取有剩余收益，actor/PR桥接与记录映射正在重组，待稳定后重审 | [Spec](../../spec/task-delivery-usecase.spec.md) · [Plan](../../spec/task-delivery-usecase.plan.md) | [验收](../../acceptance/task-delivery-usecase.md)：TD95-A1–A4，用例/原子事务/两条L3 controlled，无新增人工 |
 | 96 | worker 运行时资源所有权收敛 | workerruntime观察/句柄/在途资源、actor结果接线；不重写业务恢复 | 仅保留草稿，暂不纳入；生命周期effect/资源/确认接线与三层重构交叉，不并行建立旧runtime边界 | [Spec](../../spec/worker-runtime-ownership.spec.md) · [Plan](../../spec/worker-runtime-ownership.plan.md) | [验收](../../acceptance/worker-runtime-ownership.md)：WR96-A1–A4，owner/确认屏障/四条L3 controlled，无新增人工 |
 
-已有#91/#45、任务规则/窄端口、后台效果、恢复事实和提交屏障是已交付基线，不重新创建“契约基础任务”。原五项均保留自己的Spec/Plan与永久身份；当前仅#92/#93已确认纳入，实际执行/验收状态归execution-map。#94/#95/#96的原独立交付判断须结合三层重构成果重新核验，编号和文档存在不产生开工授权。
+已有#92/#91/#45、任务规则/窄端口、后台效果、恢复事实和提交屏障是已交付基线，不重新创建“契约基础任务”。当前仅#93待执行，实际执行/验收状态归execution-map；#92成果及独立复审/合并见[专属验收](../../acceptance/http-command-boundary.md)。#94/#95/#96的原独立交付判断须结合三层重构成果重新核验，编号和文档存在不产生开工授权。
 
 ## 原拆分的收益与独立交付判据
 

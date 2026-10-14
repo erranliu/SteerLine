@@ -1,6 +1,6 @@
 # 验收：HTTP 服务端命令边界收敛
 
-唯一归属：任务 #92，HTTP 服务端命令边界收敛。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)。[PR #311](https://github.com/erranliu/SteerLine/pull/311)的本地后续候选已修复原生就绪竞态及遗漏的CLI测试消费者，并完成最小定向复验；待新的独立复审、同步PR及真实合并，本任务不得记为实现完成。
+唯一归属：任务 #92，HTTP 服务端命令边界收敛。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)。[PR #311](https://github.com/erranliu/SteerLine/pull/311)已完成独立复审修复、最小自动验证及真实合并核验，实现完成；HC92-A1–A3通过，无新增人工项。历史失败与每轮源码/证据保留如下。
 
 [Spec](../spec/http-command-boundary.spec.md) · [Plan / 测试计划](../spec/http-command-boundary.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 
@@ -83,4 +83,12 @@ handler不再在共同仲裁锁外传入`Ready`布尔值；registry取得同一�
 
 ## 人工与阻塞范围
 
-无新增人工项或窗口；#91原人工体验仍归原记录，不阻塞本项。原生就绪竞态已在本地候选修复并按HC92-A3定向复验通过；仍待新的独立复审、同步PR及真实合并，不登记实现完成。未触发产品/live原生验收。固定Spec/Plan未修改。
+无新增人工项或窗口；#91原人工体验仍归原记录，不阻塞本项。原生就绪竞态、专属守卫遗漏和CLI消费者遗漏已修复，经独立终审与实际合并核验闭合。未触发产品/live原生验收。固定Spec/Plan未修改。
+
+## 最终独立复审与真实合并
+
+2026-10-14，最终reviewer `/root/review92_round3` 独立检查完整22文件diff、固定Spec/Plan、生产路径、全部Prepare消费者和原始验证，未发现新增问题。首轮reviewer `/root/review92_round1` 的就绪竞态由独立fixer `/root/fix92_native_readiness` 在 `75177ff14753da33c810562ad466b30b83673c01` 修复；专属AST守卫遗漏由原执行聊天在 `100413eaa5886990d573b946db159e1383bbe5c6` 补齐；第二轮reviewer `/root/review92_round2` 的CLI消费者遗漏在 `01f70460ee644b2e7ff32a7aa2825024932772d8` 修复。三项P2均已闭合，既有断言/边界未削弱。
+
+最终审核head `b459a86d88f80b34f27140812ccc1755e232611e`、base `80f30b2253386c8e04ea6fa8a7b174037621880a`。reviewer在该clean head复跑上述CLI精确命令，3项通过、complete=true、exit0、无失败/skip，summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T090051.022098500Z\summary.json`；同目录Go JSON/stderr已核。HTTP60项、实际app2项复用clean `75177ff`独立复验，后续生产代码未改变；历史固定L1的12组/553项经逐组原始事件核验后复用，未冒称最终head重跑。原始失败与修复前overlay证据继续保留。
+
+[PR复审记录](https://github.com/erranliu/SteerLine/pull/311#issuecomment-6165070946)记录agent身份、问题、修复提交及实际验证。合并前重新核head/base未变、MERGEABLE/CLEAN、REST main未保护、GraphQL保护规则/rulesets均0、无必需检查；按预期head调用合并。GitHub确认 `mergedAt=2026-10-14T09:20:31Z`（北京时间17:20:31）、merge `e3010edcb4905977e6244f2f896be140fa718a8f`；该merge已进入origin/main，两个父提交正是已核base与head。实现完成与自动验收通过分别登记；本项无人工残留，不扩大为Full/L2/L3/live或桌面体验证明。
