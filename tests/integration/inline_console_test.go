@@ -96,6 +96,9 @@ func TestPS1InlineConsoleWiring(t *testing.T) {
 		return true
 	})
 	step(key('r'))
+	// A successful start selects the new candidate. Explicitly return to the
+	// first candidate whose identity and draft this test keeps throughout.
+	step(tea.KeyMsg{Type: tea.KeyF6})
 	for _, want := range []string{"任务列表", "候选与执行", "运行与反馈"} {
 		if !strings.Contains(m.View(), want) {
 			t.Fatal("real app lost pane", want, m.View())

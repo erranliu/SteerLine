@@ -204,6 +204,9 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	}
 	// Feedback is submitted through the actual console against the selected original Decision.
 	step(key('r'))
+	// The second UI start selected P2; the later starts used the control client.
+	// Return to the original P1 before binding its feedback and stop request.
+	step(tea.KeyMsg{Type: tea.KeyF6})
 	step(key('a'))
 	if !containsConsoleText(m.View(), "提交预览") || !containsConsoleText(m.View(), "你的答复") {
 		t.Fatalf("original decision draft did not open: %s", m.View())
