@@ -397,6 +397,10 @@ func TestMain(m *testing.M) {
 	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
 		os.Exit(23)
 	}
+	// The process-port output probe needs no project, CLI build or profiles.
+	if os.Getenv("STEERLINE_TM06_RESOURCE_HELPER") == "1" {
+		os.Exit(m.Run())
+	}
 
 	for i, arg := range os.Args {
 		if arg == "--fake" {
