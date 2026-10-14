@@ -8,7 +8,7 @@
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 92 | HTTP 服务端命令边界收敛 | 无未完成硬前置；复用#45/#91；与#93独立并行，公开wire/API冻结 | 修复中；[PR #311](https://github.com/erranliu/SteerLine/pull/311)，当前守卫候选 `100413ea`；固定 Spec/Plan 与实现起点 `35d4d65350fa6f6f284e9e91a6bd657ba7abb947` | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md) | [专属验收](../acceptance/http-command-boundary.md)：本轮A1结构守卫7/7、A2 28/28及依赖边界37/37通过；独立复审发现原生就绪竞态，A3未通过，待独立修复/复验；原固定L1 12组/553项通过不解除阻塞 |
+| 92 | HTTP 服务端命令边界收敛 | 无未完成硬前置；复用#45/#91；与#93独立并行，公开wire/API冻结 | 待独立复审/同步PR/合并；[PR #311](https://github.com/erranliu/SteerLine/pull/311)，本地原生就绪修复基于 `4eb626fb`；固定 Spec/Plan 与实现起点 `35d4d65350fa6f6f284e9e91a6bd657ba7abb947` | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md) | [专属验收](../acceptance/http-command-boundary.md)：本地竞态候选新增就绪11项+A1守卫7项、A2 28项、A3 HTTP14项/app2项全部通过，无失败/跳过；原失败记录保留。原固定L1 12组/553项及依赖边界37项复用，仍待新独立复审与真实合并 |
 | 93 | HTTP 客户端原请求与停服观察解耦 | 无未完成硬前置；复用#91；与#92独立并行，新增写入仲裁仅属客户端journal | 待执行；用户已确认范围和并行条件 | [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan](../spec/http-client-request-lifecycle.plan.md) | [专属验收](../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3待验收，无新增人工项；实现时补齐跨进程journal测试、Windows观察/独立simulate及一次固定L1 |
 
 ### 本批并行与开工条件

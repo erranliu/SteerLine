@@ -28,13 +28,13 @@ type commandRegistry struct {
 	nativeViewer    NativeSessionPort
 	readiness       *readinessState
 	records         requestRecordAccess
-	mu              sync.Mutex
+	mu              sync.Locker
 }
 
 func newCommandRegistry(options Options, ports Ports, readiness *readinessState, records requestRecordAccess) *commandRegistry {
 	return &commandRegistry{projectIdentity: options.ProjectIdentity, instanceID: options.InstanceID,
 		capabilities: append([]string(nil), options.Capabilities...), query: ports.Query, commands: ports.Commands,
-		authority: ports.Authority, nativeViewer: ports.NativeViewer, readiness: readiness, records: records}
+		authority: ports.Authority, nativeViewer: ports.NativeViewer, readiness: readiness, records: records, mu: &sync.Mutex{}}
 }
 
 func (c *commandRegistry) readRecord(requestID string) (requestRecord, error) {
@@ -190,7 +190,7 @@ func (c *commandRegistry) Read(ctx context.Context, requestID string) (CommandRe
 	return response, nil
 }
 
-func (c *commandRegistry) OpenNative(ctx context.Context, envelope CommandEnvelope, ready bool) (CommandResponse, error) {
+func (c *commandRegistry) OpenNative(ctx context.Context, envelope CommandEnvelope) (CommandResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	canonical, _ := json.Marshal(envelope)
@@ -222,7 +222,7 @@ func (c *commandRegistry) OpenNative(ctx context.Context, envelope CommandEnvelo
 	if err == nil && (envelope.ExpectedVersion != 0 || target.RunID != envelope.TargetID || target.ExecutionID == "" || target.AttemptID == "" || target.SessionID == "" || target.SessionGeneration == "") {
 		err = errors.New("exact native session target required")
 	}
-	if err == nil && !ready {
+	if err == nil && !c.nativeReady(ctx) {
 		err = errors.New("service is not ready")
 	}
 	if err == nil {
@@ -259,6 +259,16 @@ func (c *commandRegistry) OpenNative(ctx context.Context, envelope CommandEnvelo
 		return CommandResponse{}, &protocolError{status: http.StatusServiceUnavailable, code: "request_persist_failed", reason: err.Error()}
 	}
 	return response, nil
+}
+
+// nativeReady is sampled only after acquiring the shared command arbitration
+// lock. Both the local lifecycle and the current runtime identity must be ready.
+func (c *commandRegistry) nativeReady(ctx context.Context) bool {
+	if !c.readiness.Ready() {
+		return false
+	}
+	identity := runtimeIdentity(Identity{InstanceID: c.instanceID}, c.query.ReadProject(ctx, "", api.ProjectSnapshot{}))
+	return identity.Ready
 }
 
 func (c *commandRegistry) candidate(ctx context.Context, runID string) (*api.CandidateSummary, error) {

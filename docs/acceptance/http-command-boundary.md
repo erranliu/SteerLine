@@ -1,6 +1,6 @@
 # 验收：HTTP 服务端命令边界收敛
 
-唯一归属：任务 #92，HTTP 服务端命令边界收敛。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)。[PR #311](https://github.com/erranliu/SteerLine/pull/311)仍在修复/复审中：本轮补齐HC92-A1结构守卫，但独立复审发现原生查看的就绪竞态仍未修复；本任务不得记为实现完成。
+唯一归属：任务 #92，HTTP 服务端命令边界收敛。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)。[PR #311](https://github.com/erranliu/SteerLine/pull/311)的本地后续候选已修复独立复审发现的原生就绪竞态并完成最小复验；待新的独立复审、同步PR及真实合并，本任务不得记为实现完成。
 
 [Spec](../spec/http-command-boundary.spec.md) · [Plan / 测试计划](../spec/http-command-boundary.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 
@@ -10,9 +10,9 @@
 | --- | --- | --- | --- |
 | HC92-A1 | 直接调用登记owner并检查handler构造；小端口stub能替代完整Client/SQL/HTTP对象，原重复实现删除；本项专属规则检查Server/registry依赖与单一记录owner | 新增`TestHTTPCommandBoundary`和AST正/负例；普通Windows Go；提取后、PR前执行 | 本轮通过：1包/7测试，0失败/跳过；守卫只验证同包源码结构，不声称编译隔离 |
 | HC92-A2 | 登记并发同ID/异内容/跨动作；派发计数及原intent、正式消费者竞争、错绑定、rejection、读取故障/unknown与原信封补交核对 | 新增registry stub + 原authority/回执反例；私有记录stub；接线后、PR前执行 | 通过：1包/28测试，0失败/跳过 |
-| HC92-A3 | 原生查看重复/丢结果、停服请求、边界记录/认证和真实服务接线；查看副作用一次、停服回执、大小/原子性及业务owner保持 | 既有httpapi及`tests/integration`定向入口；隔离HTTP/SQLite/app，无真实模型；接线后、PR前执行 | 未通过：既有HTTP/app回归通过，但队列等待期间服务降为not-ready后仍可能打开原生会话；修复并定向复验前阻塞 |
+| HC92-A3 | 原生查看重复/丢结果、停服请求、边界记录/认证和真实服务接线；查看副作用一次、停服回执、大小/原子性及业务owner保持 | 既有httpapi及`tests/integration`定向入口；隔离HTTP/SQLite/app，无真实模型；接线后、PR前执行 | 本地修复候选通过：新增排队/动态就绪11项、HTTP14项、app2项全部通过，无失败/跳过；原失败证据保留，待独立复审 |
 
-固定L1历史回归：`go run ./cmd/test-feedback -level=L1`在原实现候选`72e1937d`上通过且完整，12组、26包、553测试通过，0失败/跳过；本轮只增结构守卫并将测试夹具写入助手移至`_test.go`，未重跑L1。此历史回归不解除HC92-A3的未修复竞态。组别及测试数见原L1 summary。
+固定L1历史回归：`go run ./cmd/test-feedback -level=L1`在原实现候选`72e1937d`上通过且完整，12组、26包、553测试通过，0失败/跳过。结构守卫补齐轮未重跑L1；原生就绪修复轮复用该历史回归并执行下方最小定向复验，未重跑L1。历史L1不替代新竞态回归。组别及测试数见原L1 summary。
 
 ## 执行环境与命令
 
@@ -36,7 +36,7 @@ Runner保留各`summary.json`、Go JSON事件日志和stderr。以下目录位�
 - HC92-A3 app接线：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T070642.563530700Z\`，summary：`summary.json`。
 - 固定L1：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T070921.437919100Z\`，summary：`summary.json`；组级Go JSON/stderr记录在同目录各组子目录。
 
-### 独立复审后的补验与未解决项
+### 独立复审后的结构守卫补验与当时未解决项
 
 本轮新增证据基于`006d0ebd`起点、测试时工作树差异最终提交为`100413ea`。专属AST守卫遍历`httpapi`目录全部非测试Go源码，检查Server不导入具体product client、commandRegistry的字段/构造与方法不接受或保存Server、HTTP请求/响应/客户端、product client、SQL连接、net.Conn或os.File等宽能力；同时检查记录格式/owner唯一、commandRegistry只经`requestRecordAccess`访问记录、文件I/O不绕过owner。负例覆盖具体Client、各类宽类型、直接读记录/文件、重复record owner。记录夹具用的`writeRequestRecord`仅留在测试源码。上述是同包AST结构守卫，不表示Go编译器提供了文件级隔离。
 
@@ -45,6 +45,22 @@ Runner保留各`summary.json`、Go JSON事件日志和stderr。以下目录位�
 - 既有依赖边界命令：`go run ./cmd/test-feedback -- ./tests/integration -run '^TestCD67CoreBoundary$' -count=1`；1包、37测试通过，complete=true、无失败/跳过。summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T074030.443987700Z\summary.json`；JSON/stderr：同目录`go-test.jsonl`、`go-test.stderr.txt`。
 - 独立只读复审在clean head `006d0ebd`上的43项HTTP定向回归与2项app集成回归通过；HTTP summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T072726.699686200Z\summary.json`；app summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T073016.966730700Z\summary.json`。本轮未重复这两组既有回归。
 - 独立复审的原生就绪竞态overlay失败：报告命令为`go run ./cmd/test-feedback -- ./internal/product/httpapi -overlay <overlay.json> -run '^TestReview92QueuedNativeRechecksReadiness$' -count=1`；overlay源码与配置为`C:\Users\lmas1\AppData\Local\Temp\http92-review-64fba3c9316e4ff18edc3d6f0e556f0d\review_native_readiness_test.go`、同目录`overlay.json`；失败summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T072857.882122200Z\summary.json`，Go事件：同目录`go-test.jsonl`。复现时请求先在registry锁外采样`Ready=true`并等待同一仲裁锁，期间`SetReady(false)`，随后仍将过期`true`传给`OpenNative`；实际副作用计数1、返回`applied`/HTTP 200。`commands.go`与registry就绪路径本轮保持不变；需由后续独立修复并重新验收。
+
+### 原生就绪竞态修复与复验
+
+2026-10-14，固定Spec/Plan仍为`35d4d65350fa6f6f284e9e91a6bd657ba7abb947`。修复及测试起点为clean head `4eb626fbc25dfdeed16b20d14c4e7a7ddcb7c52c`；本轮runner记载该head与4个httpapi源码/测试文件的dirty差异，测试期间这些文件未再修改。环境为Windows/amd64、Go1.26.4、隔离fixture，无原生验收开关。
+
+handler不再在共同仲裁锁外传入`Ready`布尔值；registry取得同一仲裁锁后读取现有生命周期状态并查询运行时快照。原实例匹配、连接状态、身份/配置匹配及service.Ready判断与identity路由共用纯值函数。没有引入Server/HTTP对象/具体Client或业务资格规则。私有锁字段使用`sync.Locker`，生产构造仍只创建一个共享`*sync.Mutex`；测试wrapper在Lock尝试时发信号并保留该锁，让请求排队→失去就绪→取得锁的顺序确定，不依靠sleep。原AST守卫及负例未改动。
+
+- 新增`TestHTTPNativeQueuedReadiness`：分别在队列等待期间`SetReady(false)`、`Close`、运行时service.Ready变false，均按既有协议返回rejected/HTTP200，副作用为0；恢复后原持久拒绝不重放。
+- 新增`TestHTTPNativeRuntimeReadiness`：本地ready保持true，缺快照、旧实例、运行时not-ready、断连、身份/配置不匹配均拒绝/零开窗；恢复后新ID可applied，重复原ID保持原回执且仅开窗一次。
+- 新竞态/动态反例及A1守卫/handler：`go run ./cmd/test-feedback -- ./internal/product/httpapi -run '^(TestHTTPNativeQueuedReadiness|TestHTTPNativeRuntimeReadiness|TestHTTPCommandBoundary|TestHTTPCommandBoundaryArchitecture|TestHTTPCommandBoundaryArchitectureRejectsPrivateFixtures)$' -count=1`；1包18测试通过（新就绪11项、原A1 7项），complete=true、exit0、无失败/跳过。summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T080401.987312000Z\summary.json`。
+- 同一新增排队回归对旧生产路径的确定性反例：只在overlay适配相同私有锁信号接缝，保留`4eb626fb`的锁外ready采样及旧OpenNative；命令`go run ./cmd/test-feedback -- ./internal/product/httpapi -overlay <overlay.json> -run '^TestHTTPNativeQueuedReadiness$' -count=1`，3子场景均失败为applied/HTTP200（含顶层4失败），complete=true、无skip。overlay：`C:\Users\lmas1\AppData\Local\Temp\http92-readiness-before-621b3ac9695c4dc5b937fd18dc22cb05\overlay.json`；summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T080452.105339400Z\summary.json`。该失败验证新回归确实捕获旧缺陷，不作为修复候选失败。
+- A2共同仲裁复验：采用上方固定A2命令；因私有锁字段抽象化而重新确认普通/原生查看共同仲裁，1包28测试通过，complete=true、exit0、无失败/跳过。summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T080612.859215000Z\summary.json`。
+- A3 HTTP：采用上方固定HTTP命令；1包14测试通过，complete=true、exit0、无失败/跳过。summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T080513.208375800Z\summary.json`。
+- A3真实app接线：采用上方固定app命令；1包2测试通过，complete=true、exit0、无失败/跳过。summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T080513.217024200Z\summary.json`。
+
+上述每个summary同目录保留`go-test.jsonl`、`go-test.stderr.txt`。源码证据另保存`C:\Users\lmas1\AppData\Local\Temp\http92-readiness-evidence-621b3ac9695c4dc5b937fd18dc22cb05\source-fingerprints.json`，包含测试起点、3个生产文件、新测试与未变AST守卫的Git blob及SHA256，交接时核对与实际提交一致。未执行Full、L2/L3/live，未使用安装环境。原失败/历轮证据完整保留；本轮仅解除已复现竞态的自动复验阻塞，仍需新的独立只读复审、同步PR及真实合并。
 
 ### 失败及修正记录
 
@@ -56,4 +72,4 @@ Runner保留各`summary.json`、Go JSON事件日志和stderr。以下目录位�
 
 ## 人工与阻塞范围
 
-无新增人工项或窗口；#91原人工体验仍归原记录，不阻塞本项。当前阻塞为独立复审确认的原生就绪竞态，尚无修复或复验；交付前必须修复并按HC92-A3复验。未触发产品/live原生验收。固定Spec/Plan未修改。
+无新增人工项或窗口；#91原人工体验仍归原记录，不阻塞本项。原生就绪竞态已在本地候选修复并按HC92-A3定向复验通过；仍待新的独立复审、同步PR及真实合并，不登记实现完成。未触发产品/live原生验收。固定Spec/Plan未修改。

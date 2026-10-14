@@ -51,7 +51,7 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if envelope.Action == "open_native_session" {
-		response, openErr := s.commands.OpenNative(r.Context(), envelope, s.identityView(r.Context()).Ready)
+		response, openErr := s.commands.OpenNative(r.Context(), envelope)
 		if openErr != nil {
 			writeProtocolError(w, openErr, envelope.RequestID)
 			return

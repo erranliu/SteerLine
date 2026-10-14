@@ -112,7 +112,12 @@ func (s *Server) identityView(ctx context.Context) Identity {
 		}
 		return identity
 	}
-	snapshot := s.query.ReadProject(ctx, "", api.ProjectSnapshot{})
+	return runtimeIdentity(identity, s.query.ReadProject(ctx, "", api.ProjectSnapshot{}))
+}
+
+// runtimeIdentity keeps native-command readiness and the identity route on the
+// same committed-instance and runtime-connection checks without transport access.
+func runtimeIdentity(identity Identity, snapshot api.ProjectSnapshot) Identity {
 	connection := snapshot.Connection
 	page := connection.Snapshot.Page
 	if page == nil {
