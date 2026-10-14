@@ -36,7 +36,7 @@ func TestTaskStatusAndDeliveryEvidence(t *testing.T) {
 func TestDeliveryGateRequiresSelectedWorker(t *testing.T) {
 	record := taskmodel.TaskRecord{TaskID: "2", ContractID: "contract-2"}
 	contract := taskmodel.TaskContract{ContractID: "contract-2", Digest: "fixed"}
-	gate := executionmodel.DeliveryGate{WorkflowVersion: "worker-flow-v2", FlowRef: executionmodel.DevelopmentFlow, WorkflowTaskID: "2", WorkflowRunID: "run", SelectedExecutionID: "execution", ExecutionID: "execution", ExecutionWorkflowID: "run", PRURL: "https://example.test/pull/2", SessionID: "session", WorkspaceBranch: "branch", Status: "waiting_external", StepID: executionmodel.StepAwaitMerge}
+	gate := executionmodel.DeliveryGate{WorkflowVersion: "worker-flow-v2", FlowRef: executionmodel.DevelopmentFlow, WorkflowTaskID: "2", WorkflowRunID: "run", SelectedExecutionID: "execution", ExecutionID: "execution", ExecutionWorkflowID: "run", PRURL: "https://example.test/pull/2", SessionID: "session", WorkspaceBranch: "branch"}
 	if url, err := executionmodel.DeliveryPR(record.TaskID, record.ContractID, contract.ContractID, contract.Digest, gate, "worker-flow-v2"); err != nil || url != gate.PRURL {
 		t.Fatalf("selected worker was rejected: %q, %v", url, err)
 	}

@@ -278,14 +278,14 @@ func readViewFile(path string) (ViewFile, error) {
 
 func validSavedAction(value string) bool {
 	switch value {
-	case "open_terminal", "recheck_environment", "start_candidate", "abandon_candidate", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "answer_decision":
+	case "open_terminal", "recheck_environment", "start_candidate", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "answer_decision":
 		return true
 	}
 	return false
 }
 func validSavedActionStatus(value string) bool {
 	switch value {
-	case "submitted", "pending", "in_flight", "applying", "applied", "accepted", "rejected", "failed", "indeterminate", "submitting":
+	case "submitted", "pending", "pending_verification", "in_flight", "applying", "applied", "accepted", "rejected", "failed", "indeterminate", "submitting":
 		return true
 	}
 	return false

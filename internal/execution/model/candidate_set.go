@@ -9,7 +9,7 @@ import (
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-// The set includes historical and abandoned PRs. Sampling/turn diagnostics do
+// The set includes historical PRs. Sampling/turn diagnostics do
 // not alter this binding comparison; new candidates, PRs or exits do.
 func CandidateBindings(workflows []WorkflowRunRecord, executions []ExecutionRecord, taskID string) string {
 	type binding struct {
@@ -18,7 +18,6 @@ func CandidateBindings(workflows []WorkflowRunRecord, executions []ExecutionReco
 		FlowRef, StepID, Status             string
 		InputVersion                        uint64
 		History                             []string
-		Exit                                *CandidateAbandonment
 	}
 	values := []binding{}
 	for _, w := range workflows {
@@ -36,7 +35,7 @@ func CandidateBindings(workflows []WorkflowRunRecord, executions []ExecutionReco
 					break
 				}
 			}
-			values = append(values, binding{FlowRef: w.FlowRef, StepID: w.StepID, Status: w.Status, InputVersion: w.InputVersion, ID: w.WorkflowRunID, Selected: w.SelectedResult, PR: w.PRURL, Proposed: w.PRCandidateURL, Profile: bindingDigest(w.ExecutionProfile), Execution: identity, History: w.PRHistory, Exit: w.Abandonment})
+			values = append(values, binding{FlowRef: w.FlowRef, StepID: w.StepID, Status: w.Status, InputVersion: w.InputVersion, ID: w.WorkflowRunID, Selected: w.SelectedResult, PR: w.PRURL, Proposed: w.PRCandidateURL, Profile: bindingDigest(w.ExecutionProfile), Execution: identity, History: w.PRHistory})
 		}
 	}
 	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })

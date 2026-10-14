@@ -1,5 +1,7 @@
 # Spec：Worker 停机对账与恢复一致性修复
 
+2026-10-13 用户修订：完整移除单候选放弃功能（控制台、CLI、API、服务端及专用状态字段）；任务级丢弃和唯一交付保留。控制台任务提示只显示中文状态，并增加全部执行候选数量列。下文涉及单候选放弃或旧列表列布局的历史要求不再适用；当前操作以[执行控制台](../product-design/execution-console.md)为准。
+
 任务 ID：87；任务名称：Worker 停机对账与恢复一致性修复。
 
 状态：已获用户授权由本聊天直接执行；固定启动版本和实际交付结果见专属验收。[草稿](../roadmap/drafts/worker-stop-recovery.md) · [Plan](worker-stop-recovery.plan.md) · [验收](../acceptance/worker-stop-recovery.md)。原会话规则沿用[现行契约](product-simplification-04-conversation-recovery.spec.md)。

@@ -1,5 +1,7 @@
 # Spec：任务列表与流程状态可读性
 
+2026-10-13 用户修订：完整移除单候选放弃功能（控制台、CLI、API、服务端及专用状态字段）；任务级丢弃和唯一交付保留。控制台任务提示只显示中文状态，并增加全部执行候选数量列。下文涉及单候选放弃或旧列表列布局的历史要求不再适用；当前操作以[执行控制台](../product-design/execution-console.md)为准。
+
 本次命名增量以[状态命名 Spec](state-naming.spec.md)为准：候选快照与活动的业务字段改为 workflow_stage/workflow_status，内部领域步骤保持；原布局和事件事务保持；当前主干阶段变化只显示流程消息，阶段不变才显示状态消息，字段改名不恢复旧双消息规则。
 
 用户直接授权的普通开发，接续[原始状态保留](console-worker-state.spec.md)。配套 [Plan](console-flow-state-readability.plan.md)、[专属验收](../acceptance/console-flow-state-readability.md)。不改变任务或 worker 状态机，不改变原始记录格式及操作资格。

@@ -15,12 +15,12 @@ func TestUX1ParallelNumbersAndPrimarySurface(t *testing.T) {
 	m, _ := ccFixture(t, 5)
 	m.rows(0)
 	view := m.View()
-	for _, want := range []string{"当前 P1", "F6/F7", "workflow_stage:", "workflow_status:", "execution_status:"} {
+	for _, want := range []string{"当前 P1", "F6/F7", "workflow_stage:", "task_status:"} {
 		if !strings.Contains(view, want) {
 			t.Fatal(want, view)
 		}
 	}
-	for _, hidden := range []string{"execution-0", "candidate-0", "decision-0", "候选版本："} {
+	for _, hidden := range []string{"execution-0", "candidate-0", "decision-0", "候选版本：", "workflow_status:", "execution_status:"} {
 		if strings.Contains(view, hidden) {
 			t.Fatal("technical identity crowded primary view", hidden)
 		}
@@ -103,6 +103,7 @@ func TestUX2PreviewSubmitEndsCurrentHumanInteraction(t *testing.T) {
 	m, c := ccFixture(t, 5)
 	m.rows(0)
 	run := m.selectedRow(0).run
+	run.RecoveryVersion = 29
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.answer == nil {
 		t.Fatal("Enter did not open current interaction")
@@ -133,7 +134,7 @@ func TestUX2PreviewSubmitEndsCurrentHumanInteraction(t *testing.T) {
 	}
 	next, _ := m.Update(cmd())
 	m = next.(Model)
-	if c.decisionAnswer.RunID != run.RunID || c.decisionAnswer.OptionID != "o10" || c.decisionAnswer.Note != "候选比较备注" {
+	if c.decisionAnswer.RunID != run.RunID || c.decisionAnswer.OptionID != "o10" || c.decisionAnswer.Note != "候选比较备注" || c.decisionAnswer.SourceAttemptID != run.AttemptID || c.decisionAnswer.ExpectedRecoveryVersion != 29 {
 		t.Fatal(c.decisionAnswer)
 	}
 	// A newly committed question is a new human interaction, not the old draft.

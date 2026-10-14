@@ -1,5 +1,7 @@
 # 整体架构与职责边界
 
+> 当前源码（2026-10-13）：唯一任务 [#91](spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。实际验证与待验项见任务专属验收。WebUI、SSE 和远程服务不在本轮。
+
 SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。一期包含本地 Codex、本机 Orca 与远端路径交付。后续目标见[产品愿景](roadmap/product-vision.md)，源码归属见[代码架构](architecture/current-code-architecture.md)。
 
 本文描述 SteerLine 产品运行的业务权威。普通开发由当前聊天直接实现；用户明确要求 roadmap 调度时，才由 roadmap-runner 使用[execution-map](roadmap/execution-map.md)管理已确认的任务与依赖。roadmap 流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。
@@ -24,9 +26,9 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 领取时冻结任务契约、仓库/base、执行配置及原身份。中心在外部调用前保存意图，后端返回现场事实和回执；身份或结果不确定时沿原请求对账，不盲重发、不切换后端或派替代 worker。worker 在同一任务的原会话中处理实现和反馈；中心管理下文 development/v2 的固定步骤，测试、审查和修复要求仍由任务 Spec/Plan 决定，不增加自动修复轮数或通用编排。
 
-不同任务可以人工并行，同一任务可人工比较多个独立候选。候选各有自己的会话、工作区、分支、PR 与反馈，Task 只接受一个核验过的交付；放弃候选不等于其外部资源已经停止。
+不同任务可以人工并行，同一任务可人工比较多个独立候选。候选各有自己的会话、工作区、分支、PR 与反馈，Task 只接受一个核验过的交付。产品不提供单候选放弃操作；Task 丢弃与执行停止分别记录。
 
-自然语言成功、轮次结束、进程退出、worker_done 或 PR 创建都不证明交付。人合并后，中心重新查询匹配的 PR 与提交事实，再在同一事务记录唯一 TaskDelivery、关闭 Task 和释放后继。数据与状态细节见[数据模型](product-design/data-model.md)。
+自然语言成功、轮次结束、进程退出、worker_done 或 PR 创建都不证明交付。人合并任一已绑定候选 PR 后，中心核验该候选 PR 身份与合并事实，再在同一事务记录唯一 TaskDelivery、关闭 Task 和释放后继；其他候选已合并或查询未知不阻塞该交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。数据与状态细节见[数据模型](product-design/data-model.md)。
 
 ## 生命周期、反馈与恢复
 

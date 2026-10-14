@@ -89,12 +89,6 @@ type profilePayload struct {
 	ExecutionProfileID string `json:"execution_profile_id"`
 }
 
-type abandonPayload struct {
-	TaskID              string `json:"task_id"`
-	ExpectedTaskVersion uint64 `json:"expected_task_version"`
-	Reason              string `json:"reason"`
-}
-
 type modePayload struct {
 	Mode string `json:"mode"`
 }
@@ -145,6 +139,10 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 	projectID := ProjectID(s.options.ProjectIdentity)
 	if err = envelope.Validate(projectID, s.options.InstanceID); err != nil {
 		writeProtocolError(w, &protocolError{status: http.StatusBadRequest, code: "request_invalid", reason: err.Error()}, envelope.RequestID)
+		return
+	}
+	if envelope.Action == "open_native_session" {
+		s.openNative(w, r, envelope)
 		return
 	}
 	s.commandMu.Lock()
@@ -349,12 +347,6 @@ func validateActionEnvelope(envelope CommandEnvelope) error {
 		if err := decodeStrict(envelope.Payload, &payload); err != nil || payload.ExecutionProfileID == "" || envelope.ExpectedVersion == 0 || envelope.ExpectedGraphRevision == 0 || envelope.ExpectedControlRevision == 0 {
 			return invalidCommand("start_candidate requires a profile, task version, graph revision and control revision")
 		}
-	case "abandon_candidate":
-		var payload abandonPayload
-		if err := decodeStrict(envelope.Payload, &payload); err != nil || payload.TaskID == "" || strings.TrimSpace(payload.Reason) == "" ||
-			payload.ExpectedTaskVersion == 0 || envelope.ExpectedVersion == 0 || envelope.ExpectedControlRevision == 0 {
-			return invalidCommand("abandon_candidate requires exact task and candidate versions, reason, and control revision")
-		}
 	case "set_dispatch_mode":
 		var payload modePayload
 		if err := decodeStrict(envelope.Payload, &payload); err != nil || payload.Mode != "auto" && payload.Mode != "manual" || envelope.ExpectedVersion == 0 || envelope.ExpectedControlRevision == 0 {
@@ -508,12 +500,15 @@ func (s *Server) dispatch(ctx context.Context, envelope CommandEnvelope, record 
 	}
 	response.ControlRequest = &req
 	response.Status = "submitted"
+	if envelope.Action == "stop_service" {
+		s.stopReceipt(ctx, &response)
+	}
 	return response, nil
 }
 
 func (s *Server) controlInput(ctx context.Context, envelope CommandEnvelope, requestedBy string) (api.ControlInput, error) {
 	control := api.ControlInput{RequestID: envelope.RequestID, RequestedBy: requestedBy, InstanceID: envelope.InstanceID}
-	if envelope.Action != "stop_service" {
+	if envelope.Action != "stop_service" || envelope.ExpectedControlRevision != 0 {
 		revision := envelope.ExpectedControlRevision
 		control.ExpectedRevision = &revision
 	}
@@ -532,14 +527,6 @@ func (s *Server) controlInput(ctx context.Context, envelope CommandEnvelope, req
 			payloadValue.ExpectedGraphRevision = envelope.ExpectedGraphRevision
 		}
 		control.Action, control.Payload = api.ControlAction(envelope.Action), payloadValue
-	case "abandon_candidate":
-		var payload abandonPayload
-		if err := decodeStrict(envelope.Payload, &payload); err != nil {
-			return control, invalidCommand(err.Error())
-		}
-		control.Action = api.AbandonCandidate
-		control.Payload = api.ControlPayload{TaskID: payload.TaskID, WorkflowRunID: envelope.TargetID, ExpectedTaskVersion: payload.ExpectedTaskVersion,
-			ExpectedCandidateVersion: envelope.ExpectedVersion, Reason: payload.Reason}
 	case "open_terminal", "recheck_environment":
 		var payload environmentPayload
 		if err := decodeStrict(envelope.Payload, &payload); err != nil {
@@ -609,6 +596,9 @@ func (s *Server) readCommand(w http.ResponseWriter, r *http.Request, requestID s
 }
 
 func (s *Server) lookupAuthoritative(ctx context.Context, requestID string, original *CommandEnvelope, record *requestRecord) (CommandResponse, error) {
+	if original != nil && original.Action == "open_native_session" && record != nil && record.Response != nil {
+		return record.response(), nil
+	}
 	response := CommandResponse{RequestID: requestID, ProjectID: ProjectID(s.options.ProjectIdentity), InstanceID: s.options.InstanceID,
 		Original: original, SampledAt: time.Now().UTC()}
 	controlChecked := false
@@ -737,13 +727,6 @@ func mappedControlMatchesEnvelope(original CommandEnvelope, input api.ControlInp
 		}
 		return payload.TaskID == original.TargetID && payload.ExpectedTaskVersion == original.ExpectedVersion &&
 			payload.ExpectedGraphRevision == graph && payload.ExecutionProfileID == profile.ExecutionProfileID && payload.ExecutionProfileDigest != ""
-	case "abandon_candidate":
-		var abandon abandonPayload
-		if decodeStrict(original.Payload, &abandon) != nil {
-			return false
-		}
-		return payload.WorkflowRunID == original.TargetID && payload.ExpectedCandidateVersion == original.ExpectedVersion &&
-			payload.TaskID == abandon.TaskID && payload.ExpectedTaskVersion == abandon.ExpectedTaskVersion && payload.Reason == abandon.Reason
 	case "open_terminal", "recheck_environment":
 		var environment environmentPayload
 		return decodeStrict(original.Payload, &environment) == nil && reflect.DeepEqual(payload.Environment, &environment.Target)
@@ -799,7 +782,7 @@ func matchesCommand(original CommandEnvelope, record *requestRecord, command api
 
 func isControlAction(action string) bool {
 	switch action {
-	case "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
+	case "start_task", "start_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
 		return true
 	default:
 		return false
@@ -984,9 +967,6 @@ func normalizedControlStatus(status string) string {
 func controlTarget(request api.ControlRequest) string {
 	var payload api.ControlPayload
 	if len(request.Payload) != 0 && json.Unmarshal(request.Payload, &payload) == nil {
-		if request.Action == "abandon_candidate" && payload.WorkflowRunID != "" {
-			return payload.WorkflowRunID
-		}
 		if payload.TaskID != "" {
 			return payload.TaskID
 		}

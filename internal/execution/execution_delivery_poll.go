@@ -68,7 +68,7 @@ func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {
 			return err
 		}
 		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
-		if task == nil {
+		if task == nil || task.Status == "closed" {
 			continue
 		}
 		workflow, _ := s.workflowRecords(run)

@@ -1,6 +1,6 @@
 # 验收归档
 
-归档日期：2026-10-07。已结算的历史记录放 completed/，被放弃或待重定的旧方案放 superseded/。当前计划与未闭合项见[验收入口](../README.md)。
+归档日期：2026-10-07。已结算的历史记录放 completed/，被放弃或退役的旧方案放 superseded/。当前计划与未闭合项见[验收入口](../README.md)。
 
 归档保留原源码、范围、失败、skip和限制，不代表当前构建通过；旧方案归档不代表其任务已完成。固定Git契约仍按原commit/路径读取。JSON/JSONL保持原字节，只修复Markdown导航。
 
@@ -24,17 +24,21 @@
 | 历史文档/规划检查 | [检查记录](completed/roadmap-planning.md) |
 | 验证目录清理与更早证据 | [历史取证](completed/history.md#历史取证) |
 
-## 旧二期与延期方案
+## 旧二期与延期方案（已退出当前规划）
 
 | 原归属 | 参考记录 |
 | --- | --- |
-| #40 固定版本与双入口，继续延期 | [规划](superseded/versioned-runtime.md) |
-| #41 dev隔离与stable提升，继续延期 | [规划](superseded/runtime-isolation-promotion.md) |
+| #40 固定版本与双入口，退出当前规划 | [规划](superseded/versioned-runtime.md) |
+| #41 dev隔离与stable提升，退出当前规划 | [规划](superseded/runtime-isolation-promotion.md) |
 | #43 独立主agent探测，不再安排 | [旧规划](superseded/phase2-agent-capabilities.md) |
-| #46 提案/草稿，待重定 | [旧规划](superseded/phase2-planning-drafts.md) |
-| #47 规划会话，待重定 | [旧规划](superseded/phase2-planning-sessions.md) |
-| #48 文档发布/创建，待重定 | [旧规划](superseded/phase2-document-publish.md) |
-| #51 规划对话，待重定 | [旧规划](superseded/phase2-conversation-ui.md) |
-| #52 审阅/确认，待重定 | [旧规划](superseded/phase2-review-ui.md) |
+| #44 WinUI 基座，后续验收要求撤销，代码删除待 #91 | [历史交付/原未验](superseded/phase2-winui-foundation.md) |
+| #46 提案/草稿，退役 | [旧规划](superseded/phase2-planning-drafts.md) |
+| #47 规划会话，退役 | [旧规划](superseded/phase2-planning-sessions.md) |
+| #48 文档发布/创建，退役 | [旧规划](superseded/phase2-document-publish.md) |
+| #49 DAG 页面，退役 | [旧规划](superseded/phase2-roadmap-ui.md) |
+| #50 执行页面，退役 | [旧规划](superseded/phase2-execution-ui.md) |
+| #51 规划对话，退役 | [旧规划](superseded/phase2-conversation-ui.md) |
+| #52 审阅/确认，退役 | [旧规划](superseded/phase2-review-ui.md) |
+| 旧三节点，退役 | [2.1](superseded/phase2-execution.md) · [2.2](superseded/phase2-planning.md) · [2.3](superseded/phase2-main-agent.md) |
 
-上述记录不进入当前待验队列。2.2/2.3流程成熟后按独立任务重建当前专属计划，沿用原身份；归档记录继续只作追溯，不回写成新版本验收结果。
+2026-10-13 用户清理旧规划；上述记录及旧三节点/#44/#49/#50只作追溯，不进入当前队列，不自动恢复或复用编号。当前仅[任务 #91](../../spec/tui-http-client.spec.md)，#44 实现删除待实施，原未验不标通过。

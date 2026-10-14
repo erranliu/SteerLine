@@ -1,5 +1,9 @@
 # Spec：保留资源人工处置与精简命令入口
 
+2026-10-14 用户修订：任一已绑定候选 PR 核验已合并即可提交唯一交付并将 Task 转为 closed；其他候选已合并/状态未知或阶段推进不阻塞该候选交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。下文“所有候选 PR 可核实且只有一个合并”以及 closed 后迟到合并监控的历史要求不再适用；当前规则见[数据模型](../product-design/data-model.md#人工候选实验)，验证见[专属验收](../acceptance/candidate-first-merged-close.md)。
+
+2026-10-13 用户修订：完整移除单候选放弃功能（控制台、CLI、API、服务端及专用状态字段）；任务级丢弃和唯一交付保留。控制台任务提示只显示中文状态，并增加全部执行候选数量列。下文涉及单候选放弃或旧列表列布局的历史要求不再适用；当前操作以[执行控制台](../product-design/execution-console.md)为准。
+
 目标：`PRODUCT-SIMPLIFICATION`；批次：3。状态：实现、质量审计及最小验证完成，交付见PR #238，未分配 Task ID；本批[实施 Plan](product-simplification-03-resources-cli.plan.md)、[独立实现 PR #238](https://github.com/erranliu/SteerLine/pull/238)。依据：2026-10-07 用户要求编写审计后的三批规格，覆盖修订后的取舍 3、8。
 
 参考源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：[第二批](product-simplification-02-configuration.spec.md)已通过[PR #236](https://github.com/erranliu/SteerLine/pull/236)合入；实际实施基线记录前两批合入后的提交。遵守 [第一批](product-simplification-01-console.spec.md)“目标与共同边界”。

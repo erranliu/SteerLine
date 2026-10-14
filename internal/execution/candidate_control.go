@@ -17,42 +17,29 @@ func (s *Service) processCandidateControl(ctx context.Context, req productapi.Co
 		s.controlSeen = map[string]string{}
 	}
 	commands := s.commandService(s.Config.identity)
-	result := s.baseReceipt(req, digest, "applied", "applied", "candidate left the experiment; worker stop is recorded separately")
+	result := s.baseReceipt(req, digest, "applied", "applied", "candidate start accepted")
 	at := now()
 	result.AcceptedAt = &at
-	if req.Action == "start_candidate" {
-		profileID := payload.ExecutionProfileID
-		if profileID == "" {
-			if s.runtime.Profiles.HasMultipleProfiles() {
-				return s.rejectControl(req, digest, "invalid_request", errors.New("candidate start requires a profile selection"))
-			}
-			profileID = s.runtime.Profiles.DefaultProfileID()
+	profileID := payload.ExecutionProfileID
+	if profileID == "" {
+		if s.runtime.Profiles.HasMultipleProfiles() {
+			return s.rejectControl(req, digest, "invalid_request", errors.New("candidate start requires a profile selection"))
 		}
-		config, profile, err := s.runtime.Profiles.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest)
-		if err != nil {
-			return s.rejectControl(req, digest, "stale_profile", err)
-		}
-		// The persisted request owns the candidate ID; request replays reuse it.
-		runID := req.RequestID
-		receipt, err := commands.StartNativeCandidate(ctx, config, TaskClaimOptions{TaskID: payload.TaskID, RequestID: req.RequestID, WorkflowRunID: runID, ExpectedTaskVersion: payload.ExpectedTaskVersion, ExpectedGraphRevision: payload.ExpectedGraphRevision, ExpectedAuthorityVersion: req.ExpectedControlRevision, RequestedBy: req.RequestedBy, ExecutionProfile: &profile, ServiceInstanceID: req.InstanceID, controlRequestDigest: digest})
-		if err != nil {
-			return s.rejectControl(req, digest, controlFailureCode(err), err)
-		}
-		result.Status, result.Code, result.Message = "applying", "candidate_reserved", "candidate reserved; original worker start awaits its persisted identity"
-		result.RunID, result.AttemptID = receipt.WorkflowRunID, receipt.AttemptID
-	} else {
-		receipt, err := commands.AbandonNativeCandidate(ctx, s.Config, CandidateAbandonOptions{TaskID: payload.TaskID, WorkflowRunID: payload.WorkflowRunID, RequestID: req.RequestID, ExpectedTaskVersion: payload.ExpectedTaskVersion, ExpectedCandidateVersion: payload.ExpectedCandidateVersion, RequestedBy: req.RequestedBy, Reason: payload.Reason, ControlRequestDigest: digest})
-		if err != nil {
-			return s.rejectControl(req, digest, controlFailureCode(err), err)
-		}
-		result.RunID = receipt.WorkflowRunID
-		if receipt.Status == "pending_verification" {
-			result.Status, result.Code, result.Message = "applying", receipt.Code, receipt.Message
-		}
-		if receipt.Status == "rejected" {
-			result.Status, result.Code, result.Message = "rejected", receipt.Code, receipt.Message
-		}
+		profileID = s.runtime.Profiles.DefaultProfileID()
 	}
+	config, profile, err := s.runtime.Profiles.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest)
+	if err != nil {
+		return s.rejectControl(req, digest, "stale_profile", err)
+	}
+	// The persisted request owns the candidate ID; request replays reuse it.
+	runID := req.RequestID
+	receipt, err := commands.StartNativeCandidate(ctx, config, TaskClaimOptions{TaskID: payload.TaskID, RequestID: req.RequestID, WorkflowRunID: runID, ExpectedTaskVersion: payload.ExpectedTaskVersion, ExpectedGraphRevision: payload.ExpectedGraphRevision, ExpectedAuthorityVersion: req.ExpectedControlRevision, RequestedBy: req.RequestedBy, ExecutionProfile: &profile, ServiceInstanceID: req.InstanceID, controlRequestDigest: digest})
+	if err != nil {
+		return s.rejectControl(req, digest, controlFailureCode(err), err)
+	}
+	result.Status, result.Code, result.Message = "applying", "candidate_reserved", "candidate reserved; original worker start awaits its persisted identity"
+	result.RunID, result.AttemptID = receipt.WorkflowRunID, receipt.AttemptID
+
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
@@ -77,7 +64,7 @@ func (s *Service) replayTaskControl(ctx context.Context, req productapi.ControlR
 		return false, nil
 	}
 	old, found, err := s.commandStore.LookupCommand(ctx, s.Config.identity, req.RequestID)
-	if err != nil || !found || old.Kind != "claim_task" && old.Kind != "start_candidate" && old.Kind != "abandon_candidate" {
+	if err != nil || !found || old.Kind != "claim_task" && old.Kind != "start_candidate" {
 		return false, err
 	}
 	var binding struct {
@@ -92,13 +79,6 @@ func (s *Service) replayTaskControl(ctx context.Context, req productapi.ControlR
 	}
 	if binding.Digest != digest || action != req.Action {
 		return true, s.rejectControl(req, digest, "idempotency_conflict", errors.New("original task control request content changed"))
-	}
-	if old.Kind == "abandon_candidate" {
-		payload, err := DecodeControlPayload(req)
-		if err != nil {
-			return true, err
-		}
-		return true, s.processCandidateControl(ctx, req, payload, digest)
 	}
 	if old.Status != "accepted" {
 		return true, nativeErr("outcome_unknown", "original start command has no committed reservation")
@@ -139,7 +119,7 @@ func (s *Service) pollTaskControlReceipts(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		if receipt.Status != "applying" || receipt.Action != "start_task" && receipt.Action != "start_candidate" && receipt.Action != "abandon_candidate" {
+		if receipt.Status != "applying" || receipt.Action != "start_task" && receipt.Action != "start_candidate" {
 			continue
 		}
 		req, err := s.host.ReadControlRequest(id)
@@ -148,17 +128,6 @@ func (s *Service) pollTaskControlReceipts(ctx context.Context) error {
 		}
 		if req.RequestID != id || s.host.ControlRequestDigest(id) != receipt.RequestDigest {
 			return errors.New("task control request archive changed after admission")
-		}
-		if req.Action == "abandon_candidate" {
-			p, err := DecodeControlPayload(req)
-			if err != nil {
-				return err
-			}
-			// This is read-only PR verification followed by the same business CAS.
-			if err := s.processCandidateControl(ctx, req, p, receipt.RequestDigest); err != nil {
-				return err
-			}
-			continue
 		}
 		run := s.find(receipt.RunID)
 		if run == nil {

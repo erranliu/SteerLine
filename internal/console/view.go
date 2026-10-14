@@ -223,7 +223,7 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	} else if candidateBusinessOpen(run) && run.WorkflowStatus == "waiting_input" {
 		lines = append(lines, "当前问题尚未同步，不能提交答案。")
 	}
-	if run.Abandonment != nil || run.TaskStatus == "discarded" || run.TaskStatus == "closed" {
+	if run.TaskStatus == "discarded" || run.TaskStatus == "closed" {
 		lines = append(lines, "资源：保留，需人工处置（未确认当前存在）")
 	}
 	lines = append(lines, "采样于 "+sampleTime(state.snapshot))
@@ -343,7 +343,7 @@ func renderActionLines(state projectState, taskID string) []string {
 	lines := []string{"", "本任务操作回执"}
 	for _, action := range visible {
 		lines = append(lines, safeTerminalText(actionStatusLabel(action.Status))+" · "+safeTerminalText(action.Message))
-		if action.Action != "start_candidate" && action.Action != "abandon_candidate" && action.Action != "answer_decision" && action.EnvironmentTarget == nil {
+		if action.Action != "start_candidate" && action.Action != "answer_decision" && action.EnvironmentTarget == nil {
 			continue
 		}
 		target := action.RunID
@@ -355,7 +355,7 @@ func renderActionLines(state projectState, taskID string) []string {
 		}
 		lines = append(lines, safeTerminalText(action.Action+" · request "+action.RequestID+" · workflow_run_id "+displayDash(target)+" · 实例 "+action.TargetInstance))
 		if action.Payload.ExpectedTaskVersion != 0 {
-			lines = append(lines, fmt.Sprintf("Task版本 %d · 候选版本 %d · 冻结方案 %s", action.Payload.ExpectedTaskVersion, action.Payload.ExpectedCandidateVersion, safeTerminalText(displayDash(action.Payload.ExecutionProfileID))))
+			lines = append(lines, fmt.Sprintf("Task版本 %d · 冻结方案 %s", action.Payload.ExpectedTaskVersion, safeTerminalText(displayDash(action.Payload.ExecutionProfileID))))
 		}
 	}
 	return lines
@@ -380,7 +380,7 @@ func actionStatusLabel(status string) string {
 	case "failed":
 
 		return "操作失败"
-	case "indeterminate":
+	case "pending_verification", "indeterminate":
 
 		return "结果待确认"
 	default:
@@ -435,7 +435,7 @@ const timeLayout = "2006-01-02 15:04:05"
 
 func renderEmptySelection(state projectState) []string {
 	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
-		lines := []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
+		lines := []string{"HTTP 服务离线 · 仅显示本窗口最后观察与草稿", "重连后刷新；离线不可查询新历史或提交业务动作", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
 		return append(lines, runtimeIdentityLines(state.ref)...)
 	}
 	if state.snapshot.Connection.Diagnostic != "" {
@@ -616,9 +616,6 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if row != nil && row.run != nil && row.run.TaskStatus == "discarded" {
 		return "Task 已丢弃；不再反馈"
 	}
-	if row != nil && row.run != nil && row.run.Abandonment != nil {
-		return "候选已退出实验；不再反馈"
-	}
 	if row == nil || row.run == nil || row.run.Decision == nil || row.run.Decision.Status != "pending" {
 
 		return "当前没有待回答的问题"
@@ -632,7 +629,7 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 
 func decisionAnswerStatusLines(state projectState, row *consoleRow) []string {
 	reason := decisionAnswerAvailability(state, row)
-	if row != nil && row.run != nil && row.run.Abandonment == nil && row.run.TaskStatus != "discarded" && row.run.EnvironmentBlocker != nil {
+	if row != nil && row.run != nil && row.run.TaskStatus != "discarded" && row.run.EnvironmentBlocker != nil {
 		return []string{"a 编辑本地草稿 · 发送被环境阻断：" + safeTerminalText(reason), "解除阻断后仍需人重新提交；没有自动补投队列。"}
 	}
 	if strings.HasPrefix(reason, "提交后") {
@@ -776,7 +773,7 @@ func renderFooter(m Model, state projectState) string {
 }
 
 func renderHelp(state projectState) []string {
-	return []string{"快捷键", "←/→ 切换项目 · Tab 列表/选项/输入", "↑/↓ 或 PgUp/PgDn 选择/滚动", "Enter 到右下或当前问题 · d 完整详情 · Esc 返回", "F6/F7（或 { / }）切换候选 · b 新增 · z 退出实验", "s 选择方案（Enter 明确确认开始）", "a 右下原地回复 · Enter 换行 · F2 明确提交 · F8 完整背景/身份", "f 最终回复 · [ / ] 历史业务轮次", "v 历史决策 · u 右下只读核验（r 重读/F8 全文）", "Ctrl+N 查看原执行会话（Codex CLI / Orca，本机及远端）", "Ctrl+E 重新检查环境 · Ctrl+O 原终端（需能力）", "1 全部 · 2 Ready · 3 进行中 · 4 待决策 · 5 待合并 · 6 需处理 · 7 历史 · 8 阻塞", "m 派发模式 · x 停止服务", "q 只退出控制台；服务继续运行"}
+	return []string{"快捷键", "←/→ 切换项目 · Tab 列表/选项/输入", "↑/↓ 或 PgUp/PgDn 选择/滚动", "Enter 到右下或当前问题 · d 完整详情 · Esc 返回", "F6/F7（或 { / }）切换候选 · b 新增", "s 选择方案（Enter 明确确认开始）", "a 右下原地回复 · Enter 换行 · F2 明确提交 · F8 完整背景/身份", "f 最终回复 · [ / ] 历史业务轮次", "v 历史决策 · u 右下只读核验（r 重读/F8 全文）", "Ctrl+N 查看原执行会话（Codex CLI / Orca，本机及远端）", "Ctrl+E 重新检查环境 · Ctrl+O 原终端（需能力）", "1 全部 · 2 Ready · 3 进行中 · 4 待决策 · 5 待合并 · 6 需处理 · 7 历史 · 8 阻塞", "m 派发模式 · x 停止服务", "q 只退出控制台；服务继续运行"}
 }
 
 func joinLines(left, right []string, leftWidth, height int) string {

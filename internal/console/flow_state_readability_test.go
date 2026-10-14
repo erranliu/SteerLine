@@ -71,7 +71,7 @@ func TestTaskListUsesBlockerFactsAndAlignedSingleRows(t *testing.T) {
 		t.Fatal("open or unknown state inferred blocked")
 	}
 	for _, width := range []int{26, 38, 60} {
-		idWidth, statusWidth := taskListWidths(width)
+		idWidth, statusWidth, countWidth := taskListWidths(width)
 		for _, row := range rows {
 			lines := compactTaskRow(m, s, row, width)
 			if len(lines) != 1 || lipgloss.Width(lines[0]) > width-2 {
@@ -85,7 +85,7 @@ func TestTaskListUsesBlockerFactsAndAlignedSingleRows(t *testing.T) {
 				if !ok && row.taskID != "86" {
 					t.Fatal("title disappeared", lines)
 				}
-				if ok && lipgloss.Width(prefix) != idWidth+statusWidth+2 {
+				if ok && lipgloss.Width(prefix) != idWidth+statusWidth+countWidth+3 {
 					t.Fatal("title column drifted", lines)
 				}
 			}
@@ -118,6 +118,48 @@ func TestTaskListUsesBlockerFactsAndAlignedSingleRows(t *testing.T) {
 	active.run = &api.CandidateSummary{TaskStatus: "in_progress", WorkflowStatus: "running"}
 	if taskRowBlocked(active) || len(taskBlockerLines(active)) != 0 {
 		t.Fatal("old admission blockers replaced an active worker state")
+	}
+}
+
+func TestTaskHintCombinesAllCandidates(t *testing.T) {
+	for _, tc := range []struct {
+		name, stage, workflow, execution, task, want string
+	}{
+		{"merge", "await_merge", "waiting_external", "succeeded", "in_progress", "等待合并"},
+		{"other external wait", "publish", "waiting_external", "succeeded", "in_progress", "等待外部"},
+		{"decision", "implement.execute", "waiting_input", "succeeded", "in_progress", "待决策"},
+		{"running", "implement.execute", "running", "running", "in_progress", "进行中"},
+		{"queued", "implement.execute", "queued", "pending", "in_progress", "启动中"},
+		{"blocked", "publish", "blocked", "succeeded", "in_progress", "阻塞"},
+		{"failed", "await_merge", "waiting_external", "failed", "in_progress", "失败"},
+		{"unknown", "await_merge", "waiting_external", "unknown", "in_progress", "待核验"},
+		{"closed history", "await_merge", "waiting_external", "failed", "closed", "已关闭"},
+		{"discarded", "await_merge", "waiting_external", "succeeded", "discarded", "已丢弃"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, _ := ccFixture(t, 1)
+			run := m.selectedRow(0).run
+			run.WorkflowStage, run.WorkflowStatus, run.ExecutionStatus, run.TaskStatus = tc.stage, tc.workflow, tc.execution, tc.task
+			run.Decision = nil
+			if got := taskRowHint(m, m.projects[0], *m.selectedRow(0)); got != tc.want {
+				t.Fatalf("task hint = %q, want %q", got, tc.want)
+			}
+		})
+	}
+	m, _ := ccFixture(t, 2)
+	runs := m.projects[0].snapshot.Observation.Page.Runs
+	runs[0].WorkflowStatus, runs[0].ExecutionStatus, runs[0].Decision = "blocked", "failed", nil
+	runs[1].WorkflowStage, runs[1].WorkflowStatus, runs[1].ExecutionStatus = "await_merge", "waiting_external", "succeeded"
+	for _, selected := range runs {
+		m.projects[0].candidates["38"] = selected.RunID
+		if got := taskRowHint(m, m.projects[0], *m.selectedRow(0)); got != "等待合并" {
+			t.Fatal("selected or failed candidate hid a sibling ready for merge", selected.RunID, got)
+		}
+	}
+	runs[1].PR.QueryError = new(string)
+	*runs[1].PR.QueryError = "provider unavailable"
+	if got := taskRowHint(m, m.projects[0], *m.selectedRow(0)); got != "待核验" {
+		t.Fatal("unverified PR looked ready for merge", got)
 	}
 }
 

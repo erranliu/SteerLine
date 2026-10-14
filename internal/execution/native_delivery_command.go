@@ -107,21 +107,11 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if err != nil {
 		return executionmodel.TaskDeliveryReceipt{}, err
 	}
-	known, verificationErr := verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, snapshot, taskID, verifier, workflowRunID)
-	if err := verificationErr; err != nil {
-		if isNativeErrorCode(err, "inconsistent_delivery") {
-			_ = c.recordCandidateMergeConflict(ctx, snapshot, taskID, workflowRunID, err.Error(), known...)
-		}
-		return executionmodel.TaskDeliveryReceipt{}, err
+	info, err := verifier.Query(ctx, prURL)
+	if err != nil {
+		return executionmodel.TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "selected candidate PR could not be verified: "+err.Error())
 	}
-	var info executionmodel.PRInfo
-	for _, pr := range known {
-		if pr.WorkflowID == workflowRunID && pr.URL == prURL {
-			info = pr.Info
-			break
-		}
-	}
-	if info.State == "unknown" {
+	if info.State != "open" && info.State != "closed_unmerged" && info.State != "merged" {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR provider returned an unknown merge state")
 	} else if !info.Merged || info.State != "merged" {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("task_not_ready", "selected PR does not have complete verified merged evidence")
@@ -142,7 +132,8 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		evidence := executionmodel.TaskDeliveryEvidence{PRInstance: strings.TrimSuffix(config.PR.BaseURL, "/"), URL: info.URL, Repository: info.Repository, PRNumber: int64(number), BaseBranch: info.BaseBranch, State: info.State, Merged: true, MergedAt: *info.MergedAt, MergeCommit: *info.MergeCommit}
 		evidenceBytes, _ := json.Marshal(evidence)
 		record := executionmodel.TaskDeliveryRecord{ProjectIdentity: c.Project, TaskID: taskID, SelectedWorkflowRunID: workflowRunID, PRInstance: evidence.PRInstance, PRRepository: evidence.Repository, PRNumber: evidence.PRNumber, PRURL: evidence.URL, MergeCommit: evidence.MergeCommit, MergedAt: evidence.MergedAt, RecordedAt: time.Now().UTC(), Evidence: evidenceBytes}
-		return c.commitNativeDelivery(ctx, sqlite, graph.Authority.AuthorityVersion, graph.Authority.GraphRevision, task, workflow, execution, contract, prURL, record, executionmodel.CandidateBindings(snapshot.WorkflowRuns, snapshot.Executions, taskID))
+		binding := executionmodel.CandidateBindings([]executionmodel.WorkflowRunRecord{workflow}, []executionmodel.ExecutionRecord{execution}, taskID)
+		return c.commitNativeDelivery(ctx, sqlite, graph.Authority.AuthorityVersion, graph.Authority.GraphRevision, task, workflow, execution, contract, prURL, record, binding)
 	}
 }
 
@@ -240,7 +231,6 @@ func validateNativeDeliveryGates(record taskmodel.TaskRecord, contract taskmodel
 		PRURL:               workflow.PRURL,
 		SessionID:           sessionID,
 		WorkspaceBranch:     execution.Workspace.Branch,
-		Status:              workflow.Status, StepID: workflow.StepID,
 	}, executionmodel.Version)
 	if err != nil {
 		var e *executionmodel.ResultError

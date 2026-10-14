@@ -8,6 +8,9 @@ import (
 )
 
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Any new navigation/input supersedes the pending open intent. A late HTTP
+	// reply must not reopen an answer after Escape, help, selection or quit.
+	m.answerCheck = nil
 	if key.String() == "ctrl+n" && m.confirm == nil && m.profileChoice == nil && !m.help {
 		return m.openNativeSession()
 	}
@@ -85,7 +88,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		if m.projects[m.selected].focus == 0 {
 			switch key.String() {
-			case "s", "b", "z", "u", "x":
+			case "s", "b", "u", "x":
 				if !m.leaveAnswerSaved() {
 					return m, nil
 				}
@@ -128,8 +131,6 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "b":
 		m.detailExpanded = false
 		return m.startAdditionalCandidate()
-	case "z":
-		return m.prepareCandidateAbandon()
 	case "left", "h":
 		m.detailExpanded = false
 		return m.moveProject(-1)
@@ -450,25 +451,6 @@ func (m Model) handleConfirm(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !m.operationVisible() {
 			m.status = "窗口过小，请调整后操作；未确认"
 			return m, nil
-		}
-		if confirm.action == "abandon_candidate" {
-			s, rt := m.readyControlTarget()
-			row := m.selectedRow(m.selected)
-			if rt == nil {
-				return m, nil
-			}
-			if s.ref.Key != confirm.projectKey || rt.Service.InstanceID != confirm.instance || rt.Control.Revision != confirm.revision || row == nil || row.run == nil || row.run.RunID != confirm.runID || row.run.ControlRevision != confirm.payload.ExpectedCandidateVersion || row.native == nil || row.native.Version != confirm.payload.ExpectedTaskVersion {
-				m.confirm = nil
-				m.status = "原候选或版本已变化；未提交放弃"
-				return m, nil
-			}
-			if reason := candidateAbandonReason(*s, row); reason != "" {
-				m.confirm = nil
-				m.status = reason
-				return m, nil
-			}
-			m.confirm = nil
-			return m.submitCandidateAction(confirm.action, confirm.payload, confirm.requestID, confirm.instance, confirm.revision)
 		}
 		m.confirm = nil
 		return m.beginAction(confirm.projectKey, confirm.instance, confirm.revision, confirm.action, confirm.taskID, confirm.requestID)

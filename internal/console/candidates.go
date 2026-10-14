@@ -134,51 +134,6 @@ func (m Model) startAdditionalCandidate() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func candidateAbandonReason(s projectState, row *consoleRow) string {
-	if row == nil || row.run == nil || row.native == nil {
-
-		return "缺少精确候选/Task版本"
-	}
-	if s.snapshot.NativeTaskError != "" || s.snapshot.HistoryError != "" {
-		return "当前候选/Task版本查询不可用；请刷新"
-	}
-	if row.run.Abandonment != nil || row.run.WorkflowStatus == "abandoned" {
-
-		return "候选已退出实验"
-	}
-	if row.run.TaskStatus != "in_progress" || row.run.WorkflowStatus == "completed" {
-		return "任务已完成，不能放弃"
-	}
-	for _, r := range candidateRuns(s, row.taskID) {
-		if r.PR.State == "merged" {
-			return "已知 PR 已合并，禁止放弃"
-		}
-	}
-	return ""
-}
-
-func (m Model) prepareCandidateAbandon() (tea.Model, tea.Cmd) {
-	s, rt := m.readyControlTarget()
-	if rt == nil {
-		return m, nil
-	}
-	row := m.selectedRow(m.selected)
-	if reason := candidateAbandonReason(*s, row); reason != "" {
-		m.status = reason
-		return m, nil
-	}
-	if !hasCapability(rt, "abandon_candidate") {
-		m.status = "服务未声明 abandon_candidate 能力"
-		return m, nil
-	}
-	p := api.ControlPayload{TaskID: row.taskID, WorkflowRunID: row.run.RunID, ExpectedTaskVersion: row.native.Version, ExpectedCandidateVersion: row.run.ControlRevision, Reason: "人工方案比较：不可撤销退出实验"}
-	m.confirm = &confirmAction{projectKey: s.ref.Key, instance: rt.Service.InstanceID, revision: rt.Control.Revision, action: "abandon_candidate", taskID: row.taskID, runID: row.run.RunID, requestID: newRequestID(), payload: p, basis: candidateConfirmBasis(*s, row.run)}
-	s.focus = 1
-	s.lowerScroll = 0
-	m.leaveRecovery()
-	return m, nil
-}
-
 func (m Model) submitCandidateAction(action string, p api.ControlPayload, id, instance string, revision uint64) (tea.Model, tea.Cmd) {
 	s := &m.projects[m.selected]
 	for _, a := range s.actions {
@@ -187,7 +142,7 @@ func (m Model) submitCandidateAction(action string, p api.ControlPayload, id, in
 			return m, nil
 		}
 	}
-	a := &actionState{Payload: p, RequestID: id, Action: action, TaskID: p.TaskID, RunID: p.WorkflowRunID, TargetInstance: instance, Status: "submitting", UpdatedAt: m.clock.Now()}
+	a := &actionState{Payload: p, RequestID: id, Action: action, TaskID: p.TaskID, TargetInstance: instance, Status: "submitting", UpdatedAt: m.clock.Now()}
 	s.actions[id] = a
 	if err := m.saveProjectView(m.selected); err != nil {
 		delete(s.actions, id)
@@ -229,9 +184,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 		}
 		outcome := "参与实验"
 		loser := false
-		if r.Abandonment != nil {
-			outcome = "历史/已放弃"
-		} else if r.TaskStatus == "discarded" {
+		if r.TaskStatus == "discarded" {
 			outcome = "Task 已丢弃/保留，需人工处置"
 		} else if r.TaskStatus == "closed" {
 			outcome = "交付定位缺失/保留资源"
@@ -250,22 +203,10 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			switch {
 			case r.TaskStatus == "discarded":
 				outcome += " · 冲突：已丢弃 Task 的 PR 已合并，需人工处置"
-			case r.Abandonment != nil:
-				outcome += " · 冲突：已放弃候选 PR 已合并，需人工核实"
 			case loser:
-				outcome += " · 冲突：非交付候选 PR 已合并，保留原唯一交付"
+				outcome += " · PR 已合并"
 			case r.TaskStatus != "closed":
-				merged := 0
-				for _, candidate := range runs {
-					if candidate.PR.State == "merged" {
-						merged++
-					}
-				}
-				if merged > 1 {
-					outcome += " · 冲突：多个候选 PR 已合并，需人工处置"
-				} else {
-					outcome += " · PR 已合并，交付待核验"
-				}
+				outcome += " · PR 已合并，交付待核验"
 			}
 		}
 		elapsed := "未知"
@@ -293,11 +234,6 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 	} else {
 		lines = append(lines, "b 选择不同冻结方案新增候选")
 	}
-	if reason := candidateAbandonReason(s, row); reason != "" {
-		lines = append(lines, "z 放弃不可用："+safeTerminalText(reason))
-	} else {
-		lines = append(lines, "z 不可撤销退出实验（停止独立核实）")
-	}
 	if row.run != nil {
 		r := row.run
 		started := "未知"
@@ -305,9 +241,6 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			started = r.CandidateCreatedAt.Format("2006-01-02 15:04:05Z07:00")
 		}
 		lines = append(lines, "所选 workflow_run_id："+safeTerminalText(r.RunID), "execution/session："+safeTerminalText(r.ExecutionID+" / "+r.SessionID), fmt.Sprintf("候选版本：%d · 开始：%s", r.ControlRevision, started))
-		if r.Abandonment != nil {
-			lines = append(lines, "不可撤销退出实验；worker 停止独立核实，不再反馈。")
-		}
 		for _, url := range r.PRHistory {
 			lines = append(lines, "历史 PR："+prLink(url, url))
 		}

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -18,7 +19,7 @@ func (s *SQLiteStore) CommitTaskResult(ctx context.Context, commit storageports.
 		return storageports.ResultCommitReceipt{}, nativeErr("contract_mismatch", "result must preserve its original execution and workflow identity")
 	}
 	if input.ExpectedSetVersion == "" {
-		return storageports.ResultCommitReceipt{}, nativeErr("merge_state_unknown", "delivery requires its verified candidate and PR binding set")
+		return storageports.ResultCommitReceipt{}, nativeErr("merge_state_unknown", "delivery requires its verified selected candidate binding")
 	}
 	var receipt taskmodel.ResultReceipt
 	var delivery executionmodel.TaskDeliveryRecord
@@ -76,9 +77,6 @@ func (s *SQLiteStore) CommitTaskResult(ctx context.Context, commit storageports.
 		if err != nil {
 			return nativeErr("immutable_task", "selected workflow run changed during PR verification")
 		}
-		if currentWorkflow.Abandonment != nil {
-			return nativeErr("immutable_task", "abandoned candidate cannot deliver")
-		}
 		currentExecution, err := tx.Execution(ctx, input.ProjectIdentity, commit.Execution.ExecutionID, commit.Workflow.WorkflowRunID)
 		if err != nil {
 			return nativeErr("inconsistent_delivery", "selected execution changed during PR verification")
@@ -103,8 +101,17 @@ func (s *SQLiteStore) CommitTaskResult(ctx context.Context, commit storageports.
 		if err != nil {
 			return err
 		}
-		if executionmodel.CandidateBindings(currentSnapshot.WorkflowRuns, currentSnapshot.Executions, input.TaskID) != input.ExpectedSetVersion {
-			return nativeErr("stale_version", "candidate eligibility or known PR set changed during verification")
+		binding := executionmodel.CandidateBindings([]executionmodel.WorkflowRunRecord{currentWorkflow}, []executionmodel.ExecutionRecord{currentExecution}, input.TaskID)
+		if binding != input.ExpectedSetVersion {
+			return nativeErr("stale_version", "selected candidate binding changed during verification")
+		}
+		for _, sibling := range currentSnapshot.WorkflowRuns {
+			if sibling.WorkflowRunID == currentWorkflow.WorkflowRunID {
+				continue
+			}
+			if sibling.PRURL == currentPRURL || sibling.PRCandidateURL == currentPRURL || slices.Contains(sibling.PRHistory, currentPRURL) {
+				return nativeErr("inconsistent_delivery", "selected PR is bound to more than one candidate")
+			}
 		}
 		reused, err := tx.PRBindingsOnOtherTasks(ctx, input.ProjectIdentity, input.TaskID, commit.Delivery.PRURL)
 		if err != nil {
@@ -172,7 +179,7 @@ func readTaskResult(ctx context.Context, q interface {
 func mustResultJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 func validateResultGates(record taskmodel.TaskRecord, contract taskmodel.TaskContract, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord) (string, error) {
 	session, _ := executionSessionFacts(&execution)
-	url, err := executionmodel.DeliveryPR(record.TaskID, record.ContractID, contract.ContractID, contract.Digest, executionmodel.DeliveryGate{WorkflowVersion: workflow.WorkflowVersion, FlowRef: workflow.FlowRef, WorkflowTaskID: workflow.TaskID, SelectedExecutionID: workflow.SelectedResult, ExecutionID: execution.ExecutionID, ExecutionWorkflowID: execution.WorkflowRunID, WorkflowRunID: workflow.WorkflowRunID, PRURL: workflow.PRURL, SessionID: session, WorkspaceBranch: execution.Workspace.Branch, Status: workflow.Status, StepID: workflow.StepID}, executionmodel.Version)
+	url, err := executionmodel.DeliveryPR(record.TaskID, record.ContractID, contract.ContractID, contract.Digest, executionmodel.DeliveryGate{WorkflowVersion: workflow.WorkflowVersion, FlowRef: workflow.FlowRef, WorkflowTaskID: workflow.TaskID, SelectedExecutionID: workflow.SelectedResult, ExecutionID: execution.ExecutionID, ExecutionWorkflowID: execution.WorkflowRunID, WorkflowRunID: workflow.WorkflowRunID, PRURL: workflow.PRURL, SessionID: session, WorkspaceBranch: execution.Workspace.Branch}, executionmodel.Version)
 	if err != nil {
 		var e *executionmodel.ResultError
 		if errors.As(err, &e) {

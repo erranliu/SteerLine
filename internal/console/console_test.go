@@ -65,6 +65,7 @@ func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
 		Connection:      api.ServiceConnection{State: api.ConnectionConnected, CanControl: true, CanStop: true, IdentityMatched: true, Snapshot: obs},
 		Observation:     obs,
 		DecisionReasons: map[string]string{},
+		SelectedNative:  &api.TaskDetail{TaskSummary: api.TaskSummary{TaskID: "task-B", Status: "open", Version: 1}},
 		Tasks:           &api.TaskCandidates{Version: 1, InstanceID: runtime.Service.InstanceID, RepositoryIdentity: ref.Identity, QueriedAt: now, LastSuccessAt: &last, Tasks: []api.TaskCandidate{{TaskID: "task-B", Title: "Build B"}}},
 	}
 }
@@ -102,7 +103,7 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
 	m.profile = &viewProfile{dir: t.TempDir()}
 	m.projects[0].selectedKey = "task:" + run.TaskID
-	updated, cmd := m.answerSelectedDecision()
+	updated, cmd := openDecisionForTest(m)
 	m = updated.(Model)
 	if cmd != nil || m.answer == nil || m.answer.optionIndex != 10 {
 		t.Fatalf("recommended option was not only preselected: dialog=%+v cmd=%v", m.answer, cmd)
@@ -191,7 +192,7 @@ func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
 	m.projects[0].selectedKey = "task:" + run.TaskID
-	updated, _ := m.answerSelectedDecision()
+	updated, _ := openDecisionForTest(m)
 	m = updated.(Model)
 	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m.answer.note = []rune("preserve this answer")
@@ -218,7 +219,7 @@ func TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions(t *testing.T) {
 	run.WorkflowVersion, run.Backend, run.Protocol, run.Host = fixtureWorkflowVersion, "local", "local_process", "local"
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:" + run.TaskID
-	updated, cmd := m.answerSelectedDecision()
+	updated, cmd := openDecisionForTest(m)
 	m = updated.(Model)
 	if cmd != nil || m.answer == nil {
 		t.Fatalf("worker-flow decision was hidden: answer=%+v status=%q", m.answer, m.status)

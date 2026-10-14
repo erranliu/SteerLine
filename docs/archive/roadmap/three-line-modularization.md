@@ -67,7 +67,7 @@
 
 ### 二阶段主agent与规划领域
 
-二期采用[草稿与审核准入目标](../../roadmap/drafts/phase2-draft-roadmap-admission.md)：主agent维护草稿，独立审核agent检查Spec质量及是否基本不受前置变化影响。合格且可固定的内容才由SteerLine受控纳入正式roadmap；需要修改或等待前置的任务留草稿，按相关条件变化重新审核。当前 #46–#48是旧基础范围，尚未包含独立审核或成熟度门槛，实际实施前修订相应Spec/Plan并固定新任务，不能隐式把审核agent当worker加入一期。
+二期采用[草稿与审核准入目标](phase2-draft-roadmap-admission.md)：主agent维护草稿，独立审核agent检查Spec质量及是否基本不受前置变化影响。合格且可固定的内容才由SteerLine受控纳入正式roadmap；需要修改或等待前置的任务留草稿，按相关条件变化重新审核。当前 #46–#48是旧基础范围，尚未包含独立审核或成熟度门槛，实际实施前修订相应Spec/Plan并固定新任务，不能隐式把审核agent当worker加入一期。
 
 依照 [第二阶段共同约束](../../spec/phase2-constraints.md)，规划是独立业务领域。未来由 #46–#48 建立 `internal/planning/`，拥有PlanningWorkspace、Proposal、DraftFile、PlanningSession/Turn、文档版本、统一写入guard和规划Publication。本轮只明确该归属与接入点，不创建空规划包、通用插件机制或尚无消费者的规划实现。
 

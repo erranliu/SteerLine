@@ -24,7 +24,8 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	productclient "github.com/erranliu/SteerLine/internal/product/client"
+	"github.com/erranliu/SteerLine/internal/product/httpapi"
+	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -277,14 +278,30 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			}
 		}
 
-		t.Run("CM72 actual console shares product adapter and original receipt", func(t *testing.T) {
+		t.Run("CM72 actual console uses HTTP and original receipt", func(t *testing.T) {
+			heartbeat()
+			process := state.Service.ProcessIdentity
+			if process == nil {
+				t.Fatal("fixture service process identity missing")
+			}
+			endpoint, err := httpapi.Prepare(context.Background(), client, httpapi.Options{RunDir: c.RunDir, ProjectIdentity: c.Identity(), InstanceID: state.Service.InstanceID, Process: httpapi.ProcessIdentity{Kind: process.Kind, PID: process.PID, Created: process.Created, Executable: process.Executable}, Capabilities: state.Service.Capabilities})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer endpoint.Close(context.Background())
+			if err = endpoint.SetReady(state.Service.InstanceID, true, ""); err != nil {
+				t.Fatal(err)
+			}
+			if err = endpoint.Start(); err != nil {
+				t.Fatal(err)
+			}
 			refs, options, err := steerlineapp.PrepareConsole(context.Background(), configPath, "")
 			if err != nil || len(refs) != 1 || len(options.Clients) != 1 {
 				t.Fatalf("console construction: %+v / %v", refs, err)
 			}
 			tuiClient := options.Clients[refs[0].Key]
-			if _, ok := tuiClient.(*productclient.Client); !ok {
-				t.Fatal("TUI uses another client implementation")
+			if _, ok := tuiClient.(*httpclient.Console); !ok {
+				t.Fatal("TUI did not use the HTTP client")
 			}
 			cliProfile := client.Project().Presentation
 			profiles := refs[0].Presentation.Profiles

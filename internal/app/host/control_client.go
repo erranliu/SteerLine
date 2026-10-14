@@ -126,7 +126,7 @@ func SubmitControlInbox(c Config, input productapi.ControlInput) (productapi.Con
 	request := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: input.RequestID,
 		RepositoryIdentity: c.Identity(), InstanceID: input.InstanceID, Action: string(input.Action), Payload: raw,
 		RequestedBy: input.RequestedBy, CreatedAt: created, ExpiresAt: created.Add(2 * time.Minute)}
-	if input.ExpectedRevision != nil && input.Action != "stop_service" {
+	if input.ExpectedRevision != nil {
 		request.ExpectedControlRevision = *input.ExpectedRevision
 	}
 	if _, err := c.ControlValidation.DecodePayload(request); err != nil {

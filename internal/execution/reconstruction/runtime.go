@@ -192,7 +192,7 @@ func Slot(v Runtime) (bool, *string) {
 	occupied := v.Control.Operation != nil || len(v.Control.Blockers) != 0
 	var tasks []string
 	for _, run := range v.Runs {
-		waitingInput := run.Abandonment == nil && run.TaskStatus != "closed" && run.TaskStatus != "discarded" && run.WorkflowStatus == "waiting_input"
+		waitingInput := run.TaskStatus != "closed" && run.TaskStatus != "discarded" && run.WorkflowStatus == "waiting_input"
 		if run.ExecutionStatus == "unknown" || run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || waitingInput {
 			occupied = true
 			tasks = append(tasks, run.TaskID)

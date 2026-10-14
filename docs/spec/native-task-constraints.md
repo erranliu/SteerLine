@@ -1,5 +1,7 @@
 # 原生任务共同约束
 
+2026-10-14 用户修订：任一已绑定候选 PR 核验已合并即可提交唯一交付并将 Task 转为 closed；其他候选已合并/状态未知或阶段推进不阻塞该候选交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。下文“所有候选 PR 可核实且只有一个合并”以及 closed 后迟到合并监控的历史要求不再适用；当前规则见[数据模型](../product-design/data-model.md#人工候选实验)，验证见[专属验收](../acceptance/candidate-first-merged-close.md)。
+
 本文是可被独立任务 Spec 引用的共同约束，不是一份执行 Spec，不承担任务、实现计划或多个 PR 的验收清单。每个任务必须有自己的独立 Spec、独立 Plan 和一个独立实现 PR。
 
 下文约束 SteerLine 产品管理的原生 Task、中心 DAG 与业务交付。仓库开发由 roadmap-runner 直接调度 Codex，执行资格按 RoadmapGuide 与 execution-map 核对；引用本页要求保持产品语义，不要求将开发任务登记到外部中心。

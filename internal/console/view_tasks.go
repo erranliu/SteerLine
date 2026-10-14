@@ -67,7 +67,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		case !state.snapshotLoaded:
 			out = append(out, "正在读取项目快照…")
 		case snapshot.Connection.State == api.ConnectionOffline || snapshot.Connection.State == api.ConnectionNoRecord:
-			out = append(out, "服务离线；已有运行和日志仍可查看。")
+			out = append(out, "HTTP 服务离线；仅保留本窗口最后观察与草稿，不读取本地业务历史。")
 			out = append(out, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)))
 			out = append(out, "配置："+safeTerminalText(state.ref.ConfigPath))
 		case snapshot.TaskError != "":
@@ -90,8 +90,8 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		out = out[:max(0, height-1)]
 	}
 	if height-len(out) > 2 {
-		idWidth, statusWidth := taskListWidths(width)
-		out = append(out, "  "+truncate(padDisplay("ID", idWidth)+" "+padDisplay("任务提示", statusWidth)+" 标题", max(1, width-2)))
+		idWidth, statusWidth, countWidth := taskListWidths(width)
+		out = append(out, "  "+truncate(padDisplay("ID", idWidth)+" "+padDisplay("任务提示", statusWidth)+" "+padDisplay("候选数量", countWidth)+" 标题", max(1, width-2)))
 	}
 
 	available := max(1, height-len(out))
@@ -142,25 +142,25 @@ func renderRows(m Model, state projectState, width, height int) []string {
 
 func compactTaskRow(m Model, state projectState, row consoleRow, width int) []string {
 	available := max(1, width-2)
-	idWidth, statusWidth := taskListWidths(width)
+	idWidth, statusWidth, countWidth := taskListWidths(width)
 	hint := taskRowHint(m, state, row)
-	status := taskRowRawStatus(row)
-	cell := safeTerminalInlineText(hint + " · " + firstText(status, "—"))
+	cell := safeTerminalInlineText(hint)
 	if hint == "阻塞" {
 		cell = styleAlert.Render(padDisplay(truncate(cell, statusWidth), statusWidth))
 	} else {
 		cell = padDisplay(truncate(cell, statusWidth), statusWidth)
 	}
-	line := padDisplay(truncate(safeTerminalInlineText(row.taskID), idWidth), idWidth) + " " + cell + " " + safeTerminalInlineText(row.title)
+	count := padDisplay(fmt.Sprint(len(candidateRuns(state, row.taskID))), countWidth)
+	line := padDisplay(truncate(safeTerminalInlineText(row.taskID), idWidth), idWidth) + " " + cell + " " + count + " " + safeTerminalInlineText(row.title)
 	return []string{truncate(line, available)}
 }
 
-func taskListWidths(width int) (int, int) {
+func taskListWidths(width int) (int, int, int) {
 	available := max(1, width-2)
 	if available < 42 {
-		return 5, min(18, max(1, available-9))
+		return 5, min(10, max(1, available-18)), 8
 	}
-	return 8, 22
+	return 8, 10, 8
 }
 
 func taskBlockerLines(row consoleRow) []string {
@@ -218,8 +218,77 @@ func taskRowBlocked(row consoleRow) bool {
 }
 
 func taskRowHint(m Model, state projectState, row consoleRow) string {
+	status := taskRowRawStatus(row)
+	if status == "closed" || status == "completed" || status == "discarded" {
+		if label := workerLabels["task_status"][status]; label != "" {
+			return label
+		}
+		return displayTaskStatus(status)
+	}
+	if status == "in_progress" {
+		runs := candidateRuns(state, row.taskID)
+		if len(runs) == 0 && row.run != nil {
+			runs = []*api.CandidateSummary{row.run}
+		}
+		var merging, input, running, queued, external, uncertain, blocked, failed bool
+		for _, run := range runs {
+			if !candidateBusinessOpen(run) {
+				continue
+			}
+			switch {
+			case run.EnvironmentBlocker != nil, run.WorkflowStatus == "blocked", run.ExecutionStatus == "blocked":
+				blocked = true
+			case run.ExecutionStatus == "failed":
+				failed = true
+			case recoveryNeedsAttention(run), run.ExecutionStatus == "unknown", run.WorkflowStatus == "reconciling", run.Error != nil && strings.TrimSpace(*run.Error) != "", run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "":
+				uncertain = true
+			case waitingForMerge(run):
+				merging = true
+			case waitingForDecision(run):
+				input = true
+			case run.WorkflowStatus == "running", run.ExecutionStatus == "running", run.ExecutionStatus == "active":
+				running = true
+			case run.WorkflowStatus == "queued", run.ExecutionStatus == "pending":
+				queued = true
+			case run.WorkflowStatus == "waiting_external":
+				external = true
+			default:
+				uncertain = true
+			}
+		}
+		// A candidate that can still deliver takes priority over a sibling's
+		// failure. Task terminal state above always takes priority over all runs.
+		switch {
+		case merging:
+			return "等待合并"
+		case input:
+			return "待决策"
+		case running:
+			return "进行中"
+		case external:
+			return "等待外部"
+		}
+		if progress := taskStartProgress(state, row.taskID); progress != "" {
+			return progress
+		}
+		switch {
+		case queued:
+			return "启动中"
+		case uncertain:
+			return "待核验"
+		case blocked:
+			return "阻塞"
+		case failed:
+			return "失败"
+		default:
+			return "未核实"
+		}
+	}
 	if taskRowBlocked(row) {
 		return "阻塞"
+	}
+	if progress := taskStartProgress(state, row.taskID); progress != "" {
+		return progress
 	}
 	if row.kind == rowReady {
 		if valid, _ := state.client.CandidateAvailability(state.snapshot, m.clock.Now()); valid {
@@ -231,6 +300,13 @@ func taskRowHint(m Model, state projectState, row consoleRow) string {
 		return label
 	}
 	return "未核实"
+}
+
+func taskStartProgress(state projectState, taskID string) string {
+	if action := taskOperation(state, taskID); action != nil && (action.Action == "start_task" || action.Action == "start_candidate") {
+		return operationProgress(action)
+	}
+	return ""
 }
 
 func renderTaskListRow(id, title, taskStatus, executionStatus string, width int) string {
@@ -462,7 +538,7 @@ func taskNextAction(run *api.CandidateSummary) string {
 	case run == nil:
 
 		return "无"
-	case run.TaskStatus == "discarded" || run.Abandonment != nil:
+	case run.TaskStatus == "discarded":
 		if run.PR.State == "merged" {
 			return "合并冲突，需人工处置"
 		}

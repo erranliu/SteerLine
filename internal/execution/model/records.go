@@ -10,7 +10,6 @@ import (
 
 type WorkflowRunRecord struct {
 	ControlRevision  uint64                 `json:"-"`
-	Abandonment      *CandidateAbandonment  `json:"abandonment,omitempty"`
 	PRHistory        []string               `json:"pr_history,omitempty"`
 	ProjectIdentity  string                 `json:"project_identity"`
 	WorkflowRunID    string                 `json:"workflow_run_id"`
@@ -39,14 +38,6 @@ type WorkflowRunRecord struct {
 	PendingDecisions int                    `json:"pending_decisions,omitempty"`
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`
-}
-
-// Exiting the experiment is independent of process stop and resource cleanup.
-type CandidateAbandonment struct {
-	RequestID   string    `json:"request_id"`
-	RequestedBy string    `json:"requested_by"`
-	Reason      string    `json:"reason"`
-	At          time.Time `json:"at"`
 }
 
 type ExecutionRecord struct {

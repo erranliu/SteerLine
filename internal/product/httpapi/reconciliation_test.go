@@ -53,6 +53,32 @@ func saveMappedRecord(t *testing.T, server *Server, envelope CommandEnvelope, co
 	return record
 }
 
+func TestAPIStopPreservesDisplayedRevision(t *testing.T) {
+	server, _, _, control := newAPIFixture(t)
+	client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := host.Config{Repository: "C:/repo", RepositoryIdentity: "C:/repo", Remote: "origin", Branch: "main", RunDir: server.options.RunDir, TaskAuthority: "native", ControlValidation: formalControlValidation{}}
+	control.formalConfig = &config
+	envelope := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "stop_service", TargetID: "instance-a", ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
+	for _, submit := range []bool{true, false, true} {
+		var response CommandResponse
+		var err error
+		if submit {
+			response, err = client.SubmitCommand(context.Background(), envelope)
+		} else {
+			response, err = client.Command(context.Background(), envelope.RequestID)
+		}
+		if err != nil || response.ControlRequest == nil || response.ControlRequest.ExpectedControlRevision != 7 {
+			t.Fatalf("original stop revision was lost: %+v %v", response, err)
+		}
+	}
+	if control.submits != 1 {
+		t.Fatalf("original stop submitted %d times", control.submits)
+	}
+}
+
 func TestAPIAuthoritativeControlBinding(t *testing.T) {
 	cases := []struct {
 		name   string
@@ -125,14 +151,10 @@ func TestAPIAuthoritativeControlBinding(t *testing.T) {
 func TestAPIMappedControlPayloadBinding(t *testing.T) {
 	server, _, _, _ := newAPIFixture(t)
 	environment := api.HostActionTarget{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), TurnID: strings.Repeat("d", 32), BlockerID: "blocker", Version: 3}
-	for _, action := range []string{"abandon_candidate", "open_terminal", "recheck_environment", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"} {
+	for _, action := range []string{"open_terminal", "recheck_environment", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"} {
 		t.Run(action, func(t *testing.T) {
 			envelope := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: action, TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
 			switch action {
-			case "abandon_candidate":
-				envelope.TargetID = environment.RunID
-				envelope.ExpectedVersion = 3
-				envelope.Payload = json.RawMessage(`{"task_id":"8","expected_task_version":2,"reason":"original"}`)
 			case "open_terminal", "recheck_environment":
 				envelope.TargetID = environment.RunID
 				envelope.ExpectedVersion = 3
@@ -142,7 +164,6 @@ func TestAPIMappedControlPayloadBinding(t *testing.T) {
 			case "stop_service":
 				envelope.TargetID = envelope.InstanceID
 				envelope.ExpectedVersion = 0
-				envelope.ExpectedControlRevision = 0
 			}
 			input, err := server.controlInput(context.Background(), envelope, currentActor())
 			if err != nil {
@@ -159,9 +180,6 @@ func TestAPIMappedControlPayloadBinding(t *testing.T) {
 			}
 			changed := input.Payload
 			switch action {
-			case "abandon_candidate":
-				changed.ExpectedCandidateVersion++
-				changed.Reason = "different"
 			case "open_terminal", "recheck_environment":
 				target := *changed.Environment
 				target.AttemptID = strings.Repeat("e", 32)
@@ -169,7 +187,7 @@ func TestAPIMappedControlPayloadBinding(t *testing.T) {
 			case "set_dispatch_mode":
 				changed.Mode = "manual"
 			default:
-				changed.Reason = "foreign payload"
+				changed.Mode = "foreign payload"
 			}
 			request.Payload, _ = json.Marshal(changed)
 			if matchesControl(envelope, &record, request) {
