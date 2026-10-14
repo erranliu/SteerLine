@@ -22,7 +22,9 @@
 
 生命周期契约家族已有约 34 个生产、41 个测试文件消费者；核心 worker 约 5,500 行。该统计用于安排整合，不是承诺改动行数。按职责集中实施；本任务不按三个层级拆成只能交付签名或半条路径的独立任务。
 
-Rebase 核对：最新主干新增候选停止、启动保留及 Orca 项目仓库配对。候选停止/资源管理授权保持在应用侧，中层消费通用“禁止业务写入/允许原资源结算”约束；迟到回执仍补存原资源事实。Orca 仓库配对仍由 adapter 原生准备负责。G2 增加 CandidateStop/StartRetention/LifecycleEffect 回归，G3 增加仓库配对用例。
+首轮 Rebase 核对：主干 `1b7468b0` 新增候选停止、启动保留及 Orca 项目仓库配对。候选停止/资源管理授权保持在应用侧，中层消费通用“禁止业务写入/允许原资源结算”约束；迟到回执仍补存原资源事实。Orca 仓库配对仍由 adapter 原生准备负责。G2 增加 CandidateStop/StartRetention/LifecycleEffect 回归，G3 增加仓库配对用例。
+
+收尾再 Rebase 至主干 `ab814da9`（PR #309–#311）：保留 HTTP 服务端 `httpapi.Ports` 组合、命令注册表及最新执行配置/调试生成默认。其余 Worker 原生算法与三层契约未变；冲突仅合并文档内容。最新基线复验 G1/L1、两 adapter 适用性、原子提交与 closed 新 actor 用例；已执行 R1–R3 证据保留其原 source_commit/工作树差异，不改写为二次 rebase 后结果。
 
 ## 目标代码边界
 

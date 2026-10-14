@@ -70,3 +70,7 @@
 G2 关闭补验的新夹具最初分别被 PR/Git 目标不一致和缺原会话拒绝；改用既有正确 PR command fixture、原 session/policy 绑定，再通过实际 provider 查询与正式 CompleteNativeTask 提交 Delivery。未放宽产品资格守卫；最终新 actor 的 ServiceInstanceID 不同且 Ready=true，零额外查询与业务输入断言通过。
 
 最终 D1：`python scripts/check_doc_links.py` 通过（387 份 Markdown、2339 个本地链接、0 错误）；`python scripts/roadmap_task_id.py check` 通过（92 个身份文件、0 个草稿行、1 个正式行，未修改规划）；整分支 `git diff 1b7468b0 --check` 通过。变更 Go 文件统一 gofmt；不执行 Full/live/native 或安装更新。
+
+收尾再 Rebase：主干在实施期间新增 PR #309–#311，最终重放至 `ab814da9`；实现候选 `715b011f`。冲突仅文档，保留主干 HTTP Ports、命令边界及部署默认。前述报告保留各自重放前真实 source_commit，不能改写为新候选全量通过；新候选 L1＋三层边界/规则、两 adapter 适用性、原子提交及 closed 新 actor 定向复验通过：`20261014T103820.388440300Z`，source_commit=`715b011f`，运行输入 clean；固定 L1 与追加 targeted 37 项均通过、0 skip（所有组共 579 项）。重放只合并文档并接受已由主干实现的 HTTP Ports 组合，未改变 Worker 原生算法，故 R1–R3 不扩大复跑；其实际已验源码/差异保留于原报告。
+
+二次 rebase 的最终 D1：403 份 Markdown、2526 个本地链接、0 错误；编号检查 97 个身份文件、4 个草稿行、3 个正式行、next ID=97（主干新增任务，当前分支未修改规划）；`git diff origin/main --check` 通过，`go list ./...` 仍为 51 包。修正新主干对已搬迁结果解析文件的链接，保留 #94 任务状态并提示后续重核交叉调查输入。

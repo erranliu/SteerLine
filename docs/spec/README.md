@@ -26,7 +26,7 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 ## Worker 三层职责重构（普通开发规格）
 
-用户要求先生成文档，当前待实施，不自动启动任务。Workflow 管业务步骤，ReliableExecution 管通用可靠执行，ExecutionAdapter 管原生动作/证据；两条路径一起接入，保留单写提交与现有行为。初始化失败重试等新增能力单独留出，不接管安装任务 22。
+已按用户直接授权实施并完成约定自动验收；最新收尾 rebase 的复验已通过，实际版本与证据见专属验收。Workflow 管业务步骤，ReliableExecution 管通用可靠执行，ExecutionAdapter 管原生动作/证据；两条路径一起接入，保留单写提交与现有行为。初始化失败重试等新增能力单独留出，不接管安装任务 22。
 
 [Spec](worker-three-layer.spec.md) · [Plan](worker-three-layer.plan.md) · [专属验收](../acceptance/worker-three-layer.md) · [长期流程规则](../product-design/worker-lifecycle.md)。普通开发，无 Task ID，不修改 execution-map。
 

@@ -4,6 +4,8 @@
 
 [Plan](worker-three-layer.plan.md) · [专属验收](../acceptance/worker-three-layer.md) · [长期流程规则](../product-design/worker-lifecycle.md)。源码调查基线为 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`；当前聊天新增的 worker 流程文档和维护规则属于本次设计输入。实际实现开始时固定文档与源码的真实 Git 版本，不把此调查 commit 当作尚未提交文档的版本。
 
+实施收尾已将同一改动重放到主干 `ab814da9`，保留新增 HTTP Ports 接线和部署默认；初始调查/验收版本仍用于追溯，最新基线定向复验见专属验收。
+
 ## 问题与目标
 
 调查基线中的共享 worker，其准备、投递、观察、恢复、业务步骤和持久化大量集中在 `internal/execution.Service`。`workerFlowContext` 同时携带 WorkflowRun、Execution、Attempt、Config 和 RunView；`worker_lifecycle.go`、`worker_events.go`、`worker_completion.go` 与 `staged_flow.go` 相互读写业务步骤及执行状态。平台接口已有一定隔离，但不构成独立的可靠执行中层。
