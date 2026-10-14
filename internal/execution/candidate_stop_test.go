@@ -293,6 +293,14 @@ func TestCandidateStopControlReplayAndLatePreparation(t *testing.T) {
 	s.runContext, s.signalQueue = ctx, make(chan Signal, 4)
 	port := &creationCheckpointPort{}
 	input := b.LifecycleInput{Workspace: &b.WorkspaceIntent{Path: t.TempDir(), Branch: "candidate-test", BaseCommit: strings.Repeat("c", 40)}}
+	// Preparation must match the original durable workspace intent before
+	// this test can exercise late receipts on a stopped candidate.
+	for _, id := range ids[:2] {
+		run := s.find(id)
+		intent := *input.Workspace
+		s.executionRecord(run).WorkspaceIntent = &intent
+		require(t, s.commitWorker(run))
+	}
 	err := s.executeLifecycleStep(ctx, s.find(ids[0]), port, b.LifecycleCandidate{Action: b.LifecyclePrepareWorkspace, Input: input})
 	if !errors.Is(err, errLifecycleEffectPending) {
 		t.Fatal("original action did not reach dispatch", err)

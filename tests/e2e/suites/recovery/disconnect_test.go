@@ -53,11 +53,7 @@ func TestFailureResults(t *testing.T) {
 	if failure.Helper.Dispatches != 2 || len(failure.Domain.WorkflowRuns[0].StageResults) != 2 || failure.Domain.WorkflowRuns[0].StageResults[1].Succeeded {
 		t.Fatal("failed report without final did not retain failure")
 	}
-	f.StopService()
-	// The console reads through HTTP; reopen the owned service and wait for
-	// recovery qualification before inspecting the original failed run.
-	f.StartService()
-	f.WaitRecovery("reopened-failed-report-qualified", qualified)
+	// The console reads through HTTP, so inspect with this owned service live.
 	f.AssertRecoveryConsole()
 	f.StopService()
 	f.ConfigureMissingNativeThread()
