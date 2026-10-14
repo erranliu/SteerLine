@@ -2,7 +2,24 @@
 
 本表是用户确认的开发任务与依赖权威。2026-10-13 用户确认当前规划收敛到 `TUI → HTTP API → Go 后端`；随后用户直接授权当前聊天实施 #91，不启动 roadmap-runner 或新执行聊天。流程见[RoadmapGuide](RoadmapGuide.md)。
 
-当前已确认的本机链路已交付，暂无待执行任务。
+当前已确认的本机链路已交付。2026-10-14 用户确认将可并行推进的HTTP解耦任务#92、#93纳入本表；两项待执行，尚未启动实现。
+
+## 待执行任务
+
+| 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
+| --- | --- | --- | --- | --- | --- |
+| 92 | HTTP 服务端命令边界收敛 | 无未完成硬前置；复用#45/#91；与#93独立并行，公开wire/API冻结 | 待执行；用户已确认范围和并行条件 | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md) | [专属验收](../acceptance/http-command-boundary.md)：HC92-A1–A3待验收，无新增人工项；实现时补齐owner测试、定向HTTP/真实app接线及一次固定L1 |
+| 93 | HTTP 客户端原请求与停服观察解耦 | 无未完成硬前置；复用#91；与#92独立并行，新增写入仲裁仅属客户端journal | 待执行；用户已确认范围和并行条件 | [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan](../spec/http-client-request-lifecycle.plan.md) | [专属验收](../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3待验收，无新增人工项；实现时补齐跨进程journal测试、Windows观察/独立simulate及一次固定L1 |
+
+### 本批并行与开工条件
+
+#92拥有httpapi与app/execution_service_wiring.go的HTTP endpoint构造段；#93拥有httpclient私有journal/OS观察和consoleapp构造。二者互不消费对方新增实现，public API/httpcontract、httpfs格式/ACL和业务规则保持；不存在#92→#93或反向依赖。后合入者在最终候选按各自Plan复验实际TUI/HTTP应用接线，测试/调试资源按既有隔离要求安排。
+
+用户另告知Worker三层职责重构已在另一worktree实施，其约定保持公开HTTP/DTO。#92不得修改worker三层、actor/可靠性或adapter组装；共用execution_service_wiring.go只改HTTP endpoint段，必要冲突由后合入者保留两方成果并定向验证。#93不涉及该文件/业务服务。若实际发现公开签名或所属接线被改动，先重核契约/消费者；不能覆盖在途工作或消费猜测接口。当前不以三层重构完成作为两项的硬前置。
+
+本表只确认范围与调度条件，不代表已创建执行聊天/worktree。启动时固定已提交且执行工作区可读取的实际Spec/Plan commit及路径，再核对最新默认主干和真实在途修改；每项独立实现、复审、必要验证、真实PR合并及验收同步后记为实现完成。
+
+#94/#95/#96继续保留在[草稿及冲突核对](drafts/roadmap.md#与worker三层重构的冲突核对)，不纳入本批：#94/#96的规则/生命周期所有者与三层重构重叠；#95的最终交付抽取有独立收益，但actor/PR桥接与记录转换的当前接线尚在重组。三层成果进入主干后按真实剩余范围重新审计，不自动转正或将这些草稿建议变成执行前置。
 
 ## 已交付任务
 
@@ -16,7 +33,7 @@
 
 旧二阶段 #43/#46–#52 及延期 #40/#41 退出规划，编号不复用；旧三节点和页面不作为前置。WebUI、SSE、主 Agent 和远程部署不在本轮交付，原型仅参考；后续需要时重新规划，不从归档派发。
 
-启动需固定已提交的实际 Spec/Plan commit/路径，核对主干与任务状态。本次由用户直接授权实施；Spec/Plan 固定 commit `83a6cc4a7321994a55e5a9ae0f308927eb9fb1b3`，执行起点 `efd492cac9940a50966b3ccdb65d56012931d1d6`，分支 `codex/tui-http-client`。交付后登记自动验收、必要回归、独立复审和真实合并，再更新本表；TH-M1 可按 Plan 后置，不将实现完成写成全部已验。
+启动需固定已提交的实际 Spec/Plan commit/路径，核对主干与任务状态。#91当时由用户直接授权实施；其Spec/Plan 固定 commit `83a6cc4a7321994a55e5a9ae0f308927eb9fb1b3`，执行起点 `efd492cac9940a50966b3ccdb65d56012931d1d6`，分支 `codex/tui-http-client`。交付后登记自动验收、必要回归、独立复审和真实合并，再更新本表；TH-M1 可按 Plan 后置，不将实现完成写成全部已验。此历史版本不用于新任务#92/#93启动。
 
 ## 待人工验收
 

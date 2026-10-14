@@ -1,6 +1,6 @@
 # 并行开发指南
 
-> 2026-10-13 当前唯一规划任务为[#91](../spec/tui-http-client.spec.md)。旧二阶段候选/规划领域不作为当前待执行队列，功能地图的“拟议”仅说明未来边界。当前 TUI 已由 consoleapp 注入 HTTP 客户端；执行/验收状态归 execution-map。
+> 2026-10-14：[#91](../spec/tui-http-client.spec.md)已交付 TUI/HTTP 接入；[#92–#96草稿](../roadmap/drafts/roadmap.md)均保留，其中#92/#93已确认纳入execution-map待执行；#94/#95/#96因Worker三层重构交叉继续留草稿。旧二阶段候选不作为当前队列；拟议owner不代表已实现，执行/验收状态归 execution-map。
 
 本文持续维护 SteerLine 的功能划分、模块所有权、可并行条件和冲突触发点，是设计或调整 roadmap 前的阅读与检查入口。目标是提高 AI 开发的有效吞吐：让更多任务能够独立理解、实现、验证和交付，降低共享修改、等待、返工与集成成本。业务正确性、权限、原请求恢复和唯一交付是必须保持的边界，详见[整体架构](../architecture.md)。
 
@@ -39,6 +39,22 @@
 | TUI 经 HTTP 接入 / #91 当前源码 | httpapi 服务端、httpcontract/httpclient/httpfs、consoleapp 组装和 console 消费 | #45 基线已有；#91 补接口/纯客户端并换 TUI，共享接线由单一任务拥有，不等待 WebUI/SSE | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [本机客户端协议](../product-design/local-client-protocol.md)、[拟议界面](../product-design/planning-ui.md) |
 
 远端能力需独立核对目标权限、身份、观察/恢复/停止与路径所有权，不能从本机成功推定支持。
+
+## HTTP 接入后的草稿边界
+
+以下仅为当前[草稿](../roadmap/drafts/roadmap.md)导航，真实职责/契约与通过条件由各自Spec/Plan固定，不改变源码当前owner或自动生成依赖。
+
+| 草稿 | 拟议收敛及独立修改面 | 共享条件 |
+| --- | --- | --- |
+| #92 [HTTP命令](../spec/http-command-boundary.spec.md) | httpapi消费端口、同包信封登记/对账、app的HTTPendpoint段 | #93共同wire/API/httpfs只读；普通与原生查看保留各自重放规则 |
+| #93 [客户端原请求/观察](../spec/http-client-request-lifecycle.spec.md) | httpclient私有journal/本机observer与consoleapp构造 | 保留现有Client/Open和console消费接口；只在journal增加跨进程写入/终态保护，不重建连接框架 |
+| #94 [固定流程规则](../spec/development-flow-rules.spec.md) | 保留原development纯包方案供重审 | 暂不纳入；与正在实施的三层Workflow规则直接重叠，不同时建立两套owner |
+| #95 [最终交付](../spec/task-delivery-usecase.spec.md) | 保留delivery窄端口用例的剩余收益 | 暂不纳入；三层方案保留任务/PR业务桥接，但actor与记录转换正在重组，旧接线条件须重核 |
+| #96 [运行时资源](../spec/worker-runtime-ownership.spec.md) | 保留原资源/观察/在途owner及确认交接反例 | 暂不纳入；与三层ReliableExecution和actor资源组装交叉，不按旧runtime边界并行开工 |
+
+当前仅#92/#93确认可并行执行。正在实施的Worker三层重构覆盖#94流程owner并与#96生命周期/资源接线交叉，#95交付抽取需待actor/PR桥接稳定后重审；三项继续留草稿而非并行线。#92只改共享app文件的HTTP endpoint段，三层owner保留worker/adapter组装；后合入者保留双方成果并复验实际app接线。发现公共契约改变时先重核，不默认新增硬依赖。各项自行补owner反例/边界文件及最小组合验证，公共fixture/runner冻结；不另建签名基础、文档代管或集中补测任务。测试资源隔离/串行限制保持，具体命令/能力补齐与专属验收分别归各项Plan及acceptance。
+
+#92/#93须完成原入口接线和自己的验收；后合入者在实际最终候选按各自Plan复验TUI/HTTP应用接线，固定L1不代替定向组合。#94/#95/#96的旧未知发布/阶段/清理组合只保留为重审材料，不安排执行、不用三层验收自动补记通过。
 
 ## 没有独立契约文档时
 

@@ -36,9 +36,9 @@ SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改�
 
 统一使用 `host: orca`、`orca.terminal-profile` 格式 3 和 `orca_terminal_v3`。agent 是 Orca 注册的原生启动器标识，不由 SteerLine 拼接模型命令。payload 仅指定 CLI、wait_timeout 和可选 environment，不再指定仓库目录或 ID。同一执行方案可跨项目复用：没有 environment 时直接使用当前项目的仓库路径；指定 environment 时，先列出该环境中已注册的 Git 仓库，按实际路径的最后一级目录名与当前项目仓库匹配，再用唯一匹配的仓库 ID 创建工作区。匹配不使用 Orca 显示名称；没有匹配、重名或列表不完整时在创建前明确拒绝，不选择其他项目。恢复只使用原工作区创建回执，不重新按目录名匹配。
 
-每个远端执行只有一个受管 agent 终端。工作区创建时不传 prompt；上层 worker 保存与 Codex 一致的阶段提示词，不添加 SL_RESULT、base64 或 nonce 指令；下层通过 terminal send 原样投递一次，通过原请求回执、原生主代理状态及原终端完整可见回复核验本轮普通结果。accepted 与 turn_started 分开记录。主代理结束由订阅/补查询确认，可见完成行不作为执行结束信号；本轮普通原文与完整可见回复一致后才推进。配对订阅按固定 environment 读取 Orca 保存的认证。原 runtime / terminal / incarnation / worktree / branch 不符、输出裁剪、缺失输入/回复边界或未确认开始，均不证明完成，也不改投其他终端或补 Enter。
+每个远端执行只有一个受管 agent 终端。工作区创建时不传业务 prompt；上层 worker 保存与本地 Codex 一致的阶段提示词，不添加 SL_RESULT、base64 或 nonce 指令；下层通过 terminal send 原样投递一次，通过原请求回执、发送前基线及原生主代理的新结束记录/完整普通 lastAssistantMessage 核验本轮结果。accepted 与 turn_started 分开记录。working 观察可选，订阅不可用仍可独立有界补查询；不通过屏幕核验或可见完成行判定结束。当前完成证据仅支持 Codex 主代理，native outcome 缺失保持 unknown。配对订阅按固定 environment 读取 Orca 保存的认证。原 runtime / terminal / incarnation / pane / provider / worktree / branch 不符、正文可能截断、额外输入边界或未确认开始，均不证明完成，也不改投其他终端或补 Enter。见[完成补查询](../spec/orca-completion-query.spec.md)。
 
-不提供 Orca agent 专用日志、模型覆盖、完整会话全文读取、原生提问路由或强制报告只读权限。执行端仅通过 worktree show 比较提交与分支；inspection_scope=revision 不代表未提交工作区已经验证干净。业务结果仍经同一 development/v2 与 Git/PR 权威检查，发布 JSON 必须含 PR URL，必要时进入一次 publish.report。停止只关闭原终端，不把 PTY 关闭扩大为所有子进程写入者已消失。
+不提供 Orca agent 专用日志、模型覆盖、完整会话全文读取、原生提问路由或强制报告只读权限。执行端仅通过 worktree show 比较提交与分支；inspection_scope=revision 不代表未提交工作区已经验证干净。业务结果仍经同一 development/v3 与 Git/PR 权威检查，发布 JSON 必须含 PR URL，必要时进入一次 publish.report。停止只关闭原终端，不把 PTY 关闭扩大为所有子进程写入者已消失。
 
 ```json
 {
