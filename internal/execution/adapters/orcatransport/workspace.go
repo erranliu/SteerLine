@@ -44,7 +44,11 @@ func (l *Lifecycle) prepareWorkspace(ctx context.Context, r b.LifecycleRequest, 
 		if l.setup.AgentLaunchCommand == "" {
 			args = append(args, "--agent", s.Ref.Agent.Name)
 		}
-		result, callErr := l.client.MetaCall(ctx, args...)
+		creationTimeout := l.setup.CommandTimeout
+		if creationTimeout <= 0 {
+			creationTimeout = 40 * time.Second
+		}
+		result, callErr := l.client.MetaCallWithTimeout(ctx, creationTimeout, args...)
 		if callErr != nil {
 			return receipt, callErr
 		}
