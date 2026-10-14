@@ -1,12 +1,12 @@
 # Spec Worker 三层职责重构
 
-状态：已获用户授权实施（2026-10-14）；不包含安装更新或现场恢复。普通开发，不分配 Task ID，不修改 roadmap 或 execution-map。
+状态：已实施，约定自动验收完成（2026-10-14，见专属验收）；不包含安装更新或现场恢复。普通开发，不分配 Task ID，不修改 roadmap 或 execution-map。
 
 [Plan](worker-three-layer.plan.md) · [专属验收](../acceptance/worker-three-layer.md) · [长期流程规则](../product-design/worker-lifecycle.md)。源码调查基线为 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`；当前聊天新增的 worker 流程文档和维护规则属于本次设计输入。实际实现开始时固定文档与源码的真实 Git 版本，不把此调查 commit 当作尚未提交文档的版本。
 
 ## 问题与目标
 
-当前共享 worker 的准备、投递、观察、恢复、业务步骤和持久化大量集中在 `internal/execution.Service`。`workerFlowContext` 同时携带 WorkflowRun、Execution、Attempt、Config 和 RunView；`worker_lifecycle.go`、`worker_events.go`、`worker_completion.go` 与 `staged_flow.go` 相互读写业务步骤及执行状态。平台接口已有一定隔离，但不构成独立的可靠执行中层。
+调查基线中的共享 worker，其准备、投递、观察、恢复、业务步骤和持久化大量集中在 `internal/execution.Service`。`workerFlowContext` 同时携带 WorkflowRun、Execution、Attempt、Config 和 RunView；`worker_lifecycle.go`、`worker_events.go`、`worker_completion.go` 与 `staged_flow.go` 相互读写业务步骤及执行状态。平台接口已有一定隔离，但不构成独立的可靠执行中层。
 
 本次形成三层：Workflow 决定业务意图和后继；ReliableExecution 管理与业务步骤无关的执行可靠性；ExecutionAdapter 执行原生动作并提供可核实事实。本地 Codex app-server、Orca 本机和 environment 一起接入，保持当前 development/v3、原生协议、授权和交付行为。
 

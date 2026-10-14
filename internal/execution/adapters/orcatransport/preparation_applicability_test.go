@@ -13,7 +13,7 @@ func TestPreparationApplicabilityOriginalTerminal(t *testing.T) {
 		t.Run(environment, func(t *testing.T) {
 			l, f, s := fixtureOn(t, environment)
 			l.setup.AgentLaunchCommand = "original-launch"
- f.commandMode=true
+			f.commandMode = true
 			next, err := reliable.Next(context.Background(), l, s)
 			if err != nil || next.Action != b.LifecyclePrepareWorkspace {
 				t.Fatalf("workspace omitted: %+v %v", next, err)

@@ -4,7 +4,7 @@ Worker 执行域统一管理工作区准备、代理初始化、输入投递、�
 
 本文是这些规则的长期维护入口。下文“统一设计”定义后续实现应遵循的行为；[当前实现与缺口](#当前实现与缺口)区分已有能力与待补能力，不表示完整流程已经实现或验收。当前开发流程以 [PR 流程契约](../spec/worker-pr-flow.spec.md)的 `development/v3` 为准。本文不启动实现任务、不修改已冻结执行，也不改变安装现场。
 
-三层职责重构已形成待实施的 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)：先拆 Workflow、ReliableExecution 和 ExecutionAdapter，保持现有行为；初始化失败重试等新增能力另行实施。本次实现将规则归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；验收进度以专属文档为准。
+三层职责重构已按 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)完成 Workflow、ReliableExecution 和 ExecutionAdapter 拆分，保持现有行为；初始化失败重试等新增能力另行实施。规则已归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；实施证据以[专属验收](../acceptance/worker-three-layer.md)为准。
 
 ## 职责与规则归属
 

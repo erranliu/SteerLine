@@ -65,7 +65,7 @@ func (p *stageTestPort) ObserveLifecycle(context.Context, executionbackend.Lifec
 	return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, TurnEvidence: p.evidence}, nil, nil
 }
 func (p *stageTestPort) PreparationFacts(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.PreparationFacts, error) {
-	return executionbackend.PreparationFacts{Workspace:executionbackend.GateReady,Resource:executionbackend.GateNotApplicable,Session:executionbackend.GateUnverified}, nil
+	return executionbackend.PreparationFacts{Workspace: executionbackend.GateReady, Resource: executionbackend.GateNotApplicable, Session: executionbackend.GateUnverified}, nil
 }
 
 func workerStageFixture(t *testing.T, configure ...func(*Config)) (*Service, *reconstructiontypes.RunView, *stageTestPort) {

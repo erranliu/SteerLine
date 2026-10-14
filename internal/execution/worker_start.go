@@ -115,9 +115,11 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.Tas
 		return err
 	}
 	prepared := false
- if candidate.Done {
-  if fixed.execution.Workspace.Worktree==""{return errors.New("lifecycle completed without verified original workspace; no local fallback is authorized")}
-  prepared=true
+	if candidate.Done {
+		if fixed.execution.Workspace.Worktree == "" {
+			return errors.New("lifecycle completed without verified original workspace; no local fallback is authorized")
+		}
+		prepared = true
 	} else if candidate.Action == executionbackend.LifecyclePrepareWorkspace {
 		workspaceIntent := executionbackend.WorkspaceIntent{Path: input.Workspace.Path, Branch: input.Workspace.Branch, BaseCommit: input.Workspace.BaseCommit}
 		if candidate.Input.Workspace == nil || *candidate.Input.Workspace != workspaceIntent {

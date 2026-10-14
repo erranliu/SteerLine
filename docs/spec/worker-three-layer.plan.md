@@ -78,7 +78,7 @@ ReliableExecution 采用现有非阻塞 actor 节奏：读取不可变执行快�
 2. 持久化意图确认后才执行外部动作；保存失败/旧 revision/Task 终态/服务换代拒绝。外部成功提交失败只重查原操作，原资源由已有 owner 结算。
 3. 同步既有 controlled Orca worktree 响应的原 instanceId 字段，保持 create/show 同一身份；不省略产品原生身份守卫、不新增模拟开关。
 4. 更新 `directory_local.go`、`directory_orca_terminal.go`、execution_service_wiring、查询投影及 fixture/集成/driver 的构造。UI/HTTP 只消费原 DTO，不建立新恢复入口。
-5. 保留并迁移必要 commit boundary 用例，补 `TestThreeLayerAtomicCommit`：结果与下一意图一次提交、失败回滚、重放只结算一次、旧 Attempt 不能改变当前/兄弟执行。
+5. 保留并迁移必要 commit boundary 用例，补 `TestThreeLayerAtomicCommit`：结果与下一意图一次提交、失败回滚、重放只结算一次、旧 Attempt 不能改变当前/兄弟执行。另补 `TestWorkerFlowClosedDeliveryNoQueriesAfterActorRestart`：先用受控 provider 的实际查询计数验证 open 查询，再正式提交 Delivery、关闭任务，从同一 SQLite 重建新 actor 并运行 BeginActor/Initialize 和后续 poll；零新增查询/输入、唯一 Delivery 不变。
 
 ### P5 删除旧路径并交付验证
 
@@ -96,9 +96,9 @@ ReliableExecution 采用现有非阻塞 actor 节奏：读取不可变执行快�
 | --- | --- | --- | --- | --- |
 | D1 | 文档静态检查 | 当前仓库；文档完成后 | 文档一致性，不算产品自动验收 | 链接/编号/映射/差异格式通过；登记专属文档的静态检查节 |
 | G1 | L1 固定范围＋三层边界/规则定向 | Windows 隔离 fixture，无模型；P1–P3 后及最终 | TL-A01、TL-A02、TL-A07 | 包/符号/传递依赖负例有效；中层无 Workflow，Workflow 无原生知识；层内行为测试非零匹配、无失败/skip；summary.json 及用例日志登记对应项 |
-| G2 | 定向提交、反馈/恢复、业务步骤回归 | 既有独立 Git/SQLite/受控进程；P2–P4 后 | TL-A03、TL-A05、TL-A06 | 原子、未知输入/无 final、原 source、授权与重放行为保持；记录具体用例及原发送计数 |
+| G2 | 定向提交、反馈/恢复、业务步骤回归 | 既有独立 Git/SQLite/受控进程；P2–P4 后 | TL-A03、TL-A05、TL-A06 | 原子、未知输入/无 final、原 source、授权与重放行为保持；closed 后轮询及从原存储重建的新 actor 初始化/轮询零 provider 查询、零新输入；记录具体用例及原发送计数 |
 | G3 | 两 adapter 定向契约回归 | Codex 受控协议＋Orca local/environment fixture，无真机；P2/P4 后 | TL-A02、TL-A04、TL-A05 | 原生调用/参数与取证算法保持、部分 binding 不丢、未知零重发、两路接中层且无屏幕门槛；必要/跳过/不支持/未核实的能力组合有非零行为断言；登记两包用例日志 |
-| R1 | L3 controlled：delivery.basic、recovery.waiting-merge-restart | runner 独立 home/Git/SQLite/loopback provider；P4/P5 后 | TL-A03、TL-A06、TL-A07 | 正式三阶段/PR/合并/唯一交付及依赖保持；原待合并身份不重派，closed 后查询守卫保持；summary/scenario.json |
+| R1 | L3 controlled：delivery.basic、recovery.waiting-merge-restart | runner 独立 home/Git/SQLite/loopback provider；P4/P5 后 | TL-A03、TL-A06、TL-A07 | 正式三阶段/PR/合并/唯一交付及依赖保持；原待合并身份不重派，closed 后正常轮询的真实查询计数不变；summary/scenario.json |
 | R2 | L3 controlled：recovery.codex-resume、recovery.report-source-changed | 同上，受控 app-server；P4/P5 后 | TL-A03、TL-A05、TL-A06 | 原 thread 新 Attempt 和业务实施/report 路由不重复；人工成果不冒充旧 source；原子/唯一交付保持 |
 | R3 | L3 controlled：recovery.terminal-local-reconnect、recovery.terminal-environment-unknown-send | 现有 Orca 原生状态 fixture及受控 provider；P4/P5 后 | TL-A04、TL-A05、TL-A07 | local 原终端重接；environment 原请求未知仅对账，原始回复/结果一次结算，零新 terminal/Enter/输入 |
 
@@ -129,7 +129,7 @@ go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=
 
 G1 的三层负例和新包测试、G2 的组合提交测试是必需入口；不能运行零匹配后宣称通过。既有用例迁移时保留行为断言，更新真实包/测试名；实施验收前核对 G1–G3 各选定 owner 非零匹配、无失败/意外 skip。R1–R3 每个场景保持已有独立时限，不串入多个新增故障、不扩大期限；driver 如需接新内部类型只修改已有 native/evidence/driver owner。
 
-若既有 R1 尚未断言 closed 后零 PR 查询，P4 在现有 provider fixture 增加本执行的查询计数，并在 R1 检查终态后的后续 poll/重启；不新增产品统计接口。缺失某项断言时必须补相应小型 fixture/用例，不用历史结果替代本次候选验证。
+关闭后门槛分两处验证：R1 的 provider fixture 用独立追加日志记录实际查询次数，避免覆盖并发会话状态，检查终态后的正常轮询零新查询/输入；G2 用原 SQLite 正式 Delivery 事务和计数 provider，检查 closed 后轮询及从原存储重建的新 actor 的初始化/后续轮询。先验证 open 确实查询 provider，避免计数未接线的假通过。整进程启动/OS preflight 沿已有 R1/R2 服务恢复场景，不在 delivery.basic 的原时限内串入第二次整进程启动；不新增产品统计接口，不扩大任何既有场景期限。
 
 证据统一用 runner 默认临时目录或本次空的 `-out` 目录，包含 summary.json、选定用例日志、scenarios/<id>/scenario.json、必要身份/Operation/输入计数与 cleanup。在 [acceptance 自动项表](../acceptance/worker-three-layer.md#自动验收项)逐项登记实际路径、执行版本、分支及结论；一个场景可以覆盖多项。源码结构检查与原子断言均必需，集成通过不能掩盖分层失败。
 

@@ -1,7 +1,7 @@
 package execution
 
 import (
- executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/execution/reliable"
@@ -46,4 +46,6 @@ func applyReliableTurn(e *executionmodel.ExecutionRecord, value reliable.TurnSta
 	e.LastStoppedTurnID, e.Status, e.TurnNumber, e.UpdatedAt = value.LastStoppedTurnID, value.Status, value.Number, value.UpdatedAt
 }
 
-func storedTurnEvidence(v executionmodel.StageResult) executionbackend.TurnEvidence {return executionbackend.TurnEvidence{CommandID:v.CommandID,TurnID:v.TurnID,SessionID:v.SessionID,Succeeded:v.Succeeded,NativeOutcome:v.NativeOutcome,LastMessage:v.Final,FinalVerified:v.FinalVerified,FinalSource:v.FinalSource,FinalItemID:v.FinalItemID,FinalNativeSessionID:v.FinalNativeSessionID,FinalNativeTurnID:v.FinalNativeTurnID,Failure:v.Failure,FinalDiagnostic:v.FinalDiagnostic}}
+func storedTurnEvidence(v executionmodel.StageResult) executionbackend.TurnEvidence {
+	return executionbackend.TurnEvidence{CommandID: v.CommandID, TurnID: v.TurnID, SessionID: v.SessionID, Succeeded: v.Succeeded, NativeOutcome: v.NativeOutcome, LastMessage: v.Final, FinalVerified: v.FinalVerified, FinalSource: v.FinalSource, FinalItemID: v.FinalItemID, FinalNativeSessionID: v.FinalNativeSessionID, FinalNativeTurnID: v.FinalNativeTurnID, Failure: v.Failure, FinalDiagnostic: v.FinalDiagnostic}
+}
