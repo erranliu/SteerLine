@@ -14,7 +14,7 @@ import (
 func participatingCandidates(workflows []executionmodel.WorkflowRunRecord, taskID string) int {
 	count := 0
 	for _, w := range workflows {
-		if w.TaskID == taskID && w.Status != "completed" && w.Status != "abandoned" {
+		if w.TaskID == taskID && executionmodel.CandidateParticipates(w.Status) {
 			count++
 		}
 	}
@@ -79,5 +79,5 @@ func (s *Service) candidateBusinessClosed(run *reconstructiontypes.RunView) bool
 		return true
 	}
 	w := s.workflowRecord(run)
-	return w == nil || w.Status == "abandoned" || w.Status == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded"
+	return w == nil || !executionmodel.CandidateParticipates(w.Status)
 }

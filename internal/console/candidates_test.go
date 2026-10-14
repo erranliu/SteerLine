@@ -86,7 +86,7 @@ func TestCC1(t *testing.T) {
 			}
 		}
 	}
-	if !strings.Contains(text, "指标缺口") || !strings.Contains(text, "资源 active") || !strings.Contains(text, "无硬名额") {
+	if !strings.Contains(text, "指标缺口") || !strings.Contains(text, "资源 active") || !strings.Contains(text, "最多5个参与中候选") {
 		t.Fatal(text)
 	}
 	t.Log(text)
@@ -141,10 +141,10 @@ func TestCC3(t *testing.T) {
 	}
 	m, _ = ccKey(m, runeKey('b'))
 	m, duplicate := ccKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if duplicate != nil {
-		t.Fatal("duplicate published replacement request")
+	if duplicate == nil || len(m.projects[0].actions) != 2 {
+		t.Fatal("second confirmation did not create an independent candidate")
 	}
-	m, _ = ccKey(m, runeKey('}'))
+	m.projects[0].candidates["38"] = "candidate-1"
 	next, _ := m.Update(cmd())
 	m = next.(Model)
 	if c.calls != 1 || c.request.RequestID != id || m.selectedRow(0).run.RunID != "candidate-1" {
@@ -157,7 +157,7 @@ func TestCC3(t *testing.T) {
 	}
 	next, _ = m.Update(actionReceiptMsg{projectKey: "cc", identity: c.request.RepositoryIdentity, requestID: id, request: &c.request})
 	m = next.(Model)
-	if m.projects[0].actions[id].Status != "submitted" || len(m.projects[0].actions) != 1 {
+	if m.projects[0].actions[id].Status != "submitted" || len(m.projects[0].actions) != 2 {
 		t.Fatal("lost receipt replaced request")
 	}
 	next, _ = m.Update(actionReceiptMsg{projectKey: "cc", identity: c.request.RepositoryIdentity, requestID: id, receipt: &api.ControlReceipt{RequestID: id, Action: "start_candidate", InstanceID: a.TargetInstance, Status: "applied", RunID: "wrong-candidate"}})

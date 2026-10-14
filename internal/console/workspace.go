@@ -232,6 +232,9 @@ func confirmRequired(m Model, s projectState) []string {
 	if c == nil {
 		return nil
 	}
+	if c.action == "stop_candidate" {
+		return []string{"停止候选确认 · " + safeTerminalInlineText(s.ref.Name), "Task " + safeTerminalInlineText(c.taskID) + " · " + c.candidateLabel, "执行方案：" + safeTerminalInlineText(c.profile), "候选：" + safeTerminalInlineText(c.payload.RunID), fmt.Sprintf("候选版本 %d · 服务 %s", c.payload.ExpectedRunRevision, safeTerminalInlineText(c.instance)), "停止参与，保留历史和资源；当前 worker 可能继续运行。", "Enter 确认停止 · Esc/n 取消"}
+	}
 	return []string{"停止服务确认 · " + safeTerminalInlineText(s.ref.Name), "目标实例：" + safeTerminalInlineText(c.instance), "停止新派发，并等待 worker " + firstText(s.ref.Presentation.ShutdownGrace, "配置的宽限时间"), "随后按服务策略结束；工作现场保留。", "Enter 确认停止 · Esc/n 取消"}
 }
 
@@ -269,7 +272,7 @@ func taskAttention(s projectState, id string) string {
 	}
 	best, priority := "", 0
 	for _, r := range candidateRuns(s, id) {
-		if historicalFailedRun(r) {
+		if !candidateParticipating(r) {
 			continue
 		}
 		text, p := "", 0
@@ -322,6 +325,9 @@ func nextAction(m Model, s projectState, row *consoleRow) string {
 		return "查看任务前置与阻塞原因（d）"
 	}
 	r := row.run
+	if !candidateParticipating(r) {
+		return "历史只读 · 资源保留 · F6/F7 选择其他候选"
+	}
 	if r.TaskStatus == "discarded" {
 		return taskNextAction(r)
 	}
@@ -362,6 +368,9 @@ func receiptSummary(s projectState, row *consoleRow) []string {
 	var items []*actionState
 	for _, a := range s.actions {
 		run := a.RunID
+		if a.CandidateNumber > 0 && (a.Action == "start_task" || a.Action == "start_candidate") {
+			run = firstText(run, a.RequestID)
+		}
 		if a.EnvironmentTarget != nil {
 			run = a.EnvironmentTarget.RunID
 		}

@@ -72,7 +72,7 @@ func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {
 			continue
 		}
 		workflow, _ := s.workflowRecords(run)
-		if workflow == nil {
+		if workflow == nil || !executionmodel.CandidateParticipates(workflow.Status) {
 			continue
 		}
 		if workflow.WorkflowVersion != executionmodel.Version {

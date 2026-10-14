@@ -17,6 +17,9 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
+	if execution.Status == "failed" && execution.TurnNumber == 0 && execution.Process == nil && execution.SessionID == "" && !s.hasUnknownWorkerOperation(run) && !s.lifecycleEffectPending(run.RunID) {
+		return s.failReservedStart(run, reason)
+	}
 	if execution.RecoveryRequired && execution.RecoveryState == "unverified" && run.Decision != nil && run.Decision.Status == "answer_saved" {
 		send := s.operationByKey("worker-question-answer:" + execution.ExecutionID + ":" + run.Decision.ID)
 		if send == nil || send.Status == "confirmed" || send.Status == "rejected" {

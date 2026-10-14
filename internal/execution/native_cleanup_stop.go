@@ -52,7 +52,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes
 	if entry.HostManagedPermissions {
 		reconciliation = lifecycle
 	}
-	err = s.dispatchLifecycleEffect(ctx, run, reconciliation, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
+	err = s.dispatchResourceEffect(ctx, run, reconciliation, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 		handle = worker.proc
 	}
 	port := lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: handle, stopper: stopper, operation: op}
-	err = s.dispatchLifecycleEffect(ctx, r, port, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
+	err = s.dispatchResourceEffect(ctx, r, port, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}

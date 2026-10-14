@@ -43,7 +43,8 @@ func CandidateBindings(workflows []WorkflowRunRecord, executions []ExecutionReco
 }
 
 // Start safety rechecks known PR identities, not participation count or the
-// membership of PR-less siblings. Two starts sampled below five may both commit.
+// membership of PR-less siblings. Admission checks participation separately
+// inside the reservation transaction.
 func CandidatePRBindings(workflows []WorkflowRunRecord, taskID string) string {
 	known := []WorkflowRunRecord{}
 	for _, w := range workflows {

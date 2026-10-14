@@ -237,16 +237,29 @@ func TestTaskStartControlRejectsStaleDisplayedTaskVersion(t *testing.T) {
 
 func TestTaskStartControlReportsUnsupportedCapabilityInReceipt(t *testing.T) {
 	s, c := newTaskStartFixture(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.runContext, s.signalQueue = ctx, make(chan Signal, 8)
+	t.Cleanup(func() { cancel(); s.shutdown() })
+	gate := &startGate{entered: make(chan struct{}), release: make(chan struct{}), failure: &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow has no verified structured final source"}}
+	s.taskWork = slowStartWork{TaskWorkPort: s.taskWork, gate: gate}
 	request := startControlRequest(t, s, "101", "first")
-	digest := s.host.ControlRequestDigest(request.RequestID)
-	s.startChecks = map[string]productapi.ControlRequest{request.RequestID: request}
-	err := s.applyTaskStartCheck(taskStartCheckResult{request: request, digest: digest,
-		err: &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow has no verified structured final source"}})
-	require(t, err)
+	require(t, s.pollControl(ctx, cancel))
+	select {
+	case <-gate.entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("preparation did not start")
+	}
+	close(gate.release)
+	select {
+	case message := <-s.signalQueue:
+		require(t, s.HandleSignal(message))
+	case <-time.After(10 * time.Second):
+		t.Fatal("unsupported preparation did not return")
+	}
 	receipt, err := ReadControlReceipt(c, request.RequestID)
 	require(t, err)
-	if receipt.Status != "rejected" || receipt.Code != "unsupported" || len(s.domain.Executions) != 0 {
-		t.Fatalf("unsupported staged route was not exposed as a rejected capability: receipt=%+v executions=%d", receipt, len(s.domain.Executions))
+	if receipt.Status != "failed" || receipt.Code != "unsupported" || len(s.domain.Executions) != 1 || s.find(request.RequestID).WorkflowStage != "start.failed" {
+		t.Fatalf("unsupported start lost its candidate or failure receipt: receipt=%+v executions=%d", receipt, len(s.domain.Executions))
 	}
 }
 
@@ -296,6 +309,8 @@ func TestTaskStartControlRecoversReservationsWithoutReplay(t *testing.T) {
 	}
 	for _, req := range []productapi.ControlRequest{first, second} {
 		run := restarted.find(req.RequestID)
+		require(t, restarted.prepareReservedStart(ctx, run))
+		run = restarted.find(req.RequestID)
 		mcStartTurn(t, restarted, run)
 		mcFinishTurn(t, restarted, run)
 		require(t, restarted.pollTaskControlReceipts(ctx))
@@ -339,8 +354,8 @@ func TestTaskStartControlRejectsAuthorityChangedDuringPreflight(t *testing.T) {
 	}
 	r, err := ReadControlReceipt(c, req.RequestID)
 	require(t, err)
-	if r.Status != "rejected" || r.Code != "stale_revision" || len(s.domain.Executions) != 0 || ctx.Err() != nil {
-		t.Fatalf("stale preflight committed a task claim: %+v", r)
+	if r.Status != "failed" || len(s.domain.Executions) != 1 || s.find(req.RequestID).WorkflowStage != "start.failed" || ctx.Err() != nil {
+		t.Fatalf("changed authority lost its failed candidate: %+v", r)
 	}
 }
 

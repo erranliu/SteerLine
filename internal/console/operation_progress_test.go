@@ -40,7 +40,7 @@ func TestOperationProgressFromSubmissionThroughFailure(t *testing.T) {
 	updated, poll := m.Update(submit())
 	m = updated.(Model)
 	request := control.request
-	client.receipt = &api.ControlReceipt{RequestID: request.RequestID, InstanceID: request.InstanceID, Action: request.Action, Status: "applying", RunID: "original-run", Message: "service accepted the request"}
+	client.receipt = &api.ControlReceipt{RequestID: request.RequestID, InstanceID: request.InstanceID, Action: request.Action, Status: "applying", RunID: request.RequestID, Message: "service accepted the request"}
 	if poll == nil || !m.projects[0].actions[request.RequestID].InFlight || control.receipts != 0 {
 		t.Fatal("submission did not schedule the original receipt immediately")
 	}
@@ -52,7 +52,7 @@ func TestOperationProgressFromSubmissionThroughFailure(t *testing.T) {
 	if !strings.Contains(strings.Join(receiptSummary(m.projects[0], m.selectedRow(0)), "\n"), "service accepted") {
 		t.Fatal("early receipt was hidden until its candidate appeared")
 	}
-	run := &api.CandidateSummary{TaskID: "task-B", RunID: "original-run", TaskStatus: "in_progress", ExecutionStatus: "pending"}
+	run := &api.CandidateSummary{TaskID: "task-B", RunID: request.RequestID, TaskStatus: "in_progress", ExecutionStatus: "pending"}
 	snapshot.Observation.Page.Runs = []*api.CandidateSummary{run}
 	client.query.snapshot = snapshot
 	updated, _ = m.Update(refresh())

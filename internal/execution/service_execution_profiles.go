@@ -87,7 +87,8 @@ func (s *Service) executionConfigForRun(run *reconstructiontypes.RunView) (Confi
 			}
 			config.WorktreeRoot = filepath.Dir(run.WorkspaceIntent.Path)
 		}
-		if fixed.Publication.RemoteURL == "" {
+		unprepared := workflow.StartPending || !executionmodel.CandidateParticipates(workflow.Status) && run.WorkspaceIntent == nil && run.Process == nil && run.SessionID == ""
+		if fixed.Publication.RemoteURL == "" && !unprepared {
 			return Config{}, errors.New("fixed publication remote URL is missing; preserve original state")
 		}
 		if workflow.WorkflowVersion != executionmodel.Version {

@@ -33,14 +33,21 @@ func (s *Service) recordWorkerTurnStarted(run *reconstructiontypes.RunView, work
 	if len(sessionFacts) > 0 && sessionFacts[0] != "" {
 		sessionID = sessionFacts[0]
 	}
-	if err := BeginWorkerTurn(workflow, execution, sessionID, turnID); err != nil {
+	observedWorkflow := *workflow
+	if !executionmodel.CandidateParticipates(workflow.Status) {
+		observedWorkflow.Status = "queued"
+	}
+	if err := BeginWorkerTurn(&observedWorkflow, execution, sessionID, turnID); err != nil {
 		return "", err
 	}
-	if execution.Environment != nil && execution.Environment.Blocker != nil {
+	if executionmodel.CandidateParticipates(workflow.Status) {
+		*workflow = observedWorkflow
+	}
+	if executionmodel.CandidateParticipates(workflow.Status) && execution.Environment != nil && execution.Environment.Blocker != nil {
 		workflow.Status = "waiting_input"
 	}
 	execution.CurrentCommandID, execution.PendingCommandID = commandID, ""
-	if fresh {
+	if fresh && executionmodel.CandidateParticipates(workflow.Status) {
 		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
@@ -87,9 +94,9 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 	if ev.RunID != "" && ev.RunID != run.RunID || ev.AttemptID != "" && ev.AttemptID != run.AttemptID {
 		return executionmodel.ErrTurnStale
 	}
-	if s.candidateBusinessClosed(run) {
-		return s.recordRetiredWorkerEvent(run, ev)
-	}
+	participates := !s.candidateBusinessClosed(run)
+	frozen := workflow.Status == "completed"
+	advance := participates && run.TaskStatus != "closed" && run.TaskStatus != "discarded"
 	mode, err := s.workerFlowRegistration(run)
 	if err != nil {
 		return err
@@ -114,7 +121,10 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 			return executionmodel.ErrTurnStale
 		}
 	}
-	if fact.StartedTurnID != "" && fact.Kind == executionbackend.EventStarted {
+	if frozen && fact.StartedTurnID != "" && fact.StartedTurnID != execution.CurrentTurnID {
+		return executionmodel.ErrTurnStale
+	}
+	if !frozen && fact.StartedTurnID != "" && fact.Kind == executionbackend.EventStarted {
 		opID, err := s.recordWorkerTurnStarted(run, workflow, execution, fact.StartedTurnID, fact.SessionID)
 		if err != nil {
 			return err
@@ -124,7 +134,15 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 		}
 		workflow, execution = s.workflowRecords(run)
 	}
-	if fact.QuestionRoute != nil || len(fact.Questions) != 0 {
+	if !advance && (fact.QuestionRoute != nil || len(fact.Questions) != 0) {
+		if fact.QuestionRoute == nil || len(fact.Questions) == 0 {
+			return errors.New("worker question facts lack their fixed route")
+		}
+		if err := validateQuestionRouteForRun(run, execution, fact.QuestionRoute, fact.Questions, mode.QuestionCodecKey, mode.QuestionCodecVersion); err != nil {
+			return err
+		}
+	}
+	if advance && (fact.QuestionRoute != nil || len(fact.Questions) != 0) {
 		if fact.QuestionRoute == nil || len(fact.Questions) == 0 {
 			return errors.New("worker question facts lack their fixed route")
 		}
@@ -159,7 +177,7 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 		}
 		s.note(run, "steer", "decision", "pending", title, routeID, decisionMeta(run))
 	}
-	if fact.Kind == executionbackend.EventEscalation && fact.Matched && fact.SourceEventID != "" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID &&
+	if advance && fact.Kind == executionbackend.EventEscalation && fact.Matched && fact.SourceEventID != "" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID &&
 		(run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") &&
 		(execution.Environment == nil || execution.Environment.Blocker == nil && (execution.Environment.Preparation == nil || execution.Environment.Preparation.TurnID != execution.CurrentTurnID)) {
 		request := DecisionRequestFromEventFact(fact)
@@ -178,7 +196,7 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 		}
 		s.refreshRun(run)
 	}
-	if reply := fact.ToolReply; reply != nil && run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
+	if reply := fact.ToolReply; advance && reply != nil && run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
 		route := run.Decision.Request.QuestionRoute
 		sessionID, _ := executionSessionFacts(execution)
 		if reply.CallID == route.QuestionID && (reply.TurnID == "" || reply.TurnID == route.TurnID) && (reply.ThreadID == "" || reply.ThreadID == sessionID) {
@@ -245,7 +263,7 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 			}
 		}
 	}
-	if ev.Summary != "" {
+	if !frozen && ev.Summary != "" {
 		execution.LastEvent = ptr(ev.Summary)
 		s.refreshRun(run)
 	}
@@ -253,15 +271,18 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 		if err := envelope.ValidateResourceIdentity(execution.ProjectIdentity, execution.ExecutionID, execution.CurrentAttemptID, execution.Generation, execution.ConfigurationDigest); err != nil {
 			return err
 		}
+		if frozen {
+			continue
+		}
 		if err := putImplementationEnvelope(execution, envelope); err != nil {
 			return err
 		}
 	}
-	if ev.InputWait && ev.Diagnostic != "" {
+	if !frozen && ev.InputWait && ev.Diagnostic != "" {
 		execution.Error = ptr(clip("Original worker observation is unverified: "+ev.Diagnostic, 2000))
 		s.refreshRun(run)
 	}
-	if ev.DeliveryFinal && ev.DeliveryID != "" {
+	if !frozen && ev.DeliveryFinal && ev.DeliveryID != "" {
 		if execution.PendingDeliveryID != "" && execution.PendingDeliveryID != ev.DeliveryID {
 			return executionmodel.ErrTurnStale
 		}
@@ -271,15 +292,24 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 	var completionCandidate *executionbackend.LifecycleCandidate
 	// An ended turn may still lack a verified ordinary final. Preserve the
 	// stopped fact without a stage result or another input; observation continues.
-	if fact.Kind == executionbackend.EventStatus && fact.Completed && fact.Matched && fact.StartedTurnID != "" {
+	if !frozen && fact.Kind == executionbackend.EventStatus && fact.Completed && fact.Matched && fact.StartedTurnID != "" {
 		if fact.StartedTurnID != execution.CurrentTurnID {
 			return executionmodel.ErrTurnStale
 		}
 		if execution.LastStoppedTurnID != execution.CurrentTurnID {
-			if err := s.stopVerifiedWorkerTurn(run, workflow, execution, fact.StartedTurnID, "unknown", false); err != nil {
+			original := *workflow
+			observed := *workflow
+			if !participates {
+				observed.Status = "running"
+			}
+			if err := s.stopVerifiedWorkerTurn(run, &observed, execution, fact.StartedTurnID, "unknown", false); err != nil {
 				return err
 			}
-			workflow.Status, workflow.StageDiagnostic = "reconciling", "Native turn ended; original final reply is not yet verified"
+			if participates {
+				workflow.Status, workflow.StageDiagnostic = "reconciling", "Native turn ended; original final reply is not yet verified"
+			} else {
+				*workflow = original
+			}
 			s.refreshRun(run)
 		}
 	}
@@ -292,6 +322,14 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 			return executionmodel.ErrTurnStale
 		}
 		completionCandidate = &candidate
+		if !participates && !frozen {
+			execution.Summary = ptr(candidate.Input.Completion.Body)
+			execution.LastTurnOutcome = candidate.Input.Completion.Outcome
+			if execution.LastStoppedTurnID != candidate.Input.Completion.TurnID || execution.TurnEndedAt == nil {
+				execution.TurnEndedAt = ptr(now())
+			}
+			execution.Status, execution.LastStoppedTurnID = "idle", candidate.Input.Completion.TurnID
+		}
 	}
 	if ev.Activity.Kind != "" {
 		if err := s.recordConversationEvent(run, ev); err != nil {
@@ -305,6 +343,9 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 	if err := s.commitWorker(run, operationIDs...); err != nil {
 		return err
 	}
+	if !advance {
+		return nil
+	}
 	if completionCandidate != nil {
 		lifecycle, _, err := s.lifecycleForRun(run)
 		if err != nil {
@@ -317,7 +358,7 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 			return err
 		}
 	}
-	if ev.DeliveryFinal && ev.DeliveryID != "" {
+	if !frozen && ev.DeliveryFinal && ev.DeliveryID != "" {
 		return s.acknowledgeLifecycleDelivery(run, ev.DeliveryID)
 	}
 	return nil

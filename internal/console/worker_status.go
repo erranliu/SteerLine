@@ -13,8 +13,8 @@ import (
 // Labels and colors are keyed by the original field and exact value. Unknown
 // values remain visible and never acquire a guessed state or translation.
 var workerLabels = map[string]map[string]string{
-	"workflow_stage":   {"implement.execute": "实现执行", "implement.report": "实现报告", "publish": "发布", "publish.report": "发布报告", "await_merge": "等待合并", "delivered": "已交付"},
-	"workflow_status":  {"queued": "待启动", "running": "运行中", "waiting_input": "等待输入", "blocked": "阻塞", "reconciling": "对账中", "waiting_external": "等待外部结果", "completed": "已完成", "abandoned": "已丢弃"},
+	"workflow_stage":   {"start.submit": "提交启动", "start.prepare": "启动准备", "start.failed": "启动失败", "implement.execute": "实现执行", "implement.report": "实现报告", "publish": "发布", "publish.report": "发布报告", "await_merge": "等待合并", "delivered": "已交付"},
+	"workflow_status":  {"queued": "待启动", "running": "运行中", "waiting_input": "等待输入", "blocked": "阻塞", "reconciling": "对账中", "waiting_external": "等待外部结果", "completed": "已完成", "abandoned": "已停止参与"},
 	"execution_status": {"pending": "待开始", "running": "运行中", "succeeded": "成功", "failed": "失败", "unknown": "未核实", "blocked": "阻断", "completed": "已完成"},
 	"recovery_state":   {"unverified": "未核实", "interrupted": "已中断", "completed": "原轮次已结束", "live": "存活", "running": "运行中", "question": "等待原问题", "resuming": "恢复中"},
 	"task_status":      {"Ready": "可开始", "open": "未开始", "in_progress": "进行中", "closed": "已关闭", "discarded": "已丢弃"},

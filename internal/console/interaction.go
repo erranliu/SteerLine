@@ -14,6 +14,9 @@ func candidateLabel(state projectState, run *api.CandidateSummary) string {
 
 		return "未选择"
 	}
+	if run.CandidateNumber > 0 {
+		return fmt.Sprintf("P%d", run.CandidateNumber)
+	}
 	var workflows []api.WorkflowSummary
 	if state.snapshot.History != nil {
 		workflows = state.snapshot.History.WorkflowRuns
@@ -93,7 +96,7 @@ func feedbackReceiptStatus(state projectState, a *actionState) string {
 }
 
 func candidateBusinessOpen(run *api.CandidateSummary) bool {
-	return run != nil && run.TaskStatus != "closed" && run.TaskStatus != "completed" && run.TaskStatus != "discarded" && run.WorkflowStatus != "completed" && run.WorkflowStatus != "abandoned"
+	return candidateParticipating(run) && run.TaskStatus != "closed" && run.TaskStatus != "completed" && run.TaskStatus != "discarded"
 }
 
 func waitingForMerge(run *api.CandidateSummary) bool {
@@ -111,6 +114,26 @@ func waitingForDecision(run *api.CandidateSummary) bool {
 }
 
 func candidateHumanStatus(state projectState, run *api.CandidateSummary) string {
+	if run.WorkflowStatus == "abandoned" {
+		if run.CandidateStopReason == "startup_failed" || run.WorkflowStage == "start.failed" {
+			return "启动失败历史 · 资源保留"
+		}
+		return "已停止参与 · 资源保留"
+	}
+	if run.WorkflowStage == "start.failed" {
+		return "启动失败 · 历史"
+	}
+	if run.WorkflowStage == "start.prepare" {
+		return "准备中"
+	}
+	if run.WorkflowStage == "start.submit" {
+		if a := state.actions[run.RunID]; a != nil {
+			if a.Status == "applied" {
+				return "已创建 · 状态待同步"
+			}
+			return operationProgress(a)
+		}
+	}
 	if run.TaskStatus == "discarded" {
 		return "Task 已丢弃"
 	}

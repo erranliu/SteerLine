@@ -343,7 +343,7 @@ func renderActionLines(state projectState, taskID string) []string {
 	lines := []string{"", "本任务操作回执"}
 	for _, action := range visible {
 		lines = append(lines, safeTerminalText(actionStatusLabel(action.Status))+" · "+safeTerminalText(action.Message))
-		if action.Action != "start_candidate" && action.Action != "answer_decision" && action.EnvironmentTarget == nil {
+		if action.Action != "start_candidate" && action.Action != "stop_candidate" && action.Action != "answer_decision" && action.EnvironmentTarget == nil {
 			continue
 		}
 		target := action.RunID
@@ -759,6 +759,9 @@ func renderFooter(m Model, state projectState) string {
 	if row != nil && row.kind == rowReady {
 		action = "s 选方案"
 	}
+	if row != nil && row.run != nil {
+		action += " · F9 停止候选"
+	}
 	if state.recoveryActive {
 		action = "u/r 核验 · F8 报告 · Esc 动态"
 	}
@@ -773,7 +776,7 @@ func renderFooter(m Model, state projectState) string {
 }
 
 func renderHelp(state projectState) []string {
-	return []string{"快捷键", "←/→ 切换项目 · Tab 列表/选项/输入", "↑/↓ 或 PgUp/PgDn 选择/滚动", "Enter 到右下或当前问题 · d 完整详情 · Esc 返回", "F6/F7（或 { / }）切换候选 · b 新增", "s 选择方案（Enter 明确确认开始）", "a 右下原地回复 · Enter 换行 · F2 明确提交 · F8 完整背景/身份", "f 最终回复 · [ / ] 历史业务轮次", "v 历史决策 · u 右下只读核验（r 重读/F8 全文）", "Ctrl+N 查看原执行会话（Codex CLI / Orca，本机及远端）", "Ctrl+E 重新检查环境 · Ctrl+O 原终端（需能力）", "1 全部 · 2 Ready · 3 进行中 · 4 待决策 · 5 待合并 · 6 需处理 · 7 历史 · 8 阻塞", "m 派发模式 · x 停止服务", "q 只退出控制台；服务继续运行"}
+	return []string{"快捷键", "←/→ 切换项目 · Tab 列表/选项/输入", "↑/↓ 或 PgUp/PgDn 选择/滚动", "Enter 到右下或当前问题 · d 完整详情 · Esc 返回", "F6/F7（或 { / }）切换候选 · b 新增 · F9 停止参与", "s 选择方案（Enter 明确确认开始）", "a 右下原地回复 · Enter 换行 · F2 明确提交 · F8 完整背景/身份", "f 最终回复 · [ / ] 历史业务轮次", "v 历史决策 · u 右下只读核验（r 重读/F8 全文）", "Ctrl+N 查看原执行会话（Codex CLI / Orca，本机及远端）", "Ctrl+E 重新检查环境 · Ctrl+O 原终端（需能力）", "1 全部 · 2 Ready · 3 进行中 · 4 待决策 · 5 待合并 · 6 需处理 · 7 历史 · 8 阻塞", "m 派发模式 · x 停止服务", "q 只退出控制台；服务继续运行"}
 }
 
 func joinLines(left, right []string, leftWidth, height int) string {

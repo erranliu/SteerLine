@@ -21,7 +21,7 @@ import (
 
 type CandidateCommand struct {
 	Action, RequestID, TaskID, ProfileID, RunID, ExecutionID, DecisionID, Option, Note, InstanceID string
-	TaskVersion, GraphRevision, CandidateVersion, DecisionVersion, RunRevision                     uint64
+	TaskVersion, GraphRevision, ControlRevision, DecisionVersion, RunRevision                      uint64
 	AttemptID                                                                                      string
 	RecoveryVersion                                                                                uint64
 }
@@ -173,18 +173,25 @@ func MainCandidate(args []string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Control: receipt})
 	}
-	if in.Action != "start_candidate" && in.Action != "abandon_candidate" && in.Action != "start_task" {
+	if in.Action != "start_candidate" && in.Action != "stop_candidate" && in.Action != "start_task" {
 		return fmt.Errorf("unsupported candidate control")
 	}
-	payload := productapi.ControlPayload{TaskID: in.TaskID, WorkflowRunID: in.RunID, ExpectedTaskVersion: in.TaskVersion, ExpectedGraphRevision: in.GraphRevision, ExpectedCandidateVersion: in.CandidateVersion, Reason: in.Note}
-	if in.Action != "abandon_candidate" {
+	payload := productapi.ControlPayload{TaskID: in.TaskID}
+	if in.Action == "stop_candidate" {
+		payload.RunID, payload.ExpectedRunRevision = in.RunID, in.RunRevision
+	} else {
+		payload.ExpectedTaskVersion, payload.ExpectedGraphRevision = in.TaskVersion, in.GraphRevision
 		_, profile, err := c.ResolveExecutionProfile(in.ProfileID, "")
 		if err != nil {
 			return err
 		}
 		payload.ExecutionProfileID, payload.ExecutionProfileDigest = profile.ID, profile.Digest()
 	}
-	req, err := steerline.SubmitControlTargeted(hostConfig, in.Action, payload, "e2e", in.RequestID, in.InstanceID, nil)
+	var revision *uint64
+	if in.ControlRevision != 0 {
+		revision = &in.ControlRevision
+	}
+	req, err := steerline.SubmitControlTargeted(hostConfig, in.Action, payload, "e2e", in.RequestID, in.InstanceID, revision)
 	if err != nil {
 		return err
 	}
