@@ -19,6 +19,13 @@ type creationCheckpointPort struct {
 	unavailable          bool
 }
 
+func (p *creationCheckpointPort) PolicyCapabilities() b.LifecyclePolicyCapabilities {
+	return b.LifecyclePolicyCapabilities{Preparation: b.PreparationCapabilities{Workspace: b.MechanismApplicable, Resource: b.MechanismNotApplicable, Session: b.MechanismApplicable}}
+}
+func (p *creationCheckpointPort) PreparationFacts(context.Context, b.LifecycleSnapshot) (b.PreparationFacts, error) {
+	return b.PreparationFacts{Workspace: b.GateRequired, Resource: b.GateNotApplicable, Session: b.GateUnverified}, nil
+}
+
 func (p *creationCheckpointPort) Execute(_ context.Context, r b.LifecycleRequest) (b.LifecycleReceipt, b.LifecycleObserver, error) {
 	p.executes++
 	receipt := b.LifecycleReceipt{Operation: r.Operation, Disposition: b.OperationUnknown}

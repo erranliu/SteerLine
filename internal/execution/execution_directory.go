@@ -458,7 +458,7 @@ func TargetFor(c Config, directory *ExecutionDirectory) executionbackend.Executi
 }
 
 func (s *Service) workerFlowRegistration(run *reconstructiontypes.RunView) (ExecutionRegistration, error) {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return ExecutionRegistration{}, err
 	}

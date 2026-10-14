@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+var ErrTurnStale = errors.New("worker turn is no longer current")
+
 // LifecycleAction names one generic, durable side effect. Implementations may
 // choose native steps, while the center persists each candidate before calling
 // Execute and commits its receipt before asking for another candidate.
@@ -209,9 +211,7 @@ func (input LifecycleInput) Clone() LifecycleInput {
 type LifecycleSnapshot struct {
 	Ref                 ExecutionRef
 	Session             SessionContext
-	TaskTitle           string
-	WorkflowPhase       string
-	TaskDelivered       bool
+	ResourcesFinalized  bool
 	ConfigurationDigest string
 	ResourceGeneration  string
 	Implementation      []ImplementationDataEnvelope
@@ -648,8 +648,38 @@ type LifecycleObserver interface {
 	Close(context.Context) error
 }
 
-type LifecyclePlanPort interface {
-	Next(context.Context, LifecycleSnapshot) (LifecycleCandidate, error)
+// Applicability is an explicit capability declaration. Zero is unverified,
+// never an implicit opt-out or successful preparation.
+type Applicability string
+
+const (
+	MechanismApplicable    Applicability = "applicable"
+	MechanismNotApplicable Applicability = "not_applicable"
+	MechanismUnsupported   Applicability = "unsupported"
+	MechanismUnverified    Applicability = "unverified"
+)
+
+type PreparationCapabilities struct{ Workspace, Resource, Session Applicability }
+type PreparationGate string
+
+const (
+	GateReady         PreparationGate = "ready"
+	GateRequired      PreparationGate = "required"
+	GateNotApplicable PreparationGate = "not_applicable"
+	GateUnsupported   PreparationGate = "unsupported"
+	GateUnverified    PreparationGate = "unverified"
+)
+
+// Required means known original work remains; unverified never permits a
+// side-effect. Adapter declarations and native facts are checked separately.
+type PreparationFacts struct {
+	Workspace, Resource, Session PreparationGate
+	ResourceRequired             *ResourceIntent
+	Cleanup                      *CleanupInput
+}
+type LifecyclePreparationPort interface {
+	PreparationFacts(context.Context, LifecycleSnapshot) (PreparationFacts, error)
+	PolicyCapabilities() LifecyclePolicyCapabilities
 }
 
 type LifecycleProbePort interface {
@@ -724,6 +754,7 @@ type LifecycleRecoveryPort interface {
 }
 
 type LifecyclePolicyCapabilities struct {
+	Preparation             PreparationCapabilities
 	StructuredFinalEvidence bool
 	// Empty means frozen native permissions; compare report facts.
 	ReportToolPolicy          string
@@ -744,7 +775,7 @@ type LifecyclePolicyPort interface {
 type LifecyclePort interface {
 	LifecycleServicePort
 	LifecycleProbePort
-	LifecyclePlanPort
+	LifecyclePreparationPort
 	LifecycleExecutePort
 	LifecycleReconcilePort
 	LifecycleObservePort

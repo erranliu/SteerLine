@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 	"os"
 	"os/exec"
 	"testing"
@@ -29,7 +30,7 @@ func TestCD63BindingCodecIsolation(t *testing.T) {
 	t.Run("duplicate binding is an error", func(t *testing.T) {
 		copy := record
 		copy.ImplementationData = append(cloneData(record.ImplementationData), record.ImplementationData[0].Clone())
-		if _, err := (codexworker.ExecutionLifecycle{}).Next(context.Background(), snapshotFor(&copy)); err == nil {
+		if _, err := reliable.Next(context.Background(), codexworker.ExecutionLifecycle{}, snapshotFor(&copy)); err == nil {
 			t.Fatal("duplicate binding was treated as an unbound execution")
 		}
 	})
@@ -38,7 +39,7 @@ func TestCD63BindingCodecIsolation(t *testing.T) {
 		foreign, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ImplementationKey: "orca.terminal-state", ProjectID: copy.ProjectIdentity, ExecutionID: copy.ExecutionID, AttemptID: copy.CurrentAttemptID, Generation: copy.Generation, ConfigDigest: copy.ConfigurationDigest}, []byte(`{"process":{}}`))
 		require(t, err)
 		copy.ImplementationData = []executionbackend.ImplementationDataEnvelope{foreign}
-		if _, err := (codexworker.ExecutionLifecycle{}).Next(context.Background(), snapshotFor(&copy)); err == nil {
+		if _, err := reliable.Next(context.Background(), codexworker.ExecutionLifecycle{}, snapshotFor(&copy)); err == nil {
 			t.Fatal("Codex implementation accepted an Orca binding")
 		}
 	})

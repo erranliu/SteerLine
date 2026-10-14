@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -169,7 +170,7 @@ func TestAgentLaunchSingleTerminalAndReadonlyReconciliation(t *testing.T) {
 				t.Fatal(err)
 			}
 			bind(&s, r)
-			candidate, err := l.Next(context.Background(), s)
+			candidate, err := reliable.Next(context.Background(), l, s)
 			if err != nil || candidate.Action != b.LifecycleCreateResource {
 				t.Fatal(candidate, err)
 			}
@@ -234,7 +235,7 @@ func TestUnknownAgentLaunchNeverResendsOrAcceptsBusinessInput(t *testing.T) {
 		t.Fatal(err)
 	}
 	bind(&s, r)
-	candidate, _ := l.Next(context.Background(), s)
+	candidate, _ := reliable.Next(context.Background(), l, s)
 	req := request(s, candidate.Action, candidate.Input)
 	f.unknown = true
 	r, _, err = l.Execute(context.Background(), req)

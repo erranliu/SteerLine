@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -64,40 +65,22 @@ func (s *Service) lifecycleEffectPending(runID string) bool {
 	return false
 }
 
-// invokeLifecycleEffect has no business state or write port. Unknown mutations
-// are only reconciled against this same immutable request, never executed again.
-func invokeLifecycleEffect(ctx context.Context, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool) lifecycleEffectResult {
-	result := lifecycleEffectResult{request: request.Clone(), reconciled: reconcile}
-	if reconcile {
-		result.receipt, result.observer, result.err = port.Reconcile(ctx, request.Clone())
-	} else {
-		result.receipt, result.observer, result.err = port.Execute(ctx, request.Clone())
-	}
-	result.uncertain = !reconcile && (result.receipt.Disposition == executionbackend.OperationUnknown || result.err != nil && result.receipt.Disposition != executionbackend.OperationRejected)
-	result.receipt = result.receipt.Clone()
-	return result
+func actorEffect(value reliable.EffectResult) lifecycleEffectResult {
+	return lifecycleEffectResult{request: value.Request, receipt: value.Receipt, observer: value.Observer, err: value.Err, uncertain: value.Uncertain, reconciled: value.Reconciled}
 }
-
-// A failed reconciliation must not replace already observed facts with an
-// empty or unknown receipt. Merge before the actor chooses business or facts
-// processing, so a candidate stopped during reconciliation keeps them too.
+func reliableEffect(value lifecycleEffectResult) reliable.EffectResult {
+	return reliable.EffectResult{Request: value.request, Receipt: value.receipt, Observer: value.observer, Err: value.err, Uncertain: value.uncertain, Reconciled: value.reconciled}
+}
+func invokeLifecycleEffect(ctx context.Context, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool) lifecycleEffectResult {
+	return actorEffect(reliable.Invoke(ctx, port, port, request, reconcile))
+}
 func reconcileLifecycleResult(result lifecycleEffectResult, original *lifecycleEffectResult) lifecycleEffectResult {
-	if original == nil {
-		return result
+	var prior *reliable.EffectResult
+	if original != nil {
+		value := reliableEffect(*original)
+		prior = &value
 	}
-	result.uncertain = true
-	validationErr := result.receipt.ValidateFor(result.request)
-	if result.err == nil && validationErr == nil && result.receipt.Disposition != executionbackend.OperationUnknown {
-		return result
-	}
-	if result.observer != nil {
-		_ = result.observer.Close(context.Background())
-	}
-	fallback := *original
-	fallback.observer = nil // The initial observer was closed before reconciliation.
-	fallback.err = errors.Join(original.err, result.err, validationErr)
-	fallback.reconciled = true
-	return fallback
+	return actorEffect(reliable.ReconciledResult(reliableEffect(result), prior))
 }
 
 func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *reconstructiontypes.RunView, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool, apply func(*reconstructiontypes.RunView, lifecycleEffectResult) error) error {
@@ -224,16 +207,13 @@ func (s *Service) consumeLifecycleEffect(ctx context.Context, run *reconstructio
 	if s.candidateBusinessClosed(run) && !resourceManagement {
 		return s.recordLifecycleReceipt(run, result)
 	}
-	if result.uncertain && !result.reconciled {
+	if request, needed := reliable.ReconciliationRequest(reliableEffect(result)); needed {
 		if result.observer != nil {
 			_ = result.observer.Close(context.Background())
 		}
-		request := result.request.Clone()
-		if request.Operation.Action == string(executionbackend.LifecyclePrepareWorkspace) && len(result.receipt.Operation.Receipt) > 0 && result.receipt.ValidateFor(request) == nil {
-			request.Operation.Receipt = mustJSON(result.receipt)
-		}
 		return s.dispatchLifecycleEffectAuthorized(ctx, run, port, request, true, apply, resourceManagement, &result)
 	}
+
 	return apply(run, result)
 }
 
@@ -288,7 +268,7 @@ func (s *Service) recordLifecycleReceipt(run *reconstructiontypes.RunView, resul
 		}
 		*e = candidate
 	}
-	status, diagnostic := lifecycleOutcome(receipt, result.err)
+	status, diagnostic := reliable.Outcome(receipt, result.err)
 	if err := s.setOperationState(request.Operation.ID, status, receipt.RequestID, mustJSON(receipt), diagnostic); err != nil {
 		return err
 	}

@@ -31,7 +31,7 @@ type ExecutionLifecycle struct {
 }
 
 func (l ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: true}
+	return executionbackend.LifecyclePolicyCapabilities{Preparation: executionbackend.PreparationCapabilities{Workspace: executionbackend.MechanismApplicable, Resource: executionbackend.MechanismNotApplicable, Session: executionbackend.MechanismApplicable}, ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: true}
 }
 
 func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
@@ -152,31 +152,25 @@ func (l ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup execut
 	return l.ProbeLifecycle(ctx, setup.Clone())
 }
 
-func (l ExecutionLifecycle) Next(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
+func (l ExecutionLifecycle) PreparationFacts(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.PreparationFacts, error) {
 	if snapshot.Workspace.Path == "" && snapshot.WorkspacePlan.Path != "" {
 		if snapshot.Session.SessionID != "" || snapshot.Ref.External.Kind != "" || len(snapshot.Implementation) != 0 {
-			return executionbackend.LifecycleCandidate{}, errors.New("missing original workspace cannot be recreated for a bound worker")
+			return executionbackend.PreparationFacts{}, errors.New("missing original workspace cannot be recreated for a bound worker")
 		}
-		intent := snapshot.WorkspacePlan
-		candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}
-		return candidate, candidate.Validate()
+		return executionbackend.PreparationFacts{Workspace: executionbackend.GateRequired, Resource: executionbackend.GateNotApplicable, Session: executionbackend.GateUnverified}, nil
 	}
 	if snapshot.PendingTurn == nil {
-		return executionbackend.LifecycleCandidate{Done: true}, nil
-	}
-	if snapshot.PendingTurn.CommandID == "" || snapshot.PendingTurn.Prompt == "" {
-		return executionbackend.LifecycleCandidate{}, errors.New("app-server lifecycle has no saved turn input")
+		return executionbackend.PreparationFacts{Workspace: executionbackend.GateReady, Resource: executionbackend.GateNotApplicable, Session: executionbackend.GateUnverified}, nil
 	}
 	binding, found, err := l.readBinding(snapshot)
-	if err != nil {
-		return executionbackend.LifecycleCandidate{}, err
+	gate := executionbackend.GateRequired
+	if found && binding.Endpoint != "" && binding.Generation != "" {
+		gate = executionbackend.GateUnverified
+		if binding.SessionID != "" {
+			gate = executionbackend.GateReady
+		}
 	}
-	if !found || binding.Endpoint == "" || binding.Generation == "" {
-		candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareSession, Input: executionbackend.LifecycleInput{Turn: cloneTurn(snapshot.PendingTurn)}}
-		return candidate, candidate.Validate()
-	}
-	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleStartTurn, Input: executionbackend.LifecycleInput{Turn: cloneTurn(snapshot.PendingTurn)}}
-	return candidate, candidate.Validate()
+	return executionbackend.PreparationFacts{Workspace: executionbackend.GateReady, Resource: executionbackend.GateNotApplicable, Session: gate}, err
 }
 
 func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {

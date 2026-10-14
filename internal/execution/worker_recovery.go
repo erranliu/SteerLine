@@ -6,37 +6,21 @@ import (
 	"errors"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-// Operations are bound by their saved request and exact identity components,
-// including host publication which is keyed by WorkflowRun rather than Execution.
+// Only the actor reads storage. The middle layer owns uncertainty classification;
+// association IDs are opaque and never interpreted as task or workflow steps.
 func (s *Service) hasUnknownWorkerOperation(run *reconstructiontypes.RunView) bool {
+	operations := make([]reliable.OperationFact, 0, len(s.domain.Operations))
 	for _, op := range s.domain.Operations {
-		if op.Kind == "worker_input_value" {
-			continue
-		} // This journal has no external outcome to reconcile.
-		if op.Status != "outcome_unknown" && op.Status != "in_flight" && !(op.Kind == "stop_worker_observation" && op.Status == "accepted") {
-			continue
-		}
-		var target struct {
-			ExecutionID   string `json:"execution_id"`
-			WorkflowRunID string `json:"workflow_run_id"`
-			RunID         string `json:"run_id"`
-		}
-		if json.Unmarshal(op.Request, &target) == nil && (target.ExecutionID == run.ExecutionID || target.WorkflowRunID == run.RunID || target.RunID == run.RunID) {
-			return true
-		}
-		for _, identity := range strings.Split(op.IdempotencyKey, ":") {
-			if identity == run.ExecutionID || identity == run.RunID {
-				return true
-			}
-		}
+		operations = append(operations, reliable.OperationFact{Kind: op.Kind, Status: op.Status, IdempotencyKey: op.IdempotencyKey, Request: op.Request})
 	}
-	return false
+	return reliable.HasUnknownOperation(operations, run.ExecutionID, run.RunID)
 }
 
 // beginWorkerRecoveryAttempt advances the worker generation in one service
@@ -79,14 +63,8 @@ func (s *Service) beginWorkerRecoveryAttempt(ctx context.Context, run *reconstru
 	if err != nil {
 		return err
 	}
-	if !recovery.SessionRebindable || !recovery.ProcessAbsent || !recovery.WritersAbsent || !recovery.SessionIdle {
-		return errors.New("the original resource and writers are not proven stopped for same-session restoration")
-	}
-	if !recovery.SessionAvailable || execution.SessionID == "" {
-		return errors.New("the original session identity is unavailable; handle the original execution manually")
-	}
-	if s.hasUnknownWorkerOperation(run) {
-		return errors.New("an earlier external operation has an unknown outcome; reconcile it before continuing")
+	if err := reliable.ValidateRestoration(recovery, execution.SessionID, s.hasUnknownWorkerOperation(run)); err != nil {
+		return err
 	}
 	created := now()
 	newAttemptID := newID()
@@ -343,7 +321,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 }
 
 // reconcileWorkerRecovery owns common eligibility and decisions after native evidence reads.
-func (s *Service) reconcileWorkerRecovery(ctx context.Context, task *taskmodel.TaskRecord, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext) error {
+func (s *Service) reconcileWorkerRecovery(ctx context.Context, task *taskmodel.TaskRecord, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerRecords) error {
 	snapshot, snapshotErr := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 	if snapshotErr != nil {
 		return snapshotErr
@@ -356,7 +334,7 @@ func (s *Service) reconcileWorkerRecovery(ctx context.Context, task *taskmodel.T
 }
 
 func (s *Service) acceptWorkerRecoveryQualification(ctx context.Context, task *taskmodel.TaskRecord, run *reconstructiontypes.RunView, evidence executionbackend.LifecycleRecoveryEvidence, verifyErr error) error {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -368,7 +346,7 @@ func (s *Service) acceptWorkerRecoveryQualification(ctx context.Context, task *t
 		if s.originalWorkerTurnEnded(run) && fixed.workflow.PRURL != "" && !s.hasUnknownWorkerOperation(run) {
 			return s.pollWorkerFlowPR(ctx, run, task, fixed.workflow)
 		}
-		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
+		s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{OutcomeUncertain: true}, false)
 		return s.waitWorkerFlow(run, "Original worker identity cannot be verified: "+verifyErr.Error())
 	}
 	beforeRecovery := recordFingerprint(*execution)

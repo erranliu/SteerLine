@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	"time"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -230,7 +230,7 @@ func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev Worker
 					if err != nil {
 						return err
 					}
-					probeCtx, probeCancel := context.WithTimeout(context.Background(), min(positiveDuration(fixed.config.CommandTimeout, 30*time.Second), 10*time.Second))
+					probeCtx, probeCancel := context.WithTimeout(context.Background(), reliable.QualificationTimeout(duration(fixed.config.CommandTimeout)))
 					evidence, err := lifecycle.VerifyManualRecovery(probeCtx, snapshot)
 					probeCancel()
 					if err == nil {

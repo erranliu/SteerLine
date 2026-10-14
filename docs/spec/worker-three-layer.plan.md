@@ -6,7 +6,7 @@
 
 调查基线 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`。已完整读取 `docs/spec/SpecGuide.md`，该基线 Git blob 为 `cb77f165b80f6e7bbb09fe190d0f86b97201e2c3`；依仓库开发规则作为普通开发编写，不执行产品 roadmap 转正/调度。已读取[长期流程](../product-design/worker-lifecycle.md)、[PR 契约](worker-pr-flow.spec.md)、[核心恢复](worker-disconnect-recovery.spec.md)、[停机恢复](worker-stop-recovery.spec.md)、[原会话边界](product-simplification-04-conversation-recovery.spec.md)、[屏幕核验移除记录](../acceptance/workflow-verification.md)及[测试入口](../../tests/e2e/README.md)。
 
-实际实现开始时记录真实源码 HEAD、工作树差异和 Spec/Plan Git commit/path；当前调查不是未提交文档的固定版本。保留他人改动，使用最新已核实基线实施，发现影响本范围的差异先更新调查与计划。
+实施基线：主干 `1b7468b07f4fdcec31c59d2e3eb0d740816f4179`，设计文档固定提交 `34418bd963af75b727850272dcffc1275690e99c`（本 Spec/Plan 路径）。随后用户补充的适用性要求纳入本次实施文档与实现；候选验证同时保存 runner source_commit 和工作树差异。保留他人改动，使用最新已核实基线实施，发现影响本范围的差异先更新调查与计划。
 
 | 现有代码 | 调查结论与安排 |
 | --- | --- |
@@ -52,16 +52,18 @@ ReliableExecution 采用现有非阻塞 actor 节奏：读取不可变执行快�
 
 1. 创建 workflow/reliable 包及窄执行值；actor 从现有记录生成快照，可靠性包不导入混合 `execution/model`、reconstruction 或根 Service。
 2. 窄授权表达当前执行/Attempt、原请求、授权/恢复版本和允许动作，正式 Command/Decision 的解析仍在应用侧；中层不能自行扩大权限或构造业务继续 prompt。
-3. 收窄 adapter Snapshot/Setup；通用计划逻辑与技术 budget 归中层，保留原生复合准备和原生材料 owner。检查序列化前后持久字段/摘要是否相同，不主动升版。
-4. 在 `internal/testkit/boundary` 扩展依赖矩阵、传递依赖和负例：Workflow 直达 backend/adapter、ReliableExecution 依赖 workflow/混合业务模型/Service、adapter 回调中心写者都必须拒绝。中层导入 adapter 契约为允许边；不得扩大白名单放行循环依赖。结合层内 fixture 验证业务意图不能绕过中层执行资格，actor 只落实提交屏障与批准的原动作，不持有平行技术重试/恢复规则。
+3. 实现 adapter 能力声明与原生事实的显式适用性枚举，零值按尚未核实处理。分别验证 Codex 原生 app-server/thread 流程和 Orca 原终端/启动/原生准备流程；本地不执行 Orca 专属 READY/连接核验。中层按声明选序列，not_applicable 跳机制、必需 unsupported 阻断、unverified 原目标取证/待处理。
+4. 收窄 adapter Snapshot/Setup；通用计划逻辑与技术 budget 归中层，保留原生复合准备和原生材料 owner。检查序列化前后持久字段/摘要是否相同，不主动升版。
+5. 在 `internal/testkit/boundary` 扩展依赖矩阵、传递依赖和负例：Workflow 直达 backend/adapter、ReliableExecution 依赖 workflow/混合业务模型/Service、adapter 回调中心写者都必须拒绝。中层导入 adapter 契约为允许边；不得扩大白名单放行循环依赖。结合层内 fixture 验证业务意图不能绕过中层执行资格，actor 只落实提交屏障与批准的原动作，不持有平行技术重试/恢复规则。
 
 ### P2 收口可靠执行并接入两条路径
 
 1. 搬迁原准备、原操作对账、接受/开始/终态、期限、身份/旧写者、观察和恢复资格规则；中层返回规范事实与声明变化，不写业务阶段或 DecisionRecord。
-2. 本地 Codex 保留 owned 进程、initialize/thread/start/resume、原 turn 回执和历史；prepare_session 的部分 binding 与失败位置继续返回，首个 turn 前必要连接所有权保留。
-3. Orca local/environment 共用同一 adapter，保留唯一原 terminal、启动接受状态及原生 main-agent 证据。已识别代理即 launch confirmed 的现有能力边界先保持，不顺便加入完整初始化取证或自动启动重试。
-4. 重接、反馈、再核验和服务换代调用同一组中层规则。原生请求未知只 Reconcile，不由旧入口直接 Execute；异步效果不能跨 Attempt 改投当前目标。
-5. 补 `TestReliablePreparationFacts`、`TestReliableInputOutcomeBoundaries`、`TestReliableRecoveryAndAuthorization` 和 `TestReliableLateFacts`。使用纯 adapter fixture 验证部分成功/未知/冲突、明确拒绝与 accepted 未 started、授权版本、迟到/兄弟隔离；不模拟成功来省略守卫。
+2. 对 app-server 只有 endpoint/generation、尚无 thread 的部分绑定返回 unverified；不能因“已连接”开业务。已有同 thread 恢复 seed 仍按原授权准备。补适用性用例断言该部分成功不能进入 start_turn。
+3. 本地 Codex 保留 owned 进程、initialize/thread/start/resume、原 turn 回执和历史；prepare_session 的部分 binding 与失败位置继续返回，首个 turn 前必要连接所有权保留。
+4. Orca local/environment 共用同一 adapter，保留唯一原 terminal、启动接受状态及原生 main-agent 证据。已识别代理即 launch confirmed 的现有能力边界先保持，不顺便加入完整初始化取证或自动启动重试。
+5. 重接、反馈、再核验和服务换代调用同一组中层规则。原生请求未知只 Reconcile，不由旧入口直接 Execute；异步效果不能跨 Attempt 改投当前目标。
+6. 补 `TestReliablePreparationFacts`、`TestReliableInputOutcomeBoundaries`、`TestReliableRecoveryAndAuthorization` 和 `TestReliableLateFacts`，另补 `TestReliablePreparationApplicability` 和两 adapter 的适用性接线用例。使用纯 adapter fixture 验证部分成功/未知/冲突、明确拒绝与 accepted 未 started、授权版本、迟到/兄弟隔离；不模拟成功来省略守卫。
 
 ### P3 精简 Workflow 与恢复业务路由
 
@@ -86,14 +88,14 @@ ReliableExecution 采用现有非阻塞 actor 节奏：读取不可变执行快�
 
 ## 测试计划
 
-全部自动项 [TL-A01–TL-A07](../acceptance/worker-three-layer.md#自动验收项) 映射如下。G/R 是本文命令代号，非新增 E2E ID。纯文档交付只执行 D1；其余在实现后的指定时点执行。
+全部自动项 [TL-A01–TL-A07](../acceptance/worker-three-layer.md#自动验收项) 映射如下。G/R 是本文命令代号，非新增 E2E ID。D1 是文档静态检查；其余在实现后的指定时点执行。
 
 | 命令 | 级别与组/场景 | 环境与时点 | 自动项 | 通过条件与证据登记 |
 | --- | --- | --- | --- | --- |
 | D1 | 文档静态检查 | 当前仓库；文档完成后 | 文档一致性，不算产品自动验收 | 链接/编号/映射/差异格式通过；登记专属文档的静态检查节 |
 | G1 | L1 固定范围＋三层边界/规则定向 | Windows 隔离 fixture，无模型；P1–P3 后及最终 | TL-A01、TL-A02、TL-A07 | 包/符号/传递依赖负例有效；中层无 Workflow，Workflow 无原生知识；层内行为测试非零匹配、无失败/skip；summary.json 及用例日志登记对应项 |
 | G2 | 定向提交、反馈/恢复、业务步骤回归 | 既有独立 Git/SQLite/受控进程；P2–P4 后 | TL-A03、TL-A05、TL-A06 | 原子、未知输入/无 final、原 source、授权与重放行为保持；记录具体用例及原发送计数 |
-| G3 | 两 adapter 定向契约回归 | Codex 受控协议＋Orca local/environment fixture，无真机；P2/P4 后 | TL-A02、TL-A04、TL-A05 | 原生调用/参数与取证算法保持、部分 binding 不丢、未知零重发、两路接中层且无屏幕门槛；登记两包用例日志 |
+| G3 | 两 adapter 定向契约回归 | Codex 受控协议＋Orca local/environment fixture，无真机；P2/P4 后 | TL-A02、TL-A04、TL-A05 | 原生调用/参数与取证算法保持、部分 binding 不丢、未知零重发、两路接中层且无屏幕门槛；必要/跳过/不支持/未核实的能力组合有非零行为断言；登记两包用例日志 |
 | R1 | L3 controlled：delivery.basic、recovery.waiting-merge-restart | runner 独立 home/Git/SQLite/loopback provider；P4/P5 后 | TL-A03、TL-A06、TL-A07 | 正式三阶段/PR/合并/唯一交付及依赖保持；原待合并身份不重派，closed 后查询守卫保持；summary/scenario.json |
 | R2 | L3 controlled：recovery.codex-resume、recovery.report-source-changed | 同上，受控 app-server；P4/P5 后 | TL-A03、TL-A05、TL-A06 | 原 thread 新 Attempt 和业务实施/report 路由不重复；人工成果不冒充旧 source；原子/唯一交付保持 |
 | R3 | L3 controlled：recovery.terminal-local-reconnect、recovery.terminal-environment-unknown-send | 现有 Orca 原生状态 fixture及受控 provider；P4/P5 后 | TL-A04、TL-A05、TL-A07 | local 原终端重接；environment 原请求未知仅对账，原始回复/结果一次结算，零新 terminal/Enter/输入 |
@@ -109,19 +111,21 @@ git diff --check
 # G1：P1-P3 新包和下列 Test 前缀在实施中落实
 go run ./cmd/test-feedback -level=L1 -- ./internal/testkit/boundary ./internal/execution/workflow ./internal/execution/reliable -run '^(TestThreeLayer.*|TestWorkflow.*|TestReliable.*)$' -count=1
 
-# G2：保留既有名字；迁移到新 owner 时同步本命令和验收映射
-go run ./cmd/test-feedback -- ./internal/execution -run '^(TestThreeLayerAtomicCommit|TestWorkerCommit.*|TestWorkerReceiptFailure.*|TestAppServerFailedPreparation.*|TestWorkerIntentIsDurable.*|TestWorkerRecovery.*|TestWorkerStage.*|TestWorkerService.*|TestCandidateStop.*|TestCandidateStartRetention.*|TestLifecycleEffect.*)$' -count=1
+# G2：按下列三组定向执行，避免单个包默认 10 分钟总期限混合全部阶段回归
+go run ./cmd/test-feedback -- ./internal/execution -run '^(TestThreeLayerAtomicCommit|TestWorkerFlow.*|TestWorkerPrompt.*|TestLifecycleEffect.*)$' -count=1 -timeout=10m
+go run ./cmd/test-feedback -- ./internal/execution -run '^(TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges|TestWorkerCommit.*|TestWorkerReceiptFailure.*|TestAppServerFailedPreparation.*|TestWorkerIntentIsDurable.*|TestWorkerRecovery.*|TestWorkerService.*)$' -count=1 -timeout=25m
+go run ./cmd/test-feedback -- ./internal/execution -run '^(TestWorkerStage.*|TestCandidateStop.*|TestCandidateStartRetention.*)$' -count=1 -timeout=25m
 
 # G3：当前 adapter 入口的相关用例；故障行为不以单纯编译代替
-go run ./cmd/test-feedback -- ./internal/execution/adapters/codex ./internal/execution/adapters/orcatransport -run '^(Test.*Lifecycle.*|Test.*Preparation.*|Test.*Recovery.*|Test.*Original.*|Test.*Unknown.*|TestAgentLaunch.*|TestOrcaNativeState.*|Test.*Repository.*)$' -count=1
+go run ./cmd/test-feedback -- ./internal/execution/adapters/codex ./internal/execution/adapters/orcatransport -run '^(Test.*Lifecycle.*|Test.*Preparation.*|Test.*Recovery.*|Test.*Original.*|Test.*Unknown.*|TestAgentLaunch.*|TestOrcaNativeState.*|Test.*Repository.*|TestPreparationApplicability.*)$' -count=1
 
 # R1-R3：全部 ID 已登记，使用现有场景而非新增完整矩阵
-go run ./cmd/test-feedback -level=L3 -suite=delivery,recovery -env=controlled '-scenario=delivery.basic,recovery.waiting-merge-restart'
+go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery' -env=controlled '-scenario=delivery.basic,recovery.waiting-merge-restart'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=recovery.codex-resume,recovery.report-source-changed'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=recovery.terminal-local-reconnect,recovery.terminal-environment-unknown-send'
 ```
 
-G1 的三层负例和新包测试、G2 的组合提交测试尚待实现，在 P1–P4 明确补齐；不能运行零匹配后宣称通过。既有用例迁移时保留行为断言，更新真实包/测试名；实施验收前核对 G1–G3 各选定 owner 非零匹配、无失败/意外 skip。R1–R3 每个场景保持已有独立时限，不串入多个新增故障、不扩大期限；driver 如需接新内部类型只修改已有 native/evidence/driver owner。
+G1 的三层负例和新包测试、G2 的组合提交测试是必需入口；不能运行零匹配后宣称通过。既有用例迁移时保留行为断言，更新真实包/测试名；实施验收前核对 G1–G3 各选定 owner 非零匹配、无失败/意外 skip。R1–R3 每个场景保持已有独立时限，不串入多个新增故障、不扩大期限；driver 如需接新内部类型只修改已有 native/evidence/driver owner。
 
 若既有 R1 尚未断言 closed 后零 PR 查询，P4 在现有 provider fixture 增加本执行的查询计数，并在 R1 检查终态后的后续 poll/重启；不新增产品统计接口。缺失某项断言时必须补相应小型 fixture/用例，不用历史结果替代本次候选验证。
 

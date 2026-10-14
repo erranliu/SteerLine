@@ -4,7 +4,7 @@ Worker 执行域统一管理工作区准备、代理初始化、输入投递、�
 
 本文是这些规则的长期维护入口。下文“统一设计”定义后续实现应遵循的行为；[当前实现与缺口](#当前实现与缺口)区分已有能力与待补能力，不表示完整流程已经实现或验收。当前开发流程以 [PR 流程契约](../spec/worker-pr-flow.spec.md)的 `development/v3` 为准。本文不启动实现任务、不修改已冻结执行，也不改变安装现场。
 
-三层职责重构已形成待实施的 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)：先拆 Workflow、ReliableExecution 和 ExecutionAdapter，保持现有行为；初始化失败重试等新增能力另行实施。当前源码仍由共享 worker/Service 管理，不把目标分层描述为已经交付。
+三层职责重构已形成待实施的 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)：先拆 Workflow、ReliableExecution 和 ExecutionAdapter，保持现有行为；初始化失败重试等新增能力另行实施。本次实现将规则归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；验收进度以专属文档为准。
 
 ## 职责与规则归属
 
@@ -13,6 +13,7 @@ Worker 执行域统一管理工作区准备、代理初始化、输入投递、�
 | 所有者 | 负责内容 |
 | --- | --- |
 | Worker 执行域 | 节点推进、异常分类、重试预算、恢复资格、输入授权、结果来源与迟到事件处理；由现有 Service actor 单写提交 |
+| ReliableExecution | 通用准备推进、显式适用性门槛、部分回执合并、原输入/结果核验、恢复分类、准备/核验期限；不解释业务步骤 |
 | 生命周期与主机端口 | 表达工作区、代理、会话、输入、轮次、停止、清理和恢复的通用事实及可用能力 |
 | 具体适配器和资源 owner | 读取真实原生身份、查询原请求、识别启动退出、执行受控动作；不持有中心业务库写权 |
 | 开发流程定义 | 选择 implement、report、publish 等业务步骤，解释结构化业务结果；不在适配器中解析业务 JSON |
@@ -37,7 +38,7 @@ Workflow 选择业务步骤、构造输入、解释结果和决定后继；Relia
 | W17 | 现有 Workflow/交付与任务应用核验 PR、提交唯一 Delivery；不归执行中层 |
 | W18 | 中层依据已授权动作管理资源结算，adapter/资源 owner 提供停止与清理事实 |
 
-actor、持久化记录及存储仍是唯一提交边界，不新增各层独立保存。中层只接窄执行快照/意图/授权，不接完整 WorkflowRun、RunView、Service 或 Task/PR 状态；当前混合记录由 actor 映射。该表是目标所有权，不要求新增平台调用或改变现有阶段行为。
+actor、持久化记录及存储仍是唯一提交边界，不新增各层独立保存。中层只接窄执行快照/意图/授权，不接完整 WorkflowRun、RunView、Service 或 Task/PR 状态；当前混合记录由 actor 映射。规则实现和记录保存采用该所有权；不要求新增平台调用或改变现有阶段行为。
 
 ## 统一设计
 
@@ -78,6 +79,10 @@ flowchart TD
 | RecoveryFacts 和恢复资格 | running、question、completed、interrupted、unverified 等已核实事实及允许动作 |
 
 后文 W01–W18 是稳定的文档节点编号，不要求新增同名数据库枚举或第二套状态机。节点实现复用现有记录；只有当前记录确实无法表达必要事实时才增补字段。
+
+### 路径能力与核实状态
+
+中层统一可靠性目标，按 adapter 能力声明和原生事实选择适用流程。机制显式区分 not_applicable（可跳过该机制）、unsupported（必需能力缺失，阻断）与 unverified（继续原目标取证或待处理，不能成功推进）；零值等同 unverified。声明适用能力的原生事实再区分 required 与 ready，不用布尔 false 把未核实当作无需执行。本地 Codex 不跑 Orca 专属 TUI 启动、READY 模型轮次或 terminal/pane/provider 连接步骤；其 app-server 握手/thread 准备仍是必要门槛。
 
 ### 本地 Codex 与 Orca 路径差异
 
@@ -251,7 +256,7 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 | 范围 | 已有基础 | 待补或现有限制 |
 | --- | --- | --- |
-| 持久化副作用和并发 | 生命周期 Operation、异步回执提交、原身份/版本守卫、first-wins | 按本矩阵检查各入口是否共享同一异常分类，不新增平行规则 |
+| 持久化副作用和并发 | ReliableExecution 的事实/身份/对账规则、actor 生命周期 Operation、异步回执提交、原身份/版本守卫、first-wins | 按本矩阵检查各入口是否共享同一异常分类，不新增平行规则 |
 | 工作区和环境准备 | 固定工作区意图、准备总期限、blocker、nonce 与探针核验 | 部分现场或后端没有准备记录；不能默认所有执行已具备统一准备路径 |
 | Orca 显式启动 | 原唯一终端、启动操作、LaunchAttempted/Accepted/Confirmed、未知发送不重发 | `launchAgent` 在识别到代理名称时即确认启动；尚无完整初始化完成证据、失败收敛、有限启动重试和安全采纳人工重启的通用规则 |
 | Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |
@@ -265,8 +270,10 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 | 规则范围 | 当前文件 |
 | --- | --- |
 | 生命周期契约与规范事实 | [backend/lifecycle.go](../../internal/execution/backend/lifecycle.go)、[backend/environment.go](../../internal/execution/backend/environment.go) |
-| 准备状态与恢复分类 | [model/environment.go](../../internal/execution/model/environment.go)、[model/recovery.go](../../internal/execution/model/recovery.go) |
-| 意图执行与回执提交 | [worker_lifecycle.go](../../internal/execution/worker_lifecycle.go)、[lifecycle_effect.go](../../internal/execution/lifecycle_effect.go) |
+| 准备状态与恢复分类 | [model/environment.go](../../internal/execution/model/environment.go)、[reliable/recovery.go](../../internal/execution/reliable/recovery.go) |
+| 中层推进与规范事实 | [reliable/plan.go](../../internal/execution/reliable/plan.go)、[reliable/effect.go](../../internal/execution/reliable/effect.go)、[reliable/binding.go](../../internal/execution/reliable/binding.go) |
+| Workflow 业务规则 | [workflow/route.go](../../internal/execution/workflow/route.go)、[workflow/feedback.go](../../internal/execution/workflow/feedback.go)、[workflow/input.go](../../internal/execution/workflow/input.go) |
+| actor 意图执行与回执提交 | [worker_lifecycle.go](../../internal/execution/worker_lifecycle.go)、[lifecycle_effect.go](../../internal/execution/lifecycle_effect.go) |
 | 环境准备和再核验 | [worker_environment.go](../../internal/execution/worker_environment.go)、[worker_environment_host.go](../../internal/execution/worker_environment_host.go) |
 | 恢复事实和资格 | [worker_recovery_facts.go](../../internal/execution/worker_recovery_facts.go)、[worker_qualification.go](../../internal/execution/worker_qualification.go)、[worker_lifecycle_recovery.go](../../internal/execution/worker_lifecycle_recovery.go) |
 | 阶段结果和后继输入 | [staged_flow.go](../../internal/execution/staged_flow.go)、[worker_completion.go](../../internal/execution/worker_completion.go) |

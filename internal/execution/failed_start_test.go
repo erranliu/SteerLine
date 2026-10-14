@@ -42,7 +42,7 @@ func TestReleasedWorkerStartConvergesAcrossRestart(t *testing.T) {
 	s, run := neutralAuditService(t)
 	resolver := &failedStartResolver{}
 	s.lifecycleResolver = resolver
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	input := executionbackend.TurnInput{CommandID: newID(), Prompt: "original business input", Purpose: "business"}
 	fixed.execution.PendingCommandID = input.CommandID

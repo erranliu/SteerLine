@@ -3,6 +3,8 @@ package execution
 import (
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
+	"github.com/erranliu/SteerLine/internal/execution/workflow"
 	"strings"
 	"time"
 
@@ -44,41 +46,48 @@ func workerFlowBinding(workflow *executionmodel.WorkflowRunRecord, execution *ex
 }
 
 // BeginWorkerTurn records a platform-proven turn start for the original session.
-func BeginWorkerTurn(workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, sessionID, turnID string) error {
-	if err := workerFlowBinding(workflow, execution); err != nil {
+func BeginWorkerTurn(w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, sessionID, turnID string) error {
+	if err := workerFlowBinding(w, e); err != nil {
 		return err
 	}
-	next, err := executionmodel.BeginTurn(workerFlowState(workflow, execution, sessionID), sessionID, turnID, time.Now().UTC())
-	if err == nil {
-		applyWorkerFlowState(workflow, execution, next)
+	prior := reliableTurn(e)
+	at := time.Now().UTC()
+	next, err := reliable.BeginTurn(prior, sessionID, turnID, reliable.TurnAuthority{Allowed: workflow.FactAdmission(w.Status, "started"), OriginalOnly: w.Status == "reconciling"}, at)
+	if err == nil && next != prior {
+		applyReliableTurn(e, next)
+		w.Status, w.UpdatedAt = workflow.FactStatus("started", false), at
 	}
 	return err
 }
 
-func NoteWorkerQuestion(workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID string) error {
-	if err := workerFlowBinding(workflow, execution); err != nil {
+func NoteWorkerQuestion(w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, turnID string) error {
+	if err := workerFlowBinding(w, e); err != nil {
 		return err
 	}
-	next, err := executionmodel.NoteQuestion(workerFlowState(workflow, execution), turnID, time.Now().UTC())
-	if err == nil {
-		applyWorkerFlowState(workflow, execution, next)
-	}
-	return err
-}
-
-func ContinueWorkerQuestion(workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID string) error {
-	if err := workerFlowBinding(workflow, execution); err != nil {
+	if err := reliable.CurrentTurn(reliableTurn(e), turnID); err != nil {
 		return err
 	}
-	next, err := executionmodel.ContinueQuestion(workerFlowState(workflow, execution), turnID, time.Now().UTC())
-	if err == nil {
-		applyWorkerFlowState(workflow, execution, next)
+	if !workflow.FactAdmission(w.Status, "question") {
+		return errors.New("worker question cannot arrive in the current business state")
 	}
-	return err
+	w.Status, w.UpdatedAt = workflow.FactStatus("question", false), time.Now().UTC()
+	return nil
 }
 
-// BeginWorkerFeedbackDelivery moves a saved answer for an open PR into the
-// feedback phase before the original worker session receives another turn.
+func ContinueWorkerQuestion(w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, turnID string) error {
+	if err := workerFlowBinding(w, e); err != nil {
+		return err
+	}
+	if err := reliable.CurrentTurn(reliableTurn(e), turnID); err != nil {
+		return err
+	}
+	if !workflow.FactAdmission(w.Status, "answered") {
+		return errors.New("worker question is not waiting in the current business state")
+	}
+	w.Status, w.UpdatedAt = workflow.FactStatus("answered", false), time.Now().UTC()
+	return nil
+}
+
 func BeginWorkerFeedbackDelivery(workflow *executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, decision executionmodel.DecisionRecord, at time.Time) error {
 	if err := workerFlowBinding(workflow, &execution); err != nil {
 		return err
@@ -98,13 +107,16 @@ func BeginWorkerFeedbackDelivery(workflow *executionmodel.WorkflowRunRecord, exe
 // StopWorkerTurn accepts only the current turn's terminal observation. The
 // caller passes whether a Decision for this turn is still pending; this fact is
 // read from the existing Decision authority, not copied into Execution.
-func StopWorkerTurn(workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID string, pendingQuestion bool) error {
-	if err := workerFlowBinding(workflow, execution); err != nil {
+func StopWorkerTurn(w *executionmodel.WorkflowRunRecord, e *executionmodel.ExecutionRecord, turnID string, pendingQuestion bool) error {
+	if err := workerFlowBinding(w, e); err != nil {
 		return err
 	}
-	next, err := executionmodel.StopTurn(workerFlowState(workflow, execution), turnID, pendingQuestion, time.Now().UTC())
-	if err == nil {
-		applyWorkerFlowState(workflow, execution, next)
+	prior := reliableTurn(e)
+	at := time.Now().UTC()
+	next, err := reliable.StopTurn(prior, turnID, workflow.FactAdmission(w.Status, "ended"), at)
+	if err == nil && next != prior {
+		applyReliableTurn(e, next)
+		w.Status, w.UpdatedAt = workflow.FactStatus("ended", pendingQuestion), at
 	}
 	return err
 }
@@ -133,7 +145,7 @@ func (s *Service) stopVerifiedWorkerTurn(run *reconstructiontypes.RunView, workf
 	execution.LastTurnOutcome = outcome
 	if executionmodel.CandidateParticipates(workflow.Status) && !s.candidateBusinessClosed(run) && execution.RecoveryRequired {
 		available := execution.RecoverySessionAvailable != nil && *execution.RecoverySessionAvailable
-		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{Completed: true}, available)
+		s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{Completed: true}, available)
 	}
 	s.refreshRun(run)
 	return nil

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 	"sync"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -13,6 +14,7 @@ import (
 // A crash can happen after a native request is journaled but before its
 // Decision reaches SQLite. Replay only requests not completed or persisted.
 type workerRecoveryResult struct {
+	original  reliable.ObservationIdentity
 	runID     string
 	attemptID string
 	request   executionbackend.LifecycleRequest
@@ -28,7 +30,7 @@ func recoverWorkerExecution(ctx context.Context, lifecycle executionbackend.Life
 	receipt, observer, err := lifecycle.Reconcile(ctx, request.Clone())
 	result := workerRecoveryResult{
 		runID: request.Snapshot.Session.WorkflowRunID, attemptID: request.Snapshot.Session.AttemptID,
-		request: request.Clone(), receipt: receipt.Clone(), execution: execution, completed: receipt.State.TurnCompleted,
+		original: reliableObservation(&execution), request: request.Clone(), receipt: receipt.Clone(), execution: execution, completed: receipt.State.TurnCompleted,
 		dead: receipt.State.WorkerAbsent, err: err,
 	}
 	if validationErr := receipt.ValidateFor(request); validationErr != nil && err == nil {
@@ -190,7 +192,7 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 	if run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
-	_, err := s.workerFlowContext(run)
+	_, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -204,9 +206,7 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 	if err := s.validateLifecycleResultBinding(run, result.request); err != nil {
 		return nil // A late read-only probe cannot overwrite a committed binding.
 	}
-	if result.request.Snapshot.Session.ExecutionID != execution.ExecutionID || result.request.Snapshot.ResourceGeneration != execution.Generation ||
-		result.attemptID != "" && result.attemptID != run.AttemptID || execution.RecoveryVersion != result.execution.RecoveryVersion ||
-		execution.PendingCommandID != result.execution.PendingCommandID || execution.CurrentCommandID != result.execution.CurrentCommandID || execution.CurrentTurnID != result.execution.CurrentTurnID {
+	if result.request.Snapshot.Session.ExecutionID != execution.ExecutionID || result.request.Snapshot.ResourceGeneration != execution.Generation || result.attemptID != "" && result.attemptID != run.AttemptID || !reliable.CurrentObservation(reliableObservation(execution), result.original) {
 		return nil // A late probe cannot change a new Attempt or stop the service.
 	}
 	if err := mergeLifecycleExecutionReceipt(execution, result.receipt); err != nil {
@@ -227,16 +227,16 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 	s.refreshRun(run)
 	if result.dead {
 		if !result.receipt.State.WritersAbsent {
-			s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
+			s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{OutcomeUncertain: true}, false)
 			return s.waitWorkerFlow(run, "Original worker writers may still modify the worktree")
 		}
 		if s.hasUnknownWorkerOperation(run) {
-			s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
+			s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{OutcomeUncertain: true}, false)
 			execution.Status = "blocked"
 			return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; reconcile its original request before continuing")
 		}
 		if result.completed {
-			s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: true}, result.receipt.State.SessionAvailable)
+			s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: true}, result.receipt.State.SessionAvailable)
 			if execution.SessionID == "" || execution.SessionGeneration == "" {
 				return s.waitWorkerFlow(run, "Original worker session identity could not be committed")
 			}
@@ -251,7 +251,7 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 		// Process death settles ownership, not native session eligibility. Preserve
 		// any prior qualification and let the same worker probe verify idle/rebind.
 		if execution.RecoverySessionAvailable == nil {
-			s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
+			s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{OutcomeUncertain: true}, false)
 		}
 		execution.PendingQuestions = nil
 		execution.Status = "blocked"
@@ -284,7 +284,7 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 		return s.recheckWorkerQualification(actorContext, run)
 	}
 	if result.err != nil {
-		s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{OutcomeUncertain: true}, false)
+		s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{OutcomeUncertain: true}, false)
 		execution.Status = "blocked"
 		return s.waitWorkerFlow(run, "Original worker turn cannot be reconciled: "+result.err.Error())
 	}
@@ -315,7 +315,7 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 	if err := s.reconcileSavedLifecycleQuestionAnswer(context.Background(), run); err != nil {
 		return s.waitWorkerFlow(run, "Original worker answer cannot be reconciled: "+err.Error())
 	}
-	s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}, result.receipt.State.SessionAvailable)
+	s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}, result.receipt.State.SessionAvailable)
 	s.refreshRun(run)
 	if run.Decision != nil && run.Decision.Status == "answer_saved" {
 		if err := s.refreshSavedRecoveryDecision(run, run.Decision.Request.QuestionRoute != nil, "服务重开后保留了旧答案；请重新确认后才投递。 "); err != nil {

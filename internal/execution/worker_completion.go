@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	"time"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -26,7 +26,7 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), min(positiveDuration(fixed.config.CommandTimeout, 30*time.Second), 30*time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), reliable.ObservationTimeout(duration(fixed.config.CommandTimeout)))
 	defer cancel()
 	receipt, observer, observeErr := lifecycle.ObserveLifecycle(ctx, snapshot)
 	if observer != nil {

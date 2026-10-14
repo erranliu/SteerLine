@@ -15,7 +15,7 @@ import (
 
 func TestWorkerStageUnverifiedImplementationEntersReport(t *testing.T) {
 	s, run, port := workerStageFixture(t)
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	evidence := workerStageEvidence(s, run, "unverified projection with plausible source labels", true)
 	evidence.FinalVerified = false
@@ -40,7 +40,7 @@ func TestWorkerStageTransientFactsReconcileOriginalTurn(t *testing.T) {
 			s.lifecycleResolver = unsupportedStageResolver{port: port}
 			require(t, acceptTestStage(t, s, run, port, "verified execution", true))
 			startQueuedStage(t, s, run)
-			fixed, err := s.workerFlowContext(run)
+			fixed, err := s.workerRecords(run)
 			require(t, err)
 			evidence := workerStageEvidence(s, run, `{"outcome":"done","outputs":{},"summary":"reported"}`, true)
 			evidence.FinalVerified = false

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	workflow "github.com/erranliu/SteerLine/internal/execution/workflow"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -63,8 +64,8 @@ func (p *stageTestPort) ObserveLifecycle(context.Context, executionbackend.Lifec
 	p.observed++
 	return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, TurnEvidence: p.evidence}, nil, nil
 }
-func (p *stageTestPort) Next(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
-	return executionbackend.LifecycleCandidate{Done: true}, nil
+func (p *stageTestPort) PreparationFacts(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.PreparationFacts, error) {
+	return executionbackend.PreparationFacts{Workspace:executionbackend.GateReady,Resource:executionbackend.GateNotApplicable,Session:executionbackend.GateUnverified}, nil
 }
 
 func workerStageFixture(t *testing.T, configure ...func(*Config)) (*Service, *reconstructiontypes.RunView, *stageTestPort) {
@@ -110,7 +111,7 @@ func startQueuedStage(t *testing.T, s *Service, run *reconstructiontypes.RunView
 
 func acceptTestStage(t *testing.T, s *Service, run *reconstructiontypes.RunView, port *stageTestPort, body string, success bool) error {
 	t.Helper()
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	return s.acceptStageTurn(context.Background(), run, port, fixed, workerStageEvidence(s, run, body, success))
 }
@@ -121,12 +122,12 @@ func TestWorkerStagePublicationMismatchShowsActualBranch(t *testing.T) {
 	startQueuedStage(t, s, run)
 	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","summary":"implemented"}`, true))
 	startQueuedStage(t, s, run)
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	const url = "https://git.example/org/repo/pulls/1"
 	actualBranch := port.workspace.Branch + "-wrong"
 	info := executionmodel.PRInfo{URL: url, Repository: fixed.config.PR.Repository, BaseBranch: fixed.workflow.Branch, HeadRepository: fixed.config.PR.Repository, HeadBranch: actualBranch, HeadRevision: port.workspace.Head, State: "open"}
-	require(t, s.acceptStagePublication(run, fixed, stageReport{Outcome: "done", Summary: "published", Outputs: stageOutputs{PRURL: url}}, info))
+	require(t, s.acceptStagePublication(run, fixed, workflow.Report{Outcome: "done", Summary: "published", Outputs: workflow.Outputs{PRURL: url}}, info))
 	w, e := s.workflowRecords(run)
 	want := fmt.Sprintf("head_branch: expected=%q, actual=%q", port.workspace.Branch, actualBranch)
 	if w.Status != "blocked" || !strings.Contains(w.StageDiagnostic, want) || e.Error == nil || !strings.Contains(*e.Error, want) {
@@ -140,11 +141,11 @@ func TestWorkerStageClosedPublicationKeepsPRPolling(t *testing.T) {
 	startQueuedStage(t, s, run)
 	require(t, acceptTestStage(t, s, run, port, `{"outcome":"done","summary":"implemented"}`, true))
 	startQueuedStage(t, s, run)
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	info := executionmodel.PRInfo{URL: "https://git.example/org/repo/pulls/1", Repository: fixed.config.PR.Repository, BaseBranch: fixed.workflow.Branch, HeadRepository: fixed.config.PR.Repository, HeadBranch: port.workspace.Branch, State: "closed_unmerged"}
 	require(t, s.stopVerifiedWorkerTurn(run, fixed.workflow, fixed.execution, fixed.execution.CurrentTurnID, "succeeded", false))
-	require(t, s.acceptStagePublication(run, fixed, stageReport{Outcome: "done", Summary: "published", Outputs: stageOutputs{PRURL: info.URL}}, info))
+	require(t, s.acceptStagePublication(run, fixed, workflow.Report{Outcome: "done", Summary: "published", Outputs: workflow.Outputs{PRURL: info.URL}}, info))
 	w := s.workflowRecord(run)
 	if w.StepID != executionmodel.StepAwaitMerge || w.Status != "waiting_input" || w.PRURL != info.URL || run.Decision == nil || !workerContinuationPrompt(run.Decision.Request) {
 		t.Fatalf("closed bound PR lost polling or usable continuation: step=%s status=%s pr=%s decision=%s diagnostic=%s", w.StepID, w.Status, w.PRURL, mustJSON(run.Decision), w.StageDiagnostic)
@@ -178,7 +179,7 @@ func TestWorkerStageTransitions(t *testing.T) {
 		t.Fatal("report did not queue publication")
 	}
 	startQueuedStage(t, s, run)
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	fixed.config.PR.Kind, fixed.config.PR.BaseURL, fixed.config.PR.Repository = "gitea", server.URL, "org/repo"
 	url := server.URL + "/org/repo/pulls/1"
@@ -207,7 +208,7 @@ func TestWorkerStageResultBinding(t *testing.T) {
 			s, run, port := workerStageFixture(t)
 			require(t, acceptTestStage(t, s, run, port, "free implementation final", true))
 			startQueuedStage(t, s, run)
-			fixed, err := s.workerFlowContext(run)
+			fixed, err := s.workerRecords(run)
 			require(t, err)
 			evidence := workerStageEvidence(s, run, `{"outcome":"done","outputs":{},"summary":"implemented"}`, true)
 			switch change {
@@ -346,12 +347,12 @@ func TestWorkerStageStrictResult(t *testing.T) {
 		`{"outcome":"blocked","Outcome":"done","summary":"x"}`,
 		`{"outcome":"done","summary":"x","outputs":{"pr_url":"https://example.com/pull/1","PR_URL":"https://example.com/pull/2"}}`,
 	} {
-		if _, err := decodeStageReport(body, executionmodel.StepPublish); err == nil {
+		if _, err := workflow.DecodeReport(body, executionmodel.StepPublish); err == nil {
 			t.Fatalf("case-insensitive duplicate changed result %q", body)
 		}
 	}
 	for _, body := range []string{`{"outcome":"blocked","outcome":"done","summary":"x"}`, "```json\n{}\n```", `{} {}`, `{"outcome":"done","summary":"x","outputs":{"pr_url":1}}`, `{"outcome":"done","summary":"x","outputs":{"pr_url":"https://example.com/pull/1","pr_url":"https://example.com/pull/2"}}`} {
-		if _, err := decodeStageReport(body, executionmodel.StepReport); err == nil {
+		if _, err := workflow.DecodeReport(body, executionmodel.StepReport); err == nil {
 			t.Fatalf("accepted invalid result %q", body)
 		}
 	}
@@ -365,7 +366,7 @@ func TestWorkerStagePresentationDoesNotBlockResult(t *testing.T) {
 		`{"outcome":"done","summary":"ready","metadata":{"outcome":"note","Outcome":"another note"}}`,
 		`{"outcome":" done ","summary":" ready ","question":" "}`,
 	} {
-		report, err := decodeStageReport(body, executionmodel.StepReport)
+		report, err := workflow.DecodeReport(body, executionmodel.StepReport)
 		if err != nil || report.Outcome != "done" || report.Summary != "ready" {
 			t.Fatalf("usable report rejected: %q, %v", body, err)
 		}
@@ -413,12 +414,12 @@ func TestWorkerStagePublishReport(t *testing.T) {
 				e.OwnerServiceInstanceID = "prior-service"
 				e.RecoveryMarkedAt = ptr(now())
 			}
-			fixed, err := s.workerFlowContext(run)
+			fixed, err := s.workerRecords(run)
 			require(t, err)
 			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, original))
 			w := s.workflowRecord(run)
 			input := w.StageInputs[3]
-			if w.StepID != executionmodel.StepPublishReport || len(w.StageInputs) != 4 || len(w.StageResults) != 3 || input.SourceCommandID != original.CommandID || input.SourceTurnID != original.TurnID || !strings.HasPrefix(input.Prompt, publishReportPrompt) || !strings.Contains(input.ReportToolPolicy, "business_read_only_is_prompt_policy") {
+			if w.StepID != executionmodel.StepPublishReport || len(w.StageInputs) != 4 || len(w.StageResults) != 3 || input.SourceCommandID != original.CommandID || input.SourceTurnID != original.TurnID || !strings.HasPrefix(input.Prompt, workflow.PublishReportPrompt) || !strings.Contains(input.ReportToolPolicy, "business_read_only_is_prompt_policy") {
 				t.Fatal("publication report lost its source or formatting instruction")
 			}
 			if scenario == "recovery" {
@@ -443,7 +444,7 @@ func TestWorkerStagePublishReport(t *testing.T) {
 			if scenario == "head_advanced" {
 				port.workspace.Head, port.workspace.Dirty = strings.Repeat("e", 40), true
 			}
-			fixed, err = s.workerFlowContext(run)
+			fixed, err = s.workerRecords(run)
 			require(t, err)
 			fixed.config.PR.Kind, fixed.config.PR.BaseURL, fixed.config.PR.Repository = "gitea", server.URL, "org/repo"
 			require(t, s.acceptStageTurn(context.Background(), run, port, fixed, workerStageEvidence(s, run, body, true)))

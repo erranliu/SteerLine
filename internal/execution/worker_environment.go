@@ -1,6 +1,7 @@
 package execution
 
 import (
+"github.com/erranliu/SteerLine/internal/execution/reliable"
 	"context"
 	"encoding/json"
 	"errors"
@@ -33,21 +34,22 @@ func (s *Service) blockWorkerEnvironment(run *reconstructiontypes.RunView, fact 
 	}
 	env := execution.Environment
 	turnID := s.environmentTurn(run)
-	if fact.Turn != "" && fact.Turn != turnID {
+	if !reliable.AcceptHostFact(fact, turnID, execution.Process) {
 		return nil
 	}
-	if fact.Runtime != "" && execution.Process != nil && (fact.Runtime != execution.Process.RuntimeID || fact.Terminal != execution.Process.Terminal || fact.Incarnation != execution.Process.Incarnation) && fact.Reason != "identity_mismatch" {
-		return nil
-	}
-	if fact.Reason == "tool_initialization_failed" || fact.Reason == "preparation_failed" {
+	if reliable.InvalidatesPreparation(fact) {
 		env.Ready = false
 		env.Preparation.Invalidated = true
 	}
-	if env.Blocker == nil || env.Blocker.TurnID != turnID || env.Blocker.Fact.Reason != fact.Reason || env.Blocker.Fact.Source != fact.Source {
-		env.Blocker = &executionmodel.WorkerHostBlocker{ID: newID(), Version: 1, Fact: fact, TurnID: turnID, ObservedAt: now()}
-	} else if env.Blocker.Fact != fact {
-		env.Blocker.Fact, env.Blocker.ObservedAt = fact, now()
-		env.Blocker.Version++
+	var prior *reliable.BlockerRevision
+	if env.Blocker != nil {
+		prior = &reliable.BlockerRevision{TurnID: env.Blocker.TurnID, Fact: env.Blocker.Fact, Version: env.Blocker.Version}
+	}
+	change, fresh := reliable.BlockerChange(prior, turnID, fact)
+	if fresh {
+		env.Blocker = &executionmodel.WorkerHostBlocker{ID: newID(), TurnID: change.TurnID, Fact: change.Fact, Version: change.Version, ObservedAt: now()}
+	} else if env.Blocker.Version != change.Version {
+		env.Blocker.Fact, env.Blocker.Version, env.Blocker.ObservedAt = change.Fact, change.Version, now()
 	}
 	if workflow.Status != "waiting_external" {
 		workflow.Status, workflow.UpdatedAt = "waiting_input", now()
@@ -147,13 +149,15 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *reconstruct
 			return err
 		}
 	}
-	if !env.Preparation.Verified && !now().Before(env.Preparation.Deadline) {
-		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: env.Preparation.TurnID})
+	if fact := reliable.EnvironmentDeadline(env.Preparation.Verified, env.Preparation.Deadline, env.Preparation.TurnID, nil, execution.CurrentTurnID, now()); fact != nil {
+		return s.blockWorkerEnvironment(run, *fact)
 	}
-	if turn, turnErr := s.currentHostTurn(run); turnErr != nil {
+	turn, turnErr := s.currentHostTurn(run)
+	if turnErr != nil {
 		return turnErr
-	} else if turn != nil && turn.Purpose == "business" && !turn.Settled && !turn.HasDoneMessage && execution.CurrentTurnID != turn.TurnID && !now().Before(turn.Deadline) {
-		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "business_start_unverified", Confidence: "unverified", Source: "dispatch.intent.deadline", Turn: turn.TurnID})
+	}
+	if fact := reliable.EnvironmentDeadline(env.Preparation.Verified, env.Preparation.Deadline, env.Preparation.TurnID, turn, execution.CurrentTurnID, now()); fact != nil {
+		return s.blockWorkerEnvironment(run, *fact)
 	}
 	return nil
 }
@@ -170,7 +174,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *reconstruct
 	if s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -181,13 +185,14 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *reconstruct
 	if err := s.observeWorkerEnvironment(ctx, run); err != nil {
 		return err
 	}
-	if env.Blocker != nil {
+	progress := reliable.PreparationState(reliable.PreparationControl{Blocked: env.Blocker != nil, RecoveryRequired: execution.RecoveryRequired, Verified: env.Preparation.Verified, Invalidated: env.Preparation.Invalidated})
+	if progress == reliable.PreparationWait {
 		return nil
 	}
-	if execution.RecoveryRequired {
+	if progress == reliable.PreparationRecover {
 		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "service_recovery_required", Confidence: "confirmed", Source: "service.recovery", Detail: "原准备状态已保留；重新检查后才允许继续派发。"})
 	}
-	if env.Preparation.Verified && !env.Preparation.Invalidated {
+	if progress == reliable.PreparationReady {
 		env.Ready = true
 		if execution.TurnNumber > 0 && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" && fixed.workflow.Status != "waiting_external" &&
 			(run.Decision == nil || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied") {
@@ -207,11 +212,11 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *reconstruct
 		}
 		return nil
 	}
-	remaining := time.Until(env.Preparation.Deadline)
+	remaining := reliable.PreparationWindow(env.Preparation.Deadline, now(), duration(fixed.config.CommandTimeout))
 	if remaining <= 0 {
 		return s.observeWorkerEnvironment(ctx, run)
 	}
-	prepareCtx, cancel := context.WithTimeout(ctx, min(remaining, positiveDuration(fixed.config.CommandTimeout, 10*time.Second)))
+	prepareCtx, cancel := context.WithTimeout(ctx, remaining)
 	defer cancel()
 	if execution.Workspace.Worktree == "" || execution.Process == nil {
 		task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
@@ -297,7 +302,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *reconstruct
 }
 
 func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *reconstructiontypes.RunView) error {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -364,7 +369,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *reconstructi
 		}
 		p.Receipt = receipt
 	}
-	if p.Receipt == nil || !p.Evidence.Verified || p.Invalidated {
+	if !reliable.ProbeSettled(p.Receipt, p.Evidence, p.Invalidated) {
 		return s.commitWorker(run)
 	}
 	p.Verified = true
@@ -409,7 +414,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *reconstructi
 }
 
 func (s *Service) applyEnvironmentAction(ctx context.Context, run *reconstructiontypes.RunView, action string, input productapi.HostActionTarget, commandID string) error {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}

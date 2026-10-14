@@ -17,7 +17,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *reconstruct
 	if task == nil || workflow == nil {
 		return nativeErr("inconsistent_delivery", "native delivery task or workflow record is missing")
 	}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
