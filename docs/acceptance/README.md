@@ -6,7 +6,7 @@
 
 本机 Web 前端（普通开发）：[专属验收](web-frontend.md)，独立 `web/` 工程、浏览器认证、DAG 与执行闭环；范围归 [Spec](../spec/web-frontend.spec.md)/[Plan](../spec/web-frontend.plan.md)。
 
-全量回归维护（普通开发）：[本次结果](full-regression-2026-10-14.md)，rebase、过期测试清理、完整回归和分级复验，当前尚在执行。
+全量回归维护（普通开发）：[本次结果](full-regression-2026-10-14.md)，rebase、过期测试清理、Full 1752 通过 / 19 默认跳过、26 个登记场景通过并清理完成。
 
 Orca 当前部署仅远端：[配置维护](remote-only-orca-profiles.md)。[本机输入与就绪历史样本](orca-local-input-readiness.md)保留其原适用范围，不属于当前部署的真实执行验收。
 
