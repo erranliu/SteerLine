@@ -81,6 +81,10 @@ type answerPayload struct {
 	ExpectedRecoveryVersion *uint64             `json:"expected_recovery_version"`
 }
 
+type candidateStopPayload struct {
+	TaskID string `json:"task_id"`
+}
+
 type reasonPayload struct {
 	Reason string `json:"reason"`
 }
@@ -342,6 +346,11 @@ func validateActionEnvelope(envelope CommandEnvelope) error {
 		if err := decodeStrict(envelope.Payload, &payload); err != nil || payload.ExecutionProfileID == "" || envelope.ExpectedVersion == 0 || envelope.ExpectedControlRevision == 0 {
 			return invalidCommand("start_task requires a profile, expected task version and displayed control revision")
 		}
+	case "stop_candidate":
+		var payload candidateStopPayload
+		if err := decodeStrict(envelope.Payload, &payload); err != nil || payload.TaskID == "" || envelope.ExpectedVersion == 0 || envelope.ExpectedControlRevision == 0 || envelope.ExpectedGraphRevision != 0 {
+			return invalidCommand("stop_candidate requires task_id, target candidate and candidate/control revisions")
+		}
 	case "start_candidate":
 		var payload profilePayload
 		if err := decodeStrict(envelope.Payload, &payload); err != nil || payload.ExecutionProfileID == "" || envelope.ExpectedVersion == 0 || envelope.ExpectedGraphRevision == 0 || envelope.ExpectedControlRevision == 0 {
@@ -513,6 +522,12 @@ func (s *Server) controlInput(ctx context.Context, envelope CommandEnvelope, req
 		control.ExpectedRevision = &revision
 	}
 	switch envelope.Action {
+	case "stop_candidate":
+		var payload candidateStopPayload
+		if err := decodeStrict(envelope.Payload, &payload); err != nil {
+			return control, invalidCommand(err.Error())
+		}
+		control.Action, control.Payload = api.StopCandidate, api.ControlPayload{TaskID: payload.TaskID, RunID: envelope.TargetID, ExpectedRunRevision: envelope.ExpectedVersion}
 	case "start_task", "start_candidate":
 		var payload profilePayload
 		if err := decodeStrict(envelope.Payload, &payload); err != nil {
@@ -716,6 +731,9 @@ func mappedControlMatchesEnvelope(original CommandEnvelope, input api.ControlInp
 	}
 	payload := input.Payload
 	switch original.Action {
+	case "stop_candidate":
+		var stop candidateStopPayload
+		return decodeStrict(original.Payload, &stop) == nil && payload == (api.ControlPayload{TaskID: stop.TaskID, RunID: original.TargetID, ExpectedRunRevision: original.ExpectedVersion})
 	case "start_task", "start_candidate":
 		var profile profilePayload
 		if decodeStrict(original.Payload, &profile) != nil {
@@ -782,7 +800,7 @@ func matchesCommand(original CommandEnvelope, record *requestRecord, command api
 
 func isControlAction(action string) bool {
 	switch action {
-	case "start_task", "start_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
+	case "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
 		return true
 	default:
 		return false

@@ -28,7 +28,33 @@ func candidateRuns(state projectState, taskID string) []*api.CandidateSummary {
 			}
 		}
 	}
+	seen := map[string]bool{}
+	for _, r := range runs {
+		seen[r.RunID] = true
+	}
+	for _, a := range state.actions {
+		if a.CandidateNumber == 0 || (a.Action != "start_task" && a.Action != "start_candidate") || seen[a.RequestID] || taskID != "" && a.TaskID != taskID {
+			continue
+		}
+		// This is a display overlay for the original request, not an assertion
+		// that the service has admitted or started a worker.
+		r := &api.CandidateSummary{RunID: a.RequestID, TaskID: a.TaskID, DomainTaskID: a.TaskID, TaskStatus: "in_progress", CandidateNumber: a.CandidateNumber, CandidateCreatedAt: a.CreatedAt, WorkflowStatus: "queued", WorkflowStage: "start.submit", ExecutionStatus: "pending", StageDiagnostic: a.Message}
+		for _, profile := range state.ref.Presentation.Profiles {
+			if profile.ID == a.ExecutionProfileID {
+				selected := profile
+				r.ExecutionProfile = &selected
+				break
+			}
+		}
+		if a.Status == "failed" || a.Status == "rejected" {
+			r.WorkflowStatus, r.WorkflowStage, r.ExecutionStatus = "abandoned", "start.failed", "failed"
+		}
+		runs = append(runs, r)
+	}
 	sort.Slice(runs, func(i, j int) bool {
+		if runs[i].CandidateNumber != 0 && runs[j].CandidateNumber != 0 && runs[i].CandidateNumber != runs[j].CandidateNumber {
+			return runs[i].CandidateNumber < runs[j].CandidateNumber
+		}
 		if runs[i].CandidateCreatedAt.Equal(runs[j].CandidateCreatedAt) {
 			return runs[i].RunID < runs[j].RunID
 		}
@@ -78,12 +104,16 @@ func (m Model) cycleCandidate(delta int) (tea.Model, tea.Cmd) {
 	}
 	s.candidates[row.taskID] = runs[i].RunID
 	m.expandedDetailScroll = 0
+	s.final = finalReplyReader{finalGeneration: s.final.finalGeneration + 1, bodyGeneration: s.final.bodyGeneration + 1, previewGeneration: s.final.previewGeneration + 1}
+	s.activityGeneration++
+	s.activityKey, s.activityError, s.activityBusy, s.activityReadAt = "", "", false, time.Time{}
+	s.recentActivity, s.workerTransitions = nil, nil
 	m.saveProjectView(m.selected)
 	return m.refreshSelected(m.selected)
 }
 
 func candidateStartReason(s projectState, row *consoleRow, now time.Time) string {
-	if row == nil || row.run == nil || row.run.TaskStatus != "in_progress" {
+	if row == nil || row.run == nil || row.native == nil || (row.native.Status != "in_progress" && row.run.WorkflowStage != "start.submit") {
 		return "需要进行中的 Task"
 	}
 	if s.snapshot.NativeTaskError != "" || s.snapshot.HistoryError != "" || s.snapshot.NativeTasks == nil || row.native == nil {
@@ -106,12 +136,12 @@ func candidateStartReason(s projectState, row *consoleRow, now time.Time) string
 	}
 	count := 0
 	for _, r := range candidateRuns(s, row.taskID) {
-		if candidateBusinessOpen(r) {
+		if candidateParticipating(r) {
 			count++
 		}
 	}
 	if count >= 5 {
-		return "开始检查：当前参与数已达5个；不接受新开始（无硬名额、队列或自动补位）"
+		return "当前参与数已达5个；启动失败历史不占名额"
 	}
 	return ""
 }
@@ -136,13 +166,8 @@ func (m Model) startAdditionalCandidate() (tea.Model, tea.Cmd) {
 
 func (m Model) submitCandidateAction(action string, p api.ControlPayload, id, instance string, revision uint64) (tea.Model, tea.Cmd) {
 	s := &m.projects[m.selected]
-	for _, a := range s.actions {
-		if a.Action == action && a.TaskID == p.TaskID && !a.Resolved {
-			m.status = "原请求仍在核实 · " + a.RequestID
-			return m, nil
-		}
-	}
-	a := &actionState{Payload: p, RequestID: id, Action: action, TaskID: p.TaskID, TargetInstance: instance, Status: "submitting", UpdatedAt: m.clock.Now()}
+	number := nextCandidateNumber(*s, p.TaskID)
+	a := &actionState{CandidateNumber: number, CreatedAt: m.clock.Now(), Payload: p, RequestID: id, Action: action, TaskID: p.TaskID, TargetInstance: instance, Status: "submitting", UpdatedAt: m.clock.Now(), ExecutionProfileID: p.ExecutionProfileID, ExecutionProfileDigest: p.ExecutionProfileDigest}
 	s.actions[id] = a
 	if err := m.saveProjectView(m.selected); err != nil {
 		delete(s.actions, id)
@@ -150,7 +175,40 @@ func (m Model) submitCandidateAction(action string, p api.ControlPayload, id, in
 		return m, nil
 	}
 	m.status = "提交候选动作 · request " + id
+	m.selectNewCandidate(p.TaskID, id)
 	return m, m.submitControl(m.selected, action, p.TaskID, id, instance, revision)
+}
+
+func nextCandidateNumber(s projectState, taskID string) int {
+	number := 0
+	for i, r := range candidateRuns(s, taskID) {
+		number = max(number, r.CandidateNumber, i+1)
+	}
+	if s.snapshot.History != nil {
+		for _, w := range s.snapshot.History.WorkflowRuns {
+			if w.TaskID == taskID {
+				number = max(number, w.CandidateNumber)
+			}
+		}
+	}
+	return number + 1
+}
+
+func (m *Model) selectNewCandidate(taskID, runID string) {
+	m.leaveAnswer()
+	m.cancelWorkspace()
+	s := &m.projects[m.selected]
+	if s.candidates == nil {
+		s.candidates = map[string]string{}
+	}
+	s.candidates[taskID], s.selectedKey = runID, "task:"+taskID
+	m.expandedDetailScroll = 0
+	s.final = finalReplyReader{finalGeneration: s.final.finalGeneration + 1, bodyGeneration: s.final.bodyGeneration + 1, previewGeneration: s.final.previewGeneration + 1}
+	s.activityGeneration++
+	s.activityKey, s.activityError, s.activityBusy, s.activityReadAt = "", "", false, time.Time{}
+	s.recentActivity, s.workerTransitions = nil, nil
+	// Invalidate old body/activity responses immediately, before submission.
+	*m, _ = m.refreshSelected(m.selected)
 }
 
 func (m *Model) saveDecisionDraft() {
@@ -183,6 +241,9 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			profile = r.ExecutionProfile.Name + " [" + r.ExecutionProfile.ID + "]"
 		}
 		outcome := "参与实验"
+		if r.WorkflowStage == "start.failed" {
+			outcome = "启动失败历史 · 不占参与名额"
+		}
 		loser := false
 		if r.TaskStatus == "discarded" {
 			outcome = "Task 已丢弃/保留，需人工处置"
@@ -194,6 +255,12 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			case "loser":
 				outcome = "落选/保留资源"
 				loser = true
+			}
+		}
+		if r.WorkflowStatus == "abandoned" {
+			outcome = "已停止参与 · 不占参与名额"
+			if r.CandidateStopReason == "startup_failed" || r.WorkflowStage == "start.failed" {
+				outcome = "启动失败历史 · 不占参与名额"
 			}
 		}
 		if candidateBusinessOpen(r) && r.WorkflowStatus == "waiting_input" {
@@ -228,7 +295,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			lines = append(lines, "  最终回复摘要："+safeTerminalText(*r.Summary)+"（完整正文在候选详情查看；[ / ] 选择历史回复）")
 		}
 	}
-	lines = append(lines, "新增只做开始时5个参与检查；并发偶尔超额照实展示。", "无硬名额、预留、队列或自动补位。", "指标缺口：未提供评分/排名、token/费用比较。", "采样："+sampleTime(s.snapshot))
+	lines = append(lines, "最多5个参与中候选；准备中的候选计入，明确启动失败历史不占名额。", "每次确认独立创建；不会自动补位。", "指标缺口：未提供评分/排名、token/费用比较。", "采样："+sampleTime(s.snapshot))
 	if reason := candidateStartReason(s, row, m.clock.Now()); reason != "" {
 		lines = append(lines, "b 新增不可用："+safeTerminalText(reason))
 	} else {
@@ -236,6 +303,14 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 	}
 	if row.run != nil {
 		r := row.run
+		if r.WorkflowStatus == "abandoned" {
+			lines = append(lines, safeTerminalInlineText("已停止参与 · 原因："+displayDash(r.CandidateStopReason)+" · 操作者："+displayDash(r.CandidateStoppedBy)), "资源保留；执行状态为最后已知事实，不表示 worker 已停止。")
+		}
+		if reason := candidateStopReason(s, row.taskID, r.RunID, m.clock.Now()); reason != "" {
+			lines = append(lines, "F9 停止不可用："+reason)
+		} else {
+			lines = append(lines, "F9 停止当前候选参与（保留历史和资源）")
+		}
 		started := "未知"
 		if !r.CandidateCreatedAt.IsZero() {
 			started = r.CandidateCreatedAt.Format("2006-01-02 15:04:05Z07:00")

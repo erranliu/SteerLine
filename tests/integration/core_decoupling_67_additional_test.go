@@ -257,11 +257,21 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 		require(t, err)
 		defer store.Close()
 		command := appExecutionCommands(t, store, config2)
-		_, err = command.AbandonNativeCandidate(ctx, config2.ExecutionConfig(), execution.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: first.run.RunID, RequestID: newID(), ExpectedTaskVersion: delivered.Tasks[0].Version, ExpectedCandidateVersion: first.run.ControlRevision, RequestedBy: "operator", Reason: "must reject known merged candidate"})
-		if err == nil || !strings.Contains(err.Error(), "already_merged") {
-			t.Fatalf("real merged delivery allowed exit: %v", err)
+		snapshot, err := store.Query(ctx, config2.Identity())
+		require(t, err)
+		var revision uint64
+		for _, w := range snapshot.WorkflowRuns {
+			if w.WorkflowRunID == first.run.RunID {
+				revision = w.ControlRevision
+			}
 		}
-		t.Logf("real provider merge %s; candidate abandon rejected: %v", ledger.publicationURL, err)
+		req, payload, receipt := integrationStopRequest(config2.Identity(), first.run.RunID, revision)
+		result, err := command.StopCandidate(ctx, req, payload, receipt)
+		require(t, err)
+		if result.Code != "already_ended" {
+			t.Fatal("delivered candidate terminal facts changed", result)
+		}
+		t.Logf("real provider merge %s; original completed candidate retained", ledger.publicationURL)
 	}
 	waitFor(t, 20*time.Second, func() bool {
 		ledger2.mu.Lock()

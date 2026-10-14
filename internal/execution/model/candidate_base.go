@@ -8,10 +8,17 @@ func CandidateCommonBase(workflows []WorkflowRunRecord, executions []ExecutionRe
 		if w.TaskID != taskID {
 			continue
 		}
+		if w.StartPending {
+			continue
+		}
 		found := false
 		for _, e := range executions {
 			if e.WorkflowRunID != w.WorkflowRunID || e.ExecutionID != w.SelectedResult {
 				continue
+			}
+			if !CandidateParticipates(w.Status) && e.Workspace.Base == "" {
+				found = true
+				break
 			}
 			if !validDeliveryCommit(e.Workspace.Base) || base != "" && base != e.Workspace.Base {
 				return "", &ResultError{Code: "contract_mismatch", Message: "candidate common base is missing or inconsistent"}

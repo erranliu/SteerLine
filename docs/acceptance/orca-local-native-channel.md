@@ -30,4 +30,6 @@
 
 测试期间没有把本机加入远程主机清单，没有修改 C:\SteerlineRuntime。生成后的原生测试会话使用自己的 fixture；补齐状态钩子后启动了新的终端，不把第一轮缺钩子的空状态当成能力通过。
 
-附加编译检查：`go test ./tests/e2e/internal/testenv -run ^$` 仍被既有 `candidates.go:408` 的 WorkflowRunRecord.Abandonment 引用阻断，证据为 testenv-compile.log；本次未扩展修复旧候选场景。该失败不计通过，也不以两轮本机样本宣称完整 E2E 已通过。
+首次附加编译检查：`go test ./tests/e2e/internal/testenv -run ^$` 被既有 `candidates.go:408` 的 WorkflowRunRecord.Abandonment 引用阻断，证据为 testenv-compile.log；当时未扩展修复旧候选场景。该失败不计通过，也不以两轮本机样本宣称完整 E2E 已通过。
+
+2026-10-14 合并主干 `a8720b5f` 解决 PR #307 冲突后，保留 PR #308 的 stop_candidate 驱动和控制版本校验，driver/testenv 编译通过；保存的真实命名管道响应经生产解码器复验，两轮子用例均通过、无 skip。仅重读既有证据，未启动新原生会话或修改安装环境；日志位于 `C:\Users\lmas1\AppData\Local\Temp\steerline-pr307-conflict-1791958258219` 的 profiles-build.log 和 native-evidence-replay.log。

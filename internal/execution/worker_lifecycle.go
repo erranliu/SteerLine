@@ -848,7 +848,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 		key, kind = "worker-session:"+fixed.execution.ExecutionID+":"+commandID, "prepare_worker_session"
 	}
 	prior := s.operationByKey(key)
-	if s.candidateBusinessClosed(run) && !retiredResourceAction(candidate.Action, candidate.Input) && (prior == nil || prior.Status == "pending") {
+	if s.candidateBusinessClosed(run) {
 		return nativeErr("candidate_inactive", "retired candidate cannot authorize another lifecycle action")
 	}
 	operation, err := s.newLifecycleOperation(run, kind, key, candidate.Input.Turn)
@@ -925,6 +925,10 @@ func lifecycleOperationKey(executionID string, action executionbackend.Lifecycle
 }
 
 func (s *Service) executeLifecycleStep(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, candidate executionbackend.LifecycleCandidate) error {
+	return s.executeLifecycleStepWithCleanup(ctx, run, lifecycle, candidate, false)
+}
+
+func (s *Service) executeLifecycleStepWithCleanup(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, candidate executionbackend.LifecycleCandidate, deliveryCleanup bool) error {
 	if run != nil && s.lifecycleEffectPending(run.RunID) {
 		return errLifecycleEffectPending
 	}
@@ -946,9 +950,8 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *reconstructiont
 	} else if candidate.Action == executionbackend.LifecycleSubmitInput {
 		key, kind, value = "worker-input:"+fixed.execution.ExecutionID+":"+candidate.Input.Turn.CommandID, "submit_worker_input", candidate.Input.Turn
 	}
-	prior := s.operationByKey(key)
-	if s.candidateBusinessClosed(run) && !retiredResourceAction(candidate.Action, candidate.Input) && (prior == nil || prior.Status == "pending") {
-		return nativeErr("candidate_inactive", "retired candidate cannot authorize another lifecycle action")
+	if s.candidateBusinessClosed(run) && !(deliveryCleanup && candidate.Action == executionbackend.LifecycleCleanup && fixed.workflow.Status == "completed") {
+		return nativeErr("candidate_inactive", "candidate no longer participates")
 	}
 	operation, reconcile, err := s.originalLifecycleOperation(run, kind, key, value)
 	if err != nil {
@@ -1002,7 +1005,11 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *reconstructiont
 	if err := request.Validate(); err != nil {
 		return err
 	}
-	return s.dispatchLifecycleEffect(ctx, run, lifecycle, request, reconcile, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
+	dispatch := s.dispatchLifecycleEffect
+	if deliveryCleanup {
+		dispatch = s.dispatchResourceEffect
+	}
+	return dispatch(ctx, run, lifecycle, request, reconcile, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		return s.applyLifecycleStepReceipt(run, request, result)
 	})
 }
@@ -1128,6 +1135,11 @@ func (s *Service) applyLifecycleStepReceipt(run *reconstructiontypes.RunView, re
 	if worker != nil {
 		s.registerWorker(run, worker)
 	}
+	if failedStart && fixed.workflow.StepID == executionmodel.StepImplement && len(fixed.workflow.StageResults) == 0 {
+		fixed.execution.LastStoppedTurnID = fixed.execution.CurrentTurnID
+		fixed.execution.RecoveryRequired = false
+		return s.failReservedStart(run, diagnostic)
+	}
 	if status == "accepted" && receipt.State.ResourcePending && candidate.Action == executionbackend.LifecycleCreateResource {
 		return errLifecycleResourcePending
 	}
@@ -1218,7 +1230,7 @@ func (s *Service) cleanupLifecycleResources(ctx context.Context, run *reconstruc
 			return err
 		}
 		if hasPending {
-			if err := s.executeLifecycleStep(ctx, run, lifecycle, pending); err != nil {
+			if err := s.executeLifecycleStepWithCleanup(ctx, run, lifecycle, pending, true); err != nil {
 				return err
 			}
 			continue
@@ -1236,7 +1248,7 @@ func (s *Service) cleanupLifecycleResources(ctx context.Context, run *reconstruc
 		if candidate.Action != executionbackend.LifecycleCleanup {
 			return errors.New("completed lifecycle plan proposed a non-cleanup operation")
 		}
-		if err := s.executeLifecycleStep(ctx, run, lifecycle, candidate); err != nil {
+		if err := s.executeLifecycleStepWithCleanup(ctx, run, lifecycle, candidate, true); err != nil {
 			return err
 		}
 	}
@@ -1244,6 +1256,9 @@ func (s *Service) cleanupLifecycleResources(ctx context.Context, run *reconstruc
 }
 
 func (s *Service) acknowledgeLifecycleDelivery(run *reconstructiontypes.RunView, deliveryID string) error {
+	if s.candidateBusinessClosed(run) {
+		return nil
+	}
 	if run != nil && s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}

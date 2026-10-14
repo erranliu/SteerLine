@@ -11,6 +11,9 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Any new navigation/input supersedes the pending open intent. A late HTTP
 	// reply must not reopen an answer after Escape, help, selection or quit.
 	m.answerCheck = nil
+	if key.String() == "f9" && m.confirm == nil && m.profileChoice == nil && !m.help && !m.detailExpanded && !m.operationDetails && (m.answer == nil || !m.answer.details) {
+		return m.prepareCandidateStop()
+	}
 	if key.String() == "ctrl+n" && m.confirm == nil && m.profileChoice == nil && !m.help {
 		return m.openNativeSession()
 	}
@@ -453,6 +456,9 @@ func (m Model) handleConfirm(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.confirm = nil
+		if confirm.action == "stop_candidate" {
+			return m.submitCandidateStop(*confirm)
+		}
 		return m.beginAction(confirm.projectKey, confirm.instance, confirm.revision, confirm.action, confirm.taskID, confirm.requestID)
 	}
 	return m, nil

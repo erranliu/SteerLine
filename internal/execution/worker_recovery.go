@@ -262,8 +262,11 @@ func (s *Service) pristineTaskStartReservation(run *reconstructiontypes.RunView)
 		return false
 	}
 	reserved := false
+	if w.StartPending {
+		return true
+	}
 	for _, op := range s.domain.Operations {
-		if op.Kind == "claim_task" && op.OperationID == run.RunID {
+		if (op.Kind == "claim_task" || op.Kind == "start_candidate") && op.OperationID == run.RunID {
 			reserved = true
 			continue
 		}
@@ -284,33 +287,7 @@ func (s *Service) pristineTaskStartReservation(run *reconstructiontypes.RunView)
 }
 
 func (s *Service) resumeConfiguredWork(ctx context.Context) error {
-	if err := s.resumeWorkerFlow(ctx); err != nil {
-		return err
-	}
-	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != executionmodel.Version {
-			continue
-		}
-		workflow, execution := s.workflowRecords(run)
-		if workflow == nil || execution == nil || workflow.Status != "completed" {
-			continue
-		}
-		var cleanupErr error
-		lifecycle, _, resolveErr := s.lifecycleForRun(run)
-		if resolveErr != nil {
-			cleanupErr = resolveErr
-		} else {
-			cleanupErr = s.cleanupLifecycleResources(ctx, run, lifecycle)
-		}
-		if cleanupErr != nil {
-			execution.LastEvent = ptr("Task delivery completed; owned execution cleanup needs reconciliation: " + cleanupErr.Error())
-			s.refreshRun(run)
-			if saveErr := s.commitWorker(run); saveErr != nil {
-				return saveErr
-			}
-		}
-	}
-	return nil
+	return s.resumeWorkerFlow(ctx)
 }
 
 func (s *Service) resumeWorkerFlow(ctx context.Context) error {
@@ -328,9 +305,6 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 			continue
 		}
 		if s.candidateBusinessClosed(run) {
-			if err := s.resumeRetiredCandidate(ctx, run); err != nil {
-				resumeErr = errors.Join(resumeErr, err)
-			}
 			continue
 		}
 		if s.workers[run.RunID] != nil {
@@ -347,12 +321,21 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 			continue
 		}
 		adapter, err := s.workerFlowRegistration(run)
+		if workflow.StartPending {
+			if err := s.prepareReservedStart(ctx, run); err != nil {
+				resumeErr = errors.Join(resumeErr, err)
+			}
+			continue
+		}
 		if err != nil {
 			resumeErr = errors.Join(resumeErr, err)
 			continue
 		}
 		_, err = s.resumeRegisteredWorkerFlow(ctx, task, run, adapter)
 		if err != nil {
+			if ctx.Err() == nil && workflow.StepID == executionmodel.StepImplement && len(workflow.StageResults) == 0 && execution.Process == nil && execution.SessionID == "" && execution.PendingCommandID == "" && !s.hasUnknownWorkerOperation(run) && !s.lifecycleEffectPending(run.RunID) {
+				err = s.failReservedStart(run, err.Error())
+			}
 			resumeErr = errors.Join(resumeErr, err)
 		}
 	}

@@ -159,50 +159,53 @@ type CandidateSummary struct {
 	StageResults     []StageResultSummary `json:"stage_results,omitempty"`
 	ReportToolPolicy string               `json:"report_tool_policy,omitempty"`
 
-	DeliveryOutcome    string                   `json:"delivery_outcome"`
-	SessionID          string                   `json:"session_id"`
-	SessionGeneration  string                   `json:"session_generation"`
-	CurrentTurnID      string                   `json:"current_turn_id"`
-	TurnNumber         uint64                   `json:"turn_number"`
-	ExecutionProfile   *ExecutionProfileSummary `json:"execution_profile"`
-	PRHistory          []string                 `json:"pr_history"`
-	CandidateCreatedAt time.Time                `json:"candidate_created_at"`
-	CandidateEndedAt   *time.Time               `json:"candidate_ended_at"`
-	CandidateTiming    string                   `json:"candidate_timing"`
-	ResourceStatus     string                   `json:"resource_status"`
-	EnvironmentBlocker *EnvironmentBlocker      `json:"environment_blocker"`
-	RecoveryRequired   bool                     `json:"recovery_required"`
-	RecoveryState      string                   `json:"recovery_state"`
-	RecoveryVersion    uint64                   `json:"recovery_version"`
-	TaskID             string                   `json:"task_id"`
-	DomainTaskID       string                   `json:"domain_task_id"`
-	WorkflowVersion    string                   `json:"workflow_version"`
-	ExecutionID        string                   `json:"execution_id"`
-	Title              string                   `json:"title"`
-	RunID              string                   `json:"run_id"`
-	AttemptID          string                   `json:"attempt_id"`
-	ControlRevision    uint64                   `json:"control_revision"`
-	Claimant           string                   `json:"claimant"`
-	Host               string                   `json:"host"`
-	Backend            string                   `json:"backend"`
-	Protocol           string                   `json:"protocol"`
-	Agent              string                   `json:"agent"`
-	Target             TargetSummary            `json:"target"`
-	TaskStatus         string                   `json:"task_status"`
-	ExecutionStatus    string                   `json:"execution_status"`
-	Process            *WorkerLocation          `json:"process"`
-	StartedAt          *time.Time               `json:"started_at"`
-	EndedAt            *time.Time               `json:"ended_at"`
-	WorktreePath       *string                  `json:"worktree_path"`
-	WorktreeBranch     *string                  `json:"worktree_branch"`
-	BaseCommit         *string                  `json:"base_commit"`
-	LastEvent          *string                  `json:"last_event"`
-	LogPath            *string                  `json:"log_path"`
-	ResultPath         *string                  `json:"result_path"`
-	Summary            *string                  `json:"summary"`
-	Error              *string                  `json:"error"`
-	PR                 PRSummary                `json:"pr"`
-	Decision           *DecisionSummary         `json:"decision"`
+	DeliveryOutcome     string                   `json:"delivery_outcome"`
+	SessionID           string                   `json:"session_id"`
+	SessionGeneration   string                   `json:"session_generation"`
+	CurrentTurnID       string                   `json:"current_turn_id"`
+	TurnNumber          uint64                   `json:"turn_number"`
+	ExecutionProfile    *ExecutionProfileSummary `json:"execution_profile"`
+	PRHistory           []string                 `json:"pr_history"`
+	CandidateNumber     int                      `json:"candidate_number,omitempty"`
+	CandidateCreatedAt  time.Time                `json:"candidate_created_at"`
+	CandidateStopReason string                   `json:"candidate_stop_reason,omitempty"`
+	CandidateStoppedBy  string                   `json:"candidate_stopped_by,omitempty"`
+	CandidateEndedAt    *time.Time               `json:"candidate_ended_at"`
+	CandidateTiming     string                   `json:"candidate_timing"`
+	ResourceStatus      string                   `json:"resource_status"`
+	EnvironmentBlocker  *EnvironmentBlocker      `json:"environment_blocker"`
+	RecoveryRequired    bool                     `json:"recovery_required"`
+	RecoveryState       string                   `json:"recovery_state"`
+	RecoveryVersion     uint64                   `json:"recovery_version"`
+	TaskID              string                   `json:"task_id"`
+	DomainTaskID        string                   `json:"domain_task_id"`
+	WorkflowVersion     string                   `json:"workflow_version"`
+	ExecutionID         string                   `json:"execution_id"`
+	Title               string                   `json:"title"`
+	RunID               string                   `json:"run_id"`
+	AttemptID           string                   `json:"attempt_id"`
+	ControlRevision     uint64                   `json:"control_revision"`
+	Claimant            string                   `json:"claimant"`
+	Host                string                   `json:"host"`
+	Backend             string                   `json:"backend"`
+	Protocol            string                   `json:"protocol"`
+	Agent               string                   `json:"agent"`
+	Target              TargetSummary            `json:"target"`
+	TaskStatus          string                   `json:"task_status"`
+	ExecutionStatus     string                   `json:"execution_status"`
+	Process             *WorkerLocation          `json:"process"`
+	StartedAt           *time.Time               `json:"started_at"`
+	EndedAt             *time.Time               `json:"ended_at"`
+	WorktreePath        *string                  `json:"worktree_path"`
+	WorktreeBranch      *string                  `json:"worktree_branch"`
+	BaseCommit          *string                  `json:"base_commit"`
+	LastEvent           *string                  `json:"last_event"`
+	LogPath             *string                  `json:"log_path"`
+	ResultPath          *string                  `json:"result_path"`
+	Summary             *string                  `json:"summary"`
+	Error               *string                  `json:"error"`
+	PR                  PRSummary                `json:"pr"`
+	Decision            *DecisionSummary         `json:"decision"`
 }
 type TargetSummary struct {
 	ID         string `json:"id"`
@@ -281,6 +284,7 @@ type HistorySummary struct {
 	Executions   []ExecutionSummary `json:"executions"`
 }
 type WorkflowSummary struct {
+	CandidateNumber  int                      `json:"candidate_number,omitempty"`
 	FlowRef          string                   `json:"flow_ref"`
 	WorkflowStage    string                   `json:"workflow_stage"`
 	WorkflowStatus   string                   `json:"workflow_status"`

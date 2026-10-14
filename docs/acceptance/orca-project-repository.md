@@ -13,12 +13,20 @@
 
 原始证据目录：`C:\Users\lmas1\AppData\Local\Temp\steerline-repo-selection-check-jtq25k2x`。`targeted-checks.log` 记录路由、恢复、app profile 和 native 配置测试命令及通过结果；controlled 包仅编译、无匹配测试，不作为行为验证。adapter 全包检查见 `adapter-all.log`；产品入口及生成器语法见 `build-and-generator.log`。
 
-## 未通过或未执行
+## 首轮验证的阻塞与未执行项
 
 - 集成阶段往返未执行：整个 `tests/integration` 包因候选弃用旧接口引用无法编译（`AbandonNativeCandidate`、`CandidateAbandonOptions`、`Abandonment`）。用当前 HEAD 原文件 overlay 复核，同样报错；见 `baseline-integration.log`。
-- `tests/e2e/internal/testenv` 无法编译：既有 `driver/candidate.go` 仍使用已移除的 ControlPayload 字段。HEAD overlay 复核相同；见 `baseline-testenv.log`。未修复本次范围外的旧候选夹具。
+- 首轮 `tests/e2e/internal/testenv` 无法编译：既有 `driver/candidate.go` 仍使用已移除的 ControlPayload 字段。HEAD overlay 复核相同；见 `baseline-testenv.log`。该驱动随后在本机能力验证中修正，剩余候选夹具由主干 PR #308 修正；合并后结果见下节。
 - 真实本机/远端工作区、worker 和 PR 链路本次未运行。后置人工核验窗口待定，使用新版本生成的独立 `C:\SteerlineDebug` 包，远端事先注册与本包项目目录同名的 Git 仓库，并同步精确 base commit；不阻塞无关开发。
 - 安装更新记录见下节；旧 profile 2 及其已冻结执行无兼容读取。
+
+## 合并主干后的复验（2026-10-14）
+
+PR #307 合并主干 `a8720b5f`。唯一文本冲突位于 `tests/e2e/internal/driver/candidate.go`：保留主干新增的 stop_candidate、ExpectedRunRevision 及 ControlRevision 校验，同时保留移除旧候选弃用动作和字段的结果。该文件最终与主干一致，Orca 自动选择仓库的实现与配置改动保持。
+
+复验均通过：Orca transport/protocol 两包回归；app profile 定向测试；native 配置定向测试；driver/testenv/产品入口编译；调试生成器 PowerShell 语法检查。之前的候选旧接口编译阻塞已由主干 PR #308 修复。定向集成 `go test ./tests/integration -run '^(TestWorkerStageOrca(Terminal|Environment)RoundTrip|TestMC[789])$' -count=1` 实际执行并通过，覆盖候选停止/重建与受控本机、environment 三阶段往返；不代表真实 Orca 业务链验收。
+
+原始日志位于 `C:\Users\lmas1\AppData\Local\Temp\steerline-pr307-conflict-1791958258219`：adapters.log、profiles-build.log、integration.log、generator-syntax.log。没有运行全量测试，没有启动真实 worker/PR，也没有修改安装环境。
 
 ## 安装版同步更新（2026-10-14）
 

@@ -12,7 +12,7 @@ import (
 )
 
 func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskRecord, run *reconstructiontypes.RunView) error {
-	if s.candidateBusinessClosed(run) {
+	if s.candidateBusinessClosed(run) || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
 	fixed, err := s.workerFlowContext(run)
@@ -41,7 +41,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 		return s.scheduleWorkerStartCheck(ctx, run, fixed.config, lifecycle, setup)
 	}
 	if err := checkWorkerStart(ctx, fixed.config, lifecycle, setup); err != nil {
-		return err
+		return s.failReservedStart(run, "Worker start preflight failed: "+err.Error())
 	}
 	return s.prepareWorkerFlowResources(ctx, run)
 }
@@ -181,7 +181,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task taskmodel
 }
 
 func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructiontypes.RunView, prompt, turnID string, taskFacts ...json.RawMessage) error {
-	if s.candidateBusinessClosed(run) {
+	if s.candidateBusinessClosed(run) || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nativeErr("candidate_inactive", "candidate no longer accepts business input")
 	}
 	if s.lifecycleEffectPending(run.RunID) {

@@ -12,6 +12,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 var errTaskNotReady = errors.New("target task is no longer ready")
@@ -169,6 +170,9 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	if (s.State.Service.Status != "running" && s.State.Service.Status != "error") || !s.State.Service.Ready {
 		return s.rejectControl(*req, digest, "stale_instance", errors.New("service is stopping or not ready"))
 	}
+	if req.Action == "stop_candidate" {
+		return s.processCandidateStop(ctx, *req, payload, digest)
+	}
 	if req.Action == "start_candidate" {
 		return s.processCandidateControl(ctx, *req, payload, digest)
 	}
@@ -319,6 +323,14 @@ func (s *Service) retainControlPublicationFailure(err error) error {
 }
 
 func controlFailureCode(err error) string {
+	var taskErr *taskmodel.Error
+	if errors.As(err, &taskErr) {
+		return taskErr.Code
+	}
+	var resultErr *executionmodel.ResultError
+	if errors.As(err, &resultErr) {
+		return resultErr.Code
+	}
 	if errors.Is(err, context.Canceled) {
 		return "failed"
 	}

@@ -111,6 +111,7 @@ func (m Model) updateProject(msg projectMsg) (tea.Model, tea.Cmd) {
 			m.runFocus = ""
 		}
 	}
+	m.selectAfterCandidateStop(index)
 	if index == m.selected {
 		m.syncAnswer()
 	}

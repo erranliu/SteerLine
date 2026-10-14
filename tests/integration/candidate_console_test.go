@@ -266,20 +266,24 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		return false
 	})
 	step(key('r'))
-	step(key('z'))
+	step(tea.KeyMsg{Type: tea.KeyF9})
 	step(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, 30*time.Second, func() bool {
 		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
 		for _, r := range snap.Observation.Page.Runs {
 			if r.RunID == primary.RunID {
-				return r.Abandonment != nil
+				return r.WorkflowStatus == "abandoned" && r.CandidateStopReason == "manual"
 			}
 		}
 		return false
 	})
 	step(key('r'))
+	// Re-select the stopped history; success selected the remaining candidate.
+	for i := 0; i < 5 && !strings.Contains(m.View(), "已停止参与"); i++ {
+		step(tea.KeyMsg{Type: tea.KeyF6})
+	}
 	step(key('d')) // Enter now opens interaction/session; d owns full history facts.
-	if !containsConsoleText(m.View(), "已放弃") {
+	if !containsConsoleText(m.View(), "已停止参与") {
 		t.Fatal("UI lost original exit/stop facts", m.View())
 	}
 	snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})

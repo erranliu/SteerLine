@@ -21,6 +21,9 @@ const maxViewFileBytes = 4 << 20
 var savedRequestIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 type SavedAction struct {
+	StopSelectionPending   bool                  `json:"stop_selection_pending,omitempty"`
+	CandidateNumber        int                   `json:"candidate_number,omitempty"`
+	CreatedAt              time.Time             `json:"created_at,omitempty"`
 	DecisionIdentity       string                `json:"decision_identity,omitempty"`
 	Payload                api.ControlPayload    `json:"payload,omitempty"`
 	EnvironmentTarget      *api.HostActionTarget `json:"environment_target,omitempty"`
@@ -278,7 +281,7 @@ func readViewFile(path string) (ViewFile, error) {
 
 func validSavedAction(value string) bool {
 	switch value {
-	case "open_terminal", "recheck_environment", "start_candidate", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "answer_decision":
+	case "open_terminal", "recheck_environment", "start_candidate", "stop_candidate", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "answer_decision":
 		return true
 	}
 	return false

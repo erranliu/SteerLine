@@ -55,7 +55,7 @@ func (m Model) updateActionSubmitted(msg actionSubmittedMsg) (tea.Model, tea.Cmd
 			action.Status, action.Resolved = "rejected", true
 			action.Message = msg.err.Error() + "；正在刷新状态，请重新选择"
 			delete(state.view.Outstanding, msg.requestID)
-			if action.Action != "start_candidate" {
+			if action.Action != "start_candidate" && action.Action != "stop_candidate" {
 				state.selectedKey = ""
 				state.selectionHold = true
 			}
@@ -126,8 +126,11 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 	if msg.receipt != nil {
 		previousStatus, previousRun := action.Status, action.RunID
 		expectedRun := ""
-		if action.Action == "start_candidate" {
+		if action.Action == "start_candidate" || action.Action == "start_task" && action.CandidateNumber > 0 {
 			expectedRun = action.RequestID
+		}
+		if action.Action == "stop_candidate" {
+			expectedRun = action.Payload.RunID
 		}
 		candidateMismatch := expectedRun != "" && (msg.receipt.Status == "applied" || msg.receipt.Status == "applying") && msg.receipt.RunID != expectedRun
 		if msg.receipt.RequestID != action.RequestID || msg.receipt.Action != action.Action || msg.receipt.InstanceID != action.TargetInstance || candidateMismatch {
@@ -139,6 +142,10 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		action.Status, action.Message, action.RunID = msg.receipt.Status, msg.receipt.Message, msg.receipt.RunID
+		if action.Action == "stop_candidate" && msg.receipt.Status == "applied" && previousStatus != "applied" {
+			row := m.selectedRow(index)
+			action.StopSelectionPending = row != nil && row.run != nil && row.run.RunID == action.Payload.RunID
+		}
 		action.Resolved = msg.receipt.Status == "applied" || msg.receipt.Status == "rejected" || msg.receipt.Status == "failed" || msg.receipt.Status == "indeterminate"
 		if action.Action == "stop_service" && msg.receipt.Status == "applied" && msg.receipt.Code == "stop_exit_unverified" {
 			action.Status, action.Resolved = "pending_verification", false
@@ -151,7 +158,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 		}
 		if msg.receipt.Code == "stale_revision" {
 			action.Status, action.Message, action.Resolved = "rejected", "stale_revision：控制状态已变化；正在刷新状态，请重新选择", true
-			if action.Action != "start_candidate" {
+			if action.Action != "start_candidate" && action.Action != "stop_candidate" {
 				state.selectedKey = ""
 				state.selectionHold = true
 			}

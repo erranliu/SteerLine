@@ -53,6 +53,9 @@ type consoleRow struct {
 }
 
 type actionState struct {
+	StopSelectionPending   bool
+	CandidateNumber        int       `json:"candidate_number,omitempty"`
+	CreatedAt              time.Time `json:"created_at,omitempty"`
 	DecisionIdentity       string
 	Payload                api.ControlPayload
 	EnvironmentTarget      *api.HostActionTarget
@@ -137,12 +140,15 @@ type projectState struct {
 }
 
 type confirmAction struct {
-	projectKey string
-	instance   string
-	revision   uint64
-	action     string
-	taskID     string
-	requestID  string
+	payload        api.ControlPayload
+	candidateLabel string
+	profile        string
+	projectKey     string
+	instance       string
+	revision       uint64
+	action         string
+	taskID         string
+	requestID      string
 }
 
 type executionProfileChoice struct {
@@ -237,7 +243,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 			if outstanding {
 				message = "控制台重开后重新查询此 request_id"
 			}
-			state.actions[requestID] = &actionState{RequestID: requestID, Action: saved.Action, TaskID: saved.TaskID, ExecutionProfileID: saved.ExecutionProfileID, ExecutionProfileDigest: saved.ExecutionProfileDigest, Status: saved.Status, Message: message, RunID: saved.RunID, DecisionID: saved.DecisionID, TargetInstance: saved.TargetInstance, Resolved: !outstanding, UpdatedAt: saved.UpdatedAt, Payload: saved.Payload, EnvironmentTarget: saved.EnvironmentTarget, DecisionIdentity: saved.DecisionIdentity, DecisionDraftOptionID: saved.DecisionDraftOptionID, DecisionDraftNote: saved.DecisionDraftNote, DecisionRevision: saved.DecisionRevision, DecisionVersion: saved.DecisionVersion}
+			state.actions[requestID] = &actionState{StopSelectionPending: saved.StopSelectionPending, CandidateNumber: saved.CandidateNumber, CreatedAt: saved.CreatedAt, RequestID: requestID, Action: saved.Action, TaskID: saved.TaskID, ExecutionProfileID: saved.ExecutionProfileID, ExecutionProfileDigest: saved.ExecutionProfileDigest, Status: saved.Status, Message: message, RunID: saved.RunID, DecisionID: saved.DecisionID, TargetInstance: saved.TargetInstance, Resolved: !outstanding, UpdatedAt: saved.UpdatedAt, Payload: saved.Payload, EnvironmentTarget: saved.EnvironmentTarget, DecisionIdentity: saved.DecisionIdentity, DecisionDraftOptionID: saved.DecisionDraftOptionID, DecisionDraftNote: saved.DecisionDraftNote, DecisionRevision: saved.DecisionRevision, DecisionVersion: saved.DecisionVersion}
 		}
 		m.projects = append(m.projects, state)
 	}
@@ -323,7 +329,7 @@ func (m Model) submitControl(index int, action, taskID, requestID string, instan
 	ref := state.ref
 	payload := api.ControlPayload{}
 	switch action {
-	case "start_candidate":
+	case "start_candidate", "stop_candidate":
 		payload = state.actions[requestID].Payload
 	case "open_terminal", "recheck_environment":
 		if pending := state.actions[requestID]; pending != nil {
@@ -687,7 +693,7 @@ func controlRequestMatchesAction(request *api.ControlRequest, action *actionStat
 		return false
 	}
 	switch action.Action {
-	case "start_candidate":
+	case "start_candidate", "stop_candidate":
 		return payload == action.Payload
 	case "open_terminal", "recheck_environment":
 		return payload.Environment != nil && payload.Environment.RunID == action.TaskID && (action.EnvironmentTarget == nil || *payload.Environment == *action.EnvironmentTarget)
@@ -851,7 +857,7 @@ func filterAllows(filter int, kind rowKind, run *api.CandidateSummary) bool {
 	case 5:
 		return runNeedsAttention(run)
 	case 6:
-		return run != nil && (run.TaskStatus == "closed" && !runNeedsAttention(run) || runStatus(run) == "completed")
+		return run != nil && (run.WorkflowStatus == "abandoned" || run.TaskStatus == "closed" && !runNeedsAttention(run) || runStatus(run) == "completed")
 	}
 	return true
 }
@@ -939,7 +945,7 @@ func (m Model) refreshFinalReplies(index int) (Model, tea.Cmd) {
 	state := &m.projects[index]
 	key := ""
 	filter := api.ConversationFilter{}
-	if row := m.selectedRow(index); row != nil && row.run != nil {
+	if row := m.selectedRow(index); row != nil && row.run != nil && row.run.ExecutionID != "" {
 		key = candidateIdentity(row.run)
 		filter = api.ConversationFilter{WorkflowID: row.run.RunID, ExecutionID: row.run.ExecutionID, SessionID: row.run.SessionID, FinalsOnly: true}
 	}
@@ -1004,13 +1010,13 @@ func savedActions(actions map[string]*actionState, limit int) map[string]SavedAc
 		if len(out) >= limit {
 			break
 		}
-		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt, Payload: action.Payload, EnvironmentTarget: action.EnvironmentTarget, DecisionIdentity: action.DecisionIdentity, DecisionDraftOptionID: action.DecisionDraftOptionID, DecisionDraftNote: action.DecisionDraftNote, DecisionRevision: action.DecisionRevision, DecisionVersion: action.DecisionVersion}
+		out[action.RequestID] = SavedAction{StopSelectionPending: action.StopSelectionPending, CandidateNumber: action.CandidateNumber, CreatedAt: action.CreatedAt, Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt, Payload: action.Payload, EnvironmentTarget: action.EnvironmentTarget, DecisionIdentity: action.DecisionIdentity, DecisionDraftOptionID: action.DecisionDraftOptionID, DecisionDraftNote: action.DecisionDraftNote, DecisionRevision: action.DecisionRevision, DecisionVersion: action.DecisionVersion}
 	}
 	for _, action := range terminal {
 		if len(out) >= limit {
 			break
 		}
-		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt, Payload: action.Payload, EnvironmentTarget: action.EnvironmentTarget, DecisionIdentity: action.DecisionIdentity, DecisionDraftOptionID: action.DecisionDraftOptionID, DecisionDraftNote: action.DecisionDraftNote, DecisionRevision: action.DecisionRevision, DecisionVersion: action.DecisionVersion}
+		out[action.RequestID] = SavedAction{StopSelectionPending: action.StopSelectionPending, CandidateNumber: action.CandidateNumber, CreatedAt: action.CreatedAt, Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt, Payload: action.Payload, EnvironmentTarget: action.EnvironmentTarget, DecisionIdentity: action.DecisionIdentity, DecisionDraftOptionID: action.DecisionDraftOptionID, DecisionDraftNote: action.DecisionDraftNote, DecisionRevision: action.DecisionRevision, DecisionVersion: action.DecisionVersion}
 	}
 	return out
 }

@@ -185,6 +185,7 @@ func (m Model) createActionWithProfile(action, taskID string, profile *api.Execu
 	revision := runtimeState.Control.Revision
 	newAction := &actionState{RequestID: requestID, Action: action, TaskID: taskID, Status: "submitting", Message: "准备提交", TargetInstance: instance, UpdatedAt: m.clock.Now()}
 	if action == "start_task" {
+		newAction.CandidateNumber, newAction.CreatedAt = nextCandidateNumber(*state, taskID), m.clock.Now()
 		if row := m.selectedRow(m.selected); row != nil && row.native != nil {
 			newAction.Payload.ExpectedTaskVersion = row.native.Version
 		}
@@ -212,6 +213,9 @@ func (m Model) createActionWithProfile(action, taskID string, profile *api.Execu
 	}
 	if action == "set_dispatch_mode" && taskID == "auto" {
 		m.status += " · auto 可能开始领取 Ready 任务"
+	}
+	if action == "start_task" {
+		m.selectNewCandidate(taskID, requestID)
 	}
 	return m, m.submitControl(m.selected, action, taskID, requestID, instance, revision)
 }
