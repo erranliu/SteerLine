@@ -1,6 +1,6 @@
 # 验收：HTTP 服务端命令边界收敛
 
-唯一归属：任务 #92，HTTP 服务端命令边界收敛。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)。实现及本地自动验收已完成，PR待独立复审和合并核验；本任务仍未记为实现完成。
+唯一归属：任务 #92，HTTP 服务端命令边界收敛。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)。实现及本地自动验收已完成；[PR #311](https://github.com/erranliu/SteerLine/pull/311)待独立复审和合并核验，本任务仍未记为实现完成。
 
 [Spec](../spec/http-command-boundary.spec.md) · [Plan / 测试计划](../spec/http-command-boundary.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 
@@ -16,7 +16,7 @@
 
 ## 执行环境与命令
 
-- 日期：2026-10-14（日志时间UTC）。测试源码起点：`35d4d65350fa6f6f284e9e91a6bd657ba7abb947`；测试时工作树包含本任务实现变更。运行环境：Windows/amd64，Go 1.26.4；无启用原生验收开关。
+- 日期：2026-10-14（日志时间UTC）。固定Spec/Plan与测试源码起点：`35d4d65350fa6f6f284e9e91a6bd657ba7abb947`；验收实现候选提交：`72e1937d`（测试时工作树中的实现内容与该提交一致）。运行环境：Windows/amd64，Go 1.26.4；无启用原生验收开关。
 - HC92-A1：`go run ./cmd/test-feedback -- ./internal/product/httpapi -run '^TestHTTPCommandBoundary$' -count=1`
 - HC92-A2：`go run ./cmd/test-feedback -- ./internal/product/httpapi -run '^(TestHTTPCommandRegistry|TestAPIAuthoritativeControlBinding|TestAPIAuthoritativeSQLiteBinding|TestAPIFirstRegistrationBindsMappedControlIntent|TestAPIFormalConsumerWinsRegistrationWindow|TestAPIFormalControlContentCollisionIsIdentityConflict|TestAPIOriginalCommandReceipt|TestAPIReconnectAndUnsupported)$' -count=1`
 - HC92-A3 HTTP：`go run ./cmd/test-feedback -- ./internal/product/httpapi -run '^(TestTUIHTTPRoutes|TestAPIServiceLifecycle|TestAPIIdentityAndAuthentication|TestAPIRequestRecord.*)$' -count=1`
