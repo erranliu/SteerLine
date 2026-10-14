@@ -1,9 +1,7 @@
 package execution
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -21,10 +19,6 @@ type neutralPreparationResolver struct {
 	feedback        []string
 	questionPending bool
 	newFault        bool
-	loseReceipt     bool
-	originalRequest *executionbackend.LifecycleRequest
-	originalReceipt executionbackend.LifecycleReceipt
-	reconciles      int
 }
 
 type neutralPreparationPort struct {
@@ -78,35 +72,7 @@ func (p neutralPreparationPort) ReadProbe(id executionbackend.ProbeIdentity, dig
 	return &executionbackend.ProbeReceipt{ProbeIdentity: id, InputSHA256: digest, GitHead: "fixture-committed-head", Read: true, Write: true, Delete: true}, nil
 }
 
-func (p neutralPreparationPort) Reconcile(_ context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
-	if p.resolver.originalRequest == nil {
-		return p.LifecyclePort.Reconcile(context.Background(), r)
-	}
-	original := p.resolver.originalRequest
-	if original.Operation.ID != r.Operation.ID || original.Operation.PayloadDigest != r.Operation.PayloadDigest || !bytes.Equal(original.Operation.Request, r.Operation.Request) || original.Snapshot.Ref != r.Snapshot.Ref {
-		return executionbackend.LifecycleReceipt{}, nil, errors.New("fixture reconcile changed original operation")
-	}
-	p.resolver.reconciles++
-	receipt := p.resolver.originalReceipt.Clone()
-	receipt.Operation = r.Operation
-	receipt.Disposition = executionbackend.OperationConfirmed
-	return receipt, nil, nil
-}
-
 func (p neutralPreparationPort) Execute(ctx context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
-	if p.resolver.loseReceipt && r.Operation.Action == string(executionbackend.LifecyclePrepareSession) {
-		receipt, observer, err := p.LifecyclePort.Execute(ctx, r)
-		if err != nil {
-			return receipt, observer, err
-		}
-		original := r.Clone()
-		p.resolver.originalRequest = &original
-		p.resolver.originalReceipt = receipt.Clone()
-		receipt.Disposition = executionbackend.OperationUnknown
-		receipt.RequestID = "fixture-original-request"
-		p.resolver.loseReceipt = false
-		return receipt, observer, nil
-	}
 	if r.Input.Feedback != nil {
 		p.resolver.feedback = append(p.resolver.feedback, r.Input.Feedback.Message)
 		return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationConfirmed, State: executionbackend.LifecycleStateFacts{InputAccepted: true, TurnID: r.Snapshot.Session.CurrentTurnID}}, nil, nil

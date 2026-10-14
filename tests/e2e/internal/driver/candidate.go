@@ -164,6 +164,26 @@ func MainCandidate(args []string) error {
 		if err != nil {
 			return err
 		}
+		// Submission is not an accepted answer. Observe this exact command;
+		// never let a later business timeout hide rejection or unknown outcome.
+		ticker := time.NewTicker(150 * time.Millisecond)
+		defer ticker.Stop()
+		for cmd.Status == "pending" || cmd.Status == "in_flight" {
+			select {
+			case <-ctx.Done():
+				_ = json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Command: &cmd})
+				return fmt.Errorf("answer command %s remains unconfirmed: %w", cmd.CommandID, ctx.Err())
+			case <-ticker.C:
+			}
+			cmd, err = reader.Command(ctx, c.Identity(), cmd.CommandID)
+			if err != nil {
+				return err
+			}
+		}
+		if cmd.Status != "accepted" {
+			_ = json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Command: &cmd})
+			return fmt.Errorf("answer command %s %s: %s", cmd.CommandID, cmd.Status, cmd.Result)
+		}
 		return json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Command: &cmd})
 	}
 	if in.Action == "receipt" {

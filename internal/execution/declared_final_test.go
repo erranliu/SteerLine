@@ -52,7 +52,11 @@ func TestDeclaredFinalMissingProvenanceStoresNoCanonicalBody(t *testing.T) {
 	require(t, err)
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
 	w := s.workflowRecord(run)
-	if w.StepID != m.StepReport || len(w.StageResults) != 1 || w.StageResults[0].FinalVerified {
+	if w.StepID != m.StepImplement || w.Status != "waiting_input" || len(w.StageInputs) != 1 || len(w.StageResults) != 1 || run.Decision == nil || !s.executionRecord(run).RecoveryRequired {
+		t.Fatal("failed native implementation advanced without explicit recovery")
+	}
+	result := w.StageResults[0]
+	if result.CommandID != evidence.CommandID || result.Succeeded || result.FinalVerified || result.Outcome != "blocked" || result.Final != evidence.LastMessage || result.FinalDiagnostic != evidence.FinalDiagnostic {
 		t.Fatal("failed native implementation lost its unverified source facts")
 	}
 	page, err := newFixtureConversationQuery(s.conversationStore, s.Config.identity).ReadConversation(context.Background(), api.ConversationFilter{ExecutionID: run.ExecutionID}, "", 10)

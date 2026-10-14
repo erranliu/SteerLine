@@ -24,6 +24,9 @@ func reserveStopTestCandidates(t *testing.T, s *Service, count int) []string {
 		require(t, err)
 		config, profile, err := s.runtime.Profiles.ResolveExecutionProfile("first", "")
 		require(t, err)
+		require(t, config.BindPublicationTarget(ctx, s.runtime.ProcessHost))
+		profile = freezeClaimExecutionProfile(profile, config)
+		config.fixedProfileDigest = profile.Digest
 		id := newID()
 		_, err = s.commandService(s.Config.identity).ClaimNativeTask(ctx, config, TaskClaimOptions{
 			TaskID: "101", RequestID: id, WorkflowRunID: id, ExpectedTaskVersion: graph.ByID["101"].Version,
@@ -293,6 +296,14 @@ func TestCandidateStopControlReplayAndLatePreparation(t *testing.T) {
 	s.runContext, s.signalQueue = ctx, make(chan Signal, 4)
 	port := &creationCheckpointPort{}
 	input := b.LifecycleInput{Workspace: &b.WorkspaceIntent{Path: t.TempDir(), Branch: "candidate-test", BaseCommit: strings.Repeat("c", 40)}}
+	// Preparation must match the original durable workspace intent before
+	// this test can exercise late receipts on a stopped candidate.
+	for _, id := range ids[:2] {
+		run := s.find(id)
+		intent := *input.Workspace
+		s.executionRecord(run).WorkspaceIntent = &intent
+		require(t, s.commitWorker(run))
+	}
 	err := s.executeLifecycleStep(ctx, s.find(ids[0]), port, b.LifecycleCandidate{Action: b.LifecyclePrepareWorkspace, Input: input})
 	if !errors.Is(err, errLifecycleEffectPending) {
 		t.Fatal("original action did not reach dispatch", err)

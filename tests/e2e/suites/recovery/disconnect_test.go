@@ -53,10 +53,18 @@ func TestFailureResults(t *testing.T) {
 	if failure.Helper.Dispatches != 2 || len(failure.Domain.WorkflowRuns[0].StageResults) != 2 || failure.Domain.WorkflowRuns[0].StageResults[1].Succeeded {
 		t.Fatal("failed report without final did not retain failure")
 	}
+	// The console reads through HTTP, so inspect with this owned service live.
+	f.AssertRecoveryConsole()
 	f.StopService()
-	f.AssertRecoveryConsole()
 	f.ConfigureMissingNativeThread()
+	f.StartService()
+	f.WaitRecovery("missing-thread-unverified", func(s testenv.Snapshot) bool {
+		return s.Runtime != nil && len(s.Runtime.Runs) == 1 && len(s.Domain.Executions) == 1 &&
+			s.Domain.Executions[0].RecoveryState == "unverified" && s.Runtime.Runs[0].Decision != nil &&
+			s.Runtime.Runs[0].Decision.Status == "pending" && len(s.Runtime.Runs[0].Decision.Request.Options) == 0
+	})
 	f.AssertRecoveryConsole()
+	f.StopService()
 }
 
 func TestMissingSuccessfulResult(t *testing.T) {

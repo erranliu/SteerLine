@@ -204,6 +204,9 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	}
 	// Feedback is submitted through the actual console against the selected original Decision.
 	step(key('r'))
+	// The second UI start selected P2; the later starts used the control client.
+	// Return to the original P1 before binding its feedback and stop request.
+	step(tea.KeyMsg{Type: tea.KeyF6})
 	step(key('a'))
 	if !containsConsoleText(m.View(), "提交预览") || !containsConsoleText(m.View(), "你的答复") {
 		t.Fatalf("original decision draft did not open: %s", m.View())
@@ -212,7 +215,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	step(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("接线验证：精确原候选")})
 	for attempt := 0; attempt < 3; attempt++ {
 		step(tea.KeyMsg{Type: tea.KeyF2})
-		if !strings.Contains(m.View(), "stale_instance: SQLite projection does not match the ready service instance") {
+		if !strings.Contains(m.View(), "rejected：stale_instance:") {
 			break
 		}
 		// This API rejection precedes command admission. Simulate a human

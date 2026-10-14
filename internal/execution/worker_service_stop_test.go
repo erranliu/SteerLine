@@ -216,6 +216,9 @@ func TestWorkerLateReplyReleasesOnlyItsOriginalUncertainty(t *testing.T) {
 			if e.RecoveryState != expected || s.operationByKey("worker-question-answer:"+e.ExecutionID+":"+record.DecisionID).Status != "confirmed" || len(s.domain.Attempts) != beforeAttempts {
 				t.Fatalf("late original reply qualification: state=%s want=%s", e.RecoveryState, expected)
 			}
+			if run.Decision == nil || run.Decision.Status != "reply_accepted" || run.Decision.Request.QuestionRoute == nil {
+				t.Fatal("confirmed original reply lost its retained question history")
+			}
 		})
 	}
 }

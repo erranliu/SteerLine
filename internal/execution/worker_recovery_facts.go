@@ -25,8 +25,10 @@ func (s *Service) setWorkerRecoveryEvidence(run *reconstructiontypes.RunView, ev
 	completed := s.originalWorkerTurnEnded(run)
 	w := s.workflowRecord(run)
 	core := (w.StepID == executionmodel.StepImplement || w.StepID == executionmodel.StepReport) && w.PRURL == ""
+	questionPending := run.Decision != nil && run.Decision.Request.QuestionRoute != nil &&
+		(run.Decision.Status == "pending" || run.Decision.Status == "answer_saved")
 	s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{WorkerLive: evidence.ResourceAvailable, WorkerAbsent: evidence.ProcessAbsent, WritersAbsent: evidence.WritersAbsent, Completed: completed,
-		OutcomeUncertain: core && (completed || evidence.ProcessAbsent && evidence.WritersAbsent) && !s.workerContinuationQualified(run, evidence), QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}, evidence.SessionAvailable)
+		OutcomeUncertain: core && (completed || evidence.ProcessAbsent && evidence.WritersAbsent) && !s.workerContinuationQualified(run, evidence), QuestionPending: questionPending}, evidence.SessionAvailable)
 }
 
 // Actual worker evidence, not the declared service-stop behavior, determines

@@ -204,7 +204,11 @@ func (s *Scenario) RunPseudoConsoleSteps(command *exec.Cmd, name, readyMarker st
 		if err := windows.WriteFile(inputWrite, []byte(step.Input), nil, nil); err != nil {
 			return currentTranscript(&outputMu, &output), err
 		}
-		deadline := time.Now().Add(20 * time.Second)
+		timeout := step.Timeout
+		if timeout <= 0 {
+			timeout = 20 * time.Second
+		}
+		deadline := time.Now().Add(timeout)
 		for step.WaitFor != "" {
 			outputMu.Lock()
 			found := strings.Contains(output.String(), step.WaitFor)
