@@ -19,6 +19,13 @@ type creationCheckpointPort struct {
 	unavailable          bool
 }
 
+func (p *creationCheckpointPort) PolicyCapabilities() b.LifecyclePolicyCapabilities {
+	return b.LifecyclePolicyCapabilities{Preparation: b.PreparationCapabilities{Workspace: b.MechanismApplicable, Resource: b.MechanismNotApplicable, Session: b.MechanismApplicable}}
+}
+func (p *creationCheckpointPort) PreparationFacts(context.Context, b.LifecycleSnapshot) (b.PreparationFacts, error) {
+	return b.PreparationFacts{Workspace: b.GateRequired, Resource: b.GateNotApplicable, Session: b.GateUnverified}, nil
+}
+
 func (p *creationCheckpointPort) Execute(_ context.Context, r b.LifecycleRequest) (b.LifecycleReceipt, b.LifecycleObserver, error) {
 	p.executes++
 	receipt := b.LifecycleReceipt{Operation: r.Operation, Disposition: b.OperationUnknown}
@@ -45,10 +52,11 @@ func TestLifecycleEffectForwardsWorkspaceCreationCheckpoint(t *testing.T) {
 		checkpoint := scenario.checkpoint
 		port := &creationCheckpointPort{checkpoint: checkpoint, unavailable: scenario.unavailable}
 		ref := b.ExecutionRef{RunID: strings.Repeat("a", 32), AttemptID: strings.Repeat("b", 32)}
+		intent := b.WorkspaceIntent{Path: "original-worktree", Branch: "task", BaseCommit: strings.Repeat("c", 40)}
 		request := b.LifecycleRequest{
-			Snapshot:  b.LifecycleSnapshot{Session: b.SessionContext{ProjectID: "project", ExecutionID: "execution", WorkflowRunID: ref.RunID, AttemptID: ref.AttemptID}, ConfigurationDigest: "config", ResourceGeneration: "generation"},
-			Input:     b.LifecycleInput{Workspace: &b.WorkspaceIntent{BaseCommit: strings.Repeat("c", 40)}},
-			Operation: b.Operation{ID: "original-workspace", Action: string(b.LifecyclePrepareWorkspace), PayloadDigest: "digest", Ref: &ref, LifecycleIdentity: &b.LifecycleOperationIdentity{ProjectID: "project", ExecutionID: "execution", ConfigurationDigest: "config", ResourceGeneration: "generation", InputBindingDigest: "binding", Ref: ref}},
+			Snapshot:  b.LifecycleSnapshot{Session: b.SessionContext{ProjectID: "project", ExecutionID: "execution", WorkflowRunID: ref.RunID, AttemptID: ref.AttemptID}, ConfigurationDigest: "config", ResourceGeneration: "generation", WorkspacePlan: intent},
+			Input:     b.LifecycleInput{Workspace: &intent},
+			Operation: b.Operation{ID: "original-workspace", Status: b.OperationInFlight, Action: string(b.LifecyclePrepareWorkspace), PayloadDigest: "digest", Ref: &ref, LifecycleIdentity: &b.LifecycleOperationIdentity{ProjectID: "project", ExecutionID: "execution", ConfigurationDigest: "config", ResourceGeneration: "generation", InputBindingDigest: "binding", Ref: ref}},
 		}
 		if err := request.Validate(); err != nil {
 			t.Fatal(err)

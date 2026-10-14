@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"github.com/erranliu/SteerLine/internal/execution/workflow"
 	"strings"
 	"testing"
 
@@ -29,7 +30,7 @@ func TestWorkerFlowPromptBindsFixedTaskContract(t *testing.T) {
 	contract := taskmodel.TaskContract{ContractID: "fixed", Branch: "main", SpecRef: taskmodel.FileReference{Path: "docs/spec/task.spec.md", Commit: strings.Repeat("b", 40), SHA256: strings.Repeat("c", 64)}, PlanRef: taskmodel.FileReference{Path: "docs/spec/task.plan.md", Commit: strings.Repeat("d", 40), SHA256: strings.Repeat("e", 64)}}
 	runID := strings.Repeat("a", 32)
 	prompt, err := Prompt(task, contract, runID, executionbackend.PublicationPolicy{Publisher: "worker"})
-	if err != nil || prompt != implementPrompt+"\nSpec: "+contract.SpecRef.Path+"\nPlan: "+contract.PlanRef.Path {
+	if err != nil || prompt != workflow.ImplementPrompt+"\nSpec: "+contract.SpecRef.Path+"\nPlan: "+contract.PlanRef.Path {
 		t.Fatalf("worker prompt contains more than the action and document paths: %q / %v", prompt, err)
 	}
 	if _, err := Prompt(task, contract, "", executionbackend.PublicationPolicy{Publisher: "worker"}); err == nil {

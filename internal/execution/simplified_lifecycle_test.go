@@ -77,7 +77,7 @@ func TestSimplifiedLifecycleActorDoesNotWaitForEffect(t *testing.T) {
 			input := executionbackend.LifecycleInput{Resource: &executionbackend.ResourceIntent{Purpose: "fixture"}}
 			_, err := s.startWorkerOperation(run, string(executionbackend.LifecycleCreateResource), "slow-effect", input.Resource)
 			require(t, err)
-			fixed, err := s.workerFlowContext(run)
+			fixed, err := s.workerRecords(run)
 			require(t, err)
 			snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 			require(t, err)

@@ -1,4 +1,4 @@
-package model
+package reliable
 
 import (
 	"testing"

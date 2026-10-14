@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/workflow"
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -12,22 +13,10 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
-func publicationTargetInstruction(c Config) string {
-	// The current branch and repository are available from the native workspace.
-	facts, _ := json.Marshal(struct {
-		Remote     string `json:"remote"`
-		BaseBranch string `json:"base_branch"`
-	}{c.Remote, c.Branch})
-	return "\nPR target: " + string(facts) + "\n"
-}
-
+// Project the frozen publication contract; prompt policy belongs to Workflow.
 func stagePublicationInstruction(step string, c Config) string {
-	facts, _ := json.Marshal(map[string]any{"publication_policy": c.PublicationPolicy})
-	context := "\nFixed execution facts: " + string(facts) + "\n"
-	if step == executionmodel.StepPublish {
-		context += publicationTargetInstruction(c)
-	}
-	return context
+	policy, _ := json.Marshal(c.PublicationPolicy)
+	return workflow.PublicationInstruction(step, policy, c.Remote, c.Branch)
 }
 
 func (c Config) publicationSettings() executionmodel.PublicationSettings {
@@ -85,5 +74,5 @@ func fixedWorkflowPublicationConfig(c Config, w executionmodel.WorkflowRunRecord
 	}
 	c = c.ApplyFixedExecutionProfile(*w.ExecutionProfile, directory)
 	c.Repository = w.Repository
-	return copyWorkerFlowConfig(c), nil
+	return copyWorkerConfig(c), nil
 }

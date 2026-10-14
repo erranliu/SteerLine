@@ -1,4 +1,4 @@
-package model
+package reliable
 
 // RecoveryFacts contain verified worker evidence. A missing connection or a
 // missing process alone does not establish the absence of workspace writers.

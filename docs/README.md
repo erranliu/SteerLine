@@ -8,6 +8,7 @@ SteerLine 的整体职责、具体产品设计、后续规划、执行契约与�
 | 当前代码、模块与接口归属 | [代码架构](architecture/current-code-architecture.md) |
 | 规划任务前判断并行与冲突 | [并行开发指南](architecture/parallel-development.md) |
 | 配置、数据、反馈、会话与 UI 设计 | [产品设计](product-design/README.md) |
+| Worker 全流程异常、重试与恢复规则 | [Worker 流程异常处理与重试](product-design/worker-lifecycle.md) |
 | 讨论目标与执行任务 | [RoadmapGuide](roadmap/RoadmapGuide.md) · [正式执行规划](roadmap/execution-map.md) · [产品愿景](roadmap/product-vision.md) |
 | 未交付规格与待补验收 | [Spec / Plan](spec/README.md) |
 | 全项目测试方法与入口 | [测试指南](testing.md) · [分级 E2E](../tests/e2e/README.md) |

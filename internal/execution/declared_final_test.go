@@ -48,7 +48,7 @@ func TestDeclaredFinalMissingProvenanceStoresNoCanonicalBody(t *testing.T) {
 	s, run, port := workerStageFixture(t)
 	evidence := workerStageEvidence(s, run, "unverified summary", false)
 	evidence.FinalOrigin, evidence.FinalVerified, evidence.FinalDiagnostic = "terminal_observed", false, "missing result"
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	require(t, s.acceptStageTurn(context.Background(), run, port, fixed, evidence))
 	w := s.workflowRecord(run)

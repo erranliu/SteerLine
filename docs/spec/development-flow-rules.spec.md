@@ -8,7 +8,7 @@
 
 ## 问题与目标
 
-[staged_flow.go](../../internal/execution/staged_flow.go) 的结果消费同时调用会话提交、生命周期、PR查询与 actor 提交；[staged_result.go](../../internal/execution/staged_result.go) 的严格结果解析实际是固定流程规则。纯步骤变更仍须构造完整 Service。
+[staged_flow.go](../../internal/execution/staged_flow.go) 的结果消费同时调用会话提交、生命周期、PR查询与 actor 提交；[workflow/result.go](../../internal/execution/workflow/result.go) 的严格结果解析实际是固定流程规则。纯步骤变更仍须构造完整 Service。
 
 建立 `internal/execution/development` 纯规则 owner，收拢 development/v3 的严格业务 JSON解析、步骤结果判断、报告重试、基础提示词/结果指令和下一 StageInput 构造。规则接收固定输入/源结果、当前步骤、已核验本轮事实、报告权限描述及 actor 提供的继续资格/原因值，返回具体的结果与下一步骤/输入声明，不执行动作、不提交状态。当前仅一个固定流程，不新增 DSL、插件注册、通用 effect/事件框架或第二份步骤状态。
 

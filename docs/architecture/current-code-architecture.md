@@ -2,11 +2,13 @@
 
 > 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。实际验证与待验项见[专属验收](../acceptance/tui-http-client.md)。WebUI、SSE 和远程 HTTP 服务尚未实现。
 
-核对基点：2026-10-14，`5a24abec`；本文描述该源码树，不将历史原生样本当作当前版本全量验收。第一阶段目标包含本地 Codex、本机 Orca 与远端执行路径交付；Orca 历史交付范围见[单终端验收](../acceptance/orca-terminal-transport.md)，当前完成补查询的规则、原生短回合及未重跑 PR 范围见[补查询验收](../acceptance/orca-completion-query.md)。远端执行目标与远程 HTTP 客户端是不同能力。
+核对基点：2026-10-14，主干 `ab814da9`＋本次 Worker 三层重构；本文描述该源码树，不将历史原生样本当作当前版本全量验收。第一阶段目标包含本地 Codex、本机 Orca 与远端执行路径交付；Orca 历史交付范围见[单终端验收](../acceptance/orca-terminal-transport.md)，当前完成补查询的规则、原生短回合及未重跑 PR 范围见[补查询验收](../acceptance/orca-completion-query.md)。远端执行目标与远程 HTTP 客户端是不同能力。
 
 ## 系统边界
 
 整体职责与生命周期原则见[架构总览](../architecture.md)，本页维护实际代码与端口归属。
+
+Worker 各节点的异常分类、重试预算和恢复边界统一维护于[Worker 流程异常处理与重试](../product-design/worker-lifecycle.md)，该文档同时索引当前实现与待补能力；本页不复制处理矩阵。
 
 用于拆分 roadmap 任务时，先按[并行开发指南](parallel-development.md)核对功能、契约、共享语义/接线和测试资源；本页的包划分不直接构成并行许可。
 
@@ -74,9 +76,11 @@ Within app, [`directory.go`](../../internal/app/directory.go) explicitly combine
 
 Within console, [`final_reader.go`](../../internal/console/final_reader.go) owns the final index, selection/pin, body and bounded preview with separate generations. Its operations take `ConversationQueries`, context/time values and fixed target facts, without Model, projectState or control/native-session capabilities. [`final_replies.go`](../../internal/console/final_replies.go) and [`final_preview.go`](../../internal/console/final_preview.go) route host selection/mode and results; Model resets its own scrolling/recovery when the reader reports a binding or body-selection change. Existing historical/current-turn rules remain distinct. These are source ownership boundaries inside the same Go packages, not compile isolation or a reusable UI framework.
 
+Worker execution is composed as Workflow → ReliableExecution → adapter: `workflow` owns business prompts, source and successor rules; `reliable` owns preparation applicability, original-operation reconciliation, identity/turn facts, deadlines and recovery qualification. The execution root maps durable records and composes one WorkerCommit; it does not inject Service rules into either package. Adapters declare applicability and native facts, with no backend-name branches in reliable. The retired local workspace fallback is deleted. Scope and evidence are maintained in the [three-layer acceptance](../acceptance/worker-three-layer.md).
+
 ## Current package inventory
 
-At `5a24abec`, Windows `go list ./...` enumerates 49 packages. The current inventory includes the four isolated TUI/HTTP consumer owners, public Orca protocol codecs, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
+At the rebased three-layer candidate `715b011f`, Windows `go list ./...` enumerates 51 packages. The current inventory includes the four isolated TUI/HTTP consumer owners, public Orca protocol codecs, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
 
 | Owner / purpose | Current packages |
 | --- | --- |
@@ -84,7 +88,7 @@ At `5a24abec`, Windows `go list ./...` enumerates 49 packages. The current inven
 | Composition and host | `internal/app`, `internal/app/host`, `internal/consoleapp` |
 | Console | `internal/console`, `internal/console/activityrender` |
 | Task | `internal/task`, `internal/task/model` |
-| Execution actor and pure values | `internal/execution`, `internal/execution/agentlaunch`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
+| Execution actor and pure values | `internal/execution`, `internal/execution/agentlaunch`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler`, `internal/execution/workflow`, `internal/execution/reliable` |
 | Execution effects and native reply evidence | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
 | Filesystem guards | `internal/pathguard` |
 | Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph`, `internal/product/httpapi`, `internal/product/httpclient`, `internal/product/httpcontract`, `internal/product/httpfs` |
@@ -165,7 +169,7 @@ Test-only support has one owner under [`internal/testkit`](../../internal/testki
 
 ## Development flow ownership
 
-`internal/execution/staged_flow.go` owns the single `development/v3` flow, frozen stage input/source bindings and atomic result/transition/next-input commitment; `staged_result.go` owns strict business JSON decoding. `model/staged_flow.go` contains values and step IDs. The flow no longer stores separate artifact snapshots. Adapters normalize native evidence without selecting the next business step. Codex consumes verified app-server final_answer items. Orca uses one original terminal, exact input acceptance/start receipts, a pre-send main-agent baseline and original runtime/terminal/incarnation/pane/provider identity. Native subscription and independent `worktree.ps` queries verify a new completion and complete ordinary `lastAssistantMessage`; working observation is optional. There is no Task/Dispatch/coordinator, output-material relay, base64 result marker, screen completion heuristic or agent-private history scan. Missing/truncated/conflicting provenance blocks advancement. Current completion supports Codex main-agent evidence only; native outcome may remain unknown independently of the accepted reply and business outcome. Both adapters expose workspace facts without promising strong read-only isolation; Orca's comparison is revision-scoped. Product pages and the TUI consume persisted workflow projections. See [Orca boundary](orca-native-worker.md) and [completion rules](../spec/orca-completion-query.spec.md).
+`internal/execution/workflow` owns the single `development/v3` business prompts, source/format rules, successor decisions and strict JSON decoding. `reliable` normalizes execution evidence and owns technical qualification/reconciliation/recovery; `staged_flow.go` maps durable records and commits results, transitions and next-input intentions atomically. `model/staged_flow.go` retains persistent wire values and step IDs. The flow no longer stores separate artifact snapshots. Adapters normalize native evidence without selecting the next business step. Codex consumes verified app-server final_answer items. Orca uses one original terminal, exact input acceptance/start receipts, a pre-send main-agent baseline and original runtime/terminal/incarnation/pane/provider identity. Native subscription and independent `worktree.ps` queries verify a new completion and complete ordinary `lastAssistantMessage`; working observation is optional. There is no Task/Dispatch/coordinator, output-material relay, base64 result marker, screen completion heuristic or agent-private history scan. Missing/truncated/conflicting provenance blocks advancement. Current completion supports Codex main-agent evidence only; native outcome may remain unknown independently of the accepted reply and business outcome. Both adapters expose workspace facts without promising strong read-only isolation; Orca's comparison is revision-scoped. Product pages and the TUI consume persisted workflow projections. See [Orca boundary](orca-native-worker.md) and [completion rules](../spec/orca-completion-query.spec.md).
 
 ## HTTP 接入后的解耦评估与建议
 
@@ -207,7 +211,7 @@ flowchart LR
 
 已确认批次#92/#93中，#92/#93均已独立复审、验证并真实合并。#94/#96与三层workflow/reliable及actor接线重叠，#95的最终交付抽取仍有剩余收益但当前桥接需重审，见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。以下保留原设计理由，不作为五项实施次序。
 
-1. **高收益：抽出固定流程规则。** 从 [staged_flow.go](../../internal/execution/staged_flow.go) / [staged_result.go](../../internal/execution/staged_result.go) 分离 `development/v3` 的结果解析、步骤决策、报告重试与下一输入构造。规则接收固定值和已核验事实，返回显式变更声明/所需动作，不接收 Service、RunView 可写指针、SQL 或 backend 句柄。I/O 核验仍由 actor/效果层执行，核验结果再交规则判断；结果、转移与下一输入仍一次提交。首先分离 implement/report/publish 规则，不建设通用工作流引擎。
+1. **本次已分离固定流程规则。** [workflow](../../internal/execution/workflow/route.go) 已接收窄业务值和已核验的执行事实，返回显式后继声明；不接收 Service、RunView 可写指针、SQL 或 backend 句柄。严格结果解析归 [workflow/result.go](../../internal/execution/workflow/result.go)，原生 I/O 由 adapter 执行，技术规则由 reliable 决定，结果/转移/下一输入由 actor 一次提交。#94 的重叠调查和后续范围需在启动前与此成果核对，不据此自动改变 roadmap 任务状态。
 2. **高收益：收拢 worker 运行时资源所有权。** 首轮 [#96](../spec/worker-runtime-ownership.spec.md)只收拢观察器、原句柄、在途外部调用、取消/关闭和固定结果交接，复用已有后台机制。只接受已持久化 Operation 与冻结资源值，返回原身份事实/回执；不携带可写 RunView/apply闭包。业务 actor 保留步骤、Decision、恢复资格、提交与确认门槛，具体adapter保留证据/停服能力，本机/environment Orca仍共用实现。完整业务恢复拆分不混入首轮。
 3. **高收益：抽出任务最终交付。** [native_delivery_command.go](../../internal/execution/native_delivery_command.go) 当前组合冻结 provider、真实 PR 查询、执行门槛、任务结果和提交。[#95](../spec/task-delivery-usecase.spec.md)仅提取最终交付用例，接收固定候选/任务、带provider身份的PR事实、任务结果声明和提交端口；claim/discard的进一步收窄留后续。沿用 [ResultCommit](../../internal/storage/ports/task_result.go) 的原子提交，不拆唯一TaskDelivery/closed/WorkflowRun/图修订。流程/PR绑定仍由actor负责，未知发布但合法真实合并的原交付路径保持。
 4. **已交付：分离 HTTP 协议与命令登记/对账。** 任务 [#92](../spec/http-command-boundary.spec.md) 经PR #311将 Server 改为消费查询、命令、authority 和原生查看端口，app 直接提供现有 product client；登记 owner 接收固定信封与 OS 调用身份，不接收 Server、Request、ResponseWriter、具体 Client 或数据库连接。普通业务命令与原生窗口副作用共用记录 owner 和跨动作仲裁，保留各自重试规则；HTTP 层保留认证、路由、JSON 上限和状态码映射。不把 transport receipt 变成领域权威，也不把 unknown 当成重放许可。具体行为与验收结果见[专属验收](../acceptance/http-command-boundary.md)。

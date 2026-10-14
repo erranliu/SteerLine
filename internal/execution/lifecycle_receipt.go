@@ -41,27 +41,14 @@ func checkedLifecycleRequest(snapshot executionbackend.LifecycleSnapshot, operat
 	return request, request.Validate()
 }
 
-// lifecycleOutcome only normalizes the external result. Each action still owns
-// what counts as accepted/confirmed and which business transition may follow.
-func lifecycleOutcome(receipt executionbackend.LifecycleReceipt, err error) (string, string) {
-	status, diagnostic := string(receipt.Disposition), receipt.Diagnostic
-	if err != nil {
-		diagnostic = err.Error()
-		if receipt.Disposition != executionbackend.OperationRejected {
-			status = "outcome_unknown"
-		}
-	}
-	return status, diagnostic
-}
-
-func (s *Service) checkedWorkerTurnReceipt(run *reconstructiontypes.RunView, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, action executionbackend.LifecycleAction) (workerFlowContext, error) {
+func (s *Service) checkedWorkerTurnReceipt(run *reconstructiontypes.RunView, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, action executionbackend.LifecycleAction) (workerRecords, error) {
 	if err := receipt.ValidateFor(request); err != nil {
-		return workerFlowContext{}, err
+		return workerRecords{}, err
 	}
 	if err := s.validateLifecycleResultBinding(run, request); err != nil {
-		return workerFlowContext{}, err
+		return workerRecords{}, err
 	}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return fixed, err
 	}

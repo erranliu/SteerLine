@@ -4,13 +4,13 @@ package model
 
 import (
 	"errors"
-	"fmt"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"time"
 )
 
 const Version = "worker-flow-v2"
 
-var ErrTurnStale = errors.New("worker turn is no longer current")
+var ErrTurnStale = executionbackend.ErrTurnStale
 
 // State is a transient view of the authoritative workflow and execution.
 type State struct {
@@ -35,106 +35,6 @@ func (s State) validBinding() error {
 }
 
 func ValidateBinding(s State) error { return s.validBinding() }
-
-func BeginTurn(s State, sessionID, turnID string, at time.Time) (State, error) {
-	if err := s.validBinding(); err != nil {
-		return s, err
-	}
-	if sessionID == "" || turnID == "" {
-		return s, errors.New("worker turn start lacks native session or turn identity")
-	}
-	if s.PendingTurnID != "" && s.PendingTurnID != turnID {
-		return s, errors.New("worker turn start differs from the persisted send intent")
-	}
-	if s.SessionID != "" && s.SessionID != sessionID {
-		return s, errors.New("worker session replacement is not an ordinary continuation")
-	}
-	if s.CurrentTurnID == turnID {
-		if s.LastStoppedTurnID == turnID {
-			return s, ErrTurnStale
-		}
-		return s, nil
-	}
-	if s.CurrentTurnID != "" && s.LastStoppedTurnID != s.CurrentTurnID {
-		return s, errors.New("previous worker turn has not stopped")
-	}
-	switch s.Status {
-	case "queued", "waiting_input", "waiting_external":
-	case "reconciling":
-		// This is an observation of the original accepted input, not permission
-		// to dispatch another input while its outcome is still unknown.
-		if s.PendingTurnID != turnID {
-			return s, errors.New("reconciling start has no matching original accepted input")
-		}
-	default:
-		return s, fmt.Errorf("worker turn cannot start from %s", s.Status)
-	}
-	s.SessionID = sessionID
-	s.PendingTurnID = ""
-	s.CurrentTurnID = turnID
-	s.TurnNumber++
-	s.ExecutionStatus = "active"
-	s.ExecutionUpdatedAt = at
-	s.Status = "running"
-	s.WorkflowUpdatedAt = at
-	return s, nil
-}
-
-func NoteQuestion(s State, turnID string, at time.Time) (State, error) {
-	if err := s.validBinding(); err != nil {
-		return s, err
-	}
-	if turnID == "" || s.CurrentTurnID != turnID || s.LastStoppedTurnID == turnID {
-		return s, ErrTurnStale
-	}
-	if s.Status != "running" && s.Status != "waiting_input" {
-		return s, fmt.Errorf("worker question cannot arrive in %s", s.Status)
-	}
-	s.Status = "waiting_input"
-	s.WorkflowUpdatedAt = at
-	return s, nil
-}
-
-func ContinueQuestion(s State, turnID string, at time.Time) (State, error) {
-	if err := s.validBinding(); err != nil {
-		return s, err
-	}
-	if turnID == "" || s.CurrentTurnID != turnID || s.LastStoppedTurnID == turnID {
-		return s, ErrTurnStale
-	}
-	if s.Status != "waiting_input" {
-		return s, fmt.Errorf("worker question is not waiting in %s", s.Status)
-	}
-	s.Status = "running"
-	s.WorkflowUpdatedAt = at
-	return s, nil
-}
-
-func StopTurn(s State, turnID string, pendingQuestion bool, at time.Time) (State, error) {
-	if err := s.validBinding(); err != nil {
-		return s, err
-	}
-	if turnID == "" || s.CurrentTurnID != turnID {
-		return s, ErrTurnStale
-	}
-	if s.LastStoppedTurnID == turnID {
-		return s, nil
-	}
-	if s.Status != "running" && s.Status != "waiting_input" {
-		return s, fmt.Errorf("worker turn cannot stop from %s", s.Status)
-	}
-	s.LastStoppedTurnID = turnID
-	s.ExecutionStatus = "idle"
-	s.ExecutionUpdatedAt = at
-	// Native stop is not business completion. The bound flow decides what
-	// follows after its result and artifact checks.
-	s.Status = "blocked"
-	if pendingQuestion {
-		s.Status = "waiting_input"
-	}
-	s.WorkflowUpdatedAt = at
-	return s, nil
-}
 
 // BindPR consumes a PR identity already checked by the provider adapter.
 func BindPR(s State, url, state string, pendingQuestion bool, at time.Time) (State, error) {

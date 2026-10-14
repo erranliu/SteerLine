@@ -47,15 +47,15 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 	if err := StopWorkerTurn(&wf, &exec, "turn-2", false); err != nil || wf.Status != "blocked" {
 		t.Fatalf("closed PR did not lead to the unified decision state: phase=%s error=%v", wf.Status, err)
 	}
-	if err := BindWorkerPR(&wf, &exec, pr("pr-9", "open"), "pr-9", "o/r", false); err != nil || wf.Status != "blocked" {
-		t.Fatalf("new PR after closure was not associated: phase=%s error=%v", wf.Status, err)
+	if err := BindWorkerPR(&wf, &exec, pr("pr-9", "open"), "pr-9", "o/r", false); err == nil || wf.Status != "blocked" || wf.PRURL != "pr-8" {
+		t.Fatalf("replacement PR after closure changed original binding: phase=%s error=%v", wf.Status, err)
 	}
 	begin("turn-3")
 	if err := StopWorkerTurn(&wf, &exec, "turn-3", false); err != nil || wf.Status != "blocked" {
 		t.Fatal(err)
 	}
 	mergedAt := time.Now().UTC()
-	delivery := executionmodel.TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-9", MergeCommit: "merge-9", MergedAt: mergedAt}
+	delivery := executionmodel.TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-8", MergeCommit: "merge-9", MergedAt: mergedAt}
 	if err := reconstructiontypes.MarkWorkerDeliveryCommitted(taskmodel.TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Status != "completed" {
 		t.Fatalf("committed delivery did not complete: phase=%s error=%v", wf.Status, err)
 	}

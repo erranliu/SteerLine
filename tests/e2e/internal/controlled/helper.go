@@ -71,6 +71,9 @@ func Main(args []string) error {
 		}
 	}
 	if len(args) > 0 && args[0] == "provider" {
+		if err := recordProviderQuery(path); err != nil {
+			return err
+		}
 		s, err := Read(path)
 		if err != nil {
 			return err

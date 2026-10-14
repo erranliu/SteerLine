@@ -24,7 +24,7 @@ func verifyClaimConfigFiles(verifier ConfigVerifier) error {
 }
 
 func (s *Service) resumeRegisteredWorkerFlow(ctx context.Context, task *taskmodel.TaskRecord, run *reconstructiontypes.RunView, entry ExecutionRegistration) (bool, error) {
-	if _, err := s.workerFlowContext(run); err != nil {
+	if _, err := s.workerRecords(run); err != nil {
 		return false, err
 	}
 	return s.resumeLifecycleWorkerFlow(ctx, task, run)

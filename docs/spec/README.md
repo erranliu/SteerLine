@@ -24,6 +24,12 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 #94的Workflow规则、#96的生命周期/资源接线与三层方案交叉；#95交付抽取未被取代但actor/PR桥接正在重组，暂不安排。具体依据见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)；本表是资料导航，不用于自动派发。
 
+## Worker 三层职责重构（普通开发规格）
+
+已按用户直接授权实施并完成约定自动验收；最新收尾 rebase 的复验已通过，实际版本与证据见专属验收。Workflow 管业务步骤，ReliableExecution 管通用可靠执行，ExecutionAdapter 管原生动作/证据；两条路径一起接入，保留单写提交与现有行为。初始化失败重试等新增能力单独留出，不接管安装任务 22。
+
+[Spec](worker-three-layer.spec.md) · [Plan](worker-three-layer.plan.md) · [专属验收](../acceptance/worker-three-layer.md) · [长期流程规则](../product-design/worker-lifecycle.md)。普通开发，无 Task ID，不修改 execution-map。
+
 ## 已交付产品精简与控制台
 
 三批产品精简已分别通过PR #231/#236/#238合入，控制台体验增量通过PR #234合入；验收仍绑定各自原构建/范围，不据此宣称当前重跑。这里保留导航，不进入近期执行任务。

@@ -170,7 +170,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		execution.Process = &executionbackend.ProcessIdentity{Kind: "os", PID: 42, Created: "replacement"}
 		before := recordFingerprint(execution)
 		receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed, State: executionbackend.LifecycleStateFacts{SessionID: "late-session"}}
-		if _, proceed, err := s.applyAppServerSessionReceipt(run, request, receipt, nil); !errors.Is(err, executionmodel.ErrTurnStale) || proceed {
+		if _, proceed, err := s.applyPreparedSessionReceipt(run, request, receipt, nil); !errors.Is(err, executionmodel.ErrTurnStale) || proceed {
 			t.Fatalf("late session advanced changed binding: proceed=%v err=%v", proceed, err)
 		}
 		if recordFingerprint(*s.executionRecord(run)) != before || s.operationByKey(key).Status != "in_flight" {
