@@ -42,6 +42,33 @@ func assertWorkspaceReadonly(t *testing.T, calls [][]string) {
 	}
 }
 
+func TestWorkspaceCreationUsesConfiguredTimeout(t *testing.T) {
+	for _, environment := range []string{"", "paired-worker"} {
+		t.Run(environment, func(t *testing.T) {
+			l, f, s := fixtureOn(t, environment)
+			l.setup.AgentLaunchCommand, f.commandMode = "opaque-start", true
+			l.setup.CommandTimeout = 2 * time.Minute
+			original := l.client
+			creations := 0
+			l.client = native.New(native.Config{Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
+				want := 40 * time.Second
+				if args[0] == "worktree" && args[1] == "create" {
+					want = 2 * time.Minute
+					creations++
+				}
+				if timeout != want {
+					t.Fatalf("%v timeout = %s, want %s", args[:2], timeout, want)
+				}
+				return original.Raw(ctx, timeout, args...)
+			}})
+			receipt, _, err := l.Execute(context.Background(), request(s, b.LifecyclePrepareWorkspace, b.LifecycleInput{Workspace: &s.WorkspacePlan}))
+			if err != nil || receipt.Disposition != b.OperationConfirmed || creations != 1 {
+				t.Fatal(receipt, err, creations)
+			}
+		})
+	}
+}
+
 func TestWorkspaceTerminalSurfaceReadiness(t *testing.T) {
 	for _, scenario := range []string{"list", "show", "empty-list", "shared-deadline", "other-error", "create-error"} {
 		t.Run(scenario, func(t *testing.T) {
