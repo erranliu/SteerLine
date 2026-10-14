@@ -1,6 +1,6 @@
 # 验收：HTTP 客户端原请求与停服观察解耦
 
-唯一归属：任务 #93，HTTP 客户端原请求与停服观察解耦。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)；实现及自动验收已完成，自查后待独立只读复审与真实PR合并。
+唯一归属：任务 #93，HTTP 客户端原请求与停服观察解耦。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)；实现、独立复审修复、必要自动验证和[PR #312](https://github.com/erranliu/SteerLine/pull/312)真实合并均已核验；CL93-A1–A3通过，无新增人工项。旧CL93-A2覆盖声明已校准，历史证据保留如下。
 
 [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan / 测试计划](../spec/http-client-request-lifecycle.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 
@@ -36,4 +36,14 @@ CL93-A2的跨进程后续更新/终态保护是本任务新增的小范围修复
 | CL93-A3 / clean production候选复用 | 独立reviewer在PR候选提交2261dbdc上运行；此轮仅修改测试/验收文件，生产代码未变。source_dirty=false，simulate passed/complete/cleaned=true，workflow turns=3，原applied receipt、进程退出及两锁释放均true；仍为1 gap、0 body，不声明native final通过 | C:\Users\lmas1\AppData\Local\Temp\steerline-cl93-review-final-2261dbdc-20261014\summary.json、runtime.log；隔离包 C:\SteerlineDebug\dev-20261014-182218-2261dbdc |
 | 固定L1回归 | go run ./cmd/test-feedback -level=L1；quick scope完整通过，26包、553测试通过，0失败、0跳过 | C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T095215.852912700Z\summary.json |
 
-先前的CL93-A2 30/30仅覆盖空观察，现已由修正后的30/30真实submitted观察、8个子进程交错和mutation反证取代；不得引用旧结果宣称四种submitted交错已验。simulate包只在 C:\SteerlineDebug 下生成；没有使用 C:\SteerlineRuntime。没有新增人工项；#91桌面体验保持原归属和待验。自动项失败阻止本项交付，未知发送只查原请求，不能为验收重发或更换实例。实现提交为 7c7bd5c2465d3c503fce623bdbfa8afd776369e0；PR [#312](https://github.com/erranliu/SteerLine/pull/312)已创建，待独立只读复审，本轮不合并。本页只归属#93。
+先前的CL93-A2 30/30仅覆盖空观察，现已由修正后的30/30真实submitted观察、8个子进程交错和mutation反证取代；不得引用旧结果宣称四种submitted交错已验。simulate包只在 C:\SteerlineDebug 下生成；没有使用 C:\SteerlineRuntime。没有新增人工项；#91桌面体验保持原归属和待验。自动项失败阻止本项交付，未知发送只查原请求，不能为验收重发或更换实例。实现提交为 7c7bd5c2465d3c503fce623bdbfa8afd776369e0；PR [#312](https://github.com/erranliu/SteerLine/pull/312)已通过新的独立终审并真实合并；最终证据见下节。本页只归属#93。
+
+## 最终独立复审与真实合并
+
+2026-10-14，首轮 reviewer `/root/review93_round1` 确认旧跨进程场景的 stale 响应为 nil，未覆盖真实 submitted 覆写终态；由原执行聊天 `01a139bc-1014-7051-a871-ebb839be753b` 在 `641fc79628327071451ae95104a86600eaa017da` 补强私有测试和校准验收。最终新 reviewer `/root/review93_round2` 检查完整17文件diff、固定Spec/Plan、生产请求/停服路径、全部构造消费者和原始证据，未发现新增阻塞；唯一P2已闭合。
+
+最终reviewer在clean head `641fc79628327071451ae95104a86600eaa017da`执行固定CL93-A2命令，30项通过、passed/complete=true、exit0、无失败/skip；summary：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261014T110042.016876000Z/summary.json`，同目录原始JSON/stderr已核。四组合共8子进程在门禁前实际读取并断言非空完整submitted；两种次序、applied/rejected、磁盘和retained完整终态均验证。独立重跑临时nonterminal-overwrite变体，仅两个terminal-first叶子在terminal was lost断言失败、exit1、无skip；日志：`C:/Users/lmas1/AppData/Local/Temp/steerline-cl93-review2-mutation-14d14d20767048fab67b545682c9821e/go-test-overwrite.jsonl`。旧nil结果不再作为submitted保护已验依据。
+
+生产代码及producer相对clean `2261dbdc`组合候选未变，A1两入口/A3原进程、clean定向32项、固定L1 12组/26包/553项及独立simulate按原始事件核验后复用。simulate的原journal PID56424、generation01dd5bc60d1340db及原包两锁绑定，原applied、精确退出和两锁释放齐备，passed/complete/cleaned=true；1 gap、0 body、native_final_verified=false是冻结驱动原支持边界，不表示native final通过。
+
+[PR复审记录](https://github.com/erranliu/SteerLine/pull/312#issuecomment-6167152543)保留agent身份、发现/修复提交、实际验证和限制。合并前重新核head/base未变，base `ab814da9d5fcec17f3ba46b59827734d171ba6b7`、MERGEABLE/CLEAN、REST main未保护、GraphQL保护规则/rulesets均0、无必需检查；按预期head合并。GitHub确认 `mergedAt=2026-10-14T11:20:42Z`（北京时间19:20:42），merge `a1e38696f44a48f6db4946f62b137de38daded91`已进入origin/main，父提交与上述base/head一致。实现完成及CL93-A1–A3自动验收通过分别登记，无本任务人工残留；#91原桌面体验不因本次交付标为通过。

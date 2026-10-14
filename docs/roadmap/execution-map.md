@@ -2,13 +2,11 @@
 
 本表是用户确认的开发任务与依赖权威。2026-10-13 用户确认当前规划收敛到 `TUI → HTTP API → Go 后端`；随后用户直接授权当前聊天实施 #91，不启动 roadmap-runner 或新执行聊天。流程见[RoadmapGuide](RoadmapGuide.md)。
 
-当前已确认的本机链路已交付。2026-10-14 用户确认将HTTP解耦任务#92、#93纳入本表；#92已独立复审、自动验证并经PR #311真实合并，#93候选实现通过本地自动验收（A2补强），PR #312待独立只读复审与真实PR合并。本次runner按#92→#93顺序推进，不改变两项没有业务硬依赖的规划条件。
+当前已确认的本机链路已交付。2026-10-14用户确认的HTTP解耦任务#92/#93均已实现、独立复审修复、必要自动验证、真实PR合并及验收同步完成。本批按#92→#93推进；没有新增人工项，既有人工待验仍见下方索引。#94/#95/#96继续留草稿，不自动纳入。
 
 ## 待执行任务
 
-| 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
-| --- | --- | --- | --- | --- | --- |
-| 93 | HTTP 客户端原请求与停服观察解耦 | 无未完成硬前置；复用#91；与#92独立并行，新增写入仲裁仅属客户端journal | 候选自查及自动验收通过（A2补强后复验），PR待独立复审与合并；代码起点 `ab814da9d5fcec17f3ba46b59827734d171ba6b7`，分支 `codex/http-client-request-lifecycle-93` | [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan](../spec/http-client-request-lifecycle.plan.md) | [专属验收](../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3与固定L1通过；A2已补充真实submitted观察的四种进程交错及mutation反证；无新增人工项；待独立只读复审与PR合并；PR [#312](https://github.com/erranliu/SteerLine/pull/312) |
+当前无待执行任务；本批#92/#93结果归已交付表，草稿及验收导航不作为派发队列。
 
 ### 本批并行与开工条件
 
@@ -24,6 +22,7 @@
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
+| 93 | HTTP 客户端原请求与停服观察解耦 | 复用#91，无未完成硬前置；本次runner按#92→#93执行 | 实现完成；[PR #312](https://github.com/erranliu/SteerLine/pull/312)真实合并，merge `a1e38696f44a48f6db4946f62b137de38daded91`；CL93-A2测试缺口补齐并独立终审通过 | [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan](../spec/http-client-request-lifecycle.plan.md)，固定 `35d4d65350fa6f6f284e9e91a6bd657ba7abb947`，代码起点 `ab814da9d5fcec17f3ba46b59827734d171ba6b7` | [专属验收](../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3通过，clean最终head A2 30项及mutation反证、固定L1 12组/553项、clean simulate/原停服三事实齐备，无新增人工项；1 gap/0 body不作为native final证明；[复审记录](https://github.com/erranliu/SteerLine/pull/312#issuecomment-6167152543) |
 | 92 | HTTP 服务端命令边界收敛 | 复用#45/#91，无未完成硬前置 | 实现完成；[PR #311](https://github.com/erranliu/SteerLine/pull/311)已真实合并，merge `e3010edcb4905977e6244f2f896be140fa718a8f`；三项P2已修复并独立终审通过 | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md)，固定版本及起点 `35d4d65350fa6f6f284e9e91a6bd657ba7abb947` | [专属验收](../acceptance/http-command-boundary.md)：HC92-A1–A3通过；HTTP60项/app2项及clean最终head CLI3项通过，历史固定L1 12组/553项经核验复用，无新增人工项；[复审记录](https://github.com/erranliu/SteerLine/pull/311#issuecomment-6165070946) |
 | 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 实现完成；独立复审/自动验证/真实合并已核验 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6 通过，真终端/live 操作已验；TH-M1 窗口渲染/人工体验待验；[PR #299](https://github.com/erranliu/SteerLine/pull/299) 已合并 |
 

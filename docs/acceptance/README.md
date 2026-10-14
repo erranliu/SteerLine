@@ -43,10 +43,10 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 
 ## HTTP 接入后解耦验收
 
-2026-10-14，#92已独立复审修复、自动验证并经PR #311真实合并，移出[草稿任务表](../roadmap/drafts/roadmap.md)；#93已纳入execution-map待执行/待验收，#94/#95/#96继续留草稿、暂不安排验收。各项保留独立Spec/Plan与专属记录；无新增人工活动，未实施项不登记通过：
+2026-10-14，#92已独立复审修复、自动验证并经PR #311真实合并，移出[草稿任务表](../roadmap/drafts/roadmap.md)；#93也已独立终审、验证并经PR #312真实合并，#94/#95/#96继续留草稿、暂不安排验收。各项保留独立Spec/Plan与专属记录；无新增人工活动，未实施项不登记通过：
 
 - #92 [HTTP 服务端命令边界收敛](http-command-boundary.md)：实现完成，HC92-A1–A3通过，三项P2修复并终审通过，PR #311已合并；无人工残留。
-- #93 [HTTP 客户端原请求与停服观察解耦](http-client-request-lifecycle.md)：已纳入，CL93-A1–A3待验。
+- #93 [HTTP 客户端原请求与停服观察解耦](http-client-request-lifecycle.md)：实现完成，CL93-A1–A3通过，submitted跨进程测试缺口已补齐并终审通过，PR #312已合并；无人工残留，simulate final gap限制保留。
 - #94 [固定开发流程规则独立](development-flow-rules.md)：DF94-A1–A4。
 - #95 [任务最终交付用例独立](task-delivery-usecase.md)：TD95-A1–A4。
 - #96 [worker 运行时资源所有权收敛](worker-runtime-ownership.md)：WR96-A1–A4。
