@@ -24,7 +24,7 @@ WorkflowRun 在原记录中保存唯一 `status/flow_ref/step_id`，不并存旧
 | `blocked` | 已知失败、缺能力或前置不满足 |
 | `reconciling` | 原输入、结果或外部副作用未知；只读对账 |
 | `waiting_external` | 本开发流程的 PR 已核验，等待真实合并 |
-| `completed` / `abandoned` | 经唯一交付核验的完成 / 已退出候选 |
+| `completed` / `abandoned` | 经唯一交付核验的完成 / Task 丢弃后的工作流终态 |
 
 开发步骤为 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`。实现自由 final 不能作为结构化结果，报告绑定原执行，发布有合法结果时直接消费；缺结果或格式错误仅补一次 publish.report，绑定原发布及冻结候选，见[发布补报契约](../spec/worker-publish-report.spec.md)。源失败不被报告成功覆盖；报告最多自动重试一次，发布不为补 JSON 重做副作用。报告目前沿用双后端冻结权限，按实际 HEAD/索引/工作区内容摘要和已绑定 PR 前后对比；此能力不能保证拦截全部外部写入。
 
@@ -36,7 +36,7 @@ Execution 绑定后端目标、工作区、分支、base、当前／待开始／
 
 同一 Task 默认一个候选，人可逐个增加不同冻结配置的候选。每个候选具有独立 WorkflowRun、Execution、会话、工作区、分支、PR 和反馈；开始时观察参与数已达五个就拒绝，接受竞态偶尔超出，不建设硬名额、预留、队列、自动补位或评分融合。
 
-PR 合并前可不可撤销地放弃候选，立即退出实验；外部 worker 停止和资源结算另按原身份核实。已知 PR 合并后禁止放弃。获胜由唯一 TaskDelivery 确定，迟到事实不覆盖原交付；其他候选的历史 PR、资源与未结算执行保持准确归属。界面选择及草稿隔离见[执行控制台](execution-console.md)。
+产品不提供单候选放弃操作，控制台、CLI、API 和服务端均无此入口。Task 丢弃仍按任务级规则执行，原执行停止和资源结算按事实记录。任一已绑定候选 PR 经其冻结提供方核验已合并、仓库/base/head 分支身份与合并证据完整后即可原子提交唯一 TaskDelivery，将 Task 转为 closed 并释放后继；不要求其他候选的 PR 可查询或未合并，不等待已绑定 PR 的追加反馈结束。首个成功提交的交付记录成为获胜候选，不按合并时间排名或融合成果。提交时复核获胜候选自身绑定、任务/图版本以及 PR 不被重复绑定，其他候选阶段推进不阻塞交付。closed 后停止该任务全部候选的 PR 状态查询，重启后仍跳过；界面保留关闭时最后已知的 PR 事实。候选历史、资源与未结算执行保持准确归属。界面选择及草稿隔离见[执行控制台](execution-console.md)。
 
 ## 独立状态与资源位置
 
@@ -59,8 +59,8 @@ STEERLINE_HOME 的默认值和路径解析由 [app/config.go](../../internal/app
 | 格式 | 当前值 | 源码 |
 | --- | --- | --- |
 | 工作流协议 | worker-flow-v2 | [model/state.go](../../internal/execution/model/state.go) |
-| SQLite schema | 18 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
-| 服务 checkpoint / runtime | 20 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
+| SQLite schema | 19 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| 服务 checkpoint / runtime | 21 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
 | FixedExecutionProfile | 8 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
 | ConversationEvent | 3 | [model/conversation.go](../../internal/execution/model/conversation.go) |
 | 全局执行配置 | 2 | [app/config.go](../../internal/app/config.go) |

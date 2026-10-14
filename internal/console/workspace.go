@@ -232,13 +232,6 @@ func confirmRequired(m Model, s projectState) []string {
 	if c == nil {
 		return nil
 	}
-	if c.action == "abandon_candidate" {
-		target := "Task " + safeTerminalInlineText(c.taskID) + " / " + candidateLabel(s, &api.CandidateSummary{TaskID: c.taskID, RunID: c.runID})
-		lines := []string{"不可撤销放弃候选确认 · " + safeTerminalInlineText(s.ref.Name), target}
-		// Captured when confirmation opens; never substitute a newly selected run.
-		lines = append(lines, strings.Split(c.basis, "\n")...)
-		return append(lines, "退出实验不可撤销；worker 可能仍运行，停止独立核实。", "不会丢弃 Task 或删除资源；已知 PR 合并后禁止放弃。", "Enter 确认退出实验 · F8 完整身份 · Esc/n 取消")
-	}
 	return []string{"停止服务确认 · " + safeTerminalInlineText(s.ref.Name), "目标实例：" + safeTerminalInlineText(c.instance), "停止新派发，并等待 worker " + firstText(s.ref.Presentation.ShutdownGrace, "配置的宽限时间"), "随后按服务策略结束；工作现场保留。", "Enter 确认停止 · Esc/n 取消"}
 }
 
@@ -329,7 +322,7 @@ func nextAction(m Model, s projectState, row *consoleRow) string {
 		return "查看任务前置与阻塞原因（d）"
 	}
 	r := row.run
-	if r.TaskStatus == "discarded" || r.Abandonment != nil {
+	if r.TaskStatus == "discarded" {
 		return taskNextAction(r)
 	}
 	if waitingForMerge(r) && !runNeedsAttention(r) {
@@ -371,9 +364,6 @@ func receiptSummary(s projectState, row *consoleRow) []string {
 		run := a.RunID
 		if a.EnvironmentTarget != nil {
 			run = a.EnvironmentTarget.RunID
-		}
-		if run == "" {
-			run = a.Payload.WorkflowRunID
 		}
 		if a.EnvironmentTarget != nil {
 			if row.run != nil && run == row.run.RunID {
@@ -534,13 +524,6 @@ func windowTooSmall(m Model) []string {
 	return []string{"运行与反馈", "窗口过小，请调整后操作", "F8 完整阅读 · Esc 取消/返回；尚未发送"}
 }
 
-func candidateConfirmBasis(s projectState, r *api.CandidateSummary) string {
-	if fixed := fixedRunExecutionProfile(s, r); fixed != nil {
-		return strings.Join(profileProductLines(*fixed), "\n")
-	}
-	return "冻结方案未核实"
-}
-
 func candidateStrip(s projectState, row *consoleRow, width int) string {
 	runs := candidateRuns(s, row.taskID)
 	current := 0
@@ -627,7 +610,7 @@ func operationDetailLines(m Model, s projectState) []string {
 		}
 	}
 	if m.confirm != nil {
-		return append(confirmRequired(m, s), "实例："+safeTerminalInlineText(m.confirm.instance), "run_id："+safeTerminalInlineText(m.confirm.runID), "request_id："+m.confirm.requestID)
+		return append(confirmRequired(m, s), "实例："+safeTerminalInlineText(m.confirm.instance), "request_id："+m.confirm.requestID)
 	}
 	if s.recoveryActive {
 		local := m

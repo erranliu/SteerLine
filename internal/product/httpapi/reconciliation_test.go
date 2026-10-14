@@ -151,14 +151,10 @@ func TestAPIAuthoritativeControlBinding(t *testing.T) {
 func TestAPIMappedControlPayloadBinding(t *testing.T) {
 	server, _, _, _ := newAPIFixture(t)
 	environment := api.HostActionTarget{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), TurnID: strings.Repeat("d", 32), BlockerID: "blocker", Version: 3}
-	for _, action := range []string{"abandon_candidate", "open_terminal", "recheck_environment", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"} {
+	for _, action := range []string{"open_terminal", "recheck_environment", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"} {
 		t.Run(action, func(t *testing.T) {
 			envelope := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: action, TargetID: "dispatch", ExpectedVersion: 7, ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
 			switch action {
-			case "abandon_candidate":
-				envelope.TargetID = environment.RunID
-				envelope.ExpectedVersion = 3
-				envelope.Payload = json.RawMessage(`{"task_id":"8","expected_task_version":2,"reason":"original"}`)
 			case "open_terminal", "recheck_environment":
 				envelope.TargetID = environment.RunID
 				envelope.ExpectedVersion = 3
@@ -184,9 +180,6 @@ func TestAPIMappedControlPayloadBinding(t *testing.T) {
 			}
 			changed := input.Payload
 			switch action {
-			case "abandon_candidate":
-				changed.ExpectedCandidateVersion++
-				changed.Reason = "different"
 			case "open_terminal", "recheck_environment":
 				target := *changed.Environment
 				target.AttemptID = strings.Repeat("e", 32)
@@ -194,7 +187,7 @@ func TestAPIMappedControlPayloadBinding(t *testing.T) {
 			case "set_dispatch_mode":
 				changed.Mode = "manual"
 			default:
-				changed.Reason = "foreign payload"
+				changed.Mode = "foreign payload"
 			}
 			request.Payload, _ = json.Marshal(changed)
 			if matchesControl(envelope, &record, request) {

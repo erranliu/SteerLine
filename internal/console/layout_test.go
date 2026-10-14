@@ -106,14 +106,14 @@ func TestCompletedTaskShowsRawStateAndHistoricalExecution(t *testing.T) {
 		t.Fatalf("closed task columns: %+v", rows)
 	}
 	list := strings.Join(renderRows(m, m.projects[0], listPanelWidth(m), 12), "\n")
-	for _, want := range []string{"已关闭 · closed", "人工"} {
+	for _, want := range []string{"已关闭", "人工"} {
 		if !strings.Contains(list, want) {
 			t.Fatalf("compact list lost %q: %s", want, list)
 		}
 	}
 	overview := strings.Join(candidateOverviewLines(m, m.projects[0], &rows[0], 80), "\n")
-	if !strings.Contains(overview, "execution_status: failed") {
-		t.Fatal("historical raw execution state was hidden", overview)
+	if strings.Contains(overview, "execution_status:") || strings.Contains(overview, "workflow_status:") {
+		t.Fatal("hidden raw status leaked into overview", overview)
 	}
 	detail := strings.Join(renderDetail(m, m.projects[0], &rows[0], 80, 80), "\n")
 	for _, want := range []string{"任务状态：已完成", "执行状态：失败（历史）", "需要你操作：无"} {

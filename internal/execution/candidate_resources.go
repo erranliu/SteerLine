@@ -9,7 +9,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-// Receipt handling after experiment exit retains physical facts and the
+// Receipt handling after the Task ends retains physical facts and the
 // original Operation. It never asks a planner for another business action.
 func (s *Service) applyRetiredLifecycleReceipt(run *reconstructiontypes.RunView, result lifecycleEffectResult) (retErr error) {
 	defer func() {
@@ -226,7 +226,7 @@ func (s *Service) resumeRetiredCandidate(ctx context.Context, run *reconstructio
 		return err
 	}
 	// Reconcile only already-dispatched original operations, never pending
-	// intents which had not crossed the dispatch boundary before exit.
+	// intents which had not crossed the dispatch boundary before the Task ended.
 	for _, op := range snapshot.Operations {
 		if op.Status != executionbackend.OperationPending && op.Status != executionbackend.OperationConfirmed && op.Status != executionbackend.OperationRejected {
 			one := snapshot.Clone()
@@ -246,34 +246,6 @@ func (s *Service) resumeRetiredCandidate(ctx context.Context, run *reconstructio
 	}
 	if fixed.execution.PendingDeliveryID != "" {
 		return s.acknowledgeLifecycleDelivery(run, fixed.execution.PendingDeliveryID)
-	}
-	worker := s.workers[run.RunID]
-	if worker == nil && s.ownedProcesses[run.RunID] != nil {
-		worker = &Worker{proc: s.ownedProcesses[run.RunID]}
-	}
-	if worker != nil && fixed.workflow.Abandonment != nil {
-		op, err := s.stopRunExecution(ctx, run, worker)
-		if errors.Is(err, errLifecycleEffectPending) {
-			return nil
-		}
-		if err != nil {
-			message := "candidate exited; original worker stop is unsupported or unverified: " + err.Error()
-			if deref(fixed.execution.Error) != message {
-				fixed.execution.Error = ptr(message)
-				s.refreshRun(run)
-				return s.commitWorker(run)
-			}
-			return nil
-		}
-		if op.Status == executionbackend.OperationConfirmed {
-			fixed.execution.Status = "stopped"
-			s.refreshRun(run)
-			return s.commitWorker(run)
-		}
-		if op.Status != executionbackend.OperationRejected {
-			return s.reconcileRunStop(ctx, run, op)
-		}
-		return nil
 	}
 	if fixed.execution.Process != nil && fixed.execution.CurrentTurnID != fixed.execution.LastStoppedTurnID && s.workers[run.RunID] == nil {
 		// Attach observation to the exact original resource. This does not start

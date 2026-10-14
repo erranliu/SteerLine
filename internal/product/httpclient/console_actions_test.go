@@ -40,13 +40,13 @@ func testConsoleActions(t *testing.T) {
 	defer server.Close()
 	c := &Console{ref: api.ProjectRef{Identity: "repo", ApplicationHome: t.TempDir()}, client: &Client{baseURL: server.URL, project: identity.ProjectID, identity: identity, http: server.Client()}}
 	revision := uint64(21)
-	payload := api.ControlPayload{TaskID: "task", ExpectedTaskVersion: 7, ExpectedGraphRevision: 11, WorkflowRunID: "run", ExpectedCandidateVersion: 13, Reason: "original reason", Mode: "auto", ExecutionProfileID: "profile", Environment: &api.HostActionTarget{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", BlockerID: "blocker", Version: 17}}
+	payload := api.ControlPayload{TaskID: "task", ExpectedTaskVersion: 7, ExpectedGraphRevision: 11, Mode: "auto", ExecutionProfileID: "profile", Environment: &api.HostActionTarget{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", BlockerID: "blocker", Version: 17}}
 	cases := []struct {
 		action  api.ControlAction
 		target  string
 		version uint64
 	}{
-		{api.StartTask, "task", 7}, {api.StartCandidate, "task", 7}, {api.AbandonCandidate, "run", 13}, {api.SetDispatchMode, "dispatch", 21}, {api.PauseDispatch, "dispatch", 21}, {api.ResumeDispatch, "dispatch", 21}, {api.OpenTerminal, "run", 17}, {api.RecheckEnvironment, "run", 17},
+		{api.StartTask, "task", 7}, {api.StartCandidate, "task", 7}, {api.SetDispatchMode, "dispatch", 21}, {api.PauseDispatch, "dispatch", 21}, {api.ResumeDispatch, "dispatch", 21}, {api.OpenTerminal, "run", 17}, {api.RecheckEnvironment, "run", 17},
 	}
 	for i, test := range cases {
 		id := fmt.Sprintf("%032x", i+1)
@@ -62,9 +62,6 @@ func testConsoleActions(t *testing.T) {
 		json.Unmarshal(e.Payload, &p)
 		if test.action == api.StartCandidate && (e.ExpectedGraphRevision != 11 || string(p["execution_profile_id"]) != `"profile"`) {
 			t.Fatal("candidate intent changed")
-		}
-		if test.action == api.AbandonCandidate && string(p["expected_task_version"]) != "7" {
-			t.Fatal("abandon task version changed")
 		}
 		if test.action == api.OpenTerminal || test.action == api.RecheckEnvironment {
 			var target api.HostActionTarget

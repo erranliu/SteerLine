@@ -294,9 +294,6 @@ func (t *sqliteTx) AcceptDecisionAnswer(command storageports.CommandRecord, answ
 	if err := decode(workflowBytes, &workflow); err != nil {
 		return record, false, err
 	}
-	if workflow.Abandonment != nil {
-		return record, false, nativeErr("candidate_inactive", "abandoned candidate cannot accept feedback")
-	}
 	if err = decode(executionBytes, &execution); err != nil {
 		return record, false, err
 	}

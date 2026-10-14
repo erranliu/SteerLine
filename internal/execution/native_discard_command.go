@@ -222,7 +222,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	if executionmodel.CandidateBindings(knownSnapshot.WorkflowRuns, knownSnapshot.Executions, taskID) != intent.CandidateBindings {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "candidate bindings changed before full PR verification")
 	}
-	known, verifyErr := verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, knownSnapshot, taskID, nil, "")
+	known, verifyErr := verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, knownSnapshot, taskID, nil)
 	if verifyErr != nil && !isNativeErrorCode(verifyErr, "already_merged") {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", verifyErr.Error())
 	}

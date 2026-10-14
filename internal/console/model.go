@@ -143,9 +143,6 @@ type confirmAction struct {
 	action     string
 	taskID     string
 	requestID  string
-	runID      string
-	payload    api.ControlPayload
-	basis      string
 }
 
 type executionProfileChoice struct {
@@ -326,7 +323,7 @@ func (m Model) submitControl(index int, action, taskID, requestID string, instan
 	ref := state.ref
 	payload := api.ControlPayload{}
 	switch action {
-	case "start_candidate", "abandon_candidate":
+	case "start_candidate":
 		payload = state.actions[requestID].Payload
 	case "open_terminal", "recheck_environment":
 		if pending := state.actions[requestID]; pending != nil {
@@ -434,10 +431,6 @@ func (m Model) prepareDecisionAnswer(qualified bool) (tea.Model, tea.Cmd) {
 		m.status = "请选择带有 pending 决策的问题"
 		return m, nil
 	}
-	if row.run.Abandonment != nil {
-		m.status = "候选已退出实验；不再反馈"
-		return m, nil
-	}
 	if feedbackInProgress(*state, row.run) {
 		m.status = candidateLabel(*state, row.run) + " 的反馈已提交；等待原请求回执"
 		return m, nil
@@ -523,8 +516,8 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		dialog.error = "stale_revision：问题或运行身份已变化；草稿已保留，请刷新并核对原问题"
 		return m, nil
 	}
-	if dialog.identity != "" && candidateIdentity(run) != dialog.identity || run.Abandonment != nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
-		dialog.error = "原候选身份已变化或已退出实验；草稿保留"
+	if dialog.identity != "" && candidateIdentity(run) != dialog.identity || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
+		dialog.error = "原候选身份已变化或任务已结束；草稿保留"
 		return m, nil
 	}
 	if dialog.sourceAttemptID != run.AttemptID || dialog.recoveryVersion != run.RecoveryVersion {
@@ -694,7 +687,7 @@ func controlRequestMatchesAction(request *api.ControlRequest, action *actionStat
 		return false
 	}
 	switch action.Action {
-	case "start_candidate", "abandon_candidate":
+	case "start_candidate":
 		return payload == action.Payload
 	case "open_terminal", "recheck_environment":
 		return payload.Environment != nil && payload.Environment.RunID == action.TaskID && (action.EnvironmentTarget == nil || *payload.Environment == *action.EnvironmentTarget)

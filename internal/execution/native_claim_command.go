@@ -234,7 +234,7 @@ func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Confi
 		if err != nil {
 			return preparedTaskClaim{}, err
 		}
-		if _, err = verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, candidateSnapshot, task.TaskID, nil, ""); err != nil {
+		if _, err = verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, candidateSnapshot, task.TaskID, nil); err != nil {
 			return preparedTaskClaim{}, err
 		}
 	}

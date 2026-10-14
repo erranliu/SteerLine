@@ -97,7 +97,6 @@ type RunView struct {
 	SessionGeneration    string                                 `json:"session_generation,omitempty"`
 	TurnNumber           uint64                                 `json:"turn_number"`
 	CurrentTurnID        string                                 `json:"current_turn_id,omitempty"`
-	Abandonment          *executionmodel.CandidateAbandonment   `json:"abandonment,omitempty"`
 	ExecutionProfile     *executionmodel.FixedExecutionProfile  `json:"execution_profile,omitempty"`
 	PRHistory            []string                               `json:"pr_history,omitempty"`
 	CandidateCreatedAt   time.Time                              `json:"candidate_created_at"`

@@ -15,12 +15,12 @@ func TestUX1ParallelNumbersAndPrimarySurface(t *testing.T) {
 	m, _ := ccFixture(t, 5)
 	m.rows(0)
 	view := m.View()
-	for _, want := range []string{"当前 P1", "F6/F7", "workflow_stage:", "workflow_status:", "execution_status:"} {
+	for _, want := range []string{"当前 P1", "F6/F7", "workflow_stage:", "task_status:"} {
 		if !strings.Contains(view, want) {
 			t.Fatal(want, view)
 		}
 	}
-	for _, hidden := range []string{"execution-0", "candidate-0", "decision-0", "候选版本："} {
+	for _, hidden := range []string{"execution-0", "candidate-0", "decision-0", "候选版本：", "workflow_status:", "execution_status:"} {
 		if strings.Contains(view, hidden) {
 			t.Fatal("technical identity crowded primary view", hidden)
 		}

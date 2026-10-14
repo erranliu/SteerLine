@@ -62,14 +62,11 @@ type ControlRequest struct {
 }
 
 type ControlPayload struct {
-	WorkflowRunID            string            `json:"workflow_run_id,omitempty"`
-	ExpectedTaskVersion      uint64            `json:"expected_task_version,omitempty"`
-	ExpectedGraphRevision    uint64            `json:"expected_graph_revision,omitempty"`
-	ExpectedCandidateVersion uint64            `json:"expected_candidate_version,omitempty"`
-	Reason                   string            `json:"reason,omitempty"`
-	Environment              *HostActionTarget `json:"environment,omitempty"`
-	TaskID                   string            `json:"task_id,omitempty"`
-	Mode                     string            `json:"mode,omitempty"`
-	ExecutionProfileID       string            `json:"execution_profile_id,omitempty"`
-	ExecutionProfileDigest   string            `json:"execution_profile_digest,omitempty"`
+	ExpectedTaskVersion    uint64            `json:"expected_task_version,omitempty"`
+	ExpectedGraphRevision  uint64            `json:"expected_graph_revision,omitempty"`
+	Environment            *HostActionTarget `json:"environment,omitempty"`
+	TaskID                 string            `json:"task_id,omitempty"`
+	Mode                   string            `json:"mode,omitempty"`
+	ExecutionProfileID     string            `json:"execution_profile_id,omitempty"`
+	ExecutionProfileDigest string            `json:"execution_profile_digest,omitempty"`
 }

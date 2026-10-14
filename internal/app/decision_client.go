@@ -192,7 +192,7 @@ func submitAnswerDecisionWithStoreBound(ctx context.Context, c Config, store *sq
 		}
 		return storageports.CommandRecord{}, false, fmt.Errorf("decision is already %s but its original idempotency command is missing", decisionRecord.Status)
 	}
-	closed := run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Abandonment != nil || run.WorkflowStatus == "completed" || run.WorkflowStatus == "abandoned"
+	closed := run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.WorkflowStatus == "completed" || run.WorkflowStatus == "abandoned"
 	waitingMerge := run.WorkflowVersion == executionmodel.Version && run.WorkflowStage == executionmodel.StepAwaitMerge && run.WorkflowStatus == "waiting_external"
 	async := run.Decision != nil && run.Decision.Request.InteractionKind == "async"
 	if closed || run.Decision == nil || run.WorkflowStatus != "waiting_input" && !waitingMerge && !async {

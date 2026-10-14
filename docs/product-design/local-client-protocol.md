@@ -74,7 +74,6 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 | `start_task` | task ID / task version + `expected_control_revision` | `{"execution_profile_id":"..."}` | `StartTaskPayload` → 原 `start_task` control；服务再次核对 task version、资格、实例与 revision |
 | `start_candidate` | task ID / task version + graph/control revision | `{"execution_profile_id":"..."}` | 原 `start_candidate` control 与原 candidate command |
 | `answer_decision` | decision ID / decision version；payload 绑定 run revision/attempt/recovery | `{"run_id":"...","decision_id":"...","option_id":"...","note":"...","answers":{},"expected_run_revision":7,"source_attempt_id":"...","expected_recovery_version":2}` | 原 `DecisionPort.Submit` 与 SQLite `CommandService` |
-| `abandon_candidate` | run ID / candidate revision + control revision | `{"task_id":"...","expected_task_version":3,"reason":"..."}` | 原 `abandon_candidate` control |
 | `discard_task` | task ID / task version | `{"reason":"..."}` | 原 `TaskCommands.Discard` 与持久 discard command/receipt |
 | `set_dispatch_mode` | `dispatch` / control revision | `{"mode":"manual"}` 或 `{"mode":"auto"}` | 原控制命令与 authority CAS |
 | `pause_dispatch`, `resume_dispatch` | `dispatch` / control revision | `{}` | 原控制命令与 authority CAS |

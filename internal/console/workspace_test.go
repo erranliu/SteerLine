@@ -37,7 +37,7 @@ func TestCPWInlineChoicesFreezeTargetAndCancelOnSwitch(t *testing.T) {
 		})
 	}
 	m, c := ccFixture(t, 2)
-	m, _ = ccKey(m, runeKey('z'))
+	m, _ = ccKey(m, runeKey('x'))
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyTab})
 	m, cmd := ccKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd != nil || m.confirm == nil || m.projects[0].focus != 1 {
@@ -57,7 +57,7 @@ func TestCPWReadersDoNotDispatchHiddenActions(t *testing.T) {
 	for _, entry := range []rune{'d', 'f', 'v'} {
 		m, c := ccFixture(t, 2)
 		m, _ = ccKey(m, runeKey(entry))
-		for _, key := range []tea.KeyMsg{runeKey('s'), runeKey('b'), runeKey('z'), runeKey('a'), runeKey('u'), runeKey('x'), runeKey('m'), {Type: tea.KeyCtrlE}, {Type: tea.KeyCtrlO}, {Type: tea.KeyF2}, {Type: tea.KeyF7}, {Type: tea.KeyTab}} {
+		for _, key := range []tea.KeyMsg{runeKey('s'), runeKey('b'), runeKey('x'), runeKey('a'), runeKey('u'), runeKey('x'), runeKey('m'), {Type: tea.KeyCtrlE}, {Type: tea.KeyCtrlO}, {Type: tea.KeyF2}, {Type: tea.KeyF7}, {Type: tea.KeyTab}} {
 			m, cmd := ccKey(m, key)
 			if cmd != nil || !m.detailExpanded || m.answer != nil || m.confirm != nil || m.profileChoice != nil || c.calls != 0 || c.decisionCalls != 0 || m.selectedRow(0).run.RunID != "candidate-0" {
 				t.Fatal("reader dispatched", entry, key.String())
@@ -81,7 +81,7 @@ func TestCPWReadersDoNotDispatchHiddenActions(t *testing.T) {
 }
 
 func TestCPWNoInvisibleSubmitIncludingStop(t *testing.T) {
-	for _, action := range []rune{'a', 'b', 'z', 'x'} {
+	for _, action := range []rune{'a', 'b', 'x'} {
 		m, c := ccFixture(t, 1)
 		m.width, m.height = 120, 8
 		m, _ = ccKey(m, runeKey(action))
@@ -268,10 +268,10 @@ func TestCPWRejectedAnswerNeverReopensEditor(t *testing.T) {
 func TestCPWLongConfirmDoesNotHideItsConfirmation(t *testing.T) {
 	m, _ := ccFixture(t, 1)
 	m.width, m.height = 55, 22
-	m.selectedRow(0).run.ExecutionProfile.Name = strings.Repeat("长方案", 1000)
-	m, _ = ccKey(m, runeKey('z'))
+	m.projects[0].ref.Name = strings.Repeat("长项目", 1000)
+	m, _ = ccKey(m, runeKey('x'))
 	view := m.View()
-	if m.confirm == nil || !m.operationVisible() || !strings.Contains(view, "Enter 确认退出实验") || !strings.Contains(view, "停止独立核实") {
+	if m.confirm == nil || !m.operationVisible() || !strings.Contains(view, "Enter 确认停止") || !strings.Contains(view, "工作现场保留") {
 		t.Fatal("long confirmation displaced critical fields", view)
 	}
 	for _, line := range strings.Split(view, "\n") {

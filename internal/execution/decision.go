@@ -188,7 +188,7 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *reconstruction
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		return errors.New("decision is not pending on the current native run")
 	}
-	if run.Abandonment != nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
+	if run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nativeErr("candidate_inactive", "candidate no longer accepts feedback")
 	}
 	if run.EnvironmentBlocker != nil {

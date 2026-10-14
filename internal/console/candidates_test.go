@@ -23,7 +23,7 @@ func ccFixture(t *testing.T, count int) (Model, *testControlClient) {
 	first.CandidateCreatedAt = now.Add(-time.Minute)
 	rt := snap.Observation.Page
 	rt.Runs = nil
-	rt.Service.Capabilities = append(rt.Service.Capabilities, "start_candidate", "abandon_candidate", "recheck_environment", "open_terminal")
+	rt.Service.Capabilities = append(rt.Service.Capabilities, "start_candidate", "recheck_environment", "open_terminal")
 	for i := 0; i < count; i++ {
 		r := *first
 		d := *first.Decision
@@ -173,80 +173,54 @@ func TestCC3(t *testing.T) {
 	t.Logf("immutable candidate input: %+v; request %s recovered without resubmit", a.Payload, id)
 }
 
-func TestCC4(t *testing.T) {
-	m, c := ccFixture(t, 2)
-	m, _ = ccKey(m, runeKey('z'))
-	if m.confirm == nil {
-		t.Fatal(m.status)
-	}
-	text := strings.Join(confirmRequired(m, m.projects[0]), "\n")
-	if !strings.Contains(text, "不可撤销") || !strings.Contains(text, "可能仍运行") {
-		t.Fatal(text)
-	}
-	m, cmd := ccKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if cmd == nil {
-		t.Fatal(m.status)
-	}
-	m, _ = ccKey(m, runeKey('}'))
-	next, _ := m.Update(cmd())
-	m = next.(Model)
-	a := m.projects[0].actions[c.request.RequestID]
-	if a.Payload.WorkflowRunID != "candidate-0" || a.Payload.ExpectedCandidateVersion != 9 {
-		t.Fatal(a)
-	}
-	next, _ = m.Update(actionReceiptMsg{projectKey: "cc", identity: m.projects[0].ref.Identity, requestID: a.RequestID, receipt: &api.ControlReceipt{RequestID: a.RequestID, Action: a.Action, InstanceID: a.TargetInstance, Status: "applying", Code: "merge_state_unknown", RunID: "candidate-0"}})
-	m = next.(Model)
-	if m.projects[0].actions[a.RequestID].Resolved || m.selectedRow(0).run.RunID != "candidate-1" {
-		t.Fatal("pending verification reported exit or switched selection")
-	}
-	r := m.projects[0].snapshot.Observation.Page.Runs[0]
-	r.Abandonment = &api.AbandonmentSummary{RequestedAt: m.clock.Now()}
-	r.ResourceStatus = "unknown"
-	r.PRHistory = []string{"https://example.invalid/historical/1"}
-	m, _ = ccKey(m, runeKey('{'))
-	m.detailExpanded = true
-	text = strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 1000), "\n")
-	for _, want := range []string{"历史/已放弃", "资源 unknown", "historical/1", "worker 停止独立核实"} {
-		if !strings.Contains(text, want) {
-			t.Fatal(text)
-		}
-	}
-	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEsc})
-	m, _ = ccKey(m, runeKey('z'))
-	if m.confirm != nil {
-		t.Fatal("abandoned feedback/exit remained available")
-	}
-	m.projects[0].snapshot.Observation.Page.Runs[1].PR.State = "merged"
-	m, _ = ccKey(m, runeKey('}'))
-	m, _ = ccKey(m, runeKey('z'))
-	if m.confirm != nil || !strings.Contains(m.status, "禁止放弃") {
-		t.Fatal(m.status)
-	}
-	t.Log("exit/stop facts remain separate; exact original exit request; pending verification not exit; merged PR closes abandon")
-}
-
 func TestCandidateMergedConflictPresentation(t *testing.T) {
 	m, _ := ccFixture(t, 2)
 	s := &m.projects[0]
 	runs := s.snapshot.Observation.Page.Runs
-	runs[0].Abandonment = &api.AbandonmentSummary{RequestedAt: m.clock.Now()}
 	runs[0].PR.State = "merged"
-	text := strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
-	if !strings.Contains(text, "冲突：已放弃候选 PR 已合并") || !strings.Contains(text, "资源 active") {
-		t.Fatal("abandoned merge conflict or live resource fact missing", text)
-	}
-	runs[0].Abandonment = nil
 	runs[1].PR.State = "merged"
-	text = strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
-	if !strings.Contains(text, "冲突：多个候选 PR 已合并") || strings.Contains(text, "获胜/唯一交付") {
-		t.Fatal("multiple merges must remain a conflict without a winner", text)
+	text := strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
+	if !strings.Contains(text, "PR 已合并，交付待核验") || strings.Contains(text, "冲突：多个候选") || strings.Contains(text, "冲突：非交付候选") || strings.Contains(text, "获胜/唯一交付") {
+		t.Fatal("merged candidates should await delivery without a competing-merge conflict", text)
 	}
 	for _, r := range runs {
 		r.TaskStatus = "closed"
 	}
 	runs[0].DeliveryOutcome, runs[1].DeliveryOutcome = "loser", "winner"
 	text = strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
-	if strings.Count(text, "获胜/唯一交付") != 1 || !strings.Contains(text, "冲突：非交付候选 PR 已合并") || !strings.Contains(text, "资源 active") {
+	if strings.Count(text, "获胜/唯一交付") != 1 || !strings.Contains(text, "落选/保留资源 · PR 已合并") || strings.Contains(text, "冲突：多个候选") || strings.Contains(text, "冲突：非交付候选") || !strings.Contains(text, "资源 active") {
 		t.Fatal("late loser merge must preserve the sole delivery and actual resources", text)
+	}
+}
+
+func TestCandidateListCountAndRemovedExit(t *testing.T) {
+	m, control := ccFixture(t, 3)
+	state := &m.projects[0]
+	state.snapshot.Observation.Page.Runs = append(state.snapshot.Observation.Page.Runs, &api.CandidateSummary{TaskID: "other", RunID: "other-run"})
+	state.snapshot.Observation.Page.Runs[0].WorkflowStatus = "running"
+	state.snapshot.Observation.Page.Runs[0].Decision = nil
+	state.snapshot.Observation.Page.Runs[1].ExecutionStatus = "failed"
+	state.snapshot.Observation.Page.Runs[2].WorkflowStatus = "completed"
+	row := m.selectedRow(0)
+	for _, width := range []int{26, 38, 60} {
+		text := strings.Join(compactTaskRow(m, *state, *row, width), "\n")
+		if !strings.Contains(text, "进行中") || !strings.Contains(text, " "+padDisplay("3", 8)+" ") || strings.Contains(text, "in_progress") {
+			t.Fatalf("task state/count lost at width %d: %s", width, text)
+		}
+	}
+	row.taskID = "not-started"
+	if text := strings.Join(compactTaskRow(m, *state, *row, 60), "\n"); !strings.Contains(text, " "+padDisplay("0", 8)+" ") {
+		t.Fatal("task without candidates did not display zero", text)
+	}
+	m.selectedRow(0).run.Decision = nil
+	for _, key := range []tea.KeyMsg{runeKey('z'), {Type: tea.KeyEnter}} {
+		var cmd tea.Cmd
+		m, cmd = ccKey(m, key)
+		if m.confirm != nil || cmd != nil || control.calls != 0 || len(m.projects[0].actions) != 0 {
+			t.Fatal("removed candidate exit still dispatched a control action")
+		}
+	}
+	if help := strings.Join(renderHelp(m.projects[0]), "\n"); strings.Contains(help, "退出实验") {
+		t.Fatal("removed candidate exit remains in help", help)
 	}
 }

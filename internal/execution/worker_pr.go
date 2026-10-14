@@ -41,23 +41,22 @@ func (s *Service) offerWorkerPRFeedback(run *reconstructiontypes.RunView, url st
 }
 
 func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes.RunView, task *taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord) error {
+	if run == nil || task == nil || workflow == nil || task.Status == "closed" {
+		return nil
+	}
 	fixed, contextErr := s.workerFlowContext(run)
 	if contextErr != nil {
 		return contextErr
 	}
-	// Clues and old PRs cannot advance an implementation/report/publish step.
-	if workflow != nil && workflow.StepID != executionmodel.StepAwaitMerge {
+	// Only a PR already bound to this candidate can close a task during a
+	// feedback turn. Unbound publication clues still require their own stage.
+	awaitingMerge := workflow.StepID == executionmodel.StepAwaitMerge
+	if !awaitingMerge && workflow.PRURL == "" {
 		return nil
 	}
 	c := fixed.config
 	if run == nil || task == nil || workflow == nil || workflow.WorkflowVersion != executionmodel.Version {
 		return nil
-	}
-	if task.Status == "closed" {
-		return s.pollRetiredCandidatePRs(ctx, run, fixed)
-	}
-	if workflow.Abandonment != nil {
-		return s.pollRetiredCandidatePRs(ctx, run, fixed)
 	}
 	if task.Status == "discarded" {
 		if workflow.PRURL == "" {
@@ -83,7 +82,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if err != nil {
 		workflow.PRQueryError = ptr(clip(err.Error(), 1000))
 		s.refreshRun(run)
-		if workflow.PRURL == "" && workflow.Status != "running" {
+		if awaitingMerge && workflow.PRURL == "" && workflow.Status != "running" {
 			return s.waitWorkerFlow(run, "PR link could not be verified; the center will retry: "+err.Error())
 		}
 		return s.commitWorker(run)
@@ -95,26 +94,22 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if err := publication.ValidateWorkerPRIdentity(info, url, c.PR.Repository, workflow.Branch, execution.Workspace.Branch); err != nil {
 		workflow.PRQueryError = ptr("PR does not belong to the fixed task execution branch")
 		s.refreshRun(run)
-		if workflow.Status != "running" {
+		if awaitingMerge && workflow.Status != "running" {
 			return s.waitWorkerFlow(run, "PR link is for a different repository, base or worker branch")
 		}
 		return s.commitWorker(run)
 	}
 	pendingQuestion := execution.PendingCommandID != "" || execution.PendingTurnID != "" || run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "pending" && !workerContinuationPrompt(run.Decision.Request))
 	previousPRURL := workflow.PRURL
-	if err := BindWorkerPR(workflow, execution, info, url, c.PR.Repository, pendingQuestion); err != nil {
-		return s.waitWorkerFlow(run, "Several PRs or conflicting PR identities need a user decision: "+err.Error())
+	if awaitingMerge {
+		if err := BindWorkerPR(workflow, execution, info, url, c.PR.Repository, pendingQuestion); err != nil {
+			return s.waitWorkerFlow(run, "Several PRs or conflicting PR identities need a user decision: "+err.Error())
+		}
 	}
-	// A closed PR may merge after explicit handling outside the worker. Settle
-	// that verified merge without inventing a new input or consuming a pending one.
-	canSettleMerge := !pendingQuestion && execution.CurrentTurnID == execution.LastStoppedTurnID && !s.hasUnknownWorkerOperation(run)
-	if info.State == "merged" && canSettleMerge {
-		workflow.Status, workflow.UpdatedAt = "waiting_external", now()
-	}
-	if run.Decision != nil && run.Decision.Status == "pending" && !pendingQuestion && previousPRURL != info.URL && workflow.Status != "waiting_input" {
+	if awaitingMerge && run.Decision != nil && run.Decision.Status == "pending" && !pendingQuestion && previousPRURL != info.URL && workflow.Status != "waiting_input" {
 		s.setDecisionStatus(run, "superseded")
 	}
-	if info.State == "open" && workflow.Status == "waiting_external" && execution.Status != "active" {
+	if awaitingMerge && info.State == "open" && workflow.Status == "waiting_external" && execution.Status != "active" {
 		if err := s.offerWorkerPRFeedback(run, info.URL); err != nil {
 			return err
 		}
@@ -124,10 +119,10 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
-	if info.State == "merged" && canSettleMerge {
+	if info.State == "merged" {
 		return s.nativeCompleteMergedTask(ctx, run)
 	}
-	if info.State == "closed_unmerged" && execution.Status != "active" {
+	if awaitingMerge && info.State == "closed_unmerged" && execution.Status != "active" {
 		return s.waitWorkerFlow(run, "PR closed without merge. Send feedback to the original worker session.")
 	}
 	return nil

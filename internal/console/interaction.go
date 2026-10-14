@@ -93,7 +93,7 @@ func feedbackReceiptStatus(state projectState, a *actionState) string {
 }
 
 func candidateBusinessOpen(run *api.CandidateSummary) bool {
-	return run != nil && run.Abandonment == nil && run.TaskStatus != "closed" && run.TaskStatus != "completed" && run.TaskStatus != "discarded" && run.WorkflowStatus != "completed" && run.WorkflowStatus != "abandoned"
+	return run != nil && run.TaskStatus != "closed" && run.TaskStatus != "completed" && run.TaskStatus != "discarded" && run.WorkflowStatus != "completed" && run.WorkflowStatus != "abandoned"
 }
 
 func waitingForMerge(run *api.CandidateSummary) bool {
@@ -111,10 +111,6 @@ func waitingForDecision(run *api.CandidateSummary) bool {
 }
 
 func candidateHumanStatus(state projectState, run *api.CandidateSummary) string {
-	if run.Abandonment != nil {
-
-		return "已退出实验"
-	}
 	if run.TaskStatus == "discarded" {
 		return "Task 已丢弃"
 	}

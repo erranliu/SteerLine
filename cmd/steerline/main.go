@@ -44,7 +44,6 @@ func run() error {
 	startupID := fs.String("startup-id", "", "internal startup attempt ID")
 	taskID := fs.String("task-id", "", "control task target")
 	executionProfile := fs.String("execution-profile", "", "control start_task/start_candidate execution profile ID")
-	candidateReason := fs.String("reason", "", "abandon_candidate: irreversible experiment exit reason")
 	controlMode := fs.String("mode", "", "control set_dispatch_mode value: auto|manual")
 	requestID := fs.String("request-id", "", "control request to query")
 	waitReceipt := fs.Bool("wait", false, "control: wait for a terminal receipt")
@@ -63,9 +62,6 @@ func run() error {
 	}
 	if *executionProfile != "" && (command != "control" || *action != "start_task" && *action != "start_candidate" || *requestID != "") {
 		return fmt.Errorf("-execution-profile is only valid with control -action start_task|start_candidate")
-	}
-	if *candidateReason != "" && (command != "control" || *action != "abandon_candidate" || *requestID != "") {
-		return fmt.Errorf("-reason is only valid with control -action abandon_candidate")
 	}
 
 	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "control" && command != "answer" && command != "home" && command != "install" && command != "launchers" {
@@ -184,65 +180,6 @@ func run() error {
 			}
 			payload.ExpectedTaskVersion, payload.ExpectedGraphRevision = snapshot.SelectedNative.Version, snapshot.NativeTasks.GraphRevision
 			candidateRevision, candidateInstance = &snapshot.NativeTasks.AuthorityVersion, snapshot.Connection.Snapshot.Page.Service.InstanceID
-		case "abandon_candidate":
-			if *runID == "" || strings.TrimSpace(*candidateReason) == "" || *controlMode != "" {
-				return fmt.Errorf("abandon_candidate requires exact -run-id and -reason")
-			}
-			snapshot := product.ReadProject(ctx, *taskID, productapi.ProjectSnapshot{})
-			runtimeState := snapshot.Connection.Snapshot.Page
-			if runtimeState == nil {
-				return fmt.Errorf("service snapshot is unavailable")
-			}
-			if snapshot.NativeTasks == nil {
-				return fmt.Errorf("native task version snapshot is unavailable")
-			}
-			var target *productapi.CandidateSummary
-			for _, run := range runtimeState.Runs {
-				if run.RunID == *runID {
-					target = run
-					break
-				}
-			}
-			if target == nil || *taskID != "" && *taskID != target.TaskID {
-				return fmt.Errorf("exact candidate does not belong to the requested task")
-			}
-			// Resolve task version and graph revision from the same authoritative page.
-			targetSnapshot := snapshot
-			var selected *productapi.TaskDetail
-			for i := range snapshot.NativeTasks.Tasks {
-				if snapshot.NativeTasks.Tasks[i].TaskID == target.TaskID {
-					selected = &snapshot.NativeTasks.Tasks[i]
-					break
-				}
-			}
-			if snapshot.SelectedNative != nil && snapshot.SelectedNative.TaskID == target.TaskID {
-				selected = snapshot.SelectedNative
-			}
-			if selected == nil {
-				targetSnapshot = product.ReadProject(ctx, target.TaskID, productapi.ProjectSnapshot{})
-				if targetSnapshot.NativeTasks == nil || targetSnapshot.SelectedNative == nil || targetSnapshot.Connection.Snapshot.Page == nil {
-					return fmt.Errorf("exact candidate/task version snapshot is unavailable")
-				}
-				var refreshed *productapi.CandidateSummary
-				for _, candidate := range targetSnapshot.Connection.Snapshot.Page.Runs {
-					if candidate != nil && candidate.RunID == target.RunID {
-						refreshed = candidate
-						break
-					}
-				}
-				if refreshed == nil || refreshed.ExecutionID != target.ExecutionID || refreshed.SessionID != target.SessionID || refreshed.ControlRevision != target.ControlRevision {
-					return fmt.Errorf("candidate changed while resolving its task version; refresh and retry")
-				}
-				target = refreshed
-				selected = targetSnapshot.SelectedNative
-				runtimeState = targetSnapshot.Connection.Snapshot.Page
-			}
-			if selected == nil || selected.TaskID != target.TaskID || selected.Version == 0 {
-				return fmt.Errorf("exact native task version is unavailable")
-			}
-			payload = productapi.ControlPayload{TaskID: target.TaskID, WorkflowRunID: target.RunID, ExpectedCandidateVersion: target.ControlRevision, Reason: *candidateReason}
-			payload.ExpectedTaskVersion = selected.Version
-			candidateRevision, candidateInstance = &runtimeState.Control.Revision, runtimeState.Service.InstanceID
 		case "start_task":
 			if *taskID == "" {
 				return fmt.Errorf("start_task requires -task-id")

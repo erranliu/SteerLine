@@ -55,7 +55,7 @@ func (m Model) updateActionSubmitted(msg actionSubmittedMsg) (tea.Model, tea.Cmd
 			action.Status, action.Resolved = "rejected", true
 			action.Message = msg.err.Error() + "；正在刷新状态，请重新选择"
 			delete(state.view.Outstanding, msg.requestID)
-			if action.Action != "start_candidate" && action.Action != "abandon_candidate" {
+			if action.Action != "start_candidate" {
 				state.selectedKey = ""
 				state.selectionHold = true
 			}
@@ -129,9 +129,6 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 		if action.Action == "start_candidate" {
 			expectedRun = action.RequestID
 		}
-		if action.Action == "abandon_candidate" {
-			expectedRun = action.Payload.WorkflowRunID
-		}
 		candidateMismatch := expectedRun != "" && (msg.receipt.Status == "applied" || msg.receipt.Status == "applying") && msg.receipt.RunID != expectedRun
 		if msg.receipt.RequestID != action.RequestID || msg.receipt.Action != action.Action || msg.receipt.InstanceID != action.TargetInstance || candidateMismatch {
 			action.Status, action.Message, action.Resolved = "indeterminate", "receipt 与原控制动作或实例不匹配；已停止自动跟踪", true
@@ -154,7 +151,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 		}
 		if msg.receipt.Code == "stale_revision" {
 			action.Status, action.Message, action.Resolved = "rejected", "stale_revision：控制状态已变化；正在刷新状态，请重新选择", true
-			if action.Action != "start_candidate" && action.Action != "abandon_candidate" {
+			if action.Action != "start_candidate" {
 				state.selectedKey = ""
 				state.selectionHold = true
 			}
