@@ -36,3 +36,7 @@ Windows/amd64、Go 1.26.4，均使用既有隔离测试夹具，无真实模型�
 最小验证：`TestTaskHintCombinesAllCandidates` 覆盖正常/异常轴、两个不同候选的聚合与选择稳定性，既有窄/宽屏及详情测试更新为新主界面要求；只运行 console 包，不涉及执行引擎或 PR 交付判定，无需 L2/L3/Full。首次 console 回归仅旧 `TestUX1ParallelNumbersAndPrimarySurface` 仍断言主界面显示两个已移除字段而失败；更新为新可见/隐藏字段要求后重跑，最终结果另登记。原失败报告：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261013T105533.225696400Z/summary.json`。
 
 最终重跑：passed/complete，198 项、0 失败/跳过，4.067 秒；证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261013T105744.351369400Z/summary.json`。本次未修改 PR 关闭或关闭后轮询业务规则。
+
+## 2026-10-14 PR 集成验证
+
+提交 PR 前合入最新 `origin/main`（`ce1d2c5a`），清除新 TUI HTTP 客户端中的已删除候选放弃 action/专用 payload 引用。首轮集成编译发现该残留，未登记通过；清除后重跑 `go run ./cmd/test-feedback -out <独立临时目录> -- ./internal/console ./internal/app ./internal/consoleapp ./internal/product/api ./internal/product/httpapi ./internal/product/httpclient ./internal/product/query ./cmd/steerline -count=1`，最终 passed/complete，225.837 秒。证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-pr-candidate-http-40d782b2aaa848/summary.json`。仍使用隔离夹具，不包含安装环境或真机窗口验收。

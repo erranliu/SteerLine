@@ -31,3 +31,7 @@ Windows/amd64，既有隔离 Go 夹具，使用本地测试 Git/provider/worker 
 4. 将该夹具改为保留原 turn 身份、原待投递输入，只改变反馈启动状态/步骤后，执行 `go run ./cmd/test-feedback -out <独立临时目录> -- ./internal/execution -run '^TestCandidateOpenPRPollPreservesOriginalPendingInput$' -count=1`：passed/complete，24.517 秒。证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-first-merge-feedback-3f4fed6dd3316/summary.json`。未修改生产代码或放宽原 turn 身份校验。
 
 无任务人工项；本次未做真实提供方/真实窗口验收，不把隔离夹具结果声明为真机验收。
+
+## 2026-10-14 PR 集成验证
+
+合入最新 `origin/main`（`ce1d2c5a`）并清除 HTTP 客户端的旧候选操作引用后，重跑 `go run ./cmd/test-feedback -out <独立临时目录> -- ./internal/execution -run '^(TestMC6|TestCandidateOpenPRPollPreservesOriginalPendingInput|TestCandidateClosedPRPollDeliversLaterMerge)$' -count=1`，最终 passed/complete，6 项、0 失败/跳过；再次覆盖任一合并即可关闭、关闭及重启后零 PR 查询、追加反馈与关闭未合并 PR 的后续合并。证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-pr-candidate-close-4dc4941280ef/summary.json`。控制台/API/HTTP/CLI 集成结果见[候选操作验收](console-candidate-controls.md)。
