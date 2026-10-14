@@ -1,4 +1,4 @@
-﻿param([switch]$Live)
+param([switch]$Live)
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $generator = Join-Path $PSScriptRoot 'new-debug-release.ps1'

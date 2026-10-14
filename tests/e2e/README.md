@@ -92,7 +92,7 @@ L3 `native` 环境仅要求本机 Git、运行中的 Orca 及其 CLI，不复制
 
 L2/L3与controlled/live使用当前固定Windows Codex方案：workspace-write、unelevated、on-request、auto_review、network allow。真实执行仍固定gpt-6-luna/medium。隔离Codex home只复制认证并写入本次仓库信任，不复制sandbox账号或全局项目配置，不需要管理员初始化。受管命令由adapter生成，用户不配置raw args或权限覆盖；恢复核对原冻结配置、精确根和资源。worker不继承启动它的Codex App会话权限。
 
-真实执行使用已核对的codex-cli 0.159.2、Codex登录认证和本机Orca。特殊工具/缓存或Git维护的原生拒绝照实报告，不以切换完全访问或修复ACL使验收通过。最小自动审核验收见[第二批记录](../../docs/acceptance/product-simplification-02-configuration/README.md)。
+真实 Codex 执行使用已核对的 codex-cli 0.159.2 和 Codex 登录认证；原生工作区能力样本另需运行中的本机 Orca。特殊工具/缓存或Git维护的原生拒绝照实报告，不以切换完全访问或修复ACL使验收通过。最小自动审核验收见[第二批记录](../../docs/acceptance/product-simplification-02-configuration/README.md)。
 
 以下 sandbox 工具供其他需要 elevated 的开发场景显式使用，不属于 L2/L3 前置条件。
 
@@ -123,7 +123,7 @@ L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTe
 
 当前 L3 delivery/recovery local-codex 使用 loopback Git/PR provider 并执行真实模型；runtime.sandbox-git.local-codex 使用真实 SteerlineTest GitHub provider 与原生 credential helper，各自显式选择。旧远端驱动使用真实 SteerlineTest PR，保留作历史取证，不能作为当前分步流程入口。当前 Orca 驱动不补 Enter、不注入 agent 专用环境，使用原生主机设置。
 
-L3 delivery/recovery 的本机 Orca usage 按 [#84 明确调整的验收条件](../../docs/acceptance/worker-staged-flow.md) 登记：公开接口不提供 token usage，场景必须记录 `usage_verified=false`、`orca_usage_status=not_exposed_by_orca`，逐轮仍绑定原 Command/Dispatch/final source；真实业务与清理必须通过。该能力记录不代表 token 验证通过，不替代 local、完整 L2、其他 suite 或远端各自的门槛。
+已停用本机 Orca 场景的历史 usage 按 [#84 明确调整的验收条件](../../docs/acceptance/worker-staged-flow.md) 登记：公开接口不提供 token usage，场景必须记录 `usage_verified=false`、`orca_usage_status=not_exposed_by_orca`，逐轮仍绑定原 Command/Dispatch/final source；真实业务与清理必须通过。该能力记录不代表 token 验证通过，不替代 local、完整 L2、其他 suite 或远端各自的门槛。
 
 长提示提交前先等待原终端的粘贴草稿稳定至少一秒，并记录提交后状态；accepted/bytesWritten 不代表 agent 已启动。readiness 的 JavaScript exec wrapper 必须保留完整原生工具结果 JSON，不能只打印 stdout 或手写 exit 文本。原输入目标短暂未就绪时，场景可通过正式 recheck_environment 一次检查原环境，保持原 Task/terminal/Dispatch，不能重发旧业务输入。
 
