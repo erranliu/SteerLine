@@ -60,9 +60,6 @@ func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
 			if old.WorkflowVersion == executionmodel.Version && old.PRURL != "" && old.PRURL != v.PRURL && old.PRState != "closed_unmerged" {
 				return nativeErr("immutable_task", "bound worker PR cannot change before it is closed unmerged")
 			}
-			if old.Abandonment != nil && recordFingerprint(old.Abandonment) != recordFingerprint(v.Abandonment) {
-				return nativeErr("immutable_task", "candidate exit is irreversible")
-			}
 			if len(v.PRHistory) < len(old.PRHistory) {
 				return nativeErr("immutable_task", "candidate PR history cannot be removed")
 			}

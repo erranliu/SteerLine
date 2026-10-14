@@ -100,7 +100,7 @@ func NewService(c Config, runtime RuntimeDependencies, settings RuntimeSettings,
 		}
 	}
 	s.State.SchemaVersion = storageports.WorkerFlowRuntimeSchema
-	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
+	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
 	selectedProfile := runtime.Profiles.DefaultProfileID()
 	if c.selectedProfileID != "" {
 		selectedProfile = c.selectedProfileID

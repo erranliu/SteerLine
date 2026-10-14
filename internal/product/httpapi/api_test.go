@@ -199,7 +199,7 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 	page := api.TaskPage{Protocol: "native-tasks/v1", ProjectID: "project", AuthorityVersion: 8, GraphRevision: 4, DatabaseRevision: 21, DatabaseID: "db-a", SampledAt: now, Tasks: []api.TaskDetail{}}
 	reader := &apiReader{page: page, graph: api.GraphPage{Protocol: api.TaskGraphProtocol, ProjectID: "project", AuthorityVersion: 8, GraphRevision: 4, DatabaseRevision: 21, DatabaseID: "db-a", SampledAt: now, Nodes: []api.GraphNode{}, Edges: []api.GraphEdge{}},
 		activity: api.LogBatch{Cursor: api.ActivityCursor{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), Initialized: true}}, commands: map[string]api.CommandReceipt{}}
-	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
+	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
 	servicePage := &api.ServicePage{Service: api.ServiceSummary{InstanceID: "instance-a", Status: "running", Ready: true, ControlProtocol: 1, Capabilities: capabilities}, Control: api.ControlSummary{Revision: 7}, Runs: []*api.CandidateSummary{}}
 	reader.snapshot = api.ProjectSnapshot{SelectedTaskID: "", FullReadAt: now,
 		Connection:  api.ServiceConnection{State: api.ConnectionConnected, IdentityMatched: true, ConfigMatched: true, CanControl: true, CanStop: true, Snapshot: api.ObservationSnapshot{Page: servicePage, State: api.SnapshotValid, SampledAt: now}},
@@ -407,13 +407,16 @@ func TestAPIReconnectAndUnsupported(t *testing.T) {
 	}
 	unsupported := envelope
 	unsupported.RequestID = strings.Repeat("2", 32)
-	unsupported.Action = "planning_publish"
+	unsupported.Action = "abandon_candidate"
 	if _, err = client.SubmitCommand(context.Background(), unsupported); err == nil || !strings.Contains(err.Error(), "unsupported") {
 		t.Fatalf("unknown action did not return unsupported: %v", err)
 	}
 	unsupportedReceipt, err := client.Command(context.Background(), unsupported.RequestID)
 	if err != nil || unsupportedReceipt.Status != "rejected" || unsupportedReceipt.Code != "unsupported" {
 		t.Fatalf("unsupported action was not retained as an unsupported receipt: %+v %v", unsupportedReceipt, err)
+	}
+	if control.submits != 1 {
+		t.Fatal("removed candidate exit reached the control backend")
 	}
 	unregistered := envelope
 	unregistered.RequestID = strings.Repeat("6", 32)

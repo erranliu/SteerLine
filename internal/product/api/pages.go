@@ -164,7 +164,6 @@ type CandidateSummary struct {
 	SessionGeneration  string                   `json:"session_generation"`
 	CurrentTurnID      string                   `json:"current_turn_id"`
 	TurnNumber         uint64                   `json:"turn_number"`
-	Abandonment        *AbandonmentSummary      `json:"abandonment"`
 	ExecutionProfile   *ExecutionProfileSummary `json:"execution_profile"`
 	PRHistory          []string                 `json:"pr_history"`
 	CandidateCreatedAt time.Time                `json:"candidate_created_at"`
@@ -212,10 +211,6 @@ type TargetSummary struct {
 }
 type WorkerLocation struct {
 	Terminal string `json:"terminal"`
-}
-type AbandonmentSummary struct {
-	Reason      string    `json:"reason"`
-	RequestedAt time.Time `json:"requested_at"`
 }
 type EnvironmentBlocker struct {
 	ID      string          `json:"id"`

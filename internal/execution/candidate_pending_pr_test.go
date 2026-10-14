@@ -27,10 +27,20 @@ func TestCandidateOpenPRPollPreservesOriginalPendingInput(t *testing.T) {
 	if w.Status != "waiting_input" || e.PendingCommandID != command || w.PRURL != info.URL || run.Decision.ID != decisionID {
 		t.Fatal("actual provider poll restored merge phase/replaced Decision while original input was pending")
 	}
+	// A bound PR is still monitored while a feedback start is in progress.
+	w.StepID, w.Status, e.Status = executionmodel.StepImplement, "running", "active"
+	s.refreshRun(run)
+	require(t, s.commitWorker(run))
+	require(t, s.pollWorkerFlowPR(context.Background(), run, nativeTaskRecord(s.domain.Tasks, run.TaskID), w))
+	if w.StepID != executionmodel.StepImplement || w.Status != "running" || e.PendingCommandID != command {
+		t.Fatal("open bound PR replaced the active feedback stage")
+	}
+	inputs, turns := len(w.StageInputs), e.TurnNumber
 	f.proof(t, run, 81, "merged")
 	require(t, s.pollWorkerFlowPR(context.Background(), run, nativeTaskRecord(s.domain.Tasks, run.TaskID), w))
-	if w.Status != "waiting_input" || e.PendingCommandID != command || run.Decision.ID != decisionID || len(s.domain.Deliveries) != 0 {
-		t.Fatal("actual merge consumed an original pending input or delivered it early")
+	w, e = s.workflowRecords(run)
+	if nativeTaskRecord(s.domain.Tasks, run.TaskID).Status != "closed" || len(s.domain.Deliveries) != 1 || e.PendingCommandID != command || len(w.StageInputs) != inputs || e.TurnNumber != turns {
+		t.Fatal("verified merge waited for feedback or dispatched another input")
 	}
 }
 

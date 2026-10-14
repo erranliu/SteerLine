@@ -135,17 +135,6 @@ func mcFinishTurn(t *testing.T, s *Service, run *reconstructiontypes.RunView) {
 	t.Fatal("candidate fixture exceeded its staged turn limit")
 }
 
-func (f mcFixture) abandon(t *testing.T, run *reconstructiontypes.RunView, id string) CandidateAbandonReceipt {
-	t.Helper()
-	task := nativeTaskRecord(f.s.domain.Tasks, run.TaskID)
-	options := CandidateAbandonOptions{TaskID: run.TaskID, WorkflowRunID: run.RunID, RequestID: id, ExpectedTaskVersion: task.Version, ExpectedCandidateVersion: run.ControlRevision, RequestedBy: "operator", Reason: "manual comparison complete"}
-	r, err := f.commands.AbandonNativeCandidate(context.Background(), f.c, options)
-	require(t, err)
-	t.Logf("candidate exit receipt: %s", mustJSON(r))
-	require(t, f.s.refreshNativeSnapshot(context.Background()))
-	return r
-}
-
 func (f mcFixture) proof(t *testing.T, run *reconstructiontypes.RunView, number int, state string) executionmodel.PRInfo {
 	t.Helper()
 	e := f.s.executionRecord(run)
@@ -482,8 +471,30 @@ func TestMC5(t *testing.T) {
 	}
 }
 
+type mcCountPRQueries struct {
+	executionbackend.ManagedProcessHost
+	calls int
+}
+
+func (p *mcCountPRQueries) StartManaged(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
+	if len(cmd.Args) > 1 && cmd.Args[1] == "mc-provider" {
+		p.calls++
+	}
+	return p.ManagedProcessHost.StartManaged(cmd)
+}
+
+type mcCountVerifier struct {
+	TaskDeliveryVerifier
+	urls []string
+}
+
+func (v *mcCountVerifier) Query(ctx context.Context, url string) (executionmodel.PRInfo, error) {
+	v.urls = append(v.urls, url)
+	return v.TaskDeliveryVerifier.Query(ctx, url)
+}
+
 func TestMC6(t *testing.T) {
-	for _, mode := range []string{"multiple_merged", "abandoned_merged", "unknown_sibling", "late_after_delivery"} {
+	for _, mode := range []string{"multiple_merged", "unknown_sibling", "late_after_delivery"} {
 		t.Run(mode, func(t *testing.T) {
 			f := newMCFixture(t)
 			r, _ := f.start(t, "candidate-b")
@@ -493,87 +504,71 @@ func TestMC6(t *testing.T) {
 				mcFinishTurn(t, f.s, run)
 				f.bind(t, run, 81+i, "open")
 			}
-			if mode == "abandoned_merged" {
-				if f.abandon(t, f.first, newID()).Status != "abandoned" {
-					t.Fatal("candidate did not exit")
-				}
-			}
 			f.proof(t, second, 82, "merged")
-			if mode == "multiple_merged" || mode == "abandoned_merged" {
+			if mode == "multiple_merged" {
 				f.proof(t, f.first, 81, "merged")
 			}
 			if mode == "unknown_sibling" {
 				require(t, os.Remove(filepath.Join(f.provider, "81.json")))
 			}
 			task := nativeTaskRecord(f.s.domain.Tasks, "8")
-			_, err := f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, testPublicationClient(f.c))
-			if mode != "late_after_delivery" {
-				if err == nil {
-					t.Fatal("conflicting/unknown set delivered")
+			verifier := &mcCountVerifier{TaskDeliveryVerifier: testPublicationClient(f.c)}
+			if mode == "multiple_merged" {
+				// Hold the real verified declaration while a sibling changes stage.
+				captured := &resultCaptureStore{CommandStore: f.store}
+				_, err := newTestCommandService(captured, f.c).CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, verifier)
+				if !errors.Is(err, errCapturedResult) {
+					t.Fatal("selected merge did not reach atomic commit", err)
 				}
-				snapshot, e := readCommandSnapshot(context.Background(), f.store, f.c.Identity(), "8")
-				require(t, e)
-				if len(snapshot.Graph.Deliveries) != 0 {
-					t.Fatal("conflict created delivery")
-				}
-				return
+				f.s.workflowRecord(f.first).Status = "blocked"
+				f.s.refreshRun(f.first)
+				require(t, f.s.commitWorker(f.first))
+				_, err = f.store.CommitTaskResult(context.Background(), captured.commit)
+				require(t, err)
+			} else {
+				_, err := f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, verifier)
+				require(t, err)
 			}
+			if len(verifier.urls) != 1 || verifier.urls[0] != *second.PR.URL {
+				t.Fatal("delivery queried a sibling PR", verifier.urls)
+			}
+			require(t, f.s.refreshNativeSnapshot(context.Background()))
+			if nativeTaskRecord(f.s.domain.Tasks, "8").Status != "closed" || len(f.s.domain.Deliveries) != 1 || f.s.domain.Deliveries[0].SelectedWorkflowRunID != second.RunID {
+				t.Fatal("verified candidate did not close task with one authoritative delivery")
+			}
+			ready, err := query.NewService(f.store, f.c.Identity()).ReadyNativeTasks(context.Background())
 			require(t, err)
-			require(t, f.s.refreshNativeSnapshot(context.Background()))
-			original := digestValue(f.s.domain.Deliveries)
-			f.proof(t, f.first, 81, "merged")
-			require(t, f.s.pollRetiredCandidatePRs(context.Background(), f.first, func() workerFlowContext { fixed, e := f.s.workerFlowContext(f.first); require(t, e); return fixed }()))
-			require(t, f.s.refreshNativeSnapshot(context.Background()))
-			if digestValue(f.s.domain.Deliveries) != original || f.first.ExecutionStatus == "stopped" {
-				t.Fatal("late merge replaced delivery or invented stop")
+			if len(ready) != 1 || ready[0].TaskID != "9" {
+				t.Fatal("close did not release the successor")
 			}
-			var conflicts int
-			require(t, f.store.db.QueryRow(`SELECT COUNT(*) FROM events WHERE type='task.delivery.conflict'`).Scan(&conflicts))
-			if conflicts == 0 {
-				t.Fatal("late competing merge not recorded")
+			original := digestValue(f.s.domain.Deliveries)
+			if mode == "late_after_delivery" {
+				f.proof(t, f.first, 81, "merged")
+			}
+			before := digestValue([]executionmodel.PRState{f.first.PR, second.PR})
+			counter := &mcCountPRQueries{ManagedProcessHost: f.s.runtime.ProcessHost}
+			f.s.runtime.ProcessHost = counter
+			require(t, f.s.pollNativePRs(context.Background(), ""))
+			require(t, f.s.pollWorkerFlowPR(context.Background(), f.first, nativeTaskRecord(f.s.domain.Tasks, "8"), f.s.workflowRecord(f.first)))
+			if counter.calls != 0 || digestValue([]executionmodel.PRState{f.first.PR, second.PR}) != before || digestValue(f.s.domain.Deliveries) != original {
+				t.Fatal("closed task still observed PR state or changed its delivery", counter.calls)
+			}
+			require(t, f.s.Close())
+			restored, err := newNeutralService(f.c)
+			require(t, err)
+			defer restored.Close()
+			restoredCounter := &mcCountPRQueries{ManagedProcessHost: restored.runtime.ProcessHost}
+			restored.runtime.ProcessHost = restoredCounter
+			require(t, restored.pollNativePRs(context.Background(), ""))
+			if restoredCounter.calls != 0 || digestValue(restored.domain.Deliveries) != original {
+				t.Fatal("restart resumed PR monitoring for a closed task")
 			}
 		})
 	}
 }
 
 func TestMC7(t *testing.T) {
-	f := newMCFixture(t)
-	r, _ := f.start(t, "candidate-b")
-	second := f.s.find(r.WorkflowRunID)
-	for _, run := range []*reconstructiontypes.RunView{f.first, second} {
-		if f.abandon(t, run, newID()).Status != "abandoned" {
-			t.Fatal("candidate exit failed")
-		}
-	}
-	if participatingCandidates(f.s.domain.WorkflowRuns, "8") != 0 || nativeTaskRecord(f.s.domain.Tasks, "8").Status != "in_progress" {
-		t.Fatal("empty experiment reopened task")
-	}
-	before := digestValue(f.s.domain)
-	require(t, f.s.Close())
-	restored, err := newNeutralService(f.c)
-	require(t, err)
-	defer restored.Close()
-	if digestValue(restored.domain) != before || len(restored.runs) != 2 {
-		t.Fatal("restart lost original candidate bindings")
-	}
-	restored.lifecycleResolver = mcResolver{}
-	require(t, restored.resumeWorkerFlow(context.Background()))
-	if len(restored.workers) != 0 {
-		t.Fatal("restart revived abandoned candidate")
-	}
-	f.s = restored
-	next, _ := f.start(t, "candidate-c")
-	if next.WorkflowRunID == f.first.RunID || nativeTaskRecord(f.s.domain.Tasks, "8").Version != 2 {
-		t.Fatal("all-exited start replaced claim")
-	}
-	_, err = f.commands.DiscardNativeTask(context.Background(), f.c, "8", newID(), 2, "discard all candidates", "operator")
-	require(t, err)
-	ready, err := query.NewService(f.store, f.c.Identity()).ReadyNativeTasks(context.Background())
-	require(t, err)
-	if len(ready) != 0 {
-		t.Fatal("discard unlocked successor")
-	}
-	t.Run("discard_full_history_and_exited_set", func(t *testing.T) {
+	t.Run("discard_full_history_and_candidate_set", func(t *testing.T) {
 		f := newMCFixture(t)
 		r, _ := f.start(t, "candidate-b")
 		second := f.s.find(r.WorkflowRunID)
@@ -594,9 +589,6 @@ func TestMC7(t *testing.T) {
 			t.Fatal("closed PR allowed an implicit replacement")
 		}
 		f.bind(t, f.first, 81, "open")
-		if f.abandon(t, f.first, newID()).Status != "abandoned" {
-			t.Fatal("candidate exit failed")
-		}
 		f.proof(t, second, 82, "merged")
 		rejected, err := f.commands.DiscardNativeTask(context.Background(), f.c, "8", newID(), 2, "all candidates", "operator")
 		require(t, err)
@@ -607,201 +599,9 @@ func TestMC7(t *testing.T) {
 		accepted, err := f.commands.DiscardNativeTask(context.Background(), f.c, "8", newID(), 2, "all candidates", "operator")
 		require(t, err)
 		if accepted.Status != "discarded" || len(accepted.StopPending) != 2 || !contains(accepted.StopPending, "execution_stop_manual:"+f.first.ExecutionID) {
-			t.Fatal("discard lost exited/history PRs or live idle worker resources")
+			t.Fatal("discard lost candidate/history PRs or live idle worker resources")
 		}
 		t.Logf("complete discard receipt: %s", mustJSON(accepted))
-	})
-}
-
-type mcSlowPort struct {
-	executionbackend.LifecyclePort
-	entered, release chan struct{}
-	unknown          bool
-}
-
-func (p mcSlowPort) Execute(ctx context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
-	close(p.entered)
-	select {
-	case <-p.release:
-	case <-ctx.Done():
-		return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationUnknown}, nil, ctx.Err()
-	}
-	receipt := executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationConfirmed}
-	if p.unknown {
-		receipt.Disposition = executionbackend.OperationUnknown
-	} else if r.Operation.Action == string(executionbackend.LifecycleCreateResource) {
-		process := executionbackend.ProcessIdentity{Kind: "fixture", RuntimeID: r.Snapshot.Session.ExecutionID, Incarnation: r.Snapshot.ResourceGeneration}
-		receipt.Process = &process
-		receipt.State.SessionID = "late-original-session"
-		receipt.State.SessionGeneration = r.Snapshot.ResourceGeneration
-		envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: neutralBindingKey, CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: r.Snapshot.Session.ProjectID, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, Generation: r.Snapshot.ResourceGeneration, ConfigDigest: r.Snapshot.ConfigurationDigest}, mustJSON(neutralBinding{SessionID: receipt.State.SessionID, Generation: receipt.State.SessionGeneration}))
-		if err != nil {
-			return receipt, nil, err
-		}
-		receipt.Implementation = []executionbackend.ImplementationDataEnvelope{envelope}
-	}
-	return receipt, nil, nil
-}
-
-func (p mcSlowPort) Reconcile(_ context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
-	return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationUnknown}, nil, nil
-}
-
-func TestMC8(t *testing.T) {
-	for _, mode := range []string{"late_start", "late_feedback", "unknown_stop"} {
-		t.Run(mode, func(t *testing.T) {
-			f := newMCFixture(t)
-			run := f.first
-			if mode == "unknown_stop" {
-				mcStartTurn(t, f.s, run)
-				mcFinishTurn(t, f.s, run)
-			} else {
-				lifecycle, fixed, err := f.s.lifecycleForRun(run)
-				require(t, err)
-				intent := *fixed.execution.WorkspaceIntent
-				require(t, f.s.executeLifecycleStep(context.Background(), run, lifecycle, executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}))
-				fixed, err = f.s.workerFlowContext(run)
-				require(t, err)
-				require(t, bindPolicyResources(context.Background(), fixed.config, f.s.runtime.Directory, f.s.runtime.ProcessHost, fixed.execution, fixed.execution.Workspace.Worktree, nil))
-				require(t, f.s.commitWorker(run))
-			}
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			f.s.runContext = ctx
-			f.s.signalQueue = make(chan Signal, 8)
-			action := executionbackend.LifecycleCreateResource
-			input := executionbackend.LifecycleInput{Resource: &executionbackend.ResourceIntent{Purpose: "fixture"}}
-			if mode == "late_feedback" {
-				action = executionbackend.LifecycleDeliverFeedback
-				input = executionbackend.LifecycleInput{Feedback: &executionbackend.FeedbackInput{DecisionID: newID(), QuestionID: "question", Message: "original answer"}}
-			}
-			if mode == "unknown_stop" {
-				action = executionbackend.LifecycleStopExecution
-				input = executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: f.s.executionRecord(run).CurrentTurnID}}
-			}
-			var value any = input.Resource
-			if mode == "late_feedback" {
-				value = input.Feedback
-			}
-			if mode == "unknown_stop" {
-				value = input.Stop
-			}
-			key, _, err := lifecycleOperationKey(run.ExecutionID, action, input)
-			require(t, err)
-			opID, err := f.s.startWorkerOperation(run, string(action), key, value)
-			require(t, err)
-			fixed, err := f.s.workerFlowContext(run)
-			require(t, err)
-			snapshot, err := f.s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
-			require(t, err)
-			request := lifecycleRequest(snapshot, *f.s.operationByKey(key), action, input)
-			port := mcSlowPort{entered: make(chan struct{}), release: make(chan struct{}), unknown: mode == "unknown_stop"}
-			err = f.s.dispatchLifecycleEffect(ctx, run, port, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
-				return f.s.changeWorkerOperation(run, opID, string(result.receipt.Disposition), "", mustJSON(result.receipt), "")
-			})
-			if !errors.Is(err, errLifecycleEffectPending) {
-				t.Fatal(err)
-			}
-			<-port.entered
-			before := len(f.s.domain.Operations)
-			if f.abandon(t, run, newID()).Status != "abandoned" || participatingCandidates(f.s.domain.WorkflowRuns, "8") != 0 {
-				t.Fatal("exit waited for effect/stop")
-			}
-			f.start(t, "candidate-b")
-			close(port.release)
-			select {
-			case msg := <-f.s.signalQueue:
-				require(t, f.s.handleWorkerMessage(msg))
-			case <-time.After(3 * time.Second):
-				t.Fatal("late receipt did not return")
-			}
-			f.s.forwarders.Wait()
-			if f.s.workflowRecord(run).Abandonment == nil || f.s.operationByKey(key).Status == "in_flight" || len(f.s.domain.Operations) != before+2 {
-				t.Fatal("late receipt revived candidate or was discarded")
-			}
-			if mode == "late_start" && f.s.executionRecord(run).Process == nil {
-				t.Fatal("late live resource identity lost")
-			}
-			if mode == "unknown_stop" && f.s.executionRecord(run).Status == "stopped" {
-				t.Fatal("unknown stop displayed as confirmed")
-			}
-			originalOp := f.s.operationByKey(key)
-			t.Logf("original receipt identity and disposition: %s", mustJSON(struct {
-				ID, Kind, Status, PayloadDigest, ReceiptDigest string
-				Identity                                       *executionbackend.LifecycleOperationIdentity
-			}{originalOp.OperationID, originalOp.Kind, originalOp.Status, originalOp.PayloadDigest, digestValue(originalOp.Receipt), originalOp.LifecycleIdentity}))
-			require(t, f.s.Close())
-			restored, err := newNeutralService(f.c)
-			require(t, err)
-			defer restored.Close()
-			original := restored.find(run.RunID)
-			ops := len(restored.domain.Operations)
-			require(t, restored.resumeRetiredCandidate(context.Background(), original))
-			if original.Abandonment == nil || len(restored.domain.Operations) != ops || restored.operationByKey(key).OperationID != opID {
-				t.Fatal("restart revived candidate or replaced the original unknown operation")
-			}
-		})
-	}
-	t.Run("merged_rejects_exit", func(t *testing.T) {
-		f := newMCFixture(t)
-		mcStartTurn(t, f.s, f.first)
-		mcFinishTurn(t, f.s, f.first)
-		f.bind(t, f.first, 81, "open")
-		f.proof(t, f.first, 81, "merged")
-		r := f.abandon(t, f.first, newID())
-		if r.Status != "rejected" || r.Code != "already_merged" || f.s.workflowRecord(f.first).Abandonment != nil {
-			t.Fatal("merged candidate exited")
-		}
-	})
-	t.Run("inbox_under_project_effect", func(t *testing.T) {
-		f := newMCFixture(t)
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		f.s.runContext = ctx
-		f.s.signalQueue = make(chan Signal, 8)
-		fixed, err := f.s.workerFlowContext(f.first)
-		require(t, err)
-		input := executionbackend.LifecycleInput{Resource: &executionbackend.ResourceIntent{Purpose: "fixture"}}
-		id, err := f.s.startWorkerOperation(f.first, string(executionbackend.LifecycleCreateResource), "mc-slow-original", input.Resource)
-		require(t, err)
-		snapshot, err := f.s.lifecycleSnapshot(f.first, fixed.workflow, fixed.execution, fixed.attempt, nil)
-		require(t, err)
-		request := lifecycleRequest(snapshot, *f.s.operationByKey("mc-slow-original"), executionbackend.LifecycleCreateResource, input)
-		port := mcSlowPort{entered: make(chan struct{}), release: make(chan struct{})}
-		err = f.s.dispatchLifecycleEffect(ctx, f.first, port, request, false, func(*reconstructiontypes.RunView, lifecycleEffectResult) error {
-			return errors.New("retired original must retain facts without authorizing next step")
-		})
-		if !errors.Is(err, errLifecycleEffectPending) {
-			t.Fatal(err)
-		}
-		<-port.entered
-		defer func() { close(port.release); f.s.forwarders.Wait() }()
-		// Model the original start_task checkpoint still waiting for this effect.
-		originalReq := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: f.s.State.Control.Revision, Action: "start_task", Payload: mustJSON(productapi.ControlPayload{TaskID: "8"}), RequestedBy: "operator", CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
-		require(t, publishControlRequest(f.c.RunDir, originalReq))
-		f.s.controlSeen = map[string]string{originalReq.RequestID: "seen"}
-		f.s.State.Control.Operation = &reconstructiontypes.ControlOperation{RequestID: originalReq.RequestID, Action: originalReq.Action, TaskID: "8", RunID: f.first.RunID, Payload: originalReq.Payload, Phase: "applying", RequestDigest: rawRequestDigest(controlRequestPath(f.c.RunDir, originalReq.RequestID))}
-		p := productapi.ControlPayload{TaskID: "8", WorkflowRunID: f.first.RunID, ExpectedTaskVersion: 2, ExpectedCandidateVersion: f.first.ControlRevision, Reason: "manual alternative"}
-		req := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: f.s.State.Control.Revision, Action: "abandon_candidate", Payload: mustJSON(p), RequestedBy: "operator", CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
-		require(t, publishControlRequest(f.c.RunDir, req))
-		require(t, f.s.pollControl(ctx, cancel))
-		receipt, err := ReadControlReceipt(f.c, req.RequestID)
-		require(t, err)
-		if receipt.Status != "applied" || f.s.workflowRecord(f.first).Abandonment == nil {
-			t.Fatal("project effect prevented irreversible experiment exit")
-		}
-		graph, err := f.store.TaskGraphSnapshot(context.Background(), f.c.Identity())
-		require(t, err)
-		p = productapi.ControlPayload{TaskID: "8", ExpectedTaskVersion: 2, ExpectedGraphRevision: graph.Authority.GraphRevision}
-		req.RequestID, req.Action, req.Payload = newID(), "start_candidate", mustJSON(p)
-		require(t, publishControlRequest(f.c.RunDir, req))
-		require(t, f.s.pollControl(ctx, cancel))
-		next, err := ReadControlReceipt(f.c, req.RequestID)
-		require(t, err)
-		if next.Status != "applying" || next.RunID == f.first.RunID || len(f.s.domain.WorkflowRuns) != 2 {
-			t.Fatal("pending effect occupied a project candidate slot")
-		}
-		_ = id
 	})
 }
 
@@ -824,13 +624,6 @@ func TestMC9(t *testing.T) {
 	if _, err := f.commands.StartNativeCandidate(context.Background(), c, bad); !isNativeErrorCode(err, "candidate_limit_reached") {
 		t.Fatalf("sixth serial start: %v", err)
 	}
-	if f.abandon(t, f.first, newID()).Status != "abandoned" {
-		t.Fatal("exit failed")
-	}
-	f.start(t, "candidate-c")
-	if participatingCandidates(f.s.domain.WorkflowRuns, "8") != 5 || len(f.s.domain.WorkflowRuns) != 6 {
-		t.Fatal("exit did not immediately admit replacement")
-	}
 	var reserved int
 	require(t, f.store.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE name='one_active_workflow_per_task' OR name LIKE '%candidate%slot%'`).Scan(&reserved))
 	if reserved != 0 {
@@ -839,7 +632,7 @@ func TestMC9(t *testing.T) {
 	// No parallel overshoot is required. Acceptance is not reversed or repaired
 	// merely because an externally sampled participation count exceeds five.
 	var exported reconstructiontypes.Runtime = f.s.State
-	if len(exported.Runs) != 6 {
+	if len(exported.Runs) != 5 {
 		t.Fatal("history was pruned to enforce quantity")
 	}
 }

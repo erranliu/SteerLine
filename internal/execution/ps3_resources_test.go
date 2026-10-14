@@ -58,12 +58,6 @@ func TestPS3DiscardPreservesTwoCandidateResourcesAndPRs(t *testing.T) {
 	}
 	guard := &ps3ResourceGuard{ManagedProcessHost: f.s.runtime.ProcessHost}
 	f.s.runtime.ProcessHost, f.commands.runtime.ProcessHost = guard, guard
-	if f.abandon(t, f.first, newID()).Status != "abandoned" {
-		t.Fatal("candidate not abandoned")
-	}
-	if participatingCandidates(f.s.domain.WorkflowRuns, "8") != 1 {
-		t.Fatal("abandonment affected sibling")
-	}
 	discarded, err := f.commands.DiscardNativeTask(context.Background(), f.c, "8", newID(), 2, "retain both resources", "operator")
 	require(t, err)
 	if discarded.Status != "discarded" {

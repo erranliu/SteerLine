@@ -146,7 +146,7 @@ func (s *SQLiteStore) CommitWorker(ctx context.Context, request storageports.Wor
 			if err := json.Unmarshal(workflowBytes, &workflow); err != nil {
 				return err
 			}
-			if status != "in_progress" || workflow.Abandonment != nil {
+			if status != "in_progress" {
 				// Completed/discarded tasks may retain diagnostic and cleanup
 				// receipts, but cannot restart business work or replace evidence.
 

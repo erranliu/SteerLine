@@ -30,7 +30,7 @@ func (m *Model) syncAnswer() {
 		return
 	}
 	row := m.selectedRow(m.selected)
-	if row == nil || row.run == nil || candidateIdentity(row.run) != d.identity || row.run.Decision == nil || row.run.Decision.ID != d.decisionID || row.run.Decision.Status != "pending" || row.run.Abandonment != nil || row.run.TaskStatus == "closed" || row.run.TaskStatus == "discarded" {
+	if row == nil || row.run == nil || candidateIdentity(row.run) != d.identity || row.run.Decision == nil || row.run.Decision.ID != d.decisionID || row.run.Decision.Status != "pending" || row.run.TaskStatus == "closed" || row.run.TaskStatus == "discarded" {
 		m.leaveAnswer()
 		m.status = "原问题或候选已变化；原草稿保留，请按 a 打开当前问题"
 		return
@@ -118,7 +118,11 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 	lines = append(lines, "当前 "+candidateLabel(state, run)+" · F6/F7 候选")
 	current := *run
 	current.TaskStatus = taskRowRawStatus(*row)
-	lines = append(lines, workerStateLines(&current, width >= 55)...)
+	for _, line := range workerStateLines(&current, width >= 55) {
+		if !strings.HasPrefix(line, "execution_status:") && !strings.HasPrefix(line, "workflow_status:") {
+			lines = append(lines, line)
+		}
+	}
 	lines = append(lines, taskBlockerLines(*row)...)
 	if p := fixedRunExecutionProfile(state, run); p != nil {
 		summary := firstText(p.Name, p.ID) + " · " + p.Host + " / " + p.Agent

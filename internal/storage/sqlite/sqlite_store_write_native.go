@@ -225,7 +225,7 @@ func (t *sqliteTx) PutTaskDelivery(v executionmodel.TaskDeliveryRecord) error {
 	if evidence.ExistingAcceptance != nil || run.WorkflowVersion != executionmodel.Version {
 		return nativeErr("unsupported_schema", "delivery requires a worker-flow-v2 run")
 	}
-	if run.Abandonment != nil || run.SelectedResult == "" || run.PRURL != v.PRURL || run.Status != "waiting_external" || run.StepID != executionmodel.StepAwaitMerge {
+	if run.SelectedResult == "" || run.PRURL != v.PRURL {
 		return nativeErr("stale_version", "delivery requires the selected worker flow and its bound PR")
 	}
 	var executionPayload []byte

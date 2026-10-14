@@ -16,8 +16,8 @@ import (
 func TestTM05ProductDTO(t *testing.T) {
 	t.Run("serializable_target_version_original_receipt", func(t *testing.T) {
 		now := time.Date(2026, 10, 4, 10, 0, 0, 0, time.UTC)
-		input := ControlInput{Action: AbandonCandidate, RequestID: "original-request", InstanceID: "service-instance", ExpectedRevision: value(uint64(19)), Payload: ControlPayload{WorkflowRunID: "candidate-b", ExpectedTaskVersion: 4, ExpectedGraphRevision: 7, ExpectedCandidateVersion: 9}}
-		receipt := ControlReceipt{RequestID: input.RequestID, InstanceID: input.InstanceID, RunID: input.Payload.WorkflowRunID, ControlRevision: 19, RunRevision: 9, Status: "accepted", AcceptedAt: &now}
+		input := ControlInput{Action: StartCandidate, RequestID: "original-request", InstanceID: "service-instance", ExpectedRevision: value(uint64(19)), Payload: ControlPayload{TaskID: "77", ExpectedTaskVersion: 4, ExpectedGraphRevision: 7}}
+		receipt := ControlReceipt{RequestID: input.RequestID, InstanceID: input.InstanceID, RunID: "candidate-b", ControlRevision: 19, RunRevision: 9, Status: "accepted", AcceptedAt: &now}
 		page := ProjectSnapshot{Connection: ServiceConnection{State: ConnectionConnected, Snapshot: ObservationSnapshot{Page: &ServicePage{Repository: RepositorySummary{Identity: "project"}, Runs: []*CandidateSummary{{TaskID: "77", RunID: "candidate-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "会话-b", ControlRevision: 9, EnvironmentBlocker: &EnvironmentBlocker{ID: "blocker", Version: 2}, Decision: &DecisionSummary{ID: "decision", Version: 3, Request: DecisionRequest{Question: "继续吗？"}}}}}}}}
 		for _, original := range []any{input, receipt, page, &Error{Kind: Unsupported, Message: "source is unsupported"}, ActivityCursor{RunID: "candidate-b", ExecutionID: "execution-b", AttemptID: "attempt-b", AfterEventID: 45, Initialized: true}} {
 			encoded, err := json.Marshal(original)

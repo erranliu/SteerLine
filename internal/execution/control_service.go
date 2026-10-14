@@ -169,7 +169,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	if (s.State.Service.Status != "running" && s.State.Service.Status != "error") || !s.State.Service.Ready {
 		return s.rejectControl(*req, digest, "stale_instance", errors.New("service is stopping or not ready"))
 	}
-	if req.Action == "start_candidate" || req.Action == "abandon_candidate" {
+	if req.Action == "start_candidate" {
 		return s.processCandidateControl(ctx, *req, payload, digest)
 	}
 	if s.State.Control.Operation != nil {

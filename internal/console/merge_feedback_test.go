@@ -154,7 +154,6 @@ func TestWaitingPRMergeTerminalCandidatesDoNotRequestInput(t *testing.T) {
 		{"closed task", func(r *api.CandidateSummary) { r.TaskStatus = "closed" }},
 		{"discarded task", func(r *api.CandidateSummary) { r.TaskStatus = "discarded" }},
 		{"completed workflow", func(r *api.CandidateSummary) { r.WorkflowStatus = "completed" }},
-		{"abandoned candidate", func(r *api.CandidateSummary) { r.Abandonment = &api.AbandonmentSummary{} }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, _ := mergeFeedbackFixture(t, 1)

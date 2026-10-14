@@ -1,7 +1,7 @@
 package model
 
 // CandidateCommonBase preserves the original experiment base across every run,
-// including abandoned candidates. It never claims the task again.
+// including historical candidates. It never claims the task again.
 func CandidateCommonBase(workflows []WorkflowRunRecord, executions []ExecutionRecord, taskID string) (string, error) {
 	base := ""
 	for _, w := range workflows {

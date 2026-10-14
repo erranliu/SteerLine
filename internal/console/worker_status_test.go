@@ -35,9 +35,21 @@ func TestWorkerStatusRawFieldsAndFixedLabels(t *testing.T) {
 	run.WorkflowStage, run.WorkflowStatus, run.ExecutionStatus = "implement.report", "future_state_with_a_very_long_name", "running"
 	lines := candidateOverviewLines(m, m.projects[0], m.selectedRow(0), 28)
 	plain := strings.ReplaceAll(strings.Join(lines, ""), " ", "")
-	for _, raw := range []string{"implement.report", run.WorkflowStatus, "execution_status:"} {
+	for _, raw := range []string{"implement.report", "task_status:"} {
 		if !strings.Contains(plain, raw) {
 			t.Fatal("raw field was truncated instead of wrapped", raw, lines)
+		}
+	}
+	for _, hidden := range []string{run.WorkflowStatus, "execution_status:", "workflow_status:"} {
+		if strings.Contains(plain, hidden) {
+			t.Fatal("hidden status leaked into candidate overview", hidden, lines)
+		}
+	}
+	m.detailExpanded = true
+	detail := strings.Join(candidateDetailLines(m, m.projects[0], m.selectedRow(0)), "\n")
+	for _, raw := range []string{run.WorkflowStatus, "execution_status:", "workflow_status:"} {
+		if !strings.Contains(detail, raw) {
+			t.Fatal("raw state disappeared from details", raw, detail)
 		}
 	}
 	for _, line := range lines {
@@ -144,9 +156,14 @@ func TestWorkerStatusCompactOverviewDoesNotRepeatDiagnostics(t *testing.T) {
 		m.width, m.height = size[0], size[1]
 		m.projects[0].focus = 1
 		view := m.View()
-		for _, want := range []string{"workflow_stage:", "publish", "workflow_status:", "blocked", "execution_status:"} {
+		for _, want := range []string{"workflow_stage:", "publish", "task_status:"} {
 			if !strings.Contains(view, want) {
 				t.Fatal("main surface hid current raw state", size, want, view)
+			}
+		}
+		for _, hidden := range []string{"workflow_status:", "execution_status:"} {
+			if strings.Contains(view, hidden) {
+				t.Fatal("hidden raw status leaked into main surface", size, hidden, view)
 			}
 		}
 	}

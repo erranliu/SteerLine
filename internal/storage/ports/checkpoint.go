@@ -8,7 +8,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-const WorkerFlowRuntimeSchema = 20
+const WorkerFlowRuntimeSchema = 21
 
 type CheckpointRepository struct {
 	Path     string `json:"path"`

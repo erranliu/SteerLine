@@ -14,7 +14,7 @@ func operationProgress(action *actionState) string {
 	switch action.Action {
 	case "start_task", "start_candidate":
 		return "启动中"
-	case "abandon_candidate", "stop_service":
+	case "stop_service":
 		return "停止中"
 	case "answer_decision":
 		return "反馈处理中"
@@ -70,7 +70,7 @@ func rowOperation(state projectState, row consoleRow) *actionState {
 	if action == nil || row.run == nil {
 		return action
 	}
-	runID := firstText(action.RunID, action.Payload.WorkflowRunID)
+	runID := action.RunID
 	if action.Action == "start_candidate" {
 		runID = firstText(runID, action.RequestID)
 	}

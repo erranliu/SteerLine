@@ -46,7 +46,7 @@ func ValidateControlRequest(req productapi.ControlRequest, instanceID, repositor
 
 func ValidControlAction(action string) bool {
 	switch action {
-	case "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
+	case "start_task", "start_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
 		return true
 	}
 	return false
@@ -84,8 +84,6 @@ func DecodeControlPayload(req productapi.ControlRequest) (productapi.ControlPayl
 		allowed = map[string]bool{"task_id": true, "expected_task_version": true, "execution_profile_id": true, "execution_profile_digest": true}
 	case "start_candidate":
 		allowed = map[string]bool{"task_id": true, "expected_task_version": true, "expected_graph_revision": true, "execution_profile_id": true, "execution_profile_digest": true}
-	case "abandon_candidate":
-		allowed = map[string]bool{"task_id": true, "workflow_run_id": true, "expected_task_version": true, "expected_candidate_version": true, "reason": true}
 	}
 	if allowed != nil {
 		for key := range fields {
@@ -98,10 +96,6 @@ func DecodeControlPayload(req productapi.ControlRequest) (productapi.ControlPayl
 	case "start_candidate":
 		if taskmodel.ValidateID(p.TaskID) != nil || p.ExpectedTaskVersion == 0 || p.ExpectedGraphRevision == 0 || len(fields) != 3 && len(fields) != 5 || p.ExecutionProfileID == "" && p.ExecutionProfileDigest != "" || p.ExecutionProfileID != "" && !evidenceDigest(p.ExecutionProfileDigest) {
 			return p, errors.New("start_candidate requires task_id, current task/graph versions and a complete profile selection")
-		}
-	case "abandon_candidate":
-		if taskmodel.ValidateID(p.TaskID) != nil || !controlIDPattern.MatchString(p.WorkflowRunID) || p.ExpectedTaskVersion == 0 || p.ExpectedCandidateVersion == 0 || strings.TrimSpace(p.Reason) == "" || len(p.Reason) > 4000 || len(fields) != 5 {
-			return p, errors.New("abandon_candidate requires exact task/run versions and a reason")
 		}
 	case "open_terminal", "recheck_environment":
 		target := p.Environment

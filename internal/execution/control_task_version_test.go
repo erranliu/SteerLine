@@ -36,3 +36,14 @@ func TestControlFailureCodeReportsUnsupportedAdapter(t *testing.T) {
 		}
 	}
 }
+
+func TestControlRejectsRemovedCandidateExit(t *testing.T) {
+	at := now()
+	request := api.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: strings.Repeat("1", 32),
+		RepositoryIdentity: "project", InstanceID: "instance", ExpectedControlRevision: 3, Action: "abandon_candidate",
+		RequestedBy: "test", CreatedAt: at, ExpiresAt: at.Add(time.Minute)}
+	code, err := ValidateControlRequest(request, "instance", "project", 3, at)
+	if err == nil || code != "invalid_request" {
+		t.Fatalf("removed control action accepted: %s %v", code, err)
+	}
+}

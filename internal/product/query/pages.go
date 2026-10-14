@@ -112,7 +112,6 @@ type CandidateView struct {
 	WorktreePath, WorktreeBranch, BaseCommit       *string
 	LastEvent, LogPath, ResultPath, Summary, Error *string
 	Process                                        *backend.ProcessIdentity
-	Abandonment                                    *model.CandidateAbandonment
 	EnvironmentBlocker                             *model.WorkerHostBlocker
 	ExecutionProfile                               *model.FixedExecutionProfile
 	Decision                                       *model.DecisionState
@@ -143,9 +142,6 @@ func Candidate(r *CandidateView) *api.CandidateSummary {
 	}
 	if r.Process != nil {
 		p.Process = &api.WorkerLocation{Terminal: r.Process.Terminal}
-	}
-	if r.Abandonment != nil {
-		p.Abandonment = &api.AbandonmentSummary{Reason: r.Abandonment.Reason, RequestedAt: r.Abandonment.At}
 	}
 	if r.EnvironmentBlocker != nil {
 		p.EnvironmentBlocker = environmentBlocker(r.EnvironmentBlocker)

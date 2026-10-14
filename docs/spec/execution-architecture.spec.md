@@ -1,5 +1,9 @@
 # 执行架构共同约束
 
+2026-10-14 用户修订：任一已绑定候选 PR 核验已合并即可提交唯一交付并将 Task 转为 closed；其他候选已合并/状态未知或阶段推进不阻塞该候选交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。下文“所有候选 PR 可核实且只有一个合并”以及 closed 后迟到合并监控的历史要求不再适用；当前规则见[数据模型](../product-design/data-model.md#人工候选实验)，验证见[专属验收](../acceptance/candidate-first-merged-close.md)。
+
+2026-10-13 用户修订：完整移除单候选放弃功能（控制台、CLI、API、服务端及专用状态字段）；任务级丢弃和唯一交付保留。控制台任务提示只显示中文状态，并增加全部执行候选数量列。下文涉及单候选放弃或旧列表列布局的历史要求不再适用；当前操作以[执行控制台](../product-design/execution-console.md)为准。
+
 本文保留当前执行任务需要复用的共同边界，不单独启动实现任务。当前协议为 `worker-flow-v2`；中心五步编排、项目验证/修复门槛和答案应用证明属于退役流程。当前配置与数据字段见[数据契约](../product-design/data-model.md)，源码归属见[代码架构](../architecture/current-code-architecture.md)。
 
 ## 平台与职责
