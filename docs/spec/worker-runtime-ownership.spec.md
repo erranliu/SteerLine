@@ -4,6 +4,8 @@
 
 状态：2026-10-14 草稿规划，未纳入执行、未实施。配套 [Plan](worker-runtime-ownership.plan.md)、[专属验收](../acceptance/worker-runtime-ownership.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动固定已提交文档及最新代码。
 
+候选核对：2026-10-14继续保留草稿，未纳入execution-map，当前不安排实施。生命周期effect/receipt、观察/资源/确认权及actor接线与正在实施的Worker三层重构交叉；三层方案由ReliableExecution承担技术可靠性、actor组装资源，不能并行建设另一套旧边界。三层成果进入主干后重审Spec/Plan与验收，不自动恢复旧方案；原调查和测试安排保留作参考，以下旧并行建议不能作为开工资格。冲突说明见[本轮草稿](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 问题与限定成果
 
 [Service](../../internal/execution/service_state.go) 同时持有业务候选与 workers、ownedProcesses、观察/在途状态；[lifecycle_effect.go](../../internal/execution/lifecycle_effect.go) 已有无业务写权的异步调用，但 pendingLifecycleEffect 保存接收可写 RunView 的 apply闭包。[worker_types.go](../../internal/execution/worker_types.go) 的桥接与关闭逻辑也由同一个 execution 包持有。

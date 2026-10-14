@@ -2,7 +2,7 @@
 
 任务 ID：93；任务名称：HTTP 客户端原请求与停服观察解耦。
 
-状态：2026-10-14 草稿规划，未纳入执行、未实施。配套 [Plan](http-client-request-lifecycle.plan.md)、[专属验收](../acceptance/http-client-request-lifecycle.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动固定文档版本与最新主干。
+范围于2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)，尚未实施；实时执行/验收状态归正式清单和专属验收。配套 [Plan](http-client-request-lifecycle.plan.md)、[专属验收](../acceptance/http-client-request-lifecycle.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动固定文档版本与最新主干。
 
 ## 问题与成果
 
@@ -26,7 +26,7 @@
 
 本项拥有 httpclient 内 journal/生命周期观察及所属测试、consoleapp 必要构造接线。保持现有 Client/Open 和 console 消费接口；必要构造参数变化只由本项一次更新全部实际消费者，不留旧构造兼容转发。#92 不修改本包，本项不修改 httpapi、公共 wire/API、httpfs 格式和 ACL 实现。
 
-无新增任务硬前置，复用 #91；可与 #92/#94 并行。测试中可用自己的 httptest/stub 端点；它不代表真实服务集成已验。实际 TUI/HTTP 组合回归用原应用隔离夹具。本项不重写 TUI Model，不建立未来客户端框架。
+无新增任务硬前置，复用 #91；可与 #92 并行；正在实施的Worker三层重构保持公开HTTP/DTO，本项不改其内部执行接线。#94/#95/#96继续留草稿，不构成本项前置。测试中可用自己的 httptest/stub 端点；它不代表真实服务集成已验。实际 TUI/HTTP 组合回归用原应用隔离夹具。本项不重写 TUI Model，不建立未来客户端框架。
 
 ## 最小验收
 

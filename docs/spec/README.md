@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-本目录保留独立 Spec/Plan、未闭合的定向验收和共同约束。本轮 #91 已交付，暂无待执行工程任务，范围及结果见[正式执行清单](../roadmap/execution-map.md)与[草稿](../roadmap/drafts/roadmap.md)。#83/#84/#45/#44 的历史交付事实保留；一期及 #84 原人工项继续待验，#44 后续人工要求已撤销，原未验不标通过。旧二阶段及延期候选退出规划，编号不复用。派发仍须核对用户授权、任务状态和固定文档版本。
+本目录保留独立 Spec/Plan、未闭合的定向验收和共同约束。本轮 #91 已交付，#92/#93已确认纳入并待执行，#94/#95/#96继续留草稿，范围及结果见[正式执行清单](../roadmap/execution-map.md)与[草稿](../roadmap/drafts/roadmap.md)。#83/#84/#45/#44 的历史交付事实保留；一期及 #84 原人工项继续待验，#44 后续人工要求已撤销，原未验不标通过。旧二阶段及延期候选退出规划，编号不复用。派发仍须核对用户授权、任务状态和固定文档版本。
 
 Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在纳入执行或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不作为执行任务；少量人工项按允许范围后置。
 
@@ -10,9 +10,9 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 [SpecGuide.md](SpecGuide.md) 维护 SteerLine 产品草稿转正时必读的 Spec / Plan 生成规范：避免过度设计，先查现有代码再整合，先做相关任务整体规划，明确执行链路和桥接必要性，并落实最小测试及验收覆盖。[交互设计](../product-design/planning-ui.md)与[原型](../product-design/prototypes/planning-ui/index.html)展示规范入口和受控生成。当前产品流程为原型设计，不改变用户直接授权的普通仓库开发入口。
 
-## HTTP 接入后的解耦草稿
+## HTTP 接入后的解耦规格
 
-2026-10-14 用户授权将审计范围创建为五项草稿，各有独立Spec/Plan与专属验收；未纳入execution-map、未启动实现。任务范围、共享所有者及集成建议见[本轮草稿](../roadmap/drafts/roadmap.md)。
+2026-10-14 用户授权将审计范围创建为五项草稿，各有独立Spec/Plan与专属验收；随后确认#92/#93纳入execution-map待执行，其余三项因正在实施的Worker三层重构影响继续留草稿。五项均保留，本轮不启动实现。任务范围、共享所有者及集成建议见[本轮草稿](../roadmap/drafts/roadmap.md)。
 
 | 任务 ID | 任务名称 | Spec / Plan | 验收 |
 | --- | --- | --- | --- |
@@ -21,6 +21,8 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 | 94 | 固定开发流程规则独立 | [Spec](development-flow-rules.spec.md) · [Plan](development-flow-rules.plan.md) | [记录](../acceptance/development-flow-rules.md) |
 | 95 | 任务最终交付用例独立 | [Spec](task-delivery-usecase.spec.md) · [Plan](task-delivery-usecase.plan.md) | [记录](../acceptance/task-delivery-usecase.md) |
 | 96 | worker 运行时资源所有权收敛 | [Spec](worker-runtime-ownership.spec.md) · [Plan](worker-runtime-ownership.plan.md) | [记录](../acceptance/worker-runtime-ownership.md) |
+
+#94的Workflow规则、#96的生命周期/资源接线与三层方案交叉；#95交付抽取未被取代但actor/PR桥接正在重组，暂不安排。具体依据见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)；本表是资料导航，不用于自动派发。
 
 ## 已交付产品精简与控制台
 
@@ -57,7 +59,7 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 ## 当前已确认规划
 
-本轮 #91 已实现、独立复审修复、自动复验并经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 真实合并，暂无待执行工程任务；独立 SteerlineTest live/真终端操作已验，剩余人工体验见[验收](../acceptance/tui-http-client.md)。旧二阶段候选/三节点与延期版本任务退出活动入口，编号保留，材料见[归档](../archive/roadmap/README.md)。#44 实现已由 #91 删除，#45 保留已交付基线。
+本轮 #91 已实现、独立复审修复、自动复验并经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 真实合并，#92/#93已纳入并待执行，范围/并行条件见execution-map；#94/#95/#96尚未纳入。独立 SteerlineTest live/真终端操作已验，剩余人工体验见[验收](../acceptance/tui-http-client.md)。旧二阶段候选/三节点与延期版本任务退出活动入口，编号保留，材料见[归档](../archive/roadmap/README.md)。#44 实现已由 #91 删除，#45 保留已交付基线。
 
 | 任务 ID | 任务名称 | 前置 | Spec | Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |

@@ -168,7 +168,7 @@ Test-only support has one owner under [`internal/testkit`](../../internal/testki
 
 ## HTTP 接入后的解耦评估与建议
 
-以下为 `5a24abec` 的代码评估。2026-10-14 经范围审计与用户授权，收紧后的五项已建立 [#92–#96 草稿及 Spec/Plan](../roadmap/drafts/roadmap.md)，尚未纳入执行或实现；下述评估不自动改变任务依赖。
+以下为 `5a24abec` 的代码评估。2026-10-14 经范围审计与用户授权，收紧后的五项已建立[#92–#96草稿及Spec/Plan](../roadmap/drafts/roadmap.md)；随后#92/#93已确认纳入execution-map待执行，#94/#95/#96因Worker三层重构影响继续留草稿。下述为原基线的收益评估，旧流程/runtime owner及集成建议不用于当前开工；三层未合入前不声明其为当前代码。
 
 建议保持同一个 Go 服务，在进程内形成以下职责关系。实线表示调用/事实消费，虚线表示共享的原子提交边界；业务 actor 是唯一状态变更仲裁者。
 
@@ -202,7 +202,9 @@ flowchart LR
 | 本地 Codex ↔ Orca | 两个 adapter 和协议 codec 已分开，核心不导入实现 | 核心仍用聚合 LifecyclePort；部分通用分离启动逻辑仍叫 applyAppServerSessionReceipt/applyAppServerTurnReceipt，需要按真实通用职责建立边界；两端证据和停止能力仍不同 |
 | 存储 ↔ 查询 | SQL 与只读产品查询分包，业务提交已有 CAS/唯一约束 | SQLite 仍引用 query 的少量值/分页辅助，httpapi 也引用 query 的页大小常量；这是可清理的反向知识依赖，并非当前绕过业务权威 |
 
-### 优先重构
+### 重构收益评估
+
+当前可并行批次只有#92/#93。#94/#96与三层workflow/reliable及actor接线重叠，#95的最终交付抽取仍有剩余收益但当前桥接需重审，见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。以下保留原设计理由，不作为五项实施次序。
 
 1. **高收益：抽出固定流程规则。** 从 [staged_flow.go](../../internal/execution/staged_flow.go) / [staged_result.go](../../internal/execution/staged_result.go) 分离 `development/v3` 的结果解析、步骤决策、报告重试与下一输入构造。规则接收固定值和已核验事实，返回显式变更声明/所需动作，不接收 Service、RunView 可写指针、SQL 或 backend 句柄。I/O 核验仍由 actor/效果层执行，核验结果再交规则判断；结果、转移与下一输入仍一次提交。首先分离 implement/report/publish 规则，不建设通用工作流引擎。
 2. **高收益：收拢 worker 运行时资源所有权。** 首轮 [#96](../spec/worker-runtime-ownership.spec.md)只收拢观察器、原句柄、在途外部调用、取消/关闭和固定结果交接，复用已有后台机制。只接受已持久化 Operation 与冻结资源值，返回原身份事实/回执；不携带可写 RunView/apply闭包。业务 actor 保留步骤、Decision、恢复资格、提交与确认门槛，具体adapter保留证据/停服能力，本机/environment Orca仍共用实现。完整业务恢复拆分不混入首轮。

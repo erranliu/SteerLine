@@ -4,6 +4,8 @@
 
 依据 [Spec](worker-runtime-ownership.spec.md)，实时结果归[专属验收](../acceptance/worker-runtime-ownership.md)。2026-10-14 草稿；调查基线/RoadmapGuide/SpecGuide版本 `5a24abec3c10d184a6e57962e154854bc6011a9f`，启动另固定实际文档与最新代码。
 
+候选核对：2026-10-14继续保留草稿，未纳入execution-map，当前不安排实施。生命周期effect/receipt、观察/资源/确认权及actor接线与正在实施的Worker三层重构交叉；三层方案由ReliableExecution承担技术可靠性、actor组装资源，不能并行建设另一套旧边界。三层成果进入主干后重审Spec/Plan与验收，不自动恢复旧方案；原调查和测试安排保留作参考，以下旧并行建议不能作为开工资格。冲突说明见[本轮草稿](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 实施与删除安排
 
 1. 列出Service的workers/ownedProcesses/workerServiceOwners/lifecycleEffects、forwarders以及恢复中的临时observer所有权。按物理资源区分句柄/观察/在途调用与领域/回执处理；记录owned/attached、冻结停服策略、原generation、退出/ack的现有屏障。不重写adapter证据和业务恢复资格。

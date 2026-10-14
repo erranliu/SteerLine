@@ -1,6 +1,6 @@
 # SteerLine 当前 Roadmap 草稿
 
-2026-10-14 按 [RoadmapGuide](../RoadmapGuide.md)选定本页。用户授权将 HTTP 接入后的解耦审计落为五个草稿任务及各自 Spec/Plan；本次只建规划，不纳入 [execution-map](../execution-map.md)、不创建执行聊天/worktree或外部Task、不实施。永久编号已分配，之后纳入沿用，不复用历史ID。
+2026-10-14 按 [RoadmapGuide](../RoadmapGuide.md)选定本页。用户先授权建立五项草稿及Spec/Plan，随后确认保留全部草稿、将可独立并行推进的#92/#93纳入[execution-map](../execution-map.md)。#94/#95/#96因Worker三层重构的职责/接线影响继续留草稿，暂不安排实施。本次只更新执行规划，不创建执行聊天/worktree或外部Task、不实施。永久编号已分配，之后纳入沿用，不复用历史ID。
 
 调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`。规划约束和生成规范按该版本 [RoadmapGuide](../RoadmapGuide.md)、[SpecGuide](../../spec/SpecGuide.md)、[并行指南](../../architecture/parallel-development.md)核对；实际启动另固定已提交Spec/Plan路径/commit，执行起点核对最新主干。任务草稿不维护实时状态，正式任务/依赖及已验/待验汇总归execution-map与专属验收。
 
@@ -14,17 +14,17 @@
 
 | 任务 ID | 任务名称 | 成果 / 主要owner | 硬前置与并行/集成安排 | Spec / Plan | 专属验收 |
 | --- | --- | --- | --- | --- | --- |
-| 92 | HTTP 服务端命令边界收敛 | httpapi消费端口、同包信封登记/对账owner、HTTPendpoint接线 | 无新增硬前置；与93/94可并行，wire/API冻结 | [Spec](../../spec/http-command-boundary.spec.md) · [Plan](../../spec/http-command-boundary.plan.md) | [验收](../../acceptance/http-command-boundary.md)：HC92-A1–A3，owner/HTTP/真实app定向，无新增人工 |
-| 93 | HTTP 客户端原请求与停服观察解耦 | httpclient journal/跨进程终态保护、本机observer、consoleapp构造，保留原连接 | 无新增硬前置；与92/94可并行，新增仲裁仅在私有journal | [Spec](../../spec/http-client-request-lifecycle.spec.md) · [Plan](../../spec/http-client-request-lifecycle.plan.md) | [验收](../../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3，确定性交错/Windows/独立simulate，无新增人工 |
-| 94 | 固定开发流程规则独立 | development/v3纯规则包、原actor规则接线 | 无新增硬前置；与92/93可并行，与95保持现有调用契约可并行；建议先94后95合入 | [Spec](../../spec/development-flow-rules.spec.md) · [Plan](../../spec/development-flow-rules.plan.md) | [验收](../../acceptance/development-flow-rules.md)：DF94-A1–A4，纯规则/事务/双后端controlled，无新增人工 |
-| 95 | 任务最终交付用例独立 | delivery窄端口用例、CompleteNativeTask薄接线，保留原PR绑定 | 无新增硬前置；既有调用/冻结模型下可作为第四条并行线；默认94→95有序合入 | [Spec](../../spec/task-delivery-usecase.spec.md) · [Plan](../../spec/task-delivery-usecase.plan.md) | [验收](../../acceptance/task-delivery-usecase.md)：TD95-A1–A4，用例/原子事务/两条L3 controlled，无新增人工 |
-| 96 | worker 运行时资源所有权收敛 | workerruntime观察/句柄/在途资源、actor结果接线；不重写业务恢复 | 无新增硬前置；默认94/95后集成，降低共享actor冲突；该建议不转成DAG依赖 | [Spec](../../spec/worker-runtime-ownership.spec.md) · [Plan](../../spec/worker-runtime-ownership.plan.md) | [验收](../../acceptance/worker-runtime-ownership.md)：WR96-A1–A4，owner/确认屏障/四条L3 controlled，无新增人工 |
+| 92 | HTTP 服务端命令边界收敛 | httpapi消费端口、同包信封登记/对账owner、HTTPendpoint接线 | 已纳入execution-map待执行；无新增硬前置，与93可并行，wire/API冻结 | [Spec](../../spec/http-command-boundary.spec.md) · [Plan](../../spec/http-command-boundary.plan.md) | [验收](../../acceptance/http-command-boundary.md)：HC92-A1–A3，owner/HTTP/真实app定向，无新增人工 |
+| 93 | HTTP 客户端原请求与停服观察解耦 | httpclient journal/跨进程终态保护、本机observer、consoleapp构造，保留原连接 | 已纳入execution-map待执行；无新增硬前置，与92可并行，新增仲裁仅在私有journal | [Spec](../../spec/http-client-request-lifecycle.spec.md) · [Plan](../../spec/http-client-request-lifecycle.plan.md) | [验收](../../acceptance/http-client-request-lifecycle.md)：CL93-A1–A3，确定性交错/Windows/独立simulate，无新增人工 |
+| 94 | 固定开发流程规则独立 | development/v3纯规则包、原actor规则接线 | 仅保留草稿，暂不纳入；Workflow规则与正在实施的三层重构直接重叠，待成果合入后重审 | [Spec](../../spec/development-flow-rules.spec.md) · [Plan](../../spec/development-flow-rules.plan.md) | [验收](../../acceptance/development-flow-rules.md)：DF94-A1–A4，纯规则/事务/双后端controlled，无新增人工 |
+| 95 | 任务最终交付用例独立 | delivery窄端口用例、CompleteNativeTask薄接线，保留原PR绑定 | 仅保留草稿，暂不纳入；交付抽取有剩余收益，actor/PR桥接与记录映射正在重组，待稳定后重审 | [Spec](../../spec/task-delivery-usecase.spec.md) · [Plan](../../spec/task-delivery-usecase.plan.md) | [验收](../../acceptance/task-delivery-usecase.md)：TD95-A1–A4，用例/原子事务/两条L3 controlled，无新增人工 |
+| 96 | worker 运行时资源所有权收敛 | workerruntime观察/句柄/在途资源、actor结果接线；不重写业务恢复 | 仅保留草稿，暂不纳入；生命周期effect/资源/确认接线与三层重构交叉，不并行建立旧runtime边界 | [Spec](../../spec/worker-runtime-ownership.spec.md) · [Plan](../../spec/worker-runtime-ownership.plan.md) | [验收](../../acceptance/worker-runtime-ownership.md)：WR96-A1–A4，owner/确认屏障/四条L3 controlled，无新增人工 |
 
-已有#91/#45、任务规则/窄端口、后台效果、恢复事实和提交屏障是已交付基线，不重新创建“契约基础任务”。这五项均有独立成果和一份Spec/Plan、一个预期实现PR；仅编号不产生开工授权。
+已有#91/#45、任务规则/窄端口、后台效果、恢复事实和提交屏障是已交付基线，不重新创建“契约基础任务”。原五项均保留自己的Spec/Plan与永久身份；当前仅#92/#93已确认纳入，实际执行/验收状态归execution-map。#94/#95/#96的原独立交付判断须结合三层重构成果重新核验，编号和文档存在不产生开工授权。
 
-## 独立交付与重构收益
+## 原拆分的收益与独立交付判据
 
-独立交付要求在兄弟任务均未实施的调查基线上也能完成真实调用接线、删除旧主体/重复状态并通过自己的自动验收，不以只有新包/interface或stub通过交付。兄弟实际已合入时补最小组合验证；没有其成果不构成等待理由。#92/#93是同包职责与能力隔离，不宣称包级编译隔离。
+独立交付要求在兄弟任务均未实施的调查基线上也能完成真实调用接线、删除旧主体/重复状态并通过自己的自动验收，不以只有新包/interface或stub通过交付。兄弟实际已合入时补最小组合验证。#92/#93是同包职责与能力隔离，不宣称包级编译隔离。下表保留原收益评估；#94/#95/#96不因该评估自动纳入，须按后面的冲突核对重新定范围。
 
 | 任务 | 本项交付后可独立完成的改动/验证 | 必须消除的耦合及收益 |
 | --- | --- | --- |
@@ -39,27 +39,40 @@
 | 关系 / 共享面 | 唯一修改归属与保持条件 | 可固定 / 开工 / 合入条件 |
 | --- | --- | --- |
 | 92 ↔ 93：wire/API、请求/回执、httpfs | 本轮共同契约只读，92只改server/app HTTPendpoint，93只改client/consoleapp。文件格式/ACL不变；各用自己的私有stub | Spec已固定保持边界后可各自实现/验证，谁后合入谁核对真实客户端/服务组合；不等待兄弟未交付新API |
-| 94 ↔ 95：未知publish与真实merged、交付gate | 94负责staged_flow纯规则和原未知对账路径，95只替换最终交付用例；CompleteNativeTask原调用契约、DeliveryGate/ResultCommit保持。发布成功不是结项新门槛 | 可独立实现；后合入者运行TestDevelopmentUnknownPublicationMergedDelivery：94自建且始终验，95在基线实际含94时条件验。若必须共改model/签名，先重新核定交接，不以文件不同证明独立 |
-| 94/95 ↔ 96：Service、Signal、资源收尾 | 94不改资源map/Signal，95不改worker控制，96只接运行时资源/结果；领域候选/commit、流程/恢复/PR规则冻结。成功ack留actor，入队前失败通知由runtime、入队后由actor，每道一次 | 不设置硬依赖。96始终验三个原stage入口与自建TestWorkerRuntimeDeliveredCleanup，实际含94/95时加未知合并/事务组合；94/95若后合入且基线含96则复验清理失败场景。准确命令归各Plan，真实需要未交付接口时才重新定义依赖 |
+| 94/95：未知publish与真实merged、交付gate | 原规则不新增成功发布结项门槛；三层重构正调整Workflow/actor/PR桥接，旧文件所有权不再作为并行依据 | 两项均只留草稿，原测试/交接供重审参考；#94不并行另建development owner，#95待真实交付入口稳定后核验剩余抽取范围 |
+| 94/95/96：Service、Signal、资源收尾 | 三层Spec将技术可靠性归ReliableExecution、资源/effect/提交归actor组装；#96旧runtime与这一owner划分交叉 | 不同时实施旧runtime和三层边界。确认/清理反例可作为后续需求核对，不能直接把三层验收写为旧任务已验 |
 | 边界guard/文档/公共测试 | 每项新增自己的boundary测试文件；旧check.go策略不放宽，确需共同注册由后合入者一次整合。新私有fixture留owner，公共driver/runner冻结；每项更新自己的实际架构行 | 不另建只写接口/文档代管/最后统一测试任务。共有文件冲突按局部owner和合入次序处理，不伪造功能硬前置 |
 | 真实资源与测试 | 普通owner/fixture每次独立临时目录；93独立simulate驱动生成SteerlineTest包；L3 controlled按已有串行runner | 代码开发可并行，原生/重型测试资源单独排期。不能以同仓worktree推定仓库锁、home、账号或终端已隔离 |
 
-建议先准备92/93/94三条独立线，95在上述既有调用边界保持时可并行准备；96作为后续集成批次。这里的箭头仅表示默认合入次序，不是新增任务依赖。正式纳入时分别确认硬前置、开工条件、共享合入次序，不能把表中建议自动转成DAG边。
+当前执行批次只有#92/#93，二者可独立并行；与三层重构共享app文件时，#92只改HTTP endpoint构造段，三层owner保留worker/adapter与记录转换，后合入者复验实际app接线。#93只改客户端。三层保持公开HTTP/DTO的约定成立时无新增硬前置；实际公共契约改变须重新核对，不把文件局部冲突误记成已交付接口。#94/#95/#96暂不纳入。
+
+## 与Worker三层重构的冲突核对
+
+2026-10-14用户告知Worker三层职责重构已在实施。本轮只读取另一worktree的Spec/Plan，不修改其文档、源码或执行状态。参考路径为 `C:\Users\lmas1\.codex\worktrees\0998\SteerLine\docs\spec\worker-three-layer.spec.md` 与同目录Plan；其调查代码基线同为 `5a24abec3c10d184a6e57962e154854bc6011a9f`。读取时Spec SHA256为 `f7f63f9567047163f90847dd8243fb2bdff399f3c1db971aac9f7397950e688e`，Plan为 `4a7a5fde870408ff9fd3fcd093d4d87e7664ea200bfa3b5a5d2c18ef23b73c47`；文档头仍写设计待实施，实际在途事实按用户告知处理，本文不据该头认定已完成或尚未开工。跨worktree未提交材料只作本次范围核对，不作为新执行任务的固定规格。
+
+| 候选 | 三层Spec/Plan交叉点 | 当前安排 |
+| --- | --- | --- |
+| #94 | Workflow拥有development/v3步骤、提示词、业务JSON、report source与后继；P3直接搬迁staged_flow/staged_result，拟议workflow与旧development是同一职责的不同owner | 保留草稿、不纳入；三层合入后看剩余规则是否仍值得独立重构，不同时建立两套纯流程包 |
+| #96 | ReliableExecution拥有原操作对账/原身份/恢复与结果资格，actor组装队列/资源；P2/P4及lifecycle_effect/receipt、worker生命周期和确认交接与旧workerruntime提取交叉 | 保留草稿、不纳入；不要求三层实施者消费#96旧接口或按旧owner分法实现 |
+| #95 | 三层明确PR平台与TaskDelivery不进入可靠执行层，因此最终交付抽取未被取代；但P3/P4重新组织actor/PR桥接、workerFlowContext与记录映射，#95当前冻结接线/fixture条件不能直接沿用 | 保留草稿、不纳入；真实桥接稳定后重新核定delivery剩余收益与Spec/Plan，区别于#94/#96的直接重叠 |
+| #92/#93 | 三层保持公开HTTP/DTO，改动集中执行内部；#92仅共用app文件的HTTP endpoint段，#93为纯客户端 | 已确认进入execution-map，可并行，局部组装冲突由后合入者保留双方成果并执行各自最小组合验证 |
+
+五项均保留原身份和文档。对三层的确认/终态清理等建议只作为重审参考，不修改在途规格、不另建前置任务、不把旧任务或三层验收自动标通过。后续成果进入主干再确认#94/#95/#96的剩余范围和开工资格。
 
 ## 验收与交付安排
 
 每项已有专属验收，自动项逐项映射到Plan中的场景/命令、环境、时点、通过条件和证据位置。新增测试/新包明确是实施步骤，当前不存在；实施时补齐、枚举并执行，零匹配/skip不通过。每项PR前一次固定L1，另按改动选择owner/真实app/受控事务与必要L3，不跑默认Full或付费全链。
 
-本轮无新增独立人工签收活动：交互与平台行为保持，旧#91/#84/一期人工项继续归原记录。跨任务组合验证由相关后合入任务按自身Plan执行，分别登记到其专属验收，不共用一份多任务验收。当前仅规划不跑产品/模型验收；原始产物留新临时目录，长期只写最小证据摘要。
+本轮无新增独立人工签收活动：交互与平台行为保持，旧#91/#84/一期人工项继续归原记录。跨任务组合验证由相关后合入任务按自身Plan执行，分别登记到其专属验收，不共用一份多任务验收。当前仅规划不跑产品/模型验收；原始产物留新临时目录，长期只写最小证据摘要。#92/#93的待验汇总已在execution-map登记；其余三项仍未实施/未验，不安排旧组合场景执行。
 
 组合条件依据最终候选的实际基线commit及已包含成果，不仅看任务编号或草稿建议次序。条件未触发明确记录基线未包含该成果，不登记通过、不等待兄弟；触发但入口缺失/零匹配失败。固定L1不包含全部新反例，不能代替Plan列出的定向组合；同候选已执行的相同命令可引用证据，避免重复。2026-10-14审计修订已落实#93写入仲裁、#94解析双向基准、#96确认权交接以及各项条件组合，仍仅为待实施/待验规格。
 
-以后正式纳入/执行时固定规格、实施、自查、独立复审及必要验证，真实合并核验后同步execution-map/acceptance，移除本页完成任务条目；目前执行图保持原状态。
+#92/#93实际启动时固定已提交Spec/Plan commit及路径，核对最新主干与在途修改；实现、自查、独立复审、必要验证和真实合并核验后同步execution-map/acceptance，再移除本页完成条目。其余三项留草稿，后续另行确认范围。
 
 ## 保留候选与历史
 
-存储/查询公共纯值、会话/final采集与执行控制、TUI Model刷新/输入状态保留为未编号候选，不纳入本次五项。会话采集待运行时实际边界成熟后重审；不为增加并行数提前创建空领域。
+存储/查询公共纯值、会话/final采集与执行控制、TUI Model刷新/输入状态保留为未编号候选，不纳入当前执行批次。会话采集待运行时实际边界成熟后重审；不为增加并行数提前创建空领域。
 
 #91经 [PR #299](https://github.com/erranliu/SteerLine/pull/299)交付TUI/HTTP/Go与WinUI删除；[Spec](../../spec/tui-http-client.spec.md)、[Plan](../../spec/tui-http-client.plan.md)、[验收](../../acceptance/tui-http-client.md)保留，TH-M1剩余人工在正式清单登记。#45为已交付HTTP基线。
 
-旧#43/#46–#52/#40/#41及#88–#90不恢复派发、不复用编号；旧重构的[收敛记录](bounded-refactoring.md)保留原范围/副作用执行器暂缓判断，本次96复用现有后台机制、只收拢资源，不恢复旧异步框架提案。WebUI、SSE、主Agent、远程HTTP部署未规划任务。历史见[归档说明](../../archive/roadmap/README.md)，一期独立待验继续归execution-map/acceptance。
+旧#43/#46–#52/#40/#41及#88–#90不恢复派发、不复用编号；旧重构的[收敛记录](bounded-refactoring.md)保留原范围/副作用执行器暂缓判断，#96原提案复用后台机制、未实施；因三层重构交叉暂留草稿，不恢复旧异步框架提案。WebUI、SSE、主Agent、远程HTTP部署未规划任务。历史见[归档说明](../../archive/roadmap/README.md)，一期独立待验继续归execution-map/acceptance。

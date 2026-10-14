@@ -2,7 +2,7 @@
 
 任务 ID：92；任务名称：HTTP 服务端命令边界收敛。
 
-状态：2026-10-14 草稿规划，未纳入执行、未实施。配套 [Plan](http-command-boundary.plan.md)、[专属验收](../acceptance/http-command-boundary.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动另固定已提交 Spec/Plan 版本及最新主干。
+范围于2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)，尚未实施；实时执行/验收状态归正式清单和专属验收。配套 [Plan](http-command-boundary.plan.md)、[专属验收](../acceptance/http-command-boundary.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动另固定已提交 Spec/Plan 版本及最新主干。
 
 ## 问题与成果
 
@@ -22,11 +22,11 @@ Server 改为消费查询、命令和原生查看所需的小端口。提取同�
 
 ## 修改归属与并行
 
-本项拥有 httpapi 生产代码、所属测试和 `app/execution_service_wiring.go` 中 HTTP endpoint 的必要参数接线。#93 拥有 httpclient/consoleapp，二者消费现有协议，可并行。本项不修改 #94/#95/#96 的 execution 用例。
+本项拥有 httpapi 生产代码、所属测试和 `app/execution_service_wiring.go` 中 HTTP endpoint 的必要参数接线。#93 拥有 httpclient/consoleapp，二者消费现有协议，可并行。本项不修改执行用例或正在实施的Worker三层重构，仅修改app文件中的HTTP endpoint段，不能以共享文件为由重写worker/adapter组装。
 
 共享 httpcontract/product/api、httpfs 格式/ACL实现、测试公共 helper、runner 和存储提交接口冻结；确需改变时先重新核定相关任务范围，不将签名变化留给后合入者猜测。依赖守卫新增本项专用规则/测试，保留既有禁用规则。
 
-无新增任务硬前置，复用已交付 #91/#45。一个任务、一个实现 PR；当前仅草稿，不因编号启动执行。
+无新增任务硬前置，复用已交付 #91/#45。一个任务、一个实现 PR；已确认纳入不等于已经开工，启动须固定真实文档版本和最新主干。
 
 ## 最小验收
 

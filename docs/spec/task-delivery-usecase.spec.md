@@ -4,6 +4,8 @@
 
 状态：2026-10-14 草稿规划，未纳入执行、未实施。配套 [Plan](task-delivery-usecase.plan.md)、[专属验收](../acceptance/task-delivery-usecase.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`。
 
+候选核对：2026-10-14继续保留草稿，未纳入execution-map，当前不安排实施。最终交付用例不被三层重构替代，但当前Plan依赖的actor/PR桥接、记录转换和共同fixture正在重组，待实际接线稳定后重新核定剩余范围。三层成果进入主干后重审Spec/Plan与验收，不自动恢复旧方案；原调查和测试安排保留作参考，以下旧并行建议不能作为开工资格。冲突说明见[本轮草稿](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 问题与成果
 
 [native_delivery_command.go](../../internal/execution/native_delivery_command.go) 的 CompleteNativeTask 消费宽 CommandStore、完整 Config/runtime 和具体 publication.Client 类型核对，同时负责结果声明、真实 PR 事实、唯一交付及丢弃后迟到合并审计。交付测试仍依赖执行应用组装。

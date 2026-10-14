@@ -4,6 +4,8 @@
 
 依据 [Spec](task-delivery-usecase.spec.md)，结果归[专属验收](../acceptance/task-delivery-usecase.md)。2026-10-14 草稿；调查基线/RoadmapGuide/SpecGuide版本 `5a24abec3c10d184a6e57962e154854bc6011a9f`；启动另固定实际文档版本与主干。
 
+候选核对：2026-10-14继续保留草稿，未纳入execution-map，当前不安排实施。最终交付用例不被三层重构替代，但当前Plan依赖的actor/PR桥接、记录转换和共同fixture正在重组，待实际接线稳定后重新核定剩余范围。三层成果进入主干后重审Spec/Plan与验收，不自动恢复旧方案；原调查和测试安排保留作参考，以下旧并行建议不能作为开工资格。冲突说明见[本轮草稿](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 实施步骤与现有代码整合
 
 1. 调查 CompleteNativeTask、recordDiscardedMergeConflict、commitNativeDelivery、DeliveryGate、CommitTaskResult 和 actor 的 nativeCompleteMergedTask。明确最终交付不依赖成功步骤、原冻结配置先按选定workflow解析，现有事务负责候选/版本/唯一性。保留task Declare和全部原错误语义。

@@ -4,6 +4,8 @@
 
 依据 [Spec](development-flow-rules.spec.md)，实时结果归[专属验收](../acceptance/development-flow-rules.md)。2026-10-14 草稿，调查基线/RoadmapGuide/SpecGuide版本 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动另固定文档与代码版本。
 
+候选核对：2026-10-14继续保留草稿，未纳入execution-map，当前不安排实施。Workflow业务步骤/解析/提示词所有权与正在实施的Worker三层重构直接重叠；拟议development包不能与其workflow包作为两套owner同时实施。三层成果进入主干后重审Spec/Plan与验收，不自动恢复旧方案；原调查和测试安排保留作参考，以下旧并行建议不能作为开工资格。冲突说明见[本轮草稿](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 实施与整合
 
 1. 沿 acceptStageTurn/renderStageInput/startStageFeedback 调查步骤规则、严格解析、报告源/原身份/权限、重试与原子提交，区分纯规则和final提交、Decision/恢复资格、PR I/O。阅读reconcileStageFacts中未知发布真实合并分支，作为#95共同不变量。

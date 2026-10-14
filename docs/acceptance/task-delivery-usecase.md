@@ -4,6 +4,8 @@
 
 [Spec](../spec/task-delivery-usecase.spec.md) · [Plan / 测试计划](../spec/task-delivery-usecase.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 
+2026-10-14仍留草稿、暂不安排验收；最终交付用例不被三层重构替代，但当前Plan依赖的actor/PR桥接、记录转换和共同fixture正在重组，待实际接线稳定后重新核定剩余范围。原自动项均未执行，未来须随重定范围更新，不将三层重构结果直接登记为本任务通过。见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 自动验收计划
 
 | ID | 行为与通过条件 | 方法、环境/时点 | 状态 |

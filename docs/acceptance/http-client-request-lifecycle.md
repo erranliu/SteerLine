@@ -1,6 +1,6 @@
 # 验收：HTTP 客户端原请求与停服观察解耦
 
-唯一归属：任务 #93，HTTP 客户端原请求与停服观察解耦。2026-10-14 草稿；仅规划，待验收，未纳入执行。
+唯一归属：任务 #93，HTTP 客户端原请求与停服观察解耦。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)；尚未实施，自动项待验收。
 
 [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan / 测试计划](../spec/http-client-request-lifecycle.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 

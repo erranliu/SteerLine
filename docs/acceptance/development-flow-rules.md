@@ -4,6 +4,8 @@
 
 [Spec](../spec/development-flow-rules.spec.md) · [Plan / 测试计划](../spec/development-flow-rules.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 
+2026-10-14仍留草稿、暂不安排验收；Workflow业务步骤/解析/提示词所有权与正在实施的Worker三层重构直接重叠；拟议development包不能与其workflow包作为两套owner同时实施。原自动项均未执行，未来须随重定范围更新，不将三层重构结果直接登记为本任务通过。见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 自动验收计划
 
 | ID | 行为与通过条件 | 方法、环境/时点 | 状态 |

@@ -4,6 +4,8 @@
 
 [Spec](../spec/worker-runtime-ownership.spec.md) · [Plan / 测试计划](../spec/worker-runtime-ownership.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 
+2026-10-14仍留草稿、暂不安排验收；生命周期effect/receipt、观察/资源/确认权及actor接线与正在实施的Worker三层重构交叉；三层方案由ReliableExecution承担技术可靠性、actor组装资源，不能并行建设另一套旧边界。原自动项均未执行，未来须随重定范围更新，不将三层重构结果直接登记为本任务通过。见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 自动验收计划
 
 | ID | 行为与通过条件 | 方法、环境/时点 | 状态 |

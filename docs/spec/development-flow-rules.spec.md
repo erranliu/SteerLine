@@ -4,6 +4,8 @@
 
 状态：2026-10-14 草稿规划，未纳入执行、未实施。配套 [Plan](development-flow-rules.plan.md)、[专属验收](../acceptance/development-flow-rules.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动另固定文档与代码版本。
 
+候选核对：2026-10-14继续保留草稿，未纳入execution-map，当前不安排实施。Workflow业务步骤/解析/提示词所有权与正在实施的Worker三层重构直接重叠；拟议development包不能与其workflow包作为两套owner同时实施。三层成果进入主干后重审Spec/Plan与验收，不自动恢复旧方案；原调查和测试安排保留作参考，以下旧并行建议不能作为开工资格。冲突说明见[本轮草稿](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)。
+
 ## 问题与目标
 
 [staged_flow.go](../../internal/execution/staged_flow.go) 的结果消费同时调用会话提交、生命周期、PR查询与 actor 提交；[staged_result.go](../../internal/execution/staged_result.go) 的严格结果解析实际是固定流程规则。纯步骤变更仍须构造完整 Service。
