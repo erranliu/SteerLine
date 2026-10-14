@@ -1,6 +1,6 @@
 # 测试总入口
 
-当前产品入口为本地 Codex 与 Orca 单终端 `host=orca` / `orca_terminal_v3`（local/environment），supervised 已退役。当前通信及验证范围见[单终端验收](acceptance/orca-terminal-transport.md)与[真实调试记录](acceptance/orca-terminal-remote-retest-2026-10-10.md)：本机有限样本三阶段交付通过，本机最终 draft 保护未重新跑真机；远端升级 CLI 且预先确认目录信任后有限样本闭环通过，首次信任阻塞后原任务自动继续仍未通过。两目标受控回归不代替远端真机。旧单轮远端场景仍已退役，正式注册表不含新版远端交付；旧 supervised、统一模板及单消息接线证据保留各自历史范围。
+当前部署入口为本地 Codex 与远端 Orca 单终端 `host=orca` / `orca_terminal_v3`（environment），本机 Orca 部署已停用，supervised 已退役。隔离 local/environment 夹具与本机无模型资源能力测试保留；本机 live 恢复入口已删除。当前通信及验证范围见[单终端验收](acceptance/orca-terminal-transport.md)与[真实调试记录](acceptance/orca-terminal-remote-retest-2026-10-10.md)：本机有限样本三阶段交付通过，本机最终 draft 保护未重新跑真机；远端升级 CLI 且预先确认目录信任后有限样本闭环通过，首次信任阻塞后原任务自动继续仍未通过。两目标受控回归不代替远端真机。旧单轮远端场景仍已退役，正式注册表不含新版远端交付；旧 supervised、统一模板及单消息接线证据保留各自历史范围。
 
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
 

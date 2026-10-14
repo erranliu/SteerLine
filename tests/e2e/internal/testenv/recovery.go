@@ -15,7 +15,10 @@ import (
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 )
 
-type ConsoleStep struct{ Input, WaitFor string }
+type ConsoleStep struct {
+	Input, WaitFor string
+	Timeout        time.Duration
+}
 
 func OriginalTerminalWorkingObserved(s Snapshot) bool {
 	return len(s.Domain.Executions) == 1 && evidence.OrcaOriginalWorkingObserved(s.Domain.Executions[0])
@@ -192,7 +195,7 @@ func (p *Project) AssertRecoveryConsole() {
 	if before.Helper.Recovery != nil && before.Helper.Recovery.MissingThread {
 		name += "-error"
 	}
-	transcript, err := p.Scenario.RunPseudoConsoleSteps(cmd, name, "E2E a", ConsoleStep{Input: "u", WaitFor: "继续资格"})
+	transcript, err := p.Scenario.RunPseudoConsoleSteps(cmd, name, "E2E a", ConsoleStep{Input: "u", WaitFor: "继续资格", Timeout: 45 * time.Second})
 	p.Scenario.Must(err)
 	if strings.Contains(string(transcript), "panic:") {
 		p.Scenario.t.Fatal("recovery console panicked")
