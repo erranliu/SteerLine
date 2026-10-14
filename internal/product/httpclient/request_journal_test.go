@@ -163,7 +163,9 @@ func testJournalProcessInterleavings(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			journal, envelope := journalFixture(t, "")
-			if _, err := journal.save(context.Background(), outgoing{Version: 1, Envelope: envelope}); err != nil {
+			submitted := journalResponse(envelope, "submitted", "submitted", "original submitted observation", time.Date(2026, 10, 14, 2, 30, 0, 0, time.UTC), true)
+			initial := outgoing{Version: 1, Envelope: envelope, Response: &submitted}
+			if _, err := journal.save(context.Background(), initial); err != nil {
 				t.Fatal(err)
 			}
 			root := t.TempDir()
@@ -173,6 +175,8 @@ func testJournalProcessInterleavings(t *testing.T) {
 				waitJournalSignal(t, terminal.ready)
 				stale = startJournalHelper(t, root, "wait-write", journal.home, envelope.RequestID, "stale")
 				waitJournalSignal(t, stale.waiting)
+				assertJournalHelperObservedSubmitted(t, terminal, initial)
+				assertJournalHelperObservedSubmitted(t, stale, initial)
 				writeJournalSignal(t, terminal.gate)
 				waitJournalHelper(t, terminal)
 				waitJournalHelper(t, stale)
@@ -181,24 +185,48 @@ func testJournalProcessInterleavings(t *testing.T) {
 				stale = startJournalHelper(t, root, "write", journal.home, envelope.RequestID, "stale")
 				waitJournalSignal(t, terminal.ready)
 				waitJournalSignal(t, stale.ready)
+				terminalObserved := assertJournalHelperObservedSubmitted(t, terminal, initial)
+				staleObserved := assertJournalHelperObservedSubmitted(t, stale, initial)
 				writeJournalSignal(t, stale.gate)
 				waitJournalHelper(t, stale)
+				staleResult := readJournalHelperResult(t, stale.result)
+				if staleResult.Response == nil || staleResult.Response.Status != "submitted" || !reflect.DeepEqual(staleResult.Response, staleObserved.Response) {
+					t.Fatalf("stale-first subprocess did not write its submitted observation: observed=%+v retained=%+v", staleObserved.Response, staleResult.Response)
+				}
 				writeJournalSignal(t, terminal.gate)
 				waitJournalHelper(t, terminal)
+				if !reflect.DeepEqual(terminalObserved.Envelope, staleObserved.Envelope) {
+					t.Fatal("independent subprocesses observed different original envelopes")
+				}
 			}
 			got, err := journal.read(envelope.RequestID)
 			if err != nil || got.Response == nil || got.Response.Status != test.terminal {
 				t.Fatalf("terminal was lost: %+v %v", got, err)
 			}
-			staleResult := readJournalHelperResult(t, stale.result)
-			if test.terminalFirst && (staleResult.Response == nil || staleResult.Response.Status != test.terminal) {
-				t.Fatalf("stale process did not receive retained terminal result: %+v", staleResult)
+			terminalResult := readJournalHelperResult(t, terminal.result)
+			if terminalResult.Response == nil || terminalResult.Response.Status != test.terminal || !reflect.DeepEqual(got.Response, terminalResult.Response) {
+				t.Fatalf("terminal subprocess did not return the complete retained terminal response: disk=%+v retained=%+v", got.Response, terminalResult.Response)
 			}
-			if !test.terminalFirst && staleResult.Response != nil {
-				t.Fatalf("stale-first process unexpectedly observed a future terminal result: %+v", staleResult)
+			staleResult := readJournalHelperResult(t, stale.result)
+			if test.terminalFirst && (staleResult.Response == nil || !reflect.DeepEqual(staleResult.Response, got.Response)) {
+				t.Fatalf("terminal-first stale process did not receive the complete retained terminal response: %+v", staleResult.Response)
 			}
 		})
 	}
+}
+
+func assertJournalHelperObservedSubmitted(t *testing.T, helper *journalHelperProcess, expected outgoing) outgoing {
+	t.Helper()
+	observed := readJournalHelperResult(t, helper.observed)
+	if observed.Version != expected.Version ||
+		!reflect.DeepEqual(observed.Envelope, expected.Envelope) ||
+		!reflect.DeepEqual(observed.StopIdentity, expected.StopIdentity) ||
+		observed.Response == nil ||
+		!reflect.DeepEqual(observed.Response, expected.Response) ||
+		observed.Response.Status != "submitted" {
+		t.Fatalf("subprocess did not observe the complete durable submitted record before its write gate: %+v", observed)
+	}
+	return observed
 }
 
 func testJournalSameTerminalResponse(t *testing.T) {
@@ -367,12 +395,12 @@ func testJournalCancelAndProcessExit(t *testing.T) {
 type journalHelperProcess struct {
 	cmd                  *exec.Cmd
 	ready, gate, waiting string
-	result               string
+	result, observed     string
 }
 
 func startJournalHelper(t *testing.T, root, operation, home, id, label string, status ...string) *journalHelperProcess {
 	t.Helper()
-	paths := journalHelperProcess{ready: filepath.Join(root, label+".ready"), gate: filepath.Join(root, label+".go"), waiting: filepath.Join(root, label+".waiting"), result: filepath.Join(root, label+".json")}
+	paths := journalHelperProcess{ready: filepath.Join(root, label+".ready"), gate: filepath.Join(root, label+".go"), waiting: filepath.Join(root, label+".waiting"), result: filepath.Join(root, label+".json"), observed: filepath.Join(root, label+".observed.json")}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestHTTPRequestJournal$")
 	values := []string{
 		journalHelperEnv + "=" + operation,
@@ -382,6 +410,7 @@ func startJournalHelper(t *testing.T, root, operation, home, id, label string, s
 		"STEERLINE_HTTP_JOURNAL_GATE=" + paths.gate,
 		"STEERLINE_HTTP_JOURNAL_WAITING=" + paths.waiting,
 		"STEERLINE_HTTP_JOURNAL_RESULT=" + paths.result,
+		"STEERLINE_HTTP_JOURNAL_OBSERVED=" + paths.observed,
 	}
 	if len(status) > 0 {
 		values = append(values, "STEERLINE_HTTP_JOURNAL_STATUS="+status[0])
@@ -469,6 +498,7 @@ func runHTTPRequestJournalHelper(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		writeJournalHelperResult(t, get("OBSERVED"), previous)
 		if get("STATUS") != "" {
 			response := journalResponse(previous.Envelope, get("STATUS"), get("STATUS"), "helper response", time.Date(2026, 10, 14, 3, 4, 5, 6, time.UTC), true)
 			previous.Response = &response
@@ -486,6 +516,7 @@ func runHTTPRequestJournalHelper(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		writeJournalHelperResult(t, get("OBSERVED"), previous)
 		response := journalResponse(previous.Envelope, get("STATUS"), get("STATUS"), "helper response", time.Date(2026, 10, 14, 3, 4, 5, 6, time.UTC), true)
 		previous.Response = &response
 		path, err := journal.lockPath(id)
@@ -514,6 +545,7 @@ func runHTTPRequestJournalHelper(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		writeJournalHelperResult(t, get("OBSERVED"), previous)
 		path, err := journal.lockPath(id)
 		if err != nil {
 			t.Fatal(err)
