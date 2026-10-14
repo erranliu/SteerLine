@@ -120,10 +120,11 @@ func fakeCodexStdio() int {
 			ID     json.RawMessage `json:"id"`
 			Method string          `json:"method"`
 			Params struct {
-				ThreadID  string `json:"threadId"`
-				Cursor    string `json:"cursor"`
-				Limit     int    `json:"limit"`
-				ItemsView string `json:"itemsView"`
+				ThreadID     string `json:"threadId"`
+				Cursor       string `json:"cursor"`
+				Limit        int    `json:"limit"`
+				ItemsView    string `json:"itemsView"`
+				IncludeTurns bool   `json:"includeTurns"`
 			} `json:"params"`
 		}
 		if json.Unmarshal(scanner.Bytes(), &request) != nil || len(request.ID) == 0 {
@@ -150,7 +151,11 @@ func fakeCodexStdio() int {
 			if err != nil || request.Params.ThreadID != integrationAppServerSession {
 				response["error"] = map[string]any{"code": -32602, "message": "original history session is unavailable"}
 			} else if request.Method == "thread/read" {
-				response["result"] = map[string]any{"thread": map[string]any{"id": integrationAppServerSession, "cwd": history.Cwd}}
+				thread := map[string]any{"id": integrationAppServerSession, "cwd": history.Cwd}
+				if request.Params.IncludeTurns {
+					thread["turns"] = history.Turns
+				}
+				response["result"] = map[string]any{"thread": thread}
 			} else if request.Method == "thread/turns/list" && request.Params.Limit == 1 && request.Params.ItemsView == "full" {
 				index := 0
 				if request.Params.Cursor != "" {
@@ -323,7 +328,8 @@ func integrationAppServerConnection(connection net.Conn, state *integrationAppSe
 			state.mu.Lock()
 			turns := append([]map[string]any(nil), state.turns...)
 			state.mu.Unlock()
-			response["result"] = map[string]any{"thread": map[string]any{"id": integrationAppServerSession, "turns": turns}}
+			cwd, _ := os.Getwd()
+			response["result"] = map[string]any{"thread": map[string]any{"id": integrationAppServerSession, "cwd": cwd, "turns": turns}}
 		case "turn/start":
 			var params struct {
 				Input []struct {
