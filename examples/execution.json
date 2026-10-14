@@ -37,56 +37,6 @@
       ]
     },
     {
-      "id": "orca-local",
-      "name": "本机 Orca · GPT-6-Luna high",
-      "host": "orca",
-      "agent": "codex",
-      "implementation_configs": [
-        {
-          "implementation_key": "orca.terminal-profile",
-          "codec_version": 3,
-          "payload": {
-            "executable": "orca.exe",
-            "environment": "name:asus笔记本",
-            "wait_timeout": "30s"
-          }
-        }
-      ],
-      "agent_launch": {
-        "executable": "codex",
-        "model": "gpt-6-luna",
-        "reasoning_effort": "high",
-        "args": [
-          "--dangerously-bypass-approvals-and-sandbox"
-        ]
-      }
-    },
-    {
-      "id": "orca-local-xhigh",
-      "name": "本机 Orca · GPT-6-Luna xhigh",
-      "host": "orca",
-      "agent": "codex",
-      "implementation_configs": [
-        {
-          "implementation_key": "orca.terminal-profile",
-          "codec_version": 3,
-          "payload": {
-            "executable": "orca.exe",
-            "environment": "name:asus笔记本",
-            "wait_timeout": "30s"
-          }
-        }
-      ],
-      "agent_launch": {
-        "executable": "codex",
-        "model": "gpt-6-luna",
-        "reasoning_effort": "xhigh",
-        "args": [
-          "--dangerously-bypass-approvals-and-sandbox"
-        ]
-      }
-    },
-    {
       "id": "orca-environment",
       "name": "远端 Orca · GPT-6-Luna high",
       "host": "orca",
