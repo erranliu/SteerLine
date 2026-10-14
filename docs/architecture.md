@@ -1,6 +1,6 @@
 # 整体架构与职责边界
 
-> 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。实际验证与待验项见[专属验收](acceptance/tui-http-client.md)。WebUI、SSE 和远程 HTTP 服务尚未实现。
+> 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。用户随后直接授权普通开发本机 Web 基座、DAG 与执行页，独立工程见 [web/](../web/README.md)，结果见[专属验收](acceptance/web-frontend.md)。SSE、规划 Agent 与远程浏览器部署仍未实现；#91 原验收保持其[对应范围](acceptance/tui-http-client.md)。
 
 SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。一期包含本地 Codex、本机 Orca 与远端路径交付。后续目标见[产品愿景](roadmap/product-vision.md)，源码归属见[代码架构](architecture/current-code-architecture.md)。
 
@@ -24,6 +24,8 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 TaskDelivery 分别表达不同事实。当前 Orca 单终端路径不创建 Orca Run/Task/Dispatch；原 runtime、terminal/incarnation、worktree 和 provider session 属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runtime 投影、UI 缓存和诊断日志都不能成为第二业务权威。
 
 当前业务消费链为 `TUI → httpclient/httpcontract → HTTP → httpapi → product/client → Go 任务/执行应用与只读查询`。`consoleapp` 独立组装 TUI 连接；`app` 组装服务、SQLite 和具体执行 adapter。CLI 的内部 Go 产品客户端仍是另一种调用入口，不能据此声称全部 CLI 已经 HTTP 化。现有解耦程度及后续建议见[源码边界评估](architecture/current-code-architecture.md#http-接入后的解耦评估与建议)。
+
+本机 Web 消费链为 `React SPA → 同源浏览器会话/CSRF → web/server → 原 httpclient → native HTTP API`。浏览器入口使用项目配置 `web_address` 的稳定 loopback 地址，原 native endpoint 仍为随机端口、当前用户 Bearer 和无 Origin。两个入口在同一 Go 服务内启动/关闭；Web 不组装业务库或调度器。私有打开凭证放应用 home 的 `ui/web/<project_id>/`，CLI 与原 native discovery 核对实例后签发短票据。客户端 IndexedDB 只保存原信封、回执观察和输入草稿。契约与非目标见[Web Spec](spec/web-frontend.spec.md)。
 
 ## 执行与交付
 

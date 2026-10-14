@@ -134,7 +134,7 @@ func Prepare(ctx context.Context, ports Ports, options Options) (*Server, error)
 		Address: listener.Addr().String(), CredentialPath: credential, Ready: false, Status: "starting",
 		LeaseID: leaseID, UpdatedAt: time.Now().UTC()}
 	server.http = &http.Server{Handler: server, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second,
-		WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
+		WriteTimeout: 125 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 	if err = server.writeDiscovery(); err != nil {
 		_ = listener.Close()
 		cleanupErr := os.Remove(credential)

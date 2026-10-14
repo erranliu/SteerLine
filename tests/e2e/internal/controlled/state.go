@@ -16,19 +16,20 @@ import (
 )
 
 type State struct {
-	Recovery   *RecoveryFixture                 `json:"recovery,omitempty"`
-	Repository string                           `json:"repository,omitempty"`
-	BaseBranch string                           `json:"base_branch,omitempty"`
-	ResultText string                           `json:"result_text,omitempty"`
-	Threads    map[string]ThreadState           `json:"threads,omitempty"`
-	GitURL     string                           `json:"git_url"`
-	Cwd        string                           `json:"cwd"`
-	Session    string                           `json:"session"`
-	Sessions   int                              `json:"sessions"`
-	Dispatches int                              `json:"dispatches"`
-	Turns      []map[string]any                 `json:"turns"`
-	PR         executionmodel.PRInfo            `json:"pr"`
-	PRs        map[string]executionmodel.PRInfo `json:"prs,omitempty"`
+	WebFeedback bool                             `json:"web_feedback,omitempty"`
+	Recovery    *RecoveryFixture                 `json:"recovery,omitempty"`
+	Repository  string                           `json:"repository,omitempty"`
+	BaseBranch  string                           `json:"base_branch,omitempty"`
+	ResultText  string                           `json:"result_text,omitempty"`
+	Threads     map[string]ThreadState           `json:"threads,omitempty"`
+	GitURL      string                           `json:"git_url"`
+	Cwd         string                           `json:"cwd"`
+	Session     string                           `json:"session"`
+	Sessions    int                              `json:"sessions"`
+	Dispatches  int                              `json:"dispatches"`
+	Turns       []map[string]any                 `json:"turns"`
+	PR          executionmodel.PRInfo            `json:"pr"`
+	PRs         map[string]executionmodel.PRInfo `json:"prs,omitempty"`
 }
 
 func (s State) RepositoryName() string {

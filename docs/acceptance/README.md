@@ -4,6 +4,8 @@
 
 ## 当前入口
 
+本机 Web 前端（普通开发）：[专属验收](web-frontend.md)，独立 `web/` 工程、浏览器认证、DAG 与执行闭环；范围归 [Spec](../spec/web-frontend.spec.md)/[Plan](../spec/web-frontend.plan.md)。
+
 Orca 本机输入与就绪：[专属验收](orca-local-input-readiness.md)，配对普通终端、等待预算、失败分类与一个本机真实交付。
 
 | 范围 | 状态 / 入口 |

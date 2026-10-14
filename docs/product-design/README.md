@@ -14,6 +14,7 @@
 | [执行控制台](execution-console.md) | 当前 TUI 的任务/候选布局、原地反馈、能力展示与操作速查 |
 | [Worker PR 流程契约](../spec/worker-pr-flow.spec.md) | 当前 development/v3 的实现、报告、发布、合并与交付；原 #84 分步契约保留历史追溯 |
 | [客户端与 Go 服务边界](planning-architecture.md) | 当前 #91 的 TUI/HTTP 源码边界和未来范围 |
+| [Web 前端技术方案](web-frontend.md) | 已确认技术栈与首批 DAG/执行页；独立 web 工程及浏览器接入契约见普通开发 Spec/Plan，实际结果归专属验收 |
 | [本机客户端协议 v1](local-client-protocol.md) | #45 回环协议与 #91 TUI 所需接口 |
 | [规划界面原型参考](planning-ui.md) | 旧页面方向仅参考，不产生当前任务/前置 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |

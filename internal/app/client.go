@@ -424,8 +424,9 @@ func (r clientDecision) Submit(ctx context.Context, in productapi.DecisionInput)
 	}
 	defer store.Close()
 	a := in.Answer
-	record, submitted, err := SubmitAnswerDecisionBound(ctx, config, a.RunID, a.DecisionID, a.OptionID, a.Note, in.RequestedBy,
-		a.ExpectedDecisionVersion, a.ExpectedRunRevision, a.ServiceInstanceID, in.CommandID, a.SourceAttemptID, a.ExpectedRecoveryVersion, a.Answers)
+	record, submitted, err := submitAnswerDecisionWithStoreBound(ctx, config, store, a.RunID, a.DecisionID, a.OptionID, a.Note, in.RequestedBy,
+		a.ExpectedDecisionVersion, a.ExpectedRunRevision, a.ServiceInstanceID, in.CommandID,
+		answerBinding{AttemptID: a.SourceAttemptID, RecoveryVersion: a.ExpectedRecoveryVersion}, a.Answers)
 	return query.CommandReceipt(record), submitted, err
 }
 

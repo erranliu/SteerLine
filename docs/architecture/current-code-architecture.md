@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-> 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。实际验证与待验项见[专属验收](../acceptance/tui-http-client.md)。WebUI、SSE 和远程 HTTP 服务尚未实现。
+> 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。用户直接授权的本机 Web 普通开发已新增独立 [web/](../../web/README.md) 工程与最小 app/CLI 接线，实际验证与限制见[Web 验收](../acceptance/web-frontend.md)；#91 见其[原记录](../acceptance/tui-http-client.md)。SSE 和远程浏览器服务仍未实现。
 
 核对基点：2026-10-14，主干 `ab814da9`＋本次 Worker 三层重构；本文描述该源码树，不将历史原生样本当作当前版本全量验收。第一阶段目标包含本地 Codex、本机 Orca 与远端执行路径交付；Orca 历史交付范围见[单终端验收](../acceptance/orca-terminal-transport.md)，当前完成补查询的规则、原生短回合及未重跑 PR 范围见[补查询验收](../acceptance/orca-completion-query.md)。远端执行目标与远程 HTTP 客户端是不同能力。
 
@@ -48,6 +48,8 @@ flowchart LR
 The host does not open SQL, import backend adapters, or apply task/execution transitions. Its application admission, process facts, scheduling, command transport and activity presentation are injected. It reads the committed service/runtime sample through the configured reader; process liveness is observed separately from the SQLite snapshot.
 
 ## Module owners
+
+Web 的独立所有者为 `web/src`（React 页面、wire 消费、IndexedDB 原请求/草稿）、`web/server`（浏览器认证、稳定 listener、CLI 私有打开凭证、静态嵌入与既有 native client 转接）及 `web/tests`（真实浏览器驱动）。`internal/app/webui.go` 与既有 endpoint 生命周期只负责组装，`cmd/steerline/web.go` 解析配置/仓库身份并打开原实例。通过 `webui` build tag 嵌入 npm 构建资源，普通 Go 测试/构建不依赖 Node；具体命令见 [Web README](../../web/README.md)。
 
 | Owner | Responsibility |
 | --- | --- |
