@@ -479,10 +479,6 @@ func (c *Console) SubmitControl(ctx context.Context, in api.ControlInput) (api.C
 		envelope.ExpectedVersion = p.ExpectedTaskVersion
 		envelope.ExpectedGraphRevision = p.ExpectedGraphRevision
 		payload = map[string]any{"execution_profile_id": p.ExecutionProfileID}
-	case api.AbandonCandidate:
-		envelope.TargetID = p.WorkflowRunID
-		envelope.ExpectedVersion = p.ExpectedCandidateVersion
-		payload = map[string]any{"task_id": p.TaskID, "expected_task_version": p.ExpectedTaskVersion, "reason": p.Reason}
 	case api.SetDispatchMode:
 		envelope.TargetID = "dispatch"
 		envelope.ExpectedVersion = envelope.ExpectedControlRevision
