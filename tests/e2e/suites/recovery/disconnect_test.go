@@ -54,9 +54,21 @@ func TestFailureResults(t *testing.T) {
 		t.Fatal("failed report without final did not retain failure")
 	}
 	f.StopService()
+	// The console reads through HTTP; reopen the owned service and wait for
+	// recovery qualification before inspecting the original failed run.
+	f.StartService()
+	f.WaitRecovery("reopened-failed-report-qualified", qualified)
 	f.AssertRecoveryConsole()
+	f.StopService()
 	f.ConfigureMissingNativeThread()
+	f.StartService()
+	f.WaitRecovery("missing-thread-unverified", func(s testenv.Snapshot) bool {
+		return s.Runtime != nil && len(s.Runtime.Runs) == 1 && len(s.Domain.Executions) == 1 &&
+			s.Domain.Executions[0].RecoveryState == "unverified" && s.Runtime.Runs[0].Decision != nil &&
+			s.Runtime.Runs[0].Decision.Status == "pending" && len(s.Runtime.Runs[0].Decision.Request.Options) == 0
+	})
 	f.AssertRecoveryConsole()
+	f.StopService()
 }
 
 func TestMissingSuccessfulResult(t *testing.T) {
