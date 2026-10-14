@@ -19,6 +19,7 @@ import (
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
+	fs "github.com/erranliu/SteerLine/internal/product/httpfs"
 )
 
 const maxDiscoveryBytes = 64 << 10
@@ -118,6 +119,7 @@ func Prepare(ctx context.Context, product *productclient.Client, options Options
 	server := &Server{product: product, options: options, apiDir: apiDir, commandsDir: commandsDir,
 		credential: credential, token: token, leaseID: leaseID, listener: listener,
 		identity: Identity{Protocol: Protocol, ProjectID: ProjectID(project.Identity), RepositoryIdentity: project.Identity,
+			LockPaths:  []string{filepath.Join(project.Identity, "steerline.lock"), filepath.Join(options.RunDir, "steerline.lock")},
 			InstanceID: options.InstanceID, Process: options.Process, Address: listener.Addr().String(), Status: "starting",
 			Capabilities: append([]string(nil), options.Capabilities...), SampledAt: time.Now().UTC()},
 	}
@@ -277,7 +279,7 @@ func writePrivateContents(dir, path string, body io.Reader, exclusive bool) erro
 		if err = os.Remove(tmpName); err != nil {
 			return err
 		}
-	} else if err = os.Rename(tmpName, path); err != nil {
+	} else if err = fs.ReplacePrivateFile(tmpName, path); err != nil {
 		return err
 	}
 	return verifyPrivateFile(path)
@@ -310,34 +312,7 @@ func removeStaleCredentials(dir string) error {
 	return nil
 }
 
-func readDiscoveryFile(path string) (Discovery, error) {
-	var discovery Discovery
-	if err := verifyPrivateFile(path); err != nil {
-		return discovery, err
-	}
-	file, err := os.Open(path)
-	if err != nil {
-		return discovery, err
-	}
-	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, maxDiscoveryBytes+1))
-	if err != nil {
-		return discovery, err
-	}
-	if len(data) == 0 || len(data) > maxDiscoveryBytes {
-		return discovery, errors.New("local API discovery file is empty or too large")
-	}
-	if err = decodeStrict(data, &discovery); err != nil {
-		return discovery, err
-	}
-	failedWithoutListener := !discovery.Ready && discovery.Status == "failed" && discovery.Address == "" && discovery.CredentialPath == ""
-	if discovery.Version != 1 || discovery.Protocol != Protocol || discovery.ProjectID != ProjectID(discovery.RepositoryIdentity) ||
-		(!failedWithoutListener && (discovery.Address == "" || discovery.CredentialPath == "")) || discovery.LeaseID == "" {
-		return Discovery{}, errors.New("local API discovery has an unsupported or incomplete identity")
-	}
-	return discovery, nil
-}
-
+func readDiscoveryFile(path string) (Discovery, error) { return fs.ReadDiscoveryFile(path) }
 func decodeStrict(data []byte, target any) error {
 	decoder := json.NewDecoder(strings.NewReader(string(data)))
 	decoder.DisallowUnknownFields()

@@ -380,7 +380,7 @@ func actionStatusLabel(status string) string {
 	case "failed":
 
 		return "操作失败"
-	case "indeterminate":
+	case "pending_verification", "indeterminate":
 
 		return "结果待确认"
 	default:
@@ -435,7 +435,7 @@ const timeLayout = "2006-01-02 15:04:05"
 
 func renderEmptySelection(state projectState) []string {
 	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
-		lines := []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
+		lines := []string{"HTTP 服务离线 · 仅显示本窗口最后观察与草稿", "重连后刷新；离线不可查询新历史或提交业务动作", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
 		return append(lines, runtimeIdentityLines(state.ref)...)
 	}
 	if state.snapshot.Connection.Diagnostic != "" {

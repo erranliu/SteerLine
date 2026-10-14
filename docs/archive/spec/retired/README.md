@@ -17,3 +17,21 @@
 原 #42/#53 是人工组织为主的阶段验收，不再作为执行任务候选；ID 保留历史且不复用。现行自动/人工行为和状态分别由[一期](../../../acceptance/phase1.md)和[二期](../../../acceptance/phase2.md)验收文档维护，归档不取消外部 SteerLine 已有任务。
 
 [Orca 协议探针与原始样本](orca-probe/README.md)
+
+## 2026-10-13 清理的二阶段与延期规格
+
+以下均已退出当前规划，不作为待重定队列或前置。编号不复用，当前仅[任务 #91](../../../spec/tui-http-client.spec.md)；#44 工程删除由 #91 实施，历史交付与原未验不改称通过。
+
+| 原归属 / Spec | 原 Plan |
+| --- | --- |
+| [#40 固定版本与双入口](versioned-runtime.spec.md) | [Plan](versioned-runtime.plan.md) |
+| [#41 dev 隔离与 stable 提升](runtime-isolation-promotion.spec.md) | [Plan](runtime-isolation-promotion.plan.md) |
+| [#43 主 Agent 能力探测](phase2-agent-capabilities.spec.md) | [Plan](phase2-agent-capabilities.plan.md) |
+| [#44 WinUI 基座](phase2-winui-foundation.spec.md) | [Plan](phase2-winui-foundation.plan.md) |
+| [#46 规划草稿](phase2-planning-drafts.spec.md) | [Plan](phase2-planning-drafts.plan.md) |
+| [#47 规划会话](phase2-planning-sessions.spec.md) | [Plan](phase2-planning-sessions.plan.md) |
+| [#48 文档发布](phase2-document-publish.spec.md) | [Plan](phase2-document-publish.plan.md) |
+| [#49 DAG 页面](phase2-roadmap-ui.spec.md) | [Plan](phase2-roadmap-ui.plan.md) |
+| [#50 执行页面](phase2-execution-ui.spec.md) | [Plan](phase2-execution-ui.plan.md) |
+| [#51 规划对话页面](phase2-conversation-ui.spec.md) | [Plan](phase2-conversation-ui.plan.md) |
+| [#52 文档审阅页面](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |

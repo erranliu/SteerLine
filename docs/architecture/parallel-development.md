@@ -1,5 +1,7 @@
 # 并行开发指南
 
+> 2026-10-13 当前唯一规划任务为[#91](../spec/tui-http-client.spec.md)。旧二阶段候选/规划领域不作为当前待执行队列，功能地图的“拟议”仅说明未来边界。当前 TUI 已由 consoleapp 注入 HTTP 客户端；执行/验收状态归 execution-map。
+
 本文持续维护 SteerLine 的功能划分、模块所有权、可并行条件和冲突触发点，是设计或调整 roadmap 前的阅读与检查入口。目标是提高 AI 开发的有效吞吐：让更多任务能够独立理解、实现、验证和交付，降低共享修改、等待、返工与集成成本。业务正确性、权限、原请求恢复和唯一交付是必须保持的边界，详见[整体架构](../architecture.md)。
 
 规划时先读[RoadmapGuide](../roadmap/RoadmapGuide.md)，再读本页的判断规则，再按影响展开对应模块、契约和测试。实际源码位置由[代码架构](current-code-architecture.md)维护；本页维护并行决策，拟议任务关系由本轮选定的 drafts/ 草稿维护；用户确认的开发任务及依赖由[正式执行清单](../roadmap/execution-map.md)维护。采用的职责、接口、前置和验证要求须落实到独立 Spec/Plan；本页不分配任务 ID、不改变中心 DAG 或已冻结契约，也不是绕过硬前置的执行许可。
@@ -33,8 +35,8 @@
 | 持久化与原子提交 / 已有 | storage/ports、sqlite | 已明确语义下的读取或提交实现；消费者仍经窄端口 | schema、唯一约束、CAS/版本、同事务快照、checkpoint 与领域记录提交边界改变 | [数据模型与格式来源](../product-design/data-model.md)、[提交契约](../../internal/storage/ports/transactions.go)、[快照端口](../../internal/storage/ports/application_snapshot.go) |
 | 配置、应用组装与服务宿主 / 已有 | app 的 local/terminal 组装单元、app/host | 既有后端的配置/target/preflight/factory 通常只改所属文件；Orca 本机与远端共用单终端实现。稳定宿主/产品端口下的进程控制和入口能力 | 新后端仍改中央显式组合；共同身份/policy、公共构造、配置摘要、exe/home 传递、实例/锁、启动与停服规则改变 | [local 组装](../../internal/app/directory_local.go)、[Orca 单终端组装](../../internal/app/directory_orca_terminal.go)、[组装/宿主源码](current-code-architecture.md#build-install-and-launch-sources) |
 | 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary) |
-| 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 2.2先推导草稿/artifact/人工事项，2.3实际会话接入验证必要权限；成熟后按稳定成果拆分 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
-| 本机 HTTP 与原生 UI / 传输已有、客户端后续 | `internal/product/httpapi` loopback 传输、Windows 客户端与页面 | #45提供执行传输，#44接真实客户端；SSE 延期，#49/#50仍待2.1最小原型确认，2.2/2.3模型与布局待定 | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [本机客户端协议](../product-design/local-client-protocol.md)、[拟议界面](../product-design/planning-ui.md) |
+| 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 2.2先推导草稿/artifact/人工事项，2.3实际会话接入验证必要权限；成熟后按稳定成果拆分 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../archive/roadmap/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
+| TUI 经 HTTP 接入 / #91 当前源码 | httpapi 服务端、httpcontract/httpclient/httpfs、consoleapp 组装和 console 消费 | #45 基线已有；#91 补接口/纯客户端并换 TUI，共享接线由单一任务拥有，不等待 WebUI/SSE | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [本机客户端协议](../product-design/local-client-protocol.md)、[拟议界面](../product-design/planning-ui.md) |
 
 远端能力需独立核对目标权限、身份、观察/恢复/停止与路径所有权，不能从本机成功推定支持。
 
@@ -117,6 +119,6 @@ Codex 开发的正式交付依赖维护于 execution-map；SteerLine产品自身
 
 纯指南、链接和规划规则修改只做文档静态检查，不运行产品或模型验收。它不建立新的并行执行引擎、自动评分、通用插件或旧格式兼容机制。
 
-## #84 / #45 当前交接
+## #84 / #45 历史交接
 
-用户于 2026-10-09 明确允许 #84 与 #45 独立并行实现；共享状态、格式、流程语义由 #84 交付，主干集成先 #84 后 #45，#45 的 HTTP/client discard 接线仍由原执行者负责。#84 提供 WorkflowRun `status/flow_ref/step_id`、输入/结果版本绑定，产品 CandidateSummary 的同快照步骤、源执行事实及报告权限边界；SQLite schema 18、runtime 20、worker-flow-v2、Orca execution-state codec 11。#45 后续消费真实字段和结果，不复制转移逻辑；#44 仍等待 #45。完整状态按 [execution-map](../roadmap/execution-map.md)核对。
+用户于 2026-10-09 明确允许 #84 与 #45 独立并行实现；共享状态、格式、流程语义由 #84 交付，主干集成先 #84 后 #45，#45 的 HTTP/client discard 接线仍由原执行者负责。#84 提供 WorkflowRun `status/flow_ref/step_id`、输入/结果版本绑定，产品 CandidateSummary 的同快照步骤、源执行事实及报告权限边界；SQLite schema 18、runtime 20、worker-flow-v2、Orca execution-state codec 11。#45 后续消费真实字段和结果，不复制转移逻辑；该交接已交付，#44 后续删除由 #91 规划。完整状态按 [execution-map](../roadmap/execution-map.md)核对。

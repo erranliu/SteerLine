@@ -19,7 +19,7 @@ func TestAsyncQuestionConsoleOffersOptionsWhileRunning(t *testing.T) {
 	if waitingForDecision(run) || candidateHumanStatus(m.projects[0], run) != "运行中 · 有待回答问题" {
 		t.Fatal("async question appeared as a stopped worker")
 	}
-	updated, _ := m.answerSelectedDecision()
+	updated, _ := openDecisionForTest(m)
 	m = updated.(Model)
 	if m.answer == nil {
 		t.Fatalf("running question not editable: %s", m.status)

@@ -249,6 +249,7 @@ func (m *Model) cancelWorkspace() {
 }
 
 func (m *Model) leaveAnswerSaved() bool {
+	m.answerCheck = nil
 	if m.answer == nil {
 		return true
 	}

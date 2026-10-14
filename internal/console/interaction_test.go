@@ -103,6 +103,7 @@ func TestUX2PreviewSubmitEndsCurrentHumanInteraction(t *testing.T) {
 	m, c := ccFixture(t, 5)
 	m.rows(0)
 	run := m.selectedRow(0).run
+	run.RecoveryVersion = 29
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.answer == nil {
 		t.Fatal("Enter did not open current interaction")
@@ -133,7 +134,7 @@ func TestUX2PreviewSubmitEndsCurrentHumanInteraction(t *testing.T) {
 	}
 	next, _ := m.Update(cmd())
 	m = next.(Model)
-	if c.decisionAnswer.RunID != run.RunID || c.decisionAnswer.OptionID != "o10" || c.decisionAnswer.Note != "候选比较备注" {
+	if c.decisionAnswer.RunID != run.RunID || c.decisionAnswer.OptionID != "o10" || c.decisionAnswer.Note != "候选比较备注" || c.decisionAnswer.SourceAttemptID != run.AttemptID || c.decisionAnswer.ExpectedRecoveryVersion != 29 {
 		t.Fatal(c.decisionAnswer)
 	}
 	// A newly committed question is a new human interaction, not the old draft.

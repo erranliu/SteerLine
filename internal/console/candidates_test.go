@@ -48,7 +48,23 @@ func ccFixture(t *testing.T, count int) (Model, *testControlClient) {
 
 func ccKey(m Model, k tea.KeyMsg) (Model, tea.Cmd) {
 	next, cmd := m.Update(k)
+	if cmd != nil && next.(Model).answerCheck != nil {
+		return finishDecisionCheckForTest(next.(Model), cmd)
+	}
 	return next.(Model), cmd
+}
+
+func finishDecisionCheckForTest(m Model, cmd tea.Cmd) (Model, tea.Cmd) {
+	if cmd != nil && m.answerCheck != nil {
+		next, followup := m.Update(cmd())
+		return next.(Model), followup
+	}
+	return m, cmd
+}
+
+func openDecisionForTest(m Model) (tea.Model, tea.Cmd) {
+	next, cmd := m.answerSelectedDecision()
+	return finishDecisionCheckForTest(next.(Model), cmd)
 }
 
 func TestCC1(t *testing.T) {

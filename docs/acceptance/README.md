@@ -10,7 +10,7 @@ Orca 本机输入与就绪：[专属验收](orca-local-input-readiness.md)，配
 | --- | --- |
 | 工作流核验收敛 | [全部核验取舍与 101/105 修复](workflow-verification.md)，原始状态/正文取代屏幕核验；源码自动项与真机待验分开登记 |
 | 一期签收 | 待验；[一期活动](phase1.md) |
-| 二期节点 | [导航](phase2.md)：[2.1执行UI](phase2-execution.md)、[2.2草稿/人工事项](phase2-planning.md)、[2.3主agent](phase2-main-agent.md)均为节点验收规划，尚未完整排入 |
+| 当前 TUI/HTTP 交付 | [当前入口](phase2.md)：仅 #91，旧三节点退役 |
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[当前 Orca 单终端](orca-terminal-transport.md)；旧 Orca 活动输入/恢复记录保留历史，按当前路线重新核对适用性 |
 | Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
 | 控制台 Codex CLI 入口 | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
@@ -37,17 +37,9 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 
 ## 当前任务专属计划
 
-| 任务归属 | 计划 |
-| --- | --- |
-| #83 本机安装与调试路径隔离 | [验收](local-runtime-isolation.md) |
-| #84 Worker 分步执行与结构化状态推进，已纳入执行规划 | [验收](worker-staged-flow.md) |
-| #87 Worker 停机对账与恢复一致性修复，已合入；WSR-A1–A8 自动通过 | [验收及真实合并记录](worker-stop-recovery.md) |
-| #45 本机客户端协议与历史查询 | [验收](phase2-local-api.md) |
-| #44 WinUI基座与原生输入 | [验收](phase2-winui-foundation.md) |
-| #49 DAG与任务原生浏览，待原型 | [验收](phase2-roadmap-ui.md) |
-| #50 执行与待处理原生界面，待原型 | [验收](phase2-execution-ui.md) |
+本轮 #91 已独立复审修复、最小自动复验并经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 真实合并，实现完成；[验收](tui-http-client.md)与[Plan](../spec/tui-http-client.plan.md)映射 TH-A1–A6/TH-M1。自动项通过，独立 SteerlineTest live/真终端操作已验，原生查看窗口渲染和桌面人工体验仍待验。#45 的[历史结果/限制](phase2-local-api.md)、一期/平台未闭合项按 execution-map 保留。
 
-#43不再独立安排；#46/#47/#48/#51/#52旧计划已归档为待重定参考，不是当前验收计划。2.2/2.3任务范围成熟后补建各自当前专属记录，草稿仍链接原参考便于追溯。
+旧二阶段/WinUI/延期任务验收退出当前队列，见[归档说明](../archive/roadmap/README.md)。#44 实现已由 #91 删除，原人工项退出要求不算通过；旧候选编号不复用，也不依据归档自动恢复。
 
 ## 普通开发重构计划
 

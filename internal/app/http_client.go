@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/erranliu/SteerLine/internal/product/httpapi"
+	httpapi "github.com/erranliu/SteerLine/internal/product/httpclient"
 )
 
 // OpenHTTPClient connects to the already running instance discovered for this
@@ -21,9 +21,5 @@ func OpenHTTPClient(ctx context.Context, configPath string) (*httpapi.Client, er
 	if err == nil {
 		return client, nil
 	}
-	connection := connectHostService(ctx, config)
-	if connection.Diagnostic != "" {
-		return nil, fmt.Errorf("existing service state %s: %s; local API: %w", connection.State, connection.Diagnostic, err)
-	}
-	return nil, err
+	return nil, fmt.Errorf("local HTTP service unavailable: %w", err)
 }

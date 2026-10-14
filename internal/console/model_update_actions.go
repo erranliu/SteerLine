@@ -140,6 +140,9 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 		}
 		action.Status, action.Message, action.RunID = msg.receipt.Status, msg.receipt.Message, msg.receipt.RunID
 		action.Resolved = msg.receipt.Status == "applied" || msg.receipt.Status == "rejected" || msg.receipt.Status == "failed" || msg.receipt.Status == "indeterminate"
+		if action.Action == "stop_service" && msg.receipt.Status == "applied" && msg.receipt.Code == "stop_exit_unverified" {
+			action.Status, action.Resolved = "pending_verification", false
+		}
 		if action.Resolved || msg.receipt.Status == "applying" && (previousStatus != "applying" || previousRun != action.RunID) {
 			refreshNow = true
 		}

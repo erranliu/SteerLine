@@ -8,6 +8,9 @@ import (
 )
 
 func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Any new navigation/input supersedes the pending open intent. A late HTTP
+	// reply must not reopen an answer after Escape, help, selection or quit.
+	m.answerCheck = nil
 	if key.String() == "ctrl+n" && m.confirm == nil && m.profileChoice == nil && !m.help {
 		return m.openNativeSession()
 	}

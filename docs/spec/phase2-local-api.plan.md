@@ -1,5 +1,7 @@
 # Plan：本机客户端协议与历史查询
 
+> #45 已实现并合入，本文件保留原交付规格/计划；实际状态/限制见专属验收。新 TUI 接入和必要扩展另由[任务 #91](tui-http-client.spec.md)交付，不将新要求回写成旧任务成果。原固定 commit 的契约仍按其原版本读取。
+
 任务 ID：45；任务名称：本机客户端协议与历史查询；目标：`PHASE2.1`。执行范围见 [Spec](phase2-local-api.spec.md)，结果记录于[专属验收](../acceptance/phase2-local-api.md)。无未完成硬前置，一个实现 PR。正式实施由 roadmap-runner 核对 execution-map 的范围与前置，启动时固定实际 Spec/Plan commit 和路径。
 
 ## 实施与所有权
