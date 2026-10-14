@@ -24,7 +24,9 @@ func (s *Service) offerWorkerPRFeedback(run *reconstructiontypes.RunView, url st
 	if run == nil || run.WorkflowVersion != executionmodel.Version || url == "" {
 		return errors.New("optional PR feedback requires a fixed worker and PR")
 	}
-	if run.Decision != nil && run.Decision.Status == "pending" {
+	// PR observation must retain an accepted answer until its original delivery
+	// is confirmed. A new optional prompt would detach that saved command.
+	if run.Decision != nil && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
 		return nil
 	}
 	decision, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{

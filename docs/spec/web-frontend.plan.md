@@ -24,6 +24,8 @@
 
 审计补充：提交入口先复制调用方信封，保证锁/持久化等待期间不被外部改写；对账按完成后调度下一轮，切换实例/离线时取消读取及尚未开始的补交；回答资格查询在关闭、候选/版本变化或离线时取消，晚到结果不能提交。分段 final 拒绝重复游标、其他执行/Attempt 的正文引用和越界片段；已结束候选明确显示历史问题。
 
+主干整合补充：已读取[Worker 生命周期规则](../product-design/worker-lifecycle.md)。三层重构后的 PR 绑定只更新事实，不再替反馈设置 waiting_input；因此既有可选问题生成器必须同时保留 pending 与 answer_saved，避免 PR 轮询替换尚未投递的原答案。本批只修正 W12/W17 的决策保留条件，复用原 actor/反馈入口，不新增恢复或重试流程。
+
 ## 测试计划
 
 所有项链接[本任务验收](../acceptance/web-frontend.md)。命令从仓库根目录执行；原始产物写系统临时目录或新独立调试包 evidence，验收文档只记最小摘要。
@@ -33,6 +35,7 @@
 | WEB-A1 | 定向构建 `web.build` | Windows/Node/npm；`npm --prefix web ci`、`npm --prefix web run build`；`go build -tags webui -o <临时exe> ./cmd/steerline` | 工程及接线完成后，TS/资源与 Go 编译通过 | WEB-A1 / 构建日志 |
 | WEB-A2、A4 | L1 Web owner 与定向 HTTP `web.server` | 隔离 Go fixture；`go run ./cmd/test-feedback -- ./web/server ./internal/product/httpapi ./internal/product/httpclient -count=1`；受影响 app 定向测试 | 认证/映射接线后，非法请求和原协议断言实际命中，预算与取消保留 native 认证，无业务替代 | WEB-A2/A4 / runner summary |
 | WEB-A4 / 必要 app 受理回归 | 定向 `web.decision-wiring` | `go run ./cmd/test-feedback -- ./internal/app -run 'Test(Decision|Answer|NativeAsync|AsyncDecision)' -count=1`；真实浏览器同会话 publish feedback | store 复用改动后，原问题/答案、attempt/recovery 资格及 native 实例核验通过，浏览器确实产生原 session 的第四轮 | WEB-A4 / app runner、browser evidence |
+| WEB-A4、A6 / PR 轮询与原反馈 | 定向 `web.feedback-preservation` | `go run ./cmd/test-feedback -- ./internal/execution -run 'Test(CandidateOpenPRPoll|CandidateClosedPRPoll|WorkerFeedbackPhase|WaitingPRFeedback)' -count=1`；隔离 Go fixture；另 web.smoke | 原决策保留修复后，先证明新增场景失败再修复通过；重复 PR 轮询不替换 answer_saved，不产生额外轮次，浏览器提交后确实完成原会话第四轮 | WEB-A4/A6 / 定向 summary、浏览器证据 |
 | WEB-A3、A5 | 定向前端 `web.client`、`web.input` | Vitest/隔离 IndexedDB；`npm --prefix web test` | 客户端/组件实现后，未知/重连/回执/输入/候选反例通过 | WEB-A3/A5 / Vitest 日志 |
 | WEB-A3、A5 / 审计修复 | 定向 `web.audit-races` | 同上命令；client、Answer、App 的真实延迟 Promise/持久化场景 | PR 候选前，调用方修改不改变已提交信封、重复存储观察不堆积对账、取消缺失查询不重发、四类资格取消不发旧回答、错误 final 分页不混身份 | WEB-A3/A5 / 审计日志 |
 | WEB-A4、A6 的驱动能力 | E2E 基础设施 `web.history-fixture` | `go run ./cmd/test-feedback -- ./tests/e2e/internal/controlled -count=1` | 夹具扩展后，原线程一次 publish feedback、严格普通序列与 `thread/turns/list` 单轮分页/只读事实通过 | WEB-A4/A6 / fixture runner summary |
@@ -40,6 +43,6 @@
 | 回归 | 固定 L1 + Web owner | `go run ./cmd/test-feedback -level=L1` | 最终候选，现有边界与新 owner 通过 | 回归 / summary |
 | 文档 | 静态 | `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check` | 文档与实现完成后，0 错误 | 静态摘要 |
 
-实施中必须补齐 browser driver、simulate 指向及 Web owner 登记，不能只留下未来补验。前端场景为持续保留的定向入口，不假冒现有 L3 注册场景。无执行规则或远端平台变更，不选择全量 Full/L2/live/全平台矩阵；本机 simulate 浏览器场景覆盖本批真实接线，既有 L1/HTTP 定向覆盖回归。
+实施中必须补齐 browser driver、simulate 指向及 Web owner 登记，不能只留下未来补验。前端场景为持续保留的定向入口，不假冒现有 L3 注册场景。除原反馈决策保留修正外无执行规则或远端平台变更，不选择全量 Full/L2/live/全平台矩阵；本机 simulate 浏览器场景覆盖本批真实接线，既有 L1/HTTP 定向覆盖回归。
 
 WEB-M1 由用户在自动验证后参与，桌面输入法与原生查看窗口体验待安排；记录实际构建/环境，仅阻塞该人工体验签收，不阻塞无关后续开发。Plan 不维护实时结果。
