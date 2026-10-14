@@ -1,6 +1,6 @@
 # 验收：HTTP 服务端命令边界收敛
 
-唯一归属：任务 #92，HTTP 服务端命令边界收敛。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)。[PR #311](https://github.com/erranliu/SteerLine/pull/311)的本地后续候选已修复独立复审发现的原生就绪竞态并完成最小复验；待新的独立复审、同步PR及真实合并，本任务不得记为实现完成。
+唯一归属：任务 #92，HTTP 服务端命令边界收敛。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)。[PR #311](https://github.com/erranliu/SteerLine/pull/311)的本地后续候选已修复原生就绪竞态及遗漏的CLI测试消费者，并完成最小定向复验；待新的独立复审、同步PR及真实合并，本任务不得记为实现完成。
 
 [Spec](../spec/http-command-boundary.spec.md) · [Plan / 测试计划](../spec/http-command-boundary.plan.md) · [草稿](../roadmap/drafts/roadmap.md)
 
@@ -10,7 +10,7 @@
 | --- | --- | --- | --- |
 | HC92-A1 | 直接调用登记owner并检查handler构造；小端口stub能替代完整Client/SQL/HTTP对象，原重复实现删除；本项专属规则检查Server/registry依赖与单一记录owner | 新增`TestHTTPCommandBoundary`和AST正/负例；普通Windows Go；提取后、PR前执行 | 本轮通过：1包/7测试，0失败/跳过；守卫只验证同包源码结构，不声称编译隔离 |
 | HC92-A2 | 登记并发同ID/异内容/跨动作；派发计数及原intent、正式消费者竞争、错绑定、rejection、读取故障/unknown与原信封补交核对 | 新增registry stub + 原authority/回执反例；私有记录stub；接线后、PR前执行 | 通过：1包/28测试，0失败/跳过 |
-| HC92-A3 | 原生查看重复/丢结果、停服请求、边界记录/认证和真实服务接线；查看副作用一次、停服回执、大小/原子性及业务owner保持 | 既有httpapi及`tests/integration`定向入口；隔离HTTP/SQLite/app，无真实模型；接线后、PR前执行 | 本地修复候选通过：新增排队/动态就绪11项、HTTP14项、app2项全部通过，无失败/跳过；原失败证据保留，待独立复审 |
+| HC92-A3 | 原生查看重复/丢结果、停服请求、边界记录/认证和真实服务接线；查看副作用一次、停服回执、大小/原子性及业务owner保持 | 既有httpapi、`tests/integration`与CLI实际console定向入口；隔离HTTP/SQLite/app，无真实模型；接线后、PR前执行 | 本地候选通过：排队/动态就绪11项、HTTP14项、app2项及CLI/HTTP console 3项均通过，无失败/跳过；原失败证据保留，待独立复审 |
 
 固定L1历史回归：`go run ./cmd/test-feedback -level=L1`在原实现候选`72e1937d`上通过且完整，12组、26包、553测试通过，0失败/跳过。结构守卫补齐轮未重跑L1；原生就绪修复轮复用该历史回归并执行下方最小定向复验，未重跑L1。历史L1不替代新竞态回归。组别及测试数见原L1 summary。
 
@@ -62,6 +62,16 @@ handler不再在共同仲裁锁外传入`Ready`布尔值；registry取得同一�
 
 上述每个summary同目录保留`go-test.jsonl`、`go-test.stderr.txt`。源码证据另保存`C:\Users\lmas1\AppData\Local\Temp\http92-readiness-evidence-621b3ac9695c4dc5b937fd18dc22cb05\source-fingerprints.json`，包含测试起点、3个生产文件、新测试与未变AST守卫的Git blob及SHA256，交接时核对与实际提交一致。未执行Full、L2/L3/live，未使用安装环境。原失败/历轮证据完整保留；本轮仅解除已复现竞态的自动复验阻塞，仍需新的独立只读复审、同步PR及真实合并。
 
+### 第二轮复审后的CLI Prepare消费者补修
+
+独立复审在clean head `75177ff14753da33c810562ad466b30b83673c01`发现`cmd/steerline/native_task_test.go`仍用旧签名向`httpapi.Prepare`传完整client，导致CLI测试包不能编译。本轮只将该调用改为把同一个client填入`Query`、`Commands`、`Authority`、`NativeViewer`四个端口；原场景、断言和fixture setup语义未改。
+
+已全仓审计所有点号形式的`.Prepare(`调用，区分`workspace.Prepare`和`consoleapp.Prepare`后，全部`httpapi.Prepare`调用均传`httpapi.Ports`：`cmd/steerline/native_task_test.go`、`tests/integration/api_protocol_test.go`三处、`internal/app/execution_service_wiring.go`及`internal/product/httpapi`测试helper/调用，无其他旧签名消费者。
+
+- 独立复审的构建失败：命令`go run ./cmd/test-feedback -- ./cmd/steerline -run '^TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs$' -count=1`，summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T082507.826331700Z\summary.json`，Go事件：同目录`go-test.jsonl`。`cmd/steerline`编译失败，0测试，错误为`cannot use client (*client.Client) as httpapi.Ports`。
+- 修复后在相同命令上重跑：1包、3项通过，complete=true、exit0、无失败/跳过。source commit为`75177ff14753da33c810562ad466b30b83673c01`，测试时仅`cmd/steerline/native_task_test.go`有dirty差异，该差异完整提交为`01f70460ee644b2e7ff32a7aa2825024932772d8`。summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T084034.169629600Z\summary.json`；Go JSON/stderr：同目录`go-test.jsonl`、`go-test.stderr.txt`。本用例包含实际HTTP-backed console路径。
+- 该消费修复不改生产接线或HTTP/console行为，因此复用独立复审对clean head `75177ff`的60项HTTP定向回归、2项app集成和固定L1验证；证据见上节与此前记录，本轮只补跑CLI真实调用场景。
+
 ### 失败及修正记录
 
 保留早期失败记录；通过的是后续同命令的完整重跑。
@@ -69,6 +79,7 @@ handler不再在共同仲裁锁外传入`Ready`布尔值；registry取得同一�
 1. HC92-A1第一次运行，summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T065702.425165800Z\summary.json`。构建失败、0个测试；`command_registry.go`缺少`reflect`导入，且旧测试仍调用已移交的`Server.controlInput`。补入导入并将测试调用改为registry owner后重跑。
 2. HC92-A1第二次运行，summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T065751.113431900Z\summary.json`。构建通过但1个测试失败；测试authority stub返回未包装的`api.ErrRecordNotFound`，不符合生产查无记录时使用的`api.Error{Kind: api.UnknownRecord}`契约。修正stub后重跑通过。
 3. 本轮首次结构守卫运行，summary：`C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261014T074030.428430400Z\summary.json`。7测试中6通过、1失败、无跳过；守卫误以为file owner只在endpoint构造一次，忽略既有`state.go`命令目录验证也构造同一owner。守卫修正为要求唯一owner实现并允许endpoint/state两个既有构造点；随后完整7测试通过。
+4. 第二轮复审的CLI构建失败记录见`20261014T082507.826331700Z/summary.json`：旧consumer签名无法传入`Ports`，导致0测试执行。改为四端口组装后，用同一精确命令完整重跑通过，证据为`20261014T084034.169629600Z/summary.json`。
 
 ## 人工与阻塞范围
 
