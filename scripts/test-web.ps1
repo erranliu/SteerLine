@@ -10,7 +10,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Web build failed' }
     & npm --prefix web test *> (Join-Path $EvidenceDir 'client-tests.log')
     if ($LASTEXITCODE -ne 0) { throw 'Web client tests failed' }
-    & go run ./cmd/test-feedback -- ./web/server ./internal/product/httpapi -count=1 *> (Join-Path $EvidenceDir 'server-tests.log')
+    & go run ./cmd/test-feedback -- ./web/server ./internal/product/httpapi ./internal/product/httpclient -count=1 *> (Join-Path $EvidenceDir 'server-tests.log')
     if ($LASTEXITCODE -ne 0) { throw 'Web server tests failed' }
     if ($DebugConfig) {
         $savedWebConfig = $env:STEERLINE_WEB_CONFIG

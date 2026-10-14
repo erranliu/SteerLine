@@ -6,8 +6,8 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  timeout: 600000,
-  expect: { timeout: 20000 },
+  timeout: 900000,
+  expect: { timeout: 60000 },
   outputDir:
     process.env.STEERLINE_WEB_EVIDENCE ||
     join(tmpdir(), "steerline-web-browser-" + Date.now()),

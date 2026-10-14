@@ -5,6 +5,7 @@ import {
   fireEvent,
   waitFor,
   cleanup,
+  act,
 } from "@testing-library/react";
 import { WorkspaceContext, type Workspace } from "../../app/context";
 import { Api } from "../../shared/api/client";
@@ -114,3 +115,72 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
     ),
   );
 });
+
+it.each(["unmount", "offline", "revision", "collapse"])(
+  "cancels late eligibility without sending when %s",
+  async (reason) => {
+    const api = new Api(
+      { project_id: "cancel-input", instance_id: "original" } as Identity,
+      "csrf",
+    );
+    let resolve!: (value: unknown) => void;
+    const get = vi.spyOn(api, "get").mockImplementation(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    );
+    const send = vi.fn();
+    const workspace = {
+      api,
+      identity: api.identity,
+      online: true,
+      busy: false,
+      send,
+    } as unknown as Workspace;
+    const run = {
+      run_id: "run",
+      execution_id: "exec",
+      attempt_id: "attempt",
+      control_revision: 1,
+      recovery_version: 0,
+      workflow_status: "waiting_input",
+      task_status: "in_progress",
+      decision: {
+        id: "question",
+        version: 1,
+        status: "pending",
+        request: {
+          question: "继续？",
+          options: [],
+          context: "",
+          has_native_questions: false,
+        },
+      },
+    } as unknown as Candidate;
+    const draw = (online = true, version = 1) => (
+      <WorkspaceContext.Provider value={{ ...workspace, online }}>
+        <Answer run={{ ...run, control_revision: version }} />
+      </WorkspaceContext.Provider>
+    );
+    const view = render(draw());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "打开回答" })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "打开回答" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "回答内容" }), {
+      target: { value: "保留原候选" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "提交回答" }));
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(1));
+    if (reason === "unmount") view.unmount();
+    else if (reason === "collapse")
+      fireEvent.click(screen.getByRole("button", { name: "收起" }));
+    else
+      view.rerender(draw(reason !== "offline", reason === "revision" ? 2 : 1));
+    await act(async () => {
+      resolve({});
+    });
+    expect(send).not.toHaveBeenCalled();
+  },
+);

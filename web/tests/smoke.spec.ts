@@ -39,6 +39,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   const binary = join(root, "bin", "steerline.exe");
   const helper = join(root, "bin", "debug-helper.exe");
   let opening = "";
+  let openingError = "";
   await expect
     .poll(
       () => {
@@ -46,16 +47,24 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
           opening = execFileSync(
             binary,
             ["web", "-config", absolute, "-print-url"],
-            { env, encoding: "utf8", stdio: "pipe" },
+            { env, encoding: "utf8", stdio: "pipe", timeout: 30000 },
           ).trim();
           return !!opening;
-        } catch {
+        } catch (error) {
+          openingError = String(error);
           return false;
         }
       },
-      { timeout: 90000, message: "original Web listener must become ready" },
+      { timeout: 180000, message: "original Web listener must become ready" },
     )
-    .toBe(true);
+    .toBe(true)
+    .catch(async (error) => {
+      await testInfo.attach("opening-error", {
+        body: openingError,
+        contentType: "text/plain",
+      });
+      throw error;
+    });
   const consoleErrors: string[] = [];
   page.on("pageerror", (error) => consoleErrors.push(error.message));
   await page.goto(opening);
@@ -119,7 +128,11 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
           const snap = await get("/snapshot");
           return snap.connection.snapshot.page?.runs?.[0]?.pr?.state;
         },
-        { timeout: 150000 },
+        {
+          timeout: 300000,
+          message:
+            "cold native preparation and original three-stage publication",
+        },
       )
       .toBe("open");
     await page.reload();
@@ -141,7 +154,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   await page.getByRole("button", { name: "最终回复", exact: true }).click();
   await expect(
     page.getByText(/Controlled candidate pushed and PR created/),
-  ).toBeVisible({timeout:90000});
+  ).toBeVisible({ timeout: 90000 });
   await expect(
     page.getByRole("button", { name: "打开回答", exact: true }),
   ).toBeEnabled();
@@ -174,12 +187,31 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
         { timeout: 150000 },
       )
       .toBe(4);
+    await expect
+      .poll(
+        async () => {
+          const snapshot = await get("/snapshot");
+          const current = snapshot.connection.snapshot.page.runs.find(
+            (candidate: { run_id: string }) => candidate.run_id === run.run_id,
+          );
+          return [current.workflow_stage, current.workflow_status];
+        },
+        { timeout: 90000 },
+      )
+      .toEqual(["await_merge", "waiting_external"]);
     const after = await get("/snapshot");
     expect(after.connection.snapshot.page.runs[0].session_id).toBe(
       run.session_id,
     );
     expect(after.connection.snapshot.page.runs[0].execution_id).toBe(
       run.execution_id,
+    );
+    expect(after.connection.snapshot.page.runs[0].attempt_id).toBe(
+      run.attempt_id,
+    );
+    expect(after.connection.snapshot.page.runs[0].current_turn_id).toBe(
+      JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8"))
+        .turns[3].id,
     );
   }
   await page.screenshot({

@@ -1,5 +1,17 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  lazy,
+  Suspense,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import {
+  onlineManager,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { NavLink, Routes, Route, Navigate } from "react-router-dom";
 import {
   GitBranch,
@@ -172,6 +184,11 @@ export function App({
 }) {
   const queries = useQueryClient();
   const [error, setError] = useState("");
+  const [errorRequest, setErrorRequest] = useState("");
+  const networkOnline = useSyncExternalStore(
+    (changed) => onlineManager.subscribe(changed),
+    () => onlineManager.isOnline(),
+  );
   const [collapsed, setCollapsed] = useState(false);
   const session = useQuery({
     queryKey: ["browser-session"],
@@ -196,6 +213,7 @@ export function App({
   });
   const page = snapshot.data?.connection.snapshot.page;
   const online =
+    networkOnline &&
     connected &&
     !snapshot.isError &&
     snapshot.data?.connection.state === "connected" &&
@@ -205,8 +223,14 @@ export function App({
     page?.service.instance_id === identity.instance_id;
   const mutation = useMutation({
     mutationFn: (envelope: ReturnType<Api["envelope"]>) => api.submit(envelope),
-    onError: (e) => setError(String(e)),
-    onSuccess: () => setError(""),
+    onError: (e, envelope) => {
+      setError(String(e));
+      setErrorRequest(envelope.request_id);
+    },
+    onSuccess: () => {
+      setError("");
+      setErrorRequest("");
+    },
     onSettled: () => {
       queries.invalidateQueries({
         predicate: (q) =>
@@ -221,31 +245,52 @@ export function App({
     refetchInterval: 2000,
   });
   useEffect(() => {
-    if (!online || !requests.data) return;
-    let cancelled = false;
-    const pending = requests.data.filter(
-      (row) =>
-        row.envelope.project_id === identity.project_id &&
-        row.envelope.instance_id === identity.instance_id &&
-        (!row.response ||
-          ["submitted", "accepted", "outcome_unknown"].includes(
-            row.response.status,
-          )),
-    );
-    (async () => {
-      for (const row of pending) {
-        if (cancelled) return;
-        try {
-          await api.reconcile(row.envelope);
-        } catch {
-          /* unknown stays in journal */
+    if (
+      errorRequest &&
+      requests.data?.find((row) => row.envelope.request_id === errorRequest)
+        ?.response?.status === "applied"
+    ) {
+      setError("");
+      setErrorRequest("");
+    }
+  }, [errorRequest, requests.dataUpdatedAt, requests.data]);
+  useEffect(() => {
+    if (!online) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const pending = (await listRequests()).filter(
+          (row) =>
+            row.envelope.project_id === identity.project_id &&
+            row.envelope.instance_id === identity.instance_id &&
+            (!row.response ||
+              ["submitted", "accepted", "outcome_unknown"].includes(
+                row.response.status,
+              )),
+        );
+        for (const row of pending) {
+          if (controller.signal.aborted) return;
+          try {
+            await api.reconcile(row.envelope, controller.signal);
+            queries.invalidateQueries({ queryKey: ["local-requests"] });
+          } catch {
+            /* unknown stays in journal */
+          }
         }
+      } catch {
+        // The journal query displays storage errors; keep this loop bounded.
+      } finally {
+        if (!controller.signal.aborted)
+          timer = setTimeout(() => void poll(), 2000);
       }
-    })();
-    return () => {
-      cancelled = true;
     };
-  }, [requests.dataUpdatedAt, online, api]);
+    void poll().catch(() => {});
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [online, api, queries]);
   const send = async (
     action: string,
     target: string,
@@ -260,6 +305,7 @@ export function App({
       );
       if (result.status === "rejected" || result.status === "outcome_unknown") {
         setError(result.diagnostic || "操作结果待核实，请查询原请求");
+        setErrorRequest(result.request_id);
         return false;
       }
       return true;
@@ -417,7 +463,10 @@ export function App({
               )}
               api={api}
               online={!!online}
-              onError={setError}
+              onError={(message) => {
+                setError(message);
+                setErrorRequest("");
+              }}
             />
           </main>
           <footer className="app-footer">

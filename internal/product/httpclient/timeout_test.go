@@ -3,6 +3,7 @@ package httpclient
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,6 +25,7 @@ func TestBoundedClientBudgetPreservesAuthenticationAndCancellation(t *testing.T)
 	identity := wire.Identity{Protocol: wire.Protocol, ProjectID: wire.ProjectID("repo"), RepositoryIdentity: "repo", InstanceID: "original", Ready: true}
 	token := strings.Repeat("a", 64)
 	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+token || r.Header.Get("Origin") != "" {
 			t.Error("custom budget changed native authentication")
@@ -32,10 +34,15 @@ func TestBoundedClientBudgetPreservesAuthenticationAndCancellation(t *testing.T)
 			json.NewEncoder(w).Encode(identity)
 			return
 		}
+		io.Copy(io.Discard, r.Body)
 		entered <- struct{}{}
-		<-r.Context().Done()
+		select {
+		case <-r.Context().Done():
+		case <-release:
+		}
 	}))
 	defer server.Close()
+	defer close(release)
 	identity.Address = strings.TrimPrefix(server.URL, "http://")
 	runDir := t.TempDir()
 	dir := filepath.Join(runDir, "local-api")

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useWorkspace } from "../../app/context";
 import { readDraft, writeDraft } from "../../shared/api/journal";
 import type { Candidate } from "../../shared/api/types";
@@ -29,6 +29,18 @@ export function Answer({ run }: { run: Candidate }) {
   const [opened, setOpened] = useState(false);
   const [composing, setComposing] = useState(false);
   const [checking, setChecking] = useState(false);
+  const eligibility = useRef<AbortController | null>(null);
+  useEffect(
+    () => () => eligibility.current?.abort(),
+    [
+      key,
+      online,
+      run.control_revision,
+      run.recovery_version,
+      run.workflow_status,
+      run.task_status,
+    ],
+  );
   useEffect(() => {
     let active = true;
     readDraft(key)
@@ -50,6 +62,9 @@ export function Answer({ run }: { run: Candidate }) {
       .catch((e) => setStorageError(String(e)));
   };
   const submit = async () => {
+    eligibility.current?.abort();
+    const controller = new AbortController();
+    eligibility.current = controller;
     setChecking(true);
     setError("");
     try {
@@ -61,7 +76,9 @@ export function Answer({ run }: { run: Candidate }) {
             execution_id: run.execution_id,
             attempt_id: run.attempt_id,
           }),
+        controller.signal,
       );
+      controller.signal.throwIfAborted();
       const payload: Record<string, unknown> = {
         run_id: run.run_id,
         decision_id: decision.id,
@@ -91,7 +108,7 @@ export function Answer({ run }: { run: Candidate }) {
       if (await send("answer_decision", decision.id, decision.version, payload))
         setOpened(false);
     } catch (e) {
-      setError(String(e));
+      if (!controller.signal.aborted) setError(String(e));
     } finally {
       setChecking(false);
     }
@@ -99,7 +116,13 @@ export function Answer({ run }: { run: Candidate }) {
   return (
     <section className="answer-panel">
       <div className="section-heading">
-        <h3>{requiresAnswer(run) ? "需要你的决定" : "追加反馈"}</h3>
+        <h3>
+          {!businessOpen(run)
+            ? "历史问题"
+            : requiresAnswer(run)
+              ? "需要你的决定"
+              : "追加反馈"}
+        </h3>
         <Status value={decision.status} />
       </div>
       <h4>{decision.request.question}</h4>
@@ -107,9 +130,11 @@ export function Answer({ run }: { run: Candidate }) {
         <pre className="context-text">{decision.request.context}</pre>
       )}
       <p className="muted">
-        {requiresAnswer(run)
-          ? "回答后按原问题继续。"
-          : "可选反馈；等待 PR 合并不要求继续执行。"}
+        {!businessOpen(run)
+          ? "候选已结束，问题与回答仅供回看。"
+          : requiresAnswer(run)
+            ? "回答后按原问题继续。"
+            : "可选反馈；等待 PR 合并不要求继续执行。"}
       </p>
       {decision.status === "pending" && businessOpen(run) && (
         <>
@@ -158,7 +183,14 @@ export function Answer({ run }: { run: Candidate }) {
               <div className="input-footer">
                 <span>Enter 换行 · 点击提交 · 绑定原候选与问题</span>
                 <div className="actions">
-                  <Button onClick={() => setOpened(false)}>收起</Button>
+                  <Button
+                    onClick={() => {
+                      eligibility.current?.abort();
+                      setOpened(false);
+                    }}
+                  >
+                    收起
+                  </Button>
                   <Button
                     variant="default"
                     disabled={

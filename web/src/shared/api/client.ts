@@ -153,6 +153,7 @@ export class Api {
     return result;
   }
   async submit(envelope: Envelope) {
+    envelope = structuredClone(envelope);
     this.validate(envelope);
     return this.locked(
       "target/" +
@@ -191,13 +192,18 @@ export class Api {
         }),
     );
   }
-  async reconcile(envelope: Envelope) {
+  async reconcile(envelope: Envelope, signal?: AbortSignal) {
+    envelope = structuredClone(envelope);
     this.validate(envelope);
-    return this.locked(envelope.request_id, () =>
-      this.reconcileUnlocked(envelope),
-    );
+    return this.locked(envelope.request_id, () => {
+      signal?.throwIfAborted();
+      return this.reconcileUnlocked(envelope, signal);
+    });
   }
-  private async reconcileUnlocked(envelope: Envelope): Promise<Receipt> {
+  private async reconcileUnlocked(
+    envelope: Envelope,
+    signal?: AbortSignal,
+  ): Promise<Receipt> {
     const stored = await requestByID(envelope.request_id);
     if (!stored || canonical(stored.envelope) !== canonical(envelope))
       throw new Error("找不到匹配的完整原信封，禁止补交");
@@ -209,14 +215,18 @@ export class Api {
     try {
       const result = await this.get<Receipt>(
         "/commands/" + envelope.request_id,
+        signal,
       );
+      signal?.throwIfAborted();
       if (!matches(result, envelope)) throw new Error("对账回执与原信封不匹配");
       await recordResult(envelope.request_id, result);
       return result;
     } catch (error) {
       if (error instanceof ApiError && error.code === "command_not_found") {
+        signal?.throwIfAborted();
         return this.post(envelope);
       }
+      if (signal?.aborted) throw error;
       await recordResult(envelope.request_id, undefined, String(error));
       throw error;
     }
@@ -243,8 +253,11 @@ export class Api {
     }
     const bodies: FinalReply["bodies"] = [];
     const events: Conversation["events"] = [];
+    const cursors = new Set<string>();
     let cursor = "";
     do {
+      if (cursors.has(cursor)) throw new Error("最终回复分页游标重复");
+      cursors.add(cursor);
       const response = await this.get<{ page: Conversation }>(
         "/runs/" +
           run.run_id +
@@ -260,8 +273,14 @@ export class Api {
       );
       events.push(...response.page.events);
       for (const event of response.page.events)
-        if (event.body)
+        if (event.body) {
+          if (
+            event.body.execution_id !== run.execution_id ||
+            event.body.attempt_id !== run.attempt_id
+          )
+            throw new Error("最终回复正文属于其他执行或 Attempt");
           bodies.push(await this.body(run.run_id, event.body, signal));
+        }
       if (response.page.has_more && !response.page.next_cursor)
         throw new Error("最终回复分页没有继续游标");
       cursor = response.page.has_more ? (response.page.next_cursor ?? "") : "";
@@ -310,6 +329,7 @@ export class Api {
         page.offset !== offset ||
         page.total_bytes !== ref.bytes ||
         page.next_offset < offset ||
+        page.next_offset > ref.bytes ||
         (page.next_offset === offset && page.total_bytes !== offset)
       )
         throw new Error("正文身份/分页已变化");

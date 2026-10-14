@@ -22,7 +22,7 @@
 | 本机持久草稿与请求 | IndexedDB | 保存按原身份绑定的未发送输入与完整原命令信封，保留回执未知时的对账依据 |
 | 最小验证工具 | Vitest + Testing Library；Playwright | 关键状态/目标绑定组件测试，以及本机真实浏览器定向接线场景 |
 
-工程建议位于 `web/`，按 `app/`、`shared/ui/`、`shared/api/`、`features/` 组织；先按真实职责划分，不预建所有未来模块。DTO/请求编码在 API 层维护，页面不各自拼接协议。正式实现时核对 Go 实际 JSON 字段、分页和错误码，不能仅复制 Go 字段名或使用原型模拟结构。
+工程位于 `web/`，按 `app/`、`shared/ui/`、`shared/api/`、`features/` 组织。浏览器服务归 `web/server`；DTO/请求编码在 API 层维护，页面消费 Go 实际 JSON 字段、分页和错误码。
 
 本产品以本机交互和已有 Go 服务为中心，采用客户端 SPA 即可。运行时只需要 Go 服务和浏览器，Node.js 用于开发与构建。首期不需要 SSR、Next.js 或常驻 Node 后端；生产静态产物建议嵌入 Go 发布包，接入现有发布/调试生成流程。
 
@@ -32,9 +32,9 @@
 
 现有 `httpapi.Server.ServeHTTP` 拒绝所有非空 Origin；协议要求读取受当前 Windows 用户保护的 discovery/credential 文件。浏览器不能直接复用 TUI 的文件发现与凭证读取，单纯增加 Vite proxy 不能构成正式浏览器认证方案。
 
-建议由同一 Go 服务提供独立浏览器 handler、静态页面和同源浏览器 API，消费既有产品端口与命令权威；TUI 的本机协议保持独立。该 handler 不建立第二个业务服务、数据库或调度器。
+由同一 Go 服务提供独立浏览器 handler、静态页面和同源浏览器 API，复用既有 native HTTP 客户端与命令权威；TUI 的本机协议保持独立。该 handler 不建立第二个业务服务、数据库或调度器。
 
-浏览器入口需具备以下契约，正式 Spec/Plan 再固定路由、配置及实现细节：
+浏览器入口遵循以下契约；路由、配置及实现细节归上述 Spec/Plan：
 
 - 固定到 `127.0.0.1` 的受配置稳定地址，严格核验 Host。当前 native API 的随机端口发现可保留；Web Origin 应在服务重启后稳定，否则 IndexedDB 中的原请求和草稿不能由新 Origin 读取。端口冲突如实失败，不静默换地址丢失恢复入口。
 - 由本机启动/打开入口完成受控首次授权，建立绑定服务实例的浏览器会话；建议 HttpOnly、SameSite cookie 配合写操作的 Origin/CSRF 校验。原生 Bearer 凭证不进入页面脚本、localStorage、日志或普通 URL。不能因为来自 loopback 就免认证。

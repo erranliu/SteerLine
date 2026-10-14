@@ -124,6 +124,44 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("immutable browser requests", () => {
+  it("snapshots caller-owned data before waiting for a lock or persistence", async () => {
+    const original = structuredClone(envelope);
+    const fetch = vi.fn(async (_path, init) => {
+      expect(JSON.parse(init.body)).toEqual(original);
+      return response({
+        ...original,
+        original,
+        status: "applied",
+        sampled_at: "now",
+      });
+    });
+    vi.stubGlobal("fetch", fetch);
+    const sending = api.submit(envelope);
+    envelope.target_id = "changed-after-submit";
+    envelope.payload.execution_profile_id = "changed-profile";
+    await sending;
+    expect((await journal.requestByID(original.request_id))?.envelope).toEqual(
+      original,
+    );
+  });
+  it("does not replay authoritative absence after reconciliation is cancelled", async () => {
+    await journal.saveRequest(envelope);
+    let resolve!: (value: Response) => void;
+    const fetch = vi.fn(
+      () =>
+        new Promise<Response>((done) => {
+          resolve = done;
+        }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const controller = new AbortController();
+    const reconciling = api.reconcile(envelope, controller.signal);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    controller.abort();
+    resolve(response({ code: "command_not_found" }, 404));
+    await expect(reconciling).rejects.toThrow();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
   it("commits the whole envelope before POST, preserving target and version", async () => {
     vi.stubGlobal(
       "fetch",
@@ -240,6 +278,31 @@ describe("immutable browser requests", () => {
     ).toBe("applied");
   });
 });
+
+it.each(["foreign-attempt", "repeated-cursor"])(
+  "rejects invalid final pagination: %s",
+  async (reason) => {
+    const fetch = vi.fn(async (path: string) =>
+      path.endsWith("/final")
+        ? response({ code: "response_too_large" }, 413)
+        : response({
+            page: {
+              events:
+                reason === "foreign-attempt"
+                  ? [{ body: { execution_id: "exec", attempt_id: "foreign" } }]
+                  : [],
+              has_more: true,
+              next_cursor: "same",
+            },
+          }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    await expect(
+      api.final({ run_id: "run", execution_id: "exec", attempt_id: "attempt" }),
+    ).rejects.toThrow(reason === "foreign-attempt" ? "其他执行" : "游标重复");
+    expect(fetch).toHaveBeenCalledTimes(reason === "foreign-attempt" ? 2 : 3);
+  },
+);
 
 it("blocks a replacement request while the original target is uncertain", async () => {
   await journal.saveRequest(envelope);

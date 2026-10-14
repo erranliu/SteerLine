@@ -34,8 +34,8 @@ steerline web -config <项目配置>
 
 ```powershell
 npm --prefix web test
-go run ./cmd/test-feedback -- ./web/server ./internal/product/httpapi -count=1
-# Go 的固定 L1 已登记 quick-owner-web。
+go run ./cmd/test-feedback -- ./web/server ./internal/product/httpapi ./internal/product/httpclient -count=1
+# Go 的固定 L1 已登记 quick-owner-web 和 quick-owner-http-budget。
 go run ./cmd/test-feedback -level=L1
 ```
 
