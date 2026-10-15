@@ -25,7 +25,7 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 当前业务消费链为 `TUI → httpclient/httpcontract → HTTP → httpapi → product/client → Go 任务/执行应用与只读查询`。`consoleapp` 独立组装 TUI 连接；`app` 组装服务、SQLite 和具体执行 adapter。CLI 的内部 Go 产品客户端仍是另一种调用入口，不能据此声称全部 CLI 已经 HTTP 化。现有解耦程度及后续建议见[源码边界评估](architecture/current-code-architecture.md#http-接入后的解耦评估与建议)。
 
-本机 Web 消费链为 `React SPA → 同源浏览器会话/CSRF → web/server → 原 httpclient → native HTTP API`。浏览器入口使用项目配置 `web_address` 的稳定 loopback 地址，原 native endpoint 仍为随机端口、当前用户 Bearer 和无 Origin。两个入口在同一 Go 服务内启动/关闭；Web 不组装业务库或调度器。私有打开凭证放应用 home 的 `ui/web/<project_id>/`，CLI 与原 native discovery 核对实例后签发短票据。客户端 IndexedDB 只保存原信封、回执观察和输入草稿。契约与非目标见[Web Spec](spec/web-frontend.spec.md)。
+本机 Web 消费链为 `React SPA → 同源浏览器会话/CSRF → steerline-web → Go 应用服务 → 原 httpclient → 项目 native HTTP API`。独立 Web 程序从应用 home 的 `web.json` 读取稳定 loopback 地址，应用入口与项目 native endpoint 分别使用随机端口、当前用户 Bearer 和无 Origin。Web、应用服务和各项目服务独立启动/关闭；Web 不组装业务库或调度器。应用 discovery 位于 `<home>/application-api/`，Web 打开凭证位于 `<home>/ui/web/`，CLI 核对精确实例后签发短票据。客户端按 home、项目及实例隔离原信封、回执观察和输入草稿。契约与非目标见[独立 Web 与项目切换 Spec](spec/web-project-switch.spec.md)。
 
 ## 执行与交付
 

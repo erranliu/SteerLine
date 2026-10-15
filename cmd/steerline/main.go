@@ -28,13 +28,23 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|task|answer|home|install|launchers> [-config config.json]")
+		return fmt.Errorf("usage: steerline <console|serve-app|stop-app|run|start-service|stop-service|check|control|task|answer|home|install|launchers> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
 	}
-	if os.Args[1] == "web" {
-		return runWeb(os.Args[2:])
+	if os.Args[1] == "serve-app" || os.Args[1] == "stop-app" {
+		if len(os.Args) != 2 {
+			return errors.New("application service takes no project arguments")
+		}
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		if os.Args[1] == "serve-app" {
+			return steerlineapp.ServeApplication(ctx)
+		}
+		ctx, timeout := context.WithTimeout(ctx, 45*time.Second)
+		defer timeout()
+		return steerlineapp.StopApplication(ctx)
 	}
 	if os.Args[1] == "console" {
 		return runConsoleCommand(os.Args[2:])

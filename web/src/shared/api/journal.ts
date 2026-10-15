@@ -1,9 +1,18 @@
 import type { Envelope, Receipt, StoredRequest } from "./types";
 
 let database: Promise<IDBDatabase> | undefined;
+let home = "";
+export function setJournalHome(value: string) {
+  if (home !== value) {
+    database?.then((db) => db.close());
+    database = undefined;
+    home = value;
+  }
+}
+
 export function openJournal() {
   return (database ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open("steerline-web", 1);
+    const req = indexedDB.open("steerline-web" + (home ? ":" + home : ""), 1);
     req.onupgradeneeded = () => {
       req.result.createObjectStore("requests", {
         keyPath: "envelope.request_id",
@@ -94,6 +103,24 @@ export async function requestByID(id: string) {
       req.onsuccess = () => done(req.result);
     },
   );
+}
+// Only the sender holding the original request lock may discard its fresh row
+// before any POST has started. Submitted or uncertain requests remain immutable.
+export async function discardUnsentRequest(envelope: Envelope) {
+  return transaction<void>("requests", "readwrite", (store, done) => {
+    const req = store.get(envelope.request_id);
+    req.onsuccess = () => {
+      const row = req.result as StoredRequest | undefined;
+      if (
+        row &&
+        !row.response &&
+        !row.error &&
+        canonical(row.envelope) === canonical(envelope)
+      )
+        store.delete(envelope.request_id);
+      done();
+    };
+  });
 }
 export async function listRequests() {
   return transaction<StoredRequest[]>("requests", "readonly", (store, done) => {

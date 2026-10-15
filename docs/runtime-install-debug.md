@@ -14,7 +14,7 @@
 
 ## 执行方案
 
-`debug-template/home/execution.json` 是执行方案复制源，默认 live，含显式 simulate；模型、effort、worker 配置在这里维护。对应项目/Git/PR 配置由 `home/etc/SteerlineTest.live.json` 和 `.simulate.json` 维护，路径占位符只在生成时替换。运行封装只选择已有方案、解析工具位置，不拼装第二套执行参数。包内 `home/execution.source.json` 保留完整生成配置；首次选择后，活动配置只暴露所选方案，防止混用 provider。
+`debug-template/home/execution.json` 是执行方案复制源，默认 live，含显式 simulate；模型、effort、worker 配置在这里维护。对应项目/Git/PR 配置由 `home/config-source/SteerlineTest.live.json` 和 `.simulate.json` 维护，路径占位符只在生成时替换。运行封装只选择已有方案、解析工具位置，不拼装第二套执行参数。包内 `home/execution.source.json` 保留完整生成配置；首次选择后，活动配置只暴露所选方案，防止混用 provider。
 
 ```powershell
 & 'C:\SteerlineDebug\<版本目录>\start.bat'
@@ -65,3 +65,13 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 ## 安装版人工更新
 
 更新安装版前先结算外部 worker/PR/会话事实，停止服务，再替换安装 exe；不要用调试包接管安装版活动执行，不迁移或清空旧数据库。此操作独立于调试环境生成。
+
+## 独立 Web 与双项目包
+
+运行 `./build.ps1 -Web` 构建 `bin/steerline.exe` 和 `bin/steerline-web.exe`，只有 Web exe 嵌入页面；普通 `./build.ps1` 无 Node 前置。分别执行两份 exe 的 `install`，目标均为显式 `STEERLINE_HOME/bin`，运行中的对应目标拒绝替换；一份成功不代表另一份已安装。`steerline launchers` 安装独立的 start-app/stop-app、start-web/stop-web、web 打开入口，项目仍由 service-window 启动。
+
+`<home>/web.json` 保存 `{ "version": 1, "address": "127.0.0.1:18742" }`。项目配置删除 `web_address`，旧按项目托管和 `steerline web -config` 已删除，旧配置需显式更新，不迁移。按顺序启动 `steerline serve-app`、`steerline-web serve`，再用 `steerline-web open [-project <id>]` 打开浏览器。两个停止命令仅停止各自实例，不停止项目服务/worker。
+
+生成 `./scripts/new-debug-release.ps1 -WebAddress 127.0.0.1:<固定空闲端口> -WebProjects 2` 可取得同一 home 下的两个独立 SteerlineTest 仓库/common-dir、provider 和双 exe。第二份是独立 clone，不是 linked worktree；两份配置源均在 config-source，etc 只放活动项目配置。启动仍用新包 `start.bat --simulate`；默认 live 与首次方案冻结规则保持。Web 包启动器分别启动应用、Web 和项目进程，独立 Web 重启使用本包的 Web exe；换源码或方案重新生成。
+
+定向真实 Edge 场景使用 `STEERLINE_WEB_PACKAGE=<全新双项目包>` 后运行 `npm --prefix web run test:e2e -- project-switch.spec.ts`。单项目 smoke 使用另一新包并按 [Web 指南](../web/README.md)设置环境。浏览器测试只模拟外部模型/PR 协议，仍运行真实 Go/SQLite/Git/Edge；结果与清理登记于[专属验收](acceptance/web-project-switch.md)。

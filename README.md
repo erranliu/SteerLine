@@ -14,6 +14,10 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 在 Windows 上，双击仓库根目录的 `build.bat` 即可构建；窗口会显示结果并等待按键关闭。命令行可运行 `./build.ps1`，或调用 `build.bat --no-pause`。脚本从仓库根目录构建 `cmd/steerline`，固定输出到 `bin/steerline.exe`；构建失败时保留原文件，目标程序仍在运行时拒绝替换。此命令只生成本地二进制，不安装到 `STEERLINE_HOME`，也不切换运行中的服务。安装与源码调试共存的近期范围见[RoadmapGuide](docs/roadmap/RoadmapGuide.md) · [正式执行清单](docs/roadmap/execution-map.md)；完整 stable/dev 版本管理已移出当前规划。
 
+## 本机 Web
+
+`./build.ps1 -Web` 生成 `steerline.exe` 和独立 `steerline-web.exe`，仅 Web 程序嵌入页面。显式设置 `STEERLINE_HOME` 后，分别启动 `steerline serve-app`、`steerline-web serve`，用 `steerline-web open` 授权打开；项目服务通过原生入口独立启动。固定浏览器地址放在 `<home>/web.json`，同一地址可切换该 home 已配置项目，关闭 Web 不停止业务服务或 worker。调试仍先生成新包，详见 [Web 指南](web/README.md)。
+
 ## 执行控制台
 
 临时或 AI 调试统一运行 `./scripts/new-debug-release.ps1`，复制 `debug-template/` 并生成 `C:\SteerlineDebug` 下的完整独立 SteerlineTest 环境。执行配置在复制源维护，默认 live；AI 显式使用 `start.bat --simulate` / `console.bat --simulate`。任务状态通过包内 `reset-SteerlineTest.bat` 无备份重置，不使用安装环境。操作见[安装与调试](docs/runtime-install-debug.md)。

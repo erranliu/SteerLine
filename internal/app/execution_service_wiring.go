@@ -84,8 +84,6 @@ func serviceReadyDiagnostic(service *execution.Service) string {
 }
 
 type serviceLocalAPI struct {
-	webAddress   string
-	web          *serviceWeb
 	mu           sync.Mutex
 	product      *productclient.Client
 	runDir       string
@@ -121,9 +119,6 @@ func (s *serviceLocalAPI) Publish(instance string, process *executionbackend.Pro
 	if err := s.endpoint.SetReady(instance, ready, diagnostic); err != nil {
 		return err
 	}
-	if err := s.startWeb(); err != nil {
-		return err
-	}
 	s.published, s.ready, s.diagnostic = true, ready, diagnostic
 	return nil
 }
@@ -131,19 +126,14 @@ func (s *serviceLocalAPI) Publish(instance string, process *executionbackend.Pro
 func (s *serviceLocalAPI) Close(ctx context.Context) error {
 	s.mu.Lock()
 	endpoint := s.endpoint
-	web := s.web
-	s.web = nil
 	s.endpoint = nil
 	s.published = false
 	s.mu.Unlock()
-	var webErr, apiErr error
-	if web != nil {
-		webErr = web.Close(ctx)
-	}
+	var apiErr error
 	if endpoint != nil {
 		apiErr = endpoint.Close(ctx)
 	}
-	return errors.Join(webErr, apiErr)
+	return apiErr
 }
 
 type serviceHTTPHost struct {

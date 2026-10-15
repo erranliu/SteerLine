@@ -1,4 +1,4 @@
-param()
+param([switch]$Web)
 
 $ErrorActionPreference = 'Stop'
 
@@ -86,7 +86,7 @@ function Assert-SourceBuildPath([string]$Path, [string]$Description) {
 
 function Assert-OutputNotRunning {
     $target = Resolve-CanonicalPath $output
-    $running = Get-Process -Name steerline -ErrorAction SilentlyContinue |
+    $running = Get-Process -Name ([IO.Path]::GetFileNameWithoutExtension($output)) -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -and [string]::Equals((Resolve-CanonicalPath $_.Path), $target, [StringComparison]::OrdinalIgnoreCase) }
     if ($running) {
         throw "Cannot replace running executable $target (PID: $($running.Id -join ', ')). Stop it first."
@@ -168,5 +168,51 @@ try {
     if (Test-Path -LiteralPath $temp) {
         Assert-SourceBuildPath $temp 'temporary file'
         Remove-Item -LiteralPath $temp -Force
+    }
+}
+
+if ($Web) {
+    foreach ($webPath in @('web','web\server','web\server\dist','web\node_modules')) {
+        Assert-SourceBuildPath (Join-Path $sourceRoot $webPath) 'Web build path'
+    }
+    Push-Location (Join-Path $sourceRoot 'web')
+    try {
+        & npm ci
+        if ($LASTEXITCODE -ne 0) { throw 'Web npm install failed; business executable was built' }
+        & npm run build
+        if ($LASTEXITCODE -ne 0) { throw 'Web assets failed; business executable was built' }
+    } finally { Pop-Location }
+    $output = Join-Path $binDir 'steerline-web.exe'
+    $temp = Join-Path $binDir ('.steerline-web-build-' + [guid]::NewGuid().ToString('N') + '.exe')
+    Assert-SourceBuildPath $output 'Web output file'
+    Assert-SourceBuildPath $temp 'Web temporary file'
+    Assert-OutputNotRunning
+    try {
+        Push-Location $sourceRoot
+        try {
+            & go build -trimpath -tags webui -o $temp ./cmd/steerline-web
+            if ($LASTEXITCODE -ne 0) { throw 'Web executable build failed; business executable was built' }
+        } finally { Pop-Location }
+        Assert-SourceBuildPath $output 'Web output file'
+        Assert-SourceBuildPath $temp 'Web temporary file'
+        Assert-OutputNotRunning
+        if (Test-Path -LiteralPath $output) {
+            $webBackup = Join-Path $binDir ('.steerline-web-previous-' + [guid]::NewGuid().ToString('N') + '.exe')
+            Assert-SourceBuildPath $webBackup 'Web backup file'
+            try {
+                [IO.File]::Replace($temp, $output, $webBackup)
+            } finally {
+                if (Test-Path -LiteralPath $webBackup) {
+                    Assert-SourceBuildPath $webBackup 'Web backup file'
+                    Remove-Item -LiteralPath $webBackup -Force
+                }
+            }
+        } else { [IO.File]::Move($temp, $output) }
+        Write-Output "Built $output"
+    } finally {
+        if (Test-Path -LiteralPath $temp) {
+            Assert-SourceBuildPath $temp 'Web temporary file'
+            Remove-Item -LiteralPath $temp -Force
+        }
     }
 }

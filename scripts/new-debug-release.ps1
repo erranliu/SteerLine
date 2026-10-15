@@ -1,6 +1,7 @@
 ﻿param(
     [string]$DebugRoot = 'C:\SteerlineDebug',
     [string]$WebAddress = '',
+    [ValidateSet(1,2)][int]$WebProjects = 1,
     [switch]$Orca,
     [string]$OrcaEnvironment = 'name:台式机64G',
     [string]$OrcaAgent = 'codex',
@@ -10,6 +11,7 @@
     [ValidateSet('','high','xhigh')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
+if ($WebProjects -eq 2 -and -not $WebAddress) { throw 'WebProjects 2 requires WebAddress' }
 if ($WebAddress -and ($WebAddress -notmatch '^127\.0\.0\.1:([1-9][0-9]{0,4})$' -or [int]$Matches[1] -gt 65535)) { throw 'WebAddress must be a fixed 127.0.0.1:<1..65535>' }
 
 function Assert-PlainPath([string]$Path) {
@@ -74,7 +76,7 @@ try {
     $packageAcl.SetAccessRule($packageRule)
     Set-Acl -LiteralPath $target -AclObject $packageAcl
     foreach ($item in Get-ChildItem -LiteralPath $template -Force) { Copy-Item -LiteralPath $item.FullName -Destination $target -Recurse }
-    foreach ($dir in @('bin', 'logs', 'evidence', 'provider', 'remotes', 'home\temp', 'home\codex', 'home\gh', 'home\state', 'home\ui\views')) {
+    foreach ($dir in @('bin', 'logs', 'evidence', 'provider', 'provider-b', 'remotes', 'home\temp', 'home\codex', 'home\gh', 'home\state', 'home\ui\views', 'home\etc')) {
         New-Item -ItemType Directory -Path (Join-Path $target $dir) -Force | Out-Null
     }
     $rootText = $target.Replace('\', '/')
@@ -117,6 +119,8 @@ try {
         $manifest.execution_host='orca'
         $manifest.execution_environment=$OrcaEnvironment
     }
+    $manifest.web_projects = $WebProjects
+    Write-Manifest
     $manifest.template_sha256 = $templateHashes
     $manifest.generator_sha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
     $savedGoFlags = $env:GOFLAGS
@@ -127,6 +131,9 @@ try {
         $ldflags = "-X github.com/erranliu/SteerLine/internal/app.buildSourceCommit=$commit -X github.com/erranliu/SteerLine/internal/app.buildSourceDirty=$dirtyText"
         $productBuildArgs = @('build', '-trimpath', '-ldflags', $ldflags)
         if ($WebAddress) {
+            foreach ($webPath in @('web','web\server','web\server\dist','web\node_modules')) {
+                Assert-PlainPath (Join-Path $repo $webPath)
+            }
             $webSeedPath = Join-Path $target 'seed\provider.json'
             $webSeed = [IO.File]::ReadAllText($webSeedPath) | ConvertFrom-Json
             $webSeed.web_feedback = $true
@@ -138,7 +145,10 @@ try {
                 & npm run build *> (Join-Path $target 'evidence\build-web.log')
                 if ($LASTEXITCODE -ne 0) { throw 'Web build failed; see evidence/build-web.log' }
             } finally { Pop-Location }
-            $productBuildArgs += @('-tags', 'webui')
+            & go build -trimpath -tags webui -ldflags $ldflags -o (Join-Path $target 'bin\steerline-web.exe') ./cmd/steerline-web
+            if ($LASTEXITCODE -ne 0) { throw 'Web executable build failed' }
+            $manifest.web_projects = $WebProjects
+            [IO.File]::WriteAllText((Join-Path $target 'home\web.json'), (@{version=1;address=$WebAddress} | ConvertTo-Json), $utf8)
             $manifest.web_address = $WebAddress
         }
         $productBuildArgs += @('-o', (Join-Path $target 'bin\steerline.exe'), './cmd/steerline')
@@ -147,9 +157,39 @@ try {
         & go build -trimpath -o (Join-Path $target 'bin\debug-helper.exe') ./tests/e2e/testdata/debug-helper 2> (Join-Path $target 'evidence\build-helper.log')
         if ($LASTEXITCODE -ne 0) { throw 'Helper build failed; see evidence/build-helper.log' }
     } finally { Pop-Location; $env:GOFLAGS = $savedGoFlags }
-    Copy-Item -LiteralPath (Join-Path $target 'home\etc\SteerlineTest.live.json') -Destination (Join-Path $target 'home\etc\SteerlineTest.json')
+    if (-not $WebAddress) { Remove-Item -LiteralPath (Join-Path $target 'home\web.json') }
+    Copy-Item -LiteralPath (Join-Path $target 'home\config-source\SteerlineTest.live.json') -Destination (Join-Path $target 'home\etc\SteerlineTest.json')
     & (Join-Path $target 'bin\debug-helper.exe') debug init *> (Join-Path $target 'evidence\init.log')
     if ($LASTEXITCODE -ne 0) { throw 'Debug initialization failed; see evidence/init.log' }
+    if ($WebProjects -eq 2) {
+        & git clone --quiet --no-hardlinks (Join-Path $target 'projects\SteerlineTest') (Join-Path $target 'projects\SteerlineTestB')
+        if ($LASTEXITCODE -ne 0) { throw 'Second independent clone failed' }
+        & git -C (Join-Path $target 'projects\SteerlineTestB') remote set-url origin 'https://github.com/erranliu/SteerlineTest.git'
+        & git -C (Join-Path $target 'projects\SteerlineTestB') checkout --quiet -b ($baseBranch + '-b')
+        if ($LASTEXITCODE -ne 0) { throw 'Second base branch failed' }
+        foreach ($key in @(@('user.name','SteerLine Debug'),@('user.email','debug@example.invalid'),@('commit.gpgsign','false'),@('core.autocrlf','false'),@('gc.auto','0'))) {
+            & git -C (Join-Path $target 'projects\SteerlineTestB') config $key[0] $key[1]
+            if ($LASTEXITCODE -ne 0) { throw 'Second clone configuration failed' }
+        }
+        foreach ($name in @('AGENTS.md','publish.ps1','docs\spec\task.spec.md','docs\spec\task.plan.md')) {
+            $material = Join-Path $target ('projects\SteerlineTestB\' + $name)
+            $content = [IO.File]::ReadAllText($material).Replace($baseBranch,($baseBranch + '-b'))
+            $encoding = if ($name.EndsWith('.ps1')) { New-Object Text.UTF8Encoding $true } else { $utf8 }
+            [IO.File]::WriteAllText($material,$content,$encoding)
+        }
+        & git -C (Join-Path $target 'projects\SteerlineTestB') add .
+        & git -C (Join-Path $target 'projects\SteerlineTestB') commit --quiet --allow-empty -m 'Bind second SteerlineTest fixture base'
+        if ($LASTEXITCODE -ne 0) { throw 'Second clone contract commit failed' }
+        foreach ($mode in @('live','simulate')) {
+            $content = [IO.File]::ReadAllText((Join-Path $target "home\config-source\SteerlineTest.$mode.json"))
+            $content = $content.Replace('/projects/SteerlineTest','/projects/SteerlineTestB').Replace('/home/worktrees','/home/worktrees-b').Replace('/provider/state.json','/provider-b/state.json').Replace($baseBranch,($baseBranch + '-b'))
+            [IO.File]::WriteAllText((Join-Path $target "home\config-source\SteerlineTestB.$mode.json"), $content, $utf8)
+        }
+        Copy-Item -LiteralPath (Join-Path $target 'home\config-source\SteerlineTestB.live.json') -Destination (Join-Path $target 'home\etc\SteerlineTestB.json')
+        & (Join-Path $target 'bin\debug-helper.exe') debug init-b *> (Join-Path $target 'evidence\init-b.log')
+        if ($LASTEXITCODE -ne 0) { throw 'Second project initialization failed; see evidence/init-b.log' }
+    }
+    if ($WebAddress) { $manifest.web_binary_sha256 = (Get-FileHash -LiteralPath (Join-Path $target 'bin\steerline-web.exe')).Hash.ToLowerInvariant() }
     $manifest.binary_sha256 = (Get-FileHash -LiteralPath (Join-Path $target 'bin\steerline.exe')).Hash.ToLowerInvariant()
     $manifest.helper_sha256 = (Get-FileHash -LiteralPath (Join-Path $target 'bin\debug-helper.exe')).Hash.ToLowerInvariant()
     $manifest.status = 'ready'

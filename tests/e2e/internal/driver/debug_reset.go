@@ -20,36 +20,69 @@ import (
 var debugHistory = []string{"decision_answers", "decisions", "task_deliveries", "task_results", "conversation_events", "conversation_bodies", "conversation_source_cursors", "step_attempts", "executions", "workflow_runs", "events", "operations", "commands", "projection"}
 
 func (d *debugRelease) reset(check bool) error {
-	var locks []*host.RepoLock
-	defer func() {
-		for i := len(locks) - 1; i >= 0; i-- {
-			locks[i].Close()
-		}
-	}()
-	runDir := d.stateDir()
-	lockDirs := []string{d.root, filepath.Join(d.repo, ".git"), runDir}
-	if _, err := os.Stat(filepath.Join(d.root, "runtime")); err == nil {
-		lockDirs = append(lockDirs, filepath.Join(d.root, "runtime"))
+	scopes := []*debugRelease{d}
+	if d.webProjects == 2 {
+		scopes = append(scopes, d.secondary())
 	}
 	viewRoot := filepath.Join(d.home, "ui", "views")
 	views, err := os.ReadDir(viewRoot)
 	if err != nil {
 		return err
 	}
-	for _, v := range views {
-		if v.IsDir() {
-			lockDirs = append(lockDirs, filepath.Join(viewRoot, v.Name()))
+	dirs := []string{d.root}
+	if _, err := os.Stat(filepath.Join(d.root, "runtime-launcher")); err == nil {
+		dirs = append(dirs, filepath.Join(d.root, "runtime-launcher"))
+	}
+	for _, scope := range scopes {
+		dirs = append(dirs, filepath.Join(scope.repo, ".git"), scope.stateDir())
+		runtimeDir := filepath.Join(d.root, "runtime"+scope.suffix())
+		if _, err := os.Stat(runtimeDir); err == nil {
+			dirs = append(dirs, runtimeDir)
 		}
 	}
-	for _, dir := range lockDirs {
+	for _, dir := range []string{filepath.Join(d.home, "application-api"), filepath.Join(d.home, "ui", "web")} {
+		if _, err := os.Stat(dir); err == nil {
+			dirs = append(dirs, dir)
+		}
+	}
+	for _, view := range views {
+		if view.IsDir() {
+			dirs = append(dirs, filepath.Join(viewRoot, view.Name()))
+		}
+	}
+	var locks []*host.RepoLock
+	defer func() {
+		for i := len(locks) - 1; i >= 0; i-- {
+			locks[i].Close()
+		}
+	}()
+	for _, dir := range dirs {
 		lock, err := host.LockRepository(dir)
 		if err != nil {
-			return fmt.Errorf("close this debug service, workers and consoles before reset: %w", err)
+			return fmt.Errorf("close this debug service, Web, application gateway, workers and consoles before reset: %w", err)
 		}
 		locks = append(locks, lock)
 	}
+	for _, scope := range scopes {
+		if err = scope.resetState(true, views); err != nil {
+			return err
+		}
+	}
+	if check {
+		return nil
+	}
+	for _, scope := range scopes {
+		if err = scope.resetState(false, views); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (d *debugRelease) resetState(check bool, views []os.DirEntry) error {
+	runDir := d.stateDir()
+	viewRoot := filepath.Join(d.home, "ui", "views")
 	dbPath := filepath.Join(runDir, "steerline.db")
-	if _, err = os.Stat(dbPath); err != nil {
+	if _, err := os.Stat(dbPath); err != nil {
 		return err
 	}
 	db, err := sql.Open("sqlite", dbPath)

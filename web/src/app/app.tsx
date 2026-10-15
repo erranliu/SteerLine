@@ -2,9 +2,11 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
   useSyncExternalStore,
+  useRef,
 } from "react";
 import {
   onlineManager,
@@ -12,7 +14,14 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { NavLink, Routes, Route, Navigate } from "react-router-dom";
+import {
+  NavLink,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import {
   GitBranch,
   Layers,
@@ -24,7 +33,13 @@ import {
 } from "lucide-react";
 import { Api, ApiError, json } from "../shared/api/client";
 import { listRequests } from "../shared/api/journal";
-import type { Identity, Snapshot, StoredRequest } from "../shared/api/types";
+import type {
+  Identity,
+  Snapshot,
+  StoredRequest,
+  BrowserSession,
+  ConfiguredProject,
+} from "../shared/api/types";
 import { WorkspaceContext } from "./context";
 import { Button } from "../shared/ui/button";
 import { Dispatch } from "../features/tasks/dispatch";
@@ -52,7 +67,7 @@ function Operations({
   const reconcile = useMutation({
     mutationFn: (row: StoredRequest) => api.reconcile(row.envelope),
     onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: ["local-requests"] }),
+      queryClient.invalidateQueries({ queryKey: [api.home, "local-requests"] }),
     onError: (error) => onError(String(error)),
   });
   return requests.length ? (
@@ -94,11 +109,7 @@ function Operations({
               !["applied", "rejected"].includes(row.response.status)) && (
               <Button
                 size="sm"
-                disabled={
-                  !online ||
-                  reconcile.isPending ||
-                  row.envelope.instance_id !== api.identity.instance_id
-                }
+                disabled={!online || reconcile.isPending}
                 onClick={() => reconcile.mutate(row)}
               >
                 查询原请求
@@ -112,6 +123,7 @@ function Operations({
 function SettingsPage({ api }: { api: Api }) {
   const result = useQuery({
     queryKey: [
+      api.home,
       api.identity.project_id,
       api.identity.instance_id,
       "presentation",
@@ -177,10 +189,18 @@ function SettingsPage({ api }: { api: Api }) {
     </>
   );
 }
-export function App({
+export function Workspace({
   initial,
+  connected: applicationConnected = true,
+  home = "",
+  switcher,
+  connectionError,
 }: {
   initial: { csrf_token: string; identity: Identity };
+  connected?: boolean;
+  home?: string;
+  switcher?: React.ReactNode;
+  connectionError?: unknown;
 }) {
   const queries = useQueryClient();
   const [error, setError] = useState("");
@@ -190,22 +210,23 @@ export function App({
     () => onlineManager.isOnline(),
   );
   const [collapsed, setCollapsed] = useState(false);
-  const session = useQuery({
-    queryKey: ["browser-session"],
-    queryFn: () =>
-      json<{ csrf_token: string; identity: Identity }>("/auth/status"),
-    initialData: initial,
-    refetchInterval: 2500,
-    retry: false,
-  });
-  const identity = session.data.identity;
+  const session = {
+    data: initial,
+    isError: !applicationConnected,
+    error: connectionError,
+  };
+  const identity = initial.identity;
   const api = useMemo(
-    () => new Api(identity, session.data.csrf_token),
-    [identity.project_id, identity.instance_id, session.data.csrf_token],
+    () => new Api(identity, initial.csrf_token, home),
+    [identity.project_id, identity.instance_id, initial.csrf_token, home],
   );
-  const connected = !session.isError && identity.ready;
+  useLayoutEffect(() => {
+    api.activate();
+    return () => api.deactivate();
+  }, [api]);
+  const connected = applicationConnected && identity.ready;
   const snapshot = useQuery({
-    queryKey: [identity.project_id, identity.instance_id, "snapshot"],
+    queryKey: [home, identity.project_id, identity.instance_id, "snapshot"],
     queryFn: ({ signal }) => api.get<Snapshot>("/snapshot", signal),
     enabled: connected,
     refetchInterval: 2000,
@@ -234,13 +255,14 @@ export function App({
     onSettled: () => {
       queries.invalidateQueries({
         predicate: (q) =>
-          q.queryKey[0] === identity.project_id ||
-          q.queryKey[0] === "local-requests",
+          q.queryKey[0] === home &&
+          (q.queryKey[1] === identity.project_id ||
+            q.queryKey[1] === "local-requests"),
       });
     },
   });
   const requests = useQuery({
-    queryKey: ["local-requests"],
+    queryKey: [home, "local-requests"],
     queryFn: listRequests,
     refetchInterval: 2000,
   });
@@ -263,7 +285,6 @@ export function App({
         const pending = (await listRequests()).filter(
           (row) =>
             row.envelope.project_id === identity.project_id &&
-            row.envelope.instance_id === identity.instance_id &&
             (!row.response ||
               ["submitted", "accepted", "outcome_unknown"].includes(
                 row.response.status,
@@ -273,7 +294,7 @@ export function App({
           if (controller.signal.aborted) return;
           try {
             await api.reconcile(row.envelope, controller.signal);
-            queries.invalidateQueries({ queryKey: ["local-requests"] });
+            queries.invalidateQueries({ queryKey: [home, "local-requests"] });
           } catch {
             /* unknown stays in journal */
           }
@@ -344,25 +365,16 @@ export function App({
             <strong>SteerLine</strong>
             <span className="brand-caption">WORKSPACE</span>
           </div>
-          <div className="project-card">
-            <span className="project-avatar">S</span>
-            <div>
-              <strong>
-                {identity.repository_identity
-                  .replace(/[\\/]\.git$/, "")
-                  .split(/[\\/]/)
-                  .pop()}
-              </strong>
-              <span>本机工作空间</span>
-            </div>
-          </div>
+          {switcher ?? (
+            <div className="project-card">{identity.repository_identity}</div>
+          )}
           <p className="nav-heading">项目</p>
           <nav aria-label="主导航">
-            <NavLink to="/dag">
+            <NavLink to={"/projects/" + identity.project_id + "/dag"}>
               <GitBranch size={17} />
               <span>任务 DAG</span>
             </NavLink>
-            <NavLink to="/runs">
+            <NavLink to={"/projects/" + identity.project_id + "/runs"}>
               <Layers size={17} />
               <span>执行与待处理</span>
               {counts.questions > 0 && (
@@ -371,7 +383,7 @@ export function App({
             </NavLink>
           </nav>
           <div className="sidebar-footer">
-            <NavLink to="/settings">
+            <NavLink to={"/projects/" + identity.project_id + "/settings"}>
               <Settings size={16} />
               <span>执行设置</span>
             </NavLink>
@@ -451,10 +463,27 @@ export function App({
             <Dispatch />
             <Suspense fallback={<div className="empty">正在加载页面…</div>}>
               <Routes>
-                <Route path="/dag" element={<Dag />} />
-                <Route path="/runs" element={<Runs />} />
-                <Route path="/settings" element={<SettingsPage api={api} />} />
-                <Route path="*" element={<Navigate to="/dag" replace />} />
+                <Route
+                  path={"/projects/" + identity.project_id + "/dag"}
+                  element={<Dag />}
+                />
+                <Route
+                  path={"/projects/" + identity.project_id + "/runs"}
+                  element={<Runs />}
+                />
+                <Route
+                  path={"/projects/" + identity.project_id + "/settings"}
+                  element={<SettingsPage api={api} />}
+                />
+                <Route
+                  path="*"
+                  element={
+                    <Navigate
+                      to={"/projects/" + identity.project_id + "/dag"}
+                      replace
+                    />
+                  }
+                />
               </Routes>
             </Suspense>
             <Operations
@@ -478,5 +507,210 @@ export function App({
         </div>
       </div>
     </WorkspaceContext.Provider>
+  );
+}
+
+function readProjectPreference(
+  storage: "sessionStorage" | "localStorage",
+  key: string,
+) {
+  try {
+    return window[storage].getItem(key);
+  } catch {
+    return null;
+  }
+}
+function rememberProject(home: string, project: string) {
+  for (const [storage, prefix] of [
+    ["sessionStorage", "steerline-project:"],
+    ["localStorage", "steerline-recent:"],
+  ] as const) {
+    try {
+      window[storage].setItem(prefix + home, project);
+    } catch {
+      // Optional preferences cannot prevent URL-based project selection.
+    }
+  }
+}
+
+export function App({ initial }: { initial: BrowserSession }) {
+  const session = useQuery({
+    queryKey: ["browser-session", initial.identity.home_id],
+    queryFn: () => json<BrowserSession>("/auth/status"),
+    initialData: initial,
+    refetchInterval: 2500,
+    retry: false,
+  });
+  const home = initial.identity.home_id;
+  const sessionValid =
+    !session.isError && session.data.identity.home_id === home;
+  const catalog = useQuery({
+    queryKey: [home, "projects"],
+    queryFn: ({ signal }) =>
+      json<{ projects: ConfiguredProject[] }>("/api/v1/application/projects", {
+        signal,
+      }),
+    enabled: sessionValid,
+    refetchInterval: 5000,
+    retry: false,
+  });
+  const location = useLocation();
+  const navigate = useNavigate();
+  const match = location.pathname.match(
+    /^\/projects\/([^/]+)\/(dag|runs|settings)$/,
+  );
+  const id = match?.[1] ?? "";
+  const page = match?.[2] ?? "dag";
+  const [search, setSearch] = useState("");
+  const projects = catalog.data?.projects ?? [];
+  const selected = projects.find((p) => p.project_id === id && !p.conflict);
+  const projectIdentity = useQuery({
+    queryKey: [home, id, "identity"],
+    queryFn: ({ signal }) =>
+      json<Identity>("/api/v1/application/projects/" + id + "/identity", {
+        signal,
+      }),
+    enabled: sessionValid && !!selected,
+    refetchInterval: 10000,
+    retry: false,
+  });
+  const choose = (project: string) => {
+    rememberProject(home, project);
+    navigate("/projects/" + project + "/" + page);
+  };
+  const chosenOnce = useRef(false);
+  useEffect(() => {
+    if (id || chosenOnce.current || !catalog.data) return;
+    const preferences = [
+      readProjectPreference("sessionStorage", "steerline-project:" + home),
+      readProjectPreference("localStorage", "steerline-recent:" + home),
+    ];
+    const recent = preferences.find(
+      (candidate) =>
+        candidate &&
+        projects.some((p) => p.project_id === candidate && !p.conflict),
+    );
+    if (!preferences.some(Boolean)) chosenOnce.current = true;
+    if (recent) {
+      chosenOnce.current = true;
+      navigate("/projects/" + recent + "/dag", { replace: true });
+    }
+  }, [id, catalog.data, home, navigate, projects]);
+  useEffect(() => {
+    if (selected && id) {
+      rememberProject(home, id);
+    }
+  }, [selected?.project_id, home, id]);
+  const switcher = (
+    <div className="project-selector">
+      <label htmlFor="project-search">切换项目</label>
+      <input
+        id="project-search"
+        placeholder="搜索名称或位置"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+      />
+      <select
+        aria-label="当前项目"
+        value={selected ? id : ""}
+        onChange={(e) => {
+          if (e.target.value) choose(e.target.value);
+        }}
+      >
+        <option value="" disabled>
+          选择已配置项目
+        </option>
+        {projects
+          .filter(
+            (p) =>
+              p.project_id === id ||
+              [p.name, p.repository, p.config_id]
+                .join(" ")
+                .toLowerCase()
+                .includes(search.toLowerCase()),
+          )
+          .map((p) => (
+            <option
+              key={p.config_id}
+              value={p.project_id ?? p.config_id}
+              disabled={!p.project_id || !!p.conflict}
+            >
+              {p.name} · {p.repository} ·{" "}
+              {p.conflict
+                ? "配置冲突"
+                : !p.project_id
+                  ? "配置错误"
+                  : p.online
+                    ? "在线"
+                    : "离线"}
+              {(!p.project_id || p.conflict) && (p.diagnostic || p.conflict)
+                ? " · " + (p.diagnostic || p.conflict)
+                : ""}
+            </option>
+          ))}
+      </select>
+      {selected && (
+        <div className="project-current">
+          <div>
+            <strong>{selected.name}</strong>
+            <small>{selected.online ? "在线" : "离线"}</small>
+          </div>
+          <span className="path" title={selected.repository}>
+            {selected.repository}
+          </span>
+        </div>
+      )}
+      <Button size="sm" variant="ghost" onClick={() => void catalog.refetch()}>
+        刷新项目目录
+      </Button>
+      {selected?.diagnostic && <p className="muted">{selected.diagnostic}</p>}
+    </div>
+  );
+  const identity = projectIdentity.data;
+  if (selected && identity && identity.project_id === id)
+    return (
+      <Workspace
+        key={home + "/" + id + "/" + identity.instance_id}
+        home={home}
+        initial={{ identity, csrf_token: session.data.csrf_token }}
+        connectionError={
+          session.error ||
+          catalog.error ||
+          projectIdentity.error ||
+          session.data.diagnostic
+        }
+        connected={
+          sessionValid &&
+          !catalog.isError &&
+          !projectIdentity.isError &&
+          !session.data.diagnostic &&
+          !!selected.online
+        }
+        switcher={switcher}
+      />
+    );
+  return (
+    <div className="opening">
+      <span className="brand-symbol">◆</span>
+      <h1>SteerLine</h1>
+      {switcher}
+      {!sessionValid ? (
+        <p role="alert">会话已失效，请使用 steerline-web open 重新授权</p>
+      ) : id ? (
+        <p role="status">
+          {selected
+            ? projectIdentity.error
+              ? "项目离线，当前不可提交业务操作"
+              : "正在核验项目连接…"
+            : "项目不可访问，请重新选择"}
+        </p>
+      ) : (
+        <p>{projects.length ? "请选择当前项目" : "尚无已配置项目"}</p>
+      )}
+      {catalog.error && <p role="alert">{String(catalog.error)}</p>}
+      <p className="muted">
+        项目目录来自当前应用 home 的 etc 配置。项目服务需通过本机入口启动。
+      </p>
+    </div>
   );
 }

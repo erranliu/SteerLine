@@ -1,6 +1,6 @@
 # Spec：独立 Web 程序与已有项目切换
 
-状态：2026-10-15 用户要求先行批次的 Spec/Plan，本轮只产出文档，未实现。普通开发，无 roadmap Task ID，不改 execution-map。配套 [Plan](web-project-switch.plan.md)、[专属验收](../acceptance/web-project-switch.md)。[添加项目](project-onboarding.spec.md)另立规格并后置，不是本批前置。
+状态：2026-10-15 已实现，WPS-A1～WPS-A6 自动验收通过，WPS-M1 待人工体验；实际验证结果归专属验收。普通开发，无 roadmap Task ID，不改 execution-map。配套 [Plan](web-project-switch.plan.md)、[专属验收](../acceptance/web-project-switch.md)。[添加项目](project-onboarding.spec.md)另立规格并后置，不是本批前置。
 
 ## 1. 问题与目标
 
@@ -87,7 +87,7 @@ Web 地址存 `<home>/web.json`（`version:1`、固定 `address`，默认 `127.0
 
 ## 8. 验收要求
 
-自动/人工结果归[本任务验收](../acceptance/web-project-switch.md)，本轮均未执行。
+自动/人工结果归[本任务验收](../acceptance/web-project-switch.md)，当前执行结果以专属验收记录为准。
 
 | ID | 必须达到的行为 |
 | --- | --- |

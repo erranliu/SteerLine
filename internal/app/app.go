@@ -77,7 +77,7 @@ func runConfiguredService(ctx context.Context, config Config, mode, startupID, c
 		if err := admission.syncHostFacts(input); err != nil {
 			return nil, err
 		}
-		localAPI := &serviceLocalAPI{runDir: input.RunDir, projectID: input.RepositoryIdentity, webAddress: config.WebAddress}
+		localAPI := &serviceLocalAPI{runDir: input.RunDir, projectID: input.RepositoryIdentity}
 		service, err := newConfiguredServiceWithHost(config, serviceHTTPHost{HostPort: hostPort, localAPI: localAPI})
 		if err != nil {
 			return nil, err

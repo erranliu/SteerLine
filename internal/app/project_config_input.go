@@ -17,7 +17,6 @@ type ProjectConfigInput struct {
 	Remote                  string                          `json:"remote"`
 	Branch                  string                          `json:"branch"`
 	RunDir                  string                          `json:"run_dir"`
-	WebAddress              string                          `json:"web_address,omitempty"`
 	WorktreeRoot            string                          `json:"worktree_root"`
 	Claimant                string                          `json:"claimant"`
 	Git                     executionbackend.Command        `json:"git"`
@@ -49,7 +48,6 @@ type Config struct {
 	Remote                  string                              `json:"remote"`
 	Branch                  string                              `json:"branch"`
 	RunDir                  string                              `json:"run_dir"`
-	WebAddress              string                              `json:"web_address,omitempty"`
 	WorktreeRoot            string                              `json:"worktree_root"`
 	Claimant                string                              `json:"claimant"`
 	Git                     executionbackend.Command            `json:"git"`
@@ -80,7 +78,7 @@ type Config struct {
 func configFromProjectInput(input ProjectConfigInput) Config {
 	return Config{
 		PublicationPolicy: input.PublicationPolicy,
-		Repository:        input.Repository, TaskAuthority: input.TaskAuthority, Remote: input.Remote, Branch: input.Branch, RunDir: input.RunDir, WebAddress: input.WebAddress,
+		Repository:        input.Repository, TaskAuthority: input.TaskAuthority, Remote: input.Remote, Branch: input.Branch, RunDir: input.RunDir,
 		WorktreeRoot: input.WorktreeRoot, Claimant: input.Claimant, Git: input.Git, WorkflowProtocol: input.WorkflowProtocol,
 		ExecutableTypes: input.ExecutableTypes, TaskPoll: input.TaskPoll, PRPoll: input.PRPoll, Heartbeat: input.Heartbeat,
 		CommandTimeout: input.CommandTimeout, ShutdownGrace: input.ShutdownGrace, Agent: input.Agent, Host: input.Host,

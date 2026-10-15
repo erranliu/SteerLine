@@ -19,7 +19,13 @@ export function TaskDetail({
   const [starting, setStarting] = useState(false);
   const [profile, setProfile] = useState("");
   const detail = useQuery({
-    queryKey: [api.identity.project_id, api.identity.instance_id, "task", id],
+    queryKey: [
+      api.home,
+      api.identity.project_id,
+      api.identity.instance_id,
+      "task",
+      id,
+    ],
     queryFn: ({ signal }) =>
       api.get<TaskPage>("/tasks/" + encodeURIComponent(id), signal),
     enabled: online,
@@ -27,6 +33,7 @@ export function TaskDetail({
   });
   const presentation = useQuery({
     queryKey: [
+      api.home,
       api.identity.project_id,
       api.identity.instance_id,
       "presentation",
@@ -147,7 +154,14 @@ export function TaskDetail({
         )}
         {hasCandidates && (
           <Button asChild>
-            <Link to={"/runs?task=" + encodeURIComponent(id)}>
+            <Link
+              to={
+                "/projects/" +
+                api.identity.project_id +
+                "/runs?task=" +
+                encodeURIComponent(id)
+              }
+            >
               查看执行 <ArrowUpRight size={14} />
             </Link>
           </Button>

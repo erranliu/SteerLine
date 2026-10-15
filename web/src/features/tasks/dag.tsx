@@ -100,6 +100,7 @@ export function Dag() {
   const listCursor = params.get("list_cursor") ?? "";
   const graph = useQuery({
     queryKey: [
+      api.home,
       api.identity.project_id,
       api.identity.instance_id,
       "graph",
@@ -115,6 +116,7 @@ export function Dag() {
   });
   const tasks = useQuery({
     queryKey: [
+      api.home,
       api.identity.project_id,
       api.identity.instance_id,
       "tasks",
