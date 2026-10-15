@@ -40,3 +40,6 @@ Runner 真机验收登记在 Runner SR-A11/SR-A12。先运行 `scripts/new-debug
 
 
 最新用户范围：不做远端 Orca 路径验收，仅完成本机 Codex。本次 R1 必验为 delivery.basic、recovery.waiting-merge-restart、recovery.codex-resume；不再启动 Orca 场景。Orca 的已实现代码与历史失败保留，不把取消项改写成通过。真实本机验收仍须全新 debug 包、固定 native Codex、原生沙箱探针、指定文件/检查/原 final 和专属真实 PR。
+
+
+本机调试验收入口在删除旧执行域后只读取公开 Run/final 和外部 Codex 原生 rollout（严格匹配 session/turn/workspace、有界读取）。沙箱探针/命令退出码来自原生 CommandExecution，不读 Runner 私有 journal；原生自动审批由 Runner 自身验收取证。补充最小验证：`go test ./tests/e2e/internal/native ./tests/e2e/internal/driver -run 'Test(NativeRollout|ReadNativeRollout|BusinessRollout|DebugSandboxStage)' -count=1 -timeout=2m`，映射 SLC-A04/A06，证据 `external-rollout-2.log`。本机 live 产品闭环按 SLC-A04 的新包入口执行，原生停止确认后才清理本次专属 Git 事实。
