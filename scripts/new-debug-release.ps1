@@ -9,7 +9,7 @@
     [string]$OrcaExecutable = 'orca',
     [string]$AgentModel = '',
     [string]$AgentExecutable = '',
-    [ValidateSet('','high','xhigh')][string]$AgentReasoningEffort = ''
+    [ValidateSet('','medium','high','xhigh')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
 if ($WebProjects -eq 2 -and -not $WebAddress) { throw 'WebProjects 2 requires WebAddress' }
@@ -147,6 +147,15 @@ try {
         [IO.File]::WriteAllText((Join-Path $target 'home\execution.json'), ($catalog | ConvertTo-Json -Depth 10), $utf8)
         $manifest.execution_host='orca'
         $manifest.execution_environment=$OrcaEnvironment
+    }
+    if (-not $Orca -and ($AgentExecutable -or $AgentModel -or $AgentReasoningEffort)) {
+        $executionPath = Join-Path $target 'home\execution.json'
+        $catalog = [IO.File]::ReadAllText($executionPath) | ConvertFrom-Json
+        $settings = ($catalog.execution_profiles | Where-Object id -eq 'live').execution.settings
+        if ($AgentExecutable) { $settings.executable = $AgentExecutable }
+        if ($AgentModel) { $settings.model = $AgentModel }
+        if ($AgentReasoningEffort) { $settings.reasoning_effort = $AgentReasoningEffort }
+        [IO.File]::WriteAllText($executionPath, ($catalog | ConvertTo-Json -Depth 10), $utf8)
     }
     $manifest.web_projects = $WebProjects
     Write-Manifest

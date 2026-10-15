@@ -6,8 +6,8 @@ $existing = & gh pr list --repo erranliu/SteerlineTest --base $settings.base_bra
 if ($LASTEXITCODE -ne 0) { throw 'Existing PR query failed' }
 [array]$matches = ConvertFrom-Json -InputObject ($existing -join "`n")
 if ($matches.Count -gt 1) { throw 'Multiple matching PRs' }
-# Exercise the same shell credential-helper route that failed in the installed
-# project. gh reads the package-owned login; credentials never enter argv/output.
+# Use the existing external gh login through its standard credential helper;
+# generated packages never receive copied credentials.
 $ghPath = (Get-Command gh.exe -ErrorAction Stop).Source.Replace('\', '/')
 if ($ghPath.Contains("'")) { throw 'Unsupported gh executable path' }
 $helper = "!'$ghPath' auth git-credential"
