@@ -8,6 +8,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	p "github.com/erranliu/SteerLine/internal/storage/ports"
+	"sort"
 )
 
 func (s Reader) ReadActivityView(ctx context.Context, project, candidate, run, attempt string, after int64, limit, budget int) (p.ActivityBinding, []p.DomainEvent, error) {
@@ -52,7 +53,12 @@ func (s Reader) runnerActivity(ctx context.Context, project, candidate, run, att
 	if recent {
 		order = " DESC"
 	}
-	rows, e := tx.QueryContext(ctx, `SELECT seq,payload FROM runner_events WHERE project_identity=? AND candidate_id=? AND seq>? AND json_extract(payload,'$.attempt_id')=? ORDER BY seq`+order+` LIMIT ?`, project, candidate, after, attempt, limit)
+	sqlQuery := `SELECT seq,payload FROM runner_events WHERE project_identity=? AND candidate_id=? AND seq>? AND json_extract(payload,'$.attempt_id')=? ORDER BY seq` + order + ` LIMIT ?`
+	if recent {
+		// Preserve readable changes even when technical events are much noisier.
+		sqlQuery = `WITH ranked AS (SELECT seq,payload, row_number() OVER (PARTITION BY (json_extract(payload,'$.transition') IS NOT NULL) ORDER BY seq DESC) n FROM runner_events WHERE project_identity=? AND candidate_id=? AND seq>? AND json_extract(payload,'$.attempt_id')=?) SELECT seq,payload FROM ranked WHERE n<=CASE WHEN json_extract(payload,'$.transition') IS NOT NULL THEN 5 ELSE 10 END ORDER BY seq DESC LIMIT ?`
+	}
+	rows, e := tx.QueryContext(ctx, sqlQuery, project, candidate, after, attempt, limit)
 	if e != nil {
 		return binding, nil, e
 	}
@@ -73,6 +79,9 @@ func (s Reader) runnerActivity(ctx context.Context, project, candidate, run, att
 			break
 		}
 		v := api.ActivityEvent{V: 1, Seq: uint64(seq), TS: event.CreatedAt, Source: runnercontract.Protocol, RunID: candidate, TaskID: c.TaskID, ItemID: event.EventID, Kind: "runner_event", Status: event.Type, Title: event.Type}
+		if event.Transition != nil {
+			v = runnerWorkflowActivity(v, *event.Transition)
+		}
 		payload, _ := json.Marshal(v)
 		if used+len(payload) > budget {
 			break
@@ -88,9 +97,7 @@ func (s Reader) runnerActivity(ctx context.Context, project, candidate, run, att
 		return binding, nil, e
 	}
 	if recent {
-		for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
-			events[i], events[j] = events[j], events[i]
-		}
+		sort.Slice(events, func(i, j int) bool { return events[i].EventID < events[j].EventID })
 	}
 	return binding, events, tx.Commit()
 }

@@ -200,6 +200,15 @@ func (s *Server) read(ctx context.Context, identity Identity, path []string, que
 		return candidate, err
 	case len(path) == 3 && path[0] == "runs" && path[2] == "activity":
 		return s.readActivity(ctx, identity, path[1], queryValues)
+	case len(path) == 3 && path[0] == "runs" && path[2] == "last-message":
+		candidate, err := s.candidate(ctx, path[1])
+		if err != nil {
+			return nil, err
+		}
+		if candidate.ExecutionID == "" || candidate.AttemptID == "" || queryValues.Get("execution_id") != candidate.ExecutionID || queryValues.Get("attempt_id") != candidate.AttemptID {
+			return nil, &protocolError{status: 409, code: "stale_target", reason: "last message target changed"}
+		}
+		return s.activities.LastMessage(ctx, path[1], candidate.ExecutionID, candidate.AttemptID)
 	case len(path) == 3 && path[0] == "runs" && path[2] == "conversation":
 		return s.readConversation(ctx, identity, path[1], queryValues)
 	case len(path) == 3 && path[0] == "runs" && path[2] == "final":

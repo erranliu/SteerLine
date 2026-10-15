@@ -38,7 +38,7 @@ type Server struct {
 
 var taskReadRoute = regexp.MustCompile(`^/(task-batches/[0-9a-f]{32}|tasks/[^/]+/predecessors/requests/[0-9a-f]{32})$`)
 var taskWriteRoute = regexp.MustCompile(`^/(task-batch-validation|task-batches|tasks/[^/]+/predecessors)$`)
-var readRoute = regexp.MustCompile(`^/(identity|tasks|tasks/[^/]+|graph|snapshot|candidates|presentation|runs/[^/]+|runs/[^/]+/(activity|conversation|final|body|recovery|decision-eligibility)|commands/[0-9a-f]{32})$`)
+var readRoute = regexp.MustCompile(`^/(identity|tasks|tasks/[^/]+|graph|snapshot|candidates|presentation|runs/[^/]+|runs/[^/]+/(activity|last-message|conversation|final|body|recovery|decision-eligibility)|commands/[0-9a-f]{32})$`)
 
 func AllowedRead(route string) bool { return readRoute.MatchString(route) }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {

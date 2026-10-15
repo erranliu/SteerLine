@@ -15,6 +15,7 @@ import { SafeLink, Status, short } from "../../shared/ui/status";
 import { TaskDetail } from "../tasks/task-detail";
 import { Answer, draftKey } from "./answer";
 import { candidateState, stopReason } from "./state";
+import { LastMessage } from "./last-message";
 
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
@@ -51,7 +52,7 @@ function Output({ run }: { run: Candidate }) {
           </Button>
         </div>
         <span className="muted">
-          {online ? "定时刷新" : "最后观察"} ·{" "}
+          {online ? "查询刷新于" : "最后查询于"} ·{" "}
           {updatedAt ? new Date(updatedAt).toLocaleTimeString("zh-CN") : "—"}
         </span>
       </div>
@@ -65,16 +66,18 @@ function Output({ run }: { run: Candidate }) {
               {d}
             </p>
           ))}
-          {activity.data?.page.activity?.map((event) => (
-            <div className="activity-item" key={event.seq}>
-              <span className="activity-dot" />
-              <time>{new Date(event.ts).toLocaleTimeString("zh-CN")}</time>
-              <div>
-                <strong>{event.title || event.kind}</strong>
-                {event.detail && <pre>{event.detail}</pre>}
+          {activity.data?.page.activity
+            ?.filter((event) => event.kind !== "runner_event")
+            .map((event) => (
+              <div className="activity-item" key={event.seq}>
+                <span className="activity-dot" />
+                <time>{new Date(event.ts).toLocaleTimeString("zh-CN")}</time>
+                <div>
+                  <strong>{event.title || event.kind}</strong>
+                  {event.detail && <pre>{event.detail}</pre>}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
           {!activity.data?.page.activity?.length && (
             <div className="empty">
               {activity.isPending
@@ -82,6 +85,29 @@ function Output({ run }: { run: Candidate }) {
                 : "当前候选没有可用活动"}
             </div>
           )}
+          {!!activity.data?.page.activity?.some(
+            (event) => event.kind === "runner_event",
+          ) && (
+            <details>
+              <summary>内部执行事件</summary>
+              {activity.data.page.activity
+                .filter((event) => event.kind === "runner_event")
+                .map((event) => (
+                  <p key={event.seq} className="muted">
+                    {new Date(event.ts).toLocaleTimeString("zh-CN")} ·{" "}
+                    {event.title}
+                  </p>
+                ))}
+            </details>
+          )}
+          {!!activity.data?.page.activity?.length &&
+            !activity.data.page.activity.some(
+              (event) => event.kind !== "runner_event",
+            ) && (
+              <p className="muted">
+                暂无已记录的流程或状态变化；已有内部事件可在详情查看。
+              </p>
+            )}
           <p className="output-hint">
             近期有界活动 · 不代表完整工具过程或最终回复
           </p>
@@ -132,7 +158,11 @@ function CandidateDetail({ run }: { run: Candidate }) {
     snapshot?.connection.snapshot.page?.runs ?? [],
   );
   const canOpen =
-    online && caps.includes("open_native_session") && !!run.session_id && !!run.session_generation && !!run.attempt_id;
+    online &&
+    caps.includes("open_native_session") &&
+    !!run.session_id &&
+    !!run.session_generation &&
+    !!run.attempt_id;
   return (
     <>
       <div className="candidate-heading">
@@ -196,6 +226,10 @@ function CandidateDetail({ run }: { run: Candidate }) {
           run={run}
         />
       )}
+      <LastMessage
+        key={"message/" + run.execution_id + "/" + run.attempt_id}
+        run={run}
+      />
       <Output key={run.execution_id + "/" + run.attempt_id} run={run} />
       <div className="pr-panel">
         <div>

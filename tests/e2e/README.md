@@ -180,3 +180,7 @@ Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_met
 运行 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled` 选择四项独立隔离场景；可用 `-scenario` 精确选择。只有该包已审查的四项允许 Go `-parallel=2`，其他 E2E 包仍串行。构建场景写自身 source clone，其他场景只读 runner 二进制，禁止写工作树 bin、共享临时 home 或固定端口。生成新调试包仍串行构建 npm/dist，由 `scripts/test-debug-release.ps1` 独立验证当前正式调试入口。
 
 Windows原生隔离验证入口：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-runtime-isolation.ps1 -SteerRunnerExe <固定EXE绝对路径>`。脚本只把原test-feedback四项放在一致的原生用户上下文；当前工具的受限token被Runner拒绝时不能改变产品守卫。生成包脚本与其共用独立进程启动助手；直接在原生环境仍可运行原Go入口，所有源码/EXE/SHA/期限/并发与清理规则保持。
+
+## 执行展示与最近消息
+
+本轮采用定向 Go、Web fake timer 与 Runner 实际 EXE/受控服务验证，不新增 L2/L3 live 场景；范围与命令见 [Plan](../../docs/plans/execution-observability.plan.md)，结果见[专属验收](../../docs/acceptance/execution-observability.md)。不据消息缺失判定卡死，不在安装现场验收。
