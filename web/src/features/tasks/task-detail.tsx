@@ -54,7 +54,7 @@ export function TaskDetail({
   const blockers = hasCandidates
     ? task?.startup_blockers?.filter((value) => value !== "task_not_open")
     : task?.startup_blockers;
-  const reason = !online
+  const startReason = !online
     ? "服务未连接"
     : detail.isError
       ? "任务查询失败"
@@ -84,16 +84,12 @@ export function TaskDetail({
                         : hasCandidates &&
                             candidates.filter(participating).length >= 5
                           ? "已达到 5 个参与候选"
-                          : !selected || selected.unavailable_reason
-                            ? selected?.unavailable_reason || "没有可用执行方案"
-                            : hasCandidates &&
-                                candidates.some(
-                                  (run) =>
-                                    participating(run) &&
-                                    run.execution_profile?.id === selected.id,
-                                )
-                              ? "已存在相同方案的参与候选，请选择其他方案"
-                              : "";
+                          : "";
+  const profileReason =
+    !selected || selected.unavailable_reason
+      ? selected?.unavailable_reason || "没有可用执行方案"
+      : "";
+  const reason = startReason || profileReason;
   if (!task)
     return (
       <div className="empty">
@@ -159,15 +155,17 @@ export function TaskDetail({
         {!task.delivery && (!hasCandidates || allowCandidate) && (
           <Button
             variant="default"
-            disabled={busy || !!reason}
-            title={reason}
+            disabled={busy || !!startReason}
+            title={startReason}
             onClick={() => setStarting(!starting)}
           >
             {hasCandidates ? <Plus size={14} /> : <Play size={14} />}{" "}
             {hasCandidates ? "新增并行候选" : "手动启动"}
           </Button>
         )}
-        {reason && !task.delivery && <p className="muted">{reason}</p>}
+        {startReason && !task.delivery && (
+          <p className="muted">{startReason}</p>
+        )}
       </div>
       {starting && (
         <div className="start-panel">
@@ -191,6 +189,7 @@ export function TaskDetail({
               {d}
             </p>
           ))}
+          {reason && <p className="muted">{reason}</p>}
           <div className="actions">
             <Button onClick={() => setStarting(false)}>取消</Button>
             <Button
