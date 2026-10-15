@@ -9,9 +9,9 @@
 | TR-A1 | 对照删除清单检查 CLI/包/模板/调试分派/runner/依赖；普通业务构建及 Web 双产品构建，无当前可执行 TUI 入口 | 通过；源码/依赖检查、无 Node 业务构建、双产品构建及新包三 exe/hash 通过 |
 | TR-A2 | 运行迁移后的原 formatter 测试与基础 HTTP/localservice/app/Web owner 回归；确认日志、实例/认证/原信封、共享进程函数和公共 recovery 路由保留 | 通过；formatter 内容未变，基础 owners、CLI/候选接线、HTTP 恢复及 Web smoke 通过 |
 | TR-A3 | 用生成器默认参数及显式不同端口创建新单/双项目包；核对默认 Web 产物、端口冲突拒绝、方案冻结、活动服务/worker 的 reset 拒绝、check 不写、静止后重置范围及全部退出 | 通过；最终 generation-test.json passed=true，默认包只验产物，19747 单项目与 19744 双项目实际运行、停止和 reset 通过 |
-| TR-A4 | 固定 L1、定向混合测试、controlled recovery.failure-results / runtime.installed-debug-isolation 实际通过，所有 e2e-tag 场景编译通过；保留断言清单和查询前后状态，不能用删场景/缺包跳过换通过 | 部分通过；L1、编译、CLI/候选/数量 owner、recovery.failure-results 通过；runtime.installed-debug-isolation 两次固定 10 分钟超时，待验。原生 workspace 仅编译 |
+| TR-A4 | 固定 L1、定向混合测试、controlled recovery.failure-results / runtime.installed-debug-isolation 实际通过，所有 e2e-tag 场景编译通过；保留断言清单和查询前后状态，不能用删场景/缺包跳过换通过 | 部分通过；L1、编译、CLI/候选/数量 owner、recovery.failure-results 通过；runtime.installed-debug-isolation 仍固定 10 分钟超时，含实际 PR 提交复验，待验。原生 workspace 仅编译 |
 | TR-A5 | 新独立 simulate 包真实 Edge web.smoke；在活动轮次关闭页面后核对服务与原执行继续，再打开完成既有反馈/final/交付/离线闭环，收尾进程/监听 0 | 通过；真实 Edge 1/1、0 retry，关闭页面分支及原闭环通过，cleanup 进程/监听均 0 |
-| TR-A6 | 当前文档入口与实际一致；TUI 资料标注历史/退役并修复链接，原未验不变通过；文档链接与差异检查通过 | 通过；421 份 Markdown / 2674 条本地链接 / 0 错误，git diff --check 通过；roadmap 未修改 |
+| TR-A6 | 当前文档入口与实际一致；TUI 资料标注历史/退役并修复链接，原未验不变通过；文档链接与差异检查通过 | 通过；424 份 Markdown / 2693 条本地链接 / 0 错误，git diff --check 通过；roadmap 未修改 |
 
 ## 执行与证据登记
 
@@ -119,3 +119,9 @@ runtime 综合隔离的两个超时仍是未完成验证，保持 TR-A4 待验�
 - 整合后真实 Edge `web.smoke` 通过（9.1 分钟，1/1、0 retry）：`C:/SteerlineDebug/dev-20261015-141159-11f0842f-dirty/evidence/smoke.log`；browser-close.json 保留活动轮次关闭/重开原身份，反馈第 4 轮、原 PR 复用、交付与离线均通过。`smoke-cleanup.json` passed=true、browser_passed=true、processes=0、listeners=0、stop_errors=[]。
 
 补充验证安排：审计核对源码构建子检查通过 Git clone 绑定 HEAD，前次 dirty 工作树的该子检查仍取旧提交。先提交审计修正和此安排，再保持工作树干净，对实际 PR 提交执行一次原 runtime 综合隔离（期限与断言均不变）；结果随后补记，旧超时不改写为通过。是否将草稿转为可评审由该次实际结果决定。
+
+### 实际 PR 提交验证结论
+
+对干净提交 `8c166ac6b4a2915abca34abf8f29638918b8674c` 执行的 runtime 综合隔离仍未通过：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T062348.721529400Z/summary.json`，passed=false / cleanup_complete=true。场景在第 2 次可见服务窗口就绪等待达到原 10 分钟期限；正常清理也报告 context deadline exceeded，最终资源/进程核验完成。旧 HEAD 的源码克隆不能解释这次超时，前述核对只解决证据版本绑定，没有解决耗时问题。本次保持原期限与全部非 TUI 断言，TR-A4 继续待验。
+
+已创建草稿 [PR #324](https://github.com/erranliu/SteerLine/pull/324)，接入主干、两处审计修正和其他通过的验证均已提交；该 PR 尚不具备全部计划验收通过的结论。原生 Orca 工作区实际删除链依旧仅编译。实际安装路径没有操作，Web smoke 的进程/监听清理均为 0。
