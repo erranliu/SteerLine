@@ -45,7 +45,9 @@ if (-not $SteerRunnerExe) {
 if ($SteerRunnerExe) {
     if (-not [IO.Path]::IsPathRooted($SteerRunnerExe)) { throw 'SteerRunnerExe must be absolute' }
     $SteerRunnerExe = [IO.Path]::GetFullPath($SteerRunnerExe)
-    if (Is-Within 'C:\SteerlineRuntime' $SteerRunnerExe) { throw 'SteerRunnerExe must not use the installed environment' }
+    foreach ($installedHome in @('C:\SteerlineInstall','C:\SteerlineRuntime')) {
+        if (Is-Within $installedHome $SteerRunnerExe) { throw 'SteerRunnerExe must not use the installed environment' }
+    }
     Assert-PlainPath $SteerRunnerExe
     if (-not (Test-Path -LiteralPath $SteerRunnerExe -PathType Leaf)) { throw 'SteerRunnerExe does not exist' }
     $runnerVersionText = & $SteerRunnerExe version --json
@@ -58,7 +60,7 @@ if ($SteerRunnerExe) {
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not [IO.Path]::IsPathRooted($DebugRoot)) { throw 'DebugRoot must be absolute' }
 $debugBase = [IO.Path]::GetFullPath($DebugRoot).TrimEnd('\')
-if ((Is-Within 'C:\SteerlineRuntime' $debugBase) -or (Is-Within $debugBase 'C:\SteerlineRuntime') -or (Is-Within $repo $debugBase) -or (Is-Within $debugBase $repo)) {
+if ((Is-Within 'C:\SteerlineInstall' $debugBase) -or (Is-Within $debugBase 'C:\SteerlineInstall') -or (Is-Within 'C:\SteerlineRuntime' $debugBase) -or (Is-Within $debugBase 'C:\SteerlineRuntime') -or (Is-Within $repo $debugBase) -or (Is-Within $debugBase $repo)) {
     throw 'Debug output must be disjoint from the installed home and source checkout'
 }
 Assert-PlainPath $debugBase

@@ -1,5 +1,7 @@
 # 分级测试与 E2E 环境
 
+三 EXE 日常构建部署入口是仓库根目录 `build-deploy.bat`。该安装操作不属于 E2E 调试环境生成；首次迁移的 20 个 open/paused 任务不作为测试夹具。[部署测试计划](../../docs/plans/install-deploy.plan.md) 与 [迁移验收](../../docs/acceptance/install-cutover-20261015.md) 单独登记结果，不替代以下 live/恢复场景。
+
 临时/AI 自动调试须先运行 `scripts/new-debug-release.ps1`，使用生成的 SteerlineTest 环境；安装目录不得作为现场。独立包定向验证为 `scripts/test-debug-release.ps1 -SteerRunnerExe <absolute exe>`（亦可设置 `STEERRUNNER_EXE`），显式 `-Live` 验证实际 Runner/原生 worker 的 SteerlineTest PR；所有日志留在生成包 evidence。既有分级回归保留自己的隔离夹具，见[独立调试验收](../../docs/acceptance/debug-environment.md)。
 
 当前部署入口为本地 Codex 与远端 Orca `host=orca` / environment。本机 Orca 部署方案已停用，本机 live 恢复场景已删除；隔离 fake 协议夹具保留，本机原生工作区生命周期场景已退役。当前没有登记新版远端真实恢复场景，受控 environment 回归不能代替远端真机验收。Orca 使用一个 agent 终端，由本机 CLI 原样投递统一阶段提示词，并由适配层采集普通终端回复；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[统一提示词验收](../../docs/acceptance/orca-unified-worker-prompts.md)。
