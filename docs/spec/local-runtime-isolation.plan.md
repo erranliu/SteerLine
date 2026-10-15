@@ -1,5 +1,7 @@
 # Plan：本机安装与调试路径隔离
 
+> 2026-10-15：旧源码调试 wrapper 和 runtime.installed-debug-isolation 已退役；下文保留原版本计划/证据，不是当前入口。当前长期隔离回归及替换覆盖见 [TUI 退役 Plan](../spec/tui-retirement.plan.md#4-独立隔离回归与补验安排2026-10-15) 和[验收](../acceptance/tui-retirement.md)。
+
 任务 ID：83；任务名称：本机安装与调试路径隔离。唯一执行依据：[Spec](local-runtime-isolation.spec.md)。无未完成硬前置，一个独立实现 PR 交付。
 
 ## 实施顺序

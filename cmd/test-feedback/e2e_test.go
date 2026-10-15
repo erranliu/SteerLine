@@ -14,9 +14,9 @@ import (
 
 func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
 	ordinary := e2eScenario{ID: "delivery.basic", Env: "controlled"}
-	heavy := e2eScenario{ID: "runtime.installed-debug-isolation", Env: "controlled"}
+	isolation := e2eScenario{ID: "runtime.source-build-isolation", Env: "controlled"}
 	native := e2eScenario{ID: "workspace.orca-removal-restart", Env: "native"}
-	if e2ePackageGoTimeout([]e2eScenario{ordinary}) != "6m" || e2ePackageGoTimeout([]e2eScenario{heavy}) != "11m" || e2ePackageGoTimeout([]e2eScenario{ordinary, heavy}) != "17m" {
+	if e2ePackageGoTimeout([]e2eScenario{ordinary}) != "6m" || e2ePackageGoTimeout([]e2eScenario{isolation}) != "6m" || e2ePackageGoTimeout([]e2eScenario{ordinary, isolation}) != "12m" {
 		t.Fatal("Go parent deadline clips a selected business scene or its cleanup")
 	}
 	if e2ePackageGoTimeout([]e2eScenario{native}) != "11m" {
@@ -24,6 +24,39 @@ func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
 	}
 	if e2ePackageGoTimeout([]e2eScenario{{Env: "live"}}) != "35m" {
 		t.Fatal("live package deadline changed")
+	}
+}
+
+func TestE2EParallelismOnlyAllowsIndependentRuntimeScenes(t *testing.T) {
+	root, err := e2eRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	entries, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "controlled"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 4 || e2ePackageParallelism(entries) != 2 {
+		t.Fatal("runtime isolation scenes are not selected with bounded parallelism")
+	}
+	for _, entry := range entries {
+		if e2ePackageParallelism([]e2eScenario{entry}) != 1 {
+			t.Fatal("single scene needs no parallel slot")
+		}
+	}
+	for _, extra := range []e2eScenario{
+		{ID: "runtime.unreviewed", Env: "controlled", Package: "./tests/e2e/suites/runtime"},
+		{ID: entries[0].ID, Env: "native", Package: entries[0].Package},
+		{ID: entries[0].ID, Env: "live", Package: entries[0].Package},
+		{ID: entries[0].ID, Env: "controlled", Package: "./tests/e2e/suites/recovery"},
+	} {
+		mixed := append(append([]e2eScenario{}, entries...), extra)
+		if e2ePackageParallelism(mixed) != 1 {
+			t.Fatalf("unsafe parallel selection: %+v", extra)
+		}
+	}
+	if _, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "controlled", scenario: "runtime.installed-debug-isolation"}); err == nil {
+		t.Fatal("retired comprehensive scene remains selectable")
 	}
 }
 

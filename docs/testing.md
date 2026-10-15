@@ -82,7 +82,7 @@ go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidat
 
 ## L2 与 L3
 
-L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；当前登记的 live 使用真实 Codex。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
+L2/L3 当前在 Windows 上按包串行运行；runtime controlled 的四个独立隔离场景在包内最多并行两项，其他场景保持串行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；当前登记的 live 使用真实 Codex。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
 
 本地 live 需要已登录的 `codex-cli 0.159.2`；完整 L2 需要 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用隔离测试项目；本地不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
 
@@ -111,7 +111,7 @@ go run ./cmd/test-feedback -level=L3 -suite=runtime -env=live '-scenario=runtime
 | L2 | live | smoke | `smoke.local-codex` |
 | L3 | controlled | delivery | `delivery.basic` |
 | L3 | controlled | recovery | `recovery.waiting-merge-restart` |
-| L3 | controlled | runtime | `runtime.installed-debug-isolation` |
+| L3 | controlled | runtime | `runtime.source-build-isolation`、`runtime.path-isolation`、`runtime.service-write-isolation`、`runtime.dual-home-isolation` |
 | L3 | live | delivery | `delivery.local-codex` |
 | L3 | live | recovery | `recovery.local-codex` |
 | L3 | native | workspace | `workspace.orca-removal-restart` |

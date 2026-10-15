@@ -382,7 +382,7 @@ func runE2E(opts options) (code int) {
 			tests = append(tests, e.Test)
 		}
 		timeout := e2ePackageGoTimeout(packages[pkg])
-		args := []string{"test", "-tags=e2e", "-json", "-count=1", "-p=1", "-parallel=1", "-timeout=" + timeout, "-run=" + exactPattern(tests), pkg}
+		args := []string{"test", "-tags=e2e", "-json", "-count=1", "-p=1", fmt.Sprintf("-parallel=%d", e2ePackageParallelism(packages[pkg])), "-timeout=" + timeout, "-run=" + exactPattern(tests), pkg}
 		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{"go"}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
 		stdout, err := os.Create(g.StdoutLog)
 		if err != nil {
@@ -428,6 +428,25 @@ func runE2E(opts options) (code int) {
 	return 0
 }
 
+// Only the audited runtime scenes opt into bounded Go test parallelism. Other
+// suites (especially native/live and gated L2) retain their existing sequencing.
+func e2ePackageParallelism(entries []e2eScenario) int {
+	if len(entries) < 2 {
+		return 1
+	}
+	for _, entry := range entries {
+		if entry.Env != "controlled" || entry.Package != "./tests/e2e/suites/runtime" {
+			return 1
+		}
+		switch entry.ID {
+		case "runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation":
+		default:
+			return 1
+		}
+	}
+	return 2
+}
+
 func e2ePackageGoTimeout(entries []e2eScenario) string {
 	if len(entries) > 0 && entries[0].Env == "live" {
 		return "35m"
@@ -435,9 +454,9 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 	minutes := 0
 	for _, entry := range entries {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
-		// Heavy isolation/native restart has a 10m body; its parent must not
+		// Native restart has a 10m body; its parent must not
 		// cut the selected scene at the ordinary 6m package bound.
-		if entry.ID == "runtime.installed-debug-isolation" || entry.ID == "workspace.orca-removal-restart" {
+		if entry.ID == "workspace.orca-removal-restart" {
 			minutes += 11
 		} else {
 			minutes += 6

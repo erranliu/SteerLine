@@ -38,7 +38,10 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L2 live | `smoke.local-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
 | L3 controlled | `delivery.basic` | 验证 A 唯一 Delivery 解锁 B；B dependency-ready 且未创建 WorkflowRun |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
-| L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、服务/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
+| L3 controlled | `runtime.source-build-isolation` | 独立源码 clone 的构建/重建与输出链接拒绝，不改变另一临时 home 的程序、数据库和业务事实 |
+| L3 controlled | `runtime.path-isolation` | state junction、run_dir/worktree_root 越界和 SQLite DB/WAL/SHM 硬链接拒绝；无 worker |
+| L3 controlled | `runtime.service-write-isolation` | 原生可见服务窗口启停/重启、子进程身份、旧实例/错误配置写拒绝、跨 home 仓库锁 |
+| L3 controlled | `runtime.dual-home-isolation` | 两独立 home/clone 的原执行、控制请求和交付不串用 |
 | L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核对正式删除回执、原路径消失和 Git 注销（trash 是否留存如实登记）、CLI/HTTP 查询、重启及无关任务启动 |
 | L3 live | `runtime.sandbox-git.local-codex` | 新生成 C:\SteerlineDebug 包；两个独立 worktree/session 的普通沙箱探针、原始三阶段命令与 usage、真实 Git helper/自动审核、精确 SteerlineTest PR 合并/交付及清理 |
 | L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
@@ -84,7 +87,7 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 
-一般受控场景业务上限 5 分钟；安装/调试隔离包含两次构建、双服务与两条分步工作流，单独为 10 分钟。原生工作区删除/重启同样为 10 分钟，覆盖原生资源操作、两次 HTTP 查询、重启与无关任务的第二条三阶段工作流；两项重型场景的 Go 父期限各为 11 分钟。真实场景 10 分钟；多轮 `candidates` 组为 30 分钟（多个真实业务回合、Orca readiness 和自动审核，覆盖双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒；仅服务启动前初始化项目/SQLite 的 `task validate/create` 夹具准备命令为 2 分钟，仍受场景总期限约束。原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
+一般受控场景业务上限 5 分钟；runtime 四项独立隔离回归每项同为 5 分钟，独立创建现场且只读共享 runner 产物，最多两项并发；排队在 NewScenario 前，不占业务期限。旧综合隔离及旧 debug-runtime wrapper 已退役。原生工作区删除/重启同样为 10 分钟，覆盖原生资源操作、两次 HTTP 查询、重启与无关任务的第二条三阶段工作流；原生工作区重型场景的 Go 父期限为 11 分钟。真实场景 10 分钟；多轮 `candidates` 组为 30 分钟（多个真实业务回合、Orca readiness 和自动审核，覆盖双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒；仅服务启动前初始化项目/SQLite 的 `task validate/create` 夹具准备命令为 2 分钟，仍受场景总期限约束。原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
 
 ## 真实环境
 
@@ -172,3 +175,5 @@ Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_met
 ## Worker 分步交付断言
 
 当前 delivery.local-codex 的最小材料将 implement.ps1 的本地提交与 publish.ps1 的推送/PR 分开。development/v3 场景核对业务轮次、同会话/Attempt、Command/输入版本/规范 final 来源、每步骤原生 usage 和正确 PR 实际合并；报告绑定原执行，不比较阶段成果或冻结 PR head。readiness 独立计入原生现场，不冒充业务轮次；报告整理要求不等于强只读权限保证。规则见[统一 PR 流程](../../docs/spec/worker-pr-flow.spec.md)。
+
+运行 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled` 选择四项独立隔离场景；可用 `-scenario` 精确选择。只有该包已审查的四项允许 Go `-parallel=2`，其他 E2E 包仍串行。构建场景写自身 source clone，其他场景只读 runner 二进制，禁止写工作树 bin、共享临时 home 或固定端口。生成新调试包仍串行构建 npm/dist，由 `scripts/test-debug-release.ps1` 独立验证当前正式调试入口。

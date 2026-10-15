@@ -17,7 +17,7 @@
 | `internal/console`、`internal/consoleapp`、`internal/app/console.go`、`cmd/steerline/main.go` | 删除 TUI 及入口/只用辅助函数，清理引用和依赖 |
 | `internal/app/application_directory.go`、`internal/projectconnection`、`internal/localservice`、`web/server` | 保留原发现/转接/实例核验；不把 consoleapp.Load 换名迁回应用目录，现有目录已独立实现 |
 | launchers、`debug-template`、生成器、`driver/debug_release.go` / `debug_reset.go` / `debug_web.go` | 默认完整 Web 包、移除 TUI dispatch/状态处理、保留服务所有权与 reset 门槛 |
-| runner/boundary、混合集成/E2E、`scripts/debug-runtime.ps1` | 移除 TUI 选择/动作，保留其他断言；旧脚本继续仅作隔离回归夹具，不变成日常调试入口 |
+| runner/boundary、混合集成/E2E、`scripts/debug-runtime.ps1` | 移除 TUI 选择/动作，保留其他断言；删除无剩余消费者的旧脚本；隔离回归改由独立场景和唯一生成器承担 |
 
 ## 2. 实施步骤
 
@@ -38,7 +38,7 @@
 | `tests/e2e/internal/driver/tui_http_test.go`、`scripts/test-tui-http.ps1` | 删除整个 TUI runtime 入口；原请求/交付/final 等仍有效要求由当前 HTTP/Web 与业务场景承担，在验收记录列出覆盖归属 |
 | `testenv/recovery.go` 的 AssertRecoveryConsole、`suites/recovery/disconnect_test.go` | 删除 u 键/弹层和截图；driver 增加窄公共 HTTP recovery 查询，带原 run/execution/attempt，testenv 只消费 DTO。用 WaitRecovery 已核验的原快照作查询前证据，查询后经 driver 读取同一业务域快照，避免重复 CLI 枚举；保留两次检查前后业务不变、缺 thread 不给继续资格及原失败事实；复用 recovery.failure-results 场景；暴露既有 FinishBody 期限边界，在最后业务断言后冻结，正常停服作为独立收尾，不放宽业务期限 |
 | `suites/nativeworkspace/removal_restart_test.go` | 删除重开 TUI；在删除后/重启后等待基础 HTTP 查询就绪，核对项目/数据库/原执行及当前服务实例；无关任务启动轮询复用原快照检查，不叠加重复 HTTP 查询。保留真实工作区删除与无关任务启动的场景 ID |
-| `suites/runtime/installed_debug_isolation_test.go`、`scripts/test-debug-runtime-isolation.ps1`、`scripts/debug-runtime.ps1` | 删除 TUI 批处理/ConPTY 和 ui/views 专属断言；保留源码/模拟安装 home 隔离、服务/CLI、链接越界、过期实例与跨 home 锁反例。launcher 文件反例改用仍有效的 service-window/Web 文件；场景内“安装版”仍用隔离夹具 |
+| `suites/runtime/isolation*_test.go`、旧 debug-runtime 两份脚本 | 删除旧综合场景与两份专属脚本。保留构建输出、路径/SQLite、服务写保护、双 home 的四个独立场景；新调试包由唯一生成器测试覆盖。旧 UI/wrapper/源码 exe 回退等已删除入口断言随入口退役 |
 | `testenv/console_windows*`、`console_other.go`、ConPTY helper 测试 | 消费者替换后复核：仅服务 TUI 的按键/退出驱动删除；通用可见服务窗口、Job/process 及原生工具能力保留，不按文件名批量删除 |
 
 ## 3. 测试计划
@@ -53,7 +53,7 @@
 | TR-A4 | 候选数量/原请求 owner 回归 | `go run ./cmd/test-feedback -- ./internal/execution -run '^Test(MC9|CandidateStartReservationsRetainFailuresAndBoundParticipation|CandidateReservationConcurrentLimit)$' -count=1`；客户端接线改为两候选后执行 | 原五候选上限、串行/并发第六次拒绝及原请求重放由现有 owner 用例实际核对，不用删除覆盖替代精简。runner summary 与用例清单 |
 | TR-A3 | 定向调试包生成/重置 | 步骤 4 先补入口能力，再运行 `./scripts/test-debug-release.ps1`（不传 Live）；扩展该现有脚本保留默认地址生成检查，并为运行中的各包分配明确不同端口，覆盖单/双项目 | 默认包三 exe/Web 入口存在、无 TUI 入口；冲突失败、冻结/锁门槛/reset 范围和清理通过。包内 generation-test.json、service-test.log 及新增最小 reset/退出证据 |
 | TR-A4 | L3 controlled，recovery.failure-results | 公共 driver 改接后：`go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=recovery.failure-results'` | 原失败/缺 thread/只读检查均通过；原执行及业务不变，零补发。scenario.json、查询响应及检查前后快照 |
-| TR-A4 | L3 controlled，runtime.installed-debug-isolation；E2E 编译 | 隔离夹具调整后：`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled '-scenario=runtime.installed-debug-isolation'`；`go test -tags=e2e ./tests/e2e/... -run '^$'` | 非 TUI 的安装/调试隔离反例实际通过；其余 E2E 编译不引用删除入口。运行证据与编译日志分开，不把编译声明为场景通过 |
+| TR-A4 | L3 controlled，runtime 四个独立隔离场景；E2E 编译 | 隔离夹具调整后：`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled`；`go test -tags=e2e ./tests/e2e/... -run '^$'` | 四个独立隔离场景实际通过，零 skip、每项资源清理成功；核对原始 Go JSON 至少两项执行区间重叠；其余 E2E 编译不引用删除入口。运行证据与编译日志分开，不把编译声明为场景通过 |
 | TR-A5、TR-A2 | Web 单元/构建、真实 Edge web.smoke | `./scripts/test-web.ps1`；最终代码生成新包并运行 `./scripts/test-web-smoke.ps1`。扩展原 smoke 的浏览器关闭检查：在交付前已有活动轮次时关闭页面，经公共查询核对原项目服务/执行仍活动，再打开原目标继续 | Web 单元/构建通过；任务/反馈/final/交付/离线及关闭页面不停止业务实际通过。smoke.log、browser trace/截图、原身份快照、smoke-cleanup.json，进程/监听为 0 |
 | TR-A6 | 文档静态 | 文档完成后：`python scripts/check_doc_links.py`；`git diff --check` | 导航无失效本地链接，差异格式通过；历史未验不改为通过。结果写 acceptance |
 
@@ -77,4 +77,21 @@
 | TR-A2/A5，Web | `./scripts/test-web.ps1`；随后 `./scripts/test-web-smoke.ps1 -WebAddress 127.0.0.1:19748` 创建新 simulate 包，串行真实 Edge | 最新主干整合后的 Web 单元/构建与 smoke 通过、关闭浏览器后原执行保持、收尾进程/监听 0；新包日志/trace/cleanup 写 acceptance |
 | TR-A6，文档与差异 | `python scripts/check_doc_links.py`、`git diff --check`；最终文档完成后 | 0 错误，记录范围；旧失败与待验不改为通过 |
 
-runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前次仅有 dirty 工作树时，该子检查仍绑定旧 HEAD；本轮先提交已审计代码与安排，保持工作树干净，再用 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled '-scenario=runtime.installed-debug-isolation'` 对实际 PR 提交执行一次验证，所有夹具仍为临时 home，保留原 10 分钟期限和全部非 TUI 断言。新 runner summary/scenario/cleanup 写入专属验收，旧失败保留。该项仍未通过时以草稿 PR 明确列为待验，不凭其他检查代替通过。
+runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前次仅有 dirty 工作树时，该子检查仍绑定旧 HEAD；本轮先提交已审计代码与安排，保持工作树干净，再用 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled` 对实际 PR 提交执行一次验证，所有夹具仍为临时 home，保留原 10 分钟期限和全部非 TUI 断言。新 runner summary/scenario/cleanup 写入专属验收，旧失败保留。该项仍未通过时以草稿 PR 明确列为待验，不凭其他检查代替通过。
+
+
+## 4. 独立隔离回归与补验安排（2026-10-15）
+
+用户授权删除旧综合场景，保留长期必要隔离回归并安全并行。删除 `runtime.installed-debug-isolation` 及其仅用旧脚本的冗余检查，不用新结果覆盖旧超时记录。四个新场景每项仍为普通 controlled 5 分钟业务期限，Go 父期限保留每项 6 分钟余量；并发排队不计入场景期限。只有已审查的 runtime controlled 包允许 `-parallel=2`，其他包、native/live 和 L2 顺序不变。各项自有 home/仓库/进程/端口/provider/证据，runner 构建产物只读；构建场景只写自己的源码 clone，不再改工作树 bin。所有业务 I/O 完成后冻结 FinishBody，再由独立 cleanup 核实资源清理。
+
+| 验收项 | 场景 / 环境 | 最小实现与通过条件 | 命令 / 时点 / 证据位置 |
+| --- | --- | --- | --- |
+| [TR-A4](../acceptance/tui-retirement.md#验收项) | runtime.source-build-isolation / L3 controlled | 独立源码 clone 的 bin junction、输出硬链接拒绝；普通构建/替换保持另一临时 home 的程序/hash、DB、业务事实不变；源码/构建身份正确 | 完成改造且提交当前源码后，`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled`；runner summary 与各场景 runtime-identities.json，结果登记专属 acceptance |
+| TR-A4 | runtime.path-isolation / L3 controlled | state junction、run_dir/worktree_root 越界、SQLite DB/WAL/SHM 硬链接实际拒绝，无越界写；解除链接后原生校验恢复；无业务 worker | 同上；state/SQLite 反例日志、SQLite 字节摘要与 scenario.json |
+| TR-A4 | runtime.service-write-isolation / L3 controlled | 原生 service-window 启停/同构建重启、子进程身份；旧实例/改配置未发布请求；跨 home 仓库锁有效；不跑完整交付 | 同上；窗口日志、控制回执/计数、前后快照与 scenario.json |
+| TR-A4 | runtime.dual-home-isolation / L3 controlled | 唯一双环境业务检查，两独立执行/原请求/交付，A 合并时 B 保持原状态、B 交付不改变 A；完整通用交付规则复用已有 delivery.basic | 同上；两侧快照、请求身份/摘要和 scenario.json |
+| TR-A3、TR-A4 | 当前新调试包生成/运行 / controlled | 继续使用已有 test-debug-release 唯一流程，验证已生成包互不串用、固定端口、Web、锁/reset、冻结方案；生成阶段串行，因为共享 npm ci/dist，运行各包沿现有所有权清理 | `./scripts/test-debug-release.ps1`；四场景通过后执行；新包 generation-test.json/runtime-test.log，登记 acceptance |
+| TR-A4 | workspace.orca-removal-restart / L3 native | 补之前仅编译的本机原生删除/重启链；保留真实 Orca 删除、Git 注销、两次 HTTP 查询的项目/数据库/原执行/当前实例和无关任务启动全部断言，不请求模型 | `go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native`；驱动稳定后运行；runner/scenario/native-removal-observation.json，登记 acceptance |
+| TR-A4、TR-A6 | runner/编译/文档静态 | 新登记精确选择，旧 ID 拒绝，安全并发白名单/期限不放宽；所有 E2E 编译、依赖边界、链接无失效 | `go run ./cmd/test-feedback -- ./cmd/test-feedback -run '^Test(E2E|Level)' -count=1`；`go test -tags=e2e ./tests/e2e/... -run '^$'`；L1、文档检查按实际修改范围执行；日志路径登记 acceptance |
+
+不重跑 Full、全部 L3/live 或真实模型；本次未改变产品 worker 行为。原 Web Edge 闭环与 recovery.failure-results 已在最终产品实现上通过，本次仅重构测试组织，不重复它们；若补验发现产品修改，再选择受影响回归。无新增人工项。

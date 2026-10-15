@@ -23,7 +23,7 @@
 | `scripts/new-debug-release.ps1`、`driver/debug_web.go` | 当前 Web 由非空 WebAddress 选择；默认包没有 Web。改成默认完整 Web 包，避免删除 TUI 后默认调试包无前端 |
 | `driver/debug_reset.go`、`debug_release_test.go` | reset 读写 TUI 的 ui/views；移除该依赖，同时保留活动 Web/应用/项目/worker 的阻止重置条件 |
 | `testenv/recovery.go`、`suites/recovery/disconnect_test.go`、`suites/nativeworkspace/removal_restart_test.go` | 业务场景夹带 TUI u 键或重开查询；替换为公共 HTTP 断言，不能直接删除整个恢复/工作区场景 |
-| `internal/testkit/boundary`、`cmd/test-feedback/scoped.go`、`scripts/debug-runtime.ps1` | 有硬编码 TUI 包、跨平台依赖闭包、隔离测试入口；同步清理，保留 HTTP/存储/执行域和安装隔离守卫 |
+| `internal/testkit/boundary`、`cmd/test-feedback/scoped.go`、旧源码调试脚本（本次删除） | 有硬编码 TUI 包、跨平台依赖闭包、隔离测试入口；同步清理，保留 HTTP/存储/执行域和安装隔离守卫 |
 
 以上是代码审计结论，不表示已实施或已验证退役后的产品。
 
@@ -84,3 +84,6 @@ TUI 专属渲染、键盘、窗口偏好、TUI 客户端日志/observer 测试�
 | TR-A6 | 当前文档和测试导航无已删除的可执行入口/失效本地链接；历史结论与本批新验收分开，未执行内容不写成已通过 |
 
 本批不新增阻塞人工验收项。既有 Web 人工体验仍归原任务，原 TUI 专属未验项在实际删除后标记退役、不再适用，不能改为通过；与后台能力有关的未验要求仍归原记录。
+
+
+2026-10-15 用户确认的验证范围调整：旧综合 `runtime.installed-debug-isolation` 与旧源码调试 wrapper 退役；隔离保证由 `runtime.source-build-isolation`、`runtime.path-isolation`、`runtime.service-write-isolation`、`runtime.dual-home-isolation` 四项独立 controlled 场景及唯一新调试包测试承担。安全独立的四项最多并发二项，不共享可写构建产物；每项必须实际通过并清理。旧超时证据保留，不能仅删除旧场景即宣称验收完成。

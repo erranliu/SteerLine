@@ -102,11 +102,6 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if id == "runtime.installed-debug-isolation" {
-		// Two source builds, two isolated service lifecycles, path refusals and
-		// two staged workflows share this bound; command limits stay unchanged.
-		timeout = 10 * time.Minute
-	}
 	if id == "workspace.orca-removal-restart" {
 		// Native worktree creation/removal, HTTP queries, service restart
 		// and two staged workflows share this bound; each command stays bounded.

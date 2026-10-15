@@ -52,7 +52,7 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 .\scripts\test-debug-release.ps1 -Live
 ```
 
-两条命令都先通过生成脚本创建两套新包；结果/日志保留在包内 evidence。范围和结果见 [Plan](plans/debug-release.plan.md)、[验收](acceptance/debug-environment.md)。现有 `debug-runtime.ps1` 只用于既有源码隔离回归，不是日常或 AI 调试入口。
+两条命令都先通过生成脚本创建两套新包；结果/日志保留在包内 evidence。范围和结果见 [Plan](plans/debug-release.plan.md)、[验收](acceptance/debug-environment.md)。旧 `debug-runtime.ps1` 及其专属综合测试已退役。长期隔离回归采用四个独立 controlled 场景：`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled`，详见 [E2E 指南](../tests/e2e/README.md)。
 
 真实 Codex 沙箱及 GitHub credential-helper 无人值守回归：
 
