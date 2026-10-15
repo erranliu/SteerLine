@@ -480,6 +480,11 @@ func (d *debugRelease) prepareSelected(mode string) error {
 			}
 			settings["executable"] = codex
 		}
+		// This generated repository records only the standard helper reference;
+		// the external gh login and credential storage remain in their owner.
+		if _, err := d.git("config", "--local", "--replace-all", "credential.helper", "!gh auth git-credential"); err != nil {
+			return err
+		}
 		// Existing native logins remain external dependencies. Never copy auth,
 		// user config or credential material into a generated debug package.
 		if _, err := d.debugEnvironment(os.Environ(), mode); err != nil {
