@@ -38,7 +38,7 @@ func (p *Project) UseControlledTerminal(environment string, f controlled.Recover
 	p.ConfigureRecovery(f)
 	pairing, closeState, err := controlled.OpenTerminalState(p.Provider)
 	p.Scenario.Must(err)
-	p.Scenario.t.Cleanup(closeState)
+	p.Scenario.fixtureClosers = append(p.Scenario.fixtureClosers, closeState)
 	raw, err := json.Marshal(pairing)
 	p.Scenario.Must(err)
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Home, "orca-state-fixture.json"), map[string]string{"pairing": "orca://pair?code=" + base64.RawURLEncoding.EncodeToString(raw)}))

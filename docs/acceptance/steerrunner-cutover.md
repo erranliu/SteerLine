@@ -60,3 +60,6 @@ R1 余下三场景已改用公开候选/Run/Attempt/session、原生夹具次数
 `r1-user-host` 的 TestCodexResume 通过（316.41 秒，干净 cf0b818f），原 Run/thread/workspace 不变、新 Attempt 显式恢复、四次业务输入完成交付。其本机 Orca 历史失败因用户明确取消该路径不再重跑。用户已明确远端原生环境修好，恢复 environment 真机验收。
 
 Runner 第五轮远端已完成实施，在报告阶段暴露应用冻结策略错误；使用原 worker 的实际 PolicyCapabilities 代替本机默认，Runner 新构建 c85f4e7 单元通过，需新包复验。修正不绕过原策略资格检查。之前受控 unknown-send 清理遗留的原 Run，已通过同用户前台 serve 的显式清理 epoch 确认 stop_status=stopped，服务 not_running，见 `r1-public/unknown-original-cleanup.json`。没有按猜测 PID 清理或发送业务恢复输入。
+
+
+最新用户调整为仅完成本机 Codex 验收，两个 Orca 路径均不再作为本次待完成门槛；第六轮远端在通知时已退出，原 Run 66c944425084d05d2401eeea5961cf82 的 stop_status=stopped，服务发现不可用，无 PR。不能记为远端通过。rebase 后冻结 ed44a08b 的 TestCodexResume 再次通过（261.02 秒）；余下本地等待合并重启场景正在运行。

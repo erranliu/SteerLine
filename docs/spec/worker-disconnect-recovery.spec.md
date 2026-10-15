@@ -1,5 +1,7 @@
 # Spec：Codex / Orca 核心断连恢复
 
+源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](../architecture/current-code-architecture.md)。
+
 日期：2026-10-12。状态：实现、审计修正及受影响最小自动验证已完成；live 全链未在本轮审计重跑，未部署。普通开发，无 Task ID，不修改 execution-map 或安装现场。实时证据见专属验收。
 
 [Plan](worker-disconnect-recovery.plan.md) · [专属验收](../acceptance/worker-disconnect-recovery.md) · [L3 规划](../../tests/e2e/suites/recovery/README.md)
@@ -22,11 +24,11 @@
 
 基线是 `6d4b4fa2` 与尚未提交的 `u` 崩溃修复。源码审计依据：
 
-- [worker_lifecycle.go](../../internal/execution/worker_lifecycle.go)：reconciling 的已停止轮次提前返回，可能跳过恢复资格与 Decision。
-- [staged_flow.go](../../internal/execution/staged_flow.go)：非 implement 轮次先要求 final 来源，明确失败也可能留在 reconciling；已有反馈可回到 implement。
-- [worker_recovery.go](../../internal/execution/worker_recovery.go)：已有 continue、原会话、新 Attempt 与未知操作守卫，不必另起恢复协议。
-- [Codex lifecycle](../../internal/execution/adapters/codex/lifecycle.go)：SessionAvailable 当前依据合法 ID，尚非实际会话读取成功。
-- [Orca lifecycle](../../internal/execution/adapters/orcatransport/lifecycle.go)：原终端可重接，替代终端恢复被拒绝。
+- [worker_lifecycle.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/worker_lifecycle.go)：reconciling 的已停止轮次提前返回，可能跳过恢复资格与 Decision。
+- [staged_flow.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/staged_flow.go)：非 implement 轮次先要求 final 来源，明确失败也可能留在 reconciling；已有反馈可回到 implement。
+- [worker_recovery.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/worker_recovery.go)：已有 continue、原会话、新 Attempt 与未知操作守卫，不必另起恢复协议。
+- [Codex lifecycle](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/adapters/codex/lifecycle.go)：SessionAvailable 当前依据合法 ID，尚非实际会话读取成功。
+- [Orca lifecycle](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/adapters/orcatransport/lifecycle.go)：原终端可重接，替代终端恢复被拒绝。
 
 ## 2. 首轮范围
 

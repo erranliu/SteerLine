@@ -1,5 +1,7 @@
 # 并行开发指南
 
+源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](current-code-architecture.md)。
+
 > 2026-10-14：[#91](../spec/tui-http-client.spec.md)已交付 TUI/HTTP接入；[#92](../spec/http-command-boundary.spec.md)经PR #311交付HTTP消费端口、登记/对账与记录owner，已移出[草稿任务表](../roadmap/drafts/roadmap.md)。#93经PR #312交付journal跨进程终态保护与窄observer；#94/#95/#96因Worker三层重构交叉继续留草稿。旧二阶段候选不作为当前队列；拟议owner不代表已实现，执行/验收状态归 execution-map。
 
 本文持续维护 SteerLine 的功能划分、模块所有权、可并行条件和冲突触发点，是设计或调整 roadmap 前的阅读与检查入口。目标是提高 AI 开发的有效吞吐：让更多任务能够独立理解、实现、验证和交付，降低共享修改、等待、返工与集成成本。业务正确性、权限、原请求恢复和唯一交付是必须保持的边界，详见[整体架构](../architecture.md)。
@@ -26,14 +28,14 @@
 | 功能 / 状态 | 主要归属 | 可相对独立推进的范围 | 需要协调的触发点 | 当前资料与定位 |
 | --- | --- | --- | --- | --- |
 | 任务契约、DAG 与资格 / 已有 | task、task/model | 固定契约下的任务校验、查询、选择纯规则及任务应用用例 | TaskContract/身份改变、领取与结果端口、前置/丢弃/后继释放语义 | [数据模型](../product-design/data-model.md)、[任务输入与文档端口](../../internal/task/commands.go)、[纯模型](../../internal/task/model) |
-| 候选、派发、反馈、恢复与交付 / 已有 | execution | 沿现有小端口修改明确用例，保持 actor 和提交屏障 | 多项用例共改 WorkflowRun/Execution、Decision 路由、Operation 意图/回执、控制版本或恢复授权；同模块内也需划分共享所有者 | [反馈](../product-design/decisions.md)、[执行共同约束](../spec/execution-architecture.spec.md)、[提交屏障](../../internal/execution/service_commit.go) |
-| Codex / 本机 Orca 接入 / 已有 | execution/adapters/codex、orcatransport | 实现自身协议、观察和能力核验；不改中心业务状态机 | 共享 Codex codec、backend 契约、权限/资源封套、绑定格式、会话/轮次或错误分类改变 | [执行配置](../product-design/execution-profiles.md)、[后端契约](../../internal/execution/backend)、[共享协议 codec](../../internal/execution/adapters/protocol/codexapp) |
+| 候选、派发、反馈、恢复与交付 / 已有 | execution | 沿现有小端口修改明确用例，保持 actor 和提交屏障 | 多项用例共改 WorkflowRun/Execution、Decision 路由、Operation 意图/回执、控制版本或恢复授权；同模块内也需划分共享所有者 | [反馈](../product-design/decisions.md)、[执行共同约束](../spec/execution-architecture.spec.md)、[提交屏障](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/service_commit.go) |
+| Codex / 本机 Orca 接入 / 已有 | execution/adapters/codex、orcatransport | 实现自身协议、观察和能力核验；不改中心业务状态机 | 共享 Codex codec、backend 契约、权限/资源封套、绑定格式、会话/轮次或错误分类改变 | [执行配置](../product-design/execution-profiles.md)、[后端契约](../../internal/execution/backend)、[共享协议 codec](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/adapters/protocol/codexapp) |
 | 工作区、PR/provider 与进程资源 / 已有 | execution/workspace、publication、process | 既有调用契约下的 Git/provider/OS 操作和事实核验 | base/remote、PR 归属、进程树所有权、清理条件或资源意图改变；共同执行结算需协调 | [工作区设计](../product-design/worktree-preparation.md)、[交付规则](../product-design/data-model.md#pr-与交付)、[资源源码](current-code-architecture.md#module-owners) |
-| 会话与活动采集/读取 / 已有 | execution/conversation、采集 adapter、product/query、storage | 来源 mapper、正文读取和活动展示可沿固定模型分别改进 | 来源/轮次/正文修订、规范来源选择、去重游标或写入与 checkpoint 原子性改变 | [会话](../product-design/conversation-events.md)、[Activity](../product-design/activity.md)、[会话存储端口](../../internal/execution/conversation_ports.go) |
+| 会话与活动采集/读取 / 已有 | execution/conversation、采集 adapter、product/query、storage | 来源 mapper、正文读取和活动展示可沿固定模型分别改进 | 来源/轮次/正文修订、规范来源选择、去重游标或写入与 checkpoint 原子性改变 | [会话](../product-design/conversation-events.md)、[Activity](../product-design/activity.md)、[会话存储端口](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/conversation_ports.go) |
 | 产品查询与客户端传输 / 已有 | product/api、query、client、httpapi | 稳定 DTO 下的只读投影、查询组合、CLI/TUI 和本机 HTTP 消费适配 | 公开字段/错误/能力/游标语义、请求目标、同快照要求或命令受理规则改变 | [产品 API](../../internal/product/api)、[本机协议](../product-design/local-client-protocol.md)、[查询组装](../../internal/product/query/ports.go) |
 | 当前执行 TUI / 已有 | console；final_reader 拥有 final 状态和只读受理，Model 拥有导航/步骤目标/滚动/恢复/原会话入口 | 稳定产品契约下的 final 分页/正文/失效规则可在窄查询端口独立验证；布局、输入和候选选择仍由宿主修改 | 新后台能力、公共 DTO、草稿/原请求绑定、共享焦点/导航或宿主派生的查询/受理目标改变 | [控制台设计](../product-design/execution-console.md)、[final 状态所有者](../../internal/console/final_reader.go)、[宿主接线](../../internal/console/final_replies.go) |
 | 持久化与原子提交 / 已有 | storage/ports、sqlite | 已明确语义下的读取或提交实现；消费者仍经窄端口 | schema、唯一约束、CAS/版本、同事务快照、checkpoint 与领域记录提交边界改变 | [数据模型与格式来源](../product-design/data-model.md)、[提交契约](../../internal/storage/ports/transactions.go)、[快照端口](../../internal/storage/ports/application_snapshot.go) |
-| 配置、应用组装与服务宿主 / 已有 | app 的 local/terminal 组装单元、app/host | 既有后端的配置/target/preflight/factory 通常只改所属文件；Orca 本机与远端共用单终端实现。稳定宿主/产品端口下的进程控制和入口能力 | 新后端仍改中央显式组合；共同身份/policy、公共构造、配置摘要、exe/home 传递、实例/锁、启动与停服规则改变 | [local 组装](../../internal/app/directory_local.go)、[Orca 单终端组装](../../internal/app/directory_orca_terminal.go)、[组装/宿主源码](current-code-architecture.md#build-install-and-launch-sources) |
+| 配置、应用组装与服务宿主 / 已有 | app 的 local/terminal 组装单元、app/host | 既有后端的配置/target/preflight/factory 通常只改所属文件；Orca 本机与远端共用单终端实现。稳定宿主/产品端口下的进程控制和入口能力 | 新后端仍改中央显式组合；共同身份/policy、公共构造、配置摘要、exe/home 传递、实例/锁、启动与停服规则改变 | [local 组装](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/app/directory_local.go)、[Orca 单终端组装](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/app/directory_orca_terminal.go)、[组装/宿主源码](current-code-architecture.md#build-install-and-launch-sources) |
 | 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary) |
 | 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 2.2先推导草稿/artifact/人工事项，2.3实际会话接入验证必要权限；成熟后按稳定成果拆分 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../archive/roadmap/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
 | TUI 经 HTTP 接入 / #91 当前源码 | httpapi 服务端、httpcontract/httpclient/httpfs、consoleapp 组装和 console 消费 | #45 基线已有；#91 补接口/纯客户端并换 TUI，共享接线由单一任务拥有，不等待 WebUI/SSE | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [本机客户端协议](../product-design/local-client-protocol.md)、[拟议界面](../product-design/planning-ui.md) |
@@ -118,8 +120,8 @@ Codex 开发的正式交付依赖维护于 execution-map；SteerLine产品自身
 
 | 影响范围 | 当前验证定位 | 说明 |
 | --- | --- | --- |
-| 单 owner 规则 | [任务纯规则用例](../../internal/task/model/taskgraph_test.go)、[执行恢复隔离用例](../../internal/execution/candidate_resume_isolation_test.go)、[控制台交互用例](../../internal/console/interaction_test.go) | 定向选受影响规则；这些用例不证明所有同模块变更可以独立 |
-| 公共边界、端口、组装 | [依赖守卫](../../internal/testkit/boundary)、[真实 app/client 接线](../../tests/integration/candidate_console_test.go)、[L1 选择](../../cmd/test-feedback/scoped.go) | 接线或公共契约变化核对实际消费者，fixture 保持正式接口；源码闭包按已有平台守卫核验 |
+| 单 owner 规则 | [任务纯规则用例](../../internal/task/model/taskgraph_test.go)、[执行恢复隔离用例](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/candidate_resume_isolation_test.go)、[控制台交互用例](../../internal/console/interaction_test.go) | 定向选受影响规则；这些用例不证明所有同模块变更可以独立 |
+| 公共边界、端口、组装 | [依赖守卫](../../internal/testkit/boundary)、[真实 app/client 接线](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/tests/integration/candidate_console_test.go)、[L1 选择](../../cmd/test-feedback/scoped.go) | 接线或公共契约变化核对实际消费者，fixture 保持正式接口；源码闭包按已有平台守卫核验 |
 | 交付与恢复组合 | [登记场景](../../tests/e2e/suites.json)：delivery.basic、recovery.waiting-merge-restart（controlled）及对应 live 场景 | controlled 和 live 分别选择；delivery.basic 只证明 A 交付及 B 就绪，不证明 B 的后继执行 |
 | 双本机候选与原生资源 | 登记的 candidates.local 及[本机验收摘要](../acceptance/archive/completed/candidate-acceptance.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
 

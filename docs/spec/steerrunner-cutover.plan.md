@@ -37,3 +37,6 @@ Runner 真机验收登记在 Runner SR-A11/SR-A12。先运行 `scripts/new-debug
 
 
 2026-10-15 用户明确放弃本机 Orca 路径：移除 terminal-local-reconnect 必验项；当前 R1 为基础交付、waiting-merge-restart、本机 Codex resume、远端 environment unknown-send 四项。历史冻结批次包含的本机 Orca 失败只保留证据，不再重跑或阻塞验收。远端原生环境修复后，继续按新包完成 environment 真机闭环。
+
+
+最新用户范围：不做远端 Orca 路径验收，仅完成本机 Codex。本次 R1 必验为 delivery.basic、recovery.waiting-merge-restart、recovery.codex-resume；不再启动 Orca 场景。Orca 的已实现代码与历史失败保留，不把取消项改写成通过。真实本机验收仍须全新 debug 包、固定 native Codex、原生沙箱探针、指定文件/检查/原 final 和专属真实 PR。

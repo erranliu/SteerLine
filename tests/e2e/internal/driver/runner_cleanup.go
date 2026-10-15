@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
+	app "github.com/erranliu/SteerLine/internal/app"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -130,4 +133,41 @@ func CleanupRunner(ctx context.Context, executionConfig, stateDir string, candid
 		}
 	}
 	return cli.StopService(ctx, service.InstanceID, "fixture-close-"+service.InstanceID)
+}
+
+// CleanupOwnedRunner runs in the same environment as the original project.
+// The helper inherits external tool references without exporting credentials.
+func (c *Client) CleanupOwnedRunner(ctx context.Context, helper string) error {
+	_, err := c.runWithTimeout(ctx, 110*time.Second, helper, "runner-cleanup", "-config", c.Config)
+	return err
+}
+
+func MainRunnerCleanup(args []string) error {
+	fs := flag.NewFlagSet("runner-cleanup", flag.ContinueOnError)
+	path := fs.String("config", "", "owned project config")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	c, err := app.LoadConfig(*path)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return err
+	}
+	hc, err := app.BuildHostConfig(ctx, c)
+	if err != nil {
+		return err
+	}
+	candidates, err := ReadOriginalOperations(ctx, filepath.Join(hc.RunDir, "steerline.db"), c.Identity())
+	if err != nil {
+		return err
+	}
+	err = CleanupRunner(ctx, app.GlobalExecutionConfigPath(), filepath.Join(hc.RunDir, "runner"), candidates)
+	if encodeErr := json.NewEncoder(os.Stdout).Encode(map[string]any{"confirmed": err == nil, "error": fmt.Sprint(err)}); encodeErr != nil {
+		return encodeErr
+	}
+	return err
 }

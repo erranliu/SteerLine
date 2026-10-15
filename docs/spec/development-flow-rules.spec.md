@@ -1,5 +1,7 @@
 # Spec：固定开发流程规则独立
 
+源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](../architecture/current-code-architecture.md)。
+
 任务 ID：94；任务名称：固定开发流程规则独立。
 
 状态：2026-10-14 草稿规划，未纳入执行、未实施。配套 [Plan](development-flow-rules.plan.md)、[专属验收](../acceptance/development-flow-rules.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动另固定文档与代码版本。
@@ -8,7 +10,7 @@
 
 ## 问题与目标
 
-[staged_flow.go](../../internal/execution/staged_flow.go) 的结果消费同时调用会话提交、生命周期、PR查询与 actor 提交；[workflow/result.go](../../internal/execution/workflow/result.go) 的严格结果解析实际是固定流程规则。纯步骤变更仍须构造完整 Service。
+[staged_flow.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/staged_flow.go) 的结果消费同时调用会话提交、生命周期、PR查询与 actor 提交；[workflow/result.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/workflow/result.go) 的严格结果解析实际是固定流程规则。纯步骤变更仍须构造完整 Service。
 
 建立 `internal/execution/development` 纯规则 owner，收拢 development/v3 的严格业务 JSON解析、步骤结果判断、报告重试、基础提示词/结果指令和下一 StageInput 构造。规则接收固定输入/源结果、当前步骤、已核验本轮事实、报告权限描述及 actor 提供的继续资格/原因值，返回具体的结果与下一步骤/输入声明，不执行动作、不提交状态。当前仅一个固定流程，不新增 DSL、插件注册、通用 effect/事件框架或第二份步骤状态。
 

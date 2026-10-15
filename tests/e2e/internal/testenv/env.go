@@ -41,6 +41,7 @@ type Scenario struct {
 	t                       *testing.T
 	projects                []*Project
 	processes               []*testprocess.Process
+	fixtureClosers          []func()
 	files                   []*os.File
 	resources               []map[string]any
 	usageVerified           bool
@@ -792,9 +793,9 @@ func (s *Scenario) cleanup() {
 		if project == "" {
 			project = strings.ToLower(filepath.Clean(filepath.Join(p.Repo, ".git")))
 		}
-		state, readErr := driver.ReadWorkflow(cleanupCtx, p.Database, project)
+		_, readErr := driver.ReadWorkflow(cleanupCtx, p.Database, project)
 		if readErr == nil {
-			readErr = driver.CleanupRunner(cleanupCtx, filepath.Join(p.Home, "execution.json"), filepath.Join(filepath.Dir(p.Database), "runner"), state.Candidates)
+			readErr = p.Driver.CleanupOwnedRunner(cleanupCtx, s.Run.Helper)
 		}
 		cleanupCancel()
 		if readErr != nil {
@@ -802,6 +803,9 @@ func (s *Scenario) cleanup() {
 			failures = append(failures, "original Runner cleanup: "+readErr.Error())
 		}
 		_ = controlled.Write(filepath.Join(s.Output, p.Name+"-runner-cleanup.json"), map[string]any{"confirmed": readErr == nil, "error": fmt.Sprint(readErr)})
+	}
+	for _, closeFixture := range s.fixtureClosers {
+		closeFixture()
 	}
 	for _, f := range s.files {
 		if err := f.Close(); err != nil {
