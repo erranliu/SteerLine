@@ -1,4 +1,4 @@
-param([string]$WebAddress='127.0.0.1:19743')
+﻿param([string]$WebAddress='127.0.0.1:19743')
 $ErrorActionPreference='Stop'
 $taskRepo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $taskRelease=& (Join-Path $PSScriptRoot 'new-debug-release.ps1') -WebAddress $WebAddress
@@ -20,7 +20,7 @@ $taskOwner=$null
 $taskPassed=$false
 $taskCleanup=$false
 try {
-    $taskOwner=Start-Process -FilePath $taskHelper -ArgumentList @('debug','run','--simulate') -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $taskPackage 'evidence\launch.log') -RedirectStandardError (Join-Path $taskPackage 'evidence\launch.stderr.log')
+    $taskOwner=Start-Process -FilePath $taskHelper -ArgumentList @('debug','run','--simulate','--no-open') -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $taskPackage 'evidence\launch.log') -RedirectStandardError (Join-Path $taskPackage 'evidence\launch.stderr.log')
     Push-Location $taskRepo
     try {
         & npm --prefix web run test:e2e -- smoke.spec.ts 2>&1 | Tee-Object -FilePath (Join-Path $taskPackage 'evidence\smoke.log')
@@ -28,7 +28,7 @@ try {
     } finally { Pop-Location }
 } finally {
     $taskStopErrors=@()
-    foreach ($entry in @(@($taskWeb,'stop'),@($taskBinary,'stop-app'),@($taskBinary,'stop-service','-config',$env:STEERLINE_WEB_CONFIG))) {
+    foreach ($entry in @(@($taskHelper,'debug','stop','--simulate'))) {
         $taskExe=$entry[0];$taskArgs=@($entry | Select-Object -Skip 1)
         & $taskExe @taskArgs 2>&1 | Out-File -LiteralPath (Join-Path $taskPackage 'evidence\stop.log') -Append
         if ($LASTEXITCODE -ne 0) { $taskStopErrors+=($taskExe+' '+($taskArgs -join ' ')) }

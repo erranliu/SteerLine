@@ -61,7 +61,7 @@ var quickOwnerCases = []struct {
 	Tests       []string
 }{
 	{"quick-owner-project-connection", "github.com/erranliu/SteerLine/internal/projectconnection", []string{"TestWebSwitchResolverInheritedPipeIsBounded", "TestWebSwitchResolverRejectsInvalidOutput", "TestWebSwitchResolverCurrentConfigEncoding"}},
-	{"quick-owner-application-http", "github.com/erranliu/SteerLine/internal/product/applicationhttp", []string{"TestWebSwitchAuthenticationRoutesAndUnavailable", "TestWebSwitchOriginalEnvelopeAndInflightReplacement"}},
+	{"quick-owner-application-http", "github.com/erranliu/SteerLine/internal/product/applicationhttp", []string{"TestUnifiedStartupAuthenticationRoutesAndUnavailable", "TestUnifiedStartupOriginalEnvelopeAndInflightIsolation"}},
 	{"quick-owner-web-fixture", "github.com/erranliu/SteerLine/tests/e2e/internal/controlled", []string{"TestWebSwitchHeldStreamRetainsOriginalTurn"}},
 	{"quick-owner-application-client", "github.com/erranliu/SteerLine/internal/product/applicationclient", []string{"TestWebSwitchReconnectAndHome"}},
 	{"quick-owner-web", "github.com/erranliu/SteerLine/web/server", []string{"TestWebAuthenticationAndOriginalForwarding", "TestWebOriginHostAndStaticBoundaries", "TestWebTicketsAreSingleUseAndExpire", "TestWebAddressAndPortConflict", "TestWebLauncherPrivateDiscoveryAndInstance", "TestWebBoundedWritesAndNoBrowserStop", "TestWebSwitchSessionAndNativeStop", "TestWebSwitchDevelopmentProxyAndLease", "TestWebSwitchHomeConfigPreservesPermissions"}},
@@ -72,7 +72,7 @@ var quickOwnerCases = []struct {
 	{"quick-owner-runner-bridge", "github.com/erranliu/SteerLine/internal/runnerbridge", []string{"TestSteerRunnerOutboxBoundaries"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestResolveRepositoryUsesOriginalCommonDir"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPublicationSecretsRejectedBeforeFreeze"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestWebSwitchNativeConnectionLeaseAndRestart", "TestWebSwitchCatalogReadOnlyAndConflicts", "TestWebSwitchCatalogBoundedSlowConfig", "TestWebSwitchApplicationZeroProjectsLifecycle", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestCM71ProductDependencyBoundary", "TestRunnerProjectPreflightLeavesPrivateRunnerFilesToRunner", "TestRunnerTaskRepositoryKeepsConfiguredIdentityAcrossTransportRewrite"}},
+	{"quick-owner-unified-startup", "github.com/erranliu/SteerLine/internal/app", []string{"TestUnifiedStartupConcurrentReuseAndMissingWeb", "TestUnifiedStartupUnknownCreationCannotTakeOver", "TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost", "TestUnifiedStartupFrozenCatalogConflictsBeforeDatabase", "TestUnifiedStartupOverlappingRunDirs", "TestUnifiedStartupZeroProjectsLifecycle", "TestUnifiedStartupLifecycleSharedPIDIndependentInstances", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestCM71ProductDependencyBoundary", "TestRunnerProjectPreflightLeavesPrivateRunnerFilesToRunner", "TestRunnerTaskRepositoryKeepsConfiguredIdentityAcrossTransportRewrite"}},
 }
 
 var quickPackages = func() []string {

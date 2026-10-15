@@ -180,7 +180,7 @@ func ensureNativeStateFilesAllowed(runDir string, worktreeMetadata []string) err
 			if err := validateNativeServiceTree(runDir, ""); err != nil {
 				return err
 			}
-		case "local-api", "runner":
+		case "local-api", "runner", "application-commands":
 			info, statErr := os.Lstat(entryPath)
 			if statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 				return nativeErr("authority_mismatch", entry.Name()+" state must be a plain directory inside native run_dir")

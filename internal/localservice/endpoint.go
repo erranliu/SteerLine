@@ -85,6 +85,9 @@ func Prepare(home, dir, protocol, address string) (*Endpoint, error) {
 	}()
 	l, err := net.Listen("tcp4", address)
 	if err != nil {
+		if detail := portOwner(address); detail != "" {
+			return nil, fmt.Errorf("bind loopback %s: %w; %s", address, err, detail)
+		}
 		return nil, err
 	}
 	id, err := httpclient.CurrentProcessIdentity()
@@ -102,9 +105,14 @@ func Prepare(home, dir, protocol, address string) (*Endpoint, error) {
 		l.Close()
 		return nil, err
 	}
+	if err = Write(dir, "instance.json", e.Identity); err != nil {
+		l.Close()
+		return nil, err
+	}
 	success = true
 	return e, nil
 }
+
 // Write publishes JSON in a private service directory, securing both directory
 // and file. Use WritePrivateFile for files in an application home.
 func Write(dir, name string, value any) error {
@@ -181,7 +189,7 @@ func Read(home, dir, protocol string) (Discovery, error) {
 	if err := fs.VerifyPrivateFile(p); err != nil {
 		return d, err
 	}
-	f, err := os.Open(p)
+	f, err := fs.OpenPrivateSnapshot(p)
 	if err != nil {
 		return d, err
 	}

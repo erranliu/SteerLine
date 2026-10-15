@@ -468,7 +468,8 @@ func (p *Project) createTasks(keys []string) {
 		return taskmodel.FileReference{Path: "docs/spec/" + name, Commit: head, SHA256: hex.EncodeToString(sum[:])}
 	}
 	spec, plan := ref("task.spec.md"), ref("task.plan.md")
-	// task validate is the product's project initialization and validation path.
+	p.StartService()
+	// The shared host owns initialization before CLI task validation.
 	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion}
 	for i, key := range keys {
 		contract := taskmodel.TaskContract{ContractID: "e2e-" + key, Repository: p.RemoteURL, Remote: "origin", Branch: p.BaseBranch, SpecRef: spec, PlanRef: plan, CommonRefs: []taskmodel.FileReference{}, AcceptanceRefs: []taskmodel.FileReference{spec}}
@@ -512,25 +513,42 @@ func (p *Project) createTasks(keys []string) {
 	}
 }
 
+// StartHost starts the home owner without requiring any project to succeed.
+func (p *Project) StartHost() {
+	s := p.Scenario
+	s.t.Helper()
+	if p.Service != nil {
+		return
+	}
+	p.serviceGeneration++
+	cmd := exec.Command(p.Executable, "serve")
+	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	p.Service = s.start(cmd, fmt.Sprintf("%s-host-%d", p.Name, p.serviceGeneration))
+}
 func (p *Project) StartService() {
 	s := p.Scenario
 	s.t.Helper()
-	p.serviceGeneration++
-	// Context cancellation is handled by the owning Scenario's cleanup, not exec's root-only Kill.
-	cmd := exec.Command(p.Executable, "run", "-config", p.Config, "-dispatch", "manual", "-console", "off")
-	cmd.Env = p.Driver.Environment(os.Environ())
-	p.Service = s.start(cmd, fmt.Sprintf("%s-service-%d", p.Name, p.serviceGeneration))
-	s.Wait("service readiness", func() (bool, error) {
+	p.StartHost()
+	s.Wait("project runtime readiness", func() (bool, error) {
 		select {
 		case <-p.Service.Done:
-			s.t.Fatal("service exited; see log")
+			s.t.Fatal("host exited; see log")
 		default:
 		}
-		snapshot, err := p.Snapshot()
+		status, err := p.Driver.HostStatus(s.Context)
 		if err != nil {
 			return false, err
 		}
-		return snapshot.Runtime != nil && snapshot.Runtime.Service.Ready && snapshot.Runtime.Service.PID == p.Service.Cmd.Process.Pid && snapshot.Runtime.Service.ProcessIdentity != nil && snapshot.Runtime.Service.ProcessIdentity.PID == p.Service.Cmd.Process.Pid, nil
+		for _, project := range status.Projects {
+			if project.ConfigID != filepath.Base(p.Config) {
+				continue
+			}
+			if project.RuntimeState == "failed" {
+				s.t.Fatal(project.Diagnostic)
+			}
+			return project.Online && status.Backend.Identity.Process.PID == p.Service.Cmd.Process.Pid, nil
+		}
+		return false, nil
 	})
 }
 
@@ -562,9 +580,9 @@ func (p *Project) StartServiceViaVisibleConsole(cmd *exec.Cmd, name string) {
 func (p *Project) StopService() {
 	p.Scenario.t.Helper()
 	if p.ServiceWindow != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 		defer cancel()
-		output, err := p.Driver.Run(ctx, "stop-service", "-config", p.Config, "-by", "e2e")
+		output, err := p.Driver.Run(ctx, "stop")
 		p.Scenario.Must(err)
 		p.ServiceStopOutput = append([]byte(nil), output...)
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -580,9 +598,9 @@ func (p *Project) StopService() {
 	if p.Service == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 	defer cancel()
-	output, err := p.Driver.Run(ctx, "stop-service", "-config", p.Config, "-by", "e2e")
+	output, err := p.Driver.Run(ctx, "stop")
 	p.Scenario.Must(err)
 	p.ServiceStopOutput = append([]byte(nil), output...)
 	p.Scenario.Must(p.Service.Wait(ctx))
@@ -742,7 +760,7 @@ func (s *Scenario) cleanup() {
 	}
 	bodyContextErr := s.bodyContextErr
 	defer s.cancel()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
 	var failures []string
 	// Capture public state before shutting down, even after an assertion timeout.

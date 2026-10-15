@@ -100,3 +100,15 @@ Runner 第五轮远端已完成实施，在报告阶段暴露应用冻结策略�
 最小验证：`audit-input-binding.log` 及 `audit-after-main.log` 中 taskrunner/runnerbridge/app/test-feedback/受控三阶段均通过；后者原 CLI fixture 失败保留，修正后的 `audit-cli-http.log` TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs 通过（115.14 秒），含 CM71/CM72。`audit-boundary-main.log` 的生产/测试全标签依赖守卫和 Runner 公开边界通过；`audit-driver-main.log` 的环境隔离/业务期限/原生命令阶段检查通过；`audit-retirement.log` 的退役命令和 launcher 检查通过。`audit-main-compile-final.log` 全包只编译及 `audit-tagged-compile.log` 的 e2e 标签编译通过，不是全量测试。`audit-doc-links.log` 为 428 份 Markdown、2553 个本地导航链接、0 错误。PowerShell 调试脚本语法检查通过；未重新启动整套生成/Web/live 测试。
 
 最新失败保持：`C:/SteerlineDebug/slcodex/dev-20261015-150152-bba00436` 为干净 SteerLine bba00436 / Runner 7bede6e，服务退出，原清理 Git 子进程报 `0xc000026b`。候选提交为 unknown，未绑定 Run 不能证明零接受。随后使用原冻结 helper/公开 CLI，在独立外部宿主核清原请求并停止，`evidence/original-public-cleanup-external-result.json` exit 0、日志 confirmed=true；没有业务恢复或新发布。工具 Job 内曾被 `detach_unsupported` 安全拒绝，保留该失败，不放宽服务 token 检查。`local-final/e2e-1.jsonl` 的 TestBasicDelivery 同样报 Git `0xc000026b`，批次没有完成汇总，不计最终版本 R1 通过。此前真实 Codex PR #253 和三个 R1 原通过记录仍有效，但不能覆盖这次失败。
+
+## PR #325 统一启动主干冲突解决
+
+接入主干 `0228e51d7b5cfe3a3a4c0e9d068df8f732a9badd`（包含 #326）。保留统一 start/serve/stop/status、应用 v2、共享宿主及独立 ProjectRuntime/store/实例/锁；不恢复被迁出的 execution actor、native codec 或旧格式。冻结配置读取改为 Runner v3 快照，项目使用 Task actor 和固定 Runner CLI，各项目读端借用所属 store，任务写入串行提交并发布 caller checkpoint。
+
+原主干 ResourceSettlementError 接口改由 Task actor 提供，停服与资源事实分开：unknown 提交、缺投影及原 Run 未证明 stopped 时不能报告 settled；构造失败可能已有独立 Runner 时也保留未知。五种资源状态反例与原停止幂等/Task actor scheduler/命令文件身份检查通过，证据 `conflict-unified-actor.log`。
+
+`conflict-unified-tests-2.log` 的八个统一启动定向测试通过，覆盖共享 PID/不同实例、配置冲突与冻结、零项目、组件重用、未知创建、停机证据与安装 Web opener；app 合计 27.409 秒。CLI Task 批次/依赖/作废及原回执与关闭客户端不换实例，在 `conflict-unified-tests.log` 单包通过（43.263 秒）。快速测试清单合并 app 包的登记后，scoped/full coverage 校验通过；该日志中的首轮登记重复和 opener helper 遗漏失败保留。合并时补回了仅供测试的 opener 分支，未恢复原生 codec；首轮递归产生的测试 opener 已按精确临时路径、命令和创建时间核实并清理。
+
+共享模拟宿主通过生成时的测试私有路径路由，将 Runner 工作区匹配到原 provider，不读取 Runner 私有内容。两份同公共 Git 仓库契约共用模拟 Git transport，保持各自 base/head、clone/common-dir、provider、caller DB 和 Runner state-dir；继续使用真实 Git push。`conflict-unified-routing-2.log` 的原三阶段/反馈复用及新路径路由反例通过，第一次测试遗漏 seed 目录的失败单列保留。该定向验证不等于完整双项目 Edge/模型/PR 矩阵已复验。
+
+`conflict-unified-boundary-final.log` 为源码/跨平台生产闭包、测试依赖与 Runner 公开边界检查；`conflict-unified-compile-final-2.log` 与 `conflict-unified-e2e-compile-final.log` 记录全包及 e2e 标签只编译。Web TypeScript/Vite 构建通过（`conflict-unified-web-build.log`），生成与测试 PowerShell 脚本语法通过，文档检查 431 份/2596 个本地链接/0 错误（`conflict-unified-doc-links.log`）。没有运行全量测试，没有新 live/Orca 验收，最新产品真机与最终版本 R1 的已有未通过状态不变。

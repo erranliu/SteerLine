@@ -3,8 +3,11 @@
 package driver
 
 import (
+	"errors"
 	"fmt"
 	"golang.org/x/sys/windows"
+	"os"
+	"time"
 )
 
 func debugPlainFile(path string) error {
@@ -13,9 +16,16 @@ func debugPlainFile(path string) error {
 		return err
 	}
 	// Metadata-only access avoids interfering with SQLite's live shared-memory handle.
-	handle, err := windows.CreateFile(name, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+	var handle windows.Handle
+	for attempt := 0; attempt < 40; attempt++ {
+		handle, err = windows.CreateFile(name, 0, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, nil, windows.OPEN_EXISTING, windows.FILE_ATTRIBUTE_NORMAL, 0)
+		if err == nil || (!errors.Is(err, windows.ERROR_ACCESS_DENIED) && !errors.Is(err, windows.ERROR_SHARING_VIOLATION)) {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 	if err != nil {
-		return err
+		return &os.PathError{Op: "inspect debug file", Path: path, Err: err}
 	}
 	defer windows.CloseHandle(handle)
 	var info windows.ByHandleFileInformation

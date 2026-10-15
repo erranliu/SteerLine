@@ -25,7 +25,7 @@ func TestWebSwitchReconnectAndHome(t *testing.T) {
 				localservice.Error(w, 403, "unauthorized", "denied")
 				return
 			}
-			if r.URL.Path == "/v1/application/identity" {
+			if r.URL.Path == "/v2/application/identity" {
 				localservice.JSON(w, 200, e.Identity)
 			} else {
 				localservice.JSON(w, 200, map[string]any{"projects": []any{}})
@@ -49,7 +49,7 @@ func TestWebSwitchReconnectAndHome(t *testing.T) {
 	if err != nil || id.HomeID != original.HomeID || id.InstanceID == original.InstanceID {
 		t.Fatal(id, err)
 	}
-	if _, err = localservice.Open(context.Background(), t.TempDir(), dir, contract.Protocol, "/v1/application/identity"); err == nil {
+	if _, err = localservice.Open(context.Background(), t.TempDir(), dir, contract.Protocol, "/v2/application/identity"); err == nil {
 		t.Fatal("different home accepted")
 	}
 	if err = client.Post(context.Background(), "/shutdown", nil, nil); err == nil {

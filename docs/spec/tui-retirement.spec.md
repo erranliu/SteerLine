@@ -1,5 +1,7 @@
 # Spec：移除 TUI，保留 Web 交互前端
 
+后继拓扑由[统一启动](unified-startup.spec.md)替换：项目改为同一后端进程内运行时，使用 start/serve/stop/status 与 application/v2；本文保留原任务范围和历史调查，当前启动方式见统一启动文档。
+
 状态：2026-10-15 已按用户授权实施；所选验证中运行隔离场景超时待验，其余结果与限制见专属验收。普通开发，不分配 Task ID、不修改 roadmap 或 execution-map。配套 [Plan](tui-retirement.plan.md)及[专属验收](../acceptance/tui-retirement.md)。
 
 ## 1. 目标与范围

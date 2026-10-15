@@ -92,7 +92,13 @@ func gitBytes(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	// fixture repository's local user configuration. Keep identity and Windows
 	// long-path settings scoped to this simulated external Git command.
 	argv := append([]string{"-c", "user.name=E2E", "-c", "user.email=e2e@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.longpaths=true", "-C", dir}, args...)
-	if path := os.Getenv("STEERLINE_E2E_CONTROLLED_STATE"); path != "" {
+	projectDir := dir
+	for i, arg := range args {
+		if arg == "-C" && i+1 < len(args) {
+			projectDir = args[i+1]
+		}
+	}
+	if path := statePathForDirectory(projectDir); path != "" {
 		state, err := Read(path)
 		if err != nil {
 			return nil, err
@@ -152,4 +158,38 @@ func Merge(ctx context.Context, path, repo string) error {
 	now := time.Now().UTC()
 	s.PR.State, s.PR.Merged, s.PR.MergedAt, s.PR.MergeCommit = "merged", true, &now, &head
 	return Write(path, s)
+}
+
+func statePathForDirectory(dir string) string {
+	path := os.Getenv("STEERLINE_E2E_CONTROLLED_STATE")
+	if path == "" {
+		return ""
+	}
+	root := filepath.Dir(filepath.Dir(path))
+	if _, err := os.Stat(filepath.Join(root, "manifest.json")); err == nil {
+		for _, name := range []string{"SteerlineTest.json", "SteerlineTestB.json"} {
+			raw, err := os.ReadFile(filepath.Join(root, "seed", "fixture-routes-"+name))
+			var routes map[string]string
+			if err != nil || json.Unmarshal(raw, &routes) != nil {
+				continue
+			}
+			for prefix, provider := range routes {
+				candidate, prefix := strings.ToLower(filepath.Clean(dir)), strings.ToLower(filepath.Clean(prefix))
+				if candidate == prefix || strings.HasPrefix(candidate, prefix+string(filepath.Separator)) {
+					return provider
+				}
+			}
+		}
+	}
+	for _, relative := range []string{filepath.Join("projects", "SteerlineTestB"), filepath.Join("home", "worktrees-b")} {
+		prefix := strings.ToLower(filepath.Join(root, relative))
+		candidate := strings.ToLower(filepath.Clean(dir))
+		if candidate == prefix || strings.HasPrefix(candidate, prefix+string(filepath.Separator)) {
+			secondary := filepath.Join(root, "provider-b", "state.json")
+			if _, err := os.Stat(filepath.Join(root, "manifest.json")); err == nil {
+				return secondary
+			}
+		}
+	}
+	return path
 }

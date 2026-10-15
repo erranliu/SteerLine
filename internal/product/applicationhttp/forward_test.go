@@ -7,10 +7,8 @@ import (
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	privatefs "github.com/erranliu/SteerLine/internal/product/httpfs"
 	"net/http"
-	"net/http/httptest"
-	"os"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -19,7 +17,6 @@ import (
 )
 
 type nativeSwitchFixture struct {
-	run, repository  string
 	identity         httpcontract.Identity
 	started, release chan struct{}
 	hold             bool
@@ -27,62 +24,32 @@ type nativeSwitchFixture struct {
 }
 
 func newNativeSwitchFixture(t *testing.T, instance string, hold bool) *nativeSwitchFixture {
-	t.Helper()
-	f := &nativeSwitchFixture{run: t.TempDir(), repository: "original-repository", hold: hold, started: make(chan struct{}), release: make(chan struct{}), last: make(chan httpcontract.CommandEnvelope, 1)}
-	process, err := httpclient.CurrentProcessIdentity()
-	if err != nil {
-		t.Fatal(err)
+	return &nativeSwitchFixture{identity: httpcontract.Identity{Protocol: httpcontract.Protocol, ProjectID: httpcontract.ProjectID("original-repository"), RepositoryIdentity: "original-repository", InstanceID: instance, Ready: true}, started: make(chan struct{}), release: make(chan struct{}), hold: hold, last: make(chan httpcontract.CommandEnvelope, 1)}
+}
+func (f *nativeSwitchFixture) Identity(context.Context) httpcontract.Identity { return f.identity }
+func (f *nativeSwitchFixture) Read(ctx context.Context, route string, _ url.Values) (any, error) {
+	if route == "/identity" {
+		return f.identity, nil
 	}
-	native := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer "+strings.Repeat("c", 64) {
-			w.WriteHeader(403)
-			return
-		}
-		if r.URL.Path == "/v1/identity" {
-			localservice.JSON(w, 200, f.identity)
-			return
-		}
-		if r.Method == "POST" {
-			var envelope httpcontract.CommandEnvelope
-			if err := json.NewDecoder(r.Body).Decode(&envelope); err != nil {
-				t.Error(err)
+	if route == "/snapshot" {
+		if f.hold {
+			close(f.started)
+			select {
+			case <-f.release:
+			case <-ctx.Done():
+				return nil, ctx.Err()
 			}
-			f.last <- envelope
-			localservice.JSON(w, 200, httpcontract.CommandResponse{RequestID: envelope.RequestID, ProjectID: envelope.ProjectID, InstanceID: envelope.InstanceID, Action: envelope.Action, TargetID: envelope.TargetID, ExpectedVersion: envelope.ExpectedVersion, Original: &envelope, Status: "accepted"})
-			return
 		}
-		if strings.HasSuffix(r.URL.Path, "/snapshot") {
-			if f.hold {
-				close(f.started)
-				select {
-				case <-f.release:
-				case <-r.Context().Done():
-					return
-				}
-			}
-			localservice.JSON(w, 200, map[string]string{"from_instance": instance})
-			return
-		}
-		localservice.Error(w, 404, "command_not_found", "authority reports no original request")
-	}))
-	t.Cleanup(native.Close)
-	f.identity = httpcontract.Identity{Protocol: httpcontract.Protocol, ProjectID: httpcontract.ProjectID(f.repository), RepositoryIdentity: f.repository, InstanceID: instance, Process: process, Address: strings.TrimPrefix(native.URL, "http://"), Ready: true}
-	dir := filepath.Join(f.run, "local-api")
-	credentials := filepath.Join(dir, "credentials")
-	if err = privatefs.EnsurePrivateDirectory(credentials); err != nil {
-		t.Fatal(err)
+		return map[string]string{"from_instance": f.identity.InstanceID}, nil
 	}
-	token := filepath.Join(credentials, "test.token")
-	if err = os.WriteFile(token, []byte(strings.Repeat("c", 64)), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err = privatefs.SecurePrivateFile(token); err != nil {
-		t.Fatal(err)
-	}
-	if err = localservice.Write(dir, "discovery.json", httpcontract.Discovery{Version: 1, Protocol: httpcontract.Protocol, ProjectID: f.identity.ProjectID, RepositoryIdentity: f.repository, InstanceID: instance, Process: process, Address: f.identity.Address, CredentialPath: token, LeaseID: "lease", Ready: true}); err != nil {
-		t.Fatal(err)
-	}
-	return f
+	return nil, &httpclient.ClientError{Status: 404, Code: "command_not_found", Reason: "authority reports no original request"}
+}
+func (f *nativeSwitchFixture) Command(ctx context.Context, e httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
+	f.last <- e
+	return httpcontract.CommandResponse{RequestID: e.RequestID, ProjectID: e.ProjectID, InstanceID: e.InstanceID, Action: e.Action, TargetID: e.TargetID, Original: &e, Status: "accepted"}, nil
+}
+func (f *nativeSwitchFixture) Task(context.Context, string, string, json.RawMessage) (any, error) {
+	return nil, &httpclient.ClientError{Status: 501, Code: "unsupported"}
 }
 
 type switchingDirectory struct {
@@ -92,11 +59,10 @@ type switchingDirectory struct {
 func (d *switchingDirectory) Catalog(context.Context) (contract.Catalog, error) {
 	return contract.Catalog{}, nil
 }
-func (d *switchingDirectory) Connect(ctx context.Context, _ string) (*httpclient.Client, error) {
-	f := d.current.Load()
-	return httpclient.Open(ctx, f.run, f.repository)
+func (d *switchingDirectory) Connect(context.Context, string) (ProjectPort, error) {
+	return d.current.Load(), nil
 }
-func TestWebSwitchOriginalEnvelopeAndInflightReplacement(t *testing.T) {
+func TestUnifiedStartupOriginalEnvelopeAndInflightIsolation(t *testing.T) {
 	old := newNativeSwitchFixture(t, "native-original", true)
 	replacement := newNativeSwitchFixture(t, "native-replacement", false)
 	d := &switchingDirectory{}
@@ -112,12 +78,12 @@ func TestWebSwitchOriginalEnvelopeAndInflightReplacement(t *testing.T) {
 	defer server.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	client, err := localservice.Open(ctx, home, endpoint.Dir, contract.Protocol, "/v1/application/identity")
+	client, err := localservice.Open(ctx, home, endpoint.Dir, contract.Protocol, "/v2/application/identity")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	route := "/v1/application/projects/" + old.identity.ProjectID
+	route := "/v2/application/projects/" + old.identity.ProjectID
 	envelope := httpcontract.CommandEnvelope{RequestID: strings.Repeat("d", 32), ProjectID: old.identity.ProjectID, InstanceID: old.identity.InstanceID, Action: "start_task", TargetID: "1", ExpectedVersion: 5, ExpectedGraphRevision: 7, Payload: json.RawMessage(`{"exact_number":9007199254740993}`)}
 	var receipt httpcontract.CommandResponse
 	if err = client.Request(ctx, "POST", route+"/commands", envelope, &receipt); err != nil {

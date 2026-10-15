@@ -44,6 +44,7 @@ type Actor struct {
 	calls             chan actorCall
 	shutdownMu        sync.Mutex
 	shutdownConfirmed bool
+	settlementErr     error
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
@@ -258,7 +259,42 @@ func (a *Actor) shutdown(ctx context.Context) error {
 	}
 	err := a.options.ShutdownRunner(ctx)
 	a.shutdownConfirmed = err == nil
+	a.settlementErr = err
+	if err == nil {
+		snapshot, readErr := a.options.Store.ReadRunnerSnapshot(ctx, a.options.Tasks.Project)
+		a.settlementErr = readErr
+		for _, c := range snapshot.Candidates {
+			if c.SubmitState == "unknown" || c.RunID != "" && (c.Projection == nil || c.Projection.StopStatus != "stopped") {
+				a.settlementErr = errors.Join(a.settlementErr, errors.New("Runner service stopped; original native resource settlement remains unverified"))
+			}
+		}
+	}
 	return err
+}
+
+// ResourceSettlementError keeps native evidence separate from daemon exit.
+func (a *Actor) ResourceSettlementError() error {
+	a.shutdownMu.Lock()
+	defer a.shutdownMu.Unlock()
+	if !a.shutdownConfirmed {
+		return errors.Join(errors.New("original Runner shutdown remains unverified"), a.settlementErr)
+	}
+	return a.settlementErr
+}
+
+// ExecuteTaskMutation uses the same caller actor as candidate and DAG updates.
+// Once dispatched, cancellation leaves the original durable receipt queryable.
+func (a *Actor) ExecuteTaskMutation(ctx context.Context, run func(context.Context) error) error {
+	return a.Call(ctx, func() error {
+		a.mu.Lock()
+		ready := a.State.Service.Ready
+		a.mu.Unlock()
+		if !ready || a.ctx.Err() != nil {
+			return errors.New("project actor is not accepting task commands")
+		}
+		err := run(a.ctx)
+		return errors.Join(err, a.publish(a.ctx))
+	})
 }
 
 func (a *Actor) Discard(ctx context.Context, requestID string, intent taskmodel.DiscardIntent) (taskmodel.TaskDiscardReceipt, error) {

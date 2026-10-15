@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
@@ -38,7 +39,9 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 }
 
 func newRunnerServiceWithHost(config Config, host hostport.HostPort, mode string) (*taskrunner.Actor, error) {
-	ctx := context.Background()
+	return newRunnerServiceWithTaskStore(context.Background(), config, host, mode, nil)
+}
+func newRunnerServiceWithTaskStore(ctx context.Context, config Config, host hostport.HostPort, mode string, bind func(*sqlite.SQLiteStore)) (*taskrunner.Actor, error) {
 	if config.ProcessHost == nil {
 		return nil, errors.New("service process host is required")
 	}
@@ -64,6 +67,9 @@ func newRunnerServiceWithHost(config Config, host hostport.HostPort, mode string
 	connection, err := OpenNativeTaskCommandStore(ctx, &config)
 	if err != nil {
 		return nil, err
+	}
+	if bind != nil {
+		bind(connection)
 	}
 	cli, info, err := config.RunnerExecution.startRunner(ctx, config.RunDir, positiveDuration(config.CommandTimeout, 30*time.Second), config.runnerPublication())
 	if err != nil {

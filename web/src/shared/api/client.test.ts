@@ -197,7 +197,7 @@ describe("immutable browser requests", () => {
     expect(await journal.requestByID(envelope.request_id)).toBeDefined();
     await new Api(identity, "new-csrf").reconcile(envelope);
     expect(fetch.mock.calls[1][0]).toBe(
-      "/api/v1/application/projects/project-a/commands/" + envelope.request_id,
+      "/api/v2/application/projects/project-a/commands/" + envelope.request_id,
     );
     expect(fetch.mock.calls[1][1].method).toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(2);

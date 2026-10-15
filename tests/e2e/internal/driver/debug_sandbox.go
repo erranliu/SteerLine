@@ -109,8 +109,8 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 	if err := os.WriteFile(sibling, []byte("unchanged"), 0600); err != nil {
 		return result, err
 	}
-	// This acceptance owns only the project service; the package still includes Web.
-	serviceCmd := d.command(d.helper, "debug", "run-project")
+	// The package owner uses the same shared host and Web as every debug run.
+	serviceCmd := d.command(d.helper, "debug", "run", "--no-open")
 	log, err = os.Create(filepath.Join(root, "evidence", "sandbox-service.log"))
 	if err != nil {
 		return result, err
@@ -141,6 +141,11 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 		return fmt.Errorf("%s: %w; inspect package evidence", label, ctx.Err())
 	}
 	if err := wait("service ready", func() (bool, error) {
+		if _, err := os.Stat(filepath.Join(d.root, "runtime-launcher", "ready.json")); os.IsNotExist(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
 		snap, err := ReadApplicationProjectSnapshot(ctx, db, project, "", 100)
 		if err != nil || snap.RunnerError != nil || snap.RunnerState.Checkpoint == nil {
 			return false, nil
@@ -319,7 +324,7 @@ func debugSandboxCleanup(ctx context.Context, d *debugRelease, service *testproc
 			// The retained original process has already exited; a failed
 			// startup is not a live service that needs another stop command.
 		default:
-			_, stopErr := run(d.command(d.binary, "stop-service", "-config", d.config))
+			_, stopErr := run(d.command(d.helper, "debug", "stop", "--no-pause"))
 			failures = append(failures, stopErr, service.Stop(ctx))
 		}
 	}

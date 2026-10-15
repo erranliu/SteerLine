@@ -556,7 +556,7 @@ export function App({ initial }: { initial: BrowserSession }) {
   const catalog = useQuery({
     queryKey: [home, "projects"],
     queryFn: ({ signal }) =>
-      json<{ projects: ConfiguredProject[] }>("/api/v1/application/projects", {
+      json<{ projects: ConfiguredProject[] }>("/api/v2/application/projects", {
         signal,
       }),
     enabled: sessionValid,
@@ -576,7 +576,7 @@ export function App({ initial }: { initial: BrowserSession }) {
   const projectIdentity = useQuery({
     queryKey: [home, id, "identity"],
     queryFn: ({ signal }) =>
-      json<Identity>("/api/v1/application/projects/" + id + "/identity", {
+      json<Identity>("/api/v2/application/projects/" + id + "/identity", {
         signal,
       }),
     enabled: sessionValid && !!selected,
@@ -651,7 +651,7 @@ export function App({ initial }: { initial: BrowserSession }) {
                   ? "配置错误"
                   : p.online
                     ? "在线"
-                    : "离线"}
+                    : ({starting:"启动中",failed:"启动失败",stopping:"停止中",stopped:"已停止",ready:"在线"}[p.runtime_state ?? "stopped"])}
               {(!p.project_id || p.conflict) && (p.diagnostic || p.conflict)
                 ? " · " + (p.diagnostic || p.conflict)
                 : ""}
@@ -662,7 +662,7 @@ export function App({ initial }: { initial: BrowserSession }) {
         <div className="project-current">
           <div>
             <strong>{selected.name}</strong>
-            <small>{selected.online ? "在线" : "离线"}</small>
+            <small>{selected.online ? "在线" : ({starting:"启动中",failed:"启动失败",stopping:"停止中",stopped:"已停止",ready:"在线"}[selected.runtime_state ?? "stopped"])}</small>
           </div>
           <span className="path" title={selected.repository}>
             {selected.repository}

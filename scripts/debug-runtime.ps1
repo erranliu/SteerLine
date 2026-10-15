@@ -1,4 +1,4 @@
-# Source-isolation regression fixture only. Ordinary and AI debugging must use
+﻿# Source-isolation regression fixture only. Ordinary and AI debugging must use
 # scripts/new-debug-release.ps1 and its complete generated SteerlineTest package.
 param(
     [Parameter(Mandatory = $true)]
@@ -12,7 +12,7 @@ param(
     [string]$Config,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('build', 'launchers', 'service', 'cli')]
+    [ValidateSet('build', 'launchers', 'serve', 'cli')]
     [string]$Operation,
 
     [string[]]$Arguments = @()
@@ -128,6 +128,7 @@ function Set-DebugCodexHome {
     if ([IO.Path]::IsPathRooted($authHome)) {
         $sourceAuth = Join-Path $authHome 'auth.json'
         if (Test-Path -LiteralPath $sourceAuth -PathType Leaf) {
+            if (Test-PathWithin 'C:\SteerlineRuntime' (Resolve-CanonicalPath $sourceAuth)) { throw 'Installed authentication cannot prepare debug fixtures' }
             $destinationAuth = Join-Path $codexHome 'auth.json'
             if (-not (Test-Path -LiteralPath $destinationAuth -PathType Leaf)) {
                 Copy-Item -LiteralPath $sourceAuth -Destination $destinationAuth
@@ -138,26 +139,12 @@ function Set-DebugCodexHome {
 }
 
 function Set-DebugRuntimeOnLauncher([string]$Path, [string]$Executable) {
-    if ($Executable.Contains('%') -or $Executable.Contains('"') -or $Executable.Contains("`r") -or $Executable.Contains("`n")) {
-        throw "The source executable path cannot be represented safely in a Windows launcher: '$Executable'"
-    }
-    $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
-    $content = [IO.File]::ReadAllText($Path, $encoding)
-    $codexAssignment = 'set "CODEX_HOME=%SHOME%\codex"'
-    $binTemplate = 'set "BIN=%SHOME%\bin\steerline.exe"'
-    $executableAssignment = 'set "BIN=' + $Executable + '"'
-    if ($content.Contains($codexAssignment) -and $content.Contains($executableAssignment)) {
-        return
-    }
-    $homeAssignment = 'set "STEERLINE_HOME=%SHOME%"'
-    if (-not $content.Contains($homeAssignment) -or -not $content.Contains($binTemplate)) {
-        throw "Launcher does not set its own home: '$Path'"
-    }
-    $content = [regex]::Replace($content, '(?m)^set "CODEX_HOME=.*"\r?\n?', '')
-    $content = [regex]::Replace($content, '(?m)^set "BIN=.*"\r?\n?', '')
-    $assignments = $homeAssignment + "`r`n" + $executableAssignment + "`r`n" + $codexAssignment
-    $content = $content.Replace($homeAssignment, $assignments)
-    [IO.File]::WriteAllText($Path, $content, $encoding)
+    $command = if ([IO.Path]::GetFileName($Path) -eq 'serve.bat') { 'serve' } else { 'stop' }
+    $content = '@echo off' + "`r`n" + 'setlocal EnableExtensions DisableDelayedExpansion' + "`r`n" +
+        'set "SHOME=%~dp0"' + "`r`n" + 'set "STEERLINE_HOME=%SHOME%"' + "`r`n" +
+        'set "CODEX_HOME=%SHOME%\codex"' + "`r`n" + 'set "BIN=' + $Executable + '"' + "`r`n" +
+        '"%BIN%" ' + $command + "`r`n" + 'exit /b %ERRORLEVEL%' + "`r`n"
+    [IO.File]::WriteAllText($Path, $content, [Text.UTF8Encoding]::new($false))
 }
 
 function Assert-DebugLauncherExecutable([string]$Path, [string]$Executable) {
@@ -182,7 +169,7 @@ CODEX_HOME: $debugHomePath\codex
 Project config: $ProjectConfig
 Source executable: $Executable
 
-service-window.bat runs the source executable above. This home
+serve.bat and stop.bat run the shared headless host from the source executable. This home
 owns its configuration, SQLite state, logs, service files, worktrees, Codex
 sessions, and copied authentication file. No executable copy is installed in
 this home's bin directory.
@@ -246,10 +233,10 @@ try {
     }
 
     $buildExe = Join-Path $repoPath 'bin\steerline.exe'
-    $launcher = Join-Path $debugHomePath 'service-window.bat'
+    $launcher = Join-Path $debugHomePath 'serve.bat'
     # Preflight every script/product output before the first side effect. A
     # disjoint home root does not imply its existing output targets are disjoint.
-    foreach ($relative in @('bin', 'bin\steerline.exe', 'etc', 'execution.json', 'state', 'ui', 'codex', 'codex\auth.json', 'service-window.bat', 'README.txt')) {
+    foreach ($relative in @('bin', 'bin\steerline.exe', 'etc', 'execution.json', 'state', 'ui', 'ui\views', 'codex', 'codex\auth.json', 'serve.bat', 'stop.bat', 'README.txt')) {
         Assert-WritablePathWithin $debugHomePath (Join-Path $debugHomePath $relative)
     }
     Assert-WritablePathWithin $repoPath (Join-Path $repoPath 'bin')
@@ -281,19 +268,15 @@ try {
             }
             'launchers' {
                 Assert-SourceExecutable $buildExe
-                Invoke-Product $buildExe @('launchers')
+                Set-DebugRuntimeOnLauncher (Join-Path $debugHomePath 'stop.bat') $buildExe
                 Set-DebugRuntimeOnLauncher $launcher $buildExe
                 Set-DebugCodexHome
                 Write-DebugReadme (Join-Path $debugHomePath 'README.txt') $buildExe $configPath
             }
-            'service' {
+            'serve' {
                 Assert-SourceExecutable $buildExe
-                Assert-DebugLauncherExecutable $launcher $buildExe
                 Set-DebugCodexHome
-                & $launcher $configPath
-                if ($LASTEXITCODE -ne 0) {
-                    throw "Debug service window exited with code $LASTEXITCODE"
-                }
+                Invoke-Product $buildExe @('serve')
             }
             'cli' {
                 Assert-SourceExecutable $buildExe
@@ -309,7 +292,7 @@ try {
                     }
                 }
                 Set-DebugCodexHome
-                Invoke-Product $buildExe (@($Arguments) + @('-config', $configPath))
+                if ($Arguments[0] -in @('start','stop','serve','status')) { Invoke-Product $buildExe $Arguments } else { Invoke-Product $buildExe (@($Arguments) + @('-config', $configPath)) }
             }
         }
     } finally {

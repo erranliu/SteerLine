@@ -376,8 +376,8 @@ func httpAPIArchitectureViolations(sources []httpAPISourceFile) []string {
 			return true
 		})
 	}
-	if constructorCalls != 3 { // one declaration and the endpoint plus validation construction sites
-		violations = append(violations, fmt.Sprintf("newFileRequestRecordOwner must have one declaration and two approved production calls, found %d", constructorCalls))
+	if constructorCalls != 4 { // declaration, HTTP and in-process composition, validation
+		violations = append(violations, fmt.Sprintf("newFileRequestRecordOwner must have one declaration and three approved production calls, found %d", constructorCalls))
 	}
 	sort.Strings(violations)
 	return violations

@@ -596,8 +596,8 @@ func TestAPIServiceLifecycle(t *testing.T) {
 	stopEnvelope := CommandEnvelope{RequestID: strings.Repeat("9", 32), ProjectID: ProjectID(projectIdentity), InstanceID: "instance-b",
 		Action: "stop_service", TargetID: "instance-b", Payload: json.RawMessage(`{}`)}
 	stopReceipt, err := client.SubmitCommand(context.Background(), stopEnvelope)
-	if err != nil || stopReceipt.ControlRequest == nil || stopReceipt.Status != "submitted" || control.submits != 1 {
-		t.Fatalf("not-ready existing instance could not be stopped: %+v %v submits=%d", stopReceipt, err, control.submits)
+	if err == nil || !strings.Contains(err.Error(), "unsupported") || control.submits != 0 {
+		t.Fatalf("retired stop_service was accepted: %+v %v submits=%d", stopReceipt, err, control.submits)
 	}
 	request, _ := http.NewRequest(http.MethodGet, "http://"+rotated.listener.Addr().String()+"/v1/identity", nil)
 	request.Host = rotated.listener.Addr().String()

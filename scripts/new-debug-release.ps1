@@ -1,6 +1,6 @@
 ﻿param(
     [string]$DebugRoot = 'C:\SteerlineDebug',
-    [string]$WebAddress = '127.0.0.1:18742',
+    [string]$WebAddress = '',
     [ValidateSet(1,2)][int]$WebProjects = 1,
     [string]$SteerRunnerExe = '',
     [switch]$Orca,
@@ -12,7 +12,11 @@
     [ValidateSet('','medium','high','xhigh')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
-if (-not $WebAddress) { throw 'WebAddress must name a fixed Web endpoint' }
+if (-not $WebAddress) {
+    $portProbe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+    $portProbe.Start()
+    try { $WebAddress = '127.0.0.1:' + $portProbe.LocalEndpoint.Port } finally { $portProbe.Stop() }
+}
 if ($WebAddress -and ($WebAddress -notmatch '^127\.0\.0\.1:([1-9][0-9]{0,4})$' -or [int]$Matches[1] -gt 65535)) { throw 'WebAddress must be a fixed 127.0.0.1:<1..65535>' }
 
 function Assert-PlainPath([string]$Path) {
@@ -193,6 +197,14 @@ try {
         & go build -trimpath -o (Join-Path $target 'bin\debug-helper.exe') ./tests/e2e/testdata/debug-helper 2> (Join-Path $target 'evidence\build-helper.log')
         if ($LASTEXITCODE -ne 0) { throw 'Helper build failed; see evidence/build-helper.log' }
     } finally { Pop-Location; $env:GOFLAGS = $savedGoFlags }
+    $savedSteerlineHome = $env:STEERLINE_HOME
+    try {
+        $env:STEERLINE_HOME = Join-Path $target 'home'
+        & (Join-Path $target 'bin\steerline.exe') install *> (Join-Path $target 'evidence\install-product.log')
+        if ($LASTEXITCODE -ne 0) { throw 'Product install failed' }
+        & (Join-Path $target 'bin\steerline-web.exe') install *> (Join-Path $target 'evidence\install-web-product.log')
+        if ($LASTEXITCODE -ne 0) { throw 'Web install failed' }
+    } finally { $env:STEERLINE_HOME = $savedSteerlineHome }
     Copy-Item -LiteralPath (Join-Path $target 'home\config-source\SteerlineTest.live.json') -Destination (Join-Path $target 'home\etc\SteerlineTest.json')
     & (Join-Path $target 'bin\debug-helper.exe') debug init *> (Join-Path $target 'evidence\init.log')
     if ($LASTEXITCODE -ne 0) { throw 'Debug initialization failed; see evidence/init.log' }
@@ -229,7 +241,7 @@ try {
     $manifest.helper_sha256 = (Get-FileHash -LiteralPath (Join-Path $target 'bin\debug-helper.exe')).Hash.ToLowerInvariant()
     $manifest.status = 'ready'
     Write-Manifest
-    [pscustomobject]@{ release = $release; root = $target; start = (Join-Path $target 'start.bat'); web = (Join-Path $target 'web.bat') } | ConvertTo-Json -Compress
+    [pscustomobject]@{ release = $release; root = $target; start = (Join-Path $target 'start.bat'); stop = (Join-Path $target 'stop.bat') } | ConvertTo-Json -Compress
 } catch {
     $manifest.status = 'failed'
     $manifest.error = $_.Exception.Message

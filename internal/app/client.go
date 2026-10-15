@@ -4,11 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
@@ -19,6 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
@@ -39,6 +37,9 @@ func openProjectClient(ctx context.Context, ref productapi.ProjectRef) (*product
 // command port into its local HTTP product client. Other clients retain the
 // ordinary repository-locking TaskCommands writer.
 func openServiceProjectClient(ctx context.Context, config Config, service *taskrunner.Actor) (*productclient.Client, error) {
+	return openServiceProjectClientWithCommands(ctx, config, service, nil, nil)
+}
+func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *taskrunner.Actor, commands func(context.Context, bool) (productclient.TaskCommands, error), store *sqlite.SQLiteStore) (*productclient.Client, error) {
 	absolute, err := filepath.Abs(config.ConfigPath)
 	if err != nil {
 		return nil, err
@@ -55,6 +56,17 @@ func openServiceProjectClient(ctx context.Context, config Config, service *taskr
 			return productclient.Resources{}, err
 		}
 		resources.Discard = &clientDiscardCommands{service: service}
+		if store != nil {
+			resources.OpenReader = func(ctx context.Context) (productclient.Reader, error) {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				return &clientReader{Service: query.NewService(store, bound.Identity()), ConversationService: query.NewConversationService(store, bound.Identity()), store: store, project: bound.Identity(), config: bound, executableTypes: append([]string(nil), bound.ExecutableTypes...), freshness: projectReadFreshness(bound), borrowed: true}, nil
+			}
+		}
+		if commands != nil {
+			resources.OpenCommands = commands
+		}
 		return resources, nil
 	})
 }
@@ -88,10 +100,7 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 	if ref.Key == "" {
 		ref.Key = ref.ConfigPath + "\x00" + ref.RunDir
 	}
-	freshness := 30 * time.Second
-	if poll, err := time.ParseDuration(c.TaskPoll); err == nil && poll*3 > freshness {
-		freshness = poll * 3
-	}
+	freshness := projectReadFreshness(c)
 	return productclient.Resources{
 		Project: ref, DefaultRequestedBy: steerline.DefaultRequestedBy(), DefaultAnswerer: AnswererName(),
 		ReadFailure: func(ctx context.Context, selected string, readErr error) productapi.ProjectSnapshot {
@@ -185,6 +194,8 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 }
 
 type clientReader struct {
+	borrowed bool
+
 	query.Service
 	query.ConversationService
 	store interface {
@@ -212,7 +223,12 @@ func openClientReader(ctx context.Context, config Config, freshness time.Duratio
 		store: store, project: c.Identity(), config: c, executableTypes: append([]string(nil), c.ExecutableTypes...), freshness: freshness}, nil
 }
 
-func (r *clientReader) Close() error { return r.store.Close() }
+func (r *clientReader) Close() error {
+	if r.borrowed {
+		return nil
+	}
+	return r.store.Close()
+}
 
 func (r *clientReader) ReadProject(ctx context.Context, selected string, _ productapi.ProjectSnapshot) productapi.ProjectSnapshot {
 	snapshot, err := r.store.ReadApplicationProjectSnapshot(ctx, r.project, selected, 500)
@@ -404,7 +420,7 @@ func productServicePage(runtimeState *reconstruction.Runtime) *productapi.Servic
 	view := &query.ServiceView{Revision: runtimeState.Revision, UpdatedAt: runtimeState.UpdatedAt, HeartbeatAt: runtimeState.HeartbeatAt,
 		CurrentTask: copyClientValue(runtimeState.CurrentTask), SlotOccupied: runtimeState.SlotOccupied,
 		Repository: productapi.RepositorySummary{Path: runtimeState.Repository.Path, Remote: runtimeState.Repository.Remote, Branch: runtimeState.Repository.Branch, Identity: runtimeState.Repository.Identity},
-		Service:    productapi.ServiceSummary{InstanceID: runtimeState.Service.InstanceID, Status: runtimeState.Service.Status, ConfigDigest: runtimeState.Service.ConfigDigest, Claimant: runtimeState.Service.Claimant, Mode: runtimeState.Service.Mode, PID: runtimeState.Service.PID, Error: copyClientValue(runtimeState.Service.Error), StartupID: copyClientValue(runtimeState.Service.StartupID), Ready: runtimeState.Service.Ready, ControlProtocol: runtimeState.Service.ControlProtocol, Capabilities: append([]string(nil), runtimeState.Service.Capabilities...)},
+		Service:    productapi.ServiceSummary{InstanceID: runtimeState.Service.InstanceID, Status: runtimeState.Service.Status, ConfigDigest: runtimeState.Service.ConfigDigest, Claimant: runtimeState.Service.Claimant, Mode: runtimeState.Service.Mode, PID: runtimeState.Service.PID, Error: copyClientValue(runtimeState.Service.Error), StartupID: copyClientValue(runtimeState.Service.StartupID), Ready: runtimeState.Service.Ready, ControlProtocol: runtimeState.Service.ControlProtocol, Capabilities: publicProjectCapabilities(runtimeState.Service.Capabilities)},
 		Control:    productapi.ControlSummary{DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, Revision: runtimeState.Control.Revision},
 		Deliveries: append([]executionmodel.TaskDeliveryRecord(nil), runtimeState.Deliveries...),
 	}
@@ -437,7 +453,7 @@ func productConnection(value steerline.ServiceConnection, observation productapi
 	if value.Snapshot.Runtime == nil && observation.Page != nil {
 		valueObservation = observation
 	}
-	return productapi.ServiceConnection{Snapshot: valueObservation, Process: value.Process, State: value.State, IdentityMatched: value.IdentityMatched, ConfigMatched: value.ConfigMatched, Protocol: value.Protocol, Capabilities: append([]string(nil), value.Capabilities...), CanControl: value.CanControl, CanStop: value.CanStop, CanStart: value.CanStart, StartupID: value.StartupID, Diagnostic: value.Diagnostic}
+	return productapi.ServiceConnection{Snapshot: valueObservation, Process: value.Process, State: value.State, IdentityMatched: value.IdentityMatched, ConfigMatched: value.ConfigMatched, Protocol: value.Protocol, Capabilities: publicProjectCapabilities(value.Capabilities), CanControl: value.CanControl, CanStop: false, CanStart: value.CanStart, StartupID: value.StartupID, Diagnostic: value.Diagnostic}
 }
 
 func decisionAvailability(ctx context.Context, c Config, run *reconstruction.RunView, connection steerline.ServiceConnection) string {
@@ -476,21 +492,7 @@ func projectPresentation(c Config) productapi.ProjectPresentation {
 }
 
 func clientServiceInstruction(ref productapi.ProjectRef) string {
-	if runtime.GOOS != "windows" {
-		return "steerline start-service -config " + ref.ConfigPath
-	}
-	launcher := filepath.Join(ref.ApplicationHome, "service-window.bat")
-	binary := ref.ExecutablePath
-	if strings.TrimSpace(binary) == "" {
-		binary = filepath.Join(ref.ApplicationBin, "steerline.exe")
-	}
-	if _, err := os.Stat(binary); err != nil {
-		return fmt.Sprintf("服务窗口不可用：所选 SteerLine exe 不可用：%s", binary)
-	}
-	if _, err := os.Stat(launcher); err != nil {
-		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline launchers", launcher)
-	}
-	return launcher
+	return filepath.Join(ref.ApplicationHome, "start.bat")
 }
 
 func productReadError(err error) error {
@@ -511,4 +513,22 @@ func productReadError(err error) error {
 		return errors.Join(&productapi.Error{Kind: productapi.IdentityConflict, Message: err.Error()}, err)
 	}
 	return err
+}
+
+func publicProjectCapabilities(input []string) []string {
+	result := make([]string, 0, len(input))
+	for _, capability := range input {
+		if capability != "stop_service" {
+			result = append(result, capability)
+		}
+	}
+	return result
+}
+
+func projectReadFreshness(c Config) time.Duration {
+	freshness := 30 * time.Second
+	if poll, err := time.ParseDuration(c.TaskPoll); err == nil && poll*3 > freshness {
+		freshness = poll * 3
+	}
+	return freshness
 }

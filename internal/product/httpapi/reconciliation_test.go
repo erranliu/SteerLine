@@ -53,29 +53,27 @@ func saveMappedRecord(t *testing.T, server *Server, envelope CommandEnvelope, co
 	return record
 }
 
-func TestAPIStopPreservesDisplayedRevision(t *testing.T) {
+func TestUnifiedStartupRetiredStopReceiptRemainsReadOnly(t *testing.T) {
 	server, _, _, control := newAPIFixture(t)
 	client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := host.Config{Repository: "C:/repo", RepositoryIdentity: "C:/repo", Remote: "origin", Branch: "main", RunDir: server.options.RunDir, TaskAuthority: "native", ControlValidation: formalControlValidation{}}
-	control.formalConfig = &config
-	envelope := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "stop_service", TargetID: "instance-a", ExpectedControlRevision: 7, Payload: json.RawMessage(`{}`)}
-	for _, submit := range []bool{true, false, true} {
-		var response CommandResponse
-		var err error
-		if submit {
-			response, err = client.SubmitCommand(context.Background(), envelope)
-		} else {
-			response, err = client.Command(context.Background(), envelope.RequestID)
-		}
-		if err != nil || response.ControlRequest == nil || response.ControlRequest.ExpectedControlRevision != 7 {
-			t.Fatalf("original stop revision was lost: %+v %v", response, err)
-		}
+	defer client.Close()
+	revision := uint64(7)
+	envelope := CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "stop_service", TargetID: "instance-a", ExpectedControlRevision: revision, Payload: json.RawMessage(`{}`)}
+	input := api.ControlInput{RequestID: envelope.RequestID, Action: api.StopService, InstanceID: envelope.InstanceID, ExpectedRevision: &revision, RequestedBy: "original-user"}
+	saveMappedRecord(t, server, envelope, &input, nil)
+	control.requests[envelope.RequestID] = api.ControlRequest{ProtocolVersion: 1, RequestID: envelope.RequestID, RepositoryIdentity: "C:/repo", InstanceID: envelope.InstanceID, Action: envelope.Action, ExpectedControlRevision: revision, RequestedBy: input.RequestedBy}
+	response, err := client.Command(context.Background(), envelope.RequestID)
+	if err != nil || response.ControlRequest == nil || response.ControlRequest.ExpectedControlRevision != revision {
+		t.Fatal("old stop receipt unavailable", response, err)
 	}
-	if control.submits != 1 {
-		t.Fatalf("original stop submitted %d times", control.submits)
+	if _, err = client.SubmitCommand(context.Background(), envelope); err == nil {
+		t.Fatal("old action was reaccepted")
+	}
+	if control.submits != 0 {
+		t.Fatal("receipt lookup submitted a stop")
 	}
 }
 

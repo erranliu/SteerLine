@@ -150,3 +150,16 @@ func temporaryFileName(name string) bool {
 	return strings.HasPrefix(name, ".credential-") && strings.HasSuffix(name, ".tmp") ||
 		strings.HasPrefix(name, ".discovery-") && strings.HasSuffix(name, ".tmp")
 }
+
+// ValidateProjectCommandDirectory validates the same immutable request records
+// when their owner is an in-process runtime rather than a project listener.
+func ValidateProjectCommandDirectory(runDir, identity string) error {
+	root := filepath.Join(runDir, "application-commands")
+	if err := verifyPrivateDirectory(root); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return validateCommandDirectory(root, identity)
+}

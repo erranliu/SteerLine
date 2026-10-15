@@ -1,6 +1,7 @@
 package app
 
 import (
+	host "github.com/erranliu/SteerLine/internal/app/host"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
@@ -35,6 +36,7 @@ type ProjectConfigInput struct {
 type Config struct {
 	RunnerExecution RunnerExecutionConfig `json:"-"`
 	ConfigPath      string                `json:"-"`
+	runtimeHost     *host.Config
 
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`
 

@@ -98,12 +98,12 @@ func TestDebugReleaseWebProjects(t *testing.T) {
 		runDir := scope.stateDir()
 		ready := false
 		for ctx.Err() == nil {
-			snapshot, err := ReadHTTPProject(ctx, runDir, strings.ToLower(filepath.Clean(common)), "")
-			if err == nil && snapshot.NativeTasks != nil && snapshot.Connection.Snapshot.Page != nil && snapshot.Connection.Snapshot.Page.Service.Ready {
-				if len(snapshot.NativeTasks.Tasks) != 2 {
+			snapshot, err := ReadApplicationProjectSnapshot(ctx, filepath.Join(runDir, "steerline.db"), strings.ToLower(filepath.Clean(common)), "", 100)
+			if err == nil && snapshot.ProjectView.Tasks != nil && len(snapshot.ProjectView.Tasks.Tasks) == 2 && snapshot.RunnerState.Checkpoint != nil {
+				if len(snapshot.ProjectView.Tasks.Tasks) != 2 {
 					t.Fatal("dual-project package lost task definitions")
 				}
-				identities[snapshot.NativeTasks.ProjectID] = snapshot.NativeTasks.DatabaseID
+				identities[snapshot.ProjectView.Tasks.ProjectID] = snapshot.ProjectView.Tasks.DatabaseID
 				ready = true
 				break
 			}
@@ -122,18 +122,8 @@ func TestDebugReleaseWebProjects(t *testing.T) {
 	if err := d.reset(false); err == nil {
 		t.Fatal("reset accepted active dual-project package")
 	}
-	for _, entry := range []struct {
-		exe  string
-		args []string
-	}{
-		{filepath.Join(root, "bin", "steerline-web.exe"), []string{"stop"}},
-		{d.binary, []string{"stop-app"}},
-		{d.binary, []string{"stop-service", "-config", d.config}},
-		{d.binary, []string{"stop-service", "-config", d.secondary().config}},
-	} {
-		if out, err := d.command(entry.exe, entry.args...).CombinedOutput(); err != nil {
-			t.Fatalf("normal stop: %v %s", err, out)
-		}
+	if out, err := d.command(d.helper, "debug", "stop").CombinedOutput(); err != nil {
+		t.Fatalf("normal stop: %v %s", err, out)
 	}
 	if err := owner.Wait(ctx); err != nil {
 		t.Fatal(err)
@@ -179,14 +169,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := d.client()
-	page, err := c.Tasks(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(page.Tasks) != 2 {
-		t.Fatalf("seed task count: %d", len(page.Tasks))
-	}
-	serviceCmd := d.command(d.helper, "debug", "run", "--simulate")
+	serviceCmd := d.command(d.helper, "debug", "run", "--simulate", "--no-open")
 	log, err := os.Create(filepath.Join(root, "evidence", "service-test.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +181,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+		stopCtx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 		defer cancel()
 		service.Stop(stopCtx)
 		if common, err := d.git("rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
@@ -229,10 +212,10 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(label, " timeout")
 	}
 	wait("service lock", func() bool {
-		if _, err := os.Stat(filepath.Join(root, "runtime", "steerline.lock")); err != nil {
+		if _, err := os.Stat(filepath.Join(root, "runtime-launcher", "steerline.lock")); err != nil {
 			return false
 		}
-		lock, err := host.LockRepository(filepath.Join(root, "runtime"))
+		lock, err := host.LockRepository(filepath.Join(root, "runtime-launcher"))
 		if err != nil {
 			return true
 		}
@@ -254,6 +237,13 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		runtime := taskrunner.Project(snap.RunnerState, *snap.RunnerState.Checkpoint)
 		return runtime.Service.Ready
 	})
+	page, err := c.Tasks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Tasks) != 2 {
+		t.Fatalf("seed task count: %d", len(page.Tasks))
+	}
 	for _, action := range []string{"resume_dispatch", "start_task"} {
 		args := []string{"debug", "control", "--simulate", "-config", d.config, "-action", action, "-profile", "simulate"}
 		if action == "start_task" {
@@ -343,27 +333,10 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		c := state.Candidates[0]
 		return c.InputsRevoked && c.Projection != nil && c.Projection.StopStatus == "stopped"
 	})
-	stop := d.command(d.binary, "stop-service", "-config", d.config)
+	stop := d.command(d.helper, "debug", "stop", "--simulate")
 	out, err = stop.CombinedOutput()
 	if err != nil {
 		t.Fatalf("stop: %v %s", err, out)
-	}
-	if err = d.reset(false); err == nil {
-		t.Fatal("reset accepted active application/Web after project stop")
-	}
-	for _, entry := range []struct {
-		exe  string
-		args []string
-	}{{filepath.Join(root, "bin", "steerline-web.exe"), []string{"stop"}}, {d.binary, []string{"stop-app"}}} {
-		out, err := d.command(entry.exe, entry.args...).CombinedOutput()
-		if err != nil {
-			t.Fatalf("normal stop: %v %s", err, out)
-		}
-		if entry.args[0] == "stop" {
-			if err := d.reset(false); err == nil {
-				t.Fatal("reset accepted active application")
-			}
-		}
 	}
 	if err = service.Wait(ctx); err != nil {
 		t.Fatal(err)
@@ -393,14 +366,14 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if len(after.Candidates) != 0 || len(after.Graph.Deliveries) != 0 {
 		t.Fatal("execution state remained")
 	}
-	page, err = c.Tasks(ctx)
+	resetSnapshot, err := ReadApplicationProjectSnapshot(ctx, db, project, "", 100)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Tasks) != 2 {
+	if len(resetSnapshot.ProjectView.Tasks.Tasks) != 2 {
 		t.Fatal("tasks lost")
 	}
-	for _, task := range page.Tasks {
+	for _, task := range resetSnapshot.ProjectView.Tasks.Tasks {
 		if task.Status != "open" {
 			t.Fatal("task not open")
 		}

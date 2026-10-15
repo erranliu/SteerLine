@@ -17,10 +17,10 @@ type offlineDirectory struct{}
 func (offlineDirectory) Catalog(context.Context) (contract.Catalog, error) {
 	return contract.Catalog{Projects: []contract.Project{}}, nil
 }
-func (offlineDirectory) Connect(context.Context, string) (*httpclient.Client, error) {
+func (offlineDirectory) Connect(context.Context, string) (ProjectPort, error) {
 	return nil, &httpclient.ClientError{Status: 503, Code: "project_offline", Reason: "not connected"}
 }
-func TestWebSwitchAuthenticationRoutesAndUnavailable(t *testing.T) {
+func TestUnifiedStartupAuthenticationRoutesAndUnavailable(t *testing.T) {
 	home := t.TempDir()
 	endpoint, err := localservice.Prepare(home, filepath.Join(home, "application-api"), contract.Protocol, "127.0.0.1:0")
 	if err != nil {
@@ -40,20 +40,20 @@ func TestWebSwitchAuthenticationRoutesAndUnavailable(t *testing.T) {
 		return w
 	}
 	for _, alter := range []func(*http.Request){func(r *http.Request) { r.Host = "evil" }, func(r *http.Request) { r.Header.Set("Origin", "http://"+endpoint.Identity.Address) }, func(r *http.Request) { r.Header.Del("Authorization") }, func(r *http.Request) { r.RemoteAddr = "192.168.1.2:1234" }} {
-		if request("GET", "/v1/application/identity", alter).Code != 403 {
+		if request("GET", "/v2/application/identity", alter).Code != 403 {
 			t.Fatal("native authentication bypass")
 		}
 	}
-	for _, path := range []string{"/v1/identity", "/v1/application/projects/" + strings.Repeat("a", 64) + "/arbitrary", "/v1/application/projects/" + strings.Repeat("a", 64) + "/commands/abc"} {
+	for _, path := range []string{"/v1/identity", "/v2/application/projects/" + strings.Repeat("a", 64) + "/arbitrary", "/v2/application/projects/" + strings.Repeat("a", 64) + "/commands/abc"} {
 		if w := request("GET", path, nil); w.Code != 404 {
 			t.Fatalf("%s => %d", path, w.Code)
 		}
 	}
-	w := request("GET", "/v1/application/projects/"+strings.Repeat("a", 64)+"/commands/"+strings.Repeat("b", 32), nil)
+	w := request("GET", "/v2/application/projects/"+strings.Repeat("a", 64)+"/commands/"+strings.Repeat("b", 32), nil)
 	if w.Code != 503 || strings.Contains(w.Body.String(), "command_not_found") {
 		t.Fatal("unavailable became authoritative absence", w.Body.String())
 	}
-	if w := request("POST", "/v1/application/projects", nil); w.Code < 400 {
+	if w := request("POST", "/v2/application/projects", nil); w.Code < 400 {
 		t.Fatal("catalog became writable")
 	}
 }

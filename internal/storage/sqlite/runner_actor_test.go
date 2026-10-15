@@ -101,7 +101,13 @@ func TestRunnerActorUsesHostScheduler(t *testing.T) {
 				t.Fatal("service never became ready")
 			}
 			commandRan := false
-			require(t, actor.Call(ctx, func() error { commandRan = true; return nil }))
+			require(t, actor.ExecuteTaskMutation(ctx, func(actorContext context.Context) error {
+				if actorContext == nil || actorContext.Err() != nil {
+					t.Error("task mutation lost its live actor context")
+				}
+				commandRan = true
+				return nil
+			}))
 			if !commandRan {
 				t.Fatal("HTTP command was not serialized through the actor")
 			}
@@ -114,6 +120,9 @@ func TestRunnerActorUsesHostScheduler(t *testing.T) {
 			}
 			if (runErr != nil) != uncertain || calls != 1 {
 				t.Fatal("shutdown outcome was guessed or replayed", runErr, calls)
+			}
+			if (actor.ResourceSettlementError() != nil) != uncertain {
+				t.Fatal("resource settlement differs from the original shutdown evidence")
 			}
 			checkpoint, err := s.LoadCheckpoint(context.Background(), project, true)
 			require(t, err)

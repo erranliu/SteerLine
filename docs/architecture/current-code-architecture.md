@@ -4,8 +4,9 @@
 
 ```mermaid
 flowchart LR
-    Web[独立 Web] --> API[产品 HTTP API]
-    API --> Task[taskrunner]
+    Web[独立 Web] --> API[统一应用 HTTP API v2]
+    API --> Runtime[共享后端内的各项目运行时]
+    Runtime --> Task[taskrunner]
     Task --> Store[Task SQLite 事务]
     Task --> Bridge[runnerbridge outbox / 事件]
     Bridge --> CLI[runnerclient 固定 EXE / CLI]
@@ -43,6 +44,6 @@ flowchart LR
 
 ## 应用与 Web
 
-cmd/steerline-web 独立运行，web/src 维护当前项目页面、原信封与草稿，web/server 维护浏览器认证、静态页面与受限应用 API 转接。steerline serve-app 组合应用目录和 applicationhttp，通过 httpclient 连接项目服务；项目服务不托管 Web。projectconnection 共用只读配置与 Git 身份解析，localservice 维护 home/实例/进程发现与租约。只有 Web exe 嵌入页面，普通业务构建不依赖 Node。
+cmd/steerline-web 独立运行，web/src 维护当前项目页面、原信封与草稿。steerline start 作为短协调器启动本 home 的共享后端与 Web；serve 装载冻结配置，在进程内创建独立 ProjectRuntime、Task actor/store/实例及 Runner CLI 客户端，无逐项目 HTTP listener。CLI/Web 经应用 v2 handler 直达原项目端口；每项目 Runner 仍为独立 state-dir 下的常驻服务。Web 重启不替换项目；整体 stop 发布原宿主及各项目关闭/锁/资源事实，不能以共享 PID 退出代替原生停止。统一启动来源见[规格](../spec/unified-startup.spec.md)。
 
 [Runner 接入](../integration/steerrunner.md)记录固定构建及日志归属；[生命周期](../product-design/worker-lifecycle.md)维护统一节点/异常语义；[接入验收](../acceptance/steerrunner-cutover.md)登记实际通过、失败和未验项。原生验收不能由受控 helper、编译或模型报告代替。

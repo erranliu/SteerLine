@@ -247,7 +247,7 @@ func (d *debugRelease) resetState(check bool) error {
 		return err
 	}
 	// These are local control/runtime journals, not Git, provider facts or authentication.
-	for _, name := range []string{"control", "service", "runner"} {
+	for _, name := range []string{"control", "service", "runner", "application-commands"} {
 		path := filepath.Join(runDir, name)
 		if !pathWithin(d.root, path) {
 			return errors.New("reset path escaped root")

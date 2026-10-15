@@ -8,7 +8,7 @@
 .\scripts\new-debug-release.ps1 -SteerRunnerExe C:\Tools\SteerRunner\steerrunner.exe
 ```
 
-生成只有单一流程：复制仓库 `debug-template/`，构建本次业务/Web/helper，初始化自己的 `projects\SteerlineTest` Git 仓库和任务数据库，写入版本记录。默认输出 `C:\SteerlineDebug\dev-yyyyMMdd-HHmmss-<短commit>[-dirty]\`，时间为北京时间、精确到秒，按目录名称升序即可按创建时间排列。成功 stdout 返回 JSON，包括 root/start/web；已有目录、源码/安装目录重叠和目录链接被拒绝。失败目录保留日志、manifest 标为 failed，不可运行。
+生成只有单一流程：复制仓库 `debug-template/`，构建本次业务/Web/helper，初始化自己的 `projects\SteerlineTest` Git 仓库和任务定义，写入版本记录。默认输出 `C:\SteerlineDebug\dev-yyyyMMdd-HHmmss-<短commit>[-dirty]\`，时间为北京时间、精确到秒，按目录名称升序即可按创建时间排列。成功 stdout 返回 JSON，包括 root/start/stop；已有目录、源码/安装目录重叠和目录链接被拒绝。失败目录保留日志、manifest 标为 failed，不可运行。
 
 数据库按产品 Git common-dir 身份派生到 `home\state\SteerlineTest-<hash>\steerline.db`，不从安装版或模板复制已有数据库。初始任务来自 `seed\tasks.json`，由正式 task validate/create 创建；默认 A → B。生成过程不调用模型，不发布分支或 PR。生成需要 Go、Git、Node/npm 和已固定的独立 Runner EXE；运行不需要 Node、Go 或 Python。默认包含 Web，地址为 `127.0.0.1:18742`，可用 `-WebAddress` 指定另一固定端口；端口冲突明确失败。Runner 来源和安装说明见[Runner 接入](integration/steerrunner.md)。源码及复制源更新后重新生成，已有包保持自己的程序和配置。
 
@@ -18,18 +18,18 @@
 
 ```powershell
 & 'C:\SteerlineDebug\<版本目录>\start.bat'
-& 'C:\SteerlineDebug\<版本目录>\web.bat'
+
 
 # AI 模拟调试：用另一套新生成的环境
 & 'C:\SteerlineDebug\<另一个版本目录>\start.bat' --simulate
-& 'C:\SteerlineDebug\<另一个版本目录>\web.bat'
+
 ```
 
 默认 live 使用真实 Codex、GitHub `erranliu/SteerlineTest`。首次 live 准备只复制 Codex auth.json 并建立隔离 CODEX_HOME，从 gh 获取本包 token；不复制用户会话或安装版配置。启动时将最小 fixture 推送到 `codex/debug/<本次版本>/base`，不修改 main；候选发布脚本创建针对该 base 的真实 draft PR。包内认证是私有运行材料，不分享或纳入 Git。
 
 simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Git 提交、HTTP 推送、SQLite、正式任务控制和交付核验；不请求模型或真实 GitHub。模拟材料由 `seed/provider.json` 维护。AI 可使用 `bin/debug-helper.exe debug control --simulate -config <本包配置> -action resume_dispatch|start_task -profile simulate [-task-id 1]` 提交正式控制，并在 PR 发布后通过 `debug merge --simulate` 模拟真实本地 Git 合并与 provider 回执。`debug snapshot --simulate` 返回公开项目快照。
 
-首次运行冻结 live/simulate。未完成的准备可以用同方案重试，换方案必须创建新包。`start.bat` 持有本包服务/helper 的进程所有权；Ctrl+C 请求中心停止并结束本次辅助进程。无 stop.bat。交互窗口与自动进程使用同一入口；Web 浏览器关闭不会停止项目服务或 worker。
+首次运行冻结 live/simulate。未完成的准备可以用同方案重试，换方案必须创建新包。`start.bat` 通过正式统一入口启动后端与 Web 并打开浏览器，调试启动窗口负责持有 Git/provider helper；`stop.bat` 自动读取已冻结方案，正常停止产品并结束本次辅助进程。Ctrl+C 也请求正常清理。交互窗口与自动进程使用同一入口；Web 浏览器关闭不会停止项目服务或 worker。
 
 所有项目文件、Git 数据、配置、数据库、运行状态、日志与证据位于本包；Git/Codex/gh/Windows 属于机器基础工具，live 的 GitHub/模型属于明确外部服务。路径链接和 Git alternates 被拒绝，不回落到安装版 exe。生成目录固定位置使用，不承诺已有运行目录移动后的可用性。
 
@@ -60,7 +60,7 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 .\scripts\test-codex-sandbox.ps1
 ```
 
-先运行上述 controlled 门槛，再生成新的 live 包；真实 worker 运行探针、提交并经 gh shell helper 发布两个专属 PR，驱动在核验 base/head/SHA 后合并到本包 base，验证交付与依赖释放，并清理本次分支。必要越界走原生 auto_review，不依赖 Ctrl+N。首次准备将 gh 登录写入包内 `home/gh`，不改用户全局配置或凭据管理器；中心环境认证仍不自动传给 worker。结果见 [沙箱 Git 验收](acceptance/codex-sandbox-git.md)。
+先运行上述 controlled 门槛，再生成新的 live 包；真实 worker 运行探针、提交并经 gh shell helper 发布两个专属 PR，驱动在核验 base/head/SHA 后合并到本包 base，验证交付与依赖释放，并清理本次分支。必要越界走原生 auto_review，不依赖 Ctrl+N。认证保留在宿主现有外部登录中，包内只记录标准 credential helper 引用，不复制、导出或存储凭据；中心环境认证仍不自动传给 worker。结果见 [沙箱 Git 验收](acceptance/codex-sandbox-git.md)。
 
 ## 安装版人工更新
 
@@ -68,10 +68,10 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 
 ## 独立 Web 与双项目包
 
-运行 `./build.ps1 -Web` 构建 `bin/steerline.exe` 和 `bin/steerline-web.exe`，只有 Web exe 嵌入页面；普通 `./build.ps1` 无 Node 前置。分别执行两份 exe 的 `install`，目标均为显式 `STEERLINE_HOME/bin`，运行中的对应目标拒绝替换；一份成功不代表另一份已安装。`steerline launchers` 安装独立的 start-app/stop-app、start-web/stop-web、web 打开入口，项目仍由 service-window 启动。
+运行 `./build.ps1 -Web` 构建 `bin/steerline.exe` 和 `bin/steerline-web.exe`，只有 Web exe 嵌入页面；普通 `./build.ps1` 无 Node 前置。分别执行两份 exe 的 `install`，目标均为显式 `STEERLINE_HOME/bin`，运行中的对应目标拒绝替换；一份成功不代表另一份已安装。`steerline launchers` 安装统一 `start.bat` / `stop.bat`。旧生成模板仅在内容完全匹配时清理，自定义 bat 保留。
 
-`<home>/web.json` 保存 `{ "version": 1, "address": "127.0.0.1:18742" }`。项目配置删除 `web_address`，旧按项目托管和 `steerline web -config` 已删除，旧配置需显式更新，不迁移。按顺序启动 `steerline serve-app`、`steerline-web serve`，再用 `steerline-web open [-project <id>]` 打开浏览器。两个停止命令仅停止各自实例，不停止项目服务/worker。
+安装目录双击 start 即可启动共享后端、Web 并授权打开。后端冻结装载 `etc/*.json`，每项目独立 actor、数据库、实例、日志与锁，多个项目共享同一后端 PID。应用 v2 在进程内调用原项目用例，无项目 HTTP listener。项目添加和热加载尚未实现，修改配置后正常停启宿主。
 
-生成 `./scripts/new-debug-release.ps1 -WebAddress 127.0.0.1:<固定空闲端口> -WebProjects 2` 可取得同一 home 下的两个独立 SteerlineTest 仓库/common-dir、provider 和双 exe。第二份是独立 clone，不是 linked worktree；两份配置源均在 config-source，etc 只放活动项目配置。启动仍用新包 `start.bat --simulate`；默认 live 与首次方案冻结规则保持。Web 包启动器分别启动应用、Web 和项目进程，独立 Web 重启使用本包的 Web exe；换源码或方案重新生成。
+`<home>/web.json` 固定 Web 地址，冲突明确失败，不自动换端口。`steerline status --json` 查看宿主/Web/项目状态；`steerline stop` 或 stop.bat 覆盖全部项目，核验逐项目关闭、资源结算、精确进程退出与租约。低层 `steerline serve` 仅供前台/自动化宿主；Web 可单独 stop/serve/open，保持业务和 worker 活动轮次。
 
-定向真实 Edge 场景使用 `STEERLINE_WEB_PACKAGE=<全新双项目包>` 后运行 `npm --prefix web run test:e2e -- project-switch.spec.ts`。单项目 smoke 使用另一新包并按 [Web 指南](../web/README.md)设置环境。浏览器测试只模拟外部模型/PR 协议，仍运行真实 Go/SQLite/Git/Edge；结果与清理登记于[专属验收](acceptance/web-project-switch.md)。
+生成 `./scripts/new-debug-release.ps1 -WebProjects 2` 取得同一 home 下两份独立 SteerlineTest clone/common-dir/provider；默认 live，AI 显式 `start.bat --simulate`。真实 Edge 自动入口为 `./scripts/test-unified-startup.ps1 -Package <全新双项目包> -Simulate`；查询缓存使用另一个新包并加 `-Scenario query-cache`。模型/PR 协议属于模拟，Go、Git、SQLite 和 Edge 仍为真实实现。结果与清理见[统一启动验收](acceptance/unified-startup.md)。

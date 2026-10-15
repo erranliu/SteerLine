@@ -65,13 +65,20 @@ func LoadConfig(path string) (Config, error) { return loadConfig(path, nil, true
 func LoadQueryConfig(path string) (Config, error) { return loadConfig(path, nil, false) }
 
 func loadConfig(path string, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
+	projectBytes, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+	globalBytes, err := os.ReadFile(GlobalExecutionConfigPath())
+	if err != nil {
+		return Config{}, err
+	}
+	return loadConfigSnapshot(path, projectBytes, globalBytes, processHost, requireSupport)
+}
+func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
 	input := defaultProjectConfigInput()
 	config := configFromProjectInput(input)
 	projectPath, err := filepath.Abs(path)
-	if err != nil {
-		return config, err
-	}
-	projectBytes, err := os.ReadFile(projectPath)
 	if err != nil {
 		return config, err
 	}
@@ -94,10 +101,6 @@ func loadConfig(path string, processHost executionbackend.ManagedProcessHost, re
 		return config, err
 	}
 	globalPath := GlobalExecutionConfigPath()
-	globalBytes, err := os.ReadFile(globalPath)
-	if err != nil {
-		return config, fmt.Errorf("load global execution config %s: %w", globalPath, err)
-	}
 	var global RunnerExecutionConfig
 	if err := decodeStrictJSON(globalBytes, &global); err != nil {
 		return config, fmt.Errorf("global execution config: %w", err)
@@ -245,7 +248,14 @@ func InstallExecutable(source string) (string, error) {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	return localservice.Install(HomeDir(), source, name)
+	target, err := localservice.Install(HomeDir(), source, name)
+	if err != nil {
+		return "", err
+	}
+	if _, err = InstallLaunchers(); err != nil {
+		return target, err
+	}
+	return target, nil
 }
 
 func InstallSelf() (string, error) {

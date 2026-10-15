@@ -2,122 +2,95 @@ package app
 
 import (
 	"context"
-	"net/http"
-	"net/http/httptest"
+	"encoding/json"
+	host "github.com/erranliu/SteerLine/internal/app/host"
+	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/localservice"
-	api "github.com/erranliu/SteerLine/internal/product/api"
-	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
-	"github.com/erranliu/SteerLine/internal/product/httpclient"
-	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	fs "github.com/erranliu/SteerLine/internal/product/httpfs"
-	"github.com/erranliu/SteerLine/internal/projectconnection"
 )
 
-func TestWebSwitchNativeConnectionLeaseAndRestart(t *testing.T) {
-	home := t.TempDir()
-	repo := switchRepo(t, home, "repo")
-	switchConfig(t, home, "one", repo)
-	ref := api.ProjectRef{ConfigPath: filepath.Join(home, "etc", "one.json"), ApplicationHome: home}
-	if err := projectconnection.Resolve(context.Background(), &ref); err != nil {
-		t.Fatal(err)
-	}
-	process, err := httpclient.CurrentProcessIdentity()
-	if err != nil {
-		t.Fatal(err)
-	}
-	var identity atomic.Value
-	var calls atomic.Int32
-	started, release := make(chan struct{}), make(chan struct{})
-	native := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := identity.Load().(httpcontract.Identity)
-		if r.Header.Get("Authorization") != "Bearer "+strings.Repeat("a", 64) {
-			w.WriteHeader(403)
-			return
+func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
+	c, _ := nativeTaskFixture(t)
+	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
+	require(t, os.MkdirAll(EtcDir(), 0700))
+	require(t, os.WriteFile(filepath.Join(EtcDir(), "one.json"), projectConfigJSON(t, c), 0600))
+	second := c
+	second.Repository = filepath.Join(t.TempDir(), "second")
+	fixtureGit(t, HomeDir(), "clone", "--quiet", "--no-hardlinks", c.Repository, second.Repository)
+	fixtureGit(t, second.Repository, "remote", "set-url", "origin", "https://github.com/owner/repo.git")
+	second.RunDir = ""
+	require(t, os.WriteFile(filepath.Join(EtcDir(), "two.json"), projectConfigJSON(t, second), 0600))
+	require(t, os.WriteFile(filepath.Join(EtcDir(), "z-broken.json"), []byte("{"), 0600))
+	d := NewApplicationDirectory(HomeDir())
+	defer d.Close()
+	d.Start()
+	catalog := switchCatalog(t, d, func(c contract.Catalog) bool {
+		return len(c.Projects) == 3 && (c.Projects[0].RuntimeState != "starting" && c.Projects[1].RuntimeState != "starting")
+	})
+	for _, project := range catalog.Projects {
+		if project.ConfigID == "z-broken.json" {
+			if project.RuntimeState != "failed" || project.ProjectID != "" {
+				t.Fatal("bad configuration was not isolated", project)
+			}
+			continue
 		}
-		if r.URL.Path == "/v1/identity" {
-			calls.Add(1)
-			localservice.JSON(w, 200, id)
-			return
+		if !project.Online {
+			t.Fatal("project failed", project)
 		}
-		if r.URL.Query().Get("hold") == "1" {
-			close(started)
-			select {
-			case <-release:
-			case <-r.Context().Done():
-				return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	a, err := d.Connect(ctx, catalog.Projects[0].ProjectID)
+	require(t, err)
+	b, err := d.Connect(ctx, catalog.Projects[1].ProjectID)
+	require(t, err)
+	readCtx, readCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer readCancel()
+	if _, err := a.Read(readCtx, "/identity", nil); err != nil {
+		t.Fatal("in-process identity read failed", err)
+	}
+	ai, bi := a.Identity(ctx), b.Identity(ctx)
+	if ai.InstanceID == bi.InstanceID || ai.ProjectID == bi.ProjectID || ai.Process != bi.Process || ai.Process.PID != os.Getpid() {
+		t.Fatal("project/process ownership conflated", ai, bi)
+	}
+	for _, identity := range []httpcontract.Identity{ai, bi} {
+		for _, capability := range identity.Capabilities {
+			if capability == "stop_service" {
+				t.Fatal("retired capability exposed")
 			}
 		}
-		localservice.JSON(w, 200, map[string]string{"instance": id.InstanceID})
-	}))
-	defer native.Close()
-	defer func() {
-		select {
-		case <-release:
-		default:
-			close(release)
+	}
+	if _, err = a.Command(ctx, httpcontract.CommandEnvelope{RequestID: strings.Repeat("f", 32), ProjectID: ai.ProjectID, InstanceID: ai.InstanceID, Action: "stop_service", TargetID: ai.InstanceID, Payload: json.RawMessage(`{}`)}); err == nil {
+		t.Fatal("retired project stop accepted")
+	}
+	if !b.Identity(ctx).Ready {
+		t.Fatal("retired stop affected sibling runtime")
+	}
+	for _, e := range d.entries {
+		if e.ref.Identity == "" {
+			continue
+		} // Invalid configs own no runtime or repository lock.
+		if _, err = os.Stat(filepath.Join(e.ref.RunDir, "local-api", "discovery.json")); !os.IsNotExist(err) {
+			t.Fatal("per-project HTTP published")
 		}
-	}()
-	id := httpcontract.Identity{Protocol: httpcontract.Protocol, ProjectID: httpcontract.ProjectID(ref.Identity), RepositoryIdentity: ref.Identity, InstanceID: "original", Process: process, Address: strings.TrimPrefix(native.URL, "http://"), Ready: true}
-	identity.Store(id)
-	dir := filepath.Join(ref.RunDir, "local-api")
-	credentials := filepath.Join(dir, "credentials")
-	if err = fs.EnsurePrivateDirectory(credentials); err != nil {
-		t.Fatal(err)
-	}
-	token := filepath.Join(credentials, "native.token")
-	if err = os.WriteFile(token, []byte(strings.Repeat("a", 64)), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if err = fs.SecurePrivateFile(token); err != nil {
-		t.Fatal(err)
-	}
-	publish := func() {
-		t.Helper()
-		if err := localservice.Write(dir, "discovery.json", httpcontract.Discovery{Version: 1, Protocol: httpcontract.Protocol, ProjectID: id.ProjectID, RepositoryIdentity: ref.Identity, InstanceID: id.InstanceID, Process: process, Address: id.Address, CredentialPath: token, LeaseID: id.InstanceID, Ready: true}); err != nil {
-			t.Fatal(err)
+		lock, e := host.LockRepository(e.ref.Identity)
+		if e == nil {
+			lock.Close()
+			t.Fatal("repository lock was not retained")
 		}
 	}
-	publish()
-	d := NewApplicationDirectory(home)
-	defer d.Close()
-	switchCatalog(t, d, func(c contract.Catalog) bool { return len(c.Projects) == 1 && c.Projects[0].Online })
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	original, err := d.Connect(ctx, id.ProjectID)
-	if err != nil {
-		t.Fatal(err)
+	d.BeginStop()
+	require(t, d.Close())
+	for _, result := range d.ShutdownResults() {
+		if !result.LocalClosed || !result.LocksReleased || !result.ResourcesSettled {
+			t.Fatal("project not cleanly closed", result)
+		}
 	}
-	reused, err := d.Connect(ctx, id.ProjectID)
-	if err != nil || reused != original || calls.Load() != 1 {
-		t.Fatal("verified connection was unnecessarily rediscovered", err, calls.Load())
-	}
-	done := make(chan error, 1)
-	var oldResponse map[string]string
-	go func() { done <- original.Get(ctx, "/snapshot?hold=1", &oldResponse) }()
-	select {
-	case <-started:
-	case <-ctx.Done():
-		t.Fatal(ctx.Err())
-	}
-	id.InstanceID = "replacement"
-	identity.Store(id)
-	publish()
-	current, err := d.Connect(ctx, id.ProjectID)
-	if err != nil || current == original || current.Identity().InstanceID != id.InstanceID {
-		t.Fatal("native restart did not replace connection", err)
-	}
-	close(release)
-	if err = <-done; err != nil || oldResponse["instance"] != "original" {
-		t.Fatal("retiring connection interrupted or changed inflight result", oldResponse, err)
-	}
-	if calls.Load() != 2 {
-		t.Fatal("unexpected identity handshakes", calls.Load())
+	if a.Identity(ctx).Ready || b.Identity(ctx).Ready {
+		t.Fatal("closed project remains ready")
 	}
 }

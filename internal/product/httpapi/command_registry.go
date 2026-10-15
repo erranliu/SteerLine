@@ -411,7 +411,7 @@ func validateActionEnvelope(envelope CommandEnvelope) error {
 			payload.Target.ExecutionID == "" || payload.Target.AttemptID == "" || payload.Target.TurnID == "" || payload.Target.BlockerID == "" || envelope.ExpectedControlRevision == 0 {
 			return invalidCommand(envelope.Action + " requires its exact run/execution/attempt/turn/blocker target")
 		}
-	case "pause_dispatch", "resume_dispatch", "stop_service":
+	case "pause_dispatch", "resume_dispatch":
 		var empty map[string]json.RawMessage
 		if err := decodeStrict(envelope.Payload, &empty); err != nil || len(empty) != 0 {
 			return invalidCommand(envelope.Action + " accepts an empty JSON object")
@@ -733,7 +733,7 @@ func matchesControl(original CommandEnvelope, record *requestRecord, request api
 }
 
 func mappedControlMatchesEnvelope(original CommandEnvelope, input api.ControlInput) bool {
-	if input.RequestID != original.RequestID || input.InstanceID != original.InstanceID || string(input.Action) != original.Action || validateActionEnvelope(original) != nil {
+	if input.RequestID != original.RequestID || input.InstanceID != original.InstanceID || string(input.Action) != original.Action || (original.Action != "stop_service" && validateActionEnvelope(original) != nil) {
 		return false
 	}
 	payload := input.Payload
@@ -765,7 +765,8 @@ func mappedControlMatchesEnvelope(original CommandEnvelope, input api.ControlInp
 		}
 		return payload == (api.ControlPayload{})
 	case "stop_service":
-		return original.TargetID == original.InstanceID && payload == (api.ControlPayload{})
+		var empty map[string]json.RawMessage
+		return decodeStrict(original.Payload, &empty) == nil && len(empty) == 0 && original.TargetID == original.InstanceID && payload == (api.ControlPayload{})
 	}
 	return false
 }

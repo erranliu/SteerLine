@@ -60,7 +60,7 @@ func (a serviceAdmission) InitializeNativeProject(ctx context.Context, input hos
 	if err := a.syncHostFacts(input); err != nil {
 		return err
 	}
-	store, err := OpenNativeTaskProject(ctx, a.config)
+	store, err := openOwnedNativeTaskProject(ctx, a.config)
 	if err != nil {
 		return err
 	}

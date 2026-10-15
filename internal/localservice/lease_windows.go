@@ -3,6 +3,7 @@
 package localservice
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -31,3 +32,5 @@ func (l *lease) Close() {
 	windows.UnlockFileEx(windows.Handle(l.f.Fd()), 0, 1, 0, &l.o)
 	l.f.Close()
 }
+
+func leaseBusy(err error) bool { return errors.Is(err, windows.ERROR_LOCK_VIOLATION) }

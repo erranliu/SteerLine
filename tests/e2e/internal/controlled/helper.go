@@ -38,7 +38,8 @@ func Main(args []string) error {
 	}
 	path := argument(args, "--e2e-state")
 	if path == "" {
-		path = os.Getenv("STEERLINE_E2E_CONTROLLED_STATE")
+		cwd, _ := os.Getwd()
+		path = statePathForDirectory(cwd)
 	}
 	if path == "" || !filepath.IsAbs(path) {
 		return fmt.Errorf("helper requires absolute --e2e-state")

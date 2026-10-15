@@ -18,10 +18,10 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 ## 本机 Web
 
-`./build.ps1 -Web` 生成 `steerline.exe` 和独立 `steerline-web.exe`，仅 Web 程序嵌入页面。显式设置 `STEERLINE_HOME` 后，分别启动 `steerline serve-app`、`steerline-web serve`，用 `steerline-web open` 授权打开；项目服务通过原生入口独立启动。固定浏览器地址放在 `<home>/web.json`，同一地址可切换该 home 已配置项目，关闭 Web 不停止业务服务或 worker。调试仍先生成新包，详见 [Web 指南](web/README.md)。
+设置 `STEERLINE_HOME` 后，将两个 exe 分别 `install` 到所选 home，双击该目录的 `start.bat`，即可启动共享后端、Web 并授权打开浏览器。后端自动装载 `etc/*.json` 中的所有项目，同一进程内分别持有 actor、数据库和锁。页面选择项目进入；`stop.bat` 正常停止整个应用。`steerline status --json` 查看宿主、Web 与各项目状态。Web 可独立重启，关闭浏览器不停止业务。详见 [Web 指南](web/README.md)与[统一启动规格](docs/spec/unified-startup.spec.md)。
 
 ## 独立调试
 
-临时或 AI 调试统一运行 `./scripts/new-debug-release.ps1`，生成 `C:\SteerlineDebug` 下包含业务、Web 和 helper 的独立 SteerlineTest 包。默认 Web 地址为 `127.0.0.1:18742`，可用 `-WebAddress` 指定另一固定端口。默认 live；AI 使用 `start.bat --simulate`，启动后用 `web.bat` 打开页面。任务状态由包内 `reset-SteerlineTest.bat` 无备份重置，活动项目/应用/Web/worker 阻止重置。操作见[安装与调试](docs/runtime-install-debug.md)。
+临时或 AI 调试统一运行 `./scripts/new-debug-release.ps1`，生成 `C:\SteerlineDebug` 下包含业务、Web 和 helper 的独立 SteerlineTest 包。生成器默认分配空闲端口并固定在包配置，也可用 `-WebAddress` 指定端口。默认 live；AI 使用 `start.bat --simulate`，统一启动后自动打开页面。任务状态由包内 `reset-SteerlineTest.bat` 无备份重置，活动项目/应用/Web/worker 阻止重置。操作见[安装与调试](docs/runtime-install-debug.md)。
 
-Web 是唯一交互前端，原 TUI、`steerline console` 和 `console.bat` 已移除。后台 CLI、服务窗口与 `run -console` 日志、原生 Codex/Orca 会话查看继续保留；范围和验证见[TUI 退役](docs/spec/tui-retirement.spec.md)。
+Web 是唯一交互前端，原 TUI、`steerline console` 和 `console.bat` 已移除。后台 CLI、低层 `serve`、项目日志及原生 Codex/Orca 会话查看继续保留；范围和验证见[TUI 退役](docs/spec/tui-retirement.spec.md)。
