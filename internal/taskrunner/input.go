@@ -9,6 +9,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // Decision is a UI projection of public Runner controls, never a persisted
@@ -110,7 +111,11 @@ func InputForAnswer(candidate runnerbridge.Candidate, answer api.DecisionAnswer)
 				values[key] = append([]string(nil), parts...)
 			}
 			if len(values) == 0 {
-				if err := json.Unmarshal([]byte(answer.Note), &values); err != nil {
+				canonical, err := taskmodel.CanonicalJSON([]byte(answer.Note))
+				if err != nil {
+					return "", nil, failure("invalid_request", "answer JSON must not contain duplicate or ambiguous keys")
+				}
+				if err := json.Unmarshal(canonical, &values); err != nil {
 					return "", nil, failure("invalid_request", "answer all native questions with JSON keyed by question ID")
 				}
 			}

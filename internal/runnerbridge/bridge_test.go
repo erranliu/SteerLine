@@ -159,3 +159,27 @@ func TestSteerRunnerOutboxBoundaries(t *testing.T) {
 		}
 	})
 }
+
+func TestSteerRunnerBoundPRCannotDisappear(t *testing.T) {
+	_, store, cli := setup()
+	c := store.value
+	c.RunID = cli.run.RunID
+	cli.run.PR = &runnerclient.PRFact{URL: "https://example.invalid/pull/1"}
+	if err := bind(&c, cli.run); err != nil {
+		t.Fatal(err)
+	}
+	before := clone(c)
+	for _, pr := range []*runnerclient.PRFact{nil, {URL: "https://example.invalid/pull/2"}} {
+		invalid := cli.run
+		invalid.Revision++
+		invalid.PR = pr
+		if err := bind(&c, invalid); err == nil {
+			t.Fatal("lost fixed PR identity")
+		}
+		actual, _ := json.Marshal(c)
+		expected, _ := json.Marshal(before)
+		if string(actual) != string(expected) {
+			t.Fatal("rejected projection changed saved binding")
+		}
+	}
+}

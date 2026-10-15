@@ -82,6 +82,14 @@ func TestRunnerNativeAnswersPreserveQuestionsAndCallerInput(t *testing.T) {
 	if _, _, err := InputForAnswer(candidate, bad); err == nil {
 		t.Fatal("ambiguous structured answer accepted")
 	}
+	for _, text := range []string{`{"color":["red"],"color":["red"],"details":["because"]}`, `{"color":["red"],"details":["because"]} {}`} {
+		bad := answer
+		bad.Answers = nil
+		bad.Note = text
+		if _, _, err := InputForAnswer(candidate, bad); err == nil {
+			t.Fatal("ambiguous answer text accepted", text)
+		}
+	}
 	q.NativeQuestions = q.NativeQuestions[:1]
 	d = Decision(run)
 	if d.Request.Question != "Choose color" || len(d.Request.Options) != 1 || d.Request.Options[0].ID != "red" {

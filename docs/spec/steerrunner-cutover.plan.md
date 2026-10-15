@@ -43,3 +43,5 @@ Runner 真机验收登记在 Runner SR-A11/SR-A12。先运行 `scripts/new-debug
 
 
 本机调试验收入口在删除旧执行域后只读取公开 Run/final 和外部 Codex 原生 rollout（严格匹配 session/turn/workspace、有界读取）。沙箱探针/命令退出码来自原生 CommandExecution，不读 Runner 私有 journal；原生自动审批由 Runner 自身验收取证。补充最小验证：`go test ./tests/e2e/internal/native ./tests/e2e/internal/driver -run 'Test(NativeRollout|ReadNativeRollout|BusinessRollout|DebugSandboxStage)' -count=1 -timeout=2m`，映射 SLC-A04/A06，证据 `external-rollout-2.log`。本机 live 产品闭环按 SLC-A04 的新包入口执行，原生停止确认后才清理本次专属 Git 事实。
+
+审计测试计划（SLC-A01/A02）：本轮修复后、推送 PR 前，在隔离内存/SQLite fixture 运行 `go test ./internal/taskrunner ./internal/runnerbridge -count=1 -timeout=2m`。回答文本重复键、尾随 JSON 须被拒绝，合法原题回答不改调用者输入；已绑定 PR 丢失或替换须零投影变更。证据 `audit-input-binding.log` 及专属验收审计段。主干再次变化时保留其产品退役决策，并对冲突涉及的消费者定向编译及边界检查，不默认全量测试。本轮用户交付要求为两仓审计修复与 PR，不自动合并或发布；尚未通过的最新本机产品验收明确保留。

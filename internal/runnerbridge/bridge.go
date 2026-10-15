@@ -261,7 +261,7 @@ func (b *Bridge) RecoverInputs(ctx context.Context, project, id string) error {
 	return b.save(ctx, &c)
 }
 func bind(c *Candidate, r runnerclient.Run) error {
-	if r.RunID != c.RunID || c.InputDigest != "" && c.InputDigest != r.InputDigest || c.Branch != "" && c.Branch != r.Execution.Branch || c.PRURL != "" && r.PR != nil && c.PRURL != r.PR.URL {
+	if r.RunID != c.RunID || c.InputDigest != "" && c.InputDigest != r.InputDigest || c.Branch != "" && c.Branch != r.Execution.Branch || c.PRURL != "" && (r.PR == nil || c.PRURL != r.PR.URL) {
 		return errors.New("Runner projection changed the fixed candidate binding")
 	}
 	if c.Projection != nil && r.Revision < c.Projection.Revision {
