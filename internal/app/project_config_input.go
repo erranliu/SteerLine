@@ -16,7 +16,6 @@ type ProjectConfigInput struct {
 	Remote           string                          `json:"remote"`
 	Branch           string                          `json:"branch"`
 	RunDir           string                          `json:"run_dir"`
-	WebAddress       string                          `json:"web_address,omitempty"`
 	Claimant         string                          `json:"claimant"`
 	Git              executionbackend.Command        `json:"git"`
 	WorkflowProtocol string                          `json:"workflow_protocol,omitempty"`
@@ -44,7 +43,6 @@ type Config struct {
 	Remote           string                              `json:"remote"`
 	Branch           string                              `json:"branch"`
 	RunDir           string                              `json:"run_dir"`
-	WebAddress       string                              `json:"web_address,omitempty"`
 	Claimant         string                              `json:"claimant"`
 	Git              executionbackend.Command            `json:"git"`
 	WorkflowProtocol string                              `json:"workflow_protocol,omitempty"`

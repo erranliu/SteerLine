@@ -51,7 +51,7 @@ func (p *Project) UseControlledTerminal(environment string, f controlled.Recover
 	p.Scenario.Must(err)
 	var config map[string]any
 	p.Scenario.Must(json.Unmarshal(rawConfig, &config))
-	kind := "orca_local"
+	kind := "local"
 	if environment != "" {
 		kind = "orca_environment"
 	}
@@ -114,6 +114,11 @@ func (p *Project) WaitRecovery(label string, predicate func(Snapshot) bool) Snap
 		if len(result.Domain.Executions) == 1 && result.Domain.Executions[0].Error != nil && *result.Domain.Executions[0].Error != lastError {
 			lastError = *result.Domain.Executions[0].Error
 			p.Record(strings.ReplaceAll(label, " ", "-")+"-latest", result)
+		}
+		for _, candidate := range result.Runner.Candidates {
+			if candidate.SubmitState == "rejected" {
+				p.Scenario.t.Fatal("Runner rejected original submission: ", candidate.Diagnostic)
+			}
 		}
 		return predicate(result), nil
 	})

@@ -49,7 +49,7 @@ func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
 	var input runnerclient.RunInput
 	_ = json.Unmarshal(c.Submit.Input, &input)
 	v.Host = "local"
-	if input.Execution.Target.Kind == "orca_local" || input.Execution.Target.Kind == "orca_environment" {
+	if input.Execution.Adapter == "orca-terminal" {
 		v.Host = "orca"
 		v.Target.ID = input.Execution.Target.Environment
 	}
