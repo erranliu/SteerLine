@@ -13,6 +13,7 @@ import (
 // Signal is delivered to the single service state machine. Worker
 // observers may run concurrently, but only that state machine changes runs.
 type Signal struct {
+	mutation         *taskMutationSignal
 	discard          *taskDiscardSignal
 	workerStartCheck *workerStartCheckResult
 	startCheck       *taskStartCheckResult
@@ -118,6 +119,10 @@ func (s *Service) drainWorkerMessagesFrom(messages <-chan Signal) {
 	for messages != nil {
 		select {
 		case message := <-messages:
+			if message.mutation != nil {
+				message.mutation.done <- nativeErr("service_not_ready", "project stopped before queued task command")
+				continue
+			}
 			if message.discard != nil {
 				completeDiscardTask(message.discard, taskmodel.TaskDiscardReceipt{}, nativeErr("service_not_ready", "service stopped before the queued discard began"))
 				continue

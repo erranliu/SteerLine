@@ -79,7 +79,7 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	must := []string{"service-window.bat", "README.txt", "start-app.bat", "stop-app.bat", "start-web.bat", "stop-web.bat", "web.bat"}
+	must := []string{"start.bat", "stop.bat", "README.txt"}
 	got := map[string]bool{}
 	for _, p := range written {
 		got[filepath.Base(p)] = true
@@ -92,13 +92,14 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, "console.bat")); !os.IsNotExist(err) {
 		t.Fatal("retired TUI launcher generated")
 	}
-	window, e := os.ReadFile(filepath.Join(home, "service-window.bat"))
+	window, e := os.ReadFile(filepath.Join(home, "start.bat"))
 	if e != nil {
 		t.Fatal(e)
 	}
-	if !strings.Contains(string(window), "-dispatch manual -console summary -service-window") || !strings.Contains(string(window), "etc\\SteerLine.json") || strings.Contains(string(window), "merge-h-308-code.json") || !strings.Contains(string(window), "\r\n") {
-		t.Fatalf("service-window.bat missing required window/manual/summary behavior or CRLF:\n%s", window)
+	if !strings.Contains(string(window), `"%~dp0bin\steerline.exe" start`) || !strings.Contains(string(window), "\r\n") {
+		t.Fatalf("invalid unified launcher: %s", window)
 	}
+
 	if len(written) != len(must) {
 		t.Fatalf("unexpected launchers written: %v", written)
 	}

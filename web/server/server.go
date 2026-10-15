@@ -160,9 +160,18 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		fail(w, 403, "origin_rejected", "Web Origin does not match")
 		return
 	}
-	if r.URL.Path == "/native/identity" || r.URL.Path == "/native/shutdown" {
+	if r.URL.Path == "/native/identity" || r.URL.Path == "/native/shutdown" || r.URL.Path == "/native/backend" {
 		if r.URL.RawPath != "" || !s.endpoint.Authorized(r) {
 			fail(w, 403, "launcher_rejected", "native launcher credential required")
+			return
+		}
+		if r.Method == "GET" && r.URL.Path == "/native/backend" {
+			identity, err := s.options.Client.RefreshIdentity(r.Context())
+			if err != nil {
+				localservice.BackendError(w, err)
+			} else {
+				localservice.JSON(w, 200, identity)
+			}
 			return
 		}
 		if r.Method == "GET" && r.URL.Path == "/native/identity" {
@@ -313,7 +322,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_path", "canonical API path required")
 		return
 	}
-	prefix := "/api/v1/application"
+	prefix := "/api/v2/application"
 	route := strings.TrimPrefix(r.URL.Path, prefix)
 	if route == r.URL.Path || !(route == "/projects" || strings.HasPrefix(route, "/projects/")) {
 		fail(w, 404, "route_not_found", "application route required")

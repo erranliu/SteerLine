@@ -49,7 +49,7 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 
 ## Module owners
 
-Web 由 `cmd/steerline-web` 独立运行，`web/src` 负责当前项目页面与持久原信封/草稿，`web/server` 负责浏览器认证、静态嵌入及受限应用 API 转接。`steerline serve-app` 在 `internal/app/application_service.go` 组合应用目录和 `applicationhttp`，只通过原 `httpclient` 连接各项目；项目服务不再托管 Web。`projectconnection` 是应用服务使用的只读配置与 Git 身份解析器，`localservice` 维护独立 home/实例/进程发现和租约，应用协议为 `steerline-application/v1`。`build.ps1 -Web` 分别生成业务与 Web exe，只有后者嵌入页面；普通业务构建不依赖 Node。操作见 [Web README](../../web/README.md)，验证见[项目切换验收](../acceptance/web-project-switch.md)。
+Web 由 `cmd/steerline-web` 独立运行，保留 #323 的查询缓存和受限浏览器 API。`steerline start` 是短协调器，启动并核验本 home 的两个常驻产品进程，再委托 Web open；`serve` 组合 `ApplicationDirectory`、`ProjectRuntime` 和应用 v2 handler。目录固定 etc 配置快照，先完成有界身份 census/冲突核验，再分别持锁建立项目 actor/store/实例；路由直达原项目用例，无 per-project HTTP listener。Web 独立重启不影响项目；宿主停止先关闭全部输入资格，再并行关闭项目，发布绑定原宿主的私有 shutdown.json。`localservice` 管理精确 OS 身份、租约、短协调锁与有界私有记录；正常停止不按共享 PID 杀项目。两个 exe 分别构建，业务不嵌入 Web 资源。见[统一启动规格](../spec/unified-startup.spec.md)及[验收](../acceptance/unified-startup.md)。
 
 | Owner | Responsibility |
 | --- | --- |
@@ -108,7 +108,7 @@ The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e
 | Local native client transport | `internal/product/httpapi` adapts its consumer ports to `steerline-client/v1`; `internal/app` directly supplies the product client as the port implementation and starts the endpoint within the existing locked service lifetime. |
 | Atomic persistence declarations | `internal/storage/ports`; `internal/storage/sqlite` is the sole SQL/schema/transaction implementation. |
 | Composition inputs | `internal/app.Config`, `LoadConfig`, `NewService` and the app wiring files bind the concrete adapters, ports and SQLite owner. |
-| Main executable | `cmd/steerline/main.go` routes `serve-app`/`stop-app`, `run`/`start-service`, task and product commands. |
+| Main executable | `cmd/steerline/main.go` routes `start`/`serve`/`stop`/`status`, remote task and product commands. |
 | Test feedback executable | `cmd/test-feedback` selects L1, Full, scoped Go tests and registered controlled/live E2E scenarios; only its feedback/process imports are allowed outside tests. |
 | Diagnostic executable | `cmd/orca-probe` emits capability evidence and does not create product tasks, workers or messages. |
 

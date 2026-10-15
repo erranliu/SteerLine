@@ -4,6 +4,8 @@
 
 ## 前置与整合
 
+2026-10-15 新增前置整合约束：本任务采用[统一宿主 Plan](unified-startup.plan.md)已实现/验收的固定版本，消费应用 v2、进程内项目端口及成员准入/装载 owner；原调查版本不作为恢复独立项目进程或 TUI 的依据。登记不自动运行/派发，热加载不由统一启动批次提前实现。正式实施前同步本 Plan 的实际代码调查、接口及测试命令，不把旧应用协议当兼容路径。本次衔接维护重读 SpecGuide，版本与 hash 归统一宿主 Plan 的输入记录。
+
 必须已有 Go 应用 host、应用认证/协议、现有项目目录和独立 Web 入口。前置只提供“已配置项目”访问，没有结构核验或建库准入；本任务将其扩展为显式登记，不追溯改写前置验收。
 
 结构规则归[project-structure.md](../product-design/project-structure.md)，模板归[project-onboarding-prompt.md](../product-design/project-onboarding-prompt.md)。项目逻辑进入 Go 应用层，不进入 Web/TUI。复用 `task_documents.go` 的精确 commit 普通 blob 读取、Task 模型的规范路径/摘要能力、`service_preflight.go`/`native_state_preflight.go` 的具体参数/状态检查、`native_project_open.go`/SQLite 的原生权威初始化；不构造假 TaskContract，不复制 Task/DAG 或 worker 流程。

@@ -1153,9 +1153,7 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	if c, retErr = admission.Preflight(ctx, c, true); retErr != nil {
 		return fail(fmt.Errorf("service preflight: %w", retErr))
 	}
-	if initErr := admission.InitializeNativeProject(ctx, c); initErr != nil {
-		return fail(fmt.Errorf("initialize native project authority: %w", initErr))
-	}
+
 	// Preflight canonicalizes paths and applies the same defaults used by the
 	// service. Rewrite only this attempt's non-authoritative startup record.
 	processIdentity, retErr = c.ProcessFacts.CurrentIdentity()
@@ -1177,6 +1175,9 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 		return fail(err)
 	}
 	defer runLock.Close()
+	if initErr := admission.InitializeNativeProject(ctx, c); initErr != nil {
+		return fail(fmt.Errorf("initialize native project authority: %w", initErr))
+	}
 	selectedConsole := console
 	if selectedConsole == "" {
 		selectedConsole = ConsoleDefault()

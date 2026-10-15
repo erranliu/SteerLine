@@ -1,25 +1,34 @@
 // Package applicationhttp routes only catalogued projects through their native
-// HTTP owners. It never initializes project storage or starts a project service.
+// in-process owners. Routing never initializes storage or starts a runtime.
 package applicationhttp
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"io"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
-	"github.com/erranliu/SteerLine/internal/product/httpclient"
+
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 )
 
+type ProjectPort interface {
+	Identity(context.Context) httpcontract.Identity
+	Read(context.Context, string, url.Values) (any, error)
+	Command(context.Context, httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error)
+	Task(context.Context, string, string, json.RawMessage) (any, error)
+}
+
 type Directory interface {
 	Catalog(context.Context) (contract.Catalog, error)
-	Connect(context.Context, string) (*httpclient.Client, error)
+	Connect(context.Context, string) (ProjectPort, error)
 }
 type Server struct {
 	Endpoint  *localservice.Endpoint
@@ -27,6 +36,8 @@ type Server struct {
 	Shutdown  context.CancelFunc
 }
 
+var taskReadRoute = regexp.MustCompile(`^/(task-batches/[0-9a-f]{32}|tasks/[^/]+/predecessors/requests/[0-9a-f]{32})$`)
+var taskWriteRoute = regexp.MustCompile(`^/(task-batch-validation|task-batches|tasks/[^/]+/predecessors)$`)
 var readRoute = regexp.MustCompile(`^/(identity|tasks|tasks/[^/]+|graph|snapshot|candidates|presentation|runs/[^/]+|runs/[^/]+/(activity|conversation|final|body|recovery|decision-eligibility)|commands/[0-9a-f]{32})$`)
 
 func AllowedRead(route string) bool { return readRoute.MatchString(route) }
@@ -39,14 +50,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		localservice.Error(w, 400, "invalid_path", "canonical route required")
 		return
 	}
-	root := "/v1/application"
+	root := "/v2/application"
 	if r.URL.Path == root+"/identity" && r.Method == "GET" {
 		localservice.JSON(w, 200, s.Endpoint.Identity)
 		return
 	}
 	if r.URL.Path == root+"/shutdown" && r.Method == "POST" {
-		localservice.JSON(w, 200, map[string]string{"status": "stopping"})
 		s.Shutdown()
+		localservice.JSON(w, 200, map[string]any{"status": "stopping", "identity": s.Endpoint.Identity})
 		return
 	}
 	if r.URL.Path == root+"/projects" && r.Method == "GET" {
@@ -61,7 +72,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, root+"/projects/")
 	id, route, ok := strings.Cut(path, "/")
 	route = "/" + route
-	if !ok || len(id) != 64 || path == r.URL.Path || !(r.Method == "GET" && AllowedRead(route) || r.Method == "POST" && route == "/commands" && r.URL.RawQuery == "") {
+	if !ok || len(id) != 64 || path == r.URL.Path || !(r.Method == "GET" && (AllowedRead(route) || taskReadRoute.MatchString(route)) || r.Method == "POST" && (route == "/commands" || taskWriteRoute.MatchString(route)) && r.URL.RawQuery == "") {
 		localservice.Error(w, 404, "route_not_found", "route outside application protocol")
 		return
 	}
@@ -70,27 +81,26 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		localservice.BackendError(w, err)
 		return
 	}
-	defer c.Close()
-	identity := c.Identity()
+	identity := c.Identity(r.Context())
 	if identity.ProjectID != id {
 		localservice.Error(w, 409, "project_mismatch", "route differs from native identity")
 		return
 	}
-	if route == "/identity" {
-		live, err := c.RefreshIdentity(r.Context())
-		if err != nil {
-			localservice.BackendError(w, err)
-			return
+	var result any
+	if taskReadRoute.MatchString(route) || taskWriteRoute.MatchString(route) {
+		var data []byte
+		if r.Method == "POST" {
+			reader := http.MaxBytesReader(w, r.Body, 1<<20)
+			defer reader.Close()
+			data, err = io.ReadAll(reader)
+			if err != nil {
+				localservice.Error(w, 413, "request_body_too_large", err.Error())
+				return
+			}
 		}
-		localservice.JSON(w, 200, live)
-		return
-	}
-	var result json.RawMessage
-	if r.Method == "GET" {
-		if r.URL.RawQuery != "" {
-			route += "?" + r.URL.RawQuery
-		}
-		err = c.Get(r.Context(), route, &result)
+		result, err = c.Task(r.Context(), r.Method, route, json.RawMessage(data))
+	} else if r.Method == "GET" {
+		result, err = c.Read(r.Context(), route, r.URL.Query())
 	} else {
 		var envelope httpcontract.CommandEnvelope
 		reader := http.MaxBytesReader(w, r.Body, 1<<20)
@@ -110,14 +120,10 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			localservice.Error(w, 409, "stale_target", err.Error())
 			return
 		}
-		err = c.Post(r.Context(), route, envelope, &result)
+		result, err = c.Command(r.Context(), envelope)
 	}
 	if err != nil {
-		localservice.BackendError(w, err)
-		return
-	}
-	if len(result) == 0 {
-		localservice.BackendError(w, errors.New("empty native response"))
+		httpapi.WriteProjectError(w, err)
 		return
 	}
 	localservice.JSON(w, 200, result)

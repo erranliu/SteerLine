@@ -73,13 +73,21 @@ func LoadConfigWithDirectory(path string, directory *execution.ExecutionDirector
 }
 
 func loadConfig(path string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
+	projectBytes, err := os.ReadFile(path)
+	if err != nil {
+		return Config{}, err
+	}
+	globalBytes, err := os.ReadFile(GlobalExecutionConfigPath())
+	if err != nil {
+		return Config{}, err
+	}
+	return loadConfigSnapshot(path, projectBytes, globalBytes, directory, processHost, requireSupport)
+}
+
+func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
 	input := defaultProjectConfigInput()
 	config := configFromProjectInput(input)
 	projectPath, err := filepath.Abs(path)
-	if err != nil {
-		return config, err
-	}
-	projectBytes, err := os.ReadFile(projectPath)
 	if err != nil {
 		return config, err
 	}
@@ -104,10 +112,6 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	globalPath := GlobalExecutionConfigPath()
 	if config.Host != "" || config.Agent != "" || len(config.ExecutionProfiles) != 0 || config.DefaultExecutionProfile != "" {
 		return config, fmt.Errorf("execution profiles belong in global execution config %s", globalPath)
-	}
-	globalBytes, err := os.ReadFile(globalPath)
-	if err != nil {
-		return config, fmt.Errorf("load global execution config %s: %w", globalPath, err)
 	}
 	var global struct {
 		Version           int                          `json:"version"`
@@ -307,7 +311,14 @@ func InstallExecutable(source string) (string, error) {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	return localservice.Install(HomeDir(), source, name)
+	target, err := localservice.Install(HomeDir(), source, name)
+	if err != nil {
+		return "", err
+	}
+	if _, err = InstallLaunchers(); err != nil {
+		return target, err
+	}
+	return target, nil
 }
 
 func InstallSelf() (string, error) {

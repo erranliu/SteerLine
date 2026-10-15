@@ -50,16 +50,7 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, &protocolError{status: http.StatusBadRequest, code: "request_invalid", reason: err.Error()}, envelope.RequestID)
 		return
 	}
-	if envelope.Action == "open_native_session" {
-		response, openErr := s.commands.OpenNative(r.Context(), envelope)
-		if openErr != nil {
-			writeProtocolError(w, openErr, envelope.RequestID)
-			return
-		}
-		writeJSON(w, responseHTTPStatus(response.Status), response)
-		return
-	}
-	response, err := s.commands.Submit(r.Context(), envelope, currentActor())
+	response, err := s.Command(r.Context(), envelope)
 	if err != nil {
 		writeProtocolError(w, err, envelope.RequestID)
 		return

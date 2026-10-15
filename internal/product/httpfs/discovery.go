@@ -7,6 +7,7 @@ import (
 	"errors"
 	. "github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"io"
+	"os"
 	"strings"
 )
 
@@ -56,4 +57,13 @@ func decodeStrict(data []byte, target any) error {
 		return errors.New("JSON must contain one value")
 	}
 	return nil
+}
+
+// OpenPrivateSnapshot opens an immutable view that does not block atomic
+// replacement on Windows. The caller retains its own size/schema boundary.
+func OpenPrivateSnapshot(path string) (*os.File, error) {
+	if err := VerifyPrivateFile(path); err != nil {
+		return nil, err
+	}
+	return openDiscoveryReader(path)
 }

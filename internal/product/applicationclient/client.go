@@ -31,7 +31,7 @@ func (c *Client) Close() error                { return nil }
 func (c *Client) connect(ctx context.Context) (*localservice.Client, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	client, err := localservice.Open(ctx, c.Home, filepath.Join(c.Home, "application-api"), contract.Protocol, "/v1/application/identity")
+	client, err := localservice.Open(ctx, c.Home, filepath.Join(c.Home, "application-api"), contract.Protocol, "/v2/application/identity")
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,7 @@ func (c *Client) Get(ctx context.Context, path string, target any) error {
 		return err
 	}
 	defer client.Close()
-	return client.Request(ctx, "GET", "/v1/application"+path, nil, target)
+	return client.Request(ctx, "GET", "/v2/application"+path, nil, target)
 }
 func (c *Client) Post(ctx context.Context, path string, body, target any) error {
 	if !valid(path) {
@@ -76,5 +76,5 @@ func (c *Client) Post(ctx context.Context, path string, body, target any) error 
 		return err
 	}
 	defer client.Close()
-	return client.Request(ctx, "POST", "/v1/application"+path, body, target)
+	return client.Request(ctx, "POST", "/v2/application"+path, body, target)
 }

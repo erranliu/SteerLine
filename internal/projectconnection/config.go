@@ -29,16 +29,6 @@ func canonical(path string) string {
 	return path
 }
 func Resolve(ctx context.Context, ref *api.ProjectRef) error {
-	var config struct {
-		Repository       string `json:"repository"`
-		RunDir           string `json:"run_dir"`
-		TaskAuthority    string `json:"task_authority"`
-		WorkflowProtocol string `json:"workflow_protocol"`
-		Git              struct {
-			Executable string   `json:"executable"`
-			Args       []string `json:"args"`
-		} `json:"git"`
-	}
 	file, err := os.Open(ref.ConfigPath)
 	if err != nil {
 		return err
@@ -51,6 +41,21 @@ func Resolve(ctx context.Context, ref *api.ProjectRef) error {
 	if err != nil {
 		return err
 	}
+	return ResolveSnapshot(ctx, ref, data)
+}
+
+func ResolveSnapshot(ctx context.Context, ref *api.ProjectRef, data []byte) error {
+	var config struct {
+		Repository       string `json:"repository"`
+		RunDir           string `json:"run_dir"`
+		TaskAuthority    string `json:"task_authority"`
+		WorkflowProtocol string `json:"workflow_protocol"`
+		Git              struct {
+			Executable string   `json:"executable"`
+			Args       []string `json:"args"`
+		} `json:"git"`
+	}
+	var err error
 	if err = json.Unmarshal(bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf}), &config); err != nil {
 		return err
 	}
@@ -119,6 +124,7 @@ func Resolve(ctx context.Context, ref *api.ProjectRef) error {
 	if !pathguard.Within(home, resolved) {
 		return errors.New("project run_dir must stay inside application home")
 	}
+	ref.RunDir = resolved
 	ref.Key = canonical(ref.ConfigPath) + "\x00" + canonical(ref.RunDir)
 	ref.Presentation.NativeWorkflow = true
 	ref.Presentation.TaskAuthority = config.TaskAuthority

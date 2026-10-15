@@ -25,7 +25,7 @@ func TestWebSwitchDevelopmentProxyAndLease(t *testing.T) {
 	if w := request(s, "GET", "/projects/"+strings.Repeat("a", 64)+"/dag", "", nil, ""); w.Code != 200 || !strings.HasPrefix(w.Body.String(), "vite:") {
 		t.Fatal(w.Body.String())
 	}
-	if w := request(s, "GET", "/api/v1/application/projects", "", nil, ""); w.Code != 401 || strings.Contains(w.Body.String(), "vite:") {
+	if w := request(s, "GET", "/api/v2/application/projects", "", nil, ""); w.Code != 401 || strings.Contains(w.Body.String(), "vite:") {
 		t.Fatal("API reached Vite")
 	}
 	options.Address = freeAddress(t)
