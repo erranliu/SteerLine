@@ -61,7 +61,16 @@ it("keeps cached output visible while refreshing and stops polling the hidden ou
   const get = vi
     .spyOn(api, "get")
     .mockImplementation(
-      async (path) => (path.includes("/activity?") ? activity : tasks) as never,
+      async (path) =>
+        (path.includes("/activity?")
+          ? activity
+          : path.includes("/last-message?")
+            ? {
+                run_id: run.execution_id,
+                attempt_id: run.attempt_id,
+                message: null,
+              }
+            : tasks) as never,
     );
   let resolve!: (value: unknown) => void;
   const fetchFinal = vi.spyOn(api, "final").mockImplementation(
@@ -102,5 +111,56 @@ it("shows a loading state rather than an empty task list until the first respons
   mountFeature(<Runs />, api, client);
   expect(screen.getByText("正在读取正式任务…")).toBeVisible();
   expect(screen.queryByText("还没有正式任务")).not.toBeInTheDocument();
+  client.clear();
+});
+
+it("shows workflow changes and blocker reasons while folding technical event names", async () => {
+  const client = testClient();
+  const api = new Api(identity, "csrf", "home");
+  const options = projectQueries(api);
+  client.setQueryData(options.tasks().queryKey, tasks);
+  client.setQueryData(options.task("1").queryKey, tasks);
+  const activity = {
+    page: {
+      diagnostics: [],
+      activity: [
+        {
+          seq: 1,
+          ts: "2026-10-15T00:00:00Z",
+          kind: "worker_state",
+          status: "blocked",
+          title: "实施报告 · 状态：执行中 → 已阻塞",
+          detail: "GitHub HTTP 401 Requires authentication",
+        },
+        {
+          seq: 2,
+          ts: "2026-10-15T00:00:01Z",
+          kind: "runner_event",
+          status: "operation_committed",
+          title: "operation_committed",
+          detail: "",
+        },
+      ],
+    },
+  };
+  client.setQueryData(options.activity(run).queryKey, activity);
+  vi.spyOn(api, "get").mockImplementation(
+    async (path) =>
+      (path.includes("/activity?")
+        ? activity
+        : path.includes("/last-message?")
+          ? {
+              run_id: run.execution_id,
+              attempt_id: run.attempt_id,
+              message: null,
+            }
+          : tasks) as never,
+  );
+  mountFeature(<Runs />, api, client);
+  expect(screen.getByText("实施报告 · 状态：执行中 → 已阻塞")).toBeVisible();
+  expect(screen.getByText(/GitHub HTTP 401/)).toBeVisible();
+  expect(screen.getByText(/operation_committed/)).not.toBeVisible();
+  fireEvent.click(screen.getByText("内部执行事件"));
+  expect(screen.getByText(/operation_committed/)).toBeVisible();
   client.clear();
 });

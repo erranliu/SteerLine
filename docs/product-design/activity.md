@@ -1,31 +1,31 @@
-# Activity 契约：数据库事件与服务控制台
+# Activity 契约：公开 Runner 事件与 Web 执行详情
 
-中心活动只随业务状态写入 SQLite events。控制台通过 RecentActivity 读取所选候选当前 Attempt 的最近五条流程/状态变化、五条最近原始变化及十条其他活动；重合事件去重，共用原 1 MiB 预算，可读变化优先。右下默认只投影最多五条流程/状态消息，技术变化及其他活动摘要放入 d 详情；不提供工具正文展开或历史翻页。服务窗口输出、规范活动采集和诊断读取仍保留。产品 Activity 查询绑定明确的项目/Run/Execution/Attempt，以数据库 EventID 排序和推进游标；没有中心 activity.jsonl 镜像、文件 seq 恢复、格式探测或 raw fallback。
+SteerRunner 独占执行状态写入。SteerLine 在自己的数据库保存固定候选与 Run 的关联、公开事件和当前投影；Web 通过正式产品查询读取这些事实，不打开 Runner 数据库、Codex 私有数据库或 rollout 文件。实现与验证见 [Plan](../plans/execution-observability.plan.md) / [专属验收](../acceptance/execution-observability.md)。
 
-## 活动记录
+## 流程与状态活动
 
-活动 payload 使用 ActivityEvent v1：UTC ts、source、run_id/task_id、item_id、kind/status、title/detail、elapsed_ms、meta 和原始引用。元数据带 execution_id/attempt_id。身份、唯一外部事件键和 payload 与业务状态在同一事务提交；文件写入不参与活动采集或恢复。
+Runner 在提交 Run 的同一事务里比较真实 workflow stage、status 和 diagnostic。发生变化时追加 `workflow_changed`，记录 `transition.from/to`，保留原 event_id、Run/Attempt、revision 和 created_at。初次记录 from 为空。技术 operation 的接受或提交不单独代表业务流程改变；消息摘要也不参与结算或恢复。
 
-数据库 EventID 是查询排序与分页依据。payload 的 seq 不再从文件生成；产品客户端用 EventID 填充展示 seq。相同来源和 item_id 的规范活动保留原去重规则，不通过重读文件去重。
+SteerLine 把 transition 投影为 ActivityEvent v1 的 `worker_state`：title 使用可读的流程/状态变化，detail 保留原诊断，meta.from/to 使用 `workflow_stage/workflow_status`。缺少目标字段的规范变化报告采集诊断，不用旧字段、当前投影或日志补画历史。已存在但没有 transition 的 Runner 事件仅作为内部执行详情展示。
 
-完整消息正文和 raw 证据归 ConversationEvent 的正文/修订引用，活动摘要不代替会话正文。不同 Run/Attempt 和晚到原 Attempt 的事实保持原归属，不能以 task_id 改选另一个运行。
+ActivityEvent 的 UTC ts、source、run_id/task_id、item_id、kind/status、title/detail、elapsed_ms 和 meta 保持既有契约。数据库 seq/EventID 决定顺序、去重和游标，不使用文件序号。正式读取在同一事务核验项目/候选/Run/Attempt；历史 Attempt 必须有原公开事件作为身份依据。
 
-worker_state 的 from/to 业务字段为 workflow_stage/workflow_status，原领域记录仍用对象内 StepID/Status；缺少新目标字段的事件登记采集诊断，不读取旧字段补画。候选快照和历史 WorkflowSummary 同名，finish_task_status 已删除。详见[状态命名 Spec](../spec/state-naming.spec.md)。
+RecentActivity 按固定候选和 Attempt 取最近五条流程/状态/诊断变化、十条内部事件，合并后按原 seq 排序，共用 1 MiB 输出预算。Web 默认显示可读变化，技术事件放进“内部执行事件”折叠详情。没有可读变化时如实显示空状态，不把技术名翻译成不存在的业务节点。最终回复通过独立的原 final/正文契约读取，不由活动摘要代替。
 
-## 原始取证与采集
+## 最后观察到的消息
 
-原始 events.jsonl、实现的 history/source/mapper 和会话文件采集保留。通用 JSONL framing 只消费完整记录，保留 UTF-8/CRLF、物理 offset、文件截断/替换、扫描/记录预算与超长行后的继续采集；不解释活动 seq。数据库或采集错误明确返回，产品不从旧镜像补画。
+最近消息是独立的最佳努力活动提示，不是完整会话、业务终态或心跳。Runner 复用本地 Codex 既有 app-server 通知流，采样 completed agentMessage 和固定工具开始/结束标签；不读取 reasoning、用户输入、命令、工具参数或输出。通过原 Attempt/Generation/Session/Turn 守卫并脱敏后，仅在进程内保存每 Run 一条有界摘要，不写入 Run revision 或业务事件；乱序或过期样本丢弃且不阻断原观察。服务重启后为空，Orca 当前无该采样能力。
 
-旧 activity.jsonl 文件不再读取、写入、修复、迁移或自动重建。诊断通过现有规范活动/会话查询和原生日志进行；删除旧镜像不影响恢复。
+Runner 的公开 `last-message --run-id` 只读该缓存，返回原 Run/Attempt 和可空 message。摘要含来源 Session/Turn、kind、text 和通知到达的 UTC `observed_at`。不启动服务、不重新打开原生会话、不发模型请求、不扫描所有会话或回读私有日志。重复查询不会推进 observed_at。
 
-## 服务端控制台
+SteerLine 路由 `/runs/<candidate>/last-message?execution_id=<Runner Run>&attempt_id=<Attempt>` 在 HTTP 和应用层核验当前固定目标，随后只调用已固定 EXE 的公开 CLI；返回不同 Run/Attempt 或不合格消息时拒绝。
 
-`steerline run -console pretty|summary|json|off` 保持。TTY 下默认 pretty；summary 输出生命周期，json 输出活动 JSONL，off 静默。json 控制台 seq 只表示当前服务输出流的顺序，不作为数据库身份或恢复游标。
+Web 在当前选中执行详情展示一条摘要、明确的“观察于”本地时间和距今时长，独立于近期活动/最终回复 Tab。仅该组件在线且 document 可见时每三秒查询；切换候选/Attempt、离开执行页或浏览器后台会停止并取消请求。query key 固定 home/project/instance/candidate/Run/Attempt，晚到旧响应不会覆盖新目标。不为其他候选建立消息轮询；Runner 的正常执行观察不因页面切换停止。
 
-破坏性 payload 变更才提升 ActivityVersion。活动版本由其 payload 契约决定，不与数据库/服务 checkpoint 版本混为一谈；持久格式统一见[数据模型](data-model.md#当前格式来源)。不通过旧镜像兼容读取或补画事件。
+读取错误保留最后样本并显示失败；没有样本显示暂无。长时间没有消息不推断卡死、失败或恢复资格。活动/最终回复工具栏的“查询刷新于”只表示查询完成，不能冒充消息或业务变化时间。
 
-## 三窗运行与反馈
+## 持久性与诊断边界
 
-右上显示候选/冻结方案/原始状态/阻塞原因/PR；右下优先显示当前问题或答案预览与回执，再显示当前 workflow_stage/workflow_status 与变化，一条消息仅表示流程或状态，未变化的流程只作为状态消息上下文。execution_status/resource_status、turn ID、输入版本和恢复字段不作为默认消息。RecentActivity 在同一读取事务中核验项目/Workflow/Execution/Attempt；按预算拒绝补画过大/缺失 payload。UI 有界保留原始变化字段和诊断供详情读取，不保存工具全文，候选或 Attempt 变化清空样本并拒绝旧响应。具体规则及验收见[可读性收敛](../spec/console-flow-state-readability.spec.md)。
+中心不读取、写入、修复或迁移旧 activity.jsonl，也没有文件 seq 恢复、镜像或 raw fallback。完整 final 的正文与来源继续归公开 final/会话查询；本次临时摘要不替代它们。底层原生日志仅供独立人工诊断，不作为 UI 或执行恢复权威。
 
-右下按a激活既有Unicode编辑器，Tab循环列表/选项/输入，Enter换行，F2单次提交。长背景用F8只读查看，完整最终回复用f；普通回答不切整页详情。
+`steerline run -console pretty|summary|json|off` 的服务输出策略保持；json 控制台 seq 只表示当前输出流顺序。ActivityVersion 由 payload 契约决定，不随存储或 checkpoint 版本联动。本次新增公开 Runner transition 和独立消息 DTO，不新增另一套可推进执行状态机。

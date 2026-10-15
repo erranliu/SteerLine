@@ -2,6 +2,7 @@ import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import type { Api } from "./client";
 import type {
   Activity,
+  LastMessageView,
   Candidate,
   Envelope,
   GraphPage,
@@ -84,6 +85,41 @@ export function projectQueries(api: Api) {
               }),
             signal,
           ),
+      }),
+    lastMessage: (
+      run: Pick<Candidate, "run_id" | "execution_id" | "attempt_id">,
+    ) =>
+      queryOptions({
+        ...defaults,
+        queryKey: [
+          ...scope,
+          "last-message",
+          run.run_id,
+          run.execution_id,
+          run.attempt_id,
+        ],
+        queryFn: async ({ signal }) => {
+          const view = await api.get<LastMessageView>(
+            "/runs/" +
+              encodeURIComponent(run.run_id) +
+              "/last-message?" +
+              new URLSearchParams({
+                execution_id: run.execution_id,
+                attempt_id: run.attempt_id,
+              }),
+            signal,
+          );
+          if (
+            view.run_id !== run.execution_id ||
+            view.attempt_id !== run.attempt_id ||
+            (view.message &&
+              (view.message.run_id !== run.execution_id ||
+                view.message.attempt_id !== run.attempt_id))
+          ) {
+            throw new Error("最近消息身份已变化，请刷新执行详情");
+          }
+          return view;
+        },
       }),
     final: (run: Pick<Candidate, "run_id" | "execution_id" | "attempt_id">) =>
       queryOptions({

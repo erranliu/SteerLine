@@ -3,10 +3,12 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"path/filepath"
 	"strings"
@@ -91,4 +93,34 @@ func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
 	if retired != 0 {
 		t.Fatal("old execution tables still created")
 	}
+	t.Run("readable changes survive technical event noise", func(t *testing.T) {
+		noise := []runnerclient.Event{}
+		for i := 0; i < 7; i++ {
+			noise = append(noise, runnerclient.Event{EventID: fmt.Sprintf("change-%d", i), RunID: c.RunID, AttemptID: "attempt", Type: "workflow_changed", CreatedAt: at, Transition: &runnercontract.WorkflowTransition{From: runnercontract.WorkflowState{Stage: "implement.execute", Status: "running"}, To: runnercontract.WorkflowState{Stage: "implement.report", Status: "blocked", Diagnostic: fmt.Sprintf("HTTP 401 #%d", i)}}})
+		}
+		for i := 0; i < 40; i++ {
+			noise = append(noise, runnerclient.Event{EventID: fmt.Sprintf("technical-%d", i), RunID: c.RunID, AttemptID: "attempt", Type: "operation_committed", CreatedAt: at})
+		}
+		saved.Revision++
+		require(t, s.SaveCandidate(ctx, saved, 3, noise))
+		activity, err := query.NewService(s, project).ReadRecentActivity(ctx, c.ID, c.RunID, "attempt")
+		require(t, err)
+		changes, technical := 0, 0
+		for _, event := range activity.Activity {
+			if event.Kind == "worker_state" {
+				changes++
+				if !strings.Contains(event.Title, "实施报告") || !strings.Contains(event.Title, "已阻塞") || !strings.Contains(event.Detail, "HTTP 401") || event.ItemID == "change-0" || event.ItemID == "change-1" {
+					t.Fatal("unreadable or stale transition", event)
+				}
+			} else {
+				technical++
+			}
+		}
+		if changes != 5 || technical != 10 {
+			t.Fatal("changes lost to internal noise", changes, technical)
+		}
+		if _, err := query.NewService(s, project).ReadRecentActivity(ctx, c.ID, c.RunID, "other-attempt"); err == nil {
+			t.Fatal("foreign Attempt accepted")
+		}
+	})
 }

@@ -230,6 +230,20 @@ export interface Activity {
   };
 }
 
+export interface LastMessageView {
+  run_id: string;
+  attempt_id: string;
+  message: {
+    run_id: string;
+    attempt_id: string;
+    session_id: string;
+    turn_id: string;
+    kind: "assistant" | "tool";
+    text: string;
+    observed_at: string;
+  } | null;
+}
+
 export interface ApplicationIdentity {
   protocol: string;
   home_id: string;

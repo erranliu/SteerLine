@@ -98,17 +98,28 @@ type Inspection struct {
 	Run     *Run     `json:"run"`
 }
 type Event struct {
-	EventID   string    `json:"event_id"`
-	RunID     string    `json:"run_id"`
-	Revision  uint64    `json:"revision"`
-	Type      string    `json:"type"`
-	CommandID string    `json:"command_id"`
-	AttemptID string    `json:"attempt_id"`
-	Final     *Final    `json:"final"`
-	CreatedAt time.Time `json:"created_at"`
+	Transition *WorkflowTransition `json:"transition,omitempty"`
+	EventID    string              `json:"event_id"`
+	RunID      string              `json:"run_id"`
+	Revision   uint64              `json:"revision"`
+	Type       string              `json:"type"`
+	CommandID  string              `json:"command_id"`
+	AttemptID  string              `json:"attempt_id"`
+	Final      *Final              `json:"final"`
+	CreatedAt  time.Time           `json:"created_at"`
 }
 type EventPage struct {
 	Events     []Event `json:"events"`
 	NextCursor string  `json:"next_cursor"`
 	HasMore    bool    `json:"has_more"`
+}
+
+type WorkflowState struct {
+	Stage      string `json:"workflow_stage"`
+	Status     string `json:"workflow_status"`
+	Diagnostic string `json:"diagnostic,omitempty"`
+}
+type WorkflowTransition struct {
+	From WorkflowState `json:"from"`
+	To   WorkflowState `json:"to"`
 }

@@ -551,6 +551,16 @@ code {
 .notice strong {
   font-weight: 600;
 }
+.last-message {
+  background: #111b14;
+  border-color: var(--color-border);
+  color: inherit;
+}
+.last-message pre {
+  max-height: 10rem;
+  overflow: auto;
+  margin: 8px 0;
+}
 .pagination {
   display: flex;
   justify-content: space-between;

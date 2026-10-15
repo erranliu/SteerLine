@@ -19,6 +19,7 @@ type ProjectQueryPort interface {
 }
 
 type ActivityQueryPort interface {
+	LastMessage(context.Context, string, string, string) (api.LastMessageView, error)
 	RecentActivity(context.Context, string, string, string) (api.LogBatch, error)
 	Activity(context.Context, string, string, string, api.ActivityCursor) (api.LogBatch, error)
 }

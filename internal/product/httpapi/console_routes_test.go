@@ -7,9 +7,44 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestClientHTTPRoutes(t *testing.T) {
+	t.Run("last message uses exact target and source time", func(t *testing.T) {
+		server, _, reader, _ := newAPIFixture(t)
+		run := &api.CandidateSummary{RunID: "candidate", ExecutionID: "run", AttemptID: "attempt"}
+		reader.snapshot.Connection.Snapshot.Page.Runs = []*api.CandidateSummary{run}
+		calls := 0
+		at := time.Date(2026, 10, 15, 10, 0, 0, 0, time.UTC)
+		reader.onLastMessage = func(c, e, a string) (api.LastMessageView, error) {
+			calls++
+			if c != "candidate" || e != "run" || a != "attempt" {
+				t.Fatal("target changed")
+			}
+			return api.LastMessageView{RunID: e, AttemptID: a, Message: &api.LastMessage{RunID: e, AttemptID: a, Kind: "tool", Text: "已完成执行命令", ObservedAt: at}}, nil
+		}
+		client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
+		for i := 0; i < 2; i++ {
+			var view api.LastMessageView
+			if err := client.Get(context.Background(), "/runs/candidate/last-message?execution_id=run&attempt_id=attempt", &view); err != nil || view.Message == nil || !view.Message.ObservedAt.Equal(at) {
+				t.Fatal("source time changed", err)
+			}
+		}
+		for _, target := range []string{"execution_id=other&attempt_id=attempt", "execution_id=run&attempt_id=old", "execution_id=run"} {
+			var v api.LastMessageView
+			if client.Get(context.Background(), "/runs/candidate/last-message?"+target, &v) == nil {
+				t.Fatal("foreign target accepted")
+			}
+		}
+		if calls != 2 {
+			t.Fatal("invalid target queried Runner", calls)
+		}
+	})
 	t.Run("recent activity advances beyond the stream first page", testClientHTTPRecentActivity)
 	server, _, reader, _ := newAPIFixture(t)
 	ctx := context.Background()

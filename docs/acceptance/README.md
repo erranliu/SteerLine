@@ -4,6 +4,8 @@
 
 ## 当前入口
 
+Runner 执行展示与最近消息（普通开发）：[专属验收](execution-observability.md)，流程/状态恢复可读、仅当前可见执行刷新有时间的最近摘要；自动与人工项分别登记。
+
 TUI 退役与 Web 唯一交互前端（普通开发）：[专属验收](tui-retirement.md)；已按用户授权实施，当前验证状态见专属记录。共享服务/CLI/HTTP 与原生会话能力保留，TUI 专属测试随客户端删除。
 
 本机 Web 前端（普通开发）：[专属验收](web-frontend.md)，独立 `web/` 工程、浏览器认证、DAG 与执行闭环；范围归 [Spec](../spec/web-frontend.spec.md)/[Plan](../spec/web-frontend.plan.md)。

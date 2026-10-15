@@ -20,6 +20,7 @@ import (
 )
 
 type apiReader struct {
+	onLastMessage       func(string, string, string) (api.LastMessageView, error)
 	onRecentActivity    func(string, string, string) (api.LogBatch, error)
 	onConversation      func(api.ConversationFilter, string, int) (api.ConversationPage, error)
 	onOpenNative        func(api.NativeSessionTarget) error
@@ -35,6 +36,13 @@ type apiReader struct {
 	listCursor          string
 	listLimit           int
 	decisionSubmits     int
+}
+
+func (r *apiReader) LastMessage(_ context.Context, run, execution, attempt string) (api.LastMessageView, error) {
+	if r.onLastMessage != nil {
+		return r.onLastMessage(run, execution, attempt)
+	}
+	return api.LastMessageView{RunID: execution, AttemptID: attempt}, nil
 }
 
 func (r *apiReader) Close() error { return nil }
