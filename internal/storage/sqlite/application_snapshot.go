@@ -38,6 +38,6 @@ func readApplicationProjectSnapshotTx(ctx context.Context, tx *sql.Tx, reader Re
 			return storageports.ApplicationProjectSnapshot{}, err
 		}
 	}
-	snapshot.ExecutionState, snapshot.ExecutionError = readExecutionStateSnapshotTx(ctx, tx, project, reader.nativeBinding, nil)
+	snapshot.RunnerState, snapshot.RunnerError = readRunnerSnapshotTx(ctx, tx, project, reader.nativeBinding)
 	return snapshot, nil
 }

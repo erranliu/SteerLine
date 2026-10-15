@@ -10,7 +10,7 @@ import (
 	"time"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
-	reconstruction "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
@@ -95,11 +95,11 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	}
 	wait("service snapshot", func() bool {
 		snap, err := ReadApplicationProjectSnapshot(ctx, filepath.Join(d.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(readyCommon)), "", 100)
-		if err != nil || snap.ExecutionState.Checkpoint == nil {
+		if err != nil || snap.RunnerError != nil || snap.RunnerState.Checkpoint == nil {
 			return false
 		}
-		runtime, err := reconstruction.BuildFromStorage(snap.ExecutionState, *snap.ExecutionState.Checkpoint)
-		return err == nil && runtime.Service.Ready
+		runtime := taskrunner.Project(snap.RunnerState, *snap.RunnerState.Checkpoint)
+		return runtime.Service.Ready
 	})
 	for _, action := range []string{"resume_dispatch", "start_task"} {
 		args := []string{"debug", "control", "--simulate", "-config", d.config, "-action", action, "-profile", "simulate"}

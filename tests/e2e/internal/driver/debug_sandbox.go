@@ -14,7 +14,7 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	reconstruction "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
@@ -130,11 +130,11 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 	}
 	if err := wait("service ready", func() (bool, error) {
 		snap, err := ReadApplicationProjectSnapshot(ctx, db, project, "", 100)
-		if err != nil || snap.ExecutionState.Checkpoint == nil {
+		if err != nil || snap.RunnerError != nil || snap.RunnerState.Checkpoint == nil {
 			return false, nil
 		}
-		runtime, err := reconstruction.BuildFromStorage(snap.ExecutionState, *snap.ExecutionState.Checkpoint)
-		return err == nil && runtime.Service.Ready, nil
+		runtime := taskrunner.Project(snap.RunnerState, *snap.RunnerState.Checkpoint)
+		return runtime.Service.Ready, nil
 	}); err != nil {
 		return result, err
 	}

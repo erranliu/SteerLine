@@ -6,6 +6,12 @@ Worker 执行域统一管理工作区准备、代理初始化、输入投递、�
 
 三层职责重构已按 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)完成 Workflow、ReliableExecution 和 ExecutionAdapter 拆分，保持现有行为；初始化失败重试等新增能力另行实施。规则已归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；实施证据以[专属验收](../acceptance/worker-three-layer.md)为准。
 
+SteerRunner 跨仓拆分正在实施，切换安排见[接入 Plan](../spec/steerrunner-cutover.plan.md)，结果见[接入验收](../acceptance/steerrunner-cutover.md)。迁出后 W01–W18 的执行/资源事实、E01–E07 异常处理及恢复授权由 Runner 的单写服务管理；SteerLine 只持久化 Task/DAG、候选到 Run 的绑定、原 CLI 请求与事件投影，并在自己的事务内决定 W17 的 TaskDelivery。下文节点和异常分类继续作为共同语义入口，不新增另一套 worker 状态机。当前应用入口尚未切换，不能将新增桥接代码视为已经替换旧 worker。
+
+跨进程边界的具体规则：未知提交只查原 request_id；任务结束时在同一事务保存全部候选的停止义务，迟到接受的 Run 仍须撤销输入；Runner 的停止回执与原生进程停止分别投影。服务重启不重新发送已保存的答案、反馈或 resume。交付只接受本次刷新、身份一致的已合并 PR，不能要求候选先到 pr_ready，也不能由其他候选的未知状态阻塞正确候选交付。发布报告未完成时已经核实的 PR 可以绑定，但不因此推进 Runner 的流程里程碑。
+
+本次最小验证映射：V 的来源/身份/权限边界复用三层规则定向测试；Runner 实际 EXE 场景验证未知零重发、恢复零自动输入、缺 final 零推进、权限资源不合格零会话创建；SteerLine 的 SLC-A01–A04 验证原请求、事务回滚、迟到绑定与停止义务。真机能力按本机和 Orca 目标分别登记，沙箱拒绝或缺原生事实保持未验/失败，不以 helper 或模型报告代替。
+
 ## 职责与规则归属
 
 “Worker 层”指 `internal/execution` 内持久化的 worker 执行规则，而非仅内存中的 Worker 或 observer 句柄。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。
@@ -259,6 +265,7 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 | 持久化副作用和并发 | ReliableExecution 的事实/身份/对账规则、actor 生命周期 Operation、异步回执提交、原身份/版本守卫、first-wins | 按本矩阵检查各入口是否共享同一异常分类，不新增平行规则 |
 | 工作区和环境准备 | 固定工作区意图、准备总期限、blocker、nonce 与探针核验 | 部分现场或后端没有准备记录；不能默认所有执行已具备统一准备路径 |
 | Orca 显式启动 | 原唯一终端、启动操作、LaunchAttempted/Accepted/Confirmed、未知发送不重发 | `launchAgent` 在识别到代理名称时即确认启动；尚无完整初始化完成证据、失败收敛、有限启动重试和安全采纳人工重启的通用规则 |
+| Runner 跨仓交接 | 新 application 对 accepted+ResourcePending 继续核验原 Operation；准备超时撤销输入，迟到就绪不自动续跑；caller 重启撤回未消费授权，未知旧控制只查原 ID | SteerLine 新调用层和 Task 事务已有定向验证，实际 app/查询切换与旧 owner 删除尚未完成；远端 Codex 原生账户路由故障未通过真机验收 |
 | Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |
 | 原业务会话恢复 | RecoveryFacts、原请求核验、同 thread 恢复、Orca 原终端重接 | Orca 替代 provider/terminal 的原业务会话恢复仍不可用；业务未知发送禁止重发 |
 | 报告发布与交付 | development/v3、源结果绑定、有限补报、固定 PR 查询、唯一 Delivery；PR 观察保留 pending/answer_saved，原反馈仍走 actor 投递入口（[本机 Web 验收](../acceptance/web-frontend.md)） | 未知发布仍需原事实核验；不以这份设计声明所有故障窗口已有自动恢复 |

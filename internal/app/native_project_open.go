@@ -14,6 +14,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 func LoadDatabaseRuntime(c Config) (*reconstruction.Runtime, error) {
@@ -30,17 +31,14 @@ func LoadDatabaseRuntime(c Config) (*reconstruction.Runtime, error) {
 		return nil, err
 	}
 	defer reader.Close()
-	snapshot, err := reader.ReadExecutionStateSnapshot(context.Background(), c.Identity())
+	snapshot, err := reader.ReadRunnerSnapshot(context.Background(), c.Identity())
 	if err != nil {
 		return nil, err
 	}
 	if snapshot.Checkpoint == nil {
 		return nil, storageports.ErrNotFound
 	}
-	view, err := reconstruction.BuildFromStorage(snapshot, *snapshot.Checkpoint)
-	if err != nil {
-		return nil, err
-	}
+	view := taskrunner.Project(snapshot, *snapshot.Checkpoint)
 	return &view, nil
 }
 

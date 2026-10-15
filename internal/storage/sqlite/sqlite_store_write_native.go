@@ -392,11 +392,14 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v taskmodel.TaskRecord, expectedVersion u
 		return err
 	}
 	if v.Status == "closed" {
-		if err = t.completeNativeDeliveryWorkflow(v.ProjectIdentity, v.TaskID); err != nil {
+		if err = t.completeRunnerDeliveryCandidate(v.ProjectIdentity, v.TaskID); err != nil {
 			return err
 		}
 	}
 	if v.Status == "discarded" || v.Status == "closed" {
+		if err = t.requestRunnerTaskStops(v.ProjectIdentity, v.TaskID); err != nil {
+			return err
+		}
 		var authorityVersion, graphRevision uint64
 		if err = t.tx.QueryRowContext(t.ctx, `SELECT authority_version,graph_revision FROM project_task_authorities WHERE project_identity=? AND authority='native'`, v.ProjectIdentity).Scan(&authorityVersion, &graphRevision); err != nil {
 			return requiredRecordError(err, "authority_mismatch", "native task graph authority is unavailable")
@@ -405,62 +408,4 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v taskmodel.TaskRecord, expectedVersion u
 		return err
 	}
 	return nil
-}
-
-func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error {
-	var runID string
-	var runPayload []byte
-	var deliveryEvidence []byte
-	err := t.tx.QueryRowContext(t.ctx, `SELECT d.selected_workflow_run_id,w.payload,d.evidence FROM task_deliveries d JOIN workflow_runs w ON w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id WHERE d.project_identity=? AND d.task_id=?`, project, taskID).Scan(&runID, &runPayload, &deliveryEvidence)
-	if err != nil {
-		return requiredRecordError(err, "contract_mismatch", "task cannot close without its authoritative selected delivery")
-	}
-	var proof executionmodel.TaskDeliveryEvidence
-	if err = json.Unmarshal(deliveryEvidence, &proof); err != nil {
-		return nativeErr("inconsistent_delivery", "task delivery evidence is unreadable")
-	}
-	if proof.ExistingAcceptance != nil {
-		return nativeErr("unsupported_schema", "old acceptance delivery is unsupported")
-	}
-	var run executionmodel.WorkflowRunRecord
-	if err = json.Unmarshal(runPayload, &run); err != nil {
-		return err
-	}
-	if run.WorkflowVersion == executionmodel.Version {
-		var executionPayload []byte
-		if run.SelectedResult == "" || run.PRURL != proof.URL || !proof.Merged || proof.State != "merged" {
-			return nativeErr("stale_version", "selected worker flow no longer matches the merged PR")
-		}
-		if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?`, project, runID, run.SelectedResult).Scan(&executionPayload); err != nil {
-			return requiredRecordError(err, "contract_mismatch", "selected worker flow has no execution")
-		}
-		var execution executionmodel.ExecutionRecord
-		if err = json.Unmarshal(executionPayload, &execution); err != nil {
-			return err
-		}
-		sessionID, _ := executionSessionFacts(&execution)
-		if sessionID == "" || execution.Workspace.Branch == "" {
-			return nativeErr("contract_mismatch", "selected worker flow lacks its session or branch")
-		}
-		delivery := executionmodel.TaskDeliveryRecord{TaskID: taskID, SelectedWorkflowRunID: runID, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt}
-		state := executionmodel.State{
-			WorkflowRunID: run.WorkflowRunID, TaskID: run.TaskID, WorkflowVersion: run.WorkflowVersion,
-			Status: run.Status, PRURL: run.PRURL, PRState: run.PRState, WorkflowUpdatedAt: run.UpdatedAt,
-		}
-		next, completeErr := executionmodel.Complete(state, taskID, "closed", executionmodel.Delivery{
-			TaskID: delivery.TaskID, WorkflowRunID: delivery.SelectedWorkflowRunID, PRURL: delivery.PRURL,
-			MergeCommit: delivery.MergeCommit, MergedAt: delivery.MergedAt,
-		}, now())
-		if completeErr != nil {
-			return completeErr
-		}
-		previous := run
-		run.Status, run.PRState, run.UpdatedAt = next.Status, next.PRState, next.WorkflowUpdatedAt
-		run.StepID = executionmodel.StepDelivered
-		if err := t.appendWorkerStateActivity(&previous, &execution, run, execution); err != nil {
-			return err
-		}
-		return t.PutWorkflowRun(run)
-	}
-	return nativeErr("unsupported_schema", "delivery completion requires worker-flow-v2")
 }

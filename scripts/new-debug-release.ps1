@@ -2,8 +2,9 @@
     [string]$DebugRoot = 'C:\SteerlineDebug',
     [string]$WebAddress = '',
     [ValidateSet(1,2)][int]$WebProjects = 1,
+    [string]$SteerRunnerExe = '',
     [switch]$Orca,
-    [string]$OrcaEnvironment = 'name:台式机64G',
+    [string]$OrcaEnvironment = '台式机64G',
     [string]$OrcaAgent = 'codex',
     [string]$OrcaExecutable = 'orca',
     [string]$AgentModel = '',
@@ -28,6 +29,20 @@ function Assert-PlainPath([string]$Path) {
 }
 function Is-Within([string]$Parent, [string]$Child) {
     return $Child.Equals($Parent, [StringComparison]::OrdinalIgnoreCase) -or $Child.StartsWith($Parent.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
+}
+
+$runnerSource = $null
+if ($SteerRunnerExe) {
+    if (-not [IO.Path]::IsPathRooted($SteerRunnerExe)) { throw 'SteerRunnerExe must be absolute' }
+    $SteerRunnerExe = [IO.Path]::GetFullPath($SteerRunnerExe)
+    if (Is-Within 'C:\SteerlineRuntime' $SteerRunnerExe) { throw 'SteerRunnerExe must not use the installed environment' }
+    Assert-PlainPath $SteerRunnerExe
+    if (-not (Test-Path -LiteralPath $SteerRunnerExe -PathType Leaf)) { throw 'SteerRunnerExe does not exist' }
+    $runnerVersionText = & $SteerRunnerExe version --json
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot query the selected SteerRunner executable' }
+    $runnerVersion = $runnerVersionText | ConvertFrom-Json
+    if (-not $runnerVersion.ok -or $runnerVersion.protocol -ne 'steerrunner-cli/v1' -or 'steerrunner-cli/v1' -notin $runnerVersion.data.protocols) { throw 'SteerRunner protocol is unsupported' }
+    $runnerSource = [ordered]@{ version=$runnerVersion.data.version; source_commit=$runnerVersion.data.source_commit; protocol='steerrunner-cli/v1'; resource_digest=$runnerVersion.data.resource_digest; sha256=(Get-FileHash -LiteralPath $SteerRunnerExe -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -78,6 +93,12 @@ try {
     foreach ($item in Get-ChildItem -LiteralPath $template -Force) { Copy-Item -LiteralPath $item.FullName -Destination $target -Recurse }
     foreach ($dir in @('bin', 'logs', 'evidence', 'provider', 'provider-b', 'remotes', 'home\temp', 'home\codex', 'home\gh', 'home\state', 'home\ui\views', 'home\etc')) {
         New-Item -ItemType Directory -Path (Join-Path $target $dir) -Force | Out-Null
+    }
+    if ($runnerSource) {
+        $runnerDestination = Join-Path $target 'bin\steerrunner.exe'
+        Copy-Item -LiteralPath $SteerRunnerExe -Destination $runnerDestination
+        if ((Get-FileHash -LiteralPath $runnerDestination -Algorithm SHA256).Hash.ToLowerInvariant() -ne $runnerSource.sha256) { throw 'SteerRunner changed during packaging' }
+        $manifest.runner = $runnerSource
     }
     $rootText = $target.Replace('\', '/')
     $templateHashes = [ordered]@{}

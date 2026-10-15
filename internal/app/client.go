@@ -22,6 +22,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 func OpenClient(ctx context.Context, path string) (*productclient.Client, error) {
@@ -244,16 +245,13 @@ func applicationProjectObservation(ctx context.Context, config Config, snapshot 
 	if sampledAt.IsZero() {
 		sampledAt = time.Now().UTC()
 	}
-	if snapshot.ExecutionError != nil {
-		return observeHostRuntime(ctx, config, nil, snapshot.ExecutionError, sampledAt)
+	if snapshot.RunnerError != nil {
+		return observeHostRuntime(ctx, config, nil, snapshot.RunnerError, sampledAt)
 	}
-	if snapshot.ExecutionState.Checkpoint == nil {
+	if snapshot.RunnerState.Checkpoint == nil {
 		return observeHostRuntime(ctx, config, nil, nil, sampledAt)
 	}
-	runtimeState, err := reconstruction.BuildFromStorage(snapshot.ExecutionState, *snapshot.ExecutionState.Checkpoint)
-	if err != nil {
-		return observeHostRuntime(ctx, config, nil, err, sampledAt)
-	}
+	runtimeState := taskrunner.Project(snapshot.RunnerState, *snapshot.RunnerState.Checkpoint)
 	return observeHostRuntime(ctx, config, &runtimeState, nil, sampledAt)
 }
 

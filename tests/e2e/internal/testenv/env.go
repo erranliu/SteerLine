@@ -21,6 +21,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
@@ -76,6 +77,7 @@ type Task struct {
 }
 
 type Snapshot struct {
+	Runner  storageports.RunnerSnapshot `json:"runner"`
 	Page    storageports.NativeTaskPage `json:"page"`
 	Domain  reconstruction.Snapshot     `json:"domain"`
 	Helper  controlled.State            `json:"helper"`
@@ -581,13 +583,13 @@ func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (
 	if view.Tasks == nil || view.Ready == nil {
 		return snap, errors.New("combined project snapshot lacks task page or ready values")
 	}
-	if read.ExecutionError != nil {
-		return snap, read.ExecutionError
+	if read.RunnerError != nil {
+		return snap, read.RunnerError
 	}
-	state := read.ExecutionState
+	state := read.RunnerState
 	project := view.Tasks.ProjectID
 	graph := state.Graph
-	if project == "" || state.Records.ProjectIdentity != project || graph.Authority.ProjectIdentity != project ||
+	if project == "" || graph.Authority.ProjectIdentity != project ||
 		graph.DatabaseID != view.Tasks.DatabaseID || graph.DatabaseRevision != view.Tasks.DatabaseRevision ||
 		graph.Authority.AuthorityVersion != view.Tasks.AuthorityVersion || graph.Authority.GraphRevision != view.Tasks.GraphRevision ||
 		view.Ready.ProjectID != project || view.Ready.DatabaseID != view.Tasks.DatabaseID || view.Ready.DatabaseRevision != view.Tasks.DatabaseRevision ||
@@ -596,12 +598,15 @@ func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (
 		return snap, errors.New("combined project snapshot contains different database revisions")
 	}
 	snap.Page = *view.Tasks
-	snap.Domain = reconstruction.SnapshotFromStorage(state)
+	snap.Runner = state
+	// Domain retains task facts only while callers migrate to Runner. Never
+	// synthesize old native execution/attempt/operation records from CLI views.
+	snap.Domain = reconstruction.Snapshot{ProjectIdentity: project, Tasks: graph.Tasks}
+	for _, delivery := range graph.Deliveries {
+		snap.Domain.Deliveries = append(snap.Domain.Deliveries, delivery)
+	}
 	if state.Checkpoint != nil {
-		runtime, err := reconstruction.BuildFromStorage(state, *state.Checkpoint)
-		if err != nil {
-			return snap, err
-		}
+		runtime := taskrunner.Project(state, *state.Checkpoint)
 		snap.Runtime = &runtime
 	}
 	return snap, nil

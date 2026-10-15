@@ -56,6 +56,9 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 }
 
 var nativeTaskSchema = []string{
+	`CREATE TABLE runner_candidates (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, task_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), request_id TEXT NOT NULL, run_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), UNIQUE(project_identity,candidate_id,task_id), UNIQUE(project_identity,request_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
+	`CREATE UNIQUE INDEX runner_candidate_run ON runner_candidates(project_identity,run_id) WHERE run_id<>''`,
+	`CREATE TABLE runner_events (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, event_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id,event_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,
 	`CREATE TABLE task_results (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, result_id TEXT NOT NULL, request_id TEXT NOT NULL, input BLOB NOT NULL, receipt BLOB NOT NULL, PRIMARY KEY(project_identity,task_id), UNIQUE(project_identity,result_id), UNIQUE(project_identity,request_id))`,
 	`CREATE TABLE project_task_authorities (project_identity TEXT PRIMARY KEY, authority TEXT NOT NULL CHECK(authority='native'), authority_version INTEGER NOT NULL CHECK(authority_version>0), graph_revision INTEGER NOT NULL CHECK(graph_revision>=0), repository TEXT NOT NULL, remote TEXT NOT NULL, branch TEXT NOT NULL, dispatch_mode TEXT NOT NULL CHECK(dispatch_mode IN ('manual','auto')), dispatch_paused INTEGER NOT NULL CHECK(dispatch_paused IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
 	`CREATE TABLE database_state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), database_id TEXT NOT NULL CHECK(length(database_id)=32), revision INTEGER NOT NULL CHECK(revision>=0))`,
@@ -75,7 +78,7 @@ var nativeTaskSchema = []string{
 	`CREATE TRIGGER task_dependencies_no_update BEFORE UPDATE ON task_dependencies BEGIN SELECT RAISE(ABORT,'immutable_dependency'); END`,
 	`CREATE TRIGGER task_dependencies_no_delete BEFORE DELETE ON task_dependencies BEGIN SELECT RAISE(ABORT,'immutable_dependency'); END`,
 	`CREATE UNIQUE INDEX workflow_run_task_identity ON workflow_runs(project_identity,workflow_run_id,task_id)`,
-	`CREATE TABLE task_deliveries (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, selected_workflow_run_id TEXT NOT NULL, pr_instance TEXT NOT NULL, pr_repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number>0), pr_url TEXT NOT NULL, merge_commit TEXT NOT NULL, merged_at TEXT NOT NULL, recorded_at TEXT NOT NULL, evidence BLOB NOT NULL, PRIMARY KEY(project_identity,task_id), UNIQUE(pr_instance,pr_repository,pr_number), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id), FOREIGN KEY(project_identity,selected_workflow_run_id,task_id) REFERENCES workflow_runs(project_identity,workflow_run_id,task_id))`,
+	`CREATE TABLE task_deliveries (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, selected_workflow_run_id TEXT NOT NULL, pr_instance TEXT NOT NULL, pr_repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number>0), pr_url TEXT NOT NULL, merge_commit TEXT NOT NULL, merged_at TEXT NOT NULL, recorded_at TEXT NOT NULL, evidence BLOB NOT NULL, PRIMARY KEY(project_identity,task_id), UNIQUE(pr_instance,pr_repository,pr_number), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id), FOREIGN KEY(project_identity,selected_workflow_run_id,task_id) REFERENCES runner_candidates(project_identity,candidate_id,task_id))`,
 }
 
 var domainExecutionSchema = []string{
@@ -141,9 +144,10 @@ func validateNativeTaskStructure(ctx context.Context, tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries d JOIN project_task_authorities p ON p.project_identity=d.project_identity AND p.authority='native' JOIN tasks t ON t.project_identity=d.project_identity AND t.task_id=d.task_id WHERE t.status<>'closed' OR
-		(json_type(d.evidence,'$.existing_acceptance') IS NULL AND NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='completed' AND e.execution_id=json_extract(w.payload,'$.selected_result_id') AND ((e.status='succeeded' AND e.current_step='completed') OR (json_extract(w.payload,'$.workflow_version')='worker-flow-v2' AND json_extract(w.payload,'$.pr_url')=d.pr_url AND EXISTS (SELECT 1 FROM json_each(e.payload,'$.implementation_data') implementation WHERE COALESCE(json_extract(implementation.value,'$.implementation_key'),'')<>'' AND COALESCE(json_extract(implementation.value,'$.digest'),'')<>'') AND COALESCE(json_extract(e.payload,'$.workspace.branch'),'')<>'')))) OR
-		(json_type(d.evidence,'$.existing_acceptance') IS NOT NULL AND (json_type(d.evidence,'$.existing_acceptance')<>'object' OR NOT EXISTS (SELECT 1 FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id AND w.phase='blocked' AND e.status='failed' AND json_extract(e.payload,'$.process') IS NULL)))`).Scan(&invalidDeliveries)
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries d JOIN project_task_authorities p ON p.project_identity=d.project_identity AND p.authority='native' JOIN tasks t ON t.project_identity=d.project_identity AND t.task_id=d.task_id
+		WHERE t.status<>'closed' OR NOT EXISTS (SELECT 1 FROM runner_candidates c WHERE c.project_identity=d.project_identity AND c.candidate_id=d.selected_workflow_run_id AND c.task_id=d.task_id
+		AND json_extract(c.payload,'$.participation')='completed' AND coalesce(c.run_id,'')<>'' AND json_extract(c.payload,'$.pr_url')=d.pr_url AND json_extract(c.payload,'$.stop_requested')=1
+		AND coalesce(json_extract(c.payload,'$.input_digest'),'')<>'' AND coalesce(json_extract(c.payload,'$.branch'),'')<>'' )`).Scan(&invalidDeliveries)
 	if err != nil {
 		return err
 	}
