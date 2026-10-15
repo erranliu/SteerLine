@@ -247,7 +247,20 @@ func runE2E(opts options) (code int) {
 	fail := func(err error) int { report.Errors = append(report.Errors, err.Error()); return 1 }
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	ctx, cancelTimeout := context.WithTimeout(ctx, 45*time.Minute)
+	// The parent must include every selected scene's existing body/cleanup
+	// bound, as well as independent builds; it must not clip the final scene.
+	budget := 10 * time.Minute
+	for _, entry := range selected {
+		window, err := time.ParseDuration(e2ePackageGoTimeout([]e2eScenario{entry}))
+		if err != nil {
+			return fail(err)
+		}
+		budget += window
+	}
+	if budget < 45*time.Minute {
+		budget = 45 * time.Minute
+	}
+	ctx, cancelTimeout := context.WithTimeout(ctx, budget)
 	defer cancelTimeout()
 	buildDir := filepath.Join(out, "build")
 	if err := os.MkdirAll(buildDir, 0700); err != nil {
