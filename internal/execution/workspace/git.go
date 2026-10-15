@@ -1,4 +1,4 @@
-// Package workspace owns local Git worktree operations and metadata resolution.
+// Package workspace resolves the caller repository identity through Git.
 // It accepts only fixed repository identities and commands; it has no access to
 // SteerLine configuration or business persistence.
 package workspace

@@ -216,6 +216,14 @@ func TestIntegrationDoesNotImportE2EInternal(t *testing.T) {
 }
 
 func e2eAllowed(source, dependency string) bool {
+	for _, retired := range []string{"adapters", "workflow", "reliable", "conversation"} {
+		if under(dependency, module+"/internal/execution/"+retired) {
+			return false
+		}
+	}
+	if under(dependency, "github.com/erranliu/SteerRunner") {
+		return false
+	}
 	production := module + "/internal/app/host"
 	executionResources := []string{
 		module + "/internal/execution/adapters",
@@ -277,8 +285,8 @@ func TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports(t *tes
 		}
 	}
 	for _, adapter := range []string{"driver", "native", "evidence"} {
-		if !e2eAllowed(module+"/tests/e2e/internal/"+adapter, module+"/internal/execution/adapters/codex") {
-			t.Fatal("test adapter rejected")
+		if e2eAllowed(module+"/tests/e2e/internal/"+adapter, module+"/internal/execution/adapters/codex") || e2eAllowed(module+"/tests/e2e/internal/"+adapter, "github.com/erranliu/SteerRunner/internal/app") {
+			t.Fatal("private execution owner accepted by test tooling")
 		}
 	}
 }

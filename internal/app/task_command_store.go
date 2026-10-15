@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -142,9 +141,5 @@ func (a taskPredecessorTx) RecordPredecessorAudit(v taskapp.Command) error {
 	if v.Kind != "add_task_predecessors" || v.Status != "accepted" {
 		return &taskmodel.Error{Code: "invalid_batch", Message: "audit requires an accepted predecessor command"}
 	}
-	op := executionmodel.OperationRecord{ProjectIdentity: v.ProjectIdentity, OperationID: v.CommandID, IdempotencyKey: v.IdempotencyKey, Kind: v.Kind, Status: "confirmed", PayloadDigest: taskPayloadDigest(v.Payload), Request: v.Payload, Receipt: v.Result, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
-	if _, made, err := a.tx.PutOperation(op); err != nil || !made {
-		return errors.Join(err, &taskmodel.Error{Code: "idempotency_conflict", Message: "predecessor operation already exists"})
-	}
-	return nil
+	return a.tx.RecordPredecessorAudit(storedTaskCommand(v))
 }

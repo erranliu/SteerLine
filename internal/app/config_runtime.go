@@ -4,13 +4,9 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -36,27 +32,21 @@ func (c Config) ValidateTaskCommandConfiguration() error {
 	return nil
 }
 
-func (c Config) WorkspaceGit() workspace.Git { return c.executionBase().WorkspaceGit(c.ProcessHost) }
-
-func (c Config) ResolveCommand(command *executionbackend.Command) error {
-	return execution.ResolveCommand(command)
-}
-
-func (c Config) TaskRepositoryTarget(ctx context.Context) (string, error) {
-	return c.executionConfig().TaskRepositoryTarget(ctx, c.ProcessHost)
+func (c Config) WorkspaceGit() workspace.Git {
+	return workspace.Git{Command: executionbackend.LaunchCommand{Executable: c.Git.Executable, Args: append([]string(nil), c.Git.Args...)}, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), Start: c.ProcessHost.StartManaged}
 }
 
 func (c *Config) ResolveIdentity(ctx context.Context) error {
 	if c == nil {
 		return errors.New("application configuration is required")
 	}
-	if err := execution.ResolveCommand(&c.Git); err != nil {
+	if err := resolveCommand(&c.Git); err != nil {
 		return err
 	}
 	if c.PR.Kind == "command" {
 		for _, command := range []*executionbackend.Command{&c.PR.Query} {
 			if command.Executable != "" {
-				_ = execution.ResolveCommand(command)
+				_ = resolveCommand(command)
 			}
 		}
 	}
@@ -69,14 +59,7 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 		return errors.New("configured repository identity changed after it was resolved")
 	}
 	c.identity, c.Repository = identity, repository.Path
-	if c.activeProfile != nil {
-		updated, profile, resolveErr := c.profileCatalog().SelectExecutionProfile(c.activeProfile.ID)
-		if resolveErr != nil {
-			return resolveErr
-		}
-		*c = c.withExecutionConfig(updated)
-		c.activeProfile = &profile
-	}
+
 	return nil
 }
 
@@ -84,7 +67,7 @@ func canonicalConfigPath(value string) string {
 	return canonicalPath(value)
 }
 
-func (c Config) ValidateProfiles() error { return c.profileCatalog().Validate() }
+func (c Config) ValidateProfiles() error { return c.RunnerExecution.Validate() }
 
 func (c Config) ValidateAdmission() error {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
@@ -105,172 +88,7 @@ func (c Config) ValidateAdmission() error {
 	return nil
 }
 
-func (c *Config) PrepareWorktreeRoot() error {
-	if c == nil {
-		return errors.New("application configuration is required")
-	}
-	if c.WorktreeRoot == "" {
-		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
-	}
-	return nil
-}
-
-func (c Config) Registration() (execution.ExecutionRegistration, error) {
-	return c.executionConfig().Registration(c.ExecutionDirectory)
-}
-
-func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot) error {
-	return c.executionConfig().ValidateStoredExecutions(snapshot, c.ExecutionDirectory)
-}
-
-func (c Config) DecodeImplementationConfig(key string) ([]byte, error) {
-	return c.executionConfig().DecodeImplementationConfig(key, c.ExecutionDirectory)
-}
-
-func (c Config) CheckFixedProfile(profile executionmodel.FixedExecutionProfile) error {
-	return c.profileCatalog().CheckFixedProfile(profile)
-}
-
-func (c Config) ApplyFixedExecutionProfile(profile executionmodel.FixedExecutionProfile) Config {
-	config := c.executionConfig().ApplyFixedExecutionProfile(profile, c.ExecutionDirectory)
-	c = c.withExecutionConfig(config)
-	for _, available := range c.AvailableExecutionProfiles() {
-		if available.ID == profile.ID {
-			c.activeProfile = &available
-			break
-		}
-	}
-	return c
-}
-
-func (c Config) AvailableExecutionProfiles() []execution.ExecutionProfile {
-	return c.profileCatalog().AvailableExecutionProfiles()
-}
-
-func (c Config) DefaultProfileID() string { return c.profileCatalog().DefaultProfileID() }
-
-func (c Config) ResolveExecutionProfile(id, digest string) (execution.Config, execution.ExecutionProfile, error) {
-	return c.profileCatalog().ResolveExecutionProfile(id, digest)
-}
-
-func (c Config) ApplyExecutionProfile(profile execution.ExecutionProfile) Config {
-	found := false
-	for _, configured := range c.ExecutionProfiles {
-		found = found || configured.ID == profile.ID
-	}
-	if !found {
-		c.ExecutionProfiles = append(append([]execution.ExecutionProfile(nil), c.ExecutionProfiles...), profile)
-	}
-	catalog := c.profileCatalog()
-	config, selected, err := catalog.SelectExecutionProfile(profile.ID)
-	if err != nil {
-		return c
-	}
-	c = c.withExecutionConfig(config)
-	c.activeProfile = &selected
-	return c
-}
-
-func (c Config) withExecutionConfig(config execution.Config) Config {
-	c.Repository, c.Remote, c.Branch, c.RunDir, c.WorktreeRoot = config.Repository, config.Remote, config.Branch, config.RunDir, config.WorktreeRoot
-	c.Git, c.WorkflowProtocol, c.CommandTimeout = config.Git, config.WorkflowProtocol, config.CommandTimeout
-	c.PublicationPolicy = config.PublicationPolicy
-	c.PR, c.Host, c.Agent = executionmodel.PRProviderConfig(config.PR), config.Host, config.Agent
-	return c
-}
-
-func (c Config) executionBase() execution.Config {
-	config := execution.Config{
-		PublicationPolicy: c.PublicationPolicy,
-		Repository:        c.Repository, Remote: c.Remote, Branch: c.Branch, RunDir: c.RunDir, WorktreeRoot: c.WorktreeRoot,
-		Git: c.Git, WorkflowProtocol: c.WorkflowProtocol, CommandTimeout: c.CommandTimeout, PR: executionmodel.PRProviderConfig(c.PR),
-		Host: c.Host, Agent: c.Agent,
-	}
-	config.BindRepositoryIdentity(c.identity)
-	config.BindAcceptedConfigVersion(c.configDigest)
-	return config
-}
-
-func (c Config) executionConfig() execution.Config {
-	base := c.executionBase()
-	if c.activeProfile == nil {
-		return base
-	}
-	selected, _, err := c.profileCatalog().SelectExecutionProfile(c.activeProfile.ID)
-	if err != nil {
-		return base
-	}
-	return selected
-}
-
-// ExecutionConfig returns the single selected frozen execution input for
-// callers that need the lower-level read-only execution APIs.
-func (c Config) ExecutionConfig() execution.Config { return c.executionConfig() }
-
-func (c Config) profileCatalog() execution.ProfileCatalog {
-	base := c.executionBase()
-
-	base.Git.Args = append([]string(nil), base.Git.Args...)
-	base.PR.Query.Args = append([]string(nil), base.PR.Query.Args...)
-	return execution.ProfileCatalog{Base: base, Directory: c.ExecutionDirectory, Profiles: cloneExecutionProfiles(c.ExecutionProfiles), DefaultID: c.DefaultExecutionProfile, Global: c.globalExecution}
-}
-
-func cloneExecutionProfiles(profiles []execution.ExecutionProfile) []execution.ExecutionProfile {
-	if profiles == nil {
-		return nil
-	}
-	cloned := append([]execution.ExecutionProfile(nil), profiles...)
-	for i := range cloned {
-		inputs := profiles[i].ImplementationConfigs
-		if inputs == nil {
-			continue
-		}
-		cloned[i].ImplementationConfigs = make([]executionbackend.ImplementationConfigInput, len(inputs))
-		for j, input := range inputs {
-			input.Payload = append([]byte(nil), input.Payload...)
-			cloned[i].ImplementationConfigs[j] = input
-		}
-	}
-	return cloned
-}
-
-func (c Config) AcceptedConfigVersion() string {
-	if c.activeProfile != nil && c.activeProfile.AcceptedConfigVersion != "" {
-		return c.activeProfile.AcceptedConfigVersion
-	}
-	return c.configDigest
-}
-
-func (c Config) runtimeDependencies() execution.RuntimeDependencies {
-	return execution.RuntimeDependencies{
-		Directory: c.ExecutionDirectory, ProcessHost: c.ProcessHost,
-		Profiles: appProfilePort{catalog: c.profileCatalog()}, ConfigVerifier: appConfigVerifier{project: c.projectPath, global: c.executionPath, digest: c.configDigest},
-	}
-}
-
-func (c Config) runtimeSettings() execution.RuntimeSettings {
-	return execution.RuntimeSettings{Claimant: c.Claimant, Heartbeat: positiveDuration(c.Heartbeat, 5*time.Second), ShutdownGrace: positiveDuration(c.ShutdownGrace, 10*time.Second)}
-}
-
-// appProfilePort keeps only the execution facts needed to resolve one entry.
-// It must not retain app.Config, which also owns task/host settings and file state.
-type appProfilePort struct{ catalog execution.ProfileCatalog }
-
-func (p appProfilePort) DefaultProfileID() string { return p.catalog.DefaultProfileID() }
-func (p appProfilePort) HasMultipleProfiles() bool {
-	return p.catalog.HasMultipleProfiles()
-}
-func (p appProfilePort) ResolveExecutionProfile(id, digest string) (execution.Config, executionmodel.FixedExecutionProfile, error) {
-	config, profile, err := p.catalog.ResolveExecutionProfile(id, digest)
-	if err != nil {
-		return execution.Config{}, executionmodel.FixedExecutionProfile{}, err
-	}
-	fixed := profile.Freeze(p.catalog.Directory, config.Identity())
-	if fixed.Digest == "" {
-		return execution.Config{}, executionmodel.FixedExecutionProfile{}, errors.New("selected execution profile could not be frozen")
-	}
-	return config, fixed, nil
-}
+func (c Config) DefaultProfileID() string { return c.RunnerExecution.DefaultProfile }
 
 type appConfigVerifier struct{ project, global, digest string }
 

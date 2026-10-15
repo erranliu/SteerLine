@@ -16,23 +16,24 @@ func TestWaitingMergeRestart(t *testing.T) {
 	p.StartService()
 	p.Claim("a")
 	before := p.WaitPhase("waiting_pr_merge")
-	p.AssertFixedNativeLaunch(before)
+	p.AssertRunnerBinding(before)
 	p.Record("before-restart", before)
 	if before.Helper.Sessions != 1 || before.Helper.Dispatches != 3 || before.Helper.PR.State != "open" {
 		t.Fatal("business turn was not completed with open PR")
 	}
 	p.RestartService()
 	after := p.WaitPhase("waiting_pr_merge")
-	p.AssertFixedNativeLaunch(after)
+	p.AssertRunnerBinding(after)
 	p.Record("after-restart", after)
-	first, second := before.Domain.Executions[0], after.Domain.Executions[0]
-	firstSession, err := testenv.ExecutionSession(first)
-	env.Must(err)
-	secondSession, err := testenv.ExecutionSession(second)
-	env.Must(err)
-	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || before.Domain.WorkflowRuns[0].WorkflowRunID != after.Domain.WorkflowRuns[0].WorkflowRunID || first.ExecutionID != second.ExecutionID || firstSession != secondSession || first.Workspace.Worktree != second.Workspace.Worktree || first.Workspace.Branch != second.Workspace.Branch || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
-		t.Fatal("restart replaced original task/database/execution/workspace identity")
+	first, second := before.Runner.Candidates[0], after.Runner.Candidates[0]
+	if first.Projection == nil || second.Projection == nil {
+		t.Fatal("missing public Run projection")
 	}
+	x, y := first.Projection.Execution, second.Projection.Execution
+	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || first.ID != second.ID || first.RunID != second.RunID || first.Submit.RequestID != second.Submit.RequestID || x.AttemptID != y.AttemptID || x.SessionID != y.SessionID || x.Workspace != y.Workspace || x.Branch != y.Branch {
+		t.Fatal("restart replaced original caller/Run/Attempt/session/workspace")
+	}
+
 	if after.Helper.Sessions != before.Helper.Sessions || after.Helper.Dispatches != before.Helper.Dispatches {
 		t.Fatal("restart duplicated native session/dispatch")
 	}
@@ -48,7 +49,7 @@ func TestWaitingMergeRestart(t *testing.T) {
 	for _, task := range closed.Page.Tasks {
 		switch task.TaskID {
 		case p.Tasks["a"].ID:
-			if task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != before.Domain.WorkflowRuns[0].WorkflowRunID {
+			if task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != before.Runner.Candidates[0].ID {
 				t.Fatal("restart lost original workflow delivery")
 			}
 			delivery, _ = json.Marshal(task.Delivery)
@@ -72,7 +73,7 @@ func TestWaitingMergeRestart(t *testing.T) {
 			}
 		}
 	}
-	if len(again.Domain.WorkflowRuns) != 1 || again.Helper.Sessions != 1 || again.Helper.Dispatches != 3 {
+	if len(again.Runner.Candidates) != 1 || again.Helper.Sessions != 1 || again.Helper.Dispatches != 3 {
 		t.Fatal("repeated reconciliation duplicated execution")
 	}
 	p.StopService()

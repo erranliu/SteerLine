@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -57,7 +58,11 @@ func TestPathIsolation(t *testing.T) {
 		outside := filepath.Join(a.Home, "escaped-"+field)
 		variant := writeConfigVariant(t, b, field+".json", func(value map[string]any) { value[field] = outside })
 		output, err := s.RunCommand(b.Command(b.Executable, "check", "-config", variant), field+"-refusal")
-		if err == nil || !strings.Contains(strings.ToLower(string(output)), "must resolve inside steerline_home") {
+		validRefusal := strings.Contains(strings.ToLower(string(output)), "must resolve inside steerline_home")
+		if field == "worktree_root" {
+			validRefusal = strings.Contains(string(output), "worktree_root") && strings.Contains(strings.ToLower(string(output)), "unknown")
+		}
+		if err == nil || !validRefusal {
 			t.Fatalf("%s escape accepted: %v: %s", field, err, output)
 		}
 		if _, err := os.Stat(outside); !os.IsNotExist(err) {
@@ -119,7 +124,7 @@ func TestServiceWriteIsolation(t *testing.T) {
 		t.Fatal("configuration absent from frozen host catalog accepted")
 	}
 	s.Must(os.Remove(stale.Config))
-	if controlRequestCount(t, p) != count || len(mustSnapshot(t, p).Domain.WorkflowRuns) != 0 {
+	if controlRequestCount(t, p) != count || len(mustSnapshot(t, p).Runner.Candidates) != 0 {
 		t.Fatal("rejected write published request or workflow")
 	}
 	// A successful command proves that the rejection counter observes this transport.
@@ -208,50 +213,68 @@ func TestDualHomeIsolation(t *testing.T) {
 	a, b := s.NewProject("a"), s.NewProject("b")
 	a.CreateTasks()
 	b.CreateTasks()
-	a.StartService()
-	b.StartService()
 	aBefore, bBefore := mustSnapshot(t, a), mustSnapshot(t, b)
-	if aBefore.Page.ProjectID == bBefore.Page.ProjectID || aBefore.Page.DatabaseID == bBefore.Page.DatabaseID || serviceInstance(aBefore) == serviceInstance(bBefore) {
-		t.Fatal("homes shared project/database/service identity")
+	if aBefore.Page.ProjectID == bBefore.Page.ProjectID || aBefore.Page.DatabaseID == bBefore.Page.DatabaseID || serviceInstance(aBefore) == serviceInstance(bBefore) || aBefore.Runtime.Service.PID == bBefore.Runtime.Service.PID {
+		t.Fatal("homes shared project/database/host/runtime identity")
 	}
-	a.Claim("a")
-	requests := controlRequestFiles(t, b)
-	b.Claim("a")
-	writeRuntimeEvidence(t, s.Output, map[string]any{"normal_control_publication": assertControlPublication(t, b, requests, bBefore)})
-	aOpen, bOpen := a.WaitPhase("waiting_pr_merge"), b.WaitPhase("waiting_pr_merge")
-	for _, snap := range []testenv.Snapshot{aOpen, bOpen} {
-		if snap.Helper.Dispatches != 3 || snap.Helper.Sessions != 1 || len(snap.Domain.WorkflowRuns) != 1 || len(snap.Domain.Executions) != 1 {
-			t.Fatal("dual homes did not retain one independent original execution each")
-		}
+	// Equal task and request IDs deliberately exercise the home/project namespace.
+	if a.Tasks["a"].ID != b.Tasks["a"].ID {
+		t.Fatal("fixture needs colliding task IDs")
 	}
-	// Only A merges first: B's authority and provider must remain unchanged.
-	a.Merge()
-	aDone := a.WaitPhase("completed")
-	bStillOpen := mustSnapshot(t, b)
-	assertProjectFactsEqual(t, bOpen, bStillOpen, "A delivery changed B task facts")
-	if bStillOpen.Helper.PR.Merged {
-		t.Fatal("A merge changed B provider")
-	}
-	b.Merge()
-	bDone := b.WaitPhase("completed")
-	assertProjectFactsEqual(t, aDone, mustSnapshot(t, a), "B delivery changed A task facts")
-	assertSameServiceInstance(t, aBefore, aDone)
-	assertSameServiceInstance(t, bBefore, bDone)
-	for _, item := range []struct {
-		project    *testenv.Project
-		open, done testenv.Snapshot
-	}{{a, aOpen, aDone}, {b, bOpen, bDone}} {
-		for _, task := range item.done.Page.Tasks {
-			if task.TaskID == item.project.Tasks["a"].ID && (task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != item.open.Domain.WorkflowRuns[0].WorkflowRunID) {
-				t.Fatal("delivery does not belong to the home's original workflow")
-			}
-			if task.TaskID == item.project.Tasks["b"].ID && (!task.DependencyReady || len(task.WorkflowRuns) != 0) {
-				t.Fatal("delivery did not release only its own unstarted successor")
+	requestID := strings.Repeat("d", 32)
+	discard := func(p *testenv.Project, before testenv.Snapshot) {
+		version := uint64(0)
+		for _, task := range before.Page.Tasks {
+			if task.TaskID == p.Tasks["a"].ID {
+				version = task.Version
 			}
 		}
+		args := []string{"task", "discard", "-config", p.Config, "-task-id", p.Tasks["a"].ID, "-request-id", requestID, "-expected-version", strconv.FormatUint(version, 10), "-reason", "isolation-" + p.Name, "-by", "e2e"}
+		raw, err := p.Driver.Run(s.Context, args...)
+		s.Must(err)
+		var receipt struct {
+			RequestID string `json:"request_id"`
+			TaskID    string `json:"task_id"`
+			Status    string `json:"status"`
+		}
+		s.Must(json.Unmarshal(raw, &receipt))
+		if receipt.RequestID != requestID || receipt.TaskID != p.Tasks["a"].ID || receipt.Status != "discarded" {
+			t.Fatalf("wrong home receipt: %s", raw)
+		}
+		after := mustSnapshot(t, p)
+		replay, err := p.Driver.Run(s.Context, args...)
+		s.Must(err)
+		if strings.TrimSpace(string(replay)) != strings.TrimSpace(string(raw)) {
+			t.Fatal("original request replay changed its receipt")
+		}
+		unchanged := mustSnapshot(t, p)
+		assertProjectFactsEqual(t, after, unchanged, "request replay changed task facts")
+		if after.Page.GraphRevision != unchanged.Page.GraphRevision {
+			t.Fatal("request replay changed graph revision")
+		}
+		p.Record("discarded", after)
 	}
-	a.Record("completed", aDone)
-	b.Record("completed", bDone)
+	bProvider := fileSHA256(t, b.Provider)
+	discard(a, aBefore)
+	aDone := mustSnapshot(t, a)
+	assertProjectFactsEqual(t, bBefore, mustSnapshot(t, b), "A command changed B")
+	if fileSHA256(t, b.Provider) != bProvider {
+		t.Fatal("A command changed B provider")
+	}
+	aProvider := fileSHA256(t, a.Provider)
+	discard(b, bBefore)
+	assertProjectFactsEqual(t, aDone, mustSnapshot(t, a), "B command changed A")
+	if fileSHA256(t, a.Provider) != aProvider {
+		t.Fatal("B command changed A provider")
+	}
+	for _, p := range []*testenv.Project{a, b} {
+		snap := mustSnapshot(t, p)
+		if len(snap.Runner.Candidates) != 0 {
+			t.Fatal("isolation check dispatched an execution")
+		}
+	}
+	assertSameServiceInstance(t, aBefore, mustSnapshot(t, a))
+	assertSameServiceInstance(t, bBefore, mustSnapshot(t, b))
 	a.StopService()
 	b.StopService()
 	s.Must(s.FinishBody())

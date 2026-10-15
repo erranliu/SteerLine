@@ -1,6 +1,6 @@
 # 分级测试与 E2E 环境
 
-临时/AI 自动调试须先运行 `scripts/new-debug-release.ps1`，使用生成的 SteerlineTest 环境；安装目录不得作为现场。独立包定向验证为 `scripts/test-debug-release.ps1`，显式 `-Live` 验证真实 SteerlineTest PR；所有日志留在生成包 evidence。既有分级回归保留自己的隔离夹具，见[独立调试验收](../../docs/acceptance/debug-environment.md)。
+临时/AI 自动调试须先运行 `scripts/new-debug-release.ps1`，使用生成的 SteerlineTest 环境；安装目录不得作为现场。独立包定向验证为 `scripts/test-debug-release.ps1 -SteerRunnerExe <absolute exe>`（亦可设置 `STEERRUNNER_EXE`），显式 `-Live` 验证实际 Runner/原生 worker 的 SteerlineTest PR；所有日志留在生成包 evidence。既有分级回归保留自己的隔离夹具，见[独立调试验收](../../docs/acceptance/debug-environment.md)。
 
 当前部署入口为本地 Codex 与远端 Orca `host=orca` / environment。本机 Orca 部署方案已停用，本机 live 恢复场景已删除；隔离 fake 协议夹具保留，本机原生工作区生命周期场景已退役。当前没有登记新版远端真实恢复场景，受控 environment 回归不能代替远端真机验收。Orca 使用一个 agent 终端，由本机 CLI 原样投递统一阶段提示词，并由适配层采集普通终端回复；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[统一提示词验收](../../docs/acceptance/orca-unified-worker-prompts.md)。
 
@@ -41,7 +41,7 @@ go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled
 | L3 controlled | `runtime.source-build-isolation` | 独立源码 clone 的构建/重建与输出链接拒绝，不改变另一临时 home 的程序、数据库和业务事实 |
 | L3 controlled | `runtime.path-isolation` | state junction、run_dir/worktree_root 越界和 SQLite DB/WAL/SHM 硬链接拒绝；无 worker |
 | L3 controlled | `runtime.service-write-isolation` | 统一宿主启停/重启与匹配原实例的逐项目shutdown、旧实例/非启动快照配置写拒绝、跨home仓库锁 |
-| L3 controlled | `runtime.dual-home-isolation` | 两独立 home/clone 的原执行、控制请求和交付不串用 |
+| L3 controlled | `runtime.dual-home-isolation` | 两独立home/clone的同号任务、同号请求与原回执重放不串用，无重复完整执行链 |
 | L3 live | `runtime.sandbox-git.local-codex` | 新生成 C:\SteerlineDebug 包；两个独立 worktree/session 的普通沙箱探针、原始三阶段命令与 usage、真实 Git helper/自动审核、精确 SteerlineTest PR 合并/交付及清理 |
 | L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
@@ -74,7 +74,7 @@ go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled
 
 场景位于 `smoke`、`live`、`suites/<组>`，共享 `internal/testenv`、`driver`、`native`、`controlled`。生产代码不导入这些包。L3 不调用 L2 测试函数，共享环境与业务断言，各测试独立创建现场；没有第二套任务状态机。
 
-依赖边界保持同仓、同 go.mod：driver 调用产品现有控制/查询接口；native 集中原生可执行文件、执行配置和 Orca CLI 解码；evidence 通过实现 codec 验证原 profile/resource/session/回合，输出测试自有模型数据与统一校验。testenv 和业务场景只组织现场、消费适配层及 contracts/task 数据合同，不直接导入生产 facade 或 Codex/Orca 实现包。实现重构时优先修改适配层，不复制 codec 或增加测试专用生产接口。
+依赖边界保持同仓、同 go.mod：driver 调用产品现有控制/查询接口；native 集中原生可执行文件、执行配置和 Orca CLI 解码；新接入场景仅消费公开 Runner 配置/Run/事件和 caller 事务；剩余历史 native/evidence 对旧 codec 的依赖待 P6 清理，不代表当前新链路可继续依赖旧 owner。testenv 和业务场景只组织现场、消费适配层及 contracts/task 数据合同，不直接导入生产 facade 或 Codex/Orca 实现包。实现重构时优先修改适配层，不复制 codec 或增加测试专用生产接口。
 
 L1/quick 固定执行 `internal/testkit/boundary/e2e`，并在 `internal/testkit/boundary` 运行 execution/product/storage 边界：检查生产依赖闭包不能到达 testkit、tests、runner 或 fixture；检查启用 e2e tag 的 Go 导入（包括场景测试和 helper），实现依赖只能出现在 driver/native/evidence。fixture 包作为库存入口时不视为生产入口，但生产经任何中间包引用 fixture 都会失败。可独立运行 `go test ./internal/testkit/boundary/... -count=1`，无模型请求。
 

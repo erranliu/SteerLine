@@ -2,26 +2,20 @@ package app
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/erranliu/SteerLine/internal/execution"
-	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	transport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-type ExecutionProfile = execution.ExecutionProfile
-
 const WorkerFlowVersion = executionmodel.Version
-
-const ProjectExecutionProfileID = execution.ProjectExecutionProfileID
 
 func executionPublicationFixture() executionbackend.PublicationPolicy {
 	return executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
@@ -35,55 +29,6 @@ type terminalFixtureProfile struct {
 	Executable, Shell, WaitTimeout, Model, ReasoningEffort string
 	Args                                                   []string
 	KeepTerminal, Activate                                 bool
-}
-
-func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *terminalFixtureProfile) ExecutionProfile {
-	t.Helper()
-	if host == "orca" {
-		if terminal == nil {
-			t.Fatal("terminal fixture missing")
-		}
-		payload, err := json.Marshal(transport.Profile{Executable: terminal.Executable, Args: terminal.Args, WaitTimeout: "5s"})
-		require(t, err)
-		return ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: transport.ProfileKey, CodecVersion: transport.ProfileVersion, Payload: payload}}}
-	}
-	payload, err := codexworker.EncodeProfileConfig(worker)
-	require(t, err)
-	return ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: codexworker.ProfileCodecVersion, Payload: payload}}}
-}
-
-func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defaultID string) {
-	t.Helper()
-	raw, err := json.Marshal(map[string]any{"version": 2, "execution_profiles": profiles, "default_execution_profile": defaultID})
-	require(t, err)
-	require(t, os.MkdirAll(filepath.Dir(GlobalExecutionConfigPath()), 0700))
-	require(t, os.WriteFile(GlobalExecutionConfigPath(), raw, 0600))
-}
-
-func localGlobalExecutionFixture(t *testing.T) {
-	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)}, "local")
-}
-
-func codexProfileSettings(c execution.Config, directories ...*execution.ExecutionDirectory) codexworker.ProfileConfig {
-
-	value, _ := codexSettings(c, directories...)
-	return value
-}
-
-func codexProfileFromInputs(inputs []executionbackend.ImplementationConfigInput) codexworker.ProfileConfig {
-	for _, input := range inputs {
-		if input.ImplementationKey == codexworker.ProfileCodecKey {
-			value, _ := codexworker.DecodeProfileConfig(input.Payload)
-			return value
-		}
-	}
-	return codexworker.ProfileConfig{}
-}
-
-func testVerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile) bool {
-	host := NewProcessHost(time.Second)
-	directory, err := NewBuiltinDirectory(host)
-	return err == nil && (Config{ExecutionDirectory: directory}).CheckFixedProfile(p) == nil
 }
 
 func mustJSON(value any) []byte {
@@ -143,62 +88,17 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	return c, fixtureGit(t, repo, "rev-parse", "HEAD")
 }
 
-func bindUnitDirectory(t *testing.T, c Config) Config {
+func configTestRepository(t *testing.T) string { return projectRepo(t) }
+func localGlobalExecutionFixture(t *testing.T) {
 	t.Helper()
-	if c.PublicationPolicy.Publisher == "" {
-		c.PublicationPolicy = executionPublicationFixture()
-	}
-	if c.PR.Kind == "" {
-		c.PR = hostPublicationProviderFixture()
-	}
-	host := NewProcessHost(time.Second)
-	directory, err := NewBuiltinDirectory(host)
+	exe, err := os.Executable()
 	require(t, err)
-	c.ProcessHost = host
-	c.ExecutionDirectory = directory
-	c.bindApplicationFiles("fixture-project.json", "fixture-global.json", "fixture-accepted-v1", true)
-	return c
-}
-
-func boundProfile(c Config, p ExecutionProfile) ExecutionProfile {
-	c.ExecutionProfiles = []ExecutionProfile{p}
-	for _, bound := range c.AvailableExecutionProfiles() {
-		if bound.ID == p.ID {
-			return bound
-		}
-	}
-	panic("bound profile absent")
-}
-
-func digestValue(value any) string { return shortDigest(value) }
-
-func unitProjectProfile(c Config) ExecutionProfile {
-	executionConfig := c.executionConfig()
-	inputs := make([]executionbackend.ImplementationConfigInput, 0, len(executionConfig.ImplementationData))
-	for _, e := range executionConfig.ImplementationData {
-		inputs = append(inputs, executionbackend.ImplementationConfigInput{ImplementationKey: e.ImplementationKey, CodecVersion: e.CodecVersion, Payload: e.Payload})
-	}
-	return boundProfile(c, ExecutionProfile{ID: ProjectExecutionProfileID, Name: "Project default", Host: c.Host, Agent: c.Agent, ImplementationConfigs: inputs})
-}
-
-func setTestImplementationProfiles(t *testing.T, c *Config, worker codexworker.ProfileConfig, terminal *terminalFixtureProfile) {
-	t.Helper()
-	if c.ExecutionDirectory == nil {
-		*c = bindUnitDirectory(t, *c)
-	}
-	p := testExecutionProfile(t, ProjectExecutionProfileID, "Project default", c.Host, c.Agent, worker, terminal)
-	*c = c.ApplyExecutionProfile(p)
-}
-
-func setTestCodexProfile(t *testing.T, c *Config, worker codexworker.ProfileConfig) {
-	t.Helper()
-	var terminal *terminalFixtureProfile
-	if c.Host != "local" {
-		raw, err := c.executionConfig().DecodeImplementationConfig(transport.ProfileKey, c.ExecutionDirectory)
-		require(t, err)
-		settings, err := transport.DecodeProfile(raw)
-		require(t, err)
-		terminal = &terminalFixtureProfile{Executable: settings.Executable, Args: settings.Args, WaitTimeout: settings.WaitTimeout}
-	}
-	setTestImplementationProfiles(t, c, worker, terminal)
+	raw, err := os.ReadFile(exe)
+	require(t, err)
+	sum := sha256.Sum256(raw)
+	config := RunnerExecutionConfig{Version: 3, Runner: runnerclient.Selection{Executable: exe, Version: "unit-fixture", SHA256: hex.EncodeToString(sum[:])}, DefaultProfile: "fixture", Profiles: []RunnerProfile{{ID: "fixture", Name: "Fixture", Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"native-fixture"}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 1}}}}
+	require(t, os.MkdirAll(HomeDir(), 0700))
+	body, err := json.Marshal(config)
+	require(t, err)
+	require(t, os.WriteFile(GlobalExecutionConfigPath(), body, 0600))
 }

@@ -1,4 +1,4 @@
-﻿param([switch]$Live, [switch]$IndependentProcess)
+﻿param([switch]$Live, [string]$SteerRunnerExe = $env:STEERRUNNER_EXE, [switch]$IndependentProcess)
 $ErrorActionPreference = 'Stop'
 # Detached-start acceptance needs an independent Windows process, as in the
 # existing browser package driver. The product retains its Job safety gate.
@@ -10,6 +10,7 @@ if (-not $IndependentProcess) {
     function Quote-TestArgument([string]$Value) { return "'" + $Value.Replace("'", "''") + "'" }
     $invoke = '& ' + (Quote-TestArgument $PSCommandPath) + ' -IndependentProcess'
     if ($Live) { $invoke += ' -Live' }
+    if ($SteerRunnerExe) { $invoke += ' -SteerRunnerExe ' + (Quote-TestArgument $SteerRunnerExe) }
     $body = '$ErrorActionPreference=''Stop''; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding; '
     $body += '$env:PATH=' + (Quote-TestArgument $env:PATH) + '; '
     if ($env:CODEX_HOME) { $body += '$env:CODEX_HOME=' + (Quote-TestArgument $env:CODEX_HOME) + '; ' }
@@ -29,20 +30,20 @@ if (-not $IndependentProcess) {
 }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $generator = Join-Path $PSScriptRoot 'new-debug-release.ps1'
-$testRoot = Join-Path 'C:\SteerlineDebug' (([string][char]0x4E2D + [char]0x6587) + ' verification-' + [Guid]::NewGuid().ToString('N'))
+$testRoot = Join-Path 'C:\SteerlineDebug' (([string][char]0x4E2D + [char]0x6587) + ' test-' + [Guid]::NewGuid().ToString('N').Substring(0,12))
 $oldHome = $env:STEERLINE_HOME
 $oldConfig = $env:STEERLINE_CONFIG
 $oldTestRoot = $env:STEERLINE_DEBUG_TEST_ROOT
 $oldCodexHome = $env:CODEX_HOME
+$oldSandboxRoot = $env:STEERLINE_DEBUG_SANDBOX_ROOT
 $oldSecondRoot = $env:STEERLINE_DEBUG_SECOND_TEST_ROOT
 try {
     # Deliberate inherited pollution must not select installed state.
     $env:STEERLINE_HOME = 'C:\SteerlineRuntime'
     $env:STEERLINE_CONFIG = 'C:\SteerlineRuntime\etc\SteerlineTest.json'
-    # The default listener may belong to another environment; only inspect its generated config.
-    $defaultRelease = (& $generator -DebugRoot $testRoot | ConvertFrom-Json)
-    $first = (& $generator -DebugRoot $testRoot -WebAddress 127.0.0.1:19747 | ConvertFrom-Json)
-    $second = (& $generator -DebugRoot $testRoot -WebAddress 127.0.0.1:19744 -WebProjects 2 | ConvertFrom-Json)
+    $defaultRelease = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe | ConvertFrom-Json)
+    $first = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe -WebAddress 127.0.0.1:19747 | ConvertFrom-Json)
+    $second = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe -WebAddress 127.0.0.1:19744 -WebProjects 2 | ConvertFrom-Json)
     if ($first.root -eq $second.root) { throw 'Generator reused a release' }
     foreach ($release in @($defaultRelease, $first, $second)) {
         $manifest = Get-Content -LiteralPath (Join-Path $release.root 'manifest.json') -Raw | ConvertFrom-Json
@@ -60,16 +61,16 @@ try {
     $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $second.root
     Push-Location $repo
     try {
-        & go test ./tests/e2e/internal/driver -run '^TestDebugRelease(Runtime|WebProjects)$' -count=1 -v *> (Join-Path $first.root 'evidence\runtime-test.log')
+        & go test ./tests/e2e/internal/driver -run '^TestDebugRelease(Runtime|WebProjects)$' -count=1 -timeout=20m -v *> (Join-Path $first.root 'evidence\runtime-test.log')
         if ($LASTEXITCODE -ne 0) { throw "Runtime tests failed: $($first.root)\evidence\runtime-test.log" }
     } finally { Pop-Location }
     $refused = $false
-    try { & $generator -DebugRoot 'C:\SteerlineRuntime\debug' | Out-Null } catch { $refused = $true }
+    try { & $generator -DebugRoot 'C:\SteerlineRuntime\debug' -SteerRunnerExe $SteerRunnerExe | Out-Null } catch { $refused = $true }
     if (-not $refused) { throw 'Installed output root was accepted' }
     $alias = Join-Path $testRoot 'linked-root'
     New-Item -ItemType Junction -Path $alias -Target $second.root | Out-Null
     $refused = $false
-    try { & $generator -DebugRoot $alias | Out-Null } catch { $refused = $true }
+    try { & $generator -DebugRoot $alias -SteerRunnerExe $SteerRunnerExe | Out-Null } catch { $refused = $true }
     if (-not $refused) { throw 'Linked output root was accepted' }
     # Remove only the exact junction, never recursively follow its target.
     (Get-Item -LiteralPath $alias).Delete()
@@ -83,59 +84,19 @@ try {
     # Preoccupy the immediate timestamp window, so the real generator must refuse before building.
     foreach ($offset in 0..10) { New-Item -ItemType Directory -Path (Join-Path $collisionRoot ('dev-' + $now.AddSeconds($offset).ToString('yyyyMMdd-HHmmss') + $suffix)) -Force | Out-Null }
     $refused = $false
-    try { & $generator -DebugRoot $collisionRoot | Out-Null } catch { $refused = $true }
+    try { & $generator -DebugRoot $collisionRoot -SteerRunnerExe $SteerRunnerExe | Out-Null } catch { $refused = $true }
     if (-not $refused) { throw 'Existing timestamp directory was accepted' }
     if ($Live) {
-        # Controlled single/dual packages are frozen to simulate; live uses a fresh package.
-        $liveRelease = (& $generator -DebugRoot $testRoot -WebAddress 127.0.0.1:19745 | ConvertFrom-Json)
+        # Exercise the actual Runner/agent workflow. Existing native login stays
+        # external; this harness never exports tokens or publishes for a worker.
+        $liveRelease = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe -WebAddress 127.0.0.1:19745 | ConvertFrom-Json)
         $env:CODEX_HOME = $oldCodexHome
-        $helper = Join-Path $liveRelease.root 'bin\debug-helper.exe'
-        & $helper debug prepare
-        if ($LASTEXITCODE -ne 0) { throw 'Live preparation failed' }
-        $manifest = Get-Content -LiteralPath (Join-Path $liveRelease.root 'manifest.json') -Raw | ConvertFrom-Json
-        $token = (Get-Content -LiteralPath (Join-Path $liveRelease.root 'home\github-token') -Raw).Trim()
-        $savedGhToken = $env:GH_TOKEN
-        $env:GH_TOKEN = $token
-        $project = Join-Path $liveRelease.root 'projects\SteerlineTest'
-        $base = $manifest.base_branch
-        $head = $base.Replace('/base', '/verification')
-        $pr = $null
+        $env:STEERLINE_DEBUG_SANDBOX_ROOT = $liveRelease.root
+        Push-Location $repo
         try {
-            # Token stays in the environment and never appears in argv/logs.
-            $env:GIT_CONFIG_COUNT = '1'
-            $env:GIT_CONFIG_KEY_0 = 'http.https://github.com/erranliu/SteerlineTest.git.extraheader'
-            $env:GIT_CONFIG_VALUE_0 = 'AUTHORIZATION: basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('x-access-token:' + $token))
-            & git -C $project -c credential.helper= push origin "${base}:refs/heads/$base"
-            if ($LASTEXITCODE -ne 0) { throw 'Base push failed' }
-            & git -C $project checkout -b $head
-            if ($LASTEXITCODE -ne 0) { throw 'Head checkout failed' }
-            [IO.File]::WriteAllText((Join-Path $project 'verification.txt'), 'debug release live PR verification', [Text.UTF8Encoding]::new($false))
-            & git -C $project add verification.txt
-            & git -C $project commit -m 'Verify independent debug release'
-            if ($LASTEXITCODE -ne 0) { throw 'Verification commit failed' }
-            Push-Location $project
-            $savedErrorPreference = $ErrorActionPreference
-            try {
-                $ErrorActionPreference = 'Continue'
-                $publication = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $project 'publish.ps1') 2> (Join-Path $liveRelease.root 'evidence\publish-stderr.log')
-                $publicationExit = $LASTEXITCODE
-            } finally { $ErrorActionPreference = $savedErrorPreference; Pop-Location }
-            $prLine = $publication | Where-Object { $_ -match '^https://github.com/erranliu/SteerlineTest/pull/\d+$' } | Select-Object -Last 1
-            if ($prLine) { $pr = $prLine.Trim() }
-            if ($publicationExit -ne 0 -or -not $pr) { throw 'Live fixture publish.ps1 failed; see evidence/publish-stderr.log' }
-            $proof = & gh pr view $pr --repo erranliu/SteerlineTest --json url,state,baseRefName,headRefName,headRefOid
-            if ($LASTEXITCODE -ne 0) { throw 'Live PR query failed' }
-            $facts = $proof | ConvertFrom-Json
-
-            if ($facts.baseRefName -ne $base -or $facts.headRefName -ne $head -or $facts.state -ne 'OPEN') { throw 'Live PR identity mismatch' }
-            [IO.File]::WriteAllText((Join-Path $liveRelease.root 'evidence\live-pr.json'), ($proof | Out-String), [Text.UTF8Encoding]::new($false))
-        } finally {
-            if ($pr) { & gh pr close $pr --repo erranliu/SteerlineTest; if ($LASTEXITCODE -ne 0) { throw 'PR cleanup failed' } }
-            & git -C $project -c credential.helper= push origin --delete $head $base
-            if ($LASTEXITCODE -ne 0) { throw 'Branch cleanup failed' }
-            $env:GH_TOKEN = $savedGhToken
-            Remove-Item Env:GIT_CONFIG_COUNT,Env:GIT_CONFIG_KEY_0,Env:GIT_CONFIG_VALUE_0 -ErrorAction SilentlyContinue
-        }
+            & go test ./tests/e2e/internal/driver -run '^TestDebugReleaseCodexSandbox$' -count=1 -timeout=30m -v *> (Join-Path $liveRelease.root 'evidence\native-workflow-test.log')
+            if ($LASTEXITCODE -ne 0) { throw "Native workflow failed; inspect $($liveRelease.root)\evidence\native-workflow-test.log" }
+        } finally { Pop-Location }
     }
     $result = [pscustomobject]@{ passed = $true; default_artifacts = $defaultRelease.root; controlled = $first.root; other = $second.root; live = [bool]$Live }
     [IO.File]::WriteAllText((Join-Path $first.root 'evidence\generation-test.json'), ($result | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
@@ -145,5 +106,6 @@ try {
     $env:STEERLINE_CONFIG = $oldConfig
     $env:STEERLINE_DEBUG_TEST_ROOT = $oldTestRoot
     $env:CODEX_HOME = $oldCodexHome
+    $env:STEERLINE_DEBUG_SANDBOX_ROOT = $oldSandboxRoot
     $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $oldSecondRoot
 }

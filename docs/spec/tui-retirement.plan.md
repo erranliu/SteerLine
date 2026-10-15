@@ -119,3 +119,12 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 统一宿主独立场景不再消费旧service-window测试适配，删除 testenv 中无消费者的可见服务窗口/停服回执分支及字段；通用 testkit Process/Job 能力保持。只删除未调用分支与未使用输出，普通 StartHost/StopService 路径保持，编译检查验证剩余消费者。
 
 生成包就绪须核对 runtime-launcher 的owner/ready匹配token；该token在两项目种子任务创建后才发布，不以宿主/项目API就绪冒充夹具初始化完成。Go运行测试的defer先调用本home正式stop并核实结果，再停止其Job内Git/helper；失败同样不能遗留已脱离Job的双产品。该变更仍由TR-A3的全新生成包单/双项目场景验收。
+
+
+## 6. 接入独立 SteerRunner 执行所有者
+
+随后主干合入 #325（f3e35373）。保留它的冻结测试二进制/test2json入口、Runner EXE版本/SHA选择及其他业务组原有10分钟窗口；本次四项隔离仍各5分钟，仅这四项最多并发二项。Runner所有者与公开CLI边界见[接入说明](../integration/steerrunner.md)，本任务不改独立Runner仓库或产品worker生命周期。
+
+最终长期隔离只验证调用方职责，删除原生执行旧record断言，不从Runner投影伪造旧WorkflowRun/Execution。双home改用相同任务ID/相同request ID的独立作废命令与原回执重放：A操作不改B任务/版本/provider，B操作不改A，重放不改图版本，两个宿主/项目/数据库身份独立且无Runner候选。完整三阶段/交付不在隔离场景重复，归现有delivery与生成包单项目验证。路径检查保留state/run_dir/SQLite副作用前拒绝；worktree_root已归Runner，作为退役字段拒绝而非SteerLine可配置工作区验证。构建和宿主实例/锁检查继续保留。
+
+测试计划映射[TR-A3/TR-A4/TR-A6](../acceptance/tui-retirement.md#验收项)：先只读固定现有Runner EXE到本次临时依赖副本，记录实际source_commit/version/SHA，不构建或修改另一仓库/安装目录；以 `STEERRUNNER_EXE=<副本>` 运行四项runtime、L1和runner/驱动必要回归。生成包执行 `scripts/test-debug-release.ps1 -SteerRunnerExe <副本>`，仍单一生成流程、全新simulate包，独立进程参数须贯通Runner选择。正常/失败收尾除调用方stop与测试Job外，按已有公开CleanupRunner核对原候选/服务停止，reset之前明确停止Runner服务；不读取Runner私有库/日志。全部剩余E2E编译、文档/差异检查。实际证据另登acceptance，旧宿主/旧执行owner版本通过不冒充最新通过；远端Orca能力仍由独立Runner实现保留，不在本任务新跑真机。

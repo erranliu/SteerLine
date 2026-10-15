@@ -173,77 +173,6 @@ func (t *sqliteTx) PutTaskDependency(v taskmodel.TaskDependencyRecord) error {
 	return err
 }
 
-func (t *sqliteTx) PutTaskDelivery(v executionmodel.TaskDeliveryRecord) error {
-	if v.RecordedAt.IsZero() {
-		v.RecordedAt = now()
-	}
-	var targetBranch string
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT branch FROM project_task_authorities WHERE project_identity=? AND authority='native'`, v.ProjectIdentity).Scan(&targetBranch); err != nil {
-		return requiredRecordError(err, "authority_mismatch", "task delivery project has no native authority")
-	}
-	if err := validateNativeTaskDelivery(v, targetBranch); err != nil {
-		return err
-	}
-	var oldWorkflow, oldInstance, oldRepository, oldURL, oldMerge, oldMerged string
-	var oldNumber int64
-	var oldEvidence []byte
-	err := t.tx.QueryRowContext(t.ctx, `SELECT selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,evidence FROM task_deliveries WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&oldWorkflow, &oldInstance, &oldRepository, &oldNumber, &oldURL, &oldMerge, &oldMerged, &oldEvidence)
-	if err == nil {
-		if oldWorkflow == v.SelectedWorkflowRunID && oldInstance == v.PRInstance && oldRepository == v.PRRepository && oldNumber == v.PRNumber && oldURL == v.PRURL && oldMerge == v.MergeCommit && oldMerged == v.MergedAt.UTC().Format(time.RFC3339Nano) && bytes.Equal(oldEvidence, v.Evidence) {
-			return nil
-		}
-		return nativeErr("contract_mismatch", "task already has a different authoritative delivery")
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return err
-	}
-	var taskStatus string
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT status FROM tasks WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&taskStatus); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nativeErr("task_not_found", "delivery requires an existing native task")
-		}
-		return err
-	}
-	if taskStatus == "discarded" {
-		return nativeErr("task_discarded", "discarded task cannot receive a normal delivery")
-	}
-	if taskStatus != "in_progress" {
-		return nativeErr("stale_version", "delivery requires the claimed task to be in progress")
-	}
-	var runPayload []byte
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, v.ProjectIdentity, v.SelectedWorkflowRunID, v.TaskID).Scan(&runPayload); err != nil {
-		return requiredRecordError(err, "contract_mismatch", "delivery must reference a workflow run belonging to the task")
-	}
-	var run executionmodel.WorkflowRunRecord
-	if err := json.Unmarshal(runPayload, &run); err != nil {
-		return err
-	}
-	var evidence executionmodel.TaskDeliveryEvidence
-	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
-		return err
-	}
-	if evidence.ExistingAcceptance != nil || run.WorkflowVersion != executionmodel.Version {
-		return nativeErr("unsupported_schema", "delivery requires a worker-flow-v2 run")
-	}
-	if run.SelectedResult == "" || run.PRURL != v.PRURL {
-		return nativeErr("stale_version", "delivery requires the selected worker flow and its bound PR")
-	}
-	var executionPayload []byte
-	if err := t.tx.QueryRowContext(t.ctx, "SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?", v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&executionPayload); err != nil {
-		return requiredRecordError(err, "contract_mismatch", "delivery has no selected worker execution")
-	}
-	var execution executionmodel.ExecutionRecord
-	if err := json.Unmarshal(executionPayload, &execution); err != nil {
-		return err
-	}
-	sessionID, _ := executionSessionFacts(&execution)
-	if sessionID == "" || execution.Workspace.Branch == "" {
-		return nativeErr("contract_mismatch", "delivery has no bound worker session or branch")
-	}
-	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO task_deliveries(project_identity,task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence) VALUES(?,?,?,?,?,?,?,?,?,?,?)`, v.ProjectIdentity, v.TaskID, v.SelectedWorkflowRunID, v.PRInstance, v.PRRepository, v.PRNumber, v.PRURL, v.MergeCommit, v.MergedAt.UTC().Format(time.RFC3339Nano), v.RecordedAt.UTC().Format(time.RFC3339Nano), []byte(v.Evidence))
-	return err
-}
-
 func validateNativeTaskDelivery(v executionmodel.TaskDeliveryRecord, targetBranch string) error {
 	err := executionmodel.ValidateDelivery(v, targetBranch)
 	var rejected *executionmodel.ResultError
@@ -392,11 +321,14 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v taskmodel.TaskRecord, expectedVersion u
 		return err
 	}
 	if v.Status == "closed" {
-		if err = t.completeNativeDeliveryWorkflow(v.ProjectIdentity, v.TaskID); err != nil {
+		if err = t.completeRunnerDeliveryCandidate(v.ProjectIdentity, v.TaskID); err != nil {
 			return err
 		}
 	}
 	if v.Status == "discarded" || v.Status == "closed" {
+		if err = t.requestRunnerTaskStops(v.ProjectIdentity, v.TaskID); err != nil {
+			return err
+		}
 		var authorityVersion, graphRevision uint64
 		if err = t.tx.QueryRowContext(t.ctx, `SELECT authority_version,graph_revision FROM project_task_authorities WHERE project_identity=? AND authority='native'`, v.ProjectIdentity).Scan(&authorityVersion, &graphRevision); err != nil {
 			return requiredRecordError(err, "authority_mismatch", "native task graph authority is unavailable")
@@ -405,62 +337,4 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v taskmodel.TaskRecord, expectedVersion u
 		return err
 	}
 	return nil
-}
-
-func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error {
-	var runID string
-	var runPayload []byte
-	var deliveryEvidence []byte
-	err := t.tx.QueryRowContext(t.ctx, `SELECT d.selected_workflow_run_id,w.payload,d.evidence FROM task_deliveries d JOIN workflow_runs w ON w.project_identity=d.project_identity AND w.workflow_run_id=d.selected_workflow_run_id AND w.task_id=d.task_id WHERE d.project_identity=? AND d.task_id=?`, project, taskID).Scan(&runID, &runPayload, &deliveryEvidence)
-	if err != nil {
-		return requiredRecordError(err, "contract_mismatch", "task cannot close without its authoritative selected delivery")
-	}
-	var proof executionmodel.TaskDeliveryEvidence
-	if err = json.Unmarshal(deliveryEvidence, &proof); err != nil {
-		return nativeErr("inconsistent_delivery", "task delivery evidence is unreadable")
-	}
-	if proof.ExistingAcceptance != nil {
-		return nativeErr("unsupported_schema", "old acceptance delivery is unsupported")
-	}
-	var run executionmodel.WorkflowRunRecord
-	if err = json.Unmarshal(runPayload, &run); err != nil {
-		return err
-	}
-	if run.WorkflowVersion == executionmodel.Version {
-		var executionPayload []byte
-		if run.SelectedResult == "" || run.PRURL != proof.URL || !proof.Merged || proof.State != "merged" {
-			return nativeErr("stale_version", "selected worker flow no longer matches the merged PR")
-		}
-		if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?`, project, runID, run.SelectedResult).Scan(&executionPayload); err != nil {
-			return requiredRecordError(err, "contract_mismatch", "selected worker flow has no execution")
-		}
-		var execution executionmodel.ExecutionRecord
-		if err = json.Unmarshal(executionPayload, &execution); err != nil {
-			return err
-		}
-		sessionID, _ := executionSessionFacts(&execution)
-		if sessionID == "" || execution.Workspace.Branch == "" {
-			return nativeErr("contract_mismatch", "selected worker flow lacks its session or branch")
-		}
-		delivery := executionmodel.TaskDeliveryRecord{TaskID: taskID, SelectedWorkflowRunID: runID, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt}
-		state := executionmodel.State{
-			WorkflowRunID: run.WorkflowRunID, TaskID: run.TaskID, WorkflowVersion: run.WorkflowVersion,
-			Status: run.Status, PRURL: run.PRURL, PRState: run.PRState, WorkflowUpdatedAt: run.UpdatedAt,
-		}
-		next, completeErr := executionmodel.Complete(state, taskID, "closed", executionmodel.Delivery{
-			TaskID: delivery.TaskID, WorkflowRunID: delivery.SelectedWorkflowRunID, PRURL: delivery.PRURL,
-			MergeCommit: delivery.MergeCommit, MergedAt: delivery.MergedAt,
-		}, now())
-		if completeErr != nil {
-			return completeErr
-		}
-		previous := run
-		run.Status, run.PRState, run.UpdatedAt = next.Status, next.PRState, next.WorkflowUpdatedAt
-		run.StepID = executionmodel.StepDelivered
-		if err := t.appendWorkerStateActivity(&previous, &execution, run, execution); err != nil {
-			return err
-		}
-		return t.PutWorkflowRun(run)
-	}
-	return nativeErr("unsupported_schema", "delivery completion requires worker-flow-v2")
 }

@@ -78,6 +78,9 @@ func allowedType(value string, accepted []string) bool {
 }
 
 func CommandReceipt(r storageports.CommandRecord) api.CommandReceipt {
+	if r.Kind == "runner_discard" {
+		r.Kind = "discard_task"
+	}
 	p := api.CommandReceipt{ProjectIdentity: r.ProjectIdentity, CommandID: r.CommandID, Kind: r.Kind, TargetID: r.TargetID, ExpectedVersion: r.ExpectedVersion, RequestedBy: r.RequestedBy, Status: r.Status, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt}
 	switch r.Kind {
 	case "answer_decision":

@@ -1,5 +1,7 @@
 # Plan：本机 Codex app-server 执行迁移
 
+源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](../architecture/current-code-architecture.md)。
+
 适用说明（2026-09-30）：本 Plan 的独立进程存活及重接验收属于历史范围；当前本地 worker 由服务管理，停服后的人工继续按[新 Plan](worker-service-recovery.plan.md)实施。
 
 执行依据：[Spec](local-codex-app-server.spec.md)。按以下顺序实施，一个实现 PR 交付。实现及 A/B/C 验收已完成；当前环境缺少定向 race detector 工具链，记录在 [验收状态](../acceptance/local-codex-app-server.md)。
@@ -8,7 +10,7 @@
 
 2. **接入现有身份与 Operation。** 在 Execution 中区分 Command ID、原生 thread/turn 和宿主代次，给 Decision 保存原生请求绑定；新增本地协议并提升受影响的持久格式。复用 Operation 的意图、回执与未知状态，不另建发送状态机。按探针结果选择能证明发送归属的证据；不足时保留未知，不预先强制给所有 prompt 加消息标记。按验收 B、C 补发送幂等和旧格式拒绝测试。
 
-3. **替换执行并保留并行。** 改造 [本机启动](../../internal/execution/adapters/codex/lifecycle.go)、[worker-flow 服务](../../internal/execution/worker_start.go)和[worker 路由](../../internal/execution/service_workers.go)，使用原生 thread/turn 驱动执行。每个 Execution 独立处理阻塞 I/O，回传固定身份及冻结配置；中心沿用单写者提交。移除本地 `exec`、进程退出和问号判断的执行接线，复用[历史读取](../../internal/execution/adapters/codex/history.go)及会话持久化。按验收 B 检查异常隔离、第三任务领取与自动单活动策略。
+3. **替换执行并保留并行。** 改造 [本机启动](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/adapters/codex/lifecycle.go)、[worker-flow 服务](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/worker_start.go)和[worker 路由](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/service_workers.go)，使用原生 thread/turn 驱动执行。每个 Execution 独立处理阻塞 I/O，回传固定身份及冻结配置；中心沿用单写者提交。移除本地 `exec`、进程退出和问号判断的执行接线，复用[历史读取](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/adapters/codex/history.go)及会话持久化。按验收 B 检查异常隔离、第三任务领取与自动单活动策略。
 
 4. **接入统一决策。** 扩展现有 Decision 请求/答案 DTO 以保留原生多题和请求身份；查询与运行投影不得覆盖同时待答的请求。两类反馈共用 `answer_decision`，分别回复原请求或启动原 thread 的新 turn。更新控制台提示、送达进度和失效反馈处理；等待回答时保留 active turn。恢复采用有界逐执行核验，核验结束后允许其他合格任务继续。执行验收 A 的一条双任务真机闭环，其余输入和故障分支按 B 自动验证。
 

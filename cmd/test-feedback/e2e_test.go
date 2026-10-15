@@ -15,7 +15,7 @@ import (
 func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
 	ordinary := e2eScenario{ID: "delivery.basic", Env: "controlled"}
 	isolation := e2eScenario{ID: "runtime.source-build-isolation", Env: "controlled"}
-	if e2ePackageGoTimeout([]e2eScenario{ordinary}) != "6m" || e2ePackageGoTimeout([]e2eScenario{isolation}) != "6m" || e2ePackageGoTimeout([]e2eScenario{ordinary, isolation}) != "12m" {
+	if e2ePackageGoTimeout([]e2eScenario{ordinary}) != "12m" || e2ePackageGoTimeout([]e2eScenario{isolation}) != "6m" || e2ePackageGoTimeout([]e2eScenario{ordinary, isolation}) != "18m" {
 		t.Fatal("Go parent deadline clips a selected business scene or its cleanup")
 	}
 

@@ -23,8 +23,6 @@ type ConversationWrite = executionvalues.ConversationWrite
 
 type FinalAvailability = executionvalues.FinalAvailability
 
-type recordWrite[T any] = storageports.RecordWrite[T]
-
 type taskGraphSnapshot = storageports.TaskGraphSnapshot
 
 const MaxEventPageBytes = query.MaxEventPageBytes

@@ -31,16 +31,12 @@ func (p *Project) enableGitHub() {
 	s := p.Scenario
 	gh, err := exec.LookPath("gh")
 	s.Must(err)
-	// Authentication stdout is never logged, returned in an error or in evidence.
-	cmd := exec.CommandContext(s.Context, gh, "auth", "token", "--hostname", "github.com")
-	token, err := cmd.Output()
-	if err != nil {
-		s.t.Fatal("live GitHub tests require gh authentication")
+	// Use the existing native login without exporting or copying credentials.
+	cmd := exec.CommandContext(s.Context, gh, "auth", "status", "--active", "--hostname", "github.com")
+	if err := cmd.Run(); err != nil {
+		s.t.Fatal("live GitHub tests require an existing native login")
 	}
-	if len(strings.TrimSpace(string(token))) == 0 {
-		s.t.Fatal("GitHub authentication token missing")
-	}
-	s.Must(os.WriteFile(filepath.Join(p.Home, "github-token"), []byte(strings.TrimSpace(string(token))), 0600))
+
 	p.RealPR = true
 	p.BaseBranch = "codex/e2e/" + strings.ReplaceAll(uuid.NewString(), "-", "") + "/" + s.ID + "/base"
 	p.DefaultBranch = "main"
@@ -80,7 +76,7 @@ func (p *Project) gh(ctx context.Context, args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
 	cmd := exec.Command("gh", args...)
-	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	cmd.Env = p.Driver.Environment(os.Environ())
 	var stdout, stderr strings.Builder
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	err := testprocess.Run(ctx, cmd)
@@ -94,10 +90,10 @@ func (p *Project) githubPR(snap Snapshot) (executionmodel.PRInfo, error) {
 
 func (p *Project) githubPRContext(ctx context.Context, snap Snapshot) (executionmodel.PRInfo, error) {
 	var info executionmodel.PRInfo
-	if len(snap.Domain.WorkflowRuns) != 1 || snap.Domain.WorkflowRuns[0].PRURL == "" {
+	if len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].PRURL == "" {
 		return info, nil
 	}
-	url := snap.Domain.WorkflowRuns[0].PRURL
+	url := snap.Runner.Candidates[0].PRURL
 	if !strings.HasPrefix(url, "https://github.com/"+githubRepository+"/pull/") {
 		return info, errors.New("PR escaped the authorized test repository")
 	}
@@ -153,6 +149,21 @@ func (p *Project) cleanupGitHub() error {
 			return errors.New("refuse unowned remote branch cleanup")
 		}
 		branches[branch] = true
+	}
+	// Branches live in Runner-owned caches, not necessarily this source clone.
+	// Read only caller-owned persisted bindings; never enumerate Runner storage.
+	candidates, candidateErr := driver.ReadOriginalOperations(ctx, p.Database, p.ProjectID)
+	if candidateErr != nil {
+		return candidateErr
+	}
+	for _, candidate := range candidates {
+		if candidate.Branch == "" {
+			continue
+		}
+		if candidate.Project != p.ProjectID || candidate.RunID == "" || candidate.Branch == p.DefaultBranch || candidate.Branch == p.BaseBranch {
+			return errors.New("Runner branch cleanup ownership mismatch")
+		}
+		branches[candidate.Branch] = true
 	}
 	// A push can succeed before PR creation fails. This single-branch clone
 	// contained only main initially; other local heads belong to this fixture.

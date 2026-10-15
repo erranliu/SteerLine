@@ -237,3 +237,10 @@ PR #327 创建后主干合入统一多项目启动（0228e51d）。前述55a3445
 最终文档427份/2743条本地链接/0错误、差异检查通过。当前增量的TR-A3/TR-A4/TR-A6自动项完成；前序TUI/Web及统一启动验收按各自源码和范围保留，没有把旧Edge、recovery或远端结果移标成新版本。未跑Full/真实模型/远端真机；本机Orca场景明确退役，不再待验。取消的本机测试scratch仍按前文保留，实际安装环境未操作。
 
 后续 [PR #327](https://github.com/erranliu/SteerLine/pull/327) 基于统一启动主干0228e51d，包含独立隔离回归、必要调试夹具修正和本机Orca测试退役。
+
+
+### 合入 SteerRunner 主干的边界
+
+最终推送检查时主干再合入#325（f3e35373），执行所有者迁出。067a3cfc及5ec30fad一轮通过仍仅归旧执行所有者；当前继续整合和补验。保留当前owner的Runner投影/清理与预编译E2E入口，移除隔离测试中旧执行record断言。双home按长期最小范围验证同号任务/原请求回执不串用，完整交付由已有delivery/生成包单项目负责，避免每次隔离都重复两条原生流程。
+
+本次只读固定外部现有程序到 `%TEMP%/steerline-isolation-runner-c23f908af1bc4e91a85dff443d6bfef3/steerrunner.exe`：version=0.1.0-dev.1、source_commit=af545563c58171c584bd35d098166cf39012e699、SHA256=7ff7941cb625cec63bf32180058d5113c6f54799c567289135b6420014da312e；来源C:/Project/SteerRunner/bin，未修改源程序或另一仓库。后续运行均选择这份固定副本，版本不以文档旧41908e6冒充。实际安装环境仍未操作。

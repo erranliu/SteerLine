@@ -49,22 +49,22 @@ func TestFullOtherPackagesStartBeforeExecutionWorkersFinish(t *testing.T) {
 	}
 }
 
-func TestPrepareFullCoreEnumeratesExecutionBusinessTests(t *testing.T) {
+func TestPrepareFullCoreEnumeratesTaskRunnerTests(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	binary, dir, err := prepareCore(ctx, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if filepath.Base(dir) != "execution" {
+	if filepath.Base(dir) != "taskrunner" {
 		t.Fatalf("Full still compiles the old host facade: %s", dir)
 	}
 	names, err := listCoreTests(ctx, binary, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(names, "TestCandidateResumeErrorDoesNotStarveSibling") || !slices.Contains(names, "TestWorkerFlowClaimNeedsNoProjectSteps") {
-		t.Fatal("Full partition omitted the migrated execution business tests")
+	if !slices.Contains(names, "TestRunnerNativeAnswersPreserveQuestionsAndCallerInput") || !slices.Contains(names, "TestRunnerBaseUsesFetchedTargetAndOriginalCandidateAncestry") {
+		t.Fatal("Full partition omitted public Task-to-Runner coordination")
 	}
 }
 
@@ -176,7 +176,7 @@ func TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners(t *testin
 	}
 }
 
-func TestPrepareIntegrationPartitionEnumeratesBusinessWiring(t *testing.T) {
+func TestPrepareIntegrationPartitionEnumeratesPublicRunnerBoundary(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	binary, dir, err := prepareTestPackage(ctx, t.TempDir(), boundaryPackage, "integration")
@@ -187,7 +187,7 @@ func TestPrepareIntegrationPartitionEnumeratesBusinessWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(names, "TestCandidateClientWiring") || !slices.Contains(names, "TestTM04ExecutionWiring") {
-		t.Fatal("Full integration partition omitted current business owners")
+	if !slices.Contains(names, "TestRunnerExecutionBoundary") {
+		t.Fatal("Full integration partition omitted the actual public Runner dependency boundary")
 	}
 }

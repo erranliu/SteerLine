@@ -1,7 +1,6 @@
 {
   "repository": "__ROOT__/projects/SteerlineTest", "remote": "origin", "branch": "__BASE__",
   "task_authority": "native", "workflow_protocol": "worker-flow-v2",
-  "worktree_root": "__ROOT__/home/worktrees",
   "git": {"executable": "git"},
   "publication_policy": {"publisher": "worker"},
   "pr": {"kind": "command", "base_url": "https://github.com", "repository": "erranliu/SteerlineTest",

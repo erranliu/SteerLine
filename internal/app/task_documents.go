@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -26,7 +25,7 @@ func (a taskDocuments) ReadCommittedRegularFile(ctx context.Context, ref taskmod
 	if err := taskmodel.ValidateFileReference(ref); err != nil {
 		return nil, err
 	}
-	r := execution.Runner{Dir: a.repository, Timeout: a.timeout, ProcessHost: a.processHost}
+	r := commandRunner{Dir: a.repository, Timeout: a.timeout, ProcessHost: a.processHost}
 	resolved, err := r.Output(ctx, a.git, "rev-parse", "--verify", ref.Commit+"^{commit}")
 	if err != nil || strings.TrimSpace(string(resolved)) != ref.Commit {
 		return nil, taskDocumentError("pinned Git commit is missing or is not a full canonical commit: " + ref.Commit)

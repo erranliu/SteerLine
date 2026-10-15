@@ -11,12 +11,11 @@ import (
 
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 )
 
 func OriginalTerminalWorkingObserved(s Snapshot) bool {
-	return len(s.Domain.Executions) == 1 && evidence.OrcaOriginalWorkingObserved(s.Domain.Executions[0])
+	return len(s.Runner.Candidates) == 1 && s.Runner.Candidates[0].Projection != nil && s.Runner.Candidates[0].Projection.Execution.TurnStarted
 }
 
 func (p *Project) ConfigureRecovery(f controlled.RecoveryFixture) {
@@ -30,11 +29,11 @@ func (p *Project) ConfigureRecovery(f controlled.RecoveryFixture) {
 }
 
 func (p *Project) UseControlledTerminal(environment string, f controlled.RecoveryFixture) {
-	f.Orca = &controlled.TerminalFixture{Root: filepath.Join(p.Home, "native-worktrees"), Runtime: "owned-runtime", Handle: "owned-terminal", Incarnation: "original-incarnation", Environment: environment}
+	f.Orca = &controlled.TerminalFixture{RepositoryPath: p.Repo, Root: filepath.Join(p.Home, "native-worktrees"), Runtime: "owned-runtime", Handle: "owned-terminal", Incarnation: "original-incarnation", Environment: environment}
 	p.ConfigureRecovery(f)
 	pairing, closeState, err := controlled.OpenTerminalState(p.Provider)
 	p.Scenario.Must(err)
-	p.Scenario.t.Cleanup(closeState)
+	p.Scenario.fixtureClosers = append(p.Scenario.fixtureClosers, closeState)
 	raw, err := json.Marshal(pairing)
 	p.Scenario.Must(err)
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Home, "orca-state-fixture.json"), map[string]string{"pairing": "orca://pair?code=" + base64.RawURLEncoding.EncodeToString(raw)}))
@@ -43,9 +42,21 @@ func (p *Project) UseControlledTerminal(environment string, f controlled.Recover
 		store := map[string]any{"environments": []any{map[string]any{"id": environment, "preferredEndpointId": "fixture", "endpoints": []any{map[string]any{"id": "fixture", "endpoint": pairing["endpoint"], "deviceToken": pairing["deviceToken"], "publicKeyB64": pairing["publicKeyB64"]}}}}}
 		p.Scenario.Must(controlled.Write(filepath.Join(p.Home, "orca-environments.json"), store))
 	}
-	payload := map[string]any{"executable": p.Scenario.Run.Helper, "args": []string{"orca-fixture"}, "wait_timeout": "1s", "environment": environment}
-	profile := map[string]any{"id": "controlled", "name": "Controlled single terminal", "host": "orca", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "orca.terminal-profile", "codec_version": 3, "payload": payload}}}
-	p.Scenario.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{profile}, "default_execution_profile": "controlled"}))
+	rawConfig, err := os.ReadFile(filepath.Join(p.Home, "execution.json"))
+	p.Scenario.Must(err)
+	var config map[string]any
+	p.Scenario.Must(json.Unmarshal(rawConfig, &config))
+	kind := "local"
+	if environment != "" {
+		kind = "orca_environment"
+	}
+	target := map[string]string{"kind": kind}
+	if environment != "" {
+		target["environment"] = environment
+	}
+	profile := map[string]any{"id": "controlled", "name": "Controlled single terminal", "execution": map[string]any{"adapter": "orca-terminal", "target": target, "settings": map[string]any{"transport": map[string]any{"executable": p.Scenario.Run.Helper, "args": []string{"orca-fixture"}, "wait_timeout": "1s"}, "agent_launch": map[string]any{"executable": "codex", "args": []string{}}}}, "workflow": map[string]any{"id": "development", "version": 1}}
+	config["execution_profiles"] = []any{profile}
+	p.Scenario.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), config))
 }
 
 // CrashService terminates the exact owned test Job, without a product stop command.
@@ -60,10 +71,25 @@ func (p *Project) CrashService() {
 }
 
 func (p *Project) DisconnectWorker(snap Snapshot) {
-	if len(snap.Domain.Executions) != 1 {
-		p.Scenario.t.Fatal("fault needs one owned execution")
+	if len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].Projection == nil {
+		p.Scenario.t.Fatal("fault needs one original public Run")
 	}
-	p.Scenario.Must(native.DisconnectCandidate(snap.Domain.Executions[0], p.Root))
+	c := snap.Runner.Candidates[0]
+	r := c.Projection
+	var input struct {
+		Execution struct {
+			Settings struct {
+				Executable string `json:"executable"`
+			} `json:"settings"`
+		} `json:"execution"`
+	}
+	p.Scenario.Must(json.Unmarshal(c.Submit.Input, &input))
+	service, err := driver.ReadRunnerService(p.Scenario.Context, filepath.Join(p.Home, "execution.json"), c.StateDir)
+	p.Scenario.Must(err)
+	if service.Status != "ready" || r.Execution.Backend != "local" {
+		p.Scenario.t.Fatal("original native fault owner unavailable")
+	}
+	p.Scenario.Must(native.DisconnectCandidate(native.ProcessFaultTarget{ParentPID: service.PID, ParentCreated: service.ProcessCreated, Executable: input.Execution.Settings.Executable, Workspace: r.Execution.Workspace, Session: r.Execution.SessionID}, p.Root))
 }
 
 func (p *Project) ReleaseNativeRecovery() {
@@ -84,6 +110,11 @@ func (p *Project) WaitRecovery(label string, predicate func(Snapshot) bool) Snap
 			lastError = *result.Domain.Executions[0].Error
 			p.Record(strings.ReplaceAll(label, " ", "-")+"-latest", result)
 		}
+		for _, candidate := range result.Runner.Candidates {
+			if candidate.SubmitState == "rejected" {
+				p.Scenario.t.Fatal("Runner rejected original submission: ", candidate.Diagnostic)
+			}
+		}
 		return predicate(result), nil
 	})
 	p.Record(strings.ReplaceAll(label, " ", "-"), result)
@@ -91,70 +122,76 @@ func (p *Project) WaitRecovery(label string, predicate func(Snapshot) bool) Snap
 }
 
 // AnswerRecovery exercises formal optimistic concurrency. Only an explicit
-// pre-accept stale_recovery rejection can refresh this test's authorized answer;
+// pre-accept stale_version/stale_recovery rejection can refresh this test's authorized answer;
 // unknown command outcomes are never retried under a different request ID.
 func (p *Project) AnswerRecovery(snap Snapshot) driver.CandidateCommand {
-	if snap.Runtime == nil || len(snap.Runtime.Runs) != 1 || snap.Runtime.Runs[0].Decision == nil {
-		p.Scenario.t.Fatal("missing formal recovery decision")
-	}
-	original := snap.Runtime.Runs[0]
-	for attempt := 0; attempt < 3; attempt++ {
-		if snap.Runtime == nil || len(snap.Runtime.Runs) != 1 {
-			p.Scenario.t.Fatal("recovery refresh lost original execution")
+	original := snap
+	var lastErr error
+	for retry := 0; retry < 3; retry++ {
+		if snap.Runtime == nil || len(snap.Runtime.Runs) != 1 || len(snap.Runner.Candidates) != 1 {
+			p.Scenario.t.Fatal("missing public recovery binding")
 		}
 		r := snap.Runtime.Runs[0]
 		d := r.Decision
-		if r.RunID != original.RunID || r.ExecutionID != original.ExecutionID || r.AttemptID != original.AttemptID || d == nil || d.Status != "pending" || d.Request.QuestionRoute != nil || len(d.Request.Options) == 0 || d.Request.Options[0].ID != "continue" || r.RecoveryState == "unverified" {
-			p.Scenario.t.Fatal("original recovery is not qualified for continuation")
+		public := snap.Runner.Candidates[0].Projection
+		if public == nil || !public.Controls.CanResume || d == nil || d.Request.InteractionKind != "runner_resume" {
+			p.Scenario.t.Fatal("original Runner does not allow explicit resume")
 		}
-		in := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: r.RunID, ExecutionID: r.ExecutionID, DecisionID: d.ID, DecisionVersion: d.Version, RunRevision: r.ControlRevision, AttemptID: r.AttemptID, RecoveryVersion: r.RecoveryVersion, InstanceID: snap.Runtime.Service.InstanceID, Option: "continue", Note: "Continue this original session and verify existing work against its original Spec/Plan. Preserve correct changes; finish only the current authorized stage."}
-		_, err := p.Driver.Candidate(p.Scenario.Context, p.Scenario.Run.Helper, in)
+		if retry > 0 {
+			before := original.Runner.Candidates[0]
+			if before.ID != snap.Runner.Candidates[0].ID || before.RunID != public.RunID || before.Projection.Execution.AttemptID != public.Execution.AttemptID || before.Projection.Phase != public.Phase || original.Runtime.Runs[0].Decision.ID != d.ID {
+				p.Scenario.t.Fatal("rejected resume refresh changed original recovery target")
+			}
+		}
+		input := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: r.RunID, ExecutionID: r.ExecutionID, DecisionID: d.ID, DecisionVersion: d.Version, RunRevision: r.ControlRevision, AttemptID: r.AttemptID, RecoveryVersion: r.RecoveryVersion, InstanceID: snap.Runtime.Service.InstanceID, Option: "resume"}
+		receipt, err := p.Driver.Candidate(p.Scenario.Context, p.Scenario.Run.Helper, input)
 		if err == nil {
-			return in
+			return input
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		rejected, readErr := p.SnapshotContext(ctx)
-		cancel()
-		if readErr == nil {
-			p.RecordRecoveryBranch("recovery-answer-rejected", rejected, map[string]any{"error": err.Error(), "request_id": in.RequestID, "refresh_attempt": attempt})
-		}
-		if attempt == 2 || !strings.Contains(err.Error(), "stale_recovery: source Attempt or recovery version changed") {
+		if receipt.PreAcceptRejection != "stale_version" && receipt.PreAcceptRejection != "stale_recovery" {
 			p.Scenario.Must(err)
 		}
-		snap = p.WaitRecovery("refresh-original-recovery-consent", func(value Snapshot) bool {
-			if value.Runtime == nil || len(value.Runtime.Runs) != 1 {
-				return false
-			}
-			current := value.Runtime.Runs[0]
-			decision := current.Decision
-			return current.RunID == original.RunID && current.ExecutionID == original.ExecutionID && current.AttemptID == original.AttemptID && current.RecoveryState != "unverified" && decision != nil && decision.Status == "pending" && decision.Request.QuestionRoute == nil && len(decision.Request.Options) > 0 && decision.Request.Options[0].ID == "continue"
-		})
+		lastErr = err
+		p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, "resume-preaccept-rejection-"+input.RequestID+".json"), receipt))
+		snap, err = p.Snapshot()
+		p.Scenario.Must(err)
 	}
-	p.Scenario.t.Fatal("recovery consent refresh exhausted")
+	p.Scenario.Must(lastErr)
 	return driver.CandidateCommand{}
 }
 
 // FinishRecoveredFlow confirms each distinct product decision, never native questions.
 func (p *Project) FinishRecoveredFlow(alreadyAnswered ...string) Snapshot {
-	answered := map[string]bool{}
+	answered := map[string]uint64{}
 	for _, id := range alreadyAnswered {
-		answered[id] = true
+		answered[id] = 0
 	}
 	return p.WaitRecovery("recovered-await-merge", func(snap Snapshot) bool {
-		if len(snap.Domain.WorkflowRuns) != 1 {
+		if len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].Projection == nil {
 			return false
 		}
-		if snap.Domain.WorkflowRuns[0].Status == "waiting_external" {
+		run := snap.Runner.Candidates[0].Projection
+		if run.Status == "pr_ready" {
 			return true
 		}
-		if snap.Runtime != nil && len(snap.Runtime.Runs) == 1 {
-			r := snap.Runtime.Runs[0]
-			d := r.Decision
-			if d != nil && d.Status == "pending" && d.Request.QuestionRoute == nil && len(d.Request.Options) > 0 && d.Request.Options[0].ID == "continue" && r.RecoveryState != "unverified" && !answered[d.ID] {
-				p.AnswerRecovery(snap)
-				answered[d.ID] = true
-			}
+		if !run.Controls.CanResume || snap.Runtime == nil || len(snap.Runtime.Runs) != 1 {
+			return false
 		}
+		d := snap.Runtime.Runs[0].Decision
+		if d == nil || d.Request.InteractionKind != "runner_resume" {
+			return false
+		}
+		if version, ok := answered[d.ID]; ok && (version == 0 || version == d.Version) {
+			if version == 0 {
+				answered[d.ID] = d.Version
+			}
+			return false
+		}
+		if len(answered) > 3 {
+			p.Scenario.t.Fatal("bounded explicit recovery exhausted")
+		}
+		p.AnswerRecovery(snap)
+		answered[d.ID] = d.Version
 		return false
 	})
 }
@@ -162,10 +199,15 @@ func (p *Project) FinishRecoveredFlow(alreadyAnswered ...string) Snapshot {
 func (p *Project) NativeManualCommit(text string) string {
 	snap, err := p.Snapshot()
 	p.Scenario.Must(err)
-	if len(snap.Domain.Executions) != 1 {
-		p.Scenario.t.Fatal("manual result needs one execution")
+	if len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].Projection == nil {
+		p.Scenario.t.Fatal("manual result needs one public Run")
 	}
-	worktree := snap.Domain.Executions[0].Workspace.Worktree
+	worktree := snap.Runner.Candidates[0].Projection.Execution.Workspace
+	relative, err := filepath.Rel(p.Root, worktree)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) {
+		p.Scenario.t.Fatal("manual result escaped owned fixture")
+	}
+
 	p.Scenario.Must(os.WriteFile(filepath.Join(worktree, "result.txt"), []byte(text), 0600))
 	p.git(worktree, "add", "result.txt")
 	p.git(worktree, "commit", "-m", "native manual continuation result")
@@ -195,8 +237,8 @@ func (p *Project) AssertRecoveryHTTP(before Snapshot) {
 	domain, err := driver.ReadWorkflow(p.Scenario.Context, p.Database, before.Domain.ProjectIdentity)
 	p.Scenario.Must(err)
 	after := before
-	after.Domain = domain
-	first, _ := json.Marshal(before.Domain)
+	after.Runner = domain
+	first, _ := json.Marshal(before.Runner)
 	second, _ := json.Marshal(domain)
 	if string(first) != string(second) {
 		p.Scenario.t.Fatal("read-only recovery query changed business state")
@@ -209,7 +251,7 @@ func (p *Project) AssertRecoveryHTTP(before Snapshot) {
 }
 
 func (p *Project) AssertOneDelivery(snap Snapshot) {
-	if len(snap.Domain.Deliveries) != 1 || snap.Domain.WorkflowRuns[0].Status != "completed" {
+	if len(snap.Runner.Graph.Deliveries) != 1 || len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].Participation != "completed" {
 		p.Scenario.t.Fatal("recovery did not produce one merged delivery")
 	}
 	for _, task := range snap.Page.Tasks {

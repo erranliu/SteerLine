@@ -4,80 +4,113 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	transport "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
-	backend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 )
 
-const SupportedCodexVersion = codexworker.PolicyCodexVersion
+const SupportedCodexVersion = "codex-cli 0.159.2"
 
-var ErrOrcaRepoUnavailable = orcaworker.ErrRepoUnavailable
+var ErrOrcaRepoUnavailable = errors.New("fixed Orca repository unavailable")
 
-func OrcaOriginalTurnEnded(ctx context.Context, environment string, process backend.ProcessIdentity, proof transport.NativeProof) (bool, error) {
-	return orcaOriginalTurnEnded(ctx, environment, process, proof, orcaworker.OpenStateFeed)
-}
-
-func orcaOriginalTurnEnded(ctx context.Context, environment string, process backend.ProcessIdentity, proof transport.NativeProof, factory orcaworker.StateFeedFactory) (bool, error) {
-	if proof.WorkingAt <= 0 || proof.Provider == "" || proof.Pane == "" {
-		return false, errors.New("missing original native turn start")
+// Tool discovery is a native test precondition, not a Runner configuration codec.
+func CodexExecutable(command string) (string, error) {
+	if configured := os.Getenv("STEERLINE_NATIVE_CODEX_EXE"); configured != "" {
+		command = configured
 	}
-	feed, err := factory(ctx, environment, process)
+	if command == "" {
+		command = "codex"
+	}
+	path, err := exec.LookPath(command)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	defer feed.Close()
-	current, err := feed.Query(ctx)
+	path, err = filepath.EvalSymlinks(path)
 	if err != nil {
-		return false, err
+		return "", err
 	}
-	if current.PaneKey != proof.Pane || current.ProviderSession.ID != proof.Provider || current.AgentType != "codex" {
-		return false, errors.New("original native main-agent identity changed")
+	if runtime.GOOS != "windows" {
+		return path, nil
 	}
-	return current.MainAgent != nil && current.MainAgent.State == "done" && current.MainAgent.StateStartedAt > proof.WorkingAt && current.UpdatedAt >= current.MainAgent.StateStartedAt && !current.Interrupted && (current.MainAgent.Outcome == "" || current.MainAgent.Outcome == "success"), nil
+	file, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	var magic [2]byte
+	_, readErr := file.Read(magic[:])
+	file.Close()
+	if readErr == nil && magic == [2]byte{'M', 'Z'} {
+		return path, nil
+	}
+	// npm's documented Windows distribution carries the direct native executable.
+	root := filepath.Join(filepath.Dir(path), "node_modules", "@openai", "codex")
+	for _, candidate := range []string{filepath.Join(root, "node_modules", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe"), filepath.Join(root, "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe")} {
+		if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
+			return filepath.EvalSymlinks(candidate)
+		}
+	}
+	return "", errors.New("select the existing native Codex executable with STEERLINE_NATIVE_CODEX_EXE")
 }
 
-func CodexExecutable(command string) (string, error) { return codexworker.NativeExecutable(command) }
-
-func OrcaWorkerProfile(executable, waitTimeout string) map[string]any {
-	return map[string]any{"executable": executable, "args": []string{}, "wait_timeout": waitTimeout}
-}
-
-func WorkerImplementationConfigs(executable string, orca map[string]any) []map[string]any {
-	if orca != nil {
-		return []map[string]any{{"implementation_key": transport.ProfileKey, "codec_version": transport.ProfileVersion, "payload": orca}}
-	}
-	codex := map[string]any{"executable": executable, "model": Model, "reasoning_effort": Effort}
-	configs := []map[string]any{{"implementation_key": codexworker.ProfileCodecKey, "codec_version": codexworker.ProfileCodecVersion, "payload": codex}}
-	return configs
-}
-
-func FindOrcaRepo(ctx context.Context, call func(context.Context, ...string) (json.RawMessage, error), repository string) (string, error) {
-	return orcaworker.FindRepo(ctx, call, repository)
+// These DTOs consume only Orca's public CLI inventory for fixture ownership.
+type OrcaWorktree struct{ ID, RepoID, Path string }
+type inventoryWorktree struct {
+	ID          string `json:"id"`
+	RepoID      string `json:"repoId"`
+	Path        string `json:"path"`
+	DisplayName string `json:"displayName"`
 }
 
 func OrcaPayload(raw []byte) (json.RawMessage, error) {
-	envelope, err := orcaworker.ParseEnvelope(raw)
-	return envelope.Result, err
+	var envelope struct {
+		OK     bool            `json:"ok"`
+		Result json.RawMessage `json:"result"`
+	}
+	if json.Unmarshal(raw, &envelope) != nil || !envelope.OK || len(envelope.Result) == 0 || string(envelope.Result) == "null" {
+		return nil, errors.New("Orca CLI response unavailable or rejected")
+	}
+	return envelope.Result, nil
 }
-
-type OrcaWorktree struct{ ID, RepoID, Path string }
-
+func FindOrcaRepo(ctx context.Context, call func(context.Context, ...string) (json.RawMessage, error), repository string) (string, error) {
+	raw, err := call(ctx, "repo", "list", "--json")
+	if err != nil {
+		return "", err
+	}
+	var listing struct {
+		Repos     []struct{ ID, Path string }
+		Truncated bool
+	}
+	if json.Unmarshal(raw, &listing) != nil || listing.Truncated {
+		return "", ErrOrcaRepoUnavailable
+	}
+	key := func(s string) string { return strings.TrimRight(strings.ReplaceAll(s, "\\", "/"), "/") }
+	id := ""
+	for _, repo := range listing.Repos {
+		if strings.EqualFold(key(repo.Path), key(repository)) {
+			if id != "" || repo.ID == "" {
+				return "", ErrOrcaRepoUnavailable
+			}
+			id = repo.ID
+		}
+	}
+	if id == "" {
+		return "", ErrOrcaRepoUnavailable
+	}
+	return id, nil
+}
 func OrcaWorktrees(raw []byte) ([]OrcaWorktree, error) {
 	var listing struct {
-		Worktrees []orcaworker.Worktree `json:"worktrees"`
-		Truncated bool                  `json:"truncated"`
+		Worktrees []inventoryWorktree
+		Truncated bool
 	}
-	if err := json.Unmarshal(raw, &listing); err != nil {
-		return nil, err
-	}
-	if listing.Truncated {
-		return nil, errors.New("owned worktree inventory truncated")
+	if json.Unmarshal(raw, &listing) != nil || listing.Truncated {
+		return nil, errors.New("incomplete native worktree inventory")
 	}
 	result := make([]OrcaWorktree, 0, len(listing.Worktrees))
 	for _, w := range listing.Worktrees {
-		result = append(result, OrcaWorktree{ID: w.ID, RepoID: w.RepoID, Path: w.Path})
+		result = append(result, OrcaWorktree{w.ID, w.RepoID, w.Path})
 	}
 	return result, nil
 }

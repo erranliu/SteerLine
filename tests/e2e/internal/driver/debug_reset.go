@@ -6,18 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
-	backend "github.com/erranliu/SteerLine/internal/execution/backend"
-	processfacts "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storesqlite "github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-var debugHistory = []string{"decision_answers", "decisions", "task_deliveries", "task_results", "conversation_events", "conversation_bodies", "conversation_source_cursors", "step_attempts", "executions", "workflow_runs", "events", "operations", "commands", "projection"}
+var debugHistory = []string{"task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
 
 func (d *debugRelease) reset(check bool) error {
 	scopes := []*debugRelease{d}
@@ -113,36 +114,52 @@ func (d *debugRelease) resetState(check bool) error {
 	if count != 1 || !strings.EqualFold(filepath.Clean(project), filepath.Join(d.repo, ".git")) {
 		return errors.New("reset project does not belong to this debug package")
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT payload FROM executions WHERE project_identity=?", project)
+	rawConfig, err := os.ReadFile(filepath.Join(d.home, "execution.json"))
+	if err != nil {
+		return err
+	}
+	var selected struct {
+		Runner runnerclient.Selection `json:"runner"`
+	}
+	if err = json.Unmarshal(rawConfig, &selected); err != nil {
+		return err
+	}
+	cli, _, err := selected.Runner.Open(ctx, filepath.Join(runDir, "runner"), 20*time.Second)
+	if err != nil {
+		return err
+	}
+	info, err := cli.ServiceStatus(ctx)
+	if err != nil {
+		return err
+	}
+	if info.Status != "not_running" {
+		return errors.New("Runner service must be proven stopped before reset")
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT payload FROM runner_candidates WHERE project_identity=?", project)
 	if err != nil {
 		return err
 	}
 	for rows.Next() {
 		var raw []byte
 		if err = rows.Scan(&raw); err != nil {
-			rows.Close()
-			return err
+			break
 		}
-		var value struct {
-			Process *backend.ProcessIdentity `json:"process"`
+		var c runnerbridge.Candidate
+		if err = json.Unmarshal(raw, &c); err != nil {
+			break
 		}
-		if err = json.Unmarshal(raw, &value); err != nil {
-			rows.Close()
-			return err
-		}
-		if value.Process != nil {
-			facts := processfacts.ServiceFacts{}.Probe(value.Process)
-			if facts.State != "absent" {
-				rows.Close()
-				return fmt.Errorf("worker is not proven absent: %s", facts.State)
-			}
+		if c.SubmitState == "unknown" || c.RunID != "" && (c.Projection == nil || c.Projection.StopStatus != "stopped") {
+			err = errors.New("original Runner resource is not proven stopped; preserve its recovery state")
+			break
 		}
 	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return err
+	if err == nil {
+		err = rows.Err()
 	}
 	rows.Close()
+	if err != nil {
+		return err
+	}
 	type task struct {
 		id      string
 		version uint64
@@ -172,13 +189,31 @@ func (d *debugRelease) resetState(check bool) error {
 	}
 	rows.Close()
 	fmt.Printf("Reset %d SteerlineTest tasks; preserve definitions, dependencies, Git and PR; no backup.\n", len(tasks))
-	if check {
-		return nil
-	}
-	for _, table := range []string{"execution_bindings", "execution_operations"} {
-		if _, err = tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE run_id IN (SELECT workflow_run_id FROM workflow_runs WHERE project_identity=?)", project); err != nil {
+	for _, name := range []string{"control", "service", "runner"} {
+		target := filepath.Join(runDir, name)
+		if !pathWithin(d.root, target) {
+			return errors.New("reset target escaped debug root")
+		}
+		if err := filepath.WalkDir(target, func(path string, entry fs.DirEntry, err error) error {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if entry.Type()&os.ModeSymlink != 0 {
+				return fmt.Errorf("linked reset path: %s", path)
+			}
+			if !entry.IsDir() {
+				return debugPlainFile(path)
+			}
+			return nil
+		}); err != nil {
 			return err
 		}
+	}
+	if check {
+		return nil
 	}
 	for _, table := range debugHistory {
 		if _, err = tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE project_identity=?", project); err != nil {
@@ -220,7 +255,7 @@ func (d *debugRelease) resetState(check bool) error {
 		return err
 	}
 	// These are local control/runtime journals, not Git, provider facts or authentication.
-	for _, name := range []string{"control", "service", "runs", "application-commands"} {
+	for _, name := range []string{"control", "service", "runner", "application-commands"} {
 		path := filepath.Join(runDir, name)
 		if !pathWithin(d.root, path) {
 			return errors.New("reset path escaped root")

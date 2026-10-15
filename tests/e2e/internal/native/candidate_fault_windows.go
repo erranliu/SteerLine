@@ -3,53 +3,86 @@
 package native
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"path/filepath"
-	"strings"
-
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"golang.org/x/sys/windows"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
+	"time"
 )
 
-// DisconnectCandidate terminates only the exact isolated app-server handle,
-// inducing a real transport/resource loss. It is a test fault, never a product
-// stop receipt. The original session/worktree/database records remain untouched.
-func DisconnectCandidate(e executionmodel.ExecutionRecord, ownedRoot string) error {
-	rel, err := filepath.Rel(ownedRoot, e.Workspace.Worktree)
-	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) || e.Backend != "local" || e.Process == nil || e.Process.Kind != "os" || e.Process.PID <= 0 {
-		return errors.New("fault target is not an owned local candidate")
+// DisconnectCandidate induces transport loss only in the sole app-server child
+// of the original public Runner daemon. It is never a native stop receipt.
+func DisconnectCandidate(target ProcessFaultTarget, ownedRoot string) error {
+	relative, err := filepath.Rel(ownedRoot, target.Workspace)
+	if err != nil || relative == "." || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) || filepath.IsAbs(relative) || target.ParentPID <= 0 || target.ParentCreated == "" || !filepath.IsAbs(target.Executable) || target.Session == "" {
+		return errors.New("fault target is not one owned local Run")
 	}
-	bound := false
-	for _, data := range e.ImplementationData {
-		if data.ImplementationKey == codexworker.ExecutionBindingCodecKey {
-			binding, err := codexworker.DecodeAppServerBindingEnvelope(data, codexworker.AppServerBindingIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest})
-			if err != nil {
-				return err
-			}
-			bound = binding.SessionID == e.SessionID && binding.SessionID != ""
+	parent, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(target.ParentPID))
+	if err != nil {
+		return err
+	}
+	defer windows.CloseHandle(parent)
+	created := func(handle windows.Handle) (string, error) {
+		var c, e, k, u windows.Filetime
+		if err := windows.GetProcessTimes(handle, &c, &e, &k, &u); err != nil {
+			return "", err
 		}
+		return strconv.FormatUint(uint64(c.HighDateTime)<<32|uint64(c.LowDateTime), 10), nil
 	}
-	if !bound {
-		return errors.New("fault target has no original native binding")
+	parentCreated, err := created(parent)
+	if err != nil || parentCreated != target.ParentCreated {
+		return errors.New("original Runner parent identity changed")
 	}
-	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE|windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(e.Process.PID))
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	script := `[Console]::InputEncoding=[Text.UTF8Encoding]::new($false);[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$r=[Console]::In.ReadToEnd()|ConvertFrom-Json;$items=@(Get-CimInstance Win32_Process -Filter ('ParentProcessId='+[int]$r.pid)|Where-Object {$_.ExecutablePath -eq $r.executable -and $_.CommandLine -match '(?i)app-server'}|ForEach-Object {@{pid=[int]$_.ProcessId;executable=$_.ExecutablePath;created=$_.CreationDate.ToFileTimeUtc().ToString()}});[Console]::Out.Write((ConvertTo-Json -InputObject $items -Compress))`
+	body, _ := json.Marshal(map[string]any{"pid": target.ParentPID, "executable": target.Executable})
+	command := exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
+	command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	command.Stdin = bytes.NewReader(body)
+	raw, err := command.Output()
+	if err != nil {
+		return fmt.Errorf("owned child inventory unavailable: %w", err)
+	}
+	var children []struct {
+		PID        int    `json:"pid"`
+		Executable string `json:"executable"`
+		Created    string `json:"created"`
+	}
+	if len(raw) > 64<<10 || json.Unmarshal(raw, &children) != nil || len(children) != 1 {
+		return errors.New("original Runner does not have one unambiguous selected app-server child")
+	}
+	child := children[0]
+	h, err := windows.OpenProcess(windows.PROCESS_TERMINATE|windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(child.PID))
 	if err != nil {
 		return err
 	}
 	defer windows.CloseHandle(h)
-	var created, exited, kernel, user windows.Filetime
-	if err := windows.GetProcessTimes(h, &created, &exited, &kernel, &user); err != nil {
-		return err
+	observed, err := created(h)
+	observedTicks, observedErr := strconv.ParseUint(observed, 10, 64)
+	childTicks, childErr := strconv.ParseUint(child.Created, 10, 64)
+	// CIM DMTF timestamps have microsecond precision; retained process handles
+	// provide 100 ns FILETIME. Compare the same precision, then keep the handle.
+	if err != nil || observedErr != nil || childErr != nil || observedTicks/10 != childTicks/10 {
+		return errors.New("native fault PID creation identity changed")
 	}
 	image := make([]uint16, 32768)
 	size := uint32(len(image))
 	if err := windows.QueryFullProcessImageName(h, 0, &image[0], &size); err != nil {
 		return err
 	}
-	if fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime) != e.Process.Created || !strings.EqualFold(filepath.Clean(windows.UTF16ToString(image[:size])), filepath.Clean(e.Process.Executable)) {
-		return errors.New("fault PID has changed its original identity")
+	if !strings.EqualFold(filepath.Clean(windows.UTF16ToString(image[:size])), filepath.Clean(target.Executable)) {
+		return errors.New("native fault image changed")
+	}
+	if status, err := windows.WaitForSingleObject(parent, 0); err != nil || status != uint32(windows.WAIT_TIMEOUT) {
+		return errors.New("original Runner parent exited during child verification")
 	}
 	if err := windows.TerminateProcess(h, 1); err != nil {
 		return err

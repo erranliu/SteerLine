@@ -7,30 +7,29 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 type applicationControlValidation struct{}
 
 func (applicationControlValidation) ValidAction(action string) bool {
-	return execution.ValidControlAction(action)
+	return taskrunner.ValidControlAction(action)
 }
 func (applicationControlValidation) DecodePayload(request productapi.ControlRequest) (productapi.ControlPayload, error) {
-	return execution.DecodeControlPayload(request)
+	return taskrunner.DecodeControlPayload(request)
 }
 func (applicationControlValidation) ValidateRequest(request productapi.ControlRequest, instance, identity string, revision uint64, at time.Time) (string, error) {
-	return execution.ValidateControlRequest(request, instance, identity, revision, at)
+	return taskrunner.ValidateControlRequest(request, instance, identity, revision, at)
 }
 func (applicationControlValidation) RequestDigest(request productapi.ControlRequest) string {
-	return execution.RequestDigest(request)
+	return taskrunner.RequestDigest(request)
 }
 func (applicationControlValidation) TerminalStatus(status string) bool {
-	return execution.TerminalControlStatus(status)
+	return taskrunner.TerminalControlStatus(status)
 }
 
 // hostRuntimeConfig is the only conversion from the app's broad configured
@@ -60,7 +59,7 @@ func hostRuntimeConfig(ctx context.Context, config Config) (host.Config, error) 
 		TaskAuthority: config.TaskAuthority, WorkflowProtocol: config.WorkflowProtocol,
 		TaskPoll: config.TaskPoll, PRPoll: config.PRPoll, Heartbeat: config.Heartbeat, CommandTimeout: config.CommandTimeout, ShutdownGrace: config.ShutdownGrace,
 		ProcessFacts:                executionprocess.NewServiceFacts(),
-		WorktreeMetadataDirectories: []string{orcaworker.WorktreeTrashDirectory},
+		WorktreeMetadataDirectories: nil,
 		RuntimeReader: func(ctx context.Context, input host.Config) (*reconstruction.Runtime, error) {
 			resolved := config
 			if err := syncExecutionHostFacts(&resolved, input); err != nil {
@@ -131,7 +130,7 @@ func ensureRunDirOutsideRepository(ctx context.Context, config Config) error {
 	if applicationPathInside(repository, runDir) {
 		return errors.New("native state directory must be outside the repository")
 	}
-	runner := execution.Runner{Dir: config.Repository, Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), ProcessHost: config.ProcessHost}
+	runner := commandRunner{Dir: config.Repository, Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), ProcessHost: config.ProcessHost}
 	worktrees, err := runner.Output(ctx, config.Git, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return errors.New("cannot verify native state against linked Git worktrees")

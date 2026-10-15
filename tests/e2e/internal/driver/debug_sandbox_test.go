@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -134,22 +135,11 @@ func TestDebugSandboxStageCommands(t *testing.T) {
 		{"publication", executionmodel.StepPublish, "powershell.exe -NoProfile -File ./publish.ps1", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			journal := filepath.Join(t.TempDir(), "appserver.jsonl")
-			raw, err := json.Marshal(map[string]any{"method": "item/completed", "params": map[string]any{"item": map[string]any{"type": "agentMessage", "text": "I am moving to publication now."}}})
-			if err != nil {
-				t.Fatal(err)
-			}
+			var commands []native.RolloutCommand
 			if tc.command != "" {
-				command, err := json.Marshal(map[string]any{"method": "item/started", "params": map[string]any{"item": map[string]any{"type": "commandExecution", "command": tc.command}}})
-				if err != nil {
-					t.Fatal(err)
-				}
-				raw = append(append(raw, '\n'), command...)
+				commands = append(commands, native.RolloutCommand{Command: []string{tc.command}})
 			}
-			if err := os.WriteFile(journal, raw, 0600); err != nil {
-				t.Fatal(err)
-			}
-			if err := debugSandboxStageCommands(journal, tc.step); (err != nil) != tc.wantError {
+			if err := debugSandboxStageCommands(commands, tc.step); (err != nil) != tc.wantError {
 				t.Fatalf("stage evidence error=%v, wantError=%v", err, tc.wantError)
 			}
 		})

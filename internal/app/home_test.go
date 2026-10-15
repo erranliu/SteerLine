@@ -60,7 +60,6 @@ func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 	localGlobalExecutionFixture(t)
 	base.WorkflowProtocol = WorkerFlowVersion
 	base.RunDir = ""
-	base.WorktreeRoot = ""
 	load := func(repo string) Config {
 		c := base
 		c.Repository = repo
@@ -79,9 +78,6 @@ func TestDerivedRunDirIsStableAcrossWorktrees(t *testing.T) {
 	fromMain := load(base.Repository)
 	if !strings.Contains(fromMain.RunDir, string(filepath.Separator)+"state"+string(filepath.Separator)) {
 		t.Fatalf("run_dir was not derived under state: %s", fromMain.RunDir)
-	}
-	if fromMain.WorktreeRoot != filepath.Join(fromMain.RunDir, "worktrees") {
-		t.Fatalf("worktree_root was not derived: %s", fromMain.WorktreeRoot)
 	}
 
 	linked := filepath.Join(t.TempDir(), "linked", "repo")
@@ -115,17 +111,9 @@ func TestNativeConfigRejectsASecondRunDir(t *testing.T) {
 	}
 }
 
-func TestNativeConfigRejectsWorktreeOutsideHome(t *testing.T) {
-	t.Setenv("STEERLINE_HOME", t.TempDir())
-	c, _ := nativeTaskFixture(t)
-	localGlobalExecutionFixture(t)
-	c.WorkflowProtocol = WorkerFlowVersion
-	c.WorktreeRoot = filepath.Join(t.TempDir(), "external-worktrees")
-	p := filepath.Join(t.TempDir(), "config.json")
-	if err := os.WriteFile(p, projectConfigJSON(t, c), 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := LoadConfig(p); err == nil || !strings.Contains(err.Error(), "worktree_root must resolve inside STEERLINE_HOME") {
-		t.Fatalf("worktree root outside home was accepted: %v", err)
+func TestNativeConfigRejectsRetiredWorktreeRoot(t *testing.T) {
+	var c ProjectConfigInput
+	if err := decodeStrictJSON([]byte(`{"worktree_root":"C:/old"}`), &c); err == nil {
+		t.Fatal("retired execution-owned worktree_root accepted")
 	}
 }

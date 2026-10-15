@@ -286,5 +286,4 @@ func printHome(configPath string) {
 	fmt.Println("config        ", abs)
 	fmt.Println("repository    ", c.Repository)
 	fmt.Println("run_dir       ", c.RunDir)
-	fmt.Println("worktree_root ", c.WorktreeRoot)
 }

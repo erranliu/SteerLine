@@ -1,83 +1,35 @@
 package testenv
 
 import (
-	"encoding/base64"
-	"encoding/json"
-	"errors"
-	"os"
+	"context"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"path/filepath"
-	"strings"
+	"time"
 )
 
-// Only logs created in this isolated project are retained. Credentials/config
-// and private SQLite files are not artifacts; known auth values are redacted.
+// Diagnostics export public execution identities only. Native auth, config,
+// transcripts and Runner storage are never enumerated or copied here.
 func (p *Project) captureNativeDiagnostics() error {
-	var secrets []string
-	if token, err := os.ReadFile(filepath.Join(p.Home, "github-token")); err == nil {
-		value := strings.TrimSpace(string(token))
-		if value != "" {
-			secrets = append(secrets, value, base64.StdEncoding.EncodeToString([]byte("x-access-token:"+value)))
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	snap, err := p.SnapshotContext(ctx)
+	if err != nil {
+		return err
 	}
-	if auth, err := os.ReadFile(filepath.Join(p.Home, "codex", "auth.json")); err == nil {
-		var data map[string]any
-		if json.Unmarshal(auth, &data) == nil {
-			var collect func(map[string]any)
-			collect = func(m map[string]any) {
-				for key, value := range m {
-					if child, ok := value.(map[string]any); ok {
-						collect(child)
-					}
-					if text, ok := value.(string); ok && (strings.Contains(strings.ToLower(key), "token") || key == "OPENAI_API_KEY") {
-						secrets = append(secrets, text)
-					}
-				}
-			}
-			collect(data)
+	return controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-native-public.json"), publicNativeDiagnostics(snap))
+}
+
+func publicNativeDiagnostics(snap Snapshot) []map[string]any {
+	result := []map[string]any{}
+	for _, c := range snap.Runner.Candidates {
+		row := map[string]any{"candidate_id": c.ID, "run_id": c.RunID, "submit_state": c.SubmitState, "participation": c.Participation}
+		if c.Projection != nil {
+			r := c.Projection
+			row["revision"], row["status"] = r.Revision, r.Status
+			row["execution"] = r.Execution
+			row["controls"] = r.Controls
 		}
+		result = append(result, row)
 	}
-	roots := []string{filepath.Join(filepath.Dir(p.Database), "runs"), filepath.Join(p.Home, "codex", "log"), filepath.Join(p.Home, "codex", "sessions")}
-	for _, root := range roots {
-		err := filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
-			if errors.Is(walkErr, os.ErrNotExist) {
-				return nil
-			}
-			if walkErr != nil {
-				return walkErr
-			}
-			if d.IsDir() || (filepath.Ext(path) != ".log" && filepath.Ext(path) != ".jsonl") {
-				return nil
-			}
-			info, err := d.Info()
-			if err != nil {
-				return err
-			}
-			if info.Size() > 32<<20 {
-				return errors.New("native diagnostic log exceeds bounded artifact size")
-			}
-			raw, err := os.ReadFile(path)
-			if err != nil {
-				return err
-			}
-			for _, secret := range secrets {
-				if secret != "" {
-					raw = []byte(strings.ReplaceAll(string(raw), secret, "[REDACTED]"))
-				}
-			}
-			relative, err := filepath.Rel(p.Root, path)
-			if err != nil {
-				return err
-			}
-			// Orca logs are still beneath this project's own Codex home.
-			target := filepath.Join(p.Scenario.Output, "native-logs", relative)
-			if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
-				return err
-			}
-			return os.WriteFile(target, raw, 0600)
-		})
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return result
 }

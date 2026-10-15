@@ -5,12 +5,54 @@ import (
 	"encoding/json"
 	"fmt"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestControlledTerminalStartupIsSeparateFromBusinessInput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := Write(path, State{Recovery: &RecoveryFixture{Orca: &TerminalFixture{RepositoryPath: "owned-repo", Runtime: "original-runtime", Handle: "original-terminal", Incarnation: "original-incarnation", Worktree: "owned-worktree", Branch: "owned-branch"}}}); err != nil {
+		t.Fatal(err)
+	}
+	call := func(args ...string) map[string]any {
+		t.Helper()
+		read, write, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := os.Stdout
+		os.Stdout = write
+		err = orcaFixture(path, args)
+		os.Stdout = old
+		write.Close()
+		raw, readErr := io.ReadAll(read)
+		read.Close()
+		if err != nil || readErr != nil {
+			t.Fatal(string(raw), err, readErr)
+		}
+		var envelope map[string]any
+		if err := json.Unmarshal(raw, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope["ok"] != true {
+			t.Fatal(envelope)
+		}
+		return envelope
+	}
+	listing := call("terminal", "list", "--worktree", "id:original")
+	if len(listing["result"].(map[string]any)["terminals"].([]any)) != 1 {
+		t.Fatal(listing)
+	}
+	call("terminal", "send", "--terminal", "original-terminal", "--text", "& 'codex' '-c' 'tui.animations=false' 'Initialize this agent session. Reply READY only. Do not use tools or change files.'", "--enter", "--retry-request", "fixed-start")
+	state, err := Read(path)
+	if err != nil || state.Recovery.Orca.Agent != "codex" || state.Recovery.Orca.Launches != 1 || state.Recovery.Orca.Sends != 0 || state.Dispatches != 0 {
+		t.Fatal("agent startup became a business input", state, err)
+	}
+}
 
 func TestControlledStagesCommitReportAndPublishSeparately(t *testing.T) {
 	for _, recovery := range []bool{false, true} {
@@ -167,5 +209,30 @@ func TestControlledProviderKeepsOriginalPRWhenAnotherTaskPublishes(t *testing.T)
 	}
 	if _, err := ProviderPR(s, "https://github.com/e2e/project/pull/3"); err == nil {
 		t.Fatal("unknown PR URL reused the latest result")
+	}
+}
+
+func TestSharedHostRoutesRunnerWorkspaceToOriginalProvider(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "seed"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	primary := filepath.Join(root, "provider", "state.json")
+	secondary := filepath.Join(root, "provider-b", "state.json")
+	first := filepath.Join(root, "home", "state", "first")
+	second := filepath.Join(root, "home", "state", "second")
+	if err := Write(filepath.Join(root, "manifest.json"), map[string]bool{"fixture": true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, pair := range []struct{ name, prefix, provider string }{{"SteerlineTest.json", first, primary}, {"SteerlineTestB.json", second, secondary}} {
+		if err := Write(filepath.Join(root, "seed", "fixture-routes-"+pair.name), map[string]string{pair.prefix: pair.provider}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("STEERLINE_E2E_CONTROLLED_STATE", primary)
+	for _, pair := range []struct{ dir, want string }{{filepath.Join(first, "runner", "w", "original"), primary}, {filepath.Join(second, "runner", "w", "original"), secondary}, {second + "-sibling", primary}} {
+		if got := statePathForDirectory(pair.dir); got != pair.want {
+			t.Fatalf("provider crossed caller path: %s => %s", pair.dir, got)
+		}
 	}
 }

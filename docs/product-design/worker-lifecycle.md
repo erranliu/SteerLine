@@ -6,6 +6,20 @@ Worker 执行域统一管理工作区准备、代理初始化、输入投递、�
 
 三层职责重构已按 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)完成 Workflow、ReliableExecution 和 ExecutionAdapter 拆分，保持现有行为；初始化失败重试等新增能力另行实施。规则已归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；实施证据以[专属验收](../acceptance/worker-three-layer.md)为准。
 
+SteerRunner 跨仓拆分正在实施，切换安排见[接入 Plan](../spec/steerrunner-cutover.plan.md)，结果见[接入验收](../acceptance/steerrunner-cutover.md)。迁出后 W01–W18 的执行/资源事实、E01–E07 异常处理及恢复授权由 Runner 的单写服务管理；SteerLine 只持久化 Task/DAG、候选到 Run 的绑定、原 CLI 请求与事件投影，并在自己的事务内决定 W17 的 TaskDelivery。下文节点和异常分类继续作为共同语义入口，不新增另一套 worker 状态机。当前分支的 app service 已切换到 taskrunner/runnerbridge/runnerclient，旧根执行 actor/worker 及旧执行写表已删除；原生 owner、旧写表、闲置执行端口和旧原生重建函数已删除；跨进程受控基础闭环和用户保留的三项本机交付/恢复回归已通过；Runner 独立本机真机已通过，最新产品真机包仍在验证。两个 Orca 目标验收已由用户取消，不记为通过。
+
+跨进程边界的具体规则：未知提交只查原 request_id；任务结束时在同一事务保存全部候选的停止义务，迟到接受的 Run 仍须撤销输入；Runner 的停止回执与原生进程停止分别投影。服务重启不重新发送已保存的答案、反馈或 resume。交付只接受本次刷新、身份一致的已合并 PR，不能要求候选先到 pr_ready，也不能由其他候选的未知状态阻塞正确候选交付。发布报告未完成时已经核实的 PR 可以绑定，但不因此推进 Runner 的流程里程碑。
+
+本次最小验证映射：V 的来源/身份/权限边界复用三层规则定向测试；Runner 实际 EXE 场景验证未知零重发、恢复零自动输入、缺 final 零推进、权限资源不合格零会话创建；SteerLine 的 SLC-A01–A04 验证原请求、事务回滚、迟到绑定与停止义务。真机能力按本机和 Orca 目标分别登记，沙箱拒绝或缺原生事实保持未验/失败，不以 helper 或模型报告代替。
+
+本地 MXC 权限差异：工具 TEMP/TMP 由原生 AppContainer 管理，可与 app-server 的宿主临时目录不同。Runner 保持固定工作区/Git 写入根，不强迫工具临时目录穿透到宿主 Git admin，不修改原生权限。验收须在真实工具 token 内核验 AppContainer、原生临时文件读写及本包兄弟目录拒写；旧的 TEMP=Git admin 路径断言不能用于 MXC。app-server 自身临时目录仍由 Runner 固定在所属工作区管理目录。具体真机结果仍按两个仓库专属 acceptance 登记。
+
+本次本机资格探测预算与 Runner 外部命令统一为 30 秒，覆盖冷启动的原生版本查询。每 Attempt 仍只在资格缺失时探测，失败阻断且零新会话/输入，不自动重试，不缓存跳过版本或权限资源校验。运行失败与重验明细见专属 acceptance。
+
+本轮审计补充 W12/V 输入边界：原生多题回答必须完整匹配原题集，重复 JSON 键、额外题目、固定题的附加答案、空回答及未提供选项在原生意图前拒绝。调用方保留已绑定 PR，不接受后续投影丢失/替换；失败不改原候选。两仓定向测试通过，最新产品真机与最终固定版本 R1 仍未通过，详见[接入验收最新段](../acceptance/steerrunner-cutover.md#pr-审计修复与主干同步)，不以历史通过抵消新失败。
+
+统一启动接入的 W18 差异：多个 SteerLine 项目共用应用宿主 PID，各自保留 Task actor/store/实例和独立 Runner state-dir。Task 创建/加前置经该 actor 串行提交并发布快照；原输入/恢复规则不变。项目停机分别记录本地关闭、锁与资源结算；仅 Runner service not_running 不证明原生已停止，未知提交、缺投影或最后已知活动的 Run 保留资源未核实诊断。初始化中可能已启动独立 Runner 而无 actor 回执时也不能把资源结算写成 true。本次仅验证统一启动的空闲双项目、受控输入/停止反例及消费者；完整组合真机/恢复验收未因此通过。
+
 ## 职责与规则归属
 
 “Worker 层”指 `internal/execution` 内持久化的 worker 执行规则，而非仅内存中的 Worker 或 observer 句柄。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。
@@ -267,6 +281,7 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 | 持久化副作用和并发 | ReliableExecution 的事实/身份/对账规则、actor 生命周期 Operation、异步回执提交、原身份/版本守卫、first-wins | 按本矩阵检查各入口是否共享同一异常分类，不新增平行规则 |
 | 工作区和环境准备 | 固定工作区意图、准备总期限、blocker、nonce 与探针核验 | 部分现场或后端没有准备记录；不能默认所有执行已具备统一准备路径 |
 | Orca 显式启动 | 原唯一终端、启动操作、LaunchAttempted/Accepted/Confirmed、未知发送不重发 | `launchAgent` 在识别到代理名称时即确认启动；尚无完整初始化完成证据、失败收敛、有限启动重试和安全采纳人工重启的通用规则 |
+| Runner 跨仓交接 | 新 application 对 accepted+ResourcePending 继续核验原 Operation；准备超时撤销输入，迟到就绪不自动续跑；caller 重启撤回未消费授权，未知旧控制只查原 ID | SteerLine 新调用层和 Task 事务已有定向验证，实际 app/查询切换与旧 owner 删除尚未完成；远端 Codex 原生账户路由故障未通过真机验收 |
 | Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |
 | 原业务会话恢复 | RecoveryFacts、原请求核验、同 thread 恢复、Orca 原终端重接 | Orca 替代 provider/terminal 的原业务会话恢复仍不可用；业务未知发送禁止重发 |
 | 多项目共进程宿主 | 应用宿主内各项目持独立 actor/锁/实例；应用 v2 直接调用原项目用例；原 worker 停止策略保持 | 聚合停止先关闭全部输入资格，逐项目结算并发布绑定原宿主的私有 shutdown.json；本地关闭未知保留锁，worker 未知但本地已关闭允许原库取证。验证边界及结果见[专属验收](../acceptance/unified-startup.md) |
@@ -276,19 +291,16 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ### 源码定位
 
-| 规则范围 | 当前文件 |
+| 归属 | 当前源码 |
 | --- | --- |
-| 生命周期契约与规范事实 | [backend/lifecycle.go](../../internal/execution/backend/lifecycle.go)、[backend/environment.go](../../internal/execution/backend/environment.go) |
-| 准备状态与恢复分类 | [model/environment.go](../../internal/execution/model/environment.go)、[reliable/recovery.go](../../internal/execution/reliable/recovery.go) |
-| 中层推进与规范事实 | [reliable/plan.go](../../internal/execution/reliable/plan.go)、[reliable/effect.go](../../internal/execution/reliable/effect.go)、[reliable/binding.go](../../internal/execution/reliable/binding.go) |
-| Workflow 业务规则 | [workflow/route.go](../../internal/execution/workflow/route.go)、[workflow/feedback.go](../../internal/execution/workflow/feedback.go)、[workflow/input.go](../../internal/execution/workflow/input.go) |
-| actor 意图执行与回执提交 | [worker_lifecycle.go](../../internal/execution/worker_lifecycle.go)、[lifecycle_effect.go](../../internal/execution/lifecycle_effect.go) |
-| 环境准备和再核验 | [worker_environment.go](../../internal/execution/worker_environment.go)、[worker_environment_host.go](../../internal/execution/worker_environment_host.go) |
-| 恢复事实和资格 | [worker_recovery_facts.go](../../internal/execution/worker_recovery_facts.go)、[worker_qualification.go](../../internal/execution/worker_qualification.go)、[worker_lifecycle_recovery.go](../../internal/execution/worker_lifecycle_recovery.go) |
-| 阶段结果和后继输入 | [staged_flow.go](../../internal/execution/staged_flow.go)、[worker_completion.go](../../internal/execution/worker_completion.go) |
-| Orca 启动和原生会话事实 | [orcatransport/agent.go](../../internal/execution/adapters/orcatransport/agent.go)、[orcatransport/lifecycle.go](../../internal/execution/adapters/orcatransport/lifecycle.go)、[orcatransport/native_state.go](../../internal/execution/adapters/orcatransport/native_state.go) |
-| 本地 Codex 生命周期 | [codex/lifecycle.go](../../internal/execution/adapters/codex/lifecycle.go) |
-| PR 查询与交付 | [worker_pr.go](../../internal/execution/worker_pr.go)、[execution_delivery_poll.go](../../internal/execution/execution_delivery_poll.go) |
+| SteerLine Task/候选协调及唯一交付 | [taskrunner](../../internal/taskrunner/service.go)、[runner_result](../../internal/storage/sqlite/runner_result.go) |
+| SteerLine 原 CLI outbox、迟到接受及停止义务 | [runnerbridge](../../internal/runnerbridge/bridge.go) |
+| SteerLine 固定 EXE/公开 CLI 与 schema | [runnerclient](../../internal/runnerclient/client.go)、[runnercontract](../../internal/runnercontract/views.go) |
+| SteerLine 实际服务与公开事实投影 | [service wiring](../../internal/app/runner_service_wiring.go)、[projection](../../internal/taskrunner/projection.go) |
+| Runner 原生生命周期与持久提交 | [application（固定迁出版本）](https://github.com/erranliu/SteerRunner/tree/5f664a9/internal/application) |
+| Runner Workflow / ReliableExecution / 原生适配器 | [execution（固定迁出版本）](https://github.com/erranliu/SteerRunner/tree/5f664a9/internal/execution) |
+
+历史已冻结 Spec/Plan 中的 SteerLine 旧 worker 路径只作为来源证据，不再代表当前服务入口。Runner 的外部 workflow 为 `development/1`，其内部阶段规则沿用迁出的三层设计；配置中保留的 Task 契约协议字段不构成旧执行入口。
 
 ### 初始化失败场景的恢复边界
 

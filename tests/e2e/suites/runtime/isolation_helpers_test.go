@@ -371,55 +371,6 @@ func controlRequestFiles(t *testing.T, project *testenv.Project) []string {
 	return files
 }
 
-func assertControlPublication(t *testing.T, project *testenv.Project, before []string, snapshot testenv.Snapshot) map[string]any {
-	t.Helper()
-	after := controlRequestFiles(t, project)
-	// Claim uses the normal product client for resume_dispatch and start_task.
-	// Observing both immutable requests proves the rejection counter is live.
-	if len(after) != len(before)+2 {
-		t.Fatalf("normal claim did not publish two observable control requests: before=%d after=%d", len(before), len(after))
-	}
-	existing := make(map[string]bool, len(before))
-	for _, path := range before {
-		existing[path] = true
-	}
-	observed := make([]map[string]any, 0, 2)
-	actions := make(map[string]bool)
-	for _, path := range after {
-		if existing[path] {
-			continue
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var request struct {
-			RequestID          string `json:"request_id"`
-			RepositoryIdentity string `json:"repository_identity"`
-			InstanceID         string `json:"instance_id"`
-			Action             string `json:"action"`
-			Payload            struct {
-				TaskID string `json:"task_id"`
-			} `json:"payload"`
-		}
-		if err := json.Unmarshal(raw, &request); err != nil {
-			t.Fatalf("decode published control request %s: %v", path, err)
-		}
-		id, idErr := hex.DecodeString(request.RequestID)
-		if idErr != nil || len(id) != 16 || request.RequestID != filepath.Base(filepath.Dir(path)) ||
-			request.InstanceID != serviceInstance(snapshot) || request.RepositoryIdentity != snapshot.Runtime.Repository.Identity {
-			t.Fatalf("published request has wrong file or runtime identity: path=%s request=%+v", path, request)
-		}
-		if (request.Action != "resume_dispatch" && request.Action != "start_task") || actions[request.Action] ||
-			(request.Action == "start_task" && request.Payload.TaskID != project.Tasks["a"].ID) {
-			t.Fatalf("normal claim published an unexpected request: %+v", request)
-		}
-		actions[request.Action] = true
-		observed = append(observed, map[string]any{"path": path, "sha256": fileSHA256(t, path), "request": request})
-	}
-	return map[string]any{"before": len(before), "after": len(after), "requests": observed}
-}
-
 func assertSameServiceInstance(t *testing.T, before, after testenv.Snapshot) {
 	t.Helper()
 	if serviceInstance(before) == "" || serviceInstance(before) != serviceInstance(after) {
@@ -438,30 +389,14 @@ func writeRuntimeEvidence(t *testing.T, directory string, evidence map[string]an
 	}
 }
 
-func assertRuntimePathsInsideHome(t *testing.T, project *testenv.Project) {
-	t.Helper()
-	for _, path := range []string{filepath.Dir(project.Database), filepath.Join(project.Home, "worktrees")} {
-		rel, err := filepath.Rel(project.Home, path)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-			t.Fatalf("runtime path escaped home: home=%s path=%s rel=%s err=%v", project.Home, path, rel, err)
-		}
-	}
-}
-
 func assertProjectFactsEqual(t *testing.T, before, after testenv.Snapshot, message string) {
 	t.Helper()
-	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || len(before.Page.Tasks) != len(after.Page.Tasks) || len(before.Domain.WorkflowRuns) != len(after.Domain.WorkflowRuns) || len(before.Domain.Executions) != len(after.Domain.Executions) {
+	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || len(before.Page.Tasks) != len(after.Page.Tasks) || len(before.Runner.Candidates) != len(after.Runner.Candidates) {
 		t.Fatal(message)
-	}
-	for i := range before.Domain.WorkflowRuns {
-		left, right := before.Domain.WorkflowRuns[i], after.Domain.WorkflowRuns[i]
-		if left.WorkflowRunID != right.WorkflowRunID || left.TaskID != right.TaskID || left.Status != right.Status {
-			t.Fatal(message)
-		}
 	}
 	for i := range before.Page.Tasks {
 		left, right := before.Page.Tasks[i], after.Page.Tasks[i]
-		if left.TaskID != right.TaskID || left.Status != right.Status {
+		if left.TaskID != right.TaskID || left.Status != right.Status || left.Version != right.Version {
 			t.Fatal(message)
 		}
 	}

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -46,7 +45,7 @@ func (t *sqliteTx) BumpOpenTaskVersionCAS(next taskmodel.TaskRecord, expectedVer
 		return nativeErr("contract_mismatch", "predecessor addition cannot alter the task contract or identity")
 	}
 	var active, delivered int
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND task_id=? AND phase NOT IN ('completed','abandoned')`, next.ProjectIdentity, next.TaskID).Scan(&active); err != nil {
+	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM runner_candidates WHERE project_identity=? AND task_id=? AND json_extract(payload,'$.participation')='active'`, next.ProjectIdentity, next.TaskID).Scan(&active); err != nil {
 		return err
 	}
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, next.ProjectIdentity, next.TaskID).Scan(&delivered); err != nil {
@@ -87,17 +86,4 @@ func (tx *sqliteTx) TaskContract(ctx context.Context, project string, task taskm
 		return contract, err
 	}
 	return contract, nil
-}
-
-func (s *SQLiteStore) Operation(ctx context.Context, project, id string) (executionmodel.OperationRecord, error) {
-	var body []byte
-	err := s.db.QueryRowContext(ctx, `SELECT payload FROM operations WHERE project_identity=? AND operation_id=?`, project, id).Scan(&body)
-	if err != nil {
-		return executionmodel.OperationRecord{}, persistenceError(err)
-	}
-	var op executionmodel.OperationRecord
-	if err = json.Unmarshal(body, &op); err != nil {
-		return op, err
-	}
-	return op, nil
 }

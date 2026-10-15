@@ -62,7 +62,7 @@ func TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project str
 		return out, nativeErr("unsupported_schema", "database sampling revision is unavailable")
 	}
 	var occupied int
-	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND status IN ('pending','active','waiting_decision','blocked')`, project).Scan(&occupied); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM runner_candidates WHERE project_identity=? AND json_extract(payload,'$.participation')='active' AND json_extract(payload,'$.submit_state') NOT IN ('rejected','cancelled') AND coalesce(json_extract(payload,'$.projection.status'),'queued') NOT IN ('pr_ready','stopped')`, project).Scan(&occupied); err != nil {
 		return out, err
 	}
 	out.ExecutionSlotBusy = occupied > 0

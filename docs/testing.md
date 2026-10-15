@@ -1,5 +1,7 @@
 # 测试总入口
 
+源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](architecture/current-code-architecture.md)。
+
 当前部署入口为本地 Codex 与远端 Orca 单终端 `host=orca` / `orca_terminal_v3`（environment），本机 Orca 部署已停用，supervised 已退役。隔离 local/environment 夹具与本机无模型资源能力测试保留；本机 live 恢复入口已删除。当前通信及验证范围见[单终端验收](acceptance/orca-terminal-transport.md)与[真实调试记录](acceptance/orca-terminal-remote-retest-2026-10-10.md)：本机有限样本三阶段交付通过，本机最终 draft 保护未重新跑真机；远端升级 CLI 且预先确认目录信任后有限样本闭环通过，首次信任阻塞后原任务自动继续仍未通过。两目标受控回归不代替远端真机。旧单轮远端场景仍已退役，正式注册表不含新版远端交付；旧 supervised、统一模板及单消息接线证据保留各自历史范围。
 
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
@@ -151,7 +153,7 @@ TUI 及其专属测试、`test-tui-http.ps1` 已退役。当前 Web 单元/构�
 
 | 检查 | 前置与范围 | 测试来源 |
 | --- | --- | --- |
-| 原运行恢复预览 | `STEERLINE_REAL_RECOVERY_CONFIG` / `STEERLINE_REAL_RECOVERY_RUN_ID`；读取隔离原现场 | [TestRealIsolatedRecoveryPreview](../internal/app/host/recovery_real_probe_test.go) |
+| 原运行恢复预览 | `STEERLINE_REAL_RECOVERY_CONFIG` / `STEERLINE_REAL_RECOVERY_RUN_ID`；读取隔离原现场 | [TestRealIsolatedRecoveryPreview](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/app/host/recovery_real_probe_test.go) |
 | Windows 服务窗口 / Ctrl+C helper | 只由绑定原进程、启动回执和报告路径的专门探针调用 | [Windows 平台测试](../internal/app/host/platform_windows_test.go) |
 | elevated sandbox 凭据检查与设置 | 为显式需要 elevated 的开发场景使用；无 token 的检查和可能触发 UAC 的初始化是两步 | [E2E 指南的 sandbox 工具](../tests/e2e/README.md#真实环境)、[设置脚本](../scripts/setup-e2e-sandbox.ps1) |
 

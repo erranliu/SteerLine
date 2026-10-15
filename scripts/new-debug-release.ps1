@@ -2,13 +2,14 @@
     [string]$DebugRoot = 'C:\SteerlineDebug',
     [string]$WebAddress = '',
     [ValidateSet(1,2)][int]$WebProjects = 1,
+    [string]$SteerRunnerExe = '',
     [switch]$Orca,
-    [string]$OrcaEnvironment = 'name:台式机64G',
+    [string]$OrcaEnvironment = '台式机64G',
     [string]$OrcaAgent = 'codex',
     [string]$OrcaExecutable = 'orca',
     [string]$AgentModel = '',
     [string]$AgentExecutable = '',
-    [ValidateSet('','high','xhigh')][string]$AgentReasoningEffort = ''
+    [ValidateSet('','medium','high','xhigh')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
 if (-not $WebAddress) {
@@ -32,6 +33,26 @@ function Assert-PlainPath([string]$Path) {
 }
 function Is-Within([string]$Parent, [string]$Child) {
     return $Child.Equals($Parent, [StringComparison]::OrdinalIgnoreCase) -or $Child.StartsWith($Parent.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)
+}
+
+$runnerSource = $null
+if (-not $SteerRunnerExe -and $env:STEERRUNNER_EXE) { $SteerRunnerExe = $env:STEERRUNNER_EXE }
+if (-not $SteerRunnerExe) {
+    $runnerCommand = Get-Command steerrunner.exe -ErrorAction SilentlyContinue
+    if (-not $runnerCommand) { throw 'Select a released Runner with -SteerRunnerExe <absolute exe>' }
+    $SteerRunnerExe = $runnerCommand.Source
+}
+if ($SteerRunnerExe) {
+    if (-not [IO.Path]::IsPathRooted($SteerRunnerExe)) { throw 'SteerRunnerExe must be absolute' }
+    $SteerRunnerExe = [IO.Path]::GetFullPath($SteerRunnerExe)
+    if (Is-Within 'C:\SteerlineRuntime' $SteerRunnerExe) { throw 'SteerRunnerExe must not use the installed environment' }
+    Assert-PlainPath $SteerRunnerExe
+    if (-not (Test-Path -LiteralPath $SteerRunnerExe -PathType Leaf)) { throw 'SteerRunnerExe does not exist' }
+    $runnerVersionText = & $SteerRunnerExe version --json
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot query the selected SteerRunner executable' }
+    $runnerVersion = $runnerVersionText | ConvertFrom-Json
+    if (-not $runnerVersion.ok -or $runnerVersion.protocol -ne 'steerrunner-cli/v1' -or 'steerrunner-cli/v1' -notin $runnerVersion.data.protocols) { throw 'SteerRunner protocol is unsupported' }
+    $runnerSource = [ordered]@{ version=$runnerVersion.data.version; source_commit=$runnerVersion.data.source_commit; protocol='steerrunner-cli/v1'; resource_digest=$runnerVersion.data.resource_digest; sha256=(Get-FileHash -LiteralPath $SteerRunnerExe -Algorithm SHA256).Hash.ToLowerInvariant() }
 }
 
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -83,13 +104,19 @@ try {
     foreach ($dir in @('bin', 'logs', 'evidence', 'provider', 'provider-b', 'remotes', 'home\temp', 'home\codex', 'home\gh', 'home\state', 'home\etc')) {
         New-Item -ItemType Directory -Path (Join-Path $target $dir) -Force | Out-Null
     }
+    if ($runnerSource) {
+        $runnerDestination = Join-Path $target 'bin\steerrunner.exe'
+        Copy-Item -LiteralPath $SteerRunnerExe -Destination $runnerDestination
+        if ((Get-FileHash -LiteralPath $runnerDestination -Algorithm SHA256).Hash.ToLowerInvariant() -ne $runnerSource.sha256) { throw 'SteerRunner changed during packaging' }
+        $manifest.runner = $runnerSource
+    }
     $rootText = $target.Replace('\', '/')
     $templateHashes = [ordered]@{}
     foreach ($item in $files | Where-Object { -not $_.PSIsContainer }) {
         $relative = $item.FullName.Substring($template.Length + 1)
         $templateHashes[$relative] = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         $output = Join-Path $target $relative
-        $content = [IO.File]::ReadAllText($output).Replace('__ROOT__', $rootText).Replace('__BASE__', $baseBranch).Replace('__WEB_ADDRESS__', $WebAddress)
+        $content = [IO.File]::ReadAllText($output).Replace('__ROOT__', $rootText).Replace('__BASE__', $baseBranch).Replace('__WEB_ADDRESS__', $WebAddress).Replace('__RUNNER_VERSION__', $runnerSource.version).Replace('__RUNNER_SHA256__', $runnerSource.sha256)
         # Windows PowerShell 5 reads a BOM-less script using the system code page.
         $encoding = $utf8
         if ($item.Extension -eq '.ps1') { $encoding = New-Object Text.UTF8Encoding $true }
@@ -108,20 +135,31 @@ try {
             $overlayEncoding = if ($mapping[0] -eq 'publish.ps1') { New-Object Text.UTF8Encoding $true } else { $utf8 }
             [IO.File]::WriteAllText($destination, $content, $overlayEncoding)
         }
-        $payload = @{executable=$OrcaExecutable;wait_timeout='30s'}
-        if ($OrcaEnvironment) { $payload.environment=$OrcaEnvironment }
-        $catalog = @{version=2;default_execution_profile='live';execution_profiles=@(@{
-            id='live';name='Orca single-terminal debug';host='orca';agent=$OrcaAgent;
-            implementation_configs=@(@{implementation_key='orca.terminal-profile';codec_version=3;payload=$payload})
+        if ($OrcaAgent -ne 'codex') { throw 'This Runner release supports the Codex Orca agent' }
+        $executionTarget = @{kind='orca_local'}
+        if ($OrcaEnvironment) { $executionTarget=@{kind='orca_environment';environment=$OrcaEnvironment} }
+        $settings = @{transport=@{executable=$OrcaExecutable;wait_timeout='30s'}}
+        $catalog = @{version=3;runner=@{executable="$rootText/bin/steerrunner.exe";version=$runnerSource.version;sha256=$runnerSource.sha256};default_execution_profile='live';execution_profiles=@(@{
+            id='live';name='Orca single-terminal debug';execution=@{adapter='orca-terminal';target=$executionTarget;settings=$settings};workflow=@{id='development';version=1}
         })}
 		if ($AgentModel -or $AgentReasoningEffort) {
 			if (-not $AgentModel) { throw 'AgentReasoningEffort requires AgentModel' }
 			$launchExecutable = if ($AgentExecutable) { $AgentExecutable } else { $OrcaAgent }
-			$catalog.execution_profiles[0].agent_launch=@{executable=$launchExecutable;model=$AgentModel;reasoning_effort=$AgentReasoningEffort;args=@('--dangerously-bypass-approvals-and-sandbox')}
+			$settings.agent_launch=@{executable=$launchExecutable;model=$AgentModel;args=@()}
+            if ($AgentReasoningEffort) { $settings.agent_launch.reasoning_effort=$AgentReasoningEffort }
 		}
         [IO.File]::WriteAllText((Join-Path $target 'home\execution.json'), ($catalog | ConvertTo-Json -Depth 10), $utf8)
         $manifest.execution_host='orca'
         $manifest.execution_environment=$OrcaEnvironment
+    }
+    if (-not $Orca -and ($AgentExecutable -or $AgentModel -or $AgentReasoningEffort)) {
+        $executionPath = Join-Path $target 'home\execution.json'
+        $catalog = [IO.File]::ReadAllText($executionPath) | ConvertFrom-Json
+        $settings = ($catalog.execution_profiles | Where-Object id -eq 'live').execution.settings
+        if ($AgentExecutable) { $settings.executable = $AgentExecutable }
+        if ($AgentModel) { $settings.model = $AgentModel }
+        if ($AgentReasoningEffort) { $settings.reasoning_effort = $AgentReasoningEffort }
+        [IO.File]::WriteAllText($executionPath, ($catalog | ConvertTo-Json -Depth 10), $utf8)
     }
     $manifest.web_projects = $WebProjects
     Write-Manifest

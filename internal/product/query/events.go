@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"fmt"
 
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
@@ -19,12 +18,11 @@ const (
 )
 
 type Service struct {
-	Project   string
-	Workflows storageports.WorkflowReader
-	Events    storageports.EventReader
-	Tasks     storageports.TaskReader
-	Projects  storageports.ProjectReader
-	Activity  storageports.ActivityReader
+	Project  string
+	Events   storageports.EventReader
+	Tasks    storageports.TaskReader
+	Projects storageports.ProjectReader
+	Activity storageports.ActivityReader
 }
 
 type EventFilter struct {
@@ -60,23 +58,6 @@ type queryCursor struct {
 type CursorError struct{ Code string }
 
 func (e *CursorError) Error() string { return e.Code }
-
-func (q Service) Workflow(ctx context.Context, workflowRunID string) (storageports.WorkflowSnapshot, error) {
-	if q.Workflows == nil || q.Project == "" {
-		return storageports.WorkflowSnapshot{}, errors.New("query service store and project identity are required")
-	}
-	if workflowRunID == "" {
-		return storageports.WorkflowSnapshot{}, errors.New("workflow run identity is required")
-	}
-	snapshot, err := q.Workflows.ReadWorkflow(ctx, q.Project, workflowRunID)
-	if err != nil {
-		return storageports.WorkflowSnapshot{}, err
-	}
-	if snapshot.ProjectIdentity != q.Project || len(snapshot.WorkflowRuns) == 0 {
-		return snapshot, fmt.Errorf("workflow run %s not found", workflowRunID)
-	}
-	return snapshot, nil
-}
 
 func (q Service) ReadEvents(ctx context.Context, filter EventFilter, cursor string, limit int) (EventPage, error) {
 	if q.Events == nil || q.Project == "" {

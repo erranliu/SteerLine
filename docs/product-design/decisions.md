@@ -1,5 +1,7 @@
 # 决策与反馈
 
+源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](../architecture/current-code-architecture.md)。
+
 反馈与恢复按各后端的实际原生能力核验。
 
 SteerLine 当前使用 `worker-flow-v2`。SQLite 中的 Decision、Command、Operation 是问题、答案和发送进度的业务权威。TUI 经 HTTP 映射到服务端 `answer_decision`，CLI 仍可使用内部 Go 产品入口；领域核验和提交规则共用。TUI 离线仅保留本窗口已观察内容与草稿，禁止新业务查询/变更；重开无观察时显示不可查询原因，不直接读库。
@@ -49,4 +51,4 @@ Execution 的恢复门槛和版本每次换服务实例重新建立；第一次�
 
 ## 分步反馈与恢复
 
-支持的原生活动问题仍沿原请求回复。停止后的代码反馈明确回 implement.execute，发布修复留 publish；正常报告只整理绑定的源执行，不补做实现。当前 development/v3 不保存独立 artifact 快照，已提交报告的恢复必要时先回原会话重新核实实现。report 活动期间的新反馈保存等待，不能改写已冻结报告输入或并发新执行。已知阻断保持当前步骤，unknown 只读核对原操作/产物。服务重开保留原人工恢复门槛，不自动补发 queued 的报告或下一阶段；原会话不可恢复时需人工处理。当前规则见[staged_flow.go](../../internal/execution/staged_flow.go)，历史分步契约见[Spec](../spec/worker-staged-flow.spec.md)。
+支持的原生活动问题仍沿原请求回复。停止后的代码反馈明确回 implement.execute，发布修复留 publish；正常报告只整理绑定的源执行，不补做实现。当前 development/v3 不保存独立 artifact 快照，已提交报告的恢复必要时先回原会话重新核实实现。report 活动期间的新反馈保存等待，不能改写已冻结报告输入或并发新执行。已知阻断保持当前步骤，unknown 只读核对原操作/产物。服务重开保留原人工恢复门槛，不自动补发 queued 的报告或下一阶段；原会话不可恢复时需人工处理。当前规则见[staged_flow.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/staged_flow.go)，历史分步契约见[Spec](../spec/worker-staged-flow.spec.md)。
