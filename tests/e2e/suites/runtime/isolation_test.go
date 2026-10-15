@@ -75,7 +75,6 @@ func TestServiceWriteIsolation(t *testing.T) {
 	t.Parallel()
 	s := testenv.NewScenario(t, "runtime.service-write-isolation")
 	p := s.NewProjectAt("service", filepath.Join("中文 路径", "有空格的现场"), "")
-	installFixture(t, p)
 	cwd := filepath.Join(s.Root, "无关 cwd")
 	s.Must(os.MkdirAll(cwd, 0700))
 	p.Driver.WorkingDirectory = cwd
@@ -99,6 +98,15 @@ func TestServiceWriteIsolation(t *testing.T) {
 	if before.Runtime == nil || before.Runtime.Service.PID != p.Service.Cmd.Process.Pid || hostBefore.Backend.Identity.Process.PID != p.Service.Cmd.Process.Pid || before.Runtime.Service.ProcessIdentity == nil || !strings.EqualFold(before.Runtime.Service.ProcessIdentity.Executable, p.Executable) {
 		t.Fatal("runtime is not owned by the exact home host")
 	}
+	catalogID := ""
+	for _, row := range hostBefore.Projects {
+		if row.ConfigID == filepath.Base(p.Config) {
+			catalogID = row.ProjectID
+		}
+	}
+	if catalogID == "" {
+		t.Fatal("host catalog lacks the original project identity")
+	}
 	p.Record("first-start", before)
 	count := controlRequestCount(t, p)
 	err = p.Driver.ControlTargeted(s.Context, s.Run.Helper, "start_task", p.Tasks["a"].ID, serviceInstance(before)+"-stale")
@@ -106,7 +114,7 @@ func TestServiceWriteIsolation(t *testing.T) {
 		t.Fatal("stale instance accepted")
 	}
 	stale := p.Driver
-	stale.Config = writeConfigVariant(t, p, "Changed.json", func(value map[string]any) { value["heartbeat"] = "250ms" })
+	stale.Config = writeConfigVariantAt(t, p.Config, filepath.Join(p.Home, "etc", "Changed.json"), func(value map[string]any) { value["heartbeat"] = "250ms" })
 	if err := stale.Control(s.Context, s.Run.Helper, "start_task", p.Tasks["a"].ID); err == nil {
 		t.Fatal("configuration absent from frozen host catalog accepted")
 	}
@@ -141,7 +149,7 @@ func TestServiceWriteIsolation(t *testing.T) {
 	}
 	mirror.StopService()
 	p.StopService()
-	assertHostStopped(t, p, hostBefore.Backend.Identity.InstanceID, serviceInstance(before))
+	assertHostStopped(t, p, hostBefore.Backend.Identity.InstanceID, catalogID, serviceInstance(before))
 	p.StartService()
 	after := mustSnapshot(t, p)
 	hostAfter, err := p.Driver.HostStatus(s.Context)
@@ -157,11 +165,11 @@ func TestServiceWriteIsolation(t *testing.T) {
 	}
 	p.Record("after-restart", after)
 	p.StopService()
-	assertHostStopped(t, p, hostAfter.Backend.Identity.InstanceID, serviceInstance(after))
+	assertHostStopped(t, p, hostAfter.Backend.Identity.InstanceID, catalogID, serviceInstance(after))
 	s.Must(s.FinishBody())
 }
 
-func assertHostStopped(t *testing.T, p *testenv.Project, hostID, projectInstance string) {
+func assertHostStopped(t *testing.T, p *testenv.Project, hostID, projectID, projectInstance string) {
 	t.Helper()
 	raw, err := p.Driver.Run(p.Scenario.Context, "status", "--json")
 	p.Scenario.Must(err)
@@ -188,7 +196,7 @@ func assertHostStopped(t *testing.T, p *testenv.Project, hostID, projectInstance
 		t.Fatalf("host stop is unverified: %s", raw)
 	}
 	result := status.LastShutdown.Projects[0]
-	if result.ProjectID != p.ProjectID || result.InstanceID != projectInstance || !result.LocalClosed || !result.LocksReleased || !result.ResourcesSettled {
+	if result.ProjectID != projectID || result.InstanceID != projectInstance || !result.LocalClosed || !result.LocksReleased || !result.ResourcesSettled {
 		t.Fatalf("project stop is unverified: %s", raw)
 	}
 	p.Scenario.Must(os.WriteFile(filepath.Join(p.Scenario.Output, "shutdown-"+hostID+".json"), raw, 0600))

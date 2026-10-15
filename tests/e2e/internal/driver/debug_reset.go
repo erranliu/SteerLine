@@ -29,7 +29,12 @@ func (d *debugRelease) reset(check bool) error {
 		dirs = append(dirs, filepath.Join(d.root, "runtime-launcher"))
 	}
 	for _, scope := range scopes {
-		dirs = append(dirs, filepath.Join(scope.repo, ".git"), scope.stateDir())
+		dirs = append(dirs, filepath.Join(scope.repo, ".git"))
+		if _, err := os.Stat(scope.stateDir()); err == nil {
+			dirs = append(dirs, scope.stateDir())
+		} else if !os.IsNotExist(err) {
+			return err
+		}
 		runtimeDir := filepath.Join(d.root, "runtime"+scope.suffix())
 		if _, err := os.Stat(runtimeDir); err == nil {
 			dirs = append(dirs, runtimeDir)
@@ -72,6 +77,9 @@ func (d *debugRelease) resetState(check bool) error {
 	runDir := d.stateDir()
 	dbPath := filepath.Join(runDir, "steerline.db")
 	if _, err := os.Stat(dbPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		} // Fresh packages are initialized by the host, never reset into existence.
 		return err
 	}
 	db, err := sql.Open("sqlite", dbPath)

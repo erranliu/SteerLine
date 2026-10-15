@@ -326,7 +326,7 @@ func directoryFileSnapshot(t *testing.T, directory string) []string {
 
 func writeConfigVariant(t *testing.T, project *testenv.Project, name string, change func(map[string]any)) string {
 	t.Helper()
-	return writeConfigVariantAt(t, project.Config, filepath.Join(project.Home, "etc", name), change)
+	return writeConfigVariantAt(t, project.Config, filepath.Join(project.Root, name), change)
 }
 
 func writeConfigVariantAt(t *testing.T, source, target string, change func(map[string]any)) string {

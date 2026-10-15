@@ -40,7 +40,7 @@ go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
 | L3 controlled | `runtime.source-build-isolation` | 独立源码 clone 的构建/重建与输出链接拒绝，不改变另一临时 home 的程序、数据库和业务事实 |
 | L3 controlled | `runtime.path-isolation` | state junction、run_dir/worktree_root 越界和 SQLite DB/WAL/SHM 硬链接拒绝；无 worker |
-| L3 controlled | `runtime.service-write-isolation` | 原生可见服务窗口启停/重启、子进程身份、旧实例/错误配置写拒绝、跨 home 仓库锁 |
+| L3 controlled | `runtime.service-write-isolation` | 统一宿主启停/重启与匹配原实例的逐项目shutdown、旧实例/非启动快照配置写拒绝、跨home仓库锁 |
 | L3 controlled | `runtime.dual-home-isolation` | 两独立 home/clone 的原执行、控制请求和交付不串用 |
 | L3 live | `runtime.sandbox-git.local-codex` | 新生成 C:\SteerlineDebug 包；两个独立 worktree/session 的普通沙箱探针、原始三阶段命令与 usage、真实 Git helper/自动审核、精确 SteerlineTest PR 合并/交付及清理 |
 | L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |

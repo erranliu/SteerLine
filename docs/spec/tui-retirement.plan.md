@@ -88,7 +88,7 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 | --- | --- | --- | --- |
 | [TR-A4](../acceptance/tui-retirement.md#验收项) | runtime.source-build-isolation / L3 controlled | 独立源码 clone 的 bin junction、输出硬链接拒绝；普通构建/替换保持另一临时 home 的程序/hash、DB、业务事实不变；源码/构建身份正确 | 完成改造且提交当前源码后，`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled`；runner summary 与各场景 runtime-identities.json，结果登记专属 acceptance |
 | TR-A4 | runtime.path-isolation / L3 controlled | state junction、run_dir/worktree_root 越界、SQLite DB/WAL/SHM 硬链接实际拒绝，无越界写；解除链接后原生校验恢复；无业务 worker | 同上；state/SQLite 反例日志、SQLite 字节摘要与 scenario.json |
-| TR-A4 | runtime.service-write-isolation / L3 controlled | 原生 service-window 启停/同构建重启、子进程身份；旧实例/改配置未发布请求；跨 home 仓库锁有效；不跑完整交付 | 同上；窗口日志、控制回执/计数、前后快照与 scenario.json |
+| TR-A4 | runtime.service-write-isolation / L3 controlled | 统一宿主启停/重启与逐项目 clean shutdown；旧实例/非启动快照内配置不发布请求；跨 home 仓库锁有效；不跑完整交付 | 同上；宿主日志、原控制回执/计数、shutdown、前后快照与 scenario.json |
 | TR-A4 | runtime.dual-home-isolation / L3 controlled | 唯一双环境业务检查，两独立执行/原请求/交付，A 合并时 B 保持原状态、B 交付不改变 A；完整通用交付规则复用已有 delivery.basic | 同上；两侧快照、请求身份/摘要和 scenario.json |
 | TR-A3、TR-A4 | 当前新调试包生成/运行 / controlled | 继续使用已有 test-debug-release 唯一流程，验证已生成包互不串用、固定端口、Web、锁/reset、冻结方案；生成阶段串行，因为共享 npm ci/dist，运行各包沿现有所有权清理 | `./scripts/test-debug-release.ps1`；四场景通过后执行；新包 generation-test.json/runtime-test.log，登记 acceptance |
 
@@ -108,3 +108,8 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 四项 runtime ID 与安全并发上限保持：构建隔离准备任务后正常停止宿主，再核对静止 DB 字节；路径反例同样停服，用当前保留的本机 `check -config` 做副作用前拒绝并在解除链接后确认恢复可用。服务写保护改为唯一宿主的精确 PID/实例与项目逻辑实例、launchers 幂等/退役入口不存在、错误实例/非启动快照内配置拒绝且不发布请求、跨home仓库冲突不建库；正常控制作为计数器正例，宿主重启后核对前一实例拒绝。正常停止必须读取匹配原宿主/项目实例的 clean shutdown，各项目 local_closed/locks_released/resources_settled 均为true。双home保留原执行/请求/交付隔离，不混同同home双项目共享宿主的专项测试。
 
 测试计划映射仍为 [TR-A3/A4/A6](../acceptance/tui-retirement.md#验收项)：改接完成且提交源码后重新运行四项 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled`、当前 `scripts/test-debug-release.ps1`、L1、runner全包和全部剩余E2E编译/文档检查。环境仍为临时controlled夹具及唯一生成器新建的SteerlineDebug包，显式simulate，零本机Orca调用；按原通过条件及本节新宿主事实核对，全部证据另登记于专属acceptance，不挪用上一主干的通过记录。只读来源为统一启动Spec和现有driver/testenv，不改变产品生命周期/矩阵或 worker规则，不新增模型/远端真机验收。
+
+
+统一宿主补验暴露的必要夹具修正：配置反例写到各项目 root，不进入宿主扫描的 etc；测试分别核对目录项目ID与原生数据库身份。调试包尚无数据库时 reset 是不建库的空操作，但仍必须取得现有宿主/仓库/launcher锁，不能绕过活动进程。新增最小回归 `TestDebugResetBeforeInitializationKeepsFreshPackageAndHonorsHostLock`，命令 `go run ./cmd/test-feedback -- ./tests/e2e/internal/driver -run '^TestDebugResetBeforeInitializationKeepsFreshPackageAndHonorsHostLock$' -count=1`，映射TR-A3，验证后记录summary。
+
+当前产品拒绝仍在 kill-on-close Job 内的 detached 常驻进程。生成包测试脚本采用现有浏览器驱动的 WMI 独立进程方式作为自身原生启动现场，脚本内依然调用同一生成器、原启动/停止流程和断言；不修改产品Job守卫、不放宽期限、不以低层serve替换该项双产品启动。内部 IndependentProcess 参数仅防止脚本自递归，入口仍为 scripts/test-debug-release.ps1；证据保存外层broker日志/result和新包generation-test/runtime-test。controlled不传认证，PATH/显式CODEX_HOME路径传递不写token。

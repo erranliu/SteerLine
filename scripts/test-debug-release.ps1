@@ -1,5 +1,32 @@
-﻿param([switch]$Live)
+﻿param([switch]$Live, [switch]$IndependentProcess)
 $ErrorActionPreference = 'Stop'
+# Detached-start acceptance needs an independent Windows process, as in the
+# existing browser package driver. The product retains its Job safety gate.
+if (-not $IndependentProcess) {
+    $brokerRoot = Join-Path $env:TEMP ('steerline-debug-acceptance-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $brokerRoot | Out-Null
+    $brokerLog = Join-Path $brokerRoot 'test.log'
+    $brokerResult = Join-Path $brokerRoot 'result.json'
+    function Quote-TestArgument([string]$Value) { return "'" + $Value.Replace("'", "''") + "'" }
+    $invoke = '& ' + (Quote-TestArgument $PSCommandPath) + ' -IndependentProcess'
+    if ($Live) { $invoke += ' -Live' }
+    $body = '$ErrorActionPreference=''Stop''; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding; '
+    $body += '$env:PATH=' + (Quote-TestArgument $env:PATH) + '; '
+    if ($env:CODEX_HOME) { $body += '$env:CODEX_HOME=' + (Quote-TestArgument $env:CODEX_HOME) + '; ' }
+    $body += '$taskExit=0; try { ' + $invoke + ' *> ' + (Quote-TestArgument $brokerLog) + ' } catch { $_ | Out-File -Append -LiteralPath ' + (Quote-TestArgument $brokerLog) + '; $taskExit=1 } finally { @{exit_code=$taskExit} | ConvertTo-Json | Set-Content -Encoding utf8 -LiteralPath ' + (Quote-TestArgument $brokerResult) + ' }; exit $taskExit'
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))
+    $process = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=('powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand ' + $encoded)}
+    if ($process.ReturnValue -ne 0) { throw "Independent test process creation failed: $($process.ReturnValue)" }
+    $deadline = [DateTime]::UtcNow.AddMinutes(20)
+    while (-not (Test-Path -LiteralPath $brokerResult)) {
+        if ([DateTime]::UtcNow -ge $deadline) { throw "Independent test result unverified; inspect $brokerRoot (PID $($process.ProcessId))" }
+        Start-Sleep -Milliseconds 250
+    }
+    Get-Content -LiteralPath $brokerLog
+    $result = Get-Content -LiteralPath $brokerResult -Raw | ConvertFrom-Json
+    if ($result.exit_code -ne 0) { throw "Independent debug acceptance failed; inspect $brokerRoot" }
+    return
+}
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $generator = Join-Path $PSScriptRoot 'new-debug-release.ps1'
 $testRoot = Join-Path 'C:\SteerlineDebug' (([string][char]0x4E2D + [char]0x6587) + ' verification-' + [Guid]::NewGuid().ToString('N'))
