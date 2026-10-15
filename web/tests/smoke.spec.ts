@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 
 const config = process.env.STEERLINE_WEB_CONFIG;
@@ -118,9 +118,13 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   expect(identity.project_id).toBe(projectID);
   const continuing = process.env.STEERLINE_WEB_CONTINUE === "1";
   if (!continuing) {
+    const providerPath = join(root, "provider", "state.json");
+    const fixture = JSON.parse(readFileSync(providerPath, "utf8"));
+    fixture.recovery = { HoldStep: "implement.execute", HoldStream: true };
+    writeFileSync(providerPath, JSON.stringify(fixture));
     let startPosts = 0;
     let originalStartID = "";
-    await page.route(
+    await context.route(
       "**/api/v1/application/projects/**/commands",
       async (route) => {
         const envelope = route.request().postDataJSON();
@@ -153,6 +157,37 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
     ).toBeEnabled();
     await page.getByRole("button", { name: "手动启动", exact: true }).click();
     await page.getByRole("button", { name: "确认启动", exact: true }).click();
+    await expect.poll(() => {
+      const facts = JSON.parse(readFileSync(providerPath, "utf8"));
+      return facts.turns?.[0]?.status;
+    }, { timeout: 300000 }).toBe("inProgress");
+    await expect.poll(async () => {
+      const snapshot = (await get("/snapshot")).connection.snapshot.page;
+      const fixture = JSON.parse(readFileSync(providerPath, "utf8"));
+      return snapshot.runs[0]?.session_id === fixture.session && snapshot.runs[0]?.current_turn_id === fixture.turns[0]?.id;
+    }).toBe(true);
+    const beforeClose = (await get("/snapshot")).connection.snapshot.page;
+    const originalRun = beforeClose.runs[0];
+    expect(originalRun.session_id).toBeTruthy();
+    expect(originalRun.current_turn_id).toBeTruthy();
+    expect(originalRun.execution_id).toBeTruthy();
+    expect(originalRun.attempt_id).toBeTruthy();
+    const originalURL = page.url();
+    await page.close();
+    page = await context.newPage();
+    page.on("pageerror", (error) => consoleErrors.push(error.message));
+    const afterClose = (await get("/snapshot")).connection.snapshot.page;
+    expect(afterClose.service.instance_id).toBe(beforeClose.service.instance_id);
+    expect(afterClose.service.ready).toBe(true);
+    expect(afterClose.runs).toHaveLength(1);
+    expect(afterClose.runs[0]).toMatchObject({ run_id: originalRun.run_id, execution_id: originalRun.execution_id, attempt_id: originalRun.attempt_id, session_id: originalRun.session_id, current_turn_id: originalRun.current_turn_id });
+    const held = JSON.parse(readFileSync(providerPath, "utf8"));
+    expect(held.turns).toHaveLength(1);
+    expect(held.turns[0].status).toBe("inProgress");
+    await page.goto(originalURL);
+    await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
+    execFileSync(helper, ["release-recovery", "--e2e-state", providerPath], { env, stdio: "pipe", timeout: 30000, windowsHide: true });
+    writeFileSync(testInfo.outputPath("browser-close.json"), JSON.stringify({ before: beforeClose, after: afterClose, original_turn: held.turns[0], start_posts: startPosts }));
     await expect
       .poll(
         async () => {

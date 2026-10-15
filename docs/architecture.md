@@ -1,6 +1,6 @@
 # 整体架构与职责边界
 
-> 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。用户随后直接授权普通开发本机 Web 基座、DAG 与执行页，独立工程见 [web/](../web/README.md)，结果见[专属验收](acceptance/web-frontend.md)。SSE、规划 Agent 与远程浏览器部署仍未实现；#91 原验收保持其[对应范围](acceptance/tui-http-client.md)。
+> 2026-10-15：TUI 已移除，Web 为唯一交互前端；后台 CLI、服务及原生会话保留。实现和验证范围见[TUI 退役](acceptance/tui-retirement.md)。
 
 SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。一期包含本地 Codex、本机 Orca 与远端路径交付。后续目标见[产品愿景](roadmap/product-vision.md)，源码归属见[代码架构](architecture/current-code-architecture.md)。
 
@@ -16,14 +16,14 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 | worker | 按任务 Spec/Plan 实现、测试、修复、提交和创建 PR；不写中心业务状态 |
 | 执行后端 | 提供真实进程、终端、原生会话/轮次、平台消息和资源事实 |
 | PR 平台 | 提供 PR 身份、head/base 和实际合并事实 |
-| TUI 与 HTTP 客户端 | 仅经 HTTP 查询产品 DTO、提交绑定原身份/版本的命令；保存自己的偏好、草稿和原请求，不读业务库或宿主业务文件 |
+| Web 与 HTTP 客户端 | 仅经 HTTP 查询产品 DTO、提交绑定原身份/版本的命令；保存自己的偏好、草稿和原请求，不读业务库或宿主业务文件 |
 | HTTP 服务端与内部产品客户端 | 认证、协议映射、原请求登记/对账及应用调用；领域资格和状态转移仍由 Go 业务应用核验 |
 | 应用与服务宿主 | 组装 adapter、端口和存储，承载进程、实例核验、控制传输、锁、心跳及退出观察 |
 | SQLite 存储 | 保存唯一业务状态，核验身份、前值、版本和唯一约束后原子提交 |
 
 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 TaskDelivery 分别表达不同事实。当前 Orca 单终端路径不创建 Orca Run/Task/Dispatch；原 runtime、terminal/incarnation、worktree 和 provider session 属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runtime 投影、UI 缓存和诊断日志都不能成为第二业务权威。
 
-当前业务消费链为 `TUI → httpclient/httpcontract → HTTP → httpapi → product/client → Go 任务/执行应用与只读查询`。`consoleapp` 独立组装 TUI 连接；`app` 组装服务、SQLite 和具体执行 adapter。CLI 的内部 Go 产品客户端仍是另一种调用入口，不能据此声称全部 CLI 已经 HTTP 化。现有解耦程度及后续建议见[源码边界评估](architecture/current-code-architecture.md#http-接入后的解耦评估与建议)。
+当前浏览器消费链为 `Web → 应用目录/HTTP → httpapi → product/client → Go 任务/执行应用与只读查询`。app 组装服务、SQLite 与执行 adapter；CLI 保留现有内部 Go 产品客户端入口。
 
 本机 Web 消费链为 `React SPA → 同源浏览器会话/CSRF → steerline-web → Go 应用服务 → 原 httpclient → 项目 native HTTP API`。独立 Web 程序从应用 home 的 `web.json` 读取稳定 loopback 地址，应用入口与项目 native endpoint 分别使用随机端口、当前用户 Bearer 和无 Origin。Web、应用服务和各项目服务独立启动/关闭；Web 不组装业务库或调度器。应用 discovery 位于 `<home>/application-api/`，Web 打开凭证位于 `<home>/ui/web/`，CLI 核对精确实例后签发短票据。客户端按 home、项目及实例隔离原信封、回执观察和输入草稿。契约与非目标见[独立 Web 与项目切换 Spec](spec/web-project-switch.spec.md)。
 
@@ -41,7 +41,7 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 关闭控制台或 UI 只结束客户端观察；停止中心服务不证明外部 worker 已退出。停止、清理和释放按精确资源身份、实际后端能力及原 Operation 回执判断。
 
-Windows 中心由用户从安装入口打开的可见服务窗口承载，可最小化；独立控制台不代启后台服务。离线入口显示 window-required 和 service-window.bat 的实际路径。服务窗口关闭结束中心进程；显式停服须同时核对原请求的 applied 回执、原进程退出及仓库/状态锁释放，未知时继续保留诊断，不伪造停止成功。Linux detached 路径按其平台能力展示，不视为 Windows 原生验收证明。当前操作见[执行控制台](product-design/execution-console.md)。
+Windows 中心由用户从安装入口打开的可见服务窗口承载，可最小化；Web 浏览器不代启项目服务。离线入口显示 window-required 和 service-window.bat 的实际路径。服务窗口关闭结束中心进程；显式停服须同时核对原请求的 applied 回执、原进程退出及仓库/状态锁释放，未知时继续保留诊断，不伪造停止成功。Linux detached 路径按其平台能力展示，不视为 Windows 原生验收证明。当前操作见[Web 指南](../web/README.md)。
 
 反馈分别保存问题、答案、发送意图、平台回执和原生轮次事实，不能把“已保存”或“已接受”显示为业务要求已落实。宿主登录/权限阻断与 worker 业务问题分开，未知动作只对账。服务重启先恢复观察和原请求；继续输入或重建 worker 按当前恢复规则取得人工授权，未验证的路径保持不可用。细节见[决策与反馈](product-design/decisions.md)。
 

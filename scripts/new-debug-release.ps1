@@ -1,6 +1,6 @@
 ﻿param(
     [string]$DebugRoot = 'C:\SteerlineDebug',
-    [string]$WebAddress = '',
+    [string]$WebAddress = '127.0.0.1:18742',
     [ValidateSet(1,2)][int]$WebProjects = 1,
     [switch]$Orca,
     [string]$OrcaEnvironment = 'name:台式机64G',
@@ -11,7 +11,7 @@
     [ValidateSet('','high','xhigh')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
-if ($WebProjects -eq 2 -and -not $WebAddress) { throw 'WebProjects 2 requires WebAddress' }
+if (-not $WebAddress) { throw 'WebAddress must name a fixed Web endpoint' }
 if ($WebAddress -and ($WebAddress -notmatch '^127\.0\.0\.1:([1-9][0-9]{0,4})$' -or [int]$Matches[1] -gt 65535)) { throw 'WebAddress must be a fixed 127.0.0.1:<1..65535>' }
 
 function Assert-PlainPath([string]$Path) {
@@ -33,10 +33,10 @@ function Is-Within([string]$Parent, [string]$Child) {
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not [IO.Path]::IsPathRooted($DebugRoot)) { throw 'DebugRoot must be absolute' }
 $debugBase = [IO.Path]::GetFullPath($DebugRoot).TrimEnd('\')
-Assert-PlainPath $debugBase
 if ((Is-Within 'C:\SteerlineRuntime' $debugBase) -or (Is-Within $debugBase 'C:\SteerlineRuntime') -or (Is-Within $repo $debugBase) -or (Is-Within $debugBase $repo)) {
     throw 'Debug output must be disjoint from the installed home and source checkout'
 }
+Assert-PlainPath $debugBase
 if ($debugBase.IndexOfAny([char[]]"%'`r`n") -ge 0) { throw 'DebugRoot contains unsupported launcher/template characters' }
 if (-not (Is-Within 'C:\SteerlineDebug' $debugBase)) { throw 'DebugRoot must stay under C:\SteerlineDebug' }
 $template = Join-Path $repo 'debug-template'
@@ -46,7 +46,7 @@ foreach ($item in $files) {
     Assert-PlainPath $item.FullName
     if ($item.Name -in @('.git', 'auth.json', 'steerline.db') -or $item.Extension -eq '.exe') { throw "Runtime state in copy source: $($item.FullName)" }
 }
-foreach ($command in @('git', 'go')) { Get-Command $command -ErrorAction Stop | Out-Null }
+foreach ($command in @('git', 'go', 'node', 'npm')) { Get-Command $command -ErrorAction Stop | Out-Null }
 $commit = (& git -C $repo rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve source commit' }
 $dirty = -not [string]::IsNullOrWhiteSpace((& git -C $repo status --porcelain | Out-String))
@@ -76,7 +76,7 @@ try {
     $packageAcl.SetAccessRule($packageRule)
     Set-Acl -LiteralPath $target -AclObject $packageAcl
     foreach ($item in Get-ChildItem -LiteralPath $template -Force) { Copy-Item -LiteralPath $item.FullName -Destination $target -Recurse }
-    foreach ($dir in @('bin', 'logs', 'evidence', 'provider', 'provider-b', 'remotes', 'home\temp', 'home\codex', 'home\gh', 'home\state', 'home\ui\views', 'home\etc')) {
+    foreach ($dir in @('bin', 'logs', 'evidence', 'provider', 'provider-b', 'remotes', 'home\temp', 'home\codex', 'home\gh', 'home\state', 'home\etc')) {
         New-Item -ItemType Directory -Path (Join-Path $target $dir) -Force | Out-Null
     }
     $rootText = $target.Replace('\', '/')
@@ -130,34 +130,31 @@ try {
         $dirtyText = if ($dirty) { 'true' } else { 'false' }
         $ldflags = "-X github.com/erranliu/SteerLine/internal/app.buildSourceCommit=$commit -X github.com/erranliu/SteerLine/internal/app.buildSourceDirty=$dirtyText"
         $productBuildArgs = @('build', '-trimpath', '-ldflags', $ldflags)
-        if ($WebAddress) {
-            foreach ($webPath in @('web','web\server','web\server\dist','web\node_modules')) {
-                Assert-PlainPath (Join-Path $repo $webPath)
-            }
-            $webSeedPath = Join-Path $target 'seed\provider.json'
-            $webSeed = [IO.File]::ReadAllText($webSeedPath) | ConvertFrom-Json
-            $webSeed.web_feedback = $true
-            [IO.File]::WriteAllText($webSeedPath, ($webSeed | ConvertTo-Json -Depth 10), $utf8)
-            Push-Location (Join-Path $repo 'web')
-            try {
-                & npm ci *> (Join-Path $target 'evidence\install-web.log')
-                if ($LASTEXITCODE -ne 0) { throw 'Web dependency install failed; see evidence/install-web.log' }
-                & npm run build *> (Join-Path $target 'evidence\build-web.log')
-                if ($LASTEXITCODE -ne 0) { throw 'Web build failed; see evidence/build-web.log' }
-            } finally { Pop-Location }
-            & go build -trimpath -tags webui -ldflags $ldflags -o (Join-Path $target 'bin\steerline-web.exe') ./cmd/steerline-web
-            if ($LASTEXITCODE -ne 0) { throw 'Web executable build failed' }
-            $manifest.web_projects = $WebProjects
-            [IO.File]::WriteAllText((Join-Path $target 'home\web.json'), (@{version=1;address=$WebAddress} | ConvertTo-Json), $utf8)
-            $manifest.web_address = $WebAddress
+        foreach ($webPath in @('web','web\server','web\server\dist','web\node_modules')) {
+            Assert-PlainPath (Join-Path $repo $webPath)
         }
+        $webSeedPath = Join-Path $target 'seed\provider.json'
+        $webSeed = [IO.File]::ReadAllText($webSeedPath) | ConvertFrom-Json
+        $webSeed.web_feedback = $true
+        [IO.File]::WriteAllText($webSeedPath, ($webSeed | ConvertTo-Json -Depth 10), $utf8)
+        Push-Location (Join-Path $repo 'web')
+        try {
+            & npm ci *> (Join-Path $target 'evidence\install-web.log')
+            if ($LASTEXITCODE -ne 0) { throw 'Web dependency install failed; see evidence/install-web.log' }
+            & npm run build *> (Join-Path $target 'evidence\build-web.log')
+            if ($LASTEXITCODE -ne 0) { throw 'Web build failed; see evidence/build-web.log' }
+        } finally { Pop-Location }
+        & go build -trimpath -tags webui -ldflags $ldflags -o (Join-Path $target 'bin\steerline-web.exe') ./cmd/steerline-web
+        if ($LASTEXITCODE -ne 0) { throw 'Web executable build failed' }
+        $manifest.web_projects = $WebProjects
+        [IO.File]::WriteAllText((Join-Path $target 'home\web.json'), (@{version=1;address=$WebAddress} | ConvertTo-Json), $utf8)
+        $manifest.web_address = $WebAddress
         $productBuildArgs += @('-o', (Join-Path $target 'bin\steerline.exe'), './cmd/steerline')
         & go @productBuildArgs 2> (Join-Path $target 'evidence\build-product.log')
         if ($LASTEXITCODE -ne 0) { throw 'Product build failed; see evidence/build-product.log' }
         & go build -trimpath -o (Join-Path $target 'bin\debug-helper.exe') ./tests/e2e/testdata/debug-helper 2> (Join-Path $target 'evidence\build-helper.log')
         if ($LASTEXITCODE -ne 0) { throw 'Helper build failed; see evidence/build-helper.log' }
     } finally { Pop-Location; $env:GOFLAGS = $savedGoFlags }
-    if (-not $WebAddress) { Remove-Item -LiteralPath (Join-Path $target 'home\web.json') }
     Copy-Item -LiteralPath (Join-Path $target 'home\config-source\SteerlineTest.live.json') -Destination (Join-Path $target 'home\etc\SteerlineTest.json')
     & (Join-Path $target 'bin\debug-helper.exe') debug init *> (Join-Path $target 'evidence\init.log')
     if ($LASTEXITCODE -ne 0) { throw 'Debug initialization failed; see evidence/init.log' }
@@ -189,12 +186,12 @@ try {
         & (Join-Path $target 'bin\debug-helper.exe') debug init-b *> (Join-Path $target 'evidence\init-b.log')
         if ($LASTEXITCODE -ne 0) { throw 'Second project initialization failed; see evidence/init-b.log' }
     }
-    if ($WebAddress) { $manifest.web_binary_sha256 = (Get-FileHash -LiteralPath (Join-Path $target 'bin\steerline-web.exe')).Hash.ToLowerInvariant() }
+    $manifest.web_binary_sha256 = (Get-FileHash -LiteralPath (Join-Path $target 'bin\steerline-web.exe')).Hash.ToLowerInvariant()
     $manifest.binary_sha256 = (Get-FileHash -LiteralPath (Join-Path $target 'bin\steerline.exe')).Hash.ToLowerInvariant()
     $manifest.helper_sha256 = (Get-FileHash -LiteralPath (Join-Path $target 'bin\debug-helper.exe')).Hash.ToLowerInvariant()
     $manifest.status = 'ready'
     Write-Manifest
-    [pscustomobject]@{ release = $release; root = $target; start = (Join-Path $target 'start.bat'); console = (Join-Path $target 'console.bat') } | ConvertTo-Json -Compress
+    [pscustomobject]@{ release = $release; root = $target; start = (Join-Path $target 'start.bat'); web = (Join-Path $target 'web.bat') } | ConvertTo-Json -Compress
 } catch {
     $manifest.status = 'failed'
     $manifest.error = $_.Exception.Message

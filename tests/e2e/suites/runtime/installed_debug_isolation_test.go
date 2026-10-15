@@ -125,7 +125,7 @@ func TestInstalledDebugIsolation(t *testing.T) {
 		t.Fatalf("decode debug service entry: %v: %s", err, startJSON)
 	}
 	if requested.Status != "window-required" || requested.LauncherPath != filepath.Join(debug.Home, "service-window.bat") || requested.ConfigPath != debug.Config {
-		t.Fatalf("console/service entry did not stay in debug home: %+v", requested)
+		t.Fatalf("service entry did not stay in debug home: %+v", requested)
 	}
 	debugEvidence["start_service_window_required"] = requested
 
@@ -156,17 +156,6 @@ func TestInstalledDebugIsolation(t *testing.T) {
 		"home":         debug.Home, "config": debug.Config, "instance_id": serviceInstance(debugSnapshot),
 		"startup_log": filepath.Join(filepath.Dir(debug.Database), "service", "startups", *debugSnapshot.Runtime.Service.StartupID, "service.log"),
 	}
-	consoleBatch := filepath.Join(debug.Home, "console.bat")
-	consoleCommand := debug.Command("cmd.exe", "/d", "/c", "call", consoleBatch, "--steerline-console-child", debug.Config)
-	consoleOutput, consoleErr := s.RunPseudoConsole(consoleCommand, "debug-runtime-console", s.Run.SourceCommit)
-	if consoleErr != nil {
-		t.Fatalf("run generated debug console.bat under ConPTY: %v\n%s", consoleErr, consoleOutput)
-	}
-	for _, expected := range []string{debugExe, debug.Home, debug.Config, s.Run.SourceCommit, s.Run.SourceDirty} {
-		assertContains(t, string(consoleOutput), expected)
-	}
-	debugEvidence["console_runtime_identity"] = map[string]string{"entry": "generated console.bat --steerline-console-child via Windows ConPTY", "executable": debugExe, "home": debug.Home, "config": debug.Config, "source_commit": s.Run.SourceCommit, "source_dirty": s.Run.SourceDirty, "transcript": filepath.Join(s.Output, "debug-runtime-console.log")}
-	writeRuntimeEvidence(t, s.Output, evidence)
 	debugHashBeforeRunningBuild := fileSHA256(t, debugExe)
 	buildOutput, buildErr := runDebugScript(s, debug, powershell, debugScript, installed.Home, "build")
 	if buildErr == nil || !strings.Contains(strings.ToLower(string(buildOutput)), "debug executable is still running") {
@@ -532,35 +521,21 @@ func assertDefaultUIAliasRejected(t *testing.T, s *testenv.Scenario, project, in
 		t.Fatal(err)
 	}
 	sentinelHash := fileSHA256(t, sentinel)
-	views := filepath.Join(installedUI, "views")
-	if _, err := os.Stat(views); !os.IsNotExist(err) {
-		t.Fatalf("installed UI views already exist before alias test: %s: %v", views, err)
-	}
 	alias := filepath.Join(project.Home, "ui")
-	var scriptOutput, productOutput []byte
+	var scriptOutput []byte
 	withJunction(t, s, project, powershell, alias, installedUI, "default-ui-alias", func() {
 		var scriptErr error
-		scriptOutput, scriptErr = runDebugScript(s, project, powershell, script, installed.Home, "console")
+		scriptOutput, scriptErr = runDebugScript(s, project, powershell, script, installed.Home, "launchers")
 		if scriptErr == nil || !strings.Contains(strings.ToLower(string(scriptOutput)), "writable path must resolve inside its home") {
 			t.Fatalf("debug runtime accepted default UI junction: err=%v output=%s", scriptErr, scriptOutput)
 		}
-		productCommand := project.Command(executable, "console", "-config", project.Config)
-		var productErr error
-		productOutput, productErr = s.RunPseudoConsole(productCommand, "default-ui-native-console-alias", "UI_ALIAS_READY")
-		if productErr == nil || !strings.Contains(strings.ToLower(string(productOutput)), "ui views directory resolves outside application home") {
-			t.Fatalf("native console did not reject UI junction before creating views: err=%v output=%s", productErr, productOutput)
-		}
-		if _, err := os.Stat(views); !os.IsNotExist(err) {
-			t.Fatalf("rejected console created installed UI views directory: %v", err)
-		}
 		if actual := fileSHA256(t, sentinel); actual != sentinelHash {
-			t.Fatalf("rejected console changed installed UI sentinel: before=%s after=%s", sentinelHash, actual)
+			t.Fatalf("rejected launcher changed installed UI sentinel: before=%s after=%s", sentinelHash, actual)
 		}
 	})
 	evidence["default_ui_alias_rejected"] = map[string]any{
 		"alias": alias, "installed_ui": installedUI, "installed_sentinel": sentinel, "installed_sentinel_sha256": sentinelHash,
-		"script_refusal": string(scriptOutput), "native_console_refusal": string(productOutput),
-		"installed_views_directory_created": false,
+		"script_refusal": string(scriptOutput),
 	}
 }
 
@@ -1001,10 +976,6 @@ func latestServiceLog(t *testing.T, project *testenv.Project) []byte {
 
 func assertGeneratedLaunchers(t *testing.T, home, executable string) {
 	t.Helper()
-	console, err := os.ReadFile(filepath.Join(home, "console.bat"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	service, err := os.ReadFile(filepath.Join(home, "service-window.bat"))
 	if err != nil {
 		t.Fatal(err)
@@ -1013,9 +984,6 @@ func assertGeneratedLaunchers(t *testing.T, home, executable string) {
 		data []byte
 		want string
 	}{
-		{console, `set "STEERLINE_HOME=%SHOME%"`},
-		{console, `set "CODEX_HOME=%SHOME%\codex"`},
-		{console, `set "BIN=` + executable + `"`},
 		{service, `set "STEERLINE_HOME=%SHOME%"`},
 		{service, `set "CODEX_HOME=%SHOME%\codex"`},
 		{service, `set "BIN=` + executable + `"`},
@@ -1024,10 +992,8 @@ func assertGeneratedLaunchers(t *testing.T, home, executable string) {
 			t.Fatalf("launcher did not bind to its own home: missing %q", value.want)
 		}
 	}
-	for _, data := range [][]byte{console, service} {
-		if strings.Contains(string(data), `set "BIN=%SHOME%\bin\steerline.exe"`) {
-			t.Fatal("debug launcher retained a home-bin fallback")
-		}
+	if strings.Contains(string(service), `set "BIN=%SHOME%\bin\steerline.exe"`) {
+		t.Fatal("debug launcher retained a home-bin fallback")
 	}
 }
 

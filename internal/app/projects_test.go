@@ -72,30 +72,6 @@ func TestListProjects(t *testing.T) {
 
 }
 
-func TestConsoleProjectRefExposesCurrentRuntimeIdentity(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("STEERLINE_HOME", home)
-	localGlobalExecutionFixture(t)
-	writeProjectConfig(t, "runtime", minimalConfig(projectRepo(t)))
-
-	refs, err := LoadConsoleProjects("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(refs) != 1 {
-		t.Fatalf("console loaded %d project refs", len(refs))
-	}
-	executable, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	ref := refs[0]
-	configPath := filepath.Join(home, "etc", "runtime.json")
-	if ref.ApplicationHome != home || ref.ExecutablePath != executable || ref.ConfigPath != configPath || ref.SourceCommit == "" || ref.SourceDirty == "" {
-		t.Fatalf("console runtime identity is incomplete or misbound: %+v", ref)
-	}
-}
-
 func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("STEERLINE_HOME", home)
@@ -103,7 +79,7 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	must := []string{"console.bat", "service-window.bat", "README.txt", "start-app.bat", "stop-app.bat", "start-web.bat", "stop-web.bat", "web.bat"}
+	must := []string{"service-window.bat", "README.txt", "start-app.bat", "stop-app.bat", "start-web.bat", "stop-web.bat", "web.bat"}
 	got := map[string]bool{}
 	for _, p := range written {
 		got[filepath.Base(p)] = true
@@ -113,12 +89,8 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 			t.Fatalf("launcher %s not written (wrote %v)", name, written)
 		}
 	}
-	console, e := os.ReadFile(filepath.Join(home, "console.bat"))
-	if e != nil {
-		t.Fatal(e)
-	}
-	if !strings.Contains(string(console), "console -config") || !strings.Contains(string(console), "\r\n") {
-		t.Fatalf("console.bat missing current console entry or CRLF:\n%s", console)
+	if _, err := os.Stat(filepath.Join(home, "console.bat")); !os.IsNotExist(err) {
+		t.Fatal("retired TUI launcher generated")
 	}
 	window, e := os.ReadFile(filepath.Join(home, "service-window.bat"))
 	if e != nil {

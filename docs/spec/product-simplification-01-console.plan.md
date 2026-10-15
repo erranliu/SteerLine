@@ -1,5 +1,7 @@
 # Plan：精简候选控制台与会话阅读
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 绑定 [Spec](product-simplification-01-console.spec.md)，基线 `75474dcece26d807367e106a89a992f01f53fafd`，分支 `codex/product-simplification-console`。仅实施第一批；其他两批规格保留待实施，不改其产品行为。
 
 ## 实现

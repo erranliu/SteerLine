@@ -1,8 +1,8 @@
 # 本机客户端协议 v1
 
-本页描述 #45 基线与[任务 #91](../spec/tui-http-client.spec.md)当前源码。TUI 已统一消费 HTTP；实现/验收/合入事实归专属验收与 execution-map。
+本页描述当前项目 HTTP 公共协议。Web 经应用目录访问项目服务，原 #91 TUI 已退役；接口的有效性按实际公共消费者维护，历史验收不冒充当前复验。
 
-纯契约在 `internal/product/httpcontract`，客户端在 `httpclient`，受限文件能力在 `httpfs`；`httpapi` 提供服务端 handler，TUI 由 `consoleapp` 组装。服务继续拥有 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和唯一交付状态；HTTP 只映射现有 `product/api` DTO 与命令入口。
+纯契约在 `internal/product/httpcontract`，客户端在 `httpclient`，受限文件能力在 `httpfs`；`httpapi` 提供服务端 handler；Web 经 Go 应用目录转接。服务继续拥有 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和唯一交付状态；HTTP 只映射现有 `product/api` DTO 与命令入口。
 
 ## 发现、连接和身份
 
@@ -34,7 +34,7 @@ if ($identity.protocol -ne 'steerline-client/v1' -or $identity.project_id -ne $d
 }
 ```
 
-Go HTTP consumers use `httpclient.Open(ctx, runDir, projectIdentity)`; the TUI composition entry is `consoleapp.Prepare`. `app.OpenHTTPClient(ctx, configPath)` remains a CLI/application convenience entry and pulls in the app composition package; it is not the isolated TUI client entry. All three connect to an explicitly started instance and never start a replacement service.
+Go HTTP consumers use `httpclient.Open(ctx, runDir, projectIdentity)`. Web 通过应用目录访问明确启动的原项目实例，不创建替代服务。
 
 ## 查询路由
 
@@ -51,7 +51,7 @@ Go HTTP consumers use `httpclient.Open(ctx, runDir, projectIdentity)`; the TUI c
 | `GET /v1/projects/{project_id}/presentation` | `ProjectPresentation`：现有安全执行方案摘要、DefaultProfileID、配置 digest 和不可用原因，供客户端选择 start_task/start_candidate 的 profile ID |
 | `GET /v1/projects/{project_id}/runs/{run_id}` | 精确 run 的 `api.CandidateSummary`，含候选、Decision、PR 与交付状态 |
 | `GET /v1/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&cursor=` | `ActivityPage`，只读规范数据库活动，不回退私有日志 |
-| `GET /v1/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&recent=true` | 同一原 Execution/Attempt 的有界近期活动投影；TUI 刷新使用，不能混用流式 cursor |
+| `GET /v1/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&recent=true` | 同一原 Execution/Attempt 的有界近期活动投影；近期查询使用，不能混用流式 cursor |
 | `GET /v1/projects/{project_id}/runs/{run_id}/conversation?execution_id=&attempt_id=&session_id=&source=&turn_id=&finals_only=&cursor=&limit=` | 有界会话事件页和原正文引用 |
 | `GET /v1/projects/{project_id}/runs/{run_id}/final` | `FinalReply`，返回 final 事件及不超过 4 MiB 的完整正文；更大的正文使用 body 路由分段读取 |
 | `GET /v1/projects/{project_id}/runs/{run_id}/body?ref=<hex-json>&offset=&limit=` | `api.ConversationBodyPage`，原消息 revision/SHA 校验，单页不超过 256 KiB |
@@ -95,9 +95,9 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 
 发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；权威 `command_not_found` 才能按原完整 envelope、原 ID、原 payload 和原版本补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `local-api/commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
 
-TUI 将完整原信封保存在 `<home>/ui/http-requests/<project_id>/<request_id>.json`，POST 前原子发布；该客户端记录不成为业务权威。对原生查看器，HTTP 持久结果只用于防止重复打开；未知结果不重新调用打开器。
+Web 将完整原信封保存在现有 IndexedDB；服务端的原请求记录仍是跨动作仲裁。原生查看器的未知结果不得重放。
 
-停服以原 HTTP applied 回执、认证后的原 OS 进程 generation 退出和两个已有锁释放共同确认。客户端不读取宿主回执文件；缺证据时显示结果未核实。TUI 只结束客户端；断线保留本窗口观察与草稿，禁止变更，重新连接不会生成替代请求。
+停止项目服务沿既有 CLI/服务入口执行；未知结果保留诊断。应用/Web 服务各自通过私有原生停止入口核验原进程退出，不随浏览器关闭停止业务。
 
 本协议不提供 SSE、离线查询进程、完整原始过程阅读器、规划 handler 或通用 artifact DTO。
 
@@ -107,6 +107,6 @@ TUI 将完整原信封保存在 `<home>/ui/http-requests/<project_id>/<request_i
 
 `GET /v1/application/identity` 无项目也可用；`GET /v1/application/projects` 返回现有配置目录与逐项诊断，解析和连接分别有界，不建库。`GET /v1/application/projects/{id}/identity` 返回原生真实身份，其他明确允许的查询转到 `/v1/projects/{id}/…`。`POST /v1/application/projects/{id}/commands` 保留完整原信封、目标、实例和数字版本，由原项目最终核验。离线、冲突、身份/连接失败返回不可用；只有原权威缺失保留 `command_not_found`。
 
-应用目录在 `internal/app/application_directory.go`，与 TUI 共用无 UI 的 `projectconnection` 解析器。配置改变/删除撤销旧映射，同 common-dir 冲突拒绝路由；目录缓存经原生身份验证的 HTTP 客户端，每次借用前核对私有 discovery、项目、实例、OS 进程、凭证归属；替换只关闭旧连接的空闲 transport，在途请求不被取消或改向。
+应用目录在 `internal/app/application_directory.go`，使用无 UI 的 `projectconnection` 解析器。配置改变/删除撤销旧映射，同 common-dir 冲突拒绝路由；目录缓存经原生身份验证的 HTTP 客户端，每次借用前核对私有 discovery、项目、实例、OS 进程、凭证归属；替换只关闭旧连接的空闲 transport，在途请求不被取消或改向。
 
 `POST /v1/application/shutdown` 仅正常停止应用入口。`steerline-web.exe` 提供浏览器认证与 `/api/v1/application/projects…` 同源转接，不开放该管理路由；Web 的原生 `/native/identity` 和 `/native/shutdown` 要求独立 launcher Bearer 且无 Origin，不能使用浏览器 cookie 停服。浏览器会话绑定 home/Web 实例，与任一项目实例无关。运行方式和项目 URL 见 [Web 指南](../../web/README.md)。

@@ -94,7 +94,7 @@ func runConfiguredService(ctx context.Context, config Config, mode, startupID, c
 		service.SetStartupMetadata(id)
 		return executionServiceLifetime{service: service, config: input, mode: mode, product: product, localAPI: localAPI}, nil
 	}
-	return steerline.RunConfiguredService(ctx, hostConfig, mode, startupID, console, factory, admission, consoleActivityFormatter{})
+	return steerline.RunConfiguredService(ctx, hostConfig, mode, startupID, console, factory, admission, serviceActivityFormatter{})
 }
 
 func InstallLaunchers() ([]string, error) { return steerline.InstallLaunchers(HomeDir()) }

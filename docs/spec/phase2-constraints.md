@@ -1,5 +1,8 @@
 # 当前阶段共同约束：TUI / HTTP / Go 服务
 
+> 2026-10-15：TUI 专属客户端/交互已退役，本文保留原范围与历史事实；共享 HTTP、服务和进程身份要求继续有效。当前范围见[TUI 退役](../spec/tui-retirement.spec.md)。
+
+
 2026-10-13 用户确认当前规划仅到[任务 #91](tui-http-client.spec.md)交付。旧三节点及 WinUI 页面退出活动范围；配套[Plan](tui-http-client.plan.md)/[验收](../acceptance/tui-http-client.md)，实际范围归[execution-map](../roadmap/execution-map.md)。本页不另立任务。
 
 Go 服务核验 Task/WorkflowRun/Execution/Attempt/Decision/Command/Operation/唯一 TaskDelivery，SQLite与原命令权威保持。TUI 全部业务读取/操作经 HTTP，纯产品值/HTTP 契约/客户端不依赖具体业务实现；服务端仍用内部产品适配器。偏好、草稿、原信封与连接发现不是业务权威。

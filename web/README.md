@@ -41,7 +41,7 @@ Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的
 & 'C:\SteerlineDebug\<同一包>\web.bat'
 ```
 
-默认 live，AI 显式 `--simulate`；首次方案冻结。生成器维护双 exe、配置和启动器，两项目使用独立 clone/common-dir/provider，配置源在 `home/config-source`，etc 仅保存活动项目。包内 `reset-SteerlineTest.bat` 同时检查两项目、应用、Web 与控制台锁，再重置本包执行状态。不使用安装目录准备或运行调试。
+Web 是唯一交互前端，原 TUI 已移除。默认 live，AI 显式 `--simulate`；首次方案冻结。生成器默认包含业务/Web 双 exe、helper、配置和启动器，两项目使用独立 clone/common-dir/provider，配置源在 `home/config-source`，etc 仅保存活动项目。包内 `reset-SteerlineTest.bat` 同时检查两项目、应用、Web 与启动器锁，再重置本包执行状态。不使用安装目录准备或运行调试。
 
 热更新：先在 `web/` 运行 `npm run dev`，为 Vite 设置 `STEERLINE_WEB_DEV_PORT=18742`；启动本包 Web 前设置 `STEERLINE_WEB_DEV_ORIGIN=http://127.0.0.1:5173`。浏览器始终通过 Go 的固定 Origin，只有静态/Vite HMR 路由转到 Vite；认证和 API 留在 Go。
 

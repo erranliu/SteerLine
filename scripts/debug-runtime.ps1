@@ -12,7 +12,7 @@ param(
     [string]$Config,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('build', 'launchers', 'console', 'service', 'cli')]
+    [ValidateSet('build', 'launchers', 'service', 'cli')]
     [string]$Operation,
 
     [string[]]$Arguments = @()
@@ -182,7 +182,7 @@ CODEX_HOME: $debugHomePath\codex
 Project config: $ProjectConfig
 Source executable: $Executable
 
-console.bat and service-window.bat run the source executable above. This home
+service-window.bat runs the source executable above. This home
 owns its configuration, SQLite state, logs, service files, worktrees, Codex
 sessions, and copied authentication file. No executable copy is installed in
 this home's bin directory.
@@ -249,7 +249,7 @@ try {
     $launcher = Join-Path $debugHomePath 'service-window.bat'
     # Preflight every script/product output before the first side effect. A
     # disjoint home root does not imply its existing output targets are disjoint.
-    foreach ($relative in @('bin', 'bin\steerline.exe', 'etc', 'execution.json', 'state', 'ui', 'ui\views', 'codex', 'codex\auth.json', 'console.bat', 'service-window.bat', 'README.txt')) {
+    foreach ($relative in @('bin', 'bin\steerline.exe', 'etc', 'execution.json', 'state', 'ui', 'codex', 'codex\auth.json', 'service-window.bat', 'README.txt')) {
         Assert-WritablePathWithin $debugHomePath (Join-Path $debugHomePath $relative)
     }
     Assert-WritablePathWithin $repoPath (Join-Path $repoPath 'bin')
@@ -282,21 +282,9 @@ try {
             'launchers' {
                 Assert-SourceExecutable $buildExe
                 Invoke-Product $buildExe @('launchers')
-                Set-DebugRuntimeOnLauncher (Join-Path $debugHomePath 'console.bat') $buildExe
                 Set-DebugRuntimeOnLauncher $launcher $buildExe
                 Set-DebugCodexHome
                 Write-DebugReadme (Join-Path $debugHomePath 'README.txt') $buildExe $configPath
-            }
-            'console' {
-                Assert-SourceExecutable $buildExe
-                if (-not (Test-Path -LiteralPath (Join-Path $debugHomePath 'console.bat') -PathType Leaf) -or
-                    -not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
-                    throw "Debug launchers are missing under '$debugHomePath'; run -Operation launchers first."
-                }
-                Assert-DebugLauncherExecutable (Join-Path $debugHomePath 'console.bat') $buildExe
-                Assert-DebugLauncherExecutable $launcher $buildExe
-                Set-DebugCodexHome
-                Invoke-Product $buildExe @('console', '-config', $configPath)
             }
             'service' {
                 Assert-SourceExecutable $buildExe
@@ -312,7 +300,7 @@ try {
                 if ($Arguments.Count -eq 0) {
                     throw 'CLI requires a SteerLine command in -Arguments.'
                 }
-                if ($Arguments[0] -in @('install', 'launchers', 'console')) {
+                if ($Arguments[0] -in @('install', 'launchers')) {
                     throw "Use the dedicated debug runtime operation for '$($Arguments[0])'."
                 }
                 foreach ($argument in $Arguments) {

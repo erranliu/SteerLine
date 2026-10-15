@@ -18,12 +18,8 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 `./build.ps1 -Web` 生成 `steerline.exe` 和独立 `steerline-web.exe`，仅 Web 程序嵌入页面。显式设置 `STEERLINE_HOME` 后，分别启动 `steerline serve-app`、`steerline-web serve`，用 `steerline-web open` 授权打开；项目服务通过原生入口独立启动。固定浏览器地址放在 `<home>/web.json`，同一地址可切换该 home 已配置项目，关闭 Web 不停止业务服务或 worker。调试仍先生成新包，详见 [Web 指南](web/README.md)。
 
-## 执行控制台
+## 独立调试
 
-临时或 AI 调试统一运行 `./scripts/new-debug-release.ps1`，复制 `debug-template/` 并生成 `C:\SteerlineDebug` 下的完整独立 SteerlineTest 环境。执行配置在复制源维护，默认 live；AI 显式使用 `start.bat --simulate` / `console.bat --simulate`。任务状态通过包内 `reset-SteerlineTest.bat` 无备份重置，不使用安装环境。操作见[安装与调试](docs/runtime-install-debug.md)。
+临时或 AI 调试统一运行 `./scripts/new-debug-release.ps1`，生成 `C:\SteerlineDebug` 下包含业务、Web 和 helper 的独立 SteerlineTest 包。默认 Web 地址为 `127.0.0.1:18742`，可用 `-WebAddress` 指定另一固定端口。默认 live；AI 使用 `start.bat --simulate`，启动后用 `web.bat` 打开页面。任务状态由包内 `reset-SteerlineTest.bat` 无备份重置，活动项目/应用/Web/worker 阻止重置。操作见[安装与调试](docs/runtime-install-debug.md)。
 
-运行 `steerline console` 打开当前 TUI，默认枚举 `<STEERLINE_HOME>/etc/*.json` 连接配置，从 HTTP 服务取得执行方案摘要；`-config <path>` 打开明确项目，`-run-id <run-id|task-id>` 定位已有运行。全部业务查询和操作经本机 HTTP API 到 Go 服务；Windows console.bat 进入同一控制台；中心服务由用户从 service-window.bat 独立启动，退出控制台不会停止服务或 worker。
-
-当前控制台使用任务列表、候选摘要和运行/反馈三窗，支持候选切换、原地输入和完整最终回复的只读详情。目标选择、操作键位、草稿及重开语义统一见[执行控制台设计与操作](docs/product-design/execution-console.md)；配置和权限见[执行方案](docs/product-design/execution-profiles.md)，生命周期见[整体架构](docs/architecture.md)。中心仅采集完整最终回复、问题及必要执行事实；完整过程在原生工具查看。恢复仅继续原会话，原会话不可核实时由人处理，详见[会话与恢复精简](docs/spec/product-simplification-04-conversation-recovery.spec.md)。
-
-Windows 控制台选中已开始原生执行轮次的本机 Codex 候选后，按 `Ctrl+N` 可用 Codex CLI 打开原 app-server 会话，实时查看执行过程；任务操作仍通过 SteerLine。
+Web 是唯一交互前端，原 TUI、`steerline console` 和 `console.bat` 已移除。后台 CLI、服务窗口与 `run -console` 日志、原生 Codex/Orca 会话查看继续保留；范围和验证见[TUI 退役](docs/spec/tui-retirement.spec.md)。

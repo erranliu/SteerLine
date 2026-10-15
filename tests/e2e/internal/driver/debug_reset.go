@@ -24,11 +24,6 @@ func (d *debugRelease) reset(check bool) error {
 	if d.webProjects == 2 {
 		scopes = append(scopes, d.secondary())
 	}
-	viewRoot := filepath.Join(d.home, "ui", "views")
-	views, err := os.ReadDir(viewRoot)
-	if err != nil {
-		return err
-	}
 	dirs := []string{d.root}
 	if _, err := os.Stat(filepath.Join(d.root, "runtime-launcher")); err == nil {
 		dirs = append(dirs, filepath.Join(d.root, "runtime-launcher"))
@@ -45,11 +40,6 @@ func (d *debugRelease) reset(check bool) error {
 			dirs = append(dirs, dir)
 		}
 	}
-	for _, view := range views {
-		if view.IsDir() {
-			dirs = append(dirs, filepath.Join(viewRoot, view.Name()))
-		}
-	}
 	var locks []*host.RepoLock
 	defer func() {
 		for i := len(locks) - 1; i >= 0; i-- {
@@ -59,12 +49,12 @@ func (d *debugRelease) reset(check bool) error {
 	for _, dir := range dirs {
 		lock, err := host.LockRepository(dir)
 		if err != nil {
-			return fmt.Errorf("close this debug service, Web, application gateway, workers and consoles before reset: %w", err)
+			return fmt.Errorf("close this debug service, Web, application gateway, workers before reset: %w", err)
 		}
 		locks = append(locks, lock)
 	}
 	for _, scope := range scopes {
-		if err = scope.resetState(true, views); err != nil {
+		if err := scope.resetState(true); err != nil {
 			return err
 		}
 	}
@@ -72,15 +62,14 @@ func (d *debugRelease) reset(check bool) error {
 		return nil
 	}
 	for _, scope := range scopes {
-		if err = scope.resetState(false, views); err != nil {
+		if err := scope.resetState(false); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-func (d *debugRelease) resetState(check bool, views []os.DirEntry) error {
+func (d *debugRelease) resetState(check bool) error {
 	runDir := d.stateDir()
-	viewRoot := filepath.Join(d.home, "ui", "views")
 	dbPath := filepath.Join(runDir, "steerline.db")
 	if _, err := os.Stat(dbPath); err != nil {
 		return err
@@ -174,56 +163,7 @@ func (d *debugRelease) resetState(check bool, views []os.DirEntry) error {
 		return err
 	}
 	rows.Close()
-	// Read and validate journals before mutating anything; originals live only in memory, not backups.
-	type journal struct {
-		path     string
-		original []byte
-		next     []byte
-	}
-	var journals []journal
-	for _, v := range views {
-		if !v.IsDir() {
-			continue
-		}
-		path := filepath.Join(viewRoot, v.Name(), "view.json")
-		raw, e := os.ReadFile(path)
-		if os.IsNotExist(e) {
-			continue
-		}
-		if e != nil {
-			return e
-		}
-		var value map[string]any
-		if e = json.Unmarshal(raw, &value); e != nil {
-			return e
-		}
-		projects, ok := value["projects"].(map[string]any)
-		if value["version"] != float64(2) || !ok {
-			return fmt.Errorf("unsupported console journal: %s", path)
-		}
-		changed := false
-		for key, p := range projects {
-			entry, ok := p.(map[string]any)
-			if !ok {
-				return errors.New("invalid console journal project")
-			}
-			config, _ := entry["config_path"].(string)
-			run, _ := entry["run_dir"].(string)
-			if strings.EqualFold(filepath.Clean(config), d.config) || strings.EqualFold(filepath.Clean(run), runDir) {
-				delete(projects, key)
-				changed = true
-			}
-		}
-		if changed {
-			value["updated_at"] = time.Now().UTC().Format(time.RFC3339Nano)
-			next, e := json.MarshalIndent(value, "", "  ")
-			if e != nil {
-				return e
-			}
-			journals = append(journals, journal{path, raw, append(next, '\n')})
-		}
-	}
-	fmt.Printf("Reset %d SteerlineTest tasks and %d console journals; preserve definitions, dependencies, Git and PR; no backup.\n", len(tasks), len(journals))
+	fmt.Printf("Reset %d SteerlineTest tasks; preserve definitions, dependencies, Git and PR; no backup.\n", len(tasks))
 	if check {
 		return nil
 	}
@@ -268,25 +208,9 @@ func (d *debugRelease) resetState(check bool, views []os.DirEntry) error {
 	if invalid {
 		return errors.New("reset foreign key validation failed")
 	}
-	changed := 0
-	committed := false
-	defer func() {
-		if !committed {
-			for i := 0; i < changed; i++ {
-				_ = replaceDebugJournal(journals[i].path, journals[i].original)
-			}
-		}
-	}()
-	for _, j := range journals {
-		if err = replaceDebugJournal(j.path, j.next); err != nil {
-			return err
-		}
-		changed++
-	}
 	if err = tx.Commit(); err != nil {
 		return err
 	}
-	committed = true
 	// These are local control/runtime journals, not Git, provider facts or authentication.
 	for _, name := range []string{"control", "service", "runs"} {
 		path := filepath.Join(runDir, name)
@@ -309,24 +233,4 @@ func (d *debugRelease) resetState(check bool, views []os.DirEntry) error {
 	}
 	fmt.Println("DONE: SteerlineTest state reset without backup")
 	return nil
-}
-func replaceDebugJournal(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".reset-*")
-	if err != nil {
-		return err
-	}
-	name := f.Name()
-	defer os.Remove(name)
-	if _, err = f.Write(data); err != nil {
-		f.Close()
-		return err
-	}
-	if err = f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err = f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(name, path)
 }

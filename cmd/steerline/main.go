@@ -28,7 +28,7 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <console|serve-app|stop-app|run|start-service|stop-service|check|control|task|answer|home|install|launchers> [-config config.json]")
+		return fmt.Errorf("usage: steerline <serve-app|stop-app|run|start-service|stop-service|check|control|task|answer|home|install|launchers> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
@@ -45,9 +45,6 @@ func run() error {
 		ctx, timeout := context.WithTimeout(ctx, 45*time.Second)
 		defer timeout()
 		return steerlineapp.StopApplication(ctx)
-	}
-	if os.Args[1] == "console" {
-		return runConsoleCommand(os.Args[2:])
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -322,34 +319,6 @@ func run() error {
 		return nil
 	}
 	return fmt.Errorf("unsupported command %q", command)
-}
-
-func runConsoleCommand(args []string) error {
-	fs := flag.NewFlagSet("console", flag.ContinueOnError)
-	config := fs.String("config", "", "open one project config; default enumerates STEERLINE_HOME/etc/*.json")
-	runID := fs.String("run-id", "", "focus an existing run ID or task ID in the selected project")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		return errors.New("unexpected positional arguments")
-	}
-	if !stdinIsTTY() || !stdoutIsTTY() {
-		return errors.New("console requires an interactive terminal")
-	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	return steerlineapp.RunConsole(ctx, *config, *runID)
-}
-
-func stdinIsTTY() bool {
-	info, e := os.Stdin.Stat()
-	return e == nil && info.Mode()&os.ModeCharDevice != 0
-}
-
-func stdoutIsTTY() bool {
-	info, e := os.Stdout.Stat()
-	return e == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 // printHome shows where this machine keeps the shared SteerLine binary, configs

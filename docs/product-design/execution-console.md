@@ -1,8 +1,10 @@
 # 执行控制台设计与操作
 
+> TUI 已退役，以下仅保留历史设计。当前交互入口为 Web，范围见[退役 Spec](../spec/tui-retirement.spec.md)。
+
 > 2026-10-13 已确认[#91](../spec/tui-http-client.spec.md)保留本页界面/操作并将业务访问改为 HTTP。当前已改用纯 HTTP 客户端。离线仅保留本窗口最后观察与未发送草稿，禁止新业务查询/变更；重开没有观察时显示不可查询原因，不直接读库。验证与待验见专属验收。
 
-本文维护当前 CLI/TUI 执行控制台的布局、目标选择和操作方式，支持范围为本地 Codex 与本机 Orca。产品规则分别由[数据模型](data-model.md)、[决策与反馈](decisions.md)和[会话事件](conversation-events.md)维护；拟议原生界面见[规划与界面设计](planning-ui.md)。操作与键位以 [model_keys.go](../../internal/console/model_keys.go) 和[界面帮助](../../internal/console/view.go)的当前实现为准。
+本文维护当前 CLI/TUI 执行控制台的布局、目标选择和操作方式，支持范围为本地 Codex 与本机 Orca。产品规则分别由[数据模型](data-model.md)、[决策与反馈](decisions.md)和[会话事件](conversation-events.md)维护；拟议原生界面见[规划与界面设计](planning-ui.md)。操作与键位以 [model_keys.go](https://github.com/erranliu/SteerLine/blob/47fafc12721ceb8fa39ba1ab227872fd14513bcb/internal/console/model_keys.go) 和[界面帮助](https://github.com/erranliu/SteerLine/blob/47fafc12721ceb8fa39ba1ab227872fd14513bcb/internal/console/view.go)的当前实现为准。
 
 ## 打开与连接
 

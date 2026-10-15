@@ -108,7 +108,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		timeout = 10 * time.Minute
 	}
 	if id == "workspace.orca-removal-restart" {
-		// Native worktree creation/removal, two ConPTY queries, service restart
+		// Native worktree creation/removal, HTTP queries, service restart
 		// and two staged workflows share this bound; each command stays bounded.
 		timeout = 10 * time.Minute
 	}
@@ -142,9 +142,9 @@ func (s *Scenario) Must(err error) {
 	}
 }
 
-// Freeze the business deadline before independent service/resource cleanup.
+// FinishBody freezes the business deadline before independent service/resource cleanup.
 // Cancelling this context also prevents later business I/O after this boundary.
-func (s *Scenario) finishBody() error {
+func (s *Scenario) FinishBody() error {
 	if !s.bodyFinishedAt.IsZero() {
 		return errors.New("scenario business phase already finished")
 	}
@@ -722,7 +722,7 @@ func (p *Project) Record(label string, snap Snapshot) {
 
 func (s *Scenario) cleanup() {
 	if s.bodyFinishedAt.IsZero() {
-		_ = s.finishBody()
+		_ = s.FinishBody()
 	}
 	bodyContextErr := s.bodyContextErr
 	defer s.cancel()
