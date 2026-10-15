@@ -14,6 +14,8 @@ SteerRunner 跨仓拆分正在实施，切换安排见[接入 Plan](../spec/stee
 
 本地 MXC 权限差异：工具 TEMP/TMP 由原生 AppContainer 管理，可与 app-server 的宿主临时目录不同。Runner 保持固定工作区/Git 写入根，不强迫工具临时目录穿透到宿主 Git admin，不修改原生权限。验收须在真实工具 token 内核验 AppContainer、原生临时文件读写及本包兄弟目录拒写；旧的 TEMP=Git admin 路径断言不能用于 MXC。app-server 自身临时目录仍由 Runner 固定在所属工作区管理目录。具体真机结果仍按两个仓库专属 acceptance 登记。
 
+本次本机资格探测预算与 Runner 外部命令统一为 30 秒，覆盖冷启动的原生版本查询。每 Attempt 仍只在资格缺失时探测，失败阻断且零新会话/输入，不自动重试，不缓存跳过版本或权限资源校验。运行失败与重验明细见专属 acceptance。
+
 ## 职责与规则归属
 
 “Worker 层”指 `internal/execution` 内持久化的 worker 执行规则，而非仅内存中的 Worker 或 observer 句柄。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。
