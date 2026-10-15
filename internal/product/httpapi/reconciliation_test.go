@@ -428,3 +428,24 @@ func TestAPIFormalConsumerWinsRegistrationWindow(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIStartTaskBindsServerResolvedGraphToOriginalReceipt(t *testing.T) {
+	for _, graph := range []uint64{0, 4, 7} {
+		t.Run(fmt.Sprint(graph), func(t *testing.T) {
+			envelope := CommandEnvelope{RequestID: strings.Repeat("c", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "start_task", TargetID: "8", ExpectedVersion: 3, ExpectedControlRevision: 7, ExpectedGraphRevision: graph, Payload: json.RawMessage(`{"execution_profile_id":"fixture"}`)}
+			revision := uint64(7)
+			input := api.ControlInput{RequestID: envelope.RequestID, InstanceID: envelope.InstanceID, Action: api.StartTask, ExpectedRevision: &revision, RequestedBy: "tester", Payload: api.ControlPayload{TaskID: "8", ExpectedTaskVersion: 3, ExpectedGraphRevision: 4, ExecutionProfileID: "fixture", ExecutionProfileDigest: "frozen-profile"}}
+			record := requestRecord{Envelope: envelope, Control: &input}
+			request := registryTestControlRequest(input)
+			if matchesControl(envelope, &record, request) != (graph == 0 || graph == 4) {
+				t.Fatal("resolved graph does not bind to the original mapped intent")
+			}
+			changed := input.Payload
+			changed.ExpectedGraphRevision = 9
+			request.Payload, _ = json.Marshal(changed)
+			if matchesControl(envelope, &record, request) {
+				t.Fatal("different published graph reused original receipt")
+			}
+		})
+	}
+}

@@ -128,3 +128,12 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 最终长期隔离只验证调用方职责，删除原生执行旧record断言，不从Runner投影伪造旧WorkflowRun/Execution。双home改用相同任务ID/相同request ID的独立作废命令与原回执重放：A操作不改B任务/版本/provider，B操作不改A，重放不改图版本，两个宿主/项目/数据库身份独立且无Runner候选。完整三阶段/交付不在隔离场景重复，归现有delivery与生成包单项目验证。路径检查保留state/run_dir/SQLite副作用前拒绝；worktree_root已归Runner，作为退役字段拒绝而非SteerLine可配置工作区验证。构建和宿主实例/锁检查继续保留。
 
 测试计划映射[TR-A3/TR-A4/TR-A6](../acceptance/tui-retirement.md#验收项)：先只读固定现有Runner EXE到本次临时依赖副本，记录实际source_commit/version/SHA，不构建或修改另一仓库/安装目录；以 `STEERRUNNER_EXE=<副本>` 运行四项runtime、L1和runner/驱动必要回归。生成包执行 `scripts/test-debug-release.ps1 -SteerRunnerExe <副本>`，仍单一生成流程、全新simulate包，独立进程参数须贯通Runner选择。正常/失败收尾除调用方stop与测试Job外，按已有公开CleanupRunner核对原候选/服务停止，reset之前明确停止Runner服务；不读取Runner私有库/日志。全部剩余E2E编译、文档/差异检查。实际证据另登acceptance，旧宿主/旧执行owner版本通过不冒充最新通过；远端Orca能力仍由独立Runner实现保留，不在本任务新跑真机。
+
+
+## 7. 原生验证上下文与补验发现
+
+Runner保持调用方用户/权限完全一致，不能从当前受限工具上下文擅自换权限启动；直接受限上下文拒绝结果保留。新增最小Windows入口 `scripts/test-runtime-isolation.ps1 -SteerRunnerExe <固定副本>`，只在与现有浏览器测试相同的原生独立上下文调用原test-feedback四场景，仍由注册表/冻结二进制/场景期限/并发白名单决定范围。它与生成包脚本共用 `scripts/independent-test.ps1`，不复制另一套业务驱动，不降低产品凭据或Job守卫。
+
+补验确认的调用方回执接线修正：start_task可不携带显式图版本，命令端口把当时图版本冻结入原映射意图；原回执查证按该冻结意图匹配，而不是要求实际payload的图版本为0。明确携带图版本时仍须原值绑定，发布的payload仍须与原record逐字段一致。仅修正查证，不增加worker节点、重试或恢复规则，worker-lifecycle矩阵差异为0。TR-A2/TR-A4映射到新增 TestAPIStartTaskBindsServerResolvedGraphToOriginalReceipt（服务端冻结/显式版本/替换反例）及整个HTTP回归；正式consumer夹具同步实际非零图版本。
+
+Runner迁出后的reconstruction仅保留纯值定义、没有测试，移出L1显式运行包列表；其生产依赖/类型编译仍由其他owners及边界覆盖，不删除业务断言。TR-A4继续要求L1真实非空命中与零skip。最终必须重跑原生四项、新生成包、L1、runner/HTTP必要回归、E2E编译/脚本语法/文档差异；证据写专属acceptance，失败记录不可覆盖。

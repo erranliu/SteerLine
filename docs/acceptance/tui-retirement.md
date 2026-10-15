@@ -244,3 +244,12 @@ PR #327 创建后主干合入统一多项目启动（0228e51d）。前述55a3445
 最终推送检查时主干再合入#325（f3e35373），执行所有者迁出。067a3cfc及5ec30fad一轮通过仍仅归旧执行所有者；当前继续整合和补验。保留当前owner的Runner投影/清理与预编译E2E入口，移除隔离测试中旧执行record断言。双home按长期最小范围验证同号任务/原请求回执不串用，完整交付由已有delivery/生成包单项目负责，避免每次隔离都重复两条原生流程。
 
 本次只读固定外部现有程序到 `%TEMP%/steerline-isolation-runner-c23f908af1bc4e91a85dff443d6bfef3/steerrunner.exe`：version=0.1.0-dev.1、source_commit=af545563c58171c584bd35d098166cf39012e699、SHA256=7ff7941cb625cec63bf32180058d5113c6f54799c567289135b6420014da312e；来源C:/Project/SteerRunner/bin，未修改源程序或另一仓库。后续运行均选择这份固定副本，版本不以文档旧41908e6冒充。实际安装环境仍未操作。
+
+
+### Runner补验首轮失败及修正
+
+`20261015T082931.819474200Z` 四项均在受限工具启动上下文被Runner凭据一致性守卫拒绝，未作运行通过；守卫不修改。`20261015T082931.804507100Z` L1的实际139条rules用例通过，但reconstruction只剩无测试纯DTO而被计为空包skip，导致固定集失败；仅移出该空包，静态/编译依赖覆盖保留。
+
+新包根 `C:/SteerlineDebug/中文 test-d0c21c5319f1` 在独立上下文中WebProjects通过53.36秒，Runtime启动任务收到identity_conflict。定位为原控制请求冻结了非零图版本，而原HTTP回执比对仍要求start_task的映射图版本为零；请求已发布，不能换ID补发。失败收尾保留原请求事实并按已有公开CLI围栏/停止原Runner，旧包不复用。新增映射图绑定/替换反例，并同步formal consumer夹具的非零图版本。
+
+HTTP全包 `20261015T084158.715032000Z` 首轮保留两组过期fixture的失败（图版本未设置）；修正夹具后 `20261015T085057.611686800Z/summary.json` 全包通过。Runnerclient/bridge契约 `20261015T083239.290430700Z/summary.json`通过。后续使用固定同一Runner副本，原生四项入口共享已有WMI原生进程方式，不以更换Runner版本/权限或跳过守卫换通过。

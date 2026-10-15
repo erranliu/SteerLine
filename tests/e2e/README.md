@@ -176,3 +176,5 @@ Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_met
 当前 delivery.local-codex 的最小材料将 implement.ps1 的本地提交与 publish.ps1 的推送/PR 分开。development/v3 场景核对业务轮次、同会话/Attempt、Command/输入版本/规范 final 来源、每步骤原生 usage 和正确 PR 实际合并；报告绑定原执行，不比较阶段成果或冻结 PR head。readiness 独立计入原生现场，不冒充业务轮次；报告整理要求不等于强只读权限保证。规则见[统一 PR 流程](../../docs/spec/worker-pr-flow.spec.md)。
 
 运行 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled` 选择四项独立隔离场景；可用 `-scenario` 精确选择。只有该包已审查的四项允许 Go `-parallel=2`，其他 E2E 包仍串行。构建场景写自身 source clone，其他场景只读 runner 二进制，禁止写工作树 bin、共享临时 home 或固定端口。生成新调试包仍串行构建 npm/dist，由 `scripts/test-debug-release.ps1` 独立验证当前正式调试入口。
+
+Windows原生隔离验证入口：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-runtime-isolation.ps1 -SteerRunnerExe <固定EXE绝对路径>`。脚本只把原test-feedback四项放在一致的原生用户上下文；当前工具的受限token被Runner拒绝时不能改变产品守卫。生成包脚本与其共用独立进程启动助手；直接在原生环境仍可运行原Go入口，所有源码/EXE/SHA/期限/并发与清理规则保持。

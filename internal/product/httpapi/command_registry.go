@@ -581,7 +581,7 @@ func (s *commandRegistry) controlInput(ctx context.Context, envelope CommandEnve
 			return control, err
 		}
 		payloadValue.ExpectedTaskVersion = envelope.ExpectedVersion
-		if envelope.Action == "start_candidate" {
+		if envelope.ExpectedGraphRevision != 0 {
 			payloadValue.ExpectedGraphRevision = envelope.ExpectedGraphRevision
 		}
 		control.Action, control.Payload = api.ControlAction(envelope.Action), payloadValue
@@ -746,12 +746,12 @@ func mappedControlMatchesEnvelope(original CommandEnvelope, input api.ControlInp
 		if decodeStrict(original.Payload, &profile) != nil {
 			return false
 		}
-		graph := uint64(0)
-		if original.Action == "start_candidate" {
-			graph = original.ExpectedGraphRevision
-		}
+		// start_task may omit a displayed graph revision. Its command port
+		// freezes the current graph in the immutable mapped intent instead.
+		// matchesControl still requires the published payload to equal that intent.
+		graphMatches := original.Action == "start_task" && original.ExpectedGraphRevision == 0 || payload.ExpectedGraphRevision == original.ExpectedGraphRevision
 		return payload.TaskID == original.TargetID && payload.ExpectedTaskVersion == original.ExpectedVersion &&
-			payload.ExpectedGraphRevision == graph && payload.ExecutionProfileID == profile.ExecutionProfileID && payload.ExecutionProfileDigest != ""
+			graphMatches && payload.ExecutionProfileID == profile.ExecutionProfileID && payload.ExecutionProfileDigest != ""
 	case "open_terminal", "recheck_environment":
 		var environment environmentPayload
 		return decodeStrict(original.Payload, &environment) == nil && reflect.DeepEqual(payload.Environment, &environment.Target)
