@@ -1,10 +1,11 @@
 # 文档入口
 
-SteerLine 的整体职责、具体产品设计、后续规划、执行契约与验证证据分别维护。当前执行与验收范围是本地 Codex 和本机 Orca；规划与原生 UI 的拟议设计不表示已经交付。
+SteerLine 的整体职责、具体产品设计、后续规划、执行契约与验证证据分别维护。当前执行实现包括本地 Codex 和远端 Orca environment；本次只验本地 Codex，本机 Orca 路径已放弃；规划与原生 UI 的拟议设计不表示已经交付。
 
 | 阅读目的 | 入口 |
 | --- | --- |
 | 系统整体职责与业务权威 | [架构总览](architecture.md) |
+| 独立 Runner、固定 EXE 与 CLI 接入 | [Runner 接入](integration/steerrunner.md) |
 | 当前代码、模块与接口归属 | [代码架构](architecture/current-code-architecture.md) |
 | 规划任务前判断并行与冲突 | [并行开发指南](architecture/parallel-development.md) |
 | 配置、数据、反馈、会话与 UI 设计 | [产品设计](product-design/README.md) |

@@ -62,6 +62,8 @@ type ControlRequest struct {
 }
 
 type ControlPayload struct {
+	RunnerInput            *string           `json:"runner_input,omitempty"`
+	CallerAnswer           *DecisionAnswer   `json:"caller_answer,omitempty"`
 	RunID                  string            `json:"run_id,omitempty"`
 	ExpectedRunRevision    uint64            `json:"expected_run_revision,omitempty"`
 	ExpectedTaskVersion    uint64            `json:"expected_task_version,omitempty"`

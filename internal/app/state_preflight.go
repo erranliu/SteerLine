@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 )
 
 func preflightWorkerFlowState(ctx context.Context, c Config) error {
@@ -28,13 +28,18 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		return err
 	}
 	defer reader.Close()
-	state, err := reader.ReadExecutionStateSnapshot(ctx, c.Identity())
+	state, err := reader.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {
 		return err
 	}
 	project := c.Identity()
-	if state.Records.ProjectIdentity != project || state.Graph.Authority.ProjectIdentity != project {
-		return errors.New("persisted execution snapshot belongs to another project")
+	if state.Graph.Authority.ProjectIdentity != project {
+		return errors.New("persisted task snapshot belongs to another project")
 	}
-	return c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(state))
+	for _, candidate := range state.Candidates {
+		if candidate.Project != project || canonicalPath(candidate.StateDir) != canonicalPath(filepath.Join(c.RunDir, "runner")) || candidate.Submit.Protocol != runnerclient.Protocol || candidate.Submit.RequestID == "" {
+			return errors.New("persisted Runner candidate has a different caller or state directory binding")
+		}
+	}
+	return nil
 }

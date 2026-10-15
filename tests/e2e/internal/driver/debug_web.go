@@ -71,6 +71,32 @@ func (d *debugRelease) run() (retErr error) {
 	}
 	for _, scope := range scopes {
 		if selected.Scheme == "simulate" {
+			if scope.isSecondary() {
+				// Both frozen contracts name the same public Git repository. The
+				// shared host therefore uses one simulated Git transport, with
+				// separate base/head refs, caller stores and provider fixtures.
+				primary, err := controlled.Read(d.provider)
+				if err != nil {
+					return err
+				}
+				if primary.GitURL == "" {
+					return errors.New("primary fixture Git transport is unavailable")
+				}
+				cmd := scope.command("git", "-C", scope.repo, "push", primary.GitURL, scope.base+":refs/heads/"+scope.base)
+				cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+				if err := cmd.Run(); err != nil {
+					return err
+				}
+				secondary, err := controlled.Read(scope.provider)
+				if err != nil {
+					return err
+				}
+				secondary.GitURL = primary.GitURL
+				if err := controlled.Write(scope.provider, secondary); err != nil {
+					return err
+				}
+				continue
+			}
 			addressPath := filepath.Join(filepath.Dir(scope.provider), "address.json")
 			os.Remove(addressPath)
 			log, err := os.OpenFile(filepath.Join(d.root, "logs", "git-server"+scope.suffix()+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
@@ -114,7 +140,7 @@ func (d *debugRelease) run() (retErr error) {
 				return err
 			}
 		} else {
-			cmd := scope.command("git", "-C", scope.repo, "-c", "credential.helper=", "push", "origin", scope.base+":refs/heads/"+scope.base)
+			cmd := scope.command("git", "-C", scope.repo, "push", "origin", scope.base+":refs/heads/"+scope.base)
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			if err = cmd.Run(); err != nil {
 				return err

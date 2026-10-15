@@ -5,12 +5,12 @@
 ## 生成
 
 ```powershell
-.\scripts\new-debug-release.ps1
+.\scripts\new-debug-release.ps1 -SteerRunnerExe C:\Tools\SteerRunner\steerrunner.exe
 ```
 
 生成只有单一流程：复制仓库 `debug-template/`，构建本次业务/Web/helper，初始化自己的 `projects\SteerlineTest` Git 仓库和任务定义，写入版本记录。默认输出 `C:\SteerlineDebug\dev-yyyyMMdd-HHmmss-<短commit>[-dirty]\`，时间为北京时间、精确到秒，按目录名称升序即可按创建时间排列。成功 stdout 返回 JSON，包括 root/start/stop；已有目录、源码/安装目录重叠和目录链接被拒绝。失败目录保留日志、manifest 标为 failed，不可运行。
 
-数据库按产品 Git common-dir 身份派生到 `home\state\SteerlineTest-<hash>\steerline.db`，不从安装版或模板复制已有数据库。生成时不建业务库；宿主取得项目锁并 ready 后，初始任务由 `seed\tasks.json` 经正式 task validate/create 创建；默认 A → B。生成过程不调用模型，不发布分支或 PR。生成需要 Go、Git、Node/npm；运行产品 exe 不需要 Node、Go 或 Python。默认包含 Web，生成时分配空闲端口并写入固定配置，可用 `-WebAddress` 指定端口；端口冲突明确失败。源码及复制源更新后重新生成，已有包保持自己的程序和配置。
+数据库按产品 Git common-dir 身份派生到 `home\state\SteerlineTest-<hash>\steerline.db`，不从安装版或模板复制已有数据库。初始任务来自 `seed\tasks.json`，由正式 task validate/create 创建；默认 A → B。生成过程不调用模型，不发布分支或 PR。生成需要 Go、Git、Node/npm 和已固定的独立 Runner EXE；运行不需要 Node、Go 或 Python。默认包含 Web，地址为 `127.0.0.1:18742`，可用 `-WebAddress` 指定另一固定端口；端口冲突明确失败。Runner 来源和安装说明见[Runner 接入](integration/steerrunner.md)。源码及复制源更新后重新生成，已有包保持自己的程序和配置。
 
 ## 执行方案
 
@@ -60,7 +60,7 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 .\scripts\test-codex-sandbox.ps1
 ```
 
-先运行上述 controlled 门槛，再生成新的 live 包；真实 worker 运行探针、提交并经 gh shell helper 发布两个专属 PR，驱动在核验 base/head/SHA 后合并到本包 base，验证交付与依赖释放，并清理本次分支。必要越界走原生 auto_review，不依赖 Ctrl+N。首次准备将 gh 登录写入包内 `home/gh`，不改用户全局配置或凭据管理器；中心环境认证仍不自动传给 worker。结果见 [沙箱 Git 验收](acceptance/codex-sandbox-git.md)。
+先运行上述 controlled 门槛，再生成新的 live 包；真实 worker 运行探针、提交并经 gh shell helper 发布两个专属 PR，驱动在核验 base/head/SHA 后合并到本包 base，验证交付与依赖释放，并清理本次分支。必要越界走原生 auto_review，不依赖 Ctrl+N。认证保留在宿主现有外部登录中，包内只记录标准 credential helper 引用，不复制、导出或存储凭据；中心环境认证仍不自动传给 worker。结果见 [沙箱 Git 验收](acceptance/codex-sandbox-git.md)。
 
 ## 安装版人工更新
 

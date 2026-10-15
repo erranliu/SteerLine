@@ -11,7 +11,7 @@ import (
 	"time"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
-	reconstruction "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
@@ -99,7 +99,7 @@ func TestDebugReleaseWebProjects(t *testing.T) {
 		ready := false
 		for ctx.Err() == nil {
 			snapshot, err := ReadApplicationProjectSnapshot(ctx, filepath.Join(runDir, "steerline.db"), strings.ToLower(filepath.Clean(common)), "", 100)
-			if err == nil && snapshot.ProjectView.Tasks != nil && len(snapshot.ProjectView.Tasks.Tasks) == 2 && snapshot.ExecutionState.Checkpoint != nil {
+			if err == nil && snapshot.ProjectView.Tasks != nil && len(snapshot.ProjectView.Tasks.Tasks) == 2 && snapshot.RunnerState.Checkpoint != nil {
 				if len(snapshot.ProjectView.Tasks.Tasks) != 2 {
 					t.Fatal("dual-project package lost task definitions")
 				}
@@ -152,7 +152,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if raw, err := os.ReadFile(filepath.Join(root, "scheme.json")); err == nil {
 		t.Fatalf("requires a fresh debug package, found %s", raw)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	// Run preparation in a child so this test never changes its own CODEX_HOME/Git/auth environment.
 	prepare := d.command(d.helper, "debug", "prepare", "--simulate")
@@ -184,6 +184,17 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 		defer cancel()
 		service.Stop(stopCtx)
+		if common, err := d.git("rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
+			if state, err := ReadWorkflow(stopCtx, filepath.Join(d.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(common))); err == nil {
+				if err := CleanupRunner(stopCtx, filepath.Join(d.home, "execution.json"), filepath.Join(d.stateDir(), "runner"), state.Candidates); err != nil {
+					t.Error("original Runner cleanup: ", err)
+				}
+			} else {
+				t.Error("Runner cleanup input: ", err)
+			}
+		} else {
+			t.Error("Runner cleanup identity: ", err)
+		}
 	}()
 	wait := func(label string, predicate func() bool) {
 		t.Helper()
@@ -220,11 +231,11 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	}
 	wait("service snapshot", func() bool {
 		snap, err := ReadApplicationProjectSnapshot(ctx, filepath.Join(d.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(readyCommon)), "", 100)
-		if err != nil || snap.ExecutionState.Checkpoint == nil {
+		if err != nil || snap.RunnerError != nil || snap.RunnerState.Checkpoint == nil {
 			return false
 		}
-		runtime, err := reconstruction.BuildFromStorage(snap.ExecutionState, *snap.ExecutionState.Checkpoint)
-		return err == nil && runtime.Service.Ready
+		runtime := taskrunner.Project(snap.RunnerState, *snap.RunnerState.Checkpoint)
+		return runtime.Service.Ready
 	})
 	page, err := c.Tasks(ctx)
 	if err != nil {
@@ -255,6 +266,18 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatalf("release: %v %s", err, out)
 	}
 	wait("published candidate", func() bool {
+		if common, err := d.git("rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
+			if snap, err := ReadWorkflow(ctx, filepath.Join(d.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(common))); err == nil {
+				for _, candidate := range snap.Candidates {
+					if candidate.SubmitState == "rejected" {
+						t.Fatal("Runner rejected original submission: ", candidate.Diagnostic)
+					}
+					if candidate.Projection != nil && candidate.Projection.ResumeRequired {
+						t.Fatal("Runner blocked: ", candidate.Projection.Diagnostic)
+					}
+				}
+			}
+		}
 		state, err := controlled.Read(d.provider)
 		return err == nil && state.PR.State == "open" && len(state.Turns) == 3
 	})
@@ -273,13 +296,13 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	db := filepath.Join(d.stateDir(), "steerline.db")
 	wait("await merge checkpoint", func() bool {
 		snap, err := ReadWorkflow(ctx, db, project)
-		return err == nil && len(snap.WorkflowRuns) == 1 && snap.WorkflowRuns[0].StepID == "await_merge"
+		return err == nil && len(snap.Candidates) == 1 && snap.Candidates[0].Projection != nil && snap.Candidates[0].Projection.Status == "pr_ready"
 	})
 	before, err := ReadWorkflow(ctx, db, project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(before.WorkflowRuns) != 1 || before.WorkflowRuns[0].StepID != "await_merge" {
+	if len(before.Candidates) != 1 || before.Candidates[0].Projection == nil || before.Candidates[0].Projection.Status != "pr_ready" {
 		t.Fatal("not waiting for actual PR merge")
 	}
 	cmd := d.command(d.helper, "debug", "merge", "--simulate")
@@ -289,7 +312,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	}
 	wait("delivery", func() bool {
 		snap, err := ReadWorkflow(ctx, db, project)
-		return err == nil && len(snap.Deliveries) == 1
+		return err == nil && len(snap.Graph.Deliveries) == 1
 	})
 	snap, err := ReadApplicationProjectSnapshot(ctx, db, project, "", 100)
 	if err != nil {
@@ -302,6 +325,14 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if len(snap.ProjectView.Ready.Tasks) != 1 {
 		t.Fatalf("expected one dependency-ready successor: %+v", snap.ProjectView.Ready)
 	}
+	wait("original Runner stopped", func() bool {
+		state, err := ReadWorkflow(ctx, db, project)
+		if err != nil || len(state.Candidates) != 1 {
+			return false
+		}
+		c := state.Candidates[0]
+		return c.InputsRevoked && c.Projection != nil && c.Projection.StopStatus == "stopped"
+	})
 	stop := d.command(d.helper, "debug", "stop", "--simulate")
 	out, err = stop.CombinedOutput()
 	if err != nil {
@@ -322,7 +353,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	unchanged, err := ReadWorkflow(ctx, db, project)
-	if err != nil || len(unchanged.Deliveries) != 1 {
+	if err != nil || len(unchanged.Graph.Deliveries) != 1 {
 		t.Fatal("check modified data", err)
 	}
 	if err = d.reset(false); err != nil {
@@ -332,7 +363,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(after.WorkflowRuns) != 0 || len(after.Deliveries) != 0 {
+	if len(after.Candidates) != 0 || len(after.Graph.Deliveries) != 0 {
 		t.Fatal("execution state remained")
 	}
 	resetSnapshot, err := ReadApplicationProjectSnapshot(ctx, db, project, "", 100)

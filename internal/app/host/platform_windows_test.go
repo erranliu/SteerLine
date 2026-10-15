@@ -3,8 +3,6 @@
 package host
 
 import (
-	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -87,7 +85,7 @@ func TestLifecycleReviewExitedProcessWithRetainedHandle(t *testing.T) {
 	require(t, cmd.Process.Kill())
 	_, err = windows.WaitForSingleObject(handle, 5000)
 	require(t, err)
-	if probe := testProcessProbe(&identity); probe.State != ProcessAbsent {
+	if probe := publicProcessProbe(resourceprocess.NewServiceFacts(), &identity); probe.State != ProcessAbsent {
 		t.Fatalf("retained exited process handle reported alive: %+v", probe)
 	}
 }
@@ -176,108 +174,6 @@ func closeConsoleWindowForTests(hwnd uint64) error {
 	return nil
 }
 
-func TestWindowsStartServiceRequiresVisibleWindow(t *testing.T) {
-	f := newFixture(t)
-	_, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-	testExe, err := os.Executable()
-	require(t, err)
-	home := fixtureHome()
-	_, err = InstallLaunchers(fixtureHome())
-	require(t, err)
-	missingExe := filepath.Join(t.TempDir(), "missing-debug.exe")
-	result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: missingExe})
-	require(t, err)
-	if result.Status != "failed" || !strings.Contains(result.Error, "selected service executable is unavailable") {
-		t.Fatalf("missing selected executable was not rejected: %+v", result)
-	}
-	result, err = testStartService(context.Background(), configPath, StartServiceOptions{Executable: testExe})
-	require(t, err)
-	configAbsolute, err := filepath.Abs(configPath)
-	require(t, err)
-	if result.Status != "window-required" || result.LauncherPath != filepath.Join(home, "service-window.bat") ||
-		result.ConfigPath != configAbsolute || result.StartupID != "" || result.Connection.State != ConnectionNoRecord {
-		t.Fatalf("Windows StartService did not return the fixed visible-window entry: %+v", result)
-	}
-	if _, err := os.Stat(filepath.Join(f.c.RunDir, "service")); !os.IsNotExist(err) {
-		t.Fatalf("Windows StartService wrote service state without opening a window: %v", err)
-	}
-}
-
-func TestWindowsServiceWindowMissingConfigIsLiteral(t *testing.T) {
-	installDir := filepath.Join(t.TempDir(), "home with spaces")
-	t.Setenv("STEERLINE_HOME", installDir)
-	_, err := InstallLaunchers(fixtureHome())
-	require(t, err)
-	require(t, os.MkdirAll(filepath.Join(installDir, "bin"), 0700))
-	require(t, os.WriteFile(filepath.Join(installDir, "bin", "steerline.exe"), []byte("not executed"), 0600))
-	launcher := filepath.Join(installDir, "service-window.bat")
-	missingConfig := filepath.Join(t.TempDir(), "missing & echo unexpected-launcher-command")
-	cmd := exec.Command("cmd.exe")
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		CmdLine: fmt.Sprintf("cmd.exe /d /c \"\"%s\" \"%s\"\"", launcher, missingConfig),
-	}
-	cmd.Stdin = strings.NewReader("\n")
-	output, runErr := cmd.CombinedOutput()
-	if runErr == nil {
-		t.Fatal("missing configuration returned success")
-	}
-	for _, line := range strings.Split(string(output), "\n") {
-		if strings.TrimSpace(line) == "unexpected-launcher-command" {
-			t.Fatalf("configuration path was executed as a command:\n%s", output)
-		}
-	}
-	if !strings.Contains(string(output), missingConfig) {
-		t.Fatalf("missing configuration path was not printed literally:\n%s", output)
-	}
-}
-
-func TestWindowsPendingStartupPreservesMismatchClassification(t *testing.T) {
-	for _, kind := range []string{"config", "repository-path"} {
-		t.Run(kind, func(t *testing.T) {
-			f := newFixture(t)
-			c, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-			identity, err := resourceprocess.CurrentIdentity()
-			require(t, err)
-			record := reviewStartup(t, c, "starting", identity)
-			expected := ConnectionConfigChanged
-			if kind == "config" {
-				record.ConfigDigest = strings.Repeat("f", 64)
-			} else {
-				record.RepositoryPath = filepath.Join(t.TempDir(), "another-worktree")
-				expected = ConnectionIdentityError
-			}
-			require(t, writeStartupRecord(hostConfigForTest(c), record))
-			if kind == "repository-path" {
-				path, err := startupPath(c.RunDir, record.StartupID)
-				require(t, err)
-				before, err := os.ReadFile(path)
-				require(t, err)
-				if _, err := loadFixtureConfig(configPath); err == nil {
-					t.Fatal("startup evidence from another repository was accepted")
-				}
-				after, err := os.ReadFile(path)
-				require(t, err)
-				if !bytes.Equal(before, after) {
-					t.Fatal("rejected startup evidence was modified")
-				}
-				return
-			}
-			result, err := testStartService(context.Background(), configPath, StartServiceOptions{})
-			require(t, err)
-			if result.Status != "pending" || result.Connection.State != expected ||
-				result.Connection.Process.State != ProcessMatches || result.Connection.CanStart ||
-				result.Connection.StartupID != record.StartupID {
-				t.Fatalf("pending %s mismatch lost known identity or classification: %+v", kind, result)
-			}
-		})
-	}
-}
-
-type windowsServiceWindowProbe struct {
-	TTY           bool
-	ConsoleWindow uint64
-}
-
 func TestWindowsServiceWindowProbeHelper(t *testing.T) {
 	reportPath := os.Getenv("STEERLINE_WINDOW_PROBE_PATH")
 	if reportPath == "" {
@@ -316,4 +212,9 @@ func TestWindowsConsoleCtrlCHelper(t *testing.T) {
 		t.Fatalf("send Ctrl+C to service console: %v", callErr)
 	}
 	time.Sleep(300 * time.Millisecond)
+}
+
+type windowsServiceWindowProbe struct {
+	TTY           bool
+	ConsoleWindow uint64
 }

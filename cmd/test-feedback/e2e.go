@@ -247,7 +247,20 @@ func runE2E(opts options) (code int) {
 	fail := func(err error) int { report.Errors = append(report.Errors, err.Error()); return 1 }
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
-	ctx, cancelTimeout := context.WithTimeout(ctx, 45*time.Minute)
+	// The parent must include every selected scene's existing body/cleanup
+	// bound, as well as independent builds; it must not clip the final scene.
+	budget := 10 * time.Minute
+	for _, entry := range selected {
+		window, err := time.ParseDuration(e2ePackageGoTimeout([]e2eScenario{entry}))
+		if err != nil {
+			return fail(err)
+		}
+		budget += window
+	}
+	if budget < 45*time.Minute {
+		budget = 45 * time.Minute
+	}
+	ctx, cancelTimeout := context.WithTimeout(ctx, budget)
 	defer cancelTimeout()
 	buildDir := filepath.Join(out, "build")
 	if err := os.MkdirAll(buildDir, 0700); err != nil {
@@ -294,6 +307,23 @@ func runE2E(opts options) (code int) {
 		sum := sha256.Sum256(raw)
 		report.Builds[build.path] = hex.EncodeToString(sum[:])
 	}
+	runnerPath := os.Getenv("STEERRUNNER_EXE")
+	if runnerPath == "" {
+		runnerPath, err = exec.LookPath("steerrunner.exe")
+		if err != nil {
+			return fail(errors.New("select a standalone Runner with STEERRUNNER_EXE"))
+		}
+	}
+	runnerPath, err = filepath.Abs(runnerPath)
+	if err != nil {
+		return fail(err)
+	}
+	runnerBytes, err := os.ReadFile(runnerPath)
+	if err != nil {
+		return fail(err)
+	}
+	runnerSum := sha256.Sum256(runnerBytes)
+	report.Builds[runnerPath] = hex.EncodeToString(runnerSum[:])
 	authHome := os.Getenv("CODEX_HOME")
 	if authHome == "" {
 		userHome, err := os.UserHomeDir()
@@ -320,7 +350,7 @@ func runE2E(opts options) (code int) {
 			return fail(err)
 		}
 	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "RemoteConfig": remoteConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
+	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "RemoteConfig": remoteConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}
@@ -338,9 +368,25 @@ func runE2E(opts options) (code int) {
 		}
 		return names[i] < names[j]
 	})
-	// Enumerate selected packages before any scenario can create resources.
-	for _, pkg := range names {
-		cmd := exec.CommandContext(ctx, "go", "test", "-tags=e2e", "-list=.", pkg)
+	// Freeze every selected test binary before resource creation. Later packages
+	// must not silently compile a newer checkout halfway through a long run.
+	testBinaries := map[string]string{}
+	for index, pkg := range names {
+		testBinary := filepath.Join(buildDir, fmt.Sprintf("scenario-%d.test.exe", index+1))
+		build := exec.CommandContext(ctx, "go", "test", "-tags=e2e", "-c", "-o", testBinary, pkg)
+		build.Dir = root
+		build.Env = e2eEnvironment(os.Environ(), string(config))
+		if output, err := build.CombinedOutput(); err != nil {
+			return fail(fmt.Errorf("compile %s: %w: %s", pkg, err, output))
+		}
+		compiled, err := os.ReadFile(testBinary)
+		if err != nil {
+			return fail(err)
+		}
+		sum := sha256.Sum256(compiled)
+		report.Builds[testBinary] = hex.EncodeToString(sum[:])
+		testBinaries[pkg] = testBinary
+		cmd := exec.CommandContext(ctx, testBinary, "-test.list=.")
 		cmd.Dir = root
 		cmd.Env = e2eEnvironment(os.Environ(), string(config))
 		raw, err := cmd.CombinedOutput()
@@ -374,6 +420,9 @@ func runE2E(opts options) (code int) {
 			return fail(fmt.Errorf("manifest differs from tests in %s: actual=%v expected=%v", pkg, actual, expected))
 		}
 	}
+	if err := writeJSON(filepath.Join(buildDir, "frozen-binaries.json"), map[string]any{"source_commit": strings.TrimSpace(sourceCommit), "source_dirty": sourceDirty, "sha256": report.Builds}); err != nil {
+		return fail(err)
+	}
 	report.Preparation = time.Since(started).Seconds()
 	execution := time.Now()
 	report.Errors, report.Blocked = executeE2EPackages(ctx, names, packages, opts.e2eEnv == "gated", func(i int, pkg string) error {
@@ -382,7 +431,8 @@ func runE2E(opts options) (code int) {
 			tests = append(tests, e.Test)
 		}
 		timeout := e2ePackageGoTimeout(packages[pkg])
-		args := []string{"test", "-tags=e2e", "-json", "-count=1", "-p=1", "-parallel=1", "-timeout=" + timeout, "-run=" + exactPattern(tests), pkg}
+		importPath := strings.TrimSuffix(corePackage, "/internal/app/host") + "/" + strings.TrimPrefix(pkg, "./")
+		args := []string{"tool", "test2json", "-t", "-p", importPath, testBinaries[pkg], "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
 		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{"go"}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
 		stdout, err := os.Create(g.StdoutLog)
 		if err != nil {
@@ -394,7 +444,7 @@ func runE2E(opts options) (code int) {
 			return err
 		}
 		cmd := exec.Command("go", args...)
-		cmd.Dir = root
+		cmd.Dir = filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(pkg, "./")))
 		cmd.Env = e2eEnvironment(os.Environ(), string(config))
 		cmd.Stdout, cmd.Stderr = stdout, stderr
 		groupStarted := time.Now()
@@ -437,7 +487,9 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
 		// Heavy isolation/native restart has a 10m body; its parent must not
 		// cut the selected scene at the ordinary 6m package bound.
-		if entry.ID == "runtime.installed-debug-isolation" || entry.ID == "workspace.orca-removal-restart" {
+		if entry.ID == "delivery.basic" || entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.codex-resume" || entry.ID == "recovery.terminal-local-reconnect" || entry.ID == "recovery.terminal-environment-unknown-send" {
+			minutes += 12
+		} else if entry.ID == "runtime.installed-debug-isolation" || entry.ID == "workspace.orca-removal-restart" {
 			minutes += 11
 		} else {
 			minutes += 6

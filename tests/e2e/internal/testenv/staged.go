@@ -1,40 +1,34 @@
 package testenv
 
 import (
-	"fmt"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"errors"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"path/filepath"
-	"strings"
 )
 
-func (p *Project) AssertStagedFlow(snapshot Snapshot) {
+func (p *Project) AssertStagedFlow(snap Snapshot) {
 	p.Scenario.t.Helper()
-	if len(snapshot.Domain.WorkflowRuns) != 1 || len(snapshot.Domain.Executions) != 1 || len(snapshot.Domain.Attempts) != 1 {
-		p.Scenario.t.Fatal("staged chain lacks one original workflow/execution/Attempt")
+	if len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].Projection == nil {
+		p.Scenario.t.Fatal("missing public Run")
 	}
-	w, e := snapshot.Domain.WorkflowRuns[0], snapshot.Domain.Executions[0]
-	if w.FlowRef != "development/v3" || w.StepID != "await_merge" || w.Status != "waiting_external" || len(w.StageInputs) != 3 || len(w.StageResults) != 3 || e.TurnNumber != 3 {
-		p.Scenario.t.Fatal("staged flow/count mismatch")
-	}
-	for i, step := range []string{"implement.execute", "implement.report", "publish"} {
-		input, result := w.StageInputs[i], w.StageResults[i]
-		if input.StepID != step || result.StepID != step || input.CommandID != result.CommandID || input.Version != result.InputVersion || result.SessionID != e.SessionID || input.AttemptID != snapshot.Domain.Attempts[0].AttemptID || !result.Succeeded || result.FinalSource == "" || result.FinalItemID == "" {
-			p.Scenario.t.Fatalf("stage %s lost original input/final binding", step)
-		}
-		if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV3) {
-			p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, fmt.Sprintf("step-%d-usage-capability.json", i)), map[string]any{"status": "not_exposed_by_orca", "step_id": step, "command_id": result.CommandID, "session_id": result.SessionID, "dispatch_id": result.FinalNativeTurnID, "final_source": result.FinalSource}))
+	c := snap.Runner.Candidates[0]
+	r := c.Projection
+	conversation, err := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, p.ProjectID, c.ID, c.RunID)
+	p.Scenario.Must(err)
+	items := map[string]bool{}
+	for _, event := range conversation.Events {
+		if event.Type != api.ConversationMessageComplete || event.Phase != api.MessagePhaseFinalAnswer || event.SourceRole != api.ConversationSourceCanonical {
 			continue
 		}
-		copySnap := snapshot
-		copySnap.Domain.Executions = append(copySnap.Domain.Executions[:0:0], copySnap.Domain.Executions...)
-		copySnap.Domain.Executions[0].CurrentCommandID = result.CommandID
-		copySnap.Domain.Executions[0].CurrentTurnID = result.TurnID
-		_, err := p.NativeUsage(copySnap, fmt.Sprintf("step-%d-%s", i, strings.ReplaceAll(step, ".", "-")))
-		p.Scenario.Must(err)
+		if event.SessionID != r.Execution.SessionID || event.TurnID == "" || event.ItemKey == "" || event.Body == nil {
+			p.Scenario.Must(errors.New("public canonical final lost its original native provenance"))
+		}
+		items[event.ItemKey] = true
 	}
-	if w.StageInputs[1].SourceCommandID != w.StageResults[0].CommandID || w.StageInputs[1].SourceTurnID != w.StageResults[0].TurnID || !strings.Contains(w.StageInputs[1].ReportToolPolicy, "business_read_only_is_prompt_policy") {
-		p.Scenario.t.Fatal("report source/guarantee missing")
+	if len(items) != 3 {
+		p.Scenario.t.Fatal("development workflow needs three distinct verified native finals", len(items))
 	}
-	p.Record("staged-flow", snapshot)
+	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-staged-public-finals.json"), conversation))
 }

@@ -88,7 +88,10 @@ func Git(ctx context.Context, dir string, args ...string) (string, error) {
 }
 
 func gitBytes(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	argv := append([]string{"-C", dir}, args...)
+	// A standalone Runner clones its own cache and must not inherit the
+	// fixture repository's local user configuration. Keep identity and Windows
+	// long-path settings scoped to this simulated external Git command.
+	argv := append([]string{"-c", "user.name=E2E", "-c", "user.email=e2e@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.longpaths=true", "-C", dir}, args...)
 	projectDir := dir
 	for i, arg := range args {
 		if arg == "-C" && i+1 < len(args) {
@@ -163,6 +166,21 @@ func statePathForDirectory(dir string) string {
 		return ""
 	}
 	root := filepath.Dir(filepath.Dir(path))
+	if _, err := os.Stat(filepath.Join(root, "manifest.json")); err == nil {
+		for _, name := range []string{"SteerlineTest.json", "SteerlineTestB.json"} {
+			raw, err := os.ReadFile(filepath.Join(root, "seed", "fixture-routes-"+name))
+			var routes map[string]string
+			if err != nil || json.Unmarshal(raw, &routes) != nil {
+				continue
+			}
+			for prefix, provider := range routes {
+				candidate, prefix := strings.ToLower(filepath.Clean(dir)), strings.ToLower(filepath.Clean(prefix))
+				if candidate == prefix || strings.HasPrefix(candidate, prefix+string(filepath.Separator)) {
+					return provider
+				}
+			}
+		}
+	}
 	for _, relative := range []string{filepath.Join("projects", "SteerlineTestB"), filepath.Join("home", "worktrees-b")} {
 		prefix := strings.ToLower(filepath.Join(root, relative))
 		candidate := strings.ToLower(filepath.Clean(dir))

@@ -106,6 +106,8 @@ export function Answer({ run }: { run: Candidate }) {
         )
           throw new Error("多题答案须为问题 ID 对应字符串数组的 JSON");
         payload.answers = answers;
+        delete payload.note;
+        delete payload.option_id;
       }
       if (await send("answer_decision", decision.id, decision.version, payload))
         setOpened(false);

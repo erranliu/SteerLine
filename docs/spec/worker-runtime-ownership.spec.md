@@ -1,5 +1,7 @@
 # Spec：worker 运行时资源所有权收敛
 
+源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](../architecture/current-code-architecture.md)。
+
 任务 ID：96；任务名称：worker 运行时资源所有权收敛。
 
 状态：2026-10-14 草稿规划，未纳入执行、未实施。配套 [Plan](worker-runtime-ownership.plan.md)、[专属验收](../acceptance/worker-runtime-ownership.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动固定已提交文档及最新代码。
@@ -8,7 +10,7 @@
 
 ## 问题与限定成果
 
-[Service](../../internal/execution/service_state.go) 同时持有业务候选与 workers、ownedProcesses、观察/在途状态；[lifecycle_effect.go](../../internal/execution/lifecycle_effect.go) 已有无业务写权的异步调用，但 pendingLifecycleEffect 保存接收可写 RunView 的 apply闭包。[worker_types.go](../../internal/execution/worker_types.go) 的桥接与关闭逻辑也由同一个 execution 包持有。
+[Service](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/service_state.go) 同时持有业务候选与 workers、ownedProcesses、观察/在途状态；[lifecycle_effect.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/lifecycle_effect.go) 已有无业务写权的异步调用，但 pendingLifecycleEffect 保存接收可写 RunView 的 apply闭包。[worker_types.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/worker_types.go) 的桥接与关闭逻辑也由同一个 execution 包持有。
 
 建立 `internal/execution/workerruntime`，收拢原观察器/执行句柄、观察取消/关闭、在途外部调用与完成结果交接的资源所有权。actor 发出已持久化、固定身份的 Operation/request，runtime 使用注入的小执行/对账/观察/停止端口，返回原身份绑定的事实、回执、结果和受控资源引用。runtime 不接收 Service、RunView可写指针或业务状态 apply闭包；actor 收到结果后独自核验、更新和提交。
 

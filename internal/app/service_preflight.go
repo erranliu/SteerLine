@@ -8,9 +8,7 @@ import (
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
@@ -34,22 +32,13 @@ func preflightNative(ctx context.Context, c *Config) error {
 	if err := c.ValidateProfiles(); err != nil {
 		return err
 	}
-	entry, err := c.Registration()
-	if err != nil {
-		return err
-	}
-	if entry.ValidateConfig != nil {
-		if err := entry.ValidateConfig(ctx, c.executionConfig()); err != nil {
-			return err
-		}
-	}
 	commands := []*executionbackend.Command{&c.Git}
 	for _, command := range commands {
-		if err := execution.ResolveCommand(command); err != nil {
+		if err := resolveCommand(command); err != nil {
 			return err
 		}
 	}
-	git := execution.Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), ProcessHost: c.ProcessHost}
+	git := commandRunner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), ProcessHost: c.ProcessHost}
 	repository, err := workspace.ResolveRepository(ctx, c.WorkspaceGit(), c.Repository)
 	if err != nil {
 		return err
@@ -60,18 +49,13 @@ func preflightNative(ctx context.Context, c *Config) error {
 		return err
 	}
 	git.Dir = c.Repository
-	if entry.Preflight != nil {
-		if err := entry.Preflight(ctx, c.executionConfig()); err != nil {
-			return err
-		}
-	}
 	if c.Claimant == "" {
 		c.Claimant = "steerline-" + shortHash(c.Identity())
 	}
 	if _, err = git.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+c.Branch); err != nil {
 		return err
 	}
-	remote, err := git.Output(ctx, c.Git, "remote", "get-url", c.Remote)
+	remote, err := git.Output(ctx, c.Git, "config", "--get", "remote."+c.Remote+".url")
 	if err != nil {
 		return err
 	}
@@ -79,7 +63,7 @@ func preflightNative(ctx context.Context, c *Config) error {
 		return err
 	}
 	if c.PR.Kind == "command" {
-		if err = execution.ResolveCommand(&c.PR.Query); err != nil {
+		if err = resolveCommand(&c.PR.Query); err != nil {
 			return err
 		}
 
@@ -95,11 +79,6 @@ func preflightNative(ctx context.Context, c *Config) error {
 		return err
 	} else if err = steerline.EnsureNativeStateClean(c.RunDir, c.Repository); err != nil {
 		return err
-	}
-	if c.PR.Kind == "gitea" {
-		if err = (publication.NewClient(publication.Config(c.PR), git, git.Timeout)).Check(ctx); err != nil {
-			return err
-		}
 	}
 	return nil
 }

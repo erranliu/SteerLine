@@ -86,7 +86,7 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := query.Service{Project: "project", Workflows: reader, Tasks: reader, Events: reader}
+	service := query.Service{Project: "project", Tasks: reader, Events: reader}
 	combined, err := query.NewService(reader, "project").ReadProjectView(ctx, "2", 1)
 	if err != nil || combined.History == nil || combined.SelectedTask == nil || combined.SelectedTask.TaskID != "2" {
 		t.Fatalf("SQLite reader could not independently compose the project view: %+v %v", combined, err)

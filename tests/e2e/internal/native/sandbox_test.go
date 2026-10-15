@@ -27,35 +27,6 @@ func TestSandboxReadinessRejectsMissingAndStaleState(t *testing.T) {
 	if CheckSandboxReady(home) == nil {
 		t.Fatal("stale setup accepted")
 	}
-	destination := filepath.Join(t.TempDir(), "home")
-	if SeedAuth(home, destination, "elevated") == nil {
-		t.Fatal("invalid setup accepted for native launch")
-	}
-	if _, err := os.Stat(destination); !os.IsNotExist(err) {
-		t.Fatal("failed preflight wrote a runtime home")
-	}
-}
-
-func TestUnprovisionedHomeModesNeedOnlyAuthentication(t *testing.T) {
-	for _, mode := range []string{"unelevated", "full-access"} {
-		t.Run(mode, func(t *testing.T) {
-			source, destination := t.TempDir(), filepath.Join(t.TempDir(), "codex")
-			if err := os.WriteFile(filepath.Join(source, "auth.json"), []byte(`{"test_auth":"fixture"}`), 0600); err != nil {
-				t.Fatal(err)
-			}
-			if err := SeedAuth(source, destination, mode); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := os.Stat(filepath.Join(destination, "auth.json")); err != nil {
-				t.Fatal(err)
-			}
-			for _, dir := range []string{".sandbox", ".sandbox-secrets"} {
-				if _, err := os.Stat(filepath.Join(destination, dir)); !os.IsNotExist(err) {
-					t.Fatal("unelevated mode inherited provisioned sandbox accounts")
-				}
-			}
-		})
-	}
 }
 
 func TestSandboxReadinessExistingAccounts(t *testing.T) {

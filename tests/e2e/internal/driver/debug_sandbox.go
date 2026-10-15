@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,10 +13,12 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	reconstruction "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 )
 
@@ -32,11 +33,21 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 	if _, err := os.Stat(filepath.Join(root, "scheme.json")); !os.IsNotExist(err) {
 		return result, errors.New("requires a fresh unselected package")
 	}
+	if authHome == "" {
+		authHome = os.Getenv("CODEX_HOME")
+	}
+	if authHome == "" {
+		home, homeErr := os.UserHomeDir()
+		if homeErr != nil {
+			return result, homeErr
+		}
+		authHome = filepath.Join(home, ".codex")
+	}
 	var service *testprocess.Process
 	var log *os.File
 	var branches, urls []string
 	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		defer cancel()
 		cleanupErr := debugSandboxCleanup(cleanupCtx, d, service, branches)
 		if log != nil {
@@ -61,8 +72,8 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 	}
 	output := func(cmd *exec.Cmd) ([]byte, error) { return outputFor(cmd, 30*time.Second) }
 	prepare := d.command(d.helper, "debug", "prepare")
-	// Only provisioning reads the caller's existing login. Subsequent commands
-	// use the package's isolated homes and privately copied authentication.
+	// Native login remains an external dependency. Generated packages never
+	// receive copied authentication or user configuration.
 	var prepareEnv []string
 	for _, entry := range prepare.Env {
 		key, _, _ := strings.Cut(entry, "=")
@@ -136,11 +147,11 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 			return false, err
 		}
 		snap, err := ReadApplicationProjectSnapshot(ctx, db, project, "", 100)
-		if err != nil || snap.ExecutionState.Checkpoint == nil {
+		if err != nil || snap.RunnerError != nil || snap.RunnerState.Checkpoint == nil {
 			return false, nil
 		}
-		runtime, err := reconstruction.BuildFromStorage(snap.ExecutionState, *snap.ExecutionState.Checkpoint)
-		return err == nil && runtime.Service.Ready, nil
+		runtime := taskrunner.Project(snap.RunnerState, *snap.RunnerState.Checkpoint)
+		return runtime.Service.Ready, nil
 	}); err != nil {
 		return result, err
 	}
@@ -165,62 +176,43 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 		if err := control("start_task", taskID); err != nil {
 			return result, err
 		}
-		var run executionmodel.WorkflowRunRecord
-		if err := wait("task "+taskID+" native publication", func() (bool, error) {
+		var candidate runnerbridge.Candidate
+		if err := wait("task "+taskID+" Runner publication", func() (bool, error) {
 			snap, err := ReadWorkflow(ctx, db, project)
 			if err != nil {
 				return false, nil
 			}
-			for _, candidate := range snap.WorkflowRuns {
-				if candidate.TaskID != taskID {
+			for _, c := range snap.Candidates {
+				if c.TaskID != taskID {
 					continue
 				}
-				run = candidate
-				if candidate.StepID == "await_merge" && candidate.PRURL != "" {
+				candidate = c
+				if c.Projection != nil && c.Projection.PR != nil {
 					return true, nil
 				}
-				for _, e := range snap.Executions {
-					if e.WorkflowRunID == candidate.WorkflowRunID && e.Workspace.Branch != "" {
-						found := false
-						for _, branch := range branches {
-							found = found || branch == e.Workspace.Branch
-						}
-						if !found {
-							branches = append(branches, e.Workspace.Branch)
-						}
-					}
-					if e.WorkflowRunID == candidate.WorkflowRunID && e.DecisionID != "" {
-						return false, fmt.Errorf("worker needs input at %s; inspect its original journal", candidate.StepID)
-					}
+				if c.Projection != nil && (c.Projection.Status == "blocked" || c.Projection.Question != nil) {
+					return false, fmt.Errorf("Runner requires input: %s", c.Projection.Diagnostic)
 				}
-				if candidate.PendingDecisions > 0 {
-					return false, fmt.Errorf("worker needs input at %s; inspect its original journal", candidate.StepID)
-				}
-				return false, nil
 			}
 			return false, nil
 		}); err != nil {
 			return result, err
 		}
-		snap, err := ReadWorkflow(ctx, db, project)
+		run := candidate.Projection
+		execution := run.Execution
+		finals, err := readDebugRunnerFinals(ctx, db, project, candidate.ID)
 		if err != nil {
 			return result, err
 		}
-		var execution executionmodel.ExecutionRecord
-		for _, e := range snap.Executions {
-			if e.WorkflowRunID == run.WorkflowRunID {
-				execution = e
+		if execution.SessionID == "" || len(finals) != 3 {
+			return result, errors.New("missing three original Runner finals")
+		}
+		for _, f := range finals {
+			if !f.Verified || f.SessionID != execution.SessionID || f.NativeOutcome != "succeeded" {
+				return result, errors.New("Runner final provenance differs")
 			}
 		}
-		if execution.SessionID == "" || len(run.StageResults) != 3 {
-			return result, errors.New("missing three original native stage results")
-		}
-		for _, stage := range run.StageResults {
-			if !stage.Succeeded || !stage.FinalVerified || stage.SessionID != execution.SessionID {
-				return result, errors.New("unverified native stage result")
-			}
-		}
-		out, err := gh("pr", "view", run.PRURL, "--repo", debugRepository, "--json", "url,state,headRefOid,headRefName,baseRefName")
+		out, err := gh("pr", "view", run.PR.URL, "--repo", debugRepository, "--json", "url,state,headRefOid,headRefName,baseRefName")
 		if err != nil {
 			return result, fmt.Errorf("PR query: %v %s", err, out)
 		}
@@ -228,7 +220,7 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 		if err := json.Unmarshal(out, &pr); err != nil {
 			return result, err
 		}
-		if pr.State != "OPEN" || pr.HeadRefName != execution.Workspace.Branch || pr.BaseRefName != d.base {
+		if pr.State != "OPEN" || pr.HeadRefName != execution.Branch || pr.BaseRefName != d.base {
 			return result, errors.New("PR differs from assigned branch/base")
 		}
 		urls = append(urls, pr.URL)
@@ -240,40 +232,39 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 			branches = append(branches, pr.HeadRefName)
 		}
 		result["pr_urls"] = urls
-		files, err := d.git("-C", execution.Workspace.Worktree, "diff", "--name-only", execution.Workspace.Base+".."+pr.HeadRefOid)
+		files, err := d.git("-C", execution.Workspace, "diff", "--name-only", candidate.BaseRevision+".."+pr.HeadRefOid)
 		if err != nil || files != "result.txt" {
 			return result, fmt.Errorf("candidate files: %q %v", files, err)
 		}
-		candidateContent, err := output(d.command("git", "-C", d.repo, "show", pr.HeadRefOid+":result.txt"))
-		if err != nil || strings.ReplaceAll(string(candidateContent), "\r\n", "\n") != "SteerlineTest debug result\n"+execution.Workspace.Branch+"\n" {
+		candidateContent, err := output(d.command("git", "-C", execution.Workspace, "show", pr.HeadRefOid+":result.txt"))
+		if err != nil || strings.ReplaceAll(string(candidateContent), "\r\n", "\n") != "SteerlineTest debug result\n"+execution.Branch+"\n" {
 			return result, fmt.Errorf("candidate result does not identify its own branch: %q %v", candidateContent, err)
 		}
-		for _, stage := range run.StageResults {
-			journal := filepath.Join(d.stateDir(), "runs", run.WorkflowRunID, "turns", stage.CommandID, "appserver.jsonl")
-			if err := debugSandboxStageCommands(journal, stage.StepID); err != nil {
+		rollout, err := native.ReadBusinessRollout(authHome, execution.SessionID, execution.Workspace)
+		if err != nil {
+			return result, err
+		}
+		var commands []native.RolloutCommand
+		for n, f := range finals {
+			stage, err := native.RolloutTurnCommands(rollout, f.SessionID, f.TurnID, execution.Workspace)
+			if err != nil {
 				return result, err
 			}
+			step := []string{executionmodel.StepImplement, executionmodel.StepReport, executionmodel.StepPublish}[n]
+			if err := debugSandboxStageCommands(stage, step); err != nil {
+				return result, err
+			}
+			commands = append(commands, stage...)
 		}
-		probe, escalations, err := debugSandboxNativeEvidence(d, run.WorkflowRunID, execution.SessionID)
+		probe, err := debugSandboxNativeEvidence(commands)
 		if err != nil {
 			return result, err
 		}
-		bound, err := evidence.Candidate(snap, run.WorkflowRunID, execution.ExecutionID)
+		usage, err := debugSandboxUsage(d, rollout, finals, execution.Workspace)
 		if err != nil {
 			return result, err
 		}
-		settings, err := evidence.ModelSelection(bound)
-		if err != nil || settings.Model != native.Model || settings.Effort != native.Effort {
-			return result, errors.New("sandbox frozen model/effort differs from live registry")
-		}
-		if err := evidence.FixedNativeLaunch(bound); err != nil {
-			return result, err
-		}
-		usage, err := debugSandboxUsage(d, run, execution.Workspace.Worktree)
-		if err != nil {
-			return result, err
-		}
-		proofs = append(proofs, map[string]any{"task_id": taskID, "run_id": run.WorkflowRunID, "worktree": execution.Workspace.Worktree, "session_id": execution.SessionID, "pr": pr, "native_stages": 3, "sandbox_probe": probe, "escalation_requests": escalations, "usage": usage})
+		proofs = append(proofs, map[string]any{"task_id": taskID, "run_id": candidate.RunID, "worktree": execution.Workspace, "session_id": execution.SessionID, "pr": pr, "native_stages": 3, "sandbox_probe": probe, "evidence_source": "native external rollout", "usage": usage})
 		result["candidates"] = proofs
 		if err := controlled.Write(filepath.Join(root, "evidence", "sandbox-live.json"), result); err != nil {
 			return result, err
@@ -289,7 +280,7 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 			if err != nil {
 				return false, nil
 			}
-			for _, delivery := range snap.Deliveries {
+			for _, delivery := range snap.Graph.Deliveries {
 				if delivery.TaskID == taskID {
 					return true, nil
 				}
@@ -328,8 +319,19 @@ func debugSandboxCleanup(ctx context.Context, d *debugRelease, service *testproc
 		return output.Bytes(), err
 	}
 	if service != nil {
-		_, stopErr := run(d.command(d.helper, "debug", "stop", "--no-pause"))
-		failures = append(failures, stopErr, service.Stop(ctx))
+		select {
+		case <-service.Done:
+			// The retained original process has already exited; a failed
+			// startup is not a live service that needs another stop command.
+		default:
+			_, stopErr := run(d.command(d.helper, "debug", "stop", "--no-pause"))
+			failures = append(failures, stopErr, service.Stop(ctx))
+		}
+	}
+	// Run cleanup under the original package's environment, and confirm the
+	// original native owner has stopped before touching its owned Git facts.
+	if out, err := run(d.command(d.helper, "runner-cleanup", "-config", d.config)); err != nil {
+		return errors.Join(errors.Join(failures...), fmt.Errorf("original Runner cleanup: %v %s", err, out))
 	}
 	for _, branch := range branches {
 		if branch == "main" || branch == d.base || !strings.HasPrefix(branch, "codex/") {
@@ -368,7 +370,7 @@ func debugSandboxCleanup(ctx context.Context, d *debugRelease, service *testproc
 		if strings.TrimSpace(string(raw)) == "" {
 			continue
 		}
-		_, deleteErr := run(d.command("git", "-C", d.repo, "-c", "credential.helper=", "push", "origin", "--delete", branch))
+		_, deleteErr := run(d.command("git", "-C", d.repo, "push", "origin", "--delete", branch))
 		failures = append(failures, deleteErr)
 		if deleteErr == nil {
 			raw, queryErr = run(d.command("git", "-C", d.repo, "ls-remote", "origin", "refs/heads/"+branch))
@@ -382,182 +384,76 @@ func debugSandboxCleanup(ctx context.Context, d *debugRelease, service *testproc
 	return errors.Join(failures...)
 }
 
-func debugSandboxUsage(d *debugRelease, workflow executionmodel.WorkflowRunRecord, cwd string) ([]native.Usage, error) {
-	var original []byte
-	matches := 0
-	session := workflow.StageResults[0].SessionID
-	err := filepath.WalkDir(filepath.Join(d.home, "codex", "sessions"), func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() || !strings.Contains(entry.Name(), session) || !strings.HasSuffix(entry.Name(), ".jsonl") {
-			return nil
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		business, err := native.BusinessRolloutMatches(raw, cwd)
-		if err != nil {
-			return err
-		}
-		if business {
-			original = raw
-			matches++
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	if matches != 1 {
-		return nil, fmt.Errorf("sandbox usage has %d original root sessions", matches)
-	}
-	modelUsage, modelProof, err := native.RolloutUsage(original, cwd)
-	if err != nil {
-		return nil, err
-	}
-	if modelUsage.Session != session || modelUsage.Turn != workflow.StageResults[len(workflow.StageResults)-1].TurnID {
-		return nil, errors.New("sandbox model usage differs from original session/final turn")
-	}
-	if err := os.WriteFile(filepath.Join(d.root, "evidence", workflow.WorkflowRunID+"-model-usage.jsonl"), modelProof, 0600); err != nil {
-		return nil, err
-	}
+func debugSandboxUsage(d *debugRelease, raw []byte, finals []runnerclient.Final, cwd string) ([]native.Usage, error) {
 	var usages []native.Usage
-	for _, stage := range workflow.StageResults {
-		raw, err := os.ReadFile(filepath.Join(d.stateDir(), "runs", workflow.WorkflowRunID, "turns", stage.CommandID, "appserver.jsonl"))
-		if err != nil {
-			return nil, err
-		}
-		usage, proof, err := native.AppServerTurnUsage(raw, session, stage.TurnID)
+	for _, f := range finals {
+		usage, proof, err := native.RolloutTurnUsage(raw, cwd, f.TurnID)
 		if err != nil {
 			return nil, err
 		}
 		usage.Cwd = cwd
-		if err := os.WriteFile(filepath.Join(d.root, "evidence", stage.CommandID+"-usage.jsonl"), proof, 0600); err != nil {
-			return nil, err
-		}
-		if err := controlled.Write(filepath.Join(d.root, "evidence", stage.CommandID+"-usage.json"), usage); err != nil {
+		if err := os.WriteFile(filepath.Join(d.root, "evidence", f.CommandID+"-usage.jsonl"), proof, 0600); err != nil {
 			return nil, err
 		}
 		usages = append(usages, usage)
 	}
 	return usages, nil
 }
+func readDebugRunnerFinals(ctx context.Context, db, project, candidate string) ([]runnerclient.Final, error) {
+	reader, err := sqlite.OpenSQLiteReader(db)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	events, err := reader.RunnerEvents(ctx, project, candidate)
+	if err != nil {
+		return nil, err
+	}
+	result := []runnerclient.Final{}
+	seen := map[string]bool{}
+	for _, e := range events {
+		if f := e.Final; f != nil && !seen[f.CommandID] {
+			seen[f.CommandID] = true
+			result = append(result, *f)
+		}
+	}
+	return result, nil
+}
 
 // Check the original native tool events, rather than trusting a model's claim
 // that it has advanced to publication while still handling implementation.
-func debugSandboxStageCommands(journal, step string) error {
-	raw, err := os.ReadFile(journal)
-	if err != nil {
-		return err
-	}
+func debugSandboxStageCommands(commands []native.RolloutCommand, step string) error {
 	publication := false
-	for _, line := range strings.Split(string(raw), "\n") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		var event struct {
-			Method string
-			Params struct {
-				Item struct{ Type, Command string }
-			}
-		}
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			return fmt.Errorf("invalid %s native journal: %w", step, err)
-		}
-		if event.Method != "item/started" && event.Method != "item/completed" || event.Params.Item.Type != "commandExecution" {
-			continue
-		}
-		command := strings.ToLower(strings.ReplaceAll(event.Params.Item.Command, "\\", "/"))
+	for _, item := range commands {
+		command := strings.ToLower(strings.ReplaceAll(strings.Join(item.Command, " "), "\\", "/"))
 		publishes := strings.Contains(command, "-file ./publish.ps1") ||
 			(strings.Contains(command, "git ") && strings.Contains(command, " push ")) ||
 			strings.Contains(command, "gh pr create ")
 		if step == executionmodel.StepReport {
-			return fmt.Errorf("report used a command instead of formatting existing evidence: %s", journal)
+			return errors.New("report used a command instead of formatting existing evidence")
 		}
 		if publishes && step != executionmodel.StepPublish {
-			return fmt.Errorf("publication attempted during %s: %s", step, journal)
+			return fmt.Errorf("publication attempted during %s", step)
 		}
 		publication = publication || publishes
 	}
 	if step == executionmodel.StepPublish && !publication {
-		return fmt.Errorf("publication stage has no original publish command: %s", journal)
+		return errors.New("publication stage has no original publish command")
 	}
 	return nil
 }
 
-func debugSandboxNativeEvidence(d *debugRelease, runID, sessionID string) (map[string]any, int, error) {
-	var probe map[string]any
-	err := filepath.WalkDir(filepath.Join(d.stateDir(), "runs", runID), func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+func debugSandboxNativeEvidence(commands []native.RolloutCommand) (map[string]any, error) {
+	for _, item := range commands {
+		if item.Status != "completed" || item.ExitCode == nil || *item.ExitCode != 0 || !strings.Contains(strings.Join(item.Command, " "), "sandbox-check.ps1") {
+			continue
 		}
-		if entry.IsDir() || entry.Name() != "appserver.jsonl" {
-			return nil
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		for _, line := range strings.Split(string(raw), "\n") {
-			var e struct {
-				Method string
-				Params struct {
-					Item struct {
-						Type, Command, AggregatedOutput string
-						ExitCode                        int
-					}
-				}
-			}
-			if json.Unmarshal([]byte(line), &e) != nil || e.Method != "item/completed" || e.Params.Item.Type != "commandExecution" || e.Params.Item.ExitCode != 0 || !strings.Contains(e.Params.Item.Command, "sandbox-check.ps1") {
-				continue
-			}
-			for _, output := range strings.Split(e.Params.Item.AggregatedOutput, "\n") {
-				var value map[string]any
-				if json.Unmarshal([]byte(strings.TrimSpace(output)), &value) == nil && value["passed"] == true && value["temp_in_admin"] == true && value["project_check"] == true && value["sibling_write_denied"] == true {
-					probe = value
-				}
+		for _, line := range strings.Split(item.Output, "\n") {
+			var value map[string]any
+			if json.Unmarshal([]byte(strings.TrimSpace(line)), &value) == nil && value["passed"] == true && value["temp_in_kernel"] == true && value["app_container"] == true && value["project_check"] == true && value["sibling_write_denied"] == true {
+				return value, nil
 			}
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, 0, err
 	}
-	if probe == nil {
-		return nil, 0, fmt.Errorf("no successful native sandbox probe command for %s", runID)
-	}
-	escalations := 0
-	// Inspect only this worker's private native rollout, never user-wide history.
-	err = filepath.WalkDir(filepath.Join(d.home, "codex", "sessions"), func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() || !strings.Contains(entry.Name(), sessionID) || !strings.HasSuffix(entry.Name(), ".jsonl") {
-			return nil
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		for _, line := range strings.Split(string(raw), "\n") {
-			var e struct {
-				Type    string
-				Payload struct{ Type, Input, Arguments string }
-			}
-			if json.Unmarshal([]byte(line), &e) != nil || e.Type != "response_item" || (e.Payload.Type != "custom_tool_call" && e.Payload.Type != "function_call") {
-				continue
-			}
-			input := e.Payload.Input + e.Payload.Arguments
-			if strings.Contains(input, "require_escalated") {
-				escalations++
-				if strings.Contains(input, "sandbox-check.ps1") {
-					return fmt.Errorf("ordinary sandbox probe requested escalation")
-				}
-			}
-		}
-		return nil
-	})
-	return probe, escalations, err
+	return nil, errors.New("no successful native sandbox probe command in original rollout")
 }

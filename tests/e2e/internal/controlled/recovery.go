@@ -25,11 +25,11 @@ type RecoveryFixture struct {
 	Orca          *TerminalFixture
 }
 type TerminalFixture struct {
-	Root, Runtime, Handle, Incarnation, Environment, Worktree, Branch, Base, Name string
-	Agent, Draft, HeldCommand, HeldStep, Prompt, NativeReply                      string
-	Lines                                                                         []string
-	Creates, Sends, Closes                                                        int
-	Busy, LostSend, Gap, Lost, WrongTarget                                        bool
+	RepositoryPath, Root, Runtime, Handle, Incarnation, Environment, Worktree, Branch, Base, Name string
+	Agent, Draft, HeldCommand, HeldStep, Prompt, NativeReply                                      string
+	Lines                                                                                         []string
+	Creates, Launches, Sends, Closes                                                              int
+	Busy, LostSend, Gap, Lost, WrongTarget                                                        bool
 }
 
 var fixtureSteps = []string{"Implement the following Spec and Plan.", "Format the preceding implementation result as JSON.", "Push and create or reuse a PR"}
@@ -212,7 +212,7 @@ func orcaFixture(path string, args []string) error {
 	var result any
 	switch key {
 	case "repo list":
-		result = map[string]any{"repos": []any{map[string]any{"id": "fixture", "kind": "git", "path": s.Cwd}}}
+		result = map[string]any{"repos": []any{map[string]any{"id": "fixture", "kind": "git", "path": o.RepositoryPath}}}
 	case "status":
 		result = map[string]any{"runtime": map[string]any{"state": "ready", "appVersion": "e2e-terminal", "capabilities": []string{"terminal.prompt-delivery.v1"}}}
 	case "worktree create":
@@ -228,6 +228,8 @@ func orcaFixture(path string, args []string) error {
 		result = map[string]any{"worktree": worktree(), "agentTerminalHandle": o.Handle}
 	case "worktree show":
 		result = map[string]any{"worktree": worktree()}
+	case "terminal list":
+		result = map[string]any{"terminals": []any{term()}, "truncated": false}
 	case "terminal show":
 		if o.Lost {
 			return errors.New("original terminal handle lost")
@@ -258,6 +260,19 @@ func orcaFixture(path string, args []string) error {
 		}
 		prompt := argument(args, "--text")
 		command := argument(args, "--retry-request")
+		if o.Agent == "" {
+			initializing := prompt == "codex" || strings.HasPrefix(prompt, "& 'codex' ") && strings.Contains(prompt, "Reply READY only. Do not use tools or change files.")
+			if !initializing || o.Launches != 0 {
+				return errors.New("unexpected or duplicate original agent launch")
+			}
+			o.Agent = "codex"
+			o.Launches++
+			if err := Write(path, s); err != nil {
+				return err
+			}
+			return json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "result": map[string]any{"send": map[string]any{"handle": o.Handle, "accepted": true, "prompt": map[string]any{"requestId": command, "processIncarnation": o.Incarnation}}}, "_meta": map[string]string{"runtimeId": runtime}})
+		}
+
 		o.Prompt, o.NativeReply = prompt, ""
 		s.Cwd = o.Worktree
 		o.Sends++

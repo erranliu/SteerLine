@@ -36,7 +36,7 @@ func (d *ApplicationDirectory) prepareProject(e *catalogEntry) (r *ProjectRuntim
 	defer cancel()
 	stage := func(name string) { fmt.Fprintf(os.Stderr, "project %s startup: %s\n", e.view.ConfigID, name) }
 	stage("load configuration")
-	c, err := loadConfigSnapshot(e.ref.ConfigPath, e.data, d.global, nil, nil, true)
+	c, err := loadConfigSnapshot(e.ref.ConfigPath, e.data, d.global, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +123,12 @@ func (r *ProjectRuntime) Run(parent context.Context, publish func(*runtimeProjec
 	admission := serviceAdmission{config: &r.config}
 	hostPort := host.NewServiceHost(r.hostConfig, "", "off", r.log, admission, serviceActivityFormatter{})
 	var store *sqlite.SQLiteStore
-	service, err := newServiceWithTaskStore(ctx, r.config, r.config.ExecutionDirectory, newConversationSources(), hostPort, func(value *sqlite.SQLiteStore) { store = value })
+	service, err := newRunnerServiceWithTaskStore(ctx, r.config, hostPort, "manual", func(value *sqlite.SQLiteStore) { store = value })
 	if err != nil {
 		result.LocalClosed = true
-		result.ResourcesSettled = true
+		// Startup may have reached the independent daemon before losing its
+		// acknowledgement. A nil actor cannot prove original resources absent.
+		result.ResourcesSettled = false
 		return result, err
 	}
 	result.InstanceID = service.InstanceID()
@@ -138,18 +140,18 @@ func (r *ProjectRuntime) Run(parent context.Context, publish func(*runtimeProjec
 	if err != nil {
 		closeErr := service.Close()
 		result.LocalClosed = closeErr == nil
-		result.ResourcesSettled = true
+		result.ResourcesSettled = service.ResourceSettlementError() == nil
 		return result, errors.Join(err, closeErr)
 	}
 	port, err := httpapi.NewProject(httpapi.Ports{Query: product, Commands: product, Authority: product, NativeViewer: product}, httpapi.Options{RunDir: r.config.RunDir, ProjectIdentity: r.config.Identity(), InstanceID: result.InstanceID, Process: localAPIProcessIdentity(service.State.Service.ProcessIdentity), Capabilities: publicProjectCapabilities(service.State.Service.Capabilities)})
 	if err != nil {
 		closeErr := errors.Join(product.Close(), service.Close())
 		result.LocalClosed = closeErr == nil
-		result.ResourcesSettled = true
+		result.ResourcesSettled = service.ResourceSettlementError() == nil
 		return result, errors.Join(err, closeErr)
 	}
 	project := &runtimeProjectPort{Server: port, product: product, config: r.config, store: store, instance: result.InstanceID}
-	actor := serviceReadyHook{Service: service, ready: func() error {
+	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -170,7 +172,7 @@ func (r *ProjectRuntime) Run(parent context.Context, publish func(*runtimeProjec
 	if !result.ResourcesSettled {
 		result.Diagnostic = service.ResourceSettlementError().Error()
 	}
-	retErr = errors.Join(runErr, closeErr)
+	retErr = errors.Join(runErr, closeErr, service.ResourceSettlementError())
 	return
 }
 

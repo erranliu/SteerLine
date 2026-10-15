@@ -72,7 +72,7 @@ func TestSchemaOneCenterDatabaseIsRejectedWithoutMutation(t *testing.T) {
 	if _, err = tx.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
 		t.Fatal(err)
 	}
-	for _, stmt := range domainExecutionSchema {
+	for _, stmt := range taskServiceSchema {
 		if _, err = tx.Exec(stmt); err != nil {
 			t.Fatalf("create center schema: %v: %s", err, stmt)
 		}
@@ -109,4 +109,18 @@ func TestSchemaOneCenterDatabaseIsRejectedWithoutMutation(t *testing.T) {
 	if err != nil || !bytes.Equal(before, after) {
 		t.Fatalf("rejected database was modified: %v", err)
 	}
+}
+
+func databaseFiles(t *testing.T, path string) map[string][]byte {
+	t.Helper()
+	files := map[string][]byte{}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		b, err := os.ReadFile(path + suffix)
+		if os.IsNotExist(err) {
+			continue
+		}
+		require(t, err)
+		files[suffix] = b
+	}
+	return files
 }

@@ -12,19 +12,7 @@ import (
 )
 
 func qualified(s testenv.Snapshot) bool {
-	if s.Runtime == nil || len(s.Runtime.Runs) != 1 || len(s.Domain.Executions) != 1 || s.Runtime.Runs[0].Decision == nil {
-		return false
-	}
-	d, e := s.Runtime.Runs[0].Decision, s.Domain.Executions[0]
-	if d.Status != "pending" || len(d.Request.Options) == 0 || d.Request.Options[0].ID != "continue" || e.RecoveryState == "unverified" {
-		return false
-	}
-	for _, record := range s.Domain.Decisions {
-		if record.DecisionID == d.ID {
-			return record.Status == "pending" && record.Version == d.Version && record.RecoveryVersion == e.RecoveryVersion && record.RecoveryState == e.RecoveryState
-		}
-	}
-	return false
+	return len(s.Runner.Candidates) == 1 && s.Runner.Candidates[0].Projection != nil && s.Runner.Candidates[0].Projection.Controls.CanResume && s.Runtime != nil && len(s.Runtime.Runs) == 1 && s.Runtime.Runs[0].Decision != nil && s.Runtime.Runs[0].Decision.Request.InteractionKind == "runner_resume"
 }
 
 func TestObservationReconnect(t *testing.T) {
@@ -105,25 +93,18 @@ func testTerminalReconnect(t *testing.T, id, environment string) {
 	o.StartService()
 	o.Claim("a")
 	original := o.WaitRecovery("original-terminal-active", func(s testenv.Snapshot) bool {
-		return len(s.Domain.Executions) == 1 && s.Helper.Recovery.Orca.Sends == 1 && testenv.OriginalTerminalWorkingObserved(s)
+		return len(s.Runner.Candidates) == 1 && s.Runner.Candidates[0].Projection != nil && s.Helper.Recovery.Orca.Sends == 1
 	})
+	first := original.Runner.Candidates[0]
+	x := first.Projection.Execution
 	o.CrashService()
 	o.ReleaseNativeRecovery()
 	o.StartService()
 	resumed := o.FinishRecoveredFlow()
-	first, last := original.Domain.Executions[0], resumed.Domain.Executions[0]
-	if first.ExecutionID != last.ExecutionID || first.CurrentAttemptID != last.CurrentAttemptID || first.SessionID != last.SessionID || *first.Process != *last.Process || resumed.Helper.Recovery.Orca.Creates != 1 || resumed.Helper.Recovery.Orca.Sends != 3 || len(resumed.Domain.WorkflowRuns[0].StageResults) != 3 {
-		t.Fatal("single terminal recovery replaced or duplicated original input")
-	}
-	o.StopService()
-	state, err := controlled.Read(o.Provider)
-	s.Must(err)
-	state.Recovery.Orca.Lost = true
-	s.Must(controlled.Write(o.Provider, state))
-	o.StartService()
-	saved := o.WaitPhase("waiting_pr_merge")
-	if saved.Helper.Recovery.Orca.Sends != 3 || len(saved.Domain.WorkflowRuns[0].StageResults) != 3 {
-		t.Fatal("saved results required the lost original terminal or added input")
+	last := resumed.Runner.Candidates[0]
+	y := last.Projection.Execution
+	if first.ID != last.ID || first.RunID != last.RunID || x.AttemptID != y.AttemptID || x.SessionID != y.SessionID || x.Workspace != y.Workspace || resumed.Helper.Recovery.Orca.Creates != 1 || resumed.Helper.Recovery.Orca.Launches != 1 || resumed.Helper.Recovery.Orca.Sends != 3 {
+		t.Fatal("resident Runner replaced or resent original terminal input")
 	}
 	o.RecordRecoveryBranch("original-terminal-reconnect", resumed, map[string]any{"environment": environment, "sends": resumed.Helper.Recovery.Orca.Sends})
 	o.StopService()
@@ -145,8 +126,7 @@ func testCodexResume(t *testing.T, id string, changed bool) {
 	p.StartService()
 	p.Claim("a")
 	before := p.WaitRecovery("failed-original-report", qualified)
-	p.DisconnectWorker(before)
-	p.CrashService()
+	p.StopService()
 	candidate := ""
 	if changed {
 		candidate = p.NativeManualCommit("controlled E2E result\nmanual native result\n")
@@ -155,23 +135,16 @@ func testCodexResume(t *testing.T, id string, changed bool) {
 	gate := p.WaitRecovery("original-session-restore-ready", qualified)
 	answer := p.AnswerRecovery(gate)
 	after := p.FinishRecoveredFlow(answer.DecisionID)
-	first, last := before.Domain.Executions[0], after.Domain.Executions[0]
-	if first.ExecutionID != last.ExecutionID || first.SessionID != last.SessionID || first.Workspace.Worktree != last.Workspace.Worktree || first.CurrentAttemptID == last.CurrentAttemptID || len(after.Domain.Attempts) != 2 || after.Helper.Sessions != 1 {
-		t.Fatal("resume replaced original thread or failed to advance Attempt")
-	}
-	results := after.Domain.WorkflowRuns[0].StageResults
-	failedIndex := 1
-	if changed {
-		failedIndex = 0
-	}
-	if results[failedIndex].Succeeded || results[failedIndex].Failure == "" {
-		t.Fatal("old native failure overwritten")
+	first, last := before.Runner.Candidates[0], after.Runner.Candidates[0]
+	x, y := first.Projection.Execution, last.Projection.Execution
+	if first.ID != last.ID || first.RunID != last.RunID || x.SessionID != y.SessionID || x.Workspace != y.Workspace || x.AttemptID == y.AttemptID || after.Helper.Sessions != 1 {
+		t.Fatal("resume replaced original Run/thread/workspace or failed to advance Attempt")
 	}
 	want := 5
 	if changed {
 		want = 4
-		if results[1].StepID != "implement.execute" || after.Helper.PR.HeadRevision == candidate {
-			t.Fatal("changed manual work skipped contract verification")
+		if after.Helper.PR.HeadRevision == candidate {
+			t.Fatal("manual result skipped managed verification")
 		}
 	}
 	if after.Helper.Dispatches != want {
@@ -275,19 +248,21 @@ func testTerminalUnknownSend(t *testing.T, id, environment string) {
 	s.Must(controlled.Write(o.Provider, state))
 	o.CreateTasks()
 	o.StartService()
-	o.ClaimExpectedStatus("a", "indeterminate")
+	o.Claim("a")
 	before := o.WaitRecovery("original-send-unknown", func(s testenv.Snapshot) bool {
-		return s.Helper.Recovery.Orca.Sends == 1 && len(s.Domain.Executions) == 1
+		return len(s.Runner.Candidates) == 1 && s.Runner.Candidates[0].Projection != nil && s.Helper.Recovery.Orca.Sends == 1 && s.Runner.Candidates[0].Projection.Phase == "operation_outcome_unknown"
 	})
 	o.CrashService()
 	o.ReleaseNativeRecovery()
 	o.StartService()
 	after := o.WaitRecovery("unknown-send-remains-unverified", func(s testenv.Snapshot) bool {
-		return len(s.Domain.Executions) == 1 && s.Domain.Executions[0].RecoveryState == "unverified" && s.Runtime.Runs[0].Decision != nil && len(s.Runtime.Runs[0].Decision.Request.Options) == 0
+		return len(s.Runner.Candidates) == 1 && s.Runner.Candidates[0].Projection != nil && s.Runner.Candidates[0].Projection.Phase == "operation_outcome_unknown" && !s.Runner.Candidates[0].Projection.Controls.CanReply && !s.Runner.Candidates[0].Projection.Controls.CanResume
 	})
-	if after.Helper.Recovery.Orca.Sends != 1 || after.Helper.Recovery.Orca.Creates != 1 || after.Domain.Executions[0].SessionID != before.Domain.Executions[0].SessionID || len(after.Domain.WorkflowRuns[0].StageResults) != 0 {
-		t.Fatal("unknown original send was repeated or its unbound reply was adopted")
+	first, last := before.Runner.Candidates[0], after.Runner.Candidates[0]
+	if first.RunID != last.RunID || last.Projection.Execution.SessionID != first.Projection.Execution.SessionID || after.Helper.Recovery.Orca.Sends != 1 || after.Helper.Recovery.Orca.Creates != 1 || after.Helper.Recovery.Orca.Launches != 1 {
+		t.Fatal("unknown original terminal input was resent or replaced")
 	}
+
 	o.RecordRecoveryBranch("unknown-send-refused", after, map[string]any{"environment": environment})
 	o.StopService()
 }

@@ -332,7 +332,7 @@ func TestTM06ContractValueClosure(t *testing.T) {
 					"go.mod":                       "module " + module + "\n\ngo 1.23\n",
 					"internal/otherhelper/edge.go": "package otherhelper\nimport _ \"" + dependency + "\"\n",
 				}
-				for _, pkg := range []string{"internal/app", "internal/app/host", "internal/execution", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/product/query", "internal/product/query/taskgraph"} {
+				for _, pkg := range []string{"internal/app", "internal/app/host", "internal/taskrunner", "internal/runnerbridge", "internal/runnerclient", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/product/query", "internal/product/query/taskgraph"} {
 					path := filepath.Join(root, pkg, "empty.go")
 					if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 						t.Fatal(err)

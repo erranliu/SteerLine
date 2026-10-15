@@ -14,7 +14,8 @@ import (
 )
 
 func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
-	c := configuredLifecycleApp(t)
+	c, _ := nativeTaskFixture(t)
+	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
 	require(t, os.MkdirAll(EtcDir(), 0700))
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "one.json"), projectConfigJSON(t, c), 0600))
 	second := c
@@ -22,7 +23,6 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	fixtureGit(t, HomeDir(), "clone", "--quiet", "--no-hardlinks", c.Repository, second.Repository)
 	fixtureGit(t, second.Repository, "remote", "set-url", "origin", "https://github.com/owner/repo.git")
 	second.RunDir = ""
-	second.WorktreeRoot = ""
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "two.json"), projectConfigJSON(t, second), 0600))
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "z-broken.json"), []byte("{"), 0600))
 	d := NewApplicationDirectory(HomeDir())

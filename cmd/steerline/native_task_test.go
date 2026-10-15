@@ -15,7 +15,6 @@ import (
 	"time"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
@@ -24,20 +23,20 @@ import (
 
 func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	t.Setenv("STEERLINE_CLI_WORKER_FIXTURE", "1")
-	t.Setenv("CODEX_HOME", filepath.Join(steerlineapp.HomeDir(), "codex"))
-	if err := os.MkdirAll(os.Getenv("CODEX_HOME"), 0700); err != nil {
-		t.Fatal(err)
-	}
+	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-read-only")
 	if err := os.MkdirAll(steerlineapp.EtcDir(), 0700); err != nil {
 		t.Fatal(err)
 	}
-	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0]})
-	global, err := json.Marshal(map[string]any{
-		"version":                   2,
-		"execution_profiles":        []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: profilePayload}}}},
-		"default_execution_profile": "local",
-	})
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawExe, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exeSum := sha256.Sum256(rawExe)
+	global, err := json.Marshal(map[string]any{"version": 3, "runner": map[string]string{"executable": exe, "version": "unit-read-only", "sha256": hex.EncodeToString(exeSum[:])}, "execution_profiles": []any{map[string]any{"id": "local", "name": "Local Codex", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": "codex.exe"}}, "workflow": map[string]any{"id": "development", "version": 1}}}, "default_execution_profile": "local"})
 	if err != nil {
 		t.Fatal(err)
 	}

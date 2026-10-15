@@ -6,5 +6,5 @@ import storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 
 // NewService wires one product reader into its separate consumer capabilities.
 func NewService(store storageports.ProductReader, project string) Service {
-	return Service{Project: project, Workflows: store, Events: store, Tasks: store, Projects: store, Activity: store}
+	return Service{Project: project, Events: store, Tasks: store, Projects: store, Activity: store}
 }

@@ -1,89 +1,75 @@
 {
-  "version": 2,
+  "version": 3,
+  "runner": {
+    "executable": "C:/Tools/SteerRunner/steerrunner.exe",
+    "version": "0.1.0-dev.1",
+    "sha256": "REPLACE_WITH_THE_SELECTED_EXE_SHA256"
+  },
   "default_execution_profile": "local-luna-medium",
   "execution_profiles": [
     {
       "id": "local-luna-medium",
       "name": "本机 Codex Luna medium",
-      "host": "local",
-      "agent": "codex",
-      "implementation_configs": [
-        {
-          "implementation_key": "codex.worker-profile",
-          "codec_version": 2,
-          "payload": {
-            "executable": "codex.exe",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "medium"
-          }
+      "execution": {
+        "adapter": "codex-app-server",
+        "target": {
+          "kind": "local"
+        },
+        "settings": {
+          "executable": "codex.exe",
+          "model": "gpt-6-luna",
+          "reasoning_effort": "medium"
         }
-      ]
+      },
+      "workflow": {
+        "id": "development",
+        "version": 1
+      }
     },
     {
       "id": "local-luna-xhigh",
       "name": "本机 Codex Luna xhigh",
-      "host": "local",
-      "agent": "codex",
-      "implementation_configs": [
-        {
-          "implementation_key": "codex.worker-profile",
-          "codec_version": 2,
-          "payload": {
-            "executable": "codex.exe",
-            "model": "gpt-6-luna",
-            "reasoning_effort": "xhigh"
-          }
+      "execution": {
+        "adapter": "codex-app-server",
+        "target": {
+          "kind": "local"
+        },
+        "settings": {
+          "executable": "codex.exe",
+          "model": "gpt-6-luna",
+          "reasoning_effort": "xhigh"
         }
-      ]
-    },
-    {
-      "id": "orca-environment",
-      "name": "远端 Orca · GPT-6-Luna high",
-      "host": "orca",
-      "agent": "codex",
-      "implementation_configs": [
-        {
-          "implementation_key": "orca.terminal-profile",
-          "codec_version": 3,
-          "payload": {
-            "executable": "orca.exe",
-            "environment": "name:台式机64G",
-            "wait_timeout": "30s"
-          }
-        }
-      ],
-      "agent_launch": {
-        "executable": "codex",
-        "model": "gpt-6-luna",
-        "reasoning_effort": "high",
-        "args": [
-          "--dangerously-bypass-approvals-and-sandbox"
-        ]
+      },
+      "workflow": {
+        "id": "development",
+        "version": 1
       }
     },
     {
-      "id": "orca-environment-xhigh",
-      "name": "远端 Orca · GPT-6-Luna xhigh",
-      "host": "orca",
-      "agent": "codex",
-      "implementation_configs": [
-        {
-          "implementation_key": "orca.terminal-profile",
-          "codec_version": 3,
-          "payload": {
+      "id": "orca-environment",
+      "name": "远端 Orca",
+      "execution": {
+        "adapter": "orca-terminal",
+        "target": {
+          "kind": "orca_environment",
+          "environment": "台式机64G"
+        },
+        "settings": {
+          "transport": {
             "executable": "orca.exe",
-            "environment": "name:台式机64G",
             "wait_timeout": "30s"
+          },
+          "agent_launch": {
+            "executable": "codex",
+            "model": "gpt-6-luna",
+            "reasoning_effort": "medium",
+            "args": []
           }
         }
-      ],
-      "agent_launch": {
-        "executable": "codex",
-        "model": "gpt-6-luna",
-        "reasoning_effort": "xhigh",
-        "args": [
-          "--dangerously-bypass-approvals-and-sandbox"
-        ]
+      },
+      "workflow": {
+        "id": "development",
+        "version": 1
       }
     }
   ]

@@ -1,5 +1,7 @@
 # Spec：后端组装与最终回复状态收敛
 
+源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](../architecture/current-code-architecture.md)。
+
 本次是用户直接要求的普通开发规格，2026-10-10 用户授权本聊天实施，不分配任务编号、不进入 roadmap 调度。唯一配套文件：[Plan](bounded-structure-refactoring.plan.md) · [专属验收](../acceptance/bounded-structure-refactoring.md)。两个原候选收紧后合并为一个交付范围，预计一个实现 PR；旧编号不作为本次实施身份，实际验证与交付状态归专属验收。
 
 首次提 PR 源码基线：2026-10-10 rebase 后的 `origin/main`，commit `8e292172d84c902e93cedb9870a658e90a9db0c4`。保留原 `21d97350` 中的 Worker 分步流程（PR #262）、Codex CLI 原会话入口（PR #264）和 Orca supervised 双目标/旧本机入口切断（PR #266），并集成 PR #267 的分步反馈修复/测试调整。解决 PR 冲突时再合入 `4786934a2ab6a9be7e38d520c8efb2a7f65fedc0`，包含 #45 的本机 HTTP 客户端成果（PR #249）；范围与同包内部收敛目标保持。以实际主干源码为准，不套用此前三后端登记或旧本机 Orca 权限接线。
@@ -14,7 +16,7 @@
 
 ## 后端组装
 
-入口：[directory.go](../../internal/app/directory.go)；所属实现：[directory_local.go](../../internal/app/directory_local.go)、[directory_supervised.go（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/app/directory_supervised.go)。保持一个 app Go 包，采用普通私有函数和文件归属：
+入口：[directory.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/app/directory.go)；所属实现：[directory_local.go](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/app/directory_local.go)、[directory_supervised.go（历史）](https://github.com/erranliu/SteerLine/blob/872dba4462a4f659d7685eb2a397211a1653c632/internal/app/directory_supervised.go)。保持一个 app Go 包，采用普通私有函数和文件归属：
 
 - local Codex、Orca supervised 两个实现单元分别收拢 registration/codec、特有配置/target、preflight/claim 和 factory；localExecutionBackend 随 local 单元迁入，不只拆登记表。supervised 的 `target: local/environment` 是同一实现的配置分支，不拆成两个 registration、组装单元或生命周期。
 - NewBuiltinDirectory 只保留版本、显式组合及当前实例的一次性目录绑定。新后端仍需显式接线；既有后端局部行为变化通常不用改中央函数。

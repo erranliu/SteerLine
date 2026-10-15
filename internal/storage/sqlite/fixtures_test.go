@@ -43,8 +43,13 @@ func requireNativeAuditCode(t *testing.T, err error, code string) {
 // pipeline. Their records test persistence and query boundaries only.
 func nativeAuditRecords(t *testing.T, store *SQLiteStore, a executionmodel.ProjectTaskAuthority) []taskmodel.TaskRecord {
 	t.Helper()
-	created := time.Now().UTC()
 	ref := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+	return nativeAuditRecordsWithReference(t, store, a, ref)
+}
+
+func nativeAuditRecordsWithReference(t *testing.T, store *SQLiteStore, a executionmodel.ProjectTaskAuthority, ref taskmodel.FileReference) []taskmodel.TaskRecord {
+	t.Helper()
+	created := time.Now().UTC()
 	tasks := []taskmodel.TaskRecord{}
 	err := store.transactSQLite(context.Background(), func(tx *sqliteTx) error {
 		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{BatchID: "audit-batch", ProjectIdentity: a.ProjectIdentity, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("c", 64), CommandID: "audit-command", CreatedAt: created, TaskIDs: map[string]string{"a": "2", "b": "10", "c": "99"}}, a.AuthorityVersion, a.GraphRevision); err != nil {

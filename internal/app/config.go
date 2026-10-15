@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
@@ -61,18 +60,11 @@ func StateRoot() string { return filepath.Join(HomeDir(), "state") }
 // LoadConfig reads the project file and fixed execution catalog as one
 // application configuration. The returned catalog belongs to this config
 // instance and is reused by all of its entry paths.
-func LoadConfig(path string) (Config, error) { return loadConfig(path, nil, nil, true) }
+func LoadConfig(path string) (Config, error) { return loadConfig(path, nil, true) }
 
-func LoadQueryConfig(path string) (Config, error) { return loadConfig(path, nil, nil, false) }
+func LoadQueryConfig(path string) (Config, error) { return loadConfig(path, nil, false) }
 
-func LoadConfigWithDirectory(path string, directory *execution.ExecutionDirectory, host executionbackend.ManagedProcessHost) (Config, error) {
-	if directory == nil || host == nil {
-		return Config{}, errors.New("execution directory and process host are required")
-	}
-	return loadConfig(path, directory, host, true)
-}
-
-func loadConfig(path string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
+func loadConfig(path string, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
 	projectBytes, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, err
@@ -81,10 +73,9 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	if err != nil {
 		return Config{}, err
 	}
-	return loadConfigSnapshot(path, projectBytes, globalBytes, directory, processHost, requireSupport)
+	return loadConfigSnapshot(path, projectBytes, globalBytes, processHost, requireSupport)
 }
-
-func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
+func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
 	input := defaultProjectConfigInput()
 	config := configFromProjectInput(input)
 	projectPath, err := filepath.Abs(path)
@@ -110,55 +101,19 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, directory
 		return config, err
 	}
 	globalPath := GlobalExecutionConfigPath()
-	if config.Host != "" || config.Agent != "" || len(config.ExecutionProfiles) != 0 || config.DefaultExecutionProfile != "" {
-		return config, fmt.Errorf("execution profiles belong in global execution config %s", globalPath)
-	}
-	var global struct {
-		Version           int                          `json:"version"`
-		ExecutionProfiles []execution.ExecutionProfile `json:"execution_profiles"`
-		DefaultProfile    string                       `json:"default_execution_profile"`
-	}
+	var global RunnerExecutionConfig
 	if err := decodeStrictJSON(globalBytes, &global); err != nil {
 		return config, fmt.Errorf("global execution config: %w", err)
 	}
-	if global.Version != 2 {
-		return config, errors.New("global execution config version must be 2; older development formats are unsupported and their state must be preserved")
-	}
-	if len(global.ExecutionProfiles) == 0 {
-		return config, errors.New("global execution config requires at least one execution profile")
+	if err := global.Validate(); err != nil {
+		return config, err
 	}
 	if processHost == nil {
 		processHost = NewProcessHost(positiveDuration(config.CommandTimeout, 30*time.Second))
 	}
-	if directory == nil {
-		directory, err = NewBuiltinDirectory(processHost)
-	}
-	if err != nil {
-		return config, err
-	}
 	config.ProcessHost = processHost
-	config.ExecutionDirectory = directory
-	config.ExecutionProfiles = global.ExecutionProfiles
-	config.DefaultExecutionProfile = global.DefaultProfile
+	config.RunnerExecution = global
 	config.bindApplicationFiles(projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
-	if err := validateQueryProfiles(config); err != nil {
-		return config, err
-	}
-	if requireSupport {
-		if err := config.ValidateProfiles(); err != nil {
-			return config, err
-		}
-	}
-	initial := global.ExecutionProfiles[0]
-	if global.DefaultProfile != "" {
-		for _, profile := range global.ExecutionProfiles {
-			if profile.ID == global.DefaultProfile {
-				initial = profile
-				break
-			}
-		}
-	}
-	config = config.ApplyExecutionProfile(initial)
 	base := filepath.Dir(projectPath)
 	if config.Repository == "" || config.Branch == "" {
 		return config, errors.New("repository and branch are required")
@@ -179,11 +134,6 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, directory
 		if _, err := repositoryStateKey(config, processHost); err != nil {
 			return config, err
 		}
-	}
-	if config.WorktreeRoot == "" {
-		config.WorktreeRoot = filepath.Join(config.RunDir, "worktrees")
-	} else if !filepath.IsAbs(config.WorktreeRoot) {
-		config.WorktreeRoot = filepath.Join(base, config.WorktreeRoot)
 	}
 	for _, value := range []string{config.TaskPoll, config.PRPoll, config.Heartbeat, config.CommandTimeout, config.ShutdownGrace} {
 		duration, err := time.ParseDuration(value)
@@ -218,20 +168,7 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, directory
 	return config, nil
 }
 
-func validateQueryProfiles(config Config) error {
-	seen := map[string]bool{}
-	for _, profile := range config.ExecutionProfiles {
-		if !regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`).MatchString(profile.ID) || seen[profile.ID] || strings.TrimSpace(profile.Name) == "" {
-			return errors.New("execution profile ID or name is invalid")
-		}
-		seen[profile.ID] = true
-
-	}
-	if config.DefaultExecutionProfile != "" && !seen[config.DefaultExecutionProfile] {
-		return errors.New("default_execution_profile is not configured")
-	}
-	return nil
-}
+func validateQueryProfiles(config Config) error { return config.RunnerExecution.Validate() }
 
 func repositoryStateKey(config Config, processHost executionbackend.ManagedProcessHost) (string, error) {
 	repository, err := workspace.ResolveRepository(context.Background(), workspace.Git{
