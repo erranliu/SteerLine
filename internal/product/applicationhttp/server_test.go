@@ -53,6 +53,9 @@ func TestUnifiedStartupAuthenticationRoutesAndUnavailable(t *testing.T) {
 	if w.Code != 503 || strings.Contains(w.Body.String(), "command_not_found") {
 		t.Fatal("unavailable became authoritative absence", w.Body.String())
 	}
+	if w := request("GET", "/v2/application/projects/"+strings.Repeat("a", 64)+"/runs/candidate/last-message?execution_id=run&attempt_id=attempt", nil); w.Code != 503 {
+		t.Fatal("last-message route was not forwarded", w.Code, w.Body.String())
+	}
 	if w := request("POST", "/v2/application/projects", nil); w.Code < 400 {
 		t.Fatal("catalog became writable")
 	}

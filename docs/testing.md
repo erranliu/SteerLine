@@ -1,5 +1,7 @@
 # 测试总入口
 
+Runner 执行展示与最近消息的定向验证见 [Plan](plans/execution-observability.plan.md) / [验收](acceptance/execution-observability.md)，覆盖原子状态变化、只读消息契约、当前可见执行轮询与取消；不使用安装环境或真实模型。
+
 三 EXE 安装部署与首次迁移的测试范围、命令和真实结果见 [部署 Plan](plans/install-deploy.plan.md) 与 [安装迁移验收](acceptance/install-cutover-20261015.md)。安装环境仅用于用户授权的实际部署操作，普通回归/模型验收仍使用下述隔离入口；空闲安装停启不代表模型执行或恢复通过。
 
 源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](architecture/current-code-architecture.md)。
