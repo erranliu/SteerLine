@@ -10,7 +10,9 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 本机 Web 前端由用户直接授权普通开发，独立项目路径 `web/`：[Spec](web-frontend.spec.md) · [Plan](web-frontend.plan.md) · [专属验收](../acceptance/web-frontend.md)。不修改已有 roadmap 任务准入。
 
-2026-10-15 用户要求将后续范围拆成两个普通开发批次，本轮只编写规格/计划，不实施、不分配 Task ID、不改 execution-map：
+SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Query 缓存、有界基础预取、缓存展示、可见区域查询和操作后定向失效，不增加同步框架或后端接口。[Spec](web-query-optimization.spec.md) · [Plan](web-query-optimization.plan.md) · [专属验收](../acceptance/web-query-optimization.md)。普通开发，不纳入 roadmap；后续 SSE 沿用同一查询缓存。
+
+2026-10-15 用户将后续范围拆成两个普通开发批次；先行独立 Web 与项目切换已随 PR #320 合入主干，后续项目准备/核验/纳管仍处于规划阶段。两批均不分配 Task ID、不改 execution-map：
 
 | 批次 | 范围与依赖 | 文档 | 验收 |
 | --- | --- | --- | --- |

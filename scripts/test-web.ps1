@@ -18,7 +18,7 @@ try {
         try {
             $env:STEERLINE_WEB_CONFIG = $DebugConfig
             $env:STEERLINE_WEB_EVIDENCE = Join-Path $EvidenceDir 'browser'
-            & npm --prefix web run test:e2e *> (Join-Path $EvidenceDir 'browser.log')
+            & npm --prefix web run test:e2e -- smoke.spec.ts *> (Join-Path $EvidenceDir 'browser.log')
             if ($LASTEXITCODE -ne 0) { throw 'Real browser smoke failed' }
         } finally { $env:STEERLINE_WEB_CONFIG = $savedWebConfig; $env:STEERLINE_WEB_EVIDENCE = $savedWebEvidence }
     }

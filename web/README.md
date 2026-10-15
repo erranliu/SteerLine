@@ -27,6 +27,12 @@ Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742
 
 Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的新实例，再恢复只读连接。草稿与完整原请求存 IndexedDB，按 home/项目/实例及执行身份隔离；切换取消旧查询、资格检查和未发送回调。已发送命令只按原 ID 查询；原实例变化后仍可读取旧回执，但不把旧信封补交到新实例。离线只保留当前标签页已有缓存并禁写。
 
+## 查询与缓存
+
+服务读取统一使用 `src/shared/api/queries.ts` 的 TanStack Query options，按 home/项目/原生实例及输出身份隔离。连接核验后后台预取当前项目的执行方案和任务列表首屏；DAG/执行页共享任务列表，已有缓存先展示，后台刷新保留内容。任务列表和执行方案的在途读取可跨页面复用，项目/实例切换仍取消原 Workspace 的读取。
+
+执行方案新鲜期 60 秒，不定时轮询；动态状态保留原刷新周期，仅可见的图/列表、活动/final 启动对应查询。操作后按资源族定向失效，手动刷新包含当前连接查询；缓存不替代服务器操作资格。后续 SSE 继续更新同一缓存，本批不实现 SSE 或查询持久化。[Spec](../docs/spec/web-query-optimization.spec.md) · [Plan](../docs/spec/web-query-optimization.plan.md) · [验收](../docs/acceptance/web-query-optimization.md)。
+
 ## 独立调试与验证
 
 ```powershell
@@ -49,3 +55,5 @@ go run ./cmd/test-feedback -level=L1
 真实 Edge 切换场景会启动和正常清理全新双项目包：设置 `STEERLINE_WEB_PACKAGE=<新包>`，运行 `npm --prefix web run test:e2e -- project-switch.spec.ts`。安装检查入口为 `./scripts/test-web-switch-build.ps1 -Package <新生成的 Web 包>`，也只使用包内 home。
 
 `./scripts/test-web-smoke.ps1` 可自动生成另一新单项目包、启动、运行原 smoke 并正常清理。手动入口的原 `web.smoke` 使用另一个全新单项目 Web 包，先 `start.bat --simulate`，设置 `STEERLINE_WEB_CONFIG=<包>/home/etc/SteerlineTest.json` 后运行 `npm --prefix web run test:e2e -- smoke.spec.ts`；收尾显式正常停止 Web、应用和项目，核实本包进程/监听为 0。截图、trace 和原请求/轮次身份记录在 `STEERLINE_WEB_EVIDENCE` 指定的证据目录或默认临时目录。模拟范围仅限外部模型/PR 协议，Go、Git、SQLite 和 Edge 均为真实实现。
+
+查询缓存浏览器场景 `query-cache.spec.ts` 使用另外生成的全新双项目包：设置 `STEERLINE_WEB_PACKAGE` 和 `STEERLINE_WEB_EVIDENCE` 后运行 `npm --prefix web run test:e2e -- query-cache.spec.ts`。测试负责 simulate 准备、启动和正常清理，运行前不得先 start；不要不带文件过滤运行所有浏览器场景，各场景的现场要求不同。

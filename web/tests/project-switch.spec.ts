@@ -1,27 +1,14 @@
 import { test, expect } from "@playwright/test";
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
-import { readFileSync, writeFileSync, existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { spawn, type ChildProcess } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { freshDualPackage, packageCommand } from "./helpers/package";
 
 test("web.project-switch: independent processes, original commands and active turn survive restart", async ({
   page,
   context,
 }, info) => {
-  const root = resolve(process.env.STEERLINE_WEB_PACKAGE ?? "");
-  if (!root.toLowerCase().startsWith("c:\\steerlinedebug\\"))
-    throw new Error(
-      "fresh generated package under C:\\SteerlineDebug required",
-    );
-  const manifest = JSON.parse(
-    readFileSync(join(root, "manifest.json"), "utf8"),
-  );
-  if (
-    manifest.status !== "ready" ||
-    manifest.web_projects !== 2 ||
-    !manifest.web_binary_sha256 ||
-    existsSync(join(root, "scheme.json"))
-  )
-    throw new Error("fresh dual-project Web package required");
+  const { root, manifest } = freshDualPackage();
   const home = join(root, "home"),
     binary = join(root, "bin", "steerline.exe"),
     web = join(root, "bin", "steerline-web.exe"),
@@ -31,14 +18,7 @@ test("web.project-switch: independent processes, original commands and active tu
     STEERLINE_HOME: home,
     STEERLINE_E2E_CONTROLLED_STATE: join(root, "provider", "state.json"),
   };
-  const command = (exe: string, args: string[]) =>
-    execFileSync(exe, args, {
-      env,
-      encoding: "utf8",
-      timeout: 45000,
-      windowsHide: true,
-      stdio: "pipe",
-    }).trim();
+  const command = packageCommand(env);
   const children: ChildProcess[] = [];
   const launch = (exe: string, args: string[]) => {
     const child = spawn(exe, args, { env, windowsHide: true, stdio: "ignore" });

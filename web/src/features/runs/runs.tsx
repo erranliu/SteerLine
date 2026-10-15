@@ -8,7 +8,8 @@ import {
   Square,
 } from "lucide-react";
 import { useWorkspace } from "../../app/context";
-import type { Candidate, Activity, TaskPage } from "../../shared/api/types";
+import type { Candidate } from "../../shared/api/types";
+import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { SafeLink, Status, short } from "../../shared/ui/status";
 import { TaskDetail } from "../tasks/task-detail";
@@ -18,37 +19,19 @@ import { candidateState, stopReason } from "./state";
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
   const [tab, setTab] = useState<"activity" | "final">("activity");
-  const binding = [
-    api.home,
-    api.identity.project_id,
-    api.identity.instance_id,
-    run.run_id,
-    run.execution_id,
-    run.attempt_id,
-  ];
   const activity = useQuery({
-    queryKey: [...binding, "activity"],
-    queryFn: ({ signal }) =>
-      api.get<Activity>(
-        "/runs/" +
-          run.run_id +
-          "/activity?" +
-          new URLSearchParams({
-            execution_id: run.execution_id,
-            attempt_id: run.attempt_id,
-            recent: "true",
-          }),
-        signal,
-      ),
-    enabled: online && !!run.execution_id && !!run.attempt_id,
+    ...projectQueries(api).activity(run),
+    enabled:
+      online && tab === "activity" && !!run.execution_id && !!run.attempt_id,
     refetchInterval: 2500,
   });
   const final = useQuery({
-    queryKey: [...binding, "final"],
-    queryFn: ({ signal }) => api.final(run, signal),
+    ...projectQueries(api).final(run),
     enabled: online && tab === "final" && !!run.attempt_id,
     refetchInterval: 5000,
   });
+  const updatedAt =
+    tab === "activity" ? activity.dataUpdatedAt : final.dataUpdatedAt;
   return (
     <section className="output-panel">
       <div className="toolbar">
@@ -69,9 +52,7 @@ function Output({ run }: { run: Candidate }) {
         </div>
         <span className="muted">
           {online ? "定时刷新" : "最后观察"} ·{" "}
-          {activity.dataUpdatedAt
-            ? new Date(activity.dataUpdatedAt).toLocaleTimeString("zh-CN")
-            : "—"}
+          {updatedAt ? new Date(updatedAt).toLocaleTimeString("zh-CN") : "—"}
         </span>
       </div>
       {tab === "activity" ? (
@@ -286,13 +267,7 @@ export function Runs() {
   const page = snapshot?.connection.snapshot.page;
   const runs = page?.runs ?? [];
   const tasks = useQuery({
-    queryKey: [
-      api.home,
-      api.identity.project_id,
-      api.identity.instance_id,
-      "run-tasks",
-    ],
-    queryFn: ({ signal }) => api.get<TaskPage>("/tasks?limit=100", signal),
+    ...projectQueries(api).tasks(),
     enabled: online,
     refetchInterval: 2500,
   });
@@ -352,6 +327,10 @@ export function Runs() {
       </div>
       <div className="runs-layout">
         <aside className="run-task-list">
+          {tasks.isPending && <div className="empty">正在读取正式任务…</div>}
+          {tasks.data?.tasks.length === 0 && (
+            <div className="empty">还没有正式任务</div>
+          )}
           {visible.map((t) => (
             <button
               key={t.task_id}
