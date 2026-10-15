@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -479,6 +480,20 @@ func (d *debugRelease) prepareSelected(mode string) error {
 				return err
 			}
 			settings["executable"] = codex
+			// Verify the external login before the frozen fixture claims it.
+			probeCtx, probeCancel := context.WithTimeout(context.Background(), 20*time.Second)
+			probe := d.command("gh", "auth", "status", "--active", "--hostname", "github.com")
+			var probeOutput bytes.Buffer
+			probe.Stdout, probe.Stderr = &probeOutput, &probeOutput
+			probeErr := testprocess.Run(probeCtx, probe)
+			probeCancel()
+			if err := os.WriteFile(filepath.Join(d.root, "evidence", "native-host-gh-auth-status.log"), probeOutput.Bytes(), 0600); err != nil {
+				return err
+			}
+			if probeErr != nil {
+				return fmt.Errorf("existing external GitHub login is unavailable: %w", probeErr)
+			}
+
 		}
 		// This generated repository records only the standard helper reference;
 		// the external gh login and credential storage remain in their owner.
