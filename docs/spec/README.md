@@ -10,6 +10,13 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 本机 Web 前端由用户直接授权普通开发，独立项目路径 `web/`：[Spec](web-frontend.spec.md) · [Plan](web-frontend.plan.md) · [专属验收](../acceptance/web-frontend.md)。不修改已有 roadmap 任务准入。
 
+2026-10-15 用户要求将后续范围拆成两个普通开发批次，本轮只编写规格/计划，不实施、不分配 Task ID、不改 execution-map：
+
+| 批次 | 范围与依赖 | 文档 | 验收 |
+| --- | --- | --- | --- |
+| 先行：独立 Web 与已有项目切换 | 双 exe、Go 应用目录/路由、单端口、当前项目与多标签隔离；仅现有配置，不等待添加流程 | [Spec](web-project-switch.spec.md) · [Plan](web-project-switch.plan.md) | [记录](../acceptance/web-project-switch.md) |
+| 后续：项目准备、核验与纳管 | 依赖先行应用入口；外部 Codex 提示词、结构检查、确认后登记/建库；用户明确后置 | [Spec](project-onboarding.spec.md) · [Plan](project-onboarding.plan.md) | [记录](../acceptance/project-onboarding.md) |
+
 [SpecGuide.md](SpecGuide.md) 维护 SteerLine 产品草稿转正时必读的 Spec / Plan 生成规范：避免过度设计，先查现有代码再整合，先做相关任务整体规划，明确执行链路和桥接必要性，并落实最小测试及验收覆盖。[交互设计](../product-design/planning-ui.md)与[原型](../product-design/prototypes/planning-ui/index.html)展示规范入口和受控生成。当前产品流程为原型设计，不改变用户直接授权的普通仓库开发入口。
 
 ## HTTP 接入后的解耦规格
