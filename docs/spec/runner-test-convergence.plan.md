@@ -100,3 +100,8 @@
 ## 4. 规划交付的静态检查
 
 本轮仅新增 Spec、Plan、专属验收与导航；执行 `python scripts/check_doc_links.py` 和 `git diff --check`，核对验收项/测试计划映射及七场景与 L2 契约一致。结果只写专属验收的文档检查段，RTC-A1～A6 在实施与实际验收前均保持待验。
+
+
+## 实施中核对的测试上下文
+
+waiting-merge-restart 采用仅终止/重启 caller 的故障注入，Runner CLI peer 保持原状态；不将 graceful stop 的“原生资源未结算”报错当成普通重启。活跃 Run 的应用停机测试保留未结算诊断，最终清理显式消费公开 stopped 事实。runtime 的 install/窗口验证沿主干 `scripts/test-runtime-isolation.ps1` 使用独立同用户进程上下文，受控范围不再要求真实 Runner EXE。工具 Job 内直接运行的失败保留证据，不扩大产品权限。`scripts/test-l2.ps1` 同样复用既有独立进程启动并保留原生退出码。

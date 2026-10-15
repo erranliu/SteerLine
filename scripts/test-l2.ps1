@@ -18,8 +18,13 @@ try {
     $env:STEERRUNNER_EXE = $SteerRunnerExe
     $testArguments = @('run', './cmd/test-feedback', '-level=L2')
     if ($OutDir) { $testArguments += ('-out=' + $OutDir) }
-    & go @testArguments
-    if ($LASTEXITCODE -ne 0) { throw 'Full L2 failed; preserve the test-feedback evidence.' }
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & go @testArguments 2>&1 | ForEach-Object { $_.ToString() }
+        $testExit = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previousErrorAction }
+    if ($testExit -ne 0) { throw 'Full L2 failed; preserve the test-feedback evidence.' }
 } finally {
     $env:STEERRUNNER_EXE = $previousRunner
     Pop-Location

@@ -391,11 +391,12 @@ test("web.unified-startup: shared host, original commands and active turn surviv
     facts.active_at_host_stop = (
       await get(aid, "/snapshot")
     ).connection.snapshot.page.runs.find((run: any) => run.task_id === "3");
-    command(binary, ["stop"]);
+    // Application exit must not invent native settlement for a scripted active Run.
+    expect(() => command(binary, ["stop"])).toThrow();
     const shutdown = JSON.parse(
       readFileSync(join(home, "application-api", "shutdown.json"), "utf8"),
     );
-    expect(shutdown.clean).toBe(true);
+    expect(shutdown.clean).toBe(false);
     expect(shutdown.projects).toHaveLength(2);
     facts.shutdown = shutdown;
     command(binary, ["start", "--no-open"]);
@@ -426,6 +427,12 @@ test("web.unified-startup: shared host, original commands and active turn surviv
     expect(submissions).toBe(1);
     facts.recovery_after_host_restart = recovery;
     facts.restarted_project = await get(aid, "/identity");
+    command(helper, ["runner-cleanup", "-config", join(home,"etc","SteerlineTest.json")]);
+    // Let the actor project the public stopped fact before final application stop.
+    await expect.poll(async () => {
+      const snapshot=(await get(aid,"/snapshot")).connection.snapshot.page;
+      return snapshot.runs.find((run:any)=>run.task_id==="3")?.resource_status;
+    }).toBe("stopped");
     await second.close();
     await page.screenshot({
       path: info.outputPath("offline-project.png"),

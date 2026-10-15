@@ -510,7 +510,15 @@ func (p *Project) StopService() {
 	p.Service = nil
 }
 
-func (p *Project) RestartService() { p.StopService(); p.StartService() }
+// Restart only the caller host. The public Runner peer remains independent;
+// graceful application shutdown also reports resource settlement and is tested separately.
+func (p *Project) RestartService() {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	p.Scenario.Must(p.Service.Stop(ctx))
+	p.Service = nil
+	p.StartService()
+}
 
 func (p *Project) Claim(key string) {
 	p.ClaimExpectedStatus(key, "applied")
