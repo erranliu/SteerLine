@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { projectQueries } from "../../shared/api/queries";
 import { useSearchParams } from "react-router-dom";
 import {
   ReactFlow,
@@ -15,7 +16,7 @@ import { GitBranch, List, Network } from "lucide-react";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { Status } from "../../shared/ui/status";
-import type { GraphPage, TaskPage } from "../../shared/api/types";
+import type { GraphPage } from "../../shared/api/types";
 import { TaskDetail } from "./task-detail";
 import "@xyflow/react/dist/style.css";
 type TaskNode = Node<
@@ -99,34 +100,12 @@ export function Dag() {
   const graphCursor = params.get("graph_cursor") ?? "";
   const listCursor = params.get("list_cursor") ?? "";
   const graph = useQuery({
-    queryKey: [
-      api.home,
-      api.identity.project_id,
-      api.identity.instance_id,
-      "graph",
-      graphCursor,
-    ],
-    queryFn: ({ signal }) =>
-      api.get<GraphPage>(
-        "/graph?" + new URLSearchParams({ limit: "100", cursor: graphCursor }),
-        signal,
-      ),
-    enabled: online,
+    ...projectQueries(api).graph(graphCursor),
+    enabled: online && view === "graph",
     refetchInterval: 2500,
   });
   const tasks = useQuery({
-    queryKey: [
-      api.home,
-      api.identity.project_id,
-      api.identity.instance_id,
-      "tasks",
-      listCursor,
-    ],
-    queryFn: ({ signal }) =>
-      api.get<TaskPage>(
-        "/tasks?" + new URLSearchParams({ limit: "100", cursor: listCursor }),
-        signal,
-      ),
+    ...projectQueries(api).tasks(listCursor),
     enabled: online && view === "list",
     refetchInterval: 2500,
   });
@@ -169,10 +148,12 @@ export function Dag() {
             任务列表
           </Button>
         </div>
-        <span className="muted">
-          {graph.data?.nodes.length ?? 0} 个节点 · 图 v
-          {graph.data?.graph_revision ?? "—"}
-        </span>
+        {view === "graph" && (
+          <span className="muted">
+            {graph.data?.nodes.length ?? 0} 个节点 · 图 v
+            {graph.data?.graph_revision ?? "—"}
+          </span>
+        )}
       </div>
       <div className="dag-layout">
         <div className="graph-panel">
@@ -224,6 +205,12 @@ export function Dag() {
             )
           ) : (
             <div className="task-table">
+              {tasks.isPending && (
+                <div className="empty">正在读取正式任务…</div>
+              )}
+              {tasks.data?.tasks.length === 0 && (
+                <div className="empty">还没有正式任务</div>
+              )}
               {tasks.error && (
                 <p className="notice amber">{String(tasks.error)}</p>
               )}
