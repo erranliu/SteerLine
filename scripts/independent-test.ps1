@@ -5,6 +5,7 @@ function Invoke-IndependentTest([string]$ScriptPath, [string[]]$TestArguments, [
     New-Item -ItemType Directory -Path $brokerRoot | Out-Null
     $brokerLog = Join-Path $brokerRoot 'test.log'
     $brokerResult = Join-Path $brokerRoot 'result.json'
+    $brokerPending = Join-Path $brokerRoot 'result.json.tmp'
     function Quote-IndependentValue([string]$Value) { return "'" + $Value.Replace("'", "''") + "'" }
     $invoke = '& ' + (Quote-IndependentValue $ScriptPath) + ' -IndependentProcess'
     foreach ($arg in $TestArguments) {
@@ -14,7 +15,7 @@ function Invoke-IndependentTest([string]$ScriptPath, [string[]]$TestArguments, [
     $body = '$ErrorActionPreference=''Stop''; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); $OutputEncoding=[Console]::OutputEncoding; '
     $body += '$env:PATH=' + (Quote-IndependentValue $env:PATH) + '; '
     if ($env:CODEX_HOME) { $body += '$env:CODEX_HOME=' + (Quote-IndependentValue $env:CODEX_HOME) + '; ' }
-    $body += '$taskExit=0; try { ' + $invoke + ' *> ' + (Quote-IndependentValue $brokerLog) + '; if (-not $?) { $taskExit=1 } } catch { $_ | Out-File -Append -LiteralPath ' + (Quote-IndependentValue $brokerLog) + '; $taskExit=1 } finally { @{exit_code=$taskExit} | ConvertTo-Json | Set-Content -Encoding utf8 -LiteralPath ' + (Quote-IndependentValue $brokerResult) + ' }; exit $taskExit'
+    $body += '$taskExit=0; try { ' + $invoke + ' *> ' + (Quote-IndependentValue $brokerLog) + '; if (-not $?) { $taskExit=1 } } catch { $_ | Out-File -Append -LiteralPath ' + (Quote-IndependentValue $brokerLog) + '; $taskExit=1 } finally { @{exit_code=$taskExit} | ConvertTo-Json | Set-Content -Encoding utf8 -LiteralPath ' + (Quote-IndependentValue $brokerPending) + '; Move-Item -LiteralPath ' + (Quote-IndependentValue $brokerPending) + ' -Destination ' + (Quote-IndependentValue $brokerResult) + ' }; exit $taskExit'
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))
     $process = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=('powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand ' + $encoded)}
     if ($process.ReturnValue -ne 0) { throw "Independent test process creation failed: $($process.ReturnValue)" }

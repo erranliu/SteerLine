@@ -1,6 +1,6 @@
 # Spec：SteerRunner 拆分后的测试精简
 
-日期：2026-10-15。状态：用户已授权实施。用户直接授权的普通开发文档，不分配 Task ID，不修改 roadmap 或 execution-map。配套 [Plan](runner-test-convergence.plan.md)及[专属验收](../acceptance/runner-test-convergence.md)。
+日期：2026-10-15。状态：已实施。用户直接授权的普通开发文档，不分配 Task ID，不修改 roadmap 或 execution-map。配套 [Plan](runner-test-convergence.plan.md)及[专属验收](../acceptance/runner-test-convergence.md)。
 
 ## 1. 目标与已确认边界
 

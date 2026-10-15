@@ -1,6 +1,6 @@
 # Plan：SteerRunner 拆分后的测试精简
 
-日期：2026-10-15。状态：用户已授权实施。依据 [Spec](runner-test-convergence.spec.md)，验收归[本任务专属记录](../acceptance/runner-test-convergence.md)。普通开发，无 Task ID，不改 roadmap/execution-map；本次用户已授权 rebase 后更新文档并实施，包含必要的完整 L2 真实验收。
+日期：2026-10-15。状态：已实施。依据 [Spec](runner-test-convergence.spec.md)，验收归[本任务专属记录](../acceptance/runner-test-convergence.md)。普通开发，无 Task ID，不改 roadmap/execution-map；本次用户已授权 rebase 后更新文档并实施，包含必要的完整 L2 真实验收。
 
 ## 1. 实施前置与整合方式
 
@@ -91,7 +91,7 @@
 | RTC-A6 | L1 固定集及编译 | 最终测试选择修改后：`go run ./cmd/test-feedback -level=L1`；`go run ./cmd/test-feedback -build-only`；`go test -tags=e2e ./tests/e2e/... -run '^$'` | 固定集通过且完整，普通/e2e 编译成功；编译不算场景通过。A6 登记三个结果及选择范围 |
 | RTC-A5、A6 | 所有者/脚本/文档静态审计 | 最后执行：`rg -n -i 'orca|rollout|usage_verified|sandbox|app-server|steerrunner' tests internal/testkit cmd/test-feedback scripts`；`go list -test -deps ./...`；`go list -tags=e2e -test -deps ./tests/e2e/...`；`python scripts/check_doc_links.py`；`git diff --check`；解析保留 `.ps1` 检查语法 | 逐命中按归属说明，L2 配置中的 codex-app-server 等允许，专项无执行消费者/失效包；导航/差异/脚本零错误。A5/A6 保存审计清单与检查结果，不把 rg 非零匹配机械当失败 |
 
-夹具消费者补充：`web/tests/smoke.spec.ts`、`project-switch.spec.ts` 和 debug runtime 测试原来读取原生 turns/process.json，随步骤 3/5 改成公开 Run/原请求记录；保留关闭页面、重启 Web、多项目、反馈及请求幂等断言，删除原生进程取证。保留 debug-template 发布脚本自己的 PR 复用测试。RTC-A2/A4/A6 最小追加 `scripts/test-debug-release.ps1 -SteerRunnerExe <本次固定EXE>`、新 simulate 包的 `scripts/test-web-smoke.ps1` 与 `scripts/test-unified-startup.ps1`（仅其现有两项目浏览器入口，不跑其他原生矩阵），按各脚本保存包内证据。必要共享夹具消费者发生重接，因此这里实际执行这两项已有浏览器场景，不另建组合矩阵。
+夹具消费者补充：`web/tests/smoke.spec.ts`、`project-switch.spec.ts` 和 debug runtime 测试原来读取原生 turns/process.json，随步骤 3/5 改成公开 Run/原请求记录；保留关闭页面、重启 Web、多项目、反馈及请求幂等断言，删除原生进程取证。保留 debug-template 发布脚本自己的 PR 复用测试。RTC-A2/A4/A6 最小追加新生成单项目包的 `TestDebugReleaseRuntime`（`STEERLINE_DEBUG_TEST_ROOT=<该包>`，`go test ./tests/e2e/internal/driver -run '^TestDebugReleaseRuntime$' -count=1 -timeout=10m`）、新 simulate 包的 `scripts/test-web-smoke.ps1` 与 `scripts/test-unified-startup.ps1`（仅其现有两项目浏览器入口，不跑其他原生矩阵），按各脚本保存包内证据。必要共享夹具消费者发生重接，因此这里实际执行这两项已有浏览器场景，不另建组合矩阵。
 
 必要的 HTTP 授权/投影断言复用现有 owner；如步骤 1 发现必须迁入或修改 HTTP 测试，在 RTC-A2 明细登记精确测试名及定向命令并执行，不扩张到整组 Web 浏览器验收。
 
@@ -119,6 +119,10 @@ Web 调用方实测修复（RTC-A2/A6）：保留真实 `pr_ready` 公开状态�
 
 RTC-A2/A4/A6 模拟配置修正：修改维护源 `debug-template/home/config-source/SteerlineTest.simulate.json` 的 `pr_poll` 为 `15s`；公开 CLI 完整往返使旧 100ms 轮询长期占用调度并连续更新候选 CAS，浏览器验证无法在稳定版本提交。只改模拟模板，不改生产调度、冻结现场、授权或候选版本规则；重建新包验证现有两个浏览器消费者与清理。
 
-L2 独立进程外层等待使用 60 分钟，覆盖既有 gate 6 分钟、live 35 分钟、构建和清理预算；共享 `Invoke-IndependentTest` 提供显式 Timeout 参数，其他消费者仍用原 20 分钟。不能让外层等待先于既有 L2 内部期限超时而丢失结果。本轮真实 L2 在 7 分钟内已实际通过，新增外层预算仅消除长任务被过早截断的风险。
+L2 独立进程外层等待使用 60 分钟，覆盖既有 gate 6 分钟、live 35 分钟、构建和清理预算；共享 `Invoke-IndependentTest` 提供显式 Timeout 参数，其他消费者仍用原 20 分钟。不能让外层等待先于既有 L2 内部期限超时而丢失结果。新增外层预算仅消除长任务被过早截断的风险，实际结果只登记专属验收。
 
 	est-debug-release.ps1 -Live 也直接复用 	est-l2.ps1 的原生退出码处理，外层等待 80 分钟为前置生成/调试与完整 L2 留足预算；未选择 Live 的消费者仍保持原 20 分钟。
+
+调试验证的实施收口：本任务使用生成器成功建立且未使用过的独立单项目包执行 Runtime/freeze/stop/reset，并用新生成的独立单/双项目包执行现有浏览器消费者。保留 installer 的产品门槛；不默认重复批量生成的跨包矩阵，所需隔离由原 owner/四项 runtime 覆盖。实际执行、失败及未执行明细只登记专属验收，不将分项通过写成批量脚本整体通过。
+
+RTC-A4/A6 的 Windows 测试回执发布：`web/tests/helpers/package.ts` 和共享独立启动器先写同目录临时 JSON、关闭文件，再原子移动到唯一结果路径，读者仍只等待最终路径。避免出现文件但 writer 尚未关闭时读取触发 EBUSY；不重发业务命令、不把部分回执算作完成。由现有双项目浏览器场景和独立启动器实际消费验证，异常日志保留于专属验收。
