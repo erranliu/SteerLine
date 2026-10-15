@@ -74,4 +74,4 @@ Runner 第五轮远端已完成实施，在报告阶段暴露应用冻结策略�
 
 `local-waiting-3` 在干净 ca5d8563 + Runner dc24205 下，TestWaitingMergeRestart 通过（319.75 秒）：原 Run/Attempt/session/workspace/branch 保持，重启零重复投递，原 PR 合并后唯一交付和后继释放，清理通过。本次 R1 的三个本机场景均已有通过证据，未扩大为全部历史恢复矩阵通过。
 
-最新产品真机包第一次测试启动参数被 PowerShell 拆分（exit 2，零场景）；修正仅外部 harness 参数后，实际 1 场景失败（14.75 秒），SteerLine 启动的 Git fetch 未指定本机已有 gh 登录的标准 credential helper。没有 Run/模型派发/PR；失败包冻结保留。修正 live 模板只显式引用 `gh auth git-credential`，不读取/复制/导出凭据；须新生成包复验。
+最新产品真机包第一次测试启动参数被 PowerShell 拆分（exit 2，零场景）；修正仅外部 harness 参数后，实际 1 场景失败（14.75 秒），调试 helper 在启动 SteerLine 前推送本次专属 base 时显式清空 credential helper，未引用本机已有 gh 登录。没有 Run/模型派发/PR；失败包冻结保留。修正 live 模板只显式引用 `gh auth git-credential`，不读取/复制/导出凭据；须新生成包复验。

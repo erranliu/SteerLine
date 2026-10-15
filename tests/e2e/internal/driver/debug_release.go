@@ -259,6 +259,11 @@ func (d *debugRelease) command(exe string, args ...string) *exec.Cmd {
 		cmd.Err = err
 		return cmd
 	}
+	if mode == "live" && exe == "git" {
+		// Reference the existing external login for fixture base transport and
+		// read/cleanup operations. No credential values enter this package.
+		cmd.Args = append([]string{exe, "-c", "credential.helper=", "-c", "credential.helper=!gh auth git-credential"}, cmd.Args[1:]...)
+	}
 	env, err := d.debugEnvironment(os.Environ(), mode)
 	if err != nil {
 		cmd.Err = err
@@ -668,8 +673,7 @@ func (d *debugRelease) runProjectContext(parent context.Context) error {
 		}
 	} else {
 		// A fixture base has its own history, so no checkout/fetch of main or external local repo is needed.
-		cmd := exec.Command("git", "-C", d.repo, "-c", "credential.helper=", "push", "origin", d.base+":refs/heads/"+d.base)
-		cmd.Env = os.Environ()
+		cmd := d.command("git", "-C", d.repo, "push", "origin", d.base+":refs/heads/"+d.base)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err = cmd.Run(); err != nil {
 			return err

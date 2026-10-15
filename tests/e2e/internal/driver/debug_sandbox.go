@@ -364,7 +364,7 @@ func debugSandboxCleanup(ctx context.Context, d *debugRelease, service *testproc
 		if strings.TrimSpace(string(raw)) == "" {
 			continue
 		}
-		_, deleteErr := run(d.command("git", "-C", d.repo, "-c", "credential.helper=", "push", "origin", "--delete", branch))
+		_, deleteErr := run(d.command("git", "-C", d.repo, "push", "origin", "--delete", branch))
 		failures = append(failures, deleteErr)
 		if deleteErr == nil {
 			raw, queryErr = run(d.command("git", "-C", d.repo, "ls-remote", "origin", "refs/heads/"+branch))
