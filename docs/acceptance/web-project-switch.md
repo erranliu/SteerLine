@@ -58,3 +58,23 @@ Plan 的测试表给出命令、能力补齐、环境和执行时点。`web.proj
 最终 `./build.ps1 -Web` 已验证覆盖已有业务/Web exe 的增量构建。第一次收尾暴露 PowerShell 向 .NET Replace 传空备份路径的问题，修正为与业务产物一致的受守卫临时备份替换，再次构建通过；失败原始日志保留为 `evidence/final-build-first-attempt.log`。
 
 最终静态收尾：文档导航 418 文件、2663 本地链接无错误；97 份 Task ID 身份文件检查通过；`git diff --check` 通过。WPS-M1 仍待用户体验布局与日常独立启动/停止入口，可后置。
+
+## 2026-10-15 提 PR 前质量审计
+
+按用户要求复审实现、测试与交付接线；提交分支已从初始实现基线同步到主干 `411110d9`，保留 #318 的任务启动提示修复及 #319 的并行候选方案修复。下列问题均已修正，未新增旧协议/数据回退路径。
+
+| 发现 | 修复及最小反例 | 验收归属 |
+| --- | --- | --- |
+| Git 父进程退出后，后代继承输出管道会使 Output 等待越过配置解析期限 | 设置 250ms WaitDelay；真实测试子进程派生持有管道的后代，解析须在 2 秒内返回，夹具通过释放文件正常退出 | WPS-A2 |
+| 空 common-dir 输出可错误地退回仓库目录，异常大输出未限制内存 | 空输出拒绝；stdout 最多 64KiB，错误输出保留明确诊断；空/超量输出均不能生成项目身份 | WPS-A2、WPS-A3 |
+| 目录只读解析拒绝原生服务已支持的当前 UTF-8 BOM 配置 | 与现有原生配置解码一致去除 UTF-8 BOM；有/无 BOM 均解析至真实 common-dir，且不创建 state | WPS-A2 |
+| 标签页保存的项目被删除后，会遮挡仍有效的浏览器最近项目 | 按优先级选择第一个有效候选，保留异步目录完成后的恢复检查 | WPS-A4 |
+| 偏好读写被浏览器拒绝时，异常会阻止项目页加载或切换 | 最近偏好作为尽力保存；存储抛 SecurityError/QuotaExceededError 时仍可按 URL 切换，原信封/草稿持久化的写入守卫不放宽 | WPS-A4 |
+
+审计验证：
+
+- `go run ./cmd/test-feedback -- ./internal/projectconnection ./internal/app ./internal/product/applicationhttp ./internal/product/applicationclient ./web/server -run '^TestWebSwitch' -count=1` 通过（14.507s），报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T033758.703776000Z/summary.json`。
+- 同步主干后 `npm --prefix web test`：7 文件、47 项通过（11:40:02，5.49s），`npm --prefix web run build` 通过；包含主干两项 Web 修复的原回归及本次偏好边界反例。
+- `go run ./cmd/test-feedback -level=L1` 通过（173.2s），新增解析器 owner 已登记继承管道/异常输出检查，报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T033952.819553200Z/summary.json`。随后补充 BOM 一致性反例并登记该 owner，定向重跑 `./internal/projectconnection ./internal/app -run '^TestWebSwitch' -count=1` 通过（12.678s），报告 `.../20261015T034438.596179400Z/summary.json`。
+- 同步主干后 `./build.ps1 -Web` 双 exe 覆盖构建通过，日志/产物 hash 见 `C:/Users/lmas1/AppData/Local/Temp/steerline-web-switch-audit-20261015-114137/build.log`、`build.json`；BOM 增量后再运行普通 `./build.ps1` 通过。
+- 上文真实 Edge 单/双项目综合结果属于实施轮次的明确包版本，本轮审计没有再次执行 Edge 综合场景，也不把定向反例声明成新的浏览器注入验收。WPS-M1 仍待人工体验。

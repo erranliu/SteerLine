@@ -51,7 +51,7 @@ func Resolve(ctx context.Context, ref *api.ProjectRef) error {
 	if err != nil {
 		return err
 	}
-	if err = json.Unmarshal(data, &config); err != nil {
+	if err = json.Unmarshal(bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf}), &config); err != nil {
 		return err
 	}
 	if config.Repository == "" || config.TaskAuthority != "native" || config.WorkflowProtocol != "worker-flow-v2" {

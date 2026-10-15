@@ -95,7 +95,7 @@ var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
 }{
-	{"quick-owner-project-connection", "github.com/erranliu/SteerLine/internal/projectconnection", []string{"TestWebSwitchResolverInheritedPipeIsBounded", "TestWebSwitchResolverRejectsInvalidOutput"}},
+	{"quick-owner-project-connection", "github.com/erranliu/SteerLine/internal/projectconnection", []string{"TestWebSwitchResolverInheritedPipeIsBounded", "TestWebSwitchResolverRejectsInvalidOutput", "TestWebSwitchResolverCurrentConfigEncoding"}},
 	{"quick-owner-application-http", "github.com/erranliu/SteerLine/internal/product/applicationhttp", []string{"TestWebSwitchAuthenticationRoutesAndUnavailable", "TestWebSwitchOriginalEnvelopeAndInflightReplacement"}},
 	{"quick-owner-web-fixture", "github.com/erranliu/SteerLine/tests/e2e/internal/controlled", []string{"TestWebSwitchHeldStreamRetainsOriginalTurn"}},
 	{"quick-owner-application-client", "github.com/erranliu/SteerLine/internal/product/applicationclient", []string{"TestWebSwitchReconnectAndHome"}},

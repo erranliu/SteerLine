@@ -75,6 +75,37 @@ func TestWebSwitchResolverRejectsInvalidOutput(t *testing.T) {
 	}
 }
 
+func TestWebSwitchResolverCurrentConfigEncoding(t *testing.T) {
+	home := t.TempDir()
+	if output, err := exec.Command("git", "init", "--quiet", home).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, output)
+	}
+	raw, err := json.Marshal(map[string]string{"repository": home, "task_authority": "native", "workflow_protocol": "worker-flow-v2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, bom := range []bool{false, true} {
+		data := raw
+		if bom {
+			data = append([]byte{0xef, 0xbb, 0xbf}, raw...)
+		}
+		path := filepath.Join(home, "project.json")
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		ref := api.ProjectRef{ConfigPath: path, ApplicationHome: home}
+		if err := Resolve(context.Background(), &ref); err != nil {
+			t.Fatalf("current UTF-8 configuration (BOM=%t): %v", bom, err)
+		}
+		if ref.Identity != canonical(filepath.Join(home, ".git")) {
+			t.Fatalf("unexpected repository identity: %q", ref.Identity)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, "state")); !os.IsNotExist(err) {
+		t.Fatal("read-only config resolution created state")
+	}
+}
+
 func TestWebSwitchResolverChild(t *testing.T) {
 	switch os.Getenv("STEERLINE_RESOLVER_TEST_ROLE") {
 	case "parent":
