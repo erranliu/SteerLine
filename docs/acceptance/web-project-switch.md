@@ -78,3 +78,19 @@ Plan 的测试表给出命令、能力补齐、环境和执行时点。`web.proj
 - `go run ./cmd/test-feedback -level=L1` 通过（173.2s），新增解析器 owner 已登记继承管道/异常输出检查，报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T033952.819553200Z/summary.json`。随后补充 BOM 一致性反例并登记该 owner，定向重跑 `./internal/projectconnection ./internal/app -run '^TestWebSwitch' -count=1` 通过（12.678s），报告 `.../20261015T034438.596179400Z/summary.json`。
 - 同步主干后 `./build.ps1 -Web` 双 exe 覆盖构建通过，日志/产物 hash 见 `C:/Users/lmas1/AppData/Local/Temp/steerline-web-switch-audit-20261015-114137/build.log`、`build.json`；BOM 增量后再运行普通 `./build.ps1` 通过。
 - 上文真实 Edge 单/双项目综合结果属于实施轮次的明确包版本，本轮审计没有再次执行 Edge 综合场景，也不把定向反例声明成新的浏览器注入验收。WPS-M1 仍待人工体验。
+
+## 2026-10-15 安装目录权限故障修复
+
+用户报告 `service-SteerlineTest.bat` 突然拒绝访问。首次启动独立 Web 且 home 下没有 `web.json` 时，CLI 使用了会收紧父目录 ACL 的 `localservice.Write`。Windows 上 home 的当前用户 ACE 丢失 OI/CI 继承标志，原本依赖继承的 bat 随即变成空 DACL。配置创建时间与权限故障一致；隔离反例重现了同一 ACL 变化及 `Access is denied`，属于本次实现遗漏。
+
+按用户本次安装维护请求，仅对 `C:\SteerlineRuntime` 根目录恢复当前用户 FullControl 的文件/目录继承；未使用递归重置、未给其他用户授权、未启动任何安装服务或任务。只读复核确认项目 service、service-window、start-app/start-web 等 bat 可读取，继承当前用户 FullControl。安装环境没有用作测试现场；未替换安装的 exe，也未修改其业务状态/配置。
+
+源码修复将首次配置创建收口到 CLI 实际调用的 `EnsureAddress`，以私有临时文件原子发布 `web.json`，不修改 home 权限。原服务 discovery 的 `Write` 仍收紧其专用私有目录。新增 `TestWebSwitchHomeConfigPreservesPermissions` 并登记 L1 `quick-owner-web`：Windows 夹具模拟可继承 ACL，核对 home 安全描述符不变、已有 bat 可读、配置文件私有及已有自定义配置不被覆盖；其他平台夹具检查目录模式保持。对应 WPS-A1、WPS-A3。
+
+本轮源码基线 `47fafc12721ceb8fa39ba1ab227872fd14513bcb`，分支 `codex/fix-web-config-home-acl` 的 dirty 工作树，实际验证如下：
+
+- 修复前反例：`go run ./cmd/test-feedback -- ./web/server -run '^TestWebSwitchHomeConfigPreservesPermissions$' -count=1` 如预期失败；报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T041821.491015500Z/summary.json`，原始 JSONL 同时记录 OI/CI 丢失和 bat 拒绝访问。
+- 修复后：`go run ./cmd/test-feedback -- ./web/server ./internal/localservice ./cmd/steerline-web -count=1` 通过（10 项测试、两包无测试仅编译，7.456s），报告 `.../20261015T041854.127510400Z/summary.json`；涵盖 Web 认证、私有 discovery、租约与新增权限反例。
+- 私有文件/应用端点及测试登记回归：`go run ./cmd/test-feedback -- ./internal/product/httpfs ./internal/product/applicationhttp ./cmd/test-feedback -count=1` 通过（93 项测试，106.486s），报告 `.../20261015T041947.882558000Z/summary.json`。
+- `./build.ps1 -Web` 双 exe 构建通过；日志与 SHA-256 位于 `C:/Users/lmas1/AppData/Local/Temp/steerline-home-acl-fix-20261015-121946/build.log`、`binaries.json`，产物仅在源码 `bin/`。安装里的 Web exe 尚未带入此源码修复；当前已有 `web.json`，该首次创建分支不会再次执行。
+- 文档导航 418 文件、2664 本地链接无错误，`git diff --check` 通过。未重跑 Full、L2/L3 或 Edge 综合场景；本轮只改配置发布权限，使用真实 Windows ACL 的隔离反例与受影响包回归即可覆盖，未改 worker/业务流程。WPS-M1 状态不变。
