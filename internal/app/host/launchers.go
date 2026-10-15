@@ -13,7 +13,7 @@ import (
 //go:embed launcher/*
 var launcherFS embed.FS
 
-// InstallLaunchers writes the console and service-window entry points plus
+// InstallLaunchers writes the application, Web and service-window entry points plus
 // their README into the caller's application directory. Templates are stored
 // LF and written CRLF so they behave as native .bat files.
 func InstallLaunchers(dir string) ([]string, error) {

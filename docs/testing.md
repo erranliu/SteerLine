@@ -54,7 +54,7 @@ go run ./cmd/test-feedback -level=L1 -workers=1
 go run ./cmd/test-feedback -level=L1 -- ./cmd/test-feedback -run '^TestLevelSelectionsRejectAmbiguity$' -count=1
 
 # 只跑指定包，并保存报告
-go run ./cmd/test-feedback -- ./internal/console -count=1
+go run ./cmd/test-feedback -- ./internal/product/activityrender -count=1
 
 # 完整确定性回归：三 worker 入口
 go run ./cmd/test-feedback -workers=3
@@ -142,11 +142,11 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 
 带 tag 的场景包应通过分级 runner 执行；直接运行缺少 runner 环境的场景会失败。编译成功不证明业务断言、原生证据或清理通过。
 
-## TUI HTTP 验证与 WinUI 历史
+## Web 验证与前端历史
 
 #91 已删除 #44 三个 WinUI 工程和专属 global.json，当前无需 .NET 构建。历史结果保留在[WinUI 验收](acceptance/archive/superseded/phase2-winui-foundation.md)。
 
-当前 TUI/HTTP 新增 Boundary/Contract/Interaction/Routes，以及独立 `scripts/test-tui-http.ps1 -DebugRoot C:\SteerlineDebug -OutDir <fresh-dir>`。后者生成新的 simulate SteerlineTest 包，驱动真实 TUI 模型/HTTP/Go 服务并核验关闭、重复请求、final 与停服退出/锁证据。故障、未知结果、历史正文与错绑定由定向测试覆盖；完整安排见[#91 Plan](spec/tui-http-client.plan.md)，结果见[专属验收](acceptance/tui-http-client.md)。
+TUI 及其专属测试、`test-tui-http.ps1` 已退役。当前 Web 单元/构建使用 `scripts/test-web.ps1`；真实 Edge 闭环使用 `scripts/test-web-smoke.ps1`，由唯一生成器建立全新 simulate SteerlineTest 包。共享 HTTP、原请求、恢复与后台服务断言继续由其 owner 测试承担，迁移范围和实际结果见[TUI 退役验收](acceptance/tui-retirement.md)。[#91 Plan](spec/tui-http-client.plan.md) 与[旧验收](acceptance/tui-http-client.md)仅保留历史证据。
 
 独立调试自动入口使用生成的 `C:\SteerlineDebug` 包和 SteerlineTest，不能使用安装环境。生成/模拟/隔离/重置与脚本 PR 分别由 `scripts/test-debug-release.ps1`、其 `-Live` 参数验证；真实 Codex 沙箱与 Git 工具回归已登记为上面的 L3 `runtime.sandbox-git.local-codex`；`scripts/test-codex-sandbox.ps1` 保留独立入口，复用相同双任务驱动。各入口的前置、外部效果和证据见[调试环境验收](acceptance/debug-environment.md)与[沙箱验收](acceptance/codex-sandbox-git.md)。
 

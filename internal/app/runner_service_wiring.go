@@ -59,7 +59,7 @@ func newRunnerServiceWithHost(config Config, host hostport.HostPort, mode string
 		if err != nil {
 			return nil, err
 		}
-		host = steerline.NewServiceHost(hostConfig, "", "", nil, serviceAdmission{config: &config}, consoleActivityFormatter{})
+		host = steerline.NewServiceHost(hostConfig, "", "", nil, serviceAdmission{config: &config}, serviceActivityFormatter{})
 	}
 	connection, err := OpenNativeTaskCommandStore(ctx, &config)
 	if err != nil {

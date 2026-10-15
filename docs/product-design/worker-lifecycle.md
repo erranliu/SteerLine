@@ -16,6 +16,8 @@ SteerRunner 跨仓拆分正在实施，切换安排见[接入 Plan](../spec/stee
 
 本次本机资格探测预算与 Runner 外部命令统一为 30 秒，覆盖冷启动的原生版本查询。每 Attempt 仍只在资格缺失时探测，失败阻断且零新会话/输入，不自动重试，不缓存跳过版本或权限资源校验。运行失败与重验明细见专属 acceptance。
 
+本轮审计补充 W12/V 输入边界：原生多题回答必须完整匹配原题集，重复 JSON 键、额外题目、固定题的附加答案、空回答及未提供选项在原生意图前拒绝。调用方保留已绑定 PR，不接受后续投影丢失/替换；失败不改原候选。两仓定向测试通过，最新产品真机与最终固定版本 R1 仍未通过，详见[接入验收最新段](../acceptance/steerrunner-cutover.md#pr-审计修复与主干同步)，不以历史通过抵消新失败。
+
 ## 职责与规则归属
 
 “Worker 层”指 `internal/execution` 内持久化的 worker 执行规则，而非仅内存中的 Worker 或 observer 句柄。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。

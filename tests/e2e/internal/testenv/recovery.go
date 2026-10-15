@@ -14,11 +14,6 @@ import (
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 )
 
-type ConsoleStep struct {
-	Input, WaitFor string
-	Timeout        time.Duration
-}
-
 func OriginalTerminalWorkingObserved(s Snapshot) bool {
 	return len(s.Runner.Candidates) == 1 && s.Runner.Candidates[0].Projection != nil && s.Runner.Candidates[0].Projection.Execution.TurnStarted
 }
@@ -229,27 +224,30 @@ func (p *Project) RecordRecoveryBranch(name string, snap Snapshot, extra map[str
 	p.Scenario.Must(controlled.Write(filepath.Join(path, "result.json"), value))
 }
 
-func (p *Project) AssertRecoveryConsole() {
-	before, err := p.Snapshot()
-	p.Scenario.Must(err)
-	cmd := p.Driver.Command(p.Scenario.Context, "console", "-config", p.Config)
-	name := p.Name + "-recovery-console"
-	if before.Helper.Recovery != nil && before.Helper.Recovery.MissingThread {
-		name += "-error"
+func (p *Project) AssertRecoveryHTTP(before Snapshot) {
+	if before.Runtime == nil || len(before.Runtime.Runs) != 1 || before.Runtime.Runs[0].Decision == nil {
+		p.Scenario.t.Fatal("recovery inspection needs the original pending decision")
 	}
-	transcript, err := p.Scenario.RunPseudoConsoleSteps(cmd, name, "E2E a", ConsoleStep{Input: "u", WaitFor: "继续资格", Timeout: 45 * time.Second})
+	run := before.Runtime.Runs[0]
+	inspection, err := driver.ReadHTTPRecovery(p.Scenario.Context, filepath.Dir(p.Database), before.Domain.ProjectIdentity, run.RunID, run.ExecutionID, run.AttemptID)
 	p.Scenario.Must(err)
-	if strings.Contains(string(transcript), "panic:") {
-		p.Scenario.t.Fatal("recovery console panicked")
+	if inspection.RunID != run.RunID || inspection.ServiceInstanceID != before.Runtime.Service.InstanceID || inspection.DecisionID != run.Decision.ID {
+		p.Scenario.t.Fatal("recovery HTTP lost original identity")
 	}
-	after, err := p.Snapshot()
+	domain, err := driver.ReadWorkflow(p.Scenario.Context, p.Database, before.Domain.ProjectIdentity)
 	p.Scenario.Must(err)
-	first, _ := json.Marshal(before.Domain)
-	second, _ := json.Marshal(after.Domain)
+	after := before
+	after.Runner = domain
+	first, _ := json.Marshal(before.Runner)
+	second, _ := json.Marshal(domain)
 	if string(first) != string(second) {
-		p.Scenario.t.Fatal("read-only u changed business state")
+		p.Scenario.t.Fatal("read-only recovery query changed business state")
 	}
-	p.RecordRecoveryBranch(name, after, map[string]any{"transcript": name + ".log"})
+	name := p.Name + "-recovery-http"
+	if before.Helper.Recovery != nil && before.Helper.Recovery.MissingThread {
+		name += "-missing-thread"
+	}
+	p.RecordRecoveryBranch(name, after, map[string]any{"inspection": inspection})
 }
 
 func (p *Project) AssertOneDelivery(snap Snapshot) {

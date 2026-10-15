@@ -15,10 +15,8 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/console"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
@@ -182,7 +180,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			t.Fatal(err)
 		}
 		at := time.Now().UTC()
-		checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: storageports.CheckpointRepository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}, UpdatedAt: at, HeartbeatAt: at, Service: storageports.CheckpointServiceState{Mode: "scheduler", InstanceID: strings.Repeat("a", 32), PID: identity.PID, ProcessIdentity: identity, Status: "running", Ready: true, ConfigDigest: c.LoadedConfigDigest(), ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "set_dispatch_mode"}, HeartbeatIntervalMS: 1000}}
+		checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: storageports.CheckpointRepository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}, UpdatedAt: at, HeartbeatAt: at, Service: storageports.CheckpointServiceState{Mode: "scheduler", Claimant: c.Claimant, InstanceID: strings.Repeat("a", 32), PID: identity.PID, ProcessIdentity: identity, Status: "running", Ready: true, ConfigDigest: c.LoadedConfigDigest(), ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "set_dispatch_mode"}, HeartbeatIntervalMS: 1000}}
 		state := reconstruction.RuntimeFromCheckpoint(checkpoint, "manual", false, 1)
 
 		writer, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
@@ -279,7 +277,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			}
 		}
 
-		t.Run("CM72 actual console uses HTTP and original receipt", func(t *testing.T) {
+		t.Run("CM72 HTTP uses original CLI receipt", func(t *testing.T) {
 			heartbeat()
 			process := state.Service.ProcessIdentity
 			if process == nil {
@@ -296,56 +294,33 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			if err = endpoint.Start(); err != nil {
 				t.Fatal(err)
 			}
-			refs, options, err := steerlineapp.PrepareConsole(context.Background(), configPath, "")
-			if err != nil || len(refs) != 1 || len(options.Clients) != 1 {
-				t.Fatalf("console construction: %+v / %v", refs, err)
-			}
-			tuiClient := options.Clients[refs[0].Key]
-			if _, ok := tuiClient.(*httpclient.Console); !ok {
-				t.Fatal("TUI did not use the HTTP client")
-			}
-			cliProfile := client.Project().Presentation
-			profiles := refs[0].Presentation.Profiles
-			if len(profiles) == 0 || len(profiles) != len(cliProfile.Profiles) || profiles[0].Digest == "" || profiles[0].Digest != cliProfile.Profiles[0].Digest || refs[0].Presentation.ConfigDigest != c.LoadedConfigDigest() {
-				t.Fatal("CLI and TUI adopted different accepted profiles")
-			}
-			if result, err := tuiClient.Receipt(context.Background(), id); err != nil || result.Status != "indeterminate" || result.RequestID != id {
-				t.Fatalf("TUI changed original CLI receipt: %+v / %v", result, err)
-			}
-			heartbeat()
-			if snapshot := tuiClient.ReadProject(context.Background(), "70", productapi.ProjectSnapshot{}); snapshot.Connection.State != productapi.ConnectionConnected || snapshot.HistoryError != "" {
-				t.Fatalf("actual console failed reading project: %+v", snapshot)
-			}
-
-			detached := tuiClient.Project()
-			detached.Presentation.Profiles[0].Digest = "consumer-mutated"
-			detached.Presentation.Profiles[0].ImplementationDisplay[0] = "consumer-mutated"
-			if actual := tuiClient.Project(); actual.Presentation.Profiles[0].Digest != profiles[0].Digest || actual.Presentation.Profiles[0].ImplementationDisplay[0] == "consumer-mutated" {
-				t.Fatal("view mutated accepted profile")
-			}
-			if _, err := tuiClient.InspectRecovery(context.Background(), "missing-run"); err == nil || !strings.Contains(err.Error(), "not found") {
-				t.Fatalf("actual recovery read port missing: %v", err)
-			}
-			model, err := console.NewModel(context.Background(), refs, options)
+			httpClient, err := httpclient.Open(context.Background(), c.RunDir, c.Identity())
 			if err != nil {
 				t.Fatal(err)
 			}
-			updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-			if cmd == nil {
-				t.Fatal("TUI q did not exit")
+			defer httpClient.Close()
+			presentation, err := httpClient.ProjectPresentation(context.Background())
+			if err != nil {
+				t.Fatal(err)
 			}
-			if _, ok := cmd().(tea.QuitMsg); !ok {
-				t.Fatal("TUI q invoked a service action")
+			cliProfile := client.Project().Presentation
+			profiles := presentation.Presentation.Profiles
+			if len(profiles) == 0 || len(profiles) != len(cliProfile.Profiles) || profiles[0].Digest == "" || profiles[0].Digest != cliProfile.Profiles[0].Digest || presentation.Presentation.ConfigDigest != c.LoadedConfigDigest() {
+				t.Fatal("CLI and HTTP adopted different accepted profiles")
 			}
-			if err := updated.(console.Model).Close(); err != nil {
+			if result, err := httpClient.Command(context.Background(), id); err != nil || result.Status != "outcome_unknown" || result.RequestID != id || result.ControlReceipt == nil || result.ControlReceipt.Status != "indeterminate" || result.ControlReceipt.RequestID != id {
+				t.Fatalf("HTTP changed original CLI receipt: %+v / %v", result, err)
+			}
+			heartbeat()
+			if _, err := httpClient.Snapshot(context.Background(), "70"); err != nil {
+				t.Fatal(err)
+			}
+			if err := httpClient.Close(); err != nil {
 				t.Fatal(err)
 			}
 			heartbeat()
 			if connection := steerline.ConnectService(context.Background(), hostConfig); connection.State != steerline.ConnectionConnected {
-				t.Fatalf("TUI exit stopped service: %+v", connection)
-			}
-			if _, err := tuiClient.Request(context.Background(), id); err == nil {
-				t.Fatal("closed UI client retained resources")
+				t.Fatalf("HTTP client close stopped service: %+v", connection)
 			}
 		})
 		if err = client.Close(); err != nil {

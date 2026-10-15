@@ -2,6 +2,8 @@
 
 归属：[接入 Plan](../spec/steerrunner-cutover.plan.md)。普通开发，不纳入 roadmap。Runner 内部及真机验收由其独立仓库 `docs/acceptance/steerrunner.md` 管理。
 
+最新状态：本轮按用户要求完成自查、直接修复并分别交付 PR，不宣称独立复审，不自动合并或发布。此前实际产品受控闭环、本机独立 Runner 真机及三个 R1 的通过只归属各自版本；最新产品真机补验失败、最终固定版本 R1 尚未通过，不能声明完整交付。最新细节见末尾审计段，Orca 两路径均已取消验收。
+
 | ID | 自动验收项 | 当前结果 |
 | --- | --- | --- |
 | SLC-A01 | 公共 CLI 严格解码、丢响应原请求、终态不重发、显式新授权 | 通过；最终定向证据 final-directed.log |
@@ -84,3 +86,17 @@ Runner 第五轮远端已完成实施，在报告阶段暴露应用冻结策略�
 
 
 最终边界与文档核验：`final-owner-boundary.log` 的生产/测试源码及依赖守卫通过；`doc-links-final.log` 425 份 Markdown、2534 个本地导航链接、0 错误。`regression/local-r1-summary.json` 只聚合本次用户保留的三个场景的原始通过和清理事实，明确记录各批源版本及整个旧批次是否失败，不伪装同版本重新执行。两仓 PR 已互相引用：[SteerLine #325](https://github.com/erranliu/SteerLine/pull/325)、[SteerRunner #1](https://github.com/erranliu/SteerRunner/pull/1)。
+
+## PR 审计修复与主干同步
+
+本轮自查确认并修复：
+
+- SteerLine 的多题回答文本原用 json.Unmarshal，重复键会静默覆盖；现先使用已有 CanonicalJSON 拒绝重复键、尾随值和含混 JSON。合法题目/选项及调用者原始输入仍保留。
+- runnerbridge 只在新投影 PR 非空时检查原 URL，允许已绑定 PR 消失；现拒绝消失或替换，并在校验失败时不改变整个原候选。
+- Runner 自身同步补齐原题集、答案数量/内容及严格 JSON 验证，拒绝发生在原生意图前。SteerLine 固定其可获取实现提交 `41908e641b34a890448158d2f21a9edc597d08cb`，版本 `0.1.0-dev.1`，SHA-256 `5eb9c3a9162d13449d55d363dd136e0ee50dea0d1e06ac5afaa8b439b73e5a71`。实际独立 EXE 包检查通过，详见 Runner 专属验收 §9。
+- 接入最新主干 `60dae58306ed2dfe6daec3cd3ecf89bb0e80a7db`，保留 #324 的 TUI 退役、Web-only 和双项目调试检查；原 live 验收仍使用全新包及真实 Runner，不恢复读取 token/宿主代发布路径。恢复 HTTP 检查改为比较公开 caller RunnerSnapshot；候选服务使用主干的 serviceActivityFormatter。
+- 新定向验证发现 CLI 原回执 fixture 的 checkpoint 漏写 claimant，按真实配置补齐后，生产身份门槛不放宽；CLI→原请求重放→HTTP 原回执→关闭客户端不停止服务的嵌套测试通过。
+
+最小验证：`audit-input-binding.log` 及 `audit-after-main.log` 中 taskrunner/runnerbridge/app/test-feedback/受控三阶段均通过；后者原 CLI fixture 失败保留，修正后的 `audit-cli-http.log` TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs 通过（115.14 秒），含 CM71/CM72。`audit-boundary-main.log` 的生产/测试全标签依赖守卫和 Runner 公开边界通过；`audit-driver-main.log` 的环境隔离/业务期限/原生命令阶段检查通过；`audit-retirement.log` 的退役命令和 launcher 检查通过。`audit-main-compile-final.log` 全包只编译及 `audit-tagged-compile.log` 的 e2e 标签编译通过，不是全量测试。`audit-doc-links.log` 为 428 份 Markdown、2553 个本地导航链接、0 错误。PowerShell 调试脚本语法检查通过；未重新启动整套生成/Web/live 测试。
+
+最新失败保持：`C:/SteerlineDebug/slcodex/dev-20261015-150152-bba00436` 为干净 SteerLine bba00436 / Runner 7bede6e，服务退出，原清理 Git 子进程报 `0xc000026b`。候选提交为 unknown，未绑定 Run 不能证明零接受。随后使用原冻结 helper/公开 CLI，在独立外部宿主核清原请求并停止，`evidence/original-public-cleanup-external-result.json` exit 0、日志 confirmed=true；没有业务恢复或新发布。工具 Job 内曾被 `detach_unsupported` 安全拒绝，保留该失败，不放宽服务 token 检查。`local-final/e2e-1.jsonl` 的 TestBasicDelivery 同样报 Git `0xc000026b`，批次没有完成汇总，不计最终版本 R1 通过。此前真实 Codex PR #253 和三个 R1 原通过记录仍有效，但不能覆盖这次失败。

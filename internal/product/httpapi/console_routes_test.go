@@ -9,8 +9,8 @@ import (
 	"testing"
 )
 
-func TestTUIHTTPRoutes(t *testing.T) {
-	t.Run("recent activity advances beyond the stream first page", testTUIHTTPRecentActivity)
+func TestClientHTTPRoutes(t *testing.T) {
+	t.Run("recent activity advances beyond the stream first page", testClientHTTPRecentActivity)
 	server, _, reader, _ := newAPIFixture(t)
 	ctx := context.Background()
 	run := &api.CandidateSummary{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32), SessionID: "original", SessionGeneration: "generation"}
@@ -108,7 +108,7 @@ func TestTUIHTTPRoutes(t *testing.T) {
 	}
 }
 
-func testTUIHTTPRecentActivity(t *testing.T) {
+func testClientHTTPRecentActivity(t *testing.T) {
 	server, _, reader, _ := newAPIFixture(t)
 	run := &api.CandidateSummary{RunID: strings.Repeat("a", 32), ExecutionID: strings.Repeat("b", 32), AttemptID: strings.Repeat("c", 32)}
 	reader.snapshot.Connection.Snapshot.Page.Runs = []*api.CandidateSummary{run}

@@ -53,6 +53,6 @@ func LiveCoreRecovery(s *Scenario, chain string) {
 		s.t.Fatal("original merged native candidate identity missing")
 	}
 	p.RecordRecoveryBranch("real-core-recovery", done, map[string]any{"chain": chain, "original_session": e.SessionID, "original_turn": e.TurnID})
-	s.Must(s.finishBody())
+	s.Must(s.FinishBody())
 	p.StopService()
 }

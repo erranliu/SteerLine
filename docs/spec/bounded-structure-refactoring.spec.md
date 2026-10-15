@@ -32,7 +32,7 @@
 
 ## 最终回复状态
 
-入口：[model.go](../../internal/console/model.go)、[final_replies.go](../../internal/console/final_replies.go)、[final_preview.go](../../internal/console/final_preview.go)。保持一个 console Go 包，引入一个私有状态组件（可名 finalReplyReader）：
+入口：[model.go](https://github.com/erranliu/SteerLine/blob/47fafc12721ceb8fa39ba1ab227872fd14513bcb/internal/console/model.go)、[final_replies.go](https://github.com/erranliu/SteerLine/blob/47fafc12721ceb8fa39ba1ab227872fd14513bcb/internal/console/final_replies.go)、[final_preview.go](https://github.com/erranliu/SteerLine/blob/47fafc12721ceb8fa39ba1ab227872fd14513bcb/internal/console/final_preview.go)。保持一个 console Go 包，引入一个私有状态组件（可名 finalReplyReader）：
 
 - 收拢 final 索引/选定 item/pin、bodyRef/正文、preview 及各自 generation/busy/error/readAt；projectState 用命名字段持有。无匿名嵌入、旧平铺字段或双缓存；不把独立失效语义的 generation 强行合并。
 - 组件只接收 ConversationQueries、context/时钟值、产品 DTO 和当前目标事实。宿主仍唯一决定项目/候选选择；组件只保存读取的固定绑定，不维护另一套导航或业务快照。

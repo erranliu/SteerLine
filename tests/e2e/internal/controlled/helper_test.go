@@ -3,6 +3,7 @@ package controlled
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"io"
 	"os"
@@ -54,62 +55,85 @@ func TestControlledTerminalStartupIsSeparateFromBusinessInput(t *testing.T) {
 }
 
 func TestControlledStagesCommitReportAndPublishSeparately(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-	defer cancel()
-	root := t.TempDir()
-	repo, remote := filepath.Join(root, "repo"), filepath.Join(root, "remote.git")
-	git := func(dir string, args ...string) string {
-		t.Helper()
-		out, err := Git(ctx, dir, args...)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return out
+	for _, recovery := range []bool{false, true} {
+		t.Run(fmt.Sprintf("recovery_%t", recovery), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+			defer cancel()
+			root := t.TempDir()
+			repo, remote := filepath.Join(root, "repo"), filepath.Join(root, "remote.git")
+			git := func(dir string, args ...string) string {
+				t.Helper()
+				out, err := Git(ctx, dir, args...)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return out
+			}
+			git(root, "init", "--bare", remote)
+			git(root, "init", "-b", "main", repo)
+			git(repo, "config", "user.name", "Fixture")
+			git(repo, "config", "user.email", "fixture@example.invalid")
+			git(repo, "config", "commit.gpgsign", "false")
+			if err := os.WriteFile(filepath.Join(repo, "base.txt"), []byte("base\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			git(repo, "add", "base.txt")
+			git(repo, "commit", "-m", "base")
+			base := git(repo, "rev-parse", "HEAD")
+			git(repo, "remote", "add", "origin", "https://github.com/e2e/project.git")
+			git(repo, "checkout", "-b", "fixture/candidate")
+			path := filepath.Join(root, "state.json")
+			initial := State{Session: "original", Cwd: repo, GitURL: filepath.ToSlash(remote), WebFeedback: true}
+			if recovery {
+				initial.Recovery = &RecoveryFixture{}
+			}
+			if err := Write(path, initial); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("STEERLINE_E2E_CONTROLLED_STATE", path)
+			t.Chdir(repo)
+			dispatch := func(step string) error {
+				raw, _ := json.Marshal(map[string]any{"id": 1, "method": "turn/start", "params": map[string]any{"threadId": "original", "input": []any{map[string]string{"text": map[string]string{"implement.execute": "Implement the following Spec and Plan.", "implement.report": "Format the preceding implementation result as JSON.", "publish": "Push and create or reuse a PR using the current checked-out branch."}[step]}}}})
+				return handleRPC(path, raw, func(any) error { return nil })
+			}
+			if err := dispatch("implement.execute"); err != nil {
+				t.Fatal(err)
+			}
+			head := git(repo, "rev-parse", "HEAD")
+			if head == base || git(repo, "ls-remote", "origin", "refs/heads/fixture/candidate") != "" {
+				t.Fatal("execute did not make only a local candidate")
+			}
+			if err := dispatch("implement.report"); err != nil {
+				t.Fatal(err)
+			}
+			state, err := Read(path)
+			if err != nil || state.PR.URL != "" || git(repo, "rev-parse", "HEAD") != head {
+				t.Fatal("report published or changed the source candidate", err)
+			}
+			if !recovery {
+				if err := dispatch("implement.report"); err == nil {
+					t.Fatal("duplicate report was dispatched")
+				}
+			}
+			if err := dispatch("publish"); err != nil {
+				t.Fatal(err)
+			}
+			state, err = Read(path)
+			if err != nil || state.Session != "original" || state.Dispatches != 3 || len(state.Turns) != 3 || state.PR.State != "open" || state.PR.HeadRevision != head || !strings.Contains(git(repo, "ls-remote", "origin", "refs/heads/fixture/candidate"), head) {
+				t.Fatal("publish lost its original candidate or native sequence", err)
+			}
+			originalPR := state.PR
+			if err := dispatch("publish"); err != nil {
+				t.Fatal("feedback failed to reuse original PR", err)
+			}
+			state, err = Read(path)
+			if err != nil || state.PR.URL != originalPR.URL || state.PR.HeadRevision != head || len(state.Turns) != 4 {
+				t.Fatal("feedback changed publication identity", err)
+			}
+
+		})
 	}
-	git(root, "init", "--bare", remote)
-	git(root, "init", "-b", "main", repo)
-	if err := os.WriteFile(filepath.Join(repo, "base.txt"), []byte("base\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	git(repo, "add", "base.txt")
-	git(repo, "commit", "-m", "base")
-	base := git(repo, "rev-parse", "HEAD")
-	git(repo, "remote", "add", "origin", "https://github.com/e2e/project.git")
-	git(repo, "checkout", "-b", "fixture/candidate")
-	path := filepath.Join(root, "state.json")
-	if err := Write(path, State{Session: "original", Cwd: repo, GitURL: filepath.ToSlash(remote)}); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("STEERLINE_E2E_CONTROLLED_STATE", path)
-	t.Chdir(repo)
-	dispatch := func(step string) error {
-		raw, _ := json.Marshal(map[string]any{"id": 1, "method": "turn/start", "params": map[string]any{"threadId": "original", "input": []any{map[string]string{"text": map[string]string{"implement.execute": "Implement the following Spec and Plan.", "implement.report": "Format the preceding implementation result as JSON.", "publish": "Push and create or reuse a PR using the current checked-out branch."}[step]}}}})
-		return handleRPC(path, raw, func(any) error { return nil })
-	}
-	if err := dispatch("implement.execute"); err != nil {
-		t.Fatal(err)
-	}
-	head := git(repo, "rev-parse", "HEAD")
-	if head == base || git(repo, "ls-remote", "origin", "refs/heads/fixture/candidate") != "" {
-		t.Fatal("execute did not make only a local candidate")
-	}
-	if err := dispatch("implement.report"); err != nil {
-		t.Fatal(err)
-	}
-	state, err := Read(path)
-	if err != nil || state.PR.URL != "" || git(repo, "rev-parse", "HEAD") != head {
-		t.Fatal("report published or changed the source candidate", err)
-	}
-	if err := dispatch("implement.report"); err == nil {
-		t.Fatal("duplicate report was dispatched")
-	}
-	if err := dispatch("publish"); err != nil {
-		t.Fatal(err)
-	}
-	state, err = Read(path)
-	if err != nil || state.Session != "original" || state.Dispatches != 3 || len(state.Turns) != 3 || state.PR.State != "open" || state.PR.HeadRevision != head || !strings.Contains(git(repo, "ls-remote", "origin", "refs/heads/fixture/candidate"), head) {
-		t.Fatal("publish lost its original candidate or native sequence", err)
-	}
+
 }
 
 func TestEmptyThreadCannotResumeUntilItHasATurn(t *testing.T) {

@@ -1,10 +1,10 @@
 # 当前代码架构
 
-执行已迁到独立 [SteerRunner](https://github.com/erranliu/SteerRunner)。SteerLine 保留 Task/DAG、候选参与关系与唯一 TaskDelivery；通过固定 EXE 的 steerrunner-cli/v1 协作，不导入 Runner Go 包、原生 codec、IPC 或数据库。当前范围为本机 Codex 与远端 Orca environment；本机 Orca 已放弃。
+执行已迁到独立 [SteerRunner](https://github.com/erranliu/SteerRunner)。SteerLine 保留 Task/DAG、候选参与关系与唯一 TaskDelivery；通过固定 EXE 的 steerrunner-cli/v1 协作，不导入 Runner Go 包、原生 codec、IPC 或数据库。当前真机验收范围仅本机 Codex；两个 Orca 目标验收已取消。Web 为唯一交互前端，TUI 已按[退役决策](../acceptance/tui-retirement.md)移除。
 
 ```mermaid
 flowchart LR
-    Web[独立 Web / TUI] --> API[产品 HTTP API]
+    Web[独立 Web] --> API[产品 HTTP API]
     API --> Task[taskrunner]
     Task --> Store[Task SQLite 事务]
     Task --> Bridge[runnerbridge outbox / 事件]

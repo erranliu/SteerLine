@@ -8,26 +8,34 @@ $oldConfig = $env:STEERLINE_CONFIG
 $oldTestRoot = $env:STEERLINE_DEBUG_TEST_ROOT
 $oldCodexHome = $env:CODEX_HOME
 $oldSandboxRoot = $env:STEERLINE_DEBUG_SANDBOX_ROOT
+$oldSecondRoot = $env:STEERLINE_DEBUG_SECOND_TEST_ROOT
 try {
     # Deliberate inherited pollution must not select installed state.
     $env:STEERLINE_HOME = 'C:\SteerlineRuntime'
     $env:STEERLINE_CONFIG = 'C:\SteerlineRuntime\etc\SteerlineTest.json'
-    $first = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe | ConvertFrom-Json)
-    $second = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe | ConvertFrom-Json)
+    $defaultRelease = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe | ConvertFrom-Json)
+    $first = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe -WebAddress 127.0.0.1:19747 | ConvertFrom-Json)
+    $second = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe -WebAddress 127.0.0.1:19744 -WebProjects 2 | ConvertFrom-Json)
     if ($first.root -eq $second.root) { throw 'Generator reused a release' }
-    foreach ($release in @($first, $second)) {
+    foreach ($release in @($defaultRelease, $first, $second)) {
         $manifest = Get-Content -LiteralPath (Join-Path $release.root 'manifest.json') -Raw | ConvertFrom-Json
         if ($manifest.status -ne 'ready' -or $manifest.default_scheme -ne 'live') { throw 'Generated package is not live by default' }
         $databases = @(Get-ChildItem -LiteralPath (Join-Path $release.root 'home\state') -Filter steerline.db -Recurse)
-        if ($databases.Count -ne 1) { throw 'Expected one independent database' }
+        if ($databases.Count -ne $manifest.web_projects) { throw 'Expected independent database per configured project' }
+        foreach ($name in @('bin\steerline.exe','bin\steerline-web.exe','bin\debug-helper.exe','web.bat')) { if (-not (Test-Path -LiteralPath (Join-Path $release.root $name))) { throw "Missing Web package artifact $name" } }
+        if (Test-Path -LiteralPath (Join-Path $release.root 'console.bat')) { throw 'Retired TUI launcher present' }
+        if (-not $manifest.web_binary_sha256) { throw 'Missing Web build hash' }
     }
-    $firstIdentity = Get-Content -LiteralPath (Join-Path $first.root 'evidence\initialization.json') -Raw | ConvertFrom-Json
-    $secondIdentity = Get-Content -LiteralPath (Join-Path $second.root 'evidence\initialization.json') -Raw | ConvertFrom-Json
+    $defaultWeb = Get-Content -LiteralPath (Join-Path $defaultRelease.root 'home\web.json') -Raw | ConvertFrom-Json
+    if ($defaultWeb.address -ne '127.0.0.1:18742') { throw 'Default generator did not include stable Web endpoint' }
+    $firstIdentity = Get-Content -LiteralPath (Join-Path $first.root 'evidence\SteerlineTest.json.initialization.json') -Raw | ConvertFrom-Json
+    $secondIdentity = Get-Content -LiteralPath (Join-Path $second.root 'evidence\SteerlineTest.json.initialization.json') -Raw | ConvertFrom-Json
     if ($firstIdentity.validation.database_id -eq $secondIdentity.validation.database_id -or $firstIdentity.validation.project_id -eq $secondIdentity.validation.project_id) { throw 'Generated packages share database/project identity' }
     $env:STEERLINE_DEBUG_TEST_ROOT = $first.root
+    $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $second.root
     Push-Location $repo
     try {
-        & go test ./tests/e2e/internal/driver -run '^TestDebugReleaseRuntime$' -count=1 -timeout=12m -v *> (Join-Path $first.root 'evidence\runtime-test.log')
+        & go test ./tests/e2e/internal/driver -run '^TestDebugRelease(Runtime|WebProjects)$' -count=1 -timeout=20m -v *> (Join-Path $first.root 'evidence\runtime-test.log')
         if ($LASTEXITCODE -ne 0) { throw "Runtime tests failed: $($first.root)\evidence\runtime-test.log" }
     } finally { Pop-Location }
     $refused = $false
@@ -55,15 +63,16 @@ try {
     if ($Live) {
         # Exercise the actual Runner/agent workflow. Existing native login stays
         # external; this harness never exports tokens or publishes for a worker.
+        $liveRelease = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe -WebAddress 127.0.0.1:19745 | ConvertFrom-Json)
         $env:CODEX_HOME = $oldCodexHome
-        $env:STEERLINE_DEBUG_SANDBOX_ROOT = $second.root
+        $env:STEERLINE_DEBUG_SANDBOX_ROOT = $liveRelease.root
         Push-Location $repo
         try {
-            & go test ./tests/e2e/internal/driver -run '^TestDebugReleaseCodexSandbox$' -count=1 -timeout=30m -v *> (Join-Path $second.root 'evidence\native-workflow-test.log')
-            if ($LASTEXITCODE -ne 0) { throw "Native workflow failed; inspect $($second.root)\evidence\native-workflow-test.log" }
+            & go test ./tests/e2e/internal/driver -run '^TestDebugReleaseCodexSandbox$' -count=1 -timeout=30m -v *> (Join-Path $liveRelease.root 'evidence\native-workflow-test.log')
+            if ($LASTEXITCODE -ne 0) { throw "Native workflow failed; inspect $($liveRelease.root)\evidence\native-workflow-test.log" }
         } finally { Pop-Location }
     }
-    $result = [pscustomobject]@{ passed = $true; controlled = $first.root; other = $second.root; live = [bool]$Live }
+    $result = [pscustomobject]@{ passed = $true; default_artifacts = $defaultRelease.root; controlled = $first.root; other = $second.root; live = [bool]$Live }
     [IO.File]::WriteAllText((Join-Path $first.root 'evidence\generation-test.json'), ($result | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     $result | ConvertTo-Json
 } finally {
@@ -72,4 +81,5 @@ try {
     $env:STEERLINE_DEBUG_TEST_ROOT = $oldTestRoot
     $env:CODEX_HOME = $oldCodexHome
     $env:STEERLINE_DEBUG_SANDBOX_ROOT = $oldSandboxRoot
+    $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $oldSecondRoot
 }

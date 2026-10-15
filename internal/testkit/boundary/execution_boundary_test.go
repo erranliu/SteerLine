@@ -36,8 +36,6 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 		name, file, edge string
 		allowed          bool
 	}{
-		{"HTTP_in_console_test", "internal/console/edge_test.go", "internal/product/httpclient", true},
-		{"HTTP_constructor_in_console_production", "internal/console/edge.go", "internal/product/httpclient", false},
 		{"backend_in_HTTP_consumer", "internal/product/httpclient/edge.go", "internal/product/query", false},
 		{"SQL_in_HTTP_consumer", "internal/product/httpfs/edge.go", "database/sql", false},
 	} {
@@ -180,36 +178,6 @@ func TestTM08AppHostBoundary(t *testing.T) {
 	}
 }
 
-// Console tests and inactive-tag helpers must not regain internal query or
-// execution reconstruction access when the execution package moves.
-func TestTM04ConsoleQueryBoundary(t *testing.T) {
-	for _, dependency := range []string{core + "/query", core + "/projection", execution + "/reconstruction"} {
-		t.Run(strings.TrimPrefix(dependency, module+"/internal/"), func(t *testing.T) {
-			root := t.TempDir()
-			files := map[string]string{
-				"internal/console/edge_linux_test.go": "package console\nimport _ \"" + module + "/internal/helper\"\n",
-				"internal/helper/query_plan9.go":      "//go:build never_enabled\n\npackage helper\nimport _ \"" + dependency + "\"\n",
-			}
-			for name, source := range files {
-				path := filepath.Join(root, name)
-				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-					t.Fatal(err)
-				}
-				if err := os.WriteFile(path, []byte(source), 0600); err != nil {
-					t.Fatal(err)
-				}
-			}
-			report, err := ScanSource(root)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if len(report.Violations) == 0 {
-				t.Fatalf("console helper reached internal query: %+v", report)
-			}
-		})
-	}
-}
-
 func TestTM06AdapterBoundary(t *testing.T) {
 	for _, dependency := range []string{
 		module + "/internal/execution",
@@ -220,9 +188,7 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		module + "/internal/storage/sqlite",
 		module + "/internal/testkit/protocol",
 		module + "/internal/app",
-		console,
-		console,
-		console + "/activityrender",
+		module + "/internal/product/activityrender",
 		module + "/internal/product/api",
 		productQuery + "/taskgraph",
 	} {
@@ -366,7 +332,7 @@ func TestTM06ContractValueClosure(t *testing.T) {
 					"go.mod":                       "module " + module + "\n\ngo 1.23\n",
 					"internal/otherhelper/edge.go": "package otherhelper\nimport _ \"" + dependency + "\"\n",
 				}
-				for _, pkg := range []string{"internal/app", "internal/app/host", "internal/taskrunner", "internal/runnerbridge", "internal/runnerclient", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/product/query", "internal/product/query/taskgraph", "internal/console"} {
+				for _, pkg := range []string{"internal/app", "internal/app/host", "internal/taskrunner", "internal/runnerbridge", "internal/runnerclient", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/product/query", "internal/product/query/taskgraph"} {
 					path := filepath.Join(root, pkg, "empty.go")
 					if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 						t.Fatal(err)
@@ -395,7 +361,7 @@ func TestTM06ContractValueClosure(t *testing.T) {
 }
 
 func TestTM05ProductQueryBoundary(t *testing.T) {
-	for _, dependency := range []string{execution, console, executionAdapters + "/codex", "database/sql", module + "/internal/helper"} {
+	for _, dependency := range []string{execution, executionAdapters + "/codex", "database/sql", module + "/internal/helper"} {
 		t.Run(dependency, func(t *testing.T) {
 			root := t.TempDir()
 			path := filepath.Join(root, "internal/product/query/edge_plan9.go")

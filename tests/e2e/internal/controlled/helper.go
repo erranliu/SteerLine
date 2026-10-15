@@ -424,7 +424,7 @@ func executeControlledStage(ctx context.Context, path string, s *State, index in
 		if _, err := Git(ctx, s.Cwd, "push", "origin", branch); err != nil {
 			return "", err
 		}
-		if s.WebFeedback && len(s.Turns) == 3 {
+		if s.WebFeedback && s.PR.URL != "" {
 			// A feedback publication reuses the original candidate PR. It must
 			// not invoke the fixture's deliberately strict duplicate-create path.
 			head, err := Git(ctx, s.Cwd, "rev-parse", "HEAD")

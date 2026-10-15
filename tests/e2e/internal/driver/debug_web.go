@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -55,32 +56,58 @@ func (d *debugRelease) run() error {
 		return err
 	}
 	web := filepath.Join(d.root, "bin", "steerline-web.exe")
-	if _, err := os.Stat(web); err == nil {
-		if err = start(d.command(d.binary, "serve-app"), "application"); err != nil {
-			return err
+	if _, err := os.Stat(web); err != nil {
+		return errors.New("debug package requires steerline-web.exe")
+	}
+	if err = start(d.command(d.binary, "serve-app"), "application"); err != nil {
+		return err
+	}
+	readyCtx, done := context.WithTimeout(ctx, 15*time.Second)
+	defer done()
+	ready := false
+	for readyCtx.Err() == nil {
+		client, e := localservice.Open(readyCtx, d.home, filepath.Join(d.home, "application-api"), contract.Protocol, "/v1/application/identity")
+		if e == nil {
+			client.Close()
+			ready = true
+			break
 		}
-		readyCtx, done := context.WithTimeout(ctx, 15*time.Second)
-		defer done()
-		ready := false
-		for readyCtx.Err() == nil {
-			client, e := localservice.Open(readyCtx, d.home, filepath.Join(d.home, "application-api"), contract.Protocol, "/v1/application/identity")
-			if e == nil {
-				client.Close()
-				ready = true
-				break
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !ready {
+		return errors.New("application startup failed; see logs/application.log")
+	}
+	cmd := d.command(web, "serve")
+	if origin := os.Getenv("STEERLINE_WEB_DEV_ORIGIN"); origin != "" {
+		cmd.Env = append(cmd.Env, "STEERLINE_WEB_DEV_ORIGIN="+origin)
+	}
+	if err = start(cmd, "web"); err != nil {
+		return err
+	}
+	webReadyCtx, webReadyDone := context.WithTimeout(ctx, 15*time.Second)
+	defer webReadyDone()
+	webReady := false
+	for webReadyCtx.Err() == nil {
+		for _, child := range children {
+			select {
+			case <-child.Done:
+				if err := child.Wait(webReadyCtx); err != nil {
+					return fmt.Errorf("application/Web exited during startup; see logs: %w", err)
+				}
+				return errors.New("application/Web exited before ready; see logs")
+			default:
 			}
-			time.Sleep(50 * time.Millisecond)
 		}
-		if !ready {
-			return errors.New("application startup failed; see logs/application.log")
+		client, err := localservice.Open(webReadyCtx, d.home, filepath.Join(d.home, "ui", "web"), contract.WebProtocol, "/native/identity")
+		if err == nil {
+			client.Close()
+			webReady = true
+			break
 		}
-		cmd := d.command(web, "serve")
-		if origin := os.Getenv("STEERLINE_WEB_DEV_ORIGIN"); origin != "" {
-			cmd.Env = append(cmd.Env, "STEERLINE_WEB_DEV_ORIGIN="+origin)
-		}
-		if err = start(cmd, "web"); err != nil {
-			return err
-		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !webReady {
+		return errors.New("Web startup failed; see logs/web.log")
 	}
 	scopes := []*debugRelease{d}
 	if d.webProjects == 2 {

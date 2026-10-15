@@ -37,7 +37,12 @@ type debugRelease struct {
 // DebugReleaseMain is the package-local runtime entry point, never a production command.
 func DebugReleaseMain(args []string) error {
 	if len(args) == 0 {
-		return errors.New("debug requires init|run|console|reset|merge|control|snapshot")
+		return errors.New("debug requires init|run|reset|merge|control|snapshot")
+	}
+	switch args[0] {
+	case "init", "init-b", "prepare", "run", "run-selected", "run-project", "run-project-b", "reset", "merge", "control", "snapshot":
+	default:
+		return fmt.Errorf("unknown debug operation %q", args[0])
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -107,10 +112,6 @@ func DebugReleaseMain(args []string) error {
 		return d.run()
 	case "run-project":
 		return d.runProject()
-	case "console":
-		cmd := d.command(d.binary, "console", "-config", d.config)
-		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-		return cmd.Run()
 	case "merge":
 		if !simulate {
 			return errors.New("debug merge requires --simulate; merge live PRs explicitly")
@@ -452,7 +453,7 @@ func (d *debugRelease) prepareSelected(mode string) error {
 		return err
 	}
 	catalog["default_execution_profile"] = mode
-	// Keep only the selected source profile so the console cannot mix provider schemes.
+	// Keep only the selected source profile so clients cannot mix provider schemes.
 	profiles, _ := catalog["execution_profiles"].([]any)
 	var selected []any
 	for _, p := range profiles {
