@@ -95,7 +95,13 @@ func Main(args []string) error {
 	handle := func(raw []byte, send func(any) error) error {
 		mu.Lock()
 		defer mu.Unlock()
-		return handleRPC(path, raw, send)
+		err := handleRPC(path, raw, send)
+		if err != nil {
+			// This external fixture owns the receipt. Keep failures observable
+			// without asking callers to read Runner's private process journals.
+			_ = Write(path+".rpc-error.json", map[string]string{"error": err.Error()})
+		}
+		return err
 	}
 	if argument(args, "--listen") != "" {
 		u, err := url.Parse(argument(args, "--listen"))

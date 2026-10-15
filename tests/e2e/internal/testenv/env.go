@@ -674,6 +674,10 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 		if err != nil {
 			return false, err
 		}
+		if raw, err := os.ReadFile(p.Provider + ".rpc-error.json"); err == nil {
+			_ = os.WriteFile(filepath.Join(p.Scenario.Output, p.Name+"-fixture-rpc-error.json"), raw, 0600)
+			p.Scenario.t.Fatal("external protocol fixture failed: ", string(raw))
+		}
 		if len(snap.Runner.Candidates) != 1 {
 			return false, nil
 		}
