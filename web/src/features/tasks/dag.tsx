@@ -73,7 +73,9 @@ export function layout(graph: GraphPage, selected: string) {
         title: n.title,
         task: n.task_id,
         status: n.status,
-        blocked: !n.dependency_ready || !!n.startup_blockers?.length,
+        blocked:
+          n.status === "open" &&
+          (!n.dependency_ready || !!n.startup_blockers?.length),
       },
     };
   });
