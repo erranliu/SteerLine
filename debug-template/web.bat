@@ -2,5 +2,5 @@
 setlocal EnableExtensions DisableDelayedExpansion
 set "STEERLINE_HOME=%~dp0home"
 set "STEERLINE_E2E_CONTROLLED_STATE=%~dp0provider\state.json"
-"%~dp0bin\steerline.exe" web -config "%~dp0home\etc\SteerlineTest.json" %*
+"%~dp0bin\steerline-web.exe" open %*
 exit /b %ERRORLEVEL%

@@ -36,3 +36,8 @@ The former projects menu is retired. Use console.bat or steerline console
 (with an explicit -config when needed). Use task list and stop-service instead
 of the retired tasks/stop aliases. Retained PRs, worktrees and branches must
 be handled with the provider/target native tools; SteerLine does not delete them.
+
+Web programs: run start-app.bat first, then start-web.bat, then web.bat.
+stop-web.bat stops only Web; stop-app.bat stops only the application gateway.
+Project services are started separately using service-window.bat.
+Install both executables into this home/bin before using Web.

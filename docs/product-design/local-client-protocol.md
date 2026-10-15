@@ -100,3 +100,13 @@ TUI 将完整原信封保存在 `<home>/ui/http-requests/<project_id>/<request_i
 停服以原 HTTP applied 回执、认证后的原 OS 进程 generation 退出和两个已有锁释放共同确认。客户端不读取宿主回执文件；缺证据时显示结果未核实。TUI 只结束客户端；断线保留本窗口观察与草稿，禁止变更，重新连接不会生成替代请求。
 
 本协议不提供 SSE、离线查询进程、完整原始过程阅读器、规划 handler 或通用 artifact DTO。
+
+## 应用入口与浏览器转接
+
+独立应用协议为 `steerline-application/v1`，由 `steerline serve-app` 提供，不冒充原单项目 identity。发现文件位于 `<home>/application-api/discovery.json`，包含 home ID、应用实例、精确 OS 进程、loopback 地址和私有 Bearer；目录/文件仅当前用户可读，原子发布，应用租约同 home 单实例。客户端逐次核对 discovery 和在线 identity，禁重定向、非 loopback Host 与浏览器 Origin。
+
+`GET /v1/application/identity` 无项目也可用；`GET /v1/application/projects` 返回现有配置目录与逐项诊断，解析和连接分别有界，不建库。`GET /v1/application/projects/{id}/identity` 返回原生真实身份，其他明确允许的查询转到 `/v1/projects/{id}/…`。`POST /v1/application/projects/{id}/commands` 保留完整原信封、目标、实例和数字版本，由原项目最终核验。离线、冲突、身份/连接失败返回不可用；只有原权威缺失保留 `command_not_found`。
+
+应用目录在 `internal/app/application_directory.go`，与 TUI 共用无 UI 的 `projectconnection` 解析器。配置改变/删除撤销旧映射，同 common-dir 冲突拒绝路由；目录缓存经原生身份验证的 HTTP 客户端，每次借用前核对私有 discovery、项目、实例、OS 进程、凭证归属；替换只关闭旧连接的空闲 transport，在途请求不被取消或改向。
+
+`POST /v1/application/shutdown` 仅正常停止应用入口。`steerline-web.exe` 提供浏览器认证与 `/api/v1/application/projects…` 同源转接，不开放该管理路由；Web 的原生 `/native/identity` 和 `/native/shutdown` 要求独立 launcher Bearer 且无 Origin，不能使用浏览器 cookie 停服。浏览器会话绑定 home/Web 实例，与任一项目实例无关。运行方式和项目 URL 见 [Web 指南](../../web/README.md)。

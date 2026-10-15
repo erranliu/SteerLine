@@ -18,8 +18,11 @@ import (
 // RecoveryFixture controls only the simulated native host, never center state.
 type RecoveryFixture struct {
 	FailStep, NoFinalStep, DropStep, HoldStep string
-	MissingThread                             bool
-	Orca                                      *TerminalFixture
+	// HoldStream pauses an active native stream until release-recovery. The
+	// existing default HoldStep keeps its disconnect-injection semantics.
+	HoldStream    bool
+	MissingThread bool
+	Orca          *TerminalFixture
 }
 type TerminalFixture struct {
 	Root, Runtime, Handle, Incarnation, Environment, Worktree, Branch, Base, Name string
@@ -65,7 +68,30 @@ func recoveryStart(path string, s State, id json.RawMessage, thread, prompt stri
 			return err
 		}
 	}
-	if s.Recovery.DropStep == fixtureStepIDs[index] || s.Recovery.HoldStep == fixtureStepIDs[index] {
+	if s.Recovery.HoldStream && s.Recovery.HoldStep == fixtureStepIDs[index] {
+		deadline := time.NewTimer(5 * time.Minute)
+		defer deadline.Stop()
+		tick := time.NewTicker(50 * time.Millisecond)
+		defer tick.Stop()
+		for {
+			current, err := Read(path)
+			if err != nil {
+				return err
+			}
+			if current.Session != thread || len(current.Turns) == 0 || current.Turns[len(current.Turns)-1]["id"] != turn["id"] {
+				return errors.New("held native turn identity changed")
+			}
+			if current.Recovery != nil && current.Recovery.HoldStep == "" && current.Turns[len(current.Turns)-1]["status"] == "completed" {
+				turn = current.Turns[len(current.Turns)-1]
+				break
+			}
+			select {
+			case <-deadline.C:
+				return errors.New("held native stream release timed out")
+			case <-tick.C:
+			}
+		}
+	} else if s.Recovery.DropStep == fixtureStepIDs[index] || s.Recovery.HoldStep == fixtureStepIDs[index] {
 		return io.EOF
 	}
 	if items, ok := turn["items"].([]any); ok {

@@ -19,6 +19,7 @@ function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
   const [tab, setTab] = useState<"activity" | "final">("activity");
   const binding = [
+    api.home,
     api.identity.project_id,
     api.identity.instance_id,
     run.run_id,
@@ -285,7 +286,12 @@ export function Runs() {
   const page = snapshot?.connection.snapshot.page;
   const runs = page?.runs ?? [];
   const tasks = useQuery({
-    queryKey: [api.identity.project_id, api.identity.instance_id, "run-tasks"],
+    queryKey: [
+      api.home,
+      api.identity.project_id,
+      api.identity.instance_id,
+      "run-tasks",
+    ],
     queryFn: ({ signal }) => api.get<TaskPage>("/tasks?limit=100", signal),
     enabled: online,
     refetchInterval: 2500,

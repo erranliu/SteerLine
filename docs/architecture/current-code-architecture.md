@@ -49,7 +49,7 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 
 ## Module owners
 
-Web 的独立所有者为 `web/src`（React 页面、wire 消费、IndexedDB 原请求/草稿）、`web/server`（浏览器认证、稳定 listener、CLI 私有打开凭证、静态嵌入与既有 native client 转接）及 `web/tests`（真实浏览器驱动）。`internal/app/webui.go` 与既有 endpoint 生命周期只负责组装，`cmd/steerline/web.go` 解析配置/仓库身份并打开原实例。通过 `webui` build tag 嵌入 npm 构建资源，普通 Go 测试/构建不依赖 Node；具体命令见 [Web README](../../web/README.md)。
+Web 由 `cmd/steerline-web` 独立运行，`web/src` 负责当前项目页面与持久原信封/草稿，`web/server` 负责浏览器认证、静态嵌入及受限应用 API 转接。`steerline serve-app` 在 `internal/app/application_service.go` 组合应用目录和 `applicationhttp`，只通过原 `httpclient` 连接各项目；项目服务不再托管 Web。`projectconnection` 是 TUI/应用服务共用的只读配置与 Git 身份解析器，`localservice` 维护独立 home/实例/进程发现和租约，应用协议为 `steerline-application/v1`。`build.ps1 -Web` 分别生成业务与 Web exe，只有后者嵌入页面；普通业务构建不依赖 Node。操作见 [Web README](../../web/README.md)，验证见[项目切换验收](../acceptance/web-project-switch.md)。
 
 | Owner | Responsibility |
 | --- | --- |

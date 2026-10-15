@@ -38,17 +38,19 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   };
   const binary = join(root, "bin", "steerline.exe");
   const helper = join(root, "bin", "debug-helper.exe");
+  const webBinary = join(root, "bin", "steerline-web.exe");
   let opening = "";
   let openingError = "";
   await expect
     .poll(
       () => {
         try {
-          opening = execFileSync(
-            binary,
-            ["web", "-config", absolute, "-print-url"],
-            { env, encoding: "utf8", stdio: "pipe", timeout: 30000 },
-          ).trim();
+          opening = execFileSync(webBinary, ["open", "-print-url"], {
+            env,
+            encoding: "utf8",
+            stdio: "pipe",
+            timeout: 30000,
+          }).trim();
           return !!opening;
         } catch (error) {
           openingError = String(error);
@@ -68,43 +70,72 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   const consoleErrors: string[] = [];
   page.on("pageerror", (error) => consoleErrors.push(error.message));
   await page.goto(opening);
-  await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
-  await expect(page).toHaveURL(/\/dag$/);
+  if (!/\/projects\//.test(page.url())) {
+    const combo = page.getByRole("combobox", { name: "当前项目" });
+    await expect
+      .poll(() => combo.locator("option:not([disabled])").count())
+      .toBe(1);
+    await combo.selectOption({ index: 1 });
+  }
+  await expect(page.getByText("服务已连接", { exact: true })).toBeVisible({
+    timeout: 180000,
+  });
+  console.log("web.smoke: selected configured project and connected");
+  await expect(page).toHaveURL(/\/projects\/[a-f0-9]+\/dag$/);
   expect(page.url()).not.toContain("ticket=");
   await expect(page.locator(".graph-task")).toHaveCount(2);
   await page.screenshot({
     path: testInfo.outputPath("dag-desktop.png"),
     fullPage: true,
   });
-  const identity = await (
-    await page.request.get(
-      "http://" + manifest.web_address + "/api/v1/identity",
-    )
-  ).json();
+  const projectID = page.url().split("/projects/")[1].split("/")[0];
   const prefix =
     "http://" +
     manifest.web_address +
-    "/api/v1/projects/" +
-    identity.project_id;
-  const get = async (path: string) =>
-    (await page.request.get(prefix + path)).json();
+    "/api/v1/application/projects/" +
+    projectID;
+  const get = async (path: string) => {
+    let body: any;
+    await expect
+      .poll(
+        async () => {
+          try {
+            const response = await page.request.get(prefix + path, {
+              timeout: 20000,
+            });
+            body = await response.json();
+            return response.ok();
+          } catch {
+            return false;
+          }
+        },
+        { timeout: 90000, message: "original project query: " + path },
+      )
+      .toBe(true);
+    return body;
+  };
+  const identity = await get("/identity");
+  expect(identity.project_id).toBe(projectID);
   const continuing = process.env.STEERLINE_WEB_CONTINUE === "1";
   if (!continuing) {
     let startPosts = 0;
     let originalStartID = "";
-    await page.route("**/api/v1/projects/**/commands", async (route) => {
-      const envelope = route.request().postDataJSON();
-      if (envelope.action === "start_task") {
-        startPosts++;
-        originalStartID = envelope.request_id;
-        if (startPosts === 1) {
-          await route.fetch();
-          await route.abort("failed");
-          return;
+    await page.route(
+      "**/api/v1/application/projects/**/commands",
+      async (route) => {
+        const envelope = route.request().postDataJSON();
+        if (envelope.action === "start_task") {
+          startPosts++;
+          originalStartID = envelope.request_id;
+          if (startPosts === 1) {
+            await route.fetch();
+            await route.abort("failed");
+            return;
+          }
         }
-      }
-      await route.continue();
-    });
+        await route.continue();
+      },
+    );
     if (
       await page.getByRole("button", { name: "恢复派发", exact: true }).count()
     )
@@ -253,7 +284,13 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   await context.setOffline(false);
   await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
   const second = await context.newPage();
-  await second.goto("http://" + manifest.web_address + "/dag");
+  await second.goto(
+    "http://" +
+      manifest.web_address +
+      "/projects/" +
+      identity.project_id +
+      "/dag",
+  );
   await expect(second.getByText("服务已连接", { exact: true })).toBeVisible();
   await second.close();
   expect((await get("/snapshot")).connection.snapshot.page.service.ready).toBe(

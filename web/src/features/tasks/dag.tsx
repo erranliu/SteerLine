@@ -73,7 +73,9 @@ export function layout(graph: GraphPage, selected: string) {
         title: n.title,
         task: n.task_id,
         status: n.status,
-        blocked: !n.dependency_ready || !!n.startup_blockers?.length,
+        blocked:
+          n.status === "open" &&
+          (!n.dependency_ready || !!n.startup_blockers?.length),
       },
     };
   });
@@ -98,6 +100,7 @@ export function Dag() {
   const listCursor = params.get("list_cursor") ?? "";
   const graph = useQuery({
     queryKey: [
+      api.home,
       api.identity.project_id,
       api.identity.instance_id,
       "graph",
@@ -113,6 +116,7 @@ export function Dag() {
   });
   const tasks = useQuery({
     queryKey: [
+      api.home,
       api.identity.project_id,
       api.identity.instance_id,
       "tasks",

@@ -20,7 +20,9 @@ export function draftKey(project: string, instance: string, run: Candidate) {
 export function Answer({ run }: { run: Candidate }) {
   const { api, online, send, busy } = useWorkspace();
   const decision = run.decision!;
-  const key = draftKey(api.identity.project_id, api.identity.instance_id, run);
+  const key =
+    (api.home ? api.home + "/" : "") +
+    draftKey(api.identity.project_id, api.identity.instance_id, run);
   const [note, setNote] = useState("");
   const [option, setOption] = useState("");
   const [loaded, setLoaded] = useState(false);

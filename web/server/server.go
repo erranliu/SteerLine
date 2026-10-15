@@ -22,21 +22,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/localservice"
+	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/applicationhttp"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 )
 
 type Client interface {
-	Identity() httpcontract.Identity
-	RefreshIdentity(context.Context) (httpcontract.Identity, error)
+	Identity() contract.Identity
+	RefreshIdentity(context.Context) (contract.Identity, error)
 	Get(context.Context, string, any) error
 	Post(context.Context, string, any, any) error
 	Close() error
 }
 type Options struct {
-	Address, RunDir, DevOrigin, LauncherDir string
-	Client                                  Client
-	Assets                                  fs.FS
+	Address, Home, DevOrigin, LauncherDir string
+	Client                                Client
+	Assets                                fs.FS
 }
 type session struct {
 	CSRF    string
@@ -46,7 +49,10 @@ type Server struct {
 	options        Options
 	listener       net.Listener
 	http           *http.Server
-	identity       httpcontract.Identity
+	identity       contract.Identity
+	endpoint       *localservice.Endpoint
+	stopped        chan struct{}
+	stopOnce       sync.Once
 	secret, cookie string
 	assets         fs.FS
 	dev            http.Handler
@@ -58,11 +64,11 @@ type Server struct {
 func ValidateAddress(address string) error {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil || host != "127.0.0.1" {
-		return errors.New("web_address must be a fixed 127.0.0.1:<port>")
+		return errors.New("Web address must be a fixed 127.0.0.1:<port>")
 	}
 	var number int
 	if _, err = fmt.Sscanf(port, "%d", &number); err != nil || number < 1 || number > 65535 || fmt.Sprint(number) != port {
-		return errors.New("web_address requires a stable port from 1 to 65535")
+		return errors.New("Web address requires a stable port from 1 to 65535")
 	}
 	return nil
 }
@@ -71,8 +77,8 @@ func Prepare(options Options) (*Server, error) {
 	if err := ValidateAddress(options.Address); err != nil {
 		return nil, err
 	}
-	if options.Client == nil || options.RunDir == "" || options.LauncherDir == "" {
-		return nil, errors.New("Web requires the original native client and run directory")
+	if options.Client == nil || options.Home == "" || options.LauncherDir == "" {
+		return nil, errors.New("Web requires the application client and home")
 	}
 	assets := options.Assets
 	var dev http.Handler
@@ -93,38 +99,42 @@ func Prepare(options Options) (*Server, error) {
 			return nil, err
 		}
 	}
-	listener, err := net.Listen("tcp4", options.Address)
+	endpoint, err := localservice.Prepare(options.Home, options.LauncherDir, contract.WebProtocol, options.Address)
 	if err != nil {
-		return nil, fmt.Errorf("bind stable Web address %s: %w", options.Address, err)
-	}
-	secret, err := randomToken()
-	if err != nil {
-		listener.Close()
 		return nil, err
 	}
-	identity := options.Client.Identity()
-	if len(identity.ProjectID) != 64 || identity.InstanceID == "" {
-		listener.Close()
-		return nil, errors.New("Web requires a complete original project/instance identity")
+	listener := endpoint.Listener
+	secret := endpoint.Token
+	identity := endpoint.Identity
+	appIdentity := options.Client.Identity()
+	if appIdentity.HomeID != identity.HomeID || appIdentity.Protocol != contract.Protocol {
+		endpoint.Close()
+		return nil, errors.New("Web requires matching application home identity")
 	}
-	s := &Server{options: options, listener: listener, identity: identity, secret: secret, assets: assets, dev: dev,
-		cookie: "sl_web_" + identity.ProjectID[:12] + "_" + strings.Split(options.Address, ":")[1], tickets: map[string]time.Time{}, sessions: map[string]session{}}
+	s := &Server{options: options, listener: listener, endpoint: endpoint, stopped: make(chan struct{}), identity: identity, secret: secret, assets: assets, dev: dev,
+		cookie: "sl_web_" + identity.HomeID[:12] + "_" + strings.Split(options.Address, ":")[1], tickets: map[string]time.Time{}, sessions: map[string]session{}}
 	s.http = &http.Server{Handler: s, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 35 * time.Second, WriteTimeout: 125 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
-	if err := writeDiscovery(options.LauncherDir, discovery{Version: 1, Address: options.Address, ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Secret: secret}); err != nil {
-		listener.Close()
-		return nil, err
-	}
+
 	return s, nil
 }
-func (s *Server) Start() { go s.http.Serve(s.listener) }
+func (s *Server) Start() {
+	go func() {
+		if err := s.http.Serve(s.listener); err != nil {
+			s.stopOnce.Do(func() { close(s.stopped) })
+		}
+	}()
+}
 func (s *Server) Close(ctx context.Context) error {
 	shutdown := s.http.Shutdown(ctx)
+	if errors.Is(shutdown, context.DeadlineExceeded) {
+		shutdown = nil
+	}
 	closed := s.http.Close()
 	listener := s.listener.Close()
 	if errors.Is(listener, net.ErrClosed) {
 		listener = nil
 	}
-	return errors.Join(shutdown, closed, listener, s.options.Client.Close())
+	return errors.Join(shutdown, closed, listener, s.options.Client.Close(), s.endpoint.Close())
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -148,6 +158,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if origin := r.Header.Get("Origin"); origin != "" && origin != "http://"+s.options.Address {
 		fail(w, 403, "origin_rejected", "Web Origin does not match")
+		return
+	}
+	if r.URL.Path == "/native/identity" || r.URL.Path == "/native/shutdown" {
+		if r.URL.RawPath != "" || !s.endpoint.Authorized(r) {
+			fail(w, 403, "launcher_rejected", "native launcher credential required")
+			return
+		}
+		if r.Method == "GET" && r.URL.Path == "/native/identity" {
+			writeJSON(w, 200, s.identity)
+			return
+		}
+		if r.Method == "POST" && r.URL.Path == "/native/shutdown" {
+			writeJSON(w, 200, map[string]string{"status": "stopping"})
+			s.stopOnce.Do(func() { close(s.stopped) })
+			return
+		}
+		fail(w, 405, "method_not_allowed", "native method rejected")
 		return
 	}
 	if r.URL.Path == "/auth/issue" {
@@ -193,7 +220,7 @@ func (s *Server) issue(w http.ResponseWriter, r *http.Request) {
 	s.prune()
 	s.tickets[ticket] = time.Now().Add(time.Minute)
 	s.mu.Unlock()
-	writeJSON(w, 200, map[string]string{"ticket": ticket, "project_id": s.identity.ProjectID, "instance_id": s.identity.InstanceID})
+	writeJSON(w, 200, map[string]string{"ticket": ticket, "home_id": s.identity.HomeID, "instance_id": s.identity.InstanceID})
 }
 func (s *Server) exchange(w http.ResponseWriter, r *http.Request) {
 	if !s.browserWrite(r) {
@@ -262,18 +289,19 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	}
 	session, ok := s.authenticated(r)
 	if !ok {
-		fail(w, 401, "session_required", "open Web with steerline web -config <project>")
+		fail(w, 401, "session_required", "open Web with steerline-web open")
 		return
 	}
-	identity, err := s.options.Client.RefreshIdentity(r.Context())
+	_, err := s.options.Client.RefreshIdentity(r.Context())
+	diagnostic := ""
 	if err != nil {
-		backendError(w, err)
-		return
+		diagnostic = err.Error()
 	}
 	writeJSON(w, 200, struct {
-		CSRF     string                `json:"csrf_token"`
-		Identity httpcontract.Identity `json:"identity"`
-	}{session.CSRF, identity})
+		CSRF       string            `json:"csrf_token"`
+		Identity   contract.Identity `json:"identity"`
+		Diagnostic string            `json:"diagnostic,omitempty"`
+	}{session.CSRF, s.identity, diagnostic})
 }
 func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	session, ok := s.authenticated(r)
@@ -285,21 +313,17 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_path", "canonical API path required")
 		return
 	}
-	if r.URL.Path == "/api/v1/identity" && r.Method == "GET" {
-		identity, err := s.options.Client.RefreshIdentity(r.Context())
-		if err != nil {
-			backendError(w, err)
-			return
-		}
-		writeJSON(w, 200, identity)
-		return
-	}
-	prefix := "/api/v1/projects/" + s.identity.ProjectID
-	if !strings.HasPrefix(r.URL.Path, prefix+"/") {
-		fail(w, 409, "project_mismatch", "API route belongs to another project")
-		return
-	}
+	prefix := "/api/v1/application"
 	route := strings.TrimPrefix(r.URL.Path, prefix)
+	if route == r.URL.Path || !(route == "/projects" || strings.HasPrefix(route, "/projects/")) {
+		fail(w, 404, "route_not_found", "application route required")
+		return
+	}
+	parts := strings.Split(strings.TrimPrefix(route, "/projects/"), "/")
+	if route != "/projects" && (len(parts) < 2 || len(parts[0]) != 64 || !(r.Method == "GET" && applicationhttp.AllowedRead("/"+strings.Join(parts[1:], "/")) || r.Method == "POST" && len(parts) == 2 && parts[1] == "commands")) {
+		fail(w, 404, "route_not_found", "unsupported project route")
+		return
+	}
 	if r.URL.RawQuery != "" {
 		route += "?" + r.URL.RawQuery
 	}
@@ -313,7 +337,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			fail(w, 403, "csrf_rejected", "same-origin JSON and session CSRF token required")
 			return
 		}
-		if r.URL.Path != prefix+"/commands" || r.URL.RawQuery != "" {
+		if (len(parts) != 2 || parts[1] != "commands") || r.URL.RawQuery != "" {
 			fail(w, 404, "route_not_found", "only formal command submission is writable")
 			return
 		}
@@ -327,8 +351,8 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		if err = envelope.Validate(s.identity.ProjectID, s.identity.InstanceID); err != nil {
-			fail(w, 409, "stale_target", err.Error())
+		if envelope.ProjectID != parts[0] {
+			fail(w, 409, "project_mismatch", "command belongs to another route")
 			return
 		}
 		if envelope.Action == "stop_service" {
@@ -364,7 +388,7 @@ func (s *Server) static(w http.ResponseWriter, r *http.Request) {
 		name = "index.html"
 	}
 	body, err := fs.ReadFile(s.assets, name)
-	if errors.Is(err, fs.ErrNotExist) && (r.URL.Path == "/dag" || r.URL.Path == "/runs" || r.URL.Path == "/settings") {
+	if errors.Is(err, fs.ErrNotExist) && spaPath(r.URL.Path) {
 		name = "index.html"
 		body, err = fs.ReadFile(s.assets, name)
 	}
@@ -411,4 +435,10 @@ func backendError(w http.ResponseWriter, err error) {
 	} else {
 		fail(w, 503, "backend_unavailable", err.Error())
 	}
+}
+
+func (s *Server) Done() <-chan struct{} { return s.stopped }
+func spaPath(route string) bool {
+	parts := strings.Split(strings.Trim(route, "/"), "/")
+	return len(parts) == 3 && parts[0] == "projects" && len(parts[1]) == 64 && (parts[2] == "dag" || parts[2] == "runs" || parts[2] == "settings") || route == "/projects"
 }

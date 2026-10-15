@@ -7,7 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import type { Identity } from "../shared/api/types";
-import { App } from "./app";
+import { Workspace } from "./app";
 import { Api } from "../shared/api/client";
 import { saveRequest, listRequests } from "../shared/api/journal";
 import type { Receipt } from "../shared/api/types";
@@ -69,8 +69,8 @@ it("runs only one reconciliation round while journal observations refresh and ab
   });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/settings"]}>
-        <App initial={{ identity, csrf_token: "csrf" }} />
+      <MemoryRouter initialEntries={["/projects/poll-project/settings"]}>
+        <Workspace initial={{ identity, csrf_token: "csrf" }} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -78,7 +78,7 @@ it("runs only one reconciliation round while journal observations refresh and ab
   const rows = await listRequests();
   for (let i = 1; i <= 5; i++)
     await act(async () => {
-      client.setQueryData(["local-requests"], rows, {
+      client.setQueryData(["", "local-requests"], rows, {
         updatedAt: Date.now() + i,
       });
     });
@@ -146,8 +146,8 @@ it("disables commands when offline even while paused queries retain a successful
   });
   render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/settings"]}>
-        <App initial={{ identity, csrf_token: "csrf" }} />
+      <MemoryRouter initialEntries={["/projects/poll-project/settings"]}>
+        <Workspace initial={{ identity, csrf_token: "csrf" }} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -162,6 +162,7 @@ it("disables commands when offline even while paused queries retain a successful
   expect(screen.getByRole("button", { name: "暂停派发" })).toBeDisabled();
   expect(
     client.getQueryData([
+      "",
       identity.project_id,
       identity.instance_id,
       "snapshot",

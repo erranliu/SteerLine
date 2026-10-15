@@ -197,7 +197,7 @@ describe("immutable browser requests", () => {
     expect(await journal.requestByID(envelope.request_id)).toBeDefined();
     await new Api(identity, "new-csrf").reconcile(envelope);
     expect(fetch.mock.calls[1][0]).toBe(
-      "/api/v1/projects/project-a/commands/" + envelope.request_id,
+      "/api/v1/application/projects/project-a/commands/" + envelope.request_id,
     );
     expect(fetch.mock.calls[1][1].method).toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -232,7 +232,7 @@ describe("immutable browser requests", () => {
     await journal.saveRequest(envelope);
     const fetch = vi
       .fn()
-      .mockResolvedValue(
+      .mockImplementation(async () =>
         response({ code: "backend_unavailable", reason: "SQL failed" }, 503),
       );
     vi.stubGlobal("fetch", fetch);
@@ -242,8 +242,8 @@ describe("immutable browser requests", () => {
       new Api({ ...identity, instance_id: "replacement" }, "csrf").reconcile(
         envelope,
       ),
-    ).rejects.toThrow("其他项目或服务实例");
-    expect(fetch).toHaveBeenCalledTimes(1);
+    ).rejects.toThrow("SQL failed");
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
   it("serializes simultaneous sends of the same original request", async () => {
     const fetch = vi.fn().mockResolvedValue(response(receipt()));

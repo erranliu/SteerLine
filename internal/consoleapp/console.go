@@ -3,21 +3,14 @@ package consoleapp
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/console"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
+	"github.com/erranliu/SteerLine/internal/projectconnection"
 )
 
 type Paths struct {
@@ -55,7 +48,7 @@ func Load(ctx context.Context, configPath string, paths Paths) ([]api.ProjectRef
 		if runtime.GOOS == "windows" {
 			ref.Presentation.ServiceInstruction = filepath.Join(paths.Home, "service-window.bat")
 		}
-		if err := connectionConfig(ctx, &ref); err != nil {
+		if err := projectconnection.Resolve(ctx, &ref); err != nil {
 			ref.Error = err.Error()
 		}
 		refs = append(refs, ref)
@@ -85,73 +78,4 @@ func Prepare(ctx context.Context, configPath, runID string, paths Paths) ([]api.
 		options.Clients[refs[i].Key] = client
 	}
 	return refs, options, nil
-}
-func connectionConfig(ctx context.Context, ref *api.ProjectRef) error {
-	var config struct {
-		Repository       string `json:"repository"`
-		RunDir           string `json:"run_dir"`
-		TaskAuthority    string `json:"task_authority"`
-		WorkflowProtocol string `json:"workflow_protocol"`
-		Git              struct {
-			Executable string   `json:"executable"`
-			Args       []string `json:"args"`
-		} `json:"git"`
-	}
-	data, err := os.ReadFile(ref.ConfigPath)
-	if err != nil {
-		return err
-	}
-	if err = json.Unmarshal(data, &config); err != nil {
-		return err
-	}
-	if config.Repository == "" || config.TaskAuthority != "native" || config.WorkflowProtocol != "worker-flow-v2" {
-		return fmt.Errorf("connection requires repository, native task authority and worker-flow-v2")
-	}
-	repo := config.Repository
-	if !filepath.IsAbs(repo) {
-		repo = filepath.Join(filepath.Dir(ref.ConfigPath), repo)
-	}
-	executable := config.Git.Executable
-	if executable == "" {
-		executable = "git"
-	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	args := append(append([]string(nil), config.Git.Args...), "rev-parse", "--path-format=absolute", "--git-common-dir")
-	command := exec.CommandContext(ctx, executable, args...)
-	command.Dir = repo
-	out, err := command.Output()
-	if err != nil {
-		return fmt.Errorf("resolve connection repository identity: %w", err)
-	}
-	identity := strings.TrimSpace(string(out))
-	if !filepath.IsAbs(identity) {
-		identity = filepath.Join(repo, identity)
-	}
-	identity, err = filepath.EvalSymlinks(identity)
-	if err != nil {
-		return err
-	}
-	ref.Identity = canonical(identity)
-	name := filepath.Base(identity)
-	if strings.EqualFold(name, ".git") {
-		name = filepath.Base(filepath.Dir(identity))
-	}
-	name = strings.Trim(regexp.MustCompile(`[^a-zA-Z0-9._-]+`).ReplaceAllString(name, "-"), "-.")
-	if name == "" {
-		name = "repo"
-	}
-	digest := sha256.Sum256([]byte(ref.Identity))
-	ref.RunDir = config.RunDir
-	if ref.RunDir == "" {
-		ref.RunDir = filepath.Join(ref.ApplicationHome, "state", name+"-"+hex.EncodeToString(digest[:])[:12])
-	} else if !filepath.IsAbs(ref.RunDir) {
-		ref.RunDir = filepath.Join(filepath.Dir(ref.ConfigPath), ref.RunDir)
-	}
-	ref.RunDir = filepath.Clean(ref.RunDir)
-	ref.Key = canonical(ref.ConfigPath) + "\x00" + canonical(ref.RunDir)
-	ref.Presentation.NativeWorkflow = true
-	ref.Presentation.TaskAuthority = config.TaskAuthority
-	ref.Presentation.WorkflowProtocol = config.WorkflowProtocol
-	return nil
 }

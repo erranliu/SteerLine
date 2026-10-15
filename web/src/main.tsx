@@ -37,7 +37,7 @@ authorize()
         <span className="brand-symbol">◆</span>
         <h1>打开你的工作空间</h1>
         <p>请使用本机入口授权当前浏览器。</p>
-        <code>steerline web -config &lt;项目配置&gt;</code>
+        <code>steerline-web open</code>
         <p className="muted">{String(error)}</p>
         <button
           className="button button-outline"

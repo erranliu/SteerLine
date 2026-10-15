@@ -1,6 +1,6 @@
 # 项目管理与统一 Web 入口（方案）
 
-状态：2026-10-15 用户要求先确认方案。本轮只编写设计、项目准备提示词及结构核验规则，不实现接口、进程、界面或数据库，不执行提示词，不修改安装环境。本文是项目切换、添加和纳管职责的设计入口；[结构核验](project-structure.md)维护仓库要求，[Codex 准备提示词](project-onboarding-prompt.md)供用户复制执行。均为拟议能力，不表示已经交付。
+状态：2026-10-15 原规划先确认整体方案；随后用户直接授权实现先行的独立 Web 与已有配置项目切换，当前结果见[专属验收](../acceptance/web-project-switch.md)。添加、结构核验与纳管仍为后置设计，没有执行准备提示词或修改安装环境。本文是项目切换、添加和纳管职责的设计入口；[结构核验](project-structure.md)维护仓库要求，[Codex 准备提示词](project-onboarding-prompt.md)供用户复制执行。后置添加能力不表示已经交付。
 
 用户随后明确分批：[独立 Web 与已有项目切换 Spec](../spec/web-project-switch.spec.md)/[Plan](../spec/web-project-switch.plan.md)先行，继续只读展示 etc 中的已配置项目，不引入结构门槛；[项目添加 Spec](../spec/project-onboarding.spec.md)/[Plan](../spec/project-onboarding.plan.md)后置，才落实下文的准备、核验、登记、初始化准入。两个批次独立验收；先行批次不依赖后置批次，也不把已配置项目标成结构已通过。
 
@@ -19,7 +19,7 @@
 | 位置 | 实际行为 | 本方案的整合方向 |
 | --- | --- | --- |
 | [app/config.go](../../internal/app/config.go)、[consoleapp/console.go](../../internal/consoleapp/console.go) | 从应用 home 的 etc 加载项目配置；配置文件可直接成为 TUI 项目来源 | 项目目录与资格由应用服务统一返回，不能把“有 JSON 文件”等同于纳管完成 |
-| [web/server/server.go](../../web/server/server.go)、[app/webui.go](../../internal/app/webui.go) | 一个 Web handler 固定一个项目/实例，随项目服务运行 | 拆出 Web 进程；应用服务提供项目目录及按项目的业务访问入口 |
+| [web/server/server.go](../../web/server/server.go)、[application_service.go](../../internal/app/application_service.go) | 已拆出独立 Web；应用服务提供配置目录及按项目转接 | 后续添加复用该 Go 应用入口，不重建网关 |
 | [native_project_open.go](../../internal/app/native_project_open.go)、[service_admission.go](../../internal/app/service_admission.go) | 启动及部分命令入口可以初始化原生项目数据库；没有本文规定的文档结构门槛 | 复用原初始化/身份/事务能力，但在所有初始化入口之前增加统一纳管准入 |
 | [service_preflight.go](../../internal/app/service_preflight.go)、[native_state_preflight.go](../../internal/app/host/native_state_preflight.go) | 已有仓库、发布目标、执行环境、状态位置及格式核验 | 复用具体检查；区分项目结构、纳管参数与执行环境，不把会触碰执行环境的完整启动检查当成结构检查 |
 | [planning-ui.md](planning-ui.md#长期技术文档与结构约定) | 原型约定架构、并行开发、测试、Spec/Plan 规范及设计目录 | 本方案把角色与结构要求集中到结构核验文档，原型仍只是交互参考 |
@@ -39,9 +39,9 @@ flowchart LR
     A --> R
 ```
 
-这里的“应用服务”是 Go 后端的应用级入口，不是某一个项目的 worker 服务。它必须在零个已管理项目、所有项目服务均离线时也能提供添加与核验；不能为添加第一个项目而先创建一个临时项目数据库。当前后端只有按项目运行的服务入口，这是需要补齐的真实能力。
+这里的“应用服务”是 Go 后端的应用级入口，不是某一个项目的 worker 服务。它必须在零个已管理项目、所有项目服务均离线时也能提供添加与核验；不能为添加第一个项目而先创建一个临时项目数据库。当前 `serve-app` 已能在零配置/全离线时提供身份与只读目录；添加和核验仍按后置 Spec 补齐。
 
-应用级入口由 `steerline.exe` 承载，独立于各项目服务的生命周期；一个应用 home 只允许一个项目管理写者。具体 CLI 命令名和 HTTP DTO 留到实施规格确定，本轮不宣称已有可执行入口。保留现有每项目服务/数据库与仓库锁，不在本轮设计中合并 worker、调度器或业务数据库。
+应用级入口由 `steerline.exe` 承载，独立于各项目服务的生命周期；一个应用 home 只允许一个项目管理写者。当前入口为 `steerline serve-app/stop-app` 与 `steerline-web serve/open/stop`，协议为 `steerline-application/v1`；后置管理写入按其实施 Spec 扩展。保留现有每项目服务/数据库与仓库锁，不在本轮设计中合并 worker、调度器或业务数据库。
 
 当前 `LoadConfig` 会组合全局执行方案，部分 preflight 还会验证具体后端；添加候选不能直接套用这条完整运行接线。应用级启动、候选解析与结构核验须有不依赖执行方案就绪的入口；纳管参数及原生权威初始化使用必需的窄输入，执行目录/账户/Orca 可用性留给执行就绪检查。实施时应拆出并复用已有具体检查，不构造一个假的项目或默认 worker 来满足旧入口。
 
@@ -53,9 +53,9 @@ Web 只连接应用级 API。Go 应用服务负责项目目录、仓库身份、
 
 ## 当前项目与切换
 
-项目切换器显示显示名、仓库简要位置及在线/离线/配置错误状态。无项目时显示“添加项目”；已有项目时可记住本浏览器最近选择，但不能在服务端保存一个供全部标签页共用的当前项目。
+项目切换器显示显示名、仓库简要位置及在线/离线/配置错误状态。先行版零项目显示“尚无已配置项目”和只读说明，后置添加完成后再提供“添加项目”；已有项目时可记住本浏览器最近选择，但不能在服务端保存一个供全部标签页共用的当前项目。
 
-切换后进入目标项目相应页面；原任务/候选不存在时回到目标项目的 DAG 或执行列表，不带着同号 Task 自动定位。URL 必须包含稳定项目 ID，重名项目用路径区分。同一仓库的多个 linked worktree 按 Git common-dir 去重；不能仅按目录名识别项目。
+切换后进入目标项目相应页面；原任务/候选不存在时回到目标项目的 DAG 或执行列表，不带着同号 Task 自动定位。URL 必须包含稳定项目 ID，重名项目用路径区分。先行版同 common-dir 的重复配置显示冲突并拒绝路由，后续登记也按 Git common-dir 保持唯一；不能仅按目录名识别项目。
 
 查询缓存、草稿、页面选择与原请求记录按项目及相应实例/执行身份隔离。切换时保留原项目草稿，取消旧查询、资格检查及尚未提交的发送回调；已提交命令及未知结果留在原项目，继续按原 ID 查证，绝不改投当前项目。服务实例变更后更新连接身份，不改写旧信封。列表加载和项目连接分别限时，一个错误配置或慢连接不能拖住整个切换器。
 

@@ -14,13 +14,12 @@ import (
 	"strings"
 	"time"
 
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
-	"github.com/erranliu/SteerLine/internal/pathguard"
+	"github.com/erranliu/SteerLine/internal/localservice"
 )
 
 type ProjectInfo struct {
@@ -304,41 +303,11 @@ func atoiSafe(value string) int {
 }
 
 func InstallExecutable(source string) (string, error) {
-	if resolved, err := filepath.EvalSymlinks(source); err == nil {
-		source = resolved
-	}
-	info, err := os.Stat(source)
-	if err != nil {
-		return "", err
-	}
-	if info.IsDir() {
-		return "", fmt.Errorf("%s is a directory", source)
-	}
 	name := "steerline"
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	if !pathguard.Within(HomeDir(), BinDir()) {
-		return "", errors.New("application binary directory must resolve inside STEERLINE_HOME")
-	}
-	destination := filepath.Join(BinDir(), name)
-	if !pathguard.Within(HomeDir(), destination) {
-		return "", errors.New("installed executable must resolve inside STEERLINE_HOME")
-	}
-	if err := os.MkdirAll(BinDir(), 0700); err != nil {
-		return "", err
-	}
-	if canonicalPath(source) == canonicalPath(destination) {
-		return destination, nil
-	}
-	data, err := os.ReadFile(source)
-	if err != nil {
-		return "", err
-	}
-	if err := steerline.AtomicWrite(destination, data); err != nil {
-		return "", fmt.Errorf("install %s: %w (stop a running service using it first)", destination, err)
-	}
-	return destination, nil
+	return localservice.Install(HomeDir(), source, name)
 }
 
 func InstallSelf() (string, error) {

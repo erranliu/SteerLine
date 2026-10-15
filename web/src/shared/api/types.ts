@@ -229,3 +229,24 @@ export interface Activity {
     diagnostics: string[];
   };
 }
+
+export interface ApplicationIdentity {
+  protocol: string;
+  home_id: string;
+  instance_id: string;
+  ready: boolean;
+}
+export interface BrowserSession {
+  csrf_token: string;
+  identity: ApplicationIdentity;
+  diagnostic?: string;
+}
+export interface ConfiguredProject {
+  config_id: string;
+  name: string;
+  repository: string;
+  project_id?: string;
+  online: boolean;
+  conflict?: string;
+  diagnostic?: string;
+}

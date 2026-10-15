@@ -35,6 +35,12 @@
 
 首次启动/派发恢复/回答为真实浏览器业务提交；并行候选、停止参与和原生查看的映射由原协议定向检查及本次代码核对覆盖，未声称进行了 live 多候选或实际原生窗口验收。业务 worker/GitHub 使用受控模拟外部协议，Go/Web/Edge、持久请求及产品权威为真实实现；未执行真实模型或真实 GitHub PR 操作，未使用安装环境。真实桌面 IME 与原生窗口归 WEB-M1，仍待人工体验。
 
+## 已交付任务的首次启动提示回归（2026-10-15）
+
+WEB-A4：用户报告 `127.0.0.1:18743` 的任务 101 已交付却显示“首次启动条件未满足”。仅通过正式 `task show` 只读查询确认现场为 `status=closed`、`dependency_ready=false`、`startup_blockers=[task_not_open]`，有 PR #250 的交付记录（`merged_at=2026-10-15T02:39:40Z`）；未修改或重启安装环境，也未将其作为调试夹具。
+
+首次启动资格不适用于执行中或终态任务。任务图现只对 `open` 节点展示首次启动阻塞提示，保留原始任务状态和后端资格事实。新增 6 项隔离前端用例，覆盖与任务 101 相同的已交付快照、执行中、已放弃，以及 open 任务的依赖阻塞、派发阻塞和就绪状态。修复前 3 个非 open 用例失败；修复后 `npm --prefix web test` 为 5 个文件、32 项通过，`npm --prefix web run build`（TypeScript 与 Vite 生产构建）通过。未执行 Full、live 或浏览器交付闭环；本次修改仅为图节点提示投影，安装版仍需后续更新才能显示修复。
+
 ## PR 前质量审计与主干整合（2026-10-14）
 
 用户授权审计、直接修复并提 PR。整合主干 `fc4f1efd` 后，审计修复调用方修改原信封、重复存储观察堆积对账、离线/关闭/候选版本变化后的晚到资格提交，以及取消缺失查询仍补交的问题；final 分页新增游标/身份/范围保护，结束候选显示历史问题。
@@ -48,3 +54,11 @@
 完整 Edge `web.smoke` 通过：1 项、5.0 分钟、无重试、无 diagnostic continuation。实际覆盖本页上述原 ID 丢回执对账、中文草稿刷新、完整 final、原 session/execution/attempt 第四轮、交付/依赖解锁和离线重连；实际查看 DAG/执行宽窄截图，420px 无水平溢出，pageerror=0。证据为本包 `evidence/browser-run.log`、`evidence/browser/`，权威收尾事实为 `evidence/audit-closure-facts.json`：4 次 dispatch、原 Run delivered/completed、Task 1 closed、Task 2 open/dependency_ready；resume/start applied，answer accepted，状态原样登记。
 
 本包 stop-service 为 applied、process_exited=true、locks_released=true，wrapper 正常退出；记录 `evidence/audit-stop-service.json`、`evidence/audit-cleanup.json`，本包拥有的进程/18746 监听均为 0。其后仅补充验收记录及驱动超时说明，无实现变更。WEB-A1–A6 保持通过，WEB-M1 仍待人工；未扩展为 Full/live/远端验收。
+
+## 并行候选方案选择修复（2026-10-15）
+
+用户直接授权取消相同方案的参与限制。Web 新增候选先打开本次执行方案选择面板，确认时校验所选方案可用；默认方案不可用也可切换其他方案。服务及 SQLite 现有准入无方案去重限制，本次仅修改 Web 校验，保留五个参与候选上限和任务/派发资格。
+
+- WEB-A4 定向组件回归：`npm --prefix web test -- src/features/tasks/task-detail.test.tsx`，5 项通过，覆盖与已有候选相同方案、不同方案的提交与版本参数、不可用默认方案切换、五候选上限和首次启动。
+- Web 前端回归：`npm --prefix web test`，6 个文件、37 项通过；`npm --prefix web run build` 的 TypeScript 检查及生产构建通过。
+- 本次未运行真实浏览器、多候选 worker 或真实 PR 验收，既有浏览器证据仅代表其原有版本与覆盖范围。

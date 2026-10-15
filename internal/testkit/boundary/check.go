@@ -119,7 +119,7 @@ func consoleForbidden(pkg string) bool {
 }
 
 func httpConsumerPackage(pkg string) bool {
-	for _, suffix := range []string{"/internal/consoleapp", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs"} {
+	for _, suffix := range []string{"/internal/consoleapp", "/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs"} {
 		if pkg == module+suffix {
 			return true
 		}
@@ -495,7 +495,7 @@ func ScanSource(root string) (Report, error) {
 			report.Violations = append(report.Violations, "console production forbidden dependency: "+strings.Join(path, " -> "))
 		}
 	})
-	for _, suffix := range []string{"/internal/consoleapp", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs"} {
+	for _, suffix := range []string{"/internal/consoleapp", "/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs"} {
 		visitGraph(productionGraph, module+suffix, func(path []string) {
 			last := path[len(path)-1]
 			if !httpConsumerPackage(last) && consoleForbidden(last) {

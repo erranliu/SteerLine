@@ -2,7 +2,7 @@
 
 2026-10-14：用户已确认首期在本机浏览器使用，由 Go 服务提供页面，以后再支持远程访问；同时确认采用下列技术栈，首批交付本机浏览器接入、DAG 与执行页，并直接授权本聊天实现。工程位于独立的 [`web/`](../../web/README.md)，具体契约归 [Spec](../spec/web-frontend.spec.md)/[Plan](../spec/web-frontend.plan.md)，实际验证归[专属验收](../acceptance/web-frontend.md)。本文不创建 roadmap 任务，也不改变已有任务的范围或状态。
 
-2026-10-15 后续方案：用户要求先设计独立 Web 程序、统一浏览器端口、以当前项目为主体的切换与添加入口，见[项目管理方案](project-management.md)。项目准备由用户在外部 Codex 完成，Go 应用服务负责结构核验、纳管与建库，Web 只交互；TUI 不增加这套项目管理功能。下文同项目服务托管、按项目端口及实例会话描述仍是首批实现，不是多项目方案已经生效；本轮不修改代码、安装配置或原验收结论。
+2026-10-15：独立 Web 程序与已有项目切换由本次直接授权实施，当前进程与协议归[项目切换 Spec](../spec/web-project-switch.spec.md)，实际结果归[专属验收](../acceptance/web-project-switch.md)。Web 独立运行，通过 Go 应用服务取得当前 home 的配置目录并转接项目服务。后续[项目管理方案](project-management.md)中的准备、结构核验、纳管与建库仍未实现；TUI 不增加项目管理功能。
 
 分批规格已独立：[Web exe 与已有项目切换 Spec](../spec/web-project-switch.spec.md)/[Plan](../spec/web-project-switch.plan.md)先行，仅使用现有配置；[项目添加 Spec](../spec/project-onboarding.spec.md)/[Plan](../spec/project-onboarding.plan.md)后置，不成为切换功能的前置。
 
@@ -36,7 +36,7 @@
 
 现有 `httpapi.Server.ServeHTTP` 拒绝所有非空 Origin；协议要求读取受当前 Windows 用户保护的 discovery/credential 文件。浏览器不能直接复用 TUI 的文件发现与凭证读取，单纯增加 Vite proxy 不能构成正式浏览器认证方案。
 
-由同一 Go 服务提供独立浏览器 handler、静态页面和同源浏览器 API，复用既有 native HTTP 客户端与命令权威；TUI 的本机协议保持独立。该 handler 不建立第二个业务服务、数据库或调度器。
+`steerline-web.exe` 提供浏览器 handler、静态页面和同源 API；`steerline.exe serve-app` 拥有配置目录和受限项目路由，通过既有 native HTTP 客户端访问原项目服务。应用服务无项目数据库或调度器，Web、应用服务与项目服务分别正常停止。浏览器会话绑定 home/Web 实例，项目 URL 使用 `/projects/{id}/dag|runs|settings`，项目切换不改变原命令信封。
 
 浏览器入口遵循以下契约；路由、配置及实现细节归上述 Spec/Plan：
 
