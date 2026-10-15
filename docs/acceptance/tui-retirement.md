@@ -94,3 +94,28 @@ TUI 专属实现、入口、launcher、依赖和测试已删除；共享日志/H
 `runtime.installed-debug-isolation` 最终仍未通过，TR-A4 保持待验：`20261015T053353.711031300Z` 在末尾普通源码构建处撞到固定 10 分钟期限；调度优化试验 `20261015T054631.661511900Z` 在第二次服务窗口就绪等待时撞到同一期限，两次 cleanup_complete=true。未观察到这两处提前返回产品断言失败；超时本身仍是验证失败，不能据此证明全部隔离断言通过。调度试验没有改善结果，已撤回，原有顺序、期限和全部非 TUI 断言保留。本次没有为此重构隔离测试体系。
 
 其余 TR-A1/A2/A3/A5/A6 和 TR-A4 的 L1、定向 CLI/app/候选/数量 owner、controlled recovery、全部 E2E 编译均有上述通过证据。未执行 Full、真实模型/真实 PR、全部 L3 或原生 workspace 重跑；对应既有未验项保持未验。
+
+## 2026-10-15 PR 前审计
+
+审计本次完整差异，并接入主干 `317714e6`（原实现提交重放为 `11f0842f`）。主干双产品 build.bat、Web home ACL 修复、查询复用均保留；唯一架构文档冲突已合并双方最终语义。
+
+| 发现 | 修正与验证安排 |
+| --- | --- |
+| 原生工作区查询迁移在“无关任务启动”循环中重复 HTTP 查询，瞬时错误直接 Fatal；删除/重启后的查询只要求非空实例，没有与当前服务比对 | 两个必需查询等待 HTTP ready，并与已有当前快照的服务实例比对；保留原 run/execution/attempt 与项目/数据库检查；删除轮询中的重复查询。按 Plan 编译全部 E2E，真实原生场景仍未重跑 |
+| CM72 从 TUI 改为 HTTP 后漏掉 profile digest 非空断言，两端均空也可能通过 | 恢复非空检查；用原精确 CLI 测试复验请求/回执与服务保留 |
+| 原先通过证据基于旧主干，不能直接证明 Web 查询优化与 ACL 修复整合后的结果 | 新跑 L1、定向 owners、Web 单元/构建、全部 E2E 编译及新包真实 Edge；结果另行登记 |
+
+runtime 综合隔离的两个超时仍是未完成验证，保持 TR-A4 待验，PR 以草稿提交；没有把超时归因成已证实的产品回归，也没有借审计放宽期限或删除剩余断言。安装路径未操作。
+
+审计整合后的已完成复验（基于 `317714e6` + `11f0842f` + 审计修正）：
+
+- L1：`20261015T060421.786769900Z/summary.json`，passed=true / complete=true，271.1 秒执行时间。
+- Web 单元/构建：`C:/Users/lmas1/AppData/Local/Temp/steerline-web-check-20261015-140412-934/`，70 个前端测试全部通过；Web/HTTP owner 定向 runner `20261015T060526.274111400Z/summary.json` 通过。
+- CLI 原请求/回执、非空摘要与关闭连接保留服务：`20261015T060924.171584900Z/summary.json` 通过（98.53 秒）。
+- formatter/localservice/applicationclient/applicationhttp：`20261015T060924.226100300Z/summary.json` 通过（6.21 秒）。controlled 普通/recovery 首次发布与原 PR 复用、独立清理计时边界：`20261015T060924.226632400Z/summary.json` 通过，6 个测试、0 skip（19.14 秒）。
+- 全部 E2E 场景编译：`C:/Users/lmas1/AppData/Local/Temp/steerline-tui-retirement-review-e2e-compile.log` 通过。产品/测试完整依赖图：同临时目录 `steerline-tui-retirement-review-product-deps.log`、`steerline-tui-retirement-review-test-deps.log`，无退役 TUI 包及专属库。
+- 当前文档链接 424 份 / 2692 条 / 0 错误；整合差异检查通过。Web 真实 Edge 新包复验结果完成后补在下方，原运行隔离超时继续保留。
+
+- 整合后真实 Edge `web.smoke` 通过（9.1 分钟，1/1、0 retry）：`C:/SteerlineDebug/dev-20261015-141159-11f0842f-dirty/evidence/smoke.log`；browser-close.json 保留活动轮次关闭/重开原身份，反馈第 4 轮、原 PR 复用、交付与离线均通过。`smoke-cleanup.json` passed=true、browser_passed=true、processes=0、listeners=0、stop_errors=[]。
+
+补充验证安排：审计核对源码构建子检查通过 Git clone 绑定 HEAD，前次 dirty 工作树的该子检查仍取旧提交。先提交审计修正和此安排，再保持工作树干净，对实际 PR 提交执行一次原 runtime 综合隔离（期限与断言均不变）；结果随后补记，旧超时不改写为通过。是否将草稿转为可评审由该次实际结果决定。

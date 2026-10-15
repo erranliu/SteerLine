@@ -4,6 +4,8 @@
 
 调查代码基线 `47fafc12721ceb8fa39ba1ab227872fd14513bcb`。已读 `AGENTS.md`、`docs/spec/SpecGuide.md` 全文（SHA256 `85b656090674e1f953320b6be62d17b6888248ef7eec5fe044b9d3f408bfe4de`）、`tests/e2e/README.md`、`docs/testing.md`，核对现有 Web Spec/Plan/实现和 worker 生命周期的所有权及验证约束。本任务不改变 worker 节点/异常/恢复，统一规则继续链接[原文](../product-design/worker-lifecycle.md)，不复制矩阵。
 
+2026-10-15 审计交付接入主干 `317714e6`，保留已合入的双产品批处理构建、Web home 权限修复和查询复用。原基线证据继续绑定原版本；整合后补跑下文的最小检查，不把旧结果重新标为新基线通过。
+
 ## 1. 整合与前置
 
 现有独立 Web、Go 应用目录、项目路由和模拟调试能力已经在本基线实现，直接消费它们；项目添加/纳管不作为本批前置。本次顺序为迁出共用代码、删除专属客户端、调整启动/测试、最小验证。不新建 bridge 或第二套状态。后续任何仍按旧路径实现的改动须采用本次删除后的 owner；不保留空包给并行开发兼容。
@@ -35,7 +37,7 @@
 | `internal/app/tui_http_boundary_test.go`、`client_boundary_test.go`、`internal/product/httpclient/capability_boundary_test.go`、`internal/testkit/boundary`、CD67/runner 反例 | 删除 Console/consoleapp 的规则与负例；HTTP consumer、application/localservice/projectconnection 的无 backend/SQLite 依赖等约束保留。移除单独 go list 已删除包的 Windows/Linux 闭包扫描，保留其余跨平台检查 |
 | `tests/e2e/internal/driver/tui_http_test.go`、`scripts/test-tui-http.ps1` | 删除整个 TUI runtime 入口；原请求/交付/final 等仍有效要求由当前 HTTP/Web 与业务场景承担，在验收记录列出覆盖归属 |
 | `testenv/recovery.go` 的 AssertRecoveryConsole、`suites/recovery/disconnect_test.go` | 删除 u 键/弹层和截图；driver 增加窄公共 HTTP recovery 查询，带原 run/execution/attempt，testenv 只消费 DTO。用 WaitRecovery 已核验的原快照作查询前证据，查询后经 driver 读取同一业务域快照，避免重复 CLI 枚举；保留两次检查前后业务不变、缺 thread 不给继续资格及原失败事实；复用 recovery.failure-results 场景；暴露既有 FinishBody 期限边界，在最后业务断言后冻结，正常停服作为独立收尾，不放宽业务期限 |
-| `suites/nativeworkspace/removal_restart_test.go` | 删除重开 TUI；在删除后/重启后用现有基础 HTTP 查询补齐客户端可读及项目/数据库/原执行身份断言，保留真实工作区删除与无关任务启动的场景 ID |
+| `suites/nativeworkspace/removal_restart_test.go` | 删除重开 TUI；在删除后/重启后等待基础 HTTP 查询就绪，核对项目/数据库/原执行及当前服务实例；无关任务启动轮询复用原快照检查，不叠加重复 HTTP 查询。保留真实工作区删除与无关任务启动的场景 ID |
 | `suites/runtime/installed_debug_isolation_test.go`、`scripts/test-debug-runtime-isolation.ps1`、`scripts/debug-runtime.ps1` | 删除 TUI 批处理/ConPTY 和 ui/views 专属断言；保留源码/模拟安装 home 隔离、服务/CLI、链接越界、过期实例与跨 home 锁反例。launcher 文件反例改用仍有效的 service-window/Web 文件；场景内“安装版”仍用隔离夹具 |
 | `testenv/console_windows*`、`console_other.go`、ConPTY helper 测试 | 消费者替换后复核：仅服务 TUI 的按键/退出驱动删除；通用可见服务窗口、Job/process 及原生工具能力保留，不按文件名批量删除 |
 
@@ -62,3 +64,17 @@
 ## 4. 交付与当前文档检查
 
 实施交付时逐项登记 TR-A1～TR-A6，列出保留测试的迁入位置、删除理由及未执行边界。只对实际删除的 TUI 专属验收注明退役，保留历史通过/失败事实。规划时仅建立 Spec、Plan、专属验收及导航；实施时同步当前 README/架构并执行上述验收，文档静态检查不代替产品验收。
+
+## 5. PR 前审计复验安排
+
+对应 [TR-A1/A2/A4/A5/A6](../acceptance/tui-retirement.md#验收项)，接入 `317714e6` 并修复审计发现后执行：
+
+| 范围 | 命令、环境与时点 | 通过条件与证据位置 |
+| --- | --- | --- |
+| TR-A1/A2/A4，固定 L1 | `go run ./cmd/test-feedback -level=L1`；当前审计代码、隔离临时夹具 | runner passed/complete，边界与 owner 实际命中；summary 写 acceptance |
+| TR-A2/A4，CLI 原回执与共享 formatter/HTTP 进程实例 | `go run ./cmd/test-feedback -- ./cmd/steerline -run '^TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs$' -count=1`；以及 formatter/localservice/applicationclient/applicationhttp、controlled helper、deadline 的原有最小 owner 用例 | 恢复非空摘要断言后 CLI/HTTP 原请求与连接关闭不停止服务通过；原 owner 通过，记录精确命令和 runner summary |
+| TR-A4，原生 workspace 仅编译 | `go test -tags=e2e ./tests/e2e/... -run '^$'`；HTTP 就绪/实例核验调整后 | 全部 E2E 场景编译，保留“未重跑真实 Orca 工作区”限制；编译日志与场景通过分开登记 |
+| TR-A2/A5，Web | `./scripts/test-web.ps1`；随后 `./scripts/test-web-smoke.ps1 -WebAddress 127.0.0.1:19748` 创建新 simulate 包，串行真实 Edge | 最新主干整合后的 Web 单元/构建与 smoke 通过、关闭浏览器后原执行保持、收尾进程/监听 0；新包日志/trace/cleanup 写 acceptance |
+| TR-A6，文档与差异 | `python scripts/check_doc_links.py`、`git diff --check`；最终文档完成后 | 0 错误，记录范围；旧失败与待验不改为通过 |
+
+runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前次仅有 dirty 工作树时，该子检查仍绑定旧 HEAD；本轮先提交已审计代码与安排，保持工作树干净，再用 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled '-scenario=runtime.installed-debug-isolation'` 对实际 PR 提交执行一次验证，所有夹具仍为临时 home，保留原 10 分钟期限和全部非 TUI 断言。新 runner summary/scenario/cleanup 写入专属验收，旧失败保留。该项仍未通过时以草稿 PR 明确列为待验，不凭其他检查代替通过。

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 	"github.com/google/uuid"
@@ -52,8 +53,15 @@ func TestOrcaRemovalRestart(t *testing.T) {
 		if identity.ProjectID != before.Page.ProjectID || identity.DatabaseID != before.Page.DatabaseID {
 			t.Fatal("native cleanup changed authoritative project/database identity")
 		}
-		public, err := driver.ReadHTTPProject(s.Context, filepath.Dir(p.Database), before.Domain.ProjectIdentity, "")
-		s.Must(err)
+		var public api.ProjectSnapshot
+		s.Wait("HTTP query "+label, func() (bool, error) {
+			var err error
+			public, err = driver.ReadHTTPProject(s.Context, filepath.Dir(p.Database), before.Domain.ProjectIdentity, "")
+			if err != nil {
+				return false, err
+			}
+			return public.Connection.Snapshot.Page != nil && public.Connection.Snapshot.Page.Service.Ready, nil
+		})
 		if public.NativeTasks == nil || public.NativeTasks.ProjectID != before.Page.ProjectID || public.NativeTasks.DatabaseID != before.Page.DatabaseID || public.Connection.Snapshot.Page == nil || public.Connection.Snapshot.Page.Service.InstanceID == "" {
 			t.Fatal("HTTP query lost project/database/service identity")
 		}
@@ -69,6 +77,9 @@ func TestOrcaRemovalRestart(t *testing.T) {
 		}
 		snapshot, err := p.Snapshot()
 		s.Must(err)
+		if snapshot.Runtime == nil || public.Connection.Snapshot.Page.Service.InstanceID != snapshot.Runtime.Service.InstanceID {
+			t.Fatal("HTTP query does not belong to the current project service instance")
+		}
 		p.Record(label, snapshot)
 		ready := false
 		for _, task := range snapshot.Page.Tasks {
@@ -89,11 +100,6 @@ func TestOrcaRemovalRestart(t *testing.T) {
 	query("after-restart")
 	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "start_task", p.Tasks["c"].ID))
 	s.Wait("unrelated task starts after native cleanup", func() (bool, error) {
-		public, err := driver.ReadHTTPProject(s.Context, filepath.Dir(p.Database), before.Domain.ProjectIdentity, "")
-		s.Must(err)
-		if public.NativeTasks == nil || public.NativeTasks.ProjectID != before.Page.ProjectID || public.NativeTasks.DatabaseID != before.Page.DatabaseID || public.Connection.Snapshot.Page == nil || public.Connection.Snapshot.Page.Service.InstanceID == "" {
-			t.Fatal("HTTP query lost project/database/service identity")
-		}
 		snapshot, err := p.Snapshot()
 		if err != nil {
 			return false, err

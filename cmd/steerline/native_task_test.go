@@ -304,7 +304,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			}
 			cliProfile := client.Project().Presentation
 			profiles := presentation.Presentation.Profiles
-			if len(profiles) == 0 || len(profiles) != len(cliProfile.Profiles) || profiles[0].Digest != cliProfile.Profiles[0].Digest || presentation.Presentation.ConfigDigest != c.LoadedConfigDigest() {
+			if len(profiles) == 0 || len(profiles) != len(cliProfile.Profiles) || profiles[0].Digest == "" || profiles[0].Digest != cliProfile.Profiles[0].Digest || presentation.Presentation.ConfigDigest != c.LoadedConfigDigest() {
 				t.Fatal("CLI and HTTP adopted different accepted profiles")
 			}
 			if result, err := httpClient.Command(context.Background(), id); err != nil || result.Status != "outcome_unknown" || result.RequestID != id || result.ControlReceipt == nil || result.ControlReceipt.Status != "indeterminate" || result.ControlReceipt.RequestID != id {
