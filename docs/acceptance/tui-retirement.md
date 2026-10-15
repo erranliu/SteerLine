@@ -204,3 +204,5 @@ PR #327 创建后主干合入统一多项目启动（0228e51d）。前述55a3445
 统一宿主首轮 `20261015T074903.398462100Z` 未通过：构建163.42秒、双home201.34秒通过；服务测试把停机结果的目录项目ID与数据库身份比较，路径测试把DefaultState.json写入etc造成重复配置。服务失败现场另报owned exe短暂Access denied，保留原清理失败；不计为全部隔离通过。修正为正确身份映射、反例配置置于项目root，服务测试只读共享runner程序，不再重复安装自己的exe。
 
 同轮新包根 `C:/SteerlineDebug/中文 verification-000c5400108a4799ae9f308bd5be0a30` 失败：旧Go测试Job包装使detached产品仍在kill-on-close Job，产品在打开资源前正确拒绝；端口冲突后的fresh包尚无DB，reset误将缺失状态目录当成锁冲突。修正测试脚本采用已有浏览器驱动相同WMI独立现场，保留产品Job拒绝规则；fresh reset不建库且仍验证活动锁。新fresh reset定向回归 `20261015T075649.027992200Z/summary.json` 通过。失败包不改方案、不复用，以下重新生成并执行。
+
+第二轮新包根 `中文 verification-7c010ba5b0cf48c8bca97854d61b2c4a`：WebProjects通过92.55秒，Runtime在宿主API已ready但种子尚未写入时读到0任务而失败。旧就绪判断过早，已改为匹配包owner/ready token，并为失败路径补正式stop后再关闭Job的收尾。失败包的单/双项目已通过各自helper debug stop正常停止，不复用；重新生成验证。

@@ -6,6 +6,8 @@
 
 2026-10-15 审计交付接入主干 `317714e6`，保留已合入的双产品批处理构建、Web home 权限修复和查询复用。原基线证据继续绑定原版本；整合后补跑下文的最小检查，不把旧结果重新标为新基线通过。
 
+第1～3节保留已合并的原TUI退役实施安排；本次独立隔离重构以第4～5节为准，与统一启动冲突的旧入口由第5节替换。
+
 ## 1. 整合与前置
 
 现有独立 Web、Go 应用目录、项目路由和模拟调试能力已经在本基线实现，直接消费它们；项目添加/纳管不作为本批前置。本次顺序为迁出共用代码、删除专属客户端、调整启动/测试、最小验证。不新建 bridge 或第二套状态。后续任何仍按旧路径实现的改动须采用本次删除后的 owner；不保留空包给并行开发兼容。
@@ -113,3 +115,7 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 统一宿主补验暴露的必要夹具修正：配置反例写到各项目 root，不进入宿主扫描的 etc；测试分别核对目录项目ID与原生数据库身份。调试包尚无数据库时 reset 是不建库的空操作，但仍必须取得现有宿主/仓库/launcher锁，不能绕过活动进程。新增最小回归 `TestDebugResetBeforeInitializationKeepsFreshPackageAndHonorsHostLock`，命令 `go run ./cmd/test-feedback -- ./tests/e2e/internal/driver -run '^TestDebugResetBeforeInitializationKeepsFreshPackageAndHonorsHostLock$' -count=1`，映射TR-A3，验证后记录summary。
 
 当前产品拒绝仍在 kill-on-close Job 内的 detached 常驻进程。生成包测试脚本采用现有浏览器驱动的 WMI 独立进程方式作为自身原生启动现场，脚本内依然调用同一生成器、原启动/停止流程和断言；不修改产品Job守卫、不放宽期限、不以低层serve替换该项双产品启动。内部 IndependentProcess 参数仅防止脚本自递归，入口仍为 scripts/test-debug-release.ps1；证据保存外层broker日志/result和新包generation-test/runtime-test。controlled不传认证，PATH/显式CODEX_HOME路径传递不写token。
+
+统一宿主独立场景不再消费旧service-window测试适配，删除 testenv 中无消费者的可见服务窗口/停服回执分支及字段；通用 testkit Process/Job 能力保持。只删除未调用分支与未使用输出，普通 StartHost/StopService 路径保持，编译检查验证剩余消费者。
+
+生成包就绪须核对 runtime-launcher 的owner/ready匹配token；该token在两项目种子任务创建后才发布，不以宿主/项目API就绪冒充夹具初始化完成。Go运行测试的defer先调用本home正式stop并核实结果，再停止其Job内Git/helper；失败同样不能遗留已脱离Job的双产品。该变更仍由TR-A3的全新生成包单/双项目场景验收。
