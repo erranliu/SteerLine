@@ -9,6 +9,8 @@ import (
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -30,7 +32,7 @@ type Controls struct {
 
 func (c Controls) Handle(ctx context.Context, req api.ControlRequest, instance string, revision uint64) (api.ControlReceipt, error) {
 	now := time.Now().UTC()
-	receipt := api.ControlReceipt{Version: 1, RequestID: req.RequestID, RequestDigest: RequestDigest(req), InstanceID: instance, Action: req.Action, Status: "rejected", RequestedBy: req.RequestedBy, SubmittedAt: req.CreatedAt, CompletedAt: &now, ControlRevision: revision}
+	receipt := api.ControlReceipt{Version: 1, RequestID: req.RequestID, RequestDigest: RequestDigest(req), InstanceID: req.InstanceID, Action: req.Action, Status: "rejected", RequestedBy: req.RequestedBy, SubmittedAt: req.CreatedAt, CompletedAt: &now, ControlRevision: revision}
 	if c.Tasks == nil || c.Store == nil || c.ResolveProfile == nil {
 		return receipt, errors.New("task controls are not composed")
 	}
@@ -75,6 +77,18 @@ func (c Controls) Handle(ctx context.Context, req api.ControlRequest, instance s
 			receipt.RunID = candidate.ID
 			receipt.RunRevision = candidate.Revision
 			return c.finish(ctx, old, receipt)
+		}
+	}
+	if found && (req.Action == "runner_reply" || req.Action == "runner_resume") {
+		if candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID); err == nil {
+			for _, action := range candidate.Actions {
+				if action.Request.RequestID == "sl-input-"+req.RequestID {
+					receipt.Status = "applied"
+					receipt.RunID = candidate.ID
+					receipt.RunRevision = candidate.Revision
+					return c.finish(ctx, old, receipt)
+				}
+			}
 		}
 	}
 	if found && (req.Action == "set_dispatch_mode" || req.Action == "pause_dispatch" || req.Action == "resume_dispatch") {
@@ -126,6 +140,42 @@ func (c Controls) finish(ctx context.Context, command ports.CommandRecord, recei
 }
 func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api.ControlPayload, receipt *api.ControlReceipt) error {
 	switch req.Action {
+	case "runner_reply", "runner_resume":
+		candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID)
+		if err != nil {
+			return err
+		}
+		if candidate.Revision != payload.ExpectedRunRevision {
+			return failure("stale_version", "candidate changed before explicit input")
+		}
+		command := "reply"
+		if req.Action == "runner_resume" {
+			command = "resume"
+		}
+		body := json.RawMessage(*payload.RunnerInput)
+		if payload.CallerAnswer != nil {
+			if payload.CallerAnswer.ServiceInstanceID != req.InstanceID || payload.CallerAnswer.AnsweredBy != req.RequestedBy {
+				return failure("invalid_request", "answer belongs to another service or requester")
+			}
+			want, fixed, err := InputForAnswer(candidate, *payload.CallerAnswer)
+			if err != nil {
+				return err
+			}
+			var actualValue, fixedValue any
+			if json.Unmarshal(body, &actualValue) != nil || json.Unmarshal(fixed, &fixedValue) != nil || want != command || digest(actualValue) != digest(fixedValue) {
+				return failure("invalid_request", "public Runner input differs from the original answer")
+			}
+		}
+		err = c.Tasks.Bridge.QueueControl(ctx, c.Tasks.Project, candidate.ID, command, runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "sl-input-" + req.RequestID, Input: body})
+		var validation *runnerbridge.InputError
+		if errors.As(err, &validation) {
+			return failure(validation.Code, validation.Message)
+		}
+		if err == nil {
+			receipt.RunID = candidate.ID
+			receipt.Message = "explicit input saved; native acceptance is observed separately"
+		}
+		return err
 	case "start_task", "start_candidate":
 		if payload.ExpectedTaskVersion == 0 {
 			return failure("invalid_request", "start requires the displayed task version")
@@ -134,7 +184,7 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 		if err != nil {
 			return err
 		}
-		if req.Action == "start_candidate" {
+		{
 			if original, err := c.Store.Candidate(ctx, c.Tasks.Project, req.RequestID); err != nil || original.TaskID != payload.TaskID {
 				graph, err := c.Store.TaskGraphSnapshot(ctx, c.Tasks.Project)
 				if err != nil {

@@ -38,8 +38,7 @@ func preflightNativeStatePath(c Config) error {
 		{"control receipts", filepath.Join(c.RunDir, "control", "receipts")},
 		{"service root", filepath.Join(c.RunDir, "service")},
 		{"service startups", filepath.Join(c.RunDir, "service", "startups")},
-		{"run directories", filepath.Join(c.RunDir, "runs")},
-		{"worktrees", filepath.Join(c.RunDir, "worktrees")},
+		{"Runner state", filepath.Join(c.RunDir, "runner")},
 	} {
 		if err := ensureNativePathWithin(c.RunDir, entry.path, entry.name); err != nil {
 			return err
@@ -181,21 +180,13 @@ func ensureNativeStateFilesAllowed(runDir string, worktreeMetadata []string) err
 			if err := validateNativeServiceTree(runDir, ""); err != nil {
 				return err
 			}
-		case "local-api":
+		case "local-api", "runner":
 			info, statErr := os.Lstat(entryPath)
 			if statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-				return nativeErr("authority_mismatch", "local API state must be an existing directory inside native run_dir")
+				return nativeErr("authority_mismatch", entry.Name()+" state must be a plain directory inside native run_dir")
 			}
 		case "control":
 			if err := validateNativeControlTree(runDir); err != nil {
-				return err
-			}
-		case "runs", "worktrees":
-			var metadata []string
-			if entry.Name() == "worktrees" {
-				metadata = worktreeMetadata
-			}
-			if err := validateNativeRunDirectories(filepath.Join(runDir, entry.Name()), metadata); err != nil {
 				return err
 			}
 		default:

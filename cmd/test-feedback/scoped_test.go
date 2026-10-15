@@ -98,20 +98,13 @@ func TestQuickGroupsBoundConcurrencyAndPreserveReportOrder(t *testing.T) {
 	}
 }
 
-func TestQuickIntegrationSelectionKeepsClaimAndGuardsWithoutLongFlows(t *testing.T) {
-	parts := strings.Split(quickBoundaryPattern(), "/")
-	top, sub := regexp.MustCompile(parts[0]), regexp.MustCompile(parts[1])
-	for _, name := range quickBoundaryAssigned {
-		levels := strings.Split(name, "/")
-		if !top.MatchString(levels[0]) || (len(levels) > 1 && !sub.MatchString(levels[1])) {
-			t.Fatalf("required coverage excluded: %s", name)
-		}
+func TestQuickIntegrationSelectionKeepsPublicRunnerBoundary(t *testing.T) {
+	pattern := quickBoundaryPattern()
+	if matched, _ := regexp.MatchString(pattern, "TestRunnerExecutionBoundary"); !matched {
+		t.Fatal("public CLI boundary was omitted", pattern)
 	}
-	for _, name := range []string{"TestTM04ExecutionWiring/intent_binding_and_two_original_turns", "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery", "TestCD66FixedProfileRecovery/changed_config_keeps_native_original_identity_and_manual_gate", "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer"} {
-		levels := strings.Split(name, "/")
-		if top.MatchString(levels[0]) && sub.MatchString(levels[1]) {
-			t.Fatalf("long flow still selected: %s", name)
-		}
+	if len(quickBoundaryAssigned) != 3 || quickBoundaryAssigned[0] != "TestRunnerExecutionBoundary" {
+		t.Fatal("stale execution owner assignments", quickBoundaryAssigned)
 	}
 }
 
@@ -349,9 +342,9 @@ func TestQuickBoundaryCoverageRequiresEachAssignedEntry(t *testing.T) {
 		wantFailure   bool
 	}{
 		{name: "complete"},
-		{name: "missing_parent", omitted: "TestCD67CoreBoundary", wantFailure: true},
-		{name: "missing_claim_transaction", omitted: "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt", wantFailure: true},
-		{name: "missing_storage_wiring", omitted: "TestTM07StorageWiring", wantFailure: true},
+		{name: "missing_parent", omitted: "TestRunnerExecutionBoundary", wantFailure: true},
+		{name: "missing_windows_closure", omitted: "TestRunnerExecutionBoundary/windows", wantFailure: true},
+		{name: "missing_linux_closure", omitted: "TestRunnerExecutionBoundary/linux", wantFailure: true},
 		{name: "duplicate", duplicate: true, wantFailure: true},
 		{name: "unexpected_recovery", unexpected: true, wantFailure: true},
 	} {

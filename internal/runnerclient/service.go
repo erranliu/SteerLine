@@ -67,6 +67,11 @@ func (c Client) StopService(ctx context.Context, instance, requestID string) err
 	request := Request{Protocol: Protocol, RequestID: requestID, Input: body}
 	_, stopErr := c.Call(ctx, "service stop", nil, &request)
 	for {
+		if c.SHA256 != "" {
+			if err := VerifyExecutable(c.Executable, c.SHA256); err != nil {
+				return errors.Join(errors.New("Runner shutdown remains unverified; selected executable is unavailable"), stopErr, err)
+			}
+		}
 		info, err := c.ServiceStatus(ctx)
 		if err == nil && info.Status == "not_running" {
 			return nil

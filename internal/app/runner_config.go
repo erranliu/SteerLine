@@ -89,6 +89,10 @@ func (g RunnerExecutionConfig) startRunner(ctx context.Context, runDir string, t
 	if err != nil {
 		return cli, runnerclient.ServiceInfo{}, err
 	}
+	before, err := cli.ServiceStatus(ctx)
+	if err != nil {
+		return cli, runnerclient.ServiceInfo{}, err
+	}
 	info, err := cli.StartService(ctx, version)
 	if err != nil {
 		return cli, info, err
@@ -108,6 +112,11 @@ func (g RunnerExecutionConfig) startRunner(ctx context.Context, runDir string, t
 				break
 			}
 		}
+	}
+	if err != nil && before.Status == "not_running" {
+		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		err = errors.Join(err, cli.StopService(cleanup, info.InstanceID, "sl-startup-rejected-"+info.InstanceID))
 	}
 	return cli, info, err
 }

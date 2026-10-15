@@ -33,7 +33,7 @@ func (a *stoppingActor) TickTask(ctx context.Context, _ context.CancelFunc) erro
 	return errors.Join(ctx.Err(), a.failure)
 }
 
-func (a *stoppingActor) EndActor(stop *productapi.ControlRequest, _ *time.Time, prior error) error {
+func (a *stoppingActor) EndActor(stop *productapi.ControlRequest, _ *time.Time, _ string, prior error) error {
 	a.ended, a.prior, a.stop = true, prior, stop
 	return prior
 }
@@ -85,7 +85,7 @@ func (*lifecycleActor) TickTask(context.Context, context.CancelFunc) error    { 
 func (*lifecycleActor) TickControl(context.Context, context.CancelFunc) error { return nil }
 func (*lifecycleActor) TickPR(context.Context) error                          { return nil }
 func (*lifecycleActor) Heartbeat() error                                      { return nil }
-func (a *lifecycleActor) EndActor(*productapi.ControlRequest, *time.Time, error) error {
+func (a *lifecycleActor) EndActor(*productapi.ControlRequest, *time.Time, string, error) error {
 	a.ended = true
 	return nil
 }

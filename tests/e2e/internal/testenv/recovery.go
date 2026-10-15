@@ -211,7 +211,7 @@ func (p *Project) AssertRecoveryConsole() {
 }
 
 func (p *Project) AssertOneDelivery(snap Snapshot) {
-	if len(snap.Domain.Deliveries) != 1 || snap.Domain.WorkflowRuns[0].Status != "completed" {
+	if len(snap.Runner.Graph.Deliveries) != 1 || len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].Participation != "completed" {
 		p.Scenario.t.Fatal("recovery did not produce one merged delivery")
 	}
 	for _, task := range snap.Page.Tasks {

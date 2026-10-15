@@ -132,7 +132,7 @@ function CandidateDetail({ run }: { run: Candidate }) {
     snapshot?.connection.snapshot.page?.runs ?? [],
   );
   const canOpen =
-    online && !!run.session_id && !!run.session_generation && !!run.attempt_id;
+    online && caps.includes("open_native_session") && !!run.session_id && !!run.session_generation && !!run.attempt_id;
   return (
     <>
       <div className="candidate-heading">

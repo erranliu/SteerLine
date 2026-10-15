@@ -10,49 +10,20 @@ import (
 	"errors"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"sync"
 	"time"
 )
 
-type Action struct {
-	ObserveOnly  bool                 `json:"observe_only,omitempty"`
-	Command      string               `json:"command"`
-	Request      runnerclient.Request `json:"request"`
-	State        string               `json:"state"`
-	CommandID    string               `json:"command_id,omitempty"`
-	ErrorCode    string               `json:"error_code,omitempty"`
-	ActionStatus string               `json:"action_status,omitempty"`
-}
-type Candidate struct {
-	StartDigest     string               `json:"start_digest"`
-	ProfileID       string               `json:"profile_id"`
-	CreatedAt       time.Time            `json:"created_at"`
-	Explicit        bool                 `json:"explicit"`
-	Number          int                  `json:"number"`
-	Project         string               `json:"project"`
-	TaskID          string               `json:"task_id"`
-	Claimant        string               `json:"claimant"`
-	ContractDigest  string               `json:"contract_digest"`
-	BaseRevision    string               `json:"base_revision"`
-	Participation   string               `json:"participation"`
-	ID              string               `json:"id"`
-	Revision        uint64               `json:"revision"`
-	StateDir        string               `json:"state_dir"`
-	Submit          runnerclient.Request `json:"submit"`
-	SubmitState     string               `json:"submit_state"`
-	SubmitCommandID string               `json:"submit_command_id,omitempty"`
-	RunID           string               `json:"run_id,omitempty"`
-	InputDigest     string               `json:"input_digest,omitempty"`
-	Branch          string               `json:"branch,omitempty"`
-	PRURL           string               `json:"pr_url,omitempty"`
-	Cursor          string               `json:"cursor,omitempty"`
-	Projection      *runnerclient.Run    `json:"projection,omitempty"`
-	StopRequested   bool                 `json:"stop_requested"`
-	InputsRevoked   bool                 `json:"inputs_revoked"`
-	Stop            *Action              `json:"stop,omitempty"`
-	Actions         []Action             `json:"actions,omitempty"`
-	Diagnostic      string               `json:"diagnostic,omitempty"`
-}
+type Action = runnerstate.Action
+
+type InputError struct{ Code, Message string }
+
+func (e *InputError) Error() string         { return e.Code + ": " + e.Message }
+func inputError(code, message string) error { return &InputError{Code: code, Message: message} }
+
+type Candidate = runnerstate.Candidate
+
 type Store interface {
 	Candidate(context.Context, string, string) (Candidate, error)
 	// Save must atomically CAS the association, projection, event IDs and cursor.
@@ -158,7 +129,7 @@ func (b *Bridge) Step(ctx context.Context, project, id string) error {
 				var failure *runnerclient.Failure
 				if errors.As(submitErr, &failure) && !failure.Unknown {
 					c.SubmitState = "rejected"
-					c.Diagnostic = failure.Code
+					c.Diagnostic = failure.Code + ": " + failure.Message
 					if err := b.save(ctx, &c); err != nil {
 						return err
 					}
@@ -202,6 +173,16 @@ func (b *Bridge) Step(ctx context.Context, project, id string) error {
 	}
 	for i := range c.Actions {
 		action := &c.Actions[i]
+		if action.State == "accepted" && action.ActionStatus != "completed" && action.ActionStatus != "failed" && action.ActionStatus != "rejected" && action.ActionStatus != "cancelled" {
+			observed, err := cli.Inspect(ctx, "request-id", action.Request.RequestID, false)
+			if err != nil {
+				return err
+			}
+			if observed.Command == nil || observed.Command.Command != action.Command || observed.Command.RunID == nil || *observed.Command.RunID != c.RunID || observed.Command.CommandID != action.CommandID {
+				return errors.New("accepted input identity changed during observation")
+			}
+			action.ActionStatus = observed.Command.ActionStatus
+		}
 		if c.StopRequested && action.State == "pending" {
 			action.State = "cancelled"
 			continue
@@ -329,7 +310,7 @@ func (b *Bridge) deliver(ctx context.Context, cli CLI, c *Candidate, action *Act
 // cross the process boundary. Restarting Step never manufactures these inputs.
 func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, request runnerclient.Request) error {
 	if command != "reply" && command != "resume" {
-		return errors.New("unsupported candidate control")
+		return inputError("invalid_request", "unsupported candidate control")
 	}
 	entry, _ := b.locks.LoadOrStore(project+"\x00"+id, &sync.Mutex{})
 	gate := entry.(*sync.Mutex)
@@ -339,37 +320,48 @@ func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, 
 	if err != nil {
 		return err
 	}
-	if c.StopRequested || c.RunID == "" || c.Projection == nil {
-		return errors.New("candidate cannot accept new user input")
-	}
-	if request.Protocol != runnerclient.Protocol || request.RequestID == "" || !json.Valid(request.Input) {
-		return errors.New("invalid frozen control request")
-	}
-	var revision struct {
-		Expected uint64 `json:"expected_revision"`
-	}
-	if json.Unmarshal(request.Input, &revision) != nil || revision.Expected != c.Projection.Revision {
-		return errors.New("control requires the current observed Run revision")
-	}
 	for _, action := range c.Actions {
 		if action.Request.RequestID == request.RequestID {
 			if action.Command == command && string(action.Request.Input) == string(request.Input) {
 				return nil
 			}
-			return errors.New("control request identity conflict")
+			return inputError("idempotency_conflict", "control request identity conflict")
 		}
+	}
+	if c.StopRequested || c.RunID == "" || c.Projection == nil {
+		return inputError("candidate_inactive", "candidate cannot accept new user input")
+	}
+	if request.Protocol != runnerclient.Protocol || request.RequestID == "" || !json.Valid(request.Input) {
+		return inputError("invalid_request", "invalid frozen control request")
+	}
+	var revision struct {
+		Expected uint64 `json:"expected_revision"`
+	}
+	if json.Unmarshal(request.Input, &revision) != nil || revision.Expected != c.Projection.Revision {
+		return inputError("stale_version", "control requires the current observed Run revision")
+	}
+	for _, action := range c.Actions {
 		if action.State == "pending" || action.State == "unknown" {
-			return errors.New("an original control still requires reconciliation")
+			return inputError("input_reconciliation_required", "an original control still requires reconciliation")
 		}
 	}
 	if command == "resume" && !c.Projection.Controls.CanResume || command == "reply" && !c.Projection.Controls.CanReply {
-		return errors.New("current Run does not permit this control")
+		return inputError("candidate_inactive", "current Run does not permit this control")
 	}
 	c.Actions = append(c.Actions, Action{Command: command, Request: request, State: "pending"})
 	return b.save(ctx, &c)
 }
 
 func (b *Bridge) RefreshPR(ctx context.Context, project, id string) (Candidate, time.Time, error) {
+	return b.refreshPR(ctx, project, id, true)
+}
+
+// ObservePR is an explicit read-only provider refresh, including a withdrawn
+// candidate. It grants no delivery participation or native input authority.
+func (b *Bridge) ObservePR(ctx context.Context, project, id string) (Candidate, time.Time, error) {
+	return b.refreshPR(ctx, project, id, false)
+}
+func (b *Bridge) refreshPR(ctx context.Context, project, id string, delivery bool) (Candidate, time.Time, error) {
 	entry, _ := b.locks.LoadOrStore(project+"\x00"+id, &sync.Mutex{})
 	gate := entry.(*sync.Mutex)
 	gate.Lock()
@@ -378,7 +370,7 @@ func (b *Bridge) RefreshPR(ctx context.Context, project, id string) (Candidate, 
 	if err != nil {
 		return c, time.Time{}, err
 	}
-	if c.RunID == "" || c.StopRequested || c.Participation != "active" {
+	if c.RunID == "" || delivery && (c.StopRequested || c.Participation != "active") {
 		return c, time.Time{}, errors.New("candidate cannot verify a new delivery")
 	}
 	started := time.Now().UTC()

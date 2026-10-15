@@ -32,6 +32,11 @@ function Is-Within([string]$Parent, [string]$Child) {
 }
 
 $runnerSource = $null
+if (-not $SteerRunnerExe) {
+    $runnerCommand = Get-Command steerrunner.exe -ErrorAction SilentlyContinue
+    if (-not $runnerCommand) { throw 'Select a released Runner with -SteerRunnerExe <absolute exe>' }
+    $SteerRunnerExe = $runnerCommand.Source
+}
 if ($SteerRunnerExe) {
     if (-not [IO.Path]::IsPathRooted($SteerRunnerExe)) { throw 'SteerRunnerExe must be absolute' }
     $SteerRunnerExe = [IO.Path]::GetFullPath($SteerRunnerExe)
@@ -106,7 +111,7 @@ try {
         $relative = $item.FullName.Substring($template.Length + 1)
         $templateHashes[$relative] = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         $output = Join-Path $target $relative
-        $content = [IO.File]::ReadAllText($output).Replace('__ROOT__', $rootText).Replace('__BASE__', $baseBranch).Replace('__WEB_ADDRESS__', $WebAddress)
+        $content = [IO.File]::ReadAllText($output).Replace('__ROOT__', $rootText).Replace('__BASE__', $baseBranch).Replace('__WEB_ADDRESS__', $WebAddress).Replace('__RUNNER_VERSION__', $runnerSource.version).Replace('__RUNNER_SHA256__', $runnerSource.sha256)
         # Windows PowerShell 5 reads a BOM-less script using the system code page.
         $encoding = $utf8
         if ($item.Extension -eq '.ps1') { $encoding = New-Object Text.UTF8Encoding $true }
@@ -125,16 +130,18 @@ try {
             $overlayEncoding = if ($mapping[0] -eq 'publish.ps1') { New-Object Text.UTF8Encoding $true } else { $utf8 }
             [IO.File]::WriteAllText($destination, $content, $overlayEncoding)
         }
-        $payload = @{executable=$OrcaExecutable;wait_timeout='30s'}
-        if ($OrcaEnvironment) { $payload.environment=$OrcaEnvironment }
-        $catalog = @{version=2;default_execution_profile='live';execution_profiles=@(@{
-            id='live';name='Orca single-terminal debug';host='orca';agent=$OrcaAgent;
-            implementation_configs=@(@{implementation_key='orca.terminal-profile';codec_version=3;payload=$payload})
+        if ($OrcaAgent -ne 'codex') { throw 'This Runner release supports the Codex Orca agent' }
+        $executionTarget = @{kind='orca_local'}
+        if ($OrcaEnvironment) { $executionTarget=@{kind='orca_environment';environment=$OrcaEnvironment} }
+        $settings = @{transport=@{executable=$OrcaExecutable;wait_timeout='30s'}}
+        $catalog = @{version=3;runner=@{executable="$rootText/bin/steerrunner.exe";version=$runnerSource.version;sha256=$runnerSource.sha256};default_execution_profile='live';execution_profiles=@(@{
+            id='live';name='Orca single-terminal debug';execution=@{adapter='orca-terminal';target=$executionTarget;settings=$settings};workflow=@{id='development';version=1}
         })}
 		if ($AgentModel -or $AgentReasoningEffort) {
 			if (-not $AgentModel) { throw 'AgentReasoningEffort requires AgentModel' }
 			$launchExecutable = if ($AgentExecutable) { $AgentExecutable } else { $OrcaAgent }
-			$catalog.execution_profiles[0].agent_launch=@{executable=$launchExecutable;model=$AgentModel;reasoning_effort=$AgentReasoningEffort;args=@('--dangerously-bypass-approvals-and-sandbox')}
+			$settings.agent_launch=@{executable=$launchExecutable;model=$AgentModel;args=@()}
+            if ($AgentReasoningEffort) { $settings.agent_launch.reasoning_effort=$AgentReasoningEffort }
 		}
         [IO.File]::WriteAllText((Join-Path $target 'home\execution.json'), ($catalog | ConvertTo-Json -Depth 10), $utf8)
         $manifest.execution_host='orca'

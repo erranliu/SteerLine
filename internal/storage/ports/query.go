@@ -4,10 +4,6 @@ import "context"
 
 // Product query readers are read-only capabilities. Implementations own SQL
 // and transactions; product/query owns cursor and projection rules.
-type WorkflowReader interface {
-	ReadWorkflow(context.Context, string, string) (WorkflowSnapshot, error)
-}
-
 // ActivityReader samples identity records and bounded events in one read transaction.
 type ActivityReader interface {
 	ReadActivityView(context.Context, string, string, string, string, int64, int, int) (ActivityBinding, []DomainEvent, error)
@@ -36,7 +32,6 @@ type ProjectReader interface {
 }
 
 type ProductReader interface {
-	WorkflowReader
 	EventReader
 	TaskReader
 	ProjectReader

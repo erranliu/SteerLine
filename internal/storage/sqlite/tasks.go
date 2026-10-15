@@ -10,7 +10,9 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	queryrules "github.com/erranliu/SteerLine/internal/product/query"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -179,11 +181,11 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		outgoing[edge.PredecessorID] = append(outgoing[edge.PredecessorID], edge.SuccessorID)
 	}
 	var executionSlotBusy int
-	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions WHERE project_identity=? AND status IN ('pending','active','waiting_decision','blocked')`, project).Scan(&executionSlotBusy); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM runner_candidates WHERE project_identity=? AND json_extract(payload,'$.participation')='active' AND json_extract(payload,'$.submit_state') NOT IN ('rejected','cancelled') AND coalesce(json_extract(payload,'$.projection.status'),'queued') NOT IN ('pr_ready','stopped')`, project).Scan(&executionSlotBusy); err != nil {
 		return page, err
 	}
 	for _, record := range all {
-		detail := storageports.NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Predecessors: []taskmodel.TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []taskmodel.TaskDependencyStatus{}, StartupBlockers: []string{}}
+		detail := storageports.NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []api.WorkflowSummary{}, Predecessors: []taskmodel.TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []taskmodel.TaskDependencyStatus{}, StartupBlockers: []string{}}
 		detail.Successors = append(detail.Successors, outgoing[record.TaskID]...)
 		predecessors := make([]taskmodel.TaskDependencyStatus, 0, len(incoming[record.TaskID]))
 		for _, edge := range incoming[record.TaskID] {
@@ -228,7 +230,7 @@ type nativePageRelations struct {
 	statuses   map[string]string
 	deliveries map[string]executionmodel.TaskDeliveryRecord
 	contracts  map[string]nativePageContract
-	runs       map[string][]executionmodel.WorkflowRunRecord
+	runs       map[string][]api.WorkflowSummary
 }
 
 // Keep IN lists below SQLite's older 999-variable limit, including project_id.
@@ -244,7 +246,7 @@ func nativePageIDFilter(project string, ids []string) (string, []any) {
 }
 
 func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBranch string, tasks []taskmodel.TaskRecord, edges []taskmodel.TaskDependencyRecord) (nativePageRelations, error) {
-	out := nativePageRelations{statuses: map[string]string{}, deliveries: map[string]executionmodel.TaskDeliveryRecord{}, contracts: map[string]nativePageContract{}, runs: map[string][]executionmodel.WorkflowRunRecord{}}
+	out := nativePageRelations{statuses: map[string]string{}, deliveries: map[string]executionmodel.TaskDeliveryRecord{}, contracts: map[string]nativePageContract{}, runs: map[string][]api.WorkflowSummary{}}
 	selected := make(map[string]bool, len(tasks))
 	selectedIDs := make([]string, 0, len(tasks))
 	for _, task := range tasks {
@@ -354,25 +356,25 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 		if err != nil {
 			return out, err
 		}
-		rows, err = tx.QueryContext(ctx, `SELECT task_id,workflow_run_id,phase,payload FROM workflow_runs WHERE `+filter+` ORDER BY task_id,workflow_run_id`, args...)
+		rows, err = tx.QueryContext(ctx, `SELECT task_id,candidate_id,payload FROM runner_candidates WHERE `+filter+` ORDER BY task_id,candidate_id`, args...)
 		if err != nil {
 			return out, err
 		}
 		for rows.Next() {
-			var taskID, runID, phase string
+			var taskID, candidateID string
 			var body []byte
-			if err = rows.Scan(&taskID, &runID, &phase, &body); err != nil {
+			if err = rows.Scan(&taskID, &candidateID, &body); err != nil {
 				break
 			}
-			var run executionmodel.WorkflowRunRecord
-			if err = json.Unmarshal(body, &run); err != nil {
+			var c runnerstate.Candidate
+			if err = json.Unmarshal(body, &c); err != nil {
 				break
 			}
-			if run.ProjectIdentity != project || run.TaskID != taskID || run.WorkflowRunID != runID || run.Status != phase {
-				err = nativeErr("contract_mismatch", "workflow payload differs from its stored task binding")
+			if c.Project != project || c.TaskID != taskID || c.ID != candidateID {
+				err = nativeErr("contract_mismatch", "candidate binding differs from stored identity")
 				break
 			}
-			out.runs[taskID] = append(out.runs[taskID], run)
+			out.runs[taskID] = append(out.runs[taskID], queryrules.CandidateSummary(c))
 		}
 		if err == nil {
 			err = rows.Err()
@@ -381,6 +383,7 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 		if err != nil {
 			return out, err
 		}
+
 	}
 	return out, nil
 }

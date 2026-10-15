@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	executionreconstruction "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
@@ -53,6 +52,23 @@ func Environment(base []string, home, state string) []string {
 	if token, err := os.ReadFile(filepath.Join(home, "github-token")); err == nil {
 		// Project credential contents never enter command/evidence records.
 		result = append(result, "GH_TOKEN="+strings.TrimSpace(string(token)))
+	}
+	// The independent Runner invokes real Git. Redirect only this controlled
+	// fixture's public repository identity to its owned loopback Git server.
+	var fixture struct {
+		GitURL     string `json:"git_url"`
+		Repository string `json:"repository"`
+	}
+	if raw, err := os.ReadFile(state); err == nil && json.Unmarshal(raw, &fixture) == nil && strings.HasPrefix(fixture.GitURL, "http://127.0.0.1:") {
+		repository := fixture.Repository
+		if repository == "" {
+			if i := strings.Index(fixture.GitURL[7:], "/"); i >= 0 {
+				repository = strings.TrimSuffix(fixture.GitURL[7+i+1:], ".git")
+			}
+		}
+		if len(strings.Split(repository, "/")) == 2 {
+			result = append(result, "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=url."+fixture.GitURL+".insteadOf", "GIT_CONFIG_VALUE_0=https://github.com/"+repository+".git")
+		}
 	}
 	return append(result, "STEERLINE_HOME="+home, "STEERLINE_E2E_CONTROLLED_STATE="+state, "CODEX_HOME="+filepath.Join(home, "codex"), "TEMP="+temp, "TMP="+temp, "GOFLAGS=", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_TERMINAL_PROMPT=0", "NO_PROXY=127.0.0.1,localhost")
 }
@@ -171,11 +187,15 @@ func MainControl(args []string) error {
 	}
 	var payload any
 	if *action == "start_task" {
-		_, profile, err := c.ResolveExecutionProfile(*profileID, "")
+		client, err := steerlineapp.OpenClient(context.Background(), *config)
 		if err != nil {
 			return err
 		}
-		payload = productapi.ControlPayload{TaskID: *taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
+		defer client.Close()
+		payload, err = client.StartTaskPayload(context.Background(), *taskID, *profileID)
+		if err != nil {
+			return err
+		}
 	}
 	var request productapi.ControlRequest
 	if *expectedInstance == "" {
@@ -213,17 +233,13 @@ func (c *Client) Tasks(ctx context.Context) (storageports.NativeTaskPage, error)
 	return page, err
 }
 
-func ReadWorkflow(ctx context.Context, database, project string) (executionreconstruction.Snapshot, error) {
+func ReadWorkflow(ctx context.Context, database, project string) (storageports.RunnerSnapshot, error) {
 	reader, err := sqlite.OpenSQLiteReader(database)
 	if err != nil {
-		return executionreconstruction.Snapshot{}, err
+		return storageports.RunnerSnapshot{}, err
 	}
 	defer reader.Close()
-	snapshot, err := reader.ReadExecutionStateSnapshot(ctx, project)
-	if err != nil {
-		return executionreconstruction.Snapshot{}, err
-	}
-	return executionreconstruction.SnapshotFromStorage(snapshot), nil
+	return reader.ReadRunnerSnapshot(ctx, project)
 }
 
 // ReadProjectView uses the product reader's public transaction contract.

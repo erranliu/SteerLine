@@ -98,7 +98,7 @@ func LiveCoreRecovery(s *Scenario, chain string) {
 	if got := p.git(current.Workspace.Worktree, "show", open.Helper.PR.HeadRevision+":result.txt"); got != "real model delivery" {
 		s.t.Fatalf("real recovered artifact=%q", got)
 	}
-	p.AssertFixedNativeLaunch(open)
+	p.AssertRunnerBinding(open)
 	p.Merge()
 	done := p.WaitPhase("completed")
 	p.AssertOneDelivery(done)

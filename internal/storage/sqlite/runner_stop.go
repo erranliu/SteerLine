@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/erranliu/SteerLine/internal/runnerbridge"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 )
 
 // StopRunnerCandidate commits caller withdrawal. Native stop facts arrive
 // separately through the bridge; no native call belongs in this transaction.
-func (s *SQLiteStore) StopRunnerCandidate(ctx context.Context, project, id string, expected uint64) (runnerbridge.Candidate, error) {
-	var result runnerbridge.Candidate
+func (s *SQLiteStore) StopRunnerCandidate(ctx context.Context, project, id string, expected uint64) (runnerstate.Candidate, error) {
+	var result runnerstate.Candidate
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		c, err := readRunnerCandidate(ctx, tx.tx, project, id)
 		if err != nil {

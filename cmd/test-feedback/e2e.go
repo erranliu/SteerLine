@@ -294,6 +294,23 @@ func runE2E(opts options) (code int) {
 		sum := sha256.Sum256(raw)
 		report.Builds[build.path] = hex.EncodeToString(sum[:])
 	}
+	runnerPath := os.Getenv("STEERRUNNER_EXE")
+	if runnerPath == "" {
+		runnerPath, err = exec.LookPath("steerrunner.exe")
+		if err != nil {
+			return fail(errors.New("select a standalone Runner with STEERRUNNER_EXE"))
+		}
+	}
+	runnerPath, err = filepath.Abs(runnerPath)
+	if err != nil {
+		return fail(err)
+	}
+	runnerBytes, err := os.ReadFile(runnerPath)
+	if err != nil {
+		return fail(err)
+	}
+	runnerSum := sha256.Sum256(runnerBytes)
+	report.Builds[runnerPath] = hex.EncodeToString(runnerSum[:])
 	authHome := os.Getenv("CODEX_HOME")
 	if authHome == "" {
 		userHome, err := os.UserHomeDir()
@@ -320,7 +337,7 @@ func runE2E(opts options) (code int) {
 			return fail(err)
 		}
 	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "RemoteConfig": remoteConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
+	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "RemoteConfig": remoteConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}

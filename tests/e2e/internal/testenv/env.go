@@ -29,7 +29,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
+type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
 	orcaUsageUnavailable    bool
 	remoteOutputVerified    bool
@@ -303,11 +303,13 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	s.Must(controlled.Write(p.Provider, controlled.State{GitURL: "http://" + address + "/e2e/project.git"}))
 	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider}}
 	s.Must(controlled.Write(p.Config, map[string]any{
-		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
+		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2", "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
 		"publication_policy": map[string]any{"publisher": "worker"},
 		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
 	}))
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "host": "local", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "codex.worker-profile", "codec_version": 2, "payload": map[string]any{"executable": s.Run.Helper}}}}}, "default_execution_profile": "controlled"}))
+	selection, err := driver.RunnerSelection(s.Run.Runner)
+	s.Must(err)
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]any{"executable": s.Run.Helper}}, "workflow": map[string]any{"id": "development", "version": 1}}}, "default_execution_profile": "controlled"}))
 	commandLogs := filepath.Join(s.Output, name+"-commands")
 	s.Must(os.MkdirAll(commandLogs, 0700))
 	p.Driver = driver.Client{Binary: p.Executable, Config: p.Config, Home: p.Home, StatePath: p.Provider, LogDir: commandLogs}
@@ -350,7 +352,7 @@ func (s *Scenario) NewHomeForProject(source *Project, name, executable string) *
 	var config map[string]any
 	s.Must(json.Unmarshal(configRaw, &config))
 	delete(config, "run_dir")
-	config["worktree_root"] = filepath.Join(p.Home, "worktrees")
+
 	if pr, ok := config["pr"].(map[string]any); ok {
 		if query, ok := pr["query"].(map[string]any); ok {
 			if args, ok := query["args"].([]any); ok && len(args) >= 3 {
@@ -636,61 +638,37 @@ func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 }
 
 func (p *Project) WaitPhase(phase string) Snapshot {
-	if phase == "waiting_pr_merge" {
-		phase = "waiting_external"
-	}
-	if phase == "waiting_decision" {
-		phase = "waiting_input"
-	}
 	var result Snapshot
-	lastPhase := ""
-	rechecked := false
-	p.Scenario.Wait("workflow "+phase, func() (bool, error) {
+	p.Scenario.Wait("Runner phase "+phase, func() (bool, error) {
 		snap, err := p.Snapshot()
 		result = snap
 		if err != nil {
 			return false, err
 		}
-		if p.Chain != "" && len(snap.Domain.WorkflowRuns) == 1 {
-			current := snap.Domain.WorkflowRuns[0].Status
-			if current != lastPhase {
-				p.Record("latest-phase", snap)
-				lastPhase = current
-			}
-			if (current == "waiting_input" || current == "blocked" || current == "reconciling") && len(snap.Domain.Executions) == 1 {
-				e := snap.Domain.Executions[0]
-				if e.Environment == nil || e.Environment.Blocker == nil {
-					message := "pending decision"
-					pending := false
-					if e.Error != nil {
-						message = *e.Error
-					}
-					if snap.Runtime != nil {
-						for _, run := range snap.Runtime.Runs {
-							if run.RunID == e.WorkflowRunID && run.Decision != nil {
-								message = run.Decision.Request.Context
-								pending = true
-							}
-						}
-					}
-					if pending {
-						p.Scenario.t.Fatalf("native worker stopped before delivery: %s; see latest-phase snapshot", message)
-					}
-				}
-				if e.Environment != nil && e.Environment.Blocker != nil {
-					reason := e.Environment.Blocker.Fact.Reason
-					handled, err := recheckNativeEnvironmentOnce(reason, &rechecked, func() error {
-						_, err := p.Driver.Run(p.Scenario.Context, "answer", "-config", p.Config, "-run-id", e.WorkflowRunID, "-option", "recheck_environment", "-by", "e2e")
-						return err
-					})
-					if handled {
-						return false, err
-					}
-					p.Scenario.t.Fatalf("native environment blocked: %s; see latest-phase snapshot", reason)
-				}
-			}
+		if len(snap.Runner.Candidates) != 1 {
+			return false, nil
 		}
-		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Status == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
+		c := snap.Runner.Candidates[0]
+		if c.SubmitState == "rejected" {
+			p.Scenario.t.Fatal("original Runner submission rejected: ", c.Diagnostic)
+		}
+		if c.Projection == nil {
+			return false, nil
+		}
+		if phase == "completed" {
+			return c.Participation == "completed" && len(snap.Runner.Graph.Deliveries) == 1, nil
+		}
+		wanted := phase
+		if phase == "waiting_pr_merge" || phase == "waiting_external" {
+			wanted = "pr_ready"
+		}
+		if phase == "waiting_decision" {
+			return c.Projection.Question != nil, nil
+		}
+		if c.Projection.ResumeRequired && wanted == "pr_ready" && c.Projection.Status != wanted {
+			p.Scenario.t.Fatal("Runner needs explicit recovery: ", c.Projection.Diagnostic)
+		}
+		return c.Projection.Status == wanted, nil
 	})
 	return result
 }

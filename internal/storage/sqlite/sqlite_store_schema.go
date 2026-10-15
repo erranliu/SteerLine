@@ -44,7 +44,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 	if _, err = tx.ExecContext(ctx, `CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`); err != nil {
 		return err
 	}
-	for _, stmt := range append(append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...), conversationSchema...) {
+	for _, stmt := range append(append([]string{}, taskServiceSchema...), nativeTaskSchema...) {
 		if _, err = tx.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("create domain schema: %w", err)
 		}
@@ -58,7 +58,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 var nativeTaskSchema = []string{
 	`CREATE TABLE runner_candidates (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, task_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), request_id TEXT NOT NULL, run_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), UNIQUE(project_identity,candidate_id,task_id), UNIQUE(project_identity,request_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
 	`CREATE UNIQUE INDEX runner_candidate_run ON runner_candidates(project_identity,run_id) WHERE run_id<>''`,
-	`CREATE TABLE runner_events (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, event_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id,event_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,
+	`CREATE TABLE runner_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, event_id TEXT NOT NULL, payload BLOB NOT NULL, UNIQUE(project_identity,candidate_id,event_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,
 	`CREATE TABLE task_results (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, result_id TEXT NOT NULL, request_id TEXT NOT NULL, input BLOB NOT NULL, receipt BLOB NOT NULL, PRIMARY KEY(project_identity,task_id), UNIQUE(project_identity,result_id), UNIQUE(project_identity,request_id))`,
 	`CREATE TABLE project_task_authorities (project_identity TEXT PRIMARY KEY, authority TEXT NOT NULL CHECK(authority='native'), authority_version INTEGER NOT NULL CHECK(authority_version>0), graph_revision INTEGER NOT NULL CHECK(graph_revision>=0), repository TEXT NOT NULL, remote TEXT NOT NULL, branch TEXT NOT NULL, dispatch_mode TEXT NOT NULL CHECK(dispatch_mode IN ('manual','auto')), dispatch_paused INTEGER NOT NULL CHECK(dispatch_paused IN (0,1)), created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
 	`CREATE TABLE database_state (singleton INTEGER PRIMARY KEY CHECK(singleton=1), database_id TEXT NOT NULL CHECK(length(database_id)=32), revision INTEGER NOT NULL CHECK(revision>=0))`,
@@ -77,45 +77,20 @@ var nativeTaskSchema = []string{
 	END`,
 	`CREATE TRIGGER task_dependencies_no_update BEFORE UPDATE ON task_dependencies BEGIN SELECT RAISE(ABORT,'immutable_dependency'); END`,
 	`CREATE TRIGGER task_dependencies_no_delete BEFORE DELETE ON task_dependencies BEGIN SELECT RAISE(ABORT,'immutable_dependency'); END`,
-	`CREATE UNIQUE INDEX workflow_run_task_identity ON workflow_runs(project_identity,workflow_run_id,task_id)`,
+
 	`CREATE TABLE task_deliveries (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, selected_workflow_run_id TEXT NOT NULL, pr_instance TEXT NOT NULL, pr_repository TEXT NOT NULL, pr_number INTEGER NOT NULL CHECK(pr_number>0), pr_url TEXT NOT NULL, merge_commit TEXT NOT NULL, merged_at TEXT NOT NULL, recorded_at TEXT NOT NULL, evidence BLOB NOT NULL, PRIMARY KEY(project_identity,task_id), UNIQUE(pr_instance,pr_repository,pr_number), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id), FOREIGN KEY(project_identity,selected_workflow_run_id,task_id) REFERENCES runner_candidates(project_identity,candidate_id,task_id))`,
 }
 
-var domainExecutionSchema = []string{
-	`CREATE TABLE execution_bindings (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
-	`CREATE TABLE execution_operations (run_id TEXT NOT NULL, attempt_id TEXT NOT NULL, record_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(run_id,attempt_id,record_id))`,
+var taskServiceSchema = []string{
 	`CREATE TABLE tasks (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, external_provider TEXT NOT NULL DEFAULT '', external_project TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, task_id))`,
 	`CREATE UNIQUE INDEX task_external_identity ON tasks(project_identity,external_provider,external_project,external_id) WHERE external_id <> ''`,
-	`CREATE TABLE workflow_runs (project_identity TEXT NOT NULL, workflow_run_id TEXT NOT NULL, task_id TEXT NOT NULL, phase TEXT NOT NULL, control_revision INTEGER NOT NULL DEFAULT 1 CHECK(control_revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity, workflow_run_id), FOREIGN KEY(project_identity, task_id) REFERENCES tasks(project_identity, task_id))`,
-	`CREATE INDEX workflow_runs_task_idx ON workflow_runs(project_identity, task_id)`,
-	`CREATE TABLE executions (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, status TEXT NOT NULL, current_step TEXT NOT NULL DEFAULT '', target_json BLOB NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, execution_id), FOREIGN KEY(project_identity, workflow_run_id) REFERENCES workflow_runs(project_identity, workflow_run_id))`,
-	`CREATE INDEX executions_workflow_idx ON executions(project_identity, workflow_run_id)`,
-	`CREATE UNIQUE INDEX one_active_execution_per_workflow ON executions(project_identity,workflow_run_id) WHERE status IN ('pending','active','waiting_decision','blocked')`,
-	`CREATE TABLE step_attempts (project_identity TEXT NOT NULL, attempt_id TEXT NOT NULL, execution_id TEXT NOT NULL, step_id TEXT NOT NULL, attempt_number INTEGER NOT NULL, operation_id TEXT NOT NULL DEFAULT '', status TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, attempt_id), UNIQUE(project_identity, execution_id, step_id, attempt_number), FOREIGN KEY(project_identity, execution_id) REFERENCES executions(project_identity, execution_id))`,
-	`CREATE UNIQUE INDEX one_active_attempt_per_step ON step_attempts(project_identity, execution_id, step_id) WHERE status IN ('planned','dispatching','dispatched','running','waiting_decision','stopping','outcome_unknown')`,
-	`CREATE UNIQUE INDEX one_active_attempt_per_execution ON step_attempts(project_identity,execution_id) WHERE status IN ('planned','dispatching','dispatched','running','waiting_decision','stopping','outcome_unknown')`,
-	`CREATE TABLE decisions (project_identity TEXT NOT NULL, decision_id TEXT NOT NULL, scope TEXT NOT NULL, workflow_run_id TEXT, execution_id TEXT, attempt_id TEXT, question_id TEXT NOT NULL, status TEXT NOT NULL, version INTEGER NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, decision_id), FOREIGN KEY(project_identity, workflow_run_id) REFERENCES workflow_runs(project_identity, workflow_run_id), FOREIGN KEY(project_identity, execution_id) REFERENCES executions(project_identity, execution_id), FOREIGN KEY(project_identity, attempt_id) REFERENCES step_attempts(project_identity, attempt_id))`,
-	`CREATE INDEX decisions_scope_idx ON decisions(project_identity, workflow_run_id, execution_id, status)`,
-	`CREATE TABLE decision_answers (project_identity TEXT NOT NULL, decision_id TEXT NOT NULL, decision_version INTEGER NOT NULL, command_id TEXT NOT NULL, payload_digest TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(project_identity,decision_id,decision_version), FOREIGN KEY(project_identity,decision_id) REFERENCES decisions(project_identity,decision_id))`,
 	`CREATE TABLE events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, task_id TEXT NOT NULL DEFAULT '', workflow_run_id TEXT NOT NULL DEFAULT '', execution_id TEXT NOT NULL DEFAULT '', attempt_id TEXT NOT NULL DEFAULT '', external_source TEXT NOT NULL DEFAULT '', external_id TEXT NOT NULL DEFAULT '', type TEXT NOT NULL, received_at TEXT NOT NULL, payload_bytes INTEGER NOT NULL, payload_digest TEXT NOT NULL, payload BLOB NOT NULL)`,
 	`CREATE UNIQUE INDEX events_source_identity_idx ON events(project_identity, external_source, external_id) WHERE external_source <> '' AND external_id <> ''`,
 	`CREATE INDEX events_execution_idx ON events(project_identity, execution_id, attempt_id, event_id)`,
-	`CREATE INDEX events_worker_state_idx ON events(project_identity,workflow_run_id,execution_id,attempt_id,event_id) WHERE type='activity.worker_state'`,
-	`CREATE TABLE operations (project_identity TEXT NOT NULL, operation_id TEXT NOT NULL, idempotency_key TEXT NOT NULL, kind TEXT NOT NULL, status TEXT NOT NULL, payload_digest TEXT NOT NULL, platform_request_id TEXT NOT NULL DEFAULT '', payload BLOB NOT NULL, PRIMARY KEY(project_identity, operation_id), UNIQUE(project_identity, idempotency_key))`,
 	`CREATE TABLE commands (project_identity TEXT NOT NULL, command_id TEXT NOT NULL, kind TEXT NOT NULL, target_id TEXT NOT NULL, expected_version INTEGER NOT NULL, idempotency_key TEXT NOT NULL, requested_by TEXT NOT NULL, payload BLOB NOT NULL, status TEXT NOT NULL, result BLOB, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(project_identity, command_id), UNIQUE(project_identity, idempotency_key))`,
 	`CREATE INDEX commands_status_idx ON commands(project_identity, status, created_at)`,
 	`CREATE TABLE projection (project_identity TEXT PRIMARY KEY, revision INTEGER NOT NULL, payload BLOB NOT NULL, updated_at TEXT NOT NULL)`,
-}
-
-var conversationSchema = []string{
-	`CREATE TABLE conversation_events (event_id INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, task_id TEXT NOT NULL DEFAULT '', workflow_run_id TEXT NOT NULL DEFAULT '', execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, source_event_key TEXT NOT NULL, source TEXT NOT NULL, source_segment TEXT NOT NULL, session_id TEXT NOT NULL DEFAULT '', turn_id TEXT NOT NULL DEFAULT '', item_key TEXT NOT NULL DEFAULT '', event_type TEXT NOT NULL, phase TEXT NOT NULL DEFAULT 'unknown', final_availability TEXT NOT NULL DEFAULT '', received_at TEXT NOT NULL, payload_bytes INTEGER NOT NULL, payload BLOB NOT NULL, UNIQUE(project_identity,source_event_key))`,
-	`CREATE INDEX conversation_execution_idx ON conversation_events(project_identity,execution_id,attempt_id,event_id)`,
-	`CREATE INDEX conversation_turn_idx ON conversation_events(project_identity,execution_id,attempt_id,session_id,turn_id,event_id)`,
-	`CREATE TABLE conversation_bodies (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, item_key TEXT NOT NULL, revision INTEGER NOT NULL, body BLOB NOT NULL, sha256 TEXT NOT NULL, byte_count INTEGER NOT NULL, source TEXT NOT NULL, completeness TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(project_identity,execution_id,attempt_id,item_key,revision))`,
-	`CREATE TABLE conversation_source_cursors (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, attempt_id TEXT NOT NULL, source TEXT NOT NULL, source_segment TEXT NOT NULL, source_identity TEXT NOT NULL DEFAULT '', generation TEXT NOT NULL DEFAULT '', cursor TEXT NOT NULL DEFAULT '', local_seq INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY(project_identity,execution_id,attempt_id,source,source_segment))`,
-	`CREATE TABLE conversation_capability_reports (report_id INTEGER PRIMARY KEY AUTOINCREMENT, backend TEXT NOT NULL, protocol TEXT NOT NULL, agent TEXT NOT NULL, agent_version TEXT NOT NULL DEFAULT '', platform_version TEXT NOT NULL DEFAULT '', target_id TEXT NOT NULL DEFAULT '', checked_at TEXT NOT NULL, payload BLOB NOT NULL)`,
-	`CREATE INDEX conversation_capability_lookup_idx ON conversation_capability_reports(backend,protocol,agent,target_id,checked_at)`,
-	`CREATE INDEX conversation_native_source_idx ON conversation_events(project_identity,execution_id,attempt_id,source,event_type)`,
+	`CREATE TABLE task_audits (project_identity TEXT NOT NULL, command_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,command_id), FOREIGN KEY(project_identity,command_id) REFERENCES commands(project_identity,command_id))`,
 }
 
 func validateNativeTaskStructure(ctx context.Context, tx *sql.Tx) error {

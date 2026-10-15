@@ -37,11 +37,13 @@ type actorCall struct {
 	result chan error
 }
 type Actor struct {
-	State   reconstruction.Runtime
-	options ActorOptions
-	mu      sync.Mutex
-	ctx     context.Context
-	calls   chan actorCall
+	State             reconstruction.Runtime
+	options           ActorOptions
+	mu                sync.Mutex
+	ctx               context.Context
+	calls             chan actorCall
+	shutdownMu        sync.Mutex
+	shutdownConfirmed bool
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
@@ -57,7 +59,7 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	}
 	at := time.Now().UTC()
 	checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: options.Repository, UpdatedAt: at, HeartbeatAt: at,
-		Service: storageports.CheckpointServiceState{Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
+		Service: storageports.CheckpointServiceState{Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "stop_service", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
 	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall)}, nil
 }
 func (a *Actor) SetStartupMetadata(value string) {
@@ -145,10 +147,18 @@ func (a *Actor) TickControl(ctx context.Context, _ context.CancelFunc) error {
 		if request.Action == "stop_service" {
 			continue
 		}
+		requestFileDigest := a.options.Host.ControlRequestDigest(id)
+		if !validControlDigest(requestFileDigest) {
+			return errors.New("original host control request digest is unavailable")
+		}
 		receipt, err := a.options.Control(ctx, request)
 		if err != nil {
 			return err
 		}
+		if a.options.Host.ControlRequestDigest(id) != requestFileDigest {
+			return errors.New("host control request changed while applying its original command")
+		}
+		receipt.RequestDigest = requestFileDigest
 		if err := a.options.Host.WriteControlReceipt(receipt); err != nil {
 			return err
 		}
@@ -211,10 +221,10 @@ func (a *Actor) Heartbeat() error {
 	a.mu.Unlock()
 	return a.publish(a.ctx)
 }
-func (a *Actor) EndActor(request *api.ControlRequest, accepted *time.Time, runErr error) error {
+func (a *Actor) EndActor(request *api.ControlRequest, accepted *time.Time, acceptedDigest string, runErr error) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	stopErr := a.options.ShutdownRunner(ctx)
+	stopErr := a.shutdown(ctx)
 	a.mu.Lock()
 	a.State.Service.Ready = false
 	a.State.Service.Status = "stopped"
@@ -222,13 +232,45 @@ func (a *Actor) EndActor(request *api.ControlRequest, accepted *time.Time, runEr
 	commitErr := a.publish(ctx)
 	if request != nil {
 		now := time.Now().UTC()
-		receipt := api.ControlReceipt{Version: 1, RequestID: request.RequestID, RequestDigest: digest(*request), InstanceID: a.InstanceID(), Action: "stop_service", Status: "applied", RequestedBy: request.RequestedBy, SubmittedAt: request.CreatedAt, AcceptedAt: accepted, CompletedAt: &now}
+		receipt := api.ControlReceipt{Version: 1, RequestID: request.RequestID, RequestDigest: acceptedDigest, InstanceID: a.InstanceID(), Action: "stop_service", Status: "applied", RequestedBy: request.RequestedBy, SubmittedAt: request.CreatedAt, AcceptedAt: accepted, CompletedAt: &now}
 		if stopErr != nil {
 			receipt.Status = "indeterminate"
 			receipt.Message = stopErr.Error()
+		}
+		if !validControlDigest(acceptedDigest) || a.options.Host.ControlRequestDigest(request.RequestID) != acceptedDigest {
+			return errors.Join(runErr, stopErr, commitErr, errors.New("original stop request file identity is unavailable"))
 		}
 		commitErr = errors.Join(commitErr, a.options.Host.WriteControlReceipt(receipt))
 	}
 	return errors.Join(runErr, stopErr, commitErr)
 }
-func (a *Actor) Close() error { return a.options.Store.Close() }
+func (a *Actor) Close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	return errors.Join(a.shutdown(ctx), a.options.Store.Close())
+}
+
+func (a *Actor) shutdown(ctx context.Context) error {
+	a.shutdownMu.Lock()
+	defer a.shutdownMu.Unlock()
+	if a.shutdownConfirmed {
+		return nil
+	}
+	err := a.options.ShutdownRunner(ctx)
+	a.shutdownConfirmed = err == nil
+	return err
+}
+
+func (a *Actor) Discard(ctx context.Context, requestID string, intent taskmodel.DiscardIntent) (taskmodel.TaskDiscardReceipt, error) {
+	var receipt taskmodel.TaskDiscardReceipt
+	err := a.Call(ctx, func() error {
+		store, ok := a.options.Store.(DiscardStore)
+		if !ok {
+			return errors.New("task discard store is unavailable")
+		}
+		var err error
+		receipt, err = a.options.Tasks.Discard(ctx, store, requestID, intent)
+		return err
+	})
+	return receipt, err
+}

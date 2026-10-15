@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/runnerbridge"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"strings"
@@ -107,30 +107,38 @@ func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerRe
 	return receipt, err
 }
 
-func runnerDeliveryProof(c runnerbridge.Candidate, started time.Time, branch string) (executionmodel.PRProviderConfig, executionmodel.TaskDeliveryEvidence, error) {
-	var input runnerclient.RunInput
+func runnerDeliveryProof(c runnerstate.Candidate, started time.Time, branch string) (executionmodel.PRProviderConfig, executionmodel.TaskDeliveryEvidence, error) {
+	provider, f, err := runnerPRBinding(c, branch)
+	if err != nil {
+		return provider, executionmodel.TaskDeliveryEvidence{}, err
+	}
+	if started.IsZero() || f.CheckedAt.Before(started) || f.QueryError != "" || !f.Merged || f.State != "merged" || f.MergedAt == nil || f.MergedAt.IsZero() || f.MergeCommit == nil || !taskmodel.ValidCommit(*f.MergeCommit) {
+		return provider, executionmodel.TaskDeliveryEvidence{}, nativeErr("merge_state_unknown", "PR requires a fresh complete provider-confirmed merge")
+	}
+	return provider, executionmodel.TaskDeliveryEvidence{PRInstance: strings.TrimSuffix(provider.BaseURL, "/"), URL: f.URL, Repository: f.Repository, PRNumber: int64(f.Number), BaseBranch: branch, State: "merged", Merged: true, MergedAt: *f.MergedAt, MergeCommit: *f.MergeCommit}, nil
+}
+
+func runnerPRBinding(c runnerstate.Candidate, branch string) (executionmodel.PRProviderConfig, *runnercontract.PRFact, error) {
+	var input runnercontract.RunInput
 	var settings struct {
 		BaseURL string `json:"base_url"`
 	}
 	if json.Unmarshal(c.Submit.Input, &input) != nil || json.Unmarshal(input.Publication.Settings, &settings) != nil {
-		return executionmodel.PRProviderConfig{}, executionmodel.TaskDeliveryEvidence{}, nativeErr("contract_mismatch", "frozen publication configuration is invalid")
+		return executionmodel.PRProviderConfig{}, nil, nativeErr("contract_mismatch", "frozen publication configuration is invalid")
 	}
 	provider := executionmodel.PRProviderConfig{Kind: input.Publication.Provider, BaseURL: settings.BaseURL, Repository: input.Publication.Repository}
 	if c.Projection == nil || c.Projection.RunID != c.RunID || c.Projection.InputDigest != c.InputDigest || c.Projection.Execution.Branch != c.Branch || c.Branch == "" || c.Projection.Execution.Workspace == "" || c.Projection.Execution.SessionID == "" || c.Projection.PR == nil {
-		return provider, executionmodel.TaskDeliveryEvidence{}, nativeErr("merge_state_unknown", "candidate lacks its verified Run/workspace/session/PR binding")
+		return provider, nil, nativeErr("merge_state_unknown", "candidate lacks its verified Run/workspace/session/PR binding")
 	}
 	f := c.Projection.PR
-	if started.IsZero() || f.CheckedAt.Before(started) || f.QueryError != "" || !f.Merged || f.State != "merged" || f.MergedAt == nil || f.MergedAt.IsZero() || f.MergeCommit == nil || !taskmodel.ValidCommit(*f.MergeCommit) {
-		return provider, executionmodel.TaskDeliveryEvidence{}, nativeErr("merge_state_unknown", "PR requires a fresh complete provider-confirmed merge")
-	}
 	if f.URL != c.PRURL || f.Provider != provider.Kind || f.Repository != provider.Repository || f.HeadRepository != provider.Repository || f.BaseBranch != branch || input.Repository.BaseBranch != branch || f.HeadBranch != c.Branch {
-		return provider, executionmodel.TaskDeliveryEvidence{}, nativeErr("immutable_task", "PR differs from the frozen candidate target")
+		return provider, nil, nativeErr("immutable_task", "PR differs from the frozen candidate target")
 	}
 	number, err := provider.PRNumber(f.URL)
 	if err != nil || number != f.Number {
-		return provider, executionmodel.TaskDeliveryEvidence{}, nativeErr("immutable_task", "PR number or provider identity changed")
+		return provider, nil, nativeErr("immutable_task", "PR number or provider identity changed")
 	}
-	return provider, executionmodel.TaskDeliveryEvidence{PRInstance: strings.TrimSuffix(provider.BaseURL, "/"), URL: f.URL, Repository: f.Repository, PRNumber: int64(number), BaseBranch: branch, State: "merged", Merged: true, MergedAt: *f.MergedAt, MergeCommit: *f.MergeCommit}, nil
+	return provider, f, nil
 }
 
 func (tx *sqliteTx) completeRunnerDeliveryCandidate(project, taskID string) error {

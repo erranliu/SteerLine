@@ -5,19 +5,19 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/runnerbridge"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"path/filepath"
 )
 
-func readRunnerCandidate(ctx context.Context, db schemaQuery, project, id string) (runnerbridge.Candidate, error) {
+func readRunnerCandidate(ctx context.Context, db schemaQuery, project, id string) (runnerstate.Candidate, error) {
 	var body []byte
 	err := db.QueryRowContext(ctx, `SELECT payload FROM runner_candidates WHERE project_identity=? AND candidate_id=?`, project, id).Scan(&body)
 	if err != nil {
-		return runnerbridge.Candidate{}, err
+		return runnerstate.Candidate{}, err
 	}
-	var result runnerbridge.Candidate
+	var result runnerstate.Candidate
 	if err := json.Unmarshal(body, &result); err != nil {
 		return result, err
 	}
@@ -26,14 +26,14 @@ func readRunnerCandidate(ctx context.Context, db schemaQuery, project, id string
 	}
 	return result, nil
 }
-func (s *SQLiteStore) Candidate(ctx context.Context, project, id string) (runnerbridge.Candidate, error) {
+func (s *SQLiteStore) Candidate(ctx context.Context, project, id string) (runnerstate.Candidate, error) {
 	return readRunnerCandidate(ctx, s.db, project, id)
 }
-func (s *SQLiteStore) RunnerCandidates(ctx context.Context, project, taskID string) ([]runnerbridge.Candidate, error) {
+func (s *SQLiteStore) RunnerCandidates(ctx context.Context, project, taskID string) ([]runnerstate.Candidate, error) {
 	return readRunnerCandidates(ctx, s.db, project, taskID)
 }
 
-func readRunnerCandidates(ctx context.Context, db schemaQuery, project, taskID string) ([]runnerbridge.Candidate, error) {
+func readRunnerCandidates(ctx context.Context, db schemaQuery, project, taskID string) ([]runnerstate.Candidate, error) {
 	query := `SELECT payload FROM runner_candidates WHERE project_identity=?`
 	args := []any{project}
 	if taskID != "" {
@@ -46,13 +46,13 @@ func readRunnerCandidates(ctx context.Context, db schemaQuery, project, taskID s
 		return nil, err
 	}
 	defer rows.Close()
-	result := []runnerbridge.Candidate{}
+	result := []runnerstate.Candidate{}
 	for rows.Next() {
 		var raw []byte
 		if err := rows.Scan(&raw); err != nil {
 			return nil, err
 		}
-		var candidate runnerbridge.Candidate
+		var candidate runnerstate.Candidate
 		if err := json.Unmarshal(raw, &candidate); err != nil {
 			return nil, err
 		}
@@ -60,7 +60,7 @@ func readRunnerCandidates(ctx context.Context, db schemaQuery, project, taskID s
 	}
 	return result, rows.Err()
 }
-func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerbridge.Candidate, expected uint64, events []runnerclient.Event) error {
+func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate, expected uint64, events []runnercontract.Event) error {
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		old, err := readRunnerCandidate(ctx, tx.tx, c.Project, c.ID)
 		if err != nil {
@@ -112,15 +112,15 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerbridge.Candidat
 
 // ReserveRunnerCandidate atomically claims task work and fixes the original
 // CLI submission. It performs no external execution or platform operation.
-func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel.FixedWork, c runnerbridge.Candidate, candidate bool) error {
-	if c.Project != work.Record.ProjectIdentity || c.TaskID != work.Record.TaskID || c.ID == "" || c.Revision != 1 || c.SubmitState != "pending" || c.RunID != "" || c.Submit.Protocol != runnerclient.Protocol || c.Submit.RequestID == "" || !json.Valid(c.Submit.Input) || !filepath.IsAbs(c.StateDir) || c.Claimant == "" || c.ContractDigest != work.Contract.Digest || !taskmodel.ValidCommit(c.BaseRevision) || c.Participation != "active" {
+func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel.FixedWork, c runnerstate.Candidate, candidate bool) error {
+	if c.Project != work.Record.ProjectIdentity || c.TaskID != work.Record.TaskID || c.ID == "" || c.Revision != 1 || c.SubmitState != "pending" || c.RunID != "" || c.Submit.Protocol != runnercontract.Protocol || c.Submit.RequestID == "" || !json.Valid(c.Submit.Input) || !filepath.IsAbs(c.StateDir) || c.Claimant == "" || c.ContractDigest != work.Contract.Digest || !taskmodel.ValidCommit(c.BaseRevision) || c.Participation != "active" {
 		return nativeErr("contract_mismatch", "candidate reservation requires complete fixed task and Runner inputs")
 	}
-	var input runnerclient.RunInput
+	var input runnercontract.RunInput
 	if json.Unmarshal(c.Submit.Input, &input) != nil || input.Title != work.Record.Title || input.Repository.URL != work.Contract.Repository || input.Repository.Remote != work.Contract.Remote || input.Repository.BaseBranch != work.Contract.Branch || input.Repository.BaseRevision != c.BaseRevision || input.Publication.BaseBranch != work.Contract.Branch {
 		return nativeErr("contract_mismatch", "Runner input differs from the frozen task repository")
 	}
-	matches := func(doc runnerclient.Document, ref taskmodel.FileReference) bool {
+	matches := func(doc runnercontract.Document, ref taskmodel.FileReference) bool {
 		return doc.Kind == "git" && doc.Path == ref.Path && doc.Commit == ref.Commit && doc.Content == nil
 	}
 	if !matches(input.Documents.Spec, work.Contract.SpecRef) || !matches(input.Documents.Plan, work.Contract.PlanRef) {
@@ -241,14 +241,14 @@ func (tx *sqliteTx) requestRunnerTaskStops(project, taskID string) error {
 	if err != nil {
 		return err
 	}
-	values := []runnerbridge.Candidate{}
+	values := []runnerstate.Candidate{}
 	for rows.Next() {
 		var body []byte
 		if err := rows.Scan(&body); err != nil {
 			rows.Close()
 			return err
 		}
-		var c runnerbridge.Candidate
+		var c runnerstate.Candidate
 		if err := json.Unmarshal(body, &c); err != nil {
 			rows.Close()
 			return err

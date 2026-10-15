@@ -3,20 +3,18 @@ package app
 import (
 	"context"
 
-	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type clientDiscardCommands struct {
 	service interface {
-		DiscardNativeTask(context.Context, execution.Config, string, string, uint64, string, string) (taskmodel.TaskDiscardReceipt, error)
+		Discard(context.Context, string, taskmodel.DiscardIntent) (taskmodel.TaskDiscardReceipt, error)
 	}
-	config Config
 }
 
 func (r *clientDiscardCommands) Discard(ctx context.Context, in productapi.DiscardInput) (productapi.TaskDiscardReceipt, error) {
-	value, err := r.service.DiscardNativeTask(ctx, r.config.executionConfig(), in.TaskID, in.RequestID, in.ExpectedVersion, in.Reason, in.RequestedBy)
+	value, err := r.service.Discard(ctx, in.RequestID, taskmodel.DiscardIntent{TaskID: in.TaskID, ExpectedVersion: in.ExpectedVersion, Reason: in.Reason, RequestedBy: in.RequestedBy})
 	if err != nil {
 		return productapi.TaskDiscardReceipt{}, err
 	}

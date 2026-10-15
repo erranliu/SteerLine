@@ -26,7 +26,7 @@ type Scheduler[T any] interface {
 	TickControl(context.Context, context.CancelFunc) error
 	TickPR(context.Context) error
 	Heartbeat() error
-	EndActor(*productapi.ControlRequest, *time.Time, error) error
+	EndActor(*productapi.ControlRequest, *time.Time, string, error) error
 }
 
 func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string) (retErr error) {
@@ -53,9 +53,9 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 			case <-ctx.Done():
 				return
 			case <-stopTick.C:
-				request, _, checkedAt := c.FindStop(instanceID, seen)
+				request, fileDigest, checkedAt := c.FindStop(instanceID, seen)
 				if request != nil {
-					acceptedStops <- stopAcceptance{Request: *request, At: checkedAt}
+					acceptedStops <- stopAcceptance{Request: *request, At: checkedAt, Digest: fileDigest}
 					cancel()
 					return
 				}
@@ -78,14 +78,16 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 		}
 		var request *productapi.ControlRequest
 		var acceptedAt *time.Time
+		var acceptedDigest string
 		if stop != nil {
 			request = &stop.Request
 			acceptedAt = &stop.At
+			acceptedDigest = stop.Digest
 			if cancellationOnly(retErr) {
 				retErr = nil // An accepted stop may cancel an in-flight actor poll.
 			}
 		}
-		retErr = actor.EndActor(request, acceptedAt, retErr)
+		retErr = actor.EndActor(request, acceptedAt, acceptedDigest, retErr)
 	}()
 	taskTick := time.NewTicker(c.TaskPoll)
 	defer taskTick.Stop()
@@ -179,4 +181,5 @@ type Schedule struct {
 type stopAcceptance struct {
 	Request productapi.ControlRequest
 	At      time.Time
+	Digest  string
 }

@@ -22,59 +22,24 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/app/host"
 
-var quickTests = []string{"TestTM08ControlIdentity", "TestTM08Heartbeat", "TestTM08Shutdown", "TestServiceLifetimeCloseOnRunError"}
+var quickTests = []string{"TestAtomicWriteENOSPCPreservesPreviousSnapshot"}
 
-const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
+const executionPackage = "github.com/erranliu/SteerLine/internal/taskrunner"
 
-// Full partitions the execution business tests after their move out of the host facade.
+// Full partitions Task-to-Runner coordination; native execution tests live in Runner.
 const fullCorePackage = executionPackage
 
-// Recovery, multi-turn and candidate orchestration belong to directed regression
-// or Full. L1 keeps one claim plus the immutable identity and delivery rules.
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestPS2MandatoryLifecycleCapabilitiesKeepFixedIdentity", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority"}
+// L1 keeps the public input and fixed repository boundaries. Recovery and
+// delivery are selected through their directed regression entries.
+var quickExecutionTests = []string{"TestRunnerExplicitInputKeepsOriginalRunAndDisplayedVersions", "TestRunnerNativeAnswersPreserveQuestionsAndCallerInput", "TestRunnerBaseUsesFetchedTargetAndOriginalCandidateAncestry"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
-var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestTM04ExecutionWiring", "TestTM07StorageWiring"}
+var quickBoundaryTests = []string{"TestRunnerExecutionBoundary"}
 
-var quickBoundarySubtests = []string{"pure_ownership_all_tags_production_and_tests", "negative_source_fixtures", "repository_all_tags_and_production_graphs", "console_negative_all_tags_production_and_tests", "claim_transaction_failure_and_original_receipt"}
+func quickBoundaryPattern() string { return exactPattern(quickBoundaryTests) }
 
-func quickBoundaryPattern() string {
-	// Go matches each slash-separated test level independently. Keep all static
-	// guards, but only the claim transaction subtest of the long wiring suite.
-	return exactPattern(quickBoundaryTests) + "/" + exactPattern(quickBoundarySubtests)
-}
-
-var quickBoundaryAssigned = []string{
-	"TestCD67CoreBoundary",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/query/taskgraph",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task/model",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/model",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/backend",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/conversation",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/api",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/storage/ports",
-	"TestCD67CoreBoundary/negative_source_fixtures",
-	"TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
-	"TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
-	"TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
-	"TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
-	"TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
-	"TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
-	"TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
-	"TestCD67CoreBoundary/negative_source_fixtures/reverse_storage_edge",
-	"TestCD67CoreBoundary/negative_source_fixtures/concrete_storage_edge",
-	"TestCD67CoreBoundary/negative_source_fixtures/transitive_storage_edge",
-	"TestCD67CoreBoundary/negative_source_fixtures/reverse_client_subpackage",
-	"TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
-	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
-	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/transitive_test_helper",
-	"TestTM07StorageWiring",
-	"TestTM04ExecutionWiring",
-	"TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
-}
+var quickBoundaryAssigned = []string{"TestRunnerExecutionBoundary", "TestRunnerExecutionBoundary/windows", "TestRunnerExecutionBoundary/linux"}
 
 var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{
 	"github.com/erranliu/SteerLine/internal/product/api",
@@ -85,7 +50,7 @@ var quickRulePackages = append(append([]string{}, taskRulePackages...), []string
 	"github.com/erranliu/SteerLine/internal/execution/scheduler",
 	"github.com/erranliu/SteerLine/internal/execution/model",
 	"github.com/erranliu/SteerLine/internal/execution/backend",
-	executionPackage + "/reconstruction",
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction",
 	"github.com/erranliu/SteerLine/internal/storage/sqlite",
 	"github.com/erranliu/SteerLine/internal/console", "github.com/erranliu/SteerLine/internal/console/activityrender",
 	"github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
@@ -103,13 +68,11 @@ var quickOwnerCases = []struct {
 	{"quick-owner-http-budget", "github.com/erranliu/SteerLine/internal/product/httpclient", []string{"TestBoundedClientBudgetPreservesAuthenticationAndCancellation"}},
 	{"quick-execution", executionPackage, quickExecutionTests},
 	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestTM04ExecutionBoundary", "TestSharedFixturesRemainTestOnly", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary"}},
-	{"quick-owner-orca-terminal", "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport", []string{"TestTerminalLifecycleReplyReuseAndExactStop", "TestTerminalUnknownSubmissionOnlyObservesOriginal", "TestTerminalLocalAndRemoteUseIdenticalReturnAndNativePorts", "TestTerminalClippedScreenDoesNotBlockNativeFinal"}},
-	{"quick-owner-codec", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", []string{"TestCD63CodecIdentityAndVersion", "TestCD62NativeFactsAndQuestionRoute", "TestHistoryMixedTurnRetainsOnlyCompleteFinal", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerLaunchPreservesConfiguredArgs", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
-	{"quick-owner-identity", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/orca", []string{"TestBoundTerminalRejectsRuntimeAndIncarnationReplacement", "TestTerminalCloseRequiresExactRuntimeHandleAndPtyProof"}},
-	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
+	{"quick-owner-runner-client", "github.com/erranliu/SteerLine/internal/runnerclient", []string{"TestSteerRunnerCLIContract", "TestSteerRunnerAmbiguousEnvelope", "TestSteerRunnerReleasePinBlocksBeforeInvocation", "TestSteerRunnerUsesPublishedSchema"}},
+	{"quick-owner-runner-bridge", "github.com/erranliu/SteerLine/internal/runnerbridge", []string{"TestSteerRunnerOutboxBoundaries"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestWebSwitchNativeConnectionLeaseAndRestart", "TestWebSwitchCatalogReadOnlyAndConflicts", "TestWebSwitchCatalogBoundedSlowConfig", "TestWebSwitchApplicationZeroProjectsLifecycle", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestPS2FixedWindowsProfilesFreezeAndRestore", "TestOrcaNativeProfileKeepsFrozenAuthority", "TestOrcaPreflightDoesNotProbeAgentExecutable", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestWebSwitchNativeConnectionLeaseAndRestart", "TestWebSwitchCatalogReadOnlyAndConflicts", "TestWebSwitchCatalogBoundedSlowConfig", "TestWebSwitchApplicationZeroProjectsLifecycle", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestCM71ProductDependencyBoundary", "TestRunnerProjectPreflightLeavesPrivateRunnerFilesToRunner", "TestRunnerTaskRepositoryKeepsConfiguredIdentityAcrossTransportRewrite"}},
 }
 
 var quickPackages = func() []string {

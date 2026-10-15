@@ -3,7 +3,6 @@ package driver
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -172,6 +171,12 @@ func openDebugRelease(root string) (*debugRelease, error) {
 		if e.Type()&os.ModeSymlink != 0 {
 			return fmt.Errorf("linked debug path: %s", path)
 		}
+		// Runtime owners publish files atomically and can briefly hold two
+		// names for one file. Read-only commands validate the namespace root;
+		// destructive reset validates its targets after all owners stop.
+		if e.IsDir() && strings.EqualFold(path, filepath.Join(root, "home", "state")) {
+			return filepath.SkipDir
+		}
 		if !e.IsDir() {
 			err := debugPlainFile(path)
 			if os.IsNotExist(err) {
@@ -217,7 +222,7 @@ func openDebugRelease(root string) (*debugRelease, error) {
 		if err = json.Unmarshal(raw, &cfg); err != nil {
 			return nil, err
 		}
-		for _, key := range []string{"repository", "run_dir", "worktree_root"} {
+		for _, key := range []string{"repository", "run_dir"} {
 			v, _ := cfg[key].(string)
 			if key == "run_dir" && v == "" {
 				continue
@@ -249,26 +254,18 @@ func (d *debugRelease) stateDir() string {
 func (d *debugRelease) command(exe string, args ...string) *exec.Cmd {
 	cmd := exec.Command(exe, args...)
 	cmd.Dir = d.root
-	cmd.Env = Environment(os.Environ(), d.home, d.provider)
-	var env []string
-	for _, entry := range cmd.Env {
-		if !strings.HasPrefix(strings.ToUpper(entry), "GH_CONFIG_DIR=") {
-			env = append(env, entry)
-		}
+	mode, err := d.currentScheme()
+	if err != nil {
+		cmd.Err = err
+		return cmd
 	}
-	cmd.Env = append(env, "GH_CONFIG_DIR="+filepath.Join(d.home, "gh"))
-	if exe == d.binary && len(args) > 0 && args[0] == "run" {
-		if devOrigin := os.Getenv("STEERLINE_WEB_DEV_ORIGIN"); devOrigin != "" {
-			cmd.Env = append(cmd.Env, "STEERLINE_WEB_DEV_ORIGIN="+devOrigin)
-		}
+	env, err := d.debugEnvironment(os.Environ(), mode)
+	if err != nil {
+		cmd.Err = err
+		return cmd
 	}
-	if token, err := os.ReadFile(filepath.Join(d.home, "github-token")); err == nil {
-		cmd.Env = append(cmd.Env, "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http."+debugRemote+".extraheader", "GIT_CONFIG_VALUE_0="+debugAuthHeader(token))
-	}
+	cmd.Env = env
 	return cmd
-}
-func debugAuthHeader(token []byte) string {
-	return "AUTHORIZATION: basic " + base64.StdEncoding.EncodeToString([]byte("x-access-token:"+strings.TrimSpace(string(token))))
 }
 func (d *debugRelease) git(args ...string) (string, error) {
 	cmd := d.command("git", append([]string{"-C", d.repo}, args...)...)
@@ -393,7 +390,7 @@ func (d *debugRelease) prepare(simulate bool) error {
 		return fmt.Errorf("debug preparation/reset busy: %w", err)
 	}
 	defer lock.Close()
-	remote, err := d.git("remote", "get-url", "origin")
+	remote, err := d.git("config", "--get", "remote.origin.url")
 	if err != nil {
 		return err
 	}
@@ -463,71 +460,25 @@ func (d *debugRelease) prepareSelected(mode string) error {
 	}
 	catalog["execution_profiles"] = selected
 	if mode == "live" {
-		if selected[0].(map[string]any)["host"] == "local" {
-			authSource := os.Getenv("CODEX_HOME")
-			if authSource == "" {
-				user, err := os.UserHomeDir()
-				if err != nil {
-					return err
-				}
-				authSource = filepath.Join(user, ".codex")
-			}
-			if pathWithin(`C:\SteerlineRuntime`, authSource) {
-				return errors.New("cannot provision debug authentication from installed runtime")
-			}
-			if resolved, e := filepath.EvalSymlinks(authSource); e == nil && pathWithin(`C:\SteerlineRuntime`, resolved) {
-				return errors.New("cannot provision authentication through an installed-runtime alias")
-			}
-			if _, err = os.Stat(filepath.Join(d.home, "codex", "auth.json")); os.IsNotExist(err) {
-				if err = native.SeedAuth(authSource, filepath.Join(d.home, "codex"), "unelevated"); err != nil {
-					return err
-				}
-				// Model/effort come only from the copied execution catalog, not a second config default.
-				if err = os.WriteFile(filepath.Join(d.home, "codex", "config.toml"), nil, 0600); err != nil {
-					return err
-				}
-				if err = native.TrustProject(filepath.Join(d.home, "codex"), d.repo); err != nil {
-					return err
-				}
-			}
-			codex, err := native.CodexExecutable("codex")
+		profile := selected[0].(map[string]any)
+		execution, ok := profile["execution"].(map[string]any)
+		if !ok {
+			return errors.New("selected profile requires Runner execution settings")
+		}
+		target, _ := execution["target"].(map[string]any)
+		if target["kind"] == "local" {
+			settings, _ := execution["settings"].(map[string]any)
+			executable, _ := settings["executable"].(string)
+			codex, err := native.CodexExecutable(executable)
 			if err != nil {
 				return err
 			}
-			configs := selected[0].(map[string]any)["implementation_configs"].([]any)
-			configs[0].(map[string]any)["payload"].(map[string]any)["executable"] = codex
+			settings["executable"] = codex
 		}
-		// Capture authentication privately, never in command/evidence output.
-		if _, err = os.Stat(filepath.Join(d.home, "github-token")); os.IsNotExist(err) {
-			cmd := exec.Command("gh", "auth", "token", "--hostname", "github.com")
-			token, e := cmd.Output()
-			if e != nil || len(strings.TrimSpace(string(token))) == 0 {
-				return errors.New("live requires gh authentication")
-			}
-			if e = os.WriteFile(filepath.Join(d.home, "github-token"), []byte(strings.TrimSpace(string(token))), 0600); e != nil {
-				return e
-			}
-		}
-		// The product deliberately strips center GH_TOKEN/Git header variables
-		// before starting workers. Provision the package's own gh login instead;
-		// never change the user's config or credential-manager/keychain entries.
-		if _, err = os.Stat(filepath.Join(d.home, "gh", "hosts.yml")); os.IsNotExist(err) {
-			token, e := os.ReadFile(filepath.Join(d.home, "github-token"))
-			if e != nil {
-				return e
-			}
-			cmd := exec.Command("gh", "auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--with-token", "--insecure-storage")
-			for _, entry := range os.Environ() {
-				key, _, _ := strings.Cut(entry, "=")
-				if !strings.EqualFold(key, "GH_TOKEN") && !strings.EqualFold(key, "GITHUB_TOKEN") && !strings.EqualFold(key, "GH_CONFIG_DIR") {
-					cmd.Env = append(cmd.Env, entry)
-				}
-			}
-			cmd.Env = append(cmd.Env, "GH_CONFIG_DIR="+filepath.Join(d.home, "gh"))
-			cmd.Stdin = strings.NewReader(strings.TrimSpace(string(token)) + "\n")
-			if _, e := cmd.CombinedOutput(); e != nil {
-				return errors.New("cannot provision package-owned GitHub login")
-			}
+		// Existing native logins remain external dependencies. Never copy auth,
+		// user config or credential material into a generated debug package.
+		if _, err := d.debugEnvironment(os.Environ(), mode); err != nil {
+			return err
 		}
 	} else {
 		remote := filepath.Join(d.remoteRoot(), filepath.FromSlash(debugRepository)+".git")
@@ -577,31 +528,68 @@ func (d *debugRelease) prepareSelected(mode string) error {
 	}
 	return d.setEnvironment(mode)
 }
+func (d *debugRelease) debugEnvironment(base []string, mode string) ([]string, error) {
+	if mode == "simulate" {
+		return Environment(base, d.home, d.provider), nil
+	}
+	values := []string{}
+	for _, entry := range base {
+		name, value, _ := strings.Cut(entry, "=")
+		upper := strings.ToUpper(name)
+		if strings.HasPrefix(upper, "STEERLINE_") || upper == "TEMP" || upper == "TMP" || upper == "GIT_TERMINAL_PROMPT" {
+			continue
+		}
+		if (upper == "CODEX_HOME" || upper == "GH_CONFIG_DIR") && value != "" {
+			resolved := value
+			if path, err := filepath.EvalSymlinks(value); err == nil {
+				resolved = path
+			}
+			if pathWithin(`C:\SteerlineRuntime`, resolved) {
+				return nil, errors.New("live debug cannot use installed runtime authentication or configuration")
+			}
+		}
+		values = append(values, entry)
+	}
+	return append(values, "STEERLINE_HOME="+d.home, "TEMP="+filepath.Join(d.home, "temp"), "TMP="+filepath.Join(d.home, "temp"), "GIT_TERMINAL_PROMPT=0"), nil
+}
+func (d *debugRelease) currentScheme() (string, error) {
+	raw, err := os.ReadFile(filepath.Join(d.root, "scheme.json"))
+	if os.IsNotExist(err) {
+		return "live", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	var selected struct {
+		Scheme string `json:"scheme"`
+	}
+	if err := json.Unmarshal(raw, &selected); err != nil {
+		return "", err
+	}
+	if selected.Scheme != "live" && selected.Scheme != "simulate" {
+		return "", errors.New("frozen debug scheme is invalid")
+	}
+	return selected.Scheme, nil
+}
 func (d *debugRelease) setEnvironment(mode string) error {
-	env := Environment(os.Environ(), d.home, d.provider)
+	env, err := d.debugEnvironment(os.Environ(), mode)
+	if err != nil {
+		return err
+	}
 	for _, entry := range os.Environ() {
-		key := strings.SplitN(entry, "=", 2)[0]
-		if strings.HasPrefix(strings.ToUpper(key), "STEERLINE_") || strings.HasPrefix(strings.ToUpper(key), "GIT_") {
+		key, _, _ := strings.Cut(entry, "=")
+		if strings.HasPrefix(strings.ToUpper(key), "STEERLINE_") {
 			os.Unsetenv(key)
 		}
 	}
 	for _, entry := range env {
-		p := strings.SplitN(entry, "=", 2)
-		if len(p) == 2 {
-			os.Setenv(p[0], p[1])
+		key, value, ok := strings.Cut(entry, "=")
+		if ok {
+			os.Setenv(key, value)
 		}
 	}
-	os.Setenv("GH_CONFIG_DIR", filepath.Join(d.home, "gh"))
 	if mode == "live" {
 		os.Unsetenv("STEERLINE_E2E_CONTROLLED_STATE")
-		token, err := os.ReadFile(filepath.Join(d.home, "github-token"))
-		if err != nil {
-			return err
-		}
-		os.Setenv("GH_TOKEN", strings.TrimSpace(string(token)))
-		os.Setenv("GIT_CONFIG_COUNT", "1")
-		os.Setenv("GIT_CONFIG_KEY_0", "http."+debugRemote+".extraheader")
-		os.Setenv("GIT_CONFIG_VALUE_0", debugAuthHeader(token))
 	}
 	return nil
 }
@@ -692,9 +680,6 @@ func (d *debugRelease) runProjectContext(parent context.Context) error {
 		serviceArgs = append(serviceArgs, "-service-window")
 	}
 	cmd := d.command(d.binary, serviceArgs...)
-	if selected.Scheme == "live" {
-		cmd.Env = os.Environ()
-	}
 	serviceLog, err := os.OpenFile(filepath.Join(d.root, "logs", "project"+d.suffix()+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -717,9 +702,6 @@ func (d *debugRelease) runProjectContext(parent context.Context) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		stop := d.command(d.binary, "stop-service", "-config", d.config)
-		if selected.Scheme == "live" {
-			stop.Env = os.Environ()
-		}
 		stop.Stdout, stop.Stderr = os.Stdout, os.Stderr
 		if err = testprocess.Run(ctx, stop); err != nil {
 			return err

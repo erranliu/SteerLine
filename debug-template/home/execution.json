@@ -1,16 +1,9 @@
 {
-  "version": 2,
+  "version": 3,
+  "runner": {"executable": "__ROOT__/bin/steerrunner.exe", "version": "__RUNNER_VERSION__", "sha256": "__RUNNER_SHA256__"},
   "default_execution_profile": "live",
   "execution_profiles": [
-    {
-      "id": "live", "name": "Live SteerlineTest", "host": "local", "agent": "codex",
-      "implementation_configs": [{"implementation_key": "codex.worker-profile", "codec_version": 2,
-        "payload": {"executable": "codex", "model": "gpt-6-luna", "reasoning_effort": "medium"}}]
-    },
-    {
-      "id": "simulate", "name": "Simulated SteerlineTest (AI debug)", "host": "local", "agent": "codex",
-      "implementation_configs": [{"implementation_key": "codex.worker-profile", "codec_version": 2,
-        "payload": {"executable": "__ROOT__/bin/debug-helper.exe"}}]
-    }
+    {"id": "live", "name": "Live SteerlineTest", "execution": {"adapter": "codex-app-server", "target": {"kind": "local"}, "settings": {"executable": "codex.exe", "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": {"id": "development", "version": 1}},
+    {"id": "simulate", "name": "Simulated SteerlineTest (AI debug)", "execution": {"adapter": "codex-app-server", "target": {"kind": "local"}, "settings": {"executable": "__ROOT__/bin/debug-helper.exe"}}, "workflow": {"id": "development", "version": 1}}
   ]
 }

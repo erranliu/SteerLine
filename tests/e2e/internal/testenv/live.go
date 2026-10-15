@@ -295,7 +295,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	e := before.Domain.Executions[0]
 	p.AssertStagedFlow(before)
-	p.AssertFixedNativeLaunch(before)
+	p.AssertRunnerBinding(before)
 	if e.Process == nil || e.Workspace.Worktree == "" || e.TurnNumber != 3 {
 		s.t.Fatal("native execution identity/turn missing")
 	}
@@ -338,7 +338,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	if restart {
 		p.RestartService()
 		after := p.WaitPhase("waiting_pr_merge")
-		p.AssertFixedNativeLaunch(after)
+		p.AssertRunnerBinding(after)
 		p.Record("after-restart", after)
 		a := after.Domain.Executions[0]
 		originalSession, bindErr := ExecutionSession(e)
@@ -358,7 +358,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	p.Merge()
 	done := p.WaitPhase("completed")
-	p.AssertFixedNativeLaunch(done)
+	p.AssertRunnerBinding(done)
 	p.Record("completed", done)
 	for _, task := range done.Page.Tasks {
 		if task.TaskID == p.Tasks["a"].ID && (task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != e.WorkflowRunID) {

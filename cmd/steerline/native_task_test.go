@@ -19,25 +19,30 @@ import (
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/console"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex"})
-	global, err := json.Marshal(map[string]any{
-		"version":                   2,
-		"execution_profiles":        []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: profilePayload}}}},
-		"default_execution_profile": "local",
-	})
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawExe, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	exeSum := sha256.Sum256(rawExe)
+	global, err := json.Marshal(map[string]any{"version": 3, "runner": map[string]string{"executable": exe, "version": "unit-read-only", "sha256": hex.EncodeToString(exeSum[:])}, "execution_profiles": []any{map[string]any{"id": "local", "name": "Local Codex", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": "codex.exe"}}, "workflow": map[string]any{"id": "development", "version": 1}}}, "default_execution_profile": "local"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,18 +177,14 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	t.Run("CM71 control keeps original request and client close preserves service", func(t *testing.T) {
 		// Construct the real service identity/checkpoint without dispatching a
 		// worker. CLI publication and receipt queries use production file I/O.
-		service, err := steerlineapp.NewService(c)
+		identity, err := resourceprocess.NewServiceFacts().CurrentIdentity()
 		if err != nil {
 			t.Fatal(err)
 		}
-		state := service.State
-		state.Service.Mode, state.Service.Ready = "scheduler", true
 		at := time.Now().UTC()
-		checkpoint := reconstruction.Checkpoint(state)
-		checkpoint.SchemaVersion, checkpoint.UpdatedAt, checkpoint.HeartbeatAt = state.SchemaVersion, at, at
-		if err = service.Close(); err != nil {
-			t.Fatal(err)
-		}
+		checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: storageports.CheckpointRepository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}, UpdatedAt: at, HeartbeatAt: at, Service: storageports.CheckpointServiceState{Mode: "scheduler", InstanceID: strings.Repeat("a", 32), PID: identity.PID, ProcessIdentity: identity, Status: "running", Ready: true, ConfigDigest: c.LoadedConfigDigest(), ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "set_dispatch_mode"}, HeartbeatIntervalMS: 1000}}
+		state := reconstruction.RuntimeFromCheckpoint(checkpoint, "manual", false, 1)
+
 		writer, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
 		if err != nil {
 			t.Fatal(err)

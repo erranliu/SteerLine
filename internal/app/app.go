@@ -7,10 +7,10 @@ import (
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 func NewProcessHost(timeout time.Duration) executionbackend.ManagedProcessHost {
@@ -26,8 +26,8 @@ func StartService(ctx context.Context, configPath string, options steerline.Star
 }
 
 func StartConfiguredService(ctx context.Context, config Config, configPath string, options steerline.StartServiceOptions) (steerline.ServiceStartResult, error) {
-	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
-		return steerline.ServiceStartResult{}, errors.New("execution directory and process host are required")
+	if config.ProcessHost == nil {
+		return steerline.ServiceStartResult{}, errors.New("service process host is required")
 	}
 	if err := config.ValidateTaskCommandConfiguration(); err != nil {
 		return steerline.ServiceStartResult{}, err
@@ -58,9 +58,9 @@ func RunConfiguredService(ctx context.Context, config Config, mode, startupID, c
 	return runConfiguredService(ctx, config, mode, startupID, console, nil)
 }
 
-func runConfiguredService(ctx context.Context, config Config, mode, startupID, console string, onConstruct func(*execution.Service)) error {
-	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
-		return errors.New("execution directory and process host are required")
+func runConfiguredService(ctx context.Context, config Config, mode, startupID, console string, onConstruct func(*taskrunner.Actor)) error {
+	if config.ProcessHost == nil {
+		return errors.New("service process host is required")
 	}
 	if err := config.ValidateTaskCommandConfiguration(); err != nil {
 		return err
@@ -78,7 +78,7 @@ func runConfiguredService(ctx context.Context, config Config, mode, startupID, c
 			return nil, err
 		}
 		localAPI := &serviceLocalAPI{runDir: input.RunDir, projectID: input.RepositoryIdentity}
-		service, err := newConfiguredServiceWithHost(config, serviceHTTPHost{HostPort: hostPort, localAPI: localAPI})
+		service, err := newConfiguredServiceWithHost(config, serviceHTTPHost{HostPort: hostPort, localAPI: localAPI}, mode)
 		if err != nil {
 			return nil, err
 		}

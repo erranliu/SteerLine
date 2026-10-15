@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"io"
 	"os/exec"
 	"time"
@@ -18,11 +19,8 @@ const Protocol = "steerrunner-cli/v1"
 const MaxRequestBytes = 8 << 20
 const maxResponseBytes = 32 << 20
 
-type Request struct {
-	Protocol  string          `json:"protocol"`
-	RequestID string          `json:"request_id"`
-	Input     json.RawMessage `json:"input"`
-}
+type Request = runnercontract.Request
+
 type RemoteError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

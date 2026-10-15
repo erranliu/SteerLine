@@ -63,13 +63,15 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return dependency == module+"/internal/execution/backend" || dependency == execution+"/agentlaunch"
 	case module + "/internal/execution/conversation":
 		return dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
+	case module + "/internal/runnerstate":
+		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/storage/ports":
-		return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/product/api"
+		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate" || dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/product/api"
 	}
 	return false
 }
 
-var purePackages = []string{module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/execution/conversation", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/execution/conversation", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -265,7 +267,7 @@ func productQueryImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
 		return true
 	}
-	for _, allowed := range []string{module + "/internal/product/api", productQuery + "/taskgraph", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/storage/ports"} {
+	for _, allowed := range []string{module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/api", productQuery + "/taskgraph", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/storage/ports"} {
 		if dependency == allowed {
 			return true
 		}
@@ -278,6 +280,7 @@ func storageSQLiteImportAllowed(dependency string) bool {
 		return true
 	}
 	for _, allowed := range []string{
+		module + "/internal/runnercontract", module + "/internal/runnerstate",
 		module + "/internal/execution/backend", module + "/internal/execution/model",
 		module + "/internal/product/api", productQuery,
 		module + "/internal/storage/ports", module + "/internal/task/model",
@@ -290,7 +293,7 @@ func storageSQLiteImportAllowed(dependency string) bool {
 }
 
 func sqliteProductQuerySelectorAllowed(file *ast.File) []string {
-	allowed := map[string]bool{"History": true, "MaxEventPageBytes": true, "NativeTaskProtocol": true, "ReadySnapshot": true, "SetTaskPageCursor": true}
+	allowed := map[string]bool{"CandidateSummary": true, "RunnerHistory": true, "MaxEventPageBytes": true, "NativeTaskProtocol": true, "ReadySnapshot": true, "SetTaskPageCursor": true}
 	aliases := map[string]bool{}
 	for _, spec := range file.Imports {
 		dependency, err := strconv.Unquote(spec.Path.Value)
@@ -356,7 +359,7 @@ func ScanSource(root string) (Report, error) {
 		if pkg == console {
 			report.ConsoleFiles++
 		}
-		if pkg == execution {
+		if pkg == execution || pkg == module+"/internal/taskrunner" {
 			report.ExecutionFiles++
 		}
 		if purePackage(pkg) {
@@ -564,14 +567,14 @@ func Check(ctx context.Context, root string) (Report, error) {
 		return report, err
 	}
 	productionRoots := map[string]bool{}
-	for _, owner := range []string{core, module + "/internal/app", execution, module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", productQuery, module + "/internal/product/query/taskgraph", module + "/internal/storage/ports"} {
+	for _, owner := range []string{core, module + "/internal/app", module + "/internal/taskrunner", module + "/internal/runnerbridge", module + "/internal/runnerclient", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", productQuery, module + "/internal/product/query/taskgraph", module + "/internal/storage/ports"} {
 		productionRoots[owner] = true
 	}
 
 	for _, target := range []string{"windows", "linux"} {
 		for _, consoleGraph := range []bool{false, true} {
 
-			cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/app/host", "./internal/app", "./internal/execution", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/product/query", "./internal/product/query/taskgraph", "./internal/storage/ports")
+			cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/app/host", "./internal/app", "./internal/taskrunner", "./internal/runnerbridge", "./internal/runnerclient", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/product/query", "./internal/product/query/taskgraph", "./internal/storage/ports")
 			if consoleGraph {
 				cmd = exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/console")
 			}

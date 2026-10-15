@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"os"
 	"path/filepath"
@@ -59,14 +59,13 @@ type CandidateConversation struct {
 	Bodies []productapi.ConversationBodyPage `json:"bodies"`
 }
 
-func ReadOriginalOperations(ctx context.Context, database, project string) ([]executionmodel.OperationRecord, error) {
+func ReadOriginalOperations(ctx context.Context, database, project string) ([]runnerbridge.Candidate, error) {
 	reader, err := sqlite.OpenSQLiteReader(database)
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Close()
-	domain, err := reader.Query(ctx, project)
-	return domain.Operations, err
+	return reader.RunnerCandidates(ctx, project, "")
 }
 
 func ReadCandidateConversation(ctx context.Context, database, project, runID, executionID string) (CandidateConversation, error) {
@@ -146,45 +145,38 @@ func MainCandidate(args []string) error {
 		if err != nil {
 			return err
 		}
-		defer reader.Close()
-		d, err := productquery.NewService(reader, c.Identity()).Workflow(ctx, in.RunID)
+		candidate, readErr := reader.Candidate(ctx, c.Identity(), in.RunID)
+		_ = reader.Close()
+		if readErr != nil {
+			return readErr
+		}
+		if candidate.RunID != in.ExecutionID {
+			return fmt.Errorf("feedback candidate/Runner identity mismatch")
+		}
+		client, err := steerlineapp.OpenClient(ctx, *config)
 		if err != nil {
 			return err
 		}
-		matched := false
-		for _, e := range d.Executions {
-			if e.ExecutionID == in.ExecutionID && e.WorkflowRunID == in.RunID {
-				matched = true
-			}
-		}
-		if !matched {
-			return fmt.Errorf("feedback execution/run identity mismatch")
-		}
-		cmd, _, err := steerlineapp.SubmitAnswerDecisionBound(ctx, c, in.RunID, in.DecisionID, in.Option, in.Note, "e2e", in.DecisionVersion, in.RunRevision, in.InstanceID, in.RequestID, in.AttemptID, in.RecoveryVersion)
+		defer client.Close()
+		cmd, _, err := client.SubmitDecision(ctx, productapi.DecisionInput{CommandID: in.RequestID, RequestedBy: "e2e", Answer: productapi.DecisionAnswer{RunID: in.RunID, DecisionID: in.DecisionID, OptionID: in.Option, Note: in.Note, AnsweredBy: "e2e", ExpectedDecisionVersion: in.DecisionVersion, ExpectedRunRevision: in.RunRevision, ServiceInstanceID: in.InstanceID, SourceAttemptID: in.AttemptID, ExpectedRecoveryVersion: in.RecoveryVersion}})
 		if err != nil {
 			return err
 		}
-		// Submission is not an accepted answer. Observe this exact command;
-		// never let a later business timeout hide rejection or unknown outcome.
-		ticker := time.NewTicker(150 * time.Millisecond)
-		defer ticker.Stop()
-		for cmd.Status == "pending" || cmd.Status == "in_flight" {
-			select {
-			case <-ctx.Done():
-				_ = json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Command: &cmd})
-				return fmt.Errorf("answer command %s remains unconfirmed: %w", cmd.CommandID, ctx.Err())
-			case <-ticker.C:
-			}
-			cmd, err = reader.Command(ctx, c.Identity(), cmd.CommandID)
+		if cmd.Status == "pending" || cmd.Status == "in_flight" {
+			cmd, err = client.WaitCommand(ctx, in.RequestID, 140*time.Second)
 			if err != nil {
 				return err
 			}
 		}
-		if cmd.Status != "accepted" {
-			_ = json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Command: &cmd})
-			return fmt.Errorf("answer command %s %s: %s", cmd.CommandID, cmd.Status, cmd.Result)
+		result, _ := json.Marshal(map[string]string{"code": cmd.ResultCode, "error": cmd.ResultError})
+		display := storageports.CommandRecord{ProjectIdentity: cmd.ProjectIdentity, CommandID: cmd.CommandID, Kind: cmd.Kind, TargetID: cmd.TargetID, ExpectedVersion: cmd.ExpectedVersion, RequestedBy: cmd.RequestedBy, Status: cmd.Status, Result: result, CreatedAt: cmd.CreatedAt, UpdatedAt: cmd.UpdatedAt}
+		if err := json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Command: &display}); err != nil {
+			return err
 		}
-		return json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Command: &cmd})
+		if cmd.Status != "accepted" {
+			return fmt.Errorf("answer command %s %s: %s", cmd.CommandID, cmd.Status, cmd.ResultError)
+		}
+		return nil
 	}
 	if in.Action == "receipt" {
 		receipt, err := steerline.ReadControlReceipt(hostConfig, in.RequestID)
@@ -201,7 +193,7 @@ func MainCandidate(args []string) error {
 		payload.RunID, payload.ExpectedRunRevision = in.RunID, in.RunRevision
 	} else {
 		payload.ExpectedTaskVersion, payload.ExpectedGraphRevision = in.TaskVersion, in.GraphRevision
-		_, profile, err := c.ResolveExecutionProfile(in.ProfileID, "")
+		profile, err := c.RunnerExecution.Profile(in.ProfileID, "")
 		if err != nil {
 			return err
 		}

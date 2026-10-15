@@ -100,7 +100,7 @@ type DispatchTx interface {
 
 type PredecessorTx interface {
 	commandInsertTx
-	operationTx
+	RecordPredecessorAudit(CommandRecord) error
 	graphTx
 	PutTaskDependency(taskmodel.TaskDependencyRecord) error
 	BumpOpenTaskVersionCAS(taskmodel.TaskRecord, uint64) error

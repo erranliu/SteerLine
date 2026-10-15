@@ -21,9 +21,7 @@ func TaskSummary(t taskmodel.TaskRecord) api.TaskSummary {
 
 func TaskDetail(t storageports.NativeTaskDetail) api.TaskDetail {
 	p := api.TaskDetail{TaskSummary: TaskSummary(t.TaskRecord), StopPending: append([]string(nil), t.StopPending...), ProjectID: t.ProjectID, Priority: t.Priority, SpecPath: t.Contract.SpecRef.Path, Successors: append([]string(nil), t.Successors...), DependencyReady: t.DependencyReady, StartupBlockers: append([]string(nil), t.StartupBlockers...)}
-	for _, w := range t.WorkflowRuns {
-		p.WorkflowRuns = append(p.WorkflowRuns, workflowSummary(w))
-	}
+	p.WorkflowRuns = append([]api.WorkflowSummary(nil), t.WorkflowRuns...)
 	for _, d := range t.Predecessors {
 		p.Predecessors = append(p.Predecessors, dependencySummary(d))
 	}

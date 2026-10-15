@@ -3,7 +3,6 @@ package taskrunner
 import (
 	"encoding/json"
 
-	b "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
@@ -49,9 +48,10 @@ func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
 	v := &reconstruction.RunView{RunID: c.ID, TaskID: c.TaskID, DomainTaskID: c.TaskID, ExecutionID: c.RunID, ControlRevision: c.Revision, Claimant: c.Claimant, CandidateNumber: c.Number, CandidateCreatedAt: c.CreatedAt, CandidateTiming: "wall_since_reservation", ExecutionStatus: c.SubmitState, BaseCommit: text(c.BaseRevision), Error: text(c.Diagnostic), PR: model.PRState{State: "none"}}
 	var input runnerclient.RunInput
 	_ = json.Unmarshal(c.Submit.Input, &input)
-	v.Host = input.Execution.Target.Environment
-	if v.Host == "" {
-		v.Host = "local"
+	v.Host = "local"
+	if input.Execution.Target.Kind == "orca_local" || input.Execution.Target.Kind == "orca_environment" {
+		v.Host = "orca"
+		v.Target.ID = input.Execution.Target.Environment
 	}
 	v.Agent = "codex"
 	v.FlowRef = input.Workflow.ID
@@ -90,13 +90,8 @@ func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
 		p := r.PR
 		v.PR = model.PRState{URL: text(p.URL), HeadRevision: text(p.HeadRevision), State: p.State, MergedAt: p.MergedAt, MergeCommit: p.MergeCommit, QueriedAt: &p.CheckedAt, QueryError: text(p.QueryError)}
 	}
-	if r.Question != nil {
-		q := r.Question
-		request := model.DecisionRequest{FormatVersion: 1, InteractionKind: "native_question", BlocksProgress: true, Question: q.Text, AllowFreeText: q.AllowFreeText}
-		for _, option := range q.Options {
-			request.Options = append(request.Options, b.DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail})
-		}
-		v.Decision = &model.DecisionState{ID: q.ID, AttemptID: r.Execution.AttemptID, Version: r.Revision, Status: "pending", Request: request}
+	if !c.StopRequested && c.Participation == "active" {
+		v.Decision = Decision(r)
 	}
 	return v
 }

@@ -68,10 +68,10 @@ func (s Reader) ReadProjectRecordsTx(ctx context.Context, tx *sql.Tx, project, s
 		}
 	}
 
-	rows, err := QuerySnapshot(ctx, tx, project)
+	candidates, err := readRunnerCandidates(ctx, tx, project, "")
 	view.HistoryError = err
 	if err == nil {
-		history := queryrules.History(rows)
+		history := queryrules.RunnerHistory(candidates)
 		view.History = &history
 	}
 	return ProjectRecords{View: view}
