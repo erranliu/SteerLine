@@ -368,9 +368,25 @@ func runE2E(opts options) (code int) {
 		}
 		return names[i] < names[j]
 	})
-	// Enumerate selected packages before any scenario can create resources.
-	for _, pkg := range names {
-		cmd := exec.CommandContext(ctx, "go", "test", "-tags=e2e", "-list=.", pkg)
+	// Freeze every selected test binary before resource creation. Later packages
+	// must not silently compile a newer checkout halfway through a long run.
+	testBinaries := map[string]string{}
+	for index, pkg := range names {
+		testBinary := filepath.Join(buildDir, fmt.Sprintf("scenario-%d.test.exe", index+1))
+		build := exec.CommandContext(ctx, "go", "test", "-tags=e2e", "-c", "-o", testBinary, pkg)
+		build.Dir = root
+		build.Env = e2eEnvironment(os.Environ(), string(config))
+		if output, err := build.CombinedOutput(); err != nil {
+			return fail(fmt.Errorf("compile %s: %w: %s", pkg, err, output))
+		}
+		compiled, err := os.ReadFile(testBinary)
+		if err != nil {
+			return fail(err)
+		}
+		sum := sha256.Sum256(compiled)
+		report.Builds[testBinary] = hex.EncodeToString(sum[:])
+		testBinaries[pkg] = testBinary
+		cmd := exec.CommandContext(ctx, testBinary, "-test.list=.")
 		cmd.Dir = root
 		cmd.Env = e2eEnvironment(os.Environ(), string(config))
 		raw, err := cmd.CombinedOutput()
@@ -404,6 +420,9 @@ func runE2E(opts options) (code int) {
 			return fail(fmt.Errorf("manifest differs from tests in %s: actual=%v expected=%v", pkg, actual, expected))
 		}
 	}
+	if err := writeJSON(filepath.Join(buildDir, "frozen-binaries.json"), map[string]any{"source_commit": strings.TrimSpace(sourceCommit), "source_dirty": sourceDirty, "sha256": report.Builds}); err != nil {
+		return fail(err)
+	}
 	report.Preparation = time.Since(started).Seconds()
 	execution := time.Now()
 	report.Errors, report.Blocked = executeE2EPackages(ctx, names, packages, opts.e2eEnv == "gated", func(i int, pkg string) error {
@@ -412,7 +431,8 @@ func runE2E(opts options) (code int) {
 			tests = append(tests, e.Test)
 		}
 		timeout := e2ePackageGoTimeout(packages[pkg])
-		args := []string{"test", "-tags=e2e", "-json", "-count=1", "-p=1", "-parallel=1", "-timeout=" + timeout, "-run=" + exactPattern(tests), pkg}
+		importPath := strings.TrimSuffix(corePackage, "/internal/app/host") + "/" + strings.TrimPrefix(pkg, "./")
+		args := []string{"tool", "test2json", "-t", "-p", importPath, testBinaries[pkg], "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
 		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{"go"}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
 		stdout, err := os.Create(g.StdoutLog)
 		if err != nil {
@@ -424,7 +444,7 @@ func runE2E(opts options) (code int) {
 			return err
 		}
 		cmd := exec.Command("go", args...)
-		cmd.Dir = root
+		cmd.Dir = filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(pkg, "./")))
 		cmd.Env = e2eEnvironment(os.Environ(), string(config))
 		cmd.Stdout, cmd.Stderr = stdout, stderr
 		groupStarted := time.Now()
