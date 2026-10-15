@@ -9,7 +9,8 @@ if (-not $IndependentProcess) {
     $arguments = @()
     if ($SteerRunnerExe) { $arguments += @('-SteerRunnerExe', $SteerRunnerExe) }
     if ($OutDir) { $arguments += @('-OutDir', $OutDir) }
-    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $arguments
+    # Cover the frozen gate/live deadlines, builds and independent cleanup.
+    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $arguments -Timeout ([TimeSpan]::FromMinutes(60))
     return
 }
 $previousRunner = $env:STEERRUNNER_EXE

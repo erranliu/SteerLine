@@ -1,5 +1,5 @@
 import { it, expect } from "vitest";
-import { candidateState, stopReason } from "./state";
+import { candidateState, stopReason, businessOpen } from "./state";
 import type { Candidate } from "../../shared/api/types";
 const base = {
   task_id: "task",
@@ -50,4 +50,21 @@ it("stopped participation preserves the execution fact and cannot stop the last 
     ]),
   ).toBe("");
   expect(stopReason(stopped, [base, stopped])).toContain("历史只读");
+});
+
+it("keeps public Runner pr_ready candidates open for feedback and merge", () => {
+  const run = {
+    ...base,
+    workflow_status: "pr_ready",
+    execution_status: "pr_ready",
+    task_status: "in_progress",
+    decision: {
+      status: "pending",
+      request: { interaction_kind: "business_feedback", blocks_progress: true },
+    },
+  } as Candidate;
+  expect(businessOpen(run)).toBe(true);
+  expect(candidateState(run)).toBe("waiting_for_merge");
+  expect(businessOpen({ ...run, task_status: "closed" })).toBe(false);
+  expect(businessOpen({ ...run, workflow_status: "abandoned" })).toBe(false);
 });

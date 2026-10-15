@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-SteerRunner 拆分后的测试精简（2026-10-15，普通开发，仅规划）：[Spec](runner-test-convergence.spec.md) · [Plan](runner-test-convergence.plan.md) · [专属验收](../acceptance/runner-test-convergence.md)。执行专项归 Runner；L2 保留本机 Codex 真实实现、报告、发布、SteerlineTest PR 合并和 Task 交付全流程，不改 roadmap。
+SteerRunner 拆分后的测试精简（2026-10-15，普通开发，已授权实施）：[Spec](runner-test-convergence.spec.md) · [Plan](runner-test-convergence.plan.md) · [专属验收](../acceptance/runner-test-convergence.md)。执行专项归 Runner；L2 保留本机 Codex 真实实现、报告、发布、SteerlineTest PR 合并和 Task 交付全流程，不改 roadmap。
 
 TUI 退役与 Web 唯一交互前端（普通开发）：[Spec](tui-retirement.spec.md) · [Plan](tui-retirement.plan.md) · [专属验收](../acceptance/tui-retirement.md)。2026-10-15 按用户授权实施，实时结果归专属验收；包含默认 Web 调试包、共用代码保留与 TUI 专属测试清理，不改 roadmap。
 

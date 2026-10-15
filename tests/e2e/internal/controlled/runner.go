@@ -169,6 +169,7 @@ func RunnerCLI(args []string) (bool, error) {
 				fact.CheckedAt = time.Now().UTC()
 				run.PR = &fact
 				run.Status = "pr_ready"
+				run.Step = "await_merge"
 				run.Phase = "pr_ready"
 				run.Controls.CanReply = true
 				if provider.WebFeedback {
@@ -207,7 +208,7 @@ func RunnerCLI(args []string) (bool, error) {
 		page := runnercontract.EventPage{NextCursor: "waiting", Events: []runnercontract.Event{}}
 		if argument(args, "--after") != "fixture-end" && run.PR != nil {
 			for i := 1; i <= 3; i++ {
-				f := runnercontract.Final{CommandID: fmt.Sprintf("final-%s-%d", runID, i), AttemptID: run.Execution.AttemptID, SessionID: run.Execution.SessionID, TurnID: strconv.Itoa(i), NativeOutcome: "succeeded", Verified: true, Source: "fixture", ItemID: strconv.Itoa(i), Text: "Controlled candidate pushed and PR created"}
+				f := runnercontract.Final{CommandID: fmt.Sprintf("final-%s-%d", runID, i), AttemptID: run.Execution.AttemptID, SessionID: run.Execution.SessionID, TurnID: strconv.Itoa(i), NativeOutcome: "succeeded", Verified: true, Source: "fixture", ItemID: strconv.Itoa(i), Text: []string{"Controlled implementation result", "Controlled report result", "Controlled candidate pushed and PR created"}[i-1]}
 				page.Events = append(page.Events, runnercontract.Event{EventID: fmt.Sprintf("event-%s-%d", runID, i), RunID: runID, Revision: run.Revision, Type: "final", CommandID: f.CommandID, AttemptID: f.AttemptID, Final: &f, CreatedAt: time.Now().UTC()})
 			}
 		}

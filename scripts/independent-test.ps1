@@ -1,6 +1,6 @@
 # Native lifecycle tests must start with one consistent user token and outside
 # a caller's kill-on-close Job. This is the same WMI context as the browser driver.
-function Invoke-IndependentTest([string]$ScriptPath, [string[]]$TestArguments) {
+function Invoke-IndependentTest([string]$ScriptPath, [string[]]$TestArguments, [TimeSpan]$Timeout = [TimeSpan]::FromMinutes(20)) {
     $brokerRoot = Join-Path $env:TEMP ('steerline-native-test-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $brokerRoot | Out-Null
     $brokerLog = Join-Path $brokerRoot 'test.log'
@@ -18,7 +18,7 @@ function Invoke-IndependentTest([string]$ScriptPath, [string[]]$TestArguments) {
     $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($body))
     $process = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{CommandLine=('powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -EncodedCommand ' + $encoded)}
     if ($process.ReturnValue -ne 0) { throw "Independent test process creation failed: $($process.ReturnValue)" }
-    $deadline = [DateTime]::UtcNow.AddMinutes(20)
+    $deadline = [DateTime]::UtcNow.Add($Timeout)
     while (-not (Test-Path -LiteralPath $brokerResult)) {
         if ([DateTime]::UtcNow -ge $deadline) { throw "Independent test result unverified; inspect $brokerRoot (PID $($process.ProcessId))" }
         Start-Sleep -Milliseconds 250

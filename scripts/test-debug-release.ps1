@@ -5,7 +5,8 @@ if (-not $IndependentProcess) {
     $testArguments = @()
     if ($Live) { $testArguments += '-Live' }
     if ($SteerRunnerExe) { $testArguments += @('-SteerRunnerExe', $SteerRunnerExe) }
-    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $testArguments
+    $testBudget = if ($Live) { [TimeSpan]::FromMinutes(80) } else { [TimeSpan]::FromMinutes(20) }
+    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $testArguments -Timeout $testBudget
     return
 }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -74,8 +75,7 @@ try {
         $env:STEERRUNNER_EXE = $SteerRunnerExe
         Push-Location $repo
         try {
-            & go run ./cmd/test-feedback -level=L2
-            if ($LASTEXITCODE -ne 0) { throw 'Full L2 real product workflow failed.' }
+            & (Join-Path $PSScriptRoot 'test-l2.ps1') -SteerRunnerExe $SteerRunnerExe -IndependentProcess
         } finally { Pop-Location }
     }
     $result = [pscustomobject]@{ passed = $true; default_artifacts = $defaultRelease.root; controlled = $first.root; other = $second.root; live = [bool]$Live }

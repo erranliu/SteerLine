@@ -157,15 +157,28 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
     ).toBeEnabled();
     await page.getByRole("button", { name: "手动启动", exact: true }).click();
     await page.getByRole("button", { name: "确认启动", exact: true }).click();
-    await expect.poll(() => {
-      const facts = JSON.parse(readFileSync(providerPath, "utf8"));
-      return Object.values(facts.requests ?? {}).filter((kind) => kind === "submit").length;
-    }, { timeout: 300000 }).toBe(1);
-    await expect.poll(async () => {
-      const snapshot = (await get("/snapshot")).connection.snapshot.page;
-      const fixture = JSON.parse(readFileSync(providerPath, "utf8"));
-      return !!snapshot.runs[0]?.execution_id && !!snapshot.runs[0]?.session_id && fixture.hold;
-    }).toBe(true);
+    await expect
+      .poll(
+        () => {
+          const facts = JSON.parse(readFileSync(providerPath, "utf8"));
+          return Object.values(facts.requests ?? {}).filter(
+            (kind) => kind === "submit",
+          ).length;
+        },
+        { timeout: 300000 },
+      )
+      .toBe(1);
+    await expect
+      .poll(async () => {
+        const snapshot = (await get("/snapshot")).connection.snapshot.page;
+        const fixture = JSON.parse(readFileSync(providerPath, "utf8"));
+        return (
+          !!snapshot.runs[0]?.execution_id &&
+          !!snapshot.runs[0]?.session_id &&
+          fixture.hold
+        );
+      })
+      .toBe(true);
     const beforeClose = (await get("/snapshot")).connection.snapshot.page;
     const originalRun = beforeClose.runs[0];
     expect(originalRun.session_id).toBeTruthy();
@@ -177,17 +190,40 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
     page = await context.newPage();
     page.on("pageerror", (error) => consoleErrors.push(error.message));
     const afterClose = (await get("/snapshot")).connection.snapshot.page;
-    expect(afterClose.service.instance_id).toBe(beforeClose.service.instance_id);
+    expect(afterClose.service.instance_id).toBe(
+      beforeClose.service.instance_id,
+    );
     expect(afterClose.service.ready).toBe(true);
     expect(afterClose.runs).toHaveLength(1);
-    expect(afterClose.runs[0]).toMatchObject({ run_id: originalRun.run_id, execution_id: originalRun.execution_id, attempt_id: originalRun.attempt_id, session_id: originalRun.session_id, current_turn_id: originalRun.current_turn_id });
+    expect(afterClose.runs[0]).toMatchObject({
+      run_id: originalRun.run_id,
+      execution_id: originalRun.execution_id,
+      attempt_id: originalRun.attempt_id,
+      session_id: originalRun.session_id,
+      current_turn_id: originalRun.current_turn_id,
+    });
     const held = JSON.parse(readFileSync(providerPath, "utf8"));
-    expect(Object.values(held.requests).filter((kind) => kind === "submit")).toHaveLength(1);
+    expect(
+      Object.values(held.requests).filter((kind) => kind === "submit"),
+    ).toHaveLength(1);
     expect(held.hold).toBe(true);
     await page.goto(originalURL);
     await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
-    execFileSync(helper, ["release-fixture", "--e2e-state", providerPath], { env, stdio: "pipe", timeout: 30000, windowsHide: true });
-    writeFileSync(testInfo.outputPath("browser-close.json"), JSON.stringify({ before: beforeClose, after: afterClose, original_requests: held.requests, start_posts: startPosts }));
+    execFileSync(helper, ["release-fixture", "--e2e-state", providerPath], {
+      env,
+      stdio: "pipe",
+      timeout: 30000,
+      windowsHide: true,
+    });
+    writeFileSync(
+      testInfo.outputPath("browser-close.json"),
+      JSON.stringify({
+        before: beforeClose,
+        after: afterClose,
+        original_requests: held.requests,
+        start_posts: startPosts,
+      }),
+    );
     await expect
       .poll(
         async () => {
@@ -196,8 +232,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
         },
         {
           timeout: 300000,
-          message:
-            "original public Run and PR projection",
+          message: "original public Run and PR projection",
         },
       )
       .toBe("open");
@@ -242,12 +277,57 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
       .web_feedback,
   ).toBe(true);
   {
-    await page.getByLabel("修复发布或 PR 元数据", { exact: false }).check();
-    await page.getByRole("button", { name: "提交回答", exact: true }).click();
+    // A background PR refresh can invalidate the caller revision. A rejected
+    // answer has no Runner side effect; the user must refresh and submit anew.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await page.getByLabel("修复发布或 PR 元数据", { exact: false }).check();
+      const response = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          response.url().endsWith("/commands") &&
+          response.request().postDataJSON()?.action === "answer_decision",
+      );
+      await page.getByRole("button", { name: "提交回答", exact: true }).click();
+      const posted = await response;
+      const receipt = await posted.json();
+      if (posted.ok() && receipt.status !== "rejected") break;
+      expect(["stale_target", "stale_version"]).toContain(
+        receipt.code ?? receipt.command?.result_code,
+      );
+      expect(
+        Object.values(
+          JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8"))
+            .requests ?? {},
+        ).filter((kind) => kind === "reply"),
+      ).toHaveLength(0);
+      expect(attempt).toBeLessThan(2);
+      const operations = page.locator("details.operations");
+      if (
+        !(await operations.evaluate(
+          (element) => (element as HTMLDetailsElement).open,
+        ))
+      ) {
+        await operations.locator("summary").click();
+      }
+      const rejected = operations
+        .locator(".operation")
+        .filter({ hasText: "answer_decision" })
+        .first();
+      await expect(rejected.getByText("已拒绝", { exact: true })).toBeVisible();
+      await page.reload();
+      await page.getByRole("button", { name: "打开回答", exact: true }).click();
+      await expect(page.getByRole("textbox", { name: "回答内容" })).toHaveValue(
+        "中文验收反馈\n保持当前候选，核对 PR 元数据。",
+      );
+    }
     await expect
       .poll(
         async () =>
-          Object.values(JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8")).requests ?? {}).filter((kind) => kind === "reply").length,
+          Object.values(
+            JSON.parse(
+              readFileSync(join(root, "provider", "state.json"), "utf8"),
+            ).requests ?? {},
+          ).filter((kind) => kind === "reply").length,
         { timeout: 150000 },
       )
       .toBe(1);
@@ -262,7 +342,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
         },
         { timeout: 90000 },
       )
-      .toEqual(["await_merge", "waiting_external"]);
+      .toEqual(["await_merge", "pr_ready"]);
     const after = await get("/snapshot");
     expect(after.connection.snapshot.page.runs[0].session_id).toBe(
       run.session_id,

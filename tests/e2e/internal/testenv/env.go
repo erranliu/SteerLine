@@ -41,13 +41,11 @@ type Scenario struct {
 	t                *testing.T
 	projects         []*Project
 	processes        []*testprocess.Process
-	fixtureClosers   []func()
 	files            []*os.File
 	resources        []map[string]any
 }
 
 type Project struct {
-	RemoteBranches                                                                    []string
 	RemoteCleanupFailed                                                               bool
 	RunnerCleanupFailed                                                               bool
 	Scenario                                                                          *Scenario
@@ -69,8 +67,7 @@ type Task struct {
 	Contract taskmodel.TaskContract
 }
 
-// TaskFactsSnapshot keeps task facts for older unselected scenario assertions.
-// Native record slices remain empty; production does not reconstruct them.
+// TaskFactsSnapshot contains caller-owned task and delivery facts only.
 type TaskFactsSnapshot struct {
 	ProjectIdentity string
 	Tasks           []taskmodel.TaskRecord
@@ -398,10 +395,6 @@ func (p *Project) CreateTasks() {
 	p.createTasks([]string{"a", "b"})
 }
 
-func (p *Project) CreateTasksWithIndependentTask() {
-	p.createTasks([]string{"a", "b", "c"})
-}
-
 func (p *Project) createTasks(keys []string) {
 	s := p.Scenario
 	s.t.Helper()
@@ -559,8 +552,7 @@ func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (
 	}
 	snap.Page = *view.Tasks
 	snap.Runner = state
-	// Domain retains task facts only while callers migrate to Runner. Never
-	// synthesize old native execution/attempt/operation records from CLI views.
+	// Task facts come from the same caller-owned application read transaction.
 	snap.Domain = TaskFactsSnapshot{ProjectIdentity: project, Tasks: graph.Tasks}
 	for _, delivery := range graph.Deliveries {
 		snap.Domain.Deliveries = append(snap.Domain.Deliveries, delivery)
@@ -589,7 +581,7 @@ func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 		return snap, errors.New("project snapshot differs from its validated project/database identity")
 	}
 	snap.Helper, err = controlled.Read(p.Provider)
-	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
+	if err == nil && p.RealPR {
 		snap.Helper.PR, err = p.githubPRContext(ctx, snap)
 	}
 	return snap, err
@@ -602,10 +594,6 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 		result = snap
 		if err != nil {
 			return false, err
-		}
-		if raw, err := os.ReadFile(p.Provider + ".rpc-error.json"); err == nil {
-			_ = os.WriteFile(filepath.Join(p.Scenario.Output, p.Name+"-fixture-rpc-error.json"), raw, 0600)
-			p.Scenario.t.Fatal("external protocol fixture failed: ", string(raw))
 		}
 		if len(snap.Runner.Candidates) != 1 {
 			return false, nil
@@ -645,11 +633,7 @@ func (p *Project) Merge() {
 
 func (p *Project) Record(label string, snap Snapshot) {
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+".json"), snap))
-	if strings.HasPrefix(p.Scenario.ID, "candidates.") {
-		ops, err := driver.ReadOriginalOperations(p.Scenario.Context, p.Database, snap.Page.ProjectID)
-		p.Scenario.Must(err)
-		p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-operations.json"), ops))
-	}
+
 }
 
 func (s *Scenario) cleanup() {
@@ -707,9 +691,6 @@ func (s *Scenario) cleanup() {
 			failures = append(failures, "original Runner cleanup: "+readErr.Error())
 		}
 		_ = controlled.Write(filepath.Join(s.Output, p.Name+"-runner-cleanup.json"), map[string]any{"confirmed": readErr == nil, "error": fmt.Sprint(readErr)})
-	}
-	for _, closeFixture := range s.fixtureClosers {
-		closeFixture()
 	}
 	for _, f := range s.files {
 		if err := f.Close(); err != nil {

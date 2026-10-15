@@ -40,7 +40,7 @@
 
 ### 步骤 3：重接受控场景与合并重复项
 
-改造 `internal/testenv/env.go`、`recovery.go`、`query.go`、driver 和必要 helper，通过公开 CLI 夹具驱动 Task。
+改造 `internal/testenv/env.go`、`recovery.go`、删除失效 `query.go`、driver 和必要 helper，通过公开 CLI 夹具驱动 Task。
 
 - `smoke.delivery` 吸收 `delivery.basic` 的独有断言，删除独立 delivery 包/登记；核对相同 Delivery、后继只 ready、不再提交新业务。
 - `recovery.waiting-merge-restart` 只重启 SteerLine，保持 fixture Runner 的原 Run 和公开 PR；核对候选/请求/游标、授权和 Task，删除原生 session/dispatch 次数等执行层断言。
@@ -97,9 +97,9 @@
 
 不默认执行 Full：涉及包、固定 L1、七场景与闭包编译已覆盖本次测试重接；Full 调度选择逻辑通过其 owner 测试核对。确需全量才用现有三 worker 入口。其余 L3 live、Orca、原生恢复/沙箱矩阵由 Runner 专项承担，不在 SteerLine 重跑。完整 L2 是本任务必要的真实验收，不能以已取消其他原生目标、成本或仅编译为由省略。
 
-## 4. 规划交付的静态检查
+## 4. 最初规划轮的静态检查
 
-本轮仅新增 Spec、Plan、专属验收与导航；执行 `python scripts/check_doc_links.py` 和 `git diff --check`，核对验收项/测试计划映射及七场景与 L2 契约一致。结果只写专属验收的文档检查段，RTC-A1～A6 在实施与实际验收前均保持待验。
+最初规划轮仅新增 Spec、Plan、专属验收与导航；执行 `python scripts/check_doc_links.py` 和 `git diff --check`，核对验收项/测试计划映射及七场景与 L2 契约一致。结果只写专属验收的文档检查段，RTC-A1～A6 在实际执行前保持待验。本轮已获实施授权，按第 3 节及后续上下文补充完成必要自动验证，实时结果仅登记专属验收。
 
 
 ## 实施中核对的测试上下文
@@ -108,3 +108,17 @@ waiting-merge-restart 采用仅终止/重启 caller 的故障注入，Runner CLI
 
 
 收尾补充：TaskDelivery 后在独立清理预算内等待调用方投影的公开 stopped 事实，再停止应用，避免抢在 stop obligation 对账前关闭 actor。E2E runner 直接拥有冻结的测试 EXE，将原始输出写文件；进程结束后对有限日志执行 test2json，防止外部后台进程继承管道使报告挂起。保存 raw log、真实命令和 group wall time；转换时间戳只表示日志转换时点，不作实际场景并行起止证据。RTC-A1/A3/A4 的证据拒绝/清理核对保持，需以新现场实际执行。
+
+
+消费者审计补充：删除 debug-template 的 sandbox-check 及兄弟写入 sentinel，更新任务 Spec/Plan/AGENTS 为最小真实产物/三阶段/PR/交付；避免删除原生 helper 后仍保留失效探针命令。Web smoke 复用主干独立进程工具，修正原清理脚本将单个命令数组展开成字符的错误；不降低 resident 拒绝 kill-on-close Job 的产品门槛。RTC-A2/A4/A6 覆盖模板发布单测、PowerShell 语法、新包模拟/reset 与现有 browser smoke；Windows install 若因不可查询的同名进程保守拒绝则保留环境阻断，不修改权限或安装现场。
+
+
+Web 调用方实测修复（RTC-A2/A6）：保留真实 `pr_ready` 公开状态，`web/src/features/runs/state.ts` 将其纳入仍参与/待合并分类，Task closed/abandoned 的只读门槛不变；fixture 补真实 `await_merge` step，浏览器期待当前状态，不伪造旧值。运行 `npm --prefix web test -- src/features/runs/state.test.ts src/features/runs/answer.test.tsx`、Web build 和现有 smoke 验证反馈草稿、原 Run 提交、交付及断线约束；实际结果归专属验收。
+
+浏览器过期版本分支（RTC-A2/A6）：PR 后台观察可使候选 CAS revision 过期，现有 API 必须拒绝且零 Runner reply。场景显式观察拒绝/原回执、刷新页面保留草稿，由模拟用户重新确认提交，最多三次；只允许权威回执已拒绝的 `stale_target` / `stale_version` 分支，不对未知结果或其他错误重试，不放松当前版本/原 Run 绑定。最终断言公开 reply 仅一次。
+
+RTC-A2/A4/A6 模拟配置修正：修改维护源 `debug-template/home/config-source/SteerlineTest.simulate.json` 的 `pr_poll` 为 `15s`；公开 CLI 完整往返使旧 100ms 轮询长期占用调度并连续更新候选 CAS，浏览器验证无法在稳定版本提交。只改模拟模板，不改生产调度、冻结现场、授权或候选版本规则；重建新包验证现有两个浏览器消费者与清理。
+
+L2 独立进程外层等待使用 60 分钟，覆盖既有 gate 6 分钟、live 35 分钟、构建和清理预算；共享 `Invoke-IndependentTest` 提供显式 Timeout 参数，其他消费者仍用原 20 分钟。不能让外层等待先于既有 L2 内部期限超时而丢失结果。本轮真实 L2 在 7 分钟内已实际通过，新增外层预算仅消除长任务被过早截断的风险。
+
+	est-debug-release.ps1 -Live 也直接复用 	est-l2.ps1 的原生退出码处理，外层等待 80 分钟为前置生成/调试与完整 L2 留足预算；未选择 Live 的消费者仍保持原 20 分钟。

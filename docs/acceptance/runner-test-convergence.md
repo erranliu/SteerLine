@@ -4,15 +4,15 @@
 
 ## 验收项
 
-用户已授权实施；已 rebase 到 `20f347cd`，保留主干四项 runtime 拆分及二并行，注册表由 28 项收敛为 7 项。实时状态见下方实施记录；完整 L2 正在实际执行，不以受控通过代替。
+用户已授权实施；已 rebase 到 `20f347cd`，保留主干四项 runtime 拆分及二并行，注册表由 28 项收敛为 7 项。完整 L2 已实际通过；浏览器共享消费者仍在收尾，见下方实施记录。
 
 | ID | 自动验收及具体检查 | 状态 | 证据登记位置 |
 | --- | --- | --- | --- |
-| RTC-A1 | manifest 精确七项；L2 controlled→live、gate-only、失败/清理失败阻断；退役参数拒绝、非零匹配 | 待验 | 本项登记 test-feedback 选择测试及 gate-only 的 summary/用例清单 |
+| RTC-A1 | manifest 精确七项；L2 controlled→live、gate-only、失败/清理失败阻断；退役参数拒绝、非零匹配 | 通过 | 本项登记 test-feedback 选择测试及 gate-only 的 summary/用例清单 |
 | RTC-A2 | caller fixture 与原请求、revision、游标、绑定、事务、交付/停止义务；controlled smoke 无原生依赖 | 待验 | 本项登记 client/bridge/taskrunner/SQLite/必要 HTTP 测试与 smoke 的命令、源码、summary |
-| RTC-A3 | 完整 L2 本机 Codex 三阶段执行、真实 Git 产物与 SteerlineTest PR、真实 merge、唯一交付/后继、清理；证据缺失拒绝测试 | 待验 | 本项登记 gate/live 各报告、Runner version/SHA、公开 Run/final、产物 commit、PR URL/repo/base/head/head SHA/merge、TaskDelivery 和 cleanup |
-| RTC-A4 | waiting-merge-restart 保持原候选/请求/投影并零重复副作用；installed-debug-isolation 实际通过 | 待验 | 本项登记五个 L3 scenario、实际构建提交、环境和清理结果 |
-| RTC-A5 | 28 项及非注册专项去向清单完整；独有 Runner 断言有覆盖；失效脚本/原生基础设施无执行消费者，live 必需能力保留 | 待验 | 下方迁移明细及两仓精确 commit、测试名/命令/结果、依赖/脚本审计 |
+| RTC-A3 | 完整 L2 本机 Codex 三阶段执行、真实 Git 产物与 SteerlineTest PR、真实 merge、唯一交付/后继、清理；证据缺失拒绝测试 | 通过 | 本项登记 gate/live 各报告、Runner version/SHA、公开 Run/final、产物 commit、PR URL/repo/base/head/head SHA/merge、TaskDelivery 和 cleanup |
+| RTC-A4 | waiting-merge-restart 保持原候选/请求/投影并零重复副作用；四项 runtime isolation 实际通过 | 待验 | 本项登记五个 L3 scenario、实际构建提交、环境和清理结果 |
+| RTC-A5 | 28 项及非注册专项去向清单完整；独有 Runner 断言有覆盖；失效脚本/原生基础设施无执行消费者，live 必需能力保留 | 通过 | 下方迁移明细及两仓精确 commit、测试名/命令/结果、依赖/脚本审计 |
 | RTC-A6 | L1/Full 选择正确、普通/e2e 编译、当前文档与脚本一致；历史事实未篡改 | 待验 | 本项登记固定 L1、编译、导航/语法/差异及行数清单 |
 
 每次实际执行登记：源码 commit/dirty、环境与 EXE 版本/SHA、精确命令、时间、退出码、实际命中/skip、passed/complete/coverage、原始产物路径及限制。原始日志保存于每次新建临时证据目录，仓库只记录最小摘要；失败和未验不得被后续通过覆盖。
@@ -23,19 +23,19 @@
 
 | 原范围 | 处理要求 | 目标与实际证据 |
 | --- | --- | --- |
-| smoke.delivery / delivery.basic | 合并 SteerLine Task 断言，删除重复入口 | 待盘点、待实施 |
-| smoke.local-codex | 保留完整 L2 live；公开结果＋真实 Git/PR＋Task 证据 | 待实施、待验 |
-| waiting-merge-restart / installed-debug-isolation | 保留，受控注入上移到 Runner CLI | 待实施、待验 |
-| 其他 recovery / delivery live | 执行专项归 Runner，调用方断言落回原 owner | 待核实 Runner 覆盖及 SteerLine 归属 |
-| Orca terminal/environment / nativeworkspace | Runner 专项；不重启已取消真机验收 | 待核实具体测试/证据 |
-| sandbox、usage、rollout、原生进程故障 | Runner 专项，清除 SteerLine 专属驱动/解析器 | 待核实具体测试/证据 |
-| scripts/protocol/debug 中混合支撑 | 删除失效/专项，保留调试产品能力与最小 live 装配 | 待盘点消费者、语法和闭包 |
+| smoke.delivery / delivery.basic | 合并 SteerLine Task 断言，删除重复入口 | 已合并；`rtc-gate-3` 及完整 L2 gate 已通过 |
+| smoke.local-codex | 保留完整 L2 live；公开结果＋真实 Git/PR＋Task 证据 | 已实施；实际证据见下方 A3/A4 |
+| waiting-merge-restart / installed-debug-isolation | 保留，受控注入上移到 Runner CLI | 已实施；实际证据见下方 A3/A4 |
+| 其他 recovery / delivery live | 执行专项归 Runner，调用方断言落回原 owner | 已核实；28 项明细及 Runner owner 结果见下方 |
+| Orca terminal/environment / nativeworkspace | Runner 专项；不重启已取消真机验收 | 已核实；公开契约保留，原生专项 owner 见下方 |
+| sandbox、usage、rollout、原生进程故障 | Runner 专项，清除 SteerLine 专属驱动/解析器 | 已核实；公开契约保留，原生专项 owner 见下方 |
+| scripts/protocol/debug 中混合支撑 | 删除失效/专项，保留调试产品能力与最小 live 装配 | 已移除失效消费者；边界/编译/脚本语法通过，共享浏览器收尾中 |
 
 ## 人工与环境前置
 
 无新增人工验收。完整 L2 需要已有本机 Codex 登录、真实 Runner EXE 和 SteerlineTest GitHub 权限；不可用时 RTC-A3 保持待验/阻断。真实 PR 仅针对本次独立 base/head，保留 PR 历史。临时调试使用生成的新包，不访问安装现场，不复制认证/数据库。
 
-## 本轮文档检查
+## 最初规划轮文档检查
 
 仅检查规划文档，不计入 RTC-A1～RTC-A6 的产品验收。
 
@@ -52,7 +52,7 @@
 - 受控 L2 已通过：`.evidence/rtc-gate-3/summary.json`，smoke 66.64 秒、清理通过、coverage=gate-only；包含唯一交付、后继和交付后静默，不能当完整 L2。
 - 早期两次 gate 调试在修正夹具本地仓库/PR 刷新字段后主动终止，原报告保留于 `.evidence/rtc-gate-1`、`rtc-gate-2`，均不算通过。
 - 第一轮完整 L2：`.evidence/rtc-l2-live-1` 的 gate 通过；live 在本次新 clone 的 CRLF 配置变更导致 `git rm` 拒绝时失败，未执行模型或创建 PR。已将 clone 前的 Git 配置固定为 LF，并修正初始化前 cleanup 不应要求已存在 Task DB；保留失败，不以失败现场重试。
-- 新鲜完整 L2、L1、debug 包与其他定向检查正在执行；对应项未完成前不标全部通过。
+- 后续完整 L2、L1、L3 和 debug 结果见下方；失败现场不复用、不改写为通过。
 
 ## 28 项原注册场景去向
 
@@ -88,3 +88,52 @@
 | `recovery.report-source-changed` | Runner WorkflowSourceAndFormatRules、SRReportFreezesOriginatingNativePolicy、Codex HistoryMixedTurnRetainsOnlyCompleteFinal；SteerLine 公开 final 投影由 runner_reads 保留 |
 
 非注册专项同步清理：Orca probes/state-transitions、sandbox-setup 及脚本、原生 usage/rollout/process fault、protocol appserver/terminal/staged、controlled recovery/history。其失效测试工具及旧取证格式随门槛退役，不将工具删除声明为原生能力已验；Runner 原生行为由其对应 owner 承担。debug-template 发布脚本是 SteerLine 自有产物，保留本机模板的实际 Git/PR 复用测试；Web/debug 共享消费者改查公开请求和 Run。
+
+## 实际验证汇总（2026-10-15）
+
+均为 Windows/amd64、Go 1.26.4；除说明的真实 L2 外不调用模型。原始目录均为本次独立目录，`.evidence/` 为本地忽略的日志区；JSON 中保存完整命令、源码 commit/dirty、时间、实际命中、退出码和 EXE SHA。此处的相对证据路径是登记标识，不是长期 CI 工件地址。
+
+| 验收项 | 命令/结果与证据 |
+| --- | --- |
+| A1/A2/A3/A5/A6 | `go run ./cmd/test-feedback -out .evidence/rtc-final-owners -- ./cmd/test-feedback ./internal/runnerclient ./internal/runnerbridge ./internal/taskrunner ./internal/storage/sqlite ./tests/e2e/internal/driver -run '^Test(L2|Runner|SteerRunner|E2E|Retired|Manifest|Level|DebugPublication)' -count=1`：6 包、67 个含子项测试、0 skip，passed/complete，14.91 秒，源码 `039225ec`＋证据元数据修改。`rtc-owners-3` 另含较早完整 caller owner 定向结果。 |
+| A2/A5/A6 | `go run ./cmd/test-feedback -out .evidence/rtc-boundaries-final -- ./internal/testkit/boundary/... ./tests/integration ./tests/e2e/internal/... -count=1 -timeout=3m`：7 包、96 pass、2 skip，16.82 秒，passed/complete；skip 为需显式独立 debug 包的场景，已另验。最终辅助清理后 `go test ./tests/e2e/internal/... ./cmd/test-feedback -count=1 -timeout=3m` 再通过。 |
+| A1/A2 | `go run ./cmd/test-feedback -out .evidence/rtc-gate-3 -level=L2 -env=controlled`：`smoke.delivery` 66.64 秒、cleanup=true、coverage=gate-only；未算真实 L2。 |
+| A3 | `scripts/test-l2.ps1 -SteerRunnerExe <本次固定EXE> -OutDir .evidence/rtc-l2-live-3`：源码 `039225ec` clean，09:47:06–09:53:37 UTC，gate 83.17 秒＋live 285.54 秒，两个场景均实际 pass，cleanup=true、coverage=full-L2；详见 `summary.json`、raw log、scenarios 和下方精确 PR。 |
+| A4 | `go run ./cmd/test-feedback -out .evidence/rtc-recovery-3 -level=L3 -suite=recovery -env=controlled -scenario=recovery.waiting-merge-restart`：`039225ec`＋证据/模板修改，87.18 秒，原候选/请求保持，pass、cleanup=true。 |
+| A4 | `scripts/test-runtime-isolation.ps1`：四项 runtime 在源码 `88fc3120` clean 实际通过，二并行、cleanup=true；完整命令与结果在 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T094017.475341800Z/summary.json`。后续没有改变这四项实现。 |
+| A4/A6 | 新包 `C:/SteerlineDebug/中文 test-357ec5ad50e2/dev-20261015-174018-88fc3120` 的 `TestDebugReleaseRuntime` 78.12 秒通过，证据 `.evidence/rtc-existing-debug.log`；由生成器成功建立且未使用过的独立包，覆盖 freeze/stop/reset。 |
+| A6 | `go run ./cmd/test-feedback -out .evidence/rtc-l1 -level=L1`：passed/complete、132.7 秒；`-build-only` 的 `.evidence/rtc-build/summary.json` 通过、34.62 秒；`go test -tags=e2e ./tests/e2e/... -run '^$'` 通过。编译不算场景通过，没有运行 Full。 |
+| A2/A6 | Web 定向 `npm --prefix web test -- src/features/runs/state.test.ts src/features/runs/answer.test.tsx`：9 项通过；Web build 通过。修复真实 `pr_ready` 分类，closed/abandoned 仍只读；浏览器实测单独登记。 |
+| A5/A6 | 全部保留 PowerShell 脚本 AST 解析通过；`python -X utf8 scripts/check_doc_links.py`：434 文件、2,606 本地链接、0 错误；`git diff --check` 通过。生产边界及全部 tag 依赖检查由 boundary/integration 实际通过，没有保留测试原生协议消费者。 |
+
+### A3：真实 PR 与公开证据
+
+- Runner 固定版本/SHA 见上方；模型固定本机 `gpt-6-luna` / `medium`，引用宿主已有登录，没有复制认证。
+- Run `c2975b0f729923fda18c1a1f35e63fb2`，candidate `d93df4633f4a4c2096f6caae1714a763`；公开事件三个唯一 canonical final，分别来自真实实现、报告、发布。业务文件为已提交的 `result.txt`，内容 `real model delivery`。
+- [PR #258](https://github.com/erranliu/SteerlineTest/pull/258) 已真实合并；repo `erranliu/SteerlineTest`，base `codex/e2e/74b0ed28a9aa411881bd3873ea81a96c/smoke.local-codex/base`，head `codex/runner-c2975b0f729923fda18c1a1f35e63fb2`。
+- head/产物 commit `9df76c129e1a26e32abe7da7365343c2b543a450`，merge `87ffc0bbeb0ddbe4582de11a2d9c2ec572f1ea6b`；唯一 TaskDelivery=1、绑定相同 candidate/PR、后继 ready 且未启动，最终公开 stopped 和 cleanup 均通过。
+- live 通过后将 final 来源元数据强化为显式 Run/candidate/key 三元组；用本次真实公开事件重新构建并通过当前严格校验，保存 `rtc-l2-live-3/revalidated-public-proof.json`，同时错误 Run/candidate 的拒绝测试通过。没有为元数据格式变化额外重复模型任务，也未将此重放声明为第二次 live。
+
+### 失败与限制（保留事实）
+
+- `rtc-l2-live-2` 真实模型/PR [#256](https://github.com/erranliu/SteerlineTest/pull/256) 已合并且 Task 已交付，但 test2json 管道未关闭导致报告超时，**不计通过**。改为直接拥有测试 EXE、写 raw 文件后转换有限日志。该次专属 base/head 经 PR 精确身份及 SHA 核对后用 lease 清除，保留 PR 历史；不操作其他分支。
+- `rtc-l3` 直接在工具 Job 中测试遇到 SourceBuild install 拒绝/调用方停机早于 stop 对账；`rtc-recovery-2` 同样过早停机。已分别用既有独立 Windows 进程入口、公开 stopped 等待解决；后续成功证据独立保存。
+- 三包连续生成的第三包因同名进程不可查询而被 installer 保守拒绝；另一次并行 npm ci 导致构建失败。保留失败，不改 installer 权限规则、不碰安装现场，后续包生成串行。已成功生成的新鲜独立 debug 包按原入口实际通过；不能将失败的三包命令整体记为通过。
+- `rtc-infra-final` 曾扫描到 `.evidence/` 中一次性校验 Go 程序触发依赖守卫；删除已用完的一次性源文件后原守卫通过，未放宽边界。
+- 浏览器旧现场分别暴露原生文本断言重复、`pr_ready` 未纳入 Web、提交时 caller revision 已过期；失败日志在各新包 evidence 保留，最终场景结果见后续登记。保留服务未结算时的失败停机诊断，不把进程已退出等同业务清理通过。
+
+### A5：Runner 专项实际所有者
+
+固定源码 `af54556` clean，未修改 Runner。最终在既有独立 Windows 同用户进程入口重跑已选 owner 共 7 包、57 个顶层测试，全部 pass，0 fail；精确 `go test` 参数与完整测试名保存于 `.evidence/rtc-runner-final-command.json`，逐测试 JSONL 在 `.evidence/rtc-runner-final.jsonl`。这次核对重复执行的原因是补齐精确命令证据与权限专项。早期直接在工具 Job 中 `TestSRPermissionQualification` 的 service start exit=4 失败保留于 `rtc-runner-permissions.jsonl`，不计通过；独立进程未改变 Runner 权限策略即通过。
+
+| Runner owner（路径） | 实际通过的顶层测试 |
+| --- | --- |
+| `internal/application` | `TestSRNativeAnswerRejectsAmbiguityBeforeIntent`, `TestSRReportFreezesOriginatingNativePolicy` |
+| `internal/execution/adapters/codex` | `TestAsyncQuestionNativeIdentityOptionsReplayAndFinal`, `TestAsyncQuestionObserveSteerAndReconcile`, `TestAsyncQuestionObserverUsesNewInputCommand`, `TestGitPermissionLinkedWorktreeWriteArgsCompilesOnlyResolvedDirectories`, `TestHistoryAdapterRejectsOversizedNativeCursor`, `TestHistoryDiscoveryRejectsWorkspaceReplacementAndKeepsSourceAttempts`, `TestHistoryMixedTurnRetainsOnlyCompleteFinal`, `TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentity`, `TestHistoryPositionCannotCrossItsOriginalBinding`, `TestHistoryReadRejectsReplacedProjectBeforeOpeningClient`, `TestLaunchServerFixesWindowsSandboxBeforeStarting`, `TestManagedCommandIndependentEffortAndOrderedPermissionArgs`, `TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs`, `TestPreparationApplicabilitySkipsTerminalLaunch`, `TestRecoveryHistoryIdleRequiresOriginalStoppedTurn`, `TestRecoveryHistoryRejectsChangedFrozenBindingBeforeNativeRead`, `TestRecoveryProcessIdentityRequiresPositiveNativeProof`, `TestWorkspaceLifecyclePrecedesSessionAndRejectsRetargeting` |
+| `internal/execution/adapters/orcatransport` | `TestPreparationApplicabilityOriginalTerminal`, `TestRecoveryRejectsProviderReplacementInsideOriginalTerminal`, `TestRecoveryRejectsStaleScreenIdleAgainstNativeMainAgent`, `TestTerminalChangedIncarnationCannotComplete`, `TestTerminalClippedScreenDoesNotBlockNativeFinal`, `TestTerminalLifecycleReplyReuseAndExactStop`, `TestTerminalLocalAndRemoteUseIdenticalReturnAndNativePorts`, `TestTerminalNativeFinalRecoveryNeverReplaysInput`, `TestTerminalPreviousReplyCannotCompleteNewTurn`, `TestTerminalRecoveryQualificationIsIndependentOfManagedProcess`, `TestTerminalReplyRequiresOriginalStartedAndEnded`, `TestTerminalUnknownSubmissionOnlyObservesOriginal`, `TestWorkspaceCreationReceiptRecovery`, `TestWorkspaceCreationRecoveryRejectsChangedIdentity`, `TestWorkspaceCreationUsesConfiguredTimeout`, `TestWorkspaceRepositoryFollowsProject`, `TestWorkspaceTerminalSurfaceReadiness` |
+| `internal/execution/adapters/protocol/orca` | `TestBoundTerminalRejectsRuntimeAndIncarnationReplacement`, `TestTerminalCloseRequiresExactRuntimeHandleAndPtyProof` |
+| `internal/execution/reliable` | `TestClassifyRecovery`, `TestReliableExpiredIntentCannotExecute`, `TestReliableFreshActionKeepsOriginalIntent`, `TestReliableInputOutcomeBoundaries`, `TestReliableLateFacts`, `TestReliableOutcomeCannotTreatMissingReceiptAsSuccess`, `TestReliablePreparationApplicability`, `TestReliablePreparationFacts`, `TestReliableReconciliationRejectsForeignIntent`, `TestReliableRecoveredNativeStartRequiresOriginalIntent`, `TestReliableRecoveryAndAuthorization`, `TestReliableTurnIdentityAndNotifications`, `TestReliableUnknownEffectAndGateCannotResubmit`, `TestReliableUnverifiedReceiptRequiresOriginalReconciliation` |
+| `internal/execution/workflow` | `TestSRWorkflowDevelopment`, `TestWorkflowExecutionFacts`, `TestWorkflowSourceAndFormatRules` |
+| `tests/integration` | `TestSRPermissionQualification` |
+
+以上 owner 对应本文件 28 项去向；调用方答案/重放、原请求、游标、唯一交付和停止义务由 A2 的原包承担，未随执行专项删除。沙箱资格和实际启动权限参数由 integration/codex owner 承担；旧 SteerLine 专属 usage/rollout 解析器作为工具退役，不将其格式统计声明为新的原生功能验收。Orca 专项使用 Runner transport/protocol fixture，不声称已重新执行被用户取消的远端真机验收。

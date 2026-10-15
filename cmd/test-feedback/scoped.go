@@ -536,7 +536,7 @@ func activeRealSwitches() []string {
 		if !ok || value == "" || value == "0" || strings.EqualFold(value, "false") {
 			continue
 		}
-		for _, prefix := range []string{"STEERLINE_REAL_", "STEERLINE_NATIVE_", "STEERLINE_LOCAL_CAPABILITY_", "STEERLINE_LIVE_", "STEERLINE_RUN_WINDOW_", "STEERLINE_WINDOW_PROBE_", "STEERLINE_CODEX_HISTORY_NATIVE_"} {
+		for _, prefix := range []string{"STEERLINE_REAL_", "STEERLINE_LIVE_", "STEERLINE_RUN_WINDOW_", "STEERLINE_WINDOW_PROBE_"} {
 			if strings.HasPrefix(name, prefix) {
 				set[name] = true
 			}

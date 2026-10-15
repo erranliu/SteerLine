@@ -169,9 +169,7 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       .click();
     await page.getByRole("button", { name: "手动启动", exact: true }).click();
     await page.getByRole("button", { name: "确认启动", exact: true }).click();
-    await expect
-      .poll(() => provider().hold, { timeout: 90000 })
-      .toBe(true);
+    await expect.poll(() => provider().hold, { timeout: 90000 }).toBe(true);
     await expect
       .poll(
         async () => {
@@ -190,7 +188,8 @@ test("web.unified-startup: shared host, original commands and active turn surviv
         return !!active?.current_turn_id && !!active?.session_id;
       })
       .toBe(true);
-    const turn = active.current_turn_id, session = active.session_id;
+    const turn = active.current_turn_id,
+      session = active.session_id;
     facts.active_before = active;
     console.log("web.project-switch: original public Run held");
     facts.original_request_id = requestID;
@@ -199,7 +198,11 @@ test("web.unified-startup: shared host, original commands and active turn surviv
     await open(aid);
     await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
     const assertOriginal = async () => {
-      expect(Object.values(provider().requests ?? {}).filter((kind) => kind === "submit").length).toBe(1);
+      expect(
+        Object.values(provider().requests ?? {}).filter(
+          (kind) => kind === "submit",
+        ).length,
+      ).toBe(1);
       expect(await get(aid, "/identity")).toMatchObject({
         instance_id: originalIdentity.instance_id,
         process: originalIdentity.process,
@@ -368,7 +371,9 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       join(root, "provider", "state.json"),
       JSON.stringify(heldState),
     );
-    const dispatchesBeforeNewTask = Object.values(provider().requests ?? {}).filter((kind) => kind === "submit").length;
+    const dispatchesBeforeNewTask = Object.values(
+      provider().requests ?? {},
+    ).filter((kind) => kind === "submit").length;
     command(binary, [
       "control",
       "--project",
@@ -382,12 +387,18 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       "--wait",
     ]);
     await expect
-      .poll(() => Object.values(provider().requests ?? {}).filter((kind) => kind === "submit").length, { timeout: 120000 })
+      .poll(
+        () =>
+          Object.values(provider().requests ?? {}).filter(
+            (kind) => kind === "submit",
+          ).length,
+        { timeout: 120000 },
+      )
       .toBe(dispatchesBeforeNewTask + 1);
-    await expect
-      .poll(() => provider().hold, { timeout: 120000 })
-      .toBe(true);
-    const inputsBefore = Object.values(provider().requests ?? {}).filter((kind) => kind === "submit").length;
+    await expect.poll(() => provider().hold, { timeout: 120000 }).toBe(true);
+    const inputsBefore = Object.values(provider().requests ?? {}).filter(
+      (kind) => kind === "submit",
+    ).length;
     facts.active_at_host_stop = (
       await get(aid, "/snapshot")
     ).connection.snapshot.page.runs.find((run: any) => run.task_id === "3");
@@ -419,20 +430,33 @@ test("web.unified-startup: shared host, original commands and active turn surviv
     const recovery = (
       await get(aid, "/snapshot")
     ).connection.snapshot.page.runs.find((run: any) => run.task_id === "3");
-    expect(recovery.execution_id).toBe((facts.active_at_host_stop as any).execution_id);
-    expect(Object.values(provider().requests ?? {}).filter((kind) => kind === "submit").length).toBe(inputsBefore);
+    expect(recovery.execution_id).toBe(
+      (facts.active_at_host_stop as any).execution_id,
+    );
+    expect(
+      Object.values(provider().requests ?? {}).filter(
+        (kind) => kind === "submit",
+      ).length,
+    ).toBe(inputsBefore);
     expect(
       (await get(aid, "/commands/" + requestID)).original.instance_id,
     ).toBe(originalIdentity.instance_id);
     expect(submissions).toBe(1);
     facts.recovery_after_host_restart = recovery;
     facts.restarted_project = await get(aid, "/identity");
-    command(helper, ["runner-cleanup", "-config", join(home,"etc","SteerlineTest.json")]);
+    command(helper, [
+      "runner-cleanup",
+      "-config",
+      join(home, "etc", "SteerlineTest.json"),
+    ]);
     // Let the actor project the public stopped fact before final application stop.
-    await expect.poll(async () => {
-      const snapshot=(await get(aid,"/snapshot")).connection.snapshot.page;
-      return snapshot.runs.find((run:any)=>run.task_id==="3")?.resource_status;
-    }).toBe("stopped");
+    await expect
+      .poll(async () => {
+        const snapshot = (await get(aid, "/snapshot")).connection.snapshot.page;
+        return snapshot.runs.find((run: any) => run.task_id === "3")
+          ?.resource_status;
+      })
+      .toBe("stopped");
     await second.close();
     await page.screenshot({
       path: info.outputPath("offline-project.png"),

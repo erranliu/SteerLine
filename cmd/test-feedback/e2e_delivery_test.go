@@ -12,7 +12,7 @@ import (
 
 func TestL2RequiresRealDeliveryEvidence(t *testing.T) {
 	entry := e2eScenario{ID: "smoke.local-codex", Level: "L2", Env: "live", Chain: "local-codex", Test: "TestSmokeLocalCodex"}
-	good := feedback.LiveDeliveryProof{RunnerVersion: "0.1", RunnerSHA256: strings.Repeat("a", 64), RunID: "original-run", CandidateID: "original-candidate", FinalSources: []string{"implement", "report", "publish"}, ArtifactCommit: strings.Repeat("b", 40), Artifact: "real model delivery", PRURL: "https://github.com/erranliu/SteerlineTest/pull/1", Repository: "erranliu/SteerlineTest", Base: "codex/e2e/owned/smoke.local-codex/base", Head: "codex/owned", HeadSHA: strings.Repeat("b", 40), MergeSHA: strings.Repeat("c", 40), Merged: true, DeliveryCandidate: "original-candidate", DeliveryPR: "https://github.com/erranliu/SteerlineTest/pull/1", DeliveryCount: 1, SuccessorReady: true, SuccessorUnstarted: true}
+	good := feedback.LiveDeliveryProof{RunnerVersion: "0.1", RunnerSHA256: strings.Repeat("a", 64), RunID: "original-run", CandidateID: "original-candidate", FinalSources: []feedback.FinalSource{{RunID: "original-run", CandidateID: "original-candidate", Key: "implement"}, {RunID: "original-run", CandidateID: "original-candidate", Key: "report"}, {RunID: "original-run", CandidateID: "original-candidate", Key: "publish"}}, ArtifactCommit: strings.Repeat("b", 40), Artifact: "real model delivery", PRURL: "https://github.com/erranliu/SteerlineTest/pull/1", Repository: "erranliu/SteerlineTest", Base: "codex/e2e/owned/smoke.local-codex/base", Head: "codex/owned", HeadSHA: strings.Repeat("b", 40), MergeSHA: strings.Repeat("c", 40), Merged: true, DeliveryCandidate: "original-candidate", DeliveryPR: "https://github.com/erranliu/SteerlineTest/pull/1", DeliveryCount: 1, SuccessorReady: true, SuccessorUnstarted: true}
 	for _, tc := range []struct {
 		name   string
 		change func(*feedback.LiveDeliveryProof)
@@ -25,6 +25,7 @@ func TestL2RequiresRealDeliveryEvidence(t *testing.T) {
 		{"wrong head", func(p *feedback.LiveDeliveryProof) { p.HeadSHA = strings.Repeat("d", 40) }, false},
 		{"wrong repo", func(p *feedback.LiveDeliveryProof) { p.Repository = "e2e/project" }, false},
 		{"wrong base", func(p *feedback.LiveDeliveryProof) { p.Base = "main" }, false},
+		{"wrong Run", func(p *feedback.LiveDeliveryProof) { p.RunID = "replacement" }, false},
 		{"wrong candidate", func(p *feedback.LiveDeliveryProof) { p.DeliveryCandidate = "sibling" }, false},
 		{"wrong PR", func(p *feedback.LiveDeliveryProof) { p.DeliveryPR = "https://github.com/erranliu/SteerlineTest/pull/2" }, false},
 		{"not merged", func(p *feedback.LiveDeliveryProof) { p.Merged = false }, false},

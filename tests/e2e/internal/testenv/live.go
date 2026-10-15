@@ -169,13 +169,13 @@ func (p *Project) RunnerSubmit() any {
 	p.Scenario.Must(err)
 	return snap.Runner.Candidates[0].Submit
 }
-func sources(s *Scenario, p *Project, candidate, run string) []string {
+func sources(s *Scenario, p *Project, candidate, run string) []testfeedback.FinalSource {
 	conversation, err := driver.ReadCandidateConversation(s.Context, p.Database, p.ProjectID, candidate, run)
 	s.Must(err)
-	var result []string
+	var result []testfeedback.FinalSource
 	for _, e := range conversation.Events {
 		if e.Body != nil && e.SourceRole == "canonical" && e.Phase == "final_answer" {
-			result = append(result, e.SessionID+":"+e.TurnID+":"+e.ItemKey)
+			result = append(result, testfeedback.FinalSource{RunID: e.ExecutionID, CandidateID: e.WorkflowID, Key: e.SessionID + ":" + e.TurnID + ":" + e.ItemKey})
 		}
 	}
 	return result
