@@ -37,7 +37,7 @@
 | `internal/app/tui_http_boundary_test.go`、`client_boundary_test.go`、`internal/product/httpclient/capability_boundary_test.go`、`internal/testkit/boundary`、CD67/runner 反例 | 删除 Console/consoleapp 的规则与负例；HTTP consumer、application/localservice/projectconnection 的无 backend/SQLite 依赖等约束保留。移除单独 go list 已删除包的 Windows/Linux 闭包扫描，保留其余跨平台检查 |
 | `tests/e2e/internal/driver/tui_http_test.go`、`scripts/test-tui-http.ps1` | 删除整个 TUI runtime 入口；原请求/交付/final 等仍有效要求由当前 HTTP/Web 与业务场景承担，在验收记录列出覆盖归属 |
 | `testenv/recovery.go` 的 AssertRecoveryConsole、`suites/recovery/disconnect_test.go` | 删除 u 键/弹层和截图；driver 增加窄公共 HTTP recovery 查询，带原 run/execution/attempt，testenv 只消费 DTO。用 WaitRecovery 已核验的原快照作查询前证据，查询后经 driver 读取同一业务域快照，避免重复 CLI 枚举；保留两次检查前后业务不变、缺 thread 不给继续资格及原失败事实；复用 recovery.failure-results 场景；暴露既有 FinishBody 期限边界，在最后业务断言后冻结，正常停服作为独立收尾，不放宽业务期限 |
-| `suites/nativeworkspace/removal_restart_test.go` | 删除重开 TUI；在删除后/重启后等待基础 HTTP 查询就绪，核对项目/数据库/原执行及当前服务实例；无关任务启动轮询复用原快照检查，不叠加重复 HTTP 查询。保留真实工作区删除与无关任务启动的场景 ID |
+| 原 `suites/nativeworkspace/removal_restart_test.go` | 用户明确本机 Orca 路径已退役，删除整个本机专属场景/驱动/登记与 native 环境选项；远端 Orca environment 路径、受控协议测试和证据规则保留 |
 | `suites/runtime/isolation*_test.go`、旧 debug-runtime 两份脚本 | 删除旧综合场景与两份专属脚本。保留构建输出、路径/SQLite、服务写保护、双 home 的四个独立场景；新调试包由唯一生成器测试覆盖。旧 UI/wrapper/源码 exe 回退等已删除入口断言随入口退役 |
 | `testenv/console_windows*`、`console_other.go`、ConPTY helper 测试 | 消费者替换后复核：仅服务 TUI 的按键/退出驱动删除；通用可见服务窗口、Job/process 及原生工具能力保留，不按文件名批量删除 |
 
@@ -82,7 +82,7 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 
 ## 4. 独立隔离回归与补验安排（2026-10-15）
 
-用户授权删除旧综合场景，保留长期必要隔离回归并安全并行。删除 `runtime.installed-debug-isolation` 及其仅用旧脚本的冗余检查，不用新结果覆盖旧超时记录。四个新场景每项仍为普通 controlled 5 分钟业务期限，Go 父期限保留每项 6 分钟余量；并发排队不计入场景期限。只有已审查的 runtime controlled 包允许 `-parallel=2`，其他包、native/live 和 L2 顺序不变。各项自有 home/仓库/进程/端口/provider/证据，runner 构建产物只读；构建场景只写自己的源码 clone，不再改工作树 bin。所有业务 I/O 完成后冻结 FinishBody，再由独立 cleanup 核实资源清理。
+用户授权删除旧综合场景，保留长期必要隔离回归并安全并行。删除 `runtime.installed-debug-isolation` 及其仅用旧脚本的冗余检查，不用新结果覆盖旧超时记录。四个新场景每项仍为普通 controlled 5 分钟业务期限，Go 父期限保留每项 6 分钟余量；并发排队不计入场景期限。只有已审查的 runtime controlled 包允许 `-parallel=2`，其他包、live 和 L2 顺序不变。各项自有 home/仓库/进程/端口/provider/证据，runner 构建产物只读；构建场景只写自己的源码 clone，不再改工作树 bin。所有业务 I/O 完成后冻结 FinishBody，再由独立 cleanup 核实资源清理。
 
 | 验收项 | 场景 / 环境 | 最小实现与通过条件 | 命令 / 时点 / 证据位置 |
 | --- | --- | --- | --- |
@@ -91,7 +91,11 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 | TR-A4 | runtime.service-write-isolation / L3 controlled | 原生 service-window 启停/同构建重启、子进程身份；旧实例/改配置未发布请求；跨 home 仓库锁有效；不跑完整交付 | 同上；窗口日志、控制回执/计数、前后快照与 scenario.json |
 | TR-A4 | runtime.dual-home-isolation / L3 controlled | 唯一双环境业务检查，两独立执行/原请求/交付，A 合并时 B 保持原状态、B 交付不改变 A；完整通用交付规则复用已有 delivery.basic | 同上；两侧快照、请求身份/摘要和 scenario.json |
 | TR-A3、TR-A4 | 当前新调试包生成/运行 / controlled | 继续使用已有 test-debug-release 唯一流程，验证已生成包互不串用、固定端口、Web、锁/reset、冻结方案；生成阶段串行，因为共享 npm ci/dist，运行各包沿现有所有权清理 | `./scripts/test-debug-release.ps1`；四场景通过后执行；新包 generation-test.json/runtime-test.log，登记 acceptance |
-| TR-A4 | workspace.orca-removal-restart / L3 native | 补之前仅编译的本机原生删除/重启链；保留真实 Orca 删除、Git 注销、两次 HTTP 查询的项目/数据库/原执行/当前实例和无关任务启动全部断言，不请求模型 | `go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native`；驱动稳定后运行；runner/scenario/native-removal-observation.json，登记 acceptance |
+
 | TR-A4、TR-A6 | runner/编译/文档静态 | 新登记精确选择，旧 ID 拒绝，安全并发白名单/期限不放宽；所有 E2E 编译、依赖边界、链接无失效 | `go run ./cmd/test-feedback -- ./cmd/test-feedback -run '^Test(E2E|Level)' -count=1`；`go test -tags=e2e ./tests/e2e/... -run '^$'`；L1、文档检查按实际修改范围执行；日志路径登记 acceptance |
 
 不重跑 Full、全部 L3/live 或真实模型；本次未改变产品 worker 行为。原 Web Edge 闭环与 recovery.failure-results 已在最终产品实现上通过，本次仅重构测试组织，不重复它们；若补验发现产品修改，再选择受影响回归。无新增人工项。
+
+用户随后明确：本机 Orca 路径已经退役，远端 Orca environment 路径仍保留。因此删除 workspace.orca-removal-restart 的登记、专属驱动/证据字段与 native 环境选项，当前任务不再补跑本机原生删除链；既有远端实现、单终端受控协议测试和原始证据保留，不以本机测试替代远端验收。此前混合测试表中的工作区迁移安排随退役取消；旧记录只保留历史。
+
+远端保留的必要定向回归映射 [TR-A4](../acceptance/tui-retirement.md#验收项)：改造后运行 `go run ./cmd/test-feedback -- ./internal/app ./internal/execution/adapters/orcatransport -run '^Test(TerminalRegistrationRejectsRetiredRoutesAndAgentPrivateFields|RemoteRepositoryDiscoveryRejectsBeforeCreation|RemoteRepositoryCreationRetainsReceiptOnMismatch)$' -count=1`；受控 fake 验证退役目标拒绝、远端仓库前置拒绝/原回执保留，无本机 Orca 运行或真实模型。runner summary 及原输出登记专属 acceptance，不当作远端真机验收。

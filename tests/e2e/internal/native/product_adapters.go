@@ -12,7 +12,6 @@ import (
 )
 
 const SupportedCodexVersion = codexworker.PolicyCodexVersion
-const OrcaWorktreeTrashDirectory = orcaworker.WorktreeTrashDirectory
 
 var ErrOrcaRepoUnavailable = orcaworker.ErrRepoUnavailable
 
@@ -64,20 +63,6 @@ func OrcaPayload(raw []byte) (json.RawMessage, error) {
 }
 
 type OrcaWorktree struct{ ID, RepoID, Path string }
-
-func OrcaCreatedWorktree(raw []byte, name string) (OrcaWorktree, error) {
-	var receipt struct {
-		Worktree orcaworker.Worktree `json:"worktree"`
-	}
-	if err := json.Unmarshal(raw, &receipt); err != nil {
-		return OrcaWorktree{}, err
-	}
-	w := receipt.Worktree
-	if w.ID == "" || w.RepoID == "" || w.Path == "" || w.DisplayName != name {
-		return OrcaWorktree{}, errors.New("native worktree create did not return its fixed identity/name")
-	}
-	return OrcaWorktree{w.ID, w.RepoID, w.Path}, nil
-}
 
 func OrcaWorktrees(raw []byte) ([]OrcaWorktree, error) {
 	var listing struct {

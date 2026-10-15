@@ -22,7 +22,7 @@
 | `httpclient/lifecycle_windows.go`、`lifecycle_other.go`、`internal/localservice/endpoint.go`、`app/application_directory.go` | `CurrentProcessIdentity`、`ProcessExited` 被应用/Web 服务复用；只删除 TUI 停服 observer，保留真实进程代际核验 |
 | `scripts/new-debug-release.ps1`、`driver/debug_web.go` | 当前 Web 由非空 WebAddress 选择；默认包没有 Web。改成默认完整 Web 包，避免删除 TUI 后默认调试包无前端 |
 | `driver/debug_reset.go`、`debug_release_test.go` | reset 读写 TUI 的 ui/views；移除该依赖，同时保留活动 Web/应用/项目/worker 的阻止重置条件 |
-| `testenv/recovery.go`、`suites/recovery/disconnect_test.go`、`suites/nativeworkspace/removal_restart_test.go` | 业务场景夹带 TUI u 键或重开查询；替换为公共 HTTP 断言，不能直接删除整个恢复/工作区场景 |
+| `testenv/recovery.go`、`suites/recovery/disconnect_test.go` | 恢复场景夹带 TUI u 键；替换为公共 HTTP 断言，保留原失败和原执行只读检查。本机 Orca 工作区场景已由用户明确退役，删除专属驱动/登记；远端路径保留 |
 | `internal/testkit/boundary`、`cmd/test-feedback/scoped.go`、旧源码调试脚本（本次删除） | 有硬编码 TUI 包、跨平台依赖闭包、隔离测试入口；同步清理，保留 HTTP/存储/执行域和安装隔离守卫 |
 
 以上是代码审计结论，不表示已实施或已验证退役后的产品。
@@ -64,7 +64,7 @@ reset 不再要求 ui/views 存在或处理其 view.json。保留本包所有活
 
 ## 5. 测试与文档退役规则
 
-TUI 专属渲染、键盘、窗口偏好、TUI 客户端日志/observer 测试、TUI HTTP runtime 和脚本直接删除。混合测试逐项判断业务要求：保留任务/候选、原回执、权限、身份、恢复只读、工作区删除/重启、安装隔离断言；移到当前 owner 或直接使用既有公共客户端，不保留测试专用 TUI 模拟器。
+TUI 专属渲染、键盘、窗口偏好、TUI 客户端日志/observer 测试、TUI HTTP runtime 和脚本直接删除。混合测试逐项判断业务要求：保留任务/候选、原回执、权限、身份、恢复只读、安装隔离断言；移到当前 owner 或直接使用既有公共客户端，不保留测试专用 TUI 模拟器。
 
 清理 runner 固定包、精确 subtest、权重及架构守卫中的 TUI 选择。保留现有非 TUI 反例和严格失败语义；不能以缺包跳过、空选择或删除全部边界测试使检查通过。只在无剩余消费者时删除 TUI 专用 ConPTY 按键驱动；服务可见窗口、Job 与原生终端测试继续保留。
 
@@ -87,3 +87,5 @@ TUI 专属渲染、键盘、窗口偏好、TUI 客户端日志/observer 测试�
 
 
 2026-10-15 用户确认的验证范围调整：旧综合 `runtime.installed-debug-isolation` 与旧源码调试 wrapper 退役；隔离保证由 `runtime.source-build-isolation`、`runtime.path-isolation`、`runtime.service-write-isolation`、`runtime.dual-home-isolation` 四项独立 controlled 场景及唯一新调试包测试承担。安全独立的四项最多并发二项，不共享可写构建产物；每项必须实际通过并清理。旧超时证据保留，不能仅删除旧场景即宣称验收完成。
+
+本机 Orca 工作区路径按用户明确指示退役，不再要求本机删除/重启验收；远端 Orca environment 单终端实现与受控协议验证保持。

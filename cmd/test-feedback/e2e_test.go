@@ -15,13 +15,10 @@ import (
 func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
 	ordinary := e2eScenario{ID: "delivery.basic", Env: "controlled"}
 	isolation := e2eScenario{ID: "runtime.source-build-isolation", Env: "controlled"}
-	native := e2eScenario{ID: "workspace.orca-removal-restart", Env: "native"}
 	if e2ePackageGoTimeout([]e2eScenario{ordinary}) != "6m" || e2ePackageGoTimeout([]e2eScenario{isolation}) != "6m" || e2ePackageGoTimeout([]e2eScenario{ordinary, isolation}) != "12m" {
 		t.Fatal("Go parent deadline clips a selected business scene or its cleanup")
 	}
-	if e2ePackageGoTimeout([]e2eScenario{native}) != "11m" {
-		t.Fatal("Go parent deadline clips native removal/restart and its second workflow")
-	}
+
 	if e2ePackageGoTimeout([]e2eScenario{{Env: "live"}}) != "35m" {
 		t.Fatal("live package deadline changed")
 	}
@@ -228,51 +225,16 @@ func TestL3ExactScenarioSelectionRejectsWrongEnvironment(t *testing.T) {
 	}
 }
 
-func TestL3NativeWorkspaceIsExplicitAndSeparateFromL2(t *testing.T) {
+func TestRetiredLocalOrcaSceneCannotBeSelected(t *testing.T) {
 	root, err := e2eRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
-	opts, err := parseOptions([]string{"-level=L3", "-suite=workspace", "-env=native", "-scenario=workspace.orca-removal-restart"})
-	if err != nil {
-		t.Fatal(err)
+	if _, err := parseOptions([]string{"-level=L3", "-suite=workspace", "-env=native"}); err == nil {
+		t.Fatal("retired native environment remains selectable")
 	}
-	selected, err := selectE2E(root, opts)
-	if err != nil || len(selected) != 1 || selected[0].Env != "native" || selected[0].Chain != "" {
-		t.Fatalf("native selection: %+v %v", selected, err)
-	}
-	for _, environment := range []string{"controlled", "live"} {
-		opts.e2eEnv = environment
-		if _, err := selectE2E(root, opts); err == nil {
-			t.Fatal("native workspace scenario accepted under wrong environment")
-		}
-	}
-	if _, err := parseOptions([]string{"-level=L2", "-env=native"}); err == nil {
-		t.Fatal("native environment replaced the L2 model gate")
-	}
-}
-
-func TestNativeWorkspaceRequiresItsOwnEvidenceWithoutModelUsage(t *testing.T) {
-	entry := e2eScenario{ID: "workspace.one", Test: "TestOne", Env: "native", Level: "L3"}
-	out := t.TempDir()
-	dir := filepath.Join(out, "scenarios", entry.ID)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	log := "{\"Time\":\"2026-10-09T00:00:00Z\",\"Action\":\"start\",\"Package\":\"p\"}\n" +
-		"{\"Time\":\"2026-10-09T00:00:00Z\",\"Action\":\"run\",\"Package\":\"p\",\"Test\":\"TestOne\"}\n" +
-		"{\"Time\":\"2026-10-09T00:00:01Z\",\"Action\":\"pass\",\"Package\":\"p\",\"Test\":\"TestOne\"}\n" +
-		"{\"Time\":\"2026-10-09T00:00:01Z\",\"Action\":\"pass\",\"Package\":\"p\"}\n"
-	log = strings.ReplaceAll(log, `"Action":`, `"Elapsed":0,"Action":`)
-	g := scopedGroup{ID: "native", Packages: []string{"p"}, Summary: testfeedback.Parse([]byte(log), 0)}
-	for _, tc := range []struct{ verified, usage, pass bool }{{false, false, false}, {true, true, false}, {true, false, true}} {
-		evidence := map[string]any{"id": entry.ID, "passed": true, "cleanup_complete": true, "resources": []any{map[string]string{"kind": "project"}}, "native_workspace_verified": tc.verified, "usage_verified": tc.usage}
-		if err := writeJSON(filepath.Join(dir, "scenario.json"), evidence); err != nil {
-			t.Fatal(err)
-		}
-		if err := checkE2EGroup(g, []e2eScenario{entry}, out); (err == nil) != tc.pass {
-			t.Fatalf("evidence=%+v result=%v", tc, err)
-		}
+	if _, err := selectE2E(root, options{level: "L3", suite: "workspace", e2eEnv: "controlled", scenario: "workspace.orca-removal-restart"}); err == nil {
+		t.Fatal("retired local workspace scene remains selectable")
 	}
 }
 

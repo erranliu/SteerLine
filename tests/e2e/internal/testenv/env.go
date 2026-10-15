@@ -30,23 +30,22 @@ import (
 
 type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
-	orcaUsageUnavailable    bool
-	remoteOutputVerified    bool
-	bodyFinishedAt          time.Time
-	bodyContextErr          error
-	Run                     Run
-	ID, Root, Output        string
-	Context                 context.Context
-	cancel                  context.CancelFunc
-	t                       *testing.T
-	projects                []*Project
-	processes               []*testprocess.Process
-	files                   []*os.File
-	resources               []map[string]any
-	usageVerified           bool
-	nativeWorkspaceVerified bool
-	debugSandboxRoot        string
-	debugSandboxResult      map[string]any
+	orcaUsageUnavailable bool
+	remoteOutputVerified bool
+	bodyFinishedAt       time.Time
+	bodyContextErr       error
+	Run                  Run
+	ID, Root, Output     string
+	Context              context.Context
+	cancel               context.CancelFunc
+	t                    *testing.T
+	projects             []*Project
+	processes            []*testprocess.Process
+	files                []*os.File
+	resources            []map[string]any
+	usageVerified        bool
+	debugSandboxRoot     string
+	debugSandboxResult   map[string]any
 }
 
 type Project struct {
@@ -102,11 +101,6 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if id == "workspace.orca-removal-restart" {
-		// Native worktree creation/removal, HTTP queries, service restart
-		// and two staged workflows share this bound; each command stays bounded.
-		timeout = 10 * time.Minute
-	}
 	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.Contains(id, "orca-remote-codex") || strings.HasSuffix(id, "-live") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
 	}
@@ -158,8 +152,6 @@ func (s *Scenario) register(kind, path string, pid int) {
 }
 
 func (s *Scenario) RecordResource(kind, path string, pid int) { s.register(kind, path, pid) }
-
-func (s *Scenario) VerifyNativeWorkspaceLifecycle() { s.nativeWorkspaceVerified = true }
 
 func (s *Scenario) start(cmd *exec.Cmd, name string) *testprocess.Process {
 	s.t.Helper()
@@ -831,7 +823,7 @@ func (s *Scenario) cleanup() {
 			realPR = p.RealPRProof
 		}
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "remote_public_output_verified": s.remoteOutputVerified, "remote_usage_status": map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.remoteOutputVerified], "native_workspace_verified": s.nativeWorkspaceVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "remote_public_output_verified": s.remoteOutputVerified, "remote_usage_status": map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.remoteOutputVerified], "real_pr": realPR, "finished_at": time.Now().UTC()}
 	if s.debugSandboxResult != nil {
 		evidence["components"] = map[string]string{"worker": "local-codex", "provider": "github/" + githubRepository}
 		evidence["debug_sandbox"] = s.debugSandboxResult
