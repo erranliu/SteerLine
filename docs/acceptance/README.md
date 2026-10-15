@@ -8,6 +8,8 @@
 
 全量回归维护（普通开发）：[本次结果](full-regression-2026-10-14.md)，rebase、过期测试清理、Full 1752 通过 / 19 默认跳过、26 个登记场景通过并清理完成。
 
+合并后 Full 复验：[SQLite 查询取消与资源释放](sqlite-cancellation-full-2026-10-15.md)，主干 rebase、实际失败与依赖修复；修复后 Full 1753 通过 / 19 默认跳过 / 0 失败，complete / passed。
+
 Orca 当前部署仅远端：[配置维护](remote-only-orca-profiles.md)。[本机输入与就绪历史样本](orca-local-input-readiness.md)保留其原适用范围，不属于当前部署的真实执行验收。
 
 | 范围 | 状态 / 入口 |
