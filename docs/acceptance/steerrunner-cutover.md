@@ -4,12 +4,12 @@
 
 | ID | 自动验收项 | 当前结果 |
 | --- | --- | --- |
-| SLC-A01 | 公共 CLI 严格解码、丢响应原请求、终态不重发、显式新授权 | 已有定向单元通过，最终证据待固定 |
-| SLC-A02 | 候选原子领取和固定请求、绑定/事件/游标 CAS、终态停止义务 | SQLite 定向通过，最终证据待固定 |
-| SLC-A03 | 正确合并候选唯一交付、无 pr_ready 门槛、兄弟未知不阻塞、原子回滚与幂等 | SQLite 定向通过，最终证据待固定 |
-| SLC-A04 | 实际产品命令→Runner CLI 的完整闭环、双库、重启和停止 | 独立 EXE 基础闭环已通过；服务重启等子项仍在 R1 复验 |
-| SLC-A05 | 最小既有 L3 场景切换到新 CLI 后通过 | 用户取消本机 Orca 后保留四场景；基础交付和 Codex resume 已通过，其余复验见下 |
-| SLC-A06 | 单一执行 owner、旧 actor/worker/适配器/写表删除、固定可获取 Runner 版本 | 旧执行 owner、写表及闲置端口已删除；固定可获取构建及最终回归待完成 |
+| SLC-A01 | 公共 CLI 严格解码、丢响应原请求、终态不重发、显式新授权 | 通过；最终定向证据 final-directed.log |
+| SLC-A02 | 候选原子领取和固定请求、绑定/事件/游标 CAS、终态停止义务 | 通过；最终 SQLite/Task 定向证据 final-directed.log |
+| SLC-A03 | 正确合并候选唯一交付、无 pr_ready 门槛、兄弟未知不阻塞、原子回滚与幂等 | 通过；最终 SQLite/Task 定向证据 final-directed.log |
+| SLC-A04 | 实际产品命令→Runner CLI 的完整闭环、双库、重启和停止 | 独立 EXE 受控产品闭环及 R1 重启/停止已通过；新产品真机包另行补验 |
+| SLC-A05 | 最小既有 L3 场景切换到新 CLI 后通过 | 通过；用户保留三个本机场景，精确证据聚合见 regression/local-r1-summary.json |
+| SLC-A06 | 单一执行 owner、旧 actor/worker/适配器/写表删除、固定可获取 Runner 版本 | 通过；旧 owner/写表/闲置端口删除，公开 Runner 源版本/SHA 已固定，边界守卫及构建通过 |
 
 人工项 SLC-M01：两个独立项目的安装/升级、服务与日志定位体验；窗口待双方自动链路可用后安排，可后置，不阻塞无关开发。
 
@@ -81,3 +81,6 @@ Runner 第五轮远端已完成实施，在报告阶段暴露应用冻结策略�
 
 
 `dev-20261015-144115-879aa39a`：104.56 秒失败，原生会话创建前版本核验超时，零模型输入，清理通过；相同 EXE 单独版本核验 0.427 秒。新包 `dev-20261015-144556-879aa39a` 同源复验已通过权限资格、原生探针、实施和报告；219.33 秒失败于发布 final 的 permission blocker：普通发布/匹配 PR 查询均 401，代理没有调用原生自动审核。原生审核未被请求，不能写成被拒绝；未创建 PR，清理通过。对齐已通过的 Runner 独立 L1 提示：本机 live 准备先核实外部 gh 登录，冻结 Spec/Plan/AGENTS 明确同一发布命令只申请一次原生自动审核，任何拒绝保持阻断；须新包复验。
+
+
+最终边界与文档核验：`final-owner-boundary.log` 的生产/测试源码及依赖守卫通过；`doc-links-final.log` 425 份 Markdown、2534 个本地导航链接、0 错误。`regression/local-r1-summary.json` 只聚合本次用户保留的三个场景的原始通过和清理事实，明确记录各批源版本及整个旧批次是否失败，不伪装同版本重新执行。两仓 PR 已互相引用：[SteerLine #325](https://github.com/erranliu/SteerLine/pull/325)、[SteerRunner #1](https://github.com/erranliu/SteerRunner/pull/1)。
