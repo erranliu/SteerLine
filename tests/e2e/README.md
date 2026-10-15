@@ -1,8 +1,10 @@
 # 分级测试与 E2E 环境
 
+三 EXE 日常构建部署入口是仓库根目录 `build-deploy.bat`。该安装操作不属于 E2E 调试环境生成；首次迁移的 20 个 open/paused 任务不作为测试夹具。[部署测试计划](../../docs/plans/install-deploy.plan.md) 与 [迁移验收](../../docs/acceptance/install-cutover-20261015.md) 单独登记结果，不替代以下 live/恢复场景。
+
 临时/AI 自动调试须先运行 `scripts/new-debug-release.ps1`，使用生成的 SteerlineTest 环境；安装目录不得作为现场。独立包定向验证为 `scripts/test-debug-release.ps1 -SteerRunnerExe <absolute exe>`（亦可设置 `STEERRUNNER_EXE`），显式 `-Live` 验证实际 Runner/原生 worker 的 SteerlineTest PR；所有日志留在生成包 evidence。既有分级回归保留自己的隔离夹具，见[独立调试验收](../../docs/acceptance/debug-environment.md)。
 
-当前部署入口为本地 Codex 与远端 Orca `host=orca` / environment。本机 Orca 部署方案已停用，本机 live 恢复场景已删除；底层本机能力样本和隔离夹具保留，原生工作区生命周期仅验证 CLI 资源能力。当前没有登记新版远端真实恢复场景，受控 environment 回归不能代替远端真机验收。Orca 使用一个 agent 终端，由本机 CLI 原样投递统一阶段提示词，并由适配层采集普通终端回复；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[统一提示词验收](../../docs/acceptance/orca-unified-worker-prompts.md)。
+当前部署入口为本地 Codex 与远端 Orca `host=orca` / environment。本机 Orca 部署方案已停用，本机 live 恢复场景已删除；隔离 fake 协议夹具保留，本机原生工作区生命周期场景已退役。当前没有登记新版远端真实恢复场景，受控 environment 回归不能代替远端真机验收。Orca 使用一个 agent 终端，由本机 CLI 原样投递统一阶段提示词，并由适配层采集普通终端回复；不使用 supervised、worker-start、辅助终端、文件回传或远端回调。当前实现边界与待验项见[统一提示词验收](../../docs/acceptance/orca-unified-worker-prompts.md)。
 
 2026-10-13 的[工作流核验收敛](../../docs/acceptance/workflow-verification.md)移除产品的全部屏幕核验：就绪只查原 main-agent，完成只接收原生结束事实和完整正文；不使用 tui-idle、draft、可见标记或屏幕文字比对。下文早期屏幕保护、粘贴稳定和历史驱动描述不再是当前产品准入要求；当前真机复验单列 WV-M1。
 
@@ -22,11 +24,11 @@ go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled
 go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled
 go run ./cmd/test-feedback -level=L3 -suite=runtime -env=live '-scenario=runtime.sandbox-git.local-codex'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
-# 原生工作区生命周期，不启动模型
-go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=workspace.orca-removal-restart'
+# 独立隔离回归，最多两项并发，无模型
+go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled
 ```
 
-保留 `-quick` 和 Full 的 `-workers=3`；后者将 `internal/execution` 与 `tests/integration` 各自划分为三组，每个 worker 顺序运行两个包的对应分区，同时以独立串行命令完整运行其余包，最多四组命令并发，是完整确定性 Go 回归，不包含带 e2e tag 的场景。L2/L3 当前支持 Windows、串行。L2 默认 gated：先验证 controlled（包括证据和清理），通过才进入当前登记的本地 Codex 真实链路；失败不会创建真实会话或发模型请求。L2 禁止直接选择 live 绕过门槛；显式 controlled 的报告 coverage 为 gate-only。L3 必须显式指定 controlled/live/native 和 suite；组、场景可以逗号多选，未知、重复、零匹配或跨环境选择失败。PowerShell 的带点场景 ID 参数需加引号。
+保留 `-quick` 和 Full 的 `-workers=3`；后者将 `internal/execution` 与 `tests/integration` 各自划分为三组，每个 worker 顺序运行两个包的对应分区，同时以独立串行命令完整运行其余包，最多四组命令并发，是完整确定性 Go 回归，不包含带 e2e tag 的场景。L2/L3 当前支持 Windows，按包串行，runtime controlled 的独立场景包内最多两项并发。L2 默认 gated：先验证 controlled（包括证据和清理），通过才进入当前登记的本地 Codex 真实链路；失败不会创建真实会话或发模型请求。L2 禁止直接选择 live 绕过门槛；显式 controlled 的报告 coverage 为 gate-only。L3 必须显式指定 controlled/live 和 suite；组、场景可以逗号多选，未知、重复、零匹配或跨环境选择失败。PowerShell 的带点场景 ID 参数需加引号。
 
 不能混用原始 Go 参数、quick/full/build-only。`-out` 指定空目录；默认写入系统临时目录 `steerline-test-feedback/<运行时间>`，拒绝覆盖已有产物。
 
@@ -38,8 +40,10 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | L2 live | `smoke.local-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
 | L3 controlled | `delivery.basic` | 验证 A 唯一 Delivery 解锁 B；B dependency-ready 且未创建 WorkflowRun |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
-| L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、服务/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
-| L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核对正式删除回执、原路径消失和 Git 注销（trash 是否留存如实登记）、CLI/HTTP 查询、重启及无关任务启动 |
+| L3 controlled | `runtime.source-build-isolation` | 独立源码 clone 的构建/重建与输出链接拒绝，不改变另一临时 home 的程序、数据库和业务事实 |
+| L3 controlled | `runtime.path-isolation` | state junction、run_dir/worktree_root 越界和 SQLite DB/WAL/SHM 硬链接拒绝；无 worker |
+| L3 controlled | `runtime.service-write-isolation` | 统一宿主启停/重启与匹配原实例的逐项目shutdown、旧实例/非启动快照配置写拒绝、跨home仓库锁 |
+| L3 controlled | `runtime.dual-home-isolation` | 两独立home/clone的同号任务、同号请求与原回执重放不串用，无重复完整执行链 |
 | L3 live | `runtime.sandbox-git.local-codex` | 新生成 C:\SteerlineDebug 包；两个独立 worktree/session 的普通沙箱探针、原始三阶段命令与 usage、真实 Git helper/自动审核、精确 SteerlineTest PR 合并/交付及清理 |
 | L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
@@ -84,11 +88,11 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 
-一般受控场景业务上限 5 分钟；安装/调试隔离包含两次构建、双服务与两条分步工作流，单独为 10 分钟。原生工作区删除/重启同样为 10 分钟，覆盖原生资源操作、两次 HTTP 查询、重启与无关任务的第二条三阶段工作流；两项重型场景的 Go 父期限各为 11 分钟。真实场景 10 分钟；多轮 `candidates` 组为 30 分钟（多个真实业务回合、Orca readiness 和自动审核，覆盖双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒；仅服务启动前初始化项目/SQLite 的 `task validate/create` 夹具准备命令为 2 分钟，仍受场景总期限约束。原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
+一般受控场景业务上限 5 分钟；runtime 四项独立隔离回归每项同为 5 分钟，独立创建现场且只读共享 runner 产物，最多两项并发；排队在 NewScenario 前，不占业务期限。旧综合隔离及旧 debug-runtime wrapper 已退役。真实场景 10 分钟；多轮 `candidates` 组为 30 分钟（多个真实业务回合、Orca readiness 和自动审核，覆盖双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒；仅服务启动前初始化项目/SQLite 的 `task validate/create` 夹具准备命令为 2 分钟，仍受场景总期限约束。原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
 
 ## 真实环境
 
-L3 `native` 环境仅要求本机 Git、运行中的 Orca 及其 CLI，不复制 Codex 认证、不传 `--agent` 或业务 prompt，也不校验模型 usage。工作区操作使用真实 Orca，任务 worker 和 PR provider 使用 controlled helper。创建/删除回执、原路径消失、Git 注销及实际行政目录状态、原项目/数据库/执行身份、删除后查询和重启均须核实；不能创建同名目录冒充原生删除。此环境仅用于 L3，不能替代 L2 的真实交付链路。覆盖和结果见 [Orca E2E 记录](../../docs/acceptance/orca-e2e-coverage.md)。
+本机 Orca 资源路径与 `workspace.orca-removal-restart` 已退役，不再登记 native 测试环境或以其为验收门槛。远端 Orca environment 单终端路径仍保留；受控 local/environment 协议回归与远端真机证据分别登记，不能用本机资源操作替代远端验证。历史记录见 [Orca E2E 记录](../../docs/acceptance/orca-e2e-coverage.md)。
 
 L2/L3与controlled/live使用当前固定Windows Codex方案：workspace-write、unelevated、on-request、auto_review、network allow。真实执行仍固定gpt-6-luna/medium。隔离Codex home只复制认证并写入本次仓库信任，不复制sandbox账号或全局项目配置，不需要管理员初始化。受管命令由adapter生成，用户不配置raw args或权限覆盖；恢复核对原冻结配置、精确根和资源。worker不继承启动它的Codex App会话权限。
 
@@ -172,3 +176,7 @@ Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_met
 ## Worker 分步交付断言
 
 当前 delivery.local-codex 的最小材料将 implement.ps1 的本地提交与 publish.ps1 的推送/PR 分开。development/v3 场景核对业务轮次、同会话/Attempt、Command/输入版本/规范 final 来源、每步骤原生 usage 和正确 PR 实际合并；报告绑定原执行，不比较阶段成果或冻结 PR head。readiness 独立计入原生现场，不冒充业务轮次；报告整理要求不等于强只读权限保证。规则见[统一 PR 流程](../../docs/spec/worker-pr-flow.spec.md)。
+
+运行 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled` 选择四项独立隔离场景；可用 `-scenario` 精确选择。只有该包已审查的四项允许 Go `-parallel=2`，其他 E2E 包仍串行。构建场景写自身 source clone，其他场景只读 runner 二进制，禁止写工作树 bin、共享临时 home 或固定端口。生成新调试包仍串行构建 npm/dist，由 `scripts/test-debug-release.ps1` 独立验证当前正式调试入口。
+
+Windows原生隔离验证入口：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-runtime-isolation.ps1 -SteerRunnerExe <固定EXE绝对路径>`。脚本只把原test-feedback四项放在一致的原生用户上下文；当前工具的受限token被Runner拒绝时不能改变产品守卫。生成包脚本与其共用独立进程启动助手；直接在原生环境仍可运行原Go入口，所有源码/EXE/SHA/期限/并发与清理规则保持。

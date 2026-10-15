@@ -84,10 +84,17 @@ func TestDebugReleaseWebProjects(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		cleanup, done := context.WithTimeout(context.Background(), 30*time.Second)
-		defer done()
-		owner.Stop(cleanup)
+		cleanupDebugRuntime(t, d, owner)
 	}()
+	for !debugRunReady(root) {
+		select {
+		case <-owner.Done:
+			t.Fatal("debug launcher exited before package initialization; inspect", log.Name())
+		case <-ctx.Done():
+			t.Fatal("package initialization timed out")
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
 	scopes := []*debugRelease{d, d.secondary()}
 	identities := map[string]string{}
 	for _, scope := range scopes {
@@ -181,20 +188,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
-		defer cancel()
-		service.Stop(stopCtx)
-		if common, err := d.git("rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
-			if state, err := ReadWorkflow(stopCtx, filepath.Join(d.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(common))); err == nil {
-				if err := CleanupRunner(stopCtx, filepath.Join(d.home, "execution.json"), filepath.Join(d.stateDir(), "runner"), state.Candidates); err != nil {
-					t.Error("original Runner cleanup: ", err)
-				}
-			} else {
-				t.Error("Runner cleanup input: ", err)
-			}
-		} else {
-			t.Error("Runner cleanup identity: ", err)
-		}
+		cleanupDebugRuntime(t, d, service)
 	}()
 	wait := func(label string, predicate func() bool) {
 		t.Helper()
@@ -225,6 +219,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if err = d.reset(false); err == nil {
 		t.Fatal("reset accepted active service")
 	}
+	wait("package task initialization", func() bool { return debugRunReady(root) })
 	readyCommon, err := d.git("rev-parse", "--path-format=absolute", "--git-common-dir")
 	if err != nil {
 		t.Fatal(err)
@@ -341,6 +336,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if err = service.Wait(ctx); err != nil {
 		t.Fatal(err)
 	}
+	cleanupDebugRunners(t, d)
 	head, err := d.git("rev-parse", "HEAD")
 	if err != nil {
 		t.Fatal(err)
@@ -414,5 +410,64 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	raw, err := os.ReadFile(sentinel)
 	if err != nil || string(raw) != "unchanged" {
 		t.Fatal("external sentinel changed", err)
+	}
+}
+
+// Host readiness precedes fixture seeding. Only this matching package token
+// proves that both actors have their original task batch before assertions.
+func debugRunReady(root string) bool {
+	var owner, ready struct {
+		Token string `json:"token"`
+	}
+	for name, target := range map[string]*struct {
+		Token string `json:"token"`
+	}{"owner.json": &owner, "ready.json": &ready} {
+		raw, err := os.ReadFile(filepath.Join(root, "runtime-launcher", name))
+		if err != nil || json.Unmarshal(raw, target) != nil {
+			return false
+		}
+	}
+	return owner.Token != "" && owner.Token == ready.Token
+}
+
+func cleanupDebugRuntime(t *testing.T, d *debugRelease, owner *testprocess.Process) {
+	t.Helper()
+	// Product residents deliberately outlive the test Job. Stop by the home API
+	// before terminating only the Git/helper processes owned by that Job.
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
+	err := runCoordinator(ctx, d.command(d.binary, "stop"))
+	cancel()
+	if err != nil {
+		t.Errorf("stop owned debug products: %v", err)
+	}
+	cleanupDebugRunners(t, d)
+	ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := owner.Stop(ctx); err != nil {
+		t.Errorf("stop owned debug helpers: %v", err)
+	}
+}
+
+func cleanupDebugRunners(t *testing.T, d *debugRelease) {
+	t.Helper()
+	scopes := []*debugRelease{d}
+	if d.webProjects == 2 {
+		scopes = append(scopes, d.secondary())
+	}
+	for _, scope := range scopes {
+		ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
+		common, err := scope.git("rev-parse", "--path-format=absolute", "--git-common-dir")
+		if err == nil {
+			state, readErr := ReadWorkflow(ctx, filepath.Join(scope.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(common)))
+			if readErr == nil {
+				err = CleanupRunner(ctx, filepath.Join(scope.home, "execution.json"), filepath.Join(scope.stateDir(), "runner"), state.Candidates)
+			} else if !os.IsNotExist(readErr) {
+				err = readErr
+			}
+		}
+		cancel()
+		if err != nil {
+			t.Errorf("original Runner cleanup: %v", err)
+		}
 	}
 }

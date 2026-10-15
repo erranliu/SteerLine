@@ -1,6 +1,6 @@
 # 本机安装与独立调试
 
-日常安装固定为 `C:\SteerlineRuntime`，程序为 `bin\steerline.exe`。源码 `build.ps1` 只构建源码目录，不更新安装版。临时调试、AI 自动调试、真实 PR 调试都使用下面的统一入口，不使用或修改安装环境。
+日常安装目录为 `C:\SteerlineInstall`，包含 `bin\steerline.exe`、`bin\steerline-web.exe`、`bin\steerrunner.exe`。原 `C:\SteerlineRuntime` 停机保留。源码 `build.ps1` 只构建源码目录；根目录 `build-deploy.bat` 构建三个 EXE 并更新新安装版，见[安装与部署](integration/install-deploy.md)。临时调试、AI 自动调试、真实 PR 调试都使用下面的统一入口，不使用或修改任何安装环境。
 
 ## 生成
 
@@ -52,7 +52,7 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 .\scripts\test-debug-release.ps1 -Live
 ```
 
-两条命令都先通过生成脚本创建两套新包；结果/日志保留在包内 evidence。范围和结果见 [Plan](plans/debug-release.plan.md)、[验收](acceptance/debug-environment.md)。现有 `debug-runtime.ps1` 只用于既有源码隔离回归，不是日常或 AI 调试入口。
+两条命令都先通过生成脚本创建默认产物、单项目与双项目三个新包，-Live 另建独立 live 包；结果/日志保留在包内 evidence。范围和结果见 [Plan](plans/debug-release.plan.md)、[验收](acceptance/debug-environment.md)。旧 `debug-runtime.ps1` 及其专属综合测试已退役。长期隔离回归采用四个独立 controlled 场景：`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled`，详见 [E2E 指南](../tests/e2e/README.md)。
 
 真实 Codex 沙箱及 GitHub credential-helper 无人值守回归：
 
@@ -62,9 +62,9 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 
 先运行上述 controlled 门槛，再生成新的 live 包；真实 worker 运行探针、提交并经 gh shell helper 发布两个专属 PR，驱动在核验 base/head/SHA 后合并到本包 base，验证交付与依赖释放，并清理本次分支。必要越界走原生 auto_review，不依赖 Ctrl+N。认证保留在宿主现有外部登录中，包内只记录标准 credential helper 引用，不复制、导出或存储凭据；中心环境认证仍不自动传给 worker。结果见 [沙箱 Git 验收](acceptance/codex-sandbox-git.md)。
 
-## 安装版人工更新
+## 安装版更新
 
-更新安装版前先结算外部 worker/PR/会话事实，停止服务，再替换安装 exe；不要用调试包接管安装版活动执行，不迁移或清空旧数据库。此操作独立于调试环境生成。
+双击仓库根目录 `build-deploy.bat`：先完成构建，再通过正式 stop 结算并停止目标安装版，替换三个 EXE、刷新 Runner 固定版本与 SHA256，最后启动。停止失败则不替换；正常更新保留项目配置、任务库和执行配置中的 profiles，不自动迁移旧 schema。此操作独立于调试环境生成，不用调试包接管安装版活动执行。首次跨 schema 的任务定义迁移与历史留档见[迁移验收](acceptance/install-cutover-20261015.md)。
 
 ## 独立 Web 与双项目包
 

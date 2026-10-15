@@ -30,24 +30,23 @@ import (
 
 type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
-	orcaUsageUnavailable    bool
-	remoteOutputVerified    bool
-	bodyFinishedAt          time.Time
-	bodyContextErr          error
-	Run                     Run
-	ID, Root, Output        string
-	Context                 context.Context
-	cancel                  context.CancelFunc
-	t                       *testing.T
-	projects                []*Project
-	processes               []*testprocess.Process
-	fixtureClosers          []func()
-	files                   []*os.File
-	resources               []map[string]any
-	usageVerified           bool
-	nativeWorkspaceVerified bool
-	debugSandboxRoot        string
-	debugSandboxResult      map[string]any
+	orcaUsageUnavailable bool
+	remoteOutputVerified bool
+	bodyFinishedAt       time.Time
+	bodyContextErr       error
+	Run                  Run
+	ID, Root, Output     string
+	Context              context.Context
+	cancel               context.CancelFunc
+	t                    *testing.T
+	projects             []*Project
+	processes            []*testprocess.Process
+	fixtureClosers       []func()
+	files                []*os.File
+	resources            []map[string]any
+	usageVerified        bool
+	debugSandboxRoot     string
+	debugSandboxResult   map[string]any
 }
 
 type Project struct {
@@ -59,10 +58,6 @@ type Project struct {
 	ProjectID, DatabaseID                                                             string
 	Driver                                                                            driver.Client
 	Service                                                                           *testprocess.Process
-	ServiceWindow                                                                     *testprocess.Process
-	ServiceWindowPID                                                                  int
-	ServiceWindowStopped                                                              bool
-	ServiceStopOutput                                                                 []byte
 	GitServer                                                                         *testprocess.Process
 	serviceGeneration                                                                 int
 	Tasks                                                                             map[string]Task
@@ -124,16 +119,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		// original-service fencing; individual commands remain bounded.
 		timeout = 10 * time.Minute
 	}
-	if id == "runtime.installed-debug-isolation" {
-		// Two source builds, two isolated service lifecycles, path refusals and
-		// two staged workflows share this bound; command limits stay unchanged.
-		timeout = 10 * time.Minute
-	}
-	if id == "workspace.orca-removal-restart" {
-		// Native worktree creation/removal, HTTP queries, service restart
-		// and two staged workflows share this bound; each command stays bounded.
-		timeout = 10 * time.Minute
-	}
+
 	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.Contains(id, "orca-remote-codex") || strings.HasSuffix(id, "-live") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
 	}
@@ -186,8 +172,6 @@ func (s *Scenario) register(kind, path string, pid int) {
 
 func (s *Scenario) RecordResource(kind, path string, pid int) { s.register(kind, path, pid) }
 
-func (s *Scenario) VerifyNativeWorkspaceLifecycle() { s.nativeWorkspaceVerified = true }
-
 func (s *Scenario) start(cmd *exec.Cmd, name string) *testprocess.Process {
 	s.t.Helper()
 	f, err := os.Create(filepath.Join(s.Output, name+".log"))
@@ -198,21 +182,6 @@ func (s *Scenario) start(cmd *exec.Cmd, name string) *testprocess.Process {
 	s.Must(err)
 	s.processes = append(s.processes, p)
 	s.register("process", cmd.Path, p.Cmd.Process.Pid)
-	return p
-}
-
-// StartVisibleConsole owns a child with a separate visible Windows console.
-// The runtime suite uses it only for the service-window launcher contract.
-func (s *Scenario) StartVisibleConsole(cmd *exec.Cmd, name string) *testprocess.Process {
-	s.t.Helper()
-	f, err := os.Create(filepath.Join(s.Output, name+".log"))
-	s.Must(err)
-	s.files = append(s.files, f)
-	cmd.Stdout, cmd.Stderr = f, f
-	p, err := testprocess.StartVisibleConsole(cmd)
-	s.Must(err)
-	s.processes = append(s.processes, p)
-	s.register("visible-console-process", cmd.Path, p.Cmd.Process.Pid)
 	return p
 }
 
@@ -552,57 +521,15 @@ func (p *Project) StartService() {
 	})
 }
 
-func (p *Project) StartServiceViaVisibleConsole(cmd *exec.Cmd, name string) {
-	s := p.Scenario
-	s.t.Helper()
-	if p.ServiceWindow != nil {
-		s.t.Fatal("service-window process is already running")
-	}
-	p.serviceGeneration++
-	p.ServiceWindowPID = 0
-	p.ServiceWindowStopped = false
-	p.ServiceStopOutput = nil
-	p.ServiceWindow = s.StartVisibleConsole(cmd, name)
-	s.Wait("visible service-window readiness", func() (bool, error) {
-		select {
-		case <-p.ServiceWindow.Done:
-			s.t.Fatalf("service-window launcher exited before service readiness; see %s", filepath.Join(s.Output, name+".log"))
-		default:
-		}
-		snapshot, err := p.Snapshot()
-		if err != nil {
-			return false, err
-		}
-		return snapshot.Runtime != nil && snapshot.Runtime.Service.Ready, nil
-	})
-}
-
 func (p *Project) StopService() {
 	p.Scenario.t.Helper()
-	if p.ServiceWindow != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
-		defer cancel()
-		output, err := p.Driver.Run(ctx, "stop")
-		p.Scenario.Must(err)
-		p.ServiceStopOutput = append([]byte(nil), output...)
-		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer stopCancel()
-		// The batch waits at its post-service pause. The service has already
-		// accepted stop and exited, so close only this owned console Job.
-		p.ServiceWindowPID = p.ServiceWindow.Cmd.Process.Pid
-		p.Scenario.Must(p.ServiceWindow.Stop(stopCtx))
-		p.ServiceWindowStopped = true
-		p.ServiceWindow = nil
-		return
-	}
 	if p.Service == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 	defer cancel()
-	output, err := p.Driver.Run(ctx, "stop")
+	_, err := p.Driver.Run(ctx, "stop")
 	p.Scenario.Must(err)
-	p.ServiceStopOutput = append([]byte(nil), output...)
 	p.Scenario.Must(p.Service.Wait(ctx))
 	p.Service = nil
 }
@@ -876,7 +803,7 @@ func (s *Scenario) cleanup() {
 			realPR = p.RealPRProof
 		}
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "remote_public_output_verified": s.remoteOutputVerified, "remote_usage_status": map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.remoteOutputVerified], "native_workspace_verified": s.nativeWorkspaceVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "remote_public_output_verified": s.remoteOutputVerified, "remote_usage_status": map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.remoteOutputVerified], "real_pr": realPR, "finished_at": time.Now().UTC()}
 	if s.debugSandboxResult != nil {
 		evidence["components"] = map[string]string{"worker": "local-codex", "provider": "github/" + githubRepository}
 		evidence["debug_sandbox"] = s.debugSandboxResult

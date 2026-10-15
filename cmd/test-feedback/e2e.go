@@ -98,7 +98,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live" && entry.Env != "native") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-terminal-local" && entry.Chain != "orca-remote-codex") || (entry.Env == "native" && (entry.Level != "L3" || entry.Chain != "")) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-terminal-local" && entry.Chain != "orca-remote-codex") || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -190,9 +190,6 @@ func runE2E(opts options) (code int) {
 		return 2
 	}
 	note, coverage := "controlled worker/provider; no model requests", "selected-L3"
-	if opts.e2eEnv == "native" {
-		note = "native Orca workspace operations; controlled worker/provider; no model requests"
-	}
 	if opts.e2eEnv == "live" {
 		note = "native gpt-6-luna/medium; loopback provider"
 		for _, scenario := range selected {
@@ -432,7 +429,7 @@ func runE2E(opts options) (code int) {
 		}
 		timeout := e2ePackageGoTimeout(packages[pkg])
 		importPath := strings.TrimSuffix(corePackage, "/internal/app/host") + "/" + strings.TrimPrefix(pkg, "./")
-		args := []string{"tool", "test2json", "-t", "-p", importPath, testBinaries[pkg], "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
+		args := []string{"tool", "test2json", "-t", "-p", importPath, testBinaries[pkg], "-test.v=test2json", "-test.count=1", fmt.Sprintf("-test.parallel=%d", e2ePackageParallelism(packages[pkg])), "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
 		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{"go"}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
 		stdout, err := os.Create(g.StdoutLog)
 		if err != nil {
@@ -478,6 +475,25 @@ func runE2E(opts options) (code int) {
 	return 0
 }
 
+// Only the audited runtime scenes opt into bounded Go test parallelism. Other
+// suites (especially live and gated L2) retain their existing sequencing.
+func e2ePackageParallelism(entries []e2eScenario) int {
+	if len(entries) < 2 {
+		return 1
+	}
+	for _, entry := range entries {
+		if entry.Env != "controlled" || entry.Package != "./tests/e2e/suites/runtime" {
+			return 1
+		}
+		switch entry.ID {
+		case "runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation":
+		default:
+			return 1
+		}
+	}
+	return 2
+}
+
 func e2ePackageGoTimeout(entries []e2eScenario) string {
 	if len(entries) > 0 && entries[0].Env == "live" {
 		return "35m"
@@ -489,8 +505,6 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 		// cut the selected scene at the ordinary 6m package bound.
 		if entry.ID == "delivery.basic" || entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.codex-resume" || entry.ID == "recovery.terminal-local-reconnect" || entry.ID == "recovery.terminal-environment-unknown-send" {
 			minutes += 12
-		} else if entry.ID == "runtime.installed-debug-isolation" || entry.ID == "workspace.orca-removal-restart" {
-			minutes += 11
 		} else {
 			minutes += 6
 		}
@@ -551,7 +565,6 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			RemoteUsageStatus          string           `json:"remote_usage_status"`
 			UsageVerified              bool             `json:"usage_verified"`
 			OrcaUsageStatus            string           `json:"orca_usage_status"`
-			NativeWorkspaceVerified    bool             `json:"native_workspace_verified"`
 			RealPR                     *struct {
 				URL, State, Repository string
 				Merged                 bool
@@ -576,9 +589,6 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		}
 		if e.Chain == "orca-remote-codex" && (!evidence.RemotePublicOutputVerified || evidence.UsageVerified || evidence.RemoteUsageStatus != "not_exposed_by_orca") {
 			return fmt.Errorf("remote public output evidence missing or private usage claimed for %s", e.ID)
-		}
-		if e.Env == "native" && (!evidence.NativeWorkspaceVerified || evidence.UsageVerified || evidence.RealPR != nil) {
-			return fmt.Errorf("native no-model workspace evidence missing or mixed with model/PR evidence for %s", e.ID)
 		}
 		if e.ID == "runtime.sandbox-git.local-codex" {
 			if err := validateSandboxScenarioProof(evidence.DebugSandbox); err != nil {

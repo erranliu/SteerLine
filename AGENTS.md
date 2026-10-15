@@ -10,7 +10,7 @@ SteerLine 目前尚未发布，目前任务是快速开发和跑通流程。
 
 普通开发需求由当前聊天直接实现，不要求先纳入 roadmap，也不默认交给 roadmap-runner、创建执行聊天或独立 worktree。用户明确要求按 roadmap 调度时才使用 roadmap-runner。
 
-SteerLine 临时调试、AI 自动调试及真实 PR 调试，统一先运行 `scripts/new-debug-release.ps1` 创建 `C:\SteerlineDebug` 下的独立环境；不得使用、修改或重置 `C:\SteerlineRuntime` 安装环境。测试项目统一为 SteerlineTest；真实 PR 只针对 `erranliu/SteerlineTest` 的本次专属 base/head 分支。生成只有单一流程，复制源 `debug-template/`（含执行配置）由开发维护，默认运行 live，AI 使用 `--simulate` 显式选模拟方案。既有分级回归测试仍使用其隔离测试夹具，不可把安装目录当作测试现场。
+SteerLine 临时调试、AI 自动调试及真实 PR 调试，统一先运行 `scripts/new-debug-release.ps1` 创建 `C:\SteerlineDebug` 下的独立环境；不得使用、修改或重置当前 `C:\SteerlineInstall` 或保留的 `C:\SteerlineRuntime` 安装环境。测试项目统一为 SteerlineTest；真实 PR 只针对 `erranliu/SteerlineTest` 的本次专属 base/head 分支。生成只有单一流程，复制源 `debug-template/`（含执行配置）由开发维护，默认运行 live，AI 使用 `--simulate` 显式选模拟方案。既有分级回归测试仍使用其隔离测试夹具，不可把安装目录当作测试现场。
 
 调试环境启动后冻结执行方案，换方案须生成新环境。重置入口 `reset-SteerlineTest.bat` 不备份，只重置本包任务/执行/UI 状态，保留任务定义、契约、依赖及 Git/PR 事实；活动服务、worker 或控制台阻止重置。不得通过复制安装版数据库、认证或配置准备调试现场。
 
