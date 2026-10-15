@@ -1,6 +1,12 @@
 # Spec：独立 Web 程序与已有项目切换
 
+后继拓扑由[统一启动](unified-startup.spec.md)替换：项目改为同一后端进程内运行时，使用 start/serve/stop/status 与 application/v2；本文保留原任务范围和历史调查，当前启动方式见统一启动文档。
+
+> 后续变更：本文原 TUI 保留/组装条款已由[TUI 退役](tui-retirement.spec.md)取代；独立 Web、应用目录与项目切换要求继续有效，历史验收事实不改写。
+
 状态：2026-10-15 已实现，WPS-A1～WPS-A6 自动验收通过，WPS-M1 待人工体验；实际验证结果归专属验收。普通开发，无 roadmap Task ID，不改 execution-map。配套 [Plan](web-project-switch.plan.md)、[专属验收](../acceptance/web-project-switch.md)。[添加项目](project-onboarding.spec.md)另立规格并后置，不是本批前置。
+
+后继规划：[统一启动与多项目共进程宿主](unified-startup.spec.md)将替换本规格的分开启动、独立项目进程与应用 HTTP 回环，以及 WPS-A5 的应用重启隔离约定；用户明确不支持 TUI。后继尚未实施，本文件及已有验收保留原版本范围，不把后继计划写成当前能力。
 
 ## 1. 问题与目标
 

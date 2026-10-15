@@ -14,8 +14,8 @@ import (
 	"time"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 )
 
@@ -28,33 +28,19 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <console|serve-app|stop-app|run|start-service|stop-service|check|control|task|answer|home|install|launchers> [-config config.json]")
+		return fmt.Errorf("usage: steerline <start|serve|stop|status|check|control|task|answer|home|install|launchers> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
 	}
-	if os.Args[1] == "serve-app" || os.Args[1] == "stop-app" {
-		if len(os.Args) != 2 {
-			return errors.New("application service takes no project arguments")
-		}
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer cancel()
-		if os.Args[1] == "serve-app" {
-			return steerlineapp.ServeApplication(ctx)
-		}
-		ctx, timeout := context.WithTimeout(ctx, 45*time.Second)
-		defer timeout()
-		return steerlineapp.StopApplication(ctx)
-	}
-	if os.Args[1] == "console" {
-		return runConsoleCommand(os.Args[2:])
+	if os.Args[1] == "start" || os.Args[1] == "serve" || os.Args[1] == "stop" || os.Args[1] == "status" {
+		return runApplication(os.Args[1], os.Args[2:])
 	}
 	command := os.Args[1]
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
-	config := fs.String("config", "steerline.local.json", "configuration JSON")
+	config := fs.String("config", "", "configured project file in home/etc")
+	project := fs.String("project", "", "configured project ID")
 	runID := fs.String("run-id", "", "run to answer")
-	dispatchMode := fs.String("dispatch", "auto", "run dispatch mode: auto|manual")
-	startupID := fs.String("startup-id", "", "internal startup attempt ID")
 	taskID := fs.String("task-id", "", "control task target")
 	executionProfile := fs.String("execution-profile", "", "control start_task/start_candidate execution profile ID")
 	controlMode := fs.String("mode", "", "control set_dispatch_mode value: auto|manual")
@@ -65,8 +51,6 @@ func run() error {
 	note := fs.String("note", "", "answer: optional human note")
 	by := fs.String("by", "", "answer: who answered (defaults to the OS user)")
 	action := fs.String("action", "", "control action")
-	console := fs.String("console", "", "service console rendering: pretty|summary|json|off (default pretty on a terminal)")
-	serviceWindow := fs.Bool("service-window", false, "run inside a required visible Windows service window")
 	if e := fs.Parse(os.Args[2:]); e != nil {
 		return e
 	}
@@ -77,14 +61,8 @@ func run() error {
 		return fmt.Errorf("-execution-profile is only valid with control -action start_task|start_candidate")
 	}
 
-	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "control" && command != "answer" && command != "home" && command != "install" && command != "launchers" {
+	if command != "check" && command != "control" && command != "answer" && command != "home" && command != "install" && command != "launchers" {
 		return fmt.Errorf("unknown command %q", command)
-	}
-	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
-		return fmt.Errorf("-dispatch must be manual or auto")
-	}
-	if *serviceWindow && command != "run" {
-		return fmt.Errorf("-service-window is only valid with run")
 	}
 	if command == "install" {
 		dst, e := steerlineapp.InstallSelf()
@@ -111,11 +89,11 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	var c steerlineapp.Config
-	var product *productclient.Client
+	var product *applicationclient.Project
 	var e error
 	switch command {
-	case "control", "answer", "stop-service":
-		product, e = steerlineapp.OpenClient(ctx, *config)
+	case "control", "answer":
+		product, e = steerlineapp.OpenApplicationProject(ctx, *project, *config)
 		if e != nil {
 			return e
 		}
@@ -127,30 +105,6 @@ func run() error {
 		}
 	}
 
-	if command == "start-service" {
-		result, err := steerlineapp.StartConfiguredService(ctx, c, *config, steerline.StartServiceOptions{})
-		if err != nil {
-			return err
-		}
-		b, _ := json.Marshal(result)
-		fmt.Println(string(b))
-		if result.Status == "failed" {
-			return fmt.Errorf("service startup failed: %s", result.Error)
-		}
-		return nil
-	}
-	if command == "stop-service" {
-		result, err := product.StopService(ctx, *by, 30*time.Second)
-		if err != nil {
-			return err
-		}
-		b, _ := json.Marshal(result)
-		fmt.Println(string(b))
-		if result.Status != "stopped" {
-			return fmt.Errorf("service stop is %s: %s", result.Status, result.Diagnostic)
-		}
-		return nil
-	}
 	if command == "control" {
 		if *requestID != "" {
 			if *action != "" || *taskID != "" || *controlMode != "" {
@@ -239,7 +193,7 @@ func run() error {
 				return fmt.Errorf("run has no current environment blocker")
 			}
 			payload = productapi.ControlPayload{Environment: target}
-		case "pause_dispatch", "resume_dispatch", "stop_service":
+		case "pause_dispatch", "resume_dispatch":
 			if *taskID != "" || *controlMode != "" {
 				return fmt.Errorf("%s does not accept task or mode parameters", *action)
 			}
@@ -302,18 +256,6 @@ func run() error {
 		}
 		return nil
 	}
-	if command == "run" {
-		if *serviceWindow {
-			projectName := strings.TrimSuffix(filepath.Base(*config), filepath.Ext(*config))
-			windowCtx, windowCancel, err := steerline.ServiceWindowContext(ctx, projectName)
-			if err != nil {
-				return err
-			}
-			defer windowCancel()
-			ctx = windowCtx
-		}
-		return steerlineapp.RunConfiguredService(ctx, c, *dispatchMode, *startupID, *console)
-	}
 	if command == "check" {
 		if e = steerlineapp.Preflight(ctx, &c, true); e != nil {
 			return e
@@ -322,34 +264,6 @@ func run() error {
 		return nil
 	}
 	return fmt.Errorf("unsupported command %q", command)
-}
-
-func runConsoleCommand(args []string) error {
-	fs := flag.NewFlagSet("console", flag.ContinueOnError)
-	config := fs.String("config", "", "open one project config; default enumerates STEERLINE_HOME/etc/*.json")
-	runID := fs.String("run-id", "", "focus an existing run ID or task ID in the selected project")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		return errors.New("unexpected positional arguments")
-	}
-	if !stdinIsTTY() || !stdoutIsTTY() {
-		return errors.New("console requires an interactive terminal")
-	}
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
-	return steerlineapp.RunConsole(ctx, *config, *runID)
-}
-
-func stdinIsTTY() bool {
-	info, e := os.Stdin.Stat()
-	return e == nil && info.Mode()&os.ModeCharDevice != 0
-}
-
-func stdoutIsTTY() bool {
-	info, e := os.Stdout.Stat()
-	return e == nil && info.Mode()&os.ModeCharDevice != 0
 }
 
 // printHome shows where this machine keeps the shared SteerLine binary, configs

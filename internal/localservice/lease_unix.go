@@ -3,6 +3,7 @@
 package localservice
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -23,3 +24,7 @@ func lockLease(dir string) (*lease, error) {
 	return &lease{f: f}, nil
 }
 func (l *lease) Close() { l.f.Close() }
+
+func leaseBusy(err error) bool {
+	return errors.Is(err, unix.EWOULDBLOCK) || errors.Is(err, unix.EAGAIN)
+}

@@ -16,7 +16,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
@@ -92,7 +91,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 			t.Fatal("rejected claim changed the database")
 		}
 	})
-	t.Run("offline_persisted_query_and_console_survive_missing_support", func(t *testing.T) {
+	t.Run("offline_persisted_query_survives_missing_support", func(t *testing.T) {
 		fixture := newLifecycleProject(t, "local")
 		ctx := context.Background()
 		createIntegrationTask(t, ctx, fixture, 907)
@@ -114,17 +113,6 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		require(t, err)
 		if view.SelectedTask == nil {
 			t.Fatal("offline query lost the persisted selected task")
-		}
-		refs, options, err := steerlineapp.PrepareConsole(ctx, fixture.configPath, "")
-		require(t, err)
-		if len(refs) != 1 || refs[0].Error != "" || len(refs[0].Presentation.Profiles) != 0 {
-			t.Fatalf("offline console fabricated backend profiles: %+v", refs)
-		}
-		consoleClient := options.Clients[refs[0].Key]
-		defer consoleClient.Close()
-		offline := consoleClient.ReadProject(ctx, "907", productapi.ProjectSnapshot{})
-		if offline.Connection.State != productapi.ConnectionOffline || offline.Connection.CanControl || offline.SelectedNative != nil || offline.NativeTasks != nil {
-			t.Fatal("cold HTTP console read backend data while offline")
 		}
 		if _, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &config); err == nil {
 			t.Fatal("unknown support admitted a writable command store")

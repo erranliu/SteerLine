@@ -1,5 +1,7 @@
 # Plan：Worker 原始状态与控制台精简
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 绑定 [Spec](console-worker-state.spec.md)，结果登记[验收](../acceptance/console-worker-state.md)。直接在当前聊天实现，不修改 roadmap。
 
 本 Plan 为已交付首轮实现；后续可读性收敛使用[独立 Plan](console-flow-state-readability.plan.md) 和专属验收，不覆盖此处历史测试结果。

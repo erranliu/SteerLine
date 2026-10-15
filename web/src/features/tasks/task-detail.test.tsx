@@ -17,8 +17,62 @@ import type {
   TaskPage,
 } from "../../shared/api/types";
 import { TaskDetail } from "./task-detail";
+import { projectQueries } from "../../shared/api/queries";
+import {
+  identity as fixtureIdentity,
+  snapshot as fixtureSnapshot,
+  tasks as fixtureTasks,
+  testClient,
+} from "../../test/workspace";
 
 const clients: QueryClient[] = [];
+
+it("preserves cached task content on refresh failure but never uses it for a different task", async () => {
+  const client = testClient();
+  clients.push(client);
+  const api = new Api(fixtureIdentity, "csrf", "cache-home");
+  client.setQueryData(projectQueries(api).task("1").queryKey, fixtureTasks, {
+    updatedAt: Date.now() - 2000,
+  });
+  let reject!: (error: Error) => void;
+  vi.spyOn(api, "get").mockImplementation((path) => {
+    if (path === "/presentation")
+      return Promise.resolve({
+        presentation: { profiles: [], default_profile_id: "" },
+      }) as never;
+    return new Promise((_resolve, fail) => {
+      if (path === "/tasks/1") reject = fail;
+    }) as never;
+  });
+  const workspace: Workspace = {
+    api,
+    identity: api.identity,
+    online: true,
+    snapshot: fixtureSnapshot(api),
+    send: async () => true,
+    busy: false,
+    refresh: () => {},
+  };
+  const content = (id: string) => (
+    <QueryClientProvider client={client}>
+      <WorkspaceContext.Provider value={workspace}>
+        <MemoryRouter>
+          <TaskDetail id={id} />
+        </MemoryRouter>
+      </WorkspaceContext.Provider>
+    </QueryClientProvider>
+  );
+  const view = render(content("1"));
+  expect(screen.getByRole("heading", { name: "缓存任务" })).toBeVisible();
+  reject(new Error("详情刷新失败"));
+  await screen.findByText("Error: 详情刷新失败");
+  expect(screen.getByRole("heading", { name: "缓存任务" })).toBeVisible();
+  view.rerender(content("2"));
+  expect(
+    screen.queryByRole("heading", { name: "缓存任务" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText("正在读取任务详情…")).toBeVisible();
+});
 afterEach(() => {
   cleanup();
   clients.splice(0).forEach((client) => client.clear());

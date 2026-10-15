@@ -37,7 +37,7 @@ const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
 var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestTM04ExecutionWiring", "TestTM07StorageWiring"}
 
-var quickBoundarySubtests = []string{"pure_ownership_all_tags_production_and_tests", "negative_source_fixtures", "repository_all_tags_and_production_graphs", "console_negative_all_tags_production_and_tests", "claim_transaction_failure_and_original_receipt"}
+var quickBoundarySubtests = []string{"pure_ownership_all_tags_production_and_tests", "negative_source_fixtures", "repository_all_tags_and_production_graphs", "claim_transaction_failure_and_original_receipt"}
 
 func quickBoundaryPattern() string {
 	// Go matches each slash-separated test level independently. Keep all static
@@ -69,8 +69,6 @@ var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary/negative_source_fixtures/transitive_storage_edge",
 	"TestCD67CoreBoundary/negative_source_fixtures/reverse_client_subpackage",
 	"TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
-	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
-	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/transitive_test_helper",
 	"TestTM07StorageWiring",
 	"TestTM04ExecutionWiring",
 	"TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
@@ -87,7 +85,7 @@ var quickRulePackages = append(append([]string{}, taskRulePackages...), []string
 	"github.com/erranliu/SteerLine/internal/execution/backend",
 	executionPackage + "/reconstruction",
 	"github.com/erranliu/SteerLine/internal/storage/sqlite",
-	"github.com/erranliu/SteerLine/internal/console", "github.com/erranliu/SteerLine/internal/console/activityrender",
+	"github.com/erranliu/SteerLine/internal/product/activityrender",
 	"github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
 }...)
 
@@ -96,10 +94,10 @@ var quickOwnerCases = []struct {
 	Tests       []string
 }{
 	{"quick-owner-project-connection", "github.com/erranliu/SteerLine/internal/projectconnection", []string{"TestWebSwitchResolverInheritedPipeIsBounded", "TestWebSwitchResolverRejectsInvalidOutput", "TestWebSwitchResolverCurrentConfigEncoding"}},
-	{"quick-owner-application-http", "github.com/erranliu/SteerLine/internal/product/applicationhttp", []string{"TestWebSwitchAuthenticationRoutesAndUnavailable", "TestWebSwitchOriginalEnvelopeAndInflightReplacement"}},
+	{"quick-owner-application-http", "github.com/erranliu/SteerLine/internal/product/applicationhttp", []string{"TestUnifiedStartupAuthenticationRoutesAndUnavailable", "TestUnifiedStartupOriginalEnvelopeAndInflightIsolation"}},
 	{"quick-owner-web-fixture", "github.com/erranliu/SteerLine/tests/e2e/internal/controlled", []string{"TestWebSwitchHeldStreamRetainsOriginalTurn"}},
 	{"quick-owner-application-client", "github.com/erranliu/SteerLine/internal/product/applicationclient", []string{"TestWebSwitchReconnectAndHome"}},
-	{"quick-owner-web", "github.com/erranliu/SteerLine/web/server", []string{"TestWebAuthenticationAndOriginalForwarding", "TestWebOriginHostAndStaticBoundaries", "TestWebTicketsAreSingleUseAndExpire", "TestWebAddressAndPortConflict", "TestWebLauncherPrivateDiscoveryAndInstance", "TestWebBoundedWritesAndNoBrowserStop", "TestWebSwitchSessionAndNativeStop", "TestWebSwitchDevelopmentProxyAndLease"}},
+	{"quick-owner-web", "github.com/erranliu/SteerLine/web/server", []string{"TestWebAuthenticationAndOriginalForwarding", "TestWebOriginHostAndStaticBoundaries", "TestWebTicketsAreSingleUseAndExpire", "TestWebAddressAndPortConflict", "TestWebLauncherPrivateDiscoveryAndInstance", "TestWebBoundedWritesAndNoBrowserStop", "TestWebSwitchSessionAndNativeStop", "TestWebSwitchDevelopmentProxyAndLease", "TestWebSwitchHomeConfigPreservesPermissions"}},
 	{"quick-owner-http-budget", "github.com/erranliu/SteerLine/internal/product/httpclient", []string{"TestBoundedClientBudgetPreservesAuthenticationAndCancellation"}},
 	{"quick-execution", executionPackage, quickExecutionTests},
 	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestTM04ExecutionBoundary", "TestSharedFixturesRemainTestOnly", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary"}},
@@ -109,7 +107,7 @@ var quickOwnerCases = []struct {
 	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestWebSwitchNativeConnectionLeaseAndRestart", "TestWebSwitchCatalogReadOnlyAndConflicts", "TestWebSwitchCatalogBoundedSlowConfig", "TestWebSwitchApplicationZeroProjectsLifecycle", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestPS2FixedWindowsProfilesFreezeAndRestore", "TestOrcaNativeProfileKeepsFrozenAuthority", "TestOrcaPreflightDoesNotProbeAgentExecutable", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
+	{"quick-owner-unified-startup", "github.com/erranliu/SteerLine/internal/app", []string{"TestUnifiedStartupConcurrentReuseAndMissingWeb", "TestUnifiedStartupUnknownCreationCannotTakeOver", "TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost", "TestUnifiedStartupFrozenCatalogConflictsBeforeDatabase", "TestUnifiedStartupOverlappingRunDirs", "TestUnifiedStartupZeroProjectsLifecycle", "TestUnifiedStartupLifecycleSharedPIDIndependentInstances", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestPS2FixedWindowsProfilesFreezeAndRestore", "TestOrcaNativeProfileKeepsFrozenAuthority", "TestOrcaPreflightDoesNotProbeAgentExecutable", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
 }
 
 var quickPackages = func() []string {

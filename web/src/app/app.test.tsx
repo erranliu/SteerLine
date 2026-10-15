@@ -1,5 +1,13 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, act } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  act,
+  fireEvent,
+} from "@testing-library/react";
+import { StrictMode } from "react";
 import {
   onlineManager,
   QueryClient,
@@ -11,11 +19,180 @@ import { Workspace } from "./app";
 import { Api } from "../shared/api/client";
 import { saveRequest, listRequests } from "../shared/api/journal";
 import type { Receipt } from "../shared/api/types";
+import { projectQueries } from "../shared/api/queries";
+import {
+  identity as fixtureIdentity,
+  snapshot as makeSnapshot,
+  tasks,
+  testClient,
+} from "../test/workspace";
 
 afterEach(() => {
   cleanup();
   onlineManager.setOnline(true);
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+it("preloads only after connection verification, shares presentation in StrictMode, and does not repeat on snapshot samples", async () => {
+  const client = testClient();
+  const identity = { ...fixtureIdentity, project_id: "preload" };
+  const api = new Api(identity, "csrf", "preload-home");
+  const get = vi
+    .spyOn(Api.prototype, "get")
+    .mockImplementation(
+      async (path) =>
+        (path === "/snapshot"
+          ? makeSnapshot(api)
+          : path === "/presentation"
+            ? { presentation: { profiles: [], default_profile_id: "" } }
+            : tasks) as never,
+    );
+  const mount = (connected: boolean) => (
+    <StrictMode>
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={["/projects/preload/settings"]}>
+          <Workspace
+            initial={{ identity, csrf_token: "csrf" }}
+            home={api.home}
+            connected={connected}
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </StrictMode>
+  );
+  const view = render(mount(false));
+  expect(get).not.toHaveBeenCalled();
+  view.rerender(mount(true));
+  await screen.findByText("服务已连接", { exact: true });
+  await waitFor(() =>
+    expect(get.mock.calls.some(([path]) => path.startsWith("/tasks?"))).toBe(
+      true,
+    ),
+  );
+  expect(
+    get.mock.calls.filter(([path]) => path === "/presentation"),
+  ).toHaveLength(1);
+  expect(
+    get.mock.calls.filter(([path]) => path.startsWith("/tasks?")),
+  ).toHaveLength(1);
+  for (let index = 0; index < 3; index++)
+    await act(async () => {
+      client.setQueryData(
+        projectQueries(api).snapshot().queryKey,
+        makeSnapshot(api),
+      );
+    });
+  vi.useFakeTimers();
+  await act(() => vi.advanceTimersByTimeAsync(21000));
+  expect(
+    get.mock.calls.filter(([path]) => path === "/presentation"),
+  ).toHaveLength(1);
+  expect(
+    get.mock.calls.filter(([path]) => path.startsWith("/tasks?")),
+  ).toHaveLength(1);
+  expect(
+    get.mock.calls.every(
+      ([path]) =>
+        path === "/snapshot" ||
+        path === "/presentation" ||
+        path === "/tasks?limit=100&cursor=",
+    ),
+  ).toBe(true);
+  client.clear();
+});
+
+it("keeps cached settings visible through a failed refresh and scopes manual refresh", async () => {
+  const client = testClient();
+  const identity = { ...fixtureIdentity, project_id: "manual" };
+  const api = new Api(identity, "csrf", "manual-home");
+  const options = projectQueries(api);
+  client.setQueryData(options.presentation().queryKey, {
+    presentation: {
+      profiles: [
+        {
+          id: "profile",
+          name: "已缓存方案",
+          host: "local",
+          agent: "codex",
+          unavailable_reason: "",
+          details: [],
+        },
+      ],
+      default_profile_id: "profile",
+    },
+  });
+  const other = [api.home, "another-project", "instance", "snapshot"];
+  client.setQueryData(other, {});
+  const refreshConnection = vi.fn();
+  vi.spyOn(Api.prototype, "get").mockImplementation(async (path) => {
+    if (path === "/snapshot") return makeSnapshot(api) as never;
+    if (path === "/presentation") throw new Error("刷新失败");
+    return tasks as never;
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/projects/manual/settings"]}>
+        <Workspace
+          initial={{ identity, csrf_token: "csrf" }}
+          home={api.home}
+          onRefreshConnection={refreshConnection}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  expect(screen.getByText("已缓存方案")).toBeVisible();
+  await screen.findByText("服务已连接", { exact: true });
+  fireEvent.click(screen.getByRole("button", { name: "刷新查询" }));
+  await screen.findByText("Error: 刷新失败");
+  expect(screen.getByText("已缓存方案")).toBeVisible();
+  expect(refreshConnection).toHaveBeenCalledTimes(1);
+  expect(client.getQueryState(other)?.isInvalidated).toBe(false);
+  client.clear();
+});
+
+it("invalidates an old receipt's original instance after reconciliation without changing the new instance cache", async () => {
+  const client = testClient();
+  const identity = {
+    ...fixtureIdentity,
+    project_id: "old-receipt",
+    instance_id: "current",
+  };
+  const api = new Api(identity, "csrf");
+  const original = new Api({ ...identity, instance_id: "old" }, "csrf");
+  const envelope = original.envelope("start_task", "1", 1, {});
+  await saveRequest(envelope);
+  const oldKey = projectQueries(original).tasks().queryKey;
+  client.setQueryData(oldKey, tasks);
+  vi.spyOn(Api.prototype, "get").mockImplementation(
+    async (path) =>
+      (path === "/snapshot"
+        ? makeSnapshot(api)
+        : path === "/presentation"
+          ? { presentation: { profiles: [] } }
+          : tasks) as never,
+  );
+  vi.spyOn(Api.prototype, "reconcile").mockResolvedValue({
+    ...envelope,
+    original: envelope,
+    status: "applied",
+    sampled_at: "now",
+  });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/projects/old-receipt/settings"]}>
+        <Workspace initial={{ identity, csrf_token: "csrf" }} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(client.getQueryState(oldKey)?.isInvalidated).toBe(true),
+  );
+  expect(
+    client.getQueryState(projectQueries(api).snapshot().queryKey)
+      ?.isInvalidated,
+  ).toBe(false);
+  client.clear();
 });
 
 it("runs only one reconciliation round while journal observations refresh and aborts it offline", async () => {

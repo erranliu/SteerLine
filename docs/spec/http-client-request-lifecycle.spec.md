@@ -1,12 +1,15 @@
 # Spec：HTTP 客户端原请求与停服观察解耦
 
+> 2026-10-15：TUI 专属客户端/交互已退役，本文保留原范围与历史事实；共享 HTTP、服务和进程身份要求继续有效。当前范围见[TUI 退役](../spec/tui-retirement.spec.md)。
+
+
 任务 ID：93；任务名称：HTTP 客户端原请求与停服观察解耦。
 
 范围于2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)，尚未实施；实时执行/验收状态归正式清单和专属验收。配套 [Plan](http-client-request-lifecycle.plan.md)、[专属验收](../acceptance/http-client-request-lifecycle.md)、[本轮草稿](../roadmap/drafts/roadmap.md)。调查基线 `5a24abec3c10d184a6e57962e154854bc6011a9f`；实际启动固定文档版本与最新主干。
 
 ## 问题与成果
 
-[httpclient/console.go](../../internal/product/httpclient/console.go) 同时处理页面消费、原信封文件、提交/查找对账和 Windows 原进程/两锁退出判断。[client.go](../../internal/product/httpclient/client.go) 已有原始 HTTP 请求和连接能力，无需再建设连接管理框架。
+[httpclient/console.go](https://github.com/erranliu/SteerLine/blob/47fafc12721ceb8fa39ba1ab227872fd14513bcb/internal/product/httpclient/console.go) 同时处理页面消费、原信封文件、提交/查找对账和 Windows 原进程/两锁退出判断。[client.go](../../internal/product/httpclient/client.go) 已有原始 HTTP 请求和连接能力，无需再建设连接管理框架。
 
 在现有 httpclient 包中抽出命名的原请求 journal owner，统一 outgoing 的路径、格式/原身份核验、首次原子登记、观察更新和原响应绑定。Console 的提交/lookup 继续组织原 HTTP 对账，但不再直接实现文件持久化。把停服 OS 观察作为显式注入的小端口/函数，consoleapp 负责绑定当前平台默认实现；业务 HTTP 查询、提交与 journal 不调用 OS 观察。现有 Console 消费接口、实际取消和重连行为保持，删除旧重复文件逻辑。
 

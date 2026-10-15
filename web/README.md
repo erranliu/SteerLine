@@ -15,11 +15,13 @@ $env:STEERLINE_HOME = '<所选 home>'
 
 普通 `./build.ps1` 只生成业务 exe，无 Node 前置。页面只嵌入 Web exe；运行两份 exe 都不依赖 Node。手工等效 Web 构建为 `npm --prefix web ci`、`npm --prefix web run build`、`go build -tags webui -o bin/steerline-web.exe ./cmd/steerline-web`。
 
-在不同终端按顺序运行 `steerline serve-app`、`steerline-web serve`，然后 `steerline-web open [-project <id>]`。项目服务由已有 `start-service`/`service-window.bat` 独立启动；Web 不启动它们。`steerline-web stop` 与 `steerline stop-app` 正常停止各自精确实例并核实退出/租约释放，不停止项目服务或 worker。
+安装目录双击 `start.bat`（等价 `steerline start`），短协调器依次启动并核验同 home 的共享后端和 Web，然后委托本 home 的 Web `open` 授权打开浏览器。重复启动复用实例；`--no-open` 适合自动化。`steerline status --json` 展示宿主、Web、项目和最近停机结果，`stop.bat` / `steerline stop` 正常停止两者并核验各项目收尾。
+
+后端低层入口为 `steerline serve`，自动冻结并装载 `etc/*.json`，所有项目在同一 PID 内分别拥有数据库、actor、实例和锁。配置修改在下次宿主启动生效。Web 可通过 `steerline-web stop`、`serve`、`open` 独立重启，保持项目与 worker 活动轮次。
 
 Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742"}`；缺文件时采用该默认值并在启动时保存。稳定端口冲突明确失败。项目配置的 `web_address` 和旧 `steerline web -config` 已删除，旧配置需要显式移除该字段，不自动迁移。
 
-当前项目使用 `/projects/{project_id}/dag`、`/runs`、`/settings` 深链接。切换器显示仓库位置、状态和诊断，可搜索；每标签页的选择独立。最近选择可共享，不能抢改已打开的标签页。配置目录来自 `<home>/etc/*.json`，坏配置保留诊断，同 common-dir 多配置拒绝路由；列表和离线查询不初始化业务数据库。
+当前项目使用 `/projects/{project_id}/dag`、`/runs`、`/settings` 深链接。切换器显示仓库位置、状态和诊断，可搜索；每标签页的选择独立。最近选择可共享，不能抢改已打开的标签页。配置目录来自 `<home>/etc/*.json`，坏配置保留诊断，同 common-dir 多配置拒绝路由；列表查询不初始化业务数据库；初始化属于持锁的项目装载流程。
 
 ## 认证与恢复
 
@@ -27,25 +29,33 @@ Web 地址保存在 `<home>/web.json`：`{"version":1,"address":"127.0.0.1:18742
 
 Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的新实例，再恢复只读连接。草稿与完整原请求存 IndexedDB，按 home/项目/实例及执行身份隔离；切换取消旧查询、资格检查和未发送回调。已发送命令只按原 ID 查询；原实例变化后仍可读取旧回执，但不把旧信封补交到新实例。离线只保留当前标签页已有缓存并禁写。
 
+## 查询与缓存
+
+服务读取统一使用 `src/shared/api/queries.ts` 的 TanStack Query options，按 home/项目/原生实例及输出身份隔离。连接核验后后台预取当前项目的执行方案和任务列表首屏；DAG/执行页共享任务列表，已有缓存先展示，后台刷新保留内容。任务列表和执行方案的在途读取可跨页面复用，项目/实例切换仍取消原 Workspace 的读取。
+
+执行方案新鲜期 60 秒，不定时轮询；动态状态保留原刷新周期，仅可见的图/列表、活动/final 启动对应查询。操作后按资源族定向失效，手动刷新包含当前连接查询；缓存不替代服务器操作资格。后续 SSE 继续更新同一缓存，本批不实现 SSE 或查询持久化。[Spec](../docs/spec/web-query-optimization.spec.md) · [Plan](../docs/spec/web-query-optimization.plan.md) · [验收](../docs/acceptance/web-query-optimization.md)。
+
 ## 独立调试与验证
 
 ```powershell
 ./scripts/new-debug-release.ps1 -WebAddress 127.0.0.1:18742 -WebProjects 2
 & 'C:\SteerlineDebug\<新包>\start.bat' --simulate
-& 'C:\SteerlineDebug\<同一包>\web.bat'
+& 'C:\SteerlineDebug\<同一包>\stop.bat'
 ```
 
-默认 live，AI 显式 `--simulate`；首次方案冻结。生成器维护双 exe、配置和启动器，两项目使用独立 clone/common-dir/provider，配置源在 `home/config-source`，etc 仅保存活动项目。包内 `reset-SteerlineTest.bat` 同时检查两项目、应用、Web 与控制台锁，再重置本包执行状态。不使用安装目录准备或运行调试。
+Web 是唯一交互前端，原 TUI 已移除。默认 live，AI 显式 `--simulate`；首次方案冻结。生成器默认包含业务/Web 双 exe、helper、配置和启动器，两项目使用独立 clone/common-dir/provider，配置源在 `home/config-source`，etc 仅保存活动项目。包内 `reset-SteerlineTest.bat` 同时检查两项目、应用、Web 与启动器锁，再重置本包执行状态。不使用安装目录准备或运行调试。
 
 热更新：先在 `web/` 运行 `npm run dev`，为 Vite 设置 `STEERLINE_WEB_DEV_PORT=18742`；启动本包 Web 前设置 `STEERLINE_WEB_DEV_ORIGIN=http://127.0.0.1:5173`。浏览器始终通过 Go 的固定 Origin，只有静态/Vite HMR 路由转到 Vite；认证和 API 留在 Go。
 
 ```powershell
 npm --prefix web test
 npm --prefix web run build
-go run ./cmd/test-feedback -- ./internal/app ./internal/product/applicationhttp ./internal/product/applicationclient ./web/server -run '^TestWebSwitch' -count=1
+go run ./cmd/test-feedback -- ./internal/app ./internal/product/applicationhttp ./internal/product/applicationclient ./web/server -run '^TestUnifiedStartup' -count=1
 go run ./cmd/test-feedback -level=L1
 ```
 
-真实 Edge 切换场景会启动和正常清理全新双项目包：设置 `STEERLINE_WEB_PACKAGE=<新包>`，运行 `npm --prefix web run test:e2e -- project-switch.spec.ts`。安装检查入口为 `./scripts/test-web-switch-build.ps1 -Package <新生成的 Web 包>`，也只使用包内 home。
+真实 Edge 切换场景会启动和正常清理全新双项目包：设置 `STEERLINE_WEB_PACKAGE=<新包>`，运行 `npm --prefix web run test:e2e -- project-switch.spec.ts`。综合场景同时核验两份运行中的安装目标拒绝覆盖。推荐入口为 `./scripts/test-unified-startup.ps1 -Package <新包> -Simulate`；查询缓存另建新包并加 `-Scenario query-cache`。
 
 `./scripts/test-web-smoke.ps1` 可自动生成另一新单项目包、启动、运行原 smoke 并正常清理。手动入口的原 `web.smoke` 使用另一个全新单项目 Web 包，先 `start.bat --simulate`，设置 `STEERLINE_WEB_CONFIG=<包>/home/etc/SteerlineTest.json` 后运行 `npm --prefix web run test:e2e -- smoke.spec.ts`；收尾显式正常停止 Web、应用和项目，核实本包进程/监听为 0。截图、trace 和原请求/轮次身份记录在 `STEERLINE_WEB_EVIDENCE` 指定的证据目录或默认临时目录。模拟范围仅限外部模型/PR 协议，Go、Git、SQLite 和 Edge 均为真实实现。
+
+查询缓存浏览器场景 `query-cache.spec.ts` 使用另外生成的全新双项目包：设置 `STEERLINE_WEB_PACKAGE` 和 `STEERLINE_WEB_EVIDENCE` 后运行 `npm --prefix web run test:e2e -- query-cache.spec.ts`。测试负责 simulate 准备、启动和正常清理，运行前不得先 start；不要不带文件过滤运行所有浏览器场景，各场景的现场要求不同。

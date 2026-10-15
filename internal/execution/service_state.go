@@ -15,6 +15,7 @@ import (
 )
 
 type Service struct {
+	shutdownError        error
 	historyDone          <-chan struct{}
 	historyRequests      chan []conversationtypes.ConversationHistorySource
 	host                 hostport.HostPort

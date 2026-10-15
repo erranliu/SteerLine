@@ -20,7 +20,8 @@ func runNativeTaskCommand(args []string) error {
 	}
 	subcommand := args[0]
 	fs := flag.NewFlagSet("task "+subcommand, flag.ContinueOnError)
-	config := fs.String("config", "steerline.local.json", "configuration JSON")
+	config := fs.String("config", "", "configured project file in home/etc")
+	project := fs.String("project", "", "configured project ID")
 	taskID := fs.String("task-id", "", "native task ID")
 	predecessors := fs.String("predecessors", "", "comma-separated native predecessor task IDs")
 	cursor := fs.String("cursor", "", "native task list cursor")
@@ -32,13 +33,14 @@ func runNativeTaskCommand(args []string) error {
 	expectedGraphRevision := fs.Uint64("expected-graph-revision", 0, "sampled native graph revision")
 	reason := fs.String("reason", "", "reason for discarding or changing the task")
 	by := fs.String("by", "", "task command requester")
-	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" {
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "receipt" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
 	allowedFlags := map[string]map[string]bool{
+		"receipt":          {"config": true, "request-id": true, "task-id": true},
 		"show":             {"config": true, "task-id": true},
 		"list":             {"config": true, "cursor": true, "limit": true},
 		"validate":         {"config": true, "file": true},
@@ -53,7 +55,7 @@ func runNativeTaskCommand(args []string) error {
 		if f.Name == "expected-graph-revision" {
 			graphRevisionWasSet = true
 		}
-		if !allowedFlags[subcommand][f.Name] && unexpectedFlag == "" {
+		if f.Name != "project" && !allowedFlags[subcommand][f.Name] && unexpectedFlag == "" {
 			unexpectedFlag = f.Name
 		}
 	})
@@ -64,6 +66,15 @@ func runNativeTaskCommand(args []string) error {
 		return errors.New("unexpected positional arguments")
 	}
 	switch subcommand {
+	case "receipt":
+		if *requestID == "" {
+			return errors.New("task receipt requires --request-id")
+		}
+		if *taskID != "" {
+			if err := taskmodel.ValidateID(*taskID); err != nil {
+				return err
+			}
+		}
 	case "show":
 		if *taskID == "" {
 			return errors.New("task show requires -task-id")
@@ -118,7 +129,7 @@ func runNativeTaskCommand(args []string) error {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	ctx := context.Background()
-	opened, err := steerlineapp.OpenClient(ctx, *config)
+	opened, err := steerlineapp.OpenApplicationProject(ctx, *project, *config)
 	product := opened
 	if err != nil {
 		return err
@@ -126,6 +137,17 @@ func runNativeTaskCommand(args []string) error {
 	defer product.Close()
 	var result productapi.TaskPage
 	switch subcommand {
+	case "receipt":
+		var receipt any
+		if *taskID == "" {
+			receipt, err = product.TaskBatchReceipt(ctx, *requestID)
+		} else {
+			receipt, err = product.PredecessorReceipt(ctx, *taskID, *requestID)
+		}
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "show":
 		result, err = product.ShowTask(ctx, *taskID)
 	case "list":

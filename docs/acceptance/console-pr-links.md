@@ -1,5 +1,7 @@
 # 控制台 PR 链接
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 本聊天直接授权：候选与执行中的 PR 编号可跳转，不新增快捷键；摘要、详情和历史 PR 地址采用同一终端超链接渲染。
 
 2026-10-09，`go run ./cmd/test-feedback -- ./internal/console -count=1` 通过，9.758 秒。报告：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261009T061323.088331000Z/summary.json`。覆盖窄窗口截断时保持完整目标及关闭链接边界、PR 更新/缺失、非法协议和源文本控制字符；`git diff --check` 通过。源码为 `a3701e0a6654899ce8436b732aa14b6133033a24` 加本次未提交修改。

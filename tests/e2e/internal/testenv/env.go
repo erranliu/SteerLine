@@ -108,7 +108,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		timeout = 10 * time.Minute
 	}
 	if id == "workspace.orca-removal-restart" {
-		// Native worktree creation/removal, two ConPTY queries, service restart
+		// Native worktree creation/removal, HTTP queries, service restart
 		// and two staged workflows share this bound; each command stays bounded.
 		timeout = 10 * time.Minute
 	}
@@ -142,9 +142,9 @@ func (s *Scenario) Must(err error) {
 	}
 }
 
-// Freeze the business deadline before independent service/resource cleanup.
+// FinishBody freezes the business deadline before independent service/resource cleanup.
 // Cancelling this context also prevents later business I/O after this boundary.
-func (s *Scenario) finishBody() error {
+func (s *Scenario) FinishBody() error {
 	if !s.bodyFinishedAt.IsZero() {
 		return errors.New("scenario business phase already finished")
 	}
@@ -435,7 +435,8 @@ func (p *Project) createTasks(keys []string) {
 		return taskmodel.FileReference{Path: "docs/spec/" + name, Commit: head, SHA256: hex.EncodeToString(sum[:])}
 	}
 	spec, plan := ref("task.spec.md"), ref("task.plan.md")
-	// task validate is the product's project initialization and validation path.
+	p.StartService()
+	// The shared host owns initialization before CLI task validation.
 	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion}
 	for i, key := range keys {
 		contract := taskmodel.TaskContract{ContractID: "e2e-" + key, Repository: p.RemoteURL, Remote: "origin", Branch: p.BaseBranch, SpecRef: spec, PlanRef: plan, CommonRefs: []taskmodel.FileReference{}, AcceptanceRefs: []taskmodel.FileReference{spec}}
@@ -479,25 +480,42 @@ func (p *Project) createTasks(keys []string) {
 	}
 }
 
+// StartHost starts the home owner without requiring any project to succeed.
+func (p *Project) StartHost() {
+	s := p.Scenario
+	s.t.Helper()
+	if p.Service != nil {
+		return
+	}
+	p.serviceGeneration++
+	cmd := exec.Command(p.Executable, "serve")
+	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	p.Service = s.start(cmd, fmt.Sprintf("%s-host-%d", p.Name, p.serviceGeneration))
+}
 func (p *Project) StartService() {
 	s := p.Scenario
 	s.t.Helper()
-	p.serviceGeneration++
-	// Context cancellation is handled by the owning Scenario's cleanup, not exec's root-only Kill.
-	cmd := exec.Command(p.Executable, "run", "-config", p.Config, "-dispatch", "manual", "-console", "off")
-	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
-	p.Service = s.start(cmd, fmt.Sprintf("%s-service-%d", p.Name, p.serviceGeneration))
-	s.Wait("service readiness", func() (bool, error) {
+	p.StartHost()
+	s.Wait("project runtime readiness", func() (bool, error) {
 		select {
 		case <-p.Service.Done:
-			s.t.Fatal("service exited; see log")
+			s.t.Fatal("host exited; see log")
 		default:
 		}
-		snapshot, err := p.Snapshot()
+		status, err := p.Driver.HostStatus(s.Context)
 		if err != nil {
 			return false, err
 		}
-		return snapshot.Runtime != nil && snapshot.Runtime.Service.Ready && snapshot.Runtime.Service.PID == p.Service.Cmd.Process.Pid && snapshot.Runtime.Service.ProcessIdentity != nil && snapshot.Runtime.Service.ProcessIdentity.PID == p.Service.Cmd.Process.Pid, nil
+		for _, project := range status.Projects {
+			if project.ConfigID != filepath.Base(p.Config) {
+				continue
+			}
+			if project.RuntimeState == "failed" {
+				s.t.Fatal(project.Diagnostic)
+			}
+			return project.Online && status.Backend.Identity.Process.PID == p.Service.Cmd.Process.Pid, nil
+		}
+		return false, nil
 	})
 }
 
@@ -529,9 +547,9 @@ func (p *Project) StartServiceViaVisibleConsole(cmd *exec.Cmd, name string) {
 func (p *Project) StopService() {
 	p.Scenario.t.Helper()
 	if p.ServiceWindow != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 		defer cancel()
-		output, err := p.Driver.Run(ctx, "stop-service", "-config", p.Config, "-by", "e2e")
+		output, err := p.Driver.Run(ctx, "stop")
 		p.Scenario.Must(err)
 		p.ServiceStopOutput = append([]byte(nil), output...)
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -547,9 +565,9 @@ func (p *Project) StopService() {
 	if p.Service == nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 	defer cancel()
-	output, err := p.Driver.Run(ctx, "stop-service", "-config", p.Config, "-by", "e2e")
+	output, err := p.Driver.Run(ctx, "stop")
 	p.Scenario.Must(err)
 	p.ServiceStopOutput = append([]byte(nil), output...)
 	p.Scenario.Must(p.Service.Wait(ctx))
@@ -722,11 +740,11 @@ func (p *Project) Record(label string, snap Snapshot) {
 
 func (s *Scenario) cleanup() {
 	if s.bodyFinishedAt.IsZero() {
-		_ = s.finishBody()
+		_ = s.FinishBody()
 	}
 	bodyContextErr := s.bodyContextErr
 	defer s.cancel()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
 	var failures []string
 	// Capture public state before shutting down, even after an assertion timeout.

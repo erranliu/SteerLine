@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, Play, Plus } from "lucide-react";
 import { useWorkspace } from "../../app/context";
-import type { TaskPage, Presentation } from "../../shared/api/types";
+import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { participating } from "../runs/state";
 import { SafeLink, Status } from "../../shared/ui/status";
@@ -19,29 +19,13 @@ export function TaskDetail({
   const [starting, setStarting] = useState(false);
   const [profile, setProfile] = useState("");
   const detail = useQuery({
-    queryKey: [
-      api.home,
-      api.identity.project_id,
-      api.identity.instance_id,
-      "task",
-      id,
-    ],
-    queryFn: ({ signal }) =>
-      api.get<TaskPage>("/tasks/" + encodeURIComponent(id), signal),
+    ...projectQueries(api).task(id),
     enabled: online,
     refetchInterval: 2000,
   });
   const presentation = useQuery({
-    queryKey: [
-      api.home,
-      api.identity.project_id,
-      api.identity.instance_id,
-      "presentation",
-    ],
-    queryFn: ({ signal }) =>
-      api.get<{ presentation: Presentation }>("/presentation", signal),
+    ...projectQueries(api).presentation(),
     enabled: online,
-    refetchInterval: 10000,
   });
   const task = detail.data?.tasks[0];
   const page = snapshot?.connection.snapshot.page;
@@ -100,11 +84,15 @@ export function TaskDetail({
   if (!task)
     return (
       <div className="empty">
-        {detail.error ? String(detail.error) : "选择任务，查看依赖与执行资格"}
+        {detail.error ? String(detail.error) : "正在读取任务详情…"}
       </div>
     );
   return (
     <section className="task-detail">
+      {detail.error && <p className="notice amber">{String(detail.error)}</p>}
+      {presentation.error && (
+        <p className="notice amber">{String(presentation.error)}</p>
+      )}
       <div className="eyebrow">正式任务 · #{task.task_id}</div>
       <h2>{task.title}</h2>
       <Status value={task.status} />

@@ -25,5 +25,5 @@ func PreflightNativeStatePath(c Config) error {
 	if err := httpapi.ValidateStateDirectory(c.RunDir, c.Identity()); err != nil {
 		return fmt.Errorf("local API state: %w", err)
 	}
-	return nil
+	return httpapi.ValidateProjectCommandDirectory(c.RunDir, c.Identity())
 }

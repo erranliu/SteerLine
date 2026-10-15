@@ -191,6 +191,9 @@ func (s *Server) SetReady(instanceID string, ready bool, diagnostic string) erro
 	s.discovery.InstanceID, s.discovery.Ready, s.discovery.Status = instanceID, ready, status
 	s.discovery.Diagnostic, s.discovery.UpdatedAt = diagnostic, time.Now().UTC()
 	s.readiness.Set(ready, diagnostic, status)
+	if s.listener == nil {
+		return nil
+	}
 	return s.writeDiscoveryLocked()
 }
 
@@ -207,6 +210,9 @@ func (s *Server) Close(ctx context.Context) error {
 	httpServer, listener := s.http, s.listener
 	s.mu.Unlock()
 
+	if listener == nil {
+		return nil
+	}
 	var retErr error
 	if httpServer != nil {
 		retErr = httpServer.Shutdown(ctx)
@@ -231,6 +237,9 @@ func (s *Server) Close(ctx context.Context) error {
 func (s *Server) writeDiscovery() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.listener == nil {
+		return nil
+	}
 	return s.writeDiscoveryLocked()
 }
 
@@ -332,4 +341,25 @@ func decodeStrict(data []byte, target any) error {
 		return errors.New("JSON must contain one value")
 	}
 	return nil
+}
+
+// NewProject binds the existing query and command dispatchers without creating
+// a listener, discovery or credential. The host owns this project's lifetime.
+func NewProject(ports Ports, options Options) (*Server, error) {
+	if ports.Query == nil || ports.Commands == nil || ports.Authority == nil || ports.NativeViewer == nil || options.InstanceID == "" {
+		return nil, errors.New("project ports and runtime instance are required")
+	}
+	project := ports.Query.Project()
+	if project.Identity == "" || project.Identity != options.ProjectIdentity {
+		return nil, &api.Error{Kind: api.IdentityConflict, Message: "project port identity differs"}
+	}
+	dir := filepath.Join(options.RunDir, "application-commands")
+	if err := ensurePrivateDirectory(dir); err != nil {
+		return nil, err
+	}
+	readiness := &readinessState{status: "starting"}
+	s := &Server{query: ports.Query, activities: ports.Query, conversation: ports.Query, recovery: ports.Query, options: options, readiness: readiness,
+		identity: Identity{Protocol: Protocol, ProjectID: ProjectID(project.Identity), RepositoryIdentity: project.Identity, InstanceID: options.InstanceID, Process: options.Process, Status: "starting", Capabilities: options.Capabilities, SampledAt: time.Now().UTC()}}
+	s.commands = newCommandRegistry(options, ports, readiness, newFileRequestRecordOwner(dir))
+	return s, nil
 }

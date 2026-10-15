@@ -32,10 +32,15 @@ import {
   PanelLeftClose,
 } from "lucide-react";
 import { Api, ApiError, json } from "../shared/api/client";
+import {
+  projectQueries,
+  invalidateCommand,
+  receiptChanged,
+  refreshProject,
+} from "../shared/api/queries";
 import { listRequests } from "../shared/api/journal";
 import type {
   Identity,
-  Snapshot,
   StoredRequest,
   BrowserSession,
   ConfiguredProject,
@@ -66,6 +71,10 @@ function Operations({
   const queryClient = useQueryClient();
   const reconcile = useMutation({
     mutationFn: (row: StoredRequest) => api.reconcile(row.envelope),
+    onSuccess: (result, row) => {
+      if (receiptChanged(row.response, result))
+        void invalidateCommand(queryClient, api.home, row.envelope);
+    },
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: [api.home, "local-requests"] }),
     onError: (error) => onError(String(error)),
@@ -120,28 +129,10 @@ function Operations({
     </details>
   ) : null;
 }
-function SettingsPage({ api }: { api: Api }) {
+function SettingsPage({ api, online }: { api: Api; online: boolean }) {
   const result = useQuery({
-    queryKey: [
-      api.home,
-      api.identity.project_id,
-      api.identity.instance_id,
-      "presentation",
-    ],
-    queryFn: ({ signal }) =>
-      api.get<{
-        presentation: {
-          profiles: {
-            id: string;
-            name: string;
-            host: string;
-            agent: string;
-            unavailable_reason: string;
-            details: string[];
-          }[];
-          default_profile_id: string;
-        };
-      }>("/presentation", signal),
+    ...projectQueries(api).presentation(),
+    enabled: online,
   });
   return (
     <>
@@ -154,6 +145,7 @@ function SettingsPage({ api }: { api: Api }) {
       </div>
       <section className="settings-panel">
         <h2>已有执行方案</h2>
+        {result.isPending && <p className="muted">正在读取执行方案…</p>}
         <p className="muted">
           方案由服务配置维护。每次启动可选择方案，冻结参数由 Go 服务核验。
         </p>
@@ -195,12 +187,14 @@ export function Workspace({
   home = "",
   switcher,
   connectionError,
+  onRefreshConnection,
 }: {
   initial: { csrf_token: string; identity: Identity };
   connected?: boolean;
   home?: string;
   switcher?: React.ReactNode;
   connectionError?: unknown;
+  onRefreshConnection?: () => void;
 }) {
   const queries = useQueryClient();
   const [error, setError] = useState("");
@@ -222,12 +216,16 @@ export function Workspace({
   );
   useLayoutEffect(() => {
     api.activate();
-    return () => api.deactivate();
-  }, [api]);
+    return () => {
+      api.deactivate();
+      void queries.cancelQueries({
+        queryKey: [api.home, api.identity.project_id, api.identity.instance_id],
+      });
+    };
+  }, [api, queries]);
   const connected = applicationConnected && identity.ready;
   const snapshot = useQuery({
-    queryKey: [home, identity.project_id, identity.instance_id, "snapshot"],
-    queryFn: ({ signal }) => api.get<Snapshot>("/snapshot", signal),
+    ...projectQueries(api).snapshot(),
     enabled: connected,
     refetchInterval: 2000,
     retry: false,
@@ -252,15 +250,20 @@ export function Workspace({
       setError("");
       setErrorRequest("");
     },
-    onSettled: () => {
-      queries.invalidateQueries({
-        predicate: (q) =>
-          q.queryKey[0] === home &&
-          (q.queryKey[1] === identity.project_id ||
-            q.queryKey[1] === "local-requests"),
-      });
+    onSettled: (_result, _error, envelope) => {
+      void invalidateCommand(queries, api.home, envelope);
     },
   });
+  useEffect(() => {
+    if (!online) return;
+    const options = projectQueries(api);
+    void queries.prefetchQuery(options.presentation());
+    void queries.prefetchQuery(options.tasks());
+  }, [online, api, queries]);
+  const refresh = () => {
+    onRefreshConnection?.();
+    void refreshProject(queries, api);
+  };
   const requests = useQuery({
     queryKey: [home, "local-requests"],
     queryFn: listRequests,
@@ -293,8 +296,14 @@ export function Workspace({
         for (const row of pending) {
           if (controller.signal.aborted) return;
           try {
-            await api.reconcile(row.envelope, controller.signal);
-            queries.invalidateQueries({ queryKey: [home, "local-requests"] });
+            const result = await api.reconcile(row.envelope, controller.signal);
+            if (controller.signal.aborted) return;
+            if (receiptChanged(row.response, result))
+              void invalidateCommand(queries, api.home, row.envelope);
+            else
+              void queries.invalidateQueries({
+                queryKey: [api.home, "local-requests"],
+              });
           } catch {
             /* unknown stays in journal */
           }
@@ -355,7 +364,7 @@ export function Workspace({
         snapshot: snapshot.data,
         send,
         busy: mutation.isPending,
-        refresh: () => queries.invalidateQueries(),
+        refresh,
       }}
     >
       <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>
@@ -420,7 +429,7 @@ export function Workspace({
                 size="sm"
                 variant="ghost"
                 aria-label="刷新查询"
-                onClick={() => queries.invalidateQueries()}
+                onClick={refresh}
               >
                 <RefreshCw size={15} />
               </Button>
@@ -473,7 +482,7 @@ export function Workspace({
                 />
                 <Route
                   path={"/projects/" + identity.project_id + "/settings"}
-                  element={<SettingsPage api={api} />}
+                  element={<SettingsPage api={api} online={!!online} />}
                 />
                 <Route
                   path="*"
@@ -547,7 +556,7 @@ export function App({ initial }: { initial: BrowserSession }) {
   const catalog = useQuery({
     queryKey: [home, "projects"],
     queryFn: ({ signal }) =>
-      json<{ projects: ConfiguredProject[] }>("/api/v1/application/projects", {
+      json<{ projects: ConfiguredProject[] }>("/api/v2/application/projects", {
         signal,
       }),
     enabled: sessionValid,
@@ -567,7 +576,7 @@ export function App({ initial }: { initial: BrowserSession }) {
   const projectIdentity = useQuery({
     queryKey: [home, id, "identity"],
     queryFn: ({ signal }) =>
-      json<Identity>("/api/v1/application/projects/" + id + "/identity", {
+      json<Identity>("/api/v2/application/projects/" + id + "/identity", {
         signal,
       }),
     enabled: sessionValid && !!selected,
@@ -642,7 +651,7 @@ export function App({ initial }: { initial: BrowserSession }) {
                   ? "配置错误"
                   : p.online
                     ? "在线"
-                    : "离线"}
+                    : ({starting:"启动中",failed:"启动失败",stopping:"停止中",stopped:"已停止",ready:"在线"}[p.runtime_state ?? "stopped"])}
               {(!p.project_id || p.conflict) && (p.diagnostic || p.conflict)
                 ? " · " + (p.diagnostic || p.conflict)
                 : ""}
@@ -653,7 +662,7 @@ export function App({ initial }: { initial: BrowserSession }) {
         <div className="project-current">
           <div>
             <strong>{selected.name}</strong>
-            <small>{selected.online ? "在线" : "离线"}</small>
+            <small>{selected.online ? "在线" : ({starting:"启动中",failed:"启动失败",stopping:"停止中",stopped:"已停止",ready:"在线"}[selected.runtime_state ?? "stopped"])}</small>
           </div>
           <span className="path" title={selected.repository}>
             {selected.repository}
@@ -672,6 +681,11 @@ export function App({ initial }: { initial: BrowserSession }) {
       <Workspace
         key={home + "/" + id + "/" + identity.instance_id}
         home={home}
+        onRefreshConnection={() => {
+          void session.refetch();
+          void catalog.refetch();
+          void projectIdentity.refetch();
+        }}
         initial={{ identity, csrf_token: session.data.csrf_token }}
         connectionError={
           session.error ||

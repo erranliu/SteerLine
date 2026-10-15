@@ -40,6 +40,7 @@ func run() error {
 	}
 	flags := flag.NewFlagSet(os.Args[1], flag.ContinueOnError)
 	project := flags.String("project", "", "project ID for opening")
+	detached := flags.Bool("detached", false, "verify resident process lifetime before opening resources")
 	printURL := flags.Bool("print-url", false, "print one-use opening URL")
 	if err := flags.Parse(os.Args[2:]); err != nil {
 		return err
@@ -51,20 +52,20 @@ func run() error {
 	defer cancel()
 	switch os.Args[1] {
 	case "serve":
+		if *detached {
+			if err := localservice.VerifyDetachedLifetime(); err != nil {
+				return err
+			}
+		}
 		connectCtx, done := context.WithTimeout(ctx, 3*time.Second)
 		client, err := applicationclient.Open(connectCtx, home())
 		done()
 		if err != nil {
-			return fmt.Errorf("start steerline serve-app first: %w", err)
+			return fmt.Errorf("start steerline serve first: %w", err)
 		}
-		address, err := server.LoadAddress(home())
+		address, err := server.EnsureAddress(home())
 		if err != nil {
 			return err
-		}
-		if _, err = os.Stat(filepath.Join(home(), "web.json")); os.IsNotExist(err) {
-			if err = localservice.Write(home(), "web.json", map[string]any{"version": 1, "address": address}); err != nil {
-				return err
-			}
 		}
 		web, err := server.Prepare(server.Options{Home: home(), Address: address, LauncherDir: server.LauncherDirectory(home()), Client: client, DevOrigin: os.Getenv("STEERLINE_WEB_DEV_ORIGIN")})
 		if err != nil {
@@ -104,8 +105,7 @@ func run() error {
 		if err = cmd.Start(); err != nil {
 			return err
 		}
-		go cmd.Wait()
-		return nil
+		return cmd.Wait()
 	case "install":
 		source, err := os.Executable()
 		if err != nil {

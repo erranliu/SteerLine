@@ -2,7 +2,9 @@ package driver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -11,132 +13,213 @@ import (
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/localservice"
+	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/httpfs"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 
-// The launcher owns each product process independently. Stopping one project
-// does not close another project's Job or the application/Web Jobs.
-func (d *debugRelease) run() error {
-	launcherDir := filepath.Join(d.root, "runtime-launcher")
-	if err := os.MkdirAll(launcherDir, 0700); err != nil {
+// run owns only debug Git/provider helpers. Both product processes are started
+// through the same installed coordinator as a user's start.bat.
+func (d *debugRelease) run() (retErr error) {
+	dir := filepath.Join(d.root, "runtime-launcher")
+	if err := httpfs.EnsurePrivateDirectory(dir); err != nil {
 		return err
 	}
-	lease, err := host.LockRepository(launcherDir)
+	lease, err := host.LockRepository(dir)
 	if err != nil {
 		return err
 	}
 	defer lease.Close()
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	var children []*testprocess.Process
-	var files []*os.File
-	defer func() {
-		for i := len(children) - 1; i >= 0; i-- {
-			closeCtx, done := context.WithTimeout(context.Background(), 10*time.Second)
-			children[i].Stop(closeCtx)
-			done()
-		}
-		for _, f := range files {
-			f.Close()
-		}
-	}()
-	start := func(cmd *exec.Cmd, name string) error {
-		f, err := os.OpenFile(filepath.Join(d.root, "logs", name+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return err
-		}
-		files = append(files, f)
-		cmd.Stdout, cmd.Stderr = f, f
-		p, err := testprocess.Start(cmd)
-		if err == nil {
-			children = append(children, p)
-		}
+	token := localservice.Token()
+	if err = localservice.Write(dir, "owner.json", map[string]string{"token": token}); err != nil {
 		return err
 	}
-	web := filepath.Join(d.root, "bin", "steerline-web.exe")
-	if _, err := os.Stat(web); err == nil {
-		if err = start(d.command(d.binary, "serve-app"), "application"); err != nil {
-			return err
-		}
-		readyCtx, done := context.WithTimeout(ctx, 15*time.Second)
-		defer done()
-		ready := false
-		for readyCtx.Err() == nil {
-			client, e := localservice.Open(readyCtx, d.home, filepath.Join(d.home, "application-api"), contract.Protocol, "/v1/application/identity")
-			if e == nil {
-				client.Close()
-				ready = true
-				break
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-		if !ready {
-			return errors.New("application startup failed; see logs/application.log")
-		}
-		cmd := d.command(web, "serve")
-		if origin := os.Getenv("STEERLINE_WEB_DEV_ORIGIN"); origin != "" {
-			cmd.Env = append(cmd.Env, "STEERLINE_WEB_DEV_ORIGIN="+origin)
-		}
-		if err = start(cmd, "web"); err != nil {
-			return err
-		}
-	}
+	os.Remove(filepath.Join(dir, "stop.json"))
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
 	scopes := []*debugRelease{d}
 	if d.webProjects == 2 {
 		scopes = append(scopes, d.secondary())
 	}
-	completed := make(chan error, len(scopes))
-	for _, scope := range scopes {
-		go func(scope *debugRelease) { completed <- scope.runProjectContext(ctx) }(scope)
+	var helpers []*testprocess.Process
+	var files []*os.File
+	defer func() {
+		stopCtx, done := context.WithTimeout(context.Background(), 130*time.Second)
+		stop := d.command(d.binary, "stop")
+		retErr = errors.Join(retErr, runCoordinator(stopCtx, stop))
+		done()
+		for _, helper := range helpers {
+			cleanup, done := context.WithTimeout(context.Background(), 10*time.Second)
+			retErr = errors.Join(retErr, helper.Stop(cleanup))
+			done()
+		}
+		for _, file := range files {
+			file.Close()
+		}
+	}()
+	var selected struct {
+		Scheme string `json:"scheme"`
 	}
-	remaining := len(scopes)
-	var failures []error
+	raw, err := os.ReadFile(filepath.Join(d.root, "scheme.json"))
+	if err != nil {
+		return err
+	}
+	if err = json.Unmarshal(raw, &selected); err != nil {
+		return err
+	}
+	for _, scope := range scopes {
+		if selected.Scheme == "simulate" {
+			addressPath := filepath.Join(filepath.Dir(scope.provider), "address.json")
+			os.Remove(addressPath)
+			log, err := os.OpenFile(filepath.Join(d.root, "logs", "git-server"+scope.suffix()+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if err != nil {
+				return err
+			}
+			files = append(files, log)
+			cmd := scope.command(d.helper, "git-server", "--root", scope.remoteRoot(), "--address-file", addressPath, "--e2e-state", scope.provider)
+			cmd.Stdout, cmd.Stderr = log, log
+			helper, err := testprocess.Start(cmd)
+			if err != nil {
+				return err
+			}
+			helpers = append(helpers, helper)
+			readyCtx, done := context.WithTimeout(ctx, 20*time.Second)
+			var address struct {
+				Address string `json:"address"`
+			}
+			for readyCtx.Err() == nil {
+				raw, e := os.ReadFile(addressPath)
+				if e == nil && json.Unmarshal(raw, &address) == nil && address.Address != "" {
+					break
+				}
+				select {
+				case <-helper.Done:
+					done()
+					return errors.New("Git helper exited")
+				case <-time.After(50 * time.Millisecond):
+				}
+			}
+			done()
+			if address.Address == "" {
+				return errors.New("Git helper readiness timed out")
+			}
+			state, err := controlled.Read(scope.provider)
+			if err != nil {
+				return err
+			}
+			state.GitURL = "http://" + address.Address + "/" + debugRepository + ".git"
+			if err = controlled.Write(scope.provider, state); err != nil {
+				return err
+			}
+		} else {
+			cmd := scope.command("git", "-C", scope.repo, "-c", "credential.helper=", "push", "origin", scope.base+":refs/heads/"+scope.base)
+			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+			if err = cmd.Run(); err != nil {
+				return err
+			}
+		}
+	}
+	startCtx, done := context.WithTimeout(ctx, 190*time.Second)
+	start := d.command(d.binary, "start", "--no-open")
+	start.Stdout, start.Stderr = os.Stdout, os.Stderr
+	err = testprocess.Run(startCtx, start)
+	done()
+	if err != nil {
+		return err
+	}
+	readyCtx, done := context.WithTimeout(ctx, 180*time.Second)
+	defer done()
+	client, err := applicationclient.Open(readyCtx, d.home)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	for {
+		var catalog contract.Catalog
+		if err = client.Get(readyCtx, "/projects", &catalog); err != nil {
+			return err
+		}
+		count := 0
+		for _, project := range catalog.Projects {
+			if project.RuntimeState == "failed" {
+				controlled.Write(filepath.Join(d.root, "evidence", "startup-failure.json"), catalog)
+				return fmt.Errorf("project %s failed: %s", project.ConfigID, project.Diagnostic)
+			}
+			if project.Online {
+				count++
+			}
+		}
+		if count == len(scopes) {
+			break
+		}
+		select {
+		case <-readyCtx.Done():
+			return fmt.Errorf("required projects not ready: %+v", catalog)
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+	// Independent actors permit bounded concurrent fixture seeding after readiness.
+	seeded := make(chan error, len(scopes))
+	for _, scope := range scopes {
+		go func(scope *debugRelease) { seeded <- scope.seedTasks() }(scope)
+	}
+	for range scopes {
+		if seedErr := <-seeded; seedErr != nil {
+			err = errors.Join(err, seedErr)
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if err = localservice.Write(dir, "ready.json", map[string]string{"token": token}); err != nil {
+		return err
+	}
+	fmt.Println("Unified debug host ready:", d.home)
+	if !contains(os.Args, "--no-open") {
+		web := filepath.Join(d.home, "bin", "steerline-web.exe")
+		cmd := d.command(web, "open")
+		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+		if err = cmd.Run(); err != nil {
+			return err
+		}
+	}
 	tick := time.NewTicker(100 * time.Millisecond)
 	defer tick.Stop()
 	for {
-		allDone := remaining == 0
-		for _, child := range children {
-			select {
-			case <-child.Done:
-			default:
-				allDone = false
-			}
+		var stop struct {
+			Token string `json:"token"`
 		}
-		if allDone {
-			for _, child := range children {
-				failures = append(failures, child.Wait(context.Background()))
-			}
-			return errors.Join(failures...)
+		if localservice.ReadPrivateJSON(filepath.Join(dir, "stop.json"), &stop, 1024) == nil && stop.Token == token {
+			return nil
 		}
 		select {
-		case err := <-completed:
-			remaining--
-			failures = append(failures, err)
-		case <-tick.C:
 		case <-ctx.Done():
-			for _, entry := range []struct {
-				exe  string
-				args []string
-			}{{web, []string{"stop"}}, {d.binary, []string{"stop-app"}}} {
-				if _, err := os.Stat(entry.exe); err == nil {
-					stopCtx, done := context.WithTimeout(context.Background(), 45*time.Second)
-					failures = append(failures, testprocess.Run(stopCtx, d.command(entry.exe, entry.args...)))
-					done()
-				}
-			}
-			deadline := time.NewTimer(45 * time.Second)
-			defer deadline.Stop()
-			for remaining > 0 {
-				select {
-				case err := <-completed:
-					remaining--
-					failures = append(failures, err)
-				case <-deadline.C:
-					return errors.Join(append(failures, errors.New("project normal stop timed out"))...)
-				}
-			}
-			return errors.Join(failures...)
+			return nil
+		case <-tick.C:
 		}
 	}
+}
+func (d *debugRelease) stop() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
+	defer cancel()
+	command := d.command(d.binary, "stop")
+	command.Stdout, command.Stderr = os.Stdout, os.Stderr
+	stopErr := runCoordinator(ctx, command)
+	dir := filepath.Join(d.root, "runtime-launcher")
+	var owner struct {
+		Token string `json:"token"`
+	}
+	if err := localservice.ReadPrivateJSON(filepath.Join(dir, "owner.json"), &owner, 1024); err != nil {
+		return errors.Join(stopErr, err)
+	}
+	return errors.Join(stopErr, localservice.Write(dir, "stop.json", owner))
+}
+
+// Short coordinators own no workers; context bounds their process without a nested Job.
+func runCoordinator(ctx context.Context, command *exec.Cmd) error {
+	cmd := exec.CommandContext(ctx, command.Path, command.Args[1:]...)
+	cmd.Env, cmd.Dir, cmd.Stdout, cmd.Stderr = command.Env, command.Dir, command.Stdout, command.Stderr
+	return cmd.Run()
 }

@@ -1,4 +1,4 @@
-param([switch]$Live)
+﻿param([switch]$Live)
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $generator = Join-Path $PSScriptRoot 'new-debug-release.ps1'
@@ -7,26 +7,33 @@ $oldHome = $env:STEERLINE_HOME
 $oldConfig = $env:STEERLINE_CONFIG
 $oldTestRoot = $env:STEERLINE_DEBUG_TEST_ROOT
 $oldCodexHome = $env:CODEX_HOME
+$oldSecondRoot = $env:STEERLINE_DEBUG_SECOND_TEST_ROOT
 try {
     # Deliberate inherited pollution must not select installed state.
     $env:STEERLINE_HOME = 'C:\SteerlineRuntime'
     $env:STEERLINE_CONFIG = 'C:\SteerlineRuntime\etc\SteerlineTest.json'
-    $first = (& $generator -DebugRoot $testRoot | ConvertFrom-Json)
-    $second = (& $generator -DebugRoot $testRoot | ConvertFrom-Json)
+    # The default listener may belong to another environment; only inspect its generated config.
+    $defaultRelease = (& $generator -DebugRoot $testRoot | ConvertFrom-Json)
+    $first = (& $generator -DebugRoot $testRoot -WebAddress 127.0.0.1:19747 | ConvertFrom-Json)
+    $second = (& $generator -DebugRoot $testRoot -WebAddress 127.0.0.1:19744 -WebProjects 2 | ConvertFrom-Json)
     if ($first.root -eq $second.root) { throw 'Generator reused a release' }
-    foreach ($release in @($first, $second)) {
+    foreach ($release in @($defaultRelease, $first, $second)) {
         $manifest = Get-Content -LiteralPath (Join-Path $release.root 'manifest.json') -Raw | ConvertFrom-Json
         if ($manifest.status -ne 'ready' -or $manifest.default_scheme -ne 'live') { throw 'Generated package is not live by default' }
         $databases = @(Get-ChildItem -LiteralPath (Join-Path $release.root 'home\state') -Filter steerline.db -Recurse)
-        if ($databases.Count -ne 1) { throw 'Expected one independent database' }
+        foreach ($name in @('bin\steerline.exe','bin\steerline-web.exe','bin\debug-helper.exe','home\start.bat','home\stop.bat')) { if (-not (Test-Path -LiteralPath (Join-Path $release.root $name))) { throw "Missing package artifact $name" } }
+        if (Test-Path -LiteralPath (Join-Path $release.root 'console.bat')) { throw 'Retired TUI launcher present' }
+        if (-not $manifest.web_binary_sha256) { throw 'Missing Web build hash' }
+        if ($databases.Count -ne 0) { throw 'Fresh generation must not initialize project databases' }
     }
-    $firstIdentity = Get-Content -LiteralPath (Join-Path $first.root 'evidence\initialization.json') -Raw | ConvertFrom-Json
-    $secondIdentity = Get-Content -LiteralPath (Join-Path $second.root 'evidence\initialization.json') -Raw | ConvertFrom-Json
-    if ($firstIdentity.validation.database_id -eq $secondIdentity.validation.database_id -or $firstIdentity.validation.project_id -eq $secondIdentity.validation.project_id) { throw 'Generated packages share database/project identity' }
+    $firstIdentity = Get-Content -LiteralPath (Join-Path $first.root 'seed\SteerlineTest.json.bound-tasks.json') -Raw | ConvertFrom-Json
+    $secondIdentity = Get-Content -LiteralPath (Join-Path $second.root 'seed\SteerlineTest.json.bound-tasks.json') -Raw | ConvertFrom-Json
+    if ($firstIdentity.project_id -eq $secondIdentity.project_id) { throw 'Generated packages share database/project identity' }
     $env:STEERLINE_DEBUG_TEST_ROOT = $first.root
+    $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $second.root
     Push-Location $repo
     try {
-        & go test ./tests/e2e/internal/driver -run DebugRelease -count=1 -v *> (Join-Path $first.root 'evidence\runtime-test.log')
+        & go test ./tests/e2e/internal/driver -run '^TestDebugRelease(Runtime|WebProjects)$' -count=1 -v *> (Join-Path $first.root 'evidence\runtime-test.log')
         if ($LASTEXITCODE -ne 0) { throw "Runtime tests failed: $($first.root)\evidence\runtime-test.log" }
     } finally { Pop-Location }
     $refused = $false
@@ -52,15 +59,17 @@ try {
     try { & $generator -DebugRoot $collisionRoot | Out-Null } catch { $refused = $true }
     if (-not $refused) { throw 'Existing timestamp directory was accepted' }
     if ($Live) {
+        # Controlled single/dual packages are frozen to simulate; live uses a fresh package.
+        $liveRelease = (& $generator -DebugRoot $testRoot -WebAddress 127.0.0.1:19745 | ConvertFrom-Json)
         $env:CODEX_HOME = $oldCodexHome
-        $helper = Join-Path $second.root 'bin\debug-helper.exe'
+        $helper = Join-Path $liveRelease.root 'bin\debug-helper.exe'
         & $helper debug prepare
         if ($LASTEXITCODE -ne 0) { throw 'Live preparation failed' }
-        $manifest = Get-Content -LiteralPath (Join-Path $second.root 'manifest.json') -Raw | ConvertFrom-Json
-        $token = (Get-Content -LiteralPath (Join-Path $second.root 'home\github-token') -Raw).Trim()
+        $manifest = Get-Content -LiteralPath (Join-Path $liveRelease.root 'manifest.json') -Raw | ConvertFrom-Json
+        $token = (Get-Content -LiteralPath (Join-Path $liveRelease.root 'home\github-token') -Raw).Trim()
         $savedGhToken = $env:GH_TOKEN
         $env:GH_TOKEN = $token
-        $project = Join-Path $second.root 'projects\SteerlineTest'
+        $project = Join-Path $liveRelease.root 'projects\SteerlineTest'
         $base = $manifest.base_branch
         $head = $base.Replace('/base', '/verification')
         $pr = $null
@@ -81,7 +90,7 @@ try {
             $savedErrorPreference = $ErrorActionPreference
             try {
                 $ErrorActionPreference = 'Continue'
-                $publication = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $project 'publish.ps1') 2> (Join-Path $second.root 'evidence\publish-stderr.log')
+                $publication = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $project 'publish.ps1') 2> (Join-Path $liveRelease.root 'evidence\publish-stderr.log')
                 $publicationExit = $LASTEXITCODE
             } finally { $ErrorActionPreference = $savedErrorPreference; Pop-Location }
             $prLine = $publication | Where-Object { $_ -match '^https://github.com/erranliu/SteerlineTest/pull/\d+$' } | Select-Object -Last 1
@@ -92,7 +101,7 @@ try {
             $facts = $proof | ConvertFrom-Json
 
             if ($facts.baseRefName -ne $base -or $facts.headRefName -ne $head -or $facts.state -ne 'OPEN') { throw 'Live PR identity mismatch' }
-            [IO.File]::WriteAllText((Join-Path $second.root 'evidence\live-pr.json'), ($proof | Out-String), [Text.UTF8Encoding]::new($false))
+            [IO.File]::WriteAllText((Join-Path $liveRelease.root 'evidence\live-pr.json'), ($proof | Out-String), [Text.UTF8Encoding]::new($false))
         } finally {
             if ($pr) { & gh pr close $pr --repo erranliu/SteerlineTest; if ($LASTEXITCODE -ne 0) { throw 'PR cleanup failed' } }
             & git -C $project -c credential.helper= push origin --delete $head $base
@@ -101,7 +110,7 @@ try {
             Remove-Item Env:GIT_CONFIG_COUNT,Env:GIT_CONFIG_KEY_0,Env:GIT_CONFIG_VALUE_0 -ErrorAction SilentlyContinue
         }
     }
-    $result = [pscustomobject]@{ passed = $true; controlled = $first.root; other = $second.root; live = [bool]$Live }
+    $result = [pscustomobject]@{ passed = $true; default_artifacts = $defaultRelease.root; controlled = $first.root; other = $second.root; live = [bool]$Live }
     [IO.File]::WriteAllText((Join-Path $first.root 'evidence\generation-test.json'), ($result | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
     $result | ConvertTo-Json
 } finally {
@@ -109,4 +118,5 @@ try {
     $env:STEERLINE_CONFIG = $oldConfig
     $env:STEERLINE_DEBUG_TEST_ROOT = $oldTestRoot
     $env:CODEX_HOME = $oldCodexHome
+    $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $oldSecondRoot
 }

@@ -1,5 +1,8 @@
 # 验收：HTTP 客户端原请求与停服观察解耦
 
+> 2026-10-15：TUI 专属客户端/交互已退役，本文保留原范围与历史事实；共享 HTTP、服务和进程身份要求继续有效。当前范围见[TUI 退役](../spec/tui-retirement.spec.md)。
+
+
 唯一归属：任务 #93，HTTP 客户端原请求与停服观察解耦。2026-10-14经用户确认纳入[execution-map](../roadmap/execution-map.md)；实现、独立复审修复、必要自动验证和[PR #312](https://github.com/erranliu/SteerLine/pull/312)真实合并均已核验；CL93-A1–A3通过，无新增人工项。旧CL93-A2覆盖声明已校准，历史证据保留如下。
 
 [Spec](../spec/http-client-request-lifecycle.spec.md) · [Plan / 测试计划](../spec/http-client-request-lifecycle.plan.md) · [草稿](../roadmap/drafts/roadmap.md)

@@ -21,6 +21,8 @@ import {
   listRequests,
 } from "../shared/api/journal";
 import type { BrowserSession, Identity } from "../shared/api/types";
+import { projectQueries } from "../shared/api/queries";
+import { tasks } from "../test/workspace";
 
 const a = "a".repeat(64),
   b = "b".repeat(64);
@@ -114,6 +116,51 @@ afterEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   setJournalHome("");
+});
+
+it("cancels the old project's pending preload and never installs its late response in the new cache", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let resolve!: (response: Response) => void;
+  let oldSignal: AbortSignal | undefined;
+  vi.mocked(fetch).mockImplementation((...args) => {
+    const url = String(args[0]);
+    if (url.includes(a) && url.includes("/tasks?")) {
+      oldSignal = args[1]?.signal as AbortSignal;
+      return new Promise((done) => {
+        resolve = done;
+      });
+    }
+    if (url.includes(b) && url.includes("/tasks?"))
+      return Promise.resolve(
+        Response.json({
+          ...tasks,
+          tasks: [{ ...tasks.tasks[0], title: "仅 B 项目" }],
+        }),
+      );
+    return original(...args);
+  });
+  const { client } = mount("/projects/" + a + "/settings");
+  await waitFor(() => expect(oldSignal).toBeDefined());
+  fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), {
+    target: { value: b },
+  });
+  await waitFor(() => expect(oldSignal?.aborted).toBe(true));
+  const bKey = projectQueries(
+    new Api(identity(b), "csrf", "switch-home"),
+  ).tasks().queryKey;
+  await waitFor(() =>
+    expect(client.getQueryData(bKey)?.tasks[0].title).toBe("仅 B 项目"),
+  );
+  await act(async () => resolve(Response.json(tasks)));
+  expect(client.getQueryData(bKey)?.tasks[0].title).toBe("仅 B 项目");
+  expect(
+    client.getQueryData(
+      projectQueries(new Api(identity(a), "csrf", "switch-home")).tasks()
+        .queryKey,
+    ),
+  ).toBeUndefined();
+  client.clear();
 });
 
 it("switches same-name projects by ID, preserving page type and dropping task selection", async () => {

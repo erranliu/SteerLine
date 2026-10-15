@@ -10,10 +10,10 @@ import (
 	"strings"
 )
 
-//go:embed launcher/*
+//go:embed launcher/* retired-launchers/*
 var launcherFS embed.FS
 
-// InstallLaunchers writes the console and service-window entry points plus
+// InstallLaunchers writes the unified start and stop entry points plus
 // their README into the caller's application directory. Templates are stored
 // LF and written CRLF so they behave as native .bat files.
 func InstallLaunchers(dir string) ([]string, error) {
@@ -26,6 +26,26 @@ func InstallLaunchers(dir string) ([]string, error) {
 	entries, e := fs.ReadDir(launcherFS, "launcher")
 	if e != nil {
 		return nil, e
+	}
+	// Remove only known generated templates, never arbitrary user batches.
+	for _, name := range []string{"start-app.bat", "stop-app.bat", "start-web.bat", "stop-web.bat", "web.bat", "console.bat", "service-window.bat"} {
+		path := filepath.Join(dir, name)
+		data, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		template, readErr := launcherFS.ReadFile("retired-launchers/" + name)
+		if readErr != nil {
+			return nil, readErr
+		}
+		if bytes.Equal(toCRLF(data), toCRLF(template)) {
+			if err = os.Remove(path); err != nil {
+				return nil, err
+			}
+		}
 	}
 	var written []string
 	for _, en := range entries {

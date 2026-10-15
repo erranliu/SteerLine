@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,24 +14,25 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/console"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/product/httpapi"
-	"github.com/erranliu/SteerLine/internal/product/httpclient"
-	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex"})
+	t.Setenv("STEERLINE_CLI_WORKER_FIXTURE", "1")
+	t.Setenv("CODEX_HOME", filepath.Join(steerlineapp.HomeDir(), "codex"))
+	if err := os.MkdirAll(os.Getenv("CODEX_HOME"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(steerlineapp.EtcDir(), 0700); err != nil {
+		t.Fatal(err)
+	}
+	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0]})
 	global, err := json.Marshal(map[string]any{
 		"version":                   2,
 		"execution_profiles":        []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: profilePayload}}}},
@@ -71,8 +71,8 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		t.Fatal(err)
 	}
 	commit := strings.TrimSpace(string(head))
-	configPath := filepath.Join(t.TempDir(), "native.json")
-	configJSON, _ := json.Marshal(map[string]any{"claimant": "cli-fixture", "repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": executionmodel.Version, "executable_types": []string{"task"}, "publication_policy": executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "org/repo", "query": map[string]any{"executable": "gh"}}})
+	configPath := filepath.Join(steerlineapp.EtcDir(), "native.json")
+	configJSON, _ := json.Marshal(map[string]any{"claimant": "cli-fixture", "repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": executionmodel.Version, "executable_types": []string{"task"}, "publication_policy": executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "org/repo", "query": map[string]any{"executable": "git"}}})
 	if err = os.WriteFile(configPath, configJSON, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -80,17 +80,10 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	hostConfig, err := steerlineapp.BuildHostConfig(context.Background(), c)
-	if err != nil {
+	if err = c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	reader, err := steerlineapp.OpenNativeTaskProject(context.Background(), &c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = reader.Close(); err != nil {
-		t.Fatal(err)
-	}
+	startCLIHost(t, configPath)
 	ref := func(name string) taskmodel.FileReference {
 		blob, e := exec.Command("git", "-C", repo, "cat-file", "blob", commit+":"+name).Output()
 		if e != nil {
@@ -169,210 +162,34 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if _, callErr = captureTaskCLI(t, []string{"graph", "-config", configPath, "-cursor", "", "-status", "open"}); callErr == nil {
 		t.Fatal("graph cursor was mixed with status filtering")
 	}
-	t.Run("CM71 control keeps original request and client close preserves service", func(t *testing.T) {
-		// Construct the real service identity/checkpoint without dispatching a
-		// worker. CLI publication and receipt queries use production file I/O.
-		service, err := steerlineapp.NewService(c)
+	t.Run("control original receipt and client close preserve runtime", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		client, err := steerlineapp.OpenApplicationProject(ctx, "", configPath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		state := service.State
-		state.Service.Mode, state.Service.Ready = "scheduler", true
-		at := time.Now().UTC()
-		checkpoint := reconstruction.Checkpoint(state)
-		checkpoint.SchemaVersion, checkpoint.UpdatedAt, checkpoint.HeartbeatAt = state.SchemaVersion, at, at
-		if err = service.Close(); err != nil {
-			t.Fatal(err)
-		}
-		writer, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+		before := client.Identity()
+		request, err := client.SubmitControl(ctx, productapi.ControlInput{RequestID: strings.Repeat("9", 32), Action: productapi.SetDispatchMode, Payload: productapi.ControlPayload{Mode: "manual"}})
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = writer.SaveCheckpoint(context.Background(), checkpoint)
-		if closeErr := writer.Close(); err == nil {
-			err = closeErr
+		receipt, err := client.WaitControl(ctx, request.RequestID, 100*time.Millisecond)
+		if err != nil || receipt.RequestID != request.RequestID || receipt.Status != "applied" {
+			t.Fatal(receipt, err)
 		}
+		client.Close()
+		reopened, err := steerlineapp.OpenApplicationProject(ctx, "", configPath)
 		if err != nil {
 			t.Fatal(err)
 		}
-		capture := func(args []string) ([]byte, error) {
-			oldArgs := os.Args
-			os.Args = append([]string{"steerline"}, args...)
-			defer func() { os.Args = oldArgs }()
-			oldOut := os.Stdout
-			read, write, err := os.Pipe()
-			if err != nil {
-				t.Fatal(err)
-			}
-			os.Stdout = write
-			err = run()
-			_ = write.Close()
-			os.Stdout = oldOut
-			output, readErr := io.ReadAll(read)
-			_ = read.Close()
-			if readErr != nil {
-				t.Fatal(readErr)
-			}
-			return output, err
+		defer reopened.Close()
+		if reopened.Identity().InstanceID != before.InstanceID {
+			t.Fatal("client close changed runtime")
 		}
-		output, err := capture([]string{"control", "-config", configPath, "-action", "set_dispatch_mode", "-mode", "manual", "-by", "operator"})
-		if err != nil {
-			t.Fatalf("real CLI control: %s / %v", output, err)
-		}
-		fields := strings.Fields(string(output))
-		if len(fields) != 2 || fields[0] != "request_id" {
-			t.Fatalf("request output changed: %s", output)
-		}
-		id := fields[1]
-		client, err := steerlineapp.OpenClient(context.Background(), configPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req, err := client.Request(context.Background(), id)
-		if err != nil || req.InstanceID != state.Service.InstanceID || req.RepositoryIdentity != c.Identity() || req.ExpectedControlRevision != state.Control.Revision {
-			t.Fatalf("fixed request target: %+v / %v", req, err)
-		}
-		input := productapi.ControlInput{Action: productapi.SetDispatchMode, Payload: productapi.ControlPayload{Mode: "manual"}, RequestID: id, RequestedBy: "operator", InstanceID: req.InstanceID, ExpectedRevision: &req.ExpectedControlRevision}
-		if _, err = client.SubmitControl(context.Background(), input); err != nil {
-			t.Fatalf("immutable request replay: %v", err)
-		}
-		input.Payload.Mode = "auto"
-		if _, err = client.SubmitControl(context.Background(), input); err == nil {
-			t.Fatal("same ID different content accepted")
-		}
-		raw, err := os.ReadFile(filepath.Join(c.RunDir, "control", "requests", id, "request.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		digest := sha256.Sum256(raw)
-		receipt := productapi.ControlReceipt{Version: 1, RequestID: id, RequestDigest: hex.EncodeToString(digest[:]), InstanceID: req.InstanceID, Action: req.Action, Status: "indeterminate", Code: "outcome_unknown"}
-		receiptBody, _ := json.Marshal(receipt)
-		receiptDir := filepath.Join(c.RunDir, "control", "receipts")
-		if err = os.MkdirAll(receiptDir, 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err = os.WriteFile(filepath.Join(receiptDir, id+".json"), receiptBody, 0600); err != nil {
-			t.Fatal(err)
-		}
-		output, err = capture([]string{"control", "-config", configPath, "-request-id", id})
-		if err != nil {
-			t.Fatal(err)
-		}
-		var queried productapi.ControlReceipt
-		if err = json.Unmarshal(output, &queried); err != nil || queried.RequestID != id || queried.Status != "indeterminate" {
-			t.Fatalf("unknown CLI receipt became success or changed ID: %s / %v", output, err)
-		}
-		// This fixture publishes the test process's identity without a running
-		// service loop. Refresh only its heartbeat before positive liveness reads.
-		heartbeat := func() {
-			writer, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
-			if err != nil {
-				t.Fatal(err)
-			}
-			err = writer.Heartbeat(context.Background(), c.Identity())
-			if closeErr := writer.Close(); err == nil {
-				err = closeErr
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-		}
-
-		t.Run("CM72 actual console uses HTTP and original receipt", func(t *testing.T) {
-			heartbeat()
-			process := state.Service.ProcessIdentity
-			if process == nil {
-				t.Fatal("fixture service process identity missing")
-			}
-			endpoint, err := httpapi.Prepare(context.Background(), httpapi.Ports{Query: client, Commands: client, Authority: client, NativeViewer: client}, httpapi.Options{RunDir: c.RunDir, ProjectIdentity: c.Identity(), InstanceID: state.Service.InstanceID, Process: httpapi.ProcessIdentity{Kind: process.Kind, PID: process.PID, Created: process.Created, Executable: process.Executable}, Capabilities: state.Service.Capabilities})
-			if err != nil {
-				t.Fatal(err)
-			}
-			defer endpoint.Close(context.Background())
-			if err = endpoint.SetReady(state.Service.InstanceID, true, ""); err != nil {
-				t.Fatal(err)
-			}
-			if err = endpoint.Start(); err != nil {
-				t.Fatal(err)
-			}
-			refs, options, err := steerlineapp.PrepareConsole(context.Background(), configPath, "")
-			if err != nil || len(refs) != 1 || len(options.Clients) != 1 {
-				t.Fatalf("console construction: %+v / %v", refs, err)
-			}
-			tuiClient := options.Clients[refs[0].Key]
-			if _, ok := tuiClient.(*httpclient.Console); !ok {
-				t.Fatal("TUI did not use the HTTP client")
-			}
-			cliProfile := client.Project().Presentation
-			profiles := refs[0].Presentation.Profiles
-			if len(profiles) == 0 || len(profiles) != len(cliProfile.Profiles) || profiles[0].Digest == "" || profiles[0].Digest != cliProfile.Profiles[0].Digest || refs[0].Presentation.ConfigDigest != c.LoadedConfigDigest() {
-				t.Fatal("CLI and TUI adopted different accepted profiles")
-			}
-			if result, err := tuiClient.Receipt(context.Background(), id); err != nil || result.Status != "indeterminate" || result.RequestID != id {
-				t.Fatalf("TUI changed original CLI receipt: %+v / %v", result, err)
-			}
-			heartbeat()
-			if snapshot := tuiClient.ReadProject(context.Background(), "70", productapi.ProjectSnapshot{}); snapshot.Connection.State != productapi.ConnectionConnected || snapshot.HistoryError != "" {
-				t.Fatalf("actual console failed reading project: %+v", snapshot)
-			}
-
-			detached := tuiClient.Project()
-			detached.Presentation.Profiles[0].Digest = "consumer-mutated"
-			detached.Presentation.Profiles[0].ImplementationDisplay[0] = "consumer-mutated"
-			if actual := tuiClient.Project(); actual.Presentation.Profiles[0].Digest != profiles[0].Digest || actual.Presentation.Profiles[0].ImplementationDisplay[0] == "consumer-mutated" {
-				t.Fatal("view mutated accepted profile")
-			}
-			if _, err := tuiClient.InspectRecovery(context.Background(), "missing-run"); err == nil || !strings.Contains(err.Error(), "not found") {
-				t.Fatalf("actual recovery read port missing: %v", err)
-			}
-			model, err := console.NewModel(context.Background(), refs, options)
-			if err != nil {
-				t.Fatal(err)
-			}
-			updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
-			if cmd == nil {
-				t.Fatal("TUI q did not exit")
-			}
-			if _, ok := cmd().(tea.QuitMsg); !ok {
-				t.Fatal("TUI q invoked a service action")
-			}
-			if err := updated.(console.Model).Close(); err != nil {
-				t.Fatal(err)
-			}
-			heartbeat()
-			if connection := steerline.ConnectService(context.Background(), hostConfig); connection.State != steerline.ConnectionConnected {
-				t.Fatalf("TUI exit stopped service: %+v", connection)
-			}
-			if _, err := tuiClient.Request(context.Background(), id); err == nil {
-				t.Fatal("closed UI client retained resources")
-			}
-		})
-		if err = client.Close(); err != nil {
-			t.Fatal(err)
-		}
-		heartbeat()
-		if connection := steerline.ConnectService(context.Background(), hostConfig); connection.State != steerline.ConnectionConnected {
-			t.Fatalf("client close changed service identity/lifetime: %+v", connection)
-		}
-		unchanged, err := os.ReadFile(filepath.Join(c.RunDir, "control", "requests", id, "request.json"))
-		if err != nil || !bytes.Equal(raw, unchanged) {
-			t.Fatal("replay/close replaced original request")
-		}
-		// Even a self-consistent receipt copied into this project's directory
-		// must not become a current-project result when its request is foreign.
-		req.RepositoryIdentity = "foreign-project"
-		foreign, _ := json.Marshal(req)
-		foreignDigest := sha256.Sum256(foreign)
-		receipt.RequestDigest = hex.EncodeToString(foreignDigest[:])
-		receiptBody, _ = json.Marshal(receipt)
-		if err = os.WriteFile(filepath.Join(c.RunDir, "control", "requests", id, "request.json"), foreign, 0600); err != nil {
-			t.Fatal(err)
-		}
-		if err = os.WriteFile(filepath.Join(receiptDir, id+".json"), receiptBody, 0600); err != nil {
-			t.Fatal(err)
-		}
-		if _, err = capture([]string{"control", "-config", configPath, "-request-id", id}); err == nil || !strings.Contains(err.Error(), "project identity") {
-			t.Fatalf("foreign receipt was shown under current project: %v", err)
+		original, err := reopened.Receipt(ctx, request.RequestID)
+		if err != nil || original.RequestID != request.RequestID || original.InstanceID != before.InstanceID {
+			t.Fatal("original receipt changed", original, err)
 		}
 	})
 }

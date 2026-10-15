@@ -1,6 +1,7 @@
 package app
 
 import (
+	host "github.com/erranliu/SteerLine/internal/app/host"
 	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -39,6 +40,8 @@ type ProjectConfigInput struct {
 // decode through ProjectConfigInput; catalog, directory, process host and file
 // identity are added by app composition.
 type Config struct {
+	runtimeHost *host.Config // fixed only by the owning ProjectRuntime after admission
+
 	ConfigPath string `json:"-"`
 
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`

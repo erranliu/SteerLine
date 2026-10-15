@@ -11,7 +11,7 @@ func TestPS3RetiredCommandsAndGraphFlagsFailBeforeOpeningProject(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing-config.json")
 	original := os.Args
 	defer func() { os.Args = original }()
-	for _, command := range []string{"tasks", "stop", "projects", "certify-backend"} {
+	for _, command := range []string{"tasks", "run", "serve-app", "stop-app", "start-service", "stop-service", "console", "projects", "certify-backend"} {
 		os.Args = []string{"steerline", command, "-config", missing}
 		if err := run(); err == nil || !strings.Contains(err.Error(), "unknown command") {
 			t.Fatalf("%s did not retire before config I/O: %v", command, err)

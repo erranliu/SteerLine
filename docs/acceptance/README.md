@@ -4,9 +4,13 @@
 
 ## 当前入口
 
+TUI 退役与 Web 唯一交互前端（普通开发）：[专属验收](tui-retirement.md)；已按用户授权实施，当前验证状态见专属记录。共享服务/CLI/HTTP 与原生会话能力保留，TUI 专属测试随客户端删除。
+
 本机 Web 前端（普通开发）：[专属验收](web-frontend.md)，独立 `web/` 工程、浏览器认证、DAG 与执行闭环；范围归 [Spec](../spec/web-frontend.spec.md)/[Plan](../spec/web-frontend.plan.md)。
 
-2026-10-15 两个后续批次分别规划，均未实施/未验：[独立 Web 与已有项目切换](web-project-switch.md)先行，[项目准备/核验/纳管](project-onboarding.md)后置；各自 Spec/Plan 及最小测试映射见专属记录，后者不阻塞前者。
+SSE 前的 Web 查询优化（普通开发）：[专属验收](web-query-optimization.md)，2026-10-15 用户后续授权实施，实际结果见专属验收；缓存复用、基础预取、隐藏查询和定向刷新，后续 SSE 复用同一缓存。
+
+2026-10-15 [独立 Web 与已有项目切换](web-project-switch.md)已有实现及自动结果，人工体验待验；新增[统一启动与多项目共进程宿主](unified-startup.md)为后继重构，仅规划且明确不支持 TUI；[项目准备/核验/纳管](project-onboarding.md)继续后置、未实施/未验。各自 Spec/Plan 和最小测试映射见专属记录，不共享通过状态。
 
 全量回归维护（普通开发）：[本次结果](full-regression-2026-10-14.md)，rebase、过期测试清理、Full 1752 通过 / 19 默认跳过、26 个登记场景通过并清理完成。
 
@@ -18,10 +22,10 @@ Orca 当前部署仅远端：[配置维护](remote-only-orca-profiles.md)。[本
 | --- | --- |
 | 工作流核验收敛 | [全部核验取舍与 101/105 修复](workflow-verification.md)，原始状态/正文取代屏幕核验；源码自动项与真机待验分开登记 |
 | 一期签收 | 待验；[一期活动](phase1.md) |
-| 当前 TUI/HTTP 交付 | [当前入口](phase2.md)：仅 #91，旧三节点退役 |
+| TUI/HTTP 历史交付（TUI 已退役） | [当前入口](phase2.md)：仅 #91，旧三节点退役 |
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[当前 Orca 单终端](orca-terminal-transport.md)；旧 Orca 活动输入/恢复记录保留历史，按当前路线重新核对适用性 |
 | Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
-| 控制台 Codex CLI 入口 | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
+| 原控制台 Codex CLI 入口（已退役） | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
 | Codex / Orca 核心断连恢复 | [首轮能力与 L3 验收规划](worker-disconnect-recovery.md)，2026-10-12 审计收敛；六项功能加一项 worker 解耦验收，三组受控（独立入口）/两条真实链，原观察重接与 Codex 同 thread 恢复，工作树实现及本轮自动验收已完成，未部署 |
 | Codex 沙箱 Git 修复 | [真实 worker / SteerlineTest 无人值守验收](codex-sandbox-git.md)，普通开发，专属 base/head 验证 |
 | Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |

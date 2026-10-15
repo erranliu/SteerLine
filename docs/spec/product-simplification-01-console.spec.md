@@ -1,5 +1,7 @@
 # Spec：精简候选控制台与会话阅读
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 目标：`PRODUCT-SIMPLIFICATION`；批次：1。状态：实现、质量审计及最小验证完成，交付见[PR #231](https://github.com/erranliu/SteerLine/pull/231)，未分配 Task ID；本批一份 [实施 Plan](product-simplification-01-console.plan.md)、一个独立实现 PR。依据：2026-10-07 用户要求实施，并修订为保留三窗、简化运行动态、右下直接回答。本次修订替代先前两栏及独立反馈页方案，验证和边界见[验收记录](../acceptance/archive/completed/product-console.md)。
 
 源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：无本系列未完成前置。承接当前任务、执行、产品和存储模块边界，不再搬包或建立第二个产品客户端。

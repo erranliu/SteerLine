@@ -6,11 +6,13 @@
 
 ## 确认的产品方向
 
+2026-10-15 后继重构规划见[统一启动 Spec](../spec/unified-startup.spec.md)/[Plan](../spec/unified-startup.plan.md)：一个 start.bat 启动多项目后端与独立 Web，项目服务改为后端内运行时，不支持产品 TUI。本次实现采用该拓扑：Web 重启隔离继续保留，后端停止覆盖全部项目；实际已验/待验见[统一启动验收](../acceptance/unified-startup.md)。项目添加仍后置，消费同一宿主及应用 v2，登记本身不自动启动项目/派发任务。
+
 - 主界面始终围绕一个当前项目：其 DAG、任务、候选、问题、文档和设置。项目切换器放在当前项目名称处，支持搜索、最近使用和进入“添加项目”。不把默认首页改成跨项目任务大盘。
 - Web 采用一个稳定本机地址；项目写在页面 URL 和请求目标中，不为每个项目分配浏览器端口。每个标签页可以选择不同项目。
 - 页面资源、浏览器会话与转接由独立 Web 程序承载，可以独立调试、更新和重启。项目管理由 SteerLine 的 Go 应用服务实现，Web 不读取配置目录判断项目资格、不核验仓库、不建库、不直接管理项目进程。
 - 添加流程为：填写目标 → 取得提示词 → 用户在 Codex 准备仓库 → 回到 SteerLine 核验 → 明确确认纳管 → 服务建立项目状态并登记。Codex 自述完成不能替代核验。
-- TUI 不新增项目添加、准备提示词、结构核验或纳管设置功能；现有执行查询、反馈及已管理项目选择能力可继续使用，不以本方案为由删除。
+- Web 为唯一交互前端，原 TUI 已按独立退役 Spec 删除；本方案不重新引入终端前端。
 
 ## 当前实现与缺口
 
@@ -18,7 +20,7 @@
 
 | 位置 | 实际行为 | 本方案的整合方向 |
 | --- | --- | --- |
-| [app/config.go](../../internal/app/config.go)、[consoleapp/console.go](../../internal/consoleapp/console.go) | 从应用 home 的 etc 加载项目配置；配置文件可直接成为 TUI 项目来源 | 项目目录与资格由应用服务统一返回，不能把“有 JSON 文件”等同于纳管完成 |
+| [app/config.go](../../internal/app/config.go)、[application_directory.go](../../internal/app/application_directory.go) | 从应用 home 的 etc 加载项目配置；由应用目录解析现有项目配置 | 项目目录与资格由应用服务统一返回，不能把“有 JSON 文件”等同于纳管完成 |
 | [web/server/server.go](../../web/server/server.go)、[application_service.go](../../internal/app/application_service.go) | 已拆出独立 Web；应用服务提供配置目录及按项目转接 | 后续添加复用该 Go 应用入口，不重建网关 |
 | [native_project_open.go](../../internal/app/native_project_open.go)、[service_admission.go](../../internal/app/service_admission.go) | 启动及部分命令入口可以初始化原生项目数据库；没有本文规定的文档结构门槛 | 复用原初始化/身份/事务能力，但在所有初始化入口之前增加统一纳管准入 |
 | [service_preflight.go](../../internal/app/service_preflight.go)、[native_state_preflight.go](../../internal/app/host/native_state_preflight.go) | 已有仓库、发布目标、执行环境、状态位置及格式核验 | 复用具体检查；区分项目结构、纳管参数与执行环境，不把会触碰执行环境的完整启动检查当成结构检查 |
@@ -41,7 +43,7 @@ flowchart LR
 
 这里的“应用服务”是 Go 后端的应用级入口，不是某一个项目的 worker 服务。它必须在零个已管理项目、所有项目服务均离线时也能提供添加与核验；不能为添加第一个项目而先创建一个临时项目数据库。当前 `serve-app` 已能在零配置/全离线时提供身份与只读目录；添加和核验仍按后置 Spec 补齐。
 
-应用级入口由 `steerline.exe` 承载，独立于各项目服务的生命周期；一个应用 home 只允许一个项目管理写者。当前入口为 `steerline serve-app/stop-app` 与 `steerline-web serve/open/stop`，协议为 `steerline-application/v1`；后置管理写入按其实施 Spec 扩展。保留现有每项目服务/数据库与仓库锁，不在本轮设计中合并 worker、调度器或业务数据库。
+应用级入口由 `steerline.exe` 承载，独立于各项目服务的生命周期；一个应用 home 只允许一个项目管理写者。当前统一入口为 `steerline start/stop/status`，低层为 `steerline serve` 与 `steerline-web serve/open/stop`，协议为 `steerline-application/v2`；后置管理写入按其实施 Spec 扩展。各项目在共享后端内分别持有 actor、数据库与仓库锁；不合并 worker、调度器或业务数据库。
 
 当前 `LoadConfig` 会组合全局执行方案，部分 preflight 还会验证具体后端；添加候选不能直接套用这条完整运行接线。应用级启动、候选解析与结构核验须有不依赖执行方案就绪的入口；纳管参数及原生权威初始化使用必需的窄输入，执行目录/账户/Orca 可用性留给执行就绪检查。实施时应拆出并复用已有具体检查，不构造一个假的项目或默认 worker 来满足旧入口。
 
@@ -81,7 +83,7 @@ Web 只连接应用级 API。Go 应用服务负责项目目录、仓库身份、
 
 添加请求绑定原 request ID、应用 home、仓库 common-dir、目标分支/commit、结构规则版本/文档摘要及纳管参数摘要，记录受理时的应用实例事实。最终提交重新核验这些事实；原分支、清单、路径、配置或发布目标发生变化时返回“需重新核验”，不消费旧通过结果。不能接受浏览器自报 passed。应用重启后查询只读，显式继续仍用原请求 ID/正文并重核当前实例和原依据，不自动重放。显示名改变不产生新的仓库身份。
 
-先核验、再初始化、最后发布登记。初始原生权威沿用 manual 且 paused 的现有规则。首次添加不要求已有 Spec/Plan 或任何 Task；空数据库、空 DAG 是正常结果。所有能够初始化项目的 CLI、宿主和客户端路径都必须受同一准入约束，不能只在 Web 按钮上检查；TUI 不增加添加页面，也不能借原初始化路径隐式添加。
+先核验、再初始化、最后发布登记。初始原生权威沿用 manual 且 paused 的现有规则。首次添加不要求已有 Spec/Plan 或任何 Task；空数据库、空 DAG 是正常结果。所有能够初始化项目的 CLI、宿主和客户端路径都必须受同一准入约束，不能只在 Web 按钮上检查；客户端不能借原初始化路径隐式添加。
 
 数据库与文件发布不能假装成一笔跨介质事务。应用服务需持久保留最小添加请求/完成事实，放在应用级目录，不在未通过核验的项目下建数据库，也不向已有严格运行目录塞入新类型的临时文件。实施时选定唯一最终登记发布点：初始化成功且登记原子发布后，项目才进入正式目录。
 

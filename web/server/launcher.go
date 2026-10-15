@@ -45,6 +45,22 @@ func OpeningURL(ctx context.Context, home, project string) (string, error) {
 func Stop(ctx context.Context, home string) error {
 	return localservice.Stop(ctx, home, LauncherDirectory(home), contract.WebProtocol, "/native/identity", "/native/shutdown")
 }
+// EnsureAddress loads the Web address and persists the default on first use
+// without changing the application home's permissions.
+func EnsureAddress(home string) (string, error) {
+	address, err := LoadAddress(home)
+	if err != nil {
+		return "", err
+	}
+	if _, err = os.Stat(filepath.Join(home, "web.json")); os.IsNotExist(err) {
+		if err = localservice.WritePrivateFile(home, "web.json", map[string]any{"version": 1, "address": address}); err != nil {
+			return "", err
+		}
+	} else if err != nil {
+		return "", err
+	}
+	return address, nil
+}
 func LoadAddress(home string) (string, error) {
 	var input struct {
 		Version int    `json:"version"`

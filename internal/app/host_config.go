@@ -36,6 +36,9 @@ func (applicationControlValidation) TerminalStatus(status string) bool {
 // hostRuntimeConfig is the only conversion from the app's broad configured
 // service to the host's process, control, metadata and runtime-read inputs.
 func hostRuntimeConfig(ctx context.Context, config Config) (host.Config, error) {
+	if config.runtimeHost != nil {
+		return *config.runtimeHost, ctx.Err()
+	}
 	if err := config.RequireNativeTaskAuthority(); err != nil {
 		return host.Config{}, err
 	}
