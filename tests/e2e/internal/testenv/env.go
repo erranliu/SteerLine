@@ -21,14 +21,14 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
+type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
 	orcaUsageUnavailable    bool
 	remoteOutputVerified    bool
@@ -41,6 +41,7 @@ type Scenario struct {
 	t                       *testing.T
 	projects                []*Project
 	processes               []*testprocess.Process
+	fixtureClosers          []func()
 	files                   []*os.File
 	resources               []map[string]any
 	usageVerified           bool
@@ -52,6 +53,7 @@ type Scenario struct {
 type Project struct {
 	RemoteBranches                                                                    []string
 	RemoteCleanupFailed                                                               bool
+	RunnerCleanupFailed                                                               bool
 	Scenario                                                                          *Scenario
 	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider, Executable string
 	ProjectID, DatabaseID                                                             string
@@ -75,9 +77,23 @@ type Task struct {
 	Contract taskmodel.TaskContract
 }
 
+// TaskFactsSnapshot keeps task facts for older unselected scenario assertions.
+// Native record slices remain empty; production does not reconstruct them.
+type TaskFactsSnapshot struct {
+	ProjectIdentity string
+	Tasks           []taskmodel.TaskRecord
+	WorkflowRuns    []executionmodel.WorkflowRunRecord
+	Executions      []executionmodel.ExecutionRecord
+	Attempts        []executionmodel.StepAttemptRecord
+	Decisions       []executionmodel.DecisionRecord
+	Operations      []executionmodel.OperationRecord
+	Deliveries      []executionmodel.TaskDeliveryRecord
+}
+
 type Snapshot struct {
+	Runner  storageports.RunnerSnapshot `json:"runner"`
 	Page    storageports.NativeTaskPage `json:"page"`
-	Domain  reconstruction.Snapshot     `json:"domain"`
+	Domain  TaskFactsSnapshot           `json:"domain"`
 	Helper  controlled.State            `json:"helper"`
 	Runtime *reconstruction.Runtime     `json:"runtime,omitempty"`
 }
@@ -102,6 +118,12 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
+	switch id {
+	case "delivery.basic", "recovery.waiting-merge-restart", "recovery.codex-resume", "recovery.terminal-local-reconnect", "recovery.terminal-environment-unknown-send":
+		// Includes independent Runner startup, public CLI observation and
+		// original-service fencing; individual commands remain bounded.
+		timeout = 10 * time.Minute
+	}
 	if id == "runtime.installed-debug-isolation" {
 		// Two source builds, two isolated service lifecycles, path refusals and
 		// two staged workflows share this bound; command limits stay unchanged.
@@ -263,7 +285,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	addressPath := filepath.Join(root, "git-address.json")
 	p.git(p.Repo, "--git-dir", p.Remote, "config", "http.receivepack", "true")
 	cmd := exec.Command(s.Run.Helper, "git-server", "--root", filepath.Join(root, "remotes"), "--address-file", addressPath, "--e2e-state", p.Provider)
-	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	cmd.Env = p.Driver.Environment(os.Environ())
 	server := s.start(cmd, name+"-git-server")
 	p.GitServer = server
 	address := ""
@@ -301,11 +323,13 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	s.Must(controlled.Write(p.Provider, controlled.State{GitURL: "http://" + address + "/e2e/project.git"}))
 	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider}}
 	s.Must(controlled.Write(p.Config, map[string]any{
-		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
+		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2", "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
 		"publication_policy": map[string]any{"publisher": "worker"},
 		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
 	}))
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "host": "local", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "codex.worker-profile", "codec_version": 2, "payload": map[string]any{"executable": s.Run.Helper}}}}}, "default_execution_profile": "controlled"}))
+	selection, err := driver.RunnerSelection(s.Run.Runner)
+	s.Must(err)
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]any{"executable": s.Run.Helper}}, "workflow": map[string]any{"id": "development", "version": 1}}}, "default_execution_profile": "controlled"}))
 	commandLogs := filepath.Join(s.Output, name+"-commands")
 	s.Must(os.MkdirAll(commandLogs, 0700))
 	p.Driver = driver.Client{Binary: p.Executable, Config: p.Config, Home: p.Home, StatePath: p.Provider, LogDir: commandLogs}
@@ -348,7 +372,7 @@ func (s *Scenario) NewHomeForProject(source *Project, name, executable string) *
 	var config map[string]any
 	s.Must(json.Unmarshal(configRaw, &config))
 	delete(config, "run_dir")
-	config["worktree_root"] = filepath.Join(p.Home, "worktrees")
+
 	if pr, ok := config["pr"].(map[string]any); ok {
 		if query, ok := pr["query"].(map[string]any); ok {
 			if args, ok := query["args"].([]any); ok && len(args) >= 3 {
@@ -383,6 +407,15 @@ func (p *Project) git(dir string, args ...string) string {
 	p.Scenario.t.Helper()
 	ctx, cancel := context.WithTimeout(p.Scenario.Context, 30*time.Second)
 	defer cancel()
+	if p.Chain != "" {
+		command := exec.CommandContext(ctx, "git", append([]string{"-c", "core.longpaths=true", "-c", "user.name=E2E", "-c", "user.email=e2e@example.invalid", "-c", "commit.gpgsign=false", "-C", dir}, args...)...)
+		command.Env = p.Driver.Environment(os.Environ())
+		out, err := command.CombinedOutput()
+		if err != nil {
+			p.Scenario.t.Fatalf("owned native fixture Git: %v: %s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
 	out, err := controlled.Git(ctx, dir, args...)
 	p.Scenario.Must(err)
 	return out
@@ -390,7 +423,7 @@ func (p *Project) git(dir string, args ...string) string {
 
 func (p *Project) Command(executable string, args ...string) *exec.Cmd {
 	cmd := exec.Command(executable, args...)
-	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	cmd.Env = p.Driver.Environment(os.Environ())
 	cmd.Dir = p.Driver.WorkingDirectory
 	return cmd
 }
@@ -599,13 +632,13 @@ func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (
 	if view.Tasks == nil || view.Ready == nil {
 		return snap, errors.New("combined project snapshot lacks task page or ready values")
 	}
-	if read.ExecutionError != nil {
-		return snap, read.ExecutionError
+	if read.RunnerError != nil {
+		return snap, read.RunnerError
 	}
-	state := read.ExecutionState
+	state := read.RunnerState
 	project := view.Tasks.ProjectID
 	graph := state.Graph
-	if project == "" || state.Records.ProjectIdentity != project || graph.Authority.ProjectIdentity != project ||
+	if project == "" || graph.Authority.ProjectIdentity != project ||
 		graph.DatabaseID != view.Tasks.DatabaseID || graph.DatabaseRevision != view.Tasks.DatabaseRevision ||
 		graph.Authority.AuthorityVersion != view.Tasks.AuthorityVersion || graph.Authority.GraphRevision != view.Tasks.GraphRevision ||
 		view.Ready.ProjectID != project || view.Ready.DatabaseID != view.Tasks.DatabaseID || view.Ready.DatabaseRevision != view.Tasks.DatabaseRevision ||
@@ -614,12 +647,15 @@ func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (
 		return snap, errors.New("combined project snapshot contains different database revisions")
 	}
 	snap.Page = *view.Tasks
-	snap.Domain = reconstruction.SnapshotFromStorage(state)
+	snap.Runner = state
+	// Domain retains task facts only while callers migrate to Runner. Never
+	// synthesize old native execution/attempt/operation records from CLI views.
+	snap.Domain = TaskFactsSnapshot{ProjectIdentity: project, Tasks: graph.Tasks}
+	for _, delivery := range graph.Deliveries {
+		snap.Domain.Deliveries = append(snap.Domain.Deliveries, delivery)
+	}
 	if state.Checkpoint != nil {
-		runtime, err := reconstruction.BuildFromStorage(state, *state.Checkpoint)
-		if err != nil {
-			return snap, err
-		}
+		runtime := taskrunner.Project(state, *state.Checkpoint)
 		snap.Runtime = &runtime
 	}
 	return snap, nil
@@ -649,61 +685,41 @@ func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 }
 
 func (p *Project) WaitPhase(phase string) Snapshot {
-	if phase == "waiting_pr_merge" {
-		phase = "waiting_external"
-	}
-	if phase == "waiting_decision" {
-		phase = "waiting_input"
-	}
 	var result Snapshot
-	lastPhase := ""
-	rechecked := false
-	p.Scenario.Wait("workflow "+phase, func() (bool, error) {
+	p.Scenario.Wait("Runner phase "+phase, func() (bool, error) {
 		snap, err := p.Snapshot()
 		result = snap
 		if err != nil {
 			return false, err
 		}
-		if p.Chain != "" && len(snap.Domain.WorkflowRuns) == 1 {
-			current := snap.Domain.WorkflowRuns[0].Status
-			if current != lastPhase {
-				p.Record("latest-phase", snap)
-				lastPhase = current
-			}
-			if (current == "waiting_input" || current == "blocked" || current == "reconciling") && len(snap.Domain.Executions) == 1 {
-				e := snap.Domain.Executions[0]
-				if e.Environment == nil || e.Environment.Blocker == nil {
-					message := "pending decision"
-					pending := false
-					if e.Error != nil {
-						message = *e.Error
-					}
-					if snap.Runtime != nil {
-						for _, run := range snap.Runtime.Runs {
-							if run.RunID == e.WorkflowRunID && run.Decision != nil {
-								message = run.Decision.Request.Context
-								pending = true
-							}
-						}
-					}
-					if pending {
-						p.Scenario.t.Fatalf("native worker stopped before delivery: %s; see latest-phase snapshot", message)
-					}
-				}
-				if e.Environment != nil && e.Environment.Blocker != nil {
-					reason := e.Environment.Blocker.Fact.Reason
-					handled, err := recheckNativeEnvironmentOnce(reason, &rechecked, func() error {
-						_, err := p.Driver.Run(p.Scenario.Context, "answer", "-config", p.Config, "-run-id", e.WorkflowRunID, "-option", "recheck_environment", "-by", "e2e")
-						return err
-					})
-					if handled {
-						return false, err
-					}
-					p.Scenario.t.Fatalf("native environment blocked: %s; see latest-phase snapshot", reason)
-				}
-			}
+		if raw, err := os.ReadFile(p.Provider + ".rpc-error.json"); err == nil {
+			_ = os.WriteFile(filepath.Join(p.Scenario.Output, p.Name+"-fixture-rpc-error.json"), raw, 0600)
+			p.Scenario.t.Fatal("external protocol fixture failed: ", string(raw))
 		}
-		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Status == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
+		if len(snap.Runner.Candidates) != 1 {
+			return false, nil
+		}
+		c := snap.Runner.Candidates[0]
+		if c.SubmitState == "rejected" {
+			p.Scenario.t.Fatal("original Runner submission rejected: ", c.Diagnostic)
+		}
+		if c.Projection == nil {
+			return false, nil
+		}
+		if phase == "completed" {
+			return c.Participation == "completed" && len(snap.Runner.Graph.Deliveries) == 1, nil
+		}
+		wanted := phase
+		if phase == "waiting_pr_merge" || phase == "waiting_external" {
+			wanted = "pr_ready"
+		}
+		if phase == "waiting_decision" {
+			return c.Projection.Question != nil, nil
+		}
+		if c.Projection.ResumeRequired && wanted == "pr_ready" && c.Projection.Status != wanted {
+			p.Scenario.t.Fatal("Runner needs explicit recovery: ", c.Projection.Diagnostic)
+		}
+		return c.Projection.Status == wanted, nil
 	})
 	return result
 }
@@ -768,16 +784,12 @@ func (s *Scenario) cleanup() {
 			}
 			snap, err := p.SnapshotContext(ctx)
 			if err == nil {
-				for _, execution := range snap.Domain.Executions {
-					selected, selectErr := evidence.Candidate(snap.Domain, execution.WorkflowRunID, execution.ExecutionID)
-					if selectErr != nil {
-						failures = append(failures, selectErr.Error())
-						continue
-					}
+				for _, candidate := range snap.Runner.Candidates {
 					bound := snap
-					bound.Domain = selected
-					u, usageErr := p.NativeUsage(bound, execution.ExecutionID+"-cleanup")
-					if writeErr := controlled.Write(filepath.Join(s.Output, p.Name+"-"+execution.ExecutionID+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)}); writeErr != nil {
+					bound.Runner.Candidates = bound.Runner.Candidates[:0:0]
+					bound.Runner.Candidates = append(bound.Runner.Candidates, candidate)
+					u, usageErr := p.NativeUsage(bound, candidate.ID+"-cleanup")
+					if writeErr := controlled.Write(filepath.Join(s.Output, p.Name+"-"+candidate.ID+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)}); writeErr != nil {
 						failures = append(failures, writeErr.Error())
 					}
 				}
@@ -788,6 +800,34 @@ func (s *Scenario) cleanup() {
 		if err := s.processes[i].Stop(ctx); err != nil {
 			failures = append(failures, err.Error())
 		}
+	}
+	for _, p := range s.projects {
+		if p.Driver.Binary == "" {
+			continue
+		}
+		if _, err := os.Stat(p.Database); os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(filepath.Dir(p.Database), "runner")); os.IsNotExist(err) {
+				continue
+			}
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 90*time.Second)
+		project := p.ProjectID
+		if project == "" {
+			project = strings.ToLower(filepath.Clean(filepath.Join(p.Repo, ".git")))
+		}
+		_, readErr := driver.ReadWorkflow(cleanupCtx, p.Database, project)
+		if readErr == nil {
+			readErr = p.Driver.CleanupOwnedRunner(cleanupCtx, s.Run.Helper)
+		}
+		cleanupCancel()
+		if readErr != nil {
+			p.RunnerCleanupFailed = true
+			failures = append(failures, "original Runner cleanup: "+readErr.Error())
+		}
+		_ = controlled.Write(filepath.Join(s.Output, p.Name+"-runner-cleanup.json"), map[string]any{"confirmed": readErr == nil, "error": fmt.Sprint(readErr)})
+	}
+	for _, closeFixture := range s.fixtureClosers {
+		closeFixture()
 	}
 	for _, f := range s.files {
 		if err := f.Close(); err != nil {
@@ -814,7 +854,7 @@ func (s *Scenario) cleanup() {
 	}
 	preserveScratch := false
 	for _, p := range s.projects {
-		preserveScratch = preserveScratch || p.RemoteCleanupFailed
+		preserveScratch = preserveScratch || p.RemoteCleanupFailed || p.RunnerCleanupFailed
 	}
 	if !preserveScratch {
 		if err := RemoveOwned(s.Run.Scratch, s.Root); err != nil {

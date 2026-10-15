@@ -4,9 +4,8 @@ package native
 
 import (
 	"errors"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func DisconnectCandidate(executionmodel.ExecutionRecord, string) error {
+func DisconnectCandidate(ProcessFaultTarget, string) error {
 	return errors.New("candidate native fault requires the Windows E2E environment")
 }

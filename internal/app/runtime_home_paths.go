@@ -29,9 +29,7 @@ func validateRuntimeHomePaths(config Config) error {
 		{"service state", filepath.Join(config.RunDir, "service")},
 		{"service launch lock", filepath.Join(config.RunDir, "service", "launch.lock")},
 		{"service startups", filepath.Join(config.RunDir, "service", "startups")},
-		{"run directories", filepath.Join(config.RunDir, "runs")},
-		{"managed worktrees", filepath.Join(config.RunDir, "worktrees")},
-		{"worktree_root", config.WorktreeRoot},
+		{"Runner state", filepath.Join(config.RunDir, "runner")},
 	} {
 		if entry.path == "" {
 			continue

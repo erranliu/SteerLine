@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,19 +14,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	if os.Getenv("STEERLINE_CLI_WORKER_FIXTURE") == "1" {
-		switch strings.Join(os.Args[1:], " ") {
-		case "--version":
-			fmt.Println("codex-cli 0.159.2")
-			return
-		case "app-server --help":
-			fmt.Println("app-server --listen")
-			return
-		case "app-server --stdio":
-			testprotocol.MockAppServerStdio()
-			return
-		}
+	if testprotocol.RunRunnerServiceFixture() {
+		return
 	}
+
 	os.Exit(m.Run())
 }
 

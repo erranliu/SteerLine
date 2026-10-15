@@ -5,128 +5,92 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	p "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-// ReadActivityView pins identity records and bounded events to one WAL snapshot.
-func (s Reader) ReadActivityView(ctx context.Context, project, workflow, execution, attempt string, after int64, limit, payloadBudget int) (storageports.ActivityBinding, []storageports.DomainEvent, error) {
-	if s.db == nil {
-		return storageports.ActivityBinding{}, nil, errors.New("activity view reader is required")
-	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return storageports.ActivityBinding{}, nil, err
+func (s Reader) ReadActivityView(ctx context.Context, project, candidate, run, attempt string, after int64, limit, budget int) (p.ActivityBinding, []p.DomainEvent, error) {
+	return s.runnerActivity(ctx, project, candidate, run, attempt, after, limit, budget, false)
+}
+func (s Reader) ReadRecentActivityView(ctx context.Context, project, candidate, run, attempt string) (p.ActivityBinding, []p.DomainEvent, error) {
+	return s.runnerActivity(ctx, project, candidate, run, attempt, 0, 20, 1<<20, true)
+}
+func (s Reader) runnerActivity(ctx context.Context, project, candidate, run, attempt string, after int64, limit, budget int, recent bool) (p.ActivityBinding, []p.DomainEvent, error) {
+	binding := p.ActivityBinding{ProjectIdentity: project}
+	tx, e := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if e != nil {
+		return binding, nil, e
 	}
 	defer tx.Rollback()
-	binding, events, err := readActivityView(ctx, tx, project, workflow, execution, attempt, after, limit, payloadBudget)
-	if err != nil {
-		return storageports.ActivityBinding{}, nil, err
+	c, e := readRunnerCandidate(ctx, tx, project, candidate)
+	if e != nil {
+		return binding, nil, e
 	}
-	if err := tx.Commit(); err != nil {
-		return storageports.ActivityBinding{}, nil, err
+	if c.RunID != run || attempt == "" {
+		return binding, nil, errors.New("activity differs from original candidate Run")
 	}
-	return binding, events, nil
-}
-
-func readActivityView(ctx context.Context, db graphSnapshotQuery, project, workflow, execution, attempt string, after int64, limit, payloadBudget int) (storageports.ActivityBinding, []storageports.DomainEvent, error) {
-	binding, err := readActivityBinding(ctx, db, project, execution, attempt)
-	if err != nil {
-		return storageports.ActivityBinding{}, nil, err
-	}
-	events, err := readBoundEvents(ctx, db, project, workflow, execution, attempt, after, limit, payloadBudget)
-	if err != nil {
-		return storageports.ActivityBinding{}, nil, err
-	}
-	return binding, events, nil
-}
-
-// ReadRecentActivityView retains five flow/status changes and five recent raw
-// changes alongside ten other summaries in the original snapshot and budget.
-func (s Reader) ReadRecentActivityView(ctx context.Context, project, workflow, execution, attempt string) (storageports.ActivityBinding, []storageports.DomainEvent, error) {
-	if s.db == nil {
-		return storageports.ActivityBinding{}, nil, errors.New("activity view reader is required")
-	}
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return storageports.ActivityBinding{}, nil, err
-	}
-	defer tx.Rollback()
-	binding, err := readActivityBinding(ctx, tx, project, execution, attempt)
-	if err != nil {
-		return storageports.ActivityBinding{}, nil, err
-	}
-	rows, err := tx.QueryContext(ctx, `WITH recent AS (
-		SELECT event_id FROM events
-		WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND attempt_id=? AND type LIKE 'activity.%' AND type<>'activity.worker_state'
-		ORDER BY event_id DESC LIMIT 10
-	), changes AS (
-		SELECT event_id FROM events
-		WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND attempt_id=? AND type='activity.worker_state'
-		ORDER BY event_id DESC LIMIT 5
-	), visible_changes AS (
-		SELECT event_id FROM events
-		WHERE project_identity=? AND workflow_run_id=? AND execution_id=? AND attempt_id=? AND type='activity.worker_state'
-		AND CASE WHEN json_valid(payload) THEN
-			COALESCE(json_extract(payload,'$.meta.from.workflow_stage'),'') <> COALESCE(json_extract(payload,'$.meta.to.workflow_stage'),'')
-			OR COALESCE(json_extract(payload,'$.meta.from.workflow_status'),'') <> COALESCE(json_extract(payload,'$.meta.to.workflow_status'),'')
-		ELSE 0 END
-		ORDER BY event_id DESC LIMIT 5
-	), batch AS (
-		SELECT event_id,payload_bytes,type FROM events
-		WHERE event_id IN (SELECT event_id FROM recent UNION SELECT event_id FROM changes UNION SELECT event_id FROM visible_changes)
-	), bounded AS (
-		SELECT event_id,SUM(CASE WHEN payload_bytes<=1048576 THEN payload_bytes ELSE 0 END) OVER (ORDER BY CASE WHEN event_id IN (SELECT event_id FROM visible_changes) THEN 0 WHEN type='activity.worker_state' THEN 1 ELSE 2 END,event_id DESC) AS inline_bytes FROM batch
-	) SELECT e.event_id,e.project_identity,e.task_id,e.workflow_run_id,e.execution_id,e.attempt_id,e.external_source,e.external_id,e.type,e.received_at,e.payload_bytes,e.payload_digest,
-		CASE WHEN e.payload_bytes<=1048576 AND b.inline_bytes<=1048576 THEN e.payload ELSE X'' END
-		FROM bounded b JOIN events e ON e.event_id=b.event_id ORDER BY e.event_id`, project, workflow, execution, attempt, project, workflow, execution, attempt, project, workflow, execution, attempt)
-	if err != nil {
-		return storageports.ActivityBinding{}, nil, err
-	}
-	events, err := scanEventRows(rows)
-	if err != nil {
-		return storageports.ActivityBinding{}, nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return storageports.ActivityBinding{}, nil, err
-	}
-	return binding, events, nil
-}
-
-func readActivityBinding(ctx context.Context, db CommandRowQuerier, project, execution, attempt string) (storageports.ActivityBinding, error) {
-	binding := storageports.ActivityBinding{ProjectIdentity: project}
-	var payload []byte
-	err := db.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=?`, project, execution).Scan(&payload)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return storageports.ActivityBinding{}, err
-	}
-	if err == nil {
-		var record executionmodel.ExecutionRecord
-		if err = json.Unmarshal(payload, &record); err != nil {
-			return storageports.ActivityBinding{}, err
+	// A past Attempt remains readable only with an original public event as proof.
+	known := c.Projection != nil && c.Projection.Execution.AttemptID == attempt
+	if !known {
+		var n int
+		e = tx.QueryRowContext(ctx, `SELECT count(*) FROM runner_events WHERE project_identity=? AND candidate_id=? AND json_extract(payload,'$.attempt_id')=?`, project, candidate, attempt).Scan(&n)
+		if e != nil {
+			return binding, nil, e
 		}
-		if record.ProjectIdentity != project || record.ExecutionID != execution {
-			return storageports.ActivityBinding{}, errors.New("activity execution row and payload identity differ")
-		}
-		binding.ExecutionID = record.ExecutionID
-		binding.ExecutionWorkflowRunID = record.WorkflowRunID
+		known = n > 0
 	}
-	payload = nil
-	err = db.QueryRowContext(ctx, `SELECT payload FROM step_attempts WHERE project_identity=? AND execution_id=? AND attempt_id=?`, project, execution, attempt).Scan(&payload)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return storageports.ActivityBinding{}, err
+	if !known {
+		return binding, nil, errors.New("activity Attempt is not recorded by Runner")
 	}
-	if err == nil {
-		var record executionmodel.StepAttemptRecord
-		if err = json.Unmarshal(payload, &record); err != nil {
-			return storageports.ActivityBinding{}, err
-		}
-		if record.ProjectIdentity != project || record.ExecutionID != execution || record.AttemptID != attempt {
-			return storageports.ActivityBinding{}, errors.New("activity attempt row and payload identity differ")
-		}
-		binding.AttemptID = record.AttemptID
-		binding.AttemptExecutionID = record.ExecutionID
+	binding.ExecutionID = run
+	binding.ExecutionWorkflowRunID = candidate
+	binding.AttemptID = attempt
+	binding.AttemptExecutionID = run
+	limit = max(1, min(limit, 1000))
+	order := " ASC"
+	if recent {
+		order = " DESC"
 	}
-	return binding, nil
+	rows, e := tx.QueryContext(ctx, `SELECT seq,payload FROM runner_events WHERE project_identity=? AND candidate_id=? AND seq>? AND json_extract(payload,'$.attempt_id')=? ORDER BY seq`+order+` LIMIT ?`, project, candidate, after, attempt, limit)
+	if e != nil {
+		return binding, nil, e
+	}
+	events := []p.DomainEvent{}
+	used := 0
+	for rows.Next() {
+		var seq int64
+		var raw []byte
+		if e = rows.Scan(&seq, &raw); e != nil {
+			break
+		}
+		var event runnercontract.Event
+		if e = json.Unmarshal(raw, &event); e != nil {
+			break
+		}
+		if event.RunID != run {
+			e = errors.New("Runner event Run identity differs")
+			break
+		}
+		v := api.ActivityEvent{V: 1, Seq: uint64(seq), TS: event.CreatedAt, Source: runnercontract.Protocol, RunID: candidate, TaskID: c.TaskID, ItemID: event.EventID, Kind: "runner_event", Status: event.Type, Title: event.Type}
+		payload, _ := json.Marshal(v)
+		if used+len(payload) > budget {
+			break
+		}
+		used += len(payload)
+		events = append(events, p.DomainEvent{EventID: seq, ProjectIdentity: project, TaskID: c.TaskID, WorkflowRunID: candidate, ExecutionID: run, AttemptID: attempt, Type: "activity.runner_event", ReceivedAt: event.CreatedAt, Payload: payload, PayloadBytes: len(payload)})
+	}
+	if e == nil {
+		e = rows.Err()
+	}
+	rows.Close()
+	if e != nil {
+		return binding, nil, e
+	}
+	if recent {
+		for i, j := 0, len(events)-1; i < j; i, j = i+1, j-1 {
+			events[i], events[j] = events[j], events[i]
+		}
+	}
+	return binding, events, tx.Commit()
 }

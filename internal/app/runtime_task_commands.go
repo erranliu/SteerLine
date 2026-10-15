@@ -2,13 +2,13 @@ package app
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/execution"
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 type runtimeTaskCommands struct {
 	clientTaskCommands
-	service *execution.Service
+	service *taskrunner.Actor
 }
 
 func (r *runtimeTaskCommands) Close() error { return nil } // store belongs to ProjectRuntime

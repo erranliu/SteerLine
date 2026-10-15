@@ -11,11 +11,8 @@ import (
 	"testing"
 	"time"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func openDomainTestStore(t *testing.T) *SQLiteStore {
@@ -38,7 +35,7 @@ func TestSQLiteV3IsRejectedWithoutUpgrade(t *testing.T) {
 	require(t, err)
 	_, err = tx.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`)
 	require(t, err)
-	for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
+	for _, stmt := range []string{`CREATE TABLE workflow_runs(project_identity TEXT,task_id TEXT,phase TEXT)`} {
 		_, err = tx.Exec(stmt)
 		require(t, err)
 	}
@@ -57,6 +54,8 @@ func TestSQLiteV4IsRejectedWithoutUpgrade(t *testing.T) {
 	require(t, err)
 	require(t, store.Close())
 	raw, err := sql.Open("sqlite", path)
+	require(t, err)
+	_, err = raw.Exec(`CREATE TABLE workflow_runs(project_identity TEXT,task_id TEXT,phase TEXT)`)
 	require(t, err)
 	_, err = raw.Exec(oldActiveWorkflowIndex)
 	require(t, err)
@@ -131,75 +130,6 @@ func TestSQLiteV12IsRejectedWithoutUpgrade(t *testing.T) {
 	require(t, err)
 	require(t, raw.Close())
 	assertOldSQLiteRejectedUnchanged(t, path, 12)
-}
-
-func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
-	ctx := context.Background()
-	s := openDomainTestStore(t)
-	project := "repo:test"
-	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "17", Status: "in_progress", Version: 1}); err != nil {
-			return err
-		}
-		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: "minimal-v1", Status: "running"}); err != nil {
-			return err
-		}
-		for _, id := range []string{"exec-a"} {
-			if err := tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: id, WorkflowRunID: "wf-1", Agent: id, Status: "active", CurrentStep: "implement", Target: executionbackend.ExecutionTarget{WorktreeID: "worktree-" + id, Branch: "branch-" + id}}); err != nil {
-				return err
-			}
-			if err := tx.PutStepAttempt(executionmodel.StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt-" + id, ExecutionID: id, StepID: "implement", AttemptNumber: 1, Status: "running"}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		return tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-b", WorkflowRunID: "wf-1", Status: "active", CurrentStep: "verify"})
-	})
-	if err == nil {
-		t.Fatal("second active execution was accepted")
-	}
-	snapshot, err := s.Query(ctx, project)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(snapshot.WorkflowRuns) != 1 || len(snapshot.Executions) != 1 || len(snapshot.Attempts) != 1 {
-		t.Fatalf("unexpected snapshot: %+v", snapshot)
-	}
-}
-
-func TestSQLiteTransactionRollsBackAllDomainWrites(t *testing.T) {
-	ctx := context.Background()
-	s := openDomainTestStore(t)
-	project := "repo:rollback"
-	at := time.Now().UTC()
-	if err := s.InitializeProject(ctx, executionmodel.ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: at, UpdatedAt: at}); err != nil {
-		t.Fatal(err)
-	}
-	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "task-a", Status: "open", Version: 1}); err != nil {
-			return err
-		}
-		return tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-bad", TaskID: "missing-task", Status: "queued"})
-	})
-	if err == nil {
-		t.Fatal("expected FK violation")
-	}
-	snapshot, queryErr := s.Query(ctx, project)
-	if queryErr != nil {
-		t.Fatal(queryErr)
-	}
-	graph, graphErr := s.TaskGraphSnapshot(ctx, project)
-	if graphErr != nil {
-		t.Fatal(graphErr)
-	}
-	if len(graph.Tasks) != 0 || len(snapshot.WorkflowRuns) != 0 {
-		t.Fatalf("partial state survived rollback: %+v", snapshot)
-	}
 }
 
 func TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation(t *testing.T) {
@@ -322,47 +252,5 @@ func TestQueryEventCursorAndLargeBodyPaging(t *testing.T) {
 		t.Fatal("cursor was reused with a different filter")
 	} else if cursorErr, ok := err.(*productquery.CursorError); !ok || cursorErr.Code != "cursor_invalidated" {
 		t.Fatalf("bad cursor error: %v", err)
-	}
-}
-
-func TestOperationIdempotencyKeepsOneDurableIntent(t *testing.T) {
-	ctx := context.Background()
-	store := openDomainTestStore(t)
-	project := "repo:ops"
-	request := []byte(`{"attempt_id":"attempt-1"}`)
-	digest := operationDigest(request)
-	base := executionmodel.OperationRecord{ProjectIdentity: project, OperationID: "operation-1", IdempotencyKey: "start:attempt-1", Kind: "start_execution", Status: "pending", PayloadDigest: digest, Request: request}
-	err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, created, err := tx.PutOperation(base)
-		if err == nil && !created {
-			t.Fatal("initial operation was not created")
-		}
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	updated := base
-	updated.Status = "in_flight"
-	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, created, err := tx.PutOperation(updated)
-		if err == nil && created {
-			t.Fatal("retry created a second operation")
-		}
-		return err
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	conflict := base
-	conflict.Request = []byte(`{"attempt_id":"other"}`)
-	conflict.PayloadDigest = operationDigest(conflict.Request)
-	err = store.transactSQLite(ctx, func(tx *sqliteTx) error { _, _, err := tx.PutOperation(conflict); return err })
-	if err == nil {
-		t.Fatal("same idempotency key with a different payload was accepted")
-	}
-	var status string
-	if err = store.db.QueryRowContext(ctx, `SELECT status FROM operations WHERE project_identity=? AND operation_id=?`, project, base.OperationID).Scan(&status); err != nil || status != "in_flight" {
-		t.Fatalf("operation status was not retained: %s %v", status, err)
 	}
 }

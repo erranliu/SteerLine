@@ -1,10 +1,10 @@
-param()
+param([string]$SteerRunnerExe = $env:STEERRUNNER_EXE)
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 # The controlled gate and the real worker use separate newly generated packages.
-& (Join-Path $PSScriptRoot 'test-debug-release.ps1')
+& (Join-Path $PSScriptRoot 'test-debug-release.ps1') -SteerRunnerExe $SteerRunnerExe
 if ($LASTEXITCODE -ne 0) { throw 'Independent controlled gate failed' }
-$release = & (Join-Path $PSScriptRoot 'new-debug-release.ps1') | ConvertFrom-Json
+$release = & (Join-Path $PSScriptRoot 'new-debug-release.ps1') -SteerRunnerExe $SteerRunnerExe | ConvertFrom-Json
 $savedRoot = $env:STEERLINE_DEBUG_SANDBOX_ROOT
 try {
     $env:STEERLINE_DEBUG_SANDBOX_ROOT = $release.root

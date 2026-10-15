@@ -1,0 +1,251 @@
+// Package taskrunner coordinates task candidates through SteerRunner's CLI.
+// It owns task eligibility and delivery; it never executes native operations.
+package taskrunner
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"path/filepath"
+	"sync"
+	"time"
+)
+
+type Store interface {
+	runnerbridge.Store
+	taskapp.Reader
+	RunnerCandidates(context.Context, string, string) ([]runnerbridge.Candidate, error)
+	ReserveRunnerCandidate(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
+	StopRunnerCandidate(context.Context, string, string, uint64) (runnerbridge.Candidate, error)
+	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
+	TaskResult(context.Context, string, string) (taskmodel.ResultReceipt, bool, error)
+	CommitRunnerTaskResult(context.Context, storageports.RunnerResult) (executionmodel.TaskDeliveryReceipt, error)
+}
+type Profile struct {
+	ID, Name string
+	Input    runnerclient.RunInput
+}
+type Service struct {
+	Project, Claimant, StateDir, DefaultProfile string
+	Profiles                                    map[string]Profile
+	Tasks                                       taskapp.Service
+	Store                                       Store
+	Bridge                                      *runnerbridge.Bridge
+	ResolveBase                                 func(context.Context, taskmodel.FixedWork, bool) (string, error)
+	Admit                                       func(context.Context) error
+	mu                                          sync.Mutex
+}
+type Start struct {
+	RequestID     string `json:"request_id"`
+	TaskID        string `json:"task_id"`
+	TaskVersion   uint64 `json:"task_version"`
+	GraphRevision uint64 `json:"graph_revision,omitempty"`
+	ProfileID     string `json:"profile_id"`
+	Candidate     bool   `json:"candidate"`
+	Explicit      bool   `json:"explicit"`
+}
+
+func digest(value any) string {
+	body, _ := json.Marshal(value)
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])
+}
+func id() string {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(raw[:])
+}
+func failure(code, message string) error { return &taskmodel.Error{Code: code, Message: message} }
+
+func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidate, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if input.RequestID == "" || input.TaskVersion == 0 || input.Explicit && input.GraphRevision == 0 || !filepath.IsAbs(s.StateDir) {
+		return runnerbridge.Candidate{}, failure("invalid_batch", "start requires fixed task version, request ID and absolute Runner state directory")
+	}
+	if old, err := s.Store.Candidate(ctx, s.Project, input.RequestID); err == nil {
+		if old.StartDigest != digest(input) {
+			return old, failure("idempotency_conflict", "start request belongs to different original input")
+		}
+		return old, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return runnerbridge.Candidate{}, err
+	}
+	if s.Admit != nil {
+		if err := s.Admit(ctx); err != nil {
+			return runnerbridge.Candidate{}, err
+		}
+	}
+	work, err := s.Tasks.Fixed(ctx, s.Project, input.TaskID, input.TaskVersion, input.Candidate)
+	if err != nil {
+		return runnerbridge.Candidate{}, err
+	}
+	if input.GraphRevision != 0 && input.GraphRevision != work.Authority.GraphRevision {
+		return runnerbridge.Candidate{}, failure("stale_version", "displayed task graph changed before reservation")
+	}
+	if !s.Tasks.CanExecuteType(work.Record.Type) {
+		return runnerbridge.Candidate{}, failure("task_not_ready", "task type cannot execute")
+	}
+	if err := s.Tasks.VerifyContractFiles(ctx, work.Contract); err != nil {
+		return runnerbridge.Candidate{}, err
+	}
+	profileID := input.ProfileID
+	if profileID == "" {
+		profileID = s.DefaultProfile
+	}
+	profile, ok := s.Profiles[profileID]
+	if !ok {
+		return runnerbridge.Candidate{}, failure("profile_not_found", "selected Runner profile is unavailable")
+	}
+	base, err := s.ResolveBase(ctx, work, input.Candidate)
+	if err != nil {
+		return runnerbridge.Candidate{}, err
+	}
+	if !taskmodel.ValidCommit(base) {
+		return runnerbridge.Candidate{}, failure("base_missing_delivery", "fixed code base is invalid")
+	}
+	var run runnerclient.RunInput
+	// Profile values are frozen per candidate; do not retain shared map/slice aliases.
+	raw, _ := json.Marshal(profile.Input)
+	if err := json.Unmarshal(raw, &run); err != nil {
+		return runnerbridge.Candidate{}, err
+	}
+	run.Title = work.Record.Title
+	run.Repository.URL, run.Repository.Remote, run.Repository.BaseBranch, run.Repository.BaseRevision = work.Contract.Repository, work.Contract.Remote, work.Contract.Branch, base
+	run.Publication.BaseBranch = work.Contract.Branch
+	doc := func(ref taskmodel.FileReference) runnerclient.Document {
+		return runnerclient.Document{Kind: "git", Path: ref.Path, Commit: ref.Commit}
+	}
+	run.Documents = runnerclient.Documents{Spec: doc(work.Contract.SpecRef), Plan: doc(work.Contract.PlanRef)}
+	seen := map[string]bool{work.Contract.SpecRef.Path: true, work.Contract.PlanRef.Path: true}
+	for _, ref := range append(append([]taskmodel.FileReference{}, work.Contract.CommonRefs...), work.Contract.AcceptanceRefs...) {
+		if !seen[ref.Path] {
+			run.Documents.References = append(run.Documents.References, doc(ref))
+			seen[ref.Path] = true
+		}
+	}
+	if run.Correlation == nil {
+		run.Correlation = map[string]string{}
+	}
+	run.Correlation["steerline_task_id"], run.Correlation["steerline_candidate_id"] = input.TaskID, input.RequestID
+	if run.Workflow.ID == "" {
+		run.Workflow = runnerclient.Workflow{ID: "development", Version: 1}
+	}
+	raw, err = json.Marshal(run)
+	if err != nil {
+		return runnerbridge.Candidate{}, err
+	}
+	claimant := s.Claimant
+	if input.Candidate {
+		claimant = work.Record.Claimant
+	}
+	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "sl-submit-" + input.RequestID, Input: raw}}
+	if err := s.Store.ReserveRunnerCandidate(ctx, work, c, input.Candidate); err != nil {
+		return runnerbridge.Candidate{}, err
+	}
+	return s.Store.Candidate(ctx, s.Project, c.ID)
+}
+func (s *Service) Reconcile(ctx context.Context) error {
+	rows, err := s.Store.RunnerCandidates(ctx, s.Project, "")
+	if err != nil {
+		return err
+	}
+	var failures []error
+	for _, c := range rows {
+		if c.SubmitState == "cancelled" || c.SubmitState == "rejected" && c.RunID == "" {
+			continue
+		}
+		if err := s.Bridge.Step(ctx, s.Project, c.ID); err != nil {
+			failures = append(failures, err)
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func (s *Service) RecoverInputs(ctx context.Context) error {
+	rows, err := s.Store.RunnerCandidates(ctx, s.Project, "")
+	if err != nil {
+		return err
+	}
+	for _, c := range rows {
+		if err := s.Bridge.RecoverInputs(ctx, s.Project, c.ID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) Stop(ctx context.Context, candidate string, revision uint64) (runnerbridge.Candidate, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.Store.StopRunnerCandidate(ctx, s.Project, candidate, revision)
+}
+func (s *Service) Dispatch(ctx context.Context) error {
+	ready, err := s.Tasks.Ready(ctx, s.Project)
+	if err != nil {
+		return err
+	}
+	for _, task := range ready {
+		if !s.Tasks.CanExecuteType(task.Type) {
+			continue
+		}
+		_, err := s.Start(ctx, Start{RequestID: id(), TaskID: task.TaskID, TaskVersion: task.Version})
+		return err
+	}
+	return nil
+}
+func (s *Service) Deliver(ctx context.Context, taskID, candidateID string, version uint64) (executionmodel.TaskDeliveryReceipt, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	graph, err := s.Store.TaskGraphSnapshot(ctx, s.Project)
+	if err != nil {
+		return executionmodel.TaskDeliveryReceipt{}, err
+	}
+	record, ok := graph.ByID[taskID]
+	if !ok {
+		return executionmodel.TaskDeliveryReceipt{}, failure("task_not_found", "task was not found")
+	}
+	if existing, ok := graph.Deliveries[taskID]; ok {
+		if record.Status != "closed" || existing.SelectedWorkflowRunID != candidateID {
+			return executionmodel.TaskDeliveryReceipt{}, failure("inconsistent_delivery", "task already has another delivery")
+		}
+		original, found, err := s.Store.TaskResult(ctx, s.Project, candidateID)
+		if err != nil {
+			return executionmodel.TaskDeliveryReceipt{}, err
+		}
+		if !found || original.Input.ExpectedTaskVersion != version {
+			return executionmodel.TaskDeliveryReceipt{}, failure("stale_version", "delivery retry differs from the original task version")
+		}
+		return executionmodel.TaskDeliveryReceipt{TaskID: taskID, WorkflowRunID: candidateID, TaskVersion: original.TaskVersion, GraphRevision: original.GraphRevision, Status: "closed", Delivery: existing}, nil
+	}
+	if record.Status == "discarded" {
+		return executionmodel.TaskDeliveryReceipt{}, failure("task_discarded", "discarded task cannot receive delivery")
+	}
+	if record.Status != "in_progress" || record.Version != version {
+		return executionmodel.TaskDeliveryReceipt{}, failure("stale_version", "task version changed")
+	}
+	c, err := s.Store.Candidate(ctx, s.Project, candidateID)
+	if err != nil {
+		return executionmodel.TaskDeliveryReceipt{}, err
+	}
+	if c.TaskID != taskID {
+		return executionmodel.TaskDeliveryReceipt{}, failure("immutable_task", "candidate belongs to another task")
+	}
+	c, started, err := s.Bridge.RefreshPR(ctx, s.Project, candidateID)
+	if err != nil {
+		return executionmodel.TaskDeliveryReceipt{}, err
+	}
+	return s.Store.CommitRunnerTaskResult(ctx, storageports.RunnerResult{Project: s.Project, TaskID: taskID, CandidateID: c.ID, TaskVersion: version, CandidateRevision: c.Revision, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, VerificationStarted: started})
+}

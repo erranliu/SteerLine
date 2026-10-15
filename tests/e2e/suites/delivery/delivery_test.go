@@ -15,7 +15,7 @@ func TestBasicDelivery(t *testing.T) {
 	p.StartService()
 	p.Claim("a")
 	open := p.WaitPhase("waiting_pr_merge")
-	p.AssertFixedNativeLaunch(open)
+	p.AssertRunnerBinding(open)
 	p.Record("open", open)
 	if open.Helper.Dispatches != 3 || open.Helper.Sessions != 1 {
 		t.Fatal("expected one original execution")
@@ -24,7 +24,7 @@ func TestBasicDelivery(t *testing.T) {
 	done := p.WaitPhase("completed")
 	p.Record("completed", done)
 	for _, task := range done.Page.Tasks {
-		if task.TaskID == p.Tasks["a"].ID && (task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != open.Domain.WorkflowRuns[0].WorkflowRunID) {
+		if task.TaskID == p.Tasks["a"].ID && (task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != open.Runner.Candidates[0].ID) {
 			t.Fatal("delivery missing")
 		}
 		if task.TaskID == p.Tasks["b"].ID && (!task.DependencyReady || len(task.WorkflowRuns) != 0) {

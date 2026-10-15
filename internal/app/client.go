@@ -6,20 +6,19 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/product/query"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 func OpenClient(ctx context.Context, path string) (*productclient.Client, error) {
@@ -37,10 +36,10 @@ func openProjectClient(ctx context.Context, ref productapi.ProjectRef) (*product
 // openServiceProjectClient binds the configured service's own task-discard
 // command port into its local HTTP product client. Other clients retain the
 // ordinary repository-locking TaskCommands writer.
-func openServiceProjectClient(ctx context.Context, config Config, service *execution.Service) (*productclient.Client, error) {
+func openServiceProjectClient(ctx context.Context, config Config, service *taskrunner.Actor) (*productclient.Client, error) {
 	return openServiceProjectClientWithCommands(ctx, config, service, nil, nil)
 }
-func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *execution.Service, commands func(context.Context, bool) (productclient.TaskCommands, error), store *sqlite.SQLiteStore) (*productclient.Client, error) {
+func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *taskrunner.Actor, commands func(context.Context, bool) (productclient.TaskCommands, error), store *sqlite.SQLiteStore) (*productclient.Client, error) {
 	absolute, err := filepath.Abs(config.ConfigPath)
 	if err != nil {
 		return nil, err
@@ -56,7 +55,7 @@ func openServiceProjectClientWithCommands(ctx context.Context, config Config, se
 		if err != nil {
 			return productclient.Resources{}, err
 		}
-		resources.Discard = &clientDiscardCommands{service: service, config: bound}
+		resources.Discard = &clientDiscardCommands{service: service}
 		if store != nil {
 			resources.OpenReader = func(ctx context.Context) (productclient.Reader, error) {
 				if err := ctx.Err(); err != nil {
@@ -169,20 +168,27 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 			if profileID == "" {
 				return productapi.ControlPayload{}, errors.New("start_task requires -execution-profile")
 			}
-			_, p, err := c.ResolveExecutionProfile(profileID, "")
+			p, err := c.RunnerExecution.Profile(profileID, "")
 			if err != nil {
 				return productapi.ControlPayload{}, err
 			}
-			return productapi.ControlPayload{TaskID: id, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest(c.ExecutionDirectory)}, nil
+			reader, err := OpenNativeTaskReader(ctx, &c)
+			if err != nil {
+				return productapi.ControlPayload{}, err
+			}
+			defer reader.Close()
+			graph, err := reader.TaskGraphSnapshot(ctx, c.Identity())
+			if err != nil {
+				return productapi.ControlPayload{}, err
+			}
+			task, ok := graph.ByID[id]
+			if !ok {
+				return productapi.ControlPayload{}, taskError("task_not_found", "task was not found")
+			}
+			return productapi.ControlPayload{TaskID: id, ExpectedTaskVersion: task.Version, ExpectedGraphRevision: graph.Authority.GraphRevision, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest()}, nil
 		},
 		InspectRecovery: func(ctx context.Context, id string) (productapi.RecoveryInspection, error) {
-			result, err := execution.InspectRecovery(ctx, c.executionConfig(), c.runtimeDependencies(), id, func(ctx context.Context, _ execution.Config) (*reconstruction.Runtime, error) {
-				return LoadDatabaseRuntime(c)
-			})
-			return recoveryInspection(result), err
-		},
-		OpenNativeSession: func(ctx context.Context, target productapi.NativeSessionTarget) error {
-			return openNativeSession(ctx, c, target)
+			return inspectRunnerRecovery(ctx, c, id)
 		},
 	}, nil
 }
@@ -260,16 +266,13 @@ func applicationProjectObservation(ctx context.Context, config Config, snapshot 
 	if sampledAt.IsZero() {
 		sampledAt = time.Now().UTC()
 	}
-	if snapshot.ExecutionError != nil {
-		return observeHostRuntime(ctx, config, nil, snapshot.ExecutionError, sampledAt)
+	if snapshot.RunnerError != nil {
+		return observeHostRuntime(ctx, config, nil, snapshot.RunnerError, sampledAt)
 	}
-	if snapshot.ExecutionState.Checkpoint == nil {
+	if snapshot.RunnerState.Checkpoint == nil {
 		return observeHostRuntime(ctx, config, nil, nil, sampledAt)
 	}
-	runtimeState, err := reconstruction.BuildFromStorage(snapshot.ExecutionState, *snapshot.ExecutionState.Checkpoint)
-	if err != nil {
-		return observeHostRuntime(ctx, config, nil, err, sampledAt)
-	}
+	runtimeState := taskrunner.Project(snapshot.RunnerState, *snapshot.RunnerState.Checkpoint)
 	return observeHostRuntime(ctx, config, &runtimeState, nil, sampledAt)
 }
 
@@ -309,7 +312,27 @@ func (r *clientReader) Activity(ctx context.Context, run, execution, attempt str
 func (r *clientReader) Command(ctx context.Context, id string) (productapi.CommandReceipt, error) {
 	record, err := r.store.Command(ctx, r.project, id)
 	if errors.Is(err, storageports.ErrNotFound) {
+		hc, configErr := hostRuntimeConfig(ctx, r.config)
+		if configErr != nil {
+			return productapi.CommandReceipt{}, configErr
+		}
+		if request, readErr := steerline.ReadControlRequest(hc, id); readErr == nil {
+			payload, decodeErr := taskrunner.DecodeControlPayload(*request)
+			if decodeErr == nil && payload.CallerAnswer != nil {
+				return runnerAnswerReceipt(ctx, r.config, *request, nil)
+			}
+		}
 		return productapi.CommandReceipt{}, errors.Join(productapi.ErrRecordNotFound, err)
+	}
+	if err == nil && record.Kind == "runner_control" {
+		var request productapi.ControlRequest
+		if json.Unmarshal(record.Payload, &request) != nil {
+			return productapi.CommandReceipt{}, errors.New("original caller control is invalid")
+		}
+		payload, decodeErr := taskrunner.DecodeControlPayload(request)
+		if decodeErr == nil && payload.CallerAnswer != nil {
+			return runnerAnswerReceipt(ctx, r.config, request, &record)
+		}
 	}
 	return query.CommandReceipt(record), err
 }
@@ -386,84 +409,6 @@ func (r clientControl) Stop(ctx context.Context, by string, timeout time.Duratio
 	return steerline.StopService(ctx, hostConfig, by, timeout)
 }
 
-type clientDecision struct{ config Config }
-
-func (r clientDecision) Eligibility(ctx context.Context, run *productapi.CandidateSummary) error {
-	return execution.DecisionReplyEligibility(ctx, r.config.executionConfig(), runtimeDecisionFacts(run))
-}
-
-func (r clientDecision) Normalize(ctx context.Context, in productapi.DecisionInput) (productapi.DecisionInput, error) {
-	snapshot, err := readConfiguredRuntime(ctx, r.config)
-	if err != nil {
-		return in, err
-	}
-	if snapshot == nil {
-		return in, errors.New("no runtime snapshot")
-	}
-	run := runtimeRunByID(snapshot, in.Answer.RunID)
-	if run == nil || run.Decision == nil || run.Decision.ID != in.Answer.DecisionID {
-		return in, errors.New("decision is missing from its original run")
-	}
-	return normalizeDecisionInput(in, &run.Decision.Request)
-}
-
-func normalizeDecisionInput(in productapi.DecisionInput, request *executionmodel.DecisionRequest) (productapi.DecisionInput, error) {
-	body, err := json.Marshal(in.Answer)
-	if err != nil {
-		return in, err
-	}
-	var answer executionmodel.DecisionAnswer
-	if err = json.Unmarshal(body, &answer); err != nil {
-		return in, err
-	}
-	answer.OptionID = strings.TrimSpace(answer.OptionID)
-	if len(executionmodel.DecisionQuestions(request)) > 0 {
-		if err = execution.NormalizeNativeDecisionAnswer(request, &answer); err != nil {
-			return in, err
-		}
-	}
-	if err = executionmodel.ValidateDecisionAnswer(request, &answer); err != nil {
-		return in, err
-	}
-	body, err = json.Marshal(answer)
-	if err != nil {
-		return in, err
-	}
-	err = json.Unmarshal(body, &in.Answer)
-	return in, err
-}
-
-func (r clientDecision) Submit(ctx context.Context, in productapi.DecisionInput) (productapi.CommandReceipt, bool, error) {
-	config, store, err := openDecisionStore(ctx, r.config)
-	if err != nil {
-		return productapi.CommandReceipt{}, false, err
-	}
-	defer store.Close()
-	a := in.Answer
-	record, submitted, err := submitAnswerDecisionWithStoreBound(ctx, config, store, a.RunID, a.DecisionID, a.OptionID, a.Note, in.RequestedBy,
-		a.ExpectedDecisionVersion, a.ExpectedRunRevision, a.ServiceInstanceID, in.CommandID,
-		answerBinding{AttemptID: a.SourceAttemptID, RecoveryVersion: a.ExpectedRecoveryVersion}, a.Answers)
-	return query.CommandReceipt(record), submitted, err
-}
-
-func (r clientDecision) Answer(ctx context.Context, in productapi.AnswerInput) (productapi.CommandReceipt, bool, error) {
-	config, store, err := openDecisionStore(ctx, r.config)
-	if err != nil {
-		return productapi.CommandReceipt{}, false, err
-	}
-	defer store.Close()
-	record, submitted, err := submitDecisionAnswerWithStore(ctx, config, store, AnswerOptions{RunID: in.RunID, DecisionID: in.DecisionID, Option: in.Option, Note: in.Note, By: in.RequestedBy, ExpectedVersion: in.ExpectedVersion, CommandID: in.CommandID})
-	return query.CommandReceipt(record), submitted, err
-}
-
-func openDecisionStore(ctx context.Context, config Config) (Config, *sqlite.SQLiteStore, error) {
-	store, err := OpenNativeTaskCommandStore(ctx, &config)
-	if err != nil {
-		return config, nil, err
-	}
-	return config, store, nil
-}
-
 func productObservation(value steerline.ObservationSnapshot) productapi.ObservationSnapshot {
 	return productapi.ObservationSnapshot{Page: productServicePage(value.Runtime), State: value.State, SampledAt: value.SampledAt, HeartbeatAge: value.HeartbeatAge, FreshnessLimit: value.FreshnessLimit, ClockSkew: value.ClockSkew, Error: value.Error}
 }
@@ -518,8 +463,8 @@ func decisionAvailability(ctx context.Context, c Config, run *reconstruction.Run
 	if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
 		return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
 	}
-	if err := execution.DecisionReplyEligibility(ctx, c.executionConfig(), run); err != nil {
-		return err.Error()
+	if run.Decision.Status != "pending" {
+		return "Runner 当前未允许回答或恢复；刷新原任务状态"
 	}
 	if !connection.CanControl || connection.Snapshot.Runtime == nil {
 		return "服务离线或未就绪；答案不会写入，恢复服务后再通过同一命令提交"
@@ -532,67 +477,16 @@ func decisionAvailability(ctx context.Context, c Config, run *reconstruction.Run
 	return "服务未声明 answer_decision 能力"
 }
 
-func runtimeDecisionFacts(run *productapi.CandidateSummary) *reconstruction.RunView {
-	if run == nil {
-		return nil
-	}
-	v := &reconstruction.RunView{TaskID: run.TaskID, RunID: run.RunID, WorkflowVersion: run.WorkflowVersion, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, TaskStatus: run.TaskStatus, RecoveryRequired: run.RecoveryRequired, RecoveryState: run.RecoveryState}
-	if run.EnvironmentBlocker != nil {
-		v.EnvironmentBlocker = &executionmodel.WorkerHostBlocker{ID: run.EnvironmentBlocker.ID, TurnID: run.EnvironmentBlocker.TurnID, Version: run.EnvironmentBlocker.Version}
-	}
-	if run.Decision != nil {
-		d := run.Decision.Request
-		request := executionmodel.DecisionRequest{InteractionKind: d.InteractionKind, BlocksProgress: d.BlocksProgress, Question: d.Question, Context: d.Context, Recommended: d.Recommended, AllowFreeText: d.AllowFreeText}
-		for _, o := range d.Options {
-			request.Options = append(request.Options, executionbackend.DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
-		}
-		if d.HasNativeQuestions {
-			request.QuestionRoute = &executionbackend.ImplementationDataEnvelope{}
-		}
-		v.Decision = &executionmodel.DecisionState{ID: run.Decision.ID, AttemptID: run.Decision.AttemptID, Version: run.Decision.Version, Status: run.Decision.Status, Request: request}
-	}
-	return v
-}
-
-func recoveryInspection(r execution.RecoveryInspection) productapi.RecoveryInspection {
-	v := productapi.RecoveryInspection{Version: r.Version, SampledAt: r.SampledAt, RunID: r.RunID, RunRevision: r.RunRevision, ServiceInstanceID: r.ServiceInstanceID, ServiceStatus: r.ServiceStatus, DispatchMode: r.DispatchMode, DispatchPaused: r.DispatchPaused, SlotOccupied: r.SlotOccupied, TaskID: r.TaskID, DecisionID: r.DecisionID, DecisionStatus: r.DecisionStatus, ExecutionStatus: r.ExecutionStatus, WorkflowStage: r.WorkflowStage, WorkflowStatus: r.WorkflowStatus, Backend: r.Backend, Protocol: r.Protocol, Target: productapi.TargetSummary{ID: r.Target.ID}, ProcessCheck: r.ProcessCheck, WorkspaceError: r.WorkspaceError, ClaimError: r.ClaimError, PRError: r.PRError, ConcurrentActionReason: r.ConcurrentActionReason}
-	v.SessionCheck, v.ContinuationCheck = r.SessionCheck, r.ContinuationCheck
-	if r.Workspace != nil {
-		w := r.Workspace
-		v.Workspace = &productapi.WorkspaceSummary{InspectionScope: w.InspectionScope, Worktree: w.Worktree, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.CheckedAt}
-	}
-	if r.NativeClaim != nil {
-		v.NativeClaim = ptr(query.TaskSummary(*r.NativeClaim))
-	}
-	if r.PR != nil {
-		v.PR = &productapi.RecoveryPRSummary{URL: r.PR.URL, State: r.PR.State, Repository: r.PR.Repository, BaseBranch: r.PR.BaseBranch}
-	}
-	for _, b := range r.Blockers {
-		v.Blockers = append(v.Blockers, productapi.ControlBlocker{RequestID: b.RequestID, Action: b.Action, TaskID: b.TaskID, RunID: b.RunID, AttemptID: b.AttemptID, DecisionID: b.DecisionID, Reason: b.Reason})
-	}
-	return v
-}
-
-func ptr[T any](v T) *T { return &v }
-
 // projectPresentation exposes only accepted non-secret display fields and fixed
 // profile digests. Configuration compilation stays with the original owner.
 func projectPresentation(c Config) productapi.ProjectPresentation {
 	result := productapi.ProjectPresentation{NativeWorkflow: c.WorkflowProtocol == executionmodel.Version, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority, WorkflowProtocol: c.WorkflowProtocol, ShutdownGrace: c.ShutdownGrace, DefaultProfileID: c.DefaultProfileID()}
-	for _, p := range c.AvailableExecutionProfiles() {
-		reason := p.StaticUnavailableReason(c.ExecutionDirectory)
-		if reason == "" {
-			selected, _, err := c.ResolveExecutionProfile(p.ID, p.Digest(c.ExecutionDirectory))
-			if err != nil {
-				reason = err.Error()
-			} else if capabilityErr := execution.WorkerFlowCapabilityError(selected, c.ExecutionDirectory, c.ProcessHost); capabilityErr != nil {
-				reason = capabilityErr.Error()
-			}
+	for _, p := range c.RunnerExecution.Profiles {
+		host := p.Execution.Target.Environment
+		if host == "" {
+			host = p.Execution.Target.Kind
 		}
-		fixed := executionmodel.FixedExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Digest: p.Digest(c.ExecutionDirectory), AcceptedConfigVersion: p.AcceptedConfigVersion, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ImplementationDisplay: append([]string(nil), p.ImplementationDisplay...)}
-		summary := query.Profile(fixed)
-		summary.UnavailableReason = reason
-		result.Profiles = append(result.Profiles, summary)
+		result.Profiles = append(result.Profiles, productapi.ExecutionProfileSummary{ID: p.ID, Name: p.Name, Host: host, Agent: "codex", Digest: p.Digest(), AcceptedConfigVersion: c.LoadedConfigDigest(), ImplementationDisplay: []string{p.Execution.Adapter, host, p.Workflow.ID}, Details: []string{"SteerRunner " + c.RunnerExecution.Runner.Version, "CLI: " + runnerclient.Protocol, "工作流: " + p.Workflow.ID}})
 	}
 	return result
 }

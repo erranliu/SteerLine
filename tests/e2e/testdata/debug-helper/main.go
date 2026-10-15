@@ -9,7 +9,11 @@ import (
 
 func main() {
 	var err error
-	if len(os.Args) > 1 && os.Args[1] == "debug" {
+	if len(os.Args) > 1 && os.Args[1] == "sandbox-probe" {
+		err = driver.NativeSandboxProbe(os.Args[2:])
+	} else if len(os.Args) > 1 && os.Args[1] == "runner-cleanup" {
+		err = driver.MainRunnerCleanup(os.Args[2:])
+	} else if len(os.Args) > 1 && os.Args[1] == "debug" {
 		err = driver.DebugReleaseMain(os.Args[2:])
 	} else {
 		err = controlled.Main(os.Args[1:])

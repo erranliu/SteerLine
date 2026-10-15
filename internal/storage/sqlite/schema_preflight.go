@@ -42,7 +42,7 @@ func validateDatabaseSchema(ctx context.Context, db schemaQuery) error {
 		return nativeErr("unsupported_schema", fmt.Sprintf("unsupported SQLite schema %d; only schema %d is accepted", version, domainSchemaVersion))
 	}
 	expected := map[string]string{}
-	definitions := append(append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...), conversationSchema...)
+	definitions := append(append([]string{}, taskServiceSchema...), nativeTaskSchema...)
 	for _, stmt := range definitions {
 		fields := strings.Fields(stmt)
 		if len(fields) < 3 || fields[0] != "CREATE" {

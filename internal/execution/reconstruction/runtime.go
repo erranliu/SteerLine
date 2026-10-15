@@ -1,41 +1,8 @@
 package reconstruction
 
 import (
-	"encoding/json"
-	"errors"
-	"sort"
-
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
-
-// Snapshot is execution's private reconstruction input. Persistence exposes
-// task graph and execution records through separate consumer ports.
-type Snapshot struct {
-	ProjectIdentity string
-	Tasks           []taskmodel.TaskRecord
-	WorkflowRuns    []executionmodel.WorkflowRunRecord
-	Executions      []executionmodel.ExecutionRecord
-	Attempts        []executionmodel.StepAttemptRecord
-	Decisions       []executionmodel.DecisionRecord
-	Operations      []executionmodel.OperationRecord
-	Deliveries      []executionmodel.TaskDeliveryRecord
-}
-
-func SnapshotFromStorage(input storageports.ExecutionStateSnapshot) Snapshot {
-	deliveries := make([]executionmodel.TaskDeliveryRecord, 0, len(input.Graph.Deliveries))
-	keys := make([]string, 0, len(input.Graph.Deliveries))
-	for id := range input.Graph.Deliveries {
-		keys = append(keys, id)
-	}
-	sort.Strings(keys)
-	for _, id := range keys {
-		deliveries = append(deliveries, input.Graph.Deliveries[id])
-	}
-	r := input.Records
-	return Snapshot{ProjectIdentity: r.ProjectIdentity, Tasks: input.Graph.Tasks, WorkflowRuns: r.WorkflowRuns, Executions: r.Executions, Attempts: r.Attempts, Decisions: r.Decisions, Operations: r.Operations, Deliveries: deliveries}
-}
 
 // Metadata combines service-owned checkpoint fields with the independently read task authority.
 // It contains no configuration, database handle, actor or previously projected Run.
@@ -54,7 +21,7 @@ func MetadataOf(v Runtime) Metadata {
 
 func Checkpoint(v Runtime) storageports.ServiceCheckpoint {
 	var reserved *string
-	if unclaimedReservation(v) {
+	if v.SlotOccupied && v.CurrentTask != nil {
 		reserved = v.CurrentTask
 	}
 	checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Revision: v.Revision,
@@ -93,123 +60,4 @@ func copyValue[T any](value *T) *T {
 	}
 	copy := *value
 	return &copy
-}
-
-// CloneDomain isolates nested records and retains the control revision stored outside JSON payloads.
-func CloneSnapshot(snapshot Snapshot) (Snapshot, error) {
-	var owned Snapshot
-	data, err := json.Marshal(snapshot)
-	if err == nil {
-		err = json.Unmarshal(data, &owned)
-	}
-	if err == nil {
-		for i := range snapshot.WorkflowRuns {
-			owned.WorkflowRuns[i].ControlRevision = snapshot.WorkflowRuns[i].ControlRevision
-		}
-	}
-	return owned, err
-}
-
-// Build creates a fresh, independently owned Runtime from one already-collected snapshot.
-// Existing client views cannot fill missing records or supply execution identity.
-func Build(snapshot Snapshot, metadata Metadata) (Runtime, error) {
-	owned, err := CloneSnapshot(snapshot)
-	if err != nil {
-		return Runtime{}, err
-	}
-	data, err := json.Marshal(metadata.Checkpoint)
-	if err != nil {
-		return Runtime{}, err
-	}
-	var checkpoint storageports.ServiceCheckpoint
-	if err := json.Unmarshal(data, &checkpoint); err != nil {
-		return Runtime{}, err
-	}
-	view := RuntimeFromCheckpoint(checkpoint, metadata.DispatchMode, metadata.DispatchPaused, metadata.AuthorityRevision)
-	view.Tasks, view.WorkflowRuns, view.Executions = owned.Tasks, owned.WorkflowRuns, owned.Executions
-	view.Attempts, view.Decisions, view.Operations, view.Deliveries = owned.Attempts, owned.Decisions, owned.Operations, owned.Deliveries
-	view.Runs, err = Runs(owned)
-	if err != nil {
-		return Runtime{}, err
-	}
-	view.SlotOccupied, view.CurrentTask = Slot(view)
-	return view, nil
-}
-
-// BuildFromStorage reconstructs service state from execution-owned reads. It
-// never goes through product query pages or uses a prior in-memory Runtime.
-func BuildFromStorage(snapshot storageports.ExecutionStateSnapshot, checkpoint storageports.ServiceCheckpoint) (Runtime, error) {
-	if snapshot.Records.ProjectIdentity == "" || snapshot.Graph.Authority.ProjectIdentity != snapshot.Records.ProjectIdentity || checkpoint.Repository.Identity != snapshot.Records.ProjectIdentity {
-		return Runtime{}, errors.New("execution snapshot, task authority and checkpoint identities differ")
-	}
-	return Build(SnapshotFromStorage(snapshot), Metadata{Checkpoint: checkpoint, DispatchMode: snapshot.Graph.Authority.DispatchMode, DispatchPaused: snapshot.Graph.Authority.DispatchPaused, AuthorityRevision: snapshot.Graph.Authority.AuthorityVersion})
-}
-
-// Runs computes fresh projections without copying an actor's entire working snapshot.
-// The center alone decides whether to apply these values to existing private Run pointers.
-func Runs(snapshot Snapshot) ([]*RunView, error) {
-	runs := make([]*RunView, 0, len(snapshot.WorkflowRuns))
-	for i := range snapshot.WorkflowRuns {
-		workflow := &snapshot.WorkflowRuns[i]
-		var task taskmodel.TaskRecord
-		found := false
-		for _, record := range snapshot.Tasks {
-			if record.TaskID == workflow.TaskID {
-				task, found = record, true
-				break
-			}
-		}
-		if !found {
-			return nil, errors.New("workflow has no task record")
-		}
-		if task.Status == "discarded" && workflow.Status == "abandoned" {
-			continue
-		}
-		execution := LatestExecution(snapshot.Executions, workflow.WorkflowRunID)
-		if workflow.SelectedResult != "" {
-			execution = nil
-			for i := range snapshot.Executions {
-				e := &snapshot.Executions[i]
-				if e.WorkflowRunID == workflow.WorkflowRunID && e.ExecutionID == workflow.SelectedResult {
-					execution = e
-					break
-				}
-			}
-		}
-		if execution == nil {
-			return nil, errors.New("workflow has no execution record")
-		}
-		view, err := Run(task, *workflow, *execution, snapshot.Attempts, snapshot.Decisions, snapshot.Deliveries)
-		if err != nil {
-			return nil, err
-		}
-		runs = append(runs, &view)
-	}
-	return runs, nil
-}
-
-func Slot(v Runtime) (bool, *string) {
-	occupied := v.Control.Operation != nil || len(v.Control.Blockers) != 0
-	var tasks []string
-	for _, run := range v.Runs {
-		waitingInput := run.TaskStatus != "closed" && run.TaskStatus != "discarded" && run.WorkflowStatus == "waiting_input"
-		if run.ExecutionStatus == "unknown" || run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || waitingInput {
-			occupied = true
-			tasks = append(tasks, run.TaskID)
-		}
-	}
-	current := v.CurrentTask
-	if unclaimedReservation(v) {
-		occupied = true
-	} else {
-		current = nil
-		if len(tasks) == 1 {
-			current = ptr(tasks[0])
-		}
-	}
-	return occupied, current
-}
-
-func unclaimedReservation(v Runtime) bool {
-	return v.SlotOccupied && v.CurrentTask != nil && LatestWorkflow(v.WorkflowRuns, *v.CurrentTask) == nil
 }

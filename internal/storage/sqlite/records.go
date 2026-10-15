@@ -3,12 +3,10 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	queryrules "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
@@ -32,19 +30,6 @@ func (s Reader) DatabaseVersion(ctx context.Context) (string, uint64, error) {
 	return id, revision, err
 }
 
-func (s Reader) Query(ctx context.Context, project string) (storageports.ExecutionSnapshot, error) {
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return storageports.ExecutionSnapshot{}, err
-	}
-	defer tx.Rollback()
-	snapshot, err := QuerySnapshot(ctx, tx, project)
-	if err != nil {
-		return snapshot, err
-	}
-	return snapshot, tx.Commit()
-}
-
 type QueryContext interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
@@ -66,92 +51,6 @@ func ReadCommandByKey(ctx context.Context, query CommandRowQuerier, project, key
 	command.CreatedAt, _ = time.Parse(time.RFC3339Nano, created)
 	command.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 	return command, true, nil
-}
-
-func QuerySnapshot(ctx context.Context, db QueryContext, project string) (storageports.ExecutionSnapshot, error) {
-	out := storageports.ExecutionSnapshot{ProjectIdentity: project, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Operations: []executionmodel.OperationRecord{}}
-	queries := []struct {
-		sql    string
-		decode func([]byte) error
-	}{
-		{`SELECT payload FROM executions WHERE project_identity=? ORDER BY execution_id`, func(b []byte) error {
-			var v executionmodel.ExecutionRecord
-			if err := json.Unmarshal(b, &v); err != nil {
-				return err
-			}
-			out.Executions = append(out.Executions, v)
-			return nil
-		}},
-		{`SELECT payload FROM step_attempts WHERE project_identity=? ORDER BY execution_id,step_id,attempt_number`, func(b []byte) error {
-			var v executionmodel.StepAttemptRecord
-			if err := json.Unmarshal(b, &v); err != nil {
-				return err
-			}
-			out.Attempts = append(out.Attempts, v)
-			return nil
-		}},
-		{`SELECT payload FROM decisions WHERE project_identity=? ORDER BY decision_id`, func(b []byte) error {
-			var v executionmodel.DecisionRecord
-			if err := json.Unmarshal(b, &v); err != nil {
-				return err
-			}
-			out.Decisions = append(out.Decisions, v)
-			return nil
-		}},
-		{`SELECT payload FROM operations WHERE project_identity=? ORDER BY operation_id`, func(b []byte) error {
-			var v executionmodel.OperationRecord
-			if err := json.Unmarshal(b, &v); err != nil {
-				return err
-			}
-			out.Operations = append(out.Operations, v)
-			return nil
-		}},
-	}
-	for _, q := range queries {
-		rows, err := db.QueryContext(ctx, q.sql, project)
-		if err != nil {
-			return out, err
-		}
-		for rows.Next() {
-			var b []byte
-			if err = rows.Scan(&b); err != nil {
-				rows.Close()
-				return out, err
-			}
-			if err = q.decode(b); err != nil {
-				rows.Close()
-				return out, err
-			}
-		}
-		err = rows.Err()
-		rows.Close()
-		if err != nil {
-			return out, err
-		}
-	}
-	rows, err := db.QueryContext(ctx, `SELECT payload,control_revision FROM workflow_runs WHERE project_identity=? ORDER BY workflow_run_id`, project)
-	if err != nil {
-		return out, err
-	}
-	for rows.Next() {
-		var b []byte
-		var record executionmodel.WorkflowRunRecord
-		if err = rows.Scan(&b, &record.ControlRevision); err != nil {
-			rows.Close()
-			return out, err
-		}
-		if err = json.Unmarshal(b, &record); err != nil {
-			rows.Close()
-			return out, err
-		}
-		out.WorkflowRuns = append(out.WorkflowRuns, record)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return out, err
-	}
-	return out, nil
 }
 
 // Events reads bounded metadata and materializes only the inline bodies that

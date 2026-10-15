@@ -30,7 +30,7 @@ func TestTM01StoragePortDependencies(t *testing.T) {
 				t.Fatal(err)
 			}
 			allowed := false
-			for _, owner := range []string{"task/model", "execution/model", "execution/backend", "product/api"} {
+			for _, owner := range []string{"runnercontract", "runnerstate", "task/model", "execution/model", "execution/backend", "product/api"} {
 				if path == "github.com/erranliu/SteerLine/internal/"+owner {
 					allowed = true
 				}
