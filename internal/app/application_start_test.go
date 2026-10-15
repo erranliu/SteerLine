@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
@@ -135,5 +136,38 @@ func TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost(t *testing.T)
 	require(t, localservice.Write(backend.dir, "shutdown.json", map[string]string{"invalid": "result"}))
 	if err := verifyBackendStop(ctx, home, backend, &id); err == nil {
 		t.Fatal("corrupt shutdown became success")
+	}
+}
+
+func TestUnifiedStartupDefaultOpenUsesInstalledWeb(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("STEERLINE_HOME", home)
+	backend, web := components(home)
+	b := startupEndpoint(t, home, backend, nil)
+	startupEndpoint(t, home, web, b)
+	executable, err := os.Executable()
+	require(t, err)
+	data, err := os.ReadFile(executable)
+	require(t, err)
+	require(t, os.MkdirAll(filepath.Dir(web.exe), 0700))
+	require(t, os.WriteFile(web.exe, data, 0700))
+	record := filepath.Join(home, "open-result.json")
+	t.Setenv("STEERLINE_TEST_OPENER_RECORD", record)
+	_, err = StartApplication(context.Background(), false)
+	require(t, err)
+	var fact struct {
+		Executable, Home, Cwd string
+		Args                  []string
+	}
+	raw, err := os.ReadFile(record)
+	require(t, err)
+	require(t, json.Unmarshal(raw, &fact))
+	if !strings.EqualFold(fact.Executable, web.exe) || fact.Home != home || fact.Cwd != home || len(fact.Args) != 1 || fact.Args[0] != "open" {
+		t.Fatalf("incorrect opener target: %+v", fact)
+	}
+	t.Setenv("STEERLINE_TEST_OPENER_FAIL", "1")
+	_, err = StartApplication(context.Background(), false)
+	if err == nil || !strings.Contains(err.Error(), "browser opening failed") || !localservice.Alive(b.Identity) {
+		t.Fatal("opener failure changed resident ownership", err)
 	}
 }

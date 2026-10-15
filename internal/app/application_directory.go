@@ -271,7 +271,7 @@ func (d *ApplicationDirectory) Connect(ctx context.Context, id string) (applicat
 		if e.view.Conflict != "" {
 			return nil, &httpclient.ClientError{Status: 409, Code: "project_conflict", Reason: e.view.Conflict}
 		}
-		if e.port != nil {
+		if e.port != nil && (e.view.RuntimeState == "ready" || e.view.RuntimeState == "stopping") {
 			return e.port, nil
 		}
 		return nil, &httpclient.ClientError{Status: 503, Code: "project_unavailable", Reason: fmt.Sprintf("%s: %s", e.view.RuntimeState, e.view.Diagnostic)}

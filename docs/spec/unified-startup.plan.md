@@ -1,6 +1,6 @@
 # Plan：统一启动与多项目共进程宿主
 
-范围归 [Spec](unified-startup.spec.md)，结果归[专属验收](../acceptance/unified-startup.md)。2026-10-15 用户只要求生成文档；本 Plan 不启动实现、进程、安装或验收，不纳入 roadmap。
+范围归 [Spec](unified-startup.spec.md)，结果归[专属验收](../acceptance/unified-startup.md)。2026-10-15 用户已授权实施；按普通开发完成，不纳入 roadmap。实现前再次 rebase 到 `60dae583`，保留 #324 TUI 退役成果。
 
 初稿调查基线为 `db92f5c46bd90a45b1cfa2a6e94236113b77803a`。按用户要求于 2026-10-15 rebase 并重新审计，明确采用主干 `317714e6e42be0f902a97b1a5577e325970d2f75` 为当前调查基线，已包含 #321/#322 构建/ACL 修复及 #323 Web 查询优化；保留后者代码与验收边界。已完整读取 `docs/spec/SpecGuide.md`，该文件最后修改 commit 为 `94e704300485b82d54e44991148074841ed66019`，本次 SHA-256 为 `85b656090674e1f953320b6be62d17b6888248ef7eec5fe044b9d3f408bfe4de`；同时读取 [worker-lifecycle](../product-design/worker-lifecycle.md)、[停服恢复契约](worker-stop-recovery.spec.md)、[分级入口与扩展约定](../../tests/e2e/README.md)。普通开发依用户授权直接开展，不要求 roadmap 编号或执行聊天。
 
@@ -41,7 +41,7 @@ CLI 现状另有明确传输缺口：`task_commands.go` 已通过 product.Client
 6. **更新 Web 与启动器。** Web 自动连接 application/v2 并核验宿主换代/项目实例；目录能显示零项目、全失败、部分启动与重连状态。start.bat/stop.bat 固定安装 home、正确转义中文/空格/cwd、保留失败窗口和退出码；不要求用户分步启动。低层 Web CLI 保留独立重启。安装清理仅删除归属明确的旧启动器，未知用户文件保留；不现场迁移/重置数据，不为安装 home 设置私有目录 ACL。
 7. **先补齐唯一生成器与驱动能力。** 调试生成器默认输出双 exe 及统一宿主拓扑，WebProjects 仅表示项目数量；未指定地址时分配空闲端口并固定，产品启动不漂移。包级 --simulate 保留唯一冻结入口，产品 start 不承担方案选择。复用正式 install/launchers 和 start --no-open/status/stop，核验两个运行中安装目标分别拒绝覆盖；按 exe 路径区分产品、helper 与 worker，不再为每项目派生产品进程。同步 test-web-smoke、test-debug-release、debug driver、testenv、Web 的 project-switch/smoke/query-cache 及公共 helper，禁止 run/stop-service 备用链。纯 Go 的既有隔离 testenv 可直接使用低层 serve 宿主及同一停止能力，不为组件验证强行构建 Web/引入 Node。
 
-   新增稳定 controlled wrapper `scripts/test-unified-startup.ps1 -Package <新包> -Simulate [-Scenario unified-startup|query-cache]`，默认 unified-startup；未显式给 Simulate 时拒绝，不隐式选择模式，包本体的默认 live 保留。参数只映射既定文件。wrapper 只检查包边界、设置环境并调用对应 Edge 文件，不提前冻结/启动。扩展 `web/tests/helpers/package.ts` 统一承担 fresh 检查 → debug prepare --simulate 冻结 → debug run 调用统一启动/就绪 → finally 正常清理；project-switch 和 query-cache 复用同一所有者，不在各文件重复创建服务。freshDualPackage 要求无 scheme.json，必须在冻结前调用；ready 检查则验证同一已冻结 manifest/方案，不能再套用 fresh 条件。Go/Node/PowerShell 父调用期限分别覆盖产品 start 180 秒、stop 120 秒及必要通信余量，替换现有 30/45 秒通用超时，不能提前截断合法启动/收尾。此 wrapper 和新 helper 行为当前尚未实现，必须先补齐再验收。
+   新增稳定 controlled wrapper `scripts/test-unified-startup.ps1 -Package <新包> -Simulate [-Scenario unified-startup|query-cache]`，默认 unified-startup；未显式给 Simulate 时拒绝，不隐式选择模式，包本体的默认 live 保留。参数只映射既定文件。wrapper 只检查包边界、设置环境并调用对应 Edge 文件，不提前冻结/启动。扩展 `web/tests/helpers/package.ts` 统一承担 fresh 检查 → debug prepare --simulate 冻结 → debug run 调用统一启动/就绪 → finally 正常清理；project-switch 和 query-cache 复用同一所有者，不在各文件重复创建服务。freshDualPackage 要求无 scheme.json，必须在冻结前调用；ready 检查则验证同一已冻结 manifest/方案，不能再套用 fresh 条件。Go/Node/PowerShell 父调用期限分别覆盖产品 start 180 秒、stop 120 秒及必要通信余量，替换现有 30/45 秒通用超时，不能提前截断合法启动/收尾。wrapper 与公共 helper 随本次实现交付，先补齐再验收。Windows 浏览器驱动使用 WMI 创建本包拥有的隐藏验证启动器，避开 Node 的 kill-on-close Job；产品仍经正式 start 自验脱离启动器，验证启动器保留退出结果并在 finally 核对。
 8. **运行最小验证并统一交付。** 执行下表定向测试、受影响 fixture 回归、L1、双 exe 构建，以及不同新包中的统一启动和既有 query-cache 两个 Edge 场景；更新本任务 acceptance，不复用前序通过状态。同步运行指南、架构、应用/项目协议、project-management、前序 Spec 后继说明及 worker-lifecycle 的 W18/V06/V07/实现缺口。后续添加仍只消费宿主，不在本批实现其准入/登记。旧进程断言替换为新边界，保留事务、身份及 #323 查询反例。
 
 步骤 1→2→3 为主依赖；步骤 4/5 在运行时所有权固定后接入，步骤 6 消费固定协议；步骤 7 必须在真实调试/自动验收之前完成。实现时只复用当前主干正式规则，不按此调查 commit 恢复已被移除的 TUI 或旧链路。
@@ -90,4 +90,4 @@ CLI 现状另有明确传输缺口：`task_commands.go` 已通过 product.Client
 
 不选择 Full、全部 L2/L3、真实模型/PR 或远端矩阵：本批重构服务宿主与入口，采用真实 Windows 进程/ACL、隔离生命周期/受影响 fixture、一个真实 Edge 综合场景和一个实际改变启动驱动的既有 query-cache 回归；不重复独立 smoke 或无关浏览器矩阵。Worker 重试/业务流程规则不变。若实现改变其规则，须显式更新 Spec、统一生命周期文档和最小验证范围，不能默认为已覆盖。
 
-UST-M1：自动通过后由用户体验双击启动/重复打开、故障提示、选择项目和停止反馈；参与窗口待安排，仅阻塞体验签收，不阻塞已通过自动项的交付。实施交付时同步 acceptance 的逐项已验/待验、源码版本/环境/命令和证据；本次生成文档仅登记静态检查，不执行产品验收或部署安装目录。
+UST-M1：自动通过后由用户体验双击启动/重复打开、故障提示、选择项目和停止反馈；参与窗口待安排，仅阻塞体验签收，不阻塞已通过自动项的交付。实施交付时同步 acceptance 的逐项已验/待验、源码版本/环境/命令和证据；实施结果逐项登记 acceptance；不部署安装目录。

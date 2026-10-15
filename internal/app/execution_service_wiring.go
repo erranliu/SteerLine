@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 type executionServiceLifetime struct {
@@ -171,9 +172,9 @@ func newConfiguredServiceWithHost(config Config, host hostport.HostPort) (*execu
 }
 
 func newServiceWithHost(config Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host hostport.HostPort) (*execution.Service, error) {
-	return newServiceWithTaskStore(config, resolver, sources, host, nil)
+	return newServiceWithTaskStore(context.Background(), config, resolver, sources, host, nil)
 }
-func newServiceWithTaskStore(config Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host hostport.HostPort, bind func(taskStorage)) (*execution.Service, error) {
+func newServiceWithTaskStore(ctx context.Context, config Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host hostport.HostPort, bind func(*sqlite.SQLiteStore)) (*execution.Service, error) {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return nil, errors.New("application configuration is missing its execution directory or process host")
 	}
@@ -182,11 +183,11 @@ func newServiceWithTaskStore(config Config, resolver executionbackend.LifecycleR
 	if err != nil {
 		return nil, err
 	}
-	hostConfig, err := hostRuntimeConfig(context.Background(), config)
+	hostConfig, err := hostRuntimeConfig(ctx, config)
 	if err != nil {
 		return nil, err
 	}
-	connection, err := OpenNativeTaskCommandStore(context.Background(), &config)
+	connection, err := OpenNativeTaskCommandStore(ctx, &config)
 	if err != nil {
 		return nil, err
 	}

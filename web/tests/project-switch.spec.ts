@@ -49,6 +49,8 @@ test("web.unified-startup: shared host, original commands and active turn surviv
   };
   try {
     facts.startup=await runtime.start();
+ for (const target of [binary,web]) {let refused=false;try{command(target,["install"])}catch{refused=true} expect(refused).toBe(true)}
+ facts.running_install_rejected=true;
     await open();
     const combo = page.getByRole("combobox", { name: "当前项目" });
     await expect
@@ -320,10 +322,10 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       fullPage: true,
     });
     facts.submissions = submissions;
-  } catch(error) {primaryFailure=error;facts.business_error=String(error);throw error;
+  } catch(error) {primaryFailure=error;facts.business_error=String(error);writeFileSync(join(root,"evidence","web-project-switch.json"),JSON.stringify(facts,null,2));throw error;
   } finally {
     failures.push(...await runtime.stop());
-    await expect
+    try { await expect
       .poll(
         () =>
           Number(
@@ -335,7 +337,7 @@ test("web.unified-startup: shared host, original commands and active turn surviv
           ),
         { timeout: 30000 },
       )
-      .toBe(0);
+      .toBe(0); } catch (error) { failures.push(String(error)); }
     const inventory = JSON.parse(
       command("powershell.exe", [
         "-NoProfile",

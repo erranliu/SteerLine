@@ -38,9 +38,9 @@ func openProjectClient(ctx context.Context, ref productapi.ProjectRef) (*product
 // command port into its local HTTP product client. Other clients retain the
 // ordinary repository-locking TaskCommands writer.
 func openServiceProjectClient(ctx context.Context, config Config, service *execution.Service) (*productclient.Client, error) {
-	return openServiceProjectClientWithCommands(ctx, config, service, nil)
+	return openServiceProjectClientWithCommands(ctx, config, service, nil, nil)
 }
-func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *execution.Service, commands func(context.Context, bool) (productclient.TaskCommands, error)) (*productclient.Client, error) {
+func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *execution.Service, commands func(context.Context, bool) (productclient.TaskCommands, error), store *sqlite.SQLiteStore) (*productclient.Client, error) {
 	absolute, err := filepath.Abs(config.ConfigPath)
 	if err != nil {
 		return nil, err
@@ -57,6 +57,14 @@ func openServiceProjectClientWithCommands(ctx context.Context, config Config, se
 			return productclient.Resources{}, err
 		}
 		resources.Discard = &clientDiscardCommands{service: service, config: bound}
+		if store != nil {
+			resources.OpenReader = func(ctx context.Context) (productclient.Reader, error) {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				return &clientReader{Service: query.NewService(store, bound.Identity()), ConversationService: query.NewConversationService(store, bound.Identity()), store: store, project: bound.Identity(), config: bound, executableTypes: append([]string(nil), bound.ExecutableTypes...), freshness: 30 * time.Second, borrowed: true}, nil
+			}
+		}
 		if commands != nil {
 			resources.OpenCommands = commands
 		}
@@ -183,6 +191,8 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 }
 
 type clientReader struct {
+	borrowed bool
+
 	query.Service
 	query.ConversationService
 	store interface {
@@ -210,7 +220,12 @@ func openClientReader(ctx context.Context, config Config, freshness time.Duratio
 		store: store, project: c.Identity(), config: c, executableTypes: append([]string(nil), c.ExecutableTypes...), freshness: freshness}, nil
 }
 
-func (r *clientReader) Close() error { return r.store.Close() }
+func (r *clientReader) Close() error {
+	if r.borrowed {
+		return nil
+	}
+	return r.store.Close()
+}
 
 func (r *clientReader) ReadProject(ctx context.Context, selected string, _ productapi.ProjectSnapshot) productapi.ProjectSnapshot {
 	snapshot, err := r.store.ReadApplicationProjectSnapshot(ctx, r.project, selected, 500)

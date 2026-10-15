@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
@@ -142,6 +143,7 @@ func ensureComponent(ctx context.Context, home string, c component) (ComponentSt
 		}
 		command := exec.Command(c.exe, c.args...)
 		command.Dir = home
+		command.Env = applicationEnvironment(home)
 		command.Stdin = input
 		command.Stdout = log
 		command.Stderr = log
@@ -273,6 +275,7 @@ func StartApplication(ctx context.Context, noOpen bool) (ApplicationStatus, erro
 	if !noOpen {
 		command := exec.CommandContext(ctx, web.exe, "open")
 		command.Dir = HomeDir()
+		command.Env = applicationEnvironment(HomeDir())
 		command.Stdout = os.Stdout
 		command.Stderr = os.Stderr
 		if err = command.Run(); err != nil {
@@ -354,4 +357,15 @@ func StopAll(ctx context.Context) error {
 		backendErr = verifyBackendStop(ctx, home, backend, backendID)
 	}
 	return errors.Join(backendErr, webErr)
+}
+
+func applicationEnvironment(home string) []string {
+	env := []string{}
+	for _, value := range os.Environ() {
+		key, _, _ := strings.Cut(value, "=")
+		if !strings.EqualFold(key, "STEERLINE_HOME") {
+			env = append(env, value)
+		}
+	}
+	return append(env, "STEERLINE_HOME="+home)
 }

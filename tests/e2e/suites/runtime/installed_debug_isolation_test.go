@@ -660,7 +660,7 @@ func writeRuntimeEvidence(t *testing.T, directory string, evidence map[string]an
 
 func assertGeneratedLaunchers(t *testing.T, home, executable string) {
 	t.Helper()
-	console, err := os.ReadFile(filepath.Join(home, "serve.bat"))
+	serve, err := os.ReadFile(filepath.Join(home, "serve.bat"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -672,6 +672,7 @@ func assertGeneratedLaunchers(t *testing.T, home, executable string) {
 		data []byte
 		want string
 	}{
+		{serve, `set "STEERLINE_HOME=%SHOME%"`},
 		{service, `set "STEERLINE_HOME=%SHOME%"`},
 		{service, `set "CODEX_HOME=%SHOME%\codex"`},
 		{service, `set "BIN=` + executable + `"`},

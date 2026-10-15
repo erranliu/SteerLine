@@ -25,6 +25,12 @@ func OpenProject(ctx context.Context, home, selector string) (*Project, error) {
 	if err != nil {
 		return nil, err
 	}
+	success := false
+	defer func() {
+		if !success {
+			client.Close()
+		}
+	}()
 	var catalog contract.Catalog
 	if err = client.Get(ctx, "/projects", &catalog); err != nil {
 		return nil, err
@@ -52,6 +58,7 @@ func OpenProject(ctx context.Context, home, selector string) (*Project, error) {
 	if p.identity.ProjectID != selected {
 		return nil, errors.New("project identity differs")
 	}
+	success = true
 	return p, nil
 }
 func (p *Project) Close() error                    { return p.client.Close() }

@@ -25,8 +25,8 @@ func runApplication(command string, args []string) error {
 	if flags.NArg() != 0 {
 		return errors.New("unexpected application arguments")
 	}
-	if *noOpen && command != "start" || *jsonOutput && command != "status" {
-		return errors.New("--no-open is for start; --json is for status")
+	if *noOpen && command != "start" || *jsonOutput && command != "status" || *detached && command != "serve" {
+		return errors.New("--no-open is for start; --json is for status; --detached is for serve")
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()

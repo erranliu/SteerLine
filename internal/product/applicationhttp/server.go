@@ -1,5 +1,5 @@
 // Package applicationhttp routes only catalogued projects through their native
-// HTTP owners. It never initializes project storage or starts a project service.
+// in-process owners. Routing never initializes storage or starts a runtime.
 package applicationhttp
 
 import (
@@ -57,7 +57,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.URL.Path == root+"/shutdown" && r.Method == "POST" {
 		s.Shutdown()
-		localservice.JSON(w, 200, map[string]string{"status": "stopping"})
+		localservice.JSON(w, 200, map[string]any{"status": "stopping", "identity": s.Endpoint.Identity})
 		return
 	}
 	if r.URL.Path == root+"/projects" && r.Method == "GET" {

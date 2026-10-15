@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/localservice"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/httpfs"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
@@ -22,7 +24,7 @@ import (
 // through the same installed coordinator as a user's start.bat.
 func (d *debugRelease) run() (retErr error) {
 	dir := filepath.Join(d.root, "runtime-launcher")
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := httpfs.EnsurePrivateDirectory(dir); err != nil {
 		return err
 	}
 	lease, err := host.LockRepository(dir)
@@ -46,7 +48,7 @@ func (d *debugRelease) run() (retErr error) {
 	defer func() {
 		stopCtx, done := context.WithTimeout(context.Background(), 130*time.Second)
 		stop := d.command(d.binary, "stop")
-		retErr = errors.Join(retErr, testprocess.Run(stopCtx, stop))
+		retErr = errors.Join(retErr, runCoordinator(stopCtx, stop))
 		done()
 		for _, helper := range helpers {
 			cleanup, done := context.WithTimeout(context.Background(), 10*time.Second)
@@ -158,10 +160,18 @@ func (d *debugRelease) run() (retErr error) {
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
+	// Independent actors permit bounded concurrent fixture seeding after readiness.
+	seeded := make(chan error, len(scopes))
 	for _, scope := range scopes {
-		if err = scope.seedTasks(); err != nil {
-			return err
+		go func(scope *debugRelease) { seeded <- scope.seedTasks() }(scope)
+	}
+	for range scopes {
+		if seedErr := <-seeded; seedErr != nil {
+			err = errors.Join(err, seedErr)
 		}
+	}
+	if err != nil {
+		return err
 	}
 	if err = localservice.Write(dir, "ready.json", map[string]string{"token": token}); err != nil {
 		return err
@@ -196,7 +206,7 @@ func (d *debugRelease) stop() error {
 	defer cancel()
 	command := d.command(d.binary, "stop")
 	command.Stdout, command.Stderr = os.Stdout, os.Stderr
-	stopErr := testprocess.Run(ctx, command)
+	stopErr := runCoordinator(ctx, command)
 	dir := filepath.Join(d.root, "runtime-launcher")
 	var owner struct {
 		Token string `json:"token"`
@@ -205,4 +215,11 @@ func (d *debugRelease) stop() error {
 		return errors.Join(stopErr, err)
 	}
 	return errors.Join(stopErr, localservice.Write(dir, "stop.json", owner))
+}
+
+// Short coordinators own no workers; context bounds their process without a nested Job.
+func runCoordinator(ctx context.Context, command *exec.Cmd) error {
+	cmd := exec.CommandContext(ctx, command.Path, command.Args[1:]...)
+	cmd.Env, cmd.Dir, cmd.Stdout, cmd.Stderr = command.Env, command.Dir, command.Stdout, command.Stderr
+	return cmd.Run()
 }

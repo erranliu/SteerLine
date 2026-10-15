@@ -5,7 +5,9 @@ import (
 	"net/http"
 )
 
-func (s *Server) Identity(ctx context.Context) Identity { return s.identityView(ctx) }
+// Identity returns the immutable routing binding, like the former native client.
+// The public identity read separately checks committed runtime readiness.
+func (s *Server) Identity(context.Context) Identity { return s.discoveryIdentity() }
 func (s *Server) Command(ctx context.Context, envelope CommandEnvelope) (CommandResponse, error) {
 	if err := envelope.Validate(ProjectID(s.options.ProjectIdentity), s.options.InstanceID); err != nil {
 		return CommandResponse{}, &protocolError{status: 409, code: "stale_target", reason: err.Error()}

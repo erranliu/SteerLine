@@ -63,7 +63,7 @@ function outsideJob(exe: string, args: string[], env: NodeJS.ProcessEnv, wait: b
 }
 export function packageCommand(env: NodeJS.ProcessEnv) {
   return (exe: string, args: string[]) => {
-    if (exe.toLowerCase().endsWith("steerline.exe") && args[0] === "start") return outsideJob(exe,args,env,true);
+    if ((exe.toLowerCase().endsWith("steerline.exe") && args[0] === "start") || (args[0] === "debug" && args[1] === "stop")) return outsideJob(exe,args,env,true);
     return execFileSync(exe,args,{env,encoding:"utf8",timeout:140000,windowsHide:true,stdio:"pipe"}).trim();
   };
 }

@@ -27,8 +27,8 @@ func ServeApplication(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
 	case err = <-done:
-		if !errors.Is(err, http.ErrServerClosed) {
-			return err
+		if errors.Is(err, http.ErrServerClosed) {
+			err = nil
 		}
 	}
 	directory.BeginStop()
@@ -56,7 +56,7 @@ func ServeApplication(ctx context.Context) error {
 	closeCtx, closeCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer closeCancel()
 	shutdown := server.Shutdown(closeCtx)
-	return errors.Join(projectErr, shutdown, server.Close())
+	return errors.Join(err, projectErr, shutdown, server.Close())
 }
 func StopApplication(ctx context.Context) error {
 	return stopBackend(ctx, HomeDir())

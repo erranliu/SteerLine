@@ -78,9 +78,8 @@ func (c *Client) run(ctx context.Context, binary string, args ...string) ([]byte
 		timeout = 190 * time.Second
 	}
 	if len(args) >= 2 && args[0] == "task" && (args[1] == "validate" || args[1] == "create") {
-		// These fixture setup commands initialize the project and its SQLite
-		// schema before a service exists. Cold Windows initialization can exceed
-		// the ordinary query budget when the Full workers are running.
+		// These commands use the ready project actor and validate real Git
+		// contracts. Leave room for the existing product command budget.
 		timeout = 2 * time.Minute
 	}
 	return c.runWithTimeout(ctx, timeout, binary, args...)
@@ -138,7 +137,7 @@ func (c *Client) ControlTargeted(ctx context.Context, helper, action, taskID, ex
 	return err
 }
 
-// MainControl invokes the same exported control client used by the console.
+// MainControl invokes the same application client used by the CLI.
 // An isolated helper process scopes LoadConfig's process environment.
 func MainControl(args []string) error {
 	fs := flag.NewFlagSet("E2E control", flag.ContinueOnError)

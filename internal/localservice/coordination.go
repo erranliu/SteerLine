@@ -104,14 +104,15 @@ func ReadInstance(home, dir, protocol string) (contract.Identity, error) {
 }
 
 func WaitExited(ctx context.Context, dir string, id contract.Identity) error {
+	var lastProbe error
 	tick := time.NewTicker(50 * time.Millisecond)
 	defer tick.Stop()
 	for {
 		exited, err := httpclient.ProcessExited(id.Process)
 		if err != nil {
-			return err
+			lastProbe = err
 		}
-		if exited {
+		if err == nil && exited {
 			free, err := LeaseAvailable(dir)
 			if err != nil {
 				return err
@@ -122,7 +123,7 @@ func WaitExited(ctx context.Context, dir string, id contract.Identity) error {
 		}
 		select {
 		case <-ctx.Done():
-			return fmt.Errorf("exact process exit and lease release unverified: %w", ctx.Err())
+			return fmt.Errorf("exact process exit and lease release unverified: %w", errors.Join(ctx.Err(), lastProbe))
 		case <-tick.C:
 		}
 	}

@@ -94,7 +94,9 @@ func DebugReleaseMain(args []string) error {
 			return errors.New("invalid selected scheme")
 		}
 		simulate = selected.Scheme == "simulate"
-		if args[0] == "run-selected" { args[0] = "run" }
+		if args[0] == "run-selected" {
+			args[0] = "run"
+		}
 	}
 	if err = d.prepare(simulate); err != nil {
 		return err
@@ -236,7 +238,7 @@ func pathWithin(root, path string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 func (d *debugRelease) client() Client {
-	return Client{Binary: d.binary, Config: d.config, Home: d.home, StatePath: d.provider, LogDir: filepath.Join(d.root, "evidence", "commands")}
+	return Client{Binary: d.binary, Config: d.config, Home: d.home, StatePath: d.provider, LogDir: filepath.Join(d.root, "evidence", "commands", filepath.Base(d.config))}
 }
 func (d *debugRelease) stateDir() string {
 	return filepath.Join(d.home, "state", app.RepositoryStateKey(filepath.Join(d.repo, ".git")))
@@ -366,6 +368,9 @@ func (d *debugRelease) seedTasks() error {
 	var raw []byte
 	var err error
 	c := d.client()
+	if err := os.MkdirAll(c.LogDir, 0700); err != nil {
+		return err
+	}
 	raw, err = c.Run(ctx, "task", "validate", "-config", d.config, "-file", path)
 	if err != nil {
 		return err

@@ -41,6 +41,11 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	require(t, err)
 	b, err := d.Connect(ctx, catalog.Projects[1].ProjectID)
 	require(t, err)
+	readCtx, readCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer readCancel()
+	if _, err := a.Read(readCtx, "/identity", nil); err != nil {
+		t.Fatal("in-process identity read failed", err)
+	}
 	ai, bi := a.Identity(ctx), b.Identity(ctx)
 	if ai.InstanceID == bi.InstanceID || ai.ProjectID == bi.ProjectID || ai.Process != bi.Process || ai.Process.PID != os.Getpid() {
 		t.Fatal("project/process ownership conflated", ai, bi)

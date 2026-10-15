@@ -12,21 +12,29 @@ type runtimeTaskCommands struct {
 }
 
 func (r *runtimeTaskCommands) Close() error { return nil } // store belongs to ProjectRuntime
-func (r *runtimeTaskCommands) Create(ctx context.Context, in api.CreateInput) (value api.TaskBatchReceipt, err error) {
-	err = r.service.ExecuteTaskMutation(ctx, func(actor context.Context) error {
-		var e error
-		value, e = r.clientTaskCommands.Create(actor, in)
-		return e
+func (r *runtimeTaskCommands) Create(ctx context.Context, in api.CreateInput) (api.TaskBatchReceipt, error) {
+	result := make(chan api.TaskBatchReceipt, 1)
+	err := r.service.ExecuteTaskMutation(ctx, func(actor context.Context) error {
+		value, err := r.clientTaskCommands.Create(actor, in)
+		result <- value
+		return err
 	})
-	return
+	if err != nil {
+		return api.TaskBatchReceipt{}, err
+	}
+	return <-result, nil
 }
-func (r *runtimeTaskCommands) AddPredecessors(ctx context.Context, in api.TaskPredecessorAddInput) (value api.TaskPredecessorAddReceipt, err error) {
-	err = r.service.ExecuteTaskMutation(ctx, func(actor context.Context) error {
-		var e error
-		value, e = r.clientTaskCommands.AddPredecessors(actor, in)
-		return e
+func (r *runtimeTaskCommands) AddPredecessors(ctx context.Context, in api.TaskPredecessorAddInput) (api.TaskPredecessorAddReceipt, error) {
+	result := make(chan api.TaskPredecessorAddReceipt, 1)
+	err := r.service.ExecuteTaskMutation(ctx, func(actor context.Context) error {
+		value, err := r.clientTaskCommands.AddPredecessors(actor, in)
+		result <- value
+		return err
 	})
-	return
+	if err != nil {
+		return api.TaskPredecessorAddReceipt{}, err
+	}
+	return <-result, nil
 }
 func (r *runtimeTaskCommands) Discard(context.Context, api.DiscardInput) (api.TaskDiscardReceipt, error) {
 	return api.TaskDiscardReceipt{}, &api.Error{Kind: api.Unsupported, Message: "discard uses the actor discard port"}

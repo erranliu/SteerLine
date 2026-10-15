@@ -19,6 +19,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/projectconnection"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -33,6 +34,8 @@ type ProjectRuntime struct {
 func (d *ApplicationDirectory) prepareProject(e *catalogEntry) (r *ProjectRuntime, err error) {
 	ctx, cancel := context.WithTimeout(d.ctx, 60*time.Second)
 	defer cancel()
+	stage := func(name string) { fmt.Fprintf(os.Stderr, "project %s startup: %s\n", e.view.ConfigID, name) }
+	stage("load configuration")
 	c, err := loadConfigSnapshot(e.ref.ConfigPath, e.data, d.global, nil, nil, true)
 	if err != nil {
 		return nil, err
@@ -45,6 +48,7 @@ func (d *ApplicationDirectory) prepareProject(e *catalogEntry) (r *ProjectRuntim
 	if ref.Identity != e.ref.Identity || canonicalConfigPath(ref.RunDir) != canonicalConfigPath(e.ref.RunDir) {
 		return nil, errors.New("project identity changed after configuration census")
 	}
+	stage("validate state ownership")
 	hc, err := hostRuntimeConfig(ctx, c)
 	if err != nil {
 		return nil, err
@@ -82,10 +86,12 @@ func (d *ApplicationDirectory) prepareProject(e *catalogEntry) (r *ProjectRuntim
 	}
 	// These gates may inspect execution tools but cannot initialize a project
 	// until both ownership locks have been obtained.
+	stage("execution preflight")
 	hc, err = admission.Preflight(ctx, hc, true)
 	if err != nil {
 		return nil, err
 	}
+	stage("initialize native storage")
 	if err = admission.InitializeNativeProject(ctx, hc); err != nil {
 		return nil, err
 	}
@@ -115,9 +121,9 @@ func (r *ProjectRuntime) Run(parent context.Context, publish func(*runtimeProjec
 		}
 	}()
 	admission := serviceAdmission{config: &r.config}
-	hostPort := host.NewServiceHost(r.hostConfig, "", "off", r.log, admission, consoleActivityFormatter{})
-	var store taskStorage
-	service, err := newServiceWithTaskStore(r.config, r.config.ExecutionDirectory, newConversationSources(), hostPort, func(value taskStorage) { store = value })
+	hostPort := host.NewServiceHost(r.hostConfig, "", "off", r.log, admission, serviceActivityFormatter{})
+	var store *sqlite.SQLiteStore
+	service, err := newServiceWithTaskStore(ctx, r.config, r.config.ExecutionDirectory, newConversationSources(), hostPort, func(value *sqlite.SQLiteStore) { store = value })
 	if err != nil {
 		result.LocalClosed = true
 		result.ResourcesSettled = true
@@ -125,9 +131,10 @@ func (r *ProjectRuntime) Run(parent context.Context, publish func(*runtimeProjec
 	}
 	result.InstanceID = service.InstanceID()
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", result.InstanceID, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
+	r.config.runtimeHost = &r.hostConfig
 	product, err := openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context, bool) (productclient.TaskCommands, error) {
 		return &runtimeTaskCommands{clientTaskCommands: newClientTaskCommands(store, r.config), service: service}, nil
-	})
+	}, store)
 	if err != nil {
 		closeErr := service.Close()
 		result.LocalClosed = closeErr == nil

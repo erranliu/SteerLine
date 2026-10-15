@@ -1,40 +1,10 @@
-# 本机客户端协议 v1
+# 本机客户端协议
 
-本页描述当前项目 HTTP 公共协议。Web 经应用目录访问项目服务，原 #91 TUI 已退役；接口的有效性按实际公共消费者维护，历史验收不冒充当前复验。
-
-纯契约在 `internal/product/httpcontract`，客户端在 `httpclient`，受限文件能力在 `httpfs`；`httpapi` 提供服务端 handler；Web 经 Go 应用目录转接。服务继续拥有 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和唯一交付状态；HTTP 只映射现有 `product/api` DTO 与命令入口。
+应用 v2 是当前产品的本机入口，Web 为唯一交互前端。`httpcontract` 的项目 DTO/信封、`httpapi` 的查询/命令处理与 `product/api` 用例保持原事务和资格规则；共享后端在进程内调用项目端口，不启动项目 HTTP listener 或通过回环 HTTP 转发。下表保留项目端口的逻辑路由；外部路径统一在 `/v2/application/projects/{project_id}` 下。
 
 ## 发现、连接和身份
 
-服务先取得现有仓库/运行目录锁并完成恢复，再绑定 `127.0.0.1` 的随机 TCP 端口并开始提供 HTTP。服务不随 UI 窗口退出。实例发现文件位于 `<run_dir>/local-api/discovery.json`，凭证文件位于同目录的 `credentials/` 子目录；文件内容不进入 URL 或日志。Windows 目录和凭证 DACL 仅授予当前 Windows SID，客户端连接前重新核验 DACL。每个服务实例创建新凭证；发现文件包含 `protocol`, `project_id`, `repository_identity`, `instance_id`, `process`, `address`, `credential_path`, `ready` 与诊断，不包含凭证值。端口冲突也会写受限 `ready=false` 发现记录，保留原生绑定错误供客户端显示。
-
-`project_id` 是仓库身份 UTF-8 字节 SHA-256 的小写十六进制路由键；完整仓库身份只通过认证的 identity DTO 返回。客户端不得通过 PATH、超时或旧发现文件启动另一服务。`ready=false` 返回原实例的启动诊断；此时只开放只读查询/回执及针对该实例的停服命令。
-
-每个请求必须携带 `Authorization: Bearer <credential>`，使用精确发现的 `Host`，来源为 IPv4 loopback，且不包含浏览器 `Origin`。服务不启用 CORS。服务身份以 `/v1/identity` 响应中的协议、项目、实例、进程、能力和实时就绪状态为准。`ready=false` 时只提供诊断及只读查询，并允许停掉发现的原实例；业务变更被拒绝并以原 ID 保留 rejection。进程/实例不一致时客户端刷新并停止提交旧目标。
-
-### Windows 连接样例
-
-Windows 客户端从现有项目配置取得 `run_dir`，读取发现文件和凭证。以下 PowerShell 样例保持凭证在当前进程内存中；不要将它打印到日志、URL 或进程参数：
-
-```powershell
-$discoveryPath = Join-Path $runDir 'local-api\discovery.json'
-$discovery = Get-Content -Raw $discoveryPath | ConvertFrom-Json
-$token = [IO.File]::ReadAllText($discovery.credential_path)
-$handler = [Net.Http.HttpClientHandler]::new()
-$handler.UseProxy = $false
-$client = [Net.Http.HttpClient]::new($handler)
-$request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "http://$($discovery.address)/v1/identity")
-$request.Headers.Authorization = [Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $token)
-$request.Headers.Host = $discovery.address
-$response = $client.Send($request)
-$identity = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
-if ($identity.protocol -ne 'steerline-client/v1' -or $identity.project_id -ne $discovery.project_id -or
-    $identity.instance_id -ne $discovery.instance_id -or -not $identity.ready) {
-    throw "The discovered service is not the ready instance: $($identity.diagnostic)"
-}
-```
-
-Go HTTP consumers use `httpclient.Open(ctx, runDir, projectIdentity)`. Web 通过应用目录访问明确启动的原项目实例，不创建替代服务。
+`steerline serve` 发布 `<home>/application-api/discovery.json` 与私有 Bearer，协议为 `steerline-application/v2`。凭证、目录和记录仅当前用户可读，严格核对 home、实例、精确 OS PID/创建时间/exe、loopback Host 和在线 identity，拒绝 Origin、重定向与错实例。共享 PID 不代替各项目 runtime instance；项目和宿主的实例分别换代。业务事实仍由原项目 Task/WorkflowRun/Execution/Attempt/Decision/Command/Operation 和唯一交付拥有。
 
 ## 查询路由
 
@@ -97,16 +67,18 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 
 Web 将完整原信封保存在现有 IndexedDB；服务端的原请求记录仍是跨动作仲裁。原生查看器的未知结果不得重放。
 
-停止项目服务沿既有 CLI/服务入口执行；未知结果保留诊断。应用/Web 服务各自通过私有原生停止入口核验原进程退出，不随浏览器关闭停止业务。
+公开 stop_service action/capability 已退役，不映射为全局停机；旧原请求结果仍可只读查询。关闭浏览器不停止业务。
 
 本协议不提供 SSE、离线查询进程、完整原始过程阅读器、规划 handler 或通用 artifact DTO。
 
 ## 应用入口与浏览器转接
 
-独立应用协议为 `steerline-application/v1`，由 `steerline serve-app` 提供，不冒充原单项目 identity。发现文件位于 `<home>/application-api/discovery.json`，包含 home ID、应用实例、精确 OS 进程、loopback 地址和私有 Bearer；目录/文件仅当前用户可读，原子发布，应用租约同 home 单实例。客户端逐次核对 discovery 和在线 identity，禁重定向、非 loopback Host 与浏览器 Origin。
+`GET /v2/application/identity` 无项目也可用；`GET /v2/application/projects` 返回冻结配置快照与 starting/ready/failed/stopping/stopped 投影。目录查询不建库；项目装载先通过只读身份 census/冲突核验并取得仓库及运行目录锁，随后初始化原项目。配置变更在下次宿主启动生效。
 
-`GET /v1/application/identity` 无项目也可用；`GET /v1/application/projects` 返回现有配置目录与逐项诊断，解析和连接分别有界，不建库。`GET /v1/application/projects/{id}/identity` 返回原生真实身份，其他明确允许的查询转到 `/v1/projects/{id}/…`。`POST /v1/application/projects/{id}/commands` 保留完整原信封、目标、实例和数字版本，由原项目最终核验。离线、冲突、身份/连接失败返回不可用；只有原权威缺失保留 `command_not_found`。
+各项目 identity、查询及 commands 经目录直接取得进程内端口；保留原 project/runtime instance、原 request ID、版本与完整 JSON 数字。缺失、冲突或未 ready 返回明确不可用；只有原权威缺失才返回 command_not_found，不用 POST 重放查证。
 
-应用目录在 `internal/app/application_directory.go`，使用无 UI 的 `projectconnection` 解析器。配置改变/删除撤销旧映射，同 common-dir 冲突拒绝路由；目录缓存经原生身份验证的 HTTP 客户端，每次借用前核对私有 discovery、项目、实例、OS 进程、凭证归属；替换只关闭旧连接的空闲 transport，在途请求不被取消或改向。
+CLI 通过项目选择访问原任务用例：POST `/task-batch-validation`、`/task-batches`、`/tasks/{task}/predecessors`；原结果 GET `/task-batches/{request_id}` 和 `/tasks/{task}/predecessors/requests/{request_id}`。这些窄路由只接受原生认证，不进入 Web AllowedRead 或浏览器写入白名单。任务事务由原项目 actor 串行办理，CLI 不开第二写者。
 
-`POST /v1/application/shutdown` 仅正常停止应用入口。`steerline-web.exe` 提供浏览器认证与 `/api/v1/application/projects…` 同源转接，不开放该管理路由；Web 的原生 `/native/identity` 和 `/native/shutdown` 要求独立 launcher Bearer 且无 Origin，不能使用浏览器 cookie 停服。浏览器会话绑定 home/Web 实例，与任一项目实例无关。运行方式和项目 URL 见 [Web 指南](../../web/README.md)。
+`POST /v2/application/shutdown` 先关闭全部项目新输入资格再确认原宿主 identity，按项目聚合正常关闭与资源结算。私有 `shutdown.json` 绑定原宿主，stop 同时核验此结果、精确进程退出与租约；缺失、损坏、旧实例或任何未核实项均失败。本地关闭未知保留库/锁；worker 未知但本地已关时可重开原库取证，禁止替代 worker 或新业务输入。
+
+Web 只提供受限 `/api/v2/application/projects…` 同源转接；不代理管理/CLI 专有路由。浏览器会话绑定 home/Web 实例，原生 `/native/identity`、`/native/backend`、`/native/shutdown` 使用独立 launcher Bearer，无 Origin，浏览器 cookie 不能停服。Web 可独立重启，重新 open 授权后只读重连；原信封仍按原实例/请求查询。见[Web 指南](../../web/README.md)、[统一启动 Spec](../spec/unified-startup.spec.md)。
