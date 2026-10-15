@@ -1,15 +1,15 @@
 # 独立 Web 程序与项目切换验收
 
-专属普通开发任务：[Spec](../spec/web-project-switch.spec.md) · [Plan](../spec/web-project-switch.plan.md)。2026-10-15 仅规划，未实施、未执行产品验收；与后续项目添加分开登记，无 roadmap Task ID。
+专属普通开发任务：[Spec](../spec/web-project-switch.spec.md) · [Plan](../spec/web-project-switch.plan.md)。2026-10-15 用户直接授权实施，已完成实现及 WPS-A1～WPS-A6 自动验收；与后续项目添加分开登记，无 roadmap Task ID。
 
 | ID | 最小检查与通过条件 | 当前状态 / 证据 |
 | --- | --- | --- |
-| WPS-A1 | 双 exe 构建、资源只进 Web、无 Node 业务构建、临时 home 安装及运行目标拒绝覆盖；独立启动器、单端口及热更新接线 | 待实现/待验 |
-| WPS-A2 | 零项目/离线/错误/慢配置目录可用；同仓冲突与跨 home 隔离；核对枚举前后项目数据库/状态无新建 | 待实现/待验 |
-| WPS-A3 | 非法来源/身份/路由/CSRF 拒绝，原生令牌不出浏览器；原信封/回执及原 ID 缺失/unknown/错误语义 | 待实现/待验 |
-| WPS-A4 | URL 当前项目、同号任务/同名项目、标签页选择独立、草稿/final/迟到响应及离线禁写 | 待实现/待验 |
-| WPS-A5 | A 原生活动轮次中独立重启 Web 和应用入口；项目 PID/instance 与执行/会话身份保持，原轮次释放后完成；项目服务新实例重连不重写旧信封 | 待实现/待验 |
-| WPS-A6 | 新双项目包真实 Edge 场景及另一新包原 smoke 闭环；原生业务写/丢回执对账、截图/trace、退出与本包进程/监听 0 | 待实现/待验 |
+| WPS-A1 | 双 exe 构建、资源只进 Web、无 Node 业务构建、临时 home 安装及运行目标拒绝覆盖；独立启动器、单端口及热更新接线 | 通过；命令、版本、模拟范围及证据见下方执行记录 |
+| WPS-A2 | 零项目/离线/错误/慢配置目录可用；同仓冲突与跨 home 隔离；核对枚举前后项目数据库/状态无新建 | 通过；命令、版本、模拟范围及证据见下方执行记录 |
+| WPS-A3 | 非法来源/身份/路由/CSRF 拒绝，原生令牌不出浏览器；原信封/回执及原 ID 缺失/unknown/错误语义 | 通过；命令、版本、模拟范围及证据见下方执行记录 |
+| WPS-A4 | URL 当前项目、同号任务/同名项目、标签页选择独立、草稿/final/迟到响应及离线禁写 | 通过；命令、版本、模拟范围及证据见下方执行记录 |
+| WPS-A5 | A 原生活动轮次中独立重启 Web 和应用入口；项目 PID/instance 与执行/会话身份保持，原轮次释放后完成；项目服务新实例重连不重写旧信封 | 通过；命令、版本、模拟范围及证据见下方执行记录 |
+| WPS-A6 | 新双项目包真实 Edge 场景及另一新包原 smoke 闭环；原生业务写/丢回执对账、截图/trace、退出与本包进程/监听 0 | 通过；命令、版本、模拟范围及证据见下方执行记录 |
 | WPS-M1 | 用户体验当前项目布局、切换和独立重启入口；自动通过后参与，窗口待安排，可后置 | 待人工；仅阻塞体验签收 |
 
 ## 执行与证据登记
@@ -20,4 +20,41 @@ Plan 的测试表给出命令、能力补齐、环境和执行时点。`web.proj
 
 浏览器场景结束后逐个正常停止本包 Web、应用和两个项目服务，保存其退出事实，核对本包 owned 进程及监听为 0。若为故障场景受控结束某进程，记录其精确身份和范围。前端关闭不自动停业务服务；测试收尾由独立驱动显式完成，不能混淆两者。
 
-本轮文档静态检查只验证导航与格式，不代表 WPS-A1–A6 已验。未运行 Full/live/远端验收。
+静态检查不替代产品场景；未运行 Full、真实模型/PR 或远端矩阵。
+
+## 2026-10-15 实施与自动验收记录
+
+代码基线 `f507b7183e95acd80c06de6b2b380e6e10c63674`，本次修改为 dirty 工作树；每个新包的 manifest 保存业务/Web/helper SHA-256。未触及 `C:\SteerlineRuntime`，没有安装现场更新、真实模型调用或 GitHub PR。
+
+- WPS-A1：移除 Node/npm 的 PATH 后运行 `./build.ps1` 成功；`./build.ps1 -Web` 正式双产物构建通过，`go list -deps ./cmd/steerline` 确认业务生产依赖不含 `web/server`。新包 `C:\SteerlineDebug\dev-20261015-105910-f507b718-dirty` 的 `evidence/web-switch-build.json` 记录双 exe 安装、运行目标拒绝替换、启动器及独立正常停止通过。Vite 静态转接/API 留在 Go/同 home 租约冲突由 `TestWebSwitchDevelopmentProxyAndLease` 验证。
+- WPS-A2/A3：零项目、只读不建库、坏/慢/同仓冲突、删改配置撤销映射、跨 home、原生来源/路由、完整原信封及超过 JS 精确范围数字不变、权威缺失与不可用区分、在途调用与新连接替换均有实际命中的定向测试。报告：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T020657.743399100Z/summary.json`；最终连接缓存/原生重启与显式 HoldStream 夹具定向报告：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T024420.793910400Z/summary.json`（28.927s）。
+- WPS-A3/A4：Vitest 6 文件、34 项通过（最终 2026-10-15 11:31，4.86s；收尾日志见下），保留原 26 项并新增同名项目路由/同号目标清除、标签页独立、无效深链、home 持久隔离、排队命令取消、旧实例只读查证且禁补交、异步目录完成后恢复最近项目、原信封落盘期间切换时取消明确未发送的请求。浏览器截图检查后已修正切换器的深色背景/可读性，并显示当前名称、位置、连接状态及不可选配置诊断。
+- 最小回归：`go run ./cmd/test-feedback -level=L1` 通过（源码含新 owner 用例，187.9s），报告 `.../20261015T021419.714947900Z/summary.json`。原 native HTTP/客户端/controlled/driver 全包定向回归通过，报告 `.../20261015T013826.954602000Z/summary.json`；新增 driver/controlled 变更后再次两包检查通过（26.076s/8.187s）。CLI 两包检查通过，业务 CLI 159.768s，Web CLI 构建通过。TUI 的只读连接/路径守卫已同步纳入精确依赖白名单，仍禁止 backend/SQLite 依赖。
+- WPS-A5/A6：真实 Edge 调试发现并修复连接探测预算、已验证连接复用、测试夹具 HoldStep 断流与 WebFeedback 初次发布识别、浏览器首次选择顺序及调试启动器的进程所有权问题。失败样本保存在对应新包的 evidence；它们不记为整体通过。`dev-20261015-094907-*` 与 `dev-20261015-100132-*` 已记录重启前后原项目/执行/会话/轮次事实及正常清理 `processes=0/listeners=0`，释放后的完整闭环已在下方最终新包通过。
+
+人工 WPS-M1 未执行；仅阻塞体验签收，不代表自动结果。
+
+### 已完成的真实单项目回归
+
+`./scripts/test-web-smoke.ps1` 在全新 simulate 包 `C:\SteerlineDebug\dev-20261015-104407-f507b718-dirty` 中通过真实 Edge `web.smoke`（1 项，6.7 分钟）。证据：`evidence/smoke.log`、`evidence/browser/` 的 DAG/桌面执行页/窄屏截图；`evidence/smoke-cleanup.json` 为 `browser_passed=true`、`passed=true`、`processes=0`、`listeners=0`、`stop_errors=[]`。覆盖原生业务提交、反馈第四轮、IME 草稿、完整 final、合并交付、依赖和离线禁写。外部模型、GitHub/PR 由本包 controlled provider 模拟，产品 Go/React/Edge 及本机 HTTP/进程真实运行。
+
+双项目初次签收包 `dev-20261015-105910-f507b718-dirty` 因测试仅等待 60 秒就绪失败；随后两个项目均正常启动，收尾清理为 0/0，证据保留。已将该场景等待预算与单项目一致调整为 180 秒；不把该失败样本记为通过。
+
+### 最终双项目真实浏览器签收
+
+2026-10-15 11:19:20～11:28:30（Asia/Shanghai），全新包 `C:\SteerlineDebug\dev-20261015-111706-f507b718-dirty`，命令为设置该包的 `STEERLINE_WEB_PACKAGE` / `STEERLINE_WEB_EVIDENCE` 后运行 `npm --prefix web run test:e2e -- project-switch.spec.ts`。真实 Edge 单 worker、不重试，1 项通过（9.1 分钟）；`evidence/browser/.last-run.json` 为 `passed`。
+
+- 双独立 clone/provider 在线，同源切换与两标签选择独立通过；同号 Task 未串到另一项目。丢失首次 start_task 浏览器回执后按原 ID 查证为 applied，业务提交计数始终为 1。
+- 原轮次暂停于 implement.execute，分别正常停止并重启 Web、应用服务，原项目服务 PID/instance、worker 原生进程 PID/创建时间/可执行文件、Execution/Attempt/session/turn 均保持。释放原 turn 后沿同一 Execution/Attempt/session 完成三阶段发布，simulate PR 合并并产生 TaskDelivery。
+- 随后正常重启 A 项目服务，B 的原实例继续可用；A 按新 native 实例重新连接，旧回执仍绑定旧实例。provider 保持 1 session、3 dispatches，没有因重连启动新 worker。停止 B 后可选择离线状态并禁写，A 的原回执仍可读取。
+- 收尾正常停止本包 Web、应用与两个项目服务，`evidence/web-project-switch.json` 为 `submissions=1`、`cleanup.processes=0`、`cleanup.listeners=0`、`stop_errors=[]`。截图、完整 trace 位于 `evidence/browser/project-switch-web-project-d29a6-active-turn-survive-restart/`，过程日志为 `evidence/project-switch.log`；生成 manifest 固定三份 exe 的 SHA-256。
+
+关键事实：原 request/run `a7befdd1817b453c856fd74ac48679df`，Execution `a8c203b12c060bfbdffc0a42eb192fe3`，Attempt `2877c01d3a6b937260d0ad219d3ee953`，session `e5bc1b30-9693-404d-9697-561bb741b4b0`，原 turn `27f66205-4ade-421e-a464-a11a163cdc09`；项目 A 原实例 `66d2b6d7ac242039fcd6fe8ce2cf4514`，重启后实例 `2e6468dd5bd52623f44b579df83e3ccf`。原始完整事实归上述 JSON/trace。
+
+前一包 `dev-20261015-110416-f507b718-dirty` 已完成双重启、原轮次、合并和新实例检查，但最终离线文案精确匹配失败（实际页面为“项目离线，当前不可提交业务操作”）；已修正测试覆盖有/无缓存两种离线呈现，该包也清理为 0/0，失败记录保留。最终通过包不复用该包业务状态。
+
+综合场景之后补充的“落盘期间切换取消”窗口由新增 Vitest 反例验证，所有 34 项及生产构建再验；最终源码构建/测试日志位于最终双项目包的 `evidence/final-build.log`、`evidence/final-vitest.log`，最终业务/Web 二进制 hash 见 `evidence/final-build.json`。该竞态未使用浏览器计时注入，不能把单元反例误记成 Edge 注入场景。
+
+最终 `./build.ps1 -Web` 已验证覆盖已有业务/Web exe 的增量构建。第一次收尾暴露 PowerShell 向 .NET Replace 传空备份路径的问题，修正为与业务产物一致的受守卫临时备份替换，再次构建通过；失败原始日志保留为 `evidence/final-build-first-attempt.log`。
+
+最终静态收尾：文档导航 418 文件、2663 本地链接无错误；97 份 Task ID 身份文件检查通过；`git diff --check` 通过。WPS-M1 仍待用户体验布局与日常独立启动/停止入口，可后置。

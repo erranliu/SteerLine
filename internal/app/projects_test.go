@@ -103,7 +103,7 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	must := []string{"console.bat", "service-window.bat", "README.txt"}
+	must := []string{"console.bat", "service-window.bat", "README.txt", "start-app.bat", "stop-app.bat", "start-web.bat", "stop-web.bat", "web.bat"}
 	got := map[string]bool{}
 	for _, p := range written {
 		got[filepath.Base(p)] = true

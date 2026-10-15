@@ -1,9 +1,11 @@
 import {
   canonical,
   saveRequest,
+  discardUnsentRequest,
   recordResult,
   requestByID,
   listRequests,
+  setJournalHome,
 } from "./journal";
 import type {
   Envelope,
@@ -12,6 +14,7 @@ import type {
   BodyRef,
   FinalReply,
   Conversation,
+  BrowserSession,
 } from "./types";
 
 export class ApiError extends Error {
@@ -73,7 +76,9 @@ export async function authorize() {
       body: JSON.stringify({ ticket }),
     });
   }
-  return json<{ csrf_token: string; identity: Identity }>("/auth/status");
+  const session = await json<BrowserSession>("/auth/status");
+  setJournalHome(session.identity.home_id);
+  return session;
 }
 export function matches(receipt: Receipt, envelope: Envelope) {
   return (
@@ -98,12 +103,32 @@ export class Api {
   constructor(
     public identity: Identity,
     public csrf: string,
+    public home = "",
   ) {}
+  private active = true;
+  private lifetime = new AbortController();
+  activate() {
+    this.active = true;
+    if (this.lifetime.signal.aborted) this.lifetime = new AbortController();
+  }
+  deactivate() {
+    this.active = false;
+    this.lifetime.abort();
+  }
+  private check() {
+    if (!this.active) throw new DOMException("项目已切换", "AbortError");
+  }
+
   path(route: string) {
-    return "/api/v1/projects/" + this.identity.project_id + route;
+    return "/api/v1/application/projects/" + this.identity.project_id + route;
   }
   get<T>(route: string, signal?: AbortSignal) {
-    return json<T>(this.path(route), { signal });
+    this.check();
+    return json<T>(this.path(route), {
+      signal: signal
+        ? AbortSignal.any([signal, this.lifetime.signal])
+        : this.lifetime.signal,
+    });
   }
   envelope(
     action: string,
@@ -128,9 +153,13 @@ export class Api {
       throw new Error(
         "当前浏览器不支持原请求发送锁，请使用当前版本 Edge/Chrome",
       );
-    return navigator.locks.request("steerline-request-" + id, work);
+    return navigator.locks.request(
+      "steerline-request-" + this.home + "/" + id,
+      work,
+    );
   }
   private validate(envelope: Envelope) {
+    this.check();
     if (
       envelope.project_id !== this.identity.project_id ||
       envelope.instance_id !== this.identity.instance_id
@@ -139,6 +168,7 @@ export class Api {
     safeNumbers(envelope);
   }
   private async post(envelope: Envelope) {
+    this.validate(envelope);
     const result = await json<Receipt>(this.path("/commands"), {
       method: "POST",
       headers: {
@@ -166,6 +196,7 @@ export class Api {
         envelope.target_id,
       () =>
         this.locked(envelope.request_id, async () => {
+          this.check();
           const pending = (await listRequests()).find(
             (row) =>
               row.envelope.request_id !== envelope.request_id &&
@@ -182,7 +213,12 @@ export class Api {
             );
           const old = await requestByID(envelope.request_id);
           if (old) return this.reconcileUnlocked(envelope);
+          this.check();
           await saveRequest(envelope);
+          if (!this.active) {
+            await discardUnsentRequest(envelope);
+            throw new DOMException("项目已切换", "AbortError");
+          }
           try {
             return await this.post(envelope);
           } catch (error) {
@@ -194,7 +230,10 @@ export class Api {
   }
   async reconcile(envelope: Envelope, signal?: AbortSignal) {
     envelope = structuredClone(envelope);
-    this.validate(envelope);
+    this.check();
+    if (envelope.project_id !== this.identity.project_id)
+      throw new Error("原请求属于其他项目或服务实例");
+    safeNumbers(envelope);
     return this.locked(envelope.request_id, () => {
       signal?.throwIfAborted();
       return this.reconcileUnlocked(envelope, signal);
@@ -224,6 +263,10 @@ export class Api {
     } catch (error) {
       if (error instanceof ApiError && error.code === "command_not_found") {
         signal?.throwIfAborted();
+        if (envelope.instance_id !== this.identity.instance_id)
+          throw new Error(
+            "原请求属于其他项目或服务实例，保留原信封，不能向新实例补交",
+          );
         return this.post(envelope);
       }
       if (signal?.aborted) throw error;

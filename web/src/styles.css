@@ -1267,3 +1267,59 @@ textarea {
 .graph-canvas .react-flow__attribution a {
   color: inherit;
 }
+
+.project-selector {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  max-width: 100%;
+  text-align: left;
+}
+.project-selector label {
+  font-weight: 600;
+  font-size: 13px;
+}
+.project-selector input,
+.project-selector select {
+  background: #17221c;
+  color: #e5ede8;
+  border: 1px solid #293630;
+  border-radius: 6px;
+  padding: 8px;
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+}
+.opening .project-selector {
+  width: min(680px, 90vw);
+}
+
+.project-selector input::placeholder {
+  color: #8faaa0;
+  opacity: 1;
+}
+.project-current {
+  min-width: 0;
+  font-size: 12px;
+}
+.project-current > div {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  align-items: center;
+}
+.project-current small {
+  color: #8faaa0;
+  white-space: nowrap;
+}
+.project-current .path {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #8faaa0;
+  font-size: 11px;
+}
+.sidebar-collapsed .project-selector {
+  padding: 8px;
+}

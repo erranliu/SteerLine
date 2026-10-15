@@ -9,29 +9,31 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/localservice"
+	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	privatefs "github.com/erranliu/SteerLine/internal/product/httpfs"
 )
 
 type fakeClient struct {
-	identity httpcontract.Identity
-	calls    int
-	route    string
-	envelope httpcontract.CommandEnvelope
-	getError error
+	identity    httpcontract.Identity
+	appIdentity contract.Identity
+	calls       int
+	route       string
+	envelope    httpcontract.CommandEnvelope
+	getError    error
 }
 
-func (c *fakeClient) Identity() httpcontract.Identity { return c.identity }
-func (c *fakeClient) RefreshIdentity(context.Context) (httpcontract.Identity, error) {
-	return c.identity, nil
+func (c *fakeClient) Identity() contract.Identity { return c.appIdentity }
+func (c *fakeClient) RefreshIdentity(context.Context) (contract.Identity, error) {
+	return c.appIdentity, nil
 }
 func (c *fakeClient) Get(_ context.Context, route string, target any) error {
 	c.route = route
@@ -61,7 +63,10 @@ func freeAddress(t *testing.T) string {
 func fixture(t *testing.T) (*Server, *fakeClient) {
 	t.Helper()
 	client := &fakeClient{identity: httpcontract.Identity{ProjectID: httpcontract.ProjectID("repository"), InstanceID: "original-instance", Ready: true}}
-	s, err := Prepare(Options{Address: freeAddress(t), RunDir: t.TempDir(), LauncherDir: t.TempDir(), Client: client, Assets: fstest.MapFS{"index.html": {Data: []byte("<h1>real build</h1>")}, "assets/main.js": {Data: []byte("export default 1")}}})
+	home := t.TempDir()
+	hid, _ := localservice.HomeID(home)
+	client.appIdentity = contract.Identity{HomeID: hid, Protocol: contract.Protocol, InstanceID: "app"}
+	s, err := Prepare(Options{Address: freeAddress(t), Home: home, LauncherDir: LauncherDirectory(home), Client: client, Assets: fstest.MapFS{"index.html": {Data: []byte("<h1>real build</h1>")}, "assets/main.js": {Data: []byte("export default 1")}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,8 +111,8 @@ func login(t *testing.T, s *Server) (*http.Cookie, string) {
 
 func TestWebAuthenticationAndOriginalForwarding(t *testing.T) {
 	s, client := fixture(t)
-	route := "/api/v1/projects/" + client.identity.ProjectID + "/commands"
-	if w := request(s, "GET", route+"/id", "", nil, ""); w.Code != 401 {
+	route := "/api/v1/application/projects/" + client.identity.ProjectID + "/commands"
+	if w := request(s, "GET", route+"/"+strings.Repeat("a", 32), "", nil, ""); w.Code != 401 {
 		t.Fatal(w.Code)
 	}
 	cookie, csrf := login(t, s)
@@ -125,10 +130,10 @@ func TestWebAuthenticationAndOriginalForwarding(t *testing.T) {
 	if w.Code != 200 || client.calls != 1 || client.envelope.RequestID != envelope.RequestID || client.envelope.ExpectedControlRevision != 7 || string(client.envelope.Payload) != string(envelope.Payload) {
 		t.Fatalf("envelope changed: %d %s %+v", w.Code, w.Body.String(), client.envelope)
 	}
-	envelope.InstanceID = "replacement"
+	envelope.ProjectID = httpcontract.ProjectID("other")
 	body, _ = json.Marshal(envelope)
 	if w = request(s, "POST", route, string(body), cookie, csrf); w.Code != 409 || client.calls != 1 {
-		t.Fatal("foreign instance reached native")
+		t.Fatal("foreign project reached application")
 	}
 	client.getError = &httpclient.ClientError{Status: 404, Code: "command_not_found", Reason: "both authorities have no original request"}
 	w = request(s, "GET", route+"/"+strings.Repeat("a", 32), "", cookie, "")
@@ -136,7 +141,7 @@ func TestWebAuthenticationAndOriginalForwarding(t *testing.T) {
 		t.Fatal("formal absence was lost")
 	}
 	client.getError = errors.New("SQLite unavailable")
-	w = request(s, "GET", route+"/id", "", cookie, "")
+	w = request(s, "GET", route+"/"+strings.Repeat("a", 32), "", cookie, "")
 	if w.Code != 503 || strings.Contains(w.Body.String(), "command_not_found") {
 		t.Fatal("failure became absence")
 	}
@@ -153,7 +158,7 @@ func TestWebOriginHostAndStaticBoundaries(t *testing.T) {
 			t.Fatalf("source policy passed: %d", w.Code)
 		}
 	}
-	for route, status := range map[string]int{"/": 200, "/dag": 200, "/runs": 200, "/settings": 200, "/assets/main.js": 200, "/assets/missing.js": 404, "/auth/missing": 404, "/../secret": 400, "/assets%2fmain.js": 400} {
+	for route, status := range map[string]int{"/": 200, "/projects/" + strings.Repeat("a", 64) + "/dag": 200, "/projects/" + strings.Repeat("a", 64) + "/runs": 200, "/projects/" + strings.Repeat("a", 64) + "/settings": 200, "/assets/main.js": 200, "/assets/missing.js": 404, "/auth/missing": 404, "/../secret": 400, "/assets%2fmain.js": 400} {
 		w := request(s, "GET", route, "", nil, "")
 		if w.Code != status {
 			t.Fatalf("%s => %d want %d", route, w.Code, status)
@@ -190,7 +195,7 @@ func TestWebAddressAndPortConflict(t *testing.T) {
 		}
 	}
 	s, c := fixture(t)
-	other, err := Prepare(Options{Address: s.options.Address, RunDir: t.TempDir(), LauncherDir: t.TempDir(), Client: c, Assets: s.assets})
+	other, err := Prepare(Options{Address: s.options.Address, Home: s.options.Home, LauncherDir: t.TempDir(), Client: c, Assets: s.assets})
 	if err == nil {
 		other.Close(context.Background())
 		t.Fatal("conflict silently switched port")
@@ -199,36 +204,26 @@ func TestWebAddressAndPortConflict(t *testing.T) {
 func TestWebLauncherPrivateDiscoveryAndInstance(t *testing.T) {
 	s, c := fixture(t)
 	s.Start()
-	dir := filepath.Join(s.options.RunDir, "local-api")
-	privatefs.EnsurePrivateDirectory(dir)
-	d := httpcontract.Discovery{Version: 1, Protocol: httpcontract.Protocol, ProjectID: c.identity.ProjectID, RepositoryIdentity: "repository", InstanceID: c.identity.InstanceID, Address: "127.0.0.1:3000", CredentialPath: filepath.Join(dir, "credentials", "token"), LeaseID: strings.Repeat("a", 32)}
-	data, _ := json.Marshal(d)
-	file := filepath.Join(dir, "discovery.json")
-	if err := os.WriteFile(file, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	privatefs.SecurePrivateFile(file)
-	url, err := OpeningURL(context.Background(), s.options.RunDir, "repository", s.options.Address, s.options.LauncherDir)
+	url, err := OpeningURL(context.Background(), s.options.Home, "")
 	if err != nil || !strings.HasPrefix(url, "http://"+s.options.Address+"/#ticket=") {
 		t.Fatalf("opening failed: %s %v", url, err)
 	}
 	if strings.Contains(url, s.secret) {
-		t.Fatal("launcher secret leaked into URL")
+		t.Fatal("launcher secret leaked")
 	}
-	if err := privatefs.VerifyPrivateFile(filepath.Join(s.options.LauncherDir, "discovery.json")); err != nil {
+	if err = privatefs.VerifyPrivateFile(filepath.Join(s.options.LauncherDir, "discovery.json")); err != nil {
 		t.Fatal(err)
 	}
-	d.InstanceID = "other"
-	data, _ = json.Marshal(d)
-	os.WriteFile(file, data, 0600)
-	if _, err = OpeningURL(context.Background(), s.options.RunDir, "repository", s.options.Address, s.options.LauncherDir); err == nil {
-		t.Fatal("stale native instance opened")
+	if _, err = localservice.Read(t.TempDir(), s.options.LauncherDir, contract.WebProtocol); err == nil {
+		t.Fatal("foreign home accepted")
 	}
+	_ = c
+
 }
 func TestWebBoundedWritesAndNoBrowserStop(t *testing.T) {
 	s, c := fixture(t)
 	cookie, csrf := login(t, s)
-	route := "/api/v1/projects/" + c.identity.ProjectID + "/commands"
+	route := "/api/v1/application/projects/" + c.identity.ProjectID + "/commands"
 	w := request(s, "POST", route, `{"payload":"`+strings.Repeat("x", (1<<20)+1)+`"}`, cookie, csrf)
 	if w.Code != 413 || c.calls != 0 {
 		t.Fatalf("bound => %d %s", w.Code, w.Body.String())
@@ -257,5 +252,18 @@ func TestWebLiveAuthenticationUsesOriginalHeaders(t *testing.T) {
 	}
 	if _, err = client.Post("http://"+s.options.Address+"/auth/session", "application/json", bytes.NewReader([]byte(`{"ticket":"x"}`))); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestWebSwitchSessionAndNativeStop(t *testing.T) {
+	s, _ := fixture(t)
+	cookie, csrf := login(t, s)
+	for _, route := range []string{"/native/shutdown", "/api/v1/application/shutdown", "/api/v1/application/projects/" + strings.Repeat("a", 64) + "/../../shutdown"} {
+		if w := request(s, "POST", route, `{}`, cookie, csrf); w.Code < 400 {
+			t.Fatalf("browser reached stop %s", route)
+		}
+	}
+	if w := request(s, "GET", "/auth/status", "", cookie, ""); w.Code != 200 || strings.Contains(w.Body.String(), s.secret) {
+		t.Fatal(w.Body.String())
 	}
 }

@@ -29,7 +29,10 @@ import (
 const debugRepository = "erranliu/SteerlineTest"
 const debugRemote = "https://github.com/" + debugRepository + ".git"
 
-type debugRelease struct{ root, home, repo, config, provider, helper, binary, base, status string }
+type debugRelease struct {
+	root, home, repo, config, provider, helper, binary, base, status string
+	webProjects                                                      int
+}
 
 // DebugReleaseMain is the package-local runtime entry point, never a production command.
 func DebugReleaseMain(args []string) error {
@@ -44,13 +47,20 @@ func DebugReleaseMain(args []string) error {
 	if err != nil {
 		return err
 	}
-	if args[0] != "init" && d.status != "ready" {
+	if args[0] != "init" && args[0] != "init-b" && d.status != "ready" {
 		return errors.New("debug package generation has not completed")
 	}
 	for _, a := range args[1:] {
 		if a != "--simulate" && a != "--check" && a != "--no-pause" && args[0] != "control" {
 			return fmt.Errorf("unknown debug argument %q", a)
 		}
+	}
+	if args[0] == "init-b" {
+		return d.secondary().initialize()
+	}
+	if args[0] == "run-project-b" {
+		d = d.secondary()
+		args[0] = "run-project"
 	}
 	if args[0] == "init" {
 		return d.initialize()
@@ -95,6 +105,8 @@ func DebugReleaseMain(args []string) error {
 		return nil
 	case "run":
 		return d.run()
+	case "run-project":
+		return d.runProject()
 	case "console":
 		cmd := d.command(d.binary, "console", "-config", d.config)
 		cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
@@ -172,9 +184,10 @@ func openDebugRelease(root string) (*debugRelease, error) {
 		return nil, err
 	}
 	var manifest struct {
-		Version int    `json:"version"`
-		Base    string `json:"base_branch"`
-		Status  string `json:"status"`
+		WebProjects int    `json:"web_projects"`
+		Version     int    `json:"version"`
+		Base        string `json:"base_branch"`
+		Status      string `json:"status"`
 	}
 	raw, err := os.ReadFile(filepath.Join(root, "manifest.json"))
 	if err != nil {
@@ -186,14 +199,18 @@ func openDebugRelease(root string) (*debugRelease, error) {
 	if manifest.Version != 1 || !strings.HasPrefix(manifest.Base, "codex/debug/") || (manifest.Status != "building" && manifest.Status != "ready") {
 		return nil, errors.New("not a usable generated debug release")
 	}
-	d := &debugRelease{root: root, home: filepath.Join(root, "home"), repo: filepath.Join(root, "projects", "SteerlineTest"), config: filepath.Join(root, "home", "etc", "SteerlineTest.json"), provider: filepath.Join(root, "provider", "state.json"), helper: filepath.Join(root, "bin", "debug-helper.exe"), binary: filepath.Join(root, "bin", "steerline.exe"), base: manifest.Base, status: manifest.Status}
+	d := &debugRelease{root: root, home: filepath.Join(root, "home"), repo: filepath.Join(root, "projects", "SteerlineTest"), config: filepath.Join(root, "home", "etc", "SteerlineTest.json"), provider: filepath.Join(root, "provider", "state.json"), helper: filepath.Join(root, "bin", "debug-helper.exe"), binary: filepath.Join(root, "bin", "steerline.exe"), base: manifest.Base, status: manifest.Status, webProjects: manifest.WebProjects}
 	if _, err = os.Stat(filepath.Join(d.repo, ".git", "objects", "info", "alternates")); err == nil {
 		return nil, errors.New("Git alternates are forbidden")
 	}
 	// All materialized config paths must remain local; git/gh/codex are explicit machine tools.
 	for _, name := range []string{"SteerlineTest.json", "SteerlineTest.live.json", "SteerlineTest.simulate.json"} {
 		var cfg map[string]any
-		raw, err = os.ReadFile(filepath.Join(d.home, "etc", name))
+		dir := "config-source"
+		if name == "SteerlineTest.json" {
+			dir = "etc"
+		}
+		raw, err = os.ReadFile(filepath.Join(d.home, dir, name))
 		if err != nil {
 			return nil, err
 		}
@@ -263,9 +280,11 @@ func (d *debugRelease) git(args ...string) (string, error) {
 }
 
 func (d *debugRelease) initialize() error {
-	for _, args := range [][]string{{"init", "--quiet", "-b", d.base}, {"config", "user.name", "SteerLine Debug"}, {"config", "user.email", "debug@example.invalid"}, {"config", "commit.gpgsign", "false"}, {"config", "core.autocrlf", "false"}, {"config", "core.hooksPath", filepath.Join(d.home, "hooks")}, {"config", "gc.auto", "0"}, {"remote", "add", "origin", debugRemote}, {"add", "."}, {"commit", "--quiet", "-m", "SteerlineTest debug fixture"}} {
-		if _, err := d.git(args...); err != nil {
-			return err
+	if _, err := os.Stat(filepath.Join(d.repo, ".git")); os.IsNotExist(err) {
+		for _, args := range [][]string{{"init", "--quiet", "-b", d.base}, {"config", "user.name", "SteerLine Debug"}, {"config", "user.email", "debug@example.invalid"}, {"config", "commit.gpgsign", "false"}, {"config", "core.autocrlf", "false"}, {"config", "core.hooksPath", filepath.Join(d.home, "hooks")}, {"config", "gc.auto", "0"}, {"remote", "add", "origin", debugRemote}, {"add", "."}, {"commit", "--quiet", "-m", "SteerlineTest debug fixture"}} {
+			if _, err := d.git(args...); err != nil {
+				return err
+			}
 		}
 	}
 	if err := os.MkdirAll(filepath.Join(d.root, "evidence", "commands"), 0700); err != nil {
@@ -336,7 +355,7 @@ func (d *debugRelease) initialize() error {
 	for _, edge := range seed.Dependencies {
 		batch.Dependencies = append(batch.Dependencies, taskmodel.TaskBatchEdge{Predecessor: taskmodel.TaskBatchReference{LocalKey: edge.Predecessor}, Successor: taskmodel.TaskBatchReference{LocalKey: edge.Successor}})
 	}
-	path := filepath.Join(d.root, "seed", "bound-tasks.json")
+	path := filepath.Join(d.root, "seed", filepath.Base(d.config)+".bound-tasks.json")
 	if err = controlled.Write(path, batch); err != nil {
 		return err
 	}
@@ -365,7 +384,7 @@ func (d *debugRelease) initialize() error {
 	if receipt.Status != "accepted" {
 		return fmt.Errorf("seed rejected: %s", raw)
 	}
-	return controlled.Write(filepath.Join(d.root, "evidence", "initialization.json"), map[string]any{"validation": valid, "receipt": receipt})
+	return controlled.Write(filepath.Join(d.root, "evidence", filepath.Base(d.config)+".initialization.json"), map[string]any{"validation": valid, "receipt": receipt})
 }
 
 func (d *debugRelease) prepare(simulate bool) error {
@@ -409,6 +428,14 @@ func (d *debugRelease) prepare(simulate bool) error {
 	}
 	if err = d.prepareSelected(mode); err != nil {
 		return err
+	}
+	if d.webProjects == 2 {
+		if err = d.secondary().prepareSelected(mode); err != nil {
+			return err
+		}
+		if err = d.setEnvironment(mode); err != nil {
+			return err
+		}
 	}
 	return controlled.Write(marker, map[string]any{"scheme": mode, "ready": true})
 }
@@ -503,7 +530,7 @@ func (d *debugRelease) prepareSelected(mode string) error {
 			}
 		}
 	} else {
-		remote := filepath.Join(d.root, "remotes", filepath.FromSlash(debugRepository)+".git")
+		remote := filepath.Join(d.remoteRoot(), filepath.FromSlash(debugRepository)+".git")
 		if _, err = os.Stat(remote); os.IsNotExist(err) {
 			if err = os.MkdirAll(filepath.Dir(remote), 0700); err != nil {
 				return err
@@ -527,6 +554,9 @@ func (d *debugRelease) prepareSelected(mode string) error {
 			if err = json.Unmarshal(raw, &state); err != nil {
 				return err
 			}
+			if d.isSecondary() {
+				state.BaseBranch = d.base
+			}
 			if state.RepositoryName() != debugRepository || state.BranchName() != d.base {
 				return errors.New("provider seed must target this SteerlineTest base")
 			}
@@ -535,7 +565,7 @@ func (d *debugRelease) prepareSelected(mode string) error {
 			}
 		}
 	}
-	raw, err = os.ReadFile(filepath.Join(d.home, "etc", "SteerlineTest."+mode+".json"))
+	raw, err = os.ReadFile(filepath.Join(d.home, "config-source", strings.TrimSuffix(filepath.Base(d.config), ".json")+"."+mode+".json"))
 	if err != nil {
 		return err
 	}
@@ -576,8 +606,13 @@ func (d *debugRelease) setEnvironment(mode string) error {
 	return nil
 }
 
-func (d *debugRelease) run() error {
-	runtimeDir := filepath.Join(d.root, "runtime")
+func (d *debugRelease) runProject() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	return d.runProjectContext(ctx)
+}
+func (d *debugRelease) runProjectContext(parent context.Context) error {
+	runtimeDir := filepath.Join(d.root, "runtime"+d.suffix())
 	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
 		return err
 	}
@@ -599,10 +634,10 @@ func (d *debugRelease) run() error {
 	fmt.Println("Debug scheme:", selected.Scheme, "Home:", d.home)
 	var gitServer *testprocess.Process
 	if selected.Scheme == "simulate" {
-		addressPath := filepath.Join(d.root, "provider", "address.json")
+		addressPath := filepath.Join(filepath.Dir(d.provider), "address.json")
 		os.Remove(addressPath)
-		cmd := d.command(d.helper, "git-server", "--root", filepath.Join(d.root, "remotes"), "--address-file", addressPath, "--e2e-state", d.provider)
-		log, err := os.OpenFile(filepath.Join(d.root, "logs", "git-server.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+		cmd := d.command(d.helper, "git-server", "--root", d.remoteRoot(), "--address-file", addressPath, "--e2e-state", d.provider)
+		log, err := os.OpenFile(filepath.Join(d.root, "logs", "git-server"+d.suffix()+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
 			return err
 		}
@@ -660,7 +695,12 @@ func (d *debugRelease) run() error {
 	if selected.Scheme == "live" {
 		cmd.Env = os.Environ()
 	}
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	serviceLog, err := os.OpenFile(filepath.Join(d.root, "logs", "project"+d.suffix()+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer serviceLog.Close()
+	cmd.Stdout, cmd.Stderr = serviceLog, serviceLog
 	service, err := testprocess.Start(cmd)
 	if err != nil {
 		return err
@@ -670,13 +710,10 @@ func (d *debugRelease) run() error {
 		defer cancel()
 		service.Stop(ctx)
 	}()
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
-	defer signal.Stop(signals)
 	select {
 	case <-service.Done:
 		return service.Wait(context.Background())
-	case <-signals:
+	case <-parent.Done():
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		stop := d.command(d.binary, "stop-service", "-config", d.config)
@@ -689,4 +726,22 @@ func (d *debugRelease) run() error {
 		}
 		return service.Wait(ctx)
 	}
+}
+
+func (d *debugRelease) isSecondary() bool { return strings.HasSuffix(d.repo, "SteerlineTestB") }
+func (d *debugRelease) suffix() string {
+	if d.isSecondary() {
+		return "-b"
+	}
+	return ""
+}
+func (d *debugRelease) remoteRoot() string { return filepath.Join(d.root, "remotes"+d.suffix()) }
+func (d *debugRelease) secondary() *debugRelease {
+	copy := *d
+	copy.repo = filepath.Join(d.root, "projects", "SteerlineTestB")
+	copy.config = filepath.Join(d.home, "etc", "SteerlineTestB.json")
+	copy.provider = filepath.Join(d.root, "provider-b", "state.json")
+	copy.base = d.base + "-b"
+	copy.webProjects = 0
+	return &copy
 }

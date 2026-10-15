@@ -11,7 +11,7 @@ import (
 )
 
 func TestTUIHTTPBoundary(t *testing.T) {
-	for _, owner := range []string{"../consoleapp", "../product/httpclient", "../product/httpcontract", "../product/httpfs"} {
+	for _, owner := range []string{"../consoleapp", "../product/httpclient", "../product/httpcontract", "../product/httpfs", "../projectconnection", "../product/applicationclient", "../product/applicationcontract", "../localservice"} {
 		output, err := exec.Command("go", "list", "-deps", "-json", owner).Output()
 		if err != nil {
 			t.Fatalf("%s: %v", owner, err)
@@ -25,7 +25,7 @@ func TestTUIHTTPBoundary(t *testing.T) {
 			}
 			count++
 			name := pkg.ImportPath
-			if name == "database/sql" || strings.HasPrefix(name, "modernc.org/sqlite") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/") && !(strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/console") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/api") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpclient") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpcontract") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpfs")) {
+			if name == "database/sql" || strings.HasPrefix(name, "modernc.org/sqlite") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/") && !(strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/console") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/api") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpclient") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpcontract") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpfs") || name == "github.com/erranliu/SteerLine/internal/projectconnection" || name == "github.com/erranliu/SteerLine/internal/pathguard" || name == "github.com/erranliu/SteerLine/internal/localservice" || name == "github.com/erranliu/SteerLine/internal/product/applicationclient" || name == "github.com/erranliu/SteerLine/internal/product/applicationcontract") {
 				t.Fatalf("HTTP consumer reaches backend owner: %s", name)
 			}
 		}
