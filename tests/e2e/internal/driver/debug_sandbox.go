@@ -36,7 +36,7 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 	var log *os.File
 	var branches, urls []string
 	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 		defer cancel()
 		cleanupErr := debugSandboxCleanup(cleanupCtx, d, service, branches)
 		if log != nil {
@@ -98,8 +98,8 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 	if err := os.WriteFile(sibling, []byte("unchanged"), 0600); err != nil {
 		return result, err
 	}
-	// This acceptance owns only the project service; the package still includes Web.
-	serviceCmd := d.command(d.helper, "debug", "run-project")
+	// The package owner uses the same shared host and Web as every debug run.
+	serviceCmd := d.command(d.helper, "debug", "run", "--no-open")
 	log, err = os.Create(filepath.Join(root, "evidence", "sandbox-service.log"))
 	if err != nil {
 		return result, err
@@ -130,6 +130,11 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 		return fmt.Errorf("%s: %w; inspect package evidence", label, ctx.Err())
 	}
 	if err := wait("service ready", func() (bool, error) {
+		if _, err := os.Stat(filepath.Join(d.root, "runtime-launcher", "ready.json")); os.IsNotExist(err) {
+			return false, nil
+		} else if err != nil {
+			return false, err
+		}
 		snap, err := ReadApplicationProjectSnapshot(ctx, db, project, "", 100)
 		if err != nil || snap.ExecutionState.Checkpoint == nil {
 			return false, nil

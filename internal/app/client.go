@@ -62,7 +62,7 @@ func openServiceProjectClientWithCommands(ctx context.Context, config Config, se
 				if err := ctx.Err(); err != nil {
 					return nil, err
 				}
-				return &clientReader{Service: query.NewService(store, bound.Identity()), ConversationService: query.NewConversationService(store, bound.Identity()), store: store, project: bound.Identity(), config: bound, executableTypes: append([]string(nil), bound.ExecutableTypes...), freshness: 30 * time.Second, borrowed: true}, nil
+				return &clientReader{Service: query.NewService(store, bound.Identity()), ConversationService: query.NewConversationService(store, bound.Identity()), store: store, project: bound.Identity(), config: bound, executableTypes: append([]string(nil), bound.ExecutableTypes...), freshness: projectReadFreshness(bound), borrowed: true}, nil
 			}
 		}
 		if commands != nil {
@@ -101,10 +101,7 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 	if ref.Key == "" {
 		ref.Key = ref.ConfigPath + "\x00" + ref.RunDir
 	}
-	freshness := 30 * time.Second
-	if poll, err := time.ParseDuration(c.TaskPoll); err == nil && poll*3 > freshness {
-		freshness = poll * 3
-	}
+	freshness := projectReadFreshness(c)
 	return productclient.Resources{
 		Project: ref, DefaultRequestedBy: steerline.DefaultRequestedBy(), DefaultAnswerer: AnswererName(),
 		ReadFailure: func(ctx context.Context, selected string, readErr error) productapi.ProjectSnapshot {
@@ -632,4 +629,12 @@ func publicProjectCapabilities(input []string) []string {
 		}
 	}
 	return result
+}
+
+func projectReadFreshness(c Config) time.Duration {
+	freshness := 30 * time.Second
+	if poll, err := time.ParseDuration(c.TaskPoll); err == nil && poll*3 > freshness {
+		freshness = poll * 3
+	}
+	return freshness
 }

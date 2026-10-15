@@ -8,26 +8,26 @@
 
 ## 查询路由
 
-所有项目查询以 `/v1/projects/{project_id}` 为根。任务/图的版本和游标沿用现有 DTO；cursor 绑定原快照/筛选条件，失效时客户端刷新整页，不拼接不同 revision。活动查询必须绑定原 WorkflowRun、Execution、Attempt。会话 final 查询返回正式正文引用；body 按原 revision、SHA-256、UTF-8 offset 有界读取。客户端用 `presentation` 查询现有 `ProjectPresentation`，展示 `DefaultProfileID`、profile 摘要及 `UnavailableReason`；命令只发送用户选择的 profile ID，服务仍通过原 `StartTaskPayload` 取得并核验配置 digest。
+所有项目查询以 `/v2/application/projects/{project_id}` 为根。任务/图的版本和游标沿用现有 DTO；cursor 绑定原快照/筛选条件，失效时客户端刷新整页，不拼接不同 revision。活动查询必须绑定原 WorkflowRun、Execution、Attempt。会话 final 查询返回正式正文引用；body 按原 revision、SHA-256、UTF-8 offset 有界读取。客户端用 `presentation` 查询现有 `ProjectPresentation`，展示 `DefaultProfileID`、profile 摘要及 `UnavailableReason`；命令只发送用户选择的 profile ID，服务仍通过原 `StartTaskPayload` 取得并核验配置 digest。
 
 | 方法与路径 | DTO / 用途 |
 | --- | --- |
-| `GET /v1/identity` | `Identity`：协议、项目、实例、进程、能力、`ready`、诊断与认证后的两个原锁路径 `lock_paths` |
-| `GET /v1/projects/{project_id}/snapshot?task_id=` | `api.ProjectSnapshot`：连接、服务运行、决策/历史和选中任务 |
-| `GET /v1/projects/{project_id}/tasks?cursor=&limit=` | `api.TaskPage`：有界任务列表 |
-| `GET /v1/projects/{project_id}/tasks/{task_id}` | `api.TaskPage`：任务详情、直接依赖、交付和阻断 |
-| `GET /v1/projects/{project_id}/graph?cursor=&limit=` | `api.GraphPage`：有界基本 DAG |
-| `GET /v1/projects/{project_id}/candidates` | `api.TaskCandidates`：当前可领取任务候选 |
-| `GET /v1/projects/{project_id}/presentation` | `ProjectPresentation`：现有安全执行方案摘要、DefaultProfileID、配置 digest 和不可用原因，供客户端选择 start_task/start_candidate 的 profile ID |
-| `GET /v1/projects/{project_id}/runs/{run_id}` | 精确 run 的 `api.CandidateSummary`，含候选、Decision、PR 与交付状态 |
-| `GET /v1/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&cursor=` | `ActivityPage`，只读规范数据库活动，不回退私有日志 |
-| `GET /v1/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&recent=true` | 同一原 Execution/Attempt 的有界近期活动投影；近期查询使用，不能混用流式 cursor |
-| `GET /v1/projects/{project_id}/runs/{run_id}/conversation?execution_id=&attempt_id=&session_id=&source=&turn_id=&finals_only=&cursor=&limit=` | 有界会话事件页和原正文引用 |
-| `GET /v1/projects/{project_id}/runs/{run_id}/final` | `FinalReply`，返回 final 事件及不超过 4 MiB 的完整正文；更大的正文使用 body 路由分段读取 |
-| `GET /v1/projects/{project_id}/runs/{run_id}/body?ref=<hex-json>&offset=&limit=` | `api.ConversationBodyPage`，原消息 revision/SHA 校验，单页不超过 256 KiB |
-| `GET /v1/projects/{project_id}/runs/{run_id}/recovery?execution_id=&attempt_id=` | `api.RecoveryInspection`，只读原恢复核验，必须绑定当前 Execution/Attempt，不授予继续资格 |
-| `GET /v1/projects/{project_id}/runs/{run_id}/decision-eligibility?execution_id=&attempt_id=` | 只读原决策资格核验，同样要求精确绑定 |
-| `GET /v1/projects/{project_id}/commands/{request_id}` | 查询原 command/control 回执；没有权威记录才返回 `command_not_found` |
+| `GET /v2/application/projects/{project_id}/identity` | `Identity`：协议、项目、实例、进程、能力、`ready`、诊断与认证后的两个原锁路径 `lock_paths` |
+| `GET /v2/application/projects/{project_id}/snapshot?task_id=` | `api.ProjectSnapshot`：连接、服务运行、决策/历史和选中任务 |
+| `GET /v2/application/projects/{project_id}/tasks?cursor=&limit=` | `api.TaskPage`：有界任务列表 |
+| `GET /v2/application/projects/{project_id}/tasks/{task_id}` | `api.TaskPage`：任务详情、直接依赖、交付和阻断 |
+| `GET /v2/application/projects/{project_id}/graph?cursor=&limit=` | `api.GraphPage`：有界基本 DAG |
+| `GET /v2/application/projects/{project_id}/candidates` | `api.TaskCandidates`：当前可领取任务候选 |
+| `GET /v2/application/projects/{project_id}/presentation` | `ProjectPresentation`：现有安全执行方案摘要、DefaultProfileID、配置 digest 和不可用原因，供客户端选择 start_task/start_candidate 的 profile ID |
+| `GET /v2/application/projects/{project_id}/runs/{run_id}` | 精确 run 的 `api.CandidateSummary`，含候选、Decision、PR 与交付状态 |
+| `GET /v2/application/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&cursor=` | `ActivityPage`，只读规范数据库活动，不回退私有日志 |
+| `GET /v2/application/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&recent=true` | 同一原 Execution/Attempt 的有界近期活动投影；近期查询使用，不能混用流式 cursor |
+| `GET /v2/application/projects/{project_id}/runs/{run_id}/conversation?execution_id=&attempt_id=&session_id=&source=&turn_id=&finals_only=&cursor=&limit=` | 有界会话事件页和原正文引用 |
+| `GET /v2/application/projects/{project_id}/runs/{run_id}/final` | `FinalReply`，返回 final 事件及不超过 4 MiB 的完整正文；更大的正文使用 body 路由分段读取 |
+| `GET /v2/application/projects/{project_id}/runs/{run_id}/body?ref=<hex-json>&offset=&limit=` | `api.ConversationBodyPage`，原消息 revision/SHA 校验，单页不超过 256 KiB |
+| `GET /v2/application/projects/{project_id}/runs/{run_id}/recovery?execution_id=&attempt_id=` | `api.RecoveryInspection`，只读原恢复核验，必须绑定当前 Execution/Attempt，不授予继续资格 |
+| `GET /v2/application/projects/{project_id}/runs/{run_id}/decision-eligibility?execution_id=&attempt_id=` | 只读原决策资格核验，同样要求精确绑定 |
+| `GET /v2/application/projects/{project_id}/commands/{request_id}` | 查询原 command/control 回执；没有权威记录才返回 `command_not_found` |
 
 `TaskPage`, `GraphPage`, conversation event/body 和活动 cursor 保留各自实际身份、版本、采样/事件时间。PR、交付和历史 Decision 从现有查询投影返回，不使用 UI 缓存补写。conversation 的空 attempt 选择原 run/Execution 的完整历史；指定历史 attempt 时核对正式会话投影归属。body 保留原 Attempt/revision/SHA，不改向当前 Attempt。
 
@@ -49,7 +49,6 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 | `pause_dispatch`, `resume_dispatch` | `dispatch` / control revision | `{}` | 原控制命令与 authority CAS |
 | `open_terminal`, `recheck_environment` | run ID / blocker version + control revision | `{"target":{"run_id":"...","execution_id":"...","attempt_id":"...","turn_id":"...","blocker_id":"...","version":2}}` | 原宿主 environment control |
 | `open_native_session` | run ID / expected version 0 | `api.NativeSessionTarget`：run/Execution/Attempt/session/generation | 原冻结路径核验后打开原生查看器；持久标记 unknown 后只调用一次，无新业务轮次 |
-| `stop_service` | 当前 `instance_id` / expected version 0 | `{}` | 原服务停服 control request；退出前在在途 HTTP 请求中等待原 applied 回执，不另启动服务 |
 
 `create_task`, `add_predecessors`, planning、人工验收和自定义前置操作目前返回 `unsupported`。服务把有效 request ID 的 unsupported 拒绝保存在原 envelope 记录中；之后 GET 仍返回 `unsupported` rejection，不会伪装成 `command_not_found`。
 
@@ -63,7 +62,7 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 {"code":"command_not_found","reason":"the project database and control request authority contain no record for this request_id","request_id":"0123456789abcdef0123456789abcdef"}
 ```
 
-发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；权威 `command_not_found` 才能按原完整 envelope、原 ID、原 payload 和原版本补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `local-api/commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
+发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；权威 `command_not_found` 才能按原完整 envelope、原 ID、原 payload 和原版本补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `application-commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
 
 Web 将完整原信封保存在现有 IndexedDB；服务端的原请求记录仍是跨动作仲裁。原生查看器的未知结果不得重放。
 

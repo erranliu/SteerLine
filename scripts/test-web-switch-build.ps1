@@ -16,14 +16,19 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Launcher installation failed' }
     $taskAppProcess = Start-Process -FilePath (Join-Path $env:STEERLINE_HOME 'bin\steerline.exe') -ArgumentList 'serve' -WindowStyle Hidden -PassThru
     $taskDeadline = [DateTime]::UtcNow.AddSeconds(15)
-    while (-not (Test-Path -LiteralPath (Join-Path $env:STEERLINE_HOME 'application-api\discovery.json'))) {
+    while ($true) {
+        $taskStatus=& $business status --json | ConvertFrom-Json
+        if ($LASTEXITCODE -eq 0 -and $taskStatus.backend.state -eq 'ready') { break }
         if ($taskAppProcess.HasExited -or [DateTime]::UtcNow -gt $taskDeadline) { throw 'Application startup failed' }
         Start-Sleep -Milliseconds 50
     }
     & $business install 2>&1 | Out-File -LiteralPath (Join-Path $taskRoot 'evidence\install-running-app.log')
     if ($LASTEXITCODE -eq 0) { throw 'Running application target was replaced' }
     $taskWebProcess = Start-Process -FilePath (Join-Path $env:STEERLINE_HOME 'bin\steerline-web.exe') -ArgumentList 'serve' -WindowStyle Hidden -PassThru
-    while (-not (Test-Path -LiteralPath (Join-Path $env:STEERLINE_HOME 'ui\web\discovery.json'))) {
+        $taskDeadline = [DateTime]::UtcNow.AddSeconds(15)
+    while ($true) {
+        $taskStatus=& $business status --json | ConvertFrom-Json
+        if ($LASTEXITCODE -eq 0 -and $taskStatus.web.state -eq 'ready') { break }
         if ($taskWebProcess.HasExited -or [DateTime]::UtcNow -gt $taskDeadline) { throw 'Web startup failed' }
         Start-Sleep -Milliseconds 50
     }

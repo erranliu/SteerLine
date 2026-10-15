@@ -24,13 +24,20 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	second.RunDir = ""
 	second.WorktreeRoot = ""
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "two.json"), projectConfigJSON(t, second), 0600))
+	require(t, os.WriteFile(filepath.Join(EtcDir(), "z-broken.json"), []byte("{"), 0600))
 	d := NewApplicationDirectory(HomeDir())
 	defer d.Close()
 	d.Start()
 	catalog := switchCatalog(t, d, func(c contract.Catalog) bool {
-		return len(c.Projects) == 2 && (c.Projects[0].RuntimeState != "starting" && c.Projects[1].RuntimeState != "starting")
+		return len(c.Projects) == 3 && (c.Projects[0].RuntimeState != "starting" && c.Projects[1].RuntimeState != "starting")
 	})
 	for _, project := range catalog.Projects {
+		if project.ConfigID == "z-broken.json" {
+			if project.RuntimeState != "failed" || project.ProjectID != "" {
+				t.Fatal("bad configuration was not isolated", project)
+			}
+			continue
+		}
 		if !project.Online {
 			t.Fatal("project failed", project)
 		}
@@ -64,6 +71,9 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 		t.Fatal("retired stop affected sibling runtime")
 	}
 	for _, e := range d.entries {
+		if e.ref.Identity == "" {
+			continue
+		} // Invalid configs own no runtime or repository lock.
 		if _, err = os.Stat(filepath.Join(e.ref.RunDir, "local-api", "discovery.json")); !os.IsNotExist(err) {
 			t.Fatal("per-project HTTP published")
 		}

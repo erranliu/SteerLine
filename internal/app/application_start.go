@@ -318,10 +318,15 @@ func verifyBackendStop(ctx context.Context, home string, c component, id *contra
 	if err := localservice.ReadPrivateJSON(filepath.Join(c.dir, "shutdown.json"), &result, 1<<20); err != nil {
 		return fmt.Errorf("project shutdown result unverified: %w", err)
 	}
-	if result.Version != 1 || result.Identity != *id || !result.Clean {
+	if result.Version != 1 || result.Identity != *id || !result.Clean || result.Projects == nil || len(result.Projects) > 512 {
 		return fmt.Errorf("original host shutdown is not clean or identity differs: %s", result.Diagnostic)
 	}
+	seen := map[string]bool{}
 	for _, project := range result.Projects {
+		if project.ConfigID == "" || seen[project.ConfigID] {
+			return errors.New("project shutdown membership is invalid")
+		}
+		seen[project.ConfigID] = true
 		if !project.LocalClosed || !project.LocksReleased || !project.ResourcesSettled || project.Diagnostic != "" {
 			return fmt.Errorf("project %s shutdown unverified: %s", project.ConfigID, project.Diagnostic)
 		}

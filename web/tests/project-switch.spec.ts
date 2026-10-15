@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { preparePackageRuntime } from "./helpers/package";
@@ -9,7 +9,8 @@ test("web.unified-startup: shared host, original commands and active turn surviv
   context,
 }, info) => {
   const runtime = preparePackageRuntime();
-  const {root,manifest,home,binary,web,helper,command,launch}=runtime;
+  const { root, manifest, home, binary, web, helper, command, launch } =
+    runtime;
   const provider = () =>
     JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8"));
   const origin = "http://" + manifest.web_address;
@@ -19,7 +20,7 @@ test("web.unified-startup: shared host, original commands and active turn surviv
     package: root,
   };
   const failures: string[] = [];
- let primaryFailure: unknown;
+  let primaryFailure: unknown;
   const state = provider();
   state.recovery = { HoldStep: "implement.execute", HoldStream: true };
   state.web_feedback = false;
@@ -45,12 +46,22 @@ test("web.unified-startup: shared host, original commands and active turn surviv
         { timeout: 90000 },
       )
       .toBe(true);
+    // Native open creates a fresh browser document, even when the prior URL matches.
+    await page.goto("about:blank");
     await page.goto(url);
   };
   try {
-    facts.startup=await runtime.start();
- for (const target of [binary,web]) {let refused=false;try{command(target,["install"])}catch{refused=true} expect(refused).toBe(true)}
- facts.running_install_rejected=true;
+    facts.startup = await runtime.start();
+    for (const target of [binary, web]) {
+      let refused = false;
+      try {
+        command(target, ["install"]);
+      } catch {
+        refused = true;
+      }
+      expect(refused).toBe(true);
+    }
+    facts.running_install_rejected = true;
     await open();
     const combo = page.getByRole("combobox", { name: "当前项目" });
     await expect
@@ -111,9 +122,11 @@ test("web.unified-startup: shared host, original commands and active turn surviv
     facts.project_b = otherIdentity;
     expect(originalIdentity.process).toEqual(otherIdentity.process);
     expect(originalIdentity.instance_id).not.toBe(otherIdentity.instance_id);
-    const statusBefore = JSON.parse(command(binary,["status","--json"]));
-    command(binary,["start","--no-open"]);
-    expect(JSON.parse(command(binary,["status","--json"])).backend.identity).toEqual(statusBefore.backend.identity);
+    const statusBefore = JSON.parse(command(binary, ["status", "--json"]));
+    command(binary, ["start", "--no-open"]);
+    expect(
+      JSON.parse(command(binary, ["status", "--json"])).backend.identity,
+    ).toEqual(statusBefore.backend.identity);
     // The second tab retains A while this tab switches to B, even with same Task IDs.
     const second = await context.newPage();
     await second.goto(origin + "/projects/" + aid + "/settings");
@@ -277,67 +290,216 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       })
       .toBe(true);
     // CLI-only mutations and original receipts remain outside the browser proxy.
-    const batch = JSON.parse(readFileSync(join(root,"seed","SteerlineTest.json.bound-tasks.json"),"utf8"));
-    batch.tasks = [3,4].map((id) => ({...batch.tasks[0],local_key:"cli-"+id,task_id:id,title:"CLI startup verification "+id}));
-    batch.dependencies=[];
-    const input=join(root,"evidence","cli-batch.json");writeFileSync(input,JSON.stringify(batch));
-    const valid=JSON.parse(command(binary,["task","validate","--project",aid,"--file",input]));
+    const batch = JSON.parse(
+      readFileSync(
+        join(root, "seed", "SteerlineTest.json.bound-tasks.json"),
+        "utf8",
+      ),
+    );
+    const canonical = (value: any): any =>
+      Array.isArray(value)
+        ? value.map(canonical)
+        : value && typeof value === "object"
+          ? Object.fromEntries(
+              Object.keys(value)
+                .sort()
+                .map((key) => [key, canonical(value[key])]),
+            )
+          : value;
+    batch.tasks = [3, 4].map((id) => {
+      const contract = {
+        ...batch.tasks[0].contract,
+        contract_id: "startup-cli-" + id,
+        digest: "",
+      };
+      contract.digest = createHash("sha256")
+        .update(JSON.stringify(canonical(contract)))
+        .digest("hex");
+      return {
+        ...batch.tasks[0],
+        contract,
+        local_key: "cli-" + id,
+        task_id: id,
+        title: "CLI startup verification " + id,
+      };
+    });
+    batch.dependencies = [];
+    const input = join(root, "evidence", "cli-batch.json");
+    writeFileSync(input, JSON.stringify(batch));
+    const valid = JSON.parse(
+      command(binary, ["task", "validate", "--project", aid, "--file", input]),
+    );
     expect(valid.valid).toBe(true);
-    const batchID=randomUUID().replaceAll("-","");
-    command(binary,["task","create","--project",aid,"--file",input,"--request-id",batchID,"--expected-authority-version",String(valid.authority_version),"--by","startup-test"]);
-    const batchReceipt=JSON.parse(command(binary,["task","receipt","--project",aid,"--request-id",batchID]));
-    const dependencyID=randomUUID().replaceAll("-","");
-    command(binary,["task","add-predecessors","--project",aid,"--task-id","4","--predecessors","3","--request-id",dependencyID,"--expected-version","1","--expected-graph-revision",String(batchReceipt.graph_revision),"--reason","startup dependency check","--by","startup-test"]);
-    const predecessor=JSON.parse(command(binary,["task","receipt","--project",aid,"--task-id","4","--request-id",dependencyID]));
+    const batchID = randomUUID().replaceAll("-", "");
+    command(binary, [
+      "task",
+      "create",
+      "--project",
+      aid,
+      "--file",
+      input,
+      "--request-id",
+      batchID,
+      "--expected-authority-version",
+      String(valid.authority_version),
+      "--by",
+      "startup-test",
+    ]);
+    const batchReceipt = JSON.parse(
+      command(binary, [
+        "task",
+        "receipt",
+        "--project",
+        aid,
+        "--request-id",
+        batchID,
+      ]),
+    );
+    const dependencyID = randomUUID().replaceAll("-", "");
+    command(binary, [
+      "task",
+      "add-predecessors",
+      "--project",
+      aid,
+      "--task-id",
+      "4",
+      "--predecessors",
+      "3",
+      "--request-id",
+      dependencyID,
+      "--expected-version",
+      "1",
+      "--expected-graph-revision",
+      String(batchReceipt.graph_revision),
+      "--reason",
+      "startup dependency check",
+      "--by",
+      "startup-test",
+    ]);
+    const predecessor = JSON.parse(
+      command(binary, [
+        "task",
+        "receipt",
+        "--project",
+        aid,
+        "--task-id",
+        "4",
+        "--request-id",
+        dependencyID,
+      ]),
+    );
     expect(predecessor.request_id).toBe(dependencyID);
-    expect((await get(aid,"/tasks")).tasks).toHaveLength(4);
-    expect((await get(bid,"/tasks")).tasks).toHaveLength(2);
-    expect((await page.request.get(origin+"/api/v2/application/projects/"+aid+"/task-batches/"+batchID)).status()).toBe(404);
-    facts.cli={batchReceipt,predecessor};
-    const heldState=provider();heldState.recovery={HoldStep:"implement.execute",HoldStream:true};writeFileSync(join(root,"provider","state.json"),JSON.stringify(heldState));
-    command(binary,["control","--project",aid,"--action","start_task","--task-id","3","--execution-profile","simulate","--wait"]);
-    await expect.poll(()=>provider().turns.length,{timeout:120000}).toBe(4);
-    const inputsBefore=provider().dispatches;
-    facts.active_at_host_stop=(await get(aid,"/snapshot")).connection.snapshot.page.runs.find((run:any)=>run.task_id==="3");
-    command(binary,["stop"]);
-    const shutdown=JSON.parse(readFileSync(join(home,"application-api","shutdown.json"),"utf8"));
-    expect(shutdown.clean).toBe(true);expect(shutdown.projects).toHaveLength(2);
-    facts.shutdown=shutdown;
-    command(binary,["start","--no-open"]);
+    expect((await get(aid, "/tasks")).tasks).toHaveLength(4);
+    expect((await get(bid, "/tasks")).tasks).toHaveLength(2);
+    expect(
+      (
+        await page.request.get(
+          origin +
+            "/api/v2/application/projects/" +
+            aid +
+            "/task-batches/" +
+            batchID,
+        )
+      ).status(),
+    ).toBe(404);
+    facts.cli = { batchReceipt, predecessor };
+    const heldState = provider();
+    heldState.recovery = { HoldStep: "implement.execute", HoldStream: true };
+    writeFileSync(
+      join(root, "provider", "state.json"),
+      JSON.stringify(heldState),
+    );
+    const dispatchesBeforeNewTask = provider().dispatches;
+    command(binary, [
+      "control",
+      "--project",
+      aid,
+      "--action",
+      "start_task",
+      "--task-id",
+      "3",
+      "--execution-profile",
+      "simulate",
+      "--wait",
+    ]);
+    await expect
+      .poll(() => provider().dispatches, { timeout: 120000 })
+      .toBe(dispatchesBeforeNewTask + 1);
+    await expect
+      .poll(() => provider().turns?.[0]?.status, { timeout: 120000 })
+      .toBe("inProgress");
+    const inputsBefore = provider().dispatches;
+    facts.active_at_host_stop = (
+      await get(aid, "/snapshot")
+    ).connection.snapshot.page.runs.find((run: any) => run.task_id === "3");
+    command(binary, ["stop"]);
+    const shutdown = JSON.parse(
+      readFileSync(join(home, "application-api", "shutdown.json"), "utf8"),
+    );
+    expect(shutdown.clean).toBe(true);
+    expect(shutdown.projects).toHaveLength(2);
+    facts.shutdown = shutdown;
+    command(binary, ["start", "--no-open"]);
     await open(aid);
-    await expect.poll(async()=>{
-      const a=await get(aid,"/identity"),b=await get(bid,"/identity");
-      return a.ready && b.ready && a.instance_id!==originalIdentity.instance_id && b.instance_id!==otherIdentity.instance_id;
-    },{timeout:180000}).toBe(true);
-    const recovery=(await get(aid,"/snapshot")).connection.snapshot.page.runs.find((run:any)=>run.task_id==="3");
+    await expect
+      .poll(
+        async () => {
+          const a = await get(aid, "/identity"),
+            b = await get(bid, "/identity");
+          return (
+            a.ready &&
+            b.ready &&
+            a.instance_id !== originalIdentity.instance_id &&
+            b.instance_id !== otherIdentity.instance_id
+          );
+        },
+        { timeout: 180000 },
+      )
+      .toBe(true);
+    const recovery = (
+      await get(aid, "/snapshot")
+    ).connection.snapshot.page.runs.find((run: any) => run.task_id === "3");
     expect(recovery.recovery_required).toBe(true);
     expect(provider().dispatches).toBe(inputsBefore);
-    expect((await get(aid,"/commands/"+requestID)).original.instance_id).toBe(originalIdentity.instance_id);
+    expect(
+      (await get(aid, "/commands/" + requestID)).original.instance_id,
+    ).toBe(originalIdentity.instance_id);
     expect(submissions).toBe(1);
-    facts.recovery_after_host_restart=recovery;
-    facts.restarted_project=await get(aid,"/identity");
+    facts.recovery_after_host_restart = recovery;
+    facts.restarted_project = await get(aid, "/identity");
     await second.close();
     await page.screenshot({
       path: info.outputPath("offline-project.png"),
       fullPage: true,
     });
     facts.submissions = submissions;
-  } catch(error) {primaryFailure=error;facts.business_error=String(error);writeFileSync(join(root,"evidence","web-project-switch.json"),JSON.stringify(facts,null,2));throw error;
+  } catch (error) {
+    primaryFailure = error;
+    facts.business_error = String(error);
+    writeFileSync(
+      join(root, "evidence", "web-project-switch.json"),
+      JSON.stringify(facts, null, 2),
+    );
+    throw error;
   } finally {
-    failures.push(...await runtime.stop());
-    try { await expect
-      .poll(
-        () =>
-          Number(
-            command("powershell.exe", [
-              "-NoProfile",
-              "-Command",
-              `@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${root.replaceAll("'", "''")}\\*' }).Count`,
-            ]),
-          ),
-        { timeout: 30000 },
-      )
-      .toBe(0); } catch (error) { failures.push(String(error)); }
+    failures.push(...(await runtime.stop()));
+    try {
+      await expect
+        .poll(
+          () =>
+            Number(
+              command("powershell.exe", [
+                "-NoProfile",
+                "-Command",
+                `@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${root.replaceAll("'", "''")}\\*' }).Count`,
+              ]),
+            ),
+          { timeout: 30000 },
+        )
+        .toBe(0);
+    } catch (error) {
+      failures.push(String(error));
+    }
     const inventory = JSON.parse(
       command("powershell.exe", [
         "-NoProfile",
@@ -355,6 +517,9 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       join(root, "evidence", "web-project-switch.json"),
       JSON.stringify(facts, null, 2),
     );
-    if (!primaryFailure) {expect(inventory).toEqual({ processes: 0, listeners: 0 });expect(failures).toEqual([]);}
+    if (!primaryFailure) {
+      expect(inventory).toEqual({ processes: 0, listeners: 0 });
+      expect(failures).toEqual([]);
+    }
   }
 });

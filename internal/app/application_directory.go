@@ -73,7 +73,7 @@ func NewApplicationDirectory(home string) *ApplicationDirectory {
 		entry.data, err = readConfiguration(entry.ref.ConfigPath)
 		if err != nil {
 			entry.view.RuntimeState = "failed"
-			entry.view.Diagnostic = err.Error()
+			entry.view.Diagnostic = boundedDiagnostic(err.Error(), 4096)
 		}
 		d.entries = append(d.entries, entry)
 	}
@@ -136,7 +136,7 @@ func (d *ApplicationDirectory) run() {
 			d.mu.Lock()
 			if result.err != nil {
 				result.entry.view.RuntimeState = "failed"
-				result.entry.view.Diagnostic = result.err.Error()
+				result.entry.view.Diagnostic = boundedDiagnostic(result.err.Error(), 4096)
 			} else {
 				e := result.entry
 				e.ref = result.ref
@@ -238,7 +238,7 @@ func (d *ApplicationDirectory) finish(e *catalogEntry, result contract.ProjectSh
 	e.view.Online = false
 	if err != nil {
 		e.view.RuntimeState = "failed"
-		e.view.Diagnostic = err.Error()
+		e.view.Diagnostic = boundedDiagnostic(err.Error(), 4096)
 		if !e.result.LocalClosed || !e.result.ResourcesSettled {
 			e.result.Diagnostic = err.Error()
 		}

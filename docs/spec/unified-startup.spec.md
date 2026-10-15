@@ -1,6 +1,6 @@
 # Spec：统一启动与多项目共进程宿主
 
-状态：2026-10-15 用户要求重新规划并编写 Spec + Plan；仅规划，未实施、未验收。配套 [Plan](unified-startup.plan.md)、[专属验收](../acceptance/unified-startup.md)。普通开发，无 roadmap Task ID，不修改 execution-map。用户明确 TUI 已在移除，本任务不支持 TUI，不以其接线、兼容或移除完成为交付内容。
+状态：2026-10-15 用户已授权实施，并要求 rebase 到已合入 TUI 退役的主干；实现与逐项验证结果见专属验收。配套 [Plan](unified-startup.plan.md)、[专属验收](../acceptance/unified-startup.md)。普通开发，无 roadmap Task ID，不修改 execution-map。用户明确 TUI 已在移除，本任务不支持 TUI，不以其接线、兼容或移除完成为交付内容。
 
 ## 1. 目标、范围与前序契约
 

@@ -38,7 +38,7 @@ func ServeApplication(ctx context.Context) error {
 		result.Diagnostic = boundedDiagnostic(projectErr.Error(), 4096)
 	}
 	for i := range result.Projects {
-		result.Projects[i].Diagnostic = boundedDiagnostic(result.Projects[i].Diagnostic, 512)
+		result.Projects[i].Diagnostic = boundedDiagnostic(result.Projects[i].Diagnostic, 128)
 	}
 	for _, project := range result.Projects {
 		if !project.LocalClosed || !project.LocksReleased || !project.ResourcesSettled {

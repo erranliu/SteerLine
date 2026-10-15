@@ -109,7 +109,7 @@ func TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost(t *testing.T)
 		t.Fatal("missing shutdown result became success")
 	}
 	original := contract.Shutdown{Version: 1, Identity: id, Clean: true, Projects: []contract.ProjectShutdown{{ConfigID: "one.json", ProjectID: strings.Repeat("a", 64), InstanceID: strings.Repeat("b", 32), LocalClosed: true, LocksReleased: true, ResourcesSettled: true}}}
-	for _, kind := range []string{"wrong-instance", "local-unclosed", "worker-unknown", "unclean"} {
+	for _, kind := range []string{"wrong-instance", "local-unclosed", "worker-unknown", "unclean", "missing-projects", "duplicate-project"} {
 		t.Run(kind, func(t *testing.T) {
 			result := original
 			result.Projects = append([]contract.ProjectShutdown(nil), original.Projects...)
@@ -120,6 +120,10 @@ func TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost(t *testing.T)
 				result.Projects[0].LocalClosed = false
 			case "worker-unknown":
 				result.Projects[0].ResourcesSettled = false
+			case "missing-projects":
+				result.Projects = nil
+			case "duplicate-project":
+				result.Projects = append(result.Projects, result.Projects[0])
 			case "unclean":
 				result.Clean = false
 			}

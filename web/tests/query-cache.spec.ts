@@ -6,8 +6,8 @@ import { preparePackageRuntime } from "./helpers/package";
 test("web.query-cache: real requests share cache, preserve content and stop hidden polling across projects", async ({
   page,
 }, info) => {
-  const runtime=preparePackageRuntime();
-  const {root,manifest,home,binary,web,helper,command}=runtime;
+  const runtime = preparePackageRuntime();
+  const { root, manifest, home, binary, web, helper, command } = runtime;
   const origin = "http://" + manifest.web_address;
   const requests: string[] = [];
   const pageErrors: string[] = [];
@@ -47,7 +47,7 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     await route.fulfill({ response });
   });
   try {
-    facts.startup=await runtime.start();
+    facts.startup = await runtime.start();
     let opening = "";
     await expect
       .poll(
@@ -178,10 +178,13 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     facts.project_b = projectB;
     facts.page_errors = pageErrors;
     facts.requests = requests;
-  } catch(error) {primaryFailure=error;facts.business_error=String(error);throw error;
+  } catch (error) {
+    primaryFailure = error;
+    facts.business_error = String(error);
+    throw error;
   } finally {
     releaseTasks?.();
-    const stopErrors=await runtime.stop();
+    const stopErrors = await runtime.stop();
     const inspect = () =>
       JSON.parse(
         command("powershell.exe", [
@@ -217,6 +220,9 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
       body: JSON.stringify(facts, null, 2),
       contentType: "application/json",
     });
-    if (!primaryFailure) {if (cleanupError) throw cleanupError;expect(stopErrors).toEqual([]);}
+    if (!primaryFailure) {
+      if (cleanupError) throw cleanupError;
+      expect(stopErrors).toEqual([]);
+    }
   }
 });
