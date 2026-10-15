@@ -70,8 +70,8 @@ var quickOwnerCases = []struct {
 	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestTM04ExecutionBoundary", "TestSharedFixturesRemainTestOnly", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary"}},
 	{"quick-owner-runner-client", "github.com/erranliu/SteerLine/internal/runnerclient", []string{"TestSteerRunnerCLIContract", "TestSteerRunnerAmbiguousEnvelope", "TestSteerRunnerReleasePinBlocksBeforeInvocation", "TestSteerRunnerUsesPublishedSchema"}},
 	{"quick-owner-runner-bridge", "github.com/erranliu/SteerLine/internal/runnerbridge", []string{"TestSteerRunnerOutboxBoundaries"}},
-	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
-	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
+	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestResolveRepositoryUsesOriginalCommonDir"}},
+	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPublicationSecretsRejectedBeforeFreeze"}},
 	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestWebSwitchNativeConnectionLeaseAndRestart", "TestWebSwitchCatalogReadOnlyAndConflicts", "TestWebSwitchCatalogBoundedSlowConfig", "TestWebSwitchApplicationZeroProjectsLifecycle", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestCM71ProductDependencyBoundary", "TestRunnerProjectPreflightLeavesPrivateRunnerFilesToRunner", "TestRunnerTaskRepositoryKeepsConfiguredIdentityAcrossTransportRewrite"}},
 }
 

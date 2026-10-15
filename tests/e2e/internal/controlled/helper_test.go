@@ -46,7 +46,7 @@ func TestControlledTerminalStartupIsSeparateFromBusinessInput(t *testing.T) {
 	if len(listing["result"].(map[string]any)["terminals"].([]any)) != 1 {
 		t.Fatal(listing)
 	}
-	call("terminal", "send", "--terminal", "original-terminal", "--text", "codex", "--enter", "--retry-request", "fixed-start")
+	call("terminal", "send", "--terminal", "original-terminal", "--text", "& 'codex' '-c' 'tui.animations=false' 'Initialize this agent session. Reply READY only. Do not use tools or change files.'", "--enter", "--retry-request", "fixed-start")
 	state, err := Read(path)
 	if err != nil || state.Recovery.Orca.Agent != "codex" || state.Recovery.Orca.Launches != 1 || state.Recovery.Orca.Sends != 0 || state.Dispatches != 0 {
 		t.Fatal("agent startup became a business input", state, err)

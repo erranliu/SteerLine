@@ -3,7 +3,6 @@
 package query
 
 import (
-	"encoding/json"
 	"strings"
 	"time"
 
@@ -201,39 +200,6 @@ func workflowSummary(w model.WorkflowRunRecord) api.WorkflowSummary {
 	if w.ExecutionProfile != nil {
 		v := Profile(*w.ExecutionProfile)
 		p.ExecutionProfile = &v
-	}
-	return p
-}
-
-func History(d storageports.ExecutionSnapshot) api.HistorySummary {
-	p := api.HistorySummary{}
-	for _, w := range d.WorkflowRuns {
-		p.WorkflowRuns = append(p.WorkflowRuns, workflowSummary(w))
-	}
-	for _, a := range d.Attempts {
-		p.Attempts = append(p.Attempts, api.AttemptSummary{ExecutionID: a.ExecutionID, AttemptID: a.AttemptID, AttemptNumber: a.AttemptNumber, CreatedAt: a.CreatedAt})
-	}
-	for _, e := range d.Executions {
-		p.Executions = append(p.Executions, api.ExecutionSummary{ExecutionID: e.ExecutionID, VerifiedAt: e.Workspace.VerifiedAt, Details: executionDetails(e)})
-	}
-	for _, d := range d.Decisions {
-		v := api.DecisionHistory{WorkflowRunID: d.WorkflowRunID, DecisionID: d.DecisionID, ExecutionID: d.ExecutionID, AttemptID: d.AttemptID, Status: d.Status, Version: d.Version, CreatedAt: d.CreatedAt}
-		var r model.DecisionRequest
-		if err := json.Unmarshal(d.Request, &r); err != nil {
-			v.Diagnostic = "问题记录格式未知；原记录保留，未猜测或导入。"
-		} else {
-			request := DecisionRequest(r)
-			v.Request = &request
-		}
-		if len(d.Answer) > 0 {
-			var a api.DecisionAnswer
-			if err := json.Unmarshal(d.Answer, &a); err == nil {
-				v.Answer = &a
-			} else {
-				v.AnswerDiagnostic = "原答案记录格式未知；原记录保留，未猜测或重放。"
-			}
-		}
-		p.Decisions = append(p.Decisions, v)
 	}
 	return p
 }

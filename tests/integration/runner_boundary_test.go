@@ -12,6 +12,11 @@ import (
 // The actual cross-process behavior is exercised by the independently launched
 // TestDebugReleaseRuntime driver in a newly generated SteerlineDebug package.
 func TestRunnerExecutionBoundary(t *testing.T) {
+	for _, owner := range []string{"adapters", "reliable", "workflow", "conversation"} {
+		if _, err := os.Stat("../../internal/execution/" + owner); !os.IsNotExist(err) {
+			t.Fatal("retired execution owner returned", owner, err)
+		}
+	}
 	for _, target := range []string{"windows", "linux"} {
 		t.Run(target, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

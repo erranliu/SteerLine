@@ -261,7 +261,8 @@ func orcaFixture(path string, args []string) error {
 		prompt := argument(args, "--text")
 		command := argument(args, "--retry-request")
 		if o.Agent == "" {
-			if prompt != "codex" || o.Launches != 0 {
+			initializing := prompt == "codex" || strings.HasPrefix(prompt, "& 'codex' ") && strings.Contains(prompt, "Reply READY only. Do not use tools or change files.")
+			if !initializing || o.Launches != 0 {
 				return errors.New("unexpected or duplicate original agent launch")
 			}
 			o.Agent = "codex"

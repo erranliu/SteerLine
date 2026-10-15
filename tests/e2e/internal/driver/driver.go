@@ -24,7 +24,7 @@ import (
 
 type Client struct {
 	Binary, Config, Home, StatePath, LogDir, WorkingDirectory string
-	Profile                                                   string
+	Profile, NativeHome                                       string
 	sequence                                                  int
 }
 
@@ -49,10 +49,7 @@ func Environment(base []string, home, state string) []string {
 		result = append(result, "ORCA_PAIRING_CODE="+pairing.Pairing, "ORCA_USER_DATA_PATH="+home)
 	}
 	temp := filepath.Join(home, "temp")
-	if token, err := os.ReadFile(filepath.Join(home, "github-token")); err == nil {
-		// Project credential contents never enter command/evidence records.
-		result = append(result, "GH_TOKEN="+strings.TrimSpace(string(token)))
-	}
+
 	// The independent Runner invokes real Git. Redirect only this controlled
 	// fixture's public repository identity to its owned loopback Git server.
 	var fixture struct {
@@ -75,7 +72,7 @@ func Environment(base []string, home, state string) []string {
 
 func (c *Client) Command(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, c.Binary, args...)
-	cmd.Env = Environment(os.Environ(), c.Home, c.StatePath)
+	cmd.Env = c.Environment(os.Environ())
 	cmd.Dir = c.WorkingDirectory
 	return cmd
 }
@@ -104,7 +101,7 @@ func (c *Client) runWithTimeout(ctx context.Context, timeout time.Duration, bina
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.Command(binary, args...)
-	cmd.Env = Environment(os.Environ(), c.Home, c.StatePath)
+	cmd.Env = c.Environment(os.Environ())
 	cmd.Dir = c.WorkingDirectory
 	var out, stderr strings.Builder
 	cmd.Stdout = &out

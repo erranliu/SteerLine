@@ -10,13 +10,6 @@ type ActivityReader interface {
 	ReadRecentActivityView(context.Context, string, string, string, string) (ActivityBinding, []DomainEvent, error)
 }
 
-// TaskCandidateReader returns the whole task graph and every candidate fact
-// for one task from a single snapshot. It does not expose unrelated execution
-// records such as decisions and private operation requests.
-type TaskCandidateReader interface {
-	ReadTaskCandidateSnapshot(context.Context, string, string) (TaskCandidateSnapshot, error)
-}
-
 type EventReader interface {
 	Events(context.Context, string, string, string, int64, int, int) ([]DomainEvent, error)
 	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)

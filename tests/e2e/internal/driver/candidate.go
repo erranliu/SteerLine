@@ -3,12 +3,14 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -26,9 +28,10 @@ type CandidateCommand struct {
 	RecoveryVersion                                                                                uint64
 }
 type CandidateReceipt struct {
-	Request *productapi.ControlRequest  `json:"request,omitempty"`
-	Control *productapi.ControlReceipt  `json:"control,omitempty"`
-	Command *storageports.CommandRecord `json:"command,omitempty"`
+	PreAcceptRejection string                      `json:"pre_accept_rejection,omitempty"`
+	Request            *productapi.ControlRequest  `json:"request,omitempty"`
+	Control            *productapi.ControlReceipt  `json:"control,omitempty"`
+	Command            *storageports.CommandRecord `json:"command,omitempty"`
 }
 
 func (c *Client) Candidate(ctx context.Context, helper string, in CandidateCommand) (CandidateReceipt, error) {
@@ -159,7 +162,18 @@ func MainCandidate(args []string) error {
 		}
 		defer client.Close()
 		cmd, _, err := client.SubmitDecision(ctx, productapi.DecisionInput{CommandID: in.RequestID, RequestedBy: "e2e", Answer: productapi.DecisionAnswer{RunID: in.RunID, DecisionID: in.DecisionID, OptionID: in.Option, Note: in.Note, AnsweredBy: "e2e", ExpectedDecisionVersion: in.DecisionVersion, ExpectedRunRevision: in.RunRevision, ServiceInstanceID: in.InstanceID, SourceAttemptID: in.AttemptID, ExpectedRecoveryVersion: in.RecoveryVersion}})
+
 		if err != nil {
+			// A fresh ID is safe only after proving this original request was
+			// never persisted. Transport/unknown outcomes retain their ID.
+			var rejected *taskmodel.Error
+			if errors.As(err, &rejected) && (rejected.Code == "stale_version" || rejected.Code == "stale_recovery") {
+				if _, lookupErr := steerline.ReadControlRequest(hostConfig, in.RequestID); os.IsNotExist(lookupErr) {
+					if encodeErr := json.NewEncoder(os.Stdout).Encode(CandidateReceipt{PreAcceptRejection: rejected.Code}); encodeErr != nil {
+						return encodeErr
+					}
+				}
+			}
 			return err
 		}
 		if cmd.Status == "pending" || cmd.Status == "in_flight" {

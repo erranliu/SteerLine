@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -17,16 +16,6 @@ const Model = "gpt-6-luna"
 const Effort = "medium"
 
 var ErrNativeTurnPending = errors.New("latest native turn has not completed")
-
-func TrustProject(home, path string) error {
-	quoted, _ := json.Marshal(filepath.Clean(path))
-	f, err := os.OpenFile(filepath.Join(home, "config.toml"), os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	_, writeErr := fmt.Fprintf(f, "\n[projects.%s]\ntrust_level = \"trusted\"\n", quoted)
-	return errors.Join(writeErr, f.Close())
-}
 
 type Tokens struct {
 	Input     int64 `json:"input_tokens"`
@@ -287,49 +276,4 @@ func RolloutTurnUsage(raw []byte, cwd, turn string) (Usage, []byte, error) {
 }
 func samePath(a, b string) bool {
 	return strings.EqualFold(filepath.Clean(filepath.FromSlash(a)), filepath.Clean(filepath.FromSlash(b)))
-}
-
-func SeedAuth(source, destination, windowsSandbox string) error {
-	var sandbox map[string][]byte
-	switch windowsSandbox {
-	case "elevated":
-		var err error
-		sandbox, err = sandboxState(source)
-		if err != nil {
-			return fmt.Errorf("noninteractive sandbox preflight failed before model request: %w", err)
-		}
-	case "unelevated", "full-access":
-		// Restricted tokens use the current user, not provisioned accounts.
-	default:
-		return errors.New("unknown native Windows sandbox mode")
-	}
-	raw, err := os.ReadFile(filepath.Join(source, "auth.json"))
-	if err != nil {
-		return fmt.Errorf("live tests require readable Codex auth.json: %w", err)
-	}
-	var auth map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &auth); err != nil || len(auth) == 0 {
-		return errors.New("invalid Codex authentication file")
-	}
-	if err := os.MkdirAll(destination, 0700); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(destination, "auth.json"), raw, 0600); err != nil {
-		return err
-	}
-	// Reuse the already provisioned Windows sandbox accounts. A fresh home
-	// without these files asks for interactive UAC during the first shell call.
-	// These are credentials, never artifacts; the native runner still applies
-	// and proves the frozen workspace permissions itself.
-	for relative, data := range sandbox {
-		target := filepath.Join(destination, relative)
-		if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
-			return err
-		}
-		if err := os.WriteFile(target, data, 0600); err != nil {
-			return err
-		}
-	}
-	// No user configuration, session history, provider override or MCP is inherited.
-	return os.WriteFile(filepath.Join(destination, "config.toml"), []byte("model = \""+Model+"\"\nmodel_reasoning_effort = \""+Effort+"\"\n"), 0600)
 }

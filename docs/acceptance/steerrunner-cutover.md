@@ -7,9 +7,9 @@
 | SLC-A01 | 公共 CLI 严格解码、丢响应原请求、终态不重发、显式新授权 | 已有定向单元通过，最终证据待固定 |
 | SLC-A02 | 候选原子领取和固定请求、绑定/事件/游标 CAS、终态停止义务 | SQLite 定向通过，最终证据待固定 |
 | SLC-A03 | 正确合并候选唯一交付、无 pr_ready 门槛、兄弟未知不阻塞、原子回滚与幂等 | SQLite 定向通过，最终证据待固定 |
-| SLC-A04 | 实际产品命令→Runner CLI 的完整闭环、双库、重启和停止 | 实际 service/config/控制/读取已切换；独立 EXE 闭环仍在复验，未通过 |
-| SLC-A05 | 最小既有 L3 场景切换到新 CLI 后通过 | driver 已使用 v3 配置和公开候选投影，五场景尚未全部运行 |
-| SLC-A06 | 单一执行 owner、旧 actor/worker/适配器/写表删除、固定可获取 Runner 版本 | 待完成；当前分支不能作为已完成产品切换交付 |
+| SLC-A04 | 实际产品命令→Runner CLI 的完整闭环、双库、重启和停止 | 独立 EXE 基础闭环已通过；服务重启等子项仍在 R1 复验 |
+| SLC-A05 | 最小既有 L3 场景切换到新 CLI 后通过 | 五场景已启动；基础交付通过，其余恢复结果/复验见下 |
+| SLC-A06 | 单一执行 owner、旧 actor/worker/适配器/写表删除、固定可获取 Runner 版本 | 旧执行 owner、写表及闲置端口已删除；固定可获取构建及最终回归待完成 |
 
 人工项 SLC-M01：两个独立项目的安装/升级、服务与日志定位体验；窗口待双方自动链路可用后安排，可后置，不阻塞无关开发。
 
@@ -17,7 +17,7 @@
 
 2026-10-15：`client-release.log` 的 runnerclient/runnerbridge 定向通过，新增每次调用前 EXE 摘要校验、公开 schema 校验及外部 $ref 零读取。`control.log` 的 `go test ./internal/storage/sqlite -run '^TestRunner' -count=1 -timeout=2m` 通过：包含候选/交付、Task service、真实 host scheduler、WAL 快照、调度事务回滚和已领取但外层回执丢失后的原 ID 恢复。测试保留了夹具缺少 profile digest、契约目标和验收标题时的失败；修正夹具后运行成功，未放宽生产规则。
 
-实际 app service 已使用 taskrunner actor，版本 3 配置固定独立 Runner EXE/版本/SHA；答案、resume、作废、候选控制和 TaskDelivery 均经过公开 caller 边界。新 SQLite schema 21 删除旧执行/原生会话写表，旧根执行 actor/worker 和其专属 in-process 测试已物理删除。原生 adapters/workflow/reliable 的测试辅助依赖仍待清理；五个 L3 尚未全部执行，不能声明完成跨仓交付。
+实际 app service 已使用 taskrunner actor，版本 3 配置固定独立 Runner EXE/版本/SHA；答案、resume、作废、候选控制和 TaskDelivery 均经过公开 caller 边界。新 SQLite schema 21 删除旧执行/原生会话写表，旧根执行 actor/worker 和其专属 in-process 测试已物理删除。剩余原生 owner 和测试辅助依赖现已删除；五个 L3 的最终结果见下，尚不能声明完成跨仓交付。
 
 
 2026-10-15 迭代证据（当前 source dirty，不作为最终固定版本）：
@@ -44,3 +44,12 @@
 R1 余下三场景已改用公开候选/Run/Attempt/session、原生夹具次数和产品 resume 控制；Orca 夹具补公开 terminal list 及独立 agent-start 接受，agent 启动不计业务输入。`r1-public-recovery-compile.log` 编译通过，`public-terminal-fixture.log` 定向通过；尚未计五场景行为通过。`web-answer.log` 的 6 个回答交互测试通过（含多题 JSON 不重复为 note），`web-build.log` TypeScript/Vite 构建通过。
 
 审计并移除旧 `test-debug-release.ps1 -Live` 的包内 token 读取/导出和宿主代 worker 发布路径，改为实际原生工作流入口；固定 EXE 选择贯通生成及拒绝路径验证，PowerShell 语法检查无错误。该入口 live 尚未执行，不作通过记录。
+
+
+后续 P6 检查点：
+
+- `caller-integration/result-13.json`：SteerLine 干净 `025de7fc` + Runner 干净 `6b18f3e`，独立实际产品包 `C:/SteerlineDebug/caller/dev-20261015-130023-025de7fc`，1 场景 exit 0（137.44 秒）。公开 CLI 完成三阶段、真实 Git push、受控 PR 合并、唯一 TaskDelivery/后继释放、原 Run 停止、服务停止及重置隔离。PR provider 为受控环境，不是真实 GitHub PR。
+- 物理删除 `execution/{adapters,workflow,reliable,conversation}`；删除闲置 worker/claim/result/discard 事务端口及旧 native 重建函数。workspace 只保留调用方仓库身份解析；publication 只保留调用方配置校验，不再持有 PR 查询或 native worktree 操作。原生专属测试在 Runner，SteerLine 测试只使用公开 CLI/投影和外部工具自身证据。
+- `retired-owner-directed-2.log`：跨 OS 源码/依赖守卫、e2e 导入负例、Task/SQLite/公开查询定向通过。`public-native-directed-3.log`：原生工具自身 usage/inventory、精确自有子进程故障、外部认证引用零复制、公开诊断过滤通过。故障测试保留首次 CIM 微秒精度与 FILETIME 精度不一致失败，统一精度且保留句柄后通过。`e2e-cutover-compile-final.log` 为 e2e 全包只编译通过，不计行为覆盖。
+- R1 `r1-public`：冻结 `7b42cd7f` 和 Runner `6b18f3e`；基础交付通过 155.51 秒。本机 terminal 因夹具错误携带空 environment 被严格拒绝；codex resume 因刷新前提交过期版本失败；environment unknown-send 因夹具只识别裸 codex 命令、未识别真实初始化命令失败，且清理遇已明确拒绝的 stale_revision。修正夹具、原请求未持久化时的有界版本刷新和同一停止目标的有界刷新；所有失败保留，待新冻结版本复验。
+- Native helper 不再复制认证、配置、hooks、token 或 sandbox 凭据；既有原生登录留在原外部 home。诊断不遍历 Runner 私有库/日志或 native auth/config，只导出公开身份与由原生 rollout 筛选的本 Run usage。真实发布仍须通过正常原生工具，不能以宿主代发绕过失败。

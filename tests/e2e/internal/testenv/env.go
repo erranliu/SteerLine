@@ -25,7 +25,6 @@ import (
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
 	"github.com/google/uuid"
 )
 
@@ -77,10 +76,23 @@ type Task struct {
 	Contract taskmodel.TaskContract
 }
 
+// TaskFactsSnapshot keeps task facts for older unselected scenario assertions.
+// Native record slices remain empty; production does not reconstruct them.
+type TaskFactsSnapshot struct {
+	ProjectIdentity string
+	Tasks           []taskmodel.TaskRecord
+	WorkflowRuns    []executionmodel.WorkflowRunRecord
+	Executions      []executionmodel.ExecutionRecord
+	Attempts        []executionmodel.StepAttemptRecord
+	Decisions       []executionmodel.DecisionRecord
+	Operations      []executionmodel.OperationRecord
+	Deliveries      []executionmodel.TaskDeliveryRecord
+}
+
 type Snapshot struct {
 	Runner  storageports.RunnerSnapshot `json:"runner"`
 	Page    storageports.NativeTaskPage `json:"page"`
-	Domain  reconstruction.Snapshot     `json:"domain"`
+	Domain  TaskFactsSnapshot           `json:"domain"`
 	Helper  controlled.State            `json:"helper"`
 	Runtime *reconstruction.Runtime     `json:"runtime,omitempty"`
 }
@@ -272,7 +284,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	addressPath := filepath.Join(root, "git-address.json")
 	p.git(p.Repo, "--git-dir", p.Remote, "config", "http.receivepack", "true")
 	cmd := exec.Command(s.Run.Helper, "git-server", "--root", filepath.Join(root, "remotes"), "--address-file", addressPath, "--e2e-state", p.Provider)
-	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	cmd.Env = p.Driver.Environment(os.Environ())
 	server := s.start(cmd, name+"-git-server")
 	p.GitServer = server
 	address := ""
@@ -394,6 +406,15 @@ func (p *Project) git(dir string, args ...string) string {
 	p.Scenario.t.Helper()
 	ctx, cancel := context.WithTimeout(p.Scenario.Context, 30*time.Second)
 	defer cancel()
+	if p.Chain != "" {
+		command := exec.CommandContext(ctx, "git", append([]string{"-c", "core.longpaths=true", "-c", "user.name=E2E", "-c", "user.email=e2e@example.invalid", "-c", "commit.gpgsign=false", "-C", dir}, args...)...)
+		command.Env = p.Driver.Environment(os.Environ())
+		out, err := command.CombinedOutput()
+		if err != nil {
+			p.Scenario.t.Fatalf("owned native fixture Git: %v: %s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
 	out, err := controlled.Git(ctx, dir, args...)
 	p.Scenario.Must(err)
 	return out
@@ -401,7 +422,7 @@ func (p *Project) git(dir string, args ...string) string {
 
 func (p *Project) Command(executable string, args ...string) *exec.Cmd {
 	cmd := exec.Command(executable, args...)
-	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	cmd.Env = p.Driver.Environment(os.Environ())
 	cmd.Dir = p.Driver.WorkingDirectory
 	return cmd
 }
@@ -496,7 +517,7 @@ func (p *Project) StartService() {
 	p.serviceGeneration++
 	// Context cancellation is handled by the owning Scenario's cleanup, not exec's root-only Kill.
 	cmd := exec.Command(p.Executable, "run", "-config", p.Config, "-dispatch", "manual", "-console", "off")
-	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	cmd.Env = p.Driver.Environment(os.Environ())
 	p.Service = s.start(cmd, fmt.Sprintf("%s-service-%d", p.Name, p.serviceGeneration))
 	s.Wait("service readiness", func() (bool, error) {
 		select {
@@ -610,7 +631,7 @@ func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (
 	snap.Runner = state
 	// Domain retains task facts only while callers migrate to Runner. Never
 	// synthesize old native execution/attempt/operation records from CLI views.
-	snap.Domain = reconstruction.Snapshot{ProjectIdentity: project, Tasks: graph.Tasks}
+	snap.Domain = TaskFactsSnapshot{ProjectIdentity: project, Tasks: graph.Tasks}
 	for _, delivery := range graph.Deliveries {
 		snap.Domain.Deliveries = append(snap.Domain.Deliveries, delivery)
 	}
@@ -740,16 +761,12 @@ func (s *Scenario) cleanup() {
 			}
 			snap, err := p.SnapshotContext(ctx)
 			if err == nil {
-				for _, execution := range snap.Domain.Executions {
-					selected, selectErr := evidence.Candidate(snap.Domain, execution.WorkflowRunID, execution.ExecutionID)
-					if selectErr != nil {
-						failures = append(failures, selectErr.Error())
-						continue
-					}
+				for _, candidate := range snap.Runner.Candidates {
 					bound := snap
-					bound.Domain = selected
-					u, usageErr := p.NativeUsage(bound, execution.ExecutionID+"-cleanup")
-					if writeErr := controlled.Write(filepath.Join(s.Output, p.Name+"-"+execution.ExecutionID+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)}); writeErr != nil {
+					bound.Runner.Candidates = bound.Runner.Candidates[:0:0]
+					bound.Runner.Candidates = append(bound.Runner.Candidates, candidate)
+					u, usageErr := p.NativeUsage(bound, candidate.ID+"-cleanup")
+					if writeErr := controlled.Write(filepath.Join(s.Output, p.Name+"-"+candidate.ID+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)}); writeErr != nil {
 						failures = append(failures, writeErr.Error())
 					}
 				}

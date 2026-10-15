@@ -11,7 +11,6 @@ import (
 
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 )
 
@@ -21,7 +20,7 @@ type ConsoleStep struct {
 }
 
 func OriginalTerminalWorkingObserved(s Snapshot) bool {
-	return len(s.Domain.Executions) == 1 && evidence.OrcaOriginalWorkingObserved(s.Domain.Executions[0])
+	return len(s.Runner.Candidates) == 1 && s.Runner.Candidates[0].Projection != nil && s.Runner.Candidates[0].Projection.Execution.TurnStarted
 }
 
 func (p *Project) ConfigureRecovery(f controlled.RecoveryFixture) {
@@ -56,7 +55,11 @@ func (p *Project) UseControlledTerminal(environment string, f controlled.Recover
 	if environment != "" {
 		kind = "orca_environment"
 	}
-	profile := map[string]any{"id": "controlled", "name": "Controlled single terminal", "execution": map[string]any{"adapter": "orca-terminal", "target": map[string]string{"kind": kind, "environment": environment}, "settings": map[string]any{"transport": map[string]any{"executable": p.Scenario.Run.Helper, "args": []string{"orca-fixture"}, "wait_timeout": "1s"}, "agent_launch": map[string]any{"executable": "codex", "args": []string{}}}}, "workflow": map[string]any{"id": "development", "version": 1}}
+	target := map[string]string{"kind": kind}
+	if environment != "" {
+		target["environment"] = environment
+	}
+	profile := map[string]any{"id": "controlled", "name": "Controlled single terminal", "execution": map[string]any{"adapter": "orca-terminal", "target": target, "settings": map[string]any{"transport": map[string]any{"executable": p.Scenario.Run.Helper, "args": []string{"orca-fixture"}, "wait_timeout": "1s"}, "agent_launch": map[string]any{"executable": "codex", "args": []string{}}}}, "workflow": map[string]any{"id": "development", "version": 1}}
 	config["execution_profiles"] = []any{profile}
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), config))
 }
@@ -73,10 +76,25 @@ func (p *Project) CrashService() {
 }
 
 func (p *Project) DisconnectWorker(snap Snapshot) {
-	if len(snap.Domain.Executions) != 1 {
-		p.Scenario.t.Fatal("fault needs one owned execution")
+	if len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].Projection == nil {
+		p.Scenario.t.Fatal("fault needs one original public Run")
 	}
-	p.Scenario.Must(native.DisconnectCandidate(snap.Domain.Executions[0], p.Root))
+	c := snap.Runner.Candidates[0]
+	r := c.Projection
+	var input struct {
+		Execution struct {
+			Settings struct {
+				Executable string `json:"executable"`
+			} `json:"settings"`
+		} `json:"execution"`
+	}
+	p.Scenario.Must(json.Unmarshal(c.Submit.Input, &input))
+	service, err := driver.ReadRunnerService(p.Scenario.Context, filepath.Join(p.Home, "execution.json"), c.StateDir)
+	p.Scenario.Must(err)
+	if service.Status != "ready" || r.Execution.Backend != "local" {
+		p.Scenario.t.Fatal("original native fault owner unavailable")
+	}
+	p.Scenario.Must(native.DisconnectCandidate(native.ProcessFaultTarget{ParentPID: service.PID, ParentCreated: service.ProcessCreated, Executable: input.Execution.Settings.Executable, Workspace: r.Execution.Workspace, Session: r.Execution.SessionID}, p.Root))
 }
 
 func (p *Project) ReleaseNativeRecovery() {
@@ -104,22 +122,42 @@ func (p *Project) WaitRecovery(label string, predicate func(Snapshot) bool) Snap
 }
 
 // AnswerRecovery exercises formal optimistic concurrency. Only an explicit
-// pre-accept stale_recovery rejection can refresh this test's authorized answer;
+// pre-accept stale_version/stale_recovery rejection can refresh this test's authorized answer;
 // unknown command outcomes are never retried under a different request ID.
 func (p *Project) AnswerRecovery(snap Snapshot) driver.CandidateCommand {
-	if snap.Runtime == nil || len(snap.Runtime.Runs) != 1 || len(snap.Runner.Candidates) != 1 {
-		p.Scenario.t.Fatal("missing public recovery binding")
+	original := snap
+	var lastErr error
+	for retry := 0; retry < 3; retry++ {
+		if snap.Runtime == nil || len(snap.Runtime.Runs) != 1 || len(snap.Runner.Candidates) != 1 {
+			p.Scenario.t.Fatal("missing public recovery binding")
+		}
+		r := snap.Runtime.Runs[0]
+		d := r.Decision
+		public := snap.Runner.Candidates[0].Projection
+		if public == nil || !public.Controls.CanResume || d == nil || d.Request.InteractionKind != "runner_resume" {
+			p.Scenario.t.Fatal("original Runner does not allow explicit resume")
+		}
+		if retry > 0 {
+			before := original.Runner.Candidates[0]
+			if before.ID != snap.Runner.Candidates[0].ID || before.RunID != public.RunID || before.Projection.Execution.AttemptID != public.Execution.AttemptID || before.Projection.Phase != public.Phase || original.Runtime.Runs[0].Decision.ID != d.ID {
+				p.Scenario.t.Fatal("rejected resume refresh changed original recovery target")
+			}
+		}
+		input := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: r.RunID, ExecutionID: r.ExecutionID, DecisionID: d.ID, DecisionVersion: d.Version, RunRevision: r.ControlRevision, AttemptID: r.AttemptID, RecoveryVersion: r.RecoveryVersion, InstanceID: snap.Runtime.Service.InstanceID, Option: "resume"}
+		receipt, err := p.Driver.Candidate(p.Scenario.Context, p.Scenario.Run.Helper, input)
+		if err == nil {
+			return input
+		}
+		if receipt.PreAcceptRejection != "stale_version" && receipt.PreAcceptRejection != "stale_recovery" {
+			p.Scenario.Must(err)
+		}
+		lastErr = err
+		p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, "resume-preaccept-rejection-"+input.RequestID+".json"), receipt))
+		snap, err = p.Snapshot()
+		p.Scenario.Must(err)
 	}
-	r := snap.Runtime.Runs[0]
-	d := r.Decision
-	native := snap.Runner.Candidates[0].Projection
-	if native == nil || !native.Controls.CanResume || d == nil || d.Request.InteractionKind != "runner_resume" {
-		p.Scenario.t.Fatal("original Runner does not allow explicit resume")
-	}
-	input := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: r.RunID, ExecutionID: r.ExecutionID, DecisionID: d.ID, DecisionVersion: d.Version, RunRevision: r.ControlRevision, AttemptID: r.AttemptID, RecoveryVersion: r.RecoveryVersion, InstanceID: snap.Runtime.Service.InstanceID, Option: "resume"}
-	_, err := p.Driver.Candidate(p.Scenario.Context, p.Scenario.Run.Helper, input)
-	p.Scenario.Must(err)
-	return input
+	p.Scenario.Must(lastErr)
+	return driver.CandidateCommand{}
 }
 
 // FinishRecoveredFlow confirms each distinct product decision, never native questions.

@@ -81,10 +81,35 @@ func CleanupRunner(ctx context.Context, executionConfig, stateDir string, candid
 		if run.StopStatus == "stopped" {
 			continue
 		}
-		body, _ := json.Marshal(map[string]uint64{"expected_revision": run.Revision})
-		request := runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "fixture-stop-" + run.RunID + "-" + strconv.FormatUint(run.Revision, 10), Input: body}
-		if _, err = cli.Call(ctx, "stop", []string{"--run-id", run.RunID}, &request); err != nil {
-			return err
+		accepted := false
+		for retry := 0; retry < 5; retry++ {
+			body, _ := json.Marshal(map[string]uint64{"expected_revision": run.Revision})
+			request := runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "fixture-stop-" + run.RunID + "-" + strconv.FormatUint(run.Revision, 10), Input: body}
+			if _, err = cli.Call(ctx, "stop", []string{"--run-id", run.RunID}, &request); err == nil {
+				accepted = true
+				break
+			}
+			// This exact structured rejection proves zero acceptance; refresh
+			// only the same original stop target. Unknown outcomes are returned.
+			var rejected *runnerclient.Failure
+			if !errors.As(err, &rejected) || rejected.Code != "stale_revision" {
+				return err
+			}
+			fresh, inspectErr := cli.Inspect(ctx, "run-id", run.RunID, false)
+			if inspectErr != nil {
+				return inspectErr
+			}
+			if fresh.Run == nil || fresh.Run.RunID != run.RunID {
+				return errors.New("cleanup refresh changed original Run")
+			}
+			run = fresh.Run
+			if run.StopStatus == "stopped" {
+				accepted = true
+				break
+			}
+		}
+		if !accepted {
+			return fmt.Errorf("original Run stop stayed stale after bounded refresh: %w", err)
 		}
 		for {
 			view, err := cli.Inspect(ctx, "run-id", run.RunID, false)

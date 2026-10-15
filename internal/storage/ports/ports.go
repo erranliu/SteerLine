@@ -9,11 +9,6 @@ import (
 
 var ErrNotFound = errors.New("persistent record not found")
 
-type RecordWrite[T any] struct {
-	Before *T
-	After  T
-}
-
 type Commands interface {
 	EnqueueCommand(context.Context, CommandRecord) (CommandRecord, bool, error)
 	UpdateCommand(context.Context, CommandRecord) error

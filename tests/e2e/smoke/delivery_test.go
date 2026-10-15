@@ -25,11 +25,11 @@ func TestDeliverySmoke(t *testing.T) {
 			t.Fatal("successor started or became ready before merge")
 		}
 	}
-	session, err := testenv.ExecutionSession(open.Domain.Executions[0])
-	env.Must(err)
-	if open.Domain.Executions[0].Workspace.Worktree == "" || session != open.Helper.Session {
-		t.Fatal("execution did not bind assigned workspace/session")
+	e := open.Runner.Candidates[0].Projection.Execution
+	if e.Workspace == "" || e.SessionID != open.Helper.Session {
+		t.Fatal("execution did not bind original public workspace/session")
 	}
+
 	p.Merge()
 	closed := p.WaitPhase("completed")
 	p.Record("completed", closed)
@@ -37,7 +37,7 @@ func TestDeliverySmoke(t *testing.T) {
 	for _, task := range closed.Page.Tasks {
 		switch task.TaskID {
 		case p.Tasks["a"].ID:
-			if task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != open.Domain.WorkflowRuns[0].WorkflowRunID {
+			if task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != open.Runner.Candidates[0].ID {
 				t.Fatal("missing delivery on original workflow")
 			}
 			delivery, _ = json.Marshal(task.Delivery)
@@ -62,7 +62,7 @@ func TestDeliverySmoke(t *testing.T) {
 			}
 		}
 	}
-	if len(again.Domain.WorkflowRuns) != 1 || again.Helper.Dispatches != 3 {
+	if len(again.Runner.Candidates) != 1 || again.Helper.Dispatches != 3 {
 		t.Fatal("duplicate execution after delivery")
 	}
 	p.StopService()

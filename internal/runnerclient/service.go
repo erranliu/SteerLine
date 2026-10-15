@@ -11,6 +11,8 @@ import (
 
 type ServiceInfo struct {
 	InstanceID       string `json:"instance_id"`
+	PID              int    `json:"pid"`
+	ProcessCreated   string `json:"process_created"`
 	StateDir         string `json:"state_dir"`
 	Status           string `json:"status"`
 	Version          string `json:"version"`
