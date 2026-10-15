@@ -184,18 +184,8 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 		if err != nil {
 			return err
 		}
-		{
-			if original, err := c.Store.Candidate(ctx, c.Tasks.Project, req.RequestID); err != nil || original.TaskID != payload.TaskID {
-				graph, err := c.Store.TaskGraphSnapshot(ctx, c.Tasks.Project)
-				if err != nil {
-					return err
-				}
-				if graph.Authority.GraphRevision != payload.ExpectedGraphRevision {
-					return failure("stale_version", "candidate task graph changed")
-				}
-			}
-		}
-		candidate, err := c.Tasks.Start(ctx, Start{RequestID: req.RequestID, TaskID: payload.TaskID, TaskVersion: payload.ExpectedTaskVersion, ProfileID: profileID, Candidate: req.Action == "start_candidate", Explicit: true})
+
+		candidate, err := c.Tasks.Start(ctx, Start{RequestID: req.RequestID, TaskID: payload.TaskID, TaskVersion: payload.ExpectedTaskVersion, GraphRevision: payload.ExpectedGraphRevision, ProfileID: profileID, Candidate: req.Action == "start_candidate", Explicit: true})
 		if err == nil {
 			receipt.RunID = candidate.ID
 			receipt.RunRevision = candidate.Revision

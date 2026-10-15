@@ -50,7 +50,15 @@ func TestRunnerTaskServiceFreezesOriginalStart(t *testing.T) {
 			return strings.Repeat("c", 40), nil
 		},
 	}
-	start := taskrunner.Start{RequestID: strings.Repeat("d", 32), TaskID: tasks[0].TaskID, TaskVersion: 1, Explicit: true}
+	graph, err := s.TaskGraphSnapshot(ctx, a.ProjectIdentity)
+	require(t, err)
+	start := taskrunner.Start{GraphRevision: graph.Authority.GraphRevision, RequestID: strings.Repeat("d", 32), TaskID: tasks[0].TaskID, TaskVersion: 1, Explicit: true}
+	stale := start
+	stale.GraphRevision++
+	if _, err := svc.Start(ctx, stale); err == nil || baseCalls != 0 {
+		t.Fatal("stale displayed graph acquired input or base", err, baseCalls)
+	}
+
 	first, err := svc.Start(ctx, start)
 	require(t, err)
 	var fixed runnerclient.RunInput

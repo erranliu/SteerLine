@@ -26,9 +26,6 @@ func TestControlledStagesCommitReportAndPublishSeparately(t *testing.T) {
 	}
 	git(root, "init", "--bare", remote)
 	git(root, "init", "-b", "main", repo)
-	git(repo, "config", "user.name", "Fixture")
-	git(repo, "config", "user.email", "fixture@example.invalid")
-	git(repo, "config", "commit.gpgsign", "false")
 	if err := os.WriteFile(filepath.Join(repo, "base.txt"), []byte("base\n"), 0600); err != nil {
 		t.Fatal(err)
 	}

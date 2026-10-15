@@ -53,6 +53,7 @@ type Scenario struct {
 type Project struct {
 	RemoteBranches                                                                    []string
 	RemoteCleanupFailed                                                               bool
+	RunnerCleanupFailed                                                               bool
 	Scenario                                                                          *Scenario
 	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider, Executable string
 	ProjectID, DatabaseID                                                             string
@@ -104,6 +105,12 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
+	switch id {
+	case "delivery.basic", "recovery.waiting-merge-restart", "recovery.codex-resume", "recovery.terminal-local-reconnect", "recovery.terminal-environment-unknown-send":
+		// Includes independent Runner startup, public CLI observation and
+		// original-service fencing; individual commands remain bounded.
+		timeout = 10 * time.Minute
+	}
 	if id == "runtime.installed-debug-isolation" {
 		// Two source builds, two isolated service lifecycles, path refusals and
 		// two staged workflows share this bound; command limits stay unchanged.
@@ -754,6 +761,31 @@ func (s *Scenario) cleanup() {
 			failures = append(failures, err.Error())
 		}
 	}
+	for _, p := range s.projects {
+		if p.Driver.Binary == "" {
+			continue
+		}
+		if _, err := os.Stat(p.Database); os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Join(filepath.Dir(p.Database), "runner")); os.IsNotExist(err) {
+				continue
+			}
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 90*time.Second)
+		project := p.ProjectID
+		if project == "" {
+			project = strings.ToLower(filepath.Clean(filepath.Join(p.Repo, ".git")))
+		}
+		state, readErr := driver.ReadWorkflow(cleanupCtx, p.Database, project)
+		if readErr == nil {
+			readErr = driver.CleanupRunner(cleanupCtx, filepath.Join(p.Home, "execution.json"), filepath.Join(filepath.Dir(p.Database), "runner"), state.Candidates)
+		}
+		cleanupCancel()
+		if readErr != nil {
+			p.RunnerCleanupFailed = true
+			failures = append(failures, "original Runner cleanup: "+readErr.Error())
+		}
+		_ = controlled.Write(filepath.Join(s.Output, p.Name+"-runner-cleanup.json"), map[string]any{"confirmed": readErr == nil, "error": fmt.Sprint(readErr)})
+	}
 	for _, f := range s.files {
 		if err := f.Close(); err != nil {
 			failures = append(failures, err.Error())
@@ -779,7 +811,7 @@ func (s *Scenario) cleanup() {
 	}
 	preserveScratch := false
 	for _, p := range s.projects {
-		preserveScratch = preserveScratch || p.RemoteCleanupFailed
+		preserveScratch = preserveScratch || p.RemoteCleanupFailed || p.RunnerCleanupFailed
 	}
 	if !preserveScratch {
 		if err := RemoveOwned(s.Run.Scratch, s.Root); err != nil {

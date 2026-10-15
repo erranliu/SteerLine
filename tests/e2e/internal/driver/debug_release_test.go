@@ -28,7 +28,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if raw, err := os.ReadFile(filepath.Join(root, "scheme.json")); err == nil {
 		t.Fatalf("requires a fresh debug package, found %s", raw)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	// Run preparation in a child so this test never changes its own CODEX_HOME/Git/auth environment.
 	prepare := d.command(d.helper, "debug", "prepare", "--simulate")
@@ -56,9 +56,20 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		stopCtx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 		defer cancel()
 		service.Stop(stopCtx)
+		if common, err := d.git("rev-parse", "--path-format=absolute", "--git-common-dir"); err == nil {
+			if state, err := ReadWorkflow(stopCtx, filepath.Join(d.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(common))); err == nil {
+				if err := CleanupRunner(stopCtx, filepath.Join(d.home, "execution.json"), filepath.Join(d.stateDir(), "runner"), state.Candidates); err != nil {
+					t.Error("original Runner cleanup: ", err)
+				}
+			} else {
+				t.Error("Runner cleanup input: ", err)
+			}
+		} else {
+			t.Error("Runner cleanup identity: ", err)
+		}
 	}()
 	wait := func(label string, predicate func() bool) {
 		t.Helper()

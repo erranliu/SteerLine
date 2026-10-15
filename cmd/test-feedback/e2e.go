@@ -454,7 +454,9 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
 		// Heavy isolation/native restart has a 10m body; its parent must not
 		// cut the selected scene at the ordinary 6m package bound.
-		if entry.ID == "runtime.installed-debug-isolation" || entry.ID == "workspace.orca-removal-restart" {
+		if entry.ID == "delivery.basic" || entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.codex-resume" || entry.ID == "recovery.terminal-local-reconnect" || entry.ID == "recovery.terminal-environment-unknown-send" {
+			minutes += 12
+		} else if entry.ID == "runtime.installed-debug-isolation" || entry.ID == "workspace.orca-removal-restart" {
 			minutes += 11
 		} else {
 			minutes += 6

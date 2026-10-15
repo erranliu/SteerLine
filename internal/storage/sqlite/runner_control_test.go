@@ -40,7 +40,7 @@ func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 	resolve := func(string, string) (string, error) { return "live", nil }
 	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: resolve}
 	now := time.Now().UTC()
-	payload, _ := json.Marshal(api.ControlPayload{TaskID: tasks[0].TaskID, ExpectedTaskVersion: 1, ExecutionProfileID: "live", ExecutionProfileDigest: strings.Repeat("a", 64)})
+	payload, _ := json.Marshal(api.ControlPayload{TaskID: tasks[0].TaskID, ExpectedTaskVersion: 1, ExpectedGraphRevision: 1, ExecutionProfileID: "live", ExecutionProfileDigest: strings.Repeat("a", 64)})
 	req := api.ControlRequest{ProtocolVersion: 1, RequestID: strings.Repeat("e", 32), RepositoryIdentity: a.ProjectIdentity, InstanceID: "original", Action: "start_task", ExpectedControlRevision: 1, RequestedBy: "operator", CreatedAt: now, ExpiresAt: now.Add(time.Minute), Payload: payload}
 	_, err := s.db.ExecContext(ctx, `CREATE TRIGGER lose_runner_control_receipt BEFORE UPDATE ON commands WHEN NEW.kind='runner_control' BEGIN SELECT RAISE(ABORT,'receipt fault'); END`)
 	require(t, err)

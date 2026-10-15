@@ -30,3 +30,10 @@
 - `caller-integration/result-10.json`：1 场景退出 1，调试命令扫描到原子凭据发布的瞬时双链接；修正只读扫描边界，重置在停服证明后校验删除树。需要新包复验，不能将此记录为通过。
 
 旧测试退休范围见[删除审计](steerrunner-deletion-audit.md)。原生执行专属用例迁由 Runner 已迁出的测试覆盖；这不表示旧全部集成覆盖已等价替换，新 CLI 跨进程和 R1 场景仍为必验。
+
+
+检查点 `849f8737` 已提交实际切换及旧根 worker 删除（441 文件，删除约五万行）。随后 `caller-integration/result-11.json` 的 1 场景仍失败：已接受原 Run `eda670184228da1b881ea8dc3e07f667` 并创建原会话，受控 helper 在新缓存中提交时缺 Git 作者配置。修正夹具为每条 Git 命令显式固定测试作者、禁签名与长路径，不让 Runner 复制源仓库或用户配置；`fixture-git-identity.log` 的三阶段 Git/PR 夹具测试通过。原 Run 经公开 CLI 确认 stopped、服务 not_running，证据 `caller-integration/cleanup-original-11.json`。
+
+`regression/r1-first/summary.json` 的 delivery/basic 与 waiting-merge/restart 两场景失败且 cleanup_complete=false；不计通过。旧清理入口只终止父进程并提前删除目录，暴露常驻 Runner 的清理缺口。已增加仅使用固定 EXE/公开 CLI 的清理：先围栏停止原服务，必要时显式启动仅清理的 epoch，查询原 request/Run、停止原 Run、确认服务退出；不发业务 resume，未知则保留现场。旧失败现场的 discovery 已被旧清理误删，按原启动日志 PID/实例、创建时间、保留句柄、映像 SHA、命令目录与 SID 核对后结束其两个受控测试 daemon，单列 `verified-forced-cleanup.json`，不当作原生停止回执。
+
+`current-start-graph.log` 的 taskrunner、SQLite Runner 场景和测试入口定向通过。启动请求的图版本同时进入原始 Start 摘要并与 FixedWork 图版本比较，最终由领取事务的同图 CAS 保护；旧图在获取 base/派发前拒绝，既有原 ID 回执仍先返回。独立 EXE 与五项定向场景的业务窗口包含额外服务/CLI 边界，调整为 10 分钟，单命令时限不变，父测试另留清理窗口。

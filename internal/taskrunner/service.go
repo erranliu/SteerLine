@@ -46,12 +46,13 @@ type Service struct {
 	mu                                          sync.Mutex
 }
 type Start struct {
-	RequestID   string `json:"request_id"`
-	TaskID      string `json:"task_id"`
-	TaskVersion uint64 `json:"task_version"`
-	ProfileID   string `json:"profile_id"`
-	Candidate   bool   `json:"candidate"`
-	Explicit    bool   `json:"explicit"`
+	RequestID     string `json:"request_id"`
+	TaskID        string `json:"task_id"`
+	TaskVersion   uint64 `json:"task_version"`
+	GraphRevision uint64 `json:"graph_revision,omitempty"`
+	ProfileID     string `json:"profile_id"`
+	Candidate     bool   `json:"candidate"`
+	Explicit      bool   `json:"explicit"`
 }
 
 func digest(value any) string {
@@ -71,7 +72,7 @@ func failure(code, message string) error { return &taskmodel.Error{Code: code, M
 func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidate, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if input.RequestID == "" || input.TaskVersion == 0 || !filepath.IsAbs(s.StateDir) {
+	if input.RequestID == "" || input.TaskVersion == 0 || input.Explicit && input.GraphRevision == 0 || !filepath.IsAbs(s.StateDir) {
 		return runnerbridge.Candidate{}, failure("invalid_batch", "start requires fixed task version, request ID and absolute Runner state directory")
 	}
 	if old, err := s.Store.Candidate(ctx, s.Project, input.RequestID); err == nil {
@@ -90,6 +91,9 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	work, err := s.Tasks.Fixed(ctx, s.Project, input.TaskID, input.TaskVersion, input.Candidate)
 	if err != nil {
 		return runnerbridge.Candidate{}, err
+	}
+	if input.GraphRevision != 0 && input.GraphRevision != work.Authority.GraphRevision {
+		return runnerbridge.Candidate{}, failure("stale_version", "displayed task graph changed before reservation")
 	}
 	if !s.Tasks.CanExecuteType(work.Record.Type) {
 		return runnerbridge.Candidate{}, failure("task_not_ready", "task type cannot execute")

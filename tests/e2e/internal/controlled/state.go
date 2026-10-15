@@ -88,7 +88,10 @@ func Git(ctx context.Context, dir string, args ...string) (string, error) {
 }
 
 func gitBytes(ctx context.Context, dir string, args ...string) ([]byte, error) {
-	argv := append([]string{"-C", dir}, args...)
+	// A standalone Runner clones its own cache and must not inherit the
+	// fixture repository's local user configuration. Keep identity and Windows
+	// long-path settings scoped to this simulated external Git command.
+	argv := append([]string{"-c", "user.name=E2E", "-c", "user.email=e2e@example.invalid", "-c", "commit.gpgsign=false", "-c", "core.longpaths=true", "-C", dir}, args...)
 	if path := os.Getenv("STEERLINE_E2E_CONTROLLED_STATE"); path != "" {
 		state, err := Read(path)
 		if err != nil {
