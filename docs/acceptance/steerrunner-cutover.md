@@ -8,7 +8,7 @@
 | SLC-A02 | 候选原子领取和固定请求、绑定/事件/游标 CAS、终态停止义务 | SQLite 定向通过，最终证据待固定 |
 | SLC-A03 | 正确合并候选唯一交付、无 pr_ready 门槛、兄弟未知不阻塞、原子回滚与幂等 | SQLite 定向通过，最终证据待固定 |
 | SLC-A04 | 实际产品命令→Runner CLI 的完整闭环、双库、重启和停止 | 独立 EXE 基础闭环已通过；服务重启等子项仍在 R1 复验 |
-| SLC-A05 | 最小既有 L3 场景切换到新 CLI 后通过 | 五场景已启动；基础交付通过，其余恢复结果/复验见下 |
+| SLC-A05 | 最小既有 L3 场景切换到新 CLI 后通过 | 用户取消本机 Orca 后保留四场景；基础交付和 Codex resume 已通过，其余复验见下 |
 | SLC-A06 | 单一执行 owner、旧 actor/worker/适配器/写表删除、固定可获取 Runner 版本 | 旧执行 owner、写表及闲置端口已删除；固定可获取构建及最终回归待完成 |
 
 人工项 SLC-M01：两个独立项目的安装/升级、服务与日志定位体验；窗口待双方自动链路可用后安排，可后置，不阻塞无关开发。
@@ -53,3 +53,10 @@ R1 余下三场景已改用公开候选/Run/Attempt/session、原生夹具次数
 - `retired-owner-directed-2.log`：跨 OS 源码/依赖守卫、e2e 导入负例、Task/SQLite/公开查询定向通过。`public-native-directed-3.log`：原生工具自身 usage/inventory、精确自有子进程故障、外部认证引用零复制、公开诊断过滤通过。故障测试保留首次 CIM 微秒精度与 FILETIME 精度不一致失败，统一精度且保留句柄后通过。`e2e-cutover-compile-final.log` 为 e2e 全包只编译通过，不计行为覆盖。
 - R1 `r1-public`：冻结 `7b42cd7f` 和 Runner `6b18f3e`；基础交付通过 155.51 秒。本机 terminal 因夹具错误携带空 environment 被严格拒绝；codex resume 因刷新前提交过期版本失败；environment unknown-send 因夹具只识别裸 codex 命令、未识别真实初始化命令失败，且清理遇已明确拒绝的 stale_revision。修正夹具、原请求未持久化时的有界版本刷新和同一停止目标的有界刷新；所有失败保留，待新冻结版本复验。
 - Native helper 不再复制认证、配置、hooks、token 或 sandbox 凭据；既有原生登录留在原外部 home。诊断不遍历 Runner 私有库/日志或 native auth/config，只导出公开身份与由原生 rollout 筛选的本 Run usage。真实发布仍须通过正常原生工具，不能以宿主代发绕过失败。
+
+
+范围与 rebase 补充：最新主干 `317714e6` 的独立 Web/项目切换和查询优化已合入；切换分支 rebase 完成，`rebase-compile-2.log` 全包只编译通过，`rebase-app-runner.log` 的 TaskRunner/App 定向通过。一次 Web 定向命令误选不存在的 internal/webhost 包，整体 exit 1；同次 App/WebSwitch、applicationclient/applicationhttp/projectconnection 各包通过，不能把错误入口的整个命令计作通过。
+
+`r1-user-host` 的 TestCodexResume 通过（316.41 秒，干净 cf0b818f），原 Run/thread/workspace 不变、新 Attempt 显式恢复、四次业务输入完成交付。其本机 Orca 历史失败因用户明确取消该路径不再重跑。用户已明确远端原生环境修好，恢复 environment 真机验收。
+
+Runner 第五轮远端已完成实施，在报告阶段暴露应用冻结策略错误；使用原 worker 的实际 PolicyCapabilities 代替本机默认，Runner 新构建 c85f4e7 单元通过，需新包复验。修正不绕过原策略资格检查。之前受控 unknown-send 清理遗留的原 Run，已通过同用户前台 serve 的显式清理 epoch 确认 stop_status=stopped，服务 not_running，见 `r1-public/unknown-original-cleanup.json`。没有按猜测 PID 清理或发送业务恢复输入。

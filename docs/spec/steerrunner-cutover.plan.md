@@ -34,3 +34,6 @@ Runner 真机验收登记在 Runner SR-A11/SR-A12。先运行 `scripts/new-debug
 实施补充：受控 R1 仅通过候选保存的公开 Run/Execution/Controls 断言身份；原生状态、启动/业务投递次数由外部协议夹具提供，不从旧执行表重建。Task 中心崩溃时 resident Runner 保持；原生恢复场景显式停止/重开 Runner 服务，再通过产品 `runner_resume` 决策提交新授权。业务窗口 10 分钟、Go 父进程每场景 12 分钟包括清理，单命令仍有原时限。停止未证明时保留现场；先停止/围栏原服务，必要时显式创建仅清理 epoch，停止已绑定原 Run，禁止用父进程退出代替原生回执。
 
 新调试脚本通过 `-SteerRunnerExe` / `STEERRUNNER_EXE` 选择固定发布 EXE。`-Live` 使用实际 Runner/Codex 工作流验收，认证仅使用宿主已有登录；禁止从生成包读 token、导出凭据、调用宿主发布脚本代替 worker。其 native 前置/证据仍登记 Runner SR-A11/SR-A12 和相应独立现场，不将脚本语法检查当作 live 通过。
+
+
+2026-10-15 用户明确放弃本机 Orca 路径：移除 terminal-local-reconnect 必验项；当前 R1 为基础交付、waiting-merge-restart、本机 Codex resume、远端 environment unknown-send 四项。历史冻结批次包含的本机 Orca 失败只保留证据，不再重跑或阻塞验收。远端原生环境修复后，继续按新包完成 environment 真机闭环。
