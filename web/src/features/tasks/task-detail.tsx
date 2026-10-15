@@ -1,0 +1,222 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { ArrowUpRight, Play, Plus } from "lucide-react";
+import { useWorkspace } from "../../app/context";
+import type { TaskPage, Presentation } from "../../shared/api/types";
+import { Button } from "../../shared/ui/button";
+import { participating } from "../runs/state";
+import { SafeLink, Status } from "../../shared/ui/status";
+
+export function TaskDetail({
+  id,
+  allowCandidate = false,
+}: {
+  id: string;
+  allowCandidate?: boolean;
+}) {
+  const { api, online, snapshot, send, busy } = useWorkspace();
+  const [starting, setStarting] = useState(false);
+  const [profile, setProfile] = useState("");
+  const detail = useQuery({
+    queryKey: [api.identity.project_id, api.identity.instance_id, "task", id],
+    queryFn: ({ signal }) =>
+      api.get<TaskPage>("/tasks/" + encodeURIComponent(id), signal),
+    enabled: online,
+    refetchInterval: 2000,
+  });
+  const presentation = useQuery({
+    queryKey: [
+      api.identity.project_id,
+      api.identity.instance_id,
+      "presentation",
+    ],
+    queryFn: ({ signal }) =>
+      api.get<{ presentation: Presentation }>("/presentation", signal),
+    enabled: online,
+    refetchInterval: 10000,
+  });
+  const task = detail.data?.tasks[0];
+  const page = snapshot?.connection.snapshot.page;
+  const hasCandidates = (task?.workflow_runs?.length ?? 0) > 0;
+  const action = hasCandidates ? "start_candidate" : "start_task";
+  const profiles = presentation.data?.presentation.profiles ?? [];
+  const chosen =
+    profile || presentation.data?.presentation.default_profile_id || "";
+  const selected = profiles.find((p) => p.id === chosen);
+  const supported = page?.service.capabilities?.includes(action);
+  const candidates = (page?.runs ?? []).filter(
+    (run) => (run.domain_task_id || run.task_id) === id,
+  );
+  const dependenciesMissing = hasCandidates
+    ? task?.predecessors?.some((p) => !p.delivered)
+    : !task?.dependency_ready;
+  const blockers = hasCandidates
+    ? task?.startup_blockers?.filter((value) => value !== "task_not_open")
+    : task?.startup_blockers;
+  const reason = !online
+    ? "服务未连接"
+    : detail.isError
+      ? "任务查询失败"
+      : !supported
+        ? "服务未提供此动作"
+        : page?.control.dispatch_paused
+          ? "派发已暂停，请先恢复"
+          : page?.control.dispatch_mode !== "manual"
+            ? "手动启动要求手动派发模式"
+            : task?.delivery
+              ? "任务已交付"
+              : task?.status === "discarded"
+                ? "任务已放弃"
+                : dependenciesMissing
+                  ? "前置尚未交付"
+                  : blockers?.length
+                    ? blockers.join("；")
+                    : hasCandidates &&
+                        task?.status !== "in_progress" &&
+                        !candidates.some(
+                          (run) => run.workflow_stage === "start.submit",
+                        )
+                      ? "新增候选需要进行中的任务"
+                      : hasCandidates &&
+                          candidates.some((run) => run.pr.state === "merged")
+                        ? "已有候选 PR 合并"
+                        : hasCandidates &&
+                            candidates.filter(participating).length >= 5
+                          ? "已达到 5 个参与候选"
+                          : !selected || selected.unavailable_reason
+                            ? selected?.unavailable_reason || "没有可用执行方案"
+                            : hasCandidates &&
+                                candidates.some(
+                                  (run) =>
+                                    participating(run) &&
+                                    run.execution_profile?.id === selected.id,
+                                )
+                              ? "已存在相同方案的参与候选，请选择其他方案"
+                              : "";
+  if (!task)
+    return (
+      <div className="empty">
+        {detail.error ? String(detail.error) : "选择任务，查看依赖与执行资格"}
+      </div>
+    );
+  return (
+    <section className="task-detail">
+      <div className="eyebrow">正式任务 · #{task.task_id}</div>
+      <h2>{task.title}</h2>
+      <Status value={task.status} />
+      <div className="detail-section">
+        <h3>依赖与阻塞</h3>
+        {task.predecessors?.length ? (
+          task.predecessors.map((p) => (
+            <div className="dependency" key={p.task_id}>
+              <span>#{p.task_id}</span>
+              <span>
+                {p.delivered ? "前置已交付" : p.blocker || "等待前置交付"}
+              </span>
+            </div>
+          ))
+        ) : (
+          <p className="muted">没有前置依赖</p>
+        )}
+        {blockers?.map((b) => (
+          <p className="notice amber" key={b}>
+            {b}
+          </p>
+        ))}
+        {task.stop_pending?.map((b) => (
+          <p className="notice amber" key={b}>
+            停止待核实 · {b}
+          </p>
+        ))}
+      </div>
+      <div className="detail-section">
+        <h3>固定规格</h3>
+        <p className="path">{task.spec_path || "未关联规格"}</p>
+        <p className="muted">
+          Task v{task.version} · 图 v{detail.data?.graph_revision}
+        </p>
+      </div>
+      <div className="detail-section">
+        <h3>交付与执行</h3>
+        {task.delivery ? (
+          <>
+            <SafeLink url={task.delivery.pr_url}>
+              查看交付 PR <ArrowUpRight size={13} />
+            </SafeLink>
+            <p className="muted">{task.delivery.merged_at}</p>
+          </>
+        ) : (
+          <p className="muted">尚未核实任务交付</p>
+        )}
+        {hasCandidates && (
+          <Button asChild>
+            <Link to={"/runs?task=" + encodeURIComponent(id)}>
+              查看执行 <ArrowUpRight size={14} />
+            </Link>
+          </Button>
+        )}
+        {!task.delivery && (!hasCandidates || allowCandidate) && (
+          <Button
+            variant="default"
+            disabled={busy || !!reason}
+            title={reason}
+            onClick={() => setStarting(!starting)}
+          >
+            {hasCandidates ? <Plus size={14} /> : <Play size={14} />}{" "}
+            {hasCandidates ? "新增并行候选" : "手动启动"}
+          </Button>
+        )}
+        {reason && !task.delivery && <p className="muted">{reason}</p>}
+      </div>
+      {starting && (
+        <div className="start-panel">
+          <label htmlFor="execution-profile">本次执行方案</label>
+          <select
+            id="execution-profile"
+            value={chosen}
+            onChange={(e) => setProfile(e.target.value)}
+          >
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id} disabled={!!p.unavailable_reason}>
+                {p.name} · {p.host}/{p.agent}
+              </option>
+            ))}
+          </select>
+          <p className="muted">
+            使用服务已保存的冻结方案。本次选择不改变全局默认。
+          </p>
+          {selected?.details?.map((d, i) => (
+            <p key={i} className="muted">
+              {d}
+            </p>
+          ))}
+          <div className="actions">
+            <Button onClick={() => setStarting(false)}>取消</Button>
+            <Button
+              variant="default"
+              disabled={busy || !!reason}
+              onClick={async () => {
+                const accepted = await send(
+                  action,
+                  task.task_id,
+                  task.version,
+                  { execution_profile_id: chosen },
+                  {
+                    expected_control_revision: page?.control.revision ?? 0,
+                    ...(hasCandidates
+                      ? { expected_graph_revision: detail.data!.graph_revision }
+                      : {}),
+                  },
+                );
+                if (accepted) setStarting(false);
+              }}
+            >
+              确认启动
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}

@@ -99,7 +99,7 @@ func TestAPIAuthoritativeControlBinding(t *testing.T) {
 			config := host.Config{Repository: "C:/repo", RepositoryIdentity: "C:/repo", Remote: "origin", Branch: "main", RunDir: server.options.RunDir, TaskAuthority: "native", ControlValidation: formalControlValidation{}}
 			control.formalConfig = &config
 			envelope := CommandEnvelope{RequestID: strings.Repeat("e", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "start_candidate", TargetID: "8", ExpectedVersion: 3, ExpectedControlRevision: 7, ExpectedGraphRevision: 4, Payload: json.RawMessage(`{"execution_profile_id":"fixture"}`)}
-			mapped, err := server.controlInput(context.Background(), envelope, currentActor())
+			mapped, err := server.commands.controlInput(context.Background(), envelope, currentActor())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -165,7 +165,7 @@ func TestAPIMappedControlPayloadBinding(t *testing.T) {
 				envelope.TargetID = envelope.InstanceID
 				envelope.ExpectedVersion = 0
 			}
-			input, err := server.controlInput(context.Background(), envelope, currentActor())
+			input, err := server.commands.controlInput(context.Background(), envelope, currentActor())
 			if err != nil {
 				t.Fatal(err)
 			}

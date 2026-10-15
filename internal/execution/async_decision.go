@@ -4,18 +4,15 @@ import (
 	"errors"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/workflow"
 )
 
 func asyncContinuationStep(w *executionmodel.WorkflowRunRecord, request executionmodel.DecisionRequest) (string, error) {
 	if request.QuestionRoute == nil {
 		return "", errors.New("async continuation lost its original question route")
 	}
-	for _, result := range w.StageResults {
-		if result.TurnID == request.QuestionRoute.TurnID && result.AttemptID == request.QuestionRoute.AttemptID {
-			return result.StepID, nil
-		}
-	}
-	return "", errors.New("async continuation has no verified originating stage result")
+	step, _, err := workflow.FeedbackStep(workflowSnapshot(w), workflow.FeedbackIntent{Async: true, SourceTurn: request.QuestionRoute.TurnID, SourceAttempt: request.QuestionRoute.AttemptID})
+	return step, err
 }
 
 func (s *Service) expireAsyncQuestions(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) {

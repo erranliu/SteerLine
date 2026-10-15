@@ -123,7 +123,11 @@ func NewLifecycleWithStateFactory(setup b.LifecycleSetup, factory native.StateFe
 }
 
 func (l *Lifecycle) PolicyCapabilities() b.LifecyclePolicyCapabilities {
-	return b.LifecyclePolicyCapabilities{ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, ReportToolPolicy: "host_managed_permissions; business_read_only_is_prompt_policy", ResumeActiveObservation: true, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true}
+	resource := b.MechanismNotApplicable
+	if l.setup.AgentLaunchCommand != "" {
+		resource = b.MechanismApplicable
+	}
+	return b.LifecyclePolicyCapabilities{Preparation: b.PreparationCapabilities{Workspace: b.MechanismApplicable, Resource: resource, Session: b.MechanismApplicable}, ServiceStopBehavior: ServiceStopBehavior, StructuredFinalEvidence: true, ReportToolPolicy: "host_managed_permissions; business_read_only_is_prompt_policy", ResumeActiveObservation: true, LinkedWorkspaceWriteRoots: false, SeparateTurnStart: true}
 }
 
 func (l *Lifecycle) validate(s b.LifecycleSnapshot) error {
@@ -275,38 +279,35 @@ func (l *Lifecycle) PreflightLifecycle(ctx context.Context, setup b.LifecycleSet
 	return b.CapabilityReport{Version: 1, Backend: b.BackendOrca, Protocol: b.ProtocolOrcaTerminalV3, Target: setup.Snapshot.Ref.Target, Agent: setup.Snapshot.Ref.Agent, PlatformVersion: status.Runtime.AppVersion, CheckedAt: time.Now().UTC(), Capabilities: []b.Capability{{Name: "start", Status: b.CapabilityVerified}, {Name: "observe", Status: b.CapabilityVerified}, {Name: "output_final_answer", Status: b.CapabilityVerified, Evidence: "original accepted request, bound native main-agent start/end and complete native final body"}}}, nil
 }
 
-func (l *Lifecycle) Next(_ context.Context, s b.LifecycleSnapshot) (b.LifecycleCandidate, error) {
+func (l *Lifecycle) PreparationFacts(_ context.Context, s b.LifecycleSnapshot) (b.PreparationFacts, error) {
 	if err := l.validate(s); err != nil {
-		return b.LifecycleCandidate{}, err
+		return b.PreparationFacts{}, err
 	}
 	if s.Workspace.Path == "" {
-		intent := s.WorkspacePlan
-		return b.LifecycleCandidate{Action: b.LifecyclePrepareWorkspace, Input: b.LifecycleInput{Workspace: &intent}}, nil
-	}
-	if l.setup.AgentLaunchCommand != "" {
-		state, err := l.state(s)
-		if err != nil {
-			return b.LifecycleCandidate{}, err
-		}
-		if !state.LaunchConfirmed {
-			return b.LifecycleCandidate{Action: b.LifecycleCreateResource, Input: b.LifecycleInput{Resource: &b.ResourceIntent{Purpose: "agent-start", Name: "original-terminal", Objective: l.setup.AgentLaunchCommand}}}, nil
-		}
-	}
-	if s.PendingTurn == nil {
-		return b.LifecycleCandidate{Done: true}, nil
-	}
-	if s.Ref.External.Terminal == "" {
-		return b.LifecycleCandidate{}, errors.New("workspace has no original agent terminal; do not create a replacement")
+		return b.PreparationFacts{Workspace: b.GateRequired, Resource: b.GateUnverified, Session: b.GateUnverified}, nil
 	}
 	state, err := l.state(s)
 	if err != nil {
-		return b.LifecycleCandidate{}, err
+		return b.PreparationFacts{}, err
 	}
-	input := *s.PendingTurn
-	if turnFor(&state, input.CommandID) == nil {
-		return b.LifecycleCandidate{Action: b.LifecyclePrepareSession, Input: b.LifecycleInput{Turn: &input}}, nil
+	if l.setup.AgentLaunchCommand != "" && !state.LaunchConfirmed {
+		return b.PreparationFacts{Workspace: b.GateReady, Resource: b.GateRequired, Session: b.GateUnverified, ResourceRequired: &b.ResourceIntent{Purpose: "agent-start", Name: "original-terminal", Objective: l.setup.AgentLaunchCommand}}, nil
 	}
-	return b.LifecycleCandidate{Action: b.LifecycleStartTurn, Input: b.LifecycleInput{Turn: &input}}, nil
+	resource := b.GateNotApplicable
+	if l.setup.AgentLaunchCommand != "" {
+		resource = b.GateReady
+	}
+	if s.PendingTurn == nil {
+		return b.PreparationFacts{Workspace: b.GateReady, Resource: resource, Session: b.GateUnverified}, nil
+	}
+	if s.Ref.External.Terminal == "" {
+		return b.PreparationFacts{}, errors.New("workspace has no original agent terminal; do not create a replacement")
+	}
+	gate := b.GateRequired
+	if turnFor(&state, s.PendingTurn.CommandID) != nil {
+		gate = b.GateReady
+	}
+	return b.PreparationFacts{Workspace: b.GateReady, Resource: resource, Session: gate}, nil
 }
 
 func (l *Lifecycle) Execute(ctx context.Context, r b.LifecycleRequest) (b.LifecycleReceipt, b.LifecycleObserver, error) {

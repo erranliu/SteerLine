@@ -246,7 +246,7 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = client.Close() })
-	server, err := Prepare(ctx, client, Options{RunDir: runDir, ProjectIdentity: ref.Identity, InstanceID: "instance-a",
+	server, err := Prepare(ctx, productPorts(client), Options{RunDir: runDir, ProjectIdentity: ref.Identity, InstanceID: "instance-a",
 		Process:      ProcessIdentity{Kind: "os", PID: os.Getpid(), Created: "created-1", Executable: "steerline.exe"},
 		Capabilities: capabilities})
 	if err != nil {
@@ -554,7 +554,7 @@ func TestAPIServiceLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	cancel()
-	rotated, err := Prepare(context.Background(), product, Options{RunDir: runDir, ProjectIdentity: projectIdentity, InstanceID: "instance-b",
+	rotated, err := Prepare(context.Background(), productPorts(product), Options{RunDir: runDir, ProjectIdentity: projectIdentity, InstanceID: "instance-b",
 		Process:      ProcessIdentity{Kind: "os", PID: os.Getpid(), Created: "created-2", Executable: "steerline.exe"},
 		Capabilities: []string{"pause_dispatch", "stop_service"}})
 	if err != nil {

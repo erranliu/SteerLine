@@ -17,6 +17,38 @@ func githubCommand(path string, args []string) error {
 	return githubCommandOutput(path, args, os.Stdout)
 }
 
+// Keep query evidence separate from the app-server's mutable state. A query
+// must not overwrite a concurrent turn or publication receipt.
+func recordProviderQuery(path string) error {
+	f, err := os.OpenFile(path+".queries", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	_, writeErr := f.WriteString("query\n")
+	closeErr := f.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return closeErr
+}
+
+func ProviderQueryCount(path string) (int, error) {
+	raw, err := os.ReadFile(path + ".queries")
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	lines := strings.Split(strings.TrimSuffix(string(raw), "\n"), "\n")
+	for _, line := range lines {
+		if line != "query" {
+			return 0, fmt.Errorf("incomplete provider query evidence")
+		}
+	}
+	return len(lines), nil
+}
+
 func githubCommandOutput(path string, args []string, output io.Writer) error {
 	s, err := Read(path)
 	if err != nil {

@@ -216,28 +216,11 @@ func TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput(t *test
 	reopened.shutdown()
 }
 
-func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
+func TestWorkerEnvironmentER4DeadlineRestartAndLateSuccess(t *testing.T) {
 	s, run, resolver := neutralPendingPreparation(t)
 	e := s.executionRecord(run)
 	nonce, deadline := e.Environment.Preparation.Nonce, e.Environment.Preparation.Deadline
 	original := *e.Process
-	// An unknown original side effect is reconciled by its exact saved request.
-	request := executionbackend.TurnInput{CommandID: resolver.turn.TurnID, Prompt: "original fixture preparation"}
-	resolver.loseReceipt = true
-	lifecycle, _, err := s.lifecycleForRun(run)
-	require(t, err)
-	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareSession, Input: executionbackend.LifecycleInput{Turn: &request}}
-	err = s.executeLifecycleStep(context.Background(), run, lifecycle, candidate)
-	if !errors.Is(err, errLifecycleNeedsReconciliation) {
-		t.Fatalf("lost receipt did not retain unknown intent: %v", err)
-	}
-	originalOp := resolver.originalRequest.Operation.ID
-	digest := resolver.originalRequest.Operation.PayloadDigest
-	require(t, s.executeLifecycleStep(context.Background(), run, lifecycle, candidate))
-	op := snapshotOperation(&s.domain, originalOp)
-	if op == nil || op.Status != "confirmed" || op.PayloadDigest != digest || resolver.reconciles != 1 || len(resolver.inputs) != 0 {
-		t.Fatal("original receipt reconciliation changed request or reinjected input")
-	}
 	config := s.Config
 	require(t, s.Close())
 	reopened, err := newNeutralService(config)

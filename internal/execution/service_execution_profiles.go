@@ -22,7 +22,7 @@ func (s *Service) selectDispatchProfile(id, digest string) error {
 	if err != nil {
 		return err
 	}
-	selected = copyWorkerFlowConfig(selected)
+	selected = copyWorkerConfig(selected)
 	s.dispatchConfig = &selected
 	s.dispatchProfile = &profile
 	return nil

@@ -151,7 +151,7 @@ func TestWorkerServiceStopRecovery(t *testing.T) {
 // Recovery can validate generic identity/epochs, but native resource facts must
 // remain in the worker implementation. This also guards dead-observer fallbacks.
 func TestWorkerServiceStopBoundary(t *testing.T) {
-	for _, path := range []string{"service_shutdown.go", "worker_lifecycle_recovery.go", "worker_recovery.go", "worker_resume.go"} {
+	for _, path := range []string{"service_shutdown.go", "worker_lifecycle_recovery.go", "worker_recovery.go", "reliable/recovery_policy.go"} {
 		f, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		require(t, err)
 		ast.Inspect(f, func(n ast.Node) bool {
@@ -216,6 +216,9 @@ func TestWorkerLateReplyReleasesOnlyItsOriginalUncertainty(t *testing.T) {
 			if e.RecoveryState != expected || s.operationByKey("worker-question-answer:"+e.ExecutionID+":"+record.DecisionID).Status != "confirmed" || len(s.domain.Attempts) != beforeAttempts {
 				t.Fatalf("late original reply qualification: state=%s want=%s", e.RecoveryState, expected)
 			}
+			if run.Decision == nil || run.Decision.Status != "reply_accepted" || run.Decision.Request.QuestionRoute == nil {
+				t.Fatal("confirmed original reply lost its retained question history")
+			}
 		})
 	}
 }
@@ -259,7 +262,7 @@ func TestWorkerPreparationStopDoesNotJournalUnsentBusinessTurn(t *testing.T) {
 	e.PendingCommandID = input.CommandID
 	_, err = s.startWorkerOperation(run, "prepare_worker_session", "worker-session:"+e.ExecutionID+":"+input.CommandID, input)
 	require(t, err)
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	require(t, err)
 	request, err := s.originalLifecycleRequest(run, fixed)
 	require(t, err)
@@ -269,7 +272,7 @@ func TestWorkerPreparationStopDoesNotJournalUnsentBusinessTurn(t *testing.T) {
 	identity := owned.Identity()
 	receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed, Process: &identity, Handle: owned, State: executionbackend.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "original-session-generation"}}
 	s.State.Service.Status = "stopping"
-	_, proceed, err := s.applyAppServerSessionReceipt(run, request, receipt, nil)
+	_, proceed, err := s.applyPreparedSessionReceipt(run, request, receipt, nil)
 	require(t, err)
 	if proceed || s.operationByKey("worker-turn:"+e.ExecutionID+":"+input.CommandID) != nil {
 		t.Fatal("stopping preparation created an unsent in-flight business turn")

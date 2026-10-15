@@ -34,9 +34,9 @@ import (
 )
 
 func testIntegratedAppServerTwoTurns(t *testing.T) {
-	// Include project setup, first-turn persistence and a second original turn
-	// in the shared fixture budget under Full's parallel process load.
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	// Include project setup and two execute/report rounds on the original
+	// session in the fixture budget under Full's parallel process load.
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
 	createIntegrationTask(t, ctx, fixture, 901)
@@ -59,16 +59,16 @@ func testIntegratedAppServerTwoTurns(t *testing.T) {
 	submitIntegrationAnswer(t, ctx, fixture.config, first.run)
 
 	second := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
-		return execution.TurnNumber == 3 && execution.CurrentTurnID != firstTurn && execution.CurrentTurnID == execution.LastStoppedTurnID &&
+		return execution.TurnNumber == 4 && execution.CurrentTurnID != firstTurn && execution.CurrentTurnID == execution.LastStoppedTurnID &&
 			run.Decision != nil && run.Decision.Status == "pending"
 	})
 	if second.execution.SessionID != firstSession || second.run.Process == nil || *second.run.Process != firstProcess {
-		t.Fatalf("second app-server turn replaced its original session or process: first=%+v/%s second=%+v/%s", firstProcess, firstSession, second.run.Process, second.execution.SessionID)
+		t.Fatalf("second execute/report round replaced its original session or process: first=%+v/%s second=%+v/%s", firstProcess, firstSession, second.run.Process, second.execution.SessionID)
 	}
 	starts := lifecycleOperations(second.runtime, "start_worker_turn")
 	prepares := lifecycleOperations(second.runtime, "prepare_worker_session")
-	if len(starts) != 3 || len(prepares) != 1 {
-		t.Fatalf("app-server operation receipts = prepare:%d start:%d, want one original session and execute/report/feedback turns", len(prepares), len(starts))
+	if len(starts) != 4 || len(prepares) != 1 {
+		t.Fatalf("app-server operation receipts = prepare:%d start:%d, want one original session and two execute/report rounds", len(prepares), len(starts))
 	}
 	assertNoTaskDelivery(t, second.runtime, second.run)
 	assertQueriedTaskStatus(t, ctx, fixture.config, "901", "waiting_input")

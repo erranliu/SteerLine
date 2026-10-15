@@ -2,6 +2,7 @@ SteerLine independent debug environment
 
 start.bat                  default live: real Codex and SteerlineTest GitHub PR
 console.bat                execution console
+web.bat                    browser UI (generate with -WebAddress; start the package first)
 start.bat --simulate       AI-only simulated worker/PR, real Git and SQLite
 console.bat --simulate     select the same simulation scheme
 reset-SteerlineTest.bat    reset task state, no backup, preserves Git/PR facts

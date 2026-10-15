@@ -3,63 +3,12 @@ package execution
 import (
 	"encoding/json"
 	"errors"
+	workflow "github.com/erranliu/SteerLine/internal/execution/workflow"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
-
-const implementPrompt = "Implement the following Spec and Plan."
-const reportPrompt = "Format the preceding implementation result as JSON. Do not change files, run checks or publish."
-const publishPrompt = "Push and create or reuse a PR using the current checked-out branch. Read its exact name with git branch --show-current and use that same name for the remote branch and PR head. Do not reconstruct the branch name from the task ID, workflow run ID, workspace path or previous messages."
-const publishReportPrompt = "Format the preceding publication result as JSON. Do not change files, run checks or publish."
-
-func renderWorkerPrompt(step string, facts any) (string, error) {
-	text := ""
-	switch step {
-	case executionmodel.StepImplement:
-		text = implementPrompt
-	case executionmodel.StepReport:
-		text = reportPrompt
-	case executionmodel.StepPublish:
-		text = publishPrompt
-	case executionmodel.StepPublishReport:
-		text = publishReportPrompt
-	default:
-		return "", errors.New("no automatic prompt for this step")
-	}
-	raw, err := json.Marshal(facts)
-	if err != nil {
-		return "", err
-	}
-	if step == executionmodel.StepImplement {
-		var input struct {
-			Task struct {
-				Spec       taskmodel.FileReference   `json:"spec"`
-				Plan       taskmodel.FileReference   `json:"plan"`
-				Common     []taskmodel.FileReference `json:"common_refs"`
-				Acceptance []taskmodel.FileReference `json:"acceptance_refs"`
-			} `json:"task"`
-		}
-		if err := json.Unmarshal(raw, &input); err != nil {
-			return "", err
-		}
-		text += "\nSpec: " + input.Task.Spec.Path + "\nPlan: " + input.Task.Plan.Path
-		seen := map[string]bool{input.Task.Spec.Path: true, input.Task.Plan.Path: true}
-		for _, ref := range append(input.Task.Common, input.Task.Acceptance...) {
-			if ref.Path != "" && !seen[ref.Path] {
-				text += "\nReference: " + ref.Path
-				seen[ref.Path] = true
-			}
-		}
-	} else if string(raw) != "{}" && string(raw) != "null" {
-		text += "\nDiagnostics:\n" + string(raw)
-	}
-	if step == executionmodel.StepReport || executionmodel.PublicationStep(step) {
-		text += "\n" + stageResultInstruction(step)
-	}
-	return text, nil
-}
 
 func validateWorkerWorkspace(workspace executionmodel.WorkspaceEvidence) error {
 	if workspace.Worktree == "" || workspace.Branch == "" || !commitHash.MatchString(workspace.Base) {
@@ -79,7 +28,7 @@ func Prompt(task taskmodel.TaskRecord, contract taskmodel.TaskContract, workflow
 	if err != nil {
 		return "", err
 	}
-	return renderWorkerPrompt(executionmodel.StepImplement, struct {
+	return workflow.RenderPrompt(executionmodel.StepImplement, struct {
 		Task json.RawMessage `json:"task"`
 	}{facts})
 }

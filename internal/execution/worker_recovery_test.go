@@ -88,12 +88,12 @@ func appServerRecoveryFixture(t *testing.T, service *Service, run *reconstructio
 	input := executionbackend.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
 	_, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+input.CommandID, &input)
 	require(t, err)
-	fixed, err := service.workerFlowContext(run)
+	fixed, err := service.workerRecords(run)
 	require(t, err)
 	request, err := service.originalLifecycleRequest(run, fixed)
 	require(t, err)
 	execution = service.executionRecord(run)
-	return workerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: *execution, request: request,
+	return workerRecoveryResult{original: reliableObservation(execution), runID: run.RunID, attemptID: run.AttemptID, execution: *execution, request: request,
 		receipt: executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed,
 			State: executionbackend.LifecycleStateFacts{SessionAvailable: true, TurnStarted: true, SessionID: execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnID: execution.CurrentTurnID}}}
 }

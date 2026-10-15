@@ -11,7 +11,7 @@ import (
 // Only the worker interprets the original stop request. The application stores
 // its standard receipt and never re-executes an uncertain stop.
 func (s *Service) reconcileWorkerStops(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort) (bool, error) {
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return false, err
 	}

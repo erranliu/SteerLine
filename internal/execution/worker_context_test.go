@@ -25,7 +25,7 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 			Executions: []executionmodel.ExecutionRecord{{ProjectIdentity: ConfigurationProjectIdentity(config), ExecutionID: "execution", WorkflowRunID: "run", CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixedProfile.Digest}},
 			Attempts:   []executionmodel.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
-	fixed, err := service.workerFlowContext(run)
+	fixed, err := service.workerRecords(run)
 	if err != nil || fixed.run != run || fixed.execution.ExecutionID != "execution" {
 		t.Fatalf("fixed worker context lost its identity: %+v %v", fixed, err)
 	}
@@ -35,7 +35,7 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 	}
 	wrong := *run
 	wrong.AttemptID = "other"
-	if _, err := service.workerFlowContext(&wrong); err == nil {
+	if _, err := service.workerRecords(&wrong); err == nil {
 		t.Fatal("worker context accepted an attempt from another execution")
 	}
 }
@@ -62,11 +62,11 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 		service.domain.Executions = append(service.domain.Executions, executionmodel.ExecutionRecord{ProjectIdentity: ConfigurationProjectIdentity(base), ExecutionID: run.ExecutionID, WorkflowRunID: id, CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixed.Digest})
 		service.domain.Attempts = append(service.domain.Attempts, executionmodel.StepAttemptRecord{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID})
 	}
-	first, err := service.workerFlowContext(service.State.Runs[0])
+	first, err := service.workerRecords(service.State.Runs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := service.workerFlowContext(service.State.Runs[1])
+	second, err := service.workerRecords(service.State.Runs[1])
 	if err != nil {
 		t.Fatal(err)
 	}

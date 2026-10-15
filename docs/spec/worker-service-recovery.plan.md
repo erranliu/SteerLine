@@ -4,7 +4,7 @@
 
 ## 1. 固定恢复边界与最小平台证据
 
-先核对 [worker 适配路由](../../internal/execution/worker_execution.go)、[恢复路由](../../internal/execution/worker_resume.go)、[固定上下文](../../internal/execution/worker_execution.go)和 [Service 生命周期](../../internal/execution/service_state.go)。启动及轮询中的恢复需要从“可能准备并派发”拆成“读取事实并提交恢复判断”和“用户授权后执行”。尤其处理当前 `processCommandsAndDecisions` 在启动核验前投递已保存答案、`resumeWorkspaceWorker` 补准备/首次派发及 Orca 恢复补 Dispatch 的路径。
+先核对 [worker 适配路由](../../internal/execution/worker_execution.go)、[恢复路由](../../internal/execution/reliable/workspace.go)、[固定上下文](../../internal/execution/worker_execution.go)和 [Service 生命周期](../../internal/execution/service_state.go)。启动及轮询中的恢复需要从“可能准备并派发”拆成“读取事实并提交恢复判断”和“用户授权后执行”。尤其处理当前 `processCommandsAndDecisions` 在启动核验前投递已保存答案、`resumeWorkspaceWorker` 补准备/首次派发及 Orca 恢复补 Dispatch 的路径。
 
 在隔离临时目录用目标 Codex CLI 做一次最小协议探针：保存 thread/turn/原问题，终止 app-server，核实原 thread 的历史读取及 `thread/resume` 后的原问题状态；确认开启新 turn 所需的处理。复用为 SR3 的前置，不另做一套大规模协议验收。该探针不据旧 call ID 发答案，不改 Codex 传输层来伪造 turn 完成。
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -65,7 +66,7 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *recon
 	return err
 }
 
-func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, operation *executionmodel.OperationRecord, input executionbackend.LifecycleInput) error {
+func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerRecords, operation *executionmodel.OperationRecord, input executionbackend.LifecycleInput) error {
 	if operation == nil || operation.Status == "pending" {
 		return errors.New("original answer has no persisted send operation")
 	}
@@ -152,7 +153,7 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *reconstructiontypes.R
 	if receipt.Process != nil || receipt.Target != nil || receipt.Workspace != nil || len(receipt.Implementation) != 0 {
 		return errors.New("question feedback receipt cannot replace execution resources")
 	}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.workerRecords(run)
 	if err != nil {
 		return err
 	}
@@ -165,7 +166,7 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *reconstructiontypes.R
 		return executionmodel.ErrTurnStale
 	}
 	if executeErr != nil || receipt.Disposition == executionbackend.OperationUnknown || receipt.Disposition == executionbackend.OperationRejected {
-		status, reason := lifecycleOutcome(receipt, executeErr)
+		status, reason := reliable.Outcome(receipt, executeErr)
 		if status != "rejected" {
 			status = "outcome_unknown"
 		}

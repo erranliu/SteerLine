@@ -1,7 +1,8 @@
 ﻿param(
     [string]$DebugRoot = 'C:\SteerlineDebug',
+    [string]$WebAddress = '',
     [switch]$Orca,
-    [string]$OrcaEnvironment = 'name:asus笔记本',
+    [string]$OrcaEnvironment = 'name:台式机64G',
     [string]$OrcaAgent = 'codex',
     [string]$OrcaExecutable = 'orca',
     [string]$AgentModel = '',
@@ -9,6 +10,7 @@
     [ValidateSet('','high','xhigh')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
+if ($WebAddress -and ($WebAddress -notmatch '^127\.0\.0\.1:([1-9][0-9]{0,4})$' -or [int]$Matches[1] -gt 65535)) { throw 'WebAddress must be a fixed 127.0.0.1:<1..65535>' }
 
 function Assert-PlainPath([string]$Path) {
     $cursor = [IO.Path]::GetFullPath($Path)
@@ -81,7 +83,7 @@ try {
         $relative = $item.FullName.Substring($template.Length + 1)
         $templateHashes[$relative] = (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
         $output = Join-Path $target $relative
-        $content = [IO.File]::ReadAllText($output).Replace('__ROOT__', $rootText).Replace('__BASE__', $baseBranch)
+        $content = [IO.File]::ReadAllText($output).Replace('__ROOT__', $rootText).Replace('__BASE__', $baseBranch).Replace('__WEB_ADDRESS__', $WebAddress)
         # Windows PowerShell 5 reads a BOM-less script using the system code page.
         $encoding = $utf8
         if ($item.Extension -eq '.ps1') { $encoding = New-Object Text.UTF8Encoding $true }
@@ -123,7 +125,24 @@ try {
     try {
         $dirtyText = if ($dirty) { 'true' } else { 'false' }
         $ldflags = "-X github.com/erranliu/SteerLine/internal/app.buildSourceCommit=$commit -X github.com/erranliu/SteerLine/internal/app.buildSourceDirty=$dirtyText"
-        & go build -trimpath -ldflags $ldflags -o (Join-Path $target 'bin\steerline.exe') ./cmd/steerline 2> (Join-Path $target 'evidence\build-product.log')
+        $productBuildArgs = @('build', '-trimpath', '-ldflags', $ldflags)
+        if ($WebAddress) {
+            $webSeedPath = Join-Path $target 'seed\provider.json'
+            $webSeed = [IO.File]::ReadAllText($webSeedPath) | ConvertFrom-Json
+            $webSeed.web_feedback = $true
+            [IO.File]::WriteAllText($webSeedPath, ($webSeed | ConvertTo-Json -Depth 10), $utf8)
+            Push-Location (Join-Path $repo 'web')
+            try {
+                & npm ci *> (Join-Path $target 'evidence\install-web.log')
+                if ($LASTEXITCODE -ne 0) { throw 'Web dependency install failed; see evidence/install-web.log' }
+                & npm run build *> (Join-Path $target 'evidence\build-web.log')
+                if ($LASTEXITCODE -ne 0) { throw 'Web build failed; see evidence/build-web.log' }
+            } finally { Pop-Location }
+            $productBuildArgs += @('-tags', 'webui')
+            $manifest.web_address = $WebAddress
+        }
+        $productBuildArgs += @('-o', (Join-Path $target 'bin\steerline.exe'), './cmd/steerline')
+        & go @productBuildArgs 2> (Join-Path $target 'evidence\build-product.log')
         if ($LASTEXITCODE -ne 0) { throw 'Product build failed; see evidence/build-product.log' }
         & go build -trimpath -o (Join-Path $target 'bin\debug-helper.exe') ./tests/e2e/testdata/debug-helper 2> (Join-Path $target 'evidence\build-helper.log')
         if ($LASTEXITCODE -ne 0) { throw 'Helper build failed; see evidence/build-helper.log' }

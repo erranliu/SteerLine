@@ -240,6 +240,11 @@ func (d *debugRelease) command(exe string, args ...string) *exec.Cmd {
 		}
 	}
 	cmd.Env = append(env, "GH_CONFIG_DIR="+filepath.Join(d.home, "gh"))
+	if exe == d.binary && len(args) > 0 && args[0] == "run" {
+		if devOrigin := os.Getenv("STEERLINE_WEB_DEV_ORIGIN"); devOrigin != "" {
+			cmd.Env = append(cmd.Env, "STEERLINE_WEB_DEV_ORIGIN="+devOrigin)
+		}
+	}
 	if token, err := os.ReadFile(filepath.Join(d.home, "github-token")); err == nil {
 		cmd.Env = append(cmd.Env, "GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=http."+debugRemote+".extraheader", "GIT_CONFIG_VALUE_0="+debugAuthHeader(token))
 	}

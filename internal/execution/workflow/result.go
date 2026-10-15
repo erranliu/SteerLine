@@ -1,4 +1,4 @@
-package execution
+package workflow
 
 import (
 	"bytes"
@@ -7,11 +7,9 @@ import (
 	"io"
 	"net/url"
 	"strings"
-
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-type stageBlocker struct {
+type Blocker struct {
 	Category string `json:"category"`
 	Action   string `json:"action"`
 	Error    string `json:"error"`
@@ -19,28 +17,28 @@ type stageBlocker struct {
 	Unknown  string `json:"unknown,omitempty"`
 }
 
-type stageOutputs struct {
+type Outputs struct {
 	PRURL  string `json:"pr_url,omitempty"`
 	Branch string `json:"branch,omitempty"`
 }
 
-type stageReport struct {
-	Outcome  string        `json:"outcome"`
-	Outputs  stageOutputs  `json:"outputs,omitempty"`
-	Summary  string        `json:"summary"`
-	Question string        `json:"question,omitempty"`
-	Blocker  *stageBlocker `json:"blocker,omitempty"`
+type Report struct {
+	Outcome  string   `json:"outcome"`
+	Outputs  Outputs  `json:"outputs,omitempty"`
+	Summary  string   `json:"summary"`
+	Question string   `json:"question,omitempty"`
+	Blocker  *Blocker `json:"blocker,omitempty"`
 }
 
-const stageResultContract = `Return one JSON object:
+const ResultContract = `Return one JSON object:
 {"outcome":"done|needs_input|blocked","summary":"result"}
 For needs_input add question. For blocked add blocker: {"category":"failure|unknown_external|permission|prerequisite","action":"action","error":"error","known":"optional","unknown":"optional"}.`
 
-func stageResultInstruction(step string) string {
-	if step == executionmodel.StepReport {
-		return stageResultContract
+func ResultInstruction(step string) string {
+	if step == StepReport {
+		return ResultContract
 	}
-	return stageResultContract + "\nFor done add outputs: {\"pr_url\":\"actual PR URL\"}."
+	return ResultContract + "\nFor done add outputs: {\"pr_url\":\"actual PR URL\"}."
 }
 
 // Reject duplicate keys at every depth before decoding. encoding/json normally
@@ -99,8 +97,8 @@ func uniqueJSON(dec *json.Decoder, fields resultFields) error {
 	return err
 }
 
-func decodeStageReport(body, step string) (stageReport, error) {
-	var value stageReport
+func DecodeReport(body, step string) (Report, error) {
+	var value Report
 	if len(body) == 0 || len(body) > 128*1024 {
 		return value, errors.New("result missing or exceeds bound")
 	}
@@ -141,7 +139,7 @@ func decodeStageReport(body, step string) (stageReport, error) {
 	}
 	switch value.Outcome {
 	case "done":
-		if value.Question != "" || value.Blocker != nil || executionmodel.PublicationStep(step) && value.Outputs.PRURL == "" {
+		if value.Question != "" || value.Blocker != nil || PublicationStep(step) && value.Outputs.PRURL == "" {
 			return value, errors.New("done result has inconsistent fields")
 		}
 	case "needs_input":

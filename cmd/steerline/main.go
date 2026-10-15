@@ -33,6 +33,9 @@ func run() error {
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
 	}
+	if os.Args[1] == "web" {
+		return runWeb(os.Args[2:])
+	}
 	if os.Args[1] == "console" {
 		return runConsoleCommand(os.Args[2:])
 	}

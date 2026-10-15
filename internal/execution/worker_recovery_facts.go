@@ -4,11 +4,8 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 )
-
-func canContinueOriginalWorker(e executionbackend.LifecycleRecoveryEvidence) bool {
-	return e.SessionAvailable && e.SessionIdle && (e.ResourceAvailable && !e.ProcessAbsent || e.SessionRebindable && e.ProcessAbsent && e.WritersAbsent && !e.ResourceAvailable)
-}
 
 func (s *Service) markWorkerRecoveryRequired(run *reconstructiontypes.RunView) {
 	e := s.executionRecord(run)
@@ -21,27 +18,25 @@ func (s *Service) markWorkerRecoveryRequired(run *reconstructiontypes.RunView) {
 }
 
 func (s *Service) workerContinuationQualified(run *reconstructiontypes.RunView, evidence executionbackend.LifecycleRecoveryEvidence) bool {
-	return canContinueOriginalWorker(evidence) && !s.hasUnknownWorkerOperation(run) && s.workflowRecord(run).Status != "reconciling"
+	return reliable.CanContinueOriginal(evidence) && !s.hasUnknownWorkerOperation(run) && s.workflowRecord(run).Status != "reconciling"
 }
 
 func (s *Service) setWorkerRecoveryEvidence(run *reconstructiontypes.RunView, evidence executionbackend.LifecycleRecoveryEvidence) {
 	completed := s.originalWorkerTurnEnded(run)
 	w := s.workflowRecord(run)
 	core := (w.StepID == executionmodel.StepImplement || w.StepID == executionmodel.StepReport) && w.PRURL == ""
-	s.setWorkerRecoveryFacts(run, executionmodel.RecoveryFacts{WorkerLive: evidence.ResourceAvailable, WorkerAbsent: evidence.ProcessAbsent, WritersAbsent: evidence.WritersAbsent, Completed: completed,
-		OutcomeUncertain: core && (completed || evidence.ProcessAbsent && evidence.WritersAbsent) && !s.workerContinuationQualified(run, evidence), QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}, evidence.SessionAvailable)
+	questionPending := run.Decision != nil && run.Decision.Request.QuestionRoute != nil &&
+		(run.Decision.Status == "pending" || run.Decision.Status == "answer_saved")
+	s.setWorkerRecoveryFacts(run, reliable.RecoveryFacts{WorkerLive: evidence.ResourceAvailable, WorkerAbsent: evidence.ProcessAbsent, WritersAbsent: evidence.WritersAbsent, Completed: completed,
+		OutcomeUncertain: core && (completed || evidence.ProcessAbsent && evidence.WritersAbsent) && !s.workerContinuationQualified(run, evidence), QuestionPending: questionPending}, evidence.SessionAvailable)
 }
 
 // Actual worker evidence, not the declared service-stop behavior, determines
 // recovery eligibility. Repeated identical evidence never invalidates consent.
-func (s *Service) setWorkerRecoveryFacts(run *reconstructiontypes.RunView, facts executionmodel.RecoveryFacts, sessionAvailable bool) {
+func (s *Service) setWorkerRecoveryFacts(run *reconstructiontypes.RunView, facts reliable.RecoveryFacts, sessionAvailable bool) {
 	e := s.executionRecord(run)
-	facts.OutcomeUncertain = facts.OutcomeUncertain || s.hasUnknownWorkerOperation(run)
-	state := string(executionmodel.ClassifyRecovery(facts))
-	if e.RecoverySessionAvailable != nil && (e.RecoveryState != state || *e.RecoverySessionAvailable != sessionAvailable) {
-		e.RecoveryVersion++
-	}
-	e.RecoveryState, e.RecoverySessionAvailable = state, ptr(sessionAvailable)
+	value := reliable.RecoveryChange(reliable.RecoveryRevision{State: e.RecoveryState, SessionAvailable: e.RecoverySessionAvailable, Version: e.RecoveryVersion}, facts, sessionAvailable, s.hasUnknownWorkerOperation(run))
+	e.RecoveryState, e.RecoverySessionAvailable, e.RecoveryVersion = value.State, value.SessionAvailable, value.Version
 }
 
 func settledOriginalWorkerTurn(e *executionmodel.ExecutionRecord) bool {
@@ -66,15 +61,13 @@ func (s *Service) workerInputNotSubmitted(run *reconstructiontypes.RunView, comm
 	if command == "" || stageInput(s.workflowRecord(run), command) == nil {
 		return false
 	}
-	for _, prefix := range []string{"worker-turn:", "worker-input:"} {
-		if op := s.operationByKey(prefix + e.ExecutionID + ":" + command); op != nil && op.Status != "rejected" {
-			return false
+	status := func(key string) string {
+		if op := s.operationByKey(key + e.ExecutionID + ":" + command); op != nil {
+			return op.Status
 		}
+		return ""
 	}
-	if op := s.operationByKey("worker-session:" + e.ExecutionID + ":" + command); op != nil && op.Status != "confirmed" && op.Status != "rejected" {
-		return false
-	}
-	return true
+	return reliable.InputNotSubmitted(status("worker-turn:"), status("worker-input:"), status("worker-session:"))
 }
 
 func (s *Service) stampPendingRecoveryQuestion(run *reconstructiontypes.RunView) {

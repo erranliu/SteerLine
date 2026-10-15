@@ -112,35 +112,30 @@ func (p *additionalPort) PreflightLifecycle(_ context.Context, setup executionba
 func (p *additionalPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
 	// The injected builder binds a read-only policy envelope with no write
 	// roots. Session creation still needs this original resource receipt.
-	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.ContinueExecutionOnServiceStop, StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true, ReportToolPolicy: "fixture.read_only"}
+	return executionbackend.LifecyclePolicyCapabilities{Preparation: executionbackend.PreparationCapabilities{Workspace: executionbackend.MechanismApplicable, Resource: executionbackend.MechanismNotApplicable, Session: executionbackend.MechanismApplicable}, ServiceStopBehavior: executionbackend.ContinueExecutionOnServiceStop, StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true, ReportToolPolicy: "fixture.read_only"}
 }
 
-func (p *additionalPort) Next(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
-	if snapshot.TaskDelivered {
+func (p *additionalPort) PreparationFacts(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.PreparationFacts, error) {
+	if snapshot.ResourcesFinalized {
 		p.ledger.mu.Lock()
 		value, err := p.ledger.read()
 		p.ledger.mu.Unlock()
 		if err != nil {
-			return executionbackend.LifecycleCandidate{}, err
+			return executionbackend.PreparationFacts{}, err
 		}
 		if value.CleanupCount != 0 {
-			return executionbackend.LifecycleCandidate{Done: true}, nil
+			return executionbackend.PreparationFacts{Workspace: executionbackend.GateReady, Resource: executionbackend.GateNotApplicable, Session: executionbackend.GateUnverified}, nil
 		}
-		return executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleCleanup, Input: executionbackend.LifecycleInput{Cleanup: &executionbackend.CleanupInput{Resources: []executionbackend.ProcessIdentity{snapshot.Ref.External}}}}, nil
+		return executionbackend.PreparationFacts{Workspace: executionbackend.GateReady, Resource: executionbackend.GateNotApplicable, Session: executionbackend.GateUnverified, Cleanup: &executionbackend.CleanupInput{Resources: []executionbackend.ProcessIdentity{snapshot.Ref.External}}}, nil
 	}
+	workspace, session := executionbackend.GateReady, executionbackend.GateRequired
 	if snapshot.Workspace.Path == "" {
-		intent := snapshot.WorkspacePlan
-		return executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}, nil
+		workspace = executionbackend.GateRequired
 	}
-	if snapshot.PendingTurn == nil {
-		return executionbackend.LifecycleCandidate{Done: true}, nil
+	if snapshot.Session.SessionID != "" {
+		session = executionbackend.GateReady
 	}
-	turn := *snapshot.PendingTurn
-	action := executionbackend.LifecycleStartTurn
-	if snapshot.Session.SessionID == "" {
-		action = executionbackend.LifecyclePrepareSession
-	}
-	return executionbackend.LifecycleCandidate{Action: action, Input: executionbackend.LifecycleInput{Turn: &turn}}, nil
+	return executionbackend.PreparationFacts{Workspace: workspace, Resource: executionbackend.GateNotApplicable, Session: session}, nil
 }
 
 func (p *additionalPort) Execute(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
@@ -226,7 +221,7 @@ func (p *additionalPort) Execute(ctx context.Context, request executionbackend.L
 		receipt.Disposition = executionbackend.OperationConfirmed
 		receipt.State = executionbackend.LifecycleStateFacts{InputAccepted: true, TurnID: request.Snapshot.Session.CurrentTurnID}
 	case executionbackend.LifecycleCleanup:
-		if !request.Snapshot.TaskDelivered || !value.Settled || request.Snapshot.Ref.External != value.Process {
+		if !request.Snapshot.ResourcesFinalized || !value.Settled || request.Snapshot.Ref.External != value.Process {
 			return receipt, nil, errors.New("fixture cleanup lacks original delivered resource identity")
 		}
 		value.CleanupCount++

@@ -27,7 +27,6 @@ CR-A07 不新增顶层场景：C1 验证两路径接回事实经共同 worker �
 | 代号 / 场景 ID / 顶层测试 / chain | 最小真实链与通过条件 |
 | --- | --- |
 | V1 / recovery.codex-resume-live / TestCodexResumeLive / local-codex | 合成任务自身的只读等待窗口中停止本次owned app-server，重开中心核实原thread，正式continue后新Attempt仍同thread/worktree。受管implement处理当前成果、report来源正确，真实final/正数usage、正常PR/合并/唯一Delivery与清理。只做一次代表进程故障；人工未绑定成果由C2覆盖。 |
-| V2 / recovery.orca-local-reconnect-live / TestOrcaLocalReconnectLive / orca-terminal-local | 当前唯一agent terminal已接受短输入后停止中心，原agent在中心离线时完成合成任务；重开按原 terminal/Command/原生状态基线结算，输入计数不增。正式确认后续输入，再正常PR/合并/唯一Delivery与清理。不增加真实terminal丢失、远端wrapper或第二次故障窗口。 |
 
 V2 的 chain 需新增当前单终端产品装配/前置/证据/清理，不能复活旧 orca-codex/supervised 配置或仅注册测试名。沿 testenv/native/driver 只补本机链所需路径，远端manifest与真实断连链暂不扩展。
 
@@ -90,3 +89,5 @@ Codex 旧写者、活动人工 turn/空闲未知、配置身份与迟到版本�
 ## PR #295/#296 整合说明
 
 2026-10-13：development/v3 不恢复成果快照/候选 SHA；已发送失败报告重新实施核验。Orca controlled 提供公开加密状态订阅和 main-agent 查询，普通屏幕只核对回复与 composer；缺少原接收/开始证明的 unknown-send 保持阻断，不从正文补造回执。新轮次观察重接之前须保存原 working 证据，结果保存后的原终端丢失不会抹去中心结果。2026-10-12 的全组及 live 证据属于整合前版本，当前最小重验与限制见专属验收。
+
+2026-10-14：本机 Orca 部署已停用，V2 本机 live 入口与登记删除。底层隔离 local/environment 夹具保留；远端真实恢复当前未登记，不计为已验。

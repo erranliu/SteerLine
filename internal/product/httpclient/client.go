@@ -49,6 +49,16 @@ type Client struct {
 }
 
 func Open(ctx context.Context, runDir, projectIdentity string) (*Client, error) {
+	return OpenWithTimeout(ctx, runDir, projectIdentity, 30*time.Second)
+}
+
+// OpenWithTimeout permits a bounded caller-specific round-trip budget. Local
+// command acceptance can include several host/store validations; a bridge must
+// allow them to settle without changing the original command or retry rules.
+func OpenWithTimeout(ctx context.Context, runDir, projectIdentity string, timeout time.Duration) (*Client, error) {
+	if timeout <= 0 || timeout > 2*time.Minute {
+		return nil, errors.New("local API timeout must be positive and at most two minutes")
+	}
 	apiDir := filepath.Join(runDir, "local-api")
 	if err := fs.VerifyPrivateDirectory(apiDir); err != nil {
 		if os.IsNotExist(err) {
@@ -91,7 +101,7 @@ func Open(ctx context.Context, runDir, projectIdentity string) (*Client, error) 
 		Status: discovery.Status, Diagnostic: discovery.Diagnostic, SampledAt: discovery.UpdatedAt}
 	transport := &http.Transport{Proxy: nil, MaxIdleConns: 4, MaxIdleConnsPerHost: 2, IdleConnTimeout: 30 * time.Second}
 	client := &Client{baseURL: "http://" + host, token: string(tokenBytes), project: discovery.ProjectID, identity: identity,
-		transport: transport, http: &http.Client{Timeout: 30 * time.Second, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("local API redirects are forbidden") }}}
+		transport: transport, http: &http.Client{Timeout: timeout, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("local API redirects are forbidden") }}}
 	var live Identity
 	if err = client.get(ctx, "/v1/identity", &live); err != nil {
 		_ = client.Close()

@@ -52,7 +52,7 @@ func TestCurrentExampleProfilesFreezeOpaqueOrcaCommands(t *testing.T) {
 	require(t, json.Unmarshal(raw, &file))
 	d, err := NewBuiltinDirectory(NewProcessHost(time.Second))
 	require(t, err)
-	if len(file.Profiles) != 6 {
+	if len(file.Profiles) != 4 {
 		t.Fatal("example profiles lost")
 	}
 	for _, p := range file.Profiles {

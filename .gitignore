@@ -4,6 +4,11 @@
 *.test.exe
 coverage.out
 __pycache__/
+/web/node_modules/
+/web/server/dist/
+/web/test-results/
+/web/playwright-report/
+/web/*.tsbuildinfo
 
 # Raw validation runs belong in temporary directories; root summaries remain trackable.
 /docs/validation/*/

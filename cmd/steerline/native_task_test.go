@@ -284,7 +284,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			if process == nil {
 				t.Fatal("fixture service process identity missing")
 			}
-			endpoint, err := httpapi.Prepare(context.Background(), client, httpapi.Options{RunDir: c.RunDir, ProjectIdentity: c.Identity(), InstanceID: state.Service.InstanceID, Process: httpapi.ProcessIdentity{Kind: process.Kind, PID: process.PID, Created: process.Created, Executable: process.Executable}, Capabilities: state.Service.Capabilities})
+			endpoint, err := httpapi.Prepare(context.Background(), httpapi.Ports{Query: client, Commands: client, Authority: client, NativeViewer: client}, httpapi.Options{RunDir: c.RunDir, ProjectIdentity: c.Identity(), InstanceID: state.Service.InstanceID, Process: httpapi.ProcessIdentity{Kind: process.Kind, PID: process.PID, Created: process.Created, Executable: process.Executable}, Capabilities: state.Service.Capabilities})
 			if err != nil {
 				t.Fatal(err)
 			}

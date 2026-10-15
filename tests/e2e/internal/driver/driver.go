@@ -74,7 +74,14 @@ func (c *Client) RunHelper(ctx context.Context, helper string, args ...string) (
 }
 
 func (c *Client) run(ctx context.Context, binary string, args ...string) ([]byte, error) {
-	return c.runWithTimeout(ctx, 30*time.Second, binary, args...)
+	timeout := 30 * time.Second
+	if len(args) >= 2 && args[0] == "task" && (args[1] == "validate" || args[1] == "create") {
+		// These fixture setup commands initialize the project and its SQLite
+		// schema before a service exists. Cold Windows initialization can exceed
+		// the ordinary query budget when the Full workers are running.
+		timeout = 2 * time.Minute
+	}
+	return c.runWithTimeout(ctx, timeout, binary, args...)
 }
 
 func (c *Client) runWithTimeout(ctx context.Context, timeout time.Duration, binary string, args ...string) ([]byte, error) {

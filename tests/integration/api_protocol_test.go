@@ -52,7 +52,7 @@ func TestAPIServiceLifecycle(t *testing.T) {
 		t.Fatal("controlled service did not publish its real process identity")
 	}
 	process := httpapi.ProcessIdentity{Kind: identity.Kind, PID: identity.PID, Created: identity.Created, Executable: identity.Executable}
-	endpoint, err := httpapi.Prepare(ctx, product, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
+	endpoint, err := httpapi.Prepare(ctx, httpapi.Ports{Query: product, Commands: product, Authority: product, NativeViewer: product}, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
 		InstanceID: service.instanceID, Process: process, Capabilities: append([]string(nil), service.service.State.Service.Capabilities...)})
 	require(t, err)
 	if err = endpoint.SetReady(service.instanceID, false, "test service not ready"); err != nil {
@@ -99,7 +99,7 @@ func TestAPIServiceLifecycle(t *testing.T) {
 	listener, err := net.Listen("tcp4", "127.0.0.1:0")
 	require(t, err)
 	defer listener.Close()
-	_, err = httpapi.Prepare(ctx, product, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
+	_, err = httpapi.Prepare(ctx, httpapi.Ports{Query: product, Commands: product, Authority: product, NativeViewer: product}, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
 		InstanceID: service.instanceID, Address: listener.Addr().String()})
 	if err == nil || !strings.Contains(err.Error(), "bind local API") {
 		t.Fatalf("existing port conflict did not stop endpoint startup: %v", err)
@@ -111,7 +111,7 @@ func TestAPIServiceLifecycle(t *testing.T) {
 
 func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
 	requireWindowsAPI(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
 	serviceCtx, stopService := context.WithCancel(ctx)
@@ -120,8 +120,8 @@ func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
 	var client *httpclient.Client
 	var lastOpenErr error
 	// Native authority preflight and the real service factory precede API
-	// publication. Keep a bounded minute for that complete startup path.
-	deadline := time.Now().Add(time.Minute)
+	// publication. Allow the complete startup path under Full process load.
+	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		select {
 		case serviceErr := <-done:
@@ -216,7 +216,7 @@ func TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter(t *testing.T) {
 
 	var client *httpclient.Client
 	var lastOpenErr error
-	deadline := time.Now().Add(time.Minute)
+	deadline := time.Now().Add(2 * time.Minute)
 	for time.Now().Before(deadline) {
 		select {
 		case serviceErr := <-done:
@@ -392,7 +392,7 @@ func integrationStartupText(runDir string) string {
 
 func TestAPIIdentityAndAuthentication(t *testing.T) {
 	requireWindowsAPI(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
 	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
@@ -1004,7 +1004,7 @@ func newIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, serv
 	if identity == nil {
 		return nil, nil, fmt.Errorf("controlled service omitted process identity")
 	}
-	server, err := httpapi.Prepare(ctx, product, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
+	server, err := httpapi.Prepare(ctx, httpapi.Ports{Query: product, Commands: product, Authority: product, NativeViewer: product}, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
 		InstanceID: service.instanceID, Process: httpapi.ProcessIdentity{Kind: identity.Kind, PID: identity.PID, Created: identity.Created, Executable: identity.Executable},
 		Capabilities: append([]string(nil), service.service.State.Service.Capabilities...)})
 	if err != nil {

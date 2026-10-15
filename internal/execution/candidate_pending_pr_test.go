@@ -44,6 +44,30 @@ func TestCandidateOpenPRPollPreservesOriginalPendingInput(t *testing.T) {
 	}
 }
 
+func TestCandidateOpenPRPollPreservesSavedFeedback(t *testing.T) {
+	f := newMCFixture(t)
+	s, run := f.s, f.first
+	mcStartTurn(t, s, run)
+	mcFinishTurn(t, s, run)
+	info := f.bind(t, run, 81, "open")
+	w, e := s.workflowRecords(run)
+	w.StepID, w.Status = executionmodel.StepAwaitMerge, "waiting_external"
+	e.PendingCommandID, e.PendingTurnID = "", ""
+	s.setDecisionStatus(run, "superseded")
+	s.setRunDecision(run, nil)
+	require(t, s.offerWorkerPRFeedback(run, info.URL))
+	s.setDecisionStatus(run, "answer_saved")
+	s.refreshRun(run)
+	require(t, s.commitWorker(run))
+	decisionID, turns := run.Decision.ID, e.TurnNumber
+	for i := 0; i < 2; i++ {
+		require(t, s.pollWorkerFlowPR(context.Background(), run, nativeTaskRecord(s.domain.Tasks, run.TaskID), s.workflowRecord(run)))
+		if run.Decision.ID != decisionID || run.Decision.Status != "answer_saved" || s.executionRecord(run).TurnNumber != turns {
+			t.Fatal("PR polling replaced the saved answer before its original feedback delivery")
+		}
+	}
+}
+
 func TestCandidateClosedPRPollDeliversLaterMerge(t *testing.T) {
 	f := newMCFixture(t)
 	s, run := f.s, f.first

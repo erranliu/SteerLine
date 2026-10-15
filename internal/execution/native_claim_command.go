@@ -66,7 +66,7 @@ func (c CommandService) commitPreparedTaskClaim(ctx context.Context, prepared pr
 }
 
 func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Config, options TaskClaimOptions) (preparedTaskClaim, error) {
-	config = copyWorkerFlowConfig(config)
+	config = copyWorkerConfig(config)
 	sqlite := c.Store
 	if sqlite == nil || c.Project == "" || config.Identity() != c.Project {
 		return preparedTaskClaim{}, nativeErr("authority_mismatch", "claim requires the configured native project")

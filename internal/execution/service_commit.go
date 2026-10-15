@@ -3,6 +3,7 @@ package execution
 import (
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -331,7 +332,7 @@ func (s *Service) startWorkerOperation(run *reconstruction.RunView, kind, key st
 	operation := executionmodel.OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: key, Kind: kind,
 		Status: "in_flight", PayloadDigest: operationDigest(request), Request: request, CreatedAt: now(), UpdatedAt: now()}
 	if lifecycleOperationKind(kind) {
-		fixed, err := s.workerFlowContext(run)
+		fixed, err := s.workerRecords(run)
 		if err != nil {
 			return "", err
 		}
@@ -354,6 +355,6 @@ func (s *Service) startWorkerOperation(run *reconstruction.RunView, kind, key st
 }
 
 func lifecycleOperationKind(kind string) bool {
-	return knownLifecycleAction(executionbackend.LifecycleAction(kind)) || kind == "worker_input_value" || kind == "prepare_worker_session" ||
+	return reliable.KnownAction(executionbackend.LifecycleAction(kind)) || kind == "worker_input_value" || kind == "prepare_worker_session" ||
 		kind == "start_worker_turn" || kind == "submit_worker_input" || kind == "reply_execution_question" || kind == "stop_worker_observation"
 }

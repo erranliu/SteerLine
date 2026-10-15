@@ -41,7 +41,11 @@ try {
     (Get-Item -LiteralPath $alias).Delete()
     $collisionRoot = Join-Path $testRoot 'collision'
     $now = [TimeZoneInfo]::ConvertTimeFromUtc([DateTime]::UtcNow, [TimeZoneInfo]::FindSystemTimeZoneById('China Standard Time'))
-    $suffix = $first.release -replace '^dev-\d{8}-\d{6}', ''
+    # The checkout may advance between the earlier builds and this assertion.
+    $collisionCommit = (& git -C $repo rev-parse HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve collision source commit' }
+    $suffix = '-' + $collisionCommit.Substring(0, 8)
+    if (-not [string]::IsNullOrWhiteSpace((& git -C $repo status --porcelain | Out-String))) { $suffix += '-dirty' }
     # Preoccupy the immediate timestamp window, so the real generator must refuse before building.
     foreach ($offset in 0..10) { New-Item -ItemType Directory -Path (Join-Path $collisionRoot ('dev-' + $now.AddSeconds($offset).ToString('yyyyMMdd-HHmmss') + $suffix)) -Force | Out-Null }
     $refused = $false

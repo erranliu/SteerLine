@@ -1,6 +1,6 @@
 # 测试总入口
 
-当前产品入口为本地 Codex 与 Orca 单终端 `host=orca` / `orca_terminal_v3`（local/environment），supervised 已退役。当前通信及验证范围见[单终端验收](acceptance/orca-terminal-transport.md)与[真实调试记录](acceptance/orca-terminal-remote-retest-2026-10-10.md)：本机有限样本三阶段交付通过，本机最终 draft 保护未重新跑真机；远端升级 CLI 且预先确认目录信任后有限样本闭环通过，首次信任阻塞后原任务自动继续仍未通过。两目标受控回归不代替远端真机。旧单轮远端场景仍已退役，正式注册表不含新版远端交付；旧 supervised、统一模板及单消息接线证据保留各自历史范围。
+当前部署入口为本地 Codex 与远端 Orca 单终端 `host=orca` / `orca_terminal_v3`（environment），本机 Orca 部署已停用，supervised 已退役。隔离 local/environment 夹具与本机无模型资源能力测试保留；本机 live 恢复入口已删除。当前通信及验证范围见[单终端验收](acceptance/orca-terminal-transport.md)与[真实调试记录](acceptance/orca-terminal-remote-retest-2026-10-10.md)：本机有限样本三阶段交付通过，本机最终 draft 保护未重新跑真机；远端升级 CLI 且预先确认目录信任后有限样本闭环通过，首次信任阻塞后原任务自动继续仍未通过。两目标受控回归不代替远端真机。旧单轮远端场景仍已退役，正式注册表不含新版远端交付；旧 supervised、统一模板及单消息接线证据保留各自历史范围。
 
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
 
@@ -21,6 +21,8 @@ git diff --check
 链接检查覆盖仓库 README 与 docs 下的 Markdown 文件/目录目标，跳过代码示例、外部 URL 和页内锚点；不声明外部页面、历史章节锚点或原实验可重放性已经验证。任务身份检查使用当前规划，不复用历史验收中写死的任务集合。移动原始证据或原型时另行核对字节摘要；固定 commit 中的路径与契约摘要不因当前导航改写。
 
 ## 选择范围
+
+本机 Web 的持续定向入口为 `scripts/test-web.ps1`（构建、`web.client` / `web.input`、Web/native HTTP owner 回归）；传入 `-DebugConfig <新独立simulate包的home/etc/SteerlineTest.json>` 再执行真实 Edge 场景 `web.smoke`。驱动拒绝安装目录和非 simulate 包，证据写本次新空临时目录。准备与具体命令见 [Web 工程](../web/README.md)，本批验收见[记录](acceptance/web-frontend.md)。Go 固定 L1 新增 `quick-owner-web` 的认证/原信封/静态/端口/私有入口反例；前端 npm 与浏览器入口独立选择，不自动扩张 Full/L2/L3。
 
 | 入口 | 用途 | 模型 token / 外部效果 |
 | --- | --- | --- |

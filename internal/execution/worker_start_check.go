@@ -28,7 +28,7 @@ func startCheckBinding(run *reconstructiontypes.RunView, execution *executionmod
 }
 
 func checkWorkerStart(ctx context.Context, config Config, lifecycle executionbackend.LifecyclePort, setup executionbackend.LifecycleSetup) error {
-	config = copyWorkerFlowConfig(config)
+	config = copyWorkerConfig(config)
 	if err := config.BindPublicationTarget(ctx, setup.ProcessHost); err != nil {
 		return err
 	}

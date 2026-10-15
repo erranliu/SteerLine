@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/reliable"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -57,21 +58,14 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *reconstruct
 		return executionmodel.WorkspaceEvidence{}, err
 	}
 	if snapshot.Ref.WorkspacePath == "" {
-		// A lost or not-yet-committed resource receipt is inspected against the
-		// original persisted intent. This read does not publish the candidate.
-		operation := s.operationByKey("worker-workspace:" + run.ExecutionID)
-		var saved struct {
-			WorkflowRunID string                           `json:"workflow_run_id"`
-			ExecutionID   string                           `json:"execution_id"`
-			Workspace     executionbackend.WorkspaceIntent `json:"workspace"`
+		original, err := reliable.OriginalWorkspace(snapshot)
+		if err != nil {
+			return executionmodel.WorkspaceEvidence{}, err
 		}
-		if operation == nil || operation.Kind != "prepare_workspace" || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != run.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID ||
-			json.Unmarshal(operation.Request, &saved) != nil || saved.WorkflowRunID != run.RunID || saved.ExecutionID != run.ExecutionID || saved.Workspace != *run.WorkspaceIntent || operationDigest(operation.Request) != operation.PayloadDigest {
-			return executionmodel.WorkspaceEvidence{}, errors.New("workspace inspection has no matching committed resource or preparation intent")
-		}
-		snapshot.Ref.WorkspacePath, snapshot.Ref.WorkspaceBranch, snapshot.Ref.BaseCommit = saved.Workspace.Path, saved.Workspace.Branch, saved.Workspace.BaseCommit
-		snapshot.Workspace = saved.Workspace
+		snapshot.Ref.WorkspacePath, snapshot.Ref.WorkspaceBranch, snapshot.Ref.BaseCommit = original.Path, original.Branch, original.BaseCommit
+		snapshot.Workspace = original
 	}
+
 	inspection, err := port.InspectLifecycleWorkspace(ctx, snapshot)
 	if err != nil {
 		return executionmodel.WorkspaceEvidence{}, err
