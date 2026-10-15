@@ -22,8 +22,8 @@
 | `httpclient/lifecycle_windows.go`、`lifecycle_other.go`、`internal/localservice/endpoint.go`、`app/application_directory.go` | `CurrentProcessIdentity`、`ProcessExited` 被应用/Web 服务复用；只删除 TUI 停服 observer，保留真实进程代际核验 |
 | `scripts/new-debug-release.ps1`、`driver/debug_web.go` | 当前 Web 由非空 WebAddress 选择；默认包没有 Web。改成默认完整 Web 包，避免删除 TUI 后默认调试包无前端 |
 | `driver/debug_reset.go`、`debug_release_test.go` | reset 读写 TUI 的 ui/views；移除该依赖，同时保留活动 Web/应用/项目/worker 的阻止重置条件 |
-| `testenv/recovery.go`、`suites/recovery/disconnect_test.go`、`suites/nativeworkspace/removal_restart_test.go` | 业务场景夹带 TUI u 键或重开查询；替换为公共 HTTP 断言，不能直接删除整个恢复/工作区场景 |
-| `internal/testkit/boundary`、`cmd/test-feedback/scoped.go`、`scripts/debug-runtime.ps1` | 有硬编码 TUI 包、跨平台依赖闭包、隔离测试入口；同步清理，保留 HTTP/存储/执行域和安装隔离守卫 |
+| `testenv/recovery.go`、`suites/recovery/disconnect_test.go` | 恢复场景夹带 TUI u 键；替换为公共 HTTP 断言，保留原失败和原执行只读检查。本机 Orca 工作区场景已由用户明确退役，删除专属驱动/登记；远端路径保留 |
+| `internal/testkit/boundary`、`cmd/test-feedback/scoped.go`、旧源码调试脚本（本次删除） | 有硬编码 TUI 包、跨平台依赖闭包、隔离测试入口；同步清理，保留 HTTP/存储/执行域和安装隔离守卫 |
 
 以上是代码审计结论，不表示已实施或已验证退役后的产品。
 
@@ -64,9 +64,9 @@ reset 不再要求 ui/views 存在或处理其 view.json。保留本包所有活
 
 ## 5. 测试与文档退役规则
 
-TUI 专属渲染、键盘、窗口偏好、TUI 客户端日志/observer 测试、TUI HTTP runtime 和脚本直接删除。混合测试逐项判断业务要求：保留任务/候选、原回执、权限、身份、恢复只读、工作区删除/重启、安装隔离断言；移到当前 owner 或直接使用既有公共客户端，不保留测试专用 TUI 模拟器。
+TUI 专属渲染、键盘、窗口偏好、TUI 客户端日志/observer 测试、TUI HTTP runtime 和脚本直接删除。混合测试逐项判断业务要求：保留任务/候选、原回执、权限、身份、恢复只读、安装隔离断言；移到当前 owner 或直接使用既有公共客户端，不保留测试专用 TUI 模拟器。
 
-清理 runner 固定包、精确 subtest、权重及架构守卫中的 TUI 选择。保留现有非 TUI 反例和严格失败语义；不能以缺包跳过、空选择或删除全部边界测试使检查通过。只在无剩余消费者时删除 TUI 专用 ConPTY 按键驱动；服务可见窗口、Job 与原生终端测试继续保留。
+清理 runner 固定包、精确 subtest、权重及架构守卫中的 TUI 选择。保留现有非 TUI 反例和严格失败语义；不能以缺包跳过、空选择或删除全部边界测试使检查通过。只在无剩余消费者时删除 TUI 专用 ConPTY 按键驱动；通用 Job/进程与原生终端测试继续保留；单项目服务窗口按统一启动 Spec 退役。
 
 当前 README、运行/调试、Web、架构和测试说明改用 Web 入口。TUI 专属 Spec/Plan/设计/验收保留历史事实并在当前入口标注退役；不把原未验项记为通过。共享 API/业务要求继续有效。实施时修复删除源码造成的文档失效链接，历史源码取证使用固定 Git 版本；不改写旧验收命令为本次证据。原规划阶段只新增导航；实施阶段同步当前入口与退役说明。
 
@@ -84,3 +84,10 @@ TUI 专属渲染、键盘、窗口偏好、TUI 客户端日志/observer 测试�
 | TR-A6 | 当前文档和测试导航无已删除的可执行入口/失效本地链接；历史结论与本批新验收分开，未执行内容不写成已通过 |
 
 本批不新增阻塞人工验收项。既有 Web 人工体验仍归原任务，原 TUI 专属未验项在实际删除后标记退役、不再适用，不能改为通过；与后台能力有关的未验要求仍归原记录。
+
+
+2026-10-15 用户确认的验证范围调整：旧综合 `runtime.installed-debug-isolation` 与旧源码调试 wrapper 退役；隔离保证由 `runtime.source-build-isolation`、`runtime.path-isolation`、`runtime.service-write-isolation`、`runtime.dual-home-isolation` 四项独立 controlled 场景及唯一新调试包测试承担。安全独立的四项最多并发二项，不共享可写构建产物；每项必须实际通过并清理。旧超时证据保留，不能仅删除旧场景即宣称验收完成。
+
+本机 Orca 工作区路径按用户明确指示退役，不再要求本机删除/重启验收；远端 Orca environment 单终端实现与受控协议验证保持。
+
+当前主干已合入统一宿主和独立SteerRunner，冲突的原启动描述按现行契约执行：生成器默认选择空闲loopback端口并冻结，显式端口冲突仍拒绝；本包通过唯一serve宿主及start/stop入口运行。隔离测试只承担调用方保证，双home验证同号任务/请求及原回执重放不串用；完整执行和交付由已有delivery/新调试包场景承担。Runner工作区不作为SteerLine配置项恢复。测试程序固定外部Runner版本/SHA且只调用公开CLI，实际安装环境始终不操作。

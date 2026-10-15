@@ -35,7 +35,6 @@ git diff --check
 | 完整 L2 | 门槛通过后，本地 Codex 真实交付链路 | 消耗 token；在 SteerlineTest 创建、转 ready、合并真实 PR，并清理本次分支 |
 | L3 controlled | 独立选择交付、等待合并后重启等受控场景 | 无 token；本地隔离项目与 loopback provider |
 | L3 live | 本地 Codex 交付与恢复 | 消耗 token；使用 loopback provider |
-| L3 native | Orca 工作区删除与重启 | 无模型；创建、删除本次隔离工作区 |
 | E2E 基础设施 | 测试环境、driver、codec、证据和清理 | 无真实模型 |
 | 编译检查 | 检查包与带 tag 场景能否编译 | 不执行场景，不构成测试通过证据 |
 
@@ -84,7 +83,7 @@ go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidat
 
 ## L2 与 L3
 
-L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；当前登记的 live 使用真实 Codex。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
+L2/L3 当前在 Windows 上按包串行运行；runtime controlled 的四个独立隔离场景在包内最多并行两项，其他场景保持串行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；当前登记的 live 使用真实 Codex。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
 
 本地 live 需要已登录的 `codex-cli 0.159.2`；完整 L2 需要 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用隔离测试项目；本地不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
 
@@ -101,7 +100,6 @@ go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery,runtime' -env=con
 # 每个真实场景可以独立运行
 go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.local-codex'
 go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.local-codex'
-go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native
 
 # 独立 debug 包中的双任务真实沙箱与 Git helper 发布
 go run ./cmd/test-feedback -level=L3 -suite=runtime -env=live '-scenario=runtime.sandbox-git.local-codex'
@@ -113,10 +111,9 @@ go run ./cmd/test-feedback -level=L3 -suite=runtime -env=live '-scenario=runtime
 | L2 | live | smoke | `smoke.local-codex` |
 | L3 | controlled | delivery | `delivery.basic` |
 | L3 | controlled | recovery | `recovery.waiting-merge-restart` |
-| L3 | controlled | runtime | `runtime.installed-debug-isolation` |
+| L3 | controlled | runtime | `runtime.source-build-isolation`、`runtime.path-isolation`、`runtime.service-write-isolation`、`runtime.dual-home-isolation` |
 | L3 | live | delivery | `delivery.local-codex` |
 | L3 | live | recovery | `recovery.local-codex` |
-| L3 | native | workspace | `workspace.orca-removal-restart` |
 | L3 | live | runtime | `runtime.sandbox-git.local-codex` |
 
 注册表 [suites.json](../tests/e2e/suites.json) 是场景 ID、包、测试名和环境的来源。L3 的 `-suite` / `-scenario` 支持逗号多选；省略场景 ID 时运行所选组和环境下的全部场景。PowerShell 中含点的场景参数应整体加引号。L2 是固定选择，不接受按场景挑选或直接选择 live；L2/L3 不与 `-workers`、`-quick`、`-build-only` 或原始 Go 参数混用。

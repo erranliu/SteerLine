@@ -12,7 +12,6 @@ import (
 )
 
 const SupportedCodexVersion = "codex-cli 0.159.2"
-const OrcaWorktreeTrashDirectory = ".orca-worktree-trash"
 
 var ErrOrcaRepoUnavailable = errors.New("fixed Orca repository unavailable")
 
@@ -100,17 +99,6 @@ func FindOrcaRepo(ctx context.Context, call func(context.Context, ...string) (js
 		return "", ErrOrcaRepoUnavailable
 	}
 	return id, nil
-}
-func OrcaCreatedWorktree(raw []byte, name string) (OrcaWorktree, error) {
-	var receipt struct{ Worktree inventoryWorktree }
-	if json.Unmarshal(raw, &receipt) != nil {
-		return OrcaWorktree{}, errors.New("invalid native worktree receipt")
-	}
-	w := receipt.Worktree
-	if w.ID == "" || w.RepoID == "" || w.Path == "" || w.DisplayName != name {
-		return OrcaWorktree{}, errors.New("native worktree ownership differs")
-	}
-	return OrcaWorktree{w.ID, w.RepoID, w.Path}, nil
 }
 func OrcaWorktrees(raw []byte) ([]OrcaWorktree, error) {
 	var listing struct {

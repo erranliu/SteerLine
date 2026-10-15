@@ -1,5 +1,7 @@
 # 任务 #83 验收规划：本机安装与调试路径隔离
 
+> 2026-10-15：旧源码调试 wrapper 和 runtime.installed-debug-isolation 已退役；下文保留原版本计划/证据，不是当前入口。当前长期隔离回归及替换覆盖见 [TUI 退役 Plan](../spec/tui-retirement.plan.md#4-独立隔离回归与补验安排2026-10-15) 和[验收](../acceptance/tui-retirement.md)。
+
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
 状态：#83 实现完成；[PR #247](https://github.com/erranliu/SteerLine/pull/247) 经第五轮独立复审和必要验证后真实合并，merge commit `f7c6f1d05c78172fe8133f7c1763718df0165fe1`。LI1-A–LI4-A 自动验收通过，无本任务人工项；精确受验源码/结果映射及原失败证据保留如下。一期组合/24小时/同构建恢复是独立待签收活动，不由此任务结算宣布通过。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。

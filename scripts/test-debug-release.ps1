@@ -1,5 +1,13 @@
-param([switch]$Live, [string]$SteerRunnerExe = $env:STEERRUNNER_EXE)
+﻿param([switch]$Live, [string]$SteerRunnerExe = $env:STEERRUNNER_EXE, [switch]$IndependentProcess)
 $ErrorActionPreference = 'Stop'
+if (-not $IndependentProcess) {
+    . (Join-Path $PSScriptRoot 'independent-test.ps1')
+    $testArguments = @()
+    if ($Live) { $testArguments += '-Live' }
+    if ($SteerRunnerExe) { $testArguments += @('-SteerRunnerExe', $SteerRunnerExe) }
+    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $testArguments
+    return
+}
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $generator = Join-Path $PSScriptRoot 'new-debug-release.ps1'
 $testRoot = Join-Path 'C:\SteerlineDebug' (([string][char]0x4E2D + [char]0x6587) + ' test-' + [Guid]::NewGuid().ToString('N').Substring(0,12))

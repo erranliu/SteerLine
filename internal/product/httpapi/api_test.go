@@ -239,7 +239,7 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 				if reader.onResolveStart != nil {
 					reader.onResolveStart(taskID, profileID)
 				}
-				return api.ControlPayload{TaskID: taskID, ExecutionProfileID: profileID, ExecutionProfileDigest: strings.Repeat("a", 64)}, nil
+				return api.ControlPayload{TaskID: taskID, ExpectedGraphRevision: 4, ExecutionProfileID: profileID, ExecutionProfileDigest: strings.Repeat("a", 64)}, nil
 			}}, nil
 	})
 	if err != nil {
@@ -499,8 +499,8 @@ func TestAPIStartTaskAndCandidateVersionMapping(t *testing.T) {
 	if err = json.Unmarshal(control.requests[startTask.RequestID].Payload, &taskControl); err != nil {
 		t.Fatal(err)
 	}
-	if taskControl.ExpectedTaskVersion != 3 || taskControl.ExpectedGraphRevision != 0 {
-		t.Fatalf("start_task changed its task version or received an unsupported graph field: %+v", taskControl)
+	if taskControl.ExpectedTaskVersion != 3 || taskControl.ExpectedGraphRevision != 4 {
+		t.Fatalf("start_task lost its task version or server-resolved graph: %+v", taskControl)
 	}
 	startCandidate := startTask
 	startCandidate.RequestID = strings.Repeat("5", 32)
