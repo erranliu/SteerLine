@@ -38,7 +38,7 @@ fixture 的 `caller-fixture.json`、provider `requests` 是测试自产公开协
 
 ## 环境、预算和清理
 
-临时/AI 调试及真实 PR 调试先由 `scripts/new-debug-release.ps1` 生成 `C:\SteerlineDebug` 新包；分级 E2E 继续用自身隔离夹具。不得使用 `C:\SteerlineRuntime`。调试包默认 live，AI 用 `--simulate` 明确选模拟；方案冻结后不切换，reset 保留定义/契约/依赖/Git/PR，活动资源阻止 reset。
+临时/AI 调试及真实 PR 调试先由 `scripts/new-debug-release.ps1` 生成 `C:\SteerlineDebug` 新包；分级 E2E 继续用自身隔离夹具。不得使用当前 `C:\SteerlineInstall` 或保留的 `C:\SteerlineRuntime`。调试包默认 live，AI 用 `--simulate` 明确选模拟；方案冻结后不切换，reset 保留定义/契约/依赖/Git/PR，活动资源阻止 reset。
 
 普通 controlled 业务 5 分钟，waiting-merge-restart 和 live 10 分钟；runtime 子场景保留主干 5 分钟业务期限和独立父期限。live Go 父期限 35 分钟包含独立清理，未放宽业务窗口；普通命令、领取/控制及收尾沿现有明确预算。`FinishBody` 冻结业务期限，清理结果不能掩盖业务超时。
 

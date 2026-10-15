@@ -150,3 +150,10 @@
 - 双项目最终现场 `C:/SteerlineDebug/dev-20261015-182924-48c1a009-dirty`：`scripts/test-unified-startup.ps1 -Package <该包> -Simulate` 的既有 `project-switch.spec.ts` 实际通过，3.4 分钟；两个项目在线、原请求丢回执后查询、Web 重启保持原公开 Run、实际受控发布/合并交付、CLI 任务/回执、活动 Run 的宿主停止诊断、重启后原绑定及零重复 submit 均通过。包内 `evidence/unified-startup.log`、`web-project-switch.json`、browser trace 保存明细。
 - 最终 `evidence/cleanup.json`：processes=0、listeners=0、stop_errors=[]、shutdown.clean=true；两个项目均 local_closed/locks_released/resources_settled=true。回执原子发布改动已由浏览器独立命令和外层独立进程实际消费，不另外建立测试矩阵。
 - RTC-A1～A6 按本任务最终最小验证范围通过；批量三包命令、早期失败与未重跑的 Orca 真机仍保留各自事实。没有运行 Full，没有改动安装现场或其他 Runner 工作区，也未创建本实现的远端 PR。
+
+## 提 PR 前再次整合主干
+
+- 2026-10-15 rebase 到 `7cd2ebe1`，包含 #328 安装部署与 #329 执行可观测性；仅手工解决 `docs/acceptance/README.md`、`docs/testing.md`、`tests/e2e/README.md` 三处文档冲突，保留部署/消息指南以及双安装目录保护。`git range-diff` 核对原五提交，执行代码无额外改写；原证据源码 SHA 如实保留，后续没有重复模型、真实 PR 或 runtime 矩阵。
+- RTC-A1/A2/A5/A6：Plan 中追加的七包定向 owner 在 `.evidence/rtc-pr-rebase/summary.json` 保存精确命令/源码/环境，64 项实际通过、0 skip、passed/complete，9.505 秒；两个 HTTP 当前读取/路由 owner 单独实际通过。
+- RTC-A2/A6：当前 Web state/answer/last-message/runs 四文件共 16 项实际通过；Web TypeScript/Vite build 通过。e2e tag 全包编译通过，仅编译不计业务场景重跑。Markdown 导航 439 文件、2,622 本地链接、0 错误；差异格式检查通过。
+- 原提交 `36b00790 / 88fc3120 / 039225ec / 48c1a009 / 77e9bcc1` 分别重放为 `4ee90244 / 78447064 / 0c911c38 / da4222d5 / b2273538`；既有真实/受控验收记录中的旧 SHA 代表实际采集时版本，不是 rebase 后重跑声明。

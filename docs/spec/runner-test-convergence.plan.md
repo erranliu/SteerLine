@@ -126,3 +126,9 @@ L2 独立进程外层等待使用 60 分钟，覆盖既有 gate 6 分钟、live 
 调试验证的实施收口：本任务使用生成器成功建立且未使用过的独立单项目包执行 Runtime/freeze/stop/reset，并用新生成的独立单/双项目包执行现有浏览器消费者。保留 installer 的产品门槛；不默认重复批量生成的跨包矩阵，所需隔离由原 owner/四项 runtime 覆盖。实际执行、失败及未执行明细只登记专属验收，不将分项通过写成批量脚本整体通过。
 
 RTC-A4/A6 的 Windows 测试回执发布：`web/tests/helpers/package.ts` 和共享独立启动器先写同目录临时 JSON、关闭文件，再原子移动到唯一结果路径，读者仍只等待最终路径。避免出现文件但 writer 尚未关闭时读取触发 EBUSY；不重发业务命令、不把部分回执算作完成。由现有双项目浏览器场景和独立启动器实际消费验证，异常日志保留于专属验收。
+
+### 提 PR 前的主干整合检查
+
+基线追加 `7cd2ebe1` 的安装部署/可观测性变化，解决三处文档冲突并保留双方新入口。RTC-A1/A2/A5/A6 追加最小调用方测试：`go run ./cmd/test-feedback -- ./cmd/test-feedback ./internal/runnerclient ./internal/runnerbridge ./internal/taskrunner ./internal/storage/sqlite ./internal/product/httpapi ./internal/product/applicationhttp -run '^Test(L2|Runner|SteerRunner|E2E|Retired|Manifest|Level|Console|LastMessage|ApplicationLastMessage)' -count=1`；HTTP 新读取路径用 `go test ./internal/product/httpapi ./internal/product/applicationhttp -run '^Test(ClientHTTPRoutes|UnifiedStartupAuthenticationRoutesAndUnavailable)$' -count=1` 单独命中。环境仍为隔离 fixture，整合后、提 PR 前执行，通过条件为实际命中且无失败，证据登记专属验收及 `.evidence/rtc-pr-rebase/summary.json`。
+
+RTC-A2/A6 同时核对当前四个前端 owner（`state.test.ts`、`answer.test.tsx`、`last-message.test.tsx`、`runs.test.tsx`，`npm --prefix web test -- src/features/runs/state.test.ts src/features/runs/answer.test.tsx src/features/runs/last-message.test.tsx src/features/runs/runs.test.tsx`）、`npm --prefix web run build`、原 e2e tag 编译和文档检查；全部实际通过才提 PR。此次手工冲突仅在文档，原五提交的测试实现保持补丁等价；Runner 公开事件新增可选字段与只读消息能力由上述 owner 覆盖，不重复模型/真实 PR 或未变的 runtime 矩阵，既有真实 L2/L3/浏览器证据保留原 SHA。
