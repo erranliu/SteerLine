@@ -1,23 +1,13 @@
 import { expect, test } from "@playwright/test";
-import { spawn } from "node:child_process";
-import { closeSync, openSync, writeFileSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { freshDualPackage, packageCommand } from "./helpers/package";
+import { preparePackageRuntime } from "./helpers/package";
 
 test("web.query-cache: real requests share cache, preserve content and stop hidden polling across projects", async ({
   page,
 }, info) => {
-  const { root, manifest } = freshDualPackage();
-  const home = join(root, "home");
-  const binary = join(root, "bin", "steerline.exe");
-  const web = join(root, "bin", "steerline-web.exe");
-  const helper = join(root, "bin", "debug-helper.exe");
-  const env = {
-    ...process.env,
-    STEERLINE_HOME: home,
-    STEERLINE_E2E_CONTROLLED_STATE: join(root, "provider", "state.json"),
-  };
-  const command = packageCommand(env);
+  const runtime=preparePackageRuntime();
+  const {root,manifest,home,binary,web,helper,command}=runtime;
   const origin = "http://" + manifest.web_address;
   const requests: string[] = [];
   const pageErrors: string[] = [];
@@ -25,6 +15,7 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     if (request.method() === "GET") requests.push(request.url());
   });
   page.on("pageerror", (error) => pageErrors.push(String(error)));
+  let primaryFailure: unknown;
   const facts: Record<string, unknown> = {
     source_commit: manifest.source_commit,
     source_dirty: manifest.source_dirty,
@@ -42,7 +33,7 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     requests.filter(
       (url) =>
         new URL(url).pathname ===
-        "/api/v1/application/projects/" + project + "/" + resource,
+        "/api/v2/application/projects/" + project + "/" + resource,
     ).length;
   await page.route("**/tasks?**", async (route) => {
     const response = await route.fetch();
@@ -56,20 +47,7 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     await route.fulfill({ response });
   });
   try {
-    command(helper, ["debug", "prepare", "--simulate"]);
-    const stdout = openSync(join(root, "evidence", "query-launch.log"), "a");
-    const stderr = openSync(
-      join(root, "evidence", "query-launch.stderr.log"),
-      "a",
-    );
-    const owner = spawn(helper, ["debug", "run", "--simulate"], {
-      env,
-      windowsHide: true,
-      stdio: ["ignore", stdout, stderr],
-    });
-    owner.on("error", (error) => pageErrors.push(String(error)));
-    closeSync(stdout);
-    closeSync(stderr);
+    facts.startup=await runtime.start();
     let opening = "";
     await expect
       .poll(
@@ -89,7 +67,7 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
       .poll(
         async () => {
           const response = await page.request.get(
-            origin + "/api/v1/application/projects",
+            origin + "/api/v2/application/projects",
           );
           const catalog = await response.json();
           projectA =
@@ -200,27 +178,10 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     facts.project_b = projectB;
     facts.page_errors = pageErrors;
     facts.requests = requests;
+  } catch(error) {primaryFailure=error;facts.business_error=String(error);throw error;
   } finally {
     releaseTasks?.();
-    const stopErrors: string[] = [];
-    for (const [exe, args] of [
-      [web, ["stop"]],
-      [binary, ["stop-app"]],
-      [
-        binary,
-        ["stop-service", "-config", join(home, "etc", "SteerlineTestB.json")],
-      ],
-      [
-        binary,
-        ["stop-service", "-config", join(home, "etc", "SteerlineTest.json")],
-      ],
-    ] as [string, string[]][]) {
-      try {
-        command(exe, args);
-      } catch (error) {
-        stopErrors.push(String(error));
-      }
-    }
+    const stopErrors=await runtime.stop();
     const inspect = () =>
       JSON.parse(
         command("powershell.exe", [
@@ -256,7 +217,6 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
       body: JSON.stringify(facts, null, 2),
       contentType: "application/json",
     });
-    if (cleanupError) throw cleanupError;
-    expect(stopErrors).toEqual([]);
+    if (!primaryFailure) {if (cleanupError) throw cleanupError;expect(stopErrors).toEqual([]);}
   }
 });

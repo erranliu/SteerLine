@@ -1,30 +1,15 @@
 import { test, expect } from "@playwright/test";
-import { spawn, type ChildProcess } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { freshDualPackage, packageCommand } from "./helpers/package";
+import { preparePackageRuntime } from "./helpers/package";
 
-test("web.project-switch: independent processes, original commands and active turn survive restart", async ({
+test("web.unified-startup: shared host, original commands and active turn survive Web restart", async ({
   page,
   context,
 }, info) => {
-  const { root, manifest } = freshDualPackage();
-  const home = join(root, "home"),
-    binary = join(root, "bin", "steerline.exe"),
-    web = join(root, "bin", "steerline-web.exe"),
-    helper = join(root, "bin", "debug-helper.exe");
-  const env = {
-    ...process.env,
-    STEERLINE_HOME: home,
-    STEERLINE_E2E_CONTROLLED_STATE: join(root, "provider", "state.json"),
-  };
-  const command = packageCommand(env);
-  const children: ChildProcess[] = [];
-  const launch = (exe: string, args: string[]) => {
-    const child = spawn(exe, args, { env, windowsHide: true, stdio: "ignore" });
-    children.push(child);
-    return child;
-  };
+  const runtime = preparePackageRuntime();
+  const {root,manifest,home,binary,web,helper,command,launch}=runtime;
   const provider = () =>
     JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8"));
   const origin = "http://" + manifest.web_address;
@@ -34,13 +19,11 @@ test("web.project-switch: independent processes, original commands and active tu
     package: root,
   };
   const failures: string[] = [];
-  let stoppedB = false;
-  command(helper, ["debug", "prepare", "--simulate"]);
+ let primaryFailure: unknown;
   const state = provider();
   state.recovery = { HoldStep: "implement.execute", HoldStream: true };
   state.web_feedback = false;
   writeFileSync(join(root, "provider", "state.json"), JSON.stringify(state));
-  launch(helper, ["debug", "run", "--simulate"]);
   let aid = "",
     bid = "";
   const open = async (project = "") => {
@@ -65,13 +48,14 @@ test("web.project-switch: independent processes, original commands and active tu
     await page.goto(url);
   };
   try {
+    facts.startup=await runtime.start();
     await open();
     const combo = page.getByRole("combobox", { name: "当前项目" });
     await expect
       .poll(() => combo.locator("option:not([disabled])").count())
       .toBe(2);
     const projects = await (
-      await page.request.get(origin + "/api/v1/application/projects")
+      await page.request.get(origin + "/api/v2/application/projects")
     ).json();
     const a = projects.projects.find(
         (p: { config_id: string }) => p.config_id === "SteerlineTest.json",
@@ -86,7 +70,7 @@ test("web.project-switch: independent processes, original commands and active tu
       .poll(
         async () => {
           const catalog = await (
-            await page.request.get(origin + "/api/v1/application/projects")
+            await page.request.get(origin + "/api/v2/application/projects")
           ).json();
           facts.last_catalog = catalog;
           return catalog.projects.every((p: { online: boolean }) => p.online);
@@ -105,7 +89,7 @@ test("web.project-switch: independent processes, original commands and active tu
           async () => {
             try {
               const response = await page.request.get(
-                origin + "/api/v1/application/projects/" + project + route,
+                origin + "/api/v2/application/projects/" + project + route,
                 { timeout: 20000 },
               );
               body = await response.json();
@@ -123,6 +107,11 @@ test("web.project-switch: independent processes, original commands and active tu
       otherIdentity = await get(bid, "/identity");
     facts.project_a = originalIdentity;
     facts.project_b = otherIdentity;
+    expect(originalIdentity.process).toEqual(otherIdentity.process);
+    expect(originalIdentity.instance_id).not.toBe(otherIdentity.instance_id);
+    const statusBefore = JSON.parse(command(binary,["status","--json"]));
+    command(binary,["start","--no-open"]);
+    expect(JSON.parse(command(binary,["status","--json"])).backend.identity).toEqual(statusBefore.backend.identity);
     // The second tab retains A while this tab switches to B, even with same Task IDs.
     const second = await context.newPage();
     await second.goto(origin + "/projects/" + aid + "/settings");
@@ -139,7 +128,7 @@ test("web.project-switch: independent processes, original commands and active tu
     let submissions = 0,
       requestID = "";
     await page.route(
-      "**/api/v1/application/projects/**/commands",
+      "**/api/v2/application/projects/**/commands",
       async (route) => {
         const envelope = route.request().postDataJSON();
         if (envelope.action === "start_task") {
@@ -254,27 +243,6 @@ test("web.project-switch: independent processes, original commands and active tu
       });
     };
     await assertOriginal();
-    const appBefore = JSON.parse(
-      readFileSync(join(home, "application-api", "discovery.json"), "utf8"),
-    ).identity;
-    command(binary, ["stop-app"]);
-    launch(binary, ["serve-app"]);
-    await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
-    await assertOriginal();
-    await expect
-      .poll(
-        () =>
-          JSON.parse(
-            readFileSync(
-              join(home, "application-api", "discovery.json"),
-              "utf8",
-            ),
-          ).identity.instance_id,
-      )
-      .not.toBe(appBefore.instance_id);
-    console.log(
-      "web.project-switch: Web and application restarted; original turn unchanged",
-    );
     command(helper, [
       "release-recovery",
       "--e2e-state",
@@ -306,85 +274,55 @@ test("web.project-switch: independent processes, original commands and active tu
         timeout: 60000,
       })
       .toBe(true);
-    command(binary, [
-      "stop-service",
-      "-config",
-      join(home, "etc", "SteerlineTest.json"),
-    ]);
-    expect(await get(bid, "/identity")).toMatchObject({
-      instance_id: otherIdentity.instance_id,
-      process: otherIdentity.process,
-    });
-    launch(binary, [
-      "run",
-      "-config",
-      join(home, "etc", "SteerlineTest.json"),
-      "-dispatch",
-      "manual",
-      "-console",
-      "off",
-    ]);
-    await expect
-      .poll(
-        async () => {
-          const current = await get(aid, "/identity");
-          return (
-            !!current.instance_id &&
-            current.instance_id !== originalIdentity.instance_id
-          );
-        },
-        { timeout: 180000 },
-      )
-      .toBe(true);
-    await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
-    expect(
-      (await get(aid, "/commands/" + requestID)).original.instance_id,
-    ).toBe(originalIdentity.instance_id);
+    // CLI-only mutations and original receipts remain outside the browser proxy.
+    const batch = JSON.parse(readFileSync(join(root,"seed","SteerlineTest.json.bound-tasks.json"),"utf8"));
+    batch.tasks = [3,4].map((id) => ({...batch.tasks[0],local_key:"cli-"+id,task_id:id,title:"CLI startup verification "+id}));
+    batch.dependencies=[];
+    const input=join(root,"evidence","cli-batch.json");writeFileSync(input,JSON.stringify(batch));
+    const valid=JSON.parse(command(binary,["task","validate","--project",aid,"--file",input]));
+    expect(valid.valid).toBe(true);
+    const batchID=randomUUID().replaceAll("-","");
+    command(binary,["task","create","--project",aid,"--file",input,"--request-id",batchID,"--expected-authority-version",String(valid.authority_version),"--by","startup-test"]);
+    const batchReceipt=JSON.parse(command(binary,["task","receipt","--project",aid,"--request-id",batchID]));
+    const dependencyID=randomUUID().replaceAll("-","");
+    command(binary,["task","add-predecessors","--project",aid,"--task-id","4","--predecessors","3","--request-id",dependencyID,"--expected-version","1","--expected-graph-revision",String(batchReceipt.graph_revision),"--reason","startup dependency check","--by","startup-test"]);
+    const predecessor=JSON.parse(command(binary,["task","receipt","--project",aid,"--task-id","4","--request-id",dependencyID]));
+    expect(predecessor.request_id).toBe(dependencyID);
+    expect((await get(aid,"/tasks")).tasks).toHaveLength(4);
+    expect((await get(bid,"/tasks")).tasks).toHaveLength(2);
+    expect((await page.request.get(origin+"/api/v2/application/projects/"+aid+"/task-batches/"+batchID)).status()).toBe(404);
+    facts.cli={batchReceipt,predecessor};
+    const heldState=provider();heldState.recovery={HoldStep:"implement.execute",HoldStream:true};writeFileSync(join(root,"provider","state.json"),JSON.stringify(heldState));
+    command(binary,["control","--project",aid,"--action","start_task","--task-id","3","--execution-profile","simulate","--wait"]);
+    await expect.poll(()=>provider().turns.length,{timeout:120000}).toBe(4);
+    const inputsBefore=provider().dispatches;
+    facts.active_at_host_stop=(await get(aid,"/snapshot")).connection.snapshot.page.runs.find((run:any)=>run.task_id==="3");
+    command(binary,["stop"]);
+    const shutdown=JSON.parse(readFileSync(join(home,"application-api","shutdown.json"),"utf8"));
+    expect(shutdown.clean).toBe(true);expect(shutdown.projects).toHaveLength(2);
+    facts.shutdown=shutdown;
+    command(binary,["start","--no-open"]);
+    await open(aid);
+    await expect.poll(async()=>{
+      const a=await get(aid,"/identity"),b=await get(bid,"/identity");
+      return a.ready && b.ready && a.instance_id!==originalIdentity.instance_id && b.instance_id!==otherIdentity.instance_id;
+    },{timeout:180000}).toBe(true);
+    const recovery=(await get(aid,"/snapshot")).connection.snapshot.page.runs.find((run:any)=>run.task_id==="3");
+    expect(recovery.recovery_required).toBe(true);
+    expect(provider().dispatches).toBe(inputsBefore);
+    expect((await get(aid,"/commands/"+requestID)).original.instance_id).toBe(originalIdentity.instance_id);
     expect(submissions).toBe(1);
-    expect(provider().sessions).toBe(1);
-    expect(provider().dispatches).toBe(3);
-    facts.restarted_project = await get(aid, "/identity");
-    console.log(
-      "web.project-switch: project restarted; original receipt retained without a new worker",
-    );
-    command(binary, [
-      "stop-service",
-      "-config",
-      join(home, "etc", "SteerlineTestB.json"),
-    ]);
-    stoppedB = true;
-    await page.getByRole("combobox", { name: "当前项目" }).selectOption(bid);
-    await expect(page.getByText(/当前不可提交业务操作/)).toBeVisible();
-    expect(
-      (await get(aid, "/commands/" + requestID)).original.instance_id,
-    ).toBe(originalIdentity.instance_id);
+    facts.recovery_after_host_restart=recovery;
+    facts.restarted_project=await get(aid,"/identity");
     await second.close();
     await page.screenshot({
       path: info.outputPath("offline-project.png"),
       fullPage: true,
     });
     facts.submissions = submissions;
+  } catch(error) {primaryFailure=error;facts.business_error=String(error);throw error;
   } finally {
-    for (const [exe, args] of [
-      [web, ["stop"]],
-      [binary, ["stop-app"]],
-      [
-        binary,
-        ["stop-service", "-config", join(home, "etc", "SteerlineTestB.json")],
-      ],
-      [
-        binary,
-        ["stop-service", "-config", join(home, "etc", "SteerlineTest.json")],
-      ],
-    ] as [string, string[]][]) {
-      if (stoppedB && args.includes(join(home, "etc", "SteerlineTestB.json")))
-        continue;
-      try {
-        command(exe, args);
-      } catch (error) {
-        if (!String(error).includes("discovery")) failures.push(String(error));
-      }
-    }
+    failures.push(...await runtime.stop());
     await expect
       .poll(
         () =>
@@ -415,7 +353,6 @@ test("web.project-switch: independent processes, original commands and active tu
       join(root, "evidence", "web-project-switch.json"),
       JSON.stringify(facts, null, 2),
     );
-    expect(inventory).toEqual({ processes: 0, listeners: 0 });
-    expect(failures).toEqual([]);
+    if (!primaryFailure) {expect(inventory).toEqual({ processes: 0, listeners: 0 });expect(failures).toEqual([]);}
   }
 });

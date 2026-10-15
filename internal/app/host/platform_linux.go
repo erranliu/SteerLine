@@ -99,3 +99,7 @@ func startDetachedProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort
 }
 
 func currentJobDiagnostics() (bool, uint32, error) { return false, 0, nil }
+
+func startDetachedProductProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort) (executionbackend.ProcessIdentity, error) {
+	return startDetachedProcess(cmd, facts)
+}

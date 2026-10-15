@@ -1,4 +1,4 @@
-param([Parameter(Mandatory=$true)][string]$Package)
+﻿param([Parameter(Mandatory=$true)][string]$Package)
 $ErrorActionPreference = 'Stop'
 $taskRoot = [IO.Path]::GetFullPath($Package).TrimEnd('\')
 if (-not $taskRoot.StartsWith('C:\SteerlineDebug\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Use a generated debug package' }
@@ -14,7 +14,7 @@ try {
     foreach ($exe in @($business,$web)) { & $exe install; if ($LASTEXITCODE -ne 0) { throw "Install failed: $exe" } }
     & $business launchers
     if ($LASTEXITCODE -ne 0) { throw 'Launcher installation failed' }
-    $taskAppProcess = Start-Process -FilePath (Join-Path $env:STEERLINE_HOME 'bin\steerline.exe') -ArgumentList 'serve-app' -WindowStyle Hidden -PassThru
+    $taskAppProcess = Start-Process -FilePath (Join-Path $env:STEERLINE_HOME 'bin\steerline.exe') -ArgumentList 'serve' -WindowStyle Hidden -PassThru
     $taskDeadline = [DateTime]::UtcNow.AddSeconds(15)
     while (-not (Test-Path -LiteralPath (Join-Path $env:STEERLINE_HOME 'application-api\discovery.json'))) {
         if ($taskAppProcess.HasExited -or [DateTime]::UtcNow -gt $taskDeadline) { throw 'Application startup failed' }
@@ -32,7 +32,7 @@ try {
     & $web stop
     if ($LASTEXITCODE -ne 0) { throw 'Web normal stop failed' }
     if ($taskAppProcess.HasExited) { throw 'Stopping Web stopped application' }
-    & $business stop-app
+    & $business stop
     if ($LASTEXITCODE -ne 0) { throw 'Application normal stop failed' }
     $taskAppProcess.WaitForExit(10000) | Out-Null
     $taskWebProcess.WaitForExit(10000) | Out-Null
@@ -40,6 +40,6 @@ try {
     @{passed=$true;home=$env:STEERLINE_HOME;source_commit=$manifest.source_commit;source_dirty=$manifest.source_dirty;business_sha256=(Get-FileHash -LiteralPath $business).Hash;web_sha256=(Get-FileHash -LiteralPath $web).Hash;running_replacement_rejected=$true;independent_stop=$true} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $taskRoot 'evidence\web-switch-build.json')
 } finally {
     if ($taskWebProcess -and -not $taskWebProcess.HasExited) { & $web stop }
-    if ($taskAppProcess -and -not $taskAppProcess.HasExited) { & $business stop-app }
+    if ($taskAppProcess -and -not $taskAppProcess.HasExited) { & $business stop }
     $env:STEERLINE_HOME = $taskPreviousHome
 }

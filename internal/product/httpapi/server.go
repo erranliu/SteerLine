@@ -15,6 +15,7 @@ import (
 	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/query"
 )
 
@@ -147,53 +148,66 @@ func runtimeIdentity(identity Identity, snapshot api.ProjectSnapshot) Identity {
 }
 
 func (s *Server) serveRead(w http.ResponseWriter, r *http.Request, identity Identity, path []string) {
-	ctx := r.Context()
-	queryValues := r.URL.Query()
-	if s.consoleQuery(w, r, path) {
-		return
+	value, err := s.read(r.Context(), identity, path, r.URL.Query())
+	writeResult(w, value, err)
+}
+
+// Read is the transport-independent project query dispatcher. Both native
+// transports use these same use cases, cursor checks and response projections.
+func (s *Server) Read(ctx context.Context, route string, values url.Values) (any, error) {
+	if route == "/identity" {
+		return s.identityView(ctx), nil
+	}
+	if strings.HasPrefix(route, "/commands/") {
+		return s.commands.Read(ctx, strings.TrimPrefix(route, "/commands/"))
+	}
+	return s.read(ctx, s.discoveryIdentity(), strings.Split(strings.Trim(route, "/"), "/"), values)
+}
+
+func (s *Server) read(ctx context.Context, identity Identity, path []string, queryValues url.Values) (any, error) {
+	if len(path) == 3 && path[0] == "runs" && (path[2] == "recovery" || path[2] == "decision-eligibility") {
+		return s.readRecovery(ctx, path, queryValues)
 	}
 	switch {
 	case len(path) == 1 && path[0] == "tasks":
 		limit, err := parseLimit(queryValues.Get("limit"), 50, 500)
 		if err != nil {
-			writeProtocolError(w, err, "")
-			return
+			return nil, err
 		}
 		page, err := s.query.ListTasks(ctx, queryValues.Get("cursor"), limit)
-		writeResult(w, page, err)
+		return page, err
 	case len(path) == 2 && path[0] == "tasks":
 		page, err := s.query.ShowTask(ctx, path[1])
-		writeResult(w, page, err)
+		return page, err
 	case len(path) == 1 && path[0] == "graph":
 		limit, err := parseLimit(queryValues.Get("limit"), 100, api.MaxTaskGraphNodes)
 		if err != nil {
-			writeProtocolError(w, err, "")
-			return
+			return nil, err
 		}
 		page, err := s.query.TaskGraph(ctx, queryValues.Get("cursor"), limit)
-		writeResult(w, page, err)
+		return page, err
 	case len(path) == 1 && path[0] == "snapshot":
 		snapshot := s.query.ReadProject(ctx, queryValues.Get("task_id"), api.ProjectSnapshot{})
-		writeJSON(w, http.StatusOK, snapshot)
+		return snapshot, nil
 	case len(path) == 1 && path[0] == "candidates":
 		candidates, err := s.query.TaskSnapshot(ctx)
-		writeResult(w, candidates, err)
+		return candidates, err
 	case len(path) == 1 && path[0] == "presentation":
 		project := s.query.Project()
-		writeJSON(w, http.StatusOK, ProjectPresentation{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Presentation: project.Presentation})
+		return ProjectPresentation{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Presentation: project.Presentation}, nil
 	case len(path) == 2 && path[0] == "runs":
 		candidate, err := s.candidate(ctx, path[1])
-		writeResult(w, candidate, err)
+		return candidate, err
 	case len(path) == 3 && path[0] == "runs" && path[2] == "activity":
-		s.serveActivity(w, r, identity, path[1])
+		return s.readActivity(ctx, identity, path[1], queryValues)
 	case len(path) == 3 && path[0] == "runs" && path[2] == "conversation":
-		s.serveConversation(w, r, identity, path[1])
+		return s.readConversation(ctx, identity, path[1], queryValues)
 	case len(path) == 3 && path[0] == "runs" && path[2] == "final":
-		s.serveFinal(w, r, identity, path[1])
+		return s.readFinal(ctx, identity, path[1], queryValues)
 	case len(path) == 3 && path[0] == "runs" && path[2] == "body":
-		s.serveBody(w, r, path[1])
+		return s.readBody(ctx, path[1], queryValues)
 	default:
-		writeError(w, http.StatusNotFound, "route_not_found", "route is not part of steerline-client/v1", "")
+		return nil, &protocolError{status: 404, code: "route_not_found", reason: "unknown project route"}
 	}
 }
 
@@ -212,93 +226,76 @@ func (s *Server) candidate(ctx context.Context, runID string) (*api.CandidateSum
 	return nil, &api.Error{Kind: api.UnknownRecord, Message: "execution run was not found in the current project snapshot"}
 }
 
-func (s *Server) serveActivity(w http.ResponseWriter, r *http.Request, identity Identity, runID string) {
-	queryValues := r.URL.Query()
-	candidate, err := s.candidate(r.Context(), runID)
+func (s *Server) readActivity(ctx context.Context, identity Identity, runID string, queryValues url.Values) (any, error) {
+	candidate, err := s.candidate(ctx, runID)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
 	executionID, attemptID, err := exactRunIdentity(candidate, queryValues.Get("execution_id"), queryValues.Get("attempt_id"))
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
 	if queryValues.Get("recent") == "true" {
 		if queryValues.Get("cursor") != "" {
-			writeError(w, http.StatusBadRequest, "cursor_invalid", "recent activity cannot use a stream cursor", "")
-			return
+			return nil, &protocolError{status: http.StatusBadRequest, code: "cursor_invalid", reason: "recent activity cannot use a stream cursor"}
 		}
-		page, err := s.activities.RecentActivity(r.Context(), runID, executionID, attemptID)
+		page, err := s.activities.RecentActivity(ctx, runID, executionID, attemptID)
 		if err != nil {
-			writeProtocolError(w, err, "")
-			return
+			return nil, err
 		}
-		writeJSON(w, http.StatusOK, ActivityPage{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Page: page})
-		return
+		return ActivityPage{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Page: page}, nil
 	}
 	cursor := api.ActivityCursor{RunID: runID, ExecutionID: executionID, AttemptID: attemptID}
 	if raw := queryValues.Get("cursor"); raw != "" {
 		if err = decodeStrict([]byte(raw), &cursor); err != nil {
-			writeError(w, http.StatusBadRequest, "cursor_invalid", err.Error(), "")
-			return
+			return nil, &protocolError{status: http.StatusBadRequest, code: "cursor_invalid", reason: err.Error()}
 		}
 		if !cursor.Initialized || cursor.RunID != runID || cursor.ExecutionID != executionID || cursor.AttemptID != attemptID {
-			writeError(w, http.StatusConflict, "cursor_invalidated", "activity cursor belongs to another execution or attempt; refresh from the beginning", "")
-			return
+			return nil, &protocolError{status: http.StatusConflict, code: "cursor_invalidated", reason: "activity cursor belongs to another execution or attempt; refresh from the beginning"}
 		}
 	}
-	page, err := s.activities.Activity(r.Context(), runID, executionID, attemptID, cursor)
+	page, err := s.activities.Activity(ctx, runID, executionID, attemptID, cursor)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
-	writeJSON(w, http.StatusOK, ActivityPage{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Page: page})
+	return ActivityPage{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Page: page}, nil
 }
 
-func (s *Server) serveConversation(w http.ResponseWriter, r *http.Request, identity Identity, runID string) {
-	queryValues := r.URL.Query()
-	candidate, err := s.candidate(r.Context(), runID)
+func (s *Server) readConversation(ctx context.Context, identity Identity, runID string, queryValues url.Values) (any, error) {
+	candidate, err := s.candidate(ctx, runID)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
-	executionID, attemptID, err := s.conversationIdentity(r.Context(), candidate, queryValues.Get("execution_id"), queryValues.Get("attempt_id"))
+	executionID, attemptID, err := s.conversationIdentity(ctx, candidate, queryValues.Get("execution_id"), queryValues.Get("attempt_id"))
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
 	limit, err := parseLimit(queryValues.Get("limit"), 100, query.MaxEventPageSize)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
 	finalsOnly := queryValues.Get("finals_only") == "true"
 	filter := api.ConversationFilter{WorkflowID: candidate.RunID, ExecutionID: executionID, AttemptID: attemptID,
 		TurnID: queryValues.Get("turn_id"), SessionID: queryValues.Get("session_id"), Source: queryValues.Get("source"), FinalsOnly: finalsOnly}
-	page, err := s.conversation.ConversationPage(r.Context(), filter, queryValues.Get("cursor"), limit)
+	page, err := s.conversation.ConversationPage(ctx, filter, queryValues.Get("cursor"), limit)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
-	writeJSON(w, http.StatusOK, ConversationPage{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Page: page})
+	return ConversationPage{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Page: page}, nil
 }
 
-func (s *Server) serveFinal(w http.ResponseWriter, r *http.Request, identity Identity, runID string) {
-	candidate, err := s.candidate(r.Context(), runID)
+func (s *Server) readFinal(ctx context.Context, identity Identity, runID string, queryValues url.Values) (any, error) {
+	candidate, err := s.candidate(ctx, runID)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
 	if candidate.ExecutionID == "" || candidate.AttemptID == "" {
-		writeError(w, http.StatusConflict, "final_unavailable", "run has no exact execution and attempt identity", "")
-		return
+		return nil, &protocolError{status: http.StatusConflict, code: "final_unavailable", reason: "run has no exact execution and attempt identity"}
 	}
 	filter := api.ConversationFilter{FinalsOnly: true, WorkflowID: candidate.RunID, ExecutionID: candidate.ExecutionID, AttemptID: candidate.AttemptID}
-	page, err := s.conversation.ConversationPage(r.Context(), filter, "", query.MaxEventPageSize)
+	page, err := s.conversation.ConversationPage(ctx, filter, "", query.MaxEventPageSize)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
 	reply := FinalReply{ProjectID: identity.ProjectID, WorkflowID: candidate.RunID, ExecutionID: candidate.ExecutionID,
 		AttemptID: candidate.AttemptID, SampledAt: time.Now().UTC(), Page: page, Bodies: []FinalBody{}}
@@ -308,58 +305,48 @@ func (s *Server) serveFinal(w http.ResponseWriter, r *http.Request, identity Ide
 			continue
 		}
 		if total+event.Body.Bytes > maxFinalReplyBytes {
-			writeError(w, http.StatusRequestEntityTooLarge, "response_too_large", "final reply bodies exceed the bounded response size; use conversation and body range routes", "")
-			return
+			return nil, &protocolError{status: http.StatusRequestEntityTooLarge, code: "response_too_large", reason: "final reply bodies exceed the bounded response size; use conversation and body range routes"}
 		}
-		body, bodyErr := s.readFullBody(r.Context(), runID, *event.Body)
+		body, bodyErr := s.readFullBody(ctx, runID, *event.Body)
 		if bodyErr != nil {
-			writeProtocolError(w, bodyErr, "")
-			return
+			return nil, bodyErr
 		}
 		total += int64(len(body.Text))
 		reply.Bodies = append(reply.Bodies, body)
 	}
-	writeJSON(w, http.StatusOK, reply)
+	return reply, nil
 }
 
-func (s *Server) serveBody(w http.ResponseWriter, r *http.Request, runID string) {
-	candidate, err := s.candidate(r.Context(), runID)
+func (s *Server) readBody(ctx context.Context, runID string, queryValues url.Values) (any, error) {
+	candidate, err := s.candidate(ctx, runID)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
-	queryValues := r.URL.Query()
 	encoded := queryValues.Get("ref")
 	refBytes, err := hex.DecodeString(encoded)
 	if err != nil || len(refBytes) > 16<<10 {
-		writeError(w, http.StatusBadRequest, "body_reference_invalid", "body ref must be bounded hexadecimal encoded product JSON", "")
-		return
+		return nil, &protocolError{status: http.StatusBadRequest, code: "body_reference_invalid", reason: "body ref must be bounded hexadecimal encoded product JSON"}
 	}
 	var ref api.ConversationBodyRef
 	if err = decodeStrict(refBytes, &ref); err != nil {
-		writeError(w, http.StatusBadRequest, "body_reference_invalid", err.Error(), "")
-		return
+		return nil, &protocolError{status: http.StatusBadRequest, code: "body_reference_invalid", reason: err.Error()}
 	}
 	if ref.ExecutionID == "" || ref.AttemptID == "" {
-		writeError(w, http.StatusConflict, "target_mismatch", "body reference requires original execution and attempt", "")
-		return
+		return nil, &protocolError{status: http.StatusConflict, code: "target_mismatch", reason: "body reference requires original execution and attempt"}
 	}
-	if _, _, err = s.conversationIdentity(r.Context(), candidate, ref.ExecutionID, ref.AttemptID); err != nil {
-		writeProtocolError(w, err, "")
-		return
+	if _, _, err = s.conversationIdentity(ctx, candidate, ref.ExecutionID, ref.AttemptID); err != nil {
+		return nil, err
 	}
 	offset, err := parseInt64(queryValues.Get("offset"), 0, 1<<62)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "offset_invalid", err.Error(), "")
-		return
+		return nil, &protocolError{status: http.StatusBadRequest, code: "offset_invalid", reason: err.Error()}
 	}
 	limit, err := parseLimit(queryValues.Get("limit"), 256<<10, 256<<10)
 	if err != nil {
-		writeProtocolError(w, err, "")
-		return
+		return nil, err
 	}
-	page, err := s.conversation.Body(r.Context(), ref, offset, limit)
-	writeResult(w, page, err)
+	page, err := s.conversation.Body(ctx, ref, offset, limit)
+	return page, err
 }
 
 func (s *Server) readFullBody(ctx context.Context, runID string, ref api.ConversationBodyRef) (FinalBody, error) {
@@ -462,6 +449,11 @@ func writeResult(w http.ResponseWriter, value any, err error) {
 }
 
 func writeProtocolError(w http.ResponseWriter, err error, requestID string) {
+	var native *httpclient.ClientError
+	if errors.As(err, &native) {
+		writeError(w, native.Status, native.Code, native.Reason, requestID)
+		return
+	}
 	var protocolErr *protocolError
 	if errors.As(err, &protocolErr) {
 		writeError(w, protocolErr.status, protocolErr.code, protocolErr.reason, requestID)

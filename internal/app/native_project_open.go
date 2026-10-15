@@ -45,6 +45,12 @@ func LoadDatabaseRuntime(c Config) (*reconstruction.Runtime, error) {
 }
 
 func OpenNativeTaskProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
+	return openNativeTaskProject(ctx, c, false)
+}
+func openOwnedNativeTaskProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
+	return openNativeTaskProject(ctx, c, true)
+}
+func openNativeTaskProject(ctx context.Context, c *Config, owned bool) (*sqlite.SQLiteStore, error) {
 	if c == nil {
 		return nil, taskError("authority_mismatch", "native project configuration is required")
 	}
@@ -69,11 +75,13 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore,
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	lock, err := steerline.LockRepository(c.Identity())
-	if err != nil {
-		return nil, err
+	if !owned {
+		lock, err := steerline.LockRepository(c.Identity())
+		if err != nil {
+			return nil, err
+		}
+		defer lock.Close()
 	}
-	defer lock.Close()
 	if err := PreflightNativeStatePath(*c); err != nil {
 		return nil, err
 	}

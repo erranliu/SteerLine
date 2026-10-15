@@ -111,7 +111,7 @@ func login(t *testing.T, s *Server) (*http.Cookie, string) {
 
 func TestWebAuthenticationAndOriginalForwarding(t *testing.T) {
 	s, client := fixture(t)
-	route := "/api/v1/application/projects/" + client.identity.ProjectID + "/commands"
+	route := "/api/v2/application/projects/" + client.identity.ProjectID + "/commands"
 	if w := request(s, "GET", route+"/"+strings.Repeat("a", 32), "", nil, ""); w.Code != 401 {
 		t.Fatal(w.Code)
 	}
@@ -223,7 +223,7 @@ func TestWebLauncherPrivateDiscoveryAndInstance(t *testing.T) {
 func TestWebBoundedWritesAndNoBrowserStop(t *testing.T) {
 	s, c := fixture(t)
 	cookie, csrf := login(t, s)
-	route := "/api/v1/application/projects/" + c.identity.ProjectID + "/commands"
+	route := "/api/v2/application/projects/" + c.identity.ProjectID + "/commands"
 	w := request(s, "POST", route, `{"payload":"`+strings.Repeat("x", (1<<20)+1)+`"}`, cookie, csrf)
 	if w.Code != 413 || c.calls != 0 {
 		t.Fatalf("bound => %d %s", w.Code, w.Body.String())
@@ -258,7 +258,7 @@ func TestWebLiveAuthenticationUsesOriginalHeaders(t *testing.T) {
 func TestWebSwitchSessionAndNativeStop(t *testing.T) {
 	s, _ := fixture(t)
 	cookie, csrf := login(t, s)
-	for _, route := range []string{"/native/shutdown", "/api/v1/application/shutdown", "/api/v1/application/projects/" + strings.Repeat("a", 64) + "/../../shutdown"} {
+	for _, route := range []string{"/native/shutdown", "/api/v2/application/shutdown", "/api/v2/application/projects/" + strings.Repeat("a", 64) + "/../../shutdown"} {
 		if w := request(s, "POST", route, `{}`, cookie, csrf); w.Code < 400 {
 			t.Fatalf("browser reached stop %s", route)
 		}

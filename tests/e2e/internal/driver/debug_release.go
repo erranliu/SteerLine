@@ -11,7 +11,6 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -20,7 +19,6 @@ import (
 	app "github.com/erranliu/SteerLine/internal/app"
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
 	"github.com/google/uuid"
@@ -37,10 +35,10 @@ type debugRelease struct {
 // DebugReleaseMain is the package-local runtime entry point, never a production command.
 func DebugReleaseMain(args []string) error {
 	if len(args) == 0 {
-		return errors.New("debug requires init|run|reset|merge|control|snapshot")
+		return errors.New("debug requires init|prepare|run|stop|reset|merge|control|snapshot")
 	}
 	switch args[0] {
-	case "init", "init-b", "prepare", "run", "run-selected", "run-project", "run-project-b", "reset", "merge", "control", "snapshot":
+	case "init", "init-b", "prepare", "run", "run-selected", "stop", "reset", "merge", "control", "snapshot":
 	default:
 		return fmt.Errorf("unknown debug operation %q", args[0])
 	}
@@ -56,16 +54,12 @@ func DebugReleaseMain(args []string) error {
 		return errors.New("debug package generation has not completed")
 	}
 	for _, a := range args[1:] {
-		if a != "--simulate" && a != "--check" && a != "--no-pause" && args[0] != "control" {
+		if a != "--simulate" && a != "--check" && a != "--no-pause" && a != "--no-open" && args[0] != "control" {
 			return fmt.Errorf("unknown debug argument %q", a)
 		}
 	}
 	if args[0] == "init-b" {
 		return d.secondary().initialize()
-	}
-	if args[0] == "run-project-b" {
-		d = d.secondary()
-		args[0] = "run-project"
 	}
 	if args[0] == "init" {
 		return d.initialize()
@@ -85,7 +79,7 @@ func DebugReleaseMain(args []string) error {
 		}
 	}
 	simulate := contains(args, "--simulate")
-	if args[0] == "run-selected" {
+	if args[0] == "run-selected" || args[0] == "stop" {
 		var selected struct {
 			Scheme string `json:"scheme"`
 		}
@@ -100,7 +94,7 @@ func DebugReleaseMain(args []string) error {
 			return errors.New("invalid selected scheme")
 		}
 		simulate = selected.Scheme == "simulate"
-		args[0] = "run"
+		if args[0] == "run-selected" { args[0] = "run" }
 	}
 	if err = d.prepare(simulate); err != nil {
 		return err
@@ -110,8 +104,8 @@ func DebugReleaseMain(args []string) error {
 		return nil
 	case "run":
 		return d.run()
-	case "run-project":
-		return d.runProject()
+	case "stop":
+		return d.stop()
 	case "merge":
 		if !simulate {
 			return errors.New("debug merge requires --simulate; merge live PRs explicitly")
@@ -258,7 +252,7 @@ func (d *debugRelease) command(exe string, args ...string) *exec.Cmd {
 		}
 	}
 	cmd.Env = append(env, "GH_CONFIG_DIR="+filepath.Join(d.home, "gh"))
-	if exe == d.binary && len(args) > 0 && args[0] == "run" {
+	if exe == d.binary && len(args) > 0 && args[0] == "serve" {
 		if devOrigin := os.Getenv("STEERLINE_WEB_DEV_ORIGIN"); devOrigin != "" {
 			cmd.Env = append(cmd.Env, "STEERLINE_WEB_DEV_ORIGIN="+devOrigin)
 		}
@@ -360,8 +354,17 @@ func (d *debugRelease) initialize() error {
 	if err = controlled.Write(path, batch); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	return nil
+}
+func (d *debugRelease) seedTasks() error {
+	path := filepath.Join(d.root, "seed", filepath.Base(d.config)+".bound-tasks.json")
+	if _, err := os.Stat(filepath.Join(d.root, "evidence", filepath.Base(d.config)+".initialization.json")); err == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
+	var raw []byte
+	var err error
 	c := d.client()
 	raw, err = c.Run(ctx, "task", "validate", "-config", d.config, "-file", path)
 	if err != nil {
@@ -450,7 +453,7 @@ func (d *debugRelease) prepareSelected(mode string) error {
 		return err
 	}
 	catalog["default_execution_profile"] = mode
-	// Keep only the selected source profile so clients cannot mix provider schemes.
+	// Keep only the selected source profile so projects cannot mix provider schemes.
 	profiles, _ := catalog["execution_profiles"].([]any)
 	var selected []any
 	for _, p := range profiles {
@@ -605,128 +608,6 @@ func (d *debugRelease) setEnvironment(mode string) error {
 		os.Setenv("GIT_CONFIG_VALUE_0", debugAuthHeader(token))
 	}
 	return nil
-}
-
-func (d *debugRelease) runProject() error {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
-	return d.runProjectContext(ctx)
-}
-func (d *debugRelease) runProjectContext(parent context.Context) error {
-	runtimeDir := filepath.Join(d.root, "runtime"+d.suffix())
-	if err := os.MkdirAll(runtimeDir, 0700); err != nil {
-		return err
-	}
-	lock, err := host.LockRepository(runtimeDir)
-	if err != nil {
-		return fmt.Errorf("debug service already running: %w", err)
-	}
-	defer lock.Close()
-	var selected struct {
-		Scheme string `json:"scheme"`
-	}
-	raw, err := os.ReadFile(filepath.Join(d.root, "scheme.json"))
-	if err != nil {
-		return err
-	}
-	if err = json.Unmarshal(raw, &selected); err != nil {
-		return err
-	}
-	fmt.Println("Debug scheme:", selected.Scheme, "Home:", d.home)
-	var gitServer *testprocess.Process
-	if selected.Scheme == "simulate" {
-		addressPath := filepath.Join(filepath.Dir(d.provider), "address.json")
-		os.Remove(addressPath)
-		cmd := d.command(d.helper, "git-server", "--root", d.remoteRoot(), "--address-file", addressPath, "--e2e-state", d.provider)
-		log, err := os.OpenFile(filepath.Join(d.root, "logs", "git-server"+d.suffix()+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-		if err != nil {
-			return err
-		}
-		defer log.Close()
-		cmd.Stdout, cmd.Stderr = log, log
-		gitServer, err = testprocess.Start(cmd)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			gitServer.Stop(ctx)
-		}()
-		deadline := time.Now().Add(15 * time.Second)
-		var address struct {
-			Address string `json:"address"`
-		}
-		for time.Now().Before(deadline) {
-			if raw, e := os.ReadFile(addressPath); e == nil && json.Unmarshal(raw, &address) == nil && address.Address != "" {
-				break
-			}
-			select {
-			case <-gitServer.Done:
-				return errors.New("Git helper exited; see logs/git-server.log")
-			default:
-			}
-			time.Sleep(50 * time.Millisecond)
-		}
-		if address.Address == "" {
-			return errors.New("Git helper readiness timed out")
-		}
-		state, err := controlled.Read(d.provider)
-		if err != nil {
-			return err
-		}
-		state.GitURL = "http://" + address.Address + "/" + debugRepository + ".git"
-		if err = controlled.Write(d.provider, state); err != nil {
-			return err
-		}
-	} else {
-		// A fixture base has its own history, so no checkout/fetch of main or external local repo is needed.
-		cmd := exec.Command("git", "-C", d.repo, "-c", "credential.helper=", "push", "origin", d.base+":refs/heads/"+d.base)
-		cmd.Env = os.Environ()
-		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		if err = cmd.Run(); err != nil {
-			return err
-		}
-	}
-	serviceArgs := []string{"run", "-config", d.config, "-dispatch", "manual", "-console", "summary"}
-	if debugVisibleConsole() {
-		serviceArgs = append(serviceArgs, "-service-window")
-	}
-	cmd := d.command(d.binary, serviceArgs...)
-	if selected.Scheme == "live" {
-		cmd.Env = os.Environ()
-	}
-	serviceLog, err := os.OpenFile(filepath.Join(d.root, "logs", "project"+d.suffix()+".log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer serviceLog.Close()
-	cmd.Stdout, cmd.Stderr = serviceLog, serviceLog
-	service, err := testprocess.Start(cmd)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		service.Stop(ctx)
-	}()
-	select {
-	case <-service.Done:
-		return service.Wait(context.Background())
-	case <-parent.Done():
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		stop := d.command(d.binary, "stop-service", "-config", d.config)
-		if selected.Scheme == "live" {
-			stop.Env = os.Environ()
-		}
-		stop.Stdout, stop.Stderr = os.Stdout, os.Stderr
-		if err = testprocess.Run(ctx, stop); err != nil {
-			return err
-		}
-		return service.Wait(ctx)
-	}
 }
 
 func (d *debugRelease) isSecondary() bool { return strings.HasSuffix(d.repo, "SteerlineTestB") }

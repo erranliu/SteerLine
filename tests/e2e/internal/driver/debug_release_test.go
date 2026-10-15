@@ -179,14 +179,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := d.client()
-	page, err := c.Tasks(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(page.Tasks) != 2 {
-		t.Fatalf("seed task count: %d", len(page.Tasks))
-	}
-	serviceCmd := d.command(d.helper, "debug", "run", "--simulate")
+	serviceCmd := d.command(d.helper, "debug", "run", "--simulate", "--no-open")
 	log, err := os.Create(filepath.Join(root, "evidence", "service-test.log"))
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +191,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		stopCtx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
 		defer cancel()
 		service.Stop(stopCtx)
 	}()
@@ -218,7 +211,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		t.Fatal(label, " timeout")
 	}
 	wait("service lock", func() bool {
-		if _, err := os.Stat(filepath.Join(root, "runtime", "steerline.lock")); err != nil {
+		if _, err := os.Stat(filepath.Join(root, "runtime-launcher", "steerline.lock")); err != nil {
 			return false
 		}
 		lock, err := host.LockRepository(filepath.Join(root, "runtime"))
@@ -243,6 +236,13 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		runtime, err := reconstruction.BuildFromStorage(snap.ExecutionState, *snap.ExecutionState.Checkpoint)
 		return err == nil && runtime.Service.Ready
 	})
+	page, err := c.Tasks(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Tasks) != 2 {
+		t.Fatalf("seed task count: %d", len(page.Tasks))
+	}
 	for _, action := range []string{"resume_dispatch", "start_task"} {
 		args := []string{"debug", "control", "--simulate", "-config", d.config, "-action", action, "-profile", "simulate"}
 		if action == "start_task" {
@@ -312,7 +312,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if len(snap.ProjectView.Ready.Tasks) != 1 {
 		t.Fatalf("expected one dependency-ready successor: %+v", snap.ProjectView.Ready)
 	}
-	stop := d.command(d.binary, "stop-service", "-config", d.config)
+	stop := d.command(d.helper, "debug", "stop", "--simulate")
 	out, err = stop.CombinedOutput()
 	if err != nil {
 		t.Fatalf("stop: %v %s", err, out)

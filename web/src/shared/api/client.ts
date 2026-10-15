@@ -120,7 +120,7 @@ export class Api {
   }
 
   path(route: string) {
-    return "/api/v1/application/projects/" + this.identity.project_id + route;
+    return "/api/v2/application/projects/" + this.identity.project_id + route;
   }
   get<T>(route: string, signal?: AbortSignal) {
     this.check();

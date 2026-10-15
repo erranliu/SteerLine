@@ -1,4 +1,4 @@
-param([switch]$Live)
+﻿param([switch]$Live)
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $generator = Join-Path $PSScriptRoot 'new-debug-release.ps1'
@@ -21,16 +21,14 @@ try {
         $manifest = Get-Content -LiteralPath (Join-Path $release.root 'manifest.json') -Raw | ConvertFrom-Json
         if ($manifest.status -ne 'ready' -or $manifest.default_scheme -ne 'live') { throw 'Generated package is not live by default' }
         $databases = @(Get-ChildItem -LiteralPath (Join-Path $release.root 'home\state') -Filter steerline.db -Recurse)
-        if ($databases.Count -ne $manifest.web_projects) { throw 'Expected independent database per configured project' }
-        foreach ($name in @('bin\steerline.exe','bin\steerline-web.exe','bin\debug-helper.exe','web.bat')) { if (-not (Test-Path -LiteralPath (Join-Path $release.root $name))) { throw "Missing Web package artifact $name" } }
+        foreach ($name in @('bin\steerline.exe','bin\steerline-web.exe','bin\debug-helper.exe','home\start.bat','home\stop.bat')) { if (-not (Test-Path -LiteralPath (Join-Path $release.root $name))) { throw "Missing package artifact $name" } }
         if (Test-Path -LiteralPath (Join-Path $release.root 'console.bat')) { throw 'Retired TUI launcher present' }
         if (-not $manifest.web_binary_sha256) { throw 'Missing Web build hash' }
+        if ($databases.Count -ne 0) { throw 'Fresh generation must not initialize project databases' }
     }
-    $defaultWeb = Get-Content -LiteralPath (Join-Path $defaultRelease.root 'home\web.json') -Raw | ConvertFrom-Json
-    if ($defaultWeb.address -ne '127.0.0.1:18742') { throw 'Default generator did not include stable Web endpoint' }
-    $firstIdentity = Get-Content -LiteralPath (Join-Path $first.root 'evidence\SteerlineTest.json.initialization.json') -Raw | ConvertFrom-Json
-    $secondIdentity = Get-Content -LiteralPath (Join-Path $second.root 'evidence\SteerlineTest.json.initialization.json') -Raw | ConvertFrom-Json
-    if ($firstIdentity.validation.database_id -eq $secondIdentity.validation.database_id -or $firstIdentity.validation.project_id -eq $secondIdentity.validation.project_id) { throw 'Generated packages share database/project identity' }
+    $firstIdentity = Get-Content -LiteralPath (Join-Path $first.root 'seed\SteerlineTest.json.bound-tasks.json') -Raw | ConvertFrom-Json
+    $secondIdentity = Get-Content -LiteralPath (Join-Path $second.root 'seed\SteerlineTest.json.bound-tasks.json') -Raw | ConvertFrom-Json
+    if ($firstIdentity.project_id -eq $secondIdentity.project_id) { throw 'Generated packages share database/project identity' }
     $env:STEERLINE_DEBUG_TEST_ROOT = $first.root
     $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $second.root
     Push-Location $repo

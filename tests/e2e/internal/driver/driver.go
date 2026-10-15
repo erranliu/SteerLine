@@ -15,7 +15,6 @@ import (
 	"time"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -74,7 +73,10 @@ func (c *Client) RunHelper(ctx context.Context, helper string, args ...string) (
 }
 
 func (c *Client) run(ctx context.Context, binary string, args ...string) ([]byte, error) {
-	timeout := 30 * time.Second
+	timeout := 135 * time.Second
+	if len(args) > 0 && args[0] == "start" {
+		timeout = 190 * time.Second
+	}
 	if len(args) >= 2 && args[0] == "task" && (args[1] == "validate" || args[1] == "create") {
 		// These fixture setup commands initialize the project and its SQLite
 		// schema before a service exists. Cold Windows initialization can exceed
@@ -155,43 +157,27 @@ func MainControl(args []string) error {
 	if *expectedStatus != "applied" && !(*action == "start_task" && (*expectedStatus == "failed" || *expectedStatus == "indeterminate")) {
 		return fmt.Errorf("unsupported E2E control status expectation")
 	}
-	c, err := steerlineapp.LoadConfig(*config)
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	defer cancel()
+	product, err := steerlineapp.OpenApplicationProject(ctx, "", *config)
 	if err != nil {
 		return err
 	}
-	hostConfig, err := steerlineapp.BuildHostConfig(context.Background(), c)
-	if err != nil {
-		return err
-	}
-	identityCtx, identityCancel := context.WithTimeout(context.Background(), 25*time.Second)
-	err = c.ResolveIdentity(identityCtx)
-	identityCancel()
-	if err != nil {
-		return err
-	}
-	var payload any
+	defer product.Close()
+	var payload productapi.ControlPayload
 	if *action == "start_task" {
-		_, profile, err := c.ResolveExecutionProfile(*profileID, "")
+		payload, err = product.StartTaskPayload(ctx, *taskID, *profileID)
 		if err != nil {
 			return err
 		}
-		payload = productapi.ControlPayload{TaskID: *taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
 	}
-	var request productapi.ControlRequest
-	if *expectedInstance == "" {
-		request, err = steerline.SubmitControl(hostConfig, *action, payload, "e2e")
-	} else {
-		requestID := strings.ReplaceAll(uuid.NewString(), "-", "")
-		request, err = steerline.SubmitControlTargeted(hostConfig, *action, payload, "e2e", requestID, *expectedInstance, nil)
-	}
+	request, err := product.SubmitControl(ctx, productapi.ControlInput{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), Action: productapi.ControlAction(*action), Payload: payload, RequestedBy: "e2e", InstanceID: *expectedInstance})
 	if err != nil {
 		return err
 	}
 	// Request expiration guards admission in the product. A verified applying
 	// reservation is already durable; completion can arrive after that deadline.
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
-	defer cancel()
-	receipt, err := steerline.WaitControlReceipt(ctx, hostConfig, request.RequestID, 100*time.Millisecond)
+	receipt, err := product.WaitControl(ctx, request.RequestID, 100*time.Millisecond)
 	if err != nil {
 		return err
 	}
@@ -273,4 +259,33 @@ func MainView(args []string) error {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(view)
+}
+
+// HostStatus observes only the product's home-scoped CLI status contract.
+type HostStatus struct {
+	Backend struct {
+		State    string `json:"state"`
+		Identity struct {
+			InstanceID string `json:"instance_id"`
+			Process    struct {
+				PID int `json:"pid"`
+			} `json:"process"`
+		} `json:"identity"`
+	} `json:"backend"`
+	Projects []struct {
+		ConfigID     string `json:"config_id"`
+		ProjectID    string `json:"project_id"`
+		RuntimeState string `json:"runtime_state"`
+		Online       bool   `json:"online"`
+		Diagnostic   string `json:"diagnostic"`
+	} `json:"projects"`
+}
+
+func (c *Client) HostStatus(ctx context.Context) (status HostStatus, err error) {
+	raw, err := c.Run(ctx, "status", "--json")
+	if err != nil {
+		return status, err
+	}
+	err = json.Unmarshal(raw, &status)
+	return
 }

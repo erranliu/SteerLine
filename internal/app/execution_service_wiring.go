@@ -171,6 +171,9 @@ func newConfiguredServiceWithHost(config Config, host hostport.HostPort) (*execu
 }
 
 func newServiceWithHost(config Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host hostport.HostPort) (*execution.Service, error) {
+	return newServiceWithTaskStore(config, resolver, sources, host, nil)
+}
+func newServiceWithTaskStore(config Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host hostport.HostPort, bind func(taskStorage)) (*execution.Service, error) {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return nil, errors.New("application configuration is missing its execution directory or process host")
 	}
@@ -187,12 +190,18 @@ func newServiceWithHost(config Config, resolver executionbackend.LifecycleResolv
 	if err != nil {
 		return nil, err
 	}
+	if bind != nil {
+		bind(connection)
+	}
 	tasks := NewTaskService(connection, config)
 	if host == nil {
 		host = steerline.NewServiceHost(hostConfig, "", "", nil, serviceAdmission{config: &config}, serviceActivityFormatter{})
 	}
 	stores := execution.ServiceStorage{State: connection, Commands: connection, Worker: connection, Conversations: connection, Records: connection, Resources: executionResources{}, Close: connection.Close}
 	service, err := execution.NewService(config.executionConfig(), config.runtimeDependencies(), config.runtimeSettings(), resolver, sources, stores, tasks, tasks, host)
-	return service, err
+	if err != nil {
+		return nil, errors.Join(err, connection.Close())
+	}
+	return service, nil
 
 }

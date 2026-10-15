@@ -1,20 +1,8 @@
-SteerLine home (STEERLINE_HOME)
-==============================
+SteerLine
 
-Web is the interactive frontend. Install both steerline.exe and
-steerline-web.exe into this home/bin before using it.
+start.bat starts the shared project host and Web, then opens the browser.
+stop.bat stops both services and verifies project shutdown.
 
-Start each project with service-window.bat (default etc\SteerLine.json;
-pass a config path or set STEERLINE_CONFIG for another project).
-Then run start-app.bat, start-web.bat and web.bat in that order.
-The service window may be minimized; Ctrl+C requests normal shutdown.
-Closing the browser does not stop a project service or worker.
-stop-web.bat stops only Web; stop-app.bat stops only the application gateway.
-Project services stop through their own service window or stop-service CLI.
-
-One etc\<repo>.json per project and one state\<repoKey> per Git common dir.
-Web's stable loopback endpoint is saved in web.json.
-Execution profiles are saved in execution.json.
-Regenerate these launchers with bin\steerline.exe launchers.
-
-Retained PRs, worktrees and branches are managed with provider/native tools.
+Select a project in the browser. Projects are loaded from etc/*.json at host startup.
+Use bin/steerline.exe status --json to inspect current ownership and project state.
+Web can be restarted independently with bin/steerline-web.exe stop/serve.

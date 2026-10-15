@@ -96,8 +96,12 @@ func TestOrcaRemovalRestart(t *testing.T) {
 		return snapshot
 	}
 	query("after-removal")
+	_, err := p.Driver.Run(s.Context, "status", "--json")
+	s.Must(err)
 	p.RestartService()
 	query("after-restart")
+	_, err = p.Driver.Run(s.Context, "status", "--json")
+	s.Must(err)
 	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "start_task", p.Tasks["c"].ID))
 	s.Wait("unrelated task starts after native cleanup", func() (bool, error) {
 		snapshot, err := p.Snapshot()

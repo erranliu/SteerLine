@@ -242,6 +242,8 @@ export interface BrowserSession {
   diagnostic?: string;
 }
 export interface ConfiguredProject {
+  runtime_state?: "starting" | "ready" | "failed" | "stopping" | "stopped";
+  instance_id?: string;
   config_id: string;
   name: string;
   repository: string;

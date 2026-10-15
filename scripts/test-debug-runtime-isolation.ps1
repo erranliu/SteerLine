@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)]
     [string]$Out,
 
@@ -72,7 +72,8 @@ function New-Fixture([string]$Name, [bool]$MissingAuth = $false) {
     Write-Fixture (Join-Path $installed 'bin\steerline.exe') 'synthetic installed executable sentinel'
     Write-Fixture (Join-Path $installed 'service-instance.json') '{"instance_id":"synthetic-unchanged-instance"}'
     Write-Fixture (Join-Path $installed 'task-facts.json') '{"task_id":83,"phase":"synthetic-sentinel"}'
-    Write-Fixture (Join-Path $installed 'service-window.bat') 'synthetic installed service sentinel'
+    Write-Fixture (Join-Path $installed 'stop.bat') 'synthetic installed console sentinel'
+    Write-Fixture (Join-Path $installed 'serve.bat') 'synthetic installed service sentinel'
     Write-Fixture (Join-Path $installed 'README.txt') 'synthetic installed readme sentinel'
     Write-Fixture (Join-Path $installed 'state\state-sentinel.txt') 'synthetic installed state sentinel'
     Write-Fixture (Join-Path $installed 'ui\web\ui-sentinel.txt') 'synthetic installed UI sentinel'
@@ -92,7 +93,8 @@ $cases = @(
     @{ name = 'codex-junction-missing-auth'; operation = 'launchers'; path = 'codex'; target = 'codex'; type = 'Junction'; missingAuth = $true },
     @{ name = 'exe-hard-link'; operation = 'launchers'; path = 'bin\steerline.exe'; target = 'bin\steerline.exe'; type = 'HardLink' },
     @{ name = 'auth-hard-link'; operation = 'launchers'; path = 'codex\auth.json'; target = 'codex\auth.json'; type = 'HardLink' },
-    @{ name = 'service-hard-link'; operation = 'launchers'; path = 'service-window.bat'; target = 'service-window.bat'; type = 'HardLink' },
+    @{ name = 'console-hard-link'; operation = 'launchers'; path = 'stop.bat'; target = 'stop.bat'; type = 'HardLink' },
+    @{ name = 'service-hard-link'; operation = 'launchers'; path = 'serve.bat'; target = 'serve.bat'; type = 'HardLink' },
     @{ name = 'readme-hard-link'; operation = 'launchers'; path = 'README.txt'; target = 'README.txt'; type = 'HardLink' }
 )
 if ($IncludeSymbolicLinks) {
@@ -100,7 +102,8 @@ if ($IncludeSymbolicLinks) {
         @{ name = 'exe-file-alias'; operation = 'launchers'; path = 'bin\steerline.exe'; target = 'bin\steerline.exe'; type = 'SymbolicLink' },
         @{ name = 'auth-file-alias'; operation = 'launchers'; path = 'codex\auth.json'; target = 'codex\auth.json'; type = 'SymbolicLink' },
         @{ name = 'auth-dangling-file-alias'; operation = 'launchers'; path = 'codex\auth.json'; target = 'codex\auth.json'; type = 'SymbolicLink'; missingAuth = $true },
-        @{ name = 'service-file-alias'; operation = 'launchers'; path = 'service-window.bat'; target = 'service-window.bat'; type = 'SymbolicLink' },
+        @{ name = 'console-file-alias'; operation = 'launchers'; path = 'stop.bat'; target = 'stop.bat'; type = 'SymbolicLink' },
+        @{ name = 'service-file-alias'; operation = 'launchers'; path = 'serve.bat'; target = 'serve.bat'; type = 'SymbolicLink' },
         @{ name = 'readme-file-alias'; operation = 'launchers'; path = 'README.txt'; target = 'README.txt'; type = 'SymbolicLink' }
     )
 }
@@ -139,7 +142,7 @@ if ((Test-Path -LiteralPath (Join-Path $debug 'bin\steerline.exe')) -or
     throw 'Ordinary launcher/auth generation changed installed files or copied the source exe into the debug home.'
 }
 $expectedExecutable = 'set "BIN=' + $buildExe + '"'
-foreach ($launcher in @('service-window.bat')) {
+foreach ($launcher in @('stop.bat', 'serve.bat')) {
     $contents = [IO.File]::ReadAllText((Join-Path $debug $launcher))
     if (-not $contents.Contains('set "CODEX_HOME=%SHOME%\codex"') -or -not $contents.Contains($expectedExecutable)) {
         throw "Missing selected exe/CODEX_HOME binding in '$launcher'"

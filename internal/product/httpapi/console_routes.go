@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"net/url"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 )
@@ -25,25 +26,16 @@ func (s *Server) conversationIdentity(ctx context.Context, candidate *api.Candid
 	return candidate.ExecutionID, attempt, nil
 }
 
-func (s *Server) consoleQuery(w http.ResponseWriter, r *http.Request, path []string) bool {
-	if len(path) != 3 || path[0] != "runs" || (path[2] != "recovery" && path[2] != "decision-eligibility") {
-		return false
-	}
-	candidate, err := s.candidate(r.Context(), path[1])
+func (s *Server) readRecovery(ctx context.Context, path []string, values url.Values) (any, error) {
+	candidate, err := s.candidate(ctx, path[1])
 	if err != nil {
-		writeResult(w, nil, err)
-		return true
+		return nil, err
 	}
-	if r.URL.Query().Get("execution_id") != candidate.ExecutionID || r.URL.Query().Get("attempt_id") != candidate.AttemptID || candidate.ExecutionID == "" || candidate.AttemptID == "" {
-		writeError(w, http.StatusConflict, "stale_target", "original execution/attempt binding changed", "")
-		return true
+	if values.Get("execution_id") != candidate.ExecutionID || values.Get("attempt_id") != candidate.AttemptID || candidate.ExecutionID == "" || candidate.AttemptID == "" {
+		return nil, &protocolError{status: 409, code: "stale_target", reason: "original execution/attempt binding changed"}
 	}
 	if path[2] == "recovery" {
-		result, err := s.recovery.InspectRecovery(r.Context(), path[1])
-		writeResult(w, result, err)
-	} else {
-		err := s.recovery.DecisionEligibility(r.Context(), candidate)
-		writeResult(w, struct{}{}, err)
+		return s.recovery.InspectRecovery(ctx, path[1])
 	}
-	return true
+	return struct{}{}, s.recovery.DecisionEligibility(ctx, candidate)
 }

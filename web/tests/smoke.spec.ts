@@ -92,7 +92,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   const prefix =
     "http://" +
     manifest.web_address +
-    "/api/v1/application/projects/" +
+    "/api/v2/application/projects/" +
     projectID;
   const get = async (path: string) => {
     let body: any;
@@ -125,7 +125,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
     let startPosts = 0;
     let originalStartID = "";
     await context.route(
-      "**/api/v1/application/projects/**/commands",
+      "**/api/v2/application/projects/**/commands",
       async (route) => {
         const envelope = route.request().postDataJSON();
         if (envelope.action === "start_task") {

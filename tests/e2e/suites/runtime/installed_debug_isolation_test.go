@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,8 +17,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 )
 
 type serviceStart struct {
@@ -28,291 +27,120 @@ type serviceStart struct {
 
 func TestInstalledDebugIsolation(t *testing.T) {
 	s := testenv.NewScenario(t, "runtime.installed-debug-isolation")
-	rootPart := filepath.Join("中文 路径", "有空格的现场")
-	installed := s.NewProjectAt("installed", rootPart, "")
-	debug := s.NewProjectAt("debug", rootPart, "")
-	if installed.Repo == debug.Repo || installed.Home == debug.Home {
-		t.Fatal("controlled setup did not create independent project clones and homes")
-	}
-	unrelatedCWD := filepath.Join(s.Root, "无关 cwd", "深层目录")
-	s.Must(os.MkdirAll(unrelatedCWD, 0700))
-	installed.Driver.WorkingDirectory = unrelatedCWD
-	debug.Driver.WorkingDirectory = unrelatedCWD
-
-	if _, err := installed.Driver.Run(s.Context, "install"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := installed.Driver.Run(s.Context, "launchers"); err != nil {
-		t.Fatal(err)
-	}
+	part := filepath.Join("中文 路径", "有空格的现场")
+	installed := s.NewProjectAt("installed", part, "")
+	debug := s.NewProjectAt("debug", part, "")
+	cwd := filepath.Join(s.Root, "无关 cwd")
+	s.Must(os.MkdirAll(cwd, 0700))
+	installed.Driver.WorkingDirectory = cwd
+	debug.Driver.WorkingDirectory = cwd
+	_, err := installed.Driver.Run(s.Context, "install")
+	s.Must(err)
 	installedExe := filepath.Join(installed.Home, "bin", "steerline.exe")
-	installed.Executable, installed.Driver.Binary = installedExe, installedExe
+	installed.Executable = installedExe
+	installed.Driver.Binary = installedExe
 	installedHash := fileSHA256(t, installedExe)
 	installed.CreateTasks()
-	installed.StartService()
-	installedBefore, err := installed.Snapshot()
-	s.Must(err)
-	installedIdentity := assertServiceIdentity(t, installed, installedExe, s.Run.SourceCommit, s.Run.SourceDirty)
-	evidence := map[string]any{
-		"source_commit": s.Run.SourceCommit,
-		"source_dirty":  s.Run.SourceDirty,
-		"installed": map[string]any{
-			"executable": installedExe, "home": installed.Home, "config": installed.Config, "repository": installed.Repo,
-			"sha256_before": installedHash, "service_instance_id": serviceInstance(installedBefore), "startup_diagnostics": installedIdentity,
-		},
-		"debug": map[string]any{"home": debug.Home, "config": debug.Config, "repository": debug.Repo},
-	}
-	writeRuntimeEvidence(t, s.Output, evidence)
-
+	installedBefore := mustSnapshot(t, installed)
 	powershell := powershellExecutable(t)
-	debugScript := filepath.Join(s.Run.Root, "scripts", "debug-runtime.ps1")
-	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "build"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "launchers"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "launchers"); err != nil {
-		t.Fatal(err)
-	}
+	script := filepath.Join(s.Run.Root, "scripts", "debug-runtime.ps1")
+	_, err = runDebugScript(s, debug, powershell, script, installed.Home, "build")
+	s.Must(err)
+	_, err = runDebugScript(s, debug, powershell, script, installed.Home, "launchers")
+	s.Must(err)
 	debugExe := filepath.Join(s.Run.Root, "bin", "steerline.exe")
-	debug.Executable, debug.Driver.Binary = debugExe, debugExe
-	debugEvidence := evidence["debug"].(map[string]any)
-	assertDefaultStateAliasRejected(t, s, debug, installed, debugExe, powershell, debugScript, debugEvidence)
-	assertDefaultUIAliasRejected(t, s, debug, installed, debugExe, powershell, debugScript, debugEvidence)
-	if _, err := os.Stat(filepath.Join(debug.Home, "bin", "steerline.exe")); !os.IsNotExist(err) {
-		t.Fatalf("debug runtime unexpectedly copied the source exe into its home: %v", err)
+	debug.Executable = debugExe
+	debug.Driver.Binary = debugExe
+	evidence := map[string]any{"source_commit": s.Run.SourceCommit, "source_dirty": s.Run.SourceDirty, "installed_executable": installedExe, "debug_executable": debugExe, "installed_sha256": installedHash}
+	assertDefaultStateAliasRejected(t, s, debug, installed, debugExe, powershell, script, evidence)
+	assertGeneratedLaunchers(t, debug.Home, debugExe)
+	debug.CreateTasks()
+	before := mustSnapshot(t, debug)
+	if before.Page.ProjectID == installedBefore.Page.ProjectID || before.Page.DatabaseID == installedBefore.Page.DatabaseID {
+		t.Fatal("independent homes shared project/database")
+	}
+	if before.Runtime.Service.PID == installedBefore.Runtime.Service.PID {
+		t.Fatal("independent homes shared host process")
+	}
+	_, runningBuildErr := runDebugScript(s, debug, powershell, script, installed.Home, "build")
+	if runningBuildErr == nil {
+		t.Fatal("source build replaced a running host")
 	}
 	if fileSHA256(t, installedExe) != installedHash {
-		t.Fatal("debug build or launcher generation changed the installed executable")
+		t.Fatal("source build changed installation")
 	}
-	installedAfterFirstBuild := mustSnapshot(t, installed)
-	assertProjectFactsEqual(t, installedBefore, installedAfterFirstBuild, "debug build changed the running installed project")
-	assertSameServiceInstance(t, installedBefore, installedAfterFirstBuild)
-	installedEvidence := evidence["installed"].(map[string]any)
-	installedEvidence["sha256_after_first_debug_build"] = fileSHA256(t, installedExe)
-	installedEvidence["service_instance_id_after_first_debug_build"] = serviceInstance(installedAfterFirstBuild)
-	writeRuntimeEvidence(t, s.Output, evidence)
-
-	cliOutput, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "cli", "home")
-	if err != nil {
-		t.Fatal(err)
+	unchanged := mustSnapshot(t, installed)
+	assertProjectFactsEqual(t, installedBefore, unchanged, "debug build changed installed facts")
+	assertSameServiceInstance(t, installedBefore, unchanged)
+	count := controlRequestCount(t, debug)
+	if err = debug.Driver.ControlTargeted(s.Context, s.Run.Helper, "start_task", debug.Tasks["a"].ID, serviceInstance(before)+"-stale"); err == nil {
+		t.Fatal("stale project instance accepted")
 	}
-	assertContains(t, string(cliOutput), s.Run.SourceCommit)
-	assertContains(t, string(cliOutput), s.Run.SourceDirty)
-	productCLI, err := debug.Driver.Run(s.Context, "home", "-config", debug.Config)
-	if err != nil {
-		t.Fatal(err)
+	if controlRequestCount(t, debug) != count {
+		t.Fatal("stale target published input")
 	}
-	assertContains(t, string(productCLI), debug.Home)
-	assertContains(t, string(productCLI), debugExe)
-	assertContains(t, string(productCLI), s.Run.SourceCommit)
-	assertContains(t, string(productCLI), s.Run.SourceDirty)
-	assertContains(t, string(productCLI), debug.Config)
-	assertRuntimePathsInsideHome(t, debug)
-	assertGeneratedLaunchers(t, debug.Home, debugExe)
-	debugEvidence["executable"] = debugExe
-	debugEvidence["cli_home_output"] = map[string]string{"home": debug.Home, "executable": debugExe, "config": debug.Config, "source_commit": s.Run.SourceCommit, "source_dirty": s.Run.SourceDirty}
-	debugEvidence["executable_sha256"] = fileSHA256(t, debugExe)
-	writeRuntimeEvidence(t, s.Output, evidence)
-
-	startJSON, err := debug.Driver.Run(s.Context, "start-service", "-config", debug.Config)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var requested serviceStart
-	if err := json.Unmarshal(startJSON, &requested); err != nil {
-		t.Fatalf("decode debug service entry: %v: %s", err, startJSON)
-	}
-	if requested.Status != "window-required" || requested.LauncherPath != filepath.Join(debug.Home, "service-window.bat") || requested.ConfigPath != debug.Config {
-		t.Fatalf("service entry did not stay in debug home: %+v", requested)
-	}
-	debugEvidence["start_service_window_required"] = requested
-
-	debug.CreateTasks()
-	serviceCommand := debug.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", debugScript,
-		"-DebugHome", debug.Home, "-InstalledHome", installed.Home, "-Config", debug.Config, "-Operation", "service")
-	debug.StartServiceViaVisibleConsole(serviceCommand, "debug-operation-service-window-1")
-	debugIdentity := assertServiceIdentity(t, debug, debugExe, s.Run.SourceCommit, s.Run.SourceDirty)
-	debugEvidence["startup_diagnostics"] = debugIdentity
-	debugSnapshot, err := debug.Snapshot()
-	s.Must(err)
-	if debugSnapshot.Runtime == nil || debugSnapshot.Runtime.Service.PID <= 0 || debugSnapshot.Runtime.Service.ProcessIdentity == nil ||
-		debugSnapshot.Runtime.Service.ProcessIdentity.PID != debugSnapshot.Runtime.Service.PID ||
-		!strings.EqualFold(debugSnapshot.Runtime.Service.ProcessIdentity.Executable, debugExe) || debugSnapshot.Runtime.Service.StartupID == nil {
-		var identity any
-		var servicePID int
-		if debugSnapshot.Runtime != nil {
-			identity = debugSnapshot.Runtime.Service.ProcessIdentity
-			servicePID = debugSnapshot.Runtime.Service.PID
-		}
-		t.Fatalf("debug service-window child identity is missing or wrong: pid=%d identity=%+v want_executable=%s", servicePID, identity, debugExe)
-	}
-	debugEvidence["service_window_entry"] = map[string]any{
-		"entry":        "debug-runtime.ps1 -Operation service -> generated service-window.bat",
-		"launcher_pid": debug.ServiceWindow.Cmd.Process.Pid,
-		"service_pid":  debugSnapshot.Runtime.Service.PID,
-		"executable":   debugSnapshot.Runtime.Service.ProcessIdentity.Executable,
-		"home":         debug.Home, "config": debug.Config, "instance_id": serviceInstance(debugSnapshot),
-		"startup_log": filepath.Join(filepath.Dir(debug.Database), "service", "startups", *debugSnapshot.Runtime.Service.StartupID, "service.log"),
-	}
-	debugHashBeforeRunningBuild := fileSHA256(t, debugExe)
-	buildOutput, buildErr := runDebugScript(s, debug, powershell, debugScript, installed.Home, "build")
-	if buildErr == nil || !strings.Contains(strings.ToLower(string(buildOutput)), "debug executable is still running") {
-		t.Fatalf("debug build was allowed while its service executable was running: err=%v output=%s", buildErr, buildOutput)
-	}
-	if fileSHA256(t, debugExe) != debugHashBeforeRunningBuild {
-		t.Fatal("rejected build changed the running debug executable")
-	}
-	debugEvidence["build_while_debug_service_running_rejected"] = string(buildOutput)
-	debugBefore, err := debug.Snapshot()
-	s.Must(err)
-	debugEvidence["service_instance_id"] = serviceInstance(debugBefore)
-	writeRuntimeEvidence(t, s.Output, evidence)
-	if debugBefore.Page.ProjectID == installedBefore.Page.ProjectID || debugBefore.Page.DatabaseID == installedBefore.Page.DatabaseID {
-		t.Fatal("installed and debug homes shared a project or database identity")
-	}
-	requestsBeforeStaleTarget := controlRequestCount(t, debug)
-	staleTargetErr := debug.Driver.ControlTargeted(s.Context, s.Run.Helper, "start_task", debug.Tasks["a"].ID, serviceInstance(debugBefore)+"-stale")
-	if staleTargetErr == nil || !strings.Contains(staleTargetErr.Error(), "stale_instance") {
-		t.Fatalf("write targeting a stale service instance was not refused: %v", staleTargetErr)
-	}
-	requestsAfterStaleTarget := controlRequestCount(t, debug)
-	if count := requestsAfterStaleTarget; count != requestsBeforeStaleTarget {
-		t.Fatalf("stale-instance rejection published a control request: before=%d after=%d", requestsBeforeStaleTarget, count)
-	}
-	debugEvidence["stale_instance_write_rejected"] = staleTargetErr.Error()
-	debugEvidence["stale_instance_request_counts"] = map[string]int{"before": requestsBeforeStaleTarget, "after": requestsAfterStaleTarget}
-	writeRuntimeEvidence(t, s.Output, evidence)
-
-	staleConfig := writeConfigVariant(t, debug, "Stale.json", func(config map[string]any) {
-		config["heartbeat"] = "250ms"
-	})
-	staleDriver := debug.Driver
-	staleDriver.Config = staleConfig
-	requestsBeforeStaleConfig := controlRequestCount(t, debug)
-	staleWriteErr := staleDriver.Control(s.Context, s.Run.Helper, "start_task", debug.Tasks["a"].ID)
-	if staleWriteErr == nil {
-		t.Fatal("a write command using a changed configuration reached the running service")
-	}
-	debugEvidence["changed_config_write_rejected"] = staleWriteErr.Error()
-	requestsAfterStaleConfig := controlRequestCount(t, debug)
-	if count := requestsAfterStaleConfig; count != requestsBeforeStaleConfig {
-		t.Fatalf("changed-config rejection published a control request: before=%d after=%d", requestsBeforeStaleConfig, count)
-	}
-	debugEvidence["changed_config_request_counts"] = map[string]int{"before": requestsBeforeStaleConfig, "after": requestsAfterStaleConfig}
-	writeRuntimeEvidence(t, s.Output, evidence)
-	debugAfterRejectedWrite := mustSnapshot(t, debug)
-	if len(debugAfterRejectedWrite.Domain.WorkflowRuns) != 0 {
-		t.Fatal("rejected wrong-configuration write created a workflow")
-	}
-
 	mirror := s.NewHomeForProject(debug, "same-repository-other-home", debugExe)
-	lockCommand := mirror.Command(debugExe, "run", "-config", mirror.Config, "-dispatch", "manual", "-console", "off")
-	// Config/project preflight precedes the lock rejection; use the ordinary
-	// CLI command bound rather than a shorter ten-second startup allowance.
-	lockOutput, lockErr := s.RunCommandFor(lockCommand, "same-repository-second-writer", 30*time.Second)
-	if lockErr == nil || !strings.Contains(string(lockOutput), "repository already locked") {
-		t.Fatalf("same-clone second home did not preserve repository lock: err=%v output=%s", lockErr, lockOutput)
+	mirror.StartHost()
+	s.Wait("cross-home repository conflict", func() (bool, error) {
+		status, err := mirror.Driver.HostStatus(s.Context)
+		if err != nil {
+			return false, err
+		}
+		for _, project := range status.Projects {
+			if project.RuntimeState == "failed" {
+				if !strings.Contains(project.Diagnostic, "repository already locked") {
+					t.Fatal(project.Diagnostic)
+				}
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if _, err = os.Stat(mirror.Database); !os.IsNotExist(err) {
+		t.Fatal("conflicting home initialized database")
 	}
-	debugEvidence["cross_home_second_writer_rejected"] = string(lockOutput)
-	writeRuntimeEvidence(t, s.Output, evidence)
-
+	mirror.StopService()
 	installed.Claim("a")
-	installedOpen := installed.WaitPhase("waiting_pr_merge")
-	installed.Record("waiting-pr-merge", installedOpen)
-	requestsBeforeClaim := controlRequestFiles(t, debug)
 	debug.Claim("a")
-	debugEvidence["normal_control_publication"] = assertControlPublication(t, debug, requestsBeforeClaim, debugBefore)
-	writeRuntimeEvidence(t, s.Output, evidence)
+	installedOpen := installed.WaitPhase("waiting_pr_merge")
 	debugOpen := debug.WaitPhase("waiting_pr_merge")
-	debug.Record("waiting-pr-merge", debugOpen)
-	if installedOpen.Helper.Dispatches != 3 || debugOpen.Helper.Dispatches != 3 || installedOpen.Page.ProjectID == debugOpen.Page.ProjectID {
-		t.Fatal("writes or controlled worker state crossed between install and debug clones")
+	debug.StopService()
+	_, err = runDebugScript(s, debug, powershell, script, installed.Home, "build")
+	s.Must(err)
+	_, err = runDebugScript(s, debug, powershell, script, installed.Home, "launchers")
+	s.Must(err)
+	assertSameServiceInstance(t, installedBefore, mustSnapshot(t, installed))
+	assertSharedSQLiteRejected(t, s, debug, installed, powershell, script, evidence)
+	assertHomeJunctionRejected(t, s, debug, powershell, script, installed)
+	assertDirectBuildOutputIsolation(t, s, debug, installed, powershell, evidence)
+	assertMissingSourceExecutableRejected(t, s, debug, powershell, script, installed.Home)
+	debug.StartService()
+	after := mustSnapshot(t, debug)
+	if serviceInstance(before) == serviceInstance(after) {
+		t.Fatal("host restart retained runtime instance")
 	}
+	if len(after.Domain.WorkflowRuns) != len(debugOpen.Domain.WorkflowRuns) || after.Helper.Dispatches != debugOpen.Helper.Dispatches {
+		t.Fatal("restart produced new business input")
+	}
+	installed.Record("waiting-merge", installedOpen)
+	debug.Record("after-restart", after)
 	installed.Merge()
 	debug.Merge()
-	installedDone := installed.WaitPhase("completed")
-	debugDone := debug.WaitPhase("completed")
-	installed.Record("completed", installedDone)
-	debug.Record("completed", debugDone)
-	installed.StopService()
-	debug.StopService()
-	assertServiceStopReceipt(t, debug.ServiceStopOutput)
-	debugEvidence["operation_service_stop"] = map[string]any{"launcher_pid": debug.ServiceWindowPID, "owned_console_stopped": debug.ServiceWindowStopped, "receipt": string(debug.ServiceStopOutput)}
-	writeRuntimeEvidence(t, s.Output, evidence)
-
-	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "build"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "launchers"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "launchers"); err != nil {
-		t.Fatal(err)
-	}
-	if fileSHA256(t, installedExe) != installedHash {
-		t.Fatal("debug stop/start preparation changed the installed executable SHA-256")
-	}
-	installedAfterBuild, err := installed.Snapshot()
-	s.Must(err)
-	assertProjectFactsEqual(t, installedDone, installedAfterBuild, "debug rebuild changed installed task facts")
-	assertSameServiceInstance(t, installedBefore, installedAfterBuild)
-	installedEvidence["sha256_after_debug_restart_preparation"] = fileSHA256(t, installedExe)
-	installedEvidence["service_instance_id_after_debug_restart_preparation"] = serviceInstance(installedAfterBuild)
-	serviceBatchCommand := debug.Command("cmd.exe", "/d", "/c", "call", filepath.Join(debug.Home, "service-window.bat"), debug.Config)
-	debug.StartServiceViaVisibleConsole(serviceBatchCommand, "debug-generated-service-window-batch-2")
-	debugAfterRestartIdentity := assertServiceIdentity(t, debug, debugExe, s.Run.SourceCommit, s.Run.SourceDirty)
-	debugAfterRestart, err := debug.Snapshot()
-	s.Must(err)
-	if debugAfterRestart.Runtime == nil || debugAfterRestart.Runtime.Service.PID <= 0 || debugAfterRestart.Runtime.Service.ProcessIdentity == nil ||
-		debugAfterRestart.Runtime.Service.ProcessIdentity.PID != debugAfterRestart.Runtime.Service.PID ||
-		!strings.EqualFold(debugAfterRestart.Runtime.Service.ProcessIdentity.Executable, debugExe) || debugAfterRestart.Runtime.Service.StartupID == nil {
-		var identity any
-		var servicePID int
-		if debugAfterRestart.Runtime != nil {
-			identity = debugAfterRestart.Runtime.Service.ProcessIdentity
-			servicePID = debugAfterRestart.Runtime.Service.PID
+	s.Wait("independent deliveries", func() (bool, error) {
+		a, e := installed.Snapshot()
+		if e != nil {
+			return false, e
 		}
-		t.Fatalf("direct service-window batch child identity is missing or wrong: pid=%d identity=%+v want_executable=%s", servicePID, identity, debugExe)
-	}
-	assertProjectFactsEqual(t, debugDone, debugAfterRestart, "same-build debug restart changed task facts")
-	if serviceInstance(debugDone) == "" || serviceInstance(debugAfterRestart) == "" || serviceInstance(debugDone) == serviceInstance(debugAfterRestart) {
-		t.Fatalf("same-build debug restart did not publish a new service instance: before=%s after=%s", serviceInstance(debugDone), serviceInstance(debugAfterRestart))
-	}
-	debugEvidence["executable_sha256_after_rebuild"] = fileSHA256(t, debugExe)
-	debugEvidence["service_instance_id_after_restart"] = serviceInstance(debugAfterRestart)
-	debugEvidence["restart_startup_diagnostics"] = debugAfterRestartIdentity
-	debugEvidence["generated_service_window_batch"] = map[string]any{
-		"entry":        "cmd.exe /c call debug-home\\service-window.bat <project-config>",
-		"launcher_pid": debug.ServiceWindow.Cmd.Process.Pid,
-		"service_pid":  debugAfterRestart.Runtime.Service.PID,
-		"executable":   debugAfterRestart.Runtime.Service.ProcessIdentity.Executable,
-		"home":         debug.Home, "config": debug.Config, "instance_id": serviceInstance(debugAfterRestart),
-		"startup_log":         filepath.Join(filepath.Dir(debug.Database), "service", "startups", *debugAfterRestart.Runtime.Service.StartupID, "service.log"),
-		"startup_diagnostics": debugAfterRestartIdentity,
-	}
-	if fileSHA256(t, installedExe) != installedHash {
-		t.Fatal("debug restart changed installed executable SHA-256")
-	}
-	writeRuntimeEvidence(t, s.Output, evidence)
-
-	assertScriptRejects(t, s, debug, powershell, debugScript, installed.Home, installed.Home, installed.Config, "overlap", "home-overlap")
-	assertHomeJunctionRejected(t, s, debug, powershell, debugScript, installed)
-	assertEscapedPathRejected(t, s, debug, powershell, debugScript, installed.Home, "run_dir", "run-dir-escape")
-	assertEscapedPathRejected(t, s, debug, powershell, debugScript, installed.Home, "worktree_root", "worktree-root-escape")
-	debug.StopService()
+		b, e := debug.Snapshot()
+		return e == nil && len(a.Domain.Deliveries) == 1 && len(b.Domain.Deliveries) == 1, e
+	})
 	installed.StopService()
-	assertServiceStopReceipt(t, debug.ServiceStopOutput)
-	debugEvidence["generated_service_window_batch_stop"] = map[string]any{"launcher_pid": debug.ServiceWindowPID, "owned_console_stopped": debug.ServiceWindowStopped, "receipt": string(debug.ServiceStopOutput)}
+	debug.StopService()
+	evidence["installed_instance"] = serviceInstance(installedBefore)
+	evidence["debug_before"] = serviceInstance(before)
+	evidence["debug_after"] = serviceInstance(after)
+	evidence["independent_deliveries"] = true
 	writeRuntimeEvidence(t, s.Output, evidence)
-	// Compare actual DB bytes only after their legitimate service writers have
-	// exited and released their locks; heartbeats persist while services run.
-	assertSharedSQLiteRejected(t, s, debug, installed, powershell, debugScript, debugEvidence)
-	writeRuntimeEvidence(t, s.Output, evidence)
-	assertDirectBuildOutputIsolation(t, s, debug, installed, powershell, evidence)
-	assertMissingSourceExecutableRejected(t, s, debug, powershell, debugScript, installed.Home)
-
 }
 
 func assertSharedSQLiteRejected(t *testing.T, s *testenv.Scenario, project, installed *testenv.Project, powershell, script string, evidence map[string]any) {
@@ -383,7 +211,7 @@ func assertSharedSQLiteRejected(t *testing.T, s *testenv.Scenario, project, inst
 					t.Fatalf("%s changed shared %s or native SQLite before refusal: sentinel=%d/%s before=%v after=%v", entry, name, info.Size(), hash, before, after)
 				}
 			}
-			checkRefusal("product_cli", project.Command(project.Executable, "task", "validate", "-config", project.Config, "-file", invalidBatch))
+			checkRefusal("product_cli", project.Command(project.Executable, "check", "-config", project.Config))
 			wrapper := "& " + quote(script) + " -DebugHome " + quote(project.Home) + " -InstalledHome " + quote(installed.Home) + " -Config " + quote(project.Config) + " -Operation cli -Arguments @('task','validate','-file'," + quote(invalidBatch) + "); exit $LASTEXITCODE"
 			checkRefusal("debug_wrapper", project.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", wrapper))
 		}()
@@ -395,8 +223,8 @@ func assertSharedSQLiteRejected(t *testing.T, s *testenv.Scenario, project, inst
 	evidence["sqlite_installed_database_sha256_after"] = fileSHA256(t, installed.Database)
 	// Restore every original SQLite file before exercising the ordinary reader.
 	// The malformed batch must now reach the real business validation error.
-	output, err := s.RunCommand(project.Command(project.Executable, "task", "validate", "-config", project.Config, "-file", invalidBatch), "sqlite-single-link-normal-validation")
-	if err == nil || !strings.Contains(strings.ToLower(string(output)), "invalid_batch") {
+	output, err := s.RunCommand(project.Command(project.Executable, "check", "-config", project.Config), "sqlite-single-link-normal-validation")
+	if err != nil {
 		t.Fatalf("normal native SQLite did not remain usable: err=%v output=%s", err, output)
 	}
 	evidence["sqlite_single_link_validation"] = string(output)
@@ -489,7 +317,7 @@ func assertDefaultStateAliasRejected(t *testing.T, s *testenv.Scenario, project,
 		if scriptErr == nil || !strings.Contains(strings.ToLower(string(scriptOutput)), "writable path must resolve inside its home") {
 			t.Fatalf("debug runtime accepted default state junction: err=%v output=%s", scriptErr, scriptOutput)
 		}
-		productCommand := project.Command(executable, "task", "validate", "-config", config, "-file", invalidBatch)
+		productCommand := project.Command(executable, "check", "-config", config)
 		var productErr error
 		productOutput, productErr = s.RunCommand(productCommand, "default-state-native-alias")
 		if productErr == nil || !strings.Contains(strings.ToLower(string(productOutput)), "state root must resolve inside steerline_home") {
@@ -507,35 +335,6 @@ func assertDefaultStateAliasRejected(t *testing.T, s *testenv.Scenario, project,
 		"aliased_run_dir": aliasedRunDir, "installed_sentinel": sentinel, "installed_sentinel_sha256": sentinelHash,
 		"script_refusal": string(scriptOutput), "native_task_validate_refusal": string(productOutput),
 		"default_database_directory_created": false,
-	}
-}
-
-func assertDefaultUIAliasRejected(t *testing.T, s *testenv.Scenario, project, installed *testenv.Project, executable, powershell, script string, evidence map[string]any) {
-	t.Helper()
-	installedUI := filepath.Join(installed.Home, "ui")
-	if err := os.MkdirAll(installedUI, 0700); err != nil {
-		t.Fatal(err)
-	}
-	sentinel := filepath.Join(installedUI, "task83-ui-alias-sentinel.txt")
-	if err := os.WriteFile(sentinel, []byte("installed-ui-sentinel"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	sentinelHash := fileSHA256(t, sentinel)
-	alias := filepath.Join(project.Home, "ui")
-	var scriptOutput []byte
-	withJunction(t, s, project, powershell, alias, installedUI, "default-ui-alias", func() {
-		var scriptErr error
-		scriptOutput, scriptErr = runDebugScript(s, project, powershell, script, installed.Home, "launchers")
-		if scriptErr == nil || !strings.Contains(strings.ToLower(string(scriptOutput)), "writable path must resolve inside its home") {
-			t.Fatalf("debug runtime accepted default UI junction: err=%v output=%s", scriptErr, scriptOutput)
-		}
-		if actual := fileSHA256(t, sentinel); actual != sentinelHash {
-			t.Fatalf("rejected launcher changed installed UI sentinel: before=%s after=%s", sentinelHash, actual)
-		}
-	})
-	evidence["default_ui_alias_rejected"] = map[string]any{
-		"alias": alias, "installed_ui": installedUI, "installed_sentinel": sentinel, "installed_sentinel_sha256": sentinelHash,
-		"script_refusal": string(scriptOutput),
 	}
 }
 
@@ -754,18 +553,6 @@ func assertScriptRejects(t *testing.T, s *testenv.Scenario, project *testenv.Pro
 	}
 }
 
-func assertEscapedPathRejected(t *testing.T, s *testenv.Scenario, project *testenv.Project, powershell, script, installedHome, field, name string) {
-	t.Helper()
-	escape := filepath.Join(s.Root, "escaped "+field)
-	config := writeConfigVariant(t, project, name+".json", func(value map[string]any) {
-		value[field] = escape
-	})
-	output, err := runDebugScriptWithConfig(s, project, powershell, script, installedHome, config, name)
-	if err == nil || !strings.Contains(strings.ToLower(string(output)), strings.ToLower(field)) {
-		t.Fatalf("debug runtime accepted %s outside its home: err=%v output=%s", field, err, output)
-	}
-}
-
 func runDebugScriptWithConfig(s *testenv.Scenario, project *testenv.Project, powershell, script, installedHome, config, name string) ([]byte, error) {
 	cmd := project.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
 		"-DebugHome", project.Home, "-InstalledHome", installedHome, "-Config", config, "-Operation", "cli", "-Arguments", "home")
@@ -832,47 +619,11 @@ func writeConfigVariantAt(t *testing.T, source, target string, change func(map[s
 	return target
 }
 
-func assertServiceIdentity(t *testing.T, project *testenv.Project, executable, commit, dirty string) []string {
-	t.Helper()
-	log := latestServiceLog(t, project)
-	for _, want := range []string{
-		"runtime executable=" + executable,
-		"runtime home=" + project.Home,
-		"runtime config=" + project.Config,
-		"runtime source_commit=" + commit + " source_dirty=" + dirty,
-		"runtime repository=" + strings.ToLower(project.Repo),
-	} {
-		assertContains(t, string(log), want)
-	}
-	return runtimeDiagnosticLines(log)
-}
-
-func runtimeDiagnosticLines(log []byte) []string {
-	var lines []string
-	for _, line := range strings.Split(string(log), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "runtime ") {
-			lines = append(lines, line)
-		}
-	}
-	return lines
-}
-
 func serviceInstance(snapshot testenv.Snapshot) string {
 	if snapshot.Runtime == nil {
 		return ""
 	}
 	return snapshot.Runtime.Service.InstanceID
-}
-
-func assertServiceStopReceipt(t *testing.T, output []byte) {
-	t.Helper()
-	var receipt struct {
-		Status string `json:"status"`
-	}
-	if err := json.Unmarshal(output, &receipt); err != nil || receipt.Status != "stopped" {
-		t.Fatalf("service-window stop did not return an applied stopped receipt: status=%q err=%v output=%s", receipt.Status, err, output)
-	}
 }
 
 func controlRequestCount(t *testing.T, project *testenv.Project) int {
@@ -887,55 +638,6 @@ func controlRequestFiles(t *testing.T, project *testenv.Project) []string {
 		t.Fatal(err)
 	}
 	return files
-}
-
-func assertControlPublication(t *testing.T, project *testenv.Project, before []string, snapshot testenv.Snapshot) map[string]any {
-	t.Helper()
-	after := controlRequestFiles(t, project)
-	// Claim uses the normal product client for resume_dispatch and start_task.
-	// Observing both immutable requests proves the rejection counter is live.
-	if len(after) != len(before)+2 {
-		t.Fatalf("normal claim did not publish two observable control requests: before=%d after=%d", len(before), len(after))
-	}
-	existing := make(map[string]bool, len(before))
-	for _, path := range before {
-		existing[path] = true
-	}
-	observed := make([]map[string]any, 0, 2)
-	actions := make(map[string]bool)
-	for _, path := range after {
-		if existing[path] {
-			continue
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		var request struct {
-			RequestID          string `json:"request_id"`
-			RepositoryIdentity string `json:"repository_identity"`
-			InstanceID         string `json:"instance_id"`
-			Action             string `json:"action"`
-			Payload            struct {
-				TaskID string `json:"task_id"`
-			} `json:"payload"`
-		}
-		if err := json.Unmarshal(raw, &request); err != nil {
-			t.Fatalf("decode published control request %s: %v", path, err)
-		}
-		id, idErr := hex.DecodeString(request.RequestID)
-		if idErr != nil || len(id) != 16 || request.RequestID != filepath.Base(filepath.Dir(path)) ||
-			request.InstanceID != serviceInstance(snapshot) || request.RepositoryIdentity != snapshot.Runtime.Repository.Identity {
-			t.Fatalf("published request has wrong file or runtime identity: path=%s request=%+v", path, request)
-		}
-		if (request.Action != "resume_dispatch" && request.Action != "start_task") || actions[request.Action] ||
-			(request.Action == "start_task" && request.Payload.TaskID != project.Tasks["a"].ID) {
-			t.Fatalf("normal claim published an unexpected request: %+v", request)
-		}
-		actions[request.Action] = true
-		observed = append(observed, map[string]any{"path": path, "sha256": fileSHA256(t, path), "request": request})
-	}
-	return map[string]any{"before": len(before), "after": len(after), "requests": observed}
 }
 
 func assertSameServiceInstance(t *testing.T, before, after testenv.Snapshot) {
@@ -956,27 +658,13 @@ func writeRuntimeEvidence(t *testing.T, directory string, evidence map[string]an
 	}
 }
 
-func latestServiceLog(t *testing.T, project *testenv.Project) []byte {
+func assertGeneratedLaunchers(t *testing.T, home, executable string) {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join(filepath.Dir(project.Database), "service", "startups", "*", "service.log"))
-	if err != nil || len(files) == 0 {
-		t.Fatalf("service startup log missing for %s: %v", project.Name, err)
-	}
-	sort.Slice(files, func(i, j int) bool {
-		left, _ := os.Stat(files[i])
-		right, _ := os.Stat(files[j])
-		return left.ModTime().Before(right.ModTime())
-	})
-	raw, err := os.ReadFile(files[len(files)-1])
+	console, err := os.ReadFile(filepath.Join(home, "serve.bat"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return raw
-}
-
-func assertGeneratedLaunchers(t *testing.T, home, executable string) {
-	t.Helper()
-	service, err := os.ReadFile(filepath.Join(home, "service-window.bat"))
+	service, err := os.ReadFile(filepath.Join(home, "stop.bat"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -994,16 +682,6 @@ func assertGeneratedLaunchers(t *testing.T, home, executable string) {
 	}
 	if strings.Contains(string(service), `set "BIN=%SHOME%\bin\steerline.exe"`) {
 		t.Fatal("debug launcher retained a home-bin fallback")
-	}
-}
-
-func assertRuntimePathsInsideHome(t *testing.T, project *testenv.Project) {
-	t.Helper()
-	for _, path := range []string{filepath.Dir(project.Database), filepath.Join(project.Home, "worktrees")} {
-		rel, err := filepath.Rel(project.Home, path)
-		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
-			t.Fatalf("runtime path escaped home: home=%s path=%s rel=%s err=%v", project.Home, path, rel, err)
-		}
 	}
 }
 

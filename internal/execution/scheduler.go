@@ -148,6 +148,9 @@ func (s *Service) Heartbeat() error             { return s.store.Heartbeat() }
 func (s *Service) Signals() <-chan Signal       { return s.signalChannel() }
 func (s *Service) HistoryErrors() <-chan error  { return s.conversationHistoryErrors }
 func (s *Service) HandleSignal(message Signal) error {
+	if message.mutation != nil {
+		return s.handleTaskMutation(message.mutation)
+	}
 	if message.discard != nil {
 		return s.handleDiscardTask(message.discard)
 	}
@@ -227,7 +230,8 @@ func (s *Service) EndActor(stop *productapi.ControlRequest, acceptedAt *time.Tim
 	// Preserve the original best-effort stopping publication and ensure the stop receipt before owned resources detach.
 	s.publishCheckpoint()
 	prior = errors.Join(prior, s.ensureStopApplyingReceipt())
-	prior = errors.Join(prior, s.shutdown())
+	s.shutdownError = s.shutdown()
+	prior = errors.Join(prior, s.shutdownError)
 	if s.State.Control.Operation != nil {
 		prior = errors.Join(prior, s.recoverControlOperation())
 	}
@@ -255,3 +259,5 @@ func (s *Service) WaitSources() {
 	}
 	s.conversationHistoryErrors = nil
 }
+
+func (s *Service) ResourceSettlementError() error { return s.shutdownError }

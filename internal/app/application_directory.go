@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -16,294 +14,311 @@ import (
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/applicationhttp"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	privatefs "github.com/erranliu/SteerLine/internal/product/httpfs"
 	"github.com/erranliu/SteerLine/internal/projectconnection"
 )
 
 type catalogEntry struct {
-	view        contract.Project
-	fingerprint string
-	ref         api.ProjectRef
-	resolving   bool
-	sampled     time.Time
-	client      *httpclient.Client
-	discovery   httpcontract.Discovery
-	connecting  chan struct{}
+	view    contract.Project
+	ref     api.ProjectRef
+	data    []byte
+	port    *runtimeProjectPort
+	result  contract.ProjectShutdown
+	runtime *ProjectRuntime
 }
 
-// ApplicationDirectory owns only read-only connection facts. Each routed call
-// borrows a verified HTTP client. Retiring its idle transport never cancels an active call.
+// ApplicationDirectory owns the frozen configuration collection and independent
+// project runtimes. Catalog and Connect never initialize storage.
 type ApplicationDirectory struct {
-	home    string
-	mu      sync.Mutex
-	entries map[string]*catalogEntry
-	slots   chan struct{}
-	ctx     context.Context
-	cancel  context.CancelFunc
+	home      string
+	mu        sync.RWMutex
+	entries   []*catalogEntry
+	global    []byte
+	err       error
+	ctx       context.Context
+	cancel    context.CancelFunc
+	done      chan struct{}
+	startOnce sync.Once
 }
 
 func NewApplicationDirectory(home string) *ApplicationDirectory {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &ApplicationDirectory{home: home, entries: map[string]*catalogEntry{}, slots: make(chan struct{}, 8), ctx: ctx, cancel: cancel}
-}
-func (d *ApplicationDirectory) Close() error {
-	d.cancel()
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	for _, e := range d.entries {
-		if e.client != nil {
-			e.client.Close()
-		}
-	}
-	return nil
-}
-func fingerprint(path string) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return "error:" + err.Error()
-	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
-	if err != nil {
-		return "error:" + err.Error()
-	}
-	if len(data) > 1<<20 {
-		return "error:configuration too large"
-	}
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
-}
-func (d *ApplicationDirectory) Catalog(ctx context.Context) (contract.Catalog, error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	result := contract.Catalog{Projects: []contract.Project{}}
-	f, err := os.Open(filepath.Join(d.home, "etc"))
+	d := &ApplicationDirectory{home: home, ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	d.global, _ = readConfiguration(filepath.Join(home, "execution.json"))
+	f, err := os.Open(filepath.Join(home, "etc"))
 	if os.IsNotExist(err) {
-		for _, e := range d.entries {
-			if e.client != nil {
-				e.client.Close()
-			}
-		}
-		d.entries = map[string]*catalogEntry{}
-		return result, nil
+		return d
 	}
 	if err != nil {
-		return result, err
+		d.err = err
+		return d
 	}
 	defer f.Close()
 	files, err := f.ReadDir(513)
 	if err != nil && err != io.EOF {
-		return result, err
+		d.err = err
+		return d
 	}
 	if len(files) > 512 {
-		return result, errors.New("project directory exceeds 512 entries")
+		d.err = errors.New("project directory exceeds 512 entries")
+		return d
 	}
-	seen := map[string]bool{}
 	for _, file := range files {
 		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".json") {
 			continue
 		}
-		if err := ctx.Err(); err != nil {
-			return result, err
+		entry := &catalogEntry{view: contract.Project{ConfigID: file.Name(), Name: strings.TrimSuffix(file.Name(), filepath.Ext(file.Name())), RuntimeState: "starting"}, ref: api.ProjectRef{ConfigPath: filepath.Join(home, "etc", file.Name()), ApplicationHome: home}}
+		entry.data, err = readConfiguration(entry.ref.ConfigPath)
+		if err != nil {
+			entry.view.RuntimeState = "failed"
+			entry.view.Diagnostic = err.Error()
 		}
-		key := file.Name()
-		seen[key] = true
-		path := filepath.Join(d.home, "etc", key)
-		stamp := fingerprint(path)
-		e := d.entries[key]
-		if e == nil || e.fingerprint != stamp {
-			if e != nil && e.client != nil {
-				e.client.Close()
-			}
-			e = &catalogEntry{view: contract.Project{ConfigID: key, Name: strings.TrimSuffix(key, filepath.Ext(key)), Diagnostic: "正在解析项目连接"}, fingerprint: stamp}
-			d.entries[key] = e
+		d.entries = append(d.entries, entry)
+	}
+	sort.Slice(d.entries, func(i, j int) bool { return d.entries[i].view.ConfigID < d.entries[j].view.ConfigID })
+	return d
+}
+
+func readConfiguration(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 1<<20 {
+		return nil, errors.New("configuration exceeds 1 MiB")
+	}
+	return data, nil
+}
+
+func (d *ApplicationDirectory) Start() { d.startOnce.Do(func() { go d.run() }) }
+func (d *ApplicationDirectory) run() {
+	defer close(d.done)
+	census, cancel := context.WithTimeout(d.ctx, 30*time.Second)
+	type resolved struct {
+		entry *catalogEntry
+		ref   api.ProjectRef
+		err   error
+	}
+	results := make(chan resolved, len(d.entries))
+	censusSlots := make(chan struct{}, 8)
+	pending := 0
+	for _, entry := range d.entries {
+		if entry.view.RuntimeState == "failed" {
+			continue
 		}
-		if !e.resolving && time.Since(e.sampled) > 10*time.Second {
+		pending++
+		go func(e *catalogEntry) {
 			select {
-			case d.slots <- struct{}{}:
-				e.resolving = true
-				go d.resolve(key, path, e)
-			default:
+			case censusSlots <- struct{}{}:
+			case <-census.Done():
+				results <- resolved{entry: e, err: census.Err()}
+				return
 			}
-		}
+			defer func() { <-censusSlots }()
+			ref := e.ref
+			err := projectconnection.ResolveSnapshot(census, &ref, e.data)
+			results <- resolved{entry: e, ref: ref, err: err}
+		}(entry)
 	}
-	for key := range d.entries {
-		if !seen[key] {
-			if d.entries[key].client != nil {
-				d.entries[key].client.Close()
-			}
-			delete(d.entries, key)
-		}
-	}
-	duplicates := map[string]int{}
-	for _, e := range d.entries {
-		if e.view.ProjectID != "" {
-			duplicates[e.view.ProjectID]++
-		}
-	}
-	for _, e := range d.entries {
-		view := e.view
-		if duplicates[view.ProjectID] > 1 {
-			view.Conflict = "同仓库配置关联/冲突；控制操作已禁用"
-			view.Online = false
-		}
-		result.Projects = append(result.Projects, view)
-	}
-	sort.Slice(result.Projects, func(i, j int) bool { return result.Projects[i].ConfigID < result.Projects[j].ConfigID })
-	return result, nil
-}
-func (d *ApplicationDirectory) resolve(key, path string, e *catalogEntry) {
-	defer func() { <-d.slots }()
-	ctx, cancel := context.WithTimeout(d.ctx, 15*time.Second)
-	defer cancel()
-	ref := api.ProjectRef{ConfigPath: path, ApplicationHome: d.home}
-	err := projectconnection.Resolve(ctx, &ref)
-	view := contract.Project{ConfigID: key, Name: strings.TrimSuffix(key, filepath.Ext(key))}
-
-	if err == nil {
-		view.ProjectID = httpcontract.ProjectID(ref.Identity)
-		view.Repository = strings.TrimSuffix(ref.Identity, string(filepath.Separator)+".git")
-		view.Name = filepath.Base(view.Repository)
-		d.mu.Lock()
-		if d.entries[key] != e {
-			d.mu.Unlock()
-			return
-		}
-		e.ref = ref
-		e.view = view
-		d.mu.Unlock()
-		client, openErr := d.nativeClient(ctx, key, e, ref)
-		if openErr == nil {
-			view.Online = client.Identity().Ready
-			client.Close()
-		}
-		err = openErr
-	}
-	view.Diagnostic = ""
-	if err != nil {
-		view.Diagnostic = err.Error()
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if d.entries[key] != e {
-		return
-	}
-	e.ref = ref
-	e.view = view
-	e.sampled = time.Now()
-	e.resolving = false
-}
-func (d *ApplicationDirectory) Connect(ctx context.Context, id string) (*httpclient.Client, error) {
-	catalog, err := d.Catalog(ctx)
-	if err != nil {
-		return nil, err
-	}
-	var key string
-	for _, p := range catalog.Projects {
-		if p.ProjectID == id {
-			if p.Conflict != "" {
-				return nil, &httpclient.ClientError{Status: 409, Code: "project_conflict", Reason: p.Conflict}
-			}
-			key = p.ConfigID
-		}
-	}
-	if key == "" {
-		return nil, &httpclient.ClientError{Status: 503, Code: "project_unavailable", Reason: "project is absent, changed, or unresolved"}
-	}
-	d.mu.Lock()
-	e := d.entries[key]
-	if e == nil || e.view.ProjectID != id {
-		d.mu.Unlock()
-		return nil, errors.New("project mapping changed")
-	}
-	ref := e.ref
-	stamp := e.fingerprint
-	d.mu.Unlock()
-	connectCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-	client, err := d.nativeClient(connectCtx, key, e, ref)
-	if err != nil {
-		return nil, fmt.Errorf("project offline: %w", err)
-	}
-	// A config replaced during discovery cannot redirect a request to a new target.
-	d.mu.Lock()
-	current := d.entries[key] == e && e.ref.Identity == ref.Identity && e.ref.RunDir == ref.RunDir
-	d.mu.Unlock()
-	if !current || fingerprint(ref.ConfigPath) != stamp {
-		client.Close()
-		return nil, errors.New("project mapping changed during connection")
-	}
-	return client, nil
-}
-
-// A live transport is reused only while private discovery still names the same
-// repository, native instance, OS generation, address, and credential location.
-// Close only retires idle connections; already dispatched calls keep their owner.
-func (d *ApplicationDirectory) nativeClient(ctx context.Context, key string, e *catalogEntry, ref api.ProjectRef) (*httpclient.Client, error) {
-	dir := filepath.Join(ref.RunDir, "local-api")
-	if err := privatefs.VerifyPrivateDirectory(dir); err != nil {
-		return nil, err
-	}
-	discovery, err := privatefs.ReadDiscoveryFile(filepath.Join(dir, "discovery.json"))
-	if err != nil {
-		return nil, err
-	}
-	if discovery.RepositoryIdentity != ref.Identity || discovery.ProjectID != httpcontract.ProjectID(ref.Identity) || !privatefs.PrivatePath(filepath.Join(dir, "credentials"), discovery.CredentialPath) {
-		return nil, errors.New("native discovery project or credential ownership differs")
-	}
-	if err = privatefs.VerifyPrivateDirectory(filepath.Join(dir, "credentials")); err != nil {
-		return nil, err
-	}
-	if err = privatefs.VerifyPrivateFile(discovery.CredentialPath); err != nil {
-		return nil, err
-	}
-	exited, err := httpclient.ProcessExited(discovery.Process)
-	if err != nil || exited {
-		return nil, errors.New("native process identity is unavailable")
-	}
-	d.mu.Lock()
-	if d.entries[key] != e {
-		d.mu.Unlock()
-		return nil, errors.New("project mapping changed")
-	}
-	previous := e.discovery
-	if e.client != nil && previous.InstanceID == discovery.InstanceID && previous.Process == discovery.Process && previous.Address == discovery.Address && previous.CredentialPath == discovery.CredentialPath && previous.LeaseID == discovery.LeaseID {
-		c := e.client
-		d.mu.Unlock()
-		return c, nil
-	}
-	if pending := e.connecting; pending != nil {
-		d.mu.Unlock()
+	received := map[*catalogEntry]bool{}
+	for pending > 0 {
 		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-pending:
-			return d.nativeClient(ctx, key, e, ref)
+		case result := <-results:
+			pending--
+			received[result.entry] = true
+			d.mu.Lock()
+			if result.err != nil {
+				result.entry.view.RuntimeState = "failed"
+				result.entry.view.Diagnostic = result.err.Error()
+			} else {
+				e := result.entry
+				e.ref = result.ref
+				e.view.ProjectID = httpcontract.ProjectID(result.ref.Identity)
+				e.view.Repository = strings.TrimSuffix(result.ref.Identity, string(filepath.Separator)+".git")
+			}
+			d.mu.Unlock()
+		case <-census.Done():
+			d.mu.Lock()
+			for _, e := range d.entries {
+				if !received[e] && e.view.RuntimeState != "failed" {
+					e.view.RuntimeState = "failed"
+					e.view.Diagnostic = "project identity census: " + census.Err().Error()
+				}
+			}
+			d.mu.Unlock()
+			pending = 0
 		}
 	}
-	pending := make(chan struct{})
-	e.connecting = pending
+	cancel()
+	d.mu.Lock()
+	for i, a := range d.entries {
+		if a.view.ProjectID == "" {
+			continue
+		}
+		for _, b := range d.entries[i+1:] {
+			if b.view.ProjectID == "" {
+				continue
+			}
+			if a.ref.Identity == b.ref.Identity || withinResolved(a.ref.RunDir, b.ref.RunDir) || withinResolved(b.ref.RunDir, a.ref.RunDir) {
+				reason := "project conflict: repository or overlapping run_dir is shared by " + a.view.ConfigID + " and " + b.view.ConfigID
+				for _, e := range []*catalogEntry{a, b} {
+					e.view.Conflict = reason
+					e.view.Diagnostic = reason
+					e.view.RuntimeState = "failed"
+				}
+			}
+		}
+	}
 	d.mu.Unlock()
-	c, err := httpclient.OpenWithTimeout(ctx, ref.RunDir, ref.Identity, 2*time.Minute)
+	var wg sync.WaitGroup
+	slots := make(chan struct{}, 8)
+	for _, e := range d.entries {
+		d.mu.RLock()
+		failed := e.view.RuntimeState == "failed"
+		d.mu.RUnlock()
+		if failed {
+			continue
+		}
+		wg.Add(1)
+		go func(e *catalogEntry) {
+			defer wg.Done()
+			select {
+			case slots <- struct{}{}:
+			case <-d.ctx.Done():
+				d.finish(e, contract.ProjectShutdown{ConfigID: e.view.ConfigID, ProjectID: e.view.ProjectID, LocalClosed: true, LocksReleased: true, ResourcesSettled: true}, nil)
+				return
+			}
+			var releaseOnce sync.Once
+			releaseSlot := func() { releaseOnce.Do(func() { <-slots }) }
+			defer releaseSlot()
+			runtime, err := d.prepareProject(e)
+			if err != nil {
+				d.finish(e, contract.ProjectShutdown{ConfigID: e.view.ConfigID, ProjectID: e.view.ProjectID, LocalClosed: true, LocksReleased: true, ResourcesSettled: true}, err)
+				return
+			}
+			d.mu.Lock()
+			e.runtime = runtime
+			d.mu.Unlock()
+			result, runErr := runtime.Run(d.ctx, func(port *runtimeProjectPort) {
+				d.mu.Lock()
+				if d.ctx.Err() != nil {
+					port.StopAccepting()
+				}
+				e.port = port
+				e.view.RuntimeState = "ready"
+				e.view.Online = true
+				if d.ctx.Err() != nil {
+					e.view.RuntimeState = "stopping"
+					e.view.Online = false
+				}
+				e.view.InstanceID = port.instance
+				releaseSlot()
+				d.mu.Unlock()
+			})
+			d.finish(e, result, runErr)
+		}(e)
+	}
+	wg.Wait()
+}
+
+func (d *ApplicationDirectory) finish(e *catalogEntry, result contract.ProjectShutdown, err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "project %s failed: %v\n", e.view.ConfigID, err)
+	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	defer close(pending)
-	e.connecting = nil
-	if d.entries[key] != e || d.ctx.Err() != nil {
-		if c != nil {
-			c.Close()
-		}
-		return nil, errors.New("project mapping closed during connection")
-	}
+	e.result = result
+	e.view.Online = false
 	if err != nil {
+		e.view.RuntimeState = "failed"
+		e.view.Diagnostic = err.Error()
+		if !e.result.LocalClosed || !e.result.ResourcesSettled {
+			e.result.Diagnostic = err.Error()
+		}
+	} else {
+		e.view.RuntimeState = "stopped"
+	}
+}
+func (d *ApplicationDirectory) Catalog(ctx context.Context) (contract.Catalog, error) {
+	if err := ctx.Err(); err != nil {
+		return contract.Catalog{}, err
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	result := contract.Catalog{Projects: []contract.Project{}}
+	for _, e := range d.entries {
+		result.Projects = append(result.Projects, e.view)
+	}
+	return result, d.err
+}
+func (d *ApplicationDirectory) Connect(ctx context.Context, id string) (applicationhttp.ProjectPort, error) {
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if e.client != nil {
-		e.client.Close()
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	for _, e := range d.entries {
+		if e.view.ProjectID != id {
+			continue
+		}
+		if e.view.Conflict != "" {
+			return nil, &httpclient.ClientError{Status: 409, Code: "project_conflict", Reason: e.view.Conflict}
+		}
+		if e.port != nil {
+			return e.port, nil
+		}
+		return nil, &httpclient.ClientError{Status: 503, Code: "project_unavailable", Reason: fmt.Sprintf("%s: %s", e.view.RuntimeState, e.view.Diagnostic)}
 	}
-	e.client = c
-	e.discovery = discovery
-	return c, nil
+	return nil, &httpclient.ClientError{Status: 503, Code: "project_unavailable", Reason: "project is absent or unresolved"}
+}
+func (d *ApplicationDirectory) BeginStop() {
+	d.mu.Lock()
+	for _, e := range d.entries {
+		if e.port != nil {
+			e.port.StopAccepting()
+			e.view.RuntimeState = "stopping"
+			e.view.Online = false
+		}
+	}
+	d.cancel()
+	d.mu.Unlock()
+}
+func (d *ApplicationDirectory) Close() error {
+	d.Start()
+	d.BeginStop()
+	<-d.done
+	var errs []error
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	for _, e := range d.entries {
+		if e.result.Diagnostic != "" {
+			errs = append(errs, fmt.Errorf("%s: %s", e.view.ConfigID, e.result.Diagnostic))
+		}
+	}
+	return errors.Join(errs...)
+}
+func (d *ApplicationDirectory) ShutdownResults() []contract.ProjectShutdown {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	result := []contract.ProjectShutdown{}
+	for _, e := range d.entries {
+		r := e.result
+		if r.ConfigID == "" {
+			r = contract.ProjectShutdown{ConfigID: e.view.ConfigID, ProjectID: e.view.ProjectID, LocalClosed: true, LocksReleased: true, ResourcesSettled: true}
+		}
+		result = append(result, r)
+	}
+	return result
+}
+
+func withinResolved(root, path string) bool {
+	relative, err := filepath.Rel(canonicalConfigPath(root), canonicalConfigPath(path))
+	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
 }

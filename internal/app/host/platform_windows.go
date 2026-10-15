@@ -174,6 +174,12 @@ func probeLockFile(path string) (bool, error) {
 }
 
 func startDetachedProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort) (executionbackend.ProcessIdentity, error) {
+	return startDetachedProcessChecked(cmd, facts, false)
+}
+func startDetachedProductProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort) (executionbackend.ProcessIdentity, error) {
+	return startDetachedProcessChecked(cmd, facts, true)
+}
+func startDetachedProcessChecked(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort, selfValidates bool) (executionbackend.ProcessIdentity, error) {
 	// CREATE_BREAKAWAY_FROM_JOB is required because the caller may be a UI in a
 	// kill-on-close job. IsProcessInJob below verifies the result before we claim
 	// the service is detached. DETACHED_PROCESS also prevents console inheritance.
@@ -203,7 +209,7 @@ func startDetachedProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort
 		_ = cmd.Wait()
 		return executionbackend.ProcessIdentity{}, fmt.Errorf("cannot verify service Job Object isolation: %w", callErr)
 	}
-	if inJob != 0 {
+	if inJob != 0 && !selfValidates {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
 		parentInJob, parentFlags, parentErr := currentJobDiagnostics()

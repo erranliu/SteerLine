@@ -323,7 +323,7 @@ func debugSandboxCleanup(ctx context.Context, d *debugRelease, service *testproc
 		return output.Bytes(), err
 	}
 	if service != nil {
-		_, stopErr := run(d.command(d.binary, "stop-service", "-config", d.config))
+		_, stopErr := run(d.command(d.helper, "debug", "stop", "--no-pause"))
 		failures = append(failures, stopErr, service.Stop(ctx))
 	}
 	for _, branch := range branches {
