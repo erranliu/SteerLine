@@ -77,6 +77,9 @@ type RolloutCommand struct {
 // RolloutTurnCommands selects native completed command items from the exact
 // public session/turn, including native exit/output rather than model prose.
 func RolloutTurnCommands(raw []byte, session, turn, cwd string) ([]RolloutCommand, error) {
+	if session == "" || turn == "" || cwd == "" {
+		return nil, errors.New("native command binding is incomplete")
+	}
 	matched, err := BusinessRolloutMatches(raw, cwd)
 	if err != nil || !matched {
 		return nil, errors.New("native command rollout root differs")

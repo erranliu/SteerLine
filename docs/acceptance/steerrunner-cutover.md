@@ -70,3 +70,8 @@ Runner 第五轮远端已完成实施，在报告阶段暴露应用冻结策略�
 更深 R1 目录随后暴露 Windows Git 的管理路径长度限制，外部夹具已将原始错误写到自有回执，无需读取 Runner 私有日志；`local-waiting-2` 失败保留。Runner dc24205 将私有缓存与工作区叶目录编码为 128-bit base32，完整 Run/分支/输入摘要不变。更深真实 Git push 回归通过，实际 EXE workflow/PR identity 两组通过。SteerLine 已固定可获取版本及 SHA；新本机产品包 `C:/SteerlineDebug/slcodex/dev-20261015-143226-0f86647b` 正在执行实际产品入口→原生→真实 PR/TaskDelivery。
 
 外部 rollout 绑定/指定轮次命令/沙箱证据检查 `external-rollout-3.log` 通过；live driver 不再读取 Runner 私有 journal，原生自动审批由 Runner 自身验收负责。rebase 后 Web 回答交互 6 项通过，TypeScript/Vite 构建通过（`web-answer-rebased.log`、`web-build-rebased.log`）。
+
+
+`local-waiting-3` 在干净 ca5d8563 + Runner dc24205 下，TestWaitingMergeRestart 通过（319.75 秒）：原 Run/Attempt/session/workspace/branch 保持，重启零重复投递，原 PR 合并后唯一交付和后继释放，清理通过。本次 R1 的三个本机场景均已有通过证据，未扩大为全部历史恢复矩阵通过。
+
+最新产品真机包第一次测试启动参数被 PowerShell 拆分（exit 2，零场景）；修正仅外部 harness 参数后，实际 1 场景失败（14.75 秒），SteerLine 启动的 Git fetch 未指定本机已有 gh 登录的标准 credential helper。没有 Run/模型派发/PR；失败包冻结保留。修正 live 模板只显式引用 `gh auth git-credential`，不读取/复制/导出凭据；须新生成包复验。
