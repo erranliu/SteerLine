@@ -196,9 +196,21 @@ export function preparePackageRuntime() {
     const deadline = Date.now() + 120000;
     while (Date.now() < deadline && outcomes.some((path) => !existsSync(path)))
       await delay(100);
-    for (const path of outcomes)
+    for (const path of outcomes) {
       if (!existsSync(path))
         errors.push("owned launcher did not exit: " + path);
+      else {
+        try {
+          const fact = JSON.parse(
+            readFileSync(path, "utf8").replace(/^\uFEFF/, ""),
+          );
+          if (fact.exit_code !== 0)
+            errors.push("owned launcher failed: " + path);
+        } catch (error) {
+          errors.push("owned launcher outcome unverified: " + String(error));
+        }
+      }
+    }
     return errors;
   };
   return {

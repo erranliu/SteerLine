@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { preparePackageRuntime } from "./helpers/package";
 
@@ -210,7 +210,23 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
       facts.cleanup_error = String(error);
     }
     facts.cleanup = inventory ?? null;
+    let finalShutdown: unknown;
+    try {
+      finalShutdown = JSON.parse(
+        readFileSync(join(home, "application-api", "shutdown.json"), "utf8"),
+      );
+    } catch (error) {
+      stopErrors.push("shutdown evidence unavailable: " + String(error));
+    }
     facts.stop_errors = stopErrors;
+    writeFileSync(
+      join(root, "evidence", "cleanup.json"),
+      JSON.stringify(
+        { inventory, stop_errors: stopErrors, shutdown: finalShutdown ?? null },
+        null,
+        2,
+      ),
+    );
     facts.page_errors = pageErrors;
     writeFileSync(
       join(root, "evidence", "web-query-cache.json"),

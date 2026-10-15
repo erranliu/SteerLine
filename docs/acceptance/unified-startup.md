@@ -6,15 +6,15 @@
 
 | ID | 最小检查与通过条件 | 实施后步骤 / 证据 | 当前状态 |
 | --- | --- | --- | --- |
-| UST-A1 | 单 bat 自动启动双进程并授权打开网页，重复/并发与半启动只补缺项，失败窗口及退出码可见 | host 定向反例 + 新 Edge 包；start/status、精确进程/就绪/打开结果，见 Plan 测试表 | 定向测试通过；综合场景收尾中 |
+| UST-A1 | 单 bat 自动启动双进程并授权打开网页，重复/并发与半启动只补缺项，失败窗口及退出码可见 | host 定向反例 + 新 Edge 包；start/status、精确进程/就绪/打开结果，见 Plan 测试表 | 通过（定向 + 综合） |
 | UST-A2 | 两真实项目同 PID、独立实例/DB/actor，零/坏/慢/冲突/跨 home 隔离，身份解析总期限、锁先于初始化、manual 和配置快照正确 | host fixture + 新包状态/锁/数据库归属事实；失败项目无初始化副作用 | 通过（host/fixture） |
 | UST-A3 | 应用 API 直达原项目用例，原生/浏览器认证、固定 CLI 操作及批次/依赖原回执 GET、大整数、旧实例/同号任务隔离；旧 stop_service 不变成整体停止 | api/CLI/前端定向反例 + 实际写入、丢回执只读查证零重放；保留 #323 查询回归 | 通过（API/CLI/前端及独立缓存回归） |
-| UST-A4 | Web 重启不影响活动轮次；后端停启覆盖全部项目，逐项停机结果与精确退出/租约共同核实；冻结策略及重开零自动输入/答案正确 | lifecycle 两种策略 + 原宿主 shutdown.json + 新包活动轮次/后端重开，记录原身份/授权/副作用 | 策略 fixture 通过；综合恢复复验中 |
+| UST-A4 | Web 重启不影响活动轮次；后端停启覆盖全部项目，逐项停机结果与精确退出/租约共同核实；冻结策略及重开零自动输入/答案正确 | lifecycle 两种策略 + 原宿主 shutdown.json + 新包活动轮次/后端重开，记录原身份/授权/副作用 | 通过（策略 fixture + 综合停启） |
 | UST-A5 | 项目错误不误停兄弟；本地 actor 未关闭与 worker 未知分别处理；停机结果缺失/旧实例/部分失败不假报成功；已退出 stale 可恢复、未知进程不接管，端口/超时/部分启动诊断正确 | host/api/lifecycle 反例；正常与失败停机结果、原回执、实际进程/租约/项目锁分别取证 | 通过（定向反例） |
-| UST-A6 | bat 双产物、资源和安装守卫；旧启动器清理仅限 owned 文件，路径/cwd/ACL/日志正确，调试端口/冻结正确，无新增 TUI 支持 | 构建 + 隔离安装/ACL 反例 + 新生成包 manifest；两 exe SHA-256、路径和权限对照 | 通过；最终双 exe 重建中 |
-| UST-A7 | 统一入口 Edge 双项目选择/两标签、命令与丢回执、Web 活动轮次重启、后端停启/授权门槛；另包 query-cache 保留查询优化，分别清理完整 | Plan 中 web.unified-startup 与 web.query-cache 两场景、不同新包；截图/trace、原身份、CLI/请求计数、各自 cleanup JSON | query-cache 通过；综合场景复验中 |
+| UST-A6 | bat 双产物、资源和安装守卫；旧启动器清理仅限 owned 文件，路径/cwd/ACL/日志正确，调试端口/冻结正确，无新增 TUI 支持 | 构建 + 隔离安装/ACL 反例 + 新生成包 manifest；两 exe SHA-256、路径和权限对照 | 通过（最终双 exe 已重建） |
+| UST-A7 | 统一入口 Edge 双项目选择/两标签、命令与丢回执、Web 活动轮次重启、后端停启/授权门槛；另包 query-cache 保留查询优化，分别清理完整 | Plan 中 web.unified-startup 与 web.query-cache 两场景、不同新包；截图/trace、原身份、CLI/请求计数、各自 cleanup JSON | 通过（两个独立新包） |
 
-Plan 中的新 Go 场景、wrapper 和生成器扩展必须先实现。不存在的入口、零匹配、仅编译、模拟 provider 的自述或历史通过均不算验收。L1 是定向反例的长期回归入口，不能替代真实产品接线场景。
+Plan 中的新 Go 场景、wrapper 和生成器扩展已交付。不存在的入口、零匹配、仅编译、模拟 provider 的自述或历史通过均不算验收。L1 是定向反例的长期回归入口，不能替代真实产品接线场景。
 
 ## 环境与执行记录要求
 
@@ -77,7 +77,7 @@ Plan 中的新 Go 场景、wrapper 和生成器扩展必须先实现。不存在
 ### 独立浏览器包
 
 - 缓存回归新包：`C:/SteerlineDebug/查询缓存 独立验证/dev-20261015-152438-62157c28-dirty`。运行 `scripts/test-unified-startup.ps1 -Package <该包> -Simulate -Scenario query-cache`，真实 Edge 通过（2.1 分钟）；原 bootstrap 合并、缓存内容、隐藏轮询、两项目切换反例保留，页面错误 0。`evidence/web-query-cache.json` 记录请求计数、项目身份与 cleanup：产品/owned 进程 0，监听 0，stop_errors 为空；截图/trace 位于 `evidence/browser-query-cache`。
-- 综合最终新包：`C:/SteerlineDebug/统一启动 交付验证/dev-20261015-153103-62157c28-dirty`。入口 `scripts/test-unified-startup.ps1 -Package <该包> -Simulate`；当前运行中，结果登记后再更新 UST-A4/A7，不将前一失败包的部分通过合并为本轮通过。
+- 综合最终新包：`C:/SteerlineDebug/统一启动 交付验证/dev-20261015-153103-62157c28-dirty`。入口 `scripts/test-unified-startup.ps1 -Package <该包> -Simulate`；真实 Edge 完整通过（5.8 分钟）：两项目同 PID/独立实例、重复启动、两标签页、两个运行中安装目标拒绝覆盖、丢回执原 ID 查证仅一次 POST、Web 重启保持原 native 进程/session/turn、原执行发布/交付、CLI 创建两任务和新增依赖及原回执只读查询、浏览器拒绝 CLI 专有路由、活动执行时整体 clean 停机、全部项目换代、恢复门槛及零新派发、旧原请求保持原实例。`evidence/web-project-switch.json`、`evidence/browser-unified-startup` 保存事实与截图/trace；最终 cleanup 为进程/监听 0、stop_errors 为空，五个 `native-*.json` 退出码均为 0。
 
 ### 失败与修复记录
 
@@ -86,3 +86,13 @@ Plan 中的新 Go 场景、wrapper 和生成器扩展必须先实现。不存在
 `C:/SteerlineDebug/统一启动 最终验证/dev-20261015-151957-62157c28` 在活动轮次处失败于 PowerShell 中文路径输出编码；修复 UTF-8 输出。`C:/SteerlineDebug/查询缓存 最终验证/dev-20261015-152206-62157c28-dirty` 已完成 Web 原轮次保持、CLI 写入/原回执、整体 clean 停机，在同页 fragment 未重新装载授权而返回 401 的恢复检查处失败；驱动改为新文档兑换票据。二者的原 `evidence/web-project-switch.json` 都保留 business_error，最终 cleanup 均为进程/监听 0、stop_errors 为空，均不算综合验收通过。更早的所有者/Job/ACL 探索失败也不算通过。
 
 人工 UST-M1 仍未执行，仅后置体验签收；不把自动 --no-open、假 opener 或模拟 provider 描述为系统默认浏览器的人工体验结果。
+
+### 最终收尾
+
+最终 `build.bat --no-pause` 成功；本地 `bin/steerline.exe` SHA-256 为 `5c81d72f9b4bcf94a4dcb92741e2f1e8c07e570a603e157b0c3f9c5de26ed80b`，`bin/steerline-web.exe` 为 `49f8c47c60bcb1082a5893f6602b0f8305f2f4ecbf6035c73c07de3c129bb2c4`。构建源码为 `c0bcea40`；仅生成本地双 exe，不部署安装目录。
+
+在原成功场景的 JSON、私有最终 shutdown.json 与全部原生启动器退出记录上再次执行一致性核对，两包都为两个项目 local_closed/locks_released/resources_settled=true、clean=true，全部原生启动器退出 0。`evidence/cleanup.json` 是从这些已保存原始事实导出的清理索引，标记 derived_from，不修改原场景记录。驱动收尾增加相同退出码核对并稳定输出 cleanup.json，防止仅因结果文件存在就掩盖非零退出。
+
+补入“坏配置与两个健康 runtime 并存”反例后，`go test ./internal/app -run '^TestUnifiedStartup' -count=1` 再次通过（55.119 秒）；前端再次 10 文件/70 测试通过。独立执行三项原 worker 停服策略测试通过；没有扩大为 Full。最终自动 UST-A1～UST-A7 已通过；UST-M1 保持未验。
+
+文档链接检查：427 文件、2734 本地链接、0 错误；Task ID 检查通过（97 身份文件），未改 roadmap 执行清单；git diff --check 通过。后续文档纯结果登记再次执行静态检查。

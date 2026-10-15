@@ -508,7 +508,23 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       ]),
     );
     facts.cleanup = inventory;
+    let finalShutdown: unknown;
+    try {
+      finalShutdown = JSON.parse(
+        readFileSync(join(home, "application-api", "shutdown.json"), "utf8"),
+      );
+    } catch (error) {
+      failures.push("shutdown evidence unavailable: " + String(error));
+    }
     facts.stop_errors = failures;
+    writeFileSync(
+      join(root, "evidence", "cleanup.json"),
+      JSON.stringify(
+        { inventory, stop_errors: failures, shutdown: finalShutdown ?? null },
+        null,
+        2,
+      ),
+    );
     await info.attach("process-command-turn-evidence", {
       body: JSON.stringify(facts, null, 2),
       contentType: "application/json",
