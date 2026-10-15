@@ -4,6 +4,8 @@
 
 状态：2026-10-15 已实现，WPS-A1～WPS-A6 自动验收通过，WPS-M1 待人工体验；实际验证结果归专属验收。普通开发，无 roadmap Task ID，不改 execution-map。配套 [Plan](web-project-switch.plan.md)、[专属验收](../acceptance/web-project-switch.md)。[添加项目](project-onboarding.spec.md)另立规格并后置，不是本批前置。
 
+后继规划：[统一启动与多项目共进程宿主](unified-startup.spec.md)将替换本规格的分开启动、独立项目进程与应用 HTTP 回环，以及 WPS-A5 的应用重启隔离约定；用户明确不支持 TUI。后继尚未实施，本文件及已有验收保留原版本范围，不把后继计划写成当前能力。
+
 ## 1. 问题与目标
 
 当前 `web/server` 固定一个原生项目客户端，随项目服务启动、停止；浏览器端口放在项目配置中。更新 Web 会牵连项目进程，也无法在一个地址内切换项目。
