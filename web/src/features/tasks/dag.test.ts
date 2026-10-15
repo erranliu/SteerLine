@@ -7,13 +7,13 @@ it("positions visible dependencies and does not invent a missing boundary node",
       {
         task_id: "B",
         title: "后继",
-        status: "pending",
+        status: "open",
         dependency_ready: false,
       },
       {
         task_id: "A",
         title: "前置",
-        status: "delivered",
+        status: "closed",
         dependency_ready: true,
       },
     ],
@@ -30,3 +30,58 @@ it("positions visible dependencies and does not invent a missing boundary node",
   expect(result.edges).toHaveLength(1);
   expect(result.nodes).toHaveLength(2);
 });
+
+it.each([
+  {
+    status: "closed",
+    dependency_ready: false,
+    startup_blockers: ["task_not_open"],
+    blocked: false,
+  },
+  {
+    status: "in_progress",
+    dependency_ready: true,
+    startup_blockers: ["task_not_open"],
+    blocked: false,
+  },
+  {
+    status: "discarded",
+    dependency_ready: false,
+    startup_blockers: ["task_not_open", "dispatch_paused"],
+    blocked: false,
+  },
+  {
+    status: "open",
+    dependency_ready: false,
+    startup_blockers: [],
+    blocked: true,
+  },
+  {
+    status: "open",
+    dependency_ready: true,
+    startup_blockers: ["dispatch_paused"],
+    blocked: true,
+  },
+  {
+    status: "open",
+    dependency_ready: true,
+    startup_blockers: [],
+    blocked: false,
+  },
+])(
+  "shows first-start blockers only for open tasks: $status / $startup_blockers / $dependency_ready",
+  ({ blocked, ...task }) => {
+    const graph: GraphPage = {
+      nodes: [{ task_id: "101", title: "任务 101", blockers: [], ...task }],
+      edges: [],
+      has_more: false,
+      graph_revision: 1,
+      database_revision: 1,
+      database_id: "test-database",
+      boundary: { truncated: false, omitted_node_count: 0, reasons: [] },
+    };
+    const node = layout(graph, "101").nodes[0];
+    expect(node.data.status).toBe(task.status);
+    expect(node.data.blocked).toBe(blocked);
+  },
+);
