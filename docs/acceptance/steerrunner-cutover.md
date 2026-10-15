@@ -37,3 +37,10 @@
 `regression/r1-first/summary.json` 的 delivery/basic 与 waiting-merge/restart 两场景失败且 cleanup_complete=false；不计通过。旧清理入口只终止父进程并提前删除目录，暴露常驻 Runner 的清理缺口。已增加仅使用固定 EXE/公开 CLI 的清理：先围栏停止原服务，必要时显式启动仅清理的 epoch，查询原 request/Run、停止原 Run、确认服务退出；不发业务 resume，未知则保留现场。旧失败现场的 discovery 已被旧清理误删，按原启动日志 PID/实例、创建时间、保留句柄、映像 SHA、命令目录与 SID 核对后结束其两个受控测试 daemon，单列 `verified-forced-cleanup.json`，不当作原生停止回执。
 
 `current-start-graph.log` 的 taskrunner、SQLite Runner 场景和测试入口定向通过。启动请求的图版本同时进入原始 Start 摘要并与 FixedWork 图版本比较，最终由领取事务的同图 CAS 保护；旧图在获取 base/派发前拒绝，既有原 ID 回执仍先返回。独立 EXE 与五项定向场景的业务窗口包含额外服务/CLI 边界，调整为 10 分钟，单命令时限不变，父测试另留清理窗口。
+
+
+`caller-integration/result-12.json`：ef780c60 + Runner ede6dc5，1 场景退出 1（603 秒）。原会话实际实现和报告通过，发布受 Git `$GIT_DIR too big` 阻塞；新清理成功围栏原服务、创建仅清理 epoch、停止原 Run 后关闭服务，当前状态 not_running。Runner 6b18f3e 收短私有缓存布局并通过真实 linked-worktree push 回归，待新包。
+
+R1 余下三场景已改用公开候选/Run/Attempt/session、原生夹具次数和产品 resume 控制；Orca 夹具补公开 terminal list 及独立 agent-start 接受，agent 启动不计业务输入。`r1-public-recovery-compile.log` 编译通过，`public-terminal-fixture.log` 定向通过；尚未计五场景行为通过。`web-answer.log` 的 6 个回答交互测试通过（含多题 JSON 不重复为 note），`web-build.log` TypeScript/Vite 构建通过。
+
+审计并移除旧 `test-debug-release.ps1 -Live` 的包内 token 读取/导出和宿主代 worker 发布路径，改为实际原生工作流入口；固定 EXE 选择贯通生成及拒绝路径验证，PowerShell 语法检查无错误。该入口 live 尚未执行，不作通过记录。

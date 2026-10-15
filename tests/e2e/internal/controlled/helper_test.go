@@ -4,12 +4,54 @@ import (
 	"context"
 	"encoding/json"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestControlledTerminalStartupIsSeparateFromBusinessInput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := Write(path, State{Recovery: &RecoveryFixture{Orca: &TerminalFixture{RepositoryPath: "owned-repo", Runtime: "original-runtime", Handle: "original-terminal", Incarnation: "original-incarnation", Worktree: "owned-worktree", Branch: "owned-branch"}}}); err != nil {
+		t.Fatal(err)
+	}
+	call := func(args ...string) map[string]any {
+		t.Helper()
+		read, write, err := os.Pipe()
+		if err != nil {
+			t.Fatal(err)
+		}
+		old := os.Stdout
+		os.Stdout = write
+		err = orcaFixture(path, args)
+		os.Stdout = old
+		write.Close()
+		raw, readErr := io.ReadAll(read)
+		read.Close()
+		if err != nil || readErr != nil {
+			t.Fatal(string(raw), err, readErr)
+		}
+		var envelope map[string]any
+		if err := json.Unmarshal(raw, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope["ok"] != true {
+			t.Fatal(envelope)
+		}
+		return envelope
+	}
+	listing := call("terminal", "list", "--worktree", "id:original")
+	if len(listing["result"].(map[string]any)["terminals"].([]any)) != 1 {
+		t.Fatal(listing)
+	}
+	call("terminal", "send", "--terminal", "original-terminal", "--text", "codex", "--enter", "--retry-request", "fixed-start")
+	state, err := Read(path)
+	if err != nil || state.Recovery.Orca.Agent != "codex" || state.Recovery.Orca.Launches != 1 || state.Recovery.Orca.Sends != 0 || state.Dispatches != 0 {
+		t.Fatal("agent startup became a business input", state, err)
+	}
+}
 
 func TestControlledStagesCommitReportAndPublishSeparately(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)

@@ -22,10 +22,15 @@
 | SLC-A01 | unit：`go test ./internal/runnerclient ./internal/runnerbridge -count=1 -timeout=2m` | 隔离 CLI 子进程、内存提交故障；桥接实现后 | stdout/ID/超时语义正确；保存失败零调用，未知不换请求，终态不重新提交；`.evidence/steerrunner-cutover/client-bridge.log` |
 | SLC-A02 | unit + SQLite：`go test ./internal/storage/sqlite -run '^TestRunner(Candidate|TaskService|Actor|ApplicationSnapshot|Dispatch|Control)' -count=1 -timeout=2m` | 新建临时库、WAL 并发提交及命令回执故障；绑定/调度实现后 | 原子领取/请求、重试原回执、不可变绑定、事件/游标 CAS、终态 stop、单事务页面/Runner 快照、调度/回执全回滚及真实 host scheduler；`candidate.log`、`snapshot-dispatch.log`、`control.log` |
 | SLC-A03 | unit + SQLite：`go test ./internal/storage/sqlite -run '^TestRunnerTaskDeliveryWithoutWorkflowReady$' -count=1` | 新建临时库、事务中注入失败；交付实现后 | 非 pr_ready 的正确合并候选可交付，兄弟未知不阻塞；失败全回滚，成功唯一关闭/释放/停止，重试不查询 PR；`delivery.log` |
-| SLC-A04 | integration：真实 Runner CLI + 双库 + 受控 provider；须在 driver 接入步骤中补齐可运行入口，沿用 Runner 实际 EXE harness 的独立宿主方式 | 隔离 Git 与当前用户进程；app 切换后 | 实际产品命令经过 Runner，未知/重启/停止及反馈沿原 Run，日志归项目 runner 目录；`cli-integration/` |
+| SLC-A04 | integration：新包后独立启动 `go test -c ./tests/e2e/internal/driver` 的 EXE，以 `STEERLINE_DEBUG_TEST_ROOT` 选择包，运行 `-test.run=^TestDebugReleaseRuntime$ -test.timeout=12m`；脚本入口 `scripts/test-debug-release.ps1 -SteerRunnerExe <absolute>` | 隔离 Git 与当前用户进程；app 切换后 | 实际产品命令经过 Runner，未知/重启/停止及反馈沿原 Run，日志归项目 runner 目录；`cli-integration/` |
 | SLC-A05 | L3 controlled：沿用 Runner Plan R1 的五个登记场景，由步骤 5 将 driver 改为新 CLI 后执行 | 既有隔离分级环境；旧 owner 删除后 | 场景非零且通过，产品入口与 UI 投影不依赖旧执行库；`regression/summary.json` |
 | SLC-A06 | build + owner audit：`go build ./...`、两仓 `git diff --check`、实际引用/写表删除审计 | 新配置及固定 Runner 包；最终 PR 前 | 无旧执行写者/回退、无 Runner 私有依赖；实际 EXE 版本/SHA 可追溯；`deletion-audit.md`、`compile.log` |
 
 Runner 真机验收登记在 Runner SR-A11/SR-A12。先运行 `scripts/new-debug-release.ps1`；仅 SteerlineDebug 下独立包、SteerlineTest 专属 base/head。远端用户授权主机为 Orca「台式机64G」。当前已知本地 Codex Windows 沙箱失败须保留原始证据并解决，不扩大权限来制造通过。需要补齐的工具和 driver 属于步骤 5，不留作无明确安排的“后续补验”。
 
 不默认跑 full 或全部 L2/L3；这里只选择本次切换涉及的最小恢复、交付和 CLI 场景。人工安装体验验收可后置，不代替自动集成验收。
+
+
+实施补充：受控 R1 仅通过候选保存的公开 Run/Execution/Controls 断言身份；原生状态、启动/业务投递次数由外部协议夹具提供，不从旧执行表重建。Task 中心崩溃时 resident Runner 保持；原生恢复场景显式停止/重开 Runner 服务，再通过产品 `runner_resume` 决策提交新授权。业务窗口 10 分钟、Go 父进程每场景 12 分钟包括清理，单命令仍有原时限。停止未证明时保留现场；先停止/围栏原服务，必要时显式创建仅清理 epoch，停止已绑定原 Run，禁止用父进程退出代替原生回执。
+
+新调试脚本通过 `-SteerRunnerExe` / `STEERRUNNER_EXE` 选择固定发布 EXE。`-Live` 使用实际 Runner/Codex 工作流验收，认证仅使用宿主已有登录；禁止从生成包读 token、导出凭据、调用宿主发布脚本代替 worker。其 native 前置/证据仍登记 Runner SR-A11/SR-A12 和相应独立现场，不将脚本语法检查当作 live 通过。

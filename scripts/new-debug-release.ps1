@@ -32,6 +32,7 @@ function Is-Within([string]$Parent, [string]$Child) {
 }
 
 $runnerSource = $null
+if (-not $SteerRunnerExe -and $env:STEERRUNNER_EXE) { $SteerRunnerExe = $env:STEERRUNNER_EXE }
 if (-not $SteerRunnerExe) {
     $runnerCommand = Get-Command steerrunner.exe -ErrorAction SilentlyContinue
     if (-not $runnerCommand) { throw 'Select a released Runner with -SteerRunnerExe <absolute exe>' }
