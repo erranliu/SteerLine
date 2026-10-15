@@ -23,7 +23,7 @@
 | SLC-A02 | unit + SQLite：`go test ./internal/storage/sqlite -run '^TestRunner(Candidate|TaskService|Actor|ApplicationSnapshot|Dispatch|Control)' -count=1 -timeout=2m` | 新建临时库、WAL 并发提交及命令回执故障；绑定/调度实现后 | 原子领取/请求、重试原回执、不可变绑定、事件/游标 CAS、终态 stop、单事务页面/Runner 快照、调度/回执全回滚及真实 host scheduler；`candidate.log`、`snapshot-dispatch.log`、`control.log` |
 | SLC-A03 | unit + SQLite：`go test ./internal/storage/sqlite -run '^TestRunnerTaskDeliveryWithoutWorkflowReady$' -count=1` | 新建临时库、事务中注入失败；交付实现后 | 非 pr_ready 的正确合并候选可交付，兄弟未知不阻塞；失败全回滚，成功唯一关闭/释放/停止，重试不查询 PR；`delivery.log` |
 | SLC-A04 | integration：新包后独立启动 `go test -c ./tests/e2e/internal/driver` 的 EXE，以 `STEERLINE_DEBUG_TEST_ROOT` 选择包，运行 `-test.run=^TestDebugReleaseRuntime$ -test.timeout=12m`；脚本入口 `scripts/test-debug-release.ps1 -SteerRunnerExe <absolute>` | 隔离 Git 与当前用户进程；app 切换后 | 实际产品命令经过 Runner，未知/重启/停止及反馈沿原 Run，日志归项目 runner 目录；`cli-integration/` |
-| SLC-A05 | L3 controlled：沿用 Runner Plan R1 的五个登记场景，由步骤 5 将 driver 改为新 CLI 后执行 | 既有隔离分级环境；旧 owner 删除后 | 场景非零且通过，产品入口与 UI 投影不依赖旧执行库；`regression/summary.json` |
+| SLC-A05 | L3 controlled：沿用 Runner Plan R1 中用户保留的三个本机场景，由步骤 5 将 driver 改为新 CLI 后执行 | 既有隔离分级环境；旧 owner 删除后 | 场景非零且通过，产品入口与 UI 投影不依赖旧执行库；`regression/summary.json` |
 | SLC-A06 | build + owner audit：`go build ./...`、两仓 `git diff --check`、实际引用/写表删除审计 | 新配置及固定 Runner 包；最终 PR 前 | 无旧执行写者/回退、无 Runner 私有依赖；实际 EXE 版本/SHA 可追溯；`deletion-audit.md`、`compile.log` |
 
 Runner 真机验收登记在 Runner SR-A11/SR-A12。先运行 `scripts/new-debug-release.ps1`；仅 SteerlineDebug 下独立包、SteerlineTest 专属 base/head。远端用户授权主机为 Orca「台式机64G」。当前已知本地 Codex Windows 沙箱失败须保留原始证据并解决，不扩大权限来制造通过。需要补齐的工具和 driver 属于步骤 5，不留作无明确安排的“后续补验”。

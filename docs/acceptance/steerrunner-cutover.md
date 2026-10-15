@@ -63,3 +63,10 @@ Runner 第五轮远端已完成实施，在报告阶段暴露应用冻结策略�
 
 
 最新用户调整为仅完成本机 Codex 验收，两个 Orca 路径均不再作为本次待完成门槛；第六轮远端在通知时已退出，原 Run 66c944425084d05d2401eeea5961cf82 的 stop_status=stopped，服务发现不可用，无 PR。不能记为远端通过。rebase 后冻结 ed44a08b 的 TestCodexResume 再次通过（261.02 秒）；余下本地等待合并重启场景正在运行。
+
+
+本机 SR-A11 已通过：Runner c85f4e7 的 `C:/SteerlineDebug/srlocal/dev-20261015-141218-560ce11e/evidence/native-20261015-061410/result.json` exit 0、1 场景、235.62 秒，原生 AppContainer/TEMP/项目检查/相邻写拒绝通过，原 session 三阶段完成 result.txt 提交 `5d74b109c9f6035029ac8152d360d8fb36039b1b`，Runner 核验真实 [SteerlineTest PR #253](https://github.com/erranliu/SteerlineTest/pull/253)，原 Run stopped。普通发布先 401，原生自动审批批准同一命令后成功；Runner 自有只读 provider 核验 PR，不以模型后续 401 查询结果代替事实。
+
+更深 R1 目录随后暴露 Windows Git 的管理路径长度限制，外部夹具已将原始错误写到自有回执，无需读取 Runner 私有日志；`local-waiting-2` 失败保留。Runner dc24205 将私有缓存与工作区叶目录编码为 128-bit base32，完整 Run/分支/输入摘要不变。更深真实 Git push 回归通过，实际 EXE workflow/PR identity 两组通过。SteerLine 已固定可获取版本及 SHA；新本机产品包 `C:/SteerlineDebug/slcodex/dev-20261015-143226-0f86647b` 正在执行实际产品入口→原生→真实 PR/TaskDelivery。
+
+外部 rollout 绑定/指定轮次命令/沙箱证据检查 `external-rollout-3.log` 通过；live driver 不再读取 Runner 私有 journal，原生自动审批由 Runner 自身验收负责。rebase 后 Web 回答交互 6 项通过，TypeScript/Vite 构建通过（`web-answer-rebased.log`、`web-build-rebased.log`）。
