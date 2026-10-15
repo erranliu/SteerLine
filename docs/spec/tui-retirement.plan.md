@@ -6,7 +6,7 @@
 
 2026-10-15 审计交付接入主干 `317714e6`，保留已合入的双产品批处理构建、Web home 权限修复和查询复用。原基线证据继续绑定原版本；整合后补跑下文的最小检查，不把旧结果重新标为新基线通过。
 
-第1～3节保留已合并的原TUI退役实施安排；本次独立隔离重构以第4～5节为准，与统一启动冲突的旧入口由第5节替换。
+前序章节保留已合并的原TUI退役实施安排；当前独立隔离重构按后附统一宿主、独立Runner及原生验证上下文三节执行，冲突的旧入口与所有者断言由后文替换。
 
 ## 1. 整合与前置
 
@@ -82,7 +82,7 @@
 runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前次仅有 dirty 工作树时，该子检查仍绑定旧 HEAD；本轮先提交已审计代码与安排，保持工作树干净，再用 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled` 对实际 PR 提交执行一次验证，所有夹具仍为临时 home，保留原 10 分钟期限和全部非 TUI 断言。新 runner summary/scenario/cleanup 写入专属验收，旧失败保留。该项仍未通过时以草稿 PR 明确列为待验，不凭其他检查代替通过。
 
 
-## 4. 独立隔离回归与补验安排（2026-10-15）
+## 6. 独立隔离回归与补验安排（2026-10-15）
 
 用户授权删除旧综合场景，保留长期必要隔离回归并安全并行。删除 `runtime.installed-debug-isolation` 及其仅用旧脚本的冗余检查，不用新结果覆盖旧超时记录。四个新场景每项仍为普通 controlled 5 分钟业务期限，Go 父期限保留每项 6 分钟余量；并发排队不计入场景期限。只有已审查的 runtime controlled 包允许 `-parallel=2`，其他包、live 和 L2 顺序不变。各项自有 home/仓库/进程/端口/provider/证据，runner 构建产物只读；构建场景只写自己的源码 clone，不再改工作树 bin。所有业务 I/O 完成后冻结 FinishBody，再由独立 cleanup 核实资源清理。
 
@@ -103,7 +103,7 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 远端保留的必要定向回归映射 [TR-A4](../acceptance/tui-retirement.md#验收项)：改造后运行 `go run ./cmd/test-feedback -- ./internal/app ./internal/execution/adapters/orcatransport -run '^Test(TerminalRegistrationRejectsRetiredRoutesAndAgentPrivateFields|RemoteRepositoryDiscoveryRejectsBeforeCreation|RemoteRepositoryCreationRetainsReceiptOnMismatch)$' -count=1`；受控 fake 验证退役目标拒绝、远端仓库前置拒绝/原回执保留，无本机 Orca 运行或真实模型。runner summary 及原输出登记专属 acceptance，不当作远端真机验收。
 
 
-## 5. 接入统一多项目启动主干
+## 7. 接入统一多项目启动主干
 
 后续 PR 创建时主干已合入 #326（0228e51d）。采用其唯一 `serve` 宿主、start/stop 入口与应用 API；不恢复 service-window/run/start-service/stop-service，也不要求默认调试端口固定18742（当前生成器自动选择空闲端口后固定）。此前测试计划中与新契约冲突的旧入口验证仅保留历史；当前范围按本节调整。
 
@@ -121,7 +121,7 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 生成包就绪须核对 runtime-launcher 的owner/ready匹配token；该token在两项目种子任务创建后才发布，不以宿主/项目API就绪冒充夹具初始化完成。Go运行测试的defer先调用本home正式stop并核实结果，再停止其Job内Git/helper；失败同样不能遗留已脱离Job的双产品。该变更仍由TR-A3的全新生成包单/双项目场景验收。
 
 
-## 6. 接入独立 SteerRunner 执行所有者
+## 8. 接入独立 SteerRunner 执行所有者
 
 随后主干合入 #325（f3e35373）。保留它的冻结测试二进制/test2json入口、Runner EXE版本/SHA选择及其他业务组原有10分钟窗口；本次四项隔离仍各5分钟，仅这四项最多并发二项。Runner所有者与公开CLI边界见[接入说明](../integration/steerrunner.md)，本任务不改独立Runner仓库或产品worker生命周期。
 
@@ -130,7 +130,7 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 测试计划映射[TR-A3/TR-A4/TR-A6](../acceptance/tui-retirement.md#验收项)：先只读固定现有Runner EXE到本次临时依赖副本，记录实际source_commit/version/SHA，不构建或修改另一仓库/安装目录；以 `STEERRUNNER_EXE=<副本>` 运行四项runtime、L1和runner/驱动必要回归。生成包执行 `scripts/test-debug-release.ps1 -SteerRunnerExe <副本>`，仍单一生成流程、全新simulate包，独立进程参数须贯通Runner选择。正常/失败收尾除调用方stop与测试Job外，按已有公开CleanupRunner核对原候选/服务停止，reset之前明确停止Runner服务；不读取Runner私有库/日志。全部剩余E2E编译、文档/差异检查。实际证据另登acceptance，旧宿主/旧执行owner版本通过不冒充最新通过；远端Orca能力仍由独立Runner实现保留，不在本任务新跑真机。
 
 
-## 7. 原生验证上下文与补验发现
+## 9. 原生验证上下文与补验发现
 
 Runner保持调用方用户/权限完全一致，不能从当前受限工具上下文擅自换权限启动；直接受限上下文拒绝结果保留。新增最小Windows入口 `scripts/test-runtime-isolation.ps1 -SteerRunnerExe <固定副本>`，只在与现有浏览器测试相同的原生独立上下文调用原test-feedback四场景，仍由注册表/冻结二进制/场景期限/并发白名单决定范围。它与生成包脚本共用 `scripts/independent-test.ps1`，不复制另一套业务驱动，不降低产品凭据或Job守卫。
 

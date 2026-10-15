@@ -89,3 +89,5 @@ TUI 专属渲染、键盘、窗口偏好、TUI 客户端日志/observer 测试�
 2026-10-15 用户确认的验证范围调整：旧综合 `runtime.installed-debug-isolation` 与旧源码调试 wrapper 退役；隔离保证由 `runtime.source-build-isolation`、`runtime.path-isolation`、`runtime.service-write-isolation`、`runtime.dual-home-isolation` 四项独立 controlled 场景及唯一新调试包测试承担。安全独立的四项最多并发二项，不共享可写构建产物；每项必须实际通过并清理。旧超时证据保留，不能仅删除旧场景即宣称验收完成。
 
 本机 Orca 工作区路径按用户明确指示退役，不再要求本机删除/重启验收；远端 Orca environment 单终端实现与受控协议验证保持。
+
+当前主干已合入统一宿主和独立SteerRunner，冲突的原启动描述按现行契约执行：生成器默认选择空闲loopback端口并冻结，显式端口冲突仍拒绝；本包通过唯一serve宿主及start/stop入口运行。隔离测试只承担调用方保证，双home验证同号任务/请求及原回执重放不串用；完整执行和交付由已有delivery/新调试包场景承担。Runner工作区不作为SteerLine配置项恢复。测试程序固定外部Runner版本/SHA且只调用公开CLI，实际安装环境始终不操作。

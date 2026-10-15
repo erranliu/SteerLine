@@ -8,10 +8,10 @@
 | --- | --- | --- |
 | TR-A1 | 对照删除清单检查 CLI/包/模板/调试分派/runner/依赖；普通业务构建及 Web 双产品构建，无当前可执行 TUI 入口 | 通过；源码/依赖检查、无 Node 业务构建、双产品构建及新包三 exe/hash 通过 |
 | TR-A2 | 运行迁移后的原 formatter 测试与基础 HTTP/localservice/app/Web owner 回归；确认日志、实例/认证/原信封、共享进程函数和公共 recovery 路由保留 | 通过；formatter 内容未变，基础 owners、CLI/候选接线、HTTP 恢复及 Web smoke 通过 |
-| TR-A3 | 用生成器默认参数及显式不同端口创建新单/双项目包；核对默认 Web 产物、端口冲突拒绝、方案冻结、活动服务/worker 的 reset 拒绝、check 不写、静止后重置范围及全部退出 | 通过；最终统一宿主新包 generation-test.json passed=true，默认包只验产物，19747单项目与19744双项目运行/停止/reset通过，进程与监听均0 |
-| TR-A4 | 固定 L1、定向混合测试、controlled recovery.failure-results 和用户确认替换的四项 runtime 独立隔离回归实际通过，所有剩余 e2e-tag 场景编译通过；保留原断言覆盖归属、查询前后状态与旧失败证据 | 通过；原有 L1/CLI/候选/数量/recovery 证据保留，统一宿主四项隔离回归4/4、零skip、cleanup全通过，执行391.06秒，实际最多两项并发；本机 workspace 已退役，不再列待验 |
+| TR-A3 | 用生成器默认参数及显式不同端口创建新单/双项目包；核对默认 Web 产物、端口冲突拒绝、方案冻结、活动服务/worker 的 reset 拒绝、check 不写、静止后重置范围及全部退出 | 通过；最新独立Runner新包2364dc55，generation-test.json passed=true，19747单项目81.57秒、19744双项目77.94秒，运行/停止/reset通过，进程与监听均0 |
+| TR-A4 | 固定 L1、定向混合测试、controlled recovery.failure-results 和用户确认替换的四项 runtime 独立隔离回归实际通过，所有剩余 e2e-tag 场景编译通过；保留原断言覆盖归属、查询前后状态与旧失败证据 | 通过；原CLI/候选/数量/recovery结果保留原版本；最新Runner基线L1通过，四项隔离4/4、零skip、cleanup全通过，执行261.17秒，实际最多两项并发；本机workspace退役不再待验 |
 | TR-A5 | 新独立 simulate 包真实 Edge web.smoke；在活动轮次关闭页面后核对服务与原执行继续，再打开完成既有反馈/final/交付/离线闭环，收尾进程/监听 0 | 通过；真实 Edge 1/1、0 retry，关闭页面分支及原闭环通过，cleanup 进程/监听均 0 |
-| TR-A6 | 当前文档入口与实际一致；TUI 资料标注历史/退役并修复链接，原未验不变通过；文档链接与差异检查通过 | 通过；最新427份 Markdown / 2743条本地链接 / 0错误，git diff --check 通过；roadmap 未修改 |
+| TR-A6 | 当前文档入口与实际一致；TUI 资料标注历史/退役并修复链接，原未验不变通过；文档链接与差异检查通过 | 通过；最新431份 Markdown / 2607条本地链接 / 0错误，git diff --check 通过；roadmap 未修改 |
 
 ## 执行与证据登记
 
@@ -138,7 +138,7 @@ runtime 综合隔离的两个超时仍是未完成验证，保持 TR-A4 待验�
 | 普通源码构建/重建、bin junction/输出硬链接拒绝、另一环境 exe/hash/DB/业务事实不变 | runtime.source-build-isolation，运行自己的源码 clone；另一 home 无活动 writer，DB 字节摘要检查无心跳干扰 |
 | state junction、run_dir/worktree_root 越界、SQLite DB/WAL/SHM 硬链接、拒绝前不写及解除链接后原生校验可用 | runtime.path-isolation，无业务 worker；保留逐文件 size/hash 和 SQLite 文件集合证据 |
 | 原生 service-window 入口/可见子进程身份、launcher 幂等、同构建重启/新实例、过期实例/改配置不发请求、跨 home 仓库锁 | runtime.service-write-isolation，不再为启停重复跑完整交付；重启后另核对真正的上一实例拒绝 |
-| 两独立执行和原控制请求、双 home 的三阶段/交付不串用 | runtime.dual-home-isolation；A 先合并时 B 的原任务/PR 不变，B 完成后 A 不变；各自唯一原执行、交付与后继仍验证 |
+| 双home写入与原请求不串用 | runtime.dual-home-isolation；当前Runner基线用相同任务ID/请求ID的独立作废及原回执重放，双向任务/版本/provider不串用、无候选；完整执行/交付归已有delivery/生成包，不再重复两条流程。前述原执行双流程结果保留其版本范围 |
 | 正式新调试包生成/完整 Web、不同包/项目身份、锁/reset、方案冻结、端口冲突、停止清理 | 已有 scripts/test-debug-release.ps1，始终新生成，不扩张为第二套产品/驱动 |
 | 旧 wrapper 专属 UI alias、源码 exe fallback/missing、wrapper 的 build/service 操作 | 随 wrapper 退役；对应当前生成根重叠/链接拒绝及缺 Web 等由现有生成包入口覆盖 |
 | 本机 Orca workspace 删除/重启 | 用户明确退役，删除场景、专属驱动、孤立解码器、native 环境/证据规则和正向测试；增加旧入口拒绝检查。远端实现与公共输出/usage 守卫保留 |
@@ -253,3 +253,36 @@ PR #327 创建后主干合入统一多项目启动（0228e51d）。前述55a3445
 新包根 `C:/SteerlineDebug/中文 test-d0c21c5319f1` 在独立上下文中WebProjects通过53.36秒，Runtime启动任务收到identity_conflict。定位为原控制请求冻结了非零图版本，而原HTTP回执比对仍要求start_task的映射图版本为零；请求已发布，不能换ID补发。失败收尾保留原请求事实并按已有公开CLI围栏/停止原Runner，旧包不复用。新增映射图绑定/替换反例，并同步formal consumer夹具的非零图版本。
 
 HTTP全包 `20261015T084158.715032000Z` 首轮保留两组过期fixture的失败（图版本未设置）；修正夹具后 `20261015T085057.611686800Z/summary.json` 全包通过。Runnerclient/bridge契约 `20261015T083239.290430700Z/summary.json`通过。后续使用固定同一Runner副本，原生四项入口共享已有WMI原生进程方式，不以更换Runner版本/权限或跳过守卫换通过。
+
+### 独立Runner基线最终验收（2026-10-15）
+
+固定源码2364dc55的四项原生场景 `20261015T085407.268898500Z` 实际4/4通过、零skip、cleanup_complete=true，执行268.04秒；独立入口却因Windows PowerShell把成功stderr摘要转为异常而返回1，未把该入口标为通过。414b390b仅修正捕获后的字符串输出/原退出码判断，保留真正非零退出失败。
+
+以干净源码 `414b390b69e5db15dbce066587bc2303cf7ffa8e`、上述固定af545563 Runner执行：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-runtime-isolation.ps1 -SteerRunnerExe C:/Users/lmas1/AppData/Local/Temp/steerline-isolation-runner-c23f908af1bc4e91a85dff443d6bfef3/steerrunner.exe
+```
+
+原始证据 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T090006.293618000Z/summary.json`：passed=true/cleanup_complete=true，4/4、0skip；准备15.09秒、执行261.17秒。冻结二进制清单 `build/frozen-binaries.json` 绑定源码与全部SHA。四个scenario均passed/cleanup_complete=true、context_error=nil；`parallel-proof.json`由原始test2json cont/pass事件重建，max_active=2、结束active为空。
+
+| 场景 | 实际耗时（含收尾） |
+| --- | --- |
+| runtime.source-build-isolation | 123.01秒 |
+| runtime.path-isolation | 136.92秒 |
+| runtime.service-write-isolation | 117.66秒 |
+| runtime.dual-home-isolation | 125.77秒 |
+
+入口本身最终退出0；外层日志 `%TEMP%/steerline-isolation-runner-native-final.log`，独立原生现场 `%TEMP%/steerline-native-test-32ae76e30d124e1aa347092b7b708863/{test.log,result.json}` exit_code=0。场景本体与普通5分钟期限未改变，等待并行名额不计入场景业务期限。
+
+新调试包以源码2364dc55、相同Runner副本生成，全新根 `C:/SteerlineDebug/中文 test-fd2afb45a050`：默认产物 `dev-20261015-165408-2364dc55` 只验产物，单项目 `dev-20261015-165500-2364dc55`（19747）Runtime通过81.57秒，双项目 `dev-20261015-165559-2364dc55`（19744）WebProjects通过77.94秒，总161.55秒。单项目 `evidence/generation-test.json` passed=true/live=false、`runtime-test.log` 2/2通过；覆盖实际受控交付、冻结、活动锁/reset、静止reset保留及正常停止。`audit-cleanup.json` processes=0/listeners=0/passed=true，检查排除审计进程自身。失败根d0c21c5319f1的精确路径进程/监听同为0。外层 `%TEMP%/steerline-isolation-runner-fixed-debug.log`，独立现场 `%TEMP%/steerline-native-test-134c764746224ba3b143efbce49bec1c/result.json` exit_code=0。后续414b390b只修改另一隔离入口的stderr处理，不改变这些生成器/产品/调试测试代码。
+
+同一Runner基线其他最小检查：
+
+- L1 `20261015T085401.729078000Z/summary.json` passed/complete=true，执行108.76秒，所有组零skip/空包；源码2364dc55。
+- runner全包 `20261015T090228.693209600Z/summary.json` 90/90、零skip，包含远端public output/usage守卫、退役入口拒绝及安全并行选择；仅受控证据，不声称远端真机。
+- runner/新fresh reset定向 `20261015T085923.580536400Z/summary.json`通过；HTTP全包与Runnerclient/bridge证据见上一节。
+- 全部剩余E2E编译 `%TEMP%/steerline-isolation-runner-final-compile.log`通过；三个修改的PowerShell脚本语法检查通过。
+- 最终431份Markdown/2607条本地导航/0错误，git diff --check通过。Spec/Plan仅同步当前主干所有者及最终证据，未改roadmap。
+
+本次漏验的独立隔离/新调试包项完成。既有Edge/recovery等记录仍绑定各自源码，不称本次重跑。没有执行Full、真实模型、远端真机或真实PR；本机Orca明确退役，远端能力保留。实际安装环境未操作。取消的本机场景scratch仍按前文自动审批拒绝删除的事实保留。
