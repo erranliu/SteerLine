@@ -2,6 +2,10 @@
 
 2026-10-14：用户已确认首期在本机浏览器使用，由 Go 服务提供页面，以后再支持远程访问；同时确认采用下列技术栈，首批交付本机浏览器接入、DAG 与执行页，并直接授权本聊天实现。工程位于独立的 [`web/`](../../web/README.md)，具体契约归 [Spec](../spec/web-frontend.spec.md)/[Plan](../spec/web-frontend.plan.md)，实际验证归[专属验收](../acceptance/web-frontend.md)。本文不创建 roadmap 任务，也不改变已有任务的范围或状态。
 
+2026-10-15 后续方案：用户要求先设计独立 Web 程序、统一浏览器端口、以当前项目为主体的切换与添加入口，见[项目管理方案](project-management.md)。项目准备由用户在外部 Codex 完成，Go 应用服务负责结构核验、纳管与建库，Web 只交互；TUI 不增加这套项目管理功能。下文同项目服务托管、按项目端口及实例会话描述仍是首批实现，不是多项目方案已经生效；本轮不修改代码、安装配置或原验收结论。
+
+分批规格已独立：[Web exe 与已有项目切换 Spec](../spec/web-project-switch.spec.md)/[Plan](../spec/web-project-switch.plan.md)先行，仅使用现有配置；[项目添加 Spec](../spec/project-onboarding.spec.md)/[Plan](../spec/project-onboarding.plan.md)后置，不成为切换功能的前置。
+
 ## 现有依据
 
 [第二阶段原型](prototypes/planning-ui/index.html)是单文件 HTML/CSS/JavaScript 演示，约 390 KB，没有前端构建工程。它已经覆盖规划工作台、版本蓝图、长期文档、Roadmap 草稿、DAG、执行、验收、测试、体验版本、Bug 和设置。交互细节见[原型说明](prototypes/planning-ui/README.md)和[界面设计](planning-ui.md)。原型是产品参考，正式页面仍需按真实能力和契约接入。

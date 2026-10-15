@@ -15,6 +15,9 @@
 | [Worker PR 流程契约](../spec/worker-pr-flow.spec.md) | 当前 development/v3 的实现、报告、发布、合并与交付；原 #84 分步契约保留历史追溯 |
 | [客户端与 Go 服务边界](planning-architecture.md) | 当前 #91 的 TUI/HTTP 源码边界和未来范围 |
 | [Web 前端技术方案](web-frontend.md) | 已确认技术栈与首批 DAG/执行页；独立 web 工程及浏览器接入契约见普通开发 Spec/Plan，实际结果归专属验收 |
+| [项目管理与统一 Web 入口（方案）](project-management.md) | 独立 Web/已有项目切换先行，添加/核验纳管后置；各有独立 Spec/Plan，尚未实现 |
+| [添加项目准备提示词（方案）](project-onboarding-prompt.md) | 用户复制到目标仓库 Codex 执行的文档准备模板；不创建项目状态或 Task |
+| [项目结构与纳管核验（方案）](project-structure.md) | 文档角色/路径清单、只读固定版本核验、纳管与执行资格边界；尚无核验器 |
 | [本机客户端协议 v1](local-client-protocol.md) | #45 回环协议与 #91 TUI 所需接口 |
 | [规划界面原型参考](planning-ui.md) | 旧页面方向仅参考，不产生当前任务/前置 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |
