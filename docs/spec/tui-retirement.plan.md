@@ -99,3 +99,12 @@ runtime 综合隔离包含从 Git HEAD 克隆源码进行构建的检查。前�
 用户随后明确：本机 Orca 路径已经退役，远端 Orca environment 路径仍保留。因此删除 workspace.orca-removal-restart 的登记、专属驱动/证据字段与 native 环境选项，当前任务不再补跑本机原生删除链；既有远端实现、单终端受控协议测试和原始证据保留，不以本机测试替代远端验收。此前混合测试表中的工作区迁移安排随退役取消；旧记录只保留历史。
 
 远端保留的必要定向回归映射 [TR-A4](../acceptance/tui-retirement.md#验收项)：改造后运行 `go run ./cmd/test-feedback -- ./internal/app ./internal/execution/adapters/orcatransport -run '^Test(TerminalRegistrationRejectsRetiredRoutesAndAgentPrivateFields|RemoteRepositoryDiscoveryRejectsBeforeCreation|RemoteRepositoryCreationRetainsReceiptOnMismatch)$' -count=1`；受控 fake 验证退役目标拒绝、远端仓库前置拒绝/原回执保留，无本机 Orca 运行或真实模型。runner summary 及原输出登记专属 acceptance，不当作远端真机验收。
+
+
+## 5. 接入统一多项目启动主干
+
+后续 PR 创建时主干已合入 #326（0228e51d）。采用其唯一 `serve` 宿主、start/stop 入口与应用 API；不恢复 service-window/run/start-service/stop-service，也不要求默认调试端口固定18742（当前生成器自动选择空闲端口后固定）。此前测试计划中与新契约冲突的旧入口验证仅保留历史；当前范围按本节调整。
+
+四项 runtime ID 与安全并发上限保持：构建隔离准备任务后正常停止宿主，再核对静止 DB 字节；路径反例同样停服，用当前保留的本机 `check -config` 做副作用前拒绝并在解除链接后确认恢复可用。服务写保护改为唯一宿主的精确 PID/实例与项目逻辑实例、launchers 幂等/退役入口不存在、错误实例/非启动快照内配置拒绝且不发布请求、跨home仓库冲突不建库；正常控制作为计数器正例，宿主重启后核对前一实例拒绝。正常停止必须读取匹配原宿主/项目实例的 clean shutdown，各项目 local_closed/locks_released/resources_settled 均为true。双home保留原执行/请求/交付隔离，不混同同home双项目共享宿主的专项测试。
+
+测试计划映射仍为 [TR-A3/A4/A6](../acceptance/tui-retirement.md#验收项)：改接完成且提交源码后重新运行四项 `go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled`、当前 `scripts/test-debug-release.ps1`、L1、runner全包和全部剩余E2E编译/文档检查。环境仍为临时controlled夹具及唯一生成器新建的SteerlineDebug包，显式simulate，零本机Orca调用；按原通过条件及本节新宿主事实核对，全部证据另登记于专属acceptance，不挪用上一主干的通过记录。只读来源为统一启动Spec和现有driver/testenv，不改变产品生命周期/矩阵或 worker规则，不新增模型/远端真机验收。

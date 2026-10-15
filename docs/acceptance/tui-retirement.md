@@ -194,3 +194,8 @@ L3 四场景之后清理的代码只涉及已退役本机 native 环境/专属�
 单项目包 `evidence/generation-test.json` passed=true / live=false；`runtime-test.log` 2/2通过。包含端口占用拒绝、活动 Web/app/项目/worker 的 reset 门槛、方案冻结、独立项目身份、静止 reset/保留业务定义与 Git/PR 及停止。`evidence/audit-cleanup.json` 最终 processes=0/listeners=0/passed=true。外层原始日志 `%TEMP%/steerline-independent-isolation-debug-release.log`。本批源码基于55a34457加已记录的本机 native 退役/文档增量（dirty），产品源码未变；未把源码提交号不同当成产品行为变化。
 
 最新文档检查：424份 Markdown / 2701条本地链接 / 0错误，`git diff --check`通过。TR-A1～TR-A6 当前选定自动验收均已完成；原超时、取消的本机 native 现场以及各自历史结论保留。没有重跑 Full、真实模型、远端真机或真实 PR 交付，也不把它们计入本次通过范围。
+
+
+### 接入 #326 的验证边界
+
+PR #327 创建后主干合入统一多项目启动（0228e51d）。前述55a34457及生成包结果均属于旧宿主版本，不作为新宿主通过证据。已解决修改/删除冲突并保留旧脚本/综合场景/本机Orca场景删除；四项独立测试改接serve/应用API与原宿主停机结果。新基线的执行结果另行登记，旧结果保持原范围。

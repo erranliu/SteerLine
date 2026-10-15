@@ -30,8 +30,6 @@ func powershellExecutable(t *testing.T) string {
 
 func assertSharedSQLiteRejected(t *testing.T, s *testenv.Scenario, project, installed *testenv.Project, evidence map[string]any) {
 	t.Helper()
-	invalidBatch := filepath.Join(s.Root, "invalid-shared-sqlite-batch.json")
-	s.Must(os.WriteFile(invalidBatch, []byte("{}\n"), 0600))
 	installedDBBefore := fileSHA256(t, installed.Database)
 	results := []map[string]any{}
 	evidence["sqlite_shared_hardlinks"] = results
@@ -95,7 +93,7 @@ func assertSharedSQLiteRejected(t *testing.T, s *testenv.Scenario, project, inst
 					t.Fatalf("%s changed shared %s or native SQLite before refusal: sentinel=%d/%s before=%v after=%v", entry, name, info.Size(), hash, before, after)
 				}
 			}
-			checkRefusal("product_cli", project.Command(project.Executable, "task", "validate", "-config", project.Config, "-file", invalidBatch))
+			checkRefusal("product_cli", project.Command(project.Executable, "check", "-config", project.Config))
 
 		}()
 	}
@@ -105,9 +103,9 @@ func assertSharedSQLiteRejected(t *testing.T, s *testenv.Scenario, project, inst
 	evidence["sqlite_installed_database_sha256_before"] = installedDBBefore
 	evidence["sqlite_installed_database_sha256_after"] = fileSHA256(t, installed.Database)
 	// Restore every original SQLite file before exercising the ordinary reader.
-	// The malformed batch must now reach the real business validation error.
-	output, err := s.RunCommand(project.Command(project.Executable, "task", "validate", "-config", project.Config, "-file", invalidBatch), "sqlite-single-link-normal-validation")
-	if err == nil || !strings.Contains(strings.ToLower(string(output)), "invalid_batch") {
+	// The restored database must reach the ordinary local configuration check.
+	output, err := s.RunCommand(project.Command(project.Executable, "check", "-config", project.Config), "sqlite-single-link-normal-validation")
+	if err != nil {
 		t.Fatalf("normal native SQLite did not remain usable: err=%v output=%s", err, output)
 	}
 	evidence["sqlite_single_link_validation"] = string(output)
@@ -352,47 +350,11 @@ func writeConfigVariantAt(t *testing.T, source, target string, change func(map[s
 	return target
 }
 
-func assertServiceIdentity(t *testing.T, project *testenv.Project, executable, commit, dirty string) []string {
-	t.Helper()
-	log := latestServiceLog(t, project)
-	for _, want := range []string{
-		"runtime executable=" + executable,
-		"runtime home=" + project.Home,
-		"runtime config=" + project.Config,
-		"runtime source_commit=" + commit + " source_dirty=" + dirty,
-		"runtime repository=" + strings.ToLower(project.Repo),
-	} {
-		assertContains(t, string(log), want)
-	}
-	return runtimeDiagnosticLines(log)
-}
-
-func runtimeDiagnosticLines(log []byte) []string {
-	var lines []string
-	for _, line := range strings.Split(string(log), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "runtime ") {
-			lines = append(lines, line)
-		}
-	}
-	return lines
-}
-
 func serviceInstance(snapshot testenv.Snapshot) string {
 	if snapshot.Runtime == nil {
 		return ""
 	}
 	return snapshot.Runtime.Service.InstanceID
-}
-
-func assertServiceStopReceipt(t *testing.T, output []byte) {
-	t.Helper()
-	var receipt struct {
-		Status string `json:"status"`
-	}
-	if err := json.Unmarshal(output, &receipt); err != nil || receipt.Status != "stopped" {
-		t.Fatalf("service-window stop did not return an applied stopped receipt: status=%q err=%v output=%s", receipt.Status, err, output)
-	}
 }
 
 func controlRequestCount(t *testing.T, project *testenv.Project) int {
@@ -474,24 +436,6 @@ func writeRuntimeEvidence(t *testing.T, directory string, evidence map[string]an
 	if err := os.WriteFile(filepath.Join(directory, "runtime-identities.json"), append(raw, '\n'), 0600); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func latestServiceLog(t *testing.T, project *testenv.Project) []byte {
-	t.Helper()
-	files, err := filepath.Glob(filepath.Join(filepath.Dir(project.Database), "service", "startups", "*", "service.log"))
-	if err != nil || len(files) == 0 {
-		t.Fatalf("service startup log missing for %s: %v", project.Name, err)
-	}
-	sort.Slice(files, func(i, j int) bool {
-		left, _ := os.Stat(files[i])
-		right, _ := os.Stat(files[j])
-		return left.ModTime().Before(right.ModTime())
-	})
-	raw, err := os.ReadFile(files[len(files)-1])
-	if err != nil {
-		t.Fatal(err)
-	}
-	return raw
 }
 
 func assertRuntimePathsInsideHome(t *testing.T, project *testenv.Project) {
