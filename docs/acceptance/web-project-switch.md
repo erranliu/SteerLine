@@ -78,3 +78,9 @@ Plan 的测试表给出命令、能力补齐、环境和执行时点。`web.proj
 - `go run ./cmd/test-feedback -level=L1` 通过（173.2s），新增解析器 owner 已登记继承管道/异常输出检查，报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261015T033952.819553200Z/summary.json`。随后补充 BOM 一致性反例并登记该 owner，定向重跑 `./internal/projectconnection ./internal/app -run '^TestWebSwitch' -count=1` 通过（12.678s），报告 `.../20261015T034438.596179400Z/summary.json`。
 - 同步主干后 `./build.ps1 -Web` 双 exe 覆盖构建通过，日志/产物 hash 见 `C:/Users/lmas1/AppData/Local/Temp/steerline-web-switch-audit-20261015-114137/build.log`、`build.json`；BOM 增量后再运行普通 `./build.ps1` 通过。
 - 上文真实 Edge 单/双项目综合结果属于实施轮次的明确包版本，本轮审计没有再次执行 Edge 综合场景，也不把定向反例声明成新的浏览器注入验收。WPS-M1 仍待人工体验。
+
+## 2026-10-15 bat 双产物构建补充
+
+用户要求 `build.bat` 一次构建两个 exe，另提新 PR。本次从已合并 #320 的主干 `47fafc12` 建立独立分支，bat 固定调用 `build.ps1 -Web`，保留双击后暂停、`--no-pause` 和错误退出码；同步 README 与构建架构说明。普通 `build.ps1` 的仅业务构建入口不变。
+
+WPS-A1 补充实测：直接运行 `./build.bat --no-pause`，经 Windows PowerShell 完成 npm 资源构建及两个 Go exe 构建，退出码 0；确认 `bin/steerline.exe`、`bin/steerline-web.exe` 的写入时间均晚于命令开始，记录 SHA-256。证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-build-bat-20261015-115337/build.log`、`result.json`。本次仅改构建包装入口，未重复业务/E2E 回归。
