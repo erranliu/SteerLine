@@ -57,14 +57,9 @@ func run() error {
 		if err != nil {
 			return fmt.Errorf("start steerline serve-app first: %w", err)
 		}
-		address, err := server.LoadAddress(home())
+		address, err := server.EnsureAddress(home())
 		if err != nil {
 			return err
-		}
-		if _, err = os.Stat(filepath.Join(home(), "web.json")); os.IsNotExist(err) {
-			if err = localservice.Write(home(), "web.json", map[string]any{"version": 1, "address": address}); err != nil {
-				return err
-			}
 		}
 		web, err := server.Prepare(server.Options{Home: home(), Address: address, LauncherDir: server.LauncherDirectory(home()), Client: client, DevOrigin: os.Getenv("STEERLINE_WEB_DEV_ORIGIN")})
 		if err != nil {

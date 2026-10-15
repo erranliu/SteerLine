@@ -105,10 +105,19 @@ func Prepare(home, dir, protocol, address string) (*Endpoint, error) {
 	success = true
 	return e, nil
 }
+// Write publishes JSON in a private service directory, securing both directory
+// and file. Use WritePrivateFile for files in an application home.
 func Write(dir, name string, value any) error {
 	if err := fs.EnsurePrivateDirectory(dir); err != nil {
 		return err
 	}
+	return WritePrivateFile(dir, name, value)
+}
+
+// WritePrivateFile atomically publishes a private JSON file in an existing
+// directory without changing that directory's permissions. Application homes
+// also contain launchers and must retain their inherited access rules.
+func WritePrivateFile(dir, name string, value any) error {
 	data, err := json.Marshal(value)
 	if err != nil {
 		return err
