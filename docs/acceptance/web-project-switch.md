@@ -94,3 +94,13 @@ Plan 的测试表给出命令、能力补齐、环境和执行时点。`web.proj
 - 私有文件/应用端点及测试登记回归：`go run ./cmd/test-feedback -- ./internal/product/httpfs ./internal/product/applicationhttp ./cmd/test-feedback -count=1` 通过（93 项测试，106.486s），报告 `.../20261015T041947.882558000Z/summary.json`。
 - `./build.ps1 -Web` 双 exe 构建通过；日志与 SHA-256 位于 `C:/Users/lmas1/AppData/Local/Temp/steerline-home-acl-fix-20261015-121946/build.log`、`binaries.json`，产物仅在源码 `bin/`。安装里的 Web exe 尚未带入此源码修复；当前已有 `web.json`，该首次创建分支不会再次执行。
 - 文档导航 418 文件、2664 本地链接无错误，`git diff --check` 通过。未重跑 Full、L2/L3 或 Edge 综合场景；本轮只改配置发布权限，使用真实 Windows ACL 的隔离反例与受影响包回归即可覆盖，未改 worker/业务流程。WPS-M1 状态不变。
+
+## 2026-10-15 bat 双产物构建补充
+
+用户要求 `build.bat` 一次构建两个 exe，另提新 PR。本次从已合并 #320 的主干 `47fafc12` 建立独立分支，bat 固定调用 `build.ps1 -Web`，保留双击后暂停、`--no-pause` 和错误退出码；同步 README 与构建架构说明。普通 `build.ps1` 的仅业务构建入口不变。
+
+WPS-A1 补充实测：直接运行 `./build.bat --no-pause`，经 Windows PowerShell 完成 npm 资源构建及两个 Go exe 构建，退出码 0；确认 `bin/steerline.exe`、`bin/steerline-web.exe` 的写入时间均晚于命令开始，记录 SHA-256。证据：`C:/Users/lmas1/AppData/Local/Temp/steerline-build-bat-20261015-115337/build.log`、`result.json`。本次仅改构建包装入口，未重复业务/E2E 回归。
+
+用户随后发现权限修复分支的 `build.bat` 又只有单产物：该分支从主干创建，未包含尚未合并的双产物 PR #321。本次将原构建提交 `a282a574fda614e71811bbc69e31adfe18251a64` 合入权限修复分支，保留两项修复，使当前工作目录的 bat 默认构建两个 exe。
+
+整合后再次实际运行 `./build.bat --no-pause`，2026-10-15 12:28:47～12:30:39（Asia/Shanghai）退出码 0；业务 exe 更新至 12:28:59，Web exe 更新至 12:30:36，均晚于本次开始时间。新日志及双产物 SHA-256/时间断言：`C:/Users/lmas1/AppData/Local/Temp/steerline-build-bat-integrated-20261015-122847/build.log`、`result.json`（`Passed=true`）。未安装或启动产品环境。

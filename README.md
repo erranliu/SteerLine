@@ -12,7 +12,7 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 ## 构建
 
-在 Windows 上，双击仓库根目录的 `build.bat` 即可构建；窗口会显示结果并等待按键关闭。命令行可运行 `./build.ps1`，或调用 `build.bat --no-pause`。脚本从仓库根目录构建 `cmd/steerline`，固定输出到 `bin/steerline.exe`；构建失败时保留原文件，目标程序仍在运行时拒绝替换。此命令只生成本地二进制，不安装到 `STEERLINE_HOME`，也不切换运行中的服务。安装与源码调试共存的近期范围见[RoadmapGuide](docs/roadmap/RoadmapGuide.md) · [正式执行清单](docs/roadmap/execution-map.md)；完整 stable/dev 版本管理已移出当前规划。
+在 Windows 上，准备好 Go、Node.js 和 npm 后，双击仓库根目录的 `build.bat` 即可一次构建 `bin/steerline.exe` 和 `bin/steerline-web.exe`；窗口会显示结果并等待按键关闭。命令行可调用 `build.bat --no-pause` 跳过等待，或运行等价的 `./build.ps1 -Web`。只构建业务 exe 时运行 `./build.ps1`，无需 Node.js。构建失败时保留该目标的原文件，目标程序仍在运行时拒绝替换。此命令只生成本地二进制，不安装到 `STEERLINE_HOME`，也不切换运行中的服务。安装与源码调试共存的近期范围见[RoadmapGuide](docs/roadmap/RoadmapGuide.md) · [正式执行清单](docs/roadmap/execution-map.md)；完整 stable/dev 版本管理已移出当前规划。
 
 ## 本机 Web
 
