@@ -21,7 +21,7 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
+
 	"github.com/google/uuid"
 )
 
@@ -493,7 +493,7 @@ func (d *debugRelease) prepareSelected(mode string) error {
 		if target["kind"] == "local" {
 			settings, _ := execution["settings"].(map[string]any)
 			executable, _ := settings["executable"].(string)
-			codex, err := native.CodexExecutable(executable)
+			codex, err := CodexExecutable(executable)
 			if err != nil {
 				return err
 			}
@@ -548,6 +548,7 @@ func (d *debugRelease) prepareSelected(mode string) error {
 			if err = json.Unmarshal(raw, &state); err != nil {
 				return err
 			}
+			state.LocalRepository = d.repo
 			if d.isSecondary() {
 				state.BaseBranch = d.base
 			}
@@ -558,6 +559,13 @@ func (d *debugRelease) prepareSelected(mode string) error {
 				return err
 			}
 		}
+	}
+	if mode == "simulate" {
+		selection, err := RunnerSelection(d.helper)
+		if err != nil {
+			return err
+		}
+		catalog["runner"] = selection
 	}
 	raw, err = os.ReadFile(filepath.Join(d.home, "config-source", strings.TrimSuffix(filepath.Base(d.config), ".json")+"."+mode+".json"))
 	if err != nil {

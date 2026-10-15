@@ -20,6 +20,8 @@ SteerRunner 跨仓拆分正在实施，切换安排见[接入 Plan](../spec/stee
 
 统一启动接入的 W18 差异：多个 SteerLine 项目共用应用宿主 PID，各自保留 Task actor/store/实例和独立 Runner state-dir。Task 创建/加前置经该 actor 串行提交并发布快照；原输入/恢复规则不变。项目停机分别记录本地关闭、锁与资源结算；仅 Runner service not_running 不证明原生已停止，未知提交、缺投影或最后已知活动的 Run 保留资源未核实诊断。初始化中可能已启动独立 Runner 而无 actor 回执时也不能把资源结算写成 true。本次仅验证统一启动的空闲双项目、受控输入/停止反例及消费者；完整组合真机/恢复验收未因此通过。
 
+测试所有者按 [测试精简 Spec](../spec/runner-test-convergence.spec.md)收敛：W02–W16/W18 执行专项由 Runner 验证；W01、W12 调用方授权、W17 及迟到接受/停止义务由 SteerLine 验证。SteerLine 的完整 L2 仍用本机 Codex 实际走通实现、报告、发布和真实 PR 合并/交付；原生恢复/沙箱/Orca 不再在 SteerLine 重复建设矩阵。节点、异常和恢复规则不变，具体状态见[专属验收](../acceptance/runner-test-convergence.md)。
+
 ## 职责与规则归属
 
 安装迁移发现 W18 的 Windows broker 差异：WMI 可将调用者原有但禁用的特权启用。Runner 在原返回句柄所指的挂起子进程上，仅禁用这些被额外启用的原有特权，再完整比对授权组和特权；不新增或启用特权，不放宽用户、完整性级别、restricted/elevated 或 EXE 身份检查。`USED_FOR_ACCESS` 是访问历史位，不参与授权属性比较。无法保持原权限仍拒绝启动。本次验证仅覆盖真实空闲服务启动/退出及权限反例，不替代任务执行/恢复验收；见[安装迁移验收](../acceptance/install-cutover-20261015.md)。

@@ -154,7 +154,11 @@ func (p *Project) cleanupGitHub() error {
 	// Read only caller-owned persisted bindings; never enumerate Runner storage.
 	candidates, candidateErr := driver.ReadOriginalOperations(ctx, p.Database, p.ProjectID)
 	if candidateErr != nil {
-		return candidateErr
+		if _, statErr := os.Stat(p.Database); os.IsNotExist(statErr) {
+			candidates = nil
+		} else {
+			return candidateErr
+		}
 	}
 	for _, candidate := range candidates {
 		if candidate.Branch == "" {

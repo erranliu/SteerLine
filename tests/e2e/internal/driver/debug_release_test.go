@@ -171,7 +171,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture.Recovery = &controlled.RecoveryFixture{HoldStep: "implement.execute", HoldStream: true}
+	fixture.Hold = true
 	if err := controlled.Write(d.provider, fixture); err != nil {
 		t.Fatal(err)
 	}
@@ -251,13 +251,13 @@ func TestDebugReleaseRuntime(t *testing.T) {
 		}
 	}
 	wait("original active worker", func() bool {
-		state, err := controlled.Read(d.provider)
-		return err == nil && len(state.Turns) == 1 && state.Turns[0]["status"] == "inProgress"
+		state, err := ReadWorkflow(ctx, filepath.Join(d.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(readyCommon)))
+		return err == nil && len(state.Candidates) == 1 && state.Candidates[0].Projection != nil && state.Candidates[0].Projection.Status == "running"
 	})
 	if err := d.reset(false); err == nil {
 		t.Fatal("reset accepted active worker")
 	}
-	if out, err := d.command(d.helper, "release-recovery", "--e2e-state", d.provider).CombinedOutput(); err != nil {
+	if out, err := d.command(d.helper, "release-fixture", "--e2e-state", d.provider).CombinedOutput(); err != nil {
 		t.Fatalf("release: %v %s", err, out)
 	}
 	wait("published candidate", func() bool {
@@ -274,7 +274,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 			}
 		}
 		state, err := controlled.Read(d.provider)
-		return err == nil && state.PR.State == "open" && len(state.Turns) == 3
+		return err == nil && state.PR.State == "open"
 	})
 	state, err := controlled.Read(d.provider)
 	if err != nil {

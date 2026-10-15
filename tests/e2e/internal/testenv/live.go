@@ -1,19 +1,18 @@
 package testenv
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
+
 	"fmt"
 	"os"
-	"os/exec"
+
 	"path/filepath"
 	"strings"
-	"time"
 
-	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 )
 
 func (s *Scenario) NewLiveProject(name, chain string) *Project {
@@ -24,10 +23,10 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	p := s.NewProject(name)
 	p.Chain = chain
 	p.Driver.NativeHome = s.Run.AuthHome
-	if strings.HasPrefix(s.ID, "smoke.") || s.ID == "recovery.codex-resume-live" {
+	if s.ID == "smoke.local-codex" {
 		p.enableGitHub()
 	}
-	codex, err := native.CodexExecutable("codex")
+	codex, err := driver.CodexExecutable("codex")
 	s.Must(err)
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)
@@ -40,7 +39,11 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &catalog))
 	catalog["default_execution_profile"] = chain
-	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": native.Model, "reasoning_effort": native.Effort}}, "workflow": map[string]any{"id": "development", "version": 1}}}
+	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 1}}}
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
+	selection, err := driver.RunnerSelection(s.Run.Runner)
+	s.Must(err)
+	catalog["runner"] = selection
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
 	p.Driver.Profile = chain
 
@@ -87,12 +90,9 @@ git rev-parse HEAD
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "implement.ps1"), []byte(implement), 0600))
 	spec += "In implement.execute, run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once to write, verify and commit the candidate locally. Do not push or invoke publish.ps1 in implement.execute or implement.report. implement.report only summarizes its supplied source facts. publish.ps1 is reserved for the single publish step, which must return the JSON result contract in its native final reply.\n"
 
-	if s.ID == "recovery.codex-resume-live" || s.ID == "recovery.orca-local-reconnect-live" {
-		spec += "\n## Original-execution recovery window\n\nBefore writing result.txt or publishing, run one shell command that writes `.e2e-recovery-started.txt` in this assigned worktree, waits until `.e2e-recovery-release.txt` exists, then removes both files. Use `Set-Content -LiteralPath .e2e-recovery-started.txt -Value waiting; while (-not (Test-Path -LiteralPath .e2e-recovery-release.txt)) { Start-Sleep -Milliseconds 250 }; Remove-Item -LiteralPath .e2e-recovery-started.txt,.e2e-recovery-release.txt`. The test driver releases the existing command; it does not send another prompt. These two files are temporary fixture controls: do not stage or commit them. After release, finish only implement.execute in this original round. Later report and publish are separate authorized stages.\n"
-	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
-	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the working branch and create or update its PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the working branch and create or update its PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks public stage results, real Git delivery and dependency state.\n"), 0600))
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
@@ -105,226 +105,77 @@ git rev-parse HEAD
 	return p
 }
 
-func (p *Project) orca(ctx context.Context, args ...string) (json.RawMessage, error) {
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
-	defer cancel()
-	cmd := exec.Command(p.OrcaExecutable, args...)
-	var out, stderr strings.Builder
-	cmd.Stdout, cmd.Stderr = &out, &stderr
-	err := testprocess.Run(ctx, cmd)
-	payload, parseErr := native.OrcaPayload([]byte(out.String()))
-	record := map[string]any{"command": append([]string{p.OrcaExecutable}, args...), "stdout": out.String(), "stderr": stderr.String(), "error": fmt.Sprint(err)}
-	logErr := controlled.Write(filepath.Join(p.Scenario.Output, fmt.Sprintf("orca-call-%d.json", time.Now().UnixNano())), record)
-	return payload, errors.Join(err, parseErr, logErr)
-}
-func (p *Project) findSetup(ctx context.Context) (string, error) {
-	raw, err := p.orca(ctx, "project", "setups", "--json")
-	if err != nil {
-		return "", err
-	}
-	var listing struct {
-		Setups []struct{ ID, RepoID, Path string } `json:"setups"`
-	}
-	if err := json.Unmarshal(raw, &listing); err != nil {
-		return "", err
-	}
-	for _, setup := range listing.Setups {
-		if setup.RepoID == p.OrcaRepoID && sameLocalPath(setup.Path, p.Repo) {
-			return setup.ID, nil
-		}
-	}
-	return "", errors.New("owned Orca registration setup missing")
-}
-func sameLocalPath(a, b string) bool {
-	return strings.EqualFold(filepath.Clean(filepath.FromSlash(a)), filepath.Clean(filepath.FromSlash(b)))
-}
-
-func (p *Project) cleanupOrca() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	if p.OrcaRepoID == "" {
-		id, err := native.FindOrcaRepo(ctx, p.orca, p.Repo)
-		if errors.Is(err, native.ErrOrcaRepoUnavailable) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		p.OrcaRepoID = id
-	}
-	raw, err := p.orca(ctx, "worktree", "list", "--repo", "id:"+p.OrcaRepoID, "--limit", "1000", "--json")
-	if err != nil {
-		return err
-	}
-	worktrees, err := native.OrcaWorktrees(raw)
-	if err != nil {
-		return err
-	}
-	var failures []error
-	for _, w := range worktrees {
-		if w.RepoID != p.OrcaRepoID || w.ID == "" {
-			failures = append(failures, errors.New("Orca cleanup inventory ownership mismatch"))
-			continue
-		}
-		p.Scenario.register("orca-worktree", w.ID, 0)
-		_, err := p.orca(ctx, "terminal", "close", "--worktree", "id:"+w.ID, "--all", "--json")
-		if err != nil {
-			failures = append(failures, err)
-			continue
-		}
-		if !sameLocalPath(w.Path, p.Repo) {
-			_, err = p.orca(ctx, "worktree", "rm", "--worktree", "id:"+w.ID, "--force", "--json")
-			if err != nil {
-				failures = append(failures, err)
-			}
-		}
-	}
-	// Root coordinator terminals may be outside worktree-list's linked checkouts.
-	_, err = p.orca(ctx, "terminal", "close", "--worktree", "path:"+filepath.ToSlash(p.Repo), "--all", "--json")
-	if err != nil {
-		failures = append(failures, err)
-	}
-	if len(failures) > 0 {
-		return errors.Join(failures...)
-	}
-	setup, err := p.findSetup(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = p.orca(ctx, "project", "setup-delete", "--setup", setup, "--json")
-	return err
-}
-
-func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error) {
-	var empty native.Usage
-	if len(snap.Runner.Candidates) != 1 || snap.Runner.Candidates[0].Projection == nil {
-		return empty, errors.New("usage needs one public original Run")
-	}
-	candidate := snap.Runner.Candidates[0]
-	run := candidate.Projection
-	e := run.Execution
-	if e.Backend != "local" || e.SessionID == "" || e.TurnID == "" {
-		return empty, errors.New("selected native usage identity is unavailable")
-	}
-	var input struct {
-		Execution struct {
-			Settings struct {
-				Model  string `json:"model"`
-				Effort string `json:"reasoning_effort"`
-			} `json:"settings"`
-		} `json:"execution"`
-	}
-	if json.Unmarshal(candidate.Submit.Input, &input) != nil || input.Execution.Settings.Model != native.Model || input.Execution.Settings.Effort != native.Effort {
-		return empty, errors.New("frozen public model settings differ")
-	}
-	var result native.Usage
-	var proof []byte
-	found := false
-	err := filepath.WalkDir(filepath.Join(p.Scenario.Run.AuthHome, "sessions"), func(path string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if entry.IsDir() || !strings.Contains(entry.Name(), e.SessionID) || filepath.Ext(path) != ".jsonl" {
-			return nil
-		}
-		if found {
-			return errors.New("ambiguous original native rollout")
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		if info.Size() > 32<<20 {
-			return errors.New("native rollout exceeds bounded read")
-		}
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		matched, err := native.BusinessRolloutMatches(raw, e.Workspace)
-		if err != nil {
-			return err
-		}
-		if !matched {
-			return errors.New("native rollout belongs to another root worktree")
-		}
-		result, proof, err = native.RolloutTurnUsage(raw, e.Workspace, e.TurnID)
-		if err != nil {
-			return err
-		}
-		if result.Session != e.SessionID {
-			return errors.New("usage belongs to another original session")
-		}
-		found = true
-		return nil
-	})
-	if err != nil {
-		return result, err
-	}
-	if !found {
-		return result, errors.New("original native rollout not available")
-	}
-	if err = os.WriteFile(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.jsonl"), proof, 0600); err != nil {
-		return result, err
-	}
-	return result, controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.json"), result)
-}
-
-// LiveDelivery consumes only public Run/PR facts and the native tool's own rollout.
-func LiveDelivery(s *Scenario, chain string, restart bool) {
+// LiveDelivery exercises the real public product-to-Runner chain and GitHub.
+func LiveDelivery(s *Scenario, chain string) {
 	p := s.NewLiveProject("live", chain)
 	p.CreateTasks()
 	p.StartService()
 	p.Claim("a")
-	before := p.WaitPhase("waiting_pr_merge")
-	p.AssertRunnerBinding(before)
-	p.AssertStagedFlow(before)
-	p.Record("open", before)
-	first := before.Runner.Candidates[0]
-	e := first.Projection.Execution
-	if before.Helper.PR.State != "open" {
-		s.t.Fatal("original native Run did not publish a verified PR")
+	open := p.WaitPhase("waiting_pr_merge")
+	p.AssertRunnerBinding(open)
+	p.AssertStagedFlow(open)
+	p.Record("open", open)
+	c := open.Runner.Candidates[0]
+	pr := open.Helper.PR
+	if pr.State != "open" || c.Projection.PR == nil || c.Projection.PR.HeadRevision != pr.HeadRevision {
+		s.t.Fatal("original live PR binding missing")
 	}
-	if got := p.git(e.Workspace, "show", before.Helper.PR.HeadRevision+":result.txt"); got != "real model delivery" {
-		s.t.Fatal("native committed result differs", got)
+	// Fetch public Git objects; no Runner-owned workspace or rollout is read.
+	p.git(p.Repo, "fetch", "origin", pr.HeadBranch)
+	artifact := p.git(p.Repo, "show", pr.HeadRevision+":result.txt")
+	if artifact != "real model delivery" {
+		s.t.Fatal("committed artifact differs", artifact)
 	}
-	usage, err := p.NativeUsage(before, "before")
-	s.Must(err)
-	if restart {
-		p.RestartService()
-		after := p.WaitPhase("waiting_pr_merge")
-		p.AssertRunnerBinding(after)
-		last := after.Runner.Candidates[0]
-		x := last.Projection.Execution
-		if first.ID != last.ID || first.RunID != last.RunID || e.SessionID != x.SessionID || e.AttemptID != x.AttemptID || e.TurnID != x.TurnID || e.Workspace != x.Workspace {
-			s.t.Fatal("restart replaced original Run or issued another turn")
-		}
-		afterUsage, err := p.NativeUsage(after, "after-restart")
-		s.Must(err)
-		if usage != afterUsage {
-			s.t.Fatal("read-only restart consumed model tokens")
-		}
-	}
+	before := string(mustJSON(s, p.RunnerSubmit()))
 	p.Merge()
 	done := p.WaitPhase("completed")
 	p.AssertOneDelivery(done)
 	p.Record("completed", done)
-	if done.Runner.Graph.Deliveries[p.Tasks["a"].ID].SelectedWorkflowRunID != first.ID {
-		s.t.Fatal("delivery lost the original public candidate")
+	if before != string(mustJSON(s, p.RunnerSubmit())) {
+		s.t.Fatal("delivery replaced original submission")
 	}
-	finalUsage, err := p.NativeUsage(done, "final")
+	facts := done.Helper.PR
+	var selection struct {
+		Runner runnerclient.Selection `json:"runner"`
+	}
+	raw, err := os.ReadFile(filepath.Join(p.Home, "execution.json"))
 	s.Must(err)
-	if usage != finalUsage {
-		s.t.Fatal("delivery polling changed original usage")
+	s.Must(json.Unmarshal(raw, &selection))
+	proof := &testfeedback.LiveDeliveryProof{RunnerVersion: selection.Runner.Version, RunnerSHA256: selection.Runner.SHA256, RunID: c.RunID, CandidateID: c.ID, FinalSources: sources(s, p, c.ID, c.RunID), ArtifactCommit: pr.HeadRevision, Artifact: artifact, PRURL: facts.URL, Repository: facts.Repository, Base: facts.BaseBranch, Head: facts.HeadBranch, HeadSHA: facts.HeadRevision, Merged: facts.Merged, DeliveryCount: len(done.Runner.Graph.Deliveries)}
+	if facts.MergeCommit != nil {
+		proof.MergeSHA = *facts.MergeCommit
 	}
-	if p.RealPR {
-		proof := done.Helper.PR
-		if !proof.Merged {
-			s.t.Fatal("actual GitHub merge is missing")
+	d := done.Runner.Graph.Deliveries[p.Tasks["a"].ID]
+	proof.DeliveryCandidate = d.SelectedWorkflowRunID
+	for _, task := range done.Page.Tasks {
+		if task.TaskID == p.Tasks["a"].ID && task.Delivery != nil {
+			proof.DeliveryPR = task.Delivery.PRURL
 		}
-		p.RealPRProof = &proof
+		if task.TaskID == p.Tasks["b"].ID {
+			proof.SuccessorReady = task.DependencyReady
+			proof.SuccessorUnstarted = len(task.WorkflowRuns) == 0 && task.Status == "open"
+		}
 	}
-	s.usageVerified = true
+	s.Must(proof.Validate())
+	s.LiveProof = proof
+	p.RealPRProof = &facts
 	s.Must(s.FinishBody())
 	p.StopService()
+}
+func mustJSON(s *Scenario, v any) []byte { b, err := json.Marshal(v); s.Must(err); return b }
+func (p *Project) RunnerSubmit() any {
+	snap, err := p.Snapshot()
+	p.Scenario.Must(err)
+	return snap.Runner.Candidates[0].Submit
+}
+func sources(s *Scenario, p *Project, candidate, run string) []string {
+	conversation, err := driver.ReadCandidateConversation(s.Context, p.Database, p.ProjectID, candidate, run)
+	s.Must(err)
+	var result []string
+	for _, e := range conversation.Events {
+		if e.Body != nil && e.SourceRole == "canonical" && e.Phase == "final_answer" {
+			result = append(result, e.SessionID+":"+e.TurnID+":"+e.ItemKey)
+		}
+	}
+	return result
 }

@@ -13,7 +13,7 @@ import (
 
 func TestWritePreservesSnapshotUntilWindowsReaderReleases(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
-	if err := Write(path, State{Dispatches: 1}); err != nil {
+	if err := Write(path, State{Marker: 1}); err != nil {
 		t.Fatal(err)
 	}
 	name, err := windows.UTF16PtrFromString(path)
@@ -30,14 +30,14 @@ func TestWritePreservesSnapshotUntilWindowsReaderReleases(t *testing.T) {
 		}
 	}()
 	done := make(chan error, 1)
-	go func() { done <- Write(path, State{Dispatches: 2}) }()
+	go func() { done <- Write(path, State{Marker: 2}) }()
 	select {
 	case err := <-done:
 		t.Fatalf("write completed while replacement was locked: %v", err)
 	case <-time.After(50 * time.Millisecond):
 	}
 	before, err := Read(path)
-	if err != nil || before.Dispatches != 1 {
+	if err != nil || before.Marker != 1 {
 		t.Fatalf("previous snapshot was lost: %+v, %v", before, err)
 	}
 	if err := windows.CloseHandle(handle); err != nil {
@@ -53,7 +53,7 @@ func TestWritePreservesSnapshotUntilWindowsReaderReleases(t *testing.T) {
 		t.Fatal("write did not finish after reader released")
 	}
 	after, err := Read(path)
-	if err != nil || after.Dispatches != 2 {
+	if err != nil || after.Marker != 2 {
 		t.Fatalf("replacement snapshot differs: %+v, %v", after, err)
 	}
 	files, err := os.ReadDir(filepath.Dir(path))

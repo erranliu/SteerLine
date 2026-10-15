@@ -120,7 +120,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   if (!continuing) {
     const providerPath = join(root, "provider", "state.json");
     const fixture = JSON.parse(readFileSync(providerPath, "utf8"));
-    fixture.recovery = { HoldStep: "implement.execute", HoldStream: true };
+    fixture.hold = true;
     writeFileSync(providerPath, JSON.stringify(fixture));
     let startPosts = 0;
     let originalStartID = "";
@@ -159,12 +159,12 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
     await page.getByRole("button", { name: "确认启动", exact: true }).click();
     await expect.poll(() => {
       const facts = JSON.parse(readFileSync(providerPath, "utf8"));
-      return facts.turns?.[0]?.status;
-    }, { timeout: 300000 }).toBe("inProgress");
+      return Object.values(facts.requests ?? {}).filter((kind) => kind === "submit").length;
+    }, { timeout: 300000 }).toBe(1);
     await expect.poll(async () => {
       const snapshot = (await get("/snapshot")).connection.snapshot.page;
       const fixture = JSON.parse(readFileSync(providerPath, "utf8"));
-      return snapshot.runs[0]?.session_id === fixture.session && snapshot.runs[0]?.current_turn_id === fixture.turns[0]?.id;
+      return !!snapshot.runs[0]?.execution_id && !!snapshot.runs[0]?.session_id && fixture.hold;
     }).toBe(true);
     const beforeClose = (await get("/snapshot")).connection.snapshot.page;
     const originalRun = beforeClose.runs[0];
@@ -182,12 +182,12 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
     expect(afterClose.runs).toHaveLength(1);
     expect(afterClose.runs[0]).toMatchObject({ run_id: originalRun.run_id, execution_id: originalRun.execution_id, attempt_id: originalRun.attempt_id, session_id: originalRun.session_id, current_turn_id: originalRun.current_turn_id });
     const held = JSON.parse(readFileSync(providerPath, "utf8"));
-    expect(held.turns).toHaveLength(1);
-    expect(held.turns[0].status).toBe("inProgress");
+    expect(Object.values(held.requests).filter((kind) => kind === "submit")).toHaveLength(1);
+    expect(held.hold).toBe(true);
     await page.goto(originalURL);
     await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
-    execFileSync(helper, ["release-recovery", "--e2e-state", providerPath], { env, stdio: "pipe", timeout: 30000, windowsHide: true });
-    writeFileSync(testInfo.outputPath("browser-close.json"), JSON.stringify({ before: beforeClose, after: afterClose, original_turn: held.turns[0], start_posts: startPosts }));
+    execFileSync(helper, ["release-fixture", "--e2e-state", providerPath], { env, stdio: "pipe", timeout: 30000, windowsHide: true });
+    writeFileSync(testInfo.outputPath("browser-close.json"), JSON.stringify({ before: beforeClose, after: afterClose, original_requests: held.requests, start_posts: startPosts }));
     await expect
       .poll(
         async () => {
@@ -197,7 +197,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
         {
           timeout: 300000,
           message:
-            "cold native preparation and original three-stage publication",
+            "original public Run and PR projection",
         },
       )
       .toBe("open");
@@ -236,8 +236,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
   await expect(page.getByRole("textbox", { name: "回答内容" })).toHaveValue(
     "中文验收反馈\n保持当前候选，核对 PR 元数据。",
   );
-  // The optional publish feedback exercises a second input in the original
-  // controlled native thread when the Web fixture explicitly enables it.
+  // Public feedback must target the original Runner Run exactly once.
   expect(
     JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8"))
       .web_feedback,
@@ -248,11 +247,10 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
     await expect
       .poll(
         async () =>
-          JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8"))
-            .turns.length,
+          Object.values(JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8")).requests ?? {}).filter((kind) => kind === "reply").length,
         { timeout: 150000 },
       )
-      .toBe(4);
+      .toBe(1);
     await expect
       .poll(
         async () => {
@@ -276,8 +274,7 @@ test("web.smoke: original browser, task, feedback draft, final, delivery and off
       run.attempt_id,
     );
     expect(after.connection.snapshot.page.runs[0].current_turn_id).toBe(
-      JSON.parse(readFileSync(join(root, "provider", "state.json"), "utf8"))
-        .turns[3].id,
+      run.current_turn_id,
     );
   }
   await page.screenshot({

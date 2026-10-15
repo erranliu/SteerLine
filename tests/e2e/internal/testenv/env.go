@@ -22,31 +22,28 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
+	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, CandidateConfig, RemoteConfig, SourceCommit, SourceDirty string }
+type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, SourceCommit, SourceDirty string }
 type Scenario struct {
-	orcaUsageUnavailable bool
-	remoteOutputVerified bool
-	bodyFinishedAt       time.Time
-	bodyContextErr       error
-	Run                  Run
-	ID, Root, Output     string
-	Context              context.Context
-	cancel               context.CancelFunc
-	t                    *testing.T
-	projects             []*Project
-	processes            []*testprocess.Process
-	fixtureClosers       []func()
-	files                []*os.File
-	resources            []map[string]any
-	usageVerified        bool
-	debugSandboxRoot     string
-	debugSandboxResult   map[string]any
+	LiveProof        *testfeedback.LiveDeliveryProof
+	bodyFinishedAt   time.Time
+	bodyContextErr   error
+	Run              Run
+	ID, Root, Output string
+	Context          context.Context
+	cancel           context.CancelFunc
+	t                *testing.T
+	projects         []*Project
+	processes        []*testprocess.Process
+	fixtureClosers   []func()
+	files            []*os.File
+	resources        []map[string]any
 }
 
 type Project struct {
@@ -61,7 +58,7 @@ type Project struct {
 	GitServer                                                                         *testprocess.Process
 	serviceGeneration                                                                 int
 	Tasks                                                                             map[string]Task
-	Chain, OrcaExecutable, OrcaRepoID, OrcaSetupID                                    string
+	Chain                                                                             string
 	RealPR                                                                            bool
 	BaseBranch, DefaultBranch                                                         string
 	RealPRProof                                                                       *executionmodel.PRInfo
@@ -77,11 +74,6 @@ type Task struct {
 type TaskFactsSnapshot struct {
 	ProjectIdentity string
 	Tasks           []taskmodel.TaskRecord
-	WorkflowRuns    []executionmodel.WorkflowRunRecord
-	Executions      []executionmodel.ExecutionRecord
-	Attempts        []executionmodel.StepAttemptRecord
-	Decisions       []executionmodel.DecisionRecord
-	Operations      []executionmodel.OperationRecord
 	Deliveries      []executionmodel.TaskDeliveryRecord
 }
 
@@ -113,24 +105,8 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	switch id {
-	case "delivery.basic", "recovery.waiting-merge-restart", "recovery.codex-resume", "recovery.terminal-local-reconnect", "recovery.terminal-environment-unknown-send":
-		// Includes independent Runner startup, public CLI observation and
-		// original-service fencing; individual commands remain bounded.
+	if id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" {
 		timeout = 10 * time.Minute
-	}
-
-	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.Contains(id, "orca-remote-codex") || strings.HasSuffix(id, "-live") || strings.HasPrefix(id, "candidates.") {
-		timeout = 10 * time.Minute
-	}
-	if strings.HasPrefix(id, "candidates.") {
-		// Real business turns plus Orca readiness and automatic review
-		// share this deadline; keep each operation's own bound unchanged.
-		timeout = 30 * time.Minute
-	}
-	if id == "runtime.sandbox-git.local-codex" {
-		// Package generation plus two native three-stage tasks and real merges.
-		timeout = 25 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}
@@ -289,14 +265,14 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	p.git(p.Repo, "commit", "--quiet", "-m", "E2E project and contracts")
 	p.git(p.Repo, "push", "--quiet", "origin", "main")
 	p.git(p.Repo, "remote", "set-url", "origin", p.RemoteURL)
-	s.Must(controlled.Write(p.Provider, controlled.State{GitURL: "http://" + address + "/e2e/project.git"}))
+	s.Must(controlled.Write(p.Provider, controlled.State{LocalRepository: p.Repo, GitURL: "http://" + address + "/e2e/project.git"}))
 	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider}}
 	s.Must(controlled.Write(p.Config, map[string]any{
 		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2", "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
 		"publication_policy": map[string]any{"publisher": "worker"},
 		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
 	}))
-	selection, err := driver.RunnerSelection(s.Run.Runner)
+	selection, err := driver.RunnerSelection(s.Run.Helper)
 	s.Must(err)
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]any{"executable": s.Run.Helper}}, "workflow": map[string]any{"id": "development", "version": 1}}}, "default_execution_profile": "controlled"}))
 	commandLogs := filepath.Join(s.Output, name+"-commands")
@@ -377,7 +353,7 @@ func (p *Project) git(dir string, args ...string) string {
 	ctx, cancel := context.WithTimeout(p.Scenario.Context, 30*time.Second)
 	defer cancel()
 	if p.Chain != "" {
-		command := exec.CommandContext(ctx, "git", append([]string{"-c", "core.longpaths=true", "-c", "user.name=E2E", "-c", "user.email=e2e@example.invalid", "-c", "commit.gpgsign=false", "-C", dir}, args...)...)
+		command := exec.CommandContext(ctx, "git", append([]string{"-c", "core.longpaths=true", "-c", "core.autocrlf=false", "-c", "user.name=E2E", "-c", "user.email=e2e@example.invalid", "-c", "commit.gpgsign=false", "-C", dir}, args...)...)
 		command.Env = p.Driver.Environment(os.Environ())
 		out, err := command.CombinedOutput()
 		if err != nil {
@@ -491,7 +467,7 @@ func (p *Project) StartHost() {
 	}
 	p.serviceGeneration++
 	cmd := exec.Command(p.Executable, "serve")
-	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	cmd.Env = p.Driver.Environment(os.Environ())
 	p.Service = s.start(cmd, fmt.Sprintf("%s-host-%d", p.Name, p.serviceGeneration))
 }
 func (p *Project) StartService() {
@@ -651,19 +627,6 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 	return result
 }
 
-func recheckNativeEnvironmentOnce(reason string, rechecked *bool, recheck func() error) (bool, error) {
-	switch reason {
-	case "agent_input_unverified", "resource_preparation_unverified", "preparation_dispatch_unverified", "business_dispatch_unverified":
-		if *rechecked {
-			return true, nil
-		}
-		*rechecked = true
-		return true, recheck()
-	default:
-		return false, nil
-	}
-}
-
 func (p *Project) Merge() {
 	if p.RealPR {
 		p.Scenario.Must(p.mergeGitHub())
@@ -705,23 +668,7 @@ func (s *Scenario) cleanup() {
 		if err != nil {
 			_ = controlled.Write(filepath.Join(s.Output, p.Name+"-diagnostic.json"), map[string]string{"error": err.Error()})
 		}
-		if p.Chain != "" {
-			if err := p.captureNativeDiagnostics(); err != nil {
-				failures = append(failures, "native diagnostics: "+err.Error())
-			}
-			snap, err := p.SnapshotContext(ctx)
-			if err == nil {
-				for _, candidate := range snap.Runner.Candidates {
-					bound := snap
-					bound.Runner.Candidates = bound.Runner.Candidates[:0:0]
-					bound.Runner.Candidates = append(bound.Runner.Candidates, candidate)
-					u, usageErr := p.NativeUsage(bound, candidate.ID+"-cleanup")
-					if writeErr := controlled.Write(filepath.Join(s.Output, p.Name+"-"+candidate.ID+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)}); writeErr != nil {
-						failures = append(failures, writeErr.Error())
-					}
-				}
-			}
-		}
+
 	}
 	for i := len(s.processes) - 1; i >= 0; i-- {
 		if err := s.processes[i].Stop(ctx); err != nil {
@@ -761,17 +708,6 @@ func (s *Scenario) cleanup() {
 			failures = append(failures, err.Error())
 		}
 	}
-	if err := s.cleanupDebugSandbox(); err != nil {
-		failures = append(failures, err.Error())
-	}
-	for _, p := range s.projects {
-
-		if p.OrcaExecutable != "" {
-			if err := p.cleanupOrca(); err != nil {
-				failures = append(failures, err.Error())
-			}
-		}
-	}
 	for _, p := range s.projects {
 		if p.RealPR && !p.RemoteCleanupFailed {
 			if err := p.cleanupGitHub(); err != nil {
@@ -803,12 +739,7 @@ func (s *Scenario) cleanup() {
 			realPR = p.RealPRProof
 		}
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "remote_public_output_verified": s.remoteOutputVerified, "remote_usage_status": map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.remoteOutputVerified], "real_pr": realPR, "finished_at": time.Now().UTC()}
-	if s.debugSandboxResult != nil {
-		evidence["components"] = map[string]string{"worker": "local-codex", "provider": "github/" + githubRepository}
-		evidence["debug_sandbox"] = s.debugSandboxResult
-	}
-	evidence["orca_usage_status"] = map[bool]string{true: "not_exposed_by_orca", false: "not_applicable"}[s.orcaUsageUnavailable]
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "real_pr": realPR, "live_delivery": s.LiveProof, "finished_at": time.Now().UTC()}
 	if err := controlled.Write(filepath.Join(s.Output, "scenario.json"), evidence); err != nil {
 		s.t.Errorf("write scenario evidence: %v", err)
 	}

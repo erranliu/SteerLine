@@ -18,9 +18,10 @@ func TestWaitingMergeRestart(t *testing.T) {
 	before := p.WaitPhase("waiting_pr_merge")
 	p.AssertRunnerBinding(before)
 	p.Record("before-restart", before)
-	if before.Helper.Sessions != 1 || before.Helper.Dispatches != 3 || before.Helper.PR.State != "open" {
+	if before.Helper.PR.State != "open" {
 		t.Fatal("business turn was not completed with open PR")
 	}
+	requests, _ := json.Marshal(p.CallerRequests())
 	p.RestartService()
 	after := p.WaitPhase("waiting_pr_merge")
 	p.AssertRunnerBinding(after)
@@ -29,13 +30,13 @@ func TestWaitingMergeRestart(t *testing.T) {
 	if first.Projection == nil || second.Projection == nil {
 		t.Fatal("missing public Run projection")
 	}
-	x, y := first.Projection.Execution, second.Projection.Execution
-	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || first.ID != second.ID || first.RunID != second.RunID || first.Submit.RequestID != second.Submit.RequestID || x.AttemptID != y.AttemptID || x.SessionID != y.SessionID || x.Workspace != y.Workspace || x.Branch != y.Branch {
+	if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || first.ID != second.ID || first.RunID != second.RunID || first.Submit.RequestID != second.Submit.RequestID {
 		t.Fatal("restart replaced original caller/Run/Attempt/session/workspace")
 	}
 
-	if after.Helper.Sessions != before.Helper.Sessions || after.Helper.Dispatches != before.Helper.Dispatches {
-		t.Fatal("restart duplicated native session/dispatch")
+	afterRequests, _ := json.Marshal(p.CallerRequests())
+	if string(requests) != string(afterRequests) {
+		t.Fatal("SteerLine restart submitted new business input")
 	}
 	for _, task := range after.Page.Tasks {
 		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {
@@ -73,7 +74,7 @@ func TestWaitingMergeRestart(t *testing.T) {
 			}
 		}
 	}
-	if len(again.Runner.Candidates) != 1 || again.Helper.Sessions != 1 || again.Helper.Dispatches != 3 {
+	if len(again.Runner.Candidates) != 1 {
 		t.Fatal("repeated reconciliation duplicated execution")
 	}
 	p.StopService()
