@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -424,9 +425,12 @@ func runE2E(opts options) (code int) {
 		}
 		timeout := e2ePackageGoTimeout(packages[pkg])
 		importPath := strings.TrimSuffix(corePackage, "/internal/app/host") + "/" + strings.TrimPrefix(pkg, "./")
-		args := []string{"tool", "test2json", "-t", "-p", importPath, testBinaries[pkg], "-test.v=test2json", "-test.count=1", fmt.Sprintf("-test.parallel=%d", e2ePackageParallelism(packages[pkg])), "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
-		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{"go"}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
-		stdout, err := os.Create(g.StdoutLog)
+		args := []string{"-test.v=test2json", "-test.count=1", fmt.Sprintf("-test.parallel=%d", e2ePackageParallelism(packages[pkg])), "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
+		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{testBinaries[pkg]}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
+		// Own the test binary directly. Detached external services must not keep
+		// a live test2json pipe open after the test process has exited.
+		rawLog := filepath.Join(out, g.ID+".raw.log")
+		stdout, err := os.Create(rawLog)
 		if err != nil {
 			return err
 		}
@@ -435,7 +439,7 @@ func runE2E(opts options) (code int) {
 			stdout.Close()
 			return err
 		}
-		cmd := exec.Command("go", args...)
+		cmd := exec.Command(testBinaries[pkg], args...)
 		cmd.Dir = filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(pkg, "./")))
 		cmd.Env = e2eEnvironment(os.Environ(), string(config))
 		cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -450,10 +454,20 @@ func runE2E(opts options) (code int) {
 			g.ExitCode = 1
 			g.Error = err.Error()
 		}
-		raw, err := os.ReadFile(g.StdoutLog)
+		raw, err := os.ReadFile(rawLog)
 		if err != nil {
 			return err
 		}
+		convert := exec.CommandContext(ctx, "go", "tool", "test2json", "-t", "-p", importPath)
+		convert.Stdin = bytes.NewReader(raw)
+		converted, err := convert.Output()
+		if err != nil {
+			return fmt.Errorf("convert finite test log: %w", err)
+		}
+		if err := os.WriteFile(g.StdoutLog, converted, 0600); err != nil {
+			return err
+		}
+		raw = converted
 		g.Summary = testfeedback.Parse(raw, g.ExitCode)
 		report.Groups = append(report.Groups, g)
 		return checkE2EGroup(g, packages[pkg], out)

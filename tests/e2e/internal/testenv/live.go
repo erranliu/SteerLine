@@ -160,6 +160,7 @@ func LiveDelivery(s *Scenario, chain string) {
 	s.LiveProof = proof
 	p.RealPRProof = &facts
 	s.Must(s.FinishBody())
+	p.WaitStoppedCandidates()
 	p.StopService()
 }
 func mustJSON(s *Scenario, v any) []byte { b, err := json.Marshal(v); s.Must(err); return b }

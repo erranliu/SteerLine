@@ -1,10 +1,14 @@
 package testenv
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func (p *Project) AssertOneDelivery(s Snapshot) {
@@ -23,4 +27,26 @@ func (p *Project) CallerRequests() map[string]string {
 	var s controlled.RunnerFixture
 	p.Scenario.Must(json.Unmarshal(raw, &s))
 	return s.Bodies
+}
+
+// This is independent cleanup after delivery, not a native stop implementation.
+func (p *Project) WaitStoppedCandidates() {
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	for {
+		snapshot, err := driver.ReadWorkflow(ctx, p.Database, p.ProjectID)
+		stopped := err == nil
+		for _, c := range snapshot.Candidates {
+			if c.SubmitState == "unknown" || c.RunID != "" && (c.Projection == nil || c.Projection.StopStatus != "stopped") {
+				stopped = false
+			}
+		}
+		if stopped {
+			return
+		}
+		if ctx.Err() != nil {
+			p.Scenario.t.Fatal(fmt.Errorf("public Run stop settlement: %w", ctx.Err()))
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }

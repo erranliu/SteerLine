@@ -105,3 +105,6 @@
 ## 实施中核对的测试上下文
 
 waiting-merge-restart 采用仅终止/重启 caller 的故障注入，Runner CLI peer 保持原状态；不将 graceful stop 的“原生资源未结算”报错当成普通重启。活跃 Run 的应用停机测试保留未结算诊断，最终清理显式消费公开 stopped 事实。runtime 的 install/窗口验证沿主干 `scripts/test-runtime-isolation.ps1` 使用独立同用户进程上下文，受控范围不再要求真实 Runner EXE。工具 Job 内直接运行的失败保留证据，不扩大产品权限。`scripts/test-l2.ps1` 同样复用既有独立进程启动并保留原生退出码。
+
+
+收尾补充：TaskDelivery 后在独立清理预算内等待调用方投影的公开 stopped 事实，再停止应用，避免抢在 stop obligation 对账前关闭 actor。E2E runner 直接拥有冻结的测试 EXE，将原始输出写文件；进程结束后对有限日志执行 test2json，防止外部后台进程继承管道使报告挂起。保存 raw log、真实命令和 group wall time；转换时间戳只表示日志转换时点，不作实际场景并行起止证据。RTC-A1/A3/A4 的证据拒绝/清理核对保持，需以新现场实际执行。

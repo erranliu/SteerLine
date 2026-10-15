@@ -77,5 +77,6 @@ func TestWaitingMergeRestart(t *testing.T) {
 	if len(again.Runner.Candidates) != 1 {
 		t.Fatal("repeated reconciliation duplicated execution")
 	}
+	p.WaitStoppedCandidates()
 	p.StopService()
 }
