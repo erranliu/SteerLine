@@ -1,5 +1,7 @@
 # Plan：三窗主界面操作与控制台可读性优化
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 绑定 [Spec](console-primary-workspace.spec.md)，实施基线 `172cea6c6530b6693b742324a9c1d4f9aeb17b6d`。复用当前工作区已审计 Spec 与第一批三窗实现；不修改持久化/数据库/产品协议版本，不引入兼容路径。
 
 ## 实现步骤

@@ -384,6 +384,6 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	s.usageVerified = chain == "local-codex"
 	s.orcaUsageUnavailable = chain == "orca-terminal-local"
-	s.Must(s.finishBody())
+	s.Must(s.FinishBody())
 	p.StopService()
 }

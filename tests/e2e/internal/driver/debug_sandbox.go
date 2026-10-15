@@ -98,7 +98,8 @@ func RunDebugSandbox(ctx context.Context, root, authHome string) (result map[str
 	if err := os.WriteFile(sibling, []byte("unchanged"), 0600); err != nil {
 		return result, err
 	}
-	serviceCmd := d.command(d.helper, "debug", "run")
+	// This acceptance owns only the project service; the package still includes Web.
+	serviceCmd := d.command(d.helper, "debug", "run-project")
 	log, err = os.Create(filepath.Join(root, "evidence", "sandbox-service.log"))
 	if err != nil {
 		return result, err

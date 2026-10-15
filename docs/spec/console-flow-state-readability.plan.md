@@ -1,5 +1,7 @@
 # Plan：任务列表与流程状态可读性
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 绑定 [Spec](console-flow-state-readability.spec.md)，结果登记[专属验收](../acceptance/console-flow-state-readability.md)。直接在当前聊天执行。
 
 1. 列表固定单行/三列，使用原状态及阻塞事实生成提示，增加 8 阻塞筛选，概览对齐字段并补前置/启动原原因；保留原选择和操作规则。

@@ -1,5 +1,7 @@
 # Spec：TUI 经 HTTP 接入 Go 后端
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 任务 ID：91；任务名称：TUI 经 HTTP 接入 Go 后端；目标：`TUI-HTTP-GO`。用户已确认并直接授权实施；一个实现 PR。执行与实际结果归专属验收。配套 [Plan](tui-http-client.plan.md)、[专属验收](../acceptance/tui-http-client.md)。
 
 ## 成果与范围

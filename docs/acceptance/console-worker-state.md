@@ -1,5 +1,7 @@
 # Worker 状态变化与控制台精简验收
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 仅归属本次普通开发，[Spec](../spec/console-worker-state.spec.md)、[Plan](../spec/console-worker-state.plan.md)。不改变 roadmap 或先前提示词恢复的验收归属。
 
 | ID | 自动验收内容 | 结果 |

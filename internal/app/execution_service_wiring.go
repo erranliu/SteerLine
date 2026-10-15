@@ -189,7 +189,7 @@ func newServiceWithHost(config Config, resolver executionbackend.LifecycleResolv
 	}
 	tasks := NewTaskService(connection, config)
 	if host == nil {
-		host = steerline.NewServiceHost(hostConfig, "", "", nil, serviceAdmission{config: &config}, consoleActivityFormatter{})
+		host = steerline.NewServiceHost(hostConfig, "", "", nil, serviceAdmission{config: &config}, serviceActivityFormatter{})
 	}
 	stores := execution.ServiceStorage{State: connection, Commands: connection, Worker: connection, Conversations: connection, Records: connection, Resources: executionResources{}, Close: connection.Close}
 	service, err := execution.NewService(config.executionConfig(), config.runtimeDependencies(), config.runtimeSettings(), resolver, sources, stores, tasks, tasks, host)

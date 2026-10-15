@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,139 @@ import (
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
+
+func TestDebugReleaseWebProjects(t *testing.T) {
+	root := os.Getenv("STEERLINE_DEBUG_SECOND_TEST_ROOT")
+	if root == "" {
+		t.Skip("requires the second fresh package from scripts/test-debug-release.ps1")
+	}
+	d, err := openDebugRelease(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.webProjects != 2 {
+		t.Fatal("requires two independent projects")
+	}
+	if _, err := d.command(d.helper, "debug", "console", "--simulate").CombinedOutput(); err == nil {
+		t.Fatal("retired debug console accepted")
+	}
+	if _, err := os.Stat(filepath.Join(root, "scheme.json")); !os.IsNotExist(err) {
+		t.Fatal("retired operation froze the execution scheme")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	if out, err := d.command(d.helper, "debug", "prepare", "--simulate").CombinedOutput(); err != nil {
+		t.Fatalf("prepare: %v %s", err, out)
+	}
+	var webConfig struct {
+		Address string `json:"address"`
+	}
+	raw, err := os.ReadFile(filepath.Join(d.home, "web.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &webConfig); err != nil {
+		t.Fatal(err)
+	}
+	occupied, err := net.Listen("tcp", webConfig.Address)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflict := d.command(d.helper, "debug", "run", "--simulate")
+	conflictProcess, err := testprocess.Start(conflict)
+	if err != nil {
+		occupied.Close()
+		t.Fatal(err)
+	}
+	conflictCtx, conflictDone := context.WithTimeout(ctx, 30*time.Second)
+	conflictErr := conflictProcess.Wait(conflictCtx)
+	conflictDone()
+	cleanup, cleanupDone := context.WithTimeout(context.Background(), 10*time.Second)
+	conflictProcess.Stop(cleanup)
+	cleanupDone()
+	occupied.Close()
+	if conflictErr == nil || conflictCtx.Err() == context.DeadlineExceeded {
+		t.Fatalf("Web port conflict did not fail promptly: %v", conflictErr)
+	}
+	if err := d.reset(true); err != nil {
+		t.Fatalf("failed Web startup leaked package activity: %v", err)
+	}
+	log, err := os.Create(filepath.Join(root, "evidence", "two-project-runtime.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer log.Close()
+	command := d.command(d.helper, "debug", "run", "--simulate")
+	command.Stdout, command.Stderr = log, log
+	owner, err := testprocess.Start(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cleanup, done := context.WithTimeout(context.Background(), 30*time.Second)
+		defer done()
+		owner.Stop(cleanup)
+	}()
+	scopes := []*debugRelease{d, d.secondary()}
+	identities := map[string]string{}
+	for _, scope := range scopes {
+		common, err := scope.git("rev-parse", "--path-format=absolute", "--git-common-dir")
+		if err != nil {
+			t.Fatal(err)
+		}
+		runDir := scope.stateDir()
+		ready := false
+		for ctx.Err() == nil {
+			snapshot, err := ReadHTTPProject(ctx, runDir, strings.ToLower(filepath.Clean(common)), "")
+			if err == nil && snapshot.NativeTasks != nil && snapshot.Connection.Snapshot.Page != nil && snapshot.Connection.Snapshot.Page.Service.Ready {
+				if len(snapshot.NativeTasks.Tasks) != 2 {
+					t.Fatal("dual-project package lost task definitions")
+				}
+				identities[snapshot.NativeTasks.ProjectID] = snapshot.NativeTasks.DatabaseID
+				ready = true
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+		if !ready {
+			t.Fatal("dual-project HTTP readiness timed out")
+		}
+	}
+	if len(identities) != 2 {
+		t.Fatal("projects share identity")
+	}
+	if out, err := d.command(filepath.Join(root, "bin", "steerline-web.exe"), "open", "-print-url").CombinedOutput(); err != nil {
+		t.Fatalf("Web not available: %v %s", err, out)
+	}
+	if err := d.reset(false); err == nil {
+		t.Fatal("reset accepted active dual-project package")
+	}
+	for _, entry := range []struct {
+		exe  string
+		args []string
+	}{
+		{filepath.Join(root, "bin", "steerline-web.exe"), []string{"stop"}},
+		{d.binary, []string{"stop-app"}},
+		{d.binary, []string{"stop-service", "-config", d.config}},
+		{d.binary, []string{"stop-service", "-config", d.secondary().config}},
+	} {
+		if out, err := d.command(entry.exe, entry.args...).CombinedOutput(); err != nil {
+			t.Fatalf("normal stop: %v %s", err, out)
+		}
+	}
+	if err := owner.Wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.reset(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.reset(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := controlled.Write(filepath.Join(root, "evidence", "two-project-reset.json"), map[string]any{"passed": true, "projects": identities, "normal_exit": true}); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // Explicit opt-in: this test consumes only a newly generated package, never an installed home.
 func TestDebugReleaseRuntime(t *testing.T) {
@@ -35,6 +169,14 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	out, err := prepare.CombinedOutput()
 	if err != nil {
 		t.Fatalf("prepare: %v %s", err, out)
+	}
+	fixture, err := controlled.Read(d.provider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.Recovery = &controlled.RecoveryFixture{HoldStep: "implement.execute", HoldStream: true}
+	if err := controlled.Write(d.provider, fixture); err != nil {
+		t.Fatal(err)
 	}
 	c := d.client()
 	page, err := c.Tasks(ctx)
@@ -112,6 +254,16 @@ func TestDebugReleaseRuntime(t *testing.T) {
 			t.Fatalf("%s: %v %s", action, err, out)
 		}
 	}
+	wait("original active worker", func() bool {
+		state, err := controlled.Read(d.provider)
+		return err == nil && len(state.Turns) == 1 && state.Turns[0]["status"] == "inProgress"
+	})
+	if err := d.reset(false); err == nil {
+		t.Fatal("reset accepted active worker")
+	}
+	if out, err := d.command(d.helper, "release-recovery", "--e2e-state", d.provider).CombinedOutput(); err != nil {
+		t.Fatalf("release: %v %s", err, out)
+	}
 	wait("published candidate", func() bool {
 		state, err := controlled.Read(d.provider)
 		return err == nil && state.PR.State == "open" && len(state.Turns) == 3
@@ -165,6 +317,23 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stop: %v %s", err, out)
 	}
+	if err = d.reset(false); err == nil {
+		t.Fatal("reset accepted active application/Web after project stop")
+	}
+	for _, entry := range []struct {
+		exe  string
+		args []string
+	}{{filepath.Join(root, "bin", "steerline-web.exe"), []string{"stop"}}, {d.binary, []string{"stop-app"}}} {
+		out, err := d.command(entry.exe, entry.args...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("normal stop: %v %s", err, out)
+		}
+		if entry.args[0] == "stop" {
+			if err := d.reset(false); err == nil {
+				t.Fatal("reset accepted active application")
+			}
+		}
+	}
 	if err = service.Wait(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -176,23 +345,6 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	viewDir := filepath.Join(d.home, "ui", "views", "reset-test")
-	if err = os.MkdirAll(viewDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	journal := map[string]any{"version": 2, "projects": map[string]any{"target": map[string]string{"config_path": d.config, "run_dir": filepath.Dir(db)}, "unrelated": map[string]string{"config_path": "other"}}}
-	if err = controlled.Write(filepath.Join(viewDir, "view.json"), journal); err != nil {
-		t.Fatal(err)
-	}
-	viewLock, err := host.LockRepository(viewDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = d.reset(false); err == nil {
-		viewLock.Close()
-		t.Fatal("reset accepted active console lock")
-	}
-	viewLock.Close()
 	if err = d.reset(true); err != nil {
 		t.Fatal(err)
 	}
@@ -230,17 +382,6 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if err != nil || string(providerBefore) != string(providerAfter) {
 		t.Fatal("reset changed PR facts", err)
 	}
-	raw, err := os.ReadFile(filepath.Join(viewDir, "view.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = json.Unmarshal(raw, &journal); err != nil {
-		t.Fatal(err)
-	}
-	projects := journal["projects"].(map[string]any)
-	if len(projects) != 1 || projects["unrelated"] == nil {
-		t.Fatal("console reset scope incorrect")
-	}
 	if _, err = os.Stat(filepath.Join(root, "backup")); !os.IsNotExist(err) {
 		t.Fatal("unexpected backup")
 	}
@@ -266,7 +407,7 @@ func TestDebugReleaseRuntime(t *testing.T) {
 	if err = os.Remove(linked); err != nil {
 		t.Fatal(err)
 	}
-	raw, err = os.ReadFile(sentinel)
+	raw, err := os.ReadFile(sentinel)
 	if err != nil || string(raw) != "unchanged" {
 		t.Fatal("external sentinel changed", err)
 	}

@@ -187,7 +187,7 @@ func TestPrepareIntegrationPartitionEnumeratesBusinessWiring(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(names, "TestCandidateConsoleWiring") || !slices.Contains(names, "TestTM04ExecutionWiring") {
+	if !slices.Contains(names, "TestCandidateClientWiring") || !slices.Contains(names, "TestTM04ExecutionWiring") {
 		t.Fatal("Full integration partition omitted current business owners")
 	}
 }

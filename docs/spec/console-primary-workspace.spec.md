@@ -1,5 +1,7 @@
 # Spec：三窗主界面操作与控制台可读性优化
 
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
+
 2026-10-13 用户修订：完整移除单候选放弃功能（控制台、CLI、API、服务端及专用状态字段）；任务级丢弃和唯一交付保留。控制台任务提示只显示中文状态，并增加全部执行候选数量列。下文涉及单候选放弃或旧列表列布局的历史要求不再适用；当前操作以[执行控制台](../product-design/execution-console.md)为准。
 
 目标：`CONSOLE-PRIMARY-WORKSPACE`。状态：实现及定向/终端验证完成，已交付 [PR #234](https://github.com/erranliu/SteerLine/pull/234)，未分配 Task ID；[实施 Plan](console-primary-workspace.plan.md)。固定 L1 超时不完整，缺失项定向补跑通过；范围和限制见[验证记录](../acceptance/archive/completed/console-primary-workspace.md)。依据：2026-10-07 用户确认的控制台体验建议，要求日常操作尽量在一级界面三个窗口完成，详细阅读才进入详情，并增强颜色、加粗和焦点表示。
@@ -127,7 +129,7 @@ ANSI 样式纳入显示宽度和中文换行处理。外部内容继续通过现
 
 ## 实施范围与交付
 
-主要修改 [console](../../internal/console) 的三窗渲染、布局、键盘导航、方案选择/确认、内嵌回答、核验及摘要呈现；优先复用已有 product/query/client 读模型，必要时只补充对应摘要字段，不建立第二套查询权威、通用窗口框架、主题系统或反馈协议。
+主要修改 [console](https://github.com/erranliu/SteerLine/blob/47fafc12721ceb8fa39ba1ab227872fd14513bcb/internal/console) 的三窗渲染、布局、键盘导航、方案选择/确认、内嵌回答、核验及摘要呈现；优先复用已有 product/query/client 读模型，必要时只补充对应摘要字段，不建立第二套查询权威、通用窗口框架、主题系统或反馈协议。
 
 保留最多 10 条规范活动摘要、有界读取和简单滚动，不恢复 transcript 时间线、工具正文展开、历史活动翻页、跨重启阅读位置或全量日志导出。不开自动摘要模型、不增 PR 自动合并、资源清理、恢复重试/替代 worker 或平台无能力的“打开原终端”。PR 审阅合并仍由用户在提供方完成；保留已有入口，没有能力则显示可核实定位，不为本任务新建通用启动器。
 

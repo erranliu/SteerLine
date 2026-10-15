@@ -1,8 +1,8 @@
 # 当前代码架构与源码索引
 
-> 2026-10-14 核对：[PR299](https://github.com/erranliu/SteerLine/pull/299) 已合入，任务 [#91](../spec/tui-http-client.spec.md)保留 TUI 并改为 HTTP 业务客户端，#44 WinUI 工程已删除。用户直接授权的本机 Web 普通开发已新增独立 [web/](../../web/README.md) 工程与最小 app/CLI 接线，实际验证与限制见[Web 验收](../acceptance/web-frontend.md)；#91 见其[原记录](../acceptance/tui-http-client.md)。SSE 和远程浏览器服务仍未实现。
+> 2026-10-15：TUI 已移除，Web 为唯一交互前端；后台 CLI、项目/应用/Web 独立服务和原生会话能力保留。范围与实际验证见[TUI 退役](../acceptance/tui-retirement.md)，已有 Web 行为见[项目切换](../acceptance/web-project-switch.md)。
 
-核对基点：2026-10-14，主干 `ab814da9`＋本次 Worker 三层重构；本文描述该源码树，不将历史原生样本当作当前版本全量验收。第一阶段目标包含本地 Codex、本机 Orca 与远端执行路径交付；Orca 历史交付范围见[单终端验收](../acceptance/orca-terminal-transport.md)，当前完成补查询的规则、原生短回合及未重跑 PR 范围见[补查询验收](../acceptance/orca-completion-query.md)。远端执行目标与远程 HTTP 客户端是不同能力。
+核对基点：2026-10-15，`317714e6`＋本次 TUI 退役；本文描述该源码树，不将历史原生样本当作当前版本全量验收。第一阶段目标包含本地 Codex、本机 Orca 与远端执行路径交付；Orca 历史交付范围见[单终端验收](../acceptance/orca-terminal-transport.md)，当前完成补查询的规则、原生短回合及未重跑 PR 范围见[补查询验收](../acceptance/orca-completion-query.md)。远端执行目标与远程 HTTP 客户端是不同能力。
 
 ## 系统边界
 
@@ -12,13 +12,14 @@ Worker 各节点的异常分类、重试预算和恢复边界统一维护于[Wor
 
 用于拆分 roadmap 任务时，先按[并行开发指南](parallel-development.md)核对功能、契约、共享语义/接线和测试资源；本页的包划分不直接构成并行许可。
 
-TUI 由 `internal/consoleapp` 读取连接配置并注入 `internal/product/httpclient.Console`，全部业务消费经回环 HTTP。`internal/app` 保留 CLI/服务的具体 adapter、SQLite 和端口组装，并将 console 入口委托给 consoleapp；`internal/app/host` 承载服务进程、文件控制协议、启动/退出观察、锁与心跳，并通过注入端口调用 execution actor。任务和执行状态仍由唯一业务 actor 决定，再由 SQLite 专用提交接口校验身份、前值和版本。产品查询只把同一数据库快照投影为 `product/api` 页面。
+Web 通过独立 Web 服务、应用目录与基础 HTTP 客户端访问各项目服务。`internal/app` 保留 CLI/服务的 adapter、SQLite 和端口组装；`internal/app/host` 承载服务进程、文件控制协议、锁与心跳，通过注入端口调用 execution actor。任务和执行状态仍由唯一 actor 决定，产品查询投影同一数据库快照。
 
 ```mermaid
 flowchart LR
     CLI[cmd/steerline] --> App[internal/app]
-    TUI[internal/console] --> HC[internal/product/httpclient]
-    Assembly[internal/consoleapp] --> HC
+    Browser[web/src] --> Web[web/server]
+    Web --> Directory[internal/app application directory]
+    Directory --> HC[internal/product/httpclient]
     HC --> HTTP[127.0.0.1 HTTP]
     HC --> Contract[internal/product/httpcontract]
     CLI --> Client[internal/product/client]
@@ -38,7 +39,6 @@ flowchart LR
     Query[internal/product/query] --> Ports
     Client --> Query
     Client --> API[internal/product/api]
-    TUI --> API
     App --> SQLite[internal/storage/sqlite]
     SQLite -. implements consumer ports .-> Ports
     SQLite --> Model[task/model and execution/model]
@@ -49,7 +49,7 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 
 ## Module owners
 
-Web 由 `cmd/steerline-web` 独立运行，`web/src` 负责当前项目页面与持久原信封/草稿，`web/server` 负责浏览器认证、静态嵌入及受限应用 API 转接。`steerline serve-app` 在 `internal/app/application_service.go` 组合应用目录和 `applicationhttp`，只通过原 `httpclient` 连接各项目；项目服务不再托管 Web。`projectconnection` 是 TUI/应用服务共用的只读配置与 Git 身份解析器，`localservice` 维护独立 home/实例/进程发现和租约，应用协议为 `steerline-application/v1`。`build.ps1 -Web` 分别生成业务与 Web exe，只有后者嵌入页面；普通业务构建不依赖 Node。操作见 [Web README](../../web/README.md)，验证见[项目切换验收](../acceptance/web-project-switch.md)。
+Web 由 `cmd/steerline-web` 独立运行，`web/src` 负责当前项目页面与持久原信封/草稿，`web/server` 负责浏览器认证、静态嵌入及受限应用 API 转接。`steerline serve-app` 在 `internal/app/application_service.go` 组合应用目录和 `applicationhttp`，只通过原 `httpclient` 连接各项目；项目服务不再托管 Web。`projectconnection` 是应用服务使用的只读配置与 Git 身份解析器，`localservice` 维护独立 home/实例/进程发现和租约，应用协议为 `steerline-application/v1`。`build.ps1 -Web` 分别生成业务与 Web exe，只有后者嵌入页面；普通业务构建不依赖 Node。操作见 [Web README](../../web/README.md)，验证见[项目切换验收](../acceptance/web-project-switch.md)。
 
 | Owner | Responsibility |
 | --- | --- |
@@ -66,9 +66,8 @@ Web 由 `cmd/steerline-web` 独立运行，`web/src` 负责当前项目页面与
 | `internal/product/client` | The injected internal product client for CLI/service consumers. At app composition it directly satisfies the HTTP server's query, command, authority and native-viewer ports; the HTTP package does not depend on the concrete client. `TaskGraphExportReceipt` is a product value and graph file publication is a client operation. |
 | `internal/product/query` | Read-only projections and composition of product pages from storage ports. No SQL or business writer. |
 | `internal/product/httpapi` | Loopback HTTP discovery/authentication and DTO/action transport over narrow query, command, authority and native-viewer ports. `command_registry.go` owns immutable envelope registration and authority reconciliation; `request_records.go` owns the private record format and atomic file access. The package does not open SQL or own business transitions. |
-| `internal/consoleapp` | TUI connection-only configuration and HTTP adapter composition; injects the platform stop observer without execution/query/storage dependencies. |
-| `internal/product/httpclient`, `httpcontract`, `httpfs` | Pure HTTP consumer, serializable wire values, restricted discovery/credential files, the private request journal and an explicit stop-observer port. The journal alone owns outgoing records; the platform observer checks process/lock facts. No business-file fallback. |
-| `internal/console` | TUI navigation and view state; consumes only product API values and injected client interfaces. A named `finalReplyReader` owns final index/body/preview state and read acceptance; Model owns candidate selection, step query facts, scrolling/recovery and native session opening. |
+| `internal/product/activityrender` | Pure activity formatter shared by service output; consumes product API values and retains its original rendering tests. |
+| `internal/product/httpclient`, `httpcontract`, `httpfs` | HTTP consumer, serializable wire values, restricted discovery/credential files and shared process identity checks. No business-file fallback; browser original requests belong to Web IndexedDB. |
 | `internal/storage/ports` and `internal/storage/sqlite` | Consumer-owned narrow read/commit declarations; one SQLite implementation owns schema, SQL, WAL, CAS and transactions. |
 | `internal/testkit` and `tests/integration`, `tests/e2e` | Test-only boundary guards, Go test feedback, process ownership and protocol fixtures; real application composition tests; registered controlled/native E2E scenarios. Product production imports are forbidden. |
 
@@ -76,19 +75,17 @@ The former `internal/steerline` host/facade, `internal/steerlineapp`, `internal/
 
 Within app, [`directory.go`](../../internal/app/directory.go) explicitly combines two registration/codec pairs and binds one independent catalog. [`directory_local.go`](../../internal/app/directory_local.go) owns local Codex configuration, preflight/claim, policy resources and `localExecutionBackend`; [`directory_orca_terminal.go`](../../internal/app/directory_orca_terminal.go) owns the single Orca terminal implementation with local/environment routing. Both targets use one agent terminal, short inputs and cursor-based compact replies; supervised is deleted. Backend-local changes normally stay in the owner file; catalog-wide identity/policy changes still require coordination.
 
-Within console, [`final_reader.go`](../../internal/console/final_reader.go) owns the final index, selection/pin, body and bounded preview with separate generations. Its operations take `ConversationQueries`, context/time values and fixed target facts, without Model, projectState or control/native-session capabilities. [`final_replies.go`](../../internal/console/final_replies.go) and [`final_preview.go`](../../internal/console/final_preview.go) route host selection/mode and results; Model resets its own scrolling/recovery when the reader reports a binding or body-selection change. Existing historical/current-turn rules remain distinct. These are source ownership boundaries inside the same Go packages, not compile isolation or a reusable UI framework.
 
 Worker execution is composed as Workflow → ReliableExecution → adapter: `workflow` owns business prompts, source and successor rules; `reliable` owns preparation applicability, original-operation reconciliation, identity/turn facts, deadlines and recovery qualification. The execution root maps durable records and composes one WorkerCommit; it does not inject Service rules into either package. Adapters declare applicability and native facts, with no backend-name branches in reliable. The retired local workspace fallback is deleted. Scope and evidence are maintained in the [three-layer acceptance](../acceptance/worker-three-layer.md).
 
 ## Current package inventory
 
-At the rebased three-layer candidate `715b011f`, Windows `go list ./...` enumerates 51 packages. The current inventory includes the four isolated TUI/HTTP consumer owners, public Orca protocol codecs, path guards and test fixtures; retired Orca adapters and the former docs/validation package are absent. E2E scenario files use the `e2e` build tag and are listed separately. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
+The package inventory follows the current Go tree. Web/application consumers use the base HTTP client; the retired TUI and its request journal are absent. E2E scenarios retain their e2e build tag; the test runner enumerates the current owners.
 
 | Owner / purpose | Current packages |
 | --- | --- |
 | Product commands and runner | `cmd/orca-probe`, `cmd/steerline`, `cmd/test-feedback` |
-| Composition and host | `internal/app`, `internal/app/host`, `internal/consoleapp` |
-| Console | `internal/console`, `internal/console/activityrender` |
+| Composition and host | `internal/app`, `internal/app/host` |
 | Task | `internal/task`, `internal/task/model` |
 | Execution actor and pure values | `internal/execution`, `internal/execution/agentlaunch`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler`, `internal/execution/workflow`, `internal/execution/reliable` |
 | Execution effects and native reply evidence | `internal/execution/adapters/codex`, `internal/execution/adapters/orcatransport`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/adapters/protocol/orca`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
@@ -108,11 +105,10 @@ The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e
 | Execution records and neutral adapter values | `internal/execution/model` and `internal/execution/backend`; the unique `execution.Service` / `execution.CommandService` own dispatch, recovery, delivery and cleanup. |
 | Host calls into execution | `execution.HostPort` and scheduler callbacks in `internal/execution`; `internal/app/host` uses injected ports and does not implement domain transitions. |
 | Serializable product surface | `internal/product/api`; `internal/product/client` is the one injected Go client; `internal/product/query` projects read-only storage values. |
-| TUI composition | `internal/app.PrepareConsole` delegates to `internal/consoleapp.Prepare`; console consumes the HTTP adapter through its existing ports. |
 | Local native client transport | `internal/product/httpapi` adapts its consumer ports to `steerline-client/v1`; `internal/app` directly supplies the product client as the port implementation and starts the endpoint within the existing locked service lifetime. |
 | Atomic persistence declarations | `internal/storage/ports`; `internal/storage/sqlite` is the sole SQL/schema/transaction implementation. |
 | Composition inputs | `internal/app.Config`, `LoadConfig`, `NewService` and the app wiring files bind the concrete adapters, ports and SQLite owner. |
-| Main executable | `cmd/steerline/main.go` routes `console`, `run`/`start-service`, task and product commands. |
+| Main executable | `cmd/steerline/main.go` routes `serve-app`/`stop-app`, `run`/`start-service`, task and product commands. |
 | Test feedback executable | `cmd/test-feedback` selects L1, Full, scoped Go tests and registered controlled/live E2E scenarios; only its feedback/process imports are allowed outside tests. |
 | Diagnostic executable | `cmd/orca-probe` emits capability evidence and does not create product tasks, workers or messages. |
 
@@ -120,7 +116,7 @@ Historical migration ledgers and source inventories are available from the [fixe
 
 ## Build, install and launch sources
 
-The repository-root [`build.ps1`](../../build.ps1) builds `./cmd/steerline` to `bin/steerline.exe` on Windows; `-Web` also builds the assets and independent `bin/steerline-web.exe`. [`build.bat`](../../build.bat) always passes `-Web`, so double-clicking it builds both executables and requires Go, Node.js and npm; `--no-pause` skips its final keypress. A plain `build.ps1` still builds only the business executable without Node.js. They build only and do not install or switch a running service. `steerline install` copies the running executable through `internal/app.InstallSelf` to the configured application home. `steerline launchers` calls `internal/app/host.InstallLaunchers`, which writes the embedded `console.bat`, `service-window.bat` and launcher README into that home. The service process enters through `cmd/steerline` and `internal/app/host`; there is no separate legacy root host package. Installation/debug path isolation was delivered by #83; phase-one combined/24-hour/same-build recovery acceptance remains pending. Full stable/dev version management is outside the current roadmap.
+The repository-root [`build.ps1`](../../build.ps1) builds `./cmd/steerline` to `bin/steerline.exe` on Windows; `-Web` also builds the assets and independent `bin/steerline-web.exe`. [`build.bat`](../../build.bat) always passes `-Web`, so double-clicking it builds both executables and requires Go, Node.js and npm; `--no-pause` skips its final keypress. A plain `build.ps1` still builds only the business executable without Node.js. They build only and do not install or switch a running service. `steerline install` copies the running executable through `internal/app.InstallSelf` to the configured application home. `steerline launchers` calls `internal/app/host.InstallLaunchers`, which writes the embedded application/Web launchers, `service-window.bat` and launcher README into that home. The service process enters through `cmd/steerline` and `internal/app/host`; there is no separate legacy root host package. Installation/debug path isolation was delivered by #83; phase-one combined/24-hour/same-build recovery acceptance remains pending. Full stable/dev version management is outside the current roadmap.
 
 ## Platform-specific source owners
 
@@ -129,7 +125,6 @@ These files are selected by Go OS/build constraints and remain in their actual o
 | Concern | Current files |
 | --- | --- |
 | Service host | `internal/app/host/platform_windows.go`, `internal/app/host/platform_linux.go` and matching platform tests |
-| Console preference file semantics | `internal/console/preferences_windows.go`, `internal/console/preferences_unix.go` |
 | Execution journal and process facts | `internal/execution/journal_platform_{windows,linux,other}.go`; `internal/execution/process/facts_{windows,linux,other}.go`; `service_facts_{windows,linux,other}.go` |
 | Process replacement and ownership | `internal/execution/process/replace_{windows,unix}.go`; `internal/testkit/process/process_{windows,unix}.go`; `cmd/test-feedback/process_{windows,unix}.go` |
 | Test protocol lock and controlled state replacement | `internal/testkit/protocol/native_lock_{windows,other}.go`; `tests/e2e/internal/controlled/state_replace_{windows,other}.go` |
@@ -163,8 +158,8 @@ Test-only support has one owner under [`internal/testkit`](../../internal/testki
 | Host loop and control | [`internal/app/host/service_client.go`](../../internal/app/host/service_client.go), [`internal/app/host/control_protocol.go`](../../internal/app/host/control_protocol.go), [`internal/execution/scheduler/loop.go`](../../internal/execution/scheduler/loop.go) |
 | Execution actor and ports | [`internal/execution/service_construction.go`](../../internal/execution/service_construction.go), [`internal/execution/host_ports.go`](../../internal/execution/host_ports.go), [`internal/execution/service_commit.go`](../../internal/execution/service_commit.go) |
 | Runtime reconstruction | [`internal/execution/reconstruction/runtime.go`](../../internal/execution/reconstruction/runtime.go), [`internal/execution/reconstruction/run.go`](../../internal/execution/reconstruction/run.go) |
-| Product reads and client | [`internal/product/query/project_page.go`](../../internal/product/query/project_page.go), [`internal/product/client/client.go`](../../internal/product/client/client.go), [`internal/console/interfaces.go`](../../internal/console/interfaces.go) |
-| TUI and HTTP transport | [`internal/consoleapp`](../../internal/consoleapp), [`internal/product/httpclient`](../../internal/product/httpclient), [`internal/product/httpcontract`](../../internal/product/httpcontract), [`internal/product/httpfs`](../../internal/product/httpfs), [`internal/product/httpapi`](../../internal/product/httpapi), [protocol contract](../product-design/local-client-protocol.md), [`internal/app/execution_service_wiring.go`](../../internal/app/execution_service_wiring.go) |
+| Product reads and client | [`internal/product/query/project_page.go`](../../internal/product/query/project_page.go), [`internal/product/client/client.go`](../../internal/product/client/client.go) |
+| Web and HTTP transport | [`web/server`](../../web/server), [`internal/product/httpclient`](../../internal/product/httpclient), [`internal/product/httpcontract`](../../internal/product/httpcontract), [`internal/product/httpfs`](../../internal/product/httpfs), [`internal/product/httpapi`](../../internal/product/httpapi), [protocol contract](../product-design/local-client-protocol.md), [`internal/app/execution_service_wiring.go`](../../internal/app/execution_service_wiring.go) |
 | Storage ports and SQLite | [`internal/storage/ports`](../../internal/storage/ports), [`internal/storage/sqlite`](../../internal/storage/sqlite) |
 | Test feedback and process support | [`internal/testkit/feedback`](../../internal/testkit/feedback), [`internal/testkit/process`](../../internal/testkit/process), [`internal/testkit/protocol`](../../internal/testkit/protocol) |
 | Boundary guards and integration tests | [`internal/testkit/boundary`](../../internal/testkit/boundary), [`internal/testkit/boundary/e2e`](../../internal/testkit/boundary/e2e), [`tests/integration`](../../tests/integration) |
@@ -181,7 +176,7 @@ Test-only support has one owner under [`internal/testkit`](../../internal/testki
 
 ```mermaid
 flowchart LR
-    TUI[TUI] --> HC[HTTP 客户端]
+    Web[Web / 应用目录] --> HC[HTTP 客户端]
     HC --> HTTP[HTTP handler]
     HTTP --> App[应用查询与命令端口]
     App --> Query[只读产品查询]
@@ -202,7 +197,7 @@ flowchart LR
 
 | 边界 | 当前程度 | 仍共享的职责 |
 | --- | --- | --- |
-| TUI ↔ HTTP ↔ 服务 | 业务传输已经分开；console 只依赖产品值和消费接口，consoleapp/httpclient 的生产闭包不含业务库、query、execution 或 handler；#93已将原请求文件归 requestJournal，并由 consoleapp 显式注入 StopObserver | Console 仍组织 HTTP 对账；journal 用稳定私有 request-ID 锁文件和 Windows 内核锁/Unix flock 串行化全部写入，在锁内重读并校验原信封与 StopIdentity；applied/rejected 首次终态保留完整原回执。observer 只检查已保存原身份的 generation 与两锁，不读 HTTP 或 journal |
+| Web / 应用目录 ↔ HTTP ↔ 项目服务 | 浏览器认证与原信封保存在 Web；应用目录只读解析并转接公共 HTTP | 共享实例/进程身份核验保留；TUI Console、journal 和 observer 已退役 |
 | HTTP handler ↔ Go 应用 | Server 通过查询、命令、authority 与原生查看消费端口调用现有应用；不打开 SQL，不推进业务状态 | `command_registry.go` 统一普通命令和原生查看的登记/对账及跨动作仲裁；`request_records.go` 单独持有私有记录格式、大小边界和原子读写。app 将现有 product client 直接接入这些端口 |
 | 任务管理 ↔ 执行 | task 只依赖 task/model；execution 通过 TaskWorkPort/TaskResultPort 调用任务规则，不导入 task 实现 | claim/result/discard/delivery 跨域协调仍在 execution.CommandService；CommandStore 集合较宽，不能将它全部注入每个用途 |
 | 流程 ↔ worker 运行时 | adapter 不解析业务 JSON、不选择下一业务步骤 | staged_flow、worker 生命周期、反馈、恢复、会话采集及提交都是 Service 方法，共享 domain/runs/worker/effect 状态；主要是文件归属，尚无包级隔离 |
@@ -217,7 +212,7 @@ flowchart LR
 2. **高收益：收拢 worker 运行时资源所有权。** 首轮 [#96](../spec/worker-runtime-ownership.spec.md)只收拢观察器、原句柄、在途外部调用、取消/关闭和固定结果交接，复用已有后台机制。只接受已持久化 Operation 与冻结资源值，返回原身份事实/回执；不携带可写 RunView/apply闭包。业务 actor 保留步骤、Decision、恢复资格、提交与确认门槛，具体adapter保留证据/停服能力，本机/environment Orca仍共用实现。完整业务恢复拆分不混入首轮。
 3. **高收益：抽出任务最终交付。** [native_delivery_command.go](../../internal/execution/native_delivery_command.go) 当前组合冻结 provider、真实 PR 查询、执行门槛、任务结果和提交。[#95](../spec/task-delivery-usecase.spec.md)仅提取最终交付用例，接收固定候选/任务、带provider身份的PR事实、任务结果声明和提交端口；claim/discard的进一步收窄留后续。沿用 [ResultCommit](../../internal/storage/ports/task_result.go) 的原子提交，不拆唯一TaskDelivery/closed/WorkflowRun/图修订。流程/PR绑定仍由actor负责，未知发布但合法真实合并的原交付路径保持。
 4. **已交付：分离 HTTP 协议与命令登记/对账。** 任务 [#92](../spec/http-command-boundary.spec.md) 经PR #311将 Server 改为消费查询、命令、authority 和原生查看端口，app 直接提供现有 product client；登记 owner 接收固定信封与 OS 调用身份，不接收 Server、Request、ResponseWriter、具体 Client 或数据库连接。普通业务命令与原生窗口副作用共用记录 owner 和跨动作仲裁，保留各自重试规则；HTTP 层保留认证、路由、JSON 上限和状态码映射。不把 transport receipt 变成领域权威，也不把 unknown 当成重放许可。具体行为与验收结果见[专属验收](../acceptance/http-command-boundary.md)。
-5. **已交付：分离客户端原请求与本机观察。** [#93](../spec/http-client-request-lifecycle.spec.md)经PR #312保留已有Client/Open连接实现，由同包 `requestJournal` 独占 outgoing 文件职责，按原 request ID 使用稳定私有锁文件；所有写入在跨进程锁内重读完整信封、回执和 StopIdentity，applied/rejected first-wins。`Console` 继续组织原 HTTP 对账，`consoleapp` 显式注入只接收原认证 Identity 的平台 `StopObserver`。保留先保存后发送、窗口关闭取消、旧实例禁重放与原 applied/进程 generation/两锁三证据，不建设新连接框架或远程部署。
+5. **历史交付：客户端原请求与本机观察。** [#93](../spec/http-client-request-lifecycle.spec.md) 的 TUI Console/journal/observer 已随本次退役删除；基础 Client/Open 和应用/Web 所需进程身份核验保留，浏览器原信封由现有 Web IndexedDB 维护。原交付事实不改写。
 
 上述顺序优先减少共享 Service 的修改范围。HTTP 端口和客户端拆分可独立准备；交付抽取与 worker 抽取都涉及共享模型/接线时应分次落地。每次抽取都应以“消费者无需修改无关 owner，且测试无需完整 Service/真后端”验收，单纯移动文件或接口方法原样转发不算完成解耦。
 
@@ -226,6 +221,5 @@ flowchart LR
 - **会话/final 采集与 worker 控制：** 已有 ConversationSourcePort 和存储端口；进一步让采集只持有固定来源、读取游标与提交声明。body/历史读取无需启动/停止/恢复能力，保持 final 与 checkpoint 原子提交及原身份归属。
 - **宿主环境动作与业务反馈：** 原生查看、open_terminal、recheck_environment 属于宿主能力；Decision 答案及新业务 turn 属于流程。复用现有类型化目标，独立消费端口，避免新增宿主入口牵动 staged_flow。
 - **存储与产品投影的公共值：** 将 query 中被 SQLite/httpapi 共用的常量、历史/分页纯值移至真正的契约或消费端口 owner；保持同快照查询，逐步消除 SQLite 对 query 的引用，避免新建万能 common 包。
-- **TUI Model 的读取与输入状态：** finalReplyReader 已经分离，可按同样原则分离项目刷新/旧响应门槛与操作 journal 状态；按具体交互职责拆分，不为每个按键建立抽象。
 
 保持一个 Go 服务、一个业务写入仲裁与一个 SQLite 即可实现上述模块解耦；模块边界不要求独立进程、数据库或服务部署。当前只有一个固定开发流程，不预设插件系统、通用 DSL 或跨版本兼容层。

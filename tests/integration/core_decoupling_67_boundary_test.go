@@ -92,36 +92,6 @@ func TestCD67CoreBoundary(t *testing.T) {
 		}
 	})
 
-	t.Run("console_negative_all_tags_production_and_tests", func(t *testing.T) {
-		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/app/host", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/storage/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcatransport", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/app"} {
-			t.Run(dependency, func(t *testing.T) {
-				for _, file := range []string{"edge_plan9.go", "edge_linux_test.go"} {
-					root := t.TempDir()
-					dir := filepath.Join(root, "internal/console")
-					require(t, os.MkdirAll(dir, 0700))
-					require(t, os.WriteFile(filepath.Join(dir, file), []byte("//go:build never_enabled\n\npackage console\nimport _ \""+dependency+"\"\n"), 0600))
-					report, err := coreboundary.ScanSource(root)
-					require(t, err)
-					if !strings.Contains(strings.Join(report.Violations, "\n"), "console forbidden dependency") {
-						t.Fatalf("console fixture escaped: %+v", report)
-					}
-				}
-			})
-		}
-		t.Run("transitive_test_helper", func(t *testing.T) {
-			root := t.TempDir()
-			for path, source := range map[string]string{"internal/console/edge_darwin_test.go": "package console\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", "internal/helper/edge_freebsd.go": "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/product/client\"\n"} {
-				file := filepath.Join(root, path)
-				require(t, os.MkdirAll(filepath.Dir(file), 0700))
-				require(t, os.WriteFile(file, []byte(source), 0600))
-			}
-			report, err := coreboundary.ScanSource(root)
-			require(t, err)
-			if !strings.Contains(strings.Join(report.Violations, "\n"), "console forbidden dependency") {
-				t.Fatalf("helper fixture escaped: %+v", report)
-			}
-		})
-	})
 	t.Run("repository_all_tags_and_production_graphs", func(t *testing.T) {
 		_, file, _, ok := runtime.Caller(0)
 		if !ok {
@@ -138,7 +108,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 				t.Fatalf("empty migrated owner scan: %s", owner)
 			}
 		}
-		if report.CoreFiles == 0 || report.ConsoleFiles == 0 || report.Dependencies["windows-console"] == 0 || report.Dependencies["linux-console"] == 0 || report.Dependencies["windows"] == 0 || report.Dependencies["linux"] == 0 {
+		if report.CoreFiles == 0 || report.Dependencies["windows"] == 0 || report.Dependencies["linux"] == 0 {
 			t.Fatal("empty boundary scan")
 		}
 		if len(report.Violations) != 0 {

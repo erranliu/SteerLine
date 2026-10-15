@@ -32,7 +32,7 @@ func TestBusinessDeadlineIsFrozenBeforeIndependentCleanup(t *testing.T) {
 			if err := os.MkdirAll(s.Output, 0700); err != nil {
 				t.Fatal(err)
 			}
-			err := s.finishBody()
+			err := s.FinishBody()
 			if expired && !errors.Is(err, context.DeadlineExceeded) || !expired && err != nil {
 				t.Fatalf("business deadline result: %v", err)
 			}

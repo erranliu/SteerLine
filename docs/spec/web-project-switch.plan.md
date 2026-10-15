@@ -1,5 +1,7 @@
 # Plan：独立 Web 程序与已有项目切换
 
+> 后续变更：本文原 TUI 保留/组装条款已由[TUI 退役](tui-retirement.spec.md)取代；独立 Web、应用目录与项目切换要求继续有效，历史验收事实不改写。
+
 范围归 [Spec](web-project-switch.spec.md)，结果归[专属验收](../acceptance/web-project-switch.md)。用户直接授权普通开发规划，不纳入 roadmap；本次按用户授权直接实施，实际结果统一登记专属验收。实施基线 `f507b7183e95acd80c06de6b2b380e6e10c63674`（原规划代码调查基线 `b657baf39d82ff33e47c7175799421c340748a8d`）；已读取 `docs/spec/SpecGuide.md` 全文，其最后修改 commit 为 `d633d1110b4a54c555aa9f67dedb779a7cf9d807`，本次文件 SHA256 为 `8b340e17b0f402e924b3ddcb20e91e902bba0421b425921bd7cc62d946d45dd3`。
 
 ## 整体整合与依赖

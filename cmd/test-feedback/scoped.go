@@ -37,7 +37,7 @@ const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
 var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestTM04ExecutionWiring", "TestTM07StorageWiring"}
 
-var quickBoundarySubtests = []string{"pure_ownership_all_tags_production_and_tests", "negative_source_fixtures", "repository_all_tags_and_production_graphs", "console_negative_all_tags_production_and_tests", "claim_transaction_failure_and_original_receipt"}
+var quickBoundarySubtests = []string{"pure_ownership_all_tags_production_and_tests", "negative_source_fixtures", "repository_all_tags_and_production_graphs", "claim_transaction_failure_and_original_receipt"}
 
 func quickBoundaryPattern() string {
 	// Go matches each slash-separated test level independently. Keep all static
@@ -69,8 +69,6 @@ var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary/negative_source_fixtures/transitive_storage_edge",
 	"TestCD67CoreBoundary/negative_source_fixtures/reverse_client_subpackage",
 	"TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
-	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
-	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/transitive_test_helper",
 	"TestTM07StorageWiring",
 	"TestTM04ExecutionWiring",
 	"TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
@@ -87,7 +85,7 @@ var quickRulePackages = append(append([]string{}, taskRulePackages...), []string
 	"github.com/erranliu/SteerLine/internal/execution/backend",
 	executionPackage + "/reconstruction",
 	"github.com/erranliu/SteerLine/internal/storage/sqlite",
-	"github.com/erranliu/SteerLine/internal/console", "github.com/erranliu/SteerLine/internal/console/activityrender",
+	"github.com/erranliu/SteerLine/internal/product/activityrender",
 	"github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
 }...)
 
