@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 )
 
 func TestDebugResetBeforeInitializationKeepsFreshPackageAndHonorsHostLock(t *testing.T) {
@@ -34,5 +36,35 @@ func TestDebugResetBeforeInitializationKeepsFreshPackageAndHonorsHostLock(t *tes
 		if _, err := os.Stat(d.stateDir()); !os.IsNotExist(err) {
 			t.Fatalf("reset initialized fresh state: %v", err)
 		}
+	}
+}
+
+func TestEnvironmentCheckDebugResetPreservesUncertainResources(t *testing.T) {
+	r := runnerstate.EnvironmentCheckRecord{Operations: []runnerstate.EnvironmentCheckOperation{{Status: "outcome_unknown"}}}
+	if environmentCheckResetSafety(r) == nil {
+		t.Fatal("unknown start erased")
+	}
+	r.Operations[0].Status = "applied"
+	r.Report = &runnercontract.Check{Resources: runnercontract.CheckResources{Status: "pending"}}
+	if environmentCheckResetSafety(r) == nil {
+		t.Fatal("active resources erased")
+	}
+	r.Report.Resources.Status = "settled"
+	r.Operations = append(r.Operations, runnerstate.EnvironmentCheckOperation{Status: "outcome_unknown"})
+	if environmentCheckResetSafety(r) == nil {
+		t.Fatal("uncertain stop erased using older settled report")
+	}
+	r.Operations[1].Status = "applied"
+	if err := environmentCheckResetSafety(r); err != nil {
+		t.Fatal(err)
+	}
+	r.Report = nil
+	r.Operations = r.Operations[:1]
+	r.Operations[0].Status = "rejected"
+	if err := environmentCheckResetSafety(r); err != nil {
+		t.Fatal("definitively rejected start blocked reset", err)
+	}
+	if len(debugHistory) < 2 || debugHistory[0] != "environment_check_requests" || debugHistory[1] != "environment_checks" {
+		t.Fatal("check request associations not reset before their owner")
 	}
 }

@@ -19,20 +19,21 @@ import (
 // commandRegistry owns one request-ID namespace across normal commands and
 // native-viewer operations. It has no HTTP request/response or Server access.
 type commandRegistry struct {
-	projectIdentity string
-	instanceID      string
-	capabilities    []string
-	query           ProjectQueryPort
-	commands        CommandPort
-	authority       AuthorityPort
-	nativeViewer    NativeSessionPort
-	readiness       *readinessState
-	records         requestRecordAccess
-	mu              sync.Locker
+	environmentChecks api.EnvironmentCheckPort
+	projectIdentity   string
+	instanceID        string
+	capabilities      []string
+	query             ProjectQueryPort
+	commands          CommandPort
+	authority         AuthorityPort
+	nativeViewer      NativeSessionPort
+	readiness         *readinessState
+	records           requestRecordAccess
+	mu                sync.Locker
 }
 
 func newCommandRegistry(options Options, ports Ports, readiness *readinessState, records requestRecordAccess) *commandRegistry {
-	return &commandRegistry{projectIdentity: options.ProjectIdentity, instanceID: options.InstanceID,
+	return &commandRegistry{environmentChecks: environmentPort(ports.Query), projectIdentity: options.ProjectIdentity, instanceID: options.InstanceID,
 		capabilities: append([]string(nil), options.Capabilities...), query: ports.Query, commands: ports.Commands,
 		authority: ports.Authority, nativeViewer: ports.NativeViewer, readiness: readiness, records: records, mu: &sync.Mutex{}}
 }
@@ -50,6 +51,9 @@ func (c *commandRegistry) registerRecord(record requestRecord) error {
 func (c *commandRegistry) Submit(ctx context.Context, envelope CommandEnvelope, caller string) (CommandResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if isEnvironmentCheckAction(envelope.Action) {
+		return c.submitEnvironment(ctx, envelope)
+	}
 	canonical, err := json.Marshal(envelope)
 	if err != nil {
 		return CommandResponse{}, &protocolError{status: http.StatusBadRequest, code: "request_invalid", reason: err.Error()}
@@ -370,6 +374,9 @@ func responseHTTPStatus(status string) int {
 }
 
 func validateActionEnvelope(envelope CommandEnvelope) error {
+	if isEnvironmentCheckAction(envelope.Action) {
+		return validateEnvironmentEnvelope(envelope)
+	}
 	switch envelope.Action {
 	case "answer_decision":
 		var payload answerPayload
@@ -617,6 +624,26 @@ func (s *commandRegistry) controlInput(ctx context.Context, envelope CommandEnve
 }
 
 func (s *commandRegistry) lookupAuthoritative(ctx context.Context, requestID string, original *CommandEnvelope, record *requestRecord) (CommandResponse, error) {
+	if s.environmentChecks != nil {
+		if original != nil && isEnvironmentCheckAction(original.Action) {
+			return s.readEnvironment(ctx, *original, record)
+		}
+		if original == nil {
+			if check, err := s.environmentChecks.EnvironmentCheckRequest(ctx, requestID); err == nil {
+				for _, op := range check.Operations {
+					if op.RequestID == requestID {
+						var envelope CommandEnvelope
+						if json.Unmarshal(op.Original, &envelope) == nil && envelope.RequestID == requestID && envelope.ProjectID == ProjectID(s.projectIdentity) && check.Project == s.projectIdentity && isEnvironmentCheckAction(envelope.Action) {
+							return environmentResponse(envelope, check), nil
+						}
+					}
+				}
+				return CommandResponse{}, &protocolError{status: 409, code: "request_id_conflict", reason: "invalid original check association"}
+			} else if !environmentNotFound(err) {
+				return CommandResponse{}, err
+			}
+		}
+	}
 	if original != nil && original.Action == "open_native_session" && record != nil && record.Response != nil {
 		return record.response(), nil
 	}

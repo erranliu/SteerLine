@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+执行权限与 Git 环境检查接入（2026-10-16，普通开发，审查修订、先不实现）：[Spec](environment-check.spec.md) · [Plan](environment-check.plan.md) · [本仓验收与审查记录](../acceptance/environment-check.md)。Runner 前置已独立成其仓库同名 Spec/Plan 与 SREC 验收；本仓仅负责 caller/HTTP/Web 的 SLEC 验收。三命令与快照轮询，认证/权限和远端缺口由 Runner 负责；构建及业务资源后置，不改 roadmap。
+
 SteerRunner 拆分后的测试精简（2026-10-15，普通开发，已实施）：[Spec](runner-test-convergence.spec.md) · [Plan](runner-test-convergence.plan.md) · [专属验收](../acceptance/runner-test-convergence.md)。执行专项归 Runner；L2 保留本机 Codex 真实实现、报告、发布、SteerlineTest PR 合并和 Task 交付全流程，不改 roadmap。
 
 TUI 退役与 Web 唯一交互前端（普通开发）：[Spec](tui-retirement.spec.md) · [Plan](tui-retirement.plan.md) · [专属验收](../acceptance/tui-retirement.md)。2026-10-15 按用户授权实施，实时结果归专属验收；包含默认 Web 调试包、共用代码保留与 TUI 专属测试清理，不改 roadmap。

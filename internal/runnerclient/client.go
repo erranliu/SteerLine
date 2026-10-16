@@ -62,7 +62,7 @@ func (b *bounded) Write(value []byte) (int, error) {
 }
 func mutation(command string) bool {
 	switch command {
-	case "submit", "reply", "resume", "stop", "service stop":
+	case "submit", "reply", "resume", "stop", "service stop", "environment-check start", "environment-check stop":
 		return true
 	}
 	return false
@@ -78,6 +78,8 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 	}
 	argv := []string{}
 	switch command {
+	case "environment-check start", "environment-check inspect", "environment-check stop":
+		argv = append(argv, "environment-check", command[len("environment-check "):])
 	case "service start", "service status", "service stop", "service verify-stopped":
 		argv = append(argv, "service", command[len("service "):])
 	case "version", "capabilities", "submit", "inspect", "last-message", "open-native-session", "events", "reply", "resume", "stop":
@@ -131,6 +133,9 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 			return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Native viewer may have opened; do not replay the operation", Exit: 6, Unknown: true}
 		}
 		if mutation(command) {
+			if command == "environment-check start" || command == "environment-check stop" {
+				return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Inspect the original environment-check request ID; do not replay it", Exit: 6, Unknown: true}
+			}
 			return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Inspect or retry the original request ID and unchanged input", Exit: 6, Unknown: true}
 		}
 		return Response{}, &Failure{Code: "runner_unavailable", Message: "Runner query response is unavailable", Exit: 4}
@@ -213,7 +218,7 @@ func exitCode(code string) int {
 		return 3
 	case "service_unavailable", "service_start_failed", "detach_unsupported", "startup_unverified", "environment_unavailable":
 		return 4
-	case "request_conflict", "request_not_found", "command_not_found", "run_not_found", "stale_instance", "directory_conflict", "stale_revision", "invalid_state", "stale_question", "resume_required", "operation_unverified", "answer_pending", "repository_conflict":
+	case "request_conflict", "request_not_found", "command_not_found", "run_not_found", "check_not_found", "stale_instance", "directory_conflict", "stale_revision", "invalid_state", "stale_question", "resume_required", "operation_unverified", "answer_pending", "repository_conflict":
 		return 5
 	case "request_outcome_unknown":
 		return 6

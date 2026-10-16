@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -18,7 +19,7 @@ import (
 	storesqlite "github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-var debugHistory = []string{"task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
+var debugHistory = []string{"environment_check_requests", "environment_checks", "task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
 
 func (d *debugRelease) reset(check bool) error {
 	scopes := []*debugRelease{d}
@@ -134,6 +135,31 @@ func (d *debugRelease) resetState(check bool) error {
 	}
 	if info.Status != "not_running" {
 		return errors.New("Runner service must be proven stopped before reset")
+	}
+	checks, err := tx.QueryContext(ctx, "SELECT payload FROM environment_checks WHERE project_identity=?", project)
+	if err != nil {
+		return err
+	}
+	for checks.Next() {
+		var raw []byte
+		var record runnerstate.EnvironmentCheckRecord
+		if err = checks.Scan(&raw); err != nil {
+			break
+		}
+		if err = json.Unmarshal(raw, &record); err != nil {
+			break
+		}
+		err = environmentCheckResetSafety(record)
+		if err != nil {
+			break
+		}
+	}
+	if err == nil {
+		err = checks.Err()
+	}
+	checks.Close()
+	if err != nil {
+		return err
 	}
 	rows, err := tx.QueryContext(ctx, "SELECT payload FROM runner_candidates WHERE project_identity=?", project)
 	if err != nil {
@@ -275,5 +301,20 @@ func (d *debugRelease) resetState(check bool) error {
 		}
 	}
 	fmt.Println("DONE: SteerlineTest state reset without backup")
+	return nil
+}
+
+func environmentCheckResetSafety(record runnerstate.EnvironmentCheckRecord) error {
+	if len(record.Operations) == 0 {
+		return errors.New("environment check intent is incomplete")
+	}
+	if record.Operations[0].Status != "rejected" && (record.Report == nil || record.Report.Resources.Status != "settled") {
+		return errors.New("environment check resources are not settled; preserve recovery state")
+	}
+	for _, op := range record.Operations {
+		if op.Status == "outcome_unknown" {
+			return errors.New("environment check operation is unverified; preserve original request")
+		}
+	}
 	return nil
 }

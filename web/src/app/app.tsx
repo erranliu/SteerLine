@@ -50,6 +50,11 @@ import { Button } from "../shared/ui/button";
 import { Dispatch } from "../features/tasks/dispatch";
 import { requiresAnswer } from "../features/runs/state";
 import { Status, short } from "../shared/ui/status";
+const EnvironmentChecks = lazy(() =>
+  import("../features/environment-checks/environment-checks").then(
+    (module) => ({ default: module.EnvironmentChecks }),
+  ),
+);
 const Dag = lazy(() =>
   import("../features/tasks/dag").then((module) => ({ default: module.Dag })),
 );
@@ -144,6 +149,15 @@ function SettingsPage({ api, online }: { api: Api; online: boolean }) {
         </div>
       </div>
       <section className="settings-panel">
+        <h2>环境检查</h2>
+        <p>
+          主动验证 Worker 的执行权限与 Git / PR 能力，查看检查历史和待处理资源。
+        </p>
+        <NavLink
+          to={"/projects/" + api.identity.project_id + "/environment-checks"}
+        >
+          打开环境检查 →
+        </NavLink>
         <h2>已有执行方案</h2>
         {result.isPending && <p className="muted">正在读取执行方案…</p>}
         <p className="muted">
@@ -473,6 +487,12 @@ export function Workspace({
             <Suspense fallback={<div className="empty">正在加载页面…</div>}>
               <Routes>
                 <Route
+                  path={
+                    "/projects/" + identity.project_id + "/environment-checks"
+                  }
+                  element={<EnvironmentChecks />}
+                />
+                <Route
                   path={"/projects/" + identity.project_id + "/dag"}
                   element={<Dag />}
                 />
@@ -566,7 +586,7 @@ export function App({ initial }: { initial: BrowserSession }) {
   const location = useLocation();
   const navigate = useNavigate();
   const match = location.pathname.match(
-    /^\/projects\/([^/]+)\/(dag|runs|settings)$/,
+    /^\/projects\/([^/]+)\/(dag|runs|settings|environment-checks)$/,
   );
   const id = match?.[1] ?? "";
   const page = match?.[2] ?? "dag";
@@ -651,7 +671,13 @@ export function App({ initial }: { initial: BrowserSession }) {
                   ? "配置错误"
                   : p.online
                     ? "在线"
-                    : ({starting:"启动中",failed:"启动失败",stopping:"停止中",stopped:"已停止",ready:"在线"}[p.runtime_state ?? "stopped"])}
+                    : {
+                        starting: "启动中",
+                        failed: "启动失败",
+                        stopping: "停止中",
+                        stopped: "已停止",
+                        ready: "在线",
+                      }[p.runtime_state ?? "stopped"]}
               {(!p.project_id || p.conflict) && (p.diagnostic || p.conflict)
                 ? " · " + (p.diagnostic || p.conflict)
                 : ""}
@@ -662,7 +688,17 @@ export function App({ initial }: { initial: BrowserSession }) {
         <div className="project-current">
           <div>
             <strong>{selected.name}</strong>
-            <small>{selected.online ? "在线" : ({starting:"启动中",failed:"启动失败",stopping:"停止中",stopped:"已停止",ready:"在线"}[selected.runtime_state ?? "stopped"])}</small>
+            <small>
+              {selected.online
+                ? "在线"
+                : {
+                    starting: "启动中",
+                    failed: "启动失败",
+                    stopping: "停止中",
+                    stopped: "已停止",
+                    ready: "在线",
+                  }[selected.runtime_state ?? "stopped"]}
+            </small>
           </div>
           <span className="path" title={selected.repository}>
             {selected.repository}

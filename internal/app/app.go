@@ -10,6 +10,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
@@ -78,12 +79,13 @@ func runConfiguredService(ctx context.Context, config Config, mode, startupID, c
 			return nil, err
 		}
 		localAPI := &serviceLocalAPI{runDir: input.RunDir, projectID: input.RepositoryIdentity}
-		service, err := newConfiguredServiceWithHost(config, serviceHTTPHost{HostPort: hostPort, localAPI: localAPI}, mode)
+		var checkStore *sqlite.SQLiteStore
+		service, err := newRunnerServiceWithTaskStore(ctx, config, serviceHTTPHost{HostPort: hostPort, localAPI: localAPI}, mode, func(store *sqlite.SQLiteStore) { checkStore = store })
 		if err != nil {
 			return nil, err
 		}
 		localAPI.capabilities = append([]string(nil), service.State.Service.Capabilities...)
-		product, err := openServiceProjectClient(context.Background(), config, service)
+		product, err := openServiceProjectClientWithCommands(context.Background(), config, service, nil, checkStore)
 		if err != nil {
 			return nil, errors.Join(err, service.Close())
 		}

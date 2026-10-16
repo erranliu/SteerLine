@@ -12,7 +12,9 @@
 
 ## 权限与登录
 
-本机 Codex 的固定原生权限资源、MXC AppContainer、自动审核、Git 管理根及临时目录规则由 Runner 管理。原生拒绝与自动审核事实如实记录；SteerLine 不扩大写根、不添加权限回退，也不代代理发布。
+2026-10-16 接入：SteerLine caller/HTTP/Web 已实现，真实 Runner 发布交接待前置。[环境检查接入 Spec](../spec/environment-check.spec.md) / [Plan](../spec/environment-check.plan.md)消费 Runner 独立规格发布的 `execution.settings.access_mode=sandbox|full_access`，缺省 sandbox；检查与业务启动使用同源冻结模式，均不依赖人工/自动审批。认证类型和准备由 Runner 原 owner 决定，不新增宿主登录回退。主动 Agent 检查不替代业务无模型确定性预检；历史报告不替代新工作区必要核验。Runner 沙箱认证的作用域冲突及远端前置须在其最终版本落实，SteerLine 不生成原生权限参数，不据文档宣称双模式或远端已可用。
+
+本机 Codex 的固定原生权限资源、MXC AppContainer、Git 管理根及临时目录规则由 Runner 管理。原生拒绝与未核实事实如实记录；SteerLine 不扩大写根、不添加权限回退，也不代代理发布。
 
 Git、Codex、Orca 和原有登录属于执行环境。生成调试包不复制 auth、token、hooks、sandbox 凭据、数据库或安装配置。远端使用该 environment 的原生权限与登录，不套用本机 Codex 沙箱结论。
 

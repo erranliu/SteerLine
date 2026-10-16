@@ -124,6 +124,42 @@ beforeEach(async () => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("immutable browser requests", () => {
+  it.each([
+    ["start_environment_check", "command_not_found"],
+    ["stop_environment_check", "command_not_found"],
+    ["start_environment_check", "request_not_found"],
+    ["stop_environment_check", "request_not_found"],
+  ])(
+    "keeps unknown %s query-only on %s, including repeat submit",
+    async (action, code) => {
+      envelope.action = action;
+      await journal.saveRequest(envelope);
+      await journal.recordResult(
+        envelope.request_id,
+        undefined,
+        "lost response",
+      );
+      const fetch = vi.fn(async (_path: string, _init?: RequestInit) =>
+        response({ code, reason: "original outcome is unavailable" }, 404),
+      );
+      vi.stubGlobal("fetch", fetch);
+      const reopened = new Api(identity, "csrf");
+      await expect(reopened.reconcile(envelope)).rejects.toThrow();
+      await expect(reopened.submit(envelope)).rejects.toThrow();
+      expect(fetch).toHaveBeenCalledTimes(2);
+      expect(
+        fetch.mock.calls.every(
+          ([, init]) => !init?.method || init.method === "GET",
+        ),
+      ).toBe(true);
+      expect(
+        (await journal.requestByID(envelope.request_id))?.envelope,
+      ).toEqual(envelope);
+      expect(
+        (await journal.requestByID(envelope.request_id))?.response,
+      ).toBeUndefined();
+    },
+  );
   it("snapshots caller-owned data before waiting for a lock or persistence", async () => {
     const original = structuredClone(envelope);
     const fetch = vi.fn(async (_path, init) => {

@@ -56,6 +56,8 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 }
 
 var nativeTaskSchema = []string{
+	`CREATE TABLE environment_checks (project_identity TEXT NOT NULL, check_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,check_key))`,
+	`CREATE TABLE environment_check_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, check_key TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,check_key) REFERENCES environment_checks(project_identity,check_key))`,
 	`CREATE TABLE runner_candidates (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, task_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), request_id TEXT NOT NULL, run_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), UNIQUE(project_identity,candidate_id,task_id), UNIQUE(project_identity,request_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
 	`CREATE UNIQUE INDEX runner_candidate_run ON runner_candidates(project_identity,run_id) WHERE run_id<>''`,
 	`CREATE TABLE runner_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, event_id TEXT NOT NULL, payload BLOB NOT NULL, UNIQUE(project_identity,candidate_id,event_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,
