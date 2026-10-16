@@ -351,3 +351,82 @@ it("disables commands when offline even while paused queries retain a successful
   );
   client.clear();
 });
+
+it("routes manual reconciliation through the original envelope while an automatic round is pending", async () => {
+  const client = testClient();
+  const identity = {
+    ...fixtureIdentity,
+    project_id: "manual-receipt",
+    instance_id: "current",
+  };
+  const api = new Api(identity, "csrf", "manual-home");
+  const original = new Api(
+    { ...identity, instance_id: "old" },
+    "csrf",
+    api.home,
+  );
+  const envelope = original.envelope("start_task", "1", 1, {});
+  await saveRequest(envelope);
+  const originalKey = projectQueries(original).tasks().queryKey;
+  client.setQueryData(originalKey, tasks);
+  vi.spyOn(Api.prototype, "get").mockImplementation(
+    async (path) =>
+      (path === "/snapshot"
+        ? makeSnapshot(api)
+        : path === "/presentation"
+          ? { presentation: { profiles: [] } }
+          : tasks) as never,
+  );
+  let finishAutomatic!: (receipt: Receipt) => void;
+  let finishManual!: (receipt: Receipt) => void;
+  const reconcile = vi.spyOn(Api.prototype, "reconcile").mockImplementation(
+    (_envelope, signal) =>
+      new Promise((resolve) => {
+        if (signal) finishAutomatic = resolve;
+        else finishManual = resolve;
+      }),
+  );
+  const mounted = render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={["/projects/manual-receipt/settings"]}>
+        <Workspace home={api.home} initial={{ identity, csrf_token: "csrf" }} />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(reconcile).toHaveBeenCalledTimes(1));
+  const button = await screen.findByRole("button", { name: "查询原请求" });
+  fireEvent.click(button);
+  await waitFor(() => expect(reconcile).toHaveBeenCalledTimes(2));
+  expect(reconcile.mock.calls[1][0]).toEqual(envelope);
+  expect(reconcile.mock.calls[1][1]).toBeUndefined();
+  expect(button).toBeDisabled();
+  await act(async () =>
+    finishManual({
+      ...envelope,
+      original: envelope,
+      status: "applied",
+      sampled_at: "now",
+    }),
+  );
+  await waitFor(() =>
+    expect(client.getQueryState(originalKey)?.isInvalidated).toBe(true),
+  );
+  expect(
+    client.getQueryState(projectQueries(api).snapshot().queryKey)
+      ?.isInvalidated,
+  ).toBe(false);
+  expect(reconcile).toHaveBeenCalledTimes(2);
+  const signal = reconcile.mock.calls[0][1]!;
+  mounted.unmount();
+  expect(signal.aborted).toBe(true);
+  await act(async () =>
+    finishAutomatic({
+      ...envelope,
+      original: envelope,
+      status: "accepted",
+      sampled_at: "now",
+    }),
+  );
+  expect(reconcile).toHaveBeenCalledTimes(2);
+  client.clear();
+});
