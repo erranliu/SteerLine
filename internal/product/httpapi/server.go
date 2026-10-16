@@ -165,6 +165,9 @@ func (s *Server) Read(ctx context.Context, route string, values url.Values) (any
 }
 
 func (s *Server) read(ctx context.Context, identity Identity, path []string, queryValues url.Values) (any, error) {
+	if len(path) > 0 && path[0] == "environment-checks" {
+		return s.readEnvironmentChecks(ctx, path[1:], queryValues)
+	}
 	if len(path) == 3 && path[0] == "runs" && (path[2] == "recovery" || path[2] == "decision-eligibility") {
 		return s.readRecovery(ctx, path, queryValues)
 	}

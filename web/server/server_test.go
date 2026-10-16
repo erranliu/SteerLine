@@ -146,6 +146,38 @@ func TestWebAuthenticationAndOriginalForwarding(t *testing.T) {
 		t.Fatal("failure became absence")
 	}
 }
+
+func TestEnvironmentCheckBrowserRoutes(t *testing.T) {
+	s, client := fixture(t)
+	if w := request(s, "GET", "/projects/"+client.identity.ProjectID+"/environment-checks", "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {
+		t.Fatal("direct check URL did not serve SPA", w.Code, w.Body.String())
+	}
+	cookie, csrf := login(t, s)
+	base := "/api/v2/application/projects/" + client.identity.ProjectID
+	for _, path := range []string{"/environment-checks/options", "/environment-checks", "/environment-checks/" + strings.Repeat("a", 32)} {
+		if w := request(s, "GET", base+path, "", cookie, ""); w.Code != 200 || client.route != "/projects/"+client.identity.ProjectID+path {
+			t.Fatal("check read was not forwarded", w.Code, w.Body.String(), client.route)
+		}
+	}
+	e := httpcontract.CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: client.identity.ProjectID, InstanceID: client.identity.InstanceID, Action: "start_environment_check", TargetID: client.identity.ProjectID, Payload: json.RawMessage(`{"profile_id":"fixture","access_mode":"full_access"}`)}
+	for _, action := range []string{"start_environment_check", "stop_environment_check"} {
+		e.Action = action
+		if action == "stop_environment_check" {
+			e.RequestID = strings.Repeat("b", 32)
+			e.TargetID = strings.Repeat("a", 32)
+			e.ExpectedVersion = 3
+			e.Payload = json.RawMessage(`{}`)
+		}
+		body, _ := json.Marshal(e)
+		before := client.calls
+		if w := request(s, "POST", base+"/commands", string(body), cookie, ""); w.Code != 403 || client.calls != before {
+			t.Fatal("check mutation bypassed CSRF")
+		}
+		if w := request(s, "POST", base+"/commands", string(body), cookie, csrf); w.Code != 200 || client.calls != before+1 || client.envelope.Action != e.Action || client.envelope.TargetID != e.TargetID || client.envelope.ExpectedVersion != e.ExpectedVersion || string(client.envelope.Payload) != string(e.Payload) {
+			t.Fatal("check authorization changed", w.Code, client.envelope)
+		}
+	}
+}
 func TestWebOriginHostAndStaticBoundaries(t *testing.T) {
 	s, _ := fixture(t)
 	for _, change := range []func(*http.Request){func(r *http.Request) { r.Host = "attacker.test" }, func(r *http.Request) { r.RemoteAddr = "192.168.1.2:1234" }, func(r *http.Request) { r.Header.Set("Origin", "http://evil.test") }, func(r *http.Request) { r.Header.Set("Sec-Fetch-Site", "cross-site") }} {

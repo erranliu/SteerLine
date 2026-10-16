@@ -1,0 +1,54 @@
+{
+  "source": "SteerLine proposed check/v1 fixture; NOT a published or Controlled-verified Runner sample",
+  "resource_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "capabilities": {
+    "version": 1,
+    "supported": [{"adapter":"codex-app-server","target_kind":"local","access_modes":["sandbox","full_access"]}],
+    "input_schema": {
+      "type":"object","additionalProperties":false,"required":["repository","execution","publication"],
+      "properties": {
+        "repository":{"type":"object","required":["url","remote","base_branch","base_revision"]},
+        "publication":{"type":"object","required":["provider","repository","base_branch","settings"]},
+        "correlation":{"type":"object"},
+        "execution":{"type":"object","required":["adapter","target","settings"],"properties":{
+          "adapter":{"const":"codex-app-server"},"target":{"type":"object","required":["kind"],"properties":{"kind":{"const":"local"}}},
+          "settings":{"type":"object","additionalProperties":false,"required":["executable","access_mode"],"properties":{
+            "executable":{"type":"string","minLength":1},"model":{"type":"string"},"reasoning_effort":{"type":"string"},"access_mode":{"enum":["sandbox","full_access"]}
+          }}
+        }}
+      }
+    },
+    "receipt_schema": {"type":"object","additionalProperties":false,"required":["command_id","check_id","receipt_status","action_status"],"properties":{
+      "command_id":{"type":"string","minLength":1},"check_id":{"type":"string","minLength":1},"receipt_status":{"const":"accepted"},"action_status":{"type":"string","minLength":1}
+    }},
+    "inspection_schema": {"type":"object","additionalProperties":false,"required":["command","check"],"properties":{
+      "command":{"type":["object","null"],"required":["command_id","request_id","command","receipt_status","action_status"],"properties":{
+        "command_id":{"type":"string","minLength":1},"request_id":{"type":"string","minLength":1},"command":{"enum":["environment-check start","environment-check stop"]},"receipt_status":{"enum":["accepted","rejected"]},"action_status":{"type":"string","minLength":1}
+      }},
+      "check":{"type":["object","null"],"required":["check_id","revision","input_digest","resource_digest","context","updated_at","status","capability_status","required_checks","items","resources","controls"]}
+    }}
+  },
+  "input": {
+    "repository":{"url":"https://example.invalid/fixture/repo.git","local_path":"fixture-repo","remote":"origin","base_branch":"main","base_revision":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+    "execution":{"adapter":"codex-app-server","target":{"kind":"local"},"settings":{"executable":"fixture-codex","access_mode":"sandbox"}},
+    "publication":{"provider":"github","repository":"fixture/repo","base_branch":"main","settings":{"base_url":"https://github.com","authentication_refs":["FIXTURE_ONLY"]}},
+    "correlation":{"project":"fixture-project"}
+  },
+  "receipt":{"command_id":"start-command","check_id":"check-fixture","receipt_status":"accepted","action_status":"pending"},
+  "inspection": {
+    "command":{"command_id":"start-command","request_id":"11111111111111111111111111111111","check_id":"check-fixture","command":"environment-check start","receipt_status":"accepted","action_status":"completed"},
+    "check": {
+      "check_id":"check-fixture","revision":1,"input_digest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","resource_digest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "actual_context":{"identity":"fixture-only, no native execution"},"updated_at":"2026-10-16T01:00:00Z","status":"completed","capability_status":"failed",
+      "required_checks":["permissions","agent_tool","git_read","git_push","pr"],
+      "items":[
+        {"id":"permissions","status":"passed","identity":"fixture-worker","evidence":[{"source":"fixture","text":"not native evidence"}]},
+        {"id":"agent_tool","status":"passed","evidence":[]},
+        {"id":"git_read","status":"passed","evidence":[]},
+        {"id":"git_push","status":"failed","reason":"credential unavailable","evidence":[]},
+        {"id":"pr","status":"unverified","reason":"credential unavailable","evidence":[]}
+      ],
+      "resources":{"status":"settled"},"controls":{"can_stop":false}
+    }
+  }
+}

@@ -33,25 +33,26 @@ type Options struct {
 }
 
 type Server struct {
-	query        QueryPort
-	commands     *commandRegistry
-	activities   ActivityQueryPort
-	conversation ConversationQueryPort
-	recovery     RecoveryQueryPort
-	options      Options
-	apiDir       string
-	commandsDir  string
-	credential   string
-	token        string
-	leaseID      string
-	listener     net.Listener
-	http         *http.Server
-	identity     Identity
-	discovery    Discovery
-	readiness    *readinessState
-	mu           sync.RWMutex
-	started      bool
-	closed       bool
+	environmentChecks api.EnvironmentCheckPort
+	query             QueryPort
+	commands          *commandRegistry
+	activities        ActivityQueryPort
+	conversation      ConversationQueryPort
+	recovery          RecoveryQueryPort
+	options           Options
+	apiDir            string
+	commandsDir       string
+	credential        string
+	token             string
+	leaseID           string
+	listener          net.Listener
+	http              *http.Server
+	identity          Identity
+	discovery         Discovery
+	readiness         *readinessState
+	mu                sync.RWMutex
+	started           bool
+	closed            bool
 }
 
 // Prepare binds only the loopback interface and creates the per-instance
@@ -120,7 +121,7 @@ func Prepare(ctx context.Context, ports Ports, options Options) (*Server, error)
 	}
 
 	readiness := &readinessState{status: "starting"}
-	server := &Server{query: ports.Query, activities: ports.Query, conversation: ports.Query, recovery: ports.Query,
+	server := &Server{environmentChecks: environmentPort(ports.Query), query: ports.Query, activities: ports.Query, conversation: ports.Query, recovery: ports.Query,
 		options: options, apiDir: apiDir, commandsDir: commandsDir, readiness: readiness,
 		credential: credential, token: token, leaseID: leaseID, listener: listener,
 		identity: Identity{Protocol: Protocol, ProjectID: ProjectID(project.Identity), RepositoryIdentity: project.Identity,
@@ -358,7 +359,7 @@ func NewProject(ports Ports, options Options) (*Server, error) {
 		return nil, err
 	}
 	readiness := &readinessState{status: "starting"}
-	s := &Server{query: ports.Query, activities: ports.Query, conversation: ports.Query, recovery: ports.Query, options: options, readiness: readiness,
+	s := &Server{environmentChecks: environmentPort(ports.Query), query: ports.Query, activities: ports.Query, conversation: ports.Query, recovery: ports.Query, options: options, readiness: readiness,
 		identity: Identity{Protocol: Protocol, ProjectID: ProjectID(project.Identity), RepositoryIdentity: project.Identity, InstanceID: options.InstanceID, Process: options.Process, Status: "starting", Capabilities: options.Capabilities, SampledAt: time.Now().UTC()}}
 	s.commands = newCommandRegistry(options, ports, readiness, newFileRequestRecordOwner(dir))
 	return s, nil

@@ -4,6 +4,8 @@
 
 ## 当前入口
 
+执行权限与 Git 环境检查接入（2026-10-16，仅设计、未实施）：[本仓验收与审查记录](environment-check.md)，仅 SLEC caller/HTTP/Web；Runner 前置与原生检查在其仓库独立 SREC 验收，不共用通过状态。构建和业务资源后置。
+
 SteerRunner 拆分后的测试精简（2026-10-15，已授权实施）：[专属验收](runner-test-convergence.md)，执行专项迁出，L2 保留本机 Codex＋真实 Runner＋真实 PR 的完整闭环；实际通过/失败及边界见专属验收。
 
 Runner 执行展示与最近消息（普通开发）：[专属验收](execution-observability.md)，流程/状态恢复可读、仅当前可见执行刷新有时间的最近摘要；自动与人工项分别登记。

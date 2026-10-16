@@ -19,6 +19,14 @@ func TestMain(m *testing.M) {
 		_ = os.WriteFile(os.Getenv("STEERLINE_RUNNER_CLI_CALL"), append([]byte(strings.Join(os.Args[1:], "\n")+"\n--stdin--\n"), body...), 0600)
 		var request Request
 		_ = json.Unmarshal(body, &request)
+		if mode == "check-response" {
+			fmt.Print(strings.ReplaceAll(os.Getenv("STEERLINE_CHECK_RESPONSE"), "__REQUEST_ID__", request.RequestID))
+			code := 0
+			if os.Getenv("STEERLINE_CHECK_ERROR") != "" {
+				code = 5
+			}
+			os.Exit(code)
+		}
 		if mode == "timeout" {
 			time.Sleep(3 * time.Second)
 			os.Exit(0)
