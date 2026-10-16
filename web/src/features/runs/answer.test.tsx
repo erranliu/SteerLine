@@ -23,6 +23,7 @@ it("submits native multi-question JSON once without duplicating it as a note", a
   const workspace = { api, identity: api.identity, online: true, busy: false, send } as unknown as Workspace;
   const run = {
     run_id: "candidate", execution_id: "original-run", attempt_id: "original-attempt",
+    participation: "active", submission_status: "accepted", stop_requested: false,
     control_revision: 4, recovery_version: 7, workflow_status: "waiting_input", task_status: "in_progress",
     decision: { id: "native-question", version: 7, status: "pending", request: {
       question: "回答全部问题", context: "color: 颜色\nred: 红色\ndetails: 说明",
@@ -58,6 +59,9 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
   } as Workspace;
   const candidate = {
     run_id: "run-1",
+    participation: "active",
+    submission_status: "accepted",
+    stop_requested: false,
     workflow_status: "waiting_input",
     task_status: "in_progress",
     execution_id: "execution-1",
@@ -172,6 +176,9 @@ it.each(["unmount", "offline", "revision", "collapse"])(
       attempt_id: "attempt",
       control_revision: 1,
       recovery_version: 0,
+      participation: "active",
+      submission_status: "accepted",
+      stop_requested: false,
       workflow_status: "waiting_input",
       task_status: "in_progress",
       decision: {

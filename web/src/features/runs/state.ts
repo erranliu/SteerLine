@@ -1,5 +1,5 @@
 import type { Candidate } from "../../shared/api/types";
-const participatingStates = new Set([
+const actionableStates = new Set([
   "queued",
   "running",
   "waiting_input",
@@ -9,11 +9,13 @@ const participatingStates = new Set([
   "pr_ready",
 ]);
 export function participating(run: Candidate) {
-  return participatingStates.has(run.workflow_status);
+  return run.participation === "active";
 }
 export function businessOpen(run: Candidate) {
   return (
     participating(run) &&
+    !run.stop_requested &&
+    actionableStates.has(run.workflow_status) &&
     !["closed", "completed", "discarded"].includes(run.task_status)
   );
 }
@@ -36,21 +38,27 @@ export function requiresAnswer(run: Candidate) {
   );
 }
 export function candidateState(run: Candidate) {
-  if (run.workflow_status === "abandoned") return "abandoned";
+  if (run.participation === "abandoned") return "abandoned";
+  if (run.delivery_outcome === "winner") return "delivered";
+  if (run.participation === "completed") return "completed";
   if (run.execution_status === "running") return "running";
   if (requiresAnswer(run)) return "waiting_for_input";
   if (waitingForMerge(run)) return "waiting_for_merge";
-  if (run.delivery_outcome === "winner") return "delivered";
   return run.execution_status;
 }
 export function stopReason(run: Candidate, runs: Candidate[]) {
   if (!participating(run)) return "候选已结束，历史只读；资源保留";
+  if (run.stop_requested) return "候选停止待核实";
+  if (!actionableStates.has(run.workflow_status))
+    return "执行状态待核实，刷新后再停止参与";
   const task = run.domain_task_id || run.task_id;
   if (
     runs.filter(
       (other) =>
         (other.domain_task_id || other.task_id) === task &&
-        participating(other),
+        participating(other) &&
+        !other.stop_requested &&
+        actionableStates.has(other.workflow_status),
     ).length <= 1
   )
     return "只剩一个参与候选，不能停止";
