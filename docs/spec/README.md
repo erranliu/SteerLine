@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-产品读取、命令入口与 Web 容器重构（2026-10-16，仅审计/设计、未实施）：[Spec](product-read-command-web-refactor.spec.md) · [Plan](product-read-command-web-refactor.plan.md) · [验收安排](../acceptance/product-read-command-web-refactor.md)。优先收拢候选事实/展示规则；命令保留唯一仲裁与三种受理顺序，Web 提取副作用 hooks；不重建整套读取/命令/前端框架，不改 roadmap。
+产品读取、命令入口与 Web 容器重构（2026-10-16，按审计收窄并实施）：[Spec](product-read-command-web-refactor.spec.md) · [Plan](product-read-command-web-refactor.plan.md) · [专属验收](../acceptance/product-read-command-web-refactor.md)。优先收拢候选事实/展示规则；命令保留唯一仲裁与三种受理顺序，Web 提取副作用 hooks；不重建整套读取/命令/前端框架，不改 roadmap。
 
 应用与项目生命周期收拢（2026-10-16，普通开发，按审计收窄并实施）：[Spec](application-project-lifecycle.spec.md) · [Plan](application-project-lifecycle.plan.md) · [验收](../acceptance/application-project-lifecycle.md)。删除旧启动链，统一项目资源 owner、部分启动收尾和进程内调用排空；保留原停机/失败策略，不改 roadmap。
 

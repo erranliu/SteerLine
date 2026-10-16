@@ -1,6 +1,6 @@
 # 产品读取、命令入口与 Web 容器重构 Plan
 
-配套 [Spec](product-read-command-web-refactor.spec.md) 与[专属验收](../acceptance/product-read-command-web-refactor.md)。2026-10-16 仅完成审计/规划，产品尚未实施；实施以用户后续授权为起点。本 Plan 定义交付安排，不维护实时结果。
+配套 [Spec](product-read-command-web-refactor.spec.md) 与[专属验收](../acceptance/product-read-command-web-refactor.md)。2026-10-16 已获用户实施与提 PR 授权；A/B/C 按本文实施，实际验证与剩余人工项归专属验收。本 Plan 定义交付安排，不维护实时结果。
 
 ## 1. 实施顺序与依赖
 

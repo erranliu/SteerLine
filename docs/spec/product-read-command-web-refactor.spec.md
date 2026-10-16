@@ -1,6 +1,6 @@
 # 产品读取、命令入口与 Web 容器重构 Spec
 
-2026-10-16，用户要求审计并形成 Spec + Plan；当前仅设计，未授权实施产品代码。审计基线 `57fadfce9390982748d5ff39e6e378c47f0cf5fc`，包含已合并的应用/项目生命周期收拢。配套 [Plan](product-read-command-web-refactor.plan.md) 与[专属验收](../acceptance/product-read-command-web-refactor.md)。普通开发，不占 Task ID，不修改 roadmap。
+2026-10-16，完成审计后，用户授权实施并提 PR；本 Spec 的 A/B/C 范围已落地，自动/人工结果以专属验收为准。审计基线 `57fadfce9390982748d5ff39e6e378c47f0cf5fc`，包含已合并的应用/项目生命周期收拢。配套 [Plan](product-read-command-web-refactor.plan.md) 与[专属验收](../acceptance/product-read-command-web-refactor.md)。普通开发，不占 Task ID，不修改 roadmap。
 
 ## 1. 审计结论
 
@@ -14,7 +14,7 @@
 
 三批可以分别审查。命令入口整理不依赖候选读取重构；Web 的结构拆分也不需要等待命令入口重写。推荐先固定候选 DTO 语义，再整理命令，再提取 Web，属于实施顺序，不增加无关前置。
 
-## 2. 审计证据与现有可复用部分
+## 2. 基线审计证据与保留部分
 
 ### 2.1 候选状态
 
@@ -23,7 +23,7 @@
 - [query/pages.go](../../internal/product/query/pages.go) 已有由 TaskDelivery.SelectedWorkflowRunID 产生 winner/loser 的规则；[SQLite delivery](../../internal/storage/sqlite/runner_result.go) 与 [withdrawal](../../internal/storage/sqlite/runner_stop.go) 已分别持久化 completed/abandoned 和停止义务。复用这些事实，不能让展示重新决定业务结算。
 - [app/client.go](../../internal/app/client.go) 当前存在 RunnerSnapshot → taskrunner.Project → Runtime/RunView → query.CandidateView → DTO 的多次映射。但 Runtime 还服务于 checkpoint、宿主观察及决策可用性，整体替换会扩散到身份与持久化边界。当前证据只支持先收拢状态解释；不以减少 copy 行数作为重写依据。
 
-以上是源码审计结果，不声称已复现所有用户界面故障。实现时用小型状态组合夹具证明可观察差异。
+以上描述审计基线；实现由跨视图和 Web 状态组合用例验证差异，不能当作当前代码仍有这些缺陷。
 
 ### 2.2 命令入口
 

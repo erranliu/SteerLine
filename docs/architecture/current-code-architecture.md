@@ -40,6 +40,8 @@ flowchart LR
 
 2026-10-16 生命周期收拢：`application_catalog.go` 只读取冻结配置，离线 verify-stop 不创建活动目录。`ProjectRuntime` 统一取得与最终关闭项目资源；factory/actor 借用 store，actor 结束只写 checkpoint，`projectRunner` 保留原停机身份和结算规则。本地关闭、锁释放与 Runner 证明分别汇总；已进入的 Read/Command/Task 排空后才关库。旧逐项目启动/窗口/listener/停止采样链已删除；本地失败保留锁和宿主策略沿用。[Spec](../spec/application-project-lifecycle.spec.md) · [Plan](../spec/application-project-lifecycle.plan.md) · [验收](../acceptance/application-project-lifecycle.md)。
 
+2026-10-16 产品读取与入口整理：`runnerstate.ObservedStatus` 统一详情/历史的原观察来源；`participation`、`submission_status`、`stop_requested` 沿现有 RunView/CandidateView 传到产品 DTO，TaskDelivery 单独产生 winner/loser。`httpapi/command_registry.go` 保留唯一仲裁，`command_intents.go`、`command_dispatch.go`、`command_authority.go`、`command_native.go` 各负原职责，环境检查继续专用流程。Web 的 `useApplicationProjects`、`useWorkspaceConnection`、`useOriginalRequests` 分别持有目录选择、Api/观察连接、原请求副作用；设置页和 Operations 独立渲染，共用原 Api、query cache、journal 和 context。[Spec](../spec/product-read-command-web-refactor.spec.md) · [Plan](../spec/product-read-command-web-refactor.plan.md) · [验收](../acceptance/product-read-command-web-refactor.md)。
+
 ## 任务交付链
 
 启动先以 Task/图版本校验固定契约和候选共同 base，再在一个事务中领取候选并保存完整 CLI outbox。提交未知时只查原请求；迟到接受仍绑定原 Run，并执行已持久保存的停止义务。公开事件按原身份/游标事务保存，原 final 的正文与 hash 可追溯，日志不作为业务成功事实。
