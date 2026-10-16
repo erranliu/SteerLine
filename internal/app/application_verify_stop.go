@@ -70,8 +70,7 @@ func VerifyApplicationStopped(ctx context.Context, runnerExecutable string) (App
 	if err = recheckableShutdown(original, *b.Identity); err != nil {
 		return result, err
 	}
-	d := NewApplicationDirectory(HomeDir())
-	defer d.cancel() // census only; never Start or Close project runtimes
+	d := loadApplicationCatalog(HomeDir())
 	if d.err != nil {
 		return result, d.err
 	}

@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -21,159 +24,189 @@ import (
 	"github.com/erranliu/SteerLine/internal/projectconnection"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
 type ProjectRuntime struct {
-	config            Config
-	hostConfig        host.Config
-	configID          string
-	repoLock, runLock *host.RepoLock
-	log               *os.File
+	config              Config
+	hostConfig          host.Config
+	configID            string
+	repoLock, runLock   *host.RepoLock
+	log                 io.WriteCloser
+	store               *sqlite.SQLiteStore
+	runner              projectRunner
+	product             *productclient.Client
+	port                *runtimeProjectPort
+	closeOnce           sync.Once
+	localErr, runnerErr error
 }
 
-func (d *ApplicationDirectory) prepareProject(e *catalogEntry) (r *ProjectRuntime, err error) {
-	ctx, cancel := context.WithTimeout(d.ctx, 60*time.Second)
+func (r *ProjectRuntime) prepare(ctx context.Context, home string, e *catalogEntry, global []byte) (err error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	stage := func(name string) { fmt.Fprintf(os.Stderr, "project %s startup: %s\n", e.view.ConfigID, name) }
 	stage("load configuration")
-	c, err := loadConfigSnapshot(e.ref.ConfigPath, e.data, d.global, nil, true)
+	c, err := loadConfigSnapshot(e.ref.ConfigPath, e.data, global, nil, true)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	// Resolve again from the frozen bytes immediately before ownership is taken.
 	ref := e.ref
 	if err = projectconnection.ResolveSnapshot(ctx, &ref, e.data); err != nil {
-		return nil, err
+		return err
 	}
 	if ref.Identity != e.ref.Identity || canonicalConfigPath(ref.RunDir) != canonicalConfigPath(e.ref.RunDir) {
-		return nil, errors.New("project identity changed after configuration census")
+		return errors.New("project identity changed after configuration census")
 	}
 	stage("validate state ownership")
 	hc, err := hostRuntimeConfig(ctx, c)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	admission := serviceAdmission{config: &c}
 	if err = admission.ValidateStateLocation(hc); err != nil {
-		return nil, err
+		return err
 	}
-	repoLock, err := host.LockRepository(ref.Identity)
+	r.repoLock, err = host.LockRepository(ref.Identity)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	var runLock *host.RepoLock
-	defer func() {
-		if err != nil {
-			if runLock != nil {
-				runLock.Close()
-			}
-			repoLock.Close()
-		}
-	}()
 	if err = os.MkdirAll(ref.RunDir, 0700); err != nil {
-		return nil, err
+		return err
 	}
-	runLock, err = host.LockRepository(ref.RunDir)
+	r.runLock, err = host.LockRepository(ref.RunDir)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	lockedRef := e.ref
 	if err = projectconnection.ResolveSnapshot(ctx, &lockedRef, e.data); err != nil {
-		return nil, err
+		return err
 	}
 	if lockedRef.Identity != e.ref.Identity || canonicalConfigPath(lockedRef.RunDir) != canonicalConfigPath(e.ref.RunDir) {
-		return nil, errors.New("project identity changed while acquiring locks")
+		return errors.New("project identity changed while acquiring locks")
 	}
 	// These gates may inspect execution tools but cannot initialize a project
 	// until both ownership locks have been obtained.
 	stage("execution preflight")
 	hc, err = admission.Preflight(ctx, hc, true)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	stage("initialize native storage")
-	if err = admission.InitializeNativeProject(ctx, hc); err != nil {
-		return nil, err
+	if r.store, err = openOwnedNativeTaskCommandStore(ctx, &c); err != nil {
+		return err
 	}
-	logDir := filepath.Join(d.home, "logs", "projects")
+	logDir := filepath.Join(home, "logs", "projects")
 	if err = os.MkdirAll(logDir, 0700); err != nil {
-		return nil, err
+		return err
 	}
-	log, err := os.OpenFile(filepath.Join(logDir, e.view.ProjectID+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
+	logFile, err := os.OpenFile(filepath.Join(logDir, e.view.ProjectID+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return &ProjectRuntime{config: c, hostConfig: hc, configID: e.view.ConfigID, repoLock: repoLock, runLock: runLock, log: log}, nil
+	r.log = logFile
+	r.config, r.hostConfig = c, hc
+	return nil
 }
 
-func (r *ProjectRuntime) Run(parent context.Context, publish func(*runtimeProjectPort)) (result contract.ProjectShutdown, retErr error) {
+func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntry, global []byte, publish func(*runtimeProjectPort)) (result contract.ProjectShutdown, retErr error) {
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
 	defer startupTimer.Stop()
-	result = contract.ProjectShutdown{ConfigID: r.configID, ProjectID: httpcontract.ProjectID(r.config.Identity())}
 	defer func() {
-		r.log.Close()
-		if result.LocalClosed {
-			r.runLock.Close()
-			r.repoLock.Close()
-			result.LocksReleased = true
+		cancel()
+		r.close()
+		result = contract.ProjectShutdown{ConfigID: r.configID, ProjectID: e.view.ProjectID, LocalClosed: r.localErr == nil, LocksReleased: r.localErr == nil, ResourcesSettled: r.runner.ResourceSettlementError() == nil}
+		if r.port != nil {
+			result.InstanceID = r.port.instance
+		}
+		retErr = errors.Join(retErr, r.localErr, r.runnerErr, r.runner.ResourceSettlementError())
+		if !result.LocalClosed || !result.ResourcesSettled {
+			result.Diagnostic = retErr.Error()
 		}
 	}()
-	admission := serviceAdmission{config: &r.config}
-	hostPort := host.NewServiceHost(r.hostConfig, "", "off", r.log, admission, serviceActivityFormatter{})
-	var store *sqlite.SQLiteStore
-	service, err := newRunnerServiceWithTaskStore(ctx, r.config, hostPort, "manual", func(value *sqlite.SQLiteStore) { store = value })
-	if err != nil {
-		result.LocalClosed = true
-		// Startup may have reached the independent daemon before losing its
-		// acknowledgement. A nil actor cannot prove original resources absent.
-		result.ResourcesSettled = false
+	if err := r.prepare(ctx, home, e, global); err != nil {
 		return result, err
 	}
-	result.InstanceID = service.InstanceID()
-	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", result.InstanceID, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
+	if retErr = r.runner.start(ctx, r.config.RunnerExecution, r.config.RunDir, positiveDuration(r.config.CommandTimeout, 30*time.Second), r.config.runnerPublication()); retErr != nil {
+		return
+	}
+	hostPort := host.NewServiceHost(r.hostConfig, "off", r.log, serviceActivityFormatter{})
+	var service *taskrunner.Actor
+	service, retErr = newRunnerService(r.config, hostPort, r.store, r.runner.client, r.runner.info)
+	if retErr != nil {
+		return
+	}
+	instance := service.InstanceID()
+	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.config.runtimeHost = &r.hostConfig
-	product, err := openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context, bool) (productclient.TaskCommands, error) {
-		return &runtimeTaskCommands{clientTaskCommands: newClientTaskCommands(store, r.config), service: service}, nil
-	}, store)
-	if err != nil {
-		closeErr := service.Close()
-		result.LocalClosed = closeErr == nil
-		result.ResourcesSettled = service.ResourceSettlementError() == nil
-		return result, errors.Join(err, closeErr)
+	r.product, retErr = openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context, bool) (productclient.TaskCommands, error) {
+		return &runtimeTaskCommands{clientTaskCommands: newClientTaskCommands(r.store, r.config), service: service}, nil
+	}, r.store)
+	if retErr != nil {
+		return
 	}
-	port, err := httpapi.NewProject(httpapi.Ports{Query: product, Commands: product, Authority: product, NativeViewer: product}, httpapi.Options{RunDir: r.config.RunDir, ProjectIdentity: r.config.Identity(), InstanceID: result.InstanceID, Process: localAPIProcessIdentity(service.State.Service.ProcessIdentity), Capabilities: publicProjectCapabilities(service.State.Service.Capabilities)})
-	if err != nil {
-		closeErr := errors.Join(product.Close(), service.Close())
-		result.LocalClosed = closeErr == nil
-		result.ResourcesSettled = service.ResourceSettlementError() == nil
-		return result, errors.Join(err, closeErr)
+	var port *httpapi.Server
+	port, retErr = httpapi.NewProject(httpapi.Ports{Query: r.product, Commands: r.product, Authority: r.product, NativeViewer: r.product}, httpapi.Options{RunDir: r.config.RunDir, ProjectIdentity: r.config.Identity(), InstanceID: instance, Process: localAPIProcessIdentity(service.State.Service.ProcessIdentity), Capabilities: publicProjectCapabilities(service.State.Service.Capabilities)})
+	if retErr != nil {
+		return
 	}
-	project := &runtimeProjectPort{Server: port, product: product, config: r.config, store: store, instance: result.InstanceID}
+	r.port = &runtimeProjectPort{Server: port, product: r.product, config: r.config, store: r.store, instance: instance}
 	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if err := port.SetReady(result.InstanceID, service.State.Service.Ready, serviceReadyDiagnostic(service)); err != nil {
+		if err := port.SetReady(instance, service.State.Service.Ready, serviceReadyDiagnostic(service)); err != nil {
 			return err
 		}
 		if service.State.Service.Ready {
 			startupTimer.Stop()
 		}
-		publish(project)
+		publish(r.port)
 		return nil
 	}}
-	runErr := host.RunService(ctx, actor, r.hostConfig, "manual")
-	project.StopAccepting()
-	closeErr := errors.Join(port.Close(context.Background()), product.Close(), service.Close())
-	result.LocalClosed = closeErr == nil
-	result.ResourcesSettled = service.ResourceSettlementError() == nil
-	if !result.ResourcesSettled {
-		result.Diagnostic = service.ResourceSettlementError().Error()
-	}
-	retErr = errors.Join(runErr, closeErr, service.ResourceSettlementError())
+	retErr = host.RunService(ctx, actor, r.hostConfig, "manual")
 	return
+}
+
+// close is the sole final resource closer, including partial startup failures.
+// Remote Runner uncertainty never prevents local cleanup or changes its result.
+func (r *ProjectRuntime) close() {
+	r.closeOnce.Do(func() {
+		if r.port != nil {
+			r.port.StopAccepting()
+			r.port.drain()
+			r.localErr = errors.Join(r.localErr, r.port.Server.Close(context.Background()))
+		}
+		if r.product != nil {
+			r.localErr = errors.Join(r.localErr, r.product.Close())
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		r.runnerErr = r.runner.shutdown(ctx)
+		cancel()
+		// Preserve the former EndActor/Close pair's bounded follow-up. A confirmed
+		// stop only re-reads failed evidence; an unknown stop retains its request ID.
+		if r.runner.ResourceSettlementError() != nil && r.runner.stop != nil {
+			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+			r.runnerErr = errors.Join(r.runnerErr, r.runner.shutdown(ctx))
+			cancel()
+		}
+		if r.store != nil {
+			r.localErr = errors.Join(r.localErr, r.store.Close())
+		}
+		if r.log != nil {
+			r.localErr = errors.Join(r.localErr, r.log.Close())
+		}
+		if r.localErr == nil {
+			if r.runLock != nil {
+				r.runLock.Close()
+			}
+			if r.repoLock != nil {
+				r.repoLock.Close()
+			}
+		}
+	})
 }
 
 type runtimeProjectPort struct {
@@ -183,16 +216,22 @@ type runtimeProjectPort struct {
 	config   Config
 	store    taskStorage
 	stopping atomic.Bool
+	users    sync.RWMutex
 }
 
 func (p *runtimeProjectPort) StopAccepting() { p.stopping.Store(true) }
 func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.CommandEnvelope) (httpcontract.CommandResponse, error) {
-	if p.stopping.Load() {
-		return httpcontract.CommandResponse{}, &httpclient.ClientError{Status: 503, Code: "service_stopping", Reason: "application host is stopping"}
+	if err := p.enter(); err != nil {
+		return httpcontract.CommandResponse{}, err
 	}
+	defer p.users.RUnlock()
 	return p.Server.Command(ctx, in)
 }
 func (p *runtimeProjectPort) Task(ctx context.Context, method, route string, body json.RawMessage) (any, error) {
+	if err := p.enter(); err != nil {
+		return nil, err
+	}
+	defer p.users.RUnlock()
 	if method == "GET" {
 		kind, target, id := "create_task_batch", p.config.Identity(), strings.TrimPrefix(route, "/task-batches/")
 		if strings.HasPrefix(route, "/tasks/") {
@@ -255,4 +294,30 @@ func (p *runtimeProjectPort) Task(ctx context.Context, method, route string, bod
 		}
 		return p.product.AddPredecessors(ctx, input)
 	}
+}
+
+// Admission covers reads and direct task receipts as well as command writes.
+func (p *runtimeProjectPort) enter() error {
+	// Reject late callers before a waiting drain writer can block their RLock.
+	if p.stopping.Load() {
+		return projectStoppingError()
+	}
+	p.users.RLock()
+	if p.stopping.Load() {
+		p.users.RUnlock()
+		return projectStoppingError()
+	}
+	return nil
+}
+func (p *runtimeProjectPort) drain() { p.users.Lock(); p.users.Unlock() }
+func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.Values) (any, error) {
+	if err := p.enter(); err != nil {
+		return nil, err
+	}
+	defer p.users.RUnlock()
+	return p.Server.Read(ctx, route, values)
+}
+
+func projectStoppingError() error {
+	return &httpclient.ClientError{Status: 503, Code: "service_stopping", Reason: "application host is stopping"}
 }

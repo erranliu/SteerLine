@@ -42,7 +42,7 @@ func (a serviceAdmission) ValidateStateLocation(input host.Config) error {
 		return err
 	}
 	// This read-only gate rejects Beads and unsupported files/formats before the
-	// host publishes startup.json or opens the service log.
+	// project acquires storage or opens its service log.
 	return PreflightNativeStatePath(*a.config)
 }
 
@@ -56,17 +56,6 @@ func (a serviceAdmission) Preflight(ctx context.Context, input host.Config, chec
 	return hostRuntimeConfig(ctx, *a.config)
 }
 
-func (a serviceAdmission) InitializeNativeProject(ctx context.Context, input host.Config) error {
-	if err := a.syncHostFacts(input); err != nil {
-		return err
-	}
-	store, err := openOwnedNativeTaskProject(ctx, a.config)
-	if err != nil {
-		return err
-	}
-	return store.Close()
-}
-
 func validateNativeStore(ctx context.Context, config Config) error {
 	path := filepath.Join(config.RunDir, "steerline.db")
 	reader, err := openBoundNativeReader(ctx, config, path)
@@ -75,5 +64,3 @@ func validateNativeStore(ctx context.Context, config Config) error {
 	}
 	return reader.Close()
 }
-
-var _ host.ApplicationAdmission = serviceAdmission{}

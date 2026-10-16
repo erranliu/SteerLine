@@ -1,18 +1,14 @@
 package app
 
 import (
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
@@ -76,53 +72,4 @@ func (g RunnerExecutionConfig) taskProfiles(repository string, publication runne
 		profiles[p.ID] = taskrunner.Profile{ID: p.ID, Name: p.Name, Input: runnerclient.RunInput{Repository: runnerclient.Repository{LocalPath: repository}, Execution: p.Execution, Workflow: p.Workflow, Publication: publication}}
 	}
 	return profiles
-}
-
-// startRunner fixes the release and validates Runner's published schemas before
-// the app publishes ready or commits a task claim. Only this explicit service
-// startup path starts the daemon; opening/checking a project stays read-only.
-func (g RunnerExecutionConfig) startRunner(ctx context.Context, runDir string, timeout time.Duration, publication runnerclient.Publication) (runnerclient.Client, runnerclient.ServiceInfo, error) {
-	if err := g.Validate(); err != nil {
-		return runnerclient.Client{}, runnerclient.ServiceInfo{}, err
-	}
-	if err := runnerstatepath.Prepare(runDir); err != nil {
-		return runnerclient.Client{}, runnerclient.ServiceInfo{}, err
-	}
-	cli, version, err := g.Runner.Open(ctx, runnerstatepath.Directory(runDir), timeout)
-	if err != nil {
-		return cli, runnerclient.ServiceInfo{}, err
-	}
-	before, err := cli.ServiceStatus(ctx)
-	if err != nil {
-		return cli, runnerclient.ServiceInfo{}, err
-	}
-	info, err := cli.StartService(ctx, version)
-	if err != nil {
-		return cli, info, err
-	}
-	catalog, err := cli.Catalog(ctx, version)
-	if err == nil {
-		cli.NativeSessionAdapters = append([]string(nil), catalog.Capabilities.NativeSessionViewer.Adapters...)
-	}
-	if err == nil {
-		err = catalog.ValidatePublication(publication)
-	}
-	if err == nil {
-		for _, profile := range g.Profiles {
-			if e := catalog.ValidateExecution(profile.Execution); e != nil {
-				err = fmt.Errorf("Runner profile %s: %w", profile.ID, e)
-				break
-			}
-			if e := catalog.ValidateWorkflow(profile.Workflow); e != nil {
-				err = fmt.Errorf("Runner workflow %s: %w", profile.ID, e)
-				break
-			}
-		}
-	}
-	if err != nil && before.Status == "not_running" {
-		cleanup, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		err = errors.Join(err, cli.StopService(cleanup, info.InstanceID, "sl-startup-rejected-"+info.InstanceID))
-	}
-	return cli, info, err
 }

@@ -12,7 +12,7 @@ flowchart LR
     Bridge --> CLI[runnerclient 固定 EXE / CLI]
     CLI --> Runner[独立 SteerRunner 常驻服务]
     Runner --> Native[本机 Codex / 远端 Orca]
-    Runner --> State[项目 runner/ 状态与日志]
+    Runner --> State[项目独立短目录中的状态与日志]
 ```
 
 ## 模块归属
@@ -37,6 +37,8 @@ flowchart LR
 旧 actor/worker、adapters、workflow、reliable、conversation owner、执行写表、闲置执行事务端口与原生重建函数已物理删除。执行三层、工作区、会话、输入、恢复、原 final 与发布取证均由 Runner 单写；具体删除和验收见[删除审计](../acceptance/steerrunner-deletion-audit.md)。
 
 2026-10-16 补充清理：旧 lifecycle/adapter 端口、原生事件与 PR 线索解析、旧候选绑定/停止/丢弃辅助规则及旧状态转移已按生产引用删除，专属测试同步移除。仍被 checkpoint/产品查询引用的记录形状、停服策略展示值、能力状态、活动字段及当前 TaskDelivery 校验继续保留；包名暂不调整。范围与验证见[本次清理验收](../acceptance/execution-legacy-cleanup.md)。
+
+2026-10-16 生命周期收拢：`application_catalog.go` 只读取冻结配置，离线 verify-stop 不创建活动目录。`ProjectRuntime` 统一取得与最终关闭项目资源；factory/actor 借用 store，actor 结束只写 checkpoint，`projectRunner` 保留原停机身份和结算规则。本地关闭、锁释放与 Runner 证明分别汇总；已进入的 Read/Command/Task 排空后才关库。旧逐项目启动/窗口/listener/停止采样链已删除；本地失败保留锁和宿主策略沿用。[Spec](../spec/application-project-lifecycle.spec.md) · [Plan](../spec/application-project-lifecycle.plan.md) · [验收](../acceptance/application-project-lifecycle.md)。
 
 ## 任务交付链
 

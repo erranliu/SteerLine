@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -21,85 +19,49 @@ import (
 )
 
 type catalogEntry struct {
-	view    contract.Project
-	ref     api.ProjectRef
-	data    []byte
-	port    *runtimeProjectPort
-	result  contract.ProjectShutdown
-	runtime *ProjectRuntime
+	*catalogProject
+	port        *runtimeProjectPort
+	result      contract.ProjectShutdown
+	resultReady bool
+	runtime     *ProjectRuntime
 }
 
 // ApplicationDirectory owns the frozen configuration collection and independent
 // project runtimes. Catalog and Connect never initialize storage.
 type ApplicationDirectory struct {
-	home      string
-	mu        sync.RWMutex
-	entries   []*catalogEntry
-	global    []byte
-	err       error
-	ctx       context.Context
-	cancel    context.CancelFunc
-	done      chan struct{}
-	startOnce sync.Once
+	home              string
+	mu                sync.RWMutex
+	entries           []*catalogEntry
+	global            []byte
+	err               error
+	ctx               context.Context
+	cancel            context.CancelFunc
+	done              chan struct{}
+	started, stopping bool
+	doneOnce          sync.Once
 }
 
 func NewApplicationDirectory(home string) *ApplicationDirectory {
 	ctx, cancel := context.WithCancel(context.Background())
-	d := &ApplicationDirectory{home: home, ctx: ctx, cancel: cancel, done: make(chan struct{})}
-	d.global, _ = readConfiguration(filepath.Join(home, "execution.json"))
-	f, err := os.Open(filepath.Join(home, "etc"))
-	if os.IsNotExist(err) {
-		return d
+	catalog := loadApplicationCatalog(home)
+	d := &ApplicationDirectory{home: home, ctx: ctx, cancel: cancel, done: make(chan struct{}), global: catalog.global, err: catalog.err}
+	for _, p := range catalog.entries {
+		d.entries = append(d.entries, &catalogEntry{catalogProject: p, resultReady: true, result: contract.ProjectShutdown{ConfigID: p.view.ConfigID, LocalClosed: true, ResourcesSettled: true, LocksReleased: true}})
 	}
-	if err != nil {
-		d.err = err
-		return d
-	}
-	defer f.Close()
-	files, err := f.ReadDir(513)
-	if err != nil && err != io.EOF {
-		d.err = err
-		return d
-	}
-	if len(files) > 512 {
-		d.err = errors.New("project directory exceeds 512 entries")
-		return d
-	}
-	for _, file := range files {
-		if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".json") {
-			continue
-		}
-		entry := &catalogEntry{view: contract.Project{ConfigID: file.Name(), Name: strings.TrimSuffix(file.Name(), filepath.Ext(file.Name())), RuntimeState: "starting"}, ref: api.ProjectRef{ConfigPath: filepath.Join(home, "etc", file.Name()), ApplicationHome: home}}
-		entry.data, err = readConfiguration(entry.ref.ConfigPath)
-		if err != nil {
-			entry.view.RuntimeState = "failed"
-			entry.view.Diagnostic = boundedDiagnostic(err.Error(), 4096)
-		}
-		d.entries = append(d.entries, entry)
-	}
-	sort.Slice(d.entries, func(i, j int) bool { return d.entries[i].view.ConfigID < d.entries[j].view.ConfigID })
 	return d
 }
 
-func readConfiguration(path string) ([]byte, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
+func (d *ApplicationDirectory) Start() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.started || d.stopping {
+		return
 	}
-	defer f.Close()
-	data, err := io.ReadAll(io.LimitReader(f, (1<<20)+1))
-	if err != nil {
-		return nil, err
-	}
-	if len(data) > 1<<20 {
-		return nil, errors.New("configuration exceeds 1 MiB")
-	}
-	return data, nil
+	d.started = true
+	go d.run()
 }
-
-func (d *ApplicationDirectory) Start() { d.startOnce.Do(func() { go d.run() }) }
 func (d *ApplicationDirectory) run() {
-	defer close(d.done)
+	defer d.doneOnce.Do(func() { close(d.done) })
 	census, cancel := context.WithTimeout(d.ctx, 30*time.Second)
 	type resolved struct {
 		entry *catalogEntry
@@ -141,6 +103,7 @@ func (d *ApplicationDirectory) run() {
 				e := result.entry
 				e.ref = result.ref
 				e.view.ProjectID = httpcontract.ProjectID(result.ref.Identity)
+				e.result.ProjectID = e.view.ProjectID
 				e.view.Repository = strings.TrimSuffix(result.ref.Identity, string(filepath.Separator)+".git")
 			}
 			d.mu.Unlock()
@@ -186,6 +149,10 @@ func (d *ApplicationDirectory) run() {
 		if failed {
 			continue
 		}
+		d.mu.Lock()
+		e.resultReady = false
+		e.result = contract.ProjectShutdown{ConfigID: e.view.ConfigID, ProjectID: e.view.ProjectID}
+		d.mu.Unlock()
 		wg.Add(1)
 		go func(e *catalogEntry) {
 			defer wg.Done()
@@ -198,29 +165,13 @@ func (d *ApplicationDirectory) run() {
 			var releaseOnce sync.Once
 			releaseSlot := func() { releaseOnce.Do(func() { <-slots }) }
 			defer releaseSlot()
-			runtime, err := d.prepareProject(e)
-			if err != nil {
-				d.finish(e, contract.ProjectShutdown{ConfigID: e.view.ConfigID, ProjectID: e.view.ProjectID, LocalClosed: true, LocksReleased: true, ResourcesSettled: true}, err)
-				return
-			}
+			runtime := &ProjectRuntime{configID: e.view.ConfigID}
 			d.mu.Lock()
 			e.runtime = runtime
 			d.mu.Unlock()
-			result, runErr := runtime.Run(d.ctx, func(port *runtimeProjectPort) {
-				d.mu.Lock()
-				if d.ctx.Err() != nil {
-					port.StopAccepting()
-				}
-				e.port = port
-				e.view.RuntimeState = "ready"
-				e.view.Online = true
-				if d.ctx.Err() != nil {
-					e.view.RuntimeState = "stopping"
-					e.view.Online = false
-				}
-				e.view.InstanceID = port.instance
+			result, runErr := runtime.Run(d.ctx, d.home, e, d.global, func(port *runtimeProjectPort) {
+				d.publish(e, port)
 				releaseSlot()
-				d.mu.Unlock()
 			})
 			d.finish(e, result, runErr)
 		}(e)
@@ -235,6 +186,7 @@ func (d *ApplicationDirectory) finish(e *catalogEntry, result contract.ProjectSh
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	e.result = result
+	e.resultReady = true
 	e.view.Online = false
 	if err != nil {
 		e.view.RuntimeState = "failed"
@@ -280,19 +232,29 @@ func (d *ApplicationDirectory) Connect(ctx context.Context, id string) (applicat
 }
 func (d *ApplicationDirectory) BeginStop() {
 	d.mu.Lock()
+	d.stopping = true
 	for _, e := range d.entries {
-		if e.port != nil {
+		if e.port != nil && !e.resultReady {
 			e.port.StopAccepting()
 			e.view.RuntimeState = "stopping"
 			e.view.Online = false
 		}
 	}
-	d.cancel()
 	d.mu.Unlock()
+	d.cancel()
 }
 func (d *ApplicationDirectory) Close() error {
-	d.Start()
 	d.BeginStop()
+	d.mu.Lock()
+	if !d.started {
+		for _, e := range d.entries {
+			if e.view.RuntimeState == "starting" {
+				e.view.RuntimeState = "stopped"
+			}
+		}
+		d.doneOnce.Do(func() { close(d.done) })
+	}
+	d.mu.Unlock()
 	<-d.done
 	var errs []error
 	d.mu.RLock()
@@ -310,8 +272,8 @@ func (d *ApplicationDirectory) ShutdownResults() []contract.ProjectShutdown {
 	result := []contract.ProjectShutdown{}
 	for _, e := range d.entries {
 		r := e.result
-		if r.ConfigID == "" {
-			r = contract.ProjectShutdown{ConfigID: e.view.ConfigID, ProjectID: e.view.ProjectID, LocalClosed: true, LocksReleased: true, ResourcesSettled: true}
+		if !e.resultReady {
+			r.Diagnostic = "project shutdown is pending"
 		}
 		result = append(result, r)
 	}
@@ -321,4 +283,19 @@ func (d *ApplicationDirectory) ShutdownResults() []contract.ProjectShutdown {
 func withinResolved(root, path string) bool {
 	relative, err := filepath.Rel(canonicalConfigPath(root), canonicalConfigPath(path))
 	return err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) && !filepath.IsAbs(relative)
+}
+
+func (d *ApplicationDirectory) publish(e *catalogEntry, port *runtimeProjectPort) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	e.port = port
+	e.view.InstanceID = port.instance
+	if d.stopping || d.ctx.Err() != nil {
+		port.StopAccepting()
+		e.view.RuntimeState = "stopping"
+		e.view.Online = false
+	} else {
+		e.view.RuntimeState = "ready"
+		e.view.Online = true
+	}
 }

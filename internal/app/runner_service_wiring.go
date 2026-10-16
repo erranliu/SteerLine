@@ -6,7 +6,6 @@ import (
 	"errors"
 	"time"
 
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
@@ -38,46 +37,16 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 	return service
 }
 
-func newRunnerServiceWithHost(config Config, host hostport.HostPort, mode string) (*taskrunner.Actor, error) {
-	return newRunnerServiceWithTaskStore(context.Background(), config, host, mode, nil)
+func (c Config) runnerClient(ctx context.Context) (runnerclient.Client, error) {
+	if err := runnerstatepath.Validate(c.RunDir); err != nil {
+		return runnerclient.Client{}, err
+	}
+	cli, _, err := c.RunnerExecution.Runner.Open(ctx, runnerstatepath.Directory(c.RunDir), positiveDuration(c.CommandTimeout, 30*time.Second))
+	return cli, err
 }
-func newRunnerServiceWithTaskStore(ctx context.Context, config Config, host hostport.HostPort, mode string, bind func(*sqlite.SQLiteStore)) (*taskrunner.Actor, error) {
-	if config.ProcessHost == nil {
-		return nil, errors.New("service process host is required")
-	}
-	if err := config.ValidateTaskCommandConfiguration(); err != nil {
-		return nil, err
-	}
-	if err := config.RequireNativeTaskAuthority(); err != nil {
-		return nil, err
-	}
-	if err := config.ResolveIdentity(ctx); err != nil {
-		return nil, err
-	}
-	if err := PreflightNativeStatePath(config); err != nil {
-		return nil, err
-	}
-	if host == nil {
-		hostConfig, err := hostRuntimeConfig(ctx, config)
-		if err != nil {
-			return nil, err
-		}
-		host = steerline.NewServiceHost(hostConfig, "", "", nil, serviceAdmission{config: &config}, serviceActivityFormatter{})
-	}
-	connection, err := OpenNativeTaskCommandStore(ctx, &config)
-	if err != nil {
-		return nil, err
-	}
-	if bind != nil {
-		bind(connection)
-	}
-	cli, info, err := config.RunnerExecution.startRunner(ctx, config.RunDir, positiveDuration(config.CommandTimeout, 30*time.Second), config.runnerPublication())
-	if err != nil {
-		_ = connection.Close()
-		return nil, err
-	}
-	shutdownID := "sl-service-stop-" + info.InstanceID
-	shutdown := func(ctx context.Context) error { return cli.StopService(ctx, info.InstanceID, shutdownID) }
+
+// newRunnerService borrows project resources; it never opens or closes them.
+func newRunnerService(config Config, host hostport.HostPort, connection *sqlite.SQLiteStore, cli runnerclient.Client, info runnerclient.ServiceInfo) (*taskrunner.Actor, error) {
 	service := runnerTaskService(config, connection, cli)
 	service.Admit = func(ctx context.Context) error {
 		if err := (appConfigVerifier{project: config.projectPath, global: config.executionPath, digest: config.configDigest}).VerifyCurrentConfig(); err != nil {
@@ -97,23 +66,9 @@ func newRunnerServiceWithTaskStore(ctx context.Context, config Config, host host
 		return p.ID, err
 	}}
 	var actor *taskrunner.Actor
-	actor, err = taskrunner.NewActor(taskrunner.ActorOptions{NativeSessionAdapters: cli.NativeSessionAdapters, Tasks: service, Store: connection, Host: host, Repository: ports.CheckpointRepository{Path: config.Repository, Remote: config.Remote, Branch: config.Branch, Identity: config.Identity()}, Mode: mode, ConfigDigest: config.configDigest, Heartbeat: positiveDuration(config.Heartbeat, 5*time.Second), ShutdownRunner: shutdown, RunnerSettlement: func(ctx context.Context) error {
-		return cli.VerifyServiceSettlement(ctx, info.InstanceID, shutdownID)
-	}, Control: func(ctx context.Context, req api.ControlRequest) (api.ControlReceipt, error) {
+	var err error
+	actor, err = taskrunner.NewActor(taskrunner.ActorOptions{NativeSessionAdapters: cli.NativeSessionAdapters, Tasks: service, Store: connection, Host: host, Repository: ports.CheckpointRepository{Path: config.Repository, Remote: config.Remote, Branch: config.Branch, Identity: config.Identity()}, Mode: "manual", ConfigDigest: config.configDigest, Heartbeat: positiveDuration(config.Heartbeat, 5*time.Second), Control: func(ctx context.Context, req api.ControlRequest) (api.ControlReceipt, error) {
 		return controls.Handle(ctx, req, actor.InstanceID(), actor.State.Control.Revision)
 	}})
-	if err != nil {
-		closeCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-		return nil, errors.Join(err, shutdown(closeCtx), connection.Close())
-	}
-	return actor, nil
-}
-
-func (c Config) runnerClient(ctx context.Context) (runnerclient.Client, error) {
-	if err := runnerstatepath.Validate(c.RunDir); err != nil {
-		return runnerclient.Client{}, err
-	}
-	cli, _, err := c.RunnerExecution.Runner.Open(ctx, runnerstatepath.Directory(c.RunDir), positiveDuration(c.CommandTimeout, 30*time.Second))
-	return cli, err
+	return actor, err
 }

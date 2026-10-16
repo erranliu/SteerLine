@@ -5,12 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
-	"time"
+
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func (s *ServiceHost) WriteControlReceipt(r productapi.ControlReceipt) error {
@@ -68,54 +68,4 @@ func (s *ServiceHost) ControlRequestIDs() ([]string, error) {
 	}
 	sort.Strings(ids)
 	return ids, nil
-}
-
-func findStopRequestCached(c Config, instanceID string, seen map[string]bool) (*productapi.ControlRequest, string, time.Time) {
-	root := filepath.Join(c.RunDir, "control", "requests")
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil, "", time.Time{}
-	}
-	for _, e := range entries {
-		if !e.IsDir() || !controlIDPattern.MatchString(e.Name()) {
-			continue
-		}
-		if seen[e.Name()] {
-			continue
-		}
-		path := controlRequestPath(c.RunDir, e.Name())
-		req, err := readControlRequest(path)
-		if os.IsNotExist(err) {
-			continue
-		}
-		if err != nil {
-			if seen != nil {
-				if receipt, e := ReadControlReceipt(c, e.Name()); e == nil && c.ControlValidation != nil && c.ControlValidation.TerminalStatus(receipt.Status) {
-					seen[receipt.RequestID] = true
-				}
-			}
-			continue
-		}
-		if seen != nil {
-			seen[e.Name()] = true
-		}
-		if err != nil || req.Action != "stop_service" || req.InstanceID != instanceID || req.RequestID != e.Name() {
-			continue
-		}
-		if c.ControlValidation == nil {
-			continue
-		}
-		if _, err = c.ControlValidation.DecodePayload(req); err != nil {
-			continue
-		}
-		checkedAt := now()
-		if _, err = c.ControlValidation.ValidateRequest(req, instanceID, c.Identity(), 0, checkedAt); err != nil {
-			continue
-		}
-		if _, err = ReadControlReceipt(c, req.RequestID); err == nil {
-			continue
-		}
-		return &req, rawRequestDigest(path), checkedAt
-	}
-	return nil, "", time.Time{}
 }

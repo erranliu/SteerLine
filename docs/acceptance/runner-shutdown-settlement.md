@@ -11,7 +11,7 @@
 | RSS-A01 | Runner application 的 TestSRShutdownSettlementUsesCommittedFinalNativeEvidence | 最终持久 stopped 才结算，观察脱离仍未核实 | 通过 |
 | RSS-A02 | Runner host 的 TestSRShutdownProofRequiresReleasedWriter；integration 的 TestSRServiceOwnership/shutdown_receipt | 写锁占用不公开旧证据；空闲停机最终记录绑定原身份；损坏记录失败 | 通过 |
 | RSS-A03 | Runner integration 的 TestSRRestartRequiresResume | 有本地 worker 的服务关闭公开最终结算；重启零自动输入，恢复复用原 session | 通过 |
-| RSS-A04 | SteerLine runnerclient 的 TestServiceSettlementRequiresOriginalFinalProof；taskrunner 的 TestRunnerShutdownDoesNotEquateServiceExitWithNativeSettlement | 缺失/错配/未知证据失败；旧 running 投影可被最终证明取代，旧 stopped 不能代替最终证明；关闭不重放 | 通过 |
+| RSS-A04 | SteerLine runnerclient 的 TestServiceSettlementRequiresOriginalFinalProof；app 的 TestRunnerSettlementReadCanRecoverWithoutRepeatingStop / TestRunnerShutdownRetriesOnlyUnconfirmedOriginalStop（生命周期收拢后迁至实际 owner） | 缺失/错配/未知证据失败；旧 running 投影可被最终证明取代，旧 stopped 不能代替最终证明；关闭不重放 | 通过 |
 | RSS-A05 | SteerLine SQLite actor 与 app 统一启动停机定向测试 | 接入后停机、宿主身份及聚合拒绝规则保持 | 通过 |
 
 自动验证均使用各仓库隔离测试夹具，无真实模型/PR，无安装现场操作。命令与结果登记在本文件；Runner checkout 为 C:/Project/SteerRunner，SteerLine 为当前聊天 worktree。

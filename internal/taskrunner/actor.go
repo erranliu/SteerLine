@@ -17,7 +17,6 @@ type ActorStore interface {
 	Store
 	ReadRunnerSnapshot(context.Context, string) (storageports.RunnerSnapshot, error)
 	SaveCheckpoint(context.Context, storageports.ServiceCheckpoint) (storageports.ServiceCheckpoint, error)
-	Close() error
 }
 type ActorOptions struct {
 	NativeSessionAdapters []string
@@ -29,9 +28,7 @@ type ActorOptions struct {
 	Heartbeat             time.Duration
 	// Control validates, fixes and commits a product request; it cannot invoke
 	// native adapters. App supplies its Task/Runner CLI command coordinator.
-	Control          func(context.Context, api.ControlRequest) (api.ControlReceipt, error)
-	ShutdownRunner   func(context.Context) error
-	RunnerSettlement func(context.Context) error
+	Control func(context.Context, api.ControlRequest) (api.ControlReceipt, error)
 }
 
 type actorCall struct {
@@ -39,19 +36,16 @@ type actorCall struct {
 	result chan error
 }
 type Actor struct {
-	State             reconstruction.Runtime
-	options           ActorOptions
-	mu                sync.Mutex
-	ctx               context.Context
-	calls             chan actorCall
-	shutdownMu        sync.Mutex
-	shutdownConfirmed bool
-	settlementErr     error
+	State   reconstruction.Runtime
+	options ActorOptions
+	mu      sync.Mutex
+	ctx     context.Context
+	calls   chan actorCall
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
-	if options.Tasks == nil || options.Store == nil || options.Host == nil || options.Control == nil || options.ShutdownRunner == nil || options.RunnerSettlement == nil || options.Repository.Identity != options.Tasks.Project || options.Mode != "manual" && options.Mode != "auto" || options.Heartbeat <= 0 {
-		return nil, errors.New("task service requires its fixed caller, control and Runner lifecycle ports")
+	if options.Tasks == nil || options.Store == nil || options.Host == nil || options.Control == nil || options.Repository.Identity != options.Tasks.Project || options.Mode != "manual" && options.Mode != "auto" || options.Heartbeat <= 0 {
+		return nil, errors.New("task service requires its fixed caller and control ports")
 	}
 	identity, err := options.Host.CurrentProcessIdentity()
 	if err != nil {
@@ -62,7 +56,7 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	}
 	at := time.Now().UTC()
 	checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: options.Repository, UpdatedAt: at, HeartbeatAt: at,
-		Service: storageports.CheckpointServiceState{Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "stop_service", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
+		Service: storageports.CheckpointServiceState{Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
 	viewerAvailable := false
 	for _, adapter := range options.NativeSessionAdapters {
 		if adapter == "codex-app-server" || adapter == "orca-terminal" {
@@ -75,11 +69,7 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	}
 	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall)}, nil
 }
-func (a *Actor) SetStartupMetadata(value string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.State.Service.StartupID = &value
-}
+
 func (a *Actor) InstanceID() string { return a.State.Service.InstanceID }
 
 // VerifyRunnerAdmission reuses the application's pinned Runner/config gate
@@ -108,7 +98,7 @@ func (a *Actor) Initialize(ctx context.Context, _ context.CancelFunc) error {
 	if err := a.publish(ctx); err != nil {
 		return err
 	}
-	return a.options.Host.PublishReady(a.InstanceID(), a.State.Service.ProcessIdentity, a.State.Control.DispatchMode)
+	return nil
 }
 func (a *Actor) Signals() <-chan actorCall                             { return a.calls }
 func (a *Actor) HistoryErrors() <-chan error                           { return nil }
@@ -243,68 +233,6 @@ func (a *Actor) Heartbeat() error {
 	a.mu.Unlock()
 	return a.publish(a.ctx)
 }
-func (a *Actor) EndActor(request *api.ControlRequest, accepted *time.Time, acceptedDigest string, runErr error) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	stopErr := a.shutdown(ctx)
-	a.mu.Lock()
-	a.State.Service.Ready = false
-	a.State.Service.Status = "stopped"
-	a.mu.Unlock()
-	commitErr := a.publish(ctx)
-	if request != nil {
-		now := time.Now().UTC()
-		receipt := api.ControlReceipt{Version: 1, RequestID: request.RequestID, RequestDigest: acceptedDigest, InstanceID: a.InstanceID(), Action: "stop_service", Status: "applied", RequestedBy: request.RequestedBy, SubmittedAt: request.CreatedAt, AcceptedAt: accepted, CompletedAt: &now}
-		if stopErr != nil {
-			receipt.Status = "indeterminate"
-			receipt.Message = stopErr.Error()
-		}
-		if !validControlDigest(acceptedDigest) || a.options.Host.ControlRequestDigest(request.RequestID) != acceptedDigest {
-			return errors.Join(runErr, stopErr, commitErr, errors.New("original stop request file identity is unavailable"))
-		}
-		commitErr = errors.Join(commitErr, a.options.Host.WriteControlReceipt(receipt))
-	}
-	return errors.Join(runErr, stopErr, commitErr)
-}
-func (a *Actor) Close() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	return errors.Join(a.shutdown(ctx), a.options.Store.Close())
-}
-
-func (a *Actor) shutdown(ctx context.Context) error {
-	a.shutdownMu.Lock()
-	defer a.shutdownMu.Unlock()
-	if a.shutdownConfirmed {
-		// Close gets its own bounded context. A failed final read may be
-		// observed again without repeating the original stop side effect.
-		if a.settlementErr != nil && a.options.RunnerSettlement != nil {
-			a.settlementErr = a.options.RunnerSettlement(ctx)
-		}
-		return nil
-	}
-	err := a.options.ShutdownRunner(ctx)
-	a.shutdownConfirmed = err == nil
-	a.settlementErr = err
-	if err == nil {
-		if a.options.RunnerSettlement == nil {
-			a.settlementErr = errors.New("original Runner resource settlement evidence is unavailable")
-		} else {
-			a.settlementErr = a.options.RunnerSettlement(ctx)
-		}
-	}
-	return err
-}
-
-// ResourceSettlementError keeps native evidence separate from daemon exit.
-func (a *Actor) ResourceSettlementError() error {
-	a.shutdownMu.Lock()
-	defer a.shutdownMu.Unlock()
-	if !a.shutdownConfirmed {
-		return errors.Join(errors.New("original Runner shutdown remains unverified"), a.settlementErr)
-	}
-	return a.settlementErr
-}
 
 // ExecuteTaskMutation uses the same caller actor as candidate and DAG updates.
 // Once dispatched, cancellation leaves the original durable receipt queryable.
@@ -333,4 +261,15 @@ func (a *Actor) Discard(ctx context.Context, requestID string, intent taskmodel.
 		return err
 	})
 	return receipt, err
+}
+
+// EndActor commits local caller state. ProjectRuntime owns Runner and storage.
+func (a *Actor) EndActor(runErr error) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	a.mu.Lock()
+	a.State.Service.Ready = false
+	a.State.Service.Status = "stopped"
+	a.mu.Unlock()
+	return errors.Join(runErr, a.publish(ctx))
 }
