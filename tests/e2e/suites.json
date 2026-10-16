@@ -25,8 +25,24 @@
     "env": "controlled"
   },
   {
-    "id": "runtime.source-build-isolation",
+    "id": "runtime.service-lifecycle",
     "level": "L3",
+    "suite": "runtime",
+    "package": "./tests/e2e/suites/runtime",
+    "test": "TestServiceLifecycle",
+    "env": "controlled"
+  },
+  {
+    "id": "runtime.dual-home-operation",
+    "level": "L3",
+    "suite": "runtime",
+    "package": "./tests/e2e/suites/runtime",
+    "test": "TestDualHomeOperation",
+    "env": "controlled"
+  },
+  {
+    "id": "runtime.source-build-isolation",
+    "level": "L4",
     "suite": "runtime",
     "package": "./tests/e2e/suites/runtime",
     "test": "TestSourceBuildIsolation",
@@ -34,7 +50,7 @@
   },
   {
     "id": "runtime.path-isolation",
-    "level": "L3",
+    "level": "L4",
     "suite": "runtime",
     "package": "./tests/e2e/suites/runtime",
     "test": "TestPathIsolation",
@@ -42,7 +58,7 @@
   },
   {
     "id": "runtime.service-write-isolation",
-    "level": "L3",
+    "level": "L4",
     "suite": "runtime",
     "package": "./tests/e2e/suites/runtime",
     "test": "TestServiceWriteIsolation",
@@ -50,7 +66,7 @@
   },
   {
     "id": "runtime.dual-home-isolation",
-    "level": "L3",
+    "level": "L4",
     "suite": "runtime",
     "package": "./tests/e2e/suites/runtime",
     "test": "TestDualHomeIsolation",

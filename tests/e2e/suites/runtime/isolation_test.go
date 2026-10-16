@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -79,23 +78,7 @@ func TestPathIsolation(t *testing.T) {
 func TestServiceWriteIsolation(t *testing.T) {
 	t.Parallel()
 	s := testenv.NewScenario(t, "runtime.service-write-isolation")
-	p := s.NewProjectAt("service", filepath.Join("中文 路径", "有空格的现场"), "")
-	cwd := filepath.Join(s.Root, "无关 cwd")
-	s.Must(os.MkdirAll(cwd, 0700))
-	p.Driver.WorkingDirectory = cwd
-	for i := 0; i < 2; i++ {
-		_, err := p.Driver.Run(s.Context, "launchers")
-		s.Must(err)
-	}
-	for _, name := range []string{"start.bat", "stop.bat"} {
-		_, err := os.Stat(filepath.Join(p.Home, name))
-		s.Must(err)
-	}
-	for _, name := range []string{"service-window.bat", "console.bat"} {
-		if _, err := os.Stat(filepath.Join(p.Home, name)); !os.IsNotExist(err) {
-			t.Fatalf("retired launcher present: %s: %v", name, err)
-		}
-	}
+	p := s.NewProject("service")
 	p.CreateTasks()
 	before := mustSnapshot(t, p)
 	hostBefore, err := p.Driver.HostStatus(s.Context)
@@ -223,24 +206,7 @@ func TestDualHomeIsolation(t *testing.T) {
 	}
 	requestID := strings.Repeat("d", 32)
 	discard := func(p *testenv.Project, before testenv.Snapshot) {
-		version := uint64(0)
-		for _, task := range before.Page.Tasks {
-			if task.TaskID == p.Tasks["a"].ID {
-				version = task.Version
-			}
-		}
-		args := []string{"task", "discard", "-config", p.Config, "-task-id", p.Tasks["a"].ID, "-request-id", requestID, "-expected-version", strconv.FormatUint(version, 10), "-reason", "isolation-" + p.Name, "-by", "e2e"}
-		raw, err := p.Driver.Run(s.Context, args...)
-		s.Must(err)
-		var receipt struct {
-			RequestID string `json:"request_id"`
-			TaskID    string `json:"task_id"`
-			Status    string `json:"status"`
-		}
-		s.Must(json.Unmarshal(raw, &receipt))
-		if receipt.RequestID != requestID || receipt.TaskID != p.Tasks["a"].ID || receipt.Status != "discarded" {
-			t.Fatalf("wrong home receipt: %s", raw)
-		}
+		raw, args := discardOwnedTask(t, p, before, "a", requestID)
 		after := mustSnapshot(t, p)
 		replay, err := p.Driver.Run(s.Context, args...)
 		s.Must(err)

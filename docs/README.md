@@ -4,6 +4,7 @@ SteerLine 的整体职责、具体产品设计、后续规划、执行契约与�
 
 | 阅读目的 | 入口 |
 | --- | --- |
+| 供开发项目复用的工程规范 | [SteerlineProjectGuideDoc](../SteerlineProjectGuideDoc/README.md) · [测试架构规范](../SteerlineProjectGuideDoc/testing-architecture.md) |
 | 系统整体职责与业务权威 | [架构总览](architecture.md) |
 | 独立 Runner、固定 EXE 与 CLI 接入 | [Runner 接入](integration/steerrunner.md) |
 | 当前代码、模块与接口归属 | [代码架构](architecture/current-code-architecture.md) |
@@ -18,6 +19,7 @@ SteerLine 的整体职责、具体产品设计、后续规划、执行契约与�
 
 ## 目录边界
 
+- 仓库根目录的 SteerlineProjectGuideDoc/ 维护供开发项目复用的通用工程规范，SteerLine 自身直接引用；docs/ 维护本产品的设计、实现和结果，不独立复制通用规则。
 - docs 根目录只放对整个项目长期有效的整体文档：本入口、架构总览和测试指南。
 - product-design/ 放长期维护的具体产品设计；按功能命名，明确当前契约、拟议方案和验证限制，不按阶段编号积累目录。
 - architecture/ 放当前代码架构、源码索引与持续维护的并行开发指南；指南链接契约和测试，缺少独立说明时记录当前边界，不重复维护产品规则。
