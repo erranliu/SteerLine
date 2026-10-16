@@ -84,7 +84,7 @@ go run ./cmd/test-feedback -level=L3 '-suite=recovery,runtime' -env=controlled
 go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled
 
 # 工具进程有 Windows Job 约束时，使用独立同用户进程
-./scripts/test-runtime-isolation.ps1 -Level L3 -Suite 'recovery,runtime'
+./scripts/test-runtime-isolation.ps1 -Level L3 -Suite 'recovery,runtime' -Scenario 'runtime.service-lifecycle,recovery.waiting-merge-restart'
 ./scripts/test-runtime-isolation.ps1 -Level L4
 # 默认依次运行两级 runtime；分别生成报告
 ./scripts/test-runtime-isolation.ps1

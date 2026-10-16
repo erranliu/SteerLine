@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 	"time"
-
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 type lifecycleActor struct {
@@ -20,7 +18,7 @@ type stoppingActor struct {
 	lifecycleActor
 	failure error
 	prior   error
-	stop    *productapi.ControlRequest
+	entered chan struct{}
 }
 
 func (a *stoppingActor) Initialize(context.Context, context.CancelFunc) error {
@@ -29,38 +27,43 @@ func (a *stoppingActor) Initialize(context.Context, context.CancelFunc) error {
 }
 
 func (a *stoppingActor) TickTask(ctx context.Context, _ context.CancelFunc) error {
+	close(a.entered)
 	<-ctx.Done()
 	return errors.Join(ctx.Err(), a.failure)
 }
 
-func (a *stoppingActor) EndActor(stop *productapi.ControlRequest, _ *time.Time, _ string, prior error) error {
-	a.ended, a.prior, a.stop = true, prior, stop
+func (a *stoppingActor) EndActor(prior error) error {
+	a.ended, a.prior = true, prior
 	return prior
 }
 
-func TestAcceptedStopDuringActorPollKeepsOnlyRealErrors(t *testing.T) {
+func TestCancellationDuringActorPollKeepsOnlyRealErrors(t *testing.T) {
 	for _, joined := range []bool{false, true} {
 		t.Run(map[bool]string{false: "cancellation", true: "joined_failure"}[joined], func(t *testing.T) {
-			a := &stoppingActor{}
+			a := &stoppingActor{entered: make(chan struct{})}
 			failure := errors.New("persistence failed")
 			if joined {
 				a.failure = failure
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			err := Run(ctx, a, Schedule{TaskPoll: time.Millisecond, PRPoll: time.Second, Heartbeat: time.Second,
-				FindStop: func(string, map[string]bool) (*productapi.ControlRequest, string, time.Time) {
-					return &productapi.ControlRequest{RequestID: "accepted-stop"}, "digest", time.Now()
-				}}, "manual")
-			if !a.ended || !a.waited || a.stop == nil {
-				t.Fatal("accepted stop did not finish the actor")
+			go func() {
+				select {
+				case <-a.entered:
+					cancel()
+				case <-ctx.Done():
+				}
+			}()
+			err := Run(ctx, a, Schedule{TaskPoll: time.Millisecond, PRPoll: time.Second, Heartbeat: time.Second}, "manual")
+			if !a.ended || !a.waited {
+				t.Fatal("cancellation did not finish the actor")
 			}
 			if joined {
 				if !errors.Is(err, failure) || !errors.Is(a.prior, failure) {
 					t.Fatalf("stop hid a real error: %v", err)
 				}
 			} else if err != nil || a.prior != nil {
-				t.Fatalf("accepted stop became a service failure: %v", err)
+				t.Fatalf("cancellation became a service failure: %v", err)
 			}
 		})
 	}
@@ -85,7 +88,7 @@ func (*lifecycleActor) TickTask(context.Context, context.CancelFunc) error    { 
 func (*lifecycleActor) TickControl(context.Context, context.CancelFunc) error { return nil }
 func (*lifecycleActor) TickPR(context.Context) error                          { return nil }
 func (*lifecycleActor) Heartbeat() error                                      { return nil }
-func (a *lifecycleActor) EndActor(*productapi.ControlRequest, *time.Time, string, error) error {
+func (a *lifecycleActor) EndActor(error) error {
 	a.ended = true
 	return nil
 }

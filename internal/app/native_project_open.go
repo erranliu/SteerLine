@@ -42,12 +42,15 @@ func LoadDatabaseRuntime(c Config) (*reconstruction.Runtime, error) {
 }
 
 func OpenNativeTaskProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
-	return openNativeTaskProject(ctx, c, false)
+	return openNativeTaskProject(ctx, c, false, false)
 }
-func openOwnedNativeTaskProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
-	return openNativeTaskProject(ctx, c, true)
+
+// openOwnedNativeTaskCommandStore hands the active writer directly to the
+// project owner after initialization; no initializer-to-factory reopen cycle.
+func openOwnedNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
+	return openNativeTaskProject(ctx, c, true, true)
 }
-func openNativeTaskProject(ctx context.Context, c *Config, owned bool) (*sqlite.SQLiteStore, error) {
+func openNativeTaskProject(ctx context.Context, c *Config, owned, writable bool) (*sqlite.SQLiteStore, error) {
 	if c == nil {
 		return nil, taskError("authority_mismatch", "native project configuration is required")
 	}
@@ -68,6 +71,9 @@ func openNativeTaskProject(ctx context.Context, c *Config, owned bool) (*sqlite.
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
 	if _, err := os.Stat(path); err == nil {
+		if writable {
+			return OpenNativeTaskCommandStore(ctx, c)
+		}
 		return openBoundNativeReader(ctx, *c, path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
@@ -83,6 +89,9 @@ func openNativeTaskProject(ctx context.Context, c *Config, owned bool) (*sqlite.
 		return nil, err
 	}
 	if _, err := os.Stat(path); err == nil {
+		if writable {
+			return OpenNativeTaskCommandStore(ctx, c)
+		}
 		return openBoundNativeReader(ctx, *c, path)
 	} else if !os.IsNotExist(err) {
 		return nil, err
@@ -105,6 +114,13 @@ func openNativeTaskProject(ctx context.Context, c *Config, owned bool) (*sqlite.
 	if err = writer.InitializeProject(ctx, authority); err != nil {
 		_ = writer.Close()
 		return nil, err
+	}
+	if writable {
+		if err = validateWriterBinding(ctx, *c, writer); err != nil {
+			_ = writer.Close()
+			return nil, err
+		}
+		return writer, nil
 	}
 	if err = writer.Close(); err != nil {
 		return nil, err

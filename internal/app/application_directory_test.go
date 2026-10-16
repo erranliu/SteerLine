@@ -3,14 +3,15 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/localservice"
-	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/localservice"
+	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 )
 
 func switchRepo(t *testing.T, home, name string) string {
@@ -158,5 +159,49 @@ func TestUnifiedStartupZeroProjectsLifecycle(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "state")); !os.IsNotExist(err) {
 		t.Fatal("application created project state")
+	}
+}
+func TestUnifiedStartupCloseBeforeStartAndPendingResults(t *testing.T) {
+	home := t.TempDir()
+	repo := switchRepo(t, home, "repo")
+	switchConfig(t, home, "one", repo)
+	d := NewApplicationDirectory(home)
+	require(t, d.Close())
+	d.Start()
+	require(t, d.Close())
+	if d.started || d.entries[0].runtime != nil {
+		t.Fatal("Close implicitly started a runtime")
+	}
+	if _, err := os.Stat(filepath.Join(home, "state")); !os.IsNotExist(err) {
+		t.Fatal("Close created state", err)
+	}
+	completed := d.ShutdownResults()[0]
+	if !completed.LocalClosed || !completed.ResourcesSettled || !completed.LocksReleased {
+		t.Fatal("never-started project acquired obligations", completed)
+	}
+	// A scheduled owner's absent result must never use the no-resource default.
+	d.mu.Lock()
+	d.entries[0].resultReady = false
+	d.entries[0].result = contract.ProjectShutdown{ConfigID: "one.json"}
+	d.mu.Unlock()
+	pending := d.ShutdownResults()[0]
+	if pending.LocalClosed || pending.ResourcesSettled || pending.LocksReleased || pending.Diagnostic == "" {
+		t.Fatal("pending result fabricated clean shutdown", pending)
+	}
+}
+
+func TestUnifiedStartupLateReadyCannotReopenStoppedDirectory(t *testing.T) {
+	home := t.TempDir()
+	switchConfig(t, home, "one", switchRepo(t, home, "repo"))
+	d := NewApplicationDirectory(home)
+	defer d.Close()
+	d.BeginStop()
+	port := &runtimeProjectPort{instance: "late"}
+	d.publish(d.entries[0], port)
+	if !port.stopping.Load() || d.entries[0].view.Online || d.entries[0].view.RuntimeState != "stopping" {
+		t.Fatal("late ready reopened project", d.entries[0].view)
+	}
+	if _, err := port.Read(context.Background(), "/identity", nil); err == nil {
+		t.Fatal("late ready allowed borrowing")
 	}
 }
