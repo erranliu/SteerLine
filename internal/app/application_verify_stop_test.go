@@ -14,6 +14,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
@@ -54,7 +55,7 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 	if err := StopAll(ctx); err == nil {
 		t.Fatal("original dirty receipt unexpectedly passed ordinary stop")
 	}
-	paths := []string{filepath.Join(backend.dir, "shutdown.json"), filepath.Join(c.RunDir, "steerline.db"), filepath.Join(c.RunDir, "runner", "idle-fixture.json"), GlobalExecutionConfigPath()}
+	paths := []string{filepath.Join(backend.dir, "shutdown.json"), filepath.Join(c.RunDir, "steerline.db"), filepath.Join(runnerstatepath.Directory(c.RunDir), "idle-fixture.json"), GlobalExecutionConfigPath()}
 	before := map[string][]byte{}
 	for _, path := range paths {
 		before[path], err = os.ReadFile(path)

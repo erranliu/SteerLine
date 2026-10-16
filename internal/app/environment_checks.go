@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/environmentcheck"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 type environmentCheckPort struct {
@@ -24,7 +24,10 @@ func newEnvironmentCheckPort(c Config, store environmentcheck.Store) *environmen
 		s.Profiles = append(s.Profiles, environmentcheck.Profile{ID: p.ID, Name: p.Name, Execution: p.Execution})
 	}
 	s.Open = func(ctx context.Context, selection runnerclient.Selection) (environmentcheck.Runner, error) {
-		cli, _, err := selection.Open(ctx, filepath.Join(c.RunDir, "runner"), positiveDuration(c.CommandTimeout, 30*time.Second))
+		if err := runnerstatepath.Validate(c.RunDir); err != nil {
+			return nil, err
+		}
+		cli, _, err := selection.Open(ctx, runnerstatepath.Directory(c.RunDir), positiveDuration(c.CommandTimeout, 30*time.Second))
 		return cli, err
 	}
 	s.ResolveInput = func(ctx context.Context, execution runnerclient.ExecutionInput) (runnerclient.CheckInput, error) {

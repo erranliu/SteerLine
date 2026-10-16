@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
@@ -12,6 +11,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
@@ -111,6 +111,9 @@ func newRunnerServiceWithTaskStore(ctx context.Context, config Config, host host
 }
 
 func (c Config) runnerClient(ctx context.Context) (runnerclient.Client, error) {
-	cli, _, err := c.RunnerExecution.Runner.Open(ctx, filepath.Join(c.RunDir, "runner"), positiveDuration(c.CommandTimeout, 30*time.Second))
+	if err := runnerstatepath.Validate(c.RunDir); err != nil {
+		return runnerclient.Client{}, err
+	}
+	cli, _, err := c.RunnerExecution.Runner.Open(ctx, runnerstatepath.Directory(c.RunDir), positiveDuration(c.CommandTimeout, 30*time.Second))
 	return cli, err
 }

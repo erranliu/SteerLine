@@ -16,6 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -142,7 +143,10 @@ func verifyProjectStopped(ctx context.Context, c Config, p contract.ProjectShutd
 	if err = verifyStoppedCheckpoint(snapshot.Checkpoint, c.configDigest, p, id); err != nil {
 		return proof, err
 	}
-	cli := runnerclient.Client{Executable: exe, SHA256: hash, StateDir: filepath.Join(c.RunDir, "runner"), Timeout: 30 * time.Second}
+	if err := runnerstatepath.Validate(c.RunDir); err != nil {
+		return proof, err
+	}
+	cli := runnerclient.Client{Executable: exe, SHA256: hash, StateDir: runnerstatepath.Directory(c.RunDir), Timeout: 30 * time.Second}
 	proof.Runner, err = cli.VerifyStopped(ctx)
 	if err != nil {
 		return proof, err
