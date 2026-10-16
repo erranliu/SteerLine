@@ -83,21 +83,22 @@ type CommandEnvelope struct {
 }
 
 type CommandResponse struct {
-	RequestID       string                  `json:"request_id"`
-	ProjectID       string                  `json:"project_id"`
-	InstanceID      string                  `json:"instance_id"`
-	Action          string                  `json:"action"`
-	TargetID        string                  `json:"target_id"`
-	ExpectedVersion uint64                  `json:"expected_version"`
-	Original        *CommandEnvelope        `json:"original,omitempty"`
-	Status          string                  `json:"status"`
-	Code            string                  `json:"code,omitempty"`
-	Command         *api.CommandReceipt     `json:"command,omitempty"`
-	ControlRequest  *api.ControlRequest     `json:"control_request,omitempty"`
-	ControlReceipt  *api.ControlReceipt     `json:"control_receipt,omitempty"`
-	Discard         *api.TaskDiscardReceipt `json:"discard,omitempty"`
-	Diagnostic      string                  `json:"diagnostic,omitempty"`
-	SampledAt       time.Time               `json:"sampled_at"`
+	EnvironmentCheck *api.EnvironmentCheckRecord `json:"environment_check,omitempty"`
+	RequestID        string                      `json:"request_id"`
+	ProjectID        string                      `json:"project_id"`
+	InstanceID       string                      `json:"instance_id"`
+	Action           string                      `json:"action"`
+	TargetID         string                      `json:"target_id"`
+	ExpectedVersion  uint64                      `json:"expected_version"`
+	Original         *CommandEnvelope            `json:"original,omitempty"`
+	Status           string                      `json:"status"`
+	Code             string                      `json:"code,omitempty"`
+	Command          *api.CommandReceipt         `json:"command,omitempty"`
+	ControlRequest   *api.ControlRequest         `json:"control_request,omitempty"`
+	ControlReceipt   *api.ControlReceipt         `json:"control_receipt,omitempty"`
+	Discard          *api.TaskDiscardReceipt     `json:"discard,omitempty"`
+	Diagnostic       string                      `json:"diagnostic,omitempty"`
+	SampledAt        time.Time                   `json:"sampled_at"`
 }
 
 type ActivityPage struct {

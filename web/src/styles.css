@@ -1350,3 +1350,20 @@ textarea {
 .sidebar-collapsed .project-selector {
   padding: 8px;
 }
+.check-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin: 18px 0;
+}
+.check-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 16px 0;
+}

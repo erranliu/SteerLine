@@ -15,11 +15,12 @@ type Capabilities struct {
 	NativeSessionViewer struct {
 		Adapters []string `json:"adapters"`
 	} `json:"native_session_viewer"`
-	Protocol        string `json:"protocol"`
-	Version         string `json:"version"`
-	ResourceVersion int    `json:"resource_version"`
-	ResourceDigest  string `json:"resource_digest"`
-	Workflow        struct {
+	EnvironmentCheck *CheckCapabilities `json:"environment_check,omitempty"`
+	Protocol         string             `json:"protocol"`
+	Version          string             `json:"version"`
+	ResourceVersion  int                `json:"resource_version"`
+	ResourceDigest   string             `json:"resource_digest"`
+	Workflow         struct {
 		ID                    string   `json:"id"`
 		Version               int      `json:"version"`
 		Steps                 []string `json:"steps"`

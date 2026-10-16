@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { render } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { WorkspaceContext } from "../app/context";
+import { WorkspaceContext, type Workspace } from "../app/context";
 import { Api } from "../shared/api/client";
 import type {
   Candidate,
@@ -116,6 +116,7 @@ export function mountFeature(
   api: Api,
   client: QueryClient,
   online = true,
+  overrides: Partial<Workspace> = {},
 ) {
   return render(
     <QueryClientProvider client={client}>
@@ -128,6 +129,7 @@ export function mountFeature(
           busy: false,
           send: async () => true,
           refresh: () => {},
+          ...overrides,
         }}
       >
         <MemoryRouter>{ui}</MemoryRouter>

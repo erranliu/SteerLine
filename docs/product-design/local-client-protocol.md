@@ -81,3 +81,12 @@ CLI 通过项目选择访问原任务用例：POST `/task-batch-validation`、`/
 `POST /v2/application/shutdown` 先关闭全部项目新输入资格再确认原宿主 identity，按项目聚合正常关闭与资源结算。私有 `shutdown.json` 绑定原宿主，stop 同时核验此结果、精确进程退出与租约；缺失、损坏、旧实例或任何未核实项均失败。本地关闭未知保留库/锁；worker 未知但本地已关时可重开原库取证，禁止替代 worker 或新业务输入。
 
 Web 只提供受限 `/api/v2/application/projects…` 同源转接；不代理管理/CLI 专有路由。浏览器会话绑定 home/Web 实例，原生 `/native/identity`、`/native/backend`、`/native/shutdown` 使用独立 launcher Bearer，无 Origin，浏览器 cookie 不能停服。Web 可独立重启，重新 open 授权后只读重连；原信封仍按原实例/请求查询。见[Web 指南](../../web/README.md)、[统一启动 Spec](../spec/unified-startup.spec.md)。
+
+
+## 独立环境检查
+
+沿同一项目根提供 `GET /environment-checks/options`（预填/机制能力）、`GET /environment-checks`（本仓历史）与 `GET /environment-checks/{key}`（原请求公开快照/离线缓存）。这些查询不启动服务、Agent 或清理，不要求创建 Task；原命令查询只 inspect 该请求，详情在无未知操作时按可信 check_id 查询。start/stop 复用当前项目持有的原 Runner 实例准入，检查入口不重启 daemon。报告保留 Runner 的源时间、revision、结论和资源状态，读取时间不能冒充新检查时间。
+
+`POST /commands` 新动作 `start_environment_check`：target_id 为项目 project_id、expected_version=0，payload 为 `{profile_id,access_mode}` 或 `{execution,access_mode}`。access_mode 必须为 sandbox/full_access；后者由用户明确选择。`stop_environment_check`：target_id 为原 start 的 32 位 key、expected_version 为原生 report.revision，payload `{}`。二者不使用图/控制 revision；不会修改执行方案或业务权限。
+
+原请求在同一仲裁 namespace 中登记，SQLite 另存绑定与公开快照；`environment_check` 为完整查询投影，仲裁文件仍仅存小型结果摘要。applied 表示命令已确认受理，执行/能力/资源状态见报告。环境检查原写结果未知即只读原 ID，即使 command_not_found/request_not_found 也不补交 POST；同 ID/信封的重复 POST 从原绑定取回结果，不重派，包含 transport 仲裁文件丢失而领域绑定仍在的情形；即使本地绑定提交失败也不以新 ID 补发。尚无可信 check_id/revision 时不能 stop；原 stop 未核实或同 revision 不能再次派发收尾。细节与 Runner 发布前置见 [Spec](../spec/environment-check.spec.md)。

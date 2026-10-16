@@ -62,6 +62,7 @@ type DecisionPort interface {
 // Resources is private Go composition, distinct from the serializable API.
 // Close releases client-owned resources; it must not stop a worker or service.
 type Resources struct {
+	EnvironmentChecks                   api.EnvironmentCheckPort
 	Project                             api.ProjectRef
 	DefaultRequestedBy, DefaultAnswerer string
 	OpenReader                          func(context.Context) (Reader, error)

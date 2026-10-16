@@ -4,6 +4,8 @@
 
 ## 当前入口
 
+执行权限与 Git 环境检查接入（2026-10-16，SteerLine 已实现，真实 Runner 联调与人工验收待完成）：[本仓验收与审查记录](environment-check.md)，仅 SLEC caller/HTTP/Web；Runner 前置与原生检查在其仓库独立 SREC 验收，不共用通过状态。构建和业务资源后置。
+
 测试分级与 L4 入口（2026-10-16，普通开发）：[专属验收](test-level-alignment.md)，按通用规范拆分 L3 正常流程和 L4 系统边界，实际选择、并行及清理结果单独登记。
 
 SteerRunner 拆分后的测试精简（2026-10-15，已授权实施）：[专属验收](runner-test-convergence.md)，执行专项迁出，L2 保留本机 Codex＋真实 Runner＋真实 PR 的完整闭环；实际通过/失败及边界见专属验收。

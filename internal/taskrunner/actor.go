@@ -81,6 +81,15 @@ func (a *Actor) SetStartupMetadata(value string) {
 	a.State.Service.StartupID = &value
 }
 func (a *Actor) InstanceID() string { return a.State.Service.InstanceID }
+
+// VerifyRunnerAdmission reuses the application's pinned Runner/config gate
+// without claiming a Task, starting a daemon or changing actor state.
+func (a *Actor) VerifyRunnerAdmission(ctx context.Context) error {
+	if a.options.Tasks.Admit == nil {
+		return errors.New("original Runner instance admission is unavailable")
+	}
+	return a.options.Tasks.Admit(ctx)
+}
 func (a *Actor) BeginActor(ctx context.Context) error {
 	a.ctx = ctx
 	return a.options.Tasks.RecoverInputs(ctx)

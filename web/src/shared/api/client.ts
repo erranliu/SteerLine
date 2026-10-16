@@ -261,7 +261,12 @@ export class Api {
       await recordResult(envelope.request_id, result);
       return result;
     } catch (error) {
-      if (error instanceof ApiError && error.code === "command_not_found") {
+      if (
+        error instanceof ApiError &&
+        error.code === "command_not_found" &&
+        envelope.action !== "start_environment_check" &&
+        envelope.action !== "stop_environment_check"
+      ) {
         signal?.throwIfAborted();
         if (envelope.instance_id !== this.identity.instance_id)
           throw new Error(

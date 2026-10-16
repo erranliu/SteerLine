@@ -17,6 +17,19 @@ type offlineDirectory struct{}
 func (offlineDirectory) Catalog(context.Context) (contract.Catalog, error) {
 	return contract.Catalog{Projects: []contract.Project{}}, nil
 }
+
+func TestEnvironmentCheckReadRoutes(t *testing.T) {
+	for _, path := range []string{"environment-checks", "environment-checks/options", "environment-checks/" + strings.Repeat("a", 32)} {
+		if !AllowedRead("/" + path) {
+			t.Fatal("check read route not forwarded", path)
+		}
+	}
+	for _, path := range []string{"environment-checks/start", "environment-checks/stop", "environment-checks/cleanup", "environment-checks/../tasks"} {
+		if AllowedRead("/" + path) {
+			t.Fatal("invented check mutation route", path)
+		}
+	}
+}
 func (offlineDirectory) Connect(context.Context, string) (ProjectPort, error) {
 	return nil, &httpclient.ClientError{Status: 503, Code: "project_offline", Reason: "not connected"}
 }
