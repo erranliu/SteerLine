@@ -27,7 +27,7 @@ flowchart LR
 | internal/runnerclient | 公开 CLI 子进程、严格 JSON/退出码、EXE/实例 SHA、公开 schema 验证；不读取私有实现 |
 | internal/runnercontract 与 runnerstate | 公开协议及 caller 参与关系的纯值，不包含 native owner 或 SQL |
 | internal/storage/ports 与 sqlite | Task/DAG、候选/outbox/事件副本、唯一交付及 service checkpoint；schema 21，无旧执行写表或迁移 |
-| internal/execution/model 与 backend | 尚由产品 UI、进程身份和 Task 声明使用的纯值；无原生执行写权 |
+| internal/execution/model 与 backend | 当前 Task/交付规则、checkpoint 和产品展示值，以及 SteerLine 进程端口；无原生生命周期端口或 worker 状态转移 |
 | internal/execution/reconstruction | 服务 checkpoint 与 UI 运行值；真实候选由 taskrunner 从公开 Runner facts 投影，不从旧执行记录重建 |
 | internal/execution/workspace 与 publication | 调用方仓库身份解析、固定发布配置校验；无 native worktree 生命周期或 PR 查询实现 |
 | internal/execution/process 与 scheduler | SteerLine 自身的进程/文件资源能力与注入 actor 调度；不推进代理 workflow |
@@ -35,6 +35,8 @@ flowchart LR
 | tests/e2e/internal | 隔离环境、公开 CLI driver 和外部原生协议夹具；测试不能导入已删除 owner 或 Runner 内部包 |
 
 旧 actor/worker、adapters、workflow、reliable、conversation owner、执行写表、闲置执行事务端口与原生重建函数已物理删除。执行三层、工作区、会话、输入、恢复、原 final 与发布取证均由 Runner 单写；具体删除和验收见[删除审计](../acceptance/steerrunner-deletion-audit.md)。
+
+2026-10-16 补充清理：旧 lifecycle/adapter 端口、原生事件与 PR 线索解析、旧候选绑定/停止/丢弃辅助规则及旧状态转移已按生产引用删除，专属测试同步移除。仍被 checkpoint/产品查询引用的记录形状、停服策略展示值、能力状态、活动字段及当前 TaskDelivery 校验继续保留；包名暂不调整。范围与验证见[本次清理验收](../acceptance/execution-legacy-cleanup.md)。
 
 ## 任务交付链
 

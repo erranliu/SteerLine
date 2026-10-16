@@ -47,7 +47,6 @@ type EnvironmentCheckOperation struct {
 	CommandID  string          `json:"command_id,omitempty"`
 	Diagnostic string          `json:"diagnostic,omitempty"`
 }
-type EnvironmentCheckCatalog = json.RawMessage
 type EnvironmentCheckCommand struct {
 	RequestID        string
 	Action           string
@@ -57,7 +56,7 @@ type EnvironmentCheckCommand struct {
 	Original         json.RawMessage
 }
 type EnvironmentCheckPort interface {
-	EnvironmentCheckCatalog(context.Context) (EnvironmentCheckCatalog, error)
+	EnvironmentCheckCatalog(context.Context) (json.RawMessage, error)
 	EnvironmentChecks(context.Context) ([]EnvironmentCheckRecord, error)
 	EnvironmentCheck(context.Context, string) (EnvironmentCheckRecord, error)
 	EnvironmentCheckRequest(context.Context, string) (EnvironmentCheckRecord, error)

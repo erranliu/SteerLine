@@ -4,6 +4,8 @@
 
 ## 当前入口
 
+执行域遗留清理（2026-10-16，普通开发）：[引用审计与最小验证](execution-legacy-cleanup.md)，仅删除无生产消费者的旧执行实现及专属测试，保留当前 Task/交付、checkpoint、产品展示和宿主进程边界。
+
 执行权限与 Git 环境检查接入（2026-10-16，SteerLine 已实现，真实 Runner 联调与人工验收待完成）：[本仓验收与审查记录](environment-check.md)，仅 SLEC caller/HTTP/Web；Runner 前置与原生检查在其仓库独立 SREC 验收，不共用通过状态。构建和业务资源后置。
 
 测试分级与 L4 入口（2026-10-16，普通开发）：[专属验收](test-level-alignment.md)，按通用规范拆分 L3 正常流程和 L4 系统边界，实际选择、并行及清理结果单独登记。

@@ -16,7 +16,7 @@ type checkPortFixture struct {
 	submissions, reads, catalogs int
 }
 
-func (p *checkPortFixture) EnvironmentCheckCatalog(context.Context) (api.EnvironmentCheckCatalog, error) {
+func (p *checkPortFixture) EnvironmentCheckCatalog(context.Context) (json.RawMessage, error) {
 	p.catalogs++
 	return json.RawMessage(`{"unavailable_reason":"fixture: mechanism unsupported"}`), nil
 }

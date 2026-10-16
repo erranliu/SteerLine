@@ -1,5 +1,5 @@
-// Package backend defines pure execution interaction values and small ports.
-// It has no business persistence authority and performs no platform I/O.
+// Package backend retains product display values and SteerLine process ports.
+// Native execution and lifecycle ports belong to the standalone SteerRunner.
 package backend
 
 import (
@@ -41,18 +41,6 @@ type ExecutionRef struct {
 	Incomplete      bool              `json:"incomplete,omitempty"`
 }
 
-type ExecutionProbe interface {
-	Identity() (BackendKind, ExecutionProtocol)
-	Probe(context.Context, ExecutionTarget, AgentSpec) (CapabilityReport, error)
-}
-
-// Observation and workspace consumers do not require cancellation support.
-type ExecutionBackend interface {
-	ExecutionProbe
-	Observe(context.Context, ExecutionRef) (Observation, error)
-	InspectWorkspace(context.Context, ExecutionRef) (WorkspaceInspection, error)
-}
-
 // StopHandle is the verified native resource handle, never a center Worker.
 type StopHandle interface {
 	Identity() ProcessIdentity
@@ -60,26 +48,8 @@ type StopHandle interface {
 	Close()
 }
 
-// OwnedProcessHandle distinguishes a managed process tree owned by this
-// service from a read-only attachment to an original external resource.
-type OwnedProcessHandle interface {
-	StopHandle
-	OwnedProcess() bool
-}
-
-type ExecutionStopper interface {
-	StopExecution(context.Context, ExecutionRef, Operation, StopHandle) (StopReceipt, error)
-}
-
-// ProcessTreeHandle can prove all writers in the exact owned resource exited.
-// Root-process liveness alone is insufficient while its owner still exists.
-type ProcessTreeHandle interface {
-	StopHandle
-	WritersAbsent() bool
-}
-
 // ManagedProcessHost is a small host-owned process boundary. Implementations
-// receive a fixed command constructed by an execution adapter; they never
+// receive a fixed command constructed by the application; they never
 // receive a Service, Run, or persistence handle.
 type ManagedProcessHost interface {
 	StartManaged(*exec.Cmd) (StopHandle, error)
