@@ -1,12 +1,12 @@
 # Spec：执行权限与 Git 环境检查接入
 
-日期：2026-10-16。状态：SteerLine caller/HTTP/Web 已按本地固定草稿契约实现，真实 Runner 集成待前置。[Plan](environment-check.plan.md) · [本仓专属验收与审查记录](../acceptance/environment-check.md)。普通开发，无 Task ID，不改 roadmap/execution-map。
+日期：2026-10-16。状态：SteerLine caller/HTTP/Web 对齐 Runner 已合入 check/v1 契约，固定 EXE 集成结果见验收。[Plan](environment-check.plan.md) · [本仓专属验收与审查记录](../acceptance/environment-check.md)。普通开发，无 Task ID，不改 roadmap/execution-map。
 
 ## 1. 目标与规格所有权
 
 SteerLine 提供主动环境检查入口：选择项目、目标 Worker 和权限模式，调用独立 Runner，让实际 Agent 验证执行与 Git/必需 PR 能力，展示报告和待处理资源。构建、测试及业务资源检查后置，后续由项目定制用例负责；资源/模型目录和执行方案组合管理不在本期。
 
-Runner 前置已拆到其主仓库 `C:/Project/SteerRunner`：`docs/spec/environment-check.spec.md`、`environment-check.plan.md`、`docs/acceptance/environment-check.md`。本地为新草稿，尚未提交/发布；[发布后 Runner Spec](https://github.com/erranliu/SteerRunner/blob/main/docs/spec/environment-check.spec.md)及[Plan](https://github.com/erranliu/SteerRunner/blob/main/docs/spec/environment-check.plan.md)链接在合入后才可作为可获取版本。隔离 caller/Web 开发可使用固定草稿契约的公开 fixture；真实集成/运行前登记实际合入 commit 和固定 EXE，不能把浮动 main、本地草稿或 dirty EXE 当作已发布前置。
+Runner 契约与原生验收归属 `C:/Project/SteerRunner`。本轮固定其已合入提交 `ea1bfd982c63818de02870c70fa2f7b1c9f258b2`（PR #14）；[固定 Runner Spec](https://github.com/erranliu/SteerRunner/blob/ea1bfd982c63818de02870c70fa2f7b1c9f258b2/docs/spec/environment-check.spec.md)、[Plan](https://github.com/erranliu/SteerRunner/blob/ea1bfd982c63818de02870c70fa2f7b1c9f258b2/docs/spec/environment-check.plan.md)及其 acceptance 是前置来源。固定 EXE/version/SHA/resource_digest 记入本仓验收；不使用浮动 main 或本地草稿代表交接。
 
 | 所有者 | 唯一维护内容 |
 | --- | --- |
@@ -40,7 +40,7 @@ Runner 的在途沙箱认证在 `8876/SteerRunner` 工作树（读取 HEAD `e04d
 
 ## 4. 公开接口与最小持久化
 
-消费 Runner 拟议的 `environment-check start/inspect/stop` 三命令，不维护自己的原生命令或复制其错误分类。start/stop 是写请求；inspect 按 check_id 或原 request_id 返回有界快照/revision。首期通过现有 Query 可见轮询刷新，不增加检查专用 events/cursor/SSE。
+消费 Runner 已发布的 `environment-check start/inspect/stop` 三命令，不维护自己的原生命令或复制其错误分类。start/stop 是写请求；inspect 按 check_id 或原 request_id 返回有界快照/revision。首期通过现有 Query 可见轮询刷新，不增加检查专用 events/cursor/SSE。
 
 命令参数、CheckReceipt、Inspection、错误码的唯一规范见 Runner Spec §4/§4.1：start/stop 使用 v1 `--input -`，inspect 恰选一个 `--check-id` 或 `--request-id`。读取原 stop 请求必须校验原停止命令身份，不能把同 Check 的 start 回执当作停止结果；明确拒绝且没有 Check 的原请求也要展示。写响应回显外层 request_id，查询外层为 null。受理后环境检查 failed/unverified 是成功获取的报告，不是 inspect 传输失败；缺现场凭据与缺原生实现能力分别呈现。
 
@@ -73,10 +73,10 @@ Runner 实现的内部准备、模型轮次数、预算、Git/PR 对象守卫和
 
 - `internal/environmentcheck` 只负责原请求、绑定及公开报告缓存；纯记录由 `internal/runnerstate` 定义。`internal/app/environment_checks.go` 注入固定 EXE 和同项目 SQLite，复用已有 TaskRepositoryTarget 的静态仓库/发布目标/非秘密 URL 校验，装配实际 Publication 与本地已存在的目标 base commit。此复用不包含 Task 领取或 DAG 资格。读取本地 Git 元数据不证明远端权限；未取得来源 commit 时明确拒绝，不偷偷 fetch 或换成 HEAD。
 - `product/api` 的公开投影保留 Runner 文档为 JSON，不依赖 Runner 进程客户端；应用装配处完成投影。HTTP 继续使用既有项目认证、请求 ID 仲裁及 readiness，环境检查不进入 Task/control 用例。
-- 消费 `capabilities.environment_check` 的 version=1、supported(adapter/target_kind/access_modes)、input_schema、receipt_schema 和 inspection_schema；资源摘要仍使用 capabilities 的 resource_digest。Check DTO 绑定见 [公开值](../../internal/runnercontract/environment_check.go)。当前固定 [v1 fixture](../../internal/testkit/checkfixture/v1.json) 明确标记为本仓拟议夹具，**不是 Runner 已发布或 Controlled 已核验样例**；Runner 发布交接时须以其公开契约核对并替换，不新增兼容回退。
+- 消费 `capabilities.environment_check.contract=steerrunner-environment-check/v1` 和 `targets(adapter/target/access_modes/mechanism/platform)`，只允许 implemented 组合；schema 从同一 capabilities 的 `environment_check_schema` 读取并冻结，使用其 `$defs/input|receipt|inspection`，不远程加载引用。报告原样消费 `input/actual/result/cleanup_status/items[].required/allowed_actions`，资源完成以 `cleanup_status=completed` 为准，stop 权限以 `allowed_actions` 为准。资源摘要仍由 Runner 提供。Check DTO 见[公开值](../../internal/runnercontract/environment_check.go)；[公开同版样例](../../internal/testkit/checkfixture/published-v1.json)直接冻结 Runner 内嵌发布数据，[caller fixture](../../internal/testkit/checkfixture/v1.json)只派生测试上下文与失败报告，不是原生资格证据。删除旧草稿字段，不新增兼容回退。
 - `GET /environment-checks/options` 提供预填与能力；`GET /environment-checks` 只读本仓历史；`GET /environment-checks/{key}` 在有未知操作时只 inspect 该原请求，已取得绑定后按 check_id 读快照，离线保留源时间与诊断。key 是原 start 的 32 位 request_id，与原生 check_id 分开。无额外 events、cleanup 或启动型 GET。
 - `POST /commands` 的 `start_environment_check` target 为本项目 project_id、expected_version=0，payload 为 `{profile_id,access_mode}` 或 `{execution,access_mode}`；stop_environment_check target 为本地 key，expected_version 为显示时的 Runner report.revision、payload 为 `{}`。两者不带 task/control/graph revision。command receipt 的 applied 只表示原写请求已确认受理，不代表 Agent 已执行或能力通过。
 - SQLite schema 22 新增 environment_checks 与 environment_check_requests，保存固定身份、原请求与缓存；CAS 不改变 Task/DAG/database_revision。schema 21 直接拒绝，不迁移。调试 reset 在检查资源未结算或任何原操作未知时保留恢复记录；已证明安全时按请求关联→检查记录顺序清除本包状态。
 - 页面位于 `/projects/{project_id}/environment-checks`，从执行设置进入。按可见页面轮询选中报告；选择变化提示适用性，权限模式默认沙箱且完全访问须显式选。保存原授权依赖既有浏览器 journal/目标锁和服务端不可变请求，页面关闭不 stop。
 
-本次不修改执行方案默认值或 debug-template 的冻结执行配置：本次检查参数只属于独立请求。真实 Runner 发布后使用新调试包核对；人工体验、真实 schema/EXE 核对和 SA 原生前置继续待验，详见 acceptance。
+本次不修改执行方案默认值或 debug-template 的冻结执行配置：本次检查参数只属于独立请求。使用新调试包的同 SHA Runner 核对公开 schema/EXE；人工体验及原生组合适用范围按 acceptance 独立记录。

@@ -1,6 +1,6 @@
 # Plan：执行权限与 Git 环境检查接入
 
-日期：2026-10-16。SteerLine 实现安排与交付边界；真实 Runner 交接仍是集成前置。[Spec](environment-check.spec.md) · [本仓专属验收](../acceptance/environment-check.md)。本 Plan 只安排 SteerLine；Runner 前置已拆到 `C:/Project/SteerRunner/docs/spec/environment-check.spec.md` / `.plan.md` 及独立 acceptance，无 Task ID、不改 execution-map。
+日期：2026-10-16。SteerLine 实现安排与交付边界；按已合入 Runner `ea1bfd982c63818de02870c70fa2f7b1c9f258b2` 完成正式契约接入。[Spec](environment-check.spec.md) · [本仓专属验收](../acceptance/environment-check.md)。本 Plan 只安排 SteerLine；Runner 前置已拆到 `C:/Project/SteerRunner/docs/spec/environment-check.spec.md` / `.plan.md` 及独立 acceptance，无 Task ID、不改 execution-map。
 
 ## 1. 前置与复用
 
@@ -64,3 +64,16 @@ Runner 前置必须交接：Spec §4/§4.1 的三命令参数/CLI 信封/CheckRe
 
 
 共享入口变更的最小回归：交付前通过 test-feedback 运行 `internal/product/httpapi` 的 TestHTTPCommandBoundary*、`internal/product/applicationhttp` 的 TestUnifiedStartup*、`internal/app` 的 TestUnifiedStartup*、SQLite 的 TestNativeDatabaseInitializesCurrentSchema / TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation、`internal/testkit/boundary` 的 TestThreeLayerRepositoryBoundary、driver 的 TestDebugResetBeforeInitialization*、taskrunner 的 TestRunnerShutdown*/TestRunnerSettlement*；Web 同跑 shared/api/queries.test.ts 和 client.test.ts，并做 TypeScript/Vite build。映射 SLEC-A01/A02/A03/A04，Windows 隔离临时目录；通过条件为旧请求仲裁、认证/路由、schema 严格拒绝和数据/进程依赖边界无回归，原始日志登记在 acceptance。本次不新增测试层级或全量执行要求。
+
+## 4. 安装报错的契约对齐
+
+根因是 caller 仍要求草稿 `version/supported`，正式 Runner 用 `contract/targets` 声明能力。同步替换 capability、schema 引用、报告、停止权限及 reset 资源完成条件；只改 caller/Web，不改 Runner 原生状态机。统一生命周期的节点/异常/验证规则不变。
+
+测试计划补充（覆盖原 SLEC-A01–A04，证据仍登记本任务专属 acceptance）：
+
+| 级别/组 | 验收项 | 环境、命令与时点 | 通过条件/证据 |
+| --- | --- | --- | --- |
+| L1 SLEC-CALLER/HTTP/INTEGRATION | A01/A02/A03 | 实现后运行原定向 Go 命令，包含 `TestEnvironmentCheckPublishedSamples` 与 `TestEnvironmentCheckPublishedContract`；先用 `scripts/new-debug-release.ps1 -SteerRunnerExe C:/Project/SteerRunner/bin/steerrunner.exe` 生成独立包，再固定该包 Runner 的三个环境变量。集成测试只启动临时 state-dir 的空闲服务，cleanup 停止原 instance | 实际能力可用；Orca unsupported 拒绝；六份原 inspection 完整往返/schema 通过；capabilities 中公开样例与固定交接完全一致；无 skip、服务清理成功。test-feedback summary/go-test.jsonl 登记 acceptance |
+| L1 SLEC-WEB | A02/A04 | 原定 Web 三文件测试与 build，最终源码执行 | 读取原生 result/actual/cleanup_status/allowed_actions/证据 facts，原未知与重复操作保护继续通过；日志登记 acceptance |
+
+不选择 L2/L3/L4 或真实 Agent/Git/PR：变更属于已发布协议消费与展示，Runner 原生执行规则未修改；本仓定向回归与实际 EXE 空闲服务足以验证本次差异。人工项仍为 SLEC-M01，不把后置体验记录为通过。不修改安装目录或冻结已有调试包。
