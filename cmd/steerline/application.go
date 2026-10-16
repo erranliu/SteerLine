@@ -19,18 +19,27 @@ func runApplication(command string, args []string) error {
 	noOpen := flags.Bool("no-open", false, "start services without opening a browser")
 	detached := flags.Bool("detached", false, "verify resident process lifetime before opening resources")
 	jsonOutput := flags.Bool("json", false, "print verified application status as JSON")
+	runnerExe := flags.String("runner-exe", "", "verify-stop: absolute staged Runner executable")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected application arguments")
 	}
-	if *noOpen && command != "start" || *jsonOutput && command != "status" || *detached && command != "serve" {
-		return errors.New("--no-open is for start; --json is for status; --detached is for serve")
+	if *noOpen && command != "start" || *jsonOutput && command != "status" && command != "verify-stop" || *detached && command != "serve" || *runnerExe != "" && command != "verify-stop" {
+		return errors.New("--no-open is for start; --json is for status/verify-stop; --detached is for serve; --runner-exe is for verify-stop")
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	switch command {
+	case "verify-stop":
+		result, err := app.VerifyApplicationStopped(ctx, *runnerExe)
+		if err != nil {
+			return err
+		}
+		body, _ := json.Marshal(result)
+		fmt.Println(string(body))
+		return nil
 	case "serve":
 		if *detached {
 			if err := localservice.VerifyDetachedLifetime(); err != nil {

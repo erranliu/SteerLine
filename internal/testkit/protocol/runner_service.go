@@ -37,6 +37,13 @@ func RunRunnerServiceFixture() bool {
 		_ = json.NewDecoder(os.Stdin).Decode(&request)
 	}
 	switch command {
+	case "service verify-stopped":
+		var info map[string]any
+		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-fixture.json"))
+		if err != nil || json.Unmarshal(raw, &info) != nil || info["status"] != "not_running" {
+			panic("offline fixture writer has not stopped")
+		}
+		data = map[string]any{"state_dir": stateDir, "resources_settled": true, "runs": []any{}}
 	case "version":
 		data = map[string]any{"version": version, "protocols": []string{"steerrunner-cli/v1"}, "resource_version": 1, "resource_digest": digest}
 	case "capabilities":
