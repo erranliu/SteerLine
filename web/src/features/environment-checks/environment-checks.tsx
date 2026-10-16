@@ -23,7 +23,7 @@ const label = (value: string) => labels[value] ?? value;
 const freshExecution = (): CheckExecution => ({
   adapter: "codex-app-server",
   target: { kind: "local" },
-  settings: { executable: "codex.exe" },
+  settings: { executable: "codex" },
 });
 function unresolved(row: CheckRecord) {
   return (
@@ -90,7 +90,9 @@ function Report({
       {!sameExecution(row.input.execution, execution) && (
         <p className="notice amber">结果不适用于当前选择</p>
       )}
-      {!online && <p className="notice amber">服务离线，显示历史缓存。</p>}
+      {!online && (
+        <p className="notice amber">执行连接待核实，继续只读查询原检查。</p>
+      )}
       {row.diagnostic && (
         <p className="notice amber">
           源状态未核实：{row.diagnostic}。保留最后可信报告。
@@ -114,6 +116,20 @@ function Report({
             执行：{label(report.status)} · 能力结论：
             {label(report.result)}
           </p>
+          {report.diagnostic && (
+            <div className="notice amber" aria-label="检查诊断">
+              {report.diagnostic ===
+                "native_preparation_failed: native_executable_unavailable" && (
+                <p>
+                  未能启动 Codex：Worker
+                  无法找到或运行配置的程序。请沿用已有执行方案的 Agent
+                  executable，或填写 Worker 上可用的 Codex
+                  命令或绝对路径后重新检查。
+                </p>
+              )}
+              <p>{report.diagnostic}</p>
+            </div>
+          )}
           <p>
             源更新时间：
             <time dateTime={report.updated_at}>
@@ -130,7 +146,7 @@ function Report({
             {Object.entries(report.actual ?? {}).map(([key, value]) => (
               <div key={key}>
                 <dt>{key}</dt>
-                <dd>{value}</dd>
+                <dd>{value === "" ? "尚未取得" : value}</dd>
               </div>
             ))}
           </dl>
@@ -155,7 +171,11 @@ function Report({
             <p>
               测试 PR：
               {report.resources.pr_url.startsWith("https://") ? (
-                <a href={report.resources.pr_url} target="_blank" rel="noreferrer">
+                <a
+                  href={report.resources.pr_url}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   {report.resources.pr_url}
                 </a>
               ) : (
@@ -170,7 +190,6 @@ function Report({
           >
             资源：{label(report.cleanup_status)}
             {report.cleanup_status !== "completed" ? " · 资源待处理" : ""}{" "}
-            {report.diagnostic}
           </p>
         </>
       ) : (
@@ -182,7 +201,7 @@ function Report({
         </p>
       )}
       <div className="check-actions">
-        <Button disabled={!online || pending} onClick={refresh}>
+        <Button disabled={pending} onClick={refresh}>
           查询原请求
         </Button>
         <Button
@@ -218,17 +237,33 @@ export function EnvironmentChecks() {
   const history = useQuery({ ...queries.checks(), enabled });
   const [profileID, setProfileID] = useState("");
   const [draft, setDraft] = useState<CheckExecution | null>(null);
+  const targetDrafts = useRef<Record<string, CheckExecution>>({});
   const [mode, setMode] = useState("sandbox");
   const [selected, setSelected] = useState("");
   const selectedID = selected || history.data?.checks[0]?.id || "";
   const detail = useQuery({
     ...queries.check(selectedID),
     enabled: enabled && !!selectedID,
-    refetchInterval: online ? 3000 : false,
+    // Execution readiness does not determine whether history can be read.
+    refetchInterval: 3000,
     refetchIntervalInBackground: false,
   });
   const rows = history.data?.checks ?? [];
   const row = detail.data?.check ?? rows.find((r) => r.id === selectedID);
+  useEffect(() => {
+    const updated = detail.data?.check;
+    if (!updated) return;
+    client.setQueryData<{ checks: CheckRecord[] }>(
+      projectQueries(api).checks().queryKey,
+      (history) =>
+        history && {
+          ...history,
+          checks: history.checks.map((r) =>
+            r.id === updated.id ? updated : r,
+          ),
+        },
+    );
+  }, [api, client, detail.data]);
   const [pending, setPending] = useState(false);
   const locked = useRef(false);
   const [error, setError] = useState("");
@@ -245,7 +280,8 @@ export function EnvironmentChecks() {
     ? ((source.settings.agent_launch ?? {}) as Record<string, unknown>)
     : source.settings;
   const supported =
-    catalog.data?.capabilities?.contract === "steerrunner-environment-check/v1" &&
+    catalog.data?.capabilities?.contract ===
+      "steerrunner-environment-check/v1" &&
     catalog.data.capabilities.targets?.some(
       (p) =>
         p.mechanism === "implemented" &&
@@ -329,6 +365,7 @@ export function EnvironmentChecks() {
               onChange={(e) => {
                 setProfileID(e.target.value);
                 setDraft(null);
+                targetDrafts.current = {};
               }}
             >
               <option value="" disabled>
@@ -347,18 +384,25 @@ export function EnvironmentChecks() {
               value={source.target.kind}
               onChange={(e) => {
                 const kind = e.target.value;
-                setDraft({
-                  adapter:
-                    kind === "local" ? "codex-app-server" : "orca-terminal",
-                  target: { kind },
-                  settings:
-                    kind === "local"
-                      ? { executable: "codex.exe" }
+                if (kind === source.target.kind) return;
+                targetDrafts.current[source.target.kind] = source;
+                const configured = catalog.data?.profiles.find(
+                  (p) => p.execution.target.kind === kind,
+                )?.execution;
+                setDraft(
+                  targetDrafts.current[kind] ??
+                    configured ??
+                    (kind === "local"
+                      ? freshExecution()
                       : {
-                          transport: { executable: "orca" },
-                          agent_launch: { executable: "codex" },
-                        },
-                });
+                          adapter: "orca-terminal",
+                          target: { kind },
+                          settings: {
+                            transport: { executable: "orca" },
+                            agent_launch: { executable: "codex" },
+                          },
+                        }),
+                );
               }}
             >
               <option value="local">本机 Codex</option>
@@ -384,6 +428,7 @@ export function EnvironmentChecks() {
             Agent executable
             <input
               type="text"
+              aria-describedby="check-executable-help"
               value={String(agent.executable ?? "")}
               onChange={(e) => updateAgent("executable", e.target.value)}
             />
@@ -414,6 +459,9 @@ export function EnvironmentChecks() {
             </select>
           </label>
         </div>
+        <p id="check-executable-help" className="muted">
+          Agent executable 使用 Worker 上可用的命令或绝对路径，优先沿用已有执行方案。
+        </p>
         <div className="notice" aria-label="执行预览">
           <strong>执行预览</strong>
           <p>

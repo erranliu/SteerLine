@@ -77,3 +77,9 @@ Runner 前置必须交接：Spec §4/§4.1 的三命令参数/CLI 信封/CheckRe
 | L1 SLEC-WEB | A02/A04 | 原定 Web 三文件测试与 build，最终源码执行 | 读取原生 result/actual/cleanup_status/allowed_actions/证据 facts，原未知与重复操作保护继续通过；日志登记 acceptance |
 
 不选择 L2/L3/L4 或真实 Agent/Git/PR：变更属于已发布协议消费与展示，Runner 原生执行规则未修改；本仓定向回归与实际 EXE 空闲服务足以验证本次差异。人工项仍为 SLEC-M01，不把后置体验记录为通过。不修改安装目录或冻结已有调试包。
+
+## 5. 检查启动与报告刷新修复
+
+沿用执行方案中的 Agent executable；在目标间切换保留本页已编辑参数，并优先使用该目标的既有方案，重新选择方案时清除本页编辑。无方案的本机默认命令与 debug-template 改为 `codex`，由 Runner 原生 owner 解析其受支持的包入口，不在 SteerLine 新增 EXE 搜索、认证或兼容路径。报告读取不依赖业务执行 ready；保持可见页面轮询和后台取消，只读详情同步本页历史摘要。原生启动失败在报告顶部显示原因和修正路径，保持 Runner 结论与资源状态原值。
+
+测试计划：覆盖 [SLEC-A02/A04](../acceptance/environment-check.md#自动项)，Windows 隔离 Query/API fixture；实现后运行 `npm --prefix web test -- src/features/environment-checks/environment-checks.test.tsx src/shared/api/client.test.ts src/shared/api/queries.test.ts` 与 `npm --prefix web run build`。新增目标切换/重选方案、无方案默认命令、执行 unready 时只读刷新、queued→failed 的详情/历史一致、隐藏零轮询及恢复可见后读取、零自动 start/stop 断言。通过条件为原授权边界不变、失败原因清晰且原报告能更新，日志登记本任务 acceptance。debug-template 的实际产品验证仍先生成新包，使用固定 Runner 和本次 SteerlineTest 分支；核对新包已配置的原生程序可定位、页面切换不丢配置以及真实检查结果可见，不以 `--version` 冒充权限/Git/PR 通过。没有 Task/Runner 状态机变更，不选择 Full/L2/L3/L4；模型或 Runner 原生失败另记具体结果，不自动重试或切换权限。
