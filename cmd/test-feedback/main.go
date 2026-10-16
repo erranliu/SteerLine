@@ -480,24 +480,8 @@ func filterGeneratedRunOutput(status []byte, generatedPaths map[string]struct{})
 }
 
 func enabledNativeSwitches() []string {
-	known := []string{
-		"STEERLINE_LIVE_PR_ACCEPTANCE",
-		"STEERLINE_RUN_WINDOW_ACCEPTANCE",
-		"STEERLINE_REQUIRE_DETACHED_TESTS",
-		"STEERLINE_NATIVE_CODEX_NODE",
-		"STEERLINE_NATIVE_CODEX_SCRIPT",
-		"STEERLINE_NATIVE_ORCA_EXE",
-		"STEERLINE_NATIVE_ORCA_REPO",
-		"STEERLINE_NATIVE_ORCA_HANDLE",
-		"STEERLINE_NATIVE_ORCA_WORKTREE",
-		"STEERLINE_NATIVE_ORCA_BRANCH",
-		"STEERLINE_NATIVE_ORCA_BASE",
-		"STEERLINE_NATIVE_ORCA_RUNTIME",
-		"STEERLINE_NATIVE_ORCA_INCARNATION",
-		"STEERLINE_NATIVE_ORCA_SERVICE_REPOSITORY",
-		"STEERLINE_NATIVE_ORCA_SERVICE_EVIDENCE_OUT",
-		"STEERLINE_NATIVE_WINDOW_STOP_MODE",
-	}
+	known := []string{"STEERLINE_DEBUG_TEST_ROOT", "STEERLINE_DEBUG_SECOND_TEST_ROOT"}
+
 	enabled := []string{}
 	for _, name := range known {
 		if value := os.Getenv(name); value != "" && value != "0" && !strings.EqualFold(value, "false") {

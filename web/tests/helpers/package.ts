@@ -40,6 +40,7 @@ function outsideJob(
   const id = randomUUID();
   const script = join(root, "evidence", "native-" + id + ".ps1");
   const result = join(root, "evidence", "native-" + id + ".json");
+  const pendingResult = result + ".tmp";
   const output = join(root, "evidence", "native-" + id + ".log");
   const lines = [
     "$ErrorActionPreference='Stop'",
@@ -63,8 +64,12 @@ function outsideJob(
       " *> " +
       psQuote(output) +
       "; $taskExit=$LASTEXITCODE } finally { @{exit_code=$taskExit}|ConvertTo-Json -Compress|Set-Content -LiteralPath " +
+      psQuote(pendingResult) +
+      " -Encoding utf8; Move-Item -LiteralPath " +
+      psQuote(pendingResult) +
+      " -Destination " +
       psQuote(result) +
-      " -Encoding utf8 }",
+      " }",
   ];
   writeFileSync(script, "\ufeff" + lines.join("\r\n"));
   const shellArgs =

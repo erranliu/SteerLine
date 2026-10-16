@@ -16,20 +16,17 @@ import (
 )
 
 type State struct {
-	WebFeedback bool                             `json:"web_feedback,omitempty"`
-	Recovery    *RecoveryFixture                 `json:"recovery,omitempty"`
-	Repository  string                           `json:"repository,omitempty"`
-	BaseBranch  string                           `json:"base_branch,omitempty"`
-	ResultText  string                           `json:"result_text,omitempty"`
-	Threads     map[string]ThreadState           `json:"threads,omitempty"`
-	GitURL      string                           `json:"git_url"`
-	Cwd         string                           `json:"cwd"`
-	Session     string                           `json:"session"`
-	Sessions    int                              `json:"sessions"`
-	Dispatches  int                              `json:"dispatches"`
-	Turns       []map[string]any                 `json:"turns"`
-	PR          executionmodel.PRInfo            `json:"pr"`
-	PRs         map[string]executionmodel.PRInfo `json:"prs,omitempty"`
+	Requests        map[string]string                `json:"requests,omitempty"`
+	LocalRepository string                           `json:"local_repository,omitempty"`
+	Marker          int                              `json:"marker,omitempty"`
+	WebFeedback     bool                             `json:"web_feedback,omitempty"`
+	Hold            bool                             `json:"hold,omitempty"`
+	Repository      string                           `json:"repository,omitempty"`
+	BaseBranch      string                           `json:"base_branch,omitempty"`
+	ResultText      string                           `json:"result_text,omitempty"`
+	GitURL          string                           `json:"git_url"`
+	PR              executionmodel.PRInfo            `json:"pr"`
+	PRs             map[string]executionmodel.PRInfo `json:"prs,omitempty"`
 }
 
 func (s State) RepositoryName() string {
@@ -45,11 +42,6 @@ func (s State) BranchName() string {
 	return "main"
 }
 func (s State) RemoteIdentity() string { return "https://github.com/" + s.RepositoryName() + ".git" }
-
-type ThreadState struct {
-	Cwd   string           `json:"cwd"`
-	Turns []map[string]any `json:"turns"`
-}
 
 func Read(path string) (State, error) {
 	var s State
@@ -146,7 +138,7 @@ func Merge(ctx context.Context, path, repo string) error {
 	if s.PR.State != "open" || s.PR.HeadBranch == "" {
 		return fmt.Errorf("no open controlled PR")
 	}
-	for _, args := range [][]string{{"fetch", "origin"}, {"merge", "--no-ff", "--no-edit", "origin/" + s.PR.HeadBranch}, {"push", "origin", s.BranchName()}} {
+	for _, args := range [][]string{{"checkout", s.BranchName()}, {"fetch", "origin"}, {"merge", "--no-ff", "--no-edit", "origin/" + s.PR.HeadBranch}, {"push", "origin", s.BranchName()}} {
 		if _, err = Git(ctx, repo, append([]string{"-c", "url." + s.GitURL + ".insteadOf=" + s.RemoteIdentity()}, args...)...); err != nil {
 			return err
 		}
@@ -157,6 +149,9 @@ func Merge(ctx context.Context, path, repo string) error {
 	}
 	now := time.Now().UTC()
 	s.PR.State, s.PR.Merged, s.PR.MergedAt, s.PR.MergeCommit = "merged", true, &now, &head
+	if s.PRs != nil {
+		s.PRs[s.PR.URL] = s.PR
+	}
 	return Write(path, s)
 }
 

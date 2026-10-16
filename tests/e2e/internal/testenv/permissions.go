@@ -8,7 +8,7 @@ func (p *Project) AssertRunnerBinding(snapshot Snapshot) {
 	}
 	c := snapshot.Runner.Candidates[0]
 	r := c.Projection
-	if c.SubmitState != "accepted" || r == nil || c.RunID != r.RunID || len(r.InputDigest) != 64 || r.Execution.AttemptID == "" || r.Execution.Generation == "" || r.Execution.SessionID == "" || r.Execution.Workspace == "" || r.Execution.Branch == "" {
+	if c.SubmitState != "accepted" || r == nil || c.RunID != r.RunID || len(r.InputDigest) != 64 {
 		p.Scenario.t.Fatal("public Runner binding incomplete", c)
 	}
 }

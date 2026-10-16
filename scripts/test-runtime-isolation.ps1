@@ -1,6 +1,6 @@
 param([string]$SteerRunnerExe = $env:STEERRUNNER_EXE, [switch]$IndependentProcess)
 $ErrorActionPreference = 'Stop'
-if (-not $SteerRunnerExe -or -not [IO.Path]::IsPathRooted($SteerRunnerExe)) { throw 'Select an absolute standalone SteerRunnerExe' }
+if ($SteerRunnerExe -and -not [IO.Path]::IsPathRooted($SteerRunnerExe)) { throw 'SteerRunnerExe must be absolute when supplied' }
 if (-not $IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
     Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments @('-SteerRunnerExe', $SteerRunnerExe)

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -98,7 +99,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-terminal-local" && entry.Chain != "orca-remote-codex") || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex") || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -190,21 +191,6 @@ func runE2E(opts options) (code int) {
 		return 2
 	}
 	note, coverage := "controlled worker/provider; no model requests", "selected-L3"
-	if opts.e2eEnv == "live" {
-		note = "native gpt-6-luna/medium; loopback provider"
-		for _, scenario := range selected {
-			if scenario.ID == "runtime.sandbox-git.local-codex" {
-				note = "native gpt-6-luna/medium; selected providers; sandbox uses real SteerlineTest PRs"
-			}
-			if scenario.Chain == "orca-remote-codex" {
-				note = "native gpt-6-luna/medium; selected providers; remote Orca uses real SteerlineTest PRs"
-				break
-			}
-		}
-		if opts.suite == "candidates" {
-			note = "native gpt-6-luna/medium; exact multi-profile admission; real SteerlineTest PRs"
-		}
-	}
 	if opts.level == "L2" {
 		coverage = "gate-only"
 	}
@@ -221,7 +207,23 @@ func runE2E(opts options) (code int) {
 	}
 	defer func() {
 		// scratch is the literal directory created by this invocation.
-		if err := os.RemoveAll(scratch); err != nil {
+		preserve := false
+		for _, entry := range selected {
+			var state struct {
+				Cleanup bool `json:"cleanup_complete"`
+			}
+			raw, err := os.ReadFile(filepath.Join(out, "scenarios", entry.ID, "scenario.json"))
+			if err == nil {
+				if json.Unmarshal(raw, &state) != nil || !state.Cleanup {
+					preserve = true
+				}
+			} else if len(report.Groups) > 0 && len(report.Blocked) == 0 {
+				preserve = true
+			}
+		}
+		if preserve {
+			report.Errors = append(report.Errors, "unverified cleanup; preserve scratch: "+scratch)
+		} else if err := os.RemoveAll(scratch); err != nil {
 			report.Errors = append(report.Errors, "scratch cleanup: "+err.Error())
 		} else {
 			report.Cleanup = true
@@ -304,23 +306,31 @@ func runE2E(opts options) (code int) {
 		sum := sha256.Sum256(raw)
 		report.Builds[build.path] = hex.EncodeToString(sum[:])
 	}
-	runnerPath := os.Getenv("STEERRUNNER_EXE")
-	if runnerPath == "" {
-		runnerPath, err = exec.LookPath("steerrunner.exe")
-		if err != nil {
-			return fail(errors.New("select a standalone Runner with STEERRUNNER_EXE"))
+	runnerPath := helper
+	hasLive := false
+	for _, entry := range selected {
+		hasLive = hasLive || entry.Env == "live"
+	}
+	if hasLive {
+		runnerPath = os.Getenv("STEERRUNNER_EXE")
+		if runnerPath == "" {
+			runnerPath, err = exec.LookPath("steerrunner.exe")
+			if err != nil {
+				return fail(errors.New("select a standalone Runner with STEERRUNNER_EXE"))
+			}
 		}
+		runnerPath, err = filepath.Abs(runnerPath)
+		if err != nil {
+			return fail(err)
+		}
+		runnerBytes, err := os.ReadFile(runnerPath)
+		if err != nil {
+			return fail(err)
+		}
+		runnerSum := sha256.Sum256(runnerBytes)
+		report.Builds[runnerPath] = hex.EncodeToString(runnerSum[:])
+
 	}
-	runnerPath, err = filepath.Abs(runnerPath)
-	if err != nil {
-		return fail(err)
-	}
-	runnerBytes, err := os.ReadFile(runnerPath)
-	if err != nil {
-		return fail(err)
-	}
-	runnerSum := sha256.Sum256(runnerBytes)
-	report.Builds[runnerPath] = hex.EncodeToString(runnerSum[:])
 	authHome := os.Getenv("CODEX_HOME")
 	if authHome == "" {
 		userHome, err := os.UserHomeDir()
@@ -333,21 +343,7 @@ func runE2E(opts options) (code int) {
 	if err != nil {
 		return fail(err)
 	}
-	candidateConfig := os.Getenv("STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG")
-	if candidateConfig != "" {
-		candidateConfig, err = filepath.Abs(candidateConfig)
-		if err != nil {
-			return fail(err)
-		}
-	}
-	remoteConfig := os.Getenv("STEERLINE_REMOTE_ACCEPTANCE_CONFIG")
-	if remoteConfig != "" {
-		remoteConfig, err = filepath.Abs(remoteConfig)
-		if err != nil {
-			return fail(err)
-		}
-	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "RemoteConfig": remoteConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
+	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}
@@ -429,9 +425,12 @@ func runE2E(opts options) (code int) {
 		}
 		timeout := e2ePackageGoTimeout(packages[pkg])
 		importPath := strings.TrimSuffix(corePackage, "/internal/app/host") + "/" + strings.TrimPrefix(pkg, "./")
-		args := []string{"tool", "test2json", "-t", "-p", importPath, testBinaries[pkg], "-test.v=test2json", "-test.count=1", fmt.Sprintf("-test.parallel=%d", e2ePackageParallelism(packages[pkg])), "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
-		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{"go"}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
-		stdout, err := os.Create(g.StdoutLog)
+		args := []string{"-test.v=test2json", "-test.count=1", fmt.Sprintf("-test.parallel=%d", e2ePackageParallelism(packages[pkg])), "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
+		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{testBinaries[pkg]}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
+		// Own the test binary directly. Detached external services must not keep
+		// a live test2json pipe open after the test process has exited.
+		rawLog := filepath.Join(out, g.ID+".raw.log")
+		stdout, err := os.Create(rawLog)
 		if err != nil {
 			return err
 		}
@@ -440,7 +439,7 @@ func runE2E(opts options) (code int) {
 			stdout.Close()
 			return err
 		}
-		cmd := exec.Command("go", args...)
+		cmd := exec.Command(testBinaries[pkg], args...)
 		cmd.Dir = filepath.Join(root, filepath.FromSlash(strings.TrimPrefix(pkg, "./")))
 		cmd.Env = e2eEnvironment(os.Environ(), string(config))
 		cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -455,10 +454,20 @@ func runE2E(opts options) (code int) {
 			g.ExitCode = 1
 			g.Error = err.Error()
 		}
-		raw, err := os.ReadFile(g.StdoutLog)
+		raw, err := os.ReadFile(rawLog)
 		if err != nil {
 			return err
 		}
+		convert := exec.CommandContext(ctx, "go", "tool", "test2json", "-t", "-p", importPath)
+		convert.Stdin = bytes.NewReader(raw)
+		converted, err := convert.Output()
+		if err != nil {
+			return fmt.Errorf("convert finite test log: %w", err)
+		}
+		if err := os.WriteFile(g.StdoutLog, converted, 0600); err != nil {
+			return err
+		}
+		raw = converted
 		g.Summary = testfeedback.Parse(raw, g.ExitCode)
 		report.Groups = append(report.Groups, g)
 		return checkE2EGroup(g, packages[pkg], out)
@@ -503,7 +512,7 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
 		// Heavy isolation/native restart has a 10m body; its parent must not
 		// cut the selected scene at the ordinary 6m package bound.
-		if entry.ID == "delivery.basic" || entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.codex-resume" || entry.ID == "recovery.terminal-local-reconnect" || entry.ID == "recovery.terminal-environment-unknown-send" {
+		if entry.ID == "recovery.waiting-merge-restart" {
 			minutes += 12
 		} else {
 			minutes += 6
@@ -557,19 +566,11 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			return fmt.Errorf("scenario %s completed %d times", e.ID, seen[e.Test])
 		}
 		var evidence struct {
-			ID                         string           `json:"id"`
-			Passed                     bool             `json:"passed"`
-			Cleanup                    bool             `json:"cleanup_complete"`
-			Resources                  []map[string]any `json:"resources"`
-			RemotePublicOutputVerified bool             `json:"remote_public_output_verified"`
-			RemoteUsageStatus          string           `json:"remote_usage_status"`
-			UsageVerified              bool             `json:"usage_verified"`
-			OrcaUsageStatus            string           `json:"orca_usage_status"`
-			RealPR                     *struct {
-				URL, State, Repository string
-				Merged                 bool
-			} `json:"real_pr,omitempty"`
-			DebugSandbox *sandboxScenarioProof `json:"debug_sandbox,omitempty"`
+			ID        string                          `json:"id"`
+			Passed    bool                            `json:"passed"`
+			Cleanup   bool                            `json:"cleanup_complete"`
+			Resources []map[string]any                `json:"resources"`
+			Live      *testfeedback.LiveDeliveryProof `json:"live_delivery"`
 		}
 		raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "scenario.json"))
 		if err != nil {
@@ -578,26 +579,15 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		if err = json.Unmarshal(raw, &evidence); err != nil || evidence.ID != e.ID || !evidence.Passed || !evidence.Cleanup || len(evidence.Resources) == 0 {
 			return fmt.Errorf("invalid or incomplete evidence for %s", e.ID)
 		}
-		// Task 84's L3 native Orca acceptance records the public interface's
-		// unavailable usage capability. Keep other suites and L2's gate intact.
-		orcaPublicUsage := e.Env == "live" && e.Level == "L3" && e.Chain == "orca-terminal-local" && (e.Suite == "delivery" || e.Suite == "recovery")
-		if orcaPublicUsage && (evidence.UsageVerified || evidence.OrcaUsageStatus != "not_exposed_by_orca") {
-			return fmt.Errorf("native Orca public usage capability missing or token verification claimed for %s", e.ID)
-		}
-		if e.Env == "live" && e.Chain != "orca-remote-codex" && !orcaPublicUsage && !evidence.UsageVerified {
-			return fmt.Errorf("native token usage not verified for %s", e.ID)
-		}
-		if e.Chain == "orca-remote-codex" && (!evidence.RemotePublicOutputVerified || evidence.UsageVerified || evidence.RemoteUsageStatus != "not_exposed_by_orca") {
-			return fmt.Errorf("remote public output evidence missing or private usage claimed for %s", e.ID)
-		}
-		if e.ID == "runtime.sandbox-git.local-codex" {
-			if err := validateSandboxScenarioProof(evidence.DebugSandbox); err != nil {
-				return fmt.Errorf("sandbox evidence for %s: %w", e.ID, err)
+		if e.Env == "live" {
+			if e.ID != "smoke.local-codex" || e.Level != "L2" || e.Chain != "local-codex" || evidence.Live == nil {
+				return fmt.Errorf("unsupported live chain or missing delivery proof: %s", e.ID)
+			}
+			if err := evidence.Live.Validate(); err != nil {
+				return fmt.Errorf("live delivery %s: %w", e.ID, err)
 			}
 		}
-		if (e.Level == "L2" && e.Env == "live" || e.Chain == "orca-remote-codex" || e.ID == "recovery.codex-resume-live" || e.ID == "recovery.orca-local-reconnect-live") && (evidence.RealPR == nil || !evidence.RealPR.Merged || evidence.RealPR.State != "merged" || evidence.RealPR.Repository != "erranliu/SteerlineTest" || !regexp.MustCompile(`^https://github.com/erranliu/SteerlineTest/pull/[1-9][0-9]*$`).MatchString(evidence.RealPR.URL)) {
-			return fmt.Errorf("real merged SteerlineTest PR evidence missing for %s", e.ID)
-		}
+
 	}
 	return nil
 }

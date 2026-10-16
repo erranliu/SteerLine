@@ -47,20 +47,14 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 ## 验证
 
 ```powershell
-.\scripts\test-debug-release.ps1
-# 显式真实 PR 验证，无模型调用，创建后关闭精确 PR 并删除本次分支
-.\scripts\test-debug-release.ps1 -Live
+./scripts/test-debug-release.ps1 -SteerRunnerExe <absolute-exe>
+# 完整 L2：受控门槛后真实 Runner、本机 Codex、实现/报告/发布、真实 PR 合并及交付
+./scripts/test-l2.ps1 -SteerRunnerExe <absolute-exe>
 ```
 
-两条命令都先通过生成脚本创建默认产物、单项目与双项目三个新包，-Live 另建独立 live 包；结果/日志保留在包内 evidence。范围和结果见 [Plan](plans/debug-release.plan.md)、[验收](acceptance/debug-environment.md)。旧 `debug-runtime.ps1` 及其专属综合测试已退役。长期隔离回归采用四个独立 controlled 场景：`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled`，详见 [E2E 指南](../tests/e2e/README.md)。
+调试包生成/冻结/停止/reset 由第一条验证，默认产物、单项目和双项目三个新包分别取证；其 `-Live` 复用完整 L2。真实链路只使用本次 SteerlineTest base/head 和已有外部登录，不复制认证或安装数据。原生沙箱、usage、审核及恢复专项已归 SteerRunner，不再运行第二条双任务沙箱验收。历史证据见[原记录](acceptance/codex-sandbox-git.md)，当前要求及结果见[测试精简](acceptance/runner-test-convergence.md)。
 
-真实 Codex 沙箱及 GitHub credential-helper 无人值守回归：
-
-```powershell
-.\scripts\test-codex-sandbox.ps1
-```
-
-先运行上述 controlled 门槛，再生成新的 live 包；真实 worker 运行探针、提交并经 gh shell helper 发布两个专属 PR，驱动在核验 base/head/SHA 后合并到本包 base，验证交付与依赖释放，并清理本次分支。必要越界走原生 auto_review，不依赖 Ctrl+N。认证保留在宿主现有外部登录中，包内只记录标准 credential helper 引用，不复制、导出或存储凭据；中心环境认证仍不自动传给 worker。结果见 [沙箱 Git 验收](acceptance/codex-sandbox-git.md)。
+长期隔离保留 source-build/path/service-write/dual-home 四项 controlled 场景；工具进程发起时使用 `scripts/test-runtime-isolation.ps1` 的既有独立上下文。浏览器 smoke 使用 `scripts/test-web-smoke.ps1`，同样使用独立上下文，详见 [E2E 指南](../tests/e2e/README.md)。
 
 ## 安装版更新
 

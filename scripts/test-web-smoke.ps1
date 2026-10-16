@@ -1,7 +1,14 @@
-﻿param([string]$WebAddress='127.0.0.1:19743')
+﻿param([string]$WebAddress='127.0.0.1:19743', [string]$SteerRunnerExe=$env:STEERRUNNER_EXE, [switch]$IndependentProcess)
 $ErrorActionPreference='Stop'
+if(-not $IndependentProcess){
+ . (Join-Path $PSScriptRoot 'independent-test.ps1')
+ $arguments=@('-WebAddress',$WebAddress)
+ if($SteerRunnerExe){$arguments+=@('-SteerRunnerExe',$SteerRunnerExe)}
+ Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $arguments
+ return
+}
 $taskRepo=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$taskRelease=& (Join-Path $PSScriptRoot 'new-debug-release.ps1') -WebAddress $WebAddress
+$taskRelease=& (Join-Path $PSScriptRoot 'new-debug-release.ps1') -WebAddress $WebAddress -SteerRunnerExe $SteerRunnerExe
 if ($LASTEXITCODE -ne 0) { throw 'Fresh Web smoke package failed' }
 $taskPackage=($taskRelease | ConvertFrom-Json).root
 if (-not $taskPackage.StartsWith('C:\SteerlineDebug\',[StringComparison]::OrdinalIgnoreCase)) { throw 'Generated package escaped debug root' }
@@ -28,11 +35,13 @@ try {
     } finally { Pop-Location }
 } finally {
     $taskStopErrors=@()
-    foreach ($entry in @(@($taskHelper,'debug','stop','--simulate'))) {
-        $taskExe=$entry[0];$taskArgs=@($entry | Select-Object -Skip 1)
-        & $taskExe @taskArgs 2>&1 | Out-File -LiteralPath (Join-Path $taskPackage 'evidence\stop.log') -Append
-        if ($LASTEXITCODE -ne 0) { $taskStopErrors+=($taskExe+' '+($taskArgs -join ' ')) }
-    }
+    $taskSavedAction=$ErrorActionPreference
+    try {
+        $ErrorActionPreference='Continue'
+        & $taskHelper debug stop --simulate 2>&1 | Out-File -LiteralPath (Join-Path $taskPackage 'evidence\stop.log') -Append
+        $taskStopExit=$LASTEXITCODE
+    } finally { $ErrorActionPreference=$taskSavedAction }
+    if ($taskStopExit -ne 0) { $taskStopErrors+=('debug stop exit '+$taskStopExit) }
     if ($taskOwner) { $taskOwner.WaitForExit(15000) | Out-Null }
     $taskProcesses=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like ($taskPackage+'\*') })
     $taskListeners=@(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.OwningProcess -in $taskProcesses.ProcessId -or $_.LocalPort -eq [int]($WebAddress.Split(':')[1]) })

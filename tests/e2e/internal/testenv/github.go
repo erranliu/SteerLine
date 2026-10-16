@@ -144,17 +144,15 @@ func (p *Project) cleanupGitHub() error {
 		return errors.New("GitHub cleanup inventory may be truncated")
 	}
 	branches := map[string]bool{p.BaseBranch: true}
-	for _, branch := range p.RemoteBranches {
-		if branch == p.DefaultBranch || branch == p.BaseBranch {
-			return errors.New("refuse unowned remote branch cleanup")
-		}
-		branches[branch] = true
-	}
 	// Branches live in Runner-owned caches, not necessarily this source clone.
 	// Read only caller-owned persisted bindings; never enumerate Runner storage.
 	candidates, candidateErr := driver.ReadOriginalOperations(ctx, p.Database, p.ProjectID)
 	if candidateErr != nil {
-		return candidateErr
+		if _, statErr := os.Stat(p.Database); os.IsNotExist(statErr) {
+			candidates = nil
+		} else {
+			return candidateErr
+		}
 	}
 	for _, candidate := range candidates {
 		if candidate.Branch == "" {

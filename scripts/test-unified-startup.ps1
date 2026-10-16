@@ -24,8 +24,13 @@ try {
     $env:STEERLINE_WEB_EVIDENCE=Join-Path $taskPackage ('evidence\browser-'+$Scenario)
     Push-Location $taskRepo
     try {
-        & npm --prefix web run test:e2e -- $taskFile 2>&1 | Tee-Object -FilePath (Join-Path $taskPackage ('evidence\'+$Scenario+'.log'))
-        if ($LASTEXITCODE -ne 0) { throw "Scenario or cleanup failed; inspect $taskPackage\evidence" }
+        $taskSavedAction=$ErrorActionPreference
+        try {
+            $ErrorActionPreference='Continue'
+            & npm --prefix web run test:e2e -- $taskFile 2>&1 | Tee-Object -FilePath (Join-Path $taskPackage ('evidence\'+$Scenario+'.log'))
+            $taskTestExit=$LASTEXITCODE
+        } finally { $ErrorActionPreference=$taskSavedAction }
+        if ($taskTestExit -ne 0) { throw "Scenario or cleanup failed; inspect $taskPackage\evidence" }
     } finally { Pop-Location }
 } finally {
     $env:STEERLINE_WEB_PACKAGE=$taskSavedPackage
