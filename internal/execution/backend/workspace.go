@@ -1,9 +1,5 @@
 package backend
 
-import (
-	"time"
-)
-
 type ExecutionTarget struct {
 	ID              string `json:"id,omitempty"`
 	ConnectionID    string `json:"connection_id,omitempty"`
@@ -18,15 +14,4 @@ type WorkspaceIntent struct {
 	Path       string `json:"path"`
 	Branch     string `json:"branch"`
 	BaseCommit string `json:"base_commit"`
-}
-
-type WorkspaceInspection struct {
-	InspectionScope string    `json:"inspection_scope,omitempty"`
-	Repository      string    `json:"repository"`
-	Worktree        string    `json:"worktree"`
-	Branch          string    `json:"branch"`
-	Base            string    `json:"base"`
-	Head            string    `json:"head"`
-	Dirty           bool      `json:"dirty"`
-	CheckedAt       time.Time `json:"checked_at"`
 }

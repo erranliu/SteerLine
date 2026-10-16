@@ -4,17 +4,6 @@ import (
 	"encoding/json"
 )
 
-const DevelopmentFlow = "development/v3"
-
-const (
-	StepImplement     = "implement.execute"
-	StepReport        = "implement.report"
-	StepPublish       = "publish"
-	StepPublishReport = "publish.report"
-	StepAwaitMerge    = "await_merge"
-	StepDelivered     = "delivered"
-)
-
 // StageInput is the frozen business binding of a native input. Native transport
 // purpose remains business/readiness; it is not the business step identifier.
 type StageInput struct {
@@ -50,22 +39,6 @@ type StageResult struct {
 	Outcome              string `json:"outcome,omitempty"`
 }
 
-func ModelStep(step string) bool {
-	return step == StepImplement || ReportStep(step) || step == StepPublish
-}
-
-func ReportStep(step string) bool { return step == StepReport || step == StepPublishReport }
-
-func PublicationStep(step string) bool { return step == StepPublish || step == StepPublishReport }
-
 func CloneStageResults(results []StageResult) []StageResult {
 	return append([]StageResult(nil), results...)
-}
-
-func ValidFlowStatus(status string) bool {
-	switch status {
-	case "queued", "running", "waiting_input", "blocked", "reconciling", "waiting_external", "completed", "abandoned":
-		return true
-	}
-	return false
 }
