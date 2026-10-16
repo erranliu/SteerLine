@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/santhosh-tekuri/jsonschema/v6"
+	"runtime"
 )
 
 type CheckInput = runnercontract.CheckInput
@@ -18,7 +19,7 @@ type Check = runnercontract.Check
 type CheckCapabilities runnercontract.CheckCapabilities
 
 func (p *CheckCapabilities) Supports(input ExecutionInput) bool {
-	if p == nil || p.Version != 1 {
+	if p == nil || p.Contract != runnercontract.EnvironmentCheckContract {
 		return false
 	}
 	var settings struct {
@@ -30,8 +31,8 @@ func (p *CheckCapabilities) Supports(input ExecutionInput) bool {
 	if settings.Mode == "" {
 		settings.Mode = "sandbox"
 	}
-	for _, target := range p.Supported {
-		if target.Adapter == input.Adapter && target.TargetKind == input.Target.Kind {
+	for _, target := range p.Targets {
+		if target.Mechanism == "implemented" && (target.Platform == "" || target.Platform == runtime.GOOS) && target.Adapter == input.Adapter && target.Target == input.Target.Kind {
 			for _, mode := range target.AccessModes {
 				if mode == settings.Mode {
 					return true
@@ -113,5 +114,10 @@ func (c Client) InspectEnvironmentCheck(ctx context.Context, selector, id string
 	if selector == "check-id" && (result.Check == nil || result.Check.CheckID != id) || selector == "request-id" && (result.Command == nil || result.Command.RequestID != id) {
 		return result, errors.New("Check inspection identity differs from original selector")
 	}
+	result.Raw = append(json.RawMessage(nil), r.Data...)
 	return result, nil
+}
+
+func (p CheckCapabilities) Definition(name string) json.RawMessage {
+	return runnercontract.CheckCapabilities(p).Definition(name)
 }

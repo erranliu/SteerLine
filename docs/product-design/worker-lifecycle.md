@@ -28,6 +28,8 @@ W18 停服取证修复：停机前的候选投影不能证明停机后的资源�
 
 ## 职责与规则归属
 
+W02/W18 的调用方目录布局：SteerLine 用本地卷根 `slr/<128-bit base32 key>` 绑定完整应用 run-dir，避免深 home 超出 Runner 的认证 socket 长度限制。所有启动/检查/查询/停服证明共用此路径；查询不创建，启动才准备私有目录，别名拒绝。重置先核实原资源停止，再只删所属摘要目录。节点、异常分类、重试和恢复授权均不变，旧 Run 不迁移或改绑。V01/V06/V07 的本次增量为真实 socket、跨 home/项目隔离及原目录停止/清理；[专属验收](../acceptance/runner-short-state-path.md)记录边界和结果。
+
 原会话查看不参与 W01–W18 的执行推进：拆分 Runner 后补回公开 CLI，由原执行 owner 在既有 worker gate 内校验原身份和只读 thread/workspace，再开独立窗口；零新服务/会话/业务输入，原节点与 E01–E07 不变。验证映射及当前已验/待验范围见[专属验收](../acceptance/native-session-viewer.md)。
 
 安装迁移发现 W18 的 Windows broker 差异：WMI 可将调用者原有但禁用的特权启用。Runner 在原返回句柄所指的挂起子进程上，仅禁用这些被额外启用的原有特权，再完整比对授权组和特权；不新增或启用特权，不放宽用户、完整性级别、restricted/elevated 或 EXE 身份检查。`USED_FOR_ACCESS` 是访问历史位，不参与授权属性比较。无法保持原权限仍拒绝启动。本次验证仅覆盖真实空闲服务启动/退出及权限反例，不替代任务执行/恢复验收；见[安装迁移验收](../acceptance/install-cutover-20261015.md)。
@@ -311,6 +313,7 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 | --- | --- | --- |
 | 持久化副作用和并发 | ReliableExecution 的事实/身份/对账规则、actor 生命周期 Operation、异步回执提交、原身份/版本守卫、first-wins | 按本矩阵检查各入口是否共享同一异常分类，不新增平行规则 |
 | 工作区和环境准备 | 固定工作区意图、准备总期限、blocker、nonce 与探针核验 | 部分现场或后端没有准备记录；不能默认所有执行已具备统一准备路径 |
+| Runner 状态目录 | SteerLine 以完整应用 run-dir 派生本地卷根短目录；查询、准备、停服及重置共用；路径/别名/隔离已做定向验证 | 旧目录不迁移；安装现场原候选保持旧绑定。当前部署与验证状态见[短目录验收](../acceptance/runner-short-state-path.md) |
 | Orca 显式启动 | 原唯一终端、启动操作、LaunchAttempted/Accepted/Confirmed、未知发送不重发 | `launchAgent` 在识别到代理名称时即确认启动；尚无完整初始化完成证据、失败收敛、有限启动重试和安全采纳人工重启的通用规则 |
 | Runner 跨仓交接 | 新 application 对 accepted+ResourcePending 继续核验原 Operation；准备超时撤销输入，迟到就绪不自动续跑；caller 重启撤回未消费授权，未知旧控制只查原 ID | SteerLine app/查询已切换到 taskrunner/runnerbridge/runnerclient，旧执行 owner 和无消费者端口已删除；实际原生交付/恢复范围按专属验收判断，远端未验/失败不因源码清理转为通过 |
 | Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |

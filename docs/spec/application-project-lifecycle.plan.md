@@ -10,6 +10,8 @@
 4. actor EndActor 仅提交最终 checkpoint，去掉 Close/Runner callbacks；运行时排空进程内端口的实际 Read/Command/Task 使用者后，分别执行 Runner 和本地关闭，按原条件释放锁。
 5. 添加有价值的资源/并发回归和结构守卫。保留现有失败停机策略，补 Windows 独立测试入口 Scenario 透传；同步文档与测试清单必要说明。
 
+提 PR 前对齐主干已合入的 Runner 短状态目录与环境检查公开契约：将原 startRunner 中的 `runnerstatepath.Prepare/Directory` 一并迁入项目绑定，保留只读客户端/verify-stop 的 Validate；资源失败断言与双项目夹具清理使用同一短目录。集成范围最小复验 Windows/Linux 生产编译、默认测试编译、固定 L1（含短路径 owner 组），以及 `./scripts/test-runtime-isolation.ps1 -Level L3 -Suite runtime -Scenario runtime.service-lifecycle`。在整合后、提 PR 前执行，以上通过且场景清理完整为条件，证据追加专属 acceptance；既有 recovery/L4 断言不变，不重复完整 L3/L4。
+
 ## 测试计划
 
 所有测试用隔离 fixture；不操作安装目录。原始报告用 runner 新临时目录，源码审计/命令与结果登记到上述 acceptance 对应项。

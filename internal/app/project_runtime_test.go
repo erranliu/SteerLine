@@ -14,6 +14,7 @@ import (
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
@@ -97,7 +98,7 @@ func TestProjectRuntimePartialPreparationReleasesOwnership(t *testing.T) {
 		require(t, err)
 		lock.Close()
 	}
-	if _, err := os.Stat(filepath.Join(d.entries[0].ref.RunDir, "runner")); !os.IsNotExist(err) {
+	if _, err := os.Stat(runnerstatepath.Directory(d.entries[0].ref.RunDir)); !os.IsNotExist(err) {
 		t.Fatal("Runner started after preparation failure", err)
 	}
 }

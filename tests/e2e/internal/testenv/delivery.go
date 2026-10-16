@@ -13,6 +13,9 @@ import (
 func (p *Project) AssertClosedDeliveryQuiescent(done Snapshot) {
 	s := p.Scenario
 	s.t.Helper()
+	// Delivery commits the stop obligation before its asynchronous CLI receipt.
+	// Establish that receipt before asserting a fixed final request count.
+	p.WaitStoppedCandidates()
 	before, err := controlled.ProviderQueryCount(p.Provider)
 	s.Must(err)
 	if before == 0 {

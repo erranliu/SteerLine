@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 // projectRunner binds shutdown and settlement to the original selected daemon.
@@ -28,7 +28,10 @@ func (r *projectRunner) start(ctx context.Context, g RunnerExecutionConfig, runD
 	if err := g.Validate(); err != nil {
 		return err
 	}
-	cli, version, err := g.Runner.Open(ctx, filepath.Join(runDir, "runner"), timeout)
+	if err := runnerstatepath.Prepare(runDir); err != nil {
+		return err
+	}
+	cli, version, err := g.Runner.Open(ctx, runnerstatepath.Directory(runDir), timeout)
 	if err != nil {
 		return err
 	}

@@ -72,3 +72,14 @@ CLI/页面和用户操作未新增，不单设人工前置或阻塞窗口；若�
 最终 `go run ./cmd/test-feedback -level=L1`：15 组、259 测试通过、0 跳过、complete=true / passed=true；报告 `20261016T101327.802994400Z/summary.json`。架构、worker-lifecycle 当前实现差异、原停机验收测试位置、环境检查 Plan 的 owner 映射及 Windows Scenario 示例已同步；不改变 W/E/V 节点、异常和验证矩阵语义。
 
 2026-10-16 最终静态检查：`python scripts/check_doc_links.py` 检查 456 个 Markdown、2732 个本地导航链接，0 错误；`git diff --check` 无诊断；本次改动/新增 Go 文件 `gofmt -l` 为空。
+
+## 提 PR 前主干同步复验
+
+合入 `origin/main@42621a79`（包含已合并的第一批清理、环境检查契约与 Runner 短状态路径），保留双方文档及当前单一资源 owner。原实现提交为 `472aec59`；以下报告记录该提交加合流 working tree，最终仅再更新设计/验收文字。
+
+- 删除原 startRunner 时，将主干新增的 `runnerstatepath.Prepare/Directory` 一并迁入 `projectRunner.start`；只读 client/verify-stop 保留 Validate，不恢复旧启动 factory。日志取得前失败的目录断言跟随短目录；双项目夹具在已结算后清理各自短目录。
+- Windows `go build ./...`、临时 Linux/CGO=0 生产编译通过；`go run ./cmd/test-feedback -build-only`：53 包 complete/passed，报告 `20261016T101850.441511100Z/summary.json`。
+- `go run ./cmd/test-feedback -level=L1`：16 组、262 测试通过、0 跳过、complete/passed；报告 `20261016T101822.666426400Z/summary.json`，包含主干短路径 owner 组与本项全部固定用例。
+- `./scripts/test-runtime-isolation.ps1 -Level L3 -Suite runtime -Scenario runtime.service-lifecycle`：selected-L3，passed=true、cleanup_complete=true；报告 `20261016T101835.140787200Z/summary.json` 与 `scenarios/runtime.service-lifecycle/scenario.json`。新建隔离现场，未覆盖前次证据。
+- Plan 追加合流验证安排；架构图统一描述项目独立短目录。未重跑无关 Full/live 或完整 L3/L4，前述 recovery/L4 断言未修改。
+- 最终文档链接 458 个 Markdown、2742 个本地导航链接，0 错误；diff 检查无诊断。原始证据根沿用本记录上文。

@@ -11,6 +11,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 func preflightNativeStatePath(c Config) error {
@@ -38,7 +39,6 @@ func preflightNativeStatePath(c Config) error {
 		{"control receipts", filepath.Join(c.RunDir, "control", "receipts")},
 		{"service root", filepath.Join(c.RunDir, "service")},
 		{"service startups", filepath.Join(c.RunDir, "service", "startups")},
-		{"Runner state", filepath.Join(c.RunDir, "runner")},
 	} {
 		if err := ensureNativePathWithin(c.RunDir, entry.path, entry.name); err != nil {
 			return err
@@ -48,6 +48,9 @@ func preflightNativeStatePath(c Config) error {
 				return err
 			}
 		}
+	}
+	if err := runnerstatepath.Validate(c.RunDir); err != nil {
+		return nativeErr("authority_mismatch", err.Error())
 	}
 	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
 		return nativeErr("authority_mismatch", err.Error())
@@ -180,7 +183,7 @@ func ensureNativeStateFilesAllowed(runDir string, worktreeMetadata []string) err
 			if err := validateNativeServiceTree(runDir, ""); err != nil {
 				return err
 			}
-		case "local-api", "runner", "application-commands":
+		case "local-api", "application-commands":
 			info, statErr := os.Lstat(entryPath)
 			if statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 				return nativeErr("authority_mismatch", entry.Name()+" state must be a plain directory inside native run_dir")

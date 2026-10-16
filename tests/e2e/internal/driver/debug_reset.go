@@ -16,6 +16,7 @@ import (
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	storesqlite "github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
@@ -77,6 +78,9 @@ func (d *debugRelease) reset(check bool) error {
 }
 func (d *debugRelease) resetState(check bool) error {
 	runDir := d.stateDir()
+	if err := runnerstatepath.Validate(runDir); err != nil {
+		return err
+	}
 	dbPath := filepath.Join(runDir, "steerline.db")
 	if _, err := os.Stat(dbPath); err != nil {
 		if os.IsNotExist(err) {
@@ -125,7 +129,7 @@ func (d *debugRelease) resetState(check bool) error {
 	if err = json.Unmarshal(rawConfig, &selected); err != nil {
 		return err
 	}
-	cli, _, err := selected.Runner.Open(ctx, filepath.Join(runDir, "runner"), 20*time.Second)
+	cli, _, err := selected.Runner.Open(ctx, runnerstatepath.Directory(runDir), 20*time.Second)
 	if err != nil {
 		return err
 	}
@@ -174,6 +178,10 @@ func (d *debugRelease) resetState(check bool) error {
 		if err = json.Unmarshal(raw, &c); err != nil {
 			break
 		}
+		if !strings.EqualFold(filepath.Clean(c.StateDir), filepath.Clean(cli.StateDir)) {
+			err = errors.New("candidate Runner directory differs from this debug package")
+			break
+		}
 		if c.SubmitState == "unknown" || c.RunID != "" && (c.Projection == nil || c.Projection.StopStatus != "stopped") {
 			err = errors.New("original Runner resource is not proven stopped; preserve its recovery state")
 			break
@@ -215,7 +223,7 @@ func (d *debugRelease) resetState(check bool) error {
 	}
 	rows.Close()
 	fmt.Printf("Reset %d SteerlineTest tasks; preserve definitions, dependencies, Git and PR; no backup.\n", len(tasks))
-	for _, name := range []string{"control", "service", "runner"} {
+	for _, name := range []string{"control", "service"} {
 		target := filepath.Join(runDir, name)
 		if !pathWithin(d.root, target) {
 			return errors.New("reset target escaped debug root")
@@ -237,6 +245,11 @@ func (d *debugRelease) resetState(check bool) error {
 		}); err != nil {
 			return err
 		}
+	}
+	// The short Runner namespace is outside the package, but bound to this
+	// package's complete run directory. Validate it before changing the DB.
+	if err := validateStoppedRunnerReset(runDir); err != nil {
+		return err
 	}
 	if check {
 		return nil
@@ -281,7 +294,7 @@ func (d *debugRelease) resetState(check bool) error {
 		return err
 	}
 	// These are local control/runtime journals, not Git, provider facts or authentication.
-	for _, name := range []string{"control", "service", "runner", "application-commands"} {
+	for _, name := range []string{"control", "service", "application-commands"} {
 		path := filepath.Join(runDir, name)
 		if !pathWithin(d.root, path) {
 			return errors.New("reset path escaped root")
@@ -300,15 +313,37 @@ func (d *debugRelease) resetState(check bool) error {
 			return err
 		}
 	}
+	if err := runnerstatepath.RemoveStopped(runDir); err != nil {
+		return err
+	}
 	fmt.Println("DONE: SteerlineTest state reset without backup")
 	return nil
+}
+
+func validateStoppedRunnerReset(runDir string) error {
+	root := runnerstatepath.Directory(runDir)
+	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if entry.Type()&os.ModeSymlink != 0 || !pathWithin(root, path) {
+			return fmt.Errorf("linked Runner reset path: %s", path)
+		}
+		if !entry.IsDir() {
+			return debugPlainFile(path)
+		}
+		return nil
+	})
 }
 
 func environmentCheckResetSafety(record runnerstate.EnvironmentCheckRecord) error {
 	if len(record.Operations) == 0 {
 		return errors.New("environment check intent is incomplete")
 	}
-	if record.Operations[0].Status != "rejected" && (record.Report == nil || record.Report.Resources.Status != "settled") {
+	if record.Operations[0].Status != "rejected" && (record.Report == nil || record.Report.CleanupStatus != "completed") {
 		return errors.New("environment check resources are not settled; preserve recovery state")
 	}
 	for _, op := range record.Operations {

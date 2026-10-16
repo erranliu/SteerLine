@@ -43,7 +43,7 @@ ApplicationDirectory 的 Start 幂等；BeginStop/Close 不启动项目。Close-
 
 1. 解析冻结字节、复核身份、取得 repo/run-dir 锁，再复核路径；沿现有 preflight 拒绝非法/旧格式。
 2. 在已获锁的 owner 中初始化或打开 store，记录所有权；移除初始化短暂开关库后再次组装开库的重复接线。
-3. 取得日志与固定 Runner 客户端，执行现有 start/复用与 catalog/profile 校验；错误也保留已知 CLI/实例及是否取得收尾义务。
+3. 取得日志与固定 Runner 客户端，沿主干 `runnerstatepath.Prepare/Directory` 使用项目独立短目录，执行现有 start/复用与 catalog/profile 校验；错误也保留已知 CLI/实例及是否取得收尾义务。
 4. factory 只接受借用的 store/CLI 并组装 actor/service；构造函数不 Close、不另起 listener。
 5. actor 执行既有恢复围栏并发布 ready checkpoint，项目 handler 才发布；停止中迟到回调不能恢复可写状态。
 

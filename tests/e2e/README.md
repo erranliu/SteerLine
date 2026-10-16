@@ -12,7 +12,7 @@ L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](..
 
 | 场景 ID | 环境 | 测试内容与主要断言 | 执行约束 |
 | --- | --- | --- | --- |
-| `smoke.delivery` | controlled | 创建有依赖的任务，领取并执行至 PR 待合并，合并后只交付一次并释放后继；后继未自动启动，重复查询不新增执行或改变交付，交付后静默。 | 固定前置 gate；公开 Runner CLI 与隔离 PR provider，无真实模型。 |
+| `smoke.delivery` | controlled | 创建有依赖的任务，领取并执行至 PR 待合并，合并后只交付一次并释放后继；后继未自动启动，重复查询不新增执行或改变交付；先确认异步停止回执，再核对最终请求数与交付后静默。 | 固定前置 gate；公开 Runner CLI 与隔离 PR provider，无真实模型。 |
 | `smoke.local-codex` | live / local-codex | 真实 Runner/Codex 实现、报告、发布；检查三个公开 final 来源、PR head 中真实产物、精确 merged PR、唯一 TaskDelivery、后继 ready 且未启动及资源清理。 | gate 通过并清理完整后顺序执行；使用本次专属 SteerlineTest base/head。 |
 
 两项组成一条最小核心冒烟链；controlled 仅为 gate-only，完整两阶段才是 full-L2。

@@ -14,6 +14,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 // CleanupRunner first fences the original service (including any in-flight
@@ -165,7 +166,7 @@ func MainRunnerCleanup(args []string) error {
 	if err != nil {
 		return err
 	}
-	err = CleanupRunner(ctx, app.GlobalExecutionConfigPath(), filepath.Join(hc.RunDir, "runner"), candidates)
+	err = CleanupRunner(ctx, app.GlobalExecutionConfigPath(), runnerstatepath.Directory(hc.RunDir), candidates)
 	if encodeErr := json.NewEncoder(os.Stdout).Encode(map[string]any{"confirmed": err == nil, "error": fmt.Sprint(err)}); encodeErr != nil {
 		return encodeErr
 	}

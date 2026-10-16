@@ -11,6 +11,7 @@ import (
 	"time"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
@@ -460,7 +461,10 @@ func cleanupDebugRunners(t *testing.T, d *debugRelease) {
 		if err == nil {
 			state, readErr := ReadWorkflow(ctx, filepath.Join(scope.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(common)))
 			if readErr == nil {
-				err = CleanupRunner(ctx, filepath.Join(scope.home, "execution.json"), filepath.Join(scope.stateDir(), "runner"), state.Candidates)
+				err = CleanupRunner(ctx, filepath.Join(scope.home, "execution.json"), runnerstatepath.Directory(scope.stateDir()), state.Candidates)
+				if err == nil {
+					err = runnerstatepath.RemoveStopped(scope.stateDir())
+				}
 			} else if !os.IsNotExist(readErr) {
 				err = readErr
 			}

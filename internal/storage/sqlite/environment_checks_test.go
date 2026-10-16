@@ -21,7 +21,7 @@ func TestEnvironmentCheckStoreCASAndIsolation(t *testing.T) {
 	f := struct {
 		Input        runnercontract.CheckInput
 		Capabilities runnercontract.CheckCapabilities
-	}{Input: runnercontract.CheckInput{Publication: &runnercontract.Publication{Repository: "fixture", Settings: json.RawMessage(`{"opaque_revision":9007199254740992}`)}}, Capabilities: runnercontract.CheckCapabilities{InputSchema: json.RawMessage(`{ "type": "object" }`)}}
+	}{Input: runnercontract.CheckInput{Publication: &runnercontract.Publication{Repository: "fixture", Settings: json.RawMessage(`{"opaque_revision":9007199254740992}`)}}, Capabilities: runnercontract.CheckCapabilities{Schema: json.RawMessage(`{ "type": "object" }`)}}
 	r := rs.EnvironmentCheckRecord{ID: "check", Project: "project", Revision: 1, Input: f.Input, Capabilities: runnercontract.CheckCapabilities(f.Capabilities), CreatedAt: time.Now().UTC(), Operations: []rs.EnvironmentCheckOperation{{RequestID: "request", Original: json.RawMessage(`{ "a": 1 }`), Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "request", Input: json.RawMessage(`{ "x": 2 }`)}, Status: "outcome_unknown"}}}
 	if err = db.SaveCheck(ctx, r, 0); err != nil {
 		t.Fatal(err)

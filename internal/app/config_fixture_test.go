@@ -8,6 +8,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,6 +86,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	c, err := LoadConfig(path)
 	require(t, err)
 	require(t, c.ResolveIdentity(context.Background()))
+	t.Cleanup(func() { require(t, runnerstatepath.RemoveStopped(c.RunDir)) })
 	return c, fixtureGit(t, repo, "rev-parse", "HEAD")
 }
 

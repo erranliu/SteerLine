@@ -6,6 +6,7 @@ import (
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +28,13 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "z-broken.json"), []byte("{"), 0600))
 	d := NewApplicationDirectory(HomeDir())
 	defer d.Close()
+	t.Cleanup(func() {
+		for _, entry := range d.entries {
+			if entry.ref.RunDir != "" && entry.result.ResourcesSettled {
+				require(t, runnerstatepath.RemoveStopped(entry.ref.RunDir))
+			}
+		}
+	})
 	d.Start()
 	catalog := switchCatalog(t, d, func(c contract.Catalog) bool {
 		return len(c.Projects) == 3 && (c.Projects[0].RuntimeState != "starting" && c.Projects[1].RuntimeState != "starting")

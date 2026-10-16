@@ -12,7 +12,7 @@ flowchart LR
     Bridge --> CLI[runnerclient 固定 EXE / CLI]
     CLI --> Runner[独立 SteerRunner 常驻服务]
     Runner --> Native[本机 Codex / 远端 Orca]
-    Runner --> State[项目 runner/ 状态与日志]
+    Runner --> State[项目独立短目录中的状态与日志]
 ```
 
 ## 模块归属
