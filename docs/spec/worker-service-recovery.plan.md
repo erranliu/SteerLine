@@ -16,7 +16,7 @@ Orca 先读现有 `worker_done` relay、原终端核验、Run/Task/Dispatch/消�
 
 ## 2. 共享规则、运行记录与事务
 
-在 [workerflow](../../internal/execution/model/state.go) 增加最小纯规则：由核实事实和手动授权决定接回观察、结算、待决策及允许继续。保留五主阶段；中断不是成功，不用进程退出伪造原生轮次终态。平台事实结构由 worker 边界承接，避免建立通用插件框架。
+在 [workerflow](https://github.com/erranliu/SteerLine/blob/347037958c6fad4e52c62ea4477836261760fae6/internal/execution/model/state.go) 增加最小纯规则：由核实事实和手动授权决定接回观察、结算、待决策及允许继续。保留五主阶段；中断不是成功，不用进程退出伪造原生轮次终态。平台事实结构由 worker 边界承接，避免建立通用插件框架。
 
 扩展 [Execution/Attempt 记录](../../internal/execution/model/execution.go)、Decision/Command 和对应 SQLite/投影：Execution 保存恢复门槛及版本，Decision 保存继续方式、原因和关联旧输入，Command 固定来源 Attempt/恢复版本及输入。重建进程或 agent 时分配新 worker Attempt；普通反馈仍使用现有 Attempt。旧 binding、Operation、日志和会话游标保留，当前 Attempt 指针与授权消费由单写事务提交。
 

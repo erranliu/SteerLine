@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -15,8 +16,8 @@ func environmentRead[T any](ctx context.Context, c *Client, fn func(api.Environm
 	}
 	return fn(c.resources.EnvironmentChecks)
 }
-func (c *Client) EnvironmentCheckCatalog(ctx context.Context) (api.EnvironmentCheckCatalog, error) {
-	return environmentRead(ctx, c, func(p api.EnvironmentCheckPort) (api.EnvironmentCheckCatalog, error) {
+func (c *Client) EnvironmentCheckCatalog(ctx context.Context) (json.RawMessage, error) {
+	return environmentRead(ctx, c, func(p api.EnvironmentCheckPort) (json.RawMessage, error) {
 		return p.EnvironmentCheckCatalog(ctx)
 	})
 }

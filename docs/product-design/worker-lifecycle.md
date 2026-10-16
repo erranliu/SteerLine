@@ -4,9 +4,9 @@ Worker 执行域统一管理工作区准备、代理初始化、输入投递、�
 
 本文是这些规则的长期维护入口。下文“统一设计”定义后续实现应遵循的行为；[当前实现与缺口](#当前实现与缺口)区分已有能力与待补能力，不表示完整流程已经实现或验收。当前开发流程以 [PR 流程契约](../spec/worker-pr-flow.spec.md)的 `development/v3` 为准。本文不启动实现任务、不修改已冻结执行，也不改变安装现场。
 
-三层职责重构已按 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)完成 Workflow、ReliableExecution 和 ExecutionAdapter 拆分，保持现有行为；初始化失败重试等新增能力另行实施。规则已归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；实施证据以[专属验收](../acceptance/worker-three-layer.md)为准。
+迁出前的三层职责重构已按 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)完成 Workflow、ReliableExecution 和 ExecutionAdapter 拆分，保持现有行为；初始化失败重试等新增能力另行实施。当时规则归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；当前执行实现归独立 SteerRunner，历史实施证据以[专属验收](../acceptance/worker-three-layer.md)为准。
 
-SteerRunner 跨仓拆分正在实施，切换安排见[接入 Plan](../spec/steerrunner-cutover.plan.md)，结果见[接入验收](../acceptance/steerrunner-cutover.md)。迁出后 W01–W18 的执行/资源事实、E01–E07 异常处理及恢复授权由 Runner 的单写服务管理；SteerLine 只持久化 Task/DAG、候选到 Run 的绑定、原 CLI 请求与事件投影，并在自己的事务内决定 W17 的 TaskDelivery。下文节点和异常分类继续作为共同语义入口，不新增另一套 worker 状态机。当前分支的 app service 已切换到 taskrunner/runnerbridge/runnerclient，旧根执行 actor/worker 及旧执行写表已删除；原生 owner、旧写表、闲置执行端口和旧原生重建函数已删除；跨进程受控基础闭环和用户保留的三项本机交付/恢复回归已通过；Runner 独立本机真机已通过，最新产品真机包仍在验证。两个 Orca 目标验收已由用户取消，不记为通过。
+SteerRunner 跨仓代码切换已落地，切换安排见[接入 Plan](../spec/steerrunner-cutover.plan.md)，结果见[接入验收](../acceptance/steerrunner-cutover.md)。迁出后 W01–W18 的执行/资源事实、E01–E07 异常处理及恢复授权由 Runner 的单写服务管理；SteerLine 只持久化 Task/DAG、候选到 Run 的绑定、原 CLI 请求与事件投影，并在自己的事务内决定 W17 的 TaskDelivery。下文节点和异常分类继续作为共同语义入口，不新增另一套 worker 状态机。当前分支的 app service 已切换到 taskrunner/runnerbridge/runnerclient，旧根执行 actor/worker 及旧执行写表已删除；原生 owner、旧写表、闲置执行端口和旧原生重建函数已删除；跨进程受控基础闭环和用户保留的三项本机交付/恢复回归已通过；Runner 独立本机真机已通过，最新产品真机包仍在验证。两个 Orca 目标验收已由用户取消，不记为通过。
 
 跨进程边界的具体规则：未知提交只查原 request_id；任务结束时在同一事务保存全部候选的停止义务，迟到接受的 Run 仍须撤销输入；Runner 的停止回执与原生进程停止分别投影。服务重启不重新发送已保存的答案、反馈或 resume。交付只接受本次刷新、身份一致的已合并 PR，不能要求候选先到 pr_ready，也不能由其他候选的未知状态阻塞正确候选交付。发布报告未完成时已经核实的 PR 可以绑定，但不因此推进 Runner 的流程里程碑。
 
@@ -34,7 +34,7 @@ W02/W18 的调用方目录布局：SteerLine 用本地卷根 `slr/<128-bit base3
 
 安装迁移发现 W18 的 Windows broker 差异：WMI 可将调用者原有但禁用的特权启用。Runner 在原返回句柄所指的挂起子进程上，仅禁用这些被额外启用的原有特权，再完整比对授权组和特权；不新增或启用特权，不放宽用户、完整性级别、restricted/elevated 或 EXE 身份检查。`USED_FOR_ACCESS` 是访问历史位，不参与授权属性比较。无法保持原权限仍拒绝启动。本次验证仅覆盖真实空闲服务启动/退出及权限反例，不替代任务执行/恢复验收；见[安装迁移验收](../acceptance/install-cutover-20261015.md)。
 
-“Worker 层”指 `internal/execution` 内持久化的 worker 执行规则，而非仅内存中的 Worker 或 observer 句柄。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。
+“Worker 层”指独立 SteerRunner 内持久化的 worker 执行规则（迁出前位于本仓 `internal/execution`），而非仅内存中的 Worker 或 observer 句柄。本仓现存 `execution/model`、`backend` 仅承载调用方仍消费的 Task/交付规则、checkpoint/展示值及自身进程端口。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。
 
 | 所有者 | 负责内容 |
 | --- | --- |
@@ -286,6 +286,8 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ## 当前实现与缺口
 
+2026-10-16 执行域遗留清理删除本仓无生产消费者的旧生命周期端口、原生事件处理、候选辅助规则和状态转移函数，以及对应专属测试。产品读取仍使用的值类型和编解码保留；W01–W18、E01–E07、V01–V08 的语义、调用方输入/恢复围栏和交付事务均不变。验证及保留边界见[专属验收](../acceptance/execution-legacy-cleanup.md)。
+
 ### 执行权限与 Git 环境检查的差异及缺口（2026-10-16）
 
 本轮按用户授权实现 [SteerLine 接入 Spec](../spec/environment-check.spec.md) / [Plan](../spec/environment-check.plan.md) 的 caller/HTTP/Web；[本仓验收](../acceptance/environment-check.md)区分调用方自动结果、真实 Runner 契约前置和人工待验。Runner 前置已拆到其仓库 `docs/spec/environment-check.spec.md` / `.plan.md` 与专属 SREC 验收，由 Runner 维护权限和检查契约；本仓不重复定义。检查复用本文件节点/异常语义，不运行 development 的 W15–W17，也不另建 worker 状态机。统一规则的拟议增量与缺口如下：
@@ -311,7 +313,7 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 | 工作区和环境准备 | 固定工作区意图、准备总期限、blocker、nonce 与探针核验 | 部分现场或后端没有准备记录；不能默认所有执行已具备统一准备路径 |
 | Runner 状态目录 | SteerLine 以完整应用 run-dir 派生本地卷根短目录；查询、准备、停服及重置共用；路径/别名/隔离已做定向验证 | 旧目录不迁移；安装现场原候选保持旧绑定。当前部署与验证状态见[短目录验收](../acceptance/runner-short-state-path.md) |
 | Orca 显式启动 | 原唯一终端、启动操作、LaunchAttempted/Accepted/Confirmed、未知发送不重发 | `launchAgent` 在识别到代理名称时即确认启动；尚无完整初始化完成证据、失败收敛、有限启动重试和安全采纳人工重启的通用规则 |
-| Runner 跨仓交接 | 新 application 对 accepted+ResourcePending 继续核验原 Operation；准备超时撤销输入，迟到就绪不自动续跑；caller 重启撤回未消费授权，未知旧控制只查原 ID | SteerLine 新调用层和 Task 事务已有定向验证，实际 app/查询切换与旧 owner 删除尚未完成；远端 Codex 原生账户路由故障未通过真机验收 |
+| Runner 跨仓交接 | 新 application 对 accepted+ResourcePending 继续核验原 Operation；准备超时撤销输入，迟到就绪不自动续跑；caller 重启撤回未消费授权，未知旧控制只查原 ID | SteerLine app/查询已切换到 taskrunner/runnerbridge/runnerclient，旧执行 owner 和无消费者端口已删除；实际原生交付/恢复范围按专属验收判断，远端未验/失败不因源码清理转为通过 |
 | Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |
 | 原业务会话恢复 | RecoveryFacts、原请求核验、同 thread 恢复、Orca 原终端重接 | Orca 替代 provider/terminal 的原业务会话恢复仍不可用；业务未知发送禁止重发 |
 | 多项目共进程宿主 | 应用宿主内各项目持独立 actor/锁/实例；应用 v2 直接调用原项目用例；原 worker 停止策略保持 | 聚合停止先关闭全部输入资格，逐项目结算并发布绑定原宿主的私有 shutdown.json；本地关闭未知保留锁，worker 未知但本地已关闭允许原库取证。验证边界及结果见[专属验收](../acceptance/unified-startup.md) |

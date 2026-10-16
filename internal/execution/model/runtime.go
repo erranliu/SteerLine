@@ -6,8 +6,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-const DecisionRequestFormatVersion = 2
-
 type PendingQuestion struct {
 	InteractionKind string                                      `json:"interaction_kind,omitempty"`
 	Questions       []executionbackend.Question                 `json:"questions"`
@@ -59,22 +57,6 @@ type DecisionState struct {
 	// implementation. These paths are never read as answer authority.
 	RequestPath string `json:"request_path,omitempty"`
 	AnswerPath  string `json:"answer_path,omitempty"`
-}
-
-// DecisionAnswer is an immutable human answer submitted to CommandService.
-type DecisionAnswer struct {
-	DecisionID              string              `json:"decision_id"`
-	RunID                   string              `json:"run_id"`
-	OptionID                string              `json:"option_id,omitempty"`
-	Note                    string              `json:"note,omitempty"`
-	Answers                 map[string][]string `json:"answers,omitempty"`
-	AnsweredBy              string              `json:"answered_by"`
-	AnsweredAt              time.Time           `json:"answered_at"`
-	ExpectedDecisionVersion uint64              `json:"expected_decision_version,omitempty"`
-	ExpectedRunRevision     uint64              `json:"expected_run_revision,omitempty"`
-	SourceAttemptID         string              `json:"source_attempt_id,omitempty"`
-	ExpectedRecoveryVersion uint64              `json:"expected_recovery_version,omitempty"`
-	ServiceInstanceID       string              `json:"service_instance_id,omitempty"`
 }
 
 // Intent is durable before Git creates anything; actual workspace fields stay null

@@ -343,7 +343,7 @@ func environmentCheckResetSafety(record runnerstate.EnvironmentCheckRecord) erro
 	if len(record.Operations) == 0 {
 		return errors.New("environment check intent is incomplete")
 	}
-	if record.Operations[0].Status != "rejected" && (record.Report == nil || record.Report.Resources.Status != "settled") {
+	if record.Operations[0].Status != "rejected" && (record.Report == nil || record.Report.CleanupStatus != "completed") {
 		return errors.New("environment check resources are not settled; preserve recovery state")
 	}
 	for _, op := range record.Operations {

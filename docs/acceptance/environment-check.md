@@ -141,3 +141,22 @@ Go 最终回归：9 包 / 66 项（含子测试），65 通过、0 失败、1 �
 提交 `f89d5e1001d78d18ff96aca020f3c7701b2d6e13` 基于主干 `3dcbdc41`，测试时工作树干净。同步保留原生会话查看与环境检查两项 capabilities；沿用上列 Go 命令并在 `-run` 中加入 `TestNativeSession`，9 包 / 70 项（含子测试），69 通过、0 失败、1 跳过。证据 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261016T065651.768781800Z/summary.json` 及同目录 `go-test.jsonl`。唯一跳过仍是缺少正式 Runner EXE 的 TestEnvironmentCheckPublishedContract。
 
 Web 沿用上列测试命令并加入 `src/features/runs/native-session.test.ts`，4 文件 / 45 项通过；TypeScript/Vite build 通过。文档检查 446 份 Markdown / 2666 个本地链接 / 0 错误，diff --check 通过。本轮 Web 与静态证据见当前 Codex 聊天命令输出；未运行真实 Runner 联调或改变待验范围。
+
+## 安装包环境检查能力误判修复（2026-10-16）
+
+用户报告安装包提示“所选 Runner 未发布环境检查 v1 能力”。只读核对部署记录和执行配置后，确认安装 Runner 来源为已合入的 `ea1bfd982c63818de02870c70fa2f7b1c9f258b2`，版本 `0.1.0-dev.1`，SHA256 `4404e188da95299d02211164b64e4f425250a2ade9eb066e94f81291a306716c`。正式 capabilities 使用 `contract/targets`，本仓仍读取旧草稿 `version/supported`，因此即使 Runner 发布能力也被拒绝；报告字段与 schema 布局同样未完成对齐。
+
+本次替换为正式 wire contract：同源 schema 的本地 `$defs` 引用、`input/actual/result/cleanup_status/items[].required/allowed_actions`、原生 evidence/facts、resources PR 引用及拒绝 command.error。冻结 schema，按原始响应校验必需字段，避免 DTO 零值补齐掩盖缺失；保留输入/摘要/时间/身份/清单不变和 revision 单调守卫。stop/reset 使用正式资源完成及授权字段。没有新增旧草稿兼容路径。
+
+SteerLine 基线 `347037958c6fad4e52c62ea4477836261760fae6`，本次工作树 dirty。按统一生成器创建 `C:/SteerlineDebug/dev-20261016-171108-34703795-dirty`，包内 Runner 与安装记录 SHA 一致；resource_digest `5ef1f9f5df4b76b0dd945438b6071276c98f669255f20c6d53ff63f739cc5e85`。只使用该包 Runner 在测试独立临时 state-dir 启停空闲服务；不启动检查/Agent，不操作外部 Git/PR，不修改、重置或运行安装环境。
+
+验证结果：
+
+- SLEC-A01 正式公开契约交接已核对：实际 EXE 的 check/v1、implemented 本机与 unsupported Orca 选择、schema/caller fixture 验证通过；六份正式 inspection（start/stop/两种读取、准备失败、无 Check 拒绝、未核实）完整往返且无字段丢失。实际 capabilities 中的整份公开样例与固定交接逐值相同。测试停止原 instance 成功。只证明公开接线，不重验或冒充 Runner 原生能力。
+- SLEC-A01/A02/A03：定向 Go 九包、58 项（含子测试）全部通过，0 跳过。含原请求持久化/未知恢复/stop 身份/CAS/HTTP/项目边界、正式资源未完成 reset 拒绝及原始响应缺资源字段反例。命令为 Plan 原定向范围加 `./internal/testkit/boundary` 与 `TestHTTPCommandBoundary|TestThreeLayerRepositoryBoundary|TestSteerRunnerCLIContract`；三个 Runner pin 环境变量均已明确设置。
+- SLEC-A02/A04：Web 三文件 43 项全部通过，TypeScript/Vite build 通过。显示正式 result/actual/cleanup_status/allowed_actions/facts；保留关闭页面零取消、未知零重派及最新详情优先规则。
+- 定向 `go vet ./internal/runnerclient ./internal/environmentcheck ./internal/runnercontract` 通过；文档链接检查 451 文件、2710 本地链接、0 错误；`git diff --check` 通过。
+
+最终 Go 证据目录 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261016T091423.918551200Z`：`summary.json`、`go-test.jsonl`、`web-tests.log`、`web-build.log`。此前实际 EXE 首轮通过证据 `20261016T091233.529367300Z` 同属 test-feedback 根目录。初轮 UI 测试仅因证据从纯文本改为 JSON facts 后旧精确文本断言失败，修正匹配后最终 43 项通过；未将失败轮记为通过。
+
+SLEC-M01 人工体验仍后置。本次没有运行本机原生环境检查或远端原生验证，没有更新安装包；修复需在重新构建部署 SteerLine/Web 后生效。Runner 原生组合与残留仍以其独立 SREC acceptance 为准。

@@ -56,7 +56,7 @@ func projectEnvironmentCheck(r environmentcheck.Record) (api.EnvironmentCheckRec
 	}
 	return view, err
 }
-func (p *environmentCheckPort) EnvironmentCheckCatalog(ctx context.Context) (api.EnvironmentCheckCatalog, error) {
+func (p *environmentCheckPort) EnvironmentCheckCatalog(ctx context.Context) (json.RawMessage, error) {
 	r := p.service.Catalog(ctx)
 	r.Repository = p.repository
 	return json.Marshal(r)
