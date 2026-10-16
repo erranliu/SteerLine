@@ -37,6 +37,9 @@ export interface Task {
   }[];
   successors: string[];
   workflow_runs: {
+    participation: string;
+    submission_status: string;
+    stop_requested: boolean;
     workflow_run_id: string;
     task_id: string;
     candidate_number: number;
@@ -90,6 +93,10 @@ export interface Decision {
   };
 }
 export interface Candidate {
+  participation: string;
+  submission_status: string;
+  stop_requested: boolean;
+
   task_status: string;
   delivery_outcome?: string;
   task_id: string;

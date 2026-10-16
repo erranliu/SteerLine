@@ -2,6 +2,7 @@ package query
 
 import (
 	"encoding/json"
+
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
@@ -12,14 +13,10 @@ import (
 func CandidateSummary(c runnerstate.Candidate) api.WorkflowSummary {
 	var input runnercontract.RunInput
 	_ = json.Unmarshal(c.Submit.Input, &input)
-	v := api.WorkflowSummary{WorkflowRunID: c.ID, TaskID: c.TaskID, CandidateNumber: c.Number, CreatedAt: c.CreatedAt, FlowRef: input.Workflow.ID, WorkflowStatus: c.SubmitState,
+	v := api.WorkflowSummary{WorkflowRunID: c.ID, TaskID: c.TaskID, CandidateNumber: c.Number, CreatedAt: c.CreatedAt, FlowRef: input.Workflow.ID, Participation: c.Participation, SubmissionStatus: c.SubmitState, StopRequested: c.StopRequested, WorkflowStatus: runnerstate.ObservedStatus(c),
 		ExecutionProfile: &api.ExecutionProfileSummary{ID: c.ProfileID, Host: input.Execution.Target.Kind, Agent: input.Execution.Adapter}}
 	if c.Projection != nil {
 		v.WorkflowStage = c.Projection.Step
-		v.WorkflowStatus = c.Projection.Status
-	}
-	if c.Participation != "active" {
-		v.WorkflowStatus = c.Participation
 	}
 	return v
 }

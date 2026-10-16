@@ -31,6 +31,8 @@
 
 `TaskPage`, `GraphPage`, conversation event/body 和活动 cursor 保留各自实际身份、版本、采样/事件时间。PR、交付和历史 Decision 从现有查询投影返回，不使用 UI 缓存补写。conversation 的空 attempt 选择原 run/Execution 的完整历史；指定历史 attempt 时核对正式会话投影归属。body 保留原 Attempt/revision/SHA，不改向当前 Attempt。
 
+候选详情 `CandidateSummary` 与历史 `WorkflowSummary` 明确返回 `participation`、`submission_status`、`stop_requested`；`workflow_status` 有公开 Runner Projection 时保留其 Status，无 Projection 时取提交状态。caller 的 abandoned/completed 不再覆盖执行观察；详情 winner/loser 仍由同一快照的 TaskDelivery 产生，历史没有交付上下文时不补造 winner。Web 的参与筛选使用 participation，回答等操作继续按原事实保守判断；停止请求不等于进程已停止。当前开发版本不为缺字段的旧 DTO 增加回退。
+
 ## 命令映射
 
 所有 POST 使用唯一的 32 位小写十六进制 `request_id`、当前 `project_id`/`instance_id`、精确 `target_id`、显示时的 `expected_version`，并按动作携带控制或图 revision。请求信封在发送前由调用方持久保存。服务将完整原信封先原子登记，再写入现有宿主 immutable control inbox 或调用 SQLite CommandService；同 ID 不同信封返回 `request_id_conflict`。服务端从当前 OS 用户取得 `requested_by`，忽略客户端不能证明的身份。控制请求绑定原实例/显示 revision，由运行服务再次核对实例、control/graph/task/decision 版本和领域资格；过期目标保留原 request 并拒绝，不转向当前最新对象。
@@ -53,6 +55,16 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 `create_task`, `add_predecessors`, planning、人工验收和自定义前置操作目前返回 `unsupported`。服务把有效 request ID 的 unsupported 拒绝保存在原 envelope 记录中；之后 GET 仍返回 `unsupported` rejection，不会伪装成 `command_not_found`。
 
 命令外层 `status` 为 `submitted`, `accepted`, `applied`, `rejected`, `outcome_unknown` 之一。服务端原 control/command receipt 原样附带，内部 `applying` 表示 `accepted`，不表示 agent 已处理。`indeterminate` 或 `pending_verification` 映射为 `outcome_unknown`，客户端只查询原 request ID，不生成新 ID。
+
+实现仍由单个 commandRegistry 共用锁和 request-ID 命名空间，文件记录仅经 requestRecordAccess 访问。普通有效新请求在首次业务映射时解析载荷一次，派发消费记录中固定的 Decision/Discard/Control intent；权威身份匹配仍独立核对原信封，不以缓存的业务解析取代。登记后重读、能力/就绪和决策新鲜资格检查保留，正常派发不再次解析并重建业务输入。
+
+三种受理顺序保留如下（完整断言由 command_boundary/reconciliation、environment/native 现有测试保护）：
+
+| 路径 | 受理顺序与失败边界 |
+| --- | --- |
+| 普通 Submit | 锁 → 原记录/权威仲裁 → 首次解析与映射、记录体积校验 → Register → 重读记录 → 校验/能力/就绪 → 决策目标复核 → 派发固定 intent → 出错再查原权威 → 保存结果摘要；非法普通 action 可登记拒绝；已有接受摘要且权威丢失保持 unknown，不重放 |
+| 环境检查 | 同锁 → 严格信封校验/端口可用 → 原记录与权威仲裁 → 登记原信封 → 就绪检查 → 专用领域目标核验/派发 → 保存摘要；已有记录只查原环境检查权威，保留先验证后登记的顺序 |
+| native viewer | 同锁/ID → 原记录/权威仲裁与原会话资格 → 登记 outcome_unknown → 打开一次 → 保存结果；中断未知不能再次打开 |
 
 ### 回执与故障恢复
 

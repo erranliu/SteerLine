@@ -152,6 +152,9 @@ type StageResultSummary struct {
 }
 
 type CandidateSummary struct {
+	Participation    string               `json:"participation"`
+	SubmissionStatus string               `json:"submission_status"`
+	StopRequested    bool                 `json:"stop_requested"`
 	FlowRef          string               `json:"flow_ref"`
 	WorkflowStage    string               `json:"workflow_stage"`
 	WorkflowStatus   string               `json:"workflow_status"`
@@ -284,6 +287,9 @@ type HistorySummary struct {
 	Executions   []ExecutionSummary `json:"executions"`
 }
 type WorkflowSummary struct {
+	Participation    string                   `json:"participation"`
+	SubmissionStatus string                   `json:"submission_status"`
+	StopRequested    bool                     `json:"stop_requested"`
 	CandidateNumber  int                      `json:"candidate_number,omitempty"`
 	FlowRef          string                   `json:"flow_ref"`
 	WorkflowStage    string                   `json:"workflow_stage"`

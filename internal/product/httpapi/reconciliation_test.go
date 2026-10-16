@@ -97,7 +97,7 @@ func TestAPIAuthoritativeControlBinding(t *testing.T) {
 			config := host.Config{Repository: "C:/repo", RepositoryIdentity: "C:/repo", Remote: "origin", Branch: "main", RunDir: server.options.RunDir, TaskAuthority: "native", ControlValidation: formalControlValidation{}}
 			control.formalConfig = &config
 			envelope := CommandEnvelope{RequestID: strings.Repeat("e", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "start_candidate", TargetID: "8", ExpectedVersion: 3, ExpectedControlRevision: 7, ExpectedGraphRevision: 4, Payload: json.RawMessage(`{"execution_profile_id":"fixture"}`)}
-			mapped, err := server.commands.controlInput(context.Background(), envelope, currentActor())
+			mapped, err := mappedControlForTest(server.commands, context.Background(), envelope, currentActor())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -163,7 +163,7 @@ func TestAPIMappedControlPayloadBinding(t *testing.T) {
 				envelope.TargetID = envelope.InstanceID
 				envelope.ExpectedVersion = 0
 			}
-			input, err := server.commands.controlInput(context.Background(), envelope, currentActor())
+			input, err := mappedControlForTest(server.commands, context.Background(), envelope, currentActor())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -448,4 +448,18 @@ func TestAPIStartTaskBindsServerResolvedGraphToOriginalReceipt(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mappedControlForTest(s *commandRegistry, ctx context.Context, envelope CommandEnvelope, requestedBy string) (api.ControlInput, error) {
+	// Retired stop_service can still be mapped for matching historical receipts.
+	// Submit rejects it through parseActionEnvelope.
+	var parsed actionPayload
+	if envelope.Action != "stop_service" {
+		var err error
+		parsed, err = parseActionEnvelope(envelope)
+		if err != nil {
+			return api.ControlInput{}, err
+		}
+	}
+	return s.mappedControlInput(ctx, envelope, parsed, requestedBy)
 }
