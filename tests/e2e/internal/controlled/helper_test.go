@@ -2,6 +2,7 @@ package controlled
 
 import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,12 +36,12 @@ func TestSharedHostRoutesRunnerWorkspaceToOriginalProvider(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, pair := range []struct{ name, prefix, provider string }{{"SteerlineTest.json", first, primary}, {"SteerlineTestB.json", second, secondary}} {
-		if err := Write(filepath.Join(root, "seed", "fixture-routes-"+pair.name), map[string]string{pair.prefix: pair.provider}); err != nil {
+		if err := Write(filepath.Join(root, "seed", "fixture-routes-"+pair.name), map[string]string{pair.prefix: pair.provider, runnerstatepath.Directory(pair.prefix): pair.provider}); err != nil {
 			t.Fatal(err)
 		}
 	}
 	t.Setenv("STEERLINE_E2E_CONTROLLED_STATE", primary)
-	for _, pair := range []struct{ dir, want string }{{filepath.Join(first, "runner", "w", "original"), primary}, {filepath.Join(second, "runner", "w", "original"), secondary}, {second + "-sibling", primary}} {
+	for _, pair := range []struct{ dir, want string }{{filepath.Join(runnerstatepath.Directory(first), "w", "original"), primary}, {filepath.Join(runnerstatepath.Directory(second), "w", "original"), secondary}, {second + "-sibling", primary}} {
 		if got := statePathForDirectory(pair.dir); got != pair.want {
 			t.Fatalf("provider crossed caller path: %s => %s", pair.dir, got)
 		}

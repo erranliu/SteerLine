@@ -18,6 +18,7 @@ import (
 
 	app "github.com/erranliu/SteerLine/internal/app"
 	host "github.com/erranliu/SteerLine/internal/app/host"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
@@ -368,7 +369,7 @@ func (d *debugRelease) initialize() error {
 	}
 	// Test-owned caller paths route a shared host's external protocol helper;
 	// the helper never discovers a project by reading Runner's private state.
-	return controlled.Write(filepath.Join(d.root, "seed", "fixture-routes-"+filepath.Base(d.config)), map[string]string{d.repo: d.provider, d.stateDir(): d.provider})
+	return controlled.Write(filepath.Join(d.root, "seed", "fixture-routes-"+filepath.Base(d.config)), map[string]string{d.repo: d.provider, d.stateDir(): d.provider, runnerstatepath.Directory(d.stateDir()): d.provider})
 }
 func (d *debugRelease) seedTasks() error {
 	path := filepath.Join(d.root, "seed", filepath.Base(d.config)+".bound-tasks.json")

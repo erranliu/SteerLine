@@ -7,12 +7,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
@@ -85,7 +85,10 @@ func (g RunnerExecutionConfig) startRunner(ctx context.Context, runDir string, t
 	if err := g.Validate(); err != nil {
 		return runnerclient.Client{}, runnerclient.ServiceInfo{}, err
 	}
-	cli, version, err := g.Runner.Open(ctx, filepath.Join(runDir, "runner"), timeout)
+	if err := runnerstatepath.Prepare(runDir); err != nil {
+		return runnerclient.Client{}, runnerclient.ServiceInfo{}, err
+	}
+	cli, version, err := g.Runner.Open(ctx, runnerstatepath.Directory(runDir), timeout)
 	if err != nil {
 		return cli, runnerclient.ServiceInfo{}, err
 	}

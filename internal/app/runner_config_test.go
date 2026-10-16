@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ func TestRunnerProjectPreflightLeavesPrivateRunnerFilesToRunner(t *testing.T) {
 	store, err := OpenNativeTaskProject(context.Background(), &config)
 	require(t, err)
 	require(t, store.Close())
-	dir := filepath.Join(config.RunDir, "runner")
+	dir := runnerstatepath.Directory(config.RunDir)
 	require(t, os.MkdirAll(dir, 0700))
 	sentinel := filepath.Join(dir, "private-sentinel")
 	require(t, os.WriteFile(sentinel, []byte("owned by Runner"), 0600))
