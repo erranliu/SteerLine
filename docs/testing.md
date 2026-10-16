@@ -10,6 +10,14 @@ SteerRunner 拆分后的测试归属及实施安排见 [Spec](spec/runner-test-c
 
 完整 L2 保留真实 SteerLine → 固定 Runner EXE → 本机 Codex → 实现/报告/发布 → 真实 SteerlineTest PR → 合并 → TaskDelivery/后继释放。它覆盖 Runner 正常运行能力。执行专项迁出不降低这条链路为模拟测试。
 
+## L1–L4 定义
+
+SteerLine 直接采用 [开发项目测试架构规范](../SteerlineProjectGuideDoc/testing-architecture.md)。L1–L4 定义、L3 正交与并行设计、分级内容清单要求及跨项目测试归属统一在该规范维护；本文记录 SteerLine 的具体入口、环境、清单和实施缺口。
+
+SteerLine 的 L1 是固定的快速集成/单元集合；完整 L2 是 controlled gate 加真实本机 Codex 核心交付链；L3 为等待合并时调用方重启、宿主生命周期和双 home 独立操作；L4 为构建/路径/宿主写入/同 ID 重放的系统边界。本次拆分和执行证据见 [Plan](plans/test-level-alignment.plan.md) / [验收](acceptance/test-level-alignment.md)。
+
+SteerLine 的 Full 只运行现有确定性 Go 测试，不包含 L2/L3/L4/live。L2/L3/L4 的机器登记为 `tests/e2e/suites.json`，可读内容清单及本项目维护约定见 [E2E 指南](../tests/e2e/README.md#分级测试内容清单与维护)；实际结果在任务专属 acceptance 文档维护。
+
 ## 日常选择
 
 按变更运行最小必要范围，L1/Full 不自动运行真实模型。所有验收行为及实时结果在 [acceptance](acceptance/README.md)记录，原日志使用新建临时目录。
@@ -18,10 +26,11 @@ SteerRunner 拆分后的测试归属及实施安排见 [Spec](spec/runner-test-c
 | --- | --- | --- |
 | L1 | 固定 caller/Task/存储/HTTP/边界，默认三个进程分组 | 无真实模型 |
 | 定向 Go | 受影响的 owner 包或测试 | 普通用例为隔离 fixture |
-| Full | 全部保留的确定性 Go 测试，现有三 worker 分区/覆盖核对 | 不自动运行 L2/L3/live |
+| Full | 全部保留的确定性 Go 测试，现有三 worker 分区/覆盖核对 | 不自动运行 L2/L3/L4/live |
 | L2 controlled | Runner 公开 CLI/PR 夹具驱动产品交付 | 无模型，仅 gate-only |
 | 完整 L2 | controlled 通过后本机 Codex 真实三阶段及 GitHub PR/交付 | 消耗模型、创建并合并本次真实 PR |
-| L3 controlled | 等待合并时 SteerLine 重启及四项 runtime 隔离 | 无模型，独立临时 home/Git/SQLite |
+| L3 controlled | 调用方重启、宿主生命周期、双 home 独立操作 | 无模型，独立临时 home/Git/SQLite，最多二场景并行 |
+| L4 controlled | 构建/路径/SQLite 拒绝、宿主写入拒绝、同 ID 碰撞与重放 | 无模型，全部为隔离边界现场，runtime 最多二项并行 |
 | Web | 前端单元、构建及按需浏览器场景 | 浏览器使用新建 simulate 包 |
 
 ```powershell
@@ -41,19 +50,17 @@ go test -tags=e2e ./tests/e2e/... -run '^$'
 
 L1 固定范围以 [scoped.go](../cmd/test-feedback/scoped.go)及 [task_scope.go](../cmd/test-feedback/task_scope.go)为准；Full 保留原分区、包枚举与不遗漏/不重复核对。原生专项开关及其执行器不再属于 SteerLine 测试准入。
 
-## L2 / L3 稳定入口
+## L2 / L3 / L4 清单现状与入口
 
-[注册表](../tests/e2e/suites.json)是实际场景的来源，目前保留七项：
+[注册表](../tests/e2e/suites.json)是当前可执行场景的来源，具体测试内容见 [维护清单](../tests/e2e/README.md#分级测试内容清单与维护)。当前核对结果：
 
-| 级别 | 环境 | 场景 |
+| 级别 | 已登记内容 | 清单与实现现状 |
 | --- | --- | --- |
-| L2 | controlled | `smoke.delivery` |
-| L2 | live / local-codex | `smoke.local-codex` |
-| L3 | controlled | `recovery.waiting-merge-restart` |
-| L3 | controlled | `runtime.source-build-isolation` |
-| L3 | controlled | `runtime.path-isolation` |
-| L3 | controlled | `runtime.service-write-isolation` |
-| L3 | controlled | `runtime.dual-home-isolation` |
+| L2 | 2 项：controlled gate、live 本机 Codex | 有固定 ID、实际测试映射和选择校验，内容清单可追踪。 |
+| L3 | 3 项：等待合并重启、正常宿主生命周期、双 home 独立操作 | 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二；只选 runtime 时包内二并行。 |
+| L4 | 4 项：源码构建保护、路径保护、宿主写入拒绝、同 ID 碰撞与重放 | 支持 `-level=L4 -suite=runtime -env=controlled`；每项独立资源，runtime 包内最多二项并行。 |
+
+当前九项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
 
 ```powershell
 # 无 token 门槛，不能当作完整 L2
@@ -66,8 +73,17 @@ go run ./cmd/test-feedback -level=L2
 # Codex 工具进程内可使用既有独立进程上下文，保持同一 L2 与证据规则
 ./scripts/test-l2.ps1 -SteerRunnerExe 'C:/Tools/SteerRunner/steerrunner.exe'
 
-# 保留的受控恢复与四个隔离场景；runtime 最多二项并行
+# 三项正常流程；跨包/包内调度共用二并行预算
 go run ./cmd/test-feedback -level=L3 '-suite=recovery,runtime' -env=controlled
+
+# 四项系统边界；可用 -scenario=<逗号分隔ID> 精确选择
+go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled
+
+# 工具进程有 Windows Job 约束时，使用独立同用户进程
+./scripts/test-runtime-isolation.ps1 -Level L3 -Suite 'recovery,runtime'
+./scripts/test-runtime-isolation.ps1 -Level L4
+# 默认依次运行两级 runtime；分别生成报告
+./scripts/test-runtime-isolation.ps1
 ```
 
 L2 的 controlled 运行、证据或清理失败时，阻止真实阶段。仅 gate 报告 `coverage=gate-only`，完整两阶段才是 `full-L2`。退役的 delivery/recovery live、Orca chain、native 环境和旧 runtime 聚合 ID 明确拒绝，不映射到其他场景。

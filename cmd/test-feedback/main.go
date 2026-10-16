@@ -105,7 +105,7 @@ func run(args []string) int {
 	if parsed.quick || parsed.workers == 3 {
 		return runScoped(parsed)
 	}
-	if parsed.level == "L2" || parsed.level == "L3" {
+	if parsed.level == "L2" || parsed.level == "L3" || parsed.level == "L4" {
 		return runE2E(parsed)
 	}
 
@@ -245,10 +245,10 @@ func parseOptions(args []string) (options, error) {
 	flags.IntVar(&opts.exitCode, "exit-code", 0, "exit code from the command that produced -summarize-log")
 	flags.BoolVar(&opts.quick, "quick", false, "run the fixed minimal closed loop and pure rule packages")
 	flags.IntVar(&opts.workers, "workers", 1, "suite processes: 1 or 3; L1/quick defaults to 3")
-	flags.StringVar(&opts.level, "level", "", "test level: L1, L2 or L3")
-	flags.StringVar(&opts.suite, "suite", "", "comma-separated L3 suites")
-	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled, live (L3), gated (L2 default)")
-	flags.StringVar(&opts.scenario, "scenario", "", "comma-separated L3 scenario IDs")
+	flags.StringVar(&opts.level, "level", "", "test level: L1, L2, L3 or L4")
+	flags.StringVar(&opts.suite, "suite", "", "comma-separated L3/L4 suites")
+	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled or gated (L2 default)")
+	flags.StringVar(&opts.scenario, "scenario", "", "comma-separated L3/L4 scenario IDs")
 	if err := flags.Parse(toolArgs); err != nil {
 		return opts, fmt.Errorf("test-feedback options: %w", err)
 	}
@@ -277,7 +277,7 @@ func parseOptions(args []string) (options, error) {
 			return opts, fmt.Errorf("L1 does not accept quick, suite or env")
 		}
 		opts.quick = true
-	case "L2", "L3":
+	case "L2", "L3", "L4":
 		for _, key := range []string{"quick", "workers", "build-only", "summarize-log"} {
 			if seenOptions[key] {
 				return opts, fmt.Errorf("E2E cannot combine -%s", key)
@@ -289,13 +289,13 @@ func parseOptions(args []string) (options, error) {
 		if opts.level == "L2" && (seenOptions["suite"] || seenOptions["scenario"]) {
 			return opts, fmt.Errorf("L2 has a fixed smoke selection")
 		}
-		if opts.level == "L3" && opts.suite == "" {
-			return opts, fmt.Errorf("L3 requires -suite")
+		if opts.level != "L2" && opts.suite == "" {
+			return opts, fmt.Errorf("%s requires -suite", opts.level)
 		}
 		if opts.e2eEnv == "" && opts.level == "L2" {
 			opts.e2eEnv = "gated"
 		}
-		if opts.e2eEnv != "controlled" && !(opts.level == "L2" && opts.e2eEnv == "gated") && !(opts.level == "L3" && opts.e2eEnv == "live") {
+		if opts.e2eEnv != "controlled" && !(opts.level == "L2" && opts.e2eEnv == "gated") {
 			return opts, fmt.Errorf("unsupported E2E environment %q", opts.e2eEnv)
 		}
 	default:

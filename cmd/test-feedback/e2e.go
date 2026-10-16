@@ -16,6 +16,7 @@ import (
 	"runtime"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
@@ -31,22 +32,23 @@ type e2eScenario struct {
 	Chain   string `json:"chain,omitempty"`
 }
 type e2eReport struct {
-	Scope       string            `json:"scope"`
-	Level       string            `json:"level"`
-	Env         string            `json:"env"`
-	Environment environment       `json:"environment"`
-	Selected    []e2eScenario     `json:"selected_scenarios"`
-	Groups      []scopedGroup     `json:"groups"`
-	Builds      map[string]string `json:"build_sha256"`
-	Preparation float64           `json:"preparation_seconds"`
-	Execution   float64           `json:"execution_seconds"`
-	Passed      bool              `json:"passed"`
-	Cleanup     bool              `json:"cleanup_complete"`
-	Errors      []string          `json:"errors"`
-	Started     string            `json:"started_at"`
-	Finished    string            `json:"finished_at"`
-	Blocked     []e2eScenario     `json:"blocked_scenarios,omitempty"`
-	Coverage    string            `json:"coverage"`
+	Scope          string            `json:"scope"`
+	Level          string            `json:"level"`
+	Env            string            `json:"env"`
+	Environment    environment       `json:"environment"`
+	Selected       []e2eScenario     `json:"selected_scenarios"`
+	Groups         []scopedGroup     `json:"groups"`
+	Builds         map[string]string `json:"build_sha256"`
+	Preparation    float64           `json:"preparation_seconds"`
+	Execution      float64           `json:"execution_seconds"`
+	Passed         bool              `json:"passed"`
+	Cleanup        bool              `json:"cleanup_complete"`
+	Errors         []string          `json:"errors"`
+	Started        string            `json:"started_at"`
+	Finished       string            `json:"finished_at"`
+	Blocked        []e2eScenario     `json:"blocked_scenarios,omitempty"`
+	Coverage       string            `json:"coverage"`
+	PackageWorkers int               `json:"package_workers"`
 }
 
 func e2eRoot() (string, error) {
@@ -77,7 +79,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	ids, tests := map[string]bool{}, map[string]bool{}
 	packageEnvs := map[string]string{}
 	requested := map[string]bool{}
-	if opts.level == "L3" {
+	if opts.level == "L3" || opts.level == "L4" {
 		for _, name := range strings.Split(opts.suite, ",") {
 			if name == "" || requested[name] {
 				return nil, fmt.Errorf("invalid or repeated suite %q", name)
@@ -99,7 +101,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex") || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && (entry.Level != "L2" || entry.Chain != "local-codex")) || (entry.Env == "controlled" && entry.Chain != "") || (entry.Level != "L2" && entry.Level != "L3" && entry.Level != "L4") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -190,7 +192,7 @@ func runE2E(opts options) (code int) {
 		fmt.Fprintln(os.Stderr, "E2E output directory must be empty; use a new -out path")
 		return 2
 	}
-	note, coverage := "controlled worker/provider; no model requests", "selected-L3"
+	note, coverage := "controlled worker/provider; no model requests", "selected-"+opts.level
 	if opts.level == "L2" {
 		coverage = "gate-only"
 	}
@@ -418,14 +420,26 @@ func runE2E(opts options) (code int) {
 	}
 	report.Preparation = time.Since(started).Seconds()
 	execution := time.Now()
-	report.Errors, report.Blocked = executeE2EPackages(ctx, names, packages, opts.e2eEnv == "gated", func(i int, pkg string) error {
+	// Each callback owns one slot; publish ordered groups only after all workers
+	// have joined, so concurrent packages never mutate the shared report slice.
+	groups := make([]*scopedGroup, len(names))
+	packageWorkers := 1
+	if opts.level == "L3" && len(names) > 1 {
+		packageWorkers = 2
+	}
+	report.PackageWorkers = packageWorkers
+	report.Errors, report.Blocked = executeE2EPackages(ctx, names, packages, opts.e2eEnv == "gated", packageWorkers, func(i int, pkg string) error {
 		tests := []string{}
 		for _, e := range packages[pkg] {
 			tests = append(tests, e.Test)
 		}
 		timeout := e2ePackageGoTimeout(packages[pkg])
 		importPath := strings.TrimSuffix(corePackage, "/internal/app/host") + "/" + strings.TrimPrefix(pkg, "./")
-		args := []string{"-test.v=test2json", "-test.count=1", fmt.Sprintf("-test.parallel=%d", e2ePackageParallelism(packages[pkg])), "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
+		parallelism := e2ePackageParallelism(packages[pkg])
+		if packageWorkers > 1 {
+			parallelism = 1
+		}
+		args := []string{"-test.v=test2json", "-test.count=1", fmt.Sprintf("-test.parallel=%d", parallelism), "-test.timeout=" + timeout, "-test.run=" + exactPattern(tests)}
 		g := scopedGroup{ID: fmt.Sprintf("e2e-%d", i+1), Command: append([]string{testBinaries[pkg]}, args...), Assigned: tests, Packages: []string{pkg}, StdoutLog: filepath.Join(out, fmt.Sprintf("e2e-%d.jsonl", i+1)), StderrLog: filepath.Join(out, fmt.Sprintf("e2e-%d.stderr.txt", i+1))}
 		// Own the test binary directly. Detached external services must not keep
 		// a live test2json pipe open after the test process has exited.
@@ -444,8 +458,11 @@ func runE2E(opts options) (code int) {
 		cmd.Env = e2eEnvironment(os.Environ(), string(config))
 		cmd.Stdout, cmd.Stderr = stdout, stderr
 		groupStarted := time.Now()
+		g.StartedAt = groupStarted.UTC().Format(time.RFC3339Nano)
 		err = runOwned(ctx, cmd)
-		g.WallSeconds = time.Since(groupStarted).Seconds()
+		groupFinished := time.Now()
+		g.FinishedAt = groupFinished.UTC().Format(time.RFC3339Nano)
+		g.WallSeconds = groupFinished.Sub(groupStarted).Seconds()
 		closeErr := errors.Join(stdout.Close(), stderr.Close())
 		if closeErr != nil {
 			return closeErr
@@ -469,9 +486,14 @@ func runE2E(opts options) (code int) {
 		}
 		raw = converted
 		g.Summary = testfeedback.Parse(raw, g.ExitCode)
-		report.Groups = append(report.Groups, g)
+		groups[i] = &g
 		return checkE2EGroup(g, packages[pkg], out)
 	})
+	for _, g := range groups {
+		if g != nil {
+			report.Groups = append(report.Groups, *g)
+		}
+	}
 	report.Execution = time.Since(execution).Seconds()
 	for _, entry := range selected {
 		if _, err := os.Stat(filepath.Join(out, "scenarios", entry.ID, "blocker.json")); err == nil {
@@ -491,11 +513,18 @@ func e2ePackageParallelism(entries []e2eScenario) int {
 		return 1
 	}
 	for _, entry := range entries {
-		if entry.Env != "controlled" || entry.Package != "./tests/e2e/suites/runtime" {
+		if entry.Env != "controlled" || entry.Level != entries[0].Level || entry.Package != "./tests/e2e/suites/runtime" {
 			return 1
 		}
 		switch entry.ID {
+		case "runtime.service-lifecycle", "runtime.dual-home-operation":
+			if entry.Level != "L3" {
+				return 1
+			}
 		case "runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation":
+			if entry.Level != "L4" {
+				return 1
+			}
 		default:
 			return 1
 		}
@@ -594,9 +623,44 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 
 // The gate includes execution, evidence validation and cleanup; even a cleanup
 // failure prevents the callback from ever constructing a native environment.
-func executeE2EPackages(ctx context.Context, names []string, packages map[string][]e2eScenario, gated bool, execute func(int, string) error) ([]string, []e2eScenario) {
+func executeE2EPackages(ctx context.Context, names []string, packages map[string][]e2eScenario, gated bool, workers int, execute func(int, string) error) ([]string, []e2eScenario) {
 	var failures []string
 	var blocked []e2eScenario
+	if !gated && workers > 1 {
+		results := make([]error, len(names))
+		started := make([]bool, len(names))
+		jobs := make(chan int)
+		var wg sync.WaitGroup
+		for w := 0; w < workers; w++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				for i := range jobs {
+					if ctx.Err() != nil {
+						continue
+					}
+					started[i] = true
+					results[i] = execute(i, names[i])
+				}
+			}()
+		}
+		for i := range names {
+			jobs <- i
+		}
+		close(jobs)
+		wg.Wait()
+		for i, pkg := range names {
+			if !started[i] {
+				blocked = append(blocked, packages[pkg]...)
+			} else if results[i] != nil {
+				failures = append(failures, results[i].Error())
+			}
+		}
+		if ctx.Err() != nil {
+			failures = append(failures, ctx.Err().Error())
+		}
+		return failures, blocked
+	}
 	for i, pkg := range names {
 		if ctx.Err() != nil || (gated && packages[pkg][0].Env == "live" && len(failures) > 0) {
 			for _, remaining := range names[i:] {

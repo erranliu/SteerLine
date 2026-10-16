@@ -18,7 +18,11 @@ def prose(text):
 
 def main():
     errors = []
-    files = [ROOT / 'README.md', *sorted((ROOT / 'docs').rglob('*.md'))]
+    files = [
+        ROOT / 'README.md',
+        *sorted((ROOT / 'docs').rglob('*.md')),
+        *sorted((ROOT / 'SteerlineProjectGuideDoc').rglob('*.md')),
+    ]
     links = 0
     for path in files:
         text = prose(path.read_text(encoding='utf-8-sig'))

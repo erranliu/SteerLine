@@ -6,11 +6,13 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 [文档入口](docs/README.md) · [产品愿景](docs/roadmap/product-vision.md) · [RoadmapGuide](docs/roadmap/RoadmapGuide.md) · [正式执行清单](docs/roadmap/execution-map.md) · [当前代码架构图](docs/architecture/current-code-architecture.md) · [测试总入口](docs/testing.md)
 
+[开发项目规范](SteerlineProjectGuideDoc/README.md)面向 SteerLine 所开发的项目，SteerLine 自身也直接采用；与自身产品文档 `docs/` 分开维护。首份为[测试架构规范](SteerlineProjectGuideDoc/testing-architecture.md)。
+
 执行已拆到独立 [SteerRunner](https://github.com/erranliu/SteerRunner)：SteerLine 负责任务协调，通过固定 EXE/CLI 调用；运行数据与日志归项目工作目录。配置、固定构建及当前验收边界见 [Runner 接入](docs/integration/steerrunner.md)。
 
 ## 测试
 
-日常最小入口为 `go run ./cmd/test-feedback -level=L1`。Full、定向回归、L2/L3、测试环境与独立原生验收统一见[测试指南](docs/testing.md)；其中完整 L2 和 L3 live 会消耗模型 token，完整 L2 会创建并合并真实测试 PR。
+日常最小入口为 `go run ./cmd/test-feedback -level=L1`。Full、定向回归、L2/L3/L4 与测试环境统一见[测试指南](docs/testing.md)；完整 L2 会消耗模型 token 并创建、合并真实测试 PR，L3/L4 使用隔离的受控夹具。
 
 ## 构建
 
