@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -355,6 +356,29 @@ func serviceInstance(snapshot testenv.Snapshot) string {
 		return ""
 	}
 	return snapshot.Runtime.Service.InstanceID
+}
+
+func discardOwnedTask(t *testing.T, p *testenv.Project, before testenv.Snapshot, key, requestID string) ([]byte, []string) {
+	t.Helper()
+	version := uint64(0)
+	for _, task := range before.Page.Tasks {
+		if task.TaskID == p.Tasks[key].ID {
+			version = task.Version
+		}
+	}
+	args := []string{"task", "discard", "-config", p.Config, "-task-id", p.Tasks[key].ID, "-request-id", requestID, "-expected-version", strconv.FormatUint(version, 10), "-reason", "isolation-" + p.Name, "-by", "e2e"}
+	raw, err := p.Driver.Run(p.Scenario.Context, args...)
+	p.Scenario.Must(err)
+	var receipt struct {
+		RequestID string `json:"request_id"`
+		TaskID    string `json:"task_id"`
+		Status    string `json:"status"`
+	}
+	p.Scenario.Must(json.Unmarshal(raw, &receipt))
+	if receipt.RequestID != requestID || receipt.TaskID != p.Tasks[key].ID || receipt.Status != "discarded" {
+		t.Fatalf("wrong home receipt: %s", raw)
+	}
+	return raw, args
 }
 
 func controlRequestCount(t *testing.T, project *testenv.Project) int {

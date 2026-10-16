@@ -86,7 +86,7 @@ func NewScenario(t *testing.T, id string) *Scenario {
 	t.Helper()
 	var run Run
 	if err := json.Unmarshal([]byte(os.Getenv("STEERLINE_E2E_RUN")), &run); err != nil {
-		t.Fatalf("use go run ./cmd/test-feedback -level=L2/L3: %v", err)
+		t.Fatalf("use go run ./cmd/test-feedback -level=L2/L3/L4: %v", err)
 	}
 	return newScenario(t, id, run)
 }
