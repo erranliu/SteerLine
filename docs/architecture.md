@@ -2,7 +2,7 @@
 
 > 2026-10-15：TUI 已移除，Web 为唯一交互前端；后台 CLI、服务及原生会话保留。实现和验证范围见[TUI 退役](acceptance/tui-retirement.md)。
 
-SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。一期包含本地 Codex、本机 Orca 与远端路径交付。后续目标见[产品愿景](roadmap/product-vision.md)，源码归属见[代码架构](architecture/current-code-architecture.md)。
+SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。执行已迁到独立 SteerRunner；当前代码/运行边界见[代码架构](architecture/current-code-architecture.md)，实际后端与验收支持范围见[Runner 接入](integration/steerrunner.md)及专属验收。后续目标见[产品愿景](roadmap/product-vision.md)。
 
 本文描述 SteerLine 产品运行的业务权威。普通开发由当前聊天直接实现；用户明确要求 roadmap 调度时，才由 roadmap-runner 使用[execution-map](roadmap/execution-map.md)管理已确认的任务与依赖。roadmap 流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。
 
@@ -21,11 +21,9 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 | 应用与服务宿主 | 组装 adapter、端口和存储，承载进程、实例核验、控制传输、锁、心跳及退出观察 |
 | SQLite 存储 | 保存唯一业务状态，核验身份、前值、版本和唯一约束后原子提交 |
 
-Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 TaskDelivery 分别表达不同事实。当前 Orca 单终端路径不创建 Orca Run/Task/Dispatch；原 runtime、terminal/incarnation、worktree 和 provider session 属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runtime 投影、UI 缓存和诊断日志都不能成为第二业务权威。
+Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 TaskDelivery 分别表达不同事实。SteerLine 通过固定 Runner CLI 与执行后端协作；Runner 的进程、会话和仓库事实属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runner 状态投影、UI 缓存和诊断日志都不能成为第二业务权威。
 
-当前浏览器消费链为 `Web → 应用目录/HTTP → httpapi → product/client → Go 任务/执行应用与只读查询`。app 组装服务、SQLite 与执行 adapter；CLI 保留现有内部 Go 产品客户端入口。
-
-本机 Web 消费链为 `React SPA → 同源浏览器会话/CSRF → steerline-web → Go 应用服务 → 原 httpclient → 项目 native HTTP API`。独立 Web 程序从应用 home 的 `web.json` 读取稳定 loopback 地址，应用入口与项目 native endpoint 分别使用随机端口、当前用户 Bearer 和无 Origin。Web、应用服务和各项目服务独立启动/关闭；Web 不组装业务库或调度器。应用 discovery 位于 `<home>/application-api/`，Web 打开凭证位于 `<home>/ui/web/`，CLI 核对精确实例后签发短票据。客户端按 home、项目及实例隔离原信封、回执观察和输入草稿。契约与非目标见[独立 Web 与项目切换 Spec](spec/web-project-switch.spec.md)。
+当前拓扑是一个共享 SteerLine 后端宿主和独立 Web 程序。`steerline start` 协调启动共享后端与 Web；后端装载配置项目，在同一进程内为每个项目建立隔离的运行时、Task actor、存储和 Runner CLI 客户端。每个项目的 SteerRunner 仍独立运行。Web 与 CLI 通过统一应用 API 使用项目用例；Web 不直接访问业务数据库、调度器或 Runner 私有实现。当前模块与进程边界见[代码架构](architecture/current-code-architecture.md)，启动、项目加载和关闭契约见[统一启动 Spec](spec/unified-startup.spec.md)。
 
 ## 执行与交付
 
@@ -39,9 +37,7 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 工作区准备、代理启动/初始化、输入接受/开执行、结果结算及收尾的节点异常和重试规则统一归[Worker 流程异常处理与重试](product-design/worker-lifecycle.md)。具体适配器提供原生事实与能力，worker 执行域决定动作并通过现有单写者提交；文档中的待补设计不代表当前实现已经支持。
 
-关闭控制台或 UI 只结束客户端观察；停止中心服务不证明外部 worker 已退出。停止、清理和释放按精确资源身份、实际后端能力及原 Operation 回执判断。
-
-Windows 中心由用户从安装入口打开的可见服务窗口承载，可最小化；Web 浏览器不代启项目服务。离线入口显示 window-required 和 service-window.bat 的实际路径。服务窗口关闭结束中心进程；显式停服须同时核对原请求的 applied 回执、原进程退出及仓库/状态锁释放，未知时继续保留诊断，不伪造停止成功。Linux detached 路径按其平台能力展示，不视为 Windows 原生验收证明。当前操作见[Web 指南](../web/README.md)。
+关闭 Web 只结束客户端观察，不停止共享后端或 worker。统一宿主停机时逐项目核实关闭结果、Runner 资源结算和锁释放；共享后端进程退出本身不证明原生 worker 已停止。停止、清理和释放按精确资源身份、实际后端能力及原 Operation 回执判断，未知结果继续保留诊断。统一启动及停机契约见[Spec](spec/unified-startup.spec.md)，当前操作入口见[Web 指南](../web/README.md)。
 
 反馈分别保存问题、答案、发送意图、平台回执和原生轮次事实，不能把“已保存”或“已接受”显示为业务要求已落实。宿主登录/权限阻断与 worker 业务问题分开，未知动作只对账。服务重启先恢复观察和原请求；继续输入或重建 worker 按当前恢复规则取得人工授权，未验证的路径保持不可用。细节见[决策与反馈](product-design/decisions.md)。
 

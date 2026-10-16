@@ -1,6 +1,6 @@
 # 产品设计
 
-本目录维护长期有效的具体产品设计，按职责和功能命名，不按交付阶段或 PR 编号分类。当前执行支持范围是本地 Codex 与本机 Orca。已实现契约与拟议设计分开说明，文档本身不证明平台验收通过，也不改变中心固定 Task。
+本目录维护长期有效的具体产品设计，按职责和功能命名，不按交付阶段或 PR 编号分类。当前执行支持范围包括本地 Codex 与远端 Orca environment；本机 Orca 路径已放弃。已实现契约与拟议设计分开说明，文档本身不证明平台验收通过，也不改变中心固定 Task。
 
 | 设计 | 内容与边界 |
 | --- | --- |
@@ -11,20 +11,20 @@
 | [决策与反馈](decisions.md) | 问题、答案、投递事实、宿主阻断与人工恢复 |
 | [会话事件](conversation-events.md) | 来源、规范事件、完整正文、分页、采集与展示 |
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |
-| [执行控制台](execution-console.md) | 已退役 TUI 的历史布局与操作记录；当前使用 Web |
+| [已退役的执行控制台](../archive/design/execution-console.md) | TUI 的历史布局与操作记录；当前使用 Web |
 | [Worker PR 流程契约](../spec/worker-pr-flow.spec.md) | 当前 development/v3 的实现、报告、发布、合并与交付；原 #84 分步契约保留历史追溯 |
 | [客户端与 Go 服务边界](planning-architecture.md) | Web/应用/项目 HTTP 边界及历史 #91 追溯 |
 | [Web 前端技术方案](web-frontend.md) | 已确认技术栈与首批 DAG/执行页；独立 web 工程及浏览器接入契约见普通开发 Spec/Plan，实际结果归专属验收 |
-| [项目管理与统一 Web 入口（方案）](project-management.md) | 独立 Web/已有项目切换先行，添加/核验纳管后置；各有独立 Spec/Plan，尚未实现 |
+| [项目管理与统一 Web 入口](project-management.md) | 独立 Web/已有项目切换及统一启动宿主已交付；添加/结构核验/纳管后置，仍有独立 Spec/Plan |
 | [添加项目准备提示词（方案）](project-onboarding-prompt.md) | 用户复制到目标仓库 Codex 执行的文档准备模板；不创建项目状态或 Task |
 | [项目结构与纳管核验（方案）](project-structure.md) | 文档角色/路径清单、只读固定版本核验、纳管与执行资格边界；尚无核验器 |
 | [本机客户端协议 v1](local-client-protocol.md) | 现有回环协议与公共查询/命令接口 |
-| [规划界面原型参考](planning-ui.md) | 旧页面方向仅参考，不产生当前任务/前置 |
+| [规划界面原型参考](../archive/design/planning-ui.md) | 早期 Web 规划方案；部分构想未交付，不产生当前任务/前置 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |
 
-2026-10-13 用户确认当前规划仅到[任务 #91](../spec/tui-http-client.spec.md)。旧三节点/候选已清理，编号不复用；原型与退役规格不作为前置或派发入口。当前 #45 协议已交付，TUI 已在后续普通开发中删除，Web 为唯一交互前端，#44 工程已删除，验收状态见专属记录，见[推进边界](../roadmap/drafts/phase2-delivery.md)。
+Web 是当前唯一交互前端；旧任务 #91 交付 HTTP 客户端基线，之后 TUI 已按[退役 Spec](../spec/tui-retirement.spec.md)删除。早期 TUI/规划界面文档已移至[设计归档](../archive/design/README.md)，实现与验收状态以当前 Spec 和专属验收为准。
 
-整体职责见[架构总览](../architecture.md)，代码与接口归属见[源码索引](../architecture/current-code-architecture.md)，执行要求见[Spec 索引](../spec/README.md)，测试入口见[测试指南](../testing.md)。历史配置与试验只在[归档](../archive/README.md)或[验证证据](../validation)中承接。
+整体职责见[架构总览](../architecture.md)，代码与接口归属见[源码索引](../architecture/current-code-architecture.md)，执行要求见[Spec 索引](../spec/README.md)，测试入口见[测试指南](../testing.md)。历史配置、界面方案与试验只在[归档](../archive/README.md)或[验证证据](../validation)中承接。
 
 ## 维护规则
 

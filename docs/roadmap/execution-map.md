@@ -1,6 +1,6 @@
 # 正式执行 Roadmap
 
-本表是用户确认的开发任务与依赖权威。2026-10-13 用户确认当前规划收敛到 `TUI → HTTP API → Go 后端`；随后用户直接授权当前聊天实施 #91，不启动 roadmap-runner 或新执行聊天。流程见[RoadmapGuide](RoadmapGuide.md)。
+本表是用户确认的开发任务与依赖权威。2026-10-13 的 `TUI → HTTP API → Go 后端` 是历史阶段范围，任务 #91 已交付；TUI 后续已由普通开发任务退役，Web 为当前唯一交互前端。现行任务/依赖以本表当前状态为准。流程见[RoadmapGuide](RoadmapGuide.md)。
 
 当前已确认的本机链路已交付。2026-10-14用户确认的HTTP解耦任务#92/#93均已实现、独立复审修复、必要自动验证、真实PR合并及验收同步完成。本批按#92→#93推进；没有新增人工项，既有人工待验仍见下方索引。#94/#95/#96继续留草稿，不自动纳入。
 
@@ -26,7 +26,9 @@
 | 92 | HTTP 服务端命令边界收敛 | 复用#45/#91，无未完成硬前置 | 实现完成；[PR #311](https://github.com/erranliu/SteerLine/pull/311)已真实合并，merge `e3010edcb4905977e6244f2f896be140fa718a8f`；三项P2已修复并独立终审通过 | [Spec](../spec/http-command-boundary.spec.md) · [Plan](../spec/http-command-boundary.plan.md)，固定版本及起点 `35d4d65350fa6f6f284e9e91a6bd657ba7abb947` | [专属验收](../acceptance/http-command-boundary.md)：HC92-A1–A3通过；HTTP60项/app2项及clean最终head CLI3项通过，历史固定L1 12组/553项经核验复用，无新增人工项；[复审记录](https://github.com/erranliu/SteerLine/pull/311#issuecomment-6165070946) |
 | 91 | TUI 经 HTTP 接入 Go 后端 | 无未完成硬前置；复用已交付 #45 与现有 TUI | 实现完成；独立复审/自动验证/真实合并已核验 | [Spec](../spec/tui-http-client.spec.md) · [Plan](../spec/tui-http-client.plan.md) | [专属验收](../acceptance/tui-http-client.md)：TH-A1–A6 通过，真终端/live 操作已验；TH-M1 窗口渲染/人工体验待验；[PR #299](https://github.com/erranliu/SteerLine/pull/299) 已合并 |
 
-## 推进边界
+## #91 历史推进边界（已由 TUI 退役取代）
+
+以下两段记录 #91 实施时的范围和历史状态，不表示当前仍提供 TUI。当前交互前端与桌面体验状态见[TUI 退役验收](../acceptance/tui-retirement.md)及[Web 前端验收](../acceptance/web-frontend.md)。
 
 本轮 #91 已补齐实际 TUI 的 HTTP 能力、切换客户端接线、删除 #44 WinUI 实现/专属配置并验证本机链路。Go 保持业务权威，TUI 界面/执行功能保留；不直接访问业务库或宿主业务文件。
 
@@ -40,7 +42,7 @@
 
 | 范围 | 状态 / 安排 | 明细 |
 | --- | --- | --- |
-| #91 TUI 输入与操作 | ConPTY 键位/Unicode 多行/候选/反馈/final/恢复/停服已验；TH-M1 原生查看窗口渲染、桌面输入法/字体体验待人工判断，最迟本任务签收 | [记录](../acceptance/tui-http-client.md) |
+| #91 TUI 输入与操作（历史人工项，后续退役） | TH-M1 原生查看窗口渲染、桌面输入法/字体体验原待验；TUI 后续整体退役后，该项不再是当前签收门槛，未追认为通过 | [历史记录](../acceptance/tui-http-client.md) · [退役验收](../acceptance/tui-retirement.md) |
 | 一期单安装版签收 | 待当前支持路线能力/原生准备、固定新安装构建后组织组合/24小时/同构建恢复；窗口待安排，不新增执行任务或成为 #91 无关前置 | [一期活动](../acceptance/phase1.md) |
 | #84 步骤辨识与反馈/合并 | WFS-M1 待验；可与一期同现场分别登记，不阻塞无关客户端改造 | [记录](../acceptance/worker-staged-flow.md) |
 
