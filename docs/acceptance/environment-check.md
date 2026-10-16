@@ -135,3 +135,9 @@ Web 3 文件 / 43 项通过，TypeScript/Vite build 通过；原始日志 `C:/Us
 Go 最终回归：9 包 / 66 项（含子测试），65 通过、0 失败、1 跳过；证据 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261016T052657.880224800Z/summary.json` 及同目录原始 go-test.jsonl。唯一跳过仍为无正式 EXE 的 TestEnvironmentCheckPublishedContract，不将其计为 Runner 集成通过。源 commit `6f40f2dd70c2226c38e1599f81546652f475d563`，当前工作树未提交。
 
 本轮静态复验：443 份 Markdown / 2661 个本地导航链接 / 0 错误；git diff --check 通过。Runner 源码及其 Spec/Plan 均未修改。
+
+### PR 同步主干后复验
+
+提交 `f89d5e1001d78d18ff96aca020f3c7701b2d6e13` 基于主干 `3dcbdc41`，测试时工作树干净。同步保留原生会话查看与环境检查两项 capabilities；沿用上列 Go 命令并在 `-run` 中加入 `TestNativeSession`，9 包 / 70 项（含子测试），69 通过、0 失败、1 跳过。证据 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261016T065651.768781800Z/summary.json` 及同目录 `go-test.jsonl`。唯一跳过仍是缺少正式 Runner EXE 的 TestEnvironmentCheckPublishedContract。
+
+Web 沿用上列测试命令并加入 `src/features/runs/native-session.test.ts`，4 文件 / 45 项通过；TypeScript/Vite build 通过。文档检查 446 份 Markdown / 2666 个本地链接 / 0 错误，diff --check 通过。本轮 Web 与静态证据见当前 Codex 聊天命令输出；未运行真实 Runner 联调或改变待验范围。
