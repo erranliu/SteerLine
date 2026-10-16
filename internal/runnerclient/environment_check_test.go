@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	rc "github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -58,7 +60,7 @@ func TestEnvironmentCheckCLIContract(t *testing.T) {
 		}
 		response(inspection, true)
 		v, err := c.InspectEnvironmentCheck(ctx, selector, id)
-		if err != nil || v.Check.CapabilityStatus != "failed" {
+		if err != nil || v.Check.Result != "failed" {
 			t.Fatal("check failure misclassified as transport error", v, err)
 		}
 	}
@@ -81,11 +83,11 @@ func TestEnvironmentCheckCLIContract(t *testing.T) {
 	if !errors.As(err, &failure) || failure.Exit != 5 || failure.Unknown {
 		t.Fatal(err)
 	}
-	if rc.ValidateCheckSchema(f.Capabilities.InputSchema, f.Input) != nil {
+	if rc.ValidateCheckSchema(f.Capabilities.Definition("input"), f.Input) != nil {
 		t.Fatal("fixture schema differs")
 	}
 	f.Input.Execution.Settings = json.RawMessage(`{"executable":"codex","access_mode":"auto_review"}`)
-	if rc.ValidateCheckSchema(f.Capabilities.InputSchema, f.Input) == nil {
+	if f.Capabilities.Supports(f.Input.Execution) {
 		t.Fatal("approval mode accepted")
 	}
 }
@@ -96,28 +98,104 @@ func TestEnvironmentCheckPublishedContract(t *testing.T) {
 		t.Skip("published Runner check/v1 handoff not provided; fixture is not real integration evidence")
 	}
 	selection := rc.Selection{Executable: exe, Version: os.Getenv("STEERRUNNER_VERSION"), SHA256: os.Getenv("STEERRUNNER_SHA256")}
-	c, _, openErr := selection.Open(context.Background(), t.TempDir(), 10*time.Second)
+	c, version, openErr := selection.Open(context.Background(), t.TempDir(), 30*time.Second)
 	if openErr != nil {
 		t.Fatal("published EXE/version/SHA pin required", openErr)
 	}
+	info, err := c.StartService(context.Background(), version)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := c.StopService(context.Background(), info.InstanceID, "check-contract-stop"); err != nil {
+			t.Error(err)
+		}
+	})
 	cat, err := c.EnvironmentCheckCatalog(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cat.Capabilities.EnvironmentCheck == nil || cat.Capabilities.EnvironmentCheck.Version != 1 {
+	if cat.Capabilities.EnvironmentCheck == nil || cat.Capabilities.EnvironmentCheck.Contract != runnercontract.EnvironmentCheckContract {
 		t.Fatal("published check/v1 missing")
 	}
 	f := checkFixture(t)
 	caps := cat.Capabilities.EnvironmentCheck
+	if !caps.Supports(f.Input.Execution) {
+		t.Fatal("published local sandbox mechanism missing")
+	}
+	remote := f.Input.Execution
+	remote.Adapter, remote.Target.Kind = "orca-terminal", "orca_environment"
+	if caps.Supports(remote) {
+		t.Fatal("unsupported Orca target advertised as usable")
+	}
 	for _, p := range []struct {
 		schema json.RawMessage
 		value  any
-	}{{caps.InputSchema, f.Input}, {caps.ReceiptSchema, f.Receipt}, {caps.InspectionSchema, f.Inspection}} {
+	}{{caps.Definition("input"), f.Input}, {caps.Definition("receipt"), f.Receipt}, {caps.Definition("inspection"), f.Inspection}} {
 		if err = rc.ValidateCheckSchema(p.schema, p.value); err != nil {
-			t.Fatal("published handoff and provisional fixture differ", err)
+			t.Fatal("published schema and caller fixture differ", err)
 		}
 	}
-	t.Logf("read-only public contract check: version=%s SHA=%s resource=%s; no native Agent or permission success implied", selection.Version, selection.SHA256, cat.Capabilities.ResourceDigest)
+	frozen, err := os.ReadFile(filepath.Join("..", "testkit", "checkfixture", "published-v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSameJSON(t, frozen, cat.Capabilities.EnvironmentCheckFixtures)
+	validatePublishedSamples(t, *caps, cat.Capabilities.EnvironmentCheckFixtures)
+	t.Logf("public contract check using an isolated idle service: version=%s SHA=%s resource=%s; no native Agent or permission success implied", selection.Version, selection.SHA256, cat.Capabilities.ResourceDigest)
+}
+
+func assertSameJSON(t *testing.T, a, b []byte) {
+	t.Helper()
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil || !reflect.DeepEqual(x, y) {
+		t.Fatal("published wire document changed or lost fields")
+	}
+}
+
+func validatePublishedSamples(t *testing.T, caps rc.CheckCapabilities, raw []byte) {
+	t.Helper()
+	var fixtures struct {
+		Samples map[string]struct {
+			Data json.RawMessage `json:"data"`
+		} `json:"samples"`
+	}
+	if err := json.Unmarshal(raw, &fixtures); err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for name, sample := range fixtures.Samples {
+		if !strings.HasPrefix(name, "inspect_") && name != "preparation_failure" && name != "rejection_without_check" && name != "unverified_original" {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			var inspection rc.CheckInspection
+			if err := json.Unmarshal(sample.Data, &inspection); err != nil {
+				t.Fatal(err)
+			}
+			if err := rc.ValidateCheckSchema(caps.Definition("inspection"), inspection); err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(inspection)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertSameJSON(t, sample.Data, body)
+		})
+		count++
+	}
+	if count != 6 {
+		t.Fatalf("expected six published inspection samples, got %d", count)
+	}
+}
+
+func TestEnvironmentCheckPublishedSamples(t *testing.T) {
+	f := checkFixture(t)
+	raw, err := os.ReadFile(filepath.Join("..", "testkit", "checkfixture", "published-v1.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	validatePublishedSamples(t, f.Capabilities, raw)
 }
 
 func checkFixture(t *testing.T) (f struct {
@@ -134,6 +212,6 @@ func checkFixture(t *testing.T) (f struct {
 	if err = json.Unmarshal(body, &f); err != nil {
 		t.Fatal(err)
 	}
-	f.Inspection.Check.Context = f.Input
+	f.Inspection.Check.Input = f.Input
 	return f
 }

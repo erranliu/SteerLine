@@ -12,9 +12,10 @@ const labels: Record<string, string> = {
   unverified: "未核实",
   not_applicable: "不适用",
   pending: "待处理",
-  settled: "已结算",
   running: "执行中",
   stopped: "已停止",
+  queued: "等待执行",
+  residual: "资源残留",
   completed: "已完成",
   unsupported: "机制不支持",
 };
@@ -28,7 +29,7 @@ function unresolved(row: CheckRecord) {
   return (
     row.operations[0]?.status !== "rejected" &&
     (!row.report ||
-      row.report.resources.status !== "settled" ||
+      row.report.cleanup_status !== "completed" ||
       row.operations.some((op) => op.status === "outcome_unknown"))
   );
 }
@@ -111,7 +112,7 @@ function Report({
         <>
           <p>
             执行：{label(report.status)} · 能力结论：
-            {label(report.capability_status)}
+            {label(report.result)}
           </p>
           <p>
             源更新时间：
@@ -126,7 +127,7 @@ function Report({
             历史证据仅代表本次上下文；认证和权限可能已变化。
           </p>
           <dl>
-            {Object.entries(report.actual_context ?? {}).map(([key, value]) => (
+            {Object.entries(report.actual ?? {}).map(([key, value]) => (
               <div key={key}>
                 <dt>{key}</dt>
                 <dd>{value}</dd>
@@ -138,43 +139,39 @@ function Report({
               <strong>
                 {item.id} · {label(item.status)}
               </strong>
-              {item.identity && <p>实际身份：{item.identity}</p>}
-              {item.reason && <p>{item.reason}</p>}
+              <p>{item.stage}</p>
               <details>
                 <summary>查看证据</summary>
                 {(item.evidence ?? []).map((entry, index) => (
                   <div key={index}>
                     <p>{entry.source}</p>
-                    <pre>{entry.text}</pre>
+                    <pre>{JSON.stringify(entry.facts ?? {}, null, 2)}</pre>
                   </div>
                 ))}
               </details>
             </article>
           ))}
-          {report.pr?.url && (
+          {report.resources.pr_url && (
             <p>
               测试 PR：
-              {report.pr.url.startsWith("https://") ? (
-                <a href={report.pr.url} target="_blank" rel="noreferrer">
-                  {report.pr.url}
+              {report.resources.pr_url.startsWith("https://") ? (
+                <a href={report.resources.pr_url} target="_blank" rel="noreferrer">
+                  {report.resources.pr_url}
                 </a>
               ) : (
-                report.pr.url
+                report.resources.pr_url
               )}
             </p>
           )}
           <p
             className={
-              report.resources.status === "settled" ? "muted" : "notice amber"
+              report.cleanup_status === "completed" ? "muted" : "notice amber"
             }
           >
-            资源：{label(report.resources.status)}
-            {report.resources.status !== "settled" ? " · 资源待处理" : ""}{" "}
-            {report.resources.diagnostic}
+            资源：{label(report.cleanup_status)}
+            {report.cleanup_status !== "completed" ? " · 资源待处理" : ""}{" "}
+            {report.diagnostic}
           </p>
-          {report.controls.reason && (
-            <p className="muted">{report.controls.reason}</p>
-          )}
         </>
       ) : (
         <p>
@@ -193,7 +190,7 @@ function Report({
             !online ||
             pending ||
             !row.check_id ||
-            !report?.controls.can_stop ||
+            !report?.allowed_actions.includes("stop") ||
             repeatedStop ||
             unknown ||
             !!row.diagnostic
@@ -248,11 +245,12 @@ export function EnvironmentChecks() {
     ? ((source.settings.agent_launch ?? {}) as Record<string, unknown>)
     : source.settings;
   const supported =
-    catalog.data?.capabilities?.version === 1 &&
-    catalog.data.capabilities.supported?.some(
+    catalog.data?.capabilities?.contract === "steerrunner-environment-check/v1" &&
+    catalog.data.capabilities.targets?.some(
       (p) =>
+        p.mechanism === "implemented" &&
         p.adapter === execution.adapter &&
-        p.target_kind === execution.target.kind &&
+        p.target === execution.target.kind &&
         p.access_modes.includes(mode),
     );
   const unsettled = rows.some((r) => unresolved(r.id === row?.id ? row : r));
@@ -489,7 +487,7 @@ export function EnvironmentChecks() {
               onClick={() => setSelected(r.id)}
             >
               {new Date(r.created_at).toLocaleString("zh-CN")} ·{" "}
-              {r.report ? label(r.report.capability_status) : "未核实"}
+              {r.report ? label(r.report.result) : "未核实"}
             </Button>
           ))}
         </div>

@@ -45,11 +45,11 @@ func TestEnvironmentCheckDebugResetPreservesUncertainResources(t *testing.T) {
 		t.Fatal("unknown start erased")
 	}
 	r.Operations[0].Status = "applied"
-	r.Report = &runnercontract.Check{Resources: runnercontract.CheckResources{Status: "pending"}}
+	r.Report = &runnercontract.Check{CleanupStatus: "pending"}
 	if environmentCheckResetSafety(r) == nil {
 		t.Fatal("active resources erased")
 	}
-	r.Report.Resources.Status = "settled"
+	r.Report.CleanupStatus = "completed"
 	r.Operations = append(r.Operations, runnerstate.EnvironmentCheckOperation{Status: "outcome_unknown"})
 	if environmentCheckResetSafety(r) == nil {
 		t.Fatal("uncertain stop erased using older settled report")

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"net/url"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -15,12 +16,14 @@ type Capabilities struct {
 	NativeSessionViewer struct {
 		Adapters []string `json:"adapters"`
 	} `json:"native_session_viewer"`
-	EnvironmentCheck *CheckCapabilities `json:"environment_check,omitempty"`
-	Protocol         string             `json:"protocol"`
-	Version          string             `json:"version"`
-	ResourceVersion  int                `json:"resource_version"`
-	ResourceDigest   string             `json:"resource_digest"`
-	Workflow         struct {
+	EnvironmentCheck         *CheckCapabilities `json:"environment_check,omitempty"`
+	EnvironmentCheckSchema   json.RawMessage    `json:"environment_check_schema,omitempty"`
+	EnvironmentCheckFixtures json.RawMessage    `json:"environment_check_fixtures,omitempty"`
+	Protocol                 string             `json:"protocol"`
+	Version                  string             `json:"version"`
+	ResourceVersion          int                `json:"resource_version"`
+	ResourceDigest           string             `json:"resource_digest"`
+	Workflow                 struct {
 		ID                    string   `json:"id"`
 		Version               int      `json:"version"`
 		Steps                 []string `json:"steps"`
@@ -53,6 +56,23 @@ func (c Client) Catalog(ctx context.Context, version Version) (*Catalog, error) 
 	}
 	if caps.Protocol != Protocol || caps.Version != version.Version || caps.ResourceVersion != version.ResourceVersion || caps.ResourceDigest == "" || caps.ResourceDigest != version.ResourceDigest || caps.ConfigurationSchemas.Version != 1 {
 		return nil, errors.New("Runner capabilities differ from its selected executable/version")
+	}
+	if caps.EnvironmentCheck != nil {
+		caps.EnvironmentCheck.Schema = caps.EnvironmentCheckSchema
+		if caps.EnvironmentCheck.Contract == runnercontract.EnvironmentCheckContract {
+			var schema struct {
+				Contract    string                     `json:"contract"`
+				Definitions map[string]json.RawMessage `json:"$defs"`
+			}
+			if json.Unmarshal(caps.EnvironmentCheckSchema, &schema) != nil || schema.Contract != caps.EnvironmentCheck.Contract || caps.EnvironmentCheck.InputSchema != "steerrunner/environment-check/v1#/$defs/input" || caps.EnvironmentCheck.ReportSchema != "steerrunner/environment-check/v1#/$defs/report" {
+				return nil, errors.New("Runner environment check schema differs from its advertised contract")
+			}
+			for _, name := range []string{"input", "receipt", "report", "inspection"} {
+				if len(schema.Definitions[name]) == 0 {
+					return nil, errors.New("Runner environment check schema is incomplete")
+				}
+			}
+		}
 	}
 	return compileCatalog(caps)
 }

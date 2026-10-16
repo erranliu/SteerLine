@@ -1,0 +1,889 @@
+{
+  "contract": "steerrunner-environment-check/v1",
+  "normalization": "Stable example identities/timestamps/digests; never evidence of environment readiness. Reports without Publication do not include PR readiness.",
+  "samples": {
+    "inspect_by_check_id": {
+      "data": {
+        "check": {
+          "actual": {
+            "access_mode": "",
+            "attempt_id": "44444444444444444444444444444444",
+            "generation": "55555555555555555555555555555555"
+          },
+          "allowed_actions": [
+            "stop"
+          ],
+          "check_id": "11111111111111111111111111111111",
+          "cleanup_deadline": "2026-10-16T00:12:00Z",
+          "cleanup_status": "pending",
+          "contract": "steerrunner-environment-check/v1",
+          "created_at": "2026-10-16T00:00:00Z",
+          "excluded": [
+            "build",
+            "tests",
+            "business_resources"
+          ],
+          "execution_deadline": "2026-10-16T00:10:00Z",
+          "input": {
+            "execution": {
+              "adapter": "codex-app-server",
+              "settings": {
+                "access_mode": "sandbox"
+              },
+              "target": {
+                "kind": "local"
+              }
+            },
+            "repository": {
+              "base_branch": "main",
+              "base_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "remote": "origin",
+              "url": "https://github.com/owner/repo.git"
+            }
+          },
+          "input_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "items": [
+            {
+              "evidence": [],
+              "id": "permissions",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "workspace",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "temporary",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "git_admin",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "remote_read",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "fetch",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "base_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "commit",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "head_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "pr_create",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_query",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_close",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            }
+          ],
+          "resource_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "resources": {
+            "base_deleted": false,
+            "base_owned": false,
+            "base_ref": "refs/heads/steerline-check/11111111111111111111111111111111/base",
+            "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_deleted": false,
+            "head_owned": false,
+            "head_ref": "refs/heads/steerline-check/11111111111111111111111111111111/head",
+            "local_removed": false,
+            "pr_closed": false,
+            "writer_stopped": false
+          },
+          "result": "unverified",
+          "revision": 1,
+          "status": "queued",
+          "updated_at": "2026-10-16T00:00:00Z"
+        },
+        "command": null
+      },
+      "error": null,
+      "ok": true,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": null
+    },
+    "inspect_by_start_request_id": {
+      "data": {
+        "check": {
+          "actual": {
+            "access_mode": "",
+            "attempt_id": "44444444444444444444444444444444",
+            "generation": "55555555555555555555555555555555"
+          },
+          "allowed_actions": [
+            "stop"
+          ],
+          "check_id": "11111111111111111111111111111111",
+          "cleanup_deadline": "2026-10-16T00:12:00Z",
+          "cleanup_status": "pending",
+          "contract": "steerrunner-environment-check/v1",
+          "created_at": "2026-10-16T00:00:00Z",
+          "excluded": [
+            "build",
+            "tests",
+            "business_resources"
+          ],
+          "execution_deadline": "2026-10-16T00:10:00Z",
+          "input": {
+            "execution": {
+              "adapter": "codex-app-server",
+              "settings": {
+                "access_mode": "sandbox"
+              },
+              "target": {
+                "kind": "local"
+              }
+            },
+            "repository": {
+              "base_branch": "main",
+              "base_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "remote": "origin",
+              "url": "https://github.com/owner/repo.git"
+            }
+          },
+          "input_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "items": [
+            {
+              "evidence": [],
+              "id": "permissions",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "workspace",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "temporary",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "git_admin",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "remote_read",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "fetch",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "base_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "commit",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "head_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "pr_create",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_query",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_close",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            }
+          ],
+          "resource_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "resources": {
+            "base_deleted": false,
+            "base_owned": false,
+            "base_ref": "refs/heads/steerline-check/11111111111111111111111111111111/base",
+            "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_deleted": false,
+            "head_owned": false,
+            "head_ref": "refs/heads/steerline-check/11111111111111111111111111111111/head",
+            "local_removed": false,
+            "pr_closed": false,
+            "writer_stopped": false
+          },
+          "result": "unverified",
+          "revision": 1,
+          "status": "queued",
+          "updated_at": "2026-10-16T00:00:00Z"
+        },
+        "command": {
+          "action_status": "pending",
+          "check_id": "11111111111111111111111111111111",
+          "command": "environment-check start",
+          "command_id": "22222222222222222222222222222222",
+          "error": null,
+          "receipt_status": "accepted",
+          "request_id": "example-start"
+        }
+      },
+      "error": null,
+      "ok": true,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": null
+    },
+    "inspect_by_stop_request_id": {
+      "data": {
+        "check": {
+          "actual": {
+            "access_mode": "",
+            "attempt_id": "44444444444444444444444444444444",
+            "generation": "55555555555555555555555555555555"
+          },
+          "allowed_actions": [
+            "stop"
+          ],
+          "check_id": "11111111111111111111111111111111",
+          "cleanup_deadline": "2026-10-16T00:12:00Z",
+          "cleanup_status": "pending",
+          "contract": "steerrunner-environment-check/v1",
+          "created_at": "2026-10-16T00:00:00Z",
+          "excluded": [
+            "build",
+            "tests",
+            "business_resources"
+          ],
+          "execution_deadline": "2026-10-16T00:10:00Z",
+          "input": {
+            "execution": {
+              "adapter": "codex-app-server",
+              "settings": {
+                "access_mode": "sandbox"
+              },
+              "target": {
+                "kind": "local"
+              }
+            },
+            "repository": {
+              "base_branch": "main",
+              "base_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "remote": "origin",
+              "url": "https://github.com/owner/repo.git"
+            }
+          },
+          "input_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "items": [
+            {
+              "evidence": [],
+              "id": "permissions",
+              "required": true,
+              "stage": "native_preparation_failed",
+              "status": "failed"
+            },
+            {
+              "evidence": [],
+              "id": "workspace",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "temporary",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "git_admin",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "remote_read",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "fetch",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "base_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "commit",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "head_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "pr_create",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_query",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_close",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            }
+          ],
+          "resource_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "resources": {
+            "base_deleted": false,
+            "base_owned": false,
+            "base_ref": "refs/heads/steerline-check/11111111111111111111111111111111/base",
+            "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_deleted": false,
+            "head_owned": false,
+            "head_ref": "refs/heads/steerline-check/11111111111111111111111111111111/head",
+            "local_removed": false,
+            "pr_closed": false,
+            "writer_stopped": false
+          },
+          "result": "failed",
+          "revision": 3,
+          "status": "failed",
+          "updated_at": "2026-10-16T00:00:00Z"
+        },
+        "command": {
+          "action_status": "pending",
+          "check_id": "11111111111111111111111111111111",
+          "command": "environment-check stop",
+          "command_id": "33333333333333333333333333333333",
+          "error": null,
+          "receipt_status": "accepted",
+          "request_id": "example-stop"
+        }
+      },
+      "error": null,
+      "ok": true,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": null
+    },
+    "preparation_failure": {
+      "data": {
+        "check": {
+          "actual": {
+            "access_mode": "",
+            "attempt_id": "44444444444444444444444444444444",
+            "generation": "55555555555555555555555555555555"
+          },
+          "allowed_actions": [
+            "stop"
+          ],
+          "check_id": "11111111111111111111111111111111",
+          "cleanup_deadline": "2026-10-16T00:12:00Z",
+          "cleanup_status": "pending",
+          "contract": "steerrunner-environment-check/v1",
+          "created_at": "2026-10-16T00:00:00Z",
+          "excluded": [
+            "build",
+            "tests",
+            "business_resources"
+          ],
+          "execution_deadline": "2026-10-16T00:10:00Z",
+          "input": {
+            "execution": {
+              "adapter": "codex-app-server",
+              "settings": {
+                "access_mode": "sandbox"
+              },
+              "target": {
+                "kind": "local"
+              }
+            },
+            "repository": {
+              "base_branch": "main",
+              "base_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "remote": "origin",
+              "url": "https://github.com/owner/repo.git"
+            }
+          },
+          "input_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "items": [
+            {
+              "evidence": [],
+              "id": "permissions",
+              "required": true,
+              "stage": "native_preparation_failed",
+              "status": "failed"
+            },
+            {
+              "evidence": [],
+              "id": "workspace",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "temporary",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "git_admin",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "remote_read",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "fetch",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "base_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "commit",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "head_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "pr_create",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_query",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_close",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            }
+          ],
+          "resource_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "resources": {
+            "base_deleted": false,
+            "base_owned": false,
+            "base_ref": "refs/heads/steerline-check/11111111111111111111111111111111/base",
+            "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_deleted": false,
+            "head_owned": false,
+            "head_ref": "refs/heads/steerline-check/11111111111111111111111111111111/head",
+            "local_removed": false,
+            "pr_closed": false,
+            "writer_stopped": false
+          },
+          "result": "failed",
+          "revision": 2,
+          "status": "failed",
+          "updated_at": "2026-10-16T00:00:00Z"
+        },
+        "command": null
+      },
+      "error": null,
+      "ok": true,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": null
+    },
+    "rejection_without_check": {
+      "data": {
+        "check": null,
+        "command": {
+          "action_status": "failed",
+          "check_id": null,
+          "command": "environment-check stop",
+          "command_id": "66666666666666666666666666666666",
+          "error": {
+            "code": "stale_revision",
+            "message": "Check revision changed; inspect before submitting a new stop."
+          },
+          "receipt_status": "rejected",
+          "request_id": "example-stale-stop"
+        }
+      },
+      "error": null,
+      "ok": true,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": null
+    },
+    "stale_revision": {
+      "data": null,
+      "error": {
+        "code": "stale_revision",
+        "message": "Check revision changed; inspect before submitting a new stop."
+      },
+      "ok": false,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": "example-stale-stop"
+    },
+    "start_receipt": {
+      "data": {
+        "action_status": "pending",
+        "check_id": "11111111111111111111111111111111",
+        "command_id": "22222222222222222222222222222222",
+        "receipt_status": "accepted"
+      },
+      "error": null,
+      "ok": true,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": "example-start"
+    },
+    "start_request": {
+      "input": {
+        "execution": {
+          "adapter": "codex-app-server",
+          "settings": {
+            "access_mode": "sandbox"
+          },
+          "target": {
+            "kind": "local"
+          }
+        },
+        "repository": {
+          "base_branch": "main",
+          "base_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "remote": "origin",
+          "url": "https://github.com/owner/repo.git"
+        }
+      },
+      "protocol": "steerrunner-cli/v1",
+      "request_id": "example-start"
+    },
+    "stop_receipt": {
+      "data": {
+        "action_status": "pending",
+        "check_id": "11111111111111111111111111111111",
+        "command_id": "33333333333333333333333333333333",
+        "receipt_status": "accepted"
+      },
+      "error": null,
+      "ok": true,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": "example-stop"
+    },
+    "stop_request": {
+      "input": {
+        "check_id": "11111111111111111111111111111111",
+        "expected_revision": 2
+      },
+      "protocol": "steerrunner-cli/v1",
+      "request_id": "example-stop"
+    },
+    "unknown_request": {
+      "data": null,
+      "error": {
+        "code": "request_not_found",
+        "message": "Original environment check request was not found."
+      },
+      "ok": false,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": null
+    },
+    "unknown_write_response": {
+      "data": null,
+      "error": {
+        "code": "request_outcome_unknown",
+        "message": "Original response is unknown; inspect the original request_id."
+      },
+      "ok": false,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": "example-start"
+    },
+    "unverified_original": {
+      "data": {
+        "check": {
+          "actual": {
+            "access_mode": "",
+            "attempt_id": "44444444444444444444444444444444",
+            "generation": "55555555555555555555555555555555"
+          },
+          "allowed_actions": [
+            "stop"
+          ],
+          "check_id": "11111111111111111111111111111111",
+          "cleanup_deadline": "2026-10-16T00:12:00Z",
+          "cleanup_status": "pending",
+          "contract": "steerrunner-environment-check/v1",
+          "created_at": "2026-10-16T00:00:00Z",
+          "excluded": [
+            "build",
+            "tests",
+            "business_resources"
+          ],
+          "execution_deadline": "2026-10-16T00:10:00Z",
+          "input": {
+            "execution": {
+              "adapter": "codex-app-server",
+              "settings": {
+                "access_mode": "sandbox"
+              },
+              "target": {
+                "kind": "local"
+              }
+            },
+            "repository": {
+              "base_branch": "main",
+              "base_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "remote": "origin",
+              "url": "https://github.com/owner/repo.git"
+            }
+          },
+          "input_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "items": [
+            {
+              "evidence": [],
+              "id": "permissions",
+              "required": true,
+              "stage": "native_preparation_failed",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "workspace",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "temporary",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "git_admin",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "remote_read",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "fetch",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "base_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "commit",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "head_push",
+              "required": true,
+              "stage": "not_started",
+              "status": "unverified"
+            },
+            {
+              "evidence": [],
+              "id": "pr_create",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_query",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            },
+            {
+              "evidence": [],
+              "id": "pr_close",
+              "required": false,
+              "stage": "not_started",
+              "status": "not_applicable"
+            }
+          ],
+          "resource_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "resources": {
+            "base_deleted": false,
+            "base_owned": false,
+            "base_ref": "refs/heads/steerline-check/11111111111111111111111111111111/base",
+            "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_deleted": false,
+            "head_owned": false,
+            "head_ref": "refs/heads/steerline-check/11111111111111111111111111111111/head",
+            "local_removed": false,
+            "pr_closed": false,
+            "writer_stopped": false
+          },
+          "result": "unverified",
+          "revision": 4,
+          "status": "unverified",
+          "updated_at": "2026-10-16T00:00:00Z"
+        },
+        "command": {
+          "action_status": "unknown",
+          "check_id": "11111111111111111111111111111111",
+          "command": "environment-check start",
+          "command_id": "22222222222222222222222222222222",
+          "error": null,
+          "receipt_status": "accepted",
+          "request_id": "example-start"
+        }
+      },
+      "error": null,
+      "ok": true,
+      "protocol": "steerrunner-cli/v1",
+      "request_id": null
+    }
+  }
+}
