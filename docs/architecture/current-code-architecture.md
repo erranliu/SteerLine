@@ -26,9 +26,9 @@ flowchart LR
 | internal/runnerbridge | 持久 outbox、原 request_id/body、Run/PR/分支绑定、事件游标、停止义务、重启旧输入围栏 |
 | internal/runnerclient | 公开 CLI 子进程、严格 JSON/退出码、EXE/实例 SHA、公开 schema 验证；不读取私有实现 |
 | internal/runnercontract 与 runnerstate | 公开协议及 caller 参与关系的纯值，不包含 native owner 或 SQL |
-| internal/storage/ports 与 sqlite | Task/DAG、候选/outbox/事件副本、唯一交付及 service checkpoint；schema 21，无旧执行写表或迁移 |
+| internal/storage/ports 与 sqlite | Task/DAG、候选/outbox/事件副本、唯一交付及 service checkpoint；当前格式见[数据模型](../product-design/data-model.md#当前格式来源)，无旧执行写表或迁移 |
 | internal/execution/model 与 backend | 当前 Task/交付规则、checkpoint 和产品展示值，以及 SteerLine 进程端口；无原生生命周期端口或 worker 状态转移 |
-| internal/execution/reconstruction | 服务 checkpoint 与 UI 运行值；真实候选由 taskrunner 从公开 Runner facts 投影，不从旧执行记录重建 |
+| internal/execution/reconstruction | 服务 checkpoint 与 UI 运行值；候选由 taskrunner 从公开 Runner facts 投影，不保留旧执行记录集合或原生工作区意图 |
 | internal/execution/workspace 与 publication | 调用方仓库身份解析、固定发布配置校验；无 native worktree 生命周期或 PR 查询实现 |
 | internal/execution/process 与 scheduler | SteerLine 自身的进程/文件资源能力与注入 actor 调度；不推进代理 workflow |
 | internal/product | 稳定产品 DTO、只读投影、用户控制与 HTTP 协议；页面不能通过读日志或猜原生事实推进执行 |
@@ -36,11 +36,11 @@ flowchart LR
 
 旧 actor/worker、adapters、workflow、reliable、conversation owner、执行写表、闲置执行事务端口与原生重建函数已物理删除。执行三层、工作区、会话、输入、恢复、原 final 与发布取证均由 Runner 单写；具体删除和验收见[删除审计](../acceptance/steerrunner-deletion-audit.md)。
 
-2026-10-16 补充清理：旧 lifecycle/adapter 端口、原生事件与 PR 线索解析、旧候选绑定/停止/丢弃辅助规则及旧状态转移已按生产引用删除，专属测试同步移除。仍被 checkpoint/产品查询引用的记录形状、停服策略展示值、能力状态、活动字段及当前 TaskDelivery 校验继续保留；包名暂不调整。范围与验证见[本次清理验收](../acceptance/execution-legacy-cleanup.md)。
+旧 lifecycle/adapter 端口、原生事件处理、旧候选/状态转移规则及无消费者的记录类型已删除。当前只保留 checkpoint、产品查询、TaskDelivery 和宿主仍消费的值；模型包名与读取链保持。删除边界及证据见[执行域清理](../acceptance/execution-legacy-cleanup.md)与[记录/空壳清理](../acceptance/runtime-shell-cleanup.md)。
 
-2026-10-16 生命周期收拢：`application_catalog.go` 只读取冻结配置，离线 verify-stop 不创建活动目录。`ProjectRuntime` 统一取得与最终关闭项目资源；factory/actor 借用 store，actor 结束只写 checkpoint，`projectRunner` 保留原停机身份和结算规则。本地关闭、锁释放与 Runner 证明分别汇总；已进入的 Read/Command/Task 排空后才关库。旧逐项目启动/窗口/listener/停止采样链已删除；本地失败保留锁和宿主策略沿用。[Spec](../spec/application-project-lifecycle.spec.md) · [Plan](../spec/application-project-lifecycle.plan.md) · [验收](../acceptance/application-project-lifecycle.md)。
+`application_catalog.go` 只读取冻结配置，离线 verify-stop 不创建活动目录。`ProjectRuntime` 统一取得与最终关闭项目资源；factory/actor 借用 store，actor 结束只写 checkpoint。已进入的 Read/Command/Task 排空后才关库；本地关闭、锁释放与 Runner 证明分别汇总，本地失败保留锁。归属与验证见[生命周期 Spec](../spec/application-project-lifecycle.spec.md)及[验收](../acceptance/application-project-lifecycle.md)。
 
-2026-10-16 产品读取与入口整理：`runnerstate.ObservedStatus` 统一详情/历史的原观察来源；`participation`、`submission_status`、`stop_requested` 沿现有 RunView/CandidateView 传到产品 DTO，TaskDelivery 单独产生 winner/loser。`httpapi/command_registry.go` 保留唯一仲裁，`command_intents.go`、`command_dispatch.go`、`command_authority.go`、`command_native.go` 各负原职责，环境检查继续专用流程。Web 的 `useApplicationProjects`、`useWorkspaceConnection`、`useOriginalRequests` 分别持有目录选择、Api/观察连接、原请求副作用；设置页和 Operations 独立渲染，共用原 Api、query cache、journal 和 context。[Spec](../spec/product-read-command-web-refactor.spec.md) · [Plan](../spec/product-read-command-web-refactor.plan.md) · [验收](../acceptance/product-read-command-web-refactor.md)。
+`runnerstate.ObservedStatus` 统一详情/历史的原观察来源；参与、提交、停止意图分别传到产品 DTO，TaskDelivery 单独产生 winner/loser。`httpapi/command_registry.go` 唯一仲裁，意图、派发、权威查询与原生窗口各有所属文件，环境检查保留专用流程。Web 的三个应用 hooks 分别持有目录选择、连接与原请求副作用，共用原 Api、query cache、journal 和 context。归属与验证见[读取/命令/Web Spec](../spec/product-read-command-web-refactor.spec.md)及[验收](../acceptance/product-read-command-web-refactor.md)。
 
 ## 任务交付链
 

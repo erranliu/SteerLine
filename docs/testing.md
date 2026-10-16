@@ -1,5 +1,7 @@
 # 测试总入口
 
+旧执行记录与空壳字段清理的验证范围见[Plan](plans/runtime-shell-cleanup.plan.md)与[验收](acceptance/runtime-shell-cleanup.md)：全源码引用审计、默认测试编译与固定 L1；不新增或改变分级场景，不用编译代替运行结果。
+
 Runner 深 home 路径缺陷的最小验证见[短目录 Plan](plans/runner-short-state-path.plan.md)和[验收](acceptance/runner-short-state-path.md)：真实 Windows socket、命名空间/别名、caller 停止证明、controlled gate 及新调试包双项目/reset；不把模拟链当完整真实 L2。
 
 执行域遗留清理（2026-10-16）按[Plan](plans/execution-legacy-cleanup.plan.md)核对全平台生产引用、生产入口编译和固定 L1；旧执行实现专属测试随实现删除，已无测试的 `execution/model` 不再独立登记 L1，仍被消费的值编解码和 caller/Task/存储/宿主边界测试保留。实际结果见[专属验收](acceptance/execution-legacy-cleanup.md)。
