@@ -238,7 +238,6 @@
   "TestWindowsServiceWindowMissingConfigIsLiteral": 0.11,
   "TestRealNativePublishPromptStillFitsBound": 0.05,
   "TestJournalFromStartFalseSkipsOldPartialRecord": 0.05,
-  "TestNativeDecisionRequestAndAnswerValidation": 0.05,
   "TestCodexHistoryTurnCompletionAndLateFinal": 0.05,
   "TestConfigRejectsRemovedOrcaFallback": 0.08,
   "TestOperationIdempotencyKeepsOneDurableIntent": 0.06,
