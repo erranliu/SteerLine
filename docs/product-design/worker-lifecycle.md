@@ -28,6 +28,8 @@ W18 停服取证修复：停机前的候选投影不能证明停机后的资源�
 
 ## 职责与规则归属
 
+原会话查看不参与 W01–W18 的执行推进：拆分 Runner 后补回公开 CLI，由原执行 owner 在既有 worker gate 内校验原身份和只读 thread/workspace，再开独立窗口；零新服务/会话/业务输入，原节点与 E01–E07 不变。验证映射及当前已验/待验范围见[专属验收](../acceptance/native-session-viewer.md)。
+
 安装迁移发现 W18 的 Windows broker 差异：WMI 可将调用者原有但禁用的特权启用。Runner 在原返回句柄所指的挂起子进程上，仅禁用这些被额外启用的原有特权，再完整比对授权组和特权；不新增或启用特权，不放宽用户、完整性级别、restricted/elevated 或 EXE 身份检查。`USED_FOR_ACCESS` 是访问历史位，不参与授权属性比较。无法保持原权限仍拒绝启动。本次验证仅覆盖真实空闲服务启动/退出及权限反例，不替代任务执行/恢复验收；见[安装迁移验收](../acceptance/install-cutover-20261015.md)。
 
 “Worker 层”指 `internal/execution` 内持久化的 worker 执行规则，而非仅内存中的 Worker 或 observer 句柄。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。

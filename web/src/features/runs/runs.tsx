@@ -16,6 +16,7 @@ import { TaskDetail } from "../tasks/task-detail";
 import { Answer, draftKey } from "./answer";
 import { candidateState, stopReason } from "./state";
 import { LastMessage } from "./last-message";
+import { nativeSessionReason } from "./native-session";
 
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
@@ -157,12 +158,7 @@ function CandidateDetail({ run }: { run: Candidate }) {
     run,
     snapshot?.connection.snapshot.page?.runs ?? [],
   );
-  const canOpen =
-    online &&
-    caps.includes("open_native_session") &&
-    !!run.session_id &&
-    !!run.session_generation &&
-    !!run.attempt_id;
+  const nativeUnavailable = nativeSessionReason(run, online, caps);
   return (
     <>
       <div className="candidate-heading">
@@ -180,8 +176,8 @@ function CandidateDetail({ run }: { run: Candidate }) {
           </div>
         </div>
         <Button
-          disabled={!canOpen || busy}
-          title={!canOpen ? "原会话绑定缺失或服务离线" : ""}
+          disabled={!!nativeUnavailable || busy}
+          title={nativeUnavailable || (busy ? "正在处理上一项操作" : "")}
           onClick={() =>
             void send("open_native_session", run.run_id, 0, {
               run_id: run.run_id,

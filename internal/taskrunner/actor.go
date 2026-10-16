@@ -20,12 +20,13 @@ type ActorStore interface {
 	Close() error
 }
 type ActorOptions struct {
-	Tasks              *Service
-	Store              ActorStore
-	Host               hostport.HostPort
-	Repository         storageports.CheckpointRepository
-	Mode, ConfigDigest string
-	Heartbeat          time.Duration
+	NativeSessionAdapters []string
+	Tasks                 *Service
+	Store                 ActorStore
+	Host                  hostport.HostPort
+	Repository            storageports.CheckpointRepository
+	Mode, ConfigDigest    string
+	Heartbeat             time.Duration
 	// Control validates, fixes and commits a product request; it cannot invoke
 	// native adapters. App supplies its Task/Runner CLI command coordinator.
 	Control          func(context.Context, api.ControlRequest) (api.ControlReceipt, error)
@@ -62,6 +63,16 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	at := time.Now().UTC()
 	checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: options.Repository, UpdatedAt: at, HeartbeatAt: at,
 		Service: storageports.CheckpointServiceState{Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "stop_service", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
+	viewerAvailable := false
+	for _, adapter := range options.NativeSessionAdapters {
+		if adapter == "codex-app-server" || adapter == "orca-terminal" {
+			viewerAvailable = true
+			checkpoint.Service.Capabilities = append(checkpoint.Service.Capabilities, "open_native_session:"+adapter)
+		}
+	}
+	if viewerAvailable {
+		checkpoint.Service.Capabilities = append(checkpoint.Service.Capabilities, "open_native_session")
+	}
 	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall)}, nil
 }
 func (a *Actor) SetStartupMetadata(value string) {
