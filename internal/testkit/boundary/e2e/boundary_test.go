@@ -161,12 +161,10 @@ func TestProductionSourcesUseOnlyOwnedTestkitSupport(t *testing.T) {
 			feedback: true,
 			process:  true,
 		},
-		module + "/tests/e2e/cmd/sandbox-setup": {process: true},
 		// Controlled external CLI fixtures share protocol behavior with integration.
 		module + "/tests/e2e/internal/controlled": {process: true, module + "/internal/testkit/protocol": true},
 		module + "/tests/e2e/internal/driver":     {process: true},
-		module + "/tests/e2e/internal/native":     {process: true},
-		module + "/tests/e2e/internal/testenv":    {process: true},
+		module + "/tests/e2e/internal/testenv":    {process: true, feedback: true},
 	}
 	var failures []string
 	walkGoSources(t, repositoryRoot(t), func(path, importer string, file *ast.File) {
@@ -216,6 +214,9 @@ func TestIntegrationDoesNotImportE2EInternal(t *testing.T) {
 }
 
 func e2eAllowed(source, dependency string) bool {
+	if under(dependency, module+"/tests/e2e/internal/native") {
+		return false
+	}
 	for _, retired := range []string{"adapters", "workflow", "reliable", "conversation"} {
 		if under(dependency, module+"/internal/execution/"+retired) {
 			return false
@@ -238,7 +239,7 @@ func e2eAllowed(source, dependency string) bool {
 	if !restricted {
 		return true
 	}
-	for _, adapter := range []string{"driver", "native", "evidence"} {
+	for _, adapter := range []string{"driver", "evidence"} {
 		if under(source, module+"/tests/e2e/internal/"+adapter) {
 			return true
 		}
@@ -284,7 +285,7 @@ func TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports(t *tes
 			t.Fatal("product value contract rejected")
 		}
 	}
-	for _, adapter := range []string{"driver", "native", "evidence"} {
+	for _, adapter := range []string{"driver", "evidence"} {
 		if e2eAllowed(module+"/tests/e2e/internal/"+adapter, module+"/internal/execution/adapters/codex") || e2eAllowed(module+"/tests/e2e/internal/"+adapter, "github.com/erranliu/SteerRunner/internal/app") {
 			t.Fatal("private execution owner accepted by test tooling")
 		}

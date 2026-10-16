@@ -61,7 +61,6 @@ var quickOwnerCases = []struct {
 }{
 	{"quick-owner-project-connection", "github.com/erranliu/SteerLine/internal/projectconnection", []string{"TestWebSwitchResolverInheritedPipeIsBounded", "TestWebSwitchResolverRejectsInvalidOutput", "TestWebSwitchResolverCurrentConfigEncoding"}},
 	{"quick-owner-application-http", "github.com/erranliu/SteerLine/internal/product/applicationhttp", []string{"TestUnifiedStartupAuthenticationRoutesAndUnavailable", "TestUnifiedStartupOriginalEnvelopeAndInflightIsolation"}},
-	{"quick-owner-web-fixture", "github.com/erranliu/SteerLine/tests/e2e/internal/controlled", []string{"TestWebSwitchHeldStreamRetainsOriginalTurn"}},
 	{"quick-owner-application-client", "github.com/erranliu/SteerLine/internal/product/applicationclient", []string{"TestWebSwitchReconnectAndHome"}},
 	{"quick-owner-web", "github.com/erranliu/SteerLine/web/server", []string{"TestWebAuthenticationAndOriginalForwarding", "TestWebOriginHostAndStaticBoundaries", "TestWebTicketsAreSingleUseAndExpire", "TestWebAddressAndPortConflict", "TestWebLauncherPrivateDiscoveryAndInstance", "TestWebBoundedWritesAndNoBrowserStop", "TestWebSwitchSessionAndNativeStop", "TestWebSwitchDevelopmentProxyAndLease", "TestWebSwitchHomeConfigPreservesPermissions"}},
 	{"quick-owner-http-budget", "github.com/erranliu/SteerLine/internal/product/httpclient", []string{"TestBoundedClientBudgetPreservesAuthenticationAndCancellation"}},
@@ -537,7 +536,7 @@ func activeRealSwitches() []string {
 		if !ok || value == "" || value == "0" || strings.EqualFold(value, "false") {
 			continue
 		}
-		for _, prefix := range []string{"STEERLINE_REAL_", "STEERLINE_NATIVE_", "STEERLINE_LOCAL_CAPABILITY_", "STEERLINE_LIVE_", "STEERLINE_RUN_WINDOW_", "STEERLINE_WINDOW_PROBE_", "STEERLINE_CODEX_HISTORY_NATIVE_"} {
+		for _, prefix := range []string{"STEERLINE_REAL_", "STEERLINE_LIVE_", "STEERLINE_RUN_WINDOW_", "STEERLINE_WINDOW_PROBE_"} {
 			if strings.HasPrefix(name, prefix) {
 				set[name] = true
 			}

@@ -30,22 +30,12 @@ type Client struct {
 // Environment replaces project-owned configuration and disables inherited test switches.
 func Environment(base []string, home, state string) []string {
 	result := make([]string, 0, len(base)+6)
-	var pairing struct{ Pairing string }
-	if raw, err := os.ReadFile(filepath.Join(home, "orca-state-fixture.json")); err == nil {
-		_ = json.Unmarshal(raw, &pairing)
-	}
 	for _, v := range base {
 		key := strings.ToUpper(strings.SplitN(v, "=", 2)[0])
-		if pairing.Pairing != "" && (key == "ORCA_PAIRING_CODE" || key == "ORCA_REMOTE_PAIRING" || key == "ORCA_USER_DATA_PATH") {
-			continue
-		}
 		if strings.HasPrefix(key, "STEERLINE_") || key == "TEMP" || key == "TMP" || key == "CODEX_HOME" || strings.HasPrefix(key, "GIT_") || key == "GOFLAGS" || key == "HTTP_PROXY" || key == "HTTPS_PROXY" || key == "ALL_PROXY" || key == "NO_PROXY" {
 			continue
 		}
 		result = append(result, v)
-	}
-	if pairing.Pairing != "" {
-		result = append(result, "ORCA_PAIRING_CODE="+pairing.Pairing, "ORCA_USER_DATA_PATH="+home)
 	}
 	temp := filepath.Join(home, "temp")
 

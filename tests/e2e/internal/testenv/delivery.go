@@ -32,13 +32,13 @@ func (p *Project) AssertClosedDeliveryQuiescent(done Snapshot) {
 	})
 	snap, err := p.Snapshot()
 	s.Must(err)
-	if len(snap.Domain.Deliveries) != 1 || snap.Helper.Dispatches != done.Helper.Dispatches || snap.Helper.Sessions != done.Helper.Sessions {
+	if len(snap.Domain.Deliveries) != 1 || len(p.CallerRequests()) != 2 {
 		s.t.Fatal("closed polling created another delivery or input")
 	}
 	p.Record(phase, snap)
 	after, err := controlled.ProviderQueryCount(p.Provider)
 	s.Must(err)
-	s.Must(controlled.Write(filepath.Join(s.Output, fmt.Sprintf("%s-provider-queries.json", phase)), map[string]any{"before": before, "after": after, "additional_queries": after - before, "dispatches": snap.Helper.Dispatches, "sessions": snap.Helper.Sessions, "deliveries": len(snap.Domain.Deliveries)}))
+	s.Must(controlled.Write(filepath.Join(s.Output, fmt.Sprintf("%s-provider-queries.json", phase)), map[string]any{"before": before, "after": after, "additional_queries": after - before, "requests": len(p.CallerRequests()), "deliveries": len(snap.Domain.Deliveries)}))
 	if after != before {
 		s.t.Fatal("closed task queried provider during final snapshot")
 	}

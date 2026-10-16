@@ -6,6 +6,7 @@ const participatingStates = new Set([
   "blocked",
   "reconciling",
   "waiting_external",
+  "pr_ready",
 ]);
 export function participating(run: Candidate) {
   return participatingStates.has(run.workflow_status);
@@ -19,8 +20,9 @@ export function businessOpen(run: Candidate) {
 export function waitingForMerge(run: Candidate) {
   return (
     businessOpen(run) &&
-    run.workflow_stage === "await_merge" &&
-    run.workflow_status === "waiting_external"
+    (run.workflow_status === "pr_ready" ||
+      (run.workflow_stage === "await_merge" &&
+        run.workflow_status === "waiting_external"))
   );
 }
 export function requiresAnswer(run: Candidate) {

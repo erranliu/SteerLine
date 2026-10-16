@@ -5,7 +5,8 @@ if (-not $IndependentProcess) {
     $testArguments = @()
     if ($Live) { $testArguments += '-Live' }
     if ($SteerRunnerExe) { $testArguments += @('-SteerRunnerExe', $SteerRunnerExe) }
-    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $testArguments
+    $testBudget = if ($Live) { [TimeSpan]::FromMinutes(80) } else { [TimeSpan]::FromMinutes(20) }
+    Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $testArguments -Timeout $testBudget
     return
 }
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -15,7 +16,7 @@ $oldHome = $env:STEERLINE_HOME
 $oldConfig = $env:STEERLINE_CONFIG
 $oldTestRoot = $env:STEERLINE_DEBUG_TEST_ROOT
 $oldCodexHome = $env:CODEX_HOME
-$oldSandboxRoot = $env:STEERLINE_DEBUG_SANDBOX_ROOT
+$oldRunnerExe = $env:STEERRUNNER_EXE
 $oldSecondRoot = $env:STEERLINE_DEBUG_SECOND_TEST_ROOT
 try {
     # Deliberate inherited pollution must not select installed state.
@@ -67,15 +68,14 @@ try {
     try { & $generator -DebugRoot $collisionRoot -SteerRunnerExe $SteerRunnerExe | Out-Null } catch { $refused = $true }
     if (-not $refused) { throw 'Existing timestamp directory was accepted' }
     if ($Live) {
-        # Exercise the actual Runner/agent workflow. Existing native login stays
-        # external; this harness never exports tokens or publishes for a worker.
-        $liveRelease = (& $generator -DebugRoot $testRoot -SteerRunnerExe $SteerRunnerExe -WebAddress 127.0.0.1:19745 | ConvertFrom-Json)
+        # The single real product acceptance chain lives in L2.
+        $env:STEERLINE_HOME = $null
+        $env:STEERLINE_CONFIG = $null
         $env:CODEX_HOME = $oldCodexHome
-        $env:STEERLINE_DEBUG_SANDBOX_ROOT = $liveRelease.root
+        $env:STEERRUNNER_EXE = $SteerRunnerExe
         Push-Location $repo
         try {
-            & go test ./tests/e2e/internal/driver -run '^TestDebugReleaseCodexSandbox$' -count=1 -timeout=30m -v *> (Join-Path $liveRelease.root 'evidence\native-workflow-test.log')
-            if ($LASTEXITCODE -ne 0) { throw "Native workflow failed; inspect $($liveRelease.root)\evidence\native-workflow-test.log" }
+            & (Join-Path $PSScriptRoot 'test-l2.ps1') -SteerRunnerExe $SteerRunnerExe -IndependentProcess
         } finally { Pop-Location }
     }
     $result = [pscustomobject]@{ passed = $true; default_artifacts = $defaultRelease.root; controlled = $first.root; other = $second.root; live = [bool]$Live }
@@ -86,6 +86,6 @@ try {
     $env:STEERLINE_CONFIG = $oldConfig
     $env:STEERLINE_DEBUG_TEST_ROOT = $oldTestRoot
     $env:CODEX_HOME = $oldCodexHome
-    $env:STEERLINE_DEBUG_SANDBOX_ROOT = $oldSandboxRoot
+    $env:STEERRUNNER_EXE = $oldRunnerExe
     $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $oldSecondRoot
 }

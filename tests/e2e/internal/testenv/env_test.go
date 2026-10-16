@@ -60,11 +60,11 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	a.git(a.Repo, "commit", "--quiet", "-m", "only A")
 	state, err := controlled.Read(a.Provider)
 	s.Must(err)
-	state.Dispatches = 7
+	state.Marker = 7
 	s.Must(controlled.Write(a.Provider, state))
 	other, err := controlled.Read(b.Provider)
 	s.Must(err)
-	if other.Dispatches != 0 || b.git(b.Repo, "rev-parse", "HEAD") != before {
+	if other.Marker != 0 || b.git(b.Repo, "rev-parse", "HEAD") != before {
 		t.Fatal("A changed B's state")
 	}
 	stopCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)

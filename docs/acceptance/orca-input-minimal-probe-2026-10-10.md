@@ -6,7 +6,7 @@
 
 ## 最小入口与通过条件
 
-[基础提示词探针](../../scripts/probe-orca-terminal-prompt.py)仅调用 Orca `terminal show/wait/send`。接收器是已经在本包工作区就绪的原终端，agent 标识由 Orca 管理；探针不选择模型、不添加 provider 设置、不读 provider 日志或解析 TUI 文本。
+[基础提示词探针](https://github.com/erranliu/SteerLine/blob/20f347cdec99dc0f0701b41311112f7e330389b6/scripts/probe-orca-terminal-prompt.py)仅调用 Orca `terminal show/wait/send`。接收器是已经在本包工作区就绪的原终端，agent 标识由 Orca 管理；探针不选择模型、不添加 provider 设置、不读 provider 日志或解析 TUI 文本。
 
 一次请求计算一个随机验证任务，并只在本包 evidence 写出带唯一 nonce 和计算结果的 JSON。通过必须同时满足：原 runtime/terminal/incarnation 不变、输入被接受、Orca 原生 `turn_started` 事实属于原请求、计算结果精确相等、相同 request ID 重放返回 `replayed=true` 且仍指向原请求。接受、TUI 空闲、输出有文本或等待时间都不能单独证明执行成功；未知状态不补 Enter、不重发原文。
 
@@ -24,7 +24,7 @@ Orca CLI/runtime 1.4.223。本机 runtime `e11d4024-70e8-46c6-b86a-e17338831ba9`
 | --- | --- | --- |
 | MPI-A1 | `terminal.send --text ... --enter --wait-submit 10 --retry-request <UUID>`；短提示和约 7500 字符提示各重复 3 次，两批连续执行 | 已验收，本次 12/12：482 字符 6 次、7477 字符 6 次；全部 `input_accepted + turn_started`，nonce/算术结果一致；7.09–14.22s。首次独立现场脚本在 `evidence/orca-transport-f8f12ea1/`；加强 runtime/原请求/incarnation 核验后的仓库入口复验在 `evidence/orca-transport-2436f661/`。各目录 `result.json`、send/replay 回执及实际结果文件保留 |
 | MPI-A2 | 同一原生请求重放，比较 request/incarnation 和原生 replay 事实 | 已验收，上述每次完成后用相同 UUID、相同提示和目标重放；12 次均返回原请求和 `mutation.replayed=true`。没有因静默而生成新投递或额外 Enter |
-| MPI-A3 | [worker-start 对照探针](../../scripts/probe-orca-prompt.py)：原生 Task/Dispatch、nonce 结果、结算、重放及连续轮次 | 验收失败。`evidence/orca-prompt-c6113b8f/` 中两轮短提示完成，第三轮原生返回 `agent_unconfigured`；增加原生 `tui-idle` 和原身份核验后，`evidence/orca-prompt-312ba029/` 首轮完成，第二轮在 90s 内无唯一正确结果，`turnStart=unsupported`。短任务 Spec 为 491 字符，Orca 自身还会添加完整原生 preamble；不能冒充基础 send 通道通过 |
+| MPI-A3 | [worker-start 对照探针](https://github.com/erranliu/SteerLine/blob/20f347cdec99dc0f0701b41311112f7e330389b6/scripts/probe-orca-prompt.py)：原生 Task/Dispatch、nonce 结果、结算、重放及连续轮次 | 验收失败。`evidence/orca-prompt-c6113b8f/` 中两轮短提示完成，第三轮原生返回 `agent_unconfigured`；增加原生 `tui-idle` 和原身份核验后，`evidence/orca-prompt-312ba029/` 首轮完成，第二轮在 90s 内无唯一正确结果，`turnStart=unsupported`。短任务 Spec 为 491 字符，Orca 自身还会添加完整原生 preamble；不能冒充基础 send 通道通过 |
 | MPI-A4 | 原始现场症状的独立复现 | 已验收，`input-start-reuse.json` 中原生返回 `outcome_unknown / turn_start_unobserved`，`input-draft-before.json` 保留原生公开 draft 字段。仅该早期诊断实验补过一次 Enter，之后原 Dispatch 完成；此人工性质的实验不计自动稳定性通过，也不进入后续探针逻辑 |
 | MPI-A5 | 脚本语法及本地导航检查 | 已验收，`python -m py_compile scripts/probe-orca-prompt.py scripts/probe-orca-terminal-prompt.py`；文档链接和 diff 检查通过 |
 

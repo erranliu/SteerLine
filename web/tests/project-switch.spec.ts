@@ -22,7 +22,7 @@ test("web.unified-startup: shared host, original commands and active turn surviv
   const failures: string[] = [];
   let primaryFailure: unknown;
   const state = provider();
-  state.recovery = { HoldStep: "implement.execute", HoldStream: true };
+  state.hold = true;
   state.web_feedback = false;
   writeFileSync(join(root, "provider", "state.json"), JSON.stringify(state));
   let aid = "",
@@ -169,9 +169,7 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       .click();
     await page.getByRole("button", { name: "手动启动", exact: true }).click();
     await page.getByRole("button", { name: "确认启动", exact: true }).click();
-    await expect
-      .poll(() => provider().turns?.[0]?.status, { timeout: 90000 })
-      .toBe("inProgress");
+    await expect.poll(() => provider().hold, { timeout: 90000 }).toBe(true);
     await expect
       .poll(
         async () => {
@@ -190,52 +188,21 @@ test("web.unified-startup: shared host, original commands and active turn surviv
         return !!active?.current_turn_id && !!active?.session_id;
       })
       .toBe(true);
-    const turn = provider().turns[0].id,
-      session = provider().session;
+    const turn = active.current_turn_id,
+      session = active.session_id;
     facts.active_before = active;
-    const nativeProcessPath = join(
-      home,
-      "state",
-      "SteerlineTest-" + aid.slice(0, 12),
-      "runs",
-      active.run_id,
-      "app-server",
-      "process.json",
-    );
-    const nativeProcess = JSON.parse(readFileSync(nativeProcessPath, "utf8"));
-    expect(
-      Number.isInteger(nativeProcess.identity.pid) &&
-        nativeProcess.identity.pid > 0,
-    ).toBe(true);
-    facts.native_process = nativeProcess;
-    const checkNativeProcess = () => {
-      expect(JSON.parse(readFileSync(nativeProcessPath, "utf8"))).toEqual(
-        nativeProcess,
-      );
-      const proof = JSON.parse(
-        command("powershell.exe", [
-          "-NoProfile",
-          "-Command",
-          `$p=Get-Process -Id ${nativeProcess.identity.pid};@{pid=$p.Id;created=$p.StartTime.ToFileTimeUtc().ToString('x16');executable=$p.Path.ToLowerInvariant()}|ConvertTo-Json -Compress`,
-        ]),
-      );
-      expect(proof).toEqual({
-        pid: nativeProcess.identity.pid,
-        created: nativeProcess.identity.created,
-        executable: nativeProcess.identity.executable,
-      });
-    };
-    checkNativeProcess();
-    console.log("web.project-switch: original native turn held");
+    console.log("web.project-switch: original public Run held");
     facts.original_request_id = requestID;
     command(web, ["stop"]);
     launch(web, ["serve"]);
     await open(aid);
     await expect(page.getByText("服务已连接", { exact: true })).toBeVisible();
     const assertOriginal = async () => {
-      checkNativeProcess();
-      expect(provider().sessions).toBe(1);
-      expect(provider().dispatches).toBe(1);
+      expect(
+        Object.values(provider().requests ?? {}).filter(
+          (kind) => kind === "submit",
+        ).length,
+      ).toBe(1);
       expect(await get(aid, "/identity")).toMatchObject({
         instance_id: originalIdentity.instance_id,
         process: originalIdentity.process,
@@ -251,21 +218,16 @@ test("web.unified-startup: shared host, original commands and active turn surviv
         session_id: active.session_id,
         current_turn_id: active.current_turn_id,
       });
-      expect(provider().session).toBe(session);
-      expect(provider().turns[0]).toMatchObject({
-        id: turn,
-        status: "inProgress",
-      });
+      expect(provider().hold).toBe(true);
+      expect(active.session_id).toBe(session);
+      expect(active.current_turn_id).toBe(turn);
     };
     await assertOriginal();
     command(helper, [
-      "release-recovery",
+      "release-fixture",
       "--e2e-state",
       join(root, "provider", "state.json"),
     ]);
-    await expect
-      .poll(() => provider().turns.length, { timeout: 120000 })
-      .toBe(3);
     await expect
       .poll(
         async () => {
@@ -404,12 +366,14 @@ test("web.unified-startup: shared host, original commands and active turn surviv
     ).toBe(404);
     facts.cli = { batchReceipt, predecessor };
     const heldState = provider();
-    heldState.recovery = { HoldStep: "implement.execute", HoldStream: true };
+    heldState.hold = true;
     writeFileSync(
       join(root, "provider", "state.json"),
       JSON.stringify(heldState),
     );
-    const dispatchesBeforeNewTask = provider().dispatches;
+    const dispatchesBeforeNewTask = Object.values(
+      provider().requests ?? {},
+    ).filter((kind) => kind === "submit").length;
     command(binary, [
       "control",
       "--project",
@@ -423,20 +387,27 @@ test("web.unified-startup: shared host, original commands and active turn surviv
       "--wait",
     ]);
     await expect
-      .poll(() => provider().dispatches, { timeout: 120000 })
+      .poll(
+        () =>
+          Object.values(provider().requests ?? {}).filter(
+            (kind) => kind === "submit",
+          ).length,
+        { timeout: 120000 },
+      )
       .toBe(dispatchesBeforeNewTask + 1);
-    await expect
-      .poll(() => provider().turns?.[0]?.status, { timeout: 120000 })
-      .toBe("inProgress");
-    const inputsBefore = provider().dispatches;
+    await expect.poll(() => provider().hold, { timeout: 120000 }).toBe(true);
+    const inputsBefore = Object.values(provider().requests ?? {}).filter(
+      (kind) => kind === "submit",
+    ).length;
     facts.active_at_host_stop = (
       await get(aid, "/snapshot")
     ).connection.snapshot.page.runs.find((run: any) => run.task_id === "3");
-    command(binary, ["stop"]);
+    // Application exit must not invent native settlement for a scripted active Run.
+    expect(() => command(binary, ["stop"])).toThrow();
     const shutdown = JSON.parse(
       readFileSync(join(home, "application-api", "shutdown.json"), "utf8"),
     );
-    expect(shutdown.clean).toBe(true);
+    expect(shutdown.clean).toBe(false);
     expect(shutdown.projects).toHaveLength(2);
     facts.shutdown = shutdown;
     command(binary, ["start", "--no-open"]);
@@ -459,14 +430,33 @@ test("web.unified-startup: shared host, original commands and active turn surviv
     const recovery = (
       await get(aid, "/snapshot")
     ).connection.snapshot.page.runs.find((run: any) => run.task_id === "3");
-    expect(recovery.recovery_required).toBe(true);
-    expect(provider().dispatches).toBe(inputsBefore);
+    expect(recovery.execution_id).toBe(
+      (facts.active_at_host_stop as any).execution_id,
+    );
+    expect(
+      Object.values(provider().requests ?? {}).filter(
+        (kind) => kind === "submit",
+      ).length,
+    ).toBe(inputsBefore);
     expect(
       (await get(aid, "/commands/" + requestID)).original.instance_id,
     ).toBe(originalIdentity.instance_id);
     expect(submissions).toBe(1);
     facts.recovery_after_host_restart = recovery;
     facts.restarted_project = await get(aid, "/identity");
+    command(helper, [
+      "runner-cleanup",
+      "-config",
+      join(home, "etc", "SteerlineTest.json"),
+    ]);
+    // Let the actor project the public stopped fact before final application stop.
+    await expect
+      .poll(async () => {
+        const snapshot = (await get(aid, "/snapshot")).connection.snapshot.page;
+        return snapshot.runs.find((run: any) => run.task_id === "3")
+          ?.resource_status;
+      })
+      .toBe("stopped");
     await second.close();
     await page.screenshot({
       path: info.outputPath("offline-project.png"),
