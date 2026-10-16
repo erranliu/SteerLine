@@ -6,7 +6,7 @@
 
 ## 本轮目标与限定范围
 
-保留 `TUI → HTTP API → Go 服务`，提高 HTTP传输、固定开发流程、任务最终交付和worker运行时的独立修改/测试能力。保持一个业务actor、一个SQLite权威、原身份/请求/版本与唯一TaskDelivery原子提交。Codex/Orca adapter和Orca本机/environment路由复用，不增加第二业务/执行链。
+以 Web 作为唯一交互入口，沿用 HTTP 客户端/服务边界；候选重点是固定开发流程、任务最终交付和 worker 运行时的独立修改/测试能力。保持一个业务 actor、一个 SQLite 权威、原身份/请求/版本与唯一 TaskDelivery 原子提交。Codex/Orca adapter 和现有远端 Orca 路由复用，不增加第二业务/执行链。此草稿不是执行授权，须按当前代码重新核对候选边界。
 
 本轮不改公共wire/模型/JSON持久格式、步骤/恢复/权限/交付语义，不建设通用命令/工作流/连接/调度框架。结构收敛之外唯一明确的小范围修复是#93客户端journal的跨窗口后续更新/终态保护，允许增加journal私有辅助锁文件；基线首次登记原子性不能代替这项修复。其余行为保持，如实际必须改变冻结契约，先重定范围/所有者与真实前置，不能借重构扩大行为。结构完成要求旧重复逻辑/状态删除、小端口可独立验证，而不只是文件移动或宽对象换接口。
 
@@ -69,8 +69,8 @@
 
 ## 保留候选与历史
 
-存储/查询公共纯值、会话/final采集与执行控制、TUI Model刷新/输入状态保留为未编号候选，不纳入当前执行批次。会话采集待运行时实际边界成熟后重审；不为增加并行数提前创建空领域。
+存储/查询公共纯值、会话/final采集与执行控制保留为未编号候选，不纳入当前执行批次。TUI Model 刷新/输入状态候选已随 TUI 退役而失效；会话采集待运行时实际边界成熟后重审，不为增加并行数提前创建空领域。
 
-#91经 [PR #299](https://github.com/erranliu/SteerLine/pull/299)交付TUI/HTTP/Go与WinUI删除；[Spec](../../spec/tui-http-client.spec.md)、[Plan](../../spec/tui-http-client.plan.md)、[验收](../../acceptance/tui-http-client.md)保留，TH-M1剩余人工在正式清单登记。#45为已交付HTTP基线。
+#91 经 [PR #299](https://github.com/erranliu/SteerLine/pull/299)交付了 TUI/HTTP/Go 基线并删除 WinUI；后续 TUI 已由独立普通开发任务退役，其历史验收和现状见[任务验收](../../acceptance/tui-http-client.md)与[TUI 退役验收](../../acceptance/tui-retirement.md)。#45 为已交付 HTTP 基线。
 
 旧#43/#46–#52/#40/#41及#88–#90不恢复派发、不复用编号；旧重构的[收敛记录](bounded-refactoring.md)保留原范围/副作用执行器暂缓判断，#96原提案复用后台机制、未实施；因三层重构交叉暂留草稿，不恢复旧异步框架提案。WebUI、SSE、主Agent、远程HTTP部署未规划任务。历史见[归档说明](../../archive/roadmap/README.md)，一期独立待验继续归execution-map/acceptance。

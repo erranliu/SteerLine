@@ -1,8 +1,8 @@
 # Web 前端技术方案
 
-2026-10-14：用户已确认首期在本机浏览器使用，由 Go 服务提供页面，以后再支持远程访问；同时确认采用下列技术栈，首批交付本机浏览器接入、DAG 与执行页，并直接授权本聊天实现。工程位于独立的 [`web/`](../../web/README.md)，具体契约归 [Spec](../spec/web-frontend.spec.md)/[Plan](../spec/web-frontend.plan.md)，实际验证归[专属验收](../acceptance/web-frontend.md)。本文不创建 roadmap 任务，也不改变已有任务的范围或状态。
+2026-10-14：用户已确认首期在本机浏览器使用，同时确认采用下列技术栈，首批交付本机浏览器接入、DAG 与执行页，并直接授权本聊天实现。本文最初按 Go 服务提供页面设计；后续实现调整为独立 Web 程序，由 Go 应用宿主授权并转接服务。当前启动与进程边界见[统一启动 Spec](../spec/unified-startup.spec.md)。工程位于独立的 [`web/`](../../web/README.md)，具体契约归 [Spec](../spec/web-frontend.spec.md)/[Plan](../spec/web-frontend.plan.md)，实际验证归[专属验收](../acceptance/web-frontend.md)。本文不创建 roadmap 任务，也不改变已有任务的范围或状态。
 
-2026-10-15：独立 Web 程序与已有项目切换由本次直接授权实施，当前进程与协议归[项目切换 Spec](../spec/web-project-switch.spec.md)，实际结果归[专属验收](../acceptance/web-project-switch.md)。Web 独立运行，通过 Go 应用服务取得当前 home 的配置目录并转接项目服务。后续[项目管理方案](project-management.md)中的准备、结构核验、纳管与建库仍未实现；TUI 不增加项目管理功能。
+2026-10-15：独立 Web 程序与已有项目切换由本次直接授权实施，当前进程与协议归[项目切换 Spec](../spec/web-project-switch.spec.md)，实际结果归[专属验收](../acceptance/web-project-switch.md)。Web 独立运行，通过 Go 应用服务取得当前 home 的配置目录并转接项目服务。后续[项目管理方案](project-management.md)中的准备、结构核验、纳管与建库仍未实现；TUI 已退役。
 
 分批规格已独立：[Web exe 与已有项目切换 Spec](../spec/web-project-switch.spec.md)/[Plan](../spec/web-project-switch.plan.md)先行，仅使用现有配置；[项目添加 Spec](../spec/project-onboarding.spec.md)/[Plan](../spec/project-onboarding.plan.md)后置，不成为切换功能的前置。
 
@@ -10,9 +10,9 @@
 
 ## 现有依据
 
-[第二阶段原型](prototypes/planning-ui/index.html)是单文件 HTML/CSS/JavaScript 演示，约 390 KB，没有前端构建工程。它已经覆盖规划工作台、版本蓝图、长期文档、Roadmap 草稿、DAG、执行、验收、测试、体验版本、Bug 和设置。交互细节见[原型说明](prototypes/planning-ui/README.md)和[界面设计](planning-ui.md)。原型是产品参考，正式页面仍需按真实能力和契约接入。
+[第二阶段原型](prototypes/planning-ui/index.html)是单文件 HTML/CSS/JavaScript 演示，约 390 KB，没有前端构建工程。它已经覆盖规划工作台、版本蓝图、长期文档、Roadmap 草稿、DAG、执行、验收、测试、体验版本、Bug 和设置。交互细节见[原型说明](prototypes/planning-ui/README.md)和[归档的界面设计](../archive/design/planning-ui.md)。原型是产品参考，正式页面仍需按真实能力和契约接入。
 
-仓库当前文档和相关 Git 历史未找到已确认的 React/Vue/Vite 等 Web 技术栈。历史客户端方案为 C# / WinUI 3，工程已由 #91 删除，见[源码索引](../architecture/current-code-architecture.md)。当前可复用成果是 Go 产品接口、本机 HTTP 协议和 TUI；客户端边界见[规划架构](planning-architecture.md)，已有路由见[本机客户端协议](local-client-protocol.md)。
+仓库当前文档和相关 Git 历史未找到已确认的 React/Vue/Vite 等 Web 技术栈。历史客户端方案为 C# / WinUI 3，工程已由 #91 删除，见[源码索引](../architecture/current-code-architecture.md)。当前可复用成果是 Go 产品接口、本机 HTTP 协议和已交付的 Web 前端；客户端边界见[规划架构](planning-architecture.md)，已有路由见[本机客户端协议](local-client-protocol.md)。
 
 ## 已确认技术栈
 
