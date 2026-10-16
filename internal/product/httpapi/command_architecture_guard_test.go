@@ -102,6 +102,21 @@ func (c *commandRegistry) readDirect(path string) { _, _ = os.ReadFile(path); _,
 `},
 			wantGuards: []string{"command_registry.go bypasses the request record owner"},
 		},
+
+		{
+			name: "renamed_registry_helper_cannot_open_records",
+			sources: map[string]string{
+				"renamed.go": `package httpapi
+ type commandRegistry struct{}
+ func (c *commandRegistry) dispatch() { sneakyRead() }
+ `,
+				"business_helper.go": `package httpapi
+ import "os"
+ func sneakyRead() { _, _ = os.ReadFile("private-record") }
+ `,
+			},
+			wantGuards: []string{"business_helper.go bypasses the request record owner"},
+		},
 		{
 			name: "record_access_has_one_production_owner",
 			sources: map[string]string{
@@ -193,6 +208,7 @@ func sourceImports(file *ast.File) (map[string]string, error) {
 
 func httpAPIArchitectureViolations(sources []httpAPISourceFile) []string {
 	var violations []string
+	commandFiles, commandFunctions := commandImplementationFiles(sources)
 	typeDefs := make(map[string]httpAPITypeDefinition)
 	structs := make(map[string][]struct {
 		file   httpAPISourceFile
@@ -207,11 +223,11 @@ func httpAPIArchitectureViolations(sources []httpAPISourceFile) []string {
 			if path == productClientImport {
 				violations = append(violations, "production httpapi imports concrete product client in "+source.name)
 			}
-			if (path == "database/sql" || path == sqliteImport || path == "path/filepath") && source.name == "command_registry.go" {
-				violations = append(violations, "command_registry.go imports a concrete storage or filesystem package: "+path)
+			if (path == "database/sql" || path == sqliteImport || path == "path/filepath") && commandFiles[source.name] && commandUsesImport(source, alias, commandFunctions) {
+				violations = append(violations, source.name+" imports a concrete storage or filesystem package: "+path)
 			}
-			if (path == "net/http" || path == "database/sql" || path == sqliteImport) && (alias == "." || alias == "_") && source.name == "command_registry.go" {
-				violations = append(violations, "command_registry.go dot-imports a broad transport or storage package")
+			if (path == "net/http" || path == "database/sql" || path == sqliteImport) && (alias == "." || alias == "_") && commandFiles[source.name] && commandUsesImport(source, alias, commandFunctions) {
+				violations = append(violations, source.name+" dot-imports a broad transport or storage package")
 			}
 		}
 		for _, decl := range source.file.Decls {
@@ -332,7 +348,7 @@ func httpAPIArchitectureViolations(sources []httpAPISourceFile) []string {
 					}
 				}
 			}
-			if source.name == "command_registry.go" {
+			if commandFunctions[function] {
 				ast.Inspect(function.Body, func(node ast.Node) bool {
 					call, ok := node.(*ast.CallExpr)
 					if !ok {
@@ -341,7 +357,7 @@ func httpAPIArchitectureViolations(sources []httpAPISourceFile) []string {
 					name := calledName(call.Fun)
 					switch name {
 					case "ReadFile", "WriteFile", "Open", "OpenFile", "Create", "CreateTemp", "readRequestRecord", "writeRequestRecord", "writePrivateAtomic", "writePrivateExclusive":
-						violations = append(violations, "command_registry.go bypasses the request record owner with "+name)
+						violations = append(violations, source.name+" bypasses the request record owner with "+name)
 					}
 					return true
 				})
@@ -367,8 +383,8 @@ func httpAPIArchitectureViolations(sources []httpAPISourceFile) []string {
 			if name == "writeRequestRecord" && !strings.HasSuffix(source.name, "_test.go") {
 				violations = append(violations, "writeRequestRecord must remain test-only")
 			}
-			if (source.name == "commands.go" || source.name == "command_registry.go") && isRequestRecordAccessCall(name) {
-				if source.name == "command_registry.go" {
+			if (source.name == "commands.go" || commandFiles[source.name]) && isRequestRecordAccessCall(name) {
+				if commandFiles[source.name] {
 					return true // separately reports the more useful owner-bypass violation above
 				}
 				violations = append(violations, "commands.go bypasses the command registry for request records with "+name)
@@ -381,6 +397,82 @@ func httpAPIArchitectureViolations(sources []httpAPISourceFile) []string {
 	}
 	sort.Strings(violations)
 	return violations
+}
+
+func commandUsesImport(source httpAPISourceFile, alias string, functions map[*ast.FuncDecl]bool) bool {
+	if source.name == "command_registry.go" || alias == "." || alias == "_" {
+		return true
+	}
+	used := false
+	for _, decl := range source.file.Decls {
+		function, ok := decl.(*ast.FuncDecl)
+		if !ok || !functions[function] {
+			continue
+		}
+		ast.Inspect(function, func(node ast.Node) bool {
+			if selector, ok := node.(*ast.SelectorExpr); ok {
+				if name, ok := selector.X.(*ast.Ident); ok && name.Name == alias {
+					used = true
+				}
+			}
+			return true
+		})
+	}
+	return used
+}
+
+// Follow registry methods and their package helpers rather than a filename list.
+// Record persistence stays behind requestRecordAccess; its implementation is not
+// part of this closure.
+func commandImplementationFiles(sources []httpAPISourceFile) (map[string]bool, map[*ast.FuncDecl]bool) {
+	files := map[string]bool{"command_registry.go": true}
+	helpers := make(map[string]struct {
+		file     string
+		function *ast.FuncDecl
+	})
+	var queue []*ast.FuncDecl
+	for _, source := range sources {
+		for _, decl := range source.file.Decls {
+			function, ok := decl.(*ast.FuncDecl)
+			if !ok {
+				continue
+			}
+			if receiverTypeName(function) == "commandRegistry" || function.Name.Name == "newCommandRegistry" {
+				files[source.name] = true
+				queue = append(queue, function)
+			} else if function.Recv == nil {
+				helpers[function.Name.Name] = struct {
+					file     string
+					function *ast.FuncDecl
+				}{source.name, function}
+			}
+		}
+	}
+	seen := make(map[*ast.FuncDecl]bool)
+	for len(queue) > 0 {
+		function := queue[0]
+		queue = queue[1:]
+		if seen[function] {
+			continue
+		}
+		seen[function] = true
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			name, ok := call.Fun.(*ast.Ident)
+			if !ok {
+				return true
+			}
+			if helper, ok := helpers[name.Name]; ok {
+				files[helper.file] = true
+				queue = append(queue, helper.function)
+			}
+			return true
+		})
+	}
+	return files, seen
 }
 
 func forbiddenTypeDependencies(expression ast.Expr, imports map[string]string, definitions map[string]httpAPITypeDefinition, commandOwner bool, seen map[string]bool) []string {
