@@ -7,6 +7,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -45,7 +46,7 @@ func text(value string) *string {
 	return &value
 }
 func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
-	v := &reconstruction.RunView{RunID: c.ID, TaskID: c.TaskID, DomainTaskID: c.TaskID, ExecutionID: c.RunID, ControlRevision: c.Revision, Claimant: c.Claimant, CandidateNumber: c.Number, CandidateCreatedAt: c.CreatedAt, CandidateTiming: "wall_since_reservation", ExecutionStatus: c.SubmitState, BaseCommit: text(c.BaseRevision), Error: text(c.Diagnostic), PR: model.PRState{State: "none"}}
+	v := &reconstruction.RunView{RunID: c.ID, TaskID: c.TaskID, DomainTaskID: c.TaskID, ExecutionID: c.RunID, ControlRevision: c.Revision, Claimant: c.Claimant, CandidateNumber: c.Number, CandidateCreatedAt: c.CreatedAt, CandidateTiming: "wall_since_reservation", Participation: c.Participation, SubmissionStatus: c.SubmitState, StopRequested: c.StopRequested, WorkflowStatus: runnerstate.ObservedStatus(c), ExecutionStatus: runnerstate.ObservedStatus(c), BaseCommit: text(c.BaseRevision), Error: text(c.Diagnostic), PR: model.PRState{State: "none"}}
 	var input runnerclient.RunInput
 	_ = json.Unmarshal(c.Submit.Input, &input)
 	v.Host = "local"
@@ -70,14 +71,8 @@ func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
 	v.SessionID, v.SessionGeneration = r.Execution.SessionID, r.Execution.Generation
 	v.AttemptID, v.CurrentTurnID = r.Execution.AttemptID, r.Execution.TurnID
 	v.WorktreePath, v.WorktreeBranch = text(r.Execution.Workspace), text(r.Execution.Branch)
-	v.WorkflowStage, v.WorkflowStatus = r.Step, r.Status
-	if c.Participation == "abandoned" {
-		v.WorkflowStatus = "abandoned"
-	}
-	if c.Participation == "completed" {
-		v.WorkflowStatus = "delivered"
-	}
-	v.ExecutionStatus, v.StageDiagnostic = r.Status, r.Diagnostic
+	v.WorkflowStage = r.Step
+	v.StageDiagnostic = r.Diagnostic
 	v.Summary, v.Error = text(r.Summary), text(r.Diagnostic)
 	v.RecoveryRequired, v.RecoveryVersion = r.ResumeRequired, r.Revision
 	if r.ResumeRequired {

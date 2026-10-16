@@ -86,6 +86,9 @@ type ControlBlocker struct {
 
 // Run is a view rebuilt from the selected immutable execution records.
 type RunView struct {
+	Participation    string                       `json:"participation"`
+	SubmissionStatus string                       `json:"submission_status"`
+	StopRequested    bool                         `json:"stop_requested"`
 	FlowRef          string                       `json:"flow_ref"`
 	WorkflowStage    string                       `json:"workflow_stage"`
 	WorkflowStatus   string                       `json:"workflow_status"`
