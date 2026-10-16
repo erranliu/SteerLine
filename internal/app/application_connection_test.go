@@ -83,7 +83,21 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 			t.Fatal("repository lock was not retained")
 		}
 	}
+	// A product client only borrows the runtime's store. Its closure must not
+	// stop the actor or invalidate the sibling's resources.
+	require(t, a.(*runtimeProjectPort).product.Close())
+	if _, err := a.(*runtimeProjectPort).store.NativeAuthority(ctx, d.entries[0].ref.Identity); err != nil {
+		t.Fatal("client closed borrowed store", err)
+	}
+	if _, err := b.Read(ctx, "/identity", nil); err != nil {
+		t.Fatal("sibling affected by client close", err)
+	}
 	d.BeginStop()
+	for _, port := range []*runtimeProjectPort{a.(*runtimeProjectPort), b.(*runtimeProjectPort)} {
+		if _, err := port.Read(ctx, "/identity", nil); err == nil {
+			t.Fatal("whole-directory stop did not fence every port")
+		}
+	}
 	require(t, d.Close())
 	for _, result := range d.ShutdownResults() {
 		if !result.LocalClosed || !result.LocksReleased || !result.ResourcesSettled {

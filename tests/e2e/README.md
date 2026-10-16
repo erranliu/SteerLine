@@ -64,7 +64,7 @@ go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled
 # 精确选择边界子集；不能跨级或零匹配
 go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled '-scenario=runtime.path-isolation,runtime.dual-home-isolation'
 # Windows 工具 Job 约束下使用独立同用户进程
-./scripts/test-runtime-isolation.ps1 -Level L3 -Suite 'recovery,runtime'
+./scripts/test-runtime-isolation.ps1 -Level L3 -Suite 'recovery,runtime' -Scenario 'runtime.service-lifecycle,recovery.waiting-merge-restart'
 ./scripts/test-runtime-isolation.ps1 -Level L4
 # 默认两级 runtime 顺序执行；-OutDir <新目录> 按 L3/L4 分别保存报告
 ./scripts/test-runtime-isolation.ps1

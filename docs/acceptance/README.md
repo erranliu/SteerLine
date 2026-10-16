@@ -4,6 +4,8 @@
 
 ## 当前入口
 
+应用与项目生命周期收拢（2026-10-16，按审计收窄并实施）：[Spec / Plan 与专属验收](application-project-lifecycle.md)，记录 ALC-A1–A6 的资源所有权、请求排空、停机证明及隔离回归证据。
+
 执行域遗留清理（2026-10-16，普通开发）：[引用审计与最小验证](execution-legacy-cleanup.md)，仅删除无生产消费者的旧执行实现及专属测试，保留当前 Task/交付、checkpoint、产品展示和宿主进程边界。
 
 执行权限与 Git 环境检查接入（2026-10-16，SteerLine 已实现，真实 Runner 联调与人工验收待完成）：[本仓验收与审查记录](environment-check.md)，仅 SLEC caller/HTTP/Web；Runner 前置与原生检查在其仓库独立 SREC 验收，不共用通过状态。构建和业务资源后置。

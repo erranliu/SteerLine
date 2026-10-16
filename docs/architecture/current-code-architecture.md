@@ -38,6 +38,8 @@ flowchart LR
 
 2026-10-16 补充清理：旧 lifecycle/adapter 端口、原生事件与 PR 线索解析、旧候选绑定/停止/丢弃辅助规则及旧状态转移已按生产引用删除，专属测试同步移除。仍被 checkpoint/产品查询引用的记录形状、停服策略展示值、能力状态、活动字段及当前 TaskDelivery 校验继续保留；包名暂不调整。范围与验证见[本次清理验收](../acceptance/execution-legacy-cleanup.md)。
 
+2026-10-16 生命周期收拢：`application_catalog.go` 只读取冻结配置，离线 verify-stop 不创建活动目录。`ProjectRuntime` 统一取得与最终关闭项目资源；factory/actor 借用 store，actor 结束只写 checkpoint，`projectRunner` 保留原停机身份和结算规则。本地关闭、锁释放与 Runner 证明分别汇总；已进入的 Read/Command/Task 排空后才关库。旧逐项目启动/窗口/listener/停止采样链已删除；本地失败保留锁和宿主策略沿用。[Spec](../spec/application-project-lifecycle.spec.md) · [Plan](../spec/application-project-lifecycle.plan.md) · [验收](../acceptance/application-project-lifecycle.md)。
+
 ## 任务交付链
 
 启动先以 Task/图版本校验固定契约和候选共同 base，再在一个事务中领取候选并保存完整 CLI outbox。提交未知时只查原请求；迟到接受仍绑定原 Run，并执行已持久保存的停止义务。公开事件按原身份/游标事务保存，原 final 的正文与 hash 可追溯，日志不作为业务成功事实。

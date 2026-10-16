@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // Scheduler is the host's sole business capability. Calls run serially;
@@ -26,7 +24,7 @@ type Scheduler[T any] interface {
 	TickControl(context.Context, context.CancelFunc) error
 	TickPR(context.Context) error
 	Heartbeat() error
-	EndActor(*productapi.ControlRequest, *time.Time, string, error) error
+	EndActor(error) error
 }
 
 func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string) (retErr error) {
@@ -39,26 +37,14 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 		return err
 	}
 	heartDone := make(chan struct{})
-	acceptedStops := make(chan stopAcceptance, 1)
-	instanceID := actor.InstanceID()
 	go func() {
 		defer close(heartDone)
 		heartbeat := time.NewTicker(c.Heartbeat)
 		defer heartbeat.Stop()
-		stopTick := time.NewTicker(500 * time.Millisecond)
-		defer stopTick.Stop()
-		seen := map[string]bool{}
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-stopTick.C:
-				request, fileDigest, checkedAt := c.FindStop(instanceID, seen)
-				if request != nil {
-					acceptedStops <- stopAcceptance{Request: *request, At: checkedAt, Digest: fileDigest}
-					cancel()
-					return
-				}
 			case <-heartbeat.C:
 				if actor.Heartbeat() != nil {
 					cancel()
@@ -68,26 +54,13 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 		}
 	}()
 	defer func() {
+		canceled := ctx.Err() != nil
 		cancel()
 		<-heartDone
-		var stop *stopAcceptance
-		select {
-		case value := <-acceptedStops:
-			stop = &value
-		default:
+		if canceled && cancellationOnly(retErr) {
+			retErr = nil
 		}
-		var request *productapi.ControlRequest
-		var acceptedAt *time.Time
-		var acceptedDigest string
-		if stop != nil {
-			request = &stop.Request
-			acceptedAt = &stop.At
-			acceptedDigest = stop.Digest
-			if cancellationOnly(retErr) {
-				retErr = nil // An accepted stop may cancel an in-flight actor poll.
-			}
-		}
-		retErr = actor.EndActor(request, acceptedAt, acceptedDigest, retErr)
+		retErr = actor.EndActor(retErr)
 	}()
 	taskTick := time.NewTicker(c.TaskPoll)
 	defer taskTick.Stop()
@@ -150,8 +123,7 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 	}
 }
 
-// A joined persistence/business error must survive an accepted stop. Only the
-// cancellation caused by that stop is a successful scheduler exit.
+// A joined persistence/business error must survive cancellation.
 func cancellationOnly(err error) bool {
 	if err == context.Canceled {
 		return true
@@ -174,12 +146,4 @@ func cancellationOnly(err error) bool {
 	return false
 }
 
-type Schedule struct {
-	TaskPoll, PRPoll, Heartbeat time.Duration
-	FindStop                    func(string, map[string]bool) (*productapi.ControlRequest, string, time.Time)
-}
-type stopAcceptance struct {
-	Request productapi.ControlRequest
-	At      time.Time
-	Digest  string
-}
+type Schedule struct{ TaskPoll, PRPoll, Heartbeat time.Duration }

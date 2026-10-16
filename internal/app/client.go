@@ -33,12 +33,8 @@ func openProjectClient(ctx context.Context, ref productapi.ProjectRef) (*product
 	return productclient.Open(ctx, ref, ClientResources)
 }
 
-// openServiceProjectClient binds the configured service's own task-discard
-// command port into its local HTTP product client. Other clients retain the
-// ordinary repository-locking TaskCommands writer.
-func openServiceProjectClient(ctx context.Context, config Config, service *taskrunner.Actor) (*productclient.Client, error) {
-	return openServiceProjectClientWithCommands(ctx, config, service, nil, nil)
-}
+// openServiceProjectClientWithCommands borrows the runtime's task store and
+// command actor. Closing this client cannot close project-owned resources.
 func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *taskrunner.Actor, commands func(context.Context, bool) (productclient.TaskCommands, error), store *sqlite.SQLiteStore) (*productclient.Client, error) {
 	absolute, err := filepath.Abs(config.ConfigPath)
 	if err != nil {
@@ -410,11 +406,7 @@ func (r clientControl) Request(ctx context.Context, id string) (*productapi.Cont
 }
 
 func (r clientControl) Stop(ctx context.Context, by string, timeout time.Duration) (productapi.ServiceStopResult, error) {
-	hostConfig, err := hostRuntimeConfig(ctx, r.config)
-	if err != nil {
-		return productapi.ServiceStopResult{}, err
-	}
-	return steerline.StopService(ctx, hostConfig, by, timeout)
+	return productapi.ServiceStopResult{}, errors.New("project stop_service is retired; use application stop")
 }
 
 func productObservation(value steerline.ObservationSnapshot) productapi.ObservationSnapshot {
