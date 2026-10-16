@@ -38,11 +38,12 @@ function catalog(): CheckCatalog {
       },
     ],
     capabilities: {
-      version: 1,
-      supported: [
+      contract: "steerrunner-environment-check/v1",
+      targets: [
         {
           adapter: "codex-app-server",
-          target_kind: "local",
+          mechanism: "implemented",
+          target: "local",
           access_modes: ["sandbox", "full_access"],
         },
       ],
@@ -88,19 +89,21 @@ function record(): CheckRecord {
       input_digest: "c".repeat(64),
       updated_at: "2026-10-16T01:00:00Z",
       status: "completed",
-      capability_status: "failed",
-      actual_context: { worker: "fixture identity" },
-      required_checks: ["git_push"],
+      result: "failed",
+      actual: { worker: "fixture identity" },
+      cleanup_status: "pending",
+      allowed_actions: ["stop"],
+      diagnostic: "测试 PR 待收尾",
       items: [
         {
           id: "git_push",
           status: "failed",
-          reason: "缺少现场凭据 401",
-          evidence: [{ source: "fixture", text: "sanitized fixture evidence" }],
+          stage: "缺少现场凭据 401",
+          required: true,
+          evidence: [{ source: "fixture", facts: { diagnostic: "sanitized fixture evidence" } }],
         },
       ],
-      resources: { status: "pending", diagnostic: "测试 PR 待收尾" },
-      controls: { can_stop: true },
+      resources: {},
     },
   };
 }
@@ -176,7 +179,7 @@ it("distinguishes unsupported mechanism from a supported check's credential fail
   expect(screen.getByText(/能力结论/)).toHaveTextContent("失败");
   expect(screen.getByText(/资源：/)).toHaveTextContent("资源待处理");
   fireEvent.click(screen.getByText("查看证据"));
-  expect(screen.getByText("sanitized fixture evidence")).toBeVisible();
+  expect(screen.getByText(/sanitized fixture evidence/)).toBeVisible();
   fireEvent.change(screen.getByLabelText("执行目标"), {
     target: { value: "orca_environment" },
   });
@@ -274,7 +277,7 @@ it("invalidates check queries without touching Task or DAG caches", async () => 
 
 it("keeps history readable when Runner advertises no supported check targets", async () => {
   const options = catalog();
-  options.capabilities!.supported = null;
+  options.capabilities!.targets = null;
   const f = fixture([record()], options);
   await screen.findByText("缺少现场凭据 401");
   expect(screen.getByText(/未声明支持此目标/)).toBeVisible();
@@ -285,7 +288,7 @@ it("keeps history readable when Runner advertises no supported check targets", a
 
 it("uses the latest selected detail when its cached history still says settled", async () => {
   const old = record();
-  old.report!.resources.status = "settled";
+  old.report!.cleanup_status = "completed";
   const f = fixture([old]);
   const current = record();
   current.report!.revision = 2;

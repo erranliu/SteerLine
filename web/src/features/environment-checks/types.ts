@@ -8,10 +8,13 @@ export interface CheckCatalog {
   profiles: { id: string; name: string; execution: CheckExecution }[];
   unavailable_reason: string;
   capabilities?: {
-    version: number;
-    supported: {
+    contract: string;
+    targets: {
       adapter: string;
-      target_kind: string;
+      target: string;
+      mechanism: string;
+      platform?: string;
+      reason?: string;
       access_modes: string[];
     }[] | null;
   };
@@ -41,18 +44,18 @@ export interface CheckRecord {
     input_digest: string;
     updated_at: string;
     status: string;
-    capability_status: string;
-    actual_context: Record<string, string>;
-    required_checks: string[];
+    result: string;
+    cleanup_status: string;
+    diagnostic?: string;
+    allowed_actions: string[];
+    actual: Record<string, string | number>;
     items: {
       id: string;
       status: string;
-      reason?: string;
-      identity?: string;
-      evidence: { source: string; text: string }[];
+      stage: string;
+      required: boolean;
+      evidence: { source: string; facts?: Record<string, string> }[];
     }[];
-    resources: { status: string; diagnostic?: string };
-    controls: { can_stop: boolean; reason?: string };
-    pr?: { url?: string };
+    resources: { pr_url?: string; writer_stopped?: boolean; local_removed?: boolean };
   };
 }

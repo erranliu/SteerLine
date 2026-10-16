@@ -27,7 +27,7 @@ var ErrNotFound = runnerstate.ErrEnvironmentCheckNotFound
 
 type Error = runnerstate.EnvironmentCheckError
 
-func failure(code, message string) error { return &Error{code, message} }
+func failure(code, message string) error { return &Error{Code: code, Message: message} }
 
 type StartPayload = runnerstate.EnvironmentCheckStartPayload
 type Command = runnerstate.EnvironmentCheckCommand
@@ -76,7 +76,7 @@ func (s *Service) Catalog(ctx context.Context) Catalog {
 	}
 	if err != nil {
 		result.UnavailableReason = diagnostic(err)
-	} else if result.Capabilities == nil || result.Capabilities.Version != 1 {
+	} else if result.Capabilities == nil || result.Capabilities.Contract != runnercontract.EnvironmentCheckContract {
 		result.UnavailableReason = "所选 Runner 未发布环境检查 v1 能力；现有任务执行方案不代表支持环境检查"
 	}
 	return result
@@ -128,7 +128,7 @@ func (s *Service) Submit(ctx context.Context, c Command) (Record, error) {
 	if err != nil {
 		return r, err
 	}
-	if r.Report == nil || r.CheckID == "" || r.Report.Revision != c.ExpectedRevision || !r.Report.Controls.CanStop {
+	if r.Report == nil || r.CheckID == "" || r.Report.Revision != c.ExpectedRevision || !r.Report.CanStop() {
 		return r, failure("stale_revision", "refresh the original check before explicitly requesting stop/cleanup")
 	}
 	for _, op := range r.Operations {
@@ -174,7 +174,7 @@ func (s *Service) start(ctx context.Context, c Command) (Record, error) {
 		if last.Status == "rejected" {
 			continue
 		}
-		if row.Report == nil || row.Report.Resources.Status != "settled" {
+		if row.Report == nil || row.Report.CleanupStatus != "completed" {
 			return Record{}, failure("operation_unverified", "an earlier check or its resources remain unverified; inspect it before creating another")
 		}
 		for _, op := range row.Operations {
@@ -219,10 +219,10 @@ func (s *Service) start(ctx context.Context, c Command) (Record, error) {
 	if err != nil {
 		return Record{}, failure("input_unavailable", diagnostic(err))
 	}
-	if err = runnerclient.ValidateCheckSchema(caps.InputSchema, input); err != nil {
+	if err = runnerclient.ValidateCheckSchema(caps.Definition("input"), input); err != nil {
 		return Record{}, failure("invalid_request", "input does not match the selected Runner check schema")
 	}
-	if len(caps.ReceiptSchema) == 0 || len(caps.InspectionSchema) == 0 {
+	if len(caps.Definition("receipt")) == 0 || len(caps.Definition("inspection")) == 0 {
 		return Record{}, failure("unsupported_capability", "Runner check response schemas are missing")
 	}
 
@@ -261,7 +261,7 @@ func (s *Service) received(ctx context.Context, r Record, receipt runnerclient.C
 		if errors.As(callErr, &f) && !f.Unknown {
 			op.Status = "rejected"
 		}
-	} else if receipt.CheckID == "" || receipt.CommandID == "" || receipt.ReceiptStatus != "accepted" || r.CheckID != "" && r.CheckID != receipt.CheckID || runnerclient.ValidateCheckSchema(r.Capabilities.ReceiptSchema, receipt) != nil {
+	} else if receipt.CheckID == "" || receipt.CommandID == "" || receipt.ReceiptStatus != "accepted" || r.CheckID != "" && r.CheckID != receipt.CheckID || runnerclient.ValidateCheckSchema(r.Capabilities.Definition("receipt"), receipt) != nil {
 		op.Diagnostic = "Runner receipt identity or public schema is unverified; inspect the original request"
 	} else {
 		r.CheckID = receipt.CheckID
@@ -317,7 +317,11 @@ func (s *Service) refresh(ctx context.Context, r Record, requestID string) (Reco
 }
 
 func applyInspection(r *Record, inspection runnerclient.CheckInspection, requestID string) error {
-	if runnerclient.ValidateCheckSchema(r.Capabilities.InspectionSchema, inspection) != nil {
+	var document any = inspection
+	if len(inspection.Raw) != 0 {
+		document = inspection.Raw
+	}
+	if runnerclient.ValidateCheckSchema(r.Capabilities.Definition("inspection"), document) != nil {
 		return errors.New("Runner check inspection violates the frozen schema")
 	}
 	if requestID == "" {
@@ -347,7 +351,7 @@ func applyInspection(r *Record, inspection runnerclient.CheckInspection, request
 			if op.Status == "applied" {
 				return errors.New("accepted command receipt changed to rejected")
 			}
-			op.CommandID, op.Status, op.Diagnostic = cmd.CommandID, "rejected", cmd.Diagnostic
+			op.CommandID, op.Status, op.Diagnostic = cmd.CommandID, "rejected", commandDiagnostic(cmd)
 			return nil
 		}
 		if cmd.ReceiptStatus != "accepted" || cmd.CheckID == "" {
@@ -369,76 +373,79 @@ func applyInspection(r *Record, inspection runnerclient.CheckInspection, request
 	return errors.New("original request is not bound to this check")
 }
 func validateReport(r Record, v runnerclient.Check) error {
-	if v.CheckID == "" || r.CheckID != "" && v.CheckID != r.CheckID || v.Revision == 0 || !digestPattern.MatchString(v.InputDigest) || v.ResourceDigest != r.ResourceDigest || v.UpdatedAt.IsZero() || v.Status == "" || len(v.ActualContext) == 0 || len(v.RequiredChecks) == 0 || !equalJSON(mustJSON(v.Context), mustJSON(r.Input)) {
+	if v.CheckID == "" || r.CheckID != "" && v.CheckID != r.CheckID || v.Contract != runnercontract.EnvironmentCheckContract || v.Revision == 0 || !digestPattern.MatchString(v.InputDigest) || v.ResourceDigest != r.ResourceDigest || v.UpdatedAt.IsZero() || v.CreatedAt.IsZero() || v.Status == "" || v.Actual.AttemptID == "" || v.Actual.Generation == "" || len(v.Items) == 0 || !equalJSON(mustJSON(v.Input), mustJSON(r.Input)) {
 		return errors.New("check snapshot is incomplete or belongs to another input/resource")
 	}
-	if r.Report != nil {
-		if v.InputDigest != r.Report.InputDigest || v.Revision < r.Report.Revision || v.UpdatedAt.Before(r.Report.UpdatedAt) {
+	if prior := r.Report; prior != nil {
+		if v.InputDigest != prior.InputDigest || v.Revision < prior.Revision || v.UpdatedAt.Before(prior.UpdatedAt) || !v.CreatedAt.Equal(prior.CreatedAt) || !v.ExecutionDeadline.Equal(prior.ExecutionDeadline) || !v.CleanupDeadline.Equal(prior.CleanupDeadline) {
 			return errors.New("check snapshot digest or revision regressed")
 		}
-		if v.Revision == r.Report.Revision && !equalJSON(mustJSON(v), mustJSON(r.Report)) {
+		if v.Revision == prior.Revision && !equalJSON(mustJSON(v), mustJSON(prior)) {
 			return errors.New("conflicting check snapshot at the same revision")
 		}
-		if !sameRequiredChecks(r.Report.RequiredChecks, v.RequiredChecks) {
+		if !reflect.DeepEqual(checkManifest(prior.Items), checkManifest(v.Items)) {
 			return errors.New("frozen required check manifest changed")
 		}
+		before, after := reflect.ValueOf(prior.Actual), reflect.ValueOf(v.Actual)
+		for i := 0; i < before.NumField(); i++ {
+			if !before.Field(i).IsZero() && !reflect.DeepEqual(before.Field(i).Interface(), after.Field(i).Interface()) {
+				return errors.New("actual check context changed")
+			}
+		}
+		for _, pair := range [][2]string{{prior.Resources.BaseRef, v.Resources.BaseRef}, {prior.Resources.HeadRef, v.Resources.HeadRef}, {prior.Resources.BaseSHA, v.Resources.BaseSHA}, {prior.Resources.HeadSHA, v.Resources.HeadSHA}, {prior.Resources.PRURL, v.Resources.PRURL}} {
+			if pair[0] != "" && pair[0] != pair[1] {
+				return errors.New("check resource identity changed")
+			}
+		}
+		if prior.Resources.PRNumber != 0 && prior.Resources.PRNumber != v.Resources.PRNumber {
+			return errors.New("check PR identity changed")
+		}
 	}
-	items := map[string]string{}
+	seen := map[string]bool{}
 	for _, item := range v.Items {
-		if item.ID == "" || items[item.ID] != "" {
+		if item.ID == "" || seen[item.ID] {
 			return errors.New("duplicate check item")
 		}
+		seen[item.ID] = true
 		switch item.Status {
 		case "passed", "failed", "unverified", "not_applicable":
 		default:
 			return errors.New("unknown check item status")
 		}
-		items[item.ID] = item.Status
-	}
-	seen := map[string]bool{}
-	for _, id := range v.RequiredChecks {
-		if seen[id] || items[id] == "" || items[id] == "not_applicable" {
-			return errors.New("required check evidence is missing")
-		}
-		seen[id] = true
-		if v.CapabilityStatus == "passed" && items[id] != "passed" {
+		if item.Required && (item.Status == "not_applicable" || v.Result == "passed" && item.Status != "passed") {
 			return errors.New("passed summary conflicts with required checks")
 		}
 	}
-	switch v.CapabilityStatus {
+	switch v.Result {
 	case "passed", "failed", "unverified":
 	default:
 		return errors.New("unknown check conclusion")
 	}
-	switch v.Resources.Status {
-	case "pending", "settled", "unverified":
+	switch v.CleanupStatus {
+	case "pending", "completed", "residual":
 	default:
 		return errors.New("resource settlement is missing")
 	}
-	if v.PR != nil && (r.Input.Publication == nil || v.PR.Repository != r.Input.Publication.Repository || v.PR.BaseBranch != "steerline-check/"+v.CheckID+"/base" || v.PR.HeadBranch != "steerline-check/"+v.CheckID+"/head" || v.PR.Merged) {
+	if v.Resources.PRURL != "" && (r.Input.Publication == nil || v.Resources.BaseRef != "refs/heads/steerline-check/"+v.CheckID+"/base" || v.Resources.HeadRef != "refs/heads/steerline-check/"+v.CheckID+"/head") {
 		return errors.New("test PR identity differs from check-owned branches")
 	}
-	if v.CapabilityStatus == "passed" && r.Input.Publication != nil && v.PR == nil {
+	if v.Result == "passed" && r.Input.Publication != nil && v.Resources.PRURL == "" {
 		return errors.New("publication-required check lacks its test PR fact")
 	}
 	return nil
 }
-
-func sameRequiredChecks(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+func checkManifest(items []runnercontract.CheckItem) map[string]bool {
+	manifest := map[string]bool{}
+	for _, item := range items {
+		manifest[item.ID] = item.Required
 	}
-	set := make(map[string]bool, len(a))
-	for _, id := range a {
-		set[id] = true
+	return manifest
+}
+func commandDiagnostic(cmd *runnercontract.CheckCommand) string {
+	if cmd.Error != nil {
+		return cmd.Error.Code + ": " + cmd.Error.Message
 	}
-	for _, id := range b {
-		if !set[id] {
-			return false
-		}
-		delete(set, id)
-	}
-	return len(set) == 0
+	return ""
 }
 func equalJSON(a, b []byte) bool {
 	var x, y any

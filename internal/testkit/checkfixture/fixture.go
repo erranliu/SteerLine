@@ -1,5 +1,5 @@
-// Package checkfixture contains provisional public contract data, not a native
-// simulator. It must be replaced/checked against Runner's published handoff.
+// Package checkfixture freezes published Runner schema/samples and a synthetic
+// caller failure. It does not simulate native execution or prove readiness.
 package checkfixture
 
 import (
@@ -29,6 +29,6 @@ func Load() Fixture {
 	if err = json.Unmarshal(b, &f); err != nil {
 		panic(err)
 	}
-	f.Inspection.Check.Context = f.Input
+	f.Inspection.Check.Input = f.Input
 	return f
 }

@@ -54,6 +54,7 @@ func (r *runner) InspectEnvironmentCheck(_ context.Context, selector, id string)
 	b, _ := json.Marshal(r.f.Inspection)
 	var v runnerclient.CheckInspection
 	_ = json.Unmarshal(b, &v)
+	v.Raw = r.f.Inspection.Raw
 	if selector == "check-id" {
 		v.Command = nil
 		return v, nil
@@ -73,6 +74,8 @@ func setup(t *testing.T) (*ec.Service, *runner, *sqlite.SQLiteStore) {
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	r := &runner{f: checkfixture.Load()}
+	// The scripted Runner is portable; the published real target remains Windows.
+	r.f.Capabilities.Targets[0].Platform = ""
 	s := &ec.Service{Project: "fixture-project", Store: store, Selection: runnerclient.Selection{Executable: "fixture.exe", Version: "draft-fixture", SHA256: strings.Repeat("d", 64)}, Profiles: []ec.Profile{{ID: "fixture", Name: "Fixture", Execution: r.f.Input.Execution}}}
 	s.Admit = func(context.Context) error { r.admissions++; return nil }
 	s.Open = func(context.Context, runnerclient.Selection) (ec.Runner, error) { return r, nil }
@@ -123,7 +126,7 @@ func TestEnvironmentCheckDurableUnknownAndRestart(t *testing.T) {
 		return r, nil
 	}}
 	rec, err = restarted.Submit(ctx, q)
-	if err != nil || r.starts != 1 || rec.Report == nil || rec.Report.CapabilityStatus != "failed" {
+	if err != nil || r.starts != 1 || rec.Report == nil || rec.Report.Result != "failed" {
 		t.Fatal(rec, err, r.starts)
 	}
 	if rec.Input.Publication == nil || rec.Input.Publication.Repository != "fixture/repo" || rec.Input.Repository.BaseBranch != "main" {
@@ -147,7 +150,7 @@ func TestEnvironmentCheckDurableUnknownAndRestart(t *testing.T) {
 	}
 }
 func TestEnvironmentCheckSnapshotGuards(t *testing.T) {
-	for _, kind := range []string{"lower", "same-conflict", "digest", "missing", "context", "publication", "command", "manifest"} {
+	for _, kind := range []string{"lower", "same-conflict", "digest", "missing", "context", "publication", "command", "manifest", "raw-missing-resource"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx := context.Background()
 			s, r, _ := setup(t)
@@ -168,9 +171,9 @@ func TestEnvironmentCheckSnapshotGuards(t *testing.T) {
 			case "missing":
 				r.f.Inspection.Check.Items = nil
 			case "context":
-				r.f.Inspection.Check.Context.Repository.URL = "other"
+				r.f.Inspection.Check.Input.Repository.URL = "other"
 			case "publication":
-				r.f.Inspection.Check.CapabilityStatus = "passed"
+				r.f.Inspection.Check.Result = "passed"
 				for i := range r.f.Inspection.Check.Items {
 					r.f.Inspection.Check.Items[i].Status = "passed"
 				}
@@ -178,7 +181,13 @@ func TestEnvironmentCheckSnapshotGuards(t *testing.T) {
 				r.f.Inspection.Command.Command = "environment-check stop"
 			case "manifest":
 				r.f.Inspection.Check.Revision++
-				r.f.Inspection.Check.RequiredChecks = []string{"permissions"}
+				r.f.Inspection.Check.Items[0].Required = false
+			case "raw-missing-resource":
+				body, _ := json.Marshal(r.f.Inspection)
+				var raw map[string]any
+				_ = json.Unmarshal(body, &raw)
+				delete(raw["check"].(map[string]any)["resources"].(map[string]any), "writer_stopped")
+				r.f.Inspection.Raw, _ = json.Marshal(raw)
 			}
 			got, err := s.Request(ctx, start().RequestID)
 			if err != nil || got.Report.Revision != 2 || got.Report.Status != good.Report.Status || got.Diagnostic == "" {
@@ -205,8 +214,8 @@ func TestEnvironmentCheckStopIdentityAndConcurrency(t *testing.T) {
 	if r.starts != 1 {
 		t.Fatal("duplicate dispatch", r.starts)
 	}
-	r.f.Inspection.Check.Resources.Status = "pending"
-	r.f.Inspection.Check.Controls.CanStop = true
+	r.f.Inspection.Check.CleanupStatus = "pending"
+	r.f.Inspection.Check.AllowedActions = []string{"stop"}
 	r.f.Inspection.Check.Revision++
 	rec, _ := s.Detail(ctx, start().RequestID)
 	r.before = func(q runnerclient.Request) {
@@ -237,12 +246,15 @@ func TestEnvironmentCheckStopIdentityAndConcurrency(t *testing.T) {
 func TestEnvironmentCheckCapabilityAndRejection(t *testing.T) {
 	ctx := context.Background()
 	s, r, _ := setup(t)
-	_ = s.Catalog(ctx)
+	catalog := s.Catalog(ctx)
+	if catalog.UnavailableReason != "" || catalog.Capabilities == nil {
+		t.Fatal("published contract was mistaken for an unavailable capability", catalog)
+	}
 	_, _ = s.List(ctx)
 	if r.admissions != 0 || r.starts != 0 {
 		t.Fatal("read started service")
 	}
-	r.f.Capabilities.Supported = nil
+	r.f.Capabilities.Targets = nil
 	if _, err := s.Submit(ctx, start()); err == nil || r.starts != 0 {
 		t.Fatal("missing capability dispatched", err)
 	}
@@ -265,8 +277,8 @@ func TestEnvironmentCheckStopRecoveryDoesNotDependOnStartHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.f.Inspection.Check.Resources.Status = "pending"
-	r.f.Inspection.Check.Controls.CanStop = true
+	r.f.Inspection.Check.CleanupStatus = "pending"
+	r.f.Inspection.Check.AllowedActions = []string{"stop"}
 	current, err := s.Detail(ctx, start().RequestID)
 	if err != nil || current.Report == nil {
 		t.Fatal(current, err)
@@ -277,11 +289,11 @@ func TestEnvironmentCheckStopRecoveryDoesNotDependOnStartHistory(t *testing.T) {
 	}
 	r.inspectErrors = map[string]error{start().RequestID: errors.New("old start receipt unavailable")}
 	r.f.Inspection.Check.Revision++
-	r.f.Inspection.Check.Resources.Status = "settled"
-	r.f.Inspection.Check.Controls.CanStop = false
+	r.f.Inspection.Check.CleanupStatus = "completed"
+	r.f.Inspection.Check.AllowedActions = []string{}
 	r.inspected = nil
 	recovered, err := s.Request(ctx, stop(1).RequestID)
-	if err != nil || recovered.Diagnostic != "" || recovered.Operations[1].Status != "applied" || recovered.Report.Resources.Status != "settled" || len(r.inspected) != 1 || r.inspected[0] != "request-id:"+stop(1).RequestID {
+	if err != nil || recovered.Diagnostic != "" || recovered.Operations[1].Status != "applied" || recovered.Report.CleanupStatus != "completed" || len(r.inspected) != 1 || r.inspected[0] != "request-id:"+stop(1).RequestID {
 		t.Fatal("old start blocked original stop recovery", recovered, err, r.inspected)
 	}
 	r.inspected = nil
@@ -329,17 +341,17 @@ func TestEnvironmentCheckPreservesRunnerVerdictAndFrozenManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.f.Inspection.Check.CapabilityStatus = "unverified"
+	r.f.Inspection.Check.Result = "unverified"
 	for i := range r.f.Inspection.Check.Items {
 		r.f.Inspection.Check.Items[i].Status = "passed"
 	}
 	row, err := s.Detail(ctx, start().RequestID)
-	if err != nil || row.Report == nil || row.Report.CapabilityStatus != "unverified" {
+	if err != nil || row.Report == nil || row.Report.Result != "unverified" {
 		t.Fatal("caller recomputed native verdict", row, err)
 	}
 	// Ordering is not policy; the published required set remains the same.
 	r.f.Inspection.Check.Revision++
-	required := r.f.Inspection.Check.RequiredChecks
+	required := r.f.Inspection.Check.Items
 	required[0], required[1] = required[1], required[0]
 	row, err = s.Detail(ctx, row.ID)
 	if err != nil || row.Diagnostic != "" || row.Report.Revision != 2 {
@@ -373,8 +385,8 @@ func TestEnvironmentCheckAdmissionFailureDoesNotStartOrReplaceRunner(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.f.Inspection.Check.Resources.Status = "pending"
-	r.f.Inspection.Check.Controls.CanStop = true
+	r.f.Inspection.Check.CleanupStatus = "pending"
+	r.f.Inspection.Check.AllowedActions = []string{"stop"}
 	row, err := s.Detail(ctx, start().RequestID)
 	if err != nil || row.Report == nil {
 		t.Fatal(row, err)
