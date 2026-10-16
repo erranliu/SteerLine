@@ -6,7 +6,7 @@ SteerRunner 拆分后的测试精简（2026-10-15，普通开发，已实施）�
 
 TUI 退役与 Web 唯一交互前端（普通开发）：[Spec](tui-retirement.spec.md) · [Plan](tui-retirement.plan.md) · [专属验收](../acceptance/tui-retirement.md)。2026-10-15 按用户授权实施，实时结果归专属验收；包含默认 Web 调试包、共用代码保留与 TUI 专属测试清理，不改 roadmap。
 
-本目录保留独立 Spec/Plan、未闭合的定向验收和共同约束。本轮 #91/#92/#93 已交付，#94/#95/#96继续留草稿，范围及结果见[正式执行清单](../roadmap/execution-map.md)与[草稿](../roadmap/drafts/roadmap.md)。#83/#84/#45/#44 的历史交付事实保留；一期及 #84 原人工项继续待验，#44 后续人工要求已撤销，原未验不标通过。旧二阶段及延期候选退出规划，编号不复用。派发仍须核对用户授权、任务状态和固定文档版本。
+本目录保留独立 Spec/Plan、未闭合的定向验收和共同约束。#91/#92/#93 已交付；#91 的 TUI 客户端已由后续普通开发退役，Web 是当前唯一交互前端。#94/#95/#96继续留草稿，范围及结果见[正式执行清单](../roadmap/execution-map.md)与[草稿](../roadmap/drafts/roadmap.md)。#83/#84/#45/#44 的历史交付事实保留；一期及 #84 原人工项继续待验，#44 后续人工要求已撤销，原未验不标通过。旧二阶段及延期候选退出规划，编号不复用。派发仍须核对用户授权、任务状态和固定文档版本。
 
 Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在纳入执行或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不作为执行任务；少量人工项按允许范围后置。
 
@@ -18,15 +18,15 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Query 缓存、有界基础预取、缓存展示、可见区域查询和操作后定向失效，不增加同步框架或后端接口。[Spec](web-query-optimization.spec.md) · [Plan](web-query-optimization.plan.md) · [专属验收](../acceptance/web-query-optimization.md)。普通开发，不纳入 roadmap；后续 SSE 沿用同一查询缓存。
 
-2026-10-15 普通开发批次如下；独立 Web 与项目切换已有实现及验收记录，统一启动与多项目宿主为后继重构规划，项目添加继续后置。新增规划不分配 Task ID、不改 execution-map：
+2026-10-15 普通开发批次如下；独立 Web、项目切换及统一启动宿主已有实现和验收记录，桌面体验待人工验收；项目添加继续后置。新增规划不分配 Task ID、不改 execution-map：
 
 | 批次 | 范围与依赖 | 文档 | 验收 |
 | --- | --- | --- | --- |
 | 先行：独立 Web 与已有项目切换 | 双 exe、Go 应用目录/路由、单端口、当前项目与多标签隔离；仅现有配置，不等待添加流程 | [Spec](web-project-switch.spec.md) · [Plan](web-project-switch.plan.md) | [记录](../acceptance/web-project-switch.md) |
-| 重构：统一启动与多项目共进程宿主 | 一个 bat、双常驻进程、后端自动加载全部配置项目；替换独立项目进程，不支持 TUI；仅规划 | [Spec](unified-startup.spec.md) · [Plan](unified-startup.plan.md) | [记录](../acceptance/unified-startup.md) |
+| 重构：统一启动与多项目共进程宿主 | 一个 bat、双常驻进程、后端加载配置项目；已实施并完成约定自动验收，桌面体验待人工验收 | [Spec](unified-startup.spec.md) · [Plan](unified-startup.plan.md) | [记录](../acceptance/unified-startup.md) |
 | 后续：项目准备、核验与纳管 | 消费先行应用能力及后继宿主；外部 Codex 提示词、结构检查、确认后登记/建库；用户明确后置 | [Spec](project-onboarding.spec.md) · [Plan](project-onboarding.plan.md) | [记录](../acceptance/project-onboarding.md) |
 
-[SpecGuide.md](SpecGuide.md) 维护 SteerLine 产品草稿转正时必读的 Spec / Plan 生成规范：避免过度设计，先查现有代码再整合，先做相关任务整体规划，明确执行链路和桥接必要性，并落实最小测试及验收覆盖。[交互设计](../product-design/planning-ui.md)与[原型](../product-design/prototypes/planning-ui/index.html)展示规范入口和受控生成。当前产品流程为原型设计，不改变用户直接授权的普通仓库开发入口。
+[SpecGuide.md](SpecGuide.md) 维护 SteerLine 产品草稿转正时必读的 Spec / Plan 生成规范：避免过度设计，先查现有代码再整合，先做相关任务整体规划，明确执行链路和桥接必要性，并落实最小测试及验收覆盖。[早期交互设计归档](../archive/design/planning-ui.md)与[原型](../product-design/prototypes/planning-ui/index.html)记录规范入口和受控生成设想，不表示对应产品流程已实现，也不改变用户直接授权的普通仓库开发入口。
 
 ## HTTP 接入后的解耦规格
 
@@ -83,11 +83,11 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 既有规划与历史交付
 
-本轮 #91 已经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 真实合并；#92已独立复审、自动复验并经 [PR #311](https://github.com/erranliu/SteerLine/pull/311) 合并，#93已独立复审、验证并经PR #312真实合并，范围/并行条件见execution-map；#94/#95/#96尚未纳入。#91独立 SteerlineTest live/真终端操作已验，剩余人工体验见[验收](../acceptance/tui-http-client.md)。旧二阶段候选/三节点与延期版本任务退出活动入口，编号保留，材料见[归档](../archive/roadmap/README.md)。#44 实现已由 #91 删除，#45 保留已交付基线。
+任务 #91 已由 PR #299 合入，#92/#93 分别由 PR #311/#312 合入；#91 保留了 TUI，之后 TUI 已通过独立普通开发任务退役，详见[退役验收](../acceptance/tui-retirement.md)。#94/#95/#96 尚未纳入，范围/并行条件见[执行清单](../roadmap/execution-map.md)和[草稿](../roadmap/drafts/roadmap.md)。旧二阶段候选/三节点与延期版本任务退出活动入口，编号保留，材料见[归档](../archive/roadmap/README.md)。#44 实现由 #91 删除，#45 保留为历史 HTTP 基线。
 
 | 任务 ID | 任务名称 | 前置 | Spec | Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 91 | TUI 经 HTTP 接入 Go 后端（后续已退役） | 无未完成硬前置；复用 #45 与现有 TUI | [Spec](tui-http-client.spec.md) | [Plan](tui-http-client.plan.md) | [记录](../acceptance/tui-http-client.md) |
+| 91 | TUI 经 HTTP 接入 Go 后端（TUI 后续已退役） | 无未完成硬前置；复用 #45 与当时的 TUI | [Spec](tui-http-client.spec.md) | [Plan](tui-http-client.plan.md) | [记录](../acceptance/tui-http-client.md) · [后续退役](../acceptance/tui-retirement.md) |
 
 #45 原[Spec](phase2-local-api.spec.md)/[Plan](phase2-local-api.plan.md)保留历史基线，扩展按 #91；#83/#84/#87 已交付与当前未验按[execution-map](../roadmap/execution-map.md)核对，不重新派发。
 

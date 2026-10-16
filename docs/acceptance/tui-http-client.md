@@ -2,7 +2,7 @@
 
 > 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
 
-唯一归属 #91；[Spec](../spec/tui-http-client.spec.md)、[Plan](../spec/tui-http-client.plan.md)。2026-10-13 独立复审修复及最终自动复验通过，[PR #299](https://github.com/erranliu/SteerLine/pull/299)已真实合并，#91 实现完成。用户委托的 Windows ConPTY 真终端和 SteerlineTest live 操作已验证；TH-M1 原生查看窗口渲染及人工体验判断仍未验证。汇总归[execution-map](../roadmap/execution-map.md)，不覆盖其他任务历史。
+唯一归属 #91；[Spec](../spec/tui-http-client.spec.md)、[Plan](../spec/tui-http-client.plan.md)。2026-10-13 独立复审修复及最终自动复验通过，[PR #299](https://github.com/erranliu/SteerLine/pull/299)已真实合并，#91 实现完成。用户委托的 Windows ConPTY 真终端和 SteerlineTest live 操作已验证；TH-M1 的原生查看窗口渲染及人工体验曾待验，后续 TUI 退役后不再是当前门槛，也不追认为通过。汇总归[execution-map](../roadmap/execution-map.md)，不覆盖其他任务历史。
 
 | ID | 方法/入口 | 最小行为和通过条件 | 当前状态 |
 | --- | --- | --- | --- |

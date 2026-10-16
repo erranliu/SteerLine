@@ -2,7 +2,7 @@
 
 > 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../spec/tui-retirement.spec.md)。
 
-归属：2026-10-09 用户直接授权的普通开发，不纳入 roadmap DAG。操作契约见[控制台设计](../product-design/execution-console.md)。
+归属：2026-10-09 用户直接授权的普通开发，不纳入 roadmap DAG。历史操作契约见[已归档的控制台设计](../archive/design/execution-console.md)。
 
 ## 自动验证
 

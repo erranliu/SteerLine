@@ -6,7 +6,7 @@
 
 ## 确认的产品方向
 
-2026-10-15 后继重构规划见[统一启动 Spec](../spec/unified-startup.spec.md)/[Plan](../spec/unified-startup.plan.md)：一个 start.bat 启动多项目后端与独立 Web，项目服务改为后端内运行时，不支持产品 TUI。本次实现采用该拓扑：Web 重启隔离继续保留，后端停止覆盖全部项目；实际已验/待验见[统一启动验收](../acceptance/unified-startup.md)。项目添加仍后置，消费同一宿主及应用 v2，登记本身不自动启动项目/派发任务。
+2026-10-15 的[统一启动 Spec](../spec/unified-startup.spec.md)/[Plan](../spec/unified-startup.plan.md)已按授权实施：一个 start.bat 启动多项目后端与独立 Web，项目服务改为后端内运行时，不支持产品 TUI。Web 重启隔离继续保留，后端停止覆盖全部项目；自动验收通过，桌面体验待人工验收，见[专属记录](../acceptance/unified-startup.md)。项目添加仍后置，消费同一宿主及应用 v2，登记本身不自动启动项目/派发任务。
 
 - 主界面始终围绕一个当前项目：其 DAG、任务、候选、问题、文档和设置。项目切换器放在当前项目名称处，支持搜索、最近使用和进入“添加项目”。不把默认首页改成跨项目任务大盘。
 - Web 采用一个稳定本机地址；项目写在页面 URL 和请求目标中，不为每个项目分配浏览器端口。每个标签页可以选择不同项目。
@@ -24,7 +24,7 @@
 | [web/server/server.go](../../web/server/server.go)、[application_service.go](../../internal/app/application_service.go) | 已拆出独立 Web；应用服务提供配置目录及按项目转接 | 后续添加复用该 Go 应用入口，不重建网关 |
 | [native_project_open.go](../../internal/app/native_project_open.go)、[service_admission.go](../../internal/app/service_admission.go) | 启动及部分命令入口可以初始化原生项目数据库；没有本文规定的文档结构门槛 | 复用原初始化/身份/事务能力，但在所有初始化入口之前增加统一纳管准入 |
 | [service_preflight.go](../../internal/app/service_preflight.go)、[native_state_preflight.go](../../internal/app/host/native_state_preflight.go) | 已有仓库、发布目标、执行环境、状态位置及格式核验 | 复用具体检查；区分项目结构、纳管参数与执行环境，不把会触碰执行环境的完整启动检查当成结构检查 |
-| [planning-ui.md](planning-ui.md#长期技术文档与结构约定) | 原型约定架构、并行开发、测试、Spec/Plan 规范及设计目录 | 本方案把角色与结构要求集中到结构核验文档，原型仍只是交互参考 |
+| [早期 planning-ui 设计](../archive/design/planning-ui.md#长期技术文档与结构约定) | 原型约定架构、并行开发、测试、Spec/Plan 规范及设计目录 | 本方案把角色与结构要求集中到结构核验文档；原型已归档，仅作历史交互参考 |
 | [task/model/contract.go](../../internal/task/model/contract.go)、[task/documents.go](../../internal/task/documents.go) | 创建任务核验固定 Spec/Plan、验收引用、Git commit 与摘要 | 保留，添加项目不生成假任务或绕过任务准入 |
 
 当前没有已实现的“复制准备提示词 → 服务核验 → 纳管”完整入口。本文落实用户希望采用的流程，不把原型、人工配置或既有 preflight 描述成已具备该功能。

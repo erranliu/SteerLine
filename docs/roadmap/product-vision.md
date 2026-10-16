@@ -24,11 +24,11 @@ SteerLine 是一款带有研究性质的开发工具，长期远景是通往**�
 
 ### 2. 客户端与业务服务分离，后续受控规划
 
-当前已确认范围只到 `TUI → HTTP API → Go 后端`：保留 TUI 任务/执行能力，业务读取/命令经公开协议，Go 服务继续核验身份/资格/交付。复用 #45，删除 #44 WinUI 实现由新任务 #91 完成。实际范围见[Spec](../spec/tui-http-client.spec.md)和[execution-map](execution-map.md)。旧二阶段三节点与候选已退出当前规划。
+当前交互入口为 Web，Go 服务继续维护 Task/Execution、身份/资格、原命令及交付权威。Web SPA、项目切换和统一启动/多项目宿主已完成约定自动验收；桌面体验尚待人工确认。旧任务 #91 提供的 HTTP 客户端基线仍由 Web 使用，但其 TUI 客户端已按[退役任务](../spec/tui-retirement.spec.md)删除。交付和待验明细见[Spec 索引](../spec/README.md)、[执行清单](execution-map.md)及各专属验收。
 
-**当前交付判定：**本机 TUI 的查询、候选操作、反馈、final、恢复/原会话查看及停服核验经 HTTP 保持准确；关闭客户端不停止服务/worker，断线按原请求恢复。先完成本机链路，不把未来功能设为前置。
+**当前交付判定：**Web 的查询、任务操作、反馈、final、恢复/原生会话查看通过现有客户端和服务边界完成。项目添加/纳管和规划产品流程尚未实现；人工桌面体验仍按对应验收记录待确认。历史 TUI 体验不再作为当前能力声明。
 
-长期仍可发展独立 WebUI、按需 SSE、远程部署及受控规划 Agent，但不在当前 roadmap 拆任务、预留编号或承诺实现。原[界面原型](../product-design/prototypes/planning-ui/README.md)只作讨论参考，后续按真实需求重新规划。人控制取舍与授权，Go 业务权威不移入界面或模型。
+后续可发展按需 SSE、项目添加/结构核验及受控规划 Agent；这些能力按各自 Spec/roadmap 状态推进，不从旧原型推定已实现。早期 Web 构想见[设计归档](../archive/design/planning-ui.md)和[原型说明](../product-design/prototypes/planning-ui/README.md)。人控制取舍与授权，Go 业务权威不移入界面或模型。
 
 ### 3. 正式可发布产品
 

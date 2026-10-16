@@ -4,7 +4,7 @@
 
 2026-10-07 用户报告的 SteerLine 交互缺陷。现场为 SteerlineTest 的任务 101：worker 已发布 PR，界面仍提示 Continue，用户提交后重复开启无待办的新轮次。此记录是本次直接修复的验收活动，不分配新的执行 DAG Task ID。
 
-实现规则见[决策与反馈](../product-design/decisions.md)与[控制台操作](../product-design/execution-console.md)。待合并保留现有 Decision/Command 的自由文字反馈能力，默认不展示 Continue，不计为待交互；按 a 主动打开，非空反馈及 F2 才发起下一轮。原生问题、环境阻断、恢复资格和原请求身份核验继续生效。
+实现规则见[决策与反馈](../product-design/decisions.md)与[控制台操作](../archive/design/execution-console.md)。待合并保留现有 Decision/Command 的自由文字反馈能力，默认不展示 Continue，不计为待交互；按 a 主动打开，非空反馈及 F2 才发起下一轮。原生问题、环境阻断、恢复资格和原请求身份核验继续生效。
 
 ## 自动验证
 
