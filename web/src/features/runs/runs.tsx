@@ -17,6 +17,7 @@ import { Answer, draftKey } from "./answer";
 import { candidateState, stopReason } from "./state";
 import { LastMessage } from "./last-message";
 import { nativeSessionReason } from "./native-session";
+import { RunTask, taskDependencyReason } from "./run-task";
 
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
@@ -310,6 +311,9 @@ export function Runs() {
   const candidates = runs.filter(
     (r) => (r.domain_task_id || r.task_id) === selectedTask,
   );
+  const selectedDependencyReason = taskDependencyReason(
+    tasks.data?.tasks.find((task) => task.task_id === selectedTask),
+  );
   const selected = runID
     ? candidates.find((r) => r.run_id === runID)
     : candidates[0];
@@ -362,27 +366,17 @@ export function Runs() {
             <div className="empty">还没有正式任务</div>
           )}
           {visible.map((t) => (
-            <button
+            <RunTask
               key={t.task_id}
-              onClick={() => chooseTask(t.task_id)}
-              className={
-                "run-task " + (t.task_id === selectedTask ? "active" : "")
+              task={t}
+              selected={t.task_id === selectedTask}
+              onSelect={() => chooseTask(t.task_id)}
+              candidateCount={
+                runs.filter(
+                  (r) => (r.domain_task_id || r.task_id) === t.task_id,
+                ).length
               }
-            >
-              <span className="eyebrow">TASK #{t.task_id}</span>
-              <strong>{t.title}</strong>
-              <div>
-                <Status value={t.status} />
-                <span className="muted">
-                  {
-                    runs.filter(
-                      (r) => (r.domain_task_id || r.task_id) === t.task_id,
-                    ).length
-                  }{" "}
-                  个候选
-                </span>
-              </div>
-            </button>
+            />
           ))}
           {tasks.data?.has_more && (
             <p className="muted">
@@ -412,7 +406,9 @@ export function Runs() {
             <CandidateDetail key={selected.run_id} run={selected} />
           ) : (
             <div className="empty">
-              此任务尚无执行候选，请从任务详情手动启动。
+              {selectedDependencyReason
+                ? `${selectedDependencyReason}，解除依赖阻塞后可启动。`
+                : "此任务尚无执行候选，请从任务详情手动启动。"}
             </div>
           )}
         </section>
