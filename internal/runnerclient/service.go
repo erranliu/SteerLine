@@ -10,15 +10,50 @@ import (
 )
 
 type ServiceInfo struct {
+	InstanceID       string           `json:"instance_id"`
+	PID              int              `json:"pid"`
+	ProcessCreated   string           `json:"process_created"`
+	StateDir         string           `json:"state_dir"`
+	Status           string           `json:"status"`
+	Version          string           `json:"version"`
+	Protocol         string           `json:"protocol"`
+	ResourceDigest   string           `json:"resource_digest"`
+	ExecutableSHA256 string           `json:"executable_sha256"`
+	LastShutdown     *ServiceShutdown `json:"last_shutdown,omitempty"`
+}
+
+type ServiceShutdown struct {
 	InstanceID       string `json:"instance_id"`
-	PID              int    `json:"pid"`
-	ProcessCreated   string `json:"process_created"`
+	RequestID        string `json:"request_id"`
 	StateDir         string `json:"state_dir"`
-	Status           string `json:"status"`
-	Version          string `json:"version"`
-	Protocol         string `json:"protocol"`
-	ResourceDigest   string `json:"resource_digest"`
 	ExecutableSHA256 string `json:"executable_sha256"`
+	ResourcesSettled bool   `json:"resources_settled"`
+	Diagnostic       string `json:"diagnostic,omitempty"`
+}
+
+// VerifyServiceSettlement consumes the original Runner's post-shutdown proof.
+// It never starts a service or substitutes a cached candidate projection.
+func (c Client) VerifyServiceSettlement(ctx context.Context, instance, requestID string) error {
+	info, err := c.ServiceStatus(ctx)
+	if err != nil {
+		return err
+	}
+	return c.verifyServiceSettlement(info, instance, requestID)
+}
+
+func (c Client) verifyServiceSettlement(info ServiceInfo, instance, requestID string) error {
+	r := info.LastShutdown
+	want, err := filepath.EvalSymlinks(c.StateDir)
+	if err != nil {
+		want = filepath.Clean(c.StateDir)
+	}
+	if info.Status != "not_running" || r == nil || instance == "" || requestID == "" || c.SHA256 == "" || r.InstanceID != instance || r.RequestID != requestID || !strings.EqualFold(filepath.Clean(r.StateDir), want) || !strings.EqualFold(r.ExecutableSHA256, c.SHA256) {
+		return errors.New("original Runner resource settlement evidence is missing or identity differs")
+	}
+	if !r.ResourcesSettled || r.Diagnostic != "" {
+		return errors.New("original Runner native resource settlement remains unverified: " + r.Diagnostic)
+	}
+	return nil
 }
 
 func (c Client) ServiceStatus(ctx context.Context) (ServiceInfo, error) {

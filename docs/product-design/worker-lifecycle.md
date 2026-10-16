@@ -20,6 +20,8 @@ SteerRunner 跨仓拆分正在实施，切换安排见[接入 Plan](../spec/stee
 
 统一启动接入的 W18 差异：多个 SteerLine 项目共用应用宿主 PID，各自保留 Task actor/store/实例和独立 Runner state-dir。Task 创建/加前置经该 actor 串行提交并发布快照；原输入/恢复规则不变。项目停机分别记录本地关闭、锁与资源结算；仅 Runner service not_running 不证明原生已停止，未知提交、缺投影或最后已知活动的 Run 保留资源未核实诊断。初始化中可能已启动独立 Runner 而无 actor 回执时也不能把资源结算写成 true。本次仅验证统一启动的空闲双项目、受控输入/停止反例及消费者；完整组合真机/恢复验收未因此通过。
 
+W18 停服取证修复：停机前的候选投影不能证明停机后的资源状态。Runner 在全部 worker 退出并读取已提交原生停止事实后、释放写锁前发布最终结算；公开 service status 只在写锁空闲时返回 last_shutdown，新写者先使旧记录失效。SteerLine 核对原实例、停止 request_id、state-dir 和固定 EXE 摘要，再接受 resources_settled；不按旧 running 投影误拒绝，也不按 not_running 或旧 stopped 投影放行。缺记录、错配、超时、Orca 脱离观察或任一 Run 停止未核实仍阻断。变更范围与验证见[停服结算验收](../acceptance/runner-shutdown-settlement.md)，既有安装环境的失败回执不被改写。
+
 测试所有者按 [测试精简 Spec](../spec/runner-test-convergence.spec.md)收敛：W02–W16/W18 执行专项由 Runner 验证；W01、W12 调用方授权、W17 及迟到接受/停止义务由 SteerLine 验证。SteerLine 的完整 L2 仍用本机 Codex 实际走通实现、报告、发布和真实 PR 合并/交付；原生恢复/沙箱/Orca 不再在 SteerLine 重复建设矩阵。节点、异常和恢复规则不变，具体状态见[专属验收](../acceptance/runner-test-convergence.md)。
 
 ## 职责与规则归属
@@ -327,7 +329,7 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 | V04 观察问答与终态 | 断连只接原观察；重复答案只投原请求；明确失败无 final 可恢复；成功缺 final 不补造；人工输入不替代受管结果 |
 | V05 结果与发布 | 原来源绑定、有限格式补报、不重做发布、PR 读取重试与未知发布对账、源失败不被 report done 覆盖 |
 | V06 服务换代与身份 | 准备预算不重置；重开零新启动/输入；只读核验与结算允许；旧回执不推进新 Attempt 或兄弟候选；共进程核对共享 PID 下各项目独立实例/换代 |
-| V07 交付停止与清理 | Delivery 重复提交唯一；任一合格候选交付；closed 后零 PR 查询/新业务；部分清理不撤销交付，未知旧写者不重建；共进程核对单项目停止不杀宿主、聚合停止不跳过兄弟 |
+| V07 交付停止与清理 | Delivery 重复提交唯一；任一合格候选交付；closed 后零 PR 查询/新业务；部分清理不撤销交付，未知旧写者不重建；共进程核对单项目停止不杀宿主、聚合停止不跳过兄弟；停服最终结算绑定原实例/请求/目录/EXE，旧投影不能代替最终证据 |
 | V08 持久化窗口 | 保存意图失败、外部成功提交失败、结果提交后下一输入未发送、Task 终态与回执并发均不重复副作用 |
 
 复用[分级测试入口](../../tests/e2e/README.md)及现有 lifecycle、recovery、environment、stage 和 commit boundary 测试；新增能力在其实施 Plan 中按验收项 ID 明确场景、环境、命令、时点、通过条件与证据位置。设计文档的 V 编号只用于维护映射，不能代替任务专属验收项或注册场景。缺少驱动/原生证据时一并规划补齐，不能以“后续补验”代替必要能力。
