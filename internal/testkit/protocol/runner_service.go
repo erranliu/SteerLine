@@ -55,6 +55,7 @@ func RunRunnerServiceFixture() bool {
 			}
 		}
 		if command == "service start" && info["status"] != "ready" {
+			delete(info, "last_shutdown")
 			exe, err := os.Executable()
 			if err != nil {
 				panic(err)
@@ -79,7 +80,10 @@ func RunRunnerServiceFixture() bool {
 			}
 		}
 		if command == "service stop" {
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			info["last_shutdown"] = map[string]any{"instance_id": info["instance_id"], "request_id": request.RequestID, "state_dir": stateDir, "executable_sha256": info["executable_sha256"], "resources_settled": true}
+			info["status"] = "not_running"
+			raw, _ := json.Marshal(info)
+			if err := os.WriteFile(path, raw, 0600); err != nil {
 				panic(err)
 			}
 		}

@@ -28,8 +28,9 @@ type ActorOptions struct {
 	Heartbeat          time.Duration
 	// Control validates, fixes and commits a product request; it cannot invoke
 	// native adapters. App supplies its Task/Runner CLI command coordinator.
-	Control        func(context.Context, api.ControlRequest) (api.ControlReceipt, error)
-	ShutdownRunner func(context.Context) error
+	Control          func(context.Context, api.ControlRequest) (api.ControlReceipt, error)
+	ShutdownRunner   func(context.Context) error
+	RunnerSettlement func(context.Context) error
 }
 
 type actorCall struct {
@@ -48,7 +49,7 @@ type Actor struct {
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
-	if options.Tasks == nil || options.Store == nil || options.Host == nil || options.Control == nil || options.ShutdownRunner == nil || options.Repository.Identity != options.Tasks.Project || options.Mode != "manual" && options.Mode != "auto" || options.Heartbeat <= 0 {
+	if options.Tasks == nil || options.Store == nil || options.Host == nil || options.Control == nil || options.ShutdownRunner == nil || options.RunnerSettlement == nil || options.Repository.Identity != options.Tasks.Project || options.Mode != "manual" && options.Mode != "auto" || options.Heartbeat <= 0 {
 		return nil, errors.New("task service requires its fixed caller, control and Runner lifecycle ports")
 	}
 	identity, err := options.Host.CurrentProcessIdentity()
@@ -255,18 +256,21 @@ func (a *Actor) shutdown(ctx context.Context) error {
 	a.shutdownMu.Lock()
 	defer a.shutdownMu.Unlock()
 	if a.shutdownConfirmed {
+		// Close gets its own bounded context. A failed final read may be
+		// observed again without repeating the original stop side effect.
+		if a.settlementErr != nil && a.options.RunnerSettlement != nil {
+			a.settlementErr = a.options.RunnerSettlement(ctx)
+		}
 		return nil
 	}
 	err := a.options.ShutdownRunner(ctx)
 	a.shutdownConfirmed = err == nil
 	a.settlementErr = err
 	if err == nil {
-		snapshot, readErr := a.options.Store.ReadRunnerSnapshot(ctx, a.options.Tasks.Project)
-		a.settlementErr = readErr
-		for _, c := range snapshot.Candidates {
-			if c.SubmitState == "unknown" || c.RunID != "" && (c.Projection == nil || c.Projection.StopStatus != "stopped") {
-				a.settlementErr = errors.Join(a.settlementErr, errors.New("Runner service stopped; original native resource settlement remains unverified"))
-			}
+		if a.options.RunnerSettlement == nil {
+			a.settlementErr = errors.New("original Runner resource settlement evidence is unavailable")
+		} else {
+			a.settlementErr = a.options.RunnerSettlement(ctx)
 		}
 	}
 	return err
