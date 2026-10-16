@@ -198,15 +198,6 @@ func ServicePage(rt *ServiceView) *api.ServicePage {
 	return p
 }
 
-func workflowSummary(w model.WorkflowRunRecord) api.WorkflowSummary {
-	p := api.WorkflowSummary{CandidateNumber: w.CandidateNumber, FlowRef: w.FlowRef, WorkflowStage: w.StepID, WorkflowStatus: w.Status, WorkflowRunID: w.WorkflowRunID, TaskID: w.TaskID, CreatedAt: w.CreatedAt}
-	if w.ExecutionProfile != nil {
-		v := Profile(*w.ExecutionProfile)
-		p.ExecutionProfile = &v
-	}
-	return p
-}
-
 func Profile(f model.FixedExecutionProfile) api.ExecutionProfileSummary {
 	p := api.ExecutionProfileSummary{ID: f.ID, Name: f.Name, Host: f.Host, Agent: f.Agent, Digest: f.Digest, AcceptedConfigVersion: f.AcceptedConfigVersion, ImplementationDisplay: append([]string(nil), f.ImplementationDisplay...)}
 	p.Details = []string{"发布责任：" + f.PublicationPolicy.Publisher, "冻结发布目标：" + f.Publication.Provider.Kind + " · " + f.Publication.Provider.BaseURL + "/" + f.Publication.Provider.Repository + " · base " + f.Publication.BaseBranch, "Git remote：" + f.Publication.Remote + " · " + f.Publication.RemoteURL, "发布工具：" + f.Publication.Git.Executable + " · query " + f.Publication.Provider.Query.Executable, "认证引用：" + strings.Join(f.Publication.AuthenticationRefs, ", ")}
@@ -222,30 +213,6 @@ func Profile(f model.FixedExecutionProfile) api.ExecutionProfileSummary {
 	}
 	p.Details = append(p.Details, "受理版本："+f.AcceptedConfigVersion)
 	return p
-}
-
-func executionDetails(e model.ExecutionRecord) []string {
-	lines := []string{}
-	status := "资源与工具未核验"
-	if e.PolicyResources != nil {
-		status = "原生设置已核验；工具未核验"
-		lines = append(lines, "已绑定写根："+strings.Join(e.PolicyResources.WriteRoots, ", "), "临时写根：无（隐式临时目录已排除）")
-	}
-	if e.Environment != nil && e.Environment.Ready {
-		status = "原会话工具与准备结算已核验"
-	}
-	lines = append(lines, "权限核验："+status)
-	if e.Environment != nil {
-		status := "准备未核实"
-		if e.Environment.Ready {
-			status = "准备结算已核实"
-		}
-		lines = append(lines, "环境："+status)
-		if b := e.Environment.Blocker; b != nil {
-			lines = append(lines, "宿主阻断："+b.Fact.Reason+" · "+b.Fact.Confidence+" · "+b.Fact.Source)
-		}
-	}
-	return lines
 }
 
 func copyValue[T any](v *T) *T {

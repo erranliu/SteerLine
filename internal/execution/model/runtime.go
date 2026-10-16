@@ -6,21 +6,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-type PendingQuestion struct {
-	InteractionKind string                                      `json:"interaction_kind,omitempty"`
-	Questions       []executionbackend.Question                 `json:"questions"`
-	Route           executionbackend.ImplementationDataEnvelope `json:"route"`
-}
-
-// A human-confirmed stop settles the resource uncertainty, not the outcome of
-// any previously sent operation. It applies only to this exact attempt.
-type ManualStopConfirmation struct {
-	AttemptID   string    `json:"attempt_id"`
-	ConfirmedAt time.Time `json:"confirmed_at"`
-	ConfirmedBy string    `json:"confirmed_by,omitempty"`
-	Basis       string    `json:"basis,omitempty"`
-}
-
 // DecisionRequest binds a human question independently of workflow progress.
 type DecisionRequest struct {
 	InteractionKind string                                       `json:"interaction_kind,omitempty"`
@@ -59,8 +44,7 @@ type DecisionState struct {
 	AnswerPath  string `json:"answer_path,omitempty"`
 }
 
-// Intent is durable before Git creates anything; actual workspace fields stay null
-// until creation and verification succeed.
+// PRState holds observed publication facts for the caller's read-only view.
 type PRState struct {
 	URL          *string    `json:"url"`
 	HeadRevision *string    `json:"head_revision,omitempty"`

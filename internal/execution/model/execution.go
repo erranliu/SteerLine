@@ -25,15 +25,3 @@ type FixedExecutionProfile struct {
 	AgentLaunch        *agentlaunch.Config `json:"agent_launch,omitempty"`
 	AgentLaunchCommand string              `json:"agent_launch_command,omitempty"`
 }
-
-// PolicyResources is the resource stage of the same execution snapshot.
-// Native configuration verification does not assert successful worker tools.
-type PolicyResources struct {
-	Version            int                                         `json:"version"`
-	Digest             string                                      `json:"digest"`
-	ProfileDigest      string                                      `json:"profile_digest"`
-	Workspace          string                                      `json:"workspace"`
-	WriteRoots         []string                                    `json:"write_roots"`
-	TemporaryRoots     []string                                    `json:"temporary_roots"`
-	ImplementationData executionbackend.ImplementationDataEnvelope `json:"implementation_data"`
-}

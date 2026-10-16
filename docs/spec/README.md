@@ -1,10 +1,12 @@
 # 当前 Spec 与 Plan
 
+旧执行记录与空壳字段清理（2026-10-17，普通开发）：[Plan](../plans/runtime-shell-cleanup.plan.md) · [专属验收](../acceptance/runtime-shell-cleanup.md)。删除无消费者的旧记录、内部字段及辅助函数，校准当前文档；保留现有读取链和模型归属，不改 roadmap。
+
 产品读取、命令入口与 Web 容器重构（2026-10-16，按审计收窄并实施）：[Spec](product-read-command-web-refactor.spec.md) · [Plan](product-read-command-web-refactor.plan.md) · [专属验收](../acceptance/product-read-command-web-refactor.md)。优先收拢候选事实/展示规则；命令保留唯一仲裁与三种受理顺序，Web 提取副作用 hooks；不重建整套读取/命令/前端框架，不改 roadmap。
 
 应用与项目生命周期收拢（2026-10-16，普通开发，按审计收窄并实施）：[Spec](application-project-lifecycle.spec.md) · [Plan](application-project-lifecycle.plan.md) · [验收](../acceptance/application-project-lifecycle.md)。删除旧启动链，统一项目资源 owner、部分启动收尾和进程内调用排空；保留原停机/失败策略，不改 roadmap。
 
-执行权限与 Git 环境检查接入（2026-10-16，普通开发，审查修订、先不实现）：[Spec](environment-check.spec.md) · [Plan](environment-check.plan.md) · [本仓验收与审查记录](../acceptance/environment-check.md)。Runner 前置已独立成其仓库同名 Spec/Plan 与 SREC 验收；本仓仅负责 caller/HTTP/Web 的 SLEC 验收。三命令与快照轮询，认证/权限和远端缺口由 Runner 负责；构建及业务资源后置，不改 roadmap。
+执行权限与 Git 环境检查接入（已实现，正式公开契约已对齐）：[Spec](environment-check.spec.md) · [Plan](environment-check.plan.md) · [本仓验收与审查记录](../acceptance/environment-check.md)。caller/HTTP/Web 自动验证及固定版本本机 full_access 真实正例已有记录，启动配置与报告刷新修复已合入；原生正例仅证明记录中的源码/Runner 版本和模式，不代表全部权限、远端或恢复组合通过。SLEC-M01 完整人工体验仍待安排，Runner 其余专项归其独立 SREC 验收；构建及业务资源后置，不改 roadmap。
 
 SteerRunner 拆分后的测试精简（2026-10-15，普通开发，已实施）：[Spec](runner-test-convergence.spec.md) · [Plan](runner-test-convergence.plan.md) · [专属验收](../acceptance/runner-test-convergence.md)。执行专项归 Runner；L2 保留本机 Codex 真实实现、报告、发布、SteerlineTest PR 合并和 Task 交付全流程，不改 roadmap。
 

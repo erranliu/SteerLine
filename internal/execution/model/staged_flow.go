@@ -1,24 +1,5 @@
 package model
 
-import (
-	"encoding/json"
-)
-
-// StageInput is the frozen business binding of a native input. Native transport
-// purpose remains business/readiness; it is not the business step identifier.
-type StageInput struct {
-	FeedbackDecisionID string          `json:"feedback_decision_id,omitempty"`
-	CommandID          string          `json:"command_id"`
-	AttemptID          string          `json:"attempt_id"`
-	StepID             string          `json:"step_id"`
-	Version            uint64          `json:"version"`
-	Prompt             string          `json:"prompt"`
-	TaskFacts          json.RawMessage `json:"task_facts,omitempty"`
-	SourceCommandID    string          `json:"source_command_id,omitempty"`
-	SourceTurnID       string          `json:"source_turn_id,omitempty"`
-	ReportToolPolicy   string          `json:"report_tool_policy,omitempty"`
-}
-
 type StageResult struct {
 	CommandID            string `json:"command_id"`
 	AttemptID            string `json:"attempt_id"`

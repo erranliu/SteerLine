@@ -9,9 +9,3 @@ type ExecutionTarget struct {
 	ExternalRuntime string `json:"external_runtime,omitempty"`
 	ExecutionHost   string `json:"execution_host,omitempty"`
 }
-
-type WorkspaceIntent struct {
-	Path       string `json:"path"`
-	Branch     string `json:"branch"`
-	BaseCommit string `json:"base_commit"`
-}
