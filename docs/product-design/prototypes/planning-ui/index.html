@@ -661,7 +661,7 @@ body { margin: 0; padding: 16px; }
    <div data-draft-json-panel hidden><p class="sub">稳定关联来自 JSON；执行状态按 Task ID 查询正式 DAG。</p><pre class="json-preview" data-draft-json></pre></div><p class="receipt" data-draft-receipt role="status"></p>
   </div>
   <aside class="draft-task-panel"><h3>草稿关联任务</h3><p class="sub" data-draft-progress></p><div data-draft-task-list></div><button class="sl-button" data-action="add-draft-task">＋ 草稿任务 · 占号</button>
-   <form class="draft-task-form" data-draft-task-form hidden><h3 data-draft-task-form-title></h3><label class="field-label" for="draft-task-name">任务名称</label><input id="draft-task-name" data-draft-task-name required><p class="sub">此处维护草稿任务约束。正式 Spec 路径和正文由转正流程生成。</p><label class="field-label" for="draft-task-deps">拟议前置编号 · 逗号分隔</label><input id="draft-task-deps" data-draft-task-deps placeholder="8, 91"><div class="draft-test-plan"><label class="field-label">草稿测试约束 · 正式 Plan 由固定流程生成</label><p class="sub">L1 固定必选；按任务追加长期测试或规划入口扩展。</p><div data-draft-task-tests></div></div><p class="validation-message" data-draft-task-error></p><div class="button-row"><button class="sl-button primary" type="button" data-action="save-draft-task">保存任务</button><button class="sl-button" type="button" data-action="cancel-draft-task">取消</button></div></form>
+   <form class="draft-task-form" data-draft-task-form hidden><h3 data-draft-task-form-title></h3><label class="field-label" for="draft-task-name">任务名称</label><input id="draft-task-name" data-draft-task-name required><p class="sub">此处维护草稿任务约束。正式 Spec 路径和正文由转正流程生成。</p><label class="field-label" for="draft-task-deps">拟议前置编号 · 逗号分隔</label><input id="draft-task-deps" data-draft-task-deps placeholder="8, 91"><div class="draft-test-plan"><label class="field-label">草稿测试约束 · 正式 Plan 由固定流程生成</label><p class="sub">L1 固定必选；按任务追加 L2 / L3 或规划入口扩展。L4 只能在测试管理中人工触发，Plan 不自动选取执行。</p><div data-draft-task-tests></div></div><p class="validation-message" data-draft-task-error></p><div class="button-row"><button class="sl-button primary" type="button" data-action="save-draft-task">保存任务</button><button class="sl-button" type="button" data-action="cancel-draft-task">取消</button></div></form>
    <div class="draft-promotion-actions"><button class="sl-button primary" data-action="promote-draft">转正 · 固定流程</button><button class="sl-button" data-action="archive-draft">归档 Markdown 与 JSON</button><p class="sub" data-archive-reason></p><p class="sub">转正后原草稿保留。全部任务完成且 execution-map 同步后才可归档。</p></div>
   </aside>
  </div>
@@ -785,7 +785,7 @@ body { margin: 0; padding: 16px; }
 
 <section class="screen screen-tests" aria-label="测试管理">
  <div class="page-head"><div><h1>测试管理</h1><p class="sub">项目长期测试目录 · 固定级别与场景 · 运行记录</p></div><span class="status" data-test-catalogue-version></span></div>
- <div class="test-level-cards" data-test-level-cards></div><div class="test-catalogue-notice">L1 是每次 PR 必须通过的最小集；L4 覆盖全部脚本 / 纯代码，包含 L1，不包含 L2 / L3。临时开发测试不进入本页，未纳入长期分级入口的测试应安排清理。</div>
+ <div class="test-level-cards" data-test-level-cards></div><div class="test-catalogue-notice">L1 是每次 PR 必须通过的最小集；L3 是可并行的常规测试；L4 是不可并行的测试及各种边界情况测试，只能人工触发，Plan 不会自动选取执行。临时开发测试不进入本页，未纳入长期分级入口的测试应安排清理。</div>
  <div class="test-view-tabs"><button class="filter active" data-test-view="catalogue">长期目录</button><button class="filter" data-test-view="runs">运行记录</button></div>
  <div data-test-catalogue-view class="test-workspace"><aside class="test-suite-list" data-test-suite-list></aside><div class="test-suite-detail"><h2 data-test-suite-title></h2><p class="sub" data-test-suite-description></p><div class="test-suite-metadata" data-test-suite-metadata></div><div data-test-case-list></div><pre class="json-preview" data-test-suite-command></pre>
   <div class="callout" data-test-extension-state hidden></div><button class="sl-button" data-action="register-test-extension" hidden>演示：扩展已实现并登记分级入口</button>
@@ -1236,12 +1236,13 @@ body { margin: 0; padding: 16px; }
 
   const managedCases={
     'TC-C01':'配置解析纯代码单元测试','TC-C02':'任务依赖规则纯代码单元测试','TC-C03':'编号与输入校验脚本',
-    'TC-C04':'全部配置边界单元测试','TC-C05':'全部任务规则单元测试','TC-C06':'全部反馈转换单元测试','TC-C07':'文档关联检查脚本','TC-C08':'全部模型编解码单元测试','TC-C09':'全部命令参数检查脚本',
     'TC-S01':'启动真实调试程序并验证 ready / 查询 smoke',
     'TC-F01':'实际创建任务并读取依赖关系','TC-F02':'实际交付后读取后继资格',
     'TC-F03':'实际候选切换与回答草稿隔离','TC-F04':'实际原生会话入口路由',
-    'TC-F05':'两个真实调试环境的资源隔离','TC-F06':'实际运行后的停止与重启',
-    'TC-F07':'实际候选停止功能（任务 #93 扩展）'
+    'TC-F05':'两个真实调试环境的资源隔离','TC-F06':'独立环境的正常停止与资源清理',
+    'TC-F07':'实际候选停止功能（任务 #93 扩展）',
+    'TC-E01':'独占现场的进程中断与重启恢复','TC-E02':'共享资源冲突与资源耗尽边界',
+    'TC-E03':'配置空值、极值与非法组合边界','TC-E04':'命令参数长度与非法输入边界'
   };
   const minimumCodeCases=['TC-C01','TC-C02','TC-C03'];
   const managedSuites=[
@@ -1249,11 +1250,13 @@ body { margin: 0; padding: 16px; }
     {id:'L2-SMOKE',level:'L2',name:'实际运行 smoke',runtime:true,cases:['TC-S01'],version:1,lifecycle:'maintained',command:'project-tests run --level L2 --suite smoke（演示入口）'},
     {id:'L3-TASK',level:'L3',name:'任务与交付实际功能',runtime:true,cases:['TC-F01','TC-F02'],version:1,lifecycle:'maintained',command:'project-tests run --level L3 --suite task（演示入口）'},
     {id:'L3-FEEDBACK',level:'L3',name:'候选与反馈实际功能',runtime:true,cases:['TC-F03','TC-F04'],version:1,lifecycle:'maintained',command:'project-tests run --level L3 --suite feedback（演示入口）'},
-    {id:'L3-WORKSPACE',level:'L3',name:'实际环境隔离与恢复',runtime:true,cases:['TC-F05','TC-F06'],version:1,lifecycle:'maintained',command:'project-tests run --level L3 --suite workspace（演示入口）'},
-    {id:'L4-ALL',level:'L4',name:'全部脚本 / 纯代码测试',runtime:false,cases:['TC-C01','TC-C02','TC-C03','TC-C04','TC-C05','TC-C06','TC-C07','TC-C08','TC-C09'],version:1,lifecycle:'maintained',command:'project-tests run --level L4 --suite all-code（演示入口）'},
+    {id:'L3-WORKSPACE',level:'L3',name:'独立环境常规隔离与清理',runtime:true,cases:['TC-F05','TC-F06'],version:2,lifecycle:'maintained',command:'project-tests run --level L3 --suite workspace（演示入口）'},
+    {id:'L4-SERIAL',level:'L4',name:'独占运行与资源边界',runtime:true,cases:['TC-E01','TC-E02'],version:1,lifecycle:'maintained',command:'project-tests run --level L4 --suite serial（仅人工触发的演示入口）'},
+    {id:'L4-BOUNDARY',level:'L4',name:'配置与输入边界',runtime:false,cases:['TC-E03','TC-E04'],version:1,lifecycle:'maintained',command:'project-tests run --level L4 --suite boundary（仅人工触发的演示入口）'},
     {id:'L3-CONTROL',level:'L3',name:'候选停止功能扩展',runtime:true,cases:['TC-F07'],version:1,lifecycle:'planned',ownerTask:'93',command:'project-tests run --level L3 --suite candidate-control（待扩展入口）'}
   ];
   const suiteById=id=>managedSuites.find(s=>s.id===id);
+  const planSelectableSuite=s=>!!s&&s.level!=='L4';
   const requirement=id=>({id,version:suiteById(id).version,cases:[...suiteById(id).cases]});
   const makeTestPlan=(task,path,ids,extensions=[])=>({task:String(task),path,version:1,requirements:ids.map(requirement),extensions:[...extensions],when:'提交或更新 PR 前',evidence:'测试管理中的固定提交报告'});
   const draftTestPlans={
@@ -1270,7 +1273,7 @@ body { margin: 0; padding: 16px; }
   const initialVersionCoverage={};Object.values(tasks).filter(t=>t.delivery).forEach(t=>{const c=t.candidates.find(c=>c.id===t.delivery);initialVersionCoverage[t.id]={candidate:c.id,sha:c.commitSha};});Object.values(tasks).forEach(t=>t.candidates.filter(c=>c.commitSha).forEach(c=>c.versionCoverage={...copyObject(initialVersionCoverage),[t.id]:{candidate:c.id,sha:c.commitSha}}));
   let testCatalogueRevision=1,testView='catalogue',testLevel='L1',selectedManagedSuite='L1-MIN',selectedTestSource='candidate:8:c3',selectedTestEnvironment='',testOutcome='passed',testRunCounter=1,activeTestRun=null,unknownTestRun=null,testPlanPreview=null;
   const selectedManagedCases=Object.fromEntries(managedSuites.map(s=>[s.id,[...s.cases]])),managedTestRuns=[];
-  const levelDescriptions={L1:'每次 PR 必须通过的最小脚本 / 纯代码单元测试集',L2:'包含实际程序运行的 smoke test',L3:'按功能维护，可独立选择多个实际功能场景',L4:'全部脚本 / 纯代码测试，包含 L1，不包含 L2 / L3'};
+  const levelDescriptions={L1:'每次 PR 必须通过的最小脚本 / 纯代码单元测试集',L2:'包含实际程序运行的 smoke test',L3:'可并行的常规测试，按功能独立选择场景',L4:'不可并行的测试及各种边界情况测试；仅人工触发，Plan 不自动选取执行'};
   const taskTestPlan=t=>t.testPlan||null;
   function managedTestSource(key=selectedTestSource){
     if(key==='main'){const head=branchHead(mainBranch);return {key:'main:'+mainBranch+':'+head.sha,kind:'main',sha:head.sha,label:'主分支 '+mainBranch,coverage:copyObject(head.coverage)};}
@@ -1313,7 +1316,7 @@ body { margin: 0; padding: 16px; }
   }
   function testEnvironmentReason(s,source,env){
     if(!source)return '请选择有提交的来源。';if(!suiteAvailable(s,source))return s.lifecycle==='planned'?'扩展入口尚未实现并登记，不能验证。':'该扩展入口不属于所选代码版本。';if(!s.runtime)return '';
-    if(!env||env.state!=='ready')return 'L2 / L3 需要可用的独立调试环境。';if(env.source.sha!==source.sha)return '环境必须与本次测试来源的完整 SHA 一致。';if(env.testManifest?.[s.id]!==s.version)return '该环境未包含此版本的测试入口，请按实现后的提交重新创建环境。';return '';
+    if(!env||env.state!=='ready')return '实际运行场景需要可用的独立调试环境。';if(env.source.sha!==source.sha)return '环境必须与本次测试来源的完整 SHA 一致。';if(env.testManifest?.[s.id]!==s.version)return '该环境未包含此版本的测试入口，请按实现后的提交重新创建环境。';return '';
   }
   function renderTestManagement(){
     q('[data-test-catalogue-version]').textContent='长期目录 v'+testCatalogueRevision;
@@ -1323,17 +1326,17 @@ body { margin: 0; padding: 16px; }
     q('[data-test-suite-list]').innerHTML=suites.map(s=>`<button class="test-suite-row ${s.id===selectedManagedSuite?'selected':''}" data-managed-suite="${s.id}"><strong>${esc(s.id+' '+s.name)}</strong><span>定义 v${s.version} · ${s.cases.length} 个长期场景</span><span>${s.lifecycle==='planned'?'待实现登记':s.scope==='candidate'?'分支已登记 · 待合并':'长期维护'}</span></button>`).join('');
     const s=suiteById(selectedManagedSuite),source=managedTestSource(),env=debugEnvironments[selectedTestEnvironment];
     q('[data-test-suite-title]').textContent=s.id+' · '+s.name;q('[data-test-suite-description]').textContent=levelDescriptions[s.level];
-    q('[data-test-suite-metadata]').textContent='定义 v'+s.version+' · '+(s.runtime?'需要实际程序运行':'脚本 / 纯代码')+' · '+s.cases.length+' 个长期场景';
-    q('[data-test-case-list]').innerHTML=s.cases.map(id=>`<label class="test-case"><input type="checkbox" data-managed-case="${id}" ${selectedManagedCases[s.id].includes(id)?'checked':''} ${s.level!=='L3'||activeTestRun||unknownTestRun?'disabled':''}><span>${esc(id+' · '+managedCases[id])}</span></label>`).join('');
+    q('[data-test-suite-metadata]').textContent='定义 v'+s.version+' · '+(s.runtime?'需要实际程序运行':'脚本 / 纯代码')+' · '+s.cases.length+' 个长期场景'+(s.level==='L4'?' · 仅人工触发':s.level==='L3'?' · 可并行常规测试':'');
+    q('[data-test-case-list]').innerHTML=s.cases.map(id=>`<label class="test-case"><input type="checkbox" data-managed-case="${id}" ${selectedManagedCases[s.id].includes(id)?'checked':''} ${!['L3','L4'].includes(s.level)||activeTestRun||unknownTestRun?'disabled':''}><span>${esc(id+' · '+managedCases[id])}</span></label>`).join('');
     q('[data-test-suite-command]').textContent=s.command;
     q('[data-test-extension-state]').hidden=!s.ownerTask;q('[data-test-extension-state]').textContent=s.ownerTask?(s.lifecycle==='planned'?'此测试入口待实现并登记，登记后可运行验证。':'此测试入口已登记（演示），提交 '+s.registeredSource.sha):'';
     q('[data-action="register-test-extension"]').hidden=s.lifecycle!=='planned';q('[data-action="register-test-extension"]').disabled=!connected||source?.task!==s.ownerTask;
     q('[data-test-source]').innerHTML='<option value="main">项目主分支</option>'+Object.values(tasks).flatMap(t=>t.candidates.map(c=>`<option value="candidate:${t.id}:${c.id}" ${selectedTestSource==='candidate:'+t.id+':'+c.id?'selected':''} ${!c.commitSha?'disabled':''}>${esc(title(t)+' / '+c.id.toUpperCase())}${c.commitSha?' / '+c.commitSha.slice(0,7):' / 尚无提交'}</option>`)).join('');q('[data-test-source]').value=selectedTestSource;
     q('[data-test-source-summary]').textContent=source?source.label+' · 固定 SHA '+source.sha:'等待可验证的提交。';
-    q('[data-test-environment]').innerHTML='<option value="">'+(s.runtime?'选择独立调试环境…':'L1 / L4 不需要实际运行环境')+'</option>'+Object.values(debugEnvironments).map(e=>`<option value="${e.id}" ${e.id===selectedTestEnvironment?'selected':''} ${e.state!=='ready'?'disabled':''}>${esc(e.id+' / '+e.source.sha.slice(0,7)+' / '+e.directory)}</option>`).join('');q('[data-test-environment]').value=selectedTestEnvironment;
+    q('[data-test-environment]').innerHTML='<option value="">'+(s.runtime?'选择独立调试环境…':'此脚本 / 纯代码入口不需要实际运行环境')+'</option>'+Object.values(debugEnvironments).map(e=>`<option value="${e.id}" ${e.id===selectedTestEnvironment?'selected':''} ${e.state!=='ready'?'disabled':''}>${esc(e.id+' / '+e.source.sha.slice(0,7)+' / '+e.directory)}</option>`).join('');q('[data-test-environment]').value=selectedTestEnvironment;
     q('[data-test-environment]').disabled=!s.runtime||!!activeTestRun||!!unknownTestRun;q('[data-test-source]').disabled=!!activeTestRun||!!unknownTestRun;q('[data-test-outcome]').disabled=!!activeTestRun||!!unknownTestRun;q('[data-test-outcome]').value=testOutcome;
-    const reason=testEnvironmentReason(s,source,env)||(!selectedManagedCases[s.id].length?'请选择至少一个长期场景。':'');q('[data-test-environment-reason]').textContent=s.runtime?reason||'来源 SHA 与环境入口版本已核对（演示）。':'只运行脚本 / 纯代码，不串跑 L2 / L3。';
-    q('[data-action="run-managed-test"]').textContent=unknownTestRun?'查询原测试结果 · 演示':'运行选中测试 · 演示';q('[data-action="run-managed-test"]').disabled=!connected||!!activeTestRun||(!unknownTestRun&&(!!reason||!selectedManagedCases[s.id].length));
+    const reason=testEnvironmentReason(s,source,env)||(!selectedManagedCases[s.id].length?'请选择至少一个长期场景。':'');q('[data-test-environment-reason]').textContent=s.runtime?reason||'来源 SHA 与环境入口版本已核对（演示）。':'只运行当前脚本 / 纯代码入口，不串跑其他级别。';
+    q('[data-action="run-managed-test"]').textContent=unknownTestRun?'查询原测试结果 · 演示':s.level==='L4'?'人工触发 L4 测试 · 演示':'运行选中测试 · 演示';q('[data-action="run-managed-test"]').disabled=!connected||!!activeTestRun||(!unknownTestRun&&(!!reason||!selectedManagedCases[s.id].length));
     q('[data-test-run-validation]').textContent=activeTestRun?'运行中：'+activeTestRun.id+' / '+activeTestRun.target.label:unknownTestRun?'原结果待核实：'+unknownTestRun.id+' / '+unknownTestRun.target.label:reason;
     q('[data-test-run-list]').innerHTML=[...managedTestRuns].reverse().map(r=>`<div class="test-record"><strong>${r.outcome==='passed'?'通过':'失败'} · ${esc(r.suite)} · ${r.id}</strong><p>${esc(r.target.label)} · SHA ${r.target.sha}</p><p>场景：${esc(r.cases.join(', '))} · 所选范围完整：${r.complete?'是':'否'}</p><p>定义快照：${esc(JSON.stringify(r.definitions))}</p><p>${r.environment?'环境 '+esc(r.environment.id+' / '+r.environment.directory):'脚本 / 纯代码，无实际运行环境'}</p><p>证据：${esc(r.evidence)} · ${esc(r.date)}</p></div>`).join('')||'<p class="sub">尚无长期测试报告。</p>';
   }
@@ -1343,14 +1346,14 @@ body { margin: 0; padding: 16px; }
   function startManagedRun(){
     if(!connected)return;if(unknownTestRun){completeManagedRun(unknownTestRun);return;}
     const s=suiteById(selectedManagedSuite),source=managedTestSource(),env=debugEnvironments[selectedTestEnvironment];if(activeTestRun||testEnvironmentReason(s,source,env)||!selectedManagedCases[s.id].length)return;
-    const r={id:'test-run-'+testRunCounter++,suite:s.id,target:copyObject(source),cases:[...selectedManagedCases[s.id]],definitions:managedManifest(source),environment:s.runtime?{id:env.id,directory:env.directory,sha:env.source.sha}:null,expected:testOutcome,complete:false};activeTestRun=r;renderTestManagement();
+    const r={id:'test-run-'+testRunCounter++,suite:s.id,target:copyObject(source),cases:[...selectedManagedCases[s.id]],definitions:{[s.id]:s.version},environment:s.runtime?{id:env.id,directory:env.directory,sha:env.source.sha}:null,expected:testOutcome,complete:false};activeTestRun=r;renderTestManagement();
     setTimeout(()=>{if(!connected){activeTestRun=null;unknownTestRun=r;renderTestManagement();}else completeManagedRun(r);},700);
   }
   function openTaskManagedTest(id){
     const t=tasks[selectedTask],c=current()?.commitSha?current():t.candidates.find(c=>c.commitSha);selectedManagedSuite=id;testLevel=suiteById(id).level;testView='catalogue';selectedTestSource=c?.commitSha?'candidate:'+t.id+':'+c.id:'main';navigate('tests');
   }
   function validatePromotionTests(flow){
-    const reasons=[];flow.snapshot.tasks.forEach(t=>{const p=flow.generatedTestPlans?.[String(t.task_id)];if(!p?.path){reasons.push('#'+t.task_id+' 缺少 Plan 测试计划');return;}if(!p.requirements.some(r=>r.id==='L1-MIN'))reasons.push('#'+t.task_id+' 未包含必须的 L1 最小集');p.requirements.forEach(r=>{const s=suiteById(r.id);if(!s||s.version!==r.version||r.cases.some(id=>!s.cases.includes(id)))reasons.push('#'+t.task_id+' 测试关联无效：'+r.id);else if(s.lifecycle==='planned'&&(!p.extensions.includes(s.id)||s.ownerTask!==String(t.task_id)))reasons.push('#'+t.task_id+' 尚未安排测试入口扩展：'+s.id);});});return reasons.join('；');
+    const reasons=[];flow.snapshot.tasks.forEach(t=>{const p=flow.generatedTestPlans?.[String(t.task_id)];if(!p?.path){reasons.push('#'+t.task_id+' 缺少 Plan 测试计划');return;}if(!p.requirements.some(r=>r.id==='L1-MIN'))reasons.push('#'+t.task_id+' 未包含必须的 L1 最小集');p.requirements.forEach(r=>{const s=suiteById(r.id);if(s?.level==='L4')reasons.push('#'+t.task_id+' L4 只能人工触发，不能纳入 Plan 自动测试');else if(!s||s.version!==r.version||r.cases.some(id=>!s.cases.includes(id)))reasons.push('#'+t.task_id+' 测试关联无效：'+r.id);else if(s.lifecycle==='planned'&&(!p.extensions.includes(s.id)||s.ownerTask!==String(t.task_id)))reasons.push('#'+t.task_id+' 尚未安排测试入口扩展：'+s.id);});});return reasons.join('；');
   }
   function renderPromotionTests(){
     const flow=activeFlow;if(!flow)return;q('[data-promotion-test-links]').innerHTML=flow.snapshot.tasks.map(t=>{const p=flow.generatedTestPlans?.[String(t.task_id)]||flow.snapshot.testPlans[String(t.task_id)];return `<div class="test-plan-row"><strong>#${t.task_id} · ${p?.path?esc(p.path)+' / v'+p.version:'草稿测试约束 · 待生成正式 Plan'}</strong><p>${p?p.requirements.map(r=>esc(r.id+' / '+suiteById(r.id).level+' / v'+r.version+' / '+r.cases.join(', '))).join('<br>'):'缺少固定测试关联'}</p>${p?.extensions.length?'<p>实施步骤须补齐长期入口：'+p.extensions.map(esc).join('、')+'</p>':''}</div>`;}).join('');
@@ -1365,7 +1368,7 @@ body { margin: 0; padding: 16px; }
       case 'close-task-test-plan':testPlanPreview=null;renderTaskTests();return true;
       case 'run-managed-test':startManagedRun();return true;
       case 'register-test-extension':{const s=suiteById(selectedManagedSuite),source=managedTestSource();if(connected&&s.lifecycle==='planned'&&source?.task===s.ownerTask){s.lifecycle='maintained';s.scope='candidate';s.registeredSource=copyObject(source);recordLongDocumentTestRegistration(s,source);testCatalogueRevision++;renderTestManagement();renderTaskTests();}return true;}
-      case 'run-plan-managed-tests':{const t=tasks[selectedTask],c=current(),status=prTestStatus(t,c);const req=status.rows.find(row=>!row.passed)?.req||t.testPlan?.requirements[0];if(req)openTaskManagedTest(req.id);return true;}
+      case 'run-plan-managed-tests':{const t=tasks[selectedTask],c=current(),status=prTestStatus(t,c);const rows=status.rows.filter(row=>planSelectableSuite(row.suite));const req=rows.find(row=>!row.passed)?.req||rows[0]?.req;if(req)openTaskManagedTest(req.id);return true;}
       case 'publish-tested-pr':{const t=tasks[selectedTask],c=current();if(connected&&c?.status==='pr-checks'&&prTestStatus(t,c).passed){c.pr=c.pr||'#'+(123+Number(c.id.slice(1)));c.status='merge';recordExperienceOpenPR(c.pr.replace(/^#/,''),t.name,t.base||mainBranch);addLog(c,'activity','PR 已提交 / 更新（演示）','已核对固定 SHA 的 Plan 测试要求。');renderTaskSurfaces();renderExecution();}return true;}
     }
     return false;
@@ -1592,7 +1595,7 @@ body { margin: 0; padding: 16px; }
     const d=drafts[selectedDraft];if(d.archived)return;editingDraftTask=id;
     const t=id?d.tasks.find(t=>t.task_id===Number(id)):null;if(t&&tasks[String(t.task_id)])return;
     q('[data-draft-task-form]').hidden=false;q('[data-draft-task-form-title]').textContent=t?'完善 #'+t.task_id:'创建草稿任务 · 自动占号';
-    q('[data-draft-task-name]').value=t?.title||'';q('[data-draft-task-deps]').value=t?.depends_on.join(', ')||'';q('[data-draft-task-error]').textContent='';const testPlan=t?draftTestPlans[String(t.task_id)]:null;q('[data-draft-task-tests]').innerHTML=managedSuites.filter(s=>s.id!=='L4-ALL'||s.lifecycle==='maintained').map(s=>`<label class="human-check"><input type="checkbox" data-draft-suite="${s.id}" ${s.id==='L1-MIN'||testPlan?.requirements.some(r=>r.id===s.id)?'checked':''} ${s.id==='L1-MIN'||s.lifecycle==='planned'&&s.ownerTask!==String(t?.task_id||nextDraftTask)?'disabled':''}><span>${esc(s.id+' / '+s.level)}${s.lifecycle==='planned'?' · 本任务须扩展':''}</span></label>`).join('');q('[data-draft-task-name]').focus();
+    q('[data-draft-task-name]').value=t?.title||'';q('[data-draft-task-deps]').value=t?.depends_on.join(', ')||'';q('[data-draft-task-error]').textContent='';const testPlan=t?draftTestPlans[String(t.task_id)]:null;q('[data-draft-task-tests]').innerHTML=managedSuites.filter(planSelectableSuite).map(s=>`<label class="human-check"><input type="checkbox" data-draft-suite="${s.id}" ${s.id==='L1-MIN'||testPlan?.requirements.some(r=>r.id===s.id)?'checked':''} ${s.id==='L1-MIN'||s.lifecycle==='planned'&&s.ownerTask!==String(t?.task_id||nextDraftTask)?'disabled':''}><span>${esc(s.id+' / '+s.level)}${s.lifecycle==='planned'?' · 本任务须扩展':''}</span></label>`).join('');q('[data-draft-task-name]').focus();
   }
   function saveDraftTask(){
     const d=drafts[selectedDraft],name=q('[data-draft-task-name]').value.trim(),spec=null,raw=q('[data-draft-task-deps]').value.trim();
@@ -1604,7 +1607,7 @@ body { margin: 0; padding: 16px; }
     if(editingDraftTask&&deps.includes(Number(editingDraftTask))){error.textContent='任务不能依赖自己。';return;}
     if(editingDraftTask){const t=d.tasks.find(t=>t.task_id===Number(editingDraftTask));if(tasks[String(t.task_id)]){error.textContent='任务已正式入图，不能从草稿修改。';return;}Object.assign(t,{title:name,spec,depends_on:deps});d.body=d.body.replace(new RegExp('(^|\\n)- #'+t.task_id+' [^\\n]*'),(_,prefix)=>prefix+'- #'+t.task_id+' '+name);d.revision++;}
     else{const created=allocateDraftTask(d,name,spec,deps);editingDraftTask=String(created.task_id);}
-    const planPath=draftTestPlans[String(editingDraftTask)]?.path||'',ids=qa('[data-draft-suite]').filter(el=>el.checked).map(el=>el.dataset.draftSuite),previousTestPlan=draftTestPlans[String(editingDraftTask)],nextTestPlan=makeTestPlan(editingDraftTask,planPath,ids,ids.filter(id=>suiteById(id).lifecycle==='planned'));
+    const planPath=draftTestPlans[String(editingDraftTask)]?.path||'',ids=qa('[data-draft-suite]').filter(el=>el.checked&&planSelectableSuite(suiteById(el.dataset.draftSuite))).map(el=>el.dataset.draftSuite),previousTestPlan=draftTestPlans[String(editingDraftTask)],nextTestPlan=makeTestPlan(editingDraftTask,planPath,ids,ids.filter(id=>suiteById(id).lifecycle==='planned'));
     if(nextTestPlan&&previousTestPlan)nextTestPlan.version=JSON.stringify([nextTestPlan.path,nextTestPlan.requirements,nextTestPlan.extensions])===JSON.stringify([previousTestPlan.path,previousTestPlan.requirements,previousTestPlan.extensions])?previousTestPlan.version:previousTestPlan.version+1;draftTestPlans[String(editingDraftTask)]=nextTestPlan;
     d.receipt='已保存 Markdown / JSON 的任务关联。编号是演示占号，不写入仓库计数器。';q('[data-draft-task-form]').hidden=true;editingDraftTask=null;renderRoadmap();renderPlanningContext();
   }
@@ -1627,7 +1630,7 @@ body { margin: 0; padding: 16px; }
     setTimeout(()=>{t.mapSync=connected?'synced':'failed';if(t.mapSync==='synced')mapRevision++;renderExecutionMap();renderRoadmap();},500);
   }
   function promotionLog(flow,text){flow.logs.push(clock()+' · '+text);}
-  const specRules={'docs/spec/SpecGuide.md':{path:'docs/spec/SpecGuide.md',revision:1,body:"# Spec / Plan 生成规范\n\n本规范用于 SteerLine 产品的 Roadmap 草稿转正流程。规划工作台的对话只维护 Roadmap 草稿及其任务约束；正式 Spec / Plan 由固定转正流程生成、审阅和发布。它不替代仓库开发中的 AGENTS.md 或用户直接授权的普通开发流程。\n\n## 先固定输入，再设计\n\n- 读取本规范全文，并记录实际读取的路径与版本。文件缺失或读取失败时停止生成。\n- 固定 Roadmap Markdown / JSON、待转正任务、任务编号、代码基线及规范版本。变化后的输入通过明确的重新生成操作采用，不悄悄替换已有结果。\n- 先列出任务目标、行为边界、约束、待澄清问题和验收要求。有关键矛盾或未决范围时先补充草稿，不用推测填成正式契约。\n\n## 警惕过度设计\n\n- 默认选择满足当前确认需求的简洁设计，不为假设中的未来需求增加框架、扩展层或配置组合。\n- 不为凑并行数量拆分任务；每个任务应有独立成果、清晰职责和最小通过条件。\n- 未发布项目默认不为旧数据、配置或协议新增兼容、迁移、双写或回退路径，除非任务明确要求。\n\n## 先查现有代码，再做整合与整体规划\n\n- 新功能设计前阅读相关现有代码、调用入口、状态模型、契约、测试及其实际消费者；记录查看的位置和结论。\n- 优先复用或调整现有实现。说明保留、整合、替换及删除的部分，避免在旁边新增一套重复能力。\n- 多个相关任务先形成整体整合安排，再生成各任务 Spec / Plan。明确共用语义、修改所有者、依赖及真实交接条件，避免多个任务分别重建相同模块。\n\n## 执行链路与桥接必须显式且必要\n\n- 不隐式增加第二套执行链路、独立状态来源或不同的业务准入规则。\n- 确实需要多路径时，明确各路径的职责、选择条件、统一的业务事实与维护代价；不能用实现方便代替必要性。\n- 不引入没有必要的桥接、适配、转发、包装或重复状态。确需新增时写清现有入口为何无法承担、最小职责以及消费者。\n- 不以临时演示数据或 Agent 自述宣称真实接口、运行能力、权限、测试或交付事实已经存在。\n\n## Spec 和 Plan 分工\n\n- Spec 明确目标、当前行为与预期行为、范围、非目标、契约、状态与交付要求，以及验收项和通过条件。\n- Plan 明确代码整合步骤、涉及位置、依赖与前置、必要能力补齐、测试和交付安排。不得另立与 Spec 矛盾的第二套行为。\n- 自动与人工验收分别安排；人工项标明参与窗口及真实阻塞范围。验收要求和实时结果分开，结果不回写为 Plan 的状态表。\n- Plan 必须包含最小必要的测试计划：验收项 ID / 专属文档、长期测试级别与组 / 场景、环境、命令、执行时点、通过条件及证据登记位置。\n- 自动验收全部映射到可执行安排；缺驱动、入口或环境能力时规划最小补齐步骤或明确前置。不默认扩大到 Full、全部 live 或无关回归。\n- 新增或扩展长期 L1–L4 流程时明确稳定入口与登记安排；临时开发测试不替代长期测试证据。\n\n## 审阅与发布\n\n- 审阅时展示现有代码调查、复用 / 整合方式、执行链路变化、桥接必要性、跨任务安排及测试验收覆盖。\n- 生成正文可在转正流程内受控修改；修改后重新核对规范、依赖及 Spec / Plan 一致性，取消此前确认。\n- 审阅确认后，正式文档随 Roadmap / JSON / execution-map 文档 PR 发布。核实合入主分支后，才以固定文档版本创建正式 DAG。\n- 规范可以维护并随 Git 版本管理。已生成操作保留所用内容快照；更新规范不自动覆盖正在审阅或已发布的文档。\n"}};
+  const specRules={'docs/spec/SpecGuide.md':{path:'docs/spec/SpecGuide.md',revision:1,body:"# Spec / Plan 生成规范\n\n本规范用于 SteerLine 产品的 Roadmap 草稿转正流程。规划工作台的对话只维护 Roadmap 草稿及其任务约束；正式 Spec / Plan 由固定转正流程生成、审阅和发布。它不替代仓库开发中的 AGENTS.md 或用户直接授权的普通开发流程。\n\n## 先固定输入，再设计\n\n- 读取本规范全文，并记录实际读取的路径与版本。文件缺失或读取失败时停止生成。\n- 固定 Roadmap Markdown / JSON、待转正任务、任务编号、代码基线及规范版本。变化后的输入通过明确的重新生成操作采用，不悄悄替换已有结果。\n- 先列出任务目标、行为边界、约束、待澄清问题和验收要求。有关键矛盾或未决范围时先补充草稿，不用推测填成正式契约。\n\n## 警惕过度设计\n\n- 默认选择满足当前确认需求的简洁设计，不为假设中的未来需求增加框架、扩展层或配置组合。\n- 不为凑并行数量拆分任务；每个任务应有独立成果、清晰职责和最小通过条件。\n- 未发布项目默认不为旧数据、配置或协议新增兼容、迁移、双写或回退路径，除非任务明确要求。\n\n## 先查现有代码，再做整合与整体规划\n\n- 新功能设计前阅读相关现有代码、调用入口、状态模型、契约、测试及其实际消费者；记录查看的位置和结论。\n- 优先复用或调整现有实现。说明保留、整合、替换及删除的部分，避免在旁边新增一套重复能力。\n- 多个相关任务先形成整体整合安排，再生成各任务 Spec / Plan。明确共用语义、修改所有者、依赖及真实交接条件，避免多个任务分别重建相同模块。\n\n## 执行链路与桥接必须显式且必要\n\n- 不隐式增加第二套执行链路、独立状态来源或不同的业务准入规则。\n- 确实需要多路径时，明确各路径的职责、选择条件、统一的业务事实与维护代价；不能用实现方便代替必要性。\n- 不引入没有必要的桥接、适配、转发、包装或重复状态。确需新增时写清现有入口为何无法承担、最小职责以及消费者。\n- 不以临时演示数据或 Agent 自述宣称真实接口、运行能力、权限、测试或交付事实已经存在。\n\n## Spec 和 Plan 分工\n\n- Spec 明确目标、当前行为与预期行为、范围、非目标、契约、状态与交付要求，以及验收项和通过条件。\n- Plan 明确代码整合步骤、涉及位置、依赖与前置、必要能力补齐、测试和交付安排。不得另立与 Spec 矛盾的第二套行为。\n- 自动与人工验收分别安排；人工项标明参与窗口及真实阻塞范围。验收要求和实时结果分开，结果不回写为 Plan 的状态表。\n- Plan 必须包含最小必要的测试计划：验收项 ID / 专属文档、长期测试级别与组 / 场景、环境、命令、执行时点、通过条件及证据登记位置。\n- 自动验收全部映射到可执行安排；缺驱动、入口或环境能力时规划最小补齐步骤或明确前置。不默认扩大到 Full、全部 live 或无关回归。\n- 新增或扩展长期 L1–L4 流程时明确稳定入口与登记安排；L3 是可并行常规测试，L4 是不可并行及边界情况测试，Plan 不自动选取 L4，只能人工触发。临时开发测试不替代长期测试证据。\n\n## 审阅与发布\n\n- 审阅时展示现有代码调查、复用 / 整合方式、执行链路变化、桥接必要性、跨任务安排及测试验收覆盖。\n- 生成正文可在转正流程内受控修改；修改后重新核对规范、依赖及 Spec / Plan 一致性，取消此前确认。\n- 审阅确认后，正式文档随 Roadmap / JSON / execution-map 文档 PR 发布。核实合入主分支后，才以固定文档版本创建正式 DAG。\n- 规范可以维护并随 Git 版本管理。已生成操作保留所用内容快照；更新规范不自动覆盖正在审阅或已发布的文档。\n"}};
   let specRulePath='docs/spec/SpecGuide.md',specRuleOpen=false,specRuleEditing=false,specRuleReturnFocus=null,specRuleViewed=null;
   let generationSelectedTask=null,generationDocumentTab='spec',generationEditing=false;
   const promotionHistory=[];
@@ -1663,7 +1666,7 @@ body { margin: 0; padding: 16px; }
     const id=String(t.task_id),preference=flow.snapshot.testPlans[id],paths=generatedDocPaths(t,preference),p=preference?copyObject(preference):makeTestPlan(id,paths.plan,['L1-MIN']);p.path=paths.plan;p.version=p.version||1;
     const ownership='任务 #'+id+' 负责本范围实现；共用契约与修改顺序按本批整体安排协调。';
     const spec='# Task #'+id+' · '+t.title+' · Spec\n\n## 目标与边界\n\n'+t.title+'。以固定 Roadmap 草稿中的目标、约束及依赖为需求依据。\n\n## 草稿约束依据\n\n'+flow.snapshot.markdown+'\n\n## 现有代码与整合\n\n'+flow.investigation.reuse+'\n\n查阅（演示）：'+flow.investigation.files.join('、')+'。\n\n'+ownership+'\n\n## 执行链路与桥接\n\n沿用现有产品客户端和业务事实入口，不隐式增加第二套执行链路或重复状态。当前范围无需新增桥接；如发现确有必要，返回草稿明确职责与依据后重新生成。\n\n## 验收要求\n\n'+p.requirements.map((r,n)=>'- T'+id+'-A'+(n+1)+'：'+r.id+' / '+r.cases.join(', ')+' 验证对应行为，通过条件按任务专属验收约定。').join('\n')+'\n\n任务专属验收：docs/acceptance/task-'+id+'.md。人工项记录窗口与阻塞范围，不把非阻塞补验串入无关执行。\n\n## 生成依据\n\n规范 '+flow.norm.path+' / v'+flow.norm.revision+'；代码基线 '+flow.snapshot.codeSHA+'。无旧版兼容默认要求，避免过度设计。';
-    const plan='# Task #'+id+' · '+t.title+' · Plan\n\n## 实施与整体整合\n\n1. 按固定 Spec 和本次规范核对现有调用入口与消费者。\n2. '+flow.investigation.reuse+'\n3. '+ownership+'\n4. 补齐所选长期场景、执行必要验证并登记任务专属验收证据。\n5. 提交 PR；核实合并后同步 execution-map 与 DAG。\n\n## 测试计划 · PR 前\n\n| 自动验收项 | 长期级别 / 组 / 场景 | 环境 | 命令 | 时点 / 通过条件 | 证据登记 |\n| --- | --- | --- | --- | --- | --- |\n'+p.requirements.map((r,n)=>{const s=suiteById(r.id);return '| T'+id+'-A'+(n+1)+' / docs/acceptance/task-'+id+'.md | '+s.level+' / '+r.id+' / '+r.cases.join(', ')+' | '+(s.runtime?'与修复提交相同 SHA 的独立环境':'脚本 / 纯代码')+' | '+s.command+' | PR 前，全部所需场景通过 | docs/acceptance/task-'+id+'.md / 固定提交报告 |';}).join('\n')+'\n\n'+(p.extensions.length?'## 长期入口扩展\n\n本任务实施中落实 '+p.extensions.join(', ')+' 的入口、场景与登记，准备相同提交的可用环境后执行。\n\n':'')+'## 最小验证与人工安排\n\n未选的 L2 / L3 / L4 不默认追加；按实际范围说明必要性。人工项单列窗口和真实阻塞范围，临时开发测试不替代长期测试证据，长期不保留的临时内容在交付前清理。\n\n## 固定生成依据\n\n'+flow.norm.path+' / v'+flow.norm.revision+' · 草稿 v'+flow.snapshot.revision+' · 代码 '+flow.snapshot.codeSHA;
+    const plan='# Task #'+id+' · '+t.title+' · Plan\n\n## 实施与整体整合\n\n1. 按固定 Spec 和本次规范核对现有调用入口与消费者。\n2. '+flow.investigation.reuse+'\n3. '+ownership+'\n4. 补齐所选长期场景、执行必要验证并登记任务专属验收证据。\n5. 提交 PR；核实合并后同步 execution-map 与 DAG。\n\n## 测试计划 · PR 前\n\n| 自动验收项 | 长期级别 / 组 / 场景 | 环境 | 命令 | 时点 / 通过条件 | 证据登记 |\n| --- | --- | --- | --- | --- | --- |\n'+p.requirements.map((r,n)=>{const s=suiteById(r.id);return '| T'+id+'-A'+(n+1)+' / docs/acceptance/task-'+id+'.md | '+s.level+' / '+r.id+' / '+r.cases.join(', ')+' | '+(s.runtime?'与修复提交相同 SHA 的独立环境':'脚本 / 纯代码')+' | '+s.command+' | PR 前，全部所需场景通过 | docs/acceptance/task-'+id+'.md / 固定提交报告 |';}).join('\n')+'\n\n'+(p.extensions.length?'## 长期入口扩展\n\n本任务实施中落实 '+p.extensions.join(', ')+' 的入口、场景与登记，准备相同提交的可用环境后执行。\n\n':'')+'## 最小验证与人工安排\n\n未选的 L2 / L3 不默认追加；按实际范围说明必要性。L3 为可并行常规测试；L4 为不可并行及边界情况测试，不纳入 Plan 自动选取执行，只能人工触发。人工项单列窗口和真实阻塞范围，临时开发测试不替代长期测试证据，长期不保留的临时内容在交付前清理。\n\n## 固定生成依据\n\n'+flow.norm.path+' / v'+flow.norm.revision+' · 草稿 v'+flow.snapshot.revision+' · 代码 '+flow.snapshot.codeSHA;
     p.documentText=plan;flow.generatedTestPlans[id]=p;return {task:id,revision:1,spec:{path:paths.spec,body:spec},plan:{path:paths.plan,body:plan},original:{spec,plan}};
   }
   function generationStep(flow,stage){
@@ -1922,7 +1925,7 @@ body { margin: 0; padding: 16px; }
     {id:'406',title:'修复时发现共享状态影响超出预期',labels:['bug'],body:'复现：两个客户端同时修改展示选项。\n实际：另一个客户端设置被覆盖。\n预期：各客户端独立。',kind:'scope-growth',suite:'L1-MIN',root:'初步定位为设置作用域不明确，需进一步核对写入链路。',method:'先检查客户端设置的读写作用域，局部调整共享入口。'},
     {id:'407',title:'历史问题已关闭',labels:['bug'],body:'原平台已关闭，保留历史问题记录。',kind:'automatic',suite:'L1-MIN',externalState:'closed',root:'已由外部处理。',method:'不启动新的修复。'},
     {id:'408',title:'建议调整工具栏配色',labels:['enhancement'],body:'希望增加配色选项。',kind:'refactor',suite:'L1-MIN',root:'属于产品方案选择，尚无缺陷契约。',method:'需要人工确定预期行为。'},
-    {id:'409',title:'独立环境创建时复用了端口',labels:['bug','auto-fix'],body:'复现：同一项目创建两个独立调试环境。\n实际：两个环境复用端口。\n预期：每个环境分配独立端口、数据和配置。',kind:'runtime',suite:'L3-WORKSPACE',root:'资源分配未按环境身份隔离。',method:'按环境身份分配运行资源，使用 TC-F05 / TC-F06 验证隔离与恢复。'}
+    {id:'409',title:'独立环境创建时复用了端口',labels:['bug','auto-fix'],body:'复现：同一项目创建两个独立调试环境。\n实际：两个环境复用端口。\n预期：每个环境分配独立端口、数据和配置。',kind:'runtime',suite:'L3-WORKSPACE',root:'资源分配未按环境身份隔离。',method:'按环境身份分配运行资源，使用可并行的 TC-F05 / TC-F06 验证常规隔离与清理。'}
   ].map(i=>({...i,revision:1,externalState:i.externalState||'open',updated:'2026-10-12 09:30',supplement:'',runs:[]}));
   const bugRuns=[];
   let selectedBug='401',bugFilter='all',bugAuto=false,bugScope='approved',bugParallel=4,bugRunCounter=1,bugSyncTime='尚未手动同步',bugSchedulerQueued=false;
