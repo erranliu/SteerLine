@@ -8,6 +8,7 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 func preflightWorkerFlowState(ctx context.Context, c Config) error {
@@ -37,7 +38,7 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		return errors.New("persisted task snapshot belongs to another project")
 	}
 	for _, candidate := range state.Candidates {
-		if candidate.Project != project || canonicalPath(candidate.StateDir) != canonicalPath(filepath.Join(c.RunDir, "runner")) || candidate.Submit.Protocol != runnerclient.Protocol || candidate.Submit.RequestID == "" {
+		if candidate.Project != project || canonicalPath(candidate.StateDir) != canonicalPath(runnerstatepath.Directory(c.RunDir)) || candidate.Submit.Protocol != runnerclient.Protocol || candidate.Submit.RequestID == "" {
 			return errors.New("persisted Runner candidate has a different caller or state directory binding")
 		}
 	}

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/erranliu/SteerLine/internal/pathguard"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 func validateRuntimeHomePaths(config Config) error {
@@ -29,7 +30,6 @@ func validateRuntimeHomePaths(config Config) error {
 		{"service state", filepath.Join(config.RunDir, "service")},
 		{"service launch lock", filepath.Join(config.RunDir, "service", "launch.lock")},
 		{"service startups", filepath.Join(config.RunDir, "service", "startups")},
-		{"Runner state", filepath.Join(config.RunDir, "runner")},
 	} {
 		if entry.path == "" {
 			continue
@@ -41,6 +41,9 @@ func validateRuntimeHomePaths(config Config) error {
 		if !pathguard.Within(home, resolved) {
 			return fmt.Errorf("%s must resolve inside STEERLINE_HOME (%s)", entry.name, home)
 		}
+	}
+	if err := runnerstatepath.Validate(config.RunDir); err != nil {
+		return err
 	}
 	return pathguard.RejectSharedSQLiteFiles(filepath.Join(config.RunDir, "steerline.db"))
 }

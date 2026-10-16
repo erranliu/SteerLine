@@ -19,6 +19,7 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
@@ -672,7 +673,7 @@ func (s *Scenario) cleanup() {
 			continue
 		}
 		if _, err := os.Stat(p.Database); os.IsNotExist(err) {
-			if _, err := os.Stat(filepath.Join(filepath.Dir(p.Database), "runner")); os.IsNotExist(err) {
+			if _, err := os.Stat(runnerstatepath.Directory(filepath.Dir(p.Database))); os.IsNotExist(err) {
 				continue
 			}
 		}
@@ -689,6 +690,12 @@ func (s *Scenario) cleanup() {
 		if readErr != nil {
 			p.RunnerCleanupFailed = true
 			failures = append(failures, "original Runner cleanup: "+readErr.Error())
+		}
+		if readErr == nil {
+			if err := runnerstatepath.RemoveStopped(filepath.Dir(p.Database)); err != nil {
+				p.RunnerCleanupFailed = true
+				failures = append(failures, "Runner directory cleanup: "+err.Error())
+			}
 		}
 		_ = controlled.Write(filepath.Join(s.Output, p.Name+"-runner-cleanup.json"), map[string]any{"confirmed": readErr == nil, "error": fmt.Sprint(readErr)})
 	}

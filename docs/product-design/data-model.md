@@ -32,7 +32,7 @@ CLI 请求 ID 和正文不可变，同 ID 换正文冲突。SteerLine 保存原 
 
 公开 Runner 事件按候选绑定、事件 ID、游标和版本事务保存。完整 final 保留来源、原 session/turn/item/Attempt 与正文 hash；重复事件去重，冲突拒绝。缺 final 不推进业务，日志和模型总结不能代替来源核验。正文分页读取只读副本。
 
-Runner 状态目录在项目 run-dir/runner 下，材料、仓库缓存、执行工作区和日志均归该项目；业务库和 Runner 库分别管理。重置须先证明 Runner 服务退出及原 Run 停止，不用父进程死亡或窗口关闭代替停止。
+Runner 状态使用[短目录规则](../integration/steerrunner.md)：Windows 为本地卷根 `slr/<128-bit base32 key>`，key 绑定含 home 的完整项目 run-dir；候选保存准确 state-dir。材料、缓存、工作区和日志仍按项目独立，业务库继续在原 home。旧 `run-dir/runner` 不迁移或兼容读取。重置须先证明 Runner 服务退出及原 Run 停止，只清理本项目摘要目录，不用父进程死亡或窗口关闭代替停止。
 
 ## PR 与交付
 

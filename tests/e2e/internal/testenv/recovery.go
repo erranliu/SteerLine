@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"os"
@@ -22,7 +23,7 @@ func (p *Project) AssertOneDelivery(s Snapshot) {
 	}
 }
 func (p *Project) CallerRequests() map[string]string {
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(p.Database), "runner", "caller-fixture.json"))
+	raw, err := os.ReadFile(filepath.Join(runnerstatepath.Directory(filepath.Dir(p.Database)), "caller-fixture.json"))
 	p.Scenario.Must(err)
 	var s controlled.RunnerFixture
 	p.Scenario.Must(json.Unmarshal(raw, &s))
