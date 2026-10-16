@@ -15,7 +15,7 @@
 
 原安装现场 `101/C1`：Run `e9f565d31ef034f70e8652da2c78d286`，旧 state-dir `C:\SteerlineInstall\state\SteerlineTest-b55e8cc42ae8\runner`；17:00:31（北京时间）prepare_session 被拒绝。只读取证，未修改、移动、重置或重发。
 
-旧布局不兼容、不自动迁移；新代码不会把原 Run 冒充短目录中的新 Run。源码测试通过不代表安装环境已经更新或 C1 已恢复。无人工验收项，不运行真实业务模型或创建 PR。
+旧布局不兼容、不自动迁移；新代码不会把原 Run 冒充短目录中的新 Run。源码测试通过不代表安装环境已经更新或 C1 已恢复。无人工验收项，不运行真实业务模型或创建业务测试 PR。
 
 ## 保留的失败记录
 
@@ -30,3 +30,11 @@
 - `entry/summary.json`：固定 L1 选择器定向通过，新三个路径用例已登记 `quick-owner-runner-state-path`。
 - `boundary/summary.json`：`TestTM08AppHostBoundary`、`TestCM71ProductDependencyBoundary` 通过，调用方依赖边界不变。
 - `git diff --check` 通过。未运行 Full、完整真实 L2 或真实 PR；以上通过仅覆盖本次路径布局、接线和资源定位。
+
+## 提交前主干同步复验
+
+合入 `origin/main` 的 `6f275525`（含环境检查契约修复及旧执行域清理），仅 `docs/testing.md` 同位置新增段落冲突，保留双方内容。代码合并提交 `6ac67290` 上复验：
+
+- `.evidence/runner-short-path/pr-targeted/summary.json`：7 包、74 项通过、0 失败，78.514 秒；`TestEnvironmentCheckPublishedContract` 因未提供显式发布 Runner 配置而按设计 skip，不计实际 EXE 契约通过。包含短目录的三个用例、caller/CLI、环境检查和 reset。
+- `.evidence/runner-short-path/gate-pr/summary.json`：`smoke.delivery` 86.04 秒，passed、cleanup_complete=true、gate-only；使用独立进程及新夹具，未覆盖前一轮证据。
+- 主干同步后的代码未新增安装环境操作。最终文档更新不改变上述受测代码。
