@@ -48,6 +48,7 @@ func RunRunnerServiceFixture() bool {
 		data = map[string]any{"version": version, "protocols": []string{"steerrunner-cli/v1"}, "resource_version": 1, "resource_digest": digest}
 	case "capabilities":
 		data = map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
+			"native_session_viewer": map[string]any{"adapters": []string{"codex-app-server"}},
 			"workflow":              map[string]any{"id": "development", "version": 1},
 			"configuration_schemas": map[string]any{"version": 1, "adapters": map[string]any{"codex-app-server": map[string]string{"type": "object"}}, "providers": map[string]any{"command": map[string]string{"type": "object"}}}}
 	case "service start", "service status", "service stop":

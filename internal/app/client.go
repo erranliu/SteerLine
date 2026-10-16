@@ -149,6 +149,9 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 			return commands, nil
 		},
 		Control: clientControl{config: c}, Decision: clientDecision{config: c},
+		OpenNativeSession: func(ctx context.Context, target productapi.NativeSessionTarget) error {
+			return openRunnerNativeSession(ctx, c, target)
+		},
 		TaskSnapshot: func(ctx context.Context) (*productapi.TaskCandidates, error) {
 			reader, err := openClientReader(ctx, c, freshness)
 			if err != nil {

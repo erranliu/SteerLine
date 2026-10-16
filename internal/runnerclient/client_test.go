@@ -30,6 +30,18 @@ func TestMain(m *testing.M) {
 		if mode == "wrong-id" {
 			request.RequestID = "another"
 		}
+		if strings.HasPrefix(mode, "native") {
+			if mode == "native-broken" {
+				fmt.Println("broken response")
+				os.Exit(0)
+			}
+			session := "session"
+			if mode == "native-wrong" {
+				session = "another"
+			}
+			fmt.Printf(`{"protocol":"steerrunner-cli/v1","ok":true,"request_id":null,"data":{"run_id":"run","attempt_id":"attempt","session_id":%q,"generation":"generation","opened":true},"error":null}`, session)
+			os.Exit(0)
+		}
 		if len(os.Args) > 1 && os.Args[1] == "version" {
 			fmt.Printf(`{"protocol":"steerrunner-cli/v1","ok":true,"request_id":null,"data":{"version":"fixture","protocols":["steerrunner-cli/v1"]},"error":null}`)
 			os.Exit(0)

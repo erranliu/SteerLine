@@ -99,6 +99,9 @@ func (g RunnerExecutionConfig) startRunner(ctx context.Context, runDir string, t
 	}
 	catalog, err := cli.Catalog(ctx, version)
 	if err == nil {
+		cli.NativeSessionAdapters = append([]string(nil), catalog.Capabilities.NativeSessionViewer.Adapters...)
+	}
+	if err == nil {
 		err = catalog.ValidatePublication(publication)
 	}
 	if err == nil {

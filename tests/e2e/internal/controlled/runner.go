@@ -34,7 +34,7 @@ func RunnerCLI(args []string) (bool, error) {
 	case "version", "capabilities", "service":
 		os.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "caller-fixture-v1")
 		return protocol.RunRunnerServiceFixture(), nil
-	case "submit", "inspect", "events", "reply", "resume", "stop":
+	case "submit", "inspect", "open-native-session", "events", "reply", "resume", "stop":
 	default:
 		return false, nil
 	}
@@ -68,7 +68,7 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	var request runnercontract.Request
 	var id any
-	if args[0] != "inspect" && args[0] != "events" {
+	if args[0] != "inspect" && args[0] != "events" && args[0] != "open-native-session" {
 		if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
 			return true, err
 		}
@@ -201,6 +201,14 @@ func RunnerCLI(args []string) (bool, error) {
 	run, ok := s.Runs[runID]
 	if !ok {
 		return respond(nil, "run_not_found")
+	}
+	if args[0] == "open-native-session" {
+		if argument(args, "--attempt-id") != run.Execution.AttemptID || argument(args, "--session-id") != run.Execution.SessionID || argument(args, "--generation") != run.Execution.Generation {
+			return respond(nil, "stale_revision")
+		}
+		// Caller-only fixture: records the public opening request without
+		// owning native resources or starting an interactive agent.
+		return respond(map[string]any{"run_id": runID, "attempt_id": run.Execution.AttemptID, "session_id": run.Execution.SessionID, "generation": run.Execution.Generation, "opened": true}, "")
 	}
 	if args[0] == "events" {
 		// Deliberately opaque to the caller: scripted canonical finals suffice
