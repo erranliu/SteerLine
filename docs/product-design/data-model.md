@@ -26,7 +26,7 @@ CLI 请求 ID 和正文不可变，同 ID 换正文冲突。SteerLine 保存原 
 
 原生问题、反馈和 resume 由 Runner 公布资格、原问题/Attempt 和 revision。SteerLine 校验当前候选及 Runner 版本，再持久保存输入 outbox。中心重启将旧未发输入撤销或仅观察原请求，不能自动重授旧答案/反馈/resume。已接受与未知输入只对原请求查询。
 
-产品 Runtime 和 RunView 是只读 UI 投影，由 Task 图、service checkpoint 和公开 Runner facts 生成；不从旧执行表重建，不读取原生文本推断业务结果。
+产品 Runtime 和 RunView 是只读 UI 投影，由 Task 图、service checkpoint 和公开 Runner facts 生成；不从旧执行表重建，不读取原生文本推断业务结果。Runtime 不保存旧 WorkflowRun/Execution/Attempt/Decision/Operation 集合，RunView 不承载旧工作区意图或人工停止确认；持久化只使用独立 ServiceCheckpoint，候选与停止事实仍来自 caller 记录和公开 Runner 投影。
 
 ## 会话与事件
 

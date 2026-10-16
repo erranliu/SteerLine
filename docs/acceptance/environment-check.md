@@ -160,3 +160,27 @@ SteerLine 基线 `347037958c6fad4e52c62ea4477836261760fae6`，本次工作树 di
 最终 Go 证据目录 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261016T091423.918551200Z`：`summary.json`、`go-test.jsonl`、`web-tests.log`、`web-build.log`。此前实际 EXE 首轮通过证据 `20261016T091233.529367300Z` 同属 test-feedback 根目录。初轮 UI 测试仅因证据从纯文本改为 JSON facts 后旧精确文本断言失败，修正匹配后最终 43 项通过；未将失败轮记为通过。
 
 SLEC-M01 人工体验仍后置。本次没有运行本机原生环境检查或远端原生验证，没有更新安装包；修复需在重新构建部署 SteerLine/Web 后生效。Runner 原生组合与残留仍以其独立 SREC acceptance 为准。
+
+## 用户现场失败的同参数复现（2026-10-16）
+
+用户要求实际测试原检查 `c39521c8c276c89869e9d1bb4d5b6d25` 的失败。通过 `scripts/new-debug-release.ps1` 生成独立包 `C:/SteerlineDebug/environment-check-repro/dev-20261016-214245-5530f324`，SteerLine 源码 `5530f324a768f8b8c74ddb6195de909b9c7a9a68`（生成时 clean）；Runner 从原安装现场相同的提交 `b42e04407204fcd863b48d45b8c7f4b9538ac7c3` 导出源码重建，版本 `0.1.0-dev.1`、EXE SHA256 `12737ec30f1fb9a7b72418095abba9bd6fa02ba5e511fa9d7c43eef145495995`、resource digest `5ef1f9f5df4b76b0dd945438b6071276c98f669255f20c6d53ff63f739cc5e85`。没有复制安装数据库、认证或配置，也未修改或重启安装环境。
+
+本次为用户明确要求的真实失败复现，使用新包 live 配置及真实 Runner/Web，不执行业务 Task。新服务 PATH 排除聊天环境附带的桌面 Codex bin，保留外部现有 `codex.cmd`，匹配原服务找不到 `codex.exe` 的条件；从真实可见页面输入 `codex.exe`、`full_access`，模型和推理强度留空。原请求 `4ace167e1da5433bb746abca8f19b91f`、Check `583edc762e62f7101c4615a28d2223e7`，约 10.27 秒后到 revision 16，`status/result=failed`，诊断为 `native_preparation_failed: native_executable_unavailable`，与原现场一致。按 check-id 和原 request-id 的公开 CLI 查询报告一致；没有建立原生会话、调用模型或创建检查专属远端分支/PR，`writer_stopped/local_removed=true`、`cleanup_status=completed`。
+
+SLEC-A04 的本次观察：页面无需手动刷新即可显示 revision 16 的失败与资源完成；控制台 error/warn 为空。**未复现原页面一直停留在 revision 5 的现象，不能据此解释原缓存为何未继续更新。** 对照探针确认同 PATH 下 `codex.exe` 不可解析，而已有绝对路径直接执行 `--version` 返回 `codex-cli 0.159.2`、exit 0；此对照只证明可执行文件可定位和运行，不代表后续权限/Git/PR 成功。
+
+证据均位于上述新包 `evidence/`：`repro-summary.json`（含断言及清理结果）、`inspect-check.json`、`inspect-request.json`、`launcher-path-check.json`、`browser-report-dom.txt`、`browser-report.jpg`、`browser-console-errors.json`、`repro-stop.log`、`remove-debug-base.log`。首轮测试启动因聊天进程的 kill-on-close Job 被产品拒绝，随后在独立 WMI 上下文运行新包的前台 serve 入口完成复现；启动失败日志保留在包内 logs，不记为检查结果。结束后已停止本包 Backend/Web/Runner，核实本包进程和 Web listener 为零；debug launcher 为新包生成的专属基线分支在核对原 SHA 后删除并确认远端不存在。此项仅复现启动失败和可见页面投影，不签收 SREC 原生权限正例或完整业务 L2。
+
+## 启动配置与报告刷新修复验证（2026-10-16）
+
+用户进一步授权修复。修改范围为 Web 检查页与 debug-template：默认本机命令改为 `codex`；目标切换保留当前编辑并优先读取既有目标方案，重新选择方案清除本页编辑；报告在执行连接未就绪时仍可只读查询，可见轮询与后台取消保持；详情同步历史结论；原生程序不可用的说明置于报告顶部，空实际字段显示尚未取得。不修改 Runner 权限/原生执行、Task 流程或原请求重放规则，也没有替换安装版。
+
+对应 SLEC-A02/A04：`npm --prefix web test -- src/features/environment-checks/environment-checks.test.tsx src/shared/api/client.test.ts src/shared/api/queries.test.ts` 最终 3 文件 / 46 项全部通过，`npm --prefix web run build` 通过。新用例覆盖方案与编辑路径跨目标保留、无方案默认命令、queued→failed 的报告及历史同步、执行 unready 下持续只读查询、后台停止及恢复可见后刷新、零自动 start/stop。首次新增测试因帮助文本嵌在 label 内改变 accessible name 而有 2 项失败，已将帮助文本移到独立段落并用 aria-describedby 关联，最终回归通过。原始日志在 `C:/Users/lmas1/AppData/Local/Temp/steerline-environment-check-fix-4a48f568348244a9b5b8c72e9367de3b/`，最终文件为 `web-tests-final.log` 与 `web-build.log`；未把首次失败轮记为通过。
+
+通过生成入口创建新的独立包 `C:/SteerlineDebug/environment-check-fix/dev-20261016-215622-5530f324-dirty`，SteerLine 源码基线 `5530f324a768f8b8c74ddb6195de909b9c7a9a68` 加本轮 dirty 修改，Runner 仍固定为上一节的 b42e044 构建。使用用户要求的真实检查修复验证，live 方案从新模板 `codex` 解析到外部现有 Codex 0.159.2；不复制认证或安装数据。在独立 WMI 上下文启动新包，PATH 排除桌面聊天附加的 Codex bin。真实浏览器验证本机→远端→本机后原绝对路径及模型/强度保持，再使用 full_access 发起原请求 `ee74f26c90674a34ab4e1da8e169d3a2`、Check `bb0abf83c814c609b9a047f318c7d503`。
+
+真实结果：约 169 秒后 revision 49，`status=completed/result=passed/cleanup_status=completed`；permissions、workspace、temporary、git_admin、remote_read、fetch、base_push、commit、head_push、pr_create、pr_query、pr_close 共 12 项均 passed。实际 session/turn、runtime 0.159.2 与 full_access 由原 Runner 报告提供；页面无需手动刷新显示最终通过，历史摘要同步通过，浏览器 error/warn 为零。真实测试 [PR #380](https://github.com/erranliu/SteerlineTest/pull/380) 已关闭且未合并，GitHub 只读查询独立核对其专属 `steerline-check/bb0abf83c814c609b9a047f318c7d503/{base,head}`；远端查询确认两分支均已删除。Runner 报告 writer_stopped/local_removed/base_deleted/head_deleted/pr_closed 均 true。
+
+最终证据在新包 `evidence/`：`fix-summary.json`、`live-request-final.json`、`test-pr-facts.json`、`target-switch-check.json`、`final-browser-report.txt`、`final-browser-dom.txt`、`final-browser-report.jpg`、`final-browser-full.jpg`、`final-browser-console.json`、`web-tests.log`、`verified-web-build.log`、`stop-final.log`、`host-cleanup.json` 与 `remove-debug-base.log`。已正常停止本包服务，核实包内进程及 Web listener 均为零；生成器专属基线分支核对 SHA 后删除。执行普通开发修复的定向验证，没有运行 Full/L2/L3/L4，没有更新 roadmap 或其他仓库验收；本次本机 full_access 正例不替代 Runner 其余权限/远端/恢复组合验收。
+
+提 PR 前主干整合复验（2026-10-17）：在 `origin/main` 的 `4c4fcbab64a2150caa90a123a9f00b53db98137c` 上重放本次修复，核对上游 Web 连接与原请求 hooks 重构。运行前述三文件定向测试并加入 `src/app/app.test.tsx`，最终 4 文件 / 52 项通过；生产 build 通过，文档检查 461 文件 / 2803 本地链接 / 0 错误，`git diff --check` 通过。证据 `C:/Users/lmas1/AppData/Local/Temp/steerline-environment-check-pr-d425054fd0a248278bc1de15f1f74931/` 内 `web-tests.log`、`web-build.log`、`doc-links.log`。本轮未改检查实现，不重复真实模型/PR 测试；上一节真实通过仍明确绑定其生成时的源码与固定 Runner。

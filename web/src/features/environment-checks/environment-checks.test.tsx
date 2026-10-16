@@ -100,7 +100,12 @@ function record(): CheckRecord {
           status: "failed",
           stage: "缺少现场凭据 401",
           required: true,
-          evidence: [{ source: "fixture", facts: { diagnostic: "sanitized fixture evidence" } }],
+          evidence: [
+            {
+              source: "fixture",
+              facts: { diagnostic: "sanitized fixture evidence" },
+            },
+          ],
         },
       ],
       resources: {},
@@ -200,7 +205,7 @@ it("keeps unknown unbound checks query-only and reads cached history while execu
   expect(
     screen.getByRole("button", { name: "停止 / 收尾原检查" }),
   ).toBeDisabled();
-  expect(screen.getByText(/服务离线，显示历史缓存/)).toBeVisible();
+  expect(screen.getByText(/执行连接待核实，继续只读查询原检查/)).toBeVisible();
   f.unmount();
   expect(f.send).not.toHaveBeenCalled();
   f.client.clear();
@@ -312,5 +317,139 @@ it("uses the latest selected detail when its cached history still says settled",
   );
   expect(screen.getByRole("button", { name: "开始实际检查" })).toBeDisabled();
   expect(f.send).not.toHaveBeenCalled();
+  f.client.clear();
+});
+
+it("preserves configured and edited executables when switching targets", async () => {
+  const options = catalog();
+  options.profiles[0].execution.settings.executable = "C:/worker/codex.exe";
+  options.profiles.push({
+    id: "remote",
+    name: "远端预填",
+    execution: {
+      adapter: "orca-terminal",
+      target: { kind: "orca_environment", environment: "fixture-host" },
+      settings: {
+        transport: { executable: "C:/worker/orca.exe" },
+        agent_launch: {
+          executable: "/worker/codex",
+          runtime_executable: "/worker/runtime",
+        },
+      },
+    },
+  });
+  const f = fixture([], options);
+  await waitFor(() =>
+    expect(screen.getByLabelText("Agent executable")).toHaveValue(
+      "C:/worker/codex.exe",
+    ),
+  );
+  fireEvent.change(screen.getByLabelText("Agent executable"), {
+    target: { value: "C:/custom/codex.exe" },
+  });
+  fireEvent.change(screen.getByLabelText("执行目标"), {
+    target: { value: "orca_environment" },
+  });
+  expect(screen.getByLabelText("Agent executable")).toHaveValue(
+    "/worker/codex",
+  );
+  expect(screen.getByLabelText("Orca environment")).toHaveValue("fixture-host");
+  fireEvent.change(screen.getByLabelText("执行目标"), {
+    target: { value: "local" },
+  });
+  expect(screen.getByLabelText("Agent executable")).toHaveValue(
+    "C:/custom/codex.exe",
+  );
+  expect(screen.getByLabelText("模型")).toHaveValue("fixture-model");
+  fireEvent.change(screen.getByLabelText("预填执行方案"), {
+    target: { value: "local" },
+  });
+  expect(screen.getByLabelText("Agent executable")).toHaveValue(
+    "C:/worker/codex.exe",
+  );
+  expect(f.send).not.toHaveBeenCalled();
+  f.client.clear();
+});
+
+it("uses the Codex command without assuming an exe is on the Worker PATH", async () => {
+  const options = catalog();
+  options.profiles = [];
+  const f = fixture([], options);
+  const start = screen.getByRole("button", { name: "开始实际检查" });
+  await waitFor(() => expect(start).toBeEnabled());
+  expect(screen.getByLabelText("Agent executable")).toHaveValue("codex");
+  fireEvent.click(start);
+  expect(f.send).toHaveBeenCalledWith(
+    "start_environment_check",
+    identity.project_id,
+    0,
+    expect.objectContaining({
+      execution: expect.objectContaining({
+        settings: { executable: "codex", access_mode: "sandbox" },
+      }),
+    }),
+  );
+  f.unmount();
+  f.client.clear();
+});
+
+it("refreshes read-only reports while execution is unready and updates history after failure", async () => {
+  vi.useFakeTimers();
+  const visible = vi
+    .spyOn(document, "visibilityState", "get")
+    .mockReturnValue("visible");
+  const queued = record();
+  queued.report!.status = "queued";
+  queued.report!.result = "unverified";
+  queued.report!.diagnostic = undefined;
+  let latest = queued;
+  const f = fixture([queued], catalog(), false);
+  await act(() => vi.advanceTimersByTimeAsync(50));
+  expect(screen.getByText(/能力结论/)).toHaveTextContent("等待执行");
+  f.get.mockImplementation(
+    (path) =>
+      Promise.resolve(
+        path === "/environment-checks/options"
+          ? catalog()
+          : path === "/environment-checks"
+            ? { checks: [queued] }
+            : { check: latest },
+      ) as never,
+  );
+  latest = structuredClone(queued);
+  Object.assign(latest.report!, {
+    revision: 16,
+    status: "failed",
+    result: "failed",
+    cleanup_status: "completed",
+    updated_at: "2026-10-16T01:00:10Z",
+    allowed_actions: [],
+    diagnostic: "native_preparation_failed: native_executable_unavailable",
+  });
+  latest.report!.actual = { access_mode: "" };
+  await act(() => vi.advanceTimersByTimeAsync(3100));
+  expect(screen.getByText(/能力结论/)).toHaveTextContent("失败");
+  expect(screen.getByText(/未能启动 Codex/)).toBeVisible();
+  expect(screen.getByText(/源更新时间/)).toHaveTextContent("revision 16");
+  expect(screen.getByRole("button", { name: /· 失败/ })).toBeVisible();
+  expect(screen.getByText("尚未取得")).toBeVisible();
+  expect(screen.getByRole("button", { name: "查询原请求" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "开始实际检查" })).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "停止 / 收尾原检查" }),
+  ).toBeDisabled();
+  visible.mockReturnValue("hidden");
+  fireEvent(document, new Event("visibilitychange"));
+  const calls = f.get.mock.calls.length;
+  await act(() => vi.advanceTimersByTimeAsync(6100));
+  expect(f.get).toHaveBeenCalledTimes(calls);
+  latest = structuredClone(latest);
+  latest.report!.revision = 17;
+  visible.mockReturnValue("visible");
+  fireEvent(document, new Event("visibilitychange"));
+  await act(() => vi.advanceTimersByTimeAsync(50));
+  expect(screen.getByText(/源更新时间/)).toHaveTextContent("revision 17");
+  expect(f.send).not.toHaveBeenCalled();
+  f.unmount();
   f.client.clear();
 });
