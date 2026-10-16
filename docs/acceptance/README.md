@@ -4,6 +4,8 @@
 
 ## 当前入口
 
+产品读取、命令入口与 Web 容器重构（2026-10-16，审计与设计完成）：[Spec / Plan 与验收安排](product-read-command-web-refactor.md)，RCW-A01–A06 全部待实施/待验；本轮只检查文档，不将设计结论计作产品通过。
+
 应用与项目生命周期收拢（2026-10-16，按审计收窄并实施）：[Spec / Plan 与专属验收](application-project-lifecycle.md)，记录 ALC-A1–A6 的资源所有权、请求排空、停机证明及隔离回归证据。
 
 执行域遗留清理（2026-10-16，普通开发）：[引用审计与最小验证](execution-legacy-cleanup.md)，仅删除无生产消费者的旧执行实现及专属测试，保留当前 Task/交付、checkpoint、产品展示和宿主进程边界。

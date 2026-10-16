@@ -288,6 +288,8 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 2026-10-16 [应用与项目生命周期收拢](../spec/application-project-lifecycle.spec.md)已按审计后的范围实施：`ProjectRuntime` 唯一持有最终 store、锁、日志、product/handler 和原 Runner 绑定；actor EndActor 仅提交 stopped/ready=false checkpoint，不拥有 Runner 或 store.Close。进程内 Read/Command/Task 封闭并排空后再关闭资源；本地关闭与原 Runner 结算分别记录，后者未知仍关闭本地资源。本地失败继续保留锁/宿主，不新增恢复入口。只读 catalog 不创建活动目录，Close-before-Start 零启动，pending 结果不冒充成功。旧逐项目 start/run/listener、停止采样及专属回执接线已删除。关联 W01、W08–W14、W17–W18 / E04、E05、E07 / V01、V03、V06–V08；既有原请求、停机重试/最终证明、节点/异常/授权/恢复语义保持；本次差异与自动验证归[专属验收](../acceptance/application-project-lifecycle.md)，不增加 worker 状态机。
 
+2026-10-16 [产品读取、命令入口与 Web 容器重构](../spec/product-read-command-web-refactor.spec.md)仅完成审计/设计，尚未实施：拟明确 caller participation、提交、Runner 观察与 TaskDelivery 的展示来源，整理原请求处理和客户端连接/对账副作用；关联 W12/W17、V06/V08 的只读呈现与原请求边界，不修改节点、异常、重试、恢复、停止及交付资格。当前仍有详情/历史状态混合解释、Web 由状态名单推断参与及命令映射重复等缺口；[专属验收](../acceptance/product-read-command-web-refactor.md)记录待补用例与实际结果。
+
 2026-10-16 执行域遗留清理删除本仓无生产消费者的旧生命周期端口、原生事件处理、候选辅助规则和状态转移函数，以及对应专属测试。产品读取仍使用的值类型和编解码保留；W01–W18、E01–E07、V01–V08 的语义、调用方输入/恢复围栏和交付事务均不变。验证及保留边界见[专属验收](../acceptance/execution-legacy-cleanup.md)。
 
 ### 执行权限与 Git 环境检查的差异及缺口（2026-10-16）
