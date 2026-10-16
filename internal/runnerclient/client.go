@@ -77,7 +77,7 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 	}
 	argv := []string{}
 	switch command {
-	case "service start", "service status", "service stop":
+	case "service start", "service status", "service stop", "service verify-stopped":
 		argv = append(argv, "service", command[len("service "):])
 	case "version", "capabilities", "submit", "inspect", "last-message", "events", "reply", "resume", "stop":
 		argv = append(argv, command)

@@ -10,6 +10,7 @@ $sourceRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $RunnerRepo) { $RunnerRepo = Join-Path (Split-Path -Parent $sourceRoot) 'SteerRunner' }
 $RunnerRepo = [IO.Path]::GetFullPath($RunnerRepo)
 $InstallHome = [IO.Path]::GetFullPath($InstallHome)
+. (Join-Path $PSScriptRoot 'deployment-stop.ps1')
 
 function Within([string]$Root, [string]$Path) {
     $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
@@ -128,7 +129,12 @@ $savedHome = $env:STEERLINE_HOME
 try {
     $env:STEERLINE_HOME = $InstallHome
     $installed = Join-Path $bin 'steerline.exe'
-    if (Test-Path -LiteralPath $installed) { Invoke-Checked $installed @('stop') }
+    if (Test-Path -LiteralPath $installed) {
+        $verification = Stop-DeploymentApplication (Join-Path $package 'steerline.exe') $runnerStage
+        if ($null -ne $verification) {
+            Write-JSON (Join-Path $package 'shutdown-verification.json') $verification
+        }
+    }
     $owned = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('steerline.exe','steerline-web.exe','steerrunner.exe') -and $_.ExecutablePath -and (Within $bin $_.ExecutablePath) })
     if ($owned.Count) { throw 'Installed processes remain; preserve the original instance and inspect its shutdown result.' }
     Assert-Plain $bin

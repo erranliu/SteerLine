@@ -22,6 +22,8 @@ SteerRunner 跨仓拆分正在实施，切换安排见[接入 Plan](../spec/stee
 
 W18 停服取证修复：停机前的候选投影不能证明停机后的资源状态。Runner 在全部 worker 退出并读取已提交原生停止事实后、释放写锁前发布最终结算；公开 service status 只在写锁空闲时返回 last_shutdown，新写者先使旧记录失效。SteerLine 核对原实例、停止 request_id、state-dir 和固定 EXE 摘要，再接受 resources_settled；不按旧 running 投影误拒绝，也不按 not_running 或旧 stopped 投影放行。缺记录、错配、超时、Orca 脱离观察或任一 Run 停止未核实仍阻断。变更范围与验证见[停服结算验收](../acceptance/runner-shutdown-settlement.md)，既有安装环境的失败回执不被改写。
 
+部署 W18 补充：更新前由暂存的新 CLI 请求停机，避免重复调用安装版旧校验。原回执未通过时，显式 verify-stop 只能在原宿主/Web 已退出、各项目 LocalClosed/LocksReleased 且实例、配置摘要、checkpoint 和实际锁一致后，经新 Runner 的 service verify-stopped 取得逐 Run 资源证明，并核对候选的原 Run/input_digest/目录。Runner 在既有写锁下只读当前格式，复用 managed 恢复的原 Job owner+root 消失证明；不启动服务、恢复代理、重发输入或改写历史失败。证明不全继续阻断替换，新证明另存部署包。当前安装现场未用于验证，具体自动项见同一[验收](../acceptance/runner-shutdown-settlement.md)。
+
 测试所有者按 [测试精简 Spec](../spec/runner-test-convergence.spec.md)收敛：W02–W16/W18 执行专项由 Runner 验证；W01、W12 调用方授权、W17 及迟到接受/停止义务由 SteerLine 验证。SteerLine 的完整 L2 仍用本机 Codex 实际走通实现、报告、发布和真实 PR 合并/交付；原生恢复/沙箱/Orca 不再在 SteerLine 重复建设矩阵。节点、异常和恢复规则不变，具体状态见[专属验收](../acceptance/runner-test-convergence.md)。
 
 ## 职责与规则归属
