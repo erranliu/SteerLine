@@ -14,4 +14,6 @@ SteerLine 为 Runner 指定项目运行目录下的 `runner/`。Runner 的 SQLit
 
 恢复、回答和反馈需要当前公开 revision 的新授权。未知操作只查原 request_id，不能换 ID 重发；重启不自动恢复旧答案或业务输入。Runner 的原生查看能力以 capability 为准，不能直接猜测原会话路径或进程。
 
+原生查看通过 `open-native-session --run-id R --attempt-id A --session-id S --generation G` 调用；只有 Runner 发布的 `native_session_viewer.adapters` 中相应 adapter 可用时启用按钮。原服务负责私有 binding 和实时进程/thread/workspace 核验，调用方不读取这些私有材料。详情与本次构建/验证范围见[原会话查看验收](../acceptance/native-session-viewer.md)。
+
 本次支持验收范围为 Windows/amd64 本机 Codex。用户已取消本机和远端 Orca 路径验收，适配器保留为未验能力，不声明真机支持。

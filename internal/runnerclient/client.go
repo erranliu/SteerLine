@@ -42,9 +42,10 @@ type Failure struct {
 func (f *Failure) Error() string { return f.Code + ": " + f.Message }
 
 type Client struct {
-	Executable string
-	StateDir   string
-	Timeout    time.Duration
+	NativeSessionAdapters []string
+	Executable            string
+	StateDir              string
+	Timeout               time.Duration
 	// SHA256 binds every invocation to the selected release, including queries.
 	SHA256 string
 }
@@ -79,7 +80,7 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 	switch command {
 	case "service start", "service status", "service stop", "service verify-stopped":
 		argv = append(argv, "service", command[len("service "):])
-	case "version", "capabilities", "submit", "inspect", "last-message", "events", "reply", "resume", "stop":
+	case "version", "capabilities", "submit", "inspect", "last-message", "open-native-session", "events", "reply", "resume", "stop":
 		argv = append(argv, command)
 	default:
 		return Response{}, &Failure{Code: "invalid_arguments", Message: "Unsupported Runner CLI command", Exit: 2}
@@ -126,6 +127,9 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 		exit = -1
 	}
 	unknown := func() (Response, error) {
+		if command == "open-native-session" {
+			return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Native viewer may have opened; do not replay the operation", Exit: 6, Unknown: true}
+		}
 		if mutation(command) {
 			return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Inspect or retry the original request ID and unchanged input", Exit: 6, Unknown: true}
 		}

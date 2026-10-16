@@ -97,7 +97,7 @@ func newRunnerServiceWithTaskStore(ctx context.Context, config Config, host host
 		return p.ID, err
 	}}
 	var actor *taskrunner.Actor
-	actor, err = taskrunner.NewActor(taskrunner.ActorOptions{Tasks: service, Store: connection, Host: host, Repository: ports.CheckpointRepository{Path: config.Repository, Remote: config.Remote, Branch: config.Branch, Identity: config.Identity()}, Mode: mode, ConfigDigest: config.configDigest, Heartbeat: positiveDuration(config.Heartbeat, 5*time.Second), ShutdownRunner: shutdown, RunnerSettlement: func(ctx context.Context) error {
+	actor, err = taskrunner.NewActor(taskrunner.ActorOptions{NativeSessionAdapters: cli.NativeSessionAdapters, Tasks: service, Store: connection, Host: host, Repository: ports.CheckpointRepository{Path: config.Repository, Remote: config.Remote, Branch: config.Branch, Identity: config.Identity()}, Mode: mode, ConfigDigest: config.configDigest, Heartbeat: positiveDuration(config.Heartbeat, 5*time.Second), ShutdownRunner: shutdown, RunnerSettlement: func(ctx context.Context) error {
 		return cli.VerifyServiceSettlement(ctx, info.InstanceID, shutdownID)
 	}, Control: func(ctx context.Context, req api.ControlRequest) (api.ControlReceipt, error) {
 		return controls.Handle(ctx, req, actor.InstanceID(), actor.State.Control.Revision)

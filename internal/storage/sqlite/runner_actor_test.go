@@ -58,6 +58,7 @@ func TestRunnerActorUsesHostScheduler(t *testing.T) {
 			host := &runnerActorHost{ready: make(chan struct{}, 1)}
 			calls := 0
 			actor, err := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: &taskrunner.Service{Store: s, Project: project}, Store: s, Host: host, Repository: storageports.CheckpointRepository{Identity: project, Path: "fixture", Remote: "origin", Branch: "main"}, Mode: "manual", Heartbeat: 50 * time.Millisecond,
+				NativeSessionAdapters: []string{"codex-app-server"},
 				Control: func(context.Context, api.ControlRequest) (api.ControlReceipt, error) {
 					return api.ControlReceipt{}, errors.New("unexpected control")
 				},
@@ -71,7 +72,7 @@ func TestRunnerActorUsesHostScheduler(t *testing.T) {
 				RunnerSettlement: func(context.Context) error { return nil },
 			})
 			require(t, err)
-			for _, required := range []string{"stop_service", "pause_dispatch", "resume_dispatch", "set_dispatch_mode", "runner_reply", "runner_resume", "answer_decision"} {
+			for _, required := range []string{"stop_service", "pause_dispatch", "resume_dispatch", "set_dispatch_mode", "runner_reply", "runner_resume", "answer_decision", "open_native_session", "open_native_session:codex-app-server"} {
 				found := false
 				for _, value := range actor.State.Service.Capabilities {
 					found = found || value == required

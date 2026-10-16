@@ -1,8 +1,8 @@
-﻿param([string]$WebAddress='127.0.0.1:19743', [string]$SteerRunnerExe=$env:STEERRUNNER_EXE, [switch]$IndependentProcess)
+﻿param([string]$WebAddress='127.0.0.1:19743', [string]$SteerRunnerExe=$env:STEERRUNNER_EXE, [ValidateSet('smoke.spec.ts','native-session.spec.ts')][string]$BrowserScenario='smoke.spec.ts', [switch]$IndependentProcess)
 $ErrorActionPreference='Stop'
 if(-not $IndependentProcess){
  . (Join-Path $PSScriptRoot 'independent-test.ps1')
- $arguments=@('-WebAddress',$WebAddress)
+ $arguments=@('-WebAddress',$WebAddress,'-BrowserScenario',$BrowserScenario)
  if($SteerRunnerExe){$arguments+=@('-SteerRunnerExe',$SteerRunnerExe)}
  Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $arguments
  return
@@ -30,7 +30,7 @@ try {
     $taskOwner=Start-Process -FilePath $taskHelper -ArgumentList @('debug','run','--simulate','--no-open') -WindowStyle Hidden -PassThru -RedirectStandardOutput (Join-Path $taskPackage 'evidence\launch.log') -RedirectStandardError (Join-Path $taskPackage 'evidence\launch.stderr.log')
     Push-Location $taskRepo
     try {
-        & npm --prefix web run test:e2e -- smoke.spec.ts 2>&1 | Tee-Object -FilePath (Join-Path $taskPackage 'evidence\smoke.log')
+        & npm --prefix web run test:e2e -- $BrowserScenario 2>&1 | Tee-Object -FilePath (Join-Path $taskPackage 'evidence\smoke.log')
         $taskPassed=$LASTEXITCODE -eq 0
     } finally { Pop-Location }
 } finally {

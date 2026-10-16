@@ -12,6 +12,9 @@ import (
 )
 
 type Capabilities struct {
+	NativeSessionViewer struct {
+		Adapters []string `json:"adapters"`
+	} `json:"native_session_viewer"`
 	Protocol        string `json:"protocol"`
 	Version         string `json:"version"`
 	ResourceVersion int    `json:"resource_version"`
