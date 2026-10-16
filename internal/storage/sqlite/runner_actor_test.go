@@ -68,6 +68,7 @@ func TestRunnerActorUsesHostScheduler(t *testing.T) {
 					}
 					return nil
 				},
+				RunnerSettlement: func(context.Context) error { return nil },
 			})
 			require(t, err)
 			for _, required := range []string{"stop_service", "pause_dispatch", "resume_dispatch", "set_dispatch_mode", "runner_reply", "runner_resume", "answer_decision"} {
@@ -163,7 +164,7 @@ func TestRunnerActorBindsReceiptToOriginalHostFile(t *testing.T) {
 		t.Run(map[bool]string{false: "same", true: "changed"}[changed], func(t *testing.T) {
 			s, project, _ := nativeAuditStore(t)
 			host := &runnerControlHost{runnerActorHost: &runnerActorHost{ready: make(chan struct{}, 1)}, fileDigest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
-			actor, err := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: &taskrunner.Service{Store: s, Project: project}, Store: s, Host: host, Repository: storageports.CheckpointRepository{Identity: project}, Mode: "manual", Heartbeat: time.Second, ShutdownRunner: func(context.Context) error { return nil }, Control: func(_ context.Context, r api.ControlRequest) (api.ControlReceipt, error) {
+			actor, err := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: &taskrunner.Service{Store: s, Project: project}, Store: s, Host: host, Repository: storageports.CheckpointRepository{Identity: project}, Mode: "manual", Heartbeat: time.Second, ShutdownRunner: func(context.Context) error { return nil }, RunnerSettlement: func(context.Context) error { return nil }, Control: func(_ context.Context, r api.ControlRequest) (api.ControlReceipt, error) {
 				if changed {
 					host.fileDigest = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 				}
