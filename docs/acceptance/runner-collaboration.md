@@ -146,3 +146,15 @@ N1 重验仅调整新夹具：业务 Spec/Plan 描述产物，阶段指令放 Ru
 - 新构建 N1 首次复验：`C:/Users/lmas1/AppData/Local/Temp/steerline-collaboration-fix-18e97677397a434891e2688601444622/n1/summary.json` 失败，cleanup_complete=true、零真实 PR。正式产品响应证实原会话已完成实施与两项审计（均 pass，repair_count=0），切回执行模型后的 publish 在 `sandbox_readiness_failed: native_sandbox_command; no business input sent` 被阻断；未绕过就绪门或补发原请求。该失败不计 A06 通过，未重写旧构建 N1 事实。使用同一固定 Runner EXE、主干合并后的 caller 新建独立 `n1-retry` 现场复验，不复用或重置失败现场。
 
 实现 PR：[SteerLine #347](https://github.com/erranliu/SteerLine/pull/347) 与 [SteerRunner #20](https://github.com/erranliu/SteerRunner/pull/20)。PR 不代表部署或合并；Runner 是新调用方启用前置。
+
+
+### 修复构建 N1 最终结果
+
+`n1-retry/summary.json`：passed=true、cleanup_complete=true、零 errors。本次 caller 来源为已合入 main 的 `292737c39154eb3c07cf1fbf77adacb2ef5d7769`，Runner 为上方同一固定修复 EXE/SHA；之后 caller 与 Runner 只追加验收文档，执行代码未变。证据根：`C:/Users/lmas1/AppData/Local/Temp/steerline-collaboration-fix-18e97677397a434891e2688601444622/n1-retry/`。
+
+- 真正执行/审计/发布：同一原生 session 的 5 个 final；执行请求 gpt-6-luna/medium，audit.spec 与 audit.code 请求 gpt-6.1-sol/high，均 pass、repair_count=0，再切回原执行请求模型发布。
+- 原 Run `5191ea00d9323efebdf4159790a72c23`，候选 `c03e3d6455034d4fbf42422a5c508df0`，input_digest `617a63ffd31c079ad2fdd9bd4bd1c5475dd8a03f7c13f53ac89a32e4177a8156`。详情核对来源、冻结材料、两项审计和轮次请求模型；Task 历史核对同一候选/Run 与冻结预设，另存即时公开 CLI inspect 投影作对照。
+- 本次专属 [SteerlineTest PR #432](https://github.com/erranliu/SteerlineTest/pull/432) 已合并，merge `45891b62c0a516b163119f7adda58618490200bb`；唯一 Delivery 计数 1，后继 ready=true、unstarted=true。scenario.json、live-completed.json、audited-product-*.json、audited-product-task-history.json、audited-runner-comparison.json 保留证据。
+- 原实例停止和最终清理均核验；live-runner-cleanup.json 为 confirmed=true、error=<nil>，scenario cleanup_complete=true。未部署安装环境，未复用失败现场，也未将首次失败覆盖为成功。
+
+本轮 RCB-A02/A03 修复、U1/U3/I1/C1 及新构建 N1 已通过；RCB-A04/A06 的真实产品链证据对应本次新构建。RCB-M01 仍待人工确认，不声明 full-L2/L3 或 Orca 原生矩阵通过。
