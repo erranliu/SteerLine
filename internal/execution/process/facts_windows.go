@@ -11,14 +11,14 @@ import (
 	"syscall"
 	"unsafe"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"golang.org/x/sys/windows"
 )
 
 type childProcess struct {
 	mu            sync.Mutex
 	job           windows.Handle
-	identity      executionbackend.ProcessIdentity
+	identity      hostcontract.ProcessIdentity
 	writersAbsent bool
 }
 
@@ -39,7 +39,7 @@ func (p *childProcess) WritersAbsent() bool {
 	return p.writersAbsent
 }
 
-func (p *childProcess) Identity() executionbackend.ProcessIdentity { return p.identity }
+func (p *childProcess) Identity() hostcontract.ProcessIdentity { return p.identity }
 
 func (*childProcess) OwnedProcess() bool { return true }
 
@@ -129,24 +129,24 @@ func StartManaged(cmd *exec.Cmd) (*childProcess, error) {
 
 // A managed worker's descendants remain in its non-breakaway, kill-on-close
 // Job. Closing the owning handle (including on service exit) ends that tree.
-func WorkerTreeAbsent(identity executionbackend.ProcessIdentity) bool {
+func WorkerTreeAbsent(identity hostcontract.ProcessIdentity) bool {
 	return InspectProcess(&identity) == "process absent"
 }
 
-func IdentityFromHandle(h windows.Handle, pid int) (executionbackend.ProcessIdentity, error) {
+func IdentityFromHandle(h windows.Handle, pid int) (hostcontract.ProcessIdentity, error) {
 	var created, exit, kernel, user windows.Filetime
 	if e := windows.GetProcessTimes(h, &created, &exit, &kernel, &user); e != nil {
-		return executionbackend.ProcessIdentity{}, e
+		return hostcontract.ProcessIdentity{}, e
 	}
 	b := make([]uint16, 32768)
 	n := uint32(len(b))
 	if e := windows.QueryFullProcessImageName(h, 0, &b[0], &n); e != nil {
-		return executionbackend.ProcessIdentity{}, e
+		return hostcontract.ProcessIdentity{}, e
 	}
-	return executionbackend.ProcessIdentity{Kind: "os", PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: canonical(windows.UTF16ToString(b[:n]))}, nil
+	return hostcontract.ProcessIdentity{Kind: "os", PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: canonical(windows.UTF16ToString(b[:n]))}, nil
 }
 
-func CurrentIdentity() (*executionbackend.ProcessIdentity, error) {
+func CurrentIdentity() (*hostcontract.ProcessIdentity, error) {
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(os.Getpid()))
 	if err != nil {
 		return nil, err
@@ -159,7 +159,7 @@ func CurrentIdentity() (*executionbackend.ProcessIdentity, error) {
 	return &id, nil
 }
 
-func InspectProcess(old *executionbackend.ProcessIdentity) string {
+func InspectProcess(old *hostcontract.ProcessIdentity) string {
 	probe := Probe(old)
 	switch probe.State {
 	case "absent":
@@ -176,7 +176,7 @@ func InspectProcess(old *executionbackend.ProcessIdentity) string {
 	}
 }
 
-func Probe(old *executionbackend.ProcessIdentity) ProbeResult {
+func Probe(old *hostcontract.ProcessIdentity) ProbeResult {
 	if old == nil || old.PID <= 0 || old.Kind != "os" || old.Created == "" || old.Executable == "" {
 		return ProbeResult{State: "unknown", Reason: "process identity is missing or unsupported"}
 	}

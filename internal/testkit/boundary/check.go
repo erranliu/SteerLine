@@ -30,6 +30,7 @@ var platformText = regexp.MustCompile(`(?i)codex|orca`)
 
 const productQuery = module + "/internal/product/query"
 const storageSQLite = module + "/internal/storage/sqlite"
+const hostContract = module + "/internal/hostcontract"
 
 var executionAdapters = execution + "/adapters"
 
@@ -54,29 +55,33 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return true
 	}
 	switch owner {
+	case hostContract:
+		return dependency == module+"/internal/runnercontract"
+	case module + "/internal/execution/backend":
+		return dependency == hostContract
 	case module + "/internal/product/query/taskgraph":
 		return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/product/api" || dependency == module+"/internal/storage/ports"
 	case module + "/internal/task":
 		return dependency == module+"/internal/task/model"
 	case module + "/internal/execution/model":
-		return dependency == module+"/internal/execution/backend" || dependency == execution+"/agentlaunch" || dependency == module+"/internal/runnercontract"
+		return dependency == module+"/internal/execution/backend" || dependency == execution+"/agentlaunch" || dependency == module+"/internal/runnercontract" || dependency == hostContract
 	case module + "/internal/execution/conversation":
 		return dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
 	case module + "/internal/runnerstate":
 		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/storage/ports":
-		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate" || dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
+		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate" || dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == hostContract
 	}
 	return false
 }
 
-var purePackages = []string{module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
 		return true
 	}
-	return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/storage/ports" || dependency == module+"/internal/runnercontract"
+	return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/runnercontract" || dependency == hostContract
 }
 
 func purePackage(pkg string) bool {
@@ -113,6 +118,36 @@ func taskFactsOnlyFile(pkg, file string) bool {
 		return file == "task_command_store.go"
 	case taskRunner:
 		return file == "service.go" || file == "control.go"
+	}
+	return false
+}
+
+func misplacedHostDefinition(pkg, name string) bool {
+	if pkg == hostContract {
+		return false
+	}
+	switch name {
+	case "ServiceCheckpoint", "ServiceCheckpointSchema", "WorkerFlowRuntimeSchema", "CheckpointServiceState", "CheckpointRepository", "CheckpointControlOperation", "CheckpointControlBlocker":
+		return true
+	case "Repository", "ServiceState", "ControlState", "ControlOperation", "ControlBlocker":
+		return pkg == execution+"/reconstruction"
+	case "ProcessIdentity", "ProcessProbeFacts", "ProcessFactsPort":
+		return pkg == execution+"/backend"
+	case "ControlReceipt":
+		return pkg == execution+"/model"
+	}
+	return false
+}
+
+func hostCheckpointFile(pkg, file string) bool {
+	if pkg == module+"/internal/storage/ports" {
+		return file == "checkpoint.go"
+	}
+	if pkg == storageSQLite {
+		switch file {
+		case "checkpoint.go", "service_checkpoint.go", "sqlite_store_checkpoint.go", "runtime_preflight.go", "sqlite_store_write_commands.go":
+			return true
+		}
 	}
 	return false
 }
@@ -309,7 +344,7 @@ func productQueryImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
 		return true
 	}
-	for _, allowed := range []string{module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/api", productQuery + "/taskgraph", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/storage/ports"} {
+	for _, allowed := range []string{hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/api", productQuery + "/taskgraph", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/storage/ports"} {
 		if dependency == allowed {
 			return true
 		}
@@ -322,6 +357,7 @@ func storageSQLiteImportAllowed(dependency string) bool {
 		return true
 	}
 	for _, allowed := range []string{
+		hostContract,
 		module + "/internal/runnercontract", module + "/internal/runnerstate",
 		module + "/internal/execution/backend", module + "/internal/execution/model",
 		module + "/internal/storage/ports", module + "/internal/task/model",
@@ -383,7 +419,7 @@ func ScanSource(root string) (Report, error) {
 		if err != nil {
 			return err
 		}
-		if !strings.HasSuffix(entry.Name(), "_test.go") && pkg != module+"/internal/task/model" {
+		if !strings.HasSuffix(entry.Name(), "_test.go") {
 			for _, decl := range parsed.Decls {
 				names := []string{}
 				switch d := decl.(type) {
@@ -404,8 +440,11 @@ func ScanSource(root string) (Report, error) {
 					}
 				}
 				for _, name := range names {
-					if taskDeliveryDefinition(name) {
+					if pkg != module+"/internal/task/model" && taskDeliveryDefinition(name) {
 						report.Violations = append(report.Violations, "task delivery definition outside task/model: "+filepath.ToSlash(path)+" -> "+name)
+					}
+					if misplacedHostDefinition(pkg, name) {
+						report.Violations = append(report.Violations, "host contract definition outside hostcontract: "+filepath.ToSlash(path)+" -> "+name)
 					}
 				}
 			}
@@ -420,6 +459,9 @@ func ScanSource(root string) (Report, error) {
 			}
 			if taskFactsOnlyFile(pkg, entry.Name()) && strings.HasPrefix(value, execution+"/") {
 				report.Violations = append(report.Violations, "task facts execution dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
+			if hostCheckpointFile(pkg, entry.Name()) && strings.HasPrefix(value, execution+"/") {
+				report.Violations = append(report.Violations, "host checkpoint execution dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
 			// Shared adapters are available only to these two test owners. Keep
 			// their dependency edge so transitive forbidden imports remain visible.
@@ -608,13 +650,13 @@ func Check(ctx context.Context, root string) (Report, error) {
 		return report, err
 	}
 	productionRoots := map[string]bool{}
-	for _, owner := range []string{core, module + "/internal/app", taskRunner, module + "/internal/runnerbridge", module + "/internal/runnerclient", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", productQuery, module + "/internal/product/query/taskgraph", module + "/internal/storage/ports", module + "/web/server", module + "/cmd/steerline-web"} {
+	for _, owner := range []string{hostContract, core, module + "/internal/app", taskRunner, module + "/internal/runnerbridge", module + "/internal/runnerclient", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", productQuery, module + "/internal/product/query/taskgraph", module + "/internal/storage/ports", module + "/web/server", module + "/cmd/steerline-web"} {
 		productionRoots[owner] = true
 	}
 
 	for _, target := range []string{"windows", "linux"} {
 
-		cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/app/host", "./internal/app", "./internal/taskrunner", "./internal/runnerbridge", "./internal/runnerclient", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/product/query", "./internal/product/query/taskgraph", "./internal/storage/ports", "./web/server", "./cmd/steerline-web")
+		cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/hostcontract", "./internal/app/host", "./internal/app", "./internal/taskrunner", "./internal/runnerbridge", "./internal/runnerclient", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/product/query", "./internal/product/query/taskgraph", "./internal/storage/ports", "./web/server", "./cmd/steerline-web")
 		cmd.Dir = root
 		for _, value := range os.Environ() {
 			key, _, _ := strings.Cut(value, "=")

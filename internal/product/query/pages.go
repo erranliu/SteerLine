@@ -4,14 +4,15 @@ package query
 
 import (
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"strings"
 	"time"
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	taskview "github.com/erranliu/SteerLine/internal/product/query/taskgraph"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -130,7 +131,7 @@ type CandidateView struct {
 	StartedAt, EndedAt                             *time.Time
 	WorktreePath, WorktreeBranch, BaseCommit       *string
 	LastEvent, LogPath, ResultPath, Summary, Error *string
-	Process                                        *backend.ProcessIdentity
+	Process                                        *hostcontract.ProcessIdentity
 	EnvironmentBlocker                             *model.WorkerHostBlocker
 	ExecutionProfile                               *model.FixedExecutionProfile
 	Decision                                       *model.DecisionState

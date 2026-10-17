@@ -9,6 +9,7 @@ import (
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -71,7 +72,7 @@ func TestTM05PageProjection(t *testing.T) {
 	t.Run("candidate_excludes_private_execution_and_copies_page_values", func(t *testing.T) {
 		now := time.Now().UTC()
 		path, summary := "workspace-b", "中文😀"
-		r := &CandidateView{RunID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", ControlRevision: 9, WorktreePath: &path, Summary: &summary, CandidateEndedAt: &now, Process: &backend.ProcessIdentity{PID: 41, Terminal: "terminal-b"}, Decision: &model.DecisionState{ID: "decision-b", Version: 3, Request: model.DecisionRequest{Question: "继续？", Options: []backend.DecisionOption{{ID: "yes", Label: "继续", Action: "private-authority"}}}}}
+		r := &CandidateView{RunID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", ControlRevision: 9, WorktreePath: &path, Summary: &summary, CandidateEndedAt: &now, Process: &hostcontract.ProcessIdentity{PID: 41, Terminal: "terminal-b"}, Decision: &model.DecisionState{ID: "decision-b", Version: 3, Request: model.DecisionRequest{Question: "继续？", Options: []backend.DecisionOption{{ID: "yes", Label: "继续", Action: "private-authority"}}}}}
 		page := Candidate(r)
 		if page.RunID != r.RunID || page.ExecutionID != r.ExecutionID || page.SessionID != r.SessionID || page.ControlRevision != 9 || page.Process.Terminal != "terminal-b" {
 			t.Fatalf("lost exact target: %+v", page)

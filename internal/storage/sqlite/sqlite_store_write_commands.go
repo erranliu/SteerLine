@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/hostcontract"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func (t *sqliteTx) AppendEvent(v storageports.DomainEvent) (int64, error) {
@@ -102,7 +104,7 @@ func (t *sqliteTx) heartbeatProjection(project string) error {
 	if err != nil {
 		return err
 	}
-	var checkpoint storageports.ServiceCheckpoint
+	var checkpoint hostcontract.ServiceCheckpoint
 	if err = decode(payload, &checkpoint); err != nil {
 		return err
 	}

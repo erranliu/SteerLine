@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -29,7 +30,7 @@ func TestExecutionLocationCandidateProjection(t *testing.T) {
 		{ID: "candidate-a", TaskID: "1", StateDir: "C:/slr/first", RunID: "runner-a", Projection: &runnerclient.Run{Execution: runnerclient.Execution{AttemptID: "attempt-a"}}},
 		{ID: "candidate-b", TaskID: "1", StateDir: "D:/slr/second"},
 	}
-	runtime := taskrunner.Project(ports.RunnerSnapshot{Candidates: candidates}, ports.ServiceCheckpoint{})
+	runtime := taskrunner.Project(ports.RunnerSnapshot{Candidates: candidates}, hostcontract.ServiceCheckpoint{})
 	page := productServicePage(&runtime)
 	for i, candidate := range candidates {
 		got := page.Runs[i]

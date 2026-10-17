@@ -5,9 +5,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
-	"github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
@@ -23,7 +23,7 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 	if err != nil {
 		return err
 	}
-	var checkpoint ports.ServiceCheckpoint
+	var checkpoint hostcontract.ServiceCheckpoint
 	if snapshot.Checkpoint != nil {
 		checkpoint = *snapshot.Checkpoint
 	}
@@ -47,8 +47,8 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 			return errors.New("runner_build_changed: original environment check must be reconciled with its frozen Runner")
 		}
 	}
-	checkpoint.SchemaVersion = ports.WorkerFlowRuntimeSchema
-	checkpoint.Repository = ports.CheckpointRepository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}
+	checkpoint.SchemaVersion = hostcontract.ServiceCheckpointSchema
+	checkpoint.Repository = hostcontract.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}
 	checkpoint.Service.RunnerBuild = &pin
 	_, err = store.SaveCheckpoint(ctx, checkpoint)
 	return err

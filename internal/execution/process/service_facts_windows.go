@@ -5,24 +5,24 @@ package process
 import (
 	"errors"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"golang.org/x/sys/windows"
 )
 
-func (ServiceFacts) CurrentIdentity() (*executionbackend.ProcessIdentity, error) {
+func (ServiceFacts) CurrentIdentity() (*hostcontract.ProcessIdentity, error) {
 	return CurrentIdentity()
 }
 
-func (ServiceFacts) IdentityForPID(pid int) (executionbackend.ProcessIdentity, error) {
+func (ServiceFacts) IdentityForPID(pid int) (hostcontract.ProcessIdentity, error) {
 	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
 	if err != nil {
-		return executionbackend.ProcessIdentity{}, err
+		return hostcontract.ProcessIdentity{}, err
 	}
 	defer windows.CloseHandle(handle)
 	return IdentityFromHandle(handle, pid)
 }
 
-func (ServiceFacts) IdentityFromHandle(handle uintptr, pid int) (executionbackend.ProcessIdentity, error) {
+func (ServiceFacts) IdentityFromHandle(handle uintptr, pid int) (hostcontract.ProcessIdentity, error) {
 	return IdentityFromHandle(windows.Handle(handle), pid)
 }
 

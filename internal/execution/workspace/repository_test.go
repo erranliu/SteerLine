@@ -2,19 +2,23 @@ package workspace
 
 import (
 	"context"
-	b "github.com/erranliu/SteerLine/internal/execution/backend"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	b "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 type repositoryTestProcess struct{ p *os.Process }
 
-func (p repositoryTestProcess) Identity() b.ProcessIdentity { return b.ProcessIdentity{} }
-func (p repositoryTestProcess) Kill()                       { _ = p.p.Kill() }
-func (p repositoryTestProcess) Close()                      {}
+func (p repositoryTestProcess) Identity() hostcontract.ProcessIdentity {
+	return hostcontract.ProcessIdentity{}
+}
+func (p repositoryTestProcess) Kill()  { _ = p.p.Kill() }
+func (p repositoryTestProcess) Close() {}
 func TestResolveRepositoryUsesOriginalCommonDir(t *testing.T) {
 	ctx := context.Background()
 	git := Git{Command: b.LaunchCommand{Executable: "git"}, Timeout: 15 * time.Second, Start: func(cmd *exec.Cmd) (b.StopHandle, error) {

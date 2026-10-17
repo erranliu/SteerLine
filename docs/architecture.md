@@ -10,6 +10,8 @@
 
 > 同日第四轮：TaskDelivery、合并证据、ProjectTaskAuthority、交付回执及校验规则归 `task/model`，旧执行包无兼容别名。原子交付、原回执重放与拒绝身份变更的验证见[第四轮验收](acceptance/architecture-decoupling-round4.md)；已集成最新主干的 Runner 协作与运行视图清理。
 
+> 同日第五轮：service checkpoint、宿主服务/控制状态、内部控制回执与进程观察事实统一归纯 `hostcontract`，移除旧定义及重建层的存储端口依赖。同快照读取、原资源所有者和关闭判定保持，范围与验证见[第五轮验收](acceptance/architecture-decoupling-round5.md)。
+
 SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。执行已迁到独立 SteerRunner；当前代码/运行边界见[代码架构](architecture/current-code-architecture.md)，实际后端与验收支持范围见[Runner 接入](integration/steerrunner.md)及专属验收。后续目标见[产品愿景](roadmap/product-vision.md)。
 
 本文描述 SteerLine 产品运行的业务权威。普通开发由当前聊天直接实现；用户明确要求 roadmap 调度时，才由 roadmap-runner 使用[execution-map](roadmap/execution-map.md)管理已确认的任务与依赖。roadmap 流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。

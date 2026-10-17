@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
-func (s *SQLiteStore) LoadCheckpoint(ctx context.Context, project string, requireIdentity bool) (*storageports.ServiceCheckpoint, error) {
+func (s *SQLiteStore) LoadCheckpoint(ctx context.Context, project string, requireIdentity bool) (*hostcontract.ServiceCheckpoint, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
 		return nil, err

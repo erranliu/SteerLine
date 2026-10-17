@@ -6,27 +6,27 @@ import (
 	"errors"
 	"fmt"
 
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 type checkpointQuery interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
-func ReadServiceCheckpointTx(ctx context.Context, tx *sql.Tx, project string, requireIdentity bool) (*storageports.ServiceCheckpoint, error) {
+func ReadServiceCheckpointTx(ctx context.Context, tx *sql.Tx, project string, requireIdentity bool) (*hostcontract.ServiceCheckpoint, error) {
 	return readServiceCheckpoint(ctx, tx, project, requireIdentity)
 }
 
-func readServiceCheckpoint(ctx context.Context, tx checkpointQuery, project string, requireIdentity bool) (*storageports.ServiceCheckpoint, error) {
+func readServiceCheckpoint(ctx context.Context, tx checkpointQuery, project string, requireIdentity bool) (*hostcontract.ServiceCheckpoint, error) {
 	var payload []byte
 	if err := tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
 		return nil, err
 	}
-	var checkpoint storageports.ServiceCheckpoint
+	var checkpoint hostcontract.ServiceCheckpoint
 	if err := decode(payload, &checkpoint); err != nil {
 		return nil, err
 	}
-	if checkpoint.SchemaVersion != storageports.WorkerFlowRuntimeSchema {
+	if checkpoint.SchemaVersion != hostcontract.ServiceCheckpointSchema {
 		return nil, fmt.Errorf("unsupported runtime schema %d", checkpoint.SchemaVersion)
 	}
 	if requireIdentity && checkpoint.Repository.Identity != project {

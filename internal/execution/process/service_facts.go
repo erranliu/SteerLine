@@ -1,12 +1,12 @@
 package process
 
-import executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+import "github.com/erranliu/SteerLine/internal/hostcontract"
 
 type ServiceFacts struct{}
 
-func NewServiceFacts() executionbackend.ProcessFactsPort { return ServiceFacts{} }
+func NewServiceFacts() hostcontract.ProcessFactsPort { return ServiceFacts{} }
 
-func (ServiceFacts) Probe(identity *executionbackend.ProcessIdentity) executionbackend.ProcessProbeFacts {
+func (ServiceFacts) Probe(identity *hostcontract.ProcessIdentity) hostcontract.ProcessProbeFacts {
 	facts := Probe(identity)
-	return executionbackend.ProcessProbeFacts{State: facts.State, Reason: facts.Reason}
+	return hostcontract.ProcessProbeFacts{State: facts.State, Reason: facts.Reason}
 }

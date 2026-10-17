@@ -2,20 +2,21 @@ package taskrunner
 
 import (
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"strconv"
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // Project reconstructs a caller view from public CLI facts. It never invents
 // native process identities or writes legacy execution records.
-func Project(snapshot storageports.RunnerSnapshot, checkpoint storageports.ServiceCheckpoint) reconstruction.Runtime {
+func Project(snapshot storageports.RunnerSnapshot, checkpoint hostcontract.ServiceCheckpoint) reconstruction.Runtime {
 	g := snapshot.Graph
 	view := reconstruction.RuntimeFromCheckpoint(checkpoint, g.Authority.DispatchMode, g.Authority.DispatchPaused, g.Authority.AuthorityVersion)
 	view.Tasks = g.Tasks

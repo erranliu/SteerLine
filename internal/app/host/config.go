@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -31,7 +31,7 @@ type Config struct {
 	Heartbeat          string
 	CommandTimeout     string
 	ShutdownGrace      string
-	ProcessFacts       executionbackend.ProcessFactsPort
+	ProcessFacts       hostcontract.ProcessFactsPort
 	// Application-declared administrative names, never active execution IDs.
 	WorktreeMetadataDirectories []string
 
