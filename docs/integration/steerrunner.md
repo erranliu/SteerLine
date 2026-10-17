@@ -18,4 +18,8 @@ SteerLine 为 Runner 指定本地卷根下的短目录：Windows 为 `<drive>:\s
 
 原生查看通过 `open-native-session --run-id R --attempt-id A --session-id S --generation G` 调用；只有 Runner 发布的 `native_session_viewer.adapters` 中相应 adapter 可用时启用按钮。原服务负责私有 binding 和实时进程/thread/workspace 核验，调用方不读取这些私有材料。详情与本次构建/验证范围见[原会话查看验收](../acceptance/native-session-viewer.md)。
 
-本次支持验收范围为 Windows/amd64 本机 Codex。用户已取消本机和远端 Orca 路径验收，适配器保留为未验能力，不声明真机支持。
+Orca GitHub 执行必须显式配置 `execution.settings.agent_launch.runtime_executable` 与 `runtime_sha256`，指向执行主机已安装的可信 `steerrunner-agent.exe` 及其实际 SHA256；`agent_launch.executable` 是同主机的 native Codex。Runner 在执行主机使用已有 gh 登录准备单仓库认证，并在实际 app-server/权限模式内完成无模型预检；SteerLine 不传递凭据、不代做预检。缺 helper 时 Runner 在业务输入前拒绝，普通终端默认 Codex 启动不能替代这个能力。
+
+调试生成器的 Orca 入口要求 `-OrcaRuntimeExecutable <执行主机绝对路径> -OrcaRuntimeSHA256 <sha256>`，并始终生成 agent_launch；可另传 `-AgentExecutable <执行主机 native Codex> -AgentModel <model> -AgentReasoningEffort high`。路径在执行主机解析，不能用调用方 Test-Path 判断；应先核对执行主机的实际 helper/native 构建身份。生成器不会安装远端 helper 或复制认证，首次启动后配置仍冻结。
+
+Runner 远端机制已随主干 `d4969d0`（PR #18）合入，其独立验收见 [Orca 远端记录](https://github.com/erranliu/SteerRunner/blob/d4969d0/docs/acceptance/orca-remote-20261017.md)。SteerLine 产品接线的本次结果独立登记在[专属验收](../acceptance/orca-runtime-wiring.md)，不以 Runner 独立结果替代产品验证或改写旧安装候选。
