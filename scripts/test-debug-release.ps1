@@ -17,6 +17,7 @@ foreach ($invalidRuntime in @(
     @{Orca=$true},
     @{Orca=$true;OrcaRuntimeExecutable='relative.exe';OrcaRuntimeSHA256=('a'*64)},
     @{Orca=$true;OrcaRuntimeExecutable='C:/runtime/agent.exe';OrcaRuntimeSHA256='bad'},
+    @{Orca=$true;OrcaRuntimeExecutable='C:/runtime/agent.exe';OrcaRuntimeSHA256=(('a'*64)+"`n")},
     @{OrcaRuntimeExecutable='C:/runtime/agent.exe'}
 )) {
     $rejected = $false

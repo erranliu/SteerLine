@@ -49,3 +49,7 @@ Runner 补丁第二版仅允许 qualifier 等于目标仓库 owner，继续拒�
 - 启动控制的原请求 `ece5331715b44b49980b190ed535acbb` 曾遇文件替换拒绝；只 GET 同一请求取得 applied，没有重发 resume_dispatch。完整回执保留在 `resume-original-receipt.json`。临时核验脚本最初误将非空 next_cursor 当作截断，按正式 has_more 字段修正后对同一已完成执行重读通过，没有重跑业务。
 
 ORW-A01/A02/A03 全部通过；参数反例、无模型配置生成、两仓相关定向测试、PowerShell/JSON 语法、Markdown 链接和两仓 diff --check 均通过。未运行完整分级 L2/L3，不记 TaskDelivery/合并验收；PR 保留 OPEN 供检查，未合入任何默认主干。此前失败不抵消，也不合并为首轮通过率。未修改/使用安装环境进行测试，原安装候选未恢复。
+
+## 提 PR 后独立复审
+
+SteerLine PR #346 的独立复审发现 PowerShell 正则 `$` 接受末尾 LF，可能使非法 helper SHA 未在副作用前拒绝。改为 `\A…\z` 严格匹配并加入 `64hex+LF` 反例；五种参数反例均在查询 Runner 前拒绝。原 live 包的固定构建与结果保持原身份，本次参数边界修复使用定向反例验证。

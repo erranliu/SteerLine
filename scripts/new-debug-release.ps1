@@ -19,7 +19,7 @@ if ($Orca) {
         $OrcaRuntimeExecutable -notmatch '^(?:[A-Za-z]:[\\/]|/)') {
         throw 'Orca requires -OrcaRuntimeExecutable <absolute execution-host steerrunner-agent path>'
     }
-    if ($OrcaRuntimeSHA256 -notmatch '^[a-fA-F0-9]{64}$') {
+    if ($OrcaRuntimeSHA256 -notmatch '\A[a-fA-F0-9]{64}\z') {
         throw 'Orca requires -OrcaRuntimeSHA256 <execution-host steerrunner-agent SHA256>'
     }
     $OrcaRuntimeSHA256 = $OrcaRuntimeSHA256.ToLowerInvariant()
