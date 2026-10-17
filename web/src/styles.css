@@ -729,8 +729,19 @@ textarea {
   font-size: 17px;
   margin-bottom: 10px;
 }
-.candidate-heading > .button {
+.candidate-actions .button {
   font-size: 10px;
+}
+.candidate-actions {
+  min-width: 0;
+  align-items: flex-start;
+}
+.copy-execution-info {
+  min-width: 0;
+}
+.copy-execution-info p {
+  font-size: 10px;
+  margin: 6px 0 0;
 }
 .run-meta {
   display: flex;
