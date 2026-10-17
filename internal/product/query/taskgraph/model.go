@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"time"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -18,14 +17,14 @@ const (
 )
 
 type Node struct {
-	TaskID          string                             `json:"task_id"`
-	Title           string                             `json:"title"`
-	Status          string                             `json:"status"`
-	Priority        int                                `json:"priority"`
-	DependencyReady bool                               `json:"dependency_ready"`
-	Blockers        []taskmodel.TaskDependencyStatus   `json:"blockers"`
-	StartupBlockers []string                           `json:"startup_blockers"`
-	Delivery        *executionmodel.TaskDeliveryRecord `json:"delivery,omitempty"`
+	TaskID          string                           `json:"task_id"`
+	Title           string                           `json:"title"`
+	Status          string                           `json:"status"`
+	Priority        int                              `json:"priority"`
+	DependencyReady bool                             `json:"dependency_ready"`
+	Blockers        []taskmodel.TaskDependencyStatus `json:"blockers"`
+	StartupBlockers []string                         `json:"startup_blockers"`
+	Delivery        *taskmodel.TaskDeliveryRecord    `json:"delivery,omitempty"`
 }
 
 type Edge struct {

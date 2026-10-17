@@ -3,13 +3,32 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/runnerbridge"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
+
+func TestRunnerCandidateReadErrors(t *testing.T) {
+	s := openDomainTestStore(t)
+	if _, err := s.Candidate(context.Background(), "project", "missing"); !errors.Is(err, storageports.ErrNotFound) {
+		t.Fatalf("absent candidate must use the storage contract: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := s.Candidate(ctx, "project", "missing"); !errors.Is(err, context.Canceled) || errors.Is(err, storageports.ErrNotFound) {
+		t.Fatalf("cancellation was misclassified as an absent candidate: %v", err)
+	}
+	require(t, s.Close())
+	if _, err := s.Candidate(context.Background(), "project", "missing"); err == nil || errors.Is(err, storageports.ErrNotFound) {
+		t.Fatalf("closed storage was misclassified as an absent candidate: %v", err)
+	}
+}
 
 func TestRunnerCandidateReservationAndProjection(t *testing.T) {
 	ctx := context.Background()

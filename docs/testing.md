@@ -1,5 +1,11 @@
 # 测试总入口
 
+架构解耦第三轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round3.md)：会话原身份/游标/JSON 字节预算、正文摘要及 UTF-8 分页、能力字段投影、活动预算溢出零推进、同事务事件流与取消/异常关闭，以及 SQLite/存储端口禁止全部产品层依赖。新增查询测试沿 L1 quick-rules，真实 SQLite 读取/资源验证沿现有 SQLite 测试，守卫反例沿 quick-execution-boundary；不运行全量或真实模型。
+
+架构解耦第二轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round2.md)：历史/候选 DTO 纯投影、并发写入与事务结束后的原采样一致性、候选分页/预算、交付回滚/唯一交付/停止义务/后继释放，以及去掉 SQLite 查询层例外后的依赖守卫。新增查询测试沿 L1 quick-rules、现有读取矩阵沿 quick-owner-unified-startup、守卫反例沿 quick-execution-boundary；E2E 读取夹具同步事实字段，只补定向夹具测试和带标签编译，不以此声称完整 L2/L3 通过。
+
+架构解耦第一轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round1.md)：HTTP/Web 消费端生产依赖、taskrunner 禁止 SQL/具体存储/应用实现依赖、候选不存在与真实故障分类、首次领取及原请求重放。新增错误分类用例纳入 L1 quick-execution，SQLite 回归与守卫反例沿既有 quick-rules / quick-execution-boundary 执行；不要求全量或真实模型。
+
 Runner 深 home 路径缺陷的最小验证见[短目录 Plan](plans/runner-short-state-path.plan.md)和[验收](acceptance/runner-short-state-path.md)：真实 Windows socket、命名空间/别名、caller 停止证明、controlled gate 及新调试包双项目/reset；不把模拟链当完整真实 L2。
 
 执行域遗留清理（2026-10-16）按[Plan](plans/execution-legacy-cleanup.plan.md)核对全平台生产引用、生产入口编译和固定 L1；旧执行实现专属测试随实现删除，已无测试的 `execution/model` 不再独立登记 L1，仍被消费的值编解码和 caller/Task/存储/宿主边界测试保留。实际结果见[专属验收](acceptance/execution-legacy-cleanup.md)。

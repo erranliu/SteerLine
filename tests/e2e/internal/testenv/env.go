@@ -72,7 +72,7 @@ type Task struct {
 type TaskFactsSnapshot struct {
 	ProjectIdentity string
 	Tasks           []taskmodel.TaskRecord
-	Deliveries      []executionmodel.TaskDeliveryRecord
+	Deliveries      []taskmodel.TaskDeliveryRecord
 }
 
 type Snapshot struct {

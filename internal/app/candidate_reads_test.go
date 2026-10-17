@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
@@ -43,7 +43,7 @@ func TestCandidateReadFactsAcrossViews(t *testing.T) {
 			}
 			graph := storageports.TaskGraphSnapshot{ByID: map[string]taskmodel.TaskRecord{"task": {TaskID: "task", Status: test.task}}}
 			if test.delivery != "" {
-				graph.Deliveries = map[string]executionmodel.TaskDeliveryRecord{"task": {TaskID: "task", SelectedWorkflowRunID: "candidate"}}
+				graph.Deliveries = map[string]taskmodel.TaskDeliveryRecord{"task": {TaskID: "task", SelectedWorkflowRunID: "candidate"}}
 			}
 			rt := taskrunner.Project(storageports.RunnerSnapshot{Graph: graph, Candidates: []runnerstate.Candidate{c}}, storageports.ServiceCheckpoint{})
 			page := productServicePage(&rt)
@@ -51,15 +51,21 @@ func TestCandidateReadFactsAcrossViews(t *testing.T) {
 				t.Fatalf("runs: %+v", page.Runs)
 			}
 			detail := page.Runs[0]
-			history := query.RunnerHistory([]runnerstate.Candidate{c}).WorkflowRuns[0]
+			historyPage := query.ProjectPage(storageports.ProjectView{Candidates: []runnerstate.Candidate{c}}, "", 0, api.ObservationSnapshot{}, api.ServiceConnection{}, nil, nil)
+			taskPage := query.TaskDetail(storageports.NativeTaskDetail{Candidates: []runnerstate.Candidate{c}})
+			if historyPage.History == nil || len(historyPage.History.WorkflowRuns) != 1 || len(taskPage.WorkflowRuns) != 1 {
+				t.Fatal("sampled history or task candidates were not projected")
+			}
+			history := historyPage.History.WorkflowRuns[0]
+			taskCandidate := taskPage.WorkflowRuns[0]
 			wantStatus := test.observed
 			if wantStatus == "" {
 				wantStatus = test.submit
 			}
-			if detail.WorkflowStatus != wantStatus || detail.ExecutionStatus != wantStatus || history.WorkflowStatus != wantStatus {
+			if detail.WorkflowStatus != wantStatus || detail.ExecutionStatus != wantStatus || history.WorkflowStatus != wantStatus || taskCandidate.WorkflowStatus != wantStatus {
 				t.Fatalf("observation changed: detail=%+v history=%+v", detail, history)
 			}
-			if detail.Participation != test.participation || history.Participation != test.participation || detail.SubmissionStatus != test.submit || history.SubmissionStatus != test.submit || detail.StopRequested != test.stop || history.StopRequested != test.stop {
+			if detail.Participation != test.participation || history.Participation != test.participation || detail.SubmissionStatus != test.submit || history.SubmissionStatus != test.submit || detail.StopRequested != test.stop || history.StopRequested != test.stop || taskCandidate.Participation != history.Participation || taskCandidate.SubmissionStatus != history.SubmissionStatus || taskCandidate.StopRequested != history.StopRequested {
 				t.Fatalf("caller facts lost: detail=%+v history=%+v", detail, history)
 			}
 			if detail.RunID != c.ID || detail.ExecutionID != c.RunID || history.WorkflowRunID != c.ID || detail.WorkflowStage != history.WorkflowStage || detail.DeliveryOutcome != test.delivery {

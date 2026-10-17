@@ -32,7 +32,7 @@ type TaskDeliveryEvidence struct {
 	ExistingAcceptance *json.RawMessage `json:"existing_acceptance,omitempty"`
 }
 
-// ProjectTaskAuthority retains dispatch state until the #74 selection boundary.
+// ProjectTaskAuthority binds a project graph to its repository and dispatch authority.
 type ProjectTaskAuthority struct {
 	ProjectIdentity  string    `json:"project_id"`
 	Authority        string    `json:"authority"`

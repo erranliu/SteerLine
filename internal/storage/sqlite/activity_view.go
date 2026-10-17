@@ -5,99 +5,93 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	api "github.com/erranliu/SteerLine/internal/product/api"
+
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	p "github.com/erranliu/SteerLine/internal/storage/ports"
-	"sort"
 )
 
-func (s Reader) ReadActivityView(ctx context.Context, project, candidate, run, attempt string, after int64, limit, budget int) (p.ActivityBinding, []p.DomainEvent, error) {
-	return s.runnerActivity(ctx, project, candidate, run, attempt, after, limit, budget, false)
-}
-func (s Reader) ReadRecentActivityView(ctx context.Context, project, candidate, run, attempt string) (p.ActivityBinding, []p.DomainEvent, error) {
-	return s.runnerActivity(ctx, project, candidate, run, attempt, 0, 20, 1<<20, true)
-}
-func (s Reader) runnerActivity(ctx context.Context, project, candidate, run, attempt string, after int64, limit, budget int, recent bool) (p.ActivityBinding, []p.DomainEvent, error) {
+func (s Reader) OpenActivityView(ctx context.Context, project, candidate, run, attempt string, after int64, limit int, recent bool) (p.ActivityBinding, p.ActivityRecords, error) {
 	binding := p.ActivityBinding{ProjectIdentity: project}
-	tx, e := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if e != nil {
-		return binding, nil, e
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return binding, nil, err
 	}
-	defer tx.Rollback()
-	c, e := readRunnerCandidate(ctx, tx, project, candidate)
-	if e != nil {
-		return binding, nil, e
+	transferred := false
+	defer func() {
+		if !transferred {
+			_ = tx.Rollback()
+		}
+	}()
+	c, err := readRunnerCandidate(ctx, tx, project, candidate)
+	if err != nil {
+		return binding, nil, err
 	}
 	if c.RunID != run || attempt == "" {
 		return binding, nil, errors.New("activity differs from original candidate Run")
 	}
-	// A past Attempt remains readable only with an original public event as proof.
+	// Past Attempts need an original public event as proof, in this same sample.
 	known := c.Projection != nil && c.Projection.Execution.AttemptID == attempt
 	if !known {
-		var n int
-		e = tx.QueryRowContext(ctx, `SELECT count(*) FROM runner_events WHERE project_identity=? AND candidate_id=? AND json_extract(payload,'$.attempt_id')=?`, project, candidate, attempt).Scan(&n)
-		if e != nil {
-			return binding, nil, e
+		var count int
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM runner_events WHERE project_identity=? AND candidate_id=? AND json_extract(payload,'$.attempt_id')=?`, project, candidate, attempt).Scan(&count); err != nil {
+			return binding, nil, err
 		}
-		known = n > 0
+		known = count > 0
 	}
 	if !known {
 		return binding, nil, errors.New("activity Attempt is not recorded by Runner")
 	}
-	binding.ExecutionID = run
-	binding.ExecutionWorkflowRunID = candidate
-	binding.AttemptID = attempt
-	binding.AttemptExecutionID = run
+	binding.ExecutionID, binding.ExecutionWorkflowRunID = run, candidate
+	binding.AttemptID, binding.AttemptExecutionID = attempt, run
 	limit = max(1, min(limit, 1000))
-	order := " ASC"
+	query := `SELECT seq,payload FROM runner_events WHERE project_identity=? AND candidate_id=? AND seq>? AND json_extract(payload,'$.attempt_id')=? ORDER BY seq ASC LIMIT ?`
 	if recent {
-		order = " DESC"
+		// Keep the same latest five changes and ten technical facts. Rendering
+		// and projected byte budgets belong to product/query.
+		query = `WITH ranked AS (SELECT seq,payload, row_number() OVER (PARTITION BY (json_extract(payload,'$.transition') IS NOT NULL) ORDER BY seq DESC) n FROM runner_events WHERE project_identity=? AND candidate_id=? AND seq>? AND json_extract(payload,'$.attempt_id')=?) SELECT seq,payload FROM ranked WHERE n<=CASE WHEN json_extract(payload,'$.transition') IS NOT NULL THEN 5 ELSE 10 END ORDER BY seq DESC LIMIT ?`
 	}
-	sqlQuery := `SELECT seq,payload FROM runner_events WHERE project_identity=? AND candidate_id=? AND seq>? AND json_extract(payload,'$.attempt_id')=? ORDER BY seq` + order + ` LIMIT ?`
-	if recent {
-		// Preserve readable changes even when technical events are much noisier.
-		sqlQuery = `WITH ranked AS (SELECT seq,payload, row_number() OVER (PARTITION BY (json_extract(payload,'$.transition') IS NOT NULL) ORDER BY seq DESC) n FROM runner_events WHERE project_identity=? AND candidate_id=? AND seq>? AND json_extract(payload,'$.attempt_id')=?) SELECT seq,payload FROM ranked WHERE n<=CASE WHEN json_extract(payload,'$.transition') IS NOT NULL THEN 5 ELSE 10 END ORDER BY seq DESC LIMIT ?`
+	rows, err := tx.QueryContext(ctx, query, project, candidate, after, attempt, limit)
+	if err != nil {
+		return binding, nil, err
 	}
-	rows, e := tx.QueryContext(ctx, sqlQuery, project, candidate, after, attempt, limit)
-	if e != nil {
-		return binding, nil, e
+	transferred = true
+	return binding, &activityRecords{tx: tx, rows: rows, run: run, task: c.TaskID}, nil
+}
+
+type activityRecords struct {
+	tx         *sql.Tx
+	rows       *sql.Rows
+	run, task  string
+	closed     bool
+	closeError error
+}
+
+func (r *activityRecords) Next() (*p.ActivityRecord, error) {
+	if r.closed {
+		return nil, errors.New("activity read stream is closed")
 	}
-	events := []p.DomainEvent{}
-	used := 0
-	for rows.Next() {
-		var seq int64
-		var raw []byte
-		if e = rows.Scan(&seq, &raw); e != nil {
-			break
-		}
-		var event runnercontract.Event
-		if e = json.Unmarshal(raw, &event); e != nil {
-			break
-		}
-		if event.RunID != run {
-			e = errors.New("Runner event Run identity differs")
-			break
-		}
-		v := api.ActivityEvent{V: 1, Seq: uint64(seq), TS: event.CreatedAt, Source: runnercontract.Protocol, RunID: candidate, TaskID: c.TaskID, ItemID: event.EventID, Kind: "runner_event", Status: event.Type, Title: event.Type}
-		if event.Transition != nil {
-			v = runnerWorkflowActivity(v, *event.Transition)
-		}
-		payload, _ := json.Marshal(v)
-		if used+len(payload) > budget {
-			break
-		}
-		used += len(payload)
-		events = append(events, p.DomainEvent{EventID: seq, ProjectIdentity: project, TaskID: c.TaskID, WorkflowRunID: candidate, ExecutionID: run, AttemptID: attempt, Type: "activity.runner_event", ReceivedAt: event.CreatedAt, Payload: payload, PayloadBytes: len(payload)})
+	if !r.rows.Next() {
+		return nil, r.rows.Err()
 	}
-	if e == nil {
-		e = rows.Err()
+	var seq int64
+	var raw []byte
+	if err := r.rows.Scan(&seq, &raw); err != nil {
+		return nil, err
 	}
-	rows.Close()
-	if e != nil {
-		return binding, nil, e
+	var event runnercontract.Event
+	if err := json.Unmarshal(raw, &event); err != nil {
+		return nil, err
 	}
-	if recent {
-		sort.Slice(events, func(i, j int) bool { return events[i].EventID < events[j].EventID })
+	if event.RunID != r.run {
+		return nil, errors.New("Runner event Run identity differs")
 	}
-	return binding, events, tx.Commit()
+	return &p.ActivityRecord{EventID: seq, TaskID: r.task, Event: event}, nil
+}
+
+func (r *activityRecords) Close() error {
+	if !r.closed {
+		r.closed = true
+		r.closeError = errors.Join(r.rows.Close(), r.tx.Commit())
+	}
+	return r.closeError
 }

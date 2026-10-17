@@ -31,7 +31,7 @@ const fullCorePackage = executionPackage
 
 // L1 keeps the public input and fixed repository boundaries. Recovery and
 // delivery are selected through their directed regression entries.
-var quickExecutionTests = []string{"TestRunnerExplicitInputKeepsOriginalRunAndDisplayedVersions", "TestRunnerNativeAnswersPreserveQuestionsAndCallerInput", "TestRunnerBaseUsesFetchedTargetAndOriginalCandidateAncestry"}
+var quickExecutionTests = []string{"TestRunnerExplicitInputKeepsOriginalRunAndDisplayedVersions", "TestRunnerNativeAnswersPreserveQuestionsAndCallerInput", "TestRunnerBaseUsesFetchedTargetAndOriginalCandidateAncestry", "TestRunnerStartClassifiesCandidateLookupErrors", "TestRunnerDeliveryReplayKeepsOriginalTaskReceipt"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
@@ -64,7 +64,7 @@ var quickOwnerCases = []struct {
 	{"quick-owner-web", "github.com/erranliu/SteerLine/web/server", []string{"TestWebAuthenticationAndOriginalForwarding", "TestWebOriginHostAndStaticBoundaries", "TestWebTicketsAreSingleUseAndExpire", "TestWebAddressAndPortConflict", "TestWebLauncherPrivateDiscoveryAndInstance", "TestWebBoundedWritesAndNoBrowserStop", "TestWebSwitchSessionAndNativeStop", "TestWebSwitchDevelopmentProxyAndLease", "TestWebSwitchHomeConfigPreservesPermissions"}},
 	{"quick-owner-http-budget", "github.com/erranliu/SteerLine/internal/product/httpclient", []string{"TestBoundedClientBudgetPreservesAuthenticationAndCancellation"}},
 	{"quick-execution", executionPackage, quickExecutionTests},
-	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestTM04ExecutionBoundary", "TestSharedFixturesRemainTestOnly", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary"}},
+	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestTM04ExecutionBoundary", "TestSharedFixturesRemainTestOnly", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary", "TestTaskDeliveryOwnership"}},
 	{"quick-owner-runner-client", "github.com/erranliu/SteerLine/internal/runnerclient", []string{"TestSteerRunnerCLIContract", "TestSteerRunnerAmbiguousEnvelope", "TestSteerRunnerReleasePinBlocksBeforeInvocation", "TestSteerRunnerUsesPublishedSchema"}},
 	{"quick-owner-runner-bridge", "github.com/erranliu/SteerLine/internal/runnerbridge", []string{"TestSteerRunnerOutboxBoundaries"}},
 	{"quick-owner-runner-state-path", "github.com/erranliu/SteerLine/internal/runnerstatepath", []string{"TestRunnerSocketWorksForDeepApplicationHome", "TestRunnerNamespaceIsolationAndCleanup", "TestRunnerRejectsRedirectedStateBeforeCreateOrCleanup"}},

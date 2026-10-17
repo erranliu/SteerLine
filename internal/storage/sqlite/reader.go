@@ -5,17 +5,17 @@ package sqlite
 import (
 	"database/sql"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 const SchemaVersion = 22
 
 type Reader struct {
 	db            *sql.DB
-	nativeBinding *executionmodel.ProjectTaskAuthority
+	nativeBinding *taskmodel.ProjectTaskAuthority
 }
 
-func NewReader(db *sql.DB, binding *executionmodel.ProjectTaskAuthority) Reader {
+func NewReader(db *sql.DB, binding *taskmodel.ProjectTaskAuthority) Reader {
 	if binding != nil {
 		fixed := *binding
 		binding = &fixed

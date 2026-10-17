@@ -38,6 +38,14 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 	}{
 		{"backend_in_HTTP_consumer", "internal/product/httpclient/edge.go", "internal/product/query", false},
 		{"SQL_in_HTTP_consumer", "internal/product/httpfs/edge.go", "database/sql", false},
+		{"backend_in_Web_server", "web/server/edge_plan9.go", "internal/product/applicationhttp", false},
+		{"SQL_in_Web_command", "cmd/steerline-web/edge_linux.go", "database/sql", false},
+		{"SQL_in_taskrunner", "internal/taskrunner/edge_plan9.go", "database/sql", false},
+		{"concrete_storage_in_taskrunner", "internal/taskrunner/edge.go", "internal/storage/sqlite", false},
+		{"product_query_in_taskrunner", "internal/taskrunner/edge.go", "internal/product/query", false},
+		{"host_in_taskrunner", "internal/taskrunner/edge.go", "internal/app/host", false},
+		{"task_use_case_in_taskrunner", "internal/taskrunner/edge.go", "internal/task", true},
+		{"HTTP_contract_in_Web_server", "web/server/edge.go", "internal/product/httpcontract", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -58,6 +66,31 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 			}
 			if (len(report.Violations) == 0) != tc.allowed {
 				t.Fatalf("allowed=%v violations=%v", tc.allowed, report.Violations)
+			}
+		})
+	}
+	for _, owner := range []string{"internal/taskrunner", "web/server", "cmd/steerline-web"} {
+		t.Run(owner+"_transitive_SQL_in_inactive_sources", func(t *testing.T) {
+			root := t.TempDir()
+			for path, source := range map[string]string{
+				owner + "/edge_plan9.go":          "//go:build never_enabled\n\npackage fixture\nimport _ \"" + module + "/internal/helper\"\n",
+				"internal/helper/edge_freebsd.go": "package helper\nimport _ \"database/sql\"\n",
+			} {
+				file := filepath.Join(root, filepath.FromSlash(path))
+				if err := os.MkdirAll(filepath.Dir(file), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(file, []byte(source), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			report, err := ScanSource(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := module + "/" + owner + " -> " + module + "/internal/helper -> database/sql"
+			if !strings.Contains(strings.Join(report.Violations, "\n"), want) {
+				t.Fatalf("transitive SQL dependency escaped: %v", report.Violations)
 			}
 		})
 	}
@@ -383,12 +416,51 @@ func TestTM05ProductQueryBoundary(t *testing.T) {
 }
 
 func TestTM07StorageBoundary(t *testing.T) {
+	for _, file := range []string{"internal/storage/ports/native_task.go", "internal/storage/sqlite/tasks.go", "internal/storage/sqlite/project.go"} {
+		t.Run(file+"_rejects_product_DTO", func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, filepath.FromSlash(file))
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			source := "//go:build never_enabled\n\npackage fixture\nimport api \"" + module + "/internal/product/api\"\nvar _ api.HistorySummary\n"
+			if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+				t.Fatal(err)
+			}
+			report, err := ScanSource(root)
+			if err != nil || !strings.Contains(strings.Join(report.Violations, "\n"), "task read facts product dependency") {
+				t.Fatalf("product DTO entered raw task/candidate reads: %v %+v", err, report)
+			}
+		})
+	}
+	t.Run("query_projection_through_storage_port_helper", func(t *testing.T) {
+		root := t.TempDir()
+		for name, source := range map[string]string{
+			"internal/storage/sqlite/edge_plan9.go": "package sqlite\nimport _ \"" + module + "/internal/storage/ports\"\n",
+			"internal/storage/ports/edge.go":        "package ports\nimport _ \"" + productQuery + "\"\n",
+		} {
+			path := filepath.Join(root, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		report, err := ScanSource(root)
+		if err != nil || !strings.Contains(strings.Join(report.Violations, "\n"), "storage sqlite product dependency: "+storageSQLite+" -> "+module+"/internal/storage/ports -> "+productQuery) {
+			t.Fatalf("helper hid product projection dependency: %v %+v", err, report)
+		}
+	})
 	for _, fixture := range []struct {
 		name, dir, source, want string
 	}{
 		{"adapter_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/execution/adapters/codex\"\n", "storage sqlite forbidden dependency"},
 		{"application_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/app\"\n", "storage sqlite forbidden dependency"},
-		{"query_use_case", "internal/storage/sqlite", "package sqlite\nimport productquery \"" + productQuery + "\"\nvar _ = productquery.NewService\n", "storage sqlite product query application call"},
+		{"product_DTO_alias", "internal/storage/sqlite", "package sqlite\nimport api \"" + module + "/internal/product/api\"\ntype Filter = api.ConversationFilter\n", "storage sqlite forbidden dependency"},
+		{"product_DTO_in_read_port", "internal/storage/ports", "package ports\nimport api \"" + module + "/internal/product/api\"\ntype Body = api.ConversationBodyRef\n", "pure ownership dependency"},
+		{"query_use_case", "internal/storage/sqlite", "package sqlite\nimport productquery \"" + productQuery + "\"\nvar _ = productquery.NewService\n", "storage sqlite forbidden dependency"},
+		{"former_query_projection_exception", "internal/storage/sqlite", "package sqlite\nimport productquery \"" + productQuery + "\"\nvar _ = productquery.CandidateSummary\n", "storage sqlite forbidden dependency"},
 		{"storage_sqlite_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + storageSQLite + "\"\n", "execution reconstruction dependency"},
 		{"storage_ports_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + module + "/internal/storage/ports\"\n", ""},
 	} {

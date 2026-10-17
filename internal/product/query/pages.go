@@ -20,7 +20,9 @@ func TaskSummary(t taskmodel.TaskRecord) api.TaskSummary {
 
 func TaskDetail(t storageports.NativeTaskDetail) api.TaskDetail {
 	p := api.TaskDetail{TaskSummary: TaskSummary(t.TaskRecord), StopPending: append([]string(nil), t.StopPending...), ProjectID: t.ProjectID, Priority: t.Priority, SpecPath: t.Contract.SpecRef.Path, Successors: append([]string(nil), t.Successors...), DependencyReady: t.DependencyReady, StartupBlockers: append([]string(nil), t.StartupBlockers...)}
-	p.WorkflowRuns = append([]api.WorkflowSummary(nil), t.WorkflowRuns...)
+	for _, candidate := range t.Candidates {
+		p.WorkflowRuns = append(p.WorkflowRuns, CandidateSummary(candidate))
+	}
 	for _, d := range t.Predecessors {
 		p.Predecessors = append(p.Predecessors, dependencySummary(d))
 	}
@@ -38,6 +40,10 @@ func dependencySummary(d taskmodel.TaskDependencyStatus) api.DependencySummary {
 }
 
 func TaskPage(p storageports.NativeTaskPage) api.TaskPage {
+	p.Protocol = NativeTaskProtocol
+	if p.NextCursor == "" {
+		SetTaskPageCursor(&p, 0)
+	}
 	view := api.TaskPage{Protocol: p.Protocol, ProjectID: p.ProjectID, AuthorityVersion: p.AuthorityVersion, GraphRevision: p.GraphRevision, DatabaseRevision: p.DatabaseRevision, DatabaseID: p.DatabaseID, SampledAt: p.SampledAt, Capabilities: api.TaskCapabilities{DependencyReadiness: p.Capabilities.DependencyReadiness, DependencyBlockers: p.Capabilities.DependencyBlockers, StartupBlockers: p.Capabilities.StartupBlockers}, NextCursor: p.NextCursor, HasMore: p.HasMore, Tasks: []api.TaskDetail{}}
 	for _, t := range p.Tasks {
 		view.Tasks = append(view.Tasks, TaskDetail(t))
@@ -131,7 +137,7 @@ type ServiceView struct {
 	Service                api.ServiceSummary
 	Control                api.ControlSummary
 	Runs                   []*CandidateView
-	Deliveries             []model.TaskDeliveryRecord
+	Deliveries             []taskmodel.TaskDeliveryRecord
 }
 
 func Candidate(r *CandidateView) *api.CandidateSummary {

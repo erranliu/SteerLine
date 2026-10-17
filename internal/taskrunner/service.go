@@ -6,19 +6,18 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"path/filepath"
+	"sync"
+	"time"
+
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"path/filepath"
-	"sync"
-	"time"
 )
 
 type Store interface {
@@ -29,7 +28,7 @@ type Store interface {
 	StopRunnerCandidate(context.Context, string, string, uint64) (runnerbridge.Candidate, error)
 	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 	TaskResult(context.Context, string, string) (taskmodel.ResultReceipt, bool, error)
-	CommitRunnerTaskResult(context.Context, storageports.RunnerResult) (executionmodel.TaskDeliveryReceipt, error)
+	CommitRunnerTaskResult(context.Context, storageports.RunnerResult) (taskmodel.TaskDeliveryReceipt, error)
 }
 type Profile struct {
 	ID, Name string
@@ -80,7 +79,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 			return old, failure("idempotency_conflict", "start request belongs to different original input")
 		}
 		return old, nil
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, storageports.ErrNotFound) {
 		return runnerbridge.Candidate{}, err
 	}
 	if s.Admit != nil {
@@ -206,46 +205,46 @@ func (s *Service) Dispatch(ctx context.Context) error {
 	}
 	return nil
 }
-func (s *Service) Deliver(ctx context.Context, taskID, candidateID string, version uint64) (executionmodel.TaskDeliveryReceipt, error) {
+func (s *Service) Deliver(ctx context.Context, taskID, candidateID string, version uint64) (taskmodel.TaskDeliveryReceipt, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	graph, err := s.Store.TaskGraphSnapshot(ctx, s.Project)
 	if err != nil {
-		return executionmodel.TaskDeliveryReceipt{}, err
+		return taskmodel.TaskDeliveryReceipt{}, err
 	}
 	record, ok := graph.ByID[taskID]
 	if !ok {
-		return executionmodel.TaskDeliveryReceipt{}, failure("task_not_found", "task was not found")
+		return taskmodel.TaskDeliveryReceipt{}, failure("task_not_found", "task was not found")
 	}
 	if existing, ok := graph.Deliveries[taskID]; ok {
 		if record.Status != "closed" || existing.SelectedWorkflowRunID != candidateID {
-			return executionmodel.TaskDeliveryReceipt{}, failure("inconsistent_delivery", "task already has another delivery")
+			return taskmodel.TaskDeliveryReceipt{}, failure("inconsistent_delivery", "task already has another delivery")
 		}
 		original, found, err := s.Store.TaskResult(ctx, s.Project, candidateID)
 		if err != nil {
-			return executionmodel.TaskDeliveryReceipt{}, err
+			return taskmodel.TaskDeliveryReceipt{}, err
 		}
 		if !found || original.Input.ExpectedTaskVersion != version {
-			return executionmodel.TaskDeliveryReceipt{}, failure("stale_version", "delivery retry differs from the original task version")
+			return taskmodel.TaskDeliveryReceipt{}, failure("stale_version", "delivery retry differs from the original task version")
 		}
-		return executionmodel.TaskDeliveryReceipt{TaskID: taskID, WorkflowRunID: candidateID, TaskVersion: original.TaskVersion, GraphRevision: original.GraphRevision, Status: "closed", Delivery: existing}, nil
+		return taskmodel.TaskDeliveryReceipt{TaskID: taskID, WorkflowRunID: candidateID, TaskVersion: original.TaskVersion, GraphRevision: original.GraphRevision, Status: "closed", Delivery: existing}, nil
 	}
 	if record.Status == "discarded" {
-		return executionmodel.TaskDeliveryReceipt{}, failure("task_discarded", "discarded task cannot receive delivery")
+		return taskmodel.TaskDeliveryReceipt{}, failure("task_discarded", "discarded task cannot receive delivery")
 	}
 	if record.Status != "in_progress" || record.Version != version {
-		return executionmodel.TaskDeliveryReceipt{}, failure("stale_version", "task version changed")
+		return taskmodel.TaskDeliveryReceipt{}, failure("stale_version", "task version changed")
 	}
 	c, err := s.Store.Candidate(ctx, s.Project, candidateID)
 	if err != nil {
-		return executionmodel.TaskDeliveryReceipt{}, err
+		return taskmodel.TaskDeliveryReceipt{}, err
 	}
 	if c.TaskID != taskID {
-		return executionmodel.TaskDeliveryReceipt{}, failure("immutable_task", "candidate belongs to another task")
+		return taskmodel.TaskDeliveryReceipt{}, failure("immutable_task", "candidate belongs to another task")
 	}
 	c, started, err := s.Bridge.RefreshPR(ctx, s.Project, candidateID)
 	if err != nil {
-		return executionmodel.TaskDeliveryReceipt{}, err
+		return taskmodel.TaskDeliveryReceipt{}, err
 	}
 	return s.Store.CommitRunnerTaskResult(ctx, storageports.RunnerResult{Project: s.Project, TaskID: taskID, CandidateID: c.ID, TaskVersion: version, CandidateRevision: c.Revision, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, VerificationStarted: started})
 }

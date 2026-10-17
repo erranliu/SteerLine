@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func (s Reader) ReadRunnerSnapshot(ctx context.Context, project string) (storageports.RunnerSnapshot, error) {
@@ -22,7 +22,7 @@ func (s Reader) ReadRunnerSnapshot(ctx context.Context, project string) (storage
 	return result, tx.Commit()
 }
 
-func readRunnerSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *executionmodel.ProjectTaskAuthority) (storageports.RunnerSnapshot, error) {
+func readRunnerSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *taskmodel.ProjectTaskAuthority) (storageports.RunnerSnapshot, error) {
 	var result storageports.RunnerSnapshot
 	var err error
 	result.Graph, err = TaskGraphSnapshotTx(ctx, tx, project, binding)

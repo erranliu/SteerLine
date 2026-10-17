@@ -24,7 +24,6 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
-	"github.com/erranliu/SteerLine/internal/product/applicationhttp"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 )
@@ -329,7 +328,7 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	parts := strings.Split(strings.TrimPrefix(route, "/projects/"), "/")
-	if route != "/projects" && (len(parts) < 2 || len(parts[0]) != 64 || !(r.Method == "GET" && applicationhttp.AllowedRead("/"+strings.Join(parts[1:], "/")) || r.Method == "POST" && len(parts) == 2 && parts[1] == "commands")) {
+	if route != "/projects" && (len(parts) < 2 || len(parts[0]) != 64 || !(r.Method == "GET" && httpcontract.AllowedProjectRead("/"+strings.Join(parts[1:], "/")) || r.Method == "POST" && len(parts) == 2 && parts[1] == "commands")) {
 		fail(w, 404, "route_not_found", "unsupported project route")
 		return
 	}

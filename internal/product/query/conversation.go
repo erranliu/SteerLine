@@ -76,33 +76,27 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter api.Co
 	}
 	page := api.ConversationPage{Events: []api.ConversationEvent{}}
 	for len(page.Events) < limit {
-		record, err := q.Events.NextConversationEvent(ctx, q.Project, api.ConversationFilter(filter), after)
+		record, err := q.Events.NextConversationEvent(ctx, q.Project, storageports.ConversationFilter(filter), after)
 		if err != nil {
 			return api.ConversationPage{}, err
 		}
 		if record == nil {
 			break
 		}
-		id, payloadBytes, payload := record.EventID, record.PayloadBytes, record.Payload
+		event, projected, payloadBytes, err := projectConversationRecord(q.Project, filter, after, *record)
+		if err != nil {
+			return api.ConversationPage{}, err
+		}
 		if len(page.Events) > 0 && page.PayloadBytes+payloadBytes > MaxEventPageBytes {
 			page.HasMore = true
 			break
 		}
-		var event executionmodel.ConversationEvent
-		if err = json.Unmarshal(payload, &event); err != nil {
-			return api.ConversationPage{}, fmt.Errorf("decode conversation event %d: %w", id, err)
-		}
 		if err = event.Validate(); err != nil {
-			return api.ConversationPage{}, fmt.Errorf("validate conversation event %d: %w", id, err)
-		}
-		event.EventID = id
-		projected, err := ConversationEvent(event)
-		if err != nil {
-			return api.ConversationPage{}, fmt.Errorf("project conversation event %d: %w", id, err)
+			return api.ConversationPage{}, fmt.Errorf("validate conversation event %d: %w", record.EventID, err)
 		}
 		page.Events = append(page.Events, projected)
 		page.PayloadBytes += payloadBytes
-		after = id
+		after = record.EventID
 	}
 	if len(page.Events) > 0 {
 		if !page.HasMore && len(page.Events) == limit {
@@ -120,19 +114,42 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter api.Co
 }
 
 func (q ConversationService) readOne(ctx context.Context, filter api.ConversationFilter, after int64) (*executionmodel.ConversationEvent, error) {
-	record, err := q.Events.NextConversationEvent(ctx, q.Project, api.ConversationFilter(filter), after)
+	record, err := q.Events.NextConversationEvent(ctx, q.Project, storageports.ConversationFilter(filter), after)
 	if err != nil || record == nil {
 		return nil, err
 	}
-	var event executionmodel.ConversationEvent
-	if err := json.Unmarshal(record.Payload, &event); err != nil {
+	event, _, _, err := projectConversationRecord(q.Project, filter, after, *record)
+	if err != nil {
 		return nil, err
 	}
 	if err := event.Validate(); err != nil {
 		return nil, err
 	}
-	event.EventID = record.EventID
 	return &event, nil
+}
+
+// projectConversationRecord derives the public final reference from immutable
+// Runner facts. Its serialized DTO size is the established page budget unit.
+func projectConversationRecord(project string, filter api.ConversationFilter, after int64, record storageports.ConversationEventRecord) (executionmodel.ConversationEvent, api.ConversationEvent, int, error) {
+	e := executionmodel.ConversationEvent{}
+	r, f := record.Event, record.Event.Final
+	if record.ProjectID != project || record.EventID <= after || record.RunID == "" || record.CandidateID == "" || r.RunID != record.RunID || r.EventID == "" || f == nil || !f.Verified || f.Text == "" || f.AttemptID == "" || f.SessionID == "" || f.TurnID == "" || f.Source == "" || f.ItemID == "" {
+		return e, api.ConversationEvent{}, 0, errors.New("public Runner final lacks its original provenance")
+	}
+	for _, pair := range [][2]string{{filter.WorkflowID, record.CandidateID}, {filter.ExecutionID, record.RunID}, {filter.AttemptID, f.AttemptID}, {filter.SessionID, f.SessionID}, {filter.TurnID, f.TurnID}, {filter.Source, f.Source}} {
+		if pair[0] != "" && pair[0] != pair[1] {
+			return e, api.ConversationEvent{}, 0, errors.New("conversation record differs from its fixed filter")
+		}
+	}
+	sum := sha256.Sum256([]byte(f.Text))
+	body := &executionmodel.ConversationBodyRef{ExecutionID: record.RunID, AttemptID: f.AttemptID, ItemKey: r.EventID, Revision: 1, SHA256: hex.EncodeToString(sum[:]), Bytes: int64(len([]byte(f.Text))), Source: f.Source, Completeness: executionmodel.BodyComplete}
+	e = executionmodel.ConversationEvent{Version: executionmodel.ConversationVersion, EventID: record.EventID, ProjectID: project, TaskID: record.TaskID, WorkflowID: record.CandidateID, ExecutionID: record.RunID, AttemptID: f.AttemptID, Source: f.Source, SourceRole: executionmodel.ConversationSourceCanonical, SourceSegment: record.RunID, SourceIdentity: record.RunID, SessionID: f.SessionID, SessionQuality: executionmodel.IdentityNative, TurnID: f.TurnID, TurnQuality: executionmodel.IdentityNative, ItemID: f.ItemID, ItemKey: r.EventID, ItemQuality: executionmodel.IdentityNative, SourceEventID: r.EventID, SourceEventQuality: executionmodel.IdentityDerived, Type: executionmodel.ConversationMessageComplete, Phase: executionmodel.MessagePhaseFinalAnswer, FinalAvailability: executionmodel.FinalAvailable, Body: body, ReceivedAt: r.CreatedAt, Diagnostic: f.Diagnostic}
+	projected, err := ConversationEvent(e)
+	if err != nil {
+		return e, projected, 0, err
+	}
+	payload, err := json.Marshal(projected)
+	return e, projected, len(payload), err
 }
 
 func (q ConversationService) ReadMessageBody(ctx context.Context, ref api.ConversationBodyRef, offset int64, limit int) (api.ConversationBodyPage, error) {
@@ -148,7 +165,8 @@ func (q ConversationService) ReadMessageBody(ctx context.Context, ref api.Conver
 	if limit < utf8.UTFMax {
 		limit = utf8.UTFMax
 	}
-	record, err := q.Bodies.ConversationBody(ctx, q.Project, ref, executionmodel.MaxConversationBodyBytes+1)
+	storageRef := executionmodel.ConversationBodyRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ItemKey: ref.ItemKey, Revision: ref.Revision, SHA256: ref.SHA256, Bytes: ref.Bytes, Source: ref.Source, Completeness: executionmodel.BodyCompleteness(ref.Completeness)}
+	record, err := q.Bodies.ConversationBody(ctx, q.Project, storageRef, executionmodel.MaxConversationBodyBytes+1)
 	if err != nil {
 		return api.ConversationBodyPage{}, err
 	}
@@ -193,5 +211,17 @@ func (q ConversationService) ReadCapabilities(ctx context.Context, backend execu
 	if limit > 1000 {
 		limit = 1000
 	}
-	return q.Capabilities.ConversationCapabilityReports(ctx, backend, protocol, targetID, limit)
+	reports, err := q.Capabilities.ConversationCapabilityReports(ctx, backend, protocol, targetID, limit)
+	if err != nil || reports == nil {
+		return nil, err
+	}
+	result := make([]api.ConversationCapabilityReport, 0, len(reports))
+	for _, r := range reports {
+		v := api.ConversationCapabilityReport{Version: r.Version, Backend: string(r.Backend), Protocol: string(r.Protocol), Agent: r.Agent, AgentVersion: r.AgentVersion, PlatformVersion: r.PlatformVersion, Target: api.TargetSummary{ID: r.Target.ID, WorktreeID: r.Target.WorktreeID, Branch: r.Target.Branch}, ExecutionID: r.ExecutionID, AttemptID: r.AttemptID, Source: r.Source, SourceIdentity: r.SourceIdentity, CheckedAt: r.CheckedAt}
+		for _, c := range r.Capabilities {
+			v.Capabilities = append(v.Capabilities, api.ConversationCapability{Name: c.Name, Status: string(c.Status), Evidence: c.Evidence})
+		}
+		result = append(result, v)
+	}
+	return result, nil
 }

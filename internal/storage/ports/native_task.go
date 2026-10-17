@@ -1,11 +1,9 @@
 package ports
 
 import (
-	"encoding/json"
 	"time"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -17,16 +15,16 @@ type NativeTaskCapabilities struct {
 
 type NativeTaskDetail struct {
 	taskmodel.TaskRecord
-	ProjectID         string                             `json:"project_id"`
-	Priority          int                                `json:"priority"`
-	Contract          taskmodel.TaskContract             `json:"contract"`
-	WorkflowRuns      []api.WorkflowSummary              `json:"workflow_runs"`
-	Delivery          *executionmodel.TaskDeliveryRecord `json:"delivery,omitempty"`
-	Predecessors      []taskmodel.TaskDependencyStatus   `json:"predecessors"`
-	Successors        []string                           `json:"successors"`
-	DependencyReady   bool                               `json:"dependency_ready"`
-	UnmetPredecessors []taskmodel.TaskDependencyStatus   `json:"unmet_predecessors"`
-	StartupBlockers   []string                           `json:"startup_blockers"`
+	ProjectID         string                           `json:"project_id"`
+	Priority          int                              `json:"priority"`
+	Contract          taskmodel.TaskContract           `json:"contract"`
+	Candidates        []runnerstate.Candidate          `json:"candidates"`
+	Delivery          *taskmodel.TaskDeliveryRecord    `json:"delivery,omitempty"`
+	Predecessors      []taskmodel.TaskDependencyStatus `json:"predecessors"`
+	Successors        []string                         `json:"successors"`
+	DependencyReady   bool                             `json:"dependency_ready"`
+	UnmetPredecessors []taskmodel.TaskDependencyStatus `json:"unmet_predecessors"`
+	StartupBlockers   []string                         `json:"startup_blockers"`
 }
 
 type NativeTaskPage struct {
@@ -53,24 +51,15 @@ type NativeReadyTaskSnapshot struct {
 	Tasks            []taskmodel.TaskRecord `json:"tasks"`
 }
 
-// ProjectView holds product-ready read values sampled by one SQLite read
-// transaction. Service observation is supplied separately by the host.
+// ProjectView holds task and caller-owned candidate facts sampled by one read
+// transaction. Product projections and service observation are supplied later.
 type ProjectView struct {
 	SampledAt         time.Time
 	Tasks             *NativeTaskPage
 	Ready             *NativeReadyTaskSnapshot
 	SelectedTask      *NativeTaskDetail
-	History           *api.HistorySummary
+	Candidates        []runnerstate.Candidate
 	TaskError         error
 	SelectedTaskError error
 	HistoryError      error
-}
-
-func (p NativeTaskPage) MarshalJSON() ([]byte, error) {
-	type plain NativeTaskPage
-	body, err := json.Marshal(plain(p))
-	if err != nil {
-		return nil, err
-	}
-	return api.EscapeBidiJSON(body), nil
 }

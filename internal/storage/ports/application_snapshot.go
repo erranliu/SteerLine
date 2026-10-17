@@ -2,7 +2,7 @@ package ports
 
 import "context"
 
-// ApplicationProjectSnapshot keeps the product page and execution observation
+// ApplicationProjectSnapshot keeps task/candidate facts and execution observation
 // on the same database revision without exposing Runtime or Domain to product
 // query/API consumers.
 type ApplicationProjectSnapshot struct {

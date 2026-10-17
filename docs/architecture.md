@@ -2,6 +2,12 @@
 
 > 2026-10-15：TUI 已移除，Web 为唯一交互前端；后台 CLI、服务及原生会话保留。实现和验证范围见[TUI 退役](acceptance/tui-retirement.md)。
 
+> 2026-10-17：已按当前代码重新核对运行边界、包依赖与资源归属；三张现状图及进一步解耦建议见[代码架构](architecture/current-code-architecture.md)。第一轮已将 Web 路由白名单收口到纯 HTTP 契约层、统一候选不存在的错误映射，并补上 Web/taskrunner 依赖守卫；执行状态机继续归独立 Runner。结果见[第一轮验收](acceptance/architecture-decoupling-round1.md)。
+
+> 同日第二轮：历史与任务候选读取改为 SQLite 在原事务内返回候选事实，产品查询层在事务后生成历史/详情 DTO；SQLite 的六项查询层例外已全部移除。同快照读取与原子交付保持，范围与验证见[第二轮验收](acceptance/architecture-decoupling-round2.md)。
+
+> 同日第三轮：会话、正文及活动读取也改为存储事实与产品投影分离。SQLite 和存储端口已无产品包生产依赖；活动记录流保持绑定与事件同一读事务，查询层按原公开 JSON 字节预算投影并关闭记录流。原身份、游标、正文和预算验证见[第三轮验收](acceptance/architecture-decoupling-round3.md)。
+
 SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。执行已迁到独立 SteerRunner；当前代码/运行边界见[代码架构](architecture/current-code-architecture.md)，实际后端与验收支持范围见[Runner 接入](integration/steerrunner.md)及专属验收。后续目标见[产品愿景](roadmap/product-vision.md)。
 
 本文描述 SteerLine 产品运行的业务权威。普通开发由当前聊天直接实现；用户明确要求 roadmap 调度时，才由 roadmap-runner 使用[execution-map](roadmap/execution-map.md)管理已确认的任务与依赖。roadmap 流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。
@@ -12,22 +18,23 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 | --- | --- |
 | 人 | 决定目标与任务范围、处理产品取舍和权限问题、审阅并合并 PR |
 | 任务应用 | 核验固定任务契约、DAG、领取资格与核验后的任务结果 |
-| 执行应用 | 准备工作区、管理固定流程的步骤/status、派发并观察原会话、传递反馈、核验交付和结算资源 |
+| SteerLine 调用方（taskrunner / runnerbridge） | 冻结任务材料、保存候选与原 CLI 请求、对账公开 Run/事件/PR、转交授权输入、核验唯一交付及持久化停止义务 |
+| SteerRunner 执行应用 | 准备工作区、管理固定流程的步骤/status、派发并观察原会话、传递反馈、发布取证和结算执行资源 |
 | worker | 按任务 Spec/Plan 实现、测试、修复、提交和创建 PR；不写中心业务状态 |
 | 执行后端 | 提供真实进程、终端、原生会话/轮次、平台消息和资源事实 |
 | PR 平台 | 提供 PR 身份、head/base 和实际合并事实 |
 | Web 与 HTTP 客户端 | 仅经 HTTP 查询产品 DTO、提交绑定原身份/版本的命令；保存自己的偏好、草稿和原请求，不读业务库或宿主业务文件 |
 | HTTP 服务端与内部产品客户端 | 认证、协议映射、原请求登记/对账及应用调用；领域资格和状态转移仍由 Go 业务应用核验 |
-| 应用与服务宿主 | 组装 adapter、端口和存储，承载进程、实例核验、控制传输、锁、心跳及退出观察 |
-| SQLite 存储 | 保存唯一业务状态，核验身份、前值、版本和唯一约束后原子提交 |
+| 应用与服务宿主 | 组装调用方端口、Runner CLI 客户端和存储，承载进程、实例核验、控制传输、锁、心跳及退出观察 |
+| SQLite 存储 | 保存 SteerLine 唯一业务状态，核验身份、前值、版本和唯一约束后原子提交 |
 
-Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 TaskDelivery 分别表达不同事实。SteerLine 通过固定 Runner CLI 与执行后端协作；Runner 的进程、会话和仓库事实属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runner 状态投影、UI 缓存和诊断日志都不能成为第二业务权威。
+Task、候选参与关系与 TaskDelivery 由 SteerLine 管理；Runner 的 Run、Execution、Attempt、问题/输入与执行 Command 分别表达执行事实。现有产品 DTO 与 checkpoint 仍保留部分 WorkflowRun、Decision、Operation 等命名，不表示 SteerLine 继续持有相应原生执行状态机。SteerLine 通过固定 Runner CLI 与执行后端协作；Runner 的进程、会话和仓库事实属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runner 状态投影、UI 缓存和诊断日志都不能成为第二业务权威。
 
 当前拓扑是一个共享 SteerLine 后端宿主和独立 Web 程序。`steerline start` 协调启动共享后端与 Web；后端装载配置项目，在同一进程内为每个项目建立隔离的运行时、Task actor、存储和 Runner CLI 客户端。每个项目的 SteerRunner 仍独立运行。Web 与 CLI 通过统一应用 API 使用项目用例；Web 不直接访问业务数据库、调度器或 Runner 私有实现。当前模块与进程边界见[代码架构](architecture/current-code-architecture.md)，启动、项目加载和关闭契约见[统一启动 Spec](spec/unified-startup.spec.md)。
 
 ## 执行与交付
 
-领取时冻结任务契约、仓库/base、执行配置及原身份。中心在外部调用前保存意图，后端返回现场事实和回执；身份或结果不确定时沿原请求对账，不盲重发、不切换后端或派替代 worker。worker 在同一任务的原会话中处理实现和反馈；中心管理下文 development/v3 的固定步骤，测试、审查和修复要求仍由任务 Spec/Plan 决定，不增加自动修复轮数或通用编排。
+领取时冻结任务契约、仓库/base、执行配置及原身份。SteerLine 在外部调用前保存候选与完整 CLI outbox，Runner 返回公开事实和回执；身份或结果不确定时沿原请求对账，不盲重发、不切换后端或派替代 worker。worker 在同一任务的原会话中处理实现和反馈；固定执行步骤由 Runner 管理，SteerLine 不生成下一步 prompt 或推进原生 workflow。测试、审查和修复要求仍由任务 Spec/Plan 决定，不增加自动修复轮数或通用编排。
 
 不同任务可以人工并行，同一任务可人工比较多个独立候选。候选各有自己的会话、工作区、分支、PR 与反馈，Task 只接受一个核验过的交付。产品不提供单候选放弃操作；Task 丢弃与执行停止分别记录。
 
@@ -35,7 +42,7 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 ## 生命周期、反馈与恢复
 
-工作区准备、代理启动/初始化、输入接受/开执行、结果结算及收尾的节点异常和重试规则统一归[Worker 流程异常处理与重试](product-design/worker-lifecycle.md)。具体适配器提供原生事实与能力，worker 执行域决定动作并通过现有单写者提交；文档中的待补设计不代表当前实现已经支持。
+工作区准备、代理启动/初始化、输入接受/开执行、结果结算及收尾的节点异常和重试规则统一归[Worker 流程异常处理与重试](product-design/worker-lifecycle.md)。具体适配器提供原生事实与能力，Runner 的单写服务决定并提交执行动作；SteerLine 单独提交调用方事实和 TaskDelivery。文档中的待补设计不代表当前实现已经支持。
 
 关闭 Web 只结束客户端观察，不停止共享后端或 worker。统一宿主停机时逐项目核实关闭结果、Runner 资源结算和锁释放；共享后端进程退出本身不证明原生 worker 已停止。停止、清理和释放按精确资源身份、实际后端能力及原 Operation 回执判断，未知结果继续保留诊断。统一启动及停机契约见[Spec](spec/unified-startup.spec.md)，当前操作入口见[Web 指南](../web/README.md)。
 
@@ -49,6 +56,8 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 本文维护项目整体职责和原则。具体配置、数据、反馈、会话和 UI 设计归[产品设计](product-design/README.md)；代码文件、当前模块与接口归[源码索引](architecture/current-code-architecture.md)。产品管理的任务执行要求以独立 Spec/Plan 和中心固定契约为准，产品说明不直接改变派发资格。测试方法见[测试指南](testing.md)。
 
-## Worker 分步流程
+## Worker 流程与调用方交付
 
-当前开发流程 `development/v3` 在现有 worker 内用普通代码定义 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`；它与配置中的 `worker-flow-v2` 工作流协议是不同版本轴。实现正文自由输出，报告与发布使用严格结果；合法发布结果直接推进；发布结果格式错误时只增加一次 publish.report，禁止重做发布动作。业务模型轮次共用原会话/Attempt。WorkflowRun 的 `status/flow_ref/step_id` 是唯一业务状态权威，Execution.Status 保留原生事实。结果、转移与下一输入意图同事务提交；adapter 只提供规范事实/能力，不解析业务 JSON 或选择下一步。PR 归属与实际合并经 provider 核验，不冻结候选 SHA 或比较阶段成果快照；真实合并仍走唯一 TaskDelivery。完整契约见[统一 PR 流程](spec/worker-pr-flow.spec.md)，原 #84 的[分步 Spec](spec/worker-staged-flow.spec.md)与[验收记录](acceptance/worker-staged-flow.md)保留历史追溯。
+执行流程、步骤转移、原会话/Attempt、报告解析与发布由 Runner 管理；SteerLine 提交固定的 workflow ID/version 并消费公开 Run、控制能力、事件及 PR 事实。当前 Task 启动构造在未指定 workflow 时使用 `development`、version `1`，这是公开 Runner 输入中的版本，不能直接解释为迁出前 SteerLine 的 `development/v3` 或 `worker-flow-v2`。配置与支持范围见[Runner 接入](integration/steerrunner.md)，实际映射见[代码架构](architecture/current-code-architecture.md)。
+
+SteerLine 在交付前经 Runner CLI 刷新所选 PR，在自己的同一事务中核验原绑定、Task/图/候选版本和合并证据，记录唯一 TaskDelivery、关闭 Task、释放后继及保存候选停止义务。Runner 步骤完成或公开状态达到 `pr_ready` 不替代该事务；正确已合并结果也不要求先经过 `pr_ready`。迁出前的[统一 PR 流程](spec/worker-pr-flow.spec.md)、[分步 Spec](spec/worker-staged-flow.spec.md)与[验收记录](acceptance/worker-staged-flow.md)保留业务语义和历史追溯，不作为当前 SteerLine 内部仍存在 worker 流程实现的证据。

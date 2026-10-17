@@ -3,17 +3,19 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
 )
 
 func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
@@ -72,7 +74,7 @@ func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
 	}
 	snapshot, err := s.ReadApplicationProjectSnapshot(ctx, project, c.TaskID, 100)
 	require(t, err)
-	if snapshot.ProjectView.HistoryError != nil || len(snapshot.ProjectView.History.WorkflowRuns) != 1 || len(snapshot.ProjectView.SelectedTask.WorkflowRuns) != 1 {
+	if snapshot.ProjectView.HistoryError != nil || len(snapshot.ProjectView.Candidates) != 1 || len(snapshot.ProjectView.SelectedTask.Candidates) != 1 {
 		t.Fatalf("caller history unavailable: %+v", snapshot.ProjectView)
 	}
 	c.Revision++
@@ -93,6 +95,59 @@ func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
 	if retired != 0 {
 		t.Fatal("old execution tables still created")
 	}
+	t.Run("activity stream stays pinned and releases its connection", func(t *testing.T) {
+		binding, records, err := s.OpenActivityView(ctx, project, c.ID, c.RunID, "attempt", 0, 200, false)
+		require(t, err)
+		defer records.Close()
+		writer, err := OpenSQLiteStore(s.path)
+		require(t, err)
+		defer writer.Close()
+		late := runnerclient.Event{EventID: "during-snapshot", RunID: c.RunID, AttemptID: "attempt", Type: "operation_committed", CreatedAt: at}
+		raw, err := json.Marshal(late)
+		require(t, err)
+		_, err = writer.db.ExecContext(ctx, `INSERT INTO runner_events(project_identity,candidate_id,event_id,payload) VALUES(?,?,?,?)`, project, c.ID, late.EventID, raw)
+		require(t, err)
+		count := 0
+		for {
+			record, err := records.Next()
+			require(t, err)
+			if record == nil {
+				break
+			}
+			count++
+			if record.Event.EventID == late.EventID || record.Event.RunID != binding.ExecutionID {
+				t.Fatal("later event or foreign identity entered original sample", record)
+			}
+		}
+		if count != 2 {
+			t.Fatal("pinned activity sample changed", count)
+		}
+		require(t, records.Close())
+		require(t, records.Close())
+		if _, err := records.Next(); err == nil {
+			t.Fatal("closed stream accepted another read")
+		}
+		latest, err := query.NewService(s, project).ReadActivity(ctx, c.ID, c.RunID, "attempt", api.ActivityCursor{})
+		require(t, err)
+		if len(latest.Activity) != 3 || latest.Activity[2].ItemID != late.EventID {
+			t.Fatal("stream close kept a connection or hid the next committed sample", latest)
+		}
+	})
+	t.Run("cancelled activity stream releases its transaction", func(t *testing.T) {
+		readCtx, cancel := context.WithCancel(ctx)
+		_, records, err := s.OpenActivityView(readCtx, project, c.ID, c.RunID, "attempt", 0, 200, false)
+		require(t, err)
+		defer records.Close()
+		cancel()
+		if _, err := records.Next(); !errors.Is(err, context.Canceled) {
+			t.Fatal("cancelled stream did not preserve cancellation", err)
+		}
+		_ = records.Close() // Cancellation may already have rolled the read transaction back.
+		nextCtx, nextCancel := context.WithTimeout(ctx, 5*time.Second)
+		defer nextCancel()
+		_, err = query.NewService(s, project).ReadRecentActivity(nextCtx, c.ID, c.RunID, "attempt")
+		require(t, err)
+	})
 	t.Run("readable changes survive technical event noise", func(t *testing.T) {
 		noise := []runnerclient.Event{}
 		for i := 0; i < 7; i++ {

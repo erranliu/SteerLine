@@ -21,7 +21,7 @@ func TestDeliverySmoke(t *testing.T) {
 		t.Fatalf("incomplete controlled execution: %+v", open)
 	}
 	for _, task := range open.Page.Tasks {
-		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {
+		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.Candidates) > 0) {
 			t.Fatal("successor started or became ready before merge")
 		}
 	}
@@ -39,7 +39,7 @@ func TestDeliverySmoke(t *testing.T) {
 			}
 			delivery, _ = json.Marshal(task.Delivery)
 		case p.Tasks["b"].ID:
-			if !task.DependencyReady || len(task.WorkflowRuns) > 0 || task.Status != "open" {
+			if !task.DependencyReady || len(task.Candidates) > 0 || task.Status != "open" {
 				t.Fatal("successor not ready and unstarted")
 			}
 		}

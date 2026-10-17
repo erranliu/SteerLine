@@ -6,7 +6,6 @@ package ports
 import (
 	"context"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -49,5 +48,5 @@ type PredecessorTx interface {
 }
 
 type ProjectInitializer interface {
-	InitializeProject(context.Context, executionmodel.ProjectTaskAuthority) error
+	InitializeProject(context.Context, taskmodel.ProjectTaskAuthority) error
 }

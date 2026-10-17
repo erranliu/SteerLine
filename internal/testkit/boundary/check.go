@@ -23,6 +23,7 @@ const module = "github.com/erranliu/SteerLine"
 
 const core = module + "/internal/app/host"
 const execution = module + "/internal/execution"
+const taskRunner = module + "/internal/taskrunner"
 const sharedFixtures = module + "/internal/testkit/fixtures"
 
 var platformText = regexp.MustCompile(`(?i)codex|orca`)
@@ -64,7 +65,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	case module + "/internal/runnerstate":
 		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/storage/ports":
-		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate" || dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/product/api"
+		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate" || dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
 	}
 	return false
 }
@@ -83,6 +84,35 @@ func purePackage(pkg string) bool {
 		if pkg == owner {
 			return true
 		}
+	}
+	return false
+}
+
+// These definitions belong to the task domain, including aliases or copies in
+// inactive source files. Execution values must not become their owner again.
+func taskDeliveryDefinition(name string) bool {
+	switch name {
+	case "TaskDeliveryRecord", "TaskDeliveryEvidence", "TaskDeliveryReceipt", "ProjectTaskAuthority", "ValidateDelivery":
+		return true
+	}
+	return false
+}
+
+func taskFactsOnlyFile(pkg, file string) bool {
+	switch pkg {
+	case module + "/internal/storage/ports":
+		return file == "native_task.go" || file == "task_graph.go" || file == "transactions.go"
+	case storageSQLite:
+		switch file {
+		case "connections.go", "reader.go", "graph.go", "sqlite_native_authority.go", "runner_dispatch.go", "runner_snapshot.go", "sqlite_write_ports.go":
+			return true
+		}
+	case module + "/internal/product/query/taskgraph":
+		return file == "model.go"
+	case module + "/internal/app":
+		return file == "task_command_store.go"
+	case taskRunner:
+		return file == "service.go" || file == "control.go"
 	}
 	return false
 }
@@ -119,7 +149,7 @@ func httpConsumerForbidden(pkg string) bool {
 }
 
 func httpConsumerPackage(pkg string) bool {
-	for _, suffix := range []string{"/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs"} {
+	for _, suffix := range []string{"/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs", "/web/server", "/cmd/steerline-web"} {
 		if pkg == module+suffix {
 			return true
 		}
@@ -169,6 +199,21 @@ func executionForbidden(pkg string) bool {
 		}
 	}
 	return strings.HasPrefix(pkg, module+"/internal/task/") && pkg != module+"/internal/task/model"
+}
+
+// Task orchestration may consume task use cases and public Runner clients, but
+// SQL, storage implementations, host implementations and product queries must
+// stay behind its injected ports, including through helpers.
+func taskRunnerForbidden(pkg string) bool {
+	if pkg == execution || forbidden(pkg) || pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
+		return true
+	}
+	for _, owner := range []string{storageSQLite, productQuery, module + "/internal/product/client"} {
+		if pkg == owner || strings.HasPrefix(pkg, owner+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // Adapter implementations may consume backend capabilities and pure model values,
@@ -279,7 +324,6 @@ func storageSQLiteImportAllowed(dependency string) bool {
 	for _, allowed := range []string{
 		module + "/internal/runnercontract", module + "/internal/runnerstate",
 		module + "/internal/execution/backend", module + "/internal/execution/model",
-		module + "/internal/product/api", productQuery,
 		module + "/internal/storage/ports", module + "/internal/task/model",
 	} {
 		if dependency == allowed {
@@ -289,33 +333,9 @@ func storageSQLiteImportAllowed(dependency string) bool {
 	return false
 }
 
-func sqliteProductQuerySelectorAllowed(file *ast.File) []string {
-	allowed := map[string]bool{"CandidateSummary": true, "RunnerHistory": true, "MaxEventPageBytes": true, "NativeTaskProtocol": true, "ReadySnapshot": true, "SetTaskPageCursor": true}
-	aliases := map[string]bool{}
-	for _, spec := range file.Imports {
-		dependency, err := strconv.Unquote(spec.Path.Value)
-		if err != nil || dependency != productQuery {
-			continue
-		}
-		alias := "query"
-		if spec.Name != nil {
-			alias = spec.Name.Name
-		}
-		aliases[alias] = true
-	}
-	var violations []string
-	ast.Inspect(file, func(node ast.Node) bool {
-		selector, ok := node.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		identifier, ok := selector.X.(*ast.Ident)
-		if ok && aliases[identifier.Name] && !allowed[selector.Sel.Name] {
-			violations = append(violations, selector.Sel.Name)
-		}
-		return true
-	})
-	return violations
+func taskReadFactsOwner(pkg, file string) bool {
+	return pkg == module+"/internal/storage/ports" && file == "native_task.go" ||
+		pkg == storageSQLite && (file == "tasks.go" || file == "project.go")
 }
 
 // ScanSource parses production and test Go files regardless of GOOS or build tags.
@@ -363,6 +383,33 @@ func ScanSource(root string) (Report, error) {
 		if err != nil {
 			return err
 		}
+		if !strings.HasSuffix(entry.Name(), "_test.go") && pkg != module+"/internal/task/model" {
+			for _, decl := range parsed.Decls {
+				names := []string{}
+				switch d := decl.(type) {
+				case *ast.GenDecl:
+					for _, spec := range d.Specs {
+						switch s := spec.(type) {
+						case *ast.TypeSpec:
+							names = append(names, s.Name.Name)
+						case *ast.ValueSpec:
+							for _, name := range s.Names {
+								names = append(names, name.Name)
+							}
+						}
+					}
+				case *ast.FuncDecl:
+					if d.Recv == nil {
+						names = append(names, d.Name.Name)
+					}
+				}
+				for _, name := range names {
+					if taskDeliveryDefinition(name) {
+						report.Violations = append(report.Violations, "task delivery definition outside task/model: "+filepath.ToSlash(path)+" -> "+name)
+					}
+				}
+			}
+		}
 		if _, ok := graph[pkg]; !ok {
 			graph[pkg] = nil
 		}
@@ -370,6 +417,9 @@ func ScanSource(root string) (Report, error) {
 			value, err := strconv.Unquote(spec.Path.Value)
 			if err != nil {
 				return err
+			}
+			if taskFactsOnlyFile(pkg, entry.Name()) && strings.HasPrefix(value, execution+"/") {
+				report.Violations = append(report.Violations, "task facts execution dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
 			// Shared adapters are available only to these two test owners. Keep
 			// their dependency edge so transitive forbidden imports remain visible.
@@ -390,10 +440,8 @@ func ScanSource(root string) (Report, error) {
 			if pkg == storageSQLite && !strings.HasSuffix(entry.Name(), "_test.go") && !storageSQLiteImportAllowed(value) {
 				report.Violations = append(report.Violations, "storage sqlite forbidden dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
-			if pkg == storageSQLite && !strings.HasSuffix(entry.Name(), "_test.go") && value == productQuery {
-				for _, selector := range sqliteProductQuerySelectorAllowed(parsed) {
-					report.Violations = append(report.Violations, "storage sqlite product query application call: "+filepath.ToSlash(path)+" -> "+selector)
-				}
+			if taskReadFactsOwner(pkg, entry.Name()) && strings.HasPrefix(value, module+"/internal/product/") {
+				report.Violations = append(report.Violations, "task read facts product dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
 
 			if implementation(pkg) && !strings.HasSuffix(entry.Name(), "_test.go") && adapterDirectForbidden(value) {
@@ -445,6 +493,17 @@ func ScanSource(root string) (Report, error) {
 			report.Violations = append(report.Violations, "execution forbidden dependency: "+strings.Join(path, " -> "))
 		}
 	})
+	visitGraph(productionGraph, taskRunner, func(path []string) {
+		if taskRunnerForbidden(path[len(path)-1]) {
+			report.Violations = append(report.Violations, "task runner forbidden dependency: "+strings.Join(path, " -> "))
+		}
+	})
+	visitGraph(productionGraph, storageSQLite, func(path []string) {
+		last := path[len(path)-1]
+		if strings.HasPrefix(last, module+"/internal/product/") {
+			report.Violations = append(report.Violations, "storage sqlite product dependency: "+strings.Join(path, " -> "))
+		}
+	})
 	for _, seed := range []string{execution + "/workflow", execution + "/reliable"} {
 		visitGraph(productionGraph, seed, func(path []string) {
 			edge := path[len(path)-1]
@@ -480,7 +539,7 @@ func ScanSource(root string) (Report, error) {
 			}
 		})
 	}
-	for _, suffix := range []string{"/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs"} {
+	for _, suffix := range []string{"/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs", "/web/server", "/cmd/steerline-web"} {
 		visitGraph(productionGraph, module+suffix, func(path []string) {
 			last := path[len(path)-1]
 			if !httpConsumerPackage(last) && httpConsumerForbidden(last) {
@@ -549,13 +608,13 @@ func Check(ctx context.Context, root string) (Report, error) {
 		return report, err
 	}
 	productionRoots := map[string]bool{}
-	for _, owner := range []string{core, module + "/internal/app", module + "/internal/taskrunner", module + "/internal/runnerbridge", module + "/internal/runnerclient", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", productQuery, module + "/internal/product/query/taskgraph", module + "/internal/storage/ports"} {
+	for _, owner := range []string{core, module + "/internal/app", taskRunner, module + "/internal/runnerbridge", module + "/internal/runnerclient", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", productQuery, module + "/internal/product/query/taskgraph", module + "/internal/storage/ports", module + "/web/server", module + "/cmd/steerline-web"} {
 		productionRoots[owner] = true
 	}
 
 	for _, target := range []string{"windows", "linux"} {
 
-		cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/app/host", "./internal/app", "./internal/taskrunner", "./internal/runnerbridge", "./internal/runnerclient", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/product/query", "./internal/product/query/taskgraph", "./internal/storage/ports")
+		cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/app/host", "./internal/app", "./internal/taskrunner", "./internal/runnerbridge", "./internal/runnerclient", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/product/query", "./internal/product/query/taskgraph", "./internal/storage/ports", "./web/server", "./cmd/steerline-web")
 		cmd.Dir = root
 		for _, value := range os.Environ() {
 			key, _, _ := strings.Cut(value, "=")
@@ -608,6 +667,27 @@ func Check(ctx context.Context, root string) (Report, error) {
 				for _, dep := range append(append([]string{}, pkg.Imports...), pkg.Deps...) {
 					if executionForbidden(dep) {
 						report.Violations = append(report.Violations, graphName+" execution forbidden dependency: "+execution+" -> "+dep)
+					}
+				}
+			}
+			if pkg.ImportPath == taskRunner {
+				for _, dep := range pkg.Deps {
+					if taskRunnerForbidden(dep) {
+						report.Violations = append(report.Violations, graphName+" task runner forbidden dependency: "+taskRunner+" -> "+dep)
+					}
+				}
+			}
+			if pkg.ImportPath == storageSQLite {
+				for _, dep := range pkg.Deps {
+					if strings.HasPrefix(dep, module+"/internal/product/") {
+						report.Violations = append(report.Violations, graphName+" storage sqlite product dependency: "+storageSQLite+" -> "+dep)
+					}
+				}
+			}
+			if httpConsumerPackage(pkg.ImportPath) {
+				for _, dep := range pkg.Deps {
+					if !httpConsumerPackage(dep) && httpConsumerForbidden(dep) {
+						report.Violations = append(report.Violations, graphName+" HTTP consumer forbidden dependency: "+pkg.ImportPath+" -> "+dep)
 					}
 				}
 			}

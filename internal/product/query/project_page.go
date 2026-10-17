@@ -8,7 +8,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-// ProjectPage builds the client page from one SQLite ProjectView. All sections
+// ProjectPage builds the client page from one sampled storage ProjectView. All sections
 // in ProjectView share its pinned read transaction; this function only maps
 // sampled values and never opens storage or reconstructs actor state.
 func ProjectPage(view storageports.ProjectView, selected string, freshness time.Duration, observation api.ObservationSnapshot, connection api.ServiceConnection, decisions map[string]string, executableTypes []string) api.ProjectSnapshot {
@@ -33,8 +33,9 @@ func ProjectPage(view storageports.ProjectView, selected string, freshness time.
 	if view.SelectedTaskError != nil {
 		page.NativeTaskError = view.SelectedTaskError.Error()
 	}
-	if view.History != nil {
-		page.History = view.History
+	if view.Candidates != nil && view.HistoryError == nil {
+		history := RunnerHistory(view.Candidates)
+		page.History = &history
 	}
 	if view.HistoryError != nil {
 		page.HistoryError = view.HistoryError.Error()

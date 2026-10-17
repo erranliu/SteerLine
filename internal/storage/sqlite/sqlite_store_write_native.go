@@ -11,11 +11,10 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (t *sqliteTx) PutProjectTaskAuthority(v executionmodel.ProjectTaskAuthority) error {
+func (t *sqliteTx) PutProjectTaskAuthority(v taskmodel.ProjectTaskAuthority) error {
 	if v.ProjectIdentity == "" || v.Authority != "native" || v.AuthorityVersion == 0 || v.DispatchMode != "manual" || !v.DispatchPaused || v.Repository == "" || v.Remote == "" || v.Branch == "" {
 		return errors.New("native project authority requires identity, target, version and initial manual/paused dispatch")
 	}
@@ -29,11 +28,11 @@ func (t *sqliteTx) PutProjectTaskAuthority(v executionmodel.ProjectTaskAuthority
 	return requireIdentityWrite(result, err, "authority_mismatch: native project authority is immutable without a compare-and-swap")
 }
 
-func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v executionmodel.ProjectTaskAuthority, expectedVersion uint64) error {
+func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v taskmodel.ProjectTaskAuthority, expectedVersion uint64) error {
 	if v.ProjectIdentity == "" || expectedVersion == 0 || v.AuthorityVersion != expectedVersion+1 || v.Authority != "native" || v.DispatchMode != "manual" && v.DispatchMode != "auto" {
 		return nativeErr("authority_mismatch", "project authority update requires a valid next version and dispatch mode")
 	}
-	var old executionmodel.ProjectTaskAuthority
+	var old taskmodel.ProjectTaskAuthority
 	var paused int
 	var created, updated string
 	err := t.tx.QueryRowContext(t.ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&old.Authority, &old.AuthorityVersion, &old.GraphRevision, &old.Repository, &old.Remote, &old.Branch, &old.DispatchMode, &paused, &created, &updated)
@@ -173,9 +172,9 @@ func (t *sqliteTx) PutTaskDependency(v taskmodel.TaskDependencyRecord) error {
 	return err
 }
 
-func validateNativeTaskDelivery(v executionmodel.TaskDeliveryRecord, targetBranch string) error {
-	err := executionmodel.ValidateDelivery(v, targetBranch)
-	var rejected *executionmodel.ResultError
+func validateNativeTaskDelivery(v taskmodel.TaskDeliveryRecord, targetBranch string) error {
+	err := taskmodel.ValidateDelivery(v, targetBranch)
+	var rejected *taskmodel.Error
 	if errors.As(err, &rejected) {
 		return nativeErr(rejected.Code, rejected.Message)
 	}

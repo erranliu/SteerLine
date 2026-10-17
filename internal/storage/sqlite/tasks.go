@@ -10,8 +10,6 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	api "github.com/erranliu/SteerLine/internal/product/api"
-	queryrules "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -35,7 +33,7 @@ func (s Reader) NativeTaskPage(ctx context.Context, project, taskID, expectedDat
 }
 
 func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskID, expectedDatabaseID string, expectedDB uint64, offset, limit int) (storageports.NativeTaskPage, error) {
-	page := storageports.NativeTaskPage{Protocol: queryrules.NativeTaskProtocol, ProjectID: project, Tasks: []storageports.NativeTaskDetail{}, Capabilities: storageports.NativeTaskCapabilities{DependencyReadiness: "provided", DependencyBlockers: "provided", StartupBlockers: "provided"}}
+	page := storageports.NativeTaskPage{ProjectID: project, Tasks: []storageports.NativeTaskDetail{}, Capabilities: storageports.NativeTaskCapabilities{DependencyReadiness: "provided", DependencyBlockers: "provided", StartupBlockers: "provided"}}
 	if offset < 0 {
 		return page, nativeErr("cursor_invalidated", "negative page offset")
 	}
@@ -185,7 +183,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		return page, err
 	}
 	for _, record := range all {
-		detail := storageports.NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []api.WorkflowSummary{}, Predecessors: []taskmodel.TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []taskmodel.TaskDependencyStatus{}, StartupBlockers: []string{}}
+		detail := storageports.NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, Candidates: []runnerstate.Candidate{}, Predecessors: []taskmodel.TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []taskmodel.TaskDependencyStatus{}, StartupBlockers: []string{}}
 		detail.Successors = append(detail.Successors, outgoing[record.TaskID]...)
 		predecessors := make([]taskmodel.TaskDependencyStatus, 0, len(incoming[record.TaskID]))
 		for _, edge := range incoming[record.TaskID] {
@@ -211,7 +209,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		if detail.Contract.Repository != targetRepository || detail.Contract.Remote != targetRemote || detail.Contract.Branch != targetBranch {
 			return page, nativeErr("contract_mismatch", "task contract target differs from persisted project authority")
 		}
-		detail.WorkflowRuns = append(detail.WorkflowRuns, relations.runs[record.TaskID]...)
+		detail.Candidates = append(detail.Candidates, relations.candidates[record.TaskID]...)
 		if hasDelivery {
 			detail.Delivery = &delivery
 		}
@@ -228,9 +226,9 @@ type nativePageContract struct {
 
 type nativePageRelations struct {
 	statuses   map[string]string
-	deliveries map[string]executionmodel.TaskDeliveryRecord
+	deliveries map[string]taskmodel.TaskDeliveryRecord
 	contracts  map[string]nativePageContract
-	runs       map[string][]api.WorkflowSummary
+	candidates map[string][]runnerstate.Candidate
 }
 
 // Keep IN lists below SQLite's older 999-variable limit, including project_id.
@@ -246,7 +244,7 @@ func nativePageIDFilter(project string, ids []string) (string, []any) {
 }
 
 func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBranch string, tasks []taskmodel.TaskRecord, edges []taskmodel.TaskDependencyRecord) (nativePageRelations, error) {
-	out := nativePageRelations{statuses: map[string]string{}, deliveries: map[string]executionmodel.TaskDeliveryRecord{}, contracts: map[string]nativePageContract{}, runs: map[string][]api.WorkflowSummary{}}
+	out := nativePageRelations{statuses: map[string]string{}, deliveries: map[string]taskmodel.TaskDeliveryRecord{}, contracts: map[string]nativePageContract{}, candidates: map[string][]runnerstate.Candidate{}}
 	selected := make(map[string]bool, len(tasks))
 	selectedIDs := make([]string, 0, len(tasks))
 	for _, task := range tasks {
@@ -307,7 +305,7 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 			return out, err
 		}
 		for rows.Next() {
-			var delivery executionmodel.TaskDeliveryRecord
+			var delivery taskmodel.TaskDeliveryRecord
 			var merged, recorded string
 			delivery.ProjectIdentity = project
 			if err = rows.Scan(&delivery.TaskID, &delivery.SelectedWorkflowRunID, &delivery.PRInstance, &delivery.PRRepository, &delivery.PRNumber, &delivery.PRURL, &delivery.MergeCommit, &merged, &recorded, &delivery.Evidence); err != nil {
@@ -321,7 +319,7 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 				err = nativeErr("inconsistent_delivery", "native task delivery recording time is invalid")
 				break
 			}
-			if err = executionmodel.ValidateDelivery(delivery, targetBranch); err != nil {
+			if err = taskmodel.ValidateDelivery(delivery, targetBranch); err != nil {
 				break
 			}
 			out.deliveries[delivery.TaskID] = delivery
@@ -374,7 +372,7 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 				err = nativeErr("contract_mismatch", "candidate binding differs from stored identity")
 				break
 			}
-			out.runs[taskID] = append(out.runs[taskID], queryrules.CandidateSummary(c))
+			out.candidates[taskID] = append(out.candidates[taskID], c)
 		}
 		if err == nil {
 			err = rows.Err()

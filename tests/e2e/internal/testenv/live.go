@@ -2,10 +2,8 @@ package testenv
 
 import (
 	"encoding/json"
-
 	"fmt"
 	"os"
-
 	"path/filepath"
 	"strings"
 
@@ -153,7 +151,7 @@ func LiveDelivery(s *Scenario, chain string) {
 		}
 		if task.TaskID == p.Tasks["b"].ID {
 			proof.SuccessorReady = task.DependencyReady
-			proof.SuccessorUnstarted = len(task.WorkflowRuns) == 0 && task.Status == "open"
+			proof.SuccessorUnstarted = len(task.Candidates) == 0 && task.Status == "open"
 		}
 	}
 	s.Must(proof.Validate())

@@ -1,9 +1,10 @@
-package sqlite
+package query
 
 import (
+	"strings"
+
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"strings"
 )
 
 func runnerWorkflowActivity(v api.ActivityEvent, t runnercontract.WorkflowTransition) api.ActivityEvent {

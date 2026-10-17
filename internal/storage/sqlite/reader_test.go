@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	readsqlite "github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -27,7 +26,7 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer writer.Close()
-	authority := executionmodel.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	authority := taskmodel.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
 	at := time.Now().UTC()
 	large := []byte(strings.Repeat("x", query.MaxEventPageBytes))
 	if err = writer.InitializeProject(ctx, authority); err != nil {
@@ -88,7 +87,7 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 	}
 	service := query.Service{Project: "project", Tasks: reader, Events: reader}
 	combined, err := query.NewService(reader, "project").ReadProjectView(ctx, "2", 1)
-	if err != nil || combined.History == nil || combined.SelectedTask == nil || combined.SelectedTask.TaskID != "2" {
+	if err != nil || combined.Candidates == nil || combined.SelectedTask == nil || combined.SelectedTask.TaskID != "2" {
 		t.Fatalf("SQLite reader could not independently compose the project view: %+v %v", combined, err)
 	}
 	ready, err := service.ReadyNativeTasks(ctx)
@@ -104,7 +103,7 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 		t.Fatalf("event reader skipped a prefetched event: %+v %v", last, err)
 	}
 	records, err := reader.ReadProjectRecords(ctx, "project", "2", 1)
-	if err != nil || records.View.TaskError != nil || records.View.HistoryError != nil || records.View.History == nil || records.View.SelectedTask == nil || records.View.SelectedTask.TaskID != "2" ||
+	if err != nil || records.View.TaskError != nil || records.View.HistoryError != nil || records.View.Candidates == nil || records.View.SelectedTask == nil || records.View.SelectedTask.TaskID != "2" ||
 		records.View.Tasks.DatabaseRevision != revision || records.View.Ready.DatabaseRevision != revision {
 		t.Fatalf("raw project reader lost the shared sample or performed application projection: %+v %v", records, err)
 	}

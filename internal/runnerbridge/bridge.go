@@ -9,10 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"sync"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 )
 
 type Action = runnerstate.Action
@@ -25,6 +26,7 @@ func inputError(code, message string) error { return &InputError{Code: code, Mes
 type Candidate = runnerstate.Candidate
 
 type Store interface {
+	// Candidate returns storage/ports.ErrNotFound when the binding is absent.
 	Candidate(context.Context, string, string) (Candidate, error)
 	// Save must atomically CAS the association, projection, event IDs and cursor.
 	// Claim/reservation and Task-terminal stop intents are separate task-owned
