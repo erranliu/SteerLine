@@ -129,9 +129,13 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if err := r.prepare(ctx, home, e, global); err != nil {
 		return result, err
 	}
+	if retErr = bindRunnerBuild(ctx, r.config, r.store); retErr != nil {
+		return
+	}
 	if retErr = r.runner.start(ctx, r.config.RunnerExecution, r.config.RunDir, positiveDuration(r.config.CommandTimeout, 30*time.Second), r.config.runnerPublication()); retErr != nil {
 		return
 	}
+	r.config.runtimeRunner = &r.runner.client
 	hostPort := host.NewServiceHost(r.hostConfig, "off", r.log, serviceActivityFormatter{})
 	var service *taskrunner.Actor
 	service, retErr = newRunnerService(r.config, hostPort, r.store, r.runner.client, r.runner.info)

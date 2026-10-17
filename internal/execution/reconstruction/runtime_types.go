@@ -2,6 +2,7 @@ package reconstruction
 
 import (
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -16,28 +17,24 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-// Runtime is an immutable reconstruction result over one sampled checkpoint and record set.
+// Runtime combines a sampled service checkpoint, task graph and public Runner facts.
 type Runtime struct {
-	SchemaVersion int                                `json:"schema_version"`
-	Revision      uint64                             `json:"revision"`
-	UpdatedAt     time.Time                          `json:"updated_at"`
-	HeartbeatAt   time.Time                          `json:"heartbeat_at"`
-	Service       ServiceState                       `json:"service"`
-	Repository    Repository                         `json:"repository"`
-	Tasks         []taskmodel.TaskRecord             `json:"tasks,omitempty"`
-	WorkflowRuns  []executionmodel.WorkflowRunRecord `json:"workflow_runs,omitempty"`
-	Executions    []executionmodel.ExecutionRecord   `json:"executions,omitempty"`
-	Attempts      []executionmodel.StepAttemptRecord `json:"attempts,omitempty"`
-	Decisions     []executionmodel.DecisionRecord    `json:"decisions,omitempty"`
-	Operations    []executionmodel.OperationRecord   `json:"operations,omitempty"`
-	Deliveries    []taskmodel.TaskDeliveryRecord     `json:"-"`
-	CurrentTask   *string                            `json:"current_task"`
-	SlotOccupied  bool                               `json:"slot_occupied"`
-	Runs          []*RunView                         `json:"runs"`
-	Control       ControlState                       `json:"control"`
+	SchemaVersion int                            `json:"schema_version"`
+	Revision      uint64                         `json:"revision"`
+	UpdatedAt     time.Time                      `json:"updated_at"`
+	HeartbeatAt   time.Time                      `json:"heartbeat_at"`
+	Service       ServiceState                   `json:"service"`
+	Repository    Repository                     `json:"repository"`
+	Tasks         []taskmodel.TaskRecord         `json:"tasks,omitempty"`
+	Deliveries    []taskmodel.TaskDeliveryRecord `json:"-"`
+	CurrentTask   *string                        `json:"current_task"`
+	SlotOccupied  bool                           `json:"slot_occupied"`
+	Runs          []*RunView                     `json:"runs"`
+	Control       ControlState                   `json:"control"`
 }
 
 type ServiceState struct {
+	RunnerBuild         *runnercontract.BuildPin          `json:"runner_build,omitempty"`
 	Mode                string                            `json:"mode"`
 	InstanceID          string                            `json:"instance_id"`
 	PID                 int                               `json:"pid"`
@@ -84,8 +81,17 @@ type ControlBlocker struct {
 	Reason     string `json:"reason"`
 }
 
-// Run is a view rebuilt from the selected immutable execution records.
+// RunView projects caller participation and the last public Runner observation.
 type RunView struct {
+	RunnerRevision           uint64 `json:"runner_revision"`
+	InputDigest              string `json:"input_digest"`
+	RunnerWorkflow           *runnercontract.Workflow
+	Audit                    *runnercontract.Audit
+	Materials                []runnercontract.Material
+	RequestedModel           string
+	RequestedReasoningEffort string
+
+	RunnerStateDir   string                       `json:"runner_state_dir,omitempty"`
 	Participation    string                       `json:"participation"`
 	SubmissionStatus string                       `json:"submission_status"`
 	StopRequested    bool                         `json:"stop_requested"`
@@ -96,56 +102,50 @@ type RunView struct {
 	StageResults     []executionmodel.StageResult `json:"stage_results,omitempty"`
 	ReportToolPolicy string                       `json:"report_tool_policy,omitempty"`
 
-	SessionID            string                                 `json:"session_id,omitempty"`
-	SessionGeneration    string                                 `json:"session_generation,omitempty"`
-	TurnNumber           uint64                                 `json:"turn_number"`
-	CurrentTurnID        string                                 `json:"current_turn_id,omitempty"`
-	ExecutionProfile     *executionmodel.FixedExecutionProfile  `json:"execution_profile,omitempty"`
-	PRHistory            []string                               `json:"pr_history,omitempty"`
-	CandidateNumber      int                                    `json:"candidate_number,omitempty"`
-	CandidateCreatedAt   time.Time                              `json:"candidate_created_at"`
-	CandidateStopReason  string                                 `json:"candidate_stop_reason,omitempty"`
-	CandidateStoppedBy   string                                 `json:"candidate_stopped_by,omitempty"`
-	CandidateEndedAt     *time.Time                             `json:"candidate_ended_at,omitempty"`
-	CandidateTiming      string                                 `json:"candidate_timing"`
-	ResourceStatus       string                                 `json:"resource_status"`
-	EnvironmentBlocker   *executionmodel.WorkerHostBlocker      `json:"environment_blocker,omitempty"`
-	RecoveryRequired     bool                                   `json:"recovery_required,omitempty"`
-	RecoveryState        string                                 `json:"recovery_state,omitempty"`
-	RecoveryVersion      uint64                                 `json:"recovery_version,omitempty"`
-	ManualStop           *executionmodel.ManualStopConfirmation `json:"manual_stop,omitempty"`
-	TaskID               string                                 `json:"task_id"`
-	DomainTaskID         string                                 `json:"domain_task_id,omitempty"`
-	IdentityMapDigest    string                                 `json:"identity_map_digest,omitempty"`
-	DomainAttemptNumber  int                                    `json:"domain_attempt_number,omitempty"`
-	WorkflowVersion      string                                 `json:"workflow_version,omitempty"`
-	WorkflowConfigDigest string                                 `json:"workflow_config_digest,omitempty"`
-	ExecutionID          string                                 `json:"execution_id,omitempty"`
-	StepResultPath       *string                                `json:"step_result_path,omitempty"`
-	Title                string                                 `json:"title"`
-	RunID                string                                 `json:"run_id"`
-	AttemptID            string                                 `json:"attempt_id,omitempty"`
-	ControlRevision      uint64                                 `json:"control_revision,omitempty"`
-	Claimant             string                                 `json:"claimant"`
-	Host                 string                                 `json:"host,omitempty"`
-	Backend              string                                 `json:"backend,omitempty"`
-	Protocol             string                                 `json:"protocol,omitempty"`
-	Agent                string                                 `json:"agent,omitempty"`
-	Target               executionbackend.ExecutionTarget       `json:"target,omitempty"`
-	TaskStatus           string                                 `json:"task_status,omitempty"`
-	ExecutionStatus      string                                 `json:"execution_status"`
-	Process              *executionbackend.ProcessIdentity      `json:"process"`
-	StartedAt            *time.Time                             `json:"started_at"`
-	EndedAt              *time.Time                             `json:"ended_at"`
-	WorktreePath         *string                                `json:"worktree_path"`
-	WorktreeBranch       *string                                `json:"worktree_branch"`
-	WorkspaceIntent      *executionbackend.WorkspaceIntent      `json:"workspace_intent"`
-	BaseCommit           *string                                `json:"base_commit"`
-	PR                   executionmodel.PRState                 `json:"pr"`
-	LastEvent            *string                                `json:"last_event"`
-	LogPath              *string                                `json:"log_path"`
-	ResultPath           *string                                `json:"result_path"`
-	Summary              *string                                `json:"summary"`
-	Error                *string                                `json:"error"`
-	Decision             *executionmodel.DecisionState          `json:"decision,omitempty"`
+	SessionID           string                                `json:"session_id,omitempty"`
+	SessionGeneration   string                                `json:"session_generation,omitempty"`
+	TurnNumber          uint64                                `json:"turn_number"`
+	CurrentTurnID       string                                `json:"current_turn_id,omitempty"`
+	ExecutionProfile    *executionmodel.FixedExecutionProfile `json:"execution_profile,omitempty"`
+	PRHistory           []string                              `json:"pr_history,omitempty"`
+	CandidateNumber     int                                   `json:"candidate_number,omitempty"`
+	CandidateCreatedAt  time.Time                             `json:"candidate_created_at"`
+	CandidateStopReason string                                `json:"candidate_stop_reason,omitempty"`
+	CandidateStoppedBy  string                                `json:"candidate_stopped_by,omitempty"`
+	CandidateEndedAt    *time.Time                            `json:"candidate_ended_at,omitempty"`
+	CandidateTiming     string                                `json:"candidate_timing"`
+	ResourceStatus      string                                `json:"resource_status"`
+	EnvironmentBlocker  *executionmodel.WorkerHostBlocker     `json:"environment_blocker,omitempty"`
+	RecoveryRequired    bool                                  `json:"recovery_required,omitempty"`
+	RecoveryState       string                                `json:"recovery_state,omitempty"`
+	RecoveryVersion     uint64                                `json:"recovery_version,omitempty"`
+	TaskID              string                                `json:"task_id"`
+	DomainTaskID        string                                `json:"domain_task_id,omitempty"`
+	WorkflowVersion     string                                `json:"workflow_version,omitempty"`
+	ExecutionID         string                                `json:"execution_id,omitempty"`
+	Title               string                                `json:"title"`
+	RunID               string                                `json:"run_id"`
+	AttemptID           string                                `json:"attempt_id,omitempty"`
+	ControlRevision     uint64                                `json:"control_revision,omitempty"`
+	Claimant            string                                `json:"claimant"`
+	Host                string                                `json:"host,omitempty"`
+	Backend             string                                `json:"backend,omitempty"`
+	Protocol            string                                `json:"protocol,omitempty"`
+	Agent               string                                `json:"agent,omitempty"`
+	Target              executionbackend.ExecutionTarget      `json:"target,omitempty"`
+	TaskStatus          string                                `json:"task_status,omitempty"`
+	ExecutionStatus     string                                `json:"execution_status"`
+	Process             *executionbackend.ProcessIdentity     `json:"process"`
+	StartedAt           *time.Time                            `json:"started_at"`
+	EndedAt             *time.Time                            `json:"ended_at"`
+	WorktreePath        *string                               `json:"worktree_path"`
+	WorktreeBranch      *string                               `json:"worktree_branch"`
+	BaseCommit          *string                               `json:"base_commit"`
+	PR                  executionmodel.PRState                `json:"pr"`
+	LastEvent           *string                               `json:"last_event"`
+	LogPath             *string                               `json:"log_path"`
+	ResultPath          *string                               `json:"result_path"`
+	Summary             *string                               `json:"summary"`
+	Error               *string                               `json:"error"`
+	Decision            *executionmodel.DecisionState         `json:"decision,omitempty"`
 }

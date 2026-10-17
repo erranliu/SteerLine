@@ -96,6 +96,7 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 	ref.Presentation = projectPresentation(c)
 	runtimeInfo := CurrentRuntimeIdentity(ref.ConfigPath)
 	ref.ApplicationHome, ref.ApplicationBin = runtimeInfo.Home, BinDir()
+	ref.Presentation.ExecutionLocation.ApplicationHome = ref.ApplicationHome
 	ref.ExecutablePath, ref.SourceCommit, ref.SourceDirty = runtimeInfo.Executable, runtimeInfo.SourceCommit, runtimeInfo.SourceDirty
 	ref.Presentation.ServiceInstruction = clientServiceInstruction(ref)
 	if ref.Key == "" {
@@ -435,7 +436,7 @@ func productServicePage(runtimeState *reconstruction.Runtime) *productapi.Servic
 			view.Runs = append(view.Runs, nil)
 			continue
 		}
-		view.Runs = append(view.Runs, &query.CandidateView{Participation: run.Participation, SubmissionStatus: run.SubmissionStatus, StopRequested: run.StopRequested, FlowRef: run.FlowRef, WorkflowStage: run.WorkflowStage, WorkflowStatus: run.WorkflowStatus, StageDiagnostic: run.StageDiagnostic, StageResults: executionmodel.CloneStageResults(run.StageResults), ReportToolPolicy: run.ReportToolPolicy, SessionID: run.SessionID, SessionGeneration: run.SessionGeneration, CurrentTurnID: run.CurrentTurnID, TurnNumber: run.TurnNumber, PRHistory: append([]string(nil), run.PRHistory...), CandidateNumber: run.CandidateNumber, CandidateCreatedAt: run.CandidateCreatedAt, CandidateStopReason: run.CandidateStopReason, CandidateStoppedBy: run.CandidateStoppedBy, CandidateEndedAt: copyClientValue(run.CandidateEndedAt), CandidateTiming: run.CandidateTiming, ResourceStatus: run.ResourceStatus, RecoveryRequired: run.RecoveryRequired, RecoveryState: run.RecoveryState, RecoveryVersion: run.RecoveryVersion, TaskID: run.TaskID, DomainTaskID: run.DomainTaskID, WorkflowVersion: run.WorkflowVersion, ExecutionID: run.ExecutionID, Title: run.Title, RunID: run.RunID, AttemptID: run.AttemptID, ControlRevision: run.ControlRevision, Claimant: run.Claimant, Host: run.Host, Backend: run.Backend, Protocol: run.Protocol, Agent: run.Agent, Target: run.Target, TaskStatus: run.TaskStatus, ExecutionStatus: run.ExecutionStatus, StartedAt: copyClientValue(run.StartedAt), EndedAt: copyClientValue(run.EndedAt), WorktreePath: copyClientValue(run.WorktreePath), WorktreeBranch: copyClientValue(run.WorktreeBranch), BaseCommit: copyClientValue(run.BaseCommit), LastEvent: copyClientValue(run.LastEvent), LogPath: copyClientValue(run.LogPath), ResultPath: copyClientValue(run.ResultPath), Summary: copyClientValue(run.Summary), Error: copyClientValue(run.Error), Process: run.Process, EnvironmentBlocker: run.EnvironmentBlocker, ExecutionProfile: run.ExecutionProfile, Decision: run.Decision, PR: run.PR})
+		view.Runs = append(view.Runs, &query.CandidateView{RunnerStateDir: run.RunnerStateDir, RunnerRevision: run.RunnerRevision, InputDigest: run.InputDigest, RunnerWorkflow: run.RunnerWorkflow, Audit: run.Audit, Materials: run.Materials, RequestedModel: run.RequestedModel, RequestedReasoningEffort: run.RequestedReasoningEffort, Participation: run.Participation, SubmissionStatus: run.SubmissionStatus, StopRequested: run.StopRequested, FlowRef: run.FlowRef, WorkflowStage: run.WorkflowStage, WorkflowStatus: run.WorkflowStatus, StageDiagnostic: run.StageDiagnostic, StageResults: executionmodel.CloneStageResults(run.StageResults), ReportToolPolicy: run.ReportToolPolicy, SessionID: run.SessionID, SessionGeneration: run.SessionGeneration, CurrentTurnID: run.CurrentTurnID, TurnNumber: run.TurnNumber, PRHistory: append([]string(nil), run.PRHistory...), CandidateNumber: run.CandidateNumber, CandidateCreatedAt: run.CandidateCreatedAt, CandidateStopReason: run.CandidateStopReason, CandidateStoppedBy: run.CandidateStoppedBy, CandidateEndedAt: copyClientValue(run.CandidateEndedAt), CandidateTiming: run.CandidateTiming, ResourceStatus: run.ResourceStatus, RecoveryRequired: run.RecoveryRequired, RecoveryState: run.RecoveryState, RecoveryVersion: run.RecoveryVersion, TaskID: run.TaskID, DomainTaskID: run.DomainTaskID, WorkflowVersion: run.WorkflowVersion, ExecutionID: run.ExecutionID, Title: run.Title, RunID: run.RunID, AttemptID: run.AttemptID, ControlRevision: run.ControlRevision, Claimant: run.Claimant, Host: run.Host, Backend: run.Backend, Protocol: run.Protocol, Agent: run.Agent, Target: run.Target, TaskStatus: run.TaskStatus, ExecutionStatus: run.ExecutionStatus, StartedAt: copyClientValue(run.StartedAt), EndedAt: copyClientValue(run.EndedAt), WorktreePath: copyClientValue(run.WorktreePath), WorktreeBranch: copyClientValue(run.WorktreeBranch), BaseCommit: copyClientValue(run.BaseCommit), LastEvent: copyClientValue(run.LastEvent), LogPath: copyClientValue(run.LogPath), ResultPath: copyClientValue(run.ResultPath), Summary: copyClientValue(run.Summary), Error: copyClientValue(run.Error), Process: run.Process, EnvironmentBlocker: run.EnvironmentBlocker, ExecutionProfile: run.ExecutionProfile, Decision: run.Decision, PR: run.PR})
 	}
 	return query.ServicePage(view)
 }
@@ -481,12 +482,16 @@ func decisionAvailability(ctx context.Context, c Config, run *reconstruction.Run
 // profile digests. Configuration compilation stays with the original owner.
 func projectPresentation(c Config) productapi.ProjectPresentation {
 	result := productapi.ProjectPresentation{NativeWorkflow: c.WorkflowProtocol == executionmodel.Version, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority, WorkflowProtocol: c.WorkflowProtocol, ShutdownGrace: c.ShutdownGrace, DefaultProfileID: c.DefaultProfileID()}
+	result.ExecutionLocation.Repository = c.Repository
+	if c.RunnerExecution.Runner.Executable != "" {
+		result.ExecutionLocation.Runner = &productapi.RunnerLocation{Executable: c.RunnerExecution.Runner.Executable}
+	}
 	for _, p := range c.RunnerExecution.Profiles {
-		host := p.Execution.Target.Environment
-		if host == "" {
-			host = p.Execution.Target.Kind
-		}
-		result.Profiles = append(result.Profiles, productapi.ExecutionProfileSummary{ID: p.ID, Name: p.Name, Host: host, Agent: "codex", Digest: p.Digest(), AcceptedConfigVersion: c.LoadedConfigDigest(), ImplementationDisplay: []string{p.Execution.Adapter, host, p.Workflow.ID}, Details: []string{"SteerRunner " + c.RunnerExecution.Runner.Version, "CLI: " + runnerclient.Protocol, "工作流: " + p.Workflow.ID}})
+		f := executionmodel.RunnerProfileDisplay(p.ID, p.Name, p.Digest(), runnerclient.RunInput{Execution: p.Execution, Workflow: p.Workflow})
+		f.AcceptedConfigVersion = c.LoadedConfigDigest()
+		view := query.Profile(*f)
+		view.Details = append(view.Details, "SteerRunner "+c.RunnerExecution.Runner.Version, "CLI: "+runnerclient.Protocol)
+		result.Profiles = append(result.Profiles, view)
 	}
 	return result
 }

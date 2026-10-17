@@ -1,8 +1,14 @@
 # 验收流程与记录
 
+执行现场信息复制（2026-10-17，普通开发）：[专属验收](copy-execution-location.md)，SteerLine / SteerRunner 分别复制当前候选的最小定位路径与完整 ID；自动结果与后置人工体验单独登记。
+
 本目录保留当前计划、未闭合验收和必要的维护记录；历史结果与旧方案见[归档](archive/README.md)。Spec定义通过条件，Plan安排最小测试，具体行为与结果在任务专属记录维护。原始产物放临时目录，仓库只保留最小摘要及必要精选证据。
 
 ## 当前入口
+
+SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，实施）：[专属验收](runner-collaboration.md)登记固定构建、R1/R2、U1–U3、I1、Web、controlled 与审计 live 的真实结果及清理。U1 两断言覆盖旧 ProjectRuntime 拒绝替代实例、显式重启后接纳及旧停止隔离。RCB-M01 可后置，不继承旧构建结论。
+
+旧执行记录与空壳字段清理（2026-10-17，普通开发）：[删除边界与最小验证](runtime-shell-cleanup.md)，清理内部无消费者记录/字段/函数并校准文档；保留当前 Task、checkpoint、公开读取及宿主边界。
 
 产品读取、命令入口与 Web 容器重构（2026-10-16，已实施）：[Spec / Plan 与专属验收](product-read-command-web-refactor.md)，RCW-A01–A06 自动项通过，包含跨视图、请求仲裁、Web 71 项、固定 L1 与双 home 受控 L4；RCW-M01 可选人工体验未安排、非阻塞。
 
@@ -10,7 +16,7 @@
 
 执行域遗留清理（2026-10-16，普通开发）：[引用审计与最小验证](execution-legacy-cleanup.md)，仅删除无生产消费者的旧执行实现及专属测试，保留当前 Task/交付、checkpoint、产品展示和宿主进程边界。
 
-执行权限与 Git 环境检查接入（2026-10-16，SteerLine 已实现，真实 Runner 联调与人工验收待完成）：[本仓验收与审查记录](environment-check.md)，仅 SLEC caller/HTTP/Web；Runner 前置与原生检查在其仓库独立 SREC 验收，不共用通过状态。构建和业务资源后置。
+执行权限与 Git 环境检查接入（SteerLine 已实现，正式公开契约已对齐）：[本仓验收与审查记录](environment-check.md)，记录 caller/HTTP/Web、固定版本本机 full_access 真实正例及报告刷新修复；SLEC-M01 完整人工体验仍待安排。其余权限/远端/恢复组合由 Runner 独立 SREC 验收，不共用通过状态。构建和业务资源后置。
 
 测试分级与 L4 入口（2026-10-16，普通开发）：[专属验收](test-level-alignment.md)，按通用规范拆分 L3 正常流程和 L4 系统边界，实际选择、并行及清理结果单独登记。
 

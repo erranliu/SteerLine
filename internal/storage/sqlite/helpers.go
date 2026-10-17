@@ -10,19 +10,11 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func now() time.Time { return time.Now().UTC() }
-
-func executionSessionFacts(v *executionmodel.ExecutionRecord) (string, string) {
-	if v == nil {
-		return "", ""
-	}
-	return v.SessionID, v.SessionGeneration
-}
 
 func sameRepositoryTarget(a, b string) bool { return a == b }
 

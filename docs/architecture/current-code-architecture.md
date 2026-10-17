@@ -115,9 +115,9 @@ flowchart LR
 | `internal/runnerclient` | 固定 EXE/实例 SHA 校验、CLI 子进程、严格 JSON/退出码、公开 schema 与能力验证；不读 Runner 私有实现。 |
 | `internal/runnercontract` / `runnerstate` | 公开协议值及 SteerLine caller 参与关系；无 SQL、native owner 或具体传输实现。 |
 | `internal/environmentcheck` | 环境检查请求、报告、显式停止与原请求对账；使用独立 Store/Runner 端口，不推进 Task/DAG。 |
-| `internal/storage/ports` / `sqlite` | Task/DAG、候选/outbox/公开事件副本、唯一交付、环境检查及 service checkpoint；当前 `SchemaVersion = 22`，不提供旧格式迁移。所有读取均返回存储/领域事实，无产品包依赖；活动记录流持有读事务，使用者必须关闭。 |
+| `internal/storage/ports` / `sqlite` | Task/DAG、候选/outbox/公开事件副本、唯一交付、环境检查及 service checkpoint；当前 `SchemaVersion = 23`，不提供旧格式迁移。所有读取均返回存储/领域事实，无产品包依赖；活动记录流持有读事务，使用者必须关闭。 |
 | `internal/execution/model` / `backend` / `agentlaunch` | 仍被使用的 TaskDelivery、项目权威、checkpoint、展示值、进程端口和配置值；没有原生 worker 状态转移。 |
-| `internal/execution/reconstruction` / `hostport` | SteerLine checkpoint/运行视图与宿主控制端口；真实候选来自公开 Runner facts，不重建原生执行现场。 |
+| `internal/execution/reconstruction` / `hostport` | SteerLine checkpoint/运行视图与宿主控制端口；真实候选来自公开 Runner facts，不保留旧执行记录集合或原生工作区意图，不重建原生执行现场。 |
 | `internal/execution/workspace` / `publication` / `process` / `scheduler` | 调用方仓库身份解析、发布配置校验、SteerLine 自身进程/文件能力和 actor 调度；无 native worktree 生命周期或 PR provider 查询实现。 |
 | `internal/product/api` / `query` / `client` | 稳定产品 DTO、只读投影及注入能力的内部产品客户端；历史/候选、会话引用、正文分页、能力报告、活动标签和公开序列化预算均从存储事实生成，不再由 SQLite 构造产品 DTO。 |
 | `internal/product/applicationhttp` / `httpapi` | 统一项目路由、认证/协议映射、请求登记/对账与产品调用；不以传输回执替代业务结果。 |
@@ -125,7 +125,9 @@ flowchart LR
 | `web/server` / `web/src` | 独立 Web 宿主和 React 页面；浏览器会话、项目选择、连接观察、原信封 journal、草稿与渲染。路由白名单经纯 HTTP 契约共享，生产编译依赖受 HTTP 消费端守卫约束。 |
 | `tests/e2e/internal` | 隔离环境、公开 CLI driver 与外部协议夹具；不导入 Runner 内部包，真机验收范围单独登记。 |
 
-旧 actor/worker、adapters、workflow、reliable、conversation owner、执行写表及闲置执行事务端口已物理删除；具体范围见[删除审计](../acceptance/steerrunner-deletion-audit.md)与[后续清理验收](../acceptance/execution-legacy-cleanup.md)。残留包名和仍被消费的值不作为重新引入旧 owner 的理由。
+旧 actor/worker、adapters、workflow、reliable、conversation owner、执行写表及闲置执行事务端口已物理删除；具体范围见[删除审计](../acceptance/steerrunner-deletion-audit.md)与[后续清理验收](../acceptance/execution-legacy-cleanup.md)。无消费者的记录与空壳字段也已按[主干清理](../acceptance/runtime-shell-cleanup.md)删除；残留包名和仍被消费的值不作为重新引入旧 owner 的理由。
+
+项目 checkpoint 固定 Runner 构建与 state-dir，运行中的客户端固定本次 instance_id；替代实例只在显式重启 SteerLine、重建 ProjectRuntime 时接纳，旧 stop/settlement 闭包保持原目标。候选事务固定原预设名称/参数摘要/完整信封；公开 workflow/audit/materials/轮次请求模型贯穿 taskrunner → product query/API → Web，历史沿候选原提交读取。组合规则只消费 Runner 自包含 schema。源码与验证见[协作 Plan](../spec/runner-collaboration.plan.md)和[验收](../acceptance/runner-collaboration.md)。
 
 ## 命令、查询与事务边界
 

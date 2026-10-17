@@ -9,12 +9,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -42,6 +44,7 @@ type Service struct {
 	Bridge                                      *runnerbridge.Bridge
 	ResolveBase                                 func(context.Context, taskmodel.FixedWork, bool) (string, error)
 	Admit                                       func(context.Context) error
+	RunnerBuild                                 runnercontract.BuildPin
 	mu                                          sync.Mutex
 }
 type Start struct {
@@ -84,7 +87,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	}
 	if s.Admit != nil {
 		if err := s.Admit(ctx); err != nil {
-			return runnerbridge.Candidate{}, err
+			return runnerbridge.Candidate{}, failure("runner_unavailable", err.Error())
 		}
 	}
 	work, err := s.Tasks.Fixed(ctx, s.Project, input.TaskID, input.TaskVersion, input.Candidate)
@@ -107,6 +110,9 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	profile, ok := s.Profiles[profileID]
 	if !ok {
 		return runnerbridge.Candidate{}, failure("profile_not_found", "selected Runner profile is unavailable")
+	}
+	if profile.Input.Workflow.ID == "" || profile.Input.Workflow.Version <= 0 {
+		return runnerbridge.Candidate{}, failure("invalid_profile", "execution preset must select a published workflow explicitly")
 	}
 	base, err := s.ResolveBase(ctx, work, input.Candidate)
 	if err != nil {
@@ -139,9 +145,6 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 		run.Correlation = map[string]string{}
 	}
 	run.Correlation["steerline_task_id"], run.Correlation["steerline_candidate_id"] = input.TaskID, input.RequestID
-	if run.Workflow.ID == "" {
-		run.Workflow = runnerclient.Workflow{ID: "development", Version: 1}
-	}
 	raw, err = json.Marshal(run)
 	if err != nil {
 		return runnerbridge.Candidate{}, err
@@ -150,7 +153,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if input.Candidate {
 		claimant = work.Record.Claimant
 	}
-	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "sl-submit-" + input.RequestID, Input: raw}}
+	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(run.Execution, run.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "sl-submit-" + input.RequestID, Input: raw}}
 	if err := s.Store.ReserveRunnerCandidate(ctx, work, c, input.Candidate); err != nil {
 		return runnerbridge.Candidate{}, err
 	}
@@ -181,6 +184,9 @@ func (s *Service) RecoverInputs(ctx context.Context) error {
 	for _, c := range rows {
 		if err := s.Bridge.RecoverInputs(ctx, s.Project, c.ID); err != nil {
 			return err
+		}
+		if err := s.Bridge.VerifyBinding(ctx, s.Project, c.ID); err != nil {
+			return fmt.Errorf("original Runner binding remains unverified for candidate %s: %w", c.ID, err)
 		}
 	}
 	return nil

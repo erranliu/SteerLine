@@ -6,6 +6,8 @@
 
 架构解耦第一轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round1.md)：HTTP/Web 消费端生产依赖、taskrunner 禁止 SQL/具体存储/应用实现依赖、候选不存在与真实故障分类、首次领取及原请求重放。新增错误分类用例纳入 L1 quick-execution，SQLite 回归与守卫反例沿既有 quick-rules / quick-execution-boundary 执行；不要求全量或真实模型。
 
+旧执行记录与空壳字段清理的验证范围见[Plan](plans/runtime-shell-cleanup.plan.md)与[验收](acceptance/runtime-shell-cleanup.md)：全源码引用审计、默认测试编译与固定 L1；不新增或改变分级场景，不用编译代替运行结果。
+
 Runner 深 home 路径缺陷的最小验证见[短目录 Plan](plans/runner-short-state-path.plan.md)和[验收](acceptance/runner-short-state-path.md)：真实 Windows socket、命名空间/别名、caller 停止证明、controlled gate 及新调试包双项目/reset；不把模拟链当完整真实 L2。
 
 执行域遗留清理（2026-10-16）按[Plan](plans/execution-legacy-cleanup.plan.md)核对全平台生产引用、生产入口编译和固定 L1；旧执行实现专属测试随实现删除，已无测试的 `execution/model` 不再独立登记 L1，仍被消费的值编解码和 caller/Task/存储/宿主边界测试保留。实际结果见[专属验收](acceptance/execution-legacy-cleanup.md)。
@@ -67,10 +69,10 @@ L1 固定范围以 [scoped.go](../cmd/test-feedback/scoped.go)及 [task_scope.go
 | 级别 | 已登记内容 | 清单与实现现状 |
 | --- | --- | --- |
 | L2 | 2 项：controlled gate、live 本机 Codex | 有固定 ID、实际测试映射和选择校验，内容清单可追踪。 |
-| L3 | 3 项：等待合并重启、正常宿主生命周期、双 home 独立操作 | 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二；只选 runtime 时包内二并行。 |
+| L3 | 4 项：等待合并重启、正常宿主生命周期、双 home 独立操作、审计 workflow 真实链 | controlled 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二。审计 live 精确选择 workflow.local-codex-audited，显式配置两个不同模型，不加入完整 L2。 |
 | L4 | 4 项：源码构建保护、路径保护、宿主写入拒绝、同 ID 碰撞与重放 | 支持 `-level=L4 -suite=runtime -env=controlled`；每项独立资源，runtime 包内最多二项并行。 |
 
-当前九项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
+当前十项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
 
 ```powershell
 # 无 token 门槛，不能当作完整 L2

@@ -2,6 +2,7 @@ package ports
 
 import (
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -18,6 +19,7 @@ type CheckpointRepository struct {
 }
 
 type CheckpointServiceState struct {
+	RunnerBuild         *runnercontract.BuildPin          `json:"runner_build,omitempty"`
 	Mode                string                            `json:"mode"`
 	InstanceID          string                            `json:"instance_id"`
 	PID                 int                               `json:"pid"`

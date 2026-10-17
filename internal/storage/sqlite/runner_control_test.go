@@ -32,7 +32,7 @@ func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 		return err
 	}))
 	baseCalls := 0
-	svc := &taskrunner.Service{Project: a.ProjectIdentity, Claimant: "operator", StateDir: filepath.Join(t.TempDir(), "runner"), DefaultProfile: "live", Store: s, Tasks: taskapp.Service{Reader: s, Documents: docs, Input: taskapp.Input{Project: a.ProjectIdentity, Authority: "native", Remote: "origin", Branch: "main", ExecutableTypes: []string{"task"}}}, Profiles: map[string]taskrunner.Profile{"live": {ID: "live", Input: runnerclient.RunInput{}}}, ResolveBase: func(context.Context, taskmodel.FixedWork, bool) (string, error) {
+	svc := &taskrunner.Service{Project: a.ProjectIdentity, Claimant: "operator", StateDir: filepath.Join(t.TempDir(), "runner"), DefaultProfile: "live", Store: s, Tasks: taskapp.Service{Reader: s, Documents: docs, Input: taskapp.Input{Project: a.ProjectIdentity, Authority: "native", Remote: "origin", Branch: "main", ExecutableTypes: []string{"task"}}}, Profiles: map[string]taskrunner.Profile{"live": {ID: "live", Input: runnerclient.RunInput{Workflow: runnerclient.Workflow{ID: "development", Version: 1}}}}, ResolveBase: func(context.Context, taskmodel.FixedWork, bool) (string, error) {
 		baseCalls++
 		return strings.Repeat("c", 40), nil
 	}}

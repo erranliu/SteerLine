@@ -21,6 +21,7 @@ type ProjectRef struct {
 }
 
 type ProjectPresentation struct {
+	ExecutionLocation  ExecutionLocation         `json:"execution_location"`
 	ServiceInstruction string                    `json:"service_instruction"`
 	NativeWorkflow     bool                      `json:"native_workflow"`
 	ConfigDigest       string                    `json:"config_digest"`
@@ -31,9 +32,28 @@ type ProjectPresentation struct {
 	Profiles           []ExecutionProfileSummary `json:"profiles"`
 }
 
+// ExecutionLocation contains only paths needed to locate the execution site.
+type ExecutionLocation struct {
+	ApplicationHome string          `json:"application_home"`
+	Repository      string          `json:"repository"`
+	Runner          *RunnerLocation `json:"runner,omitempty"`
+}
+
+type RunnerLocation struct {
+	Executable string `json:"executable"`
+}
+
 // ExecutionProfileSummary deliberately has no implementation envelope, command
 // arguments, credentials, or mutable execution configuration.
 type ExecutionProfileSummary struct {
+	WorkflowID      string `json:"workflow_id"`
+	WorkflowVersion int    `json:"workflow_version"`
+	ExecutionModel  string `json:"execution_model"`
+	ExecutionEffort string `json:"execution_effort"`
+	AuditModel      string `json:"audit_model"`
+	AuditEffort     string `json:"audit_effort"`
+	AccessMode      string `json:"access_mode"`
+
 	ID                    string   `json:"id"`
 	Name                  string   `json:"name"`
 	Host                  string   `json:"host"`
@@ -152,6 +172,15 @@ type StageResultSummary struct {
 }
 
 type CandidateSummary struct {
+	RunnerRevision           uint64                  `json:"runner_revision"`
+	InputDigest              string                  `json:"input_digest"`
+	RunnerWorkflow           *RunnerWorkflowSummary  `json:"runner_workflow,omitempty"`
+	Audit                    *RunnerAuditSummary     `json:"audit,omitempty"`
+	Materials                []RunnerMaterialSummary `json:"materials"`
+	RequestedModel           string                  `json:"requested_model,omitempty"`
+	RequestedReasoningEffort string                  `json:"requested_reasoning_effort,omitempty"`
+
+	RunnerStateDir   string               `json:"runner_state_dir,omitempty"`
 	Participation    string               `json:"participation"`
 	SubmissionStatus string               `json:"submission_status"`
 	StopRequested    bool                 `json:"stop_requested"`
@@ -287,6 +316,8 @@ type HistorySummary struct {
 	Executions   []ExecutionSummary `json:"executions"`
 }
 type WorkflowSummary struct {
+	WorkflowVersion  int                      `json:"workflow_version"`
+	ExecutionID      string                   `json:"execution_id"`
 	Participation    string                   `json:"participation"`
 	SubmissionStatus string                   `json:"submission_status"`
 	StopRequested    bool                     `json:"stop_requested"`
@@ -446,6 +477,10 @@ type WorkspaceSummary struct {
 type RecoveryPRSummary struct{ URL, State, Repository, BaseBranch string }
 
 func CloneProjectRef(ref ProjectRef) ProjectRef {
+	if runner := ref.Presentation.ExecutionLocation.Runner; runner != nil {
+		copy := *runner
+		ref.Presentation.ExecutionLocation.Runner = &copy
+	}
 	ref.Presentation.Profiles = append([]ExecutionProfileSummary(nil), ref.Presentation.Profiles...)
 	for i := range ref.Presentation.Profiles {
 		p := &ref.Presentation.Profiles[i]

@@ -101,7 +101,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && (entry.Level != "L2" || entry.Chain != "local-codex")) || (entry.Env == "controlled" && entry.Chain != "") || (entry.Level != "L2" && entry.Level != "L3" && entry.Level != "L4") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && !supportedLiveScenario(entry)) || (entry.Env == "controlled" && entry.Chain != "") || (entry.Level != "L2" && entry.Level != "L3" && entry.Level != "L4") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -172,6 +172,16 @@ func runE2E(opts options) (code int) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
+	}
+	executionModel, auditModel := "", ""
+	for _, entry := range selected {
+		if entry.ID == "workflow.local-codex-audited" {
+			executionModel, auditModel = strings.TrimSpace(os.Getenv("STEERLINE_AUDIT_EXECUTION_MODEL")), strings.TrimSpace(os.Getenv("STEERLINE_AUDIT_MODEL"))
+			if executionModel == "" || auditModel == "" || executionModel == auditModel || os.Getenv("STEERRUNNER_EXE") == "" {
+				fmt.Fprintln(os.Stderr, "audited live requires explicit STEERRUNNER_EXE and distinct STEERLINE_AUDIT_EXECUTION_MODEL / STEERLINE_AUDIT_MODEL before fixture creation")
+				return 2
+			}
+		}
 	}
 	if runtime.GOOS != "windows" {
 		fmt.Fprintln(os.Stderr, "E2E currently supports Windows only")
@@ -345,7 +355,7 @@ func runE2E(opts options) (code int) {
 	if err != nil {
 		return fail(err)
 	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
+	config, err := json.Marshal(map[string]string{"ExecutionModel": executionModel, "AuditModel": auditModel, "Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}
@@ -609,7 +619,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			return fmt.Errorf("invalid or incomplete evidence for %s", e.ID)
 		}
 		if e.Env == "live" {
-			if e.ID != "smoke.local-codex" || e.Level != "L2" || e.Chain != "local-codex" || evidence.Live == nil {
+			if !supportedLiveScenario(e) || evidence.Live == nil || e.ID == "workflow.local-codex-audited" && evidence.Live.Audited == nil {
 				return fmt.Errorf("unsupported live chain or missing delivery proof: %s", e.ID)
 			}
 			if err := evidence.Live.Validate(); err != nil {
@@ -619,6 +629,10 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 
 	}
 	return nil
+}
+
+func supportedLiveScenario(e e2eScenario) bool {
+	return e.Chain == "local-codex" && (e.ID == "smoke.local-codex" && e.Level == "L2" || e.ID == "workflow.local-codex-audited" && e.Level == "L3" && e.Suite == "workflow")
 }
 
 // The gate includes execution, evidence validation and cleanup; even a cleanup

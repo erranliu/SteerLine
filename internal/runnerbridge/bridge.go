@@ -123,7 +123,7 @@ func (b *Bridge) Step(ctx context.Context, project, id string) error {
 			}
 			// A terminal task may still acquire a late accepted Run. Continue
 			// querying its original request, never create new work after withdrawal.
-			if c.StopRequested {
+			if c.StopRequested || c.SubmitObserveOnly {
 				return nil
 			}
 			receipt, submitErr := cli.Submit(ctx, c.Submit)
@@ -252,6 +252,14 @@ func (b *Bridge) RecoverInputs(ctx context.Context, project, id string) error {
 	if err != nil {
 		return err
 	}
+	if c.RunID == "" {
+		if c.SubmitState == "pending" {
+			c.SubmitState = "cancelled"
+		}
+		if c.SubmitState == "unknown" {
+			c.SubmitObserveOnly = true
+		}
+	}
 	for i := range c.Actions {
 		if c.Actions[i].State == "pending" {
 			c.Actions[i].State = "cancelled"
@@ -262,6 +270,43 @@ func (b *Bridge) RecoverInputs(ctx context.Context, project, id string) error {
 	}
 	return b.save(ctx, &c)
 }
+
+// VerifyBinding checks original public facts before the reconstructed runtime
+// opens admission. It never submits, resumes, stops or refreshes a PR.
+func (b *Bridge) VerifyBinding(ctx context.Context, project, id string) error {
+	c, err := b.Store.Candidate(ctx, project, id)
+	if err != nil {
+		return err
+	}
+	cli := b.Client(c.StateDir)
+	if c.RunID != "" {
+		observed, err := cli.Inspect(ctx, "run-id", c.RunID, false)
+		if err != nil {
+			return err
+		}
+		if observed.Run == nil || observed.Run.InputDigest == "" {
+			return errors.New("original Runner Run/input digest is missing during startup")
+		}
+		return bind(&c, *observed.Run)
+	}
+	if c.SubmitState != "unknown" {
+		return nil
+	}
+	observed, err := cli.Inspect(ctx, "request-id", c.Submit.RequestID, false)
+	if known(err, "request_not_found") {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	command := observed.Command
+	if command == nil || command.RequestID != c.Submit.RequestID || command.Command != "submit" || command.CommandID == "" || command.RunID == nil || observed.Run == nil || *command.RunID != observed.Run.RunID || observed.Run.InputDigest == "" {
+		return errors.New("original submit identity is incomplete during startup")
+	}
+	c.RunID = observed.Run.RunID
+	return bind(&c, *observed.Run)
+}
+
 func bind(c *Candidate, r runnerclient.Run) error {
 	if r.RunID != c.RunID || c.InputDigest != "" && c.InputDigest != r.InputDigest || c.Branch != "" && c.Branch != r.Execution.Branch || c.PRURL != "" && (r.PR == nil || c.PRURL != r.PR.URL) {
 		return errors.New("Runner projection changed the fixed candidate binding")

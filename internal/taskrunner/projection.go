@@ -2,6 +2,8 @@ package taskrunner
 
 import (
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"strconv"
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -46,7 +48,7 @@ func text(value string) *string {
 	return &value
 }
 func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
-	v := &reconstruction.RunView{RunID: c.ID, TaskID: c.TaskID, DomainTaskID: c.TaskID, ExecutionID: c.RunID, ControlRevision: c.Revision, Claimant: c.Claimant, CandidateNumber: c.Number, CandidateCreatedAt: c.CreatedAt, CandidateTiming: "wall_since_reservation", Participation: c.Participation, SubmissionStatus: c.SubmitState, StopRequested: c.StopRequested, WorkflowStatus: runnerstate.ObservedStatus(c), ExecutionStatus: runnerstate.ObservedStatus(c), BaseCommit: text(c.BaseRevision), Error: text(c.Diagnostic), PR: model.PRState{State: "none"}}
+	v := &reconstruction.RunView{RunnerStateDir: c.StateDir, RunID: c.ID, TaskID: c.TaskID, DomainTaskID: c.TaskID, ExecutionID: c.RunID, ControlRevision: c.Revision, Claimant: c.Claimant, CandidateNumber: c.Number, CandidateCreatedAt: c.CreatedAt, CandidateTiming: "wall_since_reservation", Participation: c.Participation, SubmissionStatus: c.SubmitState, StopRequested: c.StopRequested, WorkflowStatus: runnerstate.ObservedStatus(c), ExecutionStatus: runnerstate.ObservedStatus(c), BaseCommit: text(c.BaseRevision), Error: text(c.Diagnostic), PR: model.PRState{State: "none"}}
 	var input runnerclient.RunInput
 	_ = json.Unmarshal(c.Submit.Input, &input)
 	v.Host = "local"
@@ -56,7 +58,8 @@ func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
 	}
 	v.Agent = "codex"
 	v.FlowRef = input.Workflow.ID
-	v.WorkflowVersion = "steerrunner-cli/v1"
+	v.WorkflowVersion = strconv.Itoa(input.Workflow.Version)
+	v.ExecutionProfile = model.RunnerProfileDisplay(c.ProfileID, c.ProfileName, c.ProfileDigest, input)
 	if c.StopRequested {
 		v.ResourceStatus = "stop_pending"
 	}
@@ -67,6 +70,9 @@ func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
 	if r == nil {
 		return v
 	}
+	v.RunnerWorkflow, v.Audit, v.Materials = &r.Workflow, r.Audit, append([]runnercontract.Material(nil), r.Materials...)
+	v.RunnerRevision, v.InputDigest = r.Revision, r.InputDigest
+	v.RequestedModel, v.RequestedReasoningEffort = r.Execution.RequestedModel, r.Execution.RequestedReasoningEffort
 	v.Backend, v.Protocol = r.Execution.Backend, r.Execution.Protocol
 	v.SessionID, v.SessionGeneration = r.Execution.SessionID, r.Execution.Generation
 	v.AttemptID, v.CurrentTurnID = r.Execution.AttemptID, r.Execution.TurnID

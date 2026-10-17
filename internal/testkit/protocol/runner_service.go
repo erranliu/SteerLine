@@ -32,6 +32,9 @@ func RunRunnerServiceFixture() bool {
 	var data any
 	var request struct {
 		RequestID string `json:"request_id"`
+		Input     struct {
+			ExpectedInstanceID string `json:"expected_instance_id"`
+		} `json:"input"`
 	}
 	if command == "service stop" {
 		_ = json.NewDecoder(os.Stdin).Decode(&request)
@@ -49,8 +52,24 @@ func RunRunnerServiceFixture() bool {
 	case "capabilities":
 		data = map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
 			"native_session_viewer": map[string]any{"adapters": []string{"codex-app-server"}},
-			"workflow":              map[string]any{"id": "development", "version": 1},
-			"configuration_schemas": map[string]any{"version": 1, "adapters": map[string]any{"codex-app-server": map[string]string{"type": "object"}}, "providers": map[string]any{"command": map[string]string{"type": "object"}}}}
+			"instance_binding":      map[string]bool{"expected_instance_id": true},
+			"workflows":             []any{map[string]any{"id": "development", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"implement.execute", "implement.report", "publish", "publish.report"}}},
+			"configuration_schemas": map[string]any{"version": 1, "workflow": map[string]any{"type": "object"}, "run_configuration": map[string]any{"type": "object"}, "adapters": map[string]any{"codex-app-server": map[string]string{"type": "object"}}, "providers": map[string]any{"command": map[string]string{"type": "object"}}}}
+	case "inspect", "events":
+		// A static public observation, supplied only by the caller test. This
+		// fixture never submits a Run or executes a workflow/native operation.
+		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-run-fixture.json"))
+		if err != nil {
+			panic("idle fixture has no public Run observation")
+		}
+		var inspection map[string]any
+		if json.Unmarshal(raw, &inspection) != nil {
+			panic("invalid public Run fixture")
+		}
+		data = inspection
+		if command == "events" {
+			data = map[string]any{"events": []any{}, "next_cursor": "idle-end"}
+		}
 	case "service start", "service status", "service stop":
 		if !filepath.IsAbs(stateDir) {
 			panic("fixture requires absolute owned state-dir")
@@ -88,6 +107,10 @@ func RunRunnerServiceFixture() bool {
 			}
 		}
 		if command == "service stop" {
+			if request.Input.ExpectedInstanceID != "" && request.Input.ExpectedInstanceID != info["instance_id"] {
+				_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": "steerrunner-cli/v1", "ok": false, "request_id": request.RequestID, "data": nil, "error": map[string]string{"code": "stale_instance", "message": "original fixture instance changed"}})
+				os.Exit(5)
+			}
 			info["last_shutdown"] = map[string]any{"instance_id": info["instance_id"], "request_id": request.RequestID, "state_dir": stateDir, "executable_sha256": info["executable_sha256"], "resources_settled": true}
 			info["status"] = "not_running"
 			raw, _ := json.Marshal(info)
@@ -97,6 +120,13 @@ func RunRunnerServiceFixture() bool {
 		}
 		data = info
 	default:
+		if stateDir != "" {
+			f, err := os.OpenFile(filepath.Join(stateDir, "business-dispatch.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+			if err == nil {
+				_, _ = f.WriteString(command + "\n")
+				_ = f.Close()
+			}
+		}
 		panic("idle Runner fixture cannot perform business operations: " + command)
 	}
 	var id any
