@@ -12,7 +12,7 @@
 | [会话事件](conversation-events.md) | 来源、规范事件、完整正文、分页、采集与展示 |
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |
 | [已退役的执行控制台](../archive/design/execution-console.md) | TUI 的历史布局与操作记录；当前使用 Web |
-| [Worker PR 流程契约](../spec/worker-pr-flow.spec.md) | 当前 development/v3 的实现、报告、发布、合并与交付；原 #84 分步契约保留历史追溯 |
+| [Runner 协作契约](../spec/runner-collaboration.spec.md) | 当前 development/1 与 development-audited/1、执行预设/冻结及跨仓交接；迁出前 [PR 流程](../spec/worker-pr-flow.spec.md)保留历史追溯 |
 | [客户端与 Go 服务边界](planning-architecture.md) | Web/应用/项目 HTTP 边界及历史 #91 追溯 |
 | [Web 前端技术方案](web-frontend.md) | 已确认技术栈与首批 DAG/执行页；独立 web 工程及浏览器接入契约见普通开发 Spec/Plan，实际结果归专属验收 |
 | [项目管理与统一 Web 入口](project-management.md) | 独立 Web/已有项目切换及统一启动宿主已交付；添加/结构核验/纳管后置，仍有独立 Spec/Plan |

@@ -10,10 +10,93 @@ import {
   testClient,
 } from "../../test/workspace";
 import { Runs } from "./runs";
+import { RunnerWorkflow } from "./runner-workflow";
+import { render } from "@testing-library/react";
 
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+it("shows frozen parameters and public audit sources without inventing a pass", () => {
+  const candidate = {
+    ...run,
+    execution_profile: {
+      id: "original",
+      name: "原冻结方案",
+      host: "local",
+      agent: "codex",
+      unavailable_reason: "",
+      details: ["请求执行模型：execution-model · medium"],
+    },
+    runner_workflow: { id: "development-audited", version: 1 },
+    requested_model: "audit-model",
+    requested_reasoning_effort: "high",
+    materials: [
+      {
+        kind: "git",
+        path: "spec.md",
+        commit: "fixed-commit",
+        digest: "fixed-hash",
+      },
+    ],
+    audit: {
+      model: "audit-model",
+      reasoning_effort: "high",
+      repair_count: 1,
+      results: [
+        {
+          step: "audit.code",
+          source_report_command_id: "original-report",
+          command_id: "audit-command",
+          turn_id: "original-turn",
+          failure: "原结果未核实",
+          findings: [
+            { severity: "P2", message: "审计发现", path: "file.go", line: 3 },
+          ],
+        },
+      ],
+    },
+  };
+  const view = render(<RunnerWorkflow run={candidate} />);
+  expect(screen.getByText("冻结方案 · 原冻结方案")).toBeVisible();
+  expect(screen.getByText("Workflow · development-audited/1")).toBeVisible();
+  expect(
+    screen.getByText("当前轮次请求模型 · audit-model · high"),
+  ).toBeVisible();
+  expect(screen.getByText("audit.code · 尚无结论")).toBeVisible();
+  expect(screen.getByText("原结果未核实")).toBeVisible();
+  fireEvent.click(screen.getByText("结果来源"));
+  expect(
+    screen.getByText(
+      /报告 original-report · 命令 audit-command · 轮次 original-turn/,
+    ),
+  ).toBeVisible();
+  view.rerender(
+    <RunnerWorkflow
+      run={{
+        ...candidate,
+        audit: {
+          ...candidate.audit,
+          results: [
+            { ...candidate.audit.results[0], verdict: "pass", failure: "" },
+          ],
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText("audit.code · pass")).toBeVisible();
+  view.rerender(
+    <RunnerWorkflow
+      run={{
+        ...candidate,
+        audit: undefined,
+        runner_workflow: { id: "development", version: 1 },
+      }}
+    />,
+  );
+  expect(screen.queryByText("Runner 审计观察")).not.toBeInTheDocument();
+  expect(screen.queryByText("audit.code · pass")).not.toBeInTheDocument();
 });
 
 it("keeps cached output visible while refreshing and stops polling the hidden output tab", async () => {
@@ -58,20 +141,18 @@ it("keeps cached output visible while refreshing and stops polling the hidden ou
   };
   client.setQueryData(options.activity(run).queryKey, activity);
   client.setQueryData(options.final(run).queryKey, final);
-  const get = vi
-    .spyOn(api, "get")
-    .mockImplementation(
-      async (path) =>
-        (path.includes("/activity?")
-          ? activity
-          : path.includes("/last-message?")
-            ? {
-                run_id: run.execution_id,
-                attempt_id: run.attempt_id,
-                message: null,
-              }
-            : tasks) as never,
-    );
+  const get = vi.spyOn(api, "get").mockImplementation(
+    async (path) =>
+      (path.includes("/activity?")
+        ? activity
+        : path.includes("/last-message?")
+          ? {
+              run_id: run.execution_id,
+              attempt_id: run.attempt_id,
+              message: null,
+            }
+          : tasks) as never,
+  );
   let resolve!: (value: unknown) => void;
   const fetchFinal = vi.spyOn(api, "final").mockImplementation(
     () =>

@@ -19,6 +19,31 @@ func TestMain(m *testing.M) {
 		_ = os.WriteFile(os.Getenv("STEERLINE_RUNNER_CLI_CALL"), append([]byte(strings.Join(os.Args[1:], "\n")+"\n--stdin--\n"), body...), 0600)
 		var request Request
 		_ = json.Unmarshal(body, &request)
+
+		if mode == "instance-race" {
+			if len(os.Args) > 2 && os.Args[1] == "service" && os.Args[2] == "status" {
+				_ = os.WriteFile(os.Getenv("STEERLINE_RACE_MARKER"), []byte("B"), 0600)
+				info := ServiceInfo{InstanceID: "A", Status: "ready", StateDir: os.Getenv("STEERLINE_RACE_DIR"), Protocol: Protocol, ResourceDigest: "resources"}
+				data, _ := json.Marshal(info)
+				fmt.Printf(`{"protocol":"steerrunner-cli/v1","ok":true,"request_id":null,"data":%s,"error":null}`, data)
+				os.Exit(0)
+			}
+			raw, _ := os.ReadFile(os.Getenv("STEERLINE_RACE_MARKER"))
+			if string(raw) != "B" {
+				os.Exit(1)
+			}
+			for i, arg := range os.Args {
+				if arg == "--expected-instance-id" && i+1 < len(os.Args) && os.Args[i+1] == "A" {
+					var id any
+					if request.RequestID != "" {
+						id = request.RequestID
+					}
+					_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": Protocol, "ok": false, "request_id": id, "data": nil, "error": map[string]string{"code": "stale_instance", "message": "restart SteerLine explicitly"}})
+					os.Exit(5)
+				}
+			}
+			_ = os.WriteFile(os.Getenv("STEERLINE_RACE_BUSINESS"), []byte("B received business"), 0600)
+		}
 		if mode == "check-response" {
 			fmt.Print(strings.ReplaceAll(os.Getenv("STEERLINE_CHECK_RESPONSE"), "__REQUEST_ID__", request.RequestID))
 			code := 0
@@ -122,4 +147,38 @@ func TestSteerRunnerAmbiguousEnvelope(t *testing.T) {
 			t.Fatal("ambiguous envelope accepted", body)
 		}
 	}
+}
+
+func TestRunnerPresetFreeze(t *testing.T) {
+	t.Run("reject_replacement_between_status_and_dispatch", func(t *testing.T) {
+		exe, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		dir := t.TempDir()
+		business := filepath.Join(dir, "business")
+		t.Setenv("STEERLINE_RUNNER_CLI_FIXTURE", "instance-race")
+		t.Setenv("STEERLINE_RUNNER_CLI_CALL", filepath.Join(dir, "call"))
+		t.Setenv("STEERLINE_RACE_DIR", dir)
+		t.Setenv("STEERLINE_RACE_MARKER", filepath.Join(dir, "replacement"))
+		t.Setenv("STEERLINE_RACE_BUSINESS", business)
+		c := Client{Executable: exe, StateDir: dir, InstanceID: "A", ResourceDigest: "resources", Timeout: 5 * time.Second}
+		for _, command := range []string{"submit", "reply", "resume", "environment-check start", "inspect"} {
+			var request *Request
+			if command != "inspect" {
+				request = &Request{Protocol: Protocol, RequestID: "original-" + strings.ReplaceAll(command, " ", "-"), Input: json.RawMessage(`{}`)}
+			}
+			_, err := c.Call(context.Background(), command, nil, request)
+			var failure *Failure
+			if !errors.As(err, &failure) || failure.Code != "stale_instance" || failure.Unknown {
+				t.Fatalf("%s not fenced: %v", command, err)
+			}
+			if _, err := os.Stat(business); !os.IsNotExist(err) {
+				t.Fatal("replacement received business", err)
+			}
+			if c.InstanceID != "A" {
+				t.Fatal("old binding changed")
+			}
+		}
+	})
 }

@@ -12,13 +12,13 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 | --- | --- |
 | 人 | 决定目标与任务范围、处理产品取舍和权限问题、审阅并合并 PR |
 | 任务应用 | 核验固定任务契约、DAG、领取资格与核验后的任务结果 |
-| 执行应用 | 准备工作区、管理固定流程的步骤/status、派发并观察原会话、传递反馈、核验交付和结算资源 |
+| 独立 SteerRunner | 准备工作区、管理普通/审计 workflow 与原会话、冻结逐轮输入/模型、核验执行 PR 事实并结算原生资源 |
 | worker | 按任务 Spec/Plan 实现、测试、修复、提交和创建 PR；不写中心业务状态 |
 | 执行后端 | 提供真实进程、终端、原生会话/轮次、平台消息和资源事实 |
 | PR 平台 | 提供 PR 身份、head/base 和实际合并事实 |
 | Web 与 HTTP 客户端 | 仅经 HTTP 查询产品 DTO、提交绑定原身份/版本的命令；保存自己的偏好、草稿和原请求，不读业务库或宿主业务文件 |
 | HTTP 服务端与内部产品客户端 | 认证、协议映射、原请求登记/对账及应用调用；领域资格和状态转移仍由 Go 业务应用核验 |
-| 应用与服务宿主 | 组装 adapter、端口和存储，承载进程、实例核验、控制传输、锁、心跳及退出观察 |
+| 应用与服务宿主 | 组装公开 Runner 客户端、端口和 Task 存储，承载进程、实例核验、控制传输、锁、心跳及退出观察 |
 | SQLite 存储 | 保存唯一业务状态，核验身份、前值、版本和唯一约束后原子提交 |
 
 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 TaskDelivery 分别表达不同事实。SteerLine 通过固定 Runner CLI 与执行后端协作；Runner 的进程、会话和仓库事实属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runner 状态投影、UI 缓存和诊断日志都不能成为第二业务权威。
@@ -27,7 +27,7 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 ## 执行与交付
 
-领取时冻结任务契约、仓库/base、执行配置及原身份。中心在外部调用前保存意图，后端返回现场事实和回执；身份或结果不确定时沿原请求对账，不盲重发、不切换后端或派替代 worker。worker 在同一任务的原会话中处理实现和反馈；中心管理下文 development/v3 的固定步骤，测试、审查和修复要求仍由任务 Spec/Plan 决定，不增加自动修复轮数或通用编排。
+领取时冻结任务契约、仓库/base、执行配置及原身份。中心在外部调用前保存意图，后端返回现场事实和回执；身份或结果不确定时沿原请求对账，不盲重发、不切换后端或派替代 worker。worker 在同一任务的原会话中处理实现和反馈；Runner 管理 development/1 或 development-audited/1 的步骤与审计修复预算；SteerLine 选择预设并按公开观察展示，不重建执行状态机。
 
 不同任务可以人工并行，同一任务可人工比较多个独立候选。候选各有自己的会话、工作区、分支、PR 与反馈，Task 只接受一个核验过的交付。产品不提供单候选放弃操作；Task 丢弃与执行停止分别记录。
 
@@ -51,4 +51,4 @@ Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和 Ta
 
 ## Worker 分步流程
 
-当前开发流程 `development/v3` 在现有 worker 内用普通代码定义 `implement.execute → implement.report → publish → [publish.report] → await_merge → delivered`；它与配置中的 `worker-flow-v2` 工作流协议是不同版本轴。实现正文自由输出，报告与发布使用严格结果；合法发布结果直接推进；发布结果格式错误时只增加一次 publish.report，禁止重做发布动作。业务模型轮次共用原会话/Attempt。WorkflowRun 的 `status/flow_ref/step_id` 是唯一业务状态权威，Execution.Status 保留原生事实。结果、转移与下一输入意图同事务提交；adapter 只提供规范事实/能力，不解析业务 JSON 或选择下一步。PR 归属与实际合并经 provider 核验，不冻结候选 SHA 或比较阶段成果快照；真实合并仍走唯一 TaskDelivery。完整契约见[统一 PR 流程](spec/worker-pr-flow.spec.md)，原 #84 的[分步 Spec](spec/worker-staged-flow.spec.md)与[验收记录](acceptance/worker-staged-flow.md)保留历史追溯。
+当前工作流归独立 Runner，普通 development/1 与审计 development-audited/1 分别选择。Runner 管理实现、报告、审计、修复与发布；SteerLine 在候选事务冻结原预设和提交，消费公开观察，核验合并后提交唯一 TaskDelivery。workflow 版本、CLI 协议和 Task 的 worker-flow-v2 是不同版本轴。冻结边界见[协作 Spec](spec/runner-collaboration.spec.md)，迁出前 development/v3 的[流程契约](spec/worker-pr-flow.spec.md)保留历史追溯。

@@ -30,7 +30,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, SourceCommit, SourceDirty string }
+type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, SourceCommit, SourceDirty, ExecutionModel, AuditModel string }
 type Scenario struct {
 	LiveProof        *testfeedback.LiveDeliveryProof
 	bodyFinishedAt   time.Time
@@ -47,6 +47,7 @@ type Scenario struct {
 }
 
 type Project struct {
+	AuditObservations                                                                 map[string]string
 	RemoteCleanupFailed                                                               bool
 	RunnerCleanupFailed                                                               bool
 	Scenario                                                                          *Scenario
@@ -103,8 +104,11 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" {
+	if id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
 		timeout = 10 * time.Minute
+	}
+	if id == "workflow.local-codex-audited" {
+		timeout = 20 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}
@@ -605,6 +609,13 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 		}
 		if c.Projection == nil {
 			return false, nil
+		}
+		if p.Scenario.ID == "workflow.local-codex-audited" {
+			p.observeAuditedProduct(c, false)
+			if c.Projection.Status == "blocked" || c.Projection.Status == "failed" {
+				p.Record("blocked", snap)
+				p.Scenario.t.Fatal("audited Run blocked: ", c.Projection.Diagnostic)
+			}
 		}
 		if phase == "completed" {
 			return c.Participation == "completed" && len(snap.Runner.Graph.Deliveries) == 1, nil

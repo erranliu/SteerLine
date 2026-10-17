@@ -2,6 +2,7 @@ package query
 
 import (
 	"encoding/json"
+	model "github.com/erranliu/SteerLine/internal/execution/model"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -13,8 +14,8 @@ import (
 func CandidateSummary(c runnerstate.Candidate) api.WorkflowSummary {
 	var input runnercontract.RunInput
 	_ = json.Unmarshal(c.Submit.Input, &input)
-	v := api.WorkflowSummary{WorkflowRunID: c.ID, TaskID: c.TaskID, CandidateNumber: c.Number, CreatedAt: c.CreatedAt, FlowRef: input.Workflow.ID, Participation: c.Participation, SubmissionStatus: c.SubmitState, StopRequested: c.StopRequested, WorkflowStatus: runnerstate.ObservedStatus(c),
-		ExecutionProfile: &api.ExecutionProfileSummary{ID: c.ProfileID, Host: input.Execution.Target.Kind, Agent: input.Execution.Adapter}}
+	v := api.WorkflowSummary{WorkflowRunID: c.ID, WorkflowVersion: input.Workflow.Version, ExecutionID: c.RunID, TaskID: c.TaskID, CandidateNumber: c.Number, CreatedAt: c.CreatedAt, FlowRef: input.Workflow.ID, Participation: c.Participation, SubmissionStatus: c.SubmitState, StopRequested: c.StopRequested, WorkflowStatus: runnerstate.ObservedStatus(c),
+		ExecutionProfile: profileOfCandidate(c, input)}
 	if c.Projection != nil {
 		v.WorkflowStage = c.Projection.Step
 	}
@@ -35,4 +36,9 @@ func RunnerHistory(candidates []runnerstate.Candidate) api.HistorySummary {
 		}
 	}
 	return v
+}
+
+func profileOfCandidate(c runnerstate.Candidate, input runnercontract.RunInput) *api.ExecutionProfileSummary {
+	v := Profile(*model.RunnerProfileDisplay(c.ProfileID, c.ProfileName, c.ProfileDigest, input))
+	return &v
 }

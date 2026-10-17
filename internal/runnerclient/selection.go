@@ -63,5 +63,6 @@ func (s Selection) Open(ctx context.Context, stateDir string, timeout time.Durat
 	if err := VerifyExecutable(s.Executable, s.SHA256); err != nil {
 		return Client{}, Version{}, err
 	}
+	client.BuildVersion, client.ResourceDigest = version.Version, version.ResourceDigest
 	return client, version, nil
 }

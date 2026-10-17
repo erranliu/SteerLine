@@ -6,7 +6,7 @@
 
 L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)，本项目入口见 [测试总入口](../../docs/testing.md)。下面按当前实际登记级别列出测试内容。
 
-[suites.json](suites.json)是机器执行登记的唯一来源，登记九项（L2 两项、L3 三项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
+[suites.json](suites.json)是机器执行登记的唯一来源，登记十项（L2 两项、L3 四项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
 
 ### L2：最小核心流程
 
@@ -19,13 +19,14 @@ L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](..
 
 ### L3：可并行的不同流程
 
-以下均为 controlled，使用真实 SteerLine/Git/SQLite 和公开 Runner/PR fixture；每项拥有独立临时 home、repo、数据库、端口、provider 和证据。三个测试均允许并行。选 recovery/runtime 两包时并行启动两包、各包内部串行；只选 runtime 时包内最多二项并行，总预算二。
+recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runner/PR fixture；每项拥有独立临时 home、repo、数据库、端口、provider 和证据。三个 controlled 测试均允许并行。选 recovery/runtime 两包时并行启动两包、各包内部串行；只选 runtime 时包内最多二项并行，总预算二。workflow 为显式选择的 live 专项，使用固定真实 Runner 和本次 SteerlineTest 分支。
 
 | 场景 ID | 测试内容与主要断言 | 相对其他场景的主要覆盖维度 |
 | --- | --- | --- |
 | `recovery.waiting-merge-restart` | PR 待合并时重启 SteerLine，保留原候选/Run/请求及公开投影，不新增业务输入、不提前释放后继；随后合并并完成唯一交付。 | 在 L2 交付骨架中加入 SteerLine 重启，验证持久化事实和调用方连续性。 |
 | `runtime.service-lifecycle` | 中文/空格路径和无关 cwd 下生成启动器；创建任务、核对精确宿主身份、执行正常控制、停止并核对逐项目结算，再启动并确认新实例和原任务事实，最后正常停止。 | 单 home 的正常宿主生命周期，不注入陈旧身份/配置/锁冲突。 |
 | `runtime.dual-home-operation` | 两个独立 home 同时在线，使用不同请求分别 discard 不同任务；核对持久化结果、另一项目/provider 不变、无执行候选、原实例不变，最后停止两者。 | 多 home 合法并存及独立操作，不做同请求 ID 重放。 |
+| `workflow.local-codex-audited` | live：两种显式模型走 development-audited/1，实现、两项审计、发布与真实 PR 合并、唯一交付及后继 ready 未启动；从正式产品详情核对冻结预设、材料/摘要、各轮模型、审计来源，从任务历史核对候选/Runner Run 及 workflow；保留响应证据。 | 审计 workflow 的产品接线；须先通过空闲 I1 与 controlled gate，不归 full-L2，不重验 Runner 故障矩阵。 |
 
 本项目按规范维护上表的独有覆盖维度；并行资源声明涵盖 home、repo、数据库、端口、可变构建输出、provider 和清理所有权。
 
@@ -47,7 +48,7 @@ L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](..
 通用要求见 [测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md#l2l3l4-内容清单)，本项目具体落地如下：
 
 - 新增、删除、改级、改环境或调整主要断言时，在同一变更中同步场景实现、manifest、本节内容和 `cmd/test-feedback` 的相关选择/并行/证据校验；当前不支持的级别须先落实执行能力。
-- 退役 ID、跨级选择由 `test-feedback` 明确拒绝；L3/L4 只接受 controlled，live 仅为完整 L2 的一部分。
+- 退役 ID、跨级选择由 `test-feedback` 明确拒绝；L3 live 仅允许精确选择 workflow.local-codex-audited，L4 只接受 controlled。
 - 运行器按 manifest 选择、冻结并枚举测试，核对实际执行、非零匹配、终态和清理；[e2e_test.go](../../cmd/test-feedback/e2e_test.go)另核对本文表格中的 ID/级别与 manifest 一致且每项只登记一次。语义正交性及具体断言仍需人工代码审查。
 - Plan 引用稳定 ID 与专属验收项，实际通过/失败及日志位置写入 `docs/acceptance/`；内容清单不维护实时测试结果。证据统一为 summary.json 和 `scenarios/<id>/scenario.json`，详情见后文。
 
@@ -60,6 +61,11 @@ go run ./cmd/test-feedback -level=L2
 # 从有 Job 约束的工具进程发起时，复用仓库独立进程启动上下文
 ./scripts/test-l2.ps1 -SteerRunnerExe 'C:/Tools/SteerRunner/steerrunner.exe'
 go run ./cmd/test-feedback -level=L3 '-suite=recovery,runtime' -env=controlled
+$env:STEERLINE_AUDIT_EXECUTION_MODEL = 'gpt-6-luna'
+$env:STEERLINE_AUDIT_MODEL = 'gpt-6.1-sol'
+go run ./cmd/test-feedback -level=L3 -suite=workflow -scenario=workflow.local-codex-audited -env=live
+# Windows 工具 Job 下，使用同一隔离入口的独立进程包装
+./scripts/test-audited-workflow.ps1 -SteerRunnerExe 'C:/Tools/SteerRunner/steerrunner.exe' -ExecutionModel gpt-6-luna -AuditModel gpt-6.1-sol
 go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled
 # 精确选择边界子集；不能跨级或零匹配
 go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled '-scenario=runtime.path-isolation,runtime.dual-home-isolation'
@@ -70,7 +76,7 @@ go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled '-scenario=r
 ./scripts/test-runtime-isolation.ps1
 ```
 
-L2 固定先 gate 后 live，不能按场景绕开 gate。gate 的执行/证据/清理任一失败，不启动真实阶段；gate-only 不等于 full-L2。L3/L4 支持逗号多选 suite/scenario，必须显式选择 suite 和 controlled；子集报告为 selected-L3/selected-L4。已退役 ID、Orca chain、native 环境直接拒绝。具体总入口见 [docs/testing.md](../../docs/testing.md)。
+L2 固定先 gate 后 live，不能按场景绕开 gate。gate 的执行/证据/清理任一失败，不启动真实阶段；gate-only 不等于 full-L2。L3/L4 controlled 支持逗号多选 suite/scenario；子集报告为 selected-L3/selected-L4。L3 审计 live 在建现场前要求显式 EXE 和两个不同模型，执行 effort medium、审计 high；为两项审计及既有修复预算留出 20 分钟业务窗口，清理单独有界。阶段命令通过 Runner 公开 prompt_overrides 设置，业务 Spec/Plan 描述产物，不要求审计倒改历史流程。已退役 ID、Orca chain、native 环境直接拒绝。具体总入口见 [docs/testing.md](../../docs/testing.md)。
 
 ## 真实 L2
 

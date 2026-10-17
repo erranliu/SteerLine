@@ -55,16 +55,13 @@ func (r *projectRunner) start(ctx context.Context, g RunnerExecutionConfig, runD
 	}
 	if err == nil {
 		for _, profile := range g.Profiles {
-			if e := catalog.ValidateExecution(profile.Execution); e != nil {
-				err = fmt.Errorf("Runner profile %s: %w", profile.ID, e)
-				break
-			}
-			if e := catalog.ValidateWorkflow(profile.Workflow); e != nil {
+			if e := catalog.ValidateConfiguration(profile.Execution, profile.Workflow); e != nil {
 				err = fmt.Errorf("Runner workflow %s: %w", profile.ID, e)
 				break
 			}
 		}
 	}
+	cli.InstanceID = info.InstanceID
 	r.client, r.info = cli, info
 	// A rejected startup owns only a daemon absent before this attempt. Keep
 	// the existing request IDs and never stop a previously ready daemon here.

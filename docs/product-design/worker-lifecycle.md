@@ -2,7 +2,7 @@
 
 Worker 执行域统一管理工作区准备、代理初始化、输入投递、轮次观察、结果结算和资源恢复。每个节点都必须说明正常出口、异常事实、允许的动作和停止条件；平台适配器提供证据，不能自行决定重跑任务或推进业务步骤。
 
-本文是这些规则的长期维护入口。下文“统一设计”定义后续实现应遵循的行为；[当前实现与缺口](#当前实现与缺口)区分已有能力与待补能力，不表示完整流程已经实现或验收。当前开发流程以 [PR 流程契约](../spec/worker-pr-flow.spec.md)的 `development/v3` 为准。本文不启动实现任务、不修改已冻结执行，也不改变安装现场。
+本文是这些规则的长期维护入口。下文“统一设计”定义后续实现应遵循的行为；[当前实现与缺口](#当前实现与缺口)区分已有能力与待补能力，不表示完整流程已经实现或验收。当前流程由 Runner 的 development/1 或 development-audited/1 执行，调用边界见[协作契约](../spec/runner-collaboration.spec.md)；[PR 流程契约](../spec/worker-pr-flow.spec.md)保留迁出前来源。本文不启动实现任务、不修改已冻结执行，也不改变安装现场。
 
 迁出前的三层职责重构已按 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)完成 Workflow、ReliableExecution 和 ExecutionAdapter 拆分，保持现有行为；初始化失败重试等新增能力另行实施。当时规则归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；当前执行实现归独立 SteerRunner，历史实施证据以[专属验收](../acceptance/worker-three-layer.md)为准。
 
@@ -290,6 +290,21 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ## 当前实现与缺口
 
+### 协作边界与多 Workflow 接入（2026-10-17）
+
+[协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)已按用户授权实施，实跑与待验范围登记在任务验收。SteerLine 保存执行预设与原提交；Runner 受理时固定参数/材料/模板，逐轮发送前保存最终输入，原生身份按生命周期绑定并推进 workflow。调用方消费多流程目录、组合 schema、audit_model 和公开审计/材料/请求模型投影。本文中 development/v3 等迁出前流程名不构成 SteerLine 当前执行引擎；当前消费固定 Runner 的 development/1 与 development-audited/1，不改写历史契约或验收。
+
+| 节点 / 异常 / 验证 | 本次实现差异及验证边界 |
+| --- | --- |
+| W01 / E03 / V01、V08 | 区分部署配置、预设、原提交与受理参数/模板；预留同事务固定名称/摘要/请求。固定公开契约后 caller 可先用 fixture 开发，Runner 实际组合 schema/构建才是跨仓联验前置；样例留测试资产，不增生产样例协议 |
+| W08–W14 / E04、E07 / V03、V04、V06、V08 | 逐轮结果/授权确定后再保存完整 prompt/model/来源，已存输入恢复不重渲染；Session/Turn 不在受理时预填。原 request_id/revision/授权保持，旧/兄弟报告或缺 final 不放行；真实新增字段由同一 N1 经正式产品查询核对，空闲配置查询不能代替 |
+| W15–W16 / E07 / V05 | 审计路由、findings 裁决、修复预算和模型回切由 Runner 原 workflow owner 管理；SteerLine 只选择/显示，不建立本地审计状态机，不新增发布资格或技术重试 |
+| W17–W18 / E04、E05 / V06–V08 | 同构建换预设仅影响重启后新候选；新 Runner 实例只在显式重启 SteerLine、重建 ProjectRuntime 初始化时接纳。旧运行时发现替代实例拒绝新业务输入、保留原绑定，不自动/局部重绑；新运行时准入/客户端/停服结算同源绑定，原 Run/input_digest 保持、旧停止不影响新实例。未结算阻断换构建，新构建只用无旧状态新环境；U1 分别验证旧拒绝和显式重启后新接纳 |
+
+W/E/V 编号及既有异常、重试和输入恢复语义不变；上表明确配置/构建准入和实例归属，不新增重放授权或运行中实例切换入口。不扩展 Orca 支持或复测原生矩阵。V03/V06 补齐实际 CLI expected-instance 围栏（不是只查 status）；W01/W08 在重建准入前只读对账原 Run/请求，冲突不上线，pending 意图撤销、unknown submit/控制仅观察原 ID 且零自动重发。三类变化的完整规则只在协作 Spec 4.2 维护；实施与实际已验/待验结果归[本任务验收](../acceptance/runner-collaboration.md)，上表不代替真实链和资源结算证据。
+
+本文既有“服务换代后自动核验/结算事实”不授权存活的 SteerLine ProjectRuntime 接纳替代 Runner 实例；本次 caller 实例边界仍须显式重启 SteerLine、重建 ProjectRuntime。读取服务状态用于诊断或保留原事实，与接受新实例作为业务/停服目标分别判断。
+
 2026-10-16 [应用与项目生命周期收拢](../spec/application-project-lifecycle.spec.md)已按审计后的范围实施：`ProjectRuntime` 唯一持有最终 store、锁、日志、product/handler 和原 Runner 绑定；actor EndActor 仅提交 stopped/ready=false checkpoint，不拥有 Runner 或 store.Close。进程内 Read/Command/Task 封闭并排空后再关闭资源；本地关闭与原 Runner 结算分别记录，后者未知仍关闭本地资源。本地失败继续保留锁/宿主，不新增恢复入口。只读 catalog 不创建活动目录，Close-before-Start 零启动，pending 结果不冒充成功。旧逐项目 start/run/listener、停止采样及专属回执接线已删除。关联 W01、W08–W14、W17–W18 / E04、E05、E07 / V01、V03、V06–V08；既有原请求、停机重试/最终证明、节点/异常/授权/恢复语义保持；本次差异与自动验证归[专属验收](../acceptance/application-project-lifecycle.md)，不增加 worker 状态机。
 
 2026-10-16 [产品读取、命令入口与 Web 容器重构](../spec/product-read-command-web-refactor.spec.md)已按审计范围实施：caller participation、提交和停止请求显式传到详情/历史，Runner 观察状态由同一纯规则产生，交付标签仍来自 TaskDelivery。命令解析/映射/派发/权威匹配分责，仍沿唯一 registry/记录 owner；Web 连接与原请求对账由对应 hook 持有。关联 W12/W17、V06/V08 的只读呈现与原请求边界，不修改节点/异常矩阵、重试、恢复、停止及交付资格；详情/历史状态混合解释、Web 猜参与和正常派发重复构造映射的缺口已收拢。原生与其他既有未验项不在本轮补验；实际结果归[专属验收](../acceptance/product-read-command-web-refactor.md)。
@@ -325,7 +340,7 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 | Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |
 | 原业务会话恢复 | RecoveryFacts、原请求核验、同 thread 恢复、Orca 原终端重接 | Orca 替代 provider/terminal 的原业务会话恢复仍不可用；业务未知发送禁止重发 |
 | 多项目共进程宿主 | 应用宿主内各项目持独立 actor/锁/实例；应用 v2 直接调用原项目用例；原 worker 停止策略保持 | 聚合停止先关闭全部输入资格，逐项目结算并发布绑定原宿主的私有 shutdown.json；本地关闭未知保留锁，worker 未知但本地已关闭允许原库取证。验证边界及结果见[专属验收](../acceptance/unified-startup.md) |
-| 报告发布与交付 | development/v3、源结果绑定、有限补报、固定 PR 查询、唯一 Delivery；PR 观察保留 pending/answer_saved，原反馈仍走 actor 投递入口（[本机 Web 验收](../acceptance/web-frontend.md)） | 未知发布仍需原事实核验；不以这份设计声明所有故障窗口已有自动恢复 |
+| 报告发布与交付 | Runner development/1 或 development-audited/1、源结果绑定、有限补报、固定 PR 查询、唯一 Delivery；PR 观察保留 pending/answer_saved，原反馈仍走 actor 投递入口（[本机 Web 验收](../acceptance/web-frontend.md)） | 未知发布仍需原事实核验；不以这份设计声明所有故障窗口已有自动恢复 |
 
 实现初始化重试前必须补齐适配器证据：原启动是否真正失败、代理是否退出、是否还存在相关写者、当前就绪状态是否属于这次启动。现有 Orca terminal connected/status 表达的可能只是 PowerShell 宿主状态，不能单凭它证明 Codex 退出或重试安全。缺少公开能力时应明确阻断并列入具体实施步骤，不能仅解析屏幕错误文字后发送命令。
 

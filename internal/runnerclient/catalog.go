@@ -13,16 +13,20 @@ import (
 )
 
 type Capabilities struct {
+	InstanceBinding struct {
+		ExpectedInstanceID bool `json:"expected_instance_id"`
+	} `json:"instance_binding"`
 	NativeSessionViewer struct {
 		Adapters []string `json:"adapters"`
 	} `json:"native_session_viewer"`
-	EnvironmentCheck         *CheckCapabilities `json:"environment_check,omitempty"`
-	EnvironmentCheckSchema   json.RawMessage    `json:"environment_check_schema,omitempty"`
-	EnvironmentCheckFixtures json.RawMessage    `json:"environment_check_fixtures,omitempty"`
-	Protocol                 string             `json:"protocol"`
-	Version                  string             `json:"version"`
-	ResourceVersion          int                `json:"resource_version"`
-	ResourceDigest           string             `json:"resource_digest"`
+	EnvironmentCheck         *CheckCapabilities              `json:"environment_check,omitempty"`
+	EnvironmentCheckSchema   json.RawMessage                 `json:"environment_check_schema,omitempty"`
+	EnvironmentCheckFixtures json.RawMessage                 `json:"environment_check_fixtures,omitempty"`
+	Protocol                 string                          `json:"protocol"`
+	Version                  string                          `json:"version"`
+	ResourceVersion          int                             `json:"resource_version"`
+	ResourceDigest           string                          `json:"resource_digest"`
+	Workflows                []runnercontract.WorkflowChoice `json:"workflows"`
 	Workflow                 struct {
 		ID                    string   `json:"id"`
 		Version               int      `json:"version"`
@@ -30,14 +34,17 @@ type Capabilities struct {
 		PublicationReportStep string   `json:"publication_report_step"`
 	} `json:"workflow"`
 	ConfigurationSchemas struct {
-		Version   int                        `json:"version"`
-		Adapters  map[string]json.RawMessage `json:"adapters"`
-		Providers map[string]json.RawMessage `json:"providers"`
+		Version          int                        `json:"version"`
+		Adapters         map[string]json.RawMessage `json:"adapters"`
+		Providers        map[string]json.RawMessage `json:"providers"`
+		Workflow         json.RawMessage            `json:"workflow"`
+		RunConfiguration json.RawMessage            `json:"run_configuration"`
 	} `json:"configuration_schemas"`
 }
 type Catalog struct {
-	Capabilities        Capabilities
-	adapters, providers map[string]*jsonschema.Schema
+	Capabilities            Capabilities
+	adapters, providers     map[string]*jsonschema.Schema
+	workflow, configuration *jsonschema.Schema
 }
 type noSchemaReads struct{}
 
@@ -56,6 +63,12 @@ func (c Client) Catalog(ctx context.Context, version Version) (*Catalog, error) 
 	}
 	if caps.Protocol != Protocol || caps.Version != version.Version || caps.ResourceVersion != version.ResourceVersion || caps.ResourceDigest == "" || caps.ResourceDigest != version.ResourceDigest || caps.ConfigurationSchemas.Version != 1 {
 		return nil, errors.New("Runner capabilities differ from its selected executable/version")
+	}
+	if !caps.InstanceBinding.ExpectedInstanceID {
+		return nil, errors.New("selected Runner does not publish expected-instance fencing")
+	}
+	if len(caps.Workflows) == 0 || len(caps.ConfigurationSchemas.Workflow) == 0 || len(caps.ConfigurationSchemas.RunConfiguration) == 0 {
+		return nil, errors.New("selected Runner does not publish workflow selection and run configuration contracts")
 	}
 	if caps.EnvironmentCheck != nil {
 		caps.EnvironmentCheck.Schema = caps.EnvironmentCheckSchema
@@ -79,6 +92,31 @@ func (c Client) Catalog(ctx context.Context, version Version) (*Catalog, error) 
 
 func compileCatalog(caps Capabilities) (*Catalog, error) {
 	result := &Catalog{Capabilities: caps, adapters: map[string]*jsonschema.Schema{}, providers: map[string]*jsonschema.Schema{}}
+	seen := map[string]bool{}
+	for _, workflow := range caps.Workflows {
+		key := fmt.Sprintf("%s/%d", workflow.ID, workflow.Version)
+		if workflow.ID == "" || workflow.Version <= 0 || seen[key] || len(workflow.SupportedAdapters) == 0 || len(workflow.PromptSteps) == 0 {
+			return nil, errors.New("Runner workflow catalog is incomplete or duplicated")
+		}
+		seen[key] = true
+	}
+	for _, entry := range []struct {
+		raw    json.RawMessage
+		target **jsonschema.Schema
+		name   string
+	}{
+		{caps.ConfigurationSchemas.Workflow, &result.workflow, "workflow"},
+		{caps.ConfigurationSchemas.RunConfiguration, &result.configuration, "run-configuration"},
+	} {
+		if len(entry.raw) == 0 {
+			continue
+		}
+		schema, err := compilePublicSchema(entry.raw, entry.name)
+		if err != nil {
+			return nil, err
+		}
+		*entry.target = schema
+	}
 	for _, group := range []struct {
 		name   string
 		source map[string]json.RawMessage
@@ -126,18 +164,50 @@ func (c *Catalog) ValidatePublication(input Publication) error {
 	return validateSettings(c.providers, input.Provider, input.Settings)
 }
 func (c *Catalog) ValidateWorkflow(input Workflow) error {
-	w := c.Capabilities.Workflow
-	if input.ID != w.ID || input.Version != w.Version {
-		return errors.New("workflow differs from the selected Runner capabilities")
-	}
-	allowed := map[string]bool{w.PublicationReportStep: true}
-	for _, step := range w.Steps {
-		allowed[step] = true
-	}
-	for step, body := range input.PromptOverrides {
-		if !allowed[step] || body == "" {
-			return errors.New("prompt override requires an advertised workflow step and nonempty body")
+	for _, choice := range c.Capabilities.Workflows {
+		if input.ID == choice.ID && input.Version == choice.Version {
+			return validatePublicValue(c.workflow, input)
 		}
 	}
-	return nil
+	return errors.New("workflow is not advertised by the selected Runner")
+}
+
+func (c *Catalog) ValidateConfiguration(execution ExecutionInput, workflow Workflow) error {
+	if err := c.ValidateWorkflow(workflow); err != nil {
+		return err
+	}
+	return validatePublicValue(c.configuration, struct {
+		Execution ExecutionInput `json:"execution"`
+		Workflow  Workflow       `json:"workflow"`
+	}{execution, workflow})
+}
+
+func compilePublicSchema(raw json.RawMessage, name string) (*jsonschema.Schema, error) {
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(raw))
+	if err != nil {
+		return nil, err
+	}
+	compiler := jsonschema.NewCompiler()
+	compiler.UseLoader(noSchemaReads{})
+	compiler.AssertFormat()
+	uri := "https://steerrunner.invalid/" + name
+	if err := compiler.AddResource(uri, doc); err != nil {
+		return nil, err
+	}
+	return compiler.Compile(uri)
+}
+
+func validatePublicValue(schema *jsonschema.Schema, value any) error {
+	if schema == nil {
+		return errors.New("selected Runner does not publish the required configuration schema")
+	}
+	body, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	v, err := jsonschema.UnmarshalJSON(bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	return schema.Validate(v)
 }

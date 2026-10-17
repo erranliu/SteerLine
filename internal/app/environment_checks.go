@@ -27,6 +27,12 @@ func newEnvironmentCheckPort(c Config, store environmentcheck.Store) *environmen
 		if err := runnerstatepath.Validate(c.RunDir); err != nil {
 			return nil, err
 		}
+		if c.runtimeRunner != nil {
+			if selection != c.RunnerExecution.Runner {
+				return nil, errors.New("environment check belongs to another frozen Runner build")
+			}
+			return *c.runtimeRunner, nil
+		}
 		cli, _, err := selection.Open(ctx, runnerstatepath.Directory(c.RunDir), positiveDuration(c.CommandTimeout, 30*time.Second))
 		return cli, err
 	}

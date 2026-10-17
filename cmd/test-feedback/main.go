@@ -295,7 +295,7 @@ func parseOptions(args []string) (options, error) {
 		if opts.e2eEnv == "" && opts.level == "L2" {
 			opts.e2eEnv = "gated"
 		}
-		if opts.e2eEnv != "controlled" && !(opts.level == "L2" && opts.e2eEnv == "gated") {
+		if opts.e2eEnv != "controlled" && !(opts.level == "L2" && opts.e2eEnv == "gated") && !(opts.level == "L3" && opts.e2eEnv == "live" && opts.suite == "workflow" && opts.scenario == "workflow.local-codex-audited") {
 			return opts, fmt.Errorf("unsupported E2E environment %q", opts.e2eEnv)
 		}
 	default:

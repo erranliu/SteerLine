@@ -1,5 +1,14 @@
 [
   {
+    "id": "workflow.local-codex-audited",
+    "level": "L3",
+    "suite": "workflow",
+    "package": "./tests/e2e/live",
+    "test": "TestWorkflowLocalCodexAudited",
+    "env": "live",
+    "chain": "local-codex"
+  },
+  {
     "id": "smoke.delivery",
     "level": "L2",
     "suite": "smoke",
