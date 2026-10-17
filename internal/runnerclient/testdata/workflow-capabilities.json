@@ -1,0 +1,828 @@
+{
+  "workflows": [
+    {
+      "audit_model_required": false,
+      "description": "Implement, report and publish a verified PR.",
+      "id": "development",
+      "maximum_repair_cycles": 0,
+      "prompt_steps": [
+        "implement.execute",
+        "implement.report",
+        "publish",
+        "publish.report"
+      ],
+      "supported_adapters": [
+        "codex-app-server",
+        "orca-terminal"
+      ],
+      "version": 1
+    },
+    {
+      "audit_model_required": true,
+      "audit_steps": [
+        "audit.spec",
+        "audit.code"
+      ],
+      "description": "Implement, audit Spec and code, repair up to twice, then publish.",
+      "id": "development-audited",
+      "maximum_repair_cycles": 2,
+      "prompt_steps": [
+        "implement.execute",
+        "implement.report",
+        "publish",
+        "publish.report",
+        "audit.spec",
+        "audit.code"
+      ],
+      "supported_adapters": [
+        "codex-app-server"
+      ],
+      "version": 1
+    }
+  ],
+  "configuration_schemas": {
+    "adapters": {
+      "codex-app-server": {
+        "$id": "steerrunner/adapters/codex-app-server/settings/v1",
+        "additionalProperties": false,
+        "properties": {
+          "access_mode": {
+            "default": "sandbox",
+            "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+            "enum": [
+              "sandbox",
+              "full_access"
+            ]
+          },
+          "executable": {
+            "default": "codex.exe",
+            "minLength": 1,
+            "type": "string"
+          },
+          "github_auth": {
+            "additionalProperties": false,
+            "description": "Execution-host GitHub App key reference. Runner requests one repository, contents/PR write only. Never embed a key or token.",
+            "properties": {
+              "app_id": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "installation_id": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "private_key_env": {
+                "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_id",
+              "installation_id",
+              "private_key_env"
+            ],
+            "type": "object"
+          },
+          "model": {
+            "minLength": 1,
+            "not": {
+              "pattern": "[\u0000\r\n]"
+            },
+            "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+            "type": "string"
+          },
+          "reasoning_effort": {
+            "default": "medium",
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max",
+              "ultra"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "orca-terminal": {
+        "$id": "steerrunner/adapters/orca-terminal/settings/v1",
+        "additionalProperties": false,
+        "properties": {
+          "access_mode": {
+            "default": "sandbox",
+            "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+            "enum": [
+              "sandbox",
+              "full_access"
+            ]
+          },
+          "agent_launch": {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "executable": {
+                "default": "codex",
+                "minLength": 1,
+                "type": "string"
+              },
+              "model": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "reasoning_effort": {
+                "enum": [
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max",
+                  "ultra"
+                ]
+              },
+              "runtime_executable": {
+                "description": "Trusted steerrunner-agent executable installed on the execution host; owns host authentication and same-mode native preparation.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "runtime_sha256": {
+                "description": "Optional frozen SHA256 of the execution-host helper; required in qualification configs.",
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "transport": {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "executable": {
+                "default": "orca.exe",
+                "minLength": 1,
+                "type": "string"
+              },
+              "wait_timeout": {
+                "default": "30s",
+                "description": "Go duration, greater than 0 and at most 1m",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "providers": {
+      "command": {
+        "$id": "steerrunner/providers/command/settings/v1",
+        "additionalProperties": false,
+        "properties": {
+          "authentication_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "base_url": {
+            "format": "uri",
+            "type": "string"
+          },
+          "query": {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "executable": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "executable",
+              "args"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "base_url",
+          "query"
+        ],
+        "type": "object"
+      },
+      "gitea": {
+        "$id": "steerrunner/providers/gitea/settings/v1",
+        "additionalProperties": false,
+        "properties": {
+          "authentication_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "base_url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_url"
+        ],
+        "type": "object"
+      }
+    },
+    "run_configuration": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development-audited"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "model": {
+                        "minLength": 1,
+                        "not": {
+                          "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                        },
+                        "pattern": "^\\S(?:.*\\S)?$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "model"
+                    ]
+                  },
+                  "target": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "environment": {
+                        "const": ""
+                      },
+                      "kind": {
+                        "const": "local"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "type": "object"
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report",
+                        "audit.spec",
+                        "audit.code"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "execution": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "adapter": {
+                  "const": "codex-app-server"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/codex-app-server/settings/v1",
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "sandbox",
+                        "full_access"
+                      ]
+                    },
+                    "executable": {
+                      "default": "codex.exe",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "github_auth": {
+                      "additionalProperties": false,
+                      "description": "Execution-host GitHub App key reference. Runner requests one repository, contents/PR write only. Never embed a key or token.",
+                      "properties": {
+                        "app_id": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "installation_id": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "private_key_env": {
+                          "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "app_id",
+                        "installation_id",
+                        "private_key_env"
+                      ],
+                      "type": "object"
+                    },
+                    "model": {
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[\u0000\r\n]"
+                      },
+                      "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+                      "type": "string"
+                    },
+                    "reasoning_effort": {
+                      "default": "medium",
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                        "ultra"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "environment": {
+                      "const": ""
+                    },
+                    "kind": {
+                      "const": "local"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "adapter": {
+                  "const": "orca-terminal"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/orca-terminal/settings/v1",
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "sandbox",
+                        "full_access"
+                      ]
+                    },
+                    "agent_launch": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "default": "codex",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        },
+                        "runtime_executable": {
+                          "description": "Trusted steerrunner-agent executable installed on the execution host; owns host authentication and same-mode native preparation.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "runtime_sha256": {
+                          "description": "Optional frozen SHA256 of the execution-host helper; required in qualification configs.",
+                          "pattern": "^[a-f0-9]{64}$",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "transport": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "default": "orca.exe",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "wait_timeout": {
+                          "default": "30s",
+                          "description": "Go duration, greater than 0 and at most 1m",
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "const": ""
+                        },
+                        "kind": {
+                          "const": "local"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "minLength": 1,
+                          "pattern": "\\S",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "orca_environment"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "environment"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "workflow": {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "else": {
+                "not": {
+                  "required": [
+                    "audit_model"
+                  ]
+                },
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report"
+                      ]
+                    }
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "id": {
+                    "const": "development-audited"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report",
+                        "audit.spec",
+                        "audit.code"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "audit_model"
+                ]
+              }
+            }
+          ],
+          "description": "Audited workflow additionally requires local codex-app-server and an explicit execution.settings.model. Omitted audit effort inherits the normalized execution effort.",
+          "properties": {
+            "audit_model": {
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                  },
+                  "pattern": "^\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                "reasoning_effort": {
+                  "enum": [
+                    "minimal",
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max",
+                    "ultra"
+                  ]
+                }
+              },
+              "required": [
+                "model"
+              ],
+              "type": "object"
+            },
+            "id": {
+              "enum": [
+                "development",
+                "development-audited"
+              ]
+            },
+            "prompt_overrides": {
+              "additionalProperties": {
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "version": {
+              "const": 1
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "execution",
+        "workflow"
+      ],
+      "type": "object"
+    },
+    "version": 1,
+    "workflow": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "not": {
+              "required": [
+                "audit_model"
+              ]
+            },
+            "properties": {
+              "prompt_overrides": {
+                "propertyNames": {
+                  "enum": [
+                    "implement.execute",
+                    "implement.report",
+                    "publish",
+                    "publish.report"
+                  ]
+                }
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "id": {
+                "const": "development-audited"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "prompt_overrides": {
+                "propertyNames": {
+                  "enum": [
+                    "implement.execute",
+                    "implement.report",
+                    "publish",
+                    "publish.report",
+                    "audit.spec",
+                    "audit.code"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "audit_model"
+            ]
+          }
+        }
+      ],
+      "description": "Audited workflow additionally requires local codex-app-server and an explicit execution.settings.model. Omitted audit effort inherits the normalized execution effort.",
+      "properties": {
+        "audit_model": {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "minLength": 1,
+              "not": {
+                "pattern": "[\u0000-\u001f\u007f-\u009f]"
+              },
+              "pattern": "^\\S(?:.*\\S)?$",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "enum": [
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ]
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "enum": [
+            "development",
+            "development-audited"
+          ]
+        },
+        "prompt_overrides": {
+          "additionalProperties": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "version": {
+          "const": 1
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  "instance_binding": {
+    "expected_instance_id": true
+  }
+}

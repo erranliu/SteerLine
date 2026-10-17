@@ -42,6 +42,8 @@ flowchart LR
 
 `runnerstate.ObservedStatus` 统一详情/历史的原观察来源；参与、提交、停止意图分别传到产品 DTO，TaskDelivery 单独产生 winner/loser。`httpapi/command_registry.go` 唯一仲裁，意图、派发、权威查询与原生窗口各有所属文件，环境检查保留专用流程。Web 的三个应用 hooks 分别持有目录选择、连接与原请求副作用，共用原 Api、query cache、journal 和 context。归属与验证见[读取/命令/Web Spec](../spec/product-read-command-web-refactor.spec.md)及[验收](../acceptance/product-read-command-web-refactor.md)。
 
+项目 checkpoint 固定 Runner 构建与 state-dir，运行中的客户端固定本次 instance_id；替代实例只在显式重启 SteerLine、重建 ProjectRuntime 时接纳，旧 stop/settlement 闭包保持原目标。候选事务固定原预设名称/参数摘要/完整信封；公开 workflow/audit/materials/轮次请求模型贯穿 taskrunner → product query/API → Web，历史沿候选原提交读取。组合规则只消费 Runner 自包含 schema。源码与验证见[协作 Plan](../spec/runner-collaboration.plan.md)和[验收](../acceptance/runner-collaboration.md)。
+
 ## 任务交付链
 
 启动先以 Task/图版本校验固定契约和候选共同 base，再在一个事务中领取候选并保存完整 CLI outbox。提交未知时只查原请求；迟到接受仍绑定原 Run，并执行已持久保存的停止义务。公开事件按原身份/游标事务保存，原 final 的正文与 hash 可追溯，日志不作为业务成功事实。

@@ -20,10 +20,13 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	if chain != "local-codex" {
 		s.t.Fatal("unregistered native chain; use Runner's explicit Orca target validation")
 	}
+	if s.ID == "workflow.local-codex-audited" && (s.Run.ExecutionModel == "" || s.Run.AuditModel == "" || s.Run.ExecutionModel == s.Run.AuditModel) {
+		s.t.Fatal("audited models must be explicitly distinct before creating fixtures")
+	}
 	p := s.NewProject(name)
 	p.Chain = chain
 	p.Driver.NativeHome = s.Run.AuthHome
-	if s.ID == "smoke.local-codex" {
+	if s.ID == "smoke.local-codex" || s.ID == "workflow.local-codex-audited" {
 		p.enableGitHub()
 	}
 	codex, err := driver.CodexExecutable("codex")
@@ -40,6 +43,13 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(json.Unmarshal(raw, &catalog))
 	catalog["default_execution_profile"] = chain
 	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 1}}}
+	if s.ID == "workflow.local-codex-audited" {
+		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
+		profile["name"] = "Real E2E audited preset"
+		profile["execution"].(map[string]any)["settings"].(map[string]string)["model"] = s.Run.ExecutionModel
+		profile["workflow"] = map[string]any{"id": "development-audited", "version": 1, "audit_model": map[string]string{"model": s.Run.AuditModel, "reasoning_effort": "high"}}
+		p.AuditObservations = map[string]string{}
+	}
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
 	selection, err := driver.RunnerSelection(s.Run.Runner)
 	s.Must(err)
@@ -89,10 +99,24 @@ git rev-parse HEAD
 `
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "implement.ps1"), []byte(implement), 0600))
 	spec += "In implement.execute, run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once to write, verify and commit the candidate locally. Do not push or invoke publish.ps1 in implement.execute or implement.report. implement.report only summarizes its supplied source facts. publish.ps1 is reserved for the single publish step, which must return the JSON result contract in its native final reply.\n"
+	if s.ID == "workflow.local-codex-audited" {
+		// Keep the business acceptance independent of workflow history. Stage
+		// instructions belong to Runner's published prompt-override contract.
+		spec = "# Audited delivery fixture\n\nCreate result.txt containing exactly `real model delivery` followed by a newline. Verify and commit only result.txt. Do not change other tracked files.\n"
+		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
+		profile["workflow"].(map[string]any)["prompt_overrides"] = map[string]string{
+			"implement.execute": "Implement the bound Spec by running powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once. It writes, verifies and commits only result.txt locally. This step ends after that command. Do not run publish.ps1, push, create a PR or use gh in this step. Give a short factual implementation summary; the Runner will request reporting, audits and publication in separate later turns.",
+			"publish":           "Publish the already committed and audited candidate by running powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 exactly once. Do not implement again. Copy the exact returned https://github.com/erranliu/SteerlineTest/pull/<number> URL into the Runner publication result contract, preserving the repository owner. Return strict publication result JSON in the same final reply.",
+		}
+		s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
+	}
 
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the working branch and create or update its PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks public stage results, real Git delivery and dependency state.\n"), 0600))
+	if s.ID == "workflow.local-codex-audited" {
+		s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Audited fixture plan\n\nRead the bound Spec. Use implement.ps1 to write, verify and commit result.txt. The Runner owns workflow sequencing, report generation, audit and publication. Do not edit fixture scripts.\n\n## Test plan\n\nVerify the committed result.txt matches the exact requested content and newline; no additional business implementation is required.\n"), 0600))
+	}
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
@@ -113,7 +137,11 @@ func LiveDelivery(s *Scenario, chain string) {
 	p.Claim("a")
 	open := p.WaitPhase("waiting_pr_merge")
 	p.AssertRunnerBinding(open)
-	p.AssertStagedFlow(open)
+	if s.ID == "workflow.local-codex-audited" {
+		p.observeAuditedProduct(open.Runner.Candidates[0], true)
+	} else {
+		p.AssertStagedFlow(open)
+	}
 	p.Record("open", open)
 	c := open.Runner.Candidates[0]
 	pr := open.Helper.PR
@@ -142,6 +170,9 @@ func LiveDelivery(s *Scenario, chain string) {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &selection))
 	proof := &testfeedback.LiveDeliveryProof{RunnerVersion: selection.Runner.Version, RunnerSHA256: selection.Runner.SHA256, RunID: c.RunID, CandidateID: c.ID, FinalSources: sources(s, p, c.ID, c.RunID), ArtifactCommit: pr.HeadRevision, Artifact: artifact, PRURL: facts.URL, Repository: facts.Repository, Base: facts.BaseBranch, Head: facts.HeadBranch, HeadSHA: facts.HeadRevision, Merged: facts.Merged, DeliveryCount: len(done.Runner.Graph.Deliveries)}
+	if s.ID == "workflow.local-codex-audited" {
+		proof.Audited = &testfeedback.AuditedWorkflowProof{ExecutionModel: s.Run.ExecutionModel, AuditModel: s.Run.AuditModel, Stages: p.AuditObservations}
+	}
 	if facts.MergeCommit != nil {
 		proof.MergeSHA = *facts.MergeCommit
 	}

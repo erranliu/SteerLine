@@ -6,13 +6,13 @@ SteerLine 尚未发布。项目显式使用 task_authority=native 与 workflow_p
 
 ## 权威与身份
 
-SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery 和自身服务 checkpoint。schema 22 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。产品仍使用的纯值声明不构成执行写权。
+SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery 和自身服务 checkpoint。schema 23 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。产品仍使用的纯值声明不构成执行写权。
 
 Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、原生资源、问题、输入、恢复与停止事实。SteerLine 不读该库、原生 codec、IPC 或私有日志；只消费固定 EXE 公布的 CLI/Run/事件。
 
 项目以规范化 Git common-dir 标识；数据库另有稳定 database_id 与 database_revision。Task version、authority_version、graph_revision、候选 revision 和 Runner revision 分属不同权威，不能互相代替。读页面/资格/候选在同一 Task 库事务中采样；服务进程活性与 checkpoint 内容分别核实。
 
-候选 ID 与 Runner Run ID 分开。候选原子领取时固定完整 Spec/Plan 引用、配置、目标、原 request_id/body 与共同 base；响应丢失只查原请求。接受后 Run、输入摘要、分支和 PR 绑定不能替换。候选参与状态不冒充 Runner 原生执行状态。
+候选 ID 与 Runner Run ID 分开。候选原子领取时固定完整 Spec/Plan 引用、原预设 ID/名称/参数摘要、原执行/流程配置、目标、原 request_id/body 与共同 base；响应丢失只查原请求。项目 checkpoint 固定 Runner EXE/version/SHA/resource_digest/state-dir，候选同时记录该构建绑定；instance_id 仅属于本次 ProjectRuntime，不永久写死到 Run。接受后 Run、输入摘要、分支和 PR 绑定不能替换。候选参与状态不冒充 Runner 原生执行状态。
 
 ## 固定契约与领取
 
@@ -46,7 +46,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 | 格式/权威 | 当前值或归属 | 源码 |
 | --- | --- | --- |
-| Task SQLite | schema 22 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| Task SQLite | schema 23 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
 | Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
 | TaskContract / DAG | Task 自有纯值 | [task/model](../../internal/task/model) |

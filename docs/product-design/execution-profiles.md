@@ -8,7 +8,9 @@
 
 本机方案使用 `codex-app-server` 和 `target.kind=local`，settings 包含固定 native executable、model 和 reasoning_effort。远端方案使用 `orca-terminal`、`target.kind=orca_environment` 与明确的 environment 名称；transport 指定 Orca CLI，agent_launch 使用公开 executable/args/model/reasoning_effort，并显式固定执行主机的 `runtime_executable`（可信 steerrunner-agent）和 `runtime_sha256`。GitHub 业务不能仅靠 Orca 默认 TUI 启动；Runner 需先取得 helper 的同权限认证准备回执。执行主机须已注册匹配仓库，并取得固定 base commit；身份或权限缺证时阻断。接线与本次验证见[专属验收](../acceptance/orca-runtime-wiring.md)。
 
-默认 workflow 为 development/1。Runner 内嵌流程、提示词与 schema，原生代理在 implement、report、publish 的独立输入中执行；Spec/Plan、原请求、执行目标与提示词均在接受时冻结。定制正文仍须保留固定材料和机器结果契约。SteerLine 只选择公开方案，不解释原生终端文本推进业务。
+普通 workflow 为 development/1，审计预设显式选择 development-audited/1，并提供 workflow.audit_model；Runner 发布 workflows、workflow schema 和自包含的 run_configuration 组合 schema，caller 不补执行默认值。Runner 内嵌流程、提示词与 schema，原生代理在 implement、report、publish 的独立输入中执行。受理时固定 Spec/Plan 材料、规范化参数与提示词模板/覆盖正文；每轮最终输入在结果/反馈与授权确定后、发送前保存，恢复保留原正文和模型参数，不在受理时预生成未来轮次或原生身份。定制正文仍须保留固定材料和机器结果契约。SteerLine 只选择公开方案，不解释原生终端文本推进业务。
+
+[协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)定义预设/提交/受理数据及审计 workflow 接入。其 4.2 分开规定同构建换预设、服务换代与更换构建：原 Run 参数不变；新 Runner 实例仅在用户显式重启 SteerLine、重建 ProjectRuntime 的初始化时核验接纳，旧运行时发现替代实例拒绝新业务输入，不自动重新绑定。未结算对象阻断换构建，本期新构建使用无旧执行状态的新环境。调用方已实现上述准入和多 workflow 展示；构建 pin 持久在项目 checkpoint，候选冻结原名称/参数摘要/完整提交，参数摘要仅覆盖 execution + workflow 的有序对象 JSON；不支持升级/接管旧现场。实际结果归[专属验收](../acceptance/runner-collaboration.md)。
 
 ## 权限与登录
 
@@ -20,7 +22,7 @@ Git、Codex、Orca 和原有登录属于执行环境。生成调试包不复制 
 
 ## 运行、停止与恢复
 
-同一个 Runner EXE 提供短命 CLI 和常驻服务。SteerLine 显式启动或连接项目 state-dir 对应服务，通过 CLI 读写公开 Run/事件；只读查询不会启动服务。项目运行目录下 `runner/` 归 Runner 单写，SteerLine 只保存候选绑定、原 CLI outbox 和公开事件投影。
+同一个 Runner EXE 提供短命 CLI 和常驻服务。SteerLine 显式启动或连接项目 state-dir 对应服务，通过 CLI 读写公开 Run/事件；只读查询不会启动服务。Runner 状态归完整应用 run-dir 派生的独立短目录（Windows 为卷根 `slr/<摘要>`），由 Runner 单写，具体布局见[接入说明](../integration/steerrunner.md)；SteerLine 只保存候选绑定、原 CLI outbox 和公开事件投影。
 
 accepted 仅表示请求已持久受理。未知结果查询原 request_id；重启不重新发送旧答案、反馈或 resume。回答和恢复须使用当前公开 revision 的新授权。Task 终态的停止义务留在 SteerLine，原 Run 停止与原生资源停止分别取证；不能用父进程退出、终端空闲或服务停服回执代替执行停止。
 

@@ -141,6 +141,11 @@ func (c Controls) finish(ctx context.Context, command ports.CommandRecord, recei
 func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api.ControlPayload, receipt *api.ControlReceipt) error {
 	switch req.Action {
 	case "runner_reply", "runner_resume":
+		if c.Tasks.Admit != nil {
+			if err := c.Tasks.Admit(ctx); err != nil {
+				return failure("runner_unavailable", err.Error())
+			}
+		}
 		candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID)
 		if err != nil {
 			return err

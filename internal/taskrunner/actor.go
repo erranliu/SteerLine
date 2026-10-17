@@ -3,6 +3,7 @@ package taskrunner
 import (
 	"context"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"sync"
 	"time"
 
@@ -19,6 +20,7 @@ type ActorStore interface {
 	SaveCheckpoint(context.Context, storageports.ServiceCheckpoint) (storageports.ServiceCheckpoint, error)
 }
 type ActorOptions struct {
+	RunnerBuild           *runnercontract.BuildPin
 	NativeSessionAdapters []string
 	Tasks                 *Service
 	Store                 ActorStore
@@ -56,7 +58,7 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	}
 	at := time.Now().UTC()
 	checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: options.Repository, UpdatedAt: at, HeartbeatAt: at,
-		Service: storageports.CheckpointServiceState{Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
+		Service: storageports.CheckpointServiceState{RunnerBuild: options.RunnerBuild, Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
 	viewerAvailable := false
 	for _, adapter := range options.NativeSessionAdapters {
 		if adapter == "codex-app-server" || adapter == "orca-terminal" {

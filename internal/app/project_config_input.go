@@ -4,6 +4,7 @@ import (
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
 )
 
 // ProjectConfigInput is the app-owned on-disk project format. Runtime ports,
@@ -37,6 +38,7 @@ type Config struct {
 	RunnerExecution RunnerExecutionConfig `json:"-"`
 	ConfigPath      string                `json:"-"`
 	runtimeHost     *host.Config
+	runtimeRunner   *runnerclient.Client
 
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`
 
