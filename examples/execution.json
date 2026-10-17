@@ -60,10 +60,12 @@
             "wait_timeout": "30s"
           },
           "agent_launch": {
+            "runtime_executable": "C:/Tools/SteerRunner/steerrunner-agent.exe",
+            "runtime_sha256": "REPLACE_WITH_EXECUTION_HOST_HELPER_SHA256",
             "executable": "codex",
             "model": "gpt-6-luna",
             "reasoning_effort": "medium",
-            "args": []
+            "args": ["--no-daemon"]
           }
         }
       },

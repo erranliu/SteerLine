@@ -28,6 +28,10 @@ W18 停服取证修复：停机前的候选投影不能证明停机后的资源�
 
 ## 职责与规则归属
 
+Orca 远端认证接线（2026-10-17）：Runner 主干 `d4969d0` 已提供可信执行主机 helper，W03/W05–W07 的认证、同权限无模型预检与准备回执由它维护；缺 `agent_launch.runtime_executable` 仍在零业务输入时拒绝。SteerLine 调试生成器补齐 helper 路径/SHA 的显式配置与早期缺参拒绝，不更改节点、异常、重试或恢复授权。V01/V02/V05/V07 的具体接线验证见[专属验收](../acceptance/orca-runtime-wiring.md)；既有安装候选不改绑、不自动恢复。下表历史缺口不代替该固定 Runner 的实际能力与验收范围。
+
+本次 W16/V05 实测另发现 broker 拒绝发布查询中的 `mergeCommit { oid }`。只读字段白名单由 Runner 修复，SteerLine 不绕过认证或替 worker 执行查询；旧失败保持 blocked，补丁 helper 以新 SHA/新包实测。任务节点与输入/重试规则不变，结果仍登记上述专属验收。
+
 W02/W18 的调用方目录布局：SteerLine 用本地卷根 `slr/<128-bit base32 key>` 绑定完整应用 run-dir，避免深 home 超出 Runner 的认证 socket 长度限制。所有启动/检查/查询/停服证明共用此路径；查询不创建，启动才准备私有目录，别名拒绝。重置先核实原资源停止，再只删所属摘要目录。节点、异常分类、重试和恢复授权均不变，旧 Run 不迁移或改绑。V01/V06/V07 的本次增量为真实 socket、跨 home/项目隔离及原目录停止/清理；[专属验收](../acceptance/runner-short-state-path.md)记录边界和结果。
 
 原会话查看不参与 W01–W18 的执行推进：拆分 Runner 后补回公开 CLI，由原执行 owner 在既有 worker gate 内校验原身份和只读 thread/workspace，再开独立窗口；零新服务/会话/业务输入，原节点与 E01–E07 不变。验证映射及当前已验/待验范围见[专属验收](../acceptance/native-session-viewer.md)。
@@ -316,7 +320,7 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 | 持久化副作用和并发 | ReliableExecution 的事实/身份/对账规则、actor 生命周期 Operation、异步回执提交、原身份/版本守卫、first-wins | 按本矩阵检查各入口是否共享同一异常分类，不新增平行规则 |
 | 工作区和环境准备 | 固定工作区意图、准备总期限、blocker、nonce 与探针核验 | 部分现场或后端没有准备记录；不能默认所有执行已具备统一准备路径 |
 | Runner 状态目录 | SteerLine 以完整应用 run-dir 派生本地卷根短目录；查询、准备、停服及重置共用；路径/别名/隔离已做定向验证 | 旧目录不迁移；安装现场原候选保持旧绑定。当前部署与验证状态见[短目录验收](../acceptance/runner-short-state-path.md) |
-| Orca 显式启动 | 原唯一终端、启动操作、LaunchAttempted/Accepted/Confirmed、未知发送不重发 | `launchAgent` 在识别到代理名称时即确认启动；尚无完整初始化完成证据、失败收敛、有限启动重试和安全采纳人工重启的通用规则 |
+| Orca 显式启动 | 原唯一终端、启动操作、未知发送不重发；Runner `d4969d0` 的可信 helper 路径会提交绑定原 app-server/session、权限、配置、helper SHA 和期限的准备回执后才输入 | SteerLine 调试接线见[专属验收](../acceptance/orca-runtime-wiring.md)；缺 helper 仍拒绝。有限启动重试及替代 provider/terminal 的原会话恢复不由本次接线新增 |
 | Runner 跨仓交接 | 新 application 对 accepted+ResourcePending 继续核验原 Operation；准备超时撤销输入，迟到就绪不自动续跑；caller 重启撤回未消费授权，未知旧控制只查原 ID | SteerLine app/查询已切换到 taskrunner/runnerbridge/runnerclient，旧执行 owner 和无消费者端口已删除；实际原生交付/恢复范围按专属验收判断，远端未验/失败不因源码清理转为通过 |
 | Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |
 | 原业务会话恢复 | RecoveryFacts、原请求核验、同 thread 恢复、Orca 原终端重接 | Orca 替代 provider/terminal 的原业务会话恢复仍不可用；业务未知发送禁止重发 |
