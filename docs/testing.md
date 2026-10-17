@@ -1,5 +1,7 @@
 # 测试总入口
 
+架构解耦第四轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round4.md)：Task 交付证据纯校验、原子回滚/唯一交付/后继释放、原回执重放及身份冲突拒绝，另核对 Task 纯值与已收口文件的依赖守卫。纯模型测试沿 L1 quick-rules；新增服务重放用例纳入 quick-execution，所有权守卫纳入 quick-execution-boundary。最新主干集成后补测受影响的读取/投影和带标签消费者编译，不运行全量或真实模型。
+
 架构解耦第三轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round3.md)：会话原身份/游标/JSON 字节预算、正文摘要及 UTF-8 分页、能力字段投影、活动预算溢出零推进、同事务事件流与取消/异常关闭，以及 SQLite/存储端口禁止全部产品层依赖。新增查询测试沿 L1 quick-rules，真实 SQLite 读取/资源验证沿现有 SQLite 测试，守卫反例沿 quick-execution-boundary；不运行全量或真实模型。
 
 架构解耦第二轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round2.md)：历史/候选 DTO 纯投影、并发写入与事务结束后的原采样一致性、候选分页/预算、交付回滚/唯一交付/停止义务/后继释放，以及去掉 SQLite 查询层例外后的依赖守卫。新增查询测试沿 L1 quick-rules、现有读取矩阵沿 quick-owner-unified-startup、守卫反例沿 quick-execution-boundary；E2E 读取夹具同步事实字段，只补定向夹具测试和带标签编译，不以此声称完整 L2/L3 通过。

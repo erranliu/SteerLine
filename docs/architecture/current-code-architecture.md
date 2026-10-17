@@ -1,6 +1,6 @@
 # 当前代码架构
 
-核对日期：2026-10-17；源码基线：`2fb07ba1e74dfe6b16326d7ed462da9c57a5dec0` 加本次工作区三轮解耦变更。本页按生产代码与 `go list` 的实际依赖维护，区分进程调用、Go 包依赖和资源所有权。原始核对见[架构解耦审视](../acceptance/architecture-decoupling-review.md)，实现与验证见[第一轮](../acceptance/architecture-decoupling-round1.md)、[第二轮](../acceptance/architecture-decoupling-round2.md)和[第三轮验收](../acceptance/architecture-decoupling-round3.md)；其余建议尚未实施。
+核对日期：2026-10-17；本次四轮解耦以 `2fb07ba1e74dfe6b16326d7ed462da9c57a5dec0` 起步，已集成最新主干 `11be2af5` 的 Runner 协作与空壳清理。本页按生产代码与 `go list` 的实际依赖维护，区分进程调用、Go 包依赖和资源所有权。原始核对见[架构解耦审视](../acceptance/architecture-decoupling-review.md)，实现与验证见[第一轮](../acceptance/architecture-decoupling-round1.md)、[第二轮](../acceptance/architecture-decoupling-round2.md)、[第三轮](../acceptance/architecture-decoupling-round3.md)和[第四轮验收](../acceptance/architecture-decoupling-round4.md)；其余建议尚未实施。
 
 SteerLine 保留 Task/DAG、候选参与关系与唯一 TaskDelivery，执行已迁到独立 SteerRunner。两者只通过固定 EXE 的 `steerrunner-cli/v1` 协作；SteerLine 不导入 Runner Go 包，不读取其 codec、IPC、数据库或原生日志。当前真机验收范围仅 Windows/amd64 本机 Codex，Orca 适配器属于保留但未验能力，见[Runner 接入](../integration/steerrunner.md)。Web 为唯一交互前端，TUI 已按[退役决策](../acceptance/tui-retirement.md)移除。
 
@@ -69,6 +69,9 @@ flowchart LR
     Ports --> RS
     TaskRunner --> Task[task]
     Task --> TM[task/model]
+    Ports --> TM
+    SQLite --> TM
+    Q --> TM
     TaskRunner --> Bridge[runnerbridge]
     TaskRunner --> RC
     Bridge --> RC
@@ -76,10 +79,11 @@ flowchart LR
     RC --> Contract[runnercontract]
     Bridge --> RS[runnerstate]
     RS --> Contract
-    TaskRunner -. 交付 / 控制 / 展示值 .-> EM[execution/model]
+    TaskRunner -. 配置 / 控制 / 展示值 .-> EM[execution/model]
     TaskRunner --> Recon[execution/reconstruction]
     TaskRunner --> HP[execution/hostport]
     Recon --> Ports
+    Recon --> TM
     Ports --> EM
     SQLite --> EM
 ```
@@ -92,13 +96,14 @@ flowchart LR
 - Web 与后端共享 `httpcontract.AllowedProjectRead`；Web EXE 的生产依赖不再到达后端 handler、query、storage 或 execution。候选读取通过现有 `persistenceError` 返回 `storage/ports.ErrNotFound`，`taskrunner` 不再导入 `database/sql`。
 - SQLite 生产依赖不再到达 `product/query`。历史/任务详情读取端口只携带 `runnerstate.Candidate` 事实，`CandidateSummary`、`RunnerHistory` 和公开页面序列化归产品层；游标及协议由查询层补充，共享事件读取预算归存储端口，依赖守卫已删除原六项例外。
 - 会话、正文和活动读取已收口：`storage/ports` 与 `storage/sqlite` 均无任何 `internal/product/*` 的生产依赖。SQLite 返回 Runner 事件、绑定和正文事实；查询层生成会话引用、能力 DTO、活动标签和公开页，守卫同时拒绝 DTO 别名及间接产品依赖。
+- `TaskDeliveryRecord`、`TaskDeliveryEvidence`、`TaskDeliveryReceipt`、`ProjectTaskAuthority` 和 `ValidateDelivery` 已归 `task/model`，只依赖标准库；Task 服务/控制入口、图快照、任务详情事实、项目权威读取与初始化接口不再为这些值导入 `execution/model`。旧包无别名或转发；全标签源码守卫限制定义归属及已收口文件的执行域 import。
 - `ProjectRuntime` 持有项目资源并最终关闭；factory、actor 与服务产品客户端借用项目 store，actor 不负责最终关库。见[生命周期验收](../acceptance/application-project-lifecycle.md)。
 
 仍有以下依赖需要如实保留在图中：
 
 | 当前边 | 代码证据与影响 |
 | --- | --- |
-| `taskrunner / storage / query → execution/model` | [TaskDeliveryRecord / ProjectTaskAuthority](../../internal/execution/model/task_delivery.go)与[交付回执](../../internal/execution/model/task_receipts.go)仍在旧包；[taskrunner 投影](../../internal/taskrunner/projection.go)还构造 `reconstruction.Runtime`。当前是类型与宿主展示的耦合，不表示原生执行状态机仍在 SteerLine。 |
+| `taskrunner / storage / query → execution/model` | 交付、项目权威及回执已归 [Task 纯模型](../../internal/task/model/task_delivery.go)。剩余边来自 [taskrunner 投影](../../internal/taskrunner/projection.go)的运行视图、SQLite 的发布配置与宿主展示值，以及[任务图展示](../../internal/product/query/taskgraph/project.go)复用的 `StartupBlockers`；不表示原生执行状态机仍在 SteerLine。 |
 | `internal/app` 同时组装和适配 | [project_runtime.go](../../internal/app/project_runtime.go)负责资源获取/关闭；[client.go](../../internal/app/client.go)负责读取快照、宿主观察和产品投影；[runner_service_wiring.go](../../internal/app/runner_service_wiring.go)负责接线。高依赖数量对组装根正常，但这些实现同包，尚无包级隔离。 |
 
 `httpapi` 的 command 文件已按意图、派发、回执、原生查看拆分，Web 的三个 hook 也已分责；这些属于同包/同应用内的结构整理，不能据此宣称各自可独立编译或替换。见[本轮入口整理验收](../acceptance/product-read-command-web-refactor.md)。
@@ -109,14 +114,14 @@ flowchart LR
 | --- | --- |
 | `internal/app` | 配置冻结、项目目录、ProjectRuntime、具体 store/Runner/产品端口组装，以及当前应用适配；不构造原生执行 adapter。 |
 | `internal/app/host` | SteerLine 服务身份、锁、控制文件、进程观察、心跳、调度和退出观察；不持有 Runner 执行状态机，不导入 SQLite 实现。 |
-| `internal/task` / `task/model` | 固定契约、任务输入、DAG、依赖、资格和任务结果声明；任务纯规则不依赖执行应用。 |
+| `internal/task` / `task/model` | 固定契约、任务输入、DAG、依赖、资格、项目权威、交付记录/证据、交付回执和验证规则；任务纯模型只依赖标准库。 |
 | `internal/taskrunner` | Task actor、候选共同 base、固定材料、控制/输入校验、候选派发、核验交付与释放后继；通过公开 Runner 事实投影展示。 |
 | `internal/runnerbridge` | 原请求 outbox、Run/PR/分支绑定、事件游标与副本、停止义务和重启旧输入围栏；不创建原生会话或选择 workflow 下一步。 |
 | `internal/runnerclient` | 固定 EXE/实例 SHA 校验、CLI 子进程、严格 JSON/退出码、公开 schema 与能力验证；不读 Runner 私有实现。 |
 | `internal/runnercontract` / `runnerstate` | 公开协议值及 SteerLine caller 参与关系；无 SQL、native owner 或具体传输实现。 |
 | `internal/environmentcheck` | 环境检查请求、报告、显式停止与原请求对账；使用独立 Store/Runner 端口，不推进 Task/DAG。 |
 | `internal/storage/ports` / `sqlite` | Task/DAG、候选/outbox/公开事件副本、唯一交付、环境检查及 service checkpoint；当前 `SchemaVersion = 23`，不提供旧格式迁移。所有读取均返回存储/领域事实，无产品包依赖；活动记录流持有读事务，使用者必须关闭。 |
-| `internal/execution/model` / `backend` / `agentlaunch` | 仍被使用的 TaskDelivery、项目权威、checkpoint、展示值、进程端口和配置值；没有原生 worker 状态转移。 |
+| `internal/execution/model` / `backend` / `agentlaunch` | 仍被使用的 checkpoint、展示值、进程端口和配置值；TaskDelivery/项目权威/交付回执已迁出，没有原生 worker 状态转移。 |
 | `internal/execution/reconstruction` / `hostport` | SteerLine checkpoint/运行视图与宿主控制端口；真实候选来自公开 Runner facts，不保留旧执行记录集合或原生工作区意图，不重建原生执行现场。 |
 | `internal/execution/workspace` / `publication` / `process` / `scheduler` | 调用方仓库身份解析、发布配置校验、SteerLine 自身进程/文件能力和 actor 调度；无 native worktree 生命周期或 PR provider 查询实现。 |
 | `internal/product/api` / `query` / `client` | 稳定产品 DTO、只读投影及注入能力的内部产品客户端；历史/候选、会话引用、正文分页、能力报告、活动标签和公开序列化预算均从存储事实生成，不再由 SQLite 构造产品 DTO。 |
@@ -158,6 +163,8 @@ sequenceDiagram
 
 上图合并展示候选启动、后台对账和交付，实际是多个命令/观察周期，不是同一 HTTP 请求同步完成全部步骤。Task 关闭不要求候选先达到 `pr_ready`，也不以兄弟候选未知阻挡正确已合并结果。Runner 的执行完成不自行关闭 Task。[交付事务](../../internal/storage/sqlite/runner_result.go)继续同时核验 Task、图、候选版本与 PR 证据，类型归属调整不能把它拆成多个独立提交。
 
+第四轮只改变这些事实的 Go 所有者：[TaskDelivery/ProjectTaskAuthority](../../internal/task/model/task_delivery.go)、[交付校验](../../internal/task/model/task_delivery_validation.go)及[回执](../../internal/task/model/task_receipts.go)统一归 Task 纯模型，JSON 字段和 SQL/schema 保持。校验复用 Task 的 `Error` 和提交摘要规则，SQLite 继续映射原错误码。同一候选和原 Task 版本重放返回已保存回执，即使当前图已推进也不改回执版本、不重复写事件；更换候选或版本仍拒绝。交付、Task 关闭、图释放及全部候选停止义务继续在一个写事务内完成，故障时整体回滚。
+
 读取使用 [ReadApplicationProjectSnapshot](../../internal/storage/sqlite/application_snapshot.go)在同一读事务采样产品视图、候选与 service checkpoint，再由 app/query 生成产品页。收窄投影依赖时应在该事务内取得足够的事实，事务后纯映射；不能改成各页面分别读库，破坏同快照语义。
 
 历史/候选链现为 `SQLite 读事务 → ProjectView.Candidates / NativeTaskDetail.Candidates → query.ProjectPage / TaskDetail → API DTO`。候选顺序、Task/图/数据库版本和正文仍在原读事务内取得，投影不额外读库或查询 Runner。成功的空候选集合仍生成空历史；读取失败不把部分候选当成功历史，也不隐藏可用任务页。内部任务页仍使用既有纯值容器承载查询层补充的协议/游标，但 SQLite 不生成这些展示元数据。`TaskGraphSnapshot.ReadySnapshot` 只把同快照事实交给 Task 纯规则，不生成产品 DTO。
@@ -176,10 +183,10 @@ sequenceDiagram
 | --- | --- | --- |
 | 1（本轮完成） | 共享路由白名单归纯 HTTP 契约层 | `httpcontract.AllowedProjectRead` 为后端与 Web 的唯一共享来源；保留后端专用 Task 写入/回执路由。`web/server` 与 Web 命令已纳入消费端守卫，Windows/Linux 生产图及全标签源码检查阻止后端/SQL 依赖回流。 |
 | 2（三轮范围已完成） | 收口 SQLite 与产品投影/DTO 的依赖 | 六项旧例外和剩余会话/活动 DTO import 已移除，SQLite/存储端口均无产品包生产依赖。查询层负责公开字段、游标/协议和序列化字节预算；存储继续提供原身份、顺序、正文和同快照事实。活动使用有界只读记录流，避免为投影预算预读整页。 |
-| 3（错误映射已完成） | 把仍使用的类型按真实所有者归位 | 候选读取已按存储端口映射错误，`taskrunner` 不再识别 `sql.ErrNoRows`。余下建议为 TaskDelivery/ProjectTaskAuthority/交付回执归 Task 纯模型；checkpoint/宿主状态归宿主契约；caller 展示值按实际消费者再决定。避免创建新的通用大 model 包或长期别名转发；以目标类型的执行依赖消失、原子交付与重放语义不变为完成条件。 |
+| 3（Task 交付类型归位已完成） | 把仍使用的类型按真实所有者归位 | 候选错误映射和 TaskDelivery/ProjectTaskAuthority/交付证据/回执/校验已完成；Task 纯模型无项目内部依赖，旧执行包无别名转发，原子交付与重放已回归。剩余 checkpoint/宿主状态可归宿主契约，`StartupBlockers` 与 caller 展示值按实际消费者再决定；避免创建新的通用大 model 包。 |
 | 4 | 在必要时拆开 app 中的组装和产品适配 | 先稳定配置与资源契约，再把 `clientReader`/命令适配等实现移出组装根；`ProjectRuntime` 保留唯一资源所有者。依赖多本身不是问题，若日常改查询/命令频繁触及同一包，才值得做这一轮。 |
 | 5 | 按实际需求收窄 Runner 调用面与 Web context | `runnerbridge.CLI.Call` 仍接收 CLI 命令串，接口方法也使用 `runnerclient` 的协议别名；需要替换传输或频繁改协议时，可改用 `runnercontract` 值和语义方法。Web 的项目/连接/原请求 hook 已分责，暂可保留现有 context，出现独立功能并行冲突后再拆。 |
 
-第一轮已完成第 1 项、第 3 项中的候选不存在错误映射及相应守卫；第二、三轮已完成第 2 项。`taskrunner` 的生产传递依赖规则、SQLite/存储端口禁止产品层依赖规则由全标签源码与 Windows/Linux 依赖图核对。仍可逐步归位 Task/宿主纯值及收窄 app 中的组装与产品适配；这些尚未实施。
+第一轮已完成第 1 项及候选错误映射；第二、三轮已完成第 2 项；第四轮已完成第 3 项中的 Task 交付/项目权威类型归位。依赖规则由全标签源码与 Windows/Linux 依赖图核对。余下可继续归位宿主/展示纯值及收窄 app 中的组装与产品适配；这些尚未实施。
 
 暂不建议把 Task、候选、交付拆成独立服务/数据库，也不建议引入通用事件总线、插件注册框架或重建 workflow 层。当前一个原子交付事务、每项目资源 owner、Runner 单写执行事实的关系是必要的一致性边界。业务规则、生命周期和真实支持范围分别归[整体架构](../architecture.md)、[Worker 生命周期](../product-design/worker-lifecycle.md)及[接入验收](../acceptance/steerrunner-cutover.md)维护。

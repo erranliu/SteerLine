@@ -12,6 +12,8 @@ func TestTaskDeliveryOwnership(t *testing.T) {
 		name, path, source, diagnostic string
 	}{
 		{"task owner", "internal/task/model/delivery.go", "package model\ntype TaskDeliveryRecord struct{}", ""},
+		{"Runner profile public facts", "internal/execution/model/runner_profile.go", "package model\nimport _ \"" + module + "/internal/runnercontract\"", ""},
+		{"checkpoint public build pin", "internal/execution/reconstruction/runtime_types.go", "package reconstruction\nimport _ \"" + module + "/internal/runnercontract\"", ""},
 		{"old owner copy", "internal/execution/model/edge_plan9.go", "//go:build never_enabled\n\npackage model\ntype ProjectTaskAuthority struct{}", "task delivery definition outside task/model"},
 		{"old owner alias", "internal/execution/model/edge_freebsd.go", "package model\nimport t \"" + module + "/internal/task/model\"\ntype TaskDeliveryReceipt = t.TaskDeliveryReceipt", "task delivery definition outside task/model"},
 		{"helper alias", "internal/helper/edge.go", "package helper\nimport t \"" + module + "/internal/task/model\"\ntype TaskDeliveryEvidence = t.TaskDeliveryEvidence", "task delivery definition outside task/model"},

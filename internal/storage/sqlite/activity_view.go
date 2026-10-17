@@ -55,10 +55,11 @@ func (s Reader) OpenActivityView(ctx context.Context, project, candidate, run, a
 		return binding, nil, err
 	}
 	transferred = true
-	return binding, &activityRecords{tx: tx, rows: rows, run: run, task: c.TaskID}, nil
+	return binding, &activityRecords{ctx: ctx, tx: tx, rows: rows, run: run, task: c.TaskID}, nil
 }
 
 type activityRecords struct {
+	ctx        context.Context
 	tx         *sql.Tx
 	rows       *sql.Rows
 	run, task  string
@@ -70,8 +71,14 @@ func (r *activityRecords) Next() (*p.ActivityRecord, error) {
 	if r.closed {
 		return nil, errors.New("activity read stream is closed")
 	}
+	if err := r.ctx.Err(); err != nil {
+		return nil, err
+	}
 	if !r.rows.Next() {
 		return nil, r.rows.Err()
+	}
+	if err := r.ctx.Err(); err != nil {
+		return nil, err
 	}
 	var seq int64
 	var raw []byte

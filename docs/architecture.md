@@ -8,6 +8,8 @@
 
 > 同日第三轮：会话、正文及活动读取也改为存储事实与产品投影分离。SQLite 和存储端口已无产品包生产依赖；活动记录流保持绑定与事件同一读事务，查询层按原公开 JSON 字节预算投影并关闭记录流。原身份、游标、正文和预算验证见[第三轮验收](acceptance/architecture-decoupling-round3.md)。
 
+> 同日第四轮：TaskDelivery、合并证据、ProjectTaskAuthority、交付回执及校验规则归 `task/model`，旧执行包无兼容别名。原子交付、原回执重放与拒绝身份变更的验证见[第四轮验收](acceptance/architecture-decoupling-round4.md)；已集成最新主干的 Runner 协作与运行视图清理。
+
 SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。执行已迁到独立 SteerRunner；当前代码/运行边界见[代码架构](architecture/current-code-architecture.md)，实际后端与验收支持范围见[Runner 接入](integration/steerrunner.md)及专属验收。后续目标见[产品愿景](roadmap/product-vision.md)。
 
 本文描述 SteerLine 产品运行的业务权威。普通开发由当前聊天直接实现；用户明确要求 roadmap 调度时，才由 roadmap-runner 使用[execution-map](roadmap/execution-map.md)管理已确认的任务与依赖。roadmap 流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。

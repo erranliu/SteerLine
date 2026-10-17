@@ -87,12 +87,13 @@ func TestRunnerStartClassifiesCandidateLookupErrors(t *testing.T) {
 				return admissionFailure
 			}}
 			_, err := service.Start(context.Background(), Start{RequestID: "original", TaskVersion: 1})
-			want := tc.err
+			matched := errors.Is(err, tc.err)
 			if tc.admitted {
-				want = admissionFailure
+				var unavailable *taskmodel.Error
+				matched = errors.As(err, &unavailable) && unavailable.Code == "runner_unavailable" && unavailable.Message == admissionFailure.Error()
 			}
-			if !errors.Is(err, want) || admitted != tc.admitted {
-				t.Fatalf("error=%v admitted=%v; want %v admitted=%v", err, admitted, want, tc.admitted)
+			if !matched || admitted != tc.admitted {
+				t.Fatalf("error=%v admitted=%v; expected original lookup error or runner_unavailable admission failure; admitted=%v", err, admitted, tc.admitted)
 			}
 		})
 	}

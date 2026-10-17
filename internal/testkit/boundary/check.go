@@ -59,7 +59,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	case module + "/internal/task":
 		return dependency == module+"/internal/task/model"
 	case module + "/internal/execution/model":
-		return dependency == module+"/internal/execution/backend" || dependency == execution+"/agentlaunch"
+		return dependency == module+"/internal/execution/backend" || dependency == execution+"/agentlaunch" || dependency == module+"/internal/runnercontract"
 	case module + "/internal/execution/conversation":
 		return dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
 	case module + "/internal/runnerstate":
@@ -76,7 +76,7 @@ func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
 		return true
 	}
-	return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/storage/ports"
+	return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/storage/ports" || dependency == module+"/internal/runnercontract"
 }
 
 func purePackage(pkg string) bool {
