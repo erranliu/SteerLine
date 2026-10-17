@@ -4,6 +4,8 @@
 
 ## 当前入口
 
+SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，实施）：[专属验收](runner-collaboration.md)登记固定构建、R1/R2、U1–U3、I1、Web、controlled 与审计 live 的真实结果及清理。U1 两断言覆盖旧 ProjectRuntime 拒绝替代实例、显式重启后接纳及旧停止隔离。RCB-M01 可后置，不继承旧构建结论。
+
 旧执行记录与空壳字段清理（2026-10-17，普通开发）：[删除边界与最小验证](runtime-shell-cleanup.md)，清理内部无消费者记录/字段/函数并校准文档；保留当前 Task、checkpoint、公开读取及宿主边界。
 
 产品读取、命令入口与 Web 容器重构（2026-10-16，已实施）：[Spec / Plan 与专属验收](product-read-command-web-refactor.md)，RCW-A01–A06 自动项通过，包含跨视图、请求仲裁、Web 71 项、固定 L1 与双 home 受控 L4；RCW-M01 可选人工体验未安排、非阻塞。

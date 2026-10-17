@@ -1,14 +1,13 @@
 package app
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"regexp"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
@@ -28,9 +27,7 @@ type RunnerProfile struct {
 }
 
 func (p RunnerProfile) Digest() string {
-	body, _ := json.Marshal(p)
-	sum := sha256.Sum256(body)
-	return hex.EncodeToString(sum[:])
+	return runnercontract.ConfigurationDigest(p.Execution, p.Workflow)
 }
 func (g RunnerExecutionConfig) Validate() error {
 	if g.Version != 3 || len(g.Profiles) == 0 || g.Runner.Version == "" {
@@ -41,7 +38,7 @@ func (g RunnerExecutionConfig) Validate() error {
 	}
 	seen := map[string]bool{}
 	for _, p := range g.Profiles {
-		if !regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`).MatchString(p.ID) || strings.TrimSpace(p.Name) == "" || seen[p.ID] || p.Execution.Adapter == "" || p.Execution.Target.Kind == "" || len(p.Execution.Settings) == 0 || !json.Valid(p.Execution.Settings) || p.Workflow.ID == "" || p.Workflow.Version <= 0 {
+		if !regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`).MatchString(p.ID) || strings.TrimSpace(p.Name) == "" || seen[p.ID] || p.Execution.Adapter == "" || p.Execution.Target.Kind == "" || len(p.Execution.Settings) == 0 || !json.Valid(p.Execution.Settings) || p.Workflow.ID == "" || p.Workflow.Version <= 0 || p.Digest() == "" {
 			return errors.New("Runner execution profile is incomplete or duplicated")
 		}
 		seen[p.ID] = true

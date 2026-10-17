@@ -10,6 +10,13 @@ export interface Identity {
   sampled_at: string;
 }
 export interface Profile {
+  workflow_id?: string;
+  workflow_version?: number;
+  execution_model?: string;
+  execution_effort?: string;
+  audit_model?: string;
+  audit_effort?: string;
+  access_mode?: string;
   id: string;
   name: string;
   host: string;
@@ -93,6 +100,29 @@ export interface Decision {
   };
 }
 export interface Candidate {
+  runner_workflow?: { id: string; version: number };
+  requested_model?: string;
+  requested_reasoning_effort?: string;
+  materials?: { kind: string; path: string; commit?: string; digest: string }[];
+  audit?: {
+    model: string;
+    reasoning_effort: string;
+    repair_count: number;
+    results: {
+      step: string;
+      source_report_command_id: string;
+      command_id: string;
+      turn_id: string;
+      verdict?: string;
+      failure?: string;
+      findings?: {
+        severity: string;
+        message: string;
+        path?: string;
+        line?: number;
+      }[];
+    }[];
+  };
   participation: string;
   submission_status: string;
   stop_requested: boolean;

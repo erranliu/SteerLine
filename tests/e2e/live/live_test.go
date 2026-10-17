@@ -10,3 +10,7 @@ import (
 func TestSmokeLocalCodex(t *testing.T) {
 	testenv.LiveDelivery(testenv.NewScenario(t, "smoke.local-codex"), "local-codex")
 }
+
+func TestWorkflowLocalCodexAudited(t *testing.T) {
+	testenv.LiveDelivery(testenv.NewScenario(t, "workflow.local-codex-audited"), "local-codex")
+}

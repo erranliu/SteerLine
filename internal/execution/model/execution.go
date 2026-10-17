@@ -6,6 +6,14 @@ import (
 )
 
 type FixedExecutionProfile struct {
+	WorkflowID      string `json:"workflow_id"`
+	WorkflowVersion int    `json:"workflow_version"`
+	ExecutionModel  string `json:"execution_model"`
+	ExecutionEffort string `json:"execution_effort"`
+	AuditModel      string `json:"audit_model"`
+	AuditEffort     string `json:"audit_effort"`
+	AccessMode      string `json:"access_mode"`
+
 	ServiceStopBehavior   executionbackend.ServiceStopBehavior          `json:"service_stop_behavior"`
 	ImplementationVersion string                                        `json:"implementation_version"`
 	ImplementationKey     string                                        `json:"implementation_key"`

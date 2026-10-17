@@ -63,10 +63,10 @@ L1 固定范围以 [scoped.go](../cmd/test-feedback/scoped.go)及 [task_scope.go
 | 级别 | 已登记内容 | 清单与实现现状 |
 | --- | --- | --- |
 | L2 | 2 项：controlled gate、live 本机 Codex | 有固定 ID、实际测试映射和选择校验，内容清单可追踪。 |
-| L3 | 3 项：等待合并重启、正常宿主生命周期、双 home 独立操作 | 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二；只选 runtime 时包内二并行。 |
+| L3 | 4 项：等待合并重启、正常宿主生命周期、双 home 独立操作、审计 workflow 真实链 | controlled 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二。审计 live 精确选择 workflow.local-codex-audited，显式配置两个不同模型，不加入完整 L2。 |
 | L4 | 4 项：源码构建保护、路径保护、宿主写入拒绝、同 ID 碰撞与重放 | 支持 `-level=L4 -suite=runtime -env=controlled`；每项独立资源，runtime 包内最多二项并行。 |
 
-当前九项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
+当前十项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
 
 ```powershell
 # 无 token 门槛，不能当作完整 L2

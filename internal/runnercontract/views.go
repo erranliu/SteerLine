@@ -34,18 +34,20 @@ type Final struct {
 	Diagnostic    string `json:"diagnostic,omitempty"`
 }
 type Execution struct {
-	WorkspaceScope string `json:"workspace_scope,omitempty"`
-	TurnStarted    bool   `json:"turn_started"`
-	AttemptID      string `json:"attempt_id"`
-	Generation     string `json:"generation"`
-	Backend        string `json:"backend"`
-	Protocol       string `json:"protocol"`
-	SessionID      string `json:"session_id"`
-	TurnID         string `json:"turn_id"`
-	NativeOutcome  string `json:"native_outcome"`
-	FinalAvailable bool   `json:"final_available"`
-	Workspace      string `json:"workspace"`
-	Branch         string `json:"branch"`
+	RequestedModel           string `json:"requested_model,omitempty"`
+	RequestedReasoningEffort string `json:"requested_reasoning_effort,omitempty"`
+	WorkspaceScope           string `json:"workspace_scope,omitempty"`
+	TurnStarted              bool   `json:"turn_started"`
+	AttemptID                string `json:"attempt_id"`
+	Generation               string `json:"generation"`
+	Backend                  string `json:"backend"`
+	Protocol                 string `json:"protocol"`
+	SessionID                string `json:"session_id"`
+	TurnID                   string `json:"turn_id"`
+	NativeOutcome            string `json:"native_outcome"`
+	FinalAvailable           bool   `json:"final_available"`
+	Workspace                string `json:"workspace"`
+	Branch                   string `json:"branch"`
 }
 type Question struct {
 	ID      string `json:"id"`
@@ -65,25 +67,60 @@ type Controls struct {
 	Reason    string `json:"reason"`
 }
 type Run struct {
-	RunID            string    `json:"run_id"`
-	Revision         uint64    `json:"revision"`
-	Title            string    `json:"title"`
-	InputDigest      string    `json:"input_digest"`
-	ResourceDigest   string    `json:"resource_digest"`
-	Status           string    `json:"status"`
-	Phase            string    `json:"phase"`
-	Step             string    `json:"step"`
-	Diagnostic       string    `json:"diagnostic"`
-	NewInputsAllowed bool      `json:"new_inputs_allowed"`
-	ResumeRequired   bool      `json:"resume_required"`
-	StopStatus       string    `json:"stop_status"`
-	Execution        Execution `json:"execution"`
-	Question         *Question `json:"question"`
-	Controls         Controls  `json:"controls"`
-	PR               *PRFact   `json:"pr"`
-	Final            *Final    `json:"final"`
-	Summary          string    `json:"summary"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	Workflow         Workflow   `json:"workflow"`
+	Audit            *Audit     `json:"audit,omitempty"`
+	Materials        []Material `json:"materials"`
+	RunID            string     `json:"run_id"`
+	Revision         uint64     `json:"revision"`
+	Title            string     `json:"title"`
+	InputDigest      string     `json:"input_digest"`
+	ResourceDigest   string     `json:"resource_digest"`
+	Status           string     `json:"status"`
+	Phase            string     `json:"phase"`
+	Step             string     `json:"step"`
+	Diagnostic       string     `json:"diagnostic"`
+	NewInputsAllowed bool       `json:"new_inputs_allowed"`
+	ResumeRequired   bool       `json:"resume_required"`
+	StopStatus       string     `json:"stop_status"`
+	Execution        Execution  `json:"execution"`
+	Question         *Question  `json:"question"`
+	Controls         Controls   `json:"controls"`
+	PR               *PRFact    `json:"pr"`
+	Final            *Final     `json:"final"`
+	Summary          string     `json:"summary"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+type Material struct {
+	Kind         string `json:"kind"`
+	Path         string `json:"path"`
+	Commit       string `json:"commit,omitempty"`
+	Digest       string `json:"digest"`
+	SnapshotPath string `json:"snapshot_path"`
+}
+
+type Audit struct {
+	Model           string        `json:"model"`
+	ReasoningEffort string        `json:"reasoning_effort"`
+	RepairCount     uint64        `json:"repair_count"`
+	Results         []AuditResult `json:"results"`
+}
+
+type AuditResult struct {
+	Step                  string    `json:"step"`
+	SourceReportCommandID string    `json:"source_report_command_id"`
+	CommandID             string    `json:"command_id"`
+	TurnID                string    `json:"turn_id"`
+	Verdict               string    `json:"verdict,omitempty"`
+	Findings              []Finding `json:"findings,omitempty"`
+	Failure               string    `json:"failure,omitempty"`
+}
+
+type Finding struct {
+	Severity string `json:"severity"`
+	Message  string `json:"message"`
+	Path     string `json:"path,omitempty"`
+	Line     int    `json:"line,omitempty"`
 }
 type Command struct {
 	CommandID     string  `json:"command_id"`

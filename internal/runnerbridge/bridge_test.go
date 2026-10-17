@@ -183,3 +183,67 @@ func TestSteerRunnerBoundPRCannotDisappear(t *testing.T) {
 		}
 	}
 }
+
+func TestSteerRunnerRestartOriginalBinding(t *testing.T) {
+	for _, state := range []string{"pending", "unknown"} {
+		t.Run(state+"_not_found_zero_submit", func(t *testing.T) {
+			b, s, f := setup()
+			s.value.SubmitState = state
+			if err := b.RecoverInputs(context.Background(), "project", "candidate"); err != nil {
+				t.Fatal(err)
+			}
+			if err := b.VerifyBinding(context.Background(), "project", "candidate"); err != nil {
+				t.Fatal(err)
+			}
+			if err := b.Step(context.Background(), "project", "candidate"); err != nil {
+				t.Fatal(err)
+			}
+			if f.submits != 0 || f.inputs != 0 {
+				t.Fatal("restart replayed original submit")
+			}
+		})
+	}
+	for _, mutation := range []string{"digest", "run", "missing_request_run"} {
+		t.Run(mutation, func(t *testing.T) {
+			b, s, f := setup()
+			if mutation == "missing_request_run" {
+				s.value.SubmitState = "unknown"
+				run := "another-run"
+				f.commands[s.value.Submit.RequestID] = runnerclient.Command{RequestID: s.value.Submit.RequestID, CommandID: "original-command", Command: "submit", RunID: &run}
+			} else {
+				s.value.RunID = "run"
+				s.value.SubmitState = "accepted"
+				s.value.InputDigest = "input"
+				if mutation == "digest" {
+					f.run.InputDigest = "other"
+				} else {
+					f.run.RunID = "other"
+				}
+			}
+			if err := b.VerifyBinding(context.Background(), "project", "candidate"); err == nil {
+				t.Fatal("conflicting original public fact admitted")
+			}
+			if f.submits+f.stops+f.inputs != 0 {
+				t.Fatal("verification dispatched business")
+			}
+		})
+	}
+	t.Run("unknown_original_accepted_query_only", func(t *testing.T) {
+		b, s, f := setup()
+		s.value.SubmitState = "unknown"
+		run := f.run.RunID
+		f.commands[s.value.Submit.RequestID] = runnerclient.Command{RequestID: s.value.Submit.RequestID, CommandID: "original-command", Command: "submit", RunID: &run}
+		if err := b.RecoverInputs(context.Background(), "project", "candidate"); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.VerifyBinding(context.Background(), "project", "candidate"); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.Step(context.Background(), "project", "candidate"); err != nil {
+			t.Fatal(err)
+		}
+		if s.value.RunID != run || s.value.InputDigest != "input" || f.submits+f.stops+f.inputs != 0 {
+			t.Fatal("original request lost/replayed", s.value)
+		}
+	})
+}

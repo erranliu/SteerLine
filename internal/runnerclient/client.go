@@ -42,6 +42,9 @@ type Failure struct {
 func (f *Failure) Error() string { return f.Code + ": " + f.Message }
 
 type Client struct {
+	InstanceID            string
+	BuildVersion          string
+	ResourceDigest        string
 	NativeSessionAdapters []string
 	Executable            string
 	StateDir              string
@@ -68,6 +71,11 @@ func mutation(command string) bool {
 	return false
 }
 func (c Client) Call(ctx context.Context, command string, args []string, input *Request) (Response, error) {
+	if c.InstanceID != "" && command != "version" && command != "service status" && command != "service stop" && command != "service verify-stopped" {
+		if err := c.ValidateInstance(ctx); err != nil {
+			return Response{}, err
+		}
+	}
 	if c.Executable == "" {
 		return Response{}, &Failure{Code: "runner_unavailable", Message: "SteerRunner executable is not configured", Exit: 4}
 	}
@@ -86,6 +94,9 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 		argv = append(argv, command)
 	default:
 		return Response{}, &Failure{Code: "invalid_arguments", Message: "Unsupported Runner CLI command", Exit: 2}
+	}
+	if c.InstanceID != "" && command != "version" && command != "service start" && command != "service status" && command != "service stop" && command != "service verify-stopped" {
+		argv = append(argv, "--expected-instance-id", c.InstanceID)
 	}
 	argv = append(argv, args...)
 	argv = append(argv, "--json", "--protocol", Protocol)

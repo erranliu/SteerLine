@@ -27,6 +27,29 @@
       }
     },
     {
+      "id": "local-audited",
+      "name": "本机 Codex 审计流程",
+      "execution": {
+        "adapter": "codex-app-server",
+        "target": {
+          "kind": "local"
+        },
+        "settings": {
+          "executable": "codex.exe",
+          "model": "gpt-6-luna",
+          "reasoning_effort": "medium"
+        }
+      },
+      "workflow": {
+        "id": "development-audited",
+        "version": 1,
+        "audit_model": {
+          "model": "gpt-6.1-sol",
+          "reasoning_effort": "high"
+        }
+      }
+    },
+    {
       "id": "local-luna-xhigh",
       "name": "本机 Codex Luna xhigh",
       "execution": {

@@ -16,6 +16,7 @@ import { TaskDetail } from "../tasks/task-detail";
 import { Answer, draftKey } from "./answer";
 import { candidateState, stopReason } from "./state";
 import { LastMessage } from "./last-message";
+import { RunnerWorkflow } from "./runner-workflow";
 import { nativeSessionReason } from "./native-session";
 import { RunTask, taskDependencyReason } from "./run-task";
 
@@ -205,6 +206,7 @@ function CandidateDetail({ run }: { run: Candidate }) {
         <code>{run.worktree_path || "准备中"}</code>
         <span className="branch-name">{run.worktree_branch}</span>
       </div>
+      <RunnerWorkflow run={run} />
       {run.recovery_required && (
         <p className="notice amber">
           原执行需要恢复核验。{run.stage_diagnostic || run.error}

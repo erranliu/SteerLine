@@ -3,6 +3,8 @@
 package query
 
 import (
+	"fmt"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"strings"
 	"time"
 
@@ -87,6 +89,14 @@ func DecisionRequest(r model.DecisionRequest) api.DecisionRequest {
 // CandidateView is the bounded product projection input prepared by the
 // application edge. The query package never receives or reconstructs Runtime.
 type CandidateView struct {
+	RunnerRevision           uint64
+	InputDigest              string
+	RunnerWorkflow           *runnercontract.Workflow
+	Audit                    *runnercontract.Audit
+	Materials                []runnercontract.Material
+	RequestedModel           string
+	RequestedReasoningEffort string
+
 	Participation                                                             string `json:"participation"`
 	SubmissionStatus                                                          string `json:"submission_status"`
 	StopRequested                                                             bool   `json:"stop_requested"`
@@ -139,6 +149,7 @@ func Candidate(r *CandidateView) *api.CandidateSummary {
 		return nil
 	}
 	p := &api.CandidateSummary{Participation: r.Participation, SubmissionStatus: r.SubmissionStatus, StopRequested: r.StopRequested, FlowRef: r.FlowRef, WorkflowStage: r.WorkflowStage, WorkflowStatus: r.WorkflowStatus, StageDiagnostic: r.StageDiagnostic, ReportToolPolicy: r.ReportToolPolicy, SessionID: r.SessionID, SessionGeneration: r.SessionGeneration, CurrentTurnID: r.CurrentTurnID, TurnNumber: r.TurnNumber, PRHistory: append([]string(nil), r.PRHistory...), CandidateNumber: r.CandidateNumber, CandidateCreatedAt: r.CandidateCreatedAt, CandidateStopReason: r.CandidateStopReason, CandidateStoppedBy: r.CandidateStoppedBy, CandidateEndedAt: copyValue(r.CandidateEndedAt), CandidateTiming: r.CandidateTiming, ResourceStatus: r.ResourceStatus, RecoveryRequired: r.RecoveryRequired, RecoveryState: r.RecoveryState, RecoveryVersion: r.RecoveryVersion, TaskID: r.TaskID, DomainTaskID: r.DomainTaskID, WorkflowVersion: r.WorkflowVersion, ExecutionID: r.ExecutionID, Title: r.Title, RunID: r.RunID, AttemptID: r.AttemptID, ControlRevision: r.ControlRevision, Claimant: r.Claimant, Host: r.Host, Backend: r.Backend, Protocol: r.Protocol, Agent: r.Agent, Target: api.TargetSummary{ID: r.Target.ID, WorktreeID: r.Target.WorktreeID, Branch: r.Target.Branch}, TaskStatus: r.TaskStatus, ExecutionStatus: r.ExecutionStatus, StartedAt: copyValue(r.StartedAt), EndedAt: copyValue(r.EndedAt), WorktreePath: copyValue(r.WorktreePath), WorktreeBranch: copyValue(r.WorktreeBranch), BaseCommit: copyValue(r.BaseCommit), LastEvent: copyValue(r.LastEvent), LogPath: copyValue(r.LogPath), ResultPath: copyValue(r.ResultPath), Summary: copyValue(r.Summary), Error: copyValue(r.Error), PR: api.PRSummary{URL: copyValue(r.PR.URL), HeadRevision: copyValue(r.PR.HeadRevision), MergeCommit: copyValue(r.PR.MergeCommit), QueryError: copyValue(r.PR.QueryError), State: r.PR.State, MergedAt: copyValue(r.PR.MergedAt), QueriedAt: copyValue(r.PR.QueriedAt)}}
+	runnerWorkflow(r, p)
 	for _, result := range r.StageResults {
 		p.StageResults = append(p.StageResults, api.StageResultSummary{StepID: result.StepID, CommandID: result.CommandID, TurnID: result.TurnID, InputVersion: result.InputVersion, Succeeded: result.Succeeded, FinalVerified: result.FinalVerified, Final: result.Final, FinalSource: result.FinalSource, Failure: result.Failure, Outcome: result.Outcome})
 	}
@@ -199,7 +210,11 @@ func ServicePage(rt *ServiceView) *api.ServicePage {
 }
 
 func Profile(f model.FixedExecutionProfile) api.ExecutionProfileSummary {
-	p := api.ExecutionProfileSummary{ID: f.ID, Name: f.Name, Host: f.Host, Agent: f.Agent, Digest: f.Digest, AcceptedConfigVersion: f.AcceptedConfigVersion, ImplementationDisplay: append([]string(nil), f.ImplementationDisplay...)}
+	p := api.ExecutionProfileSummary{WorkflowID: f.WorkflowID, WorkflowVersion: f.WorkflowVersion, ExecutionModel: f.ExecutionModel, ExecutionEffort: f.ExecutionEffort, AuditModel: f.AuditModel, AuditEffort: f.AuditEffort, AccessMode: f.AccessMode, ID: f.ID, Name: f.Name, Host: f.Host, Agent: f.Agent, Digest: f.Digest, AcceptedConfigVersion: f.AcceptedConfigVersion, ImplementationDisplay: append([]string(nil), f.ImplementationDisplay...)}
+	if f.WorkflowID != "" {
+		p.Details = []string{fmt.Sprintf("工作流：%s/%d", f.WorkflowID, f.WorkflowVersion), "请求执行模型：" + displayParameter(f.ExecutionModel) + " · " + displayParameter(f.ExecutionEffort), "请求审计模型：" + displayParameter(f.AuditModel) + " · " + displayParameter(f.AuditEffort), "权限模式：" + displayParameter(f.AccessMode)}
+		return p
+	}
 	p.Details = []string{"发布责任：" + f.PublicationPolicy.Publisher, "冻结发布目标：" + f.Publication.Provider.Kind + " · " + f.Publication.Provider.BaseURL + "/" + f.Publication.Provider.Repository + " · base " + f.Publication.BaseBranch, "Git remote：" + f.Publication.Remote + " · " + f.Publication.RemoteURL, "发布工具：" + f.Publication.Git.Executable + " · query " + f.Publication.Provider.Query.Executable, "认证引用：" + strings.Join(f.Publication.AuthenticationRefs, ", ")}
 	for _, tool := range []struct {
 		name    string
@@ -221,4 +236,11 @@ func copyValue[T any](v *T) *T {
 	}
 	result := *v
 	return &result
+}
+
+func displayParameter(value string) string {
+	if value == "" {
+		return "由 Runner 决定"
+	}
+	return value
 }

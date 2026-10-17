@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，已授权实施）：[Spec](runner-collaboration.spec.md) · [Plan](runner-collaboration.plan.md) · [专属验收](../acceptance/runner-collaboration.md)。多 workflow、分层冻结、构建 pin 及产品投影已接入；U1 验证旧运行时拒绝替代实例、显式重启后接纳及旧停止隔离。实际固定构建、真实链结果和人工待验以 acceptance 为准；不部署安装环境或修改 roadmap。
+
 旧执行记录与空壳字段清理（2026-10-17，普通开发）：[Plan](../plans/runtime-shell-cleanup.plan.md) · [专属验收](../acceptance/runtime-shell-cleanup.md)。删除无消费者的旧记录、内部字段及辅助函数，校准当前文档；保留现有读取链和模型归属，不改 roadmap。
 
 产品读取、命令入口与 Web 容器重构（2026-10-16，按审计收窄并实施）：[Spec](product-read-command-web-refactor.spec.md) · [Plan](product-read-command-web-refactor.plan.md) · [专属验收](../acceptance/product-read-command-web-refactor.md)。优先收拢候选事实/展示规则；命令保留唯一仲裁与三种受理顺序，Web 提取副作用 hooks；不重建整套读取/命令/前端框架，不改 roadmap。

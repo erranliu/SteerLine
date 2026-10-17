@@ -2,6 +2,7 @@ package reconstruction
 
 import (
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -33,6 +34,7 @@ type Runtime struct {
 }
 
 type ServiceState struct {
+	RunnerBuild         *runnercontract.BuildPin          `json:"runner_build,omitempty"`
 	Mode                string                            `json:"mode"`
 	InstanceID          string                            `json:"instance_id"`
 	PID                 int                               `json:"pid"`
@@ -81,6 +83,14 @@ type ControlBlocker struct {
 
 // RunView projects caller participation and the last public Runner observation.
 type RunView struct {
+	RunnerRevision           uint64 `json:"runner_revision"`
+	InputDigest              string `json:"input_digest"`
+	RunnerWorkflow           *runnercontract.Workflow
+	Audit                    *runnercontract.Audit
+	Materials                []runnercontract.Material
+	RequestedModel           string
+	RequestedReasoningEffort string
+
 	Participation    string                       `json:"participation"`
 	SubmissionStatus string                       `json:"submission_status"`
 	StopRequested    bool                         `json:"stop_requested"`
