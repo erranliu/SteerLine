@@ -141,3 +141,8 @@ N1 重验仅调整新夹具：业务 Spec/Plan 描述产物，阶段指令放 Ru
 以上相对 test-feedback 路径均位于 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/`。原 N1 证据只证明原固定构建；本轮新 EXE 的 N1 正在独立分级隔离夹具中执行，最终结果、真实 PR 与停止清理证明追加登记，不用原 N1 代替新构建验收。人工 RCB-M01 继续后置。
 
 - 合并后 W1：5 个文件、31 项测试通过（包含执行位置复制与协作 UI），TypeScript/Vite 生产构建通过。
+
+- 合并后最终 U1：`20261017T034703.352034700Z/summary.json` 通过；app/sqlite/runnerclient 精确执行 Plan U1，包含原两条必需换代断言、预检后换代拒绝及重启原摘要冲突不上线；零失败、零跳过。
+- 新构建 N1 首次复验：`C:/Users/lmas1/AppData/Local/Temp/steerline-collaboration-fix-18e97677397a434891e2688601444622/n1/summary.json` 失败，cleanup_complete=true、零真实 PR。正式产品响应证实原会话已完成实施与两项审计（均 pass，repair_count=0），切回执行模型后的 publish 在 `sandbox_readiness_failed: native_sandbox_command; no business input sent` 被阻断；未绕过就绪门或补发原请求。该失败不计 A06 通过，未重写旧构建 N1 事实。使用同一固定 Runner EXE、主干合并后的 caller 新建独立 `n1-retry` 现场复验，不复用或重置失败现场。
+
+实现 PR：[SteerLine #347](https://github.com/erranliu/SteerLine/pull/347) 与 [SteerRunner #20](https://github.com/erranliu/SteerRunner/pull/20)。PR 不代表部署或合并；Runner 是新调用方启用前置。
