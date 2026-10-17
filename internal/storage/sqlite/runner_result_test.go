@@ -38,6 +38,9 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	}
 	selected := reserve(strings.Repeat("c", 32), false)
 	sibling := reserve(strings.Repeat("d", 32), true) // Original submission remains unknown/unsent.
+	withdrawn := reserve(strings.Repeat("e", 32), true)
+	withdrawn, err := s.StopRunnerCandidate(ctx, project, withdrawn.ID, withdrawn.Revision, "manual-withdrawal", "operator")
+	require(t, err)
 	at := time.Now().UTC()
 	merge := strings.Repeat("b", 40)
 	selected.RunID, selected.InputDigest, selected.Branch, selected.PRURL, selected.SubmitState = "original-run", "frozen-input", "original-head", "https://example.invalid/Org/Repo/pulls/84", "accepted"
@@ -99,11 +102,14 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	if closed.ByID[selected.TaskID].Status != "closed" || closed.Authority.GraphRevision != graph.Authority.GraphRevision+1 || len(closed.Deliveries) != 1 {
 		t.Fatal("delivery was not unique or graph was not released")
 	}
-	for _, id := range []string{selected.ID, sibling.ID} {
+	for _, id := range []string{selected.ID, sibling.ID, withdrawn.ID} {
 		c, err := s.Candidate(ctx, project, id)
 		require(t, err)
 		if !c.StopRequested || c.InputsRevoked {
 			t.Fatal("delivery did not preserve pending native stop", c)
+		}
+		if id == withdrawn.ID && digestValue(c.Withdrawal) != digestValue(withdrawn.Withdrawal) {
+			t.Fatal("Task terminal overwrote manual withdrawal facts")
 		}
 	}
 	if ready, _ := taskmodel.DependencyStateForTask(closed.ByID[tasks[1].TaskID], closed.TaskGraph()); !ready {

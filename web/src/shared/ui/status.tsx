@@ -30,7 +30,7 @@ const labels: Record<string, string> = {
   waiting_input: "待回答",
   waiting_external: "等待外部事实",
   reconciling: "核实中",
-  abandoned: "已放弃",
+  abandoned: "已停止参与",
 };
 export const label = (status: string) => labels[status] ?? status ?? "未知";
 export function Status({ value }: { value: string }) {

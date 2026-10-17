@@ -129,6 +129,11 @@ export interface Candidate {
     }[];
   };
   runner_state_dir?: string;
+
+  candidate_stop_reason?: string;
+  candidate_stopped_by?: string;
+  candidate_ended_at?: string;
+  resource_status?: string;
   participation: string;
   submission_status: string;
   stop_requested: boolean;

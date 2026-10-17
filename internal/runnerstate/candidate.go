@@ -18,6 +18,7 @@ type Action struct {
 }
 
 type Candidate struct {
+	Withdrawal        *Withdrawal             `json:"withdrawal,omitempty"`
 	StartDigest       string                  `json:"start_digest"`
 	ProfileID         string                  `json:"profile_id"`
 	ProfileName       string                  `json:"profile_name"`
@@ -50,4 +51,12 @@ type Candidate struct {
 	Stop              *Action                 `json:"stop,omitempty"`
 	Actions           []Action                `json:"actions,omitempty"`
 	Diagnostic        string                  `json:"diagnostic,omitempty"`
+}
+
+// Withdrawal is a caller participation fact, independent of native stop intent.
+type Withdrawal struct {
+	RequestID        string    `json:"request_id"`
+	ExpectedRevision uint64    `json:"expected_revision"`
+	RequestedBy      string    `json:"requested_by"`
+	At               time.Time `json:"at"`
 }

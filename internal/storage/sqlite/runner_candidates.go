@@ -77,6 +77,9 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 		if old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
 			return nativeErr("immutable_task", "candidate update changed its original start identity")
 		}
+		if digestValue(old.Withdrawal) != digestValue(c.Withdrawal) {
+			return nativeErr("immutable_task", "candidate update changed its withdrawal fact")
+		}
 		if c.RunID != "" && c.SubmitState != "accepted" {
 			return nativeErr("contract_mismatch", "Run binding requires its accepted original submission")
 		}
