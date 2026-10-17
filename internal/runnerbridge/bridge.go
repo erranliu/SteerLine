@@ -43,6 +43,15 @@ type Bridge struct {
 	locks  sync.Map
 }
 
+// WithCandidate serializes caller withdrawal with the exact candidate's dispatch.
+func (b *Bridge) WithCandidate(project, id string, commit func() error) error {
+	entry, _ := b.locks.LoadOrStore(project+"\x00"+id, &sync.Mutex{})
+	gate := entry.(*sync.Mutex)
+	gate.Lock()
+	defer gate.Unlock()
+	return commit()
+}
+
 func newID() string {
 	var raw [16]byte
 	if _, err := rand.Read(raw[:]); err != nil {
@@ -87,6 +96,11 @@ func (b *Bridge) Step(ctx context.Context, project, id string) error {
 	c, err := b.Store.Candidate(ctx, project, id)
 	if err != nil {
 		return err
+	}
+	// Manual withdrawal freezes caller observation and grants no resource action.
+	// Task termination can later add its own native stop obligation.
+	if c.Participation != "active" && !c.StopRequested {
+		return nil
 	}
 	cli := b.Client(c.StateDir)
 	if c.RunID == "" {
@@ -276,6 +290,9 @@ func (b *Bridge) VerifyBinding(ctx context.Context, project, id string) error {
 	if err != nil {
 		return err
 	}
+	if c.Participation != "active" && !c.StopRequested {
+		return nil
+	}
 	cli := b.Client(c.StateDir)
 	if c.RunID != "" {
 		observed, err := cli.Inspect(ctx, "run-id", c.RunID, false)
@@ -373,7 +390,7 @@ func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, 
 			return inputError("idempotency_conflict", "control request identity conflict")
 		}
 	}
-	if c.StopRequested || c.RunID == "" || c.Projection == nil {
+	if c.Participation != "active" || c.StopRequested || c.RunID == "" || c.Projection == nil {
 		return inputError("candidate_inactive", "candidate cannot accept new user input")
 	}
 	if request.Protocol != runnerclient.Protocol || request.RequestID == "" || !json.Valid(request.Input) {

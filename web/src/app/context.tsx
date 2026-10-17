@@ -1,11 +1,19 @@
 import { createContext, useContext } from "react";
 import type { Api } from "../shared/api/client";
-import type { Snapshot, Identity } from "../shared/api/types";
+import type {
+  Snapshot,
+  Identity,
+  Envelope,
+  Receipt,
+  StoredRequest,
+} from "../shared/api/types";
 export interface Workspace {
   api: Api;
   identity: Identity;
   online: boolean;
   snapshot?: Snapshot;
+  requests?: StoredRequest[];
+  submit: (envelope: Envelope) => Promise<Receipt | undefined>;
   send: (
     action: string,
     target: string,

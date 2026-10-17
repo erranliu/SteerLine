@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
@@ -43,7 +44,7 @@ func TestRunnerPresetFreeze(t *testing.T) {
 		return err
 	}))
 	baseCalls := 0
-	svc := taskrunner.Service{Project: a.ProjectIdentity, Claimant: "runner-test", StateDir: filepath.Join(t.TempDir(), "runner"), DefaultProfile: "live", Store: s,
+	svc := taskrunner.Service{Project: a.ProjectIdentity, Claimant: "runner-test", StateDir: filepath.Join(t.TempDir(), "runner"), DefaultProfile: "live", Store: s, Bridge: &runnerbridge.Bridge{Store: s},
 		Tasks:    taskapp.Service{Reader: s, Documents: docs, Input: taskapp.Input{Project: a.ProjectIdentity, Authority: "native", Remote: "origin", Branch: "main", ExecutableTypes: []string{"task"}}},
 		Profiles: map[string]taskrunner.Profile{"live": {ID: "live", Name: "Original frozen preset", Input: runnerclient.RunInput{Workflow: runnerclient.Workflow{ID: "development", Version: 1}, Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"fixed-native"}`)}, Publication: runnerclient.Publication{Provider: "command", Repository: "Org/Repo", Settings: json.RawMessage(`{"base_url":"https://example.invalid"}`)}}}},
 		ResolveBase: func(context.Context, taskmodel.FixedWork, bool) (string, error) {
@@ -97,10 +98,8 @@ func TestRunnerPresetFreeze(t *testing.T) {
 	if _, err := svc.Start(ctx, start); err == nil {
 		t.Fatal("changed start body reused the original request ID")
 	}
-	withdrawn, err := svc.Stop(ctx, first.ID, first.Revision)
-	require(t, err)
-	if !withdrawn.StopRequested || withdrawn.Participation != "abandoned" || withdrawn.InputsRevoked || withdrawn.RunID != "" {
-		t.Fatal("withdrawal invented native stop evidence", withdrawn)
+	if _, err := svc.Stop(ctx, first.ID, first.Revision, "manual-stop", "operator"); err == nil {
+		t.Fatal("last participant was withdrawn")
 	}
 	current, err := s.TaskGraphSnapshot(ctx, a.ProjectIdentity)
 	require(t, err)

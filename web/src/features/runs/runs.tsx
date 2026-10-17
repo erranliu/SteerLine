@@ -1,25 +1,21 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import {
-  ArrowUpRight,
-  Activity as ActivityIcon,
-  Layers,
-  Square,
-} from "lucide-react";
+import { ArrowUpRight, Activity as ActivityIcon, Layers } from "lucide-react";
 import { useWorkspace } from "../../app/context";
-import type { Candidate } from "../../shared/api/types";
+import type { Candidate, Envelope, Receipt } from "../../shared/api/types";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { SafeLink, Status, short } from "../../shared/ui/status";
 import { TaskDetail } from "../tasks/task-detail";
 import { Answer, draftKey } from "./answer";
-import { candidateState, stopReason } from "./state";
+import { candidateState, participating } from "./state";
 import { LastMessage } from "./last-message";
 import { RunnerWorkflow } from "./runner-workflow";
 import { nativeSessionReason } from "./native-session";
 import { RunTask, taskDependencyReason } from "./run-task";
 import { CopyExecutionInfo } from "./copy-execution-info";
+import { StopCandidate } from "./stop-candidate";
 
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
@@ -152,15 +148,15 @@ function Output({ run }: { run: Candidate }) {
     </section>
   );
 }
-function CandidateDetail({ run }: { run: Candidate }) {
+function CandidateDetail({
+  run,
+  stopControl,
+}: {
+  run: Candidate;
+  stopControl: React.ReactNode;
+}) {
   const { api, online, send, busy, snapshot } = useWorkspace();
-  const [stop, setStop] = useState(false);
   const caps = snapshot?.connection.snapshot.page?.service.capabilities ?? [];
-  const revision = snapshot?.connection.snapshot.page?.control.revision ?? 0;
-  const stopUnavailable = stopReason(
-    run,
-    snapshot?.connection.snapshot.page?.runs ?? [],
-  );
   const nativeUnavailable = nativeSessionReason(run, online, caps);
   return (
     <>
@@ -180,6 +176,7 @@ function CandidateDetail({ run }: { run: Candidate }) {
         </div>
         <div className="actions candidate-actions">
           <CopyExecutionInfo run={run} />
+          {stopControl}
           <Button
             disabled={!!nativeUnavailable || busy}
             title={nativeUnavailable || (busy ? "正在处理上一项操作" : "")}
@@ -205,6 +202,20 @@ function CandidateDetail({ run }: { run: Candidate }) {
         <span>Turn {short(run.current_turn_id)}</span>
         <span>执行事实：{run.execution_status}</span>
       </div>
+      {run.participation === "abandoned" && (
+        <p className="notice amber">
+          已停止参与 · 历史只读 · 资源保留。执行事实为最后采样，不代表 worker
+          已停止。
+          {run.candidate_stop_reason === "manual" && (
+            <>
+              {" "}
+              人工停止：{run.candidate_stopped_by} ·{" "}
+              {run.candidate_ended_at &&
+                new Date(run.candidate_ended_at).toLocaleString("zh-CN")}
+            </>
+          )}
+        </p>
+      )}
       <div className="workspace-path">
         <span>工作区</span>
         <code>{run.worktree_path || "准备中"}</code>
@@ -249,54 +260,18 @@ function CandidateDetail({ run }: { run: Candidate }) {
             <p className="muted">合并提交 {run.pr.merge_commit}</p>
           )}
         </div>
-        <Button
-          variant="destructive"
-          disabled={
-            !online ||
-            busy ||
-            !caps.includes("stop_candidate") ||
-            !!stopUnavailable
-          }
-          title={stopUnavailable}
-          onClick={() => setStop(true)}
-        >
-          <Square size={13} />
-          停止参与
-        </Button>
       </div>
-      {stop && (
-        <div className="notice amber">
-          <strong>停止候选 C{run.candidate_number}</strong>
-          <p>
-            取消本候选的后续业务推进与交付资格；保留 worker、会话、PR
-            和工作区，原 worker 可能继续已有工作。
-          </p>
-          <div className="actions">
-            <Button onClick={() => setStop(false)}>取消</Button>
-            <Button
-              variant="destructive"
-              disabled={!online || busy}
-              onClick={async () => {
-                const accepted = await send(
-                  "stop_candidate",
-                  run.run_id,
-                  run.control_revision,
-                  { task_id: run.domain_task_id || run.task_id },
-                  { expected_control_revision: revision },
-                );
-                if (accepted) setStop(false);
-              }}
-            >
-              确认停止
-            </Button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
 export function Runs() {
-  const { api, online, snapshot } = useWorkspace();
+  const { api, online, snapshot, requests } = useWorkspace();
+  const [pending, setPending] = useState<{
+    envelope: Envelope;
+    epoch: number;
+    receipt?: Receipt;
+  }>();
+  const selectionEpoch = useRef(0);
   const [params, setParams] = useSearchParams();
   const taskID = params.get("task") ?? "";
   const runID = params.get("run") ?? "";
@@ -333,8 +308,65 @@ export function Runs() {
             candidateState(r) === filter,
         ),
     ) ?? [];
-  const chooseTask = (id: string) => setParams({ task: id });
-  const chooseRun = (id: string) => setParams({ task: selectedTask, run: id });
+  const chooseTask = (id: string) => {
+    selectionEpoch.current++;
+    setParams({ task: id });
+  };
+  const chooseRun = (id: string) => {
+    selectionEpoch.current++;
+    setParams({ task: selectedTask, run: id });
+  };
+  useEffect(() => {
+    if (!pending) return;
+    const receipt =
+      requests?.find(
+        (row) => row.envelope.request_id === pending.envelope.request_id,
+      )?.response || pending.receipt;
+    if (receipt?.status === "rejected") {
+      setPending(undefined);
+      return;
+    }
+    const stopped = runs.find(
+      (candidate) => candidate.run_id === pending.envelope.target_id,
+    );
+    if (receipt?.status !== "applied" || stopped?.participation !== "abandoned")
+      return;
+    if (
+      selectionEpoch.current !== pending.epoch ||
+      selected?.run_id !== stopped.run_id
+    ) {
+      setPending(undefined);
+      return;
+    }
+    const next = runs
+      .filter(
+        (candidate) =>
+          (candidate.domain_task_id || candidate.task_id) ===
+            (stopped.domain_task_id || stopped.task_id) &&
+          participating(candidate),
+      )
+      .sort((a, b) => b.candidate_number - a.candidate_number)[0];
+    if (next) {
+      setParams({
+        task: stopped.domain_task_id || stopped.task_id,
+        run: next.run_id,
+      });
+      setPending(undefined);
+    }
+  }, [pending, requests, runs, selected?.run_id, setParams]);
+  const stopPending = (candidate: Candidate) =>
+    !!(
+      pending?.envelope.target_id === candidate.run_id ||
+      requests?.some(
+        (row) =>
+          row.envelope.project_id === api.identity.project_id &&
+          row.envelope.instance_id === api.identity.instance_id &&
+          row.envelope.action === "stop_candidate" &&
+          row.envelope.target_id === candidate.run_id &&
+          row.response?.status !== "rejected" &&
+          (row.response?.status !== "applied" || participating(candidate)),
+      )
+    );
   return (
     <>
       <div className="page-heading">
@@ -409,7 +441,28 @@ export function Runs() {
             ))}
           </div>
           {selected ? (
-            <CandidateDetail key={selected.run_id} run={selected} />
+            <CandidateDetail
+              key={selected.run_id}
+              run={selected}
+              stopControl={
+                <StopCandidate
+                  run={selected}
+                  pending={stopPending(selected)}
+                  onRequest={(envelope) =>
+                    setPending({ envelope, epoch: selectionEpoch.current })
+                  }
+                  onResult={(envelope, receipt, unsent) =>
+                    setPending((current) =>
+                      current?.envelope.request_id !== envelope.request_id
+                        ? current
+                        : unsent || receipt?.status === "rejected"
+                          ? undefined
+                          : { ...current, receipt },
+                    )
+                  }
+                />
+              }
+            />
           ) : (
             <div className="empty">
               {selectedDependencyReason

@@ -49,16 +49,19 @@ export function candidateState(run: Candidate) {
 export function stopReason(run: Candidate, runs: Candidate[]) {
   if (!participating(run)) return "候选已结束，历史只读；资源保留";
   if (run.stop_requested) return "候选停止待核实";
-  if (!actionableStates.has(run.workflow_status))
-    return "执行状态待核实，刷新后再停止参与";
+  if (
+    !run.run_id ||
+    !run.control_revision ||
+    !run.candidate_number ||
+    !runs.some((other) => other.run_id === run.run_id)
+  )
+    return "等待服务器确认候选身份与版本";
   const task = run.domain_task_id || run.task_id;
   if (
     runs.filter(
       (other) =>
         (other.domain_task_id || other.task_id) === task &&
-        participating(other) &&
-        !other.stop_requested &&
-        actionableStates.has(other.workflow_status),
+        participating(other),
     ).length <= 1
   )
     return "只剩一个参与候选，不能停止";

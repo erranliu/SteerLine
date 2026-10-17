@@ -31,7 +31,7 @@
 
 `TaskPage`, `GraphPage`, conversation event/body 和活动 cursor 保留各自实际身份、版本、采样/事件时间。PR、交付和历史 Decision 从现有查询投影返回，不使用 UI 缓存补写。conversation 的空 attempt 选择原 run/Execution 的完整历史；指定历史 attempt 时核对正式会话投影归属。body 保留原 Attempt/revision/SHA，不改向当前 Attempt。
 
-候选详情 `CandidateSummary` 与历史 `WorkflowSummary` 明确返回 `participation`、`submission_status`、`stop_requested`；`workflow_status` 有公开 Runner Projection 时保留其 Status，无 Projection 时取提交状态。caller 的 abandoned/completed 不再覆盖执行观察；详情 winner/loser 仍由同一快照的 TaskDelivery 产生，历史没有交付上下文时不补造 winner。Web 的参与筛选使用 participation，回答等操作继续按原事实保守判断；停止请求不等于进程已停止。当前开发版本不为缺字段的旧 DTO 增加回退。
+候选详情 `CandidateSummary` 与历史 `WorkflowSummary` 明确返回 `participation`、`submission_status`、`stop_requested`；`workflow_status` 有公开 Runner Projection 时保留其 Status，无 Projection 时取提交状态。caller 的 abandoned/completed 不再覆盖执行观察；详情 winner/loser 仍由同一快照的 TaskDelivery 产生，历史没有交付上下文时不补造 winner。Web 的参与筛选使用 participation，回答等操作继续按原事实保守判断；停止请求不等于进程已停止。人工 `stop_candidate` 只退出 participation，不设置 Runner 停止义务的 stop_requested；详情另返回 candidate_stop_reason、candidate_stopped_by、candidate_ended_at 作为固定历史事实。当前开发版本不为缺字段的旧 DTO 增加回退。
 
 ## 命令映射
 
