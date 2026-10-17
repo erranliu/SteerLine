@@ -226,7 +226,8 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 	decision := &apiDecision{reader: reader}
 	ref := api.ProjectRef{ConfigPath: filepath.Join(runDir, "project.json"), Identity: "C:/repo", RunDir: runDir,
 		Presentation: api.ProjectPresentation{ServiceInstruction: "service-window.bat", NativeWorkflow: true, ConfigDigest: strings.Repeat("a", 64),
-			TaskAuthority: "native", WorkflowProtocol: "worker-flow-v1", ShutdownGrace: "5s", DefaultProfileID: "fixture",
+			ExecutionLocation: api.ExecutionLocation{ApplicationHome: "C:/调试 home", Repository: "C:/repo", Runner: &api.RunnerLocation{Executable: "C:/tools/steerrunner.exe"}},
+			TaskAuthority:     "native", WorkflowProtocol: "worker-flow-v1", ShutdownGrace: "5s", DefaultProfileID: "fixture",
 			Profiles: []api.ExecutionProfileSummary{{ID: "fixture", Name: "Fixture", Host: "local", Agent: "codex", Digest: strings.Repeat("b", 64),
 				AcceptedConfigVersion: "accepted-v1", ImplementationDisplay: []string{"Codex app-server"}, Details: []string{"Local fixture"}}}}}
 	client, err := productclient.Open(ctx, ref, func(context.Context, api.ProjectRef) (productclient.Resources, error) {

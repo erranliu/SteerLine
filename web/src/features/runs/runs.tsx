@@ -19,6 +19,7 @@ import { LastMessage } from "./last-message";
 import { RunnerWorkflow } from "./runner-workflow";
 import { nativeSessionReason } from "./native-session";
 import { RunTask, taskDependencyReason } from "./run-task";
+import { CopyExecutionInfo } from "./copy-execution-info";
 
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
@@ -177,22 +178,25 @@ function CandidateDetail({ run }: { run: Candidate }) {
             </span>
           </div>
         </div>
-        <Button
-          disabled={!!nativeUnavailable || busy}
-          title={nativeUnavailable || (busy ? "正在处理上一项操作" : "")}
-          onClick={() =>
-            void send("open_native_session", run.run_id, 0, {
-              run_id: run.run_id,
-              execution_id: run.execution_id,
-              attempt_id: run.attempt_id,
-              session_id: run.session_id,
-              session_generation: run.session_generation,
-            })
-          }
-        >
-          在 {run.host === "orca" ? "Orca" : "Codex"} 中查看{" "}
-          <ArrowUpRight size={14} />
-        </Button>
+        <div className="actions candidate-actions">
+          <CopyExecutionInfo run={run} />
+          <Button
+            disabled={!!nativeUnavailable || busy}
+            title={nativeUnavailable || (busy ? "正在处理上一项操作" : "")}
+            onClick={() =>
+              void send("open_native_session", run.run_id, 0, {
+                run_id: run.run_id,
+                execution_id: run.execution_id,
+                attempt_id: run.attempt_id,
+                session_id: run.session_id,
+                session_generation: run.session_generation,
+              })
+            }
+          >
+            在 {run.host === "orca" ? "Orca" : "Codex"} 中查看{" "}
+            <ArrowUpRight size={14} />
+          </Button>
+        </div>
       </div>
       <div className="run-meta">
         <span>Run {short(run.run_id)}</span>
