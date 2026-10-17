@@ -81,6 +81,7 @@ type ControlBlocker struct {
 
 // RunView projects caller participation and the last public Runner observation.
 type RunView struct {
+	RunnerStateDir   string                       `json:"runner_state_dir,omitempty"`
 	Participation    string                       `json:"participation"`
 	SubmissionStatus string                       `json:"submission_status"`
 	StopRequested    bool                         `json:"stop_requested"`

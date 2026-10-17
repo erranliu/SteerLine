@@ -20,6 +20,11 @@ export interface Profile {
 export interface Presentation {
   default_profile_id: string;
   profiles: Profile[];
+  execution_location?: {
+    application_home: string;
+    repository: string;
+    runner?: { executable: string };
+  };
 }
 export interface Task {
   task_id: string;
@@ -93,6 +98,7 @@ export interface Decision {
   };
 }
 export interface Candidate {
+  runner_state_dir?: string;
   participation: string;
   submission_status: string;
   stop_requested: boolean;
