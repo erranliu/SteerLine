@@ -123,3 +123,21 @@ N1 重验仅调整新夹具：业务 Spec/Plan 描述产物，阶段指令放 Ru
 - [真实测试 PR #431](https://github.com/erranliu/SteerlineTest/pull/431) 已合并，merge=7a101dbb4c179e6fcc52ca429d17cab56e3998cf；唯一 TaskDelivery，后继 ready 且未启动；专属 base/head、原 Runner 停止和目录清理均已核实。
 - 首次失败 PR #430 仅属本次测试，未合并；失败及重验 cleanup_complete 均 true。成功路径停服后的额外诊断读取 discovery 不存在，发生在已经正常 stop 后，不是业务/清理失败，保留原日志。
 - 未运行完整 L2、完整 L3/L4、Orca 或重复原生故障矩阵；未触碰 C:/SteerlineInstall / C:/SteerlineRuntime。RCB-M01 未安排，允许后置。
+
+
+## 本轮实现复审修复（2026-10-17）
+
+本轮修复实际请求的实例竞态、重建准入未核对原公开事实，以及普通 Codex 模型 schema 与生产不一致三项。Runner 增量见 [PR #20](https://github.com/erranliu/SteerRunner/pull/20)，调用方依赖其 `instance_binding.expected_instance_id: true`、实际 `--expected-instance-id` 围栏及修订后的组合 schema；先合入 Runner，再启用选择新 SHA 的 SteerLine。不会凭相同 version 接纳旧 EXE。
+
+- RCB-A02：业务/查询请求保留预期实例，Runner 发现和服务受理端均核对，绑定调用不隐式启动服务。重建时先以公开 CLI 对账原 Run/input_digest 或原 submit request_id，再开放准入；冲突/缺失/不可用不上线。pending 原输入撤销；unknown submit/控制标为只观察，查无原请求也不自动重发。原信封、停服正文和旧实例结算身份不改写。
+- RCB-A03：普通 Codex model 的首尾空白、全空白、换行与生产同判；Runner R1 为 18 个正反例，R3 四个包通过；细节归 Runner 专属验收。真实 EXE I1 已通过，包括匹配实例查询、直接 stale-instance 拒绝与原实例结算。
+- 固定 Runner 修复构建：`C:/Project/SteerRunner/.evidence/collaboration-fix-7f82fb0599514709af3590f77c1ca661/steerrunner.exe` 与 build.json；SHA `74a3ab9129f287fd362696ba8ba862a88701c46aa443c22b4d33879605696992`，resource `2cd6bac5029ab42d939fce9b25c97316a5dda404056e9a000616ee24726de1f5`，version/CLI 仍为 0.1.0-dev.1 / steerrunner-cli/v1。测试时来源 529b6c3 + dirty 实施，随后提交为 Runner `49c4ff7`；未覆盖安装或原构建。
+- U1 首轮含 33 个测试/subtest：app 正向/拒绝替代/拒绝重启摘要冲突及 bridge 定向项均通过；runnerclient 的模拟 query 错把 request_id 输出为空串而非 null，导致 2 项失败。仅修复该 fixture 信封，runnerclient 复验 20261017T034230.312157200Z 通过；没有把失败记录改为通过。原失败日志为 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261017T033936.394880200Z/summary.json`。主干合入后再执行完整 U1，结果追加如下。
+- U3：`20261017T034207.288275400Z/summary.json` 通过，覆盖 bridge/taskrunner/environmentcheck/sqlite，包括 pending/unknown 原 submit 零重发及原 Run/请求身份冲突；77 项全部通过，零跳过。
+- I1：`C:/Users/lmas1/AppData/Local/Temp/steerline-collaboration-fix-18e97677397a434891e2688601444622/cli-report/i1/summary.json` 通过；同目录 capabilities.json 来自真实修复 EXE，并更新仓库 fixture 的对应公开字段。
+- C1：`20261017T034151.106617800Z/summary.json` 通过且清理完成；范围仍为 controlled gate-only。
+- 合入主干 `65f7d6c4` 后，保留其执行位置复制及 Orca 接线；产品投影相关定向回归 `20261017T034549.647979900Z/summary.json` 通过，覆盖 U2 与执行位置投影。文档检查为 469 份 Markdown / 2866 个链接，零错误。
+
+以上相对 test-feedback 路径均位于 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/`。原 N1 证据只证明原固定构建；本轮新 EXE 的 N1 正在独立分级隔离夹具中执行，最终结果、真实 PR 与停止清理证明追加登记，不用原 N1 代替新构建验收。人工 RCB-M01 继续后置。
+
+- 合并后 W1：5 个文件、31 项测试通过（包含执行位置复制与协作 UI），TypeScript/Vite 生产构建通过。
