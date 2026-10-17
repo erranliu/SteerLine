@@ -1,6 +1,6 @@
 # 当前代码架构
 
-核对日期：2026-10-17；本次四轮解耦以 `2fb07ba1e74dfe6b16326d7ed462da9c57a5dec0` 起步，已集成最新主干 `11be2af5` 的 Runner 协作与空壳清理。本页按生产代码与 `go list` 的实际依赖维护，区分进程调用、Go 包依赖和资源所有权。原始核对见[架构解耦审视](../acceptance/architecture-decoupling-review.md)，实现与验证见[第一轮](../acceptance/architecture-decoupling-round1.md)、[第二轮](../acceptance/architecture-decoupling-round2.md)、[第三轮](../acceptance/architecture-decoupling-round3.md)和[第四轮验收](../acceptance/architecture-decoupling-round4.md)；其余建议尚未实施。
+核对日期：2026-10-17；本次四轮解耦以 `2fb07ba1e74dfe6b16326d7ed462da9c57a5dec0` 起步，已集成主干 `082e48bc` 的 Runner 协作、候选安全停止与空壳清理。本页按生产代码与 `go list` 的实际依赖维护，区分进程调用、Go 包依赖和资源所有权。原始核对见[架构解耦审视](../acceptance/architecture-decoupling-review.md)，实现与验证见[第一轮](../acceptance/architecture-decoupling-round1.md)、[第二轮](../acceptance/architecture-decoupling-round2.md)、[第三轮](../acceptance/architecture-decoupling-round3.md)、[第四轮](../acceptance/architecture-decoupling-round4.md)及[PR #350 复审](../acceptance/architecture-decoupling-pr350-review.md)；其余建议尚未实施。
 
 SteerLine 保留 Task/DAG、候选参与关系与唯一 TaskDelivery，执行已迁到独立 SteerRunner。两者只通过固定 EXE 的 `steerrunner-cli/v1` 协作；SteerLine 不导入 Runner Go 包，不读取其 codec、IPC、数据库或原生日志。当前真机验收范围仅 Windows/amd64 本机 Codex，Orca 适配器属于保留但未验能力，见[Runner 接入](../integration/steerrunner.md)。Web 为唯一交互前端，TUI 已按[退役决策](../acceptance/tui-retirement.md)移除。
 

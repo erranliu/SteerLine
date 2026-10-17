@@ -38,7 +38,7 @@ Task、候选参与关系与 TaskDelivery 由 SteerLine 管理；Runner 的 Run�
 
 领取时冻结任务契约、仓库/base、执行配置及原身份。SteerLine 在外部调用前保存候选与完整 CLI outbox，Runner 返回公开事实和回执；身份或结果不确定时沿原请求对账，不盲重发、不切换后端或派替代 worker。worker 在同一任务的原会话中处理实现和反馈；Runner 管理 development/1 或 development-audited/1 的步骤与审计修复预算；SteerLine 选择预设并按公开观察展示，不重建执行状态机。
 
-不同任务可以人工并行，同一任务可人工比较多个独立候选。候选各有自己的会话、工作区、分支、PR 与反馈，Task 只接受一个核验过的交付。产品不提供单候选放弃操作；Task 丢弃与执行停止分别记录。
+不同任务可以人工并行，同一任务可人工比较多个独立候选。候选各有自己的会话、工作区、分支、PR 与反馈，Task 只接受一个核验过的交付。人工停止参与须保留至少一个参与候选，只改变参与关系，不授权原生停止；Task 丢弃与终态停止义务分别记录。主干接入与验证见[候选安全停止](acceptance/web-candidate-stop.md)。
 
 自然语言成功、轮次结束、进程退出、worker_done 或 PR 创建都不证明交付。人合并任一已绑定候选 PR 后，中心核验该候选 PR 身份与合并事实，再在同一事务记录唯一 TaskDelivery、关闭 Task 和释放后继；其他候选已合并或查询未知不阻塞该交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。数据与状态细节见[数据模型](product-design/data-model.md)。
 

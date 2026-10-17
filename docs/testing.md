@@ -1,5 +1,7 @@
 # 测试总入口
 
+[PR #350 复审](acceptance/architecture-decoupling-pr350-review.md)补齐公开 CLI 任务 DTO 解码回归和 Web 根包扩展后的闭包守卫反例夹具；集成主干候选安全停止后，定向覆盖停止/交付竞态、四轮读取与交付语义及受影响 E2E 消费者编译。证据和复现命令在专属验收记录，不运行全量或真实模型。
+
 架构解耦第四轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round4.md)：Task 交付证据纯校验、原子回滚/唯一交付/后继释放、原回执重放及身份冲突拒绝，另核对 Task 纯值与已收口文件的依赖守卫。纯模型测试沿 L1 quick-rules；新增服务重放用例纳入 quick-execution，所有权守卫纳入 quick-execution-boundary。最新主干集成后补测受影响的读取/投影和带标签消费者编译，不运行全量或真实模型。
 
 架构解耦第三轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round3.md)：会话原身份/游标/JSON 字节预算、正文摘要及 UTF-8 分页、能力字段投影、活动预算溢出零推进、同事务事件流与取消/异常关闭，以及 SQLite/存储端口禁止全部产品层依赖。新增查询测试沿 L1 quick-rules，真实 SQLite 读取/资源验证沿现有 SQLite 测试，守卫反例沿 quick-execution-boundary；不运行全量或真实模型。
