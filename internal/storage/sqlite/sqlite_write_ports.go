@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -64,7 +64,7 @@ func (s *SQLiteStore) TransactPredecessors(ctx context.Context, fn func(storagep
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
 }
 
-func (s *SQLiteStore) InitializeProject(ctx context.Context, authority executionmodel.ProjectTaskAuthority) error {
+func (s *SQLiteStore) InitializeProject(ctx context.Context, authority taskmodel.ProjectTaskAuthority) error {
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var count int
 		if err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks`).Scan(&count); err != nil {

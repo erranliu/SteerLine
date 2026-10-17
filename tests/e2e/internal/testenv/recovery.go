@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/runnerstatepath"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 )
 
 func (p *Project) AssertOneDelivery(s Snapshot) {
@@ -17,7 +18,7 @@ func (p *Project) AssertOneDelivery(s Snapshot) {
 		p.Scenario.t.Fatal("expected one original candidate delivery")
 	}
 	for _, task := range s.Page.Tasks {
-		if task.TaskID == p.Tasks["b"].ID && (!task.DependencyReady || len(task.WorkflowRuns) > 0) {
+		if task.TaskID == p.Tasks["b"].ID && (!task.DependencyReady || len(task.Candidates) > 0) {
 			p.Scenario.t.Fatal("successor not ready and unstarted")
 		}
 	}

@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions(t *testing.T) {
@@ -17,7 +17,7 @@ func TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions(t *testing.
 			Ready:     &ports.NativeReadyTaskSnapshot{ProjectID: "project", AuthorityVersion: 7, GraphRevision: 9, DatabaseID: "db", DatabaseRevision: 11, SampledAt: sampledAt},
 		},
 		RunnerState: ports.RunnerSnapshot{
-			Graph: ports.TaskGraphSnapshot{Authority: executionmodel.ProjectTaskAuthority{ProjectIdentity: "project", AuthorityVersion: 7, GraphRevision: 9}, DatabaseID: "db", DatabaseRevision: 11},
+			Graph: ports.TaskGraphSnapshot{Authority: taskmodel.ProjectTaskAuthority{ProjectIdentity: "project", AuthorityVersion: 7, GraphRevision: 9}, DatabaseID: "db", DatabaseRevision: 11},
 		},
 	}
 	snapshot, err := snapshotFromApplicationRead(read)

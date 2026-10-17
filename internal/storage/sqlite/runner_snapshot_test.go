@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -75,9 +77,20 @@ func TestRunnerApplicationSnapshotSharesTransactionAcrossWriterCommit(t *testing
 		t.Fatal("writer commit leaked into pinned product/Runner snapshot", sampled.RunnerError)
 	}
 	require(t, tx.Commit())
+	// Projection happens after the read transaction ends and a different writer
+	// has committed. History and selected-task candidates must still use only
+	// the original sampled facts, without querying the latest Run.
+	oldPage := query.ProjectPage(sampled.ProjectView, tasks[0].TaskID, 0, api.ObservationSnapshot{}, api.ServiceConnection{}, nil, nil)
+	if oldPage.History == nil || len(oldPage.History.WorkflowRuns) != 1 || oldPage.History.WorkflowRuns[0].SubmissionStatus != "pending" || oldPage.History.WorkflowRuns[0].WorkflowStatus != "pending" || oldPage.SelectedNative == nil || len(oldPage.SelectedNative.WorkflowRuns) != 1 || oldPage.SelectedNative.WorkflowRuns[0].WorkflowStatus != "pending" {
+		t.Fatal("post-transaction history/detail projection lost its original sample", oldPage)
+	}
 	next, err := reader.ReadApplicationProjectSnapshot(ctx, project, tasks[0].TaskID, 500)
 	require(t, err)
 	if next.RunnerError != nil || next.ProjectView.Tasks.AuthorityVersion != 2 || next.RunnerState.Graph.Authority.AuthorityVersion != 2 || next.RunnerState.Checkpoint.Service.InstanceID != "new-instance" || next.RunnerState.Candidates[0].Projection.RunID != "public-run" {
 		t.Fatal("next sample omitted committed Runner facts", next.RunnerError)
+	}
+	newPage := query.ProjectPage(next.ProjectView, tasks[0].TaskID, 0, api.ObservationSnapshot{}, api.ServiceConnection{}, nil, nil)
+	if newPage.History == nil || len(newPage.History.WorkflowRuns) != 1 || newPage.SelectedNative == nil || len(newPage.SelectedNative.WorkflowRuns) != 1 || newPage.History.WorkflowRuns[0].WorkflowStatus != "running" || newPage.SelectedNative.WorkflowRuns[0].WorkflowStatus != "running" {
+		t.Fatal("new history/detail projection omitted committed facts", newPage)
 	}
 }

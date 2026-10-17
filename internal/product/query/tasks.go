@@ -64,6 +64,7 @@ func (q Service) ListNativeTasks(ctx context.Context, cursor string, limit int) 
 	if expectedDB != 0 && (page.DatabaseID != expectedDatabaseID || page.DatabaseRevision != expectedDB || page.AuthorityVersion != expectedAuthority || page.GraphRevision != expectedGraph) {
 		return storageports.NativeTaskPage{}, nativeErr("cursor_invalidated", "database or project authority changed between pages")
 	}
+	page.Protocol = NativeTaskProtocol
 	SetTaskPageCursor(&page, offset)
 	return page, nil
 }
@@ -96,6 +97,7 @@ func (q Service) ShowNativeTask(ctx context.Context, id string) (storageports.Na
 	if len(page.Tasks) != 1 || page.Tasks[0].TaskID != id {
 		return storageports.NativeTaskPage{}, nativeErr("contract_mismatch", "task detail differs from the requested task")
 	}
+	page.Protocol = NativeTaskProtocol
 	return page, nil
 }
 
@@ -126,7 +128,7 @@ func (q Service) ReadyNativeTaskSnapshot(ctx context.Context) (storageports.Nati
 	if err != nil {
 		return storageports.NativeReadyTaskSnapshot{}, err
 	}
-	return ReadySnapshot(graph), nil
+	return graph.ReadySnapshot(), nil
 }
 
 func (q Service) readTaskGraph(ctx context.Context) (storageports.TaskGraphSnapshot, error) {
@@ -138,10 +140,6 @@ func (q Service) readTaskGraph(ctx context.Context) (storageports.TaskGraphSnaps
 		return storageports.TaskGraphSnapshot{}, nativeErr("authority_mismatch", "task graph belongs to another project")
 	}
 	return snapshot, nil
-}
-
-func ReadySnapshot(graph storageports.TaskGraphSnapshot) storageports.NativeReadyTaskSnapshot {
-	return storageports.NativeReadyTaskSnapshot{ProjectID: graph.Authority.ProjectIdentity, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: taskmodel.ReadyTasks(graph.TaskGraph())}
 }
 
 // ReadyNativeTasks preserves the candidate API used by dispatch and control.

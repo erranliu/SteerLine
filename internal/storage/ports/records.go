@@ -21,6 +21,9 @@ type DomainEvent struct {
 	PayloadOmitted  bool      `json:"payload_omitted,omitempty"`
 }
 
+// MaxEventPageBytes bounds event payload materialization at the read port.
+const MaxEventPageBytes = 1 << 20
+
 type CommandRecord struct {
 	ProjectIdentity string    `json:"project_identity"`
 	CommandID       string    `json:"command_id"`

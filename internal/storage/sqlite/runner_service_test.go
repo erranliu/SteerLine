@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -33,7 +32,7 @@ func (d *runnerTaskDocuments) ReadCommittedRegularFile(context.Context, taskmode
 func TestRunnerPresetFreeze(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
-	a := executionmodel.ProjectTaskAuthority{ProjectIdentity: "runner-service", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	a := taskmodel.ProjectTaskAuthority{ProjectIdentity: "runner-service", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
 	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutProjectTaskAuthority(a) }))
 	docs := &runnerTaskDocuments{repository: a.Repository, body: []byte("# Acceptance\nfixed spec and plan\n")}
 	sum := sha256.Sum256(docs.body)

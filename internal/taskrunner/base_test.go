@@ -3,14 +3,14 @@ package taskrunner
 import (
 	"context"
 	"errors"
-	model "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/runnerbridge"
-	ports "github.com/erranliu/SteerLine/internal/storage/ports"
-	task "github.com/erranliu/SteerLine/internal/task/model"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
+	ports "github.com/erranliu/SteerLine/internal/storage/ports"
+	task "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type baseStore struct {
@@ -50,7 +50,7 @@ func TestRunnerBaseUsesFetchedTargetAndOriginalCandidateAncestry(t *testing.T) {
 	head := commit("current target")
 	git(repo, "clone", "--bare", "--quiet", repo, remote)
 	git(repo, "remote", "add", "origin", remote)
-	store := &baseStore{graph: ports.TaskGraphSnapshot{Authority: model.ProjectTaskAuthority{ProjectIdentity: "p", AuthorityVersion: 1, GraphRevision: 3}, ByID: map[string]task.TaskRecord{"1": {TaskID: "1", Status: "closed"}}, Edges: []task.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}, Deliveries: map[string]model.TaskDeliveryRecord{"1": {MergeCommit: merged}}}}
+	store := &baseStore{graph: ports.TaskGraphSnapshot{Authority: task.ProjectTaskAuthority{ProjectIdentity: "p", AuthorityVersion: 1, GraphRevision: 3}, ByID: map[string]task.TaskRecord{"1": {TaskID: "1", Status: "closed"}}, Edges: []task.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}, Deliveries: map[string]task.TaskDeliveryRecord{"1": {MergeCommit: merged}}}}
 	work := task.FixedWork{Record: task.TaskRecord{ProjectIdentity: "p", TaskID: "2"}, Contract: task.TaskContract{Remote: "origin", Branch: "main", Digest: "contract"}, Authority: store.graph.TaskGraph().Authority}
 	calls := 0
 	resolver := BaseResolver{Project: "p", Store: store, Git: func(ctx context.Context, args ...string) ([]byte, error) {

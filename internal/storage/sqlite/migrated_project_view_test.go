@@ -15,7 +15,7 @@ func requireProjectView(t *testing.T, view storageports.ProjectView) {
 	for _, err := range []error{view.TaskError, view.SelectedTaskError, view.HistoryError} {
 		require(t, err)
 	}
-	if view.Tasks == nil || view.Ready == nil || view.History == nil {
+	if view.Tasks == nil || view.Ready == nil || view.Candidates == nil {
 		t.Fatal("project view omitted a successful query section")
 	}
 	if view.Tasks.DatabaseID != view.Ready.DatabaseID || view.Tasks.DatabaseRevision != view.Ready.DatabaseRevision ||
@@ -28,7 +28,7 @@ func requireProjectView(t *testing.T, view storageports.ProjectView) {
 func TestProjectViewRejectsNilReader(t *testing.T) {
 	var store *SQLiteStore
 	view, err := productquery.NewService(store, "project").ReadProjectView(context.Background(), "", 1)
-	if err == nil || view.Tasks != nil || view.History != nil {
+	if err == nil || view.Tasks != nil || view.Candidates != nil {
 		t.Fatal("nil reader exposed a successful project view")
 	}
 }
@@ -70,7 +70,7 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 	}))
 	view := reader.Reader.ReadProjectViewTx(ctx, tx, project, "99", 1)
 	requireProjectView(t, view)
-	if view.Tasks.DatabaseRevision != page.DatabaseRevision || view.Tasks.NextCursor == "" || view.SelectedTask == nil || view.SelectedTask.Status != "open" ||
+	if view.Tasks.DatabaseRevision != page.DatabaseRevision || !view.Tasks.HasMore || view.Tasks.NextCursor != "" || view.SelectedTask == nil || view.SelectedTask.Status != "open" ||
 		len(view.Ready.Tasks) != 3 {
 		t.Fatalf("writer commit leaked into the pinned product view: %+v", view)
 	}
@@ -97,7 +97,7 @@ func TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection(t *testing
 	missing, err := query.ReadProjectView(ctx, "100", 1)
 	require(t, err)
 	requireNativeAuditCode(t, missing.SelectedTaskError, "task_not_found")
-	if missing.Tasks == nil || missing.Ready == nil || missing.History == nil || missing.SelectedTask != nil {
+	if missing.Tasks == nil || missing.Ready == nil || missing.Candidates == nil || missing.SelectedTask != nil {
 		t.Fatal("missing selection discarded usable product data")
 	}
 	if _, err := query.ReadProjectView(ctx, "", 1); err != nil {
@@ -112,7 +112,7 @@ func TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection(t *testing
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
 	failed, err := query.ReadProjectView(canceled, "", 1)
-	if err == nil || failed.Tasks != nil || failed.History != nil {
+	if err == nil || failed.Tasks != nil || failed.Candidates != nil {
 		t.Fatal("canceled transaction exposed a successful partial snapshot")
 	}
 }

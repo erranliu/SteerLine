@@ -7,7 +7,6 @@ import (
 	"errors"
 	"time"
 
-	model "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -20,7 +19,7 @@ type ControlStore interface {
 	LookupCommand(context.Context, string, string) (ports.CommandRecord, bool, error)
 	EnqueueCommand(context.Context, ports.CommandRecord) (ports.CommandRecord, bool, error)
 	UpdateCommand(context.Context, ports.CommandRecord) error
-	SetRunnerDispatch(context.Context, ports.RunnerDispatch) (model.ProjectTaskAuthority, error)
+	SetRunnerDispatch(context.Context, ports.RunnerDispatch) (taskmodel.ProjectTaskAuthority, error)
 }
 type Controls struct {
 	Tasks *Service

@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	model "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
@@ -22,7 +21,7 @@ import (
 func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
-	a := model.ProjectTaskAuthority{ProjectIdentity: "runner-control", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	a := taskmodel.ProjectTaskAuthority{ProjectIdentity: "runner-control", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
 	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutProjectTaskAuthority(a) }))
 	docs := &runnerTaskDocuments{repository: a.Repository, body: []byte("# Acceptance\nfixed contract\n")}
 	sum := sha256.Sum256(docs.body)

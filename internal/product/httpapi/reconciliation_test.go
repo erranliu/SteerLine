@@ -14,11 +14,11 @@ import (
 	"time"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
-	model "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	execution "github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
@@ -207,7 +207,7 @@ func TestAPIAuthoritativeSQLiteBinding(t *testing.T) {
 						t.Fatal(err)
 					}
 					defer store.Close()
-					if err = store.InitializeProject(context.Background(), model.ProjectTaskAuthority{ProjectIdentity: "C:/repo", Authority: "native", AuthorityVersion: 1, Repository: "C:/repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}); err != nil {
+					if err = store.InitializeProject(context.Background(), taskmodel.ProjectTaskAuthority{ProjectIdentity: "C:/repo", Authority: "native", AuthorityVersion: 1, Repository: "C:/repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}); err != nil {
 						t.Fatal(err)
 					}
 					envelope := CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: kind, TargetID: "decision-original", ExpectedVersion: 3}

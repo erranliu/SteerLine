@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -35,7 +34,7 @@ func TestTaskQueriesUseOnlyTaskReader(t *testing.T) {
 	second := taskmodel.TaskRecord{TaskID: "2", Status: "open"}
 	reader := &taskReader{
 		page:  storageports.NativeTaskPage{Protocol: NativeTaskProtocol, ProjectID: "project", Tasks: []storageports.NativeTaskDetail{{TaskRecord: first}}},
-		graph: storageports.TaskGraphSnapshot{Authority: executionmodel.ProjectTaskAuthority{ProjectIdentity: "project"}, Tasks: []taskmodel.TaskRecord{first, second}, ByID: map[string]taskmodel.TaskRecord{"1": first, "2": second}, Edges: []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}},
+		graph: storageports.TaskGraphSnapshot{Authority: taskmodel.ProjectTaskAuthority{ProjectIdentity: "project"}, Tasks: []taskmodel.TaskRecord{first, second}, ByID: map[string]taskmodel.TaskRecord{"1": first, "2": second}, Edges: []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}},
 	}
 	service := Service{Project: "project", Tasks: reader}
 	page, err := service.ListNativeTasks(context.Background(), "", 1)

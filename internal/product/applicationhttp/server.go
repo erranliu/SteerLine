@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,7 +14,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
-
+	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 )
 
@@ -38,9 +37,7 @@ type Server struct {
 
 var taskReadRoute = regexp.MustCompile(`^/(task-batches/[0-9a-f]{32}|tasks/[^/]+/predecessors/requests/[0-9a-f]{32})$`)
 var taskWriteRoute = regexp.MustCompile(`^/(task-batch-validation|task-batches|tasks/[^/]+/predecessors)$`)
-var readRoute = regexp.MustCompile(`^/(identity|tasks|tasks/[^/]+|graph|snapshot|candidates|presentation|environment-checks|environment-checks/(options|[0-9a-f]{32})|runs/[^/]+|runs/[^/]+/(activity|last-message|conversation|final|body|recovery|decision-eligibility)|commands/[0-9a-f]{32})$`)
 
-func AllowedRead(route string) bool { return readRoute.MatchString(route) }
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.Endpoint.Authorized(r) {
 		localservice.Error(w, 403, "source_rejected", "native application credential, exact loopback Host and no Origin required")
@@ -72,7 +69,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, root+"/projects/")
 	id, route, ok := strings.Cut(path, "/")
 	route = "/" + route
-	if !ok || len(id) != 64 || path == r.URL.Path || !(r.Method == "GET" && (AllowedRead(route) || taskReadRoute.MatchString(route)) || r.Method == "POST" && (route == "/commands" || taskWriteRoute.MatchString(route)) && r.URL.RawQuery == "") {
+	if !ok || len(id) != 64 || path == r.URL.Path || !(r.Method == "GET" && (httpcontract.AllowedProjectRead(route) || taskReadRoute.MatchString(route)) || r.Method == "POST" && (route == "/commands" || taskWriteRoute.MatchString(route)) && r.URL.RawQuery == "") {
 		localservice.Error(w, 404, "route_not_found", "route outside application protocol")
 		return
 	}

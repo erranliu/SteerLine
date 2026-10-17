@@ -40,7 +40,7 @@ func TestWaitingMergeRestart(t *testing.T) {
 		t.Fatal("SteerLine restart submitted new business input")
 	}
 	for _, task := range after.Page.Tasks {
-		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {
+		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.Candidates) > 0) {
 			t.Fatal("restart released or started blocked successor")
 		}
 	}
@@ -56,7 +56,7 @@ func TestWaitingMergeRestart(t *testing.T) {
 			}
 			delivery, _ = json.Marshal(task.Delivery)
 		case p.Tasks["b"].ID:
-			if !task.DependencyReady || len(task.WorkflowRuns) > 0 || task.Status != "open" {
+			if !task.DependencyReady || len(task.Candidates) > 0 || task.Status != "open" {
 				t.Fatal("successor not ready and unstarted")
 			}
 		}

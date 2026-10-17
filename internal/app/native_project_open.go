@@ -7,7 +7,6 @@ import (
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -110,7 +109,7 @@ func openNativeTaskProject(ctx context.Context, c *Config, owned, writable bool)
 	if err != nil {
 		return nil, err
 	}
-	authority := executionmodel.ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: target, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	authority := taskmodel.ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: target, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if err = writer.InitializeProject(ctx, authority); err != nil {
 		_ = writer.Close()
 		return nil, err

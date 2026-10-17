@@ -4,10 +4,10 @@ import "context"
 
 // Product query readers are read-only capabilities. Implementations own SQL
 // and transactions; product/query owns cursor and projection rules.
-// ActivityReader samples identity records and bounded events in one read transaction.
+// ActivityReader pins binding and Runner events in one read transaction. The
+// consumer closes the stream after its projection budget or row limit is met.
 type ActivityReader interface {
-	ReadActivityView(context.Context, string, string, string, string, int64, int, int) (ActivityBinding, []DomainEvent, error)
-	ReadRecentActivityView(context.Context, string, string, string, string) (ActivityBinding, []DomainEvent, error)
+	OpenActivityView(context.Context, string, string, string, string, int64, int, bool) (ActivityBinding, ActivityRecords, error)
 }
 
 type EventReader interface {

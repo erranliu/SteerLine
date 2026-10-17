@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -15,7 +14,7 @@ type taskStorage interface {
 	storageports.Commands
 	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
-	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
+	NativeAuthority(context.Context, string) (taskmodel.ProjectTaskAuthority, error)
 	TransactTaskBatch(context.Context, func(storageports.BatchTx) error) error
 	TransactPredecessors(context.Context, func(storageports.PredecessorTx) error) error
 }

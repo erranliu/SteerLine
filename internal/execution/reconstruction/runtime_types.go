@@ -19,18 +19,18 @@ type Repository struct {
 
 // Runtime combines a sampled service checkpoint, task graph and public Runner facts.
 type Runtime struct {
-	SchemaVersion int                                 `json:"schema_version"`
-	Revision      uint64                              `json:"revision"`
-	UpdatedAt     time.Time                           `json:"updated_at"`
-	HeartbeatAt   time.Time                           `json:"heartbeat_at"`
-	Service       ServiceState                        `json:"service"`
-	Repository    Repository                          `json:"repository"`
-	Tasks         []taskmodel.TaskRecord              `json:"tasks,omitempty"`
-	Deliveries    []executionmodel.TaskDeliveryRecord `json:"-"`
-	CurrentTask   *string                             `json:"current_task"`
-	SlotOccupied  bool                                `json:"slot_occupied"`
-	Runs          []*RunView                          `json:"runs"`
-	Control       ControlState                        `json:"control"`
+	SchemaVersion int                            `json:"schema_version"`
+	Revision      uint64                         `json:"revision"`
+	UpdatedAt     time.Time                      `json:"updated_at"`
+	HeartbeatAt   time.Time                      `json:"heartbeat_at"`
+	Service       ServiceState                   `json:"service"`
+	Repository    Repository                     `json:"repository"`
+	Tasks         []taskmodel.TaskRecord         `json:"tasks,omitempty"`
+	Deliveries    []taskmodel.TaskDeliveryRecord `json:"-"`
+	CurrentTask   *string                        `json:"current_task"`
+	SlotOccupied  bool                           `json:"slot_occupied"`
+	Runs          []*RunView                     `json:"runs"`
+	Control       ControlState                   `json:"control"`
 }
 
 type ServiceState struct {

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"time"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -34,8 +33,8 @@ func (s Reader) TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, 
 	return TaskGraphSnapshotTx(ctx, tx, project, s.nativeBinding)
 }
 
-func TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project string, binding *executionmodel.ProjectTaskAuthority) (storageports.TaskGraphSnapshot, error) {
-	out := storageports.TaskGraphSnapshot{ByID: map[string]taskmodel.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]executionmodel.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
+func TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project string, binding *taskmodel.ProjectTaskAuthority) (storageports.TaskGraphSnapshot, error) {
+	out := storageports.TaskGraphSnapshot{ByID: map[string]taskmodel.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]taskmodel.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
 	if project == "" {
 		return out, nativeErr("authority_mismatch", "project identity is required")
 	}
@@ -152,7 +151,7 @@ func TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project str
 		return out, err
 	}
 	for rows.Next() {
-		var d executionmodel.TaskDeliveryRecord
+		var d taskmodel.TaskDeliveryRecord
 		var merged, recorded string
 		d.ProjectIdentity = project
 		if err = rows.Scan(&d.TaskID, &d.SelectedWorkflowRunID, &d.PRInstance, &d.PRRepository, &d.PRNumber, &d.PRURL, &d.MergeCommit, &merged, &recorded, &d.Evidence); err != nil {
@@ -169,7 +168,7 @@ func TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project str
 			rows.Close()
 			return out, nativeErr("contract_mismatch", "invalid delivery recording timestamp")
 		}
-		if err = executionmodel.ValidateDelivery(d, out.Authority.Branch); err != nil {
+		if err = taskmodel.ValidateDelivery(d, out.Authority.Branch); err != nil {
 			rows.Close()
 			return out, err
 		}
