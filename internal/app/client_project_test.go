@@ -96,6 +96,14 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
+	location := client.Project().Presentation.ExecutionLocation
+	if location.ApplicationHome != os.Getenv("STEERLINE_HOME") || location.Repository != repo || location.Runner == nil || location.Runner.Executable != cfg.RunnerExecution.Runner.Executable {
+		t.Fatalf("project presentation lost its bound execution location: %+v", location)
+	}
+	location.Runner.Executable = "changed-by-caller"
+	if client.Project().Presentation.ExecutionLocation.Runner.Executable != cfg.RunnerExecution.Runner.Executable {
+		t.Fatal("presentation caller changed the bound Runner location")
+	}
 	_, missingTaskErr := client.ShowTask(ctx, "999")
 	var publicError *api.Error
 	var domainError *taskmodel.Error

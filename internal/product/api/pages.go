@@ -21,6 +21,7 @@ type ProjectRef struct {
 }
 
 type ProjectPresentation struct {
+	ExecutionLocation  ExecutionLocation         `json:"execution_location"`
 	ServiceInstruction string                    `json:"service_instruction"`
 	NativeWorkflow     bool                      `json:"native_workflow"`
 	ConfigDigest       string                    `json:"config_digest"`
@@ -29,6 +30,17 @@ type ProjectPresentation struct {
 	ShutdownGrace      string                    `json:"shutdown_grace"`
 	DefaultProfileID   string                    `json:"default_profile_id"`
 	Profiles           []ExecutionProfileSummary `json:"profiles"`
+}
+
+// ExecutionLocation contains only paths needed to locate the execution site.
+type ExecutionLocation struct {
+	ApplicationHome string          `json:"application_home"`
+	Repository      string          `json:"repository"`
+	Runner          *RunnerLocation `json:"runner,omitempty"`
+}
+
+type RunnerLocation struct {
+	Executable string `json:"executable"`
 }
 
 // ExecutionProfileSummary deliberately has no implementation envelope, command
@@ -152,6 +164,7 @@ type StageResultSummary struct {
 }
 
 type CandidateSummary struct {
+	RunnerStateDir   string               `json:"runner_state_dir,omitempty"`
 	Participation    string               `json:"participation"`
 	SubmissionStatus string               `json:"submission_status"`
 	StopRequested    bool                 `json:"stop_requested"`
@@ -446,6 +459,10 @@ type WorkspaceSummary struct {
 type RecoveryPRSummary struct{ URL, State, Repository, BaseBranch string }
 
 func CloneProjectRef(ref ProjectRef) ProjectRef {
+	if runner := ref.Presentation.ExecutionLocation.Runner; runner != nil {
+		copy := *runner
+		ref.Presentation.ExecutionLocation.Runner = &copy
+	}
 	ref.Presentation.Profiles = append([]ExecutionProfileSummary(nil), ref.Presentation.Profiles...)
 	for i := range ref.Presentation.Profiles {
 		p := &ref.Presentation.Profiles[i]
