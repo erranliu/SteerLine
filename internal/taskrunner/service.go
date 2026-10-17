@@ -28,7 +28,7 @@ type Store interface {
 	taskapp.Reader
 	RunnerCandidates(context.Context, string, string) ([]runnerbridge.Candidate, error)
 	ReserveRunnerCandidate(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
-	StopRunnerCandidate(context.Context, string, string, uint64) (runnerbridge.Candidate, error)
+	StopRunnerCandidate(context.Context, string, string, uint64, string, string) (runnerbridge.Candidate, error)
 	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 	TaskResult(context.Context, string, string) (taskmodel.ResultReceipt, bool, error)
 	CommitRunnerTaskResult(context.Context, storageports.RunnerResult) (executionmodel.TaskDeliveryReceipt, error)
@@ -193,10 +193,16 @@ func (s *Service) RecoverInputs(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) Stop(ctx context.Context, candidate string, revision uint64) (runnerbridge.Candidate, error) {
+func (s *Service) Stop(ctx context.Context, candidate string, revision uint64, requestID, requestedBy string) (runnerbridge.Candidate, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.Store.StopRunnerCandidate(ctx, s.Project, candidate, revision)
+	var result runnerbridge.Candidate
+	err := s.Bridge.WithCandidate(s.Project, candidate, func() error {
+		var err error
+		result, err = s.Store.StopRunnerCandidate(ctx, s.Project, candidate, revision, requestID, requestedBy)
+		return err
+	})
+	return result, err
 }
 func (s *Service) Dispatch(ctx context.Context) error {
 	ready, err := s.Tasks.Ready(ctx, s.Project)

@@ -55,6 +55,7 @@ it("keeps Chinese composition/Enter separate from explicit submit and original c
     online: true,
     busy: false,
     send,
+    submit: (envelope) => api.submit(envelope),
     refresh: () => {},
   } as Workspace;
   const candidate = {

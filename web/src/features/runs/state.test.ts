@@ -4,6 +4,8 @@ import type { Candidate } from "../../shared/api/types";
 const base = {
   task_id: "task",
   run_id: "a",
+  candidate_number: 1,
+  control_revision: 1,
   participation: "active",
   submission_status: "accepted",
   stop_requested: false,
@@ -59,6 +61,12 @@ it("stopped participation preserves the execution fact and cannot stop the last 
     ]),
   ).toBe("");
   expect(stopReason(stopped, [base, stopped])).toContain("历史只读");
+  expect(
+    stopReason({ ...base, control_revision: 0 }, [
+      base,
+      { ...base, run_id: "second" },
+    ]),
+  ).toContain("等待服务器确认");
 });
 
 it("keeps public Runner pr_ready candidates open for feedback and merge", () => {
@@ -100,13 +108,13 @@ it("keeps participation, delivery and raw observation independent", () => {
         base,
         { ...base, run_id: "second" },
       ]),
-    ).toContain("状态待核实");
+    ).toBe("");
     expect(
       stopReason(base, [
         base,
         { ...base, run_id: "unknown", workflow_status: status },
       ]),
-    ).toContain("只剩一个");
+    ).toBe("");
   }
   expect(businessOpen({ ...base, stop_requested: true })).toBe(false);
   expect(stopReason({ ...base, stop_requested: true }, [base])).toContain(

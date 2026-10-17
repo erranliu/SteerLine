@@ -24,6 +24,8 @@ SteerLine 的 L1 是固定的快速集成/单元集合；完整 L2 是 controlle
 
 SteerLine 的 Full 只运行现有确定性 Go 测试，不包含 L2/L3/L4/live。L2/L3/L4 的机器登记为 `tests/e2e/suites.json`，可读内容清单及本项目维护约定见 [E2E 指南](../tests/e2e/README.md#分级测试内容清单与维护)；实际结果在任务专属 acceptance 文档维护。
 
+Web 候选停止参与修复的最小调用方/SQLite/HTTP/Web 验证见[Plan](plans/web-candidate-stop.plan.md)与[验收](acceptance/web-candidate-stop.md)，不启动安装现场或真实 worker。
+
 ## 日常选择
 
 按变更运行最小必要范围，L1/Full 不自动运行真实模型。所有验收行为及实时结果在 [acceptance](acceptance/README.md)记录，原日志使用新建临时目录。

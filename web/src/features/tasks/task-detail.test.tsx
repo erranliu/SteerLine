@@ -50,6 +50,7 @@ it("preserves cached task content on refresh failure but never uses it for a dif
     online: true,
     snapshot: fixtureSnapshot(api),
     send: async () => true,
+    submit: (envelope) => api.submit(envelope),
     busy: false,
     refresh: () => {},
   };

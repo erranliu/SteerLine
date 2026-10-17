@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Api } from "../shared/api/client";
 import { invalidateCommand, receiptChanged } from "../shared/api/queries";
 import { listRequests } from "../shared/api/journal";
-import type { StoredRequest } from "../shared/api/types";
+import type { StoredRequest, Envelope } from "../shared/api/types";
 
 export function useOriginalRequests(api: Api, online: boolean) {
   const queries = useQueryClient();
@@ -81,6 +81,19 @@ export function useOriginalRequests(api: Api, online: boolean) {
       clearTimeout(timer);
     };
   }, [online, api, queries]);
+  const submit = async (envelope: Envelope) => {
+    if (!online) throw new Error("当前连接不能变更业务状态");
+    try {
+      const result = await mutation.mutateAsync(envelope);
+      if (result.status === "rejected" || result.status === "outcome_unknown") {
+        setError(result.diagnostic || "操作结果待核实，请查询原请求");
+        setErrorRequest(result.request_id);
+      }
+      return result;
+    } catch {
+      return undefined;
+    }
+  };
   const send = async (
     action: string,
     target: string,
@@ -88,20 +101,14 @@ export function useOriginalRequests(api: Api, online: boolean) {
     payload: Record<string, unknown>,
     extra: Record<string, number> = {},
   ) => {
-    if (!online) throw new Error("当前连接不能变更业务状态");
-    try {
-      const result = await mutation.mutateAsync(
-        api.envelope(action, target, version, payload, extra),
-      );
-      if (result.status === "rejected" || result.status === "outcome_unknown") {
-        setError(result.diagnostic || "操作结果待核实，请查询原请求");
-        setErrorRequest(result.request_id);
-        return false;
-      }
-      return true;
-    } catch {
-      return false;
-    }
+    const result = await submit(
+      api.envelope(action, target, version, payload, extra),
+    );
+    return (
+      !!result &&
+      result.status !== "rejected" &&
+      result.status !== "outcome_unknown"
+    );
   };
   const reconcile = useMutation({
     mutationFn: (row: StoredRequest) => api.reconcile(row.envelope),
@@ -121,6 +128,7 @@ export function useOriginalRequests(api: Api, online: boolean) {
     error,
     clearError: () => setError(""),
     send,
+    submit,
     busy: mutation.isPending,
     reconcile: (row: StoredRequest) => reconcile.mutate(row),
     reconciling: reconcile.isPending,

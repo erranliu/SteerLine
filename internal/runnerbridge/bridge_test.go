@@ -38,6 +38,7 @@ type fixtureCLI struct {
 	run                    runnerclient.Run
 	submits, stops, inputs int
 	lostSubmit             bool
+	reads                  int
 	commands               map[string]runnerclient.Command
 }
 
@@ -51,6 +52,7 @@ func (f *fixtureCLI) Submit(_ context.Context, r runnerclient.Request) (runnercl
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: "submit-command", ReceiptStatus: "accepted", ActionStatus: "pending"}, nil
 }
 func (f *fixtureCLI) Inspect(_ context.Context, selector, id string, _ bool) (runnerclient.Inspection, error) {
+	f.reads++
 	copy := f.run
 	if selector == "run-id" {
 		return runnerclient.Inspection{Run: &copy}, nil
@@ -79,7 +81,7 @@ func (f *fixtureCLI) Call(_ context.Context, command string, _ []string, r *runn
 	return runnerclient.Response{Protocol: runnerclient.Protocol, OK: true, Data: body}, nil
 }
 func setup() (*Bridge, *memoryStore, *fixtureCLI) {
-	s := &memoryStore{value: Candidate{Project: "project", TaskID: "1", ID: "candidate", Revision: 1, StateDir: "state", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "fixed-submit", Input: json.RawMessage(`{"spec":"fixed"}`)}}, events: map[string]bool{}}
+	s := &memoryStore{value: Candidate{Project: "project", TaskID: "1", ID: "candidate", Revision: 1, Participation: "active", StateDir: "state", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "fixed-submit", Input: json.RawMessage(`{"spec":"fixed"}`)}}, events: map[string]bool{}}
 	f := &fixtureCLI{run: runnerclient.Run{RunID: "run", Revision: 1, InputDigest: "input", NewInputsAllowed: true, Execution: runnerclient.Execution{Branch: "branch"}}, commands: map[string]runnerclient.Command{}}
 	return &Bridge{Store: s, Client: func(string) CLI { return f }}, s, f
 }
@@ -247,3 +249,61 @@ func TestSteerRunnerRestartOriginalBinding(t *testing.T) {
 		}
 	})
 }
+
+func TestCandidateWithdrawal(t *testing.T) {
+	for _, state := range []string{"pending", "unknown", "accepted"} {
+		t.Run(state, func(t *testing.T) {
+			b, s, f := setup()
+			s.value.Participation = "abandoned"
+			s.value.SubmitState = state
+			if state == "accepted" {
+				s.value.RunID = "run"
+				s.value.Projection = &f.run
+			}
+			s.value.Actions = []Action{{Command: "resume", State: "unknown", Request: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "old-resume", Input: json.RawMessage(`{"expected_revision":1}`)}}}
+			before := clone(s.value)
+			for range 2 {
+				if err := b.Step(context.Background(), "project", "candidate"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if f.submits+f.stops+f.inputs+f.reads != 0 {
+				t.Fatal("manual withdrawal caused new CLI action/observation")
+			}
+			if string(mustJSON(s.value)) != string(mustJSON(before)) {
+				t.Fatal("manual withdrawal changed execution facts")
+			}
+			if err := b.RecoverInputs(context.Background(), "project", "candidate"); err != nil {
+				t.Fatal(err)
+			}
+			if err := b.VerifyBinding(context.Background(), "project", "candidate"); err != nil {
+				t.Fatal(err)
+			}
+			if f.submits+f.stops+f.inputs+f.reads != 0 {
+				t.Fatal("restart actively observed a withdrawn candidate")
+			}
+			err := b.QueueControl(context.Background(), "project", "candidate", "resume", runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "new-resume", Input: json.RawMessage(`{"expected_revision":1}`)})
+			if err == nil {
+				t.Fatal("withdrawn candidate accepted new explicit input")
+			}
+			// Task termination later grants its own stop obligation, including late acceptance.
+			s.value.StopRequested = true
+			if state == "unknown" {
+				runID := "run"
+				f.commands[s.value.Submit.RequestID] = runnerclient.Command{CommandID: "late-submit", Command: "submit", RunID: &runID}
+			}
+			if err := b.Step(context.Background(), "project", "candidate"); err != nil {
+				t.Fatal(err)
+			}
+			if state == "pending" {
+				if f.submits+f.stops != 0 || s.value.SubmitState != "cancelled" {
+					t.Fatal("Task stop dispatched unsent work")
+				}
+			} else if f.stops != 1 || !s.value.InputsRevoked || s.value.Participation != "abandoned" {
+				t.Fatal("Task stop obligation was lost after manual withdrawal")
+			}
+		})
+	}
+}
+
+func mustJSON(value any) []byte { body, _ := json.Marshal(value); return body }
