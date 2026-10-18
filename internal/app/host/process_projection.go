@@ -1,11 +1,11 @@
 package host
 
 import (
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
-func publicProcessProbe(factsPort executionbackend.ProcessFactsPort, identity *executionbackend.ProcessIdentity) productapi.ProcessProbe {
+func publicProcessProbe(factsPort hostcontract.ProcessFactsPort, identity *hostcontract.ProcessIdentity) productapi.ProcessProbe {
 	if factsPort == nil {
 		return productapi.ProcessProbe{State: productapi.ProcessUnknown, Reason: "application process-facts port is required"}
 	}

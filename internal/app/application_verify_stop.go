@@ -11,13 +11,13 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
-	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type ApplicationStopVerification struct {
@@ -156,7 +156,7 @@ func verifyProjectStopped(ctx context.Context, c Config, p contract.ProjectShutd
 	return proof, nil
 }
 
-func verifyStoppedCheckpoint(cp *ports.ServiceCheckpoint, digest string, p contract.ProjectShutdown, id contract.Identity) error {
+func verifyStoppedCheckpoint(cp *hostcontract.ServiceCheckpoint, digest string, p contract.ProjectShutdown, id contract.Identity) error {
 	if cp == nil || cp.Service.InstanceID != p.InstanceID || cp.Service.ConfigDigest != digest || cp.Service.Status != "stopped" || cp.Service.Ready || cp.Service.ProcessIdentity == nil {
 		return errors.New("original stopped project checkpoint or frozen configuration differs")
 	}

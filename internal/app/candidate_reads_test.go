@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -45,7 +46,7 @@ func TestCandidateReadFactsAcrossViews(t *testing.T) {
 			if test.delivery != "" {
 				graph.Deliveries = map[string]taskmodel.TaskDeliveryRecord{"task": {TaskID: "task", SelectedWorkflowRunID: "candidate"}}
 			}
-			rt := taskrunner.Project(storageports.RunnerSnapshot{Graph: graph, Candidates: []runnerstate.Candidate{c}}, storageports.ServiceCheckpoint{})
+			rt := taskrunner.Project(storageports.RunnerSnapshot{Graph: graph, Candidates: []runnerstate.Candidate{c}}, hostcontract.ServiceCheckpoint{})
 			page := productServicePage(&rt)
 			if len(page.Runs) != 1 {
 				t.Fatalf("runs: %+v", page.Runs)

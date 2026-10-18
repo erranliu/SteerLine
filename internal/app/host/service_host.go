@@ -4,8 +4,8 @@ import (
 	"errors"
 	"io"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -32,7 +32,7 @@ func (s *ServiceHost) ControlRequestDigest(id string) string {
 	return rawRequestDigest(controlRequestPath(s.Config.RunDir, id))
 }
 
-func (s *ServiceHost) CurrentProcessIdentity() (*executionbackend.ProcessIdentity, error) {
+func (s *ServiceHost) CurrentProcessIdentity() (*hostcontract.ProcessIdentity, error) {
 	if s.Config.ProcessFacts == nil {
 		return nil, errors.New("application process-facts port is required")
 	}

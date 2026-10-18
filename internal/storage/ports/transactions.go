@@ -6,11 +6,12 @@ package ports
 import (
 	"context"
 
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type Metadata interface {
-	SaveCheckpoint(context.Context, ServiceCheckpoint) (ServiceCheckpoint, error)
+	SaveCheckpoint(context.Context, hostcontract.ServiceCheckpoint) (hostcontract.ServiceCheckpoint, error)
 	Heartbeat(context.Context, string) error
 }
 

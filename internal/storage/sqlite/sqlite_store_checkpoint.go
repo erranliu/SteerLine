@@ -8,12 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 // SaveCheckpoint publishes service metadata only. It has no business write set.
-func (s *SQLiteStore) SaveCheckpoint(ctx context.Context, checkpoint storageports.ServiceCheckpoint) (storageports.ServiceCheckpoint, error) {
-	var committed storageports.ServiceCheckpoint
+func (s *SQLiteStore) SaveCheckpoint(ctx context.Context, checkpoint hostcontract.ServiceCheckpoint) (hostcontract.ServiceCheckpoint, error) {
+	var committed hostcontract.ServiceCheckpoint
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var err error
 		committed, err = tx.publishCheckpoint(checkpoint)
@@ -22,12 +23,12 @@ func (s *SQLiteStore) SaveCheckpoint(ctx context.Context, checkpoint storageport
 	return committed, err
 }
 
-func (tx *sqliteTx) publishCheckpoint(checkpoint storageports.ServiceCheckpoint) (storageports.ServiceCheckpoint, error) {
+func (tx *sqliteTx) publishCheckpoint(checkpoint hostcontract.ServiceCheckpoint) (hostcontract.ServiceCheckpoint, error) {
 	project := checkpoint.Repository.Identity
 	if project == "" {
 		return checkpoint, errors.New("checkpoint repository identity is required")
 	}
-	if checkpoint.SchemaVersion != storageports.WorkerFlowRuntimeSchema {
+	if checkpoint.SchemaVersion != hostcontract.ServiceCheckpointSchema {
 		return checkpoint, fmt.Errorf("unsupported checkpoint schema %d", checkpoint.SchemaVersion)
 	}
 	var authority string

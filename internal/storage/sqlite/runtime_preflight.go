@@ -3,7 +3,8 @@ package sqlite
 import (
 	"context"
 	"database/sql"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 func validateNativeSQLiteRuntimeProjection(ctx context.Context, db *sql.DB) error {
@@ -17,8 +18,8 @@ func validateNativeSQLiteRuntimeProjection(ctx context.Context, db *sql.DB) erro
 		if err = rows.Scan(&payload); err != nil {
 			return schemaFailure(err, "cannot read the saved runtime projection without mutation")
 		}
-		var checkpoint storageports.ServiceCheckpoint
-		if err = decode(payload, &checkpoint); err != nil || checkpoint.SchemaVersion != storageports.WorkerFlowRuntimeSchema || checkpoint.Repository.Identity == "" {
+		var checkpoint hostcontract.ServiceCheckpoint
+		if err = decode(payload, &checkpoint); err != nil || checkpoint.SchemaVersion != hostcontract.ServiceCheckpointSchema || checkpoint.Repository.Identity == "" {
 			return nativeErr("unsupported_schema", "unsupported service checkpoint; preserve the database")
 		}
 

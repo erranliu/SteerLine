@@ -2,13 +2,13 @@ package app
 
 import (
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 type executionResources struct{}
 
-func (executionResources) WorkerTreeAbsent(identity executionbackend.ProcessIdentity) bool {
+func (executionResources) WorkerTreeAbsent(identity hostcontract.ProcessIdentity) bool {
 	return executionprocess.WorkerTreeAbsent(identity)
 }
 

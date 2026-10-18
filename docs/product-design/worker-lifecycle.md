@@ -38,7 +38,7 @@ W02/W18 的调用方目录布局：SteerLine 用本地卷根 `slr/<128-bit base3
 
 安装迁移发现 W18 的 Windows broker 差异：WMI 可将调用者原有但禁用的特权启用。Runner 在原返回句柄所指的挂起子进程上，仅禁用这些被额外启用的原有特权，再完整比对授权组和特权；不新增或启用特权，不放宽用户、完整性级别、restricted/elevated 或 EXE 身份检查。`USED_FOR_ACCESS` 是访问历史位，不参与授权属性比较。无法保持原权限仍拒绝启动。本次验证仅覆盖真实空闲服务启动/退出及权限反例，不替代任务执行/恢复验收；见[安装迁移验收](../acceptance/install-cutover-20261015.md)。
 
-“Worker 层”指独立 SteerRunner 内持久化的 worker 执行规则（迁出前位于本仓 `internal/execution`），而非仅内存中的 Worker 或 observer 句柄。本仓现存 `execution/model`、`backend` 仅承载调用方仍消费的 checkpoint/展示值及自身进程端口；Task 交付、项目权威和回执规则已归 `task/model`，见[第四轮解耦验收](../acceptance/architecture-decoupling-round4.md)。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。
+“Worker 层”指独立 SteerRunner 内持久化的 worker 执行规则（迁出前位于本仓 `internal/execution`），而非仅内存中的 Worker 或 observer 句柄。本仓现存 `execution/model`、`backend` 仅承载调用方仍消费的展示/配置值及进程执行端口；Task 交付规则已归 `task/model`，service checkpoint、宿主服务/控制状态和进程观察契约已归 `hostcontract`，见[第四轮](../acceptance/architecture-decoupling-round4.md)与[第五轮解耦验收](../acceptance/architecture-decoupling-round5.md)。W18 的资源最终所有者、排空/关闭顺序、失败保锁与原实例停服/结算证明不变；本轮验证其定向回归，不改变节点、异常、重试或恢复矩阵。观察器不存在时，Execution、Attempt、Command、Operation 仍足以确定原目标和恢复边界。
 
 | 所有者 | 负责内容 |
 | --- | --- |

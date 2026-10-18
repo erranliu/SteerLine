@@ -3,13 +3,14 @@ package taskrunner
 import (
 	"context"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"sync"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -17,7 +18,7 @@ import (
 type ActorStore interface {
 	Store
 	ReadRunnerSnapshot(context.Context, string) (storageports.RunnerSnapshot, error)
-	SaveCheckpoint(context.Context, storageports.ServiceCheckpoint) (storageports.ServiceCheckpoint, error)
+	SaveCheckpoint(context.Context, hostcontract.ServiceCheckpoint) (hostcontract.ServiceCheckpoint, error)
 }
 type ActorOptions struct {
 	RunnerBuild           *runnercontract.BuildPin
@@ -25,7 +26,7 @@ type ActorOptions struct {
 	Tasks                 *Service
 	Store                 ActorStore
 	Host                  hostport.HostPort
-	Repository            storageports.CheckpointRepository
+	Repository            hostcontract.Repository
 	Mode, ConfigDigest    string
 	Heartbeat             time.Duration
 	// Control validates, fixes and commits a product request; it cannot invoke
@@ -57,8 +58,8 @@ func NewActor(options ActorOptions) (*Actor, error) {
 		return nil, errors.New("service process identity is unavailable")
 	}
 	at := time.Now().UTC()
-	checkpoint := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: options.Repository, UpdatedAt: at, HeartbeatAt: at,
-		Service: storageports.CheckpointServiceState{RunnerBuild: options.RunnerBuild, Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
+	checkpoint := hostcontract.ServiceCheckpoint{SchemaVersion: hostcontract.ServiceCheckpointSchema, Repository: options.Repository, UpdatedAt: at, HeartbeatAt: at,
+		Service: hostcontract.ServiceState{RunnerBuild: options.RunnerBuild, Mode: options.Mode, InstanceID: id(), PID: identity.PID, Status: "starting", Claimant: options.Tasks.Claimant, ProcessIdentity: identity, ConfigDigest: options.ConfigDigest, ControlProtocol: 1, Capabilities: []string{"task_dag", "runner_cli", "start_task", "start_candidate", "stop_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "runner_reply", "runner_resume", "answer_decision"}, HeartbeatIntervalMS: options.Heartbeat.Milliseconds()}}
 	viewerAvailable := false
 	for _, adapter := range options.NativeSessionAdapters {
 		if adapter == "codex-app-server" || adapter == "orca-terminal" {

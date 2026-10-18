@@ -14,6 +14,7 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 // Host implements only the small process/file port consumed by execution
@@ -26,7 +27,7 @@ func (host Host) StartManaged(command *exec.Cmd) (executionbackend.StopHandle, e
 	return StartManaged(command)
 }
 
-func (Host) InspectProcess(identity *executionbackend.ProcessIdentity) string {
+func (Host) InspectProcess(identity *hostcontract.ProcessIdentity) string {
 	return InspectProcess(identity)
 }
 

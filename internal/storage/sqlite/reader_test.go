@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	readsqlite "github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -64,7 +65,7 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := writer.SaveCheckpoint(ctx, storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: storageports.CheckpointRepository{Identity: "project"}, Service: storageports.CheckpointServiceState{InstanceID: "sample"}, HeartbeatAt: at}); err != nil {
+	if _, err := writer.SaveCheckpoint(ctx, hostcontract.ServiceCheckpoint{SchemaVersion: hostcontract.ServiceCheckpointSchema, Repository: hostcontract.Repository{Identity: "project"}, Service: hostcontract.ServiceState{InstanceID: "sample"}, HeartbeatAt: at}); err != nil {
 		t.Fatal(err)
 	}
 	uriPath := filepath.ToSlash(path)

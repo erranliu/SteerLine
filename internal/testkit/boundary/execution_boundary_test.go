@@ -365,7 +365,7 @@ func TestTM06ContractValueClosure(t *testing.T) {
 					"go.mod":                       "module " + module + "\n\ngo 1.23\n",
 					"internal/otherhelper/edge.go": "package otherhelper\nimport _ \"" + dependency + "\"\n",
 				}
-				for _, pkg := range []string{"internal/app", "internal/app/host", "internal/taskrunner", "internal/runnerbridge", "internal/runnerclient", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/product/query", "internal/product/query/taskgraph", "web/server", "cmd/steerline-web"} {
+				for _, pkg := range []string{"internal/hostcontract", "internal/app", "internal/app/host", "internal/taskrunner", "internal/runnerbridge", "internal/runnerclient", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/product/query", "internal/product/query/taskgraph", "web/server", "cmd/steerline-web"} {
 					path := filepath.Join(root, pkg, "empty.go")
 					if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 						t.Fatal(err)
@@ -466,7 +466,7 @@ func TestTM07StorageBoundary(t *testing.T) {
 		{"query_use_case", "internal/storage/sqlite", "package sqlite\nimport productquery \"" + productQuery + "\"\nvar _ = productquery.NewService\n", "storage sqlite forbidden dependency"},
 		{"former_query_projection_exception", "internal/storage/sqlite", "package sqlite\nimport productquery \"" + productQuery + "\"\nvar _ = productquery.CandidateSummary\n", "storage sqlite forbidden dependency"},
 		{"storage_sqlite_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + storageSQLite + "\"\n", "execution reconstruction dependency"},
-		{"storage_ports_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + module + "/internal/storage/ports\"\n", ""},
+		{"host_contract_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + hostContract + "\"\n", ""},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -483,7 +483,7 @@ func TestTM07StorageBoundary(t *testing.T) {
 			}
 			if fixture.want == "" {
 				if len(report.Violations) != 0 {
-					t.Fatalf("pure storage port was rejected: %+v", report)
+					t.Fatalf("pure host contract was rejected: %+v", report)
 				}
 				return
 			}

@@ -8,11 +8,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -32,7 +33,7 @@ func TestRunnerApplicationSnapshotSharesTransactionAcrossWriterCommit(t *testing
 	body, _ := json.Marshal(input)
 	candidate := runnerbridge.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "snapshot-candidate", Revision: 1, Explicit: true, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "operator", ContractDigest: contract.Digest, BaseRevision: base, Participation: "active", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "snapshot-submit", Input: body}}
 	require(t, writer.ReserveRunnerCandidate(ctx, taskmodel.FixedWork{Record: tasks[0], Contract: contract, Authority: graph.TaskGraph().Authority}, candidate, false))
-	oldCheckpoint, err := writer.SaveCheckpoint(ctx, storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Service: storageports.CheckpointServiceState{InstanceID: "old-instance", Status: "running"}, Repository: storageports.CheckpointRepository{Identity: project}})
+	oldCheckpoint, err := writer.SaveCheckpoint(ctx, hostcontract.ServiceCheckpoint{SchemaVersion: hostcontract.ServiceCheckpointSchema, Service: hostcontract.ServiceState{InstanceID: "old-instance", Status: "running", ProcessIdentity: &hostcontract.ProcessIdentity{PID: 41, Created: "old-process"}, RunnerBuild: &runnercontract.BuildPin{SHA256: "old-build"}}, Repository: hostcontract.Repository{Identity: project}})
 	require(t, err)
 	var sequence int
 	var name, path string
@@ -59,6 +60,8 @@ func TestRunnerApplicationSnapshotSharesTransactionAcrossWriterCommit(t *testing
 		}
 		next := oldCheckpoint
 		next.Service.InstanceID = "new-instance"
+		next.Service.ProcessIdentity = &hostcontract.ProcessIdentity{PID: 42, Created: "new-process"}
+		next.Service.RunnerBuild = &runnercontract.BuildPin{SHA256: "new-build"}
 		if _, err := writer.SaveCheckpoint(ctx, next); err != nil {
 			return err
 		}
@@ -73,6 +76,9 @@ func TestRunnerApplicationSnapshotSharesTransactionAcrossWriterCommit(t *testing
 		})
 	})
 	require(t, err)
+	if cp := sampled.RunnerState.Checkpoint; cp == nil || cp.Service.ProcessIdentity.Created != "old-process" || cp.Service.RunnerBuild.SHA256 != "old-build" {
+		t.Fatal("host process/build facts crossed the pinned checkpoint snapshot", cp)
+	}
 	if sampled.RunnerError != nil || sampled.ProjectView.Tasks == nil || sampled.ProjectView.Tasks.AuthorityVersion != 1 || sampled.RunnerState.Checkpoint == nil || sampled.RunnerState.Checkpoint.Service.InstanceID != "old-instance" || sampled.RunnerState.Graph.Authority.AuthorityVersion != 1 || len(sampled.RunnerState.Candidates) != 1 || sampled.RunnerState.Candidates[0].RunID != "" {
 		t.Fatal("writer commit leaked into pinned product/Runner snapshot", sampled.RunnerError)
 	}
@@ -86,6 +92,9 @@ func TestRunnerApplicationSnapshotSharesTransactionAcrossWriterCommit(t *testing
 	}
 	next, err := reader.ReadApplicationProjectSnapshot(ctx, project, tasks[0].TaskID, 500)
 	require(t, err)
+	if cp := next.RunnerState.Checkpoint; cp == nil || cp.Service.ProcessIdentity.Created != "new-process" || cp.Service.RunnerBuild.SHA256 != "new-build" {
+		t.Fatal("next checkpoint omitted committed host identity", cp)
+	}
 	if next.RunnerError != nil || next.ProjectView.Tasks.AuthorityVersion != 2 || next.RunnerState.Graph.Authority.AuthorityVersion != 2 || next.RunnerState.Checkpoint.Service.InstanceID != "new-instance" || next.RunnerState.Candidates[0].Projection.RunID != "public-run" {
 		t.Fatal("next sample omitted committed Runner facts", next.RunnerError)
 	}
