@@ -451,27 +451,10 @@ func cleanupDebugRuntime(t *testing.T, d *debugRelease, owner *testprocess.Proce
 
 func cleanupDebugRunners(t *testing.T, d *debugRelease) {
 	t.Helper()
-	scopes := []*debugRelease{d}
-	if d.webProjects == 2 {
-		scopes = append(scopes, d.secondary())
-	}
-	for _, scope := range scopes {
-		ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
-		common, err := scope.git("rev-parse", "--path-format=absolute", "--git-common-dir")
-		if err == nil {
-			state, readErr := ReadWorkflow(ctx, filepath.Join(scope.stateDir(), "steerline.db"), strings.ToLower(filepath.Clean(common)))
-			if readErr == nil {
-				err = CleanupRunner(ctx, filepath.Join(scope.home, "execution.json"), runnerstatepath.Directory(scope.stateDir()), state.Candidates)
-				if err == nil {
-					err = runnerstatepath.RemoveStopped(scope.stateDir())
-				}
-			} else if !os.IsNotExist(readErr) {
-				err = readErr
-			}
-		}
-		cancel()
-		if err != nil {
-			t.Errorf("original Runner cleanup: %v", err)
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), 130*time.Second)
+	defer cancel()
+	// The product stop already covers every project; do not stop/erase the same service twice.
+	if err := CleanupRunner(ctx, filepath.Join(d.home, "execution.json"), runnerstatepath.Directory(d.home), nil); err != nil {
+		t.Errorf("shared Runner cleanup: %v", err)
 	}
 }

@@ -67,28 +67,29 @@ type Controls struct {
 	Reason    string `json:"reason"`
 }
 type Run struct {
-	Workflow         Workflow   `json:"workflow"`
-	Audit            *Audit     `json:"audit,omitempty"`
-	Materials        []Material `json:"materials"`
-	RunID            string     `json:"run_id"`
-	Revision         uint64     `json:"revision"`
-	Title            string     `json:"title"`
-	InputDigest      string     `json:"input_digest"`
-	ResourceDigest   string     `json:"resource_digest"`
-	Status           string     `json:"status"`
-	Phase            string     `json:"phase"`
-	Step             string     `json:"step"`
-	Diagnostic       string     `json:"diagnostic"`
-	NewInputsAllowed bool       `json:"new_inputs_allowed"`
-	ResumeRequired   bool       `json:"resume_required"`
-	StopStatus       string     `json:"stop_status"`
-	Execution        Execution  `json:"execution"`
-	Question         *Question  `json:"question"`
-	Controls         Controls   `json:"controls"`
-	PR               *PRFact    `json:"pr"`
-	Final            *Final     `json:"final"`
-	Summary          string     `json:"summary"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	Correlation      map[string]string `json:"correlation,omitempty"`
+	Workflow         Workflow          `json:"workflow"`
+	Audit            *Audit            `json:"audit,omitempty"`
+	Materials        []Material        `json:"materials"`
+	RunID            string            `json:"run_id"`
+	Revision         uint64            `json:"revision"`
+	Title            string            `json:"title"`
+	InputDigest      string            `json:"input_digest"`
+	ResourceDigest   string            `json:"resource_digest"`
+	Status           string            `json:"status"`
+	Phase            string            `json:"phase"`
+	Step             string            `json:"step"`
+	Diagnostic       string            `json:"diagnostic"`
+	NewInputsAllowed bool              `json:"new_inputs_allowed"`
+	ResumeRequired   bool              `json:"resume_required"`
+	StopStatus       string            `json:"stop_status"`
+	Execution        Execution         `json:"execution"`
+	Question         *Question         `json:"question"`
+	Controls         Controls          `json:"controls"`
+	PR               *PRFact           `json:"pr"`
+	Final            *Final            `json:"final"`
+	Summary          string            `json:"summary"`
+	UpdatedAt        time.Time         `json:"updated_at"`
 }
 
 type Material struct {

@@ -80,6 +80,15 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 		if digestValue(old.Withdrawal) != digestValue(c.Withdrawal) {
 			return nativeErr("immutable_task", "candidate update changed its withdrawal fact")
 		}
+		if len(c.Actions) < len(old.Actions) {
+			return nativeErr("immutable_task", "candidate update removed an original Runner action")
+		}
+		for i, action := range old.Actions {
+			next := c.Actions[i]
+			if action.CallerRequestID != next.CallerRequestID || action.CallerRequestDigest != next.CallerRequestDigest || action.Command != next.Command || digestValue(action.Request) != digestValue(next.Request) {
+				return nativeErr("immutable_task", "candidate update changed an original Runner action request")
+			}
+		}
 		if c.RunID != "" && c.SubmitState != "accepted" {
 			return nativeErr("contract_mismatch", "Run binding requires its accepted original submission")
 		}

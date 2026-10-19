@@ -20,10 +20,11 @@ import (
 // RunnerFixture is a scripted public CLI peer. It owns no agent, transport,
 // workflow or native recovery state. Calls are evidence of caller side effects.
 type RunnerFixture struct {
-	Runs     map[string]runnercontract.Run     `json:"runs"`
-	Requests map[string]runnercontract.Command `json:"requests"`
-	Bodies   map[string]string                 `json:"bodies"`
-	Calls    []string                          `json:"calls"`
+	Providers map[string]string                 `json:"providers"`
+	Runs      map[string]runnercontract.Run     `json:"runs"`
+	Requests  map[string]runnercontract.Command `json:"requests"`
+	Bodies    map[string]string                 `json:"bodies"`
+	Calls     []string                          `json:"calls"`
 }
 
 func RunnerCLI(args []string) (bool, error) {
@@ -66,6 +67,9 @@ func RunnerCLI(args []string) (bool, error) {
 			return true, err
 		}
 	}
+	if s.Providers == nil {
+		s.Providers = map[string]string{}
+	}
 	var request runnercontract.Request
 	var id any
 	if args[0] != "inspect" && args[0] != "events" && args[0] != "open-native-session" {
@@ -80,6 +84,9 @@ func RunnerCLI(args []string) (bool, error) {
 		}
 		if code == "" && request.RequestID != "" {
 			providerPath := statePathForDirectory(stateDir)
+			if cmd, ok := s.Requests[request.RequestID]; ok && cmd.RunID != nil && s.Providers[*cmd.RunID] != "" {
+				providerPath = s.Providers[*cmd.RunID]
+			}
 			provider, err := Read(providerPath)
 			if err != nil {
 				return true, err
@@ -119,7 +126,8 @@ func RunnerCLI(args []string) (bool, error) {
 		if err := json.Unmarshal(request.Input, &input); err != nil {
 			return true, err
 		}
-		provider, err := Read(statePathForDirectory(stateDir))
+		providerPath := statePathForDirectory(input.Repository.LocalPath)
+		provider, err := Read(providerPath)
 		if err != nil {
 			return true, err
 		}
@@ -129,8 +137,9 @@ func RunnerCLI(args []string) (bool, error) {
 		input.Repository.LocalPath = provider.LocalRepository
 		runID = "run-" + request.RequestID
 		sum := sha256.Sum256(request.Input)
-		run := runnercontract.Run{RunID: runID, Revision: 1, Title: input.Title, InputDigest: hex.EncodeToString(sum[:]), Status: "running", Phase: "running", StopStatus: "active", NewInputsAllowed: true, Controls: runnercontract.Controls{CanStop: true}, UpdatedAt: time.Now().UTC(), Execution: runnercontract.Execution{AttemptID: "attempt-" + runID, Generation: "fixture", TurnID: "fixture-turn", SessionID: "session-" + runID, Workspace: input.Repository.LocalPath, Branch: "codex/fixture/" + request.RequestID}}
+		run := runnercontract.Run{Correlation: input.Correlation, RunID: runID, Revision: 1, Title: input.Title, InputDigest: hex.EncodeToString(sum[:]), Status: "running", Phase: "running", StopStatus: "active", NewInputsAllowed: true, Controls: runnercontract.Controls{CanStop: true}, UpdatedAt: time.Now().UTC(), Execution: runnercontract.Execution{AttemptID: "attempt-" + runID, Generation: "fixture", TurnID: "fixture-turn", SessionID: "session-" + runID, Workspace: input.Repository.LocalPath, Branch: "codex/fixture/" + request.RequestID}}
 		s.Runs[runID] = run
+		s.Providers[runID] = providerPath
 		cmd := runnercontract.Command{CommandID: "command-" + request.RequestID, RequestID: request.RequestID, RunID: &runID, Command: "submit", ReceiptStatus: "accepted", ActionStatus: "completed"}
 		s.Requests[request.RequestID] = cmd
 		s.Bodies[request.RequestID] = string(request.Input)
@@ -150,7 +159,10 @@ func RunnerCLI(args []string) (bool, error) {
 		if !ok {
 			return respond(nil, "run_not_found")
 		}
-		providerPath := statePathForDirectory(stateDir)
+		providerPath := s.Providers[runID]
+		if providerPath == "" {
+			providerPath = statePathForDirectory(stateDir)
+		}
 		provider, err := Read(providerPath)
 		if err != nil {
 			return true, err

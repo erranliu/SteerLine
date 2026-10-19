@@ -28,17 +28,17 @@ import (
 )
 
 type ProjectRuntime struct {
-	config              Config
-	hostConfig          host.Config
-	configID            string
-	repoLock, runLock   *host.RepoLock
-	log                 io.WriteCloser
-	store               *sqlite.SQLiteStore
-	runner              projectRunner
-	product             *productclient.Client
-	port                *runtimeProjectPort
-	closeOnce           sync.Once
-	localErr, runnerErr error
+	runner            *applicationRunner // borrowed; only ApplicationDirectory stops it
+	config            Config
+	hostConfig        host.Config
+	configID          string
+	repoLock, runLock *host.RepoLock
+	log               io.WriteCloser
+	store             *sqlite.SQLiteStore
+	product           *productclient.Client
+	port              *runtimeProjectPort
+	closeOnce         sync.Once
+	localErr          error
 }
 
 func (r *ProjectRuntime) prepare(ctx context.Context, home string, e *catalogEntry, global []byte) (err error) {
@@ -109,7 +109,8 @@ func (r *ProjectRuntime) prepare(ctx context.Context, home string, e *catalogEnt
 	return nil
 }
 
-func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntry, global []byte, publish func(*runtimeProjectPort)) (result contract.ProjectShutdown, retErr error) {
+func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntry, global []byte, runner *applicationRunner, publish func(*runtimeProjectPort)) (result contract.ProjectShutdown, retErr error) {
+	r.runner = runner
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
@@ -117,28 +118,31 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	defer func() {
 		cancel()
 		r.close()
-		result = contract.ProjectShutdown{ConfigID: r.configID, ProjectID: e.view.ProjectID, LocalClosed: r.localErr == nil, LocksReleased: r.localErr == nil, ResourcesSettled: r.runner.ResourceSettlementError() == nil}
+		result = contract.ProjectShutdown{ConfigID: r.configID, ProjectID: e.view.ProjectID, LocalClosed: r.localErr == nil, LocksReleased: r.localErr == nil}
 		if r.port != nil {
 			result.InstanceID = r.port.instance
 		}
-		retErr = errors.Join(retErr, r.localErr, r.runnerErr, r.runner.ResourceSettlementError())
-		if !result.LocalClosed || !result.ResourcesSettled {
+		retErr = errors.Join(retErr, r.localErr)
+		if !result.LocalClosed {
 			result.Diagnostic = retErr.Error()
 		}
 	}()
 	if err := r.prepare(ctx, home, e, global); err != nil {
 		return result, err
 	}
+	r.config.runtimeRunner = &runner.client
 	if retErr = bindRunnerBuild(ctx, r.config, r.store); retErr != nil {
 		return
 	}
-	if retErr = r.runner.start(ctx, r.config.RunnerExecution, r.config.RunDir, positiveDuration(r.config.CommandTimeout, 30*time.Second), r.config.runnerPublication()); retErr != nil {
+	if retErr = runner.validateProject(r.config); retErr != nil {
 		return
 	}
-	r.config.runtimeRunner = &r.runner.client
+	if retErr = newEnvironmentCheckPort(r.config, r.store).service.VerifyBindings(ctx); retErr != nil {
+		return result, fmt.Errorf("original Runner check binding remains unverified: %w", retErr)
+	}
 	hostPort := host.NewServiceHost(r.hostConfig, "off", r.log, serviceActivityFormatter{})
 	var service *taskrunner.Actor
-	service, retErr = newRunnerService(r.config, hostPort, r.store, r.runner.client, r.runner.info)
+	service, retErr = newRunnerService(r.config, hostPort, r.store, runner.client, runner.info)
 	if retErr != nil {
 		return
 	}
@@ -185,16 +189,6 @@ func (r *ProjectRuntime) close() {
 		}
 		if r.product != nil {
 			r.localErr = errors.Join(r.localErr, r.product.Close())
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		r.runnerErr = r.runner.shutdown(ctx)
-		cancel()
-		// Preserve the former EndActor/Close pair's bounded follow-up. A confirmed
-		// stop only re-reads failed evidence; an unknown stop retains its request ID.
-		if r.runner.ResourceSettlementError() != nil && r.runner.stop != nil {
-			ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
-			r.runnerErr = errors.Join(r.runnerErr, r.runner.shutdown(ctx))
-			cancel()
 		}
 		if r.store != nil {
 			r.localErr = errors.Join(r.localErr, r.store.Close())

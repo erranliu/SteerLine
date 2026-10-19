@@ -108,10 +108,12 @@ func TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost(t *testing.T)
 	if err := verifyBackendStop(ctx, home, backend, &id); err == nil {
 		t.Fatal("missing shutdown result became success")
 	}
-	original := contract.Shutdown{Version: 1, Identity: id, Clean: true, Projects: []contract.ProjectShutdown{{ConfigID: "one.json", ProjectID: strings.Repeat("a", 64), InstanceID: strings.Repeat("b", 32), LocalClosed: true, LocksReleased: true, ResourcesSettled: true}}}
+	original := contract.Shutdown{Version: 2, Identity: id, Clean: true, Runner: &contract.RunnerShutdown{ResourcesSettled: true}, Projects: []contract.ProjectShutdown{{ConfigID: "one.json", ProjectID: strings.Repeat("a", 64), InstanceID: strings.Repeat("b", 32), LocalClosed: true, LocksReleased: true}}}
 	for _, kind := range []string{"wrong-instance", "local-unclosed", "worker-unknown", "unclean", "missing-projects", "duplicate-project"} {
 		t.Run(kind, func(t *testing.T) {
 			result := original
+			shared := *original.Runner
+			result.Runner = &shared
 			result.Projects = append([]contract.ProjectShutdown(nil), original.Projects...)
 			switch kind {
 			case "wrong-instance":
@@ -119,7 +121,7 @@ func TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost(t *testing.T)
 			case "local-unclosed":
 				result.Projects[0].LocalClosed = false
 			case "worker-unknown":
-				result.Projects[0].ResourcesSettled = false
+				result.Runner.ResourcesSettled = false
 			case "missing-projects":
 				result.Projects = nil
 			case "duplicate-project":

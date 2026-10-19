@@ -39,6 +39,11 @@ func TestEnvironmentCheckStoreCASAndIsolation(t *testing.T) {
 		t.Fatal("stale CAS accepted")
 	}
 	r.Revision++
+	r.StateDir = "other-runner-directory"
+	if err = db.SaveCheck(ctx, r, 2); err == nil {
+		t.Fatal("immutable Runner directory changed")
+	}
+	r.StateDir = ""
 	r.Input.Publication = nil
 	if err = db.SaveCheck(ctx, r, 2); err == nil {
 		t.Fatal("publication removed")

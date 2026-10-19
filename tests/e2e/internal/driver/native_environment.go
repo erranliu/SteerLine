@@ -12,7 +12,12 @@ import (
 // Controlled fixtures still receive their isolated empty Codex home.
 func (c *Client) Environment(base []string) []string {
 	if c.NativeHome == "" {
-		return Environment(base, c.Home, c.StatePath)
+		result := Environment(base, c.Home, c.StatePath)
+		routes := filepath.Join(c.Home, "fixture-routes.json")
+		if _, err := os.Stat(routes); err == nil {
+			result = append(result, "STEERLINE_E2E_CONTROLLED_ROUTES="+routes)
+		}
+		return result
 	}
 	var result []string
 	count := 0

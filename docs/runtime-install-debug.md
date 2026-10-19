@@ -31,7 +31,7 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 
 首次运行冻结 live/simulate。未完成的准备可以用同方案重试，换方案必须创建新包。`start.bat` 通过正式统一入口启动后端与 Web 并打开浏览器，调试启动窗口负责持有 Git/provider helper；`stop.bat` 自动读取已冻结方案，正常停止产品并结束本次辅助进程。Ctrl+C 也请求正常清理。交互窗口与自动进程使用同一入口；Web 浏览器关闭不会停止项目服务或 worker。
 
-所有项目文件、Git 数据、配置、数据库、运行状态、日志与证据位于本包；Git/Codex/gh/Windows 属于机器基础工具，live 的 GitHub/模型属于明确外部服务。路径链接和 Git alternates 被拒绝，不回落到安装版 exe。生成目录固定位置使用，不承诺已有运行目录移动后的可用性。
+项目文件、Git 数据、配置、数据库、应用日志与证据位于本包；Runner 执行状态/工作区/日志在本 home 派生的本地卷根短目录，多个项目共用一服务和目录，Git/Codex/gh/Windows 属于机器基础工具，live 的 GitHub/模型属于明确外部服务。路径链接和 Git alternates 被拒绝，不回落到安装版 exe。生成目录固定位置使用，不承诺已有运行目录移动后的可用性。
 
 ## 无备份重置
 
@@ -42,7 +42,7 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 .\reset-SteerlineTest.bat --no-pause
 ```
 
-重置不做备份。所有任务恢复 open，清除领取、执行、决策、交付和本包控制状态，恢复 manual 且未暂停。保留任务编号、内容、契约、批次、依赖、Git、PR/provider 事实、认证和已选方案。活动项目/应用/Web/launcher 锁或不能证明已退出的 worker 阻止重置；不强行结束进程，不支持旧 schema。浏览器 IndexedDB 不由 reset 清除，沿现有实例/版本守卫处理。需要完整初始现场时重新生成。
+重置不做备份。所有任务恢复 open，清除领取、执行、决策、交付和本包控制状态，恢复 manual 且未暂停。保留任务编号、内容、契约、批次、依赖、Git、PR/provider 事实、认证、已选方案、应用 Runner 构建 pin 和整个共享 Runner 短目录。reset 先取得共享服务全部 Runs/Checks 的停止证明并核对所有项目，再修改 caller 状态；无项目数据库也不能绕过服务核验。新操作分配新的 Runner 请求号，不复用历史回执。活动项目/应用/Web/launcher 锁或不能证明已退出的 worker 阻止重置；不强行结束进程，不支持旧 schema。浏览器 IndexedDB 不由 reset 清除，沿现有实例/版本守卫处理。需要完整初始现场时重新生成。
 
 ## 验证
 
@@ -58,7 +58,7 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 
 ## 安装版更新
 
-双击仓库根目录 `build-deploy.bat`：先完成构建，再通过正式 stop 结算并停止目标安装版，替换三个 EXE、刷新 Runner 固定版本与 SHA256，最后启动。停止失败则不替换；正常更新保留项目配置、任务库和执行配置中的 profiles，不自动迁移旧 schema。此操作独立于调试环境生成，不用调试包接管安装版活动执行。首次跨 schema 的任务定义迁移与历史留档见[迁移验收](acceptance/install-cutover-20261015.md)。
+双击仓库根目录 `build-deploy.bat`：先完成构建，再通过正式 stop 结算并停止目标安装版，替换三个 EXE、刷新 Runner 固定版本与 SHA256，最后启动。停止失败则不替换；应用当前停机格式使用一份共享 Runner 结算和各项目本地关闭/锁结果，缺证据均失败。跨 Runner 构建不复用已绑定的旧 home；正常更新保留项目配置、任务库和执行配置中的 profiles，不自动迁移旧 schema。此操作独立于调试环境生成，不用调试包接管安装版活动执行。首次跨 schema 的任务定义迁移与历史留档见[迁移验收](acceptance/install-cutover-20261015.md)。
 
 ## 独立 Web 与双项目包
 

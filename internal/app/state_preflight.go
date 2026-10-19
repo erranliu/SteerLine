@@ -38,8 +38,17 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		return errors.New("persisted task snapshot belongs to another project")
 	}
 	for _, candidate := range state.Candidates {
-		if candidate.Project != project || canonicalPath(candidate.StateDir) != canonicalPath(runnerstatepath.Directory(c.RunDir)) || candidate.Submit.Protocol != runnerclient.Protocol || candidate.Submit.RequestID == "" {
+		if candidate.Project != project || canonicalPath(candidate.StateDir) != canonicalPath(runnerstatepath.Directory(c.runnerHome())) || candidate.Submit.Protocol != runnerclient.Protocol || candidate.Submit.RequestID == "" {
 			return errors.New("persisted Runner candidate has a different caller or state directory binding")
+		}
+	}
+	checks, err := reader.Checks(ctx, project)
+	if err != nil {
+		return err
+	}
+	for _, check := range checks {
+		if check.Project != project || canonicalPath(check.StateDir) != canonicalPath(runnerstatepath.Directory(c.runnerHome())) {
+			return errors.New("persisted check belongs to another Runner directory")
 		}
 	}
 	return nil

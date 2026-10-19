@@ -325,6 +325,9 @@ func (b *Bridge) VerifyBinding(ctx context.Context, project, id string) error {
 }
 
 func bind(c *Candidate, r runnerclient.Run) error {
+	if project := r.Correlation["steerline_project"]; project != "" && project != c.Project {
+		return errors.New("Runner Run belongs to another project")
+	}
 	if r.RunID != c.RunID || c.InputDigest != "" && c.InputDigest != r.InputDigest || c.Branch != "" && c.Branch != r.Execution.Branch || c.PRURL != "" && (r.PR == nil || c.PRURL != r.PR.URL) {
 		return errors.New("Runner projection changed the fixed candidate binding")
 	}
@@ -372,7 +375,7 @@ func (b *Bridge) deliver(ctx context.Context, cli CLI, c *Candidate, action *Act
 
 // QueueControl freezes an explicit current user reply or resume before it can
 // cross the process boundary. Restarting Step never manufactures these inputs.
-func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, request runnerclient.Request) error {
+func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, request runnerclient.Request, callerDigest string) error {
 	if command != "reply" && command != "resume" {
 		return inputError("invalid_request", "unsupported candidate control")
 	}
@@ -384,9 +387,13 @@ func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, 
 	if err != nil {
 		return err
 	}
+	callerID := request.RequestID
+	if callerID == "" || callerDigest == "" {
+		return inputError("invalid_request", "original product request identity is required")
+	}
 	for _, action := range c.Actions {
-		if action.Request.RequestID == request.RequestID {
-			if action.Command == command && string(action.Request.Input) == string(request.Input) {
+		if action.CallerRequestID == callerID {
+			if action.Command == command && action.CallerRequestDigest == callerDigest {
 				return nil
 			}
 			return inputError("idempotency_conflict", "control request identity conflict")
@@ -412,7 +419,8 @@ func (b *Bridge) QueueControl(ctx context.Context, project, id, command string, 
 	if command == "resume" && !c.Projection.Controls.CanResume || command == "reply" && !c.Projection.Controls.CanReply {
 		return inputError("candidate_inactive", "current Run does not permit this control")
 	}
-	c.Actions = append(c.Actions, Action{Command: command, Request: request, State: "pending"})
+	request.RequestID = newID()
+	c.Actions = append(c.Actions, Action{CallerRequestID: callerID, CallerRequestDigest: callerDigest, Command: command, Request: request, State: "pending"})
 	return b.save(ctx, &c)
 }
 

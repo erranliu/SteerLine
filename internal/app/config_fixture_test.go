@@ -86,7 +86,8 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	c, err := LoadConfig(path)
 	require(t, err)
 	require(t, c.ResolveIdentity(context.Background()))
-	t.Cleanup(func() { require(t, runnerstatepath.RemoveStopped(c.RunDir)) })
+	home := HomeDir()
+	t.Cleanup(func() { require(t, runnerstatepath.RemoveStopped(home)) })
 	return c, fixtureGit(t, repo, "rev-parse", "HEAD")
 }
 

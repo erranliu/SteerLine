@@ -24,7 +24,7 @@ func (p *Project) AssertOneDelivery(s Snapshot) {
 	}
 }
 func (p *Project) CallerRequests() map[string]string {
-	raw, err := os.ReadFile(filepath.Join(runnerstatepath.Directory(filepath.Dir(p.Database)), "caller-fixture.json"))
+	raw, err := os.ReadFile(filepath.Join(runnerstatepath.Directory(p.Home), "caller-fixture.json"))
 	p.Scenario.Must(err)
 	var s controlled.RunnerFixture
 	p.Scenario.Must(json.Unmarshal(raw, &s))

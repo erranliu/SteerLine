@@ -6,7 +6,7 @@
 
 L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)，本项目入口见 [测试总入口](../../docs/testing.md)。下面按当前实际登记级别列出测试内容。
 
-[suites.json](suites.json)是机器执行登记的唯一来源，登记十项（L2 两项、L3 四项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
+[suites.json](suites.json)是机器执行登记的唯一来源，登记十一项（L2 两项、L3 五项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
 
 ### L2：最小核心流程
 
@@ -26,6 +26,7 @@ recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runne
 | `recovery.waiting-merge-restart` | PR 待合并时重启 SteerLine，保留原候选/Run/请求及公开投影，不新增业务输入、不提前释放后继；随后合并并完成唯一交付。 | 在 L2 交付骨架中加入 SteerLine 重启，验证持久化事实和调用方连续性。 |
 | `runtime.service-lifecycle` | 中文/空格路径和无关 cwd 下生成启动器；创建任务、核对精确宿主身份、执行正常控制、停止并核对逐项目结算，再启动并确认新实例和原任务事实，最后正常停止。 | 单 home 的正常宿主生命周期，不注入陈旧身份/配置/锁冲突。 |
 | `runtime.dual-home-operation` | 两个独立 home 同时在线，使用不同请求分别 discard 不同任务；核对持久化结果、另一项目/provider 不变、无执行候选、原实例不变，最后停止两者。 | 多 home 合法并存及独立操作，不做同请求 ID 重放。 |
+| `runtime.shared-runner-projects` | 同 home 两项目共用一个 Runner，使用相同产品请求 ID 创建独立 Run，分别消费仓库/PR，整体停启保留原绑定且零自动新输入，最后核实全体清理。 | 项目级库/请求隔离与应用级共享 Runner 的接线；每项独立 home/两个 repo/provider/端口，可沿 runtime 二并行。 |
 | `workflow.local-codex-audited` | live：两种显式模型走 development-audited/1，实现、两项审计、发布与真实 PR 合并、唯一交付及后继 ready 未启动；从正式产品详情核对冻结预设、材料/摘要、各轮模型、审计来源，从任务历史核对候选/Runner Run 及 workflow；保留响应证据。 | 审计 workflow 的产品接线；须先通过空闲 I1 与 controlled gate，不归 full-L2，不重验 Runner 故障矩阵。 |
 
 本项目按规范维护上表的独有覆盖维度；并行资源声明涵盖 home、repo、数据库、端口、可变构建输出、provider 和清理所有权。

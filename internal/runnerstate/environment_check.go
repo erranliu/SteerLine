@@ -44,6 +44,7 @@ type EnvironmentCheckOperation struct {
 	Diagnostic string                 `json:"diagnostic,omitempty"`
 }
 type EnvironmentCheckRecord struct {
+	StateDir       string                           `json:"state_dir"`
 	ID             string                           `json:"id"`
 	Project        string                           `json:"project"`
 	Revision       uint64                           `json:"local_revision"`
