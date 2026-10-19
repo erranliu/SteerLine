@@ -1,43 +1,202 @@
 {
   "workflows": [
     {
-      "audit_model_required": false,
-      "description": "Implement, report and publish a verified PR.",
       "id": "development",
-      "maximum_repair_cycles": 0,
+      "version": 2,
+      "description": "Implement and publish a verified PR.",
+      "supported_adapters": [
+        "codex-app-server",
+        "orca-terminal"
+      ],
+      "audit_model_required": false,
       "prompt_steps": [
         "implement.execute",
         "implement.report",
         "publish",
         "publish.report"
       ],
-      "supported_adapters": [
-        "codex-app-server",
-        "orca-terminal"
-      ],
-      "version": 1
+      "states": {
+        "implement.execute": {
+          "report_limit": 1,
+          "kind": "execute",
+          "contract": "implementation",
+          "prompt_key": "implement.execute",
+          "prompt": "根据以下 Spec、Plan 和参考材料完成实现及必要验证。",
+          "model_role": "execution",
+          "success_output": "实施及必要验证已完成。",
+          "next": "publish.execute",
+          "report": "implement.report",
+          "wait": "implement.input"
+        },
+        "implement.input": {
+          "kind": "input",
+          "continue": "implement.execute"
+        },
+        "implement.report": {
+          "result_instruction": "Return one JSON object:\n{\"outcome\":\"done|needs_input|blocked\",\"summary\":\"result\"}\nFor needs_input add question. For blocked add blocker: {\"category\":\"failure|unknown_external|permission|prerequisite\",\"action\":\"action\",\"error\":\"error\",\"known\":\"optional\",\"unknown\":\"optional\"}.",
+          "kind": "report",
+          "contract": "implementation",
+          "prompt_key": "implement.report",
+          "prompt": "根据已有执行上下文整理指定实施结果；只报告，不补做工作。注明依据，保留失败、未知情况、缺失和冲突。",
+          "model_role": "execution",
+          "next": "publish.execute",
+          "wait": "implement.input"
+        },
+        "pr_ready": {
+          "kind": "milestone"
+        },
+        "publish.execute": {
+          "report_limit": 1,
+          "kind": "execute",
+          "contract": "publication",
+          "prompt_key": "publish",
+          "prompt": "将当前分支 push 到发布目标并创建 PR。用 git branch --show-current 取得实际分支，作为远端分支和 PR head。结果未知时说明情况，不重复创建。成功后给出 PR URL。",
+          "model_role": "execution",
+          "success_output": "本次发布已完成。",
+          "next": "pr_ready",
+          "verify": "publish.verify",
+          "report": "publish.report"
+        },
+        "publish.report": {
+          "result_instruction": "Return one JSON object:\n{\"outcome\":\"done|needs_input|blocked\",\"summary\":\"result\"}\nFor needs_input add question. For blocked add blocker: {\"category\":\"failure|unknown_external|permission|prerequisite\",\"action\":\"action\",\"error\":\"error\",\"known\":\"optional\",\"unknown\":\"optional\"}.\nFor done include outputs: {\"pr_url\":\"actual PR URL\"}.",
+          "kind": "report",
+          "contract": "publication",
+          "prompt_key": "publish.report",
+          "prompt": "根据已有上下文整理指定发布的结果和 PR URL；只报告，不重新发布。注明依据，保留失败、未知情况、缺失和冲突。",
+          "model_role": "execution",
+          "next": "pr_ready",
+          "verify": "publish.verify"
+        },
+        "publish.verify": {
+          "kind": "verify",
+          "contract": "publication",
+          "next": "pr_ready"
+        }
+      },
+      "initial": "implement.execute"
     },
     {
-      "audit_model_required": true,
-      "audit_steps": [
-        "audit.spec",
-        "audit.code"
-      ],
-      "description": "Implement, audit Spec and code, repair up to twice, then publish.",
       "id": "development-audited",
-      "maximum_repair_cycles": 2,
+      "version": 2,
+      "description": "Implement, audit and repair code once, then publish the verified revision.",
+      "supported_adapters": [
+        "codex-app-server"
+      ],
+      "audit_model_required": true,
       "prompt_steps": [
         "implement.execute",
         "implement.report",
         "publish",
         "publish.report",
-        "audit.spec",
-        "audit.code"
+        "audit.code",
+        "audit.code.report"
       ],
-      "supported_adapters": [
-        "codex-app-server"
+      "audit_steps": [
+        "audit.code.execute"
       ],
-      "version": 1
+      "states": {
+        "audit.code.execute": {
+          "report_limit": 1,
+          "kind": "execute",
+          "contract": "audit",
+          "prompt_key": "audit.code",
+          "prompt": "审计当前代码，直接修复发现的 P0–P2 问题并完成必要验证。验证后将最终代码改动追加提交到当前分支；无改动时沿用当前提交。报告实际修复的 P0–P2 总数及逐项问题、修复内容；未修复问题和未完成事项如实说明。",
+          "model_role": "audit",
+          "next": "publish.execute",
+          "report": "audit.code.report",
+          "parse": "audit.code.parse",
+          "wait": "audit.code.input",
+          "workspace": "audit"
+        },
+        "audit.code.input": {
+          "manual_implementation": "implement.execute",
+          "kind": "input"
+        },
+        "audit.code.parse": {
+          "report_limit": 1,
+          "kind": "parse",
+          "contract": "audit",
+          "prompt": "仅整理已有代码审计与修复结果；不得重审、测试、修复或发布。缺失信息如实表达，不由沉默推断成功或零修复。",
+          "next": "publish.execute",
+          "report": "audit.code.report",
+          "wait": "audit.code.input",
+          "workspace": "audit"
+        },
+        "audit.code.report": {
+          "result_instruction": "Return one JSON object:\n{\"outcome\":\"done|needs_input|blocked\",\"summary\":\"result\"}\nFor needs_input add question. For blocked add blocker: {\"category\":\"failure|unknown_external|permission|prerequisite\",\"action\":\"action\",\"error\":\"error\",\"known\":\"optional\",\"unknown\":\"optional\"}.\nInclude fixed_count (nonnegative integer), fixed_issues [{\"severity\":\"P0|P1|P2\",\"issue\":\"issue\",\"repair\":\"actual repair\",\"evidence\":\"existing location/change evidence\"}], and remaining_issues [{\"severity\":\"P0|P1|P2\",\"issue\":\"issue\",\"reason\":\"reason\"}]. Explicitly use 0 and [] only when known. done requires completed audit and necessary validation, no remaining P0-P2 issues. Preserve incomplete work and partial statistics. Never invent missing facts.",
+          "kind": "report",
+          "contract": "audit",
+          "prompt_key": "audit.code.report",
+          "prompt": "根据已有上下文整理指定审计修复结果；只报告，不重审、修代码或补检查。保留实际修复数量、逐项内容及遗留问题，缺失、歧义、冲突如实标注。",
+          "model_role": "audit",
+          "next": "publish.execute",
+          "wait": "audit.code.input",
+          "workspace": "audit"
+        },
+        "implement.execute": {
+          "report_limit": 1,
+          "commit_work": true,
+          "kind": "execute",
+          "contract": "implementation",
+          "prompt_key": "implement.execute",
+          "prompt": "根据以下 Spec、Plan 和参考材料完成实现及必要验证。",
+          "model_role": "execution",
+          "success_output": "实施及必要验证已完成。",
+          "next": "audit.code.execute",
+          "report": "implement.report",
+          "wait": "implement.input",
+          "workspace": "implementation"
+        },
+        "implement.input": {
+          "kind": "input",
+          "continue": "implement.execute"
+        },
+        "implement.report": {
+          "result_instruction": "Return one JSON object:\n{\"outcome\":\"done|needs_input|blocked\",\"summary\":\"result\"}\nFor needs_input add question. For blocked add blocker: {\"category\":\"failure|unknown_external|permission|prerequisite\",\"action\":\"action\",\"error\":\"error\",\"known\":\"optional\",\"unknown\":\"optional\"}.",
+          "kind": "report",
+          "contract": "implementation",
+          "prompt_key": "implement.report",
+          "prompt": "根据已有执行上下文整理指定实施结果；只报告，不补做工作。注明依据，保留失败、未知情况、缺失和冲突。",
+          "model_role": "execution",
+          "next": "audit.code.execute",
+          "wait": "implement.input",
+          "workspace": "implementation"
+        },
+        "pr_ready": {
+          "kind": "milestone"
+        },
+        "publish.execute": {
+          "report_limit": 1,
+          "kind": "execute",
+          "contract": "publication",
+          "prompt_key": "publish",
+          "prompt": "将当前分支 push 到发布目标并创建 PR。用 git branch --show-current 取得实际分支，作为远端分支和 PR head。结果未知时说明情况，不重复创建。成功后给出 PR URL。",
+          "model_role": "execution",
+          "success_output": "本次发布已完成。",
+          "next": "pr_ready",
+          "verify": "publish.verify",
+          "report": "publish.report",
+          "workspace": "publication"
+        },
+        "publish.report": {
+          "result_instruction": "Return one JSON object:\n{\"outcome\":\"done|needs_input|blocked\",\"summary\":\"result\"}\nFor needs_input add question. For blocked add blocker: {\"category\":\"failure|unknown_external|permission|prerequisite\",\"action\":\"action\",\"error\":\"error\",\"known\":\"optional\",\"unknown\":\"optional\"}.\nFor done include outputs: {\"pr_url\":\"actual PR URL\"}.",
+          "kind": "report",
+          "contract": "publication",
+          "prompt_key": "publish.report",
+          "prompt": "根据已有上下文整理指定发布的结果和 PR URL；只报告，不重新发布。注明依据，保留失败、未知情况、缺失和冲突。",
+          "model_role": "execution",
+          "next": "pr_ready",
+          "verify": "publish.verify",
+          "workspace": "publication"
+        },
+        "publish.verify": {
+          "kind": "verify",
+          "contract": "publication",
+          "next": "pr_ready",
+          "workspace": "publication"
+        }
+      },
+      "initial": "implement.execute"
     }
   ],
   "configuration_schemas": {
@@ -50,6 +209,7 @@
             "default": "sandbox",
             "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
             "enum": [
+              "",
               "sandbox",
               "full_access"
             ]
@@ -81,7 +241,10 @@
               "installation_id",
               "private_key_env"
             ],
-            "type": "object"
+            "type": [
+              "object",
+              "null"
+            ]
           },
           "model": {
             "minLength": 1,
@@ -109,14 +272,179 @@
       "orca-terminal": {
         "$id": "steerrunner/adapters/orca-terminal/settings/v1",
         "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "agent": {
+                  "not": {
+                    "enum": [
+                      "codex",
+                      "pi",
+                      "dsh"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "agent"
+              ]
+            },
+            "then": {
+              "properties": {
+                "agent_launch": {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "model"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "reasoning_effort"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "runtime_executable"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "runtime_sha256"
+                        ]
+                      }
+                    ]
+                  },
+                  "properties": {
+                    "args": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "agent": {
+                  "const": "pi"
+                }
+              },
+              "required": [
+                "agent"
+              ]
+            },
+            "then": {
+              "properties": {
+                "agent_launch": {
+                  "properties": {
+                    "args": {
+                      "maxItems": 0
+                    },
+                    "reasoning_effort": {
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "agent": {
+                  "const": "dsh"
+                }
+              },
+              "required": [
+                "agent"
+              ]
+            },
+            "then": {
+              "properties": {
+                "agent_launch": {
+                  "properties": {
+                    "args": {
+                      "maxItems": 0
+                    },
+                    "reasoning_effort": {
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "agent": {
+                  "not": {
+                    "const": "codex"
+                  }
+                }
+              },
+              "required": [
+                "agent"
+              ]
+            },
+            "then": {
+              "not": {
+                "required": [
+                  "github_auth"
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "github_auth"
+              ]
+            },
+            "then": {
+              "properties": {
+                "agent_launch": {
+                  "required": [
+                    "runtime_executable"
+                  ]
+                }
+              },
+              "required": [
+                "agent_launch"
+              ]
+            }
+          }
+        ],
         "properties": {
           "access_mode": {
             "default": "sandbox",
             "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
             "enum": [
+              "",
               "sandbox",
               "full_access"
             ]
+          },
+          "agent": {
+            "default": "codex",
+            "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+            "type": "string"
           },
           "agent_launch": {
             "additionalProperties": false,
@@ -128,7 +456,7 @@
                 "type": "array"
               },
               "executable": {
-                "default": "codex",
+                "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
                 "minLength": 1,
                 "type": "string"
               },
@@ -148,16 +476,40 @@
                 ]
               },
               "runtime_executable": {
-                "description": "Trusted steerrunner-agent executable installed on the execution host; owns host authentication and same-mode native preparation.",
+                "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
                 "minLength": 1,
                 "type": "string"
               },
               "runtime_sha256": {
-                "description": "Optional frozen SHA256 of the execution-host helper; required in qualification configs.",
+                "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
                 "pattern": "^[a-f0-9]{64}$",
                 "type": "string"
               }
             },
+            "type": "object"
+          },
+          "github_auth": {
+            "additionalProperties": false,
+            "description": "Execution-host GitHub App key reference. Runner requests one repository, contents/PR write only. Never embed a key or token.",
+            "properties": {
+              "app_id": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "installation_id": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "private_key_env": {
+                "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "app_id",
+              "installation_id",
+              "private_key_env"
+            ],
             "type": "object"
           },
           "transport": {
@@ -263,7 +615,7 @@
                     "const": "development"
                   },
                   "version": {
-                    "const": 1
+                    "const": 2
                   }
                 }
               }
@@ -307,7 +659,7 @@
                     "const": "development-audited"
                   },
                   "version": {
-                    "const": 1
+                    "const": 2
                   }
                 }
               }
@@ -327,7 +679,7 @@
                       "model": {
                         "minLength": 1,
                         "not": {
-                          "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                          "pattern": "[\u0000-\u001f-]"
                         },
                         "pattern": "^\\S(?:.*\\S)?$",
                         "type": "string"
@@ -363,8 +715,8 @@
                         "implement.report",
                         "publish",
                         "publish.report",
-                        "audit.spec",
-                        "audit.code"
+                        "audit.code",
+                        "audit.code.report"
                       ]
                     }
                   }
@@ -391,6 +743,7 @@
                       "default": "sandbox",
                       "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
                       "enum": [
+                        "",
                         "sandbox",
                         "full_access"
                       ]
@@ -422,7 +775,10 @@
                         "installation_id",
                         "private_key_env"
                       ],
-                      "type": "object"
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "model": {
                       "minLength": 1,
@@ -472,6 +828,59 @@
             },
             {
               "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "target": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "environment": {
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "const": "orca_environment"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "environment"
+                        ],
+                        "type": "object"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "settings": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "github_auth": {
+                            "type": "null"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
               "properties": {
                 "adapter": {
                   "const": "orca-terminal"
@@ -479,14 +888,179 @@
                 "settings": {
                   "$id": "steerrunner/adapters/orca-terminal/settings/v1",
                   "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "not": {
+                              "enum": [
+                                "codex",
+                                "pi",
+                                "dsh"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "model"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "reasoning_effort"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            },
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "pi"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "minimal",
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "xhigh"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "dsh"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "max"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "not": {
+                              "const": "codex"
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "not": {
+                          "required": [
+                            "github_auth"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "required": [
+                          "github_auth"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "required": [
+                              "runtime_executable"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "agent_launch"
+                        ]
+                      }
+                    }
+                  ],
                   "properties": {
                     "access_mode": {
                       "default": "sandbox",
                       "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
                       "enum": [
+                        "",
                         "sandbox",
                         "full_access"
                       ]
+                    },
+                    "agent": {
+                      "default": "codex",
+                      "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+                      "type": "string"
                     },
                     "agent_launch": {
                       "additionalProperties": false,
@@ -498,7 +1072,7 @@
                           "type": "array"
                         },
                         "executable": {
-                          "default": "codex",
+                          "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
                           "minLength": 1,
                           "type": "string"
                         },
@@ -518,16 +1092,40 @@
                           ]
                         },
                         "runtime_executable": {
-                          "description": "Trusted steerrunner-agent executable installed on the execution host; owns host authentication and same-mode native preparation.",
+                          "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
                           "minLength": 1,
                           "type": "string"
                         },
                         "runtime_sha256": {
-                          "description": "Optional frozen SHA256 of the execution-host helper; required in qualification configs.",
+                          "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
                           "pattern": "^[a-f0-9]{64}$",
                           "type": "string"
                         }
                       },
+                      "type": "object"
+                    },
+                    "github_auth": {
+                      "additionalProperties": false,
+                      "description": "Execution-host GitHub App key reference. Runner requests one repository, contents/PR write only. Never embed a key or token.",
+                      "properties": {
+                        "app_id": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "installation_id": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "private_key_env": {
+                          "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "app_id",
+                        "installation_id",
+                        "private_key_env"
+                      ],
                       "type": "object"
                     },
                     "transport": {
@@ -642,8 +1240,8 @@
                         "implement.report",
                         "publish",
                         "publish.report",
-                        "audit.spec",
-                        "audit.code"
+                        "audit.code",
+                        "audit.code.report"
                       ]
                     }
                   }
@@ -662,7 +1260,7 @@
                 "model": {
                   "minLength": 1,
                   "not": {
-                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                    "pattern": "[\u0000-\u001f-]"
                   },
                   "pattern": "^\\S(?:.*\\S)?$",
                   "type": "string"
@@ -699,7 +1297,7 @@
               "type": "object"
             },
             "version": {
-              "const": 1
+              "const": 2
             }
           },
           "required": [
@@ -712,6 +1310,1047 @@
       "required": [
         "execution",
         "workflow"
+      ],
+      "type": "object"
+    },
+    "run_input": {
+      "$id": "steerrunner/run-input/v1",
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development"
+                  },
+                  "version": {
+                    "const": 2
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development-audited"
+                  },
+                  "version": {
+                    "const": 2
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "model": {
+                        "minLength": 1,
+                        "not": {
+                          "pattern": "[\u0000-\u001f-]"
+                        },
+                        "pattern": "^\\S(?:.*\\S)?$",
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "model"
+                    ]
+                  },
+                  "target": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "environment": {
+                        "const": ""
+                      },
+                      "kind": {
+                        "const": "local"
+                      }
+                    },
+                    "required": [
+                      "kind"
+                    ],
+                    "type": "object"
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report",
+                        "audit.code",
+                        "audit.code.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "correlation": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "documents": {
+          "additionalProperties": false,
+          "properties": {
+            "plan": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "properties": {
+                    "content": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "const": "inline"
+                    }
+                  },
+                  "required": [
+                    "content"
+                  ]
+                },
+                {
+                  "properties": {
+                    "commit": {
+                      "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "const": "git"
+                    }
+                  },
+                  "required": [
+                    "commit"
+                  ]
+                }
+              ],
+              "properties": {
+                "commit": {
+                  "type": "string"
+                },
+                "content": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            },
+            "references": {
+              "items": {
+                "additionalProperties": false,
+                "oneOf": [
+                  {
+                    "properties": {
+                      "content": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "inline"
+                      }
+                    },
+                    "required": [
+                      "content"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "commit": {
+                        "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "git"
+                      }
+                    },
+                    "required": [
+                      "commit"
+                    ]
+                  }
+                ],
+                "properties": {
+                  "commit": {
+                    "type": "string"
+                  },
+                  "content": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "kind": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "path"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "spec": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "properties": {
+                    "content": {
+                      "type": "string"
+                    },
+                    "kind": {
+                      "const": "inline"
+                    }
+                  },
+                  "required": [
+                    "content"
+                  ]
+                },
+                {
+                  "properties": {
+                    "commit": {
+                      "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+                      "type": "string"
+                    },
+                    "kind": {
+                      "const": "git"
+                    }
+                  },
+                  "required": [
+                    "commit"
+                  ]
+                }
+              ],
+              "properties": {
+                "commit": {
+                  "type": "string"
+                },
+                "content": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "kind": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "kind",
+                "path"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "spec",
+            "plan"
+          ],
+          "type": "object"
+        },
+        "execution": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "adapter": {
+                  "const": "codex-app-server"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/codex-app-server/settings/v1",
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "",
+                        "sandbox",
+                        "full_access"
+                      ]
+                    },
+                    "executable": {
+                      "default": "codex.exe",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "github_auth": {
+                      "additionalProperties": false,
+                      "description": "Execution-host GitHub App key reference. Runner requests one repository, contents/PR write only. Never embed a key or token.",
+                      "properties": {
+                        "app_id": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "installation_id": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "private_key_env": {
+                          "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "app_id",
+                        "installation_id",
+                        "private_key_env"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
+                    "model": {
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[\u0000\r\n]"
+                      },
+                      "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+                      "type": "string"
+                    },
+                    "reasoning_effort": {
+                      "default": "medium",
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                        "ultra"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "environment": {
+                      "const": ""
+                    },
+                    "kind": {
+                      "const": "local"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "target": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "environment": {
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "const": "orca_environment"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "environment"
+                        ],
+                        "type": "object"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "settings": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          "github_auth": {
+                            "type": "null"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "adapter": {
+                  "const": "orca-terminal"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/orca-terminal/settings/v1",
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "not": {
+                              "enum": [
+                                "codex",
+                                "pi",
+                                "dsh"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "model"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "reasoning_effort"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            },
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "pi"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "minimal",
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "xhigh"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "dsh"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "max"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "not": {
+                              "const": "codex"
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "not": {
+                          "required": [
+                            "github_auth"
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "required": [
+                          "github_auth"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "required": [
+                              "runtime_executable"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "agent_launch"
+                        ]
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "",
+                        "sandbox",
+                        "full_access"
+                      ]
+                    },
+                    "agent": {
+                      "default": "codex",
+                      "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+                      "type": "string"
+                    },
+                    "agent_launch": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        },
+                        "runtime_executable": {
+                          "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "runtime_sha256": {
+                          "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
+                          "pattern": "^[a-f0-9]{64}$",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "github_auth": {
+                      "additionalProperties": false,
+                      "description": "Execution-host GitHub App key reference. Runner requests one repository, contents/PR write only. Never embed a key or token.",
+                      "properties": {
+                        "app_id": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "installation_id": {
+                          "minimum": 1,
+                          "type": "integer"
+                        },
+                        "private_key_env": {
+                          "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "app_id",
+                        "installation_id",
+                        "private_key_env"
+                      ],
+                      "type": "object"
+                    },
+                    "transport": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "default": "orca.exe",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "wait_timeout": {
+                          "default": "30s",
+                          "description": "Go duration, greater than 0 and at most 1m",
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "const": ""
+                        },
+                        "kind": {
+                          "const": "local"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "minLength": 1,
+                          "pattern": "\\S",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "orca_environment"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "environment"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "publication": {
+          "additionalProperties": false,
+          "oneOf": [
+            {
+              "properties": {
+                "provider": {
+                  "const": "command"
+                },
+                "settings": {
+                  "$id": "steerrunner/providers/command/settings/v1",
+                  "additionalProperties": false,
+                  "properties": {
+                    "authentication_refs": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "base_url": {
+                      "format": "uri",
+                      "type": "string"
+                    },
+                    "query": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "minItems": 1,
+                          "type": "array"
+                        },
+                        "executable": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "executable",
+                        "args"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "base_url",
+                    "query"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            {
+              "properties": {
+                "provider": {
+                  "const": "gitea"
+                },
+                "settings": {
+                  "$id": "steerrunner/providers/gitea/settings/v1",
+                  "additionalProperties": false,
+                  "properties": {
+                    "authentication_refs": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "base_url": {
+                      "format": "uri",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "base_url"
+                  ],
+                  "type": "object"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "base_branch": {
+              "type": "string"
+            },
+            "provider": {
+              "type": "string"
+            },
+            "repository": {
+              "type": "string"
+            },
+            "settings": {}
+          },
+          "required": [
+            "provider",
+            "repository",
+            "base_branch",
+            "settings"
+          ],
+          "type": "object"
+        },
+        "repository": {
+          "additionalProperties": false,
+          "properties": {
+            "base_branch": {
+              "type": "string"
+            },
+            "base_revision": {
+              "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+              "type": "string"
+            },
+            "local_path": {
+              "type": "string"
+            },
+            "remote": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "url",
+            "base_revision",
+            "remote",
+            "base_branch"
+          ],
+          "type": "object"
+        },
+        "title": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "workflow": {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "else": {
+                "not": {
+                  "required": [
+                    "audit_model"
+                  ]
+                },
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report"
+                      ]
+                    }
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "id": {
+                    "const": "development-audited"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report",
+                        "audit.code",
+                        "audit.code.report"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "audit_model"
+                ]
+              }
+            }
+          ],
+          "description": "Audited workflow additionally requires local codex-app-server and an explicit execution.settings.model. Omitted audit effort inherits the normalized execution effort.",
+          "properties": {
+            "audit_model": {
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "[\u0000-\u001f-]"
+                  },
+                  "pattern": "^\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                "reasoning_effort": {
+                  "enum": [
+                    "minimal",
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max",
+                    "ultra"
+                  ]
+                }
+              },
+              "required": [
+                "model"
+              ],
+              "type": "object"
+            },
+            "id": {
+              "enum": [
+                "development",
+                "development-audited"
+              ]
+            },
+            "prompt_overrides": {
+              "additionalProperties": {
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "version": {
+              "const": 2
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "title",
+        "repository",
+        "documents",
+        "execution",
+        "workflow",
+        "publication"
       ],
       "type": "object"
     },
@@ -755,8 +2394,8 @@
                     "implement.report",
                     "publish",
                     "publish.report",
-                    "audit.spec",
-                    "audit.code"
+                    "audit.code",
+                    "audit.code.report"
                   ]
                 }
               }
@@ -775,7 +2414,7 @@
             "model": {
               "minLength": 1,
               "not": {
-                "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                "pattern": "[\u0000-\u001f-]"
               },
               "pattern": "^\\S(?:.*\\S)?$",
               "type": "string"
@@ -812,7 +2451,7 @@
           "type": "object"
         },
         "version": {
-          "const": 1
+          "const": 2
         }
       },
       "required": [

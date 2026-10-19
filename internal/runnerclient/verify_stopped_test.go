@@ -19,14 +19,14 @@ func TestStoppedVerificationKeepsRunDiagnosticsAndGate(t *testing.T) {
 	t.Setenv("STEERLINE_RUNNER_CLI_CALL", filepath.Join(dir, "call"))
 	c := Client{Executable: exe, StateDir: dir}
 	for _, pass := range []bool{false, true} {
-		proof := StoppedVerification{StateDir: dir, ResourcesSettled: pass, Runs: []StoppedRun{{RunID: "original", InputDigest: "input", ResourcesSettled: pass}}, Checks: []StoppedCheck{}}
+		proof := StoppedVerification{StateDir: dir, ResourcesSettled: pass, Runs: []StoppedRun{{RunID: "original", InputDigest: "input", ResourcesSettled: pass, StopEvidenceScope: "orca_terminal"}}, Checks: []StoppedCheck{}}
 		if !pass {
 			proof.Runs[0].Diagnostic = "run original: original terminal is still active"
 		}
 		raw, _ := json.Marshal(proof)
 		t.Setenv("STEERLINE_CHECK_RESPONSE", `{"protocol":"steerrunner-cli/v1","ok":true,"request_id":null,"data":`+string(raw)+`,"error":null}`)
 		got, err := c.VerifyStopped(context.Background())
-		if (err == nil) != pass || got.ResourcesSettled != pass {
+		if (err == nil) != pass || got.ResourcesSettled != pass || got.Runs[0].StopEvidenceScope != "orca_terminal" {
 			t.Fatal(got, err)
 		}
 		if !pass && !strings.Contains(err.Error(), proof.Runs[0].Diagnostic) {

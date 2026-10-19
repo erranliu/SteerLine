@@ -20,10 +20,11 @@ type StoppedCheck struct {
 	ResourcesSettled bool   `json:"resources_settled"`
 }
 type StoppedRun struct {
-	RunID            string `json:"run_id"`
-	InputDigest      string `json:"input_digest"`
-	ResourcesSettled bool   `json:"resources_settled"`
-	Diagnostic       string `json:"diagnostic,omitempty"`
+	StopEvidenceScope string `json:"stop_evidence_scope,omitempty"`
+	RunID             string `json:"run_id"`
+	InputDigest       string `json:"input_digest"`
+	ResourcesSettled  bool   `json:"resources_settled"`
+	Diagnostic        string `json:"diagnostic,omitempty"`
 }
 
 func (c Client) VerifyStopped(ctx context.Context) (StoppedVerification, error) {
