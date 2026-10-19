@@ -16,10 +16,8 @@ function Stop-DeploymentApplication([string]$CLI, [string]$RunnerExe) {
     if ($null -eq $proof -or -not $proof.original_host.instance_id -or -not $proof.verified_at -or $null -eq $proof.projects) {
         throw 'Original resource verification did not return complete evidence; installed files were preserved.'
     }
-    foreach ($project in $proof.projects) {
-        if ($project.runner.resources_settled -ne $true -or $null -eq $project.runner.runs) {
-            throw 'A project has no settled Runner evidence; installed files were preserved.'
-        }
+    if ($proof.runner.resources_settled -ne $true -or -not $proof.runner.state_dir -or $null -eq $proof.runner.runs -or $null -eq $proof.runner.checks) {
+        throw 'Shared Runner has no complete settled resource evidence; installed files were preserved.'
     }
     return $proof
 }

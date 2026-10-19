@@ -29,10 +29,8 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	d := NewApplicationDirectory(HomeDir())
 	defer d.Close()
 	t.Cleanup(func() {
-		for _, entry := range d.entries {
-			if entry.ref.RunDir != "" && entry.result.ResourcesSettled {
-				require(t, runnerstatepath.RemoveStopped(entry.ref.RunDir))
-			}
+		if d.runner.result().Settled() {
+			require(t, runnerstatepath.RemoveStopped(d.home))
 		}
 	})
 	d.Start()
@@ -62,6 +60,9 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 		t.Fatal("in-process identity read failed", err)
 	}
 	ai, bi := a.Identity(ctx), b.Identity(ctx)
+	if d.entries[0].runtime.runner != &d.runner || d.entries[1].runtime.runner != &d.runner || d.runner.client.InstanceID == "" || d.runner.client.StateDir != runnerstatepath.Directory(d.home) {
+		t.Fatal("projects did not borrow the same fixed Runner client")
+	}
 	if ai.InstanceID == bi.InstanceID || ai.ProjectID == bi.ProjectID || ai.Process != bi.Process || ai.Process.PID != os.Getpid() {
 		t.Fatal("project/process ownership conflated", ai, bi)
 	}
@@ -108,7 +109,7 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	}
 	require(t, d.Close())
 	for _, result := range d.ShutdownResults() {
-		if !result.LocalClosed || !result.LocksReleased || !result.ResourcesSettled {
+		if !result.LocalClosed || !result.LocksReleased {
 			t.Fatal("project not cleanly closed", result)
 		}
 	}

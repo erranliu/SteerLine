@@ -679,12 +679,14 @@ func (s *Scenario) cleanup() {
 			failures = append(failures, err.Error())
 		}
 	}
+	cleanedHomes := map[string]bool{}
 	for _, p := range s.projects {
-		if p.Driver.Binary == "" {
+		if p.Driver.Binary == "" || cleanedHomes[p.Home] {
 			continue
 		}
+		cleanedHomes[p.Home] = true
 		if _, err := os.Stat(p.Database); os.IsNotExist(err) {
-			if _, err := os.Stat(runnerstatepath.Directory(filepath.Dir(p.Database))); os.IsNotExist(err) {
+			if _, err := os.Stat(runnerstatepath.Directory(p.Home)); os.IsNotExist(err) {
 				continue
 			}
 		}
@@ -703,7 +705,7 @@ func (s *Scenario) cleanup() {
 			failures = append(failures, "original Runner cleanup: "+readErr.Error())
 		}
 		if readErr == nil {
-			if err := runnerstatepath.RemoveStopped(filepath.Dir(p.Database)); err != nil {
+			if err := runnerstatepath.RemoveStopped(p.Home); err != nil {
 				p.RunnerCleanupFailed = true
 				failures = append(failures, "Runner directory cleanup: "+err.Error())
 			}

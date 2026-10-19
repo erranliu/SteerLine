@@ -61,6 +61,7 @@ func TestRunnerCandidateReservationAndProjection(t *testing.T) {
 	saved.SubmitState = "accepted"
 	saved.Cursor = "cursor"
 	saved.InputDigest = "input"
+	saved.Actions = []runnerbridge.Action{{CallerRequestID: "product-request", CallerRequestDigest: "product-digest", Command: "reply", Request: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "wire-request", Input: json.RawMessage(`{"expected_revision":1}`)}, State: "pending"}}
 	event := runnerclient.Event{EventID: "event", RunID: "run", Revision: 1, Type: "accepted"}
 	require(t, s.SaveCandidate(ctx, saved, 1, []runnerclient.Event{event}))
 	if err := s.SaveCandidate(ctx, c, 1, nil); err == nil {
@@ -84,6 +85,24 @@ func TestRunnerCandidateReservationAndProjection(t *testing.T) {
 	require(t, err)
 	if current.Cursor != "cursor" || current.Revision != 2 {
 		t.Fatal("event fault advanced cursor or projection")
+	}
+	for _, alter := range []func(*runnerbridge.Candidate){
+		func(c *runnerbridge.Candidate) { c.Actions = nil },
+		func(c *runnerbridge.Candidate) { c.Actions[0].CallerRequestID = "other-product-request" },
+		func(c *runnerbridge.Candidate) { c.Actions[0].CallerRequestDigest = "other-product-digest" },
+		func(c *runnerbridge.Candidate) { c.Actions[0].Request.RequestID = "other-wire-request" },
+		func(c *runnerbridge.Candidate) {
+			c.Actions[0].Request.Input = json.RawMessage(`{"expected_revision":2}`)
+		},
+		func(c *runnerbridge.Candidate) { c.Actions[0].Command = "resume" },
+	} {
+		bad := current
+		bad.Revision++
+		bad.Actions = append([]runnerbridge.Action(nil), current.Actions...)
+		alter(&bad)
+		if s.SaveCandidate(ctx, bad, current.Revision, nil) == nil {
+			t.Fatal("saved product-to-Runner action binding changed")
+		}
 	}
 	var count int
 	require(t, s.db.QueryRowContext(ctx, `SELECT count(*) FROM runner_events`).Scan(&count))

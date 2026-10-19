@@ -14,7 +14,7 @@ function Invoke-StagedFixture {
     if (($args -join '|') -ne 'verify-stop|--runner-exe|staged-runner|--json') { throw 'Verifier did not use selected staged Runner.' }
     $global:LASTEXITCODE = $script:verifyCode
     if ($script:verifyCode -eq 0) {
-        if ($script:invalidProof) { '{}' } else { '{"original_host":{"instance_id":"original"},"verified_at":"2026-10-16T00:00:00Z","projects":[]}' }
+        if ($script:invalidProof) { '{}' } else { '{"original_host":{"instance_id":"original"},"verified_at":"2026-10-16T00:00:00Z","projects":[],"runner":{"state_dir":"owned-shared-runner","resources_settled":true,"runs":[],"checks":[]}}' }
     }
 }
 

@@ -282,7 +282,7 @@ func TestCandidateWithdrawal(t *testing.T) {
 			if f.submits+f.stops+f.inputs+f.reads != 0 {
 				t.Fatal("restart actively observed a withdrawn candidate")
 			}
-			err := b.QueueControl(context.Background(), "project", "candidate", "resume", runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "new-resume", Input: json.RawMessage(`{"expected_revision":1}`)})
+			err := b.QueueControl(context.Background(), "project", "candidate", "resume", runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "new-resume", Input: json.RawMessage(`{"expected_revision":1}`)}, "original-product-digest")
 			if err == nil {
 				t.Fatal("withdrawn candidate accepted new explicit input")
 			}

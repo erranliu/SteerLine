@@ -1,5 +1,7 @@
 # 测试总入口
 
+共享 Runner 的最小验证见[专属验收](acceptance/shared-runner-service.md)：固定 L1、请求/全局停止证明/reset 定向测试、新 L3 `runtime.shared-runner-projects` 与既有 waiting-merge-restart，以及新调试包的真实空闲服务拓扑。无模型，不操作安装环境。
+
 架构解耦第五轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round5.md)：宿主契约所有权/依赖闭包、checkpoint 双向投影隔离、并发写入下原实例/进程/build pin 同快照、原控制回执绑定、排空与幂等关闭、失败保锁和原 Runner 停服/结算证明。新增投影测试进入既有 quick-rules，所有权守卫进入 quick-execution-boundary；其余沿既有 SQLite、宿主和生命周期定向测试。补充 Windows 消费者与 Linux 宿主/进程包编译，不执行全量或真实模型。
 
 [PR #350 复审](acceptance/architecture-decoupling-pr350-review.md)补齐公开 CLI 任务 DTO 解码回归和 Web 根包扩展后的闭包守卫反例夹具；集成主干候选安全停止后，定向覆盖停止/交付竞态、四轮读取与交付语义及受影响 E2E 消费者编译。证据和复现命令在专属验收记录，不运行全量或真实模型。
@@ -32,7 +34,7 @@ SteerRunner 拆分后的测试归属及实施安排见 [Spec](spec/runner-test-c
 
 SteerLine 直接采用 [开发项目测试架构规范](../SteerlineProjectGuideDoc/testing-architecture.md)。L1–L4 定义、L3 正交与并行设计、分级内容清单要求及跨项目测试归属统一在该规范维护；本文记录 SteerLine 的具体入口、环境、清单和实施缺口。
 
-SteerLine 的 L1 是固定的快速集成/单元集合；完整 L2 是 controlled gate 加真实本机 Codex 核心交付链；L3 为等待合并时调用方重启、宿主生命周期和双 home 独立操作；L4 为构建/路径/宿主写入/同 ID 重放的系统边界。本次拆分和执行证据见 [Plan](plans/test-level-alignment.plan.md) / [验收](acceptance/test-level-alignment.md)。
+SteerLine 的 L1 是固定的快速集成/单元集合；完整 L2 是 controlled gate 加真实本机 Codex 核心交付链；L3 为等待合并时调用方重启、宿主生命周期、同 home 共享 Runner 和双 home 独立操作；L4 为构建/路径/宿主写入/同 ID 重放的系统边界。本次拆分和执行证据见 [Plan](plans/test-level-alignment.plan.md) / [验收](acceptance/test-level-alignment.md)。
 
 SteerLine 的 Full 只运行现有确定性 Go 测试，不包含 L2/L3/L4/live。L2/L3/L4 的机器登记为 `tests/e2e/suites.json`，可读内容清单及本项目维护约定见 [E2E 指南](../tests/e2e/README.md#分级测试内容清单与维护)；实际结果在任务专属 acceptance 文档维护。
 
@@ -49,7 +51,7 @@ Web 候选停止参与修复的最小调用方/SQLite/HTTP/Web 验证见[Plan](p
 | Full | 全部保留的确定性 Go 测试，现有三 worker 分区/覆盖核对 | 不自动运行 L2/L3/L4/live |
 | L2 controlled | Runner 公开 CLI/PR 夹具驱动产品交付 | 无模型，仅 gate-only |
 | 完整 L2 | controlled 通过后本机 Codex 真实三阶段及 GitHub PR/交付 | 消耗模型、创建并合并本次真实 PR |
-| L3 controlled | 调用方重启、宿主生命周期、双 home 独立操作 | 无模型，独立临时 home/Git/SQLite，最多二场景并行 |
+| L3 controlled | 调用方重启、宿主生命周期、同 home 双项目共享 Runner、双 home 独立操作 | 无模型，独立临时 home/Git/SQLite，最多二场景并行 |
 | L4 controlled | 构建/路径/SQLite 拒绝、宿主写入拒绝、同 ID 碰撞与重放 | 无模型，全部为隔离边界现场，runtime 最多二项并行 |
 | Web | 前端单元、构建及按需浏览器场景 | 浏览器使用新建 simulate 包 |
 
@@ -77,10 +79,10 @@ L1 固定范围以 [scoped.go](../cmd/test-feedback/scoped.go)及 [task_scope.go
 | 级别 | 已登记内容 | 清单与实现现状 |
 | --- | --- | --- |
 | L2 | 2 项：controlled gate、live 本机 Codex | 有固定 ID、实际测试映射和选择校验，内容清单可追踪。 |
-| L3 | 4 项：等待合并重启、正常宿主生命周期、双 home 独立操作、审计 workflow 真实链 | controlled 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二。审计 live 精确选择 workflow.local-codex-audited，显式配置两个不同模型，不加入完整 L2。 |
+| L3 | 5 项：等待合并重启、正常宿主生命周期、同 home 共享 Runner、双 home 独立操作、审计 workflow 真实链 | controlled 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二。审计 live 精确选择 workflow.local-codex-audited，显式配置两个不同模型，不加入完整 L2。 |
 | L4 | 4 项：源码构建保护、路径保护、宿主写入拒绝、同 ID 碰撞与重放 | 支持 `-level=L4 -suite=runtime -env=controlled`；每项独立资源，runtime 包内最多二项并行。 |
 
-当前十项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
+当前十一项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
 
 ```powershell
 # 无 token 门槛，不能当作完整 L2

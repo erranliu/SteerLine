@@ -16,6 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/projectconnection"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 type catalogEntry struct {
@@ -39,14 +40,19 @@ type ApplicationDirectory struct {
 	done              chan struct{}
 	started, stopping bool
 	doneOnce          sync.Once
+	runner            applicationRunner
 }
 
 func NewApplicationDirectory(home string) *ApplicationDirectory {
 	ctx, cancel := context.WithCancel(context.Background())
 	catalog := loadApplicationCatalog(home)
 	d := &ApplicationDirectory{home: home, ctx: ctx, cancel: cancel, done: make(chan struct{}), global: catalog.global, err: catalog.err}
+	if _, err := os.Lstat(runnerstatepath.Directory(home)); !os.IsNotExist(err) {
+		d.runner.attempted = true
+		d.runner.client.StateDir = runnerstatepath.Directory(home)
+	}
 	for _, p := range catalog.entries {
-		d.entries = append(d.entries, &catalogEntry{catalogProject: p, resultReady: true, result: contract.ProjectShutdown{ConfigID: p.view.ConfigID, LocalClosed: true, ResourcesSettled: true, LocksReleased: true}})
+		d.entries = append(d.entries, &catalogEntry{catalogProject: p, resultReady: true, result: contract.ProjectShutdown{ConfigID: p.view.ConfigID, LocalClosed: true, LocksReleased: true}})
 	}
 	return d
 }
@@ -140,6 +146,33 @@ func (d *ApplicationDirectory) run() {
 		}
 	}
 	d.mu.Unlock()
+	d.mu.RLock()
+	var eligible bool
+	for _, e := range d.entries {
+		if e.view.RuntimeState != "failed" {
+			eligible = true
+		}
+	}
+	d.mu.RUnlock()
+	if eligible && d.ctx.Err() == nil {
+		var global RunnerExecutionConfig
+		err := decodeStrictJSON(d.global, &global)
+		if err == nil {
+			ctx, cancel := context.WithTimeout(d.ctx, 90*time.Second)
+			err = d.runner.start(ctx, global, d.home, 30*time.Second)
+			cancel()
+		}
+		if err != nil {
+			d.mu.Lock()
+			for _, e := range d.entries {
+				if e.view.RuntimeState != "failed" {
+					e.view.RuntimeState = "failed"
+					e.view.Diagnostic = boundedDiagnostic(err.Error(), 4096)
+				}
+			}
+			d.mu.Unlock()
+		}
+	}
 	var wg sync.WaitGroup
 	slots := make(chan struct{}, 8)
 	for _, e := range d.entries {
@@ -159,7 +192,7 @@ func (d *ApplicationDirectory) run() {
 			select {
 			case slots <- struct{}{}:
 			case <-d.ctx.Done():
-				d.finish(e, contract.ProjectShutdown{ConfigID: e.view.ConfigID, ProjectID: e.view.ProjectID, LocalClosed: true, LocksReleased: true, ResourcesSettled: true}, nil)
+				d.finish(e, contract.ProjectShutdown{ConfigID: e.view.ConfigID, ProjectID: e.view.ProjectID, LocalClosed: true, LocksReleased: true}, nil)
 				return
 			}
 			var releaseOnce sync.Once
@@ -169,7 +202,7 @@ func (d *ApplicationDirectory) run() {
 			d.mu.Lock()
 			e.runtime = runtime
 			d.mu.Unlock()
-			result, runErr := runtime.Run(d.ctx, d.home, e, d.global, func(port *runtimeProjectPort) {
+			result, runErr := runtime.Run(d.ctx, d.home, e, d.global, &d.runner, func(port *runtimeProjectPort) {
 				d.publish(e, port)
 				releaseSlot()
 			})
@@ -190,8 +223,8 @@ func (d *ApplicationDirectory) finish(e *catalogEntry, result contract.ProjectSh
 	e.view.Online = false
 	if err != nil {
 		e.view.RuntimeState = "failed"
-		e.view.Diagnostic = boundedDiagnostic(err.Error(), 4096)
-		if !e.result.LocalClosed || !e.result.ResourcesSettled {
+		e.view.Diagnostic = boundedDiagnostic(err.Error()+"; project unavailable; existing Runner executions may still continue", 4096)
+		if !e.result.LocalClosed {
 			e.result.Diagnostic = err.Error()
 		}
 	} else {
@@ -257,6 +290,15 @@ func (d *ApplicationDirectory) Close() error {
 	d.mu.Unlock()
 	<-d.done
 	var errs []error
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	_ = d.runner.shutdown(ctx)
+	cancel()
+	if d.runner.ResourceSettlementError() != nil && d.runner.stop != nil {
+		ctx, cancel = context.WithTimeout(context.Background(), 30*time.Second)
+		_ = d.runner.shutdown(ctx)
+		cancel()
+	}
+	errs = append(errs, d.runner.ResourceSettlementError())
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	for _, e := range d.entries {

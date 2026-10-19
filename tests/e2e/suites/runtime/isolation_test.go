@@ -166,25 +166,27 @@ func assertHostStopped(t *testing.T, p *testenv.Project, hostID, projectID, proj
 			State string `json:"state"`
 		} `json:"backend"`
 		LastShutdown *struct {
-			Clean    bool `json:"clean"`
+			Clean  bool `json:"clean"`
+			Runner struct {
+				ResourcesSettled bool `json:"resources_settled"`
+			} `json:"runner"`
 			Identity struct {
 				InstanceID string `json:"instance_id"`
 			} `json:"identity"`
 			Projects []struct {
-				ProjectID        string `json:"project_id"`
-				InstanceID       string `json:"instance_id"`
-				LocalClosed      bool   `json:"local_closed"`
-				LocksReleased    bool   `json:"locks_released"`
-				ResourcesSettled bool   `json:"resources_settled"`
+				ProjectID     string `json:"project_id"`
+				InstanceID    string `json:"instance_id"`
+				LocalClosed   bool   `json:"local_closed"`
+				LocksReleased bool   `json:"locks_released"`
 			} `json:"projects"`
 		} `json:"last_shutdown"`
 	}
 	p.Scenario.Must(json.Unmarshal(raw, &status))
-	if status.Backend.State != "exited" || status.LastShutdown == nil || !status.LastShutdown.Clean || status.LastShutdown.Identity.InstanceID != hostID || len(status.LastShutdown.Projects) != 1 {
+	if status.Backend.State != "exited" || status.LastShutdown == nil || !status.LastShutdown.Clean || !status.LastShutdown.Runner.ResourcesSettled || status.LastShutdown.Identity.InstanceID != hostID || len(status.LastShutdown.Projects) != 1 {
 		t.Fatalf("host stop is unverified: %s", raw)
 	}
 	result := status.LastShutdown.Projects[0]
-	if result.ProjectID != projectID || result.InstanceID != projectInstance || !result.LocalClosed || !result.LocksReleased || !result.ResourcesSettled {
+	if result.ProjectID != projectID || result.InstanceID != projectInstance || !result.LocalClosed || !result.LocksReleased {
 		t.Fatalf("project stop is unverified: %s", raw)
 	}
 	p.Scenario.Must(os.WriteFile(filepath.Join(p.Scenario.Output, "shutdown-"+hostID+".json"), raw, 0600))

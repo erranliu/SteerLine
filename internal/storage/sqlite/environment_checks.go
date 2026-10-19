@@ -95,7 +95,7 @@ func (s *SQLiteStore) SaveCheck(ctx context.Context, r runnerstate.EnvironmentCh
 		if old.Revision != expected {
 			return errors.New("stale_revision: environment check changed")
 		}
-		if old.Selection != r.Selection || old.ResourceDigest != r.ResourceDigest || !sameCheckJSON(old.Input, r.Input) || !sameCheckJSON(old.Capabilities, r.Capabilities) || !old.CreatedAt.Equal(r.CreatedAt) || old.CheckID != "" && old.CheckID != r.CheckID || len(r.Operations) < len(old.Operations) {
+		if old.StateDir != r.StateDir || old.Selection != r.Selection || old.ResourceDigest != r.ResourceDigest || !sameCheckJSON(old.Input, r.Input) || !sameCheckJSON(old.Capabilities, r.Capabilities) || !old.CreatedAt.Equal(r.CreatedAt) || old.CheckID != "" && old.CheckID != r.CheckID || len(r.Operations) < len(old.Operations) {
 			return errors.New("immutable environment check association changed")
 		}
 		for i, op := range old.Operations {

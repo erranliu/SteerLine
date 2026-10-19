@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // RunRunnerServiceFixture implements only the public, idle service contract for
@@ -19,7 +20,7 @@ func RunRunnerServiceFixture() bool {
 	}
 	args := os.Args[1:]
 	command := args[0]
-	if command == "service" && len(args) > 1 {
+	if (command == "service" || command == "environment-check") && len(args) > 1 {
 		command += " " + args[1]
 	}
 	var stateDir string
@@ -40,16 +41,42 @@ func RunRunnerServiceFixture() bool {
 		_ = json.NewDecoder(os.Stdin).Decode(&request)
 	}
 	switch command {
+	case "environment-check inspect":
+		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-check-fixture.json"))
+		if err != nil || json.Unmarshal(raw, &data) != nil {
+			panic("invalid public check fixture")
+		}
 	case "service verify-stopped":
 		var info map[string]any
 		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-fixture.json"))
 		if err != nil || json.Unmarshal(raw, &info) != nil || info["status"] != "not_running" {
 			panic("offline fixture writer has not stopped")
 		}
-		data = map[string]any{"state_dir": stateDir, "resources_settled": true, "runs": []any{}}
+		runs := []any{}
+		if body, err := os.ReadFile(filepath.Join(stateDir, "caller-fixture.json")); err == nil {
+			var fixture struct {
+				Runs map[string]map[string]any `json:"runs"`
+			}
+			if json.Unmarshal(body, &fixture) != nil {
+				panic("invalid caller fixture")
+			}
+			for id, run := range fixture.Runs {
+				if run["stop_status"] != "stopped" {
+					panic("fixture Run is not stopped")
+				}
+				runs = append(runs, map[string]any{"run_id": id, "input_digest": run["input_digest"], "resources_settled": true})
+			}
+		}
+		data = map[string]any{"state_dir": stateDir, "resources_settled": true, "runs": runs, "checks": []any{}}
 	case "version":
 		data = map[string]any{"version": version, "protocols": []string{"steerrunner-cli/v1"}, "resource_version": 1, "resource_digest": digest}
 	case "capabilities":
+		if raw, err := os.ReadFile(filepath.Join(stateDir, "idle-capabilities-fixture.json")); err == nil {
+			if json.Unmarshal(raw, &data) != nil {
+				panic("invalid public capabilities fixture")
+			}
+			break
+		}
 		data = map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
 			"native_session_viewer": map[string]any{"adapters": []string{"codex-app-server"}},
 			"instance_binding":      map[string]bool{"expected_instance_id": true},
@@ -105,6 +132,12 @@ func RunRunnerServiceFixture() bool {
 			if err := os.WriteFile(path, raw, 0600); err != nil {
 				panic(err)
 			}
+			if marker := os.Getenv("STEERLINE_TEST_RUNNER_START_ACCEPTED"); marker != "" {
+				if err := os.WriteFile(marker, []byte("accepted before response"), 0600); err != nil {
+					panic(err)
+				}
+				time.Sleep(10 * time.Second) // Parent shutdown cancels this CLI, losing its response.
+			}
 		}
 		if command == "service stop" {
 			if request.Input.ExpectedInstanceID != "" && request.Input.ExpectedInstanceID != info["instance_id"] {
@@ -112,6 +145,26 @@ func RunRunnerServiceFixture() bool {
 				os.Exit(5)
 			}
 			info["last_shutdown"] = map[string]any{"instance_id": info["instance_id"], "request_id": request.RequestID, "state_dir": stateDir, "executable_sha256": info["executable_sha256"], "resources_settled": true}
+			if raw, err := os.ReadFile(filepath.Join(stateDir, "caller-fixture.json")); err == nil {
+				var fixture map[string]json.RawMessage
+				if json.Unmarshal(raw, &fixture) != nil {
+					panic("invalid caller fixture")
+				}
+				var runs map[string]map[string]any
+				if json.Unmarshal(fixture["runs"], &runs) != nil {
+					panic("invalid public Runs")
+				}
+				for _, run := range runs {
+					run["stop_status"] = "stopped"
+					run["new_inputs_allowed"] = false
+					run["resume_required"] = true
+				}
+				fixture["runs"], _ = json.Marshal(runs)
+				raw, _ = json.Marshal(fixture)
+				if err := os.WriteFile(filepath.Join(stateDir, "caller-fixture.json"), raw, 0600); err != nil {
+					panic(err)
+				}
+			}
 			info["status"] = "not_running"
 			raw, _ := json.Marshal(info)
 			if err := os.WriteFile(path, raw, 0600); err != nil {

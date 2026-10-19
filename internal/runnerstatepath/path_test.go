@@ -62,7 +62,7 @@ func TestRunnerNamespaceIsolationAndCleanup(t *testing.T) {
 	if Directory(first) != Directory(filepath.Join(first, ".")) {
 		t.Fatal("path cleaning changed namespace")
 	}
-	if runtime.GOOS == "windows" && Directory(first) != Directory(strings.ToUpper(first)) {
+	if runtime.GOOS == "windows" && (Directory(first) != Directory(strings.ToUpper(first)) || Directory(first) != Directory(strings.ToLower(first))) {
 		t.Fatal("Windows path casing changed namespace")
 	}
 	if err := Validate("relative"); err == nil {

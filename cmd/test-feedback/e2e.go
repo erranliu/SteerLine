@@ -527,7 +527,7 @@ func e2ePackageParallelism(entries []e2eScenario) int {
 			return 1
 		}
 		switch entry.ID {
-		case "runtime.service-lifecycle", "runtime.dual-home-operation":
+		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects":
 			if entry.Level != "L3" {
 				return 1
 			}

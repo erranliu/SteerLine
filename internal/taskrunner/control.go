@@ -81,7 +81,7 @@ func (c Controls) Handle(ctx context.Context, req api.ControlRequest, instance s
 	if found && (req.Action == "runner_reply" || req.Action == "runner_resume") {
 		if candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID); err == nil {
 			for _, action := range candidate.Actions {
-				if action.Request.RequestID == "sl-input-"+req.RequestID {
+				if action.CallerRequestID == req.RequestID && action.CallerRequestDigest == receipt.RequestDigest {
 					receipt.Status = "applied"
 					receipt.RunID = candidate.ID
 					receipt.RunRevision = candidate.Revision
@@ -149,6 +149,15 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 		if err != nil {
 			return err
 		}
+		for _, action := range candidate.Actions {
+			if action.CallerRequestID == req.RequestID {
+				if action.CallerRequestDigest != RequestDigest(req) {
+					return failure("idempotency_conflict", "control request changed")
+				}
+				receipt.RunID = candidate.ID
+				return nil
+			}
+		}
 		if candidate.Revision != payload.ExpectedRunRevision {
 			return failure("stale_version", "candidate changed before explicit input")
 		}
@@ -170,7 +179,7 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 				return failure("invalid_request", "public Runner input differs from the original answer")
 			}
 		}
-		err = c.Tasks.Bridge.QueueControl(ctx, c.Tasks.Project, candidate.ID, command, runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "sl-input-" + req.RequestID, Input: body})
+		err = c.Tasks.Bridge.QueueControl(ctx, c.Tasks.Project, candidate.ID, command, runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: req.RequestID, Input: body}, RequestDigest(req))
 		var validation *runnerbridge.InputError
 		if errors.As(err, &validation) {
 			return failure(validation.Code, validation.Message)
