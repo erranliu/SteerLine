@@ -14,6 +14,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/app/host"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/localservice"
+	"github.com/erranliu/SteerLine/internal/processwindow"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
@@ -274,6 +275,7 @@ func StartApplication(ctx context.Context, noOpen bool) (ApplicationStatus, erro
 	}
 	if !noOpen {
 		command := exec.CommandContext(ctx, web.exe, "open")
+		processwindow.Hide(command)
 		command.Dir = HomeDir()
 		command.Env = applicationEnvironment(HomeDir())
 		command.Stdout = os.Stdout

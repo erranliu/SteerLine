@@ -22,7 +22,13 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/app/host"
 
-var quickTests = []string{"TestAtomicWriteENOSPCPreservesPreviousSnapshot"}
+var quickTests = func() []string {
+	tests := []string{"TestAtomicWriteENOSPCPreservesPreviousSnapshot"}
+	if runtime.GOOS == "windows" {
+		tests = append(tests, "TestBackgroundCommandsNoConsole")
+	}
+	return tests
+}()
 
 const executionPackage = "github.com/erranliu/SteerLine/internal/taskrunner"
 
