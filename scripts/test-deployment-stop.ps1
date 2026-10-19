@@ -7,6 +7,11 @@ $script:stopCode = 0
 $script:verifyCode = 0
 $script:invalidProof = $false
 $script:verifyCommand = 'verify-stop'
+$script:stagedHash = 'same'
+function Get-FileHash([string]$LiteralPath, [string]$Algorithm) {
+    if ($LiteralPath -eq 'staged-runner') { return @{Hash=$script:stagedHash} }
+    Microsoft.PowerShell.Utility\Get-FileHash -LiteralPath $LiteralPath -Algorithm $Algorithm
+}
 function Invoke-StagedFixture {
     $script:calls.Add(($args -join '|'))
     if ($args[0] -eq 'stop') {
@@ -17,7 +22,11 @@ function Invoke-StagedFixture {
     $global:LASTEXITCODE = $script:verifyCode
     if ($script:verifyCode -eq 0) {
         if ($script:invalidProof) { '{}' }
-        elseif ($script:verifyCommand -eq 'verify-restart') { '{"restartable":true,"original_host":{"instance_id":"original"},"verified_at":"2026-10-19T00:00:00Z","projects":[],"runner_build":{"sha256":"same","resource_digest":"fixed","state_dir":"owned-shared-runner"},"runner_service":{"instance_id":"original-runner","request_id":"original-stop","state_dir":"owned-shared-runner","executable_sha256":"same","resources_settled":false,"diagnostic":"original terminal still active"}}' }
+        elseif ($script:verifyCommand -eq 'verify-restart') {
+            $proof = @{restartable=$true;verifier_sha256=$script:stagedHash;original_host=@{instance_id='original'};verified_at='2026-10-19T00:00:00Z';projects=@();runner_build=@{sha256='same';resource_digest='fixed';state_dir='owned-shared-runner'};runner_service=@{instance_id='original-runner';request_id='original-stop';state_dir='owned-shared-runner';executable_sha256='same';resources_settled=$false;diagnostic='original terminal still active'}}
+            if ($script:stagedHash -eq 'candidate') { $proof.candidate_build=@{sha256='candidate';state_dir='owned-shared-runner'}; $proof.takeover=@{contract='steerrunner-takeover/v1';compatible=$true;candidate_sha256='candidate';state_dir='owned-shared-runner'} }
+            $proof | ConvertTo-Json -Depth 8 -Compress
+        }
         else { '{"original_host":{"instance_id":"original"},"verified_at":"2026-10-16T00:00:00Z","projects":[],"runner":{"state_dir":"owned-shared-runner","resources_settled":true,"runs":[],"checks":[]}}' }
     }
 }
@@ -43,6 +52,14 @@ $script:invalidProof = $false
 $script:verifyCommand = 'verify-restart'
 $proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart
 if (-not $proof.restartable -or $proof.runner_service.resources_settled -ne $false -or $script:calls.Count -ne 2) { throw 'Same-build restart confused retained native resources with settlement.' }
+$script:stagedHash = 'candidate'
+$proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart
+if ($proof.runner_build.sha256 -ne 'same' -or $proof.candidate_build.sha256 -ne 'candidate' -or $proof.runner_service.resources_settled -ne $false) { throw 'Compatible takeover changed original build or native exit facts.' }
+$script:stagedHash = 'unproved'
+$failed = $false
+try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart } catch { $failed = $true }
+if (-not $failed) { throw 'Changed build without takeover evidence was accepted.' }
+$script:stagedHash = 'same'
 $script:invalidProof = $true
 $failed = $false
 try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart } catch { $failed = $true }
@@ -80,4 +97,4 @@ try {
     if (-not $resolved.StartsWith($expectedPrefix,[StringComparison]::OrdinalIgnoreCase)) { throw 'Test cleanup escaped its temporary fixture root.' }
     Remove-Item -LiteralPath $resolved -Recurse -Force
 }
-Write-Output 'Passed: strict settlement, same-build restart, pinned Runner reuse, and all failed-verification gates.'
+Write-Output 'Passed: strict settlement, compatible takeover, pinned Runner reuse, and failed-verification gates.'

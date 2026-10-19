@@ -159,7 +159,7 @@ func (d *ApplicationDirectory) run() {
 		err := decodeStrictJSON(d.global, &global)
 		if err == nil {
 			ctx, cancel := context.WithTimeout(d.ctx, 90*time.Second)
-			err = d.runner.start(ctx, global, d.home, 30*time.Second)
+			err = d.runner.start(ctx, global, d.home, 30*time.Second, d.prepareRunnerStops)
 			cancel()
 		}
 		if err != nil {
