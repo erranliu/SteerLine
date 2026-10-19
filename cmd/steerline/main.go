@@ -28,12 +28,12 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <start|serve|stop|verify-stop|status|check|control|task|answer|home|install|launchers> [-config config.json]")
+		return fmt.Errorf("usage: steerline <start|restart|serve|stop|verify-stop|verify-restart|status|check|control|task|answer|home|install|launchers> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
 	}
-	if os.Args[1] == "start" || os.Args[1] == "serve" || os.Args[1] == "stop" || os.Args[1] == "status" || os.Args[1] == "verify-stop" {
+	if os.Args[1] == "start" || os.Args[1] == "restart" || os.Args[1] == "serve" || os.Args[1] == "stop" || os.Args[1] == "status" || os.Args[1] == "verify-stop" || os.Args[1] == "verify-restart" {
 		return runApplication(os.Args[1], os.Args[2:])
 	}
 	command := os.Args[1]

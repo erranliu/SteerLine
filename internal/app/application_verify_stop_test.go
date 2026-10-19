@@ -3,16 +3,19 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
@@ -93,6 +96,98 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 	require(t, localservice.Write(backend.dir, "shutdown.json", original))
 	if _, err = VerifyApplicationStopped(ctx, exe); err == nil {
 		t.Fatal("unclosed original runtime accepted")
+	}
+
+	t.Run("same_build_restart_retains_native_unknown", func(t *testing.T) {
+		original.Projects[0].LocalClosed = true
+		require(t, localservice.Write(backend.dir, "shutdown.json", original))
+		fixturePath := filepath.Join(runnerstatepath.Directory(c.runnerHome()), "idle-fixture.json")
+		var info runnerclient.ServiceInfo
+		require(t, json.Unmarshal(before[fixturePath], &info))
+		info.LastShutdown.ResourcesSettled = false
+		info.LastShutdown.Diagnostic = "Original Orca terminal is still active"
+		require(t, os.WriteFile(fixturePath, mustJSON(info), 0600))
+		for _, path := range paths {
+			before[path], err = os.ReadFile(path)
+			require(t, err)
+		}
+		proof, err := VerifyApplicationRestartable(ctx, exe)
+		require(t, err)
+		if !proof.Restartable || proof.RunnerService.ResourcesSettled || proof.RunnerService.Diagnostic != info.LastShutdown.Diagnostic || proof.RunnerBuild.SHA256 != proof.VerifierSHA256 || proof.OriginalHost != id {
+			t.Fatal("restart fabricated native settlement or changed ownership", proof)
+		}
+		for _, path := range paths {
+			after, err := os.ReadFile(path)
+			require(t, err)
+			if !bytes.Equal(before[path], after) {
+				t.Fatal("restart verification changed original records", path)
+			}
+		}
+		lock, err := host.LockRepository(c.RunDir)
+		require(t, err)
+		_, verifyErr := VerifyApplicationRestartable(ctx, exe)
+		lock.Close()
+		if verifyErr == nil {
+			t.Fatal("restart accepted an active project writer")
+		}
+		changedExe := filepath.Join(t.TempDir(), "different-runner.exe")
+		require(t, os.WriteFile(changedExe, []byte("another build"), 0600))
+		if _, err := VerifyApplicationRestartable(ctx, changedExe); err == nil {
+			t.Fatal("restart accepted a different Runner executable")
+		}
+		info.Status = "ready"
+		require(t, os.WriteFile(fixturePath, mustJSON(info), 0600))
+		if _, err := VerifyApplicationRestartable(ctx, exe); err == nil {
+			t.Fatal("restart accepted an active Runner writer")
+		}
+		info.Status = "not_running"
+		require(t, os.WriteFile(fixturePath, mustJSON(info), 0600))
+		original.Projects[0].LocalClosed = false
+		require(t, localservice.Write(backend.dir, "shutdown.json", original))
+		if _, err := VerifyApplicationRestartable(ctx, exe); err == nil {
+			t.Fatal("restart accepted unclosed project resources")
+		}
+		original.Projects[0].LocalClosed = true
+		require(t, localservice.Write(backend.dir, "shutdown.json", original))
+		require(t, os.WriteFile(GlobalExecutionConfigPath(), append(append([]byte{}, global...), '\n'), 0600))
+		if _, err := VerifyApplicationRestartable(ctx, exe); err == nil {
+			t.Fatal("restart accepted changed frozen configuration")
+		}
+	})
+}
+
+func TestDeploymentRestartCandidateBindingsPreserveOriginalState(t *testing.T) {
+	home := t.TempDir()
+	c := Config{executionPath: filepath.Join(home, "execution.json")}
+	pin := runnercontract.BuildPin{Executable: filepath.Join(home, "runner.exe"), Version: "fixed", SHA256: strings.Repeat("a", 64), ResourceDigest: strings.Repeat("b", 64), StateDir: runnerstatepath.Directory(home)}
+	c.RunnerExecution.Runner = runnerclient.Selection{Executable: pin.Executable, Version: pin.Version, SHA256: pin.SHA256}
+	cp := &hostcontract.ServiceCheckpoint{Service: hostcontract.ServiceState{RunnerBuild: &pin}}
+	for _, status := range []string{"outcome_unknown", "accepted", "rejected"} {
+		candidate := runnerstate.Candidate{ID: "candidate", RunnerBuild: pin, StateDir: pin.StateDir, RunID: "original", InputDigest: strings.Repeat("c", 64), SubmitState: status, PRURL: "https://github.com/owner/repo/pull/1", Diagnostic: "Original resource remains unverified"}
+		original := mustJSON(candidate)
+		require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, nil, pin))
+		if !bytes.Equal(original, mustJSON(candidate)) {
+			t.Fatal("restart rewrote candidate facts")
+		}
+		for _, alter := range []func(*runnerstate.Candidate){
+			func(r *runnerstate.Candidate) { r.RunnerBuild.SHA256 = strings.Repeat("d", 64) },
+			func(r *runnerstate.Candidate) { r.StateDir += "-other" },
+			func(r *runnerstate.Candidate) { r.InputDigest = "" },
+		} {
+			bad := candidate
+			alter(&bad)
+			if matchRestartBindings(c, cp, []runnerstate.Candidate{bad}, nil, pin) == nil {
+				t.Fatal("restart accepted a different original binding")
+			}
+		}
+	}
+	unknown := runnerstate.Candidate{ID: "unknown-submit", RunnerBuild: pin, StateDir: pin.StateDir, SubmitState: "outcome_unknown"}
+	require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{unknown}, nil, pin))
+	check := runnerstate.EnvironmentCheckRecord{Selection: runnerstate.EnvironmentRunnerPin(c.RunnerExecution.Runner), StateDir: pin.StateDir, ResourceDigest: pin.ResourceDigest}
+	require(t, matchRestartBindings(c, cp, nil, []runnerstate.EnvironmentCheckRecord{check}, pin))
+	check.ResourceDigest = strings.Repeat("e", 64)
+	if matchRestartBindings(c, cp, nil, []runnerstate.EnvironmentCheckRecord{check}, pin) == nil {
+		t.Fatal("restart accepted a foreign environment check")
 	}
 }
 

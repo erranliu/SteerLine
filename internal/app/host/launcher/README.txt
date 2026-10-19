@@ -1,6 +1,7 @@
 SteerLine
 
 start.bat starts the shared project host and Web, then opens the browser.
+restart.bat restarts with the same pinned Runner while retaining original Runs and remote terminals.
 stop.bat stops both services and verifies project shutdown.
 
 Select a project in the browser. Projects are loaded from etc/*.json at host startup.

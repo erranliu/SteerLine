@@ -37,7 +37,7 @@ func TestUnifiedStartupLaunchersRetireOnlyOwnedTemplates(t *testing.T) {
 			t.Fatal("custom launcher modified", name, err)
 		}
 	}
-	for _, name := range []string{"start.bat", "stop.bat"} {
+	for _, name := range []string{"start.bat", "restart.bat", "stop.bat"} {
 		data, err := os.ReadFile(filepath.Join(home, name))
 		if err != nil || !bytes.Contains(data, []byte("set \"STEERLINE_HOME=%~dp0\"")) || !bytes.Contains(data, []byte("exit /b %RESULT%")) {
 			t.Fatal("launcher home/exit code binding lost", name, err)

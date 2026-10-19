@@ -1,20 +1,24 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'deployment-stop.ps1')
+. (Join-Path $PSScriptRoot 'deployment-runner.ps1')
 
 $script:calls = [Collections.Generic.List[string]]::new()
 $script:stopCode = 0
 $script:verifyCode = 0
 $script:invalidProof = $false
+$script:verifyCommand = 'verify-stop'
 function Invoke-StagedFixture {
     $script:calls.Add(($args -join '|'))
     if ($args[0] -eq 'stop') {
         $global:LASTEXITCODE = $script:stopCode
         return
     }
-    if (($args -join '|') -ne 'verify-stop|--runner-exe|staged-runner|--json') { throw 'Verifier did not use selected staged Runner.' }
+    if (($args -join '|') -ne ($script:verifyCommand+'|--runner-exe|staged-runner|--json')) { throw 'Verifier did not use selected staged Runner.' }
     $global:LASTEXITCODE = $script:verifyCode
     if ($script:verifyCode -eq 0) {
-        if ($script:invalidProof) { '{}' } else { '{"original_host":{"instance_id":"original"},"verified_at":"2026-10-16T00:00:00Z","projects":[],"runner":{"state_dir":"owned-shared-runner","resources_settled":true,"runs":[],"checks":[]}}' }
+        if ($script:invalidProof) { '{}' }
+        elseif ($script:verifyCommand -eq 'verify-restart') { '{"restartable":true,"original_host":{"instance_id":"original"},"verified_at":"2026-10-19T00:00:00Z","projects":[],"runner_build":{"sha256":"same","resource_digest":"fixed","state_dir":"owned-shared-runner"},"runner_service":{"instance_id":"original-runner","request_id":"original-stop","state_dir":"owned-shared-runner","executable_sha256":"same","resources_settled":false,"diagnostic":"original terminal still active"}}' }
+        else { '{"original_host":{"instance_id":"original"},"verified_at":"2026-10-16T00:00:00Z","projects":[],"runner":{"state_dir":"owned-shared-runner","resources_settled":true,"runs":[],"checks":[]}}' }
     }
 }
 
@@ -34,4 +38,46 @@ $script:invalidProof = $true
 $failed = $false
 try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' } catch { $failed = $true }
 if (-not $failed) { throw 'Incomplete verification evidence did not block deployment.' }
-Write-Output 'Passed: staged stop, independent verification, and failed-verification deployment gate.'
+$script:calls.Clear()
+$script:invalidProof = $false
+$script:verifyCommand = 'verify-restart'
+$proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart
+if (-not $proof.restartable -or $proof.runner_service.resources_settled -ne $false -or $script:calls.Count -ne 2) { throw 'Same-build restart confused retained native resources with settlement.' }
+$script:invalidProof = $true
+$failed = $false
+try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart } catch { $failed = $true }
+if (-not $failed) { throw 'Incomplete restart proof did not block deployment.' }
+$script:invalidProof = $false
+$script:verifyCode = 1
+$failed = $false
+try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart } catch { $failed = $true }
+if (-not $failed) { throw 'Unknown service shutdown did not block restart deployment.' }
+
+$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('steerline-deploy-fixture-'+[Guid]::NewGuid().ToString('N'))
+try {
+    New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'bin') -Force | Out-Null
+    $runner = Join-Path $fixtureRoot 'bin\steerrunner.exe'
+    [IO.File]::WriteAllText($runner, 'original Runner bytes')
+    $hash = (Get-FileHash -LiteralPath $runner -Algorithm SHA256).Hash
+    $config = @{version=3;runner=@{executable=$runner;version='fixed';sha256=$hash};execution_profiles=@(@{id='fixture'})}
+    $config | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $fixtureRoot 'execution.json') -Encoding UTF8
+    $selected = Get-DeploymentRunnerSelection $fixtureRoot $false
+    if (-not $selected.Reuse -or $selected.Executable -ne $runner -or $selected.SHA256 -ne $hash) { throw 'Ordinary deployment did not reuse the installed release.' }
+    if ((Get-DeploymentRunnerSelection $fixtureRoot $true).Reuse) { throw 'Explicit Runner build was ignored.' }
+    New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'application-api') | Out-Null
+    @{sha256=$hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureRoot 'application-api\runner-build.json') -Encoding UTF8
+    Assert-DeploymentRunnerBuild $fixtureRoot $hash
+    $failed = $false
+    try { Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) } catch { $failed = $true }
+    if (-not $failed) { throw 'A new Runner build was allowed to replace an existing runtime.' }
+    [IO.File]::WriteAllText($runner, 'different bytes')
+    $failed = $false
+    try { Get-DeploymentRunnerSelection $fixtureRoot $false } catch { $failed = $true }
+    if (-not $failed) { throw 'A corrupted installed Runner pin was reused.' }
+} finally {
+    $resolved = [IO.Path]::GetFullPath($fixtureRoot)
+    $expectedPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')+'\steerline-deploy-fixture-'
+    if (-not $resolved.StartsWith($expectedPrefix,[StringComparison]::OrdinalIgnoreCase)) { throw 'Test cleanup escaped its temporary fixture root.' }
+    Remove-Item -LiteralPath $resolved -Recurse -Force
+}
+Write-Output 'Passed: strict settlement, same-build restart, pinned Runner reuse, and all failed-verification gates.'

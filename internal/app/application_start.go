@@ -285,6 +285,28 @@ func StartApplication(ctx context.Context, noOpen bool) (ApplicationStatus, erro
 	return result, nil
 }
 
+// RestartApplication retains the fixed Runner and its original Runs. A service
+// stop may leave remote native executions alive; their status stays unverified.
+func RestartApplication(ctx context.Context, noOpen bool) (ApplicationStatus, error) {
+	data, err := readConfiguration(GlobalExecutionConfigPath())
+	if err != nil {
+		return ApplicationStatus{}, err
+	}
+	var global RunnerExecutionConfig
+	if err := decodeStrictJSON(data, &global); err != nil {
+		return ApplicationStatus{}, err
+	}
+	if err := global.Validate(); err != nil {
+		return ApplicationStatus{}, err
+	}
+	if stopErr := StopAll(ctx); stopErr != nil {
+		if _, err := VerifyApplicationRestartable(ctx, global.Runner.Executable); err != nil {
+			return ApplicationStatus{}, errors.Join(stopErr, err)
+		}
+	}
+	return StartApplication(ctx, noOpen)
+}
+
 func requestStop(ctx context.Context, home string, c component) (*contract.Identity, error) {
 	status, err := observeComponent(ctx, home, c)
 	if status.State == "absent" {
