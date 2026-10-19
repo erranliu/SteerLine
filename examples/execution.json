@@ -2,7 +2,7 @@
   "version": 3,
   "runner": {
     "executable": "C:/Tools/SteerRunner/steerrunner.exe",
-    "version": "0.1.0-dev.1",
+    "version": "0.2.0-dev.2",
     "sha256": "REPLACE_WITH_THE_SELECTED_EXE_SHA256"
   },
   "default_execution_profile": "local-luna-medium",
@@ -23,7 +23,7 @@
       },
       "workflow": {
         "id": "development",
-        "version": 1
+        "version": 2
       }
     },
     {
@@ -42,7 +42,7 @@
       },
       "workflow": {
         "id": "development-audited",
-        "version": 1,
+        "version": 2,
         "audit_model": {
           "model": "gpt-6.1-sol",
           "reasoning_effort": "high"
@@ -65,7 +65,7 @@
       },
       "workflow": {
         "id": "development",
-        "version": 1
+        "version": 2
       }
     },
     {
@@ -83,18 +83,18 @@
             "wait_timeout": "30s"
           },
           "agent_launch": {
-            "runtime_executable": "C:/Tools/SteerRunner/steerrunner-agent.exe",
-            "runtime_sha256": "REPLACE_WITH_EXECUTION_HOST_HELPER_SHA256",
             "executable": "codex",
             "model": "gpt-6-luna",
             "reasoning_effort": "medium",
-            "args": ["--no-daemon"]
+            "args": [
+              "--no-daemon"
+            ]
           }
         }
       },
       "workflow": {
         "id": "development",
-        "version": 1
+        "version": 2
       }
     }
   ]

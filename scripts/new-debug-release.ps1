@@ -14,7 +14,7 @@
     [ValidateSet('','medium','high','xhigh')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
-if ($Orca) {
+if ($Orca -and -not $OrcaEnvironment) {
     if (-not $OrcaRuntimeExecutable -or $OrcaRuntimeExecutable -match '[\x00\r\n]' -or
         $OrcaRuntimeExecutable -notmatch '^(?:[A-Za-z]:[\\/]|/)') {
         throw 'Orca requires -OrcaRuntimeExecutable <absolute execution-host steerrunner-agent path>'
@@ -24,7 +24,7 @@ if ($Orca) {
     }
     $OrcaRuntimeSHA256 = $OrcaRuntimeSHA256.ToLowerInvariant()
 } elseif ($OrcaRuntimeExecutable -or $OrcaRuntimeSHA256) {
-    throw 'Orca runtime parameters require -Orca'
+    throw 'Helper runtime parameters apply only to Orca local; remote Orca uses the native agent'
 }
 if (-not $WebAddress) {
     $portProbe = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
@@ -159,13 +159,15 @@ try {
             transport=@{executable=$OrcaExecutable;wait_timeout='40s'}
             agent_launch=@{
                 executable=$launchExecutable
-                runtime_executable=$OrcaRuntimeExecutable
-                runtime_sha256=$OrcaRuntimeSHA256
                 args=@('--no-daemon')
             }
         }
+        if (-not $OrcaEnvironment) {
+            $settings.agent_launch['runtime_executable']=$OrcaRuntimeExecutable
+            $settings.agent_launch['runtime_sha256']=$OrcaRuntimeSHA256
+        }
         $catalog = @{version=3;runner=@{executable="$rootText/bin/steerrunner.exe";version=$runnerSource.version;sha256=$runnerSource.sha256};default_execution_profile='live';execution_profiles=@(@{
-            id='live';name='Orca single-terminal debug';execution=@{adapter='orca-terminal';target=$executionTarget;settings=$settings};workflow=@{id='development';version=1}
+            id='live';name='Orca single-terminal debug';execution=@{adapter='orca-terminal';target=$executionTarget;settings=$settings};workflow=@{id='development';version=2}
         })}
 		if ($AgentModel -or $AgentReasoningEffort) {
 			if (-not $AgentModel) { throw 'AgentReasoningEffort requires AgentModel' }
@@ -175,7 +177,7 @@ try {
         [IO.File]::WriteAllText((Join-Path $target 'home\execution.json'), ($catalog | ConvertTo-Json -Depth 10), $utf8)
         $manifest.execution_host='orca'
         $manifest.execution_environment=$OrcaEnvironment
-        $manifest.orca_runtime=@{executable=$OrcaRuntimeExecutable;sha256=$OrcaRuntimeSHA256}
+        if (-not $OrcaEnvironment) { $manifest.orca_runtime=@{executable=$OrcaRuntimeExecutable;sha256=$OrcaRuntimeSHA256} }
     }
     if (-not $Orca -and ($AgentExecutable -or $AgentModel -or $AgentReasoningEffort)) {
         $executionPath = Join-Path $target 'home\execution.json'

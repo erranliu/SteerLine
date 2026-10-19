@@ -26,7 +26,7 @@ type Final struct {
 	AttemptID     string `json:"attempt_id"`
 	SessionID     string `json:"session_id"`
 	TurnID        string `json:"turn_id"`
-	NativeOutcome string `json:"native_outcome"`
+	NativeOutcome string `json:"native_outcome"` // unreported is absent provider outcome, not native success.
 	Verified      bool   `json:"verified"`
 	Source        string `json:"source,omitempty"`
 	ItemID        string `json:"item_id,omitempty"`

@@ -23,8 +23,11 @@ SteerLine 为 Runner 指定本地卷根下的短目录：Windows 为 `<drive>:\s
 原生查看通过 `open-native-session --run-id R --attempt-id A --session-id S --generation G` 调用；只有 Runner 发布的 `native_session_viewer.adapters` 中相应 adapter 可用时启用按钮。原服务负责私有 binding 和实时进程/thread/workspace 核验，调用方不读取这些私有材料。详情与本次构建/验证范围见[原会话查看验收](../acceptance/native-session-viewer.md)。
 
 绑定运行时的业务和查询使用 `--expected-instance-id`，必须选择发布 `instance_binding.expected_instance_id: true` 的 Runner。该参数是实际请求的前置，不能用先查询 status 代替；绑定调用不会隐式启动替代服务。显式重启 SteerLine 后先只读核对原 Run/输入或原 submit 请求，再开放准入。原 pending 输入撤销，unknown 输入只读对账，不自动重发。该增量随两仓协作 PR 同步交付，旧构建不能用于新调用方联验。
-Orca GitHub 执行必须显式配置 `execution.settings.agent_launch.runtime_executable` 与 `runtime_sha256`，指向执行主机已安装的可信 `steerrunner-agent.exe` 及其实际 SHA256；`agent_launch.executable` 是同主机的 native Codex。Runner 在执行主机使用已有 gh 登录准备单仓库认证，并在实际 app-server/权限模式内完成无模型预检；SteerLine 不传递凭据、不代做预检。缺 helper 时 Runner 在业务输入前拒绝，普通终端默认 Codex 启动不能替代这个能力。
+远端 Orca 使用执行主机已有 Codex/Git/gh 登录，通过原生 Orca 链路启动，不部署或运行 SteerRunner helper。远端 agent_launch 的 runtime_executable/runtime_sha256 键（含空值）被公开 schema 拒绝；本机 Orca 受管实现仍可使用 helper。模型、effort、access_mode 只承诺按冻结配置传递。
 
-调试生成器的 Orca 入口要求 `-OrcaRuntimeExecutable <执行主机绝对路径> -OrcaRuntimeSHA256 <sha256>`，并始终生成 agent_launch；可另传 `-AgentExecutable <执行主机 native Codex> -AgentModel <model> -AgentReasoningEffort high`。路径在执行主机解析，不能用调用方 Test-Path 判断；应先核对执行主机的实际 helper/native 构建身份。生成器不会安装远端 helper 或复制认证，首次启动后配置仍冻结。
+调试生成器远端入口使用 -Orca -OrcaEnvironment <environment>，可传 -AgentExecutable/-AgentModel/-AgentReasoningEffort，不传 helper 参数。完整远端环境检查为 unsupported，不阻断普通 Run。service verify-stopped 的逐 Run stop_evidence_scope=orca_terminal 由 Runner 只读推导；SteerLine 展示该字段，部署继续只依据 resources_settled，旧未知仍阻断。见[本次接入验收](../acceptance/orca-remote-native.md)。
 
 Runner 远端机制已随主干 `d4969d0`（PR #18）合入，其独立验收见 [Orca 远端记录](https://github.com/erranliu/SteerRunner/blob/d4969d0/docs/acceptance/orca-remote-20261017.md)。SteerLine 产品接线的本次结果独立登记在[专属验收](../acceptance/orca-runtime-wiring.md)，不以 Runner 独立结果替代产品验证或改写旧安装候选。
+
+
+原生结果契约：execution.native_outcome / final.native_outcome 为 succeeded、failed、cancelled、unknown 或 unreported。unreported 表示接口未提供 outcome，不表示底层成功；只有 Runner 已核实原回合、完整结果及既有业务门后才能推进状态。SteerLine 原样保存/传递；任务状态、可用操作及 PR 事实仍由 Runner 给出，部署仍看 resources_settled。显式 unknown、失败、取消、未知输入不放行；历史记录不重新分类或自动恢复。CLI 结构/version v1 不变，不新增消费端容错开关。

@@ -6,7 +6,7 @@
 
 按 [公开示例](../../examples/execution.json)填写实际路径和 SHA。`execution_profiles` 每项包含 id/name、execution 与 workflow；execution 的 adapter/target/settings 直接使用 Runner 发布的公开契约，SteerLine 按公开 schema 验证，不能通过文件或网络加载额外 schema。项目文件保留仓库、Git/PR provider、Task 契约和 publication_policy；执行侧不从项目复制认证或用户配置。
 
-本机方案使用 `codex-app-server` 和 `target.kind=local`，settings 包含固定 native executable、model 和 reasoning_effort。远端方案使用 `orca-terminal`、`target.kind=orca_environment` 与明确的 environment 名称；transport 指定 Orca CLI，agent_launch 使用公开 executable/args/model/reasoning_effort，并显式固定执行主机的 `runtime_executable`（可信 steerrunner-agent）和 `runtime_sha256`。GitHub 业务不能仅靠 Orca 默认 TUI 启动；Runner 需先取得 helper 的同权限认证准备回执。执行主机须已注册匹配仓库，并取得固定 base commit；身份或权限缺证时阻断。接线与本次验证见[专属验收](../acceptance/orca-runtime-wiring.md)。
+本机方案使用 codex-app-server 和 local target。远端方案使用 orca-terminal、orca_environment 与明确 environment；transport 指定 Orca CLI，agent_launch 只配置 native executable/args/model/reasoning_effort 和 access_mode，不接受 helper runtime 路径/SHA。远端使用已有登录，停止只证明原 Orca 终端；完整 Check unsupported 不阻断普通 Run。执行主机须已注册匹配仓库并取得固定 base commit；未知操作只对账原资源。
 
 普通 workflow 为 development/1，审计预设显式选择 development-audited/1，并提供 workflow.audit_model；Runner 发布 workflows、workflow schema 和自包含的 run_configuration 组合 schema，caller 不补执行默认值。Runner 内嵌流程、提示词与 schema，原生代理在 implement、report、publish 的独立输入中执行。受理时固定 Spec/Plan 材料、规范化参数与提示词模板/覆盖正文；每轮最终输入在结果/反馈与授权确定后、发送前保存，恢复保留原正文和模型参数，不在受理时预生成未来轮次或原生身份。定制正文仍须保留固定材料和机器结果契约。SteerLine 只选择公开方案，不解释原生终端文本推进业务。
 
