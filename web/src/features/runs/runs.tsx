@@ -33,6 +33,9 @@ function Output({ run }: { run: Candidate }) {
   });
   const updatedAt =
     tab === "activity" ? activity.dataUpdatedAt : final.dataUpdatedAt;
+  const recentActivity = [...(activity.data?.page.activity ?? [])].sort(
+    (a, b) => b.seq - a.seq,
+  );
   return (
     <section className="output-panel">
       <div className="toolbar">
@@ -66,14 +69,22 @@ function Output({ run }: { run: Candidate }) {
               {d}
             </p>
           ))}
-          {activity.data?.page.activity
-            ?.filter((event) => event.kind !== "runner_event")
+          {recentActivity
+            .filter((event) => event.kind !== "runner_event")
             .map((event) => (
               <div className="activity-item" key={event.seq}>
                 <span className="activity-dot" />
                 <time>{new Date(event.ts).toLocaleTimeString("zh-CN")}</time>
                 <div>
                   <strong>{event.title || event.kind}</strong>
+                  {event.kind === "worker_state" &&
+                    event.meta?.to?.workflow_stage &&
+                    event.meta.from?.workflow_stage ===
+                      event.meta.to.workflow_stage && (
+                      <p className="muted">
+                        Workflow · <code>{event.meta.to.workflow_stage}</code>
+                      </p>
+                    )}
                   {event.detail && <pre>{event.detail}</pre>}
                 </div>
               </div>
@@ -90,7 +101,7 @@ function Output({ run }: { run: Candidate }) {
           ) && (
             <details>
               <summary>内部执行事件</summary>
-              {activity.data.page.activity
+              {recentActivity
                 .filter((event) => event.kind === "runner_event")
                 .map((event) => (
                   <p key={event.seq} className="muted">
@@ -105,7 +116,7 @@ function Output({ run }: { run: Candidate }) {
               (event) => event.kind !== "runner_event",
             ) && (
               <p className="muted">
-                暂无已记录的流程或状态变化；已有内部事件可在详情查看。
+                暂无已记录的 Workflow 或状态变化；已有内部事件可在详情查看。
               </p>
             )}
           <p className="output-hint">
