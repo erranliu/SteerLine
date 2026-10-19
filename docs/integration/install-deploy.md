@@ -4,6 +4,8 @@
 
 ## 从源码更新
 
+需要同时构建 SteerLine、Web 和 Runner 时，双击根目录 `build-deploy-all.bat`。该入口复用 `build-deploy.bat` 并固定传入 `-UpdateRunner`，其余参数原样转交，默认完成构建、部署和启动；仍遵守 Runner 构建更换与新环境要求。
+
 双击 SteerLine 仓库根目录 `build-deploy.bat`。已有安装默认复用 `execution.json` 固定的 Runner EXE，只构建 SteerLine 和 Web；首次安装或显式 `-UpdateRunner` 才从相邻 `..\SteerRunner` 源码构建 Runner。构建成功后停止应用，校验停止或同构建重启资格，安装 EXE 并重新启动。每次记录保存在 `<home>\deployments\<时间-随机ID>\deployment.json`，最新记录为 `<home>\deployment.json`，包含源码版本和三个 EXE 的实际摘要。
 
 需要 Windows、PowerShell 5.1、Go、Git、Node/npm；使用本仓当前工作区，显式构建 Runner 时才读取其源码工作区，不自动 pull/rebase/checkout。构建包括 Web 的 npm ci/build。运行已安装程序不需要 Go、Node 或 Python；实际任务仍需配置所引用的 Git、Codex、gh 和已有机器登录。构建源中允许未提交修改，部署记录标明 dirty；源码与构建依赖变更应先做必要验证。
@@ -14,7 +16,7 @@
 # 只更新，不启动
 .\build-deploy.bat -NoStart -NoPause
 # 显式构建 Runner（换构建须使用满足新环境规则的目标目录）
-.\build-deploy.bat -UpdateRunner -InstallHome C:\SteerlineNewInstall -NoPause
+.\build-deploy-all.bat -InstallHome C:\SteerlineNewInstall -NoPause
 # 覆盖源码位置或目标安装目录
 .\build-deploy.bat -RunnerRepo C:\Project\SteerRunner -InstallHome C:\SteerlineInstall -NoPause
 ```
