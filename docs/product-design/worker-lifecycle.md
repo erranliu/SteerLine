@@ -26,7 +26,7 @@ W18 停服取证修复：停机前的候选投影不能证明停机后的资源�
 
 2026-10-19 Orca W18/V06–V07 补充：Runner 停服与部署离线重验共用原 runtime 完整清单，绑定原 worktree/terminal/incarnation；PTY 已退出或在原 host 清单中缺席仅是必要条件。Codex inline-v3 helper 固定原 helper/native 身份和退出公钥；显式停止先实际核实原 app-server/tools 与 TUI 的两棵 Job 清空、关闭认证，再签发绑定完整 readiness 的退出凭据，最后关闭原 PTY。helper 已返回原 shell 时仍按原身份和原生证明清理，不依赖 agent 展示标签。工作区只保存可验签的公共凭据，私钥仅在原 helper 内存中；离线重验只经既有 Orca 文件通道读取原 host 的有界公共文件并验签，全部原 readonly reader 的 native tree 结算和 PTY 停止也须核实，快照与既有 journal 均纳入。查询失败与资源结算分别取证，不晋升业务完成。通用 helper 沿用既有 owner/exit/authentication 证明；缺 key/原退出/认证/reader 证明、未知创建或旧 helper 缺不可追溯的事实仍阻断，不迁移、补写历史或以调用方 PID 代替执行主机。服务退出继续沿 ContinueExecutionOnServiceStop，不自动停止业务或重发输入。SteerLine 仍只消费公开逐 Run 证明和既有聚合围栏，不引入另一套原生状态机。实现与真实 Codex/Orca 停止证据归 Runner 的 `docs/spec/orca-shutdown-verification.plan.md` 和专属验收；本仓消费者验证见[本次验收](../acceptance/orca-shutdown-verification.md)。本次没有使用安装环境作测试现场，也没有合并或部署。
 
-2026-10-19 初始化停止补充（W03/W05–W07/W18，E04/E05，V01/V06/V07）：原 helper 在原生准备前发布并固定资源归属和退出公钥，独立于业务 readiness。Runner 尽早持久化该归属；停止先于归属 checkpoint 时先固定到既有停止进度，再产生停止副作用。停止已确认的 WorkerAbsent 不因后续暂时核验失败丢失；初始化未完成、readiness 回执缺失时，显式停止仍只作用于原 helper 持有的 Job，查询进程树清空、关闭认证并签发原归属退出证明后才关闭 PTY。归属不能替代业务 readiness 或授权输入；服务换代零自动输入、零替换会话，原证据缺失继续阻断，历史 Run 不追补。Runner 的 `docs/spec/initialization-stop.plan.md` 与 `docs/acceptance/initialization-stop.md` 维护实现和实际结果；新增 L3 `orca-remote.initialization-stop/before-readiness`、`restart-before-readiness` 验证真实初始化窗口及换代后的停止、离线结算，不作为安装现场已解阻的证明。
+2026-10-19 原生初始化停止补充（W03/W05–W07/W18，E04/E05，V01/V06/V07）：Runner #31 / SteerLine #355 已将 Orca 远端切换为 profile v4 的直接原生执行，远端不再部署 helper 或固定控制终端。初始化已绑定原 runtime/worktree/terminal/incarnation 而尚未确认 agent ready 时，显式停止仍按该原身份核验完整终端清单；无业务 turn 的初始化允许 branch 元数据暂空，明确错分支/工作区/path 或身份冲突继续阻断。服务换代零自动输入/替换会话。离线只读 `stop_evidence_scope=orca_terminal` 仅描述原终端，不证明全 OS 树或执行主机登录撤销；旧 helper Run 不降级为新原生证明，未核实仍阻断。Runner 的 `docs/spec/initialization-stop.plan.md` 和 `docs/acceptance/initialization-stop.md` 维护两个原生 L3 case 的新验证及历史 helper 结果，不把旧构建通过继承给当前方案。
 
 测试所有者按 [测试精简 Spec](../spec/runner-test-convergence.spec.md)收敛：W02–W16/W18 执行专项由 Runner 验证；W01、W12 调用方授权、W17 及迟到接受/停止义务由 SteerLine 验证。SteerLine 的完整 L2 仍用本机 Codex 实际走通实现、报告、发布和真实 PR 合并/交付；原生恢复/沙箱/Orca 不再在 SteerLine 重复建设矩阵。节点、异常和恢复规则不变，具体状态见[专属验收](../acceptance/runner-test-convergence.md)。
 
@@ -159,7 +159,7 @@ flowchart TD
 | E01 暂时读取失败 | 查询超时、观察断连、provider 限流 | 有界重试读取或重接原观察；保留业务步骤，不重发输入 |
 | E02 明确操作失败 | 已核实代理初始化失败并退出；平台明确拒绝且无待核实副作用 | 根据节点的重试资格和预算决定重新执行；失败事实不抹掉 |
 | E03 需要环境或人工处理 | 登录失效、目录信任、审批、非法配置、缺少能力、真实业务问题 | 保存具体 blocker 或 Decision；条件变化并核验后继续，不循环尝试相同失败 |
-| E04 操作结果未知 | 调用后超时、回执丢失、发送接受但开始未证明、发布副作用未知、项目/资源停止未核实 | 对账原请求；禁止换 ID 重发、补 Enter 或新建替代执行。初始化缺 readiness 不否定已固定的资源归属；显式停止仍按原 Job/认证及签名退出证明结算 |
+| E04 操作结果未知 | 调用后超时、回执丢失、发送接受但开始未证明、发布副作用未知、项目/资源停止未核实 | 对账原请求；禁止换 ID 重发、补 Enter 或新建替代执行。初始化缺 readiness 不否定已固定的原资源身份；显式停止按冻结适配器契约取证，原生远端仅按原完整 Orca 终端清单和只读 scope 结算 |
 | E05 身份或事实冲突 | terminal/runtime/session 变化、不同结果正文、目标 PR 不符、共享宿主下项目实例失配 | 保留冲突和原绑定，阻断推进；按初始化或业务边界决定是否有恢复资格 |
 | E06 已结束但结果不可用 | 原成功轮次缺 final、正文不完整、报告格式错误 | 缺原生证据先补读；明确格式问题按流程允许补报；不能用模型声明填补来源缺口 |
 | E07 本地提交失败或并发变化 | 意图保存失败、回执提交失败、CAS 冲突、旧实例结果到达，包含已关闭项目运行时的迟到事件 | 未保存意图不调用外部；已调用则核验并补提交原事实，不重做外部动作；过期事实不推进当前执行 |
@@ -201,7 +201,7 @@ flowchart TD
 | --- | --- | --- | --- |
 | W01 资格检查与冻结执行 | Task 可领取，契约、依赖/base、profile 和执行身份已保存 | 依赖未交付、base 不含前置合并、配置非法、领取竞争、保存失败 | 任务应用拒绝不合格领取；CAS 冲突重读资格，不沿过期意图启动。确定不合格不自动重试。失败领取不产生外部副作用 |
 | W02 工作区准备 | 固定独立路径、分支、base 和 Git 身份核实并保存 | fetch 失败、锁占用、路径冲突、部分 worktree 创建、创建成功但回执丢失、远端仓库未登记 | 暂时读取失败可退避；已调用创建则先按原操作核对 Git/平台登记和精确路径。缺远端配置或冲突阻断；不另造同名目录、reset、删库或换 base |
-| W03 权限与资源准备 | 冻结的写入根、沙箱、工具能力和执行主机符合要求 | 登录/信任缺失、执行目录不可用、能力不足、资源启动/策略记录只完成一半 | 保存环境 blocker；修复条件后核验原资源。不得把运行权限升级或后端切换作为重试；部分成功按原记录对账；资源归属与业务 readiness 分离，原 helper 在原生准备前固定停止身份，初始化未完成仍须能清理原资源 |
+| W03 权限与资源准备 | 冻结的写入根、沙箱、工具能力和执行主机符合要求 | 登录/信任缺失、执行目录不可用、能力不足、资源启动/策略记录只完成一半 | 保存环境 blocker；修复条件后核验原资源。不得把运行权限升级或后端切换作为重试；部分成功按原记录对账；资源归属与业务 readiness 分离，先固定原资源停止身份；原生远端直接绑定 Orca 终端，初始化未完成仍可在原契约范围结算 |
 | W04 终端或服务资源绑定 | 唯一目标 terminal 或精确 owned app-server 已绑定 | 默认终端晚出现、多终端、连接断开、runtime/incarnation 不符、进程创建回执未知 | 晚出现可在期限内读取等待；多目标拒绝猜选；未知创建只核验原意图。不补建第二终端或启动第二写者 |
 | W05 Agent 启动 | 启动命令/原生启动请求接受，当前启动记录及代理身份可核实 | 命令拒绝、可执行文件缺失、启动接受后卡住、代理立即退出、回执未知 | 接受只推进到初始化中；暂时初始化失败且旧代理明确退出、无业务派发才允许有限新启动。未知接受/退出状态只对账；配置错误或缺能力等待处理 |
 | W06 Agent 初始化与 ready | 当前初始化完成，原生会话有效且能接受下一输入，必要初始化条件已满足 | 账户路由超时、初始化提示词仍运行、hook/握手失败、旧 session 状态缓存、provider 尚未建立或发生变化 | 读取原启动对应事实，不用代理名称或旧 idle 提前宣布 ready。明确失败按 W05 资格重试；必要 hook/能力失败阻断，不因 READY 文本忽略。初始化结果不写业务 final |
@@ -294,7 +294,7 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ## 当前实现与缺口
 
-初始化停止的当前增量：Runner 已接入早期 helper 资源归属、准备阶段停止请求和原归属签名退出证明，并保留跨失败对账的停止进度；启动失败时区分未创建与已创建但句柄未知，未知创建不得签发写者消失证明。固定控制终端在 helper 启动前绑定；尚无已提交 readiness/业务 turn 的初始化不能派发原生 history reader 或会话控制请求，停止必须验证原 helper 的 Job/认证签名退出与原控制 PTY 关闭。已就绪执行继续要求固定控制的认证撤销和关闭 checkpoint，不恢复旧 reader journal。初始化缺 readiness 与停服换代分别由新增两个 L3 case 验证，实际已验/待验以 Runner `docs/acceptance/initialization-stop.md` 为准。历史未产生原归属/退出公钥的 Run 仍无法自动结算，不迁移、不用新身份替代。
+初始化停止的当前增量：当前远端不再使用 helper 的 ownership、Job/认证签名退出或固定控制 checkpoint；主干 local 受管路径保持。原生初始化无业务 turn 时，停止可在 branch 元数据尚空的窗口沿原 runtime/worktree/path/terminal/incarnation 关闭并核实原完整清单；已开始业务或明确身份/分支冲突不适用该窗口。两个 L3 case 已重定向为仅隐藏 caller 的原生 agentIdentity、保留真实响应，分别验证初始化停止和服务换代零自动输入；实际已验/待验以 Runner 专属验收为准。历史 helper 证据不迁移、不作为 native scope 或全树清理证明。
 
 ### 应用级共享 Runner（2026-10-19）
 
@@ -390,7 +390,7 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 
 | 分组 | 必须核验的边界 |
 | --- | --- |
-| V01 准备与启动 | worktree/资源创建成功丢回执只对账；代理明确退出后才有限重试；配置/权限缺失不循环启动；原生已启动但 readiness 未保存时仍可按原归属显式停止并验证完整清理 |
+| V01 准备与启动 | worktree/资源创建成功丢回执只对账；代理明确退出后才有限重试；配置/权限缺失不循环启动；原生已启动但 readiness 未确认时仍可按原身份显式停止并验证冻结契约范围的结算 |
 | V02 初始化与会话 | 初始化状态变化不提前开业务；旧 READY/旧 provider 不能验证当前准备；无业务派发时安全重试与人工重启采纳；必要证据缺失保持阻断 |
 | V03 输入投递 | 未保存意图零发送；明确拒绝、accepted 未 started、丢回执分别处理；未知发送零重发、零补 Enter |
 | V04 观察问答与终态 | 断连只接原观察；重复答案只投原请求；明确失败无 final 可恢复；成功缺 final 不补造；人工输入不替代受管结果 |
