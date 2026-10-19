@@ -33,8 +33,17 @@ func (c Client) VerifyStopped(ctx context.Context) (StoppedVerification, error) 
 	if err != nil {
 		want = filepath.Clean(c.StateDir)
 	}
-	if !strings.EqualFold(filepath.Clean(result.StateDir), want) || !result.ResourcesSettled || result.Runs == nil {
+	if !strings.EqualFold(filepath.Clean(result.StateDir), want) || result.Runs == nil {
 		return result, errors.New("Runner original native resource absence remains unverified")
+	}
+	if !result.ResourcesSettled {
+		diagnostics := []string{"Runner original native resource absence remains unverified"}
+		for _, r := range result.Runs {
+			if !r.ResourcesSettled && r.RunID != "" && r.Diagnostic != "" {
+				diagnostics = append(diagnostics, r.Diagnostic)
+			}
+		}
+		return result, errors.New(strings.Join(diagnostics, "; "))
 	}
 	seen := map[string]bool{}
 	for _, r := range result.Runs {
