@@ -294,7 +294,7 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ## 当前实现与缺口
 
-初始化停止的当前增量：Runner 已接入早期 helper 资源归属、准备阶段停止请求和原归属签名退出证明，并保留跨失败对账的停止进度；启动失败时区分未创建与已创建但句柄未知，未知创建不得签发写者消失证明。尚无 readiness/业务 turn 的初始化不能创建原生 history reader，停止重验按此原边界处理，不要求不存在的 reader journal；初始化缺 readiness 与停服换代分别由新增两个 L3 case 验证，实际已验/待验以 Runner `docs/acceptance/initialization-stop.md` 为准。历史未产生原归属/退出公钥的 Run 仍无法自动结算，不迁移、不用新身份替代。
+初始化停止的当前增量：Runner 已接入早期 helper 资源归属、准备阶段停止请求和原归属签名退出证明，并保留跨失败对账的停止进度；启动失败时区分未创建与已创建但句柄未知，未知创建不得签发写者消失证明。固定控制终端在 helper 启动前绑定；尚无已提交 readiness/业务 turn 的初始化不能派发原生 history reader 或会话控制请求，停止必须验证原 helper 的 Job/认证签名退出与原控制 PTY 关闭。已就绪执行继续要求固定控制的认证撤销和关闭 checkpoint，不恢复旧 reader journal。初始化缺 readiness 与停服换代分别由新增两个 L3 case 验证，实际已验/待验以 Runner `docs/acceptance/initialization-stop.md` 为准。历史未产生原归属/退出公钥的 Run 仍无法自动结算，不迁移、不用新身份替代。
 
 ### 应用级共享 Runner（2026-10-19）
 
