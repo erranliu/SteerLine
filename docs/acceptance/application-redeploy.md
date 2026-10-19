@@ -20,3 +20,7 @@
 - 四个修改的 PowerShell 脚本经 Windows PowerShell 5.1 Parser 解析通过；`git diff --check` 通过。
 
 首次将多个既有 app 回归合为一组运行时达到累计 180s 上限（当时刚进入 TestSharedRunnerRejectsBuildBeforeStart）；不记该批通过。随后按上述定向组分开执行并通过，未运行全仓或 live。
+
+## 全组件构建部署入口
+
+用户后续要求新增 `build-deploy-all.bat`，转调原部署入口并固定传入 `-UpdateRunner`。使用隔离的中文/空格路径和返回码为 7 的 bat 替身，从无关 cwd 调用；核对 `-UpdateRunner`、带空格的 InstallHome/RunnerRepo、NoStart/NoPause 原样传递及退出码透传，全部通过。未调用真实构建、安装或停服；`git diff --check` 通过。既有升级核验和新环境要求保持。
