@@ -207,12 +207,15 @@ it("shows a loading state rather than an empty task list until the first respons
   client.clear();
 });
 
-it("shows workflow changes and blocker reasons while folding technical event names", async () => {
+it("shows recent changes newest first and keeps each event's workflow context", async () => {
   const client = testClient();
   const api = new Api(identity, "csrf", "home");
   const options = projectQueries(api);
   client.setQueryData(options.tasks().queryKey, tasks);
   client.setQueryData(options.task("1").queryKey, tasks);
+  client.setQueryData(options.presentation().queryKey, {
+    presentation: { profiles: [], default_profile_id: "" },
+  });
   const activity = {
     page: {
       diagnostics: [],
@@ -222,8 +225,18 @@ it("shows workflow changes and blocker reasons while folding technical event nam
           ts: "2026-10-15T00:00:00Z",
           kind: "worker_state",
           status: "blocked",
-          title: "实施报告 · 状态：执行中 → 已阻塞",
+          title: "状态切换：执行中 → 已阻塞",
           detail: "GitHub HTTP 401 Requires authentication",
+          meta: {
+            from: {
+              workflow_stage: "implement.report",
+              workflow_status: "running",
+            },
+            to: {
+              workflow_stage: "implement.report",
+              workflow_status: "blocked",
+            },
+          },
         },
         {
           seq: 2,
@@ -231,6 +244,29 @@ it("shows workflow changes and blocker reasons while folding technical event nam
           kind: "runner_event",
           status: "operation_committed",
           title: "operation_committed",
+          detail: "",
+        },
+        {
+          seq: 3,
+          ts: "2026-10-15T00:00:00Z",
+          kind: "worker_state",
+          status: "running",
+          title: "Workflow 切换：implement.report → audit.execute（执行中）",
+          detail: "",
+          meta: {
+            from: {
+              workflow_stage: "implement.report",
+              workflow_status: "blocked",
+            },
+            to: { workflow_stage: "audit.execute", workflow_status: "running" },
+          },
+        },
+        {
+          seq: 4,
+          ts: "2026-10-15T00:00:01Z",
+          kind: "runner_event",
+          status: "operation_accepted",
+          title: "operation_accepted",
           detail: "",
         },
       ],
@@ -250,11 +286,67 @@ it("shows workflow changes and blocker reasons while folding technical event nam
           : tasks) as never,
   );
   mountFeature(<Runs />, api, client);
-  expect(screen.getByText("实施报告 · 状态：执行中 → 已阻塞")).toBeVisible();
+  expect(screen.getByText("状态切换：执行中 → 已阻塞")).toBeVisible();
+  const items = document.querySelectorAll(".activity-item");
+  expect(items[0]).toHaveTextContent(
+    "Workflow 切换：implement.report → audit.execute（执行中）",
+  );
+  expect(items[1]).toHaveTextContent("状态切换：执行中 → 已阻塞");
+  expect(
+    within(items[1] as HTMLElement).getByText("implement.report"),
+  ).toBeVisible();
+  expect(
+    within(items[0] as HTMLElement).queryByText(/状态切换/),
+  ).not.toBeInTheDocument();
   expect(screen.getByText(/GitHub HTTP 401/)).toBeVisible();
   expect(screen.getByText(/operation_committed/)).not.toBeVisible();
   fireEvent.click(screen.getByText("内部执行事件"));
   expect(screen.getByText(/operation_committed/)).toBeVisible();
+  const internal = screen.getByText("内部执行事件").closest("details")!;
+  expect(within(internal).getAllByRole("paragraph")[0]).toHaveTextContent(
+    "operation_accepted",
+  );
+  expect(activity.page.activity.map((event) => event.seq)).toEqual([
+    1, 2, 3, 4,
+  ]);
+  act(() => {
+    client.setQueryData(options.activity(run).queryKey, {
+      page: {
+        ...activity.page,
+        activity: [
+          ...activity.page.activity,
+          {
+            seq: 5,
+            ts: "2026-10-15T00:00:02Z",
+            kind: "worker_state",
+            status: "blocked",
+            title: "诊断信息更新",
+            detail: "最新诊断",
+            meta: {
+              from: {
+                workflow_stage: "audit.execute",
+                workflow_status: "blocked",
+              },
+              to: {
+                workflow_stage: "audit.execute",
+                workflow_status: "blocked",
+              },
+            },
+          },
+        ],
+      },
+    });
+  });
+  await waitFor(() =>
+    expect(document.querySelectorAll(".activity-item")[0]).toHaveTextContent(
+      "最新诊断",
+    ),
+  );
+  expect(
+    within(
+      document.querySelectorAll(".activity-item")[0] as HTMLElement,
+    ).getByText("audit.execute"),
+  ).toBeVisible();
   client.clear();
 });
 

@@ -6,11 +6,13 @@ SteerRunner 独占执行状态写入。SteerLine 在自己的数据库保存固�
 
 Runner 在提交 Run 的同一事务里比较真实 workflow stage、status 和 diagnostic。发生变化时追加 `workflow_changed`，记录 `transition.from/to`，保留原 event_id、Run/Attempt、revision 和 created_at。初次记录 from 为空。技术 operation 的接受或提交不单独代表业务流程改变；消息摘要也不参与结算或恢复。
 
-SteerLine 把 transition 投影为 ActivityEvent v1 的 `worker_state`：title 使用可读的流程/状态变化，detail 保留原诊断，meta.from/to 使用 `workflow_stage/workflow_status`。缺少目标字段的规范变化报告采集诊断，不用旧字段、当前投影或日志补画历史。已存在但没有 transition 的 Runner 事件仅作为内部执行详情展示。
+SteerLine 把 transition 投影为 ActivityEvent v1 的 `worker_state`：title 分别显示“Workflow 开始”“Workflow 切换”“状态切换”或“诊断信息更新”。Workflow 节点保留完整英文标识，状态使用中文；开始或切换 Workflow 时附目标状态，同次状态变化不再重复显示。仅状态或诊断变化时，Web 在下一行标注该事件的 Workflow。detail 保留原诊断，meta.from/to 使用 `workflow_stage/workflow_status`。缺少目标字段的规范变化报告采集诊断，不用旧字段、当前投影或日志补画历史。已存在但没有 transition 的 Runner 事件仅作为内部执行详情展示。
 
 ActivityEvent 的 UTC ts、source、run_id/task_id、item_id、kind/status、title/detail、elapsed_ms 和 meta 保持既有契约。数据库 seq/EventID 决定顺序、去重和游标，不使用文件序号。正式读取在同一事务核验项目/候选/Run/Attempt；历史 Attempt 必须有原公开事件作为身份依据。
 
 RecentActivity 按固定候选和 Attempt 取最近五条流程/状态/诊断变化、十条内部事件，合并后按原 seq 排序，共用 1 MiB 输出预算。Web 默认显示可读变化，技术事件放进“内部执行事件”折叠详情。没有可读变化时如实显示空状态，不把技术名翻译成不存在的业务节点。最终回复通过独立的原 final/正文契约读取，不由活动摘要代替。
+
+近期活动与折叠的内部执行事件在 Web 中均按 seq 降序呈现，最新记录位于顶部；刷新后沿相同顺序插入。API 仍按 seq 升序返回以保留既有游标语义，不按显示时间重排。
 
 ## 最后观察到的消息
 
