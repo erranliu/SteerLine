@@ -4,7 +4,8 @@ package host
 
 import (
 	"os/exec"
-	"syscall"
+
+	"github.com/erranliu/SteerLine/internal/processwindow"
 )
 
-func hideDesktopLauncher(cmd *exec.Cmd) { cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true} }
+func hideDesktopLauncher(cmd *exec.Cmd) { processwindow.Hide(cmd) }

@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"github.com/erranliu/SteerLine/internal/hostcontract"
+	"github.com/erranliu/SteerLine/internal/processwindow"
 	"golang.org/x/sys/windows"
 )
 
@@ -74,6 +75,7 @@ func StartManaged(cmd *exec.Cmd) (*childProcess, error) {
 	}
 	// Suspend before the first instruction: no descendant can escape job assignment.
 	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP, HideWindow: true}
+	processwindow.Hide(cmd)
 	if e = cmd.Start(); e != nil {
 		windows.CloseHandle(job)
 		return nil, e

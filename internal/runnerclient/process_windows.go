@@ -4,7 +4,8 @@ package runnerclient
 
 import (
 	"os/exec"
-	"syscall"
+
+	"github.com/erranliu/SteerLine/internal/processwindow"
 )
 
-func hide(command *exec.Cmd) { command.SysProcAttr = &syscall.SysProcAttr{HideWindow: true} }
+func hide(command *exec.Cmd) { processwindow.Hide(command) }

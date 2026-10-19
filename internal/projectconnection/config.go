@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/pathguard"
+	"github.com/erranliu/SteerLine/internal/processwindow"
 	"io"
 	"os"
 	"os/exec"
@@ -74,6 +75,7 @@ func ResolveSnapshot(ctx context.Context, ref *api.ProjectRef, data []byte) erro
 	defer cancel()
 	args := append(append([]string(nil), config.Git.Args...), "rev-parse", "--path-format=absolute", "--git-common-dir")
 	command := exec.CommandContext(ctx, executable, args...)
+	processwindow.Hide(command)
 	command.Dir = repo
 	command.WaitDelay = 250 * time.Millisecond
 	var output identityOutput

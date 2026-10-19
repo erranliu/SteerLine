@@ -1,5 +1,7 @@
 # 测试总入口
 
+Windows 启动闪窗修复的最小验证见[专属验收](acceptance/startup-console-windows.md)：固定 L1 `quick-core` 的 `TestBackgroundCommandsNoConsole` 从 detached 宿主核验四类后台命令的实际控制台句柄；另定向回归统一启动与共享 Runner，不运行全量或使用安装环境。
+
 共享 Runner 的最小验证见[专属验收](acceptance/shared-runner-service.md)：固定 L1、请求/全局停止证明/reset 定向测试、新 L3 `runtime.shared-runner-projects` 与既有 waiting-merge-restart，以及新调试包的真实空闲服务拓扑。无模型，不操作安装环境。
 
 架构解耦第五轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round5.md)：宿主契约所有权/依赖闭包、checkpoint 双向投影隔离、并发写入下原实例/进程/build pin 同快照、原控制回执绑定、排空与幂等关闭、失败保锁和原 Runner 停服/结算证明。新增投影测试进入既有 quick-rules，所有权守卫进入 quick-execution-boundary；其余沿既有 SQLite、宿主和生命周期定向测试。补充 Windows 消费者与 Linux 宿主/进程包编译，不执行全量或真实模型。
