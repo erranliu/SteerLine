@@ -39,8 +39,8 @@ func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
 	c.Revision++
 	c.RunID = "original-run"
 	c.SubmitState = "accepted"
-	c.Projection = &runnerclient.Run{RunID: c.RunID, Revision: 2, Status: "running", Execution: runnerclient.Execution{AttemptID: "attempt"}}
-	final := &runnerclient.Final{CommandID: "command", AttemptID: "attempt", SessionID: "session", TurnID: "turn", NativeOutcome: "succeeded", Verified: true, Source: "native.final", ItemID: "item", Text: "原始回复\nexact body"}
+	c.Projection = &runnerclient.Run{RunID: c.RunID, Revision: 2, Status: "running", Execution: runnerclient.Execution{AttemptID: "attempt", NativeOutcome: "unreported"}}
+	final := &runnerclient.Final{CommandID: "command", AttemptID: "attempt", SessionID: "session", TurnID: "turn", NativeOutcome: "unreported", Verified: true, Source: "native.final", ItemID: "item", Text: "原始回复\nexact body"}
 	at := time.Now().UTC()
 	events := []runnerclient.Event{{EventID: "accepted", RunID: c.RunID, Revision: 1, AttemptID: "attempt", Type: "accepted", CreatedAt: at}, {EventID: "final", RunID: c.RunID, Revision: 2, AttemptID: "attempt", Type: "final", Final: final, CreatedAt: at}}
 	require(t, s.SaveCandidate(ctx, c, 1, events))
@@ -87,7 +87,7 @@ func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
 	}
 	saved, err := s.Candidate(ctx, project, c.ID)
 	require(t, err)
-	if saved.Revision != 3 {
+	if saved.Revision != 3 || saved.Projection.Execution.NativeOutcome != "unreported" {
 		t.Fatal("event conflict did not roll back candidate CAS")
 	}
 	var retired int
