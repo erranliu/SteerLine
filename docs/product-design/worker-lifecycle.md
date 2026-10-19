@@ -24,6 +24,8 @@ W18 停服取证修复：停机前的候选投影不能证明停机后的资源�
 
 部署 W18 补充：更新前由暂存的新 CLI 请求停机，避免重复调用安装版旧校验。原回执未通过时，显式 verify-stop 只能在原宿主/Web 已退出、各项目 LocalClosed/LocksReleased 且实例、配置摘要、checkpoint 和实际锁一致后，经新 Runner 的 service verify-stopped 取得逐 Run 资源证明，并核对候选的原 Run/input_digest/目录。Runner 在既有写锁下只读当前格式，复用 managed 恢复的原 Job owner+root 消失证明；不启动服务、恢复代理、重发输入或改写历史失败。证明不全继续阻断替换，新证明另存部署包。当前安装现场未用于验证，具体自动项见同一[验收](../acceptance/runner-shutdown-settlement.md)。
 
+2026-10-19 Orca W18/V06–V07 补充：Runner 停服与部署离线重验共用原 runtime 完整清单，绑定原 worktree/terminal/incarnation；PTY 已退出或在原 host 清单中缺席仅是必要条件。Codex inline-v3 helper 固定原 helper/native 身份和退出公钥；显式停止先实际核实原 app-server/tools 与 TUI 的两棵 Job 清空、关闭认证，再签发绑定完整 readiness 的退出凭据，最后关闭原 PTY。helper 已返回原 shell 时仍按原身份和原生证明清理，不依赖 agent 展示标签。工作区只保存可验签的公共凭据，私钥仅在原 helper 内存中；离线重验只经既有 Orca 文件通道读取原 host 的有界公共文件并验签，全部原 readonly reader 的 native tree 结算和 PTY 停止也须核实，快照与既有 journal 均纳入。查询失败与资源结算分别取证，不晋升业务完成。通用 helper 沿用既有 owner/exit/authentication 证明；缺 key/原退出/认证/reader 证明、未知创建或旧 helper 缺不可追溯的事实仍阻断，不迁移、补写历史或以调用方 PID 代替执行主机。服务退出继续沿 ContinueExecutionOnServiceStop，不自动停止业务或重发输入。SteerLine 仍只消费公开逐 Run 证明和既有聚合围栏，不引入另一套原生状态机。实现与真实 Codex/Orca 停止证据归 Runner 的 `docs/spec/orca-shutdown-verification.plan.md` 和专属验收；本仓消费者验证见[本次验收](../acceptance/orca-shutdown-verification.md)。本次没有使用安装环境作测试现场，也没有合并或部署。
+
 测试所有者按 [测试精简 Spec](../spec/runner-test-convergence.spec.md)收敛：W02–W16/W18 执行专项由 Runner 验证；W01、W12 调用方授权、W17 及迟到接受/停止义务由 SteerLine 验证。SteerLine 的完整 L2 仍用本机 Codex 实际走通实现、报告、发布和真实 PR 合并/交付；原生恢复/沙箱/Orca 不再在 SteerLine 重复建设矩阵。节点、异常和恢复规则不变，具体状态见[专属验收](../acceptance/runner-test-convergence.md)。
 
 ## 职责与规则归属
