@@ -273,6 +273,10 @@ export interface Activity {
       detail: string;
       kind: string;
       status: string;
+      meta?: {
+        from?: { workflow_stage: string; workflow_status: string };
+        to?: { workflow_stage: string; workflow_status: string };
+      };
     }[];
     diagnostics: string[];
   };
