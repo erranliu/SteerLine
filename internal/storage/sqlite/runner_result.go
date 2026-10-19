@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
+	"time"
+
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"strings"
-	"time"
 )
 
 type RunnerResult = storageports.RunnerResult
@@ -18,8 +19,8 @@ type RunnerResult = storageports.RunnerResult
 // CommitRunnerTaskResult consumes a fresh public Runner PR fact. Task closure,
 // unique delivery, graph release and every candidate stop obligation commit
 // together. No Runner execution state is written by this transaction.
-func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerResult) (executionmodel.TaskDeliveryReceipt, error) {
-	var receipt executionmodel.TaskDeliveryReceipt
+func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerResult) (taskmodel.TaskDeliveryReceipt, error) {
+	var receipt taskmodel.TaskDeliveryReceipt
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		graph, err := tx.TaskGraphSnapshot(ctx, input.Project)
 		if err != nil {
@@ -40,7 +41,7 @@ func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerRe
 			if !found || saved.Input.ExpectedTaskVersion != input.TaskVersion {
 				return nativeErr("stale_version", "delivery retry changed the original task version")
 			}
-			receipt = executionmodel.TaskDeliveryReceipt{TaskID: input.TaskID, WorkflowRunID: input.CandidateID, TaskVersion: saved.TaskVersion, GraphRevision: saved.GraphRevision, Status: "closed", Delivery: delivery}
+			receipt = taskmodel.TaskDeliveryReceipt{TaskID: input.TaskID, WorkflowRunID: input.CandidateID, TaskVersion: saved.TaskVersion, GraphRevision: saved.GraphRevision, Status: "closed", Delivery: delivery}
 			return errAtomicReplay
 		}
 		if record.Status == "discarded" {
@@ -76,7 +77,7 @@ func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerRe
 		}
 		at := now()
 		body, _ := json.Marshal(proof)
-		delivery := executionmodel.TaskDeliveryRecord{ProjectIdentity: input.Project, TaskID: input.TaskID, SelectedWorkflowRunID: c.ID, PRInstance: strings.TrimSuffix(provider.BaseURL, "/"), PRRepository: proof.Repository, PRNumber: proof.PRNumber, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt, RecordedAt: at, Evidence: body}
+		delivery := taskmodel.TaskDeliveryRecord{ProjectIdentity: input.Project, TaskID: input.TaskID, SelectedWorkflowRunID: c.ID, PRInstance: strings.TrimSuffix(provider.BaseURL, "/"), PRRepository: proof.Repository, PRNumber: proof.PRNumber, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt, RecordedAt: at, Evidence: body}
 		if err := validateNativeTaskDelivery(delivery, graph.Authority.Branch); err != nil {
 			return err
 		}
@@ -96,7 +97,7 @@ func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerRe
 		if _, err := tx.tx.ExecContext(ctx, `INSERT INTO task_results(project_identity,task_id,result_id,request_id,input,receipt) VALUES(?,?,?,?,?,?)`, input.Project, input.TaskID, c.ID, declaration.Input.RequestID, resultInput, resultBody); err != nil {
 			return err
 		}
-		receipt = executionmodel.TaskDeliveryReceipt{TaskID: input.TaskID, WorkflowRunID: c.ID, TaskVersion: result.TaskVersion, GraphRevision: result.GraphRevision, Status: "closed", Delivery: delivery}
+		receipt = taskmodel.TaskDeliveryReceipt{TaskID: input.TaskID, WorkflowRunID: c.ID, TaskVersion: result.TaskVersion, GraphRevision: result.GraphRevision, Status: "closed", Delivery: delivery}
 		event, _ := json.Marshal(receipt)
 		_, err = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: input.Project, TaskID: input.TaskID, WorkflowRunID: c.ID, ExternalSource: "runner-task-delivery", ExternalID: proof.URL + ":" + proof.MergeCommit, Type: "task.delivered", ReceivedAt: at, Payload: event})
 		return err
@@ -107,15 +108,15 @@ func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerRe
 	return receipt, err
 }
 
-func runnerDeliveryProof(c runnerstate.Candidate, started time.Time, branch string) (executionmodel.PRProviderConfig, executionmodel.TaskDeliveryEvidence, error) {
+func runnerDeliveryProof(c runnerstate.Candidate, started time.Time, branch string) (executionmodel.PRProviderConfig, taskmodel.TaskDeliveryEvidence, error) {
 	provider, f, err := runnerPRBinding(c, branch)
 	if err != nil {
-		return provider, executionmodel.TaskDeliveryEvidence{}, err
+		return provider, taskmodel.TaskDeliveryEvidence{}, err
 	}
 	if started.IsZero() || f.CheckedAt.Before(started) || f.QueryError != "" || !f.Merged || f.State != "merged" || f.MergedAt == nil || f.MergedAt.IsZero() || f.MergeCommit == nil || !taskmodel.ValidCommit(*f.MergeCommit) {
-		return provider, executionmodel.TaskDeliveryEvidence{}, nativeErr("merge_state_unknown", "PR requires a fresh complete provider-confirmed merge")
+		return provider, taskmodel.TaskDeliveryEvidence{}, nativeErr("merge_state_unknown", "PR requires a fresh complete provider-confirmed merge")
 	}
-	return provider, executionmodel.TaskDeliveryEvidence{PRInstance: strings.TrimSuffix(provider.BaseURL, "/"), URL: f.URL, Repository: f.Repository, PRNumber: int64(f.Number), BaseBranch: branch, State: "merged", Merged: true, MergedAt: *f.MergedAt, MergeCommit: *f.MergeCommit}, nil
+	return provider, taskmodel.TaskDeliveryEvidence{PRInstance: strings.TrimSuffix(provider.BaseURL, "/"), URL: f.URL, Repository: f.Repository, PRNumber: int64(f.Number), BaseBranch: branch, State: "merged", Merged: true, MergedAt: *f.MergedAt, MergeCommit: *f.MergeCommit}, nil
 }
 
 func runnerPRBinding(c runnerstate.Candidate, branch string) (executionmodel.PRProviderConfig, *runnercontract.PRFact, error) {

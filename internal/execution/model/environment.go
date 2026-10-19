@@ -4,18 +4,19 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 type WorkerEnvironment struct {
-	OriginalTerminal *executionbackend.ProcessIdentity `json:"original_terminal,omitempty"`
-	ProfileDigest    string                            `json:"profile_digest"`
-	LaunchCommand    string                            `json:"launch_command,omitempty"`
-	WriteRoots       []string                          `json:"write_roots,omitempty"`
-	Runtime          string                            `json:"runtime,omitempty"`
-	Preparation      *WorkerPreparation                `json:"preparation"`
-	History          []WorkerPreparation               `json:"history,omitempty"`
-	Blocker          *WorkerHostBlocker                `json:"blocker,omitempty"`
-	Ready            bool                              `json:"ready"`
+	OriginalTerminal *hostcontract.ProcessIdentity `json:"original_terminal,omitempty"`
+	ProfileDigest    string                        `json:"profile_digest"`
+	LaunchCommand    string                        `json:"launch_command,omitempty"`
+	WriteRoots       []string                      `json:"write_roots,omitempty"`
+	Runtime          string                        `json:"runtime,omitempty"`
+	Preparation      *WorkerPreparation            `json:"preparation"`
+	History          []WorkerPreparation           `json:"history,omitempty"`
+	Blocker          *WorkerHostBlocker            `json:"blocker,omitempty"`
+	Ready            bool                          `json:"ready"`
 }
 
 type WorkerPreparation struct {

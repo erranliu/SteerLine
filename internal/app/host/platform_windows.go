@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	scheduler "github.com/erranliu/SteerLine/internal/execution/scheduler"
 	"io"
 	"os"
 	"os/exec"
@@ -16,7 +15,8 @@ import (
 	"time"
 	"unsafe"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	scheduler "github.com/erranliu/SteerLine/internal/execution/scheduler"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"golang.org/x/sys/windows"
 )
 
@@ -173,13 +173,13 @@ func probeLockFile(path string) (bool, error) {
 	return false, err
 }
 
-func startDetachedProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort) (executionbackend.ProcessIdentity, error) {
+func startDetachedProcess(cmd *exec.Cmd, facts hostcontract.ProcessFactsPort) (hostcontract.ProcessIdentity, error) {
 	return startDetachedProcessChecked(cmd, facts, false)
 }
-func startDetachedProductProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort) (executionbackend.ProcessIdentity, error) {
+func startDetachedProductProcess(cmd *exec.Cmd, facts hostcontract.ProcessFactsPort) (hostcontract.ProcessIdentity, error) {
 	return startDetachedProcessChecked(cmd, facts, true)
 }
-func startDetachedProcessChecked(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort, selfValidates bool) (executionbackend.ProcessIdentity, error) {
+func startDetachedProcessChecked(cmd *exec.Cmd, facts hostcontract.ProcessFactsPort, selfValidates bool) (hostcontract.ProcessIdentity, error) {
 	// CREATE_BREAKAWAY_FROM_JOB is required because the caller may be a UI in a
 	// kill-on-close job. IsProcessInJob below verifies the result before we claim
 	// the service is detached. DETACHED_PROCESS also prevents console inheritance.
@@ -190,16 +190,16 @@ func startDetachedProcessChecked(cmd *exec.Cmd, facts executionbackend.ProcessFa
 	if err := cmd.Start(); err != nil {
 		if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
 			if inJob, _, e := currentJobDiagnostics(); e == nil && inJob {
-				return executionbackend.ProcessIdentity{}, fmt.Errorf("%w: create detached process: %v", scheduler.ErrDetachUnsupported, err)
+				return hostcontract.ProcessIdentity{}, fmt.Errorf("%w: create detached process: %v", scheduler.ErrDetachUnsupported, err)
 			}
 		}
-		return executionbackend.ProcessIdentity{}, fmt.Errorf("cannot detach service from caller job or console: %w", err)
+		return hostcontract.ProcessIdentity{}, fmt.Errorf("cannot detach service from caller job or console: %w", err)
 	}
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(cmd.Process.Pid))
 	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return executionbackend.ProcessIdentity{}, fmt.Errorf("cannot verify detached service process: %w", err)
+		return hostcontract.ProcessIdentity{}, fmt.Errorf("cannot verify detached service process: %w", err)
 	}
 	defer windows.CloseHandle(h)
 	var inJob uint32
@@ -207,7 +207,7 @@ func startDetachedProcessChecked(cmd *exec.Cmd, facts executionbackend.ProcessFa
 	if ok == 0 {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return executionbackend.ProcessIdentity{}, fmt.Errorf("cannot verify service Job Object isolation: %w", callErr)
+		return hostcontract.ProcessIdentity{}, fmt.Errorf("cannot verify service Job Object isolation: %w", callErr)
 	}
 	if inJob != 0 && !selfValidates {
 		_ = cmd.Process.Kill()
@@ -220,13 +220,13 @@ func startDetachedProcessChecked(cmd *exec.Cmd, facts executionbackend.ProcessFa
 		if parentErr != nil {
 			detail += ", parent_job_query_error=" + parentErr.Error()
 		}
-		return executionbackend.ProcessIdentity{}, fmt.Errorf("%w: %s); cannot guarantee survival after the UI exits", scheduler.ErrDetachUnsupported, detail)
+		return hostcontract.ProcessIdentity{}, fmt.Errorf("%w: %s); cannot guarantee survival after the UI exits", scheduler.ErrDetachUnsupported, detail)
 	}
 	id, err := facts.IdentityFromHandle(uintptr(h), cmd.Process.Pid)
 	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return executionbackend.ProcessIdentity{}, fmt.Errorf("cannot identify detached service process: %w", err)
+		return hostcontract.ProcessIdentity{}, fmt.Errorf("cannot identify detached service process: %w", err)
 	}
 	// No service instruction (including recovery of existing workers) may run
 	// until we know this process can survive the launcher. A failed isolation
@@ -234,7 +234,7 @@ func startDetachedProcessChecked(cmd *exec.Cmd, facts executionbackend.ProcessFa
 	if err = resumeDetachedProcess(cmd.Process.Pid); err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return executionbackend.ProcessIdentity{}, fmt.Errorf("cannot resume detached service: %w", err)
+		return hostcontract.ProcessIdentity{}, fmt.Errorf("cannot resume detached service: %w", err)
 	}
 	return id, nil
 }

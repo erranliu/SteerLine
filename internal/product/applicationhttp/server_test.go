@@ -2,14 +2,16 @@ package applicationhttp
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/localservice"
-	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
-	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/localservice"
+	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/product/httpclient"
+	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 )
 
 type offlineDirectory struct{}
@@ -20,12 +22,12 @@ func (offlineDirectory) Catalog(context.Context) (contract.Catalog, error) {
 
 func TestEnvironmentCheckReadRoutes(t *testing.T) {
 	for _, path := range []string{"environment-checks", "environment-checks/options", "environment-checks/" + strings.Repeat("a", 32)} {
-		if !AllowedRead("/" + path) {
+		if !httpcontract.AllowedProjectRead("/" + path) {
 			t.Fatal("check read route not forwarded", path)
 		}
 	}
 	for _, path := range []string{"environment-checks/start", "environment-checks/stop", "environment-checks/cleanup", "environment-checks/../tasks"} {
-		if AllowedRead("/" + path) {
+		if httpcontract.AllowedProjectRead("/" + path) {
 			t.Fatal("invented check mutation route", path)
 		}
 	}

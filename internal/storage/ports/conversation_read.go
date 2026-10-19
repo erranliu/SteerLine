@@ -4,19 +4,20 @@ import (
 	"context"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	api "github.com/erranliu/SteerLine/internal/product/api"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 type ConversationEventReader interface {
-	NextConversationEvent(context.Context, string, api.ConversationFilter, int64) (*ConversationEventRecord, error)
+	NextConversationEvent(context.Context, string, ConversationFilter, int64) (*ConversationEventRecord, error)
 }
 
 type ConversationBodyReader interface {
-	ConversationBody(context.Context, string, api.ConversationBodyRef, int) (ConversationBodyRecord, error)
+	ConversationBody(context.Context, string, executionmodel.ConversationBodyRef, int) (ConversationBodyRecord, error)
 }
 
 type ConversationCapabilityReader interface {
-	ConversationCapabilityReports(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]api.ConversationCapabilityReport, error)
+	ConversationCapabilityReports(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]executionmodel.ConversationCapabilityReport, error)
 }
 
 type ConversationReader interface {
@@ -26,9 +27,15 @@ type ConversationReader interface {
 }
 
 type ConversationEventRecord struct {
-	EventID      int64
-	PayloadBytes int
-	Payload      []byte
+	EventID                               int64
+	ProjectID, TaskID, CandidateID, RunID string
+	Event                                 runnercontract.Event
+}
+
+// ConversationFilter selects immutable Runner final facts, not display DTOs.
+type ConversationFilter struct {
+	FinalsOnly                                                    bool
+	WorkflowID, ExecutionID, AttemptID, SessionID, TurnID, Source string
 }
 
 type ConversationBodyRecord struct {

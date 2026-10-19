@@ -4,19 +4,19 @@ import (
 	"context"
 	"time"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *SQLiteStore) NativeAuthority(ctx context.Context, project string) (executionmodel.ProjectTaskAuthority, error) {
+func (s *SQLiteStore) NativeAuthority(ctx context.Context, project string) (taskmodel.ProjectTaskAuthority, error) {
 	return readNativeAuthority(ctx, s.db, project)
 }
 
-func (tx *sqliteTx) NativeAuthority(ctx context.Context, project string) (executionmodel.ProjectTaskAuthority, error) {
+func (tx *sqliteTx) NativeAuthority(ctx context.Context, project string) (taskmodel.ProjectTaskAuthority, error) {
 	return readNativeAuthority(ctx, tx.tx, project)
 }
 
-func readNativeAuthority(ctx context.Context, q CommandRowQuerier, project string) (executionmodel.ProjectTaskAuthority, error) {
-	var v executionmodel.ProjectTaskAuthority
+func readNativeAuthority(ctx context.Context, q CommandRowQuerier, project string) (taskmodel.ProjectTaskAuthority, error) {
+	var v taskmodel.ProjectTaskAuthority
 	var paused int
 	var created, updated string
 	err := q.QueryRowContext(ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, project).Scan(&v.Authority, &v.AuthorityVersion, &v.GraphRevision, &v.Repository, &v.Remote, &v.Branch, &v.DispatchMode, &paused, &created, &updated)

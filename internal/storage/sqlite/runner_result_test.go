@@ -3,13 +3,14 @@ package sqlite
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/runnerbridge"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/runnerbridge"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
@@ -37,6 +38,9 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	}
 	selected := reserve(strings.Repeat("c", 32), false)
 	sibling := reserve(strings.Repeat("d", 32), true) // Original submission remains unknown/unsent.
+	withdrawn := reserve(strings.Repeat("e", 32), true)
+	withdrawn, err := s.StopRunnerCandidate(ctx, project, withdrawn.ID, withdrawn.Revision, "manual-withdrawal", "operator")
+	require(t, err)
 	at := time.Now().UTC()
 	merge := strings.Repeat("b", 40)
 	selected.RunID, selected.InputDigest, selected.Branch, selected.PRURL, selected.SubmitState = "original-run", "frozen-input", "original-head", "https://example.invalid/Org/Repo/pulls/84", "accepted"
@@ -75,16 +79,37 @@ func TestRunnerTaskDeliveryWithoutWorkflowReady(t *testing.T) {
 	if digestValue(retry) != digestValue(receipt) {
 		t.Fatal("delivery retry changed original receipt")
 	}
+	for _, changed := range []RunnerResult{
+		func() RunnerResult { v := input; v.TaskVersion++; return v }(),
+		func() RunnerResult { v := input; v.CandidateID = sibling.ID; return v }(),
+	} {
+		if _, err := s.CommitRunnerTaskResult(ctx, changed); err == nil {
+			t.Fatal("changed delivery identity reused original receipt")
+		}
+	}
+	for _, query := range []string{
+		`SELECT count(*) FROM task_results WHERE project_identity=?`,
+		`SELECT count(*) FROM events WHERE project_identity=? AND type='task.delivered'`,
+	} {
+		var count int
+		require(t, s.db.QueryRowContext(ctx, query, project).Scan(&count))
+		if count != 1 {
+			t.Fatal("delivery replay duplicated result or event", count)
+		}
+	}
 	closed, err := s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	if closed.ByID[selected.TaskID].Status != "closed" || closed.Authority.GraphRevision != graph.Authority.GraphRevision+1 || len(closed.Deliveries) != 1 {
 		t.Fatal("delivery was not unique or graph was not released")
 	}
-	for _, id := range []string{selected.ID, sibling.ID} {
+	for _, id := range []string{selected.ID, sibling.ID, withdrawn.ID} {
 		c, err := s.Candidate(ctx, project, id)
 		require(t, err)
 		if !c.StopRequested || c.InputsRevoked {
 			t.Fatal("delivery did not preserve pending native stop", c)
+		}
+		if id == withdrawn.ID && digestValue(c.Withdrawal) != digestValue(withdrawn.Withdrawal) {
+			t.Fatal("Task terminal overwrote manual withdrawal facts")
 		}
 	}
 	if ready, _ := taskmodel.DependencyStateForTask(closed.ByID[tasks[1].TaskID], closed.TaskGraph()); !ready {

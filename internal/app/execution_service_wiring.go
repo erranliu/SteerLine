@@ -3,7 +3,7 @@ package app
 import (
 	"context"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
@@ -23,7 +23,7 @@ func (s serviceReadyHook) Initialize(ctx context.Context, cancel context.CancelF
 	return nil
 }
 
-func localAPIProcessIdentity(value *executionbackend.ProcessIdentity) httpapi.ProcessIdentity {
+func localAPIProcessIdentity(value *hostcontract.ProcessIdentity) httpapi.ProcessIdentity {
 	if value == nil {
 		return httpapi.ProcessIdentity{}
 	}

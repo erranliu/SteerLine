@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"path/filepath"
+
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"path/filepath"
 )
 
 func readRunnerCandidate(ctx context.Context, db schemaQuery, project, id string) (runnerstate.Candidate, error) {
@@ -27,7 +28,8 @@ func readRunnerCandidate(ctx context.Context, db schemaQuery, project, id string
 	return result, nil
 }
 func (s *SQLiteStore) Candidate(ctx context.Context, project, id string) (runnerstate.Candidate, error) {
-	return readRunnerCandidate(ctx, s.db, project, id)
+	candidate, err := readRunnerCandidate(ctx, s.db, project, id)
+	return candidate, persistenceError(err)
 }
 func (s *SQLiteStore) RunnerCandidates(ctx context.Context, project, taskID string) ([]runnerstate.Candidate, error) {
 	return readRunnerCandidates(ctx, s.db, project, taskID)
@@ -74,6 +76,9 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 		}
 		if old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
 			return nativeErr("immutable_task", "candidate update changed its original start identity")
+		}
+		if digestValue(old.Withdrawal) != digestValue(c.Withdrawal) {
+			return nativeErr("immutable_task", "candidate update changed its withdrawal fact")
 		}
 		if c.RunID != "" && c.SubmitState != "accepted" {
 			return nativeErr("contract_mismatch", "Run binding requires its accepted original submission")

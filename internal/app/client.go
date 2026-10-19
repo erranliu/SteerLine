@@ -423,7 +423,7 @@ func productServicePage(runtimeState *reconstruction.Runtime) *productapi.Servic
 		Repository: productapi.RepositorySummary{Path: runtimeState.Repository.Path, Remote: runtimeState.Repository.Remote, Branch: runtimeState.Repository.Branch, Identity: runtimeState.Repository.Identity},
 		Service:    productapi.ServiceSummary{InstanceID: runtimeState.Service.InstanceID, Status: runtimeState.Service.Status, ConfigDigest: runtimeState.Service.ConfigDigest, Claimant: runtimeState.Service.Claimant, Mode: runtimeState.Service.Mode, PID: runtimeState.Service.PID, Error: copyClientValue(runtimeState.Service.Error), StartupID: copyClientValue(runtimeState.Service.StartupID), Ready: runtimeState.Service.Ready, ControlProtocol: runtimeState.Service.ControlProtocol, Capabilities: publicProjectCapabilities(runtimeState.Service.Capabilities)},
 		Control:    productapi.ControlSummary{DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, Revision: runtimeState.Control.Revision},
-		Deliveries: append([]executionmodel.TaskDeliveryRecord(nil), runtimeState.Deliveries...),
+		Deliveries: append([]taskmodel.TaskDeliveryRecord(nil), runtimeState.Deliveries...),
 	}
 	if operation := runtimeState.Control.Operation; operation != nil {
 		view.Control.Operation = &productapi.PendingControl{RequestID: operation.RequestID, Action: operation.Action, TaskID: operation.TaskID, Phase: operation.Phase, RunID: operation.RunID, AttemptID: operation.AttemptID, DecisionID: operation.DecisionID}

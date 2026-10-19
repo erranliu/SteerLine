@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
-	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
@@ -72,7 +72,7 @@ func newRunnerService(config Config, host hostport.HostPort, connection *sqlite.
 	var actor *taskrunner.Actor
 	var err error
 	pin := cli.BuildPin()
-	actor, err = taskrunner.NewActor(taskrunner.ActorOptions{RunnerBuild: &pin, NativeSessionAdapters: cli.NativeSessionAdapters, Tasks: service, Store: connection, Host: host, Repository: ports.CheckpointRepository{Path: config.Repository, Remote: config.Remote, Branch: config.Branch, Identity: config.Identity()}, Mode: "manual", ConfigDigest: config.configDigest, Heartbeat: positiveDuration(config.Heartbeat, 5*time.Second), Control: func(ctx context.Context, req api.ControlRequest) (api.ControlReceipt, error) {
+	actor, err = taskrunner.NewActor(taskrunner.ActorOptions{RunnerBuild: &pin, NativeSessionAdapters: cli.NativeSessionAdapters, Tasks: service, Store: connection, Host: host, Repository: hostcontract.Repository{Path: config.Repository, Remote: config.Remote, Branch: config.Branch, Identity: config.Identity()}, Mode: "manual", ConfigDigest: config.configDigest, Heartbeat: positiveDuration(config.Heartbeat, 5*time.Second), Control: func(ctx context.Context, req api.ControlRequest) (api.ControlReceipt, error) {
 		return controls.Handle(ctx, req, actor.InstanceID(), actor.State.Control.Revision)
 	}})
 	return actor, err

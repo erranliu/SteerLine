@@ -11,14 +11,14 @@ import (
 	"strings"
 	"syscall"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 type childProcess struct {
-	identity executionbackend.ProcessIdentity
+	identity hostcontract.ProcessIdentity
 }
 
-func (p *childProcess) Identity() executionbackend.ProcessIdentity { return p.identity }
+func (p *childProcess) Identity() hostcontract.ProcessIdentity { return p.identity }
 
 func (*childProcess) OwnedProcess() bool { return true }
 
@@ -42,7 +42,7 @@ func StartManaged(cmd *exec.Cmd) (*childProcess, error) {
 	return &childProcess{identity: id}, nil
 }
 
-func WorkerTreeAbsent(identity executionbackend.ProcessIdentity) bool {
+func WorkerTreeAbsent(identity hostcontract.ProcessIdentity) bool {
 	if InspectProcess(&identity) != "process absent" {
 		return false
 	}
@@ -75,27 +75,27 @@ func SessionID(pid int) (int, error) {
 	return strconv.Atoi(fields[3])
 }
 
-func IdentityForPID(pid int) (executionbackend.ProcessIdentity, error) {
+func IdentityForPID(pid int) (hostcontract.ProcessIdentity, error) {
 	base := "/proc/" + strconv.Itoa(pid)
 	fields, e := linuxProcFields(pid)
 	if e != nil {
-		return executionbackend.ProcessIdentity{}, e
+		return hostcontract.ProcessIdentity{}, e
 	}
 	if fields[0] == "Z" {
-		return executionbackend.ProcessIdentity{}, os.ErrNotExist
+		return hostcontract.ProcessIdentity{}, os.ErrNotExist
 	}
 	exe, e := os.Readlink(base + "/exe")
 	if e != nil {
-		return executionbackend.ProcessIdentity{}, e
+		return hostcontract.ProcessIdentity{}, e
 	}
 	boot, e := os.ReadFile("/proc/sys/kernel/random/boot_id")
 	if e != nil {
-		return executionbackend.ProcessIdentity{}, e
+		return hostcontract.ProcessIdentity{}, e
 	}
-	return executionbackend.ProcessIdentity{Kind: "os", PID: pid, Created: strings.TrimSpace(string(boot)) + ":" + fields[19], Executable: exe}, nil
+	return hostcontract.ProcessIdentity{Kind: "os", PID: pid, Created: strings.TrimSpace(string(boot)) + ":" + fields[19], Executable: exe}, nil
 }
 
-func CurrentIdentity() (*executionbackend.ProcessIdentity, error) {
+func CurrentIdentity() (*hostcontract.ProcessIdentity, error) {
 	id, err := IdentityForPID(os.Getpid())
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func CurrentIdentity() (*executionbackend.ProcessIdentity, error) {
 	return &id, nil
 }
 
-func InspectProcess(old *executionbackend.ProcessIdentity) string {
+func InspectProcess(old *hostcontract.ProcessIdentity) string {
 	probe := Probe(old)
 	switch probe.State {
 	case "absent":
@@ -120,7 +120,7 @@ func InspectProcess(old *executionbackend.ProcessIdentity) string {
 	}
 }
 
-func Probe(old *executionbackend.ProcessIdentity) ProbeResult {
+func Probe(old *hostcontract.ProcessIdentity) ProbeResult {
 	if old == nil || old.PID <= 0 || old.Kind != "os" || old.Created == "" || old.Executable == "" {
 		return ProbeResult{State: "unknown", Reason: "process identity is missing or unsupported"}
 	}

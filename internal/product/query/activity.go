@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -66,23 +68,64 @@ func ProjectActivity(project, run, execution, attempt string, cursor api.Activit
 
 // ReadActivity reads one fixed snapshot before projecting public activity values.
 func (q Service) ReadActivity(ctx context.Context, run, execution, attempt string, cursor api.ActivityCursor) (api.LogBatch, error) {
-	if q.Activity == nil || q.Project == "" {
-		return api.LogBatch{}, errors.New("activity reader and project identity are required")
-	}
-	binding, events, err := q.Activity.ReadActivityView(ctx, q.Project, run, execution, attempt, cursor.AfterEventID, DefaultEventPageSize, MaxEventPageBytes)
-	if err != nil {
-		return api.LogBatch{}, err
-	}
-	return ProjectActivity(q.Project, run, execution, attempt, cursor, binding, events)
+	return q.readRunnerActivity(ctx, run, execution, attempt, cursor, false)
 }
 
 func (q Service) ReadRecentActivity(ctx context.Context, run, execution, attempt string) (api.LogBatch, error) {
+	return q.readRunnerActivity(ctx, run, execution, attempt, api.ActivityCursor{}, true)
+}
+
+func (q Service) readRunnerActivity(ctx context.Context, run, execution, attempt string, cursor api.ActivityCursor, recent bool) (batch api.LogBatch, err error) {
 	if q.Activity == nil || q.Project == "" || run == "" || execution == "" || attempt == "" {
-		return api.LogBatch{}, errors.New("recent activity requires an exact project/run/execution/attempt")
+		return batch, errors.New("activity reader and exact project/run/execution/attempt are required")
 	}
-	binding, events, err := q.Activity.ReadRecentActivityView(ctx, q.Project, run, execution, attempt)
+	limit := DefaultEventPageSize
+	if recent {
+		limit = 20
+	}
+	binding, records, err := q.Activity.OpenActivityView(ctx, q.Project, run, execution, attempt, cursor.AfterEventID, limit, recent)
 	if err != nil {
-		return api.LogBatch{}, err
+		return batch, err
 	}
-	return ProjectActivity(q.Project, run, execution, attempt, api.ActivityCursor{}, binding, events)
+	if records == nil {
+		return batch, errors.New("activity read stream is unavailable")
+	}
+	defer func() {
+		err = errors.Join(err, records.Close())
+		if err != nil {
+			batch = api.LogBatch{}
+		}
+	}()
+	events := []ports.DomainEvent{}
+	used := 0
+	for {
+		record, readErr := records.Next()
+		if readErr != nil {
+			return batch, readErr
+		}
+		if record == nil {
+			break
+		}
+		event := record.Event
+		if event.RunID != execution || event.AttemptID != attempt {
+			return batch, errors.New("Runner activity differs from original Run/Attempt")
+		}
+		v := api.ActivityEvent{V: 1, Seq: uint64(record.EventID), TS: event.CreatedAt, Source: runnercontract.Protocol, RunID: run, TaskID: record.TaskID, ItemID: event.EventID, Kind: "runner_event", Status: event.Type, Title: event.Type}
+		if event.Transition != nil {
+			v = runnerWorkflowActivity(v, *event.Transition)
+		}
+		payload, marshalErr := json.Marshal(v)
+		if marshalErr != nil {
+			return batch, marshalErr
+		}
+		if used+len(payload) > MaxEventPageBytes {
+			break
+		}
+		used += len(payload)
+		events = append(events, ports.DomainEvent{EventID: record.EventID, ProjectIdentity: q.Project, TaskID: record.TaskID, WorkflowRunID: run, ExecutionID: execution, AttemptID: attempt, Type: "activity.runner_event", ReceivedAt: event.CreatedAt, Payload: payload, PayloadBytes: len(payload)})
+	}
+	if recent {
+		sort.Slice(events, func(i, j int) bool { return events[i].EventID < events[j].EventID })
+	}
+	return ProjectActivity(q.Project, run, execution, attempt, cursor, binding, events)
 }

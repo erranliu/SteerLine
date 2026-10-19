@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
@@ -26,7 +27,7 @@ func TestRunnerWorkflowReadProjection(t *testing.T) {
 				}(), Findings: []runnercontract.Finding{{Severity: "P2", Message: "finding", Path: "file.go", Line: 3}}}}}
 			}
 			before, _ := json.Marshal(c)
-			rt := taskrunner.Project(ports.RunnerSnapshot{Candidates: []runnerstate.Candidate{c}}, ports.ServiceCheckpoint{})
+			rt := taskrunner.Project(ports.RunnerSnapshot{Candidates: []runnerstate.Candidate{c}}, hostcontract.ServiceCheckpoint{})
 			detail := productServicePage(&rt).Runs[0]
 			history := query.RunnerHistory([]runnerstate.Candidate{c}).WorkflowRuns[0]
 			if detail.WorkflowVersion != "1" || detail.Protocol != "codex-app-server/v2" || detail.RunnerWorkflow.ID != input.Workflow.ID || detail.RunnerWorkflow.Version != 1 || history.WorkflowVersion != 1 || history.ExecutionID != c.RunID {

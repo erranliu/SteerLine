@@ -7,14 +7,14 @@ import (
 	"errors"
 	"strings"
 
-	model "github.com/erranliu/SteerLine/internal/execution/model"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // SetRunnerDispatch changes only Task dispatch authority and its caller receipt.
 // No worker operation or native execution record is created.
-func (s *SQLiteStore) SetRunnerDispatch(ctx context.Context, in ports.RunnerDispatch) (model.ProjectTaskAuthority, error) {
-	var result model.ProjectTaskAuthority
+func (s *SQLiteStore) SetRunnerDispatch(ctx context.Context, in ports.RunnerDispatch) (taskmodel.ProjectTaskAuthority, error) {
+	var result taskmodel.ProjectTaskAuthority
 	if in.Project == "" || in.RequestID == "" || in.ExpectedAuthorityVersion == 0 || strings.TrimSpace(in.RequestedBy) == "" || in.Mode == nil && in.Paused == nil || in.Mode != nil && *in.Mode != "manual" && *in.Mode != "auto" {
 		return result, errors.New("dispatch change requires fixed project/request/version and mode or pause intent")
 	}

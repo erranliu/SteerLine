@@ -192,8 +192,8 @@ func MainControl(args []string) error {
 	return nil
 }
 
-func (c *Client) Tasks(ctx context.Context) (storageports.NativeTaskPage, error) {
-	var page storageports.NativeTaskPage
+func (c *Client) Tasks(ctx context.Context) (productapi.TaskPage, error) {
+	var page productapi.TaskPage
 	raw, err := c.Run(ctx, "task", "list", "-config", c.Config)
 	if err == nil {
 		err = json.Unmarshal(raw, &page)

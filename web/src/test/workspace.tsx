@@ -131,6 +131,7 @@ export function mountFeature(
           snapshot: snapshot(api, [run]),
           busy: false,
           send: async () => true,
+          submit: (envelope) => api.submit(envelope),
           refresh: () => {},
           ...overrides,
         }}

@@ -6,12 +6,12 @@ package ports
 import (
 	"context"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type Metadata interface {
-	SaveCheckpoint(context.Context, ServiceCheckpoint) (ServiceCheckpoint, error)
+	SaveCheckpoint(context.Context, hostcontract.ServiceCheckpoint) (hostcontract.ServiceCheckpoint, error)
 	Heartbeat(context.Context, string) error
 }
 
@@ -49,5 +49,5 @@ type PredecessorTx interface {
 }
 
 type ProjectInitializer interface {
-	InitializeProject(context.Context, executionmodel.ProjectTaskAuthority) error
+	InitializeProject(context.Context, taskmodel.ProjectTaskAuthority) error
 }

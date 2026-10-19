@@ -2,20 +2,21 @@ package taskrunner
 
 import (
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"strconv"
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // Project reconstructs a caller view from public CLI facts. It never invents
 // native process identities or writes legacy execution records.
-func Project(snapshot storageports.RunnerSnapshot, checkpoint storageports.ServiceCheckpoint) reconstruction.Runtime {
+func Project(snapshot storageports.RunnerSnapshot, checkpoint hostcontract.ServiceCheckpoint) reconstruction.Runtime {
 	g := snapshot.Graph
 	view := reconstruction.RuntimeFromCheckpoint(checkpoint, g.Authority.DispatchMode, g.Authority.DispatchPaused, g.Authority.AuthorityVersion)
 	view.Tasks = g.Tasks
@@ -49,6 +50,13 @@ func text(value string) *string {
 }
 func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
 	v := &reconstruction.RunView{RunnerStateDir: c.StateDir, RunID: c.ID, TaskID: c.TaskID, DomainTaskID: c.TaskID, ExecutionID: c.RunID, ControlRevision: c.Revision, Claimant: c.Claimant, CandidateNumber: c.Number, CandidateCreatedAt: c.CreatedAt, CandidateTiming: "wall_since_reservation", Participation: c.Participation, SubmissionStatus: c.SubmitState, StopRequested: c.StopRequested, WorkflowStatus: runnerstate.ObservedStatus(c), ExecutionStatus: runnerstate.ObservedStatus(c), BaseCommit: text(c.BaseRevision), Error: text(c.Diagnostic), PR: model.PRState{State: "none"}}
+	if c.Withdrawal != nil {
+		v.CandidateStopReason = "manual"
+		v.CandidateStoppedBy = c.Withdrawal.RequestedBy
+		at := c.Withdrawal.At
+		v.CandidateEndedAt = &at
+		v.ResourceStatus = "retained"
+	}
 	var input runnerclient.RunInput
 	_ = json.Unmarshal(c.Submit.Input, &input)
 	v.Host = "local"

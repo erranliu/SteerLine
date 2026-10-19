@@ -7,12 +7,11 @@ import (
 	"testing"
 	"time"
 
-	b "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/scheduler"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
@@ -37,7 +36,7 @@ func (h *runnerActorHost) WriteControlReceipt(r api.ControlReceipt) error {
 	return nil
 }
 func (*runnerActorHost) Emit(model.ActivityEvent) {}
-func (*runnerActorHost) CurrentProcessIdentity() (*b.ProcessIdentity, error) {
+func (*runnerActorHost) CurrentProcessIdentity() (*hostcontract.ProcessIdentity, error) {
 	return process.NewServiceFacts().CurrentIdentity()
 }
 
@@ -46,7 +45,7 @@ func TestRunnerActorUsesHostScheduler(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 	host := &runnerActorHost{}
-	actor, err := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: &taskrunner.Service{Store: s, Project: project}, Store: s, Host: host, Repository: storageports.CheckpointRepository{Identity: project, Path: "fixture", Remote: "origin", Branch: "main"}, Mode: "manual", Heartbeat: 50 * time.Millisecond, NativeSessionAdapters: []string{"codex-app-server"}, Control: func(context.Context, api.ControlRequest) (api.ControlReceipt, error) {
+	actor, err := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: &taskrunner.Service{Store: s, Project: project}, Store: s, Host: host, Repository: hostcontract.Repository{Identity: project, Path: "fixture", Remote: "origin", Branch: "main"}, Mode: "manual", Heartbeat: 50 * time.Millisecond, NativeSessionAdapters: []string{"codex-app-server"}, Control: func(context.Context, api.ControlRequest) (api.ControlReceipt, error) {
 		return api.ControlReceipt{}, errors.New("unexpected control")
 	}})
 	require(t, err)
@@ -125,7 +124,7 @@ func TestRunnerActorBindsReceiptToOriginalHostFile(t *testing.T) {
 		t.Run(map[bool]string{false: "same", true: "changed"}[changed], func(t *testing.T) {
 			s, project, _ := nativeAuditStore(t)
 			host := &runnerControlHost{runnerActorHost: &runnerActorHost{}, fileDigest: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
-			actor, err := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: &taskrunner.Service{Store: s, Project: project}, Store: s, Host: host, Repository: storageports.CheckpointRepository{Identity: project}, Mode: "manual", Heartbeat: time.Second, Control: func(_ context.Context, r api.ControlRequest) (api.ControlReceipt, error) {
+			actor, err := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: &taskrunner.Service{Store: s, Project: project}, Store: s, Host: host, Repository: hostcontract.Repository{Identity: project}, Mode: "manual", Heartbeat: time.Second, Control: func(_ context.Context, r api.ControlRequest) (api.ControlReceipt, error) {
 				if changed {
 					host.fileDigest = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
 				}

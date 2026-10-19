@@ -2,10 +2,11 @@ package sqlite
 
 import (
 	"context"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *SQLiteStore) BindAuthority(v executionmodel.ProjectTaskAuthority) {
+func (s *SQLiteStore) BindAuthority(v taskmodel.ProjectTaskAuthority) {
 	s.Reader = NewReader(s.db, &v)
 }
 

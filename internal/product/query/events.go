@@ -12,7 +12,7 @@ import (
 const (
 	DefaultEventPageSize = 200
 	MaxEventPageSize     = 1000
-	MaxEventPageBytes    = 1 << 20
+	MaxEventPageBytes    = storageports.MaxEventPageBytes
 	// Bound transient payload allocation as well as the returned page size.
 	EventReadBatchSize = 32
 )

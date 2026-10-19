@@ -1,5 +1,17 @@
 # 测试总入口
 
+架构解耦第五轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round5.md)：宿主契约所有权/依赖闭包、checkpoint 双向投影隔离、并发写入下原实例/进程/build pin 同快照、原控制回执绑定、排空与幂等关闭、失败保锁和原 Runner 停服/结算证明。新增投影测试进入既有 quick-rules，所有权守卫进入 quick-execution-boundary；其余沿既有 SQLite、宿主和生命周期定向测试。补充 Windows 消费者与 Linux 宿主/进程包编译，不执行全量或真实模型。
+
+[PR #350 复审](acceptance/architecture-decoupling-pr350-review.md)补齐公开 CLI 任务 DTO 解码回归和 Web 根包扩展后的闭包守卫反例夹具；集成主干候选安全停止后，定向覆盖停止/交付竞态、四轮读取与交付语义及受影响 E2E 消费者编译。证据和复现命令在专属验收记录，不运行全量或真实模型。
+
+架构解耦第四轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round4.md)：Task 交付证据纯校验、原子回滚/唯一交付/后继释放、原回执重放及身份冲突拒绝，另核对 Task 纯值与已收口文件的依赖守卫。纯模型测试沿 L1 quick-rules；新增服务重放用例纳入 quick-execution，所有权守卫纳入 quick-execution-boundary。最新主干集成后补测受影响的读取/投影和带标签消费者编译，不运行全量或真实模型。
+
+架构解耦第三轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round3.md)：会话原身份/游标/JSON 字节预算、正文摘要及 UTF-8 分页、能力字段投影、活动预算溢出零推进、同事务事件流与取消/异常关闭，以及 SQLite/存储端口禁止全部产品层依赖。新增查询测试沿 L1 quick-rules，真实 SQLite 读取/资源验证沿现有 SQLite 测试，守卫反例沿 quick-execution-boundary；不运行全量或真实模型。
+
+架构解耦第二轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round2.md)：历史/候选 DTO 纯投影、并发写入与事务结束后的原采样一致性、候选分页/预算、交付回滚/唯一交付/停止义务/后继释放，以及去掉 SQLite 查询层例外后的依赖守卫。新增查询测试沿 L1 quick-rules、现有读取矩阵沿 quick-owner-unified-startup、守卫反例沿 quick-execution-boundary；E2E 读取夹具同步事实字段，只补定向夹具测试和带标签编译，不以此声称完整 L2/L3 通过。
+
+架构解耦第一轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round1.md)：HTTP/Web 消费端生产依赖、taskrunner 禁止 SQL/具体存储/应用实现依赖、候选不存在与真实故障分类、首次领取及原请求重放。新增错误分类用例纳入 L1 quick-execution，SQLite 回归与守卫反例沿既有 quick-rules / quick-execution-boundary 执行；不要求全量或真实模型。
+
 旧执行记录与空壳字段清理的验证范围见[Plan](plans/runtime-shell-cleanup.plan.md)与[验收](acceptance/runtime-shell-cleanup.md)：全源码引用审计、默认测试编译与固定 L1；不新增或改变分级场景，不用编译代替运行结果。
 
 Runner 深 home 路径缺陷的最小验证见[短目录 Plan](plans/runner-short-state-path.plan.md)和[验收](acceptance/runner-short-state-path.md)：真实 Windows socket、命名空间/别名、caller 停止证明、controlled gate 及新调试包双项目/reset；不把模拟链当完整真实 L2。
@@ -23,6 +35,8 @@ SteerLine 直接采用 [开发项目测试架构规范](../SteerlineProjectGuide
 SteerLine 的 L1 是固定的快速集成/单元集合；完整 L2 是 controlled gate 加真实本机 Codex 核心交付链；L3 为等待合并时调用方重启、宿主生命周期和双 home 独立操作；L4 为构建/路径/宿主写入/同 ID 重放的系统边界。本次拆分和执行证据见 [Plan](plans/test-level-alignment.plan.md) / [验收](acceptance/test-level-alignment.md)。
 
 SteerLine 的 Full 只运行现有确定性 Go 测试，不包含 L2/L3/L4/live。L2/L3/L4 的机器登记为 `tests/e2e/suites.json`，可读内容清单及本项目维护约定见 [E2E 指南](../tests/e2e/README.md#分级测试内容清单与维护)；实际结果在任务专属 acceptance 文档维护。
+
+Web 候选停止参与修复的最小调用方/SQLite/HTTP/Web 验证见[Plan](plans/web-candidate-stop.plan.md)与[验收](acceptance/web-candidate-stop.md)，不启动安装现场或真实 worker。
 
 ## 日常选择
 

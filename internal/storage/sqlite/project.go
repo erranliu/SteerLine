@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"time"
 
-	queryrules "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -34,14 +33,13 @@ func (s Reader) ReadProjectRecordsTx(ctx context.Context, tx *sql.Tx, project, s
 		view.TaskError = err
 	} else {
 		page.SampledAt = view.SampledAt
-		queryrules.SetTaskPageCursor(&page, 0)
 		view.Tasks = &page
 		graph, graphErr := s.TaskGraphSnapshotTx(ctx, tx, project)
 		if graphErr != nil {
 			view.TaskError = graphErr
 		} else {
 			graph.SampledAt = view.SampledAt
-			ready := queryrules.ReadySnapshot(graph)
+			ready := graph.ReadySnapshot()
 			view.Ready = &ready
 		}
 		if selectedTaskID != "" {
@@ -71,14 +69,13 @@ func (s Reader) ReadProjectRecordsTx(ctx context.Context, tx *sql.Tx, project, s
 	candidates, err := readRunnerCandidates(ctx, tx, project, "")
 	view.HistoryError = err
 	if err == nil {
-		history := queryrules.RunnerHistory(candidates)
-		view.History = &history
+		view.Candidates = candidates
 	}
 	return ProjectRecords{View: view}
 }
 
 // ReadProjectView samples every product section in one read transaction. It
-// returns API-ready facts and never reads or reconstructs execution Runtime.
+// returns storage facts and never projects product DTOs or execution Runtime.
 func (s Reader) ReadProjectView(ctx context.Context, project, selectedTaskID string, limit int) (storageports.ProjectView, error) {
 	records, err := s.ReadProjectRecords(ctx, project, selectedTaskID, limit)
 	if err != nil {

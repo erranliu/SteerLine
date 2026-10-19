@@ -7,7 +7,6 @@ import (
 	"errors"
 	"time"
 
-	model "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -20,7 +19,7 @@ type ControlStore interface {
 	LookupCommand(context.Context, string, string) (ports.CommandRecord, bool, error)
 	EnqueueCommand(context.Context, ports.CommandRecord) (ports.CommandRecord, bool, error)
 	UpdateCommand(context.Context, ports.CommandRecord) error
-	SetRunnerDispatch(context.Context, ports.RunnerDispatch) (model.ProjectTaskAuthority, error)
+	SetRunnerDispatch(context.Context, ports.RunnerDispatch) (taskmodel.ProjectTaskAuthority, error)
 }
 type Controls struct {
 	Tasks *Service
@@ -72,7 +71,7 @@ func (c Controls) Handle(ctx context.Context, req api.ControlRequest, instance s
 		}
 	}
 	if found && req.Action == "stop_candidate" {
-		if candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID); err == nil && candidate.TaskID == payload.TaskID && candidate.StopRequested {
+		if candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID); err == nil && candidate.TaskID == payload.TaskID && candidate.Withdrawal != nil && candidate.Withdrawal.RequestID == req.RequestID && candidate.Withdrawal.ExpectedRevision == payload.ExpectedRunRevision && candidate.Withdrawal.RequestedBy == req.RequestedBy {
 			receipt.Status = "applied"
 			receipt.RunID = candidate.ID
 			receipt.RunRevision = candidate.Revision
@@ -207,9 +206,7 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 		if candidate.Revision != payload.ExpectedRunRevision {
 			return failure("stale_version", "candidate changed before withdrawal")
 		}
-		if !candidate.StopRequested {
-			candidate, err = c.Tasks.Stop(ctx, payload.RunID, payload.ExpectedRunRevision)
-		}
+		candidate, err = c.Tasks.Stop(ctx, payload.RunID, payload.ExpectedRunRevision, req.RequestID, req.RequestedBy)
 		if err == nil {
 			receipt.RunID = candidate.ID
 			receipt.RunRevision = candidate.Revision

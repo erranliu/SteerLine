@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	queryrules "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -73,7 +72,7 @@ func readBoundEvents(ctx context.Context, db QueryContext, project, workflow, ex
 	if payloadBudget < 0 {
 		return nil, errors.New("event payload budget cannot be negative")
 	}
-	payloadBudget = min(payloadBudget, queryrules.MaxEventPageBytes)
+	payloadBudget = min(payloadBudget, storageports.MaxEventPageBytes)
 	// The window sums metadata before looking up payloads, so a batch of large
 	// events does not load bodies that the page will immediately discard.
 	query := `WITH batch AS (SELECT event_id,payload_bytes FROM events WHERE project_identity=? AND event_id>?`
@@ -95,7 +94,7 @@ func readBoundEvents(ctx context.Context, db QueryContext, project, workflow, ex
 	) SELECT e.event_id,e.project_identity,e.task_id,e.workflow_run_id,e.execution_id,e.attempt_id,e.external_source,e.external_id,e.type,e.received_at,e.payload_bytes,e.payload_digest,
 		CASE WHEN e.payload_bytes<=? AND b.inline_bytes<=? THEN e.payload ELSE X'' END
 		FROM bounded b JOIN events e ON e.event_id=b.event_id ORDER BY e.event_id`
-	args = append(args, limit, queryrules.MaxEventPageBytes, queryrules.MaxEventPageBytes, payloadBudget)
+	args = append(args, limit, storageports.MaxEventPageBytes, storageports.MaxEventPageBytes, payloadBudget)
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err

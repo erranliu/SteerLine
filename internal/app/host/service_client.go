@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
@@ -37,21 +37,21 @@ const (
 // StartupRecord binds a startup attempt to the service process and its target
 // configuration. It is diagnostic evidence, not runtime or task state.
 type StartupRecord struct {
-	Version            int                               `json:"version"`
-	StartupID          string                            `json:"startup_id"`
-	Status             string                            `json:"status"`
-	StartedAt          time.Time                         `json:"started_at"`
-	UpdatedAt          time.Time                         `json:"updated_at"`
-	RepositoryIdentity string                            `json:"repository_identity"`
-	RepositoryPath     string                            `json:"repository_path"`
-	RunDir             string                            `json:"run_dir"`
-	Remote             string                            `json:"remote"`
-	Branch             string                            `json:"branch"`
-	Claimant           string                            `json:"claimant"`
-	ConfigDigest       string                            `json:"config_digest"`
-	InstanceID         string                            `json:"instance_id,omitempty"`
-	ProcessIdentity    *executionbackend.ProcessIdentity `json:"process_identity,omitempty"`
-	Error              string                            `json:"error,omitempty"`
+	Version            int                           `json:"version"`
+	StartupID          string                        `json:"startup_id"`
+	Status             string                        `json:"status"`
+	StartedAt          time.Time                     `json:"started_at"`
+	UpdatedAt          time.Time                     `json:"updated_at"`
+	RepositoryIdentity string                        `json:"repository_identity"`
+	RepositoryPath     string                        `json:"repository_path"`
+	RunDir             string                        `json:"run_dir"`
+	Remote             string                        `json:"remote"`
+	Branch             string                        `json:"branch"`
+	Claimant           string                        `json:"claimant"`
+	ConfigDigest       string                        `json:"config_digest"`
+	InstanceID         string                        `json:"instance_id,omitempty"`
+	ProcessIdentity    *hostcontract.ProcessIdentity `json:"process_identity,omitempty"`
+	Error              string                        `json:"error,omitempty"`
 }
 
 func startupPath(runDir, id string) (string, error) {
@@ -143,9 +143,9 @@ func readStartupRecord(c Config, id string) (*StartupRecord, error) {
 }
 
 type startupProcessRecord struct {
-	Version         int                              `json:"version"`
-	StartupID       string                           `json:"startup_id"`
-	ProcessIdentity executionbackend.ProcessIdentity `json:"process_identity"`
+	Version         int                          `json:"version"`
+	StartupID       string                       `json:"startup_id"`
+	ProcessIdentity hostcontract.ProcessIdentity `json:"process_identity"`
 }
 
 func validateRecordForRuntime(c Config, rt *reconstructiontypes.Runtime, record *StartupRecord, repositoryPath, runDir string) error {
@@ -179,12 +179,12 @@ func validateRecordForRuntime(c Config, rt *reconstructiontypes.Runtime, record 
 }
 
 func ConnectService(ctx context.Context, c Config) ServiceConnection {
-	return connectServiceWithProbe(ctx, c, func(identity *executionbackend.ProcessIdentity) productapi.ProcessProbe {
+	return connectServiceWithProbe(ctx, c, func(identity *hostcontract.ProcessIdentity) productapi.ProcessProbe {
 		return publicProcessProbe(c.ProcessFacts, identity)
 	})
 }
 
-func connectServiceWithProbe(ctx context.Context, c Config, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
+func connectServiceWithProbe(ctx context.Context, c Config, probe func(*hostcontract.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	if err := c.ResolveIdentity(ctx); err != nil {
 		connection.State, connection.Diagnostic, connection.CanStart = ConnectionIdentityError, "resolve repository identity: "+err.Error(), false
@@ -201,12 +201,12 @@ func ConnectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSn
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return ServiceConnection{State: ConnectionIdentityError, Snapshot: obs, Diagnostic: "resolve repository identity: " + err.Error()}
 	}
-	return connectServiceFromSnapshot(ctx, c, obs, func(identity *executionbackend.ProcessIdentity) productapi.ProcessProbe {
+	return connectServiceFromSnapshot(ctx, c, obs, func(identity *hostcontract.ProcessIdentity) productapi.ProcessProbe {
 		return publicProcessProbe(c.ProcessFacts, identity)
 	})
 }
 
-func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
+func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*hostcontract.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	connection.Snapshot = obs
 	if obs.State == SnapshotNone {

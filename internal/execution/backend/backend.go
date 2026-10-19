@@ -5,6 +5,8 @@ package backend
 import (
 	"context"
 	"os/exec"
+
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 // Backend and protocol are deliberately independent; persisted refs carry both.
@@ -26,24 +28,24 @@ type AgentSpec struct {
 }
 
 type ExecutionRef struct {
-	Version         int               `json:"version"`
-	Backend         BackendKind       `json:"backend"`
-	Protocol        ExecutionProtocol `json:"protocol"`
-	Target          ExecutionTarget   `json:"target"`
-	Agent           AgentSpec         `json:"agent"`
-	RunID           string            `json:"run_id"`
-	AttemptID       string            `json:"attempt_id"`
-	WorkspacePath   string            `json:"workspace_path,omitempty"`
-	WorkspaceBranch string            `json:"workspace_branch,omitempty"`
-	BaseCommit      string            `json:"base_commit,omitempty"`
-	External        ProcessIdentity   `json:"external"`
-	Generation      string            `json:"generation,omitempty"`
-	Incomplete      bool              `json:"incomplete,omitempty"`
+	Version         int                          `json:"version"`
+	Backend         BackendKind                  `json:"backend"`
+	Protocol        ExecutionProtocol            `json:"protocol"`
+	Target          ExecutionTarget              `json:"target"`
+	Agent           AgentSpec                    `json:"agent"`
+	RunID           string                       `json:"run_id"`
+	AttemptID       string                       `json:"attempt_id"`
+	WorkspacePath   string                       `json:"workspace_path,omitempty"`
+	WorkspaceBranch string                       `json:"workspace_branch,omitempty"`
+	BaseCommit      string                       `json:"base_commit,omitempty"`
+	External        hostcontract.ProcessIdentity `json:"external"`
+	Generation      string                       `json:"generation,omitempty"`
+	Incomplete      bool                         `json:"incomplete,omitempty"`
 }
 
 // StopHandle is the verified native resource handle, never a center Worker.
 type StopHandle interface {
-	Identity() ProcessIdentity
+	Identity() hostcontract.ProcessIdentity
 	Kill()
 	Close()
 }
@@ -53,36 +55,8 @@ type StopHandle interface {
 // receive a Service, Run, or persistence handle.
 type ManagedProcessHost interface {
 	StartManaged(*exec.Cmd) (StopHandle, error)
-	InspectProcess(*ProcessIdentity) string
+	InspectProcess(*hostcontract.ProcessIdentity) string
 	NewProcessGeneration() string
 	WriteExecutionFile(string, []byte) error
 	OutputCommand(context.Context, LaunchCommand) ([]byte, error)
-}
-
-// ProcessProbeFacts is the small OS observation returned to application hosts.
-type ProcessProbeFacts struct {
-	State  string
-	Reason string
-}
-
-// ProcessFactsPort owns process identity and liveness observations. It does
-// not start or stop processes and does not carry execution state.
-type ProcessFactsPort interface {
-	CurrentIdentity() (*ProcessIdentity, error)
-	IdentityForPID(int) (ProcessIdentity, error)
-	IdentityFromHandle(uintptr, int) (ProcessIdentity, error)
-	SessionID(int) (int, error)
-	Probe(*ProcessIdentity) ProcessProbeFacts
-}
-
-type ProcessIdentity struct {
-	Kind          string `json:"kind,omitempty"`
-	PID           int    `json:"pid,omitempty"`
-	Created       string `json:"created,omitempty"`
-	Executable    string `json:"executable,omitempty"`
-	Terminal      string `json:"terminal,omitempty"`
-	RuntimeID     string `json:"runtime_id,omitempty"`
-	Incarnation   string `json:"incarnation,omitempty"`
-	ExecutionHost string `json:"execution_host,omitempty"`
-	WorktreeID    string `json:"worktree_id,omitempty"`
 }

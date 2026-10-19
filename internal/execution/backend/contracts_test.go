@@ -3,10 +3,12 @@ package backend
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 func TestExecutionRecordsKeepWireIdentity(t *testing.T) {
-	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV3, Target: ExecutionTarget{ID: "target"}, Agent: AgentSpec{Name: "codex"}, RunID: "run", AttemptID: "attempt", External: ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}}
+	ref := ExecutionRef{Version: 1, Backend: BackendOrca, Protocol: ProtocolOrcaTerminalV3, Target: ExecutionTarget{ID: "target"}, Agent: AgentSpec{Name: "codex"}, RunID: "run", AttemptID: "attempt", External: hostcontract.ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}}
 	data, err := json.Marshal(ref)
 	if err != nil {
 		t.Fatal(err)

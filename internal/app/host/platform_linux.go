@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"syscall"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
 )
 
 func serviceConsoleWindow() uint64 { return 0 }
@@ -75,12 +75,12 @@ func probeLockFile(path string) (bool, error) {
 	return false, nil
 }
 
-func startDetachedProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort) (executionbackend.ProcessIdentity, error) {
+func startDetachedProcess(cmd *exec.Cmd, facts hostcontract.ProcessFactsPort) (hostcontract.ProcessIdentity, error) {
 	// A separate session detaches the service from the caller's terminal and
 	// process group. Pdeathsig is deliberately unset for this lifecycle.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
-		return executionbackend.ProcessIdentity{}, err
+		return hostcontract.ProcessIdentity{}, err
 	}
 	id, err := facts.IdentityForPID(cmd.Process.Pid)
 	if err == nil {
@@ -93,13 +93,13 @@ func startDetachedProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort
 	if err != nil {
 		_ = cmd.Process.Kill()
 		_ = cmd.Wait()
-		return executionbackend.ProcessIdentity{}, fmt.Errorf("cannot detach service from caller session: %w", err)
+		return hostcontract.ProcessIdentity{}, fmt.Errorf("cannot detach service from caller session: %w", err)
 	}
 	return id, nil
 }
 
 func currentJobDiagnostics() (bool, uint32, error) { return false, 0, nil }
 
-func startDetachedProductProcess(cmd *exec.Cmd, facts executionbackend.ProcessFactsPort) (executionbackend.ProcessIdentity, error) {
+func startDetachedProductProcess(cmd *exec.Cmd, facts hostcontract.ProcessFactsPort) (hostcontract.ProcessIdentity, error) {
 	return startDetachedProcess(cmd, facts)
 }

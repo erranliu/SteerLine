@@ -8,7 +8,7 @@ import (
 )
 
 func TestHTTPConsumerBoundary(t *testing.T) {
-	for _, owner := range []string{"../product/httpclient", "../product/httpcontract", "../product/httpfs", "../projectconnection", "../product/applicationclient", "../product/applicationcontract", "../localservice"} {
+	for _, owner := range []string{"../product/httpclient", "../product/httpcontract", "../product/httpfs", "../projectconnection", "../product/applicationclient", "../product/applicationcontract", "../localservice", "../../web/server", "../../cmd/steerline-web"} {
 		output, err := exec.Command("go", "list", "-deps", "-json", owner).Output()
 		if err != nil {
 			t.Fatalf("%s: %v", owner, err)

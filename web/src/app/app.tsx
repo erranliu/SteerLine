@@ -56,8 +56,16 @@ export function Workspace({
       connectionError,
       onRefreshConnection,
     });
-  const { requests, error, clearError, send, busy, reconcile, reconciling } =
-    useOriginalRequests(api, !!online);
+  const {
+    requests,
+    error,
+    clearError,
+    send,
+    submit,
+    busy,
+    reconcile,
+    reconciling,
+  } = useOriginalRequests(api, !!online);
   const [collapsed, setCollapsed] = useState(false);
   const counts = {
     runs: page?.runs?.length ?? 0,
@@ -74,6 +82,8 @@ export function Workspace({
         online: !!online,
         snapshot: snapshot.data,
         send,
+        submit,
+        requests: requests.data,
         busy,
         refresh,
       }}

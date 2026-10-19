@@ -1,84 +1,29 @@
 package reconstruction
 
 import (
-	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/hostcontract"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-type Repository struct {
-	Path     string `json:"path"`
-	Remote   string `json:"remote"`
-	Branch   string `json:"branch"`
-	Identity string `json:"identity"`
-}
-
 // Runtime combines a sampled service checkpoint, task graph and public Runner facts.
 type Runtime struct {
-	SchemaVersion int                                 `json:"schema_version"`
-	Revision      uint64                              `json:"revision"`
-	UpdatedAt     time.Time                           `json:"updated_at"`
-	HeartbeatAt   time.Time                           `json:"heartbeat_at"`
-	Service       ServiceState                        `json:"service"`
-	Repository    Repository                          `json:"repository"`
-	Tasks         []taskmodel.TaskRecord              `json:"tasks,omitempty"`
-	Deliveries    []executionmodel.TaskDeliveryRecord `json:"-"`
-	CurrentTask   *string                             `json:"current_task"`
-	SlotOccupied  bool                                `json:"slot_occupied"`
-	Runs          []*RunView                          `json:"runs"`
-	Control       ControlState                        `json:"control"`
-}
-
-type ServiceState struct {
-	RunnerBuild         *runnercontract.BuildPin          `json:"runner_build,omitempty"`
-	Mode                string                            `json:"mode"`
-	InstanceID          string                            `json:"instance_id"`
-	PID                 int                               `json:"pid"`
-	Status              string                            `json:"status"`
-	Claimant            string                            `json:"claimant"`
-	Error               *string                           `json:"error"`
-	ProcessIdentity     *executionbackend.ProcessIdentity `json:"process_identity"`
-	StartupID           *string                           `json:"startup_id"`
-	ConfigDigest        string                            `json:"config_digest"`
-	Ready               bool                              `json:"ready"`
-	ControlProtocol     int                               `json:"control_protocol"`
-	Capabilities        []string                          `json:"capabilities"`
-	HeartbeatIntervalMS int64                             `json:"heartbeat_interval_ms"`
-}
-
-type ControlState struct {
-	DispatchMode   string            `json:"dispatch_mode"`
-	DispatchPaused bool              `json:"dispatch_paused"`
-	Revision       uint64            `json:"revision"`
-	Operation      *ControlOperation `json:"operation"`
-	Blockers       []ControlBlocker  `json:"blockers"`
-}
-
-type ControlOperation struct {
-	RequestID     string                         `json:"request_id"`
-	Action        string                         `json:"action"`
-	TaskID        string                         `json:"task_id,omitempty"`
-	Payload       json.RawMessage                `json:"payload,omitempty"`
-	Phase         string                         `json:"phase"`
-	RunID         string                         `json:"run_id,omitempty"`
-	AttemptID     string                         `json:"attempt_id,omitempty"`
-	DecisionID    string                         `json:"decision_id,omitempty"`
-	RequestDigest string                         `json:"request_digest"`
-	Result        *executionmodel.ControlReceipt `json:"result,omitempty"`
-}
-
-type ControlBlocker struct {
-	RequestID  string `json:"request_id"`
-	Action     string `json:"action"`
-	TaskID     string `json:"task_id,omitempty"`
-	RunID      string `json:"run_id,omitempty"`
-	AttemptID  string `json:"attempt_id,omitempty"`
-	DecisionID string `json:"decision_id,omitempty"`
-	Reason     string `json:"reason"`
+	SchemaVersion int                            `json:"schema_version"`
+	Revision      uint64                         `json:"revision"`
+	UpdatedAt     time.Time                      `json:"updated_at"`
+	HeartbeatAt   time.Time                      `json:"heartbeat_at"`
+	Service       hostcontract.ServiceState      `json:"service"`
+	Repository    hostcontract.Repository        `json:"repository"`
+	Tasks         []taskmodel.TaskRecord         `json:"tasks,omitempty"`
+	Deliveries    []taskmodel.TaskDeliveryRecord `json:"-"`
+	CurrentTask   *string                        `json:"current_task"`
+	SlotOccupied  bool                           `json:"slot_occupied"`
+	Runs          []*RunView                     `json:"runs"`
+	Control       hostcontract.ControlState      `json:"control"`
 }
 
 // RunView projects caller participation and the last public Runner observation.
@@ -135,7 +80,7 @@ type RunView struct {
 	Target              executionbackend.ExecutionTarget      `json:"target,omitempty"`
 	TaskStatus          string                                `json:"task_status,omitempty"`
 	ExecutionStatus     string                                `json:"execution_status"`
-	Process             *executionbackend.ProcessIdentity     `json:"process"`
+	Process             *hostcontract.ProcessIdentity         `json:"process"`
 	StartedAt           *time.Time                            `json:"started_at"`
 	EndedAt             *time.Time                            `json:"ended_at"`
 	WorktreePath        *string                               `json:"worktree_path"`
