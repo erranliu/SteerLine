@@ -13,7 +13,7 @@ import (
 //go:embed launcher/* retired-launchers/*
 var launcherFS embed.FS
 
-// InstallLaunchers writes the unified start and stop entry points plus
+// InstallLaunchers writes the unified start, restart and stop entry points plus
 // their README into the caller's application directory. Templates are stored
 // LF and written CRLF so they behave as native .bat files.
 func InstallLaunchers(dir string) ([]string, error) {

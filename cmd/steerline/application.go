@@ -19,19 +19,28 @@ func runApplication(command string, args []string) error {
 	noOpen := flags.Bool("no-open", false, "start services without opening a browser")
 	detached := flags.Bool("detached", false, "verify resident process lifetime before opening resources")
 	jsonOutput := flags.Bool("json", false, "print verified application status as JSON")
-	runnerExe := flags.String("runner-exe", "", "verify-stop: absolute staged Runner executable")
+	runnerExe := flags.String("runner-exe", "", "verify-stop/verify-restart: absolute selected Runner executable")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected application arguments")
 	}
-	if *noOpen && command != "start" || *jsonOutput && command != "status" && command != "verify-stop" || *detached && command != "serve" || *runnerExe != "" && command != "verify-stop" {
-		return errors.New("--no-open is for start; --json is for status/verify-stop; --detached is for serve; --runner-exe is for verify-stop")
+	verification := command == "verify-stop" || command == "verify-restart"
+	if *noOpen && command != "start" && command != "restart" || *jsonOutput && command != "status" && !verification || *detached && command != "serve" || *runnerExe != "" && !verification {
+		return errors.New("--no-open is for start/restart; --json is for status/verify-stop/verify-restart; --detached is for serve; --runner-exe is for verification")
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	switch command {
+	case "verify-restart":
+		result, err := app.VerifyApplicationRestartable(ctx, *runnerExe)
+		if err != nil {
+			return err
+		}
+		body, _ := json.Marshal(result)
+		fmt.Println(string(body))
+		return nil
 	case "verify-stop":
 		result, err := app.VerifyApplicationStopped(ctx, *runnerExe)
 		if err != nil {
@@ -49,11 +58,13 @@ func runApplication(command string, args []string) error {
 		return app.ServeApplication(ctx)
 	case "stop":
 		return app.StopAll(ctx)
-	case "start", "status":
+	case "start", "restart", "status":
 		var status app.ApplicationStatus
 		var err error
 		if command == "start" {
 			status, err = app.StartApplication(ctx, *noOpen)
+		} else if command == "restart" {
+			status, err = app.RestartApplication(ctx, *noOpen)
 		} else {
 			status, err = app.StatusApplication(ctx)
 		}

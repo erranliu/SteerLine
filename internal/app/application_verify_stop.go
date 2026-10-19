@@ -34,10 +34,39 @@ type ProjectStopVerification struct {
 	InstanceID string `json:"instance_id"`
 }
 
+// A restart proof deliberately makes no native-resource-settlement claim.
+type ApplicationRestartVerification struct {
+	OriginalHost   contract.Identity            `json:"original_host"`
+	VerifierSHA256 string                       `json:"verifier_sha256"`
+	VerifiedAt     time.Time                    `json:"verified_at"`
+	Projects       []ProjectStopVerification    `json:"projects"`
+	Restartable    bool                         `json:"restartable"`
+	RunnerBuild    runnercontract.BuildPin      `json:"runner_build"`
+	RunnerService  runnerclient.ServiceShutdown `json:"runner_service"`
+}
+
+type applicationOfflineVerification struct {
+	ApplicationStopVerification
+	runnerBuild   runnercontract.BuildPin
+	runnerService runnerclient.ServiceShutdown
+}
+
 // VerifyApplicationStopped produces fresh evidence without changing the
 // original failed shutdown, databases, configuration, or execution authority.
 func VerifyApplicationStopped(ctx context.Context, runnerExecutable string) (ApplicationStopVerification, error) {
-	result := ApplicationStopVerification{Projects: []ProjectStopVerification{}}
+	result, err := verifyApplicationOffline(ctx, runnerExecutable, false)
+	return result.ApplicationStopVerification, err
+}
+
+func VerifyApplicationRestartable(ctx context.Context, runnerExecutable string) (ApplicationRestartVerification, error) {
+	result, err := verifyApplicationOffline(ctx, runnerExecutable, true)
+	return ApplicationRestartVerification{OriginalHost: result.OriginalHost, VerifierSHA256: result.VerifierSHA256,
+		VerifiedAt: result.VerifiedAt, Projects: result.Projects, Restartable: err == nil,
+		RunnerBuild: result.runnerBuild, RunnerService: result.runnerService}, err
+}
+
+func verifyApplicationOffline(ctx context.Context, runnerExecutable string, restart bool) (applicationOfflineVerification, error) {
+	result := applicationOfflineVerification{ApplicationStopVerification: ApplicationStopVerification{Projects: []ProjectStopVerification{}}}
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	if !filepath.IsAbs(runnerExecutable) {
@@ -97,7 +126,23 @@ func VerifyApplicationStopped(ctx context.Context, runnerExecutable string) (App
 		return result, errors.New("original shared Runner build differs from its immutable home binding")
 	}
 	cli := runnerclient.Client{Executable: runnerExecutable, SHA256: runnerHash, StateDir: original.Runner.StateDir, Timeout: 30 * time.Second}
-	result.Runner, err = cli.VerifyStopped(ctx)
+	if restart {
+		if !original.Runner.Stopped || runnerHash != pin.SHA256 {
+			return result, errors.New("restart requires the original stopped Runner service and identical executable; changing Runner requires resource settlement")
+		}
+		selection := runnerclient.Selection{Executable: runnerExecutable, Version: pin.Version, SHA256: pin.SHA256}
+		selected, _, openErr := selection.Open(ctx, pin.StateDir, 30*time.Second)
+		if openErr != nil {
+			return result, openErr
+		}
+		if selected.ResourceDigest != pin.ResourceDigest {
+			return result, errors.New("restart Runner resources differ from the original build")
+		}
+		result.runnerBuild = pin
+		result.runnerService, err = selected.VerifyServiceStopped(ctx, original.Runner.InstanceID, original.Runner.RequestID)
+	} else {
+		result.Runner, err = cli.VerifyStopped(ctx)
+	}
 	if err != nil {
 		return result, err
 	}
@@ -110,7 +155,11 @@ func VerifyApplicationStopped(ctx context.Context, runnerExecutable string) (App
 		if err != nil {
 			return result, err
 		}
-		proof, err := verifyProjectStopped(ctx, c, p, *b.Identity, result.Runner)
+		var restartPin *runnercontract.BuildPin
+		if restart {
+			restartPin = &pin
+		}
+		proof, err := verifyProjectOffline(ctx, c, p, *b.Identity, result.Runner, restartPin)
 		if err != nil {
 			return result, fmt.Errorf("%s: %w", p.ConfigID, err)
 		}
@@ -134,7 +183,7 @@ func recheckableShutdown(r contract.Shutdown, id contract.Identity) error {
 	return nil
 }
 
-func verifyProjectStopped(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification) (ProjectStopVerification, error) {
+func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin) (ProjectStopVerification, error) {
 	proof := ProjectStopVerification{ConfigID: p.ConfigID, ProjectID: p.ProjectID, InstanceID: p.InstanceID}
 	reader, err := OpenNativeTaskReader(ctx, &c)
 	if err != nil {
@@ -161,20 +210,41 @@ func verifyProjectStopped(ctx context.Context, c Config, p contract.ProjectShutd
 	if err = verifyStoppedCheckpoint(snapshot.Checkpoint, c.configDigest, p, id); err != nil {
 		return proof, err
 	}
+	checks, err := reader.Checks(ctx, c.Identity())
+	if err != nil {
+		return proof, err
+	}
+	if restartPin != nil {
+		return proof, matchRestartBindings(c, snapshot.Checkpoint, snapshot.Candidates, checks, *restartPin)
+	}
 	if canonicalConfigPath(runnerProof.StateDir) != canonicalConfigPath(runnerstatepath.Directory(c.runnerHome())) {
 		return proof, errors.New("shared Runner directory changed")
 	}
 	if err = matchStoppedCandidates(snapshot.Candidates, runnerProof); err != nil {
 		return proof, err
 	}
-	checks, err := reader.Checks(ctx, c.Identity())
-	if err != nil {
-		return proof, err
-	}
 	if err = matchStoppedChecks(checks, runnerProof); err != nil {
 		return proof, err
 	}
 	return proof, nil
+}
+
+func matchRestartBindings(c Config, cp *hostcontract.ServiceCheckpoint, candidates []runnerstate.Candidate, checks []runnerstate.EnvironmentCheckRecord, pin runnercontract.BuildPin) error {
+	selected := c.RunnerExecution.Runner
+	if selected.SHA256 != pin.SHA256 || selected.Version != pin.Version || canonicalConfigPath(selected.Executable) != canonicalConfigPath(pin.Executable) || canonicalConfigPath(pin.StateDir) != canonicalConfigPath(runnerstatepath.Directory(c.runnerHome())) || cp == nil || cp.Service.RunnerBuild == nil || !sameRunnerBuild(*cp.Service.RunnerBuild, pin) {
+		return errors.New("restart project or checkpoint differs from the original Runner build")
+	}
+	for _, candidate := range candidates {
+		if !sameRunnerBuild(candidate.RunnerBuild, pin) || canonicalConfigPath(candidate.StateDir) != canonicalConfigPath(pin.StateDir) || candidate.RunID != "" && candidate.InputDigest == "" {
+			return errors.New("restart candidate differs from the original Runner build or directory")
+		}
+	}
+	for _, check := range checks {
+		if check.Selection.SHA256 != pin.SHA256 || check.Selection.Version != pin.Version || canonicalConfigPath(check.Selection.Executable) != canonicalConfigPath(pin.Executable) || check.ResourceDigest != pin.ResourceDigest || canonicalConfigPath(check.StateDir) != canonicalConfigPath(pin.StateDir) {
+			return errors.New("restart environment check differs from the original Runner build or directory")
+		}
+	}
+	return nil
 }
 
 func matchStoppedChecks(checks []runnerstate.EnvironmentCheckRecord, runnerProof runnerclient.StoppedVerification) error {

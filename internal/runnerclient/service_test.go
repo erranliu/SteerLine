@@ -29,6 +29,10 @@ func TestServiceSettlementRequiresOriginalFinalProof(t *testing.T) {
 			if err := c.verifyServiceSettlement(i, "original", "stop-original"); (err == nil) != tc.pass {
 				t.Fatal(err)
 			}
+			serviceStopped := tc.pass || tc.name == "native_unknown" || tc.name == "contradictory"
+			if err := c.verifyServiceStopped(i, "original", "stop-original"); (err == nil) != serviceStopped {
+				t.Fatal("service exit was confused with native settlement", err)
+			}
 		})
 	}
 }

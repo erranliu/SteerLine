@@ -42,6 +42,30 @@ func (c Client) VerifyServiceSettlement(ctx context.Context, instance, requestID
 }
 
 func (c Client) verifyServiceSettlement(info ServiceInfo, instance, requestID string) error {
+	if err := c.verifyServiceStopped(info, instance, requestID); err != nil {
+		return err
+	}
+	r := info.LastShutdown
+	if !r.ResourcesSettled || r.Diagnostic != "" {
+		return errors.New("original Runner native resource settlement remains unverified: " + r.Diagnostic)
+	}
+	return nil
+}
+
+// VerifyServiceStopped proves only that the original service exited and released
+// its writer lease. Native executions may remain; this does not authorize a new build.
+func (c Client) VerifyServiceStopped(ctx context.Context, instance, requestID string) (ServiceShutdown, error) {
+	info, err := c.ServiceStatus(ctx)
+	if err != nil {
+		return ServiceShutdown{}, err
+	}
+	if err := c.verifyServiceStopped(info, instance, requestID); err != nil {
+		return ServiceShutdown{}, err
+	}
+	return *info.LastShutdown, nil
+}
+
+func (c Client) verifyServiceStopped(info ServiceInfo, instance, requestID string) error {
 	r := info.LastShutdown
 	want, err := filepath.EvalSymlinks(c.StateDir)
 	if err != nil {
@@ -49,9 +73,6 @@ func (c Client) verifyServiceSettlement(info ServiceInfo, instance, requestID st
 	}
 	if info.Status != "not_running" || r == nil || instance == "" || requestID == "" || c.SHA256 == "" || r.InstanceID != instance || r.RequestID != requestID || !strings.EqualFold(filepath.Clean(r.StateDir), want) || !strings.EqualFold(r.ExecutableSHA256, c.SHA256) {
 		return errors.New("original Runner resource settlement evidence is missing or identity differs")
-	}
-	if !r.ResourcesSettled || r.Diagnostic != "" {
-		return errors.New("original Runner native resource settlement remains unverified: " + r.Diagnostic)
 	}
 	return nil
 }
