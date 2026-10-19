@@ -1,6 +1,7 @@
 param(
     [string]$InstallHome = 'C:\SteerlineInstall',
     [string]$RunnerRepo = '',
+    [switch]$UpdateRunner,
     [switch]$NoStart,
     [switch]$NoPause
 )
@@ -11,6 +12,7 @@ if (-not $RunnerRepo) { $RunnerRepo = Join-Path (Split-Path -Parent $sourceRoot)
 $RunnerRepo = [IO.Path]::GetFullPath($RunnerRepo)
 $InstallHome = [IO.Path]::GetFullPath($InstallHome)
 . (Join-Path $PSScriptRoot 'deployment-stop.ps1')
+. (Join-Path $PSScriptRoot 'deployment-runner.ps1')
 
 function Within([string]$Root, [string]$Path) {
     $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
@@ -81,7 +83,6 @@ foreach ($protected in @($sourceRoot, $RunnerRepo, 'C:\SteerlineRuntime', 'C:\St
     if ((Within $protected $InstallHome) -or (Within $InstallHome $protected)) { throw "Installation must be disjoint from $protected" }
 }
 foreach ($path in @($InstallHome, $sourceRoot, $RunnerRepo)) { Assert-Plain $path }
-if (-not (Test-Path -LiteralPath (Join-Path $RunnerRepo 'scripts\build.ps1'))) { throw 'RunnerRepo must contain the SteerRunner checkout.' }
 foreach ($path in @((Join-Path $RunnerRepo 'bin\steerrunner.exe'), (Join-Path $sourceRoot 'bin\steerline.exe'), (Join-Path $sourceRoot 'bin\steerline-web.exe'))) { Assert-Plain $path }
 New-Item -ItemType Directory -Path $InstallHome -Force | Out-Null
 $lockPath = Join-Path $InstallHome '.deploy.lock'
@@ -90,8 +91,18 @@ $deploymentLock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.Fi
 try {
 
 # Complete all builds before stopping or replacing an installed component.
-Push-Location $RunnerRepo
-try { & (Join-Path $RunnerRepo 'scripts\build.ps1'); if (-not $?) { throw 'Runner build failed.' } } finally { Pop-Location }
+Assert-Plain (Join-Path $InstallHome 'execution.json')
+Assert-Plain (Join-Path $InstallHome 'bin\steerrunner.exe')
+$runnerSelection = Get-DeploymentRunnerSelection $InstallHome ([bool]$UpdateRunner)
+if (-not $runnerSelection.Reuse) {
+    if (-not (Test-Path -LiteralPath (Join-Path $RunnerRepo 'scripts\build.ps1'))) { throw 'RunnerRepo must contain the SteerRunner checkout.' }
+    Push-Location $RunnerRepo
+    try { & (Join-Path $RunnerRepo 'scripts\build.ps1'); if (-not $?) { throw 'Runner build failed.' } } finally { Pop-Location }
+    $runnerSource = Join-Path $RunnerRepo 'bin\steerrunner.exe'
+} else {
+    $runnerSource = $runnerSelection.Executable
+    Write-Output 'Reusing the installed, pinned Runner; building SteerLine and Web only.'
+}
 Push-Location $sourceRoot
 try { & (Join-Path $sourceRoot 'build.ps1') -Web; if (-not $?) { throw 'SteerLine/Web build failed.' } } finally { Pop-Location }
 
@@ -100,17 +111,21 @@ $package = Join-Path $InstallHome ('deployments\' + $stamp)
 New-Item -ItemType Directory -Path $package -Force | Out-Null
 $bin = Join-Path $InstallHome 'bin'
 foreach ($name in @('steerline.exe','steerline-web.exe','steerrunner.exe')) { Assert-Plain (Join-Path $bin $name) }
-foreach ($pair in @(@('steerline.exe',$sourceRoot), @('steerline-web.exe',$sourceRoot), @('steerrunner.exe',$RunnerRepo))) {
+foreach ($pair in @(@('steerline.exe',$sourceRoot), @('steerline-web.exe',$sourceRoot))) {
     $source = Join-Path $pair[1] ('bin\' + $pair[0])
     Assert-Plain $source
     Copy-Item -LiteralPath $source -Destination (Join-Path $package $pair[0])
 }
+Copy-Item -LiteralPath $runnerSource -Destination (Join-Path $package 'steerrunner.exe')
 $runnerStage = Join-Path $package 'steerrunner.exe'
 $versionRaw = & $runnerStage version --json
 if ($LASTEXITCODE -ne 0) { throw 'Staged Runner cannot report its version.' }
 $version = $versionRaw | ConvertFrom-Json
 if (-not $version.ok -or $version.protocol -ne 'steerrunner-cli/v1') { throw 'Staged Runner protocol is unsupported.' }
 $runnerHash = (Get-FileHash -LiteralPath $runnerStage -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($runnerSelection.Reuse -and ($runnerHash -ne $runnerSelection.SHA256 -or $version.data.version -ne $runnerSelection.Version)) { throw 'Staged Runner differs from its installed release pin.' }
+Assert-Plain (Join-Path $InstallHome 'application-api\runner-build.json')
+Assert-DeploymentRunnerBuild $InstallHome $runnerHash
 $configPath = Join-Path $InstallHome 'execution.json'
 Assert-Plain $configPath
 if (Test-Path -LiteralPath $configPath) {
@@ -121,6 +136,7 @@ if (Test-Path -LiteralPath $configPath) {
     $execution.execution_profiles = @($execution.execution_profiles | Where-Object id -eq 'local-luna-medium')
     $execution.default_execution_profile = 'local-luna-medium'
 }
+$allowRestart = $execution.runner.sha256 -eq $runnerHash
 $execution.runner.executable = Join-Path $bin 'steerrunner.exe'
 $execution.runner.version = $version.data.version
 $execution.runner.sha256 = $runnerHash
@@ -130,7 +146,7 @@ try {
     $env:STEERLINE_HOME = $InstallHome
     $installed = Join-Path $bin 'steerline.exe'
     if (Test-Path -LiteralPath $installed) {
-        $verification = Stop-DeploymentApplication (Join-Path $package 'steerline.exe') $runnerStage
+        $verification = Stop-DeploymentApplication (Join-Path $package 'steerline.exe') $runnerStage -AllowRestart:$allowRestart
         if ($null -ne $verification) {
             Write-JSON (Join-Path $package 'shutdown-verification.json') $verification
         }

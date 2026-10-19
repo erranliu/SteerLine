@@ -60,6 +60,8 @@ Runner 在同一 Run 记录内继续保存逐轮输入意图和动态执行事�
 
 ### 4.2 配置变化、重启与构建更换
 
+调用方生命周期补充：`restart` 与仅更新 SteerLine/Web 的部署使用独立 `verify-restart` 证明原宿主/Web、本地项目及原 Runner 服务已经退出，核对原停止 instance/request、EXE/resource/state-dir、各 checkpoint/候选/检查的固定构建及冻结配置。原生远端执行可以继续存在，resources_settled 及原失败诊断保留；该证明不授权终止或迁移执行。普通部署复用安装版固定 Runner，显式 `-UpdateRunner` 才构建 Runner。新的 ProjectRuntime 仍按本节原请求/Run 对账与零自动输入规则接纳同构建新实例。换 Runner 构建不适用此证明，仍要求资源结算和无旧执行状态的新环境。实现与验证见[同构建重启 Plan](../plans/application-redeploy.plan.md)。
+
 同构建指 EXE SHA 与 resource 身份一致，不能只比 version 字符串。Run 的构建/目录/受理参数绑定保持；服务实例在单个 ProjectRuntime 生命周期内固定，但不永久固定为 Run 首次受理时的 instance_id。**本期仅在用户显式重启 SteerLine、销毁旧 ProjectRuntime 并重建新 ProjectRuntime 的初始化过程中接纳新 Runner 实例。** 单独重启 Runner、发现 service ready、刷新页面或轮询命中另一实例均不授权当前运行时重新绑定；不增加运行中实例切换入口。
 
 | 情况 | 准入与既有运行 | 明确禁止 |
