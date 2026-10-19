@@ -19,7 +19,7 @@ func TestStoppedVerificationKeepsRunDiagnosticsAndGate(t *testing.T) {
 	t.Setenv("STEERLINE_RUNNER_CLI_CALL", filepath.Join(dir, "call"))
 	c := Client{Executable: exe, StateDir: dir}
 	for _, pass := range []bool{false, true} {
-		proof := StoppedVerification{StateDir: dir, ResourcesSettled: pass, Runs: []StoppedRun{{RunID: "original", InputDigest: "input", ResourcesSettled: pass}}}
+		proof := StoppedVerification{StateDir: dir, ResourcesSettled: pass, Runs: []StoppedRun{{RunID: "original", InputDigest: "input", ResourcesSettled: pass}}, Checks: []StoppedCheck{}}
 		if !pass {
 			proof.Runs[0].Diagnostic = "run original: original terminal is still active"
 		}

@@ -292,6 +292,19 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ## 当前实现与缺口
 
+### 应用级共享 Runner（2026-10-19）
+
+[共享服务 Spec](../spec/shared-runner-service.spec.md) / [Plan](../spec/shared-runner-service.plan.md)已按用户授权实施，仅改 SteerLine：由应用宿主持有每 home 一个 Runner，项目借用共同固定实例。节点/异常编号、Runner 原生重试、输入/恢复和冻结停止策略不变。
+
+| 节点 / 异常 / 验证 | 当前调用方边界 |
+| --- | --- |
+| W01–W04 / E04、E05、E07 / V01、V06、V08 | state-dir 按 home 派生；应用在 census 后、项目运行前初始化一次。不可变 home 构建 pin 在 service start 前核验，失败/reset 保留；候选/检查原绑定不迁移，不增加懒初始化或引用计数 |
+| W08–W14 / E04、E05、E07 / V03、V06、V08 | 产品请求与随机 Runner 请求分别持久化；Action 保存产品 ID/摘要，已存动作但外层回执丢失时仍复用原信封。检查在项目开放前核对原 Check 与未知原外部请求，过程只读；Check state-dir 与 Action 原身份/信封受存储冻结校验，运行中旧实例围栏保持 |
+| W18 / E04、E05、E07 / V06、V07 | 项目只关闭本地资源，已有 Run/检查可能继续；保留原停止义务，actor 已关时不承诺继续对账。应用在验证共享实例后立即固定停止义务，后续目录失败也不丢失；整体停止统一处理原实例与冻结策略，项目只记本地关闭/锁，应用持有一份最终资源证明 |
+| W18 / E04、E05 / V07、V08 | 离线公开 Runs/Checks 证明覆盖所有项目；未绑定未知请求继续阻断。整包 reset 全体预检，以全局最终资源证明核对原 Check/input_digest，停服前缓存不作第二结算依据；未知操作仍阻断，仅重置 caller 状态，保留共享 Runner 历史/认证/Git/PR 与构建 pin；新操作使用新外部请求，正常重启零自动业务输入 |
+
+本增量替代历史“项目退出即所属 Runner 停服”的关系；没有逐项目暂停/热重启 API或后台结算器。局部 caller 已退出后的义务由整体停服结算，或显式重启后按原流程核验。V03/V06/V07/V08 的结果及人工待验在[本任务验收](../acceptance/shared-runner-service.md)登记；真实空闲服务与 controlled 双 Run 分别取证，不据此宣称真实模型双 Run或闪窗体验通过。
+
 ### 协作边界与多 Workflow 接入（2026-10-17）
 
 [协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)已按用户授权实施，实跑与待验范围登记在任务验收。SteerLine 保存执行预设与原提交；Runner 受理时固定参数/材料/模板，逐轮发送前保存最终输入，原生身份按生命周期绑定并推进 workflow。调用方消费多流程目录、组合 schema、audit_model 和公开审计/材料/请求模型投影。本文中 development/v3 等迁出前流程名不构成 SteerLine 当前执行引擎；当前消费固定 Runner 的 development/1 与 development-audited/1，不改写历史契约或验收。

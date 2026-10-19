@@ -12,7 +12,7 @@ import (
 
 func TestRunnerSettlementReadCanRecoverWithoutRepeatingStop(t *testing.T) {
 	stops, reads := 0, 0
-	r := &projectRunner{attempted: true, stop: func(context.Context) error { stops++; return nil }, settle: func(context.Context) error {
+	r := &applicationRunner{attempted: true, stop: func(context.Context) error { stops++; return nil }, settle: func(context.Context) error {
 		reads++
 		if reads == 1 {
 			return context.DeadlineExceeded
@@ -28,7 +28,7 @@ func TestRunnerSettlementReadCanRecoverWithoutRepeatingStop(t *testing.T) {
 }
 func TestRunnerShutdownRetriesOnlyUnconfirmedOriginalStop(t *testing.T) {
 	stops, reads := 0, 0
-	r := &projectRunner{attempted: true, stop: func(context.Context) error {
+	r := &applicationRunner{attempted: true, stop: func(context.Context) error {
 		stops++
 		if stops == 1 {
 			return context.DeadlineExceeded
@@ -48,52 +48,28 @@ func TestRunnerShutdownRetriesOnlyUnconfirmedOriginalStop(t *testing.T) {
 		t.Fatal("confirmed stop repeated", err, stops, reads)
 	}
 }
-func TestRunnerRejectedCatalogCleansOnlyNewOriginalInstance(t *testing.T) {
-	for _, adopted := range []bool{false, true} {
-		t.Run(map[bool]string{false: "new", true: "already_ready"}[adopted], func(t *testing.T) {
-			c, _ := nativeTaskFixture(t)
-			t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
-			var original projectRunner
-			if adopted {
-				require(t, original.start(context.Background(), c.RunnerExecution, c.RunDir, 5*time.Second, c.runnerPublication()))
-				defer original.shutdown(context.Background())
-			}
-			var rejected projectRunner
-			bad := c.runnerPublication()
-			bad.Provider = "unsupported-fixture-provider"
-			if err := rejected.start(context.Background(), c.RunnerExecution, c.RunDir, 5*time.Second, bad); err == nil {
-				t.Fatal("unsupported publication admitted")
-			}
-			if rejected.info.InstanceID == "" {
-				t.Fatal("partial startup lost original instance")
-			}
-			if adopted {
-				if err := rejected.shutdown(context.Background()); err == nil || rejected.ResourceSettlementError() == nil {
-					t.Fatal("unadopted daemon falsely settled")
-				}
-				status, err := original.client.ServiceStatus(context.Background())
-				require(t, err)
-				if status.Status != "ready" || status.InstanceID != original.info.InstanceID {
-					t.Fatal("rejected startup stopped previous daemon", status)
-				}
-			} else {
-				require(t, rejected.shutdown(context.Background()))
-				require(t, rejected.ResourceSettlementError())
-				status, err := rejected.client.ServiceStatus(context.Background())
-				require(t, err)
-				if status.Status != "not_running" || status.LastShutdown == nil || status.LastShutdown.RequestID != "sl-startup-rejected-"+rejected.info.InstanceID {
-					t.Fatal("cleanup lost original rejected-start request", status)
-				}
-			}
-		})
+func TestSharedRunnerProjectValidationKeepsService(t *testing.T) {
+	c, _ := nativeTaskFixture(t)
+	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
+	var shared applicationRunner
+	require(t, shared.start(context.Background(), c.RunnerExecution, c.runnerHome(), 5*time.Second))
+	defer shared.shutdown(context.Background())
+	c.PR.Kind = "unsupported-fixture-provider"
+	if shared.validateProject(c) == nil {
+		t.Fatal("invalid project publication accepted")
+	}
+	info, err := shared.client.ServiceStatus(context.Background())
+	require(t, err)
+	if info.InstanceID != shared.info.InstanceID || info.Status != "ready" {
+		t.Fatal("project validation stopped shared service", info)
 	}
 }
 
 func TestRunnerUnknownStartKeepsEvidenceWithoutStoppingUntrustedTarget(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
 	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
-	var original projectRunner
-	require(t, original.start(context.Background(), c.RunnerExecution, c.RunDir, 5*time.Second, c.runnerPublication()))
+	var original applicationRunner
+	require(t, original.start(context.Background(), c.RunnerExecution, c.runnerHome(), 5*time.Second))
 	defer original.shutdown(context.Background())
 	// This is the idle public CLI fixture's data, not Runner private state.
 	path := filepath.Join(original.client.StateDir, "idle-fixture.json")
@@ -105,8 +81,8 @@ func TestRunnerUnknownStartKeepsEvidenceWithoutStoppingUntrustedTarget(t *testin
 	raw, err = json.Marshal(observed)
 	require(t, err)
 	require(t, os.WriteFile(path, raw, 0600))
-	var rejected projectRunner
-	if rejected.start(context.Background(), c.RunnerExecution, c.RunDir, 5*time.Second, c.runnerPublication()) == nil {
+	var rejected applicationRunner
+	if rejected.start(context.Background(), c.RunnerExecution, c.runnerHome(), 5*time.Second) == nil {
 		t.Fatal("untrusted release accepted")
 	}
 	if !rejected.attempted || rejected.info.InstanceID != original.info.InstanceID || rejected.client.StateDir != original.client.StateDir || rejected.stop != nil {

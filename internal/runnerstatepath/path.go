@@ -1,4 +1,4 @@
-// Package runnerstatepath owns the caller's short, per-project Runner directory.
+// Package runnerstatepath owns the caller's short, home-scoped Runner directory.
 package runnerstatepath
 
 import (
@@ -16,15 +16,15 @@ import (
 	httpfs "github.com/erranliu/SteerLine/internal/product/httpfs"
 )
 
-// Directory binds the complete application run directory (including its home)
+// Directory binds the application home
 // to a 128-bit key. Home depth and repository names cannot lengthen this path.
 // It performs no I/O and never adopts or moves an old Runner directory.
-func Directory(runDir string) string {
-	identity := filepath.Clean(runDir)
+func Directory(home string) string {
+	identity := "steerline/shared-runner/v1\x00" + filepath.Clean(home)
 	root := filepath.Join(os.TempDir(), "slr")
 	if runtime.GOOS == "windows" {
 		identity = strings.ToLower(identity)
-		root = filepath.Join(filepath.VolumeName(runDir)+string(filepath.Separator), "slr")
+		root = filepath.Join(strings.ToUpper(filepath.VolumeName(home))+string(filepath.Separator), "slr")
 	}
 	sum := sha256.Sum256([]byte(identity))
 	key := strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(sum[:16]))
@@ -33,14 +33,14 @@ func Directory(runDir string) string {
 
 // Validate is read-only. Reject aliases rather than shortening paths through
 // junctions/subst or redirecting another application's execution state.
-func Validate(runDir string) error {
-	if !filepath.IsAbs(runDir) {
-		return errors.New("Runner state requires an absolute application run directory")
+func Validate(home string) error {
+	if !filepath.IsAbs(home) {
+		return errors.New("Runner state requires an absolute application home")
 	}
-	if runtime.GOOS == "windows" && len(filepath.VolumeName(runDir)) != 2 {
+	if runtime.GOOS == "windows" && len(filepath.VolumeName(home)) != 2 {
 		return errors.New("Runner state requires a local drive application home")
 	}
-	dir := Directory(runDir)
+	dir := Directory(home)
 	// Pinned Runner's Git/authentication suffix needs 64 bytes; AF_UNIX permits
 	// 106. Keep that budget here, without relaxing Runner's own validation.
 	if len(dir)+64 > 106 {
@@ -68,20 +68,20 @@ func Validate(runDir string) error {
 
 // Prepare is used only by explicit service startup. Read-only clients call
 // Validate and do not create directories or change permissions.
-func Prepare(runDir string) error {
-	if err := Validate(runDir); err != nil {
+func Prepare(home string) error {
+	if err := Validate(home); err != nil {
 		return err
 	}
-	return httpfs.EnsurePrivateDirectory(Directory(runDir))
+	return httpfs.EnsurePrivateDirectory(Directory(home))
 }
 
-// RemoveStopped removes only this run directory's derived Runner namespace.
+// RemoveStopped removes only this home's derived Runner namespace.
 // The caller must first prove the original service and Runs have stopped.
-func RemoveStopped(runDir string) error {
-	if err := Validate(runDir); err != nil {
+func RemoveStopped(home string) error {
+	if err := Validate(home); err != nil {
 		return err
 	}
-	target := Directory(runDir)
+	target := Directory(home)
 	if err := filepath.WalkDir(target, func(path string, entry fs.DirEntry, err error) error {
 		if os.IsNotExist(err) {
 			return nil

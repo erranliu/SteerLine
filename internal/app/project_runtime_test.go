@@ -14,7 +14,6 @@ import (
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpapi"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
@@ -45,11 +44,11 @@ func TestProjectRuntimeClosesLocalResourcesDespiteRunnerUncertainty(t *testing.T
 				log.err = errors.New("log close failed")
 			}
 			stops := 0
-			r := &ProjectRuntime{repoLock: repoLock, runLock: runLock, store: store, log: log, runner: projectRunner{attempted: true, stop: func(context.Context) error { stops++; return context.DeadlineExceeded }}}
+			r := &ProjectRuntime{repoLock: repoLock, runLock: runLock, store: store, log: log, runner: &applicationRunner{attempted: true, stop: func(context.Context) error { stops++; return context.DeadlineExceeded }}}
 			r.close()
 			r.close()
-			if (r.localErr != nil) != localFailure || r.runner.ResourceSettlementError() == nil || stops != 2 || log.closed != 1 {
-				t.Fatal("local and Runner outcomes or ownership conflated", r.localErr, r.runnerErr, stops, log.closed)
+			if (r.localErr != nil) != localFailure || r.runner.ResourceSettlementError() == nil || stops != 0 || log.closed != 1 {
+				t.Fatal("local and Runner outcomes or ownership conflated", r.localErr, stops, log.closed)
 			}
 			if _, err := store.ReadRunnerSnapshot(context.Background(), repo); err == nil {
 				t.Fatal("owned store left open")
@@ -71,10 +70,11 @@ func TestProjectRuntimeClosesLocalResourcesDespiteRunnerUncertainty(t *testing.T
 }
 
 func TestProjectRuntimePartialPreparationReleasesOwnership(t *testing.T) {
+	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
 	c, _ := nativeTaskFixture(t)
 	require(t, os.MkdirAll(EtcDir(), 0700))
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "one.json"), projectConfigJSON(t, c), 0600))
-	// Fail after native initialization and both ownership locks, before Runner start.
+	// Fail after shared Runner start, native initialization and both project locks.
 	require(t, os.WriteFile(filepath.Join(HomeDir(), "logs"), []byte("blocked"), 0600))
 	d := NewApplicationDirectory(HomeDir())
 	defer d.Close()
@@ -90,7 +90,7 @@ func TestProjectRuntimePartialPreparationReleasesOwnership(t *testing.T) {
 		t.Fatal("failure did not reach log acquisition", d.entries[0].view)
 	}
 	result := d.ShutdownResults()[0]
-	if !result.LocalClosed || !result.LocksReleased || !result.ResourcesSettled || result.InstanceID != "" {
+	if !result.LocalClosed || !result.LocksReleased || result.InstanceID != "" {
 		t.Fatal("partial startup invented outstanding resources", result)
 	}
 	for _, key := range []string{d.entries[0].ref.Identity, d.entries[0].ref.RunDir} {
@@ -98,8 +98,8 @@ func TestProjectRuntimePartialPreparationReleasesOwnership(t *testing.T) {
 		require(t, err)
 		lock.Close()
 	}
-	if _, err := os.Stat(runnerstatepath.Directory(d.entries[0].ref.RunDir)); !os.IsNotExist(err) {
-		t.Fatal("Runner started after preparation failure", err)
+	if !d.runner.result().Settled() {
+		t.Fatal("shared Runner failed final settlement")
 	}
 }
 

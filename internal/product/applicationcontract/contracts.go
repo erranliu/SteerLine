@@ -32,18 +32,42 @@ type Shutdown struct {
 	Version    int               `json:"version"`
 	Identity   Identity          `json:"identity"`
 	Projects   []ProjectShutdown `json:"projects"`
+	Runner     *RunnerShutdown   `json:"runner"`
 	Clean      bool              `json:"clean"`
 	Diagnostic string            `json:"diagnostic,omitempty"`
 }
 type ProjectShutdown struct {
-	ConfigID         string `json:"config_id"`
-	ProjectID        string `json:"project_id,omitempty"`
-	InstanceID       string `json:"instance_id,omitempty"`
-	LocalClosed      bool   `json:"local_closed"`
-	LocksReleased    bool   `json:"locks_released"`
-	ResourcesSettled bool   `json:"resources_settled"`
-	Diagnostic       string `json:"diagnostic,omitempty"`
+	ConfigID      string `json:"config_id"`
+	ProjectID     string `json:"project_id,omitempty"`
+	InstanceID    string `json:"instance_id,omitempty"`
+	LocalClosed   bool   `json:"local_closed"`
+	LocksReleased bool   `json:"locks_released"`
+	Diagnostic    string `json:"diagnostic,omitempty"`
 }
 type Catalog struct {
 	Projects []Project `json:"projects"`
+}
+
+// RunnerShutdown is the single home-wide service settlement, not project state.
+type RunnerShutdown struct {
+	Attempted        bool   `json:"attempted"`
+	StateDir         string `json:"state_dir,omitempty"`
+	InstanceID       string `json:"instance_id,omitempty"`
+	ExecutableSHA256 string `json:"executable_sha256,omitempty"`
+	Version          string `json:"version,omitempty"`
+	ResourceDigest   string `json:"resource_digest,omitempty"`
+	RequestID        string `json:"request_id,omitempty"`
+	Stopped          bool   `json:"stopped"`
+	ResourcesSettled bool   `json:"resources_settled"`
+	Diagnostic       string `json:"diagnostic,omitempty"`
+}
+
+func (r *RunnerShutdown) Settled() bool {
+	if r == nil || !r.ResourcesSettled || r.Diagnostic != "" {
+		return false
+	}
+	if !r.Attempted {
+		return r.InstanceID == "" && r.RequestID == "" && r.StateDir == ""
+	}
+	return r.Stopped && r.InstanceID != "" && r.RequestID != "" && r.StateDir != "" && r.ExecutableSHA256 != "" && r.ResourceDigest != "" && r.Version != ""
 }

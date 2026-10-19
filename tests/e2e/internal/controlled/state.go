@@ -156,6 +156,17 @@ func Merge(ctx context.Context, path, repo string) error {
 }
 
 func statePathForDirectory(dir string) string {
+	if routeFile := os.Getenv("STEERLINE_E2E_CONTROLLED_ROUTES"); routeFile != "" {
+		raw, err := os.ReadFile(routeFile)
+		var routes map[string]string
+		if err == nil && json.Unmarshal(raw, &routes) == nil {
+			for repo, path := range routes {
+				if strings.EqualFold(filepath.Clean(repo), filepath.Clean(dir)) {
+					return path
+				}
+			}
+		}
+	}
 	path := os.Getenv("STEERLINE_E2E_CONTROLLED_STATE")
 	if path == "" {
 		return ""

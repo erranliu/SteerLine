@@ -12,6 +12,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 func switchRepo(t *testing.T, home, name string) string {
@@ -160,6 +161,9 @@ func TestUnifiedStartupZeroProjectsLifecycle(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, "state")); !os.IsNotExist(err) {
 		t.Fatal("application created project state")
 	}
+	if _, err := os.Stat(runnerstatepath.Directory(home)); !os.IsNotExist(err) {
+		t.Fatal("zero projects created Runner state")
+	}
 }
 func TestUnifiedStartupCloseBeforeStartAndPendingResults(t *testing.T) {
 	home := t.TempDir()
@@ -169,14 +173,14 @@ func TestUnifiedStartupCloseBeforeStartAndPendingResults(t *testing.T) {
 	require(t, d.Close())
 	d.Start()
 	require(t, d.Close())
-	if d.started || d.entries[0].runtime != nil {
+	if d.started || d.entries[0].runtime != nil || d.runner.attempted {
 		t.Fatal("Close implicitly started a runtime")
 	}
 	if _, err := os.Stat(filepath.Join(home, "state")); !os.IsNotExist(err) {
 		t.Fatal("Close created state", err)
 	}
 	completed := d.ShutdownResults()[0]
-	if !completed.LocalClosed || !completed.ResourcesSettled || !completed.LocksReleased {
+	if !completed.LocalClosed || !completed.LocksReleased {
 		t.Fatal("never-started project acquired obligations", completed)
 	}
 	// A scheduled owner's absent result must never use the no-resource default.
@@ -185,7 +189,7 @@ func TestUnifiedStartupCloseBeforeStartAndPendingResults(t *testing.T) {
 	d.entries[0].result = contract.ProjectShutdown{ConfigID: "one.json"}
 	d.mu.Unlock()
 	pending := d.ShutdownResults()[0]
-	if pending.LocalClosed || pending.ResourcesSettled || pending.LocksReleased || pending.Diagnostic == "" {
+	if pending.LocalClosed || pending.LocksReleased || pending.Diagnostic == "" {
 		t.Fatal("pending result fabricated clean shutdown", pending)
 	}
 }

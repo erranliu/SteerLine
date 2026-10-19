@@ -144,6 +144,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if run.Correlation == nil {
 		run.Correlation = map[string]string{}
 	}
+	run.Correlation["steerline_project"] = s.Project
 	run.Correlation["steerline_task_id"], run.Correlation["steerline_candidate_id"] = input.TaskID, input.RequestID
 	raw, err = json.Marshal(run)
 	if err != nil {
@@ -153,7 +154,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if input.Candidate {
 		claimant = work.Record.Claimant
 	}
-	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(run.Execution, run.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "sl-submit-" + input.RequestID, Input: raw}}
+	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(run.Execution, run.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: id(), Input: raw}}
 	if err := s.Store.ReserveRunnerCandidate(ctx, work, c, input.Candidate); err != nil {
 		return runnerbridge.Candidate{}, err
 	}

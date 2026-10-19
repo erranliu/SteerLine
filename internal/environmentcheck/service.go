@@ -5,6 +5,8 @@ package environmentcheck
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,6 +51,7 @@ type Runner interface {
 	InspectEnvironmentCheck(context.Context, string, string) (runnerclient.CheckInspection, error)
 }
 type Service struct {
+	StateDir     string
 	Project      string
 	Selection    runnerclient.Selection
 	Store        Store
@@ -82,6 +85,58 @@ func (s *Service) Catalog(ctx context.Context) Catalog {
 	return result
 }
 func (s *Service) List(ctx context.Context) ([]Record, error) { return s.Store.Checks(ctx, s.Project) }
+
+// VerifyBindings reads original checks/unknown requests before project admission.
+// It neither dispatches inputs nor rewrites the saved operations or snapshots.
+func (s *Service) VerifyBindings(ctx context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.Store.Checks(ctx, s.Project)
+	if err != nil {
+		return err
+	}
+	for _, r := range rows {
+		if r.Project != s.Project || r.StateDir != s.StateDir || len(r.Operations) == 0 {
+			return errors.New("original environment check binding is incomplete or differs")
+		}
+		if r.CheckID == "" && r.Operations[0].Status == "rejected" {
+			continue
+		}
+		runner, err := s.Open(ctx, runnerclient.Selection(r.Selection))
+		if err != nil {
+			return err
+		}
+		if r.CheckID != "" {
+			view, err := runner.InspectEnvironmentCheck(ctx, "check-id", r.CheckID)
+			if err != nil {
+				return err
+			}
+			if err = applyInspection(&r, view, ""); err != nil {
+				return err
+			}
+		} else if r.Operations[0].Status != "outcome_unknown" {
+			return errors.New("original environment check has no bound resource or unknown request")
+		}
+		for _, op := range r.Operations {
+			if op.Status != "outcome_unknown" {
+				continue
+			}
+			view, err := runner.InspectEnvironmentCheck(ctx, "request-id", op.Request.RequestID)
+			var missing *runnerclient.Failure
+			if errors.As(err, &missing) && !missing.Unknown && missing.Code == "request_not_found" {
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			if err = applyInspection(&r, view, op.RequestID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Service) Detail(ctx context.Context, id string) (Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -128,6 +183,9 @@ func (s *Service) Submit(ctx context.Context, c Command) (Record, error) {
 	if err != nil {
 		return r, err
 	}
+	if r.Project != s.Project || r.StateDir != s.StateDir {
+		return r, failure("invalid_request", "check belongs to another project or Runner directory")
+	}
 	if r.Report == nil || r.CheckID == "" || r.Report.Revision != c.ExpectedRevision || !r.Report.CanStop() {
 		return r, failure("stale_revision", "refresh the original check before explicitly requesting stop/cleanup")
 	}
@@ -147,7 +205,7 @@ func (s *Service) Submit(ctx context.Context, c Command) (Record, error) {
 		return r, failure("runner_unavailable", diagnostic(err))
 	}
 	body, _ := json.Marshal(runnerclient.CheckStop{CheckID: r.CheckID, ExpectedRevision: c.ExpectedRevision})
-	op := Operation{RequestID: c.RequestID, Action: c.Action, Original: c.Original, Request: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: c.RequestID, Input: body}, Status: "outcome_unknown"}
+	op := Operation{RequestID: c.RequestID, Action: c.Action, Original: c.Original, Request: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: newRequestID(), Input: body}, Status: "outcome_unknown"}
 	r.Operations = append(r.Operations, op)
 	if err = s.save(ctx, &r); err != nil {
 		return r, err
@@ -227,7 +285,7 @@ func (s *Service) start(ctx context.Context, c Command) (Record, error) {
 	}
 
 	body, _ := json.Marshal(input)
-	record := Record{ID: c.RequestID, Project: s.Project, Selection: runnerstate.EnvironmentRunnerPin(s.Selection), ResourceDigest: cat.Capabilities.ResourceDigest, Input: input, Capabilities: runnercontract.CheckCapabilities(*caps), CreatedAt: time.Now().UTC(), Operations: []Operation{{RequestID: c.RequestID, Action: c.Action, Original: c.Original, Request: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: c.RequestID, Input: body}, Status: "outcome_unknown"}}}
+	record := Record{StateDir: s.StateDir, ID: c.RequestID, Project: s.Project, Selection: runnerstate.EnvironmentRunnerPin(s.Selection), ResourceDigest: cat.Capabilities.ResourceDigest, Input: input, Capabilities: runnercontract.CheckCapabilities(*caps), CreatedAt: time.Now().UTC(), Operations: []Operation{{RequestID: c.RequestID, Action: c.Action, Original: c.Original, Request: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: newRequestID(), Input: body}, Status: "outcome_unknown"}}}
 	if err = s.save(ctx, &record); err != nil {
 		return record, err
 	}
@@ -276,7 +334,17 @@ func (s *Service) received(ctx context.Context, r Record, receipt runnerclient.C
 // A request read reconciles exactly that original intent. A detail read resolves
 // the one unknown operation, then uses the bound check for subsequent snapshots.
 // Accepted historical commands are not dependencies of unrelated stop recovery.
+func newRequestID() string {
+	var v [16]byte
+	if _, err := rand.Read(v[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(v[:])
+}
 func (s *Service) refresh(ctx context.Context, r Record, requestID string) (Record, error) {
+	if r.StateDir != s.StateDir {
+		return r, errors.New("environment check belongs to another Runner state directory")
+	}
 	if requestID == "" {
 		for _, op := range r.Operations {
 			if op.Status == "outcome_unknown" {
@@ -299,7 +367,12 @@ func (s *Service) refresh(ctx context.Context, r Record, requestID string) (Reco
 	if err == nil {
 		selector, id := "check-id", r.CheckID
 		if requestID != "" {
-			selector, id = "request-id", requestID
+			for _, op := range r.Operations {
+				if op.RequestID == requestID {
+					selector, id = "request-id", op.Request.RequestID
+					break
+				}
+			}
 		}
 		var inspection runnerclient.CheckInspection
 		inspection, err = runner.InspectEnvironmentCheck(ctx, selector, id)
@@ -344,7 +417,7 @@ func applyInspection(r *Record, inspection runnerclient.CheckInspection, request
 		if op.Action == StopAction {
 			want = "environment-check stop"
 		}
-		if cmd == nil || cmd.RequestID != requestID || cmd.Command != want || cmd.CommandID == "" || op.CommandID != "" && op.CommandID != cmd.CommandID || r.CheckID != "" && cmd.CheckID != "" && r.CheckID != cmd.CheckID {
+		if cmd == nil || cmd.RequestID != op.Request.RequestID || cmd.Command != want || cmd.CommandID == "" || op.CommandID != "" && op.CommandID != cmd.CommandID || r.CheckID != "" && cmd.CheckID != "" && r.CheckID != cmd.CheckID {
 			return errors.New("original check command identity changed")
 		}
 		if cmd.ReceiptStatus == "rejected" {

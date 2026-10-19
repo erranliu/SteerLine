@@ -6,11 +6,16 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 // The subprocess exercises Client.Tasks through the real CLI transport without
 // creating a project, database, service or Runner instance.
 func TestMain(m *testing.M) {
+	if protocol.RunRunnerServiceFixture() {
+		return
+	}
 	if os.Getenv("GO_TEST_TASK_PAGE_FIXTURE") == "1" {
 		if len(os.Args) != 5 || os.Args[1] != "task" || os.Args[2] != "list" || os.Args[3] != "-config" || os.Args[4] != "fixture-config" {
 			os.Exit(2)

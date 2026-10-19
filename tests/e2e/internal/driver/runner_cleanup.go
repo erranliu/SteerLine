@@ -50,8 +50,12 @@ func CleanupRunner(ctx context.Context, executionConfig, stateDir string, candid
 	for _, c := range candidates {
 		needsInspection = needsInspection || c.RunID != "" && (c.Projection == nil || c.Projection.StopStatus != "stopped") || c.SubmitState == "unknown"
 	}
+	if current, err := cli.ServiceStatus(ctx); err == nil && current.Status == "not_running" && current.LastShutdown != nil && current.LastShutdown.ResourcesSettled {
+		return cli.VerifyServiceSettlement(ctx, current.LastShutdown.InstanceID, current.LastShutdown.RequestID)
+	}
 	if !needsInspection {
-		return nil
+		_, err := cli.VerifyStopped(ctx)
+		return err
 	}
 	service, err := cli.StartService(ctx, version)
 	if err != nil {
@@ -133,7 +137,11 @@ func CleanupRunner(ctx context.Context, executionConfig, stateDir string, candid
 			}
 		}
 	}
-	return cli.StopService(ctx, service.InstanceID, "fixture-close-"+service.InstanceID)
+	requestID := "fixture-close-" + service.InstanceID
+	if err := cli.StopService(ctx, service.InstanceID, requestID); err != nil {
+		return err
+	}
+	return cli.VerifyServiceSettlement(ctx, service.InstanceID, requestID)
 }
 
 // CleanupOwnedRunner runs in the same environment as the original project.
@@ -166,7 +174,7 @@ func MainRunnerCleanup(args []string) error {
 	if err != nil {
 		return err
 	}
-	err = CleanupRunner(ctx, app.GlobalExecutionConfigPath(), runnerstatepath.Directory(hc.RunDir), candidates)
+	err = CleanupRunner(ctx, app.GlobalExecutionConfigPath(), runnerstatepath.Directory(app.HomeDir()), candidates)
 	if encodeErr := json.NewEncoder(os.Stdout).Encode(map[string]any{"confirmed": err == nil, "error": fmt.Sprint(err)}); encodeErr != nil {
 		return encodeErr
 	}
