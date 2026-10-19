@@ -8,13 +8,15 @@ import (
 )
 
 type Action struct {
-	ObserveOnly  bool                   `json:"observe_only,omitempty"`
-	Command      string                 `json:"command"`
-	Request      runnercontract.Request `json:"request"`
-	State        string                 `json:"state"`
-	CommandID    string                 `json:"command_id,omitempty"`
-	ErrorCode    string                 `json:"error_code,omitempty"`
-	ActionStatus string                 `json:"action_status,omitempty"`
+	CallerRequestID     string                 `json:"caller_request_id,omitempty"`
+	CallerRequestDigest string                 `json:"caller_request_digest,omitempty"`
+	ObserveOnly         bool                   `json:"observe_only,omitempty"`
+	Command             string                 `json:"command"`
+	Request             runnercontract.Request `json:"request"`
+	State               string                 `json:"state"`
+	CommandID           string                 `json:"command_id,omitempty"`
+	ErrorCode           string                 `json:"error_code,omitempty"`
+	ActionStatus        string                 `json:"action_status,omitempty"`
 }
 
 type Candidate struct {

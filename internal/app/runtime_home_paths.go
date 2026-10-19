@@ -42,7 +42,7 @@ func validateRuntimeHomePaths(config Config) error {
 			return fmt.Errorf("%s must resolve inside STEERLINE_HOME (%s)", entry.name, home)
 		}
 	}
-	if err := runnerstatepath.Validate(config.RunDir); err != nil {
+	if err := runnerstatepath.Validate(config.runnerHome()); err != nil {
 		return err
 	}
 	return pathguard.RejectSharedSQLiteFiles(filepath.Join(config.RunDir, "steerline.db"))

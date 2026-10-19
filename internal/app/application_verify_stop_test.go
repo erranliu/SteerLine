@@ -48,14 +48,15 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 	id := contract.Identity{Protocol: contract.Protocol, HomeID: homeID, InstanceID: localservice.Token(), Process: process, Address: "127.0.0.1:18742", Ready: true}
 	backend, _ := components(HomeDir())
 	require(t, localservice.Write(backend.dir, "instance.json", id))
-	p.ResourcesSettled = false
+	shared := d.runner.result()
+	shared.ResourcesSettled = false
 	p.Diagnostic = "Runner service stopped; original native resource settlement remains unverified"
-	original := contract.Shutdown{Version: 1, Identity: id, Projects: []contract.ProjectShutdown{p}, Clean: false, Diagnostic: p.ConfigID + ": " + p.Diagnostic}
+	original := contract.Shutdown{Version: 2, Runner: shared, Identity: id, Projects: []contract.ProjectShutdown{p}, Clean: false, Diagnostic: p.ConfigID + ": " + p.Diagnostic}
 	require(t, localservice.Write(backend.dir, "shutdown.json", original))
 	if err := StopAll(ctx); err == nil {
 		t.Fatal("original dirty receipt unexpectedly passed ordinary stop")
 	}
-	paths := []string{filepath.Join(backend.dir, "shutdown.json"), filepath.Join(c.RunDir, "steerline.db"), filepath.Join(runnerstatepath.Directory(c.RunDir), "idle-fixture.json"), GlobalExecutionConfigPath()}
+	paths := []string{filepath.Join(backend.dir, "shutdown.json"), filepath.Join(c.RunDir, "steerline.db"), filepath.Join(runnerstatepath.Directory(c.runnerHome()), "idle-fixture.json"), GlobalExecutionConfigPath()}
 	before := map[string][]byte{}
 	for _, path := range paths {
 		before[path], err = os.ReadFile(path)
@@ -65,7 +66,7 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 	require(t, err)
 	result, err := VerifyApplicationStopped(ctx, exe)
 	require(t, err)
-	if result.OriginalHost != id || len(result.VerifierSHA256) != 64 || len(result.Projects) != 1 || !result.Projects[0].Runner.ResourcesSettled {
+	if result.OriginalHost != id || len(result.VerifierSHA256) != 64 || len(result.Projects) != 1 || !result.Runner.ResourcesSettled {
 		t.Fatal(result)
 	}
 	for _, path := range paths {
@@ -97,7 +98,7 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 
 func TestDeploymentCandidateVerificationKeepsOriginalBinding(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "runner")
-	proof := runnerclient.StoppedVerification{StateDir: dir, ResourcesSettled: true, Runs: []runnerclient.StoppedRun{{RunID: "original", InputDigest: strings.Repeat("a", 64), ResourcesSettled: true}}}
+	proof := runnerclient.StoppedVerification{StateDir: dir, ResourcesSettled: true, Runs: []runnerclient.StoppedRun{{RunID: "original", InputDigest: strings.Repeat("a", 64)}}}
 	c := runnerstate.Candidate{StateDir: dir, RunID: "original", InputDigest: proof.Runs[0].InputDigest}
 	require(t, matchStoppedCandidates([]runnerstate.Candidate{c}, proof))
 	for _, alter := range []func(*runnerstate.Candidate){

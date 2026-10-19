@@ -80,5 +80,13 @@
     "package": "./tests/e2e/suites/runtime",
     "test": "TestDualHomeIsolation",
     "env": "controlled"
+  },
+  {
+    "id": "runtime.shared-runner-projects",
+    "level": "L3",
+    "suite": "runtime",
+    "package": "./tests/e2e/suites/runtime",
+    "test": "TestSharedRunnerProjects",
+    "env": "controlled"
   }
 ]

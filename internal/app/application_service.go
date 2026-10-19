@@ -33,7 +33,7 @@ func ServeApplication(ctx context.Context) error {
 	}
 	directory.BeginStop()
 	projectErr := directory.Close()
-	result := contract.Shutdown{Version: 1, Identity: endpoint.Identity, Projects: directory.ShutdownResults(), Clean: projectErr == nil}
+	result := contract.Shutdown{Version: 2, Runner: directory.runner.result(), Identity: endpoint.Identity, Projects: directory.ShutdownResults(), Clean: projectErr == nil}
 	if projectErr != nil {
 		result.Diagnostic = boundedDiagnostic(projectErr.Error(), 4096)
 	}
@@ -41,9 +41,12 @@ func ServeApplication(ctx context.Context) error {
 		result.Projects[i].Diagnostic = boundedDiagnostic(result.Projects[i].Diagnostic, 128)
 	}
 	for _, project := range result.Projects {
-		if !project.LocalClosed || !project.LocksReleased || !project.ResourcesSettled {
+		if !project.LocalClosed || !project.LocksReleased {
 			result.Clean = false
 		}
+	}
+	if !result.Runner.Settled() {
+		result.Clean = false
 	}
 	if err := localservice.Write(endpoint.Dir, "shutdown.json", result); err != nil {
 		return err

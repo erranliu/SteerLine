@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+应用级共享 SteerRunner 服务（2026-10-19，已实施）：[Spec](shared-runner-service.spec.md) · [Plan](shared-runner-service.plan.md) · [专属验收](../acceptance/shared-runner-service.md)。每个 SteerLine home 共用一个 Runner，服务所有权上移到应用；覆盖跨项目请求身份、环境检查、停机证明、换代与整包 reset，仅修改 SteerLine。固定 L1、定向反例、两个 L3 及新包真实空闲拓扑验证通过，人工体验待验；不修改 roadmap，闪窗治理后置。
+
 SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，已授权实施）：[Spec](runner-collaboration.spec.md) · [Plan](runner-collaboration.plan.md) · [专属验收](../acceptance/runner-collaboration.md)。多 workflow、分层冻结、构建 pin 及产品投影已接入；U1 验证旧运行时拒绝替代实例、显式重启后接纳及旧停止隔离。实际固定构建、真实链结果和人工待验以 acceptance 为准；不部署安装环境或修改 roadmap。
 
 旧执行记录与空壳字段清理（2026-10-17，普通开发）：[Plan](../plans/runtime-shell-cleanup.plan.md) · [专属验收](../acceptance/runtime-shell-cleanup.md)。删除无消费者的旧记录、内部字段及辅助函数，校准当前文档；保留现有读取链和模型归属，不改 roadmap。

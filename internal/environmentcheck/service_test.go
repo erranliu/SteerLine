@@ -18,6 +18,8 @@ import (
 type runner struct {
 	f                         checkfixture.Fixture
 	starts, stops, admissions int
+	startID                   string
+	stopID                    string
 	inspected                 []string
 	callErr, inspectErr       error
 	inspectErrors             map[string]error
@@ -29,6 +31,7 @@ func (r *runner) EnvironmentCheckCatalog(context.Context) (*runnerclient.Catalog
 }
 func (r *runner) StartEnvironmentCheck(_ context.Context, q runnerclient.Request) (runnerclient.CheckReceipt, error) {
 	r.starts++
+	r.startID = q.RequestID
 	if r.before != nil {
 		r.before(q)
 	}
@@ -36,6 +39,7 @@ func (r *runner) StartEnvironmentCheck(_ context.Context, q runnerclient.Request
 }
 func (r *runner) StopEnvironmentCheck(_ context.Context, q runnerclient.Request) (runnerclient.CheckReceipt, error) {
 	r.stops++
+	r.stopID = q.RequestID
 	if r.before != nil {
 		r.before(q)
 	}
@@ -60,7 +64,7 @@ func (r *runner) InspectEnvironmentCheck(_ context.Context, selector, id string)
 		return v, nil
 	}
 	v.Command.RequestID = id
-	if id != strings.Repeat("1", 32) {
+	if id != r.startID {
 		v.Command.Command = "environment-check stop"
 		v.Command.CommandID = "stop-command"
 	}
@@ -99,8 +103,8 @@ func TestEnvironmentCheckDurableUnknownAndRestart(t *testing.T) {
 	q := start()
 	r.callErr = &runnerclient.Failure{Code: "request_outcome_unknown", Unknown: true, Exit: 6}
 	r.before = func(request runnerclient.Request) {
-		saved, err := store.CheckRequest(ctx, s.Project, request.RequestID)
-		if err != nil || saved.Operations[0].Status != "outcome_unknown" || request.RequestID != q.RequestID {
+		saved, err := store.CheckRequest(ctx, s.Project, q.RequestID)
+		if err != nil || saved.Operations[0].Status != "outcome_unknown" || request.RequestID != saved.Operations[0].Request.RequestID || request.RequestID == q.RequestID {
 			t.Fatal("mutation preceded durable intent", saved, err)
 		}
 	}
@@ -219,7 +223,7 @@ func TestEnvironmentCheckStopIdentityAndConcurrency(t *testing.T) {
 	r.f.Inspection.Check.Revision++
 	rec, _ := s.Detail(ctx, start().RequestID)
 	r.before = func(q runnerclient.Request) {
-		saved, err := store.CheckRequest(ctx, s.Project, q.RequestID)
+		saved, err := store.CheckRequest(ctx, s.Project, stop(1).RequestID)
 		if err != nil || saved.Operations[len(saved.Operations)-1].Status != "outcome_unknown" {
 			t.Fatal("stop not saved", err)
 		}
@@ -236,7 +240,7 @@ func TestEnvironmentCheckStopIdentityAndConcurrency(t *testing.T) {
 	}
 	r.f.Inspection.Check.Revision++
 	_, err = s.Request(ctx, stop(1).RequestID)
-	if err != nil || r.inspected[len(r.inspected)-1] != "request-id:"+stop(1).RequestID {
+	if err != nil || r.inspected[len(r.inspected)-1] != "request-id:"+r.stopID {
 		t.Fatal("stop queried as start", err, r.inspected)
 	}
 	if _, err = s.Submit(ctx, stop(rec.Report.Revision)); err != nil || r.stops != 1 {
@@ -287,13 +291,13 @@ func TestEnvironmentCheckStopRecoveryDoesNotDependOnStartHistory(t *testing.T) {
 	if _, err = s.Submit(ctx, stop(current.Report.Revision)); err != nil {
 		t.Fatal(err)
 	}
-	r.inspectErrors = map[string]error{start().RequestID: errors.New("old start receipt unavailable")}
+	r.inspectErrors = map[string]error{r.startID: errors.New("old start receipt unavailable")}
 	r.f.Inspection.Check.Revision++
 	r.f.Inspection.Check.CleanupStatus = "completed"
 	r.f.Inspection.Check.AllowedActions = []string{}
 	r.inspected = nil
 	recovered, err := s.Request(ctx, stop(1).RequestID)
-	if err != nil || recovered.Diagnostic != "" || recovered.Operations[1].Status != "applied" || recovered.Report.CleanupStatus != "completed" || len(r.inspected) != 1 || r.inspected[0] != "request-id:"+stop(1).RequestID {
+	if err != nil || recovered.Diagnostic != "" || recovered.Operations[1].Status != "applied" || recovered.Report.CleanupStatus != "completed" || len(r.inspected) != 1 || r.inspected[0] != "request-id:"+r.stopID {
 		t.Fatal("old start blocked original stop recovery", recovered, err, r.inspected)
 	}
 	r.inspected = nil
@@ -325,7 +329,7 @@ func TestEnvironmentCheckUnknownDetailQueriesOriginalRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	row, err := s.Detail(ctx, start().RequestID)
-	if err != nil || row.CheckID == "" || len(r.inspected) != 1 || r.inspected[0] != "request-id:"+start().RequestID {
+	if err != nil || row.CheckID == "" || len(r.inspected) != 1 || r.inspected[0] != "request-id:"+r.startID {
 		t.Fatal(row, err, r.inspected)
 	}
 	_, err = s.Detail(ctx, row.ID)

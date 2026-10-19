@@ -61,8 +61,12 @@ func (d *debugRelease) reset(check bool) error {
 		}
 		locks = append(locks, lock)
 	}
+	proof, err := d.verifySharedRunnerReset()
+	if err != nil {
+		return err
+	}
 	for _, scope := range scopes {
-		if err := scope.resetState(true); err != nil {
+		if err := scope.resetState(true, proof); err != nil {
 			return err
 		}
 	}
@@ -70,15 +74,15 @@ func (d *debugRelease) reset(check bool) error {
 		return nil
 	}
 	for _, scope := range scopes {
-		if err := scope.resetState(false); err != nil {
+		if err := scope.resetState(false, proof); err != nil {
 			return err
 		}
 	}
 	return nil
 }
-func (d *debugRelease) resetState(check bool) error {
+func (d *debugRelease) resetState(check bool, proof runnerclient.StoppedVerification) error {
 	runDir := d.stateDir()
-	if err := runnerstatepath.Validate(runDir); err != nil {
+	if err := runnerstatepath.Validate(d.home); err != nil {
 		return err
 	}
 	dbPath := filepath.Join(runDir, "steerline.db")
@@ -119,26 +123,14 @@ func (d *debugRelease) resetState(check bool) error {
 	if count != 1 || !strings.EqualFold(filepath.Clean(project), filepath.Join(d.repo, ".git")) {
 		return errors.New("reset project does not belong to this debug package")
 	}
-	rawConfig, err := os.ReadFile(filepath.Join(d.home, "execution.json"))
-	if err != nil {
-		return err
+	stateDir := runnerstatepath.Directory(d.home)
+	byRun := map[string]runnerclient.StoppedRun{}
+	for _, r := range proof.Runs {
+		byRun[r.RunID] = r
 	}
-	var selected struct {
-		Runner runnerclient.Selection `json:"runner"`
-	}
-	if err = json.Unmarshal(rawConfig, &selected); err != nil {
-		return err
-	}
-	cli, _, err := selected.Runner.Open(ctx, runnerstatepath.Directory(runDir), 20*time.Second)
-	if err != nil {
-		return err
-	}
-	info, err := cli.ServiceStatus(ctx)
-	if err != nil {
-		return err
-	}
-	if info.Status != "not_running" {
-		return errors.New("Runner service must be proven stopped before reset")
+	byCheck := map[string]runnerclient.StoppedCheck{}
+	for _, c := range proof.Checks {
+		byCheck[c.CheckID] = c
 	}
 	checks, err := tx.QueryContext(ctx, "SELECT payload FROM environment_checks WHERE project_identity=?", project)
 	if err != nil {
@@ -153,7 +145,7 @@ func (d *debugRelease) resetState(check bool) error {
 		if err = json.Unmarshal(raw, &record); err != nil {
 			break
 		}
-		err = environmentCheckResetSafety(record)
+		err = environmentCheckResetSafety(record, stateDir, byCheck)
 		if err != nil {
 			break
 		}
@@ -178,11 +170,11 @@ func (d *debugRelease) resetState(check bool) error {
 		if err = json.Unmarshal(raw, &c); err != nil {
 			break
 		}
-		if !strings.EqualFold(filepath.Clean(c.StateDir), filepath.Clean(cli.StateDir)) {
+		if !strings.EqualFold(filepath.Clean(c.StateDir), filepath.Clean(stateDir)) {
 			err = errors.New("candidate Runner directory differs from this debug package")
 			break
 		}
-		if c.SubmitState == "unknown" || c.RunID != "" && (c.Projection == nil || c.Projection.StopStatus != "stopped") {
+		if c.RunID == "" && c.SubmitState != "rejected" && c.SubmitState != "cancelled" || c.RunID != "" && (byRun[c.RunID].RunID == "" || c.InputDigest == "" || byRun[c.RunID].InputDigest != c.InputDigest) {
 			err = errors.New("original Runner resource is not proven stopped; preserve its recovery state")
 			break
 		}
@@ -248,9 +240,6 @@ func (d *debugRelease) resetState(check bool) error {
 	}
 	// The short Runner namespace is outside the package, but bound to this
 	// package's complete run directory. Validate it before changing the DB.
-	if err := validateStoppedRunnerReset(runDir); err != nil {
-		return err
-	}
 	if check {
 		return nil
 	}
@@ -313,38 +302,25 @@ func (d *debugRelease) resetState(check bool) error {
 			return err
 		}
 	}
-	if err := runnerstatepath.RemoveStopped(runDir); err != nil {
-		return err
-	}
 	fmt.Println("DONE: SteerlineTest state reset without backup")
 	return nil
 }
 
-func validateStoppedRunnerReset(runDir string) error {
-	root := runnerstatepath.Directory(runDir)
-	return filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		if err != nil {
-			return err
-		}
-		if entry.Type()&os.ModeSymlink != 0 || !pathWithin(root, path) {
-			return fmt.Errorf("linked Runner reset path: %s", path)
-		}
-		if !entry.IsDir() {
-			return debugPlainFile(path)
-		}
-		return nil
-	})
-}
-
-func environmentCheckResetSafety(record runnerstate.EnvironmentCheckRecord) error {
+func environmentCheckResetSafety(record runnerstate.EnvironmentCheckRecord, stateDir string, byCheck map[string]runnerclient.StoppedCheck) error {
+	if !strings.EqualFold(filepath.Clean(record.StateDir), filepath.Clean(stateDir)) {
+		return errors.New("environment check belongs to another Runner directory")
+	}
 	if len(record.Operations) == 0 {
 		return errors.New("environment check intent is incomplete")
 	}
-	if record.Operations[0].Status != "rejected" && (record.Report == nil || record.Report.CleanupStatus != "completed") {
-		return errors.New("environment check resources are not settled; preserve recovery state")
+	if record.CheckID == "" && record.Operations[0].Status != "rejected" {
+		return errors.New("environment check submission is unverified; preserve original request")
+	}
+	if record.CheckID != "" {
+		v, ok := byCheck[record.CheckID]
+		if !ok || !v.ResourcesSettled || record.Report == nil || record.Report.InputDigest == "" || record.Report.InputDigest != v.InputDigest {
+			return errors.New("original environment check resource proof is absent or differs")
+		}
 	}
 	for _, op := range record.Operations {
 		if op.Status == "outcome_unknown" {
@@ -352,4 +328,36 @@ func environmentCheckResetSafety(record runnerstate.EnvironmentCheckRecord) erro
 		}
 	}
 	return nil
+}
+
+// Verify the whole service before any project transaction, even if no task DB exists.
+func (d *debugRelease) verifySharedRunnerReset() (runnerclient.StoppedVerification, error) {
+	var proof runnerclient.StoppedVerification
+	raw, err := os.ReadFile(filepath.Join(d.home, "execution.json"))
+	if err != nil {
+		return proof, err
+	}
+	var selected struct {
+		Runner runnerclient.Selection `json:"runner"`
+	}
+	if err = json.Unmarshal(raw, &selected); err != nil {
+		return proof, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cli, _, err := selected.Runner.Open(ctx, runnerstatepath.Directory(d.home), 20*time.Second)
+	if err != nil {
+		return proof, err
+	}
+	info, err := cli.ServiceStatus(ctx)
+	if err != nil {
+		return proof, err
+	}
+	if info.Status != "not_running" {
+		return proof, errors.New("shared Runner must be stopped before resetting any project")
+	}
+	if _, err := os.Stat(cli.StateDir); os.IsNotExist(err) {
+		return runnerclient.StoppedVerification{StateDir: cli.StateDir, ResourcesSettled: true, Runs: []runnerclient.StoppedRun{}, Checks: []runnerclient.StoppedCheck{}}, nil
+	}
+	return cli.VerifyStopped(ctx)
 }

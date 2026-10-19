@@ -284,6 +284,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	service.ResolveBase = func(context.Context, taskmodel.FixedWork, bool) (string, error) { return base, nil }
 	candidate, err := service.Start(ctx, taskrunner.Start{RequestID: requestID, TaskID: "1", TaskVersion: 1, GraphRevision: graph.Authority.GraphRevision, Explicit: true})
 	require(t, err)
+	require(t, os.WriteFile(filepath.Join(r.runner.client.StateDir, "idle-run-fixture.json"), mustJSON(map[string]any{"run": public, "command": map[string]any{"request_id": candidate.Submit.RequestID, "command_id": "frozen-submit-command", "command": "submit", "run_id": public.RunID, "receipt_status": "accepted", "action_status": "completed"}}), 0600))
 	// Observe the static accepted public fact via the normal bridge.
 	require(t, service.Bridge.Step(ctx, c.Identity(), candidate.ID))
 	candidate, err = r.store.Candidate(ctx, c.Identity(), candidate.ID)

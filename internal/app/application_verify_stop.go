@@ -16,21 +16,22 @@ import (
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 type ApplicationStopVerification struct {
-	OriginalHost   contract.Identity         `json:"original_host"`
-	VerifierSHA256 string                    `json:"verifier_sha256"`
-	VerifiedAt     time.Time                 `json:"verified_at"`
-	Projects       []ProjectStopVerification `json:"projects"`
+	OriginalHost   contract.Identity                `json:"original_host"`
+	VerifierSHA256 string                           `json:"verifier_sha256"`
+	VerifiedAt     time.Time                        `json:"verified_at"`
+	Projects       []ProjectStopVerification        `json:"projects"`
+	Runner         runnerclient.StoppedVerification `json:"runner"`
 }
 type ProjectStopVerification struct {
-	ConfigID   string                           `json:"config_id"`
-	ProjectID  string                           `json:"project_id"`
-	InstanceID string                           `json:"instance_id"`
-	Runner     runnerclient.StoppedVerification `json:"runner"`
+	ConfigID   string `json:"config_id"`
+	ProjectID  string `json:"project_id"`
+	InstanceID string `json:"instance_id"`
 }
 
 // VerifyApplicationStopped produces fresh evidence without changing the
@@ -82,6 +83,24 @@ func VerifyApplicationStopped(ctx context.Context, runnerExecutable string) (App
 		byConfig[p.ConfigID] = p
 	}
 	result.OriginalHost = *b.Identity
+	if err := runnerstatepath.Validate(HomeDir()); err != nil {
+		return result, err
+	}
+	if original.Runner.StateDir != runnerstatepath.Directory(HomeDir()) {
+		return result, errors.New("original shared Runner directory differs")
+	}
+	var pin runnercontract.BuildPin
+	if err = localservice.ReadPrivateJSON(filepath.Join(backend.dir, "runner-build.json"), &pin, 64<<10); err != nil {
+		return result, err
+	}
+	if pin.StateDir != original.Runner.StateDir || pin.SHA256 != original.Runner.ExecutableSHA256 || pin.Version != original.Runner.Version || pin.ResourceDigest != original.Runner.ResourceDigest {
+		return result, errors.New("original shared Runner build differs from its immutable home binding")
+	}
+	cli := runnerclient.Client{Executable: runnerExecutable, SHA256: runnerHash, StateDir: original.Runner.StateDir, Timeout: 30 * time.Second}
+	result.Runner, err = cli.VerifyStopped(ctx)
+	if err != nil {
+		return result, err
+	}
 	for _, entry := range d.entries {
 		p, ok := byConfig[entry.view.ConfigID]
 		if !ok {
@@ -91,7 +110,7 @@ func VerifyApplicationStopped(ctx context.Context, runnerExecutable string) (App
 		if err != nil {
 			return result, err
 		}
-		proof, err := verifyProjectStopped(ctx, c, p, *b.Identity, runnerExecutable, runnerHash)
+		proof, err := verifyProjectStopped(ctx, c, p, *b.Identity, result.Runner)
 		if err != nil {
 			return result, fmt.Errorf("%s: %w", p.ConfigID, err)
 		}
@@ -102,7 +121,7 @@ func VerifyApplicationStopped(ctx context.Context, runnerExecutable string) (App
 }
 
 func recheckableShutdown(r contract.Shutdown, id contract.Identity) error {
-	if r.Version != 1 || r.Identity != id || r.Projects == nil || len(r.Projects) > 512 {
+	if r.Version != 2 || r.Identity != id || r.Runner == nil || r.Projects == nil || len(r.Projects) > 512 {
 		return errors.New("original host shutdown identity or membership is unverified")
 	}
 	seen := map[string]bool{}
@@ -115,7 +134,7 @@ func recheckableShutdown(r contract.Shutdown, id contract.Identity) error {
 	return nil
 }
 
-func verifyProjectStopped(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, exe, hash string) (ProjectStopVerification, error) {
+func verifyProjectStopped(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification) (ProjectStopVerification, error) {
 	proof := ProjectStopVerification{ConfigID: p.ConfigID, ProjectID: p.ProjectID, InstanceID: p.InstanceID}
 	reader, err := OpenNativeTaskReader(ctx, &c)
 	if err != nil {
@@ -142,18 +161,44 @@ func verifyProjectStopped(ctx context.Context, c Config, p contract.ProjectShutd
 	if err = verifyStoppedCheckpoint(snapshot.Checkpoint, c.configDigest, p, id); err != nil {
 		return proof, err
 	}
-	if err := runnerstatepath.Validate(c.RunDir); err != nil {
+	if canonicalConfigPath(runnerProof.StateDir) != canonicalConfigPath(runnerstatepath.Directory(c.runnerHome())) {
+		return proof, errors.New("shared Runner directory changed")
+	}
+	if err = matchStoppedCandidates(snapshot.Candidates, runnerProof); err != nil {
 		return proof, err
 	}
-	cli := runnerclient.Client{Executable: exe, SHA256: hash, StateDir: runnerstatepath.Directory(c.RunDir), Timeout: 30 * time.Second}
-	proof.Runner, err = cli.VerifyStopped(ctx)
+	checks, err := reader.Checks(ctx, c.Identity())
 	if err != nil {
 		return proof, err
 	}
-	if err = matchStoppedCandidates(snapshot.Candidates, proof.Runner); err != nil {
+	if err = matchStoppedChecks(checks, runnerProof); err != nil {
 		return proof, err
 	}
 	return proof, nil
+}
+
+func matchStoppedChecks(checks []runnerstate.EnvironmentCheckRecord, runnerProof runnerclient.StoppedVerification) error {
+	byCheck := map[string]runnerclient.StoppedCheck{}
+	for _, v := range runnerProof.Checks {
+		byCheck[v.CheckID] = v
+	}
+	for _, check := range checks {
+		if canonicalConfigPath(check.StateDir) != canonicalConfigPath(runnerProof.StateDir) {
+			return errors.New("check belongs to another Runner directory")
+		}
+		if check.CheckID == "" {
+			if len(check.Operations) == 0 || check.Operations[0].Status != "rejected" {
+				return errors.New("original check submission remains unverified")
+			}
+			continue
+		}
+		v, ok := byCheck[check.CheckID]
+		if !ok || check.Report == nil || check.Report.InputDigest == "" || v.InputDigest != check.Report.InputDigest {
+			return errors.New("original check resource proof is absent or differs")
+		}
+	}
+
+	return nil
 }
 
 func verifyStoppedCheckpoint(cp *hostcontract.ServiceCheckpoint, digest string, p contract.ProjectShutdown, id contract.Identity) error {
@@ -177,10 +222,13 @@ func matchStoppedCandidates(candidates []runnerstate.Candidate, proof runnerclie
 			return errors.New("candidate belongs to another Runner state directory")
 		}
 		if c.RunID == "" {
+			if c.SubmitState != "rejected" && c.SubmitState != "cancelled" {
+				return errors.New("original candidate submission remains unverified")
+			}
 			continue
 		}
 		r, ok := runs[c.RunID]
-		if !ok || c.InputDigest != "" && c.InputDigest != r.InputDigest {
+		if !ok || c.InputDigest == "" || c.InputDigest != r.InputDigest {
 			return errors.New("original candidate Run is absent or differs from verified Runner evidence")
 		}
 	}

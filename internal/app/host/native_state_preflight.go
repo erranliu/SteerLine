@@ -49,8 +49,10 @@ func preflightNativeStatePath(c Config) error {
 			}
 		}
 	}
-	if err := runnerstatepath.Validate(c.RunDir); err != nil {
-		return nativeErr("authority_mismatch", err.Error())
+	if c.RuntimeHome != "" {
+		if err := runnerstatepath.Validate(c.RuntimeHome); err != nil {
+			return nativeErr("authority_mismatch", err.Error())
+		}
 	}
 	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
 		return nativeErr("authority_mismatch", err.Error())

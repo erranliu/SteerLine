@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
@@ -15,6 +16,13 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
+
+func (c Config) runnerHome() string {
+	if c.executionPath != "" {
+		return filepath.Dir(c.executionPath)
+	}
+	return HomeDir()
+}
 
 func (c Config) runnerPublication() runnerclient.Publication {
 	settings := map[string]any{"base_url": c.PR.BaseURL}
@@ -39,13 +47,13 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 }
 
 func (c Config) runnerClient(ctx context.Context) (runnerclient.Client, error) {
-	if err := runnerstatepath.Validate(c.RunDir); err != nil {
+	if err := runnerstatepath.Validate(c.runnerHome()); err != nil {
 		return runnerclient.Client{}, err
 	}
 	if c.runtimeRunner != nil {
 		return *c.runtimeRunner, nil
 	}
-	cli, _, err := c.RunnerExecution.Runner.Open(ctx, runnerstatepath.Directory(c.RunDir), positiveDuration(c.CommandTimeout, 30*time.Second))
+	cli, _, err := c.RunnerExecution.Runner.Open(ctx, runnerstatepath.Directory(c.runnerHome()), positiveDuration(c.CommandTimeout, 30*time.Second))
 	return cli, err
 }
 

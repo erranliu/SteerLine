@@ -6,6 +6,8 @@
 
 ## 当前入口
 
+应用级共享 SteerRunner 服务（2026-10-19，自动通过/人工待验）：[Spec / Plan 与专属验收](shared-runner-service.md)，登记 SRS-A01–A07 与后置 SRS-M01；L1/controlled 双项目与真实空闲服务拓扑分开取证，实际构建、失败修正和清理已登记，不改 roadmap。
+
 SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，实施）：[专属验收](runner-collaboration.md)登记固定构建、R1/R2、U1–U3、I1、Web、controlled 与审计 live 的真实结果及清理。U1 两断言覆盖旧 ProjectRuntime 拒绝替代实例、显式重启后接纳及旧停止隔离。RCB-M01 可后置，不继承旧构建结论。
 
 Web 候选停止参与修复（2026-10-17，普通开发）：[专属验收](web-candidate-stop.md)，记录 Web 入口、未知参与资格、并发最后一个保护、停止与交付竞争及人工退出/Task 停止义务的区分；人工体验待安排。

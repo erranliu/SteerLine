@@ -9,4 +9,6 @@ reset-SteerlineTest.bat    resets only package execution state; stop first
 First start freezes live/simulate. Generate a new package to switch.
 The debug launcher remains open to own Git/provider helpers.
 Web restart: home/bin/steerline-web.exe stop, then serve and open.
-All data belongs to this package. Never use C:\SteerlineRuntime for debug.
+Projects in one home share one Runner service and its home-derived short state directory.
+Reset preserves the Runner directory/history and home build pin; create a new package for a new Runner build.
+Never use C:\SteerlineInstall or C:\SteerlineRuntime for debug.

@@ -19,12 +19,12 @@ type environmentCheckPort struct {
 }
 
 func newEnvironmentCheckPort(c Config, store environmentcheck.Store) *environmentCheckPort {
-	s := &environmentcheck.Service{Project: c.Identity(), Selection: c.RunnerExecution.Runner, Store: store}
+	s := &environmentcheck.Service{StateDir: runnerstatepath.Directory(c.runnerHome()), Project: c.Identity(), Selection: c.RunnerExecution.Runner, Store: store}
 	for _, p := range c.RunnerExecution.Profiles {
 		s.Profiles = append(s.Profiles, environmentcheck.Profile{ID: p.ID, Name: p.Name, Execution: p.Execution})
 	}
 	s.Open = func(ctx context.Context, selection runnerclient.Selection) (environmentcheck.Runner, error) {
-		if err := runnerstatepath.Validate(c.RunDir); err != nil {
+		if err := runnerstatepath.Validate(c.runnerHome()); err != nil {
 			return nil, err
 		}
 		if c.runtimeRunner != nil {
@@ -33,7 +33,7 @@ func newEnvironmentCheckPort(c Config, store environmentcheck.Store) *environmen
 			}
 			return *c.runtimeRunner, nil
 		}
-		cli, _, err := selection.Open(ctx, runnerstatepath.Directory(c.RunDir), positiveDuration(c.CommandTimeout, 30*time.Second))
+		cli, _, err := selection.Open(ctx, runnerstatepath.Directory(c.runnerHome()), positiveDuration(c.CommandTimeout, 30*time.Second))
 		return cli, err
 	}
 	s.ResolveInput = func(ctx context.Context, execution runnerclient.ExecutionInput) (runnerclient.CheckInput, error) {
