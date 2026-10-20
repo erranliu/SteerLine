@@ -4,7 +4,30 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
+
+func TestRunnerCatalogAcceptsWorkflowsWithoutFixedPromptSteps(t *testing.T) {
+	raw, err := os.ReadFile("testdata/workflow-capabilities.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var caps Capabilities
+	if err := json.Unmarshal(raw, &caps); err != nil {
+		t.Fatal(err)
+	}
+	// Content workflows accept caller messages instead of fixed prompt steps.
+	// Their presence must not block a project's development profile.
+	for _, id := range []string{"conversation", "generate"} {
+		caps.Workflows = append(caps.Workflows, runnercontract.WorkflowChoice{
+			ID: id, Version: 1, SupportedAdapters: []string{"codex-app-server"},
+		})
+	}
+	if _, err := compileCatalog(caps); err != nil {
+		t.Fatalf("legitimate content catalog blocked development: %v", err)
+	}
+}
 
 // The frozen public fixture was captured by I1 from Runner 529b6c3 + the
 // run_configuration increment. It is test data, never a runtime capability.
