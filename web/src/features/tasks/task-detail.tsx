@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight, Play, Plus } from "lucide-react";
 import { useWorkspace } from "../../app/context";
 import { projectQueries } from "../../shared/api/queries";
@@ -15,7 +15,8 @@ export function TaskDetail({
   id: string;
   allowCandidate?: boolean;
 }) {
-  const { api, online, snapshot, send, busy } = useWorkspace();
+  const { api, online, snapshot, candidateStarts } = useWorkspace();
+  const navigate = useNavigate();
   const [starting, setStarting] = useState(false);
   const [profile, setProfile] = useState("");
   const detail = useQuery({
@@ -29,16 +30,39 @@ export function TaskDetail({
   });
   const task = detail.data?.tasks[0];
   const page = snapshot?.connection.snapshot.page;
-  const hasCandidates = (task?.workflow_runs?.length ?? 0) > 0;
+  const candidates = (page?.runs ?? []).filter(
+    (run) => (run.domain_task_id || run.task_id) === id,
+  );
+  const pendingStarts =
+    candidateStarts?.items.filter(
+      (entry) =>
+        entry.taskID === id &&
+        !task?.workflow_runs?.some((run) => run.workflow_run_id === entry.id) &&
+        !page?.runs.some((run) => run.run_id === entry.id),
+    ) ?? [];
+  const hasCandidates =
+    (task?.workflow_runs?.length ?? 0) > 0 ||
+    candidates.length > 0 ||
+    pendingStarts.some((entry) => entry.participating);
+  const awaitingClaim =
+    task?.status === "open" &&
+    (candidates.length > 0 ||
+      pendingStarts.some((entry) => entry.participating));
+  const participatingIDs = new Set([
+    ...candidates.filter(participating).map((run) => run.run_id),
+    ...(task?.workflow_runs
+      ?.filter((run) => run.participation === "active")
+      .map((run) => run.workflow_run_id) ?? []),
+    ...pendingStarts
+      .filter((entry) => entry.participating)
+      .map((entry) => entry.id),
+  ]);
   const action = hasCandidates ? "start_candidate" : "start_task";
   const profiles = presentation.data?.presentation.profiles ?? [];
   const chosen =
     profile || presentation.data?.presentation.default_profile_id || "";
   const selected = profiles.find((p) => p.id === chosen);
   const supported = page?.service.capabilities?.includes(action);
-  const candidates = (page?.runs ?? []).filter(
-    (run) => (run.domain_task_id || run.task_id) === id,
-  );
   const dependenciesMissing = hasCandidates
     ? task?.predecessors?.some((p) => !p.delivered)
     : !task?.dependency_ready;
@@ -64,6 +88,7 @@ export function TaskDetail({
                   : blockers?.length
                     ? blockers.join("；")
                     : hasCandidates &&
+                        !awaitingClaim &&
                         task?.status !== "in_progress" &&
                         !candidates.some(
                           (run) => run.workflow_stage === "start.submit",
@@ -72,8 +97,7 @@ export function TaskDetail({
                       : hasCandidates &&
                           candidates.some((run) => run.pr.state === "merged")
                         ? "已有候选 PR 合并"
-                        : hasCandidates &&
-                            candidates.filter(participating).length >= 5
+                        : hasCandidates && participatingIDs.size >= 5
                           ? "已达到 5 个参与候选"
                           : "";
   const profileReason =
@@ -157,7 +181,7 @@ export function TaskDetail({
         {!task.delivery && (!hasCandidates || allowCandidate) && (
           <Button
             variant="default"
-            disabled={busy || !!startReason}
+            disabled={!!startReason || !candidateStarts}
             title={startReason}
             onClick={() => setStarting(!starting)}
           >
@@ -196,21 +220,20 @@ export function TaskDetail({
             <Button onClick={() => setStarting(false)}>取消</Button>
             <Button
               variant="default"
-              disabled={busy || !!reason}
-              onClick={async () => {
-                const accepted = await send(
-                  action,
-                  task.task_id,
-                  task.version,
-                  { execution_profile_id: chosen },
-                  {
-                    expected_control_revision: page?.control.revision ?? 0,
-                    ...(hasCandidates
-                      ? { expected_graph_revision: detail.data!.graph_revision }
-                      : {}),
-                  },
+              disabled={!!reason || !candidateStarts}
+              onClick={() => {
+                if (!selected || !candidateStarts || reason) return;
+                const requestID = candidateStarts.start(
+                  task,
+                  selected,
+                  detail.data!.graph_revision,
+                  page?.control.revision ?? 0,
                 );
-                if (accepted) setStarting(false);
+                if (!requestID) return;
+                setStarting(false);
+                navigate(
+                  `/projects/${api.identity.project_id}/runs?task=${encodeURIComponent(id)}&run=${requestID}`,
+                );
               }}
             >
               确认启动

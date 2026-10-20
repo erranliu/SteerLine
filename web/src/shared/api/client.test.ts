@@ -340,16 +340,53 @@ it.each(["foreign-attempt", "repeated-cursor"])(
   },
 );
 
-it("blocks a replacement request while the original target is uncertain", async () => {
-  await journal.saveRequest(envelope);
-  const fetch = vi.fn();
+it.each(["start_task", "runner_resume", "stop_candidate"])(
+  "blocks a replacement %s request while the original target is uncertain",
+  async (action) => {
+    envelope.action = action;
+    await journal.saveRequest(envelope);
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    await expect(
+      api.submit({
+        ...envelope,
+        request_id: crypto.randomUUID().replaceAll("-", ""),
+      }),
+    ).rejects.toThrow("待核实操作");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await journal.listRequests()).toHaveLength(1);
+  },
+);
+
+it("sends independently confirmed candidates concurrently while preserving same-request deduplication", async () => {
+  envelope.action = "start_candidate";
+  const second = {
+    ...envelope,
+    request_id: crypto.randomUUID().replaceAll("-", ""),
+  };
+  const replies = new Map<string, (response: Response) => void>();
+  const fetch = vi.fn(
+    (_path, init) =>
+      new Promise<Response>((resolve) => {
+        replies.set(JSON.parse(init.body).request_id, resolve);
+      }),
+  );
   vi.stubGlobal("fetch", fetch);
-  await expect(
-    api.submit({
-      ...envelope,
-      request_id: crypto.randomUUID().replaceAll("-", ""),
-    }),
-  ).rejects.toThrow("待核实操作");
-  expect(fetch).not.toHaveBeenCalled();
-  expect(await journal.listRequests()).toHaveLength(1);
+  const one = api.submit(envelope);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  const two = api.submit(second);
+  const replay = api.submit(envelope);
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  expect(await journal.listRequests()).toHaveLength(2);
+  replies.get(second.request_id)!(
+    response(receipt("applied", { ...second, original: second })),
+  );
+  replies.get(envelope.request_id)!(response(receipt()));
+  const results = await Promise.all([one, two, replay]);
+  expect(results.map((result) => result.request_id)).toEqual([
+    envelope.request_id,
+    second.request_id,
+    envelope.request_id,
+  ]);
+  expect(fetch).toHaveBeenCalledTimes(2);
 });

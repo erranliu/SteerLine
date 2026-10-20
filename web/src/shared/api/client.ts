@@ -185,19 +185,14 @@ export class Api {
   async submit(envelope: Envelope) {
     envelope = structuredClone(envelope);
     this.validate(envelope);
-    return this.locked(
-      "target/" +
-        envelope.project_id +
-        "/" +
-        envelope.instance_id +
-        "/" +
-        envelope.action +
-        "/" +
-        envelope.target_id,
-      () =>
-        this.locked(envelope.request_id, async () => {
-          this.check();
-          const pending = (await listRequests()).find(
+    const submit = () =>
+      this.locked(envelope.request_id, async () => {
+        this.check();
+        // Each confirmed additional candidate is an independent operation.
+        // All other actions retain their per-target uncertainty guard.
+        const pending =
+          envelope.action !== "start_candidate" &&
+          (await listRequests()).find(
             (row) =>
               row.envelope.request_id !== envelope.request_id &&
               row.envelope.project_id === envelope.project_id &&
@@ -207,25 +202,36 @@ export class Api {
               (!row.response ||
                 !["applied", "rejected"].includes(row.response.status)),
           );
-          if (pending)
-            throw new Error(
-              "原目标已有待核实操作，请查询原请求，不能创建替代请求",
-            );
-          const old = await requestByID(envelope.request_id);
-          if (old) return this.reconcileUnlocked(envelope);
-          this.check();
-          await saveRequest(envelope);
-          if (!this.active) {
-            await discardUnsentRequest(envelope);
-            throw new DOMException("项目已切换", "AbortError");
-          }
-          try {
-            return await this.post(envelope);
-          } catch (error) {
-            await recordResult(envelope.request_id, undefined, String(error));
-            throw error;
-          }
-        }),
+        if (pending)
+          throw new Error(
+            "原目标已有待核实操作，请查询原请求，不能创建替代请求",
+          );
+        const old = await requestByID(envelope.request_id);
+        if (old) return this.reconcileUnlocked(envelope);
+        this.check();
+        await saveRequest(envelope);
+        if (!this.active) {
+          await discardUnsentRequest(envelope);
+          throw new DOMException("项目已切换", "AbortError");
+        }
+        try {
+          return await this.post(envelope);
+        } catch (error) {
+          await recordResult(envelope.request_id, undefined, String(error));
+          throw error;
+        }
+      });
+    if (envelope.action === "start_candidate") return submit();
+    return this.locked(
+      "target/" +
+        envelope.project_id +
+        "/" +
+        envelope.instance_id +
+        "/" +
+        envelope.action +
+        "/" +
+        envelope.target_id,
+      submit,
     );
   }
   async reconcile(envelope: Envelope, signal?: AbortSignal) {

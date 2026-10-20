@@ -35,6 +35,8 @@ Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的
 
 执行方案新鲜期 60 秒，不定时轮询；动态状态保留原刷新周期，仅可见的图/列表、活动/final 启动对应查询。操作后按资源族定向失效，手动刷新包含当前连接查询；缓存不替代服务器操作资格。后续 SSE 继续更新同一缓存，本批不实现 SSE 或查询持久化。[Spec](../docs/spec/web-query-optimization.spec.md) · [Plan](../docs/spec/web-query-optimization.plan.md) · [验收](../docs/acceptance/web-query-optimization.md)。
 
+启动确认后立即进入执行页并选中提交卡片，允许继续新增至五个参与候选；编号和执行信息由服务器补齐。首次领取前的后续选择等待原领取核实，已发送请求沿原日志对账，迟到回执不改变选择。未发送的等待选择只在当前 Workspace 内存中保留，不跨页面重开自动派发。[Plan](../docs/plans/web-candidate-start.plan.md) · [验收](../docs/acceptance/web-candidate-start.md)。
+
 ## 独立调试与验证
 
 ```powershell

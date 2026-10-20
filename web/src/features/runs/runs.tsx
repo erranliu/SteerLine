@@ -278,7 +278,7 @@ function CandidateDetail({
   );
 }
 export function Runs() {
-  const { api, online, snapshot, requests } = useWorkspace();
+  const { api, online, snapshot, requests, candidateStarts } = useWorkspace();
   const [pending, setPending] = useState<{
     envelope: Envelope;
     epoch: number;
@@ -291,6 +291,10 @@ export function Runs() {
   const [filter, setFilter] = useState("all");
   const page = snapshot?.connection.snapshot.page;
   const runs = page?.runs ?? [];
+  const starts =
+    candidateStarts?.items.filter(
+      (entry) => !runs.some((run) => run.run_id === entry.id),
+    ) ?? [];
   const tasks = useQuery({
     ...projectQueries(api).tasks(),
     enabled: online,
@@ -305,6 +309,10 @@ export function Runs() {
   const candidates = runs.filter(
     (r) => (r.domain_task_id || r.task_id) === selectedTask,
   );
+  const pendingCandidates = starts.filter(
+    (entry) => entry.taskID === selectedTask,
+  );
+  const selectedStart = pendingCandidates.find((entry) => entry.id === runID);
   const selectedDependencyReason = taskDependencyReason(
     tasks.data?.tasks.find((task) => task.task_id === selectedTask),
   );
@@ -408,7 +416,7 @@ export function Runs() {
             </Button>
           ))}
         </div>
-        <span className="muted">{runs.length} 个候选</span>
+        <span className="muted">{runs.length + starts.length} 个候选</span>
       </div>
       <div className="runs-layout">
         <aside className="run-task-list">
@@ -425,7 +433,8 @@ export function Runs() {
               candidateCount={
                 runs.filter(
                   (r) => (r.domain_task_id || r.task_id) === t.task_id,
-                ).length
+                ).length +
+                starts.filter((entry) => entry.taskID === t.task_id).length
               }
             />
           ))}
@@ -452,8 +461,45 @@ export function Runs() {
                 <Status value={candidateState(r)} />
               </button>
             ))}
+            {pendingCandidates.map((entry) => (
+              <button
+                key={entry.id}
+                onClick={() => chooseRun(entry.id)}
+                className={
+                  "candidate-card " + (runID === entry.id ? "active" : "")
+                }
+              >
+                <span>新候选</span>
+                <strong>{entry.profile}</strong>
+                <span className="muted">{entry.status}</span>
+              </button>
+            ))}
           </div>
-          {selected ? (
+          {selectedStart ? (
+            <div
+              key={selectedStart.id}
+              className="detail-section"
+              role="status"
+            >
+              <div className="eyebrow">新候选 · {selectedStart.profile}</div>
+              <h2>
+                {selectedStart.title ||
+                  tasks.data?.tasks.find(
+                    (task) => task.task_id === selectedTask,
+                  )?.title ||
+                  selectedTask}
+              </h2>
+              <p>{selectedStart.status}</p>
+              {selectedStart.diagnostic && (
+                <p className="notice amber">{selectedStart.diagnostic}</p>
+              )}
+              <p className="muted">
+                {selectedStart.participating
+                  ? "执行信息将在服务器确认后显示。"
+                  : "请核对原因后重新选择方案。"}
+              </p>
+            </div>
+          ) : selected ? (
             <CandidateDetail
               key={selected.run_id}
               run={selected}
