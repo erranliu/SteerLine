@@ -59,6 +59,12 @@ R1 历史验证固定 Runner `9586ac4`。本次核对 `bf3ec58` 的 `run_evidenc
 
 ### 必须补齐的验证能力
 
+TM-A08 的远端收尾补充：正式停止/verify-stop 后，按本次原 Run 的公开 `execution.branch` 和固定测试 commit 核对 head/base，先查询 head 的全部 PR 历史；仅无 PR、原 commit 精确匹配时用 lease 删除并补查为空，变更/未知保留并失败。后验入口为 `STEERLINE_TM_CLEANUP_ROOT=<已结算本包>` 配合 `go test ./tests/e2e/internal/driver -run '^TestDebugTestManagementOwnedBranchCleanup$' -count=1 -timeout=90s`，只补原包收尾，不重新调用模型；必须取得新 verify-stop 原 Run/input/settled 证明再清理。场景步骤末尾及发现遗留后执行，证据登记 `owned-head-cleanup/summary.json` 和包内 `test-management-owned-cleanup/`，不回写历史 proof。
+
+TM-A04/TM-A08 的控制回执未知补充：驱动在 resume/start 提交前写入原 `ControlInput`，只提交一次；公开错误 `request_receipt_persist_failed` 后仅按原 request_id 查询权威回执，明确拒绝不按未知处理。新增正反例 `TestTMControlReceiptFailureQueriesOriginalWithoutResubmit`，并入上述定向命令的 `-run 'TestTMGeneration|TestTMControlReceipt|TestDebugPublicationReusesPR'`；Windows 隔离 fixture，在真实补验前验证，必须一次 Submit、原 ID Query、无替代请求；证据登记专属验收 `control-reconcile`。
+
+TM-A04/TM-A08 的真实生成对象换构建补验：先固定同源码、不同版本/SHA 的 Runner A/B，运行 `scripts/test-test-management.ps1 -SteerRunnerExe <A绝对路径> -RunnerCandidate <B绝对路径> -Out <新目录>`。入口统一创建新的 live 调试包；正式生成保存后，用生产公开预检和 verify-restart 证明原服务退出/候选兼容，再更新本包 Runner 传输 pin、启动 B。确认原 Generation/Run/input/final/result 不变，随后沿原真实场景完成程序通过/失败→报告/API/浏览器及正式停止/资源结算。源码定向验证为 `go test ./tests/e2e/internal/driver ./internal/testmanagement ./internal/app -run 'TestTMGeneration|TestDebugPublicationReusesPR' -count=1 -timeout=120s`，在驱动完成后、真实场景前执行。结果登记到专属验收，包内 `evidence/test-management/generation-takeover*.json/log` 保存换代证据，失败使用新包补验，不 reset 已开始的候选。
+
 - 步骤 1 补 Runner 正式契约 fixture；步骤 2–4 增加以 `TestTM` 为前缀的实际用例并保证各命令非零命中。已有包不是新建测试框架；可合并同场景多验收项的断言。
 - 步骤 5 新增 `web/tests/test-management.spec.ts`，扩展现有隔离浏览器驱动，让 L3 场景使用本次包的稳定 Web 地址和项目身份调用该文件；不默认执行全部 Playwright 场景。补充受影响 API/HTTP/client 边界守卫与严格 JSON 反例。
 - 在 `tests/e2e/suites.json`、E2E 内容清单和 live 场景支持/证据校验中注册 `testing.management-local-codex`，不只写场景名。Driver 必须先执行 `scripts/new-debug-release.ps1`，显式固定 R3 的 Runner；AI 模拟另用新包 `start.bat --simulate`，不能用模拟结果顶替本场景。

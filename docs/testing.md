@@ -1,5 +1,7 @@
 # 测试总入口
 
+近期合入 PR #352–#365 的补验和人工操作见[本轮导航](acceptance/merged-pr-regression-20261020.md)。固定 L1 将累积的应用启动测试拆为 `quick-owner-runner-startup`（接管、启动撤销与共享 Runner）和 `quick-owner-unified-startup`（项目/宿主生命周期），保留全部原测试及每组原三分钟预算；新增无法解析项目 census 时零共享服务启动的反例。覆盖检查按固定分区核对包终态，并拒绝跨 owner 重复执行，不用重复一组补缺失组。
+
 调用方边界收口（2026-10-20）的最小验证见[Plan](plans/architecture-boundary-consolidation.plan.md)和[专属验收](acceptance/architecture-boundary-consolidation.md)：新 owner 依赖闭包、启动/正常 stop 共用 outbox、takeover 公开校验与原事实匹配、暂存部署 CLI 在线预检；只跑隔离定向测试，不使用安装现场或完整原生流程。
 
 Runner 兼容构建接管的定向测试与未验边界见[专属验收](acceptance/service-generation-recovery.md)：公开 takeover/startup stops、当前 pin 与历史 candidate/Check 分离、启动撤销 outbox、兼容部署证据；不运行安装环境或以 fixture 代替原生资格。
@@ -108,7 +110,7 @@ L1 固定范围以 [scoped.go](../cmd/test-feedback/scoped.go)及 [task_scope.go
 | L3 | 6 项：等待合并重启、正常宿主生命周期、同 home 共享 Runner、双 home 独立操作、审计 workflow 真实链、测试管理真实链 | controlled 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二。审计 live 精确选择 workflow.local-codex-audited，显式配置两个不同模型，不加入完整 L2。 |
 | L4 | 4 项：源码构建保护、路径保护、宿主写入拒绝、同 ID 碰撞与重放 | 支持 `-level=L4 -suite=runtime -env=controlled`；每项独立资源，runtime 包内最多二项并行。 |
 
-当前十一项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
+当前十二项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。
 
 ```powershell
 # 无 token 门槛，不能当作完整 L2
@@ -121,7 +123,7 @@ go run ./cmd/test-feedback -level=L2
 # Codex 工具进程内可使用既有独立进程上下文，保持同一 L2 与证据规则
 ./scripts/test-l2.ps1 -SteerRunnerExe 'C:/Tools/SteerRunner/steerrunner.exe'
 
-# 三项正常流程；跨包/包内调度共用二并行预算
+# 四项受控流程；跨包/包内调度共用二并行预算
 go run ./cmd/test-feedback -level=L3 '-suite=recovery,runtime' -env=controlled
 
 # 四项系统边界；可用 -scenario=<逗号分隔ID> 精确选择

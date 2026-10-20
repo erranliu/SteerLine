@@ -1,5 +1,7 @@
 # Worker 流程异常处理与重试
 
+2026-10-20 内容生成接管补验（W02–W18，E04–E07，V06–V08）：generate/conversation 不使用开发流程 parser 配置，Runner 接管按适用工作流校验，保留原材料/执行语义/codec/原生身份；开发配置仍严格检查。调用方原 Generation/Run/input/final 不改写，未知零重发、取消先于 worker、停止与资源结算分别证明的规则不变。本轮只修不适用配置误拒绝，不增加恢复授权、旧数据迁移或另一套状态机；实际换构建与结算结果见[测试管理验收](../acceptance/test-management.md)。
+
 2026-10-20 调用方边界收口（W02–W18，E04–E07，V03/V06–V08）：候选停止信封的构造和保存统一归 runnerbridge，正常对账和启动前收集复用；启动层继续先取项目锁/store，再持久化既有停止义务，经 pending_stops 在 worker 前受理。保留原正常/启动 ID 生成方式、未知信封原字节与 CAS，明确拒绝后才按原流程准备后续信封。公开 takeover 类型/验证归 runnercontract，原 Run/input/request/Check 与构建比较归纯 runnerbinding；启动准入、离线重启、检查查询及部署预检复用对应规则，保留各入口原有前置。只读接管不取得停止/输入授权，历史事实不改写，不新增 submit/reply/resume、重试或原生恢复能力；停服与资源结算继续分开证明。当前实现缺口和原生资格仍按既有专属验收判断。本轮安排及结果见[Plan](../plans/architecture-boundary-consolidation.plan.md)和[验收](../acceptance/architecture-boundary-consolidation.md)，不改 W/E/V 矩阵语义。
 
 2026-10-19 兼容 Runner 构建接管补充（W02–W18，E04–E07，V06–V08）：后续实现由[本次 Spec](../spec/service-generation-recovery.spec.md)、[Plan](../plans/service-generation-recovery.plan.md)和[验收](../acceptance/service-generation-recovery.md)约束，取代下述历史同构建限制。Runner 保存原执行/结果并按持久 Allowed/ResumeRequired/PendingStop 自动接续已证明尚未发送的后继；SteerLine 不自动 submit/reply/resume。paused、人工等待、业务阻断和 stop 保留；unknown 只对账。SteerLine 启动前沿原项目锁/Store 收集并保存撤销信封，经 pending_stops 在 Runner worker 前受理；无信封不得先开 worker 再追发停止。安装 pin 仍校验当前 EXE；兼容预检后只更新当前服务 pin，候选/检查/PR/Delivery 原事实不改。原服务退出与新候选兼容分别证明，resources_settled=false 不晋升 true。Orca 原创建查询与原生/跨仓现场资格仍是明确缺口，受控通过不代表已部署。
