@@ -17,12 +17,18 @@ function Get-DeploymentRunnerSelection([string]$InstallDirectory, [bool]$UpdateR
     return @{ Reuse = $true; Executable = $installed; Version = $config.runner.version; SHA256 = $config.runner.sha256 }
 }
 
-function Assert-DeploymentRunnerBuild([string]$InstallDirectory, [string]$SHA256) {
+function Assert-DeploymentRunnerBuild([string]$InstallDirectory, [string]$SHA256, [string]$CandidateExecutable) {
     $path = Join-Path $InstallDirectory 'application-api\runner-build.json'
     if (Test-Path -LiteralPath $path) {
         $pin = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
         if (-not $pin.sha256 -or $pin.sha256 -ne $SHA256) {
-            throw 'Runner build change requires a fresh environment; ordinary deployment reuses the installed Runner and preserves its Runs. No installed service or file was changed.'
+            if (-not $pin.sha256 -or -not $pin.state_dir -or -not [IO.Path]::IsPathRooted($pin.state_dir) -or -not $CandidateExecutable) { throw 'Runner build change requires original state binding and candidate takeover evidence; no installed service or file was changed.' }
+            $raw = & $CandidateExecutable service verify-takeover --candidate $CandidateExecutable --state-dir $pin.state_dir --json
+            if ($LASTEXITCODE -ne 0) { throw 'Candidate cannot verify original Runner contracts; installed service and files were preserved.' }
+            $envelope = $raw | ConvertFrom-Json -ErrorAction Stop
+            $proof = $envelope.data
+            if ($envelope.ok -ne $true -or $proof.contract -ne 'steerrunner-takeover/v1' -or $proof.compatible -ne $true -or $proof.candidate_sha256 -ne $SHA256 -or $proof.state_dir -ne $pin.state_dir -or $null -eq $proof.items -or @($proof.items | Where-Object { $_.status -notin @('compatible','read_only') }).Count) { throw 'Candidate takeover report is incomplete or incompatible; installed service and files were preserved.' }
+            return $proof
         }
     }
 }

@@ -125,7 +125,8 @@ if (-not $version.ok -or $version.protocol -ne 'steerrunner-cli/v1') { throw 'St
 $runnerHash = (Get-FileHash -LiteralPath $runnerStage -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($runnerSelection.Reuse -and ($runnerHash -ne $runnerSelection.SHA256 -or $version.data.version -ne $runnerSelection.Version)) { throw 'Staged Runner differs from its installed release pin.' }
 Assert-Plain (Join-Path $InstallHome 'application-api\runner-build.json')
-Assert-DeploymentRunnerBuild $InstallHome $runnerHash
+$takeover = Assert-DeploymentRunnerBuild $InstallHome $runnerHash $runnerStage
+if ($null -ne $takeover) { Write-JSON (Join-Path $package 'runner-takeover-preflight.json') $takeover }
 $configPath = Join-Path $InstallHome 'execution.json'
 Assert-Plain $configPath
 if (Test-Path -LiteralPath $configPath) {
@@ -136,7 +137,7 @@ if (Test-Path -LiteralPath $configPath) {
     $execution.execution_profiles = @($execution.execution_profiles | Where-Object id -eq 'local-luna-medium')
     $execution.default_execution_profile = 'local-luna-medium'
 }
-$allowRestart = $execution.runner.sha256 -eq $runnerHash
+$allowRestart = $execution.runner.sha256 -eq $runnerHash -or $null -ne $takeover
 $execution.runner.executable = Join-Path $bin 'steerrunner.exe'
 $execution.runner.version = $version.data.version
 $execution.runner.sha256 = $runnerHash

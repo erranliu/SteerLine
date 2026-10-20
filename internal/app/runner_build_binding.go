@@ -10,13 +10,15 @@ import (
 )
 
 // bindRunnerBuild checks project snapshots against the application's shared client.
-// The home-wide immutable build gate has already run before service start.
+// The home-wide current build gate has already run before service start;
+// original candidate/check build facts remain immutable after takeover.
 func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) error {
 	cli, err := c.runnerClient(ctx)
 	if err != nil {
 		return err
 	}
 	pin := cli.BuildPin()
+	compatible := cli.Takeover != nil && validTakeover(*cli.Takeover, pin)
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {
 		return err
@@ -26,13 +28,20 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 		checkpoint = *snapshot.Checkpoint
 	}
 	if checkpoint.Service.RunnerBuild != nil {
-		if !sameRunnerBuild(*checkpoint.Service.RunnerBuild, pin) {
+		if !sameRunnerBuild(*checkpoint.Service.RunnerBuild, pin) && (!compatible || canonicalPath(checkpoint.Service.RunnerBuild.StateDir) != canonicalPath(pin.StateDir)) {
 			return errors.New("runner_build_changed: restore the original Runner to reconcile/stop its resources; a new build requires a fresh environment")
 		}
 	}
 	for _, candidate := range snapshot.Candidates {
 		if !sameRunnerBuild(candidate.RunnerBuild, pin) {
-			return errors.New("runner_build_changed: candidate belongs to another frozen Runner; restart with the original build")
+			if !compatible || canonicalPath(candidate.StateDir) != canonicalPath(pin.StateDir) {
+				return errors.New("runner_build_changed: candidate takeover is unverified")
+			}
+			if candidate.RunID != "" {
+				if _, ok := takeoverCandidate(*cli.Takeover, candidate); !ok {
+					return errors.New("candidate differs from original Run/input takeover facts")
+				}
+			}
 		}
 	}
 	checks, err := store.Checks(ctx, c.Identity())
@@ -41,10 +50,12 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 	}
 	for _, check := range checks {
 		if check.Selection.SHA256 != pin.SHA256 || check.Selection.Version != pin.Version || canonicalPath(check.Selection.Executable) != canonicalPath(pin.Executable) || check.ResourceDigest != pin.ResourceDigest || canonicalPath(check.StateDir) != canonicalPath(pin.StateDir) {
-			return errors.New("runner_build_changed: original environment check must be reconciled with its frozen Runner")
+			if !compatible || !takeoverCheck(*cli.Takeover, check) {
+				return errors.New("runner_build_changed: original environment check takeover is unverified")
+			}
 		}
 	}
-	if checkpoint.Service.RunnerBuild != nil {
+	if checkpoint.Service.RunnerBuild != nil && sameRunnerBuild(*checkpoint.Service.RunnerBuild, pin) {
 		return nil
 	}
 	checkpoint.SchemaVersion = hostcontract.ServiceCheckpointSchema

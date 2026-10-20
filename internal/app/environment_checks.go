@@ -28,13 +28,42 @@ func newEnvironmentCheckPort(c Config, store environmentcheck.Store) *environmen
 			return nil, err
 		}
 		if c.runtimeRunner != nil {
-			if selection != c.RunnerExecution.Runner {
+			if selection != c.RunnerExecution.Runner && c.runtimeRunner.Takeover == nil {
 				return nil, errors.New("environment check belongs to another frozen Runner build")
 			}
 			return *c.runtimeRunner, nil
 		}
-		cli, _, err := selection.Open(ctx, runnerstatepath.Directory(c.runnerHome()), positiveDuration(c.CommandTimeout, 30*time.Second))
-		return cli, err
+		selected := c.RunnerExecution.Runner
+		cli, _, err := selected.Open(ctx, runnerstatepath.Directory(c.runnerHome()), positiveDuration(c.CommandTimeout, 30*time.Second))
+		if err != nil || selection == selected {
+			return cli, err
+		}
+		// Offline/read-only callers also use the current verified transport.
+		// The saved check selection remains an original fact, not a command to
+		// execute an old image after deployment has replaced that file.
+		proof, err := cli.VerifyTakeover(ctx)
+		if err != nil {
+			return nil, err
+		}
+		rows, err := store.Checks(ctx, c.Identity())
+		if err != nil {
+			return nil, err
+		}
+		found := false
+		for _, row := range rows {
+			if runnerclient.Selection(row.Selection) != selection {
+				continue
+			}
+			if !takeoverCheck(proof, row) {
+				return nil, errors.New("original environment check takeover is unverified")
+			}
+			found = true
+		}
+		if !found {
+			return nil, errors.New("original environment check selection is not bound to this project")
+		}
+		cli.Takeover = &proof
+		return cli, nil
 	}
 	s.ResolveInput = func(ctx context.Context, execution runnerclient.ExecutionInput) (runnerclient.CheckInput, error) {
 		git := commandRunner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), ProcessHost: c.ProcessHost}

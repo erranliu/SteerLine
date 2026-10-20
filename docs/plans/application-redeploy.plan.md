@@ -1,5 +1,7 @@
 # 同 Runner 构建的重启与显示更新
 
+后续兼容跨构建接管以[服务换代 Spec](../spec/service-generation-recovery.spec.md)和[Plan](service-generation-recovery.plan.md)为准；下文保留本次同构建修复的原始范围与验证，不把其通过计为跨构建联调资格。
+
 普通开发，2026-10-19。规则归属 [worker lifecycle](../product-design/worker-lifecycle.md) 的 W18/E04–E05/V06–V08；本次仅修复调用方把服务退出和原生资源销毁混为同一部署门槛的问题，不改变 Runner 恢复、输入授权或停止策略。
 
 1. 普通 build-deploy 复用安装配置固定的 Runner EXE，构建并更新 SteerLine/Web。首次安装或显式 `-UpdateRunner` 才从 RunnerRepo 构建 Runner。

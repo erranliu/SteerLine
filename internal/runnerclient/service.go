@@ -65,6 +65,21 @@ func (c Client) VerifyServiceStopped(ctx context.Context, instance, requestID st
 	return *info.LastShutdown, nil
 }
 
+// A selected compatible candidate can read the original service exit receipt.
+// The receipt is still checked against its original executable, never the new one.
+func (c Client) VerifyPreviousServiceStopped(ctx context.Context, sha, instance, requestID string) (ServiceShutdown, error) {
+	info, err := c.ServiceStatus(ctx)
+	if err != nil {
+		return ServiceShutdown{}, err
+	}
+	original := c
+	original.SHA256 = sha
+	if err := original.verifyServiceStopped(info, instance, requestID); err != nil {
+		return ServiceShutdown{}, err
+	}
+	return *info.LastShutdown, nil
+}
+
 func (c Client) verifyServiceStopped(info ServiceInfo, instance, requestID string) error {
 	r := info.LastShutdown
 	want, err := filepath.EvalSymlinks(c.StateDir)
@@ -106,10 +121,14 @@ func (c Client) StartService(ctx context.Context, version Version) (ServiceInfo,
 	if err != nil {
 		return info, err
 	}
-	if info.Status != "ready" || info.InstanceID == "" || info.Version != version.Version || info.ResourceDigest != version.ResourceDigest || c.SHA256 == "" || !strings.EqualFold(info.ExecutableSHA256, c.SHA256) {
-		return info, errors.New("Runner resident service differs from the selected release")
+	return info, c.validateStartedService(info, version)
+}
+
+func (c Client) validateStartedService(info ServiceInfo, version Version) error {
+	if info.Status != "ready" || info.InstanceID == "" || info.Protocol != Protocol || !strings.EqualFold(filepath.Clean(info.StateDir), filepath.Clean(c.StateDir)) || info.Version != version.Version || info.ResourceDigest != version.ResourceDigest || c.SHA256 == "" || !strings.EqualFold(info.ExecutableSHA256, c.SHA256) {
+		return errors.New("Runner resident service differs from the selected release")
 	}
-	return info, nil
+	return nil
 }
 
 // StopService fixes one instance and request before invoking the CLI. A timeout
