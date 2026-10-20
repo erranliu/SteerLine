@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
@@ -36,15 +37,15 @@ type ProjectStopVerification struct {
 
 // A restart proof deliberately makes no native-resource-settlement claim.
 type ApplicationRestartVerification struct {
-	CandidateBuild *runnercontract.BuildPin     `json:"candidate_build,omitempty"`
-	Takeover       *runnerclient.TakeoverReport `json:"takeover,omitempty"`
-	OriginalHost   contract.Identity            `json:"original_host"`
-	VerifierSHA256 string                       `json:"verifier_sha256"`
-	VerifiedAt     time.Time                    `json:"verified_at"`
-	Projects       []ProjectStopVerification    `json:"projects"`
-	Restartable    bool                         `json:"restartable"`
-	RunnerBuild    runnercontract.BuildPin      `json:"runner_build"`
-	RunnerService  runnerclient.ServiceShutdown `json:"runner_service"`
+	CandidateBuild *runnercontract.BuildPin       `json:"candidate_build,omitempty"`
+	Takeover       *runnercontract.TakeoverReport `json:"takeover,omitempty"`
+	OriginalHost   contract.Identity              `json:"original_host"`
+	VerifierSHA256 string                         `json:"verifier_sha256"`
+	VerifiedAt     time.Time                      `json:"verified_at"`
+	Projects       []ProjectStopVerification      `json:"projects"`
+	Restartable    bool                           `json:"restartable"`
+	RunnerBuild    runnercontract.BuildPin        `json:"runner_build"`
+	RunnerService  runnerclient.ServiceShutdown   `json:"runner_service"`
 }
 
 type applicationOfflineVerification struct {
@@ -52,7 +53,7 @@ type applicationOfflineVerification struct {
 	runnerBuild    runnercontract.BuildPin
 	runnerService  runnerclient.ServiceShutdown
 	candidateBuild *runnercontract.BuildPin
-	takeover       *runnerclient.TakeoverReport
+	takeover       *runnercontract.TakeoverReport
 }
 
 // VerifyApplicationStopped produces fresh evidence without changing the
@@ -199,7 +200,7 @@ func recheckableShutdown(r contract.Shutdown, id contract.Identity) error {
 	return nil
 }
 
-func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, takeover ...*runnerclient.TakeoverReport) (ProjectStopVerification, error) {
+func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutdown, id contract.Identity, runnerProof runnerclient.StoppedVerification, restartPin *runnercontract.BuildPin, takeover ...*runnercontract.TakeoverReport) (ProjectStopVerification, error) {
 	proof := ProjectStopVerification{ConfigID: p.ConfigID, ProjectID: p.ProjectID, InstanceID: p.InstanceID}
 	reader, err := OpenNativeTaskReader(ctx, &c)
 	if err != nil {
@@ -240,7 +241,7 @@ func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutd
 			cli.Takeover = takeover[0]
 		}
 		for _, g := range generations {
-			if sameRunnerBuild(g.Runner, *restartPin) {
+			if runnerbinding.SameBuild(g.Runner, *restartPin) {
 				continue
 			}
 			if cli.Takeover == nil {
@@ -276,7 +277,7 @@ func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutd
 		if len(takeover) == 0 || takeover[0] == nil {
 			needsProof := false
 			for _, candidate := range snapshot.Candidates {
-				if !sameRunnerBuild(candidate.RunnerBuild, *restartPin) {
+				if !runnerbinding.SameBuild(candidate.RunnerBuild, *restartPin) {
 					needsProof = true
 				}
 			}
@@ -294,7 +295,7 @@ func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutd
 				if err != nil {
 					return proof, err
 				}
-				takeover = []*runnerclient.TakeoverReport{&report}
+				takeover = []*runnercontract.TakeoverReport{&report}
 			}
 		}
 		return proof, matchRestartBindings(c, snapshot.Checkpoint, snapshot.Candidates, checks, *restartPin, takeover...)
@@ -311,34 +312,16 @@ func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutd
 	return proof, nil
 }
 
-func matchRestartBindings(c Config, cp *hostcontract.ServiceCheckpoint, candidates []runnerstate.Candidate, checks []runnerstate.EnvironmentCheckRecord, pin runnercontract.BuildPin, takeover ...*runnerclient.TakeoverReport) error {
-	var proof *runnerclient.TakeoverReport
+func matchRestartBindings(c Config, cp *hostcontract.ServiceCheckpoint, candidates []runnerstate.Candidate, checks []runnerstate.EnvironmentCheckRecord, pin runnercontract.BuildPin, takeover ...*runnercontract.TakeoverReport) error {
+	var proof *runnercontract.TakeoverReport
 	if len(takeover) > 0 {
 		proof = takeover[0]
 	}
 	selected := c.RunnerExecution.Runner
-	if selected.SHA256 != pin.SHA256 || selected.Version != pin.Version || canonicalConfigPath(selected.Executable) != canonicalConfigPath(pin.Executable) || canonicalConfigPath(pin.StateDir) != canonicalConfigPath(runnerstatepath.Directory(c.runnerHome())) || cp == nil || cp.Service.RunnerBuild == nil || !sameRunnerBuild(*cp.Service.RunnerBuild, pin) {
+	if selected.SHA256 != pin.SHA256 || selected.Version != pin.Version || canonicalConfigPath(selected.Executable) != canonicalConfigPath(pin.Executable) || canonicalConfigPath(pin.StateDir) != canonicalConfigPath(runnerstatepath.Directory(c.runnerHome())) || cp == nil || cp.Service.RunnerBuild == nil || !runnerbinding.SameBuild(*cp.Service.RunnerBuild, pin) {
 		return errors.New("restart project or checkpoint differs from the original Runner build")
 	}
-	for _, candidate := range candidates {
-		bound := sameRunnerBuild(candidate.RunnerBuild, pin)
-		if proof != nil {
-			if _, ok := takeoverCandidate(*proof, candidate); ok {
-				bound = true
-			}
-		}
-		if !bound || canonicalConfigPath(candidate.StateDir) != canonicalConfigPath(pin.StateDir) || candidate.RunID != "" && candidate.InputDigest == "" {
-			return errors.New("restart candidate differs from the original Runner build or directory")
-		}
-	}
-	for _, check := range checks {
-		if check.Selection.SHA256 != pin.SHA256 || check.Selection.Version != pin.Version || canonicalConfigPath(check.Selection.Executable) != canonicalConfigPath(pin.Executable) || check.ResourceDigest != pin.ResourceDigest || canonicalConfigPath(check.StateDir) != canonicalConfigPath(pin.StateDir) {
-			if proof == nil || !takeoverCheck(*proof, check) {
-				return errors.New("restart environment check differs from the original Runner build or directory")
-			}
-		}
-	}
-	return nil
+	return runnerbinding.ValidateRestartBindings(pin, proof, candidates, checks)
 }
 
 func matchStoppedChecks(checks []runnerstate.EnvironmentCheckRecord, runnerProof runnerclient.StoppedVerification) error {

@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
-func generationTakeover(proof runnerclient.TakeoverReport, g testmanagement.Generation) (runnerclient.TakeoverItem, bool) {
+func generationTakeover(proof runnercontract.TakeoverReport, g testmanagement.Generation) (runnercontract.TakeoverItem, bool) {
 	if canonicalPath(g.Runner.StateDir) != canonicalPath(proof.StateDir) {
-		return runnerclient.TakeoverItem{}, false
+		return runnercontract.TakeoverItem{}, false
 	}
 	for _, item := range proof.Items {
 		if item.Kind != "run" || item.Status != "compatible" {
@@ -22,17 +24,17 @@ func generationTakeover(proof runnerclient.TakeoverReport, g testmanagement.Gene
 			if item.ID == g.RunID && g.InputDigest != "" && item.InputDigest == g.InputDigest {
 				return item, true
 			}
-		} else if item.RequestID == g.Request.RequestID && item.RequestDigest == runnerRequestDigest("submit", "", g.Request) {
+		} else if item.RequestID == g.Request.RequestID && item.RequestDigest == runnercontract.RequestDigest("submit", "", g.Request) {
 			return item, true
 		}
 	}
-	return runnerclient.TakeoverItem{}, false
+	return runnercontract.TakeoverItem{}, false
 }
 func verifyGenerationTakeover(g testmanagement.Generation, cli runnerclient.Client) error {
 	if g.State == "rejected" && g.RunID == "" {
 		return nil
 	}
-	if cli.Takeover == nil || !validTakeover(*cli.Takeover, cli.BuildPin()) {
+	if cli.Takeover == nil || !runnerbinding.Compatible(*cli.Takeover, cli.BuildPin()) {
 		return errors.New("original generation takeover proof is unavailable")
 	}
 	if _, ok := generationTakeover(*cli.Takeover, g); !ok {
@@ -43,7 +45,7 @@ func verifyGenerationTakeover(g testmanagement.Generation, cli runnerclient.Clie
 
 type generationStartupStore interface{ testmanagement.GenerationStore }
 
-func prepareGenerationStops(ctx context.Context, store generationStartupStore, project string, cli *runnerclient.Client) ([]runnerclient.PendingStop, error) {
+func prepareGenerationStops(ctx context.Context, store generationStartupStore, project string, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
 	rows, err := store.Generations(ctx, project)
 	if err != nil {
 		return nil, err
@@ -53,7 +55,7 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 		if g.State == "rejected" && g.RunID == "" {
 			continue
 		}
-		if !sameRunnerBuild(g.Runner, cli.BuildPin()) || g.Cancelled && (g.Projection == nil || g.Projection.StopStatus != "stopped") {
+		if !runnerbinding.SameBuild(g.Runner, cli.BuildPin()) || g.Cancelled && (g.Projection == nil || g.Projection.StopStatus != "stopped") {
 			need = true
 		}
 	}
@@ -67,10 +69,10 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 		}
 		cli.Takeover = &proof
 	}
-	if !validTakeover(*cli.Takeover, cli.BuildPin()) {
+	if !runnerbinding.Compatible(*cli.Takeover, cli.BuildPin()) {
 		return nil, errors.New("generation takeover is incompatible")
 	}
-	var pending []runnerclient.PendingStop
+	var pending []runnercontract.PendingStop
 	for _, g := range rows {
 		if g.State == "rejected" && g.RunID == "" {
 			continue
@@ -92,7 +94,7 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 				return nil, err
 			}
 		}
-		pending = append(pending, runnerclient.PendingStop{RunID: item.ID, Request: *g.StopRequest})
+		pending = append(pending, runnercontract.PendingStop{RunID: item.ID, Request: *g.StopRequest})
 	}
 	return pending, nil
 }

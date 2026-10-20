@@ -55,6 +55,8 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return true
 	}
 	switch owner {
+	case module + "/internal/runnerbinding":
+		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate"
 	case hostContract:
 		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/execution/backend":
@@ -77,7 +79,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/testmanagement/model", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -186,12 +188,66 @@ func httpConsumerForbidden(pkg string) bool {
 }
 
 func httpConsumerPackage(pkg string) bool {
+	if pkg == module+"/internal/processwindow" {
+		return true
+	}
 	for _, suffix := range []string{"/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs", "/web/server", "/cmd/steerline-web"} {
 		if pkg == module+suffix {
 			return true
 		}
 	}
 	return false
+}
+
+// Infrastructure and caller owners have their own closed dependency graph,
+// rather than relying on whichever application happens to consume them today.
+func callerOwner(pkg string) bool {
+	switch pkg {
+	case module + "/internal/processwindow", module + "/internal/runnerclient", module + "/internal/runnerbridge", module + "/internal/environmentcheck", module + "/internal/runnerbinding":
+		return true
+	}
+	return false
+}
+
+func callerImportAllowed(owner, dep string) bool {
+	if dep == "database/sql" {
+		return false
+	}
+	if !strings.Contains(strings.Split(dep, "/")[0], ".") {
+		return true
+	}
+	switch owner {
+	case module + "/internal/processwindow":
+		return dep == "golang.org/x/sys/windows"
+	case module + "/internal/runnerclient":
+		return dep == module+"/internal/runnercontract" || dep == module+"/internal/processwindow" || dep == "github.com/santhosh-tekuri/jsonschema/v6"
+	case module + "/internal/runnerbridge", module + "/internal/environmentcheck":
+		return dep == module+"/internal/runnerclient" || dep == module+"/internal/runnercontract" || dep == module+"/internal/runnerstate"
+	case module + "/internal/runnerbinding":
+		return dep == module+"/internal/runnercontract" || dep == module+"/internal/runnerstate"
+	}
+	return false
+}
+
+func callerClosureAllowed(owner, dep string) bool {
+	if dep == "database/sql" {
+		return false
+	}
+	if !strings.Contains(strings.Split(dep, "/")[0], ".") {
+		return true
+	}
+	if owner != module+"/internal/processwindow" && dep == module+"/internal/runnercontract" {
+		return true
+	}
+	if owner == module+"/internal/runnerbinding" {
+		return dep == module+"/internal/runnerstate"
+	}
+	if owner == module+"/internal/runnerclient" || owner == module+"/internal/runnerbridge" || owner == module+"/internal/environmentcheck" {
+		if dep == module+"/internal/processwindow" || dep == "golang.org/x/sys/windows" || dep == "github.com/santhosh-tekuri/jsonschema/v6" || strings.HasPrefix(dep, "github.com/santhosh-tekuri/jsonschema/v6/") || strings.HasPrefix(dep, "golang.org/x/text/") {
+			return true
+		}
+	}
+	return callerImportAllowed(owner, dep)
 }
 
 func hostForbidden(pkg string) bool {
@@ -443,6 +499,9 @@ func ScanSource(root string) (Report, error) {
 					}
 				}
 				for _, name := range names {
+					if pkg != module+"/internal/runnercontract" && (name == "TakeoverReport" || name == "TakeoverItem" || name == "PendingStop" || name == "ServiceStartInput") {
+						report.Violations = append(report.Violations, "takeover contract definition outside runnercontract: "+filepath.ToSlash(path)+" -> "+name)
+					}
 					if pkg != module+"/internal/task/model" && taskDeliveryDefinition(name) {
 						report.Violations = append(report.Violations, "task delivery definition outside task/model: "+filepath.ToSlash(path)+" -> "+name)
 					}
@@ -502,6 +561,9 @@ func ScanSource(root string) (Report, error) {
 				report.Violations = append(report.Violations, "execution product read dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
 			if !strings.HasSuffix(entry.Name(), "_test.go") {
+				if callerOwner(pkg) && !callerImportAllowed(pkg, value) {
+					report.Violations = append(report.Violations, "caller owner dependency: "+filepath.ToSlash(path)+" -> "+value)
+				}
 				productionGraph[pkg] = append(productionGraph[pkg], value)
 			}
 			if pkg == core && !strings.HasSuffix(entry.Name(), "_test.go") && (value == "database/sql" || value == module+"/internal/storage/sqlite" || strings.HasPrefix(value, "modernc.org/sqlite")) {
@@ -562,6 +624,13 @@ func ScanSource(root string) (Report, error) {
 		})
 	}
 	for pkg := range productionGraph {
+		if callerOwner(pkg) {
+			visitGraph(productionGraph, pkg, func(path []string) {
+				if !callerClosureAllowed(pkg, path[len(path)-1]) {
+					report.Violations = append(report.Violations, "caller owner transitive dependency: "+strings.Join(path, " -> "))
+				}
+			})
+		}
 		if !strings.HasPrefix(pkg, executionAdapters+"/") {
 			continue
 		}
@@ -691,6 +760,18 @@ func Check(ctx context.Context, root string) (Report, error) {
 				return report, fmt.Errorf("%s dependency has errors: %s", target, pkg.ImportPath)
 			}
 			graphName := target
+			if callerOwner(pkg.ImportPath) {
+				for _, dep := range pkg.Imports {
+					if !callerImportAllowed(pkg.ImportPath, dep) {
+						report.Violations = append(report.Violations, graphName+" caller owner dependency: "+pkg.ImportPath+" -> "+dep)
+					}
+				}
+				for _, dep := range pkg.Deps {
+					if !callerClosureAllowed(pkg.ImportPath, dep) {
+						report.Violations = append(report.Violations, graphName+" caller owner transitive dependency: "+pkg.ImportPath+" -> "+dep)
+					}
+				}
+			}
 			report.Dependencies[graphName]++
 			standards[pkg.ImportPath] = pkg.Standard
 			if pkg.ImportPath == module+"/internal/execution/reconstruction" {

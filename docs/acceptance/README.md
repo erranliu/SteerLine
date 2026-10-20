@@ -6,6 +6,8 @@
 
 ## 当前入口
 
+调用方边界收口（2026-10-20，普通开发）：[Plan 与专属验收](architecture-boundary-consolidation.md)，登记 processwindow/Runner 调用方依赖守卫、唯一 stop 信封准备和统一 takeover 核验；保留既有恢复、资源所有权及原事实边界。
+
 Windows 启动闪窗修复（2026-10-19，源码修复/人工待验）：[专属验收](startup-console-windows.md)，记录逐项目 Git 与后台 CLI 的控制台创建反例、无控制台修复和定向共享 Runner 回归；未部署安装环境。
 
 Runner generate/1 对接与最简测试管理（2026-10-20，实施中）：[专属验收及缺口审查](test-management.md)，生成已真实验证，清单/固定安排/报告输出/只读页面已接线。Runner R2 已合入并通过本轮受控 CLI 验证；剩余为 SteerLine 结果消费、产物落盘与生成对象换代接线，以及真实通过/失败到浏览器的 TM-A08。只认可干净提交的当前通过，不增加 Task 字段/门禁或 conversation 操作。

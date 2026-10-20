@@ -25,7 +25,7 @@ func TestTMGenerationTakeoverAndDurableStartupStop(t *testing.T) {
 	original.Version = "old"
 	g := testmanagement.Generation{ID: strings.Repeat("e", 32), Project: "project", Revision: 1, Runner: original, RunID: "original-run", InputDigest: "original-input", Cancelled: true, State: "accepted", Request: runnercontract.Request{Protocol: runnerclient.Protocol, RequestID: "original-submit", Input: json.RawMessage(`{"title":"original"}`)}}
 	require(t, store.SaveGeneration(ctx, g, 0))
-	proof := runnerclient.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnerclient.TakeoverItem{{Kind: "run", ID: g.RunID, InputDigest: g.InputDigest, Revision: 9, Status: "compatible"}}}
+	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{Kind: "run", ID: g.RunID, InputDigest: g.InputDigest, Revision: 9, Status: "compatible"}}}
 	cli.Takeover = &proof
 	require(t, verifyGenerationTakeover(g, cli))
 	stops, err := prepareGenerationStops(ctx, store, g.Project, &cli)
@@ -45,7 +45,7 @@ func TestTMGenerationTakeoverAndDurableStartupStop(t *testing.T) {
 	}
 	for _, kind := range []string{"digest", "namespace", "build", "read-only"} {
 		bad := proof
-		bad.Items = append([]runnerclient.TakeoverItem{}, proof.Items...)
+		bad.Items = append([]runnercontract.TakeoverItem{}, proof.Items...)
 		switch kind {
 		case "digest":
 			bad.Items[0].InputDigest = "foreign"
@@ -65,7 +65,7 @@ func TestTMGenerationTakeoverAndDurableStartupStop(t *testing.T) {
 	unknown.RunID = ""
 	unknown.InputDigest = ""
 	proof.Items[0].RequestID = g.Request.RequestID
-	proof.Items[0].RequestDigest = runnerRequestDigest("submit", "", g.Request)
+	proof.Items[0].RequestDigest = runnercontract.RequestDigest("submit", "", g.Request)
 	if _, ok := generationTakeover(proof, unknown); !ok {
 		t.Fatal("lost response cannot bind original accepted request")
 	}

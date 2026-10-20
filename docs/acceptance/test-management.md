@@ -160,3 +160,10 @@ i 包 `C:/SteerlineDebug/dev-20261020-110841-0752537e-dirty` 首次真实 API �
 干净结算后再次执行**同一个 EXE** 的公开 verify-takeover，仍 `compatible=false`，仅原生成 Run 被标为 `unsupported or out of range result acquisition configuration`，开发 Run 为 compatible；证据 `evidence/test-management/takeover-after-stop.json`。所以这不是 j 未结算状态造成的假象。TM-A08 已通过，TM-A04 的真实兼容接管仍须 Runner 修复此前置；本仓调用方的受控严格绑定/取消优先测试已通过，不放宽为无证明接管。
 
 最终限制：本批未部署/提交/创建 PR；固定 L1 的三处主干已有失败仍在上节登记。i/j 原开发资源及专属 base 保留待原公开证明恢复；首次未 ready 包保留其不完整实例证明。所有失败、清理未知与成功补测分别保存，未修改/重置受保护安装目录或 Runner 私有状态。
+
+
+### PR #365 主干冲突处理（2026-10-20）
+
+合入主干 `64bba737`，保留其 CLI `verify-runner-takeover`、Runner LLM 边界、runnerbridge 候选停止 owner 与纯 runnerbinding 校验；测试生成复用 runnercontract 的公开 takeover 类型/请求摘要和 runnerbinding 的构建/兼容判定，保留生成停止 outbox 与原身份校验。首轮编译因主干删除 runnerclient 类型别名失败，完成引用调整后复测。
+
+定向证据 `%TEMP%/steerline-tm-conflict-fixed-20261020-124724/summary.json`：15 个包、177 项（含子用例）通过，complete=true、零失败/skip，53.992 秒。报告中的原命令覆盖全部 `TestTM`、接管契约/绑定、启动停止 outbox、部署重启绑定、CLI 预检和调用方/测试支持架构守卫。此前基线中的 `TestTM04ExecutionBoundary` 在本次主干上已通过；不据此改写历史失败或宣称完整 L1 通过。495 个 Markdown、3039 个本地导航链接检查零错误，差异空白检查通过。本轮未重跑真实模型、前端或 Full；历史真实场景及 Runner 前置阻断沿用上述固定版本证据。

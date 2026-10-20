@@ -23,7 +23,7 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 | 人 | 决定目标与任务范围、处理产品取舍和权限问题、审阅并合并 PR |
 | 任务应用 | 核验固定任务契约、DAG、领取资格与核验后的任务结果 |
 | SteerLine 调用方（taskrunner / runnerbridge） | 冻结任务材料、保存候选与原 CLI 请求、对账公开 Run/事件/PR、转交授权输入、核验唯一交付及持久化停止义务 |
-| 独立 SteerRunner | 准备工作区、管理普通/审计 workflow 与原会话、冻结逐轮输入/模型、核验执行 PR 事实并结算原生资源 |
+| 独立 SteerRunner | 承担全部 LLM 执行操作、准备工作区、管理普通/审计 workflow 与原会话、冻结逐轮输入/模型、核验执行 PR 事实并结算原生资源 |
 | worker | 按任务 Spec/Plan 实现、测试、修复、提交和创建 PR；不写中心业务状态 |
 | 执行后端 | 提供真实进程、终端、原生会话/轮次、平台消息和资源事实 |
 | PR 平台 | 提供 PR 身份、head/base 和实际合并事实 |
@@ -35,6 +35,14 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 Task、候选参与关系与 TaskDelivery 由 SteerLine 管理；Runner 的 Run、Execution、Attempt、问题/输入与执行 Command 分别表达执行事实。现有产品 DTO 与 checkpoint 仍保留部分 WorkflowRun、Decision、Operation 等命名，不表示 SteerLine 继续持有相应原生执行状态机。SteerLine 通过固定 Runner CLI 与执行后端协作；Runner 的进程、会话和仓库事实属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runner 状态投影、UI 缓存和诊断日志都不能成为第二业务权威。
 
 当前拓扑是一个共享 SteerLine 后端宿主和独立 Web 程序。`steerline start` 协调启动共享后端与 Web；后端装载配置项目，在同一进程内为每个项目建立隔离的运行时、Task actor、存储和 Runner CLI 客户端。每个项目的 SteerRunner 仍独立运行。Web 与 CLI 通过统一应用 API 使用项目用例；Web 不直接访问业务数据库、调度器或 Runner 私有实现。当前模块与进程边界见[代码架构](architecture/current-code-architecture.md)，启动、项目加载和关闭契约见[统一启动 Spec](spec/unified-startup.spec.md)。
+
+## LLM 执行边界
+
+SteerLine 的所有 LLM 执行操作统一由 SteerRunner 承担，包括任务执行及产品功能所需的辅助 LLM 操作。SteerLine 负责业务目标、输入材料、执行请求和结果消费；模型调用、原生代理及会话操作由 SteerRunner 执行。SteerLine 通过 Runner 的公开契约请求这些能力，不自行接入模型或启动原生代理执行 LLM 操作；Task、DAG、候选参与关系和唯一 TaskDelivery 的业务权威仍归 SteerLine。
+
+SteerLine 与 SteerRunner 各自具有默认执行链路，初始默认均为本地 Codex。SteerLine 的默认链路用于选择交给 Runner 执行的方案；SteerRunner 的默认链路也可供其内部 LLM 操作使用，例如 workflow 中需要 LLM 的 parse 步骤。Runner 的 LLM 执行职责同时覆盖外部请求和内部流程需求，不限于开发 worker 的主执行轮次。
+
+两层默认链路的选择范围与显式配置关系统一见[执行配置](product-design/execution-profiles.md#两层默认链路)。本节声明长期职责与默认设计；具体能力、配置入口和已验范围以 Runner 公开契约及[接入记录](integration/steerrunner.md)为准。
 
 ## 执行与交付
 

@@ -1,5 +1,7 @@
 # 测试总入口
 
+调用方边界收口（2026-10-20）的最小验证见[Plan](plans/architecture-boundary-consolidation.plan.md)和[专属验收](acceptance/architecture-boundary-consolidation.md)：新 owner 依赖闭包、启动/正常 stop 共用 outbox、takeover 公开校验与原事实匹配、暂存部署 CLI 在线预检；只跑隔离定向测试，不使用安装现场或完整原生流程。
+
 Runner 兼容构建接管的定向测试与未验边界见[专属验收](acceptance/service-generation-recovery.md)：公开 takeover/startup stops、当前 pin 与历史 candidate/Check 分离、启动撤销 outbox、兼容部署证据；不运行安装环境或以 fixture 代替原生资格。
 
 Windows 启动闪窗修复的最小验证见[专属验收](acceptance/startup-console-windows.md)：固定 L1 `quick-core` 的 `TestBackgroundCommandsNoConsole` 从 detached 宿主核验四类后台命令的实际控制台句柄；另定向回归统一启动与共享 Runner，不运行全量或使用安装环境。

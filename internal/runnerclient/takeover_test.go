@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 func takeoverCLI(t *testing.T) Client {
@@ -35,14 +37,14 @@ func fixtureResponse(t *testing.T, data any) {
 
 func TestTakeoverPublicContractRejectsChangedIdentityAndUnsupportedState(t *testing.T) {
 	c := takeoverCLI(t)
-	proof := TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: c.StateDir, CandidateSHA256: c.SHA256, Compatible: true, Items: []TakeoverItem{{ID: "run", Kind: "run", Revision: 7, InputDigest: "original", Status: "compatible"}}}
+	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: c.StateDir, CandidateSHA256: c.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{ID: "run", Kind: "run", Revision: 7, InputDigest: "original", Status: "compatible"}}}
 	fixtureResponse(t, proof)
 	if _, err := c.VerifyTakeover(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	for _, change := range []string{"hash", "directory", "status", "duplicate", "contract"} {
 		bad := proof
-		bad.Items = append([]TakeoverItem(nil), proof.Items...)
+		bad.Items = append([]runnercontract.TakeoverItem(nil), proof.Items...)
 		switch change {
 		case "hash":
 			bad.CandidateSHA256 = strings.Repeat("a", 64)
@@ -64,12 +66,12 @@ func TestTakeoverPublicContractRejectsChangedIdentityAndUnsupportedState(t *test
 
 func TestStartupStopsKeepBareOriginalEnvelopeAndKnownRejection(t *testing.T) {
 	c := takeoverCLI(t)
-	stops := []PendingStop{{RunID: "original-run", Request: Request{Protocol: Protocol, RequestID: "original-stop", Input: json.RawMessage(`{"expected_revision":7}`)}}}
+	stops := []runnercontract.PendingStop{{RunID: "original-run", Request: Request{Protocol: Protocol, RequestID: "original-stop", Input: json.RawMessage(`{"expected_revision":7}`)}}}
 	info := ServiceInfo{Protocol: Protocol, Status: "ready", StateDir: c.StateDir, InstanceID: "new-instance", Version: "candidate", ResourceDigest: "resources", ExecutableSHA256: c.SHA256}
 	// Call the one startup invocation directly to inspect the public wire shape;
 	// StartServiceWithStops additionally handles an already-ready current owner.
 	fixtureResponse(t, info)
-	if _, err := c.call(context.Background(), "service start", nil, nil, &ServiceStartInput{PendingStops: stops}); err != nil {
+	if _, err := c.call(context.Background(), "service start", nil, nil, &runnercontract.ServiceStartInput{PendingStops: stops}); err != nil {
 		t.Fatal(err)
 	}
 	wire, err := os.ReadFile(os.Getenv("STEERLINE_RUNNER_CLI_CALL"))
@@ -80,13 +82,13 @@ func TestStartupStopsKeepBareOriginalEnvelopeAndKnownRejection(t *testing.T) {
 	if len(parts) != 2 {
 		t.Fatal(string(wire))
 	}
-	var actual ServiceStartInput
+	var actual runnercontract.ServiceStartInput
 	if json.Unmarshal([]byte(parts[1]), &actual) != nil || len(actual.PendingStops) != 1 || actual.PendingStops[0].Request.RequestID != "original-stop" || string(actual.PendingStops[0].Request.Input) != string(stops[0].Request.Input) {
 		t.Fatal("changed original startup stop", parts[1])
 	}
 	t.Setenv("STEERLINE_CHECK_RESPONSE", `{"protocol":"steerrunner-cli/v1","ok":false,"request_id":"original-stop","data":null,"error":{"code":"stale_revision","message":"original rejection"}}`)
 	t.Setenv("STEERLINE_CHECK_ERROR", "1")
-	_, err = c.call(context.Background(), "service start", nil, nil, &ServiceStartInput{PendingStops: stops})
+	_, err = c.call(context.Background(), "service start", nil, nil, &runnercontract.ServiceStartInput{PendingStops: stops})
 	failure, ok := err.(*Failure)
 	if !ok || failure.Unknown || failure.Code != "stale_revision" {
 		t.Fatal("known original rejection became unknown", err)
