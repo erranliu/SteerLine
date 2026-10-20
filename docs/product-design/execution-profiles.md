@@ -1,6 +1,6 @@
 # 全局执行配置
 
-当前范围为本机 Codex 与远端 Orca environment；本机 Orca 已放弃。执行由独立 SteerRunner 管理。SteerLine 保留多执行方案与默认方案选择，不维护原生 codec、权限策略、会话或 workflow 状态机。
+当前范围为本机 Codex 与远端 Orca environment；本机 Orca 已放弃。执行由独立 SteerRunner 管理。SteerLine 保留多执行方案与默认方案选择，不维护原生 codec、权限策略、会话或 workflow 状态机。所有 LLM 操作的职责以[架构边界](../architecture.md#llm-执行边界)为准，本页维护两层默认链路的配置含义。
 
 所有项目共享 `<STEERLINE_HOME>/execution.json`，当前严格格式为 3。`runner` 固定独立 EXE 的绝对路径、版本与 SHA-256；每次 CLI 调用前核对 SHA，同目录常驻实例也须匹配所选 EXE。旧版本、implementation_configs、内部 codec 和项目内旧执行方案不兼容，不迁移或回退。
 
@@ -11,6 +11,21 @@
 普通 workflow 为 development/1，审计预设显式选择 development-audited/1，并提供 workflow.audit_model；Runner 发布 workflows、workflow schema 和自包含的 run_configuration 组合 schema，caller 不补执行默认值。Runner 内嵌流程、提示词与 schema，原生代理在 implement、report、publish 的独立输入中执行。受理时固定 Spec/Plan 材料、规范化参数与提示词模板/覆盖正文；每轮最终输入在结果/反馈与授权确定后、发送前保存，恢复保留原正文和模型参数，不在受理时预生成未来轮次或原生身份。定制正文仍须保留固定材料和机器结果契约。SteerLine 只选择公开方案，不解释原生终端文本推进业务。
 
 [协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)定义预设/提交/受理数据及审计 workflow 接入。其 4.2 分开规定同构建换预设、服务换代与更换构建：原 Run 参数不变；新 Runner 实例仅在用户显式重启 SteerLine、重建 ProjectRuntime 的初始化时核验接纳，旧运行时发现替代实例拒绝新业务输入，不自动重新绑定。未结算对象阻断换构建，本期新构建使用无旧执行状态的新环境。调用方已实现上述准入和多 workflow 展示；构建 pin 持久在项目 checkpoint，候选冻结原名称/参数摘要/完整提交，参数摘要仅覆盖 execution + workflow 的有序对象 JSON；不支持升级/接管旧现场。实际结果归[专属验收](../acceptance/runner-collaboration.md)。
+
+## 两层默认链路
+
+SteerLine 与 SteerRunner 各有一层默认链路，初始默认均为本地 Codex；两者分别服务调用方选择和 Runner 内部执行。
+
+| 层次 | 默认链路的用途 | 配置归属 |
+| --- | --- | --- |
+| SteerLine | 未显式选择执行预设时，选择交给 Runner 的执行方案 | `<STEERLINE_HOME>/execution.json` 的 `default_execution_profile` 指向 `execution_profiles` 中的预设，预设携带 execution 与 workflow |
+| SteerRunner | 为 Runner 内部需要 LLM 的操作提供默认执行链路，例如 workflow 的 parse | 默认链路的配置、解析及执行归 Runner，由其公开契约定义实际入口和允许的覆盖 |
+
+显式选择 SteerLine 预设时使用所选预设；未选择时才使用 `default_execution_profile`。配置必须指向存在的预设，不因本地 Codex 是初始默认就允许缺失配置。SteerLine 将所选方案提交给 Runner，由 Runner 解释执行参数及其默认值。
+
+Runner 内部操作有显式链路配置时按其契约执行，未显式指定时可使用 Runner 自身的默认链路。SteerLine 的默认预设选择不等于修改 Runner 内部默认配置；例如候选选择远端 Orca，不能据此推定 Runner 内部 parse 也使用 Orca。两层默认均为本地 Codex，也不表示共享同一份配置或同一原生会话。
+
+默认链路用于各自范围内的缺省选择，不覆盖显式配置或已冻结运行，不作为执行失败时的隐式改投路径。Runner 内部默认链路的具体字段、操作入口和覆盖优先级须以所选构建发布的公开契约为准；本页不为其新增 SteerLine 配置字段，也不将上述职责设计视为所有相关能力已经接入或验收。
 
 ## 权限与登录
 
