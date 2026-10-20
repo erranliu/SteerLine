@@ -1,0 +1,206 @@
+{
+  "after": {
+    "content_result": {
+      "status": "succeeded",
+      "json": {
+        "tests": [
+          "fixture.marker"
+        ]
+      },
+      "source": {
+        "command_id": "459a2cefab093d329f592e6269783d62",
+        "attempt_id": "82dc8006339f04f7b0562fa513880a34",
+        "session_id": "01a157d2-c294-73e2-a257-16a99e96e65a",
+        "turn_id": "01a157d2-ce40-7f23-b3b5-883d2ee3ebb7",
+        "native_outcome": "succeeded",
+        "verified": true,
+        "source": "codex.agentMessage.final_answer",
+        "item_id": "msg_043753afbc2355cc016ad6feaf76788191874164e989da94bc",
+        "text": "{\"tests\":[\"fixture.marker\"]}"
+      }
+    },
+    "correlation": {
+      "steerline_generation": "6d5327f82cda4b9eadd729fb65e9cf4f",
+      "steerline_project": "c:\\steerlinedebug\\dev-20261020-133842-5612f97d-dirty\\projects\\steerlinetest\\.git"
+    },
+    "workflow": {
+      "id": "generate",
+      "version": 1
+    },
+    "materials": [
+      {
+        "kind": "inline",
+        "path": "docs/spec/task.plan.md",
+        "digest": "ee4b91e660b0dceedf772e55247853a6c5ff557e6f4c667e4a625919092b1d29",
+        "snapshot_path": "c:\\slr\\joebvzfow66zllnhut7n6wkmbi\\inputs\\784ed608d78a7e5784c98685e52c7a70\\docs\\spec\\task.plan.md"
+      },
+      {
+        "kind": "inline",
+        "path": "docs/testing.md",
+        "digest": "6568666ccf06cc2e4f30b9ad55ba743f19fdef7bf5cfcec5fbb9aa6a929d3a84",
+        "snapshot_path": "c:\\slr\\joebvzfow66zllnhut7n6wkmbi\\inputs\\784ed608d78a7e5784c98685e52c7a70\\docs\\testing.md"
+      },
+      {
+        "kind": "inline",
+        "path": "docs/testing/test-list.json",
+        "digest": "6c4f14bd6543f6c42e450c8b08644336ed0f1a9d188c9f5e8f560bc6347dd140",
+        "snapshot_path": "c:\\slr\\joebvzfow66zllnhut7n6wkmbi\\inputs\\784ed608d78a7e5784c98685e52c7a70\\docs\\testing\\test-list.json"
+      }
+    ],
+    "run_id": "784ed608d78a7e5784c98685e52c7a70",
+    "revision": 12,
+    "title": "Plan 测试安排: docs/spec/task.plan.md",
+    "input_digest": "6d07ac4a4f64ecdc7ddd764a1689d3da878d3e9a7d70f773e69060c9e618f682",
+    "resource_digest": "a48bfb1aa7250009b21b4170532d877be01c23375ac386cb39e269794263ef91",
+    "status": "completed",
+    "phase": "closed",
+    "step": "closed",
+    "diagnostic": "",
+    "new_inputs_allowed": false,
+    "resume_required": false,
+    "stop_status": "stopped",
+    "execution": {
+      "requested_model": "gpt-6-luna",
+      "requested_reasoning_effort": "medium",
+      "workspace_scope": "read_only_directory",
+      "turn_started": true,
+      "attempt_id": "82dc8006339f04f7b0562fa513880a34",
+      "generation": "e35776d4032fac0bc58291e487f1335b",
+      "backend": "local",
+      "protocol": "local_codex_app_server_v1",
+      "session_id": "01a157d2-c294-73e2-a257-16a99e96e65a",
+      "turn_id": "01a157d2-ce40-7f23-b3b5-883d2ee3ebb7",
+      "native_outcome": "succeeded",
+      "final_available": true,
+      "workspace": "c:\\slr\\joebvzfow66zllnhut7n6wkmbi\\runs\\784ed608d78a7e5784c98685e52c7a70\\content",
+      "branch": ""
+    },
+    "question": null,
+    "controls": {
+      "can_reply": false,
+      "can_resume": false,
+      "can_stop": false,
+      "reason": ""
+    },
+    "pr": null,
+    "final": {
+      "command_id": "459a2cefab093d329f592e6269783d62",
+      "attempt_id": "82dc8006339f04f7b0562fa513880a34",
+      "session_id": "01a157d2-c294-73e2-a257-16a99e96e65a",
+      "turn_id": "01a157d2-ce40-7f23-b3b5-883d2ee3ebb7",
+      "native_outcome": "succeeded",
+      "verified": true,
+      "source": "codex.agentMessage.final_answer",
+      "item_id": "msg_043753afbc2355cc016ad6feaf76788191874164e989da94bc",
+      "text": "{\"tests\":[\"fixture.marker\"]}"
+    },
+    "summary": "",
+    "updated_at": "2026-10-20T05:40:00.318448Z"
+  },
+  "before": {
+    "content_result": {
+      "status": "succeeded",
+      "json": {
+        "tests": [
+          "fixture.marker"
+        ]
+      },
+      "source": {
+        "command_id": "459a2cefab093d329f592e6269783d62",
+        "attempt_id": "82dc8006339f04f7b0562fa513880a34",
+        "session_id": "01a157d2-c294-73e2-a257-16a99e96e65a",
+        "turn_id": "01a157d2-ce40-7f23-b3b5-883d2ee3ebb7",
+        "native_outcome": "succeeded",
+        "verified": true,
+        "source": "codex.agentMessage.final_answer",
+        "item_id": "msg_043753afbc2355cc016ad6feaf76788191874164e989da94bc",
+        "text": "{\"tests\":[\"fixture.marker\"]}"
+      }
+    },
+    "correlation": {
+      "steerline_generation": "6d5327f82cda4b9eadd729fb65e9cf4f",
+      "steerline_project": "c:\\steerlinedebug\\dev-20261020-133842-5612f97d-dirty\\projects\\steerlinetest\\.git"
+    },
+    "workflow": {
+      "id": "generate",
+      "version": 1
+    },
+    "materials": [
+      {
+        "kind": "inline",
+        "path": "docs/spec/task.plan.md",
+        "digest": "ee4b91e660b0dceedf772e55247853a6c5ff557e6f4c667e4a625919092b1d29",
+        "snapshot_path": "c:\\slr\\joebvzfow66zllnhut7n6wkmbi\\inputs\\784ed608d78a7e5784c98685e52c7a70\\docs\\spec\\task.plan.md"
+      },
+      {
+        "kind": "inline",
+        "path": "docs/testing.md",
+        "digest": "6568666ccf06cc2e4f30b9ad55ba743f19fdef7bf5cfcec5fbb9aa6a929d3a84",
+        "snapshot_path": "c:\\slr\\joebvzfow66zllnhut7n6wkmbi\\inputs\\784ed608d78a7e5784c98685e52c7a70\\docs\\testing.md"
+      },
+      {
+        "kind": "inline",
+        "path": "docs/testing/test-list.json",
+        "digest": "6c4f14bd6543f6c42e450c8b08644336ed0f1a9d188c9f5e8f560bc6347dd140",
+        "snapshot_path": "c:\\slr\\joebvzfow66zllnhut7n6wkmbi\\inputs\\784ed608d78a7e5784c98685e52c7a70\\docs\\testing\\test-list.json"
+      }
+    ],
+    "run_id": "784ed608d78a7e5784c98685e52c7a70",
+    "revision": 12,
+    "title": "Plan 测试安排: docs/spec/task.plan.md",
+    "input_digest": "6d07ac4a4f64ecdc7ddd764a1689d3da878d3e9a7d70f773e69060c9e618f682",
+    "resource_digest": "a48bfb1aa7250009b21b4170532d877be01c23375ac386cb39e269794263ef91",
+    "status": "completed",
+    "phase": "closed",
+    "step": "closed",
+    "diagnostic": "",
+    "new_inputs_allowed": false,
+    "resume_required": false,
+    "stop_status": "stopped",
+    "execution": {
+      "requested_model": "gpt-6-luna",
+      "requested_reasoning_effort": "medium",
+      "workspace_scope": "read_only_directory",
+      "turn_started": true,
+      "attempt_id": "82dc8006339f04f7b0562fa513880a34",
+      "generation": "e35776d4032fac0bc58291e487f1335b",
+      "backend": "local",
+      "protocol": "local_codex_app_server_v1",
+      "session_id": "01a157d2-c294-73e2-a257-16a99e96e65a",
+      "turn_id": "01a157d2-ce40-7f23-b3b5-883d2ee3ebb7",
+      "native_outcome": "succeeded",
+      "final_available": true,
+      "workspace": "c:\\slr\\joebvzfow66zllnhut7n6wkmbi\\runs\\784ed608d78a7e5784c98685e52c7a70\\content",
+      "branch": ""
+    },
+    "question": null,
+    "controls": {
+      "can_reply": false,
+      "can_resume": false,
+      "can_stop": false,
+      "reason": ""
+    },
+    "pr": null,
+    "final": {
+      "command_id": "459a2cefab093d329f592e6269783d62",
+      "attempt_id": "82dc8006339f04f7b0562fa513880a34",
+      "session_id": "01a157d2-c294-73e2-a257-16a99e96e65a",
+      "turn_id": "01a157d2-ce40-7f23-b3b5-883d2ee3ebb7",
+      "native_outcome": "succeeded",
+      "verified": true,
+      "source": "codex.agentMessage.final_answer",
+      "item_id": "msg_043753afbc2355cc016ad6feaf76788191874164e989da94bc",
+      "text": "{\"tests\":[\"fixture.marker\"]}"
+    },
+    "summary": "",
+    "updated_at": "2026-10-20T05:40:00.318448Z"
+  },
+  "candidate_instance": "a587c1c1cd7121396af525851e99f30c",
+  "candidate_sha256": "ea8ad087931f55fed5da086503b76d01944fe3cbc88c191caae3e481bf901d6d",
+  "generation_id": "6d5327f82cda4b9eadd729fb65e9cf4f",
+  "input_digest": "6d07ac4a4f64ecdc7ddd764a1689d3da878d3e9a7d70f773e69060c9e618f682",
+  "original_instance": "e83089a2e1e48e0ef219f939b9335db0",
+  "original_sha256": "066a182f452ba0e80e51f5091bb5ab6baf31a6cf9085ed7e4cf7ff520234346a",
+  "passed": true,
+  "run_id": "784ed608d78a7e5784c98685e52c7a70"
+}

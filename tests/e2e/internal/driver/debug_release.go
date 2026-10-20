@@ -101,6 +101,7 @@ func DebugReleaseMain(args []string) error {
 		}
 	}
 	testingSource := os.Getenv("STEERLINE_TM_SOURCE")
+	testingCandidate := os.Getenv("STEERLINE_TM_RUNNER_CANDIDATE")
 	if err = d.prepare(simulate); err != nil {
 		return err
 	}
@@ -111,7 +112,7 @@ func DebugReleaseMain(args []string) error {
 		if simulate {
 			return errors.New("testing requires a new live package")
 		}
-		return d.testManagement(testingSource)
+		return d.testManagement(testingSource, testingCandidate)
 	case "run":
 		return d.run()
 	case "stop":

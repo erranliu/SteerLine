@@ -1,6 +1,32 @@
 # Runner generate/1 对接与最简测试管理验收
 
-日期：2026-10-19；2026-10-20 更新实现与真实验证。仅归属[本任务 Spec](../spec/test-management.spec.md) / [Plan](../spec/test-management.plan.md)，普通开发，无 Task ID，不进入 roadmap。SteerLine 侧四项缺口已补实现，真实生成、实际通过/失败→API/浏览器及原 Run/整包结算通过；Runner 对自产 generate 的同构建 takeover 拒绝，真实接管未验收，完整交付未完成。不继承 Runner 或其他任务的历史通过。
+## 2026-10-20 自动缺口继续处理
+
+**最终结果：TM-A04 的真实跨构建接管及 TM-A08 同包完整闭环已验收，原 i/j 资源与分支遗留已清理。** 以下中间失败和历史阻断只保留其当时状态，不是当前待办。用户已授权两仓提交、提 PR 并检查后合并；本轮[提交前定向检查及关键证据](evidence/merged-pr-regression-20261020/README.md)随仓库保存，未部署；TM-M01 主观体验仍待用户安排。
+
+最终包 `C:/SteerlineDebug/dev-20261020-133842-5612f97d-dirty`，SteerLine `5612f97d` 加本轮驱动修正；Runner `c122d641` 加内容接管修复，A/B 为 `0.2.0-content-takeover-a/b`，SHA 分别 `066a182f452ba0e80e51f5091bb5ab6baf31a6cf9085ed7e4cf7ff520234346a` / `ea8ad087931f55fed5da086503b76d01944fe3cbc88c191caae3e481bf901d6d`。两仓均 dirty，源码补丁、驱动文件原文/摘要、固定构建 manifest 留在证据根，不冒称干净提交。
+
+- 原生成请求 `6d5327f82cda4b9eadd729fb65e9cf4f` / Run `784ed608d78a7e5784c98685e52c7a70` 经 B 实际接管。`generation-takeover.json` 记录不同 SHA/服务实例、原 Run/input/final/content_result 不变；`generation-after-takeover.json` 确认原请求仍 saved、原生成结果和 Run 不变。仅更新本包 Runner 传输 pin，无重新 generate/submit/reply/resume。
+- B 上原开发 Run `5334c89977c5109cfbee470bf60e9c86`，代码 commit `cf101768ca7db7acfea3b9d558105750153222c2`；实际程序通过报告 `35448c3876f1427d88c2069a324c4bc0` 与失败报告 `2b8b72bb1aae4aa585bc9d2671418725`，原程序退出 0/1、前后同 commit/clean。两个 API 分别 1/0/0 与 0/1/0、历史两次；两轮 Playwright 分别 4.2s / 2.3s，通过。
+- `proof.json` 的 browser_passed/browser_failed/stopped/cleanup_complete 均 true；`verify-stop.log` 按两个原 Run/input_digest 确认全局和逐 Run resources_settled=true。整包已停，不以 PID 消失代替证明。
+- 补充远端核对发现 native publish 曾推送原 head，但因“base/head 没有差异”未创建 PR；原程序仍核实代码 commit 未变。原驱动只清 base，已修为正式资源结算后核对原 Run head/base、精确 commit/lease 及无 PR，再删除并复查。本次同包后验 `owned-head-cleanup/summary.json` 实跑 1 项通过，24.496s，包内 `evidence/test-management-owned-cleanup/` 保留新 verify-stop 和 `owned-refs-cleanup.json`；未改原 proof，未重跑模型。两条本包远端分支最终均为空、PR 数为 0。
+- 独立后验脚本 `verify-closeout-utf8.ps1` 核对同一批生成、A/B、报告/API/浏览器、两原 Run 结算、实际 Runner SHA 和远端事实，`qualification.json` passed=true。初版 PowerShell 5.1 验证脚本未显式 UTF-8，读取中文原结果失败，改为 UTF-8 后对同一原证据重验；无业务重试或证据改写。
+
+以上原始日志与后验均在 `C:/Users/lmas1/AppData/Local/Temp/steerline-auto-closeout-20261020-131948/`。主场景包装退出 0；完整闭环和后验分别记录，不据此声明完整 L2/L3 或其他原生恢复矩阵通过。
+
+本节更新下文的 Runner 阻断和 i/j 清理未知结论，历史记录不覆盖。Runner `c122d641` 加本轮工作树修复已确认内容流程 parser 配置不适用的误校验，修正原本错误初始化的内容夹具，并验证生产 admission、queued/result、原材料/codec 及开发配置拒绝。四包定向与三个内容受控场景均通过；临时 A/B 固定构建和原 k 包只读 compatible 证明见 `C:/Users/lmas1/AppData/Local/Temp/steerline-auto-closeout-20261020-131948/`。本仓增加 `scripts/test-test-management.ps1 -RunnerCandidate <B>` 变体，沿现有统一新包与真实测试管理链验证 TM-A04，原模型/权限/材料保持，只有本包 Runner 传输 pin 经正式预检/verify-restart 后更新。
+
+原 i/j 两包资源与专属 base 已完成自动收尾：`dev-20261020-110841-0752537e-dirty` 的 Run `3dd1c855f6ceabc807cbc4fa95b1e893` 与 `dev-20261020-111523-0752537e-dirty` 的 Run `71d386a024a728c0e32ce3e14734de5b` 均在 B 启动 workers 前提交原 Run/revision 的持久停止信封，之后只按原请求查询，stop_status=stopped。新服务正式停服、逐 Run 与全局资源均已核实；原 caller 的失败 shutdown 与原 proof 保持失败。核对没有本包 PR、base 仍是原 commit 后以精确 lease 删除并复查远端为空。证据根下对应两个包目录的 `summary.json` / `final-service-status.json` / `final-verification.json` 和原请求 JSON 保存全部绑定。
+
+清理驱动的中间错误也保留：一次 service stop 使用不适用的顶层 expected-instance 参数，被明确拒绝后沿原 request/body 修正；一次过早将 stopping 期间的空 discovery 当作实例替换。最后均以原 service stop ID/instance 的 last_shutdown 和正式 verify-stopped 核实，不重发业务输入，不用进程消失代替结算。
+
+首个新包 `dev-20261020-132406-5612f97d-dirty` 真实生成、程序通过/失败、API/浏览器及完整结算均通过，但可选 B 参数被 debug prepare 的环境隔离清理，未执行换构建；脚本按缺少 generation-takeover.json 失败，不计 TM-A04 通过。已在 prepare 前固定该参数，与既有 source 参数同样处理；补验使用新包，不修改该包冻结材料。最终换构建结果待下方追加。
+
+驱动后续修正与失败现场：`132920` 包因参数名与业务 candidate 变量重名而编译失败，无原生运行；`133140` 包通过 A/B 预检与 verify-restart，但过早把启动返回当 B ready，失败后正式公开证明确认原生成资源已结算，caller 未核实启动记录保留。补上有界 ready 等待并定向通过后，`133424` 包已完成 B 实际接管、原生成结果 API 核验；后续 start_task 出现 Windows `request_receipt_persist_failed`。原请求记录/唯一 ID 保留，正常 stop/verify-stop 及 base 清理均通过，整场仍失败。驱动现对该公开未知回执错误只查询原 request_id，不重新提交；原输入先落盘，已知拒绝直接保留失败。`steerline-control-reconcile-directed/summary.json` 的 19 项全部通过、零 skip，14.777s；接管、就绪及早期编译失败与最终补验分别留档。新的完整场景继续使用新包。
+
+2026-10-20 合并后补验：相关三个 Web 文件 26 项与生产构建通过；固定真实 Runner 的 `TestEnvironmentCheckPublishedContract` 1 项通过、零 skip（此前缺 EXE 的跳过已补）。证据根 `C:/Users/lmas1/AppData/Local/Temp/steerline-merged-acceptance-20261020-125058/`，分别为 `web-tests-final.log` / `web-build.log` / `published-contract/summary.json`。从干净 Runner `c122d641` 构建的 `0.2.0-acceptance-20261020` / SHA `d94760b643a4ce8469edf3c3a4494b370be6160dc0aa8aa9c046474761a92a1f` 只读核对原 k 包，已完成 generate 仍 unsupported，原开发 Run compatible；`runner/tm-k-takeover.json` 保留完整封套。TM-A04 继续阻断；不重启/重置 i/j/k、不继承新版本通过。TM-M01 的历史截图/trace 和后续可交互窗口说明见[人工操作](merged-pr-regression-20261020.md#执行页与测试结果可读性)。本页下文的固定 L1 失败保留历史，当前补验结果另见该导航。
+
+日期：2026-10-19；2026-10-20 更新实现与真实验证。仅归属[本任务 Spec](../spec/test-management.spec.md) / [Plan](../spec/test-management.plan.md)，普通开发，无 Task ID，不进入 roadmap。SteerLine 侧实现、真实生成、实际通过/失败→API/浏览器、跨构建接管及原 Run/整包资源结算均已验收；当前结果见本页开头，历史失败不改写。人工 TM-M01 后置，不继承其他任务的原生资格。
 
 ## 跨仓前置
 
@@ -8,7 +34,7 @@
 | --- | --- | --- |
 | R1 | generate/1 的正式公开能力/schema、只读配置、结果与停止语义 | 已固定 PR #33 合并提交 `9586ac4dee53882ba4349710e94c950cf47fd8db`，实际公开 schema 正反验证通过；不等待 conversation 产品能力 |
 | R2 | 原开发 Run 的不可变报告/日志公开收集和读取、当前 commit/clean 观察 | 已由 Runner PR #34 合入，当前主干 bf3ec58 保留；正式公开能力和本轮受控 CLI 验证已核实。本仓已接公开客户端、持久收集/读取与当前性投影；本轮结果见末节 |
-| R3 | 同构建 EXE version/SHA、commit、resource digest/schema、定向证据 | 已固定本轮 bf3ec58 干净构建及同 EXE 的 R2 测试，见下方 2026-10-20 记录；同构建 SteerLine 报告/浏览器/正常停止闭环已通过；生成接管限制单列 |
+| R3 | 同构建 EXE version/SHA、commit、resource digest/schema、定向证据 | 当前固定 A/B 构建、原 Run 真实接管及报告/浏览器/结算见本页最终结果；source_dirty 明确保留。历史 bf3ec58 等固定版本仅证明各自当时范围 |
 
 Runner 实施固定构建：`9586ac4dee53882ba4349710e94c950cf47fd8db`、source_dirty=false、version `0.2.0-dev.2`、windows/amd64、SHA256 `33851d039193ca1f2f6766ab15e55abb54bda118ed673f81f45ad2cc80ec6b49`、resource digest `536edcaf2ed199109a1b42875f61fbb27af048a6441c5494d8afe36f4ca1bf56`。干净源码经 Runner 自身 build.ps1 输出到 `%TEMP%/steerline-test-management-runner-9586ac4/`；该目录含 EXE、build.json 和实际 capabilities.json，本仓 `internal/runnerclient/testdata/content-capabilities.json` 保留测试所需公开子集。未使用 Runner 工作区原有旧 EXE。
 
@@ -21,11 +47,11 @@ Runner 实施固定构建：`9586ac4dee53882ba4349710e94c950cf47fd8db`、source_
 | TM-A01 | generate 客户端契约、只读配置映射、开发隔离、缺能力零回退 | 受控验证通过 | 实际公开 schema fixture 正反例、配置白名单映射及缺能力拒绝；不建设 conversation 操作接口 |
 | TM-A02 | 清单/安排映射、PlanRef 同提交推导、固定快照和空/缺/无效语义 | 受控验证通过 | 严格 JSON/ID/路径、隔离 Git 同 commit 读取、已有 E2E 登记对齐；沿原候选事务固定，不增加 Task 字段或门禁 |
 | TM-A03 | 原生成请求、固定材料、空结果保护、条件保存及显式继续保存零重发 | 受控验证通过 | 内存公开 Runner fixture + SQLite CAS；真实生成保存另记，不把此项当 live 闭环 |
-| TM-A04 | 未知/取消/迟到/重启、持久化先于提交、无 Task 副作用与停服结算 | 受控通过；真实接管阻断 | 本仓已接 takeover/startup stop/离线取证，保留原 pin。固定 Runner 对自己生成的已完成 generate 记录返回 unsupported，真实换代尚不能记为通过，见末节 |
+| TM-A04 | 未知/取消/迟到/重启、持久化先于提交、无 Task 副作用与停服结算 | 已验收：受控与真实跨构建接管 | 原生成请求/Run/input/final/result 跨 A/B 保持，正式重启与最终两原 Run 结算通过；此前 unsupported 的原因及修复见页首 |
 | TM-A05 | 实际报告/公开产物回传，环境/选择/日志及干净同 commit 限定 | 功能链通过 | 定向验证及同一原开发 Run 上真实程序通过/失败，经公开 collect/list/read/workspace-git 到正式 API 与浏览器；原退出码 0/1，干净同 commit；整包结算另记 |
 | TM-A06 | 来源/版本隔离，幂等冲突、顺序与补测历史 | 通过 | 不可变 CAS、字节摘要、原请求/来源与冲突顺序定向验证；真实第二次失败覆盖当前通过，历史保留两次和各自原证据 |
 | TM-A07 | 正式 API、执行页汇总/详情/历史/日志/切换/离线 | 通过 | 前端 26 项、API 边界及真实浏览器通过/失败两轮；无新页面、执行按钮或浏览器写接口，见末节 |
-| TM-A08 | 固定真实 Runner 生成保存，实际通过/失败报告到正式 API/浏览器闭环 | 通过 | k 包真实生成、实际通过/失败到 API/浏览器、显式原 Run stop、整包 stop/verify-stop 和本包 base 清理均通过；见末节 |
+| TM-A08 | 固定真实 Runner 生成保存，实际通过/失败报告到正式 API/浏览器闭环 | 已验收 | 当前 133842 包的 A/B 接管、程序/报告/API/浏览器、原 Run/整包结算及本包 base/head 清理通过；历史 k 包保留原适用版本 |
 
 每次执行记录 SteerLine commit/工作树、Runner pin、场景选择、命令、输出目录、退出/通过/完整性、原 Run/Command/Turn/材料与代码来源、包和清理事实。失败和补测分别登记，不覆盖历史失败。模型成功、受控 fixture 或编译不能代替真实闭环。
 

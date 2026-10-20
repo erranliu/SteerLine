@@ -109,6 +109,8 @@ fixture 的 `caller-fixture.json`、provider `requests` 是测试自产公开协
 
 兼容更新的专项调试联验使用 [test-runner-update-live.ps1](../../scripts/test-runner-update-live.ps1)，参数为尚未启动的新调试包、不同 SHA 的兼容 Runner 候选及实际原生 Codex EXE。它复用生产部署预检/停服核验，经原生公开只读历史证明离线完成，再启动新 Runner 并核验真实 PR/交付，最后正式停止本包资源。具体命令、边界及验收项见[专属 Plan](../../docs/plans/service-generation-recovery.plan.md)。该专项入口未纳入分级 manifest，不能用其结果声明完整 L2/L3 或原生恢复矩阵通过。
 
+测试管理的同一 live 场景可用 `scripts/test-test-management.ps1 -SteerRunnerExe <A> -RunnerCandidate <B> -Out <新目录>` 补验生成对象换构建：A/B 必须不同 SHA，正式预检/verify-restart 后仅更新包内 Runner 传输 pin，原生成/Run/input/final/result 保持，再完成原程序/API/浏览器闭环。resume/start 回执文件写入失败只查询原 ID，零重发。原资源结算后核对本包 base 和原 Run head 的精确 commit/lease 及无 PR，删除并复查；发布未创建 PR 仍可能已经推送 head，不能只清 base。已有完成包可设置 `STEERLINE_TM_CLEANUP_ROOT=<包绝对路径>`，精确运行 `go test ./tests/e2e/internal/driver -run '^TestDebugTestManagementOwnedBranchCleanup$' -count=1 -timeout=90s` 做同一清理后验；它先正式验证原 Run 资源结算，不启动服务/模型，不改历史 proof。实际结果见[专属验收](../../docs/acceptance/test-management.md)，不增加新的 manifest ID。
+
 仅准备阶段失败且尚无业务候选时，可显式 `-ContinuePrepared`；它验证相同 live/ready 方案、stopped 服务、两项 open 任务及零候选，不修改已冻结材料，另建 continuation 证据目录。已有候选须使用新包，不能 reset 或再次领取来补成通过。
 
 普通 controlled 业务 5 分钟，waiting-merge-restart 和 live 10 分钟；runtime 子场景保留主干 5 分钟业务期限和独立父期限。live Go 父期限 35 分钟包含独立清理，未放宽业务窗口；普通命令、领取/控制及收尾沿现有明确预算。`FinishBody` 冻结业务期限，清理结果不能掩盖业务超时。

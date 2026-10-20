@@ -1,0 +1,65 @@
+{
+  "steerline_directed": {
+    "tests": 20,
+    "skipped": 0,
+    "passed": true
+  },
+  "date": "2026-10-20",
+  "runner_commit": "c122d641677593d4b694e2eda7502001510d4e8b",
+  "old_i": {
+    "owned_base_removed": true,
+    "resources_settled": true,
+    "original_service_stop": "ca24c15215094b6eaac6f65826742d41",
+    "generation_run": "146add7f37cded226996dc62c32e95b4",
+    "package": "C:/SteerlineDebug/dev-20261020-110841-0752537e-dirty",
+    "original_failed_receipt_unchanged": true,
+    "candidate_run": "3dd1c855f6ceabc807cbc4fa95b1e893"
+  },
+  "runner_controlled": {
+    "exe": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-auto-closeout-20261020-131948\\runner-controlled\\steerrunner.exe",
+    "exit_code": 0,
+    "finished_at": "2026-10-20T05:24:07.7623347Z",
+    "scenario_count": 3
+  },
+  "real_qualification": {
+    "runner_a": "066a182f452ba0e80e51f5091bb5ab6baf31a6cf9085ed7e4cf7ff520234346a",
+    "passed": true,
+    "browser_pass": true,
+    "candidate_run": "5334c89977c5109cfbee470bf60e9c86",
+    "original_runs_settled": true,
+    "api_pass": true,
+    "generation_run": "784ed608d78a7e5784c98685e52c7a70",
+    "browser_fail": true,
+    "owned_pr_count": 0,
+    "owned_base_head_absent": true,
+    "runner_b": "ea8ad087931f55fed5da086503b76d01944fe3cbc88c191caae3e481bf901d6d",
+    "api_fail": true,
+    "package": "C:/SteerlineDebug/dev-20261020-133842-5612f97d-dirty",
+    "generation_id": "6d5327f82cda4b9eadd729fb65e9cf4f",
+    "commit": "cf101768ca7db7acfea3b9d558105750153222c2"
+  },
+  "steerline_commit": "5612f97d6754b98e79b5be409ba688e204cd8832",
+  "old_j": {
+    "owned_base_removed": true,
+    "resources_settled": true,
+    "original_service_stop": "d24ffa917be54bec9b6f9ffb3da28140",
+    "generation_run": "ac4a2b76702da9255693b964b92a8c53",
+    "package": "C:/SteerlineDebug/dev-20261020-111523-0752537e-dirty",
+    "original_failed_receipt_unchanged": true,
+    "candidate_run": "71d386a024a728c0e32ce3e14734de5b"
+  },
+  "source_dirty": true,
+  "remaining_external": "Orca 1.4.224 public original-create request lookup interface not provided",
+  "runner_rules": {
+    "packages": [
+      "github.com/erranliu/SteerRunner/internal/execution/resultacquisition",
+      "github.com/erranliu/SteerRunner/internal/execution/workflow",
+      "github.com/erranliu/SteerRunner/internal/execution/adapters/codex",
+      "github.com/erranliu/SteerRunner/internal/application"
+    ],
+    "passed": 83,
+    "skipped": 0,
+    "failed": 0
+  },
+  "deployed": false
+}

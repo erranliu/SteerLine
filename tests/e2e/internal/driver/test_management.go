@@ -26,7 +26,7 @@ import (
 
 // testManagement drives only public application/Runner operations and the fixture's
 // actual assertion program. No result JSON is synthesized by this driver or an agent.
-func (d *debugRelease) testManagement(source string) (result error) {
+func (d *debugRelease) testManagement(source, runnerCandidate string) (result error) {
 	if !filepath.IsAbs(source) {
 		return errors.New("test management source must be absolute")
 	}
@@ -42,6 +42,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	}
 	proof := feedback.TestManagementProof{Package: d.root}
 	var pushed string
+	var ownedHead string
 	started := false
 	defer func() {
 		if started {
@@ -53,18 +54,8 @@ func (d *debugRelease) testManagement(source string) (result error) {
 			}
 		}
 		if pushed != "" && proof.Stopped {
-			remote, e := d.git("ls-remote", "origin", "refs/heads/"+d.base)
-			if e == nil && strings.TrimSpace(remote) != "" {
-				if len(strings.Fields(remote)) != 2 || strings.Fields(remote)[0] != pushed {
-					e = errors.New("owned base changed; preserved")
-				} else {
-					_, e = d.git("push", "--force-with-lease=refs/heads/"+d.base+":"+pushed, "origin", ":refs/heads/"+d.base)
-					if e == nil {
-						remote, e = d.git("ls-remote", "origin", "refs/heads/"+d.base)
-					}
-				}
-			}
-			proof.Cleanup = e == nil && strings.TrimSpace(remote) == ""
+			e := d.tmCleanupOwnedRefs(out, pushed, ownedHead, proof.CandidateRun)
+			proof.Cleanup = e == nil
 			if !proof.Cleanup {
 				result = errors.Join(result, fmt.Errorf("owned base cleanup unverified: %v", e))
 			}
@@ -160,6 +151,31 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	if err = controlled.Write(filepath.Join(out, "generation-run.json"), gen); err != nil {
 		return err
 	}
+	if runnerCandidate != "" {
+		if err = p.Close(); err != nil {
+			return err
+		}
+		runner, err = d.tmGenerationTakeover(ctx, out, runnerCandidate, generation, *gen.Run, runner)
+		if err != nil {
+			return err
+		}
+		proof.RunnerSHA256 = runner.SHA256
+		err = tmPoll(ctx, func() (bool, error) {
+			p, err = applicationclient.OpenProject(ctx, d.home, id.ProjectID)
+			return err == nil, nil
+		})
+		if err != nil {
+			return err
+		}
+		defer p.Close()
+		current, err := p.TestGeneration(ctx, request)
+		if err != nil || current.ID != generation.ID || current.RunID != generation.RunID || current.State != "saved" || string(current.Result) != string(generation.Result) {
+			return fmt.Errorf("generation changed across compatible takeover: %+v: %w", current, err)
+		}
+		if err = controlled.Write(filepath.Join(out, "generation-after-takeover.json"), current); err != nil {
+			return err
+		}
+	}
 	if _, err = d.git("add", "--", "docs/spec/task.spec.md", "docs/spec/task.plan.md", "docs/spec/task.tests.json"); err != nil {
 		return err
 	}
@@ -225,11 +241,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	if taskID == "" {
 		return errors.New("original testing task absent")
 	}
-	resume, err := p.SubmitControl(ctx, api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RequestedBy: "testing-driver"})
-	if err != nil {
-		return err
-	}
-	resumed, err := p.WaitControl(ctx, resume.RequestID, time.Second)
+	resumed, err := tmControl(ctx, p, out, "resume", api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RequestedBy: "testing-driver"})
 	if err != nil {
 		return err
 	}
@@ -240,14 +252,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	if err != nil {
 		return err
 	}
-	control, err := p.SubmitControl(ctx, api.ControlInput{Action: api.StartTask, Payload: payload, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RequestedBy: "testing-driver"})
-	if err != nil {
-		return err
-	}
-	if err = controlled.Write(filepath.Join(out, "start-control.json"), control); err != nil {
-		return err
-	}
-	startedReceipt, err := p.WaitControl(ctx, control.RequestID, time.Second)
+	startedReceipt, err := tmControl(ctx, p, out, "start-control", api.ControlInput{Action: api.StartTask, Payload: payload, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RequestedBy: "testing-driver"})
 	if err != nil {
 		return err
 	}
@@ -290,6 +295,8 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	if err != nil {
 		return err
 	}
+	ownedHead = original.Execution.Branch
+	proof.CandidateRun = original.RunID
 	if original.PR != nil {
 		return errors.New("fixture must not publish a PR")
 	}

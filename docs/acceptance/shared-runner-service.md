@@ -1,5 +1,7 @@
 # 应用级共享 SteerRunner 服务验收
 
+2026-10-20 合并后补验：原双项目测试与无法解析 census 的启动拒绝反例拆分，后者明确核验零服务启动/目录/项目数据库；这遵循后续兼容接管的停止义务门槛，不放宽共享服务规则。精确两项 L3 `runtime.shared-runner-projects,recovery.waiting-merge-restart` 已通过且清理完整；新真实双项目包 `C:/SteerlineDebug/dev-20261020-125527-5612f97d-dirty` 的 `TestDebugReleaseSharedRunnerService` 实跑通过（145.421s），包括同实例重复 start、reset 保留 pin/目录、重启换实例、零业务 Run，最终 `home/application-api/shutdown.json` clean=true / resources_settled=true。源码 `5612f97d` 加测试修正，Runner `c122d641` 干净构建，SHA `d94760b643a4ce8469edf3c3a4494b370be6160dc0aa8aa9c046474761a92a1f`。总证据根为 `C:/Users/lmas1/AppData/Local/Temp/steerline-merged-acceptance-20261020-125058/` 的 `controlled/L3/`、`idle-shared/`，包内 `evidence/shared-runner-service.json/log`。SRS-M01 保持待验；可用上述已停包体验，错误项目诊断仍需另行安排原执行现场，详见[人工操作](merged-pr-regression-20261020.md#双项目与-windows-启动体验)。
+
 归属：2026-10-19 普通开发，[Spec](../spec/shared-runner-service.spec.md) / [Plan](../spec/shared-runner-service.plan.md)。只覆盖 SteerLine 共享服务接线，不覆盖 Runner 原生执行/恢复专项或闪窗治理。
 
 状态：已按用户授权实施，SRS-A01–SRS-A07 自动验收通过；SRS-M01 人工体验待验。未使用或修改安装环境，未修改 Runner 仓库，未执行真实模型/业务 Run 或创建 PR。

@@ -1,5 +1,7 @@
 # 调用方边界收口验收
 
+2026-10-20 合并后补验：此前缺发布 EXE 而跳过的 `TestEnvironmentCheckPublishedContract` 已固定 Runner `c122d641` 的干净构建实跑通过（1 项、零 skip、11.638s），只使用隔离空闲服务，不声称原生执行资格。`scripts/test-deployment-stop.ps1` 通过。固定 L1 将共享 Runner/接管八项移至 `quick-owner-runner-startup`，项目生命周期留 `quick-owner-unified-startup`，每组原预算与全部断言保持；Plan 同步组名，结果及证据见[本轮补验](merged-pr-regression-20261020.md)。
+
 2026-10-20，基线 `0752537e`，用户直接授权；[实施 Plan](../plans/architecture-boundary-consolidation.plan.md)。
 
 | 自动项 | 验收范围 | 结果 |

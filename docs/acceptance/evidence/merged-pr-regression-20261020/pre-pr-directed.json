@@ -1,0 +1,553 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./cmd/test-feedback",
+    "./internal/app",
+    "./internal/storage/sqlite",
+    "./tests/e2e/internal/driver",
+    "./internal/testmanagement",
+    "./internal/testkit/boundary/e2e",
+    "-run",
+    "TestQuick|TestScopedCoverage|TestUnifiedStartupLifecycleSharedPIDIndependentInstances|TestUnifiedStartupUnresolvedCensusBlocksRunnerStart|TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding|TestTMGeneration|TestTMControlReceipt|TestDebugPublicationReusesPR|TestProductionSourcesUseOnlyOwnedTestkitSupport",
+    "-count=1",
+    "-timeout=180s",
+    "-json"
+  ],
+  "started_at": "2026-10-20T06:04:27.3010929Z",
+  "finished_at": "2026-10-20T06:04:58.9239309Z",
+  "wall_seconds": 31.6236602,
+  "environment": {
+    "source_commit": "5612f97d6754b98e79b5be409ba688e204cd8832",
+    "worktree_status": " M cmd/test-feedback/scoped.go\n M cmd/test-feedback/scoped_test.go\n M docs/acceptance/README.md\n M docs/acceptance/architecture-boundary-consolidation.md\n M docs/acceptance/recent-activity-display.md\n M docs/acceptance/shared-runner-service.md\n M docs/acceptance/startup-console-windows.md\n M docs/acceptance/test-management.md\n M docs/plans/architecture-boundary-consolidation.plan.md\n M docs/product-design/worker-lifecycle.md\n M docs/spec/test-management.plan.md\n M docs/testing.md\n M internal/app/application_connection_test.go\n M internal/storage/sqlite/runner_reads_test.go\n M scripts/test-test-management.ps1\n M tests/e2e/README.md\n M tests/e2e/internal/driver/debug_release.go\n M tests/e2e/internal/driver/test_management.go\n?? docs/acceptance/merged-pr-regression-20261020.md\n?? docs/acceptance/planning-long-documents.md\n?? tests/e2e/internal/driver/test_management_cleanup.go\n?? tests/e2e/internal/driver/test_management_cleanup_test.go\n?? tests/e2e/internal/driver/test_management_control.go\n?? tests/e2e/internal/driver/test_management_control_test.go\n?? tests/e2e/internal/driver/test_management_takeover.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 6,
+    "passed_packages": 6,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 54,
+    "passed_tests": 54,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "status": "pass",
+        "elapsed_seconds": 29.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "status": "pass",
+        "elapsed_seconds": 16.66
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "status": "pass",
+        "elapsed_seconds": 2.376
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "status": "pass",
+        "elapsed_seconds": 1.885
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "status": "pass",
+        "elapsed_seconds": 1.333
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
+        "status": "pass",
+        "elapsed_seconds": 1.164
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestUnifiedStartupLifecycleSharedPIDIndependentInstances",
+        "status": "pass",
+        "elapsed_seconds": 21.82
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestDebugPublicationReusesPR",
+        "status": "pass",
+        "elapsed_seconds": 15.14
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestDebugPublicationReusesPR/projects/SteerlineTest/OPEN",
+        "status": "pass",
+        "elapsed_seconds": 5.69
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestDebugPublicationReusesPR/projects/SteerlineTest/MERGED",
+        "status": "pass",
+        "elapsed_seconds": 4.75
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestDebugPublicationReusesPR/projects/SteerlineTest/CLOSED",
+        "status": "pass",
+        "elapsed_seconds": 4.71
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestUnifiedStartupUnresolvedCensusBlocksRunnerStart",
+        "status": "pass",
+        "elapsed_seconds": 3.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents",
+        "status": "pass",
+        "elapsed_seconds": 0.78
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestTMGenerationTakeoverAndDurableStartupStop",
+        "status": "pass",
+        "elapsed_seconds": 0.61
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
+        "name": "TestProductionSourcesUseOnlyOwnedTestkitSupport",
+        "status": "pass",
+        "elapsed_seconds": 0.42
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding",
+        "status": "pass",
+        "elapsed_seconds": 0.36
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/complete",
+        "status": "pass",
+        "elapsed_seconds": 0.3
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile",
+        "status": "pass",
+        "elapsed_seconds": 0.16
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestTMGenerationStoreCASAndImmutableRequest",
+        "status": "pass",
+        "elapsed_seconds": 0.15
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/duplicate",
+        "status": "pass",
+        "elapsed_seconds": 0.11
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/skip",
+        "status": "pass",
+        "elapsed_seconds": 0.11
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickOwnerPartitionsRejectMissingAndReplayedGroups",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/missing",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickBoundaryCoverageRequiresEachAssignedEntry",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/invalid",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/truncated",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationChangesAndRestart",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickOwnerPartitionsRejectMissingAndReplayedGroups/missing",
+        "status": "pass",
+        "elapsed_seconds": 0.06
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[\"unknown\"]}",
+        "status": "pass",
+        "elapsed_seconds": 0.06
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationSaveAndReplay",
+        "status": "pass",
+        "elapsed_seconds": 0.06
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding/activity_stream_stays_pinned_and_releases_its_connection",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding/readable_changes_survive_technical_event_noise",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[]}",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationPersistenceAndUnknown",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationCompatibleBuildObservesOriginalWithoutResubmit",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[\"unit.rules\",\"unit.rules\"]}",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationSavedFileSurvivesLostReceipt",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickTargetedCoverageRejectsZeroMatches",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationCancelledBeforeLateBindingDoesNotSave",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickBoundaryCoverageRequiresEachAssignedEntry/missing_linux_closure",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickBoundaryCoverageRequiresEachAssignedEntry/missing_parent",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickBoundaryCoverageRequiresEachAssignedEntry/unexpected_recovery",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickBoundaryCoverageRequiresEachAssignedEntry/duplicate",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickBoundaryCoverageRequiresEachAssignedEntry/missing_windows_closure",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickOwnerPartitionsRejectMissingAndReplayedGroups/replaced",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickOwnerPartitionsRejectMissingAndReplayedGroups/replayed",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickTargetedCoverageRejectsZeroMatches/false",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickTargetedCoverageRejectsZeroMatches/true",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding/cancelled_activity_stream_releases_its_transaction",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestTMControlReceiptFailureQueriesOriginalWithoutResubmit",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestTMControlReceiptFailureQueriesOriginalWithoutResubmit/request_receipt_persist_failed",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickBoundaryCoverageRequiresEachAssignedEntry/complete",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickGroupsBoundConcurrencyAndPreserveReportOrder",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickGroupsBoundConcurrencyAndPreserveReportOrder/1",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickGroupsBoundConcurrencyAndPreserveReportOrder/3",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickIntegrationSelectionKeepsPublicRunnerBoundary",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickTargetedIntegrationDoesNotReplaceFixedCoverage",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickWorkersDefaultAndExplicitSelections",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestTMControlReceiptFailureQueriesOriginalWithoutResubmit/stale_revision",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestTMGenerationResetRequiresOriginalSettlement",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestUnifiedStartupLifecycleSharedPIDIndependentInstances",
+        "status": "pass",
+        "elapsed_seconds": 21.82
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestDebugPublicationReusesPR",
+        "status": "pass",
+        "elapsed_seconds": 15.14
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestDebugPublicationReusesPR/projects/SteerlineTest/OPEN",
+        "status": "pass",
+        "elapsed_seconds": 5.69
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestDebugPublicationReusesPR/projects/SteerlineTest/MERGED",
+        "status": "pass",
+        "elapsed_seconds": 4.75
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestDebugPublicationReusesPR/projects/SteerlineTest/CLOSED",
+        "status": "pass",
+        "elapsed_seconds": 4.71
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestUnifiedStartupUnresolvedCensusBlocksRunnerStart",
+        "status": "pass",
+        "elapsed_seconds": 3.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents",
+        "status": "pass",
+        "elapsed_seconds": 0.78
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestTMGenerationTakeoverAndDurableStartupStop",
+        "status": "pass",
+        "elapsed_seconds": 0.61
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
+        "name": "TestProductionSourcesUseOnlyOwnedTestkitSupport",
+        "status": "pass",
+        "elapsed_seconds": 0.42
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding",
+        "status": "pass",
+        "elapsed_seconds": 0.36
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/complete",
+        "status": "pass",
+        "elapsed_seconds": 0.3
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile",
+        "status": "pass",
+        "elapsed_seconds": 0.16
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestTMGenerationStoreCASAndImmutableRequest",
+        "status": "pass",
+        "elapsed_seconds": 0.15
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/duplicate",
+        "status": "pass",
+        "elapsed_seconds": 0.11
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/skip",
+        "status": "pass",
+        "elapsed_seconds": 0.11
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickOwnerPartitionsRejectMissingAndReplayedGroups",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/missing",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestQuickBoundaryCoverageRequiresEachAssignedEntry",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/invalid",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/test-feedback",
+        "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/truncated",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 29.8439153,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "C:/Users/lmas1/AppData/Local/Temp/steerline-pr-closeout-20261020-140417/steerline-directed/go-test.jsonl",
+  "stderr_log": "C:/Users/lmas1/AppData/Local/Temp/steerline-pr-closeout-20261020-140417/steerline-directed/go-test.stderr.txt"
+}
