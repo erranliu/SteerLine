@@ -1,0 +1,23 @@
+{
+  "protocol": "steerrunner-cli/v1",
+  "ok": true,
+  "request_id": null,
+  "data": {
+    "candidate_sha256": "482aafcffd8b61516f26e842361602741643f52e2d77d2be5ccea6461da4292f",
+    "compatible": true,
+    "contract": "steerrunner-takeover/v1",
+    "items": [
+      {
+        "id": "5c6669c185ca96aab43eeaadf296eeee",
+        "input_digest": "10857d3f0a898f367f1ea9d48e9415a6dfcb556f9adff0f5cd418cd0b0ac941c",
+        "kind": "run",
+        "request_digest": "50e778f7d303eb10ed6121a0d4e51bc52025388c5fd957fbd621cf63f2a58e6d",
+        "request_id": "native-generate-takeover",
+        "revision": 16,
+        "status": "compatible"
+      }
+    ],
+    "state_dir": "c:\\srt\\gt-23720053\\state"
+  },
+  "error": null
+}

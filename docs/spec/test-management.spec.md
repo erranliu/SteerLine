@@ -1,6 +1,6 @@
 # Runner generate/1 对接与最简测试管理 Spec
 
-日期：2026-10-19；2026-10-20 对齐 Runner R2 交接。状态：SteerLine 侧接入及真实结果闭环已实现；Runner 对自产 generate 记录的同构建 takeover 仍拒绝，真实兼容接管未验收，整体验收尚未完成。Runner 对接和测试管理合并为一套 Spec/Plan。配套 [Plan](test-management.plan.md) 与[专属验收](../acceptance/test-management.md)。普通开发，不分配 Task ID，不修改 roadmap。
+日期：2026-10-19；2026-10-20 对齐 Runner 修复交接。状态：实现及自动验收已完成；Runner 内容接管误校验已修复，真实 A/B 接管与干净主干同构建复验均通过，人工体验后置。实际版本和各自验证范围见专属验收。Runner 对接和测试管理合并为一套 Spec/Plan。配套 [Plan](test-management.plan.md) 与[专属验收](../acceptance/test-management.md)。普通开发，不分配 Task ID，不修改 roadmap。
 
 ## 1. 目标、现状与范围
 
@@ -34,7 +34,7 @@ SteerLine 调查基线 `4c5409f398585b9fd3623d625d4e2d0563efec13`。实施固定
 跨仓前置如下；契约固定后可受控开发，真实交付还需实际构建与联验：
 
 1. **生成契约前置 R1**：已固定 Runner `9586ac4` 的 generate/1 公开 capabilities、输入/schema、结果来源及停止语义：submit v1、generate 输入、inline 材料及 read_only。本仓按该公开契约建设 fixture 和客户端，不从 Runner 私有实现拼接口，也不等待 conversation 的 UI/交互能力。
-2. **报告出口前置 R2**：Runner PR #34（合并 `a259c3a`，实现 `7325a87`）已交付 `artifacts discover/collect/list/read` 与 `workspace-git`；当前主干 `bf3ec58` 保留这些能力。正式契约见 [Runner 接入说明](https://github.com/erranliu/SteerRunner/blob/bf3ec581cb0b23a7358d95e5efa8ff5f607c2f55/docs/run-evidence-r2.md)。产物位于原工作区 `.steerrunner/artifacts/`；collect 是带原 request_id、expected_revision、relative_path 的写操作，read 按 Run/artifact ID 返回原字节 base64、SHA256 和归属。Git 查询须检查 verified 及可空 commit/clean。项目测试程序记录执行编号、顺序、实际选择和 Git 来源，SteerLine 解释测试定义、计划与通过条件；Runner 不理解测试 ID 或签发额外测试证明。SteerLine 已实现消费接入，不能再标为 Runner 尚缺接口；实际通过和恢复限制只在验收登记。
+2. **报告出口前置 R2**：Runner PR #34（合并 `a259c3a`，实现 `7325a87`）已交付 `artifacts discover/collect/list/read` 与 `workspace-git`；R2 历史固定主干 `bf3ec58` 保留这些能力。正式契约见 [Runner 接入说明](https://github.com/erranliu/SteerRunner/blob/bf3ec581cb0b23a7358d95e5efa8ff5f607c2f55/docs/run-evidence-r2.md)。产物位于原工作区 `.steerrunner/artifacts/`；collect 是带原 request_id、expected_revision、relative_path 的写操作，read 按 Run/artifact ID 返回原字节 base64、SHA256 和归属。Git 查询须检查 verified 及可空 commit/clean。项目测试程序记录执行编号、顺序、实际选择和 Git 来源，SteerLine 解释测试定义、计划与通过条件；Runner 不理解测试 ID 或签发额外测试证明。SteerLine 已实现消费接入，不能再标为 Runner 尚缺接口；实际通过和恢复限制只在验收登记。
 3. **联验前置 R3**：取得实现 R1/R2 的实际 Runner commit、EXE version/SHA、resource digest、自包含 schema 与同构建定向证据。受控开发不必等待 R3；真实接入、功能交付必须满足 R3，不能拿移动工作区或旧 EXE 冒充。
 
 不导入 Runner Go 包，不读取其 SQLite、原生文件、私有日志或认证内容；不直接启动 Codex。新流程缺能力明确返回 unsupported，不影响原有合格开发功能，也不回退本地 Agent。

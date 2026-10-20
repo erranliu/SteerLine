@@ -1,6 +1,6 @@
 # Runner generate/1 对接与最简测试管理 Plan
 
-日期：2026-10-19；2026-10-20 审查后更新。依据 [Spec](test-management.spec.md)，配套[专属验收](../acceptance/test-management.md)。普通开发，不进入 roadmap；不启动其他聊天或部署。R1 已接入，Runner R2 已合入并在当前 `bf3ec58` 发布；本批补本仓结果消费、换代接线和完整真实闭环，结果只登记 acceptance。
+日期：2026-10-19；2026-10-20 审查后更新。依据 [Spec](test-management.spec.md)，配套[专属验收](../acceptance/test-management.md)。普通开发，不进入 roadmap；不启动其他聊天或部署。R1 已接入，Runner R2 已合入，历史交接固定 `bf3ec58`；后续修复交接按下文最小复验执行；本批补本仓结果消费、换代接线和完整真实闭环，结果只登记 acceptance。
 
 ## 1. 调查与实现顺序
 
@@ -56,6 +56,12 @@ R1 历史验证固定 Runner `9586ac4`。本次核对 `bf3ec58` 的 `run_evidenc
 | [TM-A05](../acceptance/test-management.md#自动验收)、[TM-A06](../acceptance/test-management.md#自动验收) | L1 定向集成 / `TM.results` | 实际报告正反样本和公开 Runner fixture；`go run ./cmd/test-feedback -- ./cmd/test-feedback ./internal/testkit/feedback ./internal/testmanagement ./internal/runnerbridge ./internal/storage/sqlite ./internal/product/query -run '^TestTM' -count=1` | 步骤 4 后；分级/场景到ID映射、子集/gate-only不冒充整体；原退出码保持，前后干净同commit才计当前通过，选择/环境/定义/清理/日志不足拒绝通过，错配/冲突/乱序/补测/版本失效及正式查询 | TM-A05/A06 / `results/`，实际执行输出与消费前后记录 |
 | [TM-A07](../acceptance/test-management.md#自动验收) | Web 定向 / `TM.execution-view` | Vitest、隔离 QueryClient；`npm --prefix web test -- src/features/runs/plan-tests.test.tsx src/features/runs/runs.test.tsx src/shared/api/queries.test.ts`；API 断言并入 `TestTM` 定向用例 | 步骤 5 后；计数/展开/证据/空与未关联/待复验/最新失败、离线/跨项目候选切换/迟到响应；无调度/门禁 | TM-A07 / `web/`，请求计数/渲染断言 |
 | [TM-A08](../acceptance/test-management.md#自动验收) | L3 / `testing` / `testing.management-local-codex` | 隔离 debug 包 + 固定真实 Runner/Codex；`go run ./cmd/test-feedback -level=L3 -suite=testing -env=live '-scenario=testing.management-local-codex'` | R3、上述受控项通过并构建后；正式 CLI 真实生成和保存、同一隔离候选上真实通过/失败测试→Runner出口→产品API→浏览器可见；核对原来源/包归属及结算 | TM-A08 / `live/`，Runner/build pin、生成源/result、两个报告、API/浏览器断言和清理 |
+
+### Runner 修复交接的最小复验
+
+映射 [TM-A04](../acceptance/test-management.md#自动验收)：已有上层 A/B 联验后，接收新的 Runner 修复构建时，先核对干净 commit/version/SHA/resource digest，再在保留的旧失败 namespace 只读执行公开 `service status` / `service verify-takeover`，比较原 Run/revision/input/request 绑定和前后文件摘要。通过条件为原生成 compatible、绑定及现场不变；compatible 不代替资源结算或活动回合恢复。
+
+随后使用 Runner 既有隔离夹具执行 `scripts/test-foundation.ps1 -Pattern '^TestSRContentGenerateTakeoverNative$' -OutDir <新目录> -ContentNativeExecutable <固定原生Codex绝对路径> -ContentNativeModel <模型>`；这是 Runner 专属原生契约验证，不启动 SteerLine 调试服务。非零命中并完成真实 generate → 原 stop → verify-stopped → 同 EXE takeover，原内容/身份不变且资源结算通过才算成功。调用方按本任务 `TestTMGeneration` 与原接管/停止定向用例复核；相关命令、环境、输出和公开响应登记专属验收的 `evidence/generate-takeover-recheck-<日期>/` 及原临时证据根。无新产品行为时不重复 TM-A08 浏览器整场，不继承旧构建或其他原生矩阵资格。
 
 ### 必须补齐的验证能力
 

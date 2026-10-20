@@ -1,0 +1,61 @@
+=== RUN   TestContentFrozenTakeoverContracts
+=== RUN   TestContentFrozenTakeoverContracts/generate
+=== RUN   TestContentFrozenTakeoverContracts/generate/codec
+=== RUN   TestContentFrozenTakeoverContracts/generate/workflow
+=== RUN   TestContentFrozenTakeoverContracts/generate/workflow-version
+=== RUN   TestContentFrozenTakeoverContracts/generate/semantics
+=== RUN   TestContentFrozenTakeoverContracts/generate/execution-record
+=== RUN   TestContentFrozenTakeoverContracts/generate/material
+=== RUN   TestContentFrozenTakeoverContracts/generate/parser
+=== RUN   TestContentFrozenTakeoverContracts/conversation
+=== RUN   TestContentFrozenTakeoverContracts/conversation/codec
+=== RUN   TestContentFrozenTakeoverContracts/conversation/workflow
+=== RUN   TestContentFrozenTakeoverContracts/conversation/workflow-version
+=== RUN   TestContentFrozenTakeoverContracts/conversation/semantics
+=== RUN   TestContentFrozenTakeoverContracts/conversation/execution-record
+=== RUN   TestContentFrozenTakeoverContracts/conversation/material
+=== RUN   TestContentFrozenTakeoverContracts/conversation/parser
+--- PASS: TestContentFrozenTakeoverContracts (0.35s)
+    --- PASS: TestContentFrozenTakeoverContracts/generate (0.17s)
+        --- PASS: TestContentFrozenTakeoverContracts/generate/codec (0.00s)
+        --- PASS: TestContentFrozenTakeoverContracts/generate/workflow (0.01s)
+        --- PASS: TestContentFrozenTakeoverContracts/generate/workflow-version (0.00s)
+        --- PASS: TestContentFrozenTakeoverContracts/generate/semantics (0.01s)
+        --- PASS: TestContentFrozenTakeoverContracts/generate/execution-record (0.01s)
+        --- PASS: TestContentFrozenTakeoverContracts/generate/material (0.00s)
+        --- PASS: TestContentFrozenTakeoverContracts/generate/parser (0.01s)
+    --- PASS: TestContentFrozenTakeoverContracts/conversation (0.18s)
+        --- PASS: TestContentFrozenTakeoverContracts/conversation/codec (0.01s)
+        --- PASS: TestContentFrozenTakeoverContracts/conversation/workflow (0.00s)
+        --- PASS: TestContentFrozenTakeoverContracts/conversation/workflow-version (0.01s)
+        --- PASS: TestContentFrozenTakeoverContracts/conversation/semantics (0.00s)
+        --- PASS: TestContentFrozenTakeoverContracts/conversation/execution-record (0.00s)
+        --- PASS: TestContentFrozenTakeoverContracts/conversation/material (0.00s)
+        --- PASS: TestContentFrozenTakeoverContracts/conversation/parser (0.01s)
+=== RUN   TestTakeoverActualParserContractStillRequired
+--- PASS: TestTakeoverActualParserContractStillRequired (16.58s)
+=== RUN   TestServiceGenerationTakeoverRejectsUnknownCodecAndKeepsOriginalFacts
+--- PASS: TestServiceGenerationTakeoverRejectsUnknownCodecAndKeepsOriginalFacts (0.00s)
+=== RUN   TestRAConfigRejectBeforeEffects
+--- PASS: TestRAConfigRejectBeforeEffects (0.02s)
+PASS
+ok  	github.com/erranliu/SteerRunner/internal/application	20.434s
+testing: warning: no tests to run
+PASS
+ok  	github.com/erranliu/SteerRunner/internal/execution/workflow	1.030s [no tests to run]
+=== RUN   TestRAConfig
+=== RUN   TestRAConfig/duplicate
+=== RUN   TestRAConfig/range
+=== RUN   TestRAConfig/alias
+=== RUN   TestRAConfig/home
+=== RUN   TestRAConfig/unknown
+=== RUN   TestRAConfig/null
+--- PASS: TestRAConfig (0.05s)
+    --- PASS: TestRAConfig/duplicate (0.01s)
+    --- PASS: TestRAConfig/range (0.00s)
+    --- PASS: TestRAConfig/alias (0.01s)
+    --- PASS: TestRAConfig/home (0.00s)
+    --- PASS: TestRAConfig/unknown (0.00s)
+    --- PASS: TestRAConfig/null (0.01s)
+PASS
+ok  	github.com/erranliu/SteerRunner/internal/execution/resultacquisition	0.925s

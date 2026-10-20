@@ -1,0 +1,6 @@
+{
+  "model": "gpt-6.1-sol",
+  "native": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+  "root": "C:/srt\\gt-23720053",
+  "runner": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-generate-recheck-20261020-1792476800182\\native\\steerrunner.exe"
+}

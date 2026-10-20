@@ -12,7 +12,7 @@
 
 Windows 启动闪窗修复（2026-10-19，源码修复/人工待验）：[专属验收](startup-console-windows.md)，记录逐项目 Git 与后台 CLI 的控制台创建反例、无控制台修复和定向共享 Runner 回归；未部署安装环境。
 
-Runner generate/1 对接与最简测试管理（2026-10-20，自动项通过/人工待验）：[专属验收及缺口修复](test-management.md)，Runner 内容接管误校验已修，TM-A04 的真实 A/B 接管及 TM-A08 同包程序/报告/API/浏览器/结算均通过；原 i/j 遗留和本包 base/head 已清理。人工 TM-M01 后置，固定 L1 与继续补验见上述导航；脏工作树证据不计产品中干净同 commit 的当前通过，不增加 Task 字段/门禁或 conversation 操作。
+Runner generate/1 对接与最简测试管理（2026-10-20，自动项通过/人工待验）：[专属验收及缺口修复](test-management.md)，Runner 内容接管误校验已修，干净主干 13ef123 的同 EXE 真机/原 k 包只读复验通过；TM-A04 的真实 A/B 接管及 TM-A08 同包程序/报告/API/浏览器/结算均按其原固定版本通过；原 i/j 遗留和本包 base/head 已清理。人工 TM-M01 后置，固定 L1 与继续补验见上述导航；脏工作树证据不计产品中干净同 commit 的当前通过，不增加 Task 字段/门禁或 conversation 操作。
 
 应用级共享 SteerRunner 服务（2026-10-19，自动通过/人工待验）：[Spec / Plan 与专属验收](shared-runner-service.md)，登记 SRS-A01–A07 与后置 SRS-M01；L1/controlled 双项目与真实空闲服务拓扑分开取证，实际构建、失败修正和清理已登记，不改 roadmap。
 

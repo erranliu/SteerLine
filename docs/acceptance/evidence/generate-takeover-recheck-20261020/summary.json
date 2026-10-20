@@ -1,0 +1,58 @@
+{
+  "passed": true,
+  "steerline_commit": "f139e4a9795c5d79a6677c0a29de177cd024ed65",
+  "runner": {
+    "version": "0.2.0-dev.3-r2",
+    "source_commit": "13ef12312944317e7b78d4de44977b92e65e70c2",
+    "source_dirty": false,
+    "protocol": "steerrunner-cli/v1",
+    "platform": "windows/amd64",
+    "sha256": "482AAFCFFD8B61516F26E842361602741643F52E2D77D2BE5CCEA6461DA4292F"
+  },
+  "resource_digest": "a48bfb1aa7250009b21b4170532d877be01c23375ac386cb39e269794263ef91",
+  "native_scenarios": 1,
+  "native_run": {
+    "id": "5c6669c185ca96aab43eeaadf296eeee",
+    "input_digest": "10857d3f0a898f367f1ea9d48e9415a6dfcb556f9adff0f5cd418cd0b0ac941c",
+    "kind": "run",
+    "request_digest": "50e778f7d303eb10ed6121a0d4e51bc52025388c5fd957fbd621cf63f2a58e6d",
+    "request_id": "native-generate-takeover",
+    "revision": 16,
+    "status": "compatible"
+  },
+  "native_resources_settled": true,
+  "native_database_unchanged": true,
+  "original_runs": [
+    {
+      "request_id": "a26d22b2bf919dd9f83deeb964962598",
+      "request_digest": "b8aeb1307c1c1d73fab1f1c606cd4bee967c7b8e40217c20e9561d8e6fdac90f",
+      "id": "8402cc9208fbecdd4164d59e0fedc47d",
+      "kind": "run",
+      "revision": 29,
+      "input_digest": "be392998665f8f8c12c8c66cf0ca4118520e59bfd4cc63933dc404b7b10671b4",
+      "status": "compatible"
+    },
+    {
+      "request_id": "15a08ce40d7eb2e6d531e5cd7fa5bb7e",
+      "request_digest": "143cd8f7420e4918e972996be4b1db801a4ef56558569dfc9b6fc6334ca3d91c",
+      "id": "f6942435176c8f5d5430b15591e9ee8f",
+      "kind": "run",
+      "revision": 12,
+      "input_digest": "e1b76d845c14d8d4856e4adae09baef76d78814439a352f32ca69fe4d6a6f5ad",
+      "status": "compatible"
+    }
+  ],
+  "original_files_unchanged": 181,
+  "caller_tests": {
+    "passed": true,
+    "complete": true,
+    "package_count": 7,
+    "test_count": 33,
+    "failed_tests": 0,
+    "skipped_tests": 0
+  },
+  "caller_wall_seconds": 69.8216327,
+  "runner_directed_passes_including_subtests": 27,
+  "scope": "clean Runner native same-build proof + original namespace read-only + caller targeted; previous A/B and TM-A08 evidence retained",
+  "raw_evidence_root": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-generate-recheck-20261020-1792476800182"
+}
