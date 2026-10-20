@@ -13,7 +13,12 @@ import (
 )
 
 type Capabilities struct {
-	InstanceBinding struct {
+	RunEvidence *struct {
+		Version  int      `json:"version"`
+		Commands []string `json:"commands"`
+	} `json:"run_evidence,omitempty"`
+	RunEvidenceSchema json.RawMessage `json:"run_evidence_schema,omitempty"`
+	InstanceBinding   struct {
 		ExpectedInstanceID bool `json:"expected_instance_id"`
 	} `json:"instance_binding"`
 	NativeSessionViewer struct {
@@ -39,9 +44,11 @@ type Capabilities struct {
 		Providers        map[string]json.RawMessage `json:"providers"`
 		Workflow         json.RawMessage            `json:"workflow"`
 		RunConfiguration json.RawMessage            `json:"run_configuration"`
+		GenerateInput    json.RawMessage            `json:"generate_input"`
 	} `json:"configuration_schemas"`
 }
 type Catalog struct {
+	generate                *jsonschema.Schema
 	Capabilities            Capabilities
 	adapters, providers     map[string]*jsonschema.Schema
 	workflow, configuration *jsonschema.Schema
@@ -107,6 +114,7 @@ func compileCatalog(caps Capabilities) (*Catalog, error) {
 	}{
 		{caps.ConfigurationSchemas.Workflow, &result.workflow, "workflow"},
 		{caps.ConfigurationSchemas.RunConfiguration, &result.configuration, "run-configuration"},
+		{caps.ConfigurationSchemas.GenerateInput, &result.generate, "generate-input"},
 	} {
 		if len(entry.raw) == 0 {
 			continue
@@ -143,6 +151,10 @@ func compileCatalog(caps Capabilities) (*Catalog, error) {
 	}
 	return result, nil
 }
+
+// CompileCatalog validates a published capability document without starting a
+// service; execution admission remains the selected Runner's responsibility.
+func CompileCatalog(caps Capabilities) (*Catalog, error) { return compileCatalog(caps) }
 func validateSettings(schemas map[string]*jsonschema.Schema, key string, raw json.RawMessage) error {
 	schema := schemas[key]
 	if schema == nil {

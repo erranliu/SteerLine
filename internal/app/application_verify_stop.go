@@ -231,6 +231,48 @@ func verifyProjectOffline(ctx context.Context, c Config, p contract.ProjectShutd
 	if err != nil {
 		return proof, err
 	}
+	generations, err := reader.Generations(ctx, c.Identity())
+	if err != nil {
+		return proof, err
+	}
+	if restartPin != nil {
+		cli := runnerclient.Client{Executable: restartPin.Executable, StateDir: restartPin.StateDir, SHA256: restartPin.SHA256, BuildVersion: restartPin.Version, ResourceDigest: restartPin.ResourceDigest}
+		if len(takeover) > 0 {
+			cli.Takeover = takeover[0]
+		}
+		for _, g := range generations {
+			if runnerbinding.SameBuild(g.Runner, *restartPin) {
+				continue
+			}
+			if cli.Takeover == nil {
+				report, err := cli.VerifyTakeover(ctx)
+				if err != nil {
+					return proof, err
+				}
+				cli.Takeover = &report
+			}
+			if err := verifyGenerationTakeover(g, cli); err != nil {
+				return proof, err
+			}
+		}
+	} else {
+		byRun := map[string]runnerclient.StoppedRun{}
+		for _, run := range runnerProof.Runs {
+			byRun[run.RunID] = run
+		}
+		for _, g := range generations {
+			if canonicalPath(g.Runner.StateDir) != canonicalPath(runnerProof.StateDir) {
+				return proof, errors.New("generation Runner namespace differs")
+			}
+			if g.State == "rejected" && g.RunID == "" {
+				continue
+			}
+			run := byRun[g.RunID]
+			if g.RunID == "" || g.InputDigest == "" || run.InputDigest != g.InputDigest || !run.ResourcesSettled {
+				return proof, errors.New("original generation resource settlement unverified")
+			}
+		}
+	}
 	if restartPin != nil {
 		if len(takeover) == 0 || takeover[0] == nil {
 			needsProof := false

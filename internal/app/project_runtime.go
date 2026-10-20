@@ -35,6 +35,7 @@ type ProjectRuntime struct {
 	repoLock, runLock *host.RepoLock
 	log               io.WriteCloser
 	store             *sqlite.SQLiteStore
+	tests             *testManagementPort
 	product           *productclient.Client
 	port              *runtimeProjectPort
 	closeOnce         sync.Once
@@ -147,6 +148,9 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		return
 	}
 	instance := service.InstanceID()
+	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.config.runtimeTests = r.tests
+	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.config.runtimeHost = &r.hostConfig
 	r.product, retErr = openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context, bool) (productclient.TaskCommands, error) {
@@ -185,6 +189,13 @@ func (r *ProjectRuntime) close() {
 		if r.port != nil {
 			r.port.StopAccepting()
 			r.port.drain()
+		}
+		if r.tests != nil {
+			if err := r.tests.close(); err != nil && r.log != nil {
+				fmt.Fprintf(r.log, "test generation stop remains unverified: %v\n", err)
+			}
+		}
+		if r.port != nil {
 			r.localErr = errors.Join(r.localErr, r.port.Server.Close(context.Background()))
 		}
 		if r.product != nil {
@@ -230,6 +241,9 @@ func (p *runtimeProjectPort) Task(ctx context.Context, method, route string, bod
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(route, "/tests/") {
+		return p.testing(ctx, method, route, body)
+	}
 	if method == "GET" {
 		kind, target, id := "create_task_batch", p.config.Identity(), strings.TrimPrefix(route, "/task-batches/")
 		if strings.HasPrefix(route, "/tasks/") {

@@ -88,5 +88,14 @@
     "package": "./tests/e2e/suites/runtime",
     "test": "TestSharedRunnerProjects",
     "env": "controlled"
+  },
+  {
+    "id": "testing.management-local-codex",
+    "level": "L3",
+    "suite": "testing",
+    "package": "./tests/e2e/live",
+    "test": "TestManagementLocalCodex",
+    "env": "live",
+    "chain": "local-codex"
   }
 ]

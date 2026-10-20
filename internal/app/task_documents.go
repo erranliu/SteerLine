@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -25,6 +27,13 @@ func (a taskDocuments) ReadCommittedRegularFile(ctx context.Context, ref taskmod
 	if err := taskmodel.ValidateFileReference(ref); err != nil {
 		return nil, err
 	}
+	return a.readCommittedFile(ctx, ref.Commit, ref.Path)
+}
+
+// readCommittedFile is also used for optional, commit-pinned testing JSON. The
+// callers validate the path/commit before entering this shared Git reader.
+func (a taskDocuments) readCommittedFile(ctx context.Context, commit, name string) ([]byte, error) {
+	ref := taskmodel.FileReference{Commit: commit, Path: name}
 	r := commandRunner{Dir: a.repository, Timeout: a.timeout, ProcessHost: a.processHost}
 	resolved, err := r.Output(ctx, a.git, "rev-parse", "--verify", ref.Commit+"^{commit}")
 	if err != nil || strings.TrimSpace(string(resolved)) != ref.Commit {
@@ -36,7 +45,7 @@ func (a taskDocuments) ReadCommittedRegularFile(ctx context.Context, ref taskmod
 	}
 	entries := bytes.Split(bytes.TrimSuffix(tree, []byte{0}), []byte{0})
 	if len(entries) != 1 || len(entries[0]) == 0 {
-		return nil, taskDocumentError("pinned contract path is missing or ambiguous: " + ref.Path)
+		return nil, fmt.Errorf("pinned path missing or ambiguous %s: %w", ref.Path, os.ErrNotExist)
 	}
 	parts := bytes.SplitN(entries[0], []byte{'\t'}, 2)
 	if len(parts) != 2 || string(parts[1]) != ref.Path {

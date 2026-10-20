@@ -1,0 +1,108 @@
+{
+  "tests": [
+    {
+      "id": "l1.minimum",
+      "name": "固定 L1 最小集合",
+      "level": "L1",
+      "environment": "isolated",
+      "command": "go run ./cmd/test-feedback -level=L1",
+      "check": "运行固定 L1 集合，枚举及终态完整、所有必要断言通过，无意外跳过。"
+    },
+    {
+      "id": "workflow.local-codex-audited",
+      "name": "本机 Codex 审计流程",
+      "level": "L3",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=workflow -env=live -scenario=workflow.local-codex-audited",
+      "check": "使用两个显式模型完成实现、两轮审计、发布与真实 PR 合并；核对正式产品详情中的模型/材料/审计来源、唯一交付与后继 ready 未启动，清理完整。"
+    },
+    {
+      "id": "smoke.delivery",
+      "name": "核心交付受控冒烟",
+      "level": "L2",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L2 -env=controlled",
+      "check": "创建依赖任务，执行至待合并后合并；唯一交付、后继 ready 未启动，重复读取无新执行，停止回执与清理完整。仅代表 controlled gate。"
+    },
+    {
+      "id": "smoke.local-codex",
+      "name": "本机 Codex 核心交付",
+      "level": "L2",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L2",
+      "check": "受控 gate 通过后运行真实 Runner/Codex 实现、报告和发布，核对三个 final、真实产物及精确 merged PR、唯一交付和未启动后继，清理完整。"
+    },
+    {
+      "id": "recovery.waiting-merge-restart",
+      "name": "等待合并时重启",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.waiting-merge-restart",
+      "check": "PR 待合并时重启 SteerLine，保持原候选/Run/请求，零自动新输入、不提前释放后继；合并后唯一交付，资源清理完整。"
+    },
+    {
+      "id": "runtime.service-lifecycle",
+      "name": "宿主正常生命周期",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario=runtime.service-lifecycle",
+      "check": "中文与空格路径、无关 cwd 下创建启动器，核对任务、宿主身份和控制；停止结算，再启动新实例保持任务事实，最终清理完整。"
+    },
+    {
+      "id": "runtime.dual-home-operation",
+      "name": "双 home 独立操作",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario=runtime.dual-home-operation",
+      "check": "两独立 home 同时在线，以不同请求 discard 不同任务；另一项目/provider 不变、无候选，实例不变，两者停止清理完整。"
+    },
+    {
+      "id": "runtime.source-build-isolation",
+      "name": "源码构建输出隔离",
+      "level": "L4",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.source-build-isolation",
+      "check": "拒绝源码 bin junction/EXE hardlink 指向隔离安装夹具；合法构建保持源码及受保护夹具的 EXE/数据库/任务事实不变。"
+    },
+    {
+      "id": "runtime.path-isolation",
+      "name": "项目路径与数据库隔离",
+      "level": "L4",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.path-isolation",
+      "check": "拒绝 state junction、越界 run_dir、退役 worktree_root 和 DB/WAL/SHM hardlink，受保护数据不变；普通文件恢复后正常可用。"
+    },
+    {
+      "id": "runtime.service-write-isolation",
+      "name": "宿主写入隔离",
+      "level": "L4",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.service-write-isolation",
+      "check": "陈旧实例、冻结目录外写入及同 repo 跨 home 启动均拒绝且零请求/候选副作用；正常控制通过，重启后仍拒绝旧实例。"
+    },
+    {
+      "id": "runtime.dual-home-isolation",
+      "name": "双 home 同 ID 重放隔离",
+      "level": "L4",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.dual-home-isolation",
+      "check": "两 home 使用相同 task/request ID，discard 后原参数重放回执一致、版本不变；另一 home/provider 无改写、无候选，实例不变。"
+    },
+    {
+      "id": "runtime.shared-runner-projects",
+      "name": "同 home 共享 Runner",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario=runtime.shared-runner-projects",
+      "check": "同 home 两项目共用一个 Runner，相同产品请求号创建独立 Run；分别消费仓库/PR，整体重启保持绑定、零自动新输入，全体资源清理完整。"
+    },
+    {
+      "id": "testing.management-local-codex",
+      "name": "Real test management consumption",
+      "level": "L3",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -env=live -scenario=testing.management-local-codex",
+      "check": "Real generate saves the arrangement; actual pass/fail programs on the original clean Run map through public Runner artifacts to API and browser, with resources settled."
+    }
+  ]
+}

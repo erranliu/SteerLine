@@ -1,0 +1,221 @@
+// Package testmanagement owns test documents and result projections, not execution.
+package testmanagement
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"path"
+	"strings"
+
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/testmanagement/model"
+)
+
+const CataloguePath = model.CataloguePath
+const RulesPath = "docs/testing.md"
+const MaxDocumentBytes = 1 << 20
+
+type Definition = model.Definition
+type Catalogue = model.Catalogue
+
+type Arrangement struct {
+	Tests []string `json:"tests"`
+}
+type Snapshot struct {
+	Status      string       `json:"status"`
+	Diagnostic  string       `json:"diagnostic,omitempty"`
+	PlanPath    string       `json:"plan_path"`
+	Commit      string       `json:"commit"`
+	Definitions []Definition `json:"definitions"`
+	Digest      string       `json:"digest,omitempty"`
+}
+
+func Decode(raw []byte, target any) error {
+	if len(raw) == 0 || len(raw) > MaxDocumentBytes {
+		return errors.New("test document is empty or exceeds 1 MiB")
+	}
+	canonical, err := runnercontract.CanonicalJSON(raw)
+	if err != nil {
+		return err
+	}
+	d := json.NewDecoder(strings.NewReader(string(canonical)))
+	d.DisallowUnknownFields()
+	return d.Decode(target)
+}
+func Digest(v any) string {
+	raw, _ := json.Marshal(v)
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+func ContentDigest(raw []byte) string { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
+func ArrangementPath(plan string) (string, error) {
+	if path.Clean(plan) != plan || strings.ContainsAny(plan, "\\\x00") || path.IsAbs(plan) || strings.Contains(plan, ":") || strings.HasPrefix(plan, "../") || !strings.HasSuffix(plan, ".plan.md") {
+		return "", errors.New("Plan must be a normalized repository-relative .plan.md file")
+	}
+	return strings.TrimSuffix(plan, ".plan.md") + ".tests.json", nil
+}
+func ParseCatalogue(raw []byte) (Catalogue, error) {
+	var c Catalogue
+	if err := Decode(raw, &c); err != nil {
+		return c, err
+	}
+	if c.Tests == nil {
+		return c, errors.New("tests must be an array")
+	}
+	seen := map[string]bool{}
+	for _, d := range c.Tests {
+		if strings.TrimSpace(d.ID) == "" || seen[d.ID] || strings.TrimSpace(d.Name) == "" || strings.TrimSpace(d.Environment) == "" || strings.TrimSpace(d.Command) == "" || strings.TrimSpace(d.Check) == "" {
+			return c, errors.New("test definitions require unique IDs and nonempty fields")
+		}
+		if d.Level != "L1" && d.Level != "L2" && d.Level != "L3" && d.Level != "L4" {
+			return c, errors.New("invalid test level: " + d.Level)
+		}
+		seen[d.ID] = true
+	}
+	return c, nil
+}
+func Select(raw []byte, c Catalogue) ([]Definition, error) {
+	var a Arrangement
+	if err := Decode(raw, &a); err != nil {
+		return nil, err
+	}
+	if a.Tests == nil {
+		return nil, errors.New("tests must be an array")
+	}
+	index := map[string]Definition{}
+	for _, d := range c.Tests {
+		index[d.ID] = d
+	}
+	result := []Definition{}
+	seen := map[string]bool{}
+	for _, id := range a.Tests {
+		d, ok := index[id]
+		if !ok || seen[id] {
+			return nil, fmt.Errorf("unknown or duplicate test ID: %s", id)
+		}
+		seen[id] = true
+		result = append(result, d)
+	}
+	return result, nil
+}
+
+type Result struct {
+	TestID  string `json:"test_id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Log     string `json:"log"`
+}
+
+// Report is produced by the test program. Run provenance must come from Runner,
+// never from this document or an agent's final message.
+type Report struct {
+	ID           string            `json:"id"`
+	Sequence     uint64            `json:"sequence"`
+	Selection    []string          `json:"selection"`
+	Environment  string            `json:"environment"`
+	Definitions  map[string]string `json:"definitions"`
+	BeforeCommit string            `json:"before_commit"`
+	AfterCommit  string            `json:"after_commit"`
+	BeforeClean  bool              `json:"before_clean"`
+	AfterClean   bool              `json:"after_clean"`
+	Results      []Result          `json:"results"`
+}
+
+func ParseReport(raw []byte) (Report, error) {
+	var r Report
+	if err := Decode(raw, &r); err != nil {
+		return r, err
+	}
+	if r.ID == "" || r.Sequence == 0 || r.Environment == "" || len(r.Results) == 0 || len(r.Selection) == 0 {
+		return r, errors.New("incomplete test report")
+	}
+	selected := map[string]bool{}
+	for _, id := range r.Selection {
+		if id == "" || selected[id] {
+			return r, errors.New("duplicate or empty test selection")
+		}
+		selected[id] = true
+	}
+	seen := map[string]bool{}
+	for _, item := range r.Results {
+		if !selected[item.TestID] || seen[item.TestID] || r.Definitions[item.TestID] == "" || item.Log == "" {
+			return r, errors.New("test report selection/definition/log mismatch")
+		}
+		if item.Status != "passed" && item.Status != "failed" && item.Status != "incomplete" {
+			return r, errors.New("invalid test result status")
+		}
+		if item.Status != "passed" && strings.TrimSpace(item.Message) == "" {
+			return r, errors.New("failed/incomplete results require a reason")
+		}
+		seen[item.TestID] = true
+	}
+	if len(seen) != len(selected) {
+		return r, errors.New("test report does not cover its selection")
+	}
+	return r, nil
+}
+
+type Row struct {
+	Definition
+	Status  string   `json:"status"`
+	Message string   `json:"message,omitempty"`
+	Log     string   `json:"log,omitempty"`
+	History []Result `json:"history"`
+}
+type View struct {
+	Status     string `json:"status"`
+	Diagnostic string `json:"diagnostic,omitempty"`
+	PlanPath   string `json:"plan_path"`
+	Total      int    `json:"total"`
+	Passed     int    `json:"passed"`
+	Failed     int    `json:"failed"`
+	Pending    int    `json:"pending"`
+	Rows       []Row  `json:"rows"`
+}
+
+func Project(s Snapshot, reports []Report, commit string, clean, verified bool) View {
+	v := View{Status: s.Status, Diagnostic: s.Diagnostic, PlanPath: s.PlanPath, Rows: []Row{}}
+	if s.Status != "ready" {
+		return v
+	}
+	for _, d := range s.Definitions {
+		row := Row{Definition: d, Status: "pending", History: []Result{}}
+		var latest *Report
+		var item Result
+		for i := range reports {
+			r := &reports[i]
+			for _, result := range r.Results {
+				if result.TestID != d.ID {
+					continue
+				}
+				row.History = append(row.History, result)
+				if latest == nil || r.Sequence > latest.Sequence {
+					latest, item = r, result
+				}
+			}
+		}
+		if latest != nil {
+			row.Message, row.Log = item.Message, item.Log
+			if verified && clean && commit != "" && latest.BeforeClean && latest.AfterClean && latest.BeforeCommit == commit && latest.AfterCommit == commit && latest.Definitions[d.ID] == Digest(d) && latest.Environment == d.Environment {
+				row.Status = item.Status
+			} else {
+				row.Status = "stale"
+				row.Message = "代码、定义、环境或当前来源不匹配，待复验"
+			}
+		}
+		v.Total++
+		switch row.Status {
+		case "passed":
+			v.Passed++
+		case "failed":
+			v.Failed++
+		default:
+			v.Pending++
+		}
+		v.Rows = append(v.Rows, row)
+	}
+	return v
+}

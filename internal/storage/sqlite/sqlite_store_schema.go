@@ -56,6 +56,9 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 }
 
 var nativeTaskSchema = []string{
+	`CREATE TABLE test_generations (project_identity TEXT NOT NULL, generation_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,generation_id))`,
+	`CREATE TABLE test_evidence (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,
+	`CREATE TABLE test_generation_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, generation_id TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,generation_id) REFERENCES test_generations(project_identity,generation_id))`,
 	`CREATE TABLE environment_checks (project_identity TEXT NOT NULL, check_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,check_key))`,
 	`CREATE TABLE environment_check_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, check_key TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,check_key) REFERENCES environment_checks(project_identity,check_key))`,
 	`CREATE TABLE runner_candidates (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, task_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), request_id TEXT NOT NULL, run_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), UNIQUE(project_identity,candidate_id,task_id), UNIQUE(project_identity,request_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,

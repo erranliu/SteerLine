@@ -67,6 +67,7 @@ type Controls struct {
 	Reason    string `json:"reason"`
 }
 type Run struct {
+	ContentResult    *ContentResult    `json:"content_result,omitempty"`
 	Correlation      map[string]string `json:"correlation,omitempty"`
 	Workflow         Workflow          `json:"workflow"`
 	Audit            *Audit            `json:"audit,omitempty"`

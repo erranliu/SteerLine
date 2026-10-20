@@ -6,6 +6,26 @@ Runner 兼容构建接管的定向测试与未验边界见[专属验收](accepta
 
 Windows 启动闪窗修复的最小验证见[专属验收](acceptance/startup-console-windows.md)：固定 L1 `quick-core` 的 `TestBackgroundCommandsNoConsole` 从 detached 宿主核验四类后台命令的实际控制台句柄；另定向回归统一启动与共享 Runner，不运行全量或使用安装环境。
 
+## 测试管理文档与结果
+
+可映射到执行页的清单为 [test-list.json](testing/test-list.json)，格式遵循[测试管理 Spec](spec/test-management.spec.md)。每项必需 `id/name/level/environment/command/check`，仅 `note` 可选；拒绝未知字段、重复键/ID、空必需值与非法级别。首批登记固定 L1 整体及现存十二项 E2E 场景。E2E 执行选择仍以 `tests/e2e/suites.json` 为准；新增、删除、改级/环境/入口/主要断言时，依据通用规范同步修改实现、执行登记、展示清单和受影响 Plan。Web/脚本入口暂未登记，不推断它们已被覆盖。
+
+`<name>.plan.md` 旁的 `<name>.tests.json` 只保存 `{"tests":["l1.minimum"]}` 这样的有序唯一 ID；Plan 链接它并解释选择。无需自动测试时可手工写空数组并说明原因。候选从固定 PlanRef 的同一 commit 读取安排/定义，缺失或无效只展示诊断，不增加 Task 门禁。
+
+应用已启动时，使用原生 CLI 生成已有 Plan 的测试安排；显式指定本机 Codex profile 和 32 位小写十六进制请求号：
+
+```powershell
+steerline tests generate -project <id> -plan docs/spec/example.plan.md -execution-profile <profile> -request-id <id>
+steerline tests generation -project <id> -request-id <original-id>
+steerline tests stop-generation -project <id> -generation-id <original-id> -request-id <new-id>
+```
+
+生成复用 Runner generate/1 和 read_only。空模型结果、坏 ID、材料或目标变更不覆盖原文件；结果由现有项目 tick 观察保存，查询只读。重启后显式重复原 generate 请求可完成已生成结果的条件保存，不重发模型。作者维护 Plan 链接并正常提交。
+
+`cmd/test-feedback -level=L1/L2/L3/L4` 在原隔离证据目录追加 `managed-<id>.json`，保留原 summary、JSONL 与退出码。封套字段为 `id/sequence/selection/environment/definitions/before_commit/after_commit/before_clean/after_clean/results`；definitions[id] 是规范化单项 JSON 的 SHA256：字段固定按 `id,name,level,environment,command,check` 排序，非空 `note` 最后附加；以 UTF-8、无 BOM/缩进/末尾换行、与 Go `json.Marshal(Definition)` 相同的字符串转义编码（含 HTML 字符转义），不直接散列清单原始排版或属性顺序。results 中每项仅有 `test_id/status/message/log`，status 为 passed/failed/incomplete，log 指向同目录原 summary。定向 Go 子集和 build-only 不输出整体通过；gate-only 仅报告实际 controlled ID。
+
+已接入文档/生成、程序报告、Runner R2 公开收集/读取/Git 观察、不可变持久化和只读执行页。运行内使用现有 `-out .steerrunner/artifacts/<唯一执行ID>` 新目录，并由项目维护忽略规则；测试入口最后原子发布 `managed-*.json`，同目录 `summary.json` 为首版保留的原始证据。默认系统临时目录不会自动成为 Run 产物。收集原请求先持久化，未知只查询原请求；报告按原候选/Run 保存并核验字节长度和 SHA256，UI 显示 Run/artifact/摘要引用。真实场景 `testing.management-local-codex` 的结果见[专属验收](acceptance/test-management.md)。干净同 commit 才能计入当前结果，脏或未知来源只作历史/待复验。
+
 共享 Runner 的最小验证见[专属验收](acceptance/shared-runner-service.md)：固定 L1、请求/全局停止证明/reset 定向测试、新 L3 `runtime.shared-runner-projects` 与既有 waiting-merge-restart，以及新调试包的真实空闲服务拓扑。无模型，不操作安装环境。
 
 架构解耦第五轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round5.md)：宿主契约所有权/依赖闭包、checkpoint 双向投影隔离、并发写入下原实例/进程/build pin 同快照、原控制回执绑定、排空与幂等关闭、失败保锁和原 Runner 停服/结算证明。新增投影测试进入既有 quick-rules，所有权守卫进入 quick-execution-boundary；其余沿既有 SQLite、宿主和生命周期定向测试。补充 Windows 消费者与 Linux 宿主/进程包编译，不执行全量或真实模型。
@@ -85,7 +105,7 @@ L1 固定范围以 [scoped.go](../cmd/test-feedback/scoped.go)及 [task_scope.go
 | 级别 | 已登记内容 | 清单与实现现状 |
 | --- | --- | --- |
 | L2 | 2 项：controlled gate、live 本机 Codex | 有固定 ID、实际测试映射和选择校验，内容清单可追踪。 |
-| L3 | 5 项：等待合并重启、正常宿主生命周期、同 home 共享 Runner、双 home 独立操作、审计 workflow 真实链 | controlled 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二。审计 live 精确选择 workflow.local-codex-audited，显式配置两个不同模型，不加入完整 L2。 |
+| L3 | 6 项：等待合并重启、正常宿主生命周期、同 home 共享 Runner、双 home 独立操作、审计 workflow 真实链、测试管理真实链 | controlled 支持多 suite/scenario；recovery/runtime 可跨包并行，总预算二。审计 live 精确选择 workflow.local-codex-audited，显式配置两个不同模型，不加入完整 L2。 |
 | L4 | 4 项：源码构建保护、路径保护、宿主写入拒绝、同 ID 碰撞与重放 | 支持 `-level=L4 -suite=runtime -env=controlled`；每项独立资源，runtime 包内最多二项并行。 |
 
 当前十一项场景有固定 ID、实际测试映射和分级清单。四项原 runtime ID 改为 L4，按旧 L3 选择会明确失败，不提供别名；拆出的正常流程使用新 ID。“固定清单”不等于已证明运行稳定，本次结果见 [分级验收](acceptance/test-level-alignment.md)，早期冻结版本见 [历史精简验收](acceptance/runner-test-convergence.md)。

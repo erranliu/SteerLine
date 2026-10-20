@@ -1,5 +1,6 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import type { Api } from "./client";
+import type { PlanTestsView } from "../../features/runs/plan-tests";
 import type {
   CheckCatalog,
   CheckRecord,
@@ -24,6 +25,12 @@ export function projectQueries(api: Api) {
   ] as const;
   const defaults = { staleTime: 1000, retry: false } as const;
   return {
+    planTests: (run: Pick<Candidate, "run_id" | "execution_id" | "attempt_id">) =>
+      queryOptions({
+        ...defaults,
+        queryKey: [...scope, "plan-tests", run.run_id, run.execution_id, run.attempt_id],
+        queryFn: ({ signal }) => api.get<PlanTestsView>("/runs/" + encodeURIComponent(run.run_id) + "/tests", signal),
+      }),
     checkOptions: () =>
       queryOptions({
         ...defaults,

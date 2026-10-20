@@ -63,6 +63,10 @@ func prepareProjectRunnerStops(ctx context.Context, c *Config, cli *runnerclient
 		return nil, err
 	}
 	defer store.Close()
+	generationStops, err := prepareGenerationStops(ctx, store, c.Identity(), cli)
+	if err != nil {
+		return nil, err
+	}
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {
 		return nil, err
@@ -83,7 +87,7 @@ func prepareProjectRunnerStops(ctx context.Context, c *Config, cli *runnerclient
 		}
 	}
 	if !need {
-		return nil, nil
+		return generationStops, nil
 	}
 	if cli.Takeover == nil {
 		proof, err := cli.VerifyTakeover(ctx)
@@ -100,7 +104,7 @@ func prepareProjectRunnerStops(ctx context.Context, c *Config, cli *runnerclient
 			return nil, errors.New("original environment check differs from takeover proof")
 		}
 	}
-	var pending []runnercontract.PendingStop
+	pending := generationStops
 	bridge := &runnerbridge.Bridge{Store: store}
 	for _, candidate := range snapshot.Candidates {
 		if canonicalPath(candidate.StateDir) != canonicalPath(cli.StateDir) {

@@ -605,11 +605,12 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			return fmt.Errorf("scenario %s completed %d times", e.ID, seen[e.Test])
 		}
 		var evidence struct {
-			ID        string                          `json:"id"`
-			Passed    bool                            `json:"passed"`
-			Cleanup   bool                            `json:"cleanup_complete"`
-			Resources []map[string]any                `json:"resources"`
-			Live      *testfeedback.LiveDeliveryProof `json:"live_delivery"`
+			ID        string                            `json:"id"`
+			Passed    bool                              `json:"passed"`
+			Cleanup   bool                              `json:"cleanup_complete"`
+			Resources []map[string]any                  `json:"resources"`
+			Live      *testfeedback.LiveDeliveryProof   `json:"live_delivery"`
+			Testing   *testfeedback.TestManagementProof `json:"test_management"`
 		}
 		raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "scenario.json"))
 		if err != nil {
@@ -617,6 +618,15 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		}
 		if err = json.Unmarshal(raw, &evidence); err != nil || evidence.ID != e.ID || !evidence.Passed || !evidence.Cleanup || len(evidence.Resources) == 0 {
 			return fmt.Errorf("invalid or incomplete evidence for %s", e.ID)
+		}
+		if e.ID == "testing.management-local-codex" {
+			if evidence.Testing == nil {
+				return errors.New("missing test management proof")
+			}
+			if err := evidence.Testing.Validate(); err != nil {
+				return err
+			}
+			continue
 		}
 		if e.Env == "live" {
 			if !supportedLiveScenario(e) || evidence.Live == nil || e.ID == "workflow.local-codex-audited" && evidence.Live.Audited == nil {
@@ -632,7 +642,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 }
 
 func supportedLiveScenario(e e2eScenario) bool {
-	return e.Chain == "local-codex" && (e.ID == "smoke.local-codex" && e.Level == "L2" || e.ID == "workflow.local-codex-audited" && e.Level == "L3" && e.Suite == "workflow")
+	return e.Chain == "local-codex" && (e.ID == "testing.management-local-codex" && e.Level == "L3" && e.Suite == "testing" || e.ID == "smoke.local-codex" && e.Level == "L2" || e.ID == "workflow.local-codex-audited" && e.Level == "L3" && e.Suite == "workflow")
 }
 
 // The gate includes execution, evidence validation and cleanup; even a cleanup

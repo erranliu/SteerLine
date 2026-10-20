@@ -13,3 +13,6 @@ __pycache__/
 
 # Raw validation runs belong in temporary directories; root summaries remain trackable.
 /docs/validation/*/
+
+# Run-owned test evidence; reports must not change the tested Git state.
+.steerrunner/artifacts/
