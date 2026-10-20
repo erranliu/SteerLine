@@ -1,5 +1,18 @@
 # Runner generate/1 对接与最简测试管理验收
 
+## 2026-10-20 合入修复后的固定主干复验
+
+**generate 接管阻断已解除。** 本轮先将工作分支 rebase 到 SteerLine 主干 `f139e4a9`，确认 PR #365 和后续 #366 已合并；Runner 修复随 [PR #37](https://github.com/erranliu/SteerRunner/pull/37) 合入，最新干净主干为 `13ef12312944317e7b78d4de44977b92e65e70c2`（#39）。本轮独立实跑，未将之前 dirty A/B 构建的资格改记到新构建。精选公开原响应及命令见[复验证据](evidence/generate-takeover-recheck-20261020/README.md)。
+
+- 源码核对：freeze 和 takeover 共用 workflow 的 `RequiresResultAcquisition`；内容流程的合法空配置不再误拒绝，实际 parser 意图仍校验冻结配置及解析契约。材料、workflow/version、codec、原 owner 与输入绑定检查保留；没有补写默认配置、迁移或公开字段变化。
+- 本轮从 Runner 干净主干构建 `0.2.0-dev.3-r2`，SHA256 `482aafcffd8b61516f26e842361602741643f52e2d77d2be5ccea6461da4292f`，resource digest `a48bfb1aa7250009b21b4170532d877be01c23375ac386cb39e269794263ef91`，source_dirty=false。
+- 原 k 包只读复验：原 generate `f6942435176c8f5d5430b15591e9ee8f` 和 development `8402cc9208fbecdd4164d59e0fedc47d` 均 compatible，聚合 true；revision、input_digest、request_id/request_digest 与原失败响应逐项一致。原 namespace 的 181 个文件路径/长度/SHA256 前后一致，服务前后均 not_running。没有启动或修改原现场。
+- 新隔离 Runner 夹具 `C:/srt/gt-23720053/state`：真实 Codex 单回合 generate Run `5c6669c185ca96aab43eeaadf296eeee` 成功，原 final verified；显式原 Run stop → 原 service stop → verify-stopped（逐 Run 及聚合 resources_settled=true）→ 同 EXE 离线 verify-takeover（compatible=true）。原 request/input/revision 绑定一致，接管前后原数据库字节不变。非零命中 `TestSRContentGenerateTakeoverNative` 一项，30.25 秒，退出 0。
+- SteerLine 七包定向 33 项（含子用例）通过、complete=true、零失败/skip，69.822 秒，覆盖生成取消/未知/换代、原停止 outbox、接管绑定及 CLI 预检。Runner application/resultacquisition 定向 27 项（含子用例）通过，覆盖正式 freeze、generate/conversation、材料/codec/解析契约反例；workflow 包本次筛选未命中，不计其整包通过。
+
+完整原始输出位于 `C:/Users/lmas1/AppData/Local/Temp/steerline-generate-recheck-20261020-1792476800182`。本轮只补固定主干的同构建与旧记录资格证明；此前上层真实 A/B、报告/API/浏览器和 i/j 清理继续采用下节各自固定版本证据，没有重跑整场或扩大为活动回合恢复资格。未运行 Full、前端、真实 conversation 或安装部署，TM-M01 仍后置。PR #365 的初始阻断描述同步标为历史状态，并链接本轮后续 PR。
+
+
 ## 2026-10-20 自动缺口继续处理
 
 **最终结果：TM-A04 的真实跨构建接管及 TM-A08 同包完整闭环已验收，原 i/j 资源与分支遗留已清理。** 以下中间失败和历史阻断只保留其当时状态，不是当前待办。用户已授权两仓提交、提 PR 并检查后合并；本轮[提交前定向检查及关键证据](evidence/merged-pr-regression-20261020/README.md)随仓库保存，未部署；TM-M01 主观体验仍待用户安排。
@@ -34,7 +47,7 @@
 | --- | --- | --- |
 | R1 | generate/1 的正式公开能力/schema、只读配置、结果与停止语义 | 已固定 PR #33 合并提交 `9586ac4dee53882ba4349710e94c950cf47fd8db`，实际公开 schema 正反验证通过；不等待 conversation 产品能力 |
 | R2 | 原开发 Run 的不可变报告/日志公开收集和读取、当前 commit/clean 观察 | 已由 Runner PR #34 合入，当前主干 bf3ec58 保留；正式公开能力和本轮受控 CLI 验证已核实。本仓已接公开客户端、持久收集/读取与当前性投影；本轮结果见末节 |
-| R3 | 同构建 EXE version/SHA、commit、resource digest/schema、定向证据 | 当前固定 A/B 构建、原 Run 真实接管及报告/浏览器/结算见本页最终结果；source_dirty 明确保留。历史 bf3ec58 等固定版本仅证明各自当时范围 |
+| R3 | 同构建 EXE version/SHA、commit、resource digest/schema、定向证据 | 当前另有干净 Runner 13ef123 固定构建的同 EXE 真机及旧记录只读复验，见页首；A/B 报告/浏览器/结算保留原 dirty 版本证据，不串用资格。历史版本仅证明各自当时范围 |
 
 Runner 实施固定构建：`9586ac4dee53882ba4349710e94c950cf47fd8db`、source_dirty=false、version `0.2.0-dev.2`、windows/amd64、SHA256 `33851d039193ca1f2f6766ab15e55abb54bda118ed673f81f45ad2cc80ec6b49`、resource digest `536edcaf2ed199109a1b42875f61fbb27af048a6441c5494d8afe36f4ca1bf56`。干净源码经 Runner 自身 build.ps1 输出到 `%TEMP%/steerline-test-management-runner-9586ac4/`；该目录含 EXE、build.json 和实际 capabilities.json，本仓 `internal/runnerclient/testdata/content-capabilities.json` 保留测试所需公开子集。未使用 Runner 工作区原有旧 EXE。
 
@@ -47,7 +60,7 @@ Runner 实施固定构建：`9586ac4dee53882ba4349710e94c950cf47fd8db`、source_
 | TM-A01 | generate 客户端契约、只读配置映射、开发隔离、缺能力零回退 | 受控验证通过 | 实际公开 schema fixture 正反例、配置白名单映射及缺能力拒绝；不建设 conversation 操作接口 |
 | TM-A02 | 清单/安排映射、PlanRef 同提交推导、固定快照和空/缺/无效语义 | 受控验证通过 | 严格 JSON/ID/路径、隔离 Git 同 commit 读取、已有 E2E 登记对齐；沿原候选事务固定，不增加 Task 字段或门禁 |
 | TM-A03 | 原生成请求、固定材料、空结果保护、条件保存及显式继续保存零重发 | 受控验证通过 | 内存公开 Runner fixture + SQLite CAS；真实生成保存另记，不把此项当 live 闭环 |
-| TM-A04 | 未知/取消/迟到/重启、持久化先于提交、无 Task 副作用与停服结算 | 已验收：受控与真实跨构建接管 | 原生成请求/Run/input/final/result 跨 A/B 保持，正式重启与最终两原 Run 结算通过；此前 unsupported 的原因及修复见页首 |
+| TM-A04 | 未知/取消/迟到/重启、持久化先于提交、无 Task 副作用与停服结算 | 已验收：受控与真实跨构建接管 | 原生成请求/Run/input/final/result 跨 A/B 保持，正式重启与最终两原 Run 结算通过；干净主干同 EXE/原 k 包复验亦通过，版本与证据见页首 |
 | TM-A05 | 实际报告/公开产物回传，环境/选择/日志及干净同 commit 限定 | 功能链通过 | 定向验证及同一原开发 Run 上真实程序通过/失败，经公开 collect/list/read/workspace-git 到正式 API 与浏览器；原退出码 0/1，干净同 commit；整包结算另记 |
 | TM-A06 | 来源/版本隔离，幂等冲突、顺序与补测历史 | 通过 | 不可变 CAS、字节摘要、原请求/来源与冲突顺序定向验证；真实第二次失败覆盖当前通过，历史保留两次和各自原证据 |
 | TM-A07 | 正式 API、执行页汇总/详情/历史/日志/切换/离线 | 通过 | 前端 26 项、API 边界及真实浏览器通过/失败两轮；无新页面、执行按钮或浏览器写接口，见末节 |

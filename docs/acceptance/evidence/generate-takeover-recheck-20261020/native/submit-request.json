@@ -1,0 +1,49 @@
+{
+  "protocol": "steerrunner-cli/v1",
+  "request_id": "native-generate-takeover",
+  "input": {
+    "generate": {
+      "instruction": "Return exactly {\"ok\":true,\"token\":\"fixed-takeover-20261020\"}. Do not use tools.",
+      "materials": [
+        {
+          "kind": "inline",
+          "path": "token.txt",
+          "content": "fixed-takeover-20261020"
+        }
+      ],
+      "output_schema": {
+        "type": "object",
+        "required": [
+          "ok",
+          "token"
+        ],
+        "properties": {
+          "ok": {
+            "const": true
+          },
+          "token": {
+            "const": "fixed-takeover-20261020"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "title": "Generate takeover proof",
+    "workflow": {
+      "id": "generate",
+      "version": 1
+    },
+    "execution": {
+      "adapter": "codex-app-server",
+      "target": {
+        "kind": "local"
+      },
+      "settings": {
+        "access_mode": "read_only",
+        "executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+        "model": "gpt-6.1-sol",
+        "reasoning_effort": "low"
+      }
+    }
+  }
+}

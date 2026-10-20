@@ -1,0 +1,12 @@
+{
+  "protocol": "steerrunner-cli/v1",
+  "ok": true,
+  "request_id": "native-generate-explicit-stop",
+  "data": {
+    "action_status": "pending",
+    "command_id": "fa9d978fcc230c43f92f3b0819e6c143",
+    "receipt_status": "accepted",
+    "run_id": "5c6669c185ca96aab43eeaadf296eeee"
+  },
+  "error": null
+}

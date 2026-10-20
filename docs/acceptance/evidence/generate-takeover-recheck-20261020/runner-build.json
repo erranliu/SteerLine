@@ -1,0 +1,8 @@
+{
+  "version": "0.2.0-dev.3-r2",
+  "source_commit": "13ef12312944317e7b78d4de44977b92e65e70c2",
+  "source_dirty": false,
+  "protocol": "steerrunner-cli/v1",
+  "platform": "windows/amd64",
+  "sha256": "482AAFCFFD8B61516F26E842361602741643F52E2D77D2BE5CCEA6461DA4292F"
+}

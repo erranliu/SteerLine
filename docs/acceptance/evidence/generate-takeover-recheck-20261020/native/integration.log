@@ -1,0 +1,4 @@
+=== RUN   TestSRContentGenerateTakeoverNative
+    content_native_test.go:107: native=true root=C:/srt\gt-23720053 run=5c6669c185ca96aab43eeaadf296eeee result=passed settlement=passed takeover=compatible original_database=unchanged
+--- PASS: TestSRContentGenerateTakeoverNative (30.25s)
+PASS
