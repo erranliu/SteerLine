@@ -1,0 +1,114 @@
+{
+  "protocol": "steerrunner-cli/v1",
+  "ok": true,
+  "request_id": null,
+  "data": {
+    "command": null,
+    "run": {
+      "closed": true,
+      "content_result": {
+        "json": {
+          "ok": true,
+          "token": "fixed-takeover-20261020"
+        },
+        "source": {
+          "attempt_id": "344d04806319ca0355de0c7cda4a175e",
+          "command_id": "11c00e504b44faccb17c48c805a359f7",
+          "item_id": "msg_0584a50e79819004016ad706c0b67c8191a6026dab2bf57843",
+          "native_outcome": "succeeded",
+          "session_id": "01a157f2-3b57-7ac0-acee-43236cbc72c9",
+          "source": "codex.agentMessage.final_answer",
+          "text": "{\"ok\":true,\"token\":\"fixed-takeover-20261020\"}",
+          "turn_id": "01a157f2-4c44-71b1-a9c1-f07f33aaacc9",
+          "verified": true
+        },
+        "status": "succeeded"
+      },
+      "controls": {
+        "can_close": false,
+        "can_interrupt": false,
+        "can_message": false,
+        "can_reply": false,
+        "can_resume": false,
+        "can_stop": false
+      },
+      "created_at": "2026-10-20T06:14:00.9141206Z",
+      "execution": {
+        "agent": "codex",
+        "attempt_id": "344d04806319ca0355de0c7cda4a175e",
+        "backend": "local",
+        "branch": "",
+        "final_available": true,
+        "generation": "8ec698f0b194dab13318fa9edc86c41c",
+        "native_outcome": "succeeded",
+        "protocol": "local_codex_app_server_v1",
+        "requested_model": "gpt-6.1-sol",
+        "requested_reasoning_effort": "low",
+        "session_id": "01a157f2-3b57-7ac0-acee-43236cbc72c9",
+        "turn_id": "01a157f2-4c44-71b1-a9c1-f07f33aaacc9",
+        "turn_started": true,
+        "workspace": "c:\\srt\\gt-23720053\\state\\runs\\5c6669c185ca96aab43eeaadf296eeee\\content",
+        "workspace_scope": "read_only_directory"
+      },
+      "final": {
+        "attempt_id": "344d04806319ca0355de0c7cda4a175e",
+        "command_id": "11c00e504b44faccb17c48c805a359f7",
+        "item_id": "msg_0584a50e79819004016ad706c0b67c8191a6026dab2bf57843",
+        "native_outcome": "succeeded",
+        "session_id": "01a157f2-3b57-7ac0-acee-43236cbc72c9",
+        "source": "codex.agentMessage.final_answer",
+        "text": "{\"ok\":true,\"token\":\"fixed-takeover-20261020\"}",
+        "turn_id": "01a157f2-4c44-71b1-a9c1-f07f33aaacc9",
+        "verified": true
+      },
+      "input_digest": "10857d3f0a898f367f1ea9d48e9415a6dfcb556f9adff0f5cd418cd0b0ac941c",
+      "materials": [
+        {
+          "digest": "dc90060e6b5c39f514de0e5809e1683e2ed17a38b8213ed6e39473f09f5ae1ab",
+          "execution_location": "prompt:token.txt",
+          "kind": "inline",
+          "path": "token.txt",
+          "snapshot_path": "c:\\srt\\gt-23720053\\state\\inputs\\5c6669c185ca96aab43eeaadf296eeee\\token.txt"
+        }
+      ],
+      "new_inputs_allowed": false,
+      "operations": [
+        {
+          "action": "prepare_session",
+          "operation_id": "140c50fd6eb6bd24cda954d41e587587",
+          "status": "confirmed"
+        },
+        {
+          "action": "start_turn",
+          "operation_id": "c0eea8714ee82ac7c79d23f2c0c4fc0f",
+          "status": "accepted"
+        },
+        {
+          "action": "stop_execution",
+          "operation_id": "faf0dbd95d397a32bd586c237b7b5da3",
+          "status": "confirmed"
+        },
+        {
+          "action": "stop_execution",
+          "operation_id": "34052b431828dea28baf4af5b753fc35",
+          "status": "confirmed"
+        }
+      ],
+      "phase": "closed",
+      "resource_digest": "a48bfb1aa7250009b21b4170532d877be01c23375ac386cb39e269794263ef91",
+      "resume_required": false,
+      "revision": 16,
+      "run_id": "5c6669c185ca96aab43eeaadf296eeee",
+      "status": "completed",
+      "step": "closed",
+      "stop_status": "stopped",
+      "title": "Generate takeover proof",
+      "updated_at": "2026-10-20T06:14:26.9822723Z",
+      "workflow": {
+        "id": "generate",
+        "version": 1
+      }
+    }
+  },
+  "error": null
+}

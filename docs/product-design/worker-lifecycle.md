@@ -435,4 +435,4 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 
 生成对象沿 W/V03、V06–V08 的原请求规则：持久生成取消在 Runner workers 启动前转为原 stop outbox；兼容换代以公开 takeover 核对原 namespace/Run/input 或 submit request/digest，保留历史 pin。离线停止/重启核验枚举生成记录。候选测试产物收集复用同一项目观察 tick，先保存 collect 意图再调用；未知只读原请求，不发送替代输入。每份报告归原候选/Run 并不可变保存，源码未知只显示历史/待复验，不改变 Task/交付门槛。对应 V03/V06/V07/V08 的定向测试及真实场景证据见[专属验收](../acceptance/test-management.md)。
 
-当前跨仓缺口：固定 bf3ec58 / 0.2.0-dev.3-r2 对自产已完成 generate 记录的公开 takeover 返回 unsupported（result acquisition configuration），因此本仓真实生成接管仍未验收；不绕过证明或修改原记录。服务 stop 只关闭观察 writer，资源结算前须显式 stop 原 Run；真实测试驱动已落实该清理顺序，产品服务关闭/重启语义不在本任务扩大。
+历史 bf3ec58 的 generate 接管误校验已由 Runner #37 修复：不依赖开发结果解析的内容 workflow 允许合法缺省配置，实际 parser 操作仍严格校验。原生成真实 A/B 接管和干净主干 13ef123 同 EXE/原 k 包只读复验已通过，分别按专属验收的固定版本取证；不绕过证明、修改原记录或将契约 compatible 当作活动回合恢复/资源结算证明。服务 stop 只关闭观察 writer，资源结算前须显式 stop 原 Run；真实测试驱动已落实该清理顺序，产品服务关闭/重启语义不在本任务扩大。

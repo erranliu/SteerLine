@@ -1,0 +1,432 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/app",
+    "./internal/testmanagement",
+    "./internal/runnerclient",
+    "./internal/runnerbinding",
+    "./internal/runnerbridge",
+    "./cmd/steerline",
+    "./tests/e2e/internal/driver",
+    "-run",
+    "^TestTMGeneration|^TestTakeover|^TestPrepareStartupStop$|^TestRunnerTakeoverPreflight$|^TestSharedRunnerCompatibleBuildUsesPublicPreflight$|^TestStartupCancellationOutboxIsDurableBeforeRunnerStart$|^TestDeploymentRestartCandidateBindingsPreserveOriginalState$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-20T06:13:29.7480991Z",
+  "finished_at": "2026-10-20T06:14:39.5679305Z",
+  "wall_seconds": 69.8216327,
+  "environment": {
+    "source_commit": "f139e4a9795c5d79a6677c0a29de177cd024ed65",
+    "worktree_status": "clean (this run's logs and summary excluded)",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 7,
+    "passed_packages": 7,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 33,
+    "passed_tests": 33,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "status": "pass",
+        "elapsed_seconds": 54.525
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "status": "pass",
+        "elapsed_seconds": 4.906
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerclient",
+        "status": "pass",
+        "elapsed_seconds": 3.066
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "status": "pass",
+        "elapsed_seconds": 1.749
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "status": "pass",
+        "elapsed_seconds": 1.712
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbridge",
+        "status": "pass",
+        "elapsed_seconds": 1.114
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbinding",
+        "status": "pass",
+        "elapsed_seconds": 0.864
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestStartupCancellationOutboxIsDurableBeforeRunnerStart",
+        "status": "pass",
+        "elapsed_seconds": 43.46
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestSharedRunnerCompatibleBuildUsesPublicPreflight",
+        "status": "pass",
+        "elapsed_seconds": 6.98
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerclient",
+        "name": "TestTakeoverPublicContractRejectsChangedIdentityAndUnsupportedState",
+        "status": "pass",
+        "elapsed_seconds": 1.92
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight",
+        "status": "pass",
+        "elapsed_seconds": 1.75
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/valid",
+        "status": "pass",
+        "elapsed_seconds": 1.24
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/unsupported",
+        "status": "pass",
+        "elapsed_seconds": 0.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile",
+        "status": "pass",
+        "elapsed_seconds": 0.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationChangesAndRestart",
+        "status": "pass",
+        "elapsed_seconds": 0.14
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestTMGenerationTakeoverAndDurableStartupStop",
+        "status": "pass",
+        "elapsed_seconds": 0.13
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationSaveAndReplay",
+        "status": "pass",
+        "elapsed_seconds": 0.12
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/sha",
+        "status": "pass",
+        "elapsed_seconds": 0.11
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/directory",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/duplicate",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[]}",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationPersistenceAndUnknown",
+        "status": "pass",
+        "elapsed_seconds": 0.07
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationSavedFileSurvivesLostReceipt",
+        "status": "pass",
+        "elapsed_seconds": 0.06
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationCompatibleBuildObservesOriginalWithoutResubmit",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[\"unit.rules\",\"unit.rules\"]}",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[\"unknown\"]}",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationCancelledBeforeLateBindingDoesNotSave",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestDeploymentRestartCandidateBindingsPreserveOriginalState",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestTakeoverKeepsFrozenCandidatesAndRequiresOriginalRequestDigest",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbinding",
+        "name": "TestTakeoverCallerBindingPolicies",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbinding",
+        "name": "TestTakeoverCallerBindingPolicies/directory",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbinding",
+        "name": "TestTakeoverCallerBindingPolicies/input",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbinding",
+        "name": "TestTakeoverCallerBindingPolicies/proof_sha",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbinding",
+        "name": "TestTakeoverCallerBuildIdentity",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbinding",
+        "name": "TestTakeoverCheckBindings",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbridge",
+        "name": "TestPrepareStartupStop",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbridge",
+        "name": "TestPrepareStartupStop/durable_and_unknown_keeps_original_bytes",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbridge",
+        "name": "TestPrepareStartupStop/failed_commit_and_stale_snapshot_return_no_dispatchable_stop",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerbridge",
+        "name": "TestPrepareStartupStop/rejected_is_reprepared_accepted_is_observed",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestTMGenerationResetRequiresOriginalSettlement",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestStartupCancellationOutboxIsDurableBeforeRunnerStart",
+        "status": "pass",
+        "elapsed_seconds": 43.46
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestSharedRunnerCompatibleBuildUsesPublicPreflight",
+        "status": "pass",
+        "elapsed_seconds": 6.98
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/runnerclient",
+        "name": "TestTakeoverPublicContractRejectsChangedIdentityAndUnsupportedState",
+        "status": "pass",
+        "elapsed_seconds": 1.92
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight",
+        "status": "pass",
+        "elapsed_seconds": 1.75
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/valid",
+        "status": "pass",
+        "elapsed_seconds": 1.24
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/unsupported",
+        "status": "pass",
+        "elapsed_seconds": 0.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile",
+        "status": "pass",
+        "elapsed_seconds": 0.18
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationChangesAndRestart",
+        "status": "pass",
+        "elapsed_seconds": 0.14
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/app",
+        "name": "TestTMGenerationTakeoverAndDurableStartupStop",
+        "status": "pass",
+        "elapsed_seconds": 0.13
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationSaveAndReplay",
+        "status": "pass",
+        "elapsed_seconds": 0.12
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/sha",
+        "status": "pass",
+        "elapsed_seconds": 0.11
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/directory",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/cmd/steerline",
+        "name": "TestRunnerTakeoverPreflight/duplicate",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[]}",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationPersistenceAndUnknown",
+        "status": "pass",
+        "elapsed_seconds": 0.07
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationSavedFileSurvivesLostReceipt",
+        "status": "pass",
+        "elapsed_seconds": 0.06
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationCompatibleBuildObservesOriginalWithoutResubmit",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[\"unit.rules\",\"unit.rules\"]}",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationFailureAndEmptyKeepFile/{\"tests\":[\"unknown\"]}",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/testmanagement",
+        "name": "TestTMGenerationCancelledBeforeLateBindingDoesNotSave",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 54.523291,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "C:/Users/lmas1/AppData/Local/Temp/steerline-generate-recheck-20261020-1792476800182/caller/go-test.jsonl",
+  "stderr_log": "C:/Users/lmas1/AppData/Local/Temp/steerline-generate-recheck-20261020-1792476800182/caller/go-test.stderr.txt"
+}
