@@ -2,6 +2,8 @@
 
 SteerLine 只通过 `steerrunner-cli/v1` 调用独立 EXE。Runner 同一个 EXE 提供短命 CLI 与常驻服务；CLI 连接同一 state-dir 的现有实例，读请求不自动启动服务。任务、DAG、候选参与及 TaskDelivery 留在 SteerLine。
 
+所有 LLM 执行操作统一经 Runner 承担，职责声明见[LLM 执行边界](../architecture.md#llm-执行边界)。SteerLine 的默认预设选择与 Runner 内部 LLM 操作的默认链路分别说明于[两层默认链路](../product-design/execution-profiles.md#两层默认链路)；实际接入使用所选构建发布的公开配置与能力契约。
+
 多 workflow 与冻结/换代的修订方案见[协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)，已实现调用方与 Runner 组合 schema 增量。公开字段/schema 固定后 caller 可用 fixture 开发，实际 EXE/资源身份及定向证据是联验/交付前置，样例不进生产 capabilities。空闲契约查询不证明 Run 读取接通，须在同一真实 Run 经正式详情/历史验证。Spec 4.2 的同构建服务换代仅在显式重启 SteerLine、重建 ProjectRuntime 时接纳新实例；单独重启 Runner 不触发旧运行时重新绑定，实例变化时拒绝新业务输入并提示重启，旧停止请求不影响新实例。未结算阻断换构建，本期不接管旧状态。实际结果与固定构建见[本次协作验收](../acceptance/runner-collaboration.md)；下列基线仅保留首次接入来源，不代表当前所需能力。
 
 首次接入基线来自 [SteerRunner](https://github.com/erranliu/SteerRunner)，执行实现 commit `41908e641b34a890448158d2f21a9edc597d08cb`（已可从远端获取）。Windows/amd64 验证构建使用 Go 1.26.4、版本 `0.1.0-dev.1`，EXE SHA-256 为 `5eb9c3a9162d13449d55d363dd136e0ee50dea0d1e06ac5afaa8b439b73e5a71`。当前没有正式 Release；[Runner 草稿 PR](https://github.com/erranliu/SteerRunner/pull/1)与[接入验收](../acceptance/steerrunner-cutover.md)记录实际通过和剩余项。

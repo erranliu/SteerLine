@@ -1,32 +1,34 @@
 # 架构规划约束
 
-适用于双链路控制台、中心状态机、远程执行，以及后续并行执行、共享服务和移动端的规划。本页直接保留仍适用的边界，后续执行要求落实到各任务自己的Spec；源码归属与支持范围需要核实时按需查 [当前架构](../architecture/current-code-architecture.md)，不沿历史Spec逐层追读。
+适用于 SteerLine 任务协调、SteerRunner 执行接入、远程执行，以及后续并行执行、共享服务和移动端的规划。本页直接保留仍适用的边界，后续执行要求落实到各任务自己的 Spec；整体职责以[架构总览](../architecture.md)为准，源码归属与支持范围按需查[当前架构](../architecture/current-code-architecture.md)，不沿历史 Spec 逐层追读。
 
 ## 第一阶段平台范围
 
-第一阶段包含本地 Codex、本机 Orca 与远端路径交付。远端路径按[专属 Spec](../spec/orca-remote-l3.spec.md)与[验收记录](../acceptance/orca-remote-l3.md)核对实际能力和结果。
+第一阶段历史目标包含本地 Codex、本机 Orca 与远端路径交付；当前执行范围为本地 Codex 与远端 Orca environment，本机 Orca 路径已放弃。实际能力、固定构建与验证范围按[Runner 接入](../integration/steerrunner.md)及其专属验收核对，历史目标不代表当前支持或已验收。
 
 ## 长期双执行路径
 
-local Codex 与 Orca 均长期正式支持。backend、agent、execution target 和协议版本分开；远端路径也不能把本地路径用作远程故障的隐式替代。Orca terminal v2 与 supervised 可采用不同协议实现，共用业务边界和契约测试。
+本地 Codex 与远端 Orca 是由 Runner 提供的执行路径。backend、agent、execution target 和协议版本分开；具体适配器及协议能力以 Runner 公开契约为准。远端路径不能把本地路径用作远程故障的隐式替代。规划中的执行支持与实际验收分别判断。
 
 ## 业务权威与执行边界
 
-SteerLine 负责任务领取、工作区与 worker 关联、固定流程/步骤与统一 status、完整反馈送达、原会话重接、PR 关联和真实合并结项。worker 负责实现、提交、创建 PR；测试、修复、审查由任务 Spec/Plan 约定。开发流程以普通代码管理 implement.execute/report、publish、await_merge 和 delivered；不固定增加项目验证/审查循环。候选和报告前后事实核验按 [#84 契约](../spec/worker-staged-flow.spec.md)执行。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
+SteerLine 负责任务领取、DAG、候选与公开 Run 的关联、原请求及授权输入转交、公开状态投影、PR 关联和真实合并后的唯一 TaskDelivery。工作区准备、workflow 步骤推进、LLM 调用、原生会话、反馈投递与执行资源管理归独立 SteerRunner。worker 按 Spec/Plan 实现、测试、修复、提交及创建 PR；Runner 管理所选 workflow，SteerLine 消费公开事实，不重建执行状态机。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
+
+规划任何涉及 LLM 的产品功能，均须遵循[LLM 执行边界](../architecture.md#llm-执行边界)，通过 Runner 的公开能力执行；SteerLine 的默认方案选择和 Runner 内部辅助操作的默认链路按[执行配置](../product-design/execution-profiles.md#两层默认链路)分别设计。能力不足时明确 Runner 契约的补齐与接入安排，不在 SteerLine 另接模型或原生代理。
 
 中心停止监督与取消执行分开；本机路径的生命周期策略明确表达。
 
 ## 身份与扩展
 
-Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身份分别保留归属。任务领取与结项属于任务级；agent、工作区、输出和反馈属于具体会话。业务流程在 worker 内控制下一输入，adapter 不管理业务步骤或决定下一阶段。每个WorkflowRun 只有一条持续 worker 会话；同 Task 的本机多候选已使用多个独立 WorkflowRun，不为同一候选的反馈重建 worker，中心仍只记录一个 TaskDelivery。
+Task、候选、Runner Run、Execution、Attempt、会话/轮次、用户消息和外部平台身份分别保留归属。任务领取与结项属于任务级；执行资源与原生会话身份由 Runner 管理。下一步骤及输入由 Runner 的 workflow 决定，adapter 提供原生动作和证据；SteerLine 不决定 Runner 内部步骤。同 Task 的多个候选分别绑定独立 Run，仍只记录一个 TaskDelivery。会话数量、复用和角色模型选择按所选 Runner workflow 契约确定，不再以历史 WorkflowRun 命名推定单一持续会话。
 
 历史操作固定到派发时的目标及代次，配置变化和迟到消息不能重定向原执行。完成由中心按选用结果和真实交付核验。
 
 ## 原生任务与人工处置边界
 
-原生任务复用中心状态机与 SQLite，任务 DAG 决定任务间资格，WorkflowRun/Execution 管理持续会话及交付。创建任务与加入 DAG 为同一事务，交付契约随创建固定；未交付任务只能通过受控命令追加前置，事务核验身份、版本和无环关系，保留原固定契约。PR 合并前可受控丢弃，但不释放后继或抹去执行事实。已合并 PR 的任务不可丢弃或补前置。新规划改变固定交付范围或要移除旧前置时，须重新规划受影响任务，不能用普通反馈或追加边改写旧契约。
+原生任务复用 SteerLine 任务状态机与 SQLite，任务 DAG 决定任务间资格；Runner 管理执行及会话，SteerLine 核验唯一交付。创建任务与加入 DAG 为同一事务，交付契约随创建固定；未交付任务只能通过受控命令追加前置，事务核验身份、版本和无环关系，保留原固定契约。PR 合并前可受控丢弃，但不释放后继或抹去执行事实。已合并 PR 的任务不可丢弃或补前置。新规划改变固定交付范围或要移除旧前置时，须重新规划受影响任务，不能用普通反馈或追加边改写旧契约。
 
-用户可通过 Codex 分析并人工处置任务与成果，系统不承诺自动修复任意人工改动。当前格式重启先核验原请求及执行事实；仍存活的原会话可接回观察，已终止的本地 worker 由用户明确选择后在新 Attempt 继续。原 thread 无法核实时需人工处理；恢复不在原 Execution 中创建替代会话。关系视图和UI均不成为业务写者；未核实原执行或其他写者时保留未知状态，不自动创建替代worker。
+用户可通过 Codex 分析并人工处置任务与成果，系统不承诺自动修复任意人工改动。SteerLine 经 Runner 公开契约观察原执行、转交授权输入并对账原请求；原生会话重接、恢复及停止由 Runner 执行。具体允许动作、授权与已知缺口统一按[Worker 生命周期](../product-design/worker-lifecycle.md)及所选构建契约核对，不在 roadmap 维护平行恢复状态机。关系视图和 UI 均不成为业务写者；未核实原执行或其他写者时保留未知状态。
 
 ## 远端设计边界
 
