@@ -4,6 +4,7 @@ import (
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 )
 
@@ -39,6 +40,7 @@ type Config struct {
 	ConfigPath      string                `json:"-"`
 	runtimeHost     *host.Config
 	runtimeRunner   *runnerclient.Client
+	runtimeTests    api.TestManagementPort
 
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`
 

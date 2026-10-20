@@ -39,7 +39,17 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 	if err := runnerbinding.ValidateBuildBindings(pin, cli.Takeover, snapshot.Candidates, checks); err != nil {
 		return err
 	}
-
+	generations, err := store.Generations(ctx, c.Identity())
+	if err != nil {
+		return err
+	}
+	for _, g := range generations {
+		if !runnerbinding.SameBuild(g.Runner, pin) {
+			if err := verifyGenerationTakeover(g, cli); err != nil {
+				return err
+			}
+		}
+	}
 	if checkpoint.Service.RunnerBuild != nil && runnerbinding.SameBuild(*checkpoint.Service.RunnerBuild, pin) {
 		return nil
 	}

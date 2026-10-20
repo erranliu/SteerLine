@@ -25,7 +25,6 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	fixtureGit(t, second.Repository, "remote", "set-url", "origin", "https://github.com/owner/repo.git")
 	second.RunDir = ""
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "two.json"), projectConfigJSON(t, second), 0600))
-	require(t, os.WriteFile(filepath.Join(EtcDir(), "z-broken.json"), []byte("{"), 0600))
 	d := NewApplicationDirectory(HomeDir())
 	defer d.Close()
 	t.Cleanup(func() {
@@ -35,15 +34,9 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	})
 	d.Start()
 	catalog := switchCatalog(t, d, func(c contract.Catalog) bool {
-		return len(c.Projects) == 3 && (c.Projects[0].RuntimeState != "starting" && c.Projects[1].RuntimeState != "starting")
+		return len(c.Projects) == 2 && (c.Projects[0].RuntimeState != "starting" && c.Projects[1].RuntimeState != "starting")
 	})
 	for _, project := range catalog.Projects {
-		if project.ConfigID == "z-broken.json" {
-			if project.RuntimeState != "failed" || project.ProjectID != "" {
-				t.Fatal("bad configuration was not isolated", project)
-			}
-			continue
-		}
 		if !project.Online {
 			t.Fatal("project failed", project)
 		}
@@ -115,5 +108,37 @@ func TestUnifiedStartupLifecycleSharedPIDIndependentInstances(t *testing.T) {
 	}
 	if a.Identity(ctx).Ready || b.Identity(ctx).Ready {
 		t.Fatal("closed project remains ready")
+	}
+}
+
+func TestUnifiedStartupUnresolvedCensusBlocksRunnerStart(t *testing.T) {
+	c, _ := nativeTaskFixture(t)
+	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
+	require(t, os.MkdirAll(EtcDir(), 0700))
+	require(t, os.WriteFile(filepath.Join(EtcDir(), "one.json"), projectConfigJSON(t, c), 0600))
+	require(t, os.WriteFile(filepath.Join(EtcDir(), "z-broken.json"), []byte("{"), 0600))
+	d := NewApplicationDirectory(HomeDir())
+	defer d.Close()
+	d.Start()
+	catalog := switchCatalog(t, d, func(c contract.Catalog) bool {
+		return len(c.Projects) == 2 && c.Projects[0].RuntimeState == "failed" && c.Projects[1].RuntimeState == "failed"
+	})
+	if catalog.Projects[1].ProjectID != "" || !strings.Contains(catalog.Projects[0].Diagnostic, "unresolved project census") {
+		t.Fatal("unresolved stop obligations were not reported", catalog)
+	}
+	for _, project := range catalog.Projects {
+		if project.Online {
+			t.Fatal("project admitted before shared Runner startup preflight", project)
+		}
+	}
+	require(t, d.Close())
+	if d.runner.result().Attempted {
+		t.Fatal("unresolved project reached service start", d.runner.result())
+	}
+	if _, err := os.Stat(runnerstatepath.Directory(d.home)); !os.IsNotExist(err) {
+		t.Fatal("failed census created Runner state", err)
+	}
+	if _, err := os.Stat(filepath.Join(c.RunDir, "steerline.db")); !os.IsNotExist(err) {
+		t.Fatal("failed census initialized project database", err)
 	}
 }

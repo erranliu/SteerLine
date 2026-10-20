@@ -52,6 +52,7 @@ func openServiceProjectClientWithCommands(ctx context.Context, config Config, se
 			return productclient.Resources{}, err
 		}
 		resources.Discard = &clientDiscardCommands{service: service}
+		resources.Tests = bound.runtimeTests
 		if store != nil {
 			checks := newEnvironmentCheckPort(bound, store)
 			if service != nil {

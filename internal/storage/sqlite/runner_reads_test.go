@@ -164,7 +164,7 @@ func TestRunnerPublicReadsKeepOriginalFinalAndCallerBinding(t *testing.T) {
 		for _, event := range activity.Activity {
 			if event.Kind == "worker_state" {
 				changes++
-				if !strings.Contains(event.Title, "实施报告") || !strings.Contains(event.Title, "已阻塞") || !strings.Contains(event.Detail, "HTTP 401") || event.ItemID == "change-0" || event.ItemID == "change-1" {
+				if !strings.Contains(event.Title, "implement.report") || !strings.Contains(event.Title, "已阻塞") || !strings.Contains(event.Detail, "HTTP 401") || event.ItemID == "change-0" || event.ItemID == "change-1" {
 					t.Fatal("unreadable or stale transition", event)
 				}
 			} else {

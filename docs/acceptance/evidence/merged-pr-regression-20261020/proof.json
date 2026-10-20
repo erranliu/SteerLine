@@ -1,0 +1,15 @@
+{
+  "package": "C:\\SteerlineDebug\\dev-20261020-133842-5612f97d-dirty",
+  "runner_sha256": "ea8ad087931f55fed5da086503b76d01944fe3cbc88c191caae3e481bf901d6d",
+  "generation_run": "784ed608d78a7e5784c98685e52c7a70",
+  "generation_source": "codex.agentMessage.final_answer",
+  "candidate_run": "5334c89977c5109cfbee470bf60e9c86",
+  "candidate_source": "codex.agentMessage.final_answer",
+  "commit": "cf101768ca7db7acfea3b9d558105750153222c2",
+  "pass_report": "35448c3876f1427d88c2069a324c4bc0",
+  "fail_report": "2b8b72bb1aae4aa585bc9d2671418725",
+  "browser_passed": true,
+  "browser_failed": true,
+  "stopped": true,
+  "cleanup_complete": true
+}

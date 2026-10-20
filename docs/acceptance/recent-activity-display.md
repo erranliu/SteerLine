@@ -1,5 +1,7 @@
 # 近期活动展示优化验收
 
+2026-10-20 合并后补验：三份相关 Web 测试 26 项和生产构建通过；SQLite 原事实读取测试修正为 PR #356 已确定的英文 `implement.report`，中文状态/诊断/噪音和绑定断言保留。定向反馈 22 项（含子用例/选择器）全部通过、零 skip，证据为 `C:/Users/lmas1/AppData/Local/Temp/steerline-merged-acceptance-20261020-125058/focused-fixes/summary.json`。仅修正旧测试，不改产品文案。RAD-M01 保持人工待验，[操作导航](merged-pr-regression-20261020.md#执行页与测试结果可读性)区分历史截图和当前交互体验。
+
 范围：用户确认的“执行与待处理 → 近期活动”排序与文案优化。设计规则见 [Activity 契约](../product-design/activity.md)。本次为普通开发，不占 roadmap Task ID。
 
 ## 自动验收（2026-10-19）

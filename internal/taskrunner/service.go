@@ -45,6 +45,7 @@ type Service struct {
 	ResolveBase                                 func(context.Context, taskmodel.FixedWork, bool) (string, error)
 	Admit                                       func(context.Context) error
 	RunnerBuild                                 runnercontract.BuildPin
+	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork) (json.RawMessage, []runnerclient.Document)
 	mu                                          sync.Mutex
 }
 type Start struct {
@@ -114,6 +115,9 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if profile.Input.Workflow.ID == "" || profile.Input.Workflow.Version <= 0 {
 		return runnerbridge.Candidate{}, failure("invalid_profile", "execution preset must select a published workflow explicitly")
 	}
+	if profile.Input.Workflow.ID == "generate" || profile.Input.Workflow.ID == "conversation" {
+		return runnerbridge.Candidate{}, failure("invalid_profile", "content workflows cannot execute a development task")
+	}
 	base, err := s.ResolveBase(ctx, work, input.Candidate)
 	if err != nil {
 		return runnerbridge.Candidate{}, err
@@ -144,6 +148,17 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if run.Correlation == nil {
 		run.Correlation = map[string]string{}
 	}
+	var testPlan json.RawMessage
+	if s.PrepareTestPlan != nil {
+		var refs []runnerclient.Document
+		testPlan, refs = s.PrepareTestPlan(ctx, work)
+		for _, ref := range refs {
+			if !seen[ref.Path] {
+				run.Documents.References = append(run.Documents.References, ref)
+				seen[ref.Path] = true
+			}
+		}
+	}
 	run.Correlation["steerline_project"] = s.Project
 	run.Correlation["steerline_task_id"], run.Correlation["steerline_candidate_id"] = input.TaskID, input.RequestID
 	raw, err = json.Marshal(run)
@@ -155,6 +170,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 		claimant = work.Record.Claimant
 	}
 	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(run.Execution, run.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: id(), Input: raw}}
+	c.TestPlan = testPlan
 	if err := s.Store.ReserveRunnerCandidate(ctx, work, c, input.Candidate); err != nil {
 		return runnerbridge.Candidate{}, err
 	}

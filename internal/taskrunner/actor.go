@@ -39,11 +39,14 @@ type actorCall struct {
 	result chan error
 }
 type Actor struct {
-	State   reconstruction.Runtime
-	options ActorOptions
-	mu      sync.Mutex
-	ctx     context.Context
-	calls   chan actorCall
+	// ObserveAuxiliary observes caller-owned non-Task operations on the existing
+	// runtime tick; it never manages an agent process or dispatches Task work.
+	ObserveAuxiliary func(context.Context) error
+	State            reconstruction.Runtime
+	options          ActorOptions
+	mu               sync.Mutex
+	ctx              context.Context
+	calls            chan actorCall
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
@@ -134,6 +137,11 @@ func (a *Actor) Call(ctx context.Context, run func() error) error {
 	}
 }
 func (a *Actor) TickDecision(ctx context.Context) error {
+	if a.ObserveAuxiliary != nil {
+		if err := a.ObserveAuxiliary(ctx); err != nil {
+			return a.observeError(ctx, err)
+		}
+	}
 	return a.observeError(ctx, a.options.Tasks.Reconcile(ctx))
 }
 func (a *Actor) TickTask(ctx context.Context, _ context.CancelFunc) error {

@@ -1,5 +1,7 @@
 # Worker 流程异常处理与重试
 
+2026-10-20 内容生成接管补验（W02–W18，E04–E07，V06–V08）：generate/conversation 不使用开发流程 parser 配置，Runner 接管按适用工作流校验，保留原材料/执行语义/codec/原生身份；开发配置仍严格检查。调用方原 Generation/Run/input/final 不改写，未知零重发、取消先于 worker、停止与资源结算分别证明的规则不变。本轮只修不适用配置误拒绝，不增加恢复授权、旧数据迁移或另一套状态机；实际换构建与结算结果见[测试管理验收](../acceptance/test-management.md)。
+
 2026-10-20 调用方边界收口（W02–W18，E04–E07，V03/V06–V08）：候选停止信封的构造和保存统一归 runnerbridge，正常对账和启动前收集复用；启动层继续先取项目锁/store，再持久化既有停止义务，经 pending_stops 在 worker 前受理。保留原正常/启动 ID 生成方式、未知信封原字节与 CAS，明确拒绝后才按原流程准备后续信封。公开 takeover 类型/验证归 runnercontract，原 Run/input/request/Check 与构建比较归纯 runnerbinding；启动准入、离线重启、检查查询及部署预检复用对应规则，保留各入口原有前置。只读接管不取得停止/输入授权，历史事实不改写，不新增 submit/reply/resume、重试或原生恢复能力；停服与资源结算继续分开证明。当前实现缺口和原生资格仍按既有专属验收判断。本轮安排及结果见[Plan](../plans/architecture-boundary-consolidation.plan.md)和[验收](../acceptance/architecture-boundary-consolidation.md)，不改 W/E/V 矩阵语义。
 
 2026-10-19 兼容 Runner 构建接管补充（W02–W18，E04–E07，V06–V08）：后续实现由[本次 Spec](../spec/service-generation-recovery.spec.md)、[Plan](../plans/service-generation-recovery.plan.md)和[验收](../acceptance/service-generation-recovery.md)约束，取代下述历史同构建限制。Runner 保存原执行/结果并按持久 Allowed/ResumeRequired/PendingStop 自动接续已证明尚未发送的后继；SteerLine 不自动 submit/reply/resume。paused、人工等待、业务阻断和 stop 保留；unknown 只对账。SteerLine 启动前沿原项目锁/Store 收集并保存撤销信封，经 pending_stops 在 Runner worker 前受理；无信封不得先开 worker 再追发停止。安装 pin 仍校验当前 EXE；兼容预检后只更新当前服务 pin，候选/检查/PR/Delivery 原事实不改。原服务退出与新候选兼容分别证明，resources_settled=false 不晋升 true。Orca 原创建查询与原生/跨仓现场资格仍是明确缺口，受控通过不代表已部署。
@@ -304,6 +306,19 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 初始化停止的当前增量：当前远端不再使用 helper 的 ownership、Job/认证签名退出或固定控制 checkpoint；主干 local 受管路径保持。原生初始化无业务 turn 时，停止可在 branch 元数据尚空的窗口沿原 runtime/worktree/path/terminal/incarnation 关闭并核实原完整清单；已开始业务或明确身份/分支冲突不适用该窗口。两个 L3 case 已重定向为仅隐藏 caller 的原生 agentIdentity、保留真实响应，分别验证初始化停止和服务换代零自动输入；2026-10-19 的独立包 `dev-20261019-154407-be8f3b54` 中两个 case 已通过，公开离线终端 scope 与收尾均通过；本轮为相关组件 126 项、framework 17 项、Controlled 3 项及两个 L3 的增量验证，具体源/构建与原始证据归 [Runner 专属验收](https://github.com/erranliu/SteerRunner/blob/codex/initialization-stop/docs/acceptance/initialization-stop.md)。历史 helper 证据不迁移、不作为 native scope 或全树清理证明。
 
+### Runner 内容流程与测试管理接入（2026-10-19，实施中）
+
+[统一 Spec](../spec/test-management.spec.md) / [Plan](../spec/test-management.plan.md)已接 Runner `9586ac4` 的 generate/1，用原项目 tick 观察生成并条件保存测试安排；conversation/1 操作接入留待规划台。原生执行仍归 Runner，SteerLine 不新增 Agent 运行时、自动输入或第二套状态机。清单/固定快照、生成记录、报告输出及只读展示已接线；2026-10-20 已确认 R2 公开产物/Git 观察随 Runner 主干交付，缺口转为本仓消费接线，生产结果仍待验证。rebase 主干兼容换代后，生成记录仍按旧 build 严格拒绝且未加入启动前 stop 清单，须复用已有 takeover/取消优先规则补齐，不新增平行恢复状态机。具体版本、证据及缺口见[专属验收](../acceptance/test-management.md)。
+
+| 节点 / 异常 / 验证 | 本次调用方差异与缺口 |
+| --- | --- |
+| W01–W07 / E03、E05 / V01–V02 | 生成复用 Codex 程序/模型，按内容流程构造 read_only 设置并核验能力/材料，不原样继承开发权限或发布认证，不领取 Task/伪造开发输入；测试 JSON 从固定 PlanRef 同提交推导，缺失/无效只记展示诊断，不新增 Task 门禁 |
+| W08–W14 / E04、E07 / V03、V06、V08 | 项目生成请求先持久化；未知原请求只查证，取消/重启零重发、零 resume；输出格式与测试 ID/文件保存校验分别归 Runner/SteerLine，坏结果保留原文件 |
+| W15–W17 / V04、V06 | generate 不进入开发补报/发布/交付；测试计划/结果不变成 PR 门禁，不推进 TaskDelivery；项目程序报告和日志经公开产物读取，由 SteerLine 校验计划/定义及干净同 commit，脏/未知来源不计当前通过，不新增指纹或防篡改证明体系 |
+| W18 / E04–E05 / V07 | 无 Candidate 的生成及未绑定/迟到 Run 已接普通停止与 reset 围栏；当前仍缺兼容新构建的原证明核验，以及主干启动前 stop 清单中的生成对象，不能仅依赖启动后 tick 补停；生成成功与资源已停止分别取证 |
+
+调用方最小验证为 TM-A01–A08，R2 消费、生成换代及完整 live 验证保留在验收明细；原生会话、权限、恢复和停止机制专项仍归 Runner，不在本仓复制矩阵。上述增量不更改既有节点、异常分类或重试/恢复授权。
+
 ### 应用级共享 Runner（2026-10-19）
 
 [共享服务 Spec](../spec/shared-runner-service.spec.md) / [Plan](../spec/shared-runner-service.plan.md)已按用户授权实施，仅改 SteerLine：由应用宿主持有每 home 一个 Runner，项目借用共同固定实例。节点/异常编号、Runner 原生重试、输入/恢复和冻结停止策略不变。
@@ -415,3 +430,9 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 2. 统一规则在本文维护；任务 Spec/Plan 链接本文并记录本次差异、实现范围和测试计划，不复制完整矩阵。固定 Git commit 中的旧任务契约和原始验收事实不改写。
 3. 实现某项能力后同步“当前实现与缺口”，结果登记在该任务 `docs/acceptance/` 文档；纯设计整理不创建 Task ID、roadmap 执行项或未执行的验收成功记录。
 4. 文档与代码不一致时明确修正文档或实现，不增加旧数据迁移、双写或回退路径。异常恢复不能修改安装数据库、清空诊断或用新资源冒充原身份。
+
+### 测试管理增量（2026-10-20）
+
+生成对象沿 W/V03、V06–V08 的原请求规则：持久生成取消在 Runner workers 启动前转为原 stop outbox；兼容换代以公开 takeover 核对原 namespace/Run/input 或 submit request/digest，保留历史 pin。离线停止/重启核验枚举生成记录。候选测试产物收集复用同一项目观察 tick，先保存 collect 意图再调用；未知只读原请求，不发送替代输入。每份报告归原候选/Run 并不可变保存，源码未知只显示历史/待复验，不改变 Task/交付门槛。对应 V03/V06/V07/V08 的定向测试及真实场景证据见[专属验收](../acceptance/test-management.md)。
+
+当前跨仓缺口：固定 bf3ec58 / 0.2.0-dev.3-r2 对自产已完成 generate 记录的公开 takeover 返回 unsupported（result acquisition configuration），因此本仓真实生成接管仍未验收；不绕过证明或修改原记录。服务 stop 只关闭观察 writer，资源结算前须显式 stop 原 Run；真实测试驱动已落实该清理顺序，产品服务关闭/重启语义不在本任务扩大。

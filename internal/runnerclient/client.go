@@ -67,7 +67,7 @@ func (b *bounded) Write(value []byte) (int, error) {
 }
 func mutation(command string) bool {
 	switch command {
-	case "submit", "reply", "resume", "stop", "service stop", "environment-check start", "environment-check stop":
+	case "submit", "reply", "resume", "stop", "service stop", "environment-check start", "environment-check stop", "artifacts collect":
 		return true
 	}
 	return false
@@ -92,11 +92,13 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 	}
 	argv := []string{}
 	switch command {
+	case "artifacts discover", "artifacts collect", "artifacts list", "artifacts read":
+		argv = append(argv, "artifacts", command[len("artifacts "):])
 	case "environment-check start", "environment-check inspect", "environment-check stop":
 		argv = append(argv, "environment-check", command[len("environment-check "):])
 	case "service start", "service status", "service stop", "service verify-stopped", "service verify-takeover":
 		argv = append(argv, "service", command[len("service "):])
-	case "version", "capabilities", "submit", "inspect", "last-message", "open-native-session", "events", "reply", "resume", "stop":
+	case "version", "capabilities", "submit", "inspect", "last-message", "open-native-session", "events", "reply", "resume", "stop", "workspace-git":
 		argv = append(argv, command)
 	default:
 		return Response{}, &Failure{Code: "invalid_arguments", Message: "Unsupported Runner CLI command", Exit: 2}
@@ -249,13 +251,17 @@ func decodeEnvelope(raw []byte, target *Response) error {
 }
 func exitCode(code string) int {
 	switch code {
+	case "artifact_path_invalid", "artifact_limit_exceeded":
+		return 2
 	case "invalid_arguments", "invalid_request", "invalid_input", "invalid_cursor":
 		return 2
 	case "unsupported_protocol", "unsupported_schema", "unsupported_capability", "unsupported_platform":
 		return 3
-	case "service_unavailable", "service_start_failed", "detach_unsupported", "startup_unverified", "environment_unavailable":
+	case "workspace_unavailable", "artifact_unavailable", "service_unavailable", "service_start_failed", "detach_unsupported", "startup_unverified", "environment_unavailable":
 		return 4
 	case "request_conflict", "request_not_found", "command_not_found", "run_not_found", "check_not_found", "stale_instance", "directory_conflict", "stale_revision", "invalid_state", "stale_question", "resume_required", "operation_unverified", "answer_pending", "repository_conflict":
+		return 5
+	case "artifact_not_found", "artifact_changed", "artifact_integrity_failed", "workspace_source_unknown":
 		return 5
 	case "request_outcome_unknown":
 		return 6

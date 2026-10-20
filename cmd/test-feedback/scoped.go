@@ -59,6 +59,7 @@ var quickRulePackages = append(append([]string{}, taskRulePackages...), []string
 	"github.com/erranliu/SteerLine/internal/execution/scheduler",
 	"github.com/erranliu/SteerLine/internal/execution/backend",
 	"github.com/erranliu/SteerLine/internal/storage/sqlite",
+	"github.com/erranliu/SteerLine/internal/testmanagement",
 	"github.com/erranliu/SteerLine/internal/product/activityrender",
 	"github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
 }...)
@@ -81,7 +82,10 @@ var quickOwnerCases = []struct {
 	{"quick-owner-runner-state-path", "github.com/erranliu/SteerLine/internal/runnerstatepath", []string{"TestRunnerSocketWorksForDeepApplicationHome", "TestRunnerNamespaceIsolationAndCleanup", "TestRunnerRejectsRedirectedStateBeforeCreateOrCleanup"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestResolveRepositoryUsesOriginalCommonDir"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPublicationSecretsRejectedBeforeFreeze"}},
-	{"quick-owner-unified-startup", "github.com/erranliu/SteerLine/internal/app", []string{"TestStartupCancellationOutboxIsDurableBeforeRunnerStart", "TestSharedRunnerCompatibleBuildUsesPublicPreflight", "TestSharedRunnerBuildPinBeforeService", "TestSharedRunnerCatalogFailureStillClosesAdoptedInstance", "TestSharedRunnerCheckBindingFailureIsProjectLocal", "TestSharedRunnerRejectsBuildBeforeStart", "TestSharedRunnerOfflineChecksKeepOriginalBinding", "TestSharedRunnerCloseDuringUnknownStart", "TestCandidateReadFactsAcrossViews", "TestUnifiedStartupConcurrentReuseAndMissingWeb", "TestUnifiedStartupUnknownCreationCannotTakeOver", "TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost", "TestUnifiedStartupFrozenCatalogConflictsBeforeDatabase", "TestUnifiedStartupOverlappingRunDirs", "TestUnifiedStartupZeroProjectsLifecycle", "TestUnifiedStartupLifecycleSharedPIDIndependentInstances", "TestUnifiedStartupCloseBeforeStartAndPendingResults", "TestUnifiedStartupLateReadyCannotReopenStoppedDirectory", "TestProjectLifecycleOwnershipBoundary", "TestProjectRuntimeClosesLocalResourcesDespiteRunnerUncertainty", "TestProjectRuntimePartialPreparationReleasesOwnership", "TestProjectRuntimeDrainsEveryPublicEntryBeforeClosing", "TestRunnerSettlementReadCanRecoverWithoutRepeatingStop", "TestSharedRunnerProjectValidationKeepsService", "TestRunnerUnknownStartKeepsEvidenceWithoutStoppingUntrustedTarget", "TestRunnerShutdownRetriesOnlyUnconfirmedOriginalStop", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestCM71ProductDependencyBoundary", "TestRunnerProjectPreflightLeavesPrivateRunnerFilesToRunner", "TestRunnerTaskRepositoryKeepsConfiguredIdentityAcrossTransportRewrite"}},
+	// Separate the accumulated Runner recovery cases from project lifecycle cases
+	// so both retain the fixed three-minute package budget.
+	{"quick-owner-runner-startup", "github.com/erranliu/SteerLine/internal/app", []string{"TestStartupCancellationOutboxIsDurableBeforeRunnerStart", "TestSharedRunnerCompatibleBuildUsesPublicPreflight", "TestSharedRunnerBuildPinBeforeService", "TestSharedRunnerCatalogFailureStillClosesAdoptedInstance", "TestSharedRunnerCheckBindingFailureIsProjectLocal", "TestSharedRunnerRejectsBuildBeforeStart", "TestSharedRunnerOfflineChecksKeepOriginalBinding", "TestSharedRunnerCloseDuringUnknownStart"}},
+	{"quick-owner-unified-startup", "github.com/erranliu/SteerLine/internal/app", []string{"TestCandidateReadFactsAcrossViews", "TestUnifiedStartupConcurrentReuseAndMissingWeb", "TestUnifiedStartupUnknownCreationCannotTakeOver", "TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost", "TestUnifiedStartupFrozenCatalogConflictsBeforeDatabase", "TestUnifiedStartupOverlappingRunDirs", "TestUnifiedStartupZeroProjectsLifecycle", "TestUnifiedStartupLifecycleSharedPIDIndependentInstances", "TestUnifiedStartupUnresolvedCensusBlocksRunnerStart", "TestUnifiedStartupCloseBeforeStartAndPendingResults", "TestUnifiedStartupLateReadyCannotReopenStoppedDirectory", "TestProjectLifecycleOwnershipBoundary", "TestProjectRuntimeClosesLocalResourcesDespiteRunnerUncertainty", "TestProjectRuntimePartialPreparationReleasesOwnership", "TestProjectRuntimeDrainsEveryPublicEntryBeforeClosing", "TestRunnerSettlementReadCanRecoverWithoutRepeatingStop", "TestSharedRunnerProjectValidationKeepsService", "TestRunnerUnknownStartKeepsEvidenceWithoutStoppingUntrustedTarget", "TestRunnerShutdownRetriesOnlyUnconfirmedOriginalStop", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestCM71ProductDependencyBoundary", "TestRunnerProjectPreflightLeavesPrivateRunnerFilesToRunner", "TestRunnerTaskRepositoryKeepsConfiguredIdentityAcrossTransportRewrite"}},
 }
 
 var quickPackages = func() []string {
@@ -570,6 +574,7 @@ func checkScopedCoverage(report scopedReport) []string {
 		failures = append(failures, "full integration partition differs from the integration test owner")
 	}
 	seenPackages := map[string]int{}
+	seenOwnerTests := map[string]int{}
 	seenCore := map[string]int{}
 	seenIntegration := map[string]int{}
 	for _, group := range report.Groups {
@@ -594,6 +599,11 @@ func checkScopedCoverage(report scopedReport) []string {
 		if scanErr != nil {
 			failures = append(failures, group.ID+": "+scanErr.Error())
 			continue
+		}
+		if report.Scope == "quick" && strings.HasPrefix(group.ID, "quick-owner-") {
+			for key, count := range runs {
+				seenOwnerTests[key] += count
+			}
 		}
 		assigned := map[string]bool{}
 		for _, name := range group.Assigned {
@@ -697,13 +707,24 @@ func checkScopedCoverage(report scopedReport) []string {
 			failures = append(failures, "other package set differs from enumeration")
 		}
 	} else {
+		// Owners may partition one package into disjoint bounded invocations.
+		// Each assigned invocation must still supply its own package terminal.
+		expectedPackages := map[string]int{}
 		for _, pkg := range quickPackages {
-			if seenPackages[pkg] != 1 {
-				failures = append(failures, fmt.Sprintf("quick package %s completed %d times", pkg, seenPackages[pkg]))
+			expectedPackages[pkg]++
+		}
+		for pkg, count := range expectedPackages {
+			if seenPackages[pkg] != count {
+				failures = append(failures, fmt.Sprintf("quick package %s completed %d times, want %d", pkg, seenPackages[pkg], count))
 			}
 		}
-		if len(seenPackages) != len(quickPackages) {
+		if len(seenPackages) != len(expectedPackages) {
 			failures = append(failures, "quick package set differs")
+		}
+		for key, count := range seenOwnerTests {
+			if count != 1 {
+				failures = append(failures, fmt.Sprintf("quick owner test %s ran %d times", key, count))
+			}
 		}
 	}
 	return failures
