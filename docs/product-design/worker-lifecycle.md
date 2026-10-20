@@ -1,5 +1,7 @@
 # Worker 流程异常处理与重试
 
+2026-10-19 兼容 Runner 构建接管补充（W02–W18，E04–E07，V06–V08）：后续实现由[本次 Spec](../spec/service-generation-recovery.spec.md)、[Plan](../plans/service-generation-recovery.plan.md)和[验收](../acceptance/service-generation-recovery.md)约束，取代下述历史同构建限制。Runner 保存原执行/结果并按持久 Allowed/ResumeRequired/PendingStop 自动接续已证明尚未发送的后继；SteerLine 不自动 submit/reply/resume。paused、人工等待、业务阻断和 stop 保留；unknown 只对账。SteerLine 启动前沿原项目锁/Store 收集并保存撤销信封，经 pending_stops 在 Runner worker 前受理；无信封不得先开 worker 再追发停止。安装 pin 仍校验当前 EXE；兼容预检后只更新当前服务 pin，候选/检查/PR/Delivery 原事实不改。原服务退出与新候选兼容分别证明，resources_settled=false 不晋升 true。Orca 原创建查询与原生/跨仓现场资格仍是明确缺口，受控通过不代表已部署。
+
 2026-10-19 同构建重启/显示更新修复（W18，E04/E05，V06–V08）：应用宿主及 Runner 服务退出与原生资源销毁分别核验。原 Orca 执行可按既有 continue_execution 策略保留；同一 Runner EXE SHA/resource/state-dir、原停服 instance/request、项目本地关闭/锁/checkpoint/冻结配置均匹配时，显式 restart 或 SteerLine/Web 普通部署可重建调用方运行时，不要求原终端先退出。该证明称为 restartable，不将历史 resources_settled=false 或诊断改成成功。未知提交/控制和原 Run/PR 均按原 ID 保留，启动后仍零自动业务输入；更换 Runner 构建仍走资源结算及新环境规则。普通部署默认复用安装 pin，显式 -UpdateRunner 才构建 Runner；不变更 Runner 节点、重试/恢复或原生停止行为。差异及最小验证见[实施 Plan](../plans/application-redeploy.plan.md)和[专属验收](../acceptance/application-redeploy.md)。
 
 Worker 执行域统一管理工作区准备、代理初始化、输入投递、轮次观察、结果结算和资源恢复。每个节点都必须说明正常出口、异常事实、允许的动作和停止条件；平台适配器提供证据，不能自行决定重跑任务或推进业务步骤。

@@ -42,6 +42,7 @@ type Failure struct {
 func (f *Failure) Error() string { return f.Code + ": " + f.Message }
 
 type Client struct {
+	Takeover              *TakeoverReport
 	InstanceID            string
 	BuildVersion          string
 	ResourceDigest        string
@@ -71,6 +72,10 @@ func mutation(command string) bool {
 	return false
 }
 func (c Client) Call(ctx context.Context, command string, args []string, input *Request) (Response, error) {
+	return c.call(ctx, command, args, input, nil)
+}
+
+func (c Client) call(ctx context.Context, command string, args []string, input *Request, startup *ServiceStartInput) (Response, error) {
 	if c.InstanceID != "" && command != "version" && command != "service status" && command != "service stop" && command != "service verify-stopped" {
 		if err := c.ValidateInstance(ctx); err != nil {
 			return Response{}, err
@@ -88,7 +93,7 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 	switch command {
 	case "environment-check start", "environment-check inspect", "environment-check stop":
 		argv = append(argv, "environment-check", command[len("environment-check "):])
-	case "service start", "service status", "service stop", "service verify-stopped":
+	case "service start", "service status", "service stop", "service verify-stopped", "service verify-takeover":
 		argv = append(argv, "service", command[len("service "):])
 	case "version", "capabilities", "submit", "inspect", "last-message", "open-native-session", "events", "reply", "resume", "stop":
 		argv = append(argv, command)
@@ -104,7 +109,19 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 		argv = append(argv, "--state-dir", c.StateDir)
 	}
 	var body []byte
-	if input != nil {
+	if startup != nil {
+		if command != "service start" || input != nil {
+			return Response{}, errors.New("startup stops require service start")
+		}
+		if err := startup.validate(); err != nil {
+			return Response{}, err
+		}
+		body, _ = json.Marshal(startup)
+		if len(body) > MaxRequestBytes {
+			return Response{}, errors.New("startup stops exceed Runner request bound")
+		}
+		argv = append(argv, "--input", "-")
+	} else if input != nil {
 		if !mutation(command) || input.Protocol != Protocol || input.RequestID == "" || !utf8.Valid(input.Input) || !json.Valid(input.Input) {
 			return Response{}, &Failure{Code: "invalid_request", Message: "A fixed v1 request envelope is required", Exit: 2}
 		}
@@ -143,7 +160,7 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 		if command == "open-native-session" {
 			return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Native viewer may have opened; do not replay the operation", Exit: 6, Unknown: true}
 		}
-		if mutation(command) {
+		if mutation(command) || startup != nil {
 			if command == "environment-check start" || command == "environment-check stop" {
 				return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Inspect the original environment-check request ID; do not replay it", Exit: 6, Unknown: true}
 			}
@@ -158,7 +175,15 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 	if err := decodeEnvelope(output.Bytes(), &response); err != nil || response.Protocol != Protocol || response.OK == (response.Error != nil) || response.OK != (exit == 0) {
 		return unknown()
 	}
-	if input == nil && response.RequestID != nil || input != nil && (response.RequestID == nil || *response.RequestID != input.RequestID) {
+	startupFailureID := false
+	if startup != nil && !response.OK && response.RequestID != nil {
+		for _, stop := range startup.PendingStops {
+			if stop.Request.RequestID == *response.RequestID {
+				startupFailureID = true
+			}
+		}
+	}
+	if input == nil && response.RequestID != nil && !startupFailureID || input != nil && (response.RequestID == nil || *response.RequestID != input.RequestID) {
 		return unknown()
 	}
 	if !response.OK {

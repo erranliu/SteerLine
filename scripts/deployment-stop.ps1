@@ -10,13 +10,16 @@ function Stop-DeploymentApplication([string]$CLI, [string]$RunnerExe, [switch]$A
     $stopOutput | ForEach-Object { Write-Host $_ }
     if ($stopCode -eq 0) { return $null }
     if ($AllowRestart) {
-        Write-Host 'Checking same-build restart eligibility; original native executions and their diagnostics are retained.'
+        Write-Host 'Checking restart/takeover eligibility; original native executions and their diagnostics are retained.'
         $raw = & $CLI verify-restart --runner-exe $RunnerExe --json
-        if ($LASTEXITCODE -ne 0) { throw 'Original service closure or same-build restart could not be verified; installed files were preserved.' }
+        if ($LASTEXITCODE -ne 0) { throw 'Original service closure or compatible takeover could not be verified; installed files were preserved.' }
         $proof = $raw | ConvertFrom-Json -ErrorAction Stop
         if ($proof.restartable -ne $true -or -not $proof.original_host.instance_id -or -not $proof.verified_at -or $null -eq $proof.projects -or -not $proof.runner_build.sha256 -or -not $proof.runner_build.resource_digest -or -not $proof.runner_build.state_dir -or -not $proof.runner_service.instance_id -or -not $proof.runner_service.request_id -or $proof.runner_service.state_dir -ne $proof.runner_build.state_dir -or $proof.runner_service.executable_sha256 -ne $proof.runner_build.sha256) {
-            throw 'Same-build restart verification did not return complete original evidence; installed files were preserved.'
+            throw 'Restart verification did not return complete original evidence; installed files were preserved.'
         }
+        $candidateHash = (Get-FileHash -LiteralPath $RunnerExe -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($proof.verifier_sha256 -ne $candidateHash) { throw 'Restart verifier differs from staged Runner; installed files were preserved.' }
+        if ($candidateHash -ne $proof.runner_build.sha256 -and ($null -eq $proof.candidate_build -or $proof.candidate_build.sha256 -ne $candidateHash -or $proof.candidate_build.state_dir -ne $proof.runner_build.state_dir -or $null -eq $proof.takeover -or $proof.takeover.contract -ne 'steerrunner-takeover/v1' -or $proof.takeover.compatible -ne $true -or $proof.takeover.candidate_sha256 -ne $candidateHash -or $proof.takeover.state_dir -ne $proof.runner_build.state_dir)) { throw 'Changed Runner lacks compatible original-state takeover evidence; installed files were preserved.' }
         return $proof
     }
     Write-Host 'Original shutdown is unverified; checking original resource identities without restarting execution.'

@@ -1,5 +1,7 @@
 # 测试总入口
 
+Runner 兼容构建接管的定向测试与未验边界见[专属验收](acceptance/service-generation-recovery.md)：公开 takeover/startup stops、当前 pin 与历史 candidate/Check 分离、启动撤销 outbox、兼容部署证据；不运行安装环境或以 fixture 代替原生资格。
+
 Windows 启动闪窗修复的最小验证见[专属验收](acceptance/startup-console-windows.md)：固定 L1 `quick-core` 的 `TestBackgroundCommandsNoConsole` 从 detached 宿主核验四类后台命令的实际控制台句柄；另定向回归统一启动与共享 Runner，不运行全量或使用安装环境。
 
 共享 Runner 的最小验证见[专属验收](acceptance/shared-runner-service.md)：固定 L1、请求/全局停止证明/reset 定向测试、新 L3 `runtime.shared-runner-projects` 与既有 waiting-merge-restart，以及新调试包的真实空闲服务拓扑。无模型，不操作安装环境。

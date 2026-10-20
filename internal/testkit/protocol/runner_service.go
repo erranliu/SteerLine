@@ -41,6 +41,11 @@ func RunRunnerServiceFixture() bool {
 		_ = json.NewDecoder(os.Stdin).Decode(&request)
 	}
 	switch command {
+	case "service verify-takeover":
+		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-takeover-fixture.json"))
+		if err != nil || json.Unmarshal(raw, &data) != nil {
+			panic("missing public takeover fixture")
+		}
 	case "environment-check inspect":
 		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-check-fixture.json"))
 		if err != nil || json.Unmarshal(raw, &data) != nil {
