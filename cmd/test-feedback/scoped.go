@@ -57,6 +57,7 @@ var quickRulePackages = append(append([]string{}, taskRulePackages...), []string
 	"github.com/erranliu/SteerLine/internal/execution/scheduler",
 	"github.com/erranliu/SteerLine/internal/execution/backend",
 	"github.com/erranliu/SteerLine/internal/storage/sqlite",
+	"github.com/erranliu/SteerLine/internal/testmanagement",
 	"github.com/erranliu/SteerLine/internal/product/activityrender",
 	"github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
 }...)

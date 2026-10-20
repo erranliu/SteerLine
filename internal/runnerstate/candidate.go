@@ -3,6 +3,7 @@
 package runnerstate
 
 import (
+	"encoding/json"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"time"
 )
@@ -20,6 +21,7 @@ type Action struct {
 }
 
 type Candidate struct {
+	TestPlan          json.RawMessage         `json:"test_plan,omitempty"`
 	Withdrawal        *Withdrawal             `json:"withdrawal,omitempty"`
 	StartDigest       string                  `json:"start_digest"`
 	ProfileID         string                  `json:"profile_id"`

@@ -14,3 +14,7 @@ func TestSmokeLocalCodex(t *testing.T) {
 func TestWorkflowLocalCodexAudited(t *testing.T) {
 	testenv.LiveDelivery(testenv.NewScenario(t, "workflow.local-codex-audited"), "local-codex")
 }
+
+func TestManagementLocalCodex(t *testing.T) {
+	testenv.TestManagement(testenv.NewScenario(t, "testing.management-local-codex"))
+}

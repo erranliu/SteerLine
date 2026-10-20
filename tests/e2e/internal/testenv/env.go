@@ -32,18 +32,20 @@ import (
 
 type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, SourceCommit, SourceDirty, ExecutionModel, AuditModel string }
 type Scenario struct {
-	LiveProof        *testfeedback.LiveDeliveryProof
-	bodyFinishedAt   time.Time
-	bodyContextErr   error
-	Run              Run
-	ID, Root, Output string
-	Context          context.Context
-	cancel           context.CancelFunc
-	t                *testing.T
-	projects         []*Project
-	processes        []*testprocess.Process
-	files            []*os.File
-	resources        []map[string]any
+	LiveProof            *testfeedback.LiveDeliveryProof
+	TestingProof         *testfeedback.TestManagementProof
+	externalCleanupError string
+	bodyFinishedAt       time.Time
+	bodyContextErr       error
+	Run                  Run
+	ID, Root, Output     string
+	Context              context.Context
+	cancel               context.CancelFunc
+	t                    *testing.T
+	projects             []*Project
+	processes            []*testprocess.Process
+	files                []*os.File
+	resources            []map[string]any
 }
 
 type Project struct {
@@ -104,7 +106,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
+	if id == "testing.management-local-codex" || id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
 		timeout = 10 * time.Minute
 	}
 	if id == "workflow.local-codex-audited" {
@@ -657,6 +659,9 @@ func (s *Scenario) cleanup() {
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
 	var failures []string
+	if s.externalCleanupError != "" {
+		failures = append(failures, s.externalCleanupError)
+	}
 	// Capture public state before shutting down, even after an assertion timeout.
 	for _, p := range s.projects {
 		if p.Driver.Binary == "" {
@@ -738,6 +743,10 @@ func (s *Scenario) cleanup() {
 	}
 	worker := "controlled"
 	provider := "controlled"
+	if s.ID == "testing.management-local-codex" {
+		worker = "local-codex"
+		provider = "github/" + githubRepository + " (owned base only)"
+	}
 	var realPR *executionmodel.PRInfo
 	for _, p := range s.projects {
 		if p.Chain != "" {
@@ -748,7 +757,7 @@ func (s *Scenario) cleanup() {
 			realPR = p.RealPRProof
 		}
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "real_pr": realPR, "live_delivery": s.LiveProof, "finished_at": time.Now().UTC()}
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "real_pr": realPR, "live_delivery": s.LiveProof, "test_management": s.TestingProof, "finished_at": time.Now().UTC()}
 	if err := controlled.Write(filepath.Join(s.Output, "scenario.json"), evidence); err != nil {
 		s.t.Errorf("write scenario evidence: %v", err)
 	}

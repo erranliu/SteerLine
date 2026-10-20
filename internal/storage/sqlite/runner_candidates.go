@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -10,6 +11,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 func readRunnerCandidate(ctx context.Context, db schemaQuery, project, id string) (runnerstate.Candidate, error) {
@@ -74,7 +76,7 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 		if old.TaskID != c.TaskID || old.StateDir != c.StateDir || old.Explicit != c.Explicit || old.Number != c.Number || old.Claimant != c.Claimant || old.ContractDigest != c.ContractDigest || old.BaseRevision != c.BaseRevision || digestValue(old.Submit) != digestValue(c.Submit) || old.RunID != "" && old.RunID != c.RunID || old.InputDigest != "" && old.InputDigest != c.InputDigest || old.Branch != "" && old.Branch != c.Branch || old.PRURL != "" && old.PRURL != c.PRURL || old.StopRequested && !c.StopRequested || old.SubmitObserveOnly && !c.SubmitObserveOnly || old.Participation != c.Participation {
 			return nativeErr("immutable_task", "candidate update changed a frozen task association")
 		}
-		if old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
+		if !bytes.Equal(old.TestPlan, c.TestPlan) || old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
 			return nativeErr("immutable_task", "candidate update changed its original start identity")
 		}
 		if digestValue(old.Withdrawal) != digestValue(c.Withdrawal) {
@@ -147,8 +149,22 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			want[ref.Path] = ref
 		}
 	}
+	var testing struct {
+		PlanPath string `json:"plan_path"`
+		Commit   string `json:"commit"`
+		Status   string `json:"status"`
+	}
+	testingBound := len(c.TestPlan) > 0 && json.Unmarshal(c.TestPlan, &testing) == nil && testing.PlanPath == work.Contract.PlanRef.Path && testing.Commit == work.Contract.PlanRef.Commit
+	seenRefs := map[string]bool{}
 	for _, doc := range input.Documents.References {
+		if seenRefs[doc.Path] {
+			return nativeErr("contract_mismatch", "duplicate Runner reference")
+		}
+		seenRefs[doc.Path] = true
 		ref, ok := want[doc.Path]
+		if !ok && testingBound && testmodel.TestReference(doc, testing.PlanPath, testing.Commit, testing.Status == "ready") {
+			continue
+		}
 		if !ok || !matches(doc, ref) {
 			return nativeErr("contract_mismatch", "Runner reference differs from the task contract")
 		}
@@ -160,7 +176,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		previous, lookupErr := readRunnerCandidate(ctx, tx.tx, c.Project, c.ID)
 		if lookupErr == nil {
-			if previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
+			if !bytes.Equal(previous.TestPlan, c.TestPlan) || previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
 				return nativeErr("idempotency_conflict", "candidate ID belongs to another original request")
 			}
 			return errAtomicReplay

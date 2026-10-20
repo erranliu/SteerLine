@@ -6,7 +6,7 @@ SteerLine 尚未发布。项目显式使用 task_authority=native 与 workflow_p
 
 ## 权威与身份
 
-SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery 和自身服务 checkpoint。schema 23 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。产品仍使用的纯值声明不构成执行写权。
+SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、测试生成原请求与结果、原候选测试收集请求及不可变产物和自身服务 checkpoint。schema 25 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
 
 Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、原生资源、问题、输入、恢复与停止事实。SteerLine 不读该库、原生 codec、IPC 或私有日志；只消费固定 EXE 公布的 CLI/Run/事件。
 
@@ -48,7 +48,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 | 格式/权威 | 当前值或归属 | 源码 |
 | --- | --- | --- |
-| Task SQLite | schema 23 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| Task SQLite | schema 25 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
 | Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
 | TaskContract / DAG | Task 自有纯值 | [task/model](../../internal/task/model) |

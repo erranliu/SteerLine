@@ -40,7 +40,7 @@ func DebugReleaseMain(args []string) error {
 		return errors.New("debug requires init|prepare|run|stop|reset|merge|control|snapshot")
 	}
 	switch args[0] {
-	case "init", "init-b", "prepare", "run", "run-selected", "stop", "reset", "merge", "control", "snapshot":
+	case "init", "init-b", "prepare", "run", "run-selected", "stop", "reset", "merge", "control", "snapshot", "testing":
 	default:
 		return fmt.Errorf("unknown debug operation %q", args[0])
 	}
@@ -100,12 +100,18 @@ func DebugReleaseMain(args []string) error {
 			args[0] = "run"
 		}
 	}
+	testingSource := os.Getenv("STEERLINE_TM_SOURCE")
 	if err = d.prepare(simulate); err != nil {
 		return err
 	}
 	switch args[0] {
 	case "prepare":
 		return nil
+	case "testing":
+		if simulate {
+			return errors.New("testing requires a new live package")
+		}
+		return d.testManagement(testingSource)
 	case "run":
 		return d.run()
 	case "stop":

@@ -6,7 +6,9 @@
 
 L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)，本项目入口见 [测试总入口](../../docs/testing.md)。下面按当前实际登记级别列出测试内容。
 
-[suites.json](suites.json)是机器执行登记的唯一来源，登记十一项（L2 两项、L3 五项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
+[suites.json](suites.json)是机器执行登记的唯一来源，登记十二项（L2 两项、L3 六项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
+
+执行页展示清单为 [test-list.json](../../docs/testing/test-list.json)，沿用此处场景 ID/级别/环境与入口，不参与调度。更改测试内容时同步更新展示清单、此表和相关 Plan；结果追加格式及 Runner 回传约定见[测试总入口](../../docs/testing.md#测试管理文档与结果)。
 
 ### L2：最小核心流程
 
@@ -19,7 +21,7 @@ L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](..
 
 ### L3：可并行的不同流程
 
-recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runner/PR fixture；每项拥有独立临时 home、repo、数据库、端口、provider 和证据。三个 controlled 测试均允许并行。选 recovery/runtime 两包时并行启动两包、各包内部串行；只选 runtime 时包内最多二项并行，总预算二。workflow 为显式选择的 live 专项，使用固定真实 Runner 和本次 SteerlineTest 分支。
+recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runner/PR fixture；每项拥有独立临时 home、repo、数据库、端口、provider 和证据。三个 controlled 测试均允许并行。选 recovery/runtime 两包时并行启动两包、各包内部串行；只选 runtime 时包内最多二项并行，总预算二。workflow/testing 为显式选择的 live 专项，使用固定真实 Runner 和本次 SteerlineTest 分支。
 
 | 场景 ID | 测试内容与主要断言 | 相对其他场景的主要覆盖维度 |
 | --- | --- | --- |
@@ -28,6 +30,7 @@ recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runne
 | `runtime.dual-home-operation` | 两个独立 home 同时在线，使用不同请求分别 discard 不同任务；核对持久化结果、另一项目/provider 不变、无执行候选、原实例不变，最后停止两者。 | 多 home 合法并存及独立操作，不做同请求 ID 重放。 |
 | `runtime.shared-runner-projects` | 同 home 两项目共用一个 Runner，使用相同产品请求 ID 创建独立 Run，分别消费仓库/PR，整体停启保留原绑定且零自动新输入，最后核实全体清理。 | 项目级库/请求隔离与应用级共享 Runner 的接线；每项独立 home/两个 repo/provider/端口，可沿 runtime 二并行。 |
 | `workflow.local-codex-audited` | live：两种显式模型走 development-audited/1，实现、两项审计、发布与真实 PR 合并、唯一交付及后继 ready 未启动；从正式产品详情核对冻结预设、材料/摘要、各轮模型、审计来源，从任务历史核对候选/Runner Run 及 workflow；保留响应证据。 | 审计 workflow 的产品接线；须先通过空闲 I1 与 controlled gate，不归 full-L2，不重验 Runner 故障矩阵。 |
+| `testing.management-local-codex` | live：全新 debug 包，正式 CLI 调用真实 generate/1 保存安排；原开发候选上实际程序先通过再失败，经公开 artifacts/Git→API→浏览器核对计数、历史和证据，最后停止并核实原资源结算。 | 测试结果消费闭环；固定本机 Runner/Codex、独立 SteerlineTest base，测试失败来自隔离输入，不发布 PR；生成包时独占本源码 Web 依赖目录。 |
 
 本项目按规范维护上表的独有覆盖维度；并行资源声明涵盖 home、repo、数据库、端口、可变构建输出、provider 和清理所有权。
 
@@ -49,7 +52,7 @@ recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runne
 通用要求见 [测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md#l2l3l4-内容清单)，本项目具体落地如下：
 
 - 新增、删除、改级、改环境或调整主要断言时，在同一变更中同步场景实现、manifest、本节内容和 `cmd/test-feedback` 的相关选择/并行/证据校验；当前不支持的级别须先落实执行能力。
-- 退役 ID、跨级选择由 `test-feedback` 明确拒绝；L3 live 仅允许精确选择 workflow.local-codex-audited，L4 只接受 controlled。
+- 退役 ID、跨级选择由 `test-feedback` 明确拒绝；L3 live 仅允许精确选择 workflow.local-codex-audited 或 testing.management-local-codex，L4 只接受 controlled。
 - 运行器按 manifest 选择、冻结并枚举测试，核对实际执行、非零匹配、终态和清理；[e2e_test.go](../../cmd/test-feedback/e2e_test.go)另核对本文表格中的 ID/级别与 manifest 一致且每项只登记一次。语义正交性及具体断言仍需人工代码审查。
 - Plan 引用稳定 ID 与专属验收项，实际通过/失败及日志位置写入 `docs/acceptance/`；内容清单不维护实时测试结果。证据统一为 summary.json 和 `scenarios/<id>/scenario.json`，详情见后文。
 
@@ -67,6 +70,8 @@ $env:STEERLINE_AUDIT_MODEL = 'gpt-6.1-sol'
 go run ./cmd/test-feedback -level=L3 -suite=workflow -scenario=workflow.local-codex-audited -env=live
 # Windows 工具 Job 下，使用同一隔离入口的独立进程包装
 ./scripts/test-audited-workflow.ps1 -SteerRunnerExe 'C:/Tools/SteerRunner/steerrunner.exe' -ExecutionModel gpt-6-luna -AuditModel gpt-6.1-sol
+go run ./cmd/test-feedback -level=L3 -suite=testing -scenario=testing.management-local-codex -env=live
+
 go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled
 # 精确选择边界子集；不能跨级或零匹配
 go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled '-scenario=runtime.path-isolation,runtime.dual-home-isolation'
