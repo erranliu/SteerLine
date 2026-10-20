@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/environmentcheck"
+	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
@@ -54,7 +55,7 @@ func newEnvironmentCheckPort(c Config, store environmentcheck.Store) *environmen
 			if runnerclient.Selection(row.Selection) != selection {
 				continue
 			}
-			if !takeoverCheck(proof, row) {
+			if !runnerbinding.Check(proof, row) {
 				return nil, errors.New("original environment check takeover is unverified")
 			}
 			found = true

@@ -6,12 +6,9 @@ $existing = & gh pr list --repo erranliu/SteerlineTest --base $settings.base_bra
 if ($LASTEXITCODE -ne 0) { throw 'Existing PR query failed' }
 [array]$matches = ConvertFrom-Json -InputObject ($existing -join "`n")
 if ($matches.Count -gt 1) { throw 'Multiple matching PRs' }
-# Use the existing external gh login through its standard credential helper;
-# generated packages never receive copied credentials.
-$ghPath = (Get-Command gh.exe -ErrorAction Stop).Source.Replace('\', '/')
-if ($ghPath.Contains("'")) { throw 'Unsupported gh executable path' }
-$helper = "!'$ghPath' auth git-credential"
-& git -c credential.helper= -c "credential.helper=$helper" -c http.https://github.com/erranliu/SteerlineTest.git.extraheader= push origin "HEAD:refs/heads/$branch"
+# Runner supplies the native tool's scoped authentication configuration.
+# Preserve it; generated packages never receive copied host credentials.
+& git push origin "HEAD:refs/heads/$branch"
 if ($LASTEXITCODE -ne 0) { throw 'Push failed' }
 if ($matches.Count -eq 1) { $url = $matches[0].url } else {
     $url = & gh pr create --repo erranliu/SteerlineTest --base $settings.base_branch --head $branch --draft --title "SteerLine debug $($settings.release)" --body 'Independent SteerlineTest debug environment.'

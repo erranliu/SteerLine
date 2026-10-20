@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	host "github.com/erranliu/SteerLine/internal/app/host"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -53,7 +54,7 @@ func TestRunnerPresetFreeze(t *testing.T) {
 	t.Run("reject_replacement_in_live_runtime", func(t *testing.T) { testRuntimeReplacement(t, false) })
 	t.Run("reject_mismatched_run_after_explicit_restart", func(t *testing.T) { testRuntimeReplacement(t, true, true) })
 	t.Run("accept_replacement_after_explicit_restart", func(t *testing.T) { testRuntimeReplacement(t, true) })
-	t.Run("reject_changed_build_in_old_environment", func(t *testing.T) {
+	t.Run("reject_changed_build_without_compatible_takeover", func(t *testing.T) {
 		c, _ := nativeTaskFixture(t)
 		t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
 		require(t, os.MkdirAll(EtcDir(), 0700))
@@ -61,16 +62,28 @@ func TestRunnerPresetFreeze(t *testing.T) {
 		d, original := startPresetDirectory(t)
 		a := original.runner.info.InstanceID
 		require(t, d.Close())
+		pinPath := filepath.Join(HomeDir(), "application-api", "runner-build.json")
+		originalPin, err := os.ReadFile(pinPath)
+		require(t, err)
 		changed := c.RunnerExecution
 		changed.Runner.Version = "unit-next-build"
 		t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", changed.Runner.Version)
 		require(t, os.WriteFile(GlobalExecutionConfigPath(), mustJSON(changed), 0600))
+		// Current generations allow proven compatible takeover; express an
+		// explicit public rejection rather than the retired unconditional gate.
+		rejected := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: original.runner.client.StateDir, CandidateSHA256: changed.Runner.SHA256, Compatible: false, Items: []runnercontract.TakeoverItem{}}
+		require(t, os.WriteFile(filepath.Join(original.runner.client.StateDir, "idle-takeover-fixture.json"), mustJSON(rejected), 0600))
 		next := NewApplicationDirectory(HomeDir())
 		next.Start()
 		defer next.Close()
 		cat := switchCatalog(t, next, func(c contract.Catalog) bool { return len(c.Projects) == 1 && c.Projects[0].RuntimeState == "failed" })
-		if !strings.Contains(cat.Projects[0].Diagnostic, "runner_build_changed") {
-			t.Fatal("different build admitted existing state", cat)
+		if cat.Projects[0].Online || !strings.Contains(cat.Projects[0].Diagnostic, "takeover") {
+			t.Fatal("incompatible takeover was not rejected", cat)
+		}
+		currentPin, err := os.ReadFile(pinPath)
+		require(t, err)
+		if string(originalPin) != string(currentPin) {
+			t.Fatal("rejected takeover rewrote the original build pin")
 		}
 		status, err := original.runner.client.ServiceStatus(context.Background())
 		require(t, err)
@@ -271,8 +284,12 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	require(t, err)
 	wait, cancel := context.WithTimeout(ctx, 8*time.Second)
 	defer cancel()
-	_, err = r.product.WaitControl(wait, strings.Repeat("7", 32), 10*time.Millisecond)
-	require(t, err)
+	// The fixture already owns the frozen host binding. Use its verified
+	// receipt reader without repeating Git/config discovery on every poll.
+	_, err = host.WaitControlReceipt(wait, r.hostConfig, strings.Repeat("7", 32), 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("fixture resume receipt: %v", err)
+	}
 	graph, err = r.store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, err)
 	public := runnercontract.Run{RunID: strings.Repeat("b", 32), Revision: 1, InputDigest: strings.Repeat("c", 64), ResourceDigest: r.runner.info.ResourceDigest, Workflow: c.RunnerExecution.Profiles[0].Workflow, Status: "stopped", StopStatus: "stopped"}
@@ -285,12 +302,18 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	candidate, err := service.Start(ctx, taskrunner.Start{RequestID: requestID, TaskID: "1", TaskVersion: 1, GraphRevision: graph.Authority.GraphRevision, Explicit: true})
 	require(t, err)
 	require(t, os.WriteFile(filepath.Join(r.runner.client.StateDir, "idle-run-fixture.json"), mustJSON(map[string]any{"run": public, "command": map[string]any{"request_id": candidate.Submit.RequestID, "command_id": "frozen-submit-command", "command": "submit", "run_id": public.RunID, "receipt_status": "accepted", "action_status": "completed"}}), 0600))
-	// Observe the static accepted public fact via the normal bridge.
-	require(t, service.Bridge.Step(ctx, c.Identity(), candidate.ID))
-	candidate, err = r.store.Candidate(ctx, c.Identity(), candidate.ID)
-	require(t, err)
-	if candidate.RunID != public.RunID || candidate.InputDigest != public.InputDigest {
-		t.Fatal("public stopped Run was not bound", candidate)
+	// Let the running actor's own bridge observe the static public fact. A
+	// second, test-local bridge would race that writer and fail its candidate
+	// CAS. Polling committed facts neither retries a command nor weakens CAS.
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		candidate, err = r.store.Candidate(ctx, c.Identity(), candidate.ID)
+		require(t, err)
+		if candidate.RunID == public.RunID && candidate.InputDigest == public.InputDigest && candidate.Cursor == "idle-end" && candidate.Projection != nil && candidate.Projection.Status == "stopped" {
+			return candidate
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
+	t.Fatal("actor did not commit the public stopped Run observation", candidate)
 	return candidate
 }

@@ -102,6 +102,10 @@ fixture 的 `caller-fixture.json`、provider `requests` 是测试自产公开协
 
 临时/AI 调试及真实 PR 调试先由 `scripts/new-debug-release.ps1` 生成 `C:\SteerlineDebug` 新包；分级 E2E 继续用自身隔离夹具。不得使用当前 `C:\SteerlineInstall` 或保留的 `C:\SteerlineRuntime`。调试包默认 live，AI 用 `--simulate` 明确选模拟；方案冻结后不切换，reset 保留定义/契约/依赖/Git/PR，活动资源阻止 reset。
 
+兼容更新的专项调试联验使用 [test-runner-update-live.ps1](../../scripts/test-runner-update-live.ps1)，参数为尚未启动的新调试包、不同 SHA 的兼容 Runner 候选及实际原生 Codex EXE。它复用生产部署预检/停服核验，经原生公开只读历史证明离线完成，再启动新 Runner 并核验真实 PR/交付，最后正式停止本包资源。具体命令、边界及验收项见[专属 Plan](../../docs/plans/service-generation-recovery.plan.md)。该专项入口未纳入分级 manifest，不能用其结果声明完整 L2/L3 或原生恢复矩阵通过。
+
+仅准备阶段失败且尚无业务候选时，可显式 `-ContinuePrepared`；它验证相同 live/ready 方案、stopped 服务、两项 open 任务及零候选，不修改已冻结材料，另建 continuation 证据目录。已有候选须使用新包，不能 reset 或再次领取来补成通过。
+
 普通 controlled 业务 5 分钟，waiting-merge-restart 和 live 10 分钟；runtime 子场景保留主干 5 分钟业务期限和独立父期限。live Go 父期限 35 分钟包含独立清理，未放宽业务窗口；普通命令、领取/控制及收尾沿现有明确预算。`FinishBody` 冻结业务期限，清理结果不能掩盖业务超时。
 
 清理只处理本次拥有的资源、服务和 base/head；PR 历史保留。先围栏原 Runner，按公开 Run/回执确认停止；未确认不能当作已结算，也不能删除诊断冒充成功。失败保留证据，不自动重试。

@@ -169,12 +169,8 @@ func (b *Bridge) Step(ctx context.Context, project, id string) error {
 		return err
 	}
 	if c.StopRequested {
-		if c.Stop == nil || c.Stop.State == "rejected" {
-			body, _ := json.Marshal(map[string]any{"expected_revision": inspection.Run.Revision})
-			c.Stop = &Action{Command: "stop", Request: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: newID(), Input: body}, State: "unknown"}
-			if err := b.save(ctx, &c); err != nil {
-				return err
-			}
+		if err := b.prepareStop(ctx, &c, inspection.Run.Revision, newID); err != nil {
+			return err
 		}
 		if c.Stop.State == "unknown" {
 			if err := b.deliver(ctx, cli, &c, c.Stop); err != nil {

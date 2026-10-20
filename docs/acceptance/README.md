@@ -6,6 +6,8 @@
 
 ## 当前入口
 
+调用方边界收口（2026-10-20，普通开发）：[Plan 与专属验收](architecture-boundary-consolidation.md)，登记 processwindow/Runner 调用方依赖守卫、唯一 stop 信封准备和统一 takeover 核验；保留既有恢复、资源所有权及原事实边界。
+
 Windows 启动闪窗修复（2026-10-19，源码修复/人工待验）：[专属验收](startup-console-windows.md)，记录逐项目 Git 与后台 CLI 的控制台创建反例、无控制台修复和定向共享 Runner 回归；未部署安装环境。
 
 应用级共享 SteerRunner 服务（2026-10-19，自动通过/人工待验）：[Spec / Plan 与专属验收](shared-runner-service.md)，登记 SRS-A01–A07 与后置 SRS-M01；L1/controlled 双项目与真实空闲服务拓扑分开取证，实际构建、失败修正和清理已登记，不改 roadmap。

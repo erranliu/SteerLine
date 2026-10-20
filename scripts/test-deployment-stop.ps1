@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+# Load exports before installing mocks; lazy module import would replace them.
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 . (Join-Path $PSScriptRoot 'deployment-stop.ps1')
 . (Join-Path $PSScriptRoot 'deployment-runner.ps1')
 
@@ -87,6 +89,30 @@ try {
     $failed = $false
     try { Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) } catch { $failed = $true }
     if (-not $failed) { throw 'A new Runner build was allowed to replace an existing runtime.' }
+    $script:takeoverDir = Join-Path $fixtureRoot 'original-runner-state'
+    $script:takeoverFail = $false
+    $script:takeoverWrongTarget = $false
+    $script:takeoverCalls = 0
+    function Invoke-TakeoverFixture {
+        $script:takeoverCalls++
+        $expected = 'verify-runner-takeover|--runner-exe|staged-runner|--runner-sha256|'+('a'*64)+'|--state-dir|'+$script:takeoverDir+'|--json'
+        if (($args -join '|') -ne $expected) { throw 'Online preflight did not delegate to the staged Go verifier with original binding.' }
+        $global:LASTEXITCODE = [int]$script:takeoverFail
+        if ($script:takeoverFail) { return }
+        $sha = if ($script:takeoverWrongTarget) { 'foreign' } else { 'a'*64 }
+        @{candidate_sha256=$sha;state_dir=$script:takeoverDir;contract='steerrunner-takeover/v1';compatible=$true;items=@()} | ConvertTo-Json -Compress
+    }
+    @{sha256=$hash;state_dir=$script:takeoverDir} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureRoot 'application-api\runner-build.json') -Encoding UTF8
+    $proof = Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) 'staged-runner' 'Invoke-TakeoverFixture'
+    if ($proof.candidate_sha256 -ne ('a'*64) -or $script:takeoverCalls -ne 1) { throw 'Online preflight did not consume Go proof.' }
+    foreach ($rejection in @('failure','foreign')) {
+        $script:takeoverFail = $rejection -eq 'failure'
+        $script:takeoverWrongTarget = $rejection -eq 'foreign'
+        $failed = $false
+        try { Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) 'staged-runner' 'Invoke-TakeoverFixture' } catch { $failed = $true }
+        if (-not $failed) { throw "Online preflight accepted $rejection result." }
+    }
+    if ((Get-FileHash -LiteralPath $runner -Algorithm SHA256).Hash -ne $hash) { throw 'Preflight replaced the installed fixture.' }
     [IO.File]::WriteAllText($runner, 'different bytes')
     $failed = $false
     try { Get-DeploymentRunnerSelection $fixtureRoot $false } catch { $failed = $true }

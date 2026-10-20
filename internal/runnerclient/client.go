@@ -8,11 +8,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"io"
 	"os/exec"
 	"time"
 	"unicode/utf8"
+
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 const Protocol = "steerrunner-cli/v1"
@@ -42,7 +43,7 @@ type Failure struct {
 func (f *Failure) Error() string { return f.Code + ": " + f.Message }
 
 type Client struct {
-	Takeover              *TakeoverReport
+	Takeover              *runnercontract.TakeoverReport
 	InstanceID            string
 	BuildVersion          string
 	ResourceDigest        string
@@ -75,7 +76,7 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 	return c.call(ctx, command, args, input, nil)
 }
 
-func (c Client) call(ctx context.Context, command string, args []string, input *Request, startup *ServiceStartInput) (Response, error) {
+func (c Client) call(ctx context.Context, command string, args []string, input *Request, startup *runnercontract.ServiceStartInput) (Response, error) {
 	if c.InstanceID != "" && command != "version" && command != "service status" && command != "service stop" && command != "service verify-stopped" {
 		if err := c.ValidateInstance(ctx); err != nil {
 			return Response{}, err
@@ -113,7 +114,7 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 		if command != "service start" || input != nil {
 			return Response{}, errors.New("startup stops require service start")
 		}
-		if err := startup.validate(); err != nil {
+		if err := startup.Validate(); err != nil {
 			return Response{}, err
 		}
 		body, _ = json.Marshal(startup)
