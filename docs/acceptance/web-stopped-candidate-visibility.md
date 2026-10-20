@@ -22,3 +22,10 @@
 - `npm --prefix web run build`：TypeScript/Vite 通过，最终日志 `web-build-final.log`。
 
 未启动调试环境或操作安装目录；未进行真实浏览器人工验收。自动验证仅证明上述组件行为和构建结果。
+
+## PR 前主干集成
+
+已 rebase 到 `83df2408`（PR #368），保留主干新增候选的即时卡片与待启动计数；仅对正式候选应用停止参与筛选。集成验证源码为 `79063fd6`，后续提交只补充本节记录。
+
+- `npm --prefix web test -- src/features/runs/runs.test.tsx src/features/runs/state.test.ts src/features/tasks/task-detail.test.tsx src/features/runs/candidate-starts.test.tsx src/app/use-candidate-starts.test.tsx`：5 文件、27 项通过；证据根同上，`web-tests-pr.log`。
+- `npm --prefix web run build`：TypeScript/Vite 通过；`web-build-pr.log`。
