@@ -300,6 +300,8 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ## 当前实现与缺口
 
+2026-10-20 W02–W18 / E04–E07 / V06、V08 的本机组合资格已补验：SteerLine 管理服务停止后，原 Codex 工具及轮次离线完成；兼容 Runner B 补收原正式 final，沿原 Run/session 继续发布，真实测试 PR 合并后唯一交付并释放未启动的后继，正式清理确认。修复消费端对无固定 prompt steps 工作流的目录假设，以及调试模板覆盖原生作用域认证的问题；节点、异常、授权、恢复和停止语义不变。准确构建、失败/重验及证据见[专属验收末节](../acceptance/service-generation-recovery.md#最终本机结果slc-a05-通过)。Orca 创建成功丢回执、其他原生路径与旧 service-owned Job 首次升级窗口仍保留各自边界，不能按本机结果推定已通过。
+
 初始化停止的当前增量：当前远端不再使用 helper 的 ownership、Job/认证签名退出或固定控制 checkpoint；主干 local 受管路径保持。原生初始化无业务 turn 时，停止可在 branch 元数据尚空的窗口沿原 runtime/worktree/path/terminal/incarnation 关闭并核实原完整清单；已开始业务或明确身份/分支冲突不适用该窗口。两个 L3 case 已重定向为仅隐藏 caller 的原生 agentIdentity、保留真实响应，分别验证初始化停止和服务换代零自动输入；2026-10-19 的独立包 `dev-20261019-154407-be8f3b54` 中两个 case 已通过，公开离线终端 scope 与收尾均通过；本轮为相关组件 126 项、framework 17 项、Controlled 3 项及两个 L3 的增量验证，具体源/构建与原始证据归 [Runner 专属验收](https://github.com/erranliu/SteerRunner/blob/codex/initialization-stop/docs/acceptance/initialization-stop.md)。历史 helper 证据不迁移、不作为 native scope 或全树清理证明。
 
 ### 应用级共享 Runner（2026-10-19）
@@ -401,9 +403,9 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 | V03 输入投递 | 未保存意图零发送；明确拒绝、accepted 未 started、丢回执分别处理；未知发送零重发、零补 Enter |
 | V04 观察问答与终态 | 断连只接原观察；重复答案只投原请求；明确失败无 final 可恢复；成功缺 final 不补造；人工输入不替代受管结果 |
 | V05 结果与发布 | 原来源绑定、有限格式补报、不重做发布、PR 读取重试与未知发布对账、源失败不被 report done 覆盖 |
-| V06 服务换代与身份 | 初始化未完成时换代也保留原资源停止资格，零自动输入/替换会话；准备预算不重置；重开零新启动/输入；只读核验与结算允许；旧回执不推进新 Attempt 或兄弟候选；共进程核对共享 PID 下各项目独立实例/换代 |
+| V06 服务换代与身份 | 初始化未完成时换代也保留原资源停止资格，零自动输入/替换会话；准备预算不重置；重开零 caller 自动新启动/业务输入，Runner 只按原持久授权继续已证明未发送的后继；只读核验与结算允许；旧回执不推进新 Attempt 或兄弟候选；共进程核对共享 PID 下各项目独立实例/换代。本机兼容更新组合资格见[2026-10-20 验收](../acceptance/service-generation-recovery.md#最终本机结果slc-a05-通过) |
 | V07 交付停止与清理 | Delivery 重复提交唯一；任一合格候选交付；closed 后零 PR 查询/新业务；部分清理不撤销交付，未知旧写者不重建；共进程核对单项目停止不杀宿主、聚合停止不跳过兄弟；停服最终结算绑定原实例/请求/目录/EXE，旧投影不能代替最终证据 |
-| V08 持久化窗口 | 保存意图失败、外部成功提交失败、结果提交后下一输入未发送、Task 终态与回执并发均不重复副作用 |
+| V08 持久化窗口 | 保存意图失败、外部成功提交失败、结果提交后下一输入未发送、Task 终态与回执并发均不重复副作用。本机离线原 final 补收与后继交付的组合证据见同一[验收](../acceptance/service-generation-recovery.md#最终本机结果slc-a05-通过) |
 
 复用[分级测试入口](../../tests/e2e/README.md)及现有 lifecycle、recovery、environment、stage 和 commit boundary 测试；新增能力在其实施 Plan 中按验收项 ID 明确场景、环境、命令、时点、通过条件与证据位置。设计文档的 V 编号只用于维护映射，不能代替任务专属验收项或注册场景。缺少驱动/原生证据时一并规划补齐，不能以“后续补验”代替必要能力。
 

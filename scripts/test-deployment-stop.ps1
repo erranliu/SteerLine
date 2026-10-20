@@ -1,4 +1,6 @@
 $ErrorActionPreference = 'Stop'
+# Load exports before installing mocks; lazy module import would replace them.
+Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 . (Join-Path $PSScriptRoot 'deployment-stop.ps1')
 . (Join-Path $PSScriptRoot 'deployment-runner.ps1')
 

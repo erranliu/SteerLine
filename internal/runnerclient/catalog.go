@@ -95,7 +95,7 @@ func compileCatalog(caps Capabilities) (*Catalog, error) {
 	seen := map[string]bool{}
 	for _, workflow := range caps.Workflows {
 		key := fmt.Sprintf("%s/%d", workflow.ID, workflow.Version)
-		if workflow.ID == "" || workflow.Version <= 0 || seen[key] || len(workflow.SupportedAdapters) == 0 || len(workflow.PromptSteps) == 0 {
+		if workflow.ID == "" || workflow.Version <= 0 || seen[key] || len(workflow.SupportedAdapters) == 0 {
 			return nil, errors.New("Runner workflow catalog is incomplete or duplicated")
 		}
 		seen[key] = true

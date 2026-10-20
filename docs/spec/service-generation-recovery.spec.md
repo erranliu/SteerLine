@@ -9,4 +9,4 @@
 5. 部署先对 staged Runner 做在线只读预检，失败不得停旧服务或替换文件。旧应用/项目/Web/锁/checkpoint/冻结配置的关闭门槛不变。verify-restart 保留原 RunnerBuild、原 service instance/request/SHA 的退出事实，跨构建另输出 candidate_build/takeover；实际接管在新服务取得原 writer lease 后发生。普通部署继续默认复用 Runner，显式 UpdateRunner 才构建新 Runner。
 6. SteerLine 不自动生成 submit/reply/resume 或 workflow prompt。Runner 按其原持久授权对账并继续已证明未发送的后继；原 paused/waiting/blocked/stop 保持。Task/DAG 与唯一 Delivery 仍由本地事务权威决定，不增加另一套执行状态机。
 
-Orca 创建成功但原响应丢失仍受原生创建关联/查询接口限制；消费者不能凭列表或新资源绕过。完整真实 Codex/Orca/UpdateRunner 资格尚待原生现场验证，本次受控通过不替代该证据。未触碰安装或保留运行目录。
+Orca 创建成功但原响应丢失仍受原生创建关联/查询接口限制；消费者不能凭列表或新资源绕过。本机 Codex 的兼容 Runner 更新、原结果补收及继续交付资格已在 2026-10-20 独立 live 包补验，实际范围和证据见[验收](../acceptance/service-generation-recovery.md)。其他原生路径及 Orca 窗口仍分别待验。未触碰安装或保留运行目录。

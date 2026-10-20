@@ -59,6 +59,10 @@ func TestDebugPublicationReusesPR(t *testing.T) {
 					t.Fatal(err)
 				}
 				quote := func(s string) string { return strings.ReplaceAll(s, "'", "''") }
+				gitExecutable, err := exec.LookPath("git")
+				if err != nil {
+					t.Fatal(err)
+				}
 				base := "codex/debug/pr-flow/base"
 				manifest, _ := json.Marshal(map[string]string{"base_branch": base, "release": "fixture"})
 				if err := os.WriteFile(filepath.Join(root, "manifest.json"), manifest, 0600); err != nil {
@@ -72,7 +76,22 @@ func TestDebugPublicationReusesPR(t *testing.T) {
 				// Stub only GitHub facts. Git push really updates this isolated bare repo.
 				// The provider's stale head must not block reuse or cause another PR.
 				url := "https://github.com/erranliu/SteerlineTest/pull/84"
-				wrapper := `function gh.exe {}
+				wrapper := `$env:GIT_CONFIG_COUNT='2'
+$env:GIT_CONFIG_KEY_0='credential.helper'
+$env:GIT_CONFIG_VALUE_0='fixture-scoped-helper'
+$env:GIT_CONFIG_KEY_1='http.https://github.com/erranliu/SteerlineTest.git.extraheader'
+$env:GIT_CONFIG_VALUE_1='Fixture-Scoped-Authentication: retained'
+function git {
+    if ($args -contains 'push') {
+        $prefix=@()
+        foreach($argument in $args) { if($argument -eq 'push'){break}; $prefix += $argument }
+        $helper=& '` + quote(gitExecutable) + `' @prefix config --get-all credential.helper
+        $header=& '` + quote(gitExecutable) + `' @prefix config --get http.https://github.com/erranliu/SteerlineTest.git.extraheader
+        if (@($helper)[-1] -cne $env:GIT_CONFIG_VALUE_0 -or $header -cne $env:GIT_CONFIG_VALUE_1) { throw 'Publication replaced scoped authentication' }
+    }
+    & '` + quote(gitExecutable) + `' @args
+    $global:LASTEXITCODE=$LASTEXITCODE
+}
 function gh {
     $global:LASTEXITCODE = 0
     switch ($args[1]) {
