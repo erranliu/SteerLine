@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/hostcontract"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
@@ -29,7 +30,7 @@ func TestSharedRunnerCompatibleBuildUsesPublicPreflight(t *testing.T) {
 	old.ResourceDigest = strings.Repeat("c", 64)
 	require(t, bindApplicationRunnerBuild(c.runnerHome(), old))
 	require(t, runnerstatepath.Prepare(c.runnerHome()))
-	proof := runnerclient.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnerclient.TakeoverItem{}}
+	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{}}
 	require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-takeover-fixture.json"), mustJSON(proof), 0600))
 	var owner applicationRunner
 	require(t, owner.start(ctx, c.RunnerExecution, c.runnerHome(), 5*time.Second))
@@ -41,7 +42,7 @@ func TestSharedRunnerCompatibleBuildUsesPublicPreflight(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join(c.runnerHome(), "application-api", "runner-build.json"))
 	require(t, err)
 	require(t, json.Unmarshal(raw, &current))
-	if !sameRunnerBuild(current, cli.BuildPin()) {
+	if !runnerbinding.SameBuild(current, cli.BuildPin()) {
 		t.Fatal("current service pin was not updated")
 	}
 }
@@ -52,7 +53,7 @@ func TestTakeoverKeepsFrozenCandidatesAndRequiresOriginalRequestDigest(t *testin
 	current := old
 	current.SHA256 = strings.Repeat("c", 64)
 	current.Version = "candidate"
-	proof := runnerclient.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: current.StateDir, CandidateSHA256: current.SHA256, Compatible: true, Items: []runnerclient.TakeoverItem{{ID: "original-run", Kind: "run", Revision: 7, InputDigest: "original-input", Status: "compatible"}}}
+	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: current.StateDir, CandidateSHA256: current.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{ID: "original-run", Kind: "run", Revision: 7, InputDigest: "original-input", Status: "compatible"}}}
 	candidate := runnerstate.Candidate{ID: "candidate", StateDir: old.StateDir, RunnerBuild: old, RunID: "original-run", InputDigest: "original-input", PRURL: "https://example.invalid/pr/1", StopRequested: true}
 	before := mustJSON(candidate)
 	c := Config{executionPath: filepath.Join(home, "execution.json")}
@@ -71,12 +72,12 @@ func TestTakeoverKeepsFrozenCandidatesAndRequiresOriginalRequestDigest(t *testin
 	unknown.InputDigest = ""
 	unknown.Submit = runnercontract.Request{Protocol: runnerclient.Protocol, RequestID: "lost-submit", Input: json.RawMessage(`{"title":"original","n":1234567890123456789}`)}
 	proof.Items[0].RequestID = unknown.Submit.RequestID
-	proof.Items[0].RequestDigest = runnerRequestDigest("submit", "", unknown.Submit)
-	if _, ok := takeoverCandidate(proof, unknown); !ok {
+	proof.Items[0].RequestDigest = runnercontract.RequestDigest("submit", "", unknown.Submit)
+	if _, ok := runnerbinding.Candidate(proof, unknown); !ok {
 		t.Fatal("lost response could not correlate original accepted request")
 	}
 	unknown.Submit.Input = json.RawMessage(`{"title":"replacement","n":1234567890123456789}`)
-	if _, ok := takeoverCandidate(proof, unknown); ok {
+	if _, ok := runnerbinding.Candidate(proof, unknown); ok {
 		t.Fatal("changed envelope correlated by ID alone")
 	}
 }
@@ -107,7 +108,7 @@ func TestStartupCancellationOutboxIsDurableBeforeRunnerStart(t *testing.T) {
 	require(t, store.Close())
 	cli := r.runner.client
 	cli.InstanceID = ""
-	proof := runnerclient.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnerclient.TakeoverItem{{ID: candidate.RunID, Kind: "run", Revision: 7, InputDigest: candidate.InputDigest, Status: "compatible"}}}
+	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{ID: candidate.RunID, Kind: "run", Revision: 7, InputDigest: candidate.InputDigest, Status: "compatible"}}}
 	cli.Takeover = &proof
 	stops, err := prepareProjectRunnerStops(ctx, &c, &cli)
 	require(t, err)

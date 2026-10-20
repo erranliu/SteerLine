@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/hostcontract"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
@@ -18,7 +18,7 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 		return err
 	}
 	pin := cli.BuildPin()
-	compatible := cli.Takeover != nil && validTakeover(*cli.Takeover, pin)
+	compatible := cli.Takeover != nil && runnerbinding.Compatible(*cli.Takeover, pin)
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {
 		return err
@@ -28,34 +28,19 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 		checkpoint = *snapshot.Checkpoint
 	}
 	if checkpoint.Service.RunnerBuild != nil {
-		if !sameRunnerBuild(*checkpoint.Service.RunnerBuild, pin) && (!compatible || canonicalPath(checkpoint.Service.RunnerBuild.StateDir) != canonicalPath(pin.StateDir)) {
+		if !runnerbinding.SameBuild(*checkpoint.Service.RunnerBuild, pin) && (!compatible || canonicalPath(checkpoint.Service.RunnerBuild.StateDir) != canonicalPath(pin.StateDir)) {
 			return errors.New("runner_build_changed: restore the original Runner to reconcile/stop its resources; a new build requires a fresh environment")
-		}
-	}
-	for _, candidate := range snapshot.Candidates {
-		if !sameRunnerBuild(candidate.RunnerBuild, pin) {
-			if !compatible || canonicalPath(candidate.StateDir) != canonicalPath(pin.StateDir) {
-				return errors.New("runner_build_changed: candidate takeover is unverified")
-			}
-			if candidate.RunID != "" {
-				if _, ok := takeoverCandidate(*cli.Takeover, candidate); !ok {
-					return errors.New("candidate differs from original Run/input takeover facts")
-				}
-			}
 		}
 	}
 	checks, err := store.Checks(ctx, c.Identity())
 	if err != nil {
 		return err
 	}
-	for _, check := range checks {
-		if check.Selection.SHA256 != pin.SHA256 || check.Selection.Version != pin.Version || canonicalPath(check.Selection.Executable) != canonicalPath(pin.Executable) || check.ResourceDigest != pin.ResourceDigest || canonicalPath(check.StateDir) != canonicalPath(pin.StateDir) {
-			if !compatible || !takeoverCheck(*cli.Takeover, check) {
-				return errors.New("runner_build_changed: original environment check takeover is unverified")
-			}
-		}
+	if err := runnerbinding.ValidateBuildBindings(pin, cli.Takeover, snapshot.Candidates, checks); err != nil {
+		return err
 	}
-	if checkpoint.Service.RunnerBuild != nil && sameRunnerBuild(*checkpoint.Service.RunnerBuild, pin) {
+
+	if checkpoint.Service.RunnerBuild != nil && runnerbinding.SameBuild(*checkpoint.Service.RunnerBuild, pin) {
 		return nil
 	}
 	checkpoint.SchemaVersion = hostcontract.ServiceCheckpointSchema
@@ -63,8 +48,4 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 	checkpoint.Service.RunnerBuild = &pin
 	_, err = store.SaveCheckpoint(ctx, checkpoint)
 	return err
-}
-
-func sameRunnerBuild(a, b runnercontract.BuildPin) bool {
-	return a.SHA256 == b.SHA256 && a.ResourceDigest == b.ResourceDigest && a.Version == b.Version && canonicalPath(a.StateDir) == canonicalPath(b.StateDir) && canonicalPath(a.Executable) == canonicalPath(b.Executable)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
@@ -31,7 +32,7 @@ type applicationRunner struct {
 	catalog           *runnerclient.Catalog
 }
 
-func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, home string, timeout time.Duration, prepare ...func(context.Context, *runnerclient.Client) ([]runnerclient.PendingStop, error)) error {
+func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, home string, timeout time.Duration, prepare ...func(context.Context, *runnerclient.Client) ([]runnercontract.PendingStop, error)) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := g.Validate(); err != nil {
@@ -45,7 +46,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 		return err
 	}
 	var old runnercontract.BuildPin
-	if readErr := localservice.ReadPrivateJSON(filepath.Join(home, "application-api", "runner-build.json"), &old, 64<<10); readErr == nil && !sameRunnerBuild(old, cli.BuildPin()) {
+	if readErr := localservice.ReadPrivateJSON(filepath.Join(home, "application-api", "runner-build.json"), &old, 64<<10); readErr == nil && !runnerbinding.SameBuild(old, cli.BuildPin()) {
 		proof, proofErr := cli.VerifyTakeover(ctx)
 		if proofErr != nil {
 			return proofErr
@@ -56,7 +57,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 		}
 		cli.Takeover = &proof
 	}
-	var stops []runnerclient.PendingStop
+	var stops []runnercontract.PendingStop
 	for _, collect := range prepare {
 		pending, collectErr := collect(ctx, &cli)
 		if collectErr != nil {
@@ -64,7 +65,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 		}
 		stops = append(stops, pending...)
 	}
-	var proofs []runnerclient.TakeoverReport
+	var proofs []runnercontract.TakeoverReport
 	if cli.Takeover != nil {
 		proofs = append(proofs, *cli.Takeover)
 	}
@@ -98,13 +99,13 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 
 // The caller holds the home lease. A changed transport pin requires fresh public
 // compatibility evidence; original candidate/check pins remain immutable.
-func bindApplicationRunnerBuild(home string, pin runnercontract.BuildPin, proofs ...runnerclient.TakeoverReport) error {
+func bindApplicationRunnerBuild(home string, pin runnercontract.BuildPin, proofs ...runnercontract.TakeoverReport) error {
 	dir := filepath.Join(home, "application-api")
 	var old runnercontract.BuildPin
 	err := localservice.ReadPrivateJSON(filepath.Join(dir, "runner-build.json"), &old, 64<<10)
 	if err == nil {
-		if !sameRunnerBuild(old, pin) {
-			if len(proofs) != 1 || !validTakeover(proofs[0], pin) || canonicalPath(old.StateDir) != canonicalPath(pin.StateDir) {
+		if !runnerbinding.SameBuild(old, pin) {
+			if len(proofs) != 1 || !runnerbinding.Compatible(proofs[0], pin) || canonicalPath(old.StateDir) != canonicalPath(pin.StateDir) {
 				return errors.New("runner_build_changed: compatible takeover evidence is required")
 			}
 			return localservice.Write(dir, "runner-build.json", pin)

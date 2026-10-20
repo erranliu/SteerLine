@@ -125,7 +125,7 @@ if (-not $version.ok -or $version.protocol -ne 'steerrunner-cli/v1') { throw 'St
 $runnerHash = (Get-FileHash -LiteralPath $runnerStage -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($runnerSelection.Reuse -and ($runnerHash -ne $runnerSelection.SHA256 -or $version.data.version -ne $runnerSelection.Version)) { throw 'Staged Runner differs from its installed release pin.' }
 Assert-Plain (Join-Path $InstallHome 'application-api\runner-build.json')
-$takeover = Assert-DeploymentRunnerBuild $InstallHome $runnerHash $runnerStage
+$takeover = Assert-DeploymentRunnerBuild $InstallHome $runnerHash $runnerStage (Join-Path $package 'steerline.exe')
 if ($null -ne $takeover) { Write-JSON (Join-Path $package 'runner-takeover-preflight.json') $takeover }
 $configPath = Join-Path $InstallHome 'execution.json'
 Assert-Plain $configPath
