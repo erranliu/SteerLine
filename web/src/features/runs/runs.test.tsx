@@ -421,11 +421,28 @@ function receipt(envelope: Envelope, status: Receipt["status"]): Receipt {
 
 it("stops an unknown candidate from its heading using a fixed confirmation and waits for original receipt plus authoritative snapshot", async () => {
   const w = stopWorkspace();
-  w.update({
-    snapshot: w.state(
-      w.runs.map((candidate) => ({ ...candidate, workflow_status: "unknown" })),
-    ),
+  const showStopped = screen.getByRole("checkbox", {
+    name: "显示已停止参与候选",
   });
+  expect(showStopped).not.toBeChecked();
+  w.update({
+    snapshot: w.state([
+      {
+        ...w.runs[0],
+        run_id: "0".repeat(32),
+        candidate_number: 4,
+        participation: "abandoned",
+      },
+      ...w.runs.map((candidate) => ({
+        ...candidate,
+        workflow_status: "unknown",
+      })),
+    ]),
+  });
+  expect(
+    screen.queryByRole("button", { name: /候选 C4/ }),
+  ).not.toBeInTheDocument();
+  expect(screen.getAllByText("3 个候选")).toHaveLength(2);
   const button = within(
     screen
       .getByRole("heading", { name: "详情候选1" })
@@ -479,12 +496,16 @@ it("stops an unknown candidate from its heading using a fixed confirmation and w
   };
   w.update({ snapshot: w.state([stopped, w.runs[1], w.runs[2]]) });
   expect(screen.getByRole("heading", { name: "详情候选1" })).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: /候选 C1/ }),
+  ).not.toBeInTheDocument();
   w.update({
     requests: [
       { envelope, created_at: "now", response: receipt(envelope, "applied") },
     ],
   });
   await screen.findByRole("heading", { name: "详情候选3" });
+  fireEvent.click(showStopped);
   fireEvent.click(screen.getByRole("button", { name: /候选 C1/ }));
   expect(screen.getByText(/历史只读 · 资源保留/)).toBeVisible();
   expect(screen.getByText("执行事实：running")).toBeVisible();
@@ -493,6 +514,11 @@ it("stops an unknown candidate from its heading using a fixed confirmation and w
     screen.queryByRole("button", { name: "打开回答" }),
   ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "停止参与" })).toBeDisabled();
+  fireEvent.click(showStopped);
+  expect(
+    screen.queryByRole("button", { name: /候选 C1/ }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "详情候选2" })).toBeVisible();
   expect(w.submit).toHaveBeenCalledTimes(1);
   w.client.clear();
 });
