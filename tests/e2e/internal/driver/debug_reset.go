@@ -21,7 +21,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
-var debugHistory = []string{"environment_check_requests", "environment_checks", "test_generation_requests", "test_generations", "test_evidence", "task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
+var debugHistory = []string{"environment_check_requests", "environment_checks", "test_generation_requests", "test_generations", "test_evidence", "maintenance_requests", "task_execution_snapshots", "task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
 
 func (d *debugRelease) reset(check bool) error {
 	scopes := []*debugRelease{d}

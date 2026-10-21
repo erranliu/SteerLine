@@ -27,12 +27,16 @@ type GenerateCommand struct {
 	RequestID string `json:"request_id"`
 	Plan      string `json:"plan"`
 	Profile   string `json:"profile"`
+	Commit    string `json:"commit,omitempty"`
 }
 type Source struct {
-	Path   string `json:"path"`
-	Digest string `json:"digest"`
+	Path       string `json:"path"`
+	Digest     string `json:"digest"`
+	TextDigest string `json:"text_digest"`
 }
 type Generation struct {
+	Workspace    string                  `json:"workspace"`
+	Applications []Application           `json:"applications,omitempty"`
 	ID           string                  `json:"id"`
 	Project      string                  `json:"project"`
 	Revision     uint64                  `json:"revision"`
@@ -54,4 +58,26 @@ type Generation struct {
 	StopID       string                  `json:"stop_id,omitempty"`
 	StopRequest  *runnercontract.Request `json:"stop_request,omitempty"`
 	StopState    string                  `json:"stop_state,omitempty"`
+}
+
+// ApplyCommand fixes the review of one local file. Replaying never changes it.
+type ApplyCommand struct {
+	RequestID        string `json:"request_id"`
+	GenerationID     string `json:"generation_id"`
+	ExpectedRevision uint64 `json:"expected_revision"`
+	ReviewDigest     string `json:"review_digest"`
+	AllowEmpty       bool   `json:"allow_empty"`
+}
+type Application struct {
+	Command   ApplyCommand `json:"command"`
+	Before    string       `json:"before"`
+	Output    string       `json:"output"`
+	Workspace string       `json:"workspace"`
+	State     string       `json:"state"`
+}
+type Preview struct {
+	ReviewDigest string `json:"review_digest"`
+	Before       string `json:"before"`
+	After        string `json:"after"`
+	Diagnostic   string `json:"diagnostic,omitempty"`
 }

@@ -55,6 +55,8 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return true
 	}
 	switch owner {
+	case module + "/internal/projectmaintenance":
+		return dependency == module+"/internal/projectmaintenance/model" || dependency == module+"/internal/testmanagement/model"
 	case module + "/internal/runnerbinding":
 		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate"
 	case hostContract:
@@ -79,7 +81,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -420,6 +422,7 @@ func storageSQLiteImportAllowed(dependency string) bool {
 		module + "/internal/execution/backend", module + "/internal/execution/model",
 		module + "/internal/storage/ports", module + "/internal/task/model",
 		module + "/internal/testmanagement/model",
+		module + "/internal/projectmaintenance/model",
 	} {
 		if dependency == allowed {
 			return true

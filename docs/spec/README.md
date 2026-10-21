@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+项目基线与材料统一维护（2026-10-21）：[Spec](project-maintenance.spec.md) · [Plan](../plans/project-maintenance.plan.md) · [专属验收](../acceptance/project-maintenance.md) · [长期设计](../product-design/project-maintenance.md)。初始化/基线/局部共用规则和维护流程，后台检测零自动生成，生成先审阅再显式应用，首次启动冻结远端最新代码与同版本材料。当前已替换任务材料登记即永久固定、生成自动保存及缺材料仅提示的旧行为；验证归专属记录，不改历史验收或 roadmap。项目添加的最终登记/建库继续后置，消费本批共用检查能力。
+
 Runner generate/1 对接与最简测试管理（2026-10-20，实施中）：[Spec](test-management.spec.md) · [Plan](test-management.plan.md) · [专属验收及缺口审查](../acceptance/test-management.md)。生成已真实验证，清单/安排/报告输出及只读展示已接线；Runner R2 已交付，本仓尚需消费公开产物和当前 Git，并补生成对象兼容换代及真实结果闭环。从固定 PlanRef 推导 JSON，不增加 Task 字段/门禁，只认可干净提交的当前通过。不建设独立 Agent 运行时、conversation 操作或完整规划台，不进入 roadmap。
 
 应用级共享 SteerRunner 服务（2026-10-19，已实施）：[Spec](shared-runner-service.spec.md) · [Plan](shared-runner-service.plan.md) · [专属验收](../acceptance/shared-runner-service.md)。每个 SteerLine home 共用一个 Runner，服务所有权上移到应用；覆盖跨项目请求身份、环境检查、停机证明、换代与整包 reset，仅修改 SteerLine。固定 L1、定向反例、两个 L3 及新包真实空闲拓扑验证通过，人工体验待验；不修改 roadmap，闪窗治理后置。

@@ -527,7 +527,7 @@ func e2ePackageParallelism(entries []e2eScenario) int {
 			return 1
 		}
 		switch entry.ID {
-		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects":
+		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.project-maintenance":
 			if entry.Level != "L3" {
 				return 1
 			}
@@ -551,7 +551,7 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
 		// Heavy isolation/native restart has a 10m body; its parent must not
 		// cut the selected scene at the ordinary 6m package bound.
-		if entry.ID == "recovery.waiting-merge-restart" {
+		if entry.ID == "recovery.waiting-merge-restart" || entry.ID == "runtime.project-maintenance" {
 			minutes += 12
 		} else {
 			minutes += 6

@@ -18,6 +18,7 @@ import (
 
 	app "github.com/erranliu/SteerLine/internal/app"
 	host "github.com/erranliu/SteerLine/internal/app/host"
+	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
@@ -40,7 +41,7 @@ func DebugReleaseMain(args []string) error {
 		return errors.New("debug requires init|prepare|run|stop|reset|merge|control|snapshot")
 	}
 	switch args[0] {
-	case "init", "init-b", "prepare", "run", "run-selected", "stop", "reset", "merge", "control", "snapshot", "testing":
+	case "init", "init-b", "prepare", "run", "run-selected", "stop", "reset", "merge", "control", "snapshot", "testing", "maintenance":
 	default:
 		return fmt.Errorf("unknown debug operation %q", args[0])
 	}
@@ -100,6 +101,7 @@ func DebugReleaseMain(args []string) error {
 			args[0] = "run"
 		}
 	}
+	maintenanceSource := os.Getenv("STEERLINE_PM_SOURCE")
 	testingSource := os.Getenv("STEERLINE_TM_SOURCE")
 	testingCandidate := os.Getenv("STEERLINE_TM_RUNNER_CANDIDATE")
 	if err = d.prepare(simulate); err != nil {
@@ -108,6 +110,11 @@ func DebugReleaseMain(args []string) error {
 	switch args[0] {
 	case "prepare":
 		return nil
+	case "maintenance":
+		if !simulate {
+			return errors.New("maintenance requires a new --simulate package")
+		}
+		return d.projectMaintenance(maintenanceSource)
 	case "testing":
 		if simulate {
 			return errors.New("testing requires a new live package")
@@ -412,6 +419,26 @@ func (d *debugRelease) seedTasks() error {
 	}
 	if receipt.Status != "accepted" {
 		return fmt.Errorf("seed rejected: %s", raw)
+	}
+	var manifest struct {
+		Maintenance bool `json:"project_maintenance"`
+	}
+	manifestRaw, e := os.ReadFile(filepath.Join(d.root, "manifest.json"))
+	if e != nil {
+		return e
+	}
+	if e = json.Unmarshal(manifestRaw, &manifest); e != nil {
+		return e
+	}
+	if !manifest.Maintenance {
+		client, e := applicationclient.OpenProject(ctx, d.home, filepath.Base(d.config))
+		if e != nil {
+			return e
+		}
+		defer client.Close()
+		if e = AdoptFixtureMaterials(ctx, d.home, client.Identity(), "docs/spec/task.plan.md", filepath.Join(d.root, "evidence", filepath.Base(d.config)+"-maintenance")); e != nil {
+			return e
+		}
 	}
 	return controlled.Write(filepath.Join(d.root, "evidence", filepath.Base(d.config)+".initialization.json"), map[string]any{"validation": valid, "receipt": receipt})
 }

@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -82,6 +83,15 @@ func (s *SQLiteStore) SaveGeneration(ctx context.Context, r testmodel.Generation
 		if old.Revision != expected {
 			return errors.New("stale_revision: generation changed")
 		}
+		if old.Workspace != r.Workspace || len(old.Applications) > len(r.Applications) || len(old.Result) > 0 && !bytes.Equal(old.Result, r.Result) {
+			return errors.New("immutable generation result/application changed")
+		}
+		for i, a := range old.Applications {
+			next := r.Applications[i]
+			if a.Command != next.Command || a.Before != next.Before || a.Output != next.Output || a.Workspace != next.Workspace || a.State == "applied" && next.State != "applied" {
+				return errors.New("immutable file application changed")
+			}
+		}
 		if old.Command != r.Command || !reflect.DeepEqual(old.Request, r.Request) || !reflect.DeepEqual(old.Runner, r.Runner) || old.Target != r.Target || old.TargetBefore != r.TargetBefore || !reflect.DeepEqual(old.Sources, r.Sources) || !reflect.DeepEqual(old.Catalogue, r.Catalogue) || old.RunID != "" && old.RunID != r.RunID || old.InputDigest != "" && old.InputDigest != r.InputDigest || old.Cancelled && !r.Cancelled || old.StopID != "" && old.StopID != r.StopID || old.StopRequest != nil && !reflect.DeepEqual(old.StopRequest, r.StopRequest) {
 			return errors.New("immutable generation association changed")
 		}
@@ -106,7 +116,11 @@ func (s *SQLiteStore) SaveGeneration(ctx context.Context, r testmodel.Generation
 	if err != nil {
 		return err
 	}
-	for _, id := range []string{r.ID, r.StopID} {
+	ids := []string{r.ID, r.StopID}
+	for _, a := range r.Applications {
+		ids = append(ids, a.Command.RequestID)
+	}
+	for _, id := range ids {
 		if id == "" {
 			continue
 		}
