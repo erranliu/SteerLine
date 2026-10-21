@@ -72,6 +72,7 @@ type Publication struct {
 }
 type RunInput struct {
 	Title       string            `json:"title"`
+	NamePrefix  string            `json:"name_prefix,omitempty"`
 	Correlation map[string]string `json:"correlation,omitempty"`
 	Repository  Repository        `json:"repository"`
 	Documents   Documents         `json:"documents"`

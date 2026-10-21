@@ -2,6 +2,8 @@
 
 SteerLine 只通过 `steerrunner-cli/v1` 调用独立 EXE。Runner 同一个 EXE 提供短命 CLI 与常驻服务；CLI 连接同一 state-dir 的现有实例，读请求不自动启动服务。任务、DAG、候选参与及 TaskDelivery 留在 SteerLine。
 
+开发候选在预留事务内分配页面显示的候选序号，并将 `name_prefix`（C1 为 `sl-<task_id>`，C2 起为 `sl-<task_id>-c<Number>`）与最终 submit 一起冻结。Runner 将其作为通用命名标识，Orca worktree 使用 `<name_prefix>-<Runner Run ID>`；未提供时前缀为 `sr`。该字段不从 correlation 推导，也不改变原资源绑定或分支规则；需要发布了此字段/schema 的 Runner 构建，两仓验证见[专属验收](../acceptance/runner-name-prefix.md)。
+
 所有 LLM 执行操作统一经 Runner 承担，职责声明见[LLM 执行边界](../architecture.md#llm-执行边界)。SteerLine 的默认预设选择与 Runner 内部 LLM 操作的默认链路分别说明于[两层默认链路](../product-design/execution-profiles.md#两层默认链路)；实际接入使用所选构建发布的公开配置与能力契约。
 
 测试安排生成已接入 Runner PR #33 / `9586ac4` 的 `generate/1`，复用指定本机 Codex profile 的 executable/model/reasoning_effort，并显式构造 read_only；开发认证、权限、audit 和提示词不随之复制。内容流程的公开目录允许空 prompt_steps；开发候选拒绝 generate/conversation workflow。只接生成所需的 submit/inspect/content_result/stop，conversation 操作留待规划台。2026-10-20 核对 Runner PR #34 的 R2 已随历史固定版本 `bf3ec58` 发布：`artifacts discover/collect/list/read` 和 `workspace-git`，capabilities 的 run_evidence/schema 给出正式约束。SteerLine 已接入这五个命令及能力/schema 校验：原候选的 collect 请求先持久化，未知只 inspect 原请求，read 核验 Run/artifact/长度/base64/SHA256 后保存不可变副本；只读查询结合近期 verified commit/clean 计算当前结果。原 Run 使用项目忽略的 `.steerrunner/artifacts/<唯一执行ID>/`；首版收集 managed 报告与同目录 summary.json。独立生成对象已纳入兼容 takeover、启动前原 stop outbox 与离线结算核验，保留历史 build pin 和原请求。历史 bf3ec58 的 generate 接管误校验已由 Runner #37 修复：freeze/takeover 按 workflow 能力及实际 parser 意图判断结果解析配置。干净主干 13ef123 的同 EXE 真实 generate 及原 k 包只读复验通过；历史 A/B 接管另按其固定构建取证，不改写原 pin 或扩大恢复授权。命令/格式见[测试规范](../testing.md#测试管理文档与结果)，版本及验证边界见[本任务验收](../acceptance/test-management.md)。
