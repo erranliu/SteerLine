@@ -14,7 +14,9 @@ import (
 	"regexp"
 	"sync"
 	"time"
+	"unicode/utf8"
 
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/testmanagement/model"
@@ -46,7 +48,8 @@ type GenerationService struct {
 	Admit               func(context.Context) error
 	VerifyBinding       func(Generation) error
 	mu                  sync.Mutex
-	allowSave           map[string]bool
+	Workspace           func(context.Context) (string, error)
+	ReadCommitted       func(context.Context, string, string) ([]byte, error)
 }
 
 func randomID() string {
@@ -132,26 +135,49 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		if old.State == "rejected" {
 			return old, nil
 		}
-		if s.allowSave == nil {
-			s.allowSave = map[string]bool{}
-		}
-		s.allowSave[old.ID] = true
-		return s.observe(ctx, old, true)
+		return old, nil
 	} else if !errors.Is(err, ErrNotFound) {
 		return Generation{}, err
+	}
+	previous, err := s.Store.Generations(ctx, s.Project)
+	if err != nil {
+		return Generation{}, err
+	}
+	for _, g := range previous {
+		if g.Command.Plan != in.Plan || g.State == "rejected" && g.RunID == "" {
+			continue
+		}
+		if g.Projection == nil || g.Projection.StopStatus != "stopped" {
+			return Generation{}, errors.New("original generation is active or uncertain; reconcile/stop it before a new attempt")
+		}
 	}
 	target, err := ArrangementPath(in.Plan)
 	if err != nil {
 		return Generation{}, err
 	}
 	r := Generation{ID: in.RequestID, Project: s.Project, Revision: 1, Command: in, CreatedAt: time.Now().UTC(), Runner: s.Build, Target: target, State: "unknown", Sources: []Source{}}
+	if s.Workspace != nil {
+		r.Workspace, err = s.Workspace(ctx)
+		if err != nil {
+			return r, err
+		}
+	}
 	materials := []runnercontract.Document{}
 	for _, p := range []string{in.Plan, RulesPath, CataloguePath} {
 		raw, e := ReadProjectFile(s.Repository, p)
+		if in.Commit != "" {
+			if s.ReadCommitted == nil {
+				return r, errors.New("committed input reader unavailable")
+			}
+			raw, e = s.ReadCommitted(ctx, in.Commit, p)
+		}
 		if e != nil {
 			return r, e
 		}
-		r.Sources = append(r.Sources, Source{p, ContentDigest(raw)})
+		if len(raw) == 0 || len(raw) > MaxDocumentBytes || !utf8.Valid(raw) {
+			return r, fmt.Errorf("invalid bounded UTF-8 input: %s", p)
+		}
+		r.Sources = append(r.Sources, Source{Path: p, Digest: ContentDigest(raw), TextDigest: pm.TextDigest(raw)})
 		text := string(raw)
 		materials = append(materials, runnercontract.Document{Kind: "inline", Path: p, Content: &text})
 		if p == CataloguePath {
@@ -180,13 +206,29 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		return r, err
 	}
 	r.Request = runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: randomID(), Input: body}
+	if s.Workspace != nil {
+		w, e := s.Workspace(ctx)
+		if e != nil {
+			return r, e
+		}
+		if w != r.Workspace {
+			return r, errors.New("workspace changed during generation preparation")
+		}
+	}
+	if in.Commit == "" {
+		for _, source := range r.Sources {
+			b, e := ReadProjectFile(s.Repository, source.Path)
+			if e != nil {
+				return r, e
+			}
+			if ContentDigest(b) != source.Digest {
+				return r, errors.New("generation inputs changed during snapshot")
+			}
+		}
+	}
 	if err = s.Store.SaveGeneration(ctx, r, 0); err != nil {
 		return r, err
 	} // external submission is forbidden before this commit.
-	if s.allowSave == nil {
-		s.allowSave = map[string]bool{}
-	}
-	s.allowSave[r.ID] = true
 	receipt, submitErr := s.Runner.Submit(ctx, r.Request)
 	if submitErr != nil {
 		r.Diagnostic = submitErr.Error()
@@ -215,7 +257,7 @@ func (s *GenerationService) Observe(ctx context.Context) error {
 		if r.State == "rejected" {
 			continue
 		}
-		if _, e := s.observe(ctx, r, s.allowSave[r.ID]); e != nil {
+		if _, e := s.observe(ctx, r); e != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -236,7 +278,12 @@ func (s *GenerationService) Observe(ctx context.Context) error {
 	}
 	return nil
 }
-func (s *GenerationService) observe(ctx context.Context, r Generation, save bool) (Generation, error) {
+func (s *GenerationService) observe(ctx context.Context, r Generation) (Generation, error) {
+	var reconcileErr error
+	r, reconcileErr = s.reconcileApplications(ctx, r)
+	if reconcileErr != nil {
+		return r, reconcileErr
+	}
 	before, _ := json.Marshal(r)
 	if r.Runner != s.Build {
 		if s.VerifyBinding == nil {
@@ -246,7 +293,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation, save bool
 			return r, err
 		}
 	}
-	if r.State == "saved" && !r.Cancelled {
+	if r.State == "applied" && !r.Cancelled && r.Projection != nil && r.Projection.StopStatus == "stopped" {
 		return r, nil
 	}
 	selector, id := "run-id", r.RunID
@@ -295,7 +342,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation, save bool
 				r.Diagnostic = callErr.Error()
 			}
 		}
-	} else if result := run.ContentResult; result != nil {
+	} else if result := run.ContentResult; r.State != "applied" && result != nil {
 		if result.Status != "succeeded" || !result.Source.Verified || result.Source.NativeOutcome != "succeeded" || result.Source.CommandID == "" || result.Source.TurnID == "" {
 			r.State = "failed"
 			r.Diagnostic = result.Diagnostic
@@ -309,16 +356,9 @@ func (s *GenerationService) observe(ctx context.Context, r Generation, save bool
 			} else if len(definitions) == 0 {
 				r.State = "needs_review"
 				r.Diagnostic = "生成了空测试列表；原文件保留，请核对 Plan"
-			} else if save && run.StopStatus == "stopped" {
-				if e = s.saveResult(r); e != nil {
-					r.State = "stale"
-					r.Diagnostic = e.Error()
-				} else {
-					r.State = "saved"
-				}
 			}
 		}
-	} else if run.Status == "failed" || run.Status == "stopped" {
+	} else if r.State != "applied" && (run.Status == "failed" || run.Status == "stopped") {
 		r.State = "failed"
 		r.Diagnostic = "Runner 已结束，未提供可核实的生成结果：" + run.Diagnostic
 	}
@@ -329,51 +369,6 @@ func (s *GenerationService) observe(ctx context.Context, r Generation, save bool
 	r.Revision++
 	err = s.Store.SaveGeneration(ctx, r, r.Revision-1)
 	return r, err
-}
-func (s *GenerationService) saveResult(r Generation) error {
-	for _, source := range r.Sources {
-		raw, err := ReadProjectFile(s.Repository, source.Path)
-		if err != nil {
-			return err
-		}
-		if ContentDigest(raw) != source.Digest {
-			return errors.New("生成依据已变化，保留原文件，请重新生成")
-		}
-	}
-	current, err := targetDigest(s.Repository, r.Target)
-	if err != nil {
-		return err
-	}
-	var value Arrangement
-	if err = Decode(r.Result, &value); err != nil {
-		return err
-	}
-	output, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return err
-	}
-	output = append(output, '\n')
-	if current == ContentDigest(output) {
-		return nil
-	} // original atomic write may have succeeded before its receipt.
-	if current != r.TargetBefore {
-		return errors.New("测试安排已被修改，保留当前文件")
-	}
-	target := filepath.Join(s.Repository, filepath.FromSlash(r.Target))
-	f, err := os.CreateTemp(filepath.Dir(target), ".steerline-tests-*")
-	if err != nil {
-		return err
-	}
-	name := f.Name()
-	defer os.Remove(name)
-	if _, err = f.Write(output); err == nil {
-		err = f.Sync()
-	}
-	err = errors.Join(err, f.Close())
-	if err != nil {
-		return err
-	}
-	return os.Rename(name, target)
 }
 func (s *GenerationService) Stop(ctx context.Context, id, stopID string) (Generation, error) {
 	s.mu.Lock()
@@ -395,7 +390,7 @@ func (s *GenerationService) Stop(ctx context.Context, id, stopID string) (Genera
 	if err = s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
 		return r, err
 	}
-	return s.observe(ctx, r, false)
+	return s.observe(ctx, r)
 }
 func (s *GenerationService) Close(ctx context.Context) error {
 	rows, err := s.Store.Generations(ctx, s.Project)

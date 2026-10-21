@@ -17,3 +17,12 @@ func TestTMCLIRejectsIncompleteCommandsBeforeConnection(t *testing.T) {
 		}
 	}
 }
+
+func TestPMCLIApplyRequiresCompleteReview(t *testing.T) {
+	id := strings.Repeat("a", 32)
+	for _, args := range [][]string{{"apply", "-request-id", id}, {"apply", "-request-id", id, "-generation-id", id, "-expected-revision", "1"}, {"generation", "-request-id", id, "-allow-empty"}, {"generate", "-request-id", id, "-plan", "docs/a.plan.md", "-execution-profile", "local", "-expected-revision", "1"}} {
+		if e := runTestsCommand(args); e == nil || strings.Contains(e.Error(), "application") {
+			t.Fatalf("incomplete review reached application: %v %v", args, e)
+		}
+	}
+}

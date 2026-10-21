@@ -1385,3 +1385,16 @@ textarea {
   gap: 10px;
   margin: 16px 0;
 }
+
+.maintenance-panel { max-width: none; padding: 14px 18px; margin-bottom: 16px; }
+.maintenance-panel > div { display: grid; gap: 10px; margin-top: 12px; }
+.maintenance-panel label { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.maintenance-panel input:not([type="checkbox"]) { flex: 1; min-width: 200px; }
+.maintenance-panel article { border-top: 1px solid #2c4433; padding-top: 10px; }
+.maintenance-panel pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; }
+.maintenance-panel code { overflow-wrap: anywhere; }
+.maintenance-panel button { margin-right: 6px; }
+
+.maintenance-panel button { border: 1px solid #365742; border-radius: 5px; background: #1e3227; padding: 5px 10px; justify-self: start; text-align: left; }
+.maintenance-panel button:disabled { opacity: .5; cursor: not-allowed; }
+.maintenance-panel input:not([type="checkbox"]) { border: 1px solid #365742; border-radius: 5px; background: #101b14; padding: 6px 8px; }

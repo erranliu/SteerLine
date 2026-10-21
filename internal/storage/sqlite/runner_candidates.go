@@ -266,8 +266,33 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if err != nil {
 			return err
 		}
-		if contract.Digest != c.ContractDigest {
-			return nativeErr("immutable_task", "fixed contract changed")
+		confirmed := work.ConfirmedDigest
+		if confirmed == "" {
+			confirmed = work.Contract.Digest
+		}
+		if candidate {
+			frozen, e := readExecution(ctx, tx.tx, c.Project, c.TaskID)
+			if e != nil {
+				return e
+			}
+			if frozen.Contract.Digest != c.ContractDigest || frozen.Base != c.BaseRevision || digestValue(frozen.TestPlan) != digestValue(c.TestPlan) {
+				return nativeErr("immutable_task", "execution snapshot changed")
+			}
+		} else {
+			if contract.Digest != confirmed {
+				return nativeErr("immutable_task", "confirmed materials changed")
+			}
+			if e := verifyMaterial(ctx, tx.tx, c.Project, work); e != nil {
+				return e
+			}
+			frozen := taskmodel.ExecutionSnapshot{Contract: work.Contract, Base: c.BaseRevision, TestPlan: c.TestPlan}
+			raw, e := json.Marshal(frozen)
+			if e != nil {
+				return e
+			}
+			if _, e = tx.tx.ExecContext(ctx, `INSERT INTO task_execution_snapshots VALUES(?,?,?)`, c.Project, c.TaskID, raw); e != nil {
+				return e
+			}
 		}
 		body, err := json.Marshal(c)
 		if err != nil {

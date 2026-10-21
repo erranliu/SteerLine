@@ -14,19 +14,22 @@ Windows 启动闪窗修复的最小验证见[专属验收](acceptance/startup-co
 
 ## 测试管理文档与结果
 
-可映射到执行页的清单为 [test-list.json](testing/test-list.json)，格式遵循[测试管理 Spec](spec/test-management.spec.md)。每项必需 `id/name/level/environment/command/check`，仅 `note` 可选；拒绝未知字段、重复键/ID、空必需值与非法级别。首批登记固定 L1 整体及现存十二项 E2E 场景。E2E 执行选择仍以 `tests/e2e/suites.json` 为准；新增、删除、改级/环境/入口/主要断言时，依据通用规范同步修改实现、执行登记、展示清单和受影响 Plan。Web/脚本入口暂未登记，不推断它们已被覆盖。
+[项目维护](product-design/project-maintenance.md)统一初始化/基线/局部规则，生成先审阅、再显式应用，首次启动固定远端最新代码和同版本材料。必要材料待办阻断相关首次启动，测试通过不作为发布/交付门禁。实现及验收入口见 [Plan](plans/project-maintenance.plan.md#测试计划)和[专属验收](acceptance/project-maintenance.md)。L1 新规则仅登记 quick-owner-project-maintenance，app/SQLite/生成相关测试仍归原 owner；新增 L3 runtime.project-maintenance 使用唯一生成器、受控双项目 Go/Web/Edge 流程。
 
-`<name>.plan.md` 旁的 `<name>.tests.json` 只保存 `{"tests":["l1.minimum"]}` 这样的有序唯一 ID；Plan 链接它并解释选择。无需自动测试时可手工写空数组并说明原因。候选从固定 PlanRef 的同一 commit 读取安排/定义，缺失或无效只展示诊断，不增加 Task 门禁。
+可映射到执行页的清单为 [test-list.json](testing/test-list.json)，格式遵循[测试管理 Spec](spec/test-management.spec.md)。每项必需 `id/name/level/environment/command/check`，仅 `note` 可选；拒绝未知字段、重复键/ID、空必需值与非法级别。首批登记固定 L1 整体及现存十三项 E2E 场景。E2E 执行选择仍以 `tests/e2e/suites.json` 为准；新增、删除、改级/环境/入口/主要断言时，依据通用规范同步修改实现、执行登记、展示清单和受影响 Plan。Web/脚本入口暂未登记，不推断它们已被覆盖。
+
+`<name>.plan.md` 旁的 `<name>.tests.json` 只保存 `{"tests":["l1.minimum"]}` 这样的有序唯一 ID；Plan 链接它并解释选择。无需自动测试时可手工写空数组并说明原因。候选从固定 PlanRef 的同一 commit 读取安排/定义，缺失、无效或未核对的实际材料阻断相关首次启动；后续候选保留 Task 原快照。
 
 应用已启动时，使用原生 CLI 生成已有 Plan 的测试安排；显式指定本机 Codex profile 和 32 位小写十六进制请求号：
 
 ```powershell
 steerline tests generate -project <id> -plan docs/spec/example.plan.md -execution-profile <profile> -request-id <id>
 steerline tests generation -project <id> -request-id <original-id>
+steerline tests apply -project <id> -generation-id <original-id> -request-id <new-id> -expected-revision <n> -review-digest <sha256>
 steerline tests stop-generation -project <id> -generation-id <original-id> -request-id <new-id>
 ```
 
-生成复用 Runner generate/1 和 read_only。空模型结果、坏 ID、材料或目标变更不覆盖原文件；结果由现有项目 tick 观察保存，查询只读。重启后显式重复原 generate 请求可完成已生成结果的条件保存，不重发模型。作者维护 Plan 链接并正常提交。
+生成复用 Runner generate/1 和 read_only。空模型结果、坏 ID、材料或目标变更不覆盖原文件；项目 tick 只保存原结果和已发生的应用事实，不写项目文件。查询返回只读 diff/review_digest；审阅后显式 apply，按当前 HEAD/分支、完整输入及目标原字节核对，取消后旧号不得新写。原 generate 重放不调用模型或应用；HEAD 前进后仍适用的输出可重新审阅再用新应用请求。作者维护 Plan 链接，正常提交/合入后检查并采用材料。
 
 `cmd/test-feedback -level=L1/L2/L3/L4` 在原隔离证据目录追加 `managed-<id>.json`，保留原 summary、JSONL 与退出码。封套字段为 `id/sequence/selection/environment/definitions/before_commit/after_commit/before_clean/after_clean/results`；definitions[id] 是规范化单项 JSON 的 SHA256：字段固定按 `id,name,level,environment,command,check` 排序，非空 `note` 最后附加；以 UTF-8、无 BOM/缩进/末尾换行、与 Go `json.Marshal(Definition)` 相同的字符串转义编码（含 HTML 字符转义），不直接散列清单原始排版或属性顺序。results 中每项仅有 `test_id/status/message/log`，status 为 passed/failed/incomplete，log 指向同目录原 summary。定向 Go 子集和 build-only 不输出整体通过；gate-only 仅报告实际 controlled ID。
 

@@ -1,5 +1,7 @@
 # 项目管理与统一 Web 入口（方案）
 
+2026-10-20 后续设计衔接：[项目基线与材料维护](project-maintenance.md)统一初始化准备、基线更新与局部更新的快照/材料评估，提供远端观察提示、单项生成及显式应用。该批已实现共用材料维护；不实现产品 Git pull、完整 PS 核验或预纳管候选库。项目添加复用公共读取/规则并补齐 PS-01–PS-07、候选记录、确认登记和原生建库，不另造生成运行时；复制外部 Codex 提示词仍可使用，不授权产品启动模型。完整添加 UI 与已配置项目维护之间无循环前置。
+
 状态：2026-10-15 原规划先确认整体方案；随后用户直接授权实现先行的独立 Web 与已有配置项目切换，当前结果见[专属验收](../acceptance/web-project-switch.md)。添加、结构核验与纳管仍为后置设计，没有执行准备提示词或修改安装环境。本文是项目切换、添加和纳管职责的设计入口；[结构核验](project-structure.md)维护仓库要求，[Codex 准备提示词](project-onboarding-prompt.md)供用户复制执行。后置添加能力不表示已经交付。
 
 用户随后明确分批：[独立 Web 与已有项目切换 Spec](../spec/web-project-switch.spec.md)/[Plan](../spec/web-project-switch.plan.md)先行，继续只读展示 etc 中的已配置项目，不引入结构门槛；[项目添加 Spec](../spec/project-onboarding.spec.md)/[Plan](../spec/project-onboarding.plan.md)后置，才落实下文的准备、核验、登记、初始化准入。两个批次独立验收；先行批次不依赖后置批次，也不把已配置项目标成结构已通过。

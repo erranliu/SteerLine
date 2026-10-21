@@ -17,6 +17,7 @@
 | [客户端与 Go 服务边界](planning-architecture.md) | Web/应用/项目 HTTP 边界及历史 #91 追溯 |
 | [Web 前端技术方案](web-frontend.md) | 已确认技术栈与首批 DAG/执行页；独立 web 工程及浏览器接入契约见普通开发 Spec/Plan，实际结果归专属验收 |
 | [项目管理与统一 Web 入口](project-management.md) | 独立 Web/已有项目切换及统一启动宿主已交付；添加/结构核验/纳管后置，仍有独立 Spec/Plan |
+| [项目基线与材料维护](project-maintenance.md) | 初始化/基线/局部共用维护、主动远端观察、受控生成/显式应用及首次启动冻结；当前实现和验证范围见专属验收 |
 | [添加项目准备提示词（方案）](project-onboarding-prompt.md) | 用户复制到目标仓库 Codex 执行的文档准备模板；不创建项目状态或 Task |
 | [项目结构与纳管核验（方案）](project-structure.md) | 文档角色/路径清单、只读固定版本核验、纳管与执行资格边界；尚无核验器 |
 | [本机客户端协议 v1](local-client-protocol.md) | 现有回环协议与公共查询/命令接口 |

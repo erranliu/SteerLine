@@ -11,6 +11,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 type memoryGenerations struct {
@@ -42,7 +43,7 @@ func (m *memoryGenerations) SaveGeneration(_ context.Context, r Generation, expe
 	if m.fail {
 		return errors.New("persist denied")
 	}
-	if m.failSaved && r.State == "saved" {
+	if m.failSaved && r.State == "applied" {
 		return errors.New("saved receipt lost")
 	}
 	old := m.rows[r.Project+r.ID]
@@ -138,7 +139,7 @@ func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *g
 	}
 	m := &memoryGenerations{rows: map[string]Generation{}}
 	f := &generationCLI{}
-	s := &GenerationService{Project: "project", Repository: root, Store: m, Runner: f, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+	s := &GenerationService{Workspace: func(context.Context) (string, error) { return "head/branch", nil }, Project: "project", Repository: root, Store: m, Runner: f, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		return runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only","model":"test-model"}`)}, catalog, nil
 	}}
 	return s, m, f, GenerateCommand{RequestID: strings.Repeat("a", 32), Plan: "docs/spec/task.plan.md", Profile: "local"}
@@ -158,8 +159,19 @@ func TestTMGenerationSaveAndReplay(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _ = s.Store.Generation(ctx, s.Project, in.RequestID)
-	if r.State != "saved" {
-		t.Fatalf("not saved %+v", r)
+	if r.State != "generated" {
+		t.Fatal("result not awaiting review", r.State)
+	}
+	if _, e := os.Stat(filepath.Join(s.Repository, r.Target)); !os.IsNotExist(e) {
+		t.Fatal("generation wrote before review")
+	}
+	v, e := s.Preview(ctx, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	r, e = s.Apply(ctx, model.ApplyCommand{RequestID: strings.Repeat("c", 32), GenerationID: r.ID, ExpectedRevision: r.Revision, ReviewDigest: v.ReviewDigest})
+	if e != nil || r.State != "applied" {
+		t.Fatal(r.State, e)
 	}
 	raw, err := os.ReadFile(filepath.Join(s.Repository, r.Target))
 	if err != nil || !strings.Contains(string(raw), "unit.rules") {
@@ -222,7 +234,7 @@ func TestTMGenerationChangesAndRestart(t *testing.T) {
 	if _, err := s.Generate(ctx, in); err != nil {
 		t.Fatal(err)
 	}
-	s.allowSave = nil
+	// Reopening/observing cannot authorize saving.
 	f.finish(`{"tests":["unit.rules"]}`)
 	_ = s.Observe(ctx)
 	r, _ := m.Generation(ctx, s.Project, in.RequestID)
@@ -236,8 +248,15 @@ func TestTMGenerationChangesAndRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	r, _ = m.Generation(ctx, s.Project, in.RequestID)
-	if r.State != "saved" || f.submits != 1 {
-		t.Fatal("explicit completion failed", r.State)
+	if r.State != "generated" || f.submits != 1 {
+		t.Fatal("repeated generate wrote or resubmitted", r.State)
+	}
+	v, e := s.Preview(ctx, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if _, e = s.Apply(ctx, model.ApplyCommand{RequestID: strings.Repeat("c", 32), GenerationID: r.ID, ExpectedRevision: r.Revision, ReviewDigest: v.ReviewDigest}); e != nil {
+		t.Fatal(e)
 	}
 	s2, _, f2, in2 := generationFixture(t)
 	_, _ = s2.Generate(ctx, in2)
@@ -245,8 +264,8 @@ func TestTMGenerationChangesAndRestart(t *testing.T) {
 	f2.finish(`{"tests":["unit.rules"]}`)
 	_ = s2.Observe(ctx)
 	r, _ = s2.Store.Generation(ctx, s2.Project, in2.RequestID)
-	if r.State != "stale" {
-		t.Fatal("changed inputs accepted", r.State)
+	if _, e := s2.Preview(ctx, r); e == nil {
+		t.Fatal("changed inputs accepted")
 	}
 }
 
@@ -281,22 +300,32 @@ func TestTMGenerationCancelledBeforeLateBindingDoesNotSave(t *testing.T) {
 func TestTMGenerationSavedFileSurvivesLostReceipt(t *testing.T) {
 	s, m, f, in := generationFixture(t)
 	ctx := context.Background()
-	if _, err := s.Generate(ctx, in); err != nil {
-		t.Fatal(err)
+	if _, e := s.Generate(ctx, in); e != nil {
+		t.Fatal(e)
 	}
-	m.failSaved = true
 	f.finish(`{"tests":["unit.rules"]}`)
-	_ = s.Observe(ctx)
-	target, _ := ArrangementPath(in.Plan)
-	before, err := os.ReadFile(filepath.Join(s.Repository, target))
-	if err != nil {
-		t.Fatal("file was not saved before its lost receipt", err)
+	if e := s.Observe(ctx); e != nil {
+		t.Fatal(e)
+	}
+	r, _ := m.Generation(ctx, s.Project, in.RequestID)
+	v, e := s.Preview(ctx, r)
+	if e != nil {
+		t.Fatal(e)
+	}
+	cmd := model.ApplyCommand{RequestID: strings.Repeat("c", 32), GenerationID: r.ID, ExpectedRevision: r.Revision, ReviewDigest: v.ReviewDigest}
+	m.failSaved = true
+	if _, e = s.Apply(ctx, cmd); e == nil {
+		t.Fatal("expected lost application receipt")
+	}
+	before, e := os.ReadFile(filepath.Join(s.Repository, r.Target))
+	if e != nil {
+		t.Fatal(e)
 	}
 	m.failSaved = false
-	r, err := s.Generate(ctx, in)
-	after, _ := os.ReadFile(filepath.Join(s.Repository, target))
-	if err != nil || r.State != "saved" || f.submits != 1 || string(before) != string(after) {
-		t.Fatal("lost save receipt caused regeneration or replacement", r.State, err)
+	r, e = s.Apply(ctx, cmd)
+	after, _ := os.ReadFile(filepath.Join(s.Repository, r.Target))
+	if e != nil || r.State != "applied" || string(before) != string(after) || f.submits != 1 {
+		t.Fatal("application replay changed result", e)
 	}
 }
 
@@ -328,7 +357,7 @@ func TestTMGenerationCompatibleBuildObservesOriginalWithoutResubmit(t *testing.T
 		t.Fatal(err)
 	}
 	saved, _ := m.Generation(context.Background(), s.Project, in.RequestID)
-	if checks == 0 || f.submits != 1 || saved.State != "saved" || saved.Runner != original.Runner || saved.RunID != original.RunID {
+	if checks == 0 || f.submits != 1 || saved.State != "generated" || saved.Runner != original.Runner || saved.RunID != original.RunID {
 		t.Fatal(saved, f.submits, checks)
 	}
 }

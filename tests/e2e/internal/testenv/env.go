@@ -106,7 +106,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if id == "testing.management-local-codex" || id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
+	if id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
 		timeout = 10 * time.Minute
 	}
 	if id == "workflow.local-codex-audited" {
@@ -258,7 +258,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	p.RemoteURL = "https://github.com/e2e/project.git"
 	p.git(p.Repo, "remote", "add", "origin", "http://"+address+"/e2e/project.git")
 	s.Must(os.MkdirAll(filepath.Join(p.Repo, "docs", "spec"), 0700))
-	for _, name := range []string{"task.spec.md", "task.plan.md"} {
+	for _, name := range []string{"task.spec.md", "task.plan.md", "task.tests.json"} {
 		raw, err := os.ReadFile(filepath.Join(s.Run.Root, "tests", "e2e", "testdata", "tasks", name))
 		s.Must(err)
 		// Git may check out templates as CRLF; fixture contracts use stable LF bytes.
@@ -448,6 +448,7 @@ func (p *Project) createTasks(keys []string) {
 		s.t.Fatalf("unexpected create receipt: %+v", receipt)
 	}
 	p.ProjectID, p.DatabaseID = validation.ProjectID, validation.DatabaseID
+	p.adoptFixtureMaterials()
 	for key, t := range p.Tasks {
 		id, ok := receipt.TaskIDs[key]
 		if !ok {

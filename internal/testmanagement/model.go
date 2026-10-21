@@ -6,24 +6,20 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"path"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 const CataloguePath = model.CataloguePath
-const RulesPath = "docs/testing.md"
-const MaxDocumentBytes = 1 << 20
+const RulesPath = model.RulesPath
+const MaxDocumentBytes = model.MaxDocumentBytes
 
 type Definition = model.Definition
 type Catalogue = model.Catalogue
 
-type Arrangement struct {
-	Tests []string `json:"tests"`
-}
+type Arrangement = model.Arrangement
+
 type Snapshot struct {
 	Status      string       `json:"status"`
 	Diagnostic  string       `json:"diagnostic,omitempty"`
@@ -33,74 +29,16 @@ type Snapshot struct {
 	Digest      string       `json:"digest,omitempty"`
 }
 
-func Decode(raw []byte, target any) error {
-	if len(raw) == 0 || len(raw) > MaxDocumentBytes {
-		return errors.New("test document is empty or exceeds 1 MiB")
-	}
-	canonical, err := runnercontract.CanonicalJSON(raw)
-	if err != nil {
-		return err
-	}
-	d := json.NewDecoder(strings.NewReader(string(canonical)))
-	d.DisallowUnknownFields()
-	return d.Decode(target)
-}
+func Decode(raw []byte, target any) error { return model.Decode(raw, target) }
 func Digest(v any) string {
 	raw, _ := json.Marshal(v)
 	sum := sha256.Sum256(raw)
 	return hex.EncodeToString(sum[:])
 }
-func ContentDigest(raw []byte) string { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
-func ArrangementPath(plan string) (string, error) {
-	if path.Clean(plan) != plan || strings.ContainsAny(plan, "\\\x00") || path.IsAbs(plan) || strings.Contains(plan, ":") || strings.HasPrefix(plan, "../") || !strings.HasSuffix(plan, ".plan.md") {
-		return "", errors.New("Plan must be a normalized repository-relative .plan.md file")
-	}
-	return strings.TrimSuffix(plan, ".plan.md") + ".tests.json", nil
-}
-func ParseCatalogue(raw []byte) (Catalogue, error) {
-	var c Catalogue
-	if err := Decode(raw, &c); err != nil {
-		return c, err
-	}
-	if c.Tests == nil {
-		return c, errors.New("tests must be an array")
-	}
-	seen := map[string]bool{}
-	for _, d := range c.Tests {
-		if strings.TrimSpace(d.ID) == "" || seen[d.ID] || strings.TrimSpace(d.Name) == "" || strings.TrimSpace(d.Environment) == "" || strings.TrimSpace(d.Command) == "" || strings.TrimSpace(d.Check) == "" {
-			return c, errors.New("test definitions require unique IDs and nonempty fields")
-		}
-		if d.Level != "L1" && d.Level != "L2" && d.Level != "L3" && d.Level != "L4" {
-			return c, errors.New("invalid test level: " + d.Level)
-		}
-		seen[d.ID] = true
-	}
-	return c, nil
-}
-func Select(raw []byte, c Catalogue) ([]Definition, error) {
-	var a Arrangement
-	if err := Decode(raw, &a); err != nil {
-		return nil, err
-	}
-	if a.Tests == nil {
-		return nil, errors.New("tests must be an array")
-	}
-	index := map[string]Definition{}
-	for _, d := range c.Tests {
-		index[d.ID] = d
-	}
-	result := []Definition{}
-	seen := map[string]bool{}
-	for _, id := range a.Tests {
-		d, ok := index[id]
-		if !ok || seen[id] {
-			return nil, fmt.Errorf("unknown or duplicate test ID: %s", id)
-		}
-		seen[id] = true
-		result = append(result, d)
-	}
-	return result, nil
-}
+func ContentDigest(raw []byte) string                      { sum := sha256.Sum256(raw); return hex.EncodeToString(sum[:]) }
+func ArrangementPath(plan string) (string, error)          { return model.ArrangementPath(plan) }
+func ParseCatalogue(raw []byte) (Catalogue, error)         { return model.ParseCatalogue(raw) }
+func Select(raw []byte, c Catalogue) ([]Definition, error) { return model.Select(raw, c) }
 
 type Result struct {
 	TestID  string `json:"test_id"`
@@ -166,6 +104,7 @@ type Row struct {
 	History []Result `json:"history"`
 }
 type View struct {
+	Commit     string `json:"commit"`
 	Status     string `json:"status"`
 	Diagnostic string `json:"diagnostic,omitempty"`
 	PlanPath   string `json:"plan_path"`
@@ -177,7 +116,7 @@ type View struct {
 }
 
 func Project(s Snapshot, reports []Report, commit string, clean, verified bool) View {
-	v := View{Status: s.Status, Diagnostic: s.Diagnostic, PlanPath: s.PlanPath, Rows: []Row{}}
+	v := View{Commit: s.Commit, Status: s.Status, Diagnostic: s.Diagnostic, PlanPath: s.PlanPath, Rows: []Row{}}
 	if s.Status != "ready" {
 		return v
 	}

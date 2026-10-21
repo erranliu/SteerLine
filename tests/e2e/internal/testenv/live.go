@@ -115,6 +115,10 @@ git rev-parse HEAD
 	if s.ID == "workflow.local-codex-audited" {
 		s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Audited fixture plan\n\nRead the bound Spec. Use implement.ps1 to write, verify and commit result.txt. The Runner owns workflow sequencing, report generation, audit and publication. Do not edit fixture scripts.\n\n## Test plan\n\nVerify the committed result.txt matches the exact requested content and newline; no additional business implementation is required.\n"), 0600))
 	}
+	planPath := filepath.Join(p.Repo, "docs", "spec", "task.plan.md")
+	planBody, readErr := os.ReadFile(planPath)
+	s.Must(readErr)
+	s.Must(os.WriteFile(planPath, append(planBody, []byte("\nNo automated tests are registered for this caller fixture. Existing local checks and external harness acceptance remain required.\n")...), 0600))
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)

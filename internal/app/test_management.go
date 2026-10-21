@@ -12,6 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 type testManagementStore interface {
@@ -43,6 +44,9 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 		catalog, err := cli.Catalog(ctx, v)
 		return e, catalog, err
 	}
+	m := newProjectMaintenance(c, nil)
+	s.Workspace = m.workspace
+	s.ReadCommitted = m.read
 	s.VerifyBinding = func(g testmanagement.Generation) error { return verifyGenerationTakeover(g, cli) }
 	var evidenceChecked bool
 	evidence := &testmanagement.EvidenceService{Project: c.Identity(), Store: store, Runner: cli, Admit: func(ctx context.Context) error {
@@ -70,7 +74,12 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 	return &testManagementPort{service: s, store: store, evidence: evidence}
 }
 func publicGeneration(r testmanagement.Generation) api.TestGeneration {
-	v := api.TestGeneration{ID: r.ID, Revision: r.Revision, State: r.State, Target: r.Target, RunID: r.RunID, Diagnostic: r.Diagnostic, Result: r.Result}
+	v := api.TestGeneration{Plan: r.Command.Plan, Profile: r.Command.Profile, SourceCommit: r.Command.Commit, ID: r.ID, Revision: r.Revision, State: r.State, Target: r.Target, RunID: r.RunID, Diagnostic: r.Diagnostic, Result: r.Result}
+	for _, a := range r.Applications {
+		if a.State == "applied" {
+			v.Applied = true
+		}
+	}
 	if r.Projection != nil {
 		v.StopStatus = r.Projection.StopStatus
 	}
@@ -83,12 +92,20 @@ func generationError(err error) error {
 	return err
 }
 func (p *testManagementPort) GenerateTests(ctx context.Context, in api.TestGenerateRequest) (api.TestGeneration, error) {
-	r, err := p.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: in.RequestID, Plan: in.Plan, Profile: in.Profile})
+	r, err := p.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: in.RequestID, Plan: in.Plan, Profile: in.Profile, Commit: in.Commit})
 	return publicGeneration(r), generationError(err)
 }
 func (p *testManagementPort) TestGeneration(ctx context.Context, id string) (api.TestGeneration, error) {
 	r, err := p.store.Generation(ctx, p.service.Project, id)
-	return publicGeneration(r), generationError(err)
+	v := publicGeneration(r)
+	if err == nil && len(r.Result) > 0 && !r.Cancelled && r.State != "applied" {
+		preview, e := p.service.Preview(ctx, r)
+		v.Review = &api.TestGenerationReview{ReviewDigest: preview.ReviewDigest, Before: preview.Before, After: preview.After, Diagnostic: preview.Diagnostic}
+		if e != nil {
+			v.Review.Diagnostic = e.Error()
+		}
+	}
+	return v, generationError(err)
 }
 func (p *testManagementPort) StopTestGeneration(ctx context.Context, in api.TestStopGenerationRequest) (api.TestGeneration, error) {
 	r, err := p.service.Stop(ctx, in.GenerationID, in.RequestID)
@@ -139,4 +156,9 @@ func (p *testManagementPort) observe(ctx context.Context) error {
 		return err
 	}
 	return p.evidence.Observe(ctx)
+}
+
+func (p *testManagementPort) ApplyTests(ctx context.Context, in api.TestApplyRequest) (api.TestGeneration, error) {
+	r, e := p.service.Apply(ctx, testmodel.ApplyCommand{RequestID: in.RequestID, GenerationID: in.GenerationID, ExpectedRevision: in.ExpectedRevision, ReviewDigest: in.ReviewDigest, AllowEmpty: in.AllowEmpty})
+	return publicGeneration(r), generationError(e)
 }

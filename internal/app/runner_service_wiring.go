@@ -14,6 +14,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 )
 
@@ -44,6 +45,19 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 	git := commandRunner{Dir: config.Repository, Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), ProcessHost: config.ProcessHost}
 	base := taskrunner.BaseResolver{Project: config.Identity(), Store: connection, Git: func(ctx context.Context, args ...string) ([]byte, error) { return git.Output(ctx, config.Git, args...) }}
 	service.ResolveBase = base.Resolve
+	if m := config.runtimeMaintenance; m != nil {
+		service.PrepareExecution = func(ctx context.Context, w taskmodel.FixedWork, candidate bool) (taskmodel.FixedWork, string, error) {
+			return m.prepare(ctx, w, candidate, base.Resolve)
+		}
+		service.ReserveExecution = func(ctx context.Context, w taskmodel.FixedWork, c runnerbridge.Candidate, candidate bool) error {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+			if !candidate && (m.observation.Commit != c.BaseRevision || m.observation.Diagnostic != "") {
+				return errors.New("baseline observation changed before reservation; review again")
+			}
+			return connection.ReserveRunnerCandidate(ctx, w, c, candidate)
+		}
+	}
 	return service
 }
 

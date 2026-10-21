@@ -40,6 +40,12 @@ func (p *runtimeProjectPort) testing(ctx context.Context, method, route string, 
 			return nil, err
 		}
 		return port.GenerateTests(ctx, cmd)
+	case "/tests/apply":
+		var cmd api.TestApplyRequest
+		if err := decodeStrictJSON(in.Payload, &cmd); err != nil {
+			return nil, err
+		}
+		return port.ApplyTests(ctx, cmd)
 	case "/tests/stop-generation":
 		var cmd api.TestStopGenerationRequest
 		if err := decodeStrictJSON(in.Payload, &cmd); err != nil {
