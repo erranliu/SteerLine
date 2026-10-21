@@ -3,6 +3,7 @@
     [string]$WebAddress = '',
     [ValidateSet(1,2)][int]$WebProjects = 1,
     [string]$SteerRunnerExe = '',
+    [switch]$ProjectMaintenance,
     [switch]$Orca,
     [string]$OrcaEnvironment = '台式机64G',
     [string]$OrcaAgent = 'codex',
@@ -189,6 +190,8 @@ try {
         [IO.File]::WriteAllText($executionPath, ($catalog | ConvertTo-Json -Depth 10), $utf8)
     }
     $manifest.web_projects = $WebProjects
+    $manifest.project_maintenance = [bool]$ProjectMaintenance
+    Copy-Item -LiteralPath (Join-Path $repo 'internal/runnerclient/testdata/content-capabilities.json') -Destination (Join-Path $target 'seed/runner-content-capabilities.json')
     Write-Manifest
     $manifest.template_sha256 = $templateHashes
     $manifest.generator_sha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()

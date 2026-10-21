@@ -96,7 +96,8 @@ it("preloads only after connection verification, shares presentation in StrictMo
       ([path]) =>
         path === "/snapshot" ||
         path === "/presentation" ||
-        path === "/tasks?limit=100&cursor=",
+        path === "/tasks?limit=100&cursor=" ||
+        path === "/maintenance?mode=baseline&plan=",
     ),
   ).toBe(true);
   client.clear();

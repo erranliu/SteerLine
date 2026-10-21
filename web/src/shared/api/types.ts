@@ -248,6 +248,7 @@ export interface Envelope {
   payload: Record<string, unknown>;
 }
 export interface Receipt {
+ maintenance?: unknown;
   request_id: string;
   project_id: string;
   instance_id: string;

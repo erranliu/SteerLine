@@ -1,5 +1,7 @@
 # 项目结构与纳管核验（方案）
 
+2026-10-21 共用能力衔接：[统一维护流程](project-maintenance.md)先提取普通文件/精确 blob、路径/UTF-8/限额与测试材料规则，不承担完整 PS-01–PS-07、角色清单或链接核验；项目添加在同一公共基础上补齐本页规则。维护初始化模式复用相同材料检查，不声称纳管结构已通过，不把缺少本清单提前变成 Task 门禁。结构核验器只读传入的精确 commit，不因查结构而 fetch、建库或运行模型。当前完整核验器仍未实现。
+
 状态：拟议规则 `steerline-project/v1`，2026-10-15 形成，尚无产品核验器实现。用于[项目添加流程](project-management.md)，与[Codex 准备提示词](project-onboarding-prompt.md)配套。本文维护仓库结构规则；不是 SteerLine 自身仓库的一次初始化指令，也不要求本轮修改目标项目。
 
 ## 三种资格分别判定
@@ -109,6 +111,7 @@ PS-07 中已有 current-format 数据只允许身份/目标匹配的明确复用
 
 - 复用 [workspace](../../internal/execution/workspace) 的仓库身份解析及 [httpcontract](../../internal/product/httpcontract/contracts.go) 的项目 ID；不另造按名称识别的项目编号。
 - [task_documents.go](../../internal/app/task_documents.go) 已有固定 commit 普通 blob 读取，[task/model/contract.go](../../internal/task/model/contract.go) 有规范路径验证；实施时提取实际共用读取/路径能力，新增本文的角色与大小/正文检查，不能因此构造假 TaskContract。
+- [维护 Plan](../plans/project-maintenance.plan.md)先提供窄公共读取/规则，PS-01–PS-07 的完整建设与验收仍在项目添加批次。未来添加流程 testing 角色需适配 `docs/testing.md`，测试材料定位遵循维护设计；本批维护不要求项目先具备角色清单，不提前收紧其他文档映射。
 - [Preflight](../../internal/app/service_preflight.go) 与 [原生状态前置](../../internal/app/host/native_state_preflight.go)可提供配置/状态边界检查；须分离具有环境探测或初始化职责的部分。查结构不能调用 [OpenNativeTaskProject](../../internal/app/native_project_open.go) 提前建库。
 - 只有最终纳管提交可复用原 `InitializeProject` 及初始手动/暂停状态。添加项目不改变任务的 Spec/Plan/AcceptanceRefs 契约、DAG 准入、执行方案冻结或交付规则。
 

@@ -103,6 +103,14 @@
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -env=live -scenario=testing.management-local-codex",
       "check": "Real generate saves the arrangement; actual pass/fail programs on the original clean Run map through public Runner artifacts to API and browser, with resources settled."
+    },
+    {
+      "id": "runtime.project-maintenance",
+      "name": "项目基线与材料维护",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -scenario=runtime.project-maintenance -env=controlled",
+      "check": "新独立调试包中真实 Go/Web/Edge 验证三入口、远端变化、单项生成审阅应用、首次冻结和跨项目隔离；模拟 Runner，停止与清理完整。"
     }
   ]
 }

@@ -14,6 +14,8 @@ import (
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
+	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
@@ -98,6 +100,10 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	if err != nil {
 		return err
 	}
+	beforeApply, err := os.ReadFile(filepath.Join(d.repo, "docs/spec/task.tests.json"))
+	if err != nil {
+		return err
+	}
 	var generation api.TestGeneration
 	if err = json.Unmarshal(raw, &generation); err != nil {
 		return err
@@ -111,10 +117,21 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 		if generation.State == "rejected" || generation.State == "conflict" || generation.State == "invalid" || generation.State == "needs_review" || generation.State == "failed" || generation.State == "stale" {
 			return false, fmt.Errorf("generation: %+v", generation)
 		}
-		return generation.State == "saved", nil
+		return generation.State == "generated" && generation.StopStatus == "stopped" && generation.Review != nil && generation.Review.ReviewDigest != "", nil
 	})
 	if err != nil {
 		return err
+	}
+	unchanged, err := os.ReadFile(filepath.Join(d.repo, "docs/spec/task.tests.json"))
+	if err != nil || string(beforeApply) != string(unchanged) {
+		return errors.New("generation wrote before explicit application")
+	}
+	if err = controlled.Write(filepath.Join(out, "generation-before-apply.json"), generation); err != nil {
+		return err
+	}
+	generation, err = p.ApplyTests(ctx, api.TestApplyRequest{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), GenerationID: generation.ID, ExpectedRevision: generation.Revision, ReviewDigest: generation.Review.ReviewDigest})
+	if err != nil || generation.State != "applied" {
+		return fmt.Errorf("explicit application: %+v %w", generation, err)
 	}
 	if err = controlled.Write(filepath.Join(out, "generation.json"), generation); err != nil {
 		return err
@@ -169,7 +186,7 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 		}
 		defer p.Close()
 		current, err := p.TestGeneration(ctx, request)
-		if err != nil || current.ID != generation.ID || current.RunID != generation.RunID || current.State != "saved" || string(current.Result) != string(generation.Result) {
+		if err != nil || current.ID != generation.ID || current.RunID != generation.RunID || current.State != "applied" || string(current.Result) != string(generation.Result) {
 			return fmt.Errorf("generation changed across compatible takeover: %+v: %w", current, err)
 		}
 		if err = controlled.Write(filepath.Join(out, "generation-after-takeover.json"), current); err != nil {
@@ -241,6 +258,9 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	if taskID == "" {
 		return errors.New("original testing task absent")
 	}
+	if err = d.tmApproveMaterials(ctx, p.Identity(), "docs/spec/task.plan.md", out); err != nil {
+		return err
+	}
 	resumed, err := tmControl(ctx, p, out, "resume", api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RequestedBy: "testing-driver"})
 	if err != nil {
 		return err
@@ -289,7 +309,11 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 			return false, nil
 		}
 		original = *v.Run
-		finished := original.Status == "blocked" || original.Status == "failed" || original.Status == "stopped"
+		// The fixture can report unknown_external while waiting for this driver.
+		// A committed implementation report with no reply/resume qualification
+		// is also a collection boundary; it does not mean Task success.
+		committedWait := original.Status == "reconciling" && original.Phase == "result_committed" && original.Step == "implement.report" && !original.Controls.CanReply && !original.Controls.CanResume
+		finished := original.Status == "blocked" || original.Status == "failed" || original.Status == "stopped" || committedWait
 		return finished && original.Execution.Workspace != "" && original.Final != nil && original.Final.Verified, nil
 	})
 	if err != nil {
@@ -447,4 +471,49 @@ func tmPoll(ctx context.Context, check func() (bool, error)) error {
 		case <-time.After(time.Second):
 		}
 	}
+}
+
+func (d *debugRelease) tmApproveMaterials(ctx context.Context, identity httpcontract.Identity, plan, out string) error {
+	return AdoptFixtureMaterials(ctx, d.home, identity, plan, out)
+}
+
+// AdoptFixtureMaterials records the external fixture driver's explicit review
+// through the same public command as the browser; production never auto-adopts.
+func AdoptFixtureMaterials(ctx context.Context, home string, identity httpcontract.Identity, plan, out string) error {
+	if e := os.MkdirAll(out, 0700); e != nil {
+		return e
+	}
+	client, e := applicationclient.Open(ctx, home)
+	if e != nil {
+		return e
+	}
+	defer client.Close()
+	command := func(action, target string, payload any) (httpcontract.CommandResponse, error) {
+		body, _ := json.Marshal(payload)
+		in := httpcontract.CommandEnvelope{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: action, TargetID: target, ExpectedVersion: 1, Payload: body}
+		var result httpcontract.CommandResponse
+		e := client.Post(ctx, "/projects/"+identity.ProjectID+"/commands", in, &result)
+		if e == nil && result.Status != "applied" {
+			e = fmt.Errorf("maintenance %s: %+v", action, result)
+		}
+		if e == nil {
+			e = controlled.Write(filepath.Join(out, action+".json"), result)
+		}
+		return result, e
+	}
+	if _, e = command("maintenance_check", identity.ProjectID, map[string]any{}); e != nil {
+		return e
+	}
+	var view struct {
+		Assessment pm.Assessment `json:"assessment"`
+	}
+	if e = client.Get(ctx, "/projects/"+identity.ProjectID+"/maintenance?plan="+plan, &view); e != nil {
+		return e
+	}
+	if len(view.Assessment.Items) != 1 {
+		return errors.New("missing material review")
+	}
+	i := view.Assessment.Items[0]
+	_, e = command("maintenance_review", plan, map[string]any{"plan": plan, "mode": "baseline", "review_digest": i.ReviewDigest})
+	return e
 }

@@ -45,6 +45,8 @@ type Service struct {
 	ResolveBase                                 func(context.Context, taskmodel.FixedWork, bool) (string, error)
 	Admit                                       func(context.Context) error
 	RunnerBuild                                 runnercontract.BuildPin
+	ReserveExecution                            func(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
+	PrepareExecution                            func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error)
 	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork) (json.RawMessage, []runnerclient.Document)
 	mu                                          sync.Mutex
 }
@@ -101,9 +103,6 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if !s.Tasks.CanExecuteType(work.Record.Type) {
 		return runnerbridge.Candidate{}, failure("task_not_ready", "task type cannot execute")
 	}
-	if err := s.Tasks.VerifyContractFiles(ctx, work.Contract); err != nil {
-		return runnerbridge.Candidate{}, err
-	}
 	profileID := input.ProfileID
 	if profileID == "" {
 		profileID = s.DefaultProfile
@@ -118,12 +117,20 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if profile.Input.Workflow.ID == "generate" || profile.Input.Workflow.ID == "conversation" {
 		return runnerbridge.Candidate{}, failure("invalid_profile", "content workflows cannot execute a development task")
 	}
-	base, err := s.ResolveBase(ctx, work, input.Candidate)
+	var base string
+	if s.PrepareExecution != nil {
+		work, base, err = s.PrepareExecution(ctx, work, input.Candidate)
+	} else {
+		base, err = s.ResolveBase(ctx, work, input.Candidate)
+	}
 	if err != nil {
 		return runnerbridge.Candidate{}, err
 	}
 	if !taskmodel.ValidCommit(base) {
 		return runnerbridge.Candidate{}, failure("base_missing_delivery", "fixed code base is invalid")
+	}
+	if err := s.Tasks.VerifyContractFiles(ctx, work.Contract); err != nil {
+		return runnerbridge.Candidate{}, err
 	}
 	var run runnerclient.RunInput
 	// Profile values are frozen per candidate; do not retain shared map/slice aliases.
@@ -171,7 +178,11 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	}
 	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(run.Execution, run.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: id(), Input: raw}}
 	c.TestPlan = testPlan
-	if err := s.Store.ReserveRunnerCandidate(ctx, work, c, input.Candidate); err != nil {
+	reserve := s.Store.ReserveRunnerCandidate
+	if s.ReserveExecution != nil {
+		reserve = s.ReserveExecution
+	}
+	if err := reserve(ctx, work, c, input.Candidate); err != nil {
 		return runnerbridge.Candidate{}, err
 	}
 	return s.Store.Candidate(ctx, s.Project, c.ID)

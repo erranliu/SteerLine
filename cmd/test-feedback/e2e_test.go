@@ -55,7 +55,7 @@ func TestE2EParallelismOnlyAllowsIndependentRuntimeScenes(t *testing.T) {
 		}
 	}
 	flows, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "controlled"})
-	if err != nil || len(flows) != 3 || e2ePackageParallelism(flows) != 2 {
+	if err != nil || len(flows) != 4 || e2ePackageParallelism(flows) != 2 {
 		t.Fatalf("normal flows lost bounded parallelism: %v %v", flows, err)
 	}
 	if _, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "controlled", scenario: "runtime.installed-debug-isolation"}); err == nil {
