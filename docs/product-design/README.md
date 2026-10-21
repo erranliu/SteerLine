@@ -8,6 +8,7 @@
 | [执行配置](execution-profiles.md) | 项目/全局配置、权限冻结、发布责任和需求准入 |
 | [工作区准备](worktree-preparation.md) | 仓库/worktree 身份、准备、锁和失败恢复 |
 | [Worker 流程异常处理与重试](worker-lifecycle.md) | 从领取、初始化、输入发送到交付/清理的节点矩阵；统一异常分类、重试预算、会话变化与恢复边界，区分当前实现和待补能力 |
+| [可靠性交付链路](../architecture/reliable-delivery-chain.md) | 串联命令、原请求、PR 唯一交付、重启、停服、部署和 reset 的证明；区分必要核验与可简化协调，不另建 Worker 规则 |
 | [决策与反馈](decisions.md) | 问题、答案、投递事实、宿主阻断与人工恢复 |
 | [会话事件](conversation-events.md) | 来源、规范事件、完整正文、分页、采集与展示 |
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |

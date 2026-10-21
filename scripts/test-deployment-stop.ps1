@@ -1,77 +1,72 @@
 $ErrorActionPreference = 'Stop'
-# Load exports before installing mocks; lazy module import would replace them.
 Import-Module Microsoft.PowerShell.Utility -ErrorAction Stop
 . (Join-Path $PSScriptRoot 'deployment-stop.ps1')
 . (Join-Path $PSScriptRoot 'deployment-runner.ps1')
 
 $script:calls = [Collections.Generic.List[string]]::new()
-$script:stopCode = 0
-$script:verifyCode = 0
-$script:invalidProof = $false
-$script:verifyCommand = 'verify-stop'
 $script:stagedHash = 'same'
+$script:packageDigest = 'a'*64
+$script:realPackageDigest = ${function:Get-DeploymentPackageDigest}
+function Get-DeploymentPackageDigest([string]$CLI, [string]$RunnerExe) {
+    if ($CLI -eq 'Invoke-StagedFixture') { return $script:packageDigest }
+    & $script:realPackageDigest $CLI $RunnerExe
+}
+$script:mode = 'valid'
+$script:expectedGoal = 'replace'
+$savedHome = $env:STEERLINE_HOME
+$env:STEERLINE_HOME = Join-Path ([IO.Path]::GetTempPath()) 'steerline-script-test-home'
 function Get-FileHash([string]$LiteralPath, [string]$Algorithm) {
     if ($LiteralPath -eq 'staged-runner') { return @{Hash=$script:stagedHash} }
     Microsoft.PowerShell.Utility\Get-FileHash -LiteralPath $LiteralPath -Algorithm $Algorithm
 }
 function Invoke-StagedFixture {
     $script:calls.Add(($args -join '|'))
-    if ($args[0] -eq 'stop') {
-        $global:LASTEXITCODE = $script:stopCode
-        return
+    if ($args.Count -ne 10 -or $args[6] -notmatch '^[0-9a-f]{32}$') { throw 'Missing fresh deployment invocation.' }
+    $expected = 'prepare-deployment|--runner-exe|staged-runner|--goal|'+$script:expectedGoal+'|--invocation-id|'+$args[6]+'|--package-sha256|'+$script:packageDigest+'|--json'
+    if (($args -join '|') -ne $expected) { throw 'Deployment did not delegate the exact selected target to Go.' }
+    $global:LASTEXITCODE = if ($script:mode -eq 'failure') { 1 } else { 0 }
+    if ($global:LASTEXITCODE) { return }
+    if ($script:mode -eq 'malformed') { 'not JSON'; return }
+    $proof = @{contract='steerline-deployment-preparation/v1';home=$env:STEERLINE_HOME;goal=$script:expectedGoal;invocation_id=$args[6];package_sha256=$script:packageDigest;outcome='prepared';verifier_sha256=$script:stagedHash;verified_at='2026-10-21T00:00:00Z';facts=@{native_resources='unverified'}}
+    switch ($script:mode) {
+        'wrong-contract' { $proof.contract='foreign' }
+        'wrong-home' { $proof.home=Join-Path $env:STEERLINE_HOME 'foreign' }
+        'wrong-goal' { $proof.goal='reset' }
+        'wrong-candidate' { $proof.verifier_sha256='foreign' }
+        'wrong-invocation' { $proof.invocation_id='stale' }
+        'wrong-package' { $proof.package_sha256='foreign' }
+        'changing-package' { $script:packageDigest='b'*64 }
+        'blocked' { $proof.outcome='blocked' }
+        'missing-time' { $proof.Remove('verified_at') }
+        'changing-runner' { $script:stagedHash='changed-during-call' }
     }
-    if (($args -join '|') -ne ($script:verifyCommand+'|--runner-exe|staged-runner|--json')) { throw 'Verifier did not use selected staged Runner.' }
-    $global:LASTEXITCODE = $script:verifyCode
-    if ($script:verifyCode -eq 0) {
-        if ($script:invalidProof) { '{}' }
-        elseif ($script:verifyCommand -eq 'verify-restart') {
-            $proof = @{restartable=$true;verifier_sha256=$script:stagedHash;original_host=@{instance_id='original'};verified_at='2026-10-19T00:00:00Z';projects=@();runner_build=@{sha256='same';resource_digest='fixed';state_dir='owned-shared-runner'};runner_service=@{instance_id='original-runner';request_id='original-stop';state_dir='owned-shared-runner';executable_sha256='same';resources_settled=$false;diagnostic='original terminal still active'}}
-            if ($script:stagedHash -eq 'candidate') { $proof.candidate_build=@{sha256='candidate';state_dir='owned-shared-runner'}; $proof.takeover=@{contract='steerrunner-takeover/v1';compatible=$true;candidate_sha256='candidate';state_dir='owned-shared-runner'} }
-            $proof | ConvertTo-Json -Depth 8 -Compress
-        }
-        else { '{"original_host":{"instance_id":"original"},"verified_at":"2026-10-16T00:00:00Z","projects":[],"runner":{"state_dir":"owned-shared-runner","resources_settled":true,"runs":[],"checks":[]}}' }
-    }
+    $proof | ConvertTo-Json -Depth 8 -Compress
 }
-
-$proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner'
-if ($null -ne $proof -or $script:calls.Count -ne 1 -or $script:calls[0] -ne 'stop') { throw 'Clean stop should finish directly.' }
-$script:calls.Clear()
-$script:stopCode = 1
-$proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner'
-if ($script:calls.Count -ne 2 -or $proof.original_host.instance_id -ne 'original') { throw 'Failed receipt was not independently verified.' }
-$script:calls.Clear()
-$script:verifyCode = 1
-$failed = $false
-try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' } catch { $failed = $true }
-if (-not $failed -or $script:calls.Count -ne 2) { throw 'Failed verification did not block deployment.' }
-$script:verifyCode = 0
-$script:invalidProof = $true
-$failed = $false
-try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' } catch { $failed = $true }
-if (-not $failed) { throw 'Incomplete verification evidence did not block deployment.' }
-$script:calls.Clear()
-$script:invalidProof = $false
-$script:verifyCommand = 'verify-restart'
-$proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart
-if (-not $proof.restartable -or $proof.runner_service.resources_settled -ne $false -or $script:calls.Count -ne 2) { throw 'Same-build restart confused retained native resources with settlement.' }
-$script:stagedHash = 'candidate'
-$proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart
-if ($proof.runner_build.sha256 -ne 'same' -or $proof.candidate_build.sha256 -ne 'candidate' -or $proof.runner_service.resources_settled -ne $false) { throw 'Compatible takeover changed original build or native exit facts.' }
-$script:stagedHash = 'unproved'
-$failed = $false
-try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart } catch { $failed = $true }
-if (-not $failed) { throw 'Changed build without takeover evidence was accepted.' }
-$script:stagedHash = 'same'
-$script:invalidProof = $true
-$failed = $false
-try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart } catch { $failed = $true }
-if (-not $failed) { throw 'Incomplete restart proof did not block deployment.' }
-$script:invalidProof = $false
-$script:verifyCode = 1
-$failed = $false
-try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart } catch { $failed = $true }
-if (-not $failed) { throw 'Unknown service shutdown did not block restart deployment.' }
-
+try {
+    foreach ($script:expectedGoal in @('replace','update')) {
+        $script:calls.Clear()
+        $script:mode='valid'
+        $script:stagedHash='candidate'
+        $proof = Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart:($script:expectedGoal -eq 'update')
+        if ($script:calls.Count -ne 1 -or $proof.goal -ne $script:expectedGoal -or $proof.facts.native_resources -ne 'unverified') { throw 'Go result was reinterpreted or lifecycle orchestration was duplicated.' }
+        foreach ($script:mode in @('failure','malformed','wrong-contract','wrong-home','wrong-goal','wrong-candidate','wrong-invocation','wrong-package','changing-package','blocked','missing-time','changing-runner')) {
+            $script:calls.Clear()
+            $script:stagedHash='same'
+            $script:packageDigest='a'*64
+            $failed=$false
+            try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' -AllowRestart:($script:expectedGoal -eq 'update') } catch { $failed=$true }
+            if (-not $failed -or $script:calls.Count -ne 1) { throw "Accepted $script:mode or retried deployment outside Go." }
+        }
+    }
+    $script:calls.Clear()
+    $env:STEERLINE_HOME=''
+    $failed=$false
+    try { Stop-DeploymentApplication 'Invoke-StagedFixture' 'staged-runner' } catch { $failed=$true }
+    if (-not $failed -or $script:calls.Count) { throw 'Missing explicit home reached a mutating command.' }
+} finally {
+    $env:STEERLINE_HOME=$savedHome
+}
+$script:stagedHash='same'
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('steerline-deploy-fixture-'+[Guid]::NewGuid().ToString('N'))
 try {
     New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'bin') -Force | Out-Null
@@ -123,4 +118,4 @@ try {
     if (-not $resolved.StartsWith($expectedPrefix,[StringComparison]::OrdinalIgnoreCase)) { throw 'Test cleanup escaped its temporary fixture root.' }
     Remove-Item -LiteralPath $resolved -Recurse -Force
 }
-Write-Output 'Passed: strict settlement, compatible takeover, pinned Runner reuse, and failed-verification gates.'
+Write-Output 'Passed: one Go preparation call, invocation/package binding, pinned Runner reuse, and takeover preflight gates.'

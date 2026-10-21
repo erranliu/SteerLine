@@ -39,6 +39,48 @@ type CLI interface {
 	Events(context.Context, string, string) (runnerclient.EventPage, error)
 	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
 }
+
+type snapshotCLI interface {
+	SupportsObservation() bool
+	Observe(context.Context, string, string) (runnerclient.RunObservation, error)
+}
+
+func observationOnly(c Candidate) bool {
+	if c.StopRequested {
+		return false
+	}
+	for _, action := range c.Actions {
+		if action.State == "pending" || action.State == "unknown" || action.State == "accepted" && action.ActionStatus != "completed" && action.ActionStatus != "failed" && action.ActionStatus != "rejected" && action.ActionStatus != "cancelled" {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *Bridge) observe(ctx context.Context, cli snapshotCLI, c *Candidate) error {
+	result, err := cli.Observe(ctx, c.RunID, c.Cursor)
+	if err != nil {
+		return err
+	}
+	if result.Contract != runnerclient.RunObservationContract || result.EventPage.Events == nil || result.EventPage.NextCursor == "" {
+		return errors.New("Runner snapshot contract is incomplete")
+	}
+	if err := bind(c, result.Run); err != nil {
+		return err
+	}
+	for _, event := range result.EventPage.Events {
+		if event.EventID == "" || event.RunID != c.RunID || event.Revision == 0 || event.Revision > result.Run.Revision {
+			return errors.New("Runner events exceed its observed projection")
+		}
+	}
+	c.Cursor = result.EventPage.NextCursor
+	if c.InputsRevoked && result.Run.NewInputsAllowed {
+		c.InputsRevoked = false
+		c.Stop = nil
+	}
+	return b.save(ctx, c, result.EventPage.Events...)
+}
+
 type Bridge struct {
 	Store  Store
 	Client func(string) CLI
@@ -158,6 +200,9 @@ func (b *Bridge) Step(ctx context.Context, project, id string) error {
 			}
 		}
 	}
+	if snapshot, ok := cli.(snapshotCLI); ok && snapshot.SupportsObservation() && observationOnly(c) {
+		return b.observe(ctx, snapshot, &c)
+	}
 	inspection, err := cli.Inspect(ctx, "run-id", c.RunID, false)
 	if err != nil {
 		return err
@@ -223,6 +268,9 @@ func (b *Bridge) Step(ctx context.Context, project, id string) error {
 				return err
 			}
 		}
+	}
+	if snapshot, ok := cli.(snapshotCLI); ok && snapshot.SupportsObservation() {
+		return b.observe(ctx, snapshot, &c)
 	}
 	page, err := cli.Events(ctx, c.RunID, c.Cursor)
 	if err != nil {
