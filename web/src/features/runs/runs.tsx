@@ -12,6 +12,7 @@ import { Answer, draftKey } from "./answer";
 import { candidateState, participating } from "./state";
 import { LastMessage } from "./last-message";
 import { RunnerWorkflow } from "./runner-workflow";
+import { DeliverySummary } from "./delivery-summary";
 import { PlanTests } from "./plan-tests";
 import { nativeSessionReason } from "./native-session";
 import { RunTask, taskDependencyReason } from "./run-task";
@@ -234,6 +235,7 @@ function CandidateDetail({
         <span className="branch-name">{run.worktree_branch}</span>
       </div>
       <RunnerWorkflow run={run} />
+      <DeliverySummary run={run} />
       <PlanTests run={run} />
       {run.recovery_required && (
         <p className="notice amber">

@@ -49,7 +49,9 @@ func text(value string) *string {
 	return &value
 }
 func projectCandidate(c runnerbridge.Candidate) *reconstruction.RunView {
+	delivery := deliveryObservation(c)
 	v := &reconstruction.RunView{RunnerStateDir: c.StateDir, RunID: c.ID, TaskID: c.TaskID, DomainTaskID: c.TaskID, ExecutionID: c.RunID, ControlRevision: c.Revision, Claimant: c.Claimant, CandidateNumber: c.Number, CandidateCreatedAt: c.CreatedAt, CandidateTiming: "wall_since_reservation", Participation: c.Participation, SubmissionStatus: c.SubmitState, StopRequested: c.StopRequested, WorkflowStatus: runnerstate.ObservedStatus(c), ExecutionStatus: runnerstate.ObservedStatus(c), BaseCommit: text(c.BaseRevision), Error: text(c.Diagnostic), PR: model.PRState{State: "none"}}
+	v.RunnerDelivery = delivery
 	if c.Withdrawal != nil {
 		v.CandidateStopReason = "manual"
 		v.CandidateStoppedBy = c.Withdrawal.RequestedBy

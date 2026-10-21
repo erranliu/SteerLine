@@ -28,8 +28,9 @@ type Runtime struct {
 
 // RunView projects caller participation and the last public Runner observation.
 type RunView struct {
-	RunnerRevision           uint64 `json:"runner_revision"`
-	InputDigest              string `json:"input_digest"`
+	RunnerDelivery           *runnercontract.DeliveryObservation `json:"runner_delivery,omitempty"`
+	RunnerRevision           uint64                              `json:"runner_revision"`
+	InputDigest              string                              `json:"input_digest"`
 	RunnerWorkflow           *runnercontract.Workflow
 	Audit                    *runnercontract.Audit
 	Materials                []runnercontract.Material
