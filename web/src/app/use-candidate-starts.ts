@@ -160,7 +160,7 @@ export function useCandidateStarts(
             task.status !== "in_progress" ||
             task.version !== entry.first!.expected_version + 1 ||
             page.graph_revision !== entry.graphRevision ||
-            !task.workflow_runs.some(
+            !task.workflow_runs?.some(
               (run) => run.workflow_run_id === entry.first!.request_id,
             )
           ) {
@@ -229,11 +229,10 @@ export function useCandidateStarts(
         !["open", "in_progress"].includes(task.status)
       )
         return;
-      const known = new Set(
-        task.workflow_runs.map((run) => run.workflow_run_id),
-      );
+      const workflowRuns = task.workflow_runs ?? [];
+      const known = new Set(workflowRuns.map((run) => run.workflow_run_id));
       const active = new Set(
-        task.workflow_runs
+        workflowRuns
           .filter((run) => run.participation === "active")
           .map((run) => run.workflow_run_id),
       );
