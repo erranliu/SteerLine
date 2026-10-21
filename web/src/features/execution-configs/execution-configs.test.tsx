@@ -207,7 +207,7 @@ function fixture(
               state: "unsupported",
               diagnostic: "Pi 未注册目录；可手动填写",
               models: [],
-              agents: [{ id: "pi", supported: true, directory: "unverified" }],
+              agents: [{ id: "codex", directory: "registered" }],
               context_unverified: true,
             });
           }

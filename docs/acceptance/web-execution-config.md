@@ -170,10 +170,21 @@ Web 前后端独立负责能力查询、配置生成和文件管理；Go 执行�
 
 ### WEC-A15
 
-待本轮最终复验。Web查询层统一本机/远端Orca RPC与Agent、模型、provider、effort投影；两传输身份/认证独立。远端注册Pi可以查询，原始多级provider/model保留，目录不附带Web执行策略、不虚构注册，目录成功不开放远端Pi/DSH执行。返回中不透出provider凭据；API拒绝凭据输入，Web不增加provider/Agent独立配置发现或Runner接口。
+已实施，定向自动验证通过。Web查询层统一本机/远端Orca RPC与Agent、模型、provider、effort投影；两传输身份/认证独立。远端注册Pi可以查询，原始多级provider/model保留，目录不附带Web执行策略、不虚构注册，目录成功不开放远端Pi/DSH执行。返回中不透出provider凭据；API拒绝凭据输入，Web不增加provider/Agent独立配置发现或Runner接口。
 
 ### WEC-A16
 
-待本轮最终复验。Pi Provider选项只取Orca目录，切换清理模型/effort，保存完整selector而不保存provider/key配置字段；未支持远端Agent显示目录事实和禁用原因，目录/凭据/调用及上下文状态分开。现有CRUD、未知值保留、冲突及生效提示不退化。
+已实施，17项定向前端测试及生产构建通过。Pi Provider选项只取Orca目录，切换清理模型/effort，保存完整selector而不保存provider/key配置字段；未支持远端Agent显示目录事实和禁用原因，目录/凭据/调用及上下文状态分开。现有CRUD、未知值保留、冲突及生效提示不退化。
 
-本轮最小验证及PR信息在完成后登记；测试范围、入口、环境和通过条件见Plan U11及对应测试表。
+本轮已同步主干 `ef6449a7`，生产代码固定在 `530631b8`；其后仅修正组件测试中已移除的目录DTO夹具，并登记结果。以下证据根目录为 `C:/Users/lmas1/AppData/Local/Temp/wec-unified-orca-20261021/`。测试范围、入口、环境和通过条件见Plan U11及对应测试表。
+
+| 验收项/范围 | 实际验证与结果 | 证据 |
+| --- | --- | --- |
+| A15、A01/A03/A04/A10/A11回归 | 本机named pipe/远端配对加密WebSocket受控测试通过；相同Pi完整selector和provider投影、远端按请求Agent查询、注册目录与执行支持分离、凭据不透出/不接收、原生方法白名单及依赖边界成立。固定owner/展示清单/零匹配守卫通过 | `go-final.log`，实际命令包含Plan A15及Codex目录、环境目录、缓存取消和测试登记定向项；没有调用模型业务方法 |
+| A16、A05/A12回归 | 配置组件10、API1、App6，共17项通过；Provider筛选及原样保存、切换字段清理、远端已发现Pi仍禁用，原组件回归通过。TypeScript/Vite生产构建通过 | `ui-final.log`、`build.log`；构建为同一生产源码，夹具修正后重跑17项 |
+| A07回归 | `TestWebExecutionConfigLoadedSnapshot` 通过，执行服务只提供已加载配置摘要，不查询能力 | `snapshot.log` |
+| A08/A13主干集成复验 | `configuration.execution-profiles` 通过，163.11秒；报告记录源码 `530631b844202ad3126e69eb2ec3a42a6d99e18b`、启动时工作树clean。浏览器保存本机Orca三Agent配置、旧宿主门槛、正式stop/start、加载摘要及关闭Web后CLI消费均通过，旧候选摘要不变，cleanup_complete=true | `l3-final/L3/summary.json`、`scenarios/configuration.execution-profiles/scenario.json`、before/after快照、两个browser阶段日志/截图/trace；使用自有controlled SteerlineTest home/repo/端口、离线契约与空Orca userData |
+
+文档本地链接目标和 `git diff --check` 通过。未重复真实目录专项或真实helper/模型/PR业务任务，不把受控远端Pi目录查询计为远端Pi执行验收；M01/M02人工项仍后置。
+
+首轮独立进程包装启动后没有形成可观测测试子进程或scenario报告，未计测试通过，已停止该轮owned等待进程。最终使用同一WMI独立用户上下文，通过临时脚本文件调用既有 `test-runtime-isolation.ps1 -IndependentProcess`，报告与退出码均通过；未修改宿主Job守卫或产品代码以绕过限制。
