@@ -19,20 +19,32 @@ func runApplication(command string, args []string) error {
 	noOpen := flags.Bool("no-open", false, "start services without opening a browser")
 	detached := flags.Bool("detached", false, "verify resident process lifetime before opening resources")
 	jsonOutput := flags.Bool("json", false, "print verified application status as JSON")
-	runnerExe := flags.String("runner-exe", "", "verify-stop/verify-restart: absolute selected Runner executable")
+	runnerExe := flags.String("runner-exe", "", "verification/deployment: absolute selected Runner executable")
+	goal := flags.String("goal", "", "prepare-deployment: update or replace")
+	invocation := flags.String("invocation-id", "", "prepare-deployment: fresh 128-bit invocation identity")
+	packageSHA := flags.String("package-sha256", "", "prepare-deployment: digest of all three staged programs")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
 		return errors.New("unexpected application arguments")
 	}
-	verification := command == "verify-stop" || command == "verify-restart"
-	if *noOpen && command != "start" && command != "restart" || *jsonOutput && command != "status" && !verification || *detached && command != "serve" || *runnerExe != "" && !verification {
-		return errors.New("--no-open is for start/restart; --json is for status/verify-stop/verify-restart; --detached is for serve; --runner-exe is for verification")
+	verification := command == "verify-stop" || command == "verify-restart" || command == "recover-deployment" || command == "prepare-deployment"
+	if *noOpen && command != "start" && command != "restart" || *jsonOutput && command != "status" && !verification || *detached && command != "serve" || *runnerExe != "" && !verification || (*goal != "" || *invocation != "" || *packageSHA != "") && command != "prepare-deployment" {
+		return errors.New("--no-open is for start/restart; --json is for status/verification/deployment; --detached is for serve; --runner-exe is for verification/deployment; --goal is for prepare-deployment")
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	switch command {
+	case "prepare-deployment":
+		result, err := app.PrepareApplicationDeployment(ctx, *runnerExe, app.DeploymentGoal(*goal), *invocation, *packageSHA)
+		return errors.Join(err, json.NewEncoder(os.Stdout).Encode(result))
+	case "recover-deployment":
+		result, err := app.RecoverApplicationForDeployment(ctx, *runnerExe)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(result)
 	case "verify-restart":
 		result, err := app.VerifyApplicationRestartable(ctx, *runnerExe)
 		if err != nil {

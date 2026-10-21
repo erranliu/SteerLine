@@ -48,6 +48,8 @@ type Client struct {
 	BuildVersion          string
 	ResourceDigest        string
 	NativeSessionAdapters []string
+	FullBindingCommands   []string
+	RunObservation        bool
 	Executable            string
 	StateDir              string
 	Timeout               time.Duration
@@ -77,7 +79,11 @@ func (c Client) Call(ctx context.Context, command string, args []string, input *
 }
 
 func (c Client) call(ctx context.Context, command string, args []string, input *Request, startup *runnercontract.ServiceStartInput) (Response, error) {
-	if c.InstanceID != "" && command != "version" && command != "service status" && command != "service stop" && command != "service verify-stopped" {
+	binding, covered, bindingErr := c.fullBinding(command)
+	if bindingErr != nil {
+		return Response{}, &Failure{Code: "invalid_binding", Message: bindingErr.Error(), Exit: 5}
+	}
+	if !covered && c.InstanceID != "" && command != "version" && command != "service status" && command != "service stop" && command != "service verify-stopped" {
 		if err := c.ValidateInstance(ctx); err != nil {
 			return Response{}, err
 		}
@@ -98,13 +104,16 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 		argv = append(argv, "environment-check", command[len("environment-check "):])
 	case "service start", "service status", "service stop", "service verify-stopped", "service verify-takeover":
 		argv = append(argv, "service", command[len("service "):])
-	case "version", "capabilities", "submit", "inspect", "last-message", "open-native-session", "events", "reply", "resume", "stop", "workspace-git":
+	case "version", "capabilities", "submit", "inspect", "observe", "last-message", "open-native-session", "events", "reply", "resume", "stop", "workspace-git":
 		argv = append(argv, command)
 	default:
 		return Response{}, &Failure{Code: "invalid_arguments", Message: "Unsupported Runner CLI command", Exit: 2}
 	}
 	if c.InstanceID != "" && command != "version" && command != "service start" && command != "service status" && command != "service stop" && command != "service verify-stopped" {
 		argv = append(argv, "--expected-instance-id", c.InstanceID)
+	}
+	if covered {
+		argv = append(argv, "--expected-binding", binding)
 	}
 	argv = append(argv, args...)
 	argv = append(argv, "--json", "--protocol", Protocol)
