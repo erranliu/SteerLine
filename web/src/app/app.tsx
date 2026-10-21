@@ -21,6 +21,7 @@ import { Operations } from "./operations";
 import { useApplicationProjects } from "./use-application-projects";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
+import { useCandidateStarts } from "./use-candidate-starts";
 const EnvironmentChecks = lazy(() =>
   import("../features/environment-checks/environment-checks").then(
     (module) => ({ default: module.EnvironmentChecks }),
@@ -66,6 +67,12 @@ export function Workspace({
     reconcile,
     reconciling,
   } = useOriginalRequests(api, !!online);
+  const candidateStarts = useCandidateStarts(
+    api,
+    !!online,
+    requests.data,
+    submit,
+  );
   const [collapsed, setCollapsed] = useState(false);
   const counts = {
     runs: page?.runs?.length ?? 0,
@@ -84,6 +91,7 @@ export function Workspace({
         send,
         submit,
         requests: requests.data,
+        candidateStarts,
         busy,
         refresh,
       }}

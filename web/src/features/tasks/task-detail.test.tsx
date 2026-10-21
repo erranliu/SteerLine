@@ -158,13 +158,13 @@ function setup({
         ? { presentation: { default_profile_id: "default", profiles } }
         : taskPage) as never,
   );
-  const send = vi.fn().mockResolvedValue(true);
+  const start = vi.fn().mockReturnValue("new-candidate");
   const workspace = {
     api,
     identity: api.identity,
     online: true,
     busy: false,
-    send,
+    candidateStarts: { items: [], start },
     snapshot: {
       connection: {
         snapshot: {
@@ -194,28 +194,31 @@ function setup({
       </WorkspaceContext.Provider>
     </QueryClientProvider>,
   );
-  return { send };
+  return { start };
 }
 
 it.each(["default", "other"])(
   "opens the candidate profile picker and submits %s independently of existing candidates",
   async (profile) => {
-    const { send } = setup();
+    const { start } = setup();
     fireEvent.click(
       await screen.findByRole("button", { name: "新增并行候选" }),
     );
     const picker = screen.getByRole("combobox", { name: "本次执行方案" });
     await waitFor(() => expect(picker).toHaveValue("default"));
-    expect(send).not.toHaveBeenCalled();
+    expect(start).not.toHaveBeenCalled();
     fireEvent.change(picker, { target: { value: profile } });
     fireEvent.click(screen.getByRole("button", { name: "确认启动" }));
     await waitFor(() =>
-      expect(send).toHaveBeenCalledWith(
-        "start_candidate",
-        "38",
-        2,
-        { execution_profile_id: profile },
-        { expected_control_revision: 3, expected_graph_revision: 7 },
+      expect(start).toHaveBeenCalledWith(
+        expect.objectContaining({
+          task_id: "38",
+          version: 2,
+          status: "in_progress",
+        }),
+        expect.objectContaining({ id: profile }),
+        7,
+        3,
       ),
     );
     await waitFor(() =>
@@ -225,7 +228,7 @@ it.each(["default", "other"])(
 );
 
 it("lets an unavailable default be replaced before confirming a candidate", async () => {
-  const { send } = setup({ unavailableDefault: true });
+  const { start } = setup({ unavailableDefault: true });
   fireEvent.click(await screen.findByRole("button", { name: "新增并行候选" }));
   await screen.findByText("默认方案不可用");
   expect(screen.getByRole("button", { name: "确认启动" })).toBeDisabled();
@@ -235,28 +238,31 @@ it("lets an unavailable default be replaced before confirming a candidate", asyn
   expect(screen.getByRole("button", { name: "确认启动" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "确认启动" }));
   await waitFor(() =>
-    expect(send).toHaveBeenCalledWith(
-      "start_candidate",
-      "38",
-      2,
-      { execution_profile_id: "other" },
-      { expected_control_revision: 3, expected_graph_revision: 7 },
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task_id: "38",
+        version: 2,
+        status: "in_progress",
+      }),
+      expect.objectContaining({ id: "other" }),
+      7,
+      3,
     ),
   );
 });
 
 it("keeps the five participating candidate limit", async () => {
-  const { send } = setup({ count: 5 });
+  const { start } = setup({ count: 5 });
   const button = await screen.findByRole("button", { name: "新增并行候选" });
   expect(button).toBeDisabled();
   expect(button).toHaveAttribute("title", "已达到 5 个参与候选");
   fireEvent.click(button);
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
-  expect(send).not.toHaveBeenCalled();
+  expect(start).not.toHaveBeenCalled();
 });
 
 it("keeps first startup using the selected profile", async () => {
-  const { send } = setup({ firstStart: true });
+  const { start } = setup({ firstStart: true });
   fireEvent.click(await screen.findByRole("button", { name: "手动启动" }));
   await waitFor(() =>
     expect(screen.getByRole("combobox")).toHaveValue("default"),
@@ -266,12 +272,11 @@ it("keeps first startup using the selected profile", async () => {
   });
   fireEvent.click(screen.getByRole("button", { name: "确认启动" }));
   await waitFor(() =>
-    expect(send).toHaveBeenCalledWith(
-      "start_task",
-      "38",
-      2,
-      { execution_profile_id: "other" },
-      { expected_control_revision: 3 },
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({ task_id: "38", version: 2, status: "open" }),
+      expect.objectContaining({ id: "other" }),
+      7,
+      3,
     ),
   );
 });

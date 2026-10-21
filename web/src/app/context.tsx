@@ -1,5 +1,6 @@
 import { createContext, useContext } from "react";
 import type { Api } from "../shared/api/client";
+import type { CandidateStarts } from "./use-candidate-starts";
 import type {
   Snapshot,
   Identity,
@@ -13,6 +14,7 @@ export interface Workspace {
   online: boolean;
   snapshot?: Snapshot;
   requests?: StoredRequest[];
+  candidateStarts?: CandidateStarts;
   submit: (envelope: Envelope) => Promise<Receipt | undefined>;
   send: (
     action: string,

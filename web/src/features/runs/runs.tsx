@@ -278,7 +278,7 @@ function CandidateDetail({
   );
 }
 export function Runs() {
-  const { api, online, snapshot, requests } = useWorkspace();
+  const { api, online, snapshot, requests, candidateStarts } = useWorkspace();
   const [pending, setPending] = useState<{
     envelope: Envelope;
     epoch: number;
@@ -289,8 +289,16 @@ export function Runs() {
   const taskID = params.get("task") ?? "";
   const runID = params.get("run") ?? "";
   const [filter, setFilter] = useState("all");
+  const [showStopped, setShowStopped] = useState(false);
   const page = snapshot?.connection.snapshot.page;
   const runs = page?.runs ?? [];
+  const starts =
+    candidateStarts?.items.filter(
+      (entry) => !runs.some((run) => run.run_id === entry.id),
+    ) ?? [];
+  const visibleRuns = runs.filter(
+    (run) => showStopped || run.participation !== "abandoned",
+  );
   const tasks = useQuery({
     ...projectQueries(api).tasks(),
     enabled: online,
@@ -302,20 +310,35 @@ export function Runs() {
     runs[0]?.task_id ||
     tasks.data?.tasks[0]?.task_id ||
     "";
-  const candidates = runs.filter(
+  const taskCandidates = runs.filter(
     (r) => (r.domain_task_id || r.task_id) === selectedTask,
   );
+  const candidates = visibleRuns.filter(
+    (r) => (r.domain_task_id || r.task_id) === selectedTask,
+  );
+  const pendingCandidates = starts.filter(
+    (entry) => entry.taskID === selectedTask,
+  );
+  const selectedStart = pendingCandidates.find((entry) => entry.id === runID);
   const selectedDependencyReason = taskDependencyReason(
     tasks.data?.tasks.find((task) => task.task_id === selectedTask),
   );
-  const selected = runID
-    ? candidates.find((r) => r.run_id === runID)
-    : candidates[0];
+  const requested = runID
+    ? taskCandidates.find((r) => r.run_id === runID)
+    : taskCandidates[0];
+  // Keep the current stop target until its original receipt is reconciled.
+  const awaitingStop =
+    pending?.envelope.target_id === requested?.run_id &&
+    pending?.epoch === selectionEpoch.current;
+  const selected =
+    !showStopped && requested?.participation === "abandoned" && !awaitingStop
+      ? candidates[0]
+      : requested;
   const visible =
     tasks.data?.tasks.filter(
       (t) =>
         filter === "all" ||
-        runs.some(
+        visibleRuns.some(
           (r) =>
             (r.domain_task_id || r.task_id) === t.task_id &&
             candidateState(r) === filter,
@@ -346,7 +369,7 @@ export function Runs() {
       return;
     if (
       selectionEpoch.current !== pending.epoch ||
-      selected?.run_id !== stopped.run_id
+      requested?.run_id !== stopped.run_id
     ) {
       setPending(undefined);
       return;
@@ -366,7 +389,7 @@ export function Runs() {
       });
       setPending(undefined);
     }
-  }, [pending, requests, runs, selected?.run_id, setParams]);
+  }, [pending, requests, runs, requested?.run_id, setParams]);
   const stopPending = (candidate: Candidate) =>
     !!(
       pending?.envelope.target_id === candidate.run_id ||
@@ -408,7 +431,29 @@ export function Runs() {
             </Button>
           ))}
         </div>
-        <span className="muted">{runs.length} 个候选</span>
+        <div className="actions">
+          <label className="candidate-visibility">
+            <input
+              type="checkbox"
+              checked={showStopped}
+              onChange={(event) => {
+                setShowStopped(event.target.checked);
+                if (
+                  !event.target.checked &&
+                  selected?.participation === "abandoned"
+                ) {
+                  const next = taskCandidates.find(
+                    (run) => run.participation !== "abandoned",
+                  );
+                  if (next) chooseRun(next.run_id);
+                  else chooseTask(selectedTask);
+                }
+              }}
+            />
+            显示已停止参与候选
+          </label>
+          <span className="muted">{visibleRuns.length + starts.length} 个候选</span>
+        </div>
       </div>
       <div className="runs-layout">
         <aside className="run-task-list">
@@ -423,9 +468,10 @@ export function Runs() {
               selected={t.task_id === selectedTask}
               onSelect={() => chooseTask(t.task_id)}
               candidateCount={
-                runs.filter(
+                visibleRuns.filter(
                   (r) => (r.domain_task_id || r.task_id) === t.task_id,
-                ).length
+                ).length +
+                starts.filter((entry) => entry.taskID === t.task_id).length
               }
             />
           ))}
@@ -452,8 +498,45 @@ export function Runs() {
                 <Status value={candidateState(r)} />
               </button>
             ))}
+            {pendingCandidates.map((entry) => (
+              <button
+                key={entry.id}
+                onClick={() => chooseRun(entry.id)}
+                className={
+                  "candidate-card " + (runID === entry.id ? "active" : "")
+                }
+              >
+                <span>新候选</span>
+                <strong>{entry.profile}</strong>
+                <span className="muted">{entry.status}</span>
+              </button>
+            ))}
           </div>
-          {selected ? (
+          {selectedStart ? (
+            <div
+              key={selectedStart.id}
+              className="detail-section"
+              role="status"
+            >
+              <div className="eyebrow">新候选 · {selectedStart.profile}</div>
+              <h2>
+                {selectedStart.title ||
+                  tasks.data?.tasks.find(
+                    (task) => task.task_id === selectedTask,
+                  )?.title ||
+                  selectedTask}
+              </h2>
+              <p>{selectedStart.status}</p>
+              {selectedStart.diagnostic && (
+                <p className="notice amber">{selectedStart.diagnostic}</p>
+              )}
+              <p className="muted">
+                {selectedStart.participating
+                  ? "执行信息将在服务器确认后显示。"
+                  : "请核对原因后重新选择方案。"}
+              </p>
+            </div>
+          ) : selected ? (
             <CandidateDetail
               key={selected.run_id}
               run={selected}
@@ -461,9 +544,10 @@ export function Runs() {
                 <StopCandidate
                   run={selected}
                   pending={stopPending(selected)}
-                  onRequest={(envelope) =>
-                    setPending({ envelope, epoch: selectionEpoch.current })
-                  }
+                  onRequest={(envelope) => {
+                    setParams({ task: selectedTask, run: envelope.target_id });
+                    setPending({ envelope, epoch: selectionEpoch.current });
+                  }}
                   onResult={(envelope, receipt, unsent) =>
                     setPending((current) =>
                       current?.envelope.request_id !== envelope.request_id
@@ -478,9 +562,13 @@ export function Runs() {
             />
           ) : (
             <div className="empty">
-              {selectedDependencyReason
-                ? `${selectedDependencyReason}，解除依赖阻塞后可启动。`
-                : "此任务尚无执行候选，请从任务详情手动启动。"}
+              {!showStopped &&
+              taskCandidates.length > 0 &&
+              candidates.length === 0
+                ? "此任务的候选均已停止参与，勾选“显示已停止参与候选”可查看历史。"
+                : selectedDependencyReason
+                  ? `${selectedDependencyReason}，解除依赖阻塞后可启动。`
+                  : "此任务尚无执行候选，请从任务详情手动启动。"}
             </div>
           )}
         </section>
