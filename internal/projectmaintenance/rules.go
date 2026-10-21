@@ -14,15 +14,17 @@ import (
 
 type Reader func(string) ([]byte, error)
 type Item struct {
-	Plan             string   `json:"plan"`
-	Target           string   `json:"target"`
-	Status           string   `json:"status"`
-	Diagnostic       string   `json:"diagnostic,omitempty"`
-	Inputs           string   `json:"inputs,omitempty"`
-	Output           string   `json:"output,omitempty"`
-	ReviewDigest     string   `json:"review_digest,omitempty"`
-	ApprovalRevision uint64   `json:"approval_revision"`
-	Tests            []string `json:"tests"`
+	// Definitions are the selected values from this exact assessment, reused at first reservation.
+	Definitions      []testmanagement.Definition `json:"-"`
+	Plan             string                      `json:"plan"`
+	Target           string                      `json:"target"`
+	Status           string                      `json:"status"`
+	Diagnostic       string                      `json:"diagnostic,omitempty"`
+	Inputs           string                      `json:"inputs,omitempty"`
+	Output           string                      `json:"output,omitempty"`
+	ReviewDigest     string                      `json:"review_digest,omitempty"`
+	ApprovalRevision uint64                      `json:"approval_revision"`
+	Tests            []string                    `json:"tests"`
 }
 type Assessment struct {
 	Mode   string `json:"mode"`
@@ -98,6 +100,7 @@ func Evaluate(mode, commit string, plans []string, r Reader, approvals map[strin
 			a.Items = append(a.Items, i)
 			continue
 		}
+		i.Definitions = definitions
 		for _, d := range definitions {
 			i.Tests = append(i.Tests, d.ID)
 		}

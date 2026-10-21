@@ -2,12 +2,15 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	rules "github.com/erranliu/SteerLine/internal/projectmaintenance"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/testmanagement"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -158,6 +161,13 @@ func TestPMFreezeRequiresApprovalAndResolvesLatestContent(t *testing.T) {
 	if b != next || got.Contract.PlanRef.Commit != next || got.Contract.SpecRef.Commit != next || got.ConfirmedDigest != c.Digest {
 		t.Fatal("mixed commit freeze", got, b)
 	}
+	// After the gate, even an unavailable Git adapter must not cause a second
+	// read to replace the validated snapshot with a missing/invalid one.
+	snapshot, refs := (Config{}).prepareTestPlan(context.Background(), got)
+	var frozen testmanagement.Snapshot
+	if err := json.Unmarshal(snapshot, &frozen); err != nil || frozen.Status != "ready" || frozen.Commit != next || len(frozen.Definitions) != 1 || frozen.Definitions[0].ID != "one" || len(refs) != 4 {
+		t.Fatal("execution did not reuse the assessed test snapshot", string(snapshot), err)
+	}
 	if e = os.WriteFile(filepath.Join(work, "task.plan.md"), []byte("# New test requirements\n"), 0600); e != nil {
 		t.Fatal(e)
 	}
@@ -192,5 +202,58 @@ func TestPMRemoteSharesInflightObservation(t *testing.T) {
 		if e := <-result; e != nil {
 			t.Fatal(e)
 		}
+	}
+}
+
+func (s *pmStore) MaintenanceReceipt(_ context.Context, project, id string) (json.RawMessage, error) {
+	if s.approval.RequestID == id && s.approval.Project == project {
+		return json.Marshal(s.approval)
+	}
+	return nil, storageports.ErrNotFound
+}
+func (s *pmStore) SaveMaterialApproval(_ context.Context, a pm.Approval, expected uint64) (pm.Approval, error) {
+	if s.approval.Revision != expected {
+		return a, fmt.Errorf("stale approval")
+	}
+	a.Revision = expected + 1
+	s.approval = a
+	return a, nil
+}
+func (s *pmStore) Generations(context.Context, string) ([]testmanagement.Generation, error) {
+	return nil, nil
+}
+
+func TestPMReviewLocalWithoutRemoteObservation(t *testing.T) {
+	root := t.TempDir()
+	pmGit(t, root, "init", "--initial-branch=main")
+	files := map[string]string{"task.plan.md": "# Plan\nNo automated tests are needed.\n", "task.tests.json": `{"tests":[]}`, "docs/testing.md": "# Testing\nRules\n", "docs/testing/test-list.json": `{"tests":[]}`}
+	for path, body := range files {
+		name := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(name, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pmGit(t, root, "add", ".")
+	pmGit(t, root, "-c", "user.name=PM test", "-c", "user.email=pm@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "draft material")
+	m := newProjectMaintenance(Config{Repository: root, Git: backend.Command{Executable: "git"}, ProcessHost: resourceprocess.New(time.Minute)}, &pmStore{})
+	ctx := context.Background()
+	value, err := m.view(ctx, "local", "task.plan.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(value)
+	var view struct {
+		Assessment rules.Assessment `json:"assessment"`
+	}
+	if err := json.Unmarshal(raw, &view); err != nil || len(view.Assessment.Items) != 1 || view.Assessment.Items[0].Status != "needs_review" {
+		t.Fatal("local check depended on remote fetch", string(raw), err)
+	}
+	item := view.Assessment.Items[0]
+	a, err := m.approve(ctx, materialReview{RequestID: strings.Repeat("a", 32), Plan: item.Plan, Mode: "local", ReviewDigest: item.ReviewDigest}, 1)
+	if err != nil || !strings.HasPrefix(a.Commit, "draft:") || m.current().Commit != "" {
+		t.Fatal("local adoption required or invented remote readiness", a, err)
 	}
 }

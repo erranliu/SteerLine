@@ -172,3 +172,44 @@ func TestPMGenerationUnknownBlocksReplacement(t *testing.T) {
 		t.Fatal("explicit new attempt refused after settlement", e)
 	}
 }
+
+func TestPMGenerationAppliedResultStillObservesSettlement(t *testing.T) {
+	s, m, f, in := readyApply(t)
+	ctx := context.Background()
+	f.run.StopStatus = ""
+	f.run.Revision++
+	if err := s.Observe(ctx); err != nil {
+		t.Fatal(err)
+	}
+	r, _ := m.Generation(ctx, s.Project, in.GenerationID)
+	in.ExpectedRevision = r.Revision
+	r, err := s.Apply(ctx, in)
+	if err != nil || r.State != "applied" {
+		t.Fatal("verified output could not be applied before settlement", r, err)
+	}
+	next := r.Command
+	next.RequestID = strings.Repeat("e", 32)
+	if _, err := s.Generate(ctx, next); err == nil {
+		t.Fatal("unsettled original was replaced")
+	}
+	target := filepath.Join(s.Repository, r.Target)
+	if err := os.WriteFile(target, []byte("user changed applied file"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f.run.StopStatus = "stopped"
+	f.run.Revision++
+	if err := s.Observe(ctx); err != nil {
+		t.Fatal(err)
+	}
+	settled, _ := m.Generation(ctx, s.Project, r.ID)
+	if settled.State != "applied" || settled.Projection.StopStatus != "stopped" || string(settled.Result) != string(r.Result) {
+		t.Fatal("applied file suppressed settlement or lost its original result", settled)
+	}
+	body, _ := os.ReadFile(target)
+	if string(body) != "user changed applied file" || f.submits != 1 || f.stops != 0 {
+		t.Fatal("settlement observation performed a new operation")
+	}
+	if _, err := s.Generate(ctx, next); err != nil || f.submits != 2 {
+		t.Fatal("explicit new attempt refused after observed settlement", err)
+	}
+}

@@ -73,7 +73,7 @@ export function ProjectMaintenance() {
   const [generation, setGeneration] = useState(""),
     [task, setTask] = useState(""),
     [taskReview, setTaskReview] = useState<TaskReview>(),
-    [allowEmpty, setAllowEmpty] = useState(false);
+    [emptyReview, setEmptyReview] = useState("");
   const base = ["maintenance", identity.project_id, identity.instance_id];
   const view = useQuery({
     queryKey: [...base, mode, plan],
@@ -104,13 +104,16 @@ export function ProjectMaintenance() {
       open &&
       !!generation &&
       q.state.data?.stop_status !== "stopped" &&
-      !["applied", "rejected"].includes(q.state.data?.state || "")
+      q.state.data?.state !== "rejected"
         ? 5000
         : false,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     retry: false,
   });
+  const allowEmpty =
+    !!gen.data?.review?.review_digest &&
+    emptyReview === gen.data.review.review_digest;
   async function action(
     action: string,
     target: string,
@@ -192,8 +195,8 @@ export function ProjectMaintenance() {
           </p>
           {view.data?.local_commit && view.data.local_commit !== o?.commit && (
             <p>
-              本地与远端基线不同 · 本地 HEAD {view.data.local_commit}，请使用 Git
-              核对并更新。
+              本地与远端基线不同 · 本地 HEAD {view.data.local_commit}，请使用
+              Git 核对并更新。
             </p>
           )}
           <p>
@@ -361,12 +364,13 @@ export function ProjectMaintenance() {
                 应用目标 <code>{gen.data.target}</code>
               </p>
               {gen.data.diagnostic && <p>{gen.data.diagnostic}</p>}
+              {gen.data.stop_status !== "stopped" &&
+                gen.data.state !== "rejected" && (
+                  <p>原生成资源尚未核实停止；资源结算另行核对。</p>
+                )}
               {gen.data.review && (
                 <>
                   <p>{gen.data.review.diagnostic}</p>
-                  {gen.data.stop_status !== "stopped" && (
-                    <p>原生成资源尚未核实停止；资源结算另行核对。</p>
-                  )}
                   <h4>当前文件</h4>
                   <pre>{gen.data.review.before}</pre>
                   <h4>拟应用内容</h4>
@@ -375,7 +379,13 @@ export function ProjectMaintenance() {
                     <input
                       type="checkbox"
                       checked={allowEmpty}
-                      onChange={(e) => setAllowEmpty(e.target.checked)}
+                      onChange={(e) =>
+                        setEmptyReview(
+                          e.target.checked
+                            ? gen.data?.review?.review_digest || ""
+                            : "",
+                        )
+                      }
                     />
                     已确认空安排，Plan 已说明无需自动测试
                   </label>
@@ -403,7 +413,9 @@ export function ProjectMaintenance() {
                 disabled={
                   busy ||
                   !online ||
-                  ["cancelled", "applied"].includes(gen.data.state)
+                  gen.data.state === "cancelled" ||
+                  (gen.data.state === "applied" &&
+                    gen.data.stop_status === "stopped")
                 }
                 onClick={() =>
                   void action("maintenance_stop_generation", gen.data!.id, {

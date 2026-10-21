@@ -139,3 +139,33 @@ PM-M01 仍待用户体验签收，不把自动浏览器截图当作人工验收�
 `pm-evidence-20261021-pr-main2/summary.json`：6 包 80 项中 79 通过，唯一失败为既有 HTTP 消费者依赖白名单未列 `projectconnection` 已使用的 `processwindow`。检查该包只设置本机窗口启动标志，不包含数据库、Runner 或业务 owner，故在原边界测试中仅按精确包名允许该通用工具，保留其余后端/SQLite 禁令。`pm-evidence-20261021-pr-consumer-boundary/summary.json` 定向补验通过（13.113 秒）；前轮失败单独保留。维护/生成/恢复、Runner 绑定/观察与 quick-owner 选择的其余 79 项均已在最新主干通过，未重复无变化的 Web 或 live。
 
 本轮文档检查为 518 份 Markdown、3279 条本地链接、0 错误，差异空白检查通过。PR：[erranliu/SteerLine#373](https://github.com/erranliu/SteerLine/pull/373)。
+
+
+## 2026-10-21 PR #373 审查与直接修复
+
+审查基线为 PR head `ca69f7d88cc232dbc97185196d9b9057cddedae8`。按三入口复用、生成授权/原请求与首次/后续冻结逐项检查，确认并修复以下 4 项；不增加流程、持久状态、schema 或新 Runner 能力。
+
+| 问题 | 修正及验收映射 |
+| --- | --- |
+| 文件显式应用后直接跳过 Generation 观察，即使原 Run 尚未停止；会保留旧资源状态并永久挡住后续显式生成，UI 同时隐藏/禁止原资源停止 | applied 保留文件/原输出事实，继续只读观察原 Run 至 stopped；界面持续展示/查询并允许显式停止，核实后新请求可生成。PM-A05/A06 |
+| 首次材料 gate 已通过，但 prepareTestPlan 再独立读 Git；第二次读取失败仍能返回 missing/invalid 快照并进入原预留 | 共用规则返回同次完整选中定义，首预留直接据此构造同 commit 快照，首候选与后续候选共用消费路径，消除 gate 后二次解析/降级。PM-A02/A07 |
+| 局部草稿检查与人工采用也要求已有成功远端观察，远端暂不可用时错误阻断本地核对 | local 独立读取本地快照/同一规则并保存 draft 来源；不虚构远端就绪，首次启动仍 fresh fetch。PM-A02/A03 |
+| 空安排勾选保存在面板级布尔值，切换原生成后会沿用另一结果的确认 | 仅当保存的确认等于当前 review_digest 时才允许 allow_empty，原生成或条件变化不转移确认。PM-A05/A08 |
+
+### 本轮定向证据
+
+源码为上述 PR head 的 dirty 修复工作区。独立临时 Git/内存或 SQLite fixture 均未接触安装环境；真实产品闭环仅使用本轮唯一生成器新包。
+
+- 修复前反例：`C:\SteerlineDebug\pm-review-20261021-before/summary.json`，3 项均失败，分别为 `TestPMGenerationAppliedResultStillObservesSettlement`、`TestPMFreezeRequiresApprovalAndResolvesLatestContent`、`TestPMReviewLocalWithoutRemoteObservation`。不是零匹配或环境跳过。
+- 修复后：`C:\SteerlineDebug\pm-review-20261021-after/summary.json`，6 包 71 项通过、0 跳过（74.010 秒）；实际选择/原源码/逐项结果在 JSONL。覆盖三个反例、原生成 unknown/取消/应用恢复、三入口纯规则、SQLite approval CAS/原候选、base/Delivery 与 quick owner 选择。
+- 快照反例在 gate 后使用不可用 Git 配置消费准备结果，仍得到原同 commit、完整所选定义及 4 个原引用，不把后续读取错误冻结为 invalid。资源反例在原 Run 未停止时应用，修改本地文件后仅观察原 stopped，文件不被重写、原输出及 applied 保持、零新模型/停止调用；之后显式新请求可用。
+- 前端：`npm --prefix web test -- project-maintenance.test.tsx plan-tests.test.tsx`，2 文件 8 项通过；新增不同生成的空安排确认隔离、已应用但未结算的原资源可见且可显式停止；TypeScript/Vite 构建通过。新增组件用例初轮持有已卸载的旧 checkbox 节点导致断言失败，改为读取当前节点后通过，不将该失败算作产品通过。
+
+单独复跑受控 L3 `runtime.project-maintenance` 已通过，组合及退出证据如下。本轮不重复真实模型；原 live 的来源与历史结果仍按前文 commit/构建归属，不能冒充本次修复的 live 证据。PM-M01 仍待人工体验。
+
+
+本轮受控闭环实际命令：`powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/test-runtime-isolation.ps1 -Level L3 -Suite runtime -Scenario runtime.project-maintenance -OutDir C:\SteerlineDebug\pm-review-20261021-flow`，退出码 0。正式报告 `C:\SteerlineDebug\pm-review-20261021-flow/L3/summary.json` 的 passed=true；包 `C:\SteerlineDebug\dev-20261021-112125-ca69f7d8-dirty` 显式 simulate，真实 Go/Web/Edge、双项目和独立 bare remote，全程无模型调用。
+
+包内 `evidence/project-maintenance/proof.json` 的 passed/stopped/resources_settled 均 true；浏览器 facts/trace/截图证明三入口共用调用、生成待审阅/单文件应用、Task 材料确认、首候选同 commit 测试快照、材料改变后的后续候选仍固定原版本及另一项目不串状态。`reset.json` 再次核对两项目各 tasks=2、task_contracts=2、task_execution_snapshots=0，保留定义与 Git 事实。公开 verify-stop 已通过；未接触安装/保留运行目录，未创建真实 PR 或真实模型 Run。本轮新增异常边界由前述反例/组件测试证明，不用受控 Runner 冒充原生故障验证。
+
+本轮最终文档检查 518 份 Markdown、3279 条本地链接、0 错误；`git diff --check` 通过。已同步 Plan 的测试映射、统一维护设计与 W01/W18 差异，四项修复没有增加独立运行时、通用作业/恢复机制或新持久字段。PR 更新后的 commit 以 Git head 为准；PM-M01 仍后置。

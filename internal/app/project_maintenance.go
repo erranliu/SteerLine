@@ -329,6 +329,12 @@ func (m *projectMaintenance) prepare(ctx context.Context, w taskmodel.FixedWork,
 	w.MaterialInputs = item.Inputs
 	w.MaterialOutput = item.Output
 	w.MaterialRevision = item.ApprovalRevision
+	// Freeze the definitions already validated by the common rule pipeline.
+	// A second Git read must not turn a ready assessment into an invalid snapshot.
+	w.FrozenTestPlan, e = json.Marshal(testmanagement.Snapshot{Status: "ready", PlanPath: item.Plan, Commit: o.Commit, Definitions: item.Definitions, Digest: testmanagement.Digest(item.Definitions)})
+	if e != nil {
+		return w, "", e
+	}
 	// The same fresh fetched target must contain all predecessor deliveries.
 	b, e := base(ctx, w, false)
 	if e != nil {
@@ -366,7 +372,7 @@ func (m *projectMaintenance) approve(ctx context.Context, in materialReview, exp
 		return pmm.Approval{}, e
 	}
 	o := m.current()
-	if o.Commit == "" {
+	if in.Mode != "local" && o.Commit == "" {
 		return pmm.Approval{}, errors.New("check remote first")
 	}
 	if in.Mode != "local" {
@@ -466,7 +472,7 @@ func (m *projectMaintenance) confirm(ctx context.Context, in taskReview) (taskmo
 func (m *projectMaintenance) view(ctx context.Context, mode, plan string) (any, error) {
 	ctx = materialReads(ctx)
 	o := m.current()
-	if o.Commit == "" {
+	if mode != "local" && o.Commit == "" {
 		return struct {
 			Observation pmm.Observation `json:"observation"`
 			Assessment  pm.Assessment   `json:"assessment"`

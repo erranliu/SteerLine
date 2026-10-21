@@ -35,7 +35,7 @@ const view = {
     { id: "b".repeat(32), plan: "docs/task.plan.md", state: "generated" },
   ],
 };
-function setup(online = true, settled = true) {
+function setup(online = true, settled = true, applied = false) {
   const api = new Api(identity, "csrf", "home");
   const get = vi.spyOn(api, "get").mockImplementation(async (route) =>
     route.startsWith("/maintenance")
@@ -50,15 +50,21 @@ function setup(online = true, settled = true) {
         : route.startsWith("/tasks")
           ? tasks
           : {
-              id: "b".repeat(32),
+              id: route.split("/").pop() || "",
               revision: 3,
-              state: "generated",
+              state: applied ? "applied" : "generated",
+              applied,
               stop_status: settled ? "stopped" : "active",
-              review: {
-                review_digest: "c".repeat(64),
-                before: "old-file",
-                after: "proposed-file",
-              },
+              review: applied
+                ? undefined
+                : {
+                    review_digest: (route.endsWith("b".repeat(32))
+                      ? "c"
+                      : "d"
+                    ).repeat(64),
+                    before: "old-file",
+                    after: "proposed-file",
+                  },
             },
   );
   const submit = vi.spyOn(api, "submit").mockImplementation(async (e) => ({
@@ -81,7 +87,9 @@ it("PM keeps generation and file application explicit and binds review condition
   const { submit } = setup();
   await screen.findByText(/项目维护/);
   fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  expect(await screen.findByText(/本地与远端基线不同 · 本地 HEAD/)).toBeVisible();
+  expect(
+    await screen.findByText(/本地与远端基线不同 · 本地 HEAD/),
+  ).toBeVisible();
   fireEvent.click(await screen.findByRole("button", { name: "选择此 Plan" }));
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "生成测试安排" })).toBeEnabled(),
@@ -134,4 +142,56 @@ it("PM separates verified output application from resource settlement", async ()
     ).toBeEnabled(),
   );
   expect(submit).not.toHaveBeenCalled();
+});
+
+it("PM empty arrangement confirmation belongs to the reviewed generation", async () => {
+  const { submit } = setup();
+  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
+  await screen.findByRole("option", { name: /bbbbbbbb/ });
+  fireEvent.change(screen.getByRole("combobox", { name: "已有生成记录" }), {
+    target: { value: "b".repeat(32) },
+  });
+  const confirmation = await screen.findByRole("checkbox", {
+    name: /已确认空安排/,
+  });
+  fireEvent.click(confirmation);
+  expect(confirmation).toBeChecked();
+  fireEvent.change(screen.getByRole("textbox", { name: "原生成请求" }), {
+    target: { value: "a".repeat(32) },
+  });
+  await waitFor(() =>
+    expect(
+      screen.getByRole("checkbox", { name: /已确认空安排/ }),
+    ).not.toBeChecked(),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "应用已审阅内容" }));
+  await waitFor(() =>
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        target_id: "a".repeat(32),
+        payload: expect.objectContaining({ allow_empty: false }),
+      }),
+    ),
+  );
+});
+
+it("PM applied output keeps unsettled resource visible and stoppable", async () => {
+  const { submit } = setup(true, false, true);
+  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
+  await screen.findByRole("option", { name: /bbbbbbbb/ });
+  fireEvent.change(screen.getByRole("combobox", { name: "已有生成记录" }), {
+    target: { value: "b".repeat(32) },
+  });
+  expect(await screen.findByText(/原生成资源尚未核实停止/)).toBeVisible();
+  const stop = screen.getByRole("button", { name: "取消生成/禁止后续应用" });
+  expect(stop).toBeEnabled();
+  fireEvent.click(stop);
+  await waitFor(() =>
+    expect(submit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "maintenance_stop_generation",
+        target_id: "b".repeat(32),
+      }),
+    ),
+  );
 });

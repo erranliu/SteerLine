@@ -293,7 +293,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 			return r, err
 		}
 	}
-	if r.State == "applied" && !r.Cancelled {
+	if r.State == "applied" && !r.Cancelled && r.Projection != nil && r.Projection.StopStatus == "stopped" {
 		return r, nil
 	}
 	selector, id := "run-id", r.RunID
@@ -342,7 +342,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 				r.Diagnostic = callErr.Error()
 			}
 		}
-	} else if result := run.ContentResult; result != nil {
+	} else if result := run.ContentResult; r.State != "applied" && result != nil {
 		if result.Status != "succeeded" || !result.Source.Verified || result.Source.NativeOutcome != "succeeded" || result.Source.CommandID == "" || result.Source.TurnID == "" {
 			r.State = "failed"
 			r.Diagnostic = result.Diagnostic
@@ -358,7 +358,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 				r.Diagnostic = "生成了空测试列表；原文件保留，请核对 Plan"
 			}
 		}
-	} else if run.Status == "failed" || run.Status == "stopped" {
+	} else if r.State != "applied" && (run.Status == "failed" || run.Status == "stopped") {
 		r.State = "failed"
 		r.Diagnostic = "Runner 已结束，未提供可核实的生成结果：" + run.Diagnostic
 	}

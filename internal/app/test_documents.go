@@ -13,12 +13,10 @@ import (
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
-// Preparation follows the maintenance gate. Later candidates reuse the Task
-// execution snapshot; the immutable Plan commit supplies every Git reference.
+// First reservation consumes the common assessment snapshot; later candidates
+// reuse the Task execution snapshot. No consumer re-reads the assessed inputs.
 func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork) (json.RawMessage, []runnerclient.Document) {
 	if len(work.FrozenTestPlan) > 0 {
-		var frozen testmanagement.Snapshot
-		_ = json.Unmarshal(work.FrozenTestPlan, &frozen)
 		path, _ := testmanagement.ArrangementPath(work.Contract.PlanRef.Path)
 		instructions := testmodel.TestingInstructions
 		return work.FrozenTestPlan, []runnerclient.Document{{Kind: "git", Path: path, Commit: work.Contract.PlanRef.Commit}, {Kind: "git", Path: testmanagement.CataloguePath, Commit: work.Contract.PlanRef.Commit}, {Kind: "git", Path: testmanagement.RulesPath, Commit: work.Contract.PlanRef.Commit}, {Kind: "inline", Path: "steerline-testing.md", Content: &instructions}}
