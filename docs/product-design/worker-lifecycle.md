@@ -1,5 +1,7 @@
 # Worker 流程异常处理与重试
 
+2026-10-21 工作区命名输入（W01/W02，V01/V06–V08）：SteerLine 在预留事务内分配候选 Number 并冻结公开 `name_prefix`（C1 为 `sl-<task_id>`，C2 起为 `sl-<task_id>-c<Number>`）与最终 submit；重放使用原编号/请求，不在事务外预估。Runner 独立冻结通用前缀（缺省 `sr`），Orca 创建与回执校验共用 `<prefix>-<Run ID>`，不解析 correlation 的业务含义。名称不是资源身份权威；原绑定、只读对账、未知零重发与恢复授权保持，不改既有现场名称或新增节点/异常/重试。最小验证及未验范围见[专属验收](../acceptance/runner-name-prefix.md)。
+
 2026-10-20 内容生成接管补验（W02–W18，E04–E07，V06–V08）：generate/conversation 不使用开发流程 parser 配置，Runner 接管按适用工作流校验，保留原材料/执行语义/codec/原生身份；开发配置仍严格检查。调用方原 Generation/Run/input/final 不改写，未知零重发、取消先于 worker、停止与资源结算分别证明的规则不变。本轮只修不适用配置误拒绝，不增加恢复授权、旧数据迁移或另一套状态机；实际换构建与结算结果见[测试管理验收](../acceptance/test-management.md)。
 
 2026-10-20 调用方边界收口（W02–W18，E04–E07，V03/V06–V08）：候选停止信封的构造和保存统一归 runnerbridge，正常对账和启动前收集复用；启动层继续先取项目锁/store，再持久化既有停止义务，经 pending_stops 在 worker 前受理。保留原正常/启动 ID 生成方式、未知信封原字节与 CAS，明确拒绝后才按原流程准备后续信封。公开 takeover 类型/验证归 runnercontract，原 Run/input/request/Check 与构建比较归纯 runnerbinding；启动准入、离线重启、检查查询及部署预检复用对应规则，保留各入口原有前置。只读接管不取得停止/输入授权，历史事实不改写，不新增 submit/reply/resume、重试或原生恢复能力；停服与资源结算继续分开证明。当前实现缺口和原生资格仍按既有专属验收判断。本轮安排及结果见[Plan](../plans/architecture-boundary-consolidation.plan.md)和[验收](../acceptance/architecture-boundary-consolidation.md)，不改 W/E/V 矩阵语义。

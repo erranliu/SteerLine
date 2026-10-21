@@ -1,13 +1,17 @@
 package sqlite
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -45,7 +49,7 @@ func TestRunnerPresetFreeze(t *testing.T) {
 	baseCalls := 0
 	svc := taskrunner.Service{Project: a.ProjectIdentity, Claimant: "runner-test", StateDir: filepath.Join(t.TempDir(), "runner"), DefaultProfile: "live", Store: s, Bridge: &runnerbridge.Bridge{Store: s},
 		Tasks:    taskapp.Service{Reader: s, Documents: docs, Input: taskapp.Input{Project: a.ProjectIdentity, Authority: "native", Remote: "origin", Branch: "main", ExecutableTypes: []string{"task"}}},
-		Profiles: map[string]taskrunner.Profile{"live": {ID: "live", Name: "Original frozen preset", Input: runnerclient.RunInput{Workflow: runnerclient.Workflow{ID: "development", Version: 1}, Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"fixed-native"}`)}, Publication: runnerclient.Publication{Provider: "command", Repository: "Org/Repo", Settings: json.RawMessage(`{"base_url":"https://example.invalid"}`)}}}},
+		Profiles: map[string]taskrunner.Profile{"live": {ID: "live", Name: "Original frozen preset", Input: runnerclient.RunInput{Workflow: runnerclient.Workflow{ID: "development", Version: 2}, Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"fixed-native"}`)}, Publication: runnerclient.Publication{Provider: "gitea", Repository: "Org/Repo", Settings: json.RawMessage(`{"base_url":"https://example.invalid"}`)}}}},
 		ResolveBase: func(context.Context, taskmodel.FixedWork, bool) (string, error) {
 			baseCalls++
 			return strings.Repeat("c", 40), nil
@@ -64,6 +68,31 @@ func TestRunnerPresetFreeze(t *testing.T) {
 	require(t, err)
 	var fixed runnerclient.RunInput
 	require(t, json.Unmarshal(first.Submit.Input, &fixed))
+	if fixed.NamePrefix != "sl-"+start.TaskID {
+		t.Fatal("submission lost its transaction-assigned naming prefix", fixed.NamePrefix)
+	}
+	// Optional real public-contract check; this CLI path never starts a service.
+	if executable := os.Getenv("STEERRUNNER_EXE"); executable != "" {
+		t.Run("published-runner-name-prefix", func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+			command := exec.CommandContext(ctx, executable, "validate", "--kind", "run", "--input", "-", "--json")
+			command.Stdin = bytes.NewReader(first.Submit.Input)
+			out, err := command.CombinedOutput()
+			if err != nil {
+				t.Fatalf("Runner rejected the actual frozen submission: %s / %v", out, err)
+			}
+			var result struct {
+				OK   bool `json:"ok"`
+				Data struct {
+					Valid bool `json:"valid"`
+				} `json:"data"`
+			}
+			if json.Unmarshal(out, &result) != nil || !result.OK || !result.Data.Valid {
+				t.Fatalf("Runner did not validate the frozen submission: %s", out)
+			}
+		})
+	}
 	if fixed.Repository.BaseRevision != strings.Repeat("c", 40) || fixed.Documents.Spec.Commit != ref.Commit || fixed.Correlation["steerline_task_id"] != start.TaskID || first.ProfileID != "live" || first.Number != 1 {
 		t.Fatal("start failed to freeze its exact task/profile/base", first, fixed)
 	}

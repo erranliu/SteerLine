@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"path/filepath"
 
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -173,9 +174,24 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 	if len(want) != 0 {
 		return nativeErr("contract_mismatch", "Runner input omits fixed task references")
 	}
+	// Freeze the public naming hint with the authoritative candidate number,
+	// before the submission can be observed or sent by the bridge.
+	freezeNumber := func(number int) error {
+		c.Number = number
+		input.NamePrefix = "sl-" + c.TaskID
+		if number > 1 {
+			input.NamePrefix += fmt.Sprintf("-c%d", number)
+		}
+		var err error
+		c.Submit.Input, err = json.Marshal(input)
+		return err
+	}
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		previous, lookupErr := readRunnerCandidate(ctx, tx.tx, c.Project, c.ID)
 		if lookupErr == nil {
+			if err := freezeNumber(previous.Number); err != nil {
+				return err
+			}
 			if !bytes.Equal(previous.TestPlan, c.TestPlan) || previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
 				return nativeErr("idempotency_conflict", "candidate ID belongs to another original request")
 			}
@@ -210,7 +226,9 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if candidate && conflictingBase > 0 {
 			return nativeErr("contract_mismatch", "candidate common base changed")
 		}
-		c.Number = number + 1
+		if err := freezeNumber(number + 1); err != nil {
+			return err
+		}
 		if !c.Explicit {
 			var occupied int
 			if err := tx.tx.QueryRowContext(ctx, `SELECT count(*) FROM runner_candidates WHERE project_identity=? AND json_extract(payload,'$.participation')='active' AND json_extract(payload,'$.submit_state') NOT IN ('rejected','cancelled') AND coalesce(json_extract(payload,'$.projection.status'),'queued') NOT IN ('pr_ready','stopped')`, c.Project).Scan(&occupied); err != nil {
