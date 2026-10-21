@@ -374,6 +374,11 @@ func StopAll(ctx context.Context) error {
 		return err
 	}
 	defer release()
+	return stopAllCoordinated(ctx, home)
+}
+
+// The caller holds startup coordination, including interrupted deployment recovery.
+func stopAllCoordinated(ctx context.Context, home string) error {
 	backend, web := components(home)
 	// Receiving the host acknowledgement follows BeginStop's closure of every
 	// project's input gate. Independently attempt Web and all project cleanup.

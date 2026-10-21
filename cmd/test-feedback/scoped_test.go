@@ -430,7 +430,7 @@ func TestQuickOwnerPartitionsRejectMissingAndReplayedGroups(t *testing.T) {
 		groups []scopedGroup
 		want   string
 	}{
-		{"missing", append(append([]scopedGroup{}, groups[:index]...), groups[index+1:]...), "quick package github.com/erranliu/SteerLine/internal/app completed 1 times, want 2"},
+		{"missing", append(append([]scopedGroup{}, groups[:index]...), groups[index+1:]...), "quick package github.com/erranliu/SteerLine/internal/app completed 2 times, want 3"},
 		{"replayed", append(append([]scopedGroup{}, groups...), groups[index]), "quick owner test "},
 		{"replaced", replaced, "quick owner test "},
 	} {

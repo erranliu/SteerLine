@@ -16,6 +16,8 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 
 本文描述 SteerLine 产品运行的业务权威。普通开发由当前聊天直接实现；用户明确要求 roadmap 调度时，才由 roadmap-runner 使用[execution-map](roadmap/execution-map.md)管理已确认的任务与依赖。roadmap 流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。
 
+命令受理、PR 唯一交付、服务与资源结算，以及重启/部署中的证明关系，统一从[可靠性交付链路](architecture/reliable-delivery-chain.md)阅读；该文也列出重复协调与可简化流程，具体 Worker 规则仍归既有生命周期文档。
+
 ## 职责与权威
 
 | 所有者 | 职责 |

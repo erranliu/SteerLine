@@ -31,7 +31,7 @@ func run() error {
 		return runRunnerTakeover(os.Args[2:])
 	}
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <start|restart|serve|stop|verify-stop|verify-restart|verify-runner-takeover|status|check|control|task|tests|answer|home|install|launchers> [-config config.json]")
+		return fmt.Errorf("usage: steerline <start|restart|serve|stop|prepare-deployment|verify-stop|verify-restart|recover-deployment|verify-runner-takeover|status|check|control|task|tests|answer|home|install|launchers> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
@@ -39,7 +39,7 @@ func run() error {
 	if os.Args[1] == "tests" {
 		return runTestsCommand(os.Args[2:])
 	}
-	if os.Args[1] == "start" || os.Args[1] == "restart" || os.Args[1] == "serve" || os.Args[1] == "stop" || os.Args[1] == "status" || os.Args[1] == "verify-stop" || os.Args[1] == "verify-restart" {
+	if os.Args[1] == "start" || os.Args[1] == "restart" || os.Args[1] == "serve" || os.Args[1] == "stop" || os.Args[1] == "status" || os.Args[1] == "verify-stop" || os.Args[1] == "verify-restart" || os.Args[1] == "recover-deployment" || os.Args[1] == "prepare-deployment" {
 		return runApplication(os.Args[1], os.Args[2:])
 	}
 	command := os.Args[1]
