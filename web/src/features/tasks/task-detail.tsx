@@ -39,7 +39,7 @@ export function TaskDetail({
       (entry) =>
         entry.taskID === id &&
         !task?.workflow_runs?.some((run) => run.workflow_run_id === entry.id) &&
-        !page?.runs.some((run) => run.run_id === entry.id),
+        !page?.runs?.some((run) => run.run_id === entry.id),
     ) ?? [];
   const hasCandidates =
     (task?.workflow_runs?.length ?? 0) > 0 ||

@@ -25,6 +25,7 @@ recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runne
 
 | 场景 ID | 测试内容与主要断言 | 相对其他场景的主要覆盖维度 |
 | --- | --- | --- |
+| `configuration.execution-profiles` | controlled / configuration | 浏览器保存三种本机 Orca Agent 配置、待重启门槛、正式停启、关闭 Web 后 CLI 核对 adapter/target/agent/model/effort/helper 字段，原候选不变。 | 自有临时 home/repo/端口，公开 Runner fixture，浏览器及服务完整清理。 |
 | `recovery.waiting-merge-restart` | PR 待合并时重启 SteerLine，保留原候选/Run/请求及公开投影，不新增业务输入、不提前释放后继；随后合并并完成唯一交付。 | 在 L2 交付骨架中加入 SteerLine 重启，验证持久化事实和调用方连续性。 |
 | `runtime.service-lifecycle` | 中文/空格路径和无关 cwd 下生成启动器；创建任务、核对精确宿主身份、执行正常控制、停止并核对逐项目结算，再启动并确认新实例和原任务事实，最后正常停止。 | 单 home 的正常宿主生命周期，不注入陈旧身份/配置/锁冲突。 |
 | `runtime.dual-home-operation` | 两个独立 home 同时在线，使用不同请求分别 discard 不同任务；核对持久化结果、另一项目/provider 不变、无执行候选、原实例不变，最后停止两者。 | 多 home 合法并存及独立操作，不做同请求 ID 重放。 |

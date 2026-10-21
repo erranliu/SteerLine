@@ -105,5 +105,13 @@
     "package": "./tests/e2e/suites/runtime",
     "test": "TestProjectMaintenance",
     "env": "controlled"
+  },
+  {
+    "id": "configuration.execution-profiles",
+    "level": "L3",
+    "suite": "configuration",
+    "package": "./tests/e2e/configuration",
+    "test": "TestExecutionProfiles",
+    "env": "controlled"
   }
 ]

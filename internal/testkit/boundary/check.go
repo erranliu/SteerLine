@@ -59,6 +59,8 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return dependency == module+"/internal/taskcontract"
 	case module + "/internal/projectmaintenance":
 		return dependency == module+"/internal/projectmaintenance/model" || dependency == module+"/internal/testmanagement/model"
+	case module + "/internal/executionconfig":
+		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/runnerbinding":
 		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate"
 	case hostContract:
@@ -83,7 +85,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -174,6 +176,9 @@ func forbidden(pkg string) bool {
 }
 
 func httpConsumerForbidden(pkg string) bool {
+	if strings.HasPrefix(strings.ToLower(pkg), "github.com/erranliu/steerrunner/") {
+		return true
+	}
 	if pkg == module+"/internal/product/api" {
 		return false
 	}
@@ -191,7 +196,14 @@ func httpConsumerForbidden(pkg string) bool {
 	return false
 }
 
+func webConfigDependency(owner, dep string) bool {
+	web := owner == module+"/cmd/steerline-web" || owner == module+"/web/server" || strings.HasPrefix(owner, module+"/web/server/")
+	return web && (dep == module+"/internal/executionconfig" || dep == module+"/internal/runnercontract")
+}
 func httpConsumerPackage(pkg string) bool {
+	if strings.HasPrefix(pkg, module+"/web/server/") {
+		return true
+	}
 	if pkg == module+"/internal/processwindow" {
 		return true
 	}
@@ -658,13 +670,28 @@ func ScanSource(root string) (Report, error) {
 			}
 		})
 	}
-	for _, suffix := range []string{"/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs", "/web/server", "/cmd/steerline-web"} {
+	httpSeeds := []string{"/internal/projectconnection", "/internal/pathguard", "/internal/localservice", "/internal/product/applicationclient", "/internal/product/applicationcontract", "/internal/product/httpclient", "/internal/product/httpcontract", "/internal/product/httpfs", "/web/server", "/cmd/steerline-web"}
+	for pkg := range productionGraph {
+		if strings.HasPrefix(pkg, module+"/web/server/") {
+			httpSeeds = append(httpSeeds, strings.TrimPrefix(pkg, module))
+		}
+	}
+	for _, suffix := range httpSeeds {
 		visitGraph(productionGraph, module+suffix, func(path []string) {
 			last := path[len(path)-1]
-			if !httpConsumerPackage(last) && httpConsumerForbidden(last) {
+			if !httpConsumerPackage(last) && httpConsumerForbidden(last) && !webConfigDependency(module+suffix, last) {
 				report.Violations = append(report.Violations, "HTTP consumer forbidden dependency: "+strings.Join(path, " -> "))
 			}
 		})
+	}
+	for seed := range productionGraph {
+		if seed == module+"/internal/app" || strings.HasPrefix(seed, module+"/internal/app/") || seed == taskRunner || seed == module+"/internal/runnercontract" || seed == module+"/internal/executionconfig" {
+			visitGraph(productionGraph, seed, func(path []string) {
+				if strings.HasPrefix(path[len(path)-1], module+"/web/") {
+					report.Violations = append(report.Violations, "execution consumer depends on Web: "+strings.Join(path, " -> "))
+				}
+			})
+		}
 	}
 	for pkg := range graph {
 		if !implementation(pkg) {
@@ -817,7 +844,7 @@ func Check(ctx context.Context, root string) (Report, error) {
 			}
 			if httpConsumerPackage(pkg.ImportPath) {
 				for _, dep := range pkg.Deps {
-					if !httpConsumerPackage(dep) && httpConsumerForbidden(dep) {
+					if !httpConsumerPackage(dep) && httpConsumerForbidden(dep) && !webConfigDependency(pkg.ImportPath, dep) {
 						report.Violations = append(report.Violations, graphName+" HTTP consumer forbidden dependency: "+pkg.ImportPath+" -> "+dep)
 					}
 				}

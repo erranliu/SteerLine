@@ -31,6 +31,8 @@ steerline tests stop-generation -project <id> -generation-id <original-id> -requ
 
 候选通过原执行提示中的系统安排，以及固定base worktree内的真实规范/清单路径取得测试要求，测试程序必须实际执行并产生受管报告。页面不能以模型 final 自述通过。过期候选停止发起新 collect，已有证据只作历史；当前性未知时不显示当前通过。
 
+Web 执行配置的最小验证见[Plan](spec/web-execution-config.plan.md) / [验收](acceptance/web-execution-config.md)：Web 配置/目录 owner 纳入固定 L1，`configuration.execution-profiles` 为独立 L3 受控保存、正式重启及关闭 Web 后 CLI 消费场景。真实目录专项内部先生成新 debug 包，仅查询 Codex/本机 Orca/已配对 Orca，不计完整执行链验收。
+
 ## L1–L4 定义
 
 SteerLine 直接采用 [开发项目测试架构规范](../SteerlineProjectGuideDoc/testing-architecture.md)。L1–L4 定义、L3 正交与并行设计、分级内容清单要求及跨项目测试归属统一在该规范维护；本文记录 SteerLine 的具体入口、环境、清单和实施缺口。

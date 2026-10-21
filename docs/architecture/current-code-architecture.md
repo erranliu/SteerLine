@@ -1,5 +1,7 @@
 # 当前代码架构
 
+2026-10-21 Web执行配置增量：Web独立负责目录探测和execution.json条件保存，Go执行服务只消费配置并投影原加载摘要；Runner不新增接口。实现与验证见[专属验收](../acceptance/web-execution-config.md)。
+
 2026-10-20 调用方边界增量：[本轮收口](../acceptance/architecture-boundary-consolidation.md)将候选停止信封准备统一到 runnerbridge、公开 takeover 类型与校验归 runnercontract、调用方绑定规则归纯 runnerbinding；修复 processwindow 的 HTTP 基础设施窄依赖并增加调用方 owner 守卫。下述历史轮次与未实施建议按其各自范围理解。
 
 核对日期：2026-10-19；前四轮已随 PR #350 合入 `64f91853`，本页包含基于该主干的第五轮宿主契约归位。本页按生产代码与 `go list` 的实际依赖维护，区分进程调用、Go 包依赖和资源所有权。原始核对见[架构解耦审视](../acceptance/architecture-decoupling-review.md)，实现与验证见[第一轮](../acceptance/architecture-decoupling-round1.md)、[第二轮](../acceptance/architecture-decoupling-round2.md)、[第三轮](../acceptance/architecture-decoupling-round3.md)、[第四轮](../acceptance/architecture-decoupling-round4.md)、[PR #350 复审](../acceptance/architecture-decoupling-pr350-review.md)及[第五轮验收](../acceptance/architecture-decoupling-round5.md)；其余建议尚未实施。
@@ -16,6 +18,9 @@ flowchart TB
     Start --> Serve[steerline serve 共享后端进程]
     Browser[浏览器 React 页面] -->|HTTP / 浏览器认证| Web
     Web -->|本机 HTTP 应用 API v2| Router
+    Web -->|只读元数据查询| Catalog[本机 Codex / 已配对 Orca 目录]
+    Web -->|条件保存| ConfigFile[execution.json]
+    ConfigFile -->|启动加载并冻结| Owner
     CLI[steerline 业务 CLI] -->|本机 HTTP 应用 API v2| Router
     subgraph Backend[共享后端]
         Serve --> Owner[ApplicationDirectory / applicationRunner]
@@ -68,6 +73,14 @@ flowchart LR
     RB --> RS[runnerstate]
     WebServer[web/server] --> HC[product/httpclient]
     WebServer --> HContract[product/httpcontract 路由与传输契约]
+    WebServer --> WebConfig[web/server/executionconfig]
+    WebServer --> Discovery[web/server/discovery]
+    Discovery --> WebConfig
+    Discovery --> NQ[web/server/nativequery]
+    WebConfig --> NQ
+    WebConfig --> ConfigValue[internal/executionconfig 纯值]
+    App --> ConfigValue
+    ConfigValue --> Contract
     AH --> HA
     HA --> Q[product/query]
     Client --> API[product/api]
@@ -146,6 +159,8 @@ flowchart LR
 | `internal/product/api` / `query` / `client` | 稳定产品 DTO、只读投影及注入能力的内部产品客户端；历史/候选、会话引用、正文分页、能力报告、活动标签和公开序列化预算均从存储事实生成，不再由 SQLite 构造产品 DTO。 |
 | `internal/product/applicationhttp` / `httpapi` | 统一项目路由、认证/协议映射、请求登记/对账与产品调用；不以传输回执替代业务结果。 |
 | `internal/product/applicationclient` / `httpclient` 及契约/连接包 | 本机 HTTP 消费、发现与公开协议；不访问业务库或具体调度器。 |
+| `internal/executionconfig` | Web 与 Go 消费者共享的纯配置值、严格解码和参数摘要，无文件/进程/网络职责。 |
+| `web/server/executionconfig` / `web/server/discovery` / `web/server/nativequery` | Web 独立拥有配置条件保存、Codex/Orca 元数据客户端及有界原生查询进程；无业务执行或 Runner 常驻服务依赖。 |
 | `web/server` / `web/src` | 独立 Web 宿主和 React 页面；浏览器会话、项目选择、连接观察、原信封 journal、草稿与渲染。路由白名单经纯 HTTP 契约共享，生产编译依赖受 HTTP 消费端守卫约束。 |
 | `tests/e2e/internal` | 隔离环境、公开 CLI driver 与外部协议夹具；不导入 Runner 内部包，真机验收范围单独登记。 |
 
@@ -211,3 +226,5 @@ sequenceDiagram
 第一轮已完成第 1 项及候选错误映射；第二、三轮已完成第 2 项；第四、五轮已完成第 3 项中的 Task 与宿主契约归位。依赖规则由全标签源码与 Windows/Linux 依赖图核对。余下可继续收窄展示/控制传输值及 app 中的组装与产品适配；这些尚未实施。
 
 暂不建议把 Task、候选、交付拆成独立服务/数据库，也不建议引入通用事件总线、插件注册框架或重建 workflow 层。当前一个原子交付事务、每项目资源 owner、Runner 单写执行事实的关系是必要的一致性边界。业务规则、生命周期和真实支持范围分别归[整体架构](../architecture.md)、[Worker 生命周期](../product-design/worker-lifecycle.md)及[接入验收](../acceptance/steerrunner-cutover.md)维护。
+
+Web目录层的Orca named pipe与配对WebSocket共用 `readOrcaCatalog`，只表达目标注册Agent及模型/provider/effort事实，不承载本机/远端产品支持策略。配置owner独立发布可生成组合并验证完整schema；前端合并展示。模型provider凭据留在原Agent，Web不建key配置、provider发现或账号数据库；Go执行服务仍仅消费execution.json。

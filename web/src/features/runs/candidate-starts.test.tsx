@@ -50,7 +50,7 @@ function setup(existing = false, requests: StoredRequest[] = []) {
                 stop_requested: false,
               },
             ]
-          : [],
+          : null,
       },
     ],
   };
@@ -109,6 +109,7 @@ function setup(existing = false, requests: StoredRequest[] = []) {
   function Harness({ runs }: { runs: Candidate[] }) {
     const candidateStarts = useCandidateStarts(api, true, requests, submit);
     const observation = snapshot(api, runs);
+    if (!runs.length) observation.connection.snapshot.page!.runs = null;
     observation.connection.snapshot.page!.service.capabilities.push(
       "start_candidate",
     );
@@ -176,6 +177,39 @@ it("immediately selects each new card and lets an unclaimed task reserve five co
   expect(
     screen.queryByRole("button", { name: "近期活动" }),
   ).not.toBeInTheDocument();
+  client.clear();
+});
+
+it("submits the selected remote profile when a fresh task and snapshot have null run lists", async () => {
+  const { confirm, submit, calls, client } = setup();
+  const remoteProfile = {
+    id: "orca-remote-desktop64g-xhigh",
+    name: "远端 Orca · GPT-6-Luna xhigh",
+    host: "remote",
+    agent: "orca-terminal",
+    execution_model: "gpt-6-luna",
+    execution_effort: "xhigh",
+    unavailable_reason: "",
+    details: [],
+  };
+  const api = new Api(identity, "csrf");
+  client.setQueryData(projectQueries(api).presentation().queryKey, {
+    presentation: {
+      default_profile_id: remoteProfile.id,
+      profiles: [remoteProfile],
+    },
+  });
+  await confirm(true);
+  expect(submit).toHaveBeenCalledTimes(1);
+  expect(calls[0].envelope).toMatchObject({
+    action: "start_task",
+    target_id: "1",
+    expected_version: 1,
+    payload: { execution_profile_id: remoteProfile.id },
+  });
+  expect(document.querySelector(".candidate-card.active")).toHaveTextContent(
+    "正在提交",
+  );
   client.clear();
 });
 

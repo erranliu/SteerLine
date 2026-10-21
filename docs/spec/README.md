@@ -4,6 +4,8 @@
 
 项目基线与材料统一维护（2026-10-21）：[Spec](project-maintenance.spec.md) · [Plan](../plans/project-maintenance.plan.md) · [专属验收](../acceptance/project-maintenance.md) · [长期设计](../product-design/project-maintenance.md)。初始化/基线/局部共用规则和维护流程，后台检测零自动生成，生成先审阅再显式应用，首次启动冻结远端最新代码与同版本材料。当前已替换任务材料登记即永久固定、生成自动保存及缺材料仅提示的旧行为；验证归专属记录，不改历史验收或 roadmap。项目添加的最终登记/建库继续后置，消费本批共用检查能力。
 
+Web 执行配置管理与能力探测（2026-10-21，按确认原型实施）：[Spec](web-execution-config.spec.md) · [Plan](web-execution-config.plan.md) · [专属验收](../acceptance/web-execution-config.md)。Web 前后端直接查询 Codex/Orca，管理全局预设及条件保存；保存后显式重启生效。Go 执行服务只消费配置和投影加载摘要，Runner 不新增探测接口；实现与验证范围登记于专属验收，不修改 roadmap。本机 Orca 已实现；目录查询统一本机/远端Orca能力，与执行支持组合分开。provider凭据由原Agent管理，Pi按已有目录筛选Provider；验证见专属验收。
+
 Runner generate/1 对接与最简测试管理（自动项通过，人工待验）：[Spec](test-management.spec.md) · [Plan](test-management.plan.md) · [专属验收](../acceptance/test-management.md)。公开产物收集、当前 Git 核验、生成对象兼容接管及真实结果闭环已接入；TM-A04/TM-A08 等实际版本与结果以专属记录为准，TM-M01 后置。生成先审阅再显式应用等后续变更归[项目维护](../product-design/project-maintenance.md)，原固定版本证据保持。不增加 Task 字段/测试门禁或 conversation 操作。
 
 应用级共享 SteerRunner 服务（2026-10-19，已实施）：[Spec](shared-runner-service.spec.md) · [Plan](shared-runner-service.plan.md) · [专属验收](../acceptance/shared-runner-service.md)。每个 SteerLine home 共用一个 Runner，服务所有权上移到应用；覆盖跨项目请求身份、环境检查、停机证明、换代与整包 reset，仅修改 SteerLine。固定 L1、定向反例、两个 L3 及新包真实空闲拓扑验证通过，人工体验待验；后续[闪窗修复](../acceptance/startup-console-windows.md)已有独立记录，不修改 roadmap。

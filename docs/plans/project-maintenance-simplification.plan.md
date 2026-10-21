@@ -104,3 +104,5 @@ PMS-M01：T1–T4通过后，用户在新独立包浏览提交/PR、处理一次
 | PMS-A08 | 文档 | 完成时python scripts/check_doc_links.py及git diff --check | 新规则/实施状态/实际结果一致 |
 
 不重复Full、其他L2/L3、此前多版本T3或整套Web单测：未更改Web、版本比较、PR交付和生成调度；这些范围由原证据及本轮定向回归覆盖，新增风险是最新Runner消费传输，以一次真实L3直接验证。审计分支用最新公开模板的L1验证，不再额外启动审计模型。结果仅写专属验收，不在本Plan维护实时状态。
+
+提交 PR 前合并主干增量：保留主干执行配置与首次启动空列表修复，合并 quick-owner、纯包边界及场景清单。最小补验在合并后、推送前进行：PMS-A08 对应 `go test ./internal/testkit/boundary ./cmd/test-feedback -count=1`，以及 app 的 `TestWebExecutionConfigLoadedSnapshot|TestPMSGenerationFreshnessAndCandidateVersions`；Web 定向覆盖任务详情、候选启动、基线维护、候选文档/计划测试及执行配置，并运行 `npm --prefix web run build`。通过条件为新旧登记均有效、材料与配置接线不冲突、空列表启动修复保留和生产构建通过；证据登记专属验收的提交前集成记录。仅合并登记及独立页面接线，不再启动已通过的原生模型/L3；不触及安装环境。

@@ -142,3 +142,16 @@ PMS-A08：TestPM/TestTM及HTTP/CLI定向回归、T2/T3核对旧人工入口移�
 本轮 PMS-A03/A04/A06/A08/A09 的路径适配增量在上述最小范围通过，前轮最新Runner未适配限制已解决。未重复Full、其他L2/L3或多版本受控矩阵；审计提示以最新公开模板L1验证，未额外启动审计模型。PMS-M01仍待人工体验签收。本次未部署、未使用/读写/重置 `C:/SteerlineInstall` 或 `C:/SteerlineRuntime`，未改 Runner 仓库/默认 EXE。
 
 最终静态核对：`links-final.log` 记录523个Markdown、3396条本地导航、0错误；`diff-final.log` 的 git diff --check 通过；`bytes-current.log` 覆盖116个修改/新增文件，UTF-8无BOM及行尾空白0错误。
+
+### 提交前主干集成验证
+
+用户授权提交、推送与创建PR后，本次实现固定为 `00706c2f`，合并主干 `9095fd991ea0cfb3070446bd89217696787a94bb`（执行配置页面及首次启动空列表修复）。冲突仅在 quick-owner 登记、纯包边界和场景清单：保留主干执行配置测试/纯包与新增场景，同时采用本次自动材料/候选版本规则，删除已被本次替换的旧人工确认用例登记；任务详情自动合并后保留空列表保护及过期候选名额规则。
+
+本节证据位于同一最新Runner证据根的 `publish-main-integration/`：
+
+- `boundary.log`：`go test ./internal/testkit/boundary ./cmd/test-feedback -count=1` 两包通过。
+- `app/summary.json`：`TestWebExecutionConfigLoadedSnapshot` 与 `TestPMSGenerationFreshnessAndCandidateVersions` 两项通过、complete=true，24.990秒；验证主干执行配置与自动材料流程接线。
+- `web-tests.log`：任务详情、候选启动、启动状态、基线维护、候选文档、计划测试、执行配置7文件40项通过；`web-build.log`：TypeScript及Vite生产构建通过。
+- `doc-links.log`：527个Markdown、3443条本地导航、0错误；提交前暂存区diff检查通过。
+
+未重跑已通过的真实模型/L3或全量测试：合并未改动已验的Runner文档/提示传输规则；本轮新增风险由上述集成补验覆盖。PMS-M01仍待人工体验签收。提交、推送及创建PR仅操作本开发仓库与GitHub，不部署或改动安装环境。
