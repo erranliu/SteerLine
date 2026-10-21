@@ -1,5 +1,7 @@
 package api
 
+import "time"
+
 // RunnerDeliverySummary is a read-only display DTO. It has no owner bindings,
 // stored lifecycle state or execution capabilities.
 type RunnerDeliverySummary struct {
@@ -15,6 +17,7 @@ type RunnerDeliverySummary struct {
 	FinalVerified    bool                   `json:"final_verified"`
 	ContentStatus    string                 `json:"content_status,omitempty"`
 	PRState          string                 `json:"pr_state,omitempty"`
+	PRCheckedAt      *time.Time             `json:"pr_checked_at,omitempty"`
 	PRQueryError     string                 `json:"pr_query_error,omitempty"`
 	StopStatus       string                 `json:"stop_status,omitempty"`
 	Closed           bool                   `json:"closed"`

@@ -1,5 +1,7 @@
 package runnercontract
 
+import "time"
+
 // DeliveryObservation is a bounded, read-only caller projection of one public
 // Run snapshot and independently observed command receipts. It is not a CLI
 // lifecycle state, persisted authority or permission to send input.
@@ -16,6 +18,7 @@ type DeliveryObservation struct {
 	FinalVerified    bool                 `json:"final_verified"`
 	ContentStatus    string               `json:"content_status,omitempty"`
 	PRState          string               `json:"pr_state,omitempty"`
+	PRCheckedAt      *time.Time           `json:"pr_checked_at,omitempty"`
 	PRQueryError     string               `json:"pr_query_error,omitempty"`
 	StopStatus       string               `json:"stop_status,omitempty"`
 	Closed           bool                 `json:"closed"`

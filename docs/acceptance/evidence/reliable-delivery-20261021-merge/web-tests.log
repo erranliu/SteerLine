@@ -1,0 +1,12 @@
+
+> steerline-web@0.1.0 test
+> vitest run src/features/runs/delivery-summary.test.tsx src/features/runs/runs.test.tsx
+
+
+ RUN  v5.0.4 C:/Users/lmas1/.codex/worktrees/e108/SteerRunner/.evidence/pr-merge-20261021/SteerLine/web
+
+
+ Test Files  2 passed (2)
+      Tests  18 passed (18)
+   Start at  11:38:52
+   Duration  2.95s (environment 52%, tests 27%, setup 9%, import 8%, transform 4%)

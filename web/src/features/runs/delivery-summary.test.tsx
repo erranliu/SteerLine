@@ -16,6 +16,7 @@ const observation: NonNullable<Candidate["runner_delivery"]> = {
   native_outcome: "succeeded",
   final_verified: true,
   pr_state: "open",
+  pr_checked_at: "2026-10-21T01:02:03Z",
   closed: false,
   resume_required: false,
   new_inputs_allowed: true,
@@ -48,10 +49,66 @@ it("separates accepted commands, PR readiness and unsettled resources with no I/
   expect(screen.getByText("资源停止 · 未取得停止证明")).toBeVisible();
   expect(screen.getByText("当前可用操作 · 停止")).toBeVisible();
   expect(screen.getByText(/original-reply/)).toBeInTheDocument();
+  expect(view.container.querySelector("time")).toHaveAttribute(
+    "datetime",
+    observation.pr_checked_at,
+  );
+  expect(screen.getByText(/PR 缓存观察/)).toHaveTextContent(
+    "非实时状态，本页刷新不查询外部 PR",
+  );
   view.rerender(<DeliverySummary run={original} />);
   expect(request).not.toHaveBeenCalled();
   expect(JSON.stringify(original)).toBe(before);
   request.mockRestore();
+});
+
+it.each([undefined, "provider unavailable"])(
+  "does not invent a missing PR query time or refresh a cached result (%s)",
+  (pr_query_error) => {
+    const request = vi.spyOn(globalThis, "fetch");
+    const view = render(
+      <DeliverySummary
+        run={{
+          ...run,
+          runner_delivery: {
+            ...observation,
+            pr_checked_at: undefined,
+            pr_query_error,
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText(/未记录查询时间/)).toBeVisible();
+    expect(view.container.querySelector("time")).toBeNull();
+    expect(screen.getByText("PR 观察 · 待合并")).toBeVisible();
+    if (pr_query_error) {
+      expect(screen.getByText(/PR 查询未核实/)).toBeVisible();
+    }
+    expect(request).not.toHaveBeenCalled();
+    request.mockRestore();
+  },
+);
+
+it("retains the last verified time alongside a failed PR query", () => {
+  render(
+    <DeliverySummary
+      run={{
+        ...run,
+        runner_delivery: {
+          ...observation,
+          pr_query_error: "provider unavailable",
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText(/上次核实于/)).toHaveAttribute(
+    "datetime",
+    observation.pr_checked_at,
+  );
+  expect(
+    screen.getByText("PR 查询未核实 · provider unavailable"),
+  ).toBeVisible();
+  expect(screen.getByText(/非实时状态/)).toBeVisible();
 });
 
 it.each([

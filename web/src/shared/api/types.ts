@@ -118,6 +118,7 @@ export interface Candidate {
     final_verified: boolean;
     content_status?: string;
     pr_state?: string;
+    pr_checked_at?: string;
     pr_query_error?: string;
     stop_status?: string;
     closed: boolean;

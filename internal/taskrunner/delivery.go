@@ -44,6 +44,10 @@ func deliveryObservation(c runnerstate.Candidate) *runnercontract.DeliveryObserv
 	}
 	if r.PR != nil {
 		v.PRState, v.PRQueryError = r.PR.State, r.PR.QueryError
+		if !r.PR.CheckedAt.IsZero() {
+			at := r.PR.CheckedAt
+			v.PRCheckedAt = &at
+		}
 	}
 	v.StopStatus, v.Closed = r.StopStatus, r.Closed
 	v.ResumeRequired, v.NewInputsAllowed, v.Controls = r.ResumeRequired, r.NewInputsAllowed, r.Controls

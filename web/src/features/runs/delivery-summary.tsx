@@ -58,6 +58,22 @@ export function DeliverySummary({ run }: { run: Candidate }) {
             {v.content_status ? label(v.content_status) : label(v.status)}
           </p>
           <p>PR 观察 · {v.pr_state ? label(v.pr_state) : "尚无已绑定 PR"}</p>
+          {v.pr_state && (
+            <p className="muted">
+              PR 缓存观察 ·{" "}
+              {v.pr_checked_at ? (
+                <time dateTime={v.pr_checked_at}>
+                  上次核实于{" "}
+                  {new Date(v.pr_checked_at).toLocaleString("zh-CN", {
+                    hour12: false,
+                  })}
+                </time>
+              ) : (
+                "未记录查询时间"
+              )}
+              ；非实时状态，本页刷新不查询外部 PR。
+            </p>
+          )}
           {v.pr_query_error && (
             <p className="notice amber">PR 查询未核实 · {v.pr_query_error}</p>
           )}

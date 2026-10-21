@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -16,6 +17,11 @@ func TestRunnerDeliveryReadProjection(t *testing.T) {
 		t.Run(status, func(t *testing.T) {
 			r := &runnercontract.Run{RunID: "runner", Revision: 12, InputDigest: "fixed", Status: status, Step: "audit.code", Phase: "original_phase", Diagnostic: "original diagnostic", Controls: runnercontract.Controls{CanStop: true}, Execution: runnercontract.Execution{AttemptID: "attempt", SessionID: "session", TurnID: "turn", NativeOutcome: "succeeded"}, Final: &runnercontract.Final{AttemptID: "attempt", SessionID: "session", TurnID: "turn", Verified: true}, ContentResult: &runnercontract.ContentResult{Status: "succeeded"}, PR: &runnercontract.PRFact{State: "open"}}
 			r.ContentResult.Source = *r.Final
+			checkedAt := time.Date(2026, 10, 21, 1, 2, 3, 0, time.UTC)
+			r.PR.CheckedAt = checkedAt
+			if status == "reconciling" {
+				r.PR.QueryError = "provider unavailable"
+			}
 			c := runnerstate.Candidate{ID: "candidate", RunID: r.RunID, Revision: 2, InputDigest: r.InputDigest, Participation: "active", SubmitState: "accepted", Submit: runnercontract.Request{RequestID: "submit-original"}, Projection: r, Actions: []runnerstate.Action{{Command: "reply", Request: runnercontract.Request{RequestID: "reply-original"}, State: "accepted", ActionStatus: "completed"}}}
 			before, _ := json.Marshal(c)
 			rt := taskrunner.Project(ports.RunnerSnapshot{Candidates: []runnerstate.Candidate{c}}, hostcontract.ServiceCheckpoint{})
@@ -25,6 +31,16 @@ func TestRunnerDeliveryReadProjection(t *testing.T) {
 				t.Fatalf("independent facts lost or completion inferred: %+v", v)
 			}
 			v.Commands[1].ActionStatus = "consumer mutation"
+			if v.PRCheckedAt == nil || !v.PRCheckedAt.Equal(checkedAt) {
+				t.Fatal("original PR observation time lost", v.PRCheckedAt)
+			}
+			if v.PRQueryError != r.PR.QueryError {
+				t.Fatal("query failure lost its cached PR observation", v)
+			}
+			*v.PRCheckedAt = checkedAt.Add(time.Hour)
+			if !rt.Runs[0].RunnerDelivery.PRCheckedAt.Equal(checkedAt) {
+				t.Fatal("PR observation time aliases the sampled view")
+			}
 			v.Controls.CanStop = false
 			if rt.Runs[0].RunnerDelivery.Commands[1].ActionStatus != "completed" || !rt.Runs[0].RunnerDelivery.Controls.CanStop {
 				t.Fatal("product response aliases the sampled view")
@@ -80,6 +96,9 @@ func TestRunnerDeliveryRejectsForeignAndStaleFacts(t *testing.T) {
 				}
 			} else if summary.Available || summary.StopStatus != "" || summary.Controls.CanResume {
 				t.Fatal("unverified projection granted facts or controls", summary)
+			}
+			if summary.PRCheckedAt != nil {
+				t.Fatal("missing PR query time was invented", summary.PRCheckedAt)
 			}
 		})
 	}
