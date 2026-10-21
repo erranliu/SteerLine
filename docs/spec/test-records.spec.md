@@ -19,7 +19,7 @@
 | `internal/storage/sqlite/test_evidence.go` | 原 Evidence 必须绑定 Candidate/Run，不能承载独立脚本；新增项目记录表/查询索引是必要扩展。原证据收集状态继续由原 owner 维护。 |
 | `internal/product/api/test_management.go`、HTTP/客户端、Web | 扩展登记与只读查询；页面不遍历候选拼历史。原候选 PlanTests 保持原 EvidenceView 读取，只增加记录跳转。 |
 
-旧 [测试管理 Spec](test-management.spec.md)的“不做独立页面/只接收 Runner 候选来源”在本次扩展；其生成/应用、Task 材料冻结及候选证据规则保持。已有生产者/消费者共同采用扩展后的同一报告类型，不保留旧格式兼容、历史回填或迁移。保留原文件布局属于实现复用，并非旧数据兼容。
+旧 [测试管理 Spec](test-management.spec.md)的“不做独立页面/只接收 Runner 候选来源”在本次扩展；系统生成和候选材料冻结沿最新主干的 [项目维护收敛](project-maintenance-simplification.spec.md)，不恢复旧人工 apply；原候选证据规则保持。已有生产者/消费者共同采用扩展后的同一报告类型，不保留旧格式兼容、历史回填或迁移。保留原文件布局属于实现复用，并非旧数据兼容。
 
 ## 3. 测试集与报告
 
@@ -64,7 +64,7 @@ steerline tests register -project <项目ID> -report-dir <本次报告绝对目�
 # test-feedback 新参数：-rerun-of 'test_id=前次报告ID[,test_id=前次报告ID]'
 ```
 
-register 只读指定目录内的报告和声明证据，不执行测试。CLI 通过既有认证应用/项目命令通道逐条提交；可由本项目 test-feedback 或其他项目脚本调用。新增命令独立校验参数，不沿用 generate/apply 的必填请求号和材料参数。命令请求号按原 CommandEnvelope 生成/保存；业务去重用项目+报告 ID，不能混用传输请求号。
+register 只读指定目录内的报告和声明证据，不执行测试。CLI 通过既有认证应用/项目命令通道逐条提交；可由本项目 test-feedback 或其他项目脚本调用。新增命令独立校验参数，不沿用生成/停止命令的必填请求号和材料参数。命令请求号按原 CommandEnvelope 生成/保存；业务去重用项目+报告 ID，不能混用传输请求号。
 
 项目目标由调用方显式选择，来源仓库沿现有项目 repository 识别/校验，不发明第二套 Git URL 归一化。Runner 来源必须核验原绑定，普通脚本记录明确标“脚本报告”，不能凭填写来源字段升级为 Runner 证明。
 
@@ -76,7 +76,7 @@ CLI 只读取声明的目录内普通文件，拒绝路径穿越/绝对引用/�
 
 登记阶段未上传/无法取得 summary 与测试执行时缺必要证据分开：前者保留脚本报告的原始结果并标“证据未核实”，后者由生产者如实报告 incomplete。不得为了登记成功把原始失败改成未完成，或把执行未完成改成通过。
 
-控制台和独立 registration.json 按报告 ID 记录已登记/失败/未知、目标与诊断。多个报告分别成功或失败，不要求整目录事务。测试退出码保持原意；standalone register 有拒绝/未知项时返回非零并列明。离线后显式补登记原目录，不重跑测试。没有后台发送器、自动补测或常驻 worker。
+控制台和独立 registration.json 按报告 ID 记录已登记/失败/未知、目标与诊断。多个报告分别成功或失败，不要求整目录事务。测试退出码保持原意；standalone register 有拒绝/未知项时返回非零并列明。离线后显式补登记原目录，不重跑测试。本地登记日志在发送前保存未知状态，显式补登按尝试追加并保留原回执。原请求对账只读取并核验该记录及完整原输入，不依赖 UI 历史详情或重新提交；临时存储/传输失败保持未知。没有后台发送器、自动补测或常驻 worker。
 
 ### 4.3 所有权与去重
 
@@ -86,7 +86,7 @@ Runner 保留原公开 artifact 收集和 Candidate/Run Evidence 所有权；在
 
 项目记录的 summary 存取统一受 512 KiB 限制，超过时只显示原引用/不可用原因。Runner 原 Evidence 中更大的合格 artifact 仍按原规则保留和供 PlanTests 核验，不因页面预算被截断或删除。
 
-原 PlanTests 继续读原 EvidenceView，复用扩展后的报告解析，不改读项目记录表。项目记录投影暂时不可用不得吞掉原已核验候选证据。原 Evidence 存储维护已投影 artifact 数量（复用其只追加、不可变的 artifacts 集合），现有项目 tick 有界读取尚未投影的已保存 Evidence 并幂等登记，成功才推进该数量；包括已交付/已放弃候选，不依赖其继续满足原 Runner 观察筛选或 Runner 仍在线。只有 artifacts 增加才需再次投影，单纯 Git 观察时间更新不触发重复投影。此处只处理本服务已有证据，不重新采集、不建 outbox/新 worker；结构冲突返回明确诊断，不标投影成功。
+原 PlanTests 继续读原 EvidenceView，复用扩展后的报告解析，不改读项目记录表。项目记录投影暂时不可用不得吞掉原已核验候选证据。原 Evidence 存储维护已投影 artifact 数量（复用其只追加、不可变的 artifacts 集合），现有项目 tick 有界读取尚未投影的已保存 Evidence 并幂等登记，成功才推进该数量；包括已交付/已放弃候选，不依赖其继续满足原 Runner 观察筛选或 Runner 仍在线。只有 artifacts 增加才需再次投影，单纯 Git 观察时间更新不触发重复投影。此处只处理本服务已有证据，不重新采集、不建 outbox/新 worker；结构冲突返回明确诊断，不标投影成功；单个坏候选不阻断其他候选，同批显式父子报告不依赖枚举顺序。
 
 原候选 Git 新鲜度、固定 Plan/定义、Run/输入及必要证据规则不放宽；独立记录不因 SHA 相同自动算作候选证明。查询不导入报告，也不扫描临时目录/私有文件。
 

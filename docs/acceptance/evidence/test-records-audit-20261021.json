@@ -1,0 +1,414 @@
+{
+  "date": "2026-10-21",
+  "kind": "implementation-audit",
+  "review": "current chat self-review; no independent agent review claimed",
+  "integrated_main": "6cf83c63662f8f586e0922e11cdbbc4f2098bdef",
+  "tested_head": "3101a288cb14c33941e14fbbdd80e6d43a24b269",
+  "worktree": "dirty; follow-up command/report changes and driver directory fix tested separately",
+  "findings_fixed": [
+    "Registration reconciliation now reads one authoritative record and validates the complete original input, without UI history coupling.",
+    "Transient storage errors remain unknown; known validation and identity errors are rejected.",
+    "CLI and script share an append-only attempt journal persisted before sending.",
+    "Retained evidence projection progresses other candidates after errors, rotates bounded batches and orders explicit parents before children.",
+    "Environment mismatch freezes before execution; retest diagnosis distinguishes environment from definition change.",
+    "One shared report parser; removed unused freeze parameter and skipped freeze for build-only/summary-only.",
+    "Main integration preserves automatic materials/current candidate gates, uses schema 28, updates project switch maintenance fixture.",
+    "Shared debug driver creates automatic-material evidence directory before writing it."
+  ],
+  "go": [
+    {
+      "command": [
+        "go",
+        "test",
+        "./internal/testmanagement",
+        "./internal/storage/sqlite",
+        "./internal/app",
+        "./internal/product/httpapi",
+        "./internal/product/applicationclient",
+        "./cmd/steerline",
+        "./cmd/test-feedback",
+        "./tests/e2e/internal/driver",
+        "./web/server",
+        "-run",
+        "^(TestTR|TestTM)",
+        "-count=1",
+        "-json"
+      ],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-audit-l1-20261021-1713\\summary.json",
+      "status": "passed",
+      "complete": true,
+      "tests": 65,
+      "passed_tests": 65,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "source_commit": "3101a288cb14c33941e14fbbdd80e6d43a24b269",
+      "sha256": "1835b40fa23102e46ef9d92c5a3653cb41ef4488296d0a0b138adb059e4f1513"
+    },
+    {
+      "command": [
+        "go",
+        "test",
+        "./internal/testmanagement",
+        "./internal/storage/sqlite",
+        "./internal/app",
+        "./internal/product/httpapi",
+        "./internal/product/applicationclient",
+        "./cmd/steerline",
+        "./cmd/test-feedback",
+        "./tests/e2e/internal/driver",
+        "./web/server",
+        "-run",
+        "^(TestTR|TestTM)|^TestPMSGenerationFreshnessAndCandidateVersions$|^TestPMRemoteFreshObservedCommitAndRewrite$|^TestCandidateReadFactsAcrossViews$",
+        "-count=1",
+        "-json"
+      ],
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-audit-final-l1-20261021-1715\\summary.json",
+      "status": "passed",
+      "complete": true,
+      "tests": 77,
+      "passed_tests": 77,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "source_commit": "3101a288cb14c33941e14fbbdd80e6d43a24b269",
+      "sha256": "9b694a9c84c686d118bc71e130df87c7df42297a65931e7b6a6aef72f5747cce"
+    }
+  ],
+  "other_checks": [
+    {
+      "command": "npm --prefix web test -- src/features/tests src/features/runs/plan-tests.test.tsx src/app/project-switch.test.tsx src/shared/api",
+      "result": "59 tests across 6 files passed; zero unhandled errors after fixture fix",
+      "raw_log": "tool stdout; not separately persisted"
+    },
+    {
+      "command": "npm --prefix web run build",
+      "result": "TypeScript/Vite passed",
+      "raw_log": "tool stdout; same Web build also retained in final debug package"
+    },
+    {
+      "command": "go test ./cmd/test-feedback -run 'Test.*(Scope|Quick|Owner|L3|L4|Scenario|Manifest)' -count=1",
+      "result": "passed"
+    },
+    {
+      "command": "go test ./internal/testkit/boundary/... -count=1",
+      "result": "both boundary packages passed"
+    },
+    {
+      "command": "go test ./cmd/test-feedback -run '^TestTR|^TestTM|Test.*(Scope|Quick|Owner|L3|L4|Scenario|Manifest)' -count=1",
+      "result": "passed after freeze simplification"
+    },
+    {
+      "command": "go test ./tests/e2e/internal/driver -run '^TestTR|^TestTM' -count=1",
+      "result": "passed after shared evidence directory fix"
+    },
+    {
+      "command": "python scripts/check_doc_links.py",
+      "result": "530 Markdown files, 3478 local links, zero errors before final acceptance append; checked again at commit"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed"
+    },
+    {
+      "command": "conflict-marker scan of changed source/docs",
+      "result": "zero unresolved markers"
+    }
+  ],
+  "failed_attempt": {
+    "out": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-audit-flow-20261021-1712",
+    "package": "C:\\SteerlineDebug\\dev-20261021-171224-3101a288-dirty",
+    "failure": "automatic material evidence directory missing before browser startup; original failed proof retained",
+    "closure": "C:\\SteerlineDebug\\dev-20261021-171224-3101a288-dirty\\evidence\\test-records\\audit-verify-stop.json",
+    "closure_result": "formal verify-stop exited zero; resources_settled=true"
+  },
+  "final_flow": {
+    "out": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-audit-flow-final-20261021-1715",
+    "status": "passed",
+    "package": "C:\\SteerlineDebug\\dev-20261021-171607-3101a288-dirty",
+    "scenario_passed": true,
+    "cleanup_complete": true,
+    "proof": {
+      "environment": "controlled",
+      "package": "C:\\SteerlineDebug\\dev-20261021-171607-3101a288-dirty",
+      "passed": true,
+      "resources_settled": true,
+      "source": "C:\\Users\\lmas1\\.codex\\worktrees\\b8d5\\SteerLine",
+      "stopped": true
+    },
+    "reports": [
+      {
+        "id": "9744529e15594d619110f6e7ffb5a4c2",
+        "rerun_of": "",
+        "status": "failed",
+        "before_commit": "c68bed7bce5c4a5bddaad1240bcad3518ff9c686",
+        "after_commit": "c68bed7bce5c4a5bddaad1240bcad3518ff9c686",
+        "report": "C:\\SteerlineDebug\\dev-20261021-171607-3101a288-dirty\\evidence\\test-records\\first-failed\\managed-fixture.marker.json"
+      },
+      {
+        "id": "611fcd418db441cb918b8fb256f22b47",
+        "rerun_of": "9744529e15594d619110f6e7ffb5a4c2",
+        "status": "passed",
+        "before_commit": "462baa37215765f63a382a5b97514e360b38e2f3",
+        "after_commit": "462baa37215765f63a382a5b97514e360b38e2f3",
+        "report": "C:\\SteerlineDebug\\dev-20261021-171607-3101a288-dirty\\evidence\\test-records\\second-passed\\managed-fixture.marker.json"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-audit-flow-final-20261021-1715\\summary.json",
+        "sha256": "459db6dd18e3e7f29b70e98fbaa606f81b872d0083e024f2b5b06fce91388d80"
+      },
+      {
+        "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-audit-flow-final-20261021-1715\\scenarios\\testing.records\\scenario.json",
+        "sha256": "30675a81d807da393cbeafd26aa7df3dcdf226173cff92c3de9fae7b16e6a8f3"
+      },
+      {
+        "path": "C:\\SteerlineDebug\\dev-20261021-171607-3101a288-dirty\\evidence\\test-records\\proof.json",
+        "sha256": "97bcbaab49a94c8c446fe610598ac9b1bdd829a2363f471d885d171e2a740b0b"
+      },
+      {
+        "path": "C:\\SteerlineDebug\\dev-20261021-171607-3101a288-dirty\\evidence\\test-records\\browser\\test-records-testing-recor-d7eb3-etest-and-read-only-history\\test-records.png",
+        "sha256": "117571229bb73ccf8f70fcbcc8d1ef14bfc851368f201d04210c35faba2dcefb"
+      }
+    ],
+    "journal_attempts": {
+      "first-failed": 2,
+      "second-passed": 1
+    },
+    "visual_review": "Current chat inspected actual screenshot; original failure, retest passed, chain, evidence and read-only controls visible. Not a user UX signoff."
+  },
+  "manual": "TR-M01 pending user experience review; no full L1/L2/L3/L4 or real model run",
+  "files": [
+    {
+      "path": "cmd/steerline/test_records.go",
+      "sha256": "9cb07facc4f09ec3c2037de4bd36807257f9ab7490a2edbc70e56c76b7e0a388"
+    },
+    {
+      "path": "cmd/steerline/test_records_test.go",
+      "sha256": "e559b0aee64e1118913dd70d5865a187a4fb57228ce84ffd13d1027ad819b444"
+    },
+    {
+      "path": "cmd/steerline/tests.go",
+      "sha256": "1d0335f273fdd5936b067c8077e6bfcc0009659c31b2032f5627708983eb80c5"
+    },
+    {
+      "path": "cmd/test-feedback/main.go",
+      "sha256": "f213e0e7e83dc2fd0fbc7e807b6a2da4d86965344111bd62a1ee4abb79943935"
+    },
+    {
+      "path": "cmd/test-feedback/managed.go",
+      "sha256": "9393dfa80b67a076ae59e2dfc925fbfbacc12766ab817ca01231dd89019bad9a"
+    },
+    {
+      "path": "cmd/test-feedback/managed_test.go",
+      "sha256": "6664c9e97e1a32dd4982b4fcc23b3324f49719047fd89a78dc5be7dd754bb5a8"
+    },
+    {
+      "path": "cmd/test-feedback/scoped.go",
+      "sha256": "5dc4ab8ac7da1f169a9725dab6ae710269b69334ef4842451ac95a6ab086e574"
+    },
+    {
+      "path": "cmd/test-feedback/test_records_test.go",
+      "sha256": "16fffeeadf156f09df7b965b5e64debb06733c9b0c4db4d38ae8a2cdf5967b75"
+    },
+    {
+      "path": "debug-template/projects/SteerlineTest/test-marker.ps1",
+      "sha256": "b76a72ab025e35a83a7e35a7e165388293dd2507f16c24113cbfa32fd75f153e"
+    },
+    {
+      "path": "internal/app/test_management.go",
+      "sha256": "6e6037cb8dd447e7b73b1389b8fbc996ad8e1cfcc15a11050c89c566bf0ccc13"
+    },
+    {
+      "path": "internal/app/test_records.go",
+      "sha256": "e788c79881b272c289dcd8af04f0350967329d442c4403e57d0ad4bdffc25aec"
+    },
+    {
+      "path": "internal/app/test_records_test.go",
+      "sha256": "ad6a456247e8589ec9f50d8a6614186a9d5fcf58723f9295327d752730359760"
+    },
+    {
+      "path": "internal/pathguard/path.go",
+      "sha256": "0e67328b4d2f4873c9c3d1c10282ca23ac3dea090b84dbf4b9e6908938e940de"
+    },
+    {
+      "path": "internal/product/api/client.go",
+      "sha256": "6ead979bf916764e1cb7788ccdb823420e7f10be4a1934b064b9d6eee66cf648"
+    },
+    {
+      "path": "internal/product/api/test_records.go",
+      "sha256": "f4131eb0e7b617db361bb8622f5883fad0b14f5d25055f1962b5f5f4d8c685fb"
+    },
+    {
+      "path": "internal/product/applicationclient/test_records.go",
+      "sha256": "7096fd18f07c0e2985570305bb5a6408b50916a6a193e4d846c6cb4d6dbb1a28"
+    },
+    {
+      "path": "internal/product/applicationclient/test_records_test.go",
+      "sha256": "6ee3a752dc8a81c66774dbdba4ce4d7c78694a95191e04f437edd51a1450facd"
+    },
+    {
+      "path": "internal/product/client/test_records.go",
+      "sha256": "79ded1a3f49e5acd087dae166feee757e4353d9e7043e2695ab91c8b5ab85d6e"
+    },
+    {
+      "path": "internal/product/httpapi/command_registry.go",
+      "sha256": "990e00c4eeb7b58c5e272d56520af8005070f5610e4626811de1c5c92523efff"
+    },
+    {
+      "path": "internal/product/httpapi/server.go",
+      "sha256": "1c94439f9a1869cd57afd3fb4850fbadd1e78d6508e90c3b617b1f8d2f610a0f"
+    },
+    {
+      "path": "internal/product/httpapi/test_records.go",
+      "sha256": "7ef75b9c5689555d441711c4bb0889730744c42869d0c9017b6cded734349a79"
+    },
+    {
+      "path": "internal/product/httpapi/test_records_test.go",
+      "sha256": "808c9754a3feaa328ecbbe9e2f7dc1ecff972af4e9fbad04451c1dcce5483f03"
+    },
+    {
+      "path": "internal/product/httpcontract/contracts.go",
+      "sha256": "111a19d7ed715db0d0f4d7966f0f337d9733e58ae9d639da04f79f5d18bc1c6a"
+    },
+    {
+      "path": "internal/product/httpcontract/routes.go",
+      "sha256": "40c3271bcbc0423354d9869d2a2b729de0017c8ac9d5b78502e56063da3efb52"
+    },
+    {
+      "path": "internal/storage/sqlite/reader.go",
+      "sha256": "1f3addca23095267c19ef68c889075b8afb5f96d6d908195ec96196f0bb2d902"
+    },
+    {
+      "path": "internal/storage/sqlite/sqlite_store_schema.go",
+      "sha256": "cf43f2901cc67a4ae354280193dab45a77b5f806a24ee28bf0f1cd299022956b"
+    },
+    {
+      "path": "internal/storage/sqlite/test_records.go",
+      "sha256": "baefd5c472eddb96a322c1f2cec6d02e0dd03209afbea3fa9974e8a52a69f286"
+    },
+    {
+      "path": "internal/storage/sqlite/test_records_test.go",
+      "sha256": "c3c3d7063c8bd4830a6c6292efdf52628950729cd28726d452140cf5960d18c7"
+    },
+    {
+      "path": "internal/testmanagement/evidence.go",
+      "sha256": "61a70a2d4369edb8b50c8d8038bd5f3fcf90fb588c6626f54fdf5a3bb2382a20"
+    },
+    {
+      "path": "internal/testmanagement/evidence_test.go",
+      "sha256": "a7fadd47935d0708791f9c472dbca33c08ba913c50418656e2ec32a600c9632a"
+    },
+    {
+      "path": "internal/testmanagement/model.go",
+      "sha256": "ff792be04761138f6f04d3f07d1b1c8b7af46b4c9f54576bfa6d5309895aa576"
+    },
+    {
+      "path": "internal/testmanagement/model/evidence.go",
+      "sha256": "68fcf601cd434b72b62ac6713a308ebe96790beda22137b6ccbccc15386c3f62"
+    },
+    {
+      "path": "internal/testmanagement/model/test_records.go",
+      "sha256": "21166474508d769a81018b8f424e1b9188066e3fc7cb1bae9b5ef9c54c26d69d"
+    },
+    {
+      "path": "internal/testmanagement/model_test.go",
+      "sha256": "d27d79163014179bf431a0b177c308e658d9b461e38eb6f95e45c980a7b00c50"
+    },
+    {
+      "path": "internal/testmanagement/record_files.go",
+      "sha256": "ddd372a40a73f1d86fc10f95033e8b489a5025a7606cbefba31c5f437bdc603a"
+    },
+    {
+      "path": "internal/testmanagement/records.go",
+      "sha256": "48030b7f19207d85760a6c120c8be2acf4bfe04d16fb1cfb2c9775746a7ca923"
+    },
+    {
+      "path": "internal/testmanagement/records_test.go",
+      "sha256": "88c1e8edf1a02a40a01a1d86327105c271afb830003ef9dd6b851ee27b122c1a"
+    },
+    {
+      "path": "scripts/test-test-records.ps1",
+      "sha256": "128d1ae939d506b4a25b2f40bd9d551ea6b23adbfb6c1a75578784c00ca19270"
+    },
+    {
+      "path": "tests/e2e/README.md",
+      "sha256": "3e1a06e58c508a891912702e6fc263f45ac61307b9109dadfca321138893a389"
+    },
+    {
+      "path": "tests/e2e/internal/driver/debug_release.go",
+      "sha256": "bf71ab053d61699480f291100e246f3ccac220f3a3909a6dea6aef9dd1f36ff6"
+    },
+    {
+      "path": "tests/e2e/internal/driver/debug_reset.go",
+      "sha256": "90ff6b937eb0007d8fecf7a4cb8431d2d658ea82aad31c812698d32e63686735"
+    },
+    {
+      "path": "tests/e2e/internal/driver/project_maintenance.go",
+      "sha256": "fc48eb77df2cc249962e8ca7c6652016a8f9ad92d857ba2466f0738173d0c250"
+    },
+    {
+      "path": "tests/e2e/internal/driver/test_management.go",
+      "sha256": "55718a305310146f4ae2342bd499f7b637ad53a80f8a0e7f73f8c3b7ad717545"
+    },
+    {
+      "path": "tests/e2e/internal/testenv/test_records.go",
+      "sha256": "32996e28aad55b271ea6fe262559f5f3efb0933b6dca5e506315a05ea9f9fab6"
+    },
+    {
+      "path": "tests/e2e/suites.json",
+      "sha256": "2dda645abd01555cdcf397ce772e2e858cdf48f4e25104dbd3de866f82b7807a"
+    },
+    {
+      "path": "tests/e2e/suites/testing/records_test.go",
+      "sha256": "e3f63b4a646ea409639a00e7479f36c5402f0ae9ccd6c59f9473f1a15fb5bca9"
+    },
+    {
+      "path": "web/server/server.go",
+      "sha256": "66150a5f9ded2108cb2148073c32bb391aa4b4120efdbe608030a13d3ae4b431"
+    },
+    {
+      "path": "web/server/server_test.go",
+      "sha256": "f6a35581c827ea71a886387e259ad037a7d3aeff2e8ba153d3e15ffa7f5989f5"
+    },
+    {
+      "path": "web/src/app/app.tsx",
+      "sha256": "bb023b86e31b9465e0a3b5ee827abe401a1c4256935d98de1f7a6bbe28116bf0"
+    },
+    {
+      "path": "web/src/app/project-switch.test.tsx",
+      "sha256": "ce39bb2c3a11e6f16892ba09c6f38ff493a70e4ea7d74311d554dc881f63aea9"
+    },
+    {
+      "path": "web/src/app/use-application-projects.ts",
+      "sha256": "6b32da2e01592c40fa9cffcd2f07d3e608a1844142c9321fa19b9e6ae47a4a17"
+    },
+    {
+      "path": "web/src/features/runs/plan-tests.test.tsx",
+      "sha256": "cdf701d0ff2961f5426100b34e0089180ba200cdaf9d0e390ad640a454c4f025"
+    },
+    {
+      "path": "web/src/features/runs/plan-tests.tsx",
+      "sha256": "37e9364b9fa60f9bfb808edeba8c886520a72c4a8da84d7123ce1da3d996530c"
+    },
+    {
+      "path": "web/src/features/tests/tests.test.tsx",
+      "sha256": "e3065047e9f814d66d0135da863b52cf81fb37ca0521df0079467b623ed6584a"
+    },
+    {
+      "path": "web/src/features/tests/tests.tsx",
+      "sha256": "36b0fcfbc93710fca5593fe17aceb34408bc088ab121a7576ea938dd9fdaa794"
+    },
+    {
+      "path": "web/src/features/tests/types.ts",
+      "sha256": "8648e77965bf3347a36b4ba10ae049ddc49048cbbc66472cd2065ddb0de5036a"
+    },
+    {
+      "path": "web/src/styles.css",
+      "sha256": "a92750ce2ad02c985e2b3a5e457f687d5ed69958f823aab4d247335d6455baef"
+    },
+    {
+      "path": "web/tests/test-records.spec.ts",
+      "sha256": "98112d7d3f4296893fa9bd2d92a4475b38bcf479f985e50d5f461fce8d811a35"
+    }
+  ]
+}

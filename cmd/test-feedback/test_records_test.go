@@ -18,7 +18,7 @@ func TestTRProducerFreezesDefinitionAndIDsBeforeExecution(t *testing.T) {
 	catalog, _ := json.Marshal(testmanagement.Catalogue{Tests: []testmanagement.Definition{d}})
 	_ = os.WriteFile(testmanagement.CataloguePath, catalog, 0600)
 	opts := options{level: "L1", out: t.TempDir()}
-	frozen, e := freezeManagedReports(opts, 1)
+	frozen, e := freezeManagedReports(opts)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -39,14 +39,14 @@ func TestTRProducerFreezesDefinitionAndIDsBeforeExecution(t *testing.T) {
 	if e != nil || r.Definition.Name != "before" || r.ID != frozen.ids["l1.minimum"] || r.Results[0].Status != "passed" {
 		t.Fatal(string(raw), e)
 	}
-	other, e := freezeManagedReports(opts, 2)
+	other, e := freezeManagedReports(opts)
 	if e != nil || other.ids["l1.minimum"] == r.ID {
 		t.Fatal("rerun reused execution identity", e)
 	}
 	d.Environment = "controlled"
 	catalog, _ = json.Marshal(testmanagement.Catalogue{Tests: []testmanagement.Definition{d}})
 	_ = os.WriteFile(testmanagement.CataloguePath, catalog, 0600)
-	if _, err := freezeManagedReports(opts, 3); err == nil {
+	if _, err := freezeManagedReports(opts); err == nil {
 		t.Fatal("environment mismatch was discovered after execution")
 	}
 }

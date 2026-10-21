@@ -49,7 +49,7 @@ type managedRun struct {
 	repository, branch, command string
 }
 
-func freezeManagedReports(opts options, sequence uint64) (*managedRun, error) {
+func freezeManagedReports(opts options) (*managedRun, error) {
 	root, err := e2eRoot()
 	if err != nil {
 		return nil, err

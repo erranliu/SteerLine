@@ -54,7 +54,9 @@ function mock() {
     "fetch",
     vi.fn(async (url: string) =>
       Response.json(
-        url === "/auth/status"
+        url.endsWith("/maintenance")
+          ? { observation: { commit: "" }, tasks: [], profiles: [], profile: "" }
+          : url === "/auth/status"
           ? session
           : url.endsWith("/projects")
             ? { projects }

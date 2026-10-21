@@ -540,6 +540,9 @@ func tmPoll(ctx context.Context, check func() (bool, error)) error {
 // supplies a result, writes an arrangement, or approves a material version.
 func WaitFixtureMaterials(ctx context.Context, home string, identity httpcontract.Identity, plan, out string) (pmm.Material, error) {
 	var material pmm.Material
+	if err := os.MkdirAll(out, 0700); err != nil {
+		return material, err
+	}
 	client, e := applicationclient.Open(ctx, home)
 	if e != nil {
 		return material, e

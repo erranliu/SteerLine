@@ -6,7 +6,7 @@
 
 L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)，本项目入口见 [测试总入口](../../docs/testing.md)。下面按当前实际登记级别列出测试内容。
 
-[suites.json](suites.json)是机器执行登记的唯一来源，登记十三项（L2 两项、L3 七项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
+[suites.json](suites.json)是机器执行登记的唯一来源，登记十五项（L2 两项、L3 九项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
 
 执行页展示清单为 [test-list.json](../../docs/testing/test-list.json)，沿用此处场景 ID/级别/环境与入口，不参与调度。更改测试内容时同步更新展示清单、此表和相关 Plan；结果追加格式及 Runner 回传约定见[测试总入口](../../docs/testing.md#测试管理文档与结果)。
 

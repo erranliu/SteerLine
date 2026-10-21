@@ -33,7 +33,7 @@ func TestTMManagedResultsPreserveFailureAndNoMatch(t *testing.T) {
 			}
 			_ = writeJSON(filepath.Join(out, "summary.json"), summary)
 			opts := options{level: "L1", out: out}
-			frozen, freezeErr := freezeManagedReports(opts, 1)
+			frozen, freezeErr := freezeManagedReports(opts)
 			if freezeErr != nil {
 				t.Fatal(freezeErr)
 			}

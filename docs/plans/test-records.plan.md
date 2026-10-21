@@ -8,7 +8,7 @@
 
 已核对：`cmd/steerline/tests.go` 用 STEERLINE_HOME 发现应用，没有 -home 参数，且旧子命令共用必填 request-id；register 必须独立校验参数。项目和应用 HTTP 命令均有 1 MiB 限制，Runner 单 artifact 为 1 MiB；本次不能用“沿现有预算”掩盖整目录/大日志无法提交。Spec 已固定逐报告、小 summary、超限保留记录的做法。
 
-Runner 所需公开 artifacts/Git 已具备，不依赖其新功能或真实模型。原 worker/停止/恢复、生成/应用、Task 冻结不变；因此不新建并行生命周期矩阵。未发布版共同切换扩展后的报告字段，不兼容旧包、不回填历史。
+Runner 所需公开 artifacts/Git 已具备，不依赖其新功能或真实模型。已读取 [worker 生命周期](../product-design/worker-lifecycle.md)，本次没有新增或修改节点/异常/验证矩阵规则（W/E/V 无差异）。原 worker/停止/恢复、系统生成及候选材料冻结沿最新主干的 [项目维护收敛](../spec/project-maintenance-simplification.spec.md)，不恢复人工 apply，也不新建并行生命周期矩阵。未发布版共同切换扩展后的报告字段，不兼容旧包、不回填历史。
 
 ## 2. 实施步骤
 
@@ -23,7 +23,7 @@ Runner 所需公开 artifacts/Git 已具备，不依赖其新功能或真实模�
 
 - 在原 SQLite/store/ports 扩展项目记录表及必要测试集/时间索引，主身份为项目+报告 ID；保存不可变报告、声明证据摘要和附属证据/来源观察，入库序号用于分页上界。不给每个场景建表，也不复制候选状态。
 - 每份报告一笔事务：校验报告、项目、已存在父记录同测试集、自引用/冲突、规范化摘要和已接收 summary；同内容幂等。引用新 ID 的既有父记录天然保持先后，不建立可编辑复验 DAG 或跨机时钟准入。
-- 缺失/过大 summary 留不可用原因和原引用，记录可见；已上传字节摘要错误则拒绝。补齐只能匹配原声明摘要，事务更新附属观察，不改结果。提供 Register/Catalogue/List/Detail/Summary 窄用例。
+- 缺失/过大 summary 留不可用原因和原引用，记录可见；已上传字节摘要错误则拒绝。补齐只能匹配原声明摘要，事务更新附属观察，不改结果。提供 Register/Catalogue/List/Detail/Summary 窄用例。登记原请求对账使用 owner 的单记录回执读取，重新校验完整原输入及附带证据，不调用 UI Detail/历史投影；暂时存储失败保持未知，只有明确无效/身份冲突才判拒绝。
 - 历史目录直接从已保存定义快照合并旧 ID；当前目录读取复用项目维护基线，失败不能拦住记录查询。
 
 ### 2.3 CLI、脚本与有界传输
@@ -31,14 +31,14 @@ Runner 所需公开 artifacts/Git 已具备，不依赖其新功能或真实模�
 - `cmd/steerline/tests.go` 增加独立 register 参数分支，`-project/-report-dir` 与原 STEERLINE_HOME 发现；不传生成/应用参数。复用既有应用客户端/项目命令/认证，发送记录内容而非服务器本机路径。
 - CLI 逐报告读取原子发布的 `managed-*.json` 和已声明 summary：报告 128 KiB、summary 512 KiB 原始字节上限，完整编码信封至多 1 MiB。路径/链接/摘要沿既有 helpers；不提高通用预算、不读取未声明文件、不做分片。报告有效但 summary 不可用仍登记并显示诊断。
 - 记录/证据解析、规范化、预算检查放业务 owner，CLI 仅执行本机文件读取与命令传送；Runner 用相同纯校验，不从 CLI 包导入实现。
-- test-feedback 新增可选 `-record-project` 与 `-rerun-of 'test_id=record_id[,test_id=record_id]'`；结束时调用同一 register 用例。registration.json 按报告保存结果和原请求信息，控制台区分测试失败和登记失败。报告 ID 保持不变，补登记只重发原报告，原测试退出码不变；standalone register 有失败/未知项非零。
+- test-feedback 新增可选 `-record-project` 与 `-rerun-of 'test_id=record_id[,test_id=record_id]'`；结束时调用同一 register 用例。CLI 与 test-feedback 共用本地登记日志；registration.json 在发送前先保存未知状态，显式补登按尝试追加并保留原请求信息，控制台区分测试失败和登记失败。报告 ID 保持不变，补登记只重发原报告，原测试退出码不变；standalone register 有失败/未知项非零。
 - 保留原 Full/build-only/Go 定向入口，未适配集合不报整体通过；产物仍用新 out/原忽略目录。同步 docs/testing.md 的扩展格式、例子、单集复验映射及补登记流程。
 
 ### 2.4 Runner 接线，候选读取保持
 
 - EvidenceService 按原公开 artifacts/请求校验和持久原 Evidence；项目 tick 从已存证据登记同一份解析报告为项目记录。原 Evidence 行增加已投影 artifact 数量，成功登记后才推进；按 artifacts 追加数量大于已投影数量的条件有界读取，Git 刷新不重投影，不每轮全库重放，不新增队列/worker。
-- 项目记录暂时写失败不能回滚/吞掉已保存的原候选证据；即使之后候选已放弃/交付、Runner 不在线，tick/重启仍能用本服务保存的原证据补登记。冲突明确诊断，不推进投影 artifact 数量。CLI 与 Runner 同报告去重，核验来源附加而不改原报告。
-- PlanTests 保留原 EvidenceView/当前 Git 新鲜度/Run 绑定/固定材料门槛，只新增深链接。原生成/应用/停止不重构，独立脚本记录不反向注入候选通过。
+- 项目记录暂时写失败不能回滚/吞掉已保存的原候选证据；即使之后候选已放弃/交付、Runner 不在线，tick/重启仍能用本服务保存的原证据补登记。冲突明确诊断，不推进投影 artifact 数量。有界批次遍历失败后仍处理其他候选，以进程内轮转游标避免坏候选占满批次；同批报告先登记可用父记录，不依赖 artifact 枚举顺序，不新增持久队列。CLI 与 Runner 同报告去重，核验来源附加而不改原报告。
+- PlanTests 保留原 EvidenceView/当前 Git 新鲜度/Run 绑定/固定材料门槛，只新增深链接。原系统生成/停止不重构，独立脚本记录不反向注入候选通过。
 
 ### 2.5 查询与 Web
 
@@ -64,9 +64,9 @@ Runner 所需公开 artifacts/Git 已具备，不依赖其新功能或真实模�
 | 验收项 | 级别/组、环境与时点 | 命令 | 通过条件/证据 |
 | --- | --- | --- | --- |
 | [TR-A01](../acceptance/test-records.md#tr-a01) | L1 / tr.producer，临时 Git/out；2.1/2.3 后 | `go run ./cmd/test-feedback -out <证据>/producer -- ./cmd/test-feedback -run '^TestTRProducer\|^TestTMManaged\|^TestTMRegistered' -count=1` | 开始前冻结/运行中清单变化、原结果和退出码、部分/零匹配、record 参数/导出；summary/原报告/调用计数 |
-| [TR-A02](../acceptance/test-records.md#tr-a02) | L1 / tr.register，临时 repo/DB/认证服务；2.2/2.3 后 | `go run ./cmd/test-feedback -out <证据>/register -- ./internal/testmanagement ./internal/storage/sqlite ./internal/app ./internal/product/httpapi ./internal/product/applicationclient ./cmd/steerline -run '^TestTRRegister' -count=1` | 无候选/认证/项目/路径、真实编码 1 MiB 边界、缺/大 summary 可查询、同摘要补齐/错误摘要拒绝、分条成功/幂等/冲突、离线/未知/原退出码；信封/注册状态/事务证据 |
+| [TR-A02](../acceptance/test-records.md#tr-a02) | L1 / tr.register，临时 repo/DB/认证服务；2.2/2.3 后 | `go run ./cmd/test-feedback -out <证据>/register -- ./internal/testmanagement ./internal/storage/sqlite ./internal/app ./internal/product/httpapi ./internal/product/applicationclient ./cmd/steerline -run '^TestTRRegister' -count=1` | 无候选/认证/项目/路径、真实编码 1 MiB 边界、缺/大 summary 可查询、同摘要补齐/错误摘要拒绝、分条成功/幂等/冲突、离线/未知/原退出码、发送前日志与追加尝试、已提交未知回执只读对账/完整证据重验；信封/注册状态/事务证据 |
 | [TR-A03](../acceptance/test-records.md#tr-a03) | L1 / tr.retest，纯报告；2.1/2.2 后 | `go run ./cmd/test-feedback -out <证据>/retest -- ./internal/testmanagement -run '^TestTRRetest' -count=1` | 单份完整通过、部分/分次/跨 SHA 不拼接、再失败/未完成/缺证据/不可比、脏/未知源码复验标注而不强制提交、分叉/无关联/迟到/跨机时钟；原报告和投影 |
-| [TR-A04](../acceptance/test-records.md#tr-a04) | L1 / tr.runner，公开 Runner fixture；2.4 后 | `go run ./cmd/test-feedback -out <证据>/runner -- ./internal/testmanagement ./internal/app ./internal/storage/sqlite -run '^TestTRRunner\|^TestTMEvidence\|^TestTMPlan' -count=1` | 同报告不同顺序去重、索引失败保留原证据/未推进 artifact 数量，随后候选放弃/交付及 Runner 离线仍从已存证据补登，成功后不全库重放；PlanTests 原归属/Git 门槛，调用计数/结果 |
+| [TR-A04](../acceptance/test-records.md#tr-a04) | L1 / tr.runner，公开 Runner fixture；2.4 后 | `go run ./cmd/test-feedback -out <证据>/runner -- ./internal/testmanagement ./internal/app ./internal/storage/sqlite -run '^TestTRRunner\|^TestTMEvidence\|^TestTMPlan' -count=1` | 同报告不同顺序去重、索引失败保留原证据/未推进 artifact 数量，随后候选放弃/交付及 Runner 离线仍从已存证据补登，失败批次仍推进其他候选、轮转不饥饿、父子 artifact 乱序正确，成功后不全库重放；PlanTests 原归属/Git 门槛，调用计数/结果 |
 | [TR-A05](../acceptance/test-records.md#tr-a05) | L1 / tr.query，隔离项目数据；2.5 后 | `go run ./cmd/test-feedback -out <证据>/query -- ./internal/testmanagement ./internal/storage/sqlite ./internal/app ./internal/product/httpapi ./web/server -run '^TestTRQuery' -count=1` | 目录坏仍可查历史、组合过滤/时区、游标项目/筛选/入库上界、链跨页、汇总和已存 summary/不可用、观察变化刷新提示；响应/零写结果副作用 |
 | [TR-A06](../acceptance/test-records.md#tr-a06) | L1 / Web Vitest + 编译，接口 fixture；2.5 后 | `npm --prefix web test -- src/features/tests src/features/runs/plan-tests.test.tsx src/app/project-switch.test.tsx src/shared/api`；`npm --prefix web run build` | 只读导航/筛选/URL/摘要缺失/候选往返、离线/隐藏/迟到隔离、部分不冒充完整；组件报告/构建日志 |
 | [TR-A07](../acceptance/test-records.md#tr-a07) | L3 / testing.records，controlled 新包/SteerlineTest/真实 Go-CLI-Web-Edge；定向 L1 后 | `go run ./cmd/test-feedback -level L3 -suite testing -scenario 'testing.records' -env controlled -out <证据>/flow` | 实际小脚本失败→提交修正→通过→原报告重放，CLI/DB/API/浏览器和清理；scenario.json/summary/CLI输出/截图 |

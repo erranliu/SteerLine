@@ -102,9 +102,9 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "create report directory: %v\n", err)
 		return 2
 	}
-	if parsed.level != "" {
+	if parsed.level != "" && !parsed.buildOnly && parsed.summarizeLog == "" && len(parsed.goTestArgs) == 0 {
 		before, sequence := observeManagedSource(), managedReportSequence()
-		parsed.managed, err = freezeManagedReports(parsed, sequence)
+		parsed.managed, err = freezeManagedReports(parsed)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			return 2
