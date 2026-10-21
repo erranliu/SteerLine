@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"os"
 	"path/filepath"
 	"strings"
@@ -238,6 +239,9 @@ func (d *ApplicationDirectory) Catalog(ctx context.Context) (contract.Catalog, e
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	result := contract.Catalog{Projects: []contract.Project{}}
+	if len(d.global) > 0 {
+		result.LoadedExecutionDigest = executionconfig.Digest(d.global)
+	}
 	for _, e := range d.entries {
 		result.Projects = append(result.Projects, e.view)
 	}

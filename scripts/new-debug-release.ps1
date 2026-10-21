@@ -10,9 +10,10 @@
     [string]$OrcaExecutable = 'orca',
     [string]$OrcaRuntimeExecutable = '',
     [string]$OrcaRuntimeSHA256 = '',
+    [string]$OrcaRuntimePublication = '',
     [string]$AgentModel = '',
     [string]$AgentExecutable = '',
-    [ValidateSet('','medium','high','xhigh')][string]$AgentReasoningEffort = ''
+    [ValidateSet('','minimal','low','medium','high','xhigh','max','ultra')][string]$AgentReasoningEffort = ''
 )
 $ErrorActionPreference = 'Stop'
 if ($Orca -and -not $OrcaEnvironment) {
@@ -24,7 +25,7 @@ if ($Orca -and -not $OrcaEnvironment) {
         throw 'Orca requires -OrcaRuntimeSHA256 <execution-host steerrunner-agent SHA256>'
     }
     $OrcaRuntimeSHA256 = $OrcaRuntimeSHA256.ToLowerInvariant()
-} elseif ($OrcaRuntimeExecutable -or $OrcaRuntimeSHA256) {
+} elseif ($OrcaRuntimeExecutable -or $OrcaRuntimeSHA256 -or $OrcaRuntimePublication) {
     throw 'Helper runtime parameters apply only to Orca local; remote Orca uses the native agent'
 }
 if (-not $WebAddress) {
@@ -152,18 +153,32 @@ try {
             $overlayEncoding = if ($mapping[0] -eq 'publish.ps1') { New-Object Text.UTF8Encoding $true } else { $utf8 }
             [IO.File]::WriteAllText($destination, $content, $overlayEncoding)
         }
-        if ($OrcaAgent -ne 'codex') { throw 'This Runner release supports the Codex Orca agent' }
-        $executionTarget = @{kind='orca_local'}
+        if ($OrcaAgent -notin @('codex','pi','dsh') -or ($OrcaEnvironment -and $OrcaAgent -ne 'codex')) { throw 'Local Orca supports Codex/Pi/DSH; remote Orca supports Codex only' }
+        $executionTarget = @{kind='local'}
         if ($OrcaEnvironment) { $executionTarget=@{kind='orca_environment';environment=$OrcaEnvironment} }
-        $launchExecutable = if ($AgentExecutable) { $AgentExecutable } else { $OrcaAgent }
+        $launchExecutable = if ($AgentExecutable) { $AgentExecutable } elseif ($OrcaAgent -eq 'codex') { 'codex' } else { $OrcaAgent + '.cmd' }
         $settings = @{
+            agent=$OrcaAgent
             transport=@{executable=$OrcaExecutable;wait_timeout='40s'}
             agent_launch=@{
                 executable=$launchExecutable
-                args=@('--no-daemon')
+                args=@()
             }
         }
         if (-not $OrcaEnvironment) {
+            Assert-PlainPath $OrcaRuntimeExecutable
+            if ((Is-Within 'C:\SteerlineInstall' $OrcaRuntimeExecutable) -or (Is-Within 'C:\SteerlineRuntime' $OrcaRuntimeExecutable)) { throw 'Helper material must not come from an installed environment' }
+            if (-not (Test-Path -LiteralPath $OrcaRuntimeExecutable -PathType Leaf) -or (Get-FileHash -LiteralPath $OrcaRuntimeExecutable -Algorithm SHA256).Hash.ToLowerInvariant() -ne $OrcaRuntimeSHA256) { throw 'Local Orca helper material does not match its supplied SHA256' }
+            $helperDestination = Join-Path $target 'bin\steerrunner-agent.exe'
+            Copy-Item -LiteralPath $OrcaRuntimeExecutable -Destination $helperDestination
+            if ((Get-FileHash -LiteralPath $helperDestination -Algorithm SHA256).Hash.ToLowerInvariant() -ne $OrcaRuntimeSHA256) { throw 'Local Orca helper changed during packaging' }
+            if ($OrcaRuntimePublication) {
+                Assert-PlainPath $OrcaRuntimePublication
+                $publication = [IO.File]::ReadAllText($OrcaRuntimePublication) | ConvertFrom-Json
+                if ($publication.helper_sha256 -ne $OrcaRuntimeSHA256 -or $publication.runner_sha256 -ne $runnerSource.sha256 -or $publication.source_commit -ne $runnerSource.source_commit -or $publication.source_dirty) { throw 'Helper publication identity differs from selected Runner release' }
+                Copy-Item -LiteralPath $OrcaRuntimePublication -Destination (Join-Path $target 'evidence\helper-publication.json')
+            }
+            $OrcaRuntimeExecutable = $helperDestination.Replace('\','/')
             $settings.agent_launch['runtime_executable']=$OrcaRuntimeExecutable
             $settings.agent_launch['runtime_sha256']=$OrcaRuntimeSHA256
         }
