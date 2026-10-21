@@ -105,6 +105,42 @@ export interface Decision {
   };
 }
 export interface Candidate {
+  runner_delivery?: {
+    available: boolean;
+    run_id?: string;
+    revision: number;
+    submission: string;
+    step?: string;
+    status?: string;
+    phase?: string;
+    diagnostic?: string;
+    native_outcome?: string;
+    final_verified: boolean;
+    content_status?: string;
+    pr_state?: string;
+    pr_checked_at?: string;
+    pr_query_error?: string;
+    stop_status?: string;
+    closed: boolean;
+    resume_required: boolean;
+    new_inputs_allowed: boolean;
+    controls: {
+      can_reply: boolean;
+      can_resume: boolean;
+      can_stop: boolean;
+      can_message: boolean;
+      can_interrupt: boolean;
+      can_close: boolean;
+      reason: string;
+    };
+    commands: {
+      command: string;
+      request_id: string;
+      command_id?: string;
+      receipt_state: string;
+      action_status?: string;
+    }[];
+  };
   runner_workflow?: { id: string; version: number };
   requested_model?: string;
   requested_reasoning_effort?: string;

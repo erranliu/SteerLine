@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"testing"
+	"time"
 )
 
 type memoryStore struct {
@@ -86,6 +87,29 @@ func setup() (*Bridge, *memoryStore, *fixtureCLI) {
 	return &Bridge{Store: s, Client: func(string) CLI { return f }}, s, f
 }
 func TestSteerRunnerOutboxBoundaries(t *testing.T) {
+	t.Run("pending original control returns before a later stop", func(t *testing.T) {
+		b, s, f := setup()
+		s.value.RunID, s.value.SubmitState = "run", "accepted"
+		s.value.Actions = []Action{{Command: "reply", State: "accepted", CommandID: "original-command", ActionStatus: "pending", Request: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "original-reply"}}}
+		runID := "run"
+		f.commands["original-reply"] = runnerclient.Command{Command: "reply", CommandID: "original-command", RequestID: "original-reply", RunID: &runID, ActionStatus: "pending"}
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := b.Step(ctx, "project", "candidate"); err != nil {
+			t.Fatal(err)
+		}
+		if s.value.Actions[0].ActionStatus != "pending" {
+			t.Fatal("pending operation was completed by observation")
+		}
+		s.value.StopRequested = true
+		s.value.Revision++
+		if err := b.Step(ctx, "project", "candidate"); err != nil {
+			t.Fatal(err)
+		}
+		if f.inputs != 0 || f.stops != 1 || f.submits != 0 || !s.value.InputsRevoked || s.value.Actions[0].Request.RequestID != "original-reply" {
+			t.Fatal("pending control blocked stop or was repeated")
+		}
+	})
 	t.Run("restart withdraws unused authorizations", func(t *testing.T) {
 		b, s, f := setup()
 		s.value.RunID, s.value.SubmitState = "run", "accepted"

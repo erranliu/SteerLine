@@ -172,6 +172,7 @@ type StageResultSummary struct {
 }
 
 type CandidateSummary struct {
+	RunnerDelivery           *RunnerDeliverySummary  `json:"runner_delivery,omitempty"`
 	RunnerRevision           uint64                  `json:"runner_revision"`
 	InputDigest              string                  `json:"input_digest"`
 	RunnerWorkflow           *RunnerWorkflowSummary  `json:"runner_workflow,omitempty"`

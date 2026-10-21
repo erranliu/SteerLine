@@ -1,5 +1,7 @@
 # Worker 流程异常处理与重试
 
+2026-10-21 当前操作与展示收敛：开发 workflow 使用 development/2 或 development-audited/2，实施/发布已有按需补报，审计在一次正式回合内修复，不增加自动返修/再审循环。兼容 Runner 换代按下述 2026-10-19 接管增量保留原授权；关服务不等于停止 Run，更新不以所有资源先退出为固定前提。原创建/输入未知、旧写者/原会话资格及 PR/停止核验均保留。交付摘要只投影原 Run 与独立命令事实，不新增业务状态、等待循环或恢复入口；本次不改变 W01–W18、E01–E07、V01–V08 的职责与副作用门槛。实施与最小验证见[Plan](../plans/reliable-delivery-simplification.plan.md)及[验收](../acceptance/reliable-delivery-simplification.md)。历史版本的规则和验收按各原构建理解。
+
 2026-10-21 工作区命名输入（W01/W02，V01/V06–V08）：SteerLine 在预留事务内分配候选 Number 并冻结公开 `name_prefix`（C1 为 `sl-<task_id>`，C2 起为 `sl-<task_id>-c<Number>`）与最终 submit；重放使用原编号/请求，不在事务外预估。Runner 独立冻结通用前缀（缺省 `sr`），Orca 创建与回执校验共用 `<prefix>-<Run ID>`，不解析 correlation 的业务含义。名称不是资源身份权威；原绑定、只读对账、未知零重发与恢复授权保持，不改既有现场名称或新增节点/异常/重试。最小验证及未验范围见[专属验收](../acceptance/runner-name-prefix.md)。
 
 2026-10-21 部署中断恢复（W18，E04/E05，V06–V08）：系统重启留下缺失或陈旧宿主停机回执时，部署可在启动协调锁内核实原宿主精确退出、原安装文件及 Runner pin、配置/checkpoint/项目集合、实际锁及原记录接管后，运行原安装一次，等待所有项目 ready 并正常停服，再执行完整 verify-restart。匹配当前实例的失败回执、未知创建、活动服务、身份/配置/文件冲突或候选不兼容继续阻断；不伪造回执、不循环恢复、不创建业务 submit/reply/resume。原 Run/input/PR 与资源未核实诊断保留，旧回执随新证明保存。该动作只补齐调用方正式停服证据，不改变 Runner 的节点、恢复授权或原生结算规则；安排和自动验证见[Plan](../plans/deployment-interrupted-recovery.plan.md)与[验收](../acceptance/deployment-interrupted-recovery.md)。当前真实 OS 重启后的自动部署尚未实测，受控通过不替代原生资格或部署验收。
@@ -16,7 +18,7 @@
 
 Worker 执行域统一管理工作区准备、代理初始化、输入投递、轮次观察、结果结算和资源恢复。每个节点都必须说明正常出口、异常事实、允许的动作和停止条件；平台适配器提供证据，不能自行决定重跑任务或推进业务步骤。
 
-本文是这些规则的长期维护入口。下文“统一设计”定义后续实现应遵循的行为；[当前实现与缺口](#当前实现与缺口)区分已有能力与待补能力，不表示完整流程已经实现或验收。当前流程由 Runner 的 development/1 或 development-audited/1 执行，调用边界见[协作契约](../spec/runner-collaboration.spec.md)；[PR 流程契约](../spec/worker-pr-flow.spec.md)保留迁出前来源。本文不启动实现任务、不修改已冻结执行，也不改变安装现场。
+本文是这些规则的长期维护入口。下文“统一设计”定义各节点职责；[当前实现与缺口](#当前实现与缺口)及文首增量区分已有能力与待补能力，不表示完整流程已经实现或验收。当前开发流程由 Runner 的 development/2 或 development-audited/2 执行，调用边界见[协作契约](../spec/runner-collaboration.spec.md)；[PR 流程契约](../spec/worker-pr-flow.spec.md)保留迁出前来源。本文不修改已冻结执行，也不改变安装现场。
 
 迁出前的三层职责重构已按 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)完成 Workflow、ReliableExecution 和 ExecutionAdapter 拆分，保持现有行为；初始化失败重试等新增能力另行实施。当时规则归到 workflow/reliable，Service 负责记录映射、异步交接和原子提交；当前执行实现归独立 SteerRunner，历史实施证据以[专属验收](../acceptance/worker-three-layer.md)为准。
 
@@ -120,7 +122,7 @@ flowchart TD
 
 | 信息 | 含义与边界 |
 | --- | --- |
-| WorkflowRun 的流程和步骤 | 当前应完成的业务动作，开发流程为 `implement.execute → implement.report → publish → await_merge → delivered`，保留既有一次格式补报分支 |
+| WorkflowRun 的流程和步骤 | 当前应完成的业务动作；Runner development/2 为实施 → 发布 → pr_ready，报告按需且每源最多一次；带审计版本在发布前增加一次代码审计及修复。合并与 TaskDelivery 归调用方，不是 Runner 自动后继 |
 | Execution 与原生轮次事实 | 代理和轮次是否活动、结束、等待或停止；不替代 WorkflowRun，也不代表 Task 交付 |
 | Operation 结果 | 原外部动作的 pending、in_flight、accepted、confirmed、rejected 或 unknown 事实；仅 accepted 不等于节点完成 |
 | 准备记录和环境 blocker | 当前准备进度、期限、实际环境阻断及核验结果；与业务问题分开 |
@@ -147,7 +149,7 @@ flowchart TD
 | W08/W09 输入准备与发送 | 保存当前输入，调用固定 thread 的 turn/start；成功回执含原生 turn ID。thread/start、turn/start 的 RPC 超时仍可能产生副作用 | 原输入经 terminal send，输入接受与原生业务轮次开始分别取证；当前准备/完成不读取屏幕或 draft，未知原输入不补 Enter |
 | W10 开执行 | 成功的 turn/start 回执被当前适配器归一化为 InputAccepted 与 TurnStarted；后续 turn/started 和原 thread/turn 事件继续校验。回执丢失不能换 ID 再调 turn/start | 通过原请求开始回执及绑定 pane/provider 的可信 working 事实确认；accepted 未 started 继续对账 |
 | W11–W13 观察问答与结果 | JSON-RPC 请求/回复、原生 turn 事件和精确 thread/turn 历史；原请求身份必须保留 | 原终端/原生状态查询与主 agent 证据；不能凭屏幕 idle、标题或人工新回复结算原输入 |
-| 服务停止与恢复 | 冻结 stop_execution，停止并核实精确受管写者；旧写者停止且原 thread 可核实后，可用新进程/Attempt 恢复同 thread | 冻结 continue_execution，中心只脱离观察；原执行可能继续。原 terminal/runtime/provider 丢失后的原业务会话重建仍不支持 |
+| 服务停止与恢复 | 兼容独立 owner 保留原连接、Job/工具树和认证；停服只脱离观察，显式 Run stop 才停止原树。资源丢失后的原 thread 人工恢复仍需旧写者缺席等资格；旧服务独占 Job 的活动执行不冒充可无损移交 | 沿 continue_execution 脱离原观察，保留原 terminal/runtime/provider；丢失后的原业务会话重建仍不支持。新远端原生停止保证限原 terminal scope |
 | W14–W18 业务结算与收尾 | 共用步骤、报告、PR 核验与唯一交付；具体进程/工作区 owner 负责资源结算 | 共用同一业务规则；原生终端/工作区 owner 提供其停止和清理事实 |
 
 本地路径仍有需要处理的准备异常：可执行文件或沙箱配置非法、app-server 已启动但 process 回执保存失败、连接/握手超时、thread 已创建但回执丢失、空 thread 在首个 turn 前连接丢失、turn/start 成功但原生回执未保存。已有 thread ID 时优先核验或恢复原 thread；不知道 thread/start 是否成功时先对账原准备，不再调用 thread/start 猜测性创建会话。

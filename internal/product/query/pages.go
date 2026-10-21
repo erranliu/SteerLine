@@ -96,6 +96,7 @@ func DecisionRequest(r model.DecisionRequest) api.DecisionRequest {
 // CandidateView is the bounded product projection input prepared by the
 // application edge. The query package never receives or reconstructs Runtime.
 type CandidateView struct {
+	RunnerDelivery           *runnercontract.DeliveryObservation
 	RunnerRevision           uint64
 	InputDigest              string
 	RunnerWorkflow           *runnercontract.Workflow
@@ -158,6 +159,9 @@ func Candidate(r *CandidateView) *api.CandidateSummary {
 	}
 	p := &api.CandidateSummary{RunnerStateDir: r.RunnerStateDir, Participation: r.Participation, SubmissionStatus: r.SubmissionStatus, StopRequested: r.StopRequested, FlowRef: r.FlowRef, WorkflowStage: r.WorkflowStage, WorkflowStatus: r.WorkflowStatus, StageDiagnostic: r.StageDiagnostic, ReportToolPolicy: r.ReportToolPolicy, SessionID: r.SessionID, SessionGeneration: r.SessionGeneration, CurrentTurnID: r.CurrentTurnID, TurnNumber: r.TurnNumber, PRHistory: append([]string(nil), r.PRHistory...), CandidateNumber: r.CandidateNumber, CandidateCreatedAt: r.CandidateCreatedAt, CandidateStopReason: r.CandidateStopReason, CandidateStoppedBy: r.CandidateStoppedBy, CandidateEndedAt: copyValue(r.CandidateEndedAt), CandidateTiming: r.CandidateTiming, ResourceStatus: r.ResourceStatus, RecoveryRequired: r.RecoveryRequired, RecoveryState: r.RecoveryState, RecoveryVersion: r.RecoveryVersion, TaskID: r.TaskID, DomainTaskID: r.DomainTaskID, WorkflowVersion: r.WorkflowVersion, ExecutionID: r.ExecutionID, Title: r.Title, RunID: r.RunID, AttemptID: r.AttemptID, ControlRevision: r.ControlRevision, Claimant: r.Claimant, Host: r.Host, Backend: r.Backend, Protocol: r.Protocol, Agent: r.Agent, Target: api.TargetSummary{ID: r.Target.ID, WorktreeID: r.Target.WorktreeID, Branch: r.Target.Branch}, TaskStatus: r.TaskStatus, ExecutionStatus: r.ExecutionStatus, StartedAt: copyValue(r.StartedAt), EndedAt: copyValue(r.EndedAt), WorktreePath: copyValue(r.WorktreePath), WorktreeBranch: copyValue(r.WorktreeBranch), BaseCommit: copyValue(r.BaseCommit), LastEvent: copyValue(r.LastEvent), LogPath: copyValue(r.LogPath), ResultPath: copyValue(r.ResultPath), Summary: copyValue(r.Summary), Error: copyValue(r.Error), PR: api.PRSummary{URL: copyValue(r.PR.URL), HeadRevision: copyValue(r.PR.HeadRevision), MergeCommit: copyValue(r.PR.MergeCommit), QueryError: copyValue(r.PR.QueryError), State: r.PR.State, MergedAt: copyValue(r.PR.MergedAt), QueriedAt: copyValue(r.PR.QueriedAt)}}
 	runnerWorkflow(r, p)
+	if r.RunnerDelivery != nil {
+		p.RunnerDelivery = runnerDelivery(r.RunnerDelivery)
+	}
 	for _, result := range r.StageResults {
 		p.StageResults = append(p.StageResults, api.StageResultSummary{StepID: result.StepID, CommandID: result.CommandID, TurnID: result.TurnID, InputVersion: result.InputVersion, Succeeded: result.Succeeded, FinalVerified: result.FinalVerified, Final: result.Final, FinalSource: result.FinalSource, Failure: result.Failure, Outcome: result.Outcome})
 	}
