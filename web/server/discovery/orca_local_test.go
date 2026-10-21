@@ -104,7 +104,11 @@ func TestLocalOrcaCatalog(t *testing.T) {
 								if q.Params["waitForListing"] != true || mode == "in-progress" {
 									result = map[string]any{"listingInProgress": true}
 								} else {
-									models := []any{map[string]any{"id": q.Params["agent"], "efforts": []any{map[string]string{"value": "high", "label": "High"}}}}
+									modelID := q.Params["agent"]
+									if modelID == "pi" {
+										modelID = "openrouter/vendor/family/model"
+									}
+									models := []any{map[string]any{"id": modelID, "efforts": []any{map[string]string{"value": "high", "label": "High"}}}}
 									if mode == "empty" {
 										models = []any{}
 									}
@@ -172,7 +176,7 @@ func TestLocalOrcaCatalog(t *testing.T) {
 				if err != nil || out.State != "ready" {
 					t.Fatal(out.State, err)
 				}
-				if mode != "empty" && (len(out.Models) != 1 || out.Models[0].ID != "pi") {
+				if mode != "empty" && (len(out.Models) != 1 || out.Models[0].ID != "openrouter/vendor/family/model" || out.Models[0].Provider != "openrouter") {
 					t.Fatal("wrong Agent catalog")
 				}
 				cached, e := m.Query(ctx, q)
@@ -209,7 +213,7 @@ func TestLocalOrcaCatalog(t *testing.T) {
 			}
 			if mode == "missing" {
 				for _, a := range out.Agents {
-					if a.ID == "pi" && (!a.Supported || a.Directory != "unverified") {
+					if a.ID == "pi" {
 						t.Fatal("missing directory marked registered")
 					}
 				}

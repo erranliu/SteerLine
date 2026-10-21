@@ -1,6 +1,6 @@
 # Web 执行配置管理与能力探测 Plan
 
-日期：2026-10-21。状态：实现已覆盖 U1–U6 与本机 Orca 增量 U7–U10；本文维护交付安排，实时验证及人工现场只登记在专属验收。执行范围以 [Spec](web-execution-config.spec.md) 为准，结果登记于[专属验收](../acceptance/web-execution-config.md)。普通开发，不占 Task ID、不纳入 roadmap，不自动部署安装环境。
+日期：2026-10-21。状态：实现覆盖 U1–U10，并按最新确认边界收口 U11；本文维护交付安排，实时验证及人工现场只登记在专属验收。执行范围以 [Spec](web-execution-config.spec.md) 为准，结果登记于[专属验收](../acceptance/web-execution-config.md)。普通开发，不占 Task ID、不纳入 roadmap，不自动部署安装环境。
 
 ## 1. 基线、调查与整合
 
@@ -107,6 +107,14 @@ U1 → U2/U3 → U4/U5 → U6 为实现依赖关系，不是 roadmap DAG，不�
 4. 对A13的真实执行消费只核对调用方公开提交，原生业务执行资格仍由Runner原owner验证；引用其已有本机执行规格/证据，不把历史构建通过继承给本次选定发布物。若部署材料或原生IPC前置缺失，登记具体阻断；若必须改变既定边界才能补齐，则停止报告，不继续替代实现。
 5. 在专属验收登记A10–A14的已验/未验/阻断及证据；既有A01–A09原记录保持其原范围。M02人工本机链路体验可后置；不修改当前仍运行的冻结验收包，实施后另建新现场。U7/U8 → U9 → U10为本机增量依赖，不是roadmap DAG。
 
+### U11：外部 provider 配置所有权与统一 Orca 目录
+
+1. 将 `discovery` 中的Orca目录查询与配置支持规则分开：统一RPC读取层删除local布尔策略和Codex硬编码，远端传递请求Agent；本机/远端使用相同注册核验、目录解析和Pi provider/model投影。只让连接/认证及目标身份留在各传输实现，不增加协议框架、独立provider发现或Runner探测接口。
+2. 查询API按原生Agent身份及目标注册列表处理，返回Agent目录事实；生成配置继续由 `executionconfig.Supported` 与完整公开schema裁决。保持远端Pi/DSH配置拒绝，防止目录成功扩大执行能力。去除目录DTO中的产品supported/reason字段，由页面结合GET组合说明可编辑范围；未发布协议不保留旧DTO兼容。
+3. 页面从Pi目录provider投影筛选模型，保持完整原始model selector；切provider清理模型/effort，手动原始值保持未验证。提示用户在目标Orca/Agent配置provider凭据，不提供API key/base URL/账号管理，不推断目录等于凭据或模型已验证。原生默认上下文继续标为未核实，不新增多账号身份选择。
+4. 扩展既有 `TestOrcaCapabilityWire`、`TestLocalOrcaCatalog`、配置/路由测试和组件/API测试，覆盖两种传输同一Pi selector、远端注册Pi目录成功与生成配置拒绝、密钥字段不透出/不接受、Provider筛选原样保存。不增加同构L3场景；主干集成后定向复验原保存/重启/关闭Web消费场景及受影响应用读取边界。
+5. 同步Spec、产品设计、架构/README及验收导航，修正“本机Orca待实施”的过期文字。实现合入最新主干后保留双方测试登记及owner守卫；交付PR，结果和未验范围只登记专属验收。当前冻结人工验收包不修改或重启。
+
 ## 3. 测试计划
 
 采用[统一测试架构](../../SteerlineProjectGuideDoc/testing-architecture.md)、[测试入口](../testing.md)和[E2E 扩展约定](../../tests/e2e/README.md)。原范围入口已提供；本机增量的测试/脚本选项随U7–U10提供；是否通过以专属验收的实际证据为准。实际执行结果登记于专属验收，入口或环境缺失不能跳过计通过。
@@ -138,6 +146,16 @@ U1 → U2/U3 → U4/U5 → U6 为实现依赖关系，不是 roadmap DAG，不�
 | [WEC-A13](../acceptance/web-execution-config.md#wec-a13) | L3 / 既有configuration.execution-profiles；独立controlled SteerlineTest现场 | 扩展当前Go场景/Playwright参数化及fixture模板；沿用 `go run ./cmd/test-feedback -level=L3 -suite=configuration -scenario=configuration.execution-profiles -env=controlled` | U10补齐后；Web保存→旧宿主门槛→正式stop/start→关闭Web→CLI提交，核对local/orca-terminal及Agent/model/effort/runtime路径/SHA，旧候选原字段保持、owned资源清理完整；summary/scenario/浏览器trace登记A13 |
 | [WEC-A14](../acceptance/web-execution-config.md#wec-a14) | 原生目录专项；新C:/SteerlineDebug包、已有本机Orca；不计完整L2/L3业务执行 | `./scripts/test-execution-profile-discovery.ps1 -SteerRunnerExe '<固定EXE>' -LocalOrca` | U10后；固定Orca版本/metadata通路及身份，真实Codex目录/effort/来源、token不落证据，Web连接/本包服务清理完整，共享Orca未被停止；discovery.json/cleanup/result及版本摘要登记A14。Orca不可用明确阻断，不自动启动它或借远端通过 |
 | [WEC-M02](../acceptance/web-execution-config.md#wec-m02) | 人工后置；新受控可写fixture或另建冻结debug只读现场 | 参与窗口由用户后续安排；冻结包不测试保存 | 自动项后体验本机双链路、三Agent、目录缺失/手动值/helper缺失、窄屏及待重启；不阻塞无关开发，真实配置损坏/身份混用转为必须修复 |
+
+### 统一目录边界的最小测试计划
+
+| 验收项 | 级别/组、环境和命令 | 时点、通过条件和证据 |
+| --- | --- | --- |
+| [WEC-A15](../acceptance/web-execution-config.md#wec-a15) | L1 / quick-owner-web-discovery、quick-owner-web-config、quick-owner-web及quick-execution-boundary；`go test ./web/server/... ./internal/testkit/boundary -run 'TestOrcaCapabilityWire|TestLocalOrcaCatalog|TestLocalOrcaConfiguration|TestWebExecutionConfigRoutes|TestWebExecutionConfigOwnership|TestTM04ExecutionBoundary' -count=1` | U11后；受控named pipe/配对WebSocket均保留相同Pi selector/provider；目录无产品策略、未知注册不伪造；远端可查询但不生成不支持执行；凭据字段拒绝及不出结果，方法白名单与owner依赖成立。日志登记A15 |
+| [WEC-A16](../acceptance/web-execution-config.md#wec-a16) | L1 / 定向Vitest；`npm --prefix web test -- --run src/features/execution-configs/execution-configs.test.tsx src/shared/api/execution-configs.test.ts src/app/app.test.tsx`；`npm --prefix web run build` | U11后；Pi Provider筛选、切换清字段、完整selector保存、远端发现Pi仍禁生成、凭据说明及原组件用例通过；UI/构建日志登记A16 |
+| [WEC-A08](../acceptance/web-execution-config.md#wec-a08)、[WEC-A13](../acceptance/web-execution-config.md#wec-a13) 主干集成复验 | 既有L3 / configuration.execution-profiles，controlled SteerlineTest；`./scripts/test-runtime-isolation.ps1 -Level L3 -Suite configuration -Scenario configuration.execution-profiles -OutDir '<新临时目录>'` | 合入当前主干并构建Web后；保存/旧宿主门槛/正式重启/关闭Web后CLI消费及清理不退化；仍使用自有离线契约和空Orca userData，报告登记专属验收 |
+
+这次调整不执行真实远端Pi/DSH任务，也不以目录fixture证明它们执行就绪。统一协议/字段行为由两种传输的受控测试覆盖，先前真实目录证据只保留其当时版本和范围；不新增API key探针或重复真实模型/PR验收。人工Provider筛选体验沿M02后置。
 
 本次不新增L2/L4，不重跑Runner本机模型/PR/原生停止矩阵；需要补的独有风险是Web的本机IPC与既有配置交接，分别由上述L1、参数化L3和真实目录专项覆盖。若发现新的真实执行缺陷，按其owner另行报告，不以扩大本机目录owner解决。
 

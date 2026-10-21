@@ -163,3 +163,17 @@ Web 前后端独立负责能力查询、配置生成和文件管理；Go 执行�
 按用户要求新建 `C:/SteerlineDebug/dev-20261021-112240-00eb8c6f-dirty`，唯一生成器在启动前校验并复制正式 helper 到本包 `bin/steerrunner-agent.exe`，部署来源保存在 `evidence/helper-publication.json`；live方案冻结后通过正式start启动。准备脚本自动确认本机Orca未被写入顶层Codex executable。后端PID12500、Web PID55796，SteerlineTest已online、runtime_state=ready，状态记录于 `evidence/manual-local-orca/ready-status.json`。
 
 验收页已在当前聊天浏览器新标签打开并保留：[执行配置](http://127.0.0.1:51327/settings/execution-configs)。已从真实页面确认本机Orca链路、Codex/Pi/DSH选择器、helper材料核对通过、7个Codex模型/effort及“当前服务已加载保存配置”。该包保持运行，M01/M02仍待用户正式反馈，不将打开页面或原型认可记作人工通过。冻结包可预览/查询字段，新增保存由后端拒绝；保存与正式重启已有独立受控L3证据。原61774人工现场未改配置或停止，安装目录未使用。结束本现场时只在本包home范围正式stop。
+
+## 统一 Orca 目录与 provider 凭据边界增量
+
+按用户最新确认，SteerLine只查询和选择目标已配置能力，模型provider/API key由Orca所启动的Agent管理。新增A15/A16，不把原目录通过扩展为远端Pi执行通过；当前51327人工包仍为先前冻结版本，本轮不修改/重启。
+
+### WEC-A15
+
+待本轮最终复验。Web查询层统一本机/远端Orca RPC与Agent、模型、provider、effort投影；两传输身份/认证独立。远端注册Pi可以查询，原始多级provider/model保留，目录不附带Web执行策略、不虚构注册，目录成功不开放远端Pi/DSH执行。返回中不透出provider凭据；API拒绝凭据输入，Web不增加provider/Agent独立配置发现或Runner接口。
+
+### WEC-A16
+
+待本轮最终复验。Pi Provider选项只取Orca目录，切换清理模型/effort，保存完整selector而不保存provider/key配置字段；未支持远端Agent显示目录事实和禁用原因，目录/凭据/调用及上下文状态分开。现有CRUD、未知值保留、冲突及生效提示不退化。
+
+本轮最小验证及PR信息在完成后登记；测试范围、入口、环境和通过条件见Plan U11及对应测试表。

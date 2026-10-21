@@ -11,10 +11,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sync"
 	"time"
 )
+
+var agentID = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
 
 type Request struct {
 	Kind        string `json:"kind"`
@@ -31,6 +34,7 @@ type Effort struct {
 }
 type Model struct {
 	ID            string   `json:"id"`
+	Provider      string   `json:"provider,omitempty"`
 	Label         string   `json:"label"`
 	Default       bool     `json:"is_default"`
 	DefaultEffort string   `json:"default_effort,omitempty"`
@@ -42,8 +46,6 @@ type Environment struct {
 }
 type Agent struct {
 	ID        string `json:"id"`
-	Supported bool   `json:"supported"`
-	Reason    string `json:"reason,omitempty"`
 	Directory string `json:"directory,omitempty"`
 }
 type Result struct {
@@ -128,8 +130,11 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 		if q.Host == "local" && q.Environment != "" {
 			return Result{}, errors.New("local discovery cannot select an environment")
 		}
-		if q.Adapter == "codex-app-server" && (q.Host != "local" || q.Agent != "codex") || q.Adapter == "orca-terminal" && (q.Agent != "codex" && (q.Host != "local" || q.Agent != "pi" && q.Agent != "dsh")) {
-			return Result{State: "unsupported", Diagnostic: "当前 Web 未映射此执行组合", ContextUnverified: true}, nil
+		if !agentID.MatchString(q.Agent) {
+			return Result{}, errors.New("invalid discovery agent")
+		}
+		if q.Adapter == "codex-app-server" && (q.Host != "local" || q.Agent != "codex") {
+			return Result{State: "unsupported", Origin: "unknown", Diagnostic: "Codex 直连仅提供本机 Codex 目录", ContextUnverified: true}, nil
 		}
 	}
 	config, err := m.Store.Current()
@@ -223,7 +228,7 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 		defer m.wg.Done()
 		defer func() { <-m.slots }()
 		defer cancel()
-		result := Result{ContextKey: key, ContextUnverified: true, Freshness: "fresh", Scope: "原生默认账号与配置目录；未验证具体项目执行上下文"}
+		result := Result{Origin: "unknown", ContextKey: key, ContextUnverified: true, Freshness: "fresh", Scope: "原生默认账号与配置目录；未验证具体项目执行上下文"}
 		var e error
 		if q.Kind == "environments" {
 			result.Environments, e = m.environments(queryCtx, resolved)
@@ -233,7 +238,7 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 			result, e = localOrcaCatalog(queryCtx, local, q.Kind, q.Agent, result)
 		} else if q.Host == "local" {
 			if q.Kind == "agents" {
-				result.Agents = []Agent{{ID: "codex", Supported: true}}
+				result.Agents = []Agent{{ID: "codex", Directory: "product"}}
 				result.State = "ready"
 				result.Origin = "product"
 			} else {
@@ -242,7 +247,7 @@ func (m *Manager) Query(ctx context.Context, q Request) (Result, error) {
 				result.Origin = "probe"
 			}
 		} else {
-			result, e = orcaCatalog(queryCtx, env, q.Kind, result)
+			result, e = orcaCatalog(queryCtx, env, q.Kind, q.Agent, result)
 		}
 		if e != nil {
 			result.State = "unavailable"

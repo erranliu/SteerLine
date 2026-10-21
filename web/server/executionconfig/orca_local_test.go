@@ -129,6 +129,28 @@ func TestLocalOrcaConfiguration(t *testing.T) {
 			t.Fatal("empty remote helper key accepted")
 		}
 	}
+	// Discovery can expose remote agents without granting execution mappings.
+	for _, agent := range []string{"pi", "dsh", "custom-agent"} {
+		remote := template
+		remote.ID = "remote-" + agent
+		remote.Execution.Target.Kind = "orca_environment"
+		remote.Execution.Target.Environment = "paired"
+		remote.Execution.Settings = json.RawMessage(`{"agent":"` + agent + `","agent_launch":{"model":"openrouter/vendor/model"}}`)
+		next := c
+		next.Profiles = append(append([]cfg.Profile{}, c.Profiles...), remote)
+		if _, err := s.Validate(ctx, encode(t, next)); err == nil {
+			t.Fatal("native discovery expanded unsupported remote execution", agent)
+		}
+	}
+	for _, field := range []string{"api_key", "provider_credentials", "base_url"} {
+		next := c
+		next.Profiles = append([]cfg.Profile{}, c.Profiles...)
+		raw := map[string]any{"model": "manual-model", field: "fixture-deployment-secret"}
+		next.Profiles[0].Execution.Settings, _ = json.Marshal(raw)
+		if _, err := s.Validate(ctx, encode(t, next)); err == nil {
+			t.Fatal("Web accepted provider credential management", field)
+		}
+	}
 	// Missing deployment material blocks changed local execution, while names,
 	// defaults, unrelated routes and exact saved execution values remain usable.
 	if err := os.Remove(helper); err != nil {

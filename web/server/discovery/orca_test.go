@@ -6,9 +6,15 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"github.com/coder/websocket"
+	cfg "github.com/erranliu/SteerLine/internal/executionconfig"
+	"github.com/erranliu/SteerLine/internal/localservice"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	repository "github.com/erranliu/SteerLine/web/server/executionconfig"
 	"golang.org/x/crypto/nacl/box"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -16,7 +22,7 @@ import (
 )
 
 func TestOrcaCapabilityWire(t *testing.T) {
-	for _, mode := range []string{"probe", "seed", "unsupported", "changed-runtime"} {
+	for _, mode := range []string{"probe", "seed", "unsupported", "changed-runtime", "remote-pi"} {
 		t.Run(mode, func(t *testing.T) {
 			pub, secret, _ := box.GenerateKey(rand.Reader)
 			var mu sync.Mutex
@@ -74,8 +80,19 @@ func TestOrcaCapabilityWire(t *testing.T) {
 						}
 						result = map[string]any{"runtimeProtocolVersion": 3, "minCompatibleRuntimeClientVersion": 2, "pairedDeviceId": "device", "appVersion": "1.4.fixture", "capabilities": caps}
 					case "agentSession.agents":
+						if mode == "remote-pi" {
+							result = map[string]any{"agents": []any{map[string]string{"agent": "pi"}, map[string]string{"agent": "custom-agent"}}}
+							break
+						}
 						result = map[string]any{"agents": []any{map[string]string{"agent": "codex"}, map[string]string{"agent": "claude"}}}
 					case "agentSession.modelCatalog":
+						if mode == "remote-pi" {
+							if q.Params["agent"] != "pi" {
+								return
+							}
+							result = map[string]any{"origin": "probe", "models": []any{map[string]any{"id": "openrouter/vendor/family/model", "efforts": []Effort{{"high", "High"}}, "apiKey": "fixture-secret-must-not-cross"}}}
+							break
+						}
 						if q.Params["waitForListing"] == true {
 							result = map[string]any{"origin": mode, "fetchedAt": time.Now().UnixMilli(), "models": []any{map[string]any{"id": "model", "label": "Model", "defaultEffort": "high", "efforts": []Effort{{"high", "High"}}}}}
 						} else {
@@ -95,12 +112,38 @@ func TestOrcaCapabilityWire(t *testing.T) {
 			}))
 			defer server.Close()
 			e := nativeEnvironment{ID: "id", PairedDevice: "device", Preferred: "ep", Endpoints: []accessEndpoint{{ID: "ep", Endpoint: "ws" + strings.TrimPrefix(server.URL, "http"), Token: "test-token", Key: base64.StdEncoding.EncodeToString(pub[:])}}}
-			out, err := orcaCatalog(context.Background(), e, "models", Result{ContextUnverified: true})
+			var out Result
+			var err error
+			if mode == "remote-pi" {
+				home, data := t.TempDir(), t.TempDir()
+				config := cfg.File[cfg.Pin]{Version: 3, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "Local", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
+				if err := localservice.WritePrivateFile(home, "execution.json", config); err != nil {
+					t.Fatal(err)
+				}
+				raw, _ := json.Marshal(map[string]any{"version": 1, "environments": []nativeEnvironment{e}})
+				if err := os.WriteFile(filepath.Join(data, "orca-environments.json"), raw, 0600); err != nil {
+					t.Fatal(err)
+				}
+				m := New(repository.New(home))
+				m.OrcaData = data
+				out, err = m.Query(context.Background(), Request{Kind: "models", Adapter: "orca-terminal", Host: "orca_environment", Environment: e.ID, Agent: "pi"})
+				m.Close()
+				encoded, _ := json.Marshal(out)
+				if err != nil || out.State != "ready" || len(out.Models) != 1 || out.Models[0].Provider != "openrouter" || out.Models[0].ID != "openrouter/vendor/family/model" || strings.Contains(string(encoded), "fixture-secret-must-not-cross") {
+					t.Fatal("remote native directory lost identity or exposed credentials", out.State, err)
+				}
+				if len(out.Agents) != 2 || out.Channel != "paired-websocket" || out.RuntimeDigest == "" {
+					t.Fatal("remote native facts incomplete")
+				}
+			} else {
+				out, err = orcaCatalog(context.Background(), e, "models", "codex", Result{ContextUnverified: true})
+			}
 			switch mode {
 			case "unsupported":
 				if err != nil || out.State != "unsupported" {
 					t.Fatal(out, err)
 				}
+			case "remote-pi":
 			case "changed-runtime":
 				if err == nil {
 					t.Fatal("runtime switch accepted")

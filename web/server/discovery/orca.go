@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/coder/websocket"
@@ -255,20 +256,25 @@ func (c *orcaConnection) call(ctx context.Context, method string, params any) (j
 		return response.Result, nil
 	}
 }
-func orcaCatalog(ctx context.Context, e nativeEnvironment, kind string, out Result) (Result, error) {
+func orcaCatalog(ctx context.Context, e nativeEnvironment, kind, agent string, out Result) (Result, error) {
 	c, err := connectOrca(ctx, e)
 	if err != nil {
 		return out, err
 	}
 	defer c.socket.CloseNow()
-	return readOrcaCatalog(ctx, c, e.PairedDevice, kind, "codex", false, out)
+	out.Channel = "paired-websocket"
+	out, err = readOrcaCatalog(ctx, c, e.PairedDevice, kind, agent, out)
+	if c.runtimeID != "" {
+		out.RuntimeDigest = cfg.Digest([]byte(c.runtimeID))
+	}
+	return out, err
 }
 
 type capabilityCaller interface {
 	call(context.Context, string, any) (json.RawMessage, error)
 }
 
-func readOrcaCatalog(ctx context.Context, c capabilityCaller, pairedDevice, kind, agent string, local bool, out Result) (Result, error) {
+func readOrcaCatalog(ctx context.Context, c capabilityCaller, pairedDevice, kind, agent string, out Result) (Result, error) {
 	raw, err := c.call(ctx, "status.get", map[string]any{})
 	if err != nil {
 		return out, err
@@ -314,28 +320,14 @@ func readOrcaCatalog(ctx context.Context, c capabilityCaller, pairedDevice, kind
 		return out, errors.New("Orca Agent directory is incomplete")
 	}
 	found := false
+	seenAgents := map[string]bool{}
 	for _, a := range agents.Agents {
-		if a.Agent == "" {
-			return out, errors.New("invalid Orca Agent identity")
+		if !agentID.MatchString(a.Agent) || seenAgents[a.Agent] {
+			return out, errors.New("invalid or duplicate Orca Agent identity")
 		}
-		supported := a.Agent == "codex" || local && (a.Agent == "pi" || a.Agent == "dsh")
-		reason := ""
-		if !supported {
-			reason = "当前执行链路未支持"
-		}
-		out.Agents = append(out.Agents, Agent{ID: a.Agent, Supported: supported, Reason: reason, Directory: "registered"})
+		seenAgents[a.Agent] = true
+		out.Agents = append(out.Agents, Agent{ID: a.Agent, Directory: "registered"})
 		found = found || a.Agent == agent
-	}
-	if local {
-		for _, known := range []string{"codex", "pi", "dsh"} {
-			registered := false
-			for _, a := range out.Agents {
-				registered = registered || a.ID == known
-			}
-			if !registered {
-				out.Agents = append(out.Agents, Agent{ID: known, Supported: true, Directory: "unverified", Reason: "已映射；Orca 未注册目录，可手动填写未验证值"})
-			}
-		}
 	}
 	if kind == "agents" {
 		out.State = "ready"
@@ -344,7 +336,7 @@ func readOrcaCatalog(ctx context.Context, c capabilityCaller, pairedDevice, kind
 	}
 	if !found {
 		out.State = "unsupported"
-		out.Diagnostic = "目标运行机未注册所选 Agent 能力目录；可手动填写未验证值"
+		out.Diagnostic = "目标 Orca 未注册所选 Agent 目录；配置支持范围请查看执行映射"
 		return out, nil
 	}
 	query := map[string]any{"agent": agent}
@@ -413,7 +405,16 @@ func readOrcaCatalog(ctx context.Context, c capabilityCaller, pairedDevice, kind
 			}
 			seenEffort[effort.Value] = true
 		}
-		out.Models = append(out.Models, Model{m.ID, m.Label, m.Default, m.DefaultEffort, efforts})
+		row := Model{ID: m.ID, Label: m.Label, Default: m.Default, DefaultEffort: m.DefaultEffort, Efforts: efforts}
+		// Pi's native model-list contract identifies a model as provider/model. Keep
+		// that selector intact; this display projection carries no credential state.
+		if agent == "pi" {
+			provider, model, ok := strings.Cut(m.ID, "/")
+			if ok && agentID.MatchString(provider) && model != "" {
+				row.Provider = provider
+			}
+		}
+		out.Models = append(out.Models, row)
 	}
 	out.State = "ready"
 	return out, nil

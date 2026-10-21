@@ -12,6 +12,8 @@
 
 [协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)定义预设/提交/受理数据及审计 workflow 接入。其 4.2 分开规定同构建换预设、服务换代与更换构建：原 Run 参数不变；新 Runner 实例仅在用户显式重启 SteerLine、重建 ProjectRuntime 的初始化时核验接纳，旧运行时发现替代实例拒绝新业务输入，不自动重新绑定。未结算对象阻断换构建，本期新构建使用无旧执行状态的新环境。调用方已实现上述准入和多 workflow 展示；构建 pin 持久在项目 checkpoint，候选冻结原名称/参数摘要/完整提交，参数摘要仅覆盖 execution + workflow 的有序对象 JSON；不支持升级/接管旧现场。实际结果归[专属验收](../acceptance/runner-collaboration.md)。
 
+本功能只消费外部配置能力：provider的API key/OAuth、base URL、自定义模型由目标Orca中的Agent原生配置管理。Web统一通过Orca的status/agents/modelCatalog查询本机或远端目录，不读取Pi凭据文件或另接provider发现。目录Agent事实与Web/Runner执行组合分开；Pi按目录提供Provider筛选，保存既有完整provider/model。目录可见不代表凭据或调用已验证，当前默认账号/工作区上下文仍未核实；不提供多套账号配置选择。远端Pi/DSH目录可被发现，但本期执行范围保持Codex，不能因目录而自动开放。
+
 ## Web 配置管理
 
 [Web 执行配置管理 Spec](../spec/web-execution-config.spec.md) / [Plan](../spec/web-execution-config.plan.md)规定管理入口 `/settings/execution-configs`：Web 前后端拥有能力目录查询、预设编辑/生成及 `execution.json` 条件保存；Codex/Orca 由 Web 后端直接查询。Go 执行服务只消费配置、独立校验并冻结参数，提供原加载文件摘要的只读投影；Runner 不新增探测接口。能力目录/缓存不是执行资格或第二配置来源。首版保存后沿既有正式重启流程生效，不热加载、不自动停服或改投；冻结调试包只读。边界与实际结果见[专属验收](../acceptance/web-execution-config.md)。

@@ -75,6 +75,7 @@ export function ExecutionConfigs({
   const [draft, setDraft] = useState<Profile>();
   const [defaultChoice, setDefaultChoice] = useState(false);
   const [manual, setManual] = useState(false);
+  const [providerChoice, setProviderChoice] = useState("");
   const [catalog, setCatalog] = useState<Catalog>();
   const [loading, setLoading] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -112,6 +113,7 @@ export function ExecutionConfigs({
     const generation = ++latest.current;
     setLoading(true);
     setCatalog(undefined);
+    setProviderChoice("");
     const probeProfile = base?.config.execution_profiles.find(
       (p) =>
         p.execution.adapter === draft.execution.adapter &&
@@ -156,7 +158,19 @@ export function ExecutionConfigs({
             return current;
           const m =
             result.models!.find((x) => x.is_default) ?? result.models![0];
-          return changeModel(current, m.id, m.default_effort);
+          const choice = base?.combinations.find(
+            (c) =>
+              c.host === current.execution.target.kind &&
+              c.adapter === current.execution.adapter &&
+              c.agent === agentOf(current),
+          );
+          return changeModel(
+            current,
+            m.id,
+            choice?.efforts.includes(m.default_effort ?? "")
+              ? m.default_effort
+              : undefined,
+          );
         });
       }
     };
@@ -191,6 +205,28 @@ export function ExecutionConfigs({
       defaultChoice !== (base?.config.default_execution_profile === draft.id));
   const models = catalog?.models ?? [];
   const model = draft ? String(values(draft).model ?? "") : "";
+  const providerEnabled = adapter === "orca-terminal" && agent === "pi";
+  const providers = [
+    ...new Set(models.flatMap((m) => (m.provider ? [m.provider] : []))),
+  ];
+  const selectedProvider = providerEnabled
+    ? (models.find((m) => m.id === model)?.provider ?? providerChoice)
+    : "";
+  const visibleModels =
+    providerEnabled && selectedProvider
+      ? models.filter((m) => m.provider === selectedProvider)
+      : models;
+  const mappedAgents =
+    base?.combinations
+      .filter((c) => c.host === host && c.adapter === adapter && c.supported)
+      .map((c) => c.agent) ?? [];
+  const agentChoices = [
+    ...new Set([
+      ...mappedAgents,
+      ...(catalog?.agents?.map((a) => a.id) ?? []),
+      agent,
+    ]),
+  ];
   const effort = draft ? String(values(draft).reasoning_effort ?? "") : "";
   const combination = base?.combinations.find(
     (c) => c.host === host && c.adapter === adapter && c.agent === agent,
@@ -501,9 +537,9 @@ export function ExecutionConfigs({
       {!value && <option value="">请选择模型</option>}
       {currentValue(
         value,
-        models.map((m) => m.id),
+        visibleModels.map((m) => m.id),
       )}
-      {models.map((m) => (
+      {visibleModels.map((m) => (
         <option key={m.id} value={m.id}>
           {m.label || m.id}
         </option>
@@ -805,41 +841,61 @@ export function ExecutionConfigs({
                             )
                           }
                         >
-                          {(remote(draft)
-                            ? ["codex"]
-                            : ["codex", "pi", "dsh"]
-                          ).map((a) => (
+                          {agentChoices.map((a) => (
                             <option
                               key={a}
                               value={a}
-                              disabled={
-                                !base.combinations.some(
-                                  (c) =>
-                                    c.host === host &&
-                                    c.adapter === adapter &&
-                                    c.agent === a &&
-                                    c.supported,
-                                )
-                              }
+                              disabled={!mappedAgents.includes(a)}
                             >
-                              {{ codex: "Codex", pi: "Pi", dsh: "DSH" }[a] ?? a}
+                              {(
+                                {
+                                  codex: "Codex",
+                                  pi: "Pi",
+                                  dsh: "DSH",
+                                } as Record<string, string>
+                              )[a] ?? a}
+                              {!mappedAgents.includes(a)
+                                ? " · 目录已发现，当前执行链路未支持"
+                                : catalog?.agents &&
+                                    !catalog.agents.some(
+                                      (entry) => entry.id === a,
+                                    )
+                                  ? " · 未发现目录，可手动填写"
+                                  : ""}
                             </option>
                           ))}
-                          {catalog?.agents
-                            ?.filter(
-                              (a) =>
-                                !(
-                                  remote(draft)
-                                    ? ["codex"]
-                                    : ["codex", "pi", "dsh"]
-                                ).includes(a.id),
-                            )
-                            .map((a) => (
-                              <option key={a.id} disabled>
-                                {a.id} · {a.reason || "当前链路未支持"}
-                              </option>
-                            ))}
                         </select>
+                      </div>
+                    )}
+                    {adapter === "orca-terminal" && (
+                      <p className="sl-help">
+                        Provider 与 API key 请在目标 Orca / Agent
+                        中配置；SteerLine 仅查询和选择已有目录，不保存凭据。
+                      </p>
+                    )}
+                    {providerEnabled && (
+                      <div className="sl-field">
+                        <label htmlFor="execution-provider">Provider</label>
+                        <select
+                          id="execution-provider"
+                          value={selectedProvider}
+                          disabled={manual || loading}
+                          onChange={(e) => {
+                            setProviderChoice(e.target.value);
+                            setMain("", undefined);
+                          }}
+                        >
+                          <option value="">全部已发现 Provider</option>
+                          {providers.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="sl-help">
+                          模型保留完整 provider/model 标识；目录可见不代表 API
+                          key 或实际调用已验证。
+                        </p>
                       </div>
                     )}
                     {localOrca && (

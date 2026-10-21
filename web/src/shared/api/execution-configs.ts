@@ -76,13 +76,12 @@ export interface Catalog {
   environments?: { id: string; name: string }[];
   agents?: {
     id: string;
-    supported: boolean;
-    reason?: string;
-    directory?: string;
+    directory: string;
   }[];
   models?: {
     id: string;
     label: string;
+    provider?: string;
     is_default: boolean;
     default_effort?: string;
     efforts: { value: string; label: string }[];
@@ -95,14 +94,15 @@ export function executionConfigAPI(csrf: string) {
     read: (signal?: AbortSignal) => json<ConfigSnapshot>(path, { signal }),
     discover: (
       query: {
-        kind: "environments" | "agents" | "models";
         host: string;
-        adapter?: string;
         environment?: string;
         profile_id?: string;
         agent?: string;
         refresh?: boolean;
-      },
+      } & (
+        | { kind: "environments"; adapter?: never }
+        | { kind: "agents" | "models"; adapter: string }
+      ),
       signal?: AbortSignal,
     ) =>
       json<Catalog>(path + "/discover", {

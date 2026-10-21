@@ -22,6 +22,8 @@ function fixture(
     defaults?: boolean;
     lost?: boolean;
     helper?: boolean;
+    piProviders?: boolean;
+    remoteAgents?: boolean;
   } = {},
 ) {
   let saved: ConfigSnapshot = {
@@ -152,6 +154,17 @@ function fixture(
             environments: [{ id: "remote", name: "远端机器" }],
           });
         if (q.host === "orca_environment") {
+          if (options.remoteAgents)
+            return response({
+              state: "ready",
+              origin: "probe",
+              agents: [
+                { id: "codex", directory: "registered" },
+                { id: "pi", directory: "registered" },
+              ],
+              models: [],
+              context_unverified: true,
+            });
           if (options.delay) await new Promise((r) => setTimeout(r, 120));
           return response({
             state: "unavailable",
@@ -163,6 +176,32 @@ function fixture(
         }
         if (q.adapter === "orca-terminal") {
           if (q.agent === "pi") {
+            if (options.piProviders)
+              return response({
+                state: "ready",
+                origin: "probe",
+                agents: [
+                  { id: "pi", directory: "registered" },
+                  { id: "custom-agent", directory: "registered" },
+                ],
+                models: [
+                  {
+                    id: "deepseek/deepseek-flash",
+                    provider: "deepseek",
+                    label: "DeepSeek direct",
+                    efforts: [{ value: "high" }],
+                    is_default: true,
+                    default_effort: "high",
+                  },
+                  {
+                    id: "openrouter/deepseek/deepseek-chat",
+                    provider: "openrouter",
+                    label: "OpenRouter DeepSeek",
+                    efforts: [{ value: "high" }],
+                  },
+                ],
+                context_unverified: true,
+              });
             if (options.delay) await new Promise((r) => setTimeout(r, 120));
             return response({
               state: "unsupported",
@@ -434,4 +473,49 @@ it("keeps local directory querying available without helper and labels missing P
         JSON.parse(String(init?.body)).agent === "pi",
     ),
   ).toBe(true);
+});
+
+it("selects an Orca-provided Pi provider without storing credentials or widening remote execution", async () => {
+  const writes = fixture({
+    helper: true,
+    piProviders: true,
+    remoteAgents: true,
+  });
+  await screen.findByDisplayValue("本机日常");
+  fireEvent.change(screen.getByLabelText("执行链路"), {
+    target: { value: "orca-terminal" },
+  });
+  fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "pi" } });
+  await screen.findByRole("option", { name: "openrouter" });
+  fireEvent.change(screen.getByLabelText("Provider"), {
+    target: { value: "openrouter" },
+  });
+  expect(screen.getByLabelText("模型")).toHaveValue("");
+  expect(screen.queryByRole("option", { name: "DeepSeek direct" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("模型"), {
+    target: { value: "openrouter/deepseek/deepseek-chat" },
+  });
+  fireEvent.change(screen.getByLabelText("Thinking effort"), {
+    target: { value: "high" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  const profile = (writes[0] as ConfigSnapshot["config"]).execution_profiles[0];
+  expect(profile.execution.settings.agent_launch?.model).toBe(
+    "openrouter/deepseek/deepseek-chat",
+  );
+  expect(profile.execution.settings).not.toHaveProperty("provider");
+  expect(profile.execution.settings).not.toHaveProperty("api_key");
+  expect(screen.getByText(/Provider 与 API key 请在目标 Orca/)).toBeVisible();
+  fireEvent.change(screen.getByLabelText("运行机"), {
+    target: { value: "remote" },
+  });
+  await screen.findByRole("option", {
+    name: /Pi · 目录已发现，当前执行链路未支持/,
+  });
+  expect(
+    screen.getByRole("option", { name: /Pi · 目录已发现，当前执行链路未支持/ }),
+  ).toBeDisabled();
+  expect(screen.queryByLabelText("Provider")).toBeNull();
+  expect(screen.getByLabelText("Agent")).toHaveValue("codex");
 });

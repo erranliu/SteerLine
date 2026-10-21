@@ -99,7 +99,7 @@ func TestWebExecutionConfigRoutes(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"local_helper"`) || !strings.Contains(w.Body.String(), `"combinations"`) {
 		t.Fatal("missing structured support contract")
 	}
-	for _, body := range []string{`{"kind":"models","host":"local"}`, `{"kind":"models","host":"local","adapter":"orca-terminal","environment":"remote"}`, `{"kind":"models","host":"local","adapter":"orca-terminal","endpoint":"arbitrary"}`} {
+	for _, body := range []string{`{"kind":"models","host":"local"}`, `{"kind":"models","host":"local","adapter":"orca-terminal","api_key":"fixture-secret"}`, `{"kind":"models","host":"local","adapter":"orca-terminal","environment":"remote"}`, `{"kind":"models","host":"local","adapter":"orca-terminal","endpoint":"arbitrary"}`} {
 		if got := request(s, "POST", path+"/discover", body, cookie, csrf); got.Code != 400 {
 			t.Fatal("ambiguous or arbitrary native route accepted", got.Code)
 		}

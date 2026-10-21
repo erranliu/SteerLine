@@ -132,5 +132,5 @@ func localOrcaCatalog(ctx context.Context, r localRuntime, kind, agent string, o
 	c.reader = bufio.NewReader(io.LimitReader(conn, (1<<20)+1))
 	out.Channel = "named-pipe"
 	out.RuntimeDigest = cfg.Digest([]byte(r.RuntimeID))
-	return readOrcaCatalog(ctx, c, "", kind, agent, true, out)
+	return readOrcaCatalog(ctx, c, "", kind, agent, out)
 }

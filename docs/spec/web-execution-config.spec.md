@@ -1,6 +1,6 @@
 # Web 执行配置管理与能力探测 Spec
 
-日期：2026-10-21。状态：已按用户授权实现本机 Orca 增量，支持范围及实际验证结果见专属验收。实现及验证范围登记于专属验收。配套 [Plan](web-execution-config.plan.md) 与[专属验收](../acceptance/web-execution-config.md)。普通开发，无 roadmap Task ID，不修改 execution-map。
+日期：2026-10-21。状态：已实现配置管理、本机 Orca 及统一 Orca 目录边界；实际验证范围见专属验收。配套 [Plan](web-execution-config.plan.md) 与[专属验收](../acceptance/web-execution-config.md)。普通开发，无 roadmap Task ID，不修改 execution-map。
 
 ## 1. 目标、现状与范围
 
@@ -9,6 +9,8 @@
 实施前代码基线为 `00eb8c6f89d4fe66bb4da840025094ce711d0422`。当时 `web/src/features/settings/settings.tsx` 只展示已加载预设；`web/server` 主要承担浏览器认证和应用 API 转发。实施前全局配置由 `internal/app/runner_config.go` 定义，格式为 3，保存在 `<STEERLINE_HOME>/execution.json`；应用启动时读取整份快照，文件改变后拒绝新候选，不热加载。
 
 已实现范围是本机 Codex app-server 与远端 Orca/Codex。本次增加 Windows/amd64 的本机 Orca：运行机仍为本机，链路选择 Orca + Agent，按已有 Runner 契约提供 Codex、Pi（`pi`）、DeepSeek Harness（`dsh`）的明确参数映射。原“本机 Orca 已放弃/不恢复”的范围限制由本次修订取代。其他 Agent 仍只能展示未支持原因；Orca 注册或返回目录不能自动扩展产品支持矩阵。Pi/DSH 的本机能力不推导为远端支持，远端可生成范围仍为 Codex。
+
+不包含模型 provider 的 API key/OAuth、base URL 或账号配置管理，也不扫描/复制 Pi 等 Agent 的凭据配置。用户在目标 Orca 所启动的 Agent 中完成配置或登录。Orca 的连接认证仅用于访问既有目标，不是模型 provider 凭据管理。
 
 不包含 Runner 构建选择/升级、远端机器配对/解绑、任意 SSH 主机、远端 Codex 直连、自动登录、真实模型试运行、配置热加载或浏览器控制整体重启。本机 Orca 增量不扩展至其他 OS，不代替部署 helper，也不改 Runner/Orca 的业务执行、权限、停止或恢复协议。权限和执行环境的主动验证继续使用既有环境检查入口。
 
@@ -83,7 +85,7 @@ Web 后端创建自身拥有的短命 app-server，完成 initialize/initialized
 
 分页游标重复、响应不完整、非法数据和超时均不能表示完整目录。单次探测总期限 30 秒，响应总上限 1 MiB；到期/取消/断开/正常完成均关闭连接并结算精确 owned 进程，独立清理上限 5 秒。Windows 后台启动不闪控制台。不能按进程名称清理其他 Codex；清理失败必须显示诊断，不能报告成功并遗留进程。Web 关闭时排空这些查询，不影响业务代理。
 
-### 4.2 本机 Orca（新增，待实施）
+### 4.2 本机 Orca
 
 Web 后端从自身固定 Orca user-data 目录只读加载 `orca-runtime.json`；使用服务启动环境中的 `ORCA_USER_DATA_PATH` 或平台默认目录，不能接受浏览器传入目录、pipe、token、pairing code 或 RPC 方法。Windows 选择 metadata 声明的本机 named pipe，按原生换行 JSON envelope 发送 request ID、`authToken`、固定方法/参数及必要 `clientCapabilities`。仅复用已有 Orca 本机认证，不要求本机自配对，不读取远端登记凭据，不继承 `ORCA_ENVIRONMENT/ORCA_PAIRING_CODE/ORCA_REMOTE_PAIRING` 改投远端，也不执行 `orca open/serve` 自动启动共享运行时。
 
@@ -107,7 +109,17 @@ Web 后端从自身固定 Orca user-data 目录只读加载 `orca-runtime.json`�
 
 正式实现封装必要协议和能力协商，禁止运行时导入 Orca 安装包里的私有 JS 或依赖其内部文件路径。本次会话的探索已验证上述接口可返回目录，但不代替本功能的可复现自动验收，见专属验收。
 
-### 4.4 查询与错误展示
+### 4.4 Orca 本机与远端的一致性
+
+本机和远端共用一套 `status.get → agentSession.agents → agentSession.modelCatalog(agent=所选值)` 的协商、目录解析、来源与错误语义。差异只在目标选择、本机named pipe或远端配对加密传输及相应身份核对；Web不分别实现本机/远端的Pi、provider或模型发现，不自行调用Pi CLI、provider HTTP接口或读取auth/models文件补查。
+
+查询层如实返回目标Orca注册的Agent，不混入“本机支持Pi、远端只支持Codex”等执行规则，也不补造未注册Agent。models请求只对目标已注册的Agent调用modelCatalog；目录层按同一协议接受本机/远端Agent，远端入口不得写死Codex。API返回的Agent目录事实与GET的Web/Runner执行支持组合分开，页面再合并展示。注册但无执行映射的Agent显示已发现及不支持原因并禁用配置生成；有映射但缺目录的Agent仍可按既有未验证原始值规则编辑。远端Pi/DSH执行范围本次不扩展，不由目录查询成功授予资格。
+
+模型provider与API key留在目标Orca/Agent。Pi目录的原始`provider/model`标识可投影只读provider用于筛选，完整标识（含多级斜杠）原样保存到既有`agent_launch.model`，不新增执行配置中的provider凭据字段。其他Agent的模型ID不套用Pi格式。手动模型标识不会创建provider或写入凭据。
+
+当前查询没有绑定具体worktree/session/account，始终显示context_unverified。保持Orca/Pi原生默认配置是本期部署前提；目录可见、凭据配置、模型调用成功及项目可执行分开，不根据目录推断API key有效性、额度或权限。刷新绕过Web缓存，不冒充已强制刷新Orca原生缓存；来源/时间以Orca返回为准。多套账号/配置身份选择不在本期范围，缺Orca公开契约时不能自行读文件或声称查询与执行已绑定同一账号。
+
+### 4.5 查询与错误展示
 
 查询状态使用 `not_requested / in_progress / ready / unavailable / unsupported`，另带 `freshness`、`origin`、`fetched_at`、`context_unverified` 和最后一次错误。无数据、查询失败、完整空目录、过期结果必须区分；部分成功不能把整个目录标成 ready。
 
@@ -119,7 +131,7 @@ Web 后端从自身固定 Orca user-data 目录只读加载 `orca-runtime.json`�
 
 页面原型已于 2026-10-21 经用户确认，采用本次会话的 `execution-config-manager.html` 布局与交互；生产页面使用真实目录与 HTTP 配置保存，不保留示例数据或原型状态持久化。桌面采用左侧配置列表、右侧编辑器，窄屏依次排列。列表显示名称、默认标识、运行机、链路/Agent、模型/effort；提供新建、编辑、复制、删除、设为默认。复制生成新 ID；既有 ID 不因名称改变而变化。至少保留一个配置，删除默认项须在同次保存中选择替代项。历史执行不随目录删除而消失。
 
-主要编辑顺序为“名称 → 运行机 → 执行链路 → Agent → 模型 → Thinking effort”。本机新增“Codex 直连 / Orca + Agent”链路选择；远端链路仍固定 Orca。本机 Orca 展示 Codex/Pi/DSH 的产品映射与各自目录状态；本机 Codex 不展示无意义的 Agent 单选。运行机与链路是独立字段，不能把本机 Orca伪装为远端机器。当前未支持 Agent 可读但不可生成。权限模式、workflow、审计模型/effort 和其余现有合法设置放在更多设置；审计模型同样按所选链路目录和完整 workflow schema 校验。切换链路/Agent 时同步处理不再合法的审计流程、审计参数与 effort，不能隐藏保留导致保存后才发现旧组合冲突。首版不提供任意 shell 命令输入或新增可执行程序注册；已有 executable/args/认证引用/提示词覆盖可查看，编辑其他字段时原样保留，不丢失、不复制凭据正文。
+主要编辑顺序为“名称 → 运行机 → 执行链路 → Agent → Provider（Pi）→ 模型 → Thinking effort”。Pi的Provider选项只从Orca返回目录投影，选择Provider会清空不匹配的模型与effort；其他Agent不显示该筛选。页面提供目标Orca/Agent配置凭据的说明，不提供key、base URL或登录配置表单。本机新增“Codex 直连 / Orca + Agent”链路选择；远端链路仍固定 Orca。本机 Orca 展示 Codex/Pi/DSH 的产品映射与各自目录状态；本机 Codex 不展示无意义的 Agent 单选。运行机与链路是独立字段，不能把本机 Orca伪装为远端机器。当前未支持 Agent 可读但不可生成。权限模式、workflow、审计模型/effort 和其余现有合法设置放在更多设置；审计模型同样按所选链路目录和完整 workflow schema 校验。切换链路/Agent 时同步处理不再合法的审计流程、审计参数与 effort，不能隐藏保留导致保存后才发现旧组合冲突。首版不提供任意 shell 命令输入或新增可执行程序注册；已有 executable/args/认证引用/提示词覆盖可查看，编辑其他字段时原样保留，不丢失、不复制凭据正文。
 
 新建时可将返回的默认模型/effort预填为明确选项，并允许修改；不把预填值冒充 Runner 最终解析值。刷新目录不自动改已保存配置。切换模型时若旧 effort 不再支持，清空并要求选择；不支持 effort 时显示“不适用”并省略该字段，不把默认、空串与 none 混同。
 
@@ -143,7 +155,7 @@ Web 后端从自身固定 Orca user-data 目录只读加载 `orca-runtime.json`�
 
 路径实际为不带尾斜杠的基础路径及其子路径。复用精确 loopback/Host、同源 cookie、Origin 和 CSRF；所有 POST/PUT 都核验 CSRF，不能通过只读外观绕过原生进程启动授权。请求与结果上限 1 MiB，错误不回显认证正文。目标程序仅来自服务端支持策略或当前已保存配置；不接受通用文件路径、原生 RPC 透传、任意 argv/env 或目标 URL，浏览器不取得配对凭据。
 
-本机增量沿用同一命名空间：`GET` 增加结构化运行机/链路/Agent 支持组合、各分支 effort/workflow 约束及本机 helper 部署材料是否齐备；不能向浏览器返回认证正文。`POST /discover` 的 models/agents 请求显式提供 `host`、`adapter` 和适用的 `agent/environment`，后端核对组合后选择本机 Codex、本机 Orca IPC 或远端 Orca；environments 仍只查询登记机器。前后端及测试同步更新，不保留缺 adapter 的歧义分支，不新增 `host=local_orca` 或配置格式4；已保存配置仍用既有 adapter/target 区分。
+本机增量沿用同一命名空间：`GET` 增加结构化运行机/链路/Agent 支持组合、各分支 effort/workflow 约束及本机 helper 部署材料是否齐备；不能向浏览器返回认证正文。`POST /discover` 的 models/agents 请求显式提供 `host`、`adapter` 和适用的 `agent/environment`，后端核对目录路由与Agent标识后选择本机 Codex、本机 Orca IPC 或远端 Orca；Orca查询不受执行映射过滤；environments 仍只查询登记机器。前后端及测试同步更新，不保留缺 adapter 的歧义分支，不新增 `host=local_orca` 或配置格式4；已保存配置仍用既有 adapter/target 区分。
 
 读取/写入只针对固定 home 的 `execution.json`；部署字段 `version` 和 `runner` 不可由本页改变。已有符合公开 schema 的未编辑设置按 JSON 值保留，不进行默认展开；不接受重复键、未知字段、非法组合或超限配置。ID、名称、非空目录、唯一 ID、默认项存在等规则沿当前格式。生成与保存共用一套 Web 后端实现，PUT 不信任先前 validate 结果或浏览器提交的探测结论。
 
@@ -185,6 +197,8 @@ Web 比较同 home/当前宿主实例的 loaded_execution_digest 与 saved_diges
 | WEC-A12 | 本机链路可切换，Agent/模型/effort/审计字段正确联动，三通路迟到响应隔离，草稿与原生默认值保留 |
 | WEC-A13 | 扩展原受控配置L3，保存本机 Orca 后正式重启，关闭Web后CLI提交使用原样adapter/target/agent/model/effort/helper，旧候选不变 |
 | WEC-A14 | 新生成调试包经正式Web路径取得真实本机Orca目录及来源，并核验Web owned连接清理；不运行helper或模型，不改变共享Orca资源 |
+| WEC-A15 | 本机/远端同一Orca目录协议、响应投影与错误规则；远端可查询注册Pi，目录不带产品支持字段、不补注册项、不扩展远端执行映射，凭据不透出 |
+| WEC-A16 | Pi Provider筛选与完整原始模型标识保存正确，无provider凭据管理；切换后字段重置，未映射的远端Agent显示已发现但不可生成配置 |
 
 WEC-M01 为后置人工体验：中文名称、列表/编辑器、窄屏键盘操作、失败文案和待重启提示；参与窗口及非阻塞范围见专属验收。功能未完成前，不以探索调用、编译或文档生成代替以上结果。
 

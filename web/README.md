@@ -76,3 +76,5 @@ go run ./cmd/test-feedback -level=L3 -suite=configuration -scenario=configuratio
 前者使用独立 controlled 现场覆盖保存/正式重启/CLI消费；后者内部先生成新调试包，只验证真实目录查询并正常清理，不运行模型任务。结果见[专属验收](../docs/acceptance/web-execution-config.md)。
 
 本机 Orca 目录由 Web 自有 named pipe 客户端查询，仅允许 status/agents/modelCatalog，无 Runner 探测接口。本机执行所需 helper 路径/SHA 来自部署模板，缺材料不阻止查询目录；Pi/DSH 无 Orca 结构化目录时可手动填 schema 合法值，并保持未验证标识。helper 的正式发布材料准备与新包复制方式见 Spec，页面不能任意配置程序。
+
+本机和远端Orca共用status/agents/modelCatalog目录流程，只在连接认证与目标身份上区分。发现Agent不代表SteerLine支持其执行；远端目录入口可以按注册Agent查询，配置生成仍保留现有支持范围。Pi提供只读Provider筛选并保存完整provider/model；API key/OAuth/base URL由目标Orca中的Agent原生配置，页面不管理或复制凭据。目录可见不等于实际调用通过，查询与执行上下文仍显示未核实。
