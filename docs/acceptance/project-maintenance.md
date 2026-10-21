@@ -1,5 +1,7 @@
 # 项目基线与材料统一维护验收
 
+后续[收敛方案验收](project-maintenance-simplification.md)已于2026-10-21建立，状态为待实施/待验证。本文PM-A01–PM-A08及PM-M01仅证明本页所记原实现，不代表一键快进、自动生成或候选独立版本等新行为已经通过。
+
 专属任务：[Spec](../spec/project-maintenance.spec.md) · [Plan](../plans/project-maintenance.plan.md) · [统一设计](../product-design/project-maintenance.md)。2026-10-21 已按用户授权实现并验证；当前记录与 2026-10-20 的文档审查历史分别保留，无 roadmap Task ID。产品结果见本文实施验证节，人工体验 PM-M01 后置。
 
 ## 自动验收

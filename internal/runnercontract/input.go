@@ -12,7 +12,7 @@ type BuildPin struct {
 }
 
 type Document struct {
-	Kind    string  `json:"kind"`
+	Kind    string  `json:"kind,omitempty"`
 	Path    string  `json:"path"`
 	Commit  string  `json:"commit,omitempty"`
 	Content *string `json:"content,omitempty"`
@@ -45,14 +45,23 @@ type ModelSettings struct {
 	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 }
 
+// WorkflowPrompt exposes only published prompt metadata, not execution transitions.
+type WorkflowPrompt struct {
+	Kind      string `json:"kind"`
+	Contract  string `json:"contract"`
+	PromptKey string `json:"prompt_key"`
+	Prompt    string `json:"prompt"`
+}
+
 type WorkflowChoice struct {
-	ID                  string   `json:"id"`
-	Version             int      `json:"version"`
-	Description         string   `json:"description"`
-	SupportedAdapters   []string `json:"supported_adapters"`
-	AuditModelRequired  bool     `json:"audit_model_required"`
-	PromptSteps         []string `json:"prompt_steps"`
-	MaximumRepairCycles uint64   `json:"maximum_repair_cycles"`
+	States              map[string]WorkflowPrompt `json:"states,omitempty"`
+	ID                  string                    `json:"id"`
+	Version             int                       `json:"version"`
+	Description         string                    `json:"description"`
+	SupportedAdapters   []string                  `json:"supported_adapters"`
+	AuditModelRequired  bool                      `json:"audit_model_required"`
+	PromptSteps         []string                  `json:"prompt_steps"`
+	MaximumRepairCycles uint64                    `json:"maximum_repair_cycles"`
 }
 type ExecutionTarget struct {
 	Kind        string `json:"kind"`

@@ -1,0 +1,176 @@
+[
+  {
+    "id": "development",
+    "version": 2,
+    "description": "Implement and publish a verified PR.",
+    "supported_adapters": [
+      "codex-app-server",
+      "orca-terminal"
+    ],
+    "audit_model_required": false,
+    "prompt_steps": [
+      "implement.execute",
+      "implement.report",
+      "publish",
+      "publish.report"
+    ],
+    "states": {
+      "implement.execute": {
+        "kind": "execute",
+        "contract": "implementation",
+        "prompt_key": "implement.execute",
+        "prompt": "读取当前 worktree 中以下路径的 Spec、Plan 和参考材料，完成实现及必要验证。"
+      },
+      "implement.input": {
+        "kind": "input"
+      },
+      "implement.report": {
+        "kind": "report",
+        "contract": "implementation",
+        "prompt_key": "implement.report",
+        "prompt": "根据已有执行上下文整理指定实施结果；只报告，不补做工作。注明依据，保留失败、未知情况、缺失和冲突。"
+      },
+      "pr_ready": {
+        "kind": "milestone"
+      },
+      "publish.execute": {
+        "kind": "execute",
+        "contract": "publication",
+        "prompt_key": "publish",
+        "prompt": "将当前分支 push 到发布目标并创建 PR。用 git branch --show-current 取得实际分支，作为远端分支和 PR head。结果未知时说明情况，不重复创建。成功后给出 PR URL。"
+      },
+      "publish.report": {
+        "kind": "report",
+        "contract": "publication",
+        "prompt_key": "publish.report",
+        "prompt": "根据已有上下文整理指定发布的结果和 PR URL；只报告，不重新发布。注明依据，保留失败、未知情况、缺失和冲突。"
+      },
+      "publish.verify": {
+        "kind": "verify",
+        "contract": "publication"
+      }
+    },
+    "initial": "implement.execute"
+  },
+  {
+    "id": "development-audited",
+    "version": 2,
+    "description": "Implement, audit and repair code once, then publish the verified revision.",
+    "supported_adapters": [
+      "codex-app-server",
+      "orca-terminal"
+    ],
+    "audit_model_required": true,
+    "prompt_steps": [
+      "implement.execute",
+      "implement.report",
+      "publish",
+      "publish.report",
+      "audit.code",
+      "audit.code.report"
+    ],
+    "audit_steps": [
+      "audit.code.execute"
+    ],
+    "states": {
+      "audit.code.execute": {
+        "kind": "execute",
+        "contract": "audit",
+        "prompt_key": "audit.code",
+        "prompt": "审计当前代码，直接修复发现的 P0–P2 问题并完成必要验证。验证后将最终代码改动追加提交到当前分支；无改动时沿用当前提交。报告实际修复的 P0–P2 总数及逐项问题、修复内容；未修复问题和未完成事项如实说明。\n最终回复必须为单一 JSON 对象，不添加代码围栏或额外正文。\nReturn one JSON object:\n{\"outcome\":\"done|needs_input|blocked\",\"summary\":\"result\"}\nFor needs_input add question. For blocked add blocker: {\"category\":\"failure|unknown_external|permission|prerequisite\",\"action\":\"action\",\"error\":\"error\",\"known\":\"optional\",\"unknown\":\"optional\"}.\nInclude fixed_count (nonnegative integer), fixed_issues [{\"severity\":\"P0|P1|P2\",\"issue\":\"issue\",\"repair\":\"actual repair\",\"evidence\":\"existing location/change evidence\"}], and remaining_issues [{\"severity\":\"P0|P1|P2\",\"issue\":\"issue\",\"reason\":\"reason\"}]. Explicitly use 0 and [] only when known. done requires completed audit and necessary validation, no remaining P0-P2 issues. Preserve incomplete work and partial statistics. Never invent missing facts."
+      },
+      "audit.code.input": {
+        "kind": "input"
+      },
+      "audit.code.parse": {
+        "kind": "parse",
+        "contract": "audit",
+        "prompt": "仅整理已有代码审计与修复结果；不得重审、测试、修复或发布。缺失信息如实表达，不由沉默推断成功或零修复。"
+      },
+      "audit.code.report": {
+        "kind": "report",
+        "contract": "audit",
+        "prompt_key": "audit.code.report",
+        "prompt": "根据已有上下文整理指定审计修复结果；只报告，不重审、修代码或补检查。保留实际修复数量、逐项内容及遗留问题，缺失、歧义、冲突如实标注。"
+      },
+      "implement.execute": {
+        "kind": "execute",
+        "contract": "implementation",
+        "prompt_key": "implement.execute",
+        "prompt": "读取当前 worktree 中以下路径的 Spec、Plan 和参考材料，完成实现及必要验证。"
+      },
+      "implement.input": {
+        "kind": "input"
+      },
+      "implement.report": {
+        "kind": "report",
+        "contract": "implementation",
+        "prompt_key": "implement.report",
+        "prompt": "根据已有执行上下文整理指定实施结果；只报告，不补做工作。注明依据，保留失败、未知情况、缺失和冲突。"
+      },
+      "pr_ready": {
+        "kind": "milestone"
+      },
+      "publish.execute": {
+        "kind": "execute",
+        "contract": "publication",
+        "prompt_key": "publish",
+        "prompt": "将当前分支 push 到发布目标并创建 PR。用 git branch --show-current 取得实际分支，作为远端分支和 PR head。结果未知时说明情况，不重复创建。成功后给出 PR URL。"
+      },
+      "publish.report": {
+        "kind": "report",
+        "contract": "publication",
+        "prompt_key": "publish.report",
+        "prompt": "根据已有上下文整理指定发布的结果和 PR URL；只报告，不重新发布。注明依据，保留失败、未知情况、缺失和冲突。"
+      },
+      "publish.verify": {
+        "kind": "verify",
+        "contract": "publication"
+      }
+    },
+    "initial": "implement.execute"
+  },
+  {
+    "id": "conversation",
+    "version": 1,
+    "description": "Read-only content execution with original native final results.",
+    "supported_adapters": [
+      "codex-app-server"
+    ],
+    "audit_model_required": false,
+    "prompt_steps": [],
+    "states": {
+      "closed": {
+        "kind": "terminal"
+      },
+      "execute": {
+        "kind": "execute",
+        "contract": "final"
+      },
+      "input": {
+        "kind": "input"
+      }
+    },
+    "initial": "execute"
+  },
+  {
+    "id": "generate",
+    "version": 1,
+    "description": "Read-only content execution with original native final results.",
+    "supported_adapters": [
+      "codex-app-server"
+    ],
+    "audit_model_required": false,
+    "prompt_steps": [],
+    "states": {
+      "closed": {
+        "kind": "terminal"
+      },
+      "execute": {
+        "kind": "execute",
+        "contract": "final"
+      }
+    },
+    "initial": "execute"
+  }
+]

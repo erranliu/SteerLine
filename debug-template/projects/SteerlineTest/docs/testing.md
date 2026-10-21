@@ -1,7 +1,7 @@
 # Fixture testing
 
-The catalogue is docs/testing/test-list.json. Plan test IDs are in the adjacent
-task.tests.json. Keep definitions and arrangements consistent when editing tests.
+The catalogue is docs/testing/test-list.json. Plan test IDs are supplied in the
+system-generated snapshot inside the frozen execution prompt. Maintain the Plan, test catalogue and actual programs; SteerLine automatically selects registered tests for each changed Plan. No arrangement JSON application or commit is required.
 
 For a registered marker check, run its exact command with
 `-Out .steerrunner/artifacts/<unique-execution-id>` in the original Run workspace.

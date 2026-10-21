@@ -41,22 +41,7 @@ func (r BaseResolver) Resolve(ctx context.Context, work taskmodel.FixedWork, can
 		return "", err
 	}
 	base := strings.TrimSpace(string(raw))
-	if candidate {
-		values, err := r.Store.RunnerCandidates(ctx, r.Project, work.Record.TaskID)
-		if err != nil {
-			return "", err
-		}
-		base = ""
-		for _, c := range values {
-			if c.ContractDigest != work.Contract.Digest || !taskmodel.ValidCommit(c.BaseRevision) || base != "" && base != c.BaseRevision {
-				return "", failure("contract_mismatch", "candidate common base is inconsistent")
-			}
-			base = c.BaseRevision
-		}
-		if !taskmodel.ValidCommit(base) {
-			return "", failure("base_missing_delivery", "candidate has no original common base")
-		}
-	}
+
 	if !taskmodel.ValidCommit(base) {
 		return "", failure("base_missing_delivery", "target branch has no valid commit")
 	}

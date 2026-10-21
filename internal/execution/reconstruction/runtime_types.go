@@ -54,6 +54,7 @@ type RunView struct {
 	CurrentTurnID       string                                `json:"current_turn_id,omitempty"`
 	ExecutionProfile    *executionmodel.FixedExecutionProfile `json:"execution_profile,omitempty"`
 	PRHistory           []string                              `json:"pr_history,omitempty"`
+	MaterialStatus      string                                `json:"material_status,omitempty"`
 	CandidateNumber     int                                   `json:"candidate_number,omitempty"`
 	CandidateCreatedAt  time.Time                             `json:"candidate_created_at"`
 	CandidateStopReason string                                `json:"candidate_stop_reason,omitempty"`

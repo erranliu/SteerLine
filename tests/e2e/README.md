@@ -29,9 +29,9 @@ recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runne
 | `runtime.service-lifecycle` | 中文/空格路径和无关 cwd 下生成启动器；创建任务、核对精确宿主身份、执行正常控制、停止并核对逐项目结算，再启动并确认新实例和原任务事实，最后正常停止。 | 单 home 的正常宿主生命周期，不注入陈旧身份/配置/锁冲突。 |
 | `runtime.dual-home-operation` | 两个独立 home 同时在线，使用不同请求分别 discard 不同任务；核对持久化结果、另一项目/provider 不变、无执行候选、原实例不变，最后停止两者。 | 多 home 合法并存及独立操作，不做同请求 ID 重放。 |
 | `runtime.shared-runner-projects` | 同 home 两项目共用一个 Runner，使用相同产品请求 ID 创建独立 Run，分别消费仓库/PR，整体停启保留原绑定且零自动新输入，最后核实全体清理。 | 项目级库/请求隔离与应用级共享 Runner 的接线；每项独立 home/两个 repo/provider/端口，可沿 runtime 二并行。 |
-| `runtime.project-maintenance` | 唯一生成器新建双项目包；真实 Go/Web/Edge 检查三入口、单项生成零提前写、显式应用、隔离远端前进与材料确认、首次冻结和原 PlanTests；停止并核对资源。 | 基线与材料维护流程；公开 Runner 使用受控结果，不计真实模型。生成阶段独占源码 Web 构建目录，复用 test-project-maintenance.ps1/同一 driver；场景不使用 t.Parallel。 |
+| `runtime.project-maintenance` | 唯一生成器新建双项目包；真实 Go/Web/Edge 检查快进、三版自动材料、候选独立冻结、过期测试禁用、完整差异与旧PR交付；停止并核对资源。 | 基线与材料维护流程；公开 Runner 使用受控结果，不计真实模型。生成阶段独占源码 Web 构建目录，复用 test-project-maintenance.ps1/同一 driver；场景不使用 t.Parallel。 |
 | `workflow.local-codex-audited` | live：两种显式模型走 development-audited/1，实现、两项审计、发布与真实 PR 合并、唯一交付及后继 ready 未启动；从正式产品详情核对冻结预设、材料/摘要、各轮模型、审计来源，从任务历史核对候选/Runner Run 及 workflow；保留响应证据。 | 审计 workflow 的产品接线；须先通过空闲 I1 与 controlled gate，不归 full-L2，不重验 Runner 故障矩阵。 |
-| `testing.management-local-codex` | live：全新 debug 包，正式 CLI 调用真实 generate/1 保存安排；原开发候选上实际程序先通过再失败，经公开 artifacts/Git→API→浏览器核对计数、历史和证据，最后停止并核实原资源结算。 | 测试结果消费闭环；固定本机 Runner/Codex、独立 SteerlineTest base，测试失败来自隔离输入，不发布 PR；生成包时独占本源码 Web 依赖目录。 |
+| `testing.management-local-codex` | live：全新 debug 包，维护观察自动调用真实 generate/1 保存系统安排，候选使用原提示中的系统快照和真实worktree文档路径；原开发候选上实际程序先通过再失败，经公开 artifacts/Git→API→浏览器核对计数、历史和证据，最后停止并核实原资源结算。 | 测试结果消费闭环；固定本机 Runner/Codex、独立 SteerlineTest base，测试失败来自隔离输入，不发布 PR；生成包时独占本源码 Web 依赖目录。 |
 
 本项目按规范维护上表的独有覆盖维度；并行资源声明涵盖 home、repo、数据库、端口、可变构建输出、provider 和清理所有权。
 
@@ -135,4 +135,4 @@ go test -tags=e2e ./tests/e2e/... -run '^$'
 
 本轮采用定向 Go、Web fake timer 与 Runner 实际 EXE/受控服务验证，不新增 L2/L3 live 场景；范围与命令见 [Plan](../../docs/plans/execution-observability.plan.md)，结果见[专属验收](../../docs/acceptance/execution-observability.md)。不据消息缺失判定卡死，不在安装现场验收。
 
-项目维护定向入口：`go run ./cmd/test-feedback -level=L3 -suite=runtime -scenario=runtime.project-maintenance -env=controlled`；Windows 工具 Job 下可用 `./scripts/test-runtime-isolation.ps1 -Level L3 -Suite runtime -Scenario runtime.project-maintenance -OutDir <新目录>`。单独入口 `./scripts/test-project-maintenance.ps1 -SteerRunnerExe <安装环境外EXE> -Out <新目录>` 仍调用唯一生成器和同一 Go/Edge driver，不另造现场。真实 `testing.management-local-codex` 驱动已采用生成后审阅/显式应用，并保留真实通过/失败报告与清理验证。
+项目维护定向入口：`go run ./cmd/test-feedback -level=L3 -suite=runtime -scenario=runtime.project-maintenance -env=controlled`；Windows 工具 Job 下可用 `./scripts/test-runtime-isolation.ps1 -Level L3 -Suite runtime -Scenario runtime.project-maintenance -OutDir <新目录>`。单独入口 `./scripts/test-project-maintenance.ps1 -SteerRunnerExe <安装环境外EXE> -Out <新目录>` 仍调用唯一生成器和同一 Go/Edge driver，不另造现场。真实 `testing.management-local-codex` 驱动已采用自动生成/系统保存，无人工 apply，并保留真实通过/失败报告与清理验证。

@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+项目更新与候选版本收敛（2026-10-21，已实施）：[Spec](project-maintenance-simplification.spec.md) · [Plan](../plans/project-maintenance-simplification.plan.md) · [专属验收](../acceptance/project-maintenance-simplification.md) · [长期设计](../product-design/project-maintenance.md)。远端/本地提交与PR、日志及一键快进，材料自动跟随、Plan变化自动生成系统测试安排；每个新候选固定最新版本，旧候选过期保留且禁用当前测试关联，其PR合入仍可完成任务。取代下述上一批人工确认/应用及Task级冻结；实际验证见专属验收，不改roadmap。
+
 项目基线与材料统一维护（2026-10-21）：[Spec](project-maintenance.spec.md) · [Plan](../plans/project-maintenance.plan.md) · [专属验收](../acceptance/project-maintenance.md) · [长期设计](../product-design/project-maintenance.md)。初始化/基线/局部共用规则和维护流程，后台检测零自动生成，生成先审阅再显式应用，首次启动冻结远端最新代码与同版本材料。当前已替换任务材料登记即永久固定、生成自动保存及缺材料仅提示的旧行为；验证归专属记录，不改历史验收或 roadmap。项目添加的最终登记/建库继续后置，消费本批共用检查能力。
 
 Runner generate/1 对接与最简测试管理（自动项通过，人工待验）：[Spec](test-management.spec.md) · [Plan](test-management.plan.md) · [专属验收](../acceptance/test-management.md)。公开产物收集、当前 Git 核验、生成对象兼容接管及真实结果闭环已接入；TM-A04/TM-A08 等实际版本与结果以专属记录为准，TM-M01 后置。生成先审阅再显式应用等后续变更归[项目维护](../product-design/project-maintenance.md)，原固定版本证据保持。不增加 Task 字段/测试门禁或 conversation 操作。

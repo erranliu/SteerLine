@@ -14,6 +14,7 @@ import { LastMessage } from "./last-message";
 import { RunnerWorkflow } from "./runner-workflow";
 import { DeliverySummary } from "./delivery-summary";
 import { PlanTests } from "./plan-tests";
+import { CandidateDocuments } from "./candidate-documents";
 import { nativeSessionReason } from "./native-session";
 import { RunTask, taskDependencyReason } from "./run-task";
 import { CopyExecutionInfo } from "./copy-execution-info";
@@ -236,6 +237,7 @@ function CandidateDetail({
       </div>
       <RunnerWorkflow run={run} />
       <DeliverySummary run={run} />
+      <CandidateDocuments run={run} />
       <PlanTests run={run} />
       {run.recovery_required && (
         <p className="notice amber">

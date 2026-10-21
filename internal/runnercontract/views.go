@@ -98,11 +98,12 @@ type Run struct {
 }
 
 type Material struct {
-	Kind         string `json:"kind"`
-	Path         string `json:"path"`
-	Commit       string `json:"commit,omitempty"`
-	Digest       string `json:"digest"`
-	SnapshotPath string `json:"snapshot_path"`
+	ExecutionLocation string `json:"execution_location,omitempty"`
+	Kind              string `json:"kind"`
+	Path              string `json:"path"`
+	Commit            string `json:"commit,omitempty"`
+	Digest            string `json:"digest"`
+	SnapshotPath      string `json:"snapshot_path"`
 }
 
 type Audit struct {

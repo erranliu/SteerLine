@@ -12,7 +12,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
-	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 type testManagementStore interface {
@@ -21,9 +20,10 @@ type testManagementStore interface {
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
 type testManagementPort struct {
-	service  *testmanagement.GenerationService
-	store    testManagementStore
-	evidence *testmanagement.EvidenceService
+	service     *testmanagement.GenerationService
+	store       testManagementStore
+	evidence    *testmanagement.EvidenceService
+	maintenance *projectMaintenance
 }
 
 func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error) *testManagementPort {
@@ -45,7 +45,6 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 		return e, catalog, err
 	}
 	m := newProjectMaintenance(c, nil)
-	s.Workspace = m.workspace
 	s.ReadCommitted = m.read
 	s.VerifyBinding = func(g testmanagement.Generation) error { return verifyGenerationTakeover(g, cli) }
 	var evidenceChecked bool
@@ -71,15 +70,17 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 		}
 		return nil
 	}}
-	return &testManagementPort{service: s, store: store, evidence: evidence}
+	port := &testManagementPort{service: s, store: store, evidence: evidence, maintenance: c.runtimeMaintenance}
+	if port.maintenance != nil {
+		port.maintenance.tests = port
+		evidence.AllowCollect = func(ctx context.Context, c runnerstate.Candidate) bool {
+			return port.maintenance.freshness(ctx, c) == "current"
+		}
+	}
+	return port
 }
 func publicGeneration(r testmanagement.Generation) api.TestGeneration {
 	v := api.TestGeneration{Plan: r.Command.Plan, Profile: r.Command.Profile, SourceCommit: r.Command.Commit, ID: r.ID, Revision: r.Revision, State: r.State, Target: r.Target, RunID: r.RunID, Diagnostic: r.Diagnostic, Result: r.Result}
-	for _, a := range r.Applications {
-		if a.State == "applied" {
-			v.Applied = true
-		}
-	}
 	if r.Projection != nil {
 		v.StopStatus = r.Projection.StopStatus
 	}
@@ -91,20 +92,9 @@ func generationError(err error) error {
 	}
 	return err
 }
-func (p *testManagementPort) GenerateTests(ctx context.Context, in api.TestGenerateRequest) (api.TestGeneration, error) {
-	r, err := p.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: in.RequestID, Plan: in.Plan, Profile: in.Profile, Commit: in.Commit})
-	return publicGeneration(r), generationError(err)
-}
 func (p *testManagementPort) TestGeneration(ctx context.Context, id string) (api.TestGeneration, error) {
 	r, err := p.store.Generation(ctx, p.service.Project, id)
 	v := publicGeneration(r)
-	if err == nil && len(r.Result) > 0 && !r.Cancelled && r.State != "applied" {
-		preview, e := p.service.Preview(ctx, r)
-		v.Review = &api.TestGenerationReview{ReviewDigest: preview.ReviewDigest, Before: preview.Before, After: preview.After, Diagnostic: preview.Diagnostic}
-		if e != nil {
-			v.Review.Diagnostic = e.Error()
-		}
-	}
 	return v, generationError(err)
 }
 func (p *testManagementPort) StopTestGeneration(ctx context.Context, in api.TestStopGenerationRequest) (api.TestGeneration, error) {
@@ -125,6 +115,26 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 			return nil, err
 		}
 	}
+	freshness := "current"
+	if p.maintenance != nil {
+		freshness = p.maintenance.freshness(ctx, c)
+	}
+	encode := func(v testmanagement.View) (json.RawMessage, error) {
+		if freshness != "current" {
+			v.Passed = 0
+			v.Failed = 0
+			v.Pending = 0
+			v.Diagnostic = "当前测试关联不可用：" + freshness + "；以下为原候选历史"
+			for i := range v.Rows {
+				v.Rows[i].Status = "stale"
+			}
+		}
+		return json.Marshal(struct {
+			testmanagement.View
+			MaterialStatus       string `json:"material_status"`
+			AssociationAvailable bool   `json:"association_available"`
+		}{v, freshness, freshness == "current"})
+	}
 	evidence, readErr := p.store.Evidence(ctx, p.service.Project, id)
 	if readErr != nil && !errors.Is(readErr, testmanagement.ErrNotFound) {
 		return nil, readErr
@@ -134,7 +144,7 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 		if s.Status == "ready" && len(s.Definitions) > 0 {
 			v.Diagnostic = "尚无已核实的程序测试报告"
 		}
-		return json.Marshal(v)
+		return encode(v)
 	}
 	if evidence.RunID != c.RunID || evidence.InputDigest != c.InputDigest {
 		return nil, errors.New("test report candidate association differs")
@@ -143,7 +153,7 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 		evidence.Git.Verified = false
 	}
 	v := testmanagement.EvidenceView(s, evidence, time.Now().UTC())
-	return json.Marshal(v)
+	return encode(v)
 }
 func (p *testManagementPort) close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -155,10 +165,10 @@ func (p *testManagementPort) observe(ctx context.Context) error {
 	if err := p.service.Observe(ctx); err != nil {
 		return err
 	}
+	if p.maintenance != nil {
+		if e := p.maintenance.refresh(ctx); e != nil {
+			return e
+		}
+	}
 	return p.evidence.Observe(ctx)
-}
-
-func (p *testManagementPort) ApplyTests(ctx context.Context, in api.TestApplyRequest) (api.TestGeneration, error) {
-	r, e := p.service.Apply(ctx, testmodel.ApplyCommand{RequestID: in.RequestID, GenerationID: in.GenerationID, ExpectedRevision: in.ExpectedRevision, ReviewDigest: in.ReviewDigest, AllowEmpty: in.AllowEmpty})
-	return publicGeneration(r), generationError(e)
 }

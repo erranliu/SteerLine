@@ -105,6 +105,7 @@ export interface Decision {
   };
 }
 export interface Candidate {
+ material_status?: "current" | "outdated" | "unknown";
   runner_delivery?: {
     available: boolean;
     run_id?: string;

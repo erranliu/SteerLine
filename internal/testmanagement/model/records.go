@@ -35,49 +35,26 @@ type Source struct {
 	TextDigest string `json:"text_digest"`
 }
 type Generation struct {
-	Workspace    string                  `json:"workspace"`
-	Applications []Application           `json:"applications,omitempty"`
-	ID           string                  `json:"id"`
-	Project      string                  `json:"project"`
-	Revision     uint64                  `json:"revision"`
-	Command      GenerateCommand         `json:"command"`
-	CreatedAt    time.Time               `json:"created_at"`
-	Runner       runnercontract.BuildPin `json:"runner"`
-	Request      runnercontract.Request  `json:"runner_request"`
-	Sources      []Source                `json:"sources"`
-	Target       string                  `json:"target"`
-	TargetBefore string                  `json:"target_before"`
-	Catalogue    Catalogue               `json:"catalogue"`
-	RunID        string                  `json:"run_id,omitempty"`
-	InputDigest  string                  `json:"input_digest,omitempty"`
-	Projection   *runnercontract.Run     `json:"report,omitempty"`
-	State        string                  `json:"state"`
-	Diagnostic   string                  `json:"diagnostic,omitempty"`
-	Result       json.RawMessage         `json:"result,omitempty"`
-	Cancelled    bool                    `json:"cancelled"`
-	StopID       string                  `json:"stop_id,omitempty"`
-	StopRequest  *runnercontract.Request `json:"stop_request,omitempty"`
-	StopState    string                  `json:"stop_state,omitempty"`
-}
-
-// ApplyCommand fixes the review of one local file. Replaying never changes it.
-type ApplyCommand struct {
-	RequestID        string `json:"request_id"`
-	GenerationID     string `json:"generation_id"`
-	ExpectedRevision uint64 `json:"expected_revision"`
-	ReviewDigest     string `json:"review_digest"`
-	AllowEmpty       bool   `json:"allow_empty"`
-}
-type Application struct {
-	Command   ApplyCommand `json:"command"`
-	Before    string       `json:"before"`
-	Output    string       `json:"output"`
-	Workspace string       `json:"workspace"`
-	State     string       `json:"state"`
-}
-type Preview struct {
-	ReviewDigest string `json:"review_digest"`
-	Before       string `json:"before"`
-	After        string `json:"after"`
-	Diagnostic   string `json:"diagnostic,omitempty"`
+	Inputs      string                  `json:"inputs"`
+	PlanText    string                  `json:"plan_text"`
+	ID          string                  `json:"id"`
+	Project     string                  `json:"project"`
+	Revision    uint64                  `json:"revision"`
+	Command     GenerateCommand         `json:"command"`
+	CreatedAt   time.Time               `json:"created_at"`
+	Runner      runnercontract.BuildPin `json:"runner"`
+	Request     runnercontract.Request  `json:"runner_request"`
+	Sources     []Source                `json:"sources"`
+	Target      string                  `json:"target"`
+	Catalogue   Catalogue               `json:"catalogue"`
+	RunID       string                  `json:"run_id,omitempty"`
+	InputDigest string                  `json:"input_digest,omitempty"`
+	Projection  *runnercontract.Run     `json:"report,omitempty"`
+	State       string                  `json:"state"`
+	Diagnostic  string                  `json:"diagnostic,omitempty"`
+	Result      json.RawMessage         `json:"result,omitempty"`
+	Cancelled   bool                    `json:"cancelled"`
+	StopID      string                  `json:"stop_id,omitempty"`
+	StopRequest *runnercontract.Request `json:"stop_request,omitempty"`
+	StopState   string                  `json:"stop_state,omitempty"`
 }

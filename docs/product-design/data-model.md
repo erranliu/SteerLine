@@ -6,23 +6,23 @@ SteerLine 尚未发布。项目显式使用 task_authority=native 与 workflow_p
 
 ## 权威与身份
 
-SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、测试生成原请求与结果、原候选测试收集请求及不可变产物和自身服务 checkpoint。schema 26 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
+SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、测试生成原请求与结果、原候选测试收集请求及不可变产物和自身服务 checkpoint。schema 27 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
 
 Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、原生资源、问题、输入、恢复与停止事实。SteerLine 不读该库、原生 codec、IPC 或私有日志；只消费固定 EXE 公布的 CLI/Run/事件。
 
 项目以规范化 Git common-dir 标识；数据库另有稳定 database_id 与 database_revision。Task version、authority_version、graph_revision、候选 revision 和 Runner revision 分属不同权威，不能互相代替。读页面/资格/候选在同一 Task 库事务中采样；服务进程活性与 checkpoint 内容分别核实。
 
-候选 ID 与 Runner Run ID 分开。候选原子领取时固定完整 Spec/Plan 引用、原预设 ID/名称/参数摘要、原执行/流程配置、目标、原 request_id/body 与共同 base；响应丢失只查原请求。项目 checkpoint 固定 Runner EXE/version/SHA/resource_digest/state-dir，候选同时记录该构建绑定；instance_id 仅属于本次 ProjectRuntime，不永久写死到 Run。接受后 Run、输入摘要、分支和 PR 绑定不能替换。候选参与状态不冒充 Runner 原生执行状态。
+候选 ID 与 Runner Run ID 分开。候选原子领取时固定完整 Spec/Plan 引用、原预设 ID/名称/参数摘要、原执行/流程配置、目标、原 request_id/body 与各自 base；响应丢失只查原请求。项目 checkpoint 固定 Runner EXE/version/SHA/resource_digest/state-dir，候选同时记录该构建绑定；instance_id 仅属于本次 ProjectRuntime，不永久写死到 Run。接受后 Run、输入摘要、分支和 PR 绑定不能替换。候选参与状态不冒充 Runner 原生执行状态。
 
 人工候选退出在原候选 payload 固定 `withdrawal`（request_id、expected_revision、requested_by、at），与 `participation=abandoned` 同事务保存；原请求重放不重写首次事实。`stop_requested` 专指独立的 Runner 停止义务，不由人工退出设置。退出与名额统计在写事务中重检，至少保留一个参与候选；Task 终态之后仍可另行增加停止义务，保留原 withdrawal。当前 Web 及调用方验证见[专属验收](../acceptance/web-candidate-stop.md)。
 
 ## 固定契约与领取
 
-当前规则（2026-10-21）：[项目基线与材料维护](project-maintenance.md#task-材料更新与首次启动冻结)分开保存“Task 最近确认材料”与“首次预留不可变执行契约”。目标 repository/remote/branch 不可借材料确认变更；未预留任务按 Task version 确认内容。首次 fresh fetch 后同 commit 解析引用/测试快照，在原项目库事务重核实际消费的确认，固定唯一 Task 快照、base、候选/outbox；不跨应用文件/项目库伪造事务，不比较无关 Plan/轮询时间。后续候选/拒绝/未知重放沿原版本；原 base 被历史改写排除时拒绝新候选而不换基线。材料规则不迁移旧库或改历史。材料依据和确认请求分别保存于 maintenance_approvals/maintenance_requests，唯一执行快照保存于 task_execution_snapshots；Generation payload 保存不可变输入、待审阅结果和逐次单文件应用意图/事实。
+当前规则（2026-10-21）：[项目基线与材料维护](project-maintenance.md)将项目最新材料与各候选执行快照分别保存。`project_materials` 保存远端解析后的全部引用、内容摘要、生成输入摘要及系统 Generation；`maintenance_settings` 保存一次性生成方案与最近远端观察，`maintenance_requests` 保存原快进事实。每个新候选 fresh fetch 后绑定同 commit 的代码、材料及已就绪测试安排，预留事务重核材料/生成摘要并原子保存候选与 outbox。候选 payload 保存完整独立 Contract、base、MaterialDigest 和系统测试快照（在原 submit 的执行提示正文中绑定）。原号重放保持原版本；内容变化只标记旧候选过期，不修改其参与状态或原执行。已删除 Task 唯一快照和人工批准/文件应用权威，无旧库迁移。Generation 保存不可变输入与系统结果，不创建 Task/Candidate、不写旁置安排文件。
 
 TaskContract 固定目标仓库、remote、base 分支及 Spec/Plan/其他材料的 commit、路径和 SHA-256。启动前核对 Task 版本、DAG 就绪、authority、图版本、目标仓库及前置合并是否进入当前 base；最终领取事务再次进行同图 CAS。领取与完整 CLI outbox 一次提交，失败零派发。正常 implement/report/publish 不创建额外 DAG Task。
 
-同一 Task 的候选共享原 base。新的参与候选只生成自己的 caller 候选 ID、原始提交和 Runner Run，不能用旧候选换绑出新执行。旧提交未知、迟到接受和终态后接受仍沿原记录对账。
+同一 Task 的各候选分别绑定创建时最新 base 和材料。新的参与候选只生成自己的 caller 候选 ID、原始提交和 Runner Run，不能用旧候选换绑出新执行。旧提交未知、迟到接受和终态后接受仍沿原记录对账。
 
 ## 输入与恢复
 
@@ -42,7 +42,7 @@ Runner 状态使用[短目录规则](../integration/steerrunner.md)：Windows �
 
 代理/用户给出的 URL 只是线索。Runner 核对固定 provider、仓库、base/head 与当前执行分支；Task 交付前通过 CLI 再刷新 PR。Task 版本、候选绑定、原 PR 归属和真实 merged/merge commit 在提交事务重核。
 
-Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义务一次提交；失败全部回滚，重复读取和迟到事件不重复交付。不要求候选先到 pr_ready，也不因兄弟候选未知阻塞正确已合并候选。
+Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义务一次提交；失败全部回滚，重复读取和迟到事件不重复交付。不要求候选先到 pr_ready，也不因兄弟候选未知或材料过期阻塞正确已合并候选；交付校验使用所选候选原契约。
 
 作废同样固定原请求与任务版本；未知 PR/执行事实保持明确阻断。Task 终态保存每个候选的停止义务，迟到接受的原 Run 仍须撤销输入并停止。逻辑撤销、服务停服与原生停止分别取证；本次无中心 PR/分支/工作区删除状态机。
 
@@ -50,10 +50,10 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 | 格式/权威 | 当前值或归属 | 源码 |
 | --- | --- | --- |
-| Task SQLite | schema 26 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| Task SQLite | schema 27 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
 | Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
-| TaskContract / DAG | Task 自有纯值 | [task/model](../../internal/task/model) |
+| TaskContract / DAG | 契约结构为 taskcontract 纯值；校验/DAG 归 task/model | [task/model](../../internal/task/model) |
 | 候选/outbox/公开投影 | caller 参与关系 | [runnerstate](../../internal/runnerstate) |
 | 单事务候选领取 | 图/任务版本 CAS | [runner_candidates.go](../../internal/storage/sqlite/runner_candidates.go) |
 | 交付与后继 | Task 自有事务 | [runner_result.go](../../internal/storage/sqlite/runner_result.go) |

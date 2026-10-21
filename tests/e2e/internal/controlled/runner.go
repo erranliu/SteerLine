@@ -169,7 +169,33 @@ func RunnerCLI(args []string) (bool, error) {
 				return true, err
 			}
 			// Scripted public result, not a native/model success claim.
-			result := json.RawMessage(`{"tests":["fixture.marker"]}`)
+			selection := []string{}
+			noTests := false
+			for _, material := range generation.Generate.Materials {
+				if material.Content == nil {
+					continue
+				}
+				if strings.HasSuffix(material.Path, ".plan.md") && (strings.Contains(strings.ToLower(*material.Content), "no automated tests") || strings.Contains(*material.Content, "无需自动测试")) {
+					noTests = true
+				}
+				if material.Path == "docs/testing/test-list.json" {
+					var catalog struct {
+						Tests []struct {
+							ID string `json:"id"`
+						} `json:"tests"`
+					}
+					if e := json.Unmarshal([]byte(*material.Content), &catalog); e != nil {
+						return true, e
+					}
+					for _, d := range catalog.Tests {
+						selection = append(selection, d.ID)
+					}
+				}
+			}
+			if noTests {
+				selection = []string{}
+			}
+			result, _ := json.Marshal(map[string]any{"tests": selection})
 			source := runnercontract.Final{CommandID: "fixture-content-" + request.RequestID, TurnID: "fixture-turn", Verified: true, NativeOutcome: "succeeded", Source: "caller-fixture"}
 			run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: result, Source: source}
 			run.Status = "completed"

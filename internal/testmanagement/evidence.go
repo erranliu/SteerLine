@@ -29,11 +29,12 @@ type EvidenceRunner interface {
 	Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error)
 }
 type EvidenceService struct {
-	Project string
-	Store   EvidenceStore
-	Runner  EvidenceRunner
-	Admit   func(context.Context) error
-	mu      sync.Mutex
+	AllowCollect func(context.Context, runnerstate.Candidate) bool
+	Project      string
+	Store        EvidenceStore
+	Runner       EvidenceRunner
+	Admit        func(context.Context) error
+	mu           sync.Mutex
 }
 
 func (s *EvidenceService) save(ctx context.Context, r *model.Evidence) error {
@@ -68,7 +69,7 @@ func (s *EvidenceService) Observe(ctx context.Context) error {
 		if r.RunID != c.RunID || r.InputDigest != c.InputDigest {
 			return errors.New("test evidence original Run changed")
 		}
-		err = s.observeCandidate(ctx, &r)
+		err = s.observeCandidate(ctx, &r, s.AllowCollect == nil || s.AllowCollect(ctx, c))
 		if err != nil {
 			r.Diagnostic = err.Error()
 			r.Git = runnercontract.WorkspaceGit{RunID: r.RunID, ObservedAt: time.Now().UTC(), Diagnostic: err.Error()}
@@ -81,7 +82,7 @@ func (s *EvidenceService) Observe(ctx context.Context) error {
 	}
 	return nil
 }
-func (s *EvidenceService) observeCandidate(ctx context.Context, r *model.Evidence) error {
+func (s *EvidenceService) observeCandidate(ctx context.Context, r *model.Evidence, collect bool) error {
 	if s.Admit != nil {
 		if err := s.Admit(ctx); err != nil {
 			return err
@@ -111,6 +112,10 @@ func (s *EvidenceService) observeCandidate(ctx context.Context, r *model.Evidenc
 	// Restore committed immutable evidence before asking for new files.
 	if err = s.readListed(ctx, r, listed.Artifacts); err != nil {
 		return err
+	}
+	if !collect {
+		r.Git.Verified = false
+		return nil
 	}
 	discovery, discoverErr := s.Runner.DiscoverArtifacts(ctx, r.RunID)
 	if discoverErr == nil {

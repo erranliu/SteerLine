@@ -40,6 +40,7 @@ type Config struct {
 	ConfigPath         string                `json:"-"`
 	runtimeHost        *host.Config
 	runtimeRunner      *runnerclient.Client
+	runtimeCatalog     *runnerclient.Catalog
 	runtimeMaintenance *projectMaintenance
 	runtimeTests       api.TestManagementPort
 

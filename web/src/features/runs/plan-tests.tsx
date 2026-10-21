@@ -22,6 +22,8 @@ export type TestRow = {
   history: TestResult[];
 };
 export type PlanTestsView = {
+ material_status?:string;
+ association_available?:boolean;
   commit?: string;
   status: string;
   diagnostic?: string;
@@ -50,6 +52,8 @@ export function PlanTests({ run }: { run: Candidate }) {
   return (
     <section className="settings-panel" aria-label="计划测试">
       <h3>计划测试</h3>
+      {view?.material_status==="outdated"&&<p className="notice amber">已过期 · 保留候选。当前测试关联不可用，以下仅为历史；此候选 PR 合入仍可完成任务。</p>}
+      {view?.material_status==="unknown"&&<p className="notice amber">材料当前性待核实；历史结果保留。</p>}
       {!online && (
         <p className="notice amber">离线 · 以下为最后观察，当前结果待核实</p>
       )}
@@ -77,7 +81,7 @@ export function PlanTests({ run }: { run: Candidate }) {
               </>
             )}
           </p>
-          {view.total === 0 ? (
+          {view.association_available===false ? (<p>历史测试安排 · 共 {view.total} 项 · 当前关联不可用</p>) : view.total === 0 ? (
             <p>未安排自动测试</p>
           ) : (
             <p>

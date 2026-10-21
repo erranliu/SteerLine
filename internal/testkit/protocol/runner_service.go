@@ -85,7 +85,7 @@ func RunRunnerServiceFixture() bool {
 		data = map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
 			"native_session_viewer": map[string]any{"adapters": []string{"codex-app-server"}},
 			"instance_binding":      map[string]bool{"expected_instance_id": true},
-			"workflows":             []any{map[string]any{"id": "development", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"implement.execute", "implement.report", "publish", "publish.report"}}},
+			"workflows":             []any{map[string]any{"id": "development", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"implement.execute", "implement.report", "publish", "publish.report"}, "states": map[string]any{"implement.execute": map[string]any{"kind": "execute", "contract": "implementation", "prompt_key": "implement.execute", "prompt": "Fixture implementation instruction."}}}},
 			"configuration_schemas": map[string]any{"version": 1, "workflow": map[string]any{"type": "object"}, "run_configuration": map[string]any{"type": "object"}, "adapters": map[string]any{"codex-app-server": map[string]string{"type": "object"}}, "providers": map[string]any{"command": map[string]string{"type": "object"}}}}
 	case "inspect", "events":
 		// A static public observation, supplied only by the caller test. This

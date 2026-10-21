@@ -101,7 +101,7 @@ func (d *debugRelease) verifyMaintenanceReset(out string) error {
 		if e != nil {
 			return e
 		}
-		for _, table := range []string{"task_execution_snapshots", "tasks", "task_contracts"} {
+		for _, table := range []string{"project_materials", "tasks", "task_contracts"} {
 			var count int
 			e = db.QueryRow("SELECT count(*) FROM " + table).Scan(&count)
 			if e != nil {
@@ -109,7 +109,7 @@ func (d *debugRelease) verifyMaintenanceReset(out string) error {
 				return e
 			}
 			facts[filepath.Base(scope.config)+":"+table] = count
-			if table == "task_execution_snapshots" && count != 0 || table != "task_execution_snapshots" && count != 2 {
+			if table == "project_materials" && count != 0 || table != "project_materials" && count != 2 {
 				db.Close()
 				return errors.New("reset lost task definitions or retained execution snapshot")
 			}

@@ -55,6 +55,8 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return true
 	}
 	switch owner {
+	case module + "/internal/task/model", module + "/internal/projectmaintenance/model":
+		return dependency == module+"/internal/taskcontract"
 	case module + "/internal/projectmaintenance":
 		return dependency == module+"/internal/projectmaintenance/model" || dependency == module+"/internal/testmanagement/model"
 	case module + "/internal/runnerbinding":
@@ -72,7 +74,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	case module + "/internal/execution/conversation":
 		return dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
 	case module + "/internal/runnerstate":
-		return dependency == module+"/internal/runnercontract"
+		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/taskcontract"
 	case module + "/internal/testmanagement/model":
 		return dependency == module+"/internal/runnercontract"
 	case module + "/internal/storage/ports":
@@ -81,7 +83,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -238,7 +240,7 @@ func callerClosureAllowed(owner, dep string) bool {
 	if !strings.Contains(strings.Split(dep, "/")[0], ".") {
 		return true
 	}
-	if owner != module+"/internal/processwindow" && dep == module+"/internal/runnercontract" {
+	if owner != module+"/internal/processwindow" && (dep == module+"/internal/runnercontract" || dep == module+"/internal/taskcontract") {
 		return true
 	}
 	if owner == module+"/internal/runnerbinding" {

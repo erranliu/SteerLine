@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
@@ -77,7 +78,7 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 		if old.TaskID != c.TaskID || old.StateDir != c.StateDir || old.Explicit != c.Explicit || old.Number != c.Number || old.Claimant != c.Claimant || old.ContractDigest != c.ContractDigest || old.BaseRevision != c.BaseRevision || digestValue(old.Submit) != digestValue(c.Submit) || old.RunID != "" && old.RunID != c.RunID || old.InputDigest != "" && old.InputDigest != c.InputDigest || old.Branch != "" && old.Branch != c.Branch || old.PRURL != "" && old.PRURL != c.PRURL || old.StopRequested && !c.StopRequested || old.SubmitObserveOnly && !c.SubmitObserveOnly || old.Participation != c.Participation {
 			return nativeErr("immutable_task", "candidate update changed a frozen task association")
 		}
-		if !bytes.Equal(old.TestPlan, c.TestPlan) || old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
+		if digestValue(old.Contract) != digestValue(c.Contract) || old.MaterialDigest != c.MaterialDigest || !bytes.Equal(old.TestPlan, c.TestPlan) || old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
 			return nativeErr("immutable_task", "candidate update changed its original start identity")
 		}
 		if digestValue(old.Withdrawal) != digestValue(c.Withdrawal) {
@@ -130,6 +131,7 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 // ReserveRunnerCandidate atomically claims task work and fixes the original
 // CLI submission. It performs no external execution or platform operation.
 func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel.FixedWork, c runnerstate.Candidate, candidate bool) error {
+	c.Contract = work.Contract
 	if c.Project != work.Record.ProjectIdentity || c.TaskID != work.Record.TaskID || c.ID == "" || c.Revision != 1 || c.SubmitState != "pending" || c.RunID != "" || c.Submit.Protocol != runnercontract.Protocol || c.Submit.RequestID == "" || !json.Valid(c.Submit.Input) || !filepath.IsAbs(c.StateDir) || c.Claimant == "" || c.ContractDigest != work.Contract.Digest || !taskmodel.ValidCommit(c.BaseRevision) || c.Participation != "active" {
 		return nativeErr("contract_mismatch", "candidate reservation requires complete fixed task and Runner inputs")
 	}
@@ -138,7 +140,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		return nativeErr("contract_mismatch", "Runner input differs from the frozen task repository")
 	}
 	matches := func(doc runnercontract.Document, ref taskmodel.FileReference) bool {
-		return doc.Kind == "git" && doc.Path == ref.Path && doc.Commit == ref.Commit && doc.Content == nil
+		return doc.Kind == "" && doc.Path == ref.Path && doc.Commit == "" && doc.Content == nil
 	}
 	if !matches(input.Documents.Spec, work.Contract.SpecRef) || !matches(input.Documents.Plan, work.Contract.PlanRef) {
 		return nativeErr("contract_mismatch", "Runner Spec/Plan differ from the task contract")
@@ -151,11 +153,25 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		}
 	}
 	var testing struct {
-		PlanPath string `json:"plan_path"`
-		Commit   string `json:"commit"`
-		Status   string `json:"status"`
+		GenerationID string                 `json:"generation_id"`
+		Inputs       string                 `json:"inputs"`
+		Definitions  []testmodel.Definition `json:"definitions"`
+		PlanPath     string                 `json:"plan_path"`
+		Commit       string                 `json:"commit"`
+		Status       string                 `json:"status"`
 	}
 	testingBound := len(c.TestPlan) > 0 && json.Unmarshal(c.TestPlan, &testing) == nil && testing.PlanPath == work.Contract.PlanRef.Path && testing.Commit == work.Contract.PlanRef.Commit
+	if testingBound && testing.Status == "ready" {
+		bound := false
+		for _, body := range input.Workflow.PromptOverrides {
+			if strings.Contains(body, testmodel.TestingContext(c.TestPlan)) {
+				bound = true
+			}
+		}
+		if !bound {
+			return nativeErr("contract_mismatch", "system test snapshot is absent from frozen prompt context")
+		}
+	}
 	seenRefs := map[string]bool{}
 	for _, doc := range input.Documents.References {
 		if seenRefs[doc.Path] {
@@ -192,7 +208,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			if err := freezeNumber(previous.Number); err != nil {
 				return err
 			}
-			if !bytes.Equal(previous.TestPlan, c.TestPlan) || previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
+			if digestValue(previous.Contract) != digestValue(c.Contract) || previous.MaterialDigest != c.MaterialDigest || !bytes.Equal(previous.TestPlan, c.TestPlan) || previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
 				return nativeErr("idempotency_conflict", "candidate ID belongs to another original request")
 			}
 			return errAtomicReplay
@@ -216,15 +232,12 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if candidate && !c.Explicit {
 			return nativeErr("wrong_mode", "new candidates require an explicit start")
 		}
-		var active, number, conflictingBase int
-		if err := tx.tx.QueryRowContext(ctx, `SELECT coalesce(sum(CASE WHEN json_extract(payload,'$.participation')='active' THEN 1 ELSE 0 END),0),coalesce(max(json_extract(payload,'$.number')),0),coalesce(sum(CASE WHEN json_extract(payload,'$.base_revision')<>? THEN 1 ELSE 0 END),0) FROM runner_candidates WHERE project_identity=? AND task_id=?`, c.BaseRevision, c.Project, c.TaskID).Scan(&active, &number, &conflictingBase); err != nil {
+		var active, number int
+		if err := tx.tx.QueryRowContext(ctx, `SELECT coalesce(sum(CASE WHEN json_extract(payload,'$.participation')='active' AND coalesce(json_extract(payload,'$.material_digest'),'')=? THEN 1 ELSE 0 END),0),coalesce(max(json_extract(payload,'$.number')),0) FROM runner_candidates WHERE project_identity=? AND task_id=?`, c.MaterialDigest, c.Project, c.TaskID).Scan(&active, &number); err != nil {
 			return err
 		}
 		if active >= 5 {
-			return nativeErr("candidate_limit_reached", "five candidates already participate")
-		}
-		if candidate && conflictingBase > 0 {
-			return nativeErr("contract_mismatch", "candidate common base changed")
+			return nativeErr("candidate_limit_reached", "当前材料版本已有五个参与候选")
 		}
 		if err := freezeNumber(number + 1); err != nil {
 			return err
@@ -270,30 +283,43 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if confirmed == "" {
 			confirmed = work.Contract.Digest
 		}
-		if candidate {
-			frozen, e := readExecution(ctx, tx.tx, c.Project, c.TaskID)
-			if e != nil {
-				return e
-			}
-			if frozen.Contract.Digest != c.ContractDigest || frozen.Base != c.BaseRevision || digestValue(frozen.TestPlan) != digestValue(c.TestPlan) {
-				return nativeErr("immutable_task", "execution snapshot changed")
-			}
-		} else {
-			if contract.Digest != confirmed {
-				return nativeErr("immutable_task", "confirmed materials changed")
-			}
-			if e := verifyMaterial(ctx, tx.tx, c.Project, work); e != nil {
-				return e
-			}
-			frozen := taskmodel.ExecutionSnapshot{Contract: work.Contract, Base: c.BaseRevision, TestPlan: c.TestPlan}
-			raw, e := json.Marshal(frozen)
-			if e != nil {
-				return e
-			}
-			if _, e = tx.tx.ExecContext(ctx, `INSERT INTO task_execution_snapshots VALUES(?,?,?)`, c.Project, c.TaskID, raw); e != nil {
-				return e
-			}
+		if contract.Digest != confirmed {
+			return nativeErr("immutable_task", "task materials changed during reservation")
 		}
+		if c.MaterialDigest != "" {
+			var raw []byte
+			if e := tx.tx.QueryRowContext(ctx, `SELECT payload FROM project_materials WHERE project_identity=? AND task_id=?`, c.Project, c.TaskID).Scan(&raw); e != nil {
+				return e
+			}
+			var current struct {
+				Digest       string                 `json:"digest"`
+				GenerationID string                 `json:"generation_id"`
+				Status       string                 `json:"status"`
+				Inputs       string                 `json:"inputs"`
+				Contract     taskmodel.TaskContract `json:"contract"`
+			}
+			if json.Unmarshal(raw, &current) != nil || current.Digest != c.MaterialDigest || current.Status != "ready" {
+				return nativeErr("materials_changed", "latest materials changed before reservation")
+			}
+			if digestValue(current.Contract) != digestValue(work.Contract) || !testingBound || testing.Status != "ready" || testing.GenerationID != current.GenerationID || testing.Inputs != current.Inputs {
+				return nativeErr("materials_changed", "candidate does not bind latest complete materials")
+			}
+			var generationRaw []byte
+			if e := tx.tx.QueryRowContext(ctx, `SELECT payload FROM test_generations WHERE project_identity=? AND generation_id=?`, c.Project, current.GenerationID).Scan(&generationRaw); e != nil {
+				return e
+			}
+			var generation testmodel.Generation
+			if json.Unmarshal(generationRaw, &generation) != nil || generation.State != "generated" || generation.Cancelled || generation.Inputs != current.Inputs {
+				return nativeErr("materials_changed", "generation is no longer ready")
+			}
+			definitions, e := testmodel.Select(generation.Result, generation.Catalogue)
+			if e != nil || digestValue(definitions) != digestValue(testing.Definitions) {
+				return nativeErr("contract_mismatch", "generated test definitions differ from frozen input")
+			}
+
+		}
+		c.Contract = work.Contract
+
 		body, err := json.Marshal(c)
 		if err != nil {
 			return err

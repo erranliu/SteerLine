@@ -1,5 +1,7 @@
 # Plan：项目基线与材料统一维护
 
+后续实施计划见[项目更新与候选版本收敛](project-maintenance-simplification.plan.md)。2026-10-21 新方案已确认但尚未实施；本文是上一批的实施/验证安排，人工采用、显式应用及Task级冻结不能作为新方案继续保留的要求，原验收结果不改写。
+
 状态：2026-10-21 已获用户实施授权，沿审查后最简方案开发和验证。范围归 [Spec](../spec/project-maintenance.spec.md)，行为正文归[项目维护设计](../product-design/project-maintenance.md)，结果归[专属验收](../acceptance/project-maintenance.md)。不改 roadmap 或安装环境；仅在独立 SteerlineTest 夹具验证。实施前已快进至主干 `9e02854ef66e1b1e4b1fbdff35a9eeca294b26a5`。
 
 ## 输入与现有代码整合
@@ -54,6 +56,6 @@ PM-M01：自动项通过后，用户在新独立包检查提示/diff/启动待�
 
 公共规则：[projectmaintenance/rules.go](../../internal/projectmaintenance/rules.go)；文档解析：[testmanagement/model/inputs.go](../../internal/testmanagement/model/inputs.go)；Git/工作区适配与三入口装配：[app/project_maintenance.go](../../internal/app/project_maintenance.go)。默认评估未启动任务绑定的 Plan，显式 Plan 可独立维护；不扫描并重写历史候选。
 
-人工依据与 Task 确认：[sqlite/maintenance.go](../../internal/storage/sqlite/maintenance.go)；首次冻结沿原候选事务，最后预留同时核对已观察的基线；后续候选/Delivery 读唯一 Task 快照。生成沿原 Generation，单文件应用/只核验恢复：[testmanagement/apply.go](../../internal/testmanagement/apply.go)。当前格式为 schema 26，无旧数据迁移。
+人工依据与 Task 确认：[sqlite/maintenance.go](../../internal/storage/sqlite/maintenance.go)；首次冻结沿原候选事务，最后预留同时核对已观察的基线；后续候选/Delivery 读唯一 Task 快照。生成沿原 Generation，单文件应用/只核验恢复：[testmanagement/apply.go](https://github.com/erranliu/SteerLine/blob/b9e5002d38da4722dc8457338e063ce56817fb48/internal/testmanagement/apply.go)。当前格式为 schema 26，无旧数据迁移。
 
 Web 维护动作沿 `/commands`；原 tests CLI 增加 apply。`runtime.project-maintenance` 复用唯一生成器和双项目隔离包，场景不使用 `t.Parallel`，避免同包生成时争用源码 Web 构建目录；其余已准入 runtime 场景仍有原并行预算。原 E2E fixture 补最小公共材料并由外部驱动显式采用；不在产品中自动采用，也不为调用方协议夹具虚构受管测试通过。

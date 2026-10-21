@@ -286,21 +286,6 @@ export class Api {
       throw error;
     }
   }
-  // Explicit continuation of an already durable single-file intent. Never called
-  // by queries, polling, reconnect or request-journal restoration.
-  async continueMaintenanceApply(envelope: Envelope) {
-    this.validate(envelope);
-    if (envelope.action !== "maintenance_apply")
-      throw new Error("只能显式继续原文件应用");
-    return this.locked(envelope.request_id, async () => {
-      const row = await requestByID(envelope.request_id);
-      if (!row || canonical(row.envelope) !== canonical(envelope))
-        throw new Error("缺少完整原请求");
-      const current = await this.reconcileUnlocked(envelope);
-      if (current.status !== "outcome_unknown") return current;
-      return this.post(envelope);
-    });
-  }
   async final(
     run: { run_id: string; execution_id: string; attempt_id: string },
     signal?: AbortSignal,

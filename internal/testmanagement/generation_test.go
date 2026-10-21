@@ -11,7 +11,6 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 type memoryGenerations struct {
@@ -139,7 +138,7 @@ func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *g
 	}
 	m := &memoryGenerations{rows: map[string]Generation{}}
 	f := &generationCLI{}
-	s := &GenerationService{Workspace: func(context.Context) (string, error) { return "head/branch", nil }, Project: "project", Repository: root, Store: m, Runner: f, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+	s := &GenerationService{Project: "project", Repository: root, Store: m, Runner: f, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		return runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only","model":"test-model"}`)}, catalog, nil
 	}}
 	return s, m, f, GenerateCommand{RequestID: strings.Repeat("a", 32), Plan: "docs/spec/task.plan.md", Profile: "local"}
@@ -165,17 +164,8 @@ func TestTMGenerationSaveAndReplay(t *testing.T) {
 	if _, e := os.Stat(filepath.Join(s.Repository, r.Target)); !os.IsNotExist(e) {
 		t.Fatal("generation wrote before review")
 	}
-	v, e := s.Preview(ctx, r)
-	if e != nil {
-		t.Fatal(e)
-	}
-	r, e = s.Apply(ctx, model.ApplyCommand{RequestID: strings.Repeat("c", 32), GenerationID: r.ID, ExpectedRevision: r.Revision, ReviewDigest: v.ReviewDigest})
-	if e != nil || r.State != "applied" {
-		t.Fatal(r.State, e)
-	}
-	raw, err := os.ReadFile(filepath.Join(s.Repository, r.Target))
-	if err != nil || !strings.Contains(string(raw), "unit.rules") {
-		t.Fatal(string(raw), err)
+	if r.Inputs == "" || len(r.Result) == 0 {
+		t.Fatal("missing system-stored selection", r)
 	}
 	if _, err = s.Generate(ctx, in); err != nil || f.submits != 1 {
 		t.Fatal("replayed model", err)
@@ -231,75 +221,6 @@ func TestTMGenerationPersistenceAndUnknown(t *testing.T) {
 func TestTMGenerationChangesAndRestart(t *testing.T) {
 	s, m, f, in := generationFixture(t)
 	ctx := context.Background()
-	if _, err := s.Generate(ctx, in); err != nil {
-		t.Fatal(err)
-	}
-	// Reopening/observing cannot authorize saving.
-	f.finish(`{"tests":["unit.rules"]}`)
-	_ = s.Observe(ctx)
-	r, _ := m.Generation(ctx, s.Project, in.RequestID)
-	if r.State != "generated" {
-		t.Fatal("restart wrote file", r.State)
-	}
-	if _, err := os.Stat(filepath.Join(s.Repository, r.Target)); !os.IsNotExist(err) {
-		t.Fatal("restart saved without intent")
-	}
-	if _, err := s.Generate(ctx, in); err != nil {
-		t.Fatal(err)
-	}
-	r, _ = m.Generation(ctx, s.Project, in.RequestID)
-	if r.State != "generated" || f.submits != 1 {
-		t.Fatal("repeated generate wrote or resubmitted", r.State)
-	}
-	v, e := s.Preview(ctx, r)
-	if e != nil {
-		t.Fatal(e)
-	}
-	if _, e = s.Apply(ctx, model.ApplyCommand{RequestID: strings.Repeat("c", 32), GenerationID: r.ID, ExpectedRevision: r.Revision, ReviewDigest: v.ReviewDigest}); e != nil {
-		t.Fatal(e)
-	}
-	s2, _, f2, in2 := generationFixture(t)
-	_, _ = s2.Generate(ctx, in2)
-	_ = os.WriteFile(filepath.Join(s2.Repository, in2.Plan), []byte("# changed Plan"), 0600)
-	f2.finish(`{"tests":["unit.rules"]}`)
-	_ = s2.Observe(ctx)
-	r, _ = s2.Store.Generation(ctx, s2.Project, in2.RequestID)
-	if _, e := s2.Preview(ctx, r); e == nil {
-		t.Fatal("changed inputs accepted")
-	}
-}
-
-func TestTMGenerationCancelledBeforeLateBindingDoesNotSave(t *testing.T) {
-	s, _, f, in := generationFixture(t)
-	f.lost, f.hidden = true, true
-	ctx := context.Background()
-	_, _ = s.Generate(ctx, in)
-	if _, err := s.Stop(ctx, in.RequestID, strings.Repeat("b", 32)); err != nil {
-		t.Fatal(err)
-	}
-	if f.stops != 0 {
-		t.Fatal("unbound stop sent to a different Run")
-	}
-	f.hidden = false
-	if err := s.Observe(ctx); err != nil || f.stops != 1 {
-		t.Fatal("late binding lost original stop", err)
-	}
-	f.finish(`{"tests":["unit.rules"]}`)
-	if err := s.Observe(ctx); err != nil {
-		t.Fatal(err)
-	}
-	target, _ := ArrangementPath(in.Plan)
-	if _, err := os.Stat(filepath.Join(s.Repository, target)); !os.IsNotExist(err) {
-		t.Fatal("cancelled generation wrote its late result")
-	}
-	if err := s.Close(ctx); err != nil || f.stops != 1 || f.submits != 1 {
-		t.Fatal("closure resent an original action", err)
-	}
-}
-
-func TestTMGenerationSavedFileSurvivesLostReceipt(t *testing.T) {
-	s, m, f, in := generationFixture(t)
-	ctx := context.Background()
 	if _, e := s.Generate(ctx, in); e != nil {
 		t.Fatal(e)
 	}
@@ -307,25 +228,17 @@ func TestTMGenerationSavedFileSurvivesLostReceipt(t *testing.T) {
 	if e := s.Observe(ctx); e != nil {
 		t.Fatal(e)
 	}
-	r, _ := m.Generation(ctx, s.Project, in.RequestID)
-	v, e := s.Preview(ctx, r)
-	if e != nil {
+	before, _ := m.Generation(ctx, s.Project, in.RequestID)
+	copy := *s
+	if e := copy.Observe(ctx); e != nil {
 		t.Fatal(e)
 	}
-	cmd := model.ApplyCommand{RequestID: strings.Repeat("c", 32), GenerationID: r.ID, ExpectedRevision: r.Revision, ReviewDigest: v.ReviewDigest}
-	m.failSaved = true
-	if _, e = s.Apply(ctx, cmd); e == nil {
-		t.Fatal("expected lost application receipt")
+	after, _ := m.Generation(ctx, s.Project, in.RequestID)
+	if string(before.Result) != string(after.Result) || f.submits != 1 {
+		t.Fatal("restart changed original generation")
 	}
-	before, e := os.ReadFile(filepath.Join(s.Repository, r.Target))
-	if e != nil {
+	if e := copy.Close(ctx); e != nil {
 		t.Fatal(e)
-	}
-	m.failSaved = false
-	r, e = s.Apply(ctx, cmd)
-	after, _ := os.ReadFile(filepath.Join(s.Repository, r.Target))
-	if e != nil || r.State != "applied" || string(before) != string(after) || f.submits != 1 {
-		t.Fatal("application replay changed result", e)
 	}
 }
 
