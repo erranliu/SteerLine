@@ -436,7 +436,7 @@ func (d *debugRelease) seedTasks() error {
 			return e
 		}
 		defer client.Close()
-		if e = AdoptFixtureMaterials(ctx, d.home, client.Identity(), "docs/spec/task.plan.md", filepath.Join(d.root, "evidence", filepath.Base(d.config)+"-maintenance")); e != nil {
+		if _, e = WaitFixtureMaterials(ctx, d.home, client.Identity(), "docs/spec/task.plan.md", filepath.Join(d.root, "evidence", filepath.Base(d.config)+"-maintenance")); e != nil {
 			return e
 		}
 	}

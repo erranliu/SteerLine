@@ -11,5 +11,6 @@ func (p *Project) adoptFixtureMaterials() {
 	client, e := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
 	s.Must(e)
 	defer client.Close()
-	s.Must(driver.AdoptFixtureMaterials(s.Context, p.Home, client.Identity(), "docs/spec/task.plan.md", filepath.Join(s.Output, p.Name+"-maintenance")))
+	_, err := driver.WaitFixtureMaterials(s.Context, p.Home, client.Identity(), "docs/spec/task.plan.md", filepath.Join(s.Output, p.Name+"-maintenance"))
+	s.Must(err)
 }

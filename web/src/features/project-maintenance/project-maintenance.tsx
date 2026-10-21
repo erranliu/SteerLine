@@ -1,539 +1,98 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
-import type { Presentation, TaskPage } from "../../shared/api/types";
+import { SafeLink } from "../../shared/ui/status";
 
-type Item = {
-  plan: string;
-  target: string;
-  status: string;
-  diagnostic?: string;
-  review_digest: string;
-  approval_revision: number;
-  tests: string[];
+export type Commit = {sha:string;title:string;author:string;time:string;url:string;prs:string[];pr_diagnostic?:string};
+export type MaintenanceView = {
+ observation:{commit:string;last_success?:string;diagnostic?:string};
+ remote_name:string;remote:Commit;local_info?:Commit;
+ local:{commit:string;branch:string;status:string;ahead:number;behind:number;can_update:boolean;reason?:string};
+ tasks:{task_id:string;contract:{plan_ref:{path:string}};status:string;diagnostic?:string;generation_id:string}[];
+ profiles:{id:string;name:string}[];profile:string;
 };
-type View = {
-  tasks?: { task_id: string; plan: string; diagnostic: string }[];
-  local_commit?: string;
-  generations?: { id: string; plan: string; state: string }[];
-  observation: {
-    commit: string;
-    previous?: string;
-    checked_at: string;
-    last_success?: string;
-    diagnostic?: string;
-    rewritten: boolean;
-  };
-  assessment: { commit: string; items: Item[] };
-  hint?: string;
-};
-type Generation = {
-  applied?: boolean;
-  stop_status?: string;
-  plan?: string;
-  profile?: string;
-  source_commit?: string;
-  id: string;
-  revision: number;
-  state: string;
-  target: string;
-  diagnostic?: string;
-  result?: unknown;
-  review?: {
-    review_digest: string;
-    before: string;
-    after: string;
-    diagnostic?: string;
-  };
-};
-type TaskReview = {
-  task_id: string;
-  version: number;
-  contract: unknown;
-  review_digest: string;
-  diffs: { path: string; before: string; after: string; truncated: boolean }[];
-};
-const stateNames: Record<string, string> = {
-  ready: "材料已核对",
-  needs_review: "待核对",
-  invalid: "材料缺失或无效",
-  generated: "待审阅",
-  needs_review_result: "空安排待确认",
-  applied: "已应用到本地",
-  cancelled: "已取消",
-};
-export function ProjectMaintenance() {
-  const { api, identity, online, refresh, requests } = useWorkspace();
-  const [open, setOpen] = useState(false),
-    [mode, setMode] = useState("baseline"),
-    [plan, setPlan] = useState(""),
-    [profile, setProfile] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  const [generation, setGeneration] = useState(""),
-    [task, setTask] = useState(""),
-    [taskReview, setTaskReview] = useState<TaskReview>(),
-    [emptyReview, setEmptyReview] = useState("");
-  const base = ["maintenance", identity.project_id, identity.instance_id];
-  const view = useQuery({
-    queryKey: [...base, mode, plan],
-    queryFn: () =>
-      api.get<View>(
-        "/maintenance?mode=" + mode + "&plan=" + encodeURIComponent(plan),
-      ),
-    enabled: online,
-    refetchInterval: online ? 60000 : false,
-    retry: false,
-  });
-  const profiles = useQuery({
-    queryKey: [...base, "profiles"],
-    queryFn: () => api.get<{ presentation: Presentation }>("/presentation"),
-    enabled: online && open,
-  });
-  const tasks = useQuery({
-    queryKey: [...base, "tasks"],
-    queryFn: () => api.get<TaskPage>("/tasks?limit=500"),
-    enabled: online && open,
-  });
-  const gen = useQuery({
-    queryKey: [...base, "generation", generation],
-    queryFn: () => api.get<Generation>("/tests/generations/" + generation),
-    enabled: online && open && !!generation,
-    refetchInterval: (q) =>
-      online &&
-      open &&
-      !!generation &&
-      q.state.data?.stop_status !== "stopped" &&
-      q.state.data?.state !== "rejected"
-        ? 5000
-        : false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    retry: false,
-  });
-  const allowEmpty =
-    !!gen.data?.review?.review_digest &&
-    emptyReview === gen.data.review.review_digest;
-  async function action(
-    action: string,
-    target: string,
-    payload: Record<string, unknown>,
-    version = 1,
-  ) {
-    setBusy(true);
-    setError("");
-    try {
-      const result = await api.submit(
-        api.envelope(action, target, Math.max(1, version), payload),
-      );
-      if (result.status !== "applied")
-        throw new Error(result.diagnostic || "原操作结果待核实，请查询原请求");
-      await view.refetch();
-      if (
-        generation &&
-        ["maintenance_apply", "maintenance_stop_generation"].includes(action)
-      )
-        await gen.refetch();
-      refresh();
-      return result.maintenance;
-    } catch (e) {
-      setError(String(e));
-      return undefined;
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function checkTask() {
-    setBusy(true);
-    setTaskReview(undefined);
-    setError("");
-    try {
-      setTaskReview(
-        await api.get<TaskReview>(
-          "/maintenance/tasks/" + encodeURIComponent(task),
-        ),
-      );
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  const pendingRequests =
-    requests?.filter(
-      (r) =>
-        r.envelope.action.startsWith("maintenance_") &&
-        r.envelope.project_id === identity.project_id &&
-        r.envelope.instance_id === identity.instance_id &&
-        !["applied", "rejected"].includes(r.response?.status || ""),
-    ) || [];
-  const o = view.data?.observation;
-  const pending = view.data?.assessment?.items.some(
-    (i) => i.status !== "ready",
-  );
-  const title = o?.diagnostic
-    ? "检查失败"
-    : !o?.commit
-      ? "基线待检查"
-      : pending
-        ? "材料待更新"
-        : view.data?.local_commit && view.data.local_commit !== o.commit
-          ? "本地与远端基线不同"
-          : "公共材料已就绪";
-  return (
-    <section aria-label="项目维护" className="settings-panel maintenance-panel">
-      <button onClick={() => setOpen(!open)} aria-expanded={open}>
-        项目维护 · {title}
-      </button>
-      {o?.last_success && (
-        <small> · 最近检查 {new Date(o.last_success).toLocaleString()}</small>
-      )}
-      {open && (
-        <div>
-          <p>
-            目标基线 <code>{o?.commit || "尚无成功观察"}</code>
-          </p>
-          {view.data?.local_commit && view.data.local_commit !== o?.commit && (
-            <p>
-              本地与远端基线不同 · 本地 HEAD {view.data.local_commit}，请使用
-              Git 核对并更新。
-            </p>
-          )}
-          <p>
-            请使用正常 Git
-            流程更新本地仓库。仅源码变化建议核对测试适用性；必要材料待办只阻断相关任务首次启动。
-          </p>
-          {o?.rewritten && (
-            <p className="notice amber">
-              远端历史非快进，请核对 Git 历史；已有执行保持原基线。
-            </p>
-          )}
-          {o?.diagnostic && <p role="alert">{o.diagnostic}</p>}
-          {(error || view.error) && (
-            <p role="alert">{error || String(view.error)}</p>
-          )}
-          <button
-            disabled={!online || busy}
-            onClick={() =>
-              void action("maintenance_check", identity.project_id, {})
-            }
-          >
-            检查远端
-          </button>
-          <label>
-            维护范围{" "}
-            <select
-              value={mode}
-              onChange={(e) => {
-                setMode(e.target.value);
-                setTaskReview(undefined);
-              }}
-            >
-              <option value="baseline">基线更新</option>
-              <option value="initialize">初始化检查</option>
-              <option value="local">局部草稿</option>
-            </select>
-          </label>
-          <label>
-            Plan 路径{" "}
-            <input
-              value={plan}
-              onChange={(e) => setPlan(e.target.value)}
-              placeholder="留空查看全部任务 Plan"
-            />
-          </label>
-          <p>
-            {mode === "local"
-              ? "工作区草稿 · 未提交或合入不计远端就绪"
-              : "按远端固定提交核验"}
-          </p>
-          {(view.data?.assessment?.items || []).map((item, i) => (
-            <article key={item.plan || i}>
-              <strong>
-                {item.plan || "公共材料"} ·{" "}
-                {stateNames[item.status] || item.status}
-              </strong>
-              {item.diagnostic && <p>{item.diagnostic}</p>}
-              <p>{item.tests?.join("、")}</p>
-              {item.plan && item.status !== "invalid" && (
-                <button
-                  disabled={busy || !online}
-                  onClick={() =>
-                    void action(
-                      "maintenance_review",
-                      item.plan,
-                      {
-                        plan: item.plan,
-                        mode,
-                        review_digest: item.review_digest,
-                      },
-                      item.approval_revision,
-                    )
-                  }
-                >
-                  已审阅，采用当前安排
-                </button>
-              )}
-              {item.plan && (
-                <button onClick={() => setPlan(item.plan)}>选择此 Plan</button>
-              )}
-            </article>
-          ))}
-          <label>
-            本机生成方案{" "}
-            <select
-              value={
-                profile || profiles.data?.presentation.default_profile_id || ""
-              }
-              onChange={(e) => setProfile(e.target.value)}
-            >
-              {profiles.data?.presentation.profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <p>
-            一次生成一个 Plan
-            的测试安排；不运行测试，不自动应用或提交。提交/合入后重新核对远端材料状态。
-          </p>
-          <button
-            disabled={
-              busy ||
-              !online ||
-              !plan ||
-              mode === "initialize" ||
-              (mode !== "local" && !o?.commit)
-            }
-            onClick={() =>
-              void action("maintenance_generate", plan, {
-                plan,
-                profile:
-                  profile || profiles.data?.presentation.default_profile_id,
-                commit: mode === "local" ? "" : o?.commit,
-              }).then((v) => {
-                if (v) setGeneration((v as Generation).id);
-              })
-            }
-          >
-            生成测试安排
-          </button>
-          <label>
-            已有生成记录{" "}
-            <select
-              aria-label="已有生成记录"
-              value={generation}
-              onChange={(e) => setGeneration(e.target.value)}
-            >
-              <option value="">选择原生成</option>
-              {view.data?.generations?.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.plan} · {stateNames[g.state] || g.state} · {g.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            disabled={!online || busy || !generation}
-            onClick={() => void gen.refetch()}
-          >
-            重新读取生成预览
-          </button>
-          <label>
-            原生成请求{" "}
-            <input
-              value={generation}
-              onChange={(e) => setGeneration(e.target.value)}
-              placeholder="原生成 ID，可在重启后继续查询"
-            />
-          </label>
-          {gen.data && (
-            <div aria-label="生成预览">
-              <p>
-                {stateNames[gen.data.state] || gen.data.state} · {gen.data.id}
-              </p>
-              {gen.data.applied && gen.data.state !== "applied" && (
-                <p>文件已应用；取消不会回滚已经发生的写入。</p>
-              )}
-              <p>
-                输入 {gen.data.plan} · {gen.data.source_commit || "工作区草稿"}{" "}
-                · {gen.data.profile}
-              </p>
-              <p>
-                应用目标 <code>{gen.data.target}</code>
-              </p>
-              {gen.data.diagnostic && <p>{gen.data.diagnostic}</p>}
-              {gen.data.stop_status !== "stopped" &&
-                gen.data.state !== "rejected" && (
-                  <p>原生成资源尚未核实停止；资源结算另行核对。</p>
-                )}
-              {gen.data.review && (
-                <>
-                  <p>{gen.data.review.diagnostic}</p>
-                  <h4>当前文件</h4>
-                  <pre>{gen.data.review.before}</pre>
-                  <h4>拟应用内容</h4>
-                  <pre>{gen.data.review.after}</pre>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={allowEmpty}
-                      onChange={(e) =>
-                        setEmptyReview(
-                          e.target.checked
-                            ? gen.data?.review?.review_digest || ""
-                            : "",
-                        )
-                      }
-                    />
-                    已确认空安排，Plan 已说明无需自动测试
-                  </label>
-                  <button
-                    disabled={busy || !online || !gen.data.review.review_digest}
-                    onClick={() =>
-                      void action(
-                        "maintenance_apply",
-                        gen.data!.id,
-                        {
-                          generation_id: gen.data!.id,
-                          expected_revision: gen.data!.revision,
-                          review_digest: gen.data!.review!.review_digest,
-                          allow_empty: allowEmpty,
-                        },
-                        gen.data!.revision,
-                      )
-                    }
-                  >
-                    应用已审阅内容
-                  </button>
-                </>
-              )}
-              <button
-                disabled={
-                  busy ||
-                  !online ||
-                  gen.data.state === "cancelled" ||
-                  (gen.data.state === "applied" &&
-                    gen.data.stop_status === "stopped")
-                }
-                onClick={() =>
-                  void action("maintenance_stop_generation", gen.data!.id, {
-                    generation_id: gen.data!.id,
-                  })
-                }
-              >
-                取消生成/禁止后续应用
-              </button>
-            </div>
-          )}
-          {gen.error && <p role="alert">{String(gen.error)}</p>}
-          {pendingRequests.map((r) => (
-            <p key={r.envelope.request_id}>
-              原操作 {r.envelope.request_id} · {r.envelope.action}
-              <button
-                disabled={busy || !online}
-                onClick={() =>
-                  void api
-                    .reconcile(r.envelope)
-                    .then(() => refresh())
-                    .catch((e) => setError(String(e)))
-                }
-              >
-                核对原请求
-              </button>
-              {r.envelope.action === "maintenance_apply" && (
-                <button
-                  disabled={busy || !online}
-                  onClick={() =>
-                    void api
-                      .continueMaintenanceApply(r.envelope)
-                      .then(() => {
-                        refresh();
-                        void view.refetch();
-                        void gen.refetch();
-                      })
-                      .catch((e) => setError(String(e)))
-                  }
-                >
-                  显式继续原文件应用
-                </button>
-              )}
-            </p>
-          ))}
-          <h4>未启动任务材料确认</h4>
-          {view.data?.tasks?.map((t) => (
-            <p key={t.task_id}>
-              #{t.task_id} · {t.plan} · {t.diagnostic}
-              <button
-                onClick={() => {
-                  setTask(t.task_id);
-                  setTaskReview(undefined);
-                }}
-              >
-                选择待更新任务 #{t.task_id}
-              </button>
-            </p>
-          ))}
-          <select
-            aria-label="待确认任务"
-            value={task}
-            onChange={(e) => {
-              setTask(e.target.value);
-              setTaskReview(undefined);
-            }}
-          >
-            <option value="">选择任务</option>
-            {tasks.data?.tasks
-              .filter((t) => t.status === "open")
-              .map((t) => (
-                <option key={t.task_id} value={t.task_id}>
-                  #{t.task_id} {t.title}
-                </option>
-              ))}
-          </select>
-          <button
-            disabled={busy || !online || !task}
-            onClick={() => void checkTask()}
-          >
-            查看最新材料差异
-          </button>
-          {taskReview && (
-            <div>
-              {taskReview.diffs.map((d) => (
-                <article key={d.path}>
-                  <strong>{d.path}</strong>
-                  {d.truncated && (
-                    <p>仅显示前 8 KiB，请在仓库中核对完整差异。</p>
-                  )}
-                  <pre>{d.before}</pre>
-                  <pre>{d.after}</pre>
-                </article>
-              ))}
-              <button
-                disabled={busy || !online}
-                onClick={() =>
-                  void action(
-                    "maintenance_confirm_task",
-                    taskReview.task_id,
-                    {
-                      task_id: taskReview.task_id,
-                      version: taskReview.version,
-                      contract: taskReview.contract,
-                      review_digest: taskReview.review_digest,
-                    },
-                    taskReview.version,
-                  ).then((v) => {
-                    if (v) setTaskReview(undefined);
-                  })
-                }
-              >
-                已审阅，确认这些任务材料
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </section>
-  );
+const names:Record<string,string>={ready:"测试安排已就绪",pending:"等待生成测试安排",accepted:"测试安排生成中",unknown:"原生成结果待核实",failed:"测试安排生成失败",invalid:"材料或测试安排无效",rejected:"测试安排生成被拒绝",cancelled:"测试生成已取消",configuration_required:"需要配置测试生成"};
+const time=(value?:string)=>value?new Date(value).toLocaleString():"时间未知";
+
+function CommitDetails({commit}:{commit:Commit}) {
+ const {api,online,identity}=useWorkspace();
+ const [expanded,setExpanded]=useState(false);
+ const detail=useQuery({queryKey:["commit-details",identity.project_id,identity.instance_id,commit.sha],
+ queryFn:()=>api.get<Commit>("/maintenance/commits/"+commit.sha),enabled:online&&expanded,staleTime:60000,retry:false});
+ const value=detail.data||commit;
+ return <div className="maintenance-commit">
+  <span>{time(commit.time)} · {commit.title||"正在读取提交"} · {commit.author}</span>{" "}
+  {commit.url&&<SafeLink url={commit.url}>查看提交</SafeLink>}{" "}
+  <button onClick={()=>setExpanded(!expanded)} aria-expanded={expanded}>提交详情 / 关联 PR</button>
+  {expanded&&<div><code>{commit.sha}</code>
+   {detail.isFetching&&<p>正在查询关联 PR…</p>}
+   {detail.error&&<p role="alert">{String(detail.error)}</p>}
+   {value.prs?.map(url=><p key={url}><SafeLink url={url}>{url}</SafeLink></p>)}
+   {value.pr_diagnostic?<p className="muted">{value.pr_diagnostic}</p>:!detail.isFetching&&<p className="muted">{value.prs?.length?"":"该提交没有关联 PR"}</p>}
+  </div>}
+ </div>;
+}
+export function ProjectMaintenance(){
+ const {api,identity,online,refresh,requests}=useWorkspace();
+ const [open,setOpen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState("");
+ const [logs,setLogs]=useState(false),[page,setPage]=useState(0),[scope,setScope]=useState("history"),[profile,setProfile]=useState("");
+ const base=["maintenance",identity.project_id,identity.instance_id];
+ const view=useQuery({queryKey:base,queryFn:()=>api.get<MaintenanceView>("/maintenance"),enabled:online,refetchInterval:online?5000:false,retry:false});
+ const log=useQuery({queryKey:[...base,"log",view.data?.observation.commit,page,scope],queryFn:()=>api.get<{commits:Commit[];more:boolean}>("/maintenance/log?page="+page+"&scope="+scope),enabled:online&&open&&logs,retry:false});
+ async function action(name:string,target:string,payload:Record<string,unknown>={}){
+  setBusy(true);setError("");
+  try{
+   const r=await api.submit(api.envelope(name,target,1,payload));
+   if(r.status!=="applied")throw new Error(r.diagnostic||"原操作结果待核实");
+   const operation=r.maintenance as {status?:string;diagnostic?:string}|undefined;
+   if(operation?.status==="outcome_unknown")setError(operation.diagnostic||"原更新结果待核实，请人工核对");
+   await view.refetch();refresh();
+  }catch(e){setError(String(e))}finally{setBusy(false)}
+ }
+ const v=view.data;
+ const l=v?.local;
+ const localLabel=!l?"正在读取本地版本":l.status==="synced"?"已同步":l.status==="behind"?"落后 "+l.behind+" 个提交":l.status==="ahead"?"领先 "+l.ahead+" 个提交":l.status==="diverged"?"已分叉 · 领先 "+l.ahead+" / 落后 "+l.behind+" 个提交":"状态待核实";
+ const problems=v?.tasks.filter(t=>t.status!=="ready")||[];
+ const pending=requests?.filter(r=>r.envelope.action.startsWith("maintenance_")&&!["applied","rejected"].includes(r.response?.status||""))||[];
+ return <section aria-label="项目维护" className="settings-panel maintenance-panel">
+  <button onClick={()=>setOpen(!open)} aria-expanded={open}>项目维护 · {v?.observation.diagnostic?"检查失败":!v?.observation.commit?"远端待检查":problems.length?problems.length+" 项材料待处理":localLabel}</button>
+  {v?.observation.last_success&&<small> · 最近成功检查 {time(v.observation.last_success)}</small>}
+  {open&&<div>
+   {!online&&<p className="notice amber">离线 · 以下为最后观察，当前状态待核实</p>}
+   {(error||view.error)&&<p role="alert">{error||String(view.error)}</p>}
+   {v?.observation.diagnostic&&<p role="alert">检查远端失败：{v.observation.diagnostic}。请核对网络、认证及目标分支后重试。</p>}
+   <h4>远端基线 · {v?.remote_name}</h4>
+   {v?.remote?.sha?<CommitDetails commit={v.remote}/>:<p>尚无成功观察</p>}
+   <h4>本地基线 · {l?.branch||"分支待核实"} · {localLabel}</h4>
+   {v?.local_info?.sha?<CommitDetails commit={v.local_info}/>:l?.commit&&<code>{l.commit.slice(0,12)}</code>}
+   {l?.reason&&<p className="notice amber">{l.reason}</p>}
+   <p>
+    <button disabled={!online||busy} onClick={()=>void action("maintenance_check",identity.project_id)}>检查更新</button>{" "}
+    <button disabled={!online||busy||!l?.can_update} onClick={()=>void action("maintenance_update",identity.project_id)}>更新本地</button>{" "}
+    <button onClick={()=>setLogs(!logs)} aria-expanded={logs}>查看提交日志</button>
+   </p>
+   {logs&&<section aria-label="提交日志">
+    <label>日志范围 <select value={scope} onChange={e=>{setScope(e.target.value);setPage(0)}}>
+     <option value="history">远端提交历史</option><option value="behind">本地缺少的提交</option><option value="ahead">本地独有的提交</option>
+    </select></label>
+    {log.error&&<p role="alert">{String(log.error)}</p>}
+    {log.data?.commits.map(c=><CommitDetails key={c.sha} commit={c}/>)}
+    {log.data?.commits.length===0&&<p>没有对应提交</p>}
+    <button disabled={page===0} onClick={()=>setPage(page-1)}>上一页</button>{" "}
+    <button disabled={!log.data?.more} onClick={()=>setPage(page+1)}>下一页</button>
+   </section>}
+   <h4>任务最新材料与测试安排</h4>
+   <p className="muted">文档自动跟随远端。Plan 更新后自动生成测试安排，新候选使用最新版本；原候选保留其执行版本。</p>
+   {v?.tasks.map(t=><article key={t.task_id}><strong>#{t.task_id} · {names[t.status]||t.status}</strong><p>{t.contract?.plan_ref?.path}</p>{t.diagnostic&&<p>{t.diagnostic}</p>}
+    {["failed","invalid","rejected","cancelled"].includes(t.status)&&<button disabled={!online||busy} onClick={()=>void action("maintenance_retry",t.task_id,{task_id:t.task_id})}>重试生成</button>}
+   </article>)}
+   {problems.some(t=>t.status==="configuration_required")&&<div>
+    <label>测试生成方案 <select aria-label="测试生成方案" value={profile||v?.profile||""} onChange={e=>setProfile(e.target.value)}>
+     <option value="">选择本机 Codex 方案</option>{v?.profiles.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+    </select></label>
+    <button disabled={!online||busy||!(profile||v?.profile)} onClick={()=>void action("maintenance_profile",identity.project_id,{profile:profile||v?.profile})}>保存测试生成方案</button>
+   </div>}
+   {pending.map(r=><p key={r.envelope.request_id}>有更新操作结果待核实。<button disabled={!online||busy} onClick={()=>void api.reconcile(r.envelope).then(()=>{refresh();void view.refetch()}).catch(e=>setError(String(e)))}>核对更新结果</button></p>)}
+  </div>}
+ </section>;
 }

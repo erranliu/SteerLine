@@ -102,7 +102,7 @@
       "level": "L3",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -env=live -scenario=testing.management-local-codex",
-      "check": "Real generate saves the arrangement; actual pass/fail programs on the original clean Run map through public Runner artifacts to API and browser, with resources settled."
+      "check": "Automatic real generation stores the system arrangement without apply; current Runner receives real worktree paths and the exact arrangement in its frozen prompt; actual pass/fail programs on the original clean Run map through public Runner artifacts to API and browser, with resources settled."
     },
     {
       "id": "runtime.project-maintenance",
@@ -110,7 +110,7 @@
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -scenario=runtime.project-maintenance -env=controlled",
-      "check": "新独立调试包中真实 Go/Web/Edge 验证三入口、远端变化、单项生成审阅应用、首次冻结和跨项目隔离；模拟 Runner，停止与清理完整。"
+      "check": "新独立调试包中真实 Go/Web/Edge 验证快进、三版自动材料、独立候选、过期测试禁用、旧PR交付与跨项目隔离；模拟 Runner，停止与清理完整。"
     },
     {
       "id": "configuration.execution-profiles",

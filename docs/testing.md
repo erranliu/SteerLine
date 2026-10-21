@@ -14,56 +14,22 @@ Windows 启动闪窗修复的最小验证见[专属验收](acceptance/startup-co
 
 ## 测试管理文档与结果
 
-[项目维护](product-design/project-maintenance.md)统一初始化/基线/局部规则，生成先审阅、再显式应用，首次启动固定远端最新代码和同版本材料。必要材料待办阻断相关首次启动，测试通过不作为发布/交付门禁。实现及验收入口见 [Plan](plans/project-maintenance.plan.md#测试计划)和[专属验收](acceptance/project-maintenance.md)。L1 新规则仅登记 quick-owner-project-maintenance，app/SQLite/生成相关测试仍归原 owner；新增 L3 runtime.project-maintenance 使用唯一生成器、受控双项目 Go/Web/Edge 流程。
+[项目更新与候选版本收敛](spec/project-maintenance-simplification.spec.md)按[Plan](plans/project-maintenance-simplification.plan.md#测试计划)实施，实际结果与未验边界见[专属验收](acceptance/project-maintenance-simplification.md)。系统在宿主观察/检查及新候选准备时自动读取远端 Plan、规范与清单，生成结果保存在项目库，不再人工审阅/apply 或提交旁置安排文件。每个新候选独立固定最新代码及材料，过期候选只读测试历史，PR仍可交付。HTTP GET和前端轮询只读；失败显式重试，未知只核对原请求。维护规范、清单及实际测试程序仍由开发维护。
+
+L1 新规则登记原 project-maintenance、test-management、app/SQLite/taskrunner owner；L3 扩展既有 `runtime.project-maintenance` 与 `testing.management-local-codex`，不另建业务链。上一批结果保留于[原验收](acceptance/project-maintenance.md)。
 
 可映射到执行页的清单为 [test-list.json](testing/test-list.json)，格式遵循[测试管理 Spec](spec/test-management.spec.md)。每项必需 `id/name/level/environment/command/check`，仅 `note` 可选；拒绝未知字段、重复键/ID、空必需值与非法级别。首批登记固定 L1 整体及现存十三项 E2E 场景。E2E 执行选择仍以 `tests/e2e/suites.json` 为准；新增、删除、改级/环境/入口/主要断言时，依据通用规范同步修改实现、执行登记、展示清单和受影响 Plan。Web/脚本入口暂未登记，不推断它们已被覆盖。
 
-`<name>.plan.md` 旁的 `<name>.tests.json` 只保存 `{"tests":["l1.minimum"]}` 这样的有序唯一 ID；Plan 链接它并解释选择。无需自动测试时可手工写空数组并说明原因。候选从固定 PlanRef 的同一 commit 读取安排/定义，缺失、无效或未核对的实际材料阻断相关首次启动；后续候选保留 Task 原快照。
+系统测试安排由远端固定版本的 Plan、`docs/testing.md` 与 `docs/testing/test-list.json` 自动生成，仅保存在项目库。无需自动测试时，Plan必须明确说明原因，才能接受生成的空数组。无效输出或缺失定义阻断新候选，已有候选及其PR继续按原快照执行。
 
-应用已启动时，使用原生 CLI 生成已有 Plan 的测试安排；显式指定本机 Codex profile 和 32 位小写十六进制请求号：
+原生成查询与停止继续使用正式 CLI；生成、重试及一次性本机 Codex profile 设置由项目维护流程消费同一服务。原请求重放只对账，不重新调用模型。
 
 ```powershell
-steerline tests generate -project <id> -plan docs/spec/example.plan.md -execution-profile <profile> -request-id <id>
 steerline tests generation -project <id> -request-id <original-id>
-steerline tests apply -project <id> -generation-id <original-id> -request-id <new-id> -expected-revision <n> -review-digest <sha256>
 steerline tests stop-generation -project <id> -generation-id <original-id> -request-id <new-id>
 ```
 
-生成复用 Runner generate/1 和 read_only。空模型结果、坏 ID、材料或目标变更不覆盖原文件；项目 tick 只保存原结果和已发生的应用事实，不写项目文件。查询返回只读 diff/review_digest；审阅后显式 apply，按当前 HEAD/分支、完整输入及目标原字节核对，取消后旧号不得新写。原 generate 重放不调用模型或应用；HEAD 前进后仍适用的输出可重新审阅再用新应用请求。作者维护 Plan 链接，正常提交/合入后检查并采用材料。
-
-`cmd/test-feedback -level=L1/L2/L3/L4` 在原隔离证据目录追加 `managed-<id>.json`，保留原 summary、JSONL 与退出码。封套字段为 `id/sequence/selection/environment/definitions/before_commit/after_commit/before_clean/after_clean/results`；definitions[id] 是规范化单项 JSON 的 SHA256：字段固定按 `id,name,level,environment,command,check` 排序，非空 `note` 最后附加；以 UTF-8、无 BOM/缩进/末尾换行、与 Go `json.Marshal(Definition)` 相同的字符串转义编码（含 HTML 字符转义），不直接散列清单原始排版或属性顺序。results 中每项仅有 `test_id/status/message/log`，status 为 passed/failed/incomplete，log 指向同目录原 summary。定向 Go 子集和 build-only 不输出整体通过；gate-only 仅报告实际 controlled ID。
-
-已接入文档/生成、程序报告、Runner R2 公开收集/读取/Git 观察、不可变持久化和只读执行页。运行内使用现有 `-out .steerrunner/artifacts/<唯一执行ID>` 新目录，并由项目维护忽略规则；测试入口最后原子发布 `managed-*.json`，同目录 `summary.json` 为首版保留的原始证据。默认系统临时目录不会自动成为 Run 产物。收集原请求先持久化，未知只查询原请求；报告按原候选/Run 保存并核验字节长度和 SHA256，UI 显示 Run/artifact/摘要引用。真实场景 `testing.management-local-codex` 的结果见[专属验收](acceptance/test-management.md)。干净同 commit 才能计入当前结果，脏或未知来源只作历史/待复验。
-
-共享 Runner 的最小验证见[专属验收](acceptance/shared-runner-service.md)：固定 L1、请求/全局停止证明/reset 定向测试、新 L3 `runtime.shared-runner-projects` 与既有 waiting-merge-restart，以及新调试包的真实空闲服务拓扑。无模型，不操作安装环境。
-
-架构解耦第五轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round5.md)：宿主契约所有权/依赖闭包、checkpoint 双向投影隔离、并发写入下原实例/进程/build pin 同快照、原控制回执绑定、排空与幂等关闭、失败保锁和原 Runner 停服/结算证明。新增投影测试进入既有 quick-rules，所有权守卫进入 quick-execution-boundary；其余沿既有 SQLite、宿主和生命周期定向测试。补充 Windows 消费者与 Linux 宿主/进程包编译，不执行全量或真实模型。
-
-[PR #350 复审](acceptance/architecture-decoupling-pr350-review.md)补齐公开 CLI 任务 DTO 解码回归和 Web 根包扩展后的闭包守卫反例夹具；集成主干候选安全停止后，定向覆盖停止/交付竞态、四轮读取与交付语义及受影响 E2E 消费者编译。证据和复现命令在专属验收记录，不运行全量或真实模型。
-
-架构解耦第四轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round4.md)：Task 交付证据纯校验、原子回滚/唯一交付/后继释放、原回执重放及身份冲突拒绝，另核对 Task 纯值与已收口文件的依赖守卫。纯模型测试沿 L1 quick-rules；新增服务重放用例纳入 quick-execution，所有权守卫纳入 quick-execution-boundary。最新主干集成后补测受影响的读取/投影和带标签消费者编译，不运行全量或真实模型。
-
-架构解耦第三轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round3.md)：会话原身份/游标/JSON 字节预算、正文摘要及 UTF-8 分页、能力字段投影、活动预算溢出零推进、同事务事件流与取消/异常关闭，以及 SQLite/存储端口禁止全部产品层依赖。新增查询测试沿 L1 quick-rules，真实 SQLite 读取/资源验证沿现有 SQLite 测试，守卫反例沿 quick-execution-boundary；不运行全量或真实模型。
-
-架构解耦第二轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round2.md)：历史/候选 DTO 纯投影、并发写入与事务结束后的原采样一致性、候选分页/预算、交付回滚/唯一交付/停止义务/后继释放，以及去掉 SQLite 查询层例外后的依赖守卫。新增查询测试沿 L1 quick-rules、现有读取矩阵沿 quick-owner-unified-startup、守卫反例沿 quick-execution-boundary；E2E 读取夹具同步事实字段，只补定向夹具测试和带标签编译，不以此声称完整 L2/L3 通过。
-
-架构解耦第一轮的最小验证见[验收与复现入口](acceptance/architecture-decoupling-round1.md)：HTTP/Web 消费端生产依赖、taskrunner 禁止 SQL/具体存储/应用实现依赖、候选不存在与真实故障分类、首次领取及原请求重放。新增错误分类用例纳入 L1 quick-execution，SQLite 回归与守卫反例沿既有 quick-rules / quick-execution-boundary 执行；不要求全量或真实模型。
-
-旧执行记录与空壳字段清理的验证范围见[Plan](plans/runtime-shell-cleanup.plan.md)与[验收](acceptance/runtime-shell-cleanup.md)：全源码引用审计、默认测试编译与固定 L1；不新增或改变分级场景，不用编译代替运行结果。
-
-Runner 深 home 路径缺陷的最小验证见[短目录 Plan](plans/runner-short-state-path.plan.md)和[验收](acceptance/runner-short-state-path.md)：真实 Windows socket、命名空间/别名、caller 停止证明、controlled gate 及新调试包双项目/reset；不把模拟链当完整真实 L2。
-
-执行域遗留清理（2026-10-16）按[Plan](plans/execution-legacy-cleanup.plan.md)核对全平台生产引用、生产入口编译和固定 L1；旧执行实现专属测试随实现删除，已无测试的 `execution/model` 不再独立登记 L1，仍被消费的值编解码和 caller/Task/存储/宿主边界测试保留。实际结果见[专属验收](acceptance/execution-legacy-cleanup.md)。
-
-Runner 执行展示与最近消息的定向验证见 [Plan](plans/execution-observability.plan.md) / [验收](acceptance/execution-observability.md)，覆盖原子状态变化、只读消息契约、当前可见执行轮询与取消；不使用安装环境或真实模型。
-
-三 EXE 安装部署与首次迁移的测试范围、命令和真实结果见 [部署 Plan](plans/install-deploy.plan.md) 与 [安装迁移验收](acceptance/install-cutover-20261015.md)。安装环境仅用于用户授权的实际部署操作，普通回归/模型验收仍使用下述隔离入口；空闲安装停启不代表模型执行或恢复通过。
-
-源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](architecture/current-code-architecture.md)。
-
-SteerRunner 拆分后的测试归属及实施安排见 [Spec](spec/runner-test-convergence.spec.md)、[Plan](spec/runner-test-convergence.plan.md)和[专属验收](acceptance/runner-test-convergence.md)。SteerLine 保留调用方、Task/DAG、候选、交付、宿主和 Web 测试；Codex/Orca、原生恢复、沙箱及执行流程专项在 Runner 仓库维护。
-
-完整 L2 保留真实 SteerLine → 固定 Runner EXE → 本机 Codex → 实现/报告/发布 → 真实 SteerlineTest PR → 合并 → TaskDelivery/后继释放。它覆盖 Runner 正常运行能力。执行专项迁出不降低这条链路为模拟测试。
+候选通过原执行提示中的系统安排，以及固定base worktree内的真实规范/清单路径取得测试要求，测试程序必须实际执行并产生受管报告。页面不能以模型 final 自述通过。过期候选停止发起新 collect，已有证据只作历史；当前性未知时不显示当前通过。
 
 Web 执行配置的最小验证见[Plan](spec/web-execution-config.plan.md) / [验收](acceptance/web-execution-config.md)：Web 配置/目录 owner 纳入固定 L1，`configuration.execution-profiles` 为独立 L3 受控保存、正式重启及关闭 Web 后 CLI 消费场景。真实目录专项内部先生成新 debug 包，仅查询 Codex/本机 Orca/已配对 Orca，不计完整执行链验收。
 

@@ -57,11 +57,7 @@ func (s *SQLiteStore) CommitRunnerTaskResult(ctx context.Context, input RunnerRe
 		if c.TaskID != input.TaskID || c.Revision != input.CandidateRevision || c.Participation != "active" || c.StopRequested || c.RunID == "" || c.SubmitState != "accepted" || c.Claimant != record.Claimant {
 			return nativeErr("candidate_inactive", "selected Run binding changed during verification")
 		}
-		frozen, err := readExecution(ctx, tx.tx, input.Project, record.TaskID)
-		contract := frozen.Contract
-		if err != nil {
-			return err
-		}
+		contract := c.Contract
 		if c.ContractDigest != contract.Digest {
 			return nativeErr("contract_mismatch", "candidate lost the fixed task contract")
 		}

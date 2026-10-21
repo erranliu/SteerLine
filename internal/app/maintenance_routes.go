@@ -43,6 +43,14 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 				if out.Status != "outcome_unknown" {
 					return nil
 				}
+				result, e := p.maintenanceReceipt(ctx, in.RequestID)
+				if e != nil {
+					return e
+				}
+				if result != nil {
+					out = *result
+				}
+				return nil
 			}
 		} else {
 			old = storageports.CommandRecord{ProjectIdentity: p.config.Identity(), CommandID: in.RequestID, Kind: "project_maintenance", TargetID: in.TargetID, ExpectedVersion: in.ExpectedVersion, IdempotencyKey: in.RequestID, RequestedBy: "local-user", Payload: raw, Status: "pending", CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
@@ -59,7 +67,7 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 			out.Diagnostic = e.Error()
 			var external *runnerclient.Failure
 			durableUnknown := false
-			if in.Action == "maintenance_generate" {
+			if in.Action == "maintenance_retry" {
 				g, readErr := p.config.runtimeMaintenance.store.Generation(context.WithoutCancel(ctx), p.config.Identity(), in.RequestID)
 				durableUnknown = readErr == nil && g.State != "rejected"
 			}
@@ -70,13 +78,18 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 					durableUnknown = readErr == nil && g.Cancelled && g.StopID == in.RequestID
 				}
 			}
-			if durableUnknown || errors.Is(e, testmanagement.ErrApplicationUnknown) || errors.As(e, &external) && external.Unknown {
+			if durableUnknown || errors.As(e, &external) && external.Unknown {
 				out.Status = "outcome_unknown"
 				out.Code = "outcome_unknown"
 			}
 		} else {
 			out.Maintenance, _ = json.Marshal(result)
-			if g, ok := result.(api.TestGeneration); ok && in.Action == "maintenance_generate" && g.RunID == "" && g.State == "unknown" {
+			if update, ok := result.(updateFact); ok && update.Status != "applied" {
+				out.Status = update.Status
+				out.Code = update.Status
+				out.Diagnostic = update.Diagnostic
+			}
+			if g, ok := result.(api.TestGeneration); ok && in.Action == "maintenance_retry" && g.RunID == "" && g.State == "unknown" {
 				out.Status = "outcome_unknown"
 			}
 		}
@@ -99,47 +112,76 @@ func (p *runtimeProjectPort) maintenanceAction(ctx context.Context, in httpcontr
 		if e := decodeStrictJSON(in.Payload, &empty); e != nil {
 			return nil, e
 		}
-		return m.check(ctx)
-	case "maintenance_review":
-		var v materialReview
+		if _, e := m.check(ctx); e != nil {
+			return nil, e
+		}
+		return nil, m.refresh(ctx)
+	case "maintenance_update":
+		if e := decodeStrictJSON(in.Payload, &struct{}{}); e != nil {
+			return nil, e
+		}
+		if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
+			return nil, errors.New("update target mismatch")
+		}
+		return m.updateLocal(ctx, in.RequestID)
+	case "maintenance_profile":
+		if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
+			return nil, errors.New("profile target/version mismatch")
+		}
+		var v struct {
+			Profile string `json:"profile"`
+		}
 		if e := decodeStrictJSON(in.Payload, &v); e != nil {
 			return nil, e
 		}
-		if in.TargetID != v.Plan {
-			return nil, errors.New("review target mismatch")
+		profile, e := m.config.RunnerExecution.Profile(v.Profile, "")
+		if e != nil {
+			return nil, e
 		}
-		v.RequestID = in.RequestID
-		return m.approve(ctx, v, in.ExpectedVersion)
-	case "maintenance_confirm_task":
-		var v taskReview
+		if _, e = generationProfile(profile); e != nil {
+			return nil, e
+		}
+		store := m.store.(materialStore)
+		if e = store.SetMaterialProfile(ctx, m.config.Identity(), v.Profile); e != nil {
+			return nil, e
+		}
+		return nil, m.refresh(ctx)
+	case "maintenance_retry":
+		var v struct {
+			TaskID string `json:"task_id"`
+		}
 		if e := decodeStrictJSON(in.Payload, &v); e != nil {
 			return nil, e
 		}
-		if in.TargetID != v.TaskID || in.ExpectedVersion != v.Version {
-			return nil, errors.New("task target mismatch")
+		if in.TargetID != v.TaskID || in.ExpectedVersion != 1 {
+			return nil, errors.New("retry target mismatch")
 		}
-		v.RequestID = in.RequestID
-		return m.confirm(ctx, v)
-	case "maintenance_generate":
-		var v api.TestGenerateRequest
-		if e := decodeStrictJSON(in.Payload, &v); e != nil {
+		store := m.store.(materialStore)
+		material, e := store.Material(ctx, m.config.Identity(), v.TaskID)
+		if e != nil {
 			return nil, e
 		}
-		if in.TargetID != v.Plan {
-			return nil, errors.New("generation target mismatch")
+		if material.Status != "failed" && material.Status != "invalid" && material.Status != "rejected" && material.Status != "cancelled" {
+			return nil, errors.New("原生成尚未明确失败")
 		}
-		v.RequestID = in.RequestID
-		return p.config.runtimeTests.GenerateTests(ctx, v)
-	case "maintenance_apply":
-		var v api.TestApplyRequest
-		if e := decodeStrictJSON(in.Payload, &v); e != nil {
+		if g, e := m.store.Generation(ctx, m.config.Identity(), material.GenerationID); e == nil {
+			if !(g.State == "rejected" && g.RunID == "") && (g.Projection == nil || g.Projection.StopStatus != "stopped") {
+				return nil, errors.New("原生成停止或资源仍待核实，请稍后重试")
+			}
+		}
+		material.GenerationID = in.RequestID
+		material.Status = "pending"
+		material.Diagnostic = ""
+		// Generate uses the new explicit request; original unknown operations are not retried.
+		profile := store.MaterialProfile(ctx, m.config.Identity())
+		if profile == "" {
+			profile = m.config.RunnerExecution.DefaultProfile
+		}
+		if e = store.SaveMaterial(ctx, m.config.Identity(), material); e != nil {
 			return nil, e
 		}
-		if in.TargetID != v.GenerationID || in.ExpectedVersion != v.ExpectedRevision {
-			return nil, errors.New("application target/version mismatch")
-		}
-		v.RequestID = in.RequestID
-		return p.config.runtimeTests.ApplyTests(ctx, v)
+		g, e := m.tests.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: in.RequestID, Plan: material.Contract.PlanRef.Path, Profile: profile, Commit: material.Commit})
+		return publicGeneration(g), e
 	case "maintenance_stop_generation":
 		var v api.TestStopGenerationRequest
 		if e := decodeStrictJSON(in.Payload, &v); e != nil {
@@ -171,7 +213,14 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 	if e == nil && out.Status == "outcome_unknown" {
 		var value any
 		switch in.Action {
-		case "maintenance_generate":
+		case "maintenance_update":
+			fact, e := p.config.runtimeMaintenance.observeUpdate(ctx, in.RequestID)
+			if e == nil {
+				value = fact
+				out.Status = fact.Status
+				out.Diagnostic = fact.Diagnostic
+			}
+		case "maintenance_retry":
 			if g, err := p.config.runtimeMaintenance.store.Generation(ctx, p.config.Identity(), in.RequestID); err == nil {
 				value = publicGeneration(g)
 				if g.RunID != "" {
@@ -180,7 +229,7 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 					out.Status = "rejected"
 				}
 			}
-		case "maintenance_apply", "maintenance_stop_generation":
+		case "maintenance_stop_generation":
 			var target struct {
 				GenerationID string `json:"generation_id"`
 			}
@@ -190,18 +239,10 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 					if in.Action == "maintenance_stop_generation" && g.Cancelled && g.StopID == in.RequestID {
 						out.Status = "applied"
 					}
-					for _, a := range g.Applications {
-						if in.Action == "maintenance_apply" && a.Command.RequestID == in.RequestID && a.State == "applied" {
-							out.Status = "applied"
-						}
-					}
+
 				}
 			}
-		case "maintenance_review", "maintenance_confirm_task":
-			if raw, err := p.config.runtimeMaintenance.store.MaintenanceReceipt(ctx, p.config.Identity(), in.RequestID); err == nil {
-				value = raw
-				out.Status = "applied"
-			}
+
 		}
 		if value != nil {
 			out.Maintenance, _ = json.Marshal(value)
@@ -222,7 +263,16 @@ func (p *runtimeProjectPort) maintenanceRead(ctx context.Context, route, mode, p
 		return nil, errors.New("maintenance unavailable")
 	}
 	if strings.HasPrefix(route, "/maintenance/tasks/") {
-		return m.taskPreview(ctx, strings.TrimPrefix(route, "/maintenance/tasks/"))
+		return m.taskDocuments(ctx, strings.TrimPrefix(route, "/maintenance/tasks/"))
+	}
+	if route == "/maintenance/log" {
+		if mode == "" {
+			mode = "0"
+		}
+		return m.commitLog(ctx, mode, plan)
+	}
+	if strings.HasPrefix(route, "/maintenance/commits/") {
+		return m.commitInfo(ctx, strings.TrimPrefix(route, "/maintenance/commits/"), true), nil
 	}
 	return m.view(ctx, mode, plan)
 }

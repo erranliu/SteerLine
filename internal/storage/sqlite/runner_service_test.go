@@ -47,6 +47,7 @@ func TestRunnerPresetFreeze(t *testing.T) {
 		return err
 	}))
 	baseCalls := 0
+	promptCalls := 0
 	svc := taskrunner.Service{Project: a.ProjectIdentity, Claimant: "runner-test", StateDir: filepath.Join(t.TempDir(), "runner"), DefaultProfile: "live", Store: s, Bridge: &runnerbridge.Bridge{Store: s},
 		Tasks:    taskapp.Service{Reader: s, Documents: docs, Input: taskapp.Input{Project: a.ProjectIdentity, Authority: "native", Remote: "origin", Branch: "main", ExecutableTypes: []string{"task"}}},
 		Profiles: map[string]taskrunner.Profile{"live": {ID: "live", Name: "Original frozen preset", Input: runnerclient.RunInput{Workflow: runnerclient.Workflow{ID: "development", Version: 2}, Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"fixed-native"}`)}, Publication: runnerclient.Publication{Provider: "gitea", Repository: "Org/Repo", Settings: json.RawMessage(`{"base_url":"https://example.invalid"}`)}}}},
@@ -54,6 +55,11 @@ func TestRunnerPresetFreeze(t *testing.T) {
 			baseCalls++
 			return strings.Repeat("c", 40), nil
 		},
+	}
+	svc.PrepareTestPlan = func(_ context.Context, _ taskmodel.FixedWork, run *runnerclient.RunInput) (json.RawMessage, error) {
+		promptCalls++
+		run.Workflow.PromptOverrides = map[string]string{"implement.execute": "Frozen system test context"}
+		return nil, nil
 	}
 	graph, err := s.TaskGraphSnapshot(ctx, a.ProjectIdentity)
 	require(t, err)
@@ -93,10 +99,10 @@ func TestRunnerPresetFreeze(t *testing.T) {
 			}
 		})
 	}
-	if fixed.Repository.BaseRevision != strings.Repeat("c", 40) || fixed.Documents.Spec.Commit != ref.Commit || fixed.Correlation["steerline_task_id"] != start.TaskID || first.ProfileID != "live" || first.Number != 1 {
+	if fixed.Repository.BaseRevision != strings.Repeat("c", 40) || fixed.Documents.Spec.Path != ref.Path || fixed.Documents.Spec.Commit != "" || fixed.Documents.Spec.Kind != "" || first.Contract.SpecRef.Commit != ref.Commit || fixed.Correlation["steerline_task_id"] != start.TaskID || first.ProfileID != "live" || first.Number != 1 {
 		t.Fatal("start failed to freeze its exact task/profile/base", first, fixed)
 	}
-	if first.ProfileDigest != runnercontract.ConfigurationDigest(fixed.Execution, fixed.Workflow) || first.ProfileName != svc.Profiles["live"].Name || first.RunnerBuild != svc.RunnerBuild {
+	if first.ProfileDigest != runnercontract.ConfigurationDigest(svc.Profiles["live"].Input.Execution, svc.Profiles["live"].Input.Workflow) || first.ProfileDigest == runnercontract.ConfigurationDigest(fixed.Execution, fixed.Workflow) || first.ProfileName != svc.Profiles["live"].Name || first.RunnerBuild != svc.RunnerBuild {
 		t.Fatal("candidate did not atomically freeze preset and build", first)
 	}
 	for _, change := range []func(*runnercontract.BuildPin){func(p *runnercontract.BuildPin) { p.SHA256 = "other" }, func(p *runnercontract.BuildPin) { p.ResourceDigest = "other" }} {
@@ -119,7 +125,7 @@ func TestRunnerPresetFreeze(t *testing.T) {
 	svc.Profiles = nil
 	again, err := svc.Start(ctx, start)
 	require(t, err)
-	if digestValue(first) != digestValue(again) || baseCalls != 1 {
+	if digestValue(first) != digestValue(again) || baseCalls != 1 || promptCalls != 1 {
 		t.Fatal("original start was rebuilt instead of replayed")
 	}
 	start.ProfileID = "different"

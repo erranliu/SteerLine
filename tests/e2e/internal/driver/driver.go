@@ -4,6 +4,7 @@ package driver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
@@ -153,7 +154,7 @@ func MainControl(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	if *action != "resume_dispatch" && *action != "start_task" {
+	if *action != "resume_dispatch" && *action != "start_task" && *action != "start_candidate" {
 		return fmt.Errorf("unsupported E2E control action")
 	}
 	if *expectedStatus != "applied" && !(*action == "start_task" && (*expectedStatus == "failed" || *expectedStatus == "indeterminate")) {
@@ -167,12 +168,20 @@ func MainControl(args []string) error {
 	}
 	defer product.Close()
 	var payload productapi.ControlPayload
-	if *action == "start_task" {
+	if *action == "start_task" || *action == "start_candidate" {
 		payload, err = product.StartTaskPayload(ctx, *taskID, *profileID)
 		if err != nil {
 			return err
 		}
 	}
+	if *action == "start_candidate" {
+		snapshot := product.ReadProject(ctx, *taskID, productapi.ProjectSnapshot{})
+		if snapshot.NativeTasks == nil {
+			return errors.New("task graph snapshot unavailable")
+		}
+		payload.ExpectedGraphRevision = snapshot.NativeTasks.GraphRevision
+	}
+
 	request, err := product.SubmitControl(ctx, productapi.ControlInput{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), Action: productapi.ControlAction(*action), Payload: payload, RequestedBy: "e2e", InstanceID: *expectedInstance})
 	if err != nil {
 		return err

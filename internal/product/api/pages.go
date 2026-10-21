@@ -199,6 +199,7 @@ type CandidateSummary struct {
 	TurnNumber          uint64                   `json:"turn_number"`
 	ExecutionProfile    *ExecutionProfileSummary `json:"execution_profile"`
 	PRHistory           []string                 `json:"pr_history"`
+	MaterialStatus      string                   `json:"material_status,omitempty"`
 	CandidateNumber     int                      `json:"candidate_number,omitempty"`
 	CandidateCreatedAt  time.Time                `json:"candidate_created_at"`
 	CandidateStopReason string                   `json:"candidate_stop_reason,omitempty"`

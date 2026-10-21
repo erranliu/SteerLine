@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+项目更新与候选版本收敛（2026-10-21，已实施）：[Spec](project-maintenance-simplification.spec.md) · [Plan](../plans/project-maintenance-simplification.plan.md) · [专属验收](../acceptance/project-maintenance-simplification.md) · [长期设计](../product-design/project-maintenance.md)。远端/本地提交与PR、日志及一键快进，材料自动跟随、Plan变化自动生成系统测试安排；每个新候选固定最新版本，旧候选过期保留且禁用当前测试关联，其PR合入仍可完成任务。取代下述上一批人工确认/应用及Task级冻结；实际验证见专属验收，不改roadmap。
+
 项目基线与材料统一维护（2026-10-21）：[Spec](project-maintenance.spec.md) · [Plan](../plans/project-maintenance.plan.md) · [专属验收](../acceptance/project-maintenance.md) · [长期设计](../product-design/project-maintenance.md)。初始化/基线/局部共用规则和维护流程，后台检测零自动生成，生成先审阅再显式应用，首次启动冻结远端最新代码与同版本材料。当前已替换任务材料登记即永久固定、生成自动保存及缺材料仅提示的旧行为；验证归专属记录，不改历史验收或 roadmap。项目添加的最终登记/建库继续后置，消费本批共用检查能力。
 
 Web 执行配置管理与能力探测（2026-10-21，按确认原型实施）：[Spec](web-execution-config.spec.md) · [Plan](web-execution-config.plan.md) · [专属验收](../acceptance/web-execution-config.md)。Web 前后端直接查询 Codex/Orca，管理全局预设及条件保存；保存后显式重启生效。Go 执行服务只消费配置和投影加载摘要，Runner 不新增探测接口；实现与验证范围登记于专属验收，不修改 roadmap。本机 Orca 已实现；目录查询统一本机/远端Orca能力，与执行支持组合分开。provider凭据由原Agent管理，Pi按已有目录筛选Provider；验证见专属验收。

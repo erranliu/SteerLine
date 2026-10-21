@@ -136,6 +136,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		return result, err
 	}
 	r.config.runtimeRunner = &runner.client
+	r.config.runtimeCatalog = runner.catalog
 	if retErr = bindRunnerBuild(ctx, r.config, r.store); retErr != nil {
 		return
 	}
@@ -343,16 +344,19 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(route, "/runs/") && strings.HasSuffix(route, "/documents") && strings.Count(route, "/") == 3 {
+		if len(values) != 0 {
+			return nil, errors.New("document query does not accept parameters")
+		}
+		return p.config.runtimeMaintenance.candidateDocuments(ctx, strings.TrimSuffix(strings.TrimPrefix(route, "/runs/"), "/documents"))
+	}
 	if strings.HasPrefix(route, "/maintenance") || strings.HasPrefix(route, "/tests/generations/") {
 		for key, list := range values {
-			if route != "/maintenance" || (key != "mode" && key != "plan") || len(list) != 1 {
+			if (route != "/maintenance" && route != "/maintenance/log") || (key != "page" && key != "scope") || len(list) != 1 {
 				return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unsupported or repeated maintenance query"}
 			}
 		}
-		if mode := values.Get("mode"); mode != "" && mode != "baseline" && mode != "initialize" && mode != "local" {
-			return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unknown maintenance mode"}
-		}
-		return p.maintenanceRead(ctx, route, values.Get("mode"), values.Get("plan"))
+		return p.maintenanceRead(ctx, route, values.Get("page"), values.Get("scope"))
 	}
 	if strings.HasPrefix(route, "/commands/") {
 		if r, e := p.maintenanceReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
