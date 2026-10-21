@@ -3,6 +3,7 @@ module github.com/erranliu/SteerLine
 go 1.24.2
 
 require (
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/coder/websocket v1.8.14
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.19

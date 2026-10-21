@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight, Play, Plus } from "lucide-react";
 import { useWorkspace } from "../../app/context";
+import {TaskMaterials} from "./task-materials";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { participating } from "../runs/state";
@@ -38,7 +39,7 @@ export function TaskDetail({
       (entry) =>
         entry.taskID === id &&
         !task?.workflow_runs?.some((run) => run.workflow_run_id === entry.id) &&
-        !page?.runs.some((run) => run.run_id === entry.id),
+        !page?.runs?.some((run) => run.run_id === entry.id),
     ) ?? [];
   const hasCandidates =
     (task?.workflow_runs?.length ?? 0) > 0 ||
@@ -49,9 +50,9 @@ export function TaskDetail({
     (candidates.length > 0 ||
       pendingStarts.some((entry) => entry.participating));
   const participatingIDs = new Set([
-    ...candidates.filter(participating).map((run) => run.run_id),
+    ...candidates.filter(run=>participating(run)&&run.material_status!=="outdated").map((run) => run.run_id),
     ...(task?.workflow_runs
-      ?.filter((run) => run.participation === "active")
+      ?.filter((run) => run.participation === "active" && !candidates.some(c=>c.run_id===run.workflow_run_id&&c.material_status==="outdated"))
       .map((run) => run.workflow_run_id) ?? []),
     ...pendingStarts
       .filter((entry) => entry.participating)
@@ -146,8 +147,9 @@ export function TaskDetail({
         ))}
       </div>
       <div className="detail-section">
-        <h3>固定规格</h3>
+        <h3>任务文档</h3>
         <p className="path">{task.spec_path || "未关联规格"}</p>
+        <TaskMaterials id={id}/>
         <p className="muted">
           Task v{task.version} · 图 v{detail.data?.graph_revision}
         </p>

@@ -1,0 +1,5653 @@
+{
+  "source": {
+    "version": "0.2.0-dev.3-r2",
+    "resource_digest": "a48bfb1aa7250009b21b4170532d877be01c23375ac386cb39e269794263ef91",
+    "executable_sha256": "4dbf25c74ecc5d360fbfacc88fe599744cdc80a10648962ddc86f73c7d4b467b",
+    "purpose": "Published offline schema fixture; tests never execute Runner or helper"
+  },
+  "configuration_schemas": {
+    "adapters": {
+      "codex-app-server": {
+        "$id": "steerrunner/adapters/codex-app-server/settings/v1",
+        "additionalProperties": false,
+        "properties": {
+          "access_mode": {
+            "default": "sandbox",
+            "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+            "enum": [
+              "",
+              "sandbox",
+              "full_access",
+              "read_only"
+            ]
+          },
+          "executable": {
+            "default": "codex.exe",
+            "minLength": 1,
+            "type": "string"
+          },
+          "model": {
+            "minLength": 1,
+            "not": {
+              "pattern": "[\u0000\r\n]"
+            },
+            "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+            "type": "string"
+          },
+          "reasoning_effort": {
+            "default": "medium",
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max",
+              "ultra"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "orca-terminal": {
+        "$id": "steerrunner/adapters/orca-terminal/settings/v1",
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "agent": {
+                  "not": {
+                    "enum": [
+                      "codex",
+                      "pi",
+                      "dsh"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "agent"
+              ]
+            },
+            "then": {
+              "properties": {
+                "agent_launch": {
+                  "not": {
+                    "anyOf": [
+                      {
+                        "required": [
+                          "model"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "reasoning_effort"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "runtime_executable"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "runtime_sha256"
+                        ]
+                      }
+                    ]
+                  },
+                  "properties": {
+                    "args": {
+                      "maxItems": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "agent": {
+                  "const": "pi"
+                }
+              },
+              "required": [
+                "agent"
+              ]
+            },
+            "then": {
+              "properties": {
+                "agent_launch": {
+                  "properties": {
+                    "args": {
+                      "maxItems": 0
+                    },
+                    "reasoning_effort": {
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "agent": {
+                  "const": "dsh"
+                }
+              },
+              "required": [
+                "agent"
+              ]
+            },
+            "then": {
+              "properties": {
+                "agent_launch": {
+                  "properties": {
+                    "args": {
+                      "maxItems": 0
+                    },
+                    "reasoning_effort": {
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "max"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "properties": {
+          "access_mode": {
+            "default": "sandbox",
+            "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+            "enum": [
+              "",
+              "sandbox",
+              "full_access"
+            ]
+          },
+          "agent": {
+            "default": "codex",
+            "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+            "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "agent_launch": {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "executable": {
+                "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "model": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "reasoning_effort": {
+                "enum": [
+                  "minimal",
+                  "low",
+                  "medium",
+                  "high",
+                  "xhigh",
+                  "max",
+                  "ultra"
+                ]
+              },
+              "runtime_executable": {
+                "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
+                "minLength": 1,
+                "type": "string"
+              },
+              "runtime_sha256": {
+                "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "transport": {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "executable": {
+                "default": "orca.exe",
+                "minLength": 1,
+                "type": "string"
+              },
+              "wait_timeout": {
+                "default": "30s",
+                "description": "Go duration, greater than 0 and at most 1m",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "type": "object"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "conversation_input": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development"
+                  },
+                  "version": {
+                    "const": 2
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  },
+                  "settings": {
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "",
+                              "sandbox",
+                              "full_access"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development-audited"
+                  },
+                  "version": {
+                    "const": 2
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "adapter": {
+                          "const": "codex-app-server"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "settings": {
+                          "properties": {
+                            "model": {
+                              "minLength": 1,
+                              "not": {
+                                "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                              },
+                              "pattern": "^\\S(?:.*\\S)?$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "model"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "adapter": {
+                          "const": "orca-terminal"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "settings": {
+                          "properties": {
+                            "agent": {
+                              "const": "codex"
+                            },
+                            "agent_launch": {
+                              "properties": {
+                                "model": {
+                                  "minLength": 1,
+                                  "not": {
+                                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                  },
+                                  "pattern": "^\\S(?:.*\\S)?$",
+                                  "type": "string"
+                                },
+                                "runtime_executable": {
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model",
+                                "runtime_executable"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "agent_launch"
+                          ]
+                        },
+                        "target": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "const": ""
+                            },
+                            "kind": {
+                              "const": "local"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  },
+                  "settings": {
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "",
+                              "sandbox",
+                              "full_access"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report",
+                        "audit.code",
+                        "audit.code.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "conversation"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "access_mode": {
+                        "const": "read_only"
+                      }
+                    },
+                    "required": [
+                      "access_mode"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": false
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "generate"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "access_mode": {
+                        "const": "read_only"
+                      }
+                    },
+                    "required": [
+                      "access_mode"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": false
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "conversation": {
+          "additionalProperties": false,
+          "properties": {
+            "directory": {
+              "additionalProperties": false,
+              "properties": {
+                "access": {
+                  "const": "read_only"
+                },
+                "path": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "access"
+              ],
+              "type": "object"
+            },
+            "instruction": {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "materials": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "commit": {
+                    "const": ""
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "inline"
+                  },
+                  "path": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "path",
+                  "content"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "instruction",
+            "materials",
+            "directory"
+          ],
+          "type": "object"
+        },
+        "correlation": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "execution": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "adapter": {
+                  "const": "codex-app-server"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/codex-app-server/settings/v1",
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "",
+                        "sandbox",
+                        "full_access",
+                        "read_only"
+                      ]
+                    },
+                    "executable": {
+                      "default": "codex.exe",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "model": {
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[\u0000\r\n]"
+                      },
+                      "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+                      "type": "string"
+                    },
+                    "reasoning_effort": {
+                      "default": "medium",
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                        "ultra"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "environment": {
+                      "const": ""
+                    },
+                    "kind": {
+                      "const": "local"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "target": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "environment": {
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "const": "orca_environment"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "environment"
+                        ],
+                        "type": "object"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "settings": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "adapter": {
+                  "const": "orca-terminal"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/orca-terminal/settings/v1",
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "not": {
+                              "enum": [
+                                "codex",
+                                "pi",
+                                "dsh"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "model"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "reasoning_effort"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            },
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "pi"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "minimal",
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "xhigh"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "dsh"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "max"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "",
+                        "sandbox",
+                        "full_access"
+                      ]
+                    },
+                    "agent": {
+                      "default": "codex",
+                      "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+                      "type": "string"
+                    },
+                    "agent_launch": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        },
+                        "runtime_executable": {
+                          "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "runtime_sha256": {
+                          "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
+                          "pattern": "^[a-f0-9]{64}$",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "transport": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "default": "orca.exe",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "wait_timeout": {
+                          "default": "30s",
+                          "description": "Go duration, greater than 0 and at most 1m",
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "const": ""
+                        },
+                        "kind": {
+                          "const": "local"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "minLength": 1,
+                          "pattern": "\\S",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "orca_environment"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "environment"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "title": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "workflow": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "conversation"
+            },
+            "version": {
+              "const": 1
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "title",
+        "workflow",
+        "execution",
+        "conversation"
+      ],
+      "type": "object"
+    },
+    "generate_input": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development"
+                  },
+                  "version": {
+                    "const": 2
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  },
+                  "settings": {
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "",
+                              "sandbox",
+                              "full_access"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development-audited"
+                  },
+                  "version": {
+                    "const": 2
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "adapter": {
+                          "const": "codex-app-server"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "settings": {
+                          "properties": {
+                            "model": {
+                              "minLength": 1,
+                              "not": {
+                                "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                              },
+                              "pattern": "^\\S(?:.*\\S)?$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "model"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "adapter": {
+                          "const": "orca-terminal"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "settings": {
+                          "properties": {
+                            "agent": {
+                              "const": "codex"
+                            },
+                            "agent_launch": {
+                              "properties": {
+                                "model": {
+                                  "minLength": 1,
+                                  "not": {
+                                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                  },
+                                  "pattern": "^\\S(?:.*\\S)?$",
+                                  "type": "string"
+                                },
+                                "runtime_executable": {
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model",
+                                "runtime_executable"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "agent_launch"
+                          ]
+                        },
+                        "target": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "const": ""
+                            },
+                            "kind": {
+                              "const": "local"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  },
+                  "settings": {
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "",
+                              "sandbox",
+                              "full_access"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report",
+                        "audit.code",
+                        "audit.code.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "conversation"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "access_mode": {
+                        "const": "read_only"
+                      }
+                    },
+                    "required": [
+                      "access_mode"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": false
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "generate"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "access_mode": {
+                        "const": "read_only"
+                      }
+                    },
+                    "required": [
+                      "access_mode"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": false
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "correlation": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "execution": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "adapter": {
+                  "const": "codex-app-server"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/codex-app-server/settings/v1",
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "",
+                        "sandbox",
+                        "full_access",
+                        "read_only"
+                      ]
+                    },
+                    "executable": {
+                      "default": "codex.exe",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "model": {
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[\u0000\r\n]"
+                      },
+                      "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+                      "type": "string"
+                    },
+                    "reasoning_effort": {
+                      "default": "medium",
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                        "ultra"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "environment": {
+                      "const": ""
+                    },
+                    "kind": {
+                      "const": "local"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "target": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "environment": {
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "const": "orca_environment"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "environment"
+                        ],
+                        "type": "object"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "settings": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "adapter": {
+                  "const": "orca-terminal"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/orca-terminal/settings/v1",
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "not": {
+                              "enum": [
+                                "codex",
+                                "pi",
+                                "dsh"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "model"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "reasoning_effort"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            },
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "pi"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "minimal",
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "xhigh"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "dsh"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "max"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "",
+                        "sandbox",
+                        "full_access"
+                      ]
+                    },
+                    "agent": {
+                      "default": "codex",
+                      "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+                      "type": "string"
+                    },
+                    "agent_launch": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        },
+                        "runtime_executable": {
+                          "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "runtime_sha256": {
+                          "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
+                          "pattern": "^[a-f0-9]{64}$",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "transport": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "default": "orca.exe",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "wait_timeout": {
+                          "default": "30s",
+                          "description": "Go duration, greater than 0 and at most 1m",
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "const": ""
+                        },
+                        "kind": {
+                          "const": "local"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "minLength": 1,
+                          "pattern": "\\S",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "orca_environment"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "environment"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "generate": {
+          "additionalProperties": false,
+          "properties": {
+            "directory": {
+              "additionalProperties": false,
+              "properties": {
+                "access": {
+                  "const": "read_only"
+                },
+                "path": {
+                  "minLength": 1,
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "access"
+              ],
+              "type": "object"
+            },
+            "instruction": {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "materials": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "commit": {
+                    "const": ""
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "inline"
+                  },
+                  "path": {
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "path",
+                  "content"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "output_schema": {}
+          },
+          "required": [
+            "instruction",
+            "materials"
+          ],
+          "type": "object"
+        },
+        "title": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        },
+        "workflow": {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "generate"
+            },
+            "version": {
+              "const": 1
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "title",
+        "workflow",
+        "execution",
+        "generate"
+      ],
+      "type": "object"
+    },
+    "message_input": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_revision": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "text": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "type": "string"
+        }
+      },
+      "required": [
+        "expected_revision",
+        "text"
+      ],
+      "type": "object"
+    },
+    "providers": {
+      "command": {
+        "$id": "steerrunner/providers/command/settings/v1",
+        "additionalProperties": false,
+        "properties": {
+          "authentication_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "base_url": {
+            "format": "uri",
+            "type": "string"
+          },
+          "query": {
+            "additionalProperties": false,
+            "properties": {
+              "args": {
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              "executable": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "executable",
+              "args"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "base_url",
+          "query"
+        ],
+        "type": "object"
+      },
+      "gitea": {
+        "$id": "steerrunner/providers/gitea/settings/v1",
+        "additionalProperties": false,
+        "properties": {
+          "authentication_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "base_url": {
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "base_url"
+        ],
+        "type": "object"
+      }
+    },
+    "revision_input": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_revision": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expected_revision"
+      ],
+      "type": "object"
+    },
+    "run_configuration": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development"
+                  },
+                  "version": {
+                    "const": 2
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  },
+                  "settings": {
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "",
+                              "sandbox",
+                              "full_access"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "development-audited"
+                  },
+                  "version": {
+                    "const": 2
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "adapter": {
+                          "const": "codex-app-server"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "settings": {
+                          "properties": {
+                            "model": {
+                              "minLength": 1,
+                              "not": {
+                                "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                              },
+                              "pattern": "^\\S(?:.*\\S)?$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "model"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "adapter": {
+                          "const": "orca-terminal"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "settings": {
+                          "properties": {
+                            "agent": {
+                              "const": "codex"
+                            },
+                            "agent_launch": {
+                              "properties": {
+                                "model": {
+                                  "minLength": 1,
+                                  "not": {
+                                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                  },
+                                  "pattern": "^\\S(?:.*\\S)?$",
+                                  "type": "string"
+                                },
+                                "runtime_executable": {
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model",
+                                "runtime_executable"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "agent_launch"
+                          ]
+                        },
+                        "target": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "const": ""
+                            },
+                            "kind": {
+                              "const": "local"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  },
+                  "settings": {
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "",
+                              "sandbox",
+                              "full_access"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report",
+                        "audit.code",
+                        "audit.code.report"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "conversation"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "access_mode": {
+                        "const": "read_only"
+                      }
+                    },
+                    "required": [
+                      "access_mode"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": false
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "generate"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "access_mode": {
+                        "const": "read_only"
+                      }
+                    },
+                    "required": [
+                      "access_mode"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": false
+                }
+              }
+            }
+          }
+        }
+      ],
+      "properties": {
+        "execution": {
+          "oneOf": [
+            {
+              "additionalProperties": false,
+              "properties": {
+                "adapter": {
+                  "const": "codex-app-server"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/codex-app-server/settings/v1",
+                  "additionalProperties": false,
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "",
+                        "sandbox",
+                        "full_access",
+                        "read_only"
+                      ]
+                    },
+                    "executable": {
+                      "default": "codex.exe",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "model": {
+                      "minLength": 1,
+                      "not": {
+                        "pattern": "[\u0000\r\n]"
+                      },
+                      "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+                      "type": "string"
+                    },
+                    "reasoning_effort": {
+                      "default": "medium",
+                      "enum": [
+                        "minimal",
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max",
+                        "ultra"
+                      ]
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "environment": {
+                      "const": ""
+                    },
+                    "kind": {
+                      "const": "local"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            },
+            {
+              "additionalProperties": false,
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "target": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "environment": {
+                            "minLength": 1,
+                            "pattern": "\\S",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "const": "orca_environment"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "environment"
+                        ],
+                        "type": "object"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "settings": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "adapter": {
+                  "const": "orca-terminal"
+                },
+                "settings": {
+                  "$id": "steerrunner/adapters/orca-terminal/settings/v1",
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "not": {
+                              "enum": [
+                                "codex",
+                                "pi",
+                                "dsh"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "not": {
+                              "anyOf": [
+                                {
+                                  "required": [
+                                    "model"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "reasoning_effort"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_executable"
+                                  ]
+                                },
+                                {
+                                  "required": [
+                                    "runtime_sha256"
+                                  ]
+                                }
+                              ]
+                            },
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "pi"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "minimal",
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "xhigh"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {
+                          "agent": {
+                            "const": "dsh"
+                          }
+                        },
+                        "required": [
+                          "agent"
+                        ]
+                      },
+                      "then": {
+                        "properties": {
+                          "agent_launch": {
+                            "properties": {
+                              "args": {
+                                "maxItems": 0
+                              },
+                              "reasoning_effort": {
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                  "max"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "access_mode": {
+                      "default": "sandbox",
+                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "enum": [
+                        "",
+                        "sandbox",
+                        "full_access"
+                      ]
+                    },
+                    "agent": {
+                      "default": "codex",
+                      "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+                      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+                      "type": "string"
+                    },
+                    "agent_launch": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        },
+                        "runtime_executable": {
+                          "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "runtime_sha256": {
+                          "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
+                          "pattern": "^[a-f0-9]{64}$",
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "transport": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "args": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "executable": {
+                          "default": "orca.exe",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "wait_timeout": {
+                          "default": "30s",
+                          "description": "Go duration, greater than 0 and at most 1m",
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "target": {
+                  "oneOf": [
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "const": ""
+                        },
+                        "kind": {
+                          "const": "local"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    },
+                    {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "minLength": 1,
+                          "pattern": "\\S",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "orca_environment"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "environment"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "adapter",
+                "target",
+                "settings"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "workflow": {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "else": {
+                "not": {
+                  "required": [
+                    "audit_model"
+                  ]
+                },
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report"
+                      ]
+                    }
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "id": {
+                    "const": "development-audited"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "prompt_overrides": {
+                    "propertyNames": {
+                      "enum": [
+                        "implement.execute",
+                        "implement.report",
+                        "publish",
+                        "publish.report",
+                        "audit.code",
+                        "audit.code.report"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "audit_model"
+                ]
+              }
+            },
+            {
+              "else": {
+                "properties": {
+                  "version": {
+                    "const": 2
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "conversation",
+                      "generate"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "prompt_overrides": {
+                    "maxProperties": 0
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          ],
+          "description": "Audited workflow requires managed Codex with two explicit, different models. Orca uses execution.settings.agent_launch.model and the trusted execution-host runtime. Omitted audit effort inherits the normalized execution effort.",
+          "properties": {
+            "audit_model": {
+              "additionalProperties": false,
+              "properties": {
+                "model": {
+                  "minLength": 1,
+                  "not": {
+                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                  },
+                  "pattern": "^\\S(?:.*\\S)?$",
+                  "type": "string"
+                },
+                "reasoning_effort": {
+                  "enum": [
+                    "minimal",
+                    "low",
+                    "medium",
+                    "high",
+                    "xhigh",
+                    "max",
+                    "ultra"
+                  ]
+                }
+              },
+              "required": [
+                "model"
+              ],
+              "type": "object"
+            },
+            "id": {
+              "enum": [
+                "development",
+                "development-audited",
+                "conversation",
+                "generate"
+              ]
+            },
+            "prompt_overrides": {
+              "additionalProperties": {
+                "minLength": 1,
+                "pattern": "\\S",
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "version": {
+              "enum": [
+                1,
+                2
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "version"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "execution",
+        "workflow"
+      ],
+      "type": "object"
+    },
+    "run_input": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "development"
+                      },
+                      "version": {
+                        "const": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server",
+                          "orca-terminal"
+                        ]
+                      },
+                      "settings": {
+                        "allOf": [
+                          {},
+                          {
+                            "properties": {
+                              "access_mode": {
+                                "enum": [
+                                  "",
+                                  "sandbox",
+                                  "full_access"
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": {
+                        "propertyNames": {
+                          "enum": [
+                            "implement.execute",
+                            "implement.report",
+                            "publish",
+                            "publish.report"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "development-audited"
+                      },
+                      "version": {
+                        "const": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "adapter": {
+                              "const": "codex-app-server"
+                            }
+                          }
+                        },
+                        "then": {
+                          "properties": {
+                            "settings": {
+                              "properties": {
+                                "model": {
+                                  "minLength": 1,
+                                  "not": {
+                                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                  },
+                                  "pattern": "^\\S(?:.*\\S)?$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "adapter": {
+                              "const": "orca-terminal"
+                            }
+                          }
+                        },
+                        "then": {
+                          "properties": {
+                            "settings": {
+                              "properties": {
+                                "agent": {
+                                  "const": "codex"
+                                },
+                                "agent_launch": {
+                                  "properties": {
+                                    "model": {
+                                      "minLength": 1,
+                                      "not": {
+                                        "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                      },
+                                      "pattern": "^\\S(?:.*\\S)?$",
+                                      "type": "string"
+                                    },
+                                    "runtime_executable": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "model",
+                                    "runtime_executable"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "agent_launch"
+                              ]
+                            },
+                            "target": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "environment": {
+                                  "const": ""
+                                },
+                                "kind": {
+                                  "const": "local"
+                                }
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "type": "object"
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server",
+                          "orca-terminal"
+                        ]
+                      },
+                      "settings": {
+                        "allOf": [
+                          {},
+                          {
+                            "properties": {
+                              "access_mode": {
+                                "enum": [
+                                  "",
+                                  "sandbox",
+                                  "full_access"
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": {
+                        "propertyNames": {
+                          "enum": [
+                            "implement.execute",
+                            "implement.report",
+                            "publish",
+                            "publish.report",
+                            "audit.code",
+                            "audit.code.report"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "conversation"
+                      },
+                      "version": {
+                        "const": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server"
+                        ]
+                      },
+                      "settings": {
+                        "properties": {
+                          "access_mode": {
+                            "const": "read_only"
+                          }
+                        },
+                        "required": [
+                          "access_mode"
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": false
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "generate"
+                      },
+                      "version": {
+                        "const": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server"
+                        ]
+                      },
+                      "settings": {
+                        "properties": {
+                          "access_mode": {
+                            "const": "read_only"
+                          }
+                        },
+                        "required": [
+                          "access_mode"
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": false
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "properties": {
+            "conversation": false,
+            "correlation": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "documents": {
+              "additionalProperties": false,
+              "properties": {
+                "plan": {
+                  "additionalProperties": false,
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "content": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "inline"
+                        }
+                      },
+                      "required": [
+                        "content"
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "commit": {
+                          "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "git"
+                        }
+                      },
+                      "required": [
+                        "commit"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "commit": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path"
+                  ],
+                  "type": "object"
+                },
+                "references": {
+                  "items": {
+                    "additionalProperties": false,
+                    "oneOf": [
+                      {
+                        "properties": {
+                          "content": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "const": "inline"
+                          }
+                        },
+                        "required": [
+                          "content"
+                        ]
+                      },
+                      {
+                        "properties": {
+                          "commit": {
+                            "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "const": "git"
+                          }
+                        },
+                        "required": [
+                          "commit"
+                        ]
+                      }
+                    ],
+                    "properties": {
+                      "commit": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "anyOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "kind": {
+                        "type": "string"
+                      },
+                      "path": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "path"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "spec": {
+                  "additionalProperties": false,
+                  "oneOf": [
+                    {
+                      "properties": {
+                        "content": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "inline"
+                        }
+                      },
+                      "required": [
+                        "content"
+                      ]
+                    },
+                    {
+                      "properties": {
+                        "commit": {
+                          "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+                          "type": "string"
+                        },
+                        "kind": {
+                          "const": "git"
+                        }
+                      },
+                      "required": [
+                        "commit"
+                      ]
+                    }
+                  ],
+                  "properties": {
+                    "commit": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path"
+                  ],
+                  "type": "object"
+                }
+              },
+              "required": [
+                "spec",
+                "plan"
+              ],
+              "type": "object"
+            },
+            "execution": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "adapter": {
+                      "const": "codex-app-server"
+                    },
+                    "settings": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "access_mode": {
+                          "default": "sandbox",
+                          "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                          "enum": [
+                            "",
+                            "sandbox",
+                            "full_access",
+                            "read_only"
+                          ]
+                        },
+                        "executable": {
+                          "default": "codex.exe",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "not": {
+                            "pattern": "[\u0000\r\n]"
+                          },
+                          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "default": "medium",
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "target": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "const": ""
+                        },
+                        "kind": {
+                          "const": "local"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "adapter",
+                    "target",
+                    "settings"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "target": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "environment": {
+                                "minLength": 1,
+                                "pattern": "\\S",
+                                "type": "string"
+                              },
+                              "kind": {
+                                "const": "orca_environment"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "environment"
+                            ],
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "settings": {
+                            "properties": {
+                              "agent_launch": {
+                                "not": {
+                                  "anyOf": [
+                                    {
+                                      "required": [
+                                        "runtime_executable"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_sha256"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "adapter": {
+                      "const": "orca-terminal"
+                    },
+                    "settings": {
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "not": {
+                                  "enum": [
+                                    "codex",
+                                    "pi",
+                                    "dsh"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "not": {
+                                  "anyOf": [
+                                    {
+                                      "required": [
+                                        "model"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "reasoning_effort"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_executable"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_sha256"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "const": "pi"
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  },
+                                  "reasoning_effort": {
+                                    "enum": [
+                                      "minimal",
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "xhigh"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "const": "dsh"
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  },
+                                  "reasoning_effort": {
+                                    "enum": [
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "max"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "properties": {
+                        "access_mode": {
+                          "default": "sandbox",
+                          "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                          "enum": [
+                            "",
+                            "sandbox",
+                            "full_access"
+                          ]
+                        },
+                        "agent": {
+                          "default": "codex",
+                          "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+                          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+                          "type": "string"
+                        },
+                        "agent_launch": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "args": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "executable": {
+                              "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "model": {
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "reasoning_effort": {
+                              "enum": [
+                                "minimal",
+                                "low",
+                                "medium",
+                                "high",
+                                "xhigh",
+                                "max",
+                                "ultra"
+                              ]
+                            },
+                            "runtime_executable": {
+                              "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "runtime_sha256": {
+                              "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
+                              "pattern": "^[a-f0-9]{64}$",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "transport": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "args": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "executable": {
+                              "default": "orca.exe",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "wait_timeout": {
+                              "default": "30s",
+                              "description": "Go duration, greater than 0 and at most 1m",
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "target": {
+                      "oneOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "const": ""
+                            },
+                            "kind": {
+                              "const": "local"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "minLength": 1,
+                              "pattern": "\\S",
+                              "type": "string"
+                            },
+                            "kind": {
+                              "const": "orca_environment"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "environment"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "adapter",
+                    "target",
+                    "settings"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "generate": false,
+            "publication": {
+              "additionalProperties": false,
+              "oneOf": [
+                {
+                  "properties": {
+                    "provider": {
+                      "const": "command"
+                    },
+                    "settings": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "authentication_refs": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "base_url": {
+                          "format": "uri",
+                          "type": "string"
+                        },
+                        "query": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "args": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "minItems": 1,
+                              "type": "array"
+                            },
+                            "executable": {
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "executable",
+                            "args"
+                          ],
+                          "type": "object"
+                        }
+                      },
+                      "required": [
+                        "base_url",
+                        "query"
+                      ],
+                      "type": "object"
+                    }
+                  }
+                },
+                {
+                  "properties": {
+                    "provider": {
+                      "const": "gitea"
+                    },
+                    "settings": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "authentication_refs": {
+                          "items": {
+                            "type": "string"
+                          },
+                          "type": "array"
+                        },
+                        "base_url": {
+                          "format": "uri",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "base_url"
+                      ],
+                      "type": "object"
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "base_branch": {
+                  "type": "string"
+                },
+                "provider": {
+                  "type": "string"
+                },
+                "repository": {
+                  "type": "string"
+                },
+                "settings": {}
+              },
+              "required": [
+                "provider",
+                "repository",
+                "base_branch",
+                "settings"
+              ],
+              "type": "object"
+            },
+            "repository": {
+              "additionalProperties": false,
+              "properties": {
+                "base_branch": {
+                  "type": "string"
+                },
+                "base_revision": {
+                  "pattern": "^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$",
+                  "type": "string"
+                },
+                "local_path": {
+                  "type": "string"
+                },
+                "remote": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "url",
+                "base_revision",
+                "remote",
+                "base_branch"
+              ],
+              "type": "object"
+            },
+            "title": {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "workflow": {
+              "allOf": [
+                {
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "else": {
+                        "not": {
+                          "required": [
+                            "audit_model"
+                          ]
+                        },
+                        "properties": {
+                          "prompt_overrides": {
+                            "propertyNames": {
+                              "enum": [
+                                "implement.execute",
+                                "implement.report",
+                                "publish",
+                                "publish.report"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      "if": {
+                        "properties": {
+                          "id": {
+                            "const": "development-audited"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "prompt_overrides": {
+                            "propertyNames": {
+                              "enum": [
+                                "implement.execute",
+                                "implement.report",
+                                "publish",
+                                "publish.report",
+                                "audit.code",
+                                "audit.code.report"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "audit_model"
+                        ]
+                      }
+                    },
+                    {
+                      "else": {
+                        "properties": {
+                          "version": {
+                            "const": 2
+                          }
+                        }
+                      },
+                      "if": {
+                        "properties": {
+                          "id": {
+                            "enum": [
+                              "conversation",
+                              "generate"
+                            ]
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "prompt_overrides": {
+                            "maxProperties": 0
+                          },
+                          "version": {
+                            "const": 1
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "description": "Audited workflow requires managed Codex with two explicit, different models. Orca uses execution.settings.agent_launch.model and the trusted execution-host runtime. Omitted audit effort inherits the normalized execution effort.",
+                  "properties": {
+                    "audit_model": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "model": {
+                          "minLength": 1,
+                          "not": {
+                            "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                          },
+                          "pattern": "^\\S(?:.*\\S)?$",
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "model"
+                      ],
+                      "type": "object"
+                    },
+                    "id": {
+                      "enum": [
+                        "development",
+                        "development-audited",
+                        "conversation",
+                        "generate"
+                      ]
+                    },
+                    "prompt_overrides": {
+                      "additionalProperties": {
+                        "minLength": 1,
+                        "pattern": "\\S",
+                        "type": "string"
+                      },
+                      "type": "object"
+                    },
+                    "version": {
+                      "enum": [
+                        1,
+                        2
+                      ]
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "version"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "properties": {
+                    "id": {
+                      "enum": [
+                        "development",
+                        "development-audited"
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "required": [
+            "title",
+            "repository",
+            "documents",
+            "execution",
+            "workflow",
+            "publication"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "development"
+                      },
+                      "version": {
+                        "const": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server",
+                          "orca-terminal"
+                        ]
+                      },
+                      "settings": {
+                        "allOf": [
+                          {},
+                          {
+                            "properties": {
+                              "access_mode": {
+                                "enum": [
+                                  "",
+                                  "sandbox",
+                                  "full_access"
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": {
+                        "propertyNames": {
+                          "enum": [
+                            "implement.execute",
+                            "implement.report",
+                            "publish",
+                            "publish.report"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "development-audited"
+                      },
+                      "version": {
+                        "const": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "adapter": {
+                              "const": "codex-app-server"
+                            }
+                          }
+                        },
+                        "then": {
+                          "properties": {
+                            "settings": {
+                              "properties": {
+                                "model": {
+                                  "minLength": 1,
+                                  "not": {
+                                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                  },
+                                  "pattern": "^\\S(?:.*\\S)?$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "adapter": {
+                              "const": "orca-terminal"
+                            }
+                          }
+                        },
+                        "then": {
+                          "properties": {
+                            "settings": {
+                              "properties": {
+                                "agent": {
+                                  "const": "codex"
+                                },
+                                "agent_launch": {
+                                  "properties": {
+                                    "model": {
+                                      "minLength": 1,
+                                      "not": {
+                                        "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                      },
+                                      "pattern": "^\\S(?:.*\\S)?$",
+                                      "type": "string"
+                                    },
+                                    "runtime_executable": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "model",
+                                    "runtime_executable"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "agent_launch"
+                              ]
+                            },
+                            "target": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "environment": {
+                                  "const": ""
+                                },
+                                "kind": {
+                                  "const": "local"
+                                }
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "type": "object"
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server",
+                          "orca-terminal"
+                        ]
+                      },
+                      "settings": {
+                        "allOf": [
+                          {},
+                          {
+                            "properties": {
+                              "access_mode": {
+                                "enum": [
+                                  "",
+                                  "sandbox",
+                                  "full_access"
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": {
+                        "propertyNames": {
+                          "enum": [
+                            "implement.execute",
+                            "implement.report",
+                            "publish",
+                            "publish.report",
+                            "audit.code",
+                            "audit.code.report"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "conversation"
+                      },
+                      "version": {
+                        "const": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server"
+                        ]
+                      },
+                      "settings": {
+                        "properties": {
+                          "access_mode": {
+                            "const": "read_only"
+                          }
+                        },
+                        "required": [
+                          "access_mode"
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": false
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "generate"
+                      },
+                      "version": {
+                        "const": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server"
+                        ]
+                      },
+                      "settings": {
+                        "properties": {
+                          "access_mode": {
+                            "const": "read_only"
+                          }
+                        },
+                        "required": [
+                          "access_mode"
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": false
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "properties": {
+            "conversation": {
+              "additionalProperties": false,
+              "properties": {
+                "directory": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "const": "read_only"
+                    },
+                    "path": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "access"
+                  ],
+                  "type": "object"
+                },
+                "instruction": {
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "materials": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "commit": {
+                        "const": ""
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "inline"
+                      },
+                      "path": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "path",
+                      "content"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "instruction",
+                "materials",
+                "directory"
+              ],
+              "type": "object"
+            },
+            "correlation": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "execution": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "adapter": {
+                      "const": "codex-app-server"
+                    },
+                    "settings": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "access_mode": {
+                          "default": "sandbox",
+                          "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                          "enum": [
+                            "",
+                            "sandbox",
+                            "full_access",
+                            "read_only"
+                          ]
+                        },
+                        "executable": {
+                          "default": "codex.exe",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "not": {
+                            "pattern": "[\u0000\r\n]"
+                          },
+                          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "default": "medium",
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "target": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "const": ""
+                        },
+                        "kind": {
+                          "const": "local"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "adapter",
+                    "target",
+                    "settings"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "target": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "environment": {
+                                "minLength": 1,
+                                "pattern": "\\S",
+                                "type": "string"
+                              },
+                              "kind": {
+                                "const": "orca_environment"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "environment"
+                            ],
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "settings": {
+                            "properties": {
+                              "agent_launch": {
+                                "not": {
+                                  "anyOf": [
+                                    {
+                                      "required": [
+                                        "runtime_executable"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_sha256"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "adapter": {
+                      "const": "orca-terminal"
+                    },
+                    "settings": {
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "not": {
+                                  "enum": [
+                                    "codex",
+                                    "pi",
+                                    "dsh"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "not": {
+                                  "anyOf": [
+                                    {
+                                      "required": [
+                                        "model"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "reasoning_effort"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_executable"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_sha256"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "const": "pi"
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  },
+                                  "reasoning_effort": {
+                                    "enum": [
+                                      "minimal",
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "xhigh"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "const": "dsh"
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  },
+                                  "reasoning_effort": {
+                                    "enum": [
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "max"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "properties": {
+                        "access_mode": {
+                          "default": "sandbox",
+                          "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                          "enum": [
+                            "",
+                            "sandbox",
+                            "full_access"
+                          ]
+                        },
+                        "agent": {
+                          "default": "codex",
+                          "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+                          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+                          "type": "string"
+                        },
+                        "agent_launch": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "args": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "executable": {
+                              "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "model": {
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "reasoning_effort": {
+                              "enum": [
+                                "minimal",
+                                "low",
+                                "medium",
+                                "high",
+                                "xhigh",
+                                "max",
+                                "ultra"
+                              ]
+                            },
+                            "runtime_executable": {
+                              "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "runtime_sha256": {
+                              "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
+                              "pattern": "^[a-f0-9]{64}$",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "transport": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "args": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "executable": {
+                              "default": "orca.exe",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "wait_timeout": {
+                              "default": "30s",
+                              "description": "Go duration, greater than 0 and at most 1m",
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "target": {
+                      "oneOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "const": ""
+                            },
+                            "kind": {
+                              "const": "local"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "minLength": 1,
+                              "pattern": "\\S",
+                              "type": "string"
+                            },
+                            "kind": {
+                              "const": "orca_environment"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "environment"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "adapter",
+                    "target",
+                    "settings"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "title": {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "workflow": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "const": "conversation"
+                },
+                "version": {
+                  "const": 1
+                }
+              },
+              "required": [
+                "id",
+                "version"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "title",
+            "workflow",
+            "execution",
+            "conversation"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "development"
+                      },
+                      "version": {
+                        "const": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server",
+                          "orca-terminal"
+                        ]
+                      },
+                      "settings": {
+                        "allOf": [
+                          {},
+                          {
+                            "properties": {
+                              "access_mode": {
+                                "enum": [
+                                  "",
+                                  "sandbox",
+                                  "full_access"
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": {
+                        "propertyNames": {
+                          "enum": [
+                            "implement.execute",
+                            "implement.report",
+                            "publish",
+                            "publish.report"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "development-audited"
+                      },
+                      "version": {
+                        "const": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "adapter": {
+                              "const": "codex-app-server"
+                            }
+                          }
+                        },
+                        "then": {
+                          "properties": {
+                            "settings": {
+                              "properties": {
+                                "model": {
+                                  "minLength": 1,
+                                  "not": {
+                                    "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                  },
+                                  "pattern": "^\\S(?:.*\\S)?$",
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "adapter": {
+                              "const": "orca-terminal"
+                            }
+                          }
+                        },
+                        "then": {
+                          "properties": {
+                            "settings": {
+                              "properties": {
+                                "agent": {
+                                  "const": "codex"
+                                },
+                                "agent_launch": {
+                                  "properties": {
+                                    "model": {
+                                      "minLength": 1,
+                                      "not": {
+                                        "pattern": "[\u0000-\u001f\u007f-\u009f]"
+                                      },
+                                      "pattern": "^\\S(?:.*\\S)?$",
+                                      "type": "string"
+                                    },
+                                    "runtime_executable": {
+                                      "minLength": 1,
+                                      "type": "string"
+                                    }
+                                  },
+                                  "required": [
+                                    "model",
+                                    "runtime_executable"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "agent_launch"
+                              ]
+                            },
+                            "target": {
+                              "additionalProperties": false,
+                              "properties": {
+                                "environment": {
+                                  "const": ""
+                                },
+                                "kind": {
+                                  "const": "local"
+                                }
+                              },
+                              "required": [
+                                "kind"
+                              ],
+                              "type": "object"
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server",
+                          "orca-terminal"
+                        ]
+                      },
+                      "settings": {
+                        "allOf": [
+                          {},
+                          {
+                            "properties": {
+                              "access_mode": {
+                                "enum": [
+                                  "",
+                                  "sandbox",
+                                  "full_access"
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": {
+                        "propertyNames": {
+                          "enum": [
+                            "implement.execute",
+                            "implement.report",
+                            "publish",
+                            "publish.report",
+                            "audit.code",
+                            "audit.code.report"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "conversation"
+                      },
+                      "version": {
+                        "const": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server"
+                        ]
+                      },
+                      "settings": {
+                        "properties": {
+                          "access_mode": {
+                            "const": "read_only"
+                          }
+                        },
+                        "required": [
+                          "access_mode"
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": false
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "workflow": {
+                    "properties": {
+                      "id": {
+                        "const": "generate"
+                      },
+                      "version": {
+                        "const": 1
+                      }
+                    }
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "execution": {
+                    "properties": {
+                      "adapter": {
+                        "enum": [
+                          "codex-app-server"
+                        ]
+                      },
+                      "settings": {
+                        "properties": {
+                          "access_mode": {
+                            "const": "read_only"
+                          }
+                        },
+                        "required": [
+                          "access_mode"
+                        ]
+                      }
+                    }
+                  },
+                  "workflow": {
+                    "properties": {
+                      "prompt_overrides": false
+                    }
+                  }
+                }
+              }
+            }
+          ],
+          "properties": {
+            "correlation": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "execution": {
+              "oneOf": [
+                {
+                  "additionalProperties": false,
+                  "properties": {
+                    "adapter": {
+                      "const": "codex-app-server"
+                    },
+                    "settings": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "access_mode": {
+                          "default": "sandbox",
+                          "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                          "enum": [
+                            "",
+                            "sandbox",
+                            "full_access",
+                            "read_only"
+                          ]
+                        },
+                        "executable": {
+                          "default": "codex.exe",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "model": {
+                          "minLength": 1,
+                          "not": {
+                            "pattern": "[\u0000\r\n]"
+                          },
+                          "pattern": "^\\S(?:[\\s\\S]*\\S)?$",
+                          "type": "string"
+                        },
+                        "reasoning_effort": {
+                          "default": "medium",
+                          "enum": [
+                            "minimal",
+                            "low",
+                            "medium",
+                            "high",
+                            "xhigh",
+                            "max",
+                            "ultra"
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "target": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "environment": {
+                          "const": ""
+                        },
+                        "kind": {
+                          "const": "local"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ],
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "adapter",
+                    "target",
+                    "settings"
+                  ],
+                  "type": "object"
+                },
+                {
+                  "additionalProperties": false,
+                  "allOf": [
+                    {
+                      "if": {
+                        "properties": {
+                          "target": {
+                            "additionalProperties": false,
+                            "properties": {
+                              "environment": {
+                                "minLength": 1,
+                                "pattern": "\\S",
+                                "type": "string"
+                              },
+                              "kind": {
+                                "const": "orca_environment"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "environment"
+                            ],
+                            "type": "object"
+                          }
+                        }
+                      },
+                      "then": {
+                        "properties": {
+                          "settings": {
+                            "properties": {
+                              "agent_launch": {
+                                "not": {
+                                  "anyOf": [
+                                    {
+                                      "required": [
+                                        "runtime_executable"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_sha256"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "properties": {
+                    "adapter": {
+                      "const": "orca-terminal"
+                    },
+                    "settings": {
+                      "additionalProperties": false,
+                      "allOf": [
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "not": {
+                                  "enum": [
+                                    "codex",
+                                    "pi",
+                                    "dsh"
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "not": {
+                                  "anyOf": [
+                                    {
+                                      "required": [
+                                        "model"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "reasoning_effort"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_executable"
+                                      ]
+                                    },
+                                    {
+                                      "required": [
+                                        "runtime_sha256"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "const": "pi"
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  },
+                                  "reasoning_effort": {
+                                    "enum": [
+                                      "minimal",
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "xhigh"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "if": {
+                            "properties": {
+                              "agent": {
+                                "const": "dsh"
+                              }
+                            },
+                            "required": [
+                              "agent"
+                            ]
+                          },
+                          "then": {
+                            "properties": {
+                              "agent_launch": {
+                                "properties": {
+                                  "args": {
+                                    "maxItems": 0
+                                  },
+                                  "reasoning_effort": {
+                                    "enum": [
+                                      "low",
+                                      "medium",
+                                      "high",
+                                      "max"
+                                    ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ],
+                      "properties": {
+                        "access_mode": {
+                          "default": "sandbox",
+                          "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                          "enum": [
+                            "",
+                            "sandbox",
+                            "full_access"
+                          ]
+                        },
+                        "agent": {
+                          "default": "codex",
+                          "description": "Orca terminal agent identifier. Missing preserves the Codex default; runtime evidence and permission qualification are still required.",
+                          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
+                          "type": "string"
+                        },
+                        "agent_launch": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "args": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "executable": {
+                              "description": "Native executable; defaults to codex, pi.cmd or dsh.cmd for the corresponding managed agent.",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "model": {
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "reasoning_effort": {
+                              "enum": [
+                                "minimal",
+                                "low",
+                                "medium",
+                                "high",
+                                "xhigh",
+                                "max",
+                                "ultra"
+                              ]
+                            },
+                            "runtime_executable": {
+                              "description": "Local target only: trusted managed terminal helper. Forbidden for orca_environment, including empty values.",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "runtime_sha256": {
+                              "description": "Local target only: frozen helper SHA256. Forbidden for orca_environment.",
+                              "pattern": "^[a-f0-9]{64}$",
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        },
+                        "transport": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "args": {
+                              "items": {
+                                "type": "string"
+                              },
+                              "type": "array"
+                            },
+                            "executable": {
+                              "default": "orca.exe",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "wait_timeout": {
+                              "default": "30s",
+                              "description": "Go duration, greater than 0 and at most 1m",
+                              "minLength": 1,
+                              "type": "string"
+                            }
+                          },
+                          "type": "object"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "target": {
+                      "oneOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "const": ""
+                            },
+                            "kind": {
+                              "const": "local"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "minLength": 1,
+                              "pattern": "\\S",
+                              "type": "string"
+                            },
+                            "kind": {
+                              "const": "orca_environment"
+                            }
+                          },
+                          "required": [
+                            "kind",
+                            "environment"
+                          ],
+                          "type": "object"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "adapter",
+                    "target",
+                    "settings"
+                  ],
+                  "type": "object"
+                }
+              ]
+            },
+            "generate": {
+              "additionalProperties": false,
+              "properties": {
+                "directory": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "access": {
+                      "const": "read_only"
+                    },
+                    "path": {
+                      "minLength": 1,
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "access"
+                  ],
+                  "type": "object"
+                },
+                "instruction": {
+                  "minLength": 1,
+                  "pattern": "\\S",
+                  "type": "string"
+                },
+                "materials": {
+                  "items": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "commit": {
+                        "const": ""
+                      },
+                      "content": {
+                        "type": "string"
+                      },
+                      "kind": {
+                        "const": "inline"
+                      },
+                      "path": {
+                        "minLength": 1,
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "path",
+                      "content"
+                    ],
+                    "type": "object"
+                  },
+                  "type": "array"
+                },
+                "output_schema": {}
+              },
+              "required": [
+                "instruction",
+                "materials"
+              ],
+              "type": "object"
+            },
+            "title": {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            "workflow": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "const": "generate"
+                },
+                "version": {
+                  "const": 1
+                }
+              },
+              "required": [
+                "id",
+                "version"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "title",
+            "workflow",
+            "execution",
+            "generate"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "version": 1,
+    "workflow": {
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "else": {
+            "not": {
+              "required": [
+                "audit_model"
+              ]
+            },
+            "properties": {
+              "prompt_overrides": {
+                "propertyNames": {
+                  "enum": [
+                    "implement.execute",
+                    "implement.report",
+                    "publish",
+                    "publish.report"
+                  ]
+                }
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "id": {
+                "const": "development-audited"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "prompt_overrides": {
+                "propertyNames": {
+                  "enum": [
+                    "implement.execute",
+                    "implement.report",
+                    "publish",
+                    "publish.report",
+                    "audit.code",
+                    "audit.code.report"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "audit_model"
+            ]
+          }
+        },
+        {
+          "else": {
+            "properties": {
+              "version": {
+                "const": 2
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "id": {
+                "enum": [
+                  "conversation",
+                  "generate"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "prompt_overrides": {
+                "maxProperties": 0
+              },
+              "version": {
+                "const": 1
+              }
+            }
+          }
+        }
+      ],
+      "description": "Audited workflow requires managed Codex with two explicit, different models. Orca uses execution.settings.agent_launch.model and the trusted execution-host runtime. Omitted audit effort inherits the normalized execution effort.",
+      "properties": {
+        "audit_model": {
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "minLength": 1,
+              "not": {
+                "pattern": "[\u0000-\u001f\u007f-\u009f]"
+              },
+              "pattern": "^\\S(?:.*\\S)?$",
+              "type": "string"
+            },
+            "reasoning_effort": {
+              "enum": [
+                "minimal",
+                "low",
+                "medium",
+                "high",
+                "xhigh",
+                "max",
+                "ultra"
+              ]
+            }
+          },
+          "required": [
+            "model"
+          ],
+          "type": "object"
+        },
+        "id": {
+          "enum": [
+            "development",
+            "development-audited",
+            "conversation",
+            "generate"
+          ]
+        },
+        "prompt_overrides": {
+          "additionalProperties": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "version": {
+          "enum": [
+            1,
+            2
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "version"
+      ],
+      "type": "object"
+    }
+  },
+  "workflows": [
+    {
+      "id": "development",
+      "version": 2,
+      "supported_adapters": [
+        "codex-app-server",
+        "orca-terminal"
+      ],
+      "audit_model_required": false
+    },
+    {
+      "id": "development-audited",
+      "version": 2,
+      "supported_adapters": [
+        "codex-app-server",
+        "orca-terminal"
+      ],
+      "audit_model_required": true
+    },
+    {
+      "id": "conversation",
+      "version": 1,
+      "supported_adapters": [
+        "codex-app-server"
+      ],
+      "audit_model_required": false
+    },
+    {
+      "id": "generate",
+      "version": 1,
+      "supported_adapters": [
+        "codex-app-server"
+      ],
+      "audit_model_required": false
+    }
+  ]
+}

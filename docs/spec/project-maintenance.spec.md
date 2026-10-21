@@ -1,5 +1,7 @@
 # Spec：项目基线与材料统一维护
 
+后续方案：2026-10-21 用户确认[项目更新与候选版本收敛](project-maintenance-simplification.spec.md)，配套[新Plan](../plans/project-maintenance-simplification.plan.md)和[专属验收](../acceptance/project-maintenance-simplification.md)。拟替换本文人工确认/文件应用、无同步按钮及Task级共同冻结规则；本轮仅规划，本文保留上一批实施契约及原验收范围，不把新规则标为已实现。
+
 状态：2026-10-21 按用户授权实施；验证结果以专属验收为准。配套 [Plan](../plans/project-maintenance.plan.md)、[专属验收](../acceptance/project-maintenance.md)，统一行为正文见[项目维护设计](../product-design/project-maintenance.md)。普通开发，不占 Task ID 或修改 roadmap。
 
 ## 目标与现状

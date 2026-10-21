@@ -4,75 +4,40 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"time"
-
+	"fmt"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
-// First reservation consumes the common assessment snapshot; later candidates
-// reuse the Task execution snapshot. No consumer re-reads the assessed inputs.
-func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork) (json.RawMessage, []runnerclient.Document) {
-	if len(work.FrozenTestPlan) > 0 {
-		path, _ := testmanagement.ArrangementPath(work.Contract.PlanRef.Path)
-		instructions := testmodel.TestingInstructions
-		return work.FrozenTestPlan, []runnerclient.Document{{Kind: "git", Path: path, Commit: work.Contract.PlanRef.Commit}, {Kind: "git", Path: testmanagement.CataloguePath, Commit: work.Contract.PlanRef.Commit}, {Kind: "git", Path: testmanagement.RulesPath, Commit: work.Contract.PlanRef.Commit}, {Kind: "inline", Path: "steerline-testing.md", Content: &instructions}}
+// Only repository documents are paths. System results belong to the immutable
+// request's prompt context; Runner never has to create a pretend reference file.
+func (c Config) prepareTestPlan(_ context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (json.RawMessage, error) {
+	if len(work.FrozenTestPlan) == 0 {
+		raw, _ := json.Marshal(testmanagement.Snapshot{Status: "missing", PlanPath: work.Contract.PlanRef.Path, Commit: work.Contract.PlanRef.Commit, Diagnostic: "候选尚未绑定系统测试安排", Definitions: []testmanagement.Definition{}})
+		return raw, nil
 	}
-	snapshot := testmanagement.Snapshot{Status: "missing", PlanPath: work.Contract.PlanRef.Path, Commit: work.Contract.PlanRef.Commit, Definitions: []testmanagement.Definition{}}
-	refs := []runnerclient.Document{}
-	finish := func() (json.RawMessage, []runnerclient.Document) { raw, _ := json.Marshal(snapshot); return raw, refs }
-	name, err := testmanagement.ArrangementPath(snapshot.PlanPath)
-	if err != nil {
-		snapshot.Status = "invalid"
-		snapshot.Diagnostic = err.Error()
-		return finish()
+	if c.runtimeCatalog == nil {
+		return nil, errors.New("所选Runner未提供执行提示正文，无法绑定系统测试安排")
 	}
-	reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
-	read := func(path string) ([]byte, error) {
-		body, e := reader.readCommittedFile(ctx, snapshot.Commit, path)
-		if e != nil {
-			return nil, e
+	workflow, e := c.runtimeCatalog.WithPromptContext(run.Workflow, testmodel.TestingContext(work.FrozenTestPlan))
+	if e != nil {
+		return nil, fmt.Errorf("所选Runner无法绑定系统测试安排：%w", e)
+	}
+	if e = c.runtimeCatalog.ValidateConfiguration(run.Execution, workflow); e != nil {
+		return nil, e
+	}
+	run.Workflow = workflow
+	seen := map[string]bool{run.Documents.Spec.Path: true, run.Documents.Plan.Path: true}
+	for _, ref := range run.Documents.References {
+		seen[ref.Path] = true
+	}
+	for _, path := range []string{testmanagement.CataloguePath, testmanagement.RulesPath} {
+		if !seen[path] {
+			run.Documents.References = append(run.Documents.References, runnerclient.Document{Path: path})
+			seen[path] = true
 		}
-		if len(body) > testmanagement.MaxDocumentBytes {
-			return nil, errors.New("test document exceeds 1 MiB")
-		}
-		refs = append(refs, runnerclient.Document{Kind: "git", Path: path, Commit: snapshot.Commit})
-		return body, nil
 	}
-	arrangement, err := read(name)
-	if err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			snapshot.Status = "invalid"
-		}
-		snapshot.Diagnostic = err.Error()
-		return finish()
-	}
-	snapshot.Status = "invalid"
-	catalogue, err := read(testmanagement.CataloguePath)
-	if err != nil {
-		snapshot.Diagnostic = err.Error()
-		return finish()
-	}
-	if _, err = read(testmanagement.RulesPath); err != nil {
-		snapshot.Diagnostic = err.Error()
-		return finish()
-	}
-	catalog, err := testmanagement.ParseCatalogue(catalogue)
-	if err != nil {
-		snapshot.Diagnostic = err.Error()
-		return finish()
-	}
-	snapshot.Definitions, err = testmanagement.Select(arrangement, catalog)
-	if err != nil {
-		snapshot.Diagnostic = err.Error()
-		return finish()
-	}
-	instructions := testmodel.TestingInstructions
-	refs = append(refs, runnerclient.Document{Kind: "inline", Path: "steerline-testing.md", Content: &instructions})
-	snapshot.Status = "ready"
-	snapshot.Digest = testmanagement.Digest(snapshot.Definitions)
-	return finish()
+	return append(json.RawMessage(nil), work.FrozenTestPlan...), nil
 }

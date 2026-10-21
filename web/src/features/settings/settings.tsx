@@ -27,10 +27,13 @@ export function SettingsPage({ api, online }: { api: Api; online: boolean }) {
         >
           打开环境检查 →
         </NavLink>
-        <h2>已有执行方案</h2>
+        <h2>全局执行配置</h2>
+        <NavLink to="/settings/execution-configs">管理执行配置 →</NavLink>
+        <h2>当前服务已加载方案</h2>
         {result.isPending && <p className="muted">正在读取执行方案…</p>}
         <p className="muted">
-          方案由服务配置维护。每次启动可选择方案，冻结参数由 Go 服务核验。
+          在全局管理页编辑并保存配置，重启 SteerLine 后生效。每次启动冻结参数由
+          Go 服务核验。
         </p>
         {result.data?.presentation.profiles.map((p) => (
           <article className="profile" key={p.id}>

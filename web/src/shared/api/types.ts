@@ -55,7 +55,7 @@ export interface Task {
     workflow_run_id: string;
     task_id: string;
     candidate_number: number;
-  }[];
+  }[] | null;
   delivery?: { pr_url: string; workflow_run_id: string; merged_at: string };
   stop_pending?: string[];
 }
@@ -105,6 +105,7 @@ export interface Decision {
   };
 }
 export interface Candidate {
+ material_status?: "current" | "outdated" | "unknown";
   runner_delivery?: {
     available: boolean;
     run_id?: string;
@@ -216,7 +217,7 @@ export interface Candidate {
 }
 export interface ServicePage {
   service: { instance_id: string; ready: boolean; capabilities: string[] };
-  runs: Candidate[];
+  runs: Candidate[] | null;
   control: {
     revision: number;
     dispatch_mode: string;

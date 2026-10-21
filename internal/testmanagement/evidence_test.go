@@ -233,3 +233,21 @@ func TestTMEvidenceStaleRevisionPlansFreshRequestOnlyAfterKnownRejection(t *test
 		t.Fatal(f.collects, m.record)
 	}
 }
+
+func TestPMSExpiredEvidenceNeverStartsNewCollection(t *testing.T) {
+	s, m, f, snap := evidenceFixture(t)
+	ctx := context.Background()
+	if e := s.Observe(ctx); e != nil {
+		t.Fatal(e)
+	}
+	original := f.collects
+	s.AllowCollect = func(context.Context, runnerstate.Candidate) bool { return false }
+	publishEvidence(f, "late", 2, "passed")
+	if e := s.Observe(ctx); e != nil {
+		t.Fatal(e)
+	}
+	v := EvidenceView(snap, *m.record, time.Now())
+	if f.collects != original || v.Passed != 0 || len(v.Rows[0].History) != 1 {
+		t.Fatal("expired evidence started collection or counted current pass", v, f.collects)
+	}
+}

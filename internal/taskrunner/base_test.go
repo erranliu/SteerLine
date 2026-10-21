@@ -61,16 +61,16 @@ func TestRunnerBaseUsesFetchedTargetAndOriginalCandidateAncestry(t *testing.T) {
 		t.Fatal("fresh target was not fixed", base, err)
 	}
 	store.candidates = []runnerbridge.Candidate{{ContractDigest: "contract", BaseRevision: merged}}
-	if base, err := resolver.Resolve(ctx, work, true); err != nil || base != merged {
-		t.Fatal("candidate did not retain original base", base, err)
+	if base, err := resolver.Resolve(ctx, work, true); err != nil || base != head {
+		t.Fatal("candidate did not use the latest remote base", base, err)
 	}
 	store.candidates[0].BaseRevision = first
-	if _, err := resolver.Resolve(ctx, work, true); err == nil {
-		t.Fatal("base excluded delivered predecessor")
+	if base, err := resolver.Resolve(ctx, work, true); err != nil || base != head {
+		t.Fatal("old candidate prevented a fresh base")
 	}
 	store.candidates = append(store.candidates, runnerbridge.Candidate{ContractDigest: "contract", BaseRevision: head})
-	if _, err := resolver.Resolve(ctx, work, true); err == nil {
-		t.Fatal("inconsistent sibling base accepted")
+	if base, err := resolver.Resolve(ctx, work, true); err != nil || base != head {
+		t.Fatal("sibling versions prevented latest base")
 	}
 	store.graph.Authority.GraphRevision++
 	before := calls

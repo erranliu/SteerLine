@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -48,7 +49,6 @@ type GenerationService struct {
 	Admit               func(context.Context) error
 	VerifyBinding       func(Generation) error
 	mu                  sync.Mutex
-	Workspace           func(context.Context) (string, error)
 	ReadCommitted       func(context.Context, string, string) ([]byte, error)
 }
 
@@ -96,24 +96,6 @@ func ReadProjectFile(root, relative string) ([]byte, error) {
 	}
 	return raw, err
 }
-func targetDigest(root, relative string) (string, error) {
-	raw, err := ReadProjectFile(root, relative)
-	if os.IsNotExist(err) {
-		parent := filepath.Dir(filepath.Join(root, filepath.FromSlash(relative)))
-		resolved, e := filepath.EvalSymlinks(parent)
-		if e != nil {
-			return "", e
-		}
-		if resolved != parent {
-			return "", errors.New("redirected target parent")
-		}
-		return "missing", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	return ContentDigest(raw), nil
-}
 func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (Generation, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -156,12 +138,6 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		return Generation{}, err
 	}
 	r := Generation{ID: in.RequestID, Project: s.Project, Revision: 1, Command: in, CreatedAt: time.Now().UTC(), Runner: s.Build, Target: target, State: "unknown", Sources: []Source{}}
-	if s.Workspace != nil {
-		r.Workspace, err = s.Workspace(ctx)
-		if err != nil {
-			return r, err
-		}
-	}
 	materials := []runnercontract.Document{}
 	for _, p := range []string{in.Plan, RulesPath, CataloguePath} {
 		raw, e := ReadProjectFile(s.Repository, p)
@@ -178,6 +154,9 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 			return r, fmt.Errorf("invalid bounded UTF-8 input: %s", p)
 		}
 		r.Sources = append(r.Sources, Source{Path: p, Digest: ContentDigest(raw), TextDigest: pm.TextDigest(raw)})
+		if p == in.Plan {
+			r.PlanText = string(raw)
+		}
 		text := string(raw)
 		materials = append(materials, runnercontract.Document{Kind: "inline", Path: p, Content: &text})
 		if p == CataloguePath {
@@ -187,10 +166,7 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 			}
 		}
 	}
-	r.TargetBefore, err = targetDigest(s.Repository, target)
-	if err != nil {
-		return r, err
-	}
+	r.Inputs = GenerationInputs(r.Sources)
 	execution, catalogue, err := s.Prepare(ctx, in.Profile)
 	if err != nil {
 		return r, err
@@ -206,15 +182,6 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		return r, err
 	}
 	r.Request = runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: randomID(), Input: body}
-	if s.Workspace != nil {
-		w, e := s.Workspace(ctx)
-		if e != nil {
-			return r, e
-		}
-		if w != r.Workspace {
-			return r, errors.New("workspace changed during generation preparation")
-		}
-	}
 	if in.Commit == "" {
 		for _, source := range r.Sources {
 			b, e := ReadProjectFile(s.Repository, source.Path)
@@ -279,11 +246,6 @@ func (s *GenerationService) Observe(ctx context.Context) error {
 	return nil
 }
 func (s *GenerationService) observe(ctx context.Context, r Generation) (Generation, error) {
-	var reconcileErr error
-	r, reconcileErr = s.reconcileApplications(ctx, r)
-	if reconcileErr != nil {
-		return r, reconcileErr
-	}
 	before, _ := json.Marshal(r)
 	if r.Runner != s.Build {
 		if s.VerifyBinding == nil {
@@ -293,7 +255,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 			return r, err
 		}
 	}
-	if r.State == "applied" && !r.Cancelled && r.Projection != nil && r.Projection.StopStatus == "stopped" {
+	if r.State == "generated" && !r.Cancelled && r.Projection != nil && r.Projection.StopStatus == "stopped" {
 		return r, nil
 	}
 	selector, id := "run-id", r.RunID
@@ -342,7 +304,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 				r.Diagnostic = callErr.Error()
 			}
 		}
-	} else if result := run.ContentResult; r.State != "applied" && result != nil {
+	} else if result := run.ContentResult; r.State != "generated" && result != nil {
 		if result.Status != "succeeded" || !result.Source.Verified || result.Source.NativeOutcome != "succeeded" || result.Source.CommandID == "" || result.Source.TurnID == "" {
 			r.State = "failed"
 			r.Diagnostic = result.Diagnostic
@@ -353,12 +315,12 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 			if e != nil {
 				r.State = "invalid"
 				r.Diagnostic = e.Error()
-			} else if len(definitions) == 0 {
-				r.State = "needs_review"
-				r.Diagnostic = "生成了空测试列表；原文件保留，请核对 Plan"
+			} else if len(definitions) == 0 && !AllowsNoTests(r.PlanText) {
+				r.State = "invalid"
+				r.Diagnostic = "空测试安排需要 Plan 明确说明无需自动测试"
 			}
 		}
-	} else if r.State != "applied" && (run.Status == "failed" || run.Status == "stopped") {
+	} else if r.State != "generated" && (run.Status == "failed" || run.Status == "stopped") {
 		r.State = "failed"
 		r.Diagnostic = "Runner 已结束，未提供可核实的生成结果：" + run.Diagnostic
 	}
@@ -414,4 +376,16 @@ func (s *GenerationService) Close(ctx context.Context) error {
 		}
 	}
 	return err
+}
+
+// GenerationInputs identifies actual generator input, independent of Git commit.
+func GenerationInputs(sources []Source) string {
+	values := []string{pm.RulesVersion}
+	for _, s := range sources {
+		values = append(values, s.Path, s.TextDigest)
+	}
+	return pm.Hash(values)
+}
+func AllowsNoTests(plan string) bool {
+	return strings.Contains(plan, "无需自动测试") || strings.Contains(strings.ToLower(plan), "no automated tests")
 }

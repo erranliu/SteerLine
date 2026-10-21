@@ -52,7 +52,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		service.ReserveExecution = func(ctx context.Context, w taskmodel.FixedWork, c runnerbridge.Candidate, candidate bool) error {
 			m.mu.Lock()
 			defer m.mu.Unlock()
-			if !candidate && (m.observation.Commit != c.BaseRevision || m.observation.Diagnostic != "") {
+			if m.observation.Commit != c.BaseRevision || m.observation.Diagnostic != "" {
 				return errors.New("baseline observation changed before reservation; review again")
 			}
 			return connection.ReserveRunnerCandidate(ctx, w, c, candidate)

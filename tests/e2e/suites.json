@@ -107,6 +107,14 @@
     "env": "controlled"
   },
   {
+    "id": "configuration.execution-profiles",
+    "level": "L3",
+    "suite": "configuration",
+    "package": "./tests/e2e/configuration",
+    "test": "TestExecutionProfiles",
+    "env": "controlled"
+  },
+  {
     "id": "testing.records",
     "level": "L3",
     "suite": "testing",

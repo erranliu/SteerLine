@@ -1,197 +1,65 @@
-import { afterEach, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { Api } from "../../shared/api/client";
-import {
-  identity,
-  mountFeature,
-  testClient,
-  tasks,
-} from "../../test/workspace";
-import { ProjectMaintenance } from "./project-maintenance";
-afterEach(() => {
-  cleanup();
-  vi.restoreAllMocks();
-});
-const view = {
-  local_commit: "old",
-  observation: {
-    commit: "latest",
-    checked_at: "2026-10-21T01:00:00Z",
-    rewritten: false,
-  },
-  assessment: {
-    items: [
-      {
-        plan: "docs/task.plan.md",
-        target: "docs/task.tests.json",
-        status: "needs_review",
-        tests: ["rules"],
-        review_digest: "a".repeat(64),
-        approval_revision: 2,
-      },
-    ],
-  },
-  generations: [
-    { id: "b".repeat(32), plan: "docs/task.plan.md", state: "generated" },
-  ],
-};
-function setup(online = true, settled = true, applied = false) {
-  const api = new Api(identity, "csrf", "home");
-  const get = vi.spyOn(api, "get").mockImplementation(async (route) =>
-    route.startsWith("/maintenance")
-      ? view
-      : route === "/presentation"
-        ? {
-            presentation: {
-              profiles: [{ id: "local", name: "Local" }],
-              default_profile_id: "local",
-            },
-          }
-        : route.startsWith("/tasks")
-          ? tasks
-          : {
-              id: route.split("/").pop() || "",
-              revision: 3,
-              state: applied ? "applied" : "generated",
-              applied,
-              stop_status: settled ? "stopped" : "active",
-              review: applied
-                ? undefined
-                : {
-                    review_digest: (route.endsWith("b".repeat(32))
-                      ? "c"
-                      : "d"
-                    ).repeat(64),
-                    before: "old-file",
-                    after: "proposed-file",
-                  },
-            },
-  );
-  const submit = vi.spyOn(api, "submit").mockImplementation(async (e) => ({
-    ...e,
-    original: e,
-    status: "applied",
-    sampled_at: "now",
-  }));
-  mountFeature(<ProjectMaintenance />, api, testClient(), online);
-  return {
-    api,
-    get,
-    submit,
-    settle: () => {
-      settled = true;
-    },
-  };
+import {afterEach,expect,it,vi} from "vitest";
+import {cleanup,fireEvent,screen,waitFor} from "@testing-library/react";
+import {Api} from "../../shared/api/client";
+import {identity,mountFeature,testClient} from "../../test/workspace";
+import {ProjectMaintenance,type MaintenanceView} from "./project-maintenance";
+afterEach(cleanup);
+function setup(overrides:Partial<MaintenanceView>={},online=true){
+ const sha="a".repeat(40);
+ const view:MaintenanceView={observation:{commit:sha,last_success:"2026-10-21T01:00:00Z"},remote_name:"origin/main",
+ remote:{sha,title:"Update Plan",author:"Developer",time:"2026-10-21T00:00:00Z",url:"https://github.com/example/repo/commit/"+sha,prs:[]},
+ local:{commit:"b".repeat(40),branch:"main",status:"behind",ahead:0,behind:2,can_update:true},
+ tasks:[{task_id:"101",contract:{plan_ref:{path:"docs/task.plan.md"}},status:"ready",generation_id:"generation"}],profiles:[{id:"local",name:"本机Codex"}],profile:"",...overrides};
+ const api=new Api(identity,"csrf");
+ const get=vi.spyOn(api,"get").mockImplementation(async(route)=>{
+  if(route.startsWith("/maintenance/log"))return {commits:[view.remote],more:false} as never;
+  if(route.startsWith("/maintenance/commits/"))return {...view.remote,prs:["https://github.com/example/repo/pull/9"]} as never;
+  return view as never;
+ });
+ const submit=vi.spyOn(api,"submit").mockResolvedValue({status:"applied"} as never);
+ mountFeature(<ProjectMaintenance/>,api,testClient(),online);
+ return {api,get,submit,view};
 }
-it("PM keeps generation and file application explicit and binds review conditions", async () => {
-  const { submit } = setup();
-  await screen.findByText(/项目维护/);
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  expect(
-    await screen.findByText(/本地与远端基线不同 · 本地 HEAD/),
-  ).toBeVisible();
-  fireEvent.click(await screen.findByRole("button", { name: "选择此 Plan" }));
-  await waitFor(() =>
-    expect(screen.getByRole("button", { name: "生成测试安排" })).toBeEnabled(),
-  );
-  expect(submit).not.toHaveBeenCalled();
-  await screen.findByRole("option", { name: /bbbbbbbb/ });
-  fireEvent.change(screen.getByRole("combobox", { name: "已有生成记录" }), {
-    target: { value: "b".repeat(32) },
-  });
-  expect(await screen.findByText("proposed-file")).toBeVisible();
-  expect(submit).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole("button", { name: "应用已审阅内容" }));
-  await waitFor(() =>
-    expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "maintenance_apply",
-        target_id: "b".repeat(32),
-        expected_version: 3,
-        payload: expect.objectContaining({
-          review_digest: "c".repeat(64),
-          expected_revision: 3,
-        }),
-      }),
-    ),
-  );
+it("PMS shows remote/local meaning and only the update workflow",async()=>{
+ const {get,submit}=setup();
+ fireEvent.click(await screen.findByRole("button",{name:/项目维护/}));
+ expect(await screen.findByText(/远端基线 · origin\/main/)).toBeVisible();
+ expect(screen.getByRole("heading",{name:/本地基线.*落后 2/})).toBeVisible();
+ expect(screen.getByText(/Update Plan/)).toBeVisible();
+ expect(screen.queryByLabelText("维护范围")).toBeNull();
+ expect(screen.queryByRole("button",{name:"应用已审阅内容"})).toBeNull();
+ expect(submit).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole("button",{name:"更新本地"}));
+ await waitFor(()=>expect(submit).toHaveBeenCalledWith(expect.objectContaining({action:"maintenance_update",target_id:identity.project_id})));
+ expect(get).toHaveBeenCalledWith("/maintenance");
 });
-it("PM scopes read caches and issues no reads or commands offline", () => {
-  const { get, submit } = setup(false);
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  expect(get).not.toHaveBeenCalled();
-  expect(submit).not.toHaveBeenCalled();
-  expect(screen.getByRole("button", { name: "检查远端" })).toBeDisabled();
+it("PMS displays why update needs manual handling and disables unsafe update",async()=>{
+ setup({local:{commit:"b".repeat(40),branch:"feature",status:"diverged",ahead:3,behind:2,can_update:false,reason:"本地存在独有提交，请人工处理"}});
+ fireEvent.click(await screen.findByRole("button",{name:/项目维护/}));
+ expect(await screen.findByRole("heading",{name:/本地基线.*已分叉 · 领先 3/})).toBeVisible();
+ expect(screen.getByText(/请人工处理/)).toBeVisible();
+ expect(screen.getByRole("button",{name:"更新本地"})).toBeDisabled();
 });
-
-it("PM separates verified output application from resource settlement", async () => {
-  const { submit, settle } = setup(true, false);
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  await screen.findByRole("option", { name: /bbbbbbbb/ });
-  fireEvent.change(screen.getByRole("combobox", { name: "已有生成记录" }), {
-    target: { value: "b".repeat(32) },
-  });
-  await screen.findByText("proposed-file");
-  expect(screen.getByRole("button", { name: "应用已审阅内容" })).toBeEnabled();
-  expect(submit).not.toHaveBeenCalled();
-  settle();
-  fireEvent.click(screen.getByRole("button", { name: "重新读取生成预览" }));
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "应用已审阅内容" }),
-    ).toBeEnabled(),
-  );
-  expect(submit).not.toHaveBeenCalled();
+it("PMS lets users browse log and real associated PR without mutation",async()=>{
+ const {submit}=setup();
+ fireEvent.click(await screen.findByRole("button",{name:/项目维护/}));
+ fireEvent.click(screen.getByRole("button",{name:"查看提交日志"}));
+ await screen.findByRole("region",{name:"提交日志"});
+ fireEvent.click(screen.getAllByRole("button",{name:"提交详情 / 关联 PR"})[0]);
+ expect(await screen.findByRole("link",{name:"https://github.com/example/repo/pull/9"})).toBeVisible();
+ expect(submit).not.toHaveBeenCalled();
 });
-
-it("PM empty arrangement confirmation belongs to the reviewed generation", async () => {
-  const { submit } = setup();
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  await screen.findByRole("option", { name: /bbbbbbbb/ });
-  fireEvent.change(screen.getByRole("combobox", { name: "已有生成记录" }), {
-    target: { value: "b".repeat(32) },
-  });
-  const confirmation = await screen.findByRole("checkbox", {
-    name: /已确认空安排/,
-  });
-  fireEvent.click(confirmation);
-  expect(confirmation).toBeChecked();
-  fireEvent.change(screen.getByRole("textbox", { name: "原生成请求" }), {
-    target: { value: "a".repeat(32) },
-  });
-  await waitFor(() =>
-    expect(
-      screen.getByRole("checkbox", { name: /已确认空安排/ }),
-    ).not.toBeChecked(),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "应用已审阅内容" }));
-  await waitFor(() =>
-    expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        target_id: "a".repeat(32),
-        payload: expect.objectContaining({ allow_empty: false }),
-      }),
-    ),
-  );
+it("PMS exposes configuration and explicit failed retry only on problems",async()=>{
+ const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"docs/task.plan.md"}},status:"configuration_required",generation_id:""}]});
+ fireEvent.click(await screen.findByRole("button",{name:/项目维护/}));
+ fireEvent.change(await screen.findByRole("combobox",{name:"测试生成方案"}),{target:{value:"local"}});
+ fireEvent.click(screen.getByRole("button",{name:"保存测试生成方案"}));
+ await waitFor(()=>expect(submit).toHaveBeenCalledWith(expect.objectContaining({action:"maintenance_profile",payload:{profile:"local"}})));
 });
-
-it("PM applied output keeps unsettled resource visible and stoppable", async () => {
-  const { submit } = setup(true, false, true);
-  fireEvent.click(screen.getByRole("button", { name: /项目维护/ }));
-  await screen.findByRole("option", { name: /bbbbbbbb/ });
-  fireEvent.change(screen.getByRole("combobox", { name: "已有生成记录" }), {
-    target: { value: "b".repeat(32) },
-  });
-  expect(await screen.findByText(/原生成资源尚未核实停止/)).toBeVisible();
-  const stop = screen.getByRole("button", { name: "取消生成/禁止后续应用" });
-  expect(stop).toBeEnabled();
-  fireEvent.click(stop);
-  await waitFor(() =>
-    expect(submit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: "maintenance_stop_generation",
-        target_id: "b".repeat(32),
-      }),
-    ),
-  );
+it("PMS offline view retains facts and does not submit or check automatically",async()=>{
+ const {get,submit}=setup({},false);
+ fireEvent.click(screen.getByRole("button",{name:/项目维护/}));
+ expect(screen.getByRole("button",{name:"检查更新"})).toBeDisabled();
+ expect(screen.getByText(/离线/)).toBeVisible();
+ expect(get).not.toHaveBeenCalled();expect(submit).not.toHaveBeenCalled();
 });

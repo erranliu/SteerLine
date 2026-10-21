@@ -40,6 +40,8 @@ Task、候选参与关系与 TaskDelivery 由 SteerLine 管理；Runner 的 Run�
 
 ## LLM 执行边界
 
+[Web 执行配置管理](spec/web-execution-config.spec.md)为 Web 后端增加窄职责：直接查询 Codex/Orca 能力目录，生成/校验并保存唯一的 `execution.json`。这些查询不创建业务会话或模型轮次，不属于 LLM 执行；Web 不取得业务库、任务状态或 Runner 私有资源管理权。Go 执行服务只加载、校验和冻结配置，Runner 不新增探测接口。配置管理位于 `web/server/executionconfig`，目录查询位于 `web/server/discovery`；纯配置值位于 `internal/executionconfig`。产品 API 访问与执行生命周期边界保持。
+
 SteerLine 的所有 LLM 执行操作统一由 SteerRunner 承担，包括任务执行及产品功能所需的辅助 LLM 操作。SteerLine 负责业务目标、输入材料、执行请求和结果消费；模型调用、原生代理及会话操作由 SteerRunner 执行。SteerLine 通过 Runner 的公开契约请求这些能力，不自行接入模型或启动原生代理执行 LLM 操作；Task、DAG、候选参与关系和唯一 TaskDelivery 的业务权威仍归 SteerLine。
 
 SteerLine 与 SteerRunner 各自具有默认执行链路，初始默认均为本地 Codex。SteerLine 的默认链路用于选择交给 Runner 执行的方案；SteerRunner 的默认链路也可供其内部 LLM 操作使用，例如 workflow 中需要 LLM 的 parse 步骤。Runner 的 LLM 执行职责同时覆盖外部请求和内部流程需求，不限于开发 worker 的主执行轮次。

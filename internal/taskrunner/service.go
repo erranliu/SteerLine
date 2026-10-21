@@ -47,7 +47,7 @@ type Service struct {
 	RunnerBuild                                 runnercontract.BuildPin
 	ReserveExecution                            func(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
 	PrepareExecution                            func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error)
-	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork) (json.RawMessage, []runnerclient.Document)
+	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (json.RawMessage, error)
 	mu                                          sync.Mutex
 }
 type Start struct {
@@ -142,7 +142,7 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	run.Repository.URL, run.Repository.Remote, run.Repository.BaseBranch, run.Repository.BaseRevision = work.Contract.Repository, work.Contract.Remote, work.Contract.Branch, base
 	run.Publication.BaseBranch = work.Contract.Branch
 	doc := func(ref taskmodel.FileReference) runnerclient.Document {
-		return runnerclient.Document{Kind: "git", Path: ref.Path, Commit: ref.Commit}
+		return runnerclient.Document{Path: ref.Path}
 	}
 	run.Documents = runnerclient.Documents{Spec: doc(work.Contract.SpecRef), Plan: doc(work.Contract.PlanRef)}
 	seen := map[string]bool{work.Contract.SpecRef.Path: true, work.Contract.PlanRef.Path: true}
@@ -157,15 +157,12 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	}
 	var testPlan json.RawMessage
 	if s.PrepareTestPlan != nil {
-		var refs []runnerclient.Document
-		testPlan, refs = s.PrepareTestPlan(ctx, work)
-		for _, ref := range refs {
-			if !seen[ref.Path] {
-				run.Documents.References = append(run.Documents.References, ref)
-				seen[ref.Path] = true
-			}
+		testPlan, err = s.PrepareTestPlan(ctx, work, &run)
+		if err != nil {
+			return runnerbridge.Candidate{}, err
 		}
 	}
+
 	run.Correlation["steerline_project"] = s.Project
 	run.Correlation["steerline_task_id"], run.Correlation["steerline_candidate_id"] = input.TaskID, input.RequestID
 	raw, err = json.Marshal(run)
@@ -176,8 +173,10 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	if input.Candidate {
 		claimant = work.Record.Claimant
 	}
-	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(run.Execution, run.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: id(), Input: raw}}
+	c := runnerbridge.Candidate{Project: s.Project, TaskID: input.TaskID, ID: input.RequestID, Revision: 1, Explicit: input.Explicit, StateDir: s.StateDir, Claimant: claimant, ContractDigest: work.Contract.Digest, BaseRevision: base, Participation: "active", StartDigest: digest(input), ProfileID: profileID, ProfileName: profile.Name, ProfileDigest: runnercontract.ConfigurationDigest(profile.Input.Execution, profile.Input.Workflow), RunnerBuild: s.RunnerBuild, CreatedAt: time.Now().UTC(), SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: id(), Input: raw}}
 	c.TestPlan = testPlan
+	c.Contract = work.Contract
+	c.MaterialDigest = work.MaterialDigest
 	reserve := s.Store.ReserveRunnerCandidate
 	if s.ReserveExecution != nil {
 		reserve = s.ReserveExecution

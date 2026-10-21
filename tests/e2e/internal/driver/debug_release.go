@@ -442,7 +442,7 @@ func (d *debugRelease) seedTasks() error {
 			return e
 		}
 		defer client.Close()
-		if e = AdoptFixtureMaterials(ctx, d.home, client.Identity(), "docs/spec/task.plan.md", filepath.Join(d.root, "evidence", filepath.Base(d.config)+"-maintenance")); e != nil {
+		if _, e = WaitFixtureMaterials(ctx, d.home, client.Identity(), "docs/spec/task.plan.md", filepath.Join(d.root, "evidence", filepath.Base(d.config)+"-maintenance")); e != nil {
 			return e
 		}
 	}
@@ -531,7 +531,7 @@ func (d *debugRelease) prepareSelected(mode string) error {
 			return errors.New("selected profile requires Runner execution settings")
 		}
 		target, _ := execution["target"].(map[string]any)
-		if target["kind"] == "local" {
+		if target["kind"] == "local" && execution["adapter"] == "codex-app-server" {
 			settings, _ := execution["settings"].(map[string]any)
 			executable, _ := settings["executable"].(string)
 			codex, err := CodexExecutable(executable)

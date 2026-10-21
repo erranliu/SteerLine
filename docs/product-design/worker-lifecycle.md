@@ -6,7 +6,9 @@
 
 2026-10-21 部署中断恢复（W18，E04/E05，V06–V08）：系统重启留下缺失或陈旧宿主停机回执时，部署可在启动协调锁内核实原宿主精确退出、原安装文件及 Runner pin、配置/checkpoint/项目集合、实际锁及原记录接管后，运行原安装一次，等待所有项目 ready 并正常停服，再执行完整 verify-restart。匹配当前实例的失败回执、未知创建、活动服务、身份/配置/文件冲突或候选不兼容继续阻断；不伪造回执、不循环恢复、不创建业务 submit/reply/resume。原 Run/input/PR 与资源未核实诊断保留，旧回执随新证明保存。该动作只补齐调用方正式停服证据，不改变 Runner 的节点、恢复授权或原生结算规则；安排和自动验证见[Plan](../plans/deployment-interrupted-recovery.plan.md)与[验收](../acceptance/deployment-interrupted-recovery.md)。当前真实 OS 重启后的自动部署尚未实测，受控通过不替代原生资格或部署验收。
 
-2026-10-21 项目维护增量：[Spec](../spec/project-maintenance.spec.md)、[Plan](../plans/project-maintenance.plan.md)统一初始化/基线/局部材料维护。W01 首次预留前核验本次远端最新代码及同版本必要材料；生成先准备/审阅，再由独立显式应用动作写文件。历史执行/并行候选仍沿原冻结版本。当前实现与该增量的节点/异常/验证映射见下方[项目维护缺口](#项目基线与材料维护2026-10-21)，不改变 Runner W02–W18 的 owner 或现有恢复授权。
+2026-10-21 最新Runner文档路径语义适配（W01/W08–W16、E03/E07、V01/V03/V06/V08）：开发Spec/Plan/参考材料仅指向固定base的worktree相对路径，不再要求Runner复制/核验文档快照。SteerLine仍保存各候选原契约和测试快照，系统测试安排随公开原执行提示正文冻结到原submit，实施/代码审计使用同一安排；不新增虚构文件、不改原工作区、不修改Runner节点/默认提示或原状态机。缺公开模板直接阻断新候选，原请求不重组/重发；generate继续自身inline材料语义。安排与实际验证归[同一Plan增量](../plans/project-maintenance-simplification.plan.md#最新runner路径语义适配2026-10-21继续实施)及[专属验收](../acceptance/project-maintenance-simplification.md)。
+
+2026-10-21 项目更新方案已实施：[收敛Spec](../spec/project-maintenance-simplification.spec.md)、[Plan](../plans/project-maintenance-simplification.plan.md)将W01改为每个新候选固定最新代码/材料，Plan变化自动生成系统测试安排，旧候选过期保留且禁用当前测试关联；W17允许旧候选PR合入完成任务。节点/异常/验证映射见下方[项目维护增量](#项目基线与材料维护2026-10-21)，实际结果见专属验收，不改变Runner执行/资源owner或原未知处理规则。
 
 2026-10-20 内容生成接管补验（W02–W18，E04–E07，V06–V08）：generate/conversation 不使用开发流程 parser 配置，Runner 接管按适用工作流校验，保留原材料/执行语义/codec/原生身份；开发配置仍严格检查。调用方原 Generation/Run/input/final 不改写，未知零重发、取消先于 worker、停止与资源结算分别证明的规则不变。本轮只修不适用配置误拒绝，不增加恢复授权、旧数据迁移或另一套状态机；实际换构建与结算结果见[测试管理验收](../acceptance/test-management.md)。
 
@@ -322,16 +324,18 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ### 项目基线与材料维护（2026-10-21）
 
-统一行为归[项目维护设计](project-maintenance.md)。当前已接入后台观察、三入口共用规则、人工核对/显式应用及首次同版本冻结；完整 PS 纳管和其他原生恢复能力仍不属于本批。实际证据归本批专属验收，不覆盖旧 TM 或原生恢复验收。
+统一规则归[项目维护设计](project-maintenance.md)，本轮[Spec](../spec/project-maintenance-simplification.spec.md)、[Plan](../plans/project-maintenance-simplification.plan.md)和[专属验收](../acceptance/project-maintenance-simplification.md)记录实施与验证。上一批人工核对/文件应用及Task级冻结已替换，历史证据仍保留。完整PS纳管和Runner原生恢复不纳入本批。
 
-| 节点 / 异常 / 验证 | 当前增量与边界 |
+| 节点 / 异常 / 验证 | 已确认差异、现有缺口与验证安排 |
 | --- | --- |
-| W01 / E01、E03、E05、E07 / V01、V08 | fresh fetch、相关范围材料就绪、共用核验结果直接构造同 commit 测试快照（gate 后不重复读取降级）、全部 refs、Task/图/配置/维护版本 CAS，同事务固定契约/base/候选/outbox；缺材料阻断首次启动，无关 Plan 不阻断；原拒绝/未知/退出不解除已预留冻结 |
-| W01 之前的材料维护 / E03、E05–E07 / V03、V06、V08 | 三入口共用窄规则；一次生成一个 Plan/一个输出，审阅后显式单文件应用；取消/应用意图串行，回执丢失只查原动作，查询不补写；不是新增 worker 节点或多文件事务 |
-| W08–W14 的内容请求 / E04–E07 / V03、V06、V08 | 复用原 Runner generation 信封/原请求查询；后台观察、页面查询、换代均零自动生成/应用，取消不接受迟到应用；明确失败才允许显式新尝试，不重发未知输入 |
-| W18 / E04、E05 / V07 | 维护引用的原生成、未绑定/迟到 Run 沿共享停止/reset 围栏；停止受理、原资源结算与材料应用分别证明；已应用后继续观察原 Run 至停止事实、不改文件或原输出，原资源仍可显式停止，不因没有 Candidate 漏掉清单 |
+| W01 / E01、E03、E05、E07 / V01、V08 | 由Task共用快照改为每个候选fresh fetch最新base/同commit全refs，绑定对应系统生成结果；原预留重放仍用原输入。已删除base/SQL跨候选限制及Task唯一快照，须保留Task/图/目标/材料CAS和前置Delivery检查。PMS-A03/A04验证多版本新候选、竞态零派发和原号不升级 |
+| W01之前的项目更新 / E03、E05、E07 / V03、V06、V08 | 增加远端/本地提交与PR/分页日志，以及显式固定目标的安全快进；只改主仓库且不丢本地修改/不动候选。已补原命令/锁/实际HEAD核验，未知只核实不追赶新目标。PMS-A01/A02/A08覆盖正常与人工处理原因 |
+| W08–W14的内容生成 / E04–E07 / V03、V06、V08 | 用户已确认自动策略：新Plan/规范/清单输入登记唯一初始生成，结果保存在项目库、无需文件应用。Generation已移除工作区/文件应用权威，直接保存系统结果；原意图先保存、未知原号、失败显式重试、旧迟到不能套新版本、重启不重复、profile/资源资格保持。PMS-A04/A05及PMS-A09真实接线覆盖；GET仍只读 |
+| W08–W16的候选观察/反馈 / E03–E07 / V03、V06、V08 | 过期为调用方材料新鲜度，不改变Runner执行/原反馈/继续/发布资格，不自动停止。仅最新材料可关联测试；旧collect未知仅对账，晚到只存历史。证据收集/DTO已共用该判断。PMS-A06验证内容差异、同版本多候选与来源隔离 |
+| W17 / E03、E05、E07 / V03、V08 | 用户明确过期候选PR合入仍可完成任务，最新测试生成中/失败不阻断；交付必须改读所选候选自己的冻结契约。SQLite result已改读候选快照；唯一Delivery/后继释放/全部候选停止义务保持。PMS-A07验证跨版本合并竞争与显式退出反例 |
+| W18 / E04、E05 / V07 | 自动生成仍归原Generation和共享停止/reset清单，候选材料版本不产生新资源owner。任务关闭撤销未提交需求，受理/未知按原请求结算，共享引用不误停；旧候选过期不等于资源停止。PMS-A05/A07/A09验证原Run/停止/清理，不能漏掉无Candidate的生成Run |
 
-自动项 PM-A01–PM-A08 与最小验证映射见 [Plan](../plans/project-maintenance.plan.md#测试计划)，实际结果归[专属验收](../acceptance/project-maintenance.md)。必要测试材料缺失/无效或实际输入变化未复核阻断相关首次启动；仅源码适用性变化只提示，不增加全局人工门禁。相关确认与首次冻结在同一项目库重核，轮询时间/无关 Plan 不制造冲突。测试结果/PR/唯一交付不变；初始化只复用规则，不启动 Runner/建库或提前实现全套纳管结构。后续候选先用原快照，原 base 被目标历史改写排除时拒绝新建但不换基线。
+上述新规则已实施，实际验证与未验项仅登记专属验收；最小L1、既有controlled/live L3扩展与PMS-A01–PMS-A09映射见[测试计划](../plans/project-maintenance-simplification.plan.md#测试计划)。新鲜度、参与、资源和交付保持正交；历史已核实通过不改写，已完成Task不因材料更新自动重开，不增加测试通过/最新版本交付门禁。
 
 2026-10-20 W02–W18 / E04–E07 / V06、V08 的本机组合资格已补验：SteerLine 管理服务停止后，原 Codex 工具及轮次离线完成；兼容 Runner B 补收原正式 final，沿原 Run/session 继续发布，真实测试 PR 合并后唯一交付并释放未启动的后继，正式清理确认。修复消费端对无固定 prompt steps 工作流的目录假设，以及调试模板覆盖原生作用域认证的问题；节点、异常、授权、恢复和停止语义不变。准确构建、失败/重验及证据见[专属验收末节](../acceptance/service-generation-recovery.md#最终本机结果slc-a05-通过)。Orca 创建成功丢回执、其他原生路径与旧 service-owned Job 首次升级窗口仍保留各自边界，不能按本机结果推定已通过。
 

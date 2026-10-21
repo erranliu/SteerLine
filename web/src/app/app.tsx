@@ -1,5 +1,12 @@
 import { lazy, Suspense, useState } from "react";
-import { NavLink, Routes, Route, Navigate } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import {
+  NavLink,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from "react-router-dom";
 import {
   GitBranch,
   Layers,
@@ -10,6 +17,7 @@ import {
   Command,
   PanelLeftClose,
 } from "lucide-react";
+import { json } from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
 import type { Identity, BrowserSession } from "../shared/api/types";
 import { WorkspaceContext } from "./context";
@@ -20,6 +28,7 @@ import { requiresAnswer } from "../features/runs/state";
 import { short } from "../shared/ui/status";
 import { SettingsPage } from "../features/settings/settings";
 import { Operations } from "./operations";
+import { ExecutionConfigs } from "../features/execution-configs/execution-configs";
 import { useApplicationProjects } from "./use-application-projects";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
@@ -46,6 +55,7 @@ export function Workspace({
   connected: applicationConnected = true,
   home = "",
   switcher,
+  configurationPending = false,
   connectionError,
   onRefreshConnection,
 }: {
@@ -53,6 +63,7 @@ export function Workspace({
   connected?: boolean;
   home?: string;
   switcher?: React.ReactNode;
+  configurationPending?: boolean;
   connectionError?: unknown;
   onRefreshConnection?: () => void;
 }) {
@@ -76,7 +87,7 @@ export function Workspace({
   } = useOriginalRequests(api, !!online);
   const candidateStarts = useCandidateStarts(
     api,
-    !!online,
+    !!online && !configurationPending,
     requests.data,
     submit,
   );
@@ -132,6 +143,10 @@ export function Workspace({
             </NavLink>
           </nav>
           <div className="sidebar-footer">
+            <NavLink to="/settings/execution-configs">
+              <Settings size={16} />
+              <span>全局执行配置</span>
+            </NavLink>
             <NavLink to={"/projects/" + identity.project_id + "/settings"}>
               <Settings size={16} />
               <span>执行设置</span>
@@ -212,6 +227,12 @@ export function Workspace({
                 本机请求存储不可用：{String(requests.error)}
               </div>
             )}
+            {configurationPending && (
+              <div className="notice amber" role="status">
+                执行配置已保存，需重启 SteerLine
+                后才能启动新候选。已有执行保留原参数。
+              </div>
+            )}
             <Dispatch />
             <Suspense fallback={<div className="empty">正在加载页面…</div>}>
               <Routes>
@@ -282,6 +303,30 @@ export function App({ initial }: { initial: BrowserSession }) {
     choose,
   } = useApplicationProjects(initial);
   const [search, setSearch] = useState("");
+  const route = useLocation();
+  const savedStatus = useQuery({
+    queryKey: [home, "execution-config-status"],
+    queryFn: ({ signal }) =>
+      json<{ saved_digest: string }>("/api/web/execution-config/status", {
+        signal,
+      }),
+    enabled: sessionValid,
+    refetchInterval: 5000,
+    retry: false,
+  });
+  const configurationPending =
+    !!savedStatus.data?.saved_digest &&
+    !!catalog.data?.loaded_execution_digest &&
+    savedStatus.data.saved_digest !== catalog.data.loaded_execution_digest;
+  if (route.pathname === "/settings/execution-configs")
+    return (
+      <ExecutionConfigs
+        home={home}
+        csrf={session.data.csrf_token}
+        loadedDigest={catalog.data?.loaded_execution_digest}
+        applicationConnected={sessionValid && !catalog.isError}
+      />
+    );
   const switcher = (
     <div className="project-selector">
       <label htmlFor="project-search">切换项目</label>
@@ -369,6 +414,7 @@ export function App({ initial }: { initial: BrowserSession }) {
       <Workspace
         key={home + "/" + id + "/" + identity.instance_id}
         home={home}
+        configurationPending={configurationPending}
         onRefreshConnection={() => {
           void session.refetch();
           void catalog.refetch();
@@ -396,6 +442,7 @@ export function App({ initial }: { initial: BrowserSession }) {
       <span className="brand-symbol">◆</span>
       <h1>SteerLine</h1>
       {switcher}
+      <NavLink to="/settings/execution-configs">管理全局执行配置 →</NavLink>
       {!sessionValid ? (
         <p role="alert">会话已失效，请使用 steerline-web open 重新授权</p>
       ) : id ? (

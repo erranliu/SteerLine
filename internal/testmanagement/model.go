@@ -21,12 +21,14 @@ type Catalogue = model.Catalogue
 type Arrangement = model.Arrangement
 
 type Snapshot struct {
-	Status      string       `json:"status"`
-	Diagnostic  string       `json:"diagnostic,omitempty"`
-	PlanPath    string       `json:"plan_path"`
-	Commit      string       `json:"commit"`
-	Definitions []Definition `json:"definitions"`
-	Digest      string       `json:"digest,omitempty"`
+	GenerationID string       `json:"generation_id,omitempty"`
+	Inputs       string       `json:"inputs,omitempty"`
+	Status       string       `json:"status"`
+	Diagnostic   string       `json:"diagnostic,omitempty"`
+	PlanPath     string       `json:"plan_path"`
+	Commit       string       `json:"commit"`
+	Definitions  []Definition `json:"definitions"`
+	Digest       string       `json:"digest,omitempty"`
 }
 
 func Decode(raw []byte, target any) error { return model.Decode(raw, target) }

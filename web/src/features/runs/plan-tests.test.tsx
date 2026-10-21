@@ -37,3 +37,13 @@ it("TM scopes cache to the exact project/candidate and does not query while offl
   expect(projectQueries(other).planTests(run).queryKey).not.toEqual(projectQueries(api).planTests(run).queryKey);
   expect(projectQueries(api).planTests({...run,run_id:"other"}).queryKey).not.toEqual(projectQueries(api).planTests(run).queryKey);
 });
+
+it("PMS keeps expired tests as history and explains old PR completion", async () => {
+ const api=new Api(identity,"csrf","home");vi.spyOn(api,"get").mockResolvedValue({...view,material_status:"outdated",association_available:false,passed:0,failed:0,rows:view.rows.map(r=>({...r,status:"stale"}))});
+ mountFeature(<PlanTests run={run}/>,api,testClient());
+ expect(await screen.findByText(/此候选 PR 合入仍可完成任务/)).toBeVisible();
+ expect(screen.getByText(/历史测试安排/)).toBeVisible();
+ expect(screen.queryByText(/共 1 项 · 通过/)).toBeNull();
+ fireEvent.click(screen.getByText(/规则验证 · L1/));
+ expect(screen.getByText("report:original")).toBeVisible();
+});

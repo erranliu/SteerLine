@@ -26,6 +26,8 @@ import (
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/product/httpclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	"github.com/erranliu/SteerLine/web/server/discovery"
+	configrepo "github.com/erranliu/SteerLine/web/server/executionconfig"
 )
 
 type Client interface {
@@ -45,6 +47,8 @@ type session struct {
 	Expires time.Time
 }
 type Server struct {
+	configuration  *configrepo.Store
+	discovery      *discovery.Manager
 	options        Options
 	listener       net.Listener
 	http           *http.Server
@@ -112,6 +116,8 @@ func Prepare(options Options) (*Server, error) {
 	}
 	s := &Server{options: options, listener: listener, endpoint: endpoint, stopped: make(chan struct{}), identity: identity, secret: secret, assets: assets, dev: dev,
 		cookie: "sl_web_" + identity.HomeID[:12] + "_" + strings.Split(options.Address, ":")[1], tickets: map[string]time.Time{}, sessions: map[string]session{}}
+	s.configuration = configrepo.New(options.Home)
+	s.discovery = discovery.New(s.configuration)
 	s.http = &http.Server{Handler: s, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 35 * time.Second, WriteTimeout: 125 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 << 10}
 
 	return s, nil
@@ -129,6 +135,9 @@ func (s *Server) Close(ctx context.Context) error {
 		shutdown = nil
 	}
 	closed := s.http.Close()
+	if s.discovery != nil {
+		s.discovery.Close()
+	}
 	listener := s.listener.Close()
 	if errors.Is(listener, net.ErrClosed) {
 		listener = nil
@@ -321,6 +330,10 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "invalid_path", "canonical API path required")
 		return
 	}
+	if r.URL.Path == "/api/web/execution-config" || strings.HasPrefix(r.URL.Path, "/api/web/execution-config/") {
+		s.executionConfig(w, r, session)
+		return
+	}
 	prefix := "/api/v2/application"
 	route := strings.TrimPrefix(r.URL.Path, prefix)
 	if route == r.URL.Path || !(route == "/projects" || strings.HasPrefix(route, "/projects/")) {
@@ -447,6 +460,9 @@ func backendError(w http.ResponseWriter, err error) {
 
 func (s *Server) Done() <-chan struct{} { return s.stopped }
 func spaPath(route string) bool {
+	if route == "/settings/execution-configs" {
+		return true
+	}
 	parts := strings.Split(strings.Trim(route, "/"), "/")
 	return len(parts) == 3 && parts[0] == "projects" && len(parts[1]) == 64 && (parts[2] == "tests" || parts[2] == "dag" || parts[2] == "runs" || parts[2] == "settings" || parts[2] == "environment-checks") || route == "/projects"
 }
