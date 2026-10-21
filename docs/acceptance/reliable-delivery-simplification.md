@@ -14,3 +14,5 @@
 Runner 审计输出试验只在独立目录使用原生 Codex 与 Runner 夹具，不创建真实 PR，不代表本次 UI 已获全产品原生交付资格。原始日志为 Runner 工作树 `.evidence/reliable-delivery-20261021/steerline-projection-pass.log`、`steerline-bridge-pass.log`、`web-tests.log`、`web-build.log`、`test-selection.log`；截图为同目录 `delivery-summary.png`。
 
 Runner 的 V1 小样本对比 4 项通过，额外补报由 2 降为 0；随后旧冻结提示跨构建接管/新默认的两个正式受控分支通过，才更新新 Run 的默认提示文本。调用方没有强制覆盖 audit.code，没有新增原生 schema 或恢复策略；原有个人配置的显式覆盖仍保留。两仓结果不冒充安装环境已更新。
+
+提交 PR 前合入主干 `9cf844639c21f841eb743e7b4f9680b23c7db0af`，保留其同快照观察、完整受理绑定及部署改动；本摘要只消费已有投影。合并后 `go test ./internal/app ./internal/runnerbridge ./internal/taskrunner ./internal/runnerclient ./cmd/test-feedback -run 'TestRunnerDelivery|TestRunnerWorkflowReadProjection|TestCM71ProductDependencyBoundary|TestRunnerObservation|TestSteerRunnerOutboxBoundaries|TestRunnerFullBindingAdmission|TestQuick' -count=1 -timeout=2m` 五包通过。前端源码未因合并改变，复用上列 15 项及构建证据；HTTP 既有失败的 import 在该主干仍存在。合并复验日志登记于 Runner 的 `docs/acceptance/evidence/reliable-delivery-20261021/pr-steerline-rules.log`。
