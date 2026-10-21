@@ -18,6 +18,7 @@ import type {
   Envelope,
   Profile,
   Receipt,
+  StoredRequest,
 } from "../../shared/api/types";
 import {
   identity,
@@ -29,7 +30,7 @@ import {
 import { Runs } from "./runs";
 
 afterEach(cleanup);
-function setup(existing = false) {
+function setup(existing = false, requests: StoredRequest[] = []) {
   const api = new Api(identity, "csrf");
   const client = testClient();
   const taskPage = {
@@ -105,7 +106,6 @@ function setup(existing = false) {
         calls.push({ envelope, resolve });
       }),
   );
-  const requests: [] = [];
   function Harness({ runs }: { runs: Candidate[] }) {
     const candidateStarts = useCandidateStarts(api, true, requests, submit);
     const observation = snapshot(api, runs);
@@ -215,5 +215,32 @@ it("clears old output immediately, keeps selection through late receipts, and re
   expect(
     screen.queryByText("执行信息将在服务器确认后显示。"),
   ).not.toBeInTheDocument();
+  client.clear();
+});
+
+it("shows server candidates after restart without restoring obsolete journal cards or consuming their slots", async () => {
+  const old = new Api({ ...identity, instance_id: "previous" }, "csrf");
+  const requests: StoredRequest[] = Array.from({ length: 19 }, (_, index) => {
+    const envelope = old.envelope("start_candidate", "1", 2, {
+      execution_profile_id: "obsolete-profile",
+    });
+    if (index === 0) envelope.request_id = run.run_id;
+    return {
+      envelope,
+      created_at: "now",
+      response: { ...envelope, status: "applied", sampled_at: "now" },
+    };
+  });
+  const { confirm, client, submit } = setup(true, requests);
+  await screen.findByText("旧候选活动");
+  expect(document.querySelectorAll(".candidate-card")).toHaveLength(1);
+  expect(screen.getAllByText("1 个候选")).toHaveLength(2);
+  expect(screen.queryByText("新候选")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "新增并行候选" })).toBeEnabled();
+  expect(submit).not.toHaveBeenCalled();
+  await confirm();
+  expect(document.querySelectorAll(".candidate-card")).toHaveLength(2);
+  expect(screen.getAllByText("2 个候选")).toHaveLength(2);
+  expect(submit).toHaveBeenCalledTimes(1);
   client.clear();
 });

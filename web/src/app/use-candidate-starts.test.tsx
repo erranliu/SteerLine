@@ -236,3 +236,42 @@ it("allows independent additions while another addition is unresolved", async ()
   expect(result.current.items[1].status).toBe("启动被拒绝");
   expect(result.current.items[0].status).toBe("正在提交");
 });
+
+it("scopes restored start cards and the five-candidate limit to the current service instance", () => {
+  const { result, rerender, api, submit } = setup();
+  const old = new Api({ ...identity, instance_id: "previous" }, "csrf");
+  const requests: StoredRequest[] = Array.from({ length: 18 }, (_, index) => {
+    const envelope = old.envelope(
+      index % 2 ? "start_candidate" : "start_task",
+      task.task_id,
+      1,
+      { execution_profile_id: "old-profile" },
+    );
+    return {
+      envelope,
+      created_at: "now",
+      response: receipt(envelope, index === 0 ? "outcome_unknown" : "applied"),
+    };
+  });
+  const envelope = api.envelope("start_candidate", task.task_id, 2, {
+    execution_profile_id: profile.id,
+  });
+  requests.push({ envelope, created_at: "now" });
+  const original = structuredClone(requests);
+  rerender({ online: true, client: api, requests });
+  expect(result.current.items).toMatchObject([
+    { id: envelope.request_id, status: "正在提交", participating: true },
+  ]);
+  expect(submit).not.toHaveBeenCalled();
+  const running = { ...task, status: "in_progress", version: 2 };
+  const ids: (string | undefined)[] = [];
+  act(() => {
+    for (let i = 0; i < 5; i++)
+      ids.push(result.current.start(running, profile, 1, 3));
+  });
+  expect(ids.slice(0, 4).every(Boolean)).toBe(true);
+  expect(ids[4]).toBeUndefined();
+  expect(result.current.items).toHaveLength(5);
+  expect(submit).toHaveBeenCalledTimes(4);
+  expect(requests).toEqual(original);
+});

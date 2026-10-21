@@ -110,6 +110,9 @@ export function useCandidateStarts(
   const rows = (requests ?? []).filter(
     (row) =>
       row.envelope.project_id === api.identity.project_id &&
+      // Previous instances keep their request history; only the current
+      // instance's starts can stand in for candidates not yet in its snapshot.
+      row.envelope.instance_id === api.identity.instance_id &&
       ["start_task", "start_candidate"].includes(row.envelope.action),
   );
   const entries = current.current.entries;

@@ -70,6 +70,8 @@ Web 候选停止参与修复的最小调用方/SQLite/HTTP/Web 验证见[Plan](p
 
 ## 日常选择
 
+Web 历史启动请求误显示为候选的实例隔离回归见[专属验收 WCS-A5](acceptance/web-candidate-start.md#2026-10-21-历史请求误显示为候选修复)：使用定向 Web hook/执行页夹具验证占位、计数和名额，不启动真实 worker。
+
 按变更运行最小必要范围，L1/Full 不自动运行真实模型。所有验收行为及实时结果在 [acceptance](acceptance/README.md)记录，原日志使用新建临时目录。
 
 | 入口 | 范围 | 外部效果 |
