@@ -175,6 +175,9 @@ func (s *Server) read(ctx context.Context, identity Identity, path []string, que
 		}
 		return port.PlanTests(ctx, path[1])
 	}
+	if len(path) > 1 && path[0] == "tests" && (path[1] == "records" || path[1] == "catalogue") {
+		return s.readTestRecords(ctx, path, queryValues)
+	}
 	if len(path) > 0 && path[0] == "environment-checks" {
 		return s.readEnvironmentChecks(ctx, path[1:], queryValues)
 	}
@@ -484,7 +487,10 @@ func writeProtocolError(w http.ResponseWriter, err error, requestID string) {
 	var productErr *api.Error
 	if errors.As(err, &productErr) {
 		status := http.StatusServiceUnavailable
-		if productErr.Kind == api.UnknownRecord {
+		if productErr.Kind == api.InvalidInput {
+			status = http.StatusBadRequest
+
+		} else if productErr.Kind == api.UnknownRecord {
 			status = http.StatusNotFound
 		} else if productErr.Kind == api.IdentityConflict {
 			status = http.StatusConflict

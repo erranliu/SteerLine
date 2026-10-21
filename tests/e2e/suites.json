@@ -105,5 +105,13 @@
     "package": "./tests/e2e/suites/runtime",
     "test": "TestProjectMaintenance",
     "env": "controlled"
+  },
+  {
+    "id": "testing.records",
+    "level": "L3",
+    "suite": "testing",
+    "package": "./tests/e2e/suites/testing",
+    "test": "TestRecords",
+    "env": "controlled"
   }
 ]

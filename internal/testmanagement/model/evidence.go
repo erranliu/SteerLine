@@ -15,6 +15,7 @@ type EvidenceArtifact struct {
 	Content  []byte                  `json:"content"`
 }
 type Evidence struct {
+	TaskID      string                      `json:"task_id,omitempty"`
 	Project     string                      `json:"project"`
 	CandidateID string                      `json:"candidate_id"`
 	RunID       string                      `json:"run_id"`

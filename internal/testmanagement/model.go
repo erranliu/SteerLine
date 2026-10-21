@@ -40,29 +40,10 @@ func ArrangementPath(plan string) (string, error)          { return model.Arrang
 func ParseCatalogue(raw []byte) (Catalogue, error)         { return model.ParseCatalogue(raw) }
 func Select(raw []byte, c Catalogue) ([]Definition, error) { return model.Select(raw, c) }
 
-type Result struct {
-	TestID  string `json:"test_id"`
-	Status  string `json:"status"`
-	Message string `json:"message"`
-	Log     string `json:"log"`
-}
+type Result = model.Result
+type Report = model.Report
 
-// Report is produced by the test program. Run provenance must come from Runner,
-// never from this document or an agent's final message.
-type Report struct {
-	ID           string            `json:"id"`
-	Sequence     uint64            `json:"sequence"`
-	Selection    []string          `json:"selection"`
-	Environment  string            `json:"environment"`
-	Definitions  map[string]string `json:"definitions"`
-	BeforeCommit string            `json:"before_commit"`
-	AfterCommit  string            `json:"after_commit"`
-	BeforeClean  bool              `json:"before_clean"`
-	AfterClean   bool              `json:"after_clean"`
-	Results      []Result          `json:"results"`
-}
-
-func ParseReport(raw []byte) (Report, error) {
+func parseReport(raw []byte) (Report, error) {
 	var r Report
 	if err := Decode(raw, &r); err != nil {
 		return r, err

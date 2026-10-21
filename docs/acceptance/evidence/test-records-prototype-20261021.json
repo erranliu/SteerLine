@@ -1,0 +1,84 @@
+{
+  "kind": "prototype-and-document-check-only",
+  "date": "2026-10-21",
+  "baseline": "b9e5002d38da4722dc8457338e063ce56817fb48",
+  "working_tree": "modified; design only",
+  "browser": "Edge headless via bundled Playwright",
+  "time_zone": "Asia/Shanghai",
+  "viewports": [
+    {
+      "width": 1450,
+      "height": 1100
+    },
+    {
+      "width": 430,
+      "height": 950
+    }
+  ],
+  "checks": [
+    "原失败与完整显式复验链分别保留，筛选不截断链",
+    "只读命令/通过条件快照与演示证据摘要",
+    "部分复验及定义变化筛选",
+    "环境及分支/SHA筛选",
+    "日期逆序校验",
+    "级别/搜索/无记录/无匹配",
+    "最新失败不被旧通过覆盖",
+    "测试定义只读，无执行测试入口",
+    "原候选跳转",
+    "离线保留最后观察",
+    "桌面/窄屏，无横向溢出",
+    "子集通过在摘要明确标部分范围"
+  ],
+  "js_errors": [],
+  "screenshots_local_only": [
+    "%TEMP%/steerline-test-records-desktop.png",
+    "%TEMP%/steerline-test-records-retest.png",
+    "%TEMP%/steerline-test-records-mobile.png"
+  ],
+  "sha256": {
+    "docs/product-design/prototypes/planning-ui/index.html": "ab939dbe2b177e667f53ec951fe9b32c401b2a7a37e4274308e241f7e27cc9d6",
+    "docs/product-design/prototypes/planning-ui/README.md": "c758f83495af4808a37b3e0442cf331df61286852755ebe7e07306022fc80d1d",
+    "docs/spec/test-records.spec.md": "206fe330ed5345192185dbceccbff69ea76b074fe5cb68724643f9c219a073a5",
+    "docs/plans/test-records.plan.md": "852e6e7766f223b086c1a0e278d1c72c4b72be7c8d176bc63dc1c1c8d0d211df",
+    "docs/acceptance/test-records.md": "dfdf3ef22dd3349fea983d607ceb89e3d23a36694eb6ff51f826223bc54e9020"
+  },
+  "product_acceptance": "TR-A01–TR-A07 and TR-M01 not executed; no product runtime, model, import, database or deployment",
+  "documentation": {
+    "links": "Markdown: 523 files, 3406 local navigation links, 0 errors",
+    "whitespace": "git diff --check passed; changed/new files no trailing whitespace",
+    "acceptance_mapping": "TR-A01–TR-A07 appear in Spec, Plan and acceptance"
+  },
+  "audit": [
+    {
+      "date": "2026-10-21",
+      "kind": "main-session-spec-plan-quality-audit",
+      "scope": "design and prototype only; product TR-A01–TR-A07/TR-M01 remain unverified",
+      "checks": [
+        "不同 SHA 的两个子集通过不拼成完整复验",
+        "最新后继失败生效，中间通过保留历史",
+        "未提交修正可如实复验通过，原失败行及汇总明确来源非固定 SHA",
+        "既有完整/部分/定义变化例子保持",
+        "分支筛选和完整链详情",
+        "失败+复验通过过滤排除拼接子集、包含带来源标注的脏源码复验",
+        "只读/摘要展开/空/搜索状态",
+        "桌面/窄屏无横向溢出",
+        "Spec/Plan/验收映射、传输预算、原候选接线与投影补登记安排一致"
+      ],
+      "js_errors": [],
+      "documents": "Markdown: 523 files, 3407 local navigation links, 0 errors",
+      "whitespace": "git diff --check and changed/new file trailing whitespace passed",
+      "sha256": {
+        "docs/spec/test-records.spec.md": "4679a90614ae83b86c195e5ea356ed000d1abda8b607a0d81a17e00de803176d",
+        "docs/plans/test-records.plan.md": "298eda532841c1184cefbe52c56bf29993e58b7fd6156dc948c432405349a13c",
+        "docs/acceptance/test-records.md": "9660e96b23dd35f2b0369cdb96ca84c49bdd63335457bac614470203da5989c1",
+        "docs/product-design/prototypes/planning-ui/index.html": "33bbf81436c5e361d7fbe8ddf2d9cf389852e1501700c87388cd9e567766e8ed",
+        "docs/product-design/prototypes/planning-ui/README.md": "1eb8904e6355976f87f7d500a91fe4823b8dd78544d65256dd21e5b6f5e51f81"
+      },
+      "screenshots_local_only": [
+        "%TEMP%/steerline-test-records-audit-split.png",
+        "%TEMP%/steerline-test-records-audit-desktop.png",
+        "%TEMP%/steerline-test-records-audit-mobile.png"
+      ]
+    }
+  ]
+}

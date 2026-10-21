@@ -111,6 +111,14 @@
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -scenario=runtime.project-maintenance -env=controlled",
       "check": "新独立调试包中真实 Go/Web/Edge 验证三入口、远端变化、单项生成审阅应用、首次冻结和跨项目隔离；模拟 Runner，停止与清理完整。"
+    },
+    {
+      "id": "testing.records",
+      "name": "测试集记录与显式复验",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -scenario=testing.records -env=controlled",
+      "check": "新隔离包中真实小型脚本失败后提交修正并通过，经正式 CLI、SQLite、API 和浏览器展示显式复验；原报告重放无重复，停止和资源清理完整。"
     }
   ]
 }

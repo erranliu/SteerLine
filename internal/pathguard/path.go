@@ -1,10 +1,24 @@
 package pathguard
 
 import (
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
 )
+
+// RejectHardLinkedFile prevents a caller-owned evidence directory from reading
+// another name for an external file. Missing files are handled by the caller.
+func RejectHardLinkedFile(path string) error {
+	links, err := fileLinkCount(path)
+	if err != nil {
+		return err
+	}
+	if links > 1 {
+		return fmt.Errorf("file must not be a hard link: %s", path)
+	}
+	return nil
+}
 
 // Within reports whether target is contained by root after both paths have
 // been resolved with ResolveProspective.

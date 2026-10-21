@@ -41,7 +41,7 @@ func DebugReleaseMain(args []string) error {
 		return errors.New("debug requires init|prepare|run|stop|reset|merge|control|snapshot")
 	}
 	switch args[0] {
-	case "init", "init-b", "prepare", "run", "run-selected", "stop", "reset", "merge", "control", "snapshot", "testing", "maintenance":
+	case "init", "init-b", "prepare", "run", "run-selected", "stop", "reset", "merge", "control", "snapshot", "testing", "maintenance", "records":
 	default:
 		return fmt.Errorf("unknown debug operation %q", args[0])
 	}
@@ -101,6 +101,7 @@ func DebugReleaseMain(args []string) error {
 			args[0] = "run"
 		}
 	}
+	recordsSource := os.Getenv("STEERLINE_TR_SOURCE")
 	maintenanceSource := os.Getenv("STEERLINE_PM_SOURCE")
 	testingSource := os.Getenv("STEERLINE_TM_SOURCE")
 	testingCandidate := os.Getenv("STEERLINE_TM_RUNNER_CANDIDATE")
@@ -110,6 +111,11 @@ func DebugReleaseMain(args []string) error {
 	switch args[0] {
 	case "prepare":
 		return nil
+	case "records":
+		if !simulate {
+			return errors.New("records requires a new --simulate package")
+		}
+		return d.testRecords(recordsSource)
 	case "maintenance":
 		if !simulate {
 			return errors.New("maintenance requires a new --simulate package")

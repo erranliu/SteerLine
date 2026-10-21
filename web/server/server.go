@@ -448,5 +448,5 @@ func backendError(w http.ResponseWriter, err error) {
 func (s *Server) Done() <-chan struct{} { return s.stopped }
 func spaPath(route string) bool {
 	parts := strings.Split(strings.Trim(route, "/"), "/")
-	return len(parts) == 3 && parts[0] == "projects" && len(parts[1]) == 64 && (parts[2] == "dag" || parts[2] == "runs" || parts[2] == "settings" || parts[2] == "environment-checks") || route == "/projects"
+	return len(parts) == 3 && parts[0] == "projects" && len(parts[1]) == 64 && (parts[2] == "tests" || parts[2] == "dag" || parts[2] == "runs" || parts[2] == "settings" || parts[2] == "environment-checks") || route == "/projects"
 }

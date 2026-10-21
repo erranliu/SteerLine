@@ -17,7 +17,7 @@ it("TM shows planned tests, the latest failure and expandable original evidence"
   fireEvent.click(screen.getByText(/规则验证 · L1/));
   expect(screen.getByText("实际断言失败")).toBeVisible();
   expect(screen.getByText("report:original")).toBeVisible();
-  expect(screen.queryByRole("link")).toBeNull();
+  expect(screen.getByRole("link",{name:"查看测试记录"})).toHaveAttribute("href","/projects/project/tests?test=rules");
   expect(screen.queryByRole("button",{name:/运行/})).toBeNull();
 });
 it("TM distinguishes an empty arrangement and missing/invalid documents", async () => {

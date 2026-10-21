@@ -66,7 +66,7 @@ func TestTMResultsLatestAndSource(t *testing.T) {
 	}
 }
 func TestTMReportValidation(t *testing.T) {
-	r := Report{ID: "id", Sequence: 1, Selection: []string{"x"}, Environment: "isolated", Definitions: map[string]string{"x": "hash"}, Results: []Result{{TestID: "x", Status: "failed", Message: "assertion failed", Log: "summary.json"}}}
+	r := trRecord("a", "failed", "").Report
 	raw, _ := json.Marshal(r)
 	if _, err := ParseReport(raw); err != nil {
 		t.Fatal(err)

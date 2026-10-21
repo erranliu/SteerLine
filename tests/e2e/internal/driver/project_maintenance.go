@@ -15,11 +15,17 @@ import (
 
 // projectMaintenance reuses the single package launcher and its isolated Git
 // transport. Browser actions use the authenticated public Go/Web protocol.
-func (d *debugRelease) projectMaintenance(source string) (result error) {
+func (d *debugRelease) projectMaintenance(source string) error {
+	return d.controlledBrowser(source, "project-maintenance", "tests/project-maintenance.spec.ts", true)
+}
+func (d *debugRelease) testRecords(source string) error {
+	return d.controlledBrowser(source, "test-records", "tests/test-records.spec.ts", false)
+}
+func (d *debugRelease) controlledBrowser(source, outName, testFile string, reset bool) (result error) {
 	if !filepath.IsAbs(source) {
 		return errors.New("maintenance source must be absolute")
 	}
-	out := filepath.Join(d.root, "evidence", "project-maintenance")
+	out := filepath.Join(d.root, "evidence", outName)
 	if e := os.MkdirAll(out, 0700); e != nil {
 		return e
 	}
@@ -48,7 +54,7 @@ func (d *debugRelease) projectMaintenance(source string) (result error) {
 			settled = verifyErr == nil
 			result = errors.Join(result, verifyErr)
 		}
-		if result == nil && stopped && settled {
+		if reset && result == nil && stopped && settled {
 			result = d.reset(false)
 			if result == nil {
 				result = d.verifyMaintenanceReset(out)
@@ -73,7 +79,7 @@ func (d *debugRelease) projectMaintenance(source string) (result error) {
 	}); e != nil {
 		return e
 	}
-	browser := d.command("npm.cmd", "exec", "--", "playwright", "test", "tests/project-maintenance.spec.ts")
+	browser := d.command("npm.cmd", "exec", "--", "playwright", "test", testFile)
 	browser.Dir = filepath.Join(source, "web")
 	browser.Env = append(browser.Env, "STEERLINE_WEB_CONFIG="+d.config, "STEERLINE_WEB_EVIDENCE="+filepath.Join(out, "browser"))
 	var buffer bytes.Buffer

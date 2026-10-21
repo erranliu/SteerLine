@@ -33,6 +33,9 @@ type options struct {
 	suite          string
 	e2eEnv         string
 	scenario       string
+	recordProject  string
+	rerunOf        string
+	managed        *managedRun
 }
 
 type environment struct {
@@ -101,6 +104,11 @@ func run(args []string) int {
 	}
 	if parsed.level != "" {
 		before, sequence := observeManagedSource(), managedReportSequence()
+		parsed.managed, err = freezeManagedReports(parsed, sequence)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			return 2
+		}
 		defer writeManagedReports(parsed, before, sequence)
 	}
 	if parsed.summarizeLog != "" {
@@ -253,11 +261,16 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&opts.suite, "suite", "", "comma-separated L3/L4 suites")
 	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled or gated (L2 default)")
 	flags.StringVar(&opts.scenario, "scenario", "", "comma-separated L3/L4 scenario IDs")
+	flags.StringVar(&opts.recordProject, "record-project", "", "register reports in the selected project after testing")
+	flags.StringVar(&opts.rerunOf, "rerun-of", "", "test_id=original_report_id comma-separated explicit retests")
 	if err := flags.Parse(toolArgs); err != nil {
 		return opts, fmt.Errorf("test-feedback options: %w", err)
 	}
 	if len(flags.Args()) != 0 {
 		return opts, fmt.Errorf("Go test arguments must follow --")
+	}
+	if (opts.recordProject != "" || opts.rerunOf != "") && (opts.level == "" || opts.buildOnly || opts.summarizeLog != "" || len(goArgs) > 0) {
+		return opts, fmt.Errorf("record-project/rerun-of require a complete registered level selection")
 	}
 	seenOptions := map[string]bool{}
 	for _, arg := range toolArgs {

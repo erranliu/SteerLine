@@ -6,7 +6,7 @@
 
 L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)，本项目入口见 [测试总入口](../../docs/testing.md)。下面按当前实际登记级别列出测试内容。
 
-[suites.json](suites.json)是机器执行登记的唯一来源，登记十三项（L2 两项、L3 七项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
+[suites.json](suites.json)是机器执行登记的唯一来源，登记十四项（L2 两项、L3 八项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
 
 执行页展示清单为 [test-list.json](../../docs/testing/test-list.json)，沿用此处场景 ID/级别/环境与入口，不参与调度。更改测试内容时同步更新展示清单、此表和相关 Plan；结果追加格式及 Runner 回传约定见[测试总入口](../../docs/testing.md#测试管理文档与结果)。
 
@@ -31,6 +31,7 @@ recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runne
 | `runtime.shared-runner-projects` | 同 home 两项目共用一个 Runner，使用相同产品请求 ID 创建独立 Run，分别消费仓库/PR，整体停启保留原绑定且零自动新输入，最后核实全体清理。 | 项目级库/请求隔离与应用级共享 Runner 的接线；每项独立 home/两个 repo/provider/端口，可沿 runtime 二并行。 |
 | `runtime.project-maintenance` | 唯一生成器新建双项目包；真实 Go/Web/Edge 检查三入口、单项生成零提前写、显式应用、隔离远端前进与材料确认、首次冻结和原 PlanTests；停止并核对资源。 | 基线与材料维护流程；公开 Runner 使用受控结果，不计真实模型。生成阶段独占源码 Web 构建目录，复用 test-project-maintenance.ps1/同一 driver；场景不使用 t.Parallel。 |
 | `workflow.local-codex-audited` | live：两种显式模型走 development-audited/1，实现、两项审计、发布与真实 PR 合并、唯一交付及后继 ready 未启动；从正式产品详情核对冻结预设、材料/摘要、各轮模型、审计来源，从任务历史核对候选/Runner Run 及 workflow；保留响应证据。 | 审计 workflow 的产品接线；须先通过空闲 I1 与 controlled gate，不归 full-L2，不重验 Runner 故障矩阵。 |
+| `testing.records` | controlled：新建单项目 debug 包，实际小脚本失败→提交修正→通过，正式 CLI 登记及原报告幂等重放，API/Edge 查看原始失败、显式复验链与原 summary，停止并核实资源。 | 独立脚本记录不绑定候选；复用唯一生成器和共享 browser driver，独占源码 Web 构建目录，不使用 t.Parallel；其余状态矩阵归 L1。 |
 | `testing.management-local-codex` | live：全新 debug 包，正式 CLI 调用真实 generate/1 保存安排；原开发候选上实际程序先通过再失败，经公开 artifacts/Git→API→浏览器核对计数、历史和证据，最后停止并核实原资源结算。 | 测试结果消费闭环；固定本机 Runner/Codex、独立 SteerlineTest base，测试失败来自隔离输入，不发布 PR；生成包时独占本源码 Web 依赖目录。 |
 
 本项目按规范维护上表的独有覆盖维度；并行资源声明涵盖 home、repo、数据库、端口、可变构建输出、provider 和清理所有权。
@@ -136,3 +137,6 @@ go test -tags=e2e ./tests/e2e/... -run '^$'
 本轮采用定向 Go、Web fake timer 与 Runner 实际 EXE/受控服务验证，不新增 L2/L3 live 场景；范围与命令见 [Plan](../../docs/plans/execution-observability.plan.md)，结果见[专属验收](../../docs/acceptance/execution-observability.md)。不据消息缺失判定卡死，不在安装现场验收。
 
 项目维护定向入口：`go run ./cmd/test-feedback -level=L3 -suite=runtime -scenario=runtime.project-maintenance -env=controlled`；Windows 工具 Job 下可用 `./scripts/test-runtime-isolation.ps1 -Level L3 -Suite runtime -Scenario runtime.project-maintenance -OutDir <新目录>`。单独入口 `./scripts/test-project-maintenance.ps1 -SteerRunnerExe <安装环境外EXE> -Out <新目录>` 仍调用唯一生成器和同一 Go/Edge driver，不另造现场。真实 `testing.management-local-codex` 驱动已采用生成后审阅/显式应用，并保留真实通过/失败报告与清理验证。
+
+
+测试记录唯一 controlled 闭环：`go run ./cmd/test-feedback -level L3 -suite testing -scenario 'testing.records' -env controlled -out <新目录>`。`scripts/test-test-records.ps1` 复用唯一新包生成器及共享 Go/Edge driver，只在新建 C:\SteerlineDebug 包的 SteerlineTest 中执行实际 marker 断言失败→提交修正→通过→CLI 登记/原报告幂等重放→API/页面只读查询，方案显式冻结为 simulate，不调用模型或递归执行完整 L1。现场的 repo/home/SQLite/端口由新包独占，报告在包的 `evidence/test-records/`，浏览器截图/trace 在其 browser 子目录，proof 同时要求 stopped 和 resources_settled；外层 scenario 保存包路径/资源归属。受控 Runner 使用既有公开协议夹具，不扩大 Runner 测试矩阵。部分范围、离线、分叉等由定向 L1/组件测试验证。场景及验收映射见[Plan](../../docs/plans/test-records.plan.md)和[验收](../../docs/acceptance/test-records.md)。

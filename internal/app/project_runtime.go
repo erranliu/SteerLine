@@ -156,6 +156,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	}
 	instance := service.InstanceID()
 	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.tests.maintenance = r.config.runtimeMaintenance
 	r.config.runtimeTests = r.tests
 	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)

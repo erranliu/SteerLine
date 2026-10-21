@@ -16,14 +16,17 @@ import (
 )
 
 type testManagementStore interface {
+	testmanagement.RecordStore
 	testmanagement.GenerationStore
 	testmanagement.EvidenceStore
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
 type testManagementPort struct {
-	service  *testmanagement.GenerationService
-	store    testManagementStore
-	evidence *testmanagement.EvidenceService
+	records     *testmanagement.RecordService
+	maintenance *projectMaintenance
+	service     *testmanagement.GenerationService
+	store       testManagementStore
+	evidence    *testmanagement.EvidenceService
 }
 
 func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error) *testManagementPort {
@@ -71,7 +74,7 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 		}
 		return nil
 	}}
-	return &testManagementPort{service: s, store: store, evidence: evidence}
+	return &testManagementPort{service: s, store: store, evidence: evidence, records: &testmanagement.RecordService{Project: c.Identity(), Store: store}, maintenance: m}
 }
 func publicGeneration(r testmanagement.Generation) api.TestGeneration {
 	v := api.TestGeneration{Plan: r.Command.Plan, Profile: r.Command.Profile, SourceCommit: r.Command.Commit, ID: r.ID, Revision: r.Revision, State: r.State, Target: r.Target, RunID: r.RunID, Diagnostic: r.Diagnostic, Result: r.Result}
@@ -152,10 +155,10 @@ func (p *testManagementPort) close() error {
 }
 
 func (p *testManagementPort) observe(ctx context.Context) error {
-	if err := p.service.Observe(ctx); err != nil {
-		return err
-	}
-	return p.evidence.Observe(ctx)
+	generationErr := p.service.Observe(ctx)
+	evidenceErr := p.evidence.Observe(ctx)
+	projectionErr := p.records.ProjectEvidence(ctx)
+	return errors.Join(generationErr, evidenceErr, projectionErr)
 }
 
 func (p *testManagementPort) ApplyTests(ctx context.Context, in api.TestApplyRequest) (api.TestGeneration, error) {

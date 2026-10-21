@@ -279,7 +279,7 @@ func EvidenceView(s Snapshot, r model.Evidence, now time.Time) View {
 				valid = false
 				break
 			}
-			if len(log.Content) != log.Metadata.SizeBytes || ContentDigest(log.Content) != log.Metadata.SHA256 || ContentDigest(a.Content) != a.Metadata.SHA256 {
+			if len(log.Content) != log.Metadata.SizeBytes || ContentDigest(log.Content) != log.Metadata.SHA256 || ContentDigest(a.Content) != a.Metadata.SHA256 || len(log.Content) != report.Evidence.Bytes || ContentDigest(log.Content) != report.Evidence.SHA256 {
 				valid = false
 				break
 			}

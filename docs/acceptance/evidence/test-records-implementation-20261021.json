@@ -1,0 +1,435 @@
+{
+  "recorded_at": "2026-10-21T16:17:17.152194+08:00",
+  "source_commit": "b9e5002d38da4722dc8457338e063ce56817fb48",
+  "source_dirty": true,
+  "scope": "Test records and read-only test management; ordinary development, no roadmap task or deployment",
+  "acceptance": {
+    "automatic": [
+      "TR-A01",
+      "TR-A02",
+      "TR-A03",
+      "TR-A04",
+      "TR-A05",
+      "TR-A06",
+      "TR-A07"
+    ],
+    "automatic_result": "passed within declared targeted scope",
+    "manual": {
+      "TR-M01": "pending user experience acceptance"
+    }
+  },
+  "go": {
+    "command": [
+      "go",
+      "test",
+      "./internal/testmanagement",
+      "./internal/storage/sqlite",
+      "./internal/app",
+      "./internal/product/httpapi",
+      "./internal/product/applicationclient",
+      "./cmd/steerline",
+      "./cmd/test-feedback",
+      "./tests/e2e/internal/driver",
+      "./web/server",
+      "-run",
+      "^(TestTR|TestTM)",
+      "-count=1",
+      "-json"
+    ],
+    "output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-l1-final-20261021-1613",
+    "passed_tests": 62,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "exit_code": 0
+  },
+  "frontend": {
+    "test_command": "npm --prefix web test -- src/features/tests src/features/runs/plan-tests.test.tsx src/app/project-switch.test.tsx src/shared/api",
+    "passed_tests": 57,
+    "test_exit": 0,
+    "build_command": "npm --prefix web run build",
+    "build_exit": 0,
+    "output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-front-final-20261021-1614"
+  },
+  "flow": {
+    "command": "go run ./cmd/test-feedback -level L3 -suite testing -scenario 'testing.records' -env controlled -out C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-final-20261021-1609",
+    "package": "C:\\SteerlineDebug\\dev-20261021-160902-b9e5002d-dirty",
+    "scheme": "simulate",
+    "provider": "controlled public Runner fixture",
+    "output": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-final-20261021-1609",
+    "scenario": "testing.records",
+    "passed": true,
+    "cleanup_complete": true,
+    "proof": {
+      "environment": "controlled",
+      "package": "C:\\SteerlineDebug\\dev-20261021-160902-b9e5002d-dirty",
+      "passed": true,
+      "resources_settled": true,
+      "source": "C:\\Users\\lmas1\\.codex\\worktrees\\b8d5\\SteerLine",
+      "stopped": true
+    },
+    "records": {
+      "failed": "752718daf9a74cb6b34f15376b3773b0",
+      "passed": "b70da27d844f4ce791003a1705dfaae0",
+      "failed_exit": 1,
+      "passed_exit": 0,
+      "before_commit": "2cee92b92c88616ed2d59f4729862e528e6ca73e",
+      "fixed_commit": "17b14b2c611c4e8ff3ee5f519585f86ceb722629",
+      "record_count": 2,
+      "project": "0d7d08f3cf98b21b1039d2df9c3c51733e182696565ed44be98d9db3a5e53d2f",
+      "independent": true,
+      "browser": true
+    },
+    "screenshot": "C:\\SteerlineDebug\\dev-20261021-160902-b9e5002d-dirty\\evidence\\test-records\\browser\\test-records-testing-recor-d7eb3-etest-and-read-only-history\\test-records.png",
+    "trace": "C:\\SteerlineDebug\\dev-20261021-160902-b9e5002d-dirty\\evidence\\test-records\\browser\\test-records-testing-recor-d7eb3-etest-and-read-only-history\\trace.zip"
+  },
+  "dependency_guards": {
+    "command": "go test ./internal/testkit/boundary/... -count=1",
+    "exit_code": 0,
+    "log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-guards-final-20261021-1615.log"
+  },
+  "selector_regression": {
+    "command": "go test ./cmd/test-feedback -run 'Test.*(Scope|Quick|Owner|L3|L4|Scenario|Manifest)' -count=1",
+    "exit_code": 0
+  },
+  "self_review": [
+    "Read-only UI; no test execution or result edits",
+    "Immutable normalized report identity; bounded summary supplement never downgrades evidence",
+    "Explicit single-report retest coverage; no cross-report or cross-SHA stitching",
+    "Original Runner EvidenceView retained, with shared current report and summary-declaration validation",
+    "Index retry consumes only retained evidence, progress tied to artifact append count",
+    "Both React project routing and Go SPA deep links verified",
+    "Unsafe producer sequence rendered as string in query DTO",
+    "Git diagnostics never used as source commit identity",
+    "No compatibility migration, upload session, repair workflow or new worker"
+  ],
+  "prior_failed_attempts_preserved": [
+    {
+      "summary": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-20261021-1551\\summary.json",
+      "sha256": "0c8ee3165e3034c8eaa2e6a45c3bef73e68f02d3f69b4b5db1229d22867715d0",
+      "passed": false
+    },
+    {
+      "summary": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-20261021-1555\\summary.json",
+      "sha256": "7271a271e88606e424648e8f668b10afe06bb578d1e2077e1ef412507213c00d",
+      "passed": false
+    },
+    {
+      "summary": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-20261021-1559\\summary.json",
+      "sha256": "3977dfb66125ca5db5906e118e7ec5dbab5b48337910263559476b850a84c557",
+      "passed": false
+    },
+    {
+      "summary": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-20261021-1601\\summary.json",
+      "sha256": "aed0849cfa34d2280b4c2ec3da0af65ea6693632d21b7fdbbd9a25b2f9dd5741",
+      "passed": false
+    }
+  ],
+  "earlier_passing_flow": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-20261021-1605\\summary.json",
+  "verification_artifacts": [
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-l1-final-20261021-1613\\summary.json",
+      "sha256": "0648d7440919d9a080f33daad94c8d0d9ad98b874d4a789a741425b1ad0f99e2"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-l1-final-20261021-1613\\go-test.jsonl",
+      "sha256": "4e036c93cd5871fbdf36989f939530662e2a3fcc6752ad58da0b9096cdcf7305"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-front-final-20261021-1614\\vitest.log",
+      "sha256": "6a608688a0e1dc317776a9616716072a1ac56e872a344b9367ec932326fb22f2"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-front-final-20261021-1614\\build.log",
+      "sha256": "ae1c145d635e8bbc73bf58bc1e8467bb2aa40a6e876aff1511565251c49c2c05"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-final-20261021-1609\\summary.json",
+      "sha256": "4daee962fda667d773e4aa382672ef09f25151684fa0ee885aacbba86073baa2"
+    },
+    {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-tr-flow-final-20261021-1609\\scenarios\\testing.records\\scenario.json",
+      "sha256": "5d667359f258500499f6362f49e352702b3f7ad3406c1cb351ff338ce90b02f3"
+    },
+    {
+      "path": "C:\\SteerlineDebug\\dev-20261021-160902-b9e5002d-dirty\\evidence\\test-records\\proof.json",
+      "sha256": "1ca735d3337d078a83b8b6b284d83480388c20cb6b5a3fadf8e82fde3e93523d"
+    },
+    {
+      "path": "C:\\SteerlineDebug\\dev-20261021-160902-b9e5002d-dirty\\evidence\\test-records\\records-proof.json",
+      "sha256": "1d8669157db6d846c988d235ba472f98fbb691c1502937d93c2f081435a92b47"
+    },
+    {
+      "path": "C:\\SteerlineDebug\\dev-20261021-160902-b9e5002d-dirty\\evidence\\test-records\\browser\\test-records-testing-recor-d7eb3-etest-and-read-only-history\\test-records.png",
+      "sha256": "adc29b5ba38ddeebae996cd330e010b88dedb4ad4551f052095c20540f9da56d"
+    }
+  ],
+  "implementation_files": [
+    {
+      "path": "cmd/steerline/test_records.go",
+      "sha256": "428502a8a168c17218156970c4840943f06496bfb8c771dfc5bf7e9b508467d4"
+    },
+    {
+      "path": "cmd/steerline/test_records_test.go",
+      "sha256": "e559b0aee64e1118913dd70d5865a187a4fb57228ce84ffd13d1027ad819b444"
+    },
+    {
+      "path": "cmd/steerline/tests.go",
+      "sha256": "c2d76631e91334975aeede97d0748346cfbc337e50065aa9bd5f97c94d7dfe96"
+    },
+    {
+      "path": "cmd/test-feedback/e2e_test.go",
+      "sha256": "1127c318a6725447d6d301736249a367b5ba320aef8e4b1f6a86c8ce1e34d0f1"
+    },
+    {
+      "path": "cmd/test-feedback/main.go",
+      "sha256": "de2ca9be6615bd6e9d9db2c5c9841251d3c29de637c1428226641d4991bb18de"
+    },
+    {
+      "path": "cmd/test-feedback/managed.go",
+      "sha256": "59a617c48fa456cc6f562c11d7c71aa3493971c3f6f2ae64024ecc3e22894656"
+    },
+    {
+      "path": "cmd/test-feedback/managed_test.go",
+      "sha256": "8258387eb483f37fb92618b32524fefcc11ef4634d55de35001440f215655a32"
+    },
+    {
+      "path": "cmd/test-feedback/scoped.go",
+      "sha256": "419c61430d56aba29bef623af4e8cc94475fcd865fc745f092f1f505184dfbd3"
+    },
+    {
+      "path": "cmd/test-feedback/test_records_test.go",
+      "sha256": "a5768a1a18404e22c3b0a451e70fe692df155d8a4e99f84e2b7f294016b296d0"
+    },
+    {
+      "path": "debug-template/projects/SteerlineTest/test-marker.ps1",
+      "sha256": "b76a72ab025e35a83a7e35a7e165388293dd2507f16c24113cbfa32fd75f153e"
+    },
+    {
+      "path": "docs/testing/test-list.json",
+      "sha256": "802092d47342d24ee6c68521c1a468bef364a68b1fe309627b8863d07db437fe"
+    },
+    {
+      "path": "internal/app/project_runtime.go",
+      "sha256": "c39839bdae4a5c18bbb6c6e1539929f4370bc488d271c23fa66624ba4a6d74a1"
+    },
+    {
+      "path": "internal/app/test_management.go",
+      "sha256": "f8df069d20ffa3ecc97faacc15c05166346cf07dc8a818aa7999ba4f7a2ee376"
+    },
+    {
+      "path": "internal/app/test_records.go",
+      "sha256": "65ccc2e29a327398d433ed5e5cfea2030887eeba4c28abe54915f24fea45d49b"
+    },
+    {
+      "path": "internal/app/test_records_test.go",
+      "sha256": "ad6a456247e8589ec9f50d8a6614186a9d5fcf58723f9295327d752730359760"
+    },
+    {
+      "path": "internal/pathguard/path.go",
+      "sha256": "0e67328b4d2f4873c9c3d1c10282ca23ac3dea090b84dbf4b9e6908938e940de"
+    },
+    {
+      "path": "internal/product/api/client.go",
+      "sha256": "6ead979bf916764e1cb7788ccdb823420e7f10be4a1934b064b9d6eee66cf648"
+    },
+    {
+      "path": "internal/product/api/test_records.go",
+      "sha256": "369e87242bea33c958d25d23d59ffbe27d514d241d95ae2b1d3dc617054b129d"
+    },
+    {
+      "path": "internal/product/applicationclient/test_records.go",
+      "sha256": "c51c2d33244f0fdeca067a378eaf5a07cab6ebcedb3110cbeb8b82352722311a"
+    },
+    {
+      "path": "internal/product/applicationclient/test_records_test.go",
+      "sha256": "0fe12d8272b3c69cf2a3862c0eb22070178c30689a6bdb4533718022abdb7ecb"
+    },
+    {
+      "path": "internal/product/client/test_records.go",
+      "sha256": "409baafc8cadd6daa53bc6bd232c69074ed91c07cefd078ca28a1f1d2e201ccc"
+    },
+    {
+      "path": "internal/product/httpapi/command_registry.go",
+      "sha256": "990e00c4eeb7b58c5e272d56520af8005070f5610e4626811de1c5c92523efff"
+    },
+    {
+      "path": "internal/product/httpapi/server.go",
+      "sha256": "1c94439f9a1869cd57afd3fb4850fbadd1e78d6508e90c3b617b1f8d2f610a0f"
+    },
+    {
+      "path": "internal/product/httpapi/test_records.go",
+      "sha256": "8d164101dfc9464059c741470828d0a2cd7decd69b1ca1d1f8288ef4742f56fe"
+    },
+    {
+      "path": "internal/product/httpapi/test_records_test.go",
+      "sha256": "5fb7d1770c072e35568f992201ad84efe1691dac5244e47894ff29117fe80854"
+    },
+    {
+      "path": "internal/product/httpcontract/contracts.go",
+      "sha256": "111a19d7ed715db0d0f4d7966f0f337d9733e58ae9d639da04f79f5d18bc1c6a"
+    },
+    {
+      "path": "internal/product/httpcontract/routes.go",
+      "sha256": "5594e5dcbd4f657def0d013a25f6872d879baec87caf1af9922492cb8a8cbd60"
+    },
+    {
+      "path": "internal/storage/sqlite/reader.go",
+      "sha256": "63aff6a591802c7529fca44d8069c21bff4620d02ad9647514cdc81a59490e46"
+    },
+    {
+      "path": "internal/storage/sqlite/sqlite_store_schema.go",
+      "sha256": "112737439bfa8368d7facc40e8cc1af3fe7a7104b65369e903547158ae27303f"
+    },
+    {
+      "path": "internal/storage/sqlite/test_records.go",
+      "sha256": "3f258853865e64cca3a9ef516866f2a5b5d4085f308f569927bff3a63fa1dee0"
+    },
+    {
+      "path": "internal/storage/sqlite/test_records_test.go",
+      "sha256": "191cd42cd7c7b69fb71ccc082799a61fa82383a86535ffad424166120f57be0e"
+    },
+    {
+      "path": "internal/testmanagement/evidence.go",
+      "sha256": "25e60630843687d8de25fdb49157654030b8265898ee70892858b73ea62d1cff"
+    },
+    {
+      "path": "internal/testmanagement/evidence_test.go",
+      "sha256": "8fef359219914116d6abc8981454c44ab7812300370a1447e1147dbf6d681452"
+    },
+    {
+      "path": "internal/testmanagement/model.go",
+      "sha256": "9f29401dc8ed0a65c455d0cd50a925c55d4d13be19352861867f07f616671226"
+    },
+    {
+      "path": "internal/testmanagement/model/evidence.go",
+      "sha256": "68fcf601cd434b72b62ac6713a308ebe96790beda22137b6ccbccc15386c3f62"
+    },
+    {
+      "path": "internal/testmanagement/model/test_records.go",
+      "sha256": "0ad5f7f36462d059ac8add71dec40a4a5938e316f31f9866a142cbadd66710da"
+    },
+    {
+      "path": "internal/testmanagement/model_test.go",
+      "sha256": "d27d79163014179bf431a0b177c308e658d9b461e38eb6f95e45c980a7b00c50"
+    },
+    {
+      "path": "internal/testmanagement/record_files.go",
+      "sha256": "f19cc18b9036db31cfd805e34ffaea9d0f150befe37627758ec4cbce6b27df44"
+    },
+    {
+      "path": "internal/testmanagement/records.go",
+      "sha256": "18f0853dacce36ce4b0216181f218c112138354f927738e0a588d072de1aeaf1"
+    },
+    {
+      "path": "internal/testmanagement/records_test.go",
+      "sha256": "34d0e906d5ebc5fd692cb84bb1eb82c458a53d991e14d8922ab212b725b51bc7"
+    },
+    {
+      "path": "scripts/test-test-records.ps1",
+      "sha256": "128d1ae939d506b4a25b2f40bd9d551ea6b23adbfb6c1a75578784c00ca19270"
+    },
+    {
+      "path": "tests/e2e/README.md",
+      "sha256": "6e69829896b2b57b35b5faaee4956787cff1f515c122f1b591c6d77541293a21"
+    },
+    {
+      "path": "tests/e2e/internal/driver/debug_release.go",
+      "sha256": "37f413c5565ae6fb9b4845878e231421856a73a744537b03e0929548b14bf206"
+    },
+    {
+      "path": "tests/e2e/internal/driver/debug_reset.go",
+      "sha256": "82d36051aa7de3eb67864037b17e5123382b9aa0b361acdbca6454fbe09dad30"
+    },
+    {
+      "path": "tests/e2e/internal/driver/project_maintenance.go",
+      "sha256": "f6f1c9035c1eb56914eff46c727cb9a253597a438e54cffe122f5da1358f5b82"
+    },
+    {
+      "path": "tests/e2e/internal/testenv/test_records.go",
+      "sha256": "32996e28aad55b271ea6fe262559f5f3efb0933b6dca5e506315a05ea9f9fab6"
+    },
+    {
+      "path": "tests/e2e/suites.json",
+      "sha256": "03ef9dbba5d0a59ff1e68a6456b2a05bebddc844be0a7c76c7c0e9a6387205e8"
+    },
+    {
+      "path": "tests/e2e/suites/testing/records_test.go",
+      "sha256": "e3f63b4a646ea409639a00e7479f36c5402f0ae9ccd6c59f9473f1a15fb5bca9"
+    },
+    {
+      "path": "web/server/server.go",
+      "sha256": "4b042cd12c16aa3ebdec221e361c57e7d68b7430af6b27b226bb4feb427e3300"
+    },
+    {
+      "path": "web/server/server_test.go",
+      "sha256": "f6a35581c827ea71a886387e259ad037a7d3aeff2e8ba153d3e15ffa7f5989f5"
+    },
+    {
+      "path": "web/src/app/app.tsx",
+      "sha256": "a5e60b2841ff8fd3944db9036972ad5ae2a366f310e564ab721fb4c10f63e119"
+    },
+    {
+      "path": "web/src/app/project-switch.test.tsx",
+      "sha256": "4de770e45fe86f0027f45d101765df6670b995ee0e5c5ba7d83716967146106b"
+    },
+    {
+      "path": "web/src/app/use-application-projects.ts",
+      "sha256": "be5132586b3e44fc8e1fb087b899e33ca7fedc99b951c2f2aca632bc320c61dd"
+    },
+    {
+      "path": "web/src/features/runs/plan-tests.test.tsx",
+      "sha256": "4c7d891a113003193b95a69c1b382436e8de3fced96f39f93ba5b43d649e2eac"
+    },
+    {
+      "path": "web/src/features/runs/plan-tests.tsx",
+      "sha256": "ffd0ab239289cebb53498fac57227ea34dc74e58a71e96797ebbcdb01fe90e9b"
+    },
+    {
+      "path": "web/src/features/tests/tests.test.tsx",
+      "sha256": "e3065047e9f814d66d0135da863b52cf81fb37ca0521df0079467b623ed6584a"
+    },
+    {
+      "path": "web/src/features/tests/tests.tsx",
+      "sha256": "36b0fcfbc93710fca5593fe17aceb34408bc088ab121a7576ea938dd9fdaa794"
+    },
+    {
+      "path": "web/src/features/tests/types.ts",
+      "sha256": "8648e77965bf3347a36b4ba10ae049ddc49048cbbc66472cd2065ddb0de5036a"
+    },
+    {
+      "path": "web/src/styles.css",
+      "sha256": "a92750ce2ad02c985e2b3a5e457f687d5ed69958f823aab4d247335d6455baef"
+    },
+    {
+      "path": "web/tests/test-records.spec.ts",
+      "sha256": "98112d7d3f4296893fa9bd2d92a4475b38bcf479f985e50d5f461fce8d811a35"
+    }
+  ],
+  "documentation_files": [
+    {
+      "path": "docs/spec/test-records.spec.md",
+      "sha256": "7436529d8dd53075dd4ace8687fec89cb18b07dfa28ab5a447154254a2bcc740"
+    },
+    {
+      "path": "docs/plans/test-records.plan.md",
+      "sha256": "ac9727b4f42c8be9765ee5e50e371945a14863af6da11e7cff949c3632258ad0"
+    },
+    {
+      "path": "docs/acceptance/test-records.md",
+      "sha256": "f4f49e29f120f74f48dba555b414bcfd772e9a215825e3331ffe143648e68d05"
+    },
+    {
+      "path": "docs/testing.md",
+      "sha256": "428093abc1246cc774a523810f8e383918a4a1b68ef1f259feb834a0ebc93a6c"
+    },
+    {
+      "path": "tests/e2e/README.md",
+      "sha256": "6e69829896b2b57b35b5faaee4956787cff1f515c122f1b591c6d77541293a21"
+    }
+  ],
+  "limits": [
+    "No full repository suite or full L1/L2/L3 coverage claimed",
+    "No real model or PR flow executed",
+    "TR-M01 is intentionally pending; automatic desktop screenshot self-review is not user sign-off"
+  ]
+}

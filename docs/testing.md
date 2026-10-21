@@ -16,7 +16,7 @@ Windows 启动闪窗修复的最小验证见[专属验收](acceptance/startup-co
 
 [项目维护](product-design/project-maintenance.md)统一初始化/基线/局部规则，生成先审阅、再显式应用，首次启动固定远端最新代码和同版本材料。必要材料待办阻断相关首次启动，测试通过不作为发布/交付门禁。实现及验收入口见 [Plan](plans/project-maintenance.plan.md#测试计划)和[专属验收](acceptance/project-maintenance.md)。L1 新规则仅登记 quick-owner-project-maintenance，app/SQLite/生成相关测试仍归原 owner；新增 L3 runtime.project-maintenance 使用唯一生成器、受控双项目 Go/Web/Edge 流程。
 
-可映射到执行页的清单为 [test-list.json](testing/test-list.json)，格式遵循[测试管理 Spec](spec/test-management.spec.md)。每项必需 `id/name/level/environment/command/check`，仅 `note` 可选；拒绝未知字段、重复键/ID、空必需值与非法级别。首批登记固定 L1 整体及现存十三项 E2E 场景。E2E 执行选择仍以 `tests/e2e/suites.json` 为准；新增、删除、改级/环境/入口/主要断言时，依据通用规范同步修改实现、执行登记、展示清单和受影响 Plan。Web/脚本入口暂未登记，不推断它们已被覆盖。
+可映射到执行页的清单为 [test-list.json](testing/test-list.json)，格式遵循[测试管理 Spec](spec/test-management.spec.md)。每项必需 `id/name/level/environment/command/check`，仅 `note` 可选；拒绝未知字段、重复键/ID、空必需值与非法级别。展示清单登记固定 L1 整体及现有 E2E 场景。E2E 执行选择仍以 `tests/e2e/suites.json` 为准；新增、删除、改级/环境/入口/主要断言时，依据通用规范同步修改实现、执行登记、展示清单和受影响 Plan。Web/脚本入口暂未登记，不推断它们已被覆盖。
 
 `<name>.plan.md` 旁的 `<name>.tests.json` 只保存 `{"tests":["l1.minimum"]}` 这样的有序唯一 ID；Plan 链接它并解释选择。无需自动测试时可手工写空数组并说明原因。候选从固定 PlanRef 的同一 commit 读取安排/定义，缺失、无效或未核对的实际材料阻断相关首次启动；后续候选保留 Task 原快照。
 
@@ -31,9 +31,22 @@ steerline tests stop-generation -project <id> -generation-id <original-id> -requ
 
 生成复用 Runner generate/1 和 read_only。空模型结果、坏 ID、材料或目标变更不覆盖原文件；项目 tick 只保存原结果和已发生的应用事实，不写项目文件。查询返回只读 diff/review_digest；审阅后显式 apply，按当前 HEAD/分支、完整输入及目标原字节核对，取消后旧号不得新写。原 generate 重放不调用模型或应用；HEAD 前进后仍适用的输出可重新审阅再用新应用请求。作者维护 Plan 链接，正常提交/合入后检查并采用材料。
 
-`cmd/test-feedback -level=L1/L2/L3/L4` 在原隔离证据目录追加 `managed-<id>.json`，保留原 summary、JSONL 与退出码。封套字段为 `id/sequence/selection/environment/definitions/before_commit/after_commit/before_clean/after_clean/results`；definitions[id] 是规范化单项 JSON 的 SHA256：字段固定按 `id,name,level,environment,command,check` 排序，非空 `note` 最后附加；以 UTF-8、无 BOM/缩进/末尾换行、与 Go `json.Marshal(Definition)` 相同的字符串转义编码（含 HTML 字符转义），不直接散列清单原始排版或属性顺序。results 中每项仅有 `test_id/status/message/log`，status 为 passed/failed/incomplete，log 指向同目录原 summary。定向 Go 子集和 build-only 不输出整体通过；gate-only 仅报告实际 controlled ID。
+`cmd/test-feedback -level=L1/L2/L3/L4` 在原隔离证据目录追加 `managed-<id>.json`，保留原 summary、JSONL 与退出码。每报告对应一个登记测试集/环境；执行前冻结 32 位随机 `id`、`started_at`、`definition`、`selection/definitions`、实际 `command`、`repository`（Git common dir）、`branch` 和可选 `rerun_of`；执行后补 `finished_at/sequence/before_commit/after_commit/before_clean/after_clean/results/evidence`。`evidence` 声明同目录 `summary.json` 的原字节数/SHA256。definitions[id] 是规范化单项 JSON 的 SHA256：字段固定按 `id,name,level,environment,command,check` 排序，非空 `note` 最后附加；以 UTF-8、无 BOM/缩进/末尾换行、与 Go `json.Marshal(Definition)` 相同的字符串转义编码（含 HTML 字符转义），不直接散列清单原始排版或属性顺序。results 中每项为 `test_id/status/message/log`，status 为 passed/failed/incomplete，log 指向同目录原 summary。仅已有稳定子项的入口使用可选 `scope`，不跨报告拼接通过。定向 Go 子集和 build-only 不输出整体通过；gate-only 仅报告实际 controlled ID。
 
-已接入文档/生成、程序报告、Runner R2 公开收集/读取/Git 观察、不可变持久化和只读执行页。运行内使用现有 `-out .steerrunner/artifacts/<唯一执行ID>` 新目录，并由项目维护忽略规则；测试入口最后原子发布 `managed-*.json`，同目录 `summary.json` 为首版保留的原始证据。默认系统临时目录不会自动成为 Run 产物。收集原请求先持久化，未知只查询原请求；报告按原候选/Run 保存并核验字节长度和 SHA256，UI 显示 Run/artifact/摘要引用。真实场景 `testing.management-local-codex` 的结果见[专属验收](acceptance/test-management.md)。干净同 commit 才能计入当前结果，脏或未知来源只作历史/待复验。
+测试管理为项目级只读页面 `/projects/:id/tests`。脚本可独立登记，无需 Task/Run；候选仍从原 EvidenceView 核验，不用独立历史代替候选证明。新增/补登记复用 `STEERLINE_HOME` 发现应用：
+
+```powershell
+# 实际完成所选测试后可自动登记；登记失败不改变原测试退出码
+go run ./cmd/test-feedback -level L1 -record-project <配置ID> -out <新的绝对输出目录>
+# 单测试集的显式复验，父报告须已登记；无映射为独立运行
+go run ./cmd/test-feedback -level L3 -suite testing -scenario 'testing.records' -env controlled -record-project <配置ID> -rerun-of 'testing.records=<原报告ID>' -out <新目录>
+# 仅补登记现有报告，不运行测试
+steerline tests register -project <配置ID或项目ID> -report-dir <报告绝对目录>
+```
+
+报告至多 128 KiB，summary 至多 512 KiB，整份 JSON/base64 命令至多 1 MiB；逐报告原子登记并以项目+报告 ID 幂等。目录内普通文件才可读取，链接越界、内容/摘要冲突拒绝；缺失/过大 summary 仍登记原始结果并标证据不可用，不计复验通过，可按原声明摘要补齐。`registration.json` 单独保存报告 ID、传输请求号、登记/拒绝/未知状态及诊断。离线保留原产物，用原报告补登；本地 register 有失败/未知项非零，页面不提供执行或改结果按钮。详情接口将可能超过浏览器安全整数范围的 producer `sequence` 作为字符串输出，原报告字节/数值不变。复验只认显式链最新一份可比且完整覆盖原失败范围的通过报告，原失败保留；源码脏/未知允许展示复验通过，但显著标记“源码未固定”，不能当作固定 SHA 证明。
+
+已接入文档/生成、程序报告、Runner R2 公开收集/读取/Git 观察、不可变持久化和只读执行页。运行内使用现有 `-out .steerrunner/artifacts/<唯一执行ID>` 新目录，并由项目维护忽略规则；测试入口最后原子发布 `managed-*.json`，同目录 `summary.json` 为首版保留的原始证据。默认系统临时目录不会自动成为 Run 产物。收集原请求先持久化，未知只查询原请求；报告按原候选/Run 保存并核验字节长度和 SHA256，UI 显示 Run/artifact/摘要引用。真实场景 `testing.management-local-codex` 的结果见[专属验收](acceptance/test-management.md)。原候选的当前结果仍要求干净同 commit；项目历史按上文独立展示源码状态和显式复验。
 
 共享 Runner 的最小验证见[专属验收](acceptance/shared-runner-service.md)：固定 L1、请求/全局停止证明/reset 定向测试、新 L3 `runtime.shared-runner-projects` 与既有 waiting-merge-restart，以及新调试包的真实空闲服务拓扑。无模型，不操作安装环境。
 
