@@ -61,12 +61,16 @@ type Question struct {
 	NativeQuestions []Question `json:"native_questions"`
 }
 type Controls struct {
-	CanReply  bool   `json:"can_reply"`
-	CanResume bool   `json:"can_resume"`
-	CanStop   bool   `json:"can_stop"`
-	Reason    string `json:"reason"`
+	CanMessage   bool   `json:"can_message"`
+	CanInterrupt bool   `json:"can_interrupt"`
+	CanClose     bool   `json:"can_close"`
+	CanReply     bool   `json:"can_reply"`
+	CanResume    bool   `json:"can_resume"`
+	CanStop      bool   `json:"can_stop"`
+	Reason       string `json:"reason"`
 }
 type Run struct {
+	Closed           bool              `json:"closed"`
 	ContentResult    *ContentResult    `json:"content_result,omitempty"`
 	Correlation      map[string]string `json:"correlation,omitempty"`
 	Workflow         Workflow          `json:"workflow"`

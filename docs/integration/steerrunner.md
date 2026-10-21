@@ -2,6 +2,8 @@
 
 SteerLine 只通过 `steerrunner-cli/v1` 调用独立 EXE。Runner 同一个 EXE 提供短命 CLI 与常驻服务；CLI 连接同一 state-dir 的现有实例，读请求不自动启动服务。任务、DAG、候选参与及 TaskDelivery 留在 SteerLine。
 
+当前恢复与更新按[服务换代恢复契约](../spec/service-generation-recovery.spec.md)：相关契约兼容时保留原 Run/授权与执行资源，使用 verify-takeover 核对候选构建，不以全部资源先停止为固定前提。下述首次协作 Spec 4.2 的同构建限制和“未结算阻断换构建”仅保留历史范围；删除目录、重置和破坏性迁移仍须取得原范围资源结算证明。资源丢失、不兼容或未知原操作不能通过更新解除。
+
 所有 LLM 执行操作统一经 Runner 承担，职责声明见[LLM 执行边界](../architecture.md#llm-执行边界)。SteerLine 的默认预设选择与 Runner 内部 LLM 操作的默认链路分别说明于[两层默认链路](../product-design/execution-profiles.md#两层默认链路)；实际接入使用所选构建发布的公开配置与能力契约。
 
 测试安排生成已接入 Runner PR #33 / `9586ac4` 的 `generate/1`，复用指定本机 Codex profile 的 executable/model/reasoning_effort，并显式构造 read_only；开发认证、权限、audit 和提示词不随之复制。内容流程的公开目录允许空 prompt_steps；开发候选拒绝 generate/conversation workflow。只接生成所需的 submit/inspect/content_result/stop，conversation 操作留待规划台。2026-10-20 核对 Runner PR #34 的 R2 已随历史固定版本 `bf3ec58` 发布：`artifacts discover/collect/list/read` 和 `workspace-git`，capabilities 的 run_evidence/schema 给出正式约束。SteerLine 已接入这五个命令及能力/schema 校验：原候选的 collect 请求先持久化，未知只 inspect 原请求，read 核验 Run/artifact/长度/base64/SHA256 后保存不可变副本；只读查询结合近期 verified commit/clean 计算当前结果。原 Run 使用项目忽略的 `.steerrunner/artifacts/<唯一执行ID>/`；首版收集 managed 报告与同目录 summary.json。独立生成对象已纳入兼容 takeover、启动前原 stop outbox 与离线结算核验，保留历史 build pin 和原请求。历史 bf3ec58 的 generate 接管误校验已由 Runner #37 修复：freeze/takeover 按 workflow 能力及实际 parser 意图判断结果解析配置。干净主干 13ef123 的同 EXE 真实 generate 及原 k 包只读复验通过；历史 A/B 接管另按其固定构建取证，不改写原 pin 或扩大恢复授权。命令/格式见[测试规范](../testing.md#测试管理文档与结果)，版本及验证边界见[本任务验收](../acceptance/test-management.md)。
@@ -22,7 +24,9 @@ SteerLine 为 Runner 指定本地卷根下的短目录：Windows 为 `<drive>:\s
 
 查询不创建目录；显式服务启动才创建当前用户私有目录，拒绝重定向/网络卷。重置必须先证明原 Run 和服务已停止，随后只删除该项目的摘要目录，不能删除共享 `slr` 根。实现与实际结果见[短目录验收](../acceptance/runner-short-state-path.md)。SteerLine 仍只通过 CLI 读取公开 Run/事件，不读取其私有数据库或原生日志。
 
-恢复、回答和反馈需要当前公开 revision 的新授权。未知操作只查原 request_id，不能换 ID 重发；重启不自动恢复旧答案或业务输入。Runner 的原生查看能力以 capability 为准，不能直接猜测原会话路径或进程。
+新提交的恢复、回答和反馈需要当前公开 revision 的显式授权。兼容服务重启保留 Runner 原授权、会话与等待状态，可补收原结果并接续已证明未发送的后继，不因重启批量 resume；原资源丢失、不兼容、业务阻断和显式 stop 仍按原门槛处理。SteerLine 不自动生成新的 submit/reply/resume；旧调用方 pending 控制撤回，unknown 只查原 request_id。Runner 已受理且绑定原问题/执行范围的未发送答案按原授权对账，旧 epoch 或错范围仍需人工确认。不能换 ID 重发未知操作。详见[换代恢复契约](../spec/service-generation-recovery.spec.md)。
+
+交付摘要只读取已有 Run 投影和原命令回执，分别展示受理、原生结果、业务阶段、PR 与资源停止；命令 completed、pr_ready 和 resources_settled 不能互相替代。刷新不发送输入，不创建资源；完整 environment-check、纯 validate 和 R2 收集按需使用，Run 内的权限/来源/发布门槛保持。摘要实现与验收见[可靠性交付简化](../acceptance/reliable-delivery-simplification.md)。
 
 原生查看通过 `open-native-session --run-id R --attempt-id A --session-id S --generation G` 调用；只有 Runner 发布的 `native_session_viewer.adapters` 中相应 adapter 可用时启用按钮。原服务负责私有 binding 和实时进程/thread/workspace 核验，调用方不读取这些私有材料。详情与本次构建/验证范围见[原会话查看验收](../acceptance/native-session-viewer.md)。
 
