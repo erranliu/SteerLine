@@ -107,14 +107,31 @@ func startPresetDirectory(t *testing.T) (*ApplicationDirectory, *ProjectRuntime)
 	return d, d.entries[0].runtime
 }
 
+func prepareStoppedRunRepository(t *testing.T, c Config) {
+	t.Helper()
+	require(t, os.WriteFile(filepath.Join(c.Repository, "spec.md"), []byte("# Spec\n\n## Acceptance\n\nFrozen task.\n"), 0600))
+	require(t, os.WriteFile(filepath.Join(c.Repository, "task.plan.md"), []byte("# Plan\n\nFrozen implementation plan. No automated tests are required for this stopped Run fixture.\n"), 0600))
+	for name, body := range map[string]string{
+		"docs/testing.md":             "# Testing\nStopped public Run fixture.\n",
+		"docs/testing/test-list.json": `{"tests":[]}`,
+		"task.tests.json":             `{"tests":[]}`,
+	} {
+		path := filepath.Join(c.Repository, filepath.FromSlash(name))
+		require(t, os.MkdirAll(filepath.Dir(path), 0700))
+		require(t, os.WriteFile(path, []byte(body), 0600))
+	}
+	fixtureGit(t, c.Repository, "add", "spec.md", "task.plan.md", "task.tests.json", "docs")
+	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "frozen task references")
+	// Keep the configured repository identity while routing fixture fetches to
+	// a real isolated bare remote, never to the placeholder GitHub repository.
+	remote := filepath.Join(t.TempDir(), "origin.git")
+	fixtureGit(t, c.Repository, "clone", "--bare", c.Repository, remote)
+	fixtureGit(t, c.Repository, "config", "url.file:///"+filepath.ToSlash(remote)+".insteadOf", "https://github.com/owner/repo.git")
+}
+
 func testRuntimeReplacement(t *testing.T, restart bool, invalid ...bool) {
 	c, _ := nativeTaskFixture(t)
-	if restart {
-		require(t, os.WriteFile(filepath.Join(c.Repository, "spec.md"), []byte("# Spec\n\n## Acceptance\n\nFrozen task.\n"), 0600))
-		require(t, os.WriteFile(filepath.Join(c.Repository, "plan.md"), []byte("# Plan\n\nFrozen implementation plan.\n"), 0600))
-		fixtureGit(t, c.Repository, "add", "spec.md", "plan.md")
-		fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "frozen task references")
-	}
+	prepareStoppedRunRepository(t, c)
 	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
 	require(t, os.MkdirAll(EtcDir(), 0700))
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "one.json"), projectConfigJSON(t, c), 0600))
@@ -270,7 +287,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 		sum := sha256.Sum256(raw)
 		return taskmodel.FileReference{Path: name, Commit: base, SHA256: hex.EncodeToString(sum[:])}
 	}
-	spec, plan := ref("spec.md"), ref("plan.md")
+	spec, plan := ref("spec.md"), ref("task.plan.md")
 	contract := taskmodel.TaskContract{ContractID: "runtime-binding", Repository: "https://github.com/owner/repo.git", Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, AcceptanceRefs: []taskmodel.FileReference{spec}, CommonRefs: []taskmodel.FileReference{}}
 	var err error
 	contract.Digest, err = taskmodel.ContractDigest(contract)
@@ -280,6 +297,18 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion, ProjectID: c.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "a", TaskID: 1, Type: "task", Title: "Frozen task", Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
 	_, err = r.product.CreateTaskBatch(ctx, api.CreateInput{Payload: mustJSON(batch), RequestID: strings.Repeat("8", 32), RequestedBy: "fixture", ExpectedAuthorityVersion: graph.Authority.AuthorityVersion})
 	require(t, err)
+	m := r.config.runtimeMaintenance
+	_, err = m.check(ctx)
+	require(t, err)
+	assessment, err := m.assessment(ctx, "baseline", "task.plan.md", base)
+	require(t, err)
+	if len(assessment.Items) != 1 || assessment.Items[0].Status != "needs_review" {
+		t.Fatal("fixture materials invalid", assessment)
+	}
+	require(t, r.port.actor.Call(ctx, func() error {
+		_, err := m.approve(ctx, materialReview{RequestID: strings.Repeat("6", 32), Plan: "task.plan.md", Mode: "baseline", ReviewDigest: assessment.Items[0].ReviewDigest}, 1)
+		return err
+	}))
 	_, err = r.product.SubmitControl(ctx, api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.Repeat("7", 32), RequestedBy: "fixture"})
 	require(t, err)
 	wait, cancel := context.WithTimeout(ctx, 8*time.Second)
@@ -298,7 +327,6 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	// Reserve through the actual caller service; the idle peer supplies only an
 	// existing stopped Run observation, never a model or business execution.
 	service := runnerTaskService(r.config, r.store, r.runner.client)
-	service.ResolveBase = func(context.Context, taskmodel.FixedWork, bool) (string, error) { return base, nil }
 	candidate, err := service.Start(ctx, taskrunner.Start{RequestID: requestID, TaskID: "1", TaskVersion: 1, GraphRevision: graph.Authority.GraphRevision, Explicit: true})
 	require(t, err)
 	require(t, os.WriteFile(filepath.Join(r.runner.client.StateDir, "idle-run-fixture.json"), mustJSON(map[string]any{"run": public, "command": map[string]any{"request_id": candidate.Submit.RequestID, "command_id": "frozen-submit-command", "command": "submit", "run_id": public.RunID, "receipt_status": "accepted", "action_status": "completed"}}), 0600))

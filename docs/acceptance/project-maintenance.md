@@ -118,3 +118,15 @@ PM-M01 仍待用户体验签收，不把自动浏览器截图当作人工验收�
 完整证据：`C:\SteerlineDebug\pm-evidence-20261021-live-v3/proof.json` 及包内 `evidence/test-management/` 的原请求/生成/应用/候选、程序/API、两套 Edge 截图/trace、停止/verify-stop 与清理日志。发布版 Runner pin 与前述相同。前两轮的介入/空输出事实仍保留，不能被本轮结果覆盖。
 
 收尾修正纯提示文案：HEAD 与远端 commit 不同统一显示“本地与远端基线不同”，避免把本地领先或分叉一概描述为远端领先；仅文字和对应断言调整，面板 3/3 与 TypeScript/Vite 构建重新通过，未重复整套受控 L3。PM-A01–PM-A08 已完成本批自动验证，PM-M01 仍待人工体验。上述验证取证于提交前 dirty 工作区；后续提交与 PR 以 Git 事实为准。安装/保留运行环境未修改。
+
+
+## 2026-10-21 提交前主干集成
+
+用户授权提交、推送和提 PR 后，发现主干已增加 #370 候选请求实例隔离与 #371 事务内 Runner name_prefix 冻结。本批 rebase 至 `070bb7d7`，只手工合并两处并列文档说明，保留主干 freezeNumber/最终 submit 固定行为与本批执行快照事务；实施提交为 `33cd721f`。前述受控/live 仍明确归属 `9e02854e` 的实施工作区，本次未重复 live 或声称其覆盖新的主干 Runner 命名实现。
+
+- Web 集成回归：`npm --prefix web test -- project-maintenance.test.tsx plan-tests.test.tsx use-candidate-starts.test.tsx candidate-starts.test.tsx`，4 文件 17 项通过；`npm --prefix web run build` 通过。
+- Go 首轮：`C:\SteerlineDebug\pm-evidence-20261021-pr-integration/summary.json`，5 包 45 条记录、42 通过/3 失败（含父测试），4 个产品包全部通过；应用层失败限定为旧执行配置重启夹具：虚构 `owner/repo` 远端无法 fresh fetch。补本地隔离 bare remote、最小材料及显式核对后，`pr-preset-fix` 又揭示旧 `plan.md` 不符合现行 `.plan.md` 规范，该失败也保留，不回写为通过。
+- 最小修正仅限测试：共用 stopped Run 准备函数采用 `task.plan.md`/`task.tests.json`、空清单与明确无需自动测试说明，Git transport rewrite 保持原仓库业务身份；显式沿项目 actor 核对，删除已失效的 ResolveBase 替身。原运行时替换、原 Run/input/停止及重启断言均保留；没有关闭远端或材料验证。
+- 修正后失败项定向补验：`go run ./cmd/test-feedback -out C:/SteerlineDebug/pm-evidence-20261021-pr-preset-restart -- ./internal/app -run '^TestRunnerPresetFreeze/(reject_mismatched_run_after_explicit_restart|accept_replacement_after_explicit_restart)$' -count=1` 通过（182.463 秒）；共用夹具的 `TestStartupCancellationOutboxIsDurableBeforeRunnerStart` 另由 `pm-evidence-20261021-pr-outbox` 通过（93.263 秒）。对应 `summary.json`/JSONL 保留源码 dirty、原选择和逐项事实，未重跑已通过的全部场景。
+
+最终文档检查 508 份 Markdown、3183 条本地导航链接、0 错误，差异空白检查通过。PM-M01 仍后置；安装环境未修改。提交与 PR 信息以 Git 事实为准。

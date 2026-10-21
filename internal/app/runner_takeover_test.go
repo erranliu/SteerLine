@@ -84,10 +84,7 @@ func TestTakeoverKeepsFrozenCandidatesAndRequiresOriginalRequestDigest(t *testin
 
 func TestStartupCancellationOutboxIsDurableBeforeRunnerStart(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
-	require(t, os.WriteFile(filepath.Join(c.Repository, "spec.md"), []byte("# Spec\n\n## Acceptance\n\nFrozen task.\n"), 0600))
-	require(t, os.WriteFile(filepath.Join(c.Repository, "plan.md"), []byte("# Plan\n\nFrozen implementation plan.\n"), 0600))
-	fixtureGit(t, c.Repository, "add", "spec.md", "plan.md")
-	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "frozen task references")
+	prepareStoppedRunRepository(t, c)
 	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
 	require(t, os.MkdirAll(EtcDir(), 0700))
 	require(t, os.WriteFile(filepath.Join(EtcDir(), "one.json"), projectConfigJSON(t, c), 0600))
