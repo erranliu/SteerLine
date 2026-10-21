@@ -8,9 +8,9 @@
 
 本机方案使用 codex-app-server 和 local target。远端方案使用 orca-terminal、orca_environment 与明确 environment；transport 指定 Orca CLI，agent_launch 只配置 native executable/args/model/reasoning_effort 和 access_mode，不接受 helper runtime 路径/SHA。远端使用已有登录，停止只证明原 Orca 终端；完整 Check unsupported 不阻断普通 Run。执行主机须已注册匹配仓库并取得固定 base commit；未知操作只对账原资源。
 
-普通 workflow 为 development/1，审计预设显式选择 development-audited/1，并提供 workflow.audit_model；Runner 发布 workflows、workflow schema 和自包含的 run_configuration 组合 schema，caller 不补执行默认值。Runner 内嵌流程、提示词与 schema，原生代理在 implement、report、publish 的独立输入中执行。受理时固定 Spec/Plan 材料、规范化参数与提示词模板/覆盖正文；每轮最终输入在结果/反馈与授权确定后、发送前保存，恢复保留原正文和模型参数，不在受理时预生成未来轮次或原生身份。定制正文仍须保留固定材料和机器结果契约。SteerLine 只选择公开方案，不解释原生终端文本推进业务。
+普通与审计开发 workflow 的 ID/version 以所选 Runner 构建的公开目录为准，审计预设提供 workflow.audit_model；Runner 发布 workflows、workflow schema 和自包含的 run_configuration 组合 schema，caller 不补执行默认值。Runner 内嵌流程、提示词与 schema，原生代理在 implement、report、publish 的独立输入中执行。受理时固定 Spec/Plan 材料、规范化参数与提示词模板/覆盖正文；每轮最终输入在结果/反馈与授权确定后、发送前保存，恢复保留原正文和模型参数，不在受理时预生成未来轮次或原生身份。定制正文仍须保留固定材料和机器结果契约。SteerLine 只选择公开方案，不解释原生终端文本推进业务。
 
-[协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)定义预设/提交/受理数据及审计 workflow 接入。其 4.2 分开规定同构建换预设、服务换代与更换构建：原 Run 参数不变；新 Runner 实例仅在用户显式重启 SteerLine、重建 ProjectRuntime 的初始化时核验接纳，旧运行时发现替代实例拒绝新业务输入，不自动重新绑定。未结算对象阻断换构建，本期新构建使用无旧执行状态的新环境。调用方已实现上述准入和多 workflow 展示；构建 pin 持久在项目 checkpoint，候选冻结原名称/参数摘要/完整提交，参数摘要仅覆盖 execution + workflow 的有序对象 JSON；不支持升级/接管旧现场。实际结果归[专属验收](../acceptance/runner-collaboration.md)。
+[协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)定义预设、提交、受理数据及审计 workflow 接入。原 Run 参数、候选名称/参数摘要/完整提交保持冻结；参数摘要仅覆盖 execution + workflow 的有序对象 JSON。新 Runner 实例在显式重启 SteerLine、重建 ProjectRuntime 时核验接纳，运行中的旧实例围栏保持。更换构建按后续[兼容接管契约](../spec/service-generation-recovery.spec.md)核验原候选、请求、检查及生成对象；只更新当前应用服务 pin，不改历史构建/输入/PR/Delivery 事实。应用构建 pin 位于 `application-api/runner-build.json`，项目 checkpoint 保留原操作绑定。缺兼容或原资源证明仍阻断，销毁/reset 仍要求结算。实际结果归[协作验收](../acceptance/runner-collaboration.md)与[换代验收](../acceptance/service-generation-recovery.md)。
 
 ## 两层默认链路
 
@@ -29,7 +29,7 @@ Runner 内部操作有显式链路配置时按其契约执行，未显式指定�
 
 ## 权限与登录
 
-2026-10-16 接入：SteerLine caller/HTTP/Web 已实现，真实 Runner 发布交接待前置。[环境检查接入 Spec](../spec/environment-check.spec.md) / [Plan](../spec/environment-check.plan.md)消费 Runner 独立规格发布的 `execution.settings.access_mode=sandbox|full_access`，缺省 sandbox；检查与业务启动使用同源冻结模式，均不依赖人工/自动审批。认证类型和准备由 Runner 原 owner 决定，不新增宿主登录回退。主动 Agent 检查不替代业务无模型确定性预检；历史报告不替代新工作区必要核验。Runner 沙箱认证的作用域冲突及远端前置须在其最终版本落实，SteerLine 不生成原生权限参数，不据文档宣称双模式或远端已可用。
+[环境检查接入 Spec](../spec/environment-check.spec.md) / [Plan](../spec/environment-check.plan.md)已对齐 Runner 正式公开契约，消费 `execution.settings.access_mode=sandbox|full_access`，缺省 sandbox；检查与业务启动使用同源冻结模式。caller/HTTP/Web 自动验证及固定版本本机 full_access 真机正例见[专属验收](../acceptance/environment-check.md)，完整人工体验仍待安排；其余权限、远端和恢复组合分别核验。认证类型和准备由 Runner 原 owner 决定；主动 Agent 检查不替代业务无模型确定性预检，历史报告不替代新工作区核验，SteerLine 不生成原生权限参数或增加登录回退。
 
 本机 Codex 的固定原生权限资源、MXC AppContainer、Git 管理根及临时目录规则由 Runner 管理。原生拒绝与未核实事实如实记录；SteerLine 不扩大写根、不添加权限回退，也不代代理发布。
 
@@ -37,7 +37,7 @@ Git、Codex、Orca 和原有登录属于执行环境。生成调试包不复制 
 
 ## 运行、停止与恢复
 
-同一个 Runner EXE 提供短命 CLI 和常驻服务。SteerLine 显式启动或连接项目 state-dir 对应服务，通过 CLI 读写公开 Run/事件；只读查询不会启动服务。Runner 状态归完整应用 run-dir 派生的独立短目录（Windows 为卷根 `slr/<摘要>`），由 Runner 单写，具体布局见[接入说明](../integration/steerrunner.md)；SteerLine 只保存候选绑定、原 CLI outbox 和公开事件投影。
+同一个 Runner EXE 提供短命 CLI 和常驻服务。应用宿主在项目 census 后初始化一个 home 级 Runner，各项目借用同一固定客户端，通过公开 CLI 读写 Run/事件；只读查询不会启动服务。Runner 状态归规范绝对 home 派生的独立短目录（Windows 为卷根 `slr/<摘要>`），由 Runner 单写，具体布局见[接入说明](../integration/steerrunner.md)；Task 数据库按项目隔离，SteerLine 保存候选绑定、原 CLI outbox 和公开事件投影。
 
 accepted 仅表示请求已持久受理。未知结果查询原 request_id；重启不重新发送旧答案、反馈或 resume。回答和恢复须使用当前公开 revision 的新授权。Task 终态的停止义务留在 SteerLine，原 Run 停止与原生资源停止分别取证；不能用父进程退出、终端空闲或服务停服回执代替执行停止。
 

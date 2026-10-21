@@ -20,7 +20,7 @@
 
 ## 2026-10-13 清理的二阶段与延期规格
 
-以下均已退出当前规划，不作为待重定队列或前置。编号不复用，当前仅[任务 #91](../../../spec/tui-http-client.spec.md)；#44 工程删除由 #91 实施，历史交付与原未验不改称通过。
+以下均已退出当前规划，不作为待重定队列或前置。编号不复用；[任务 #91](../../../spec/tui-http-client.spec.md)已交付并删除 #44 工程，TUI 随后退役。当前执行以[正式清单](../../../roadmap/execution-map.md)为准，历史交付与原未验不改称通过。
 
 | 原归属 / Spec | 原 Plan |
 | --- | --- |
@@ -35,3 +35,15 @@
 | [#50 执行页面](phase2-execution-ui.spec.md) | [Plan](phase2-execution-ui.plan.md) |
 | [#51 规划对话页面](phase2-conversation-ui.spec.md) | [Plan](phase2-conversation-ui.plan.md) |
 | [#52 文档审阅页面](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |
+
+## 2026-10-21 Orca 历史方案归档
+
+| 原方案 | 文档 | 退役原因与原证据 |
+| --- | --- | --- |
+| 本机原生通用 worker | [Spec](orca-native-worker.spec.md) · [Plan](orca-native-worker.plan.md) | 旧 worker-start/Dispatch 已删除；[原验收](../../../acceptance/archive/superseded/orca-native-worker.md) |
+| 本机原生编排 | [Spec](worker-flow-orca-native.spec.md) · [Plan](worker-flow-orca-native.plan.md) | 原 ON 场景随路线退役，未验保留；[原验收](../../../acceptance/archive/superseded/worker-flow-orca-native.md) |
+| supervised 分步结果 | [Spec](orca-supervised-results.spec.md) · [Plan](orca-supervised-results.plan.md) | payload/supervised 路线已替代；[原验收](../../../acceptance/archive/superseded/orca-supervised-results.md) |
+| supervised 双目标 | [Plan](orca-supervised-targets.plan.md) | 旧实现退役；[原验收](../../../acceptance/archive/superseded/orca-supervised-targets.md) |
+| 本机输入与就绪 | [Spec](orca-local-input-readiness.spec.md) · [Plan](orca-local-input-readiness.plan.md) | 本机 Orca 已放弃，有限通过样本仍有效于原版本；[原验收](../../../acceptance/archive/superseded/orca-local-input-readiness.md) |
+
+当前远端 Orca 经独立 Runner 接入，见[接入说明](../../../integration/steerrunner.md)。归档不宣告历史失败、取消或未验通过，也不要求恢复旧路线。

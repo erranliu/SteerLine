@@ -1,6 +1,6 @@
 # #231 三窗与内嵌反馈验收摘要
 
-2026-10-07 第一批产品精简，绑定[Spec](../../../spec/product-simplification-01-console.spec.md)与[Plan](../../../spec/product-simplification-01-console.plan.md)。三窗、当前候选/Attempt 最新 10 条活动、原地反馈、完整业务最终回复与只保存草稿/原请求的 UI 偏好已实现；第二、三批不因此完成。
+2026-10-07 第一批产品精简，绑定[Spec](../../../archive/spec/completed/product-simplification-01-console.spec.md)与[Plan](../../../archive/spec/completed/product-simplification-01-console.plan.md)。三窗、当前候选/Attempt 最新 10 条活动、原地反馈、完整业务最终回复与只保存草稿/原请求的 UI 偏好已实现；第二、三批不因此完成。
 
 | 范围 | 原结果 |
 | --- | --- |

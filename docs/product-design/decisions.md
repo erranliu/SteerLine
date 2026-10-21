@@ -47,7 +47,7 @@ Execution 的恢复门槛和版本每次换服务实例重新建立；第一次�
 
 宿主等待期间的普通文字与中心动作备注不混成新的 worker 指令。业务反馈的原问题、答案与发送事实保持独立，恢复后仍须核验原目标与投递资格；目标过期则保留并提示，未知发送只对账。原生会话查看是独立宿主副作用，精确绑定原会话，不创建业务轮次。
 
-当前单终端 Orca 没有旧 supervised 的 Dispatch/message/结果 relay 或准备 nonce 路径；历史[环境验收](../acceptance/archive/completed/worker-readiness.md)保留原结果，不作为现行能力声明。当前能力、完成核验及未重跑范围见[Orca 架构](../architecture/orca-native-worker.md)与[补查询验收](../acceptance/orca-completion-query.md)。
+当前单终端 Orca 没有旧 supervised 的 Dispatch/message/结果 relay 或准备 nonce 路径；历史[环境验收](../acceptance/archive/completed/worker-readiness.md)保留原结果，不作为现行能力声明。当前能力、完成核验及未重跑范围见[Orca 架构](../archive/design/orca-native-worker.md)与[补查询验收](../acceptance/orca-completion-query.md)。
 
 ## 分步反馈与恢复
 

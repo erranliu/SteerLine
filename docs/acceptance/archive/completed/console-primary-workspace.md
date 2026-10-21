@@ -1,6 +1,6 @@
 # 控制台三窗体验与 PR #234 质量审计
 
-绑定 [Spec](../../../spec/console-primary-workspace.spec.md) / [Plan](../../../spec/console-primary-workspace.plan.md)。实现基线 `172cea6c`，首次交付 `6e920356`；2026-10-07 质量审计同步主分支 `ae32f300`，合并提交 `d6e36a3d`。
+绑定 [Spec](../../../archive/spec/completed/console-primary-workspace.spec.md) / [Plan](../../../archive/spec/completed/console-primary-workspace.plan.md)。实现基线 `172cea6c`，首次交付 `6e920356`；2026-10-07 质量审计同步主分支 `ae32f300`，合并提交 `d6e36a3d`。
 
 ## 已有实现验证
 

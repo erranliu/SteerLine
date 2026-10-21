@@ -58,7 +58,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 | 单事务候选领取 | 图/任务版本 CAS | [runner_candidates.go](../../internal/storage/sqlite/runner_candidates.go) |
 | 交付与后继 | Task 自有事务 | [runner_result.go](../../internal/storage/sqlite/runner_result.go) |
 | 公开事件 | 游标和事件 ID 去重 | [runner_events.go](../../internal/storage/sqlite/runner_events.go) |
-| 执行 workflow / 原生格式 | Runner 独立 owner；development/1 | [Runner 接入](../integration/steerrunner.md) |
+| 执行 workflow / 原生格式 | Runner 独立 owner；ID/version 取所选构建公开目录 | [Runner 接入](../integration/steerrunner.md) |
 
 节点和异常规则见[生命周期](worker-lifecycle.md)，配置见[执行方案](execution-profiles.md)，实际通过/未验见[接入验收](../acceptance/steerrunner-cutover.md)。历史 Spec 的迁出前源码链接固定在原 Git 提交，只作追溯。
 

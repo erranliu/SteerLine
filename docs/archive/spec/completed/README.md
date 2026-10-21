@@ -1,8 +1,8 @@
 # 已交付 Spec 与 Plan
 
-本目录保存已经执行并合入的规格、配套计划与阶段共同约束。核对基线为三线最终清理 PR227 合入后的源码树；原文中的“待实施”“待评审”、旧模块路径和阶段前置属于交付时的历史记录，不是当前待办。移动仅修正文档导航，原固定 Git 引用仍由原 commit 提供。
+本目录保存已经执行并合入的规格、配套计划与阶段共同约束。早期归档基线为三线最终清理 PR227 合入后的源码树，后续补充的基线与来源另列；原文中的“待实施”“待评审”、旧模块路径和阶段前置属于交付时的历史记录，不是当前待办。移动仅修正文档导航，原固定 Git 引用仍由原 commit 提供。
 
-当前剩余任务见[Spec 索引](../../../spec/README.md)，当前接口见[代码架构](../../../architecture/current-code-architecture.md)。本机 Orca 和 local 的未闭合定向验收仍留在活动 Spec 索引；归档不宣告远端流程、旧故障矩阵或未测平台已经通过。
+当前剩余任务见[Spec 索引](../../../spec/README.md)，当前接口见[代码架构](../../../architecture/current-code-architecture.md)。仍适用的 local 定向验收留在活动 Spec 索引，本机 Orca 旧方案见[退役规格](../retired/README.md)；归档不宣告远端流程、旧故障矩阵或未测平台已经通过。
 
 ## 交付依据
 
@@ -87,3 +87,16 @@
 | [Plan：解耦后的代码精简](post-decoupling-simplification.plan.md) | 独立修复/验证计划 |
 | [189 后基线修复](rebase-189-baseline-repair.plan.md) | 独立修复/验证计划 |
 | [Plan：测试设计审计与基线修复](test-baseline-repair.plan.md) | 独立修复/验证计划 |
+
+## 2026-10-21 补充归档
+
+| 已交付范围 | Spec / Plan | 原版本验收 / 交付依据 |
+| --- | --- | --- |
+| 控制台与内嵌反馈 | [Spec](product-simplification-01-console.spec.md) · [Plan](product-simplification-01-console.plan.md) | [记录](../../../acceptance/archive/completed/product-console.md)；PR #231 |
+| 原生权限与审核配置 | [Spec](product-simplification-02-configuration.spec.md) · [Plan](product-simplification-02-configuration.plan.md) | [记录](../../../acceptance/archive/completed/product-simplification-02-configuration/README.md)；PR #236 |
+| 资源与 CLI 收口 | [Spec](product-simplification-03-resources-cli.spec.md) · [Plan](product-simplification-03-resources-cli.plan.md) | [记录](../../../acceptance/archive/completed/product-simplification-03-resources-cli/README.md)；PR #238 |
+| 会话与恢复精简 | [Spec](product-simplification-04-conversation-recovery.spec.md) · [Plan](product-simplification-04-conversation-recovery.plan.md) | [记录](../../../acceptance/archive/completed/product-simplification-04-conversation-recovery.md)；PR #243 |
+| 控制台主界面 | [Spec](console-primary-workspace.spec.md) · [Plan](console-primary-workspace.plan.md) | [记录](../../../acceptance/archive/completed/console-primary-workspace.md)；PR #234 |
+| 迁出前 Worker 三层重构 | [Spec](worker-three-layer.spec.md) · [Plan](worker-three-layer.plan.md) | [记录](../../../acceptance/archive/completed/worker-three-layer.md)；PR #313，TL-A01–TL-A07 自动通过 |
+
+上述合并提交均在本次核对基线 `45d2e8d9` 的历史中。TUI 后续退役，执行实现迁到独立 Runner；本表不把原版本证据晋升为当前构建通过。
