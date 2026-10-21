@@ -119,6 +119,14 @@
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=configuration -scenario=configuration.execution-profiles -env=controlled",
       "check": "浏览器条件保存本机Orca三Agent配置、待重启门槛、正式停启、关闭Web后CLI核对adapter/target/agent/model/effort/helper，原候选不变且资源清理完整。"
+    },
+    {
+      "id": "testing.records",
+      "name": "测试集记录与显式复验",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -scenario=testing.records -env=controlled",
+      "check": "新隔离包中真实小型脚本失败后提交修正并通过，经正式 CLI、SQLite、API 和浏览器展示显式复验；原报告重放无重复，停止和资源清理完整。"
     }
   ]
 }

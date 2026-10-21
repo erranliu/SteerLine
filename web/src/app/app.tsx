@@ -10,6 +10,7 @@ import {
 import {
   GitBranch,
   Layers,
+  FlaskConical,
   Settings,
   RefreshCw,
   ArrowUpRight,
@@ -32,6 +33,11 @@ import { useApplicationProjects } from "./use-application-projects";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
 import { useCandidateStarts } from "./use-candidate-starts";
+const Tests = lazy(() =>
+  import("../features/tests/tests").then((module) => ({
+    default: module.Tests,
+  })),
+);
 const EnvironmentChecks = lazy(() =>
   import("../features/environment-checks/environment-checks").then(
     (module) => ({ default: module.EnvironmentChecks }),
@@ -131,6 +137,10 @@ export function Workspace({
                 <span className="nav-count">{counts.questions}</span>
               )}
             </NavLink>
+            <NavLink to={"/projects/" + identity.project_id + "/tests"}>
+              <FlaskConical size={17} />
+              <span>测试管理</span>
+            </NavLink>
           </nav>
           <div className="sidebar-footer">
             <NavLink to="/settings/execution-configs">
@@ -181,7 +191,9 @@ export function Workspace({
             </div>
           </header>
           <main>
-            <ProjectMaintenance key={identity.project_id+identity.instance_id} />
+            <ProjectMaintenance
+              key={identity.project_id + identity.instance_id}
+            />
             {!online && (
               <div className="notice amber" role="status">
                 <strong>
@@ -224,6 +236,10 @@ export function Workspace({
             <Dispatch />
             <Suspense fallback={<div className="empty">正在加载页面…</div>}>
               <Routes>
+                <Route
+                  path={"/projects/" + identity.project_id + "/tests"}
+                  element={<Tests />}
+                />
                 <Route
                   path={
                     "/projects/" + identity.project_id + "/environment-checks"

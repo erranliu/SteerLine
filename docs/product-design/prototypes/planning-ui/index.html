@@ -491,7 +491,7 @@ body { margin: 0; padding: 16px; }
 @media(max-width:650px) { #sl-viz .debug-environment-workspace { grid-template-columns: minmax(0,1fr); } #sl-viz .debug-environment-list { border-right: 0; border-bottom: 1px solid var(--sl-border); } }
 
 #sl-viz[data-page="tests"] .screen-tests { display: block; }
-#sl-viz .test-level-cards { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; padding: 18px 20px 12px; }
+#sl-viz .test-level-cards { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 10px; padding: 18px 20px 12px; }
 #sl-viz .test-level-card { padding: 12px; text-align: left; background: var(--sl-surface); border: 1px solid var(--sl-border); border-radius: 8px; font-size: 12px; line-height: 1.6; }
 #sl-viz .test-level-card.selected { background: var(--sl-accent-soft); border-color: var(--sl-accent); }
 #sl-viz .test-level-card strong { display: block; font-size: 14px; }
@@ -505,18 +505,27 @@ body { margin: 0; padding: 16px; }
 #sl-viz .test-suite-detail, #sl-viz .test-full-panel { padding: 20px; min-width: 0; }
 #sl-viz .test-suite-metadata { margin: 12px 0; font-size: 12px; line-height: 1.7; }
 #sl-viz .test-case { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--sl-border); font-size: 12px; line-height: 1.7; }
-#sl-viz .test-run-controls { border-top: 1px solid var(--sl-border); margin-top: 20px; padding-top: 16px; }
-#sl-viz .test-run-controls .button-row { margin-top: 14px; }
-#sl-viz .test-run-controls .button-row select { width: auto; }
 #sl-viz .test-record, #sl-viz .test-plan-row { margin-top: 12px; padding: 14px; background: var(--sl-surface); border: 1px solid var(--sl-border); border-radius: 8px; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
 #sl-viz .test-record p, #sl-viz .test-plan-row p { margin-top: 4px; }
+#sl-viz .test-search { padding: 0 20px 14px; }
+#sl-viz .test-record-filters { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 14px 0; }
+#sl-viz .test-record-filters label { font-size: 12px; }
+#sl-viz .test-record-filters input, #sl-viz .test-record-filters select { width: 100%; margin-top: 5px; }
+#sl-viz .test-record-summary { padding: 12px; background: var(--sl-accent-soft); border-radius: 8px; font-size: 12px; line-height: 1.9; }
+#sl-viz .test-record summary { cursor: pointer; }
+#sl-viz .test-record-chain { padding: 10px; margin-top: 10px; border-left: 3px solid var(--sl-accent); background: var(--sl-soft); }
+#sl-viz .test-result-passed { color: var(--sl-green); }
+#sl-viz .test-result-failed { color: var(--sl-red); }
+#sl-viz .test-result-incomplete { color: var(--sl-amber); }
+#sl-viz .test-empty { padding: 24px 0; font-size: 12px; color: var(--sl-muted); }
+#sl-viz .test-record .button-row { margin-top: 10px; }
 #sl-viz .task-tests { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--sl-border); font-size: 12px; line-height: 1.7; }
 #sl-viz .task-tests button { white-space: normal; overflow-wrap: anywhere; text-align: left; }
 #sl-viz .pr-test-gate { padding: 12px; border: 1px solid var(--sl-border); background: var(--sl-soft); border-radius: 8px; margin: 12px 0; font-size: 12px; line-height: 1.7; }
 #sl-viz .pr-test-gate .button-row { margin-top: 10px; }
 #sl-viz .draft-test-plan { margin-top: 13px; border-top: 1px solid var(--sl-border); padding-top: 10px; }
 @media(max-width:800px) { #sl-viz .test-level-cards { grid-template-columns: repeat(2,minmax(0,1fr)); } }
-@media(max-width:650px) { #sl-viz .test-workspace { grid-template-columns: minmax(0,1fr); } #sl-viz .test-suite-list { border-right: 0; border-bottom: 1px solid var(--sl-border); } }
+@media(max-width:650px) { #sl-viz .test-workspace { grid-template-columns: minmax(0,1fr); } #sl-viz .test-suite-list { border-right: 0; border-bottom: 1px solid var(--sl-border); } #sl-viz .test-record-filters { grid-template-columns: minmax(0,1fr); } }
 
 #sl-viz[data-page="experience"] .screen-experience { display: block; }
 #sl-viz .experience-overview { padding: 12px 20px; font-size: 12px; line-height: 1.8; color: var(--sl-muted); border-top: 1px solid var(--sl-border); overflow-wrap: anywhere; }
@@ -718,7 +727,7 @@ body { margin: 0; padding: 16px; }
       <div data-empty-run class="callout" hidden>此任务尚未执行。请从任务 DAG 首次启动，或由当前项目的自动派发启动一个默认候选。<div class="button-row" style="margin-top:10px"><button class="sl-button" data-nav="dag">前往任务 DAG</button></div></div>
       <div data-selected-run hidden>
         <div class="execution-heading"><div><h3 data-candidate-title></h3><p class="run-id" data-candidate-id></p></div><span class="status" data-candidate-status></span></div>
-        <div class="candidate-meta" data-candidate-meta></div><div class="pr-test-gate"><strong>Plan · PR 前长期测试</strong><p data-pr-test-status></p><div data-pr-test-requirements></div><div class="button-row"><button class="sl-button" data-action="run-plan-managed-tests">按 Plan 执行测试</button><button class="sl-button primary" data-action="publish-tested-pr" hidden>演示：提交 / 更新 PR</button></div></div>
+        <div class="candidate-meta" data-candidate-meta></div><div class="pr-test-gate"><strong>Plan · PR 前长期测试</strong><p data-pr-test-status></p><div data-pr-test-requirements></div><div class="button-row"><button class="sl-button" data-action="run-plan-managed-tests">查看脚本测试记录</button><button class="sl-button primary" data-action="publish-tested-pr" hidden>演示：提交 / 更新 PR</button></div></div>
         <div class="decision-box" data-decision-box hidden>
           <strong data-question-title></strong><p data-question-body></p>
           <label class="field-label" for="candidate-answer" data-answer-target></label>
@@ -788,15 +797,27 @@ body { margin: 0; padding: 16px; }
 </section>
 
 <section class="screen screen-tests" aria-label="测试管理">
- <div class="page-head"><div><h1>测试管理</h1><p class="sub">项目长期测试目录 · 固定级别与场景 · 运行记录</p></div><span class="status" data-test-catalogue-version></span></div>
- <div class="test-level-cards" data-test-level-cards></div><div class="test-catalogue-notice">L1 是每次 PR 必须通过的最小集；L3 是可并行的常规测试；L4 是不可并行的测试及各种边界情况测试，只能人工触发，Plan 不会自动选取执行。临时开发测试不进入本页，未纳入长期分级入口的测试应安排清理。</div>
- <div class="test-view-tabs"><button class="filter active" data-test-view="catalogue">长期目录</button><button class="filter" data-test-view="runs">运行记录</button></div>
- <div data-test-catalogue-view class="test-workspace"><aside class="test-suite-list" data-test-suite-list></aside><div class="test-suite-detail"><h2 data-test-suite-title></h2><p class="sub" data-test-suite-description></p><div class="test-suite-metadata" data-test-suite-metadata></div><div data-test-case-list></div><pre class="json-preview" data-test-suite-command></pre>
-  <div class="callout" data-test-extension-state hidden></div><button class="sl-button" data-action="register-test-extension" hidden>演示：扩展已实现并登记分级入口</button>
-  <div class="test-run-controls"><h3>运行长期测试 · 演示</h3><label class="field-label" for="test-source">提交 / 候选来源</label><select id="test-source" data-test-source></select><p class="sub" data-test-source-summary></p><label class="field-label" for="test-environment">实际运行测试的独立调试环境</label><select id="test-environment" data-test-environment></select><p class="sub" data-test-environment-reason></p><div class="button-row"><label class="small">演示结果 <select data-test-outcome><option value="passed">通过</option><option value="failed">失败</option></select></label><button class="sl-button primary" data-action="run-managed-test">运行选中测试 · 演示</button></div><p class="validation-message" data-test-run-validation role="status"></p><p class="receipt" data-test-run-receipt role="status"></p></div>
+ <div class="page-head"><div><h1>测试管理</h1><p class="sub">脚本登记的执行记录 · 测试集与复验过程</p></div><span class="status" data-test-catalogue-version></span></div>
+ <div class="test-level-cards" data-test-level-cards></div>
+ <div class="test-catalogue-notice">测试脚本执行并登记报告，本页只读查看。通过仅证明记录中的代码、定义、环境与实际范围；复验通过须有单次完整匹配报告，保留原失败，不拼接不同提交的部分通过。</div>
+ <div class="test-search"><label class="field-label" for="test-search">搜索测试集名称 / ID</label><input id="test-search" type="search" data-test-search placeholder="例如：任务、L3-TASK"></div>
+ <div class="test-workspace"><aside class="test-suite-list" data-test-suite-list aria-label="测试集"></aside><div class="test-suite-detail">
+  <h2 data-test-suite-title></h2><p class="sub" data-test-suite-description></p><p class="sub" data-test-observation role="status"></p>
+  <div class="test-view-tabs"><button class="filter" data-test-view="runs">运行记录</button><button class="filter" data-test-view="catalogue">测试定义</button></div>
+  <div data-test-catalogue-view hidden><div class="test-suite-metadata" data-test-suite-metadata></div><div data-test-case-list></div><pre class="json-preview" data-test-suite-command></pre><p class="sub">以上命令仅供查看，页面不会执行命令。清单登记不代表入口已经实现或测试已经通过。</p></div>
+  <div data-test-runs-view>
+   <div class="test-record-filters">
+    <label>原始结果<select data-record-filter="outcome"><option value="all">全部结果</option><option value="passed">通过</option><option value="failed">失败</option><option value="incomplete">未完成</option></select></label>
+    <label>复验情况<select data-record-filter="retest"><option value="all">全部复验情况</option><option value="pending">失败待复验</option><option value="passed">复验通过</option><option value="partial">部分复验通过</option><option value="changed">定义变化，待另行核对</option></select></label>
+    <label>环境<select data-record-filter="environment"><option value="all">全部环境</option><option value="isolated">isolated</option><option value="controlled">controlled</option><option value="live">live</option></select></label>
+    <label>分支 / SHA<input data-record-filter="source" placeholder="例如 main 或 2222222"></label>
+    <label>开始日期<input type="date" data-record-filter="from"></label><label>结束日期<input type="date" data-record-filter="to"></label>
+   </div>
+   <div class="button-row"><button class="sl-button" data-action="reset-test-filters">清除筛选</button></div><p class="validation-message" data-test-filter-error role="status"></p>
+   <div class="test-record-summary" data-test-record-summary></div><div data-test-run-list></div>
+  </div>
  </div></div>
- <div data-test-runs-view hidden class="test-full-panel"><h2>不可变运行记录</h2><p class="sub">提交、候选、目录、定义版本、所选场景、完成范围和证据分别保留；旧提交或未完整结果不计入当前 PR 要求。</p><div data-test-run-list></div></div>
- <p class="prototype-note" style="padding:14px 20px">分级目录、运行与 PR 检查均为演示。不会执行真实测试、提 PR 或扫描 / 删除临时测试。</p>
+ <p class="prototype-note" style="padding:14px 20px">记录、脚本登记及证据均为内嵌演示数据，不访问服务或本机文件。其他分页保留早期流程演示，不属于本次测试记录契约。</p>
 </section>
 
 <section class="screen screen-experience" aria-label="体验版本">
@@ -1250,7 +1271,7 @@ body { margin: 0; padding: 16px; }
   };
   const minimumCodeCases=['TC-C01','TC-C02','TC-C03'];
   const managedSuites=[
-    {id:'L1-MIN',level:'L1',name:'PR 必须验证的最小集',runtime:false,cases:[...minimumCodeCases],version:1,lifecycle:'maintained',command:'project-tests run --level L1 --suite minimum（演示入口）'},
+    {id:'L1-MIN',level:'L1',name:'快速单元与集成测试集',runtime:false,cases:[...minimumCodeCases],version:1,lifecycle:'maintained',command:'project-tests run --level L1 --suite minimum（演示入口）'},
     {id:'L2-SMOKE',level:'L2',name:'实际运行 smoke',runtime:true,cases:['TC-S01'],version:1,lifecycle:'maintained',command:'project-tests run --level L2 --suite smoke（演示入口）'},
     {id:'L3-TASK',level:'L3',name:'任务与交付实际功能',runtime:true,cases:['TC-F01','TC-F02'],version:1,lifecycle:'maintained',command:'project-tests run --level L3 --suite task（演示入口）'},
     {id:'L3-FEEDBACK',level:'L3',name:'候选与反馈实际功能',runtime:true,cases:['TC-F03','TC-F04'],version:1,lifecycle:'maintained',command:'project-tests run --level L3 --suite feedback（演示入口）'},
@@ -1275,15 +1296,10 @@ body { margin: 0; padding: 16px; }
   };
   Object.values(tasks).forEach(t=>t.testPlan=copyObject(draftTestPlans[t.id]));
   const initialVersionCoverage={};Object.values(tasks).filter(t=>t.delivery).forEach(t=>{const c=t.candidates.find(c=>c.id===t.delivery);initialVersionCoverage[t.id]={candidate:c.id,sha:c.commitSha};});Object.values(tasks).forEach(t=>t.candidates.filter(c=>c.commitSha).forEach(c=>c.versionCoverage={...copyObject(initialVersionCoverage),[t.id]:{candidate:c.id,sha:c.commitSha}}));
-  let testCatalogueRevision=1,testView='catalogue',testLevel='L1',selectedManagedSuite='L1-MIN',selectedTestSource='candidate:8:c3',selectedTestEnvironment='',testOutcome='passed',testRunCounter=1,activeTestRun=null,unknownTestRun=null,testPlanPreview=null;
-  const selectedManagedCases=Object.fromEntries(managedSuites.map(s=>[s.id,[...s.cases]])),managedTestRuns=[];
-  const levelDescriptions={L1:'每次 PR 必须通过的最小脚本 / 纯代码单元测试集',L2:'包含实际程序运行的 smoke test',L3:'可并行的常规测试，按功能独立选择场景',L4:'不可并行的测试及各种边界情况测试；仅人工触发，Plan 不自动选取执行'};
+  let testView='runs',testLevel='all',selectedManagedSuite='L3-TASK',testPlanPreview=null;
+  const managedTestRuns=[];
+  const levelDescriptions={L1:'快速单元 / 小范围集成测试',L2:'最小核心流程冒烟测试',L3:'资源隔离的不同流程测试',L4:'独占流程或系统边界测试；并发约束按入口说明'};
   const taskTestPlan=t=>t.testPlan||null;
-  function managedTestSource(key=selectedTestSource){
-    if(key==='main'){const head=branchHead(mainBranch);return {key:'main:'+mainBranch+':'+head.sha,kind:'main',sha:head.sha,label:'主分支 '+mainBranch,coverage:copyObject(head.coverage)};}
-    const [,task,candidateId]=key.split(':'),t=tasks[task],c=t?.candidates.find(c=>c.id===candidateId);
-    return c?.commitSha?{key:'candidate:'+task+':'+c.id+':'+c.commitSha,kind:'candidate',task,candidate:c.id,sha:c.commitSha,label:'Task #'+task+' / 候选 '+c.id.toUpperCase(),coverage:copyObject(c.versionCoverage||{[task]:{candidate:c.id,sha:c.commitSha}})}:null;
-  }
   function suiteAvailable(s,source){
     if(s.lifecycle!=='maintained')return false;
     if(!s.registeredSource)return true;
@@ -1297,7 +1313,7 @@ body { margin: 0; padding: 16px; }
   }
   function testRequirementEvidence(req,t,c){
     const belongs=r=>r&&r.target.task===t.id&&r.target.candidate===c?.id&&r.target.sha===c?.commitSha&&r.definitions[req.id]===req.version;
-    const matching=[...managedTestRuns].reverse().filter(r=>r.complete&&belongs(r)),pending=[activeTestRun,unknownTestRun].filter(belongs);
+    const matching=[...managedTestRuns].reverse().filter(r=>r.complete&&belongs(r)),pending=[];
     const latest=req.cases.map(id=>({id,record:matching.find(r=>r.cases.includes(id)),pending:pending.some(r=>r.cases.includes(id))}));
     const missing=latest.filter(row=>row.pending||row.record?.outcome!=='passed').map(row=>row.id);return {passed:!missing.length,missing,runs:[...new Set(latest.filter(row=>!row.pending&&row.record?.outcome==='passed').map(row=>row.record.id))]};
   }
@@ -1318,43 +1334,100 @@ body { margin: 0; padding: 16px; }
     q('[data-action="publish-tested-pr"]').hidden=c.status!=='pr-checks';q('[data-action="publish-tested-pr"]').disabled=!connected||!status.passed;
     if(c.status==='merge'&&!t.delivery){q('[data-action="simulate-delivery"]').disabled=!connected||!status.passed;q('[data-action="simulate-delivery"]').title=status.reason;}
   }
-  function testEnvironmentReason(s,source,env){
-    if(!source)return '请选择有提交的来源。';if(!suiteAvailable(s,source))return s.lifecycle==='planned'?'扩展入口尚未实现并登记，不能验证。':'该扩展入口不属于所选代码版本。';if(!s.runtime)return '';
-    if(!env||env.state!=='ready')return '实际运行场景需要可用的独立调试环境。';if(env.source.sha!==source.sha)return '环境必须与本次测试来源的完整 SHA 一致。';if(env.testManifest?.[s.id]!==s.version)return '该环境未包含此版本的测试入口，请按实现后的提交重新创建环境。';return '';
+  const recordFilters={outcome:'all',retest:'all',environment:'all',source:'',from:'',to:''};
+  let testSearch='',expandedTestRecord=null;
+  const testOutcomeLabel={passed:'通过',failed:'失败',incomplete:'未完成'};
+  function testRecordView(r,index=0){
+    const suite=suiteById(r.suite),stamp=r.startedAt||'2026-10-20T08:'+String(index%60).padStart(2,'0')+':00Z';
+    return {...r,branch:r.branch||'main',startedAt:stamp,finishedAt:r.finishedAt||stamp,clean:r.clean!==false,
+      environmentName:r.environmentName||(suite?.runtime?'controlled':'isolated'),
+      definitionDigest:r.definitionDigest||'demo-definition-'+r.suite+'-'+r.definitions[r.suite],expectedCases:r.expectedCases||suite?.cases||r.cases,
+      commandSnapshot:r.commandSnapshot||suite?.command||'历史命令（演示）',checkSnapshot:r.checkSnapshot||'实际选择内的必要断言、证据与清理均满足入口约定（演示）。',
+      results:r.results||r.cases.map(id=>({id,status:r.outcome,message:r.outcome==='failed'?'实际断言失败':r.outcome==='incomplete'?'环境或必要证据不完整':'所选范围通过'}))};
   }
+  function testRecordViews(){return managedTestRuns.map(testRecordView).sort((a,b)=>b.startedAt.localeCompare(a.startedAt)||b.id.localeCompare(a.id));}
+  function retestAncestor(record,ancestor,records){
+    const seen=new Set();let current=record;
+    while(current?.rerunOf&&!seen.has(current.id)){seen.add(current.id);if(current.rerunOf===ancestor)return true;current=records.find(r=>r.id===current.rerunOf);}
+    return false;
+  }
+  function retestLeaves(record,records){
+    const related=records.filter(r=>retestAncestor(r,record.id,records)&&r.suite===record.suite);
+    return related.filter(r=>!related.some(child=>child.rerunOf===r.id));
+  }
+  function failedRecordRecovery(record,records){
+    const failed=record.results.filter(x=>x.status==='failed').map(x=>x.id);if(!failed.length)return '';
+    const leaves=retestLeaves(record,records);
+    if(leaves.length>1)return '多次复验，分别查看';
+    const latest=leaves[0];if(!latest)return '失败待复验';
+    if(latest.definitionDigest!==record.definitionDigest)return '定义变化，待另行核对';
+    if(latest.environmentName!==record.environmentName)return '环境变化，待另行核对';
+    if(!latest.complete||latest.outcome!=='passed')return '失败待复验';
+    const passed=failed.filter(id=>latest.results.some(x=>x.id===id&&x.status==='passed')).length;
+    return passed===failed.length?'复验通过':passed?'部分复验通过':'失败待复验';
+  }
+  function testRetestLabel(record,records){
+    if(record.outcome==='failed')return failedRecordRecovery(record,records);
+    if(!record.rerunOf)return '独立运行';
+    const parent=records.find(r=>r.id===record.rerunOf);if(!parent)return '前次记录待核对';
+    if(record.definitionDigest!==parent.definitionDigest)return '定义变化，待另行核对';
+    if(record.environmentName!==parent.environmentName)return '环境变化，待另行核对';
+    if(!record.complete||record.outcome!=='passed')return '复验未完成';
+    const ancestors=[];let current=parent;const seen=new Set();
+    while(current&&!seen.has(current.id)){seen.add(current.id);ancestors.push(current);current=records.find(r=>r.id===current.rerunOf);}
+    const failed=[...new Set(ancestors.flatMap(r=>r.results.filter(x=>x.status==='failed').map(x=>x.id)))];
+    if(!failed.length)return '复验记录';
+    return failed.every(id=>record.results.some(x=>x.id===id&&x.status==='passed'))?'复验通过':'部分复验通过';
+  }
+  function testRecordChain(record,records){
+    let rootRecord=record;const seen=new Set();
+    while(rootRecord.rerunOf&&!seen.has(rootRecord.id)){seen.add(rootRecord.id);const parent=records.find(r=>r.id===rootRecord.rerunOf);if(!parent)break;rootRecord=parent;}
+    return records.filter(r=>r.id===rootRecord.id||retestAncestor(r,rootRecord.id,records)).reverse();
+  }
+  function testLocalDay(stamp){const d=new Date(stamp);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
   function renderTestManagement(){
-    q('[data-test-catalogue-version]').textContent='长期目录 v'+testCatalogueRevision;
-    q('[data-test-level-cards]').innerHTML=Object.entries(levelDescriptions).map(([id,text])=>`<button class="test-level-card ${testLevel===id?'selected':''}" data-test-level="${id}"><strong>${id}</strong>${esc(text)}</button>`).join('');
-    qa('[data-test-view]').forEach(b=>b.classList.toggle('active',b.dataset.testView===testView));q('[data-test-catalogue-view]').hidden=testView!=='catalogue';q('[data-test-runs-view]').hidden=testView!=='runs';
-    const suites=managedSuites.filter(s=>s.level===testLevel);if(!suites.some(s=>s.id===selectedManagedSuite))selectedManagedSuite=suites[0].id;
-    q('[data-test-suite-list]').innerHTML=suites.map(s=>`<button class="test-suite-row ${s.id===selectedManagedSuite?'selected':''}" data-managed-suite="${s.id}"><strong>${esc(s.id+' '+s.name)}</strong><span>定义 v${s.version} · ${s.cases.length} 个长期场景</span><span>${s.lifecycle==='planned'?'待实现登记':s.scope==='candidate'?'分支已登记 · 待合并':'长期维护'}</span></button>`).join('');
-    const s=suiteById(selectedManagedSuite),source=managedTestSource(),env=debugEnvironments[selectedTestEnvironment];
-    q('[data-test-suite-title]').textContent=s.id+' · '+s.name;q('[data-test-suite-description]').textContent=levelDescriptions[s.level];
-    q('[data-test-suite-metadata]').textContent='定义 v'+s.version+' · '+(s.runtime?'需要实际程序运行':'脚本 / 纯代码')+' · '+s.cases.length+' 个长期场景'+(s.level==='L4'?' · 仅人工触发':s.level==='L3'?' · 可并行常规测试':'');
-    q('[data-test-case-list]').innerHTML=s.cases.map(id=>`<label class="test-case"><input type="checkbox" data-managed-case="${id}" ${selectedManagedCases[s.id].includes(id)?'checked':''} ${!['L3','L4'].includes(s.level)||activeTestRun||unknownTestRun?'disabled':''}><span>${esc(id+' · '+managedCases[id])}</span></label>`).join('');
-    q('[data-test-suite-command]').textContent=s.command;
-    q('[data-test-extension-state]').hidden=!s.ownerTask;q('[data-test-extension-state]').textContent=s.ownerTask?(s.lifecycle==='planned'?'此测试入口待实现并登记，登记后可运行验证。':'此测试入口已登记（演示），提交 '+s.registeredSource.sha):'';
-    q('[data-action="register-test-extension"]').hidden=s.lifecycle!=='planned';q('[data-action="register-test-extension"]').disabled=!connected||source?.task!==s.ownerTask;
-    q('[data-test-source]').innerHTML='<option value="main">项目主分支</option>'+Object.values(tasks).flatMap(t=>t.candidates.map(c=>`<option value="candidate:${t.id}:${c.id}" ${selectedTestSource==='candidate:'+t.id+':'+c.id?'selected':''} ${!c.commitSha?'disabled':''}>${esc(title(t)+' / '+c.id.toUpperCase())}${c.commitSha?' / '+c.commitSha.slice(0,7):' / 尚无提交'}</option>`)).join('');q('[data-test-source]').value=selectedTestSource;
-    q('[data-test-source-summary]').textContent=source?source.label+' · 固定 SHA '+source.sha:'等待可验证的提交。';
-    q('[data-test-environment]').innerHTML='<option value="">'+(s.runtime?'选择独立调试环境…':'此脚本 / 纯代码入口不需要实际运行环境')+'</option>'+Object.values(debugEnvironments).map(e=>`<option value="${e.id}" ${e.id===selectedTestEnvironment?'selected':''} ${e.state!=='ready'?'disabled':''}>${esc(e.id+' / '+e.source.sha.slice(0,7)+' / '+e.directory)}</option>`).join('');q('[data-test-environment]').value=selectedTestEnvironment;
-    q('[data-test-environment]').disabled=!s.runtime||!!activeTestRun||!!unknownTestRun;q('[data-test-source]').disabled=!!activeTestRun||!!unknownTestRun;q('[data-test-outcome]').disabled=!!activeTestRun||!!unknownTestRun;q('[data-test-outcome]').value=testOutcome;
-    const reason=testEnvironmentReason(s,source,env)||(!selectedManagedCases[s.id].length?'请选择至少一个长期场景。':'');q('[data-test-environment-reason]').textContent=s.runtime?reason||'来源 SHA 与环境入口版本已核对（演示）。':'只运行当前脚本 / 纯代码入口，不串跑其他级别。';
-    q('[data-action="run-managed-test"]').textContent=unknownTestRun?'查询原测试结果 · 演示':s.level==='L4'?'人工触发 L4 测试 · 演示':'运行选中测试 · 演示';q('[data-action="run-managed-test"]').disabled=!connected||!!activeTestRun||(!unknownTestRun&&(!!reason||!selectedManagedCases[s.id].length));
-    q('[data-test-run-validation]').textContent=activeTestRun?'运行中：'+activeTestRun.id+' / '+activeTestRun.target.label:unknownTestRun?'原结果待核实：'+unknownTestRun.id+' / '+unknownTestRun.target.label:reason;
-    q('[data-test-run-list]').innerHTML=[...managedTestRuns].reverse().map(r=>`<div class="test-record"><strong>${r.outcome==='passed'?'通过':'失败'} · ${esc(r.suite)} · ${r.id}</strong><p>${esc(r.target.label)} · SHA ${r.target.sha}</p><p>场景：${esc(r.cases.join(', '))} · 所选范围完整：${r.complete?'是':'否'}</p><p>定义快照：${esc(JSON.stringify(r.definitions))}</p><p>${r.environment?'环境 '+esc(r.environment.id+' / '+r.environment.directory):'脚本 / 纯代码，无实际运行环境'}</p><p>证据：${esc(r.evidence)} · ${esc(r.date)}</p></div>`).join('')||'<p class="sub">尚无长期测试报告。</p>';
-  }
-  function completeManagedRun(r){
-    r.outcome=r.expected;r.complete=true;r.date=new Date().toLocaleDateString('zh-CN')+' '+clock();r.evidence='demo-test-evidence/'+r.id+'/report.json';managedTestRuns.push(r);activeTestRun=null;unknownTestRun=null;q('[data-test-run-receipt]').textContent=r.id+' 已取得'+(r.outcome==='passed'?'通过':'失败')+'报告，结果绑定原提交。';renderTestManagement();renderTaskTests();
-  }
-  function startManagedRun(){
-    if(!connected)return;if(unknownTestRun){completeManagedRun(unknownTestRun);return;}
-    const s=suiteById(selectedManagedSuite),source=managedTestSource(),env=debugEnvironments[selectedTestEnvironment];if(activeTestRun||testEnvironmentReason(s,source,env)||!selectedManagedCases[s.id].length)return;
-    const r={id:'test-run-'+testRunCounter++,suite:s.id,target:copyObject(source),cases:[...selectedManagedCases[s.id]],definitions:{[s.id]:s.version},environment:s.runtime?{id:env.id,directory:env.directory,sha:env.source.sha}:null,expected:testOutcome,complete:false};activeTestRun=r;renderTestManagement();
-    setTimeout(()=>{if(!connected){activeTestRun=null;unknownTestRun=r;renderTestManagement();}else completeManagedRun(r);},700);
+    q('[data-test-catalogue-version]').textContent='main · 示例清单 SHA 1111111';
+    q('[data-test-level-cards]').innerHTML=Object.entries({all:'全部测试集',...levelDescriptions}).map(([id,text])=>`<button class="test-level-card ${testLevel===id?'selected':''}" data-test-level="${id}"><strong>${id==='all'?'全部':id} · ${managedSuites.filter(s=>id==='all'||s.level===id).length}</strong>${esc(text)}</button>`).join('');
+    const suites=managedSuites.filter(s=>(testLevel==='all'||s.level===testLevel)&&(s.id+' '+s.name).toLowerCase().includes(testSearch.toLowerCase()));
+    if(!suites.some(s=>s.id===selectedManagedSuite))selectedManagedSuite=suites[0]?.id||'';
+    const records=testRecordViews();
+    q('[data-test-suite-list]').innerHTML=suites.map(s=>`<button class="test-suite-row ${s.id===selectedManagedSuite?'selected':''}" data-managed-suite="${s.id}"><strong>${esc(s.id+' · '+s.name)}</strong><span>${s.level} · ${records.filter(r=>r.suite===s.id).length} 次执行</span><span>${s.lifecycle==='planned'?'待实现登记':'长期测试集'}</span></button>`).join('')||'<p class="test-empty">没有匹配的测试集；该级别可能尚未登记。</p>';
+    const suite=suiteById(selectedManagedSuite);
+    qa('[data-test-view]').forEach(b=>b.classList.toggle('active',b.dataset.testView===testView));
+    q('[data-test-catalogue-view]').hidden=testView!=='catalogue'||!suite;q('[data-test-runs-view]').hidden=testView!=='runs'||!suite;
+    q('[data-test-suite-title]').textContent=suite?suite.id+' · '+suite.name:'没有匹配的测试集';
+    q('[data-test-suite-description]').textContent=suite?levelDescriptions[suite.level]:'';
+    q('[data-test-observation]').textContent=connected?'以下为脚本登记的演示记录，不代表当前主分支通过。':'离线 · 以下为最后观察，不能确认是否有新记录。';
+    if(!suite)return;
+    q('[data-test-suite-metadata]').textContent='定义来源 main / 1111111 · '+suite.cases.length+' 个可独立报告的演示场景 · '+(suite.lifecycle==='planned'?'入口待实现':'命令与范围以脚本登记为准');
+    q('[data-test-case-list]').innerHTML=suite.cases.map(id=>'<p class="test-case">'+esc(id+' · '+managedCases[id])+'</p>').join('');
+    q('[data-test-suite-command]').textContent=suite.command;
+    qa('[data-record-filter]').forEach(el=>{if(document.activeElement!==el)el.value=recordFilters[el.dataset.recordFilter];});
+    const invalid=recordFilters.from&&recordFilters.to&&recordFilters.from>recordFilters.to;
+    q('[data-test-filter-error]').textContent=invalid?'开始日期不能晚于结束日期。':'';
+    const base=records.filter(r=>r.suite===suite.id&&(recordFilters.environment==='all'||r.environmentName===recordFilters.environment)&&(!recordFilters.source||(r.branch+' '+r.target.sha).toLowerCase().includes(recordFilters.source.toLowerCase()))&&(!recordFilters.from||testLocalDay(r.startedAt)>=recordFilters.from)&&(!recordFilters.to||testLocalDay(r.startedAt)<=recordFilters.to));
+    const retestLabels={pending:'失败待复验',passed:'复验通过',partial:'部分复验通过',changed:'定义变化，待另行核对'};
+    const visible=invalid?[]:base.filter(r=>(recordFilters.outcome==='all'||r.outcome===recordFilters.outcome)&&(recordFilters.retest==='all'||testRetestLabel(r,records)===retestLabels[recordFilters.retest]));
+    const lastPassed=base.find(r=>r.outcome==='passed'),pending=base.filter(r=>r.outcome==='failed'&&failedRecordRecovery(r,records)!=='复验通过');
+    q('[data-test-record-summary]').textContent='所选代码 / 环境 / 日期范围：'+base.length+' 次执行 · 最近原始结果 '+(testOutcomeLabel[base[0]?.outcome]||'尚无记录')+(base[0]?.clean===false?'（工作区有修改）':'')+' · 最近原始通过 '+(lastPassed?new Date(lastPassed.startedAt).toLocaleString('zh-CN')+(lastPassed.clean?'':'（工作区有修改，非固定 SHA 证明）'):'无')+' · 失败待完整复验 '+pending.length+' · 列表命中 '+visible.length+' 条。复验关系按完整链计算，不受列表筛选隐藏影响。';
+    q('[data-test-run-list]').innerHTML=visible.map(r=>{
+      const label=testRetestLabel(r,records),chain=testRecordChain(r,records),open=expandedTestRecord===r.id,retestSource=r.outcome==='failed'?retestLeaves(r,records)[0]:r;
+      const counts=['passed','failed','incomplete'].map(status=>testOutcomeLabel[status]+' '+r.results.filter(x=>x.status===status).length).join(' / ');
+      return `<details class="test-record" data-record-id="${esc(r.id)}" ${open?'open':''}><summary><strong class="test-result-${r.outcome}">${testOutcomeLabel[r.outcome]}</strong> · ${esc(label)}${label==='复验通过'&&retestSource?.clean===false?'（复验源码未固定）':''} · ${esc(r.id)}<br><span class="sub">${esc(new Date(r.startedAt).toLocaleString('zh-CN'))} · ${esc(r.branch)} / ${esc(r.target.sha.slice(0,7))} · ${esc(r.environmentName)}${r.cases.length<r.expectedCases.length?' · 部分范围':''}${r.clean?'':' · 工作区有修改'}</span></summary>
+      <p>原始结果：${counts} · 实际范围：${esc(r.cases.join(', '))} · 所选范围报告完整：${r.complete?'是':'否'} · 测试集范围覆盖 ${r.cases.length}/${r.expectedCases.length}</p>
+      <p>来源：${esc(r.target.label)} · ${r.target.task?'Task #'+esc(r.target.task)+' / 候选 '+esc(r.target.candidate):'独立脚本，无任务绑定'}</p>
+      <p>代码 SHA：${esc(r.target.sha)} · 定义摘要：${esc(r.definitionDigest)}（演示）</p>
+      <p>开始：${esc(new Date(r.startedAt).toLocaleString('zh-CN'))} · 结束：${esc(new Date(r.finishedAt).toLocaleString('zh-CN'))}</p>
+      <p>当次命令：${esc(r.commandSnapshot)}</p><p>当次通过条件：${esc(r.checkSnapshot)}</p>
+      ${r.results.map(x=>'<p class="test-result-'+x.status+'">'+esc(x.id+' · '+testOutcomeLabel[x.status]+' · '+x.message)+'</p>').join('')}
+      <p>证据引用：${esc(r.evidence)}</p><button class="sl-button" data-record-evidence="${esc(r.id)}">查看证据摘要 · 演示</button><pre hidden data-evidence-preview="${esc(r.id)}" class="json-preview">${esc(JSON.stringify({example:true,execution:r.id,selection:r.cases,results:r.results,evidence:r.evidence},null,2))}</pre><p class="sub">${r.clean?'该记录为固定代码版本的历史结果，不推断当前版本。':'工作区有修改：原始结果与显式复验保留，不作为固定 SHA 通过证明。'}</p>
+      <div class="test-record-chain"><strong>复验过程 · 显式前次记录关联</strong>${chain.map(item=>'<p>'+esc(item.id+' → '+testOutcomeLabel[item.outcome]+' / '+item.target.sha.slice(0,7)+(item.clean?'':'；工作区有修改')+(item.rerunOf?'；复验 '+item.rerunOf:'；原始运行'))+'</p>').join('')}<p>当前记录：${esc(label)}。原失败与每次重跑分别保留。</p></div>
+      ${r.target.task?'<button class="sl-button" data-record-candidate="'+esc(r.id)+'">查看来源候选</button>':''}
+      </details>`;
+    }).join('')||'<p class="test-empty">'+(invalid?'请调整日期范围。':base.length?'没有符合筛选条件的记录。':'尚无执行记录。')+'</p>';
   }
   function openTaskManagedTest(id){
-    const t=tasks[selectedTask],c=current()?.commitSha?current():t.candidates.find(c=>c.commitSha);selectedManagedSuite=id;testLevel=suiteById(id).level;testView='catalogue';selectedTestSource=c?.commitSha?'candidate:'+t.id+':'+c.id:'main';navigate('tests');
+    selectedManagedSuite=id;testLevel=suiteById(id).level;testView='runs';testSearch='';Object.assign(recordFilters,{outcome:'all',retest:'all',environment:'all',source:'',from:'',to:''});q('[data-test-search]').value='';navigate('tests');
   }
   function validatePromotionTests(flow){
     const reasons=[];flow.snapshot.tasks.forEach(t=>{const p=flow.generatedTestPlans?.[String(t.task_id)];if(!p?.path){reasons.push('#'+t.task_id+' 缺少 Plan 测试计划');return;}if(!p.requirements.some(r=>r.id==='L1-MIN'))reasons.push('#'+t.task_id+' 未包含必须的 L1 最小集');p.requirements.forEach(r=>{const s=suiteById(r.id);if(s?.level==='L4')reasons.push('#'+t.task_id+' L4 只能人工触发，不能纳入 Plan 自动测试');else if(!s||s.version!==r.version||r.cases.some(id=>!s.cases.includes(id)))reasons.push('#'+t.task_id+' 测试关联无效：'+r.id);else if(s.lifecycle==='planned'&&(!p.extensions.includes(s.id)||s.ownerTask!==String(t.task_id)))reasons.push('#'+t.task_id+' 尚未安排测试入口扩展：'+s.id);});});return reasons.join('；');
@@ -1363,15 +1436,16 @@ body { margin: 0; padding: 16px; }
     const flow=activeFlow;if(!flow)return;q('[data-promotion-test-links]').innerHTML=flow.snapshot.tasks.map(t=>{const p=flow.generatedTestPlans?.[String(t.task_id)]||flow.snapshot.testPlans[String(t.task_id)];return `<div class="test-plan-row"><strong>#${t.task_id} · ${p?.path?esc(p.path)+' / v'+p.version:'草稿测试约束 · 待生成正式 Plan'}</strong><p>${p?p.requirements.map(r=>esc(r.id+' / '+suiteById(r.id).level+' / v'+r.version+' / '+r.cases.join(', '))).join('<br>'):'缺少固定测试关联'}</p>${p?.extensions.length?'<p>实施步骤须补齐长期入口：'+p.extensions.map(esc).join('、')+'</p>':''}</div>`;}).join('');
   }
   function handleTestManagementAction(button){
-    if(button.dataset.testLevel){testLevel=button.dataset.testLevel;selectedManagedSuite=managedSuites.find(s=>s.level===testLevel).id;testView='catalogue';renderTestManagement();return true;}
+    if(button.dataset.recordEvidence){const preview=q('[data-evidence-preview="'+button.dataset.recordEvidence+'"]');preview.hidden=!preview.hidden;button.textContent=preview.hidden?'查看证据摘要 · 演示':'收起证据摘要';return true;}
+    if(button.dataset.testLevel){testLevel=button.dataset.testLevel;renderTestManagement();return true;}
     if(button.dataset.testView){testView=button.dataset.testView;renderTestManagement();return true;}
     if(button.dataset.managedSuite){selectedManagedSuite=button.dataset.managedSuite;renderTestManagement();return true;}
+    if(button.dataset.recordCandidate){const r=managedTestRuns.find(r=>r.id===button.dataset.recordCandidate),t=tasks[r?.target.task];if(t){selectedTask=t.id;selectedCandidate=r.target.candidate;navigate('runs');}return true;}
     if(button.dataset.taskManagedTest){openTaskManagedTest(button.dataset.taskManagedTest);return true;}
     if(button.dataset.action==='view-task-plan'&&!acceptanceForTask(selectedTask).length){testPlanPreview=selectedTask;navigate('dag');return true;}
     switch(button.dataset.action){
       case 'close-task-test-plan':testPlanPreview=null;renderTaskTests();return true;
-      case 'run-managed-test':startManagedRun();return true;
-      case 'register-test-extension':{const s=suiteById(selectedManagedSuite),source=managedTestSource();if(connected&&s.lifecycle==='planned'&&source?.task===s.ownerTask){s.lifecycle='maintained';s.scope='candidate';s.registeredSource=copyObject(source);recordLongDocumentTestRegistration(s,source);testCatalogueRevision++;renderTestManagement();renderTaskTests();}return true;}
+      case 'reset-test-filters':Object.assign(recordFilters,{outcome:'all',retest:'all',environment:'all',source:'',from:'',to:''});renderTestManagement();return true;
       case 'run-plan-managed-tests':{const t=tasks[selectedTask],c=current(),status=prTestStatus(t,c);const rows=status.rows.filter(row=>planSelectableSuite(row.suite));const req=rows.find(row=>!row.passed)?.req||rows[0]?.req;if(req)openTaskManagedTest(req.id);return true;}
       case 'publish-tested-pr':{const t=tasks[selectedTask],c=current();if(connected&&c?.status==='pr-checks'&&prTestStatus(t,c).passed){c.pr=c.pr||'#'+(123+Number(c.id.slice(1)));c.status='merge';recordExperienceOpenPR(c.pr.replace(/^#/,''),t.name,t.base||mainBranch);addLog(c,'activity','PR 已提交 / 更新（演示）','已核对固定 SHA 的 Plan 测试要求。');renderTaskSurfaces();renderExecution();}return true;}
     }
@@ -1379,6 +1453,39 @@ body { margin: 0; padding: 16px; }
   }
   // Existing example PRs carry explicit historical demo test reports; they are not real execution evidence.
   ['7','8'].forEach(id=>{const t=tasks[id],c=id==='7'?t.candidates[0]:t.candidates.find(c=>c.id==='c3');t.testPlan.requirements.forEach(req=>managedTestRuns.push({id:'historic-'+id+'-'+req.id,suite:req.id,target:{kind:'candidate',task:id,candidate:c.id,sha:c.commitSha,label:'Task #'+id+' / 候选 '+c.id.toUpperCase()},cases:[...req.cases],definitions:{[req.id]:req.version},environment:suiteById(req.id).runtime?{id:'historic-env-'+id,directory:'历史隔离环境（演示）'}:null,outcome:'passed',complete:true,date:'历史演示记录',evidence:'demo-test-evidence/historic-'+id+'/'+req.id+'.json'}));});
+
+  // Script-produced record fixtures. No page action starts tests or edits results.
+  function seedScriptTestRecords(){
+    const sha=character=>character.repeat(40);
+    const add=(id,outcome,minute,options={})=>{
+      const suite=options.suite||'L3-TASK',definition=suiteById(suite),cases=options.cases||[...definition.cases];
+      const startedAt='2026-10-21T0'+(minute>=60?'2':'1')+':'+String(minute%60).padStart(2,'0')+':00Z';
+      managedTestRuns.push({id,suite,cases,definitions:{[suite]:1},definitionDigest:options.changed?'demo-definition-changed':'demo-definition-'+suite+'-1',
+        branch:options.branch||'fix/task-read',target:{kind:'script',sha:sha(options.sha||'2'),label:'SteerlineTest · 命令行测试脚本'},environmentName:definition.runtime?'controlled':'isolated',environment:null,
+        outcome,complete:outcome!=='incomplete',clean:options.clean!==false,startedAt,finishedAt:startedAt,date:startedAt,rerunOf:options.rerunOf||null,
+        evidence:'demo-script-evidence/'+id+'/summary.json',results:cases.map(id=>({id,status:outcome,message:outcome==='failed'?'任务读取结果不符合断言':outcome==='incomplete'?'必要环境未就绪，未取得完整证据':'本次实际选择及清理通过'}))});
+    };
+    add('script-task-001','failed',0,{sha:'1'});
+    add('script-task-002','failed',5,{sha:'2',rerunOf:'script-task-001'});
+    add('script-task-003','passed',12,{sha:'3',rerunOf:'script-task-002'});
+    add('script-task-004','failed',20,{sha:'4',branch:'fix/task-release'});
+    add('script-task-005','passed',25,{sha:'5',branch:'fix/task-release',cases:['TC-F01'],rerunOf:'script-task-004'});
+    add('script-task-006','passed',30,{sha:'6',branch:'main'});
+    add('script-task-007','incomplete',35,{sha:'5',branch:'check/environment',cases:['TC-F02']});
+    add('script-task-008','failed',40,{sha:'7',branch:'fix/definition'});
+    add('script-task-009','passed',45,{sha:'8',branch:'fix/definition',changed:true,rerunOf:'script-task-008'});
+    add('script-task-010','passed',50,{sha:'9',branch:'dev/local',clean:false});
+    add('script-task-011','failed',55,{sha:'a',branch:'fix/split'});
+    add('script-task-012','passed',56,{sha:'b',branch:'fix/split',cases:['TC-F01'],rerunOf:'script-task-011'});
+    add('script-task-013','passed',57,{sha:'c',branch:'fix/split',cases:['TC-F02'],rerunOf:'script-task-012'});
+    add('script-task-014','failed',70,{sha:'d',branch:'fix/regression'});
+    add('script-task-015','passed',75,{sha:'e',branch:'fix/regression',rerunOf:'script-task-014'});
+    add('script-task-016','failed',80,{sha:'f',branch:'fix/regression',rerunOf:'script-task-015'});
+    add('script-task-017','failed',85,{sha:'a',branch:'fix/local'});
+    add('script-task-018','passed',90,{sha:'a',branch:'fix/local',clean:false,rerunOf:'script-task-017'});
+    add('script-l1-001','failed',65,{suite:'L1-MIN',sha:'a',branch:'main'});
+  }
+  seedScriptTestRecords();
 
   function acceptanceEligible(a){
     const t=tasks[a.task];if(!t)return false;
@@ -2050,7 +2157,7 @@ body { margin: 0; padding: 16px; }
         r.manualRecords.push({...copyObject(r.manual),sha:r.sha,issueRevision:r.snapshot.revision,environment:copyObject(r.environment),guide:'中文输入组词 / 候选切换 / 显式提交指南',date:bugDate()});r.inputError='';
         if(r.manual.outcome==='failed'){r.reason='人工验证失败，原提交未证明修复，保留失败记录交给人工处理。';renderBugManagement();}else advanceBug(r,'baseline-testing');return true;
       }return true;
-      case 'view-bug-test-records':testView='runs';navigate('tests');return true;
+      case 'view-bug-test-records':{const r=bugCurrent(bugIssue(selectedBug))?.reports?.[0];testView='runs';testLevel='all';testSearch='';q('[data-test-search]').value='';if(r)selectedManagedSuite=r.suite;Object.assign(recordFilters,{outcome:'all',retest:'all',environment:'all',source:'',from:'',to:''});navigate('tests');return true;}
       case 'publish-bug-pr':if(connected&&r?.phase==='pr-ready'&&bugInputCurrent(r)&&r.verifiedSHA===r.sha){r.pr=r.pr||String(300+r.number);r.draftPR=false;r.phase='pr';recordExperienceOpenPR(r.pr,'修复 Issue #'+i.id+'：'+r.snapshot.title,r.branch);bugLog(r,'提交 / 更新已验证 PR #'+r.pr+'（演示），自动修复流程结束，等待合并。');renderBugManagement();}return true;
       case 'merge-bug-pr':if(connected&&r?.phase==='pr'&&bugInputCurrent(r)&&r.verifiedSHA===r.sha){
         const ancestors=experiencePRs.filter(p=>p.status==='merged'&&p.branch===r.branch).map(p=>p.sha),head=branchHead(r.branch);head.sha=experienceSHA(0xe000+r.number);const p=experiencePRs.find(p=>p.id===r.pr);Object.assign(p,{status:'merged',sha:head.sha,ancestors,date:bugDate(),change:'修复 Issue #'+i.id+'：'+r.snapshot.title+'。',guide:'体验原 Issue 的触发场景，核对修复行为。'});recordLongDocumentCodeMerge(r.snapshot.title,r.branch,head.sha);r.phase='merged';r.reason='PR 合并已核实（演示），Issue 外部状态单独保留。';bugLog(r,r.reason);renderExperience();renderBugManagement();}return true;
@@ -2203,21 +2310,20 @@ body { margin: 0; padding: 16px; }
   root.addEventListener('input',e=>{
     if(e.target.matches('[data-bug-supplement]'))bugIssue(selectedBug).supplement=e.target.value;
     if(e.target.matches('[data-bug-manual]')){const r=bugCurrent(bugIssue(selectedBug));if(r)r.manual[e.target.dataset.bugManual]=e.target.value;}
+    if(e.target.matches('[data-test-search]')){testSearch=e.target.value;renderTestManagement();}
     if(e.target.matches('.composer textarea'))sessions[activeSession].draft=e.target.value;
     if(e.target.matches('[data-answer]')&&current())current().draft=e.target.value;
     if(e.target.matches('[data-draft-body]'))drafts[selectedDraft].editBody=e.target.value;
     if(e.target.matches('[data-acceptance-manual-field]')){const a=acceptanceItems.find(a=>a.id===selectedAcceptance);if(a)a.manual[e.target.dataset.acceptanceManualField]=e.target.value;}
   });
+  root.addEventListener('toggle',e=>{if(e.target.matches('details[data-record-id]')&&e.target.open)expandedTestRecord=e.target.dataset.recordId;},true);
   root.addEventListener('compositionstart',()=>answerComposing=true);root.addEventListener('compositionend',()=>answerComposing=false);
   root.addEventListener('change',e=>{
     if(e.target.matches('[data-bug-filter]')){bugFilter=e.target.value;renderBugManagement();}
     if(e.target.matches('[data-bug-manual]')){const r=bugCurrent(bugIssue(selectedBug));if(r)r.manual[e.target.dataset.bugManual]=e.target.value;}
     if(e.target.matches('[data-experience-pr]')){experienceCreatePR=e.target.value;renderExperienceCreate();}
     if(e.target.matches('[data-experience-pr-filter]')){experiencePRFilter=e.target.value;renderExperience();}
-    if(e.target.matches('[data-test-source]')){selectedTestSource=e.target.value;renderTestManagement();}
-    if(e.target.matches('[data-test-environment]')){selectedTestEnvironment=e.target.value;renderTestManagement();}
-    if(e.target.matches('[data-test-outcome]'))testOutcome=e.target.value;
-    if(e.target.matches('[data-managed-case]')){const cases=selectedManagedCases[selectedManagedSuite];selectedManagedCases[selectedManagedSuite]=e.target.checked?[...cases,e.target.dataset.managedCase]:cases.filter(id=>id!==e.target.dataset.managedCase);renderTestManagement();}
+    if(e.target.matches('[data-record-filter]')){recordFilters[e.target.dataset.recordFilter]=e.target.value;renderTestManagement();}
     if(e.target.matches('[data-debug-source-type]')){debugCreateDraft.type=e.target.value;renderDebugCreate();}
     if(e.target.matches('[data-debug-source-task]')){debugCreateDraft.task=e.target.value;debugCreateDraft.candidate='';renderDebugCreate();}
     if(e.target.matches('[data-debug-source-candidate]')){debugCreateDraft.candidate=e.target.value;renderDebugCreate();}

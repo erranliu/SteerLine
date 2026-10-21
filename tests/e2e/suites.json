@@ -113,5 +113,13 @@
     "package": "./tests/e2e/configuration",
     "test": "TestExecutionProfiles",
     "env": "controlled"
+  },
+  {
+    "id": "testing.records",
+    "level": "L3",
+    "suite": "testing",
+    "package": "./tests/e2e/suites/testing",
+    "test": "TestRecords",
+    "env": "controlled"
   }
 ]

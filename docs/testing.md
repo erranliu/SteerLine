@@ -33,6 +33,23 @@ steerline tests stop-generation -project <id> -generation-id <original-id> -requ
 
 Web 执行配置的最小验证见[Plan](spec/web-execution-config.plan.md) / [验收](acceptance/web-execution-config.md)：Web 配置/目录 owner 纳入固定 L1，`configuration.execution-profiles` 为独立 L3 受控保存、正式重启及关闭 Web 后 CLI 消费场景。真实目录专项内部先生成新 debug 包，仅查询 Codex/本机 Orca/已配对 Orca，不计完整执行链验收。
 
+`cmd/test-feedback -level=L1/L2/L3/L4` 在原隔离证据目录追加 `managed-<id>.json`，保留原 summary、JSONL 与退出码。每报告对应一个登记测试集/环境；执行前冻结 32 位随机 `id`、`started_at`、`definition`、`selection/definitions`、实际 `command`、`repository`（Git common dir）、`branch` 和可选 `rerun_of`；执行后补 `finished_at/sequence/before_commit/after_commit/before_clean/after_clean/results/evidence`。`evidence` 声明同目录 `summary.json` 的原字节数/SHA256。definitions[id] 是规范化单项 JSON 的 SHA256：字段固定按 `id,name,level,environment,command,check` 排序，非空 `note` 最后附加；以 UTF-8、无 BOM/缩进/末尾换行、与 Go `json.Marshal(Definition)` 相同的字符串转义编码（含 HTML 字符转义），不直接散列清单原始排版或属性顺序。results 中每项为 `test_id/status/message/log`，status 为 passed/failed/incomplete，log 指向同目录原 summary。仅已有稳定子项的入口使用可选 `scope`，不跨报告拼接通过。定向 Go 子集和 build-only 不输出整体通过；gate-only 仅报告实际 controlled ID。
+
+测试管理为项目级只读页面 `/projects/:id/tests`。脚本可独立登记，无需 Task/Run；候选仍从原 EvidenceView 核验，不用独立历史代替候选证明。新增/补登记复用 `STEERLINE_HOME` 发现应用：
+
+```powershell
+# 实际完成所选测试后可自动登记；登记失败不改变原测试退出码
+go run ./cmd/test-feedback -level L1 -record-project <配置ID> -out <新的绝对输出目录>
+# 单测试集的显式复验，父报告须已登记；无映射为独立运行
+go run ./cmd/test-feedback -level L3 -suite testing -scenario 'testing.records' -env controlled -record-project <配置ID> -rerun-of 'testing.records=<原报告ID>' -out <新目录>
+# 仅补登记现有报告，不运行测试
+steerline tests register -project <配置ID或项目ID> -report-dir <报告绝对目录>
+```
+
+报告至多 128 KiB，summary 至多 512 KiB，整份 JSON/base64 命令至多 1 MiB；逐报告原子登记并以项目+报告 ID 幂等。目录内普通文件才可读取，链接越界、内容/摘要冲突拒绝；缺失/过大 summary 仍登记原始结果并标证据不可用，不计复验通过，可按原声明摘要补齐。`registration.json` 逐次追加报告 ID、传输请求号、登记/拒绝/未知状态及诊断；发送前先保存未知状态，补登保留既有尝试。离线保留原产物，用原报告补登；本地 register 有失败/未知项非零，页面不提供执行或改结果按钮。详情接口将可能超过浏览器安全整数范围的 producer `sequence` 作为字符串输出，原报告字节/数值不变。复验只认显式链最新一份可比且完整覆盖原失败范围的通过报告，原失败保留；源码脏/未知允许展示复验通过，但显著标记“源码未固定”，不能当作固定 SHA 证明。
+
+已接入文档/生成、程序报告、Runner R2 公开收集/读取/Git 观察、不可变持久化和只读执行页。运行内使用现有 `-out .steerrunner/artifacts/<唯一执行ID>` 新目录，并由项目维护忽略规则；测试入口最后原子发布 `managed-*.json`，同目录 `summary.json` 为首版保留的原始证据。默认系统临时目录不会自动成为 Run 产物。收集原请求先持久化，未知只查询原请求；报告按原候选/Run 保存并核验字节长度和 SHA256，UI 显示 Run/artifact/摘要引用。真实场景 `testing.management-local-codex` 的结果见[专属验收](acceptance/test-management.md)。原候选的当前结果仍要求干净同 commit；项目历史按上文独立展示源码状态和显式复验。
+
 ## L1–L4 定义
 
 SteerLine 直接采用 [开发项目测试架构规范](../SteerlineProjectGuideDoc/testing-architecture.md)。L1–L4 定义、L3 正交与并行设计、分级内容清单要求及跨项目测试归属统一在该规范维护；本文记录 SteerLine 的具体入口、环境、清单和实施缺口。

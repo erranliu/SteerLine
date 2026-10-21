@@ -1398,3 +1398,23 @@ textarea {
 .maintenance-panel button { border: 1px solid #365742; border-radius: 5px; background: #1e3227; padding: 5px 10px; justify-self: start; text-align: left; }
 .maintenance-panel button:disabled { opacity: .5; cursor: not-allowed; }
 .maintenance-panel input:not([type="checkbox"]) { border: 1px solid #365742; border-radius: 5px; background: #101b14; padding: 6px 8px; }
+
+.tests-page { padding: 24px; }
+.tests-page .page-heading,.tests-page .button-row { display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap; }
+.test-catalogue-filters { display:flex;gap:16px;margin:20px 0; }
+.tests-workspace { display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px; }
+.test-suites { border-right:1px solid var(--color-border);padding-right:14px; }
+.test-suite { display:block;width:100%;border:1px solid transparent;text-align:left;padding:12px;border-radius:8px;margin-bottom:6px;background:transparent; }
+.test-suite.selected { background:#17352a;border-color:var(--color-primary); }
+.test-suite span,.test-record-open span { display:block;margin-top:5px;font-size:12px; }
+.test-record-panel { min-width:0; }
+.test-record-filters { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0; }
+.tests-page label { display:flex;flex-direction:column;gap:5px;font-size:12px; }
+.tests-page input,.tests-page select { min-width:0;padding:9px;border:1px solid var(--color-border);border-radius:6px;background:var(--color-background);color:inherit; }
+.test-record-card { border:1px solid var(--color-border);border-radius:8px;margin:12px 0; }
+.test-record-open { display:block;width:100%;padding:14px;text-align:left;background:transparent;overflow-wrap:anywhere; }
+.tests-page pre,.tests-page code,.tests-page p { overflow-wrap:anywhere; }
+.tests-page pre { white-space:pre-wrap;max-height:420px;overflow:auto; }
+.record-failed { color:#b5483c; }.record-passed { color:#22745b; }.record-incomplete { color:#96641b; }
+.test-chain-link { text-align:left;text-decoration:underline;overflow-wrap:anywhere; }
+@media(max-width:800px){.tests-workspace{grid-template-columns:minmax(0,1fr)}.test-suites{border-right:0;border-bottom:1px solid var(--color-border)}.test-record-filters{grid-template-columns:minmax(0,1fr)}}

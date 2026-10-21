@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { projectQueries } from "../../shared/api/queries";
@@ -42,7 +43,7 @@ const labels: Record<string, string> = {
   stale: "待复验",
 };
 export function PlanTests({ run }: { run: Candidate }) {
-  const { api, online } = useWorkspace();
+  const { api, online, identity } = useWorkspace();
   const result = useQuery({
     ...projectQueries(api).planTests(run),
     enabled: online,
@@ -96,7 +97,7 @@ export function PlanTests({ run }: { run: Candidate }) {
                 {row.name} · {row.level} / {row.environment} ·{" "}
                 {labels[row.status] || "待核实"}
               </summary>
-              <p className="muted">{row.id}</p>
+              <p className="muted">{row.id} · <Link to={"/projects/"+identity.project_id+"/tests?test="+encodeURIComponent(row.id)}>查看测试记录</Link></p>
               <pre>{row.command}</pre>
               <p>{row.check}</p>
               {row.message && <p>{row.message}</p>}

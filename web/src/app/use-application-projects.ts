@@ -57,7 +57,7 @@ export function useApplicationProjects(initial: BrowserSession) {
   const location = useLocation();
   const navigate = useNavigate();
   const match = location.pathname.match(
-    /^\/projects\/([^/]+)\/(dag|runs|settings|environment-checks)$/,
+    /^\/projects\/([^/]+)\/(dag|runs|tests|settings|environment-checks)$/,
   );
   const id = match?.[1] ?? "";
   const page = match?.[2] ?? "dag";

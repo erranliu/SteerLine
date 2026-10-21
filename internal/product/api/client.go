@@ -9,6 +9,7 @@ type ErrorKind string
 var ErrRecordNotFound = errors.New("product record not found")
 
 const (
+	InvalidInput       ErrorKind = "invalid_input"
 	Unavailable        ErrorKind = "unavailable"
 	MissingDatabase    ErrorKind = "missing_database"
 	IncompatibleFormat ErrorKind = "incompatible_format"

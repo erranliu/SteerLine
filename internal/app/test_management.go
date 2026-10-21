@@ -15,11 +15,13 @@ import (
 )
 
 type testManagementStore interface {
+	testmanagement.RecordStore
 	testmanagement.GenerationStore
 	testmanagement.EvidenceStore
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
 type testManagementPort struct {
+	records     *testmanagement.RecordService
 	service     *testmanagement.GenerationService
 	store       testManagementStore
 	evidence    *testmanagement.EvidenceService
@@ -70,7 +72,7 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 		}
 		return nil
 	}}
-	port := &testManagementPort{service: s, store: store, evidence: evidence, maintenance: c.runtimeMaintenance}
+	port := &testManagementPort{service: s, store: store, evidence: evidence, maintenance: c.runtimeMaintenance, records: &testmanagement.RecordService{Project: c.Identity(), Store: store}}
 	if port.maintenance != nil {
 		port.maintenance.tests = port
 		evidence.AllowCollect = func(ctx context.Context, c runnerstate.Candidate) bool {
@@ -162,13 +164,14 @@ func (p *testManagementPort) close() error {
 }
 
 func (p *testManagementPort) observe(ctx context.Context) error {
-	if err := p.service.Observe(ctx); err != nil {
-		return err
+	observationErr := p.service.Observe(ctx)
+	if observationErr == nil && p.maintenance != nil {
+		observationErr = p.maintenance.refresh(ctx)
 	}
-	if p.maintenance != nil {
-		if e := p.maintenance.refresh(ctx); e != nil {
-			return e
-		}
+	if observationErr == nil {
+		observationErr = p.evidence.Observe(ctx)
 	}
-	return p.evidence.Observe(ctx)
+	// Independent history consumes retained evidence even when live observation
+	// or current-material refresh is unavailable.
+	return errors.Join(observationErr, p.records.ProjectEvidence(ctx))
 }

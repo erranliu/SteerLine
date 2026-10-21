@@ -54,7 +54,9 @@ function mock() {
     "fetch",
     vi.fn(async (url: string) =>
       Response.json(
-        url === "/auth/status"
+        url.endsWith("/maintenance")
+          ? { observation: { commit: "" }, tasks: [], profiles: [], profile: "" }
+          : url === "/auth/status"
           ? session
           : url.endsWith("/projects")
             ? { projects }
@@ -344,4 +346,73 @@ it("reads an original envelope after native restart and never replays it into th
       (row) => row.envelope.request_id === envelope.request_id,
     )?.envelope,
   ).toEqual(envelope);
+});
+
+it("TR recognizes test-record deep links and cancels late record reads when switching projects", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  let resolveOld!: (response: Response) => void;
+  let oldSignal: AbortSignal | undefined;
+  vi.mocked(fetch).mockImplementation((...args) => {
+    const url = String(args[0]);
+    if (url.endsWith("/tests/catalogue"))
+      return Promise.resolve(
+        Response.json({
+          tests: [
+            {
+              id: "rules",
+              name: "Rules",
+              level: "L1",
+              environment: "isolated",
+              command: "test",
+              check: "assert",
+              current: true,
+            },
+          ],
+          path: "test-list.json",
+          commit: "sha",
+          observed_at: "2026-10-21T00:00:00Z",
+        }),
+      );
+    if (url.includes("/tests/records?")) {
+      if (url.includes(a)) {
+        oldSignal = args[1]?.signal as AbortSignal;
+        return new Promise((done) => {
+          resolveOld = done;
+        });
+      }
+      return Promise.resolve(
+        Response.json({
+          records: [],
+          summary: { total: 0, pending: 0 },
+          observed_at: "2026-10-21T00:00:00Z",
+        }),
+      );
+    }
+    return original(...args);
+  });
+  mount(`/projects/${a}/tests?test=rules`);
+  expect(
+    await screen.findByRole("heading", { name: "测试管理" }),
+  ).toBeVisible();
+  await waitFor(() => expect(resolveOld).toBeDefined());
+  fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), {
+    target: { value: b },
+  });
+  await waitFor(() =>
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      `/projects/${b}/tests`,
+    ),
+  );
+  await waitFor(() => expect(oldSignal?.aborted).toBe(true));
+  await act(async () =>
+    resolveOld(
+      Response.json({
+        records: [{ id: "late-old-project", status: "failed" }],
+        summary: { total: 1, pending: 1 },
+      }),
+    ),
+  );
+  expect(screen.queryByText("late-old-project")).toBeNull();
+  expect(await screen.findByText("尚无执行记录")).toBeVisible();
 });

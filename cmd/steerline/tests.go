@@ -15,6 +15,9 @@ import (
 )
 
 func runTestsCommand(args []string) error {
+	if len(args) > 0 && args[0] == "register" {
+		return runTestRegister(args[1:])
+	}
 	if len(args) == 0 {
 		return errors.New("usage: steerline tests <generation|stop-generation> -project ID -request-id ID")
 	}

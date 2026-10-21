@@ -133,7 +133,8 @@ func evidenceFixture(t *testing.T) (*EvidenceService, *evidenceMemory, *evidence
 }
 func publishEvidence(f *evidenceCLI, id string, sequence uint64, status string) {
 	d := definition()
-	report := Report{ID: id, Sequence: sequence, Selection: []string{d.ID}, Environment: d.Environment, Definitions: map[string]string{d.ID: Digest(d)}, BeforeCommit: *f.git.Commit, AfterCommit: *f.git.Commit, BeforeClean: true, AfterClean: true, Results: []Result{{TestID: d.ID, Status: status, Message: "actual assertion", Log: "summary.json"}}}
+	summary := []byte(`{"actual_assertions":true}`)
+	report := Report{ID: ContentDigest([]byte(id))[:32], StartedAt: time.Now().Add(-time.Second), FinishedAt: time.Now(), Definition: d, Command: d.Command, Repository: "repo", Evidence: model.ReportEvidence{Path: "summary.json", Bytes: len(summary), SHA256: ContentDigest(summary)}, Sequence: sequence, Selection: []string{d.ID}, Environment: d.Environment, Definitions: map[string]string{d.ID: Digest(d)}, BeforeCommit: *f.git.Commit, AfterCommit: *f.git.Commit, BeforeClean: true, AfterClean: true, Results: []Result{{TestID: d.ID, Status: status, Message: "actual assertion", Log: "summary.json"}}}
 	raw, _ := json.Marshal(report)
 	f.files[id+"/managed-test.json"] = raw
 	f.files[id+"/summary.json"] = []byte(`{"actual_assertions":true}`)
@@ -183,7 +184,7 @@ func TestTMEvidenceUnknownDoesNotResendAndPersistenceFailure(t *testing.T) {
 	}
 }
 func TestTMEvidenceBadBytesOrMissingLogCannotPass(t *testing.T) {
-	for _, mode := range []string{"bytes", "log", "conflict", "stale", "order"} {
+	for _, mode := range []string{"bytes", "log", "conflict", "stale", "order", "declared-summary"} {
 		t.Run(mode, func(t *testing.T) {
 			s, m, f, snap := evidenceFixture(t)
 			switch mode {
@@ -195,8 +196,13 @@ func TestTMEvidenceBadBytesOrMissingLogCannotPass(t *testing.T) {
 				publishEvidence(f, "other", 2, "failed")
 				var r Report
 				_ = json.Unmarshal(f.files["other/managed-test.json"], &r)
-				r.ID = "first"
+				r.ID = ContentDigest([]byte("first"))[:32]
 				f.files["other/managed-test.json"], _ = json.Marshal(r)
+			case "declared-summary":
+				var r Report
+				_ = json.Unmarshal(f.files["first/managed-test.json"], &r)
+				r.Evidence.SHA256 = ContentDigest([]byte("different summary"))
+				f.files["first/managed-test.json"], _ = json.Marshal(r)
 			case "stale":
 				f.git.ObservedAt = time.Now().Add(-time.Minute)
 			case "order":
