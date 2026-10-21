@@ -51,4 +51,4 @@
 
 实现任务运行针对性检查后执行 `go test ./... -count=1 -timeout 10m`、`go vet ./...`、`git diff --check`，适用时补充 race 和原生构建。纯文档调整只检查链接、引用方向和规格一致性，不宣称实现验收已通过。
 
-当前资源处置以[第三批简化 Spec](product-simplification-03-resources-cli.spec.md)为准：Task 丢弃不关闭 PR、不删除 worktree/分支，只有原执行停止及必要协议收尾；保留候选/PR 历史、唯一交付和依赖资格。高级 DAG 查询及专用文件导出已退出当前 CLI，基本按项目分页和任务直接关系保留。
+当前资源处置以[第三批简化 Spec](../archive/spec/completed/product-simplification-03-resources-cli.spec.md)为准：Task 丢弃不关闭 PR、不删除 worktree/分支，只有原执行停止及必要协议收尾；保留候选/PR 历史、唯一交付和依赖资格。高级 DAG 查询及专用文件导出已退出当前 CLI，基本按项目分页和任务直接关系保留。

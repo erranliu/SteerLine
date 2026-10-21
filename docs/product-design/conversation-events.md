@@ -1,6 +1,6 @@
 # 最终回复与必要会话事实
 
-中心保存完整最终回复、session/turn 状态、宿主等待及采集缺口。问题、背景、选项和答案由 Decision 保存，发送意图与回执由 Command/Operation 保存。完整工具过程、普通消息、增量、终端正文和未知原始事件留在原生工具，中心不维护其副本。此次收口见[Spec](../spec/product-simplification-04-conversation-recovery.spec.md)及[验收](../acceptance/product-simplification-04-conversation-recovery.md)。
+中心保存完整最终回复、session/turn 状态、宿主等待及采集缺口。问题、背景、选项和答案由 Decision 保存，发送意图与回执由 Command/Operation 保存。完整工具过程、普通消息、增量、终端正文和未知原始事件留在原生工具，中心不维护其副本。此次收口见[Spec](../archive/spec/completed/product-simplification-04-conversation-recovery.spec.md)及[验收](../acceptance/archive/completed/product-simplification-04-conversation-recovery.md)。
 
 ## 原生采集
 

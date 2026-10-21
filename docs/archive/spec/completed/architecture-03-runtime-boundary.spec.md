@@ -6,7 +6,7 @@
 
 所有业务表写入都由显式命令或转换事务负责；Runtime/Run 只承担读视图，checkpoint 发布只写服务快照。完成剩余恢复、清理和服务控制调用点迁移后，删除 Runtime 整体差异写回，让改变内存视图不再可能触发业务写入。
 
-同时按实际调用方收窄执行后端接口，结束中心业务流程与平台协议的交叉依赖。遵守 [worker-flow](worker-flow.spec.md)、[原生 Orca](../../../spec/worker-flow-orca-native.spec.md)和[执行架构](../../../spec/execution-architecture.spec.md)。本 PR 不新增旧数据迁移、双写、兼容开关或隐式提交回退。
+同时按实际调用方收窄执行后端接口，结束中心业务流程与平台协议的交叉依赖。遵守 [worker-flow](worker-flow.spec.md)、[原生 Orca](../retired/worker-flow-orca-native.spec.md)和[执行架构](../../../spec/execution-architecture.spec.md)。本 PR 不新增旧数据迁移、双写、兼容开关或隐式提交回退。
 
 ## 2. 剩余写入点迁移
 

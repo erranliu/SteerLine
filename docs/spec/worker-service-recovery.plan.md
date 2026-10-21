@@ -66,7 +66,7 @@ SR1/SR2 尽量合并到现有 worker-flow、app-server、Orca fake、Command/Dec
 
 实现最终候选运行 `go run ./cmd/test-feedback -quick`，追加未被入口覆盖的 SR1/SR2 定向用例和 SR3 一条本机闭环。Windows 候选构建按真机需要执行；改动跨平台进程代码时增加 Linux 编译核验。已有定向测试通过后，仅在新改动或具体风险出现时扩大范围，默认不跑全量。
 
-更新 [worker-flow](../archive/spec/completed/worker-flow.spec.md)、[本地 app-server](local-codex-app-server.spec.md)、[Orca native](worker-flow-orca-native.spec.md)的适用边界及配套 Plan，更新 [数据契约](../product-design/data-model.md)、[决策说明](../product-design/decisions.md)、相关运行说明与 [执行架构共同约束](execution-architecture.spec.md)。保留旧验收的原始事实，注明新语义由本 Spec 替代，不把新编写的文档视为验收通过。
+更新 [worker-flow](../archive/spec/completed/worker-flow.spec.md)、[本地 app-server](local-codex-app-server.spec.md)、[Orca native](../archive/spec/retired/worker-flow-orca-native.spec.md)的适用边界及配套 Plan，更新 [数据契约](../product-design/data-model.md)、[决策说明](../product-design/decisions.md)、相关运行说明与 [执行架构共同约束](execution-architecture.spec.md)。保留旧验收的原始事实，注明新语义由本 Spec 替代，不把新编写的文档视为验收通过。
 
 原始证据留本次新临时目录，最小结果在任务专属验收文档记录：代码/CLI 版本、测试方式、原/新 Attempt 与进程或 terminal 身份、thread/turn 或 Dispatch、原问题、用户继续命令和是否产生外部发送。验证目录和测试进程按归属清理；不访问 `C:\SteerlineRuntime`、#101、现有 Orca 终端，也不领取真实任务。
 

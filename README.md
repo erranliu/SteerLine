@@ -2,13 +2,13 @@
 
 SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 roadmap 组织规划、任务依赖与 AI 执行，让人掌握产品目标、关键决策和 PR 合并。
 
-长期目标是让 AI 能自主完成普通人需要长期借助 AI 才能开发的复杂软件项目。项目目前尚未发布。第一阶段包含本地 Codex、本机 Orca 与远端路径交付。
+长期目标是让 AI 能自主完成普通人需要长期借助 AI 才能开发的复杂软件项目。项目目前尚未发布。当前接入本地 Codex 与远端 Orca environment，本机 Orca 路径已放弃；具体已验范围见各项验收记录。
 
 [文档入口](docs/README.md) · [产品愿景](docs/roadmap/product-vision.md) · [RoadmapGuide](docs/roadmap/RoadmapGuide.md) · [正式执行清单](docs/roadmap/execution-map.md) · [当前代码架构图](docs/architecture/current-code-architecture.md) · [测试总入口](docs/testing.md)
 
 [开发项目规范](SteerlineProjectGuideDoc/README.md)面向 SteerLine 所开发的项目，SteerLine 自身也直接采用；与自身产品文档 `docs/` 分开维护。首份为[测试架构规范](SteerlineProjectGuideDoc/testing-architecture.md)。
 
-执行已拆到独立 [SteerRunner](https://github.com/erranliu/SteerRunner)：SteerLine 负责任务协调，通过固定 EXE/CLI 调用；运行数据与日志归项目工作目录。配置、固定构建及当前验收边界见 [Runner 接入](docs/integration/steerrunner.md)。
+执行已拆到独立 [SteerRunner](https://github.com/erranliu/SteerRunner)：SteerLine 负责任务协调，通过固定 EXE/CLI 调用。每个 home 共用一个 Runner 服务，执行数据与日志存于该 home 对应的独立短目录，Task 数据库仍按项目隔离。配置、固定构建及当前验收边界见 [Runner 接入](docs/integration/steerrunner.md)。
 
 ## 测试
 

@@ -36,7 +36,7 @@ SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反�
 
 Task、候选参与关系与 TaskDelivery 由 SteerLine 管理；Runner 的 Run、Execution、Attempt、问题/输入与执行 Command 分别表达执行事实。现有产品 DTO 与 checkpoint 仍保留部分 WorkflowRun、Decision、Operation 等命名，不表示 SteerLine 继续持有相应原生执行状态机。SteerLine 通过固定 Runner CLI 与执行后端协作；Runner 的进程、会话和仓库事实属于执行身份，不替代中心业务 Task 或 DAG。配置、服务 checkpoint、Runner 状态投影、UI 缓存和诊断日志都不能成为第二业务权威。
 
-当前拓扑是一个共享 SteerLine 后端宿主和独立 Web 程序。`steerline start` 协调启动共享后端与 Web；后端装载配置项目，在同一进程内为每个项目建立隔离的运行时、Task actor、存储和 Runner CLI 客户端。每个项目的 SteerRunner 仍独立运行。Web 与 CLI 通过统一应用 API 使用项目用例；Web 不直接访问业务数据库、调度器或 Runner 私有实现。当前模块与进程边界见[代码架构](architecture/current-code-architecture.md)，启动、项目加载和关闭契约见[统一启动 Spec](spec/unified-startup.spec.md)。
+当前拓扑是一个共享 SteerLine 后端宿主和独立 Web 程序。`steerline start` 协调启动共享后端与 Web；后端装载配置项目，在同一进程内为每个项目建立隔离的运行时、Task actor 和存储。应用宿主持有一个 home 级 SteerRunner 服务，各项目借用同一固定客户端，整体关闭统一结算。Web 与 CLI 通过统一应用 API 使用项目用例；Web 不直接访问业务数据库、调度器或 Runner 私有实现。当前模块与进程边界见[代码架构](architecture/current-code-architecture.md)，启动、项目加载和关闭契约见[统一启动 Spec](spec/unified-startup.spec.md)与[共享 Runner 服务](spec/shared-runner-service.spec.md)。
 
 ## LLM 执行边界
 
@@ -48,7 +48,7 @@ SteerLine 与 SteerRunner 各自具有默认执行链路，初始默认均为本
 
 ## 执行与交付
 
-领取时冻结任务契约、仓库/base、执行配置及原身份。SteerLine 在外部调用前保存候选与完整 CLI outbox，Runner 返回公开事实和回执；身份或结果不确定时沿原请求对账，不盲重发、不切换后端或派替代 worker。worker 在同一任务的原会话中处理实现和反馈；Runner 管理 development/1 或 development-audited/1 的步骤与审计修复预算；SteerLine 选择预设并按公开观察展示，不重建执行状态机。
+领取时冻结任务契约、仓库/base、执行配置及原身份。SteerLine 在外部调用前保存候选与完整 CLI outbox，Runner 返回公开事实和回执；身份或结果不确定时沿原请求对账，不盲重发、不切换后端或派替代 worker。worker 在同一任务的原会话中处理实现和反馈；Runner 管理所选构建发布的普通或审计开发 workflow 的步骤与修复预算；SteerLine 选择预设并按公开观察展示，不重建执行状态机。
 
 不同任务可以人工并行，同一任务可人工比较多个独立候选。候选各有自己的会话、工作区、分支、PR 与反馈，Task 只接受一个核验过的交付。人工停止参与须保留至少一个参与候选，只改变参与关系，不授权原生停止；Task 丢弃与终态停止义务分别记录。主干接入与验证见[候选安全停止](acceptance/web-candidate-stop.md)。
 
@@ -72,6 +72,6 @@ SteerLine 与 SteerRunner 各自具有默认执行链路，初始默认均为本
 
 ## Worker 流程与调用方交付
 
-当前工作流归独立 Runner，普通 development/1 与审计 development-audited/1 分别选择。Runner 管理实现、报告、审计、修复与发布；SteerLine 在候选事务冻结原预设和提交，消费公开观察，核验合并后提交唯一 TaskDelivery。workflow 版本、CLI 协议和 Task 的 worker-flow-v2 是不同版本轴。冻结边界见[协作 Spec](spec/runner-collaboration.spec.md)，迁出前 development/v3 的[流程契约](spec/worker-pr-flow.spec.md)保留历史追溯。
+当前工作流归独立 Runner，普通与审计开发 workflow 按所选构建的公开目录分别选择。Runner 管理实现、报告、审计、修复与发布；SteerLine 在候选事务冻结原预设和提交，消费公开观察，核验合并后提交唯一 TaskDelivery。workflow 版本、CLI 协议和 Task 的 worker-flow-v2 是不同版本轴。冻结边界见[协作 Spec](spec/runner-collaboration.spec.md)，迁出前 development/v3 的[流程契约](spec/worker-pr-flow.spec.md)保留历史追溯。
 
 SteerLine 在交付前经 Runner CLI 刷新所选 PR，在自己的同一事务中核验原绑定、Task/图/候选版本和合并证据，记录唯一 TaskDelivery、关闭 Task、释放后继及保存候选停止义务。Runner 步骤完成或公开状态达到 `pr_ready` 不替代该事务；正确已合并结果也不要求先经过 `pr_ready`。

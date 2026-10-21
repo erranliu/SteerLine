@@ -1,6 +1,6 @@
 # Spec：worker 停服恢复与手动继续
 
-当前恢复行为由[最终回复与原会话恢复精简](product-simplification-04-conversation-recovery.spec.md)收窄：只恢复原 session，取消 new_session 与无原会话的人工新建路径。本文其他原请求/身份/停止边界保留。
+当前恢复行为由[最终回复与原会话恢复精简](../archive/spec/completed/product-simplification-04-conversation-recovery.spec.md)收窄：只恢复原 session，取消 new_session 与无原会话的人工新建路径。本文其他原请求/身份/停止边界保留。
 
 目标：`WORKER-SERVICE-RECOVERY`。状态：实现候选；本机 local Codex 闭环与 Orca fake 定向验证已通过，Orca 新 agent 的安全重建仍缺真机能力证据。配套 [Plan](worker-service-recovery.plan.md)及[验证记录](../acceptance/worker-service-recovery.md)。日期：2026-09-30。实现基线：`origin/main` 的 `472d61e`（含 #144、#148、#149）；不创建或绑定生产 Task。
 
@@ -16,7 +16,7 @@ SteerLine 服务重开后核对已有 worker 的真实状态，恢复观察和�
 | --- | --- |
 | [本地 app-server Spec](local-codex-app-server.spec.md) §2、§5、验收 A/B | 移除活动 turn 与请求必须跨停服存活的要求；原 worker 存活时仍精确重接，终止时等待人工继续 |
 | [worker-flow Spec](../archive/spec/completed/worker-flow.spec.md) §4、§5、§8 | 普通反馈继续原会话；本次新增的显式停服恢复可建立新 worker 运行记录，原生会话能核实则复用，失效时只能由用户明确选择新会话 |
-| [Orca native Spec](worker-flow-orca-native.spec.md) 的恢复及会话替换边界 | 保留原 terminal/Dispatch 的重接和退出后结果结算；确认旧 worker 终止后允许经过本 Spec 人工授权的恢复，不能把新 terminal/incarnation 冒充原会话 |
+| [Orca native Spec](../archive/spec/retired/worker-flow-orca-native.spec.md) 的恢复及会话替换边界 | 保留原 terminal/Dispatch 的重接和退出后结果结算；确认旧 worker 终止后允许经过本 Spec 人工授权的恢复，不能把新 terminal/incarnation 冒充原会话 |
 | [架构规划约束](../roadmap/architecture-constraints.md)中的单会话描述 | 同一任务保留一条权威活动 WorkflowRun/Execution；显式恢复可顺序建立新 worker 代次，任何时刻不能产生两个未排除活动可能性的 worker |
 
 复用 Task 领取、固定任务契约、五个业务主阶段、统一 Decision/Command/Operation、会话记录及真实 PR 合并交付。停服不释放领取，不重建工作区，不 reset 已有代码或提交，不因进程退出认定任务完成。不实现 SCM、专用 broker、宿主权限修改、跨后端切换或旧格式迁移。

@@ -6,7 +6,7 @@
 
 中心业务流程消费经过核验的 worker 事实；平台适配层解释各自的消息、日志、身份格式和回执。一次完成三种现有路径的事件与轮次终态整理：local Codex app-server、原生 Orca、受监督 Orca。准备、启动、反馈和恢复沿用固定 Execution 配置及现有 mode 路由。
 
-遵守 [worker-flow](worker-flow.spec.md)、[原生 Orca](../../../spec/worker-flow-orca-native.spec.md)、[执行架构](../../../spec/execution-architecture.spec.md)中的当前流程、唯一业务写者、身份及交付约束。本文是现有能力的内部重构，不重启旧五步流程。项目尚未发布，不新增旧数据、旧配置或旧协议兼容路径。
+遵守 [worker-flow](worker-flow.spec.md)、[原生 Orca](../retired/worker-flow-orca-native.spec.md)、[执行架构](../../../spec/execution-architecture.spec.md)中的当前流程、唯一业务写者、身份及交付约束。本文是现有能力的内部重构，不重启旧五步流程。项目尚未发布，不新增旧数据、旧配置或旧协议兼容路径。
 
 ## 2. 当前问题与交付范围
 
