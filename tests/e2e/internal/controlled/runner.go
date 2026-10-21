@@ -31,6 +31,26 @@ func RunnerCLI(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
 	}
+	if args[0] == "capabilities" {
+		exe, err := os.Executable()
+		if err != nil {
+			return true, err
+		}
+		raw, err := os.ReadFile(filepath.Join(filepath.Dir(filepath.Dir(exe)), "seed", "runner-content-capabilities.json"))
+		if err == nil {
+			var data map[string]any
+			if err = json.Unmarshal(raw, &data); err != nil {
+				return true, err
+			}
+			data["version"] = "caller-fixture-v1"
+			data["resource_version"] = 1
+			data["resource_digest"] = strings.Repeat("a", 64)
+			return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": "steerrunner-cli/v1", "ok": true, "request_id": nil, "data": data, "error": nil})
+		}
+		if !os.IsNotExist(err) {
+			return true, err
+		}
+	}
 	switch args[0] {
 	case "version", "capabilities", "service":
 		os.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "caller-fixture-v1")
@@ -126,7 +146,11 @@ func RunnerCLI(args []string) (bool, error) {
 		if err := json.Unmarshal(request.Input, &input); err != nil {
 			return true, err
 		}
-		providerPath := statePathForDirectory(input.Repository.LocalPath)
+		directory := input.Repository.LocalPath
+		if directory == "" {
+			directory = stateDir
+		}
+		providerPath := statePathForDirectory(directory)
 		provider, err := Read(providerPath)
 		if err != nil {
 			return true, err
@@ -138,6 +162,21 @@ func RunnerCLI(args []string) (bool, error) {
 		runID = "run-" + request.RequestID
 		sum := sha256.Sum256(request.Input)
 		run := runnercontract.Run{Correlation: input.Correlation, RunID: runID, Revision: 1, Title: input.Title, InputDigest: hex.EncodeToString(sum[:]), Status: "running", Phase: "running", StopStatus: "active", NewInputsAllowed: true, Controls: runnercontract.Controls{CanStop: true}, UpdatedAt: time.Now().UTC(), Execution: runnercontract.Execution{AttemptID: "attempt-" + runID, Generation: "fixture", TurnID: "fixture-turn", SessionID: "session-" + runID, Workspace: input.Repository.LocalPath, Branch: "codex/fixture/" + request.RequestID}}
+		run.Workflow = input.Workflow
+		if input.Workflow.ID == "generate" {
+			var generation runnercontract.GenerateRunInput
+			if err := json.Unmarshal(request.Input, &generation); err != nil {
+				return true, err
+			}
+			// Scripted public result, not a native/model success claim.
+			result := json.RawMessage(`{"tests":["fixture.marker"]}`)
+			source := runnercontract.Final{CommandID: "fixture-content-" + request.RequestID, TurnID: "fixture-turn", Verified: true, NativeOutcome: "succeeded", Source: "caller-fixture"}
+			run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: result, Source: source}
+			run.Status = "completed"
+			run.StopStatus = "stopped"
+			run.Final = &source
+			run.NewInputsAllowed = false
+		}
 		s.Runs[runID] = run
 		s.Providers[runID] = providerPath
 		cmd := runnercontract.Command{CommandID: "command-" + request.RequestID, RequestID: request.RequestID, RunID: &runID, Command: "submit", ReceiptStatus: "accepted", ActionStatus: "completed"}

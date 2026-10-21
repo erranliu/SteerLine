@@ -97,5 +97,13 @@
     "test": "TestManagementLocalCodex",
     "env": "live",
     "chain": "local-codex"
+  },
+  {
+    "id": "runtime.project-maintenance",
+    "level": "L3",
+    "suite": "runtime",
+    "package": "./tests/e2e/suites/runtime",
+    "test": "TestProjectMaintenance",
+    "env": "controlled"
   }
 ]

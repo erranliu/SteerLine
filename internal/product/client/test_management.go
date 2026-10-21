@@ -28,3 +28,7 @@ func (c *Client) TestGeneration(ctx context.Context, id string) (api.TestGenerat
 func (c *Client) StopTestGeneration(ctx context.Context, in api.TestStopGenerationRequest) (api.TestGeneration, error) {
 	return testRead(ctx, c, func(p api.TestManagementPort) (api.TestGeneration, error) { return p.StopTestGeneration(ctx, in) })
 }
+
+func (c *Client) ApplyTests(ctx context.Context, in api.TestApplyRequest) (api.TestGeneration, error) {
+	return testRead(ctx, c, func(p api.TestManagementPort) (api.TestGeneration, error) { return p.ApplyTests(ctx, in) })
+}

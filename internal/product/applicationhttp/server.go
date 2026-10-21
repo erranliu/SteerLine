@@ -36,7 +36,7 @@ type Server struct {
 }
 
 var taskReadRoute = regexp.MustCompile(`^/(task-batches/[0-9a-f]{32}|tasks/[^/]+/predecessors/requests/[0-9a-f]{32}|tests/generations/[0-9a-f]{32})$`)
-var taskWriteRoute = regexp.MustCompile(`^/(task-batch-validation|task-batches|tasks/[^/]+/predecessors|tests/generate|tests/stop-generation)$`)
+var taskWriteRoute = regexp.MustCompile(`^/(task-batch-validation|task-batches|tasks/[^/]+/predecessors|tests/generate|tests/apply|tests/stop-generation)$`)
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !s.Endpoint.Authorized(r) {

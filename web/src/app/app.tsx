@@ -13,6 +13,7 @@ import { ApiError } from "../shared/api/client";
 import type { Identity, BrowserSession } from "../shared/api/types";
 import { WorkspaceContext } from "./context";
 import { Button } from "../shared/ui/button";
+import { ProjectMaintenance } from "../features/project-maintenance/project-maintenance";
 import { Dispatch } from "../features/tasks/dispatch";
 import { requiresAnswer } from "../features/runs/state";
 import { short } from "../shared/ui/status";
@@ -165,6 +166,7 @@ export function Workspace({
             </div>
           </header>
           <main>
+            <ProjectMaintenance key={identity.project_id+identity.instance_id} />
             {!online && (
               <div className="notice amber" role="status">
                 <strong>

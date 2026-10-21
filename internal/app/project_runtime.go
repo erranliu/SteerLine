@@ -114,10 +114,14 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.runner = runner
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
+	var maintenanceDone chan struct{}
 	startupTimer := time.AfterFunc(120*time.Second, cancel)
 	defer startupTimer.Stop()
 	defer func() {
 		cancel()
+		if maintenanceDone != nil {
+			<-maintenanceDone
+		}
 		r.close()
 		result = contract.ProjectShutdown{ConfigID: r.configID, ProjectID: e.view.ProjectID, LocalClosed: r.localErr == nil, LocksReleased: r.localErr == nil}
 		if r.port != nil {
@@ -141,6 +145,9 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr = newEnvironmentCheckPort(r.config, r.store).service.VerifyBindings(ctx); retErr != nil {
 		return result, fmt.Errorf("original Runner check binding remains unverified: %w", retErr)
 	}
+	r.config.runtimeMaintenance = newProjectMaintenance(r.config, r.store)
+	maintenanceDone = make(chan struct{})
+	go func() { defer close(maintenanceDone); r.config.runtimeMaintenance.observe(ctx) }()
 	hostPort := host.NewServiceHost(r.hostConfig, "off", r.log, serviceActivityFormatter{})
 	var service *taskrunner.Actor
 	service, retErr = newRunnerService(r.config, hostPort, r.store, runner.client, runner.info)
@@ -164,7 +171,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr != nil {
 		return
 	}
-	r.port = &runtimeProjectPort{Server: port, product: r.product, config: r.config, store: r.store, instance: instance}
+	r.port = &runtimeProjectPort{actor: service, Server: port, product: r.product, config: r.config, store: r.store, instance: instance}
 	actor := serviceReadyHook{Actor: service, ready: func() error {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -219,6 +226,7 @@ func (r *ProjectRuntime) close() {
 }
 
 type runtimeProjectPort struct {
+	actor    *taskrunner.Actor
 	instance string
 	*httpapi.Server
 	product  *productclient.Client
@@ -234,6 +242,9 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 		return httpcontract.CommandResponse{}, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(in.Action, "maintenance_") {
+		return p.maintenanceCommand(ctx, in)
+	}
 	return p.Server.Command(ctx, in)
 }
 func (p *runtimeProjectPort) Task(ctx context.Context, method, route string, body json.RawMessage) (any, error) {
@@ -242,7 +253,12 @@ func (p *runtimeProjectPort) Task(ctx context.Context, method, route string, bod
 	}
 	defer p.users.RUnlock()
 	if strings.HasPrefix(route, "/tests/") {
-		return p.testing(ctx, method, route, body)
+		if method == "GET" || p.actor == nil {
+			return p.testing(ctx, method, route, body)
+		}
+		var out any
+		e := p.actor.Call(ctx, func() error { var err error; out, err = p.testing(ctx, method, route, body); return err })
+		return out, e
 	}
 	if method == "GET" {
 		kind, target, id := "create_task_batch", p.config.Identity(), strings.TrimPrefix(route, "/task-batches/")
@@ -327,6 +343,24 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(route, "/maintenance") || strings.HasPrefix(route, "/tests/generations/") {
+		for key, list := range values {
+			if route != "/maintenance" || (key != "mode" && key != "plan") || len(list) != 1 {
+				return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unsupported or repeated maintenance query"}
+			}
+		}
+		if mode := values.Get("mode"); mode != "" && mode != "baseline" && mode != "initialize" && mode != "local" {
+			return nil, &httpclient.ClientError{Status: 400, Code: "invalid_query", Reason: "unknown maintenance mode"}
+		}
+		return p.maintenanceRead(ctx, route, values.Get("mode"), values.Get("plan"))
+	}
+	if strings.HasPrefix(route, "/commands/") {
+		if r, e := p.maintenanceReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
+			return nil, e
+		} else if r != nil {
+			return r, nil
+		}
+	}
 	return p.Server.Read(ctx, route, values)
 }
 

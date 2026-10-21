@@ -41,6 +41,7 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	write(testmanagement.RulesPath, "# Testing\nRun minimal checks.\n")
 	write("docs/task.plan.md", "# Plan\nTest rules.")
 	write("docs/task.tests.json", `{"tests":["rules"]}`)
 	write(testmanagement.CataloguePath, `{"tests":[{"id":"rules","name":"规则","level":"L1","environment":"isolated","command":"rules","check":"断言通过"}]}`)
@@ -53,7 +54,7 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	raw, refs := c.prepareTestPlan(context.Background(), work)
 	var snap testmanagement.Snapshot
 	_ = json.Unmarshal(raw, &snap)
-	if snap.Status != "ready" || len(snap.Definitions) != 1 || snap.Definitions[0].ID != "rules" || len(refs) != 3 {
+	if snap.Status != "ready" || len(snap.Definitions) != 1 || snap.Definitions[0].ID != "rules" || len(refs) != 4 {
 		t.Fatalf("moving files used: %s %+v", raw, refs)
 	}
 	work.Contract.PlanRef.Path = "docs/missing.plan.md"

@@ -6,7 +6,7 @@ SteerLine 尚未发布。项目显式使用 task_authority=native 与 workflow_p
 
 ## 权威与身份
 
-SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、测试生成原请求与结果、原候选测试收集请求及不可变产物和自身服务 checkpoint。schema 25 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
+SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、测试生成原请求与结果、原候选测试收集请求及不可变产物和自身服务 checkpoint。schema 26 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
 
 Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、原生资源、问题、输入、恢复与停止事实。SteerLine 不读该库、原生 codec、IPC 或私有日志；只消费固定 EXE 公布的 CLI/Run/事件。
 
@@ -17,6 +17,8 @@ Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、�
 人工候选退出在原候选 payload 固定 `withdrawal`（request_id、expected_revision、requested_by、at），与 `participation=abandoned` 同事务保存；原请求重放不重写首次事实。`stop_requested` 专指独立的 Runner 停止义务，不由人工退出设置。退出与名额统计在写事务中重检，至少保留一个参与候选；Task 终态之后仍可另行增加停止义务，保留原 withdrawal。当前 Web 及调用方验证见[专属验收](../acceptance/web-candidate-stop.md)。
 
 ## 固定契约与领取
+
+当前规则（2026-10-21）：[项目基线与材料维护](project-maintenance.md#task-材料更新与首次启动冻结)分开保存“Task 最近确认材料”与“首次预留不可变执行契约”。目标 repository/remote/branch 不可借材料确认变更；未预留任务按 Task version 确认内容。首次 fresh fetch 后同 commit 解析引用/测试快照，在原项目库事务重核实际消费的确认，固定唯一 Task 快照、base、候选/outbox；不跨应用文件/项目库伪造事务，不比较无关 Plan/轮询时间。后续候选/拒绝/未知重放沿原版本；原 base 被历史改写排除时拒绝新候选而不换基线。材料规则不迁移旧库或改历史。材料依据和确认请求分别保存于 maintenance_approvals/maintenance_requests，唯一执行快照保存于 task_execution_snapshots；Generation payload 保存不可变输入、待审阅结果和逐次单文件应用意图/事实。
 
 TaskContract 固定目标仓库、remote、base 分支及 Spec/Plan/其他材料的 commit、路径和 SHA-256。启动前核对 Task 版本、DAG 就绪、authority、图版本、目标仓库及前置合并是否进入当前 base；最终领取事务再次进行同图 CAS。领取与完整 CLI outbox 一次提交，失败零派发。正常 implement/report/publish 不创建额外 DAG Task。
 
@@ -48,7 +50,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 | 格式/权威 | 当前值或归属 | 源码 |
 | --- | --- | --- |
-| Task SQLite | schema 25 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| Task SQLite | schema 26 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
 | Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
 | TaskContract / DAG | Task 自有纯值 | [task/model](../../internal/task/model) |

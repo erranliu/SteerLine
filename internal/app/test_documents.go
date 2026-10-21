@@ -13,9 +13,16 @@ import (
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
-// A missing/invalid optional testing document is a display diagnostic, never a
-// new Task eligibility rule. The immutable Plan commit supplies both paths.
+// Preparation follows the maintenance gate. Later candidates reuse the Task
+// execution snapshot; the immutable Plan commit supplies every Git reference.
 func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork) (json.RawMessage, []runnerclient.Document) {
+	if len(work.FrozenTestPlan) > 0 {
+		var frozen testmanagement.Snapshot
+		_ = json.Unmarshal(work.FrozenTestPlan, &frozen)
+		path, _ := testmanagement.ArrangementPath(work.Contract.PlanRef.Path)
+		instructions := testmodel.TestingInstructions
+		return work.FrozenTestPlan, []runnerclient.Document{{Kind: "git", Path: path, Commit: work.Contract.PlanRef.Commit}, {Kind: "git", Path: testmanagement.CataloguePath, Commit: work.Contract.PlanRef.Commit}, {Kind: "git", Path: testmanagement.RulesPath, Commit: work.Contract.PlanRef.Commit}, {Kind: "inline", Path: "steerline-testing.md", Content: &instructions}}
+	}
 	snapshot := testmanagement.Snapshot{Status: "missing", PlanPath: work.Contract.PlanRef.Path, Commit: work.Contract.PlanRef.Commit, Definitions: []testmanagement.Definition{}}
 	refs := []runnerclient.Document{}
 	finish := func() (json.RawMessage, []runnerclient.Document) { raw, _ := json.Marshal(snapshot); return raw, refs }
@@ -48,6 +55,10 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork) (
 	snapshot.Status = "invalid"
 	catalogue, err := read(testmanagement.CataloguePath)
 	if err != nil {
+		snapshot.Diagnostic = err.Error()
+		return finish()
+	}
+	if _, err = read(testmanagement.RulesPath); err != nil {
 		snapshot.Diagnostic = err.Error()
 		return finish()
 	}
