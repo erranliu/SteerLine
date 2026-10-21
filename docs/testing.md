@@ -1,5 +1,9 @@
 # 测试总入口
 
+可靠性交付简化的本批定向验证见[实施 Plan](plans/reliability-simplification.plan.md)和[验收](acceptance/reliability-simplification.md)：Go 部署目标/一次恢复、实际命令完整绑定、同快照观察与 CAS；新用例进入既有 L1 owner 分区，公开 CLI 联验另用实际固定 Runner，未运行完整 L2/L3 或安装环境。
+
+部署中断自动恢复的最小验证见[Plan](plans/deployment-interrupted-recovery.plan.md)与[验收](acceptance/deployment-interrupted-recovery.md)：固定 L1 `quick-owner-deployment-recovery` 验证缺失/陈旧回执的恢复准入、readiness、新停机证明及失败围栏；CLI 参数归 `quick-owner-runner-preflight-cli`。脚本路由另运行 `scripts/test-deployment-stop.ps1`，不使用安装现场或真实 OS 重启。
+
 近期合入 PR #352–#365 的补验和人工操作见[本轮导航](acceptance/merged-pr-regression-20261020.md)。固定 L1 将累积的应用启动测试拆为 `quick-owner-runner-startup`（接管、启动撤销与共享 Runner）和 `quick-owner-unified-startup`（项目/宿主生命周期），保留全部原测试及每组原三分钟预算；新增无法解析项目 census 时零共享服务启动的反例。覆盖检查按固定分区核对包终态，并拒绝跨 owner 重复执行，不用重复一组补缺失组。
 
 调用方边界收口（2026-10-20）的最小验证见[Plan](plans/architecture-boundary-consolidation.plan.md)和[专属验收](acceptance/architecture-boundary-consolidation.md)：新 owner 依赖闭包、启动/正常 stop 共用 outbox、takeover 公开校验与原事实匹配、暂存部署 CLI 在线预检；只跑隔离定向测试，不使用安装现场或完整原生流程。

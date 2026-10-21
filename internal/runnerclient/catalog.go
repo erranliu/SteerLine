@@ -13,13 +13,19 @@ import (
 )
 
 type Capabilities struct {
+	RunObservation *struct {
+		Contract     string `json:"contract"`
+		SameSnapshot bool   `json:"same_snapshot"`
+		MaxEvents    int    `json:"max_events"`
+	} `json:"run_observation,omitempty"`
 	RunEvidence *struct {
 		Version  int      `json:"version"`
 		Commands []string `json:"commands"`
 	} `json:"run_evidence,omitempty"`
 	RunEvidenceSchema json.RawMessage `json:"run_evidence_schema,omitempty"`
 	InstanceBinding   struct {
-		ExpectedInstanceID bool `json:"expected_instance_id"`
+		ExpectedInstanceID bool                      `json:"expected_instance_id"`
+		FullBinding        *ServiceBindingCapability `json:"full_binding,omitempty"`
 	} `json:"instance_binding"`
 	NativeSessionViewer struct {
 		Adapters []string `json:"adapters"`
@@ -73,6 +79,18 @@ func (c Client) Catalog(ctx context.Context, version Version) (*Catalog, error) 
 	}
 	if !caps.InstanceBinding.ExpectedInstanceID {
 		return nil, errors.New("selected Runner does not publish expected-instance fencing")
+	}
+	if binding := caps.InstanceBinding.FullBinding; binding != nil {
+		if binding.Contract != ServiceBindingContract || !binding.BeforeEffects || !binding.NoImplicitStart || len(binding.Commands) == 0 {
+			return nil, errors.New("selected Runner publishes incomplete full-binding admission")
+		}
+		seen := map[string]bool{}
+		for _, command := range binding.Commands {
+			if command == "" || seen[command] {
+				return nil, errors.New("selected Runner publishes invalid full-binding command coverage")
+			}
+			seen[command] = true
+		}
 	}
 	if len(caps.Workflows) == 0 || len(caps.ConfigurationSchemas.Workflow) == 0 || len(caps.ConfigurationSchemas.RunConfiguration) == 0 {
 		return nil, errors.New("selected Runner does not publish workflow selection and run configuration contracts")

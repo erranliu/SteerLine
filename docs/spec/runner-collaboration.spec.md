@@ -60,7 +60,7 @@ Runner 在同一 Run 记录内继续保存逐轮输入意图和动态执行事�
 
 ### 4.2 配置变化、重启与构建更换
 
-调用方生命周期补充：`restart` 与仅更新 SteerLine/Web 的部署使用独立 `verify-restart` 证明原宿主/Web、本地项目及原 Runner 服务已经退出，核对原停止 instance/request、EXE/resource/state-dir、各 checkpoint/候选/检查的固定构建及冻结配置。原生远端执行可以继续存在，resources_settled 及原失败诊断保留；该证明不授权终止或迁移执行。普通部署复用安装版固定 Runner，显式 `-UpdateRunner` 才构建 Runner。新的 ProjectRuntime 仍按本节原请求/Run 对账与零自动输入规则接纳同构建新实例。换 Runner 构建不适用此证明，仍要求资源结算和无旧执行状态的新环境。实现与验证见[同构建重启 Plan](../plans/application-redeploy.plan.md)。
+restart 与程序部署分别证明原宿主/Web、本地项目及原 Runner 服务已经退出，核对原停止 instance/request、EXE/resource/state-dir、checkpoint 和冻结配置。原生执行可以继续存在，resources_settled 及原失败诊断保留；重启证明不授权终止或迁移执行。普通部署复用安装版固定 Runner，显式 -UpdateRunner 才构建 Runner；更换构建按[兼容接管契约](service-generation-recovery.spec.md)验证原记录和候选，不能要求原生资源全部退出，也不能只凭候选 compatible 推定原服务退出。部署通过 prepare-deployment 按目标复用停止、核验和至多一次受控原安装恢复；只读 verify-stop / verify-restart 保持独立。基础实现见[重启 Plan](../plans/application-redeploy.plan.md)，判定收口见[简化 Plan](../plans/reliability-simplification.plan.md)。
 
 同构建指 EXE SHA 与 resource 身份一致，不能只比 version 字符串。Run 的构建/目录/受理参数绑定保持；服务实例在单个 ProjectRuntime 生命周期内固定，但不永久固定为 Run 首次受理时的 instance_id。**本期仅在用户显式重启 SteerLine、销毁旧 ProjectRuntime 并重建新 ProjectRuntime 的初始化过程中接纳新 Runner 实例。** 单独重启 Runner、发现 service ready、刷新页面或轮询命中另一实例均不授权当前运行时重新绑定；不增加运行中实例切换入口。
 
@@ -68,11 +68,11 @@ Runner 在同一 Run 记录内继续保存逐轮输入意图和动态执行事�
 | --- | --- | --- |
 | 同构建更换预设/默认项 | 文件改变后当前宿主拒绝新候选；普通 home 显式停止/重启并核验本次实例后，新候选才采用新目录。旧 Run 的观察/原请求对账/停止继续从持久绑定取值 | 用新预设覆盖旧 Run、重新拼旧提交；热加载部分配置 |
 | 同构建服务重启，预设可保持不变 | 若旧 ProjectRuntime 仍存活，发现实例不同即拒绝新业务输入并提示显式重启 SteerLine，保留原绑定。用户显式重启后，新 ProjectRuntime 沿既有启动/写锁规则在同一 state-dir、同一构建核验本次实例及原 Run/input_digest 或原 submit request_id；准入、查询/控制客户端和停服/结算闭包在新运行时初始化时取得同一绑定。旧停服请求/回执仍指向旧实例，新停服动作使用新实例及独立原请求。崩溃后停止事实未核实的，新运行时只按既有规则恢复观察/对账，不能据 ready 宣称资源结算或自动续发业务 | 旧运行时自动接纳替代实例或只改部分绑定；用旧实例回执证明新实例已停止；因换代自动恢复业务输入、重置预算；为最终停止证明新增启动/恢复业务 |
-| 更换 Runner 构建 | 先用原构建对账并停止原现场，只有所有原执行/检查资源及原请求结算可证明时，才允许选择新构建；本期新构建使用现有新环境流程产生的无旧执行状态 home/run-dir/state-dir | 有未结算对象时换构建；多个构建共享一个 state-dir；旧状态迁移/改绑或通过新构建“接管”原 Run |
+| 更换 Runner 构建 | 原服务退出与候选对原状态 compatible 分别核验；沿公开接管契约核对原候选、Run/input、检查及生成记录。写锁内先受理原停止义务，再允许 worker；历史绑定与资源未结算诊断保持 | 不兼容或缺证据仍换构建；两个活跃 writer 共享 state-dir；改写原 Run/input/PR、补发旧输入或把 read_only 当成恢复/停止授权 |
 
-未结算包括：pending/unknown submit 或控制请求，活动、等待回答/继续但尚未正式停止的 Run/检查，未完成停止义务，以及停止/清理事实缺失。已核实原停止、输入授权撤销且资源结算的历史 Run，不仅因保留 resume_required 等历史字段就算未结算；仍须核对原请求和检查的结算。Task 已 closed、PR 已合并或父进程退出均不豁免。原构建/目录不可用或身份对不上时保留未核实并阻断更换，不能用当前配置猜旧绑定。本期不实现跨构建旧状态恢复、自动路由或并行维护多套 Runner；旧目录保留原归属，不因换构建删改。
+未结算包括 pending/unknown submit 或控制请求、活动或等待的原执行、未完成停止义务及停止/清理事实缺失。它们必须保留原记录，不能直接清除；是否允许兼容接管按公开逐项证明判定，是否允许销毁/reset 仍要求完整资源结算。Task closed、PR merged 或父进程退出均不补造原生停止。原构建/目录不可用、原记录缺失或身份不符时保留未核实并阻断，不能用当前配置猜旧绑定；不并行维护多套 writer，不迁移或改绑历史执行，不因换构建删改旧归属。
 
-配置变动后的观察/停止由当前已核验项目运行时及其持久原绑定提供，不能要求先让新配置通过新候选准入；该规则不放宽实例匹配要求。运行中发现替代实例时，可读服务诊断和已保存事实，不能据此更新绑定、自动派发提交/回答/反馈/resume/检查输入，或把原停服请求/结算目标改指新实例。冷启动发现部署 pin 与未结算记录不一致时拒绝新构建，提示恢复原构建正式对账/停止；不另启替代服务。仅预设改变且构建相同的显式重启不重解释旧提交。调试包始终更严格：启动后冻结，换 EXE/方案须新建包，reset 不解冻。
+配置变动后的观察/停止由当前已核验项目运行时及其持久原绑定提供，不能要求先让新配置通过新候选准入；该规则不放宽实例匹配要求。运行中发现替代实例时，可读服务诊断和已保存事实，不能据此更新绑定、自动派发提交/回答/反馈/resume/检查输入，或把原停服请求/结算目标改指新实例。冷启动的构建变化必须取得候选公开接管证明，缺失或不兼容则阻断，不另启替代服务猜测恢复。仅预设改变且构建相同的显式重启不重解释旧提交。调试包始终更严格：启动后冻结，换 EXE/方案须新建包，reset 不解冻。
 
 实例检查必须作用于实际 CLI 请求：绑定客户端在 resident 业务/查询命令上传递 `--expected-instance-id`，Runner 在公开受理路径校验，返回 `stale_instance` 时不派发业务；绑定调用不隐式启动服务。`capabilities.instance_binding.expected_instance_id: true` 是接入前置，缺失明确拒绝。`service status` 仍供诊断，`service stop` 继续使用原正文的 expected_instance_id，不改写已冻结的业务信封。
 

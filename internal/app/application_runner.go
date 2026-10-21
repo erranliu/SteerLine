@@ -91,7 +91,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	r.settle = func(ctx context.Context) error { return cli.VerifyServiceSettlement(ctx, info.InstanceID, r.requestID) }
 	catalog, err := cli.Catalog(ctx, version)
 	if err == nil {
-		cli.NativeSessionAdapters = append([]string(nil), catalog.Capabilities.NativeSessionViewer.Adapters...)
+		cli = cli.WithCatalog(catalog)
 	}
 	r.client, r.catalog = cli, catalog
 	return err

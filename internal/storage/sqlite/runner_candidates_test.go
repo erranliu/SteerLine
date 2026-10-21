@@ -56,6 +56,38 @@ func TestRunnerCandidateReservationAndProjection(t *testing.T) {
 	}
 	saved, err := s.Candidate(ctx, project, c.ID)
 	require(t, err)
+	var firstInput runnerclient.RunInput
+	require(t, json.Unmarshal(saved.Submit.Input, &firstInput))
+	if saved.Number != 1 || firstInput.NamePrefix != "sl-"+c.TaskID {
+		t.Fatal("candidate number and submit prefix were not frozen together", saved, firstInput)
+	}
+	second := c
+	second.ID, second.Submit.RequestID = "candidate-two", "second-request"
+	claimedWork := work
+	claimedWork.Record, claimedWork.Authority = graph.ByID[c.TaskID], graph.TaskGraph().Authority
+	require(t, s.ReserveRunnerCandidate(ctx, claimedWork, second, true))
+	second, err = s.Candidate(ctx, project, second.ID)
+	require(t, err)
+	var secondInput runnerclient.RunInput
+	require(t, json.Unmarshal(second.Submit.Input, &secondInput))
+	if second.Number != 2 || secondInput.NamePrefix != "sl-"+c.TaskID+"-c2" {
+		t.Fatal("second candidate used an ID or stale number for its name", second, secondInput)
+	}
+	// Replay after another allocation must reuse the first number and exact bytes.
+	require(t, s.ReserveRunnerCandidate(ctx, work, c, false))
+	replayed, err := s.Candidate(ctx, project, c.ID)
+	require(t, err)
+	if digestValue(saved) != digestValue(replayed) {
+		t.Fatal("reservation replay changed the frozen submission")
+	}
+	changedName := saved
+	changedName.Revision++
+	firstInput.NamePrefix = "sl-other-c1"
+	changedName.Submit.Input, err = json.Marshal(firstInput)
+	require(t, err)
+	if s.SaveCandidate(ctx, changedName, saved.Revision, nil) == nil {
+		t.Fatal("saved submission name was mutable")
+	}
 	saved.Revision++
 	saved.RunID = "run"
 	saved.SubmitState = "accepted"
