@@ -130,3 +130,12 @@ PM-M01 仍待用户体验签收，不把自动浏览器截图当作人工验收�
 - 修正后失败项定向补验：`go run ./cmd/test-feedback -out C:/SteerlineDebug/pm-evidence-20261021-pr-preset-restart -- ./internal/app -run '^TestRunnerPresetFreeze/(reject_mismatched_run_after_explicit_restart|accept_replacement_after_explicit_restart)$' -count=1` 通过（182.463 秒）；共用夹具的 `TestStartupCancellationOutboxIsDurableBeforeRunnerStart` 另由 `pm-evidence-20261021-pr-outbox` 通过（93.263 秒）。对应 `summary.json`/JSONL 保留源码 dirty、原选择和逐项事实，未重跑已通过的全部场景。
 
 最终文档检查 508 份 Markdown、3183 条本地导航链接、0 错误，差异空白检查通过。PM-M01 仍后置；安装环境未修改。提交与 PR 信息以 Git 事实为准。
+
+
+### PR #373 后续主干集成
+
+推送期间主干又合入 #372，因此继续 rebase 至 `9cf84463`。保留其 Runner 完整绑定/同快照观察和部署流程，仅合并测试 owner 并列条目及生命周期说明；产品维护实现未放宽。最终源码提交以 PR head 为准，前文 `33cd721f` 等为当时取证历史。
+
+`pm-evidence-20261021-pr-main2/summary.json`：6 包 80 项中 79 通过，唯一失败为既有 HTTP 消费者依赖白名单未列 `projectconnection` 已使用的 `processwindow`。检查该包只设置本机窗口启动标志，不包含数据库、Runner 或业务 owner，故在原边界测试中仅按精确包名允许该通用工具，保留其余后端/SQLite 禁令。`pm-evidence-20261021-pr-consumer-boundary/summary.json` 定向补验通过（13.113 秒）；前轮失败单独保留。维护/生成/恢复、Runner 绑定/观察与 quick-owner 选择的其余 79 项均已在最新主干通过，未重复无变化的 Web 或 live。
+
+本轮文档检查为 518 份 Markdown、3279 条本地链接、0 错误，差异空白检查通过。PR：[erranliu/SteerLine#373](https://github.com/erranliu/SteerLine/pull/373)。
