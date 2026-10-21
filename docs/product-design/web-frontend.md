@@ -8,6 +8,8 @@
 
 2026-10-15 查询体验规划：用户明确后续引入 SSE；此前先统一 Query 缓存与参数、有界预取基础数据、复用缓存展示、停止隐藏区域查询及操作后按资源族失效。见[查询优化 Spec](../spec/web-query-optimization.spec.md)/[Plan](../spec/web-query-optimization.plan.md)与[专属验收](../acceptance/web-query-optimization.md)。本次按后续授权实施，业务查询统一由 Query options 定义；当前项目连接核验后预取执行方案与任务首屏，方案新鲜期 60 秒，动态查询只轮询可见区域，操作按资源族失效。项目切换保留原作用域取消。后续 SSE 更新同一缓存，不新增持久服务缓存、同步框架或后端接口；实际验证范围归专属验收，本轮不实现 SSE。
 
+2026-10-21：新增全局[执行配置管理](../spec/web-execution-config.spec.md)页，路径 `/settings/execution-configs`，零项目时也可进入。Web 前后端负责原生目录探测、配置编辑及条件保存；执行服务仅消费配置和投影原加载摘要。保存后明确待重启，冻结调试包只读，Runner 不新增探测接口。
+
 ## 现有依据
 
 [第二阶段原型](prototypes/planning-ui/index.html)是单文件 HTML/CSS/JavaScript 演示，约 390 KB，没有前端构建工程。它已经覆盖规划工作台、版本蓝图、长期文档、Roadmap 草稿、DAG、执行、验收、测试、体验版本、Bug 和设置。交互细节见[原型说明](prototypes/planning-ui/README.md)和[归档的界面设计](../archive/design/planning-ui.md)。原型是产品参考，正式页面仍需按真实能力和契约接入。

@@ -45,7 +45,8 @@ type ProjectShutdown struct {
 	Diagnostic    string `json:"diagnostic,omitempty"`
 }
 type Catalog struct {
-	Projects []Project `json:"projects"`
+	LoadedExecutionDigest string    `json:"loaded_execution_digest,omitempty"`
+	Projects              []Project `json:"projects"`
 }
 
 // RunnerShutdown is the single home-wide service settlement, not project state.

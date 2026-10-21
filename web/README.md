@@ -61,3 +61,18 @@ go run ./cmd/test-feedback -level=L1
 `./scripts/test-web-smoke.ps1` 可自动生成另一新单项目包、启动、运行原 smoke 并正常清理。手动入口的原 `web.smoke` 使用另一个全新单项目 Web 包，先 `start.bat --simulate`，设置 `STEERLINE_WEB_CONFIG=<包>/home/etc/SteerlineTest.json` 后运行 `npm --prefix web run test:e2e -- smoke.spec.ts`；收尾显式正常停止 Web、应用和项目，核实本包进程/监听为 0。截图、trace 和原请求/轮次身份记录在 `STEERLINE_WEB_EVIDENCE` 指定的证据目录或默认临时目录。模拟范围仅限外部模型/PR 协议，Go、Git、SQLite 和 Edge 均为真实实现。
 
 查询缓存浏览器场景 `query-cache.spec.ts` 使用另外生成的全新双项目包：设置 `STEERLINE_WEB_PACKAGE` 和 `STEERLINE_WEB_EVIDENCE` 后运行 `npm --prefix web run test:e2e -- query-cache.spec.ts`。测试负责 simulate 准备、启动和正常清理，运行前不得先 start；不要不带文件过滤运行所有浏览器场景，各场景的现场要求不同。
+
+## 执行配置管理
+
+全局入口 `/settings/execution-configs` 支持本机 Codex、本机 Orca/Codex、Pi、DSH（Windows/amd64）、已配对远端 Orca/Codex 的配置编辑、复制、默认选择及条件保存。Web 后端直接查询原生目录；`execution.json` 是唯一配置文件，Go 执行服务只消费启动快照。保存后通过既有原生命令 `steerline restart --no-open` 生效；浏览器不会自动重启。目录结果始终标明原生默认账号范围，不等于项目执行资格。冻结调试包拒绝保存，换方案须生成新包。
+
+定向验证：
+
+```powershell
+go run ./cmd/test-feedback -level=L3 -suite=configuration -scenario=configuration.execution-profiles -env=controlled
+./scripts/test-execution-profile-discovery.ps1 -SteerRunnerExe '<固定Runner绝对路径>' -OrcaEnvironment '<已登记环境ID>'
+```
+
+前者使用独立 controlled 现场覆盖保存/正式重启/CLI消费；后者内部先生成新调试包，只验证真实目录查询并正常清理，不运行模型任务。结果见[专属验收](../docs/acceptance/web-execution-config.md)。
+
+本机 Orca 目录由 Web 自有 named pipe 客户端查询，仅允许 status/agents/modelCatalog，无 Runner 探测接口。本机执行所需 helper 路径/SHA 来自部署模板，缺材料不阻止查询目录；Pi/DSH 无 Orca 结构化目录时可手动填 schema 合法值，并保持未验证标识。helper 的正式发布材料准备与新包复制方式见 Spec，页面不能任意配置程序。

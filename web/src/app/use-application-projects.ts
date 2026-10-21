@@ -44,9 +44,12 @@ export function useApplicationProjects(initial: BrowserSession) {
   const catalog = useQuery({
     queryKey: [home, "projects"],
     queryFn: ({ signal }) =>
-      json<{ projects: ConfiguredProject[] }>("/api/v2/application/projects", {
-        signal,
-      }),
+      json<{ projects: ConfiguredProject[]; loaded_execution_digest?: string }>(
+        "/api/v2/application/projects",
+        {
+          signal,
+        },
+      ),
     enabled: sessionValid,
     refetchInterval: 5000,
     retry: false,
@@ -76,6 +79,7 @@ export function useApplicationProjects(initial: BrowserSession) {
   };
   const chosenOnce = useRef(false);
   useEffect(() => {
+    if (location.pathname.startsWith("/settings/")) return;
     if (id || chosenOnce.current || !catalog.data) return;
     const preferences = [
       readProjectPreference("sessionStorage", "steerline-project:" + home),
@@ -91,7 +95,7 @@ export function useApplicationProjects(initial: BrowserSession) {
       chosenOnce.current = true;
       navigate("/projects/" + recent + "/dag", { replace: true });
     }
-  }, [id, catalog.data, home, navigate, projects]);
+  }, [id, catalog.data, home, navigate, projects, location.pathname]);
   useEffect(() => {
     if (selected && id) {
       rememberProject(home, id);

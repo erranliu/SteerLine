@@ -31,6 +31,21 @@ func RunnerCLI(args []string) (bool, error) {
 	if len(args) == 0 {
 		return false, nil
 	}
+	if len(args) == 3 && args[0] == "capabilities" && args[1] == "--offline" && args[2] == "--json" {
+		if path := os.Getenv("STEERLINE_TEST_WEB_OFFLINE_CAPABILITIES"); path != "" {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				return true, err
+			}
+			var data map[string]any
+			if err = json.Unmarshal(raw, &data); err != nil {
+				return true, err
+			}
+			data["version"] = "caller-fixture-v1"
+			data["resource_digest"] = strings.Repeat("a", 64)
+			return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"ok": true, "protocol": "steerrunner-cli/v1", "data": data})
+		}
+	}
 	if args[0] == "capabilities" {
 		exe, err := os.Executable()
 		if err != nil {

@@ -67,3 +67,16 @@ func OpenPrivateSnapshot(path string) (*os.File, error) {
 	}
 	return openDiscoveryReader(path)
 }
+
+// OpenRegularSnapshot provides the same non-blocking atomic-replacement reader
+// for non-secret configuration files. It never changes their existing ACL.
+func OpenRegularSnapshot(path string) (*os.File, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("configuration is not a regular file")
+	}
+	return openDiscoveryReader(path)
+}

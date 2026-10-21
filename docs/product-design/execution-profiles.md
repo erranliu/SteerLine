@@ -1,6 +1,6 @@
 # 全局执行配置
 
-当前范围为本机 Codex 与远端 Orca environment；本机 Orca 已放弃。执行由独立 SteerRunner 管理。SteerLine 保留多执行方案与默认方案选择，不维护原生 codec、权限策略、会话或 workflow 状态机。所有 LLM 操作的职责以[架构边界](../architecture.md#llm-执行边界)为准，本页维护两层默认链路的配置含义。
+当前实现支持本机 Codex、Windows/amd64 本机 Orca/Codex、Pi、DSH 及远端 Orca environment/Codex。详见[Web 执行配置 Spec](../spec/web-execution-config.spec.md)及[Plan](../spec/web-execution-config.plan.md)，实际验证和人工验收独立登记。执行由独立 SteerRunner 管理。SteerLine 保留多执行方案与默认方案选择，不维护业务执行的原生 codec、权限策略、会话或 workflow 状态机。所有 LLM 操作的职责以[架构边界](../architecture.md#llm-执行边界)为准，本页维护两层默认链路的配置含义。
 
 所有项目共享 `<STEERLINE_HOME>/execution.json`，当前严格格式为 3。`runner` 固定独立 EXE 的绝对路径、版本与 SHA-256；每次 CLI 调用前核对 SHA，同目录常驻实例也须匹配所选 EXE。旧版本、implementation_configs、内部 codec 和项目内旧执行方案不兼容，不迁移或回退。
 
@@ -11,6 +11,12 @@
 普通 workflow 为 development/1，审计预设显式选择 development-audited/1，并提供 workflow.audit_model；Runner 发布 workflows、workflow schema 和自包含的 run_configuration 组合 schema，caller 不补执行默认值。Runner 内嵌流程、提示词与 schema，原生代理在 implement、report、publish 的独立输入中执行。受理时固定 Spec/Plan 材料、规范化参数与提示词模板/覆盖正文；每轮最终输入在结果/反馈与授权确定后、发送前保存，恢复保留原正文和模型参数，不在受理时预生成未来轮次或原生身份。定制正文仍须保留固定材料和机器结果契约。SteerLine 只选择公开方案，不解释原生终端文本推进业务。
 
 [协作 Spec](../spec/runner-collaboration.spec.md) / [Plan](../spec/runner-collaboration.plan.md)定义预设/提交/受理数据及审计 workflow 接入。其 4.2 分开规定同构建换预设、服务换代与更换构建：原 Run 参数不变；新 Runner 实例仅在用户显式重启 SteerLine、重建 ProjectRuntime 的初始化时核验接纳，旧运行时发现替代实例拒绝新业务输入，不自动重新绑定。未结算对象阻断换构建，本期新构建使用无旧执行状态的新环境。调用方已实现上述准入和多 workflow 展示；构建 pin 持久在项目 checkpoint，候选冻结原名称/参数摘要/完整提交，参数摘要仅覆盖 execution + workflow 的有序对象 JSON；不支持升级/接管旧现场。实际结果归[专属验收](../acceptance/runner-collaboration.md)。
+
+## Web 配置管理
+
+[Web 执行配置管理 Spec](../spec/web-execution-config.spec.md) / [Plan](../spec/web-execution-config.plan.md)规定管理入口 `/settings/execution-configs`：Web 前后端拥有能力目录查询、预设编辑/生成及 `execution.json` 条件保存；Codex/Orca 由 Web 后端直接查询。Go 执行服务只消费配置、独立校验并冻结参数，提供原加载文件摘要的只读投影；Runner 不新增探测接口。能力目录/缓存不是执行资格或第二配置来源。首版保存后沿既有正式重启流程生效，不热加载、不自动停服或改投；冻结调试包只读。边界与实际结果见[专属验收](../acceptance/web-execution-config.md)。
+
+本机 Orca 新增设计使用 Web 自有 named pipe 目录客户端，配置仍是 `orca-terminal + target.local`；Go 执行服务只消费配置，Runner 不新增探测接口。本机受管 helper 路径/SHA 是部署模板输入，缺少时不得用目录查询或任意程序路径代替；远端仍拒绝本机 helper 字段。新增验收为 WEC-A10–A14/M02，不能继承前版本机 Orca 被拒绝的测试结论。
 
 ## 两层默认链路
 

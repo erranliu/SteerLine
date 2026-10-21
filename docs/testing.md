@@ -65,6 +65,8 @@ SteerRunner 拆分后的测试归属及实施安排见 [Spec](spec/runner-test-c
 
 完整 L2 保留真实 SteerLine → 固定 Runner EXE → 本机 Codex → 实现/报告/发布 → 真实 SteerlineTest PR → 合并 → TaskDelivery/后继释放。它覆盖 Runner 正常运行能力。执行专项迁出不降低这条链路为模拟测试。
 
+Web 执行配置的最小验证见[Plan](spec/web-execution-config.plan.md) / [验收](acceptance/web-execution-config.md)：Web 配置/目录 owner 纳入固定 L1，`configuration.execution-profiles` 为独立 L3 受控保存、正式重启及关闭 Web 后 CLI 消费场景。真实目录专项内部先生成新 debug 包，仅查询 Codex/本机 Orca/已配对 Orca，不计完整执行链验收。
+
 ## L1–L4 定义
 
 SteerLine 直接采用 [开发项目测试架构规范](../SteerlineProjectGuideDoc/testing-architecture.md)。L1–L4 定义、L3 正交与并行设计、分级内容清单要求及跨项目测试归属统一在该规范维护；本文记录 SteerLine 的具体入口、环境、清单和实施缺口。

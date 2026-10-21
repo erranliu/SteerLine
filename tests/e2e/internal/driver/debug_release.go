@@ -525,7 +525,7 @@ func (d *debugRelease) prepareSelected(mode string) error {
 			return errors.New("selected profile requires Runner execution settings")
 		}
 		target, _ := execution["target"].(map[string]any)
-		if target["kind"] == "local" {
+		if target["kind"] == "local" && execution["adapter"] == "codex-app-server" {
 			settings, _ := execution["settings"].(map[string]any)
 			executable, _ := settings["executable"].(string)
 			codex, err := CodexExecutable(executable)
