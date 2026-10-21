@@ -32,7 +32,7 @@ export function StopCandidate({
         ? "停止请求待核实，请在操作回执中查询原请求"
         : busy || sending
           ? "正在处理上一项操作"
-          : stopReason(run, page.runs);
+          : stopReason(run, page.runs ?? []);
   const changed =
     confirmation &&
     (confirmation.envelope.project_id !== api.identity.project_id ||

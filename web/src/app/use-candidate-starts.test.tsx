@@ -123,7 +123,7 @@ it("shows five confirmations immediately, waits only for the original claim, and
   expect(submit).toHaveBeenCalledTimes(5);
 });
 
-it.each(["version", "graph", "identity"])(
+it.each(["version", "graph", "identity", "runs"])(
   "does not send waiting confirmations when the claimed %s differs",
   async (change) => {
     const { result, api, calls, submit } = setup();
@@ -139,14 +139,17 @@ it.each(["version", "graph", "identity"])(
           ...task,
           status: "in_progress",
           version: change === "version" ? 3 : 2,
-          workflow_runs: [
-            {
-              workflow_run_id:
-                change === "identity"
-                  ? "someone-else"
-                  : calls[0].envelope.request_id,
-            },
-          ],
+          workflow_runs:
+            change === "runs"
+              ? null
+              : [
+                  {
+                    workflow_run_id:
+                      change === "identity"
+                        ? "someone-else"
+                        : calls[0].envelope.request_id,
+                  },
+                ],
         },
       ],
     });
