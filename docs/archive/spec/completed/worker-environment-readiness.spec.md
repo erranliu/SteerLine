@@ -12,7 +12,7 @@
 
 本期覆盖 Windows 本机 `host=orca`、`agent=codex`、`sandbox=workspace-write` 的固定执行配置。无论是否显式指定 model/effort，都必须使用能落实本 Spec 权限设置的受管启动命令；不能因 model 为空而走无法冻结权限的 `worktree create --agent` 分支。不增加新 agent、远端后端、候选 worker、通用修复框架或自动操作 Windows 账户/ACL/防火墙的安装器。操作系统确需管理员授权时，由用户在原生系统入口处理；SteerLine 负责诊断、定位原会话、重新核验和安全续行。
 
-沿用 [项目规则](../../../../AGENTS.md)、[worker-flow](worker-flow.spec.md)、[本机 Orca 原生编排](../../../spec/worker-flow-orca-native.spec.md)和[原生任务约束](../../../spec/native-task-constraints.md)。不引入旧数据迁移、双写、旧启动路径兼容、自动降级沙箱或运行中更换 Profile。本 Spec 补充就绪与宿主恢复语义，不改既有 PR 合并交付规则。
+沿用 [项目规则](../../../../AGENTS.md)、[worker-flow](worker-flow.spec.md)、[本机 Orca 原生编排](../retired/worker-flow-orca-native.spec.md)和[原生任务约束](../../../spec/native-task-constraints.md)。不引入旧数据迁移、双写、旧启动路径兼容、自动降级沙箱或运行中更换 Profile。本 Spec 补充就绪与宿主恢复语义，不改既有 PR 合并交付规则。
 
 针对本期 Windows Orca Codex 路径，本 Spec 的受管启动/CLI 能力检查替代原生 Orca Spec §4 中“仅依赖 opaque agent 启动设置、不调用中心 Codex CLI、不固定 Codex 参数”的限制；这是已知 agent 的明确权限契约，不改变其他 agent 路径。原生 Orca Spec §5 的首轮业务派发改为准备成功后的业务派发。worker-flow §5 的业务文字反馈语义保持，仅本 Spec 明确绑定受理方的宿主选项由中心处理，不新增专用恢复 API。
 

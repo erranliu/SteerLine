@@ -1,6 +1,6 @@
 # 第二批：固定原生方案与配置收口
 
-绑定[Spec](../../../../spec/product-simplification-02-configuration.spec.md)/[Plan](../../../../spec/product-simplification-02-configuration.plan.md)，基线172cea6c，实施、自查与最小验证完成。保留多后端、远端协议、多候选、必要准入与worker发布职责。下列报告保留实际结果与范围，不以参数断言冒充原生验收。
+绑定[Spec](../../../../archive/spec/completed/product-simplification-02-configuration.spec.md)/[Plan](../../../../archive/spec/completed/product-simplification-02-configuration.plan.md)，基线172cea6c，实施、自查与最小验证完成。保留多后端、远端协议、多候选、必要准入与worker发布职责。下列报告保留实际结果与范围，不以参数断言冒充原生验收。
 
 Windows local和Orca/Codex固定workspace-write、unelevated、on-request、auto_review、network allow。项目严格拒绝execution_policy/execution_requirements，全局Codex input严格拒绝旧args/profile/windows_sandbox和审批覆盖，包括空值。原参数由adapter生成；现有资源封套保存启动设置和精确写根。
 

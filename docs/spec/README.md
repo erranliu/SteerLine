@@ -4,9 +4,9 @@
 
 Web 执行配置管理与能力探测（2026-10-21，按确认原型实施）：[Spec](web-execution-config.spec.md) · [Plan](web-execution-config.plan.md) · [专属验收](../acceptance/web-execution-config.md)。Web 前后端直接查询 Codex/Orca，管理全局预设及条件保存；保存后显式重启生效。Go 执行服务只消费配置和投影加载摘要，Runner 不新增探测接口；实现与验证范围登记于专属验收，不修改 roadmap。本机 Orca 已实现；目录查询统一本机/远端Orca能力，与执行支持组合分开。provider凭据由原Agent管理，Pi按已有目录筛选Provider；验证见专属验收。
 
-Runner generate/1 对接与最简测试管理（2026-10-20，实施中）：[Spec](test-management.spec.md) · [Plan](test-management.plan.md) · [专属验收及缺口审查](../acceptance/test-management.md)。生成已真实验证，清单/安排/报告输出及只读展示已接线；Runner R2 已交付，本仓尚需消费公开产物和当前 Git，并补生成对象兼容换代及真实结果闭环。从固定 PlanRef 推导 JSON，不增加 Task 字段/门禁，只认可干净提交的当前通过。不建设独立 Agent 运行时、conversation 操作或完整规划台，不进入 roadmap。
+Runner generate/1 对接与最简测试管理（自动项通过，人工待验）：[Spec](test-management.spec.md) · [Plan](test-management.plan.md) · [专属验收](../acceptance/test-management.md)。公开产物收集、当前 Git 核验、生成对象兼容接管及真实结果闭环已接入；TM-A04/TM-A08 等实际版本与结果以专属记录为准，TM-M01 后置。生成先审阅再显式应用等后续变更归[项目维护](../product-design/project-maintenance.md)，原固定版本证据保持。不增加 Task 字段/测试门禁或 conversation 操作。
 
-应用级共享 SteerRunner 服务（2026-10-19，已实施）：[Spec](shared-runner-service.spec.md) · [Plan](shared-runner-service.plan.md) · [专属验收](../acceptance/shared-runner-service.md)。每个 SteerLine home 共用一个 Runner，服务所有权上移到应用；覆盖跨项目请求身份、环境检查、停机证明、换代与整包 reset，仅修改 SteerLine。固定 L1、定向反例、两个 L3 及新包真实空闲拓扑验证通过，人工体验待验；不修改 roadmap，闪窗治理后置。
+应用级共享 SteerRunner 服务（2026-10-19，已实施）：[Spec](shared-runner-service.spec.md) · [Plan](shared-runner-service.plan.md) · [专属验收](../acceptance/shared-runner-service.md)。每个 SteerLine home 共用一个 Runner，服务所有权上移到应用；覆盖跨项目请求身份、环境检查、停机证明、换代与整包 reset，仅修改 SteerLine。固定 L1、定向反例、两个 L3 及新包真实空闲拓扑验证通过，人工体验待验；后续[闪窗修复](../acceptance/startup-console-windows.md)已有独立记录，不修改 roadmap。
 
 SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，已授权实施）：[Spec](runner-collaboration.spec.md) · [Plan](runner-collaboration.plan.md) · [专属验收](../acceptance/runner-collaboration.md)。多 workflow、分层冻结、构建 pin 及产品投影已接入；U1 验证旧运行时拒绝替代实例、显式重启后接纳及旧停止隔离。实际固定构建、真实链结果和人工待验以 acceptance 为准；不部署安装环境或修改 roadmap。
 
@@ -46,7 +46,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## HTTP 接入后的解耦规格
 
-2026-10-14 用户确认#92/#93纳入execution-map；#92已独立复审、验证并经PR #311真实合并，#93已独立复审、验证并经PR #312真实合并，其余三项因正在实施的Worker三层重构影响继续留草稿。五项独立Spec/Plan与专属验收保留，已交付#92/#93移出草稿任务表。任务范围、共享所有者及集成建议见[本轮草稿](../roadmap/drafts/roadmap.md)。
+2026-10-14 用户确认#92/#93纳入execution-map；#92已独立复审、验证并经PR #311真实合并，#93已独立复审、验证并经PR #312真实合并，其余三项仍留草稿；原冲突判断形成于三层重构实施期间，当前须结合已合入重构和 Runner 迁出重新核对。五项独立Spec/Plan与专属验收保留，已交付#92/#93移出草稿任务表。任务范围、共享所有者及集成建议见[本轮草稿](../roadmap/drafts/roadmap.md)。
 
 | 任务 ID | 任务名称 | Spec / Plan | 验收 |
 | --- | --- | --- | --- |
@@ -56,26 +56,11 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 | 95 | 任务最终交付用例独立 | [Spec](task-delivery-usecase.spec.md) · [Plan](task-delivery-usecase.plan.md) | [记录](../acceptance/task-delivery-usecase.md) |
 | 96 | worker 运行时资源所有权收敛 | [Spec](worker-runtime-ownership.spec.md) · [Plan](worker-runtime-ownership.plan.md) | [记录](../acceptance/worker-runtime-ownership.md) |
 
-#94的Workflow规则、#96的生命周期/资源接线与三层方案交叉；#95交付抽取未被取代但actor/PR桥接正在重组，暂不安排。具体依据见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)；本表是资料导航，不用于自动派发。
+#94/#95/#96 的原拆分针对迁出前代码；三层重构已合入，执行随后迁至 Runner，原范围和收益须重核，当前仍未纳入、不自动启动。历史依据见[冲突核对](../roadmap/drafts/roadmap.md#与worker三层重构的冲突核对)；本表是资料导航，不用于自动派发。
 
-## Worker 三层职责重构（普通开发规格）
+## 已交付规格归档
 
-已按用户直接授权实施并完成约定自动验收；最新收尾 rebase 的复验已通过，实际版本与证据见专属验收。Workflow 管业务步骤，ReliableExecution 管通用可靠执行，ExecutionAdapter 管原生动作/证据；两条路径一起接入，保留单写提交与现有行为。初始化失败重试等新增能力单独留出，不接管安装任务 22。
-
-[Spec](worker-three-layer.spec.md) · [Plan](worker-three-layer.plan.md) · [专属验收](../acceptance/worker-three-layer.md) · [长期流程规则](../product-design/worker-lifecycle.md)。普通开发，无 Task ID，不修改 execution-map。
-
-## 已交付产品精简与控制台
-
-三批产品精简已分别通过PR #231/#236/#238合入，控制台体验增量通过PR #234合入；验收仍绑定各自原构建/范围，不据此宣称当前重跑。这里保留导航，不进入近期执行任务。
-
-| 范围 | 规格 / 计划 | 历史验收 |
-| --- | --- | --- |
-| 三窗/近期活动/内嵌反馈 | [Spec](product-simplification-01-console.spec.md) · [Plan](product-simplification-01-console.plan.md) | [记录](../acceptance/archive/completed/product-console.md) |
-| 固定原生权限与审核配置、附加需求/认证收口 | [Spec](product-simplification-02-configuration.spec.md) · [Plan](product-simplification-02-configuration.plan.md) | [记录](../acceptance/archive/completed/product-simplification-02-configuration/README.md) |
-| Task丢弃后资源人工处置、CLI及高级图收口 | [Spec](product-simplification-03-resources-cli.spec.md) · [Plan](product-simplification-03-resources-cli.plan.md) | [记录](../acceptance/archive/completed/product-simplification-03-resources-cli/README.md) |
-| 控制台主界面与可读性 | [Spec](console-primary-workspace.spec.md) · [Plan](console-primary-workspace.plan.md) | [记录](../acceptance/archive/completed/console-primary-workspace.md) |
-
-任务Plan逐项或按明确ID范围覆盖全部自动验收项，列场景/命令、环境、时点、通过条件与专属登记位置；缺驱动/场景/环境能力须在实施中补齐或明确前置。必要回归与产品自动验收分别标记，静态检查不代替业务/原生证据。
+控制台主界面、四批产品精简和迁出前 Worker 三层重构已交付，其 Spec/Plan 与原版本验收由[已交付归档](../archive/spec/completed/README.md#2026-10-21-补充归档)承接。三层重构经 PR #313 合入，执行实现随后迁至独立 Runner；长期流程规则继续维护于 [Worker 生命周期](../product-design/worker-lifecycle.md)。已退役的 TUI 和本机 Orca 方案不再列作当前实施或补验入口。
 
 ## 旧 Orca 编排身份残留清理（普通开发规格）
 
@@ -85,11 +70,9 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 仅将候选快照及状态事件的 step_id/status 改为 workflow_stage/workflow_status，删除 finish_task_status；其余状态、内部步骤字段和布局保持。[Spec](state-naming.spec.md) · [Plan](state-naming.plan.md) · [专属验收](../acceptance/state-naming.md)。普通开发，不纳入 roadmap，无旧记录兼容；实际结果以专属验收为准。
 
-## 本轮会话与恢复精简
+## 会话与恢复精简历史
 
-第四批已完成工作区实现及最小自动验收，待 PR 评审；未创建外部 Task/DAG。中心只保存完整 final、问题与必要事实，恢复只继续原会话；多后端、多候选及反馈格式保持。旧构建的故障与实际验证范围由专属验收记录区分。
-
-[Spec](product-simplification-04-conversation-recovery.spec.md) · [Plan](product-simplification-04-conversation-recovery.plan.md) · [验收](../acceptance/product-simplification-04-conversation-recovery.md)
+第四批产品精简已由 PR #243 合入；[Spec / Plan](../archive/spec/completed/README.md#2026-10-21-补充归档)及[原版本验收](../acceptance/archive/completed/product-simplification-04-conversation-recovery.md)已归档。后续恢复规则以 [Worker 生命周期](../product-design/worker-lifecycle.md)和[服务换代恢复](service-generation-recovery.spec.md)为准。
 
 ## 停机对账修复
 
@@ -109,12 +92,11 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 尚未闭合的定向验收
 
-下列实现已有合入基线，但仍有明确的验证缺口；不因归档其他已交付任务而宣告完成，也不重新创建任务身份。
+下列记录保留原交付范围内的验证缺口；迁出前验收不直接代表当前 Runner 能力，是否补验须按现行契约重核适用性，不重新创建任务身份。本机 Orca 原编排已退役，其未验项转入历史记录。
 
 | 范围 | Spec / Plan | 剩余边界与证据 |
 | --- | --- | --- |
 | local Codex app-server | [Spec](local-codex-app-server.spec.md) · [Plan](local-codex-app-server.plan.md) | A/B/C 已完成，定向 race detector 仍受工具链条件限制；见[状态](../acceptance/local-codex-app-server.md) |
-| 本机 Orca 原生编排 | [Spec](worker-flow-orca-native.spec.md) · [Plan](worker-flow-orca-native.plan.md) | 活动轮次输入、消息竞争/故障、完整输出和独立生命周期仍按原 ON 场景核验；见[验收边界](../acceptance/worker-flow-orca-native.md) |
 | worker 停服恢复 | [Spec](worker-service-recovery.spec.md) · [Plan](worker-service-recovery.plan.md) | local 闭环已验证，Orca 新 agent 安全重建仍缺真机证据；见[验证记录](../acceptance/worker-service-recovery.md) |
 
 ## 普通开发重构规划
@@ -125,9 +107,9 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 只根据原主 agent 的可信状态切换确认执行开始/结束，缺信号时补一次查询，普通回复只用于结果采集。保留原终端和统一提示词，不使用 supervised、模型标记或结构化对话。已实施，自动验证与真实交付范围见[专属验收](../acceptance/orca-native-state-transitions.md)。[Spec](orca-native-state-transitions.spec.md) · [Plan](orca-native-state-transitions.plan.md)。
 
-## Orca 本机输入与就绪（普通开发）
+## 退役 Orca 方案
 
-配对普通终端、等待预算与拒绝回执分类；两个只读回合及一个本机真实合并交付已通过。[Spec](orca-local-input-readiness.spec.md) · [Plan](orca-local-input-readiness.plan.md) · [验收](../acceptance/orca-local-input-readiness.md)。
+本机 Orca 已放弃；supervised、worker-start、Dispatch 和本机输入/就绪方案见[退役规格](../archive/spec/retired/README.md#2026-10-21-orca-历史方案归档)及[原验收](../acceptance/archive/README.md#退役-orca-方案与原版本证据)。历史失败、取消和未验仍保留，不计入当前远端路径已验范围。远端接入与构建要求见 [Runner 接入](../integration/steerrunner.md)。
 
 ## Codex / Orca 断连恢复规划
 

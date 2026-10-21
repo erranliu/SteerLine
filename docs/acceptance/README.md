@@ -50,11 +50,11 @@ SSE 前的 Web 查询优化（普通开发）：[专属验收](web-query-optimiz
 
 2026-10-15 [独立 Web 与已有项目切换](web-project-switch.md)及[统一启动与多项目共进程宿主](unified-startup.md)均已有实现和约定自动验收结果，桌面体验待人工验收；[项目准备/核验/纳管](project-onboarding.md)继续后置、未实施/未验。各自 Spec/Plan 和最小测试映射见专属记录，不共享通过状态。
 
-全量回归维护（普通开发）：[本次结果](full-regression-2026-10-14.md)，rebase、过期测试清理、Full 1752 通过 / 19 默认跳过、26 个登记场景通过并清理完成。
+全量回归维护（普通开发）：[本次结果](archive/completed/full-regression-2026-10-14.md)，rebase、过期测试清理、Full 1752 通过 / 19 默认跳过、26 个登记场景通过并清理完成。
 
-合并后 Full 复验：[SQLite 查询取消与资源释放](sqlite-cancellation-full-2026-10-15.md)，主干 rebase、实际失败与依赖修复；修复后 Full 1753 通过 / 19 默认跳过 / 0 失败，complete / passed。
+合并后 Full 复验：[SQLite 查询取消与资源释放](archive/completed/sqlite-cancellation-full-2026-10-15.md)，主干 rebase、实际失败与依赖修复；修复后 Full 1753 通过 / 19 默认跳过 / 0 失败，complete / passed。
 
-Orca 当前部署仅远端：[配置维护](remote-only-orca-profiles.md)。[本机输入与就绪历史样本](orca-local-input-readiness.md)保留其原适用范围，不属于当前部署的真实执行验收。
+Orca 当前部署仅远端：[配置维护](remote-only-orca-profiles.md)。[本机输入与就绪历史样本](archive/superseded/orca-local-input-readiness.md)保留其原适用范围，不属于当前部署的真实执行验收。
 
 | 范围 | 状态 / 入口 |
 | --- | --- |
@@ -62,15 +62,11 @@ Orca 当前部署仅远端：[配置维护](remote-only-orca-profiles.md)。[本
 | 一期签收 | 待验；[一期活动](phase1.md) |
 | TUI/HTTP 历史交付（TUI 已退役） | [旧范围与阶段记录](phase2.md)：#91 HTTP 基线；TUI 已由[退役任务](tui-retirement.md)删除 |
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[当前 Orca 单终端](orca-terminal-transport.md)；旧 Orca 活动输入/恢复记录保留历史，按当前路线重新核对适用性 |
-| Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
 | 原控制台 Codex CLI 入口（已退役） | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
 | Codex / Orca 核心断连恢复 | [首轮能力与 L3 验收规划](worker-disconnect-recovery.md)，2026-10-12 审计收敛；六项功能加一项 worker 解耦验收，三组受控（独立入口）/两条真实链，原观察重接与 Codex 同 thread 恢复，工作树实现及本轮自动验收已完成，未部署 |
 | Codex 沙箱 Git 修复 | [真实 worker / SteerlineTest 无人值守验收](codex-sandbox-git.md)，普通开发，专属 base/head 验证 |
 | Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
 | Orca状态同步修复 | [延迟启动活动推进状态](orca-delayed-start-status-2026-10-09.md)，原 Dispatch 在完成前同步开始事实，源码定向验证通过 |
-| Orca supervised 双目标（历史） | [本机目标与旧入口切断](orca-supervised-targets.md)，同一原远端生命周期；该实现已退役 |
-| Orca supervised 结果修复前置（历史） | [单消息结果协议审计与原生探针](orca-supervised-result-probe-2026-10-10.md)，只证明原路线的接口前置，不覆盖单终端 |
-| Orca supervised 结果修复（历史） | [分步结果、恢复与正文接线](orca-supervised-results.md)，保留原定向验证与安装记录，不作当前接线说明 |
 | Worker 提示词与三轮恢复 | [统一模板与原生回复采集](worker-prompt-convergence.md)，用户直接授权恢复 #84 设计 |
 | Worker 状态与控制台精简 | [原字段、变化记录与主界面回归](console-worker-state.md)，普通开发 |
 | Orca 提示词最小探针 | [输入通道与 worker-start 对照](orca-input-minimal-probe-2026-10-10.md)，1.4.224 原生 worker-start 仍复现未提交；基础 500/7500 字符 6/6，约12K输入未通过；历史1.4.223结果另列 |
@@ -78,16 +74,16 @@ Orca 当前部署仅远端：[配置维护](remote-only-orca-profiles.md)。[本
 | Orca 分步开发缺口 | [当前远端待补与历史来源](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮/supervised 场景退役，不计单终端交付覆盖 |
 | 旧 Orca 身份残留清理 | [专属记录](retired-orca-identity-cleanup.md)，当前字段/受控接线与文档校准，不增加原生验收通过项 |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
-| Orca 原生状态切换 | [专属验收](orca-native-state-transitions.md)，状态门槛、一次补查询与旧回复拒绝已实施；真实范围及取消项如实登记，本机后续交付见[输入与就绪验收](orca-local-input-readiness.md) |
+| Orca 原生状态切换 | [专属验收](orca-native-state-transitions.md)，状态门槛、一次补查询与旧回复拒绝已实施；真实范围及取消项如实登记，本机后续交付见[输入与就绪验收](archive/superseded/orca-local-input-readiness.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
 | 测试维护 | [测试代码精简](test-code-simplification.md) |
-| 历史结果与旧方案 | [归档索引](archive/README.md) |
+| 历史结果与旧方案 | [归档索引](archive/README.md)，含已结束回归、三层重构与退役 Orca 方案；原失败/未验保留 |
 
 execution-map维护执行/验收汇总并链接未验事项；开发任务状态与依赖以execution-map为准，真实PR和验证证据由runner核对；SteerLine产品业务状态按其工具回执核对。
 
-## 当前任务专属计划
+## TUI/HTTP 历史交付与未验边界
 
-本轮 #91 已独立复审修复、最小自动复验并经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 真实合并，实现完成；[验收](tui-http-client.md)与[Plan](../spec/tui-http-client.plan.md)映射 TH-A1–A6/TH-M1。自动项通过，独立 SteerlineTest live/真终端操作已验，原生查看窗口渲染和桌面人工体验仍待验。#45 的[历史结果/限制](phase2-local-api.md)、一期/平台未闭合项按 execution-map 保留。
+历史 #91 已独立复审修复、最小自动复验并经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 真实合并，实现完成；[验收](tui-http-client.md)与[Plan](../spec/tui-http-client.plan.md)映射 TH-A1–A6/TH-M1。原构建自动项通过，独立 SteerlineTest live/真终端操作已验；原生查看窗口渲染和桌面体验未验。TUI 已退役，原 TUI 人工项保留历史状态，当前 Web/原生查看体验按各自专属记录核验。#45 的[历史结果/限制](phase2-local-api.md)、一期/平台未闭合项按 execution-map 保留。
 
 旧二阶段/WinUI/延期任务验收退出当前队列，见[归档说明](../archive/roadmap/README.md)。#44 实现已由 #91 删除，原人工项退出要求不算通过；旧候选编号不复用，也不依据归档自动恢复。
 
@@ -103,7 +99,7 @@ execution-map维护执行/验收汇总并链接未验事项；开发任务状态
 
 ## 普通开发重构历史
 
-[Worker 三层职责重构](worker-three-layer.md)归属一个无编号的结构重构，配套 [Spec](../spec/worker-three-layer.spec.md)与[Plan](../spec/worker-three-layer.plan.md)。当前只生成设计文档，TL-A01–TL-A07 均待执行；初始化增强和安装现场恢复不纳入本项，不以既有恢复验收声明本轮通过。
+[Worker 三层职责重构](archive/completed/worker-three-layer.md)已完成 TL-A01–TL-A07 自动验收，并由 PR #313 合入；配套 [Spec](../archive/spec/completed/worker-three-layer.spec.md)与[Plan](../archive/spec/completed/worker-three-layer.plan.md)已归档。执行后续迁至独立 Runner，原受控证据不代表当前构建重新通过；没有新增初始化重试或安装现场恢复验收。
 
 [后端组装与最终回复状态收敛](bounded-structure-refactoring.md)仅归属一个无编号合并重构，2026-10-10 用户授权本聊天实施后，BS-A1–BS-A5 自动验证与结构自查通过，提交/PR 及独立复审/合并状态见专属记录。其[Spec](../spec/bounded-structure-refactoring.spec.md) / [Plan](../spec/bounded-structure-refactoring.plan.md)按 `8e292172` 提 PR 集成基线收紧；不进入 roadmap 调度，不再维护三项独立编号验收。
 

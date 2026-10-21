@@ -1,35 +1,31 @@
 # 执行架构共同约束
 
-2026-10-14 用户修订：任一已绑定候选 PR 核验已合并即可提交唯一交付并将 Task 转为 closed；其他候选已合并/状态未知或阶段推进不阻塞该候选交付。closed 后停止该任务全部候选的 PR 状态查询，重启保持。下文“所有候选 PR 可核实且只有一个合并”以及 closed 后迟到合并监控的历史要求不再适用；当前规则见[数据模型](../product-design/data-model.md#人工候选实验)，验证见[专属验收](../acceptance/candidate-first-merged-close.md)。
-
-2026-10-13 用户修订：完整移除单候选放弃功能（控制台、CLI、API、服务端及专用状态字段）；任务级丢弃和唯一交付保留。控制台任务提示只显示中文状态，并增加全部执行候选数量列。下文涉及单候选放弃或旧列表列布局的历史要求不再适用；历史操作设计见[归档](../archive/design/execution-console.md)。
-
-本文保留当前执行任务需要复用的共同边界，不单独启动实现任务。当前协议为 `worker-flow-v2`；中心五步编排、项目验证/修复门槛和答案应用证明属于退役流程。当前配置与数据字段见[数据契约](../product-design/data-model.md)，源码归属见[代码架构](../architecture/current-code-architecture.md)。
+本文维护当前任务可复用的执行边界，不单独启动实现任务。2026-10-21 按独立 Runner、Web 唯一前端及现行候选/恢复契约校准；固定任务仍读取其原 commit/路径，历史要求与原验收不回写为当前通过。
 
 ## 平台与职责
 
-第一阶段包含本地 Codex、本机 Orca 与远端路径交付。未发布版本不增加旧配置、数据库或协议的迁移、双写和回退路径。
+当前通过固定 EXE 的 `steerrunner-cli/v1` 接入本地 Codex 与远端 Orca environment，本机 Orca 路径已放弃。未发布版本默认不兼容旧配置、数据库或协议，不新增迁移、双写和回退路径。
 
-worker 按固定 Spec/Plan 实现、测试、修复、提交并创建 PR；中心负责启动与观察原会话、用户反馈、恢复权限和真实交付核验。测试与审查要求来自对应任务契约，中心在现有 worker 内管理开发流程的步骤与统一 status，流程规则见 [分步契约](worker-staged-flow.spec.md)。测试/审查范围仍来自任务 Spec/Plan，不固定增加 verify/review 阶段。正常 implement.execute/report 与 publish 三轮共用原会话/Attempt；接受结果、转移与下一输入意图原子保存。
+SteerLine 管 Task/DAG、候选参与关系、原 CLI outbox、公开事实投影与唯一 TaskDelivery；独立 SteerRunner 管全部 LLM 操作、原会话、工作区、workflow、原生资源及执行结算。Web/CLI 经产品查询与命令入口操作，不成为第二业务写者。SQLite 校验身份、前值、版本和唯一约束，事务不跨越外部平台调用。职责以[整体架构](../architecture.md)为准，格式来源见[数据模型](../product-design/data-model.md#当前格式来源)。
 
-任务应用负责资格、领取、固定 DAG 和应用核验后的结果；执行应用负责候选、会话、交付事实与资源结算。产品查询、CLI/TUI 和服务宿主消费各自端口，不成为第二业务写者。SQLite 是唯一业务权威；配置、服务 checkpoint 和运行投影不写回任务或执行状态。存储校验身份、前值、版本和唯一约束，事务不跨越平台调用。
+一个 home 共享一个 Runner 服务，各项目保持自己的 Task actor、数据库和锁；应用宿主拥有共享服务，项目借用固定客户端，整体关闭统一结算。具体边界见[共享服务 Spec](shared-runner-service.spec.md)。开发 workflow 的 ID/version 取所选 Runner 构建公开目录，与 Task 的 `worker-flow-v2` 协议分别冻结；不从迁出前 development/v3 推定当前步骤或能力。
 
-## 身份与候选
+## 身份、候选与交付
 
-Task、WorkflowRun、Execution、Attempt、原生会话/轮次、消息与外部平台身份分别绑定。不同任务可人工并行，自动派发保持单活动执行。一个 Task 可人工增加不同冻结配置的候选，各自拥有 WorkflowRun、会话、工作区、分支、PR 和反馈；默认一个，开始时观察参与数已达五个拒绝，接受竞态偶尔超出。
+Task、Candidate、Runner Run、Attempt、原生会话/轮次、命令与 PR 分别绑定。候选在领取事务冻结原任务材料、仓库/base、执行预设和完整提交；后续事实不能覆盖原身份或兄弟候选。首次冻结及必要材料检查见[项目维护](../product-design/project-maintenance.md)，候选规则见[数据模型](../product-design/data-model.md#人工候选实验)。
 
-合并前可放弃候选并退出实验，停止结果和资源事实另行记录；已知 PR 合并后拒绝放弃。中心不自动评分或融合。候选失败、停止或轮次完成不等于 Task 完成，迟到输出或合并不能覆盖既有交付。任务与命令固定规则见[原生任务约束](native-task-constraints.md)。
+人工停止参与只改变参与关系并保护最后一个参与候选，不授权 Runner 停止或宣告资源结算；Task 丢弃和终态停止义务分别记录。具体要求见[候选停止参与验收](../acceptance/web-candidate-stop.md)。
+
+任一已绑定候选 PR 经核验确已合并，即可在同一事务记录唯一 TaskDelivery、关闭 Task、释放后继并保存全部候选停止义务。其他候选已合并、状态未知或尚未到 pr_ready 不阻塞正确候选交付；closed 后停止该任务全部候选 PR 查询，重启保持。自然语言成功、轮次结束、命令 completed 或资源已停均不替代交付。具体要求与证据见[首个合并交付](../acceptance/candidate-first-merged-close.md)。
 
 ## 外部动作、反馈与恢复
 
-副作用前持久化固定意图，回执、消息与来源游标提交后才推进；同一请求按原 ID 对账，结果未知时不得换 ID 盲重发。消息与操作始终校验项目、执行、尝试及外部身份，迟到事实不能重定向新执行。UI/CLI 共用产品 Query/Command，不直接写数据库或操作平台终端。
+副作用前持久化固定意图，原请求未知时只按原 ID 对账，不能换 ID 重发或改投后端。问题、答案保存、发送意图、平台回执、原生轮次结果与业务阶段分别表达；迟到事实不取得新输入、重建资源或推进兄弟候选的授权。详细规则归[决策与反馈](../product-design/decisions.md)及[Worker 生命周期](../product-design/worker-lifecycle.md)，不在任务中另建平行状态机。
 
-过程输出、最终正文、原生轮次终态和业务完成分别记录。原会话反馈区分答案保存、发送回执与新轮次开始，不要求 agent 提供“答案已应用”证明。环境 blocker 与业务 Decision 分开，权限或原身份未知时保留阻断事实，不自动改投后端或创建替代 worker。
+显式重启 SteerLine 后核验新 Runner 实例；运行中的旧 ProjectRuntime 不自动重绑。兼容构建接管按原 Run/输入/请求及公开逐项证明核验，不要求原资源全部先停；销毁/reset 仍须取得准确原范围的停止与结算证明。SteerLine 零自动 submit/reply/resume；Runner 只沿原持久授权继续已证明未发送的后继。未知副作用、资源丢失、不兼容和明确停止均保留原门槛，详见[服务换代恢复契约](service-generation-recovery.spec.md)。
 
-服务重开先恢复观察和结果对账，新执行输入遵循[停服恢复 Spec](worker-service-recovery.spec.md)的人工授权。不能证明原 worker 停止或安全重建时保持未知；没有真机证据的 Orca 新 agent 恢复不宣称可用。停止中心观察和停止外部执行分别表达。
+## 验证与历史边界
 
-## 交付与验证
+测试只选择受影响的最小必要范围，Plan 映射任务专属验收项、场景/命令、环境、时点、通过条件与证据位置，入口见[测试指南](../testing.md)。本地、远端、受控和真实模型证据分别判断，不能用编译、skip 或原版本通过替代当前业务验收。
 
-中心经 provider 核验真实 PR 的归属、固定提交和实际合并，唯一 TaskDelivery、任务关闭与后继释放在同一业务提交边界完成。worker 成功、测试通过或候选轮次结束不能代替交付。冲突和未知事实进入待处理，不伪造完成。
-
-后续任务保持已具备能力，只验证实际受影响范围；测试层级、环境与证据按对应 Plan 的最小必要测试计划选择，入口见[测试指南](../testing.md)。一期组合验收与二期范围分别遵循[一期约束](phase1-delivery-constraints.md)和[二期约束](phase2-constraints.md)。
+一期组合活动和旧 TUI/HTTP 交付保留原[一期约束](phase1-delivery-constraints.md)、[二期约束](phase2-constraints.md)及专属验收，仅按仍适用的范围引用；退役路线的未验不自动变成当前待办。当前模块归属见[代码架构](../architecture/current-code-architecture.md)，旧资料见[归档](../archive/README.md)。

@@ -28,7 +28,7 @@
 | #84 步骤辨识与反馈/合并 | WFS-M1 待验；本任务自动能力交付后，可与一期 P1A1-M 同一现场集中验收，分别登记结果；不阻塞无关二期研发 | [专属记录](../../acceptance/worker-staged-flow.md) |
 | #44原生输入与可达性 | #44已交付；UI2-M/UI4-M/UI5-M待人工，最迟2.1签收 | [记录](../../acceptance/archive/superseded/phase2-winui-foundation.md) |
 
-自动补验：[Codex race](../../acceptance/local-codex-app-server.md) · [当前 Orca 单终端与远端待验](../../acceptance/orca-terminal-transport.md)。旧[Orca原生编排](../../acceptance/worker-flow-orca-native.md)及[安全重建](../../acceptance/worker-service-recovery.md)保留历史来源，适用性须按当前单终端重新核对，不能照旧路线直接执行。
+自动补验：[Codex race](../../acceptance/local-codex-app-server.md) · [当前 Orca 单终端与远端待验](../../acceptance/orca-terminal-transport.md)。旧[Orca原生编排](../../acceptance/archive/superseded/worker-flow-orca-native.md)及[安全重建](../../acceptance/worker-service-recovery.md)保留历史来源，适用性须按当前单终端重新核对，不能照旧路线直接执行。
 
 ## 执行记录
 
@@ -38,7 +38,7 @@
 
 2026-10-10，#84 post-merge 独立审计确认 PR #262 历史交付无阻塞缺陷；main 已通过 PR #268 在 execution-map/验收中登记 #84 实现完成，WFS-M1 和后续 Orca supervised 规范 final 能力缺口仍分别待人工/技术补齐。#45 将最新 main `40446a671badc901bcf868872a383b421d646803` 以 merge `5bee8ded64a79982e4c39688c3e2cff595800be1` 集入原 PR 分支；精确候选 `21fb131f6b89cc6e04c3b85a4a9e3de232c2b613`。stale task version、unsupported profile/receipt、18 HTTP/API、8 服务集成、staged query/feedback、vet 及 L1（12组/479通过/0失败/0跳过）通过。API2 原始 SHM failure 仍 `验收失败`；限定风险接受未生效，等待 #45 新独立终审。PR #249 保持 OPEN，#44 不启动。
 
-2026-10-09 #84 集成主干原生 Orca 改动（PR #259，主干 ade7042b），沿原固定 c4bcbec Spec/Plan 实现通用步骤，未恢复退役 launcher。用户明确调整 Orca usage 验收为公开接口不可用如实登记，真实三轮/原身份/PR/清理仍必验；[专属记录](../../acceptance/worker-staged-flow.md)同步原失败与新验证范围。历史预留 #86 保留身份但不进入 DAG，主干直接实施结果见[原生 Orca 调整](../../architecture/orca-native-worker.md)，不作为 #84 等待边。
+2026-10-09 #84 集成主干原生 Orca 改动（PR #259，主干 ade7042b），沿原固定 c4bcbec Spec/Plan 实现通用步骤，未恢复退役 launcher。用户明确调整 Orca usage 验收为公开接口不可用如实登记，真实三轮/原身份/PR/清理仍必验；[专属记录](../../acceptance/worker-staged-flow.md)同步原失败与新验证范围。历史预留 #86 保留身份但不进入 DAG，主干直接实施结果见[原生 Orca 调整](../design/orca-native-worker.md)，不作为 #84 等待边。
 
 
 2026-10-09 最新授权：“rebase，#84任务可以并行执行了, #84用 GPT6.1 Sol High”。#84 开发聊天使用 gpt-6.1-sol/high（产品 E2E 仍按固定 Plan 的原模型/原生权限），与 #45 独立并行；共享主干接线先 #84 后 #45，#44 硬前置保持。#84 固定 Spec/Plan commit `c4bcbec06289c9f5b086c8f1f98859a0f858d7e5`，代码起点同 SHA，工作树 b123、分支 codex/task-84-worker-staged-flow；实现/验证进行中，尚未独立复审或合并。#45 原执行者仍处理 PR #249，API2 失败未闭合，不由本任务接管。此前串行纳入记录是历史安排，不覆盖本段最新授权。

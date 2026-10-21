@@ -6,7 +6,7 @@
 
 worker 每次业务转换明确声明读取前提、修改记录、操作和事件，并在一个 SQLite 事务内提交。外部动作只能使用已成功持久化的意图；中心不能通过发布整份 Runtime 顺带保存这些业务变更。
 
-遵守 [worker-flow](worker-flow.spec.md)、[原生 Orca](../../../spec/worker-flow-orca-native.spec.md)及[原生任务共同约束](../../../spec/native-task-constraints.md)。复用 `transactSQLite`、现有领域记录、Operation 幂等规则和 `ControlRevision`。不新增通用仓储、事件溯源、跨系统事务或旧数据兼容设施。
+遵守 [worker-flow](worker-flow.spec.md)、[原生 Orca](../retired/worker-flow-orca-native.spec.md)及[原生任务共同约束](../../../spec/native-task-constraints.md)。复用 `transactSQLite`、现有领域记录、Operation 幂等规则和 `ControlRevision`。不新增通用仓储、事件溯源、跨系统事务或旧数据兼容设施。
 
 ## 2. 范围与分工
 

@@ -1,6 +1,6 @@
 # 安装版 SteerlineTest 重置验收
 
-归属：用户明确授权修复 `C:/SteerlineRuntime/reset-SteerlineTest.bat` 后直接重置任务；普通管理操作，不进入 roadmap。关联[Orca 结果修复](orca-supervised-results.md)。独立调试包自带 reset 仍遵循无备份约定；本文件记录的是另外修复的安装版 Python 配套工具。
+归属：用户明确授权修复 `C:/SteerlineRuntime/reset-SteerlineTest.bat` 后直接重置任务；普通管理操作，不进入 roadmap。关联[Orca 结果修复](archive/superseded/orca-supervised-results.md)。独立调试包自带 reset 仍遵循无备份约定；本文件记录的是另外修复的安装版 Python 配套工具。
 
 设计：只读导出任务定义、完整固定契约和依赖，经当前产品 task-batch/v1 验证并在独立临时 home 创建新库。持有仓库、状态与全部控制台视图锁后，备份旧 SQLite 和本项目 control/service/runs，替换为产品创建的新库，删除视图中匹配本项目路径的请求/草稿。短暂启动本工具拥有的 manual 服务，通过公开 control 恢复调度后停止；不启动任务或修改 Git/PR。失败保存新现场并还原旧库/目录/视图，不增加旧 schema 兼容或 SQL 状态改写。
 
