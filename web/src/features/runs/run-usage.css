@@ -1,0 +1,47 @@
+.run-usage {
+  border-block: 1px solid #2b4031;
+  padding: 11px 0;
+  margin: 12px 0;
+  font-size: 11px;
+}
+.run-usage summary {
+  cursor: pointer;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+.run-usage strong {
+  font-variant-numeric: tabular-nums;
+}
+.usage-expand {
+  margin-left: auto;
+  color: #86a592;
+}
+.usage-expand::after {
+  content: " ▾";
+}
+.run-usage details[open] .usage-expand::after {
+  content: " ▴";
+}
+.run-usage dl {
+  margin: 14px 0;
+}
+.run-usage dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+  margin: 8px 0;
+}
+.run-usage dt {
+  color: #86a592;
+  min-width: 145px;
+}
+.run-usage dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.run-usage summary:focus-visible {
+  outline: 2px solid #86a592;
+  outline-offset: 4px;
+}

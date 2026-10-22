@@ -1,5 +1,6 @@
 import { queryOptions, type QueryClient } from "@tanstack/react-query";
 import type { Api } from "./client";
+import type { RunUsageView } from "./run-usage";
 import type { PlanTestsView } from "../../features/runs/plan-tests";
 import type {
   CheckCatalog,
@@ -25,11 +26,64 @@ export function projectQueries(api: Api) {
   ] as const;
   const defaults = { staleTime: 1000, retry: false } as const;
   return {
-    planTests: (run: Pick<Candidate, "run_id" | "execution_id" | "attempt_id">) =>
+    runUsage: (
+      run: Pick<
+        Candidate,
+        | "run_id"
+        | "execution_id"
+        | "attempt_id"
+        | "current_turn_id"
+        | "workflow_stage"
+        | "workflow_status"
+      >,
+    ) =>
       queryOptions({
         ...defaults,
-        queryKey: [...scope, "plan-tests", run.run_id, run.execution_id, run.attempt_id],
-        queryFn: ({ signal }) => api.get<PlanTestsView>("/runs/" + encodeURIComponent(run.run_id) + "/tests", signal),
+        queryKey: [
+          ...scope,
+          "run-usage",
+          run.run_id,
+          run.execution_id,
+          run.attempt_id,
+          run.current_turn_id,
+          run.workflow_stage,
+          run.workflow_status,
+        ],
+        queryFn: async ({ signal }) => {
+          const view = await api.get<RunUsageView>(
+            "/runs/" +
+              encodeURIComponent(run.run_id) +
+              "/usage?" +
+              new URLSearchParams({ execution_id: run.execution_id }),
+            signal,
+          );
+          if (
+            view.run_id !== run.run_id ||
+            view.execution_id !== run.execution_id ||
+            (view.cost &&
+              view.cost.usage_revision !== view.usage?.snapshot_revision)
+          )
+            throw new Error("用量身份或快照已变化，请刷新执行详情");
+          return view;
+        },
+      }),
+    planTests: (
+      run: Pick<Candidate, "run_id" | "execution_id" | "attempt_id">,
+    ) =>
+      queryOptions({
+        ...defaults,
+        queryKey: [
+          ...scope,
+          "plan-tests",
+          run.run_id,
+          run.execution_id,
+          run.attempt_id,
+        ],
+        queryFn: ({ signal }) =>
+          api.get<PlanTestsView>(
+            "/runs/" + encodeURIComponent(run.run_id) + "/tests",
+            signal,
+          ),
       }),
     checkOptions: () =>
       queryOptions({
@@ -173,7 +227,12 @@ export function projectQueries(api: Api) {
 }
 
 const taskResources = new Set(["snapshot", "tasks", "task", "graph"]);
-const dynamicResources = new Set([...taskResources, "activity", "final"]);
+const dynamicResources = new Set([
+  ...taskResources,
+  "activity",
+  "final",
+  "run-usage",
+]);
 const taskActions = new Set([
   "set_dispatch_mode",
   "pause_dispatch",
@@ -212,7 +271,9 @@ export function invalidateCommand(
       if (affectsOutput && typeof runID === "string" && runID) {
         return (
           taskResources.has(resource) ||
-          ((resource === "activity" || resource === "final") &&
+          ((resource === "activity" ||
+            resource === "final" ||
+            resource === "run-usage") &&
             key[4] === runID)
         );
       }

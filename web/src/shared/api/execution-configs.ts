@@ -35,6 +35,8 @@ export interface ExecutionConfig {
   default_execution_profile: string;
   execution_profiles: Profile[];
   max_generate_concurrency?: number;
+  pricing_policy?: string;
+  usage_policy?: Record<string, unknown>;
 }
 export interface Combination {
   host: string;
@@ -62,11 +64,7 @@ export interface ConfigSnapshot {
 }
 export interface Catalog {
   state:
-    | "not_requested"
-    | "in_progress"
-    | "ready"
-    | "unavailable"
-    | "unsupported";
+    "not_requested" | "in_progress" | "ready" | "unavailable" | "unsupported";
   freshness: "fresh" | "cached" | "expired";
   origin: string;
   fetched_at?: string;

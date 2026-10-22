@@ -33,6 +33,9 @@ func (c Client) WithCatalog(catalog *Catalog) Client {
 		return c
 	}
 	c.NativeSessionAdapters = append([]string(nil), catalog.Capabilities.NativeSessionViewer.Adapters...)
+	u, p := catalog.Capabilities.RunUsage, catalog.Capabilities.RunCost
+	c.RunUsageSupported = u != nil && u.Schema == "run-usage/v1" && u.QueryOnly
+	c.RunCostSupported = p != nil && p.Schema == "run-cost-estimate/v1" && p.UsageContract == "run-usage/v1" && p.QueryOnly && p.Basis == "api_equivalent"
 	c.RunObservation = catalog.Capabilities.RunObservation != nil && catalog.Capabilities.RunObservation.Contract == RunObservationContract && catalog.Capabilities.RunObservation.SameSnapshot && catalog.Capabilities.RunObservation.MaxEvents >= 100
 	c.FullBindingCommands = nil
 	if cap := catalog.Capabilities.InstanceBinding.FullBinding; cap != nil && cap.Contract == ServiceBindingContract && cap.BeforeEffects && cap.NoImplicitStart {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"path/filepath"
 	"strings"
 	"time"
@@ -117,6 +118,17 @@ func (c Client) serviceInfo(ctx context.Context, command string) (ServiceInfo, e
 // StartService is called only by the explicitly started SteerLine service.
 // Queries use ServiceStatus, and never enter this startup path.
 func (c Client) StartService(ctx context.Context, version Version) (ServiceInfo, error) {
+	if len(c.UsagePolicy) > 0 {
+		response, err := c.call(ctx, "service start", nil, nil, &runnercontract.ServiceStartInput{PendingStops: []runnercontract.PendingStop{}, UsagePolicy: c.UsagePolicy})
+		var info ServiceInfo
+		if err != nil {
+			return info, err
+		}
+		if json.Unmarshal(response.Data, &info) != nil {
+			return info, errors.New("Runner service identity is unavailable")
+		}
+		return info, c.validateStartedService(info, version)
+	}
 	info, err := c.serviceInfo(ctx, "service start")
 	if err != nil {
 		return info, err

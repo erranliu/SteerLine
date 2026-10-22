@@ -1,5 +1,11 @@
 # SteerRunner 依赖与运行
 
+执行页“用量与费用”消费 Runner #47 / `61d9317524b56f148b2b31e2f23a4acc1de58081` 的 `run-usage`、`estimate-run-cost`，以同一用量快照估算候选累计主会话费用。页面不触发日志补采或执行输入；缺价表仍显示 Token，未知不显示零，部分费用标记“已计价部分”。当前资格为 Orca 本机 Codex/Pi/DSH 和远端 Codex；`codex-app-server` 与远端 Pi/DSH 未由本次接入扩展。接入与测试范围见[Plan](../plans/run-usage-cost-ui.plan.md)和[验收](../acceptance/run-usage-cost-ui.md)。
+
+`execution.json` 的可选顶层 `pricing_policy` 为 Runner 所在机器上的绝对 JSON 文件路径，例如 `"pricing_policy": "C:/MySteerLine/pricing-policy.json"`。价表使用所选 Runner 发布的 `run-pricing-policy/v1`，明确 ID、版本、来源、币种、生效区间和模型费率；不内置价格、不联网抓价。金额是 token 的 API 等价估算，不是实际扣费，排除订阅/credits 结算与工具/外部 API 附加费。价表在估价时由 Runner 独立读取，刷新可以按新策略重算，用量事实不变；设置或更换文件路径需保存配置并显式重启 SteerLine。
+
+本机采集沿 Runner 默认策略。远端采集需要在 `execution.json` 顶层显式配置 Runner 的 `usage_policy`，启动时原样传入原 `service start`；例如关闭远端新增目录登记的策略为 `{"enabled":true,"remote_log_access":{"mode":"disabled","grants":[]}}`。允许远端登记时使用 Runner 公开 schema 的 `temporary` 模式，并显式指定 environment、已核实的稳定 host_id 和受限 session_roots。不要使用账号 home 或凭据根作为授权范围；具体根资格由 Runner 验证。策略省略不扩权，页面读取不授权；更改须经正式停服/启动，冲突不热更新。Web 编辑执行 profile 时保留这两项部署字段。
+
 SteerLine 只通过 `steerrunner-cli/v1` 调用独立 EXE。Runner 同一个 EXE 提供短命 CLI 与常驻服务；CLI 连接同一 state-dir 的现有实例，读请求不自动启动服务。任务、DAG、候选参与及 TaskDelivery 留在 SteerLine。
 
 当前恢复与更新按[服务换代恢复契约](../spec/service-generation-recovery.spec.md)：相关契约兼容时保留原 Run/授权与执行资源，使用 verify-takeover 核对候选构建，不以全部资源先停止为固定前提。下述首次协作 Spec 4.2 的同构建限制和“未结算阻断换构建”仅保留历史范围；删除目录、重置和破坏性迁移仍须取得原范围资源结算证明。资源丢失、不兼容或未知原操作不能通过更新解除。

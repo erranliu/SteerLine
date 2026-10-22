@@ -13,6 +13,16 @@ import (
 )
 
 type Capabilities struct {
+	RunUsage *struct {
+		Schema    string `json:"schema"`
+		QueryOnly bool   `json:"query_only"`
+	} `json:"run_usage,omitempty"`
+	RunCost *struct {
+		Schema        string `json:"schema"`
+		UsageContract string `json:"usage_contract"`
+		QueryOnly     bool   `json:"query_only"`
+		Basis         string `json:"basis"`
+	} `json:"run_cost,omitempty"`
 	RunObservation *struct {
 		Contract     string `json:"contract"`
 		SameSnapshot bool   `json:"same_snapshot"`

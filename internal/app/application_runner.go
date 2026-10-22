@@ -82,6 +82,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	}
 	r.client = cli
 	r.attempted = true
+	cli.UsagePolicy = append([]byte(nil), g.UsagePolicy...)
 	info, err := cli.StartServiceWithStops(ctx, version, stops)
 	r.info = info
 	if err != nil {
