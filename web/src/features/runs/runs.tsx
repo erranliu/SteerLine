@@ -19,6 +19,7 @@ import { nativeSessionReason } from "./native-session";
 import { RunTask, taskDependencyReason } from "./run-task";
 import { CopyExecutionInfo } from "./copy-execution-info";
 import { StopCandidate } from "./stop-candidate";
+import { RunUsage } from "./run-usage";
 
 function Output({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
@@ -230,6 +231,7 @@ function CandidateDetail({
           )}
         </p>
       )}
+      <RunUsage key={run.run_id + "/" + run.execution_id} run={run} />
       <div className="workspace-path">
         <span>工作区</span>
         <code>{run.worktree_path || "准备中"}</code>

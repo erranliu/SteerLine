@@ -165,6 +165,9 @@ func (s *Server) Read(ctx context.Context, route string, values url.Values) (any
 }
 
 func (s *Server) read(ctx context.Context, identity Identity, path []string, queryValues url.Values) (any, error) {
+	if len(path) == 3 && path[0] == "runs" && path[2] == "usage" {
+		return s.readRunUsage(ctx, path[1], queryValues)
+	}
 	if len(path) == 3 && path[0] == "runs" && path[2] == "tests" {
 		if len(queryValues) != 0 {
 			return nil, invalidCommand("test query does not accept parameters")

@@ -38,6 +38,11 @@ func (c Client) StartServiceWithStops(ctx context.Context, version Version, stop
 		if err := c.validateStartedService(current, version); err != nil {
 			return current, err
 		}
+		if len(c.UsagePolicy) > 0 {
+			if _, err := c.StartService(ctx, version); err != nil {
+				return current, err
+			}
+		}
 		bound := c
 		bound.InstanceID = current.InstanceID
 		for _, stop := range stops {
@@ -47,7 +52,7 @@ func (c Client) StartServiceWithStops(ctx context.Context, version Version, stop
 		}
 		return current, nil
 	}
-	response, err := c.call(ctx, "service start", nil, nil, &runnercontract.ServiceStartInput{PendingStops: stops})
+	response, err := c.call(ctx, "service start", nil, nil, &runnercontract.ServiceStartInput{PendingStops: stops, UsagePolicy: c.UsagePolicy})
 	var info ServiceInfo
 	if err != nil {
 		return info, err

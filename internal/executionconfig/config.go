@@ -20,11 +20,13 @@ type Pin struct {
 	SHA256     string `json:"sha256"`
 }
 type File[P any] struct {
-	Version                int       `json:"version"`
-	Runner                 P         `json:"runner"`
-	DefaultProfile         string    `json:"default_execution_profile"`
-	MaxGenerateConcurrency *int      `json:"max_generate_concurrency,omitempty"`
-	Profiles               []Profile `json:"execution_profiles"`
+	Version                int             `json:"version"`
+	Runner                 P               `json:"runner"`
+	DefaultProfile         string          `json:"default_execution_profile"`
+	MaxGenerateConcurrency *int            `json:"max_generate_concurrency,omitempty"`
+	PricingPolicy          string          `json:"pricing_policy,omitempty"`
+	UsagePolicy            json.RawMessage `json:"usage_policy,omitempty"`
+	Profiles               []Profile       `json:"execution_profiles"`
 }
 type Profile struct {
 	ID        string                        `json:"id"`
