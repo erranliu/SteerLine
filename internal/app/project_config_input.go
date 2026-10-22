@@ -6,6 +6,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 // ProjectConfigInput is the app-owned on-disk project format. Runtime ports,
@@ -39,6 +40,7 @@ type Config struct {
 	RunnerExecution    RunnerExecutionConfig `json:"-"`
 	ConfigPath         string                `json:"-"`
 	runtimeHost        *host.Config
+	runtimeGenerations *testmanagement.GenerationQueue
 	runtimeRunner      *runnerclient.Client
 	runtimeCatalog     *runnerclient.Catalog
 	runtimeMaintenance *projectMaintenance

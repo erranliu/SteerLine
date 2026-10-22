@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { SafeLink } from "../../shared/ui/status";
+import { GenerationProgress, type GenerationProgressValue } from "./generation-progress";
 
 export type Commit = {sha:string;title:string;author:string;time:string;url:string;prs:string[];pr_diagnostic?:string};
 export type MaintenanceView = {
@@ -10,8 +11,9 @@ export type MaintenanceView = {
  local:{commit:string;branch:string;status:string;ahead:number;behind:number;can_update:boolean;reason?:string};
  tasks:{task_id:string;contract:{plan_ref:{path:string}};status:string;diagnostic?:string;generation_id:string}[];
  profiles:{id:string;name:string}[];profile:string;
+ generation_progress?: GenerationProgressValue;
 };
-const names:Record<string,string>={ready:"测试安排已就绪",pending:"等待生成测试安排",accepted:"测试安排生成中",unknown:"原生成结果待核实",failed:"测试安排生成失败",invalid:"材料或测试安排无效",rejected:"测试安排生成被拒绝",cancelled:"测试生成已取消",configuration_required:"需要配置测试生成"};
+const names:Record<string,string>={ready:"测试安排已就绪",pending:"等待生成测试安排",queued:"测试安排排队中",accepted:"测试安排生成中",unknown:"原生成结果待核实",failed:"测试安排生成失败",invalid:"材料或测试安排无效",rejected:"测试安排生成被拒绝",cancelled:"测试生成已取消",configuration_required:"需要配置测试生成"};
 const time=(value?:string)=>value?new Date(value).toLocaleString():"时间未知";
 
 function CommitDetails({commit}:{commit:Commit}) {
@@ -56,7 +58,7 @@ export function ProjectMaintenance(){
  const pending=requests?.filter(r=>r.envelope.action.startsWith("maintenance_")&&!["applied","rejected"].includes(r.response?.status||""))||[];
  return <section aria-label="项目维护" className="settings-panel maintenance-panel">
   <button onClick={()=>setOpen(!open)} aria-expanded={open}>项目维护 · {v?.observation.diagnostic?"检查失败":!v?.observation.commit?"远端待检查":problems.length?problems.length+" 项材料待处理":localLabel}</button>
-  {v?.observation.last_success&&<small> · 最近成功检查 {time(v.observation.last_success)}</small>}
+  <GenerationProgress value={v?.generation_progress} online={online} scope={identity.project_id}/>{v?.observation.last_success&&<small> · 最近成功检查 {time(v.observation.last_success)}</small>}
   {open&&<div>
    {!online&&<p className="notice amber">离线 · 以下为最后观察，当前状态待核实</p>}
    {(error||view.error)&&<p role="alert">{error||String(view.error)}</p>}
@@ -82,6 +84,7 @@ export function ProjectMaintenance(){
     <button disabled={!log.data?.more} onClick={()=>setPage(page+1)}>下一页</button>
    </section>}
    <h4>任务最新材料与测试安排</h4>
+   <button disabled={!online||busy||!v?.observation.commit||!!v?.observation.diagnostic||!problems.length} onClick={()=>void action("maintenance_generate_all",identity.project_id)}>一键生成</button>
    <p className="muted">文档自动跟随远端。Plan 更新后自动生成测试安排，新候选使用最新版本；原候选保留其执行版本。</p>
    {v?.tasks.map(t=><article key={t.task_id}><strong>#{t.task_id} · {names[t.status]||t.status}</strong><p>{t.contract?.plan_ref?.path}</p>{t.diagnostic&&<p>{t.diagnostic}</p>}
     {["failed","invalid","rejected","cancelled"].includes(t.status)&&<button disabled={!online||busy} onClick={()=>void action("maintenance_retry",t.task_id,{task_id:t.task_id})}>重试生成</button>}

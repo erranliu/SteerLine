@@ -9,18 +9,21 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/localservice"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 // applicationRunner binds shutdown and settlement to the original selected daemon.
 // Its retry semantics match the caller contract: only an unconfirmed stop may
 // repeat, with the same request ID; a failed final read can be read again.
 type applicationRunner struct {
+	generations       *testmanagement.GenerationQueue
 	client            runnerclient.Client
 	info              runnerclient.ServiceInfo
 	attempted         bool
@@ -38,6 +41,8 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	if err := g.Validate(); err != nil {
 		return err
 	}
+	limit, _ := executionconfig.GenerateConcurrency(g.MaxGenerateConcurrency)
+	r.generations = testmanagement.NewGenerationQueue(limit)
 	if err := runnerstatepath.Validate(home); err != nil {
 		return err
 	}

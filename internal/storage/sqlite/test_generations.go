@@ -83,6 +83,9 @@ func (s *SQLiteStore) SaveGeneration(ctx context.Context, r testmodel.Generation
 		if old.Revision != expected {
 			return errors.New("stale_revision: generation changed")
 		}
+		if old.Submission != r.Submission && !(old.Submission == "pending" && r.Submission == "started") {
+			return errors.New("generation submission cannot move backwards")
+		}
 		if old.Inputs != r.Inputs || old.PlanText != r.PlanText || len(old.Result) > 0 && !bytes.Equal(old.Result, r.Result) {
 			return errors.New("immutable generation input/result changed")
 		}

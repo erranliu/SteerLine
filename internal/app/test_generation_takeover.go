@@ -31,7 +31,7 @@ func generationTakeover(proof runnercontract.TakeoverReport, g testmanagement.Ge
 	return runnercontract.TakeoverItem{}, false
 }
 func verifyGenerationTakeover(g testmanagement.Generation, cli runnerclient.Client) error {
-	if g.State == "rejected" && g.RunID == "" {
+	if g.Unsubmitted() || g.State == "rejected" && g.RunID == "" {
 		return nil
 	}
 	if cli.Takeover == nil || !runnerbinding.Compatible(*cli.Takeover, cli.BuildPin()) {
@@ -52,7 +52,7 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 	}
 	need := false
 	for _, g := range rows {
-		if g.State == "rejected" && g.RunID == "" {
+		if g.Unsubmitted() || g.State == "rejected" && g.RunID == "" {
 			continue
 		}
 		if !runnerbinding.SameBuild(g.Runner, cli.BuildPin()) || g.Cancelled && (g.Projection == nil || g.Projection.StopStatus != "stopped") {
@@ -74,7 +74,7 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 	}
 	var pending []runnercontract.PendingStop
 	for _, g := range rows {
-		if g.State == "rejected" && g.RunID == "" {
+		if g.Unsubmitted() || g.State == "rejected" && g.RunID == "" {
 			continue
 		}
 		item, bound := generationTakeover(*cli.Takeover, g)

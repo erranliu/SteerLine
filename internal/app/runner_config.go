@@ -20,6 +20,9 @@ func (g RunnerExecutionConfig) Validate() error {
 	if err := runnerclient.VerifyExecutable(g.Runner.Executable, g.Runner.SHA256); err != nil {
 		return err
 	}
+	if _, err := executionconfig.GenerateConcurrency(g.MaxGenerateConcurrency); err != nil {
+		return err
+	}
 	return executionconfig.Validate(g.Version, g.DefaultProfile, g.Profiles)
 }
 func (g RunnerExecutionConfig) Profile(id, digest string) (RunnerProfile, error) {

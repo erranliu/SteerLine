@@ -1,5 +1,7 @@
 # Worker 流程异常处理与重试
 
+2026-10-22 generate 调用方排队（W01/W08–W14/W18，E04/E07，V03/V06–V08）：同 home 应用宿主持有一份全局生成准入队列，自动生成、单项重试和一键生成共用 Generation 记录。`submission=pending` 明确证明尚未调用 Runner；取得名额后先持久化 started/unknown，再发送原冻结请求。started 之后即使查无请求也不重发；占位覆盖活动和未知，只有明确拒绝、排队取消或已核实 stopped 才释放。启动 census 在任一项目派发前重建全部占位和等待顺序；退出/失败项目仅撤销内存中的未提交准入，原活动占位保留。排队取消零 Runner 调用，无 Run 的条目不要求 takeover/资源停止证明；排队期间换构建在提交前明确拒绝，显式重试才创建当前构建的新意图。当前构建的原未提交 outbox 可按原授权首次提交，不扩大已发送请求的恢复授权。批次只冻结成员引用与完成时间，不复制执行状态机；远端检查失败不阻碍原生成结果的完成计时。默认并发五，配置沿启动冻结。最小验证及实际结果见 [Plan](../plans/generate-queue.plan.md) 和 [专属验收](../acceptance/generate-queue.md)。
+
 2026-10-21 当前操作与展示收敛：开发 workflow 使用 development/2 或 development-audited/2，实施/发布已有按需补报，审计在一次正式回合内修复，不增加自动返修/再审循环。兼容 Runner 换代按下述 2026-10-19 接管增量保留原授权；关服务不等于停止 Run，更新不以所有资源先退出为固定前提。原创建/输入未知、旧写者/原会话资格及 PR/停止核验均保留。交付摘要只投影原 Run 与独立命令事实，不新增业务状态、等待循环或恢复入口；本次不改变 W01–W18、E01–E07、V01–V08 的职责与副作用门槛。实施与最小验证见[Plan](../plans/reliable-delivery-simplification.plan.md)及[验收](../acceptance/reliable-delivery-simplification.md)。历史版本的规则和验收按各原构建理解。
 
 2026-10-21 工作区命名输入（W01/W02，V01/V06–V08）：SteerLine 在预留事务内分配候选 Number 并冻结公开 `name_prefix`（C1 为 `sl-<task_id>`，C2 起为 `sl-<task_id>-c<Number>`）与最终 submit；重放使用原编号/请求，不在事务外预估。Runner 独立冻结通用前缀（缺省 `sr`），Orca 创建与回执校验共用 `<prefix>-<Run ID>`，不解析 correlation 的业务含义。名称不是资源身份权威；原绑定、只读对账、未知零重发与恢复授权保持，不改既有现场名称或新增节点/异常/重试。最小验证及未验范围见[专属验收](../acceptance/runner-name-prefix.md)。

@@ -48,6 +48,37 @@ func fixture(t *testing.T) (*Store, Config) {
 	}
 	return s, c
 }
+
+func TestGQConcurrencySaveAndValidation(t *testing.T) {
+	s, c := fixture(t)
+	ctx := context.Background()
+	base, err := s.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := cfg.GenerateConcurrency(base.Config.MaxGenerateConcurrency); err != nil || got != 5 {
+		t.Fatal(got, err)
+	}
+	for _, limit := range []int{0, -1} {
+		c.MaxGenerateConcurrency = &limit
+		if _, err = s.Validate(ctx, encode(t, c)); err == nil {
+			t.Fatal("invalid concurrency accepted", limit)
+		}
+	}
+	limit := 3
+	c.MaxGenerateConcurrency = &limit
+	saved, err := s.Save(ctx, base.SavedDigest, encode(t, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	read, err := s.Current()
+	if err != nil || read.MaxGenerateConcurrency == nil || *read.MaxGenerateConcurrency != 3 || saved.SavedDigest == base.SavedDigest {
+		t.Fatal(read, err)
+	}
+	if base.Config.MaxGenerateConcurrency != nil {
+		t.Fatal("saved value rewrote loaded snapshot")
+	}
+}
 func encode(t *testing.T, c Config) []byte {
 	t.Helper()
 	r, err := json.Marshal(c)

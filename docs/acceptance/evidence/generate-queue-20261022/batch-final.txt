@@ -1,0 +1,10 @@
+=== RUN   TestGQBatchReusesActiveAndPersistsCompletion
+--- PASS: TestGQBatchReusesActiveAndPersistsCompletion (7.19s)
+=== RUN   TestGQPreparationFailureDoesNotLookQueued
+--- PASS: TestGQPreparationFailureDoesNotLookQueued (5.15s)
+=== RUN   TestGQBatchRetriesSettledFailureOnceAndBlocksUnknown
+--- PASS: TestGQBatchRetriesSettledFailureOnceAndBlocksUnknown (8.83s)
+=== RUN   TestGQQueuedGenerationNeedsNoRunnerTakeoverOrStop
+--- PASS: TestGQQueuedGenerationNeedsNoRunnerTakeoverOrStop (0.09s)
+PASS
+ok  	github.com/erranliu/SteerLine/internal/app	24.607s

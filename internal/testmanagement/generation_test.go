@@ -17,6 +17,7 @@ type memoryGenerations struct {
 	rows      map[string]Generation
 	fail      bool
 	failSaved bool
+	denyState string
 }
 
 func (m *memoryGenerations) Generation(_ context.Context, p, id string) (Generation, error) {
@@ -39,6 +40,9 @@ func (m *memoryGenerations) Generations(ctx context.Context, p string) ([]Genera
 	return r, nil
 }
 func (m *memoryGenerations) SaveGeneration(_ context.Context, r Generation, expected uint64) error {
+	if m.denyState != "" && r.State == m.denyState {
+		return errors.New("injected save window")
+	}
 	if m.fail {
 		return errors.New("persist denied")
 	}

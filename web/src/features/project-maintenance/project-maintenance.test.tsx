@@ -1,9 +1,10 @@
 import {afterEach,expect,it,vi} from "vitest";
-import {cleanup,fireEvent,screen,waitFor} from "@testing-library/react";
+import {act,cleanup,fireEvent,render,screen,waitFor} from "@testing-library/react";
+import {GenerationProgress} from "./generation-progress";
 import {Api} from "../../shared/api/client";
 import {identity,mountFeature,testClient} from "../../test/workspace";
 import {ProjectMaintenance,type MaintenanceView} from "./project-maintenance";
-afterEach(cleanup);
+afterEach(()=>{cleanup();vi.useRealTimers();sessionStorage.clear()});
 function setup(overrides:Partial<MaintenanceView>={},online=true){
  const sha="a".repeat(40);
  const view:MaintenanceView={observation:{commit:sha,last_success:"2026-10-21T01:00:00Z"},remote_name:"origin/main",
@@ -62,4 +63,57 @@ it("PMS offline view retains facts and does not submit or check automatically",a
  expect(screen.getByRole("button",{name:"检查更新"})).toBeDisabled();
  expect(screen.getByText(/离线/)).toBeVisible();
  expect(get).not.toHaveBeenCalled();expect(submit).not.toHaveBeenCalled();
+});
+
+it("GQ keeps progress in the collapsed title and submits one bulk command",async()=>{
+ const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"docs/task.plan.md"}},status:"accepted",generation_id:"generation"}],generation_progress:{id:"batch",total:9,succeeded:8,running:1,queued:0,failed:0,blocked:0}});
+ expect(await screen.findByText("8/9 生成中")).toBeVisible();
+ const toggle=screen.getByRole("button",{name:/项目维护/});
+ expect(toggle).toHaveAttribute("aria-expanded","false");
+ expect(screen.getByLabelText("正在生成")).toBeVisible();
+ fireEvent.click(toggle);
+ fireEvent.click(screen.getByRole("button",{name:"一键生成"}));
+ await waitFor(()=>expect(submit).toHaveBeenCalledWith(expect.objectContaining({action:"maintenance_generate_all",target_id:identity.project_id,payload:{}})));
+ fireEvent.click(toggle);
+ expect(screen.getByText("8/9 生成中")).toBeVisible();
+ expect(submit).toHaveBeenCalledTimes(1);
+});
+
+it("GQ hides success after five seconds using the backend completion timestamp",()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date("2026-10-22T00:00:00Z"));
+ const value={id:"batch",total:9,succeeded:9,queued:0,running:0,failed:0,blocked:0,completed_at:new Date().toISOString()};
+ const mounted=render(<GenerationProgress value={value} online/>);
+ expect(screen.getByText("9/9 生成完毕")).toBeVisible();
+ act(()=>vi.advanceTimersByTime(4999));
+ expect(screen.getByText("9/9 生成完毕")).toBeVisible();
+ act(()=>vi.advanceTimersByTime(1));
+ expect(screen.queryByRole("status")).toBeNull();
+ mounted.unmount();
+ render(<GenerationProgress value={value} online/>);
+ expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("GQ retains failures and stops the spinner for pending verification",()=>{
+ vi.useFakeTimers();
+ render(<GenerationProgress value={{id:"batch",total:9,succeeded:8,queued:0,running:0,failed:1,blocked:0}} online/>);
+ act(()=>vi.advanceTimersByTime(60000));
+ expect(screen.getByText("8/9 已生成，1 项失败")).toBeVisible();
+ expect(screen.queryByLabelText("正在生成")).toBeNull();
+});
+
+it("GQ polling delay does not shorten the five-second notice or reset it on remount",()=>{
+ vi.useFakeTimers();vi.setSystemTime(new Date("2026-10-22T00:00:00Z"));
+ const active={id:"delayed",total:1,succeeded:0,queued:0,running:1,failed:0,blocked:0};
+ const mounted=render(<GenerationProgress value={active} online/>);
+ const completed={...active,succeeded:1,running:0,completed_at:new Date().toISOString()};
+ act(()=>vi.advanceTimersByTime(8000));
+ mounted.rerender(<GenerationProgress value={completed} online/>);
+ expect(screen.getByText("1/1 生成完毕")).toBeVisible();
+ act(()=>vi.advanceTimersByTime(2000));
+ mounted.unmount();
+ render(<GenerationProgress value={completed} online/>);
+ act(()=>vi.advanceTimersByTime(2999));
+ expect(screen.getByText("1/1 生成完毕")).toBeVisible();
+ act(()=>vi.advanceTimersByTime(1));
+ expect(screen.queryByRole("status")).toBeNull();
 });

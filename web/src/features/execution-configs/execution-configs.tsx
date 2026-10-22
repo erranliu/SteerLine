@@ -80,6 +80,7 @@ export function ExecutionConfigs({
   const [loading, setLoading] = useState(false);
   const [refresh, setRefresh] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [generateLimit, setGenerateLimit] = useState<string>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pending, setPending] = useState<(() => void) | null>(null);
@@ -422,7 +423,11 @@ export function ExecutionConfigs({
     if (value === "local") changeRoute("local", adapter ?? "codex-app-server");
     else changeRoute("orca_environment", "orca-terminal", "codex", value);
   }
-  async function saveConfig(config: ExecutionConfig, selectedID: string) {
+  async function saveConfig(
+    config: ExecutionConfig,
+    selectedID: string,
+    preserveDraft = false,
+  ) {
     if (!base) return;
     setSaving(true);
     setError("");
@@ -442,8 +447,10 @@ export function ExecutionConfigs({
       const p =
         result.config.execution_profiles.find((v) => v.id === selectedID) ??
         result.config.execution_profiles[0];
-      setDraft(clone(p));
-      setDefaultChoice(p.id === result.config.default_execution_profile);
+      if (!preserveDraft) {
+        setDraft(clone(p));
+        setDefaultChoice(p.id === result.config.default_execution_profile);
+      }
       setDeleting(false);
       setPending(null);
       setNotice("配置已保存。重启 SteerLine 后生效。");
@@ -622,6 +629,61 @@ export function ExecutionConfigs({
                 重新读取
               </button>
             </div>
+          )}
+          {base && (
+            <section
+              className="sl-generation-settings"
+              aria-label="生成并发设置"
+            >
+              <div>
+                <label htmlFor="generate-concurrency">生成最大并发数</label>{" "}
+                <input
+                  id="generate-concurrency"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={
+                    generateLimit ??
+                    String(base.config.max_generate_concurrency ?? 5)
+                  }
+                  disabled={!base.writable || saving}
+                  onChange={(e) => setGenerateLimit(e.target.value)}
+                />
+                <p>
+                  所有项目共用生成队列，默认最多同时生成 5 项。保存后重启
+                  SteerLine 生效。
+                </p>
+                <button
+                  type="button"
+                  className="sl-button"
+                  disabled={
+                    !base.writable ||
+                    saving ||
+                    dirty ||
+                    !generateLimit ||
+                    !Number.isSafeInteger(Number(generateLimit)) ||
+                    Number(generateLimit) < 1 ||
+                    Number(generateLimit) ===
+                      (base.config.max_generate_concurrency ?? 5)
+                  }
+                  onClick={() =>
+                    void saveConfig(
+                      {
+                        ...base.config,
+                        max_generate_concurrency: Number(generateLimit),
+                      },
+                      draft?.id ?? base.config.default_execution_profile,
+                      true,
+                    )
+                  }
+                >
+                  保存生成并发
+                </button>
+                {dirty && (
+                  <p>请先保存或放弃当前执行方案修改，再保存生成并发。</p>
+                )}
+              </div>
+            </section>
           )}
           {base && draft && (
             <div className="sl-workspace">

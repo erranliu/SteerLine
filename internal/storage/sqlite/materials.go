@@ -59,3 +59,26 @@ func (s *SQLiteStore) SaveMaterialObservation(ctx context.Context, project strin
 	_, e = s.db.ExecContext(ctx, `INSERT INTO maintenance_settings(project_identity,profile,observation) VALUES(?,'',?) ON CONFLICT(project_identity) DO UPDATE SET observation=excluded.observation`, project, raw)
 	return e
 }
+
+func (s *SQLiteStore) GenerationBatch(ctx context.Context, project string) (pm.GenerationBatch, error) {
+	var batch pm.GenerationBatch
+	var raw []byte
+	err := s.db.QueryRowContext(ctx, `SELECT generation_batch FROM maintenance_settings WHERE project_identity=?`, project).Scan(&raw)
+	if err != nil {
+		return batch, persistenceError(err)
+	}
+	if len(raw) == 0 {
+		return batch, nil
+	}
+	err = json.Unmarshal(raw, &batch)
+	return batch, err
+}
+
+func (s *SQLiteStore) SaveGenerationBatch(ctx context.Context, project string, batch pm.GenerationBatch) error {
+	raw, err := json.Marshal(batch)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `INSERT INTO maintenance_settings(project_identity,profile,generation_batch) VALUES(?,'',?) ON CONFLICT(project_identity) DO UPDATE SET generation_batch=excluded.generation_batch`, project, raw)
+	return err
+}

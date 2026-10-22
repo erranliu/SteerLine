@@ -1,5 +1,7 @@
 # 全局执行配置
 
+`max_generate_concurrency` 是 SteerLine 调用 Runner generate 的 home 级最大并发数；省略时为 5，显式值必须是正整数。在全局执行设置中保存，重启 SteerLine 后生效；所有项目的自动生成、一键生成和单项重试共享队列，名额覆盖实际执行与待核实调用。开发候选和 Runner 内部其他 LLM 操作不计入该配额。实现及验证见 [生成队列验收](../acceptance/generate-queue.md)。
+
 当前实现支持本机 Codex、Windows/amd64 本机 Orca/Codex、Pi、DSH 及远端 Orca environment/Codex。详见[Web 执行配置 Spec](../spec/web-execution-config.spec.md)及[Plan](../spec/web-execution-config.plan.md)，实际验证和人工验收独立登记。执行由独立 SteerRunner 管理。SteerLine 保留多执行方案与默认方案选择，不维护业务执行的原生 codec、权限策略、会话或 workflow 状态机。所有 LLM 操作的职责以[架构边界](../architecture.md#llm-执行边界)为准，本页维护两层默认链路的配置含义。
 
 所有项目共享 `<STEERLINE_HOME>/execution.json`，当前严格格式为 3。`runner` 固定独立 EXE 的绝对路径、版本与 SHA-256；每次 CLI 调用前核对 SHA，同目录常驻实例也须匹配所选 EXE。旧版本、implementation_configs、内部 codec 和项目内旧执行方案不兼容，不迁移或回退。

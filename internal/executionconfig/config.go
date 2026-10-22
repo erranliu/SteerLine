@@ -20,10 +20,11 @@ type Pin struct {
 	SHA256     string `json:"sha256"`
 }
 type File[P any] struct {
-	Version        int       `json:"version"`
-	Runner         P         `json:"runner"`
-	DefaultProfile string    `json:"default_execution_profile"`
-	Profiles       []Profile `json:"execution_profiles"`
+	Version                int       `json:"version"`
+	Runner                 P         `json:"runner"`
+	DefaultProfile         string    `json:"default_execution_profile"`
+	MaxGenerateConcurrency *int      `json:"max_generate_concurrency,omitempty"`
+	Profiles               []Profile `json:"execution_profiles"`
 }
 type Profile struct {
 	ID        string                        `json:"id"`
@@ -69,3 +70,14 @@ func Decode(raw []byte, value any) error {
 	return nil
 }
 func Digest(raw []byte) string { v := sha256.Sum256(raw); return hex.EncodeToString(v[:]) }
+
+// GenerateConcurrency is a caller scheduling budget, frozen at application start.
+func GenerateConcurrency(value *int) (int, error) {
+	if value == nil {
+		return 5, nil
+	}
+	if *value <= 0 {
+		return 0, errors.New("max_generate_concurrency must be a positive integer")
+	}
+	return *value, nil
+}

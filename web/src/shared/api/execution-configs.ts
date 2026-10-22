@@ -34,6 +34,7 @@ export interface ExecutionConfig {
   runner: { executable: string; version: string; sha256: string };
   default_execution_profile: string;
   execution_profiles: Profile[];
+  max_generate_concurrency?: number;
 }
 export interface Combination {
   host: string;

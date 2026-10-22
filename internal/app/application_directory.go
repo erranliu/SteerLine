@@ -214,6 +214,9 @@ func (d *ApplicationDirectory) run() {
 }
 
 func (d *ApplicationDirectory) finish(e *catalogEntry, result contract.ProjectShutdown, err error) {
+	if d.runner.generations != nil {
+		d.runner.generations.RemoveWaiting(e.ref.Identity)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "project %s failed: %v\n", e.view.ConfigID, err)
 	}
