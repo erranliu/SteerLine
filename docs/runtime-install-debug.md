@@ -14,7 +14,7 @@
 
 ## 执行方案
 
-`debug-template/home/execution.json` 是执行方案复制源，默认 live，含显式 simulate；模型、effort、worker 配置在这里维护。对应项目/Git/PR 配置由 `home/config-source/SteerlineTest.live.json` 和 `.simulate.json` 维护，路径占位符只在生成时替换。运行封装只选择已有方案、解析工具位置，不拼装第二套执行参数。包内 `home/execution.source.json` 保留完整生成配置；首次选择后，活动配置只暴露所选方案，防止混用 provider。
+`debug-template/home/execution.json` 是执行方案复制源，默认 live，含显式 simulate；AI 使用 `--simulate` 显式选择模拟方案。模型、effort、worker 配置在这里维护。对应项目/Git/PR 配置由 `home/config-source/SteerlineTest.live.json` 和 `.simulate.json` 维护，路径占位符只在生成时替换。运行封装只选择已有方案、解析工具位置，不拼装第二套执行参数。包内 `home/execution.source.json` 保留完整生成配置；首次选择后，活动配置只暴露所选方案，防止混用 provider。
 
 ```powershell
 & 'C:\SteerlineDebug\<版本目录>\start.bat'

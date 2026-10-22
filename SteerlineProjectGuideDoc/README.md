@@ -5,6 +5,7 @@
 | 主题 | 规范 | 内容 |
 | --- | --- | --- |
 | 测试 | [测试架构规范](testing-architecture.md) | L1–L4 定义、L3 正交与并行设计、测试内容清单、职责归属和最小必要验证。 |
+| Spec / Plan | [Spec 与 Plan 编写规范](spec-plan-guidelines.md) | SteerLine 的文档职责及测试、验收、roadmap、worker 规则读取入口。 |
 
 ## 目录与内容边界
 

@@ -144,9 +144,9 @@ L2 通过证据包括公开阶段/final 来源、原 Run/候选、Git 提交中�
 
 前端与 HTTP owner 使用 `scripts/test-web.ps1`，浏览器入口及新包前置见 [Web 工程](../web/README.md)。浏览器 fixture 消费公开 Run/请求证据，浏览器关闭不停止原业务、同请求不重复提交、多项目/多标签隔离等要求继续保留。
 
-临时/AI 调试及真实 PR 调试先运行 `scripts/new-debug-release.ps1`，创建 `C:\SteerlineDebug` 下独立环境；不使用安装现场。生成默认 live，AI 明确 `--simulate`；模拟方案使用包内公开 Runner CLI fixture，真实方案使用固定真实 EXE。`scripts/test-debug-release.ps1 -SteerRunnerExe <absolute>` 验证包生成、冻结、停止与 reset；其 `-Live` 复用完整 L2，不再运行第二条沙箱验收链。详见 [调试环境验收](acceptance/debug-environment.md)。
+临时/AI 调试及真实 PR 调试必须先读取并遵循 [独立调试流程](runtime-install-debug.md)：统一生成、执行配置复制源、方案冻结、专属 SteerlineTest base/head 与无备份重置均在该文档维护。不得使用、修改或重置 `C:\SteerlineInstall` 或保留的 `C:\SteerlineRuntime`，不得复制安装版数据库、认证或配置准备现场。既有分级回归继续使用自身隔离夹具。
 
-认证引用既有宿主登录，不复制安装数据库、认证或用户配置。方案启动后冻结，换方案新建包；重置不备份且活动服务/资源阻止重置。
+`scripts/test-debug-release.ps1 -SteerRunnerExe <absolute>` 验证包生成、冻结、停止与 reset；其 `-Live` 复用完整 L2，不再运行第二条沙箱验收链。详见 [调试环境验收](acceptance/debug-environment.md)。
 
 ## 报告与文档检查
 
@@ -159,4 +159,12 @@ python scripts/check_doc_links.py
 git diff --check
 ```
 
-新 Plan 的测试计划按任务专属验收 ID 映射场景/命令、环境、时点、通过条件与证据位置；缺能力须列入实施或明确前置。结果只登记 acceptance，Plan 不维护实时结果。历史原生结果仅证明各自冻结版本与原范围，参见 [历史验收](acceptance/archive/README.md)。
+历史原生结果仅证明各自冻结版本与原范围，参见 [历史验收](acceptance/archive/README.md)。
+
+## Spec / Plan 的验证安排
+
+Spec 的验证需求及 Plan 的测试计划遵循上文采用的测试架构规范，以最小必要范围验证本次变更。新编写或本次修改的实现 Plan 必须包含“测试计划”，覆盖任务范围内全部自动验收项，按任务专属验收项 ID 映射测试级别、组/场景、环境、命令、执行时点、通过条件与证据登记位置。同一场景可覆盖多项；未选择相关组时说明原因，不默认运行 L2/L3 或 Full。
+
+需要新增场景、工具、驱动或环境能力时，纳入实施步骤或明确前置，不只写“后续补验”。草稿可标待定；纳入 roadmap 执行前明确验证方式和能力补齐安排，实际验收前落实可用入口。分级入口与扩展约定见 [E2E 指南](../tests/e2e/README.md)。
+
+Plan 安排执行自动验收、更新任务专属 acceptance 明细；roadmap 任务另同步 execution-map 汇总。Plan 不维护实时结果。人工项单列参与窗口和阻塞范围，允许后置项不阻碍无关后续执行；具体文档归属、验收分类及记录要求统一见 [验收流程](acceptance/README.md)。
