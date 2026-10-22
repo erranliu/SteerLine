@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { projectQueries } from "../../shared/api/queries";
+import { useQueryVisibility } from "../../shared/query-visibility";
 import type { Candidate } from "../../shared/api/types";
 import type { RunUsageView } from "../../shared/api/run-usage";
 import { Button } from "../../shared/ui/button";
@@ -80,10 +80,11 @@ export function usagePollInterval(view: RunUsageView | undefined) {
 
 export function RunUsage({ run }: { run: Candidate }) {
   const { api, online } = useWorkspace();
-  const client = useQueryClient();
-  const [visible, setVisible] = useState(document.visibilityState !== "hidden");
   const options = projectQueries(api).runUsage(run);
-  const enabled = online && visible && !!run.execution_id;
+  const enabled = useQueryVisibility(
+    online && !!run.execution_id,
+    options.queryKey,
+  );
   const query = useQuery({
     ...options,
     enabled,
@@ -92,24 +93,6 @@ export function RunUsage({ run }: { run: Candidate }) {
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
   });
-  const key = JSON.stringify(options.queryKey);
-  useEffect(() => {
-    const queryKey = JSON.parse(key) as readonly unknown[];
-    const update = () => {
-      const shown = document.visibilityState !== "hidden";
-      setVisible(shown);
-      if (!shown) void client.cancelQueries({ queryKey, exact: true });
-    };
-    document.addEventListener("visibilitychange", update);
-    return () => {
-      document.removeEventListener("visibilitychange", update);
-      void client.cancelQueries({ queryKey, exact: true });
-    };
-  }, [client, key]);
-  useEffect(() => {
-    if (!enabled)
-      void client.cancelQueries({ queryKey: JSON.parse(key), exact: true });
-  }, [enabled, client, key]);
   const view = query.data;
   const usage = view?.usage;
   const cost = view?.cost;

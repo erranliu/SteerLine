@@ -7,7 +7,7 @@ import {
   act,
   fireEvent,
 } from "@testing-library/react";
-import { StrictMode } from "react";
+import { StrictMode, type ComponentProps } from "react";
 import {
   onlineManager,
   QueryClient,
@@ -27,6 +27,36 @@ import {
   testClient,
 } from "../test/workspace";
 
+function workspaceRead(api: Api, path: string): unknown {
+  if (path === "/snapshot") return makeSnapshot(api);
+  if (path === "/presentation")
+    return { presentation: { profiles: [], default_profile_id: "" } };
+  if (path === "/maintenance")
+    return { observation: { commit: "" }, tasks: [] };
+  if (path.startsWith("/tasks?")) return tasks;
+  throw new Error("Unexpected Workspace read: " + path);
+}
+
+function mountWorkspace(
+  api: Api,
+  client: QueryClient,
+  props: Partial<ComponentProps<typeof Workspace>> = {},
+) {
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter
+        initialEntries={[`/projects/${api.identity.project_id}/settings`]}
+      >
+        <Workspace
+          home={api.home}
+          initial={{ identity: api.identity, csrf_token: "csrf" }}
+          {...props}
+        />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
 afterEach(() => {
   cleanup();
   onlineManager.setOnline(true);
@@ -40,14 +70,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
   const api = new Api(identity, "csrf", "preload-home");
   const get = vi
     .spyOn(Api.prototype, "get")
-    .mockImplementation(
-      async (path) =>
-        (path === "/snapshot"
-          ? makeSnapshot(api)
-          : path === "/presentation"
-            ? { presentation: { profiles: [], default_profile_id: "" } }
-            : tasks) as never,
-    );
+    .mockImplementation(async (path) => workspaceRead(api, path) as never);
   const mount = (connected: boolean) => (
     <StrictMode>
       <QueryClientProvider client={client}>
@@ -83,6 +106,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
         makeSnapshot(api),
       );
     });
+  expect(screen.getByRole("button", { name: /项目维护/ })).toBeVisible();
   vi.useFakeTimers();
   await act(() => vi.advanceTimersByTimeAsync(21000));
   expect(
@@ -97,7 +121,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
         path === "/snapshot" ||
         path === "/presentation" ||
         path === "/tasks?limit=100&cursor=" ||
-        path === "/maintenance?mode=baseline&plan=",
+        path === "/maintenance",
     ),
   ).toBe(true);
   client.clear();
@@ -127,21 +151,10 @@ it("keeps cached settings visible through a failed refresh and scopes manual ref
   client.setQueryData(other, {});
   const refreshConnection = vi.fn();
   vi.spyOn(Api.prototype, "get").mockImplementation(async (path) => {
-    if (path === "/snapshot") return makeSnapshot(api) as never;
     if (path === "/presentation") throw new Error("刷新失败");
-    return tasks as never;
+    return workspaceRead(api, path) as never;
   });
-  render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/projects/manual/settings"]}>
-        <Workspace
-          initial={{ identity, csrf_token: "csrf" }}
-          home={api.home}
-          onRefreshConnection={refreshConnection}
-        />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  mountWorkspace(api, client, { onRefreshConnection: refreshConnection });
   expect(screen.getByText("已缓存方案")).toBeVisible();
   await screen.findByText("服务已连接", { exact: true });
   fireEvent.click(screen.getByRole("button", { name: "刷新查询" }));
@@ -166,12 +179,7 @@ it("invalidates an old receipt's original instance after reconciliation without 
   const oldKey = projectQueries(original).tasks().queryKey;
   client.setQueryData(oldKey, tasks);
   vi.spyOn(Api.prototype, "get").mockImplementation(
-    async (path) =>
-      (path === "/snapshot"
-        ? makeSnapshot(api)
-        : path === "/presentation"
-          ? { presentation: { profiles: [] } }
-          : tasks) as never,
+    async (path) => workspaceRead(api, path) as never,
   );
   vi.spyOn(Api.prototype, "reconcile").mockResolvedValue({
     ...envelope,
@@ -179,13 +187,7 @@ it("invalidates an old receipt's original instance after reconciliation without 
     status: "applied",
     sampled_at: "now",
   });
-  render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/projects/old-receipt/settings"]}>
-        <Workspace initial={{ identity, csrf_token: "csrf" }} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  mountWorkspace(api, client);
   await waitFor(() =>
     expect(client.getQueryState(oldKey)?.isInvalidated).toBe(true),
   );
@@ -203,7 +205,8 @@ it("runs only one reconciliation round while journal observations refresh and ab
     repository_identity: "repo",
     ready: true,
   } as Identity;
-  const envelope = new Api(identity, "csrf").envelope("start_task", "1", 1, {});
+  const api = new Api(identity, "csrf");
+  const envelope = api.envelope("start_task", "1", 1, {});
   await saveRequest(envelope);
   let resolve!: (receipt: Receipt) => void;
   const reconcile = vi.spyOn(Api.prototype, "reconcile").mockImplementation(
@@ -218,40 +221,14 @@ it("runs only one reconciliation round while journal observations refresh and ab
       Response.json(
         url === "/auth/status"
           ? { identity, csrf_token: "csrf" }
-          : url.endsWith("/snapshot")
-            ? {
-                connection: {
-                  state: "connected",
-                  can_control: true,
-                  identity_matched: true,
-                  config_matched: true,
-                  snapshot: {
-                    page: {
-                      service: { instance_id: identity.instance_id },
-                      runs: [],
-                      control: {
-                        revision: 1,
-                        dispatch_mode: "manual",
-                        dispatch_paused: false,
-                      },
-                    },
-                  },
-                },
-              }
-            : { presentation: { profiles: [], default_profile_id: "" } },
+          : workspaceRead(api, url.replace(/^.*\/projects\/[^/]+/, "")),
       ),
     ),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/projects/poll-project/settings"]}>
-        <Workspace initial={{ identity, csrf_token: "csrf" }} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  mountWorkspace(api, client);
   await waitFor(() => expect(reconcile).toHaveBeenCalledTimes(1));
   const rows = await listRequests();
   for (let i = 1; i <= 5; i++)
@@ -283,52 +260,22 @@ it("disables commands when offline even while paused queries retain a successful
     repository_identity: "repo",
     ready: true,
   } as Identity;
-  const snapshot = {
-    connection: {
-      state: "connected",
-      can_control: true,
-      identity_matched: true,
-      config_matched: true,
-      snapshot: {
-        page: {
-          service: {
-            instance_id: "original",
-            ready: true,
-            capabilities: ["pause_dispatch", "set_dispatch_mode"],
-          },
-          runs: [],
-          control: {
-            revision: 1,
-            dispatch_mode: "manual",
-            dispatch_paused: false,
-            blockers: [],
-          },
-        },
-      },
-    },
-  };
+  const api = new Api(identity, "csrf");
+  const snapshot = makeSnapshot(api);
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) =>
       Response.json(
         url === "/auth/status"
           ? { identity, csrf_token: "csrf" }
-          : url.endsWith("/snapshot")
-            ? snapshot
-            : { presentation: { profiles: [], default_profile_id: "" } },
+          : workspaceRead(api, url.replace(/^.*\/projects\/[^/]+/, "")),
       ),
     ),
   );
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/projects/poll-project/settings"]}>
-        <Workspace initial={{ identity, csrf_token: "csrf" }} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  mountWorkspace(api, client);
   await waitFor(() =>
     expect(screen.getByText("服务已连接", { exact: true })).toBeVisible(),
   );
@@ -371,12 +318,7 @@ it("routes manual reconciliation through the original envelope while an automati
   const originalKey = projectQueries(original).tasks().queryKey;
   client.setQueryData(originalKey, tasks);
   vi.spyOn(Api.prototype, "get").mockImplementation(
-    async (path) =>
-      (path === "/snapshot"
-        ? makeSnapshot(api)
-        : path === "/presentation"
-          ? { presentation: { profiles: [] } }
-          : tasks) as never,
+    async (path) => workspaceRead(api, path) as never,
   );
   let finishAutomatic!: (receipt: Receipt) => void;
   let finishManual!: (receipt: Receipt) => void;
@@ -387,13 +329,7 @@ it("routes manual reconciliation through the original envelope while an automati
         else finishManual = resolve;
       }),
   );
-  const mounted = render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={["/projects/manual-receipt/settings"]}>
-        <Workspace home={api.home} initial={{ identity, csrf_token: "csrf" }} />
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
+  const mounted = mountWorkspace(api, client);
   await waitFor(() => expect(reconcile).toHaveBeenCalledTimes(1));
   const button = await screen.findByRole("button", { name: "查询原请求" });
   fireEvent.click(button);

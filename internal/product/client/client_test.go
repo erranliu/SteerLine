@@ -30,13 +30,18 @@ func (r *readerFixture) ShowTask(context.Context, string) (api.TaskPage, error) 
 
 type commandsFixture struct {
 	TaskCommands
-	closed int
+	closed    int
+	discarded int
 }
 
 func (r *commandsFixture) Close() error { r.closed++; return nil }
 
 func (r *commandsFixture) Validate(context.Context, []byte) (api.TaskBatchValidation, error) {
 	return api.TaskBatchValidation{Valid: true}, nil
+}
+func (r *commandsFixture) Discard(context.Context, api.DiscardInput) (api.TaskDiscardReceipt, error) {
+	r.discarded++
+	return api.TaskDiscardReceipt{}, nil
 }
 
 func testClient(t *testing.T, r Resources) *Client {
@@ -54,21 +59,20 @@ func TestCM71ResourceOwnershipAndClosedClient(t *testing.T) {
 	r := &readerFixture{}
 	commands := &commandsFixture{}
 	closed := 0
-	mutations := 0
-	c := testClient(t, Resources{OpenReader: func(context.Context) (Reader, error) { return r, nil }, OpenCommands: func(_ context.Context, mutation bool) (TaskCommands, error) {
-		if mutation {
-			mutations++
-		}
+	c := testClient(t, Resources{OpenReader: func(context.Context) (Reader, error) { return r, nil }, OpenCommands: func(context.Context) (TaskCommands, error) {
 		return commands, nil
-	}, Close: func() error { closed++; return nil }})
+	}, Discard: commands, Close: func() error { closed++; return nil }})
 	if _, err := c.ShowTask(context.Background(), "1"); err != nil || r.closed != 1 {
 		t.Fatalf("read resource not closed: %v / %d", err, r.closed)
 	}
-	if _, err := c.ValidateTaskBatch(context.Background(), []byte(`{}`)); err != nil || commands.closed != 1 || mutations != 0 {
+	if _, err := c.ValidateTaskBatch(context.Background(), []byte(`{}`)); err != nil || commands.closed != 1 {
 		t.Fatalf("validation factory scope: %v / %+v", err, commands)
 	}
 	if err := c.Close(); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := c.DiscardTask(context.Background(), api.DiscardInput{}); err == nil || commands.discarded != 0 {
+		t.Fatal("closed client reached discard owner", err)
 	}
 	_ = c.Close()
 	if closed != 1 {
@@ -79,6 +83,13 @@ func TestCM71ResourceOwnershipAndClosedClient(t *testing.T) {
 	}
 	r.closeErr = errors.New("reader close failed")
 	c2 := testClient(t, Resources{OpenReader: func(context.Context) (Reader, error) { return r, nil }})
+	if _, err := c2.DiscardTask(context.Background(), api.DiscardInput{}); err == nil {
+		t.Fatal("discard without an explicit owner was accepted")
+	}
+	c3 := testClient(t, Resources{Discard: commands})
+	if _, err := c3.DiscardTask(context.Background(), api.DiscardInput{}); err != nil || commands.discarded != 1 {
+		t.Fatal("discard did not use its explicit owner", err)
+	}
 	if _, err := c2.ShowTask(context.Background(), "1"); !errors.Is(err, r.closeErr) {
 		t.Fatalf("close failure became success: %v", err)
 	}

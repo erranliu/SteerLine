@@ -16,6 +16,8 @@ import type {
   Receipt,
   Snapshot,
   TaskPage,
+  Materials,
+  DocumentView,
 } from "./types";
 
 export function projectQueries(api: Api) {
@@ -26,6 +28,26 @@ export function projectQueries(api: Api) {
   ] as const;
   const defaults = { staleTime: 1000, retry: false } as const;
   return {
+    taskMaterials: (id: string) =>
+      queryOptions({
+        retry: false,
+        queryKey: [...scope, "task-materials", id],
+        queryFn: ({ signal }) =>
+          api.get<Materials>(
+            "/maintenance/tasks/" + encodeURIComponent(id),
+            signal,
+          ),
+      }),
+    candidateDocuments: (id: string) =>
+      queryOptions({
+        retry: false,
+        queryKey: [...scope, "candidate-documents", id],
+        queryFn: ({ signal }) =>
+          api.get<DocumentView>(
+            "/runs/" + encodeURIComponent(id) + "/documents",
+            signal,
+          ),
+      }),
     runUsage: (
       run: Pick<
         Candidate,

@@ -1,3 +1,15 @@
+export type Materials = {
+  commit: string;
+  status: string;
+  diagnostic?: string;
+  files: { path: string; body: string; diagnostic?: string }[];
+};
+export type DocumentView = {
+  status: string;
+  commit: string;
+  latest_commit: string;
+  files: { path: string; before: string; after: string; diagnostic?: string }[];
+};
 export interface Identity {
   protocol: string;
   project_id: string;

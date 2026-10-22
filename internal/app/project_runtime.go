@@ -162,7 +162,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.config.runtimeHost = &r.hostConfig
-	r.product, retErr = openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context, bool) (productclient.TaskCommands, error) {
+	r.product, retErr = openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context) (productclient.TaskCommands, error) {
 		return &runtimeTaskCommands{clientTaskCommands: newClientTaskCommands(r.store, r.config), service: service}, nil
 	}, r.store)
 	if retErr != nil {

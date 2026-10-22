@@ -121,7 +121,7 @@ func read[T any](ctx context.Context, c *Client, fn func(Reader) (T, error)) (re
 	return fn(r)
 }
 
-func command[T any](ctx context.Context, c *Client, mutation bool, fn func(TaskCommands) (T, error)) (result T, err error) {
+func command[T any](ctx context.Context, c *Client, fn func(TaskCommands) (T, error)) (result T, err error) {
 	if err = c.begin(ctx); err != nil {
 		return result, err
 	}
@@ -129,7 +129,7 @@ func command[T any](ctx context.Context, c *Client, mutation bool, fn func(TaskC
 	if c.resources.OpenCommands == nil {
 		return result, unsupported("product commands")
 	}
-	r, err := c.resources.OpenCommands(ctx, mutation)
+	r, err := c.resources.OpenCommands(ctx)
 	if err != nil {
 		return result, classify(err)
 	}
@@ -150,26 +150,26 @@ func (c *Client) TaskGraph(ctx context.Context, cursor string, limit int) (api.G
 }
 
 func (c *Client) ValidateTaskBatch(ctx context.Context, payload []byte) (api.TaskBatchValidation, error) {
-	return command(ctx, c, false, func(r TaskCommands) (api.TaskBatchValidation, error) { return r.Validate(ctx, payload) })
+	return command(ctx, c, func(r TaskCommands) (api.TaskBatchValidation, error) { return r.Validate(ctx, payload) })
 }
 
 func (c *Client) CreateTaskBatch(ctx context.Context, in api.CreateInput) (api.TaskBatchReceipt, error) {
-	return command(ctx, c, true, func(r TaskCommands) (api.TaskBatchReceipt, error) { return r.Create(ctx, in) })
+	return command(ctx, c, func(r TaskCommands) (api.TaskBatchReceipt, error) { return r.Create(ctx, in) })
 }
 
 func (c *Client) DiscardTask(ctx context.Context, in api.DiscardInput) (api.TaskDiscardReceipt, error) {
-	if c.resources.Discard != nil {
-		if err := c.begin(ctx); err != nil {
-			return api.TaskDiscardReceipt{}, err
-		}
-		defer c.mu.RUnlock()
-		return c.resources.Discard.Discard(ctx, in)
+	if err := c.begin(ctx); err != nil {
+		return api.TaskDiscardReceipt{}, err
 	}
-	return command(ctx, c, true, func(r TaskCommands) (api.TaskDiscardReceipt, error) { return r.Discard(ctx, in) })
+	defer c.mu.RUnlock()
+	if c.resources.Discard == nil {
+		return api.TaskDiscardReceipt{}, unsupported("task discard")
+	}
+	return c.resources.Discard.Discard(ctx, in)
 }
 
 func (c *Client) AddPredecessors(ctx context.Context, in api.TaskPredecessorAddInput) (api.TaskPredecessorAddReceipt, error) {
-	return command(ctx, c, true, func(r TaskCommands) (api.TaskPredecessorAddReceipt, error) {
+	return command(ctx, c, func(r TaskCommands) (api.TaskPredecessorAddReceipt, error) {
 		return r.AddPredecessors(ctx, in)
 	})
 }
