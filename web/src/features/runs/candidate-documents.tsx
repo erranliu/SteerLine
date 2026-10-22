@@ -2,13 +2,12 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import type { Candidate } from "../../shared/api/types";
+import { projectQueries } from "../../shared/api/queries";
 
-type DocumentView={status:string;commit:string;latest_commit:string;files:{path:string;before:string;after:string;diagnostic?:string}[]};
 export function CandidateDocuments({run}:{run:Candidate}){
- const {api,online,identity}=useWorkspace();
+ const {api,online}=useWorkspace();
  const [open,setOpen]=useState(false);
- const view=useQuery({queryKey:["candidate-documents",identity.project_id,identity.instance_id,run.run_id],
- queryFn:()=>api.get<DocumentView>("/runs/"+encodeURIComponent(run.run_id)+"/documents"),enabled:online&&open,refetchInterval:online&&open?5000:false,retry:false});
+ const view=useQuery({...projectQueries(api).candidateDocuments(run.run_id),enabled:online&&open,refetchInterval:online&&open?5000:false});
  return <section aria-label="候选文档" className="settings-panel">
   {run.material_status==="outdated"&&<p className="notice amber">已过期 · 保留候选。原执行继续保留，此候选 PR 合入仍可完成任务。</p>}
   {run.material_status==="unknown"&&<p className="muted">绑定文档当前性待核实</p>}

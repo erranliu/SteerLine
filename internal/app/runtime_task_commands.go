@@ -36,6 +36,3 @@ func (r *runtimeTaskCommands) AddPredecessors(ctx context.Context, in api.TaskPr
 	}
 	return <-result, nil
 }
-func (r *runtimeTaskCommands) Discard(context.Context, api.DiscardInput) (api.TaskDiscardReceipt, error) {
-	return api.TaskDiscardReceipt{}, &api.Error{Kind: api.Unsupported, Message: "discard uses the actor discard port"}
-}

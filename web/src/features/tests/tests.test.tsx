@@ -129,14 +129,13 @@ it("TR filters through the API and switches to the frozen definition without exe
   expect(screen.getByText("test rules")).toBeVisible();
   expect(post).not.toHaveBeenCalled();
 });
-it("TR does not query while offline or hidden", async () => {
+it("TR does not query while offline or initially hidden", async () => {
   const offline = setup(false);
   expect(screen.getByText(/离线 · 以下为最后观察/)).toBeVisible();
   expect(offline.get).not.toHaveBeenCalled();
   cleanup();
-  vi.spyOn(document, "hidden", "get").mockReturnValue(true);
-  const hidden = setup();
-  expect(hidden.get).not.toHaveBeenCalled();
+  vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+  expect(setup().get).not.toHaveBeenCalled();
 });
 
 it("TR links only verified Runner origin to the product candidate", async () => {

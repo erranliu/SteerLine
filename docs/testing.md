@@ -1,5 +1,7 @@
 # 测试总入口
 
+查询、可见性与独立客户端精简的定向验证见[专属验收](acceptance/query-visibility-client-simplification.md)：共享查询键/取消、可见性生命周期、正式 actor 命令及保留独立读取；通用断言收口到共享测试，功能 owner 保留自身协议和业务要求，没有新增流程场景。
+
 执行页用量与费用接入的最小验证见[Plan](plans/run-usage-cost-ui.plan.md)和[验收](acceptance/run-usage-cost-ui.md)：CLI 原实例/快照绑定、调用方候选/目录身份与费用隔离、HTTP 只读边界、Web 部署字段保存纳入既有 L1 owner；前端组件定向验证部分/完整/未知/零、精度、查询取消及刷新。原生用量采集与计价矩阵继续由 Runner 所有，不新增完整执行场景。
 
 项目维护一键生成/全局 generate 队列的定向 L1 见 [Plan](plans/generate-queue.plan.md) 和 [验收](acceptance/generate-queue.md)。应用批量/进度/排队接管反例登记在 `quick-owner-generate-queue`；生成规则与 SQLite 留在既有规则包，配置保存归 `quick-owner-web-config`，未新增 E2E 场景或扩大 full。

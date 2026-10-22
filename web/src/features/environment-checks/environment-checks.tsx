@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { projectQueries } from "../../shared/api/queries";
+import { usePageVisible } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
 import type { CheckExecution, CheckRecord } from "./types";
 
@@ -230,7 +231,7 @@ export function EnvironmentChecks() {
   const { api, identity, online, send, busy } = useWorkspace();
   const client = useQueryClient();
   const queries = projectQueries(api);
-  const [visible, setVisible] = useState(document.visibilityState !== "hidden");
+  const visible = usePageVisible();
   // Read-only settings/history remain accessible while execution is unready.
   const enabled = visible;
   const catalog = useQuery({ ...queries.checkOptions(), enabled });
@@ -302,25 +303,23 @@ export function EnvironmentChecks() {
       settings: remote ? { ...source.settings, agent_launch: values } : values,
     });
   };
-  useEffect(() => {
+  const cancelChecks = useCallback(() => {
     const scope = [api.home, identity.project_id, identity.instance_id];
-    const cancel = () =>
-      client.cancelQueries({
-        predicate: (q) =>
-          scope.every((v, i) => q.queryKey[i] === v) &&
-          ["check", "checks", "check-options"].includes(String(q.queryKey[3])),
-      });
-    const update = () => {
-      const shown = document.visibilityState !== "hidden";
-      setVisible(shown);
-      if (!shown) void cancel();
-    };
-    document.addEventListener("visibilitychange", update);
-    return () => {
-      document.removeEventListener("visibilitychange", update);
-      void cancel();
-    };
+    return client.cancelQueries({
+      predicate: (q) =>
+        scope.every((v, i) => q.queryKey[i] === v) &&
+        ["check", "checks", "check-options"].includes(String(q.queryKey[3])),
+    });
   }, [api, client, identity.project_id, identity.instance_id]);
+  useEffect(() => {
+    if (!visible) void cancelChecks();
+  }, [visible, cancelChecks]);
+  useEffect(
+    () => () => {
+      void cancelChecks();
+    },
+    [cancelChecks],
+  );
   const act = async (
     action: string,
     target: string,

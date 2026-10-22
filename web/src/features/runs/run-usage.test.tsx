@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
@@ -139,54 +138,9 @@ it("polls visible partial data, retains the last amount on failure, and stops af
   expect(get).toHaveBeenCalledTimes(finalized);
   client.clear();
 });
-it("cancels selection requests and rejects foreign identities or mixed snapshots", async () => {
-  vi.useFakeTimers();
+it("rejects foreign identities or mixed snapshots", async () => {
   const api = new Api(identity, "csrf", "home");
   const client = testClient();
-  let oldSignal: AbortSignal | undefined;
-  let finish!: (v: unknown) => void;
-  vi.spyOn(api, "get").mockImplementation((path, signal) => {
-    if (path.includes("execution_id=execution")) {
-      oldSignal = signal;
-      return new Promise((resolve) => {
-        finish = resolve;
-      }) as never;
-    }
-    return Promise.resolve({
-      ...view(),
-      run_id: "next",
-      execution_id: "next-execution",
-      usage: null,
-      cost: null,
-      reason: "USAGE_UNSUPPORTED",
-    }) as never;
-  });
-  function Selected() {
-    const [next, setNext] = useState(false);
-    return (
-      <>
-        <button onClick={() => setNext(true)}>切换候选</button>
-        <RunUsage
-          run={
-            next
-              ? { ...run, run_id: "next", execution_id: "next-execution" }
-              : run
-          }
-        />
-      </>
-    );
-  }
-  const mounted = mountFeature(<Selected />, api, client);
-  await act(() => vi.advanceTimersByTimeAsync(1));
-  fireEvent.click(screen.getByText("切换候选"));
-  await act(() => vi.advanceTimersByTimeAsync(1));
-  expect(oldSignal?.aborted).toBe(true);
-  await act(async () => finish(view()));
-  expect(screen.queryByText(/USD 0.0533/)).not.toBeInTheDocument();
-  expect(screen.getByText("用量暂不支持")).toBeVisible();
-  mounted.unmount();
-  client.clear();
-  vi.useRealTimers();
   const get = vi.spyOn(api, "get");
   get.mockResolvedValue({ ...view(), execution_id: "foreign" });
   await expect(

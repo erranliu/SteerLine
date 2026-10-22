@@ -161,28 +161,57 @@ it.each([
   client.clear();
 });
 
-it("refreshes cached business and presentation data only for the current instance and home journal", async () => {
-  const client = testClient();
-  const api = new Api(identity, "csrf", "home");
-  const current = projectQueries(api).presentation().queryKey;
-  const other = projectQueries(
-    new Api({ ...identity, instance_id: "old" }, "csrf", "home"),
-  ).presentation().queryKey;
-  client.setQueryData(current, {
-    presentation: { profiles: [], default_profile_id: "" },
-  });
-  client.setQueryData(other, {
-    presentation: { profiles: [], default_profile_id: "" },
-  });
-  client.setQueryData(["home", "local-requests"], []);
-  await refreshProject(client, api);
-  expect(client.getQueryState(current)?.isInvalidated).toBe(true);
-  expect(client.getQueryState(other)?.isInvalidated).toBe(false);
-  expect(client.getQueryState(["home", "local-requests"])?.isInvalidated).toBe(
-    true,
-  );
-  client.clear();
-});
+it.each(["presentation", "taskMaterials", "candidateDocuments"] as const)(
+  "scopes %s refresh and cancellation to the current home/project/instance",
+  async (resource) => {
+    const client = testClient();
+    const api = new Api(identity, "csrf", "home");
+    const key = (a: Api) =>
+      (resource === "presentation"
+        ? projectQueries(a).presentation()
+        : projectQueries(a)[resource]("id")
+      ).queryKey;
+    const current = key(api);
+    const others = [
+      new Api(identity, "csrf", "other"),
+      new Api({ ...identity, project_id: "other" }, "csrf", "home"),
+      new Api({ ...identity, instance_id: "old" }, "csrf", "home"),
+    ].map(key);
+    [current, ...others].forEach((k) => client.setQueryData([...k], {}));
+    client.setQueryData(["home", "local-requests"], []);
+    await refreshProject(client, api);
+    expect(client.getQueryState(current)?.isInvalidated).toBe(true);
+    others.forEach((k) =>
+      expect(client.getQueryState(k)?.isInvalidated).toBe(false),
+    );
+    expect(
+      client.getQueryState(["home", "local-requests"])?.isInvalidated,
+    ).toBe(true);
+    if (resource !== "presentation") {
+      client.removeQueries({ queryKey: current });
+      let finish!: (value: unknown) => void;
+      const get = vi.spyOn(api, "get").mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }) as never,
+      );
+      const pending =
+        resource === "taskMaterials"
+          ? client.prefetchQuery(projectQueries(api).taskMaterials("id"))
+          : client.prefetchQuery(projectQueries(api).candidateDocuments("id"));
+      const signal = get.mock.calls[0][1];
+      await client.cancelQueries({
+        queryKey: [api.home, identity.project_id, identity.instance_id],
+      });
+      expect(signal?.aborted).toBe(true);
+      finish({ commit: "late" });
+      await pending;
+      expect(client.getQueryData(current)).toBeUndefined();
+    }
+    client.clear();
+  },
+);
 
 it("refreshes changed outcomes including unknown and rejection without treating a sampling timestamp as a change", () => {
   const receipt = { status: "accepted", sampled_at: "first" } as Receipt;

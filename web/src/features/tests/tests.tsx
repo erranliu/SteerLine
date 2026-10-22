@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
+import { usePageVisible } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
 import type {
   Catalogue,
@@ -32,14 +33,9 @@ const partial = (r: RecordRow) => (r.partial ? " · 部分范围" : "");
 export function Tests() {
   const { api, identity, online } = useWorkspace();
   const [params, setParams] = useSearchParams();
-  const [visible, setVisible] = useState(!document.hidden),
-    [view, setView] = useState("runs"),
+  const visible = usePageVisible();
+  const [view, setView] = useState("runs"),
     [showEvidence, setShowEvidence] = useState(false);
-  useEffect(() => {
-    const changed = () => setVisible(!document.hidden);
-    document.addEventListener("visibilitychange", changed);
-    return () => document.removeEventListener("visibilitychange", changed);
-  }, []);
   const base = [
     api.home,
     identity.project_id,

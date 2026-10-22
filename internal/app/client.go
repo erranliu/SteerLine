@@ -35,7 +35,7 @@ func openProjectClient(ctx context.Context, ref productapi.ProjectRef) (*product
 
 // openServiceProjectClientWithCommands borrows the runtime's task store and
 // command actor. Closing this client cannot close project-owned resources.
-func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *taskrunner.Actor, commands func(context.Context, bool) (productclient.TaskCommands, error), store *sqlite.SQLiteStore) (*productclient.Client, error) {
+func openServiceProjectClientWithCommands(ctx context.Context, config Config, service *taskrunner.Actor, commands func(context.Context) (productclient.TaskCommands, error), store *sqlite.SQLiteStore) (*productclient.Client, error) {
 	absolute, err := filepath.Abs(config.ConfigPath)
 	if err != nil {
 		return nil, err
@@ -119,37 +119,6 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 		},
 		OpenReader: func(ctx context.Context) (productclient.Reader, error) {
 			return openClientReader(ctx, c, freshness)
-		},
-		OpenCommands: func(ctx context.Context, mutation bool) (productclient.TaskCommands, error) {
-			cfg := c
-			s, err := OpenNativeTaskProject(ctx, &cfg)
-			if err != nil {
-				return nil, err
-			}
-			var lock *steerline.RepoLock
-			if mutation {
-				if err = s.Close(); err != nil {
-					return nil, err
-				}
-				lock, err = steerline.LockRepository(c.Identity())
-				if err != nil {
-					return nil, err
-				}
-				s, err = OpenNativeTaskCommandStore(ctx, &cfg)
-				if err != nil {
-					lock.Close()
-					return nil, err
-				}
-			}
-			commands, err := newClientCommands(s, c, lock)
-			if err != nil {
-				_ = s.Close()
-				if lock != nil {
-					lock.Close()
-				}
-				return nil, err
-			}
-			return commands, nil
 		},
 		Control: clientControl{config: c}, Decision: clientDecision{config: c},
 		OpenNativeSession: func(ctx context.Context, target productapi.NativeSessionTarget) error {

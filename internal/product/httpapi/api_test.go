@@ -232,8 +232,8 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 				AcceptedConfigVersion: "accepted-v1", ImplementationDisplay: []string{"Codex app-server"}, Details: []string{"Local fixture"}}}}}
 	client, err := productclient.Open(ctx, ref, func(context.Context, api.ProjectRef) (productclient.Resources, error) {
 		return productclient.Resources{Project: ref, OpenReader: func(context.Context) (productclient.Reader, error) { return reader, nil },
-			OpenCommands: func(context.Context, bool) (productclient.TaskCommands, error) { return apiCommands{}, nil },
-			Control:      control, Decision: decision, DefaultRequestedBy: "tester",
+			OpenCommands: func(context.Context) (productclient.TaskCommands, error) { return apiCommands{}, nil }, Discard: apiCommands{},
+			Control: control, Decision: decision, DefaultRequestedBy: "tester",
 			OpenNativeSession: func(_ context.Context, target api.NativeSessionTarget) error {
 				if reader.onOpenNative != nil {
 					return reader.onOpenNative(target)
