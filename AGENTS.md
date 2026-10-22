@@ -1,35 +1,12 @@
 # 项目默认规则
 
-SteerLine 目前尚未发布，目前任务是快速开发和跑通流程。
+SteerLine 尚未发布，以快速开发、跑通流程和简洁设计为默认目标。
+除非用户或当前 Spec 明确要求，不兼容先前开发版本的数据、数据库、配置或自身协议，不新增旧版读取、迁移、双写或回退路径。
 
-默认不兼容先前开发版本的数据、数据库、配置或 SteerLine 自身协议；
+普通开发由当前聊天直接实现，仅用户明确要求按 roadmap 调度时使用 roadmap-runner。
 
-除非用户或当前任务 Spec 明确要求，不新增旧版读取、迁移、双写或回退路径。
+开始相关工作前，按需读取并遵循：
 
-默认采用满足当前需求的简洁设计。
-
-普通开发需求由当前聊天直接实现，不要求先纳入 roadmap，也不默认交给 roadmap-runner、创建执行聊天或独立 worktree。用户明确要求按 roadmap 调度时才使用 roadmap-runner。
-
-SteerLine 临时调试、AI 自动调试及真实 PR 调试，统一先运行 `scripts/new-debug-release.ps1` 创建 `C:\SteerlineDebug` 下的独立环境；不得使用、修改或重置当前 `C:\SteerlineInstall` 或保留的 `C:\SteerlineRuntime` 安装环境。测试项目统一为 SteerlineTest；真实 PR 只针对 `erranliu/SteerlineTest` 的本次专属 base/head 分支。生成只有单一流程，复制源 `debug-template/`（含执行配置）由开发维护，默认运行 live，AI 使用 `--simulate` 显式选模拟方案。既有分级回归测试仍使用其隔离测试夹具，不可把安装目录当作测试现场。
-
-调试环境启动后冻结执行方案，换方案须生成新环境。重置入口 `reset-SteerlineTest.bat` 不备份，只重置本包任务/执行/UI 状态，保留任务定义、契约、依赖及 Git/PR 事实；活动服务、worker 或控制台阻止重置。不得通过复制安装版数据库、认证或配置准备调试现场。
-
-每次设计或修改 roadmap，先读取 `docs/roadmap/RoadmapGuide.md` 及其必需文档，再明确选定或新建 `docs/roadmap/drafts/` 下的草稿。roadmap-runner 只从用户已确认的 `docs/roadmap/execution-map.md` 选择，核对任务状态、依赖和明确前置，不依据草稿或已占编号启动任务；这些准入要求不适用于用户直接授权的普通开发。
-
-roadmap 任务在草稿阶段即可分配全局唯一 Task ID；纳入执行沿用该 ID，不重新编号。用户确认任务范围和依赖后写入 execution-map，作为 roadmap 调度的任务与依赖权威；启动时固定 Spec/Plan 的实际 Git commit 和路径。普通开发不强制占号、建立草稿或修改 execution-map。此流程不要求外部 SteerLine 中心准入、回执或 Task/DAG 版本，也不修改外部业务状态。SteerLine 产品自身的任务创建、中心 DAG 和 TaskDelivery 规则仍按产品契约执行。
-
-人工验收为主的活动不进入执行 DAG；自动验收可独立成任务或作为任务的一部分。所有自动/人工验收行为与已验/待验明细统一放在 `docs/acceptance/`。任务附带少量人工验收时尽量后置，不阻碍无关后续执行，真实失败、关键前置及明确先验门槛不豁免。`execution-map.md` 是仓库内执行与验收汇总的真相源，须链接未验收文档；roadmap 开发任务经实现、独立复审、必要自动验证和真实 PR 合并核验后记为实现完成，并同步验收结果；前置成果进入最新主干后才释放后继。已纳入任务不必立即移出草稿，执行完成后再移除；草稿不严格维护实时状态。
-
-spec文档里，如果要设计验证需求，默认只做最小必要验证。
-
-设计或修改 worker 流程、异常处理、重试和恢复行为时，先读取 `docs/product-design/worker-lifecycle.md`，同步其节点/异常/验证矩阵及当前实现缺口。统一规则在该文档维护，任务 Spec/Plan 链接并说明本次差异，不另建平行状态机或复制整套处理规则。
-
-任务在 roadmap 草稿阶段就规划自动/人工验收并链接 `docs/acceptance/` 的专属文档，不等纳入执行才补建。任务与验收文档是一对一或一对多关系，一份任务验收文档只归属一个任务，不覆盖多个任务；未定步骤/环境/人工窗口明确记录待定。规划提示词鼓励同时识别独立验收活动并链接其文档，不将这些活动强制串入执行路径、自动占 Task ID 或入 DAG。
-
-尽量不要跑全量测试，已经提供了最小测试入口，实在要跑全量的话有并行测试入口
-
-测试架构直接采用 [开发项目测试架构规范](SteerlineProjectGuideDoc/testing-architecture.md)；通用 L1–L4 定义、正交设计和清单维护规则在该文档维护。本项目执行入口、实际场景及未对齐项见 `docs/testing.md` 与 `tests/e2e/README.md`。
-
-新编写或本次修改的实现 Plan 应包含“测试计划”：按最小必要范围列出测试级别、组/场景 ID、环境、命令、执行时点、通过条件和证据位置；需要新增场景或测试环境能力时一并规划。未选择相关组时简述原因，不要求所有任务默认跑 L2/L3 或 full。分级入口与扩展约定见 `tests/e2e/README.md`。
-
-Plan 的测试计划必须覆盖本任务范围内全部自动验收项，按验收项 ID 链接任务专属验收文档，并映射到场景/命令、环境、时点、通过条件与证据登记位置；可由同一场景覆盖多个项，不要求每项单独脚本。缺少自动化工具/驱动/环境能力时写入实施步骤或明确前置，不只写“后续补验”。草稿可标待定，纳入执行前明确验证方式和能力补齐安排，执行验收前落实可用入口。执行自动验收并更新 acceptance 明细属于交付安排；roadmap 任务另同步 execution-map 汇总；Plan 不维护实时结果。人工项单列参与窗口和阻塞范围，允许后置项不变成无关任务的等待步骤。
+- 编写或修改 Spec / Plan：[编写规范](SteerlineProjectGuideDoc/spec-plan-guidelines.md)。
+- 测试、验收或临时/AI/真实 PR 调试：[测试指南](docs/testing.md)。
+- 规划、修改或执行 roadmap：[RoadmapGuide](docs/roadmap/RoadmapGuide.md) 及其必需文档。
