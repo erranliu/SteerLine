@@ -88,6 +88,9 @@ func (s *Store) read() (Config, []byte, error) {
 	if err = cfg.Decode(raw, &c); err != nil {
 		return c, nil, failure(400, "invalid_configuration", err.Error())
 	}
+	if _, err = cfg.GenerateConcurrency(c.MaxGenerateConcurrency); err != nil {
+		return c, nil, failure(400, "invalid_configuration", err.Error())
+	}
 	if err = cfg.Validate(c.Version, c.DefaultProfile, c.Profiles); err != nil {
 		return c, nil, failure(400, "invalid_configuration", err.Error())
 	}
@@ -148,6 +151,9 @@ func (s *Store) validate(ctx context.Context, raw []byte) (Config, error) {
 	}
 	if proposed.Version != current.Version || proposed.Runner != current.Runner {
 		return proposed, failure(400, "deployment_read_only", "Runner deployment pin cannot be changed here")
+	}
+	if _, err = cfg.GenerateConcurrency(proposed.MaxGenerateConcurrency); err != nil {
+		return proposed, failure(400, "invalid_configuration", err.Error())
 	}
 	if err = cfg.Validate(proposed.Version, proposed.DefaultProfile, proposed.Profiles); err != nil {
 		return proposed, failure(400, "invalid_configuration", err.Error())

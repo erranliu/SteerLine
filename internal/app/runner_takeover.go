@@ -35,6 +35,7 @@ func (d *ApplicationDirectory) prepareRunnerStops(ctx context.Context, cli *runn
 		if err != nil {
 			return nil, err
 		}
+		c.runtimeGenerations = d.runner.generations
 		stops, err := prepareProjectRunnerStops(ctx, &c, cli)
 		if err != nil {
 			return nil, fmt.Errorf("%s startup recovery: %w", entry.view.ConfigID, err)
@@ -63,6 +64,15 @@ func prepareProjectRunnerStops(ctx context.Context, c *Config, cli *runnerclient
 		return nil, err
 	}
 	defer store.Close()
+	if c.runtimeGenerations != nil {
+		rows, err := store.Generations(ctx, c.Identity())
+		if err != nil {
+			return nil, err
+		}
+		for _, g := range rows {
+			c.runtimeGenerations.Update(g)
+		}
+	}
 	generationStops, err := prepareGenerationStops(ctx, store, c.Identity(), cli)
 	if err != nil {
 		return nil, err

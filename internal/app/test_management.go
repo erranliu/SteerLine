@@ -29,7 +29,7 @@ type testManagementPort struct {
 }
 
 func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error) *testManagementPort {
-	s := &testmanagement.GenerationService{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Admit: admit}
+	s := &testmanagement.GenerationService{Project: c.Identity(), Repository: c.Repository, Store: store, Runner: cli, Build: cli.BuildPin(), Admit: admit, Queue: c.runtimeGenerations}
 	s.Prepare = func(ctx context.Context, id string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		p, err := c.RunnerExecution.Profile(id, "")
 		if err != nil {

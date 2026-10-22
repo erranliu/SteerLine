@@ -10,9 +10,9 @@ import (
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 func maintenanceResponse(in httpcontract.CommandEnvelope) httpcontract.CommandResponse {
@@ -67,6 +67,10 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 			out.Diagnostic = e.Error()
 			var external *runnerclient.Failure
 			durableUnknown := false
+			if in.Action == "maintenance_generate_all" {
+				_, readErr := p.config.runtimeMaintenance.store.MaintenanceReceipt(context.WithoutCancel(ctx), p.config.Identity(), in.RequestID)
+				durableUnknown = readErr == nil
+			}
 			if in.Action == "maintenance_retry" {
 				g, readErr := p.config.runtimeMaintenance.store.Generation(context.WithoutCancel(ctx), p.config.Identity(), in.RequestID)
 				durableUnknown = readErr == nil && g.State != "rejected"
@@ -156,32 +160,19 @@ func (p *runtimeProjectPort) maintenanceAction(ctx context.Context, in httpcontr
 		if in.TargetID != v.TaskID || in.ExpectedVersion != 1 {
 			return nil, errors.New("retry target mismatch")
 		}
-		store := m.store.(materialStore)
-		material, e := store.Material(ctx, m.config.Identity(), v.TaskID)
-		if e != nil {
-			return nil, e
+		g, e := m.retryGeneration(ctx, v.TaskID, in.RequestID)
+		if e == nil {
+			e = m.syncGenerationBatch(ctx)
 		}
-		if material.Status != "failed" && material.Status != "invalid" && material.Status != "rejected" && material.Status != "cancelled" {
-			return nil, errors.New("原生成尚未明确失败")
-		}
-		if g, e := m.store.Generation(ctx, m.config.Identity(), material.GenerationID); e == nil {
-			if !(g.State == "rejected" && g.RunID == "") && (g.Projection == nil || g.Projection.StopStatus != "stopped") {
-				return nil, errors.New("原生成停止或资源仍待核实，请稍后重试")
-			}
-		}
-		material.GenerationID = in.RequestID
-		material.Status = "pending"
-		material.Diagnostic = ""
-		// Generate uses the new explicit request; original unknown operations are not retried.
-		profile := store.MaterialProfile(ctx, m.config.Identity())
-		if profile == "" {
-			profile = m.config.RunnerExecution.DefaultProfile
-		}
-		if e = store.SaveMaterial(ctx, m.config.Identity(), material); e != nil {
-			return nil, e
-		}
-		g, e := m.tests.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: in.RequestID, Plan: material.Contract.PlanRef.Path, Profile: profile, Commit: material.Commit})
 		return publicGeneration(g), e
+	case "maintenance_generate_all":
+		if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
+			return nil, errors.New("generation target/version mismatch")
+		}
+		if err := decodeStrictJSON(in.Payload, &struct{}{}); err != nil {
+			return nil, err
+		}
+		return m.generateAll(ctx, in.RequestID)
 	case "maintenance_stop_generation":
 		var v api.TestStopGenerationRequest
 		if e := decodeStrictJSON(in.Payload, &v); e != nil {
@@ -213,6 +204,14 @@ func (p *runtimeProjectPort) maintenanceReceipt(ctx context.Context, id string) 
 	if e == nil && out.Status == "outcome_unknown" {
 		var value any
 		switch in.Action {
+		case "maintenance_generate_all":
+			if raw, err := p.config.runtimeMaintenance.store.MaintenanceReceipt(ctx, p.config.Identity(), in.RequestID); err == nil {
+				var batch pm.GenerationBatch
+				if json.Unmarshal(raw, &batch) == nil && batch.ID == in.RequestID && batch.Processed {
+					value = p.config.runtimeMaintenance.batchProgress(ctx, batch)
+					out.Status = "applied"
+				}
+			}
 		case "maintenance_update":
 			fact, e := p.config.runtimeMaintenance.observeUpdate(ctx, in.RequestID)
 			if e == nil {

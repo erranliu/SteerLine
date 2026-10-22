@@ -107,6 +107,7 @@ type pmsStore struct {
 	materials   map[string]pm.Material
 	generations map[string]testmanagement.Generation
 	receipts    map[string]json.RawMessage
+	batch       pm.GenerationBatch
 	profile     string
 	candidates  map[string]runnerstate.Candidate
 }
@@ -579,4 +580,12 @@ func TestPMSBaselineGiteaPRMetadata(t *testing.T) {
 			}
 		})
 	}
+}
+
+func (s *pmsStore) GenerationBatch(context.Context, string) (pm.GenerationBatch, error) {
+	return s.batch, nil
+}
+func (s *pmsStore) SaveGenerationBatch(_ context.Context, _ string, b pm.GenerationBatch) error {
+	s.batch = b
+	return nil
 }

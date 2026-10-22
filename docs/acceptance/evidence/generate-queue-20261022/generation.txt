@@ -1,0 +1,52 @@
+=== RUN   TestGenerationQueueSharedLimitAndFIFO
+--- PASS: TestGenerationQueueSharedLimitAndFIFO (0.33s)
+=== RUN   TestGenerationQueueCancelAndRestartUnknown
+--- PASS: TestGenerationQueueCancelAndRestartUnknown (0.14s)
+=== RUN   TestGenerationQueueResumeOnlyUnsubmittedOutbox
+--- PASS: TestGenerationQueueResumeOnlyUnsubmittedOutbox (0.05s)
+=== RUN   TestGenerationQueuePersistenceWindowsAndBuildChange
+=== RUN   TestGenerationQueuePersistenceWindowsAndBuildChange/unknown
+=== RUN   TestGenerationQueuePersistenceWindowsAndBuildChange/accepted
+--- PASS: TestGenerationQueuePersistenceWindowsAndBuildChange (0.17s)
+    --- PASS: TestGenerationQueuePersistenceWindowsAndBuildChange/unknown (0.06s)
+    --- PASS: TestGenerationQueuePersistenceWindowsAndBuildChange/accepted (0.06s)
+=== RUN   TestTMGenerationSaveAndReplay
+--- PASS: TestTMGenerationSaveAndReplay (0.05s)
+=== RUN   TestTMGenerationFailureAndEmptyKeepFile
+=== RUN   TestTMGenerationFailureAndEmptyKeepFile/{"tests":[]}
+=== RUN   TestTMGenerationFailureAndEmptyKeepFile/{"tests":["unknown"]}
+=== RUN   TestTMGenerationFailureAndEmptyKeepFile/{"tests":["unit.rules","unit.rules"]}
+--- PASS: TestTMGenerationFailureAndEmptyKeepFile (0.19s)
+    --- PASS: TestTMGenerationFailureAndEmptyKeepFile/{"tests":[]} (0.06s)
+    --- PASS: TestTMGenerationFailureAndEmptyKeepFile/{"tests":["unknown"]} (0.06s)
+    --- PASS: TestTMGenerationFailureAndEmptyKeepFile/{"tests":["unit.rules","unit.rules"]} (0.07s)
+=== RUN   TestTMGenerationPersistenceAndUnknown
+--- PASS: TestTMGenerationPersistenceAndUnknown (0.06s)
+=== RUN   TestTMGenerationChangesAndRestart
+--- PASS: TestTMGenerationChangesAndRestart (0.06s)
+=== RUN   TestTMGenerationCompatibleBuildObservesOriginalWithoutResubmit
+--- PASS: TestTMGenerationCompatibleBuildObservesOriginalWithoutResubmit (0.06s)
+PASS
+ok  	github.com/erranliu/SteerLine/internal/testmanagement	2.531s
+=== RUN   TestGQDurableBatchAndSubmissionBoundary
+--- PASS: TestGQDurableBatchAndSubmissionBoundary (0.21s)
+=== RUN   TestTMGenerationStoreCASAndImmutableRequest
+--- PASS: TestTMGenerationStoreCASAndImmutableRequest (0.13s)
+PASS
+ok  	github.com/erranliu/SteerLine/internal/storage/sqlite	2.385s
+=== RUN   TestGQBatchReusesActiveAndPersistsCompletion
+--- PASS: TestGQBatchReusesActiveAndPersistsCompletion (7.21s)
+=== RUN   TestGQPreparationFailureDoesNotLookQueued
+--- PASS: TestGQPreparationFailureDoesNotLookQueued (8.69s)
+=== RUN   TestGQBatchRetriesSettledFailureOnceAndBlocksUnknown
+--- PASS: TestGQBatchRetriesSettledFailureOnceAndBlocksUnknown (10.73s)
+=== RUN   TestPMSGenerationFreshnessAndCandidateVersions
+--- PASS: TestPMSGenerationFreshnessAndCandidateVersions (23.15s)
+=== RUN   TestPMSGenerationUnknownDoesNotOfferAutomaticRetry
+--- PASS: TestPMSGenerationUnknownDoesNotOfferAutomaticRetry (8.87s)
+=== RUN   TestTMGenerationTakeoverAndDurableStartupStop
+--- PASS: TestTMGenerationTakeoverAndDurableStartupStop (0.13s)
+=== RUN   TestGQQueuedGenerationNeedsNoRunnerTakeoverOrStop
+--- PASS: TestGQQueuedGenerationNeedsNoRunnerTakeoverOrStop (0.08s)
+PASS
+ok  	github.com/erranliu/SteerLine/internal/app	62.437s

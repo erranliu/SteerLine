@@ -180,6 +180,14 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 			profiles = append(profiles, profile{p.ID, p.Name})
 		}
 	}
+	var progress pm.GenerationProgress
+	if batchStore, ok := m.store.(generationBatchStore); ok {
+		batch, err := batchStore.GenerationBatch(ctx, m.config.Identity())
+		if err != nil && !errors.Is(err, storageports.ErrNotFound) {
+			return nil, err
+		}
+		progress = m.batchProgress(ctx, batch)
+	}
 	local := m.localBaseline(ctx)
 	remote := m.commitInfo(ctx, o.Commit, true)
 	localInfo := remote
@@ -187,15 +195,16 @@ func (m *projectMaintenance) baselineView(ctx context.Context) (any, error) {
 		localInfo = m.commitInfo(ctx, local.Commit, false)
 	}
 	return struct {
-		Observation pm.Observation `json:"observation"`
-		LocalInfo   baselineCommit `json:"local_info"`
-		RemoteName  string         `json:"remote_name"`
-		Remote      baselineCommit `json:"remote"`
-		Local       localBaseline  `json:"local"`
-		Tasks       []pm.Material  `json:"tasks"`
-		Profiles    []profile      `json:"profiles"`
-		Profile     string         `json:"profile"`
-	}{o, localInfo, m.config.Remote + "/" + m.config.Branch, remote, local, materials, profiles, store.MaterialProfile(ctx, m.config.Identity())}, nil
+		Observation pm.Observation        `json:"observation"`
+		LocalInfo   baselineCommit        `json:"local_info"`
+		RemoteName  string                `json:"remote_name"`
+		Remote      baselineCommit        `json:"remote"`
+		Local       localBaseline         `json:"local"`
+		Tasks       []pm.Material         `json:"tasks"`
+		Profiles    []profile             `json:"profiles"`
+		Profile     string                `json:"profile"`
+		Progress    pm.GenerationProgress `json:"generation_progress"`
+	}{o, localInfo, m.config.Remote + "/" + m.config.Branch, remote, local, materials, profiles, store.MaterialProfile(ctx, m.config.Identity()), progress}, nil
 }
 func generationProfile(p RunnerProfile) (bool, error) {
 	if p.Execution.Adapter != "codex-app-server" || p.Execution.Target.Kind != "local" {

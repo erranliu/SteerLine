@@ -1,5 +1,7 @@
 # 测试总入口
 
+项目维护一键生成/全局 generate 队列的定向 L1 见 [Plan](plans/generate-queue.plan.md) 和 [验收](acceptance/generate-queue.md)。应用批量/进度/排队接管反例登记在 `quick-owner-generate-queue`；生成规则与 SQLite 留在既有规则包，配置保存归 `quick-owner-web-config`，未新增 E2E 场景或扩大 full。
+
 可靠性交付简化的本批定向验证见[实施 Plan](plans/reliability-simplification.plan.md)和[验收](acceptance/reliability-simplification.md)：Go 部署目标/一次恢复、实际命令完整绑定、同快照观察与 CAS；新用例进入既有 L1 owner 分区，公开 CLI 联验另用实际固定 Runner，未运行完整 L2/L3 或安装环境。
 
 部署中断自动恢复的最小验证见[Plan](plans/deployment-interrupted-recovery.plan.md)与[验收](acceptance/deployment-interrupted-recovery.md)：固定 L1 `quick-owner-deployment-recovery` 验证缺失/陈旧回执的恢复准入、readiness、新停机证明及失败围栏；CLI 参数归 `quick-owner-runner-preflight-cli`。脚本路由另运行 `scripts/test-deployment-stop.ps1`，不使用安装现场或真实 OS 重启。

@@ -69,6 +69,7 @@ var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
 }{
+	{"quick-owner-generate-queue", "github.com/erranliu/SteerLine/internal/app", []string{"TestGQBatchReusesActiveAndPersistsCompletion", "TestGQBatchRetriesSettledFailureOnceAndBlocksUnknown", "TestGQQueuedGenerationNeedsNoRunnerTakeoverOrStop", "TestGQPreparationFailureDoesNotLookQueued"}},
 	{"quick-owner-project-maintenance", "github.com/erranliu/SteerLine/internal/projectmaintenance", []string{"TestPMSMaterialInputsDoNotRequireArrangement"}},
 	{"quick-owner-project-connection", "github.com/erranliu/SteerLine/internal/projectconnection", []string{"TestWebSwitchResolverInheritedPipeIsBounded", "TestWebSwitchResolverRejectsInvalidOutput", "TestWebSwitchResolverCurrentConfigEncoding"}},
 	{"quick-owner-application-http", "github.com/erranliu/SteerLine/internal/product/applicationhttp", []string{"TestPMReadRoutesKeepMaintenanceWritesOnCommands", "TestUnifiedStartupAuthenticationRoutesAndUnavailable", "TestUnifiedStartupOriginalEnvelopeAndInflightIsolation"}},
@@ -77,7 +78,7 @@ var quickOwnerCases = []struct {
 	{"quick-owner-test-records-producer", "github.com/erranliu/SteerLine/cmd/test-feedback", []string{"TestTRProducerUnknownGitDoesNotBecomeFakeCommit", "TestTRProducerFreezesDefinitionAndIDsBeforeExecution", "TestTRProducerRejectsAmbiguousRecordSelections", "TestTMManagedResultsPreserveFailureAndNoMatch", "TestTMRegisteredCatalogueMatchesExecutableManifest"}},
 	{"quick-owner-application-client", "github.com/erranliu/SteerLine/internal/product/applicationclient", []string{"TestTRRegisterEncodedBudgetAndUnknownOutcome", "TestWebSwitchReconnectAndHome"}},
 	{"quick-owner-web", "github.com/erranliu/SteerLine/web/server", []string{"TestWebExecutionConfigRoutes", "TestWebAuthenticationAndOriginalForwarding", "TestWebOriginHostAndStaticBoundaries", "TestWebTicketsAreSingleUseAndExpire", "TestWebAddressAndPortConflict", "TestWebLauncherPrivateDiscoveryAndInstance", "TestWebBoundedWritesAndNoBrowserStop", "TestWebSwitchSessionAndNativeStop", "TestWebSwitchDevelopmentProxyAndLease", "TestWebSwitchHomeConfigPreservesPermissions"}},
-	{"quick-owner-web-config", "github.com/erranliu/SteerLine/web/server/executionconfig", []string{"TestExecutionConfigSave", "TestExecutionConfigConcurrentAndFrozen", "TestExecutionConfigSchemaAndPreservation", "TestExecutionConfigStatusIsReadOnly", "TestLocalOrcaConfiguration"}},
+	{"quick-owner-web-config", "github.com/erranliu/SteerLine/web/server/executionconfig", []string{"TestExecutionConfigSave", "TestExecutionConfigConcurrentAndFrozen", "TestExecutionConfigSchemaAndPreservation", "TestExecutionConfigStatusIsReadOnly", "TestLocalOrcaConfiguration", "TestGQConcurrencySaveAndValidation"}},
 	{"quick-owner-web-discovery", "github.com/erranliu/SteerLine/web/server/discovery", []string{"TestCodexCatalog", "TestEnvironmentDirectory", "TestOrcaCapabilityWire", "TestDiscoverySharingCancellationAndCache", "TestLocalOrcaCatalog"}},
 	{"quick-owner-http-budget", "github.com/erranliu/SteerLine/internal/product/httpclient", []string{"TestBoundedClientBudgetPreservesAuthenticationAndCancellation"}},
 	{"quick-execution", executionPackage, quickExecutionTests},

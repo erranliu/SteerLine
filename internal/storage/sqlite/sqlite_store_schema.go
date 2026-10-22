@@ -61,7 +61,7 @@ var nativeTaskSchema = []string{
 	`CREATE INDEX test_records_time ON test_records(project_identity,started_at DESC,record_id DESC)`,
 	`CREATE TABLE maintenance_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, digest TEXT NOT NULL, result BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
 	`CREATE TABLE project_materials (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,task_id))`,
-	`CREATE TABLE maintenance_settings (project_identity TEXT PRIMARY KEY, profile TEXT NOT NULL, observation BLOB)`,
+	`CREATE TABLE maintenance_settings (project_identity TEXT PRIMARY KEY, profile TEXT NOT NULL, observation BLOB, generation_batch BLOB)`,
 	`CREATE TABLE test_generations (project_identity TEXT NOT NULL, generation_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,generation_id))`,
 	`CREATE TABLE test_evidence (projected_artifacts INTEGER NOT NULL DEFAULT 0, project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,
 	`CREATE TABLE test_generation_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, generation_id TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,generation_id) REFERENCES test_generations(project_identity,generation_id))`,

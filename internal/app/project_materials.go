@@ -64,7 +64,7 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 	}
 	observed := m.current()
 	if observed.Commit == "" || observed.Diagnostic != "" {
-		return nil
+		return m.completeGenerationBatch(ctx)
 	}
 	graph, e := m.store.TaskGraphSnapshot(ctx, m.config.Identity())
 	if e != nil {
@@ -118,6 +118,9 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 			}
 			material.GenerationID = chosen.ID
 			material.Status = chosen.State
+			if chosen.Cancelled {
+				material.Status = "cancelled"
+			}
 			material.Diagnostic = chosen.Diagnostic
 			if chosen.State == "generated" {
 				definitions, err := testmanagement.Select(chosen.Result, chosen.Catalogue)
@@ -147,7 +150,7 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 			} else {
 				busy := false
 				for _, g := range rows {
-					if g.Command.Plan != material.Contract.PlanRef.Path || g.State == "rejected" && g.RunID == "" || g.Projection != nil && g.Projection.StopStatus == "stopped" {
+					if g.Command.Plan != material.Contract.PlanRef.Path || g.Settled() {
 						continue
 					}
 					busy = true
@@ -171,7 +174,8 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 				if e = store.SaveMaterial(ctx, m.config.Identity(), material); e != nil {
 					return e
 				}
-				_, err = m.tests.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: material.GenerationID, Plan: material.Contract.PlanRef.Path, Profile: profile, Commit: observed.Commit})
+				generated, generateErr := m.tests.service.Generate(ctx, testmanagement.GenerateCommand{RequestID: material.GenerationID, Plan: material.Contract.PlanRef.Path, Profile: profile, Commit: observed.Commit})
+				err = generateErr
 				if err != nil {
 					material.Status = "failed"
 					var failure *runnerclient.Failure
@@ -179,8 +183,11 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 						material.Status = "unknown"
 					}
 					material.Diagnostic = err.Error()
+					if saved, readErr := m.store.Generation(ctx, m.config.Identity(), material.GenerationID); readErr == nil {
+						material.Status = saved.State
+					}
 				} else {
-					material.Status = "accepted"
+					material.Status = generated.State
 				}
 			}
 		}
@@ -204,13 +211,13 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 			return e
 		}
 		for _, g := range rows {
-			if wanted[g.Command.Plan+"\n"+g.Inputs] || g.Cancelled || g.State == "rejected" && g.RunID == "" || g.Projection != nil && g.Projection.StopStatus == "stopped" {
+			if wanted[g.Command.Plan+"\n"+g.Inputs] || g.Cancelled || g.Settled() {
 				continue
 			}
 			_, _ = m.tests.service.Stop(ctx, g.ID, pmm.Hash([]string{g.ID, "superseded"})[:32])
 		}
 	}
-	return nil
+	return m.syncGenerationBatch(ctx)
 }
 
 func (m *projectMaintenance) freshness(ctx context.Context, c runnerstate.Candidate) string {

@@ -284,6 +284,9 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 			cli.Takeover = takeover[0]
 		}
 		for _, g := range generations {
+			if g.Unsubmitted() {
+				continue
+			}
 			if interrupted {
 				if g.State == "rejected" && g.RunID == "" {
 					continue
@@ -313,6 +316,9 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 			byRun[run.RunID] = run
 		}
 		for _, g := range generations {
+			if g.Unsubmitted() {
+				continue
+			}
 			if canonicalPath(g.Runner.StateDir) != canonicalPath(runnerProof.StateDir) {
 				return proof, errors.New("generation Runner namespace differs")
 			}

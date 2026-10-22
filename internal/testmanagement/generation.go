@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -48,6 +49,7 @@ type GenerationService struct {
 	Prepare             func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error)
 	Admit               func(context.Context) error
 	VerifyBinding       func(Generation) error
+	Queue               *GenerationQueue
 	mu                  sync.Mutex
 	ReadCommitted       func(context.Context, string, string) ([]byte, error)
 }
@@ -126,7 +128,8 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		return Generation{}, err
 	}
 	for _, g := range previous {
-		if g.Command.Plan != in.Plan || g.State == "rejected" && g.RunID == "" {
+		s.queue().Update(g)
+		if g.Command.Plan != in.Plan || g.Settled() {
 			continue
 		}
 		if g.Projection == nil || g.Projection.StopStatus != "stopped" {
@@ -137,7 +140,7 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	if err != nil {
 		return Generation{}, err
 	}
-	r := Generation{ID: in.RequestID, Project: s.Project, Revision: 1, Command: in, CreatedAt: time.Now().UTC(), Runner: s.Build, Target: target, State: "unknown", Sources: []Source{}}
+	r := Generation{ID: in.RequestID, Project: s.Project, Revision: 1, Command: in, CreatedAt: time.Now().UTC(), Runner: s.Build, Target: target, State: "queued", Submission: "pending", Sources: []Source{}}
 	materials := []runnercontract.Document{}
 	for _, p := range []string{in.Plan, RulesPath, CataloguePath} {
 		raw, e := ReadProjectFile(s.Repository, p)
@@ -196,6 +199,51 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	if err = s.Store.SaveGeneration(ctx, r, 0); err != nil {
 		return r, err
 	} // external submission is forbidden before this commit.
+	s.queue().Update(r)
+	return s.dispatch(ctx, r)
+}
+
+func (s *GenerationService) queue() *GenerationQueue {
+	if s.Queue == nil {
+		s.Queue = NewGenerationQueue(5)
+	}
+	return s.Queue
+}
+
+func (s *GenerationService) dispatch(ctx context.Context, r Generation) (Generation, error) {
+	if !r.Unsubmitted() || r.Cancelled {
+		return r, nil
+	}
+	// No Run exists to take over for an unsent request. A different build must
+	// not execute it and then leave the new Run bound to the old build pin.
+	if r.Runner != s.Build {
+		r.State = "rejected"
+		r.Diagnostic = "排队期间 Runner 构建已变化，请一键生成或重试以使用当前构建"
+		r.Revision++
+		if err := s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
+			return r, err
+		}
+		s.queue().Update(r)
+		return r, nil
+	}
+	if s.Admit != nil {
+		if err := s.Admit(ctx); err != nil {
+			return r, err
+		}
+	}
+	if !s.queue().acquire(r) {
+		return r, nil
+	}
+	// Commit the ambiguity boundary before the external call. Recovery only
+	// inspects the original request after this commit, including a crash here.
+	r.State, r.Submission = "unknown", "started"
+	r.Revision++
+	if err := s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
+		r.State, r.Submission = "queued", "pending"
+		r.Revision--
+		s.Queue.Update(r)
+		return r, err
+	}
 	receipt, submitErr := s.Runner.Submit(ctx, r.Request)
 	if submitErr != nil {
 		r.Diagnostic = submitErr.Error()
@@ -208,9 +256,10 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		r.State = "accepted"
 	}
 	r.Revision++
-	if err = s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
+	if err := s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
 		return r, err
 	}
+	s.Queue.Update(r)
 	return r, submitErr
 }
 func (s *GenerationService) Observe(ctx context.Context) error {
@@ -220,11 +269,21 @@ func (s *GenerationService) Observe(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].CreatedAt.Before(rows[j].CreatedAt) })
+	for _, r := range rows {
+		s.queue().Update(r)
+	}
 	for _, r := range rows {
 		if r.State == "rejected" {
 			continue
 		}
-		if _, e := s.observe(ctx, r); e != nil {
+		var e error
+		if r.Unsubmitted() {
+			_, e = s.dispatch(ctx, r)
+		} else {
+			_, e = s.observe(ctx, r)
+		}
+		if e != nil {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -330,6 +389,9 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 	}
 	r.Revision++
 	err = s.Store.SaveGeneration(ctx, r, r.Revision-1)
+	if err == nil {
+		s.queue().Update(r)
+	}
 	return r, err
 }
 func (s *GenerationService) Stop(ctx context.Context, id, stopID string) (Generation, error) {
@@ -351,6 +413,10 @@ func (s *GenerationService) Stop(ctx context.Context, id, stopID string) (Genera
 	r.Revision++
 	if err = s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
 		return r, err
+	}
+	if r.Unsubmitted() {
+		s.queue().Update(r)
+		return r, nil
 	}
 	return s.observe(ctx, r)
 }

@@ -660,4 +660,29 @@
   border: 0;
 }
 
-.execution-config-app label { color: var(--sl-text); }
+.execution-config-app label {
+  color: var(--sl-text);
+}
+
+.execution-config-app .sl-generation-settings {
+  background: var(--sl-panel);
+  border: 1px solid var(--sl-line);
+  border-radius: 7px;
+  padding: 14px;
+  margin-bottom: 17px;
+}
+.execution-config-app .sl-generation-settings label {
+  font-weight: 500;
+}
+.execution-config-app .sl-generation-settings input {
+  width: 80px;
+  padding: 6px 8px;
+  border: 1px solid var(--sl-line);
+  border-radius: 5px;
+  background: var(--sl-bg);
+}
+.execution-config-app .sl-generation-settings p {
+  color: var(--sl-muted);
+  font-size: 12px;
+  margin: 8px 0;
+}

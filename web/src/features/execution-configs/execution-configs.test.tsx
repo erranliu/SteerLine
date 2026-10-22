@@ -519,3 +519,17 @@ it("selects an Orca-provided Pi provider without storing credentials or widening
   expect(screen.queryByLabelText("Provider")).toBeNull();
   expect(screen.getByLabelText("Agent")).toHaveValue("codex");
 });
+
+it("GQ saves global generation concurrency and requires restart", async () => {
+  const writes = fixture();
+  const input = await screen.findByLabelText("生成最大并发数");
+  expect(input).toHaveValue(5);
+  fireEvent.change(input, { target: { value: "0" } });
+  expect(screen.getByRole("button", { name: "保存生成并发" })).toBeDisabled();
+  fireEvent.change(input, { target: { value: "3" } });
+  fireEvent.click(screen.getByRole("button", { name: "保存生成并发" }));
+  await screen.findByText("配置已保存，待重启生效");
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toMatchObject({ max_generate_concurrency: 3, default_execution_profile: "local" });
+  expect(screen.getByRole("button", { name: "保存生成并发" })).toBeDisabled();
+});

@@ -136,6 +136,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 		return result, err
 	}
 	r.config.runtimeRunner = &runner.client
+	r.config.runtimeGenerations = runner.generations
 	r.config.runtimeCatalog = runner.catalog
 	if retErr = bindRunnerBuild(ctx, r.config, r.store); retErr != nil {
 		return

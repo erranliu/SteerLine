@@ -74,3 +74,19 @@ func TestTMGenerationTakeoverAndDurableStartupStop(t *testing.T) {
 		t.Fatal("changed input matched by request ID")
 	}
 }
+
+func TestGQQueuedGenerationNeedsNoRunnerTakeoverOrStop(t *testing.T) {
+	ctx := context.Background()
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
+	require(t, err)
+	defer store.Close()
+	g := testmanagement.Generation{ID: strings.Repeat("f", 32), Project: "project", Revision: 1, State: "queued", Submission: "pending", Request: runnercontract.Request{RequestID: "never-sent"}}
+	require(t, store.SaveGeneration(ctx, g, 0))
+	cli := runnerclient.Client{} // No executable: any Runner call would fail.
+	require(t, verifyGenerationTakeover(g, cli))
+	stops, err := prepareGenerationStops(ctx, store, g.Project, &cli)
+	require(t, err)
+	if len(stops) != 0 {
+		t.Fatal(stops)
+	}
+}

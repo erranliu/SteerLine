@@ -1,0 +1,12 @@
+
+> steerline-web@0.1.0 test
+> vitest run src/features/project-maintenance/project-maintenance.test.tsx src/features/execution-configs/execution-configs.test.tsx
+
+
+ RUN  v5.0.4 C:/Users/lmas1/.codex/worktrees/06bb/SteerLine/web
+
+
+ Test Files  2 passed (2)
+      Tests  20 passed (20)
+   Start at  10:40:57
+   Duration  10.12s (environment 45%, tests 38%, setup 9%, import 5%, transform 3%)

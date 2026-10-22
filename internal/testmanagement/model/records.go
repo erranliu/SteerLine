@@ -51,10 +51,18 @@ type Generation struct {
 	InputDigest string                  `json:"input_digest,omitempty"`
 	Projection  *runnercontract.Run     `json:"report,omitempty"`
 	State       string                  `json:"state"`
+	Submission  string                  `json:"submission,omitempty"`
 	Diagnostic  string                  `json:"diagnostic,omitempty"`
 	Result      json.RawMessage         `json:"result,omitempty"`
 	Cancelled   bool                    `json:"cancelled"`
 	StopID      string                  `json:"stop_id,omitempty"`
 	StopRequest *runnercontract.Request `json:"stop_request,omitempty"`
 	StopState   string                  `json:"stop_state,omitempty"`
+}
+
+// Pending is a durable outbox that has never entered Runner.Submit.
+func (g Generation) Unsubmitted() bool { return g.Submission == "pending" }
+
+func (g Generation) Settled() bool {
+	return g.Unsubmitted() && g.Cancelled || g.State == "rejected" && g.RunID == "" || g.Projection != nil && g.Projection.StopStatus == "stopped"
 }
