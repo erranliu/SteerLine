@@ -28,4 +28,13 @@
 
 ## 人工与边界
 
-GTR-M01 页面密度人工体验后置。当前工作树未提交，测试报告按真实脏源码状态保存，不导出冒充固定 SHA 历史；新功能的固定源码导出由临时 Git 和隔离调试项目验证。
+GTR-M01 页面密度人工体验后置。首次实现阶段的报告按真实脏源码状态保存；提交实现后另在干净固定 SHA 补跑 L1/L2，并通过正式命令生成随 PR 提交的历史文件，不把旧脏报告改写为固定源码。
+
+## 提交前固定源码复验与本 PR 历史文件
+
+实现提交 `84e57b8e968fd0a2e5627d4f2e428b58c15b312d` 后，在同一干净提交上运行固定 L1、L2，均通过；原 managed 报告前后 SHA 相同且 before_clean/after_clean=true。使用正式 `test-feedback record` 分别导出，两次执行合并到 `SteerlineFlow/testing/records/84e57b8e968fd0a2e5627d4f2e428b58c15b312d.json` 的两个 run，测试项为 l1.minimum 与 smoke.delivery。记录作为后续提交随同一 PR 合入，文件名保留实际受测源码提交。
+
+- L1：`C:/Users/lmas1/AppData/Local/Temp/steerline-git-history-fixed-l1-f7d31681cf474179b9f61683f55b0aed/summary.json`，准备 0.4 秒、执行 12.2 秒，32 项通过。
+- L2：`C:/Users/lmas1/AppData/Local/Temp/steerline-git-history-fixed-l2-b463e5b058454324be6da57a12d0fb17/summary.json`，受控交付冒烟实际用例 93.6 秒，passed/cleanup_complete=true。
+
+导出 L1 后产生的历史文件不影响 L2 的源码 clean；这次真实使用也验证了记录目录排除规则和相同 SHA 下多次执行的合并。
