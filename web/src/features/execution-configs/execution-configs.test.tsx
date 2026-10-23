@@ -9,6 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 import { ExecutionConfigs } from "./execution-configs";
+import { SettingsPage } from "../settings/settings";
 import type { ConfigSnapshot } from "../../shared/api/execution-configs";
 afterEach(() => {
   cleanup();
@@ -17,6 +18,8 @@ afterEach(() => {
 function fixture(
   options: {
     conflict?: boolean;
+    configuration?: boolean;
+    readOnly?: boolean;
     delay?: boolean;
     unknown?: boolean;
     defaults?: boolean;
@@ -28,7 +31,7 @@ function fixture(
 ) {
   let saved: ConfigSnapshot = {
     saved_digest: "old",
-    writable: true,
+    writable: !options.readOnly,
     efforts: ["medium", "high", "ultra"],
     local_helper: { available: !!options.helper, reason: "helper 未部署" },
     combinations: [
@@ -267,12 +270,21 @@ function fixture(
   render(
     <QueryClientProvider client={query}>
       <MemoryRouter>
-        <ExecutionConfigs
-          home="test-home"
-          csrf="csrf"
-          loadedDigest="old"
-          applicationConnected
-        />
+        {options.configuration ? (
+          <SettingsPage
+            home="test-home"
+            csrf="csrf"
+            loadedDigest="old"
+            applicationConnected
+          />
+        ) : (
+          <ExecutionConfigs
+            home="test-home"
+            csrf="csrf"
+            loadedDigest="old"
+            applicationConnected
+          />
+        )}
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -310,7 +322,7 @@ it("clears incompatible effort and protects unsaved changes", async () => {
   fireEvent.change(screen.getByLabelText("Thinking effort"), {
     target: { value: "high" },
   });
-  fireEvent.click(screen.getByRole("button", { name: "新建配置" }));
+  fireEvent.click(screen.getByRole("button", { name: "新建方案" }));
   await screen.findByText("当前修改尚未保存");
   fireEvent.click(screen.getByRole("button", { name: "继续编辑" }));
   expect(screen.getByLabelText("模型")).toHaveValue("small");
@@ -520,8 +532,8 @@ it("selects an Orca-provided Pi provider without storing credentials or widening
   expect(screen.getByLabelText("Agent")).toHaveValue("codex");
 });
 
-it("GQ saves global generation concurrency and requires restart", async () => {
-  const writes = fixture();
+it("GQ saves shared generation concurrency in configuration and requires restart", async () => {
+  const writes = fixture({ configuration: true });
   const input = await screen.findByLabelText("生成最大并发数");
   expect(input).toHaveValue(5);
   fireEvent.change(input, { target: { value: "0" } });
@@ -530,6 +542,43 @@ it("GQ saves global generation concurrency and requires restart", async () => {
   fireEvent.click(screen.getByRole("button", { name: "保存生成并发" }));
   await screen.findByText("配置已保存，待重启生效");
   expect(writes).toHaveLength(1);
-  expect(writes[0]).toMatchObject({ max_generate_concurrency: 3, default_execution_profile: "local" });
+  expect(writes[0]).toMatchObject({
+    max_generate_concurrency: 3,
+    default_execution_profile: "local",
+  });
+  expect(screen.getByRole("button", { name: "保存生成并发" })).toBeDisabled();
+});
+
+it("configuration preserves input on a conditional conflict and never drops execution profiles", async () => {
+  const writes = fixture({ configuration: true, conflict: true });
+  fireEvent.change(await screen.findByLabelText("生成最大并发数"), {
+    target: { value: "7" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存生成并发" }));
+  await screen.findByText(/配置已被其他页面修改，当前输入已保留/);
+  expect(screen.getByLabelText("生成最大并发数")).toHaveValue(7);
+  expect(writes).toHaveLength(1);
+  expect(writes[0]).toMatchObject({
+    execution_profiles: [
+      {
+        execution: {
+          settings: { github_auth: { private_key_env: "EXAMPLE" } },
+        },
+      },
+    ],
+  });
+});
+
+it("configuration reconciles a lost save response and disables writes in a frozen package", async () => {
+  const writes = fixture({ configuration: true, lost: true });
+  fireEvent.change(await screen.findByLabelText("生成最大并发数"), {
+    target: { value: "6" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存生成并发" }));
+  await screen.findByText("生成并发已保存。重启 SteerLine 后生效。");
+  expect(writes).toHaveLength(1);
+  cleanup();
+  fixture({ configuration: true, readOnly: true });
+  expect(await screen.findByLabelText("生成最大并发数")).toBeDisabled();
   expect(screen.getByRole("button", { name: "保存生成并发" })).toBeDisabled();
 });

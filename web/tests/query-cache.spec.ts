@@ -120,7 +120,7 @@ test("web.query-cache: real requests share cache, preserve content and stop hidd
     facts.concurrent_tasks_requests = count(projectA, "tasks");
     console.log("web.query-cache: pending bootstrap shared by both pages");
 
-    await page.getByRole("link", { name: "执行设置" }).click();
+    await page.getByRole("link", { name: "配置", exact: true }).click();
     const presentationCount = count(projectA, "presentation");
     await page.waitForTimeout(1100); // Make the dynamic task page stale, with no observer polling it.
     held = false;

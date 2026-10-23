@@ -7,16 +7,8 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
-import {
-  GitBranch,
-  Layers,
-  FlaskConical,
-  Settings,
-  RefreshCw,
-  ArrowUpRight,
-  Command,
-  PanelLeftClose,
-} from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import { AppShell } from "./app-shell";
 import { json } from "../shared/api/client";
 import { ApiError } from "../shared/api/client";
 import type { Identity, BrowserSession } from "../shared/api/types";
@@ -56,6 +48,7 @@ export function Workspace({
   home = "",
   switcher,
   configurationPending = false,
+  loadedDigest,
   connectionError,
   onRefreshConnection,
 }: {
@@ -64,6 +57,7 @@ export function Workspace({
   home?: string;
   switcher?: React.ReactNode;
   configurationPending?: boolean;
+  loadedDigest?: string;
   connectionError?: unknown;
   onRefreshConnection?: () => void;
 }) {
@@ -91,7 +85,6 @@ export function Workspace({
     requests.data,
     submit,
   );
-  const [collapsed, setCollapsed] = useState(false);
   const counts = {
     runs: page?.runs?.length ?? 0,
     questions:
@@ -114,178 +107,124 @@ export function Workspace({
         refresh,
       }}
     >
-      <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>
-        <aside className="sidebar">
-          <div className="brand">
-            <span className="brand-symbol">◆</span>
-            <strong>SteerLine</strong>
-            <span className="brand-caption">WORKSPACE</span>
-          </div>
-          {switcher ?? (
+      <AppShell
+        projectId={identity.project_id}
+        switcher={
+          switcher ?? (
             <div className="project-card">{identity.repository_identity}</div>
-          )}
-          <p className="nav-heading">项目</p>
-          <nav aria-label="主导航">
-            <NavLink to={"/projects/" + identity.project_id + "/dag"}>
-              <GitBranch size={17} />
-              <span>任务 DAG</span>
-            </NavLink>
-            <NavLink to={"/projects/" + identity.project_id + "/runs"}>
-              <Layers size={17} />
-              <span>执行与待处理</span>
-              {counts.questions > 0 && (
-                <span className="nav-count">{counts.questions}</span>
-              )}
-            </NavLink>
-            <NavLink to={"/projects/" + identity.project_id + "/tests"}>
-              <FlaskConical size={17} />
-              <span>测试管理</span>
-            </NavLink>
-          </nav>
-          <div className="sidebar-footer">
-            <NavLink to="/settings/execution-configs">
-              <Settings size={16} />
-              <span>全局执行配置</span>
-            </NavLink>
-            <NavLink to={"/projects/" + identity.project_id + "/settings"}>
-              <Settings size={16} />
-              <span>执行设置</span>
-            </NavLink>
-            <div className="sidebar-note">
-              <span className="connection-dot" /> LOCAL SERVICE{" "}
-              <ArrowUpRight size={12} />
-            </div>
-          </div>
-        </aside>
-        <div className="main-shell">
-          <header className="topbar">
-            <div className="breadcrumb">
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label="切换导航宽度"
-                onClick={() => setCollapsed(!collapsed)}
-              >
-                <PanelLeftClose size={17} />
-              </Button>
-              <span>当前项目</span>
-              <span>/</span>
-              <strong>规划与执行</strong>
-            </div>
-            <div className="connection">
-              <span className={"connection-dot " + (online ? "" : "offline")} />
-              <span aria-live="polite">
-                {online ? "服务已连接" : "连接待核实"}
-              </span>
-              <span className="instance-label">
-                {short(identity.instance_id)}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                aria-label="刷新查询"
-                onClick={refresh}
-              >
-                <RefreshCw size={15} />
-              </Button>
-            </div>
-          </header>
-          <main>
-            <ProjectMaintenance
-              key={identity.project_id + identity.instance_id}
-            />
-            {!online && (
-              <div className="notice amber" role="status">
-                <strong>
-                  {connectionError instanceof ApiError &&
-                  connectionError.status === 401
-                    ? "会话已失效，请从本机 CLI 重新打开"
-                    : "当前不可提交业务操作"}
-                </strong>
-                <p>
-                  {diagnostic || "正在核验项目与服务实例…"}{" "}
-                  {snapshot.dataUpdatedAt
-                    ? "最后观察 " +
-                      new Date(snapshot.dataUpdatedAt).toLocaleTimeString(
-                        "zh-CN",
-                      )
-                    : ""}
-                </p>
-              </div>
-            )}
-            {error && (
-              <div role="alert" className="notice amber">
-                <strong>操作结果未放行</strong>
-                <p>{error}</p>
-                <Button size="sm" onClick={clearError}>
-                  收起提示
-                </Button>
-              </div>
-            )}
-            {requests.error && (
-              <div className="notice amber">
-                本机请求存储不可用：{String(requests.error)}
-              </div>
-            )}
-            {configurationPending && (
-              <div className="notice amber" role="status">
-                执行配置已保存，需重启 SteerLine
-                后才能启动新候选。已有执行保留原参数。
-              </div>
-            )}
-            <Dispatch />
-            <Suspense fallback={<div className="empty">正在加载页面…</div>}>
-              <Routes>
-                <Route
-                  path={"/projects/" + identity.project_id + "/tests"}
-                  element={<Tests />}
-                />
-                <Route
-                  path={
-                    "/projects/" + identity.project_id + "/environment-checks"
-                  }
-                  element={<EnvironmentChecks />}
-                />
-                <Route
-                  path={"/projects/" + identity.project_id + "/dag"}
-                  element={<Dag />}
-                />
-                <Route
-                  path={"/projects/" + identity.project_id + "/runs"}
-                  element={<Runs />}
-                />
-                <Route
-                  path={"/projects/" + identity.project_id + "/settings"}
-                  element={<SettingsPage api={api} online={!!online} />}
-                />
-                <Route
-                  path="*"
-                  element={
-                    <Navigate
-                      to={"/projects/" + identity.project_id + "/dag"}
-                      replace
-                    />
-                  }
-                />
-              </Routes>
-            </Suspense>
-            <Operations
-              requests={(requests.data ?? []).filter(
-                (r) => r.envelope.project_id === identity.project_id,
-              )}
-              online={!!online}
-              reconcile={reconcile}
-              reconciling={reconciling}
-            />
-          </main>
-          <footer className="app-footer">
-            <span>
-              <Command size={12} /> SteerLine · 本机 Web
+          )
+        }
+        questions={counts.questions}
+        footer={`${counts.runs} 个候选 · 业务状态由 Go 服务核验`}
+        connection={
+          <div className="connection">
+            <span className={"connection-dot " + (online ? "" : "offline")} />
+            <span aria-live="polite">
+              {online ? "服务已连接" : "连接待核实"}
             </span>
-            <span>{counts.runs} 个候选 · 业务状态由 Go 服务核验</span>
-          </footer>
-        </div>
-      </div>
+            <span className="instance-label">
+              {short(identity.instance_id)}
+            </span>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="刷新查询"
+              onClick={refresh}
+            >
+              <RefreshCw size={15} />
+            </Button>
+          </div>
+        }
+      >
+        <ProjectMaintenance key={identity.project_id + identity.instance_id} />
+        {!online && (
+          <div className="notice amber" role="status">
+            <strong>
+              {connectionError instanceof ApiError &&
+              connectionError.status === 401
+                ? "会话已失效，请从本机 CLI 重新打开"
+                : "当前不可提交业务操作"}
+            </strong>
+            <p>
+              {diagnostic || "正在核验项目与服务实例…"}{" "}
+              {snapshot.dataUpdatedAt
+                ? "最后观察 " +
+                  new Date(snapshot.dataUpdatedAt).toLocaleTimeString("zh-CN")
+                : ""}
+            </p>
+          </div>
+        )}
+        {error && (
+          <div role="alert" className="notice amber">
+            <strong>操作结果未放行</strong>
+            <p>{error}</p>
+            <Button size="sm" onClick={clearError}>
+              收起提示
+            </Button>
+          </div>
+        )}
+        {requests.error && (
+          <div className="notice amber">
+            本机请求存储不可用：{String(requests.error)}
+          </div>
+        )}
+        {configurationPending && (
+          <div className="notice amber" role="status">
+            配置已保存，需重启 SteerLine 后才能启动新候选。已有执行保留原参数。
+          </div>
+        )}
+        <Dispatch />
+        <Suspense fallback={<div className="empty">正在加载页面…</div>}>
+          <Routes>
+            <Route
+              path={"/projects/" + identity.project_id + "/tests"}
+              element={<Tests />}
+            />
+            <Route
+              path={"/projects/" + identity.project_id + "/environment-checks"}
+              element={<EnvironmentChecks />}
+            />
+            <Route
+              path={"/projects/" + identity.project_id + "/dag"}
+              element={<Dag />}
+            />
+            <Route
+              path={"/projects/" + identity.project_id + "/runs"}
+              element={<Runs />}
+            />
+            <Route
+              path={"/projects/" + identity.project_id + "/settings"}
+              element={
+                <SettingsPage
+                  api={api}
+                  online={!!online}
+                  home={home}
+                  csrf={initial.csrf_token}
+                  loadedDigest={loadedDigest}
+                  applicationConnected={applicationConnected}
+                />
+              }
+            />
+            <Route
+              path="*"
+              element={
+                <Navigate
+                  to={"/projects/" + identity.project_id + "/dag"}
+                  replace
+                />
+              }
+            />
+          </Routes>
+        </Suspense>
+        <Operations
+          requests={(requests.data ?? []).filter(
+            (r) => r.envelope.project_id === identity.project_id,
+          )}
+          online={!!online}
+          reconcile={reconcile}
+          reconciling={reconciling}
+        />
+      </AppShell>
     </WorkspaceContext.Provider>
   );
 }
@@ -301,6 +240,7 @@ export function App({ initial }: { initial: BrowserSession }) {
     selected,
     projectIdentity,
     choose,
+    returnTo,
   } = useApplicationProjects(initial);
   const [search, setSearch] = useState("");
   const route = useLocation();
@@ -318,15 +258,6 @@ export function App({ initial }: { initial: BrowserSession }) {
     !!savedStatus.data?.saved_digest &&
     !!catalog.data?.loaded_execution_digest &&
     savedStatus.data.saved_digest !== catalog.data.loaded_execution_digest;
-  if (route.pathname === "/settings/execution-configs")
-    return (
-      <ExecutionConfigs
-        home={home}
-        csrf={session.data.csrf_token}
-        loadedDigest={catalog.data?.loaded_execution_digest}
-        applicationConnected={sessionValid && !catalog.isError}
-      />
-    );
   const switcher = (
     <div className="project-selector">
       <label htmlFor="project-search">切换项目</label>
@@ -408,6 +339,50 @@ export function App({ initial }: { initial: BrowserSession }) {
       {selected?.diagnostic && <p className="muted">{selected.diagnostic}</p>}
     </div>
   );
+  if (
+    route.pathname === "/settings/execution-configs" ||
+    route.pathname === "/settings"
+  )
+    return (
+      <AppShell
+        projectId={selected?.project_id}
+        switcher={switcher}
+        returnTo={returnTo}
+        connection={
+          <div className="connection">
+            <span
+              className={
+                "connection-dot " +
+                (sessionValid && !catalog.isError ? "" : "offline")
+              }
+            />
+            <span>
+              {sessionValid && !catalog.isError ? "应用已连接" : "连接待核实"}
+            </span>
+          </div>
+        }
+        footer="所有项目共享执行方案与生成并发设置"
+      >
+        {route.pathname === "/settings/execution-configs" ? (
+          <ExecutionConfigs
+            key={home}
+            home={home}
+            csrf={session.data.csrf_token}
+            loadedDigest={catalog.data?.loaded_execution_digest}
+            applicationConnected={sessionValid && !catalog.isError}
+          />
+        ) : (
+          <SettingsPage
+            key={home}
+            projectId={selected?.project_id}
+            home={home}
+            csrf={session.data.csrf_token}
+            loadedDigest={catalog.data?.loaded_execution_digest}
+            applicationConnected={sessionValid && !catalog.isError}
+          />
+        )}
+      </AppShell>
+    );
   const identity = projectIdentity.data;
   if (selected && identity && identity.project_id === id)
     return (
@@ -415,6 +390,7 @@ export function App({ initial }: { initial: BrowserSession }) {
         key={home + "/" + id + "/" + identity.instance_id}
         home={home}
         configurationPending={configurationPending}
+        loadedDigest={catalog.data?.loaded_execution_digest}
         onRefreshConnection={() => {
           void session.refetch();
           void catalog.refetch();
@@ -442,7 +418,8 @@ export function App({ initial }: { initial: BrowserSession }) {
       <span className="brand-symbol">◆</span>
       <h1>SteerLine</h1>
       {switcher}
-      <NavLink to="/settings/execution-configs">管理全局执行配置 →</NavLink>
+      <NavLink to="/settings/execution-configs">执行方案配置 →</NavLink>
+      <NavLink to="/settings">配置 →</NavLink>
       {!sessionValid ? (
         <p role="alert">会话已失效，请使用 steerline-web open 重新授权</p>
       ) : id ? (

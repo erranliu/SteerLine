@@ -460,7 +460,7 @@ func backendError(w http.ResponseWriter, err error) {
 
 func (s *Server) Done() <-chan struct{} { return s.stopped }
 func spaPath(route string) bool {
-	if route == "/settings/execution-configs" {
+	if route == "/settings/execution-configs" || route == "/settings" {
 		return true
 	}
 	parts := strings.Split(strings.Trim(route, "/"), "/")

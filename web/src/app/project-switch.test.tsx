@@ -9,7 +9,11 @@ import {
   act,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation } from "react-router-dom";
+import {
+  createMemoryRouter,
+  RouterProvider,
+  useLocation,
+} from "react-router-dom";
 import { App } from "./app";
 import { Api } from "../shared/api/client";
 import * as journal from "../shared/api/journal";
@@ -23,6 +27,7 @@ import {
 import type { BrowserSession, Identity } from "../shared/api/types";
 import { projectQueries } from "../shared/api/queries";
 import { tasks } from "../test/workspace";
+import { configSnapshot } from "../test/execution-config";
 
 const a = "a".repeat(64),
   b = "b".repeat(64);
@@ -54,38 +59,47 @@ function mock() {
     "fetch",
     vi.fn(async (url: string) =>
       Response.json(
-        url.endsWith("/maintenance")
-          ? { observation: { commit: "" }, tasks: [], profiles: [], profile: "" }
-          : url === "/auth/status"
-          ? session
-          : url.endsWith("/projects")
-            ? { projects }
-            : url.endsWith("/identity")
-              ? identity(url.includes(a) ? a : b)
-              : url.endsWith("/snapshot")
-                ? {
-                    connection: {
-                      state: "connected",
-                      can_control: true,
-                      identity_matched: true,
-                      config_matched: true,
-                      snapshot: {
-                        page: {
-                          service: {
-                            instance_id:
-                              "instance-" + (url.includes(a) ? "a" : "b"),
-                          },
-                          runs: [],
-                          control: {
-                            revision: 1,
-                            dispatch_mode: "manual",
-                            dispatch_paused: false,
+        url === "/api/web/execution-config"
+          ? configSnapshot
+          : url.endsWith("/maintenance")
+            ? {
+                observation: { commit: "" },
+                tasks: [],
+                profiles: [],
+                profile: "",
+              }
+            : url === "/auth/status"
+              ? session
+              : url.endsWith("/projects")
+                ? { projects }
+                : url.endsWith("/identity")
+                  ? identity(url.includes(a) ? a : b)
+                  : url.endsWith("/snapshot")
+                    ? {
+                        connection: {
+                          state: "connected",
+                          can_control: true,
+                          identity_matched: true,
+                          config_matched: true,
+                          snapshot: {
+                            page: {
+                              service: {
+                                instance_id:
+                                  "instance-" + (url.includes(a) ? "a" : "b"),
+                              },
+                              runs: [],
+                              control: {
+                                revision: 1,
+                                dispatch_mode: "manual",
+                                dispatch_paused: false,
+                              },
+                            },
                           },
                         },
+                      }
+                    : {
+                        presentation: { profiles: [], default_profile_id: "" },
                       },
-                    },
-                  }
-                : { presentation: { profiles: [], default_profile_id: "" } },
       ),
     ),
   );
@@ -93,7 +107,7 @@ function mock() {
 function Location() {
   return (
     <output data-testid="location">
-      {useLocation().pathname + useLocation().search}
+      {useLocation().pathname + useLocation().search + useLocation().hash}
     </output>
   );
 }
@@ -101,15 +115,26 @@ function mount(route: string) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  const router = createMemoryRouter(
+    [
+      {
+        path: "*",
+        element: (
+          <>
+            <App initial={session} />
+            <Location />
+          </>
+        ),
+      },
+    ],
+    { initialEntries: [route] },
+  );
   const view = render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[route]}>
-        <App initial={session} />
-        <Location />
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
-  return { ...view, client };
+  return { ...view, client, router };
 }
 afterEach(() => {
   cleanup();
@@ -168,7 +193,7 @@ it("cancels the old project's pending preload and never installs its late respon
 it("switches same-name projects by ID, preserving page type and dropping task selection", async () => {
   mock();
   mount("/projects/" + a + "/settings?task=1");
-  await screen.findByText("执行设置", { selector: "h1" });
+  await screen.findByText("配置", { selector: "h1" });
   fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), {
     target: { value: b },
   });
@@ -415,4 +440,107 @@ it("TR recognizes test-record deep links and cancels late record reads when swit
   );
   expect(screen.queryByText("late-old-project")).toBeNull();
   expect(await screen.findByText("尚无执行记录")).toBeVisible();
+});
+
+it("returns from execution profiles to the same project, page, query and fragment", async () => {
+  mock();
+  const target = `/projects/${a}/settings?task=1#details`;
+  mount(target);
+  await screen.findByRole("heading", { name: "配置" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await screen.findByRole("heading", { name: "执行方案配置" });
+  expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
+    "href",
+    target,
+  );
+  expect(screen.getByRole("link", { name: "配置" })).toHaveAttribute(
+    "href",
+    `/projects/${a}/settings`,
+  );
+  expect(screen.queryByLabelText("生成最大并发数")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
+  await waitFor(() =>
+    expect(screen.getByTestId("location")).toHaveTextContent(target),
+  );
+});
+
+it("restores a valid recent project on direct entry and rejects a removed return target", async () => {
+  mock();
+  sessionStorage.setItem(
+    "steerline-return:switch-home",
+    `/projects/${"c".repeat(64)}/runs?task=2`,
+  );
+  localStorage.setItem("steerline-recent:switch-home", b);
+  mount("/settings/execution-configs");
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
+      "href",
+      `/projects/${b}/dag`,
+    ),
+  );
+});
+
+it("keeps configuration available without projects and returns to project selection", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((...args) =>
+    String(args[0]).endsWith("/projects")
+      ? Promise.resolve(Response.json({ projects: [] }))
+      : original(...args),
+  );
+  mount("/settings/execution-configs");
+  await screen.findByRole("heading", { name: "执行方案配置" });
+  expect(
+    screen.queryByRole("link", { name: "返回项目" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen
+      .getAllByRole("link", { name: "选择项目" })
+      .every((link) => link.getAttribute("href") === "/projects"),
+  ).toBe(true);
+  fireEvent.click(screen.getByRole("link", { name: "配置" }));
+  expect(await screen.findByLabelText("生成最大并发数")).toHaveValue(5);
+  expect(screen.getByText("所有项目共享", { exact: true })).toBeVisible();
+});
+
+it("guards return links and browser back while an execution profile has unsaved changes", async () => {
+  mock();
+  const { router } = mount(`/projects/${a}/settings`);
+  await screen.findByRole("heading", { name: "配置" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  const name = await screen.findByLabelText("配置名称");
+  fireEvent.change(name, { target: { value: "未保存方案" } });
+  const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
+  await waitFor(() => expect(confirm).toHaveBeenCalledTimes(1));
+  expect(screen.getByLabelText("配置名称")).toHaveValue("未保存方案");
+  await act(async () => {
+    await router.navigate(-1);
+  });
+  await waitFor(() => expect(confirm).toHaveBeenCalledTimes(2));
+  expect(screen.getByTestId("location")).toHaveTextContent(
+    "/settings/execution-configs",
+  );
+  confirm.mockReturnValue(true);
+  fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
+  await screen.findByRole("heading", { name: "配置" });
+});
+
+it("keeps the exact return route when browser preference storage is unavailable", async () => {
+  mock();
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+    throw new DOMException("blocked");
+  });
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("blocked");
+  });
+  mount(`/projects/${a}/settings?task=4`);
+  await screen.findByRole("heading", { name: "配置" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await waitFor(() =>
+    expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute(
+      "href",
+      `/projects/${a}/settings?task=4`,
+    ),
+  );
 });

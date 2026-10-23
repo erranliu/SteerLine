@@ -191,7 +191,8 @@ nav a:hover,
   background: #1c2b23;
   text-decoration: none;
 }
-nav a.active {
+nav a.active,
+.sidebar-footer > a.active {
   background: #223e30;
   color: #9ceac7;
 }
@@ -1423,3 +1424,52 @@ textarea {
 .maintenance-spinner { animation: maintenance-spin 1s linear infinite; }
 @keyframes maintenance-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .maintenance-spinner { animation: none; } }
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.configuration-panels {
+  display: grid;
+  gap: 18px;
+}
+.configuration-panels .settings-panel {
+  margin: 0;
+}
+.configuration-panels .settings-panel > a {
+  display: inline-block;
+  margin-top: 12px;
+}
+.settings-scope {
+  color: #99e6c5;
+  font-size: 11px;
+}
+.configuration-field {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.configuration-field label {
+  font-weight: 500;
+}
+.configuration-field input {
+  width: 100px;
+  padding: 8px;
+  border: 1px solid #32473a;
+  border-radius: 5px;
+  background: #101614;
+  color: #e5ede8;
+}
+@media (max-width: 620px) {
+  .topbar {
+    height: auto;
+    min-height: 50px;
+    padding-block: 8px;
+    flex-wrap: wrap;
+  }
+  .topbar-actions {
+    gap: 8px;
+  }
+}

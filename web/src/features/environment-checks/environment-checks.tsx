@@ -351,7 +351,7 @@ export function EnvironmentChecks() {
           <p>使用实际 Agent 验证预先准备好的执行权限、Git 和项目发布能力。</p>
         </div>
         <NavLink to={"/projects/" + identity.project_id + "/settings"}>
-          执行设置
+          配置
         </NavLink>
       </div>
       <section className="settings-panel">

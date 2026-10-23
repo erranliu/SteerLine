@@ -1,6 +1,6 @@
-# 全局执行配置
+# 执行方案配置
 
-`max_generate_concurrency` 是 SteerLine 调用 Runner generate 的 home 级最大并发数；省略时为 5，显式值必须是正整数。在全局执行设置中保存，重启 SteerLine 后生效；所有项目的自动生成、一键生成和单项重试共享队列，名额覆盖实际执行与待核实调用。开发候选和 Runner 内部其他 LLM 操作不计入该配额。实现及验证见 [生成队列验收](../../SteerlineFlow/testing/acceptance/generate-queue.md)。
+`max_generate_concurrency` 是 SteerLine 调用 Runner generate 的 home 级最大并发数；省略时为 5，显式值必须是正整数。在 Web“配置”页中保存，重启 SteerLine 后生效；所有项目的自动生成、一键生成和单项重试共享队列，名额覆盖实际执行与待核实调用。开发候选和 Runner 内部其他 LLM 操作不计入该配额。实现及验证见 [生成队列验收](../../SteerlineFlow/testing/acceptance/generate-queue.md)。
 
 当前实现支持本机 Codex、Windows/amd64 本机 Orca/Codex、Pi、DSH 及远端 Orca environment/Codex。详见[Web 执行配置 Spec](../../SteerlineFlow/spec/web-execution-config.spec.md)及[Plan](../../SteerlineFlow/plans/web-execution-config.plan.md)，实际验证和人工验收独立登记。执行由独立 SteerRunner 管理。SteerLine 保留多执行方案与默认方案选择，不维护业务执行的原生 codec、权限策略、会话或 workflow 状态机。所有 LLM 操作的职责以[架构边界](../architecture.md#llm-执行边界)为准，本页维护两层默认链路的配置含义。
 
@@ -18,7 +18,7 @@
 
 ## Web 配置管理
 
-[Web 执行配置管理 Spec](../../SteerlineFlow/spec/web-execution-config.spec.md) / [Plan](../../SteerlineFlow/plans/web-execution-config.plan.md)规定管理入口 `/settings/execution-configs`：Web 前后端拥有能力目录查询、预设编辑/生成及 `execution.json` 条件保存；Codex/Orca 由 Web 后端直接查询。Go 执行服务只消费配置、独立校验并冻结参数，提供原加载文件摘要的只读投影；Runner 不新增探测接口。能力目录/缓存不是执行资格或第二配置来源。首版保存后沿既有正式重启流程生效，不热加载、不自动停服或改投；冻结调试包只读。边界与实际结果见[专属验收](../../SteerlineFlow/testing/acceptance/web-execution-config.md)。
+[Web 执行配置管理 Spec](../../SteerlineFlow/spec/web-execution-config.spec.md) / [Plan](../../SteerlineFlow/plans/web-execution-config.plan.md)规定执行方案管理入口 `/settings/execution-configs`（页面名称“执行方案配置”）：Web 前后端拥有能力目录查询、预设编辑/生成及 `execution.json` 条件保存；Codex/Orca 由 Web 后端直接查询。Go 执行服务只消费配置、独立校验并冻结参数，提供原加载文件摘要的只读投影；Runner 不新增探测接口。能力目录/缓存不是执行资格或第二配置来源。生成并发设置单独放在“配置”页（项目入口 `/projects/:id/settings`，无项目入口 `/settings`），仍保存于同一 execution.json、沿原条件写入与共享队列语义，不在执行方案编辑器重复展示。首版保存后沿既有正式重启流程生效，不热加载、不自动停服或改投；冻结调试包只读。边界与实际结果见[专属验收](../../SteerlineFlow/testing/acceptance/web-execution-config.md)。
 
 本机 Orca 新增设计使用 Web 自有 named pipe 目录客户端，配置仍是 `orca-terminal + target.local`；Go 执行服务只消费配置，Runner 不新增探测接口。本机受管 helper 路径/SHA 是部署模板输入，缺少时不得用目录查询或任意程序路径代替；远端仍拒绝本机 helper 字段。新增验收为 WEC-A10–A14/M02，不能继承前版本机 Orca 被拒绝的测试结论。
 
