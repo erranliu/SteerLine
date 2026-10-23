@@ -284,13 +284,10 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 			cli.Takeover = takeover[0]
 		}
 		for _, g := range generations {
-			if g.Unsubmitted() {
+			if g.Unsubmitted() || g.State == "rejected" && g.RunID == "" {
 				continue
 			}
 			if interrupted {
-				if g.State == "rejected" && g.RunID == "" {
-					continue
-				}
 				if _, ok := generationTakeover(*takeover[0], g); !ok {
 					return proof, errors.New("interrupted generation differs from takeover evidence")
 				}
@@ -306,8 +303,11 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 				}
 				cli.Takeover = &report
 			}
-			if err := verifyGenerationTakeover(g, cli); err != nil {
-				return proof, err
+			// Supplied takeover evidence was validated against the selected
+			// deployment candidate. The original home pin remains the restart
+			// checkpoint identity, not the verifier of that candidate's report.
+			if _, ok := generationTakeover(*cli.Takeover, g); !ok {
+				return proof, errors.New("original generation Run/input differs from takeover proof")
 			}
 		}
 	} else {

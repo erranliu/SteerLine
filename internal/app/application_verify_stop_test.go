@@ -18,6 +18,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
@@ -152,6 +153,75 @@ func TestDeploymentRechecksFailedReceiptWithoutRestartOrRewrite(t *testing.T) {
 		require(t, os.WriteFile(GlobalExecutionConfigPath(), append(append([]byte{}, global...), '\n'), 0600))
 		if _, err := VerifyApplicationRestartable(ctx, exe); err == nil {
 			t.Fatal("restart accepted changed frozen configuration")
+		}
+	})
+
+	t.Run("cross_build_generation_uses_selected_candidate_proof", func(t *testing.T) {
+		require(t, os.WriteFile(GlobalExecutionConfigPath(), global, 0600))
+		original.Projects[0].LocalClosed = true
+		require(t, localservice.Write(backend.dir, "shutdown.json", original))
+		fixturePath := filepath.Join(runnerstatepath.Directory(c.runnerHome()), "idle-fixture.json")
+		var info runnerclient.ServiceInfo
+		require(t, json.Unmarshal(before[fixturePath], &info))
+		info.LastShutdown.ResourcesSettled = false
+		info.LastShutdown.Diagnostic = "original native resources remain unverified"
+		require(t, os.WriteFile(fixturePath, mustJSON(info), 0600))
+
+		// A historical generation, the last resident Runner, and the staged
+		// verifier have three different builds, as in successive deployments.
+		g := testmanagement.Generation{ID: strings.Repeat("e", 32), Project: c.Identity(), Revision: 1, Runner: d.runner.client.BuildPin(), State: "accepted", RunID: "original-generation", InputDigest: "original-generation-input"}
+		g.Runner.SHA256 = strings.Repeat("a", 64)
+		g.Runner.Version = "historical"
+		g.Request = runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-generation-submit", Input: json.RawMessage(`{"title":"original"}`)}
+		store, err := OpenNativeTaskCommandStore(ctx, &c)
+		require(t, err)
+		require(t, store.SaveGeneration(ctx, g, 0))
+		require(t, store.Close())
+		image, err := os.ReadFile(exe)
+		require(t, err)
+		candidate := filepath.Join(t.TempDir(), "candidate.exe")
+		require(t, os.WriteFile(candidate, append(image, []byte("candidate-build")...), 0700))
+		sha := taskPayloadDigest(append(image, []byte("candidate-build")...))
+		takeover := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: g.Runner.StateDir, CandidateSHA256: sha, Compatible: true, Items: []runnercontract.TakeoverItem{{Kind: "run", ID: g.RunID, InputDigest: g.InputDigest, Revision: 3, Status: "compatible"}}}
+		takeoverPath := filepath.Join(g.Runner.StateDir, "idle-takeover-fixture.json")
+		require(t, os.WriteFile(takeoverPath, mustJSON(takeover), 0600))
+		for _, path := range paths {
+			before[path], err = os.ReadFile(path)
+			require(t, err)
+		}
+		proof, err := VerifyApplicationRestartable(ctx, candidate)
+		require(t, err)
+		if !proof.Restartable || proof.RunnerService.ResourcesSettled || proof.RunnerService.Diagnostic != info.LastShutdown.Diagnostic || proof.CandidateBuild == nil || proof.CandidateBuild.SHA256 != sha || proof.RunnerBuild.SHA256 != original.Runner.ExecutableSHA256 {
+			t.Fatal("restart confused original and selected builds or native settlement", proof)
+		}
+		for _, path := range paths {
+			after, err := os.ReadFile(path)
+			require(t, err)
+			if !bytes.Equal(before[path], after) {
+				t.Fatal("cross-build verification changed original facts", path)
+			}
+		}
+		for _, fault := range []string{"input", "namespace", "candidate", "missing", "read_only"} {
+			t.Run(fault, func(t *testing.T) {
+				var bad runnercontract.TakeoverReport
+				require(t, json.Unmarshal(mustJSON(takeover), &bad))
+				switch fault {
+				case "input":
+					bad.Items[0].InputDigest = "foreign"
+				case "namespace":
+					bad.StateDir += "-foreign"
+				case "candidate":
+					bad.CandidateSHA256 = g.Runner.SHA256
+				case "missing":
+					bad.Items = []runnercontract.TakeoverItem{}
+				case "read_only":
+					bad.Items[0].Status = "read_only"
+				}
+				require(t, os.WriteFile(takeoverPath, mustJSON(bad), 0600))
+				if _, err := VerifyApplicationRestartable(ctx, candidate); err == nil {
+					t.Fatal("accepted invalid generation takeover", fault)
+				}
+			})
 		}
 	})
 }

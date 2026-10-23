@@ -39,6 +39,8 @@ Full 仅指全部普通 Go 测试，已登记为 L4 `go.full`，不包含 e2e �
 
 结果和未验边界写入任务专属 [验收记录](acceptance/README.md)，测试列表只说明测什么。报告格式、登记和复验见 [报告约定](testing/reports.md)。历史验收沿用其冻结版本与当时级别，不代表当前代码通过。
 
+安装部署的历史生成记录接管修复见[专属验收](acceptance/install-deployment-generation-20261022.md)：部署定向回归覆盖三代 Runner 构建及错误输入、命名空间、候选、缺失 Run 和只读证明；自动测试使用隔离现场，实际安装维护单独记录。
+
 ## 维护
 
 修改测试内容时，同步实现、分级列表、JSON、[E2E 登记](../tests/e2e/suites.json)及执行器选择/证据校验。JSON 使用 `id/name/level/environment/command/check`，可选 `note`，不新增未支持的字段。ID 保持验证目的；改级后旧级别选择明确失败。

@@ -95,11 +95,7 @@ func TestDeploymentInterruptedRecovery(t *testing.T) {
 	c, err = LoadConfig(configPath)
 	require(t, err)
 	require(t, c.ResolveIdentity(context.Background()))
-	for _, name := range []string{"spec.md", "plan.md"} {
-		require(t, os.WriteFile(filepath.Join(c.Repository, name), []byte("# Frozen task\n\n## Acceptance\n\nFixture.\n"), 0600))
-	}
-	fixtureGit(t, c.Repository, "add", ".")
-	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "frozen task")
+	prepareStoppedRunRepository(t, c)
 	d, runtime := startPresetDirectory(t)
 	candidate := seedStoppedPublicRun(t, runtime, c)
 	require(t, d.Close())
@@ -107,6 +103,15 @@ func TestDeploymentInterruptedRecovery(t *testing.T) {
 	store, err := OpenNativeTaskCommandStore(ctx, &c)
 	require(t, err)
 	defer store.Close()
+	generations, err := store.Generations(ctx, c.Identity())
+	require(t, err)
+	if len(generations) != 1 {
+		t.Fatal("expected the frozen task's generation", generations)
+	}
+	generation := generations[0]
+	generation.RunID, generation.InputDigest = "original-generation", "original-generation-input"
+	generation.Revision++
+	require(t, store.SaveGeneration(ctx, generation, generation.Revision-1))
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	require(t, err)
 	var checkpoint hostcontract.ServiceCheckpoint
@@ -144,7 +149,10 @@ func TestDeploymentInterruptedRecovery(t *testing.T) {
 	info.LastShutdown.Diagnostic = "original native resources remain unverified"
 	require(t, os.WriteFile(infoPath, mustJSON(info), 0600))
 	takeoverPath := filepath.Join(runnerDir, "idle-takeover-fixture.json")
-	takeover := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: runnerDir, CandidateSHA256: global.Runner.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{ID: candidate.RunID, Kind: "run", Revision: 1, InputDigest: candidate.InputDigest, Status: "compatible"}}}
+	takeover := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: runnerDir, CandidateSHA256: global.Runner.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{
+		{ID: candidate.RunID, Kind: "run", Revision: 1, InputDigest: candidate.InputDigest, Status: "compatible"},
+		{ID: generation.RunID, Kind: "run", Revision: 1, InputDigest: generation.InputDigest, Status: "compatible"},
+	}}
 	require(t, os.WriteFile(takeoverPath, mustJSON(takeover), 0600))
 	paths := []string{GlobalExecutionConfigPath(), configPath, filepath.Join(backend.dir, "instance.json"), filepath.Join(backend.dir, "launch.json"), filepath.Join(backend.dir, "shutdown.json"), filepath.Join(backend.dir, "runner-build.json"), filepath.Join(HomeDir(), "deployment.json"), infoPath, takeoverPath, web.exe}
 	baseline := map[string][]byte{}
