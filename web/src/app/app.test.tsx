@@ -16,6 +16,7 @@ import {
 import { MemoryRouter } from "react-router-dom";
 import type { Identity } from "../shared/api/types";
 import { Workspace } from "./app";
+import { configSnapshot } from "../test/execution-config";
 import { Api } from "../shared/api/client";
 import { saveRequest, listRequests } from "../shared/api/journal";
 import type { Receipt } from "../shared/api/types";
@@ -127,39 +128,27 @@ it("preloads only after connection verification, shares presentation in StrictMo
   client.clear();
 });
 
-it("keeps cached settings visible through a failed refresh and scopes manual refresh", async () => {
+it("removes duplicated profiles from configuration and scopes manual refresh", async () => {
   const client = testClient();
   const identity = { ...fixtureIdentity, project_id: "manual" };
   const api = new Api(identity, "csrf", "manual-home");
-  const options = projectQueries(api);
-  client.setQueryData(options.presentation().queryKey, {
-    presentation: {
-      profiles: [
-        {
-          id: "profile",
-          name: "已缓存方案",
-          host: "local",
-          agent: "codex",
-          unavailable_reason: "",
-          details: [],
-        },
-      ],
-      default_profile_id: "profile",
-    },
-  });
+  client.setQueryData([api.home, "execution-config"], configSnapshot);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json(configSnapshot)),
+  );
   const other = [api.home, "another-project", "instance", "snapshot"];
   client.setQueryData(other, {});
   const refreshConnection = vi.fn();
-  vi.spyOn(Api.prototype, "get").mockImplementation(async (path) => {
-    if (path === "/presentation") throw new Error("刷新失败");
-    return workspaceRead(api, path) as never;
-  });
+  vi.spyOn(Api.prototype, "get").mockImplementation(
+    async (path) => workspaceRead(api, path) as never,
+  );
   mountWorkspace(api, client, { onRefreshConnection: refreshConnection });
-  expect(screen.getByText("已缓存方案")).toBeVisible();
+  expect(await screen.findByLabelText("生成最大并发数")).toHaveValue(5);
+  expect(screen.queryByText("当前服务已加载方案")).not.toBeInTheDocument();
+  expect(screen.queryByText("全局执行配置")).not.toBeInTheDocument();
   await screen.findByText("服务已连接", { exact: true });
   fireEvent.click(screen.getByRole("button", { name: "刷新查询" }));
-  await screen.findByText("Error: 刷新失败");
-  expect(screen.getByText("已缓存方案")).toBeVisible();
   expect(refreshConnection).toHaveBeenCalledTimes(1);
   expect(client.getQueryState(other)?.isInvalidated).toBe(false);
   client.clear();
@@ -219,9 +208,11 @@ it("runs only one reconciliation round while journal observations refresh and ab
     "fetch",
     vi.fn(async (url: string) =>
       Response.json(
-        url === "/auth/status"
-          ? { identity, csrf_token: "csrf" }
-          : workspaceRead(api, url.replace(/^.*\/projects\/[^/]+/, "")),
+        url === "/api/web/execution-config"
+          ? configSnapshot
+          : url === "/auth/status"
+            ? { identity, csrf_token: "csrf" }
+            : workspaceRead(api, url.replace(/^.*\/projects\/[^/]+/, "")),
       ),
     ),
   );
@@ -266,9 +257,11 @@ it("disables commands when offline even while paused queries retain a successful
     "fetch",
     vi.fn(async (url: string) =>
       Response.json(
-        url === "/auth/status"
-          ? { identity, csrf_token: "csrf" }
-          : workspaceRead(api, url.replace(/^.*\/projects\/[^/]+/, "")),
+        url === "/api/web/execution-config"
+          ? configSnapshot
+          : url === "/auth/status"
+            ? { identity, csrf_token: "csrf" }
+            : workspaceRead(api, url.replace(/^.*\/projects\/[^/]+/, "")),
       ),
     ),
   );

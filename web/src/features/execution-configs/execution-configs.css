@@ -1,29 +1,20 @@
 .execution-config-app {
-  --sl-bg: light-dark(#f7f8fa, #16191f);
-  --sl-panel: light-dark(#fff, #1d222b);
-  --sl-rail: light-dark(#f1f3f6, #191e26);
-  --sl-text: light-dark(#1d2839, #e8edf5);
-  --sl-muted: light-dark(#637084, #a3aec0);
-  --sl-line: light-dark(#e3e7ee, #343e4c);
-  --sl-blue: light-dark(#315bda, #9bb7ff);
-  --sl-blue-bg: light-dark(#eef3ff, #28354f);
-  --sl-good: light-dark(#23734e, #86d5aa);
-  --sl-good-bg: light-dark(#eef8f2, #213c30);
-  --sl-warn: light-dark(#93601a, #efc47c);
-  --sl-warn-bg: light-dark(#fff7e8, #3b3022);
-  --sl-danger: light-dark(#b24343, #f19e9e);
-  font:
-    14px/1.5 Inter,
-    "Segoe UI",
-    "Microsoft YaHei",
-    sans-serif;
+  --sl-bg: #101614;
+  --sl-panel: #152019;
+  --sl-rail: #17221c;
+  --sl-text: #e5ede8;
+  --sl-muted: #8faaa0;
+  --sl-line: #293630;
+  --sl-blue: #78d7b5;
+  --sl-blue-bg: #223e30;
+  --sl-good: #86d5aa;
+  --sl-good-bg: #213c30;
+  --sl-warn: #efc47c;
+  --sl-warn-bg: #3b3022;
+  --sl-danger: #f19e9e;
+  font: inherit;
   color: var(--sl-text);
-  background: var(--sl-bg);
-  border: 1px solid var(--sl-line);
-  border-radius: 12px;
-  overflow: hidden;
-  color-scheme: light dark;
-  isolation: isolate;
+  min-width: 0;
 }
 .execution-config-app * {
   box-sizing: border-box;
@@ -43,85 +34,10 @@
   opacity: 0.48;
   cursor: not-allowed;
 }
-.execution-config-app .sl-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 18px 110px 18px 20px;
-  border-bottom: 1px solid var(--sl-line);
-  background: var(--sl-panel);
-  min-height: 64px;
-}
-.execution-config-app .sl-brand {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.4px;
-}
-.execution-config-app .sl-symbol {
-  color: var(--sl-blue);
-  font-size: 20px;
-}
-.execution-config-app .sl-divider {
-  height: 18px;
-  width: 1px;
-  background: var(--sl-line);
-  margin: 0 8px;
-}
-.execution-config-app .sl-crumb {
-  color: var(--sl-muted);
-  font-size: 12px;
-}
-.execution-config-app .sl-prototype {
-  margin-left: auto;
-  font-size: 11px;
-  white-space: nowrap;
-  color: var(--sl-muted);
-  border: 1px solid var(--sl-line);
-  padding: 3px 7px;
-  border-radius: 5px;
-}
-.execution-config-app .sl-shell {
-  display: grid;
-  grid-template-columns: 150px minmax(0, 1fr);
-}
-.execution-config-app .sl-nav {
-  background: var(--sl-rail);
-  padding: 25px 12px;
-  border-right: 1px solid var(--sl-line);
-}
-.execution-config-app .sl-nav-label {
-  font-size: 11px;
-  letter-spacing: 1px;
-  color: var(--sl-muted);
-  margin: 0 10px 12px;
-}
-.execution-config-app .sl-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px;
-  border-radius: 6px;
-  color: var(--sl-muted);
-  font-size: 12px;
-  margin: 3px 0;
-}
-.execution-config-app .sl-nav-item.active {
-  background: var(--sl-panel);
-  color: var(--sl-blue);
-  font-weight: 500;
-  box-shadow: 0 1px 2px light-dark(#1726400a, #0002);
-}
 .execution-config-app svg {
   width: 16px;
   height: 16px;
   flex-shrink: 0;
-}
-.execution-config-app .sl-main {
-  padding: 27px 26px 24px;
-  min-width: 0;
 }
 .execution-config-app .sl-page-head {
   display: flex;
@@ -137,8 +53,8 @@
   margin-bottom: 5px;
 }
 .execution-config-app h1 {
-  font-size: 23px;
-  line-height: 1.35;
+  font-size: 25px;
+  line-height: 1.4;
   letter-spacing: -0.6px;
   margin: 0 0 6px;
   font-weight: 600;
@@ -168,7 +84,7 @@
 .execution-config-app .sl-button.primary {
   background: var(--sl-blue);
   border-color: var(--sl-blue);
-  color: light-dark(#fff, #15203c);
+  color: #10281c;
 }
 .execution-config-app .sl-button.quiet {
   border-color: transparent;
@@ -213,7 +129,7 @@
   background: var(--sl-rail);
 }
 .execution-config-app .sl-profile.selected {
-  border-color: light-dark(#cbd8fb, #45618a);
+  border-color: #365b47;
   background: var(--sl-blue-bg);
 }
 .execution-config-app .sl-profile-name {
@@ -500,38 +416,11 @@
   display: none !important;
 }
 @media (max-width: 900px) {
-  .execution-config-app .sl-shell {
-    grid-template-columns: 1fr;
-  }
-  .execution-config-app .sl-nav {
-    display: none;
-  }
-  .execution-config-app .sl-main {
-    padding: 22px;
-  }
   .execution-config-app .sl-workspace {
     grid-template-columns: 210px minmax(0, 1fr);
   }
 }
 @media (max-width: 620px) {
-  .execution-config-app .sl-top {
-    padding: 14px 100px 14px 14px;
-    flex-wrap: wrap;
-    gap: 5px;
-  }
-  .execution-config-app .sl-prototype {
-    margin-left: 0;
-  }
-  .execution-config-app .sl-crumb,
-  .execution-config-app .sl-divider {
-    display: none;
-  }
-  .execution-config-app .sl-brand {
-    font-size: 14px;
-  }
-  .execution-config-app .sl-main {
-    padding: 18px 12px;
-  }
   .execution-config-app .sl-page-head {
     gap: 10px;
   }
@@ -581,9 +470,6 @@
   .execution-config-app .sl-query {
     align-items: flex-start;
   }
-  .execution-config-app .sl-prototype {
-    font-size: 10px;
-  }
 }
 @media (pointer: coarse) {
   .execution-config-app button,
@@ -598,22 +484,7 @@
   margin: 0;
   min-width: 0;
 }
-.execution-config-app .sl-top {
-  padding-right: 24px;
-}
-.execution-config-app .sl-brand {
-  text-decoration: none;
-  color: var(--sl-text);
-}
-.execution-config-app .sl-return {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--sl-muted);
-  font-size: 12px;
-  text-decoration: none;
-}
+
 .execution-config-app .sl-model-note {
   display: flex;
   align-items: flex-start;
@@ -633,10 +504,7 @@
 .execution-config-app .sl-toast {
   min-height: 18px;
 }
-.execution-config-app .sl-nav-item {
-  text-decoration: none;
-}
-.execution-config-app .sl-main h1 {
+.execution-config-app h1 {
   color: var(--sl-text);
 }
 .execution-config-app details > summary {
@@ -654,35 +522,7 @@
 .execution-config-app .sl-button:disabled {
   cursor: not-allowed;
 }
-.execution-config-app {
-  border-radius: 0;
-  min-height: 100vh;
-  border: 0;
-}
 
 .execution-config-app label {
   color: var(--sl-text);
-}
-
-.execution-config-app .sl-generation-settings {
-  background: var(--sl-panel);
-  border: 1px solid var(--sl-line);
-  border-radius: 7px;
-  padding: 14px;
-  margin-bottom: 17px;
-}
-.execution-config-app .sl-generation-settings label {
-  font-weight: 500;
-}
-.execution-config-app .sl-generation-settings input {
-  width: 80px;
-  padding: 6px 8px;
-  border: 1px solid var(--sl-line);
-  border-radius: 5px;
-  background: var(--sl-bg);
-}
-.execution-config-app .sl-generation-settings p {
-  color: var(--sl-muted);
-  font-size: 12px;
-  margin: 8px 0;
 }

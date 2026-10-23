@@ -1,4 +1,4 @@
-import { json } from "./client";
+import { ApiError, json } from "./client";
 export interface Settings {
   executable?: string;
   model?: string;
@@ -141,4 +141,20 @@ export function stable(value: unknown): string {
       "}"
     );
   return JSON.stringify(value);
+}
+
+export async function saveExecutionConfig(
+  api: ReturnType<typeof executionConfigAPI>,
+  config: ExecutionConfig,
+  digest: string,
+) {
+  try {
+    return await api.save(config, digest);
+  } catch (error) {
+    if (error instanceof ApiError && error.status >= 400 && error.status < 500)
+      throw error;
+    const current = await api.read();
+    if (stable(current.config) !== stable(config)) throw error;
+    return current;
+  }
 }

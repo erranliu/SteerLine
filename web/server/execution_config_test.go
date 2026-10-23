@@ -144,4 +144,7 @@ func TestWebExecutionConfigRoutes(t *testing.T) {
 	if w = request(s, "GET", "/settings/execution-configs", "", nil, ""); w.Code != 200 {
 		t.Fatal("global SPA route unavailable", w.Code)
 	}
+	if w = request(s, "GET", "/settings", "", nil, ""); w.Code != 200 {
+		t.Fatal("configuration SPA route unavailable", w.Code)
+	}
 }

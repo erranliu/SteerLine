@@ -8,6 +8,8 @@
 
 2026-10-15 查询体验规划：用户明确后续引入 SSE；此前先统一 Query 缓存与参数、有界预取基础数据、复用缓存展示、停止隐藏区域查询及操作后按资源族失效。见[查询优化 Spec](../../SteerlineFlow/spec/web-query-optimization.spec.md)/[Plan](../../SteerlineFlow/plans/web-query-optimization.plan.md)与[专属验收](../../SteerlineFlow/testing/acceptance/web-query-optimization.md)。本次按后续授权实施，业务查询统一由 Query options 定义；当前项目连接核验后预取执行方案与任务首屏，方案新鲜期 60 秒，动态查询只轮询可见区域，操作按资源族失效。项目切换保留原作用域取消。后续 SSE 更新同一缓存，不新增持久服务缓存、同步框架或后端接口；实际验证范围归专属验收，本轮不实现 SSE。
 
+2026-10-23：全局入口名称调整为“执行方案配置”，原项目“执行设置”调整为“配置”，移除重复执行方案列表；共享生成并发设置移至“配置”，保留所有项目共享、默认 5 和保存后重启生效。两页复用项目页侧栏、顶栏和配色。从项目进入执行方案配置后返回原项目/页面及查询、片段；直达时采用最近有效项目，否则提供项目选择。未保存修改离开时提示，零项目仍可访问 `/settings`。验证范围见[专属验收](../../SteerlineFlow/testing/acceptance/configuration-navigation.md)。
+
 2026-10-21：新增全局[执行配置管理](../../SteerlineFlow/spec/web-execution-config.spec.md)页，路径 `/settings/execution-configs`，零项目时也可进入。Web 前后端负责原生目录探测、配置编辑及条件保存；执行服务仅消费配置和投影原加载摘要。保存后明确待重启，冻结调试包只读，Runner 不新增探测接口。
 
 ## 现有依据

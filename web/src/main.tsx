@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter } from "react-router-dom";
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { authorize } from "./shared/api/client";
 import { App } from "./app/app";
 import "./styles.css";
@@ -24,9 +24,11 @@ authorize()
     root.render(
       <StrictMode>
         <QueryClientProvider client={queries}>
-          <BrowserRouter>
-            <App initial={initial} />
-          </BrowserRouter>
+          <RouterProvider
+            router={createBrowserRouter([
+              { path: "*", element: <App initial={initial} /> },
+            ])}
+          />
         </QueryClientProvider>
       </StrictMode>,
     ),
