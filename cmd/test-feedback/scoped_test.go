@@ -401,43 +401,20 @@ func syntheticQuickOwners(t *testing.T, root string) []scopedGroup {
 	return groups
 }
 
-func TestQuickOwnerPartitionsRejectMissingAndReplayedGroups(t *testing.T) {
+func TestQuickOwnersRejectMissingAndReplayedGroups(t *testing.T) {
 	groups := syntheticQuickOwners(t, t.TempDir())
-	index := -1
-	seen := map[string]bool{}
-	for i, owner := range quickOwnerCases {
-		if owner.ID == "quick-owner-runner-startup" {
-			index = i
-		}
-		for _, name := range owner.Tests {
-			key := owner.Package + "\x00" + name
-			if seen[key] {
-				t.Fatal("owner partitions overlap", key)
-			}
-			seen[key] = true
-		}
-	}
-	if index < 0 {
-		t.Fatal("Runner startup partition missing")
-	}
-	replaced := append([]scopedGroup{}, groups...)
-	if index+1 >= len(groups) || quickOwnerCases[index+1].Package != quickOwnerCases[index].Package {
-		t.Fatal("same-package lifecycle partition missing")
-	}
-	replaced[index+1] = groups[index]
 	for _, tc := range []struct {
 		name   string
 		groups []scopedGroup
 		want   string
 	}{
-		{"missing", append(append([]scopedGroup{}, groups[:index]...), groups[index+1:]...), "quick package github.com/erranliu/SteerLine/internal/app completed 3 times, want 4"},
-		{"replayed", append(append([]scopedGroup{}, groups...), groups[index]), "quick owner test "},
-		{"replaced", replaced, "quick owner test "},
+		{"missing", nil, "quick package github.com/erranliu/SteerLine/cmd/test-feedback completed 0 times, want 1"},
+		{"replayed", append(append([]scopedGroup{}, groups...), groups[0]), "quick owner test "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			problems := checkScopedCoverage(scopedReport{Scope: "quick", Groups: tc.groups})
 			if !strings.Contains(strings.Join(problems, "\n"), tc.want) {
-				t.Fatalf("partition error not identified: %v", problems)
+				t.Fatalf("coverage error not identified: %v", problems)
 			}
 		})
 	}

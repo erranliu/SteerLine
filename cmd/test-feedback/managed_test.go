@@ -77,7 +77,7 @@ func TestTMRegisteredCatalogueMatchesExecutableManifest(t *testing.T) {
 	if err = json.Unmarshal(manifestRaw, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalogue.Tests) != len(manifest)+1 {
+	if len(catalogue.Tests) != len(manifest)+2 {
 		t.Fatal("catalogue and executable manifest differ")
 	}
 	byID := map[string]testmanagement.Definition{}
@@ -88,6 +88,97 @@ func TestTMRegisteredCatalogueMatchesExecutableManifest(t *testing.T) {
 		d, ok := byID[entry.ID]
 		if !ok || d.Level != entry.Level || d.Environment != entry.Env || !strings.Contains(d.Command, "-level="+entry.Level) {
 			t.Fatal("catalogue changed level/environment/command", entry.ID)
+		}
+	}
+}
+
+func TestManagedGoFullCannotClaimSubsetOrSkippedCoverage(t *testing.T) {
+	root := t.TempDir()
+	t.Chdir(root)
+	if err := os.WriteFile("go.mod", []byte("module fixture\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll("docs/testing", 0700); err != nil {
+		t.Fatal(err)
+	}
+	d := testmanagement.Definition{ID: "go.full", Name: "Go", Level: "L4", Environment: "isolated", Command: "go run ./cmd/test-feedback -level=L4 -suite=go", Check: "complete"}
+	raw, _ := json.Marshal(testmanagement.Catalogue{Tests: []testmanagement.Definition{d}})
+	if err := os.WriteFile(testmanagement.CataloguePath, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, scope, testStatus, want string
+		complete, skipped             bool
+	}{
+		{"full", "full", "pass", "passed", true, false},
+		{"quick-subset", "quick", "pass", "incomplete", true, false},
+		{"zero-match", "full", "", "incomplete", true, false},
+		{"skipped", "full", "pass", "incomplete", true, true},
+		{"incomplete", "full", "pass", "incomplete", false, false},
+		{"assertion-failure", "full", "fail", "failed", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := options{level: "L4", suite: "go", out: t.TempDir()}
+			var err error
+			opts.managed, err = freezeManagedReports(opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			group := scopedGroup{Summary: feedback.Summary{Complete: true}}
+			if tc.testStatus != "" {
+				group.Summary.Tests = []feedback.Test{{Status: tc.testStatus}}
+			}
+			if tc.skipped {
+				group.Summary.SkippedTests = 1
+			}
+			summary := scopedReport{Scope: tc.scope, Passed: tc.testStatus == "pass", Complete: tc.complete, Groups: []scopedGroup{group}}
+			if err = writeJSON(filepath.Join(opts.out, "summary.json"), summary); err != nil {
+				t.Fatal(err)
+			}
+			writeManagedReports(opts, managedSource{}, 1)
+			body, err := os.ReadFile(filepath.Join(opts.out, "managed-go.full.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			report, err := testmanagement.ParseReport(body)
+			if err != nil || report.Results[0].Status != tc.want {
+				t.Fatalf("report status differs: %s %v", body, err)
+			}
+		})
+	}
+}
+
+func TestRegisteredCommandsSelectExactlyTheirDefinitions(t *testing.T) {
+	root, err := e2eRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(testmanagement.CataloguePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalogue, err := testmanagement.ParseCatalogue(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range catalogue.Tests {
+		args := strings.Fields(d.Command)
+		if len(args) < 4 || strings.Join(args[:3], " ") != "go run ./cmd/test-feedback" {
+			t.Fatalf("unsupported registered command: %s", d.Command)
+		}
+		opts, err := parseOptions(args[3:])
+		if err != nil {
+			t.Fatal(d.ID, err)
+		}
+		if opts.level != d.Level {
+			t.Fatal("registered level differs", d.ID)
+		}
+		frozen, err := freezeManagedReports(opts)
+		if err != nil {
+			t.Fatal(d.ID, err)
+		}
+		if len(frozen.definitions) != 1 || frozen.definitions[d.ID].ID != d.ID {
+			t.Fatal("command selects a different definition", d.ID, frozen.definitions)
 		}
 	}
 }

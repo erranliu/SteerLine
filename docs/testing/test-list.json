@@ -6,31 +6,26 @@
       "level": "L1",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L1",
-      "check": "运行固定 L1 集合，枚举及终态完整、所有必要断言通过，无意外跳过。"
-    },
-    {
-      "id": "workflow.local-codex-audited",
-      "name": "本机 Codex 审计流程",
-      "level": "L3",
-      "environment": "live",
-      "command": "go run ./cmd/test-feedback -level=L3 -suite=workflow -env=live -scenario=workflow.local-codex-audited",
-      "check": "使用两个显式模型完成实现、两轮审计、发布与真实 PR 合并；核对正式产品详情中的模型/材料/审计来源、唯一交付与后继 ready 未启动，清理完整。"
+      "check": "固定最小任务规则、公开契约、持久化与依赖边界、清单一致性全部执行，终态完整、断言通过、无意外跳过。",
+      "note": "固定单一最小集，目标总耗时 1 分钟内；任务规则、公开 Runner 契约、最小持久化和依赖边界、清单一致性。专项回归按影响使用 L4 go.full 或 owner 定向命令。"
     },
     {
       "id": "smoke.delivery",
       "name": "核心交付受控冒烟",
       "level": "L2",
       "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L2 -env=controlled",
-      "check": "创建依赖任务，执行至待合并后合并；唯一交付、后继 ready 未启动，重复读取无新执行，停止回执与清理完整。仅代表 controlled gate。"
+      "command": "go run ./cmd/test-feedback -level=L2",
+      "check": "创建依赖任务，执行至待合并后合并；唯一交付、后继 ready 未启动，重复读取无新执行，停止回执与清理完整。完整受控冒烟通过。",
+      "note": "固定单一 L2，目标总耗时 5 分钟内；真实 SteerLine/Git/SQLite，受控公开 Runner/PR，无模型或真实 GitHub 副作用。"
     },
     {
-      "id": "smoke.local-codex",
-      "name": "本机 Codex 核心交付",
-      "level": "L2",
-      "environment": "live",
-      "command": "go run ./cmd/test-feedback -level=L2",
-      "check": "受控 gate 通过后运行真实 Runner/Codex 实现、报告和发布，核对三个 final、真实产物及精确 merged PR、唯一交付和未启动后继，清理完整。"
+      "id": "configuration.execution-profiles",
+      "name": "执行配置保存与生效",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=configuration -env=controlled -scenario=configuration.execution-profiles",
+      "check": "浏览器条件保存本机Orca三Agent配置、待重启门槛、正式停启、关闭Web后CLI核对adapter/target/agent/model/effort/helper，原候选不变且资源清理完整。",
+      "note": "独立 home/repo/DB/端口/浏览器输出；受控 Runner，无真实 Orca。可跨包有界并行，组合运行证据尚待补齐。"
     },
     {
       "id": "recovery.waiting-merge-restart",
@@ -38,15 +33,8 @@
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.waiting-merge-restart",
-      "check": "PR 待合并时重启 SteerLine，保持原候选/Run/请求，零自动新输入、不提前释放后继；合并后唯一交付，资源清理完整。"
-    },
-    {
-      "id": "runtime.service-lifecycle",
-      "name": "宿主正常生命周期",
-      "level": "L3",
-      "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario=runtime.service-lifecycle",
-      "check": "中文与空格路径、无关 cwd 下创建启动器，核对任务、宿主身份和控制；停止结算，再启动新实例保持任务事实，最终清理完整。"
+      "check": "PR 待合并时重启 SteerLine，保持原候选/Run/请求，零自动新输入、不提前释放后继；合并后唯一交付，资源清理完整。",
+      "note": "独立 home/repo/DB/端口/provider/证据；与 runtime 跨包总并发二。"
     },
     {
       "id": "runtime.dual-home-operation",
@@ -54,39 +42,17 @@
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario=runtime.dual-home-operation",
-      "check": "两独立 home 同时在线，以不同请求 discard 不同任务；另一项目/provider 不变、无候选，实例不变，两者停止清理完整。"
+      "check": "两独立 home 同时在线，以不同请求 discard 不同任务；另一项目/provider 不变、无候选，实例不变，两者停止清理完整。",
+      "note": "独立双 home/repo/DB/端口/provider/证据；runtime 包内并发二。"
     },
     {
-      "id": "runtime.source-build-isolation",
-      "name": "源码构建输出隔离",
-      "level": "L4",
+      "id": "runtime.service-lifecycle",
+      "name": "宿主正常生命周期",
+      "level": "L3",
       "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.source-build-isolation",
-      "check": "拒绝源码 bin junction/EXE hardlink 指向隔离安装夹具；合法构建保持源码及受保护夹具的 EXE/数据库/任务事实不变。"
-    },
-    {
-      "id": "runtime.path-isolation",
-      "name": "项目路径与数据库隔离",
-      "level": "L4",
-      "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.path-isolation",
-      "check": "拒绝 state junction、越界 run_dir、退役 worktree_root 和 DB/WAL/SHM hardlink，受保护数据不变；普通文件恢复后正常可用。"
-    },
-    {
-      "id": "runtime.service-write-isolation",
-      "name": "宿主写入隔离",
-      "level": "L4",
-      "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.service-write-isolation",
-      "check": "陈旧实例、冻结目录外写入及同 repo 跨 home 启动均拒绝且零请求/候选副作用；正常控制通过，重启后仍拒绝旧实例。"
-    },
-    {
-      "id": "runtime.dual-home-isolation",
-      "name": "双 home 同 ID 重放隔离",
-      "level": "L4",
-      "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.dual-home-isolation",
-      "check": "两 home 使用相同 task/request ID，discard 后原参数重放回执一致、版本不变；另一 home/provider 无改写、无候选，实例不变。"
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario=runtime.service-lifecycle",
+      "check": "中文与空格路径、无关 cwd 下创建启动器，核对任务、宿主身份和控制；停止结算，再启动新实例保持任务事实，最终清理完整。",
+      "note": "独立 home/repo/DB/端口/provider/证据；runtime 包内并发二。"
     },
     {
       "id": "runtime.shared-runner-projects",
@@ -94,39 +60,98 @@
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario=runtime.shared-runner-projects",
-      "check": "同 home 两项目共用一个 Runner，相同产品请求号创建独立 Run；分别消费仓库/PR，整体重启保持绑定、零自动新输入，全体资源清理完整。"
+      "check": "同 home 两项目共用一个 Runner，相同产品请求号创建独立 Run；分别消费仓库/PR，整体重启保持绑定、零自动新输入，全体资源清理完整。",
+      "note": "独立 home、双项目 repo/DB/provider/端口及证据；runtime 包内并发二。"
     },
     {
-      "id": "testing.management-local-codex",
-      "name": "Real test management consumption",
-      "level": "L3",
-      "environment": "live",
-      "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -env=live -scenario=testing.management-local-codex",
-      "check": "Automatic real generation stores the system arrangement without apply; current Runner receives real worktree paths and the exact arrangement in its frozen prompt; actual pass/fail programs on the original clean Run map through public Runner artifacts to API and browser, with resources settled."
+      "id": "go.full",
+      "name": "Go 单元与集成测试全集",
+      "level": "L4",
+      "environment": "isolated",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=go",
+      "check": "枚举全部普通 Go 包及固定分区，测试终态完整、不遗漏或重复；必要断言通过，跳过或缺证据不计完整通过。",
+      "note": "复用既有 Full 三 worker 执行器，包含 L1 及移出的 owner/边界回归；不含 e2e 标签流程和 Web 前端测试，不随每次修改默认执行。可用不带 level 的 owner 定向命令诊断，定向子集不报告 go.full 通过。"
+    },
+    {
+      "id": "runtime.dual-home-isolation",
+      "name": "双 home 同 ID 重放隔离",
+      "level": "L4",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.dual-home-isolation",
+      "check": "两 home 使用相同 task/request ID，discard 后原参数重放回执一致、版本不变；另一 home/provider 无改写、无候选，实例不变。",
+      "note": "独立临时 home/repo/DB/端口/provider/证据；四项边界可包内二并行，与共享 Web 构建场景同选时串行。"
+    },
+    {
+      "id": "runtime.path-isolation",
+      "name": "项目路径与数据库隔离",
+      "level": "L4",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.path-isolation",
+      "check": "拒绝 state junction、越界 run_dir、退役 worktree_root 和 DB/WAL/SHM hardlink，受保护数据不变；普通文件恢复后正常可用。",
+      "note": "独立临时 home/repo/DB/端口/provider/证据；四项边界可包内二并行，与共享 Web 构建场景同选时串行。"
     },
     {
       "id": "runtime.project-maintenance",
       "name": "项目基线与材料维护",
-      "level": "L3",
+      "level": "L4",
       "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -scenario=runtime.project-maintenance -env=controlled",
-      "check": "新独立调试包中真实 Go/Web/Edge 验证快进、三版自动材料、独立候选、过期测试禁用、旧PR交付与跨项目隔离；模拟 Runner，停止与清理完整。"
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.project-maintenance",
+      "check": "新独立调试包中真实 Go/Web/Edge 验证快进、三版自动材料、独立候选、过期测试禁用、旧PR交付与跨项目隔离；模拟 Runner，停止与清理完整。",
+      "note": "共享源码 web/node_modules 与构建输出，必须串行；需要 Windows、Node/npm、Edge；E2E 入口自建公开 Runner 夹具。"
     },
     {
-      "id": "configuration.execution-profiles",
-      "name": "执行配置保存与生效",
-      "level": "L3",
+      "id": "runtime.service-write-isolation",
+      "name": "宿主写入隔离",
+      "level": "L4",
       "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L3 -suite=configuration -scenario=configuration.execution-profiles -env=controlled",
-      "check": "浏览器条件保存本机Orca三Agent配置、待重启门槛、正式停启、关闭Web后CLI核对adapter/target/agent/model/effort/helper，原候选不变且资源清理完整。"
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.service-write-isolation",
+      "check": "陈旧实例、冻结目录外写入及同 repo 跨 home 启动均拒绝且零请求/候选副作用；正常控制通过，重启后仍拒绝旧实例。",
+      "note": "独立临时 home/repo/DB/端口/provider/证据；四项边界可包内二并行，与共享 Web 构建场景同选时串行。"
+    },
+    {
+      "id": "runtime.source-build-isolation",
+      "name": "源码构建输出隔离",
+      "level": "L4",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.source-build-isolation",
+      "check": "拒绝源码 bin junction/EXE hardlink 指向隔离安装夹具；合法构建保持源码及受保护夹具的 EXE/数据库/任务事实不变。",
+      "note": "独立临时 home/repo/DB/端口/provider/证据；四项边界可包内二并行，与共享 Web 构建场景同选时串行。"
+    },
+    {
+      "id": "smoke.local-codex",
+      "name": "本机 Codex 核心交付",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=smoke -env=live -scenario=smoke.local-codex",
+      "check": "运行真实 Runner/Codex 实现、报告和发布，核对三个 final、真实产物及精确 merged PR、唯一交付和未启动后继，清理完整。",
+      "note": "L4 真实交付专项，单独精确选择；固定 Runner、本机 Codex 登录及 SteerlineTest GitHub 写权限，消耗模型并创建/合并本次专属 PR；资源清理须验证。"
+    },
+    {
+      "id": "testing.management-local-codex",
+      "name": "真实测试管理消费",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.management-local-codex",
+      "check": "真实自动生成保存系统安排，原干净 Run 实际执行先通过再失败的测试程序，经 Runner artifacts、Git、API 和浏览器核对原报告及绑定；停止和资源清理完整。",
+      "note": "共享源码 Web 构建目录，必须串行；需要固定 Runner、本机 Codex 登录、Node/npm/Edge，消耗真实模型；隔离包不发布 PR。"
     },
     {
       "id": "testing.records",
       "name": "测试集记录与显式复验",
-      "level": "L3",
+      "level": "L4",
       "environment": "controlled",
-      "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -scenario=testing.records -env=controlled",
-      "check": "新隔离包中真实小型脚本失败后提交修正并通过，经正式 CLI、SQLite、API 和浏览器展示显式复验；原报告重放无重复，停止和资源清理完整。"
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=controlled -scenario=testing.records",
+      "check": "新隔离包中真实小型脚本失败后提交修正并通过，经正式 CLI、SQLite、API 和浏览器展示显式复验；原报告重放无重复，停止和资源清理完整。",
+      "note": "共享源码 web/node_modules 与构建输出，必须串行；需要 Windows、Node/npm、Edge；E2E 入口自建公开 Runner 夹具。"
+    },
+    {
+      "id": "workflow.local-codex-audited",
+      "name": "本机 Codex 审计流程",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=workflow -env=live -scenario=workflow.local-codex-audited",
+      "check": "使用两个显式模型完成实现、两轮审计、发布与真实 PR 合并；核对正式产品详情中的模型/材料/审计来源、唯一交付与后继 ready 未启动，清理完整。",
+      "note": "L4 真实审计专项，单独精确选择；固定 Runner、两个不同的显式模型及 SteerlineTest GitHub 写权限，消耗模型并创建/合并专属 PR。"
     }
   ]
 }

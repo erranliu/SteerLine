@@ -73,6 +73,9 @@ func freezeManagedReports(opts options) (*managedRun, error) {
 	if opts.level == "L1" {
 		selected = []string{"l1.minimum"}
 		actualEnvironments["l1.minimum"] = "isolated"
+	} else if opts.level == "L4" && opts.suite == "go" {
+		selected = []string{"go.full"}
+		actualEnvironments["go.full"] = "isolated"
 	} else {
 		scenarios, e := selectE2E(root, opts)
 		if e != nil {
@@ -94,8 +97,8 @@ func freezeManagedReports(opts options) (*managedRun, error) {
 		if !ok {
 			return nil, fmt.Errorf("unregistered test %s", id)
 		}
-		if d.Environment != actualEnvironments[id] {
-			return nil, fmt.Errorf("registered environment differs from selected test %s", id)
+		if d.Level != opts.level || d.Environment != actualEnvironments[id] {
+			return nil, fmt.Errorf("registered level/environment differs from selected test %s", id)
 		}
 		run.definitions[id] = d
 		run.ids[id] = testmanagement.NewRecordID()
@@ -135,7 +138,8 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 	summaryRaw, readErr := os.ReadFile(filepath.Join(opts.out, "summary.json"))
 	var scoped scopedReport
 	var e2e e2eReport
-	if opts.level == "L1" {
+	scopedRun := opts.level == "L1" || opts.level == "L4" && opts.suite == "go"
+	if scopedRun {
 		err = json.Unmarshal(summaryRaw, &scoped)
 	} else {
 		err = json.Unmarshal(summaryRaw, &e2e)
@@ -149,7 +153,11 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 		}
 		status, message := "incomplete", "测试报告缺失或不完整"
 		if readErr == nil && err == nil {
-			if opts.level == "L1" {
+			if scopedRun {
+				expectedScope := "quick"
+				if opts.level == "L4" {
+					expectedScope = "full"
+				}
 				count, valid, assertionFailed := 0, true, false
 				for _, group := range scoped.Groups {
 					count += len(group.Summary.Tests)
@@ -160,14 +168,14 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 						valid = false
 					}
 				}
-				if scoped.Scope == "quick" && assertionFailed {
-					status, message = "failed", "L1 存在实际断言失败；完整性与原始错误见 summary.json"
-				} else if scoped.Complete && scoped.Scope == "quick" && count > 0 && valid {
+				if scoped.Scope == expectedScope && assertionFailed {
+					status, message = "failed", "测试集存在实际断言失败；完整性与原始错误见 summary.json"
+				} else if scoped.Complete && scoped.Scope == expectedScope && count > 0 && valid {
 					status = "failed"
-					message = "L1 存在失败"
+					message = "测试集存在失败"
 					if scoped.Passed {
 						status = "passed"
-						message = "固定 L1 选择通过"
+						message = "登记测试集通过"
 					}
 				}
 			} else {

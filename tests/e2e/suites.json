@@ -1,7 +1,7 @@
 [
   {
     "id": "workflow.local-codex-audited",
-    "level": "L3",
+    "level": "L4",
     "suite": "workflow",
     "package": "./tests/e2e/live",
     "test": "TestWorkflowLocalCodexAudited",
@@ -18,7 +18,7 @@
   },
   {
     "id": "smoke.local-codex",
-    "level": "L2",
+    "level": "L4",
     "suite": "smoke",
     "package": "./tests/e2e/live",
     "test": "TestSmokeLocalCodex",
@@ -91,7 +91,7 @@
   },
   {
     "id": "testing.management-local-codex",
-    "level": "L3",
+    "level": "L4",
     "suite": "testing",
     "package": "./tests/e2e/live",
     "test": "TestManagementLocalCodex",
@@ -100,7 +100,7 @@
   },
   {
     "id": "runtime.project-maintenance",
-    "level": "L3",
+    "level": "L4",
     "suite": "runtime",
     "package": "./tests/e2e/suites/runtime",
     "test": "TestProjectMaintenance",
@@ -116,7 +116,7 @@
   },
   {
     "id": "testing.records",
-    "level": "L3",
+    "level": "L4",
     "suite": "testing",
     "package": "./tests/e2e/suites/testing",
     "test": "TestRecords",

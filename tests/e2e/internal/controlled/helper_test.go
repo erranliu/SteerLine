@@ -1,12 +1,55 @@
 package controlled
 
 import (
+	"encoding/json"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+func TestDirectControlledHelperAdvertisesGeneration(t *testing.T) {
+	reader, writer, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reader.Close()
+	previous := os.Stdout
+	os.Stdout = writer
+	handled, callErr := RunnerCLI([]string{"capabilities", "--offline", "--json"})
+	os.Stdout = previous
+	writer.Close()
+	if !handled || callErr != nil {
+		t.Fatal("direct helper capabilities unavailable", handled, callErr)
+	}
+	raw, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &envelope); err != nil || len(envelope) != 5 {
+		t.Fatal("public CLI requires its complete five-field envelope", string(raw), err)
+	}
+	var caps runnerclient.Capabilities
+	if err = json.Unmarshal(envelope["data"], &caps); err != nil {
+		t.Fatal(err)
+	}
+	catalog, err := runnerclient.CompileCatalog(caps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = catalog.ValidateWorkflow(runnercontract.Workflow{ID: "development", Version: 1}); err != nil {
+		t.Fatal("controlled delivery capability lost", err)
+	}
+	input := runnercontract.GenerateRunInput{Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only"}`)}}
+	if err = catalog.ValidateGenerate(input); err != nil {
+		t.Fatal("automatic fixture materials cannot use the advertised generation contract", err)
+	}
+}
 
 func TestControlledProviderKeepsOriginalPRWhenAnotherTaskPublishes(t *testing.T) {
 	first := executionmodel.PRInfo{URL: "https://github.com/e2e/project/pull/1", HeadBranch: "first", State: "open"}

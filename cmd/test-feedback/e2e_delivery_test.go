@@ -10,8 +10,8 @@ import (
 	feedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
-func TestL2RequiresRealDeliveryEvidence(t *testing.T) {
-	entry := e2eScenario{ID: "smoke.local-codex", Level: "L2", Env: "live", Chain: "local-codex", Test: "TestSmokeLocalCodex"}
+func TestL4RequiresRealDeliveryEvidence(t *testing.T) {
+	entry := e2eScenario{ID: "smoke.local-codex", Level: "L4", Env: "live", Chain: "local-codex", Test: "TestSmokeLocalCodex"}
 	good := feedback.LiveDeliveryProof{RunnerVersion: "0.1", RunnerSHA256: strings.Repeat("a", 64), RunID: "original-run", CandidateID: "original-candidate", FinalSources: []feedback.FinalSource{{RunID: "original-run", CandidateID: "original-candidate", Key: "implement"}, {RunID: "original-run", CandidateID: "original-candidate", Key: "report"}, {RunID: "original-run", CandidateID: "original-candidate", Key: "publish"}}, ArtifactCommit: strings.Repeat("b", 40), Artifact: "real model delivery", PRURL: "https://github.com/erranliu/SteerlineTest/pull/1", Repository: "erranliu/SteerlineTest", Base: "codex/e2e/owned/smoke.local-codex/base", Head: "codex/owned", HeadSHA: strings.Repeat("b", 40), MergeSHA: strings.Repeat("c", 40), Merged: true, DeliveryCandidate: "original-candidate", DeliveryPR: "https://github.com/erranliu/SteerlineTest/pull/1", DeliveryCount: 1, SuccessorReady: true, SuccessorUnstarted: true}
 	for _, tc := range []struct {
 		name   string

@@ -114,6 +114,10 @@ func run(args []string) int {
 	if parsed.summarizeLog != "" {
 		return summarizeExisting(parsed)
 	}
+	if parsed.level == "L4" && parsed.suite == "go" {
+		parsed.workers = 3
+		return runScoped(parsed)
+	}
 	if parsed.quick || parsed.workers == 3 {
 		return runScoped(parsed)
 	}
@@ -259,7 +263,7 @@ func parseOptions(args []string) (options, error) {
 	flags.IntVar(&opts.workers, "workers", 1, "suite processes: 1 or 3; L1/quick defaults to 3")
 	flags.StringVar(&opts.level, "level", "", "test level: L1, L2, L3 or L4")
 	flags.StringVar(&opts.suite, "suite", "", "comma-separated L3/L4 suites")
-	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled or gated (L2 default)")
+	flags.StringVar(&opts.e2eEnv, "env", "", "test environment: controlled (L2 default), live or isolated (L4 Go)")
 	flags.StringVar(&opts.scenario, "scenario", "", "comma-separated L3/L4 scenario IDs")
 	flags.StringVar(&opts.recordProject, "record-project", "", "register reports in the selected project after testing")
 	flags.StringVar(&opts.rerunOf, "rerun-of", "", "test_id=original_report_id comma-separated explicit retests")
@@ -310,11 +314,23 @@ func parseOptions(args []string) (options, error) {
 			return opts, fmt.Errorf("%s requires -suite", opts.level)
 		}
 		if opts.e2eEnv == "" && opts.level == "L2" {
-			opts.e2eEnv = "gated"
+			opts.e2eEnv = "controlled"
 		}
-		if opts.e2eEnv != "controlled" && !(opts.level == "L2" && opts.e2eEnv == "gated") && !(opts.level == "L3" && opts.e2eEnv == "live" && (opts.suite == "workflow" && opts.scenario == "workflow.local-codex-audited" || opts.suite == "testing" && opts.scenario == "testing.management-local-codex")) {
-			return opts, fmt.Errorf("unsupported E2E environment %q", opts.e2eEnv)
+		localGo := opts.level == "L4" && opts.suite == "go" && (opts.scenario == "" || opts.scenario == "go.full")
+		if localGo && opts.e2eEnv == "" {
+			opts.e2eEnv = "isolated"
 		}
+		live := opts.level == "L4" && opts.e2eEnv == "live" && (opts.suite == "smoke" && opts.scenario == "smoke.local-codex" ||
+			opts.suite == "workflow" && opts.scenario == "workflow.local-codex-audited" ||
+			opts.suite == "testing" && opts.scenario == "testing.management-local-codex")
+		if localGo {
+			if opts.e2eEnv != "isolated" {
+				return opts, fmt.Errorf("L4 go.full requires isolated environment")
+			}
+		} else if opts.suite == "go" || opts.e2eEnv != "controlled" && !live {
+			return opts, fmt.Errorf("unsupported test selection/environment %q", opts.e2eEnv)
+		}
+
 	default:
 		return opts, fmt.Errorf("invalid test level %q", opts.level)
 	}
