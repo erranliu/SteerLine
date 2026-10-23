@@ -7,6 +7,7 @@ SteerLine 尚未发布，以快速开发、跑通流程和简洁设计为默认�
 
 开始相关工作前，按需读取并遵循：
 
+- 流程目录、测试输出或并行调试路径：[路径清单](SteerlineFlow/paths.md)。
 - 编写或修改 Spec / Plan：[编写规范](SteerlineProjectGuideDoc/spec-plan-guidelines.md)。
 - 测试、验收或临时/AI/真实 PR 调试：[测试指南](SteerlineFlow/testing.md)。
 - 规划、修改或执行 roadmap：[RoadmapGuide](SteerlineFlow/Roadmap/RoadmapGuide.md) 及其必需文档。

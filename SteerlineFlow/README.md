@@ -4,6 +4,7 @@
 
 | 内容 | 入口与职责 |
 | --- | --- |
+| 流程路径 | [paths.md](paths.md)：流程定义位置、L1–L4 固定报告结构、仓库外测试/并行调试目录、应用与调度状态。 |
 | 任务需求 | [spec/](spec/README.md)：Spec、共同执行约束及任务资料索引。 |
 | 实现计划 | [plans/](plans/)：对应 Spec 的实现步骤和最小必要测试计划。 |
 | Roadmap | [RoadmapGuide](Roadmap/RoadmapGuide.md) 维护本项目规则；[execution-map](Roadmap/execution-map.md) 维护确认的范围、依赖和执行/验收汇总；草稿与永久任务身份分别在 `Roadmap/drafts/`、`Roadmap/task-ids/`。 |
