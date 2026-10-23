@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
@@ -103,7 +104,9 @@ func TestEnvironmentCheckDebugResetPreservesUncertainResources(t *testing.T) {
 	if err := verify(); err != nil {
 		t.Fatal("definitively rejected start blocked reset", err)
 	}
-	if len(debugHistory) < 2 || debugHistory[0] != "environment_check_requests" || debugHistory[1] != "environment_checks" {
+	requests := slices.Index(debugHistory, "environment_check_requests")
+	checks := slices.Index(debugHistory, "environment_checks")
+	if requests < 0 || checks < 0 || requests >= checks {
 		t.Fatal("check request associations not reset before their owner")
 	}
 }

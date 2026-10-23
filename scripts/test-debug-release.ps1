@@ -1,4 +1,4 @@
-﻿param([switch]$Live, [string]$SteerRunnerExe = $env:STEERRUNNER_EXE, [switch]$IndependentProcess)
+param([switch]$Live, [string]$SteerRunnerExe = $env:STEERRUNNER_EXE, [switch]$IndependentProcess)
 $ErrorActionPreference = 'Stop'
 if (-not $IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
@@ -84,14 +84,14 @@ try {
     try { & $generator -DebugRoot $collisionRoot -SteerRunnerExe $SteerRunnerExe | Out-Null } catch { $refused = $true }
     if (-not $refused) { throw 'Existing timestamp directory was accepted' }
     if ($Live) {
-        # The single real product acceptance chain lives in L2.
+        # The real product acceptance chain is an explicit L4 specialty.
         $env:STEERLINE_HOME = $null
         $env:STEERLINE_CONFIG = $null
         $env:CODEX_HOME = $oldCodexHome
         $env:STEERRUNNER_EXE = $SteerRunnerExe
         Push-Location $repo
         try {
-            & (Join-Path $PSScriptRoot 'test-l2.ps1') -SteerRunnerExe $SteerRunnerExe -IndependentProcess
+            & (Join-Path $PSScriptRoot 'test-live-delivery.ps1') -SteerRunnerExe $SteerRunnerExe -IndependentProcess
         } finally { Pop-Location }
     }
     $result = [pscustomobject]@{ passed = $true; default_artifacts = $defaultRelease.root; controlled = $first.root; other = $second.root; live = [bool]$Live }

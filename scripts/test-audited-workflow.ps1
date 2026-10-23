@@ -23,7 +23,7 @@ try {
     $env:STEERRUNNER_EXE = $SteerRunnerExe
     $env:STEERLINE_AUDIT_EXECUTION_MODEL = $ExecutionModel
     $env:STEERLINE_AUDIT_MODEL = $AuditModel
-    $testArguments = @('run', './cmd/test-feedback', '-level=L3', '-suite=workflow', '-scenario=workflow.local-codex-audited', '-env=live')
+    $testArguments = @('run', './cmd/test-feedback', '-level=L4', '-suite=workflow', '-scenario=workflow.local-codex-audited', '-env=live')
     if ($OutDir) { $testArguments += ('-out=' + $OutDir) }
     $savedErrorAction = $ErrorActionPreference
     try {

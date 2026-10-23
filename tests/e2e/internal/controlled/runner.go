@@ -65,6 +65,7 @@ func RunnerCLI(args []string) (bool, error) {
 		if !os.IsNotExist(err) {
 			return true, err
 		}
+		return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": "steerrunner-cli/v1", "ok": true, "request_id": nil, "data": controlledCapabilities(), "error": nil})
 	}
 	switch args[0] {
 	case "version", "capabilities", "service":
@@ -382,4 +383,13 @@ func prepareFixturePR(path string, s *State, repo, branch string) (model.PRInfo,
 		return model.PRInfo{}, err
 	}
 	return pr, nil
+}
+
+// This peer already scripts generate results in submit/inspect. Advertise that
+// public capability even when the helper is built directly rather than packaged.
+func controlledCapabilities() map[string]any {
+	caps := protocol.RunnerServiceCapabilities("caller-fixture-v1")
+	caps["workflows"] = append(caps["workflows"].([]any), map[string]any{"id": "generate", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{}})
+	caps["configuration_schemas"].(map[string]any)["generate_input"] = map[string]any{"type": "object", "required": []string{"workflow", "execution", "generate"}}
+	return caps
 }

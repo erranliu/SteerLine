@@ -48,11 +48,11 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 
 ```powershell
 ./scripts/test-debug-release.ps1 -SteerRunnerExe <absolute-exe>
-# 完整 L2：受控门槛后真实 Runner、本机 Codex、实现/报告/发布、真实 PR 合并及交付
-./scripts/test-l2.ps1 -SteerRunnerExe <absolute-exe>
+# L4 真实交付：Runner、本机 Codex、实现/报告/发布、真实 PR 合并及交付
+./scripts/test-live-delivery.ps1 -SteerRunnerExe <absolute-exe>
 ```
 
-调试包生成/冻结/停止/reset 由第一条验证，默认产物、单项目和双项目三个新包分别取证；其 `-Live` 复用完整 L2。真实链路只使用本次 SteerlineTest base/head 和已有外部登录，不复制认证或安装数据。原生沙箱、usage、审核及恢复专项已归 SteerRunner，不再运行第二条双任务沙箱验收。历史证据见[原记录](acceptance/codex-sandbox-git.md)，当前要求及结果见[测试精简](acceptance/runner-test-convergence.md)。
+调试包生成/冻结/停止/reset 由第一条验证，默认产物、单项目和双项目三个新包分别取证；其 `-Live` 复用 L4 真实交付专项。真实链路只使用本次 SteerlineTest base/head 和已有外部登录，不复制认证或安装数据。原生沙箱、usage、审核及恢复专项已归 SteerRunner，不再运行第二条双任务沙箱验收。历史证据见[原记录](acceptance/codex-sandbox-git.md)，当前要求及结果见[测试精简](acceptance/runner-test-convergence.md)。
 
 长期隔离保留 source-build/path/service-write/dual-home 四项 controlled 场景；工具进程发起时使用 `scripts/test-runtime-isolation.ps1` 的既有独立上下文。浏览器 smoke 使用 `scripts/test-web-smoke.ps1`，同样使用独立上下文，详见 [E2E 指南](../tests/e2e/README.md)。
 

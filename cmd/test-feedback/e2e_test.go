@@ -34,8 +34,12 @@ func TestE2EParallelismOnlyAllowsIndependentRuntimeScenes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 4 || e2ePackageParallelism(entries) != 2 {
-		t.Fatal("runtime isolation scenes are not selected with bounded parallelism")
+	if len(entries) != 5 || e2ePackageParallelism(entries) != 1 {
+		t.Fatal("runtime maintenance must serialize the package")
+	}
+	entries = entries[:4]
+	if e2ePackageParallelism(entries) != 2 {
+		t.Fatal("independent boundaries lost bounded parallelism")
 	}
 	for _, entry := range entries {
 		if e2ePackageParallelism([]e2eScenario{entry}) != 1 {
@@ -55,7 +59,7 @@ func TestE2EParallelismOnlyAllowsIndependentRuntimeScenes(t *testing.T) {
 		}
 	}
 	flows, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "controlled"})
-	if err != nil || len(flows) != 4 || e2ePackageParallelism(flows) != 2 {
+	if err != nil || len(flows) != 3 || e2ePackageParallelism(flows) != 2 {
 		t.Fatalf("normal flows lost bounded parallelism: %v %v", flows, err)
 	}
 	if _, err := selectE2E(root, options{level: "L3", suite: "runtime", e2eEnv: "controlled", scenario: "runtime.installed-debug-isolation"}); err == nil {
@@ -79,24 +83,66 @@ func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
 			args = append(args, "-suite=runtime", "-env=controlled")
 		}
 		opts, err := parseOptions(args)
-		expected := "gated"
-		if level != "L2" {
-			expected = "controlled"
-		}
-		if err != nil || opts.e2eEnv != expected {
+		if err != nil || opts.e2eEnv != "controlled" {
 			t.Fatalf("%v: %v", args, err)
 		}
 	}
 }
 
-func TestL2GatedSelectionUsesCurrentRegisteredChain(t *testing.T) {
+func TestL2OnlySelectsControlledSmokeAndL4OwnsRealChains(t *testing.T) {
 	root, err := e2eRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
-	selected, err := selectE2E(root, options{level: "L2", e2eEnv: "gated"})
-	if err != nil || len(selected) != 2 || selected[0].ID != "smoke.delivery" || selected[1].ID != "smoke.local-codex" {
-		t.Fatalf("fixed current L2 selection: %+v %v", selected, err)
+	opts, err := parseOptions([]string{"-level=L2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected, err := selectE2E(root, opts)
+	if err != nil || len(selected) != 1 || selected[0].ID != "smoke.delivery" || selected[0].Env != "controlled" {
+		t.Fatalf("fixed controlled smoke: %+v %v", selected, err)
+	}
+	for _, tc := range []struct{ suite, id string }{
+		{"smoke", "smoke.local-codex"}, {"workflow", "workflow.local-codex-audited"}, {"testing", "testing.management-local-codex"},
+	} {
+		opts, err = parseOptions([]string{"-level=L4", "-suite=" + tc.suite, "-env=live", "-scenario=" + tc.id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		selected, err = selectE2E(root, opts)
+		if err != nil || len(selected) != 1 || selected[0].ID != tc.id {
+			t.Fatalf("real chain not selectable: %v %v", selected, err)
+		}
+	}
+	for _, args := range [][]string{
+		{"-level=L2", "-env=live"}, {"-level=L2", "-env=gated"},
+		{"-level=L3", "-suite=workflow", "-env=live", "-scenario=workflow.local-codex-audited"},
+		{"-level=L4", "-suite=testing", "-env=live"},
+		{"-level=L4", "-suite=go", "-scenario=unknown"}, {"-level=L4", "-suite=go", "-env=controlled"},
+	} {
+		if _, err := parseOptions(args); err == nil {
+			t.Fatalf("unsafe selection accepted: %v", args)
+		}
+	}
+}
+
+func TestExclusiveScenariosOnlySelectAtL4(t *testing.T) {
+	root, err := e2eRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct{ suite, id string }{
+		{"runtime", "runtime.project-maintenance"}, {"testing", "testing.records"},
+	} {
+		opts := options{level: "L3", suite: tc.suite, scenario: tc.id, e2eEnv: "controlled"}
+		if _, err := selectE2E(root, opts); err == nil {
+			t.Fatal("exclusive builder accepted as L3", tc.id)
+		}
+		opts.level = "L4"
+		selected, err := selectE2E(root, opts)
+		if err != nil || len(selected) != 1 || e2ePackageParallelism(selected) != 1 {
+			t.Fatalf("exclusive L4 selection: %v %v", selected, err)
+		}
 	}
 }
 
@@ -180,37 +226,14 @@ func TestE2EResultRequiresCompleteLogsAndCleanupEvidence(t *testing.T) {
 	}
 }
 
-func TestL2FailureStopsBeforeNativeEnvironmentCallback(t *testing.T) {
-	names := []string{"controlled", "live"}
-	groups := map[string][]e2eScenario{"controlled": {{Env: "controlled", ID: "gate"}}, "live": {{Env: "live", ID: "native"}}}
-	for _, failure := range []error{errors.New("test failed"), errors.New("cleanup failed"), errors.New("usage/evidence missing")} {
-		nativeCalls := 0
-		errs, blocked := executeE2EPackages(context.Background(), names, groups, true, 2, func(_ int, pkg string) error {
-			if pkg == "controlled" {
-				return failure
-			}
-			nativeCalls++
-			return nil
-		})
-		if len(errs) != 1 || len(blocked) != 1 || nativeCalls != 0 {
-			t.Fatalf("gate leaked: %v %v %d", errs, blocked, nativeCalls)
-		}
-	}
-	calls := 0
-	errs, blocked := executeE2EPackages(context.Background(), names, groups, true, 2, func(_ int, _ string) error { calls++; return nil })
-	if len(errs) != 0 || len(blocked) != 0 || calls != 2 {
-		t.Fatal("successful gate did not run live stage")
-	}
-}
-
 func TestL3AndL4SelectDisjointRegisteredContent(t *testing.T) {
 	root, err := e2eRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
-		"L3": {"recovery.waiting-merge-restart", "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.project-maintenance"},
-		"L4": {"runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation"},
+		"L3": {"recovery.waiting-merge-restart", "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects"},
+		"L4": {"runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation", "runtime.project-maintenance"},
 	}
 	for level, ids := range want {
 		suite := "runtime"
@@ -254,7 +277,7 @@ func TestIndependentPackagesOverlapAndPreserveFailuresAndCancellation(t *testing
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	entered := make(chan struct{}, 2)
-	errs, blocked := executeE2EPackages(ctx, names, groups, false, 2, func(i int, _ string) error {
+	errs, blocked := executeE2EPackages(ctx, names, groups, 2, func(i int, _ string) error {
 		entered <- struct{}{}
 		if i == 0 {
 			select {
@@ -276,7 +299,7 @@ func TestIndependentPackagesOverlapAndPreserveFailuresAndCancellation(t *testing
 	}
 	cancel()
 	calls := 0
-	errs, blocked = executeE2EPackages(ctx, names, groups, false, 2, func(int, string) error { calls++; return nil })
+	errs, blocked = executeE2EPackages(ctx, names, groups, 2, func(int, string) error { calls++; return nil })
 	if calls != 0 || len(errs) == 0 || len(blocked) != 2 {
 		t.Fatalf("cancelled packages executed or lost blockers: %v %v %d", errs, blocked, calls)
 	}
@@ -287,40 +310,42 @@ func TestScenarioContentListMatchesRegisteredIDsAndLevels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(filepath.Join(root, "tests", "e2e", "suites.json"))
+	raw, err := os.ReadFile(filepath.Join(root, "docs", "testing", "test-list.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var entries []e2eScenario
-	if err := json.Unmarshal(raw, &entries); err != nil {
+	var catalogue struct{ Tests []struct{ ID, Level string } }
+	if err = json.Unmarshal(raw, &catalogue); err != nil {
 		t.Fatal(err)
 	}
 	levels := map[string]string{}
-	for _, entry := range entries {
+	seen := map[string]int{}
+	for _, entry := range catalogue.Tests {
 		levels[entry.ID] = entry.Level
 	}
-	doc, err := os.ReadFile(filepath.Join(root, "tests", "e2e", "README.md"))
-	if err != nil {
-		t.Fatal(err)
+	for _, level := range []string{"L1", "L2", "L3", "L4"} {
+		doc, err := os.ReadFile(filepath.Join(root, "docs", "testing", strings.ToLower(level)+".md"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(doc), "\n") {
+			if !strings.HasPrefix(line, "| `") {
+				continue
+			}
+			id := strings.Trim(strings.Split(line, "|")[1], " `")
+			// L4 also lists unregistered standalone script paths.
+			if strings.HasPrefix(id, "scripts/") {
+				continue
+			}
+			if levels[id] != level {
+				t.Fatalf("documented ID %s under %s differs from catalogue %s", id, level, levels[id])
+			}
+			seen[id]++
+		}
 	}
-	seen := map[string]int{}
-	level := ""
-	for _, line := range strings.Split(string(doc), "\n") {
-		if strings.HasPrefix(line, "### L") {
-			level = strings.TrimPrefix(line, "### ")[:2]
-		}
-		if !strings.HasPrefix(line, "| `") {
-			continue
-		}
-		id := strings.Trim(strings.Split(line, "|")[1], " `")
-		if levels[id] != level || levels[id] == "" {
-			t.Fatalf("documented ID %s under %s differs from manifest %s", id, level, levels[id])
-		}
-		seen[id]++
-	}
-	for _, entry := range entries {
-		if seen[entry.ID] != 1 {
-			t.Fatalf("scenario %s documented %d times", entry.ID, seen[entry.ID])
+	for id := range levels {
+		if seen[id] != 1 {
+			t.Fatalf("test %s documented %d times", id, seen[id])
 		}
 	}
 }

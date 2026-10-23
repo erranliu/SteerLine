@@ -22,22 +22,12 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/app/host"
 
-var quickTests = func() []string {
-	tests := []string{"TestAtomicWriteENOSPCPreservesPreviousSnapshot"}
-	if runtime.GOOS == "windows" {
-		tests = append(tests, "TestBackgroundCommandsNoConsole")
-	}
-	return tests
-}()
+var quickTests = []string{"TestAtomicWriteENOSPCPreservesPreviousSnapshot"}
 
 const executionPackage = "github.com/erranliu/SteerLine/internal/taskrunner"
 
 // Full partitions Task-to-Runner coordination; native execution tests live in Runner.
 const fullCorePackage = executionPackage
-
-// L1 keeps the public input and fixed repository boundaries. Recovery and
-// delivery are selected through their directed regression entries.
-var quickExecutionTests = []string{"TestRunnerExplicitInputKeepsOriginalRunAndDisplayedVersions", "TestRunnerNativeAnswersPreserveQuestionsAndCallerInput", "TestRunnerBaseUsesFetchedTargetAndOriginalCandidateAncestry", "TestRunnerStartClassifiesCandidateLookupErrors", "TestRunnerDeliveryReplayKeepsOriginalTaskReceipt", "TestSharedRunnerControlRecoversMissingOuterReceipt"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
@@ -47,54 +37,15 @@ func quickBoundaryPattern() string { return exactPattern(quickBoundaryTests) }
 
 var quickBoundaryAssigned = []string{"TestRunnerExecutionBoundary", "TestRunnerExecutionBoundary/windows", "TestRunnerExecutionBoundary/linux"}
 
-var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{
-	"github.com/erranliu/SteerLine/internal/runnercontract",
-	"github.com/erranliu/SteerLine/internal/executionconfig",
-	"github.com/erranliu/SteerLine/internal/runnerbinding",
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction",
-	"github.com/erranliu/SteerLine/internal/product/api",
-	"github.com/erranliu/SteerLine/internal/product/client",
-	"github.com/erranliu/SteerLine/internal/product/query",
-	"github.com/erranliu/SteerLine/internal/product/query/taskgraph",
-	"github.com/erranliu/SteerLine/internal/storage/ports",
-	"github.com/erranliu/SteerLine/internal/execution/scheduler",
-	"github.com/erranliu/SteerLine/internal/execution/backend",
-	"github.com/erranliu/SteerLine/internal/storage/sqlite",
-	"github.com/erranliu/SteerLine/internal/testmanagement",
-	"github.com/erranliu/SteerLine/internal/product/activityrender",
-	"github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
-}...)
+// L1 is deliberately fixed and small. All owner regressions remain in L4 go.full.
+var quickRulePackages = append(append([]string{}, taskRulePackages...),
+	"github.com/erranliu/SteerLine/internal/runnercontract")
 
 var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
 }{
-	{"quick-owner-generate-queue", "github.com/erranliu/SteerLine/internal/app", []string{"TestGQBatchReusesActiveAndPersistsCompletion", "TestGQBatchRetriesSettledFailureOnceAndBlocksUnknown", "TestGQQueuedGenerationNeedsNoRunnerTakeoverOrStop", "TestGQPreparationFailureDoesNotLookQueued"}},
-	{"quick-owner-project-maintenance", "github.com/erranliu/SteerLine/internal/projectmaintenance", []string{"TestPMSMaterialInputsDoNotRequireArrangement"}},
-	{"quick-owner-project-connection", "github.com/erranliu/SteerLine/internal/projectconnection", []string{"TestWebSwitchResolverInheritedPipeIsBounded", "TestWebSwitchResolverRejectsInvalidOutput", "TestWebSwitchResolverCurrentConfigEncoding"}},
-	{"quick-owner-application-http", "github.com/erranliu/SteerLine/internal/product/applicationhttp", []string{"TestPMReadRoutesKeepMaintenanceWritesOnCommands", "TestUnifiedStartupAuthenticationRoutesAndUnavailable", "TestUnifiedStartupOriginalEnvelopeAndInflightIsolation"}},
-	{"quick-owner-test-records-web", "github.com/erranliu/SteerLine/web/server", []string{"TestTRQueryBrowserRoutesAndReadOnlyBoundary"}},
-	{"quick-owner-test-records-http", "github.com/erranliu/SteerLine/internal/product/httpapi", []string{"TestTRRegisterUnknownCommitReconcilesWithoutRepeatOrDetail", "TestTRRegisterAuthenticatedReplayAndWireBoundary", "TestTRQueryReadOnlyFiltersAndAuthentication", "TestRunUsageHTTPReadBoundary"}},
-	{"quick-owner-test-records-producer", "github.com/erranliu/SteerLine/cmd/test-feedback", []string{"TestTRProducerUnknownGitDoesNotBecomeFakeCommit", "TestTRProducerFreezesDefinitionAndIDsBeforeExecution", "TestTRProducerRejectsAmbiguousRecordSelections", "TestTMManagedResultsPreserveFailureAndNoMatch", "TestTMRegisteredCatalogueMatchesExecutableManifest"}},
-	{"quick-owner-application-client", "github.com/erranliu/SteerLine/internal/product/applicationclient", []string{"TestTRRegisterEncodedBudgetAndUnknownOutcome", "TestWebSwitchReconnectAndHome"}},
-	{"quick-owner-web", "github.com/erranliu/SteerLine/web/server", []string{"TestWebExecutionConfigRoutes", "TestWebAuthenticationAndOriginalForwarding", "TestWebOriginHostAndStaticBoundaries", "TestWebTicketsAreSingleUseAndExpire", "TestWebAddressAndPortConflict", "TestWebLauncherPrivateDiscoveryAndInstance", "TestWebBoundedWritesAndNoBrowserStop", "TestWebSwitchSessionAndNativeStop", "TestWebSwitchDevelopmentProxyAndLease", "TestWebSwitchHomeConfigPreservesPermissions"}},
-	{"quick-owner-web-config", "github.com/erranliu/SteerLine/web/server/executionconfig", []string{"TestRunUsageConfigPreservation", "TestExecutionConfigSave", "TestExecutionConfigConcurrentAndFrozen", "TestExecutionConfigSchemaAndPreservation", "TestExecutionConfigStatusIsReadOnly", "TestLocalOrcaConfiguration", "TestGQConcurrencySaveAndValidation"}},
-	{"quick-owner-web-discovery", "github.com/erranliu/SteerLine/web/server/discovery", []string{"TestCodexCatalog", "TestEnvironmentDirectory", "TestOrcaCapabilityWire", "TestDiscoverySharingCancellationAndCache", "TestLocalOrcaCatalog"}},
-	{"quick-owner-http-budget", "github.com/erranliu/SteerLine/internal/product/httpclient", []string{"TestBoundedClientBudgetPreservesAuthenticationAndCancellation"}},
-	{"quick-execution", executionPackage, quickExecutionTests},
-	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestWebExecutionConfigOwnership", "TestTM04ExecutionBoundary", "TestSharedFixturesRemainTestOnly", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary", "TestTaskDeliveryOwnership", "TestHostCheckpointOwnership", "TestCallerOwnerBoundary", "TestTakeoverContractOwnership"}},
-	{"quick-owner-environment-check", "github.com/erranliu/SteerLine/internal/environmentcheck", []string{"TestSharedRunnerChecksUseSavedExternalIdentity", "TestSharedRunnerRestartVerifiesChecksReadOnly", "TestSharedRunnerCheckStopRejectsOtherDirectory", "TestEnvironmentCheckDurableUnknownAndRestart", "TestEnvironmentCheckStopIdentityAndConcurrency"}},
-	{"quick-owner-runner-preflight-cli", "github.com/erranliu/SteerLine/cmd/steerline", []string{"TestTRRegisterCLIArgumentsAndOfflineReportRetained", "TestRunnerTakeoverPreflight", "TestDeploymentRecoveryArguments", "TestPMCLIApplyRequiresCompleteReview"}},
-	{"quick-owner-runner-client", "github.com/erranliu/SteerLine/internal/runnerclient", []string{"TestRunUsageSnapshotAndCostBinding", "TestRunUsageCapabilityAndStartupPolicy", "TestRunnerFullBindingAdmission", "TestPMSWorktreePromptContext", "TestRunnerObservationResponse", "TestTakeoverPublicContractRejectsChangedIdentityAndUnsupportedState", "TestStartupStopsKeepBareOriginalEnvelopeAndKnownRejection", "TestSteerRunnerCLIContract", "TestSteerRunnerAmbiguousEnvelope", "TestSteerRunnerReleasePinBlocksBeforeInvocation", "TestSteerRunnerUsesPublishedSchema", "TestSharedRunnerStoppedProofCoversChecks"}},
-	{"quick-owner-runner-bridge", "github.com/erranliu/SteerLine/internal/runnerbridge", []string{"TestRunnerObservationAtomicSave", "TestSteerRunnerOutboxBoundaries", "TestSharedRunnerControlKeepsOriginalProductRequest", "TestPrepareStartupStop"}},
-	{"quick-owner-runner-state-path", "github.com/erranliu/SteerLine/internal/runnerstatepath", []string{"TestRunnerSocketWorksForDeepApplicationHome", "TestRunnerNamespaceIsolationAndCleanup", "TestRunnerRejectsRedirectedStateBeforeCreateOrCleanup"}},
-	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestResolveRepositoryUsesOriginalCommonDir"}},
-	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPublicationSecretsRejectedBeforeFreeze"}},
-	// Separate the accumulated Runner recovery cases from project lifecycle cases
-	// so both retain the fixed three-minute package budget.
-	{"quick-owner-deployment-recovery", "github.com/erranliu/SteerLine/internal/app", []string{"TestDeploymentPreparation", "TestDeploymentPreparationPackage", "TestDeploymentInterruptedRecovery", "TestDeploymentRecoveryReadiness"}},
-	{"quick-owner-runner-startup", "github.com/erranliu/SteerLine/internal/app", []string{"TestStartupCancellationOutboxIsDurableBeforeRunnerStart", "TestSharedRunnerCompatibleBuildUsesPublicPreflight", "TestSharedRunnerBuildPinBeforeService", "TestSharedRunnerCatalogFailureStillClosesAdoptedInstance", "TestSharedRunnerCheckBindingFailureIsProjectLocal", "TestSharedRunnerRejectsBuildBeforeStart", "TestSharedRunnerOfflineChecksKeepOriginalBinding", "TestSharedRunnerCloseDuringUnknownStart"}},
-	{"quick-owner-unified-startup", "github.com/erranliu/SteerLine/internal/app", []string{"TestTRQueryCatalogueUsesObservedCommitAndKeepsHistoricalDefinitions", "TestTRRegisterRejectsForeignRepositoryBeforeWrite", "TestRunUsageCallerIsolation", "TestRunUsageCandidateBinding", "TestWebExecutionConfigLoadedSnapshot", "TestRunnerDeliveryReadProjection", "TestRunnerDeliveryRejectsForeignAndStaleFacts", "TestCandidateReadFactsAcrossViews", "TestUnifiedStartupConcurrentReuseAndMissingWeb", "TestUnifiedStartupUnknownCreationCannotTakeOver", "TestUnifiedStartupLifecycleShutdownEvidenceFencesOriginalHost", "TestUnifiedStartupFrozenCatalogConflictsBeforeDatabase", "TestUnifiedStartupOverlappingRunDirs", "TestUnifiedStartupZeroProjectsLifecycle", "TestUnifiedStartupLifecycleSharedPIDIndependentInstances", "TestUnifiedStartupUnresolvedCensusBlocksRunnerStart", "TestUnifiedStartupCloseBeforeStartAndPendingResults", "TestUnifiedStartupLateReadyCannotReopenStoppedDirectory", "TestProjectLifecycleOwnershipBoundary", "TestProjectRuntimeClosesLocalResourcesDespiteRunnerUncertainty", "TestProjectRuntimePartialPreparationReleasesOwnership", "TestProjectRuntimeDrainsEveryPublicEntryBeforeClosing", "TestRunnerSettlementReadCanRecoverWithoutRepeatingStop", "TestSharedRunnerProjectValidationKeepsService", "TestRunnerUnknownStartKeepsEvidenceWithoutStoppingUntrustedTarget", "TestRunnerShutdownRetriesOnlyUnconfirmedOriginalStop", "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestCM71ProductDependencyBoundary", "TestRunnerProjectPreflightLeavesPrivateRunnerFilesToRunner", "TestRunnerTaskRepositoryKeepsConfiguredIdentityAcrossTransportRewrite", "TestPMRemoteFreshObservedCommitAndRewrite", "TestPMRemoteSharesInflightObservation", "TestPMSGenerationFreshnessAndCandidateVersions", "TestPMSFastForwardAndOriginalUpdateReplay", "TestPMSBaselineComparisonAndBlockedUpdates", "TestPMSBaselineGiteaPRMetadata", "TestPMSGenerationUnknownDoesNotOfferAutomaticRetry"}},
+	{"quick-owner-catalogue", "github.com/erranliu/SteerLine/cmd/test-feedback", []string{"TestTMRegisteredCatalogueMatchesExecutableManifest", "TestScenarioContentListMatchesRegisteredIDsAndLevels", "TestRegisteredCommandsSelectExactlyTheirDefinitions"}},
 }
 
 var quickPackages = func() []string {
@@ -164,9 +115,8 @@ func runScoped(opts options) int {
 		report.WeightSource = "testdata/core-test-weights.json (serial baseline 543f0d4; top-level elapsed, floor 0.05s)"
 	}
 	report.Environment = collectEnvironment(opts.cacheCondition, opts.nativeNote, opts.out, nil)
-	// Keep room for the bounded multi-turn integration fixtures as well as
-	// each worker's core partition; missing terminal events still fail coverage.
-	timeout := 60 * time.Minute
+	// One minute is the L1 design target; allow cold compilation separately.
+	timeout := 5 * time.Minute
 	if !opts.quick {
 		timeout = 75 * time.Minute
 	}

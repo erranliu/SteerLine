@@ -1,142 +1,35 @@
 # SteerLine E2E
 
-执行专项由独立 SteerRunner 项目承担；SteerLine 保留调用方与产品闭环。早期测试精简见 [Spec](../../docs/spec/runner-test-convergence.spec.md)和[验收](../../docs/acceptance/runner-test-convergence.md)；当前 L3/L4 拆分见 [Plan](../../docs/plans/test-level-alignment.plan.md)与[专属验收](../../docs/acceptance/test-level-alignment.md)，历史七项登记不再代表当前清单。
+SteerLine 验证调用方与产品闭环，Runner 的原生执行、恢复和协议故障矩阵由 SteerRunner 维护。统一分层见 [测试架构](../../SteerlineProjectGuideDoc/testing-architecture.md)，日常入口见 [测试指南](../../docs/testing.md)。
 
-## 分级测试内容清单与维护
+## 登记与清单
 
-L1–L4 的统一定义及设计要求采用 [开发项目测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md)，本项目入口见 [测试总入口](../../docs/testing.md)。下面按当前实际登记级别列出测试内容。
+[suites.json](suites.json)登记 E2E ID、级别、suite、package、test、env 及适用 chain；当前 L2 为单一受控冒烟，L3 仅资源隔离的受控功能，真实链及共享构建目录场景归 L4。完整内容只在 [L2](../../docs/testing/l2.md)、[L3](../../docs/testing/l3.md)、[L4](../../docs/testing/l4.md)维护，并与 [JSON](../../docs/testing/test-list.json)同步。
 
-[suites.json](suites.json)是机器执行登记的唯一来源，登记十五项（L2 两项、L3 九项、L4 四项），保存 ID、level、suite、package、test、env 和适用的 chain；下表维护这些 ID 对应的流程、主要断言和执行约束。不得在其他文档维护相互独立的可执行清单。
-
-执行页展示清单为 [test-list.json](../../docs/testing/test-list.json)，沿用此处场景 ID/级别/环境与入口，不参与调度。更改测试内容时同步更新展示清单、此表和相关 Plan；结果追加格式及 Runner 回传约定见[测试总入口](../../docs/testing.md#测试管理文档与结果)。
-
-### L2：最小核心流程
-
-| 场景 ID | 环境 | 测试内容与主要断言 | 执行约束 |
-| --- | --- | --- | --- |
-| `smoke.delivery` | controlled | 创建有依赖的任务，领取并执行至 PR 待合并，合并后只交付一次并释放后继；后继未自动启动，重复查询不新增执行或改变交付；先确认异步停止回执，再核对最终请求数与交付后静默。 | 固定前置 gate；公开 Runner CLI 与隔离 PR provider，无真实模型。 |
-| `smoke.local-codex` | live / local-codex | 真实 Runner/Codex 实现、报告、发布；检查三个公开 final 来源、PR head 中真实产物、精确 merged PR、唯一 TaskDelivery、后继 ready 且未启动及资源清理。 | gate 通过并清理完整后顺序执行；使用本次专属 SteerlineTest base/head。 |
-
-两项组成一条最小核心冒烟链；controlled 仅为 gate-only，完整两阶段才是 full-L2。
-
-### L3：可并行的不同流程
-
-recovery/runtime 使用 controlled，真实 SteerLine/Git/SQLite 和公开 Runner/PR fixture；每项拥有独立临时 home、repo、数据库、端口、provider 和证据。五个 controlled 场景各自隔离；维护场景自身顺序运行，其余已准入场景保留有界并行。选 recovery/runtime 两包时并行启动两包、各包内部串行；只选 runtime 时包内最多二项并行，总预算二。workflow/testing 为显式选择的 live 专项，使用固定真实 Runner 和本次 SteerlineTest 分支。
-
-| 场景 ID | 测试内容与主要断言 | 相对其他场景的主要覆盖维度 |
-| --- | --- | --- |
-| `configuration.execution-profiles` | controlled / configuration | 浏览器保存三种本机 Orca Agent 配置、待重启门槛、正式停启、关闭 Web 后 CLI 核对 adapter/target/agent/model/effort/helper 字段，原候选不变。 | 自有临时 home/repo/端口，公开 Runner fixture，浏览器及服务完整清理。 |
-| `recovery.waiting-merge-restart` | PR 待合并时重启 SteerLine，保留原候选/Run/请求及公开投影，不新增业务输入、不提前释放后继；随后合并并完成唯一交付。 | 在 L2 交付骨架中加入 SteerLine 重启，验证持久化事实和调用方连续性。 |
-| `runtime.service-lifecycle` | 中文/空格路径和无关 cwd 下生成启动器；创建任务、核对精确宿主身份、执行正常控制、停止并核对逐项目结算，再启动并确认新实例和原任务事实，最后正常停止。 | 单 home 的正常宿主生命周期，不注入陈旧身份/配置/锁冲突。 |
-| `runtime.dual-home-operation` | 两个独立 home 同时在线，使用不同请求分别 discard 不同任务；核对持久化结果、另一项目/provider 不变、无执行候选、原实例不变，最后停止两者。 | 多 home 合法并存及独立操作，不做同请求 ID 重放。 |
-| `runtime.shared-runner-projects` | 同 home 两项目共用一个 Runner，使用相同产品请求 ID 创建独立 Run，分别消费仓库/PR，整体停启保留原绑定且零自动新输入，最后核实全体清理。 | 项目级库/请求隔离与应用级共享 Runner 的接线；每项独立 home/两个 repo/provider/端口，可沿 runtime 二并行。 |
-| `runtime.project-maintenance` | 唯一生成器新建双项目包；真实 Go/Web/Edge 检查快进、三版自动材料、候选独立冻结、过期测试禁用、完整差异与旧PR交付；停止并核对资源。 | 基线与材料维护流程；公开 Runner 使用受控结果，不计真实模型。生成阶段独占源码 Web 构建目录，复用 test-project-maintenance.ps1/同一 driver；场景不使用 t.Parallel。 |
-| `workflow.local-codex-audited` | live：两种显式模型走 development-audited/1，实现、两项审计、发布与真实 PR 合并、唯一交付及后继 ready 未启动；从正式产品详情核对冻结预设、材料/摘要、各轮模型、审计来源，从任务历史核对候选/Runner Run 及 workflow；保留响应证据。 | 审计 workflow 的产品接线；须先通过空闲 I1 与 controlled gate，不归 full-L2，不重验 Runner 故障矩阵。 |
-| `testing.records` | controlled：新建单项目 debug 包，实际小脚本失败→提交修正→通过，正式 CLI 登记及原报告幂等重放，API/Edge 查看原始失败、显式复验链与原 summary，停止并核实资源。 | 独立脚本记录不绑定候选；复用唯一生成器和共享 browser driver，独占源码 Web 构建目录，不使用 t.Parallel；其余状态矩阵归 L1。 |
-| `testing.management-local-codex` | live：全新 debug 包，维护观察自动调用真实 generate/1 保存系统安排，候选使用原提示中的系统快照和真实worktree文档路径；原开发候选上实际程序先通过再失败，经公开 artifacts/Git→API→浏览器核对计数、历史和证据，最后停止并核实原资源结算。 | 测试结果消费闭环；固定本机 Runner/Codex、独立 SteerlineTest base，测试失败来自隔离输入，不发布 PR；生成包时独占本源码 Web 依赖目录。 |
-
-本项目按规范维护上表的独有覆盖维度；并行资源声明涵盖 home、repo、数据库、端口、可变构建输出、provider 和清理所有权。
-
-### L4：系统边界
-
-以下均为 controlled/runtime，使用自己的临时 home/repo/provider/端口/证据。独占关系只存在于每项内部人为构造的别名或冲突，不触碰共享安装现场，因此这四项边界可包内二并行；L4 不是全局串行开关。其他包按顺序执行，后续不可并行项需单独登记具体约束并落实调度。
-
-| 场景 ID | 边界条件与主要断言 | 所有者/独有覆盖 |
-| --- | --- | --- |
-| `runtime.source-build-isolation` | 源码克隆的 bin junction、EXE hardlink 指向本项安装夹具时拒绝 build；合法 build/rebuild 保持源码 clean、来源身份及夹具 EXE/数据库/任务事实不变。 | SteerLine build 输出保护；可写源码克隆仅归本项。 |
-| `runtime.path-isolation` | 拒绝 state junction、run_dir 越界、退役 worktree_root 配置和 SQLite DB/WAL/SHM hardlink；受保护数据不变，恢复正常文件后可使用。 | SteerLine 配置解析及 SQLite 打开前保护。 |
-| `runtime.service-write-isolation` | 拒绝陈旧实例、宿主冻结目录以外的配置写入、同 repo 跨 home 启动；拒绝无请求/候选副作用，正常控制作为正向对照；重启后仍拒绝原实例写入。 | SteerLine 控制入口与 repository 独占，不测试 Runner 会话恢复。 |
-| `runtime.dual-home-isolation` | 两 home 故意使用相同 task/request ID，执行 discard 后以原参数重放；回执一致、任务/graph revision 不变，另一 home/provider 无改写、无候选且实例不变。 | SteerLine Task/请求命名空间与幂等反例，不测试 Runner 原生输入去重。 |
-
-四项原 runtime ID 保留验证目的，级别统一改为 L4；在 L3 下选择这些 ID 明确失败，无兼容映射。构建输出与配置路径均使用链接反例，但保护的写入口不同；服务测试验证冲突拒绝，双 home 验证命名空间/回执，保留这些独有断言。L2/L3/L4 的实际结果统一见 [本次验收](../../docs/acceptance/test-level-alignment.md)，清单不声明运行稳定性。
-
-### 清单维护规则
-
-通用要求见 [测试架构规范](../../SteerlineProjectGuideDoc/testing-architecture.md#l2l3l4-内容清单)，本项目具体落地如下：
-
-- 新增、删除、改级、改环境或调整主要断言时，在同一变更中同步场景实现、manifest、本节内容和 `cmd/test-feedback` 的相关选择/并行/证据校验；当前不支持的级别须先落实执行能力。
-- 退役 ID、跨级选择由 `test-feedback` 明确拒绝；L3 live 仅允许精确选择 workflow.local-codex-audited 或 testing.management-local-codex，L4 只接受 controlled。
-- 运行器按 manifest 选择、冻结并枚举测试，核对实际执行、非零匹配、终态和清理；[e2e_test.go](../../cmd/test-feedback/e2e_test.go)另核对本文表格中的 ID/级别与 manifest 一致且每项只登记一次。语义正交性及具体断言仍需人工代码审查。
-- Plan 引用稳定 ID 与专属验收项，实际通过/失败及日志位置写入 `docs/acceptance/`；内容清单不维护实时测试结果。证据统一为 summary.json 和 `scenarios/<id>/scenario.json`，详情见后文。
-
-## 场景执行入口
+## 执行
 
 ```powershell
-go run ./cmd/test-feedback -level=L2 -env=controlled
-$env:STEERRUNNER_EXE = 'C:/Tools/SteerRunner/steerrunner.exe'
 go run ./cmd/test-feedback -level=L2
-# 从有 Job 约束的工具进程发起时，复用仓库独立进程启动上下文
-./scripts/test-l2.ps1 -SteerRunnerExe 'C:/Tools/SteerRunner/steerrunner.exe'
-go run ./cmd/test-feedback -level=L3 '-suite=recovery,runtime' -env=controlled
-$env:STEERLINE_AUDIT_EXECUTION_MODEL = 'gpt-6-luna'
-$env:STEERLINE_AUDIT_MODEL = 'gpt-6.1-sol'
-go run ./cmd/test-feedback -level=L3 -suite=workflow -scenario=workflow.local-codex-audited -env=live
-# Windows 工具 Job 下，使用同一隔离入口的独立进程包装
-./scripts/test-audited-workflow.ps1 -SteerRunnerExe 'C:/Tools/SteerRunner/steerrunner.exe' -ExecutionModel gpt-6-luna -AuditModel gpt-6.1-sol
-go run ./cmd/test-feedback -level=L3 -suite=testing -scenario=testing.management-local-codex -env=live
-
-go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled
-# 精确选择边界子集；不能跨级或零匹配
-go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled '-scenario=runtime.path-isolation,runtime.dual-home-isolation'
-# Windows 工具 Job 约束下使用独立同用户进程
-./scripts/test-runtime-isolation.ps1 -Level L3 -Suite 'recovery,runtime' -Scenario 'runtime.service-lifecycle,recovery.waiting-merge-restart'
-./scripts/test-runtime-isolation.ps1 -Level L4
-# 默认两级 runtime 顺序执行；-OutDir <新目录> 按 L3/L4 分别保存报告
-./scripts/test-runtime-isolation.ps1
+go run ./cmd/test-feedback -level=L3 -suite=recovery,runtime -env=controlled
+go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.path-isolation
+$env:STEERRUNNER_EXE = 'C:/Tools/SteerRunner/steerrunner.exe'
+go run ./cmd/test-feedback -level=L4 -suite=smoke -env=live -scenario=smoke.local-codex
 ```
 
-L2 固定先 gate 后 live，不能按场景绕开 gate。gate 的执行/证据/清理任一失败，不启动真实阶段；gate-only 不等于 full-L2。L3/L4 controlled 支持逗号多选 suite/scenario；子集报告为 selected-L3/selected-L4。L3 审计 live 在建现场前要求显式 EXE 和两个不同模型，执行 effort medium、审计 high；为两项审计及既有修复预算留出 20 分钟业务窗口，清理单独有界。阶段命令通过 Runner 公开 prompt_overrides 设置，业务 Spec/Plan 描述产物，不要求审计倒改历史流程。已退役 ID、Orca chain、native 环境直接拒绝。具体总入口见 [docs/testing.md](../../docs/testing.md)。
+L2 的完整受控冒烟报告为 `full-L2`，不会构造真实模型现场。L3/L4 子集为 selected-L3/selected-L4，跨级、退役 ID、空选择和混合环境拒绝；live 仅支持单独精确选择。L3 总并发二；L4 包间串行，runtime 四项独立边界可包内二并行，加入共享构建目录场景则串行。
 
-## 真实 L2
+Windows 工具进程有 Job 约束时，使用 `scripts/test-l2.ps1`、`scripts/test-live-delivery.ps1`、`scripts/test-audited-workflow.ps1` 或 `scripts/test-runtime-isolation.ps1` 的独立同用户进程上下文，不修改产品权限或安装现场。
 
-真实链为 SteerLine 产品命令 → 固定独立 Runner EXE → 本机 Codex → development 实现、报告、发布 → 真实 SteerlineTest PR → 真实 provider 核实 merge → 唯一 TaskDelivery 和后继释放。
+## 真实链与环境
 
-- Windows/amd64、Go、Git、已登录 Codex、gh 及 `erranliu/SteerlineTest` 写权限；选择固定本机 Codex 可执行文件、`gpt-6-luna` / `medium`。Runner 负责原生版本/权限/环境准入，SteerLine 仅装配公开配置。
-- 每次独立隔离现场、本次专属随机 base/head；不修改 SteerlineTest 主分支。驱动准备 fixture base，真实 worker 执行业务实现与 commit/push/PR 创建；驱动可精确转 ready、合并、查询及清理。
-- 任务产物 `result.txt` 必须在 PR head 提交中为指定内容；通过 Git 对象检查，不读取 Runner 私有工作区、数据库或日志。公开 canonical final/来源必须绑定原候选/Run，三阶段正常结果完整。
-- 合并事实必须包含精确 URL/repository/base/head/head SHA/merge SHA。TaskDelivery 只能有一次且绑定所选候选/PR；后继 ready、未自动启动。
-- 原生 usage/rollout、沙箱与原生恢复不在 SteerLine 重验。证据缺少公开结果、真实 Git/PR 或 Task 事实仍失败，不能用模型自述、helper 或假 PR 替代。
-- 使用既有宿主登录，不复制认证/安装数据库/配置，不写凭据进日志。缺 EXE/登录/权限时明确失败或阻断，不切回模拟。
+Windows/amd64、Go/Git、已登录本机 Codex、固定独立 Runner EXE。交付和审计需要 gh 及 `erranliu/SteerlineTest` 写权限；每次只使用本次随机 base/head，不修改主分支。worker 实际执行任务实现、commit、push 和 PR 创建，驱动仅准备 fixture base、查询、转 ready、精确合并与清理。任务定义和输入公开，认证、原生转录及私有状态不写入共享证据。
 
-## 受控夹具与所有者
+真实交付固定 `gpt-6-luna` / `medium`；审计通过 `STEERLINE_AUDIT_EXECUTION_MODEL` / `STEERLINE_AUDIT_MODEL` 显式指定两个不同模型，执行 medium、审计 high。验证公开 final、原候选/Run、真实 Git 产物、精确已合并 PR、唯一 TaskDelivery、后继 ready 未启动、资源结算；审计另核对正式产品详情中的模型、材料及审计来源。测试管理真实链按自己的 proof 核对安排和报告消费，不发布 PR。
 
-controlled 场景运行真实 SteerLine、Git、SQLite，但 Runner 由公开 CLI 子进程夹具提供，PR 使用隔离 provider。fixture 保存预设公开 Run/事件与不可变请求记录，不实现 Codex app-server、Orca transport、workflow 或恢复状态机。caller 断言提交/授权/回执/事件/交付的影响，不计数原生线程、终端或业务轮次。
-
-`smoke.delivery` 包含基础交付和交付后静默，不再重复登记 delivery.basic。waiting-merge-restart 只重启 SteerLine，核对原候选/Run/请求/游标，无自动输入，随后唯一交付。更小的未知回执、重复授权、事务回滚、迟到接受/停止等由 client/bridge/taskrunner/SQLite/HTTP owner 承担。
-
-fixture 的 `caller-fixture.json`、provider `requests` 是测试自产公开协议证据，不是 Runner 私有状态。真实 Runner 从不使用这些文件。通用 Git/provider、process 与 UI 夹具继续保留，Orca/Codex 执行专项在 Runner 仓库。
-
-## 环境、预算和清理
-
-临时/AI 调试及真实 PR 调试先由 `scripts/new-debug-release.ps1` 生成 `C:\SteerlineDebug` 新包；分级 E2E 继续用自身隔离夹具。不得使用当前 `C:\SteerlineInstall` 或保留的 `C:\SteerlineRuntime`。调试包默认 live，AI 用 `--simulate` 明确选模拟；方案冻结后不切换，reset 保留定义/契约/依赖/Git/PR，活动资源阻止 reset。
-
-兼容更新的专项调试联验使用 [test-runner-update-live.ps1](../../scripts/test-runner-update-live.ps1)，参数为尚未启动的新调试包、不同 SHA 的兼容 Runner 候选及实际原生 Codex EXE。它复用生产部署预检/停服核验，经原生公开只读历史证明离线完成，再启动新 Runner 并核验真实 PR/交付，最后正式停止本包资源。具体命令、边界及验收项见[专属 Plan](../../docs/plans/service-generation-recovery.plan.md)。该专项入口未纳入分级 manifest，不能用其结果声明完整 L2/L3 或原生恢复矩阵通过。
-
-测试管理的同一 live 场景可用 `scripts/test-test-management.ps1 -SteerRunnerExe <A> -RunnerCandidate <B> -Out <新目录>` 补验生成对象换构建：A/B 必须不同 SHA，正式预检/verify-restart 后仅更新包内 Runner 传输 pin，原生成/Run/input/final/result 保持，再完成原程序/API/浏览器闭环。resume/start 回执文件写入失败只查询原 ID，零重发。原资源结算后核对本包 base 和原 Run head 的精确 commit/lease 及无 PR，删除并复查；发布未创建 PR 仍可能已经推送 head，不能只清 base。已有完成包可设置 `STEERLINE_TM_CLEANUP_ROOT=<包绝对路径>`，精确运行 `go test ./tests/e2e/internal/driver -run '^TestDebugTestManagementOwnedBranchCleanup$' -count=1 -timeout=90s` 做同一清理后验；它先正式验证原 Run 资源结算，不启动服务/模型，不改历史 proof。实际结果见[专属验收](../../docs/acceptance/test-management.md)，不增加新的 manifest ID。
-
-仅准备阶段失败且尚无业务候选时，可显式 `-ContinuePrepared`；它验证相同 live/ready 方案、stopped 服务、两项 open 任务及零候选，不修改已冻结材料，另建 continuation 证据目录。已有候选须使用新包，不能 reset 或再次领取来补成通过。
-
-普通 controlled 业务 5 分钟，waiting-merge-restart 和 live 10 分钟；runtime 子场景保留主干 5 分钟业务期限和独立父期限。live Go 父期限 35 分钟包含独立清理，未放宽业务窗口；普通命令、领取/控制及收尾沿现有明确预算。`FinishBody` 冻结业务期限，清理结果不能掩盖业务超时。
-
-清理只处理本次拥有的资源、服务和 base/head；PR 历史保留。先围栏原 Runner，按公开 Run/回执确认停止；未确认不能当作已结算，也不能删除诊断冒充成功。失败保留证据，不自动重试。
+调试包及浏览器前置遵循 [独立调试流程](../../docs/runtime-install-debug.md)。依赖/构建使用源码可写目录的场景归 L4，不能与其他 Web 安装/构建并发。
 
 ## 证据与扩展
 
-summary.json 记录源码/工作树、冻结构建 SHA、实际选择、用例终态、coverage 和清理；每项 `scenarios/<id>/scenario.json` 必须实际通过、清理完整且资源非空。L2 live 另保存 `live_delivery`：Runner 来源、原 Run/候选、三个公开 final 来源、Git 产物、精确 merged PR、唯一 Delivery 与后继事实。缺项由 runner 拒绝。
+输出到全新 `-out` 目录：summary、原 JSONL、冻结构建摘要及 `scenarios/<id>/scenario.json`。执行器核对实际非零命中、用例终态、选择、必要 proof 和清理；缺失、跳过、超时或自然语言成功均不能代替通过。失败保留现场与诊断，不自动重试。受管报告与登记见 [报告约定](../../docs/testing/reports.md)。
 
-```powershell
-# 测试基础设施与调用方依赖边界
-go test ./cmd/test-feedback ./tests/e2e/internal/... ./internal/testkit/boundary/... -count=1
-# 编译所有登记场景，不执行业务
-go test -tags=e2e ./tests/e2e/... -run '^$'
-```
-
-新增场景先判断所有者，优先在原 owner 添加最小用例；不因 Runner 增加后端而扩展 SteerLine 原生矩阵。确有产品闭环差异时在 manifest 登记 ID/level/suite/package/test/env，live 仅本机 Codex 且仍属于完整 L2。一个包不混合环境，runner 冻结/枚举测试并核对 manifest。Plan 按专属验收 ID 覆盖命令、环境、时点、通过条件和证据位置，新增能力必须在实施中落实。
-
-## 执行展示与最近消息
-
-本轮采用定向 Go、Web fake timer 与 Runner 实际 EXE/受控服务验证，不新增 L2/L3 live 场景；范围与命令见 [Plan](../../docs/plans/execution-observability.plan.md)，结果见[专属验收](../../docs/acceptance/execution-observability.md)。不据消息缺失判定卡死，不在安装现场验收。
-
-项目维护定向入口：`go run ./cmd/test-feedback -level=L3 -suite=runtime -scenario=runtime.project-maintenance -env=controlled`；Windows 工具 Job 下可用 `./scripts/test-runtime-isolation.ps1 -Level L3 -Suite runtime -Scenario runtime.project-maintenance -OutDir <新目录>`。单独入口 `./scripts/test-project-maintenance.ps1 -SteerRunnerExe <安装环境外EXE> -Out <新目录>` 仍调用唯一生成器和同一 Go/Edge driver，不另造现场。真实 `testing.management-local-codex` 驱动已采用自动生成/系统保存，无人工 apply，并保留真实通过/失败报告与清理验证。
-
-测试记录唯一 controlled 闭环：`go run ./cmd/test-feedback -level L3 -suite testing -scenario 'testing.records' -env controlled -out <新目录>`。`scripts/test-test-records.ps1` 复用唯一新包生成器及共享 Go/Edge driver，只在新建 C:\SteerlineDebug 包的 SteerlineTest 中执行实际 marker 断言失败→提交修正→通过→CLI 登记/原报告幂等重放→API/页面只读查询，方案显式冻结为 simulate，不调用模型或递归执行完整 L1。现场的 repo/home/SQLite/端口由新包独占，报告在包的 `evidence/test-records/`，浏览器截图/trace 在其 browser 子目录，proof 同时要求 stopped 和 resources_settled；外层 scenario 保存包路径/资源归属。受控 Runner 使用既有公开协议夹具，不扩大 Runner 测试矩阵。部分范围、离线、分叉等由定向 L1/组件测试验证。场景及验收映射见[Plan](../../docs/plans/test-records.plan.md)和[验收](../../docs/acceptance/test-records.md)。
+新增、改级、改环境或改变主要断言时，同步实现、manifest、分级列表、JSON 和选择/并行/证据校验。各场景说明独有覆盖和清理所有权；L3 不共享可变产物，无顺序依赖。测试只消费依赖公开边界，不在调用方重建 Runner 内部流程。历史 Spec/Plan/验收按冻结定义读取，当前命令以本指南和分级清单为准。

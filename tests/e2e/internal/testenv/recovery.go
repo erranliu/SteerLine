@@ -28,7 +28,21 @@ func (p *Project) CallerRequests() map[string]string {
 	p.Scenario.Must(err)
 	var s controlled.RunnerFixture
 	p.Scenario.Must(json.Unmarshal(raw, &s))
-	return s.Bodies
+	return deliveryRequestBodies(s)
+}
+
+// Material generation is preparation, separate from the delivery Run's submit
+// and stop. Keep every unclassified request so it cannot hide an extra input.
+func deliveryRequestBodies(fixture controlled.RunnerFixture) map[string]string {
+	requests := map[string]string{}
+	for id, body := range fixture.Bodies {
+		command := fixture.Requests[id]
+		if command.RunID != nil && fixture.Runs[*command.RunID].Workflow.ID == "generate" {
+			continue
+		}
+		requests[id] = body
+	}
+	return requests
 }
 
 // This is independent cleanup after delivery, not a native stop implementation.

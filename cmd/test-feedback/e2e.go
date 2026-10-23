@@ -112,7 +112,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 			return nil, errors.New("one E2E package cannot mix environments")
 		}
 		packageEnvs[entry.Package] = entry.Env
-		if entry.Level == opts.level && (entry.Env == opts.e2eEnv || opts.e2eEnv == "gated") && (opts.level == "L2" || requested[entry.Suite]) {
+		if entry.Level == opts.level && entry.Env == opts.e2eEnv && (opts.level == "L2" || requested[entry.Suite]) {
 			found[entry.Suite] = true
 			if len(wantedIDs) > 0 && !wantedIDs[entry.ID] {
 				continue
@@ -134,19 +134,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	if len(selected) == 0 {
 		return nil, errors.New("no E2E scenarios selected")
 	}
-	if opts.e2eEnv == "gated" {
-		chains := map[string]bool{}
-		for _, e := range selected {
-			if e.Env == "controlled" {
-				chains["controlled"] = true
-			} else {
-				chains[e.Chain] = true
-			}
-		}
-		if len(selected) != 2 || !chains["controlled"] || !chains["local-codex"] {
-			return nil, errors.New("L2 requires its controlled gate and current local Codex live chain")
-		}
-	}
+
 	return selected, nil
 }
 
@@ -204,12 +192,12 @@ func runE2E(opts options) (code int) {
 	}
 	note, coverage := "controlled worker/provider; no model requests", "selected-"+opts.level
 	if opts.level == "L2" {
-		coverage = "gate-only"
-	}
-	if opts.e2eEnv == "gated" {
-		note = "controlled gate, then native gpt-6-luna/medium on the current local Codex chain with real SteerlineTest GitHub PRs"
 		coverage = "full-L2"
 	}
+	if opts.e2eEnv == "live" {
+		note = "real Runner/local Codex; isolated test resources and explicit external effects"
+	}
+
 	report := e2eReport{Scope: "e2e", Coverage: coverage, Level: opts.level, Env: opts.e2eEnv, Selected: selected, Builds: map[string]string{}, Errors: []string{}, Started: time.Now().UTC().Format(time.RFC3339Nano), Environment: collectEnvironment(opts.cacheCondition, note, out, nil)}
 	started := time.Now()
 	scratch, err := os.MkdirTemp("", "steerline-e2e-")
@@ -438,7 +426,7 @@ func runE2E(opts options) (code int) {
 		packageWorkers = 2
 	}
 	report.PackageWorkers = packageWorkers
-	report.Errors, report.Blocked = executeE2EPackages(ctx, names, packages, opts.e2eEnv == "gated", packageWorkers, func(i int, pkg string) error {
+	report.Errors, report.Blocked = executeE2EPackages(ctx, names, packages, packageWorkers, func(i int, pkg string) error {
 		tests := []string{}
 		for _, e := range packages[pkg] {
 			tests = append(tests, e.Test)
@@ -517,7 +505,7 @@ func runE2E(opts options) (code int) {
 }
 
 // Only the audited runtime scenes opt into bounded Go test parallelism. Other
-// suites (especially live and gated L2) retain their existing sequencing.
+// suites retain their existing sequencing. Shared Web builders always serialize.
 func e2ePackageParallelism(entries []e2eScenario) int {
 	if len(entries) < 2 {
 		return 1
@@ -527,7 +515,7 @@ func e2ePackageParallelism(entries []e2eScenario) int {
 			return 1
 		}
 		switch entry.ID {
-		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects", "runtime.project-maintenance":
+		case "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects":
 			if entry.Level != "L3" {
 				return 1
 			}
@@ -642,15 +630,13 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 }
 
 func supportedLiveScenario(e e2eScenario) bool {
-	return e.Chain == "local-codex" && (e.ID == "testing.management-local-codex" && e.Level == "L3" && e.Suite == "testing" || e.ID == "smoke.local-codex" && e.Level == "L2" || e.ID == "workflow.local-codex-audited" && e.Level == "L3" && e.Suite == "workflow")
+	return e.Chain == "local-codex" && (e.ID == "testing.management-local-codex" && e.Level == "L4" && e.Suite == "testing" || e.ID == "smoke.local-codex" && e.Level == "L4" || e.ID == "workflow.local-codex-audited" && e.Level == "L4" && e.Suite == "workflow")
 }
 
-// The gate includes execution, evidence validation and cleanup; even a cleanup
-// failure prevents the callback from ever constructing a native environment.
-func executeE2EPackages(ctx context.Context, names []string, packages map[string][]e2eScenario, gated bool, workers int, execute func(int, string) error) ([]string, []e2eScenario) {
+func executeE2EPackages(ctx context.Context, names []string, packages map[string][]e2eScenario, workers int, execute func(int, string) error) ([]string, []e2eScenario) {
 	var failures []string
 	var blocked []e2eScenario
-	if !gated && workers > 1 {
+	if workers > 1 {
 		results := make([]error, len(names))
 		started := make([]bool, len(names))
 		jobs := make(chan int)
@@ -686,7 +672,7 @@ func executeE2EPackages(ctx context.Context, names []string, packages map[string
 		return failures, blocked
 	}
 	for i, pkg := range names {
-		if ctx.Err() != nil || (gated && packages[pkg][0].Env == "live" && len(failures) > 0) {
+		if ctx.Err() != nil {
 			for _, remaining := range names[i:] {
 				blocked = append(blocked, packages[remaining]...)
 			}
