@@ -20,8 +20,14 @@ def main():
     errors = []
     files = [
         ROOT / 'README.md',
+        ROOT / 'AGENTS.md',
+        ROOT / 'web/README.md',
         *sorted((ROOT / 'docs').rglob('*.md')),
+        *sorted((ROOT / 'SteerlineFlow').rglob('*.md')),
         *sorted((ROOT / 'SteerlineProjectGuideDoc').rglob('*.md')),
+        *sorted((ROOT / 'tests/e2e').rglob('*.md')),
+        *sorted((ROOT / 'debug-template').rglob('*.md')),
+        *sorted((ROOT / '.agents').rglob('*.md')),
     ]
     links = 0
     for path in files:

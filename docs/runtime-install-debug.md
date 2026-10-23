@@ -52,13 +52,13 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 ./scripts/test-live-delivery.ps1 -SteerRunnerExe <absolute-exe>
 ```
 
-调试包生成/冻结/停止/reset 由第一条验证，默认产物、单项目和双项目三个新包分别取证；其 `-Live` 复用 L4 真实交付专项。真实链路只使用本次 SteerlineTest base/head 和已有外部登录，不复制认证或安装数据。原生沙箱、usage、审核及恢复专项已归 SteerRunner，不再运行第二条双任务沙箱验收。历史证据见[原记录](acceptance/codex-sandbox-git.md)，当前要求及结果见[测试精简](acceptance/runner-test-convergence.md)。
+调试包生成/冻结/停止/reset 由第一条验证，默认产物、单项目和双项目三个新包分别取证；其 `-Live` 复用 L4 真实交付专项。真实链路只使用本次 SteerlineTest base/head 和已有外部登录，不复制认证或安装数据。原生沙箱、usage、审核及恢复专项已归 SteerRunner，不再运行第二条双任务沙箱验收。历史证据见[原记录](../SteerlineFlow/testing/acceptance/codex-sandbox-git.md)，当前要求及结果见[测试精简](../SteerlineFlow/testing/acceptance/runner-test-convergence.md)。
 
 长期隔离保留 source-build/path/service-write/dual-home 四项 controlled 场景；工具进程发起时使用 `scripts/test-runtime-isolation.ps1` 的既有独立上下文。浏览器 smoke 使用 `scripts/test-web-smoke.ps1`，同样使用独立上下文，详见 [E2E 指南](../tests/e2e/README.md)。
 
 ## 安装版更新
 
-双击仓库根目录 `build-deploy.bat`：先完成构建，再通过正式 stop 结算并停止目标安装版，替换三个 EXE、刷新 Runner 固定版本与 SHA256，最后启动。停止失败则不替换；应用当前停机格式使用一份共享 Runner 结算和各项目本地关闭/锁结果，缺证据均失败。跨 Runner 构建不复用已绑定的旧 home；正常更新保留项目配置、任务库和执行配置中的 profiles，不自动迁移旧 schema。此操作独立于调试环境生成，不用调试包接管安装版活动执行。首次跨 schema 的任务定义迁移与历史留档见[迁移验收](acceptance/install-cutover-20261015.md)。
+双击仓库根目录 `build-deploy.bat`：先完成构建，再通过正式 stop 结算并停止目标安装版，替换三个 EXE、刷新 Runner 固定版本与 SHA256，最后启动。停止失败则不替换；应用当前停机格式使用一份共享 Runner 结算和各项目本地关闭/锁结果，缺证据均失败。跨 Runner 构建不复用已绑定的旧 home；正常更新保留项目配置、任务库和执行配置中的 profiles，不自动迁移旧 schema。此操作独立于调试环境生成，不用调试包接管安装版活动执行。首次跨 schema 的任务定义迁移与历史留档见[迁移验收](../SteerlineFlow/testing/acceptance/install-cutover-20261015.md)。
 
 ## 独立 Web 与双项目包
 
@@ -68,4 +68,4 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 
 `<home>/web.json` 固定 Web 地址，冲突明确失败，不自动换端口。`steerline status --json` 查看宿主/Web/项目状态；`steerline stop` 或 stop.bat 覆盖全部项目，核验逐项目关闭、资源结算、精确进程退出与租约。低层 `steerline serve` 仅供前台/自动化宿主；Web 可单独 stop/serve/open，保持业务和 worker 活动轮次。
 
-生成 `./scripts/new-debug-release.ps1 -WebProjects 2` 取得同一 home 下两份独立 SteerlineTest clone/common-dir/provider；默认 live，AI 显式 `start.bat --simulate`。真实 Edge 自动入口为 `./scripts/test-unified-startup.ps1 -Package <全新双项目包> -Simulate`；查询缓存使用另一个新包并加 `-Scenario query-cache`。模型/PR 协议属于模拟，Go、Git、SQLite 和 Edge 仍为真实实现。结果与清理见[统一启动验收](acceptance/unified-startup.md)。
+生成 `./scripts/new-debug-release.ps1 -WebProjects 2` 取得同一 home 下两份独立 SteerlineTest clone/common-dir/provider；默认 live，AI 显式 `start.bat --simulate`。真实 Edge 自动入口为 `./scripts/test-unified-startup.ps1 -Package <全新双项目包> -Simulate`；查询缓存使用另一个新包并加 `-Scenario query-cache`。模型/PR 协议属于模拟，Go、Git、SQLite 和 Edge 仍为真实实现。结果与清理见[统一启动验收](../SteerlineFlow/testing/acceptance/unified-startup.md)。

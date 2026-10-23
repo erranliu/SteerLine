@@ -35,8 +35,8 @@
 - 根 README.md：用途、入口、实际构建/启动方式；未实现就如实写明。
 - 根 AGENTS.md：项目修改边界、最小检查、协作规则和提交/发布授权边界。
 - 四类长期文档：架构事实、并行开发约束、测试方法、Spec/Plan 编写规范。
-- docs/spec/README.md：任务 Spec/Plan 的目录及职责。
-- docs/acceptance/README.md：自动/人工验收、待验/失败/通过及证据记录约定。
+- SteerlineFlow/spec/README.md：任务 Spec/Plan 的目录及职责。
+- SteerlineFlow/testing/acceptance/README.md：自动/人工验收、待验/失败/通过及证据记录约定。
 - 一个长期设计目录及其中 README.md：优先采用已有设计目录，否则使用 docs/design。
 - .steerline/project.json：明确映射四类文档及设计目录。
 
@@ -46,22 +46,22 @@
   "documents": {
     "architecture": "docs/architecture.md",
     "parallel": "docs/architecture/parallel-development.md",
-    "testing": "docs/testing.md",
-    "spec_guide": "docs/spec/SpecGuide.md"
+    "testing": "SteerlineFlow/testing.md",
+    "spec_guide": "SteerlineFlow/spec/SpecGuide.md"
   },
   "design_root": "docs/design"
 }
 
-四个 documents 角色必须全部存在，分别指向不同的仓库相对 .md 普通文件。使用 / 分隔，不能含绝对路径、盘符、反斜杠或 .. 穿越；不使用 symlink、submodule 或目录代替文件。清单只接受上面这些字段，不加入命令、运行目录、认证或“已通过核验”等内容。根 README/AGENTS 和 docs/spec、docs/acceptance 的 README 是固定入口。设计目录用 README 保存到 Git，不使用只有空目录或 .gitkeep 的假结构。
+四个 documents 角色必须全部存在，分别指向不同的仓库相对 .md 普通文件。使用 / 分隔，不能含绝对路径、盘符、反斜杠或 .. 穿越；不使用 symlink、submodule 或目录代替文件。清单只接受上面这些字段，不加入命令、运行目录、认证或“已通过核验”等内容。根 README/AGENTS 和 SteerlineFlow/spec、SteerlineFlow/testing/acceptance 的 README 是固定入口。设计目录用 README 保存到 Git，不使用只有空目录或 .gitkeep 的假结构。
 
 正文按实际情况补齐：
 
-与后续统一维护首版衔接时，testing 角色固定为 docs/testing.md，不另建同内容测试规范。维护测试管理所需的 docs/testing/test-list.json；有实际 Plan 时在测试计划里说明最小必要入口，SteerLine在远端Plan更新后自动生成系统测试安排；不要求创建、应用或提交旁置.tests.json。没有测试时如实记录、清单可为空；没有实际任务时不创建示范 Plan/安排。服务采用配置远端目标分支的已发布 commit，本地领先提交或未合入准备 PR 仍须报告待发布。
+与后续统一维护首版衔接时，testing 角色固定为 SteerlineFlow/testing.md，不另建同内容测试规范。维护测试管理所需的 SteerlineFlow/testing/test-list.json；有实际 Plan 时在测试计划里说明最小必要入口，SteerLine在远端Plan更新后自动生成系统测试安排；不要求创建、应用或提交旁置.tests.json。没有测试时如实记录、清单可为空；没有实际任务时不创建示范 Plan/安排。服务采用配置远端目标分支的已发布 commit，本地领先提交或未合入准备 PR 仍须报告待发布。
 
 - 架构：模块及职责、主要调用/数据路径、状态权威、当前能力和缺口。
 - 并行开发：独立交付边界、共享文件/接口如何协调、依赖与合入条件、工作区和数据隔离。
 - 测试：已有最小命令、环境、通过条件及证据位置。没有可用测试时明确写“当前尚无”，不得虚构通过结果；不为接入临时跑全量或真实模型/真实 PR 验收。
-- Spec/Plan 规范：先调查代码和整合已有实现；Spec 写目标、范围、契约与验收要求，Plan 写实施及最小必要测试安排；自动/人工项区分，结果进入 docs/acceptance；普通开发不强制 roadmap，也不默认新增兼容/迁移。
+- Spec/Plan 规范：先调查代码和整合已有实现；Spec 写目标、范围、契约与验收要求，Plan 写实施及最小必要测试安排；自动/人工项区分，结果进入 SteerlineFlow/testing/acceptance；普通开发不强制 roadmap，也不默认新增兼容/迁移。
 - 目录 README：解释用途、已有文档入口及维护规则；没有专题设计时如实说明。
 
 每份必需 Markdown 都要合法 UTF-8、非空，有一级标题和实质正文；单份不超过 1 MiB，总和不超过 8 MiB。清单不超过 64 KiB。核对必需文档里的相对 Markdown 链接能在同一 Git 版本解析到实际文件/目录且不越出仓库；正文链接允许正常的 ../ 相对引用，不把代码示例里的路径当成实际文件要求。不要用空标题、伪造实现事实或复制 SteerLine 自身的 Go/worker/roadmap 规则填满文档。

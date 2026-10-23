@@ -44,7 +44,7 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
  const originalOther=await otherGet();
  await expect(section.getByLabel("维护范围")).toHaveCount(0);
  await expect(section.getByRole("button",{name:"应用已审阅内容"})).toHaveCount(0);
- const arrangement=join(repo,"docs","spec","task.tests.json");
+ const arrangement=join(repo,"SteerlineFlow","plans","task.tests.json");
  const beforeArrangement=readFileSync(arrangement,"utf8");
  // The package is isolated. Advance its bare remote, leaving local one commit behind.
  git("checkout",manifest.base_branch);
@@ -73,8 +73,8 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
  expect(original.commit).toBe(latest);
  const changePlan=async(label:string)=>{
   git("checkout",manifest.base_branch);
-  appendFileSync(join(repo,"docs","spec","task.plan.md"),"\n"+label+"\n");
-  git("add","docs/spec/task.plan.md");git("commit","-qm",label);git("push",remote,"HEAD:refs/heads/"+manifest.base_branch);
+  appendFileSync(join(repo,"SteerlineFlow", "plans", "task.plan.md"),"\n"+label+"\n");
+  git("add","SteerlineFlow/plans/task.plan.md");git("commit","-qm",label);git("push",remote,"HEAD:refs/heads/"+manifest.base_branch);
   expect((await call("maintenance_check",project)).status).toBe("applied");
   return ready();
  };
@@ -91,8 +91,8 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
  expect(secondTests.commit).toBe(secondMaterial.observation.commit);
  expect(secondTests.association_available).toBe(true);expect(thirdTests.association_available).toBe(true);
  const diff=await get("/runs/"+first.run_id+"/documents");
- expect(diff.files.find((f:any)=>f.path==="docs/spec/task.plan.md").after).toContain("Plan version two");
- expect(diff.files.find((f:any)=>f.path==="docs/spec/task.plan.md").before).not.toContain("Plan version two");
+ expect(diff.files.find((f:any)=>f.path==="SteerlineFlow/plans/task.plan.md").after).toContain("Plan version two");
+ expect(diff.files.find((f:any)=>f.path==="SteerlineFlow/plans/task.plan.md").before).not.toContain("Plan version two");
  const thirdMaterial=await changePlan("Plan version three");
  expect(thirdMaterial.tasks.find((t:any)=>t.task_id==="1").generation_id).not.toBe(secondGeneration);
  expect((await get("/runs/"+third.run_id+"/tests")).association_available).toBe(false);

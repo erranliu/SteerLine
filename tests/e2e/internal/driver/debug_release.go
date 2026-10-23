@@ -352,8 +352,7 @@ func (d *debugRelease) initialize() error {
 	if err != nil {
 		return err
 	}
-	reference := func(name string) (taskmodel.FileReference, error) {
-		p := "docs/spec/" + name
+	reference := func(p string) (taskmodel.FileReference, error) {
 		// Pin committed bytes so Windows checkout line-ending conversion cannot change the contract hash.
 		cmd := d.command("git", "-C", d.repo, "show", head+":"+p)
 		b, e := cmd.Output()
@@ -363,11 +362,11 @@ func (d *debugRelease) initialize() error {
 		sum := sha256.Sum256(b)
 		return taskmodel.FileReference{Path: p, Commit: head, SHA256: hex.EncodeToString(sum[:])}, nil
 	}
-	spec, err := reference("task.spec.md")
+	spec, err := reference("SteerlineFlow/spec/task.spec.md")
 	if err != nil {
 		return err
 	}
-	plan, err := reference("task.plan.md")
+	plan, err := reference("SteerlineFlow/plans/task.plan.md")
 	if err != nil {
 		return err
 	}
@@ -442,7 +441,7 @@ func (d *debugRelease) seedTasks() error {
 			return e
 		}
 		defer client.Close()
-		if _, e = WaitFixtureMaterials(ctx, d.home, client.Identity(), "docs/spec/task.plan.md", filepath.Join(d.root, "evidence", filepath.Base(d.config)+"-maintenance")); e != nil {
+		if _, e = WaitFixtureMaterials(ctx, d.home, client.Identity(), "SteerlineFlow/plans/task.plan.md", filepath.Join(d.root, "evidence", filepath.Base(d.config)+"-maintenance")); e != nil {
 			return e
 		}
 	}

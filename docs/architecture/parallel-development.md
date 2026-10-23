@@ -2,11 +2,11 @@
 
 源码追溯：已迁出的本地源码链接固定到拆分前提交；当前模块归属见 [代码架构](current-code-architecture.md)。
 
-> 2026-10-14：[#91](../spec/tui-http-client.spec.md)已交付 TUI/HTTP接入；[#92](../spec/http-command-boundary.spec.md)经PR #311交付HTTP消费端口、登记/对账与记录owner，已移出[草稿任务表](../roadmap/drafts/roadmap.md)。#93经PR #312交付journal跨进程终态保护与窄observer；#94/#95/#96因Worker三层重构交叉继续留草稿。旧二阶段候选不作为当前队列；拟议owner不代表已实现，执行/验收状态归 execution-map。
+> 2026-10-14：[#91](../../SteerlineFlow/spec/tui-http-client.spec.md)已交付 TUI/HTTP接入；[#92](../../SteerlineFlow/spec/http-command-boundary.spec.md)经PR #311交付HTTP消费端口、登记/对账与记录owner，已移出[草稿任务表](../../SteerlineFlow/Roadmap/drafts/roadmap.md)。#93经PR #312交付journal跨进程终态保护与窄observer；#94/#95/#96因Worker三层重构交叉继续留草稿。旧二阶段候选不作为当前队列；拟议owner不代表已实现，执行/验收状态归 execution-map。
 
 本文持续维护 SteerLine 的功能划分、模块所有权、可并行条件和冲突触发点，是设计或调整 roadmap 前的阅读与检查入口。目标是提高 AI 开发的有效吞吐：让更多任务能够独立理解、实现、验证和交付，降低共享修改、等待、返工与集成成本。业务正确性、权限、原请求恢复和唯一交付是必须保持的边界，详见[整体架构](../architecture.md)。
 
-规划时先读[RoadmapGuide](../roadmap/RoadmapGuide.md)，再读本页的判断规则，再按影响展开对应模块、契约和测试。实际源码位置由[代码架构](current-code-architecture.md)维护；本页维护并行决策，拟议任务关系由本轮选定的 drafts/ 草稿维护；用户确认的开发任务及依赖由[正式执行清单](../roadmap/execution-map.md)维护。采用的职责、接口、前置和验证要求须落实到独立 Spec/Plan；本页不分配任务 ID、不改变中心 DAG 或已冻结契约，也不是绕过硬前置的执行许可。
+规划时先读[RoadmapGuide](../../SteerlineFlow/Roadmap/RoadmapGuide.md)，再读本页的判断规则，再按影响展开对应模块、契约和测试。实际源码位置由[代码架构](current-code-architecture.md)维护；本页维护并行决策，拟议任务关系由本轮选定的 drafts/ 草稿维护；用户确认的开发任务及依赖由[正式执行清单](../../SteerlineFlow/Roadmap/execution-map.md)维护。采用的职责、接口、前置和验证要求须落实到独立 Spec/Plan；本页不分配任务 ID、不改变中心 DAG 或已冻结契约，也不是绕过硬前置的执行许可。
 
 ## 并行开发的判断
 
@@ -28,29 +28,29 @@
 | 功能 / 状态 | 主要归属 | 可相对独立推进的范围 | 需要协调的触发点 | 当前资料与定位 |
 | --- | --- | --- | --- | --- |
 | 任务契约、DAG 与资格 / 已有 | task、task/model | 固定契约下的任务校验、查询、选择纯规则及任务应用用例 | TaskContract/身份改变、领取与结果端口、前置/丢弃/后继释放语义 | [数据模型](../product-design/data-model.md)、[任务输入与文档端口](../../internal/task/commands.go)、[纯模型](../../internal/task/model) |
-| 候选、派发、反馈、恢复与交付 / 已有 | execution | 沿现有小端口修改明确用例，保持 actor 和提交屏障 | 多项用例共改 WorkflowRun/Execution、Decision 路由、Operation 意图/回执、控制版本或恢复授权；同模块内也需划分共享所有者 | [反馈](../product-design/decisions.md)、[执行共同约束](../spec/execution-architecture.spec.md)、[提交屏障](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/service_commit.go) |
+| 候选、派发、反馈、恢复与交付 / 已有 | execution | 沿现有小端口修改明确用例，保持 actor 和提交屏障 | 多项用例共改 WorkflowRun/Execution、Decision 路由、Operation 意图/回执、控制版本或恢复授权；同模块内也需划分共享所有者 | [反馈](../product-design/decisions.md)、[执行共同约束](../../SteerlineFlow/spec/execution-architecture.spec.md)、[提交屏障](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/service_commit.go) |
 | Codex / 本机 Orca 接入 / 已有 | execution/adapters/codex、orcatransport | 实现自身协议、观察和能力核验；不改中心业务状态机 | 共享 Codex codec、backend 契约、权限/资源封套、绑定格式、会话/轮次或错误分类改变 | [执行配置](../product-design/execution-profiles.md)、[后端契约](../../internal/execution/backend)、[共享协议 codec](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/adapters/protocol/codexapp) |
 | 工作区、PR/provider 与进程资源 / 已有 | execution/workspace、publication、process | 既有调用契约下的 Git/provider/OS 操作和事实核验 | base/remote、PR 归属、进程树所有权、清理条件或资源意图改变；共同执行结算需协调 | [工作区设计](../product-design/worktree-preparation.md)、[交付规则](../product-design/data-model.md#pr-与交付)、[资源源码](current-code-architecture.md#module-owners) |
 | 会话与活动采集/读取 / 已有 | execution/conversation、采集 adapter、product/query、storage | 来源 mapper、正文读取和活动展示可沿固定模型分别改进 | 来源/轮次/正文修订、规范来源选择、去重游标或写入与 checkpoint 原子性改变 | [会话](../product-design/conversation-events.md)、[Activity](../product-design/activity.md)、[会话存储端口](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/conversation_ports.go) |
 | 产品查询与客户端传输 / 已有 | product/api、query、client、httpapi | 稳定 DTO 下的只读投影、查询组合、CLI/Web 和本机 HTTP 消费适配 | 公开字段/错误/能力/游标语义、请求目标、同快照要求或命令受理规则改变 | [产品 API](../../internal/product/api)、[本机协议](../product-design/local-client-protocol.md)、[查询组装](../../internal/product/query/ports.go) |
 | 持久化与原子提交 / 已有 | storage/ports、sqlite | 已明确语义下的读取或提交实现；消费者仍经窄端口 | schema、唯一约束、CAS/版本、同事务快照、checkpoint 与领域记录提交边界改变 | [数据模型与格式来源](../product-design/data-model.md)、[提交契约](../../internal/storage/ports/transactions.go)、[快照端口](../../internal/storage/ports/application_snapshot.go) |
 | 配置、应用组装与服务宿主 / 已有 | app 的 local/terminal 组装单元、app/host | 既有后端的配置/target/preflight/factory 通常只改所属文件；Orca 本机与远端共用单终端实现。稳定宿主/产品端口下的进程控制和入口能力 | 新后端仍改中央显式组合；共同身份/policy、公共构造、配置摘要、exe/home 传递、实例/锁、启动与停服规则改变 | [local 组装](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/app/directory_local.go)、[Orca 单终端组装](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/app/directory_orca_terminal.go)、[组装/宿主源码](current-code-architecture.md#build-install-and-launch-sources) |
-| 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary) |
-| 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 2.2先推导草稿/artifact/人工事项，2.3实际会话接入验证必要权限；成熟后按稳定成果拆分 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../archive/roadmap/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
+| 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../../SteerlineFlow/testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary) |
+| 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 2.2先推导草稿/artifact/人工事项，2.3实际会话接入验证必要权限；成熟后按稳定成果拆分 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../../SteerlineFlow/archive/roadmap/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
 
 远端能力需独立核对目标权限、身份、观察/恢复/停止与路径所有权，不能从本机成功推定支持。
 
 ## HTTP 接入后的草稿边界
 
-以下仅为当前[草稿](../roadmap/drafts/roadmap.md)导航，真实职责/契约与通过条件由各自Spec/Plan固定，不改变源码当前owner或自动生成依赖。
+以下仅为当前[草稿](../../SteerlineFlow/Roadmap/drafts/roadmap.md)导航，真实职责/契约与通过条件由各自Spec/Plan固定，不改变源码当前owner或自动生成依赖。
 
 | 草稿 | 拟议收敛及独立修改面 | 共享条件 |
 | --- | --- | --- |
-| #92 [HTTP命令](../spec/http-command-boundary.spec.md) | httpapi消费端口、同包信封登记/对账、app的HTTPendpoint段 | #93共同wire/API/httpfs只读；普通与原生查看保留各自重放规则 |
-| #93 [客户端原请求/观察](../spec/http-client-request-lifecycle.spec.md) | 原 TUI journal/observer 已退役；共享 HTTP Client/Open 与进程身份保留 | 新客户端能力按当前 Web/application 边界维护；原交付事实保留 |
-| #94 [固定流程规则](../spec/development-flow-rules.spec.md) | 保留原development纯包方案供重审 | 暂不纳入；与正在实施的三层Workflow规则直接重叠，不同时建立两套owner |
-| #95 [最终交付](../spec/task-delivery-usecase.spec.md) | 保留delivery窄端口用例的剩余收益 | 暂不纳入；三层方案保留任务/PR业务桥接，但actor与记录转换正在重组，旧接线条件须重核 |
-| #96 [运行时资源](../spec/worker-runtime-ownership.spec.md) | 保留原资源/观察/在途owner及确认交接反例 | 暂不纳入；与三层ReliableExecution和actor资源组装交叉，不按旧runtime边界并行开工 |
+| #92 [HTTP命令](../../SteerlineFlow/spec/http-command-boundary.spec.md) | httpapi消费端口、同包信封登记/对账、app的HTTPendpoint段 | #93共同wire/API/httpfs只读；普通与原生查看保留各自重放规则 |
+| #93 [客户端原请求/观察](../../SteerlineFlow/spec/http-client-request-lifecycle.spec.md) | 原 TUI journal/observer 已退役；共享 HTTP Client/Open 与进程身份保留 | 新客户端能力按当前 Web/application 边界维护；原交付事实保留 |
+| #94 [固定流程规则](../../SteerlineFlow/spec/development-flow-rules.spec.md) | 保留原development纯包方案供重审 | 暂不纳入；与正在实施的三层Workflow规则直接重叠，不同时建立两套owner |
+| #95 [最终交付](../../SteerlineFlow/spec/task-delivery-usecase.spec.md) | 保留delivery窄端口用例的剩余收益 | 暂不纳入；三层方案保留任务/PR业务桥接，但actor与记录转换正在重组，旧接线条件须重核 |
+| #96 [运行时资源](../../SteerlineFlow/spec/worker-runtime-ownership.spec.md) | 保留原资源/观察/在途owner及确认交接反例 | 暂不纳入；与三层ReliableExecution和actor资源组装交叉，不按旧runtime边界并行开工 |
 
 已确认的#92/#93无相互业务硬依赖；#92/#93均已交付。正在实施的Worker三层重构覆盖#94流程owner并与#96生命周期/资源接线交叉，#95交付抽取需待actor/PR桥接稳定后重审；三项继续留草稿而非并行线。#92仅修改共享app文件的HTTP endpoint段，三层owner保留worker/adapter组装；后合入者保留双方成果并复验实际app接线。发现公共契约改变时先重核，不默认新增硬依赖。各项自行补owner反例/边界文件及最小组合验证，公共fixture/runner冻结；不另建签名基础、文档代管或集中补测任务。测试资源隔离/串行限制保持，具体命令/能力补齐与专属验收分别归各项Plan及acceptance。
 
@@ -91,7 +91,7 @@ Codex 开发的正式交付依赖维护于 execution-map；SteerLine产品自身
 2. 每个候选任务写清产品成果、主要所有者、输入/输出契约、共同语义/代码/资源、最小通过条件；列明范围内是否改变接口或格式。
 3. 对实际有交接或共享影响的任务对，选择上述安排，分别记录可固定、可开工和可合入条件。不要求全任务做无意义的两两矩阵。
 4. 共同基础按真实独立成果拆分。若没有独立通过条件，或双方核心语义尚未稳定，保持同一交付任务或留草稿，不能制造只写签名的“已完成前置”。
-5. 在草稿阶段按[验收流程](../acceptance/README.md)规划自动/人工行为，建立任务专属的一份或多份 acceptance 文档并从草稿链接，单份文档不覆盖多任务，未定内容明确标注。鼓励同时识别独立验收活动并安排，但不强制串成固定执行路径。人工组织/判断为主的阶段活动不作为任务；自动验收可独立成任务或纳入实现。少量人工项尽量后置，标明参与人/窗口、截止阶段与实际阻塞范围，避免成为无关任务的开工前置。
+5. 在草稿阶段按[验收流程](../../SteerlineFlow/testing/acceptance/README.md)规划自动/人工行为，建立任务专属的一份或多份 acceptance 文档并从草稿链接，单份文档不覆盖多任务，未定内容明确标注。鼓励同时识别独立验收活动并安排，但不强制串成固定执行路径。人工组织/判断为主的阶段活动不作为任务；自动验收可独立成任务或纳入实现。少量人工项尽量后置，标明参与人/窗口、截止阶段与实际阻塞范围，避免成为无关任务的开工前置。
 6. 纳入执行前明确独立 Spec/Plan、任务身份及 acceptance 记录，经用户确认写入 execution-map；启动时固定实际文档commit，当前空正式表不从草稿回填。Spec 写职责、契约及硬前置；Plan 写共享段所有权、集成顺序和最小测试计划，不让本页成为隐式执行要求。纳入不要求删除草稿条目；真正执行完成后移除，草稿无需维护实时状态。
 
 建议在本轮关系说明中使用以下简表；每项任务仍遵循一个任务、一份 Spec/Plan、一个实现 PR：
@@ -114,16 +114,16 @@ Codex 开发的正式交付依赖维护于 execution-map；SteerLine产品自身
 
 ## 测试与独立性证据
 
-测试采用[总入口](../testing.md)和[E2E 约定](../../tests/e2e/README.md)。以下是定位和选择建议，不是每个任务默认必跑的矩阵；每次由实际改动的 Plan 确定级别、组/场景、环境、命令、时点、通过条件和证据。
+测试采用[总入口](../../SteerlineFlow/testing.md)和[E2E 约定](../../tests/e2e/README.md)。以下是定位和选择建议，不是每个任务默认必跑的矩阵；每次由实际改动的 Plan 确定级别、组/场景、环境、命令、时点、通过条件和证据。
 
 | 影响范围 | 当前验证定位 | 说明 |
 | --- | --- | --- |
 | 单 owner 规则 | [任务纯规则用例](../../internal/task/model/taskgraph_test.go)、[执行恢复隔离用例](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/internal/execution/candidate_resume_isolation_test.go)、[控制台交互用例](https://github.com/erranliu/SteerLine/blob/47fafc12721ceb8fa39ba1ab227872fd14513bcb/internal/console/interaction_test.go) | 定向选受影响规则；这些用例不证明所有同模块变更可以独立 |
 | 公共边界、端口、组装 | [依赖守卫](../../internal/testkit/boundary)、[真实 app/client 接线](https://github.com/erranliu/SteerLine/blob/d20a72284705b4daac476d4fa5770151dca03e56/tests/integration/candidate_console_test.go)、[L1 选择](../../cmd/test-feedback/scoped.go) | 接线或公共契约变化核对实际消费者，fixture 保持正式接口；源码闭包按已有平台守卫核验 |
 | 交付与恢复组合 | [登记场景](../../tests/e2e/suites.json)：delivery.basic、recovery.waiting-merge-restart（controlled）及对应 live 场景 | controlled 和 live 分别选择；delivery.basic 只证明 A 交付及 B 就绪，不证明 B 的后继执行 |
-| 双本机候选与原生资源 | 登记的 candidates.local 及[本机验收摘要](../acceptance/archive/completed/candidate-acceptance.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
+| 双本机候选与原生资源 | 登记的 candidates.local 及[本机验收摘要](../../SteerlineFlow/testing/acceptance/archive/completed/candidate-acceptance.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
 
-已有[任务/执行/控制台独立 owner 探针的固定历史记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-10-independence-cleanup/independence.md)证明了当时几个明确规则可在所属边界被修改和检验；它们不是所有功能组合或当前任意接口变化的独立性证明。历史失败、未触发分支、原生未测范围和不同源码基线通过[验收摘要与历史快照](../acceptance/README.md)追溯，不能算作当前通过。后续新增证据链接到对应模块/边界的最小摘要，原始运行产物放临时目录，不要求规划者追读全部归档 Spec。
+已有[任务/执行/控制台独立 owner 探针的固定历史记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-10-independence-cleanup/independence.md)证明了当时几个明确规则可在所属边界被修改和检验；它们不是所有功能组合或当前任意接口变化的独立性证明。历史失败、未触发分支、原生未测范围和不同源码基线通过[验收摘要与历史快照](../../SteerlineFlow/testing/acceptance/README.md)追溯，不能算作当前通过。后续新增证据链接到对应模块/边界的最小摘要，原始运行产物放临时目录，不要求规划者追读全部归档 Spec。
 
 没有专门契约测试时，先使用受影响 owner 用例和真实组装入口；只有确有未覆盖边界才新增最小场景/环境能力，并在 Plan 说明。新增契约/测试说明形成后更新本页链接，保持正文由对应所有者维护。
 
@@ -137,4 +137,4 @@ Codex 开发的正式交付依赖维护于 execution-map；SteerLine产品自身
 
 ## #84 / #45 历史交接
 
-用户于 2026-10-09 明确允许 #84 与 #45 独立并行实现；共享状态、格式、流程语义由 #84 交付，主干集成先 #84 后 #45，#45 的 HTTP/client discard 接线仍由原执行者负责。#84 提供 WorkflowRun `status/flow_ref/step_id`、输入/结果版本绑定，产品 CandidateSummary 的同快照步骤、源执行事实及报告权限边界；SQLite schema 18、runtime 20、worker-flow-v2、Orca execution-state codec 11。#45 后续消费真实字段和结果，不复制转移逻辑；该交接已交付，#44 后续删除由 #91 规划。完整状态按 [execution-map](../roadmap/execution-map.md)核对。
+用户于 2026-10-09 明确允许 #84 与 #45 独立并行实现；共享状态、格式、流程语义由 #84 交付，主干集成先 #84 后 #45，#45 的 HTTP/client discard 接线仍由原执行者负责。#84 提供 WorkflowRun `status/flow_ref/step_id`、输入/结果版本绑定，产品 CandidateSummary 的同快照步骤、源执行事实及报告权限边界；SQLite schema 18、runtime 20、worker-flow-v2、Orca execution-state codec 11。#45 后续消费真实字段和结果，不复制转移逻辑；该交接已交付，#44 后续删除由 #91 规划。完整状态按 [execution-map](../../SteerlineFlow/Roadmap/execution-map.md)核对。

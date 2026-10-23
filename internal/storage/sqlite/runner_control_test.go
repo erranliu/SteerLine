@@ -25,7 +25,7 @@ func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutProjectTaskAuthority(a) }))
 	docs := &runnerTaskDocuments{repository: a.Repository, body: []byte("# Acceptance\nfixed contract\n")}
 	sum := sha256.Sum256(docs.body)
-	ref := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: hex.EncodeToString(sum[:])}
+	ref := taskmodel.FileReference{Path: "SteerlineFlow/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: hex.EncodeToString(sum[:])}
 	tasks := nativeAuditRecordsWithReference(t, s, a, ref)
 	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		_, err := tx.tx.ExecContext(ctx, `UPDATE project_task_authorities SET dispatch_paused=0 WHERE project_identity=?`, a.ProjectIdentity)

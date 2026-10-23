@@ -8,22 +8,22 @@ import (
 
 func TestFilterGeneratedRunOutputPreservesOtherValidationChanges(t *testing.T) {
 	repoRoot := t.TempDir()
-	outDir := filepath.Join(repoRoot, "docs", "validation", "test-feedback", "run with spaces")
+	outDir := filepath.Join(repoRoot, "SteerlineFlow", "testing", "validation", "test-feedback", "run with spaces")
 	generated := generatedRunOutputPaths(repoRoot, outDir)
 	status := strings.Join([]string{
-		"?? docs/validation/test-feedback/run with spaces/go-test.jsonl",
-		"?? docs/validation/test-feedback/run with spaces/go-test.stderr.txt",
-		"?? docs/validation/test-feedback/run with spaces/summary.json",
-		"?? docs/validation/test-feedback/README.md",
-		" M docs/validation/test-feedback/coverage-map.md",
+		"?? SteerlineFlow/testing/validation/test-feedback/run with spaces/go-test.jsonl",
+		"?? SteerlineFlow/testing/validation/test-feedback/run with spaces/go-test.stderr.txt",
+		"?? SteerlineFlow/testing/validation/test-feedback/run with spaces/summary.json",
+		"?? SteerlineFlow/testing/validation/test-feedback/README.md",
+		" M SteerlineFlow/testing/validation/test-feedback/coverage-map.md",
 		" M internal/app/host/service_test.go",
 		"",
 	}, "\x00")
 
 	got := filterGeneratedRunOutput([]byte(status), generated)
 	want := strings.Join([]string{
-		"?? docs/validation/test-feedback/README.md",
-		" M docs/validation/test-feedback/coverage-map.md",
+		"?? SteerlineFlow/testing/validation/test-feedback/README.md",
+		" M SteerlineFlow/testing/validation/test-feedback/coverage-map.md",
 		" M internal/app/host/service_test.go",
 	}, "\n")
 	if got != want {

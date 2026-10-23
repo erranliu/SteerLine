@@ -33,7 +33,7 @@ func TestTMDocuments(t *testing.T) {
 			t.Fatal("unsafe Plan path", name)
 		}
 	}
-	if name, err := ArrangementPath("docs/spec/task.plan.md"); err != nil || name != "docs/spec/task.tests.json" {
+	if name, err := ArrangementPath("SteerlineFlow/plans/task.plan.md"); err != nil || name != "SteerlineFlow/plans/task.tests.json" {
 		t.Fatal(name, err)
 	}
 }

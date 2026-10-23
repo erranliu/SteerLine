@@ -14,7 +14,7 @@ Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、�
 
 候选 ID 与 Runner Run ID 分开。候选原子领取时固定完整 Spec/Plan 引用、原预设 ID/名称/参数摘要、原执行/流程配置、目标、原 request_id/body 与各自 base；响应丢失只查原请求。项目 checkpoint 固定 Runner EXE/version/SHA/resource_digest/state-dir，候选同时记录该构建绑定；instance_id 仅属于本次 ProjectRuntime，不永久写死到 Run。接受后 Run、输入摘要、分支和 PR 绑定不能替换。候选参与状态不冒充 Runner 原生执行状态。
 
-人工候选退出在原候选 payload 固定 `withdrawal`（request_id、expected_revision、requested_by、at），与 `participation=abandoned` 同事务保存；原请求重放不重写首次事实。`stop_requested` 专指独立的 Runner 停止义务，不由人工退出设置。退出与名额统计在写事务中重检，至少保留一个参与候选；Task 终态之后仍可另行增加停止义务，保留原 withdrawal。当前 Web 及调用方验证见[专属验收](../acceptance/web-candidate-stop.md)。
+人工候选退出在原候选 payload 固定 `withdrawal`（request_id、expected_revision、requested_by、at），与 `participation=abandoned` 同事务保存；原请求重放不重写首次事实。`stop_requested` 专指独立的 Runner 停止义务，不由人工退出设置。退出与名额统计在写事务中重检，至少保留一个参与候选；Task 终态之后仍可另行增加停止义务，保留原 withdrawal。当前 Web 及调用方验证见[专属验收](../../SteerlineFlow/testing/acceptance/web-candidate-stop.md)。
 
 ## 固定契约与领取
 
@@ -60,7 +60,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 | 公开事件 | 游标和事件 ID 去重 | [runner_events.go](../../internal/storage/sqlite/runner_events.go) |
 | 执行 workflow / 原生格式 | Runner 独立 owner；ID/version 取所选构建公开目录 | [Runner 接入](../integration/steerrunner.md) |
 
-节点和异常规则见[生命周期](worker-lifecycle.md)，配置见[执行方案](execution-profiles.md)，实际通过/未验见[接入验收](../acceptance/steerrunner-cutover.md)。历史 Spec 的迁出前源码链接固定在原 Git 提交，只作追溯。
+节点和异常规则见[生命周期](worker-lifecycle.md)，配置见[执行方案](execution-profiles.md)，实际通过/未验见[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)。历史 Spec 的迁出前源码链接固定在原 Git 提交，只作追溯。
 
 
-环境检查另存 environment_checks / environment_check_requests：项目、原 start/stop、固定 Runner pin、公开输入/首个权威摘要和最近快照；本地 CAS revision 与 Runner revision 分开。它们不生成 Task、候选、交付或新的执行状态权威，亦不推进任务数据库 revision。结果未知只读原请求，reset 必须保留未知操作及未结算资源的恢复记录。[接入规格](../spec/environment-check.spec.md)与[验收](../acceptance/environment-check.md)分别定义行为与实际前置状态。
+环境检查另存 environment_checks / environment_check_requests：项目、原 start/stop、固定 Runner pin、公开输入/首个权威摘要和最近快照；本地 CAS revision 与 Runner revision 分开。它们不生成 Task、候选、交付或新的执行状态权威，亦不推进任务数据库 revision。结果未知只读原请求，reset 必须保留未知操作及未结算资源的恢复记录。[接入规格](../../SteerlineFlow/spec/environment-check.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/environment-check.md)分别定义行为与实际前置状态。

@@ -142,8 +142,8 @@ try {
     }
     if ($Orca) {
         foreach ($mapping in @(
-            @('task.spec.md', 'projects\SteerlineTest\docs\spec\task.spec.md'),
-            @('task.plan.md', 'projects\SteerlineTest\docs\spec\task.plan.md'),
+            @('task.spec.md', 'projects\SteerlineTest\SteerlineFlow\spec\task.spec.md'),
+            @('task.plan.md', 'projects\SteerlineTest\SteerlineFlow\plans\task.plan.md'),
             @('AGENTS.md', 'projects\SteerlineTest\AGENTS.md'),
             @('publish.ps1', 'projects\SteerlineTest\publish.ps1')
         )) {
@@ -263,7 +263,7 @@ try {
             & git -C (Join-Path $target 'projects\SteerlineTestB') config $key[0] $key[1]
             if ($LASTEXITCODE -ne 0) { throw 'Second clone configuration failed' }
         }
-        foreach ($name in @('AGENTS.md','publish.ps1','docs\spec\task.spec.md','docs\spec\task.plan.md')) {
+        foreach ($name in @('AGENTS.md','publish.ps1','SteerlineFlow\spec\task.spec.md','SteerlineFlow\plans\task.plan.md')) {
             $material = Join-Path $target ('projects\SteerlineTestB\' + $name)
             $content = [IO.File]::ReadAllText($material).Replace($baseBranch,($baseBranch + '-b'))
             $encoding = if ($name.EndsWith('.ps1')) { New-Object Text.UTF8Encoding $true } else { $utf8 }

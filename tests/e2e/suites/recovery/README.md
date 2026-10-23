@@ -8,4 +8,4 @@ go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=
 
 Codex/Orca 原生断连、终端身份、未知输入、同 thread 恢复、缺 final/补报、资源资格属于 SteerRunner 专项。调用方未知回执、原授权 revision、事件游标与停止义务由 SteerLine 对应 owner 测试承担。完整本机 Codex 运行和真实 PR 闭环继续由 L2 覆盖。
 
-[精简 Spec](../../../../docs/spec/runner-test-convergence.spec.md) · [验收](../../../../docs/acceptance/runner-test-convergence.md) · [E2E 指南](../../README.md)
+[精简 Spec](../../../../SteerlineFlow/spec/runner-test-convergence.spec.md) · [验收](../../../../SteerlineFlow/testing/acceptance/runner-test-convergence.md) · [E2E 指南](../../README.md)

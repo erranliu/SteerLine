@@ -17,7 +17,7 @@ import (
 
 func TestTM05PageProjection(t *testing.T) {
 	t.Run("task_page_excludes_fixed_contract_and_private_delivery_evidence", func(t *testing.T) {
-		input := storageports.NativeTaskDetail{TaskRecord: taskmodel.TaskRecord{TaskID: "77", Title: "中文任务", Version: 6, IdentityMapDigest: "private-map", ContractID: "private-contract"}, Contract: taskmodel.TaskContract{SpecRef: taskmodel.FileReference{Path: "docs/spec/task.spec.md", SHA256: "secret-document-hash"}, PlanRef: taskmodel.FileReference{Path: "docs/spec/task.plan.md"}}, Delivery: &taskmodel.TaskDeliveryRecord{SelectedWorkflowRunID: "winning-workflow", PRURL: "https://example.invalid/pr/7", Evidence: []byte(`{"private":true}`)}}
+		input := storageports.NativeTaskDetail{TaskRecord: taskmodel.TaskRecord{TaskID: "77", Title: "中文任务", Version: 6, IdentityMapDigest: "private-map", ContractID: "private-contract"}, Contract: taskmodel.TaskContract{SpecRef: taskmodel.FileReference{Path: "SteerlineFlow/spec/task.spec.md", SHA256: "secret-document-hash"}, PlanRef: taskmodel.FileReference{Path: "SteerlineFlow/plans/task.plan.md"}}, Delivery: &taskmodel.TaskDeliveryRecord{SelectedWorkflowRunID: "winning-workflow", PRURL: "https://example.invalid/pr/7", Evidence: []byte(`{"private":true}`)}}
 		page := TaskDetail(input)
 		encoded, err := json.Marshal(page)
 		if err != nil {

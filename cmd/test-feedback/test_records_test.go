@@ -13,7 +13,7 @@ func TestTRProducerFreezesDefinitionAndIDsBeforeExecution(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 	_ = os.WriteFile("go.mod", []byte("module fixture\n"), 0600)
-	_ = os.MkdirAll("docs/testing", 0700)
+	_ = os.MkdirAll("SteerlineFlow/testing", 0700)
 	d := testmanagement.Definition{ID: "l1.minimum", Name: "before", Level: "L1", Environment: "isolated", Command: "test rules", Check: "actual rules"}
 	catalog, _ := json.Marshal(testmanagement.Catalogue{Tests: []testmanagement.Definition{d}})
 	_ = os.WriteFile(testmanagement.CataloguePath, catalog, 0600)

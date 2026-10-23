@@ -50,7 +50,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			t.Fatalf("git %v: %v: %s", args, err, out)
 		}
 	}
-	files := map[string]string{"docs/spec/example.spec.md": "# Example Spec\n\n## Acceptance\n\nPass.\n", "docs/spec/example.plan.md": "# Example Plan\n", "docs/spec/native-task-constraints.md": "# Shared Constraints\n"}
+	files := map[string]string{"SteerlineFlow/spec/example.spec.md": "# Example Spec\n\n## Acceptance\n\nPass.\n", "SteerlineFlow/plans/example.plan.md": "# Example Plan\n", "SteerlineFlow/spec/native-task-constraints.md": "# Shared Constraints\n"}
 	for name, body := range files {
 		path := filepath.Join(repo, filepath.FromSlash(name))
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
@@ -91,7 +91,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		sum := sha256.Sum256(blob)
 		return taskmodel.FileReference{Path: name, Commit: commit, SHA256: hex.EncodeToString(sum[:])}
 	}
-	contract := taskmodel.TaskContract{ContractID: "contract-example", Repository: remoteURL, Remote: "origin", Branch: "main", SpecRef: ref("docs/spec/example.spec.md"), PlanRef: ref("docs/spec/example.plan.md"), CommonRefs: []taskmodel.FileReference{ref("docs/spec/native-task-constraints.md")}}
+	contract := taskmodel.TaskContract{ContractID: "contract-example", Repository: remoteURL, Remote: "origin", Branch: "main", SpecRef: ref("SteerlineFlow/spec/example.spec.md"), PlanRef: ref("SteerlineFlow/plans/example.plan.md"), CommonRefs: []taskmodel.FileReference{ref("SteerlineFlow/spec/native-task-constraints.md")}}
 	contract.AcceptanceRefs = []taskmodel.FileReference{contract.SpecRef}
 	contract.Digest, err = taskmodel.ContractDigest(contract)
 	if err != nil {

@@ -1,12 +1,12 @@
 # 最终回复与必要会话事实
 
-中心保存完整最终回复、session/turn 状态、宿主等待及采集缺口。问题、背景、选项和答案由 Decision 保存，发送意图与回执由 Command/Operation 保存。完整工具过程、普通消息、增量、终端正文和未知原始事件留在原生工具，中心不维护其副本。此次收口见[Spec](../archive/spec/completed/product-simplification-04-conversation-recovery.spec.md)及[验收](../acceptance/archive/completed/product-simplification-04-conversation-recovery.md)。
+中心保存完整最终回复、session/turn 状态、宿主等待及采集缺口。问题、背景、选项和答案由 Decision 保存，发送意图与回执由 Command/Operation 保存。完整工具过程、普通消息、增量、终端正文和未知原始事件留在原生工具，中心不维护其副本。此次收口见[Spec](../../SteerlineFlow/archive/spec/completed/product-simplification-04-conversation-recovery.spec.md)及[验收](../../SteerlineFlow/testing/acceptance/archive/completed/product-simplification-04-conversation-recovery.md)。
 
 ## 原生采集
 
 本地 Codex 沿原 `codex-app-server` 历史读取接口工作。先核验原 session、workspace 和 Codex home，再以有界 turn 页读取必要状态与 final。只有明确 `agentMessage.phase=final_answer`、原生 turn 有非空 `completedAt` 且正文实际存在时，中心保存完整正文。显式空字符串是完整空回复；缺失 text、未知 phase、失败或取消且没有 final 均保留真实状态与明确缺口，不采用最后一条文字冒充 final。
 
-Orca 本机/environment 通过同一原终端的请求回执与主代理状态核验本轮结束，再保存完整普通 `lastAssistantMessage`；当前只支持 Codex 主代理。订阅和独立 `worktree.ps` 查询核对发送前基线、原 runtime/terminal/incarnation/pane/provider 及原输入；working 通知不是必需条件。无 Task/Dispatch、输出材料 relay、base64 标记、屏幕完成推断或 agent 私有 home/history 扫描。正文缺失、可能截断、原身份/输入归属或正文冲突时报告缺口，不推进下一阶段；原生 outcome 缺失仍保留 unknown，不能因正文受理推定工具或 PR 成功。已受理原文及摘要不可替换，最终正文沿现有规范会话提交保存。详细规则与证据见[完成 Spec](../spec/orca-completion-query.spec.md)及[验收](../acceptance/orca-completion-query.md)。
+Orca 本机/environment 通过同一原终端的请求回执与主代理状态核验本轮结束，再保存完整普通 `lastAssistantMessage`；当前只支持 Codex 主代理。订阅和独立 `worktree.ps` 查询核对发送前基线、原 runtime/terminal/incarnation/pane/provider 及原输入；working 通知不是必需条件。无 Task/Dispatch、输出材料 relay、base64 标记、屏幕完成推断或 agent 私有 home/history 扫描。正文缺失、可能截断、原身份/输入归属或正文冲突时报告缺口，不推进下一阶段；原生 outcome 缺失仍保留 unknown，不能因正文受理推定工具或 PR 成功。已受理原文及摘要不可替换，最终正文沿现有规范会话提交保存。详细规则与证据见[完成 Spec](../../SteerlineFlow/spec/orca-completion-query.spec.md)及[验收](../../SteerlineFlow/testing/acceptance/orca-completion-query.md)。
 
 正在运行的 turn 只保存原 turn 开始事实，不保存部分正文。结束但 final 尚未出现的原 turn 保留有界重访锚点；迟到的 final 仍属于原 turn，不新建会话。原生历史读取游标与最终正文在事务完成后推进；读取失败保存 gap，不推进游标。重复读取按原 source/session/turn/item 身份幂等。终态 final item 内容变化被拒绝，保留原正文并报告缺口。迟到的完整 final 在最终回复索引中解除该 turn 先前的缺正文提示；诊断查询仍可追溯该提示。
 

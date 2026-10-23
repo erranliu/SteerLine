@@ -84,7 +84,7 @@ func TestTM05ProductDTO(t *testing.T) {
 		}
 	})
 	t.Run("task_page_escapes_bidi_preserves_unicode", func(t *testing.T) {
-		page := TaskPage{Tasks: []TaskDetail{{TaskSummary: TaskSummary{TaskID: "77", Title: "中文😀\u202e标题"}, SpecPath: "docs/spec/固定.md"}}}
+		page := TaskPage{Tasks: []TaskDetail{{TaskSummary: TaskSummary{TaskID: "77", Title: "中文😀\u202e标题"}, SpecPath: "SteerlineFlow/spec/固定.md"}}}
 		encoded, err := json.Marshal(page)
 		if err != nil {
 			t.Fatal(err)

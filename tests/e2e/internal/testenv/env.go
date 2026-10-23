@@ -257,13 +257,18 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	})
 	p.RemoteURL = "https://github.com/e2e/project.git"
 	p.git(p.Repo, "remote", "add", "origin", "http://"+address+"/e2e/project.git")
-	s.Must(os.MkdirAll(filepath.Join(p.Repo, "docs", "spec"), 0700))
 	for _, name := range []string{"task.spec.md", "task.plan.md", "task.tests.json"} {
 		raw, err := os.ReadFile(filepath.Join(s.Run.Root, "tests", "e2e", "testdata", "tasks", name))
 		s.Must(err)
 		// Git may check out templates as CRLF; fixture contracts use stable LF bytes.
 		raw = bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n"))
-		s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", name), raw, 0600))
+		directory := "plans"
+		if name == "task.spec.md" {
+			directory = "spec"
+		}
+		path := filepath.Join(p.Repo, "SteerlineFlow", directory, name)
+		s.Must(os.MkdirAll(filepath.Dir(path), 0700))
+		s.Must(os.WriteFile(path, raw, 0600))
 	}
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "E2E project and contracts")
@@ -406,13 +411,13 @@ func (p *Project) createTasks(keys []string) {
 	s := p.Scenario
 	s.t.Helper()
 	head := p.git(p.Repo, "rev-parse", "HEAD")
-	ref := func(name string) taskmodel.FileReference {
-		raw, err := os.ReadFile(filepath.Join(p.Repo, "docs", "spec", name))
+	ref := func(path string) taskmodel.FileReference {
+		raw, err := os.ReadFile(filepath.Join(p.Repo, filepath.FromSlash(path)))
 		s.Must(err)
 		sum := sha256.Sum256(raw)
-		return taskmodel.FileReference{Path: "docs/spec/" + name, Commit: head, SHA256: hex.EncodeToString(sum[:])}
+		return taskmodel.FileReference{Path: path, Commit: head, SHA256: hex.EncodeToString(sum[:])}
 	}
-	spec, plan := ref("task.spec.md"), ref("task.plan.md")
+	spec, plan := ref("SteerlineFlow/spec/task.spec.md"), ref("SteerlineFlow/plans/task.plan.md")
 	p.StartService()
 	// The shared host owns initialization before CLI task validation.
 	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion}

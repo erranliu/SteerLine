@@ -34,7 +34,7 @@
    └─ design/README.md                 # 长期设计目录入口，可显式映射现有目录
 ```
 
-Git 不保存空目录，因此目录入口 README 是实际文件要求，不用空目录或占位 `.gitkeep` 代替。`docs/spec`、`docs/acceptance` 是本版固定约定；四类长期文档及设计目录由清单定位。不要求仓库具备 SteerLine 自己的全部目录、RoadmapGuide、execution-map、任务编号脚本、特定语言、测试分级实现或发布脚本。添加项目不生成示范 Task/Spec/Plan/验收成功记录，也不要求先规划 roadmap。
+Git 不保存空目录，因此目录入口 README 是实际文件要求，不用空目录或占位 `.gitkeep` 代替。`SteerlineFlow/spec`、`SteerlineFlow/testing/acceptance` 是本版固定约定；四类长期文档及设计目录由清单定位。不要求仓库具备 SteerLine 自己的全部目录、RoadmapGuide、execution-map、任务编号脚本、特定语言、测试分级实现或发布脚本。添加项目不生成示范 Task/Spec/Plan/验收成功记录，也不要求先规划 roadmap。
 
 仓库中的 `.steerline/` 只存受 Git 管理的准备清单，不存数据库、服务发现、认证或运行状态。运行状态继续位于应用管理的仓库外目录。
 
@@ -48,8 +48,8 @@ Git 不保存空目录，因此目录入口 README 是实际文件要求，不�
   "documents": {
     "architecture": "docs/architecture.md",
     "parallel": "docs/architecture/parallel-development.md",
-    "testing": "docs/testing.md",
-    "spec_guide": "docs/spec/SpecGuide.md"
+    "testing": "SteerlineFlow/testing.md",
+    "spec_guide": "SteerlineFlow/spec/SpecGuide.md"
   },
   "design_root": "docs/design"
 }
@@ -111,7 +111,7 @@ PS-07 中已有 current-format 数据只允许身份/目标匹配的明确复用
 
 - 复用 [workspace](../../internal/execution/workspace) 的仓库身份解析及 [httpcontract](../../internal/product/httpcontract/contracts.go) 的项目 ID；不另造按名称识别的项目编号。
 - [task_documents.go](../../internal/app/task_documents.go) 已有固定 commit 普通 blob 读取，[task/model/contract.go](../../internal/task/model/contract.go) 有规范路径验证；实施时提取实际共用读取/路径能力，新增本文的角色与大小/正文检查，不能因此构造假 TaskContract。
-- [维护 Plan](../plans/project-maintenance.plan.md)先提供窄公共读取/规则，PS-01–PS-07 的完整建设与验收仍在项目添加批次。未来添加流程 testing 角色需适配 `docs/testing.md`，测试材料定位遵循维护设计；本批维护不要求项目先具备角色清单，不提前收紧其他文档映射。
+- [维护 Plan](../../SteerlineFlow/plans/project-maintenance.plan.md)先提供窄公共读取/规则，PS-01–PS-07 的完整建设与验收仍在项目添加批次。未来添加流程 testing 角色需适配 `SteerlineFlow/testing.md`，测试材料定位遵循维护设计；本批维护不要求项目先具备角色清单，不提前收紧其他文档映射。
 - [Preflight](../../internal/app/service_preflight.go) 与 [原生状态前置](../../internal/app/host/native_state_preflight.go)可提供配置/状态边界检查；须分离具有环境探测或初始化职责的部分。查结构不能调用 [OpenNativeTaskProject](../../internal/app/native_project_open.go) 提前建库。
 - 只有最终纳管提交可复用原 `InitializeProject` 及初始手动/暂停状态。添加项目不改变任务的 Spec/Plan/AcceptanceRefs 契约、DAG 准入、执行方案冻结或交付规则。
 

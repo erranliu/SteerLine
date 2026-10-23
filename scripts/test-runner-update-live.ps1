@@ -124,11 +124,11 @@ Write-Output $commit
 '@
     [IO.File]::WriteAllText((Join-Path $repository 'implement-recovery.ps1'), $implementation, [Text.UTF8Encoding]::new($true))
     [IO.File]::AppendAllText((Join-Path $repository '.gitignore'), "`n.recovery-*.json`n", [Text.UTF8Encoding]::new($false))
-    $specPath = Join-Path $repository 'docs\spec\task.spec.md'
+    $specPath = Join-Path $repository 'SteerlineFlow\spec\task.spec.md'
     $spec = [IO.File]::ReadAllText($specPath)
     $spec += "`nRecovery qualification: in implementation run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement-recovery.ps1 exactly once. It waits 90 seconds to exercise the authorized management-service outage, then writes, verifies and commits result.txt. Use a shell timeout of at least 120000ms, yield at 1000ms and poll that same command to completion. Do not repeat it or implement the file separately. The ignored .recovery-*.json files are test observations; never stage them. Do not modify the script or any other tracked file. After success return the exact completion line: 实施及必要验证已完成。`n"
     [IO.File]::WriteAllText($specPath, $spec, [Text.UTF8Encoding]::new($false))
-    $planPath = Join-Path $repository 'docs\spec\task.plan.md'
+    $planPath = Join-Path $repository 'SteerlineFlow\plans\task.plan.md'
     [IO.File]::AppendAllText($planPath, "`nFor this recovery qualification, run implement-recovery.ps1 once instead of doing its operations separately. Allow its 90 second wait to finish; publication remains a separate step.`n", [Text.UTF8Encoding]::new($false))
     Invoke-Audit git @('-C',$repository,'add','.') | Out-Null
     Invoke-Audit git @('-C',$repository,'commit','-m','Freeze live recovery qualification materials') | Out-Null

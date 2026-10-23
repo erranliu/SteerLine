@@ -113,7 +113,7 @@ func (f *generationCLI) finish(result string) {
 func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *generationCLI, GenerateCommand) {
 	t.Helper()
 	root := t.TempDir()
-	for p, text := range map[string]string{"docs/spec/task.plan.md": "# Plan\n验证规则。", RulesPath: "# 测试规范\n最小验证。"} {
+	for p, text := range map[string]string{"SteerlineFlow/plans/task.plan.md": "# Plan\n验证规则。", RulesPath: "# 测试规范\n最小验证。"} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, p)), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -145,7 +145,7 @@ func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *g
 	s := &GenerationService{Project: "project", Repository: root, Store: m, Runner: f, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		return runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only","model":"test-model"}`)}, catalog, nil
 	}}
-	return s, m, f, GenerateCommand{RequestID: strings.Repeat("a", 32), Plan: "docs/spec/task.plan.md", Profile: "local"}
+	return s, m, f, GenerateCommand{RequestID: strings.Repeat("a", 32), Plan: "SteerlineFlow/plans/task.plan.md", Profile: "local"}
 }
 func TestTMGenerationSaveAndReplay(t *testing.T) {
 	s, _, f, in := generationFixture(t)

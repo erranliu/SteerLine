@@ -23,7 +23,7 @@ func testPathCatalog(t *testing.T) *runnerclient.Catalog {
 	return cat
 }
 func TestTMCommittedPlanSnapshot(t *testing.T) {
-	snap := testmanagement.Snapshot{Status: "ready", PlanPath: "docs/task.plan.md", Commit: "fixed", GenerationID: "original", Definitions: []testmanagement.Definition{{ID: "one"}}}
+	snap := testmanagement.Snapshot{Status: "ready", PlanPath: "SteerlineFlow/plans/task.plan.md", Commit: "fixed", GenerationID: "original", Definitions: []testmanagement.Definition{{ID: "one"}}}
 	raw, _ := json.Marshal(snap)
 	work := taskmodel.FixedWork{FrozenTestPlan: raw, Contract: taskmodel.TaskContract{PlanRef: taskmodel.FileReference{Path: snap.PlanPath, Commit: snap.Commit}}}
 	run := runnerclient.RunInput{Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}

@@ -12,7 +12,7 @@ __pycache__/
 /web/*.tsbuildinfo
 
 # Raw validation runs belong in temporary directories; root summaries remain trackable.
-/docs/validation/*/
+/SteerlineFlow/testing/validation/*/
 
 # Run-owned test evidence; reports must not change the tested Git state.
 .steerrunner/artifacts/

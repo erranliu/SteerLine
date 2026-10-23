@@ -34,7 +34,7 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 
 ## 同构建更新与重启
 
-显示更新不要求终止原 Orca 执行。同构建重启核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、原构建/冻结配置/checkpoint/候选/检查绑定，保留资源未结算诊断。换 Runner 构建时，候选通过公开 `service verify-takeover` 核验原状态，部署另行证明原服务退出与本地关闭；原 Run、输入、PR 与交付事实保留，资源未结算诊断不改成成功。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。实施与验证见[兼容接管 Plan](../plans/service-generation-recovery.plan.md)。
+显示更新不要求终止原 Orca 执行。同构建重启核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、原构建/冻结配置/checkpoint/候选/检查绑定，保留资源未结算诊断。换 Runner 构建时，候选通过公开 `service verify-takeover` 核验原状态，部署另行证明原服务退出与本地关闭；原 Run、输入、PR 与交付事实保留，资源未结算诊断不改成成功。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。实施与验证见[兼容接管 Plan](../../SteerlineFlow/plans/service-generation-recovery.plan.md)。
 
 首次从尚未提供 `service verify-takeover` 的旧 Runner 更新时，在线预检会返回 `service_unavailable: The service query response is unavailable.`，随后部署报告 `Candidate cannot verify original Runner contracts`。此时尚未停服或替换文件。先在普通桌面终端正常停止安装版，再重新执行完整部署，使候选在原写锁释放后走已有的离线兼容核验：
 
@@ -45,13 +45,13 @@ if ($LASTEXITCODE -ne 0) { throw '原安装停服未核实，保留现场并检�
 .\build-deploy-all.bat -NoPause
 ```
 
-不删除 pin 或数据库来跳过核验；离线报告不兼容时仍不替换。本机首次更新的实际处理见[2026-10-20 部署记录](../acceptance/install-runner-takeover-20261020.md)。
+不删除 pin 或数据库来跳过核验；离线报告不兼容时仍不替换。本机首次更新的实际处理见[2026-10-20 部署记录](../../SteerlineFlow/testing/acceptance/install-runner-takeover-20261020.md)。
 
 Runner 兼容不代表 SteerLine 自身数据库 schema 兼容。项目若报告 `unsupported SQLite schema`，按项目默认规则使用当前格式的新状态；脚本不会自动迁移或清空旧库。用户明确授权清理时，可归档旧状态，再通过正式任务 validate/create 入口在新库创建所需任务定义和依赖，不能直接改 schema 编号冒充升级。
 
 系统重启或宿主被中断后，最新宿主可能没有停机回执，或 `shutdown.json` 仍属于上一实例。部署由 Go prepare-deployment 按 update 目标组织停止、verify-restart 及必要时一次受控恢复：核实原宿主/Web/Runner 已退出、启动身份、原安装三个 EXE 摘要、Runner pin、冻结配置/checkpoint/项目集合、实际锁及原记录的候选接管证据，再使用原安装运行至全部项目 ready，正常停服并重新执行完整 `verify-restart`。通常直接重跑部署即可，无须手工恢复原版本。
 
-恢复全过程持有启动协调锁；不强杀、清库、改写原 Run/输入/PR 或循环重试。匹配当前实例的失败回执、未知创建、活动服务、文件/配置/身份变化或不兼容仍阻断替换。`resources_settled=false` 保持原事实，旧宿主、旧回执及旧 Runner 诊断随新的 `shutdown-verification.json` 保存。仅允许重启的部署路径使用此恢复，严格资源销毁路径不放宽。实现与隔离验证见[自动恢复验收](../acceptance/deployment-interrupted-recovery.md)；此前人工恢复的现场证据见[2026-10-21 维护记录](../acceptance/install-shutdown-recovery-20261021.md)。
+恢复全过程持有启动协调锁；不强杀、清库、改写原 Run/输入/PR 或循环重试。匹配当前实例的失败回执、未知创建、活动服务、文件/配置/身份变化或不兼容仍阻断替换。`resources_settled=false` 保持原事实，旧宿主、旧回执及旧 Runner 诊断随新的 `shutdown-verification.json` 保存。仅允许重启的部署路径使用此恢复，严格资源销毁路径不放宽。实现与隔离验证见[自动恢复验收](../../SteerlineFlow/testing/acceptance/deployment-interrupted-recovery.md)；此前人工恢复的现场证据见[2026-10-21 维护记录](../../SteerlineFlow/testing/acceptance/install-shutdown-recovery-20261021.md)。
 
 ## 本次迁移
 
@@ -59,6 +59,6 @@ Runner 兼容不代表 SteerLine 自身数据库 schema 兼容。项目若报告
 
 经用户确认，只迁移任务定义和依赖：新任务全部为 `open`，调度保持 manual + paused。旧交付和执行状态不能作为真实 Runner Run 导入，因此在 `C:\SteerlineInstall\migration\20261015-task-definitions` 留档；旧目录完整保留，已停止。该目录含导入批次、原状态、历史交付证据、旧 Workflow/PR 引用和导入回执；完整旧执行日志仍在旧安装目录。
 
-恢复派发前先按历史处理已交付或等待合并的旧任务，避免重做既有工作。旧任务 101 已交付，任务 102/105 在导出时等待 PR 合并；新任务列表不会将这些历史伪装为 Runner 执行。迁移与部署验证见[验收记录](../acceptance/install-cutover-20261015.md)。
+恢复派发前先按历史处理已交付或等待合并的旧任务，避免重做既有工作。旧任务 101 已交付，任务 102/105 在导出时等待 PR 合并；新任务列表不会将这些历史伪装为 Runner 执行。迁移与部署验证见[验收记录](../../SteerlineFlow/testing/acceptance/install-cutover-20261015.md)。
 
-部署判定与脚本收口的当前增量见[简化验收](../acceptance/reliability-simplification.md)：脚本只调用 prepare-deployment 一次，以本次随机调用 ID、完整暂存包摘要、home/目标及 Runner SHA 核对结果。原停止、候选兼容与资源事实保留在 shutdown-verification.json 中。该报告不是持续持有的 writer lease；直接离线替换和中断续装尚未启用。
+部署判定与脚本收口的当前增量见[简化验收](../../SteerlineFlow/testing/acceptance/reliability-simplification.md)：脚本只调用 prepare-deployment 一次，以本次随机调用 ID、完整暂存包摘要、home/目标及 Runner SHA 核对结果。原停止、候选兼容与资源事实保留在 shutdown-verification.json 中。该报告不是持续持有的 writer lease；直接离线替换和中断续装尚未启用。

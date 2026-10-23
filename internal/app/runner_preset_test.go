@@ -110,18 +110,18 @@ func startPresetDirectory(t *testing.T) (*ApplicationDirectory, *ProjectRuntime)
 
 func prepareStoppedRunRepository(t *testing.T, c Config) {
 	t.Helper()
-	require(t, os.WriteFile(filepath.Join(c.Repository, "spec.md"), []byte("# Spec\n\n## Acceptance\n\nFrozen task.\n"), 0600))
-	require(t, os.WriteFile(filepath.Join(c.Repository, "task.plan.md"), []byte("# Plan\n\nFrozen implementation plan. No automated tests are required for this stopped Run fixture.\n"), 0600))
 	for name, body := range map[string]string{
-		"docs/testing.md":             "# Testing\nStopped public Run fixture.\n",
-		"docs/testing/test-list.json": `{"tests":[]}`,
-		"task.tests.json":             `{"tests":[]}`,
+		"SteerlineFlow/spec/task.spec.md":      "# Spec\n\n## Acceptance\n\nFrozen task.\n",
+		"SteerlineFlow/plans/task.plan.md":     "# Plan\n\nFrozen implementation plan. No automated tests are required for this stopped Run fixture.\n",
+		"SteerlineFlow/testing.md":             "# Testing\nStopped public Run fixture.\n",
+		"SteerlineFlow/testing/test-list.json": `{"tests":[]}`,
+		"SteerlineFlow/plans/task.tests.json":  `{"tests":[]}`,
 	} {
 		path := filepath.Join(c.Repository, filepath.FromSlash(name))
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))
 		require(t, os.WriteFile(path, []byte(body), 0600))
 	}
-	fixtureGit(t, c.Repository, "add", "spec.md", "task.plan.md", "task.tests.json", "docs")
+	fixtureGit(t, c.Repository, "add", "SteerlineFlow")
 	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "frozen task references")
 	// Keep the configured repository identity while routing fixture fetches to
 	// a real isolated bare remote, never to the placeholder GitHub repository.
@@ -288,7 +288,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 		sum := sha256.Sum256(raw)
 		return taskmodel.FileReference{Path: name, Commit: base, SHA256: hex.EncodeToString(sum[:])}
 	}
-	spec, plan := ref("spec.md"), ref("task.plan.md")
+	spec, plan := ref("SteerlineFlow/spec/task.spec.md"), ref("SteerlineFlow/plans/task.plan.md")
 	contract := taskmodel.TaskContract{ContractID: "runtime-binding", Repository: "https://github.com/owner/repo.git", Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, AcceptanceRefs: []taskmodel.FileReference{spec}, CommonRefs: []taskmodel.FileReference{}}
 	var err error
 	contract.Digest, err = taskmodel.ContractDigest(contract)

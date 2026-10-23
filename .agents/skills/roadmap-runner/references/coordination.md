@@ -39,7 +39,7 @@ execution-map 是用户确认的 Codex 开发任务与依赖权威。每次初�
   "repo_root": "C:/Project/Example",
   "project_id": "verified-project-id",
   "coordinator_thread_id": "current-thread-id",
-  "roadmap": "C:/Project/Example/docs/roadmap/execution-map.md",
+  "roadmap": "C:/Project/Example/SteerlineFlow/Roadmap/execution-map.md",
   "default_branch": "main",
   "authorization": {
     "source": "本聊天用户指令或可核对的原始消息引用",
@@ -53,8 +53,8 @@ execution-map 是用户确认的 Codex 开发任务与依赖权威。每次初�
   },
   "interval_minutes": 20,
   "tasks": [
-    {"id": "#A", "spec": "C:/Project/Example/docs/a.spec.md", "plan": "C:/Project/Example/docs/a.plan.md"},
-    {"id": "#B", "spec": "C:/Project/Example/docs/b.spec.md", "plan": "C:/Project/Example/docs/b.plan.md"}
+    {"id": "#A", "spec": "C:/Project/Example/SteerlineFlow/spec/a.spec.md", "plan": "C:/Project/Example/SteerlineFlow/plans/a.plan.md"},
+    {"id": "#B", "spec": "C:/Project/Example/SteerlineFlow/spec/b.spec.md", "plan": "C:/Project/Example/SteerlineFlow/plans/b.plan.md"}
   ]
 }
 ```
@@ -91,7 +91,7 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
 - `merge`：head、commit、merged_at；只有平台已确认真实合并后记录。`observed_merge` 可单独记未复审就被外部合并的事实，保留待决。
 - `blocker`、`decisions`：实际失败及待用户决定内容、原始用户批准记录。不得以记录例外替代取得批准。
 
-仅余允许后置的少量人工补验时，无需逐项申请 `accepted_exception`。先实际把待验内容写入 docs/acceptance/，在 execution-map 同步验收汇总和待验链接（不改变中心状态），保留原验收条件、参与人/窗口、操作步骤及取证位置，并核对记录；后续不依赖该结果且无明确先验要求时填写：
+仅余允许后置的少量人工补验时，无需逐项申请 `accepted_exception`。先实际把待验内容写入 SteerlineFlow/testing/acceptance/，在 execution-map 同步验收汇总和待验链接（不改变中心状态），保留原验收条件、参与人/窗口、操作步骤及取证位置，并核对记录；后续不依赖该结果且无明确先验要求时填写：
 
 ```json
 {
@@ -103,7 +103,7 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
     {
       "check_id": "manual-check-id",
       "reason": "implemented feature awaits human interaction",
-      "roadmap_path": "/absolute/project/docs/acceptance/task-acceptance.md#manual-validation"
+      "roadmap_path": "/absolute/project/SteerlineFlow/testing/acceptance/task-acceptance.md#manual-validation"
     }
   ]
 }
@@ -113,7 +113,7 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
 
 `roadmap_path` 是现有状态格式中的验收记录定位字段，值指向 acceptance 文档；协调者实际核对记录并同步 execution-map 的待验链接。元数据不代替文档明细或正式汇总。
 
-已合入 task 的原审核、验证和合并证据仍不可修改；补验结果另写 docs/acceptance/ 的具体项并同步正式汇总，可在 run.decisions 保留定位。原 `manual_pending` 保留的是合入时尚未人工验证的事实；这些外部流程记录不改变中心 Task/DAG 状态。人工为主活动不作为执行成员，明确先验门槛及已知失败仍阻塞。
+已合入 task 的原审核、验证和合并证据仍不可修改；补验结果另写 SteerlineFlow/testing/acceptance/ 的具体项并同步正式汇总，可在 run.decisions 保留定位。原 `manual_pending` 保留的是合入时尚未人工验证的事实；这些外部流程记录不改变中心 Task/DAG 状态。人工为主活动不作为执行成员，明确先验门槛及已知失败仍阻塞。
 
 task phase：`pending → creating → running → pr_ready → reviewing → ready_to_merge → merged`；停顿用 `blocked` 或 `needs_user_decision`。run phase：`active / paused / needs_user_decision / complete`。每次读取/写入都校验基本证据；助手不自动推断 Git 或 session 状态。
 
