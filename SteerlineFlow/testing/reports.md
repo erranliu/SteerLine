@@ -1,5 +1,7 @@
 # 测试报告与登记
 
+固定输出根、每级文件布局、临时 scratch 和仓库外并行目录见[流程路径清单](../paths.md)。本文件只维护报告内容与登记规则，具体运行的绝对路径和源码版本记录在专属验收中。
+
 分级入口保留原 `summary.json`、JSONL 和退出码，并追加 `managed-<id>.json`。L1 对应一个整体 ID，E2E 对应实际所选场景，L4 Go 对应 `go.full`；定向子集和 build-only 不输出完整登记项通过。E2E 证据位于 `scenarios/<id>/scenario.json`，含实际断言、资源与清理事实。运行结果写任务专属 [验收记录](acceptance/README.md)，清单不维护实时结果。
 
 ## 格式
