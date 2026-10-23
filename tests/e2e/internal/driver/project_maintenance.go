@@ -29,6 +29,18 @@ func (d *debugRelease) controlledBrowser(source, outName, testFile string, reset
 	if e := os.MkdirAll(out, 0700); e != nil {
 		return e
 	}
+	writer := ""
+	if outName == "test-records" {
+		writer = filepath.Join(out, "test-feedback.exe")
+		build := d.command("go", "build", "-o", writer, "./cmd/test-feedback")
+		build.Dir = source
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		err := testprocess.Run(ctx, build)
+		cancel()
+		if err != nil {
+			return fmt.Errorf("build repository record writer: %w", err)
+		}
+	}
 	log, e := os.Create(filepath.Join(out, "runtime.log"))
 	if e != nil {
 		return e
@@ -81,7 +93,7 @@ func (d *debugRelease) controlledBrowser(source, outName, testFile string, reset
 	}
 	browser := d.command("npm.cmd", "exec", "--", "playwright", "test", testFile)
 	browser.Dir = filepath.Join(source, "web")
-	browser.Env = append(browser.Env, "STEERLINE_WEB_CONFIG="+d.config, "STEERLINE_WEB_EVIDENCE="+filepath.Join(out, "browser"))
+	browser.Env = append(browser.Env, "STEERLINE_WEB_CONFIG="+d.config, "STEERLINE_WEB_EVIDENCE="+filepath.Join(out, "browser"), "STEERLINE_TEST_RECORD_WRITER="+writer)
 	var buffer bytes.Buffer
 	browser.Stdout = &buffer
 	browser.Stderr = &buffer

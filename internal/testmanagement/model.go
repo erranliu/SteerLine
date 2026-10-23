@@ -44,6 +44,7 @@ func Select(raw []byte, c Catalogue) ([]Definition, error) { return model.Select
 
 type Result = model.Result
 type Report = model.Report
+type RecordFilter = model.RecordFilter
 
 func parseReport(raw []byte) (Report, error) {
 	var r Report

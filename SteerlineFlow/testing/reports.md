@@ -1,35 +1,34 @@
-# 测试报告与登记
+# 测试报告与 Git 历史
 
-固定输出根、每级文件布局、临时 scratch 和仓库外并行目录见[流程路径清单](../paths.md)。本文件只维护报告内容与登记规则，具体运行的绝对路径和源码版本记录在专属验收中。
+固定输出根、每级文件布局、临时 scratch 和仓库外并行目录见[流程路径清单](../paths.md)。本文件维护报告内容与 Git 历史规则，具体运行的绝对路径和源码版本记录在专属验收中。
 
-分级入口保留原 `summary.json`、JSONL 和退出码，并追加 `managed-<id>.json`。L1 对应一个整体 ID，E2E 对应实际所选场景，L4 Go 对应 `go.full`；定向子集和 build-only 不输出完整登记项通过。E2E 证据位于 `scenarios/<id>/scenario.json`，含实际断言、资源与清理事实。运行结果写任务专属 [验收记录](acceptance/README.md)，清单不维护实时结果。
+分级入口保留 summary.json、JSONL 和退出码，并输出每个完整登记测试项的 managed-<id>.json。L1 为整体 ID，E2E 为实际所选场景，L4 Go 为 go.full；定向子集和 build-only 不输出整体通过。缺失、跳过、零匹配、超时、必要证据或清理不完整不能算通过。失败和补测分别保留。E2E 证据位于 `scenarios/<id>/scenario.json`，含实际断言、资源与清理事实。
 
-## 格式
+## 写入 Git 历史
 
-执行前冻结随机报告 ID、`started_at/definition/selection/definitions`、实际 `command/repository/branch` 及可选 `rerun_of`；执行后补 `finished_at/sequence/before_commit/after_commit/before_clean/after_clean/results/evidence`。repository 是 Git common dir。结果项为 `test_id/status/message/log`，status 为 passed/failed/incomplete，log 指向同目录原 summary。
-
-`evidence` 记录同目录 `summary.json` 的原字节数和 SHA256。定义摘要对规范化单项 JSON 取 SHA256：固定按 `id,name,level,environment,command,check` 排序，非空 `note` 最后；UTF-8、无 BOM/缩进/末尾换行，使用 Go `json.Marshal(Definition)` 字符串转义（含 HTML 转义）。不散列原清单排版。
-
-缺失、跳过、零匹配、超时、选择不完整或清理未核实不计通过；失败与补测分别保存，不拼接子集为整体通过。L2 `full-L2` 仅表示当前受控冒烟，历史 gate-only/full-L2 按其冻结定义解释。
-
-## 登记与复验
+先提交代码，再运行测试，使用新的绝对 out 目录：
 
 ```powershell
-go run ./cmd/test-feedback -level=L1 -record-project <配置ID> -out <新的绝对目录>
-go run ./cmd/test-feedback -level=L4 -suite=testing -env=controlled -scenario=testing.records -record-project <配置ID> -rerun-of 'testing.records=<原报告ID>' -out <新目录>
-steerline tests register -project <配置ID或项目ID> -report-dir <报告绝对目录>
+go run ./cmd/test-feedback -level=L1 -out <新的绝对报告目录>
+go run ./cmd/test-feedback record -report-dir <同一报告目录>
 ```
 
-运行后自动登记失败不改变原测试退出码；离线保留原产物，用原报告补登。独立 register 有拒绝/未知项时非零退出。`registration.json` 追加原报告、请求号、登记/拒绝/未知状态及诊断；未知沿原请求对账，不重跑测试。
+第二条只读取原报告、校验并写入 `SteerlineFlow/testing/records/<完整受测 SHA>.json`，不执行测试、不连接 SteerLine、不访问数据库、不自动提交或 push。提交该 JSON 随 PR 合入。不同 SHA 不写同一文件；相同 SHA 补测追加 run，相同报告重复导出不重复，相同时间不同结果拒绝。同目录并发写者明确失败，待原写者完成后显式重做导出。
 
-报告至多 128 KiB，summary 至多 512 KiB，整份 JSON/base64 命令至多 1 MiB；按项目与报告 ID 原子幂等登记。只读取目录内普通文件，越界链接或内容/摘要冲突拒绝。缺失/过大 summary 可保留结果并标证据不可用，不计复验通过；可按原摘要补齐。
+格式只有 runs，每次执行包含 at（UTC 结束时间）及 results；结果项为 test_id、level、environment、status（passed/failed/incomplete）和可选 note。文件名给出 SHA；不保存本机路径、定义快照、命令、PR 或完整日志。例子及边界见 [Spec](../spec/test-records.spec.md)。完整日志留在本次报告目录。
 
-复验仅认显式链最新、可比且完整覆盖原失败范围的通过报告，原失败保留。源码脏/未知时显著显示“源码未固定”，不能当固定 SHA 证明；候选当前通过要求原 Run 上干净同 commit。详情 API 将 producer sequence 作为字符串输出，原报告字节不变。
+只导出同仓库、同次执行、前后干净且未变的受测 commit 的完整登记项。记录目录自身变化不计源码脏；源码脏/未知/执行期间变动时报告只留本地。记录提交会产生新的 SHA，文件仍指向原受测 SHA；rebase/squash 后不改名假装验证新提交。
 
-## 自动安排与候选证据
+## 页面读取与清理
 
-系统读取固定版本的 Plan、`SteerlineFlow/testing.md` 与 `SteerlineFlow/testing/test-list.json`，自动生成测试 ID 安排并存项目库。无需自动测试时 Plan 必须明确原因。无效输出或缺失定义阻断新候选；已有候选按原快照执行。原生成查询/停止使用正式 CLI，未知只核对原请求。
+SteerLine 历史页面只读取已核实主分支 commit 中的 records 目录，未提交或尚未合入的文件不展示。目录缺失为空，坏文件报错；每个主分支 commit 解析一次并在内存缓存。通过 PR 删除旧文件即可清理页面历史，Git 仍可追溯。清单继续由 test-list.json 负责。
 
-候选消费冻结提示中的安排和真实 worktree 文档；测试程序实际执行并输出报告，不能用模型 final 自述代替。运行内使用项目忽略的 `.steerrunner/artifacts/<唯一执行ID>/` 新目录，最后原子发布 managed 报告；默认系统临时目录不会自动成为 Run 产物。
+原始失败和后续通过分别展示，不自动建立复验链或判断失败已解决。历史通过仅证明当次记录的提交与环境，不代表当前主分支通过。定义页显示当前清单定义，简洁历史不冒充保存了旧定义。
 
-Runner R2 公开收集/读取与 Git 观察按原候选/Run 核验字节长度和 SHA256，保存不可变副本。collect 原请求先持久化，未知只查询；过期候选不发起新 collect，原证据只作历史，当前性未知不显示当前通过。页面 `/projects/:id/tests` 只读；独立脚本历史不代替候选证明。协议细节见 [测试管理 Spec](../spec/test-management.spec.md)。
+原 tests register、record-project/rerun-of、登记回执、数据库历史和 Runner 历史投影已删除，不兼容旧数据。
+
+## 候选证据
+
+候选 PlanTests 继续消费原始 managed 报告及 Runner 公开 artifacts，按原 Run、输入、固定定义、Git 和清理事实核验；简洁历史不替代候选证明。生产者在开始前冻结 ID、时间、定义、选择、命令及仓库；结束后补结果、源码观察和 summary 字节长度/SHA256。定义摘要仍按原规范化 Definition JSON 计算，不散列清单排版。
+
+系统自动安排仍读取固定版本 Plan、[测试指南](../testing.md) 和 test-list.json；无自动测试时 Plan 必须明确原因。运行内证据位于项目忽略的 `.steerrunner/artifacts/<唯一执行ID>/` 新目录；候选旧证据规则及公开收集所有权不变。实际结果仍写任务专属[验收记录](acceptance/README.md)。

@@ -66,7 +66,7 @@ func TestTMResultsLatestAndSource(t *testing.T) {
 	}
 }
 func TestTMReportValidation(t *testing.T) {
-	r := trRecord("a", "failed", "").Report
+	r := historyReport("failed")
 	raw, _ := json.Marshal(r)
 	if _, err := ParseReport(raw); err != nil {
 		t.Fatal(err)

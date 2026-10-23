@@ -30,7 +30,8 @@
 | `SteerlineFlow/Roadmap/drafts/`、`SteerlineFlow/Roadmap/task-ids/` | 候选讨论与永久任务身份；身份分配不等于执行授权。 |
 | `SteerlineFlow/testing.md`、`SteerlineFlow/testing/test-list.json` | 程序固定读取的测试规范和机器定义。与 Plan 一起作为系统测试安排的输入。 |
 | `SteerlineFlow/testing/l1.md` 至 `l4.md` | 可读测试列表；ID、级别、环境及入口须与清单一致。 |
-| `SteerlineFlow/testing/reports.md` | 报告格式、登记和复验规则；不是某次原始报告。 |
+| `SteerlineFlow/testing/reports.md` | 报告格式、Git 历史导出和读取规则；不是某次原始报告。 |
+| `SteerlineFlow/testing/records/<完整受测 SHA>.json` | 按受测提交保存的简洁历史，随 PR 合入；SteerLine 只读已核实主分支中的文件，删除文件可清理页面历史。 |
 | `SteerlineFlow/testing/acceptance/` | 专属验收计划、已验/待验、历史结果摘要及原始证据定位。 |
 | `SteerlineFlow/archive/` | 过期流程材料；固定历史证据按其原 commit/路径读取。 |
 | `tests/e2e/suites.json`、`tests/e2e/testdata/` | E2E 执行登记与只读夹具来源，不保存某次运行现场。 |
@@ -70,7 +71,7 @@ C:\SteerlineDebug\<scope-id>\
 
 ### 已登记 L1–L4 的固定报告结构
 
-test-feedback 每次输出根统一以 `summary.json` 为结果入口；受管报告使用 `managed-<test-id>.json`。文件名中的 test-id 是稳定测试 ID，JSON 正文的 `id` 则是本次随机报告 ID，两者不能混用。未登记的独立脚本沿上一节及 L4 列表中的真实产物定位，不推断它们已有受管报告。报告字段、摘要及登记规则唯一维护于 [reports.md](testing/reports.md)。
+test-feedback 每次输出根统一以 `summary.json` 为结果入口；受管报告使用 `managed-<test-id>.json`。文件名中的 test-id 是稳定测试 ID，JSON 正文的 `id` 则是本次随机报告 ID，两者不能混用。未登记的独立脚本沿上一节及 L4 列表中的真实产物定位，不推断它们已有受管报告。报告字段、摘要及 Git 历史导出规则唯一维护于 [reports.md](testing/reports.md)。
 
 | 范围 | 正常执行的稳定路径 |
 | --- | --- |
@@ -100,7 +101,7 @@ E2E 的附加结构如下。构建、场景和清理失败时可能只产生其�
     └── <原始命令、断言、停止与清理证据>
 ```
 
-分组 ID、包序号及附加日志不作为测试身份。读 summary 中的实际选择、分组日志路径和场景证据，不硬编码 `e2e-1` 或某个分组执行顺序。`registration.json` 由实际登记流程写入；读取报告或写入回执失败时可能没有该文件，不能以其存在与否推断登记成功。前置尚未通过或没有可执行项时，也不能要求凭空产生完整报告集合。
+分组 ID、包序号及附加日志不作为测试身份。读 summary 中的实际选择、分组日志路径和场景证据，不硬编码 `e2e-1` 或某个分组执行顺序。`test-feedback record -report-dir <本次报告绝对目录>` 将完整且固定干净源码的实际报告导出到 Git 内的 `SteerlineFlow/testing/records/<完整受测 SHA>.json`；同一提交的多次执行合并到同一文件，不复制原始日志。历史没有数据库登记或 registration.json 回执，具体格式与边界见[报告约定](testing/reports.md)。前置尚未通过或没有可执行项时，也不能要求凭空产生完整报告集合。
 
 ### 显式路径调用示例
 
@@ -170,7 +171,7 @@ roadmap-runner 的仓库外状态目录约定为 `<CODEX_HOME>/task-state/roadma
 
 ## 结果留存与路径维护
 
-原 summary、JSONL、managed 报告和必要清理证据保留在本次独占运行目录；Git 中仅保存任务专属验收摘要及原始路径/版本/命令定位。失败与补测分目录保存，资源未确认停止或证据未登记完成时保留原现场。临时目录可能被系统清理，需要长期追溯时先保存完整证据并在验收记录更新实际定位，不仅复制一份“通过”文字。
+原 summary、JSONL、managed 报告和必要清理证据保留在本次独占运行目录；Git 中保存任务专属验收摘要、原始路径/版本/命令定位，以及 `SteerlineFlow/testing/records/` 下按受测 SHA 生成的简洁测试历史；不保存完整原始日志。失败与补测分目录保存，资源未确认停止或证据未登记完成时保留原现场。临时目录可能被系统清理，需要长期追溯时先保存完整证据并在验收记录更新实际定位，不仅复制一份“通过”文字。
 
 源码中的 `.evidence/` 是已忽略的本地临时证据区，不是本约定的仓库外并行调试根；新建持续现场使用上面的外部 scope。`SteerlineFlow/testing/acceptance/` 和 archive/ 也不放运行中的数据库、认证、服务锁或大体积原始现场。
 

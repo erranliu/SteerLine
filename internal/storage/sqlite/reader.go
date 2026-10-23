@@ -8,7 +8,7 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-const SchemaVersion = 29
+const SchemaVersion = 30
 
 type Reader struct {
 	db            *sql.DB

@@ -3,80 +3,82 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"strings"
-	"testing"
-	"time"
-
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
-	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
 )
 
-type trAppStore struct {
-	testManagementStore
-	definitions []tm.Definition
-	writes      int
-}
-
-func (s *trAppStore) TestRecordDefinitions(context.Context, string) ([]tm.Definition, error) {
-	return s.definitions, nil
-}
-func (s *trAppStore) SaveTestRecord(_ context.Context, r tm.TestRecord) (tm.TestRecord, error) {
-	s.writes++
-	return r, nil
-}
-func TestTRQueryCatalogueUsesObservedCommitAndKeepsHistoricalDefinitions(t *testing.T) {
-	root := t.TempDir()
-	pmGit(t, root, "init", "--initial-branch=main")
-	pmGit(t, root, "config", "user.name", "fixture")
-	pmGit(t, root, "config", "user.email", "fixture@example.invalid")
-	path := filepath.Join(root, filepath.FromSlash(tm.CataloguePath))
-	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
-		t.Fatal(e)
+func TestTRQueryOnlyCommittedGitHistoryAndDeletion(t *testing.T) {
+	repo := t.TempDir()
+	pmGit(t, repo, "init", "--initial-branch=main")
+	pmGit(t, repo, "config", "user.name", "History test")
+	pmGit(t, repo, "config", "user.email", "history@example.invalid")
+	write := func(name, body string) {
+		t.Helper()
+		target := filepath.Join(repo, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(target, []byte(body), 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
-	raw := `{"tests":[{"id":"current","name":"Main frozen","level":"L1","environment":"isolated","command":"test","check":"assert"}]}`
-	if e := os.WriteFile(path, []byte(raw), 0600); e != nil {
-		t.Fatal(e)
+	commit := func() string {
+		t.Helper()
+		pmGit(t, repo, "add", ".")
+		pmGit(t, repo, "-c", "commit.gpgsign=false", "commit", "-qm", "test")
+		return pmGit(t, repo, "rev-parse", "HEAD")
 	}
-	pmGit(t, root, "add", ".")
-	pmGit(t, root, "-c", "commit.gpgsign=false", "commit", "-qm", "catalogue")
-	commit := pmGit(t, root, "rev-parse", "HEAD")
-	_ = os.WriteFile(path, []byte("bad local edit"), 0600)
-	proc := resourceprocess.New(time.Minute)
-	maintenance := &projectMaintenance{config: Config{Repository: root, Git: backend.Command{Executable: "git"}, ProcessHost: proc}, observation: pm.Observation{Commit: commit}}
-	store := &trAppStore{definitions: []tm.Definition{{ID: "historic", Name: "Historic"}}}
-	port := &testManagementPort{service: &testmanagement.GenerationService{Project: "project"}, store: store, maintenance: maintenance}
-	out, e := port.TestCatalogue(context.Background())
-	if e != nil || !strings.Contains(string(out), "Main frozen") || !strings.Contains(string(out), "Historic") || strings.Contains(string(out), "bad local") {
-		t.Fatal(string(out), e)
+	write("code.txt", "one")
+	tested := commit()
+	m := newProjectMaintenance(Config{Repository: repo, Git: backend.Command{Executable: "git"}, ProcessHost: resourceprocess.New(time.Minute)}, nil)
+	m.observation = pm.Observation{Commit: tested}
+	p := &testManagementPort{maintenance: m, service: &testmanagement.GenerationService{Project: repo}}
+	ctx := context.Background()
+	path := testmanagement.RecordsPath + "/" + tested + ".json"
+	body := `{"runs":[{"at":"2026-10-23T00:00:00Z","results":[{"test_id":"old.rules","level":"L3","environment":"controlled","status":"failed","note":"actual failure"}]}]}`
+	write(path, body)
+	page, err := p.recordSnapshot(ctx)
+	if err != nil || len(page.Records) != 0 {
+		t.Fatal("uncommitted record visible", page, err)
 	}
-	maintenance.observation.Commit = ""
-	out, e = port.TestCatalogue(context.Background())
-	if e != nil || !strings.Contains(string(out), "Historic") || !strings.Contains(string(out), "diagnostic") {
-		t.Fatal("unavailable catalogue lost history", string(out), e)
+	main := commit()
+	m.observation = pm.Observation{Commit: main}
+	page, err = p.recordSnapshot(ctx)
+	if err != nil || len(page.Records) != 1 || page.Records[0].Commit != tested {
+		t.Fatal(page, err)
 	}
-	if store.writes != 0 {
-		t.Fatal("catalogue read mutated records")
+	write(path, "broken worktree JSON")
+	detail, err := p.TestRecord(ctx, page.Records[0].ID)
+	if err != nil || !strings.Contains(string(detail), "actual failure") {
+		t.Fatal("read worktree", string(detail), err)
 	}
-}
-func TestTRRegisterRejectsForeignRepositoryBeforeWrite(t *testing.T) {
-	project := filepath.Join(t.TempDir(), ".git")
-	d := tm.Definition{ID: "rules", Name: "Rules", Level: "L1", Environment: "isolated", Command: "test", Check: "assert"}
-	r := tm.Report{ID: strings.Repeat("a", 32), Sequence: 1, StartedAt: time.Now(), FinishedAt: time.Now(), Definition: d, Repository: filepath.Join(t.TempDir(), "foreign.git"), Command: "test", Selection: []string{d.ID}, Environment: d.Environment, Definitions: map[string]string{d.ID: testmanagement.Digest(d)}, Results: []tm.Result{{TestID: d.ID, Status: "passed", Log: "summary.json"}}, Evidence: tm.ReportEvidence{Path: "summary.json"}}
-	store := &trAppStore{}
-	port := &testManagementPort{service: &testmanagement.GenerationService{Project: project}, store: store, records: &testmanagement.RecordService{Project: project, Store: store}}
-	raw, _ := json.Marshal(r)
-	if _, e := port.RegisterTestRecord(context.Background(), api.TestRecordRegistration{Report: raw}); e == nil || store.writes != 0 {
-		t.Fatal("foreign repository accepted", e, store.writes)
+	catalog, err := p.TestCatalogue(ctx)
+	if err != nil || !strings.Contains(string(catalog), `"id":"old.rules"`) || !strings.Contains(string(catalog), `"current":false`) {
+		t.Fatal("missing catalogue blocked history", string(catalog), err)
 	}
-	r.Repository = project
-	raw, _ = json.Marshal(r)
-	if _, e := port.RegisterTestRecord(context.Background(), api.TestRecordRegistration{Report: raw}); e != nil || store.writes != 1 {
-		t.Fatal(e, store.writes)
+	write(path, `{"runs":[]}`)
+	m.observation = pm.Observation{Commit: commit()}
+	if _, err = p.TestRecords(ctx, api.TestRecordFilter{}); err == nil {
+		t.Fatal("bad Git JSON silently hidden")
+	}
+	if err = os.Remove(filepath.Join(repo, filepath.FromSlash(path))); err != nil {
+		t.Fatal(err)
+	}
+	m.observation = pm.Observation{Commit: commit()}
+	raw, err := p.TestRecords(ctx, api.TestRecordFilter{})
+	var empty testmanagement.RecordPage
+	if err != nil || json.Unmarshal(raw, &empty) != nil || len(empty.Records) != 0 {
+		t.Fatal("deleted history retained", string(raw), err)
+	}
+	if _, err = p.TestRecord(ctx, page.Records[0].ID); err == nil {
+		t.Fatal("deleted detail retained")
 	}
 }

@@ -50,10 +50,10 @@ func TestTRProducerFreezesDefinitionAndIDsBeforeExecution(t *testing.T) {
 		t.Fatal("environment mismatch was discovered after execution")
 	}
 }
-func TestTRProducerRejectsAmbiguousRecordSelections(t *testing.T) {
+func TestTRProducerRejectsRemovedRegistrationOptions(t *testing.T) {
 	for _, args := range [][]string{{"-record-project=x"}, {"-level=L1", "-record-project=x", "--", "./subset"}, {"-level=L1", "-rerun-of=x=bad", "-build-only"}} {
 		if _, e := parseOptions(args); e == nil {
-			t.Fatal("ambiguous registration accepted", args)
+			t.Fatal("removed database registration option accepted", args)
 		}
 	}
 }
