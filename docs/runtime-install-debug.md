@@ -4,6 +4,8 @@
 
 ## 生成
 
+源码外的 scope 根、测试输出和调试包路径统一见[流程路径清单](../SteerlineFlow/paths.md)。并行工作显式使用不同 scope 下的 `packages/` 作为 `-DebugRoot`；同一源码 checkout 的 Web/EXE 构建仍须串行，生成后的独立包另核对 home、端口和 live base 分支隔离。
+
 ```powershell
 .\scripts\new-debug-release.ps1 -SteerRunnerExe C:\Tools\SteerRunner\steerrunner.exe
 ```

@@ -1,6 +1,8 @@
 # 测试报告与 Git 历史
 
-分级入口保留 summary.json、JSONL 和退出码，并输出每个完整登记测试项的 managed-<id>.json。L1 为整体 ID，E2E 为实际所选场景，L4 Go 为 go.full；定向子集和 build-only 不输出整体通过。缺失、跳过、零匹配、超时、必要证据或清理不完整不能算通过。失败和补测分别保留。
+固定输出根、每级文件布局、临时 scratch 和仓库外并行目录见[流程路径清单](../paths.md)。本文件维护报告内容与 Git 历史规则，具体运行的绝对路径和源码版本记录在专属验收中。
+
+分级入口保留 summary.json、JSONL 和退出码，并输出每个完整登记测试项的 managed-<id>.json。L1 为整体 ID，E2E 为实际所选场景，L4 Go 为 go.full；定向子集和 build-only 不输出整体通过。缺失、跳过、零匹配、超时、必要证据或清理不完整不能算通过。失败和补测分别保留。E2E 证据位于 `scenarios/<id>/scenario.json`，含实际断言、资源与清理事实。
 
 ## 写入 Git 历史
 

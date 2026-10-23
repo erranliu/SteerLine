@@ -38,3 +38,9 @@ GTR-M01 页面密度人工体验后置。首次实现阶段的报告按真实脏
 - L2：`C:/Users/lmas1/AppData/Local/Temp/steerline-git-history-fixed-l2-b463e5b058454324be6da57a12d0fb17/summary.json`，受控交付冒烟实际用例 93.6 秒，passed/cleanup_complete=true。
 
 导出 L1 后产生的历史文件不影响 L2 的源码 clean；这次真实使用也验证了记录目录排除规则和相同 SHA 下多次执行的合并。
+
+## 2026-10-23 合并主分支并解决文档冲突
+
+将主分支 `eeed8724`（PR #387 流程路径清单）合并到 PR #386 分支。唯一文本冲突在 testing/reports.md 开头：保留主分支新增路径清单入口，并保留本 PR 的简洁 Git 历史格式、导出和只读规则；路径清单同步登记 records/<受测 SHA>.json，删除已失效的数据库登记/registration.json 生成说明，并区分原始报告与 Git 简洁历史的留存位置。
+
+本次只修改文档，程序、测试定义和已提交的受测 SHA JSON 未改变，不将旧历史记录改名为合并提交。验证：文档 568 份、3574 条本地导航链接、0 错误；工作树与暂存差异检查通过；TestTMRegisteredCatalogueMatchesExecutableManifest 和 TestScenarioContentListMatchesRegisteredIDsAndLevels 定向验证通过（3.1 秒）。原始输出：`C:/SteerlineDebug/wt-e846-git-test-history/diagnostics/20261023T054811726Z-c533059b6a5b4bbca7ef670467be5ef0/summary.json`。纯文档合并不重复执行 L1/L2，不新增测试通过历史。
