@@ -1,0 +1,27 @@
+# Plan：Orca 远程协议剩余门槛
+
+2026-09-28 后续：[SteerlineTest 当前目标 P13 负向](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec01-p13-steerlinetest-2026-09-28/README.md)用真实远端 verify worker、原 Dispatch 和中心状态，分别证明缺必需检查与检查提交不符时拒绝推进；此前非零退出真机分支保留。P10 当前目标人工提示/处置与活跃问题 8 KiB 发送前拒绝已有回执，当前支持范围的 P01–P13 完成。#4 不再安排重复协议验证；下一步是原中心 Task 按固定契约形成真实 Delivery。远程取消仍为 unsupported，Spec 03 的受影响故障路径和 viewer、#42 的长期可靠性分别验收。
+
+本次发布遵守 Spec 的最小交付边界，保留已通过的当前目标证据和所有未通过项。基础能力与项目预检须在交付配置上核验；不再把完整协议验收与有人值守 MVP 的启用混为一个门槛。
+
+任务 ID：4；任务名称：Orca 远程协议验证。执行依据：[Spec](01-orca-remote-protocol.md)；未测项目见[剩余门槛](orca-probe/remaining-gates.md)。本 Plan 收口尚未验收的能力，不重复已有真实探测。
+
+2026-09-28 当前生产目标已改为 `台式机64g`（本机 Orca 1.4.209/远端 1.4.215）。[当前目标 P10 记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-desktop64g-2026-09-28.md)保留 Smart App Control 阻断及用户批准关闭后的新试次、UAC 启用重启、同一 Git Bash 目标的受控取消/批准回执，以及用户拍摄的安全桌面原图；可见宿主提示和人工处置分支通过。8 KiB 发送前拒绝沿用已验证的本机入口与 home 真机样本，不把旧主机设置提示补写为当时已捕获。远端 `gh` 登录后，另一个隔离 Task 已按固定命令创建并合并 PR #85；此回执不代替 P13 剩余负向场景。
+
+## 实施顺序
+
+1. 固定中心/远端 Orca、agent、操作系统和隔离测试仓库版本，核对能力报告、字段映射与原始脱敏样本。本轮允许本机中心 1.4.209/home 远端 1.4.210；小版本号差异不单独触发 P01–P12 重跑或阻止 P10。新证据须带双方实际版本、必需能力和执行身份，不覆盖旧结论或外推到其他组合。
+2. 基于已实测的 30 KiB 传输证据，将受支持版本的结构化消息上限固定为不高于 8 KiB，并验证序列化后超限在发送前拒绝；不以测得 Orca 的真实最大值为交付门槛。在隔离远端核验宿主权限提示的观察和人工处置路径；无法可靠分类时保持待人工核实，不自动答复。
+3. 保留受限适配器的保守发送上限及生产远程取消不可用结论。新的正向样本不能单独提升支持版本、消息大小或取消能力；变更前须补对应故障验收。
+4. P13 的结果门槛由[远程闭环 Spec](03-remote-execution-and-viewer.md)中心状态机核验：正向、非零退出负向已有原真机回执；[当前目标两项单字段故障注入](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec01-p13-steerlinetest-2026-09-28/README.md)补齐缺必需检查与检查提交不符，均未产生 verified revision、PR 或 Delivery。三项各保留原身份和结算，不由纯函数测试外推。
+5. 更新能力报告与剩余门槛，按 `verified / unsupported / not_tested` 分开记录，未获得真机证据的必需项继续保持未验收。
+
+## 完成条件
+
+- P10 和 P13 按 Spec 的真实远端/中心边界验收，版本、身份、样本及残留资源可追溯；不能用纯校验器单测代替 P13。
+- 远程取消和已支持版本范围与证据一致；尚未测得的能力不被写成支持。
+- 文档链接、协议样本与能力报告一致，`git diff --check` 通过。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../testing/acceptance/archive/completed/history.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

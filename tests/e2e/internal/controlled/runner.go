@@ -194,7 +194,7 @@ func RunnerCLI(args []string) (bool, error) {
 				if strings.HasSuffix(material.Path, ".plan.md") && (strings.Contains(strings.ToLower(*material.Content), "no automated tests") || strings.Contains(*material.Content, "无需自动测试")) {
 					noTests = true
 				}
-				if material.Path == "docs/testing/test-list.json" {
+				if material.Path == "SteerlineFlow/testing/test-list.json" {
 					var catalog struct {
 						Tests []struct {
 							ID string `json:"id"`

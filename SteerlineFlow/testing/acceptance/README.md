@@ -1,0 +1,162 @@
+# 验收流程与记录
+
+流程目录迁移（2026-10-23，普通开发）：[迁移验证](steerline-flow-layout.md)，记录 rebase、SteerlineFlow 目录与程序读取路径同步、调试包和测试结果，以及主干已有回归失败。
+
+安装目录部署的生成记录接管修复（2026-10-22，用户授权维护）：[修复与实际维护](install-deployment-generation-20261022.md)，记录三代构建身份误比较、只读回归反例与原安装更新证据，原生资源未结算事实单独保留。
+
+执行现场信息复制（2026-10-17，普通开发）：[专属验收](copy-execution-location.md)，SteerLine / SteerRunner 分别复制当前候选的最小定位路径与完整 ID；自动结果与后置人工体验单独登记。
+
+本目录保留当前计划、未闭合验收和必要的维护记录；历史结果与旧方案见[归档](archive/README.md)。Spec定义通过条件，Plan安排最小测试，具体行为与结果在任务专属记录维护。原始产物放临时目录，仓库只保留最小摘要及必要精选证据。
+
+## 当前入口
+
+测试架构对齐（2026-10-23，普通开发）：[专属验收](testing-architecture-alignment.md)，L1 最小集合、L2 受控冒烟、L3 并行功能、L4 专项与可复用 Go 全集；登记文档/执行器同步、实际耗时和原失败修正。
+
+查询与可见性复用、独立客户端写入分支精简（2026-10-22，普通开发）：[专属验收](query-visibility-client-simplification.md)，逐项验证统一查询作用域、共享取消与 actor 命令接线；代码及测试净减统计、原失败和基线复现分别留证。
+
+执行页用量与费用（2026-10-22，普通开发）：[专属验收](run-usage-cost-ui.md)，登记公开 Runner 查询、固定快照计价、候选身份、部署配置保留及简洁摘要/折叠明细；原生采集资格与后置人工体验分开记录。
+
+项目更新与候选版本收敛（2026-10-21，已实施、定向自动验收通过）：[专属验收](project-maintenance-simplification.md)，PMS-A01–PMS-A09/PMS-M01 分别规划基线信息/快进、自动生成、候选级版本与过期测试、旧版PR仍可交付及隔离验证；实际结果与失败补验独立记录，不继承原PM/TM通过结果。
+
+Web 候选历史请求实例隔离（2026-10-21，普通开发）：[专属验收 WCS-A5](web-candidate-start.md#2026-10-21-历史请求误显示为候选修复)，记录旧请求误显示为新候选及错误占用名额的修复、复现与定向回归；尚未部署安装环境。
+
+项目基线与材料统一维护（2026-10-21）：[专属验收](project-maintenance.md)，PM-A01–PM-A08 的当前实现/验证结果见专属记录，覆盖三入口共用规则、受控生成/显式应用和首次启动同版本冻结；人工体验可后置。不改旧测试管理或项目添加的历史结果。
+
+Web 执行配置管理与能力探测（2026-10-21，按确认原型实施）：[专属验收](web-execution-config.md)，绑定 Web 直接探测/配置管理、条件保存和重启消费的 WEC-A01–A09，以及后置 WEC-M01；实际通过/待验边界见登记，不以探索调用替代正式证据。本机 Orca A10–A14 的已验/待验范围见记录；统一目录与凭据边界追加A15/A16。M01/M02仍待用户签收，各轮不互相继承原生执行结论。
+
+2026-10-20 近期合入 PR #352–#365：[合并后补验与人工操作导航](merged-pr-regression-20261020.md)。登记原失败、过期断言修正、L1 分组预算、受控流程和真实空闲双项目补验；[PR #363 原型](planning-long-documents.md)另列独立结果。人工视觉签收与 Runner 工程阻断分开保留。
+
+调用方边界收口（2026-10-20，普通开发）：[Plan 与专属验收](architecture-boundary-consolidation.md)，登记 processwindow/Runner 调用方依赖守卫、唯一 stop 信封准备和统一 takeover 核验；保留既有恢复、资源所有权及原事实边界。
+
+Windows 启动闪窗修复（2026-10-19，源码修复/人工待验）：[专属验收](startup-console-windows.md)，记录逐项目 Git 与后台 CLI 的控制台创建反例、无控制台修复和定向共享 Runner 回归；未部署安装环境。
+
+Runner generate/1 对接与最简测试管理（2026-10-20，自动项通过/人工待验）：[专属验收及缺口修复](test-management.md)，Runner 内容接管误校验已修，干净主干 13ef123 的同 EXE 真机/原 k 包只读复验通过；TM-A04 的真实 A/B 接管及 TM-A08 同包程序/报告/API/浏览器/结算均按其原固定版本通过；原 i/j 遗留和本包 base/head 已清理。人工 TM-M01 后置，固定 L1 与继续补验见上述导航；脏工作树证据不计产品中干净同 commit 的当前通过，不增加 Task 字段/门禁或 conversation 操作。
+
+应用级共享 SteerRunner 服务（2026-10-19，自动通过/人工待验）：[Spec / Plan 与专属验收](shared-runner-service.md)，登记 SRS-A01–A07 与后置 SRS-M01；L1/controlled 双项目与真实空闲服务拓扑分开取证，实际构建、失败修正和清理已登记，不改 roadmap。
+
+SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，实施）：[专属验收](runner-collaboration.md)登记固定构建、R1/R2、U1–U3、I1、Web、controlled 与审计 live 的真实结果及清理。U1 两断言覆盖旧 ProjectRuntime 拒绝替代实例、显式重启后接纳及旧停止隔离。RCB-M01 可后置，不继承旧构建结论。
+
+Web 候选停止参与修复（2026-10-17，普通开发）：[专属验收](web-candidate-stop.md)，记录 Web 入口、未知参与资格、并发最后一个保护、停止与交付竞争及人工退出/Task 停止义务的区分；人工体验待安排。
+
+旧执行记录与空壳字段清理（2026-10-17，普通开发）：[删除边界与最小验证](runtime-shell-cleanup.md)，清理内部无消费者记录/字段/函数并校准文档；保留当前 Task、checkpoint、公开读取及宿主边界。
+
+产品读取、命令入口与 Web 容器重构（2026-10-16，已实施）：[Spec / Plan 与专属验收](product-read-command-web-refactor.md)，RCW-A01–A06 自动项通过，包含跨视图、请求仲裁、Web 71 项、固定 L1 与双 home 受控 L4；RCW-M01 可选人工体验未安排、非阻塞。
+
+应用与项目生命周期收拢（2026-10-16，按审计收窄并实施）：[Spec / Plan 与专属验收](application-project-lifecycle.md)，记录 ALC-A1–A6 的资源所有权、请求排空、停机证明及隔离回归证据。
+
+执行域遗留清理（2026-10-16，普通开发）：[引用审计与最小验证](execution-legacy-cleanup.md)，仅删除无生产消费者的旧执行实现及专属测试，保留当前 Task/交付、checkpoint、产品展示和宿主进程边界。
+
+执行权限与 Git 环境检查接入（SteerLine 已实现，正式公开契约已对齐）：[本仓验收与审查记录](environment-check.md)，记录 caller/HTTP/Web、固定版本本机 full_access 真实正例及报告刷新修复；SLEC-M01 完整人工体验仍待安排。其余权限/远端/恢复组合由 Runner 独立 SREC 验收，不共用通过状态。构建和业务资源后置。
+
+测试分级与 L4 入口（2026-10-16，普通开发）：[专属验收](test-level-alignment.md)，按通用规范拆分 L3 正常流程和 L4 系统边界，实际选择、并行及清理结果单独登记。
+
+SteerRunner 拆分后的测试精简（2026-10-15，已授权实施）：[专属验收](runner-test-convergence.md)，执行专项迁出，L2 保留本机 Codex＋真实 Runner＋真实 PR 的完整闭环；实际通过/失败及边界见专属验收。
+
+Runner 执行展示与最近消息（普通开发）：[专属验收](execution-observability.md)，流程/状态恢复可读、仅当前可见执行刷新有时间的最近摘要；自动与人工项分别登记。
+
+TUI 退役与 Web 唯一交互前端（普通开发）：[专属验收](tui-retirement.md)；已按用户授权实施，当前验证状态见专属记录。共享服务/CLI/HTTP 与原生会话能力保留，TUI 专属测试随客户端删除。
+
+本机 Web 前端（普通开发）：[专属验收](web-frontend.md)，独立 `web/` 工程、浏览器认证、DAG 与执行闭环；范围归 [Spec](../../spec/web-frontend.spec.md)/[Plan](../../plans/web-frontend.plan.md)。
+
+SSE 前的 Web 查询优化（普通开发）：[专属验收](web-query-optimization.md)，2026-10-15 用户后续授权实施，实际结果见专属验收；缓存复用、基础预取、隐藏查询和定向刷新，后续 SSE 复用同一缓存。
+
+2026-10-15 [独立 Web 与已有项目切换](web-project-switch.md)及[统一启动与多项目共进程宿主](unified-startup.md)均已有实现和约定自动验收结果，桌面体验待人工验收；[项目准备/核验/纳管](project-onboarding.md)继续后置、未实施/未验。各自 Spec/Plan 和最小测试映射见专属记录，不共享通过状态。
+
+全量回归维护（普通开发）：[本次结果](archive/completed/full-regression-2026-10-14.md)，rebase、过期测试清理、Full 1752 通过 / 19 默认跳过、26 个登记场景通过并清理完成。
+
+合并后 Full 复验：[SQLite 查询取消与资源释放](archive/completed/sqlite-cancellation-full-2026-10-15.md)，主干 rebase、实际失败与依赖修复；修复后 Full 1753 通过 / 19 默认跳过 / 0 失败，complete / passed。
+
+Orca 当前部署仅远端：[配置维护](remote-only-orca-profiles.md)。[本机输入与就绪历史样本](archive/superseded/orca-local-input-readiness.md)保留其原适用范围，不属于当前部署的真实执行验收。
+
+| 范围 | 状态 / 入口 |
+| --- | --- |
+| 工作流核验收敛 | [全部核验取舍与 101/105 修复](workflow-verification.md)，原始状态/正文取代屏幕核验；源码自动项与真机待验分开登记 |
+| 一期签收 | 待验；[一期活动](phase1.md) |
+| TUI/HTTP 历史交付（TUI 已退役） | [旧范围与阶段记录](phase2.md)：#91 HTTP 基线；TUI 已由[退役任务](tui-retirement.md)删除 |
+| 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[当前 Orca 单终端](orca-terminal-transport.md)；旧 Orca 活动输入/恢复记录保留历史，按当前路线重新核对适用性 |
+| 原控制台 Codex CLI 入口（已退役） | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
+| Codex / Orca 核心断连恢复 | [首轮能力与 L3 验收规划](worker-disconnect-recovery.md)，2026-10-12 审计收敛；六项功能加一项 worker 解耦验收，三组受控（独立入口）/两条真实链，原观察重接与 Codex 同 thread 恢复，工作树实现及本轮自动验收已完成，未部署 |
+| Codex 沙箱 Git 修复 | [真实 worker / SteerlineTest 无人值守验收](codex-sandbox-git.md)，普通开发，专属 base/head 验证 |
+| Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
+| Orca状态同步修复 | [延迟启动活动推进状态](orca-delayed-start-status-2026-10-09.md)，原 Dispatch 在完成前同步开始事实，源码定向验证通过 |
+| Worker 提示词与三轮恢复 | [统一模板与原生回复采集](worker-prompt-convergence.md)，用户直接授权恢复 #84 设计 |
+| Worker 状态与控制台精简 | [原字段、变化记录与主界面回归](console-worker-state.md)，普通开发 |
+| Orca 提示词最小探针 | [输入通道与 worker-start 对照](orca-input-minimal-probe-2026-10-10.md)，1.4.224 原生 worker-start 仍复现未提交；基础 500/7500 字符 6/6，约12K输入未通过；历史1.4.223结果另列 |
+| Orca 单终端通信 | [实施与待验项](orca-terminal-transport.md) · [真实记录](orca-terminal-remote-retest-2026-10-10.md)，本机有限样本通过、本机最终 draft 保护未重新跑真机；远端升级 CLI/预先确认目录信任后有限样本通过，首次信任阻塞后原任务自动继续未通过；两目标受控回归不代替原生验收 |
+| Orca 分步开发缺口 | [当前远端待补与历史来源](orca-remote-l3.md#当前分步流程能力缺口)，旧单轮/supervised 场景退役，不计单终端交付覆盖 |
+| 旧 Orca 身份残留清理 | [专属记录](retired-orca-identity-cleanup.md)，当前字段/受控接线与文档校准，不增加原生验收通过项 |
+| 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
+| Orca 原生状态切换 | [专属验收](orca-native-state-transitions.md)，状态门槛、一次补查询与旧回复拒绝已实施；真实范围及取消项如实登记，本机后续交付见[输入与就绪验收](archive/superseded/orca-local-input-readiness.md) |
+| 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
+| 测试维护 | [测试代码精简](test-code-simplification.md) |
+| 历史结果与旧方案 | [归档索引](archive/README.md)，含已结束回归、三层重构与退役 Orca 方案；原失败/未验保留 |
+
+execution-map维护执行/验收汇总并链接未验事项；开发任务状态与依赖以execution-map为准，真实PR和验证证据由runner核对；SteerLine产品业务状态按其工具回执核对。
+
+## TUI/HTTP 历史交付与未验边界
+
+历史 #91 已独立复审修复、最小自动复验并经 [PR #299](https://github.com/erranliu/SteerLine/pull/299) 真实合并，实现完成；[验收](tui-http-client.md)与[Plan](../../plans/tui-http-client.plan.md)映射 TH-A1–A6/TH-M1。原构建自动项通过，独立 SteerlineTest live/真终端操作已验；原生查看窗口渲染和桌面体验未验。TUI 已退役，原 TUI 人工项保留历史状态，当前 Web/原生查看体验按各自专属记录核验。#45 的[历史结果/限制](phase2-local-api.md)、一期/平台未闭合项按 execution-map 保留。
+
+旧二阶段/WinUI/延期任务验收退出当前队列，见[归档说明](../../archive/roadmap/README.md)。#44 实现已由 #91 删除，原人工项退出要求不算通过；旧候选编号不复用，也不依据归档自动恢复。
+
+## HTTP 接入后解耦验收
+
+2026-10-14，#92已独立复审修复、自动验证并经PR #311真实合并，移出[草稿任务表](../../Roadmap/drafts/roadmap.md)；#93也已独立终审、验证并经PR #312真实合并，#94/#95/#96继续留草稿、暂不安排验收。各项保留独立Spec/Plan与专属记录；无新增人工活动，未实施项不登记通过：
+
+- #92 [HTTP 服务端命令边界收敛](http-command-boundary.md)：实现完成，HC92-A1–A3通过，三项P2修复并终审通过，PR #311已合并；无人工残留。
+- #93 [HTTP 客户端原请求与停服观察解耦](http-client-request-lifecycle.md)：实现完成，CL93-A1–A3通过，submitted跨进程测试缺口已补齐并终审通过，PR #312已合并；无人工残留，simulate final gap限制保留。
+- #94 [固定开发流程规则独立](development-flow-rules.md)：DF94-A1–A4。
+- #95 [任务最终交付用例独立](task-delivery-usecase.md)：TD95-A1–A4。
+- #96 [worker 运行时资源所有权收敛](worker-runtime-ownership.md)：WR96-A1–A4。
+
+## 普通开发重构历史
+
+[Worker 三层职责重构](archive/completed/worker-three-layer.md)已完成 TL-A01–TL-A07 自动验收，并由 PR #313 合入；配套 [Spec](../../archive/spec/completed/worker-three-layer.spec.md)与[Plan](../../archive/spec/completed/worker-three-layer.plan.md)已归档。执行后续迁至独立 Runner，原受控证据不代表当前构建重新通过；没有新增初始化重试或安装现场恢复验收。
+
+[后端组装与最终回复状态收敛](bounded-structure-refactoring.md)仅归属一个无编号合并重构，2026-10-10 用户授权本聊天实施后，BS-A1–BS-A5 自动验证与结构自查通过，提交/PR 及独立复审/合并状态见专属记录。其[Spec](../../spec/bounded-structure-refactoring.spec.md) / [Plan](../../plans/bounded-structure-refactoring.plan.md)按 `8e292172` 提 PR 集成基线收紧；不进入 roadmap 调度，不再维护三项独立编号验收。
+
+## 归档流程
+
+1. 已结算验收/维护活动移入 archive/completed/；历史失败、skip和限制随记录保留。
+2. 已放弃或被替代的方案移入 archive/superseded/，明确未验与适用边界，不改称已通过。
+3. 仍有当前必需未验项的任务记录保留；已验历史可另归档并从当前记录引用。未纳入执行的有效计划同样保留。
+4. 移动后修复导航和索引，保留Task ID、固定commit/契约路径及机器证据原字节；不保留空转发文件。原始运行日志不新增进仓库。
+
+## 哪些内容可以作为执行任务
+
+| 内容 | 安排 |
+| --- | --- |
+| 可由 agent 自动完成并提供可复核结果的自动验收 | 可作为独立任务，也可作为实现任务的一部分；独立任务需有明确自动步骤、通过条件和交付产物 |
+| 以人工操作、人工判断或持续人工组织为主的验收 | 只作为本目录的验收活动，不作为执行 DAG 任务；可关联已有功能任务和阶段目标 |
+| 自动实现/验收为主体，附带少量人工验收 | 原任务可执行；尽量集中后置，登记待验项、责任人/窗口和适用范围，不阻碍无关后续执行 |
+
+“少量”按是否需要持续人工参与、是否影响核心结果判断，不设置任意百分比门槛。已知失败、自动化失败、功能缺失、权限/环境前置未满足或未知外部动作不改称人工待验。明确要求先验的门槛或后继确实需要的关键能力仍须满足；不以标注后置改写固定契约或真实 DAG 资格。
+
+验收活动使用场景/验收项 ID，不申请 Task ID。Task ID 只关联它验证的已有任务；原 #42/#53 身份保留历史且不复用，它们的人工验收活动已从草稿任务清单移出。确有自动化工具/场景缺口时另行规划任务，先分配新 ID，不用原人工验收身份改装成工程任务。
+
+## 每项验收记录
+
+任务还在 roadmap 草稿时就建立本目录的专属记录，并由草稿链接。任务与验收文档是一对一或一对多关系，一份任务验收文档只归属一个任务，禁止合并多个任务的验收计划/状态到同一份文件。初稿先写清范围、自动/人工方式、最小通过条件与准备/参与安排；尚未确定的命令、构建或窗口明确写待定，执行前再固定。验收规划随任务范围细化，不要求草稿实时复制验收结果。
+
+独立阶段/体验/跨模块验收活动另建自己的文档，可引用相关任务及其专属验收记录，但不代替各任务文档。历史结果索引和通用流程入口只做导航/取证，不作为多个任务共用的当前验收计划或状态表。
+
+至少记录：验收项 ID、方法（自动/人工）、关联任务/阶段、操作步骤或命令、环境与构建 commit/摘要、通过条件、触发/安排、阻塞范围、当前状态、结果和证据。人工项另记参与人及窗口；待安排时明确写待安排，不伪造日期或责任人。自动项可以链接现有场景及脚本，不复制全部实现。
+
+同一场景包含自动检查和人工判断时，分成可分别记录结果的子项（如 A1-A、A1-M），不能用一个“混合通过”覆盖仍未执行的人工步骤。执行前补齐实际命令/操作、环境与构建；执行后记录日期、结果及证据位置。计划尚未执行时可以明确写“命令/参与窗口待固定”。
+
+状态使用待验收、已验收、验收失败；临时执行中、待环境/待安排可作为原因说明。已验收必须有具体结果与对应范围；自动通过不代替人工确认，PR 合并或 TaskDelivery 不直接使验收项通过。明确不适用时记录原因和决定来源，不填通过。
+
+## 稳定流程
+
+任务Plan逐项或按明确ID范围覆盖全部自动验收项，列场景/命令、环境、时点、通过条件与专属登记位置；缺驱动/场景/环境能力须在实施中补齐或明确前置。必要回归与产品自动验收分别标记，静态检查不代替业务/原生证据。
+
+1. 草稿阶段就分类自动/人工，建立任务专属的一份或多份验收文档，并在草稿链接，记录最小通过条件和准备/参与安排，未定内容写待定。规划提示词鼓励识别独立验收活动，但不强制新增活动或固定执行路径；人工为主活动不入 DAG。少量人工项登记后置策略，后续 Spec/Plan 沿用对应验收项并细化。
+2. execution-map任务行记录执行事实、验收摘要和待验链接。“待人工验收”只列实现已结束或所需任务已完整排入的具体人工项，写清准备/交付条件；未完整排入的未来阶段只保留验收规划。自动补验单列链接，人工活动不成为伪DAG成员。任务纳入不要求从草稿移除。
+3. 执行自动步骤或预约人工窗口，保存原始输出到本次临时目录。按真实结果逐项更新本目录，不能以整批一次确认覆盖未测项。
+4. 更新 execution-map 的执行/验收汇总。自动及必需检查通过、仅剩允许后置的少量人工项时，保留待验链接并继续合入/无关后续执行，不标全部验收通过。
+5. 真正执行完成并核对外部结果后，从相应草稿移除已完成任务条目；验收仍待补时，继续保留 acceptance 明细和 execution-map 链接。已归档 Task 的未验事项单列索引，不混入活动 DAG 成员表。
+6. 人工补验完成后更新结果及正式汇总；发现失败保留原失败、明确影响范围，必要时另立修复任务或按原任务受控修复，不重发旧请求。全部已验后撤下待验索引，保留本目录已验记录和来源。
+
+开发任务依赖交付未知时不得派发后继；验收汇总与明细不一致时先核对记录和证据，不采用草稿里的旧状态。验收状态与开发实现状态分别登记；本流程记录不写入外部产品Task/DAG。
+
+尚未纳入执行、也未进入实际验收安排的草稿验收计划标为“仅规划，待验收”，不因此成为正式执行成员或当前待验队列。任务纳入执行或独立活动进入实际验收安排后，execution-map 同步未验文档；草稿中的链接只用于讨论与完善计划。

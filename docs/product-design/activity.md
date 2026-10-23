@@ -1,6 +1,6 @@
 # Activity 契约：公开 Runner 事件与 Web 执行详情
 
-SteerRunner 独占执行状态写入。SteerLine 在自己的数据库保存固定候选与 Run 的关联、公开事件和当前投影；Web 通过正式产品查询读取这些事实，不打开 Runner 数据库、Codex 私有数据库或 rollout 文件。实现与验证见 [Plan](../plans/execution-observability.plan.md) / [专属验收](../acceptance/execution-observability.md)。
+SteerRunner 独占执行状态写入。SteerLine 在自己的数据库保存固定候选与 Run 的关联、公开事件和当前投影；Web 通过正式产品查询读取这些事实，不打开 Runner 数据库、Codex 私有数据库或 rollout 文件。实现与验证见 [Plan](../../SteerlineFlow/plans/execution-observability.plan.md) / [专属验收](../../SteerlineFlow/testing/acceptance/execution-observability.md)。
 
 ## 流程与状态活动
 

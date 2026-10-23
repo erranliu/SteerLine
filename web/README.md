@@ -1,6 +1,6 @@
 # SteerLine Web
 
-本机浏览器客户端，使用独立 Web 程序、Go 应用目录与原项目服务。[Spec](../docs/spec/web-project-switch.spec.md) · [Plan](../docs/spec/web-project-switch.plan.md) · [验收](../docs/acceptance/web-project-switch.md)。项目添加、远程 Web 和 SSE 尚未实现。
+本机浏览器客户端，使用独立 Web 程序、Go 应用目录与原项目服务。[Spec](../SteerlineFlow/spec/web-project-switch.spec.md) · [Plan](../SteerlineFlow/plans/web-project-switch.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-project-switch.md)。项目添加、远程 Web 和 SSE 尚未实现。
 
 ## 构建与启动
 
@@ -33,9 +33,9 @@ Web 重启后再次 `open` 授权。应用服务重启后 Web 核对同 home 的
 
 服务读取统一使用 `src/shared/api/queries.ts` 的 TanStack Query options，按 home/项目/原生实例及输出身份隔离。连接核验后后台预取当前项目的执行方案和任务列表首屏；DAG/执行页共享任务列表，已有缓存先展示，后台刷新保留内容。任务列表和执行方案的在途读取可跨页面复用，项目/实例切换仍取消原 Workspace 的读取。
 
-执行方案新鲜期 60 秒，不定时轮询；动态状态保留原刷新周期，仅可见的图/列表、活动/final 启动对应查询。操作后按资源族定向失效，手动刷新包含当前连接查询；缓存不替代服务器操作资格。后续 SSE 继续更新同一缓存，本批不实现 SSE 或查询持久化。[Spec](../docs/spec/web-query-optimization.spec.md) · [Plan](../docs/spec/web-query-optimization.plan.md) · [验收](../docs/acceptance/web-query-optimization.md)。
+执行方案新鲜期 60 秒，不定时轮询；动态状态保留原刷新周期，仅可见的图/列表、活动/final 启动对应查询。操作后按资源族定向失效，手动刷新包含当前连接查询；缓存不替代服务器操作资格。后续 SSE 继续更新同一缓存，本批不实现 SSE 或查询持久化。[Spec](../SteerlineFlow/spec/web-query-optimization.spec.md) · [Plan](../SteerlineFlow/plans/web-query-optimization.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-query-optimization.md)。
 
-启动确认后立即进入执行页并选中提交卡片，允许继续新增至五个参与候选；编号和执行信息由服务器补齐。首次领取前的后续选择等待原领取核实，已发送请求沿原日志对账，迟到回执不改变选择。未发送的等待选择只在当前 Workspace 内存中保留，不跨页面重开自动派发。[Plan](../docs/plans/web-candidate-start.plan.md) · [验收](../docs/acceptance/web-candidate-start.md)。
+启动确认后立即进入执行页并选中提交卡片，允许继续新增至五个参与候选；编号和执行信息由服务器补齐。首次领取前的后续选择等待原领取核实，已发送请求沿原日志对账，迟到回执不改变选择。未发送的等待选择只在当前 Workspace 内存中保留，不跨页面重开自动派发。[Plan](../SteerlineFlow/plans/web-candidate-start.plan.md) · [验收](../SteerlineFlow/testing/acceptance/web-candidate-start.md)。
 
 ## 独立调试与验证
 
@@ -73,7 +73,7 @@ go run ./cmd/test-feedback -level=L3 -suite=configuration -scenario=configuratio
 ./scripts/test-execution-profile-discovery.ps1 -SteerRunnerExe '<固定Runner绝对路径>' -OrcaEnvironment '<已登记环境ID>'
 ```
 
-前者使用独立 controlled 现场覆盖保存/正式重启/CLI消费；后者内部先生成新调试包，只验证真实目录查询并正常清理，不运行模型任务。结果见[专属验收](../docs/acceptance/web-execution-config.md)。
+前者使用独立 controlled 现场覆盖保存/正式重启/CLI消费；后者内部先生成新调试包，只验证真实目录查询并正常清理，不运行模型任务。结果见[专属验收](../SteerlineFlow/testing/acceptance/web-execution-config.md)。
 
 本机 Orca 目录由 Web 自有 named pipe 客户端查询，仅允许 status/agents/modelCatalog，无 Runner 探测接口。本机执行所需 helper 路径/SHA 来自部署模板，缺材料不阻止查询目录；Pi/DSH 无 Orca 结构化目录时可手动填 schema 合法值，并保持未验证标识。helper 的正式发布材料准备与新包复制方式见 Spec，页面不能任意配置程序。
 

@@ -57,7 +57,8 @@ func (p *Project) enableGitHub() {
 	// repository's future instructions/content must not change this contract.
 	p.git(p.Repo, "rm", "-r", "--quiet", "--ignore-unmatch", ".")
 	s.Must(os.CopyFS(p.Repo, os.DirFS(filepath.Join(s.Run.Root, "tests", "e2e", "testdata", "projects", "minimal"))))
-	s.Must(os.MkdirAll(filepath.Join(p.Repo, "docs", "spec"), 0700))
+	s.Must(os.MkdirAll(filepath.Join(p.Repo, "SteerlineFlow", "spec"), 0700))
+	s.Must(os.MkdirAll(filepath.Join(p.Repo, "SteerlineFlow", "plans"), 0700))
 	s.register("github-base-branch", p.BaseBranch, 0)
 	query := map[string]any{"executable": gh, "args": []string{"pr", "view", "{pr_url}", "--repo", "{repository}", "--json", githubFields, "--jq", githubInfoQuery}}
 	var config map[string]any

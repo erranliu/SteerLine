@@ -7,7 +7,7 @@ import { PlanTests, type PlanTestsView } from "./plan-tests";
 
 afterEach(cleanup);
 const view: PlanTestsView = {
-  status:"ready", plan_path:"docs/task.plan.md", total:1, passed:0, failed:1, pending:0,
+  status:"ready", plan_path:"SteerlineFlow/plans/task.plan.md", total:1, passed:0, failed:1, pending:0,
   rows:[{id:"rules",name:"规则验证",level:"L1",environment:"isolated",command:"test-rules",check:"断言通过",status:"failed",message:"实际断言失败",log:"report:original",history:[{test_id:"rules",status:"passed",message:"旧结果",log:"report:old"}]}],
 };
 it("TM shows planned tests, the latest failure and expandable original evidence", async () => {

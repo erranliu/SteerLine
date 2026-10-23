@@ -15,7 +15,7 @@ func TestTMManagedResultsPreserveFailureAndNoMatch(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
 	_ = os.WriteFile("go.mod", []byte("module fixture\n"), 0600)
-	_ = os.MkdirAll("docs/testing", 0700)
+	_ = os.MkdirAll("SteerlineFlow/testing", 0700)
 	d := testmanagement.Definition{ID: "l1.minimum", Name: "L1", Level: "L1", Environment: "isolated", Command: "go run ./cmd/test-feedback -level=L1", Check: "complete"}
 	raw, _ := json.Marshal(testmanagement.Catalogue{Tests: []testmanagement.Definition{d}})
 	_ = os.WriteFile(testmanagement.CataloguePath, raw, 0600)
@@ -98,7 +98,7 @@ func TestManagedGoFullCannotClaimSubsetOrSkippedCoverage(t *testing.T) {
 	if err := os.WriteFile("go.mod", []byte("module fixture\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll("docs/testing", 0700); err != nil {
+	if err := os.MkdirAll("SteerlineFlow/testing", 0700); err != nil {
 		t.Fatal(err)
 	}
 	d := testmanagement.Definition{ID: "go.full", Name: "Go", Level: "L4", Environment: "isolated", Command: "go run ./cmd/test-feedback -level=L4 -suite=go", Check: "complete"}

@@ -213,7 +213,7 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	pmGit(t, root, "clone", remote, repo)
 	pmGit(t, repo, "config", "user.name", "PM test")
 	pmGit(t, repo, "config", "user.email", "pm@example.invalid")
-	files := map[string]string{"task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "docs/testing.md": "# Testing\nRules\n", "docs/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
+	files := map[string]string{"task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "SteerlineFlow/testing.md": "# Testing\nRules\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
 	for name, body := range files {
 		p := filepath.Join(repo, name)
 		if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {

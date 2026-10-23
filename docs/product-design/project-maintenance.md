@@ -1,6 +1,6 @@
 # 项目更新与候选版本维护
 
-状态：2026-10-21 已按用户确认方案实施，仍未部署安装环境。交付范围见[收敛 Spec](../spec/project-maintenance-simplification.spec.md)、[Plan](../plans/project-maintenance-simplification.plan.md)，验证结果及未验边界归[专属验收](../acceptance/project-maintenance-simplification.md)。上一批人工确认/应用及任务级冻结已替换；旧版本证据保留在[原验收](../acceptance/project-maintenance.md)。
+状态：2026-10-21 已按用户确认方案实施，仍未部署安装环境。交付范围见[收敛 Spec](../../SteerlineFlow/spec/project-maintenance-simplification.spec.md)、[Plan](../../SteerlineFlow/plans/project-maintenance-simplification.plan.md)，验证结果及未验边界归[专属验收](../../SteerlineFlow/testing/acceptance/project-maintenance-simplification.md)。上一批人工确认/应用及任务级冻结已替换；旧版本证据保留在[原验收](../../SteerlineFlow/testing/acceptance/project-maintenance.md)。
 
 ## 一条用户流程
 
@@ -39,7 +39,7 @@
 
 任务原路径上的Spec、Plan、common、acceptance自动刷新到远端最新版本并重算摘要，无人工内容批准。路径缺失/改名、普通文件/UTF-8/大小/严格格式不合格列为具体问题，转作者正常Git流程修复；不猜新路径、不更改仓库/分支/任务依赖。
 
-未完成任务的Plan首次无结果，或Plan、测试规范、完整清单内容改变，自动登记生成；同一Plan同输入复用有效结果，多个任务可引用，commit前进或旁置JSON变化不触发循环。规范/清单固定使用docs/testing.md与docs/testing/test-list.json。已完成/放弃任务不再为新材料发起生成，不自动重开。
+未完成任务的Plan首次无结果，或Plan、测试规范、完整清单内容改变，自动登记生成；同一Plan同输入复用有效结果，多个任务可引用，commit前进或旁置JSON变化不触发循环。规范/清单固定使用SteerlineFlow/testing.md与SteerlineFlow/testing/test-list.json。已完成/放弃任务不再为新材料发起生成，不自动重开。
 
 生成复用read_only的generate/1，每次只处理一个Plan，只选择清单已有ID并展开完整定义，不编写测试程序或改Plan。项目显式测试生成profile优先，否则只可采用项目默认且合格的本地Codex profile；默认Orca或缺配置时显示一次性设置，不猜模型/降低权限。profile、权限和原请求按调用冻结，改配置不改变已受理请求。
 

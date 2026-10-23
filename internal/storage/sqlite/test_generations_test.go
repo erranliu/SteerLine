@@ -70,7 +70,7 @@ func TestTMGenerationStoreCASAndImmutableRequest(t *testing.T) {
 	defer s.Close()
 	ctx := context.Background()
 	id := strings.Repeat("a", 32)
-	r := testmanagement.Generation{Project: "p", ID: id, Revision: 1, Command: testmanagement.GenerateCommand{RequestID: id, Plan: "docs/task.plan.md", Profile: "local"}, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-runner-request", Input: json.RawMessage(`{"title":"original"}`)}, State: "unknown"}
+	r := testmanagement.Generation{Project: "p", ID: id, Revision: 1, Command: testmanagement.GenerateCommand{RequestID: id, Plan: "SteerlineFlow/plans/task.plan.md", Profile: "local"}, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-runner-request", Input: json.RawMessage(`{"title":"original"}`)}, State: "unknown"}
 	if err = s.SaveGeneration(ctx, r, 0); err != nil {
 		t.Fatal(err)
 	}

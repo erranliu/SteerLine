@@ -7,10 +7,10 @@ import (
 )
 
 func TestContractDigestAndReferenceBoundary(t *testing.T) {
-	ref := FileReference{Path: "docs/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+	ref := FileReference{Path: "SteerlineFlow/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
 	contract := TaskContract{
 		ContractID: "task-7", Repository: "https://example.test/repo.git", Remote: "origin", Branch: "main",
-		SpecRef: ref, PlanRef: FileReference{Path: "docs/spec/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256},
+		SpecRef: ref, PlanRef: FileReference{Path: "SteerlineFlow/plans/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256},
 		AcceptanceRefs: []FileReference{ref},
 	}
 	var err error
@@ -35,10 +35,10 @@ func TestContractDigestAndReferenceBoundary(t *testing.T) {
 }
 
 func TestBatchValidationAndReadinessShareTaskRules(t *testing.T) {
-	ref := FileReference{Path: "docs/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+	ref := FileReference{Path: "SteerlineFlow/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
 	contract := TaskContract{
 		ContractID: "contract-2", Repository: "https://example.test/repo.git", Remote: "origin", Branch: "main",
-		SpecRef: ref, PlanRef: FileReference{Path: "docs/spec/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256},
+		SpecRef: ref, PlanRef: FileReference{Path: "SteerlineFlow/plans/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256},
 		AcceptanceRefs: []FileReference{ref},
 	}
 	contract.Digest, _ = ContractDigest(contract)

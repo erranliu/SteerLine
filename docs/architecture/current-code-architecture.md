@@ -1,16 +1,16 @@
 # 当前代码架构
 
-2026-10-21 Web执行配置增量：Web独立负责目录探测和execution.json条件保存，Go执行服务只消费配置并投影原加载摘要；Runner不新增接口。实现与验证见[专属验收](../acceptance/web-execution-config.md)。
+2026-10-21 Web执行配置增量：Web独立负责目录探测和execution.json条件保存，Go执行服务只消费配置并投影原加载摘要；Runner不新增接口。实现与验证见[专属验收](../../SteerlineFlow/testing/acceptance/web-execution-config.md)。
 
-2026-10-20 调用方边界增量：[本轮收口](../acceptance/architecture-boundary-consolidation.md)将候选停止信封准备统一到 runnerbridge、公开 takeover 类型与校验归 runnercontract、调用方绑定规则归纯 runnerbinding；修复 processwindow 的 HTTP 基础设施窄依赖并增加调用方 owner 守卫。下述历史轮次与未实施建议按其各自范围理解。
+2026-10-20 调用方边界增量：[本轮收口](../../SteerlineFlow/testing/acceptance/architecture-boundary-consolidation.md)将候选停止信封准备统一到 runnerbridge、公开 takeover 类型与校验归 runnercontract、调用方绑定规则归纯 runnerbinding；修复 processwindow 的 HTTP 基础设施窄依赖并增加调用方 owner 守卫。下述历史轮次与未实施建议按其各自范围理解。
 
-核对日期：2026-10-19；前四轮已随 PR #350 合入 `64f91853`，本页包含基于该主干的第五轮宿主契约归位。本页按生产代码与 `go list` 的实际依赖维护，区分进程调用、Go 包依赖和资源所有权。原始核对见[架构解耦审视](../acceptance/architecture-decoupling-review.md)，实现与验证见[第一轮](../acceptance/architecture-decoupling-round1.md)、[第二轮](../acceptance/architecture-decoupling-round2.md)、[第三轮](../acceptance/architecture-decoupling-round3.md)、[第四轮](../acceptance/architecture-decoupling-round4.md)、[PR #350 复审](../acceptance/architecture-decoupling-pr350-review.md)及[第五轮验收](../acceptance/architecture-decoupling-round5.md)；其余建议尚未实施。
+核对日期：2026-10-19；前四轮已随 PR #350 合入 `64f91853`，本页包含基于该主干的第五轮宿主契约归位。本页按生产代码与 `go list` 的实际依赖维护，区分进程调用、Go 包依赖和资源所有权。原始核对见[架构解耦审视](../../SteerlineFlow/testing/acceptance/architecture-decoupling-review.md)，实现与验证见[第一轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round1.md)、[第二轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round2.md)、[第三轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round3.md)、[第四轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round4.md)、[PR #350 复审](../../SteerlineFlow/testing/acceptance/architecture-decoupling-pr350-review.md)及[第五轮验收](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round5.md)；其余建议尚未实施。
 
-SteerLine 保留 Task/DAG、候选参与关系与唯一 TaskDelivery，执行已迁到独立 SteerRunner。两者只通过固定 EXE 的 `steerrunner-cli/v1` 协作；SteerLine 不导入 Runner Go 包，不读取其 codec、IPC、数据库或原生日志。当前接入本机 Codex 和远端 Orca environment；各构建/平台的已验与未验范围见[Runner 接入](../integration/steerrunner.md)及专属验收，不以适配器存在推定通过。Web 为唯一交互前端，TUI 已按[退役决策](../acceptance/tui-retirement.md)移除。
+SteerLine 保留 Task/DAG、候选参与关系与唯一 TaskDelivery，执行已迁到独立 SteerRunner。两者只通过固定 EXE 的 `steerrunner-cli/v1` 协作；SteerLine 不导入 Runner Go 包，不读取其 codec、IPC、数据库或原生日志。当前接入本机 Codex 和远端 Orca environment；各构建/平台的已验与未验范围见[Runner 接入](../integration/steerrunner.md)及专属验收，不以适配器存在推定通过。Web 为唯一交互前端，TUI 已按[退役决策](../../SteerlineFlow/testing/acceptance/tui-retirement.md)移除。
 
 ## 进程与运行边界
 
-下图箭头表示运行时调用或读写，不表示 Go import。`steerline start` 是短协调器；共享后端承载每项目运行时，各项目没有独立 HTTP listener。应用目录在 census 后初始化一个 home 级 Runner，所有项目借用固定客户端，整体关闭统一结算。见[共享服务验收](../acceptance/shared-runner-service.md)。
+下图箭头表示运行时调用或读写，不表示 Go import。`steerline start` 是短协调器；共享后端承载每项目运行时，各项目没有独立 HTTP listener。应用目录在 census 后初始化一个 home 级 Runner，所有项目借用固定客户端，整体关闭统一结算。见[共享服务验收](../../SteerlineFlow/testing/acceptance/shared-runner-service.md)。
 
 ```mermaid
 flowchart TB
@@ -126,7 +126,7 @@ flowchart LR
 - 会话、正文和活动读取已收口：`storage/ports` 与 `storage/sqlite` 均无任何 `internal/product/*` 的生产依赖。SQLite 返回 Runner 事件、绑定和正文事实；查询层生成会话引用、能力 DTO、活动标签和公开页，守卫同时拒绝 DTO 别名及间接产品依赖。
 - `TaskDeliveryRecord`、`TaskDeliveryEvidence`、`TaskDeliveryReceipt`、`ProjectTaskAuthority` 和 `ValidateDelivery` 已归 `task/model`，只依赖标准库；Task 服务/控制入口、图快照、任务详情事实、项目权威读取与初始化接口不再为这些值导入 `execution/model`。旧包无别名或转发；全标签源码守卫限制定义归属及已收口文件的执行域 import。
 - `hostcontract` 统一拥有 service checkpoint、宿主服务/控制状态、内部控制回执、进程身份与只读观察端口，只依赖标准库和公开 `runnercontract`。存储端口引用该契约，不再定义 checkpoint；`reconstruction` 只投影宿主与调用方事实，不再依赖存储端口。旧定义和别名已移除，持久 schema 与 JSON 保持。
-- `ProjectRuntime` 持有项目资源并最终关闭；factory、actor 与服务产品客户端借用项目 store，actor 不负责最终关库。见[生命周期验收](../acceptance/application-project-lifecycle.md)。
+- `ProjectRuntime` 持有项目资源并最终关闭；factory、actor 与服务产品客户端借用项目 store，actor 不负责最终关库。见[生命周期验收](../../SteerlineFlow/testing/acceptance/application-project-lifecycle.md)。
 
 仍有以下依赖需要如实保留在图中：
 
@@ -135,7 +135,7 @@ flowchart LR
 | `taskrunner / storage / query → execution/model` | Task 交付已归 [Task 纯模型](../../internal/task/model/task_delivery.go)，checkpoint 与宿主事实已归 [宿主契约](../../internal/hostcontract/checkpoint.go)。剩余边来自候选/活动/正文展示、发布配置及[任务图展示](../../internal/product/query/taskgraph/project.go)复用的 `StartupBlockers`；`execution/hostport` 的控制传输接口还复用活动展示值，不表示原生执行状态机仍在 SteerLine。 |
 | `internal/app` 同时组装和适配 | [project_runtime.go](../../internal/app/project_runtime.go)负责资源获取/关闭；[client.go](../../internal/app/client.go)负责读取快照、宿主观察和产品投影；[runner_service_wiring.go](../../internal/app/runner_service_wiring.go)负责接线。高依赖数量对组装根正常，但这些实现同包，尚无包级隔离。 |
 
-`httpapi` 的 command 文件已按意图、派发、回执、原生查看拆分，Web 的三个 hook 也已分责；这些属于同包/同应用内的结构整理，不能据此宣称各自可独立编译或替换。见[本轮入口整理验收](../acceptance/product-read-command-web-refactor.md)。
+`httpapi` 的 command 文件已按意图、派发、回执、原生查看拆分，Web 的三个 hook 也已分责；这些属于同包/同应用内的结构整理，不能据此宣称各自可独立编译或替换。见[本轮入口整理验收](../../SteerlineFlow/testing/acceptance/product-read-command-web-refactor.md)。
 
 ## 模块与资源归属
 
@@ -164,9 +164,9 @@ flowchart LR
 | `web/server` / `web/src` | 独立 Web 宿主和 React 页面；浏览器会话、项目选择、连接观察、原信封 journal、草稿与渲染。路由白名单经纯 HTTP 契约共享，生产编译依赖受 HTTP 消费端守卫约束。 |
 | `tests/e2e/internal` | 隔离环境、公开 CLI driver 与外部协议夹具；不导入 Runner 内部包，真机验收范围单独登记。 |
 
-旧 actor/worker、adapters、workflow、reliable、conversation owner、执行写表及闲置执行事务端口已物理删除；具体范围见[删除审计](../acceptance/steerrunner-deletion-audit.md)与[后续清理验收](../acceptance/execution-legacy-cleanup.md)。无消费者的记录与空壳字段也已按[主干清理](../acceptance/runtime-shell-cleanup.md)删除；残留包名和仍被消费的值不作为重新引入旧 owner 的理由。
+旧 actor/worker、adapters、workflow、reliable、conversation owner、执行写表及闲置执行事务端口已物理删除；具体范围见[删除审计](../../SteerlineFlow/testing/acceptance/steerrunner-deletion-audit.md)与[后续清理验收](../../SteerlineFlow/testing/acceptance/execution-legacy-cleanup.md)。无消费者的记录与空壳字段也已按[主干清理](../../SteerlineFlow/testing/acceptance/runtime-shell-cleanup.md)删除；残留包名和仍被消费的值不作为重新引入旧 owner 的理由。
 
-项目 checkpoint 固定 Runner 构建与 state-dir，运行中的客户端固定本次 instance_id；替代实例只在显式重启 SteerLine、重建 ProjectRuntime 时接纳，旧 stop/settlement 闭包保持原目标。候选事务固定原预设名称/参数摘要/完整信封；公开 workflow/audit/materials/轮次请求模型贯穿 taskrunner → product query/API → Web，历史沿候选原提交读取。组合规则只消费 Runner 自包含 schema。源码与验证见[协作 Plan](../spec/runner-collaboration.plan.md)和[验收](../acceptance/runner-collaboration.md)。
+项目 checkpoint 固定 Runner 构建与 state-dir，运行中的客户端固定本次 instance_id；替代实例只在显式重启 SteerLine、重建 ProjectRuntime 时接纳，旧 stop/settlement 闭包保持原目标。候选事务固定原预设名称/参数摘要/完整信封；公开 workflow/audit/materials/轮次请求模型贯穿 taskrunner → product query/API → Web，历史沿候选原提交读取。组合规则只消费 Runner 自包含 schema。源码与验证见[协作 Plan](../../SteerlineFlow/plans/runner-collaboration.plan.md)和[验收](../../SteerlineFlow/testing/acceptance/runner-collaboration.md)。
 
 ## 命令、查询与事务边界
 
@@ -207,7 +207,7 @@ sequenceDiagram
 
 活动链现为 `OpenActivityView → 原绑定 + ActivityRecords → query 逐条投影/计数 → LogBatch`。记录流保持同一只读事务，按原事件顺序/数量读取；公开活动 JSON 的 1 MiB 预算、工作流标签和投影在查询层计算，超预算记录不推进游标，也不继续读取后续行。最近活动继续选最新五条流程变化与十条技术事件，再按事件序号输出。所有成功、预算终止、身份/读取失败和取消路径都关闭记录流；关闭/提交失败不能返回成功页面。
 
-`ProjectRuntime` 统一取得项目锁、日志、store 和产品端口，借用应用的 Runner 客户端；关闭时先拒绝/排空 Read、Command、Task，再关库并汇总本地关闭与锁释放。`ApplicationDirectory` 等待项目关闭后，由 `applicationRunner` 停止原共享实例，应用停机结果与离线取证各只保存一份共享资源证明。局部 caller 退出后已有执行可能继续，原绑定和停止义务保留。Web 关闭只结束客户端观察；共享后端 PID 退出不证明 Runner/worker 已停止。契约见[统一启动](../spec/unified-startup.spec.md)和[项目生命周期](../spec/application-project-lifecycle.spec.md)。
+`ProjectRuntime` 统一取得项目锁、日志、store 和产品端口，借用应用的 Runner 客户端；关闭时先拒绝/排空 Read、Command、Task，再关库并汇总本地关闭与锁释放。`ApplicationDirectory` 等待项目关闭后，由 `applicationRunner` 停止原共享实例，应用停机结果与离线取证各只保存一份共享资源证明。局部 caller 退出后已有执行可能继续，原绑定和停止义务保留。Web 关闭只结束客户端观察；共享后端 PID 退出不证明 Runner/worker 已停止。契约见[统一启动](../../SteerlineFlow/spec/unified-startup.spec.md)和[项目生命周期](../../SteerlineFlow/spec/application-project-lifecycle.spec.md)。
 
 第五轮将 `ServiceCheckpoint` 与重复的服务/控制状态统一到 `hostcontract`，仓库、原实例、Runner build pin、进程创建身份、心跳、准备状态、控制结果及预留任务的字段保持；checkpoint schema 仍为 21，数据库 schema 仍为 23。存储保存、心跳更新、版本递增与 `ReadApplicationProjectSnapshot` 的事务边界保持，控制/派发权威仍由独立 Task 事实提供。checkpoint 与运行视图双向复制可变字段，预留任务及嵌套回执时间也独立复制；不会因调用方改动投影污染已采样事实。`ProjectRuntime` 仍是项目本地资源的最终所有者，actor/factory 借用 store，排空、幂等关闭和失败保锁不变；Runner 最终所有权已随共享服务上移到应用。
 
@@ -225,6 +225,6 @@ sequenceDiagram
 
 第一轮已完成第 1 项及候选错误映射；第二、三轮已完成第 2 项；第四、五轮已完成第 3 项中的 Task 与宿主契约归位。依赖规则由全标签源码与 Windows/Linux 依赖图核对。余下可继续收窄展示/控制传输值及 app 中的组装与产品适配；这些尚未实施。
 
-暂不建议把 Task、候选、交付拆成独立服务/数据库，也不建议引入通用事件总线、插件注册框架或重建 workflow 层。当前一个原子交付事务、每项目资源 owner、Runner 单写执行事实的关系是必要的一致性边界。业务规则、生命周期和真实支持范围分别归[整体架构](../architecture.md)、[Worker 生命周期](../product-design/worker-lifecycle.md)及[接入验收](../acceptance/steerrunner-cutover.md)维护。
+暂不建议把 Task、候选、交付拆成独立服务/数据库，也不建议引入通用事件总线、插件注册框架或重建 workflow 层。当前一个原子交付事务、每项目资源 owner、Runner 单写执行事实的关系是必要的一致性边界。业务规则、生命周期和真实支持范围分别归[整体架构](../architecture.md)、[Worker 生命周期](../product-design/worker-lifecycle.md)及[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)维护。
 
 Web目录层的Orca named pipe与配对WebSocket共用 `readOrcaCatalog`，只表达目标注册Agent及模型/provider/effort事实，不承载本机/远端产品支持策略。配置owner独立发布可生成组合并验证完整schema；前端合并展示。模型provider凭据留在原Agent，Web不建key配置、provider发现或账号数据库；Go执行服务仍仅消费execution.json。

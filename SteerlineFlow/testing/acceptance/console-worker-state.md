@@ -1,0 +1,37 @@
+# Worker 状态变化与控制台精简验收
+
+> 2026-10-15 TUI 退役：本文保留原交付/验收事实，TUI 专属操作和未验项不再适用，不记为通过。共享后台/API 要求继续归原记录；当前范围见 [TUI 退役](../../spec/tui-retirement.spec.md)。
+
+仅归属本次普通开发，[Spec](../../spec/console-worker-state.spec.md)、[Plan](../../plans/console-worker-state.plan.md)。不改变 roadmap 或先前提示词恢复的验收归属。
+
+| ID | 自动验收内容 | 结果 |
+| --- | --- | --- |
+| CSC-A1 | 原状态字段、唯一查询映射、worker 状态/变化同事务、失败不发布、重复不新增 | 通过：model/reconstruction 与状态事务/失败回滚、三轮定向回归 |
+| CSC-A2 | 领取/交付变化与重放、同快照/原 Attempt、五条状态变化不被工具活动挤掉 | 通过：领取/交付重放、activity 读事务和工具噪声定向回归 |
+| CSC-A3 | 原值完整、固定中文/颜色、未知/长值、窄屏与精简，问题/终态/焦点/回执规则保持 | 通过：console 包与 activityrender 回归、最终 UI 增量 |
+| CSC-A4 | 公开活动读取、边界、构建、vet、文档检查 | 通过：query、boundary、构建、vet、导航和 diff 检查 |
+
+环境为现有隔离测试夹具，不启动模型或操作安装版。普通流程仍只有原三轮，UI 不定义新状态或推进任务。
+
+## 2026-10-10 实现结果
+
+源码基线 `42f36428857a198822a69b342950fd4465f0caf9`，叠加本聊天先前提示词恢复及本项未提交改动。产物目录：`C:/Users/lmas1/AppData/Local/Temp/steerline-console-state-20261010-131357/`。
+
+- `console-model.log`：console 2.710s、activityrender 0.528s、model 0.556s、reconstruction 0.584s，全通过。最终标题框和独立活动缓冲增量 `console-final.log` 通过（1.692s）。原始字段/固定映射、未知值不猜颜色、长值换行、问题/终态仍显示变化、重复刷新不累加、迟到 Attempt 拒绝及焦点/窄屏操作覆盖。
+- `execution.log`：5 个顶层定向场景及子场景通过（47.720s），含新增状态提交/回滚、不变状态不重复写、公开读取、原提交 stale/event/checkpoint 失败，provider 交付与重放只记录一次、领取以及三轮状态推进。
+- `activity.log`：同 WAL 快照及原身份核对通过；6 条状态变化后再写 20 条工具活动，读取仍保留最后 5 条变化与最后 10 条其他活动。来源、顺序和原字节预算保持。
+- `boundary.log`：query、执行/产品/存储与 E2E 边界通过；`vet.log` 无诊断。最终构建为该目录 `steerline.exe`；`static.log` 文档导航和 diff 检查通过（312 个 Markdown、1921 个链接、0 错误）。
+
+实现期首轮 UI 失败来自旧四列表格/重复提示断言及极短列表的高度溢出；更新契约断言并修正视口后通过。移动共享投影函数后，旧私有函数的测试引用已同步。没有通过削弱命令身份、答案提交或隐藏操作的资格核验使测试通过。
+
+没有运行 Full、完整 L2/L3 或真实模型，没有替换安装版；未提交、推送或创建 PR。本项结果不改变既有原生模型/长期恢复的未验记录。
+
+## 提交前审计（2026-10-10）
+
+用户授权审计、修复并提 PR。本聊天复核全部前述改动，未另行调度 agent。发现并修复：列表原来按固定两行估算视口，状态换行时可能把选中项挤出；改为按实际渲染高度选择窗口，保留选中项。待回答问题的提前返回曾隐藏活动采集缺口；现在问题和缺口共同显示。新增换行视口/问题下缺口回归通过，console 全包 1.822s、Orca adapter 全包 2.308s 通过；输出见本聊天。
+
+最新主干新增 Orca 原会话查看和 WinUI 基座，PR 提交前集成主干，保留原新能力入口与本次精简界面；最终精确候选和验证见后续记录。本段不改旧构建结果或安装事实。
+
+集成后复核补齐一项诊断：字段损坏的 worker_state 活动曾被解析跳过，界面却不提示缺口；现在保留 seq 定位的采集诊断，不从 title 推断状态。对应坏字段负例通过，当前问题不会再遮住该缺口。
+
+最终代码候选以 `origin/main f04fdf089a58723909279d44c497377427b868dd` 为基线，主体提交 `49b2546f3a740bce538fef10f500520ff3382916`，之后补上坏字段诊断增量。console 全包增量 2.115s 通过。集成候选的 console/activityrender、model/reconstruction、双 Orca adapter、query、SQLite 全包和 boundary 通过；execution 定向 WorkerStage/WorkerPrompt/WorkerStateActivity/WorkerFlowProviderDelivery/Claim/WorkspaceInstruction 通过（179.015s）。保留主干 Ctrl+N 本机/远端 Orca 入口，相关 app 定向通过（1.586s）。vet、构建、316 Markdown/1928 导航链接及 diff 检查通过。日志见本聊天与 `C:/Users/lmas1/AppData/Local/Temp/steerline-worker-console-pr-audit-20261010-141126/`。此前“未提交”属于当时快照；当前进入 PR 交付，不改安装版。

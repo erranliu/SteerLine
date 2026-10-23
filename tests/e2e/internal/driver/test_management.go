@@ -96,12 +96,12 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	// the deterministic test inputs, while Codex supplies a real original Run.
 	spec := "# Test result consumption fixture\n\nNo implementation or publication is requested. Do not edit, commit or push files, do not run publish.ps1, and do not report implementation success. Inspect the original Plan, then finish with a clear BLOCKED diagnosis: deterministic tests are owned by the external acceptance driver. Do not fabricate test results.\n\n## Acceptance\n\nTracked files remain unchanged; the original Codex turn honestly reports the external-driver boundary. No publication.\n"
 	plan := "# Test result consumption plan\n\nThis Plan requires exactly one automatic test: fixture.marker from the catalog. The arrangement MUST be {\"tests\":[\"fixture.marker\"]}; an empty selection would omit the mandatory acceptance test even though product code is unchanged. Its actual program checks the run-owned ignored input. The external driver executes it once with passing input and once with failing input, in fresh .steerrunner/artifacts directories. No code change or publication is required.\n\n## 测试计划\n\n系统自动生成测试安排：fixture.marker, L1, isolated. Command: powershell -NoProfile -ExecutionPolicy Bypass -File ./test-marker.ps1 -Out .steerrunner/artifacts/<unique-execution>. Pass requires exit 0, a real assertion, original summary and managed report on clean unchanged commit. The second actual assertion must fail with exit 1. Evidence is retained in the original Run; external acceptance verifies API and browser counts.\n"
-	for name, body := range map[string]string{"task.spec.md": spec, "task.plan.md": plan} {
-		if err := os.WriteFile(filepath.Join(d.repo, "docs", "spec", name), []byte(body), 0600); err != nil {
+	for path, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": spec, "SteerlineFlow/plans/task.plan.md": plan} {
+		if err := os.WriteFile(filepath.Join(d.repo, filepath.FromSlash(path)), []byte(body), 0600); err != nil {
 			return err
 		}
 	}
-	if _, err := d.git("add", "--", "docs/spec/task.spec.md", "docs/spec/task.plan.md", "docs/spec/task.tests.json"); err != nil {
+	if _, err := d.git("add", "--", "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json"); err != nil {
 		return err
 	}
 	if _, err := d.git("commit", "--quiet", "-m", "Pin test management acceptance materials"); err != nil {
@@ -131,16 +131,16 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	}
 	defer p.Close()
 	id := p.Identity()
-	reference := func(name string) (taskmodel.FileReference, error) {
-		b, e := d.command("git", "-C", d.repo, "show", head+":docs/spec/"+name).Output()
+	reference := func(path string) (taskmodel.FileReference, error) {
+		b, e := d.command("git", "-C", d.repo, "show", head+":"+path).Output()
 		sum := sha256.Sum256(b)
-		return taskmodel.FileReference{Path: "docs/spec/" + name, Commit: head, SHA256: hex.EncodeToString(sum[:])}, e
+		return taskmodel.FileReference{Path: path, Commit: head, SHA256: hex.EncodeToString(sum[:])}, e
 	}
-	specRef, err := reference("task.spec.md")
+	specRef, err := reference("SteerlineFlow/spec/task.spec.md")
 	if err != nil {
 		return err
 	}
-	planRef, err := reference("task.plan.md")
+	planRef, err := reference("SteerlineFlow/plans/task.plan.md")
 	if err != nil {
 		return err
 	}
@@ -181,7 +181,7 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	if taskID == "" {
 		return errors.New("original testing task absent")
 	}
-	material, err := WaitFixtureMaterials(ctx, d.home, p.Identity(), "docs/spec/task.plan.md", out)
+	material, err := WaitFixtureMaterials(ctx, d.home, p.Identity(), "SteerlineFlow/plans/task.plan.md", out)
 	if err != nil {
 		return err
 	}
@@ -336,7 +336,7 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	ownedHead = original.Execution.Branch
 	proof.CandidateRun = original.RunID
 	// Verify latest public worktree paths and the exact frozen prompt context.
-	catalogueText, e := d.git("show", head+":docs/testing/test-list.json")
+	catalogueText, e := d.git("show", head+":SteerlineFlow/testing/test-list.json")
 	if e != nil {
 		return e
 	}

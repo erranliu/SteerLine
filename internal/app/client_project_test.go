@@ -61,8 +61,8 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 			return err
 		}
 		for _, id := range []string{"2", "10"} {
-			reference := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
-			contract := taskmodel.TaskContract{ContractID: "contract-" + id, Repository: "https://github.com/Org/Repo.git", Remote: "origin", Branch: "main", SpecRef: reference, PlanRef: taskmodel.FileReference{Path: "docs/task.plan.md", Commit: reference.Commit, SHA256: reference.SHA256}, AcceptanceRefs: []taskmodel.FileReference{reference}}
+			reference := taskmodel.FileReference{Path: "SteerlineFlow/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+			contract := taskmodel.TaskContract{ContractID: "contract-" + id, Repository: "https://github.com/Org/Repo.git", Remote: "origin", Branch: "main", SpecRef: reference, PlanRef: taskmodel.FileReference{Path: "SteerlineFlow/plans/task.plan.md", Commit: reference.Commit, SHA256: reference.SHA256}, AcceptanceRefs: []taskmodel.FileReference{reference}}
 			var err error
 			contract.Digest, err = taskmodel.ContractDigest(contract)
 			if err != nil {

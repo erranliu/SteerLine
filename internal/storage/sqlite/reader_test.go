@@ -38,8 +38,8 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 			return err
 		}
 		for _, id := range []string{"1", "2"} {
-			ref := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
-			contract := taskmodel.TaskContract{ContractID: "contract-" + id, Repository: authority.Repository, Remote: authority.Remote, Branch: authority.Branch, SpecRef: ref, PlanRef: taskmodel.FileReference{Path: "docs/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256}, AcceptanceRefs: []taskmodel.FileReference{ref}}
+			ref := taskmodel.FileReference{Path: "SteerlineFlow/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+			contract := taskmodel.TaskContract{ContractID: "contract-" + id, Repository: authority.Repository, Remote: authority.Remote, Branch: authority.Branch, SpecRef: ref, PlanRef: taskmodel.FileReference{Path: "SteerlineFlow/plans/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256}, AcceptanceRefs: []taskmodel.FileReference{ref}}
 			contract.Digest, err = taskmodel.ContractDigest(contract)
 			if err != nil {
 				return err

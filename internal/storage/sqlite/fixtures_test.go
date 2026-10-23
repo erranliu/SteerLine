@@ -43,7 +43,7 @@ func requireNativeAuditCode(t *testing.T, err error, code string) {
 // pipeline. Their records test persistence and query boundaries only.
 func nativeAuditRecords(t *testing.T, store *SQLiteStore, a taskmodel.ProjectTaskAuthority) []taskmodel.TaskRecord {
 	t.Helper()
-	ref := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+	ref := taskmodel.FileReference{Path: "SteerlineFlow/spec/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
 	return nativeAuditRecordsWithReference(t, store, a, ref)
 }
 
@@ -57,7 +57,7 @@ func nativeAuditRecordsWithReference(t *testing.T, store *SQLiteStore, a taskmod
 		}
 		for _, id := range []string{"2", "10", "99"} {
 			task := taskmodel.TaskRecord{ProjectIdentity: a.ProjectIdentity, TaskID: id, BatchID: "audit-batch", Title: "Audit " + id, Type: "task", Priority: 2, ContractID: "contract-" + id, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
-			contract := taskmodel.TaskContract{ContractID: task.ContractID, Repository: a.Repository, Remote: a.Remote, Branch: a.Branch, SpecRef: ref, PlanRef: taskmodel.FileReference{Path: "docs/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256}, AcceptanceRefs: []taskmodel.FileReference{ref}}
+			contract := taskmodel.TaskContract{ContractID: task.ContractID, Repository: a.Repository, Remote: a.Remote, Branch: a.Branch, SpecRef: ref, PlanRef: taskmodel.FileReference{Path: "SteerlineFlow/plans/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256}, AcceptanceRefs: []taskmodel.FileReference{ref}}
 			var err error
 			contract.Digest, err = taskmodel.ContractDigest(contract)
 			if err != nil {

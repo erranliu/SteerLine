@@ -13,9 +13,10 @@ class DocumentBoundaryTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        self.directory = self.root / 'docs' / 'roadmap'
+        self.directory = self.root / 'SteerlineFlow' / 'Roadmap'
         self.directory.mkdir(parents=True)
-        (self.root / 'docs' / 'spec').mkdir()
+        (self.root / 'SteerlineFlow' / 'spec').mkdir()
+        (self.root / 'SteerlineFlow' / 'plans').mkdir()
         self.records = {7: 'task-seven', 8: 'task-eight'}
         self.write('execution-map.md', '')
 
@@ -26,11 +27,11 @@ class DocumentBoundaryTests(unittest.TestCase):
 
     def contract_row(self, number=7, stem='seven', base='drafts'):
         name = self.records[number]
-        for suffix in ('spec', 'plan'):
-            path = self.root / 'docs' / 'spec' / f'{stem}.{suffix}.md'
+        for suffix, directory in (('spec', 'spec'), ('plan', 'plans')):
+            path = self.root / 'SteerlineFlow' / directory / f'{stem}.{suffix}.md'
             path.write_text(f'任务 ID：{number}；任务名称：{name}。\n', encoding='utf-8')
-        spec = os.path.relpath(self.root / 'docs' / 'spec' / f'{stem}.spec.md', self.directory / base).replace('\\', '/')
-        plan = os.path.relpath(self.root / 'docs' / 'spec' / f'{stem}.plan.md', self.directory / base).replace('\\', '/')
+        spec = os.path.relpath(self.root / 'SteerlineFlow' / 'spec' / f'{stem}.spec.md', self.directory / base).replace('\\', '/')
+        plan = os.path.relpath(self.root / 'SteerlineFlow' / 'plans' / f'{stem}.plan.md', self.directory / base).replace('\\', '/')
         return (f'| {number} | {name} | scope | none | '
                 f'[Spec]({spec}) · [Plan]({plan}) |\n')
 

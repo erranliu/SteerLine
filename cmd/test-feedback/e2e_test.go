@@ -310,7 +310,7 @@ func TestScenarioContentListMatchesRegisteredIDsAndLevels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(filepath.Join(root, "docs", "testing", "test-list.json"))
+	raw, err := os.ReadFile(filepath.Join(root, "SteerlineFlow", "testing", "test-list.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +324,7 @@ func TestScenarioContentListMatchesRegisteredIDsAndLevels(t *testing.T) {
 		levels[entry.ID] = entry.Level
 	}
 	for _, level := range []string{"L1", "L2", "L3", "L4"} {
-		doc, err := os.ReadFile(filepath.Join(root, "docs", "testing", strings.ToLower(level)+".md"))
+		doc, err := os.ReadFile(filepath.Join(root, "SteerlineFlow", "testing", strings.ToLower(level)+".md"))
 		if err != nil {
 			t.Fatal(err)
 		}

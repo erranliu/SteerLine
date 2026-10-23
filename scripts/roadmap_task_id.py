@@ -33,7 +33,7 @@ def repository_root() -> Path:
 
 def registry(root: Path) -> dict[int, str]:
     records = {}
-    directory = root / "docs" / "roadmap" / "task-ids"
+    directory = root / "SteerlineFlow" / "Roadmap" / "task-ids"
     for path in directory.glob("*.json"):
         record = json.loads(path.read_text(encoding="utf-8"))
         task_id, name = record.get("id"), record.get("name")
@@ -114,7 +114,7 @@ def rename_task(root: Path, records: dict[int, str], task_id: int, name: str) ->
         state = load_state(root, old_oid, records)
         state["reservations"][str(task_id)] = name
         if update_ref(root, state, old_oid):
-            path = root / "docs" / "roadmap" / "task-ids" / f"{task_id}.json"
+            path = root / "SteerlineFlow" / "Roadmap" / "task-ids" / f"{task_id}.json"
             try:
                 path.write_text(
                     json.dumps({"id": task_id, "name": name}, ensure_ascii=False, indent=2) + "\n",
@@ -152,7 +152,7 @@ def document_tasks(path: Path, *, require_contract: bool = True) -> dict[int, tu
 
 
 def check_documents(root: Path, records: dict[int, str]) -> tuple[int, int]:
-    directory = root / "docs" / "roadmap"
+    directory = root / "SteerlineFlow" / "Roadmap"
     drafts = [(path, document_tasks(path, require_contract=False))
               for path in sorted((directory / "drafts").rglob("*.md"))]
     formal_path = directory / "execution-map.md"
@@ -196,7 +196,7 @@ def main() -> None:
             raise ValueError("task name must be nonempty and contain no newline or pipe")
     if args.command == "reserve":
         task_id = initialize_or_reserve(root, records, name)
-        path = root / "docs" / "roadmap" / "task-ids" / f"{task_id}.json"
+        path = root / "SteerlineFlow" / "Roadmap" / "task-ids" / f"{task_id}.json"
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             with path.open("x", encoding="utf-8", newline="\n") as output:

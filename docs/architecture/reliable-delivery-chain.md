@@ -2,7 +2,7 @@
 
 SteerLine 的可靠性依靠三种独立结果：命令是否送达并被处理、业务成果是否形成唯一交付、执行资源是否停止并可以清理。当前身份、原请求和事务校验大多有必要；可以减少的是重复的跨进程查询、同一权威内的多份命令记录，以及为了取得正常停机回执而重新运行整套应用的操作。
 
-核对日期为 2026-10-21，依据 SteerLine `9e02854e` 加当前分支的部署中断恢复修改；后者已通过隔离定向验证，尚未实际部署及重启实测。Runner 边界另核对本地源码 `8261310d`。下文“当前链路”以该审计基线说明原有边界，“简化建议”为按[首轮审计](../acceptance/reliable-delivery-simplification-audit-20261021.md)修订、经[第二轮审计](../acceptance/reliable-delivery-simplification-audit-round2-20261021.md)复核的方案。其后本批已实现判定/表达收口、完整受理前绑定和同快照观察；实际通过范围与未实施的清单/租约/续装/命令合并统一见[实施验收](../acceptance/reliability-simplification.md)，不把设计审计当作运行资格。
+核对日期为 2026-10-21，依据 SteerLine `9e02854e` 加当前分支的部署中断恢复修改；后者已通过隔离定向验证，尚未实际部署及重启实测。Runner 边界另核对本地源码 `8261310d`。下文“当前链路”以该审计基线说明原有边界，“简化建议”为按[首轮审计](../../SteerlineFlow/testing/acceptance/reliable-delivery-simplification-audit-20261021.md)修订、经[第二轮审计](../../SteerlineFlow/testing/acceptance/reliable-delivery-simplification-audit-round2-20261021.md)复核的方案。其后本批已实现判定/表达收口、完整受理前绑定和同快照观察；实际通过范围与未实施的清单/租约/续装/命令合并统一见[实施验收](../../SteerlineFlow/testing/acceptance/reliability-simplification.md)，不把设计审计当作运行资格。
 
 本文提供跨组件导航和简化分析。Worker 节点、异常分类和恢复授权仍归 [worker lifecycle](../product-design/worker-lifecycle.md) 的 W01–W18、E01–E07、V01–V08，不新增状态机、准入服务、回执系统或 roadmap 任务。
 
@@ -53,7 +53,7 @@ sequenceDiagram
 5. **核验交付。** 交付前通过 Runner 刷新 PR，核对 provider、仓库、原 Run、工作区/会话、base/head 分支、PR URL/number、merged、MergeCommit/MergedAt 和本次查询时间。SQLite 事务再次核对 Task/图/候选版本、契约和参与资格，然后提交唯一交付、Task closed、图修订及候选停止义务。事务外查询与事务内重核防范的是不同窗口。
 6. **交付后收尾。** 任一合格候选即可交付，不等待兄弟候选都变成确定状态，也不要求先达到 `pr_ready`。交付后的停止或清理失败保留诊断，不撤销已经成立的 Delivery。Task closed 后不再轮询该任务候选的 PR；其他原停止义务仍要完成对账。
 
-核心接线为 [taskrunner/service.go](../../internal/taskrunner/service.go)、[runnerbridge/bridge.go](../../internal/runnerbridge/bridge.go) 和 [SQLite 交付事务](../../internal/storage/sqlite/runner_result.go)。完整契约与异常规则分别见[数据模型](../product-design/data-model.md)、[Runner 协作](../spec/runner-collaboration.spec.md)及 [W17–W18](../product-design/worker-lifecycle.md#报告发布与收尾阶段)。
+核心接线为 [taskrunner/service.go](../../internal/taskrunner/service.go)、[runnerbridge/bridge.go](../../internal/runnerbridge/bridge.go) 和 [SQLite 交付事务](../../internal/storage/sqlite/runner_result.go)。完整契约与异常规则分别见[数据模型](../product-design/data-model.md)、[Runner 协作](../../SteerlineFlow/spec/runner-collaboration.spec.md)及 [W17–W18](../product-design/worker-lifecycle.md#报告发布与收尾阶段)。
 
 ## 身份与回执各自证明什么
 
@@ -113,7 +113,7 @@ sequenceDiagram
 
 运行内原请求投递与重启后的 observe-only 是有意区别，不能笼统归为“所有 unknown 都无限重试”或“所有 unknown 都永不再投递”。具体实现见 [Bridge.Step / RecoverInputs / deliver](../../internal/runnerbridge/bridge.go)。
 
-调用方不自动补发旧输入，也不表示 Runner 必须停住所有已授权工作。Runner 按原持久 Allowed/ResumeRequired/PendingStop 等事实对账，只在既有授权允许且能够证明尚未发送时继续后继；paused、人工等待、业务阻断和 stop 保持各自含义。SteerLine 不因重建运行时而生成新授权。该边界由[兼容接管契约](../spec/service-generation-recovery.spec.md)和 Worker 规则维护。
+调用方不自动补发旧输入，也不表示 Runner 必须停住所有已授权工作。Runner 按原持久 Allowed/ResumeRequired/PendingStop 等事实对账，只在既有授权允许且能够证明尚未发送时继续后继；paused、人工等待、业务阻断和 stop 保持各自含义。SteerLine 不因重建运行时而生成新授权。该边界由[兼容接管契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md)和 Worker 规则维护。
 
 ### 服务与发布运维
 
@@ -304,7 +304,7 @@ SteerLine 与 Runner 各自持久化原请求是跨权威边界的必要安排�
 
 ### 先消除文档里的重复规则
 
-审计时资料有实质性的历史覆盖：协作 Spec 的早期 4.2 段写换 Runner 必须全资源结算和新环境，而后来的[兼容接管契约](../spec/service-generation-recovery.spec.md)及实现已支持经证明的原状态接管；worker lifecycle 也保留了“各项目独立 Runner 目录”的旧段落和后来的 home 共享 Runner 说明；部分反馈设计仍描述迁出前的中心 Decision/Operation 与 TUI。
+审计时资料有实质性的历史覆盖：协作 Spec 的早期 4.2 段写换 Runner 必须全资源结算和新环境，而后来的[兼容接管契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md)及实现已支持经证明的原状态接管；worker lifecycle 也保留了“各项目独立 Runner 目录”的旧段落和后来的 home 共享 Runner 说明；部分反馈设计仍描述迁出前的中心 Decision/Operation 与 TUI。
 
 本批已收口协作 Spec 4.2 和 worker lifecycle 的上述换构建/目录规则；迁出前中心/TUI 等更大范围历史正文仍待专门整理。这些文字不意味着代码同时执行了两套流程，却增加理解、实现和恢复操作的负担。建议长期设计直接写当前规则，删除被取代的重复要求，将必要历史说明留给各自验收/归档。本文通过指向源码和较新契约说明当前链路，相关历史正文的全面收口仍需专门完成，避免只增加更多“补充说明”。
 
@@ -366,9 +366,9 @@ SteerLine 与 Runner 各自持久化原请求是跨权威边界的必要安排�
 | 身份、事务和格式 | [数据模型](../product-design/data-model.md)、[runnerstate](../../internal/runnerstate) |
 | 候选冻结、投递与原请求恢复 | [taskrunner](../../internal/taskrunner/service.go)、[runnerbridge](../../internal/runnerbridge/bridge.go)、[候选事务](../../internal/storage/sqlite/runner_candidates.go) |
 | PR 刷新、唯一交付及停止义务 | [交付事务](../../internal/storage/sqlite/runner_result.go)、[TaskDelivery 校验](../../internal/task/model/task_delivery_validation.go) |
-| 实例、构建及接管 | [runnerclient](../../internal/runnerclient/client.go)、[runnerbinding](../../internal/runnerbinding/takeover.go)、[兼容接管契约](../spec/service-generation-recovery.spec.md) |
+| 实例、构建及接管 | [runnerclient](../../internal/runnerclient/client.go)、[runnerbinding](../../internal/runnerbinding/takeover.go)、[兼容接管契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md) |
 | 启停、离线与中断恢复 | [application_start](../../internal/app/application_start.go)、[verify-stop/restart](../../internal/app/application_verify_stop.go)、[deployment recovery](../../internal/app/deployment_recovery.go) |
-| 部署脚本、当前操作与实测范围 | [build-deploy](../../scripts/build-deploy.ps1)、[安装部署](../integration/install-deploy.md)、[中断恢复验收](../acceptance/deployment-interrupted-recovery.md) |
+| 部署脚本、当前操作与实测范围 | [build-deploy](../../scripts/build-deploy.ps1)、[安装部署](../integration/install-deploy.md)、[中断恢复验收](../../SteerlineFlow/testing/acceptance/deployment-interrupted-recovery.md) |
 | 辅助执行及 reset | [环境检查](../../internal/environmentcheck/service.go)、[测试生成](../../internal/testmanagement/generation.go)、[调试包 reset](../../tests/e2e/internal/driver/debug_reset.go) |
 
 现有验证范围按各专属验收判断；本文的源码分析与简化建议不扩大本机或 Orca 原生资格，也不把部署回执、测试报告或人工验收互相替代。

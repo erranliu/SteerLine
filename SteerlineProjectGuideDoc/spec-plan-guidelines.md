@@ -6,7 +6,7 @@ Spec 定义成果、边界与通过条件，Plan 安排实施与验证；具体�
 
 编写时按内容读取并遵循：
 
-- 验证需求、Plan 的测试计划及执行入口：[测试指南](../docs/testing.md)。
-- 验收规划、专属文档及结果登记：[验收流程](../docs/acceptance/README.md)。
-- roadmap 任务的草稿、身份与执行安排：[RoadmapGuide](../docs/roadmap/RoadmapGuide.md) 及其必需文档。
+- 验证需求、Plan 的测试计划及执行入口：[测试指南](../SteerlineFlow/testing.md)。
+- 验收规划、专属文档及结果登记：[验收流程](../SteerlineFlow/testing/acceptance/README.md)。
+- roadmap 任务的草稿、身份与执行安排：[RoadmapGuide](../SteerlineFlow/Roadmap/RoadmapGuide.md) 及其必需文档。
 - worker 流程、异常、重试或恢复设计：[worker 生命周期](../docs/product-design/worker-lifecycle.md)，链接统一规则并说明本次差异。

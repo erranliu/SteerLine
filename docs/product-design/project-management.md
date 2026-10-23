@@ -2,13 +2,13 @@
 
 2026-10-20 后续设计衔接：[项目基线与材料维护](project-maintenance.md)统一初始化准备、基线更新与局部更新的快照/材料评估，提供远端观察提示、单项生成及显式应用。该批已实现共用材料维护；不实现产品 Git pull、完整 PS 核验或预纳管候选库。项目添加复用公共读取/规则并补齐 PS-01–PS-07、候选记录、确认登记和原生建库，不另造生成运行时；复制外部 Codex 提示词仍可使用，不授权产品启动模型。完整添加 UI 与已配置项目维护之间无循环前置。
 
-状态：2026-10-15 原规划先确认整体方案；随后用户直接授权实现先行的独立 Web 与已有配置项目切换，当前结果见[专属验收](../acceptance/web-project-switch.md)。添加、结构核验与纳管仍为后置设计，没有执行准备提示词或修改安装环境。本文是项目切换、添加和纳管职责的设计入口；[结构核验](project-structure.md)维护仓库要求，[Codex 准备提示词](project-onboarding-prompt.md)供用户复制执行。后置添加能力不表示已经交付。
+状态：2026-10-15 原规划先确认整体方案；随后用户直接授权实现先行的独立 Web 与已有配置项目切换，当前结果见[专属验收](../../SteerlineFlow/testing/acceptance/web-project-switch.md)。添加、结构核验与纳管仍为后置设计，没有执行准备提示词或修改安装环境。本文是项目切换、添加和纳管职责的设计入口；[结构核验](project-structure.md)维护仓库要求，[Codex 准备提示词](project-onboarding-prompt.md)供用户复制执行。后置添加能力不表示已经交付。
 
-用户随后明确分批：[独立 Web 与已有项目切换 Spec](../spec/web-project-switch.spec.md)/[Plan](../spec/web-project-switch.plan.md)先行，继续只读展示 etc 中的已配置项目，不引入结构门槛；[项目添加 Spec](../spec/project-onboarding.spec.md)/[Plan](../spec/project-onboarding.plan.md)后置，才落实下文的准备、核验、登记、初始化准入。两个批次独立验收；先行批次不依赖后置批次，也不把已配置项目标成结构已通过。
+用户随后明确分批：[独立 Web 与已有项目切换 Spec](../../SteerlineFlow/spec/web-project-switch.spec.md)/[Plan](../../SteerlineFlow/plans/web-project-switch.plan.md)先行，继续只读展示 etc 中的已配置项目，不引入结构门槛；[项目添加 Spec](../../SteerlineFlow/spec/project-onboarding.spec.md)/[Plan](../../SteerlineFlow/plans/project-onboarding.plan.md)后置，才落实下文的准备、核验、登记、初始化准入。两个批次独立验收；先行批次不依赖后置批次，也不把已配置项目标成结构已通过。
 
 ## 确认的产品方向
 
-2026-10-15 的[统一启动 Spec](../spec/unified-startup.spec.md)/[Plan](../spec/unified-startup.plan.md)已按授权实施：一个 start.bat 启动多项目后端与独立 Web，项目服务改为后端内运行时，不支持产品 TUI。Web 重启隔离继续保留，后端停止覆盖全部项目；自动验收通过，桌面体验待人工验收，见[专属记录](../acceptance/unified-startup.md)。项目添加仍后置，消费同一宿主及应用 v2，登记本身不自动启动项目/派发任务。
+2026-10-15 的[统一启动 Spec](../../SteerlineFlow/spec/unified-startup.spec.md)/[Plan](../../SteerlineFlow/plans/unified-startup.plan.md)已按授权实施：一个 start.bat 启动多项目后端与独立 Web，项目服务改为后端内运行时，不支持产品 TUI。Web 重启隔离继续保留，后端停止覆盖全部项目；自动验收通过，桌面体验待人工验收，见[专属记录](../../SteerlineFlow/testing/acceptance/unified-startup.md)。项目添加仍后置，消费同一宿主及应用 v2，登记本身不自动启动项目/派发任务。
 
 - 主界面始终围绕一个当前项目：其 DAG、任务、候选、问题、文档和设置。项目切换器放在当前项目名称处，支持搜索、最近使用和进入“添加项目”。不把默认首页改成跨项目任务大盘。
 - Web 采用一个稳定本机地址；项目写在页面 URL 和请求目标中，不为每个项目分配浏览器端口。每个标签页可以选择不同项目。
@@ -26,7 +26,7 @@
 | [web/server/server.go](../../web/server/server.go)、[application_service.go](../../internal/app/application_service.go) | 已拆出独立 Web；应用服务提供配置目录及按项目转接 | 后续添加复用该 Go 应用入口，不重建网关 |
 | [native_project_open.go](../../internal/app/native_project_open.go)、[service_admission.go](../../internal/app/service_admission.go) | 启动及部分命令入口可以初始化原生项目数据库；没有本文规定的文档结构门槛 | 复用原初始化/身份/事务能力，但在所有初始化入口之前增加统一纳管准入 |
 | [service_preflight.go](../../internal/app/service_preflight.go)、[native_state_preflight.go](../../internal/app/host/native_state_preflight.go) | 已有仓库、发布目标、执行环境、状态位置及格式核验 | 复用具体检查；区分项目结构、纳管参数与执行环境，不把会触碰执行环境的完整启动检查当成结构检查 |
-| [早期 planning-ui 设计](../archive/design/planning-ui.md#长期技术文档与结构约定) | 原型约定架构、并行开发、测试、Spec/Plan 规范及设计目录 | 本方案把角色与结构要求集中到结构核验文档；原型已归档，仅作历史交互参考 |
+| [早期 planning-ui 设计](../../SteerlineFlow/archive/design/planning-ui.md#长期技术文档与结构约定) | 原型约定架构、并行开发、测试、Spec/Plan 规范及设计目录 | 本方案把角色与结构要求集中到结构核验文档；原型已归档，仅作历史交互参考 |
 | [task/model/contract.go](../../internal/task/model/contract.go)、[task/documents.go](../../internal/task/documents.go) | 创建任务核验固定 Spec/Plan、验收引用、Git commit 与摘要 | 保留，添加项目不生成假任务或绕过任务准入 |
 
 当前没有已实现的“复制准备提示词 → 服务核验 → 纳管”完整入口。本文落实用户希望采用的流程，不把原型、人工配置或既有 preflight 描述成已具备该功能。
@@ -101,4 +101,4 @@ Web 只连接应用级 API。Go 应用服务负责项目目录、仓库身份、
 
 本方案选择“本机已有 Git 仓库 + 外部 Codex 文档准备 + 服务结构核验 + 明确纳管”。不提供自动创建远端仓库、自动安装工具、由 Web 调度 Codex 准备、自动推送或自动合并。执行环境/账户是否就绪与项目纳管分开显示；Orca 登记只属于选择相应执行方案时的就绪条件，不是所有项目的结构门槛。
 
-两个批次的实施接线、能力补齐和最小测试安排归各自 Spec/Plan，结果分别登记 [Web 切换验收](../acceptance/web-project-switch.md)及[项目添加验收](../acceptance/project-onboarding.md)。本轮只做文档静态核对，不把这些未来能力登记成已验收，也不加入 roadmap 执行清单。
+两个批次的实施接线、能力补齐和最小测试安排归各自 Spec/Plan，结果分别登记 [Web 切换验收](../../SteerlineFlow/testing/acceptance/web-project-switch.md)及[项目添加验收](../../SteerlineFlow/testing/acceptance/project-onboarding.md)。本轮只做文档静态核对，不把这些未来能力登记成已验收，也不加入 roadmap 执行清单。

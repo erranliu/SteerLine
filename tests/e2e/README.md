@@ -1,10 +1,10 @@
 # SteerLine E2E
 
-SteerLine 验证调用方与产品闭环，Runner 的原生执行、恢复和协议故障矩阵由 SteerRunner 维护。统一分层见 [测试架构](../../SteerlineProjectGuideDoc/testing-architecture.md)，日常入口见 [测试指南](../../docs/testing.md)。
+SteerLine 验证调用方与产品闭环，Runner 的原生执行、恢复和协议故障矩阵由 SteerRunner 维护。统一分层见 [测试架构](../../SteerlineProjectGuideDoc/testing-architecture.md)，日常入口见 [测试指南](../../SteerlineFlow/testing.md)。
 
 ## 登记与清单
 
-[suites.json](suites.json)登记 E2E ID、级别、suite、package、test、env 及适用 chain；当前 L2 为单一受控冒烟，L3 仅资源隔离的受控功能，真实链及共享构建目录场景归 L4。完整内容只在 [L2](../../docs/testing/l2.md)、[L3](../../docs/testing/l3.md)、[L4](../../docs/testing/l4.md)维护，并与 [JSON](../../docs/testing/test-list.json)同步。
+[suites.json](suites.json)登记 E2E ID、级别、suite、package、test、env 及适用 chain；当前 L2 为单一受控冒烟，L3 仅资源隔离的受控功能，真实链及共享构建目录场景归 L4。完整内容只在 [L2](../../SteerlineFlow/testing/l2.md)、[L3](../../SteerlineFlow/testing/l3.md)、[L4](../../SteerlineFlow/testing/l4.md)维护，并与 [JSON](../../SteerlineFlow/testing/test-list.json)同步。
 
 ## 执行
 
@@ -30,6 +30,6 @@ Windows/amd64、Go/Git、已登录本机 Codex、固定独立 Runner EXE。交�
 
 ## 证据与扩展
 
-输出到全新 `-out` 目录：summary、原 JSONL、冻结构建摘要及 `scenarios/<id>/scenario.json`。执行器核对实际非零命中、用例终态、选择、必要 proof 和清理；缺失、跳过、超时或自然语言成功均不能代替通过。失败保留现场与诊断，不自动重试。受管报告与登记见 [报告约定](../../docs/testing/reports.md)。
+输出到全新 `-out` 目录：summary、原 JSONL、冻结构建摘要及 `scenarios/<id>/scenario.json`。执行器核对实际非零命中、用例终态、选择、必要 proof 和清理；缺失、跳过、超时或自然语言成功均不能代替通过。失败保留现场与诊断，不自动重试。受管报告与登记见 [报告约定](../../SteerlineFlow/testing/reports.md)。
 
 新增、改级、改环境或改变主要断言时，同步实现、manifest、分级列表、JSON 和选择/并行/证据校验。各场景说明独有覆盖和清理所有权；L3 不共享可变产物，无顺序依赖。测试只消费依赖公开边界，不在调用方重建 Runner 内部流程。历史 Spec/Plan/验收按冻结定义读取，当前命令以本指南和分级清单为准。

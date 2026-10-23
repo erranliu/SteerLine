@@ -10,7 +10,7 @@ $beforeCommit=(& git rev-parse HEAD).Trim()
 $beforeStatus= & git status --porcelain --untracked-files=all
 $beforeClean=$LASTEXITCODE -eq 0 -and -not $beforeStatus
 New-Item -ItemType Directory -Path $Out -Force | Out-Null
-$catalog=Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $PSScriptRoot 'docs/testing/test-list.json') | ConvertFrom-Json
+$catalog=Get-Content -Raw -Encoding utf8 -LiteralPath (Join-Path $PSScriptRoot 'SteerlineFlow/testing/test-list.json') | ConvertFrom-Json
 $definition=$catalog.tests | Where-Object {$_.id -eq 'fixture.marker'}
 $ordered=[ordered]@{id=$definition.id;name=$definition.name;level=$definition.level;environment=$definition.environment;command=$definition.command;check=$definition.check}
 $bytes=[Text.Encoding]::UTF8.GetBytes(($ordered | ConvertTo-Json -Compress))

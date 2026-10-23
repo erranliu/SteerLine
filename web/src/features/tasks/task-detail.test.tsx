@@ -137,7 +137,7 @@ function setup({
         version: 2,
         status: firstStart ? "open" : "in_progress",
         dependency_ready: true,
-        spec_path: "docs/spec/task.md",
+        spec_path: "SteerlineFlow/spec/task.md",
         startup_blockers: [],
         predecessors: [],
         successors: [],

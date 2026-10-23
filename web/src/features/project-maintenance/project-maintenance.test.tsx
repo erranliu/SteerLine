@@ -10,7 +10,7 @@ function setup(overrides:Partial<MaintenanceView>={},online=true){
  const view:MaintenanceView={observation:{commit:sha,last_success:"2026-10-21T01:00:00Z"},remote_name:"origin/main",
  remote:{sha,title:"Update Plan",author:"Developer",time:"2026-10-21T00:00:00Z",url:"https://github.com/example/repo/commit/"+sha,prs:[]},
  local:{commit:"b".repeat(40),branch:"main",status:"behind",ahead:0,behind:2,can_update:true},
- tasks:[{task_id:"101",contract:{plan_ref:{path:"docs/task.plan.md"}},status:"ready",generation_id:"generation"}],profiles:[{id:"local",name:"本机Codex"}],profile:"",...overrides};
+ tasks:[{task_id:"101",contract:{plan_ref:{path:"SteerlineFlow/plans/task.plan.md"}},status:"ready",generation_id:"generation"}],profiles:[{id:"local",name:"本机Codex"}],profile:"",...overrides};
  const api=new Api(identity,"csrf");
  const get=vi.spyOn(api,"get").mockImplementation(async(route)=>{
   if(route.startsWith("/maintenance/log"))return {commits:[view.remote],more:false} as never;
@@ -51,7 +51,7 @@ it("PMS lets users browse log and real associated PR without mutation",async()=>
  expect(submit).not.toHaveBeenCalled();
 });
 it("PMS exposes configuration and explicit failed retry only on problems",async()=>{
- const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"docs/task.plan.md"}},status:"configuration_required",generation_id:""}]});
+ const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"SteerlineFlow/plans/task.plan.md"}},status:"configuration_required",generation_id:""}]});
  fireEvent.click(await screen.findByRole("button",{name:/项目维护/}));
  fireEvent.change(await screen.findByRole("combobox",{name:"测试生成方案"}),{target:{value:"local"}});
  fireEvent.click(screen.getByRole("button",{name:"保存测试生成方案"}));
@@ -66,7 +66,7 @@ it("PMS offline view retains facts and does not submit or check automatically",a
 });
 
 it("GQ keeps progress in the collapsed title and submits one bulk command",async()=>{
- const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"docs/task.plan.md"}},status:"accepted",generation_id:"generation"}],generation_progress:{id:"batch",total:9,succeeded:8,running:1,queued:0,failed:0,blocked:0}});
+ const {submit}=setup({tasks:[{task_id:"101",contract:{plan_ref:{path:"SteerlineFlow/plans/task.plan.md"}},status:"accepted",generation_id:"generation"}],generation_progress:{id:"batch",total:9,succeeded:8,running:1,queued:0,failed:0,blocked:0}});
  expect(await screen.findByText("8/9 生成中")).toBeVisible();
  const toggle=screen.getByRole("button",{name:/项目维护/});
  expect(toggle).toHaveAttribute("aria-expanded","false");

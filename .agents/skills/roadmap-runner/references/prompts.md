@@ -8,7 +8,7 @@ roadmap只绑定用户确认的execution-map。协调者先按[来源与资格](
 
 工具参数：`model: "gpt-6-luna"`、`thinking: "xhigh"`；项目托管 worktree，从默认主干创建。
 
-> 执行正式 execution-map `{roadmap}` 中已核对前置的任务 `{task_id}`。先读工作区 AGENTS.md、共同约束 `{constraints}`、Spec `{spec}` 和 Plan `{plan}`（固定文档 commit `{document_commit}`，按该 commit 读取），按其范围实现，逐项完成Plan映射的自动验收和最小必要回归，在当前任务专属acceptance登记真实结果。完成后自己复查实际 diff 与生产调用路径，修复确认的问题，提交推送并创建针对 `{default_branch}` 的 PR；PR 说明记录最终行为及实际验证，按工具要求关联 PR。不要合并 PR 或启动其他 roadmap 任务。仅余人工补验时在 docs/acceptance/ 登记任务/验收项、原因、步骤和证据位置，保留未验事实，在execution-map同步当前任务的验收汇总/待人工链接，未完整排入的未来节点不加入索引；仅在后续不依赖该少量人工结果且无明确先验要求时后置，不仅因此保持 draft 或请求批准。真实验收失败、功能或前置能力缺失仍诊断并报告，不改称人工补验。最终报告 PR URL、分支、最终 commit、验证结果、人工清单及未解决问题，然后停止写入工作区，等待协调 session 调度独立 subagent 复审；后续冲突、共享主干集成或原需求遗漏优先由本执行 session 处理。
+> 执行正式 execution-map `{roadmap}` 中已核对前置的任务 `{task_id}`。先读工作区 AGENTS.md、共同约束 `{constraints}`、Spec `{spec}` 和 Plan `{plan}`（固定文档 commit `{document_commit}`，按该 commit 读取），按其范围实现，逐项完成Plan映射的自动验收和最小必要回归，在当前任务专属acceptance登记真实结果。完成后自己复查实际 diff 与生产调用路径，修复确认的问题，提交推送并创建针对 `{default_branch}` 的 PR；PR 说明记录最终行为及实际验证，按工具要求关联 PR。不要合并 PR 或启动其他 roadmap 任务。仅余人工补验时在 SteerlineFlow/testing/acceptance/ 登记任务/验收项、原因、步骤和证据位置，保留未验事实，在execution-map同步当前任务的验收汇总/待人工链接，未完整排入的未来节点不加入索引；仅在后续不依赖该少量人工结果且无明确先验要求时后置，不仅因此保持 draft 或请求批准。真实验收失败、功能或前置能力缺失仍诊断并报告，不改称人工补验。最终报告 PR URL、分支、最终 commit、验证结果、人工清单及未解决问题，然后停止写入工作区，等待协调 session 调度独立 subagent 复审；后续冲突、共享主干集成或原需求遗漏优先由本执行 session 处理。
 
 发送前必须核对已有固定Plan。若用户要先规划或补Plan，按规划请求处理，不用本执行模板启动尚不具备执行条件的worker。
 

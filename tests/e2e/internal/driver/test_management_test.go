@@ -14,7 +14,7 @@ import (
 func TestTMFixtureProgramEmitsActualPassAndFailure(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join("..", "..", "..", "..", "debug-template", "projects", "SteerlineTest")
-	for _, p := range []string{"test-marker.ps1", ".gitignore", "docs/testing/test-list.json"} {
+	for _, p := range []string{"test-marker.ps1", ".gitignore", "SteerlineFlow/testing/test-list.json"} {
 		b, e := os.ReadFile(filepath.Join(source, p))
 		if e != nil {
 			t.Fatal(e)
@@ -34,7 +34,7 @@ func TestTMFixtureProgramEmitsActualPassAndFailure(t *testing.T) {
 			t.Fatal(e, string(b))
 		}
 	}
-	raw, _ := os.ReadFile(filepath.Join(root, "docs/testing/test-list.json"))
+	raw, _ := os.ReadFile(filepath.Join(root, "SteerlineFlow/testing/test-list.json"))
 	var catalog testmanagement.Catalogue
 	if e := json.Unmarshal(raw, &catalog); e != nil {
 		t.Fatal(e)
