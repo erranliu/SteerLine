@@ -47,9 +47,6 @@ func (c *commandRegistry) registerRecord(record requestRecord) error {
 func (c *commandRegistry) Submit(ctx context.Context, envelope CommandEnvelope, caller string) (CommandResponse, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if envelope.Action == api.RegisterTestRecord {
-		return c.submitTestRecord(ctx, envelope)
-	}
 	if isEnvironmentCheckAction(envelope.Action) {
 		return c.submitEnvironment(ctx, envelope)
 	}
@@ -178,9 +175,6 @@ func (c *commandRegistry) Read(ctx context.Context, requestID string) (CommandRe
 	if record, err := c.readRecord(requestID); err == nil {
 		original = envelopePtr(record.Envelope)
 		originalRecord = &record
-		if record.Envelope.Action == api.RegisterTestRecord {
-			return c.readTestRegistration(ctx, record.Envelope, &record)
-		}
 		if record.Response != nil {
 			response := record.response()
 			storedResponse = &response

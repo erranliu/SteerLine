@@ -1,17 +1,12 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/app"
-	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -36,7 +31,7 @@ func managedGitValue(args ...string) string {
 
 func observeManagedSource() managedSource {
 	commit := managedGitValue("rev-parse", "HEAD")
-	status, err := exec.Command("git", "status", "--porcelain", "--untracked-files=normal").Output()
+	status, err := exec.Command("git", "status", "--porcelain", "--untracked-files=normal", "--", ".", ":(exclude)"+testmanagement.RecordsPath).Output()
 	return managedSource{commit: commit, clean: err == nil && (len(commit) == 40 || len(commit) == 64) && strings.TrimSpace(string(status)) == ""}
 }
 
@@ -45,7 +40,6 @@ type managedRun struct {
 	definitions                 map[string]testmanagement.Definition
 	environments                map[string]string
 	ids                         map[string]string
-	reruns                      map[string]string
 	repository, branch, command string
 }
 
@@ -88,7 +82,7 @@ func freezeManagedReports(opts options) (*managedRun, error) {
 		}
 	}
 
-	run := &managedRun{started: time.Now().UTC(), definitions: map[string]testmanagement.Definition{}, environments: actualEnvironments, ids: map[string]string{}, reruns: map[string]string{}, repository: managedGitValue("rev-parse", "--path-format=absolute", "--git-common-dir"), branch: managedGitValue("branch", "--show-current"), command: strings.Join(os.Args, " ")}
+	run := &managedRun{started: time.Now().UTC(), definitions: map[string]testmanagement.Definition{}, environments: actualEnvironments, ids: map[string]string{}, repository: managedGitValue("rev-parse", "--path-format=absolute", "--git-common-dir"), branch: managedGitValue("branch", "--show-current"), command: strings.Join(os.Args, " ")}
 	if run.repository == "" {
 		run.repository = root
 	}
@@ -102,18 +96,6 @@ func freezeManagedReports(opts options) (*managedRun, error) {
 		}
 		run.definitions[id] = d
 		run.ids[id] = testmanagement.NewRecordID()
-	}
-	if opts.rerunOf != "" {
-		for _, mapping := range strings.Split(opts.rerunOf, ",") {
-			parts := strings.Split(mapping, "=")
-			if len(parts) != 2 || !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(parts[1]) || run.reruns[parts[0]] != "" {
-				return nil, fmt.Errorf("invalid rerun-of mapping")
-			}
-			if _, ok := run.ids[parts[0]]; !ok {
-				return nil, fmt.Errorf("rerun-of references unselected test")
-			}
-			run.reruns[parts[0]] = parts[1]
-		}
 	}
 	return run, nil
 }
@@ -218,50 +200,12 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 				}
 			}
 		}
-		report := testmanagement.Report{ID: run.ids[id], StartedAt: run.started, FinishedAt: time.Now().UTC(), Definition: d, Command: run.command, Repository: run.repository, Branch: run.branch, RerunOf: run.reruns[id], Evidence: tm.ReportEvidence{Path: "summary.json", Bytes: len(summaryRaw), SHA256: testmanagement.ContentDigest(summaryRaw)}, Sequence: sequence, Selection: []string{id}, Environment: actualEnvironments[id], Definitions: map[string]string{id: testmanagement.Digest(d)}, BeforeCommit: before.commit, AfterCommit: after.commit, BeforeClean: before.clean, AfterClean: after.clean, Results: []testmanagement.Result{{TestID: id, Status: status, Message: message, Log: "summary.json"}}}
+		report := testmanagement.Report{ID: run.ids[id], StartedAt: run.started, FinishedAt: time.Now().UTC(), Definition: d, Command: run.command, Repository: run.repository, Branch: run.branch, Evidence: tm.ReportEvidence{Path: "summary.json", Bytes: len(summaryRaw), SHA256: testmanagement.ContentDigest(summaryRaw)}, Sequence: sequence, Selection: []string{id}, Environment: actualEnvironments[id], Definitions: map[string]string{id: testmanagement.Digest(d)}, BeforeCommit: before.commit, AfterCommit: after.commit, BeforeClean: before.clean, AfterClean: after.clean, Results: []testmanagement.Result{{TestID: id, Status: status, Message: message, Log: "summary.json"}}}
 		if e := testmanagement.WriteRecordJSON(filepath.Join(opts.out, "managed-"+id+".json"), report); e != nil {
 			fmt.Fprintln(os.Stderr, "write registered report:", e)
 		}
 	}
-	if opts.recordProject != "" {
-		registerManagedReports(opts)
-	} else {
-		fmt.Fprintln(os.Stderr, "测试报告已保存；未指定 record-project，尚未登记。")
-	}
-}
-func registerManagedReports(opts options) {
-	items, e := testmanagement.ReadRegistrationDirectory(opts.out)
-	if e != nil {
-		fmt.Fprintln(os.Stderr, e)
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	p, connectErr := app.OpenApplicationProject(ctx, opts.recordProject, "")
-	if p != nil {
-		defer p.Close()
-	}
-	receipts, err := testmanagement.RegisterFiles(opts.out, items, func(in tm.RegisterRecord, requestID string) testmanagement.RegistrationResult {
-		callErr := connectErr
-		var result json.RawMessage
-		if callErr == nil {
-			result, callErr = p.RegisterTestRecord(ctx, api.TestRecordRegistration(in), requestID)
-		}
-		outcome := testmanagement.RegistrationResult{Status: applicationclient.RecordRegistrationStatus(callErr), Result: result}
-		if callErr != nil {
-			outcome.Diagnostic = callErr.Error()
-		}
-		return outcome
-	})
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "测试结果保留，登记未完成：", err)
-		return
-	}
-	for _, receipt := range receipts {
-		if receipt.Status != "registered" {
-			fmt.Fprintln(os.Stderr, "测试结果保留，登记未完成：", receipt.Path, receipt.Diagnostic)
-		}
-	}
+	fmt.Fprintln(os.Stderr, "测试报告已保存；可用 test-feedback record -report-dir <目录> 写入 Git 历史文件。")
 }
 
 func managedReportSequence() uint64 { return uint64(time.Now().UnixNano()) }

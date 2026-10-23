@@ -137,11 +137,11 @@
     },
     {
       "id": "testing.records",
-      "name": "测试集记录与显式复验",
+      "name": "Git 测试历史",
       "level": "L4",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=controlled -scenario=testing.records",
-      "check": "新隔离包中真实小型脚本失败后提交修正并通过，经正式 CLI、SQLite、API 和浏览器展示显式复验；原报告重放无重复，停止和资源清理完整。",
+      "check": "新隔离包中实际小型脚本失败后提交修正并通过，仓库命令按受测 SHA 导出简洁 JSON；主分支合入前不可见、合入后 API/浏览器可读，重复导出不重复、失败保留、删文件移除历史，停止和资源清理完整。",
       "note": "共享源码 web/node_modules 与构建输出，必须串行；需要 Windows、Node/npm、Edge；E2E 入口自建公开 Runner 夹具。"
     },
     {

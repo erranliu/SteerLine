@@ -3,7 +3,7 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Api } from "../../shared/api/client";
 import { identity, mountFeature, testClient } from "../../test/workspace";
 import { Tests } from "./tests";
-import type { RecordDetail, RecordPage, RecordRow } from "./types";
+import type { RecordPage, RecordRow } from "./types";
 
 afterEach(() => {
   cleanup();
@@ -21,107 +21,79 @@ const definition = {
 const failed: RecordRow = {
   id: "a".repeat(32),
   test_id: "rules",
-  name: "规则测试",
   level: "L1",
   environment: "isolated",
   status: "failed",
-  message: "原始断言失败",
-  retest: "passed",
-  retest_source_fixed: false,
-  started_at: "2026-10-21T00:00:00Z",
-  finished_at: "2026-10-21T00:00:01Z",
-  branch: "main",
+  note: "原始断言失败",
+  at: "2026-10-23T00:00:00Z",
   commit: "1".repeat(40),
-  source_fixed: true,
-  partial: false,
-  evidence_status: "available",
-  source: { kind: "script" },
+  path: "SteerlineFlow/testing/records/" + "1".repeat(40) + ".json",
+};
+const passed: RecordRow = {
+  ...failed,
+  id: "b".repeat(32),
+  at: "2026-10-23T01:00:00Z",
+  status: "passed",
+  note: undefined,
 };
 const page: RecordPage = {
-  records: [failed],
+  records: [passed, failed],
   cursor: "",
-  upper: 1,
-  observed_at: failed.started_at,
-  summary: { total: 1, pending: 0, latest: failed },
+  commit: "2".repeat(40),
+  path: "SteerlineFlow/testing/records",
+  observed_at: failed.at,
+  summary: { total: 2, failed: 1, latest: passed, last_passed: passed },
 };
-const detail: RecordDetail = {
-  ...failed,
-  chain: [failed],
-  report: {
-    definition,
-    command: "actual rules",
-    repository: "repo",
-    before_commit: "1".repeat(40),
-    after_commit: "1".repeat(40),
-    before_clean: true,
-    after_clean: true,
-    definitions: { rules: "digest" },
-    results: [],
-  },
-};
-function setup(online = true, source = detail.source) {
+function setup(online = true, bad = false) {
   const api = new Api(identity, "csrf", "home");
   const get = vi.spyOn(api, "get").mockImplementation(async (path) => {
     if (path === "/tests/catalogue")
       return {
         tests: [definition],
-        commit: "commit",
+        commit: page.commit,
         path: "test-list.json",
-        observed_at: failed.started_at,
+        observed_at: failed.at,
       };
-    if (path.includes("/evidence"))
-      return {
-        id: failed.id,
-        status: "unavailable",
-        diagnostic: "文件缺失",
-        path: "summary.json",
-        sha256: "sha",
-        text: "",
-      };
-    if (path.startsWith("/tests/records?")) return page;
-    return { ...detail, source };
+    if (path.startsWith("/tests/records?")) {
+      if (bad) throw new Error("invalid Git JSON");
+      return page;
+    }
+    return failed;
   });
   const post = vi.spyOn(api, "submit");
   mountFeature(<Tests />, api, testClient(), online);
-  return { api, get, post };
+  return { get, post };
 }
-it("TR preserves the original failure, marks unfixed retest source, and reads evidence on demand", async () => {
+it("TR displays original Git failure and subsequent pass without retest or evidence writes", async () => {
   const { get, post } = setup();
-  await screen.findByRole("button", { name: /失败.*复验通过/ });
-  expect(screen.getByText(/复验源码未固定/)).toBeVisible();
+  await screen.findByRole("button", { name: /失败.*原始断言失败/ });
+  expect(screen.getByRole("button", { name: /通过/ })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: /失败.*原始断言失败/ }));
+  expect(await screen.findByText("受测 SHA：" + failed.commit)).toBeVisible();
+  expect(screen.getByText("Git 文件：" + failed.path)).toBeVisible();
+  expect(screen.queryByText(/复验通过/)).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: /执行测试|重跑|查看证据/ }),
+  ).toBeNull();
   expect(get.mock.calls.some(([path]) => path.endsWith("/evidence"))).toBe(
     false,
   );
-  fireEvent.click(screen.getByRole("button", { name: /失败.*复验通过/ }));
-  await screen.findByText("原始断言失败");
-  fireEvent.click(screen.getByRole("button", { name: "查看证据摘要" }));
-  expect(await screen.findByText(/证据不可用：文件缺失/)).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "刷新记录" }));
-  await waitFor(() =>
-    expect(
-      get.mock.calls.filter(([path]) => path.endsWith("/evidence")).length,
-    ).toBe(2),
-  );
-  expect(screen.queryByRole("link", { name: "查看来源候选" })).toBeNull();
-  expect(
-    screen.queryByRole("button", { name: /执行测试|运行测试|重跑/ }),
-  ).toBeNull();
   expect(post).not.toHaveBeenCalled();
 });
-it("TR filters through the API and switches to the frozen definition without execution", async () => {
+it("TR filters Git history and shows the current catalogue definition", async () => {
   const { get, post } = setup();
-  await screen.findByRole("button", { name: /失败.*复验通过/ });
+  await screen.findByRole("button", { name: /失败.*原始断言失败/ });
   fireEvent.change(screen.getByLabelText("原始结果"), {
     target: { value: "failed" },
   });
-  fireEvent.change(screen.getByLabelText("分支 / SHA"), {
-    target: { value: "main" },
+  fireEvent.change(screen.getByLabelText("受测 SHA"), {
+    target: { value: "abc" },
   });
   await waitFor(() =>
     expect(
       get.mock.calls.some(
         ([path]) =>
-          path.includes("outcome=failed") && path.includes("source=main"),
+          path.includes("outcome=failed") && path.includes("source=abc"),
       ),
     ).toBe(true),
   );
@@ -129,26 +101,18 @@ it("TR filters through the API and switches to the frozen definition without exe
   expect(screen.getByText("test rules")).toBeVisible();
   expect(post).not.toHaveBeenCalled();
 });
-it("TR does not query while offline or initially hidden", async () => {
+it("TR keeps bad Git JSON distinct from an empty history", async () => {
+  setup(true, true);
+  expect(
+    await screen.findByText(/记录查询失败.*invalid Git JSON/),
+  ).toBeVisible();
+  expect(screen.queryByText("尚无执行记录")).toBeNull();
+});
+it("TR stops queries offline and when hidden", () => {
   const offline = setup(false);
   expect(screen.getByText(/离线 · 以下为最后观察/)).toBeVisible();
   expect(offline.get).not.toHaveBeenCalled();
   cleanup();
   vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
   expect(setup().get).not.toHaveBeenCalled();
-});
-
-it("TR links only verified Runner origin to the product candidate", async () => {
-  setup(true, {
-    kind: "runner",
-    task_id: "task",
-    candidate_id: "candidate",
-    run_id: "runner-run",
-  });
-  fireEvent.click(
-    await screen.findByRole("button", { name: /失败.*复验通过/ }),
-  );
-  expect(
-    await screen.findByRole("link", { name: "查看来源候选" }),
-  ).toHaveAttribute("href", "/projects/project/runs?task=task&run=candidate");
 });
