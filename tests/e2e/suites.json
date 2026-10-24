@@ -121,5 +121,13 @@
     "package": "./tests/e2e/suites/testing",
     "test": "TestRecords",
     "env": "controlled"
+  },
+  {
+    "id": "testing.runtime-progress",
+    "level": "L3",
+    "suite": "testing",
+    "package": "./tests/e2e/suites/testing",
+    "test": "TestRuntimeProgress",
+    "env": "controlled"
   }
 ]

@@ -197,6 +197,8 @@ func RunRunnerServiceFixture() bool {
 func RunnerServiceCapabilities(version string) map[string]any {
 	digest := strings.Repeat("a", 64)
 	return map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
+		"progress_file":         map[string]any{"contract": "steerrunner-progress-file/v1", "command": "progress-file --run-id R --json", "submit_property": "progress_file", "environment_variable": "STEERLINE_PROGRESS_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256"},
+		"progress_file_schema":  map[string]any{"$id": "steerrunner-progress-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-progress-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"type": "string"}}},
 		"native_session_viewer": map[string]any{"adapters": []string{"codex-app-server"}},
 		"instance_binding":      map[string]bool{"expected_instance_id": true},
 		"workflows":             []any{map[string]any{"id": "development", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"implement.execute", "implement.report", "publish", "publish.report"}, "states": map[string]any{"implement.execute": map[string]any{"kind": "execute", "contract": "implementation", "prompt_key": "implement.execute", "prompt": "Fixture implementation instruction."}}}},

@@ -27,8 +27,8 @@ SteerLine 历史页面只读取已核实主分支 commit 中的 records 目录�
 
 原 tests register、record-project/rerun-of、登记回执、数据库历史和 Runner 历史投影已删除，不兼容旧数据。
 
-## 候选证据
+## 候选运行时进度
 
-候选 PlanTests 继续消费原始 managed 报告及 Runner 公开 artifacts，按原 Run、输入、固定定义、Git 和清理事实核验；简洁历史不替代候选证明。生产者在开始前冻结 ID、时间、定义、选择、命令及仓库；结束后补结果、源码观察和 summary 字节长度/SHA256。定义摘要仍按原规范化 Definition JSON 计算，不散列清单排版。
+候选消费冻结提示中的安排和真实 worktree 文档。运行时进度使用 Runner 绑定的 `STEERLINE_PROGRESS_FILE`，字段为 `test.<test_id>`；开始或重跑清零，完整通过才写 true。入口使用正式写入逻辑，加锁合并并原子替换；失败、跳过、零匹配或清理未核实均未完成。普通 L1–L4 入口的原始日志和报告仍保留。
 
-系统自动安排仍读取固定版本 Plan、[测试指南](../testing.md) 和 test-list.json；无自动测试时 Plan 必须明确原因。运行内证据位于项目忽略的 `.steerrunner/artifacts/<唯一执行ID>/` 新目录；候选旧证据规则及公开收集所有权不变。实际结果仍写任务专属[验收记录](acceptance/README.md)。
+候选查询通过公开 progress-file 接口核验原 Run、版本、长度和 SHA256，保留最后有效快照；断连或无效 JSON 单独显示诊断。候选不再收集 managed/summary，不调用 R2 或 workspace-git，也不从进度生成详细历史。独立测试历史沿前述 Git JSON 导出和主分支只读机制，详见[运行时进度](../../docs/integration/runtime-progress.md)。

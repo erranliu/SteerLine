@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
@@ -82,63 +83,18 @@ func parseReport(raw []byte) (Report, error) {
 
 type Row struct {
 	Definition
-	Status  string   `json:"status"`
-	Message string   `json:"message,omitempty"`
-	Log     string   `json:"log,omitempty"`
-	History []Result `json:"history"`
+	Status string `json:"status"`
 }
 type View struct {
-	Commit     string `json:"commit"`
-	Status     string `json:"status"`
-	Diagnostic string `json:"diagnostic,omitempty"`
-	PlanPath   string `json:"plan_path"`
-	Total      int    `json:"total"`
-	Passed     int    `json:"passed"`
-	Failed     int    `json:"failed"`
-	Pending    int    `json:"pending"`
-	Rows       []Row  `json:"rows"`
-}
-
-func Project(s Snapshot, reports []Report, commit string, clean, verified bool) View {
-	v := View{Commit: s.Commit, Status: s.Status, Diagnostic: s.Diagnostic, PlanPath: s.PlanPath, Rows: []Row{}}
-	if s.Status != "ready" {
-		return v
-	}
-	for _, d := range s.Definitions {
-		row := Row{Definition: d, Status: "pending", History: []Result{}}
-		var latest *Report
-		var item Result
-		for i := range reports {
-			r := &reports[i]
-			for _, result := range r.Results {
-				if result.TestID != d.ID {
-					continue
-				}
-				row.History = append(row.History, result)
-				if latest == nil || r.Sequence > latest.Sequence {
-					latest, item = r, result
-				}
-			}
-		}
-		if latest != nil {
-			row.Message, row.Log = item.Message, item.Log
-			if verified && clean && commit != "" && latest.BeforeClean && latest.AfterClean && latest.BeforeCommit == commit && latest.AfterCommit == commit && latest.Definitions[d.ID] == Digest(d) && latest.Environment == d.Environment {
-				row.Status = item.Status
-			} else {
-				row.Status = "stale"
-				row.Message = "代码、定义、环境或当前来源不匹配，待复验"
-			}
-		}
-		v.Total++
-		switch row.Status {
-		case "passed":
-			v.Passed++
-		case "failed":
-			v.Failed++
-		default:
-			v.Pending++
-		}
-		v.Rows = append(v.Rows, row)
-	}
-	return v
+	ProgressVersion  uint64     `json:"progress_version"`
+	ObservedAt       *time.Time `json:"observed_at,omitempty"`
+	CollectionStatus string     `json:"collection_status,omitempty"`
+	Commit           string     `json:"commit"`
+	Status           string     `json:"status"`
+	Diagnostic       string     `json:"diagnostic,omitempty"`
+	PlanPath         string     `json:"plan_path"`
+	Total            int        `json:"total"`
+	Passed           int        `json:"passed"`
+	Pending          int        `json:"pending"`
+	Rows             []Row      `json:"rows"`
 }

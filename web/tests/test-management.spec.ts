@@ -17,11 +17,11 @@ test("testing.management-local-codex: original API results appear in executions"
   await page.goto(new URL(`/projects/${project}/runs?task=${process.env.STEERLINE_TM_TASK}&run=${process.env.STEERLINE_TM_CANDIDATE}`,page.url()).href);
   const section = page.getByRole("region",{name:"计划测试"});
   const failed = process.env.STEERLINE_TM_PHASE === "fail";
-  await expect(section).toContainText(failed ? "共 1 项 · 通过 0 · 失败 1 · 待验证 0" : "共 1 项 · 通过 1 · 失败 0 · 待验证 0");
-  await section.getByText(`Fixture marker · L1 / isolated · ${failed ? "失败" : "通过"}`, {exact:true}).click();
+  await expect(section).toContainText(failed ? "共 1 项 · 已通过 0 · 未完成 1" : "共 1 项 · 已通过 1 · 未完成 0");
+  await section.getByText(`Fixture marker · L1 / isolated · ${failed ? "未完成" : "通过"}`, {exact:true}).click();
   await expect(section).toContainText("fixture.marker");
-  await expect(section).toContainText("证据引用：");
-  await expect(section).toContainText("SHA256");
-  await expect(section).toContainText(failed ? "历史结果（2）" : "历史结果（1）");
+  await expect(section).toContainText("进度版本");
+  await expect(section).not.toContainText("证据引用：");
+  await expect(section).not.toContainText("历史结果（");
   await page.screenshot({path:testInfo.outputPath("execution-tests.png"),fullPage:true});
 });

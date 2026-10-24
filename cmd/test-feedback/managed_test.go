@@ -32,13 +32,29 @@ func TestTMManagedResultsPreserveFailureAndNoMatch(t *testing.T) {
 				summary.Groups[0].Summary.Tests = append(summary.Groups[0].Summary.Tests, feedback.Test{})
 			}
 			_ = writeJSON(filepath.Join(out, "summary.json"), summary)
+			progress := filepath.Join(t.TempDir(), "progress.bin")
+			t.Setenv("STEERLINE_PROGRESS_FILE", progress)
+			if err := os.WriteFile(progress, []byte(`{"test.l1.minimum":true,"plan.design":true}`), 0600); err != nil {
+				t.Fatal(err)
+			}
 			opts := options{level: "L1", out: out}
 			frozen, freezeErr := freezeManagedReports(opts)
 			if freezeErr != nil {
 				t.Fatal(freezeErr)
 			}
+			reset, _ := os.ReadFile(progress)
+			var progressFields map[string]bool
+			_ = json.Unmarshal(reset, &progressFields)
+			if progressFields["test.l1.minimum"] {
+				t.Fatal("rerun did not reset previous pass")
+			}
 			opts.managed = frozen
 			writeManagedReports(opts, managedSource{}, 1)
+			progressRaw, _ := os.ReadFile(progress)
+			_ = json.Unmarshal(progressRaw, &progressFields)
+			if progressFields["test.l1.minimum"] != (tt.want == "passed") || !progressFields["plan.design"] {
+				t.Fatal("progress differs from actual result", string(progressRaw))
+			}
 			body, err := os.ReadFile(filepath.Join(out, "managed-l1.minimum.json"))
 			if err != nil {
 				t.Fatal(err)
@@ -89,6 +105,61 @@ func TestTMRegisteredCatalogueMatchesExecutableManifest(t *testing.T) {
 		if !ok || d.Level != entry.Level || d.Environment != entry.Env || !strings.Contains(d.Command, "-level="+entry.Level) {
 			t.Fatal("catalogue changed level/environment/command", entry.ID)
 		}
+	}
+}
+
+func TestProgressE2EFinalizationRequiresVerifiedScenario(t *testing.T) {
+	entry := e2eScenario{ID: "fixture.progress", Test: "TestProgress", Package: "./tests/e2e/suites/testing", Level: "L3", Env: "controlled"}
+	definition := testmanagement.Definition{ID: entry.ID, Name: "Progress", Level: entry.Level, Environment: entry.Env, Command: "actual scenario", Check: "verified scenario and cleanup"}
+	pkg := strings.TrimSuffix(corePackage, "/internal/app/host") + "/tests/e2e/suites/testing"
+	for _, tc := range []struct {
+		name                                      string
+		missingResources, skipped, missingCleanup bool
+	}{
+		{name: "passed"},
+		{name: "missing-resources", missingResources: true},
+		{name: "skipped", skipped: true},
+		{name: "missing-cleanup", missingCleanup: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := t.TempDir()
+			path := filepath.Join(out, "scenarios", entry.ID)
+			if err := os.MkdirAll(path, 0700); err != nil {
+				t.Fatal(err)
+			}
+			resources := []map[string]any{{"kind": "owned-fixture"}}
+			if tc.missingResources {
+				resources = nil
+			}
+			if err := writeJSON(filepath.Join(path, "scenario.json"), map[string]any{"id": entry.ID, "passed": true, "cleanup_complete": !tc.missingCleanup, "resources": resources}); err != nil {
+				t.Fatal(err)
+			}
+			group := scopedGroup{Packages: []string{entry.Package}, Summary: feedback.Summary{Passed: true, Complete: true, Packages: []feedback.Package{{Name: pkg, Status: "pass"}}, Tests: []feedback.Test{{Package: pkg, Name: entry.Test, Status: "pass"}}}}
+			if tc.skipped {
+				group.Summary.SkippedTests = 1
+			}
+			if err := writeJSON(filepath.Join(out, "summary.json"), e2eReport{Selected: []e2eScenario{entry}, Groups: []scopedGroup{group}, Cleanup: true}); err != nil {
+				t.Fatal(err)
+			}
+			progress := filepath.Join(out, "progress.bin")
+			t.Setenv("STEERLINE_PROGRESS_FILE", progress)
+			if err := os.WriteFile(progress, []byte(`{"test.fixture.progress":false}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			frozen := &managedRun{definitions: map[string]testmanagement.Definition{entry.ID: definition}, environments: map[string]string{entry.ID: entry.Env}, ids: map[string]string{entry.ID: testmanagement.NewRecordID()}}
+			writeManagedReports(options{level: entry.Level, out: out, managed: frozen}, managedSource{}, 1)
+			raw, err := os.ReadFile(progress)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var fields map[string]bool
+			if err := json.Unmarshal(raw, &fields); err != nil {
+				t.Fatal(err)
+			}
+			if fields["test.fixture.progress"] != (tc.name == "passed") {
+				t.Fatal("unverified finalization completed progress", string(raw))
+			}
+		})
 	}
 }
 

@@ -8,3 +8,8 @@ import (
 )
 
 func TestRecords(t *testing.T) { testenv.TestRecords(testenv.NewScenario(t, "testing.records")) }
+
+func TestRuntimeProgress(t *testing.T) {
+	t.Parallel()
+	testenv.RuntimeProgress(testenv.NewScenario(t, "testing.runtime-progress"))
+}

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -33,6 +34,14 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	if string(got) != string(raw) || len(run.Documents.References) != 2 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testmodel.TestingContext(raw)) {
 		t.Fatal("system context was not frozen", run)
 	}
+	if run.ProgressFile == nil {
+		t.Fatal("progress was not frozen with candidate")
+	}
+	initial, err := base64.StdEncoding.DecodeString(run.ProgressFile.InitialContentBase64)
+	require(t, err)
+	if string(initial) != `{"test.one":false}` {
+		t.Fatal(string(initial))
+	}
 	for _, ref := range run.Documents.References {
 		if ref.Kind != "" || ref.Commit != "" || ref.Content != nil || strings.Contains(ref.Path, "steerline-test") {
 			t.Fatal("pretend document path", ref)
@@ -46,7 +55,7 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	require(t, e)
 	var missing testmanagement.Snapshot
 	require(t, json.Unmarshal(got, &missing))
-	if missing.Status != "missing" {
+	if missing.Status != "missing" || run.ProgressFile != nil {
 		t.Fatal("missing snapshot fell back to repository arrangement")
 	}
 }

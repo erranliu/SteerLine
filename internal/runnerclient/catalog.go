@@ -13,7 +13,9 @@ import (
 )
 
 type Capabilities struct {
-	RunUsage *struct {
+	ProgressFile       *ProgressCapability `json:"progress_file,omitempty"`
+	ProgressFileSchema json.RawMessage     `json:"progress_file_schema,omitempty"`
+	RunUsage           *struct {
 		Schema    string `json:"schema"`
 		QueryOnly bool   `json:"query_only"`
 	} `json:"run_usage,omitempty"`
@@ -28,12 +30,7 @@ type Capabilities struct {
 		SameSnapshot bool   `json:"same_snapshot"`
 		MaxEvents    int    `json:"max_events"`
 	} `json:"run_observation,omitempty"`
-	RunEvidence *struct {
-		Version  int      `json:"version"`
-		Commands []string `json:"commands"`
-	} `json:"run_evidence,omitempty"`
-	RunEvidenceSchema json.RawMessage `json:"run_evidence_schema,omitempty"`
-	InstanceBinding   struct {
+	InstanceBinding struct {
 		ExpectedInstanceID bool                      `json:"expected_instance_id"`
 		FullBinding        *ServiceBindingCapability `json:"full_binding,omitempty"`
 	} `json:"instance_binding"`

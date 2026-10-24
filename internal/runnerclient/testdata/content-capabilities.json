@@ -6229,5 +6229,103 @@
         ]
       }
     }
+  },
+  "progress_file": {
+    "contract": "steerrunner-progress-file/v1",
+    "command": "progress-file --run-id R --json",
+    "submit_property": "progress_file",
+    "environment_variable": "STEERLINE_PROGRESS_FILE",
+    "max_bytes": 65536,
+    "encoding": "base64",
+    "digest": "sha256"
+  },
+  "progress_file_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "steerrunner-progress-file/v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract",
+      "run_id",
+      "version",
+      "encoding",
+      "size_bytes",
+      "collection_status"
+    ],
+    "properties": {
+      "contract": {
+        "const": "steerrunner-progress-file/v1"
+      },
+      "run_id": {
+        "type": "string"
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "observed_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "encoding": {
+        "const": "base64"
+      },
+      "content_base64": {
+        "type": "string",
+        "contentEncoding": "base64",
+        "maxLength": 87384
+      },
+      "size_bytes": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 65536
+      },
+      "sha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "collection_status": {
+        "enum": [
+          "disabled",
+          "pending",
+          "initializing",
+          "observing",
+          "unavailable",
+          "closed",
+          "detached"
+        ]
+      },
+      "diagnostic": {
+        "enum": [
+          "binding_invalid",
+          "workspace_unavailable",
+          "directory_unavailable",
+          "file_missing",
+          "read_failed",
+          "size_exceeded",
+          "file_changing",
+          "initialization_unverified",
+          "transport_unavailable"
+        ]
+      }
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "version": {
+              "minimum": 1
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "content_base64",
+            "sha256",
+            "observed_at"
+          ]
+        }
+      }
+    ]
   }
 }

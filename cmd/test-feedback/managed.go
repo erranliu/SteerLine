@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/runtimeprogress"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
@@ -97,6 +99,13 @@ func freezeManagedReports(opts options) (*managedRun, error) {
 		run.definitions[id] = d
 		run.ids[id] = testmanagement.NewRecordID()
 	}
+	values := map[string]bool{}
+	for id := range run.ids {
+		values[testmanagement.ProgressKey(id)] = false
+	}
+	if err := runtimeprogress.Update(context.Background(), values, true); err != nil {
+		return nil, fmt.Errorf("reset runtime progress: %w", err)
+	}
 	return run, nil
 }
 
@@ -168,8 +177,15 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 				}
 				body, e := os.ReadFile(filepath.Join(opts.out, "scenarios", id, "scenario.json"))
 				matched := ""
+				verified := false
 				for _, entry := range e2e.Selected {
 					if entry.ID == id && entry.Env == d.Environment && entry.Level == d.Level {
+						var groupEntries []e2eScenario
+						for _, selected := range e2e.Selected {
+							if selected.Package == entry.Package {
+								groupEntries = append(groupEntries, selected)
+							}
+						}
 						for _, group := range e2e.Groups {
 							if !group.Summary.Complete {
 								continue
@@ -178,6 +194,7 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 								if test.Package == strings.TrimPrefix(entry.Package, "./") || strings.HasSuffix(test.Package, strings.TrimPrefix(entry.Package, ".")) {
 									if test.Name == entry.Test && (test.Status == "pass" || test.Status == "fail") {
 										matched = test.Status
+										verified = checkE2EGroup(group, groupEntries, opts.out) == nil
 									}
 								}
 							}
@@ -187,9 +204,11 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 				if e == nil && json.Unmarshal(body, &evidence) == nil && evidence.ID == id && evidence.Cleanup && matched != "" {
 					status = "failed"
 					message = "场景断言失败"
-					if matched == "pass" && evidence.Passed && e2e.Cleanup {
-						status = "passed"
-						message = "所选场景与清理通过"
+					if matched == "pass" {
+						status, message = "incomplete", "场景证据、执行集合或清理核验不完整"
+						if verified && evidence.Passed && e2e.Cleanup {
+							status, message = "passed", "所选场景与清理通过"
+						}
 					}
 				}
 				for _, blocked := range e2e.Blocked {
@@ -199,6 +218,9 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 					}
 				}
 			}
+		}
+		if e := runtimeprogress.Update(context.Background(), map[string]bool{testmanagement.ProgressKey(id): status == "passed"}, true); e != nil {
+			fmt.Fprintln(os.Stderr, "runtime progress unavailable:", e)
 		}
 		report := testmanagement.Report{ID: run.ids[id], StartedAt: run.started, FinishedAt: time.Now().UTC(), Definition: d, Command: run.command, Repository: run.repository, Branch: run.branch, Evidence: tm.ReportEvidence{Path: "summary.json", Bytes: len(summaryRaw), SHA256: testmanagement.ContentDigest(summaryRaw)}, Sequence: sequence, Selection: []string{id}, Environment: actualEnvironments[id], Definitions: map[string]string{id: testmanagement.Digest(d)}, BeforeCommit: before.commit, AfterCommit: after.commit, BeforeClean: before.clean, AfterClean: after.clean, Results: []testmanagement.Result{{TestID: id, Status: status, Message: message, Log: "summary.json"}}}
 		if e := testmanagement.WriteRecordJSON(filepath.Join(opts.out, "managed-"+id+".json"), report); e != nil {

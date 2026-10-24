@@ -1,0 +1,32 @@
+# 运行时测试进度 Spec
+
+2026-10-24。调用方接入 Runner `steerrunner-progress-file/v1`，以唯一运行时文件替代候选自动证据采集。Runner 仅传递原始字节，测试语义归 SteerLine，实际执行与通过判定归项目入口。
+
+## 契约
+
+- 候选提交时冻结原测试安排，并将 `test.<test_id>: false` 对象作为 `progress_file.initial_content_base64` 注入。所选 Runner 必须发布完整 capability/schema；无能力拒绝新候选，不回退 R2。
+- Runner 在原执行工作区提供 `STEERLINE_PROGRESS_FILE`。本地和远端使用同一调用方接口；SteerLine 不直接读取任何工作区文件。
+- 文件为最多 64 KiB 的 UTF-8 JSON 布尔对象，字段必须完整对应冻结安排，拒绝重复、未知、缺失字段和 null/非布尔值。首次仅支持测试字段，Plan 目标解析及自动注入延后。
+- 入口开始或重跑时先清零对应字段；只有完整非零选择、实际断言、输入及清理核验通过才写 true。失败、跳过、Listed、EmptyShard、部分选择和前置失败不完成。不会根据 Agent final 判通过。
+- 写入方使用同目录字节锁、合并和原子替换；不得丢失其它字段。未注入环境变量时独立运行不要求服务。显式脚本拒绝未声明字段，自动入口忽略未列入本次安排的测试。
+- 文件采集版本独立于候选和业务 Run revision。调用方核验原 Run、规范 base64、长度、SHA256、时间和单调版本。同版本内容变化或旧版本拒绝覆盖。
+- 持久化最新传输快照、最后有效业务字段及其版本/时间。传输失败或格式无效时保留最后有效结果，并显示同步诊断；恢复后继续接受新快照。终态快照可查询且不重新读取已 closed 来源。
+- 进度观察独立于生成结果和材料刷新错误；不发送 submit/reply/resume，不改变 Runner 或 Task 业务终态。
+
+## 产品与清理
+
+执行页展示本次安排的已通过/未完成、最后观察和同步异常。false 不区分失败与尚未执行，不推导额外状态。材料过期按既有当前性规则展示历史。
+
+删除候选 R2 收集 outbox、产物副本和 workspace-git 当前通过判定。保留独立 managed 报告及主干现有的 Git JSON 历史导出/读取机制，不从布尔进度制造详细历史，不恢复已退役的数据库登记或复验关系。
+
+数据库采用新 schema，不迁移旧开发库；安装现场和原在途 Run 保持原样，不部署或重置。项目原始 XML、summary、receipt、日志和独立报告继续保存。
+
+## 验收
+
+- A1：候选初始化字段、提示和进度能力准入冻结，原输入不被后续修改。
+- A2：本地程序与 PowerShell 并发合并不丢字段，开始清零、仅通过完成、无环境可独立运行。
+- A3：真实 SQLite 与公开 Runner fixture 验证通过、重跑、格式错误、断连恢复及服务重启，业务 revision 和输入不变。
+- A4：执行页保留异常期间最后快照，不再展示候选 managed 证据历史；独立 Git 历史继续通过。
+- A5：merge-h-308-code L1–L4 在既有真实判定后汇报；协议夹具不冒充 Unity 业务验收。
+
+实施和测试安排见 [Plan](../plans/runtime-test-progress.plan.md)，操作契约见[接入说明](../../docs/integration/runtime-progress.md)。

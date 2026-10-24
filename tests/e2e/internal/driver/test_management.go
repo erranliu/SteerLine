@@ -95,7 +95,7 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	// This dedicated task intentionally ends before publication. The driver owns
 	// the deterministic test inputs, while Codex supplies a real original Run.
 	spec := "# Test result consumption fixture\n\nNo implementation or publication is requested. Do not edit, commit or push files, do not run publish.ps1, and do not report implementation success. Inspect the original Plan, then finish with a clear BLOCKED diagnosis: deterministic tests are owned by the external acceptance driver. Do not fabricate test results.\n\n## Acceptance\n\nTracked files remain unchanged; the original Codex turn honestly reports the external-driver boundary. No publication.\n"
-	plan := "# Test result consumption plan\n\nThis Plan requires exactly one automatic test: fixture.marker from the catalog. The arrangement MUST be {\"tests\":[\"fixture.marker\"]}; an empty selection would omit the mandatory acceptance test even though product code is unchanged. Its actual program checks the run-owned ignored input. The external driver executes it once with passing input and once with failing input, in fresh .steerrunner/artifacts directories. No code change or publication is required.\n\n## 测试计划\n\n系统自动生成测试安排：fixture.marker, L1, isolated. Command: powershell -NoProfile -ExecutionPolicy Bypass -File ./test-marker.ps1 -Out .steerrunner/artifacts/<unique-execution>. Pass requires exit 0, a real assertion, original summary and managed report on clean unchanged commit. The second actual assertion must fail with exit 1. Evidence is retained in the original Run; external acceptance verifies API and browser counts.\n"
+	plan := "# Test result consumption plan\n\nThis Plan requires exactly one automatic test: fixture.marker from the catalog. The arrangement MUST be {\"tests\":[\"fixture.marker\"]}; an empty selection would omit the mandatory acceptance test even though product code is unchanged. Its actual program checks the run-owned ignored input. The external driver executes it once with passing input and once with failing input, in fresh .steerrunner/artifacts directories. No code change or publication is required.\n\n## 测试计划\n\n系统自动生成测试安排：fixture.marker, L1, isolated. Command: pwsh -NoProfile -ExecutionPolicy Bypass -File ./test-marker.ps1 -Out .steerrunner/artifacts/<unique-execution>. Pass requires exit 0, a real assertion, original summary and managed report on clean unchanged commit. The second actual assertion must fail with exit 1. The entry updates the runtime progress file only after a real assertion passes; failure remains incomplete. Raw reports remain independent; external acceptance verifies API and browser progress.\n"
 	for path, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": spec, "SteerlineFlow/plans/task.plan.md": plan} {
 		if err := os.WriteFile(filepath.Join(d.repo, filepath.FromSlash(path)), []byte(body), 0600); err != nil {
 			return err
@@ -411,8 +411,9 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 		if err = os.WriteFile(filepath.Join(artifacts, "fixture-input.txt"), []byte(input), 0600); err != nil {
 			return err
 		}
-		cmd := d.command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "./test-marker.ps1", "-Out", ".steerrunner/artifacts/execution-"+phase)
+		cmd := d.command("pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "./test-marker.ps1", "-Out", ".steerrunner/artifacts/execution-"+phase)
 		cmd.Dir = original.Execution.Workspace
+		cmd.Env = append(cmd.Env, "STEERLINE_PROGRESS_FILE="+filepath.Join(original.Execution.Workspace, ".steerrunner", "progress", original.RunID, "progress.bin"))
 		output, runErr := cmd.CombinedOutput()
 		if e := os.WriteFile(filepath.Join(out, phase+"-program.log"), output, 0600); e != nil {
 			return e
@@ -444,13 +445,18 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 				return false, e
 			}
 			if phase == "pass" {
-				return view.Passed == 1 && view.Failed == 0, nil
+				return view.Passed == 1 && view.Pending == 0 && view.ProgressVersion > 0, nil
 			}
-			return view.Failed == 1 && view.Passed == 0 && len(view.Rows) == 1 && len(view.Rows[0].History) == 2, nil
+			return view.Pending == 1 && view.Passed == 0 && view.ProgressVersion > proof.PassVersion, nil
 		})
 		if err != nil {
 			_ = controlled.Write(filepath.Join(out, phase+"-api.json"), view)
 			return fmt.Errorf("%s API: %w", phase, err)
+		}
+		if phase == "pass" {
+			proof.PassVersion = view.ProgressVersion
+		} else {
+			proof.FailVersion = view.ProgressVersion
 		}
 		if err = controlled.Write(filepath.Join(out, phase+"-api.json"), view); err != nil {
 			return err

@@ -1,1 +1,1 @@
-{"tests":[{"id":"fixture.marker","name":"Fixture marker","level":"L1","environment":"isolated","command":"powershell -NoProfile -ExecutionPolicy Bypass -File ./test-marker.ps1","check":"Run-owned fixture input equals fixture-ok; program assertion, report and exit code agree."}]}
+{"tests":[{"id":"fixture.marker","name":"Fixture marker","level":"L1","environment":"isolated","command":"pwsh -NoProfile -ExecutionPolicy Bypass -File ./test-marker.ps1","check":"Run-owned fixture input equals fixture-ok; program assertion, report and exit code agree."}]}

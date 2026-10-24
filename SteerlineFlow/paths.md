@@ -124,7 +124,7 @@ $slL4Out = New-SteerLineTestOutput 'L4'
 go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=runtime.path-isolation -out $slL4Out
 ```
 
-Run 内需要 Runner 自动收集测试产物时，使用原执行 worktree 中已忽略的 `.steerrunner/artifacts/<唯一执行ID>/` 作为 `-out`。这是受管执行的产物位置；仓库外的普通测试结果不会自动成为该 Run 的证据。不能用目录复制取代原候选绑定与公开 artifact 核验。
+候选测试进度统一写入 Runner 注入的 `STEERLINE_PROGRESS_FILE`，实际位置为原执行工作区 `.steerrunner/progress/<Run ID>/progress.bin`；入口只使用注入路径，不自行拼接。旁置 `.lock` 与原子替换临时文件只协调写者，整棵 progress 子树由 Runner 放入 Git info/exclude。Runner 只转发此文件，SteerLine 不再收集候选 managed 产物；原始报告继续使用正式 `-out` 独立目录，Git 历史沿报告导出机制。
 
 ## 可并行的独立调试包
 
