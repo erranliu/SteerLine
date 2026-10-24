@@ -71,7 +71,7 @@ func (c Controls) Handle(ctx context.Context, req api.ControlRequest, instance s
 		}
 	}
 	if found && req.Action == "stop_candidate" {
-		if candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID); err == nil && candidate.TaskID == payload.TaskID && candidate.Withdrawal != nil && candidate.Withdrawal.RequestID == req.RequestID && candidate.Withdrawal.ExpectedRevision == payload.ExpectedRunRevision && candidate.Withdrawal.RequestedBy == req.RequestedBy {
+		if candidate, err := c.Store.Candidate(ctx, c.Tasks.Project, payload.RunID); err == nil && candidate.TaskID == payload.TaskID && candidate.Withdrawal.Matches(req.RequestID, payload.ExpectedRunRevision, req.RequestedBy) {
 			receipt.Status = "applied"
 			receipt.RunID = candidate.ID
 			receipt.RunRevision = candidate.Revision
@@ -211,9 +211,6 @@ func (c Controls) apply(ctx context.Context, req api.ControlRequest, payload api
 		}
 		if candidate.TaskID != payload.TaskID {
 			return failure("invalid_request", "candidate belongs to another task")
-		}
-		if candidate.Revision != payload.ExpectedRunRevision {
-			return failure("stale_version", "candidate changed before withdrawal")
 		}
 		candidate, err = c.Tasks.Stop(ctx, payload.RunID, payload.ExpectedRunRevision, req.RequestID, req.RequestedBy)
 		if err == nil {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { StoredRequest } from "../shared/api/types";
 import { Button } from "../shared/ui/button";
 import { Status, short } from "../shared/ui/status";
@@ -12,6 +13,7 @@ export function Operations({
   reconciling: boolean;
   online: boolean;
 }) {
+  const [copyFeedback, setCopyFeedback] = useState("");
   return requests.length ? (
     <details className="operations">
       <summary>
@@ -29,6 +31,7 @@ export function Operations({
           项待核实
         </span>
       </summary>
+      {copyFeedback && <p role="status">{copyFeedback}</p>}
       {requests
         .slice()
         .reverse()
@@ -42,6 +45,38 @@ export function Operations({
                 {short(row.envelope.request_id)}
               </span>
               {row.error && <p className="muted">{row.error}</p>}
+              {!["applied", "rejected"].includes(row.response?.status ?? "") &&
+                Date.now() - Date.parse(row.created_at) >= 30000 && (
+                  <p className="notice amber">
+                    结果尚未确认 · 已等待{" "}
+                    {Math.floor(
+                      (Date.now() - Date.parse(row.created_at)) / 1000,
+                    )}{" "}
+                    秒；保留原请求，继续核实。
+                  </p>
+                )}
+              {row.checked_at && (
+                <p className="muted">
+                  最后核实：{new Date(row.checked_at).toLocaleString("zh-CN")}
+                </p>
+              )}
+              <button
+                className="muted"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(
+                      row.envelope.request_id,
+                    );
+                    setCopyFeedback("已复制原请求 ID");
+                  } catch {
+                    setCopyFeedback(
+                      "复制失败，请手动复制：" + row.envelope.request_id,
+                    );
+                  }
+                }}
+              >
+                复制原请求 ID
+              </button>
               {row.response?.diagnostic && (
                 <p className="muted">{row.response.diagnostic}</p>
               )}

@@ -9,11 +9,13 @@ import { stopReason } from "./state";
 export function StopCandidate({
   run,
   pending,
+  applied = false,
   onRequest,
   onResult,
 }: {
   run: Candidate;
   pending: boolean;
+  applied?: boolean;
   onRequest: (envelope: Envelope) => void;
   onResult: (envelope: Envelope, receipt?: Receipt, unsent?: boolean) => void;
 }) {
@@ -28,19 +30,18 @@ export function StopCandidate({
     ? "服务离线，连接后可停止参与"
     : !page?.service.capabilities.includes("stop_candidate")
       ? "当前服务未提供停止参与能力"
-      : pending
-        ? "停止请求待核实，请在操作回执中查询原请求"
-        : busy || sending
-          ? "正在处理上一项操作"
-          : stopReason(run, page.runs ?? []);
+      : applied
+        ? "停止已生效，等待列表刷新"
+        : pending
+          ? "停止请求待核实，请在操作回执中查询原请求"
+          : busy || sending
+            ? "正在处理上一项操作"
+            : stopReason(run, page.runs ?? []);
   const changed =
     confirmation &&
     (confirmation.envelope.project_id !== api.identity.project_id ||
       confirmation.envelope.instance_id !== api.identity.instance_id ||
-      confirmation.envelope.target_id !== run.run_id ||
-      confirmation.envelope.expected_version !== run.control_revision ||
-      confirmation.envelope.expected_control_revision !==
-        page?.control.revision);
+      confirmation.envelope.target_id !== run.run_id);
   const confirmReason =
     reason || (changed ? "候选或服务状态已变化，请取消后重新确认" : "");
   return (

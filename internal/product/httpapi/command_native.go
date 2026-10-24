@@ -12,8 +12,11 @@ import (
 )
 
 func (c *commandRegistry) OpenNative(ctx context.Context, envelope CommandEnvelope) (CommandResponse, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	unlock, err := c.lockRequest(ctx, envelope.RequestID)
+	if err != nil {
+		return CommandResponse{}, err
+	}
+	defer unlock()
 	canonical, _ := json.Marshal(envelope)
 	digest := digestBytes(canonical)
 	record, err := c.readRecord(envelope.RequestID)

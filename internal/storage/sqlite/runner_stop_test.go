@@ -231,3 +231,38 @@ func TestRunnerControlStopRecoversOnlyOriginalWithdrawal(t *testing.T) {
 		t.Fatal("different request inferred success from terminal candidate", denied)
 	}
 }
+
+func TestCandidateStopReliabilityObservationChanges(t *testing.T) {
+	ctx := context.Background()
+	s, project, reserve := candidateStopFixture(t)
+	first := reserve(strings.Repeat("b", 32), false)
+	reserve("second", true)
+	observed := first.Revision
+	first.Diagnostic = "new observation"
+	first.Revision++
+	require(t, s.SaveCandidate(ctx, first, observed, nil))
+	if _, err := s.StopRunnerCandidate(ctx, project, first.ID, first.Revision+1, "future", "operator"); err == nil {
+		t.Fatal("future observation accepted")
+	}
+	graph, err := s.TaskGraphSnapshot(ctx, project)
+	require(t, err)
+	svc := &taskrunner.Service{Project: project, Store: s, Bridge: &runnerbridge.Bridge{Store: s}}
+	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: func(string, string) (string, error) { t.Fatal("stop consulted profile"); return "", nil }}
+	payload, _ := json.Marshal(api.ControlPayload{TaskID: first.TaskID, RunID: first.ID, ExpectedRunRevision: observed})
+	now := time.Now().UTC()
+	req := api.ControlRequest{ProtocolVersion: 1, RequestID: strings.Repeat("e", 32), RepositoryIdentity: project, InstanceID: "instance", Action: "stop_candidate", ExpectedControlRevision: graph.Authority.AuthorityVersion, RequestedBy: "operator", CreatedAt: now, ExpiresAt: now.Add(time.Minute), Payload: payload}
+	receipt, err := controls.Handle(ctx, req, "instance", graph.Authority.AuthorityVersion+10)
+	require(t, err)
+	if receipt.Status != "applied" {
+		t.Fatal("observation/control revision growth rejected stop", receipt)
+	}
+	current, err := s.Candidate(ctx, project, first.ID)
+	require(t, err)
+	if current.Revision != first.Revision+1 || !current.Withdrawal.Matches(req.RequestID, observed, "operator") || current.Diagnostic != "new observation" {
+		t.Fatal("stop lost latest facts or original intent", current)
+	}
+	req.Action = "pause_dispatch"
+	if code, err := taskrunner.ValidateControlRequest(req, "instance", project, graph.Authority.AuthorityVersion+10, now); err == nil || code != "stale_revision" {
+		t.Fatal("other controls lost strict revision", code, err)
+	}
+}

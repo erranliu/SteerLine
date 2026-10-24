@@ -1,5 +1,7 @@
 # Spec：候选停止参与与终态处理收敛
 
+2026-10-25 当前增量：[停止可靠受理与核实](candidate-stop-reliability.spec.md) 替代本文停止要求候选/派发版本完全相等及相应等待规则；原参与、最后一个和资源边界继续适用。实现与验证见该增量专属验收。
+
 2026-10-14 用户直接授权的普通开发需求。状态：已实现，最小自动验收已通过；人工复验待定，结果见专属验收。不新增 roadmap 任务，不修改 execution-map。
 
 配套[实现 Plan](../plans/candidate-stop.plan.md)与[专属验收规划](../testing/acceptance/candidate-stop.md)。接续[候选连续创建与失败留档](../plans/candidate-start-retention.plan.md)，保留立即显示新候选、最多五个参与候选和编号不复用的规则。

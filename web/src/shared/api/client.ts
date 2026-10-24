@@ -107,13 +107,14 @@ export class Api {
   ) {}
   private active = true;
   private lifetime = new AbortController();
+  private reconciliations = new Map<string, Promise<Receipt>>();
   activate() {
     this.active = true;
     if (this.lifetime.signal.aborted) this.lifetime = new AbortController();
   }
   deactivate() {
     this.active = false;
-    this.lifetime.abort();
+    this.lifetime.abort(new DOMException("项目已切换", "AbortError"));
   }
   private check() {
     if (!this.active) throw new DOMException("项目已切换", "AbortError");
@@ -148,15 +149,44 @@ export class Api {
       payload,
     };
   }
-  private async locked<T>(id: string, work: () => Promise<T>) {
+  private async bounded<T>(
+    ms: number,
+    work: (signal: AbortSignal) => Promise<T>,
+    signal?: AbortSignal,
+  ) {
+    const budget = new AbortController();
+    const timer = setTimeout(
+      () =>
+        budget.abort(
+          new DOMException("本次请求核实超时，保留原请求", "TimeoutError"),
+        ),
+      ms,
+    );
+    const combined = AbortSignal.any([
+      budget.signal,
+      this.lifetime.signal,
+      ...(signal ? [signal] : []),
+    ]);
+    try {
+      combined.throwIfAborted();
+      return await work(combined);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  private async locked<T>(
+    id: string,
+    work: () => Promise<T>,
+    signal?: AbortSignal,
+  ) {
     if (!navigator.locks)
       throw new Error(
         "当前浏览器不支持原请求发送锁，请使用当前版本 Edge/Chrome",
       );
-    return navigator.locks.request(
-      "steerline-request-" + this.home + "/" + id,
-      work,
-    );
+    const name = "steerline-request-" + this.home + "/" + id;
+    return signal
+      ? navigator.locks.request(name, { signal }, work)
+      : navigator.locks.request(name, work);
   }
   private validate(envelope: Envelope) {
     this.check();
@@ -167,7 +197,7 @@ export class Api {
       throw new Error("原请求属于其他项目或服务实例，请保留历史并重新核对");
     safeNumbers(envelope);
   }
-  private async post(envelope: Envelope) {
+  private async post(envelope: Envelope, signal?: AbortSignal) {
     this.validate(envelope);
     const result = await json<Receipt>(this.path("/commands"), {
       method: "POST",
@@ -176,7 +206,9 @@ export class Api {
         "X-CSRF-Token": this.csrf,
       },
       body: JSON.stringify(envelope),
+      signal: signal ?? this.lifetime.signal,
     });
+    signal?.throwIfAborted();
     if (!matches(result, envelope))
       throw new Error("回执与原请求身份或正文不匹配，保留原请求待核实");
     await recordResult(envelope.request_id, result);
@@ -185,54 +217,71 @@ export class Api {
   async submit(envelope: Envelope) {
     envelope = structuredClone(envelope);
     this.validate(envelope);
-    const submit = () =>
-      this.locked(envelope.request_id, async () => {
-        this.check();
-        // Each confirmed additional candidate is an independent operation.
-        // All other actions retain their per-target uncertainty guard.
-        const pending =
-          envelope.action !== "start_candidate" &&
-          (await listRequests()).find(
-            (row) =>
-              row.envelope.request_id !== envelope.request_id &&
-              row.envelope.project_id === envelope.project_id &&
-              row.envelope.instance_id === envelope.instance_id &&
-              row.envelope.action === envelope.action &&
-              row.envelope.target_id === envelope.target_id &&
-              (!row.response ||
-                !["applied", "rejected"].includes(row.response.status)),
-          );
-        if (pending)
-          throw new Error(
-            "原目标已有待核实操作，请查询原请求，不能创建替代请求",
-          );
-        const old = await requestByID(envelope.request_id);
-        if (old) return this.reconcileUnlocked(envelope);
-        this.check();
-        await saveRequest(envelope);
-        if (!this.active) {
-          await discardUnsentRequest(envelope);
-          throw new DOMException("项目已切换", "AbortError");
-        }
-        try {
-          return await this.post(envelope);
-        } catch (error) {
-          await recordResult(envelope.request_id, undefined, String(error));
-          throw error;
-        }
-      });
-    if (envelope.action === "start_candidate") return submit();
-    return this.locked(
-      "target/" +
-        envelope.project_id +
-        "/" +
-        envelope.instance_id +
-        "/" +
-        envelope.action +
-        "/" +
-        envelope.target_id,
-      submit,
-    );
+    const send = async (signal?: AbortSignal) => {
+      const submit = () =>
+        this.locked(
+          envelope.request_id,
+          async () => {
+            signal?.throwIfAborted();
+            this.check();
+            // Each confirmed additional candidate is an independent operation.
+            // All other actions retain their per-target uncertainty guard.
+            const pending =
+              envelope.action !== "start_candidate" &&
+              (await listRequests()).find(
+                (row) =>
+                  row.envelope.request_id !== envelope.request_id &&
+                  row.envelope.project_id === envelope.project_id &&
+                  row.envelope.instance_id === envelope.instance_id &&
+                  row.envelope.action === envelope.action &&
+                  row.envelope.target_id === envelope.target_id &&
+                  (!row.response ||
+                    !["applied", "rejected"].includes(row.response.status)),
+              );
+            if (pending)
+              throw new Error(
+                "原目标已有待核实操作，请查询原请求，不能创建替代请求",
+              );
+            const old = await requestByID(envelope.request_id);
+            if (old) return this.reconcileUnlocked(envelope, signal);
+            this.check();
+            await saveRequest(envelope);
+            if (!this.active || signal?.aborted) {
+              await discardUnsentRequest(envelope);
+              signal?.throwIfAborted();
+              throw new DOMException("项目已切换", "AbortError");
+            }
+            try {
+              return await this.post(envelope, signal);
+            } catch (error) {
+              if (this.active)
+                await recordResult(
+                  envelope.request_id,
+                  undefined,
+                  String(error),
+                );
+              throw error;
+            }
+          },
+          signal,
+        );
+      if (envelope.action === "start_candidate") return submit();
+      return this.locked(
+        "target/" +
+          envelope.project_id +
+          "/" +
+          envelope.instance_id +
+          "/" +
+          envelope.action +
+          "/" +
+          envelope.target_id,
+        submit,
+        signal,
+      );
+    };
+    return envelope.action === "stop_candidate"
+      ? this.bounded(10000, send)
+      : send(this.lifetime.signal);
   }
   async reconcile(envelope: Envelope, signal?: AbortSignal) {
     envelope = structuredClone(envelope);
@@ -240,10 +289,31 @@ export class Api {
     if (envelope.project_id !== this.identity.project_id)
       throw new Error("原请求属于其他项目或服务实例");
     safeNumbers(envelope);
-    return this.locked(envelope.request_id, () => {
-      signal?.throwIfAborted();
-      return this.reconcileUnlocked(envelope, signal);
-    });
+    const old = this.reconciliations.get(envelope.request_id);
+    if (old)
+      return old.then((result) => {
+        if (!matches(result, envelope))
+          throw new Error("对账回执与原信封不匹配");
+        return result;
+      });
+    const work = this.bounded(
+      5000,
+      (budget) =>
+        this.locked(
+          envelope.request_id,
+          () => this.reconcileUnlocked(envelope, budget),
+          budget,
+        ),
+      signal,
+    )
+      .catch(async (error) => {
+        if (!signal?.aborted && this.active)
+          await recordResult(envelope.request_id, undefined, String(error));
+        throw error;
+      })
+      .finally(() => this.reconciliations.delete(envelope.request_id));
+    this.reconciliations.set(envelope.request_id, work);
+    return work;
   }
   private async reconcileUnlocked(
     envelope: Envelope,
@@ -270,6 +340,7 @@ export class Api {
       if (
         error instanceof ApiError &&
         error.code === "command_not_found" &&
+        envelope.action !== "stop_candidate" &&
         envelope.action !== "start_environment_check" &&
         envelope.action !== "stop_environment_check" &&
         !envelope.action.startsWith("maintenance_")
@@ -279,7 +350,7 @@ export class Api {
           throw new Error(
             "原请求属于其他项目或服务实例，保留原信封，不能向新实例补交",
           );
-        return this.post(envelope);
+        return this.post(envelope, signal);
       }
       if (signal?.aborted) throw error;
       await recordResult(envelope.request_id, undefined, String(error));

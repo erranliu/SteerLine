@@ -30,7 +30,7 @@ func ValidateControlRequest(req productapi.ControlRequest, instanceID, repositor
 	if strings.TrimSpace(req.RequestedBy) == "" {
 		return "invalid_request", errors.New("requested_by is required")
 	}
-	if req.Action != "stop_service" && req.ExpectedControlRevision != revision {
+	if req.Action != "stop_service" && req.Action != "stop_candidate" && req.ExpectedControlRevision != revision {
 		return "stale_revision", errors.New("control state changed; refresh before retrying")
 	}
 	_, createdOffset := req.CreatedAt.Zone()

@@ -166,9 +166,11 @@ function Output({ run }: { run: Candidate }) {
 function CandidateDetail({
   run,
   stopControl,
+  stopApplied = false,
 }: {
   run: Candidate;
   stopControl: React.ReactNode;
+  stopApplied?: boolean;
 }) {
   const { api, online, send, busy, snapshot } = useWorkspace();
   const caps = snapshot?.connection.snapshot.page?.service.capabilities ?? [];
@@ -253,7 +255,12 @@ function CandidateDetail({
         </p>
       )}
       {run.error && <p className="notice amber">{run.error}</p>}
-      {run.decision && (
+      {stopApplied && run.participation === "active" && (
+        <p className="notice amber">
+          停止已生效，列表刷新中；可使用页面刷新重取。
+        </p>
+      )}
+      {run.decision && (!stopApplied || !participating(run)) && (
         <Answer
           key={draftKey(api.identity.project_id, api.identity.instance_id, run)}
           run={run}
@@ -298,6 +305,16 @@ export function Runs() {
   const [showStopped, setShowStopped] = useState(false);
   const page = snapshot?.connection.snapshot.page;
   const runs = page?.runs ?? [];
+  const stopApplied = (id: string) =>
+    (pending?.envelope.target_id === id &&
+      pending.receipt?.status === "applied") ||
+    !!requests?.some(
+      (row) =>
+        row.envelope.project_id === api.identity.project_id &&
+        row.envelope.action === "stop_candidate" &&
+        row.envelope.target_id === id &&
+        row.response?.status === "applied",
+    );
   const starts =
     candidateStarts?.items.filter(
       (entry) => !runs.some((run) => run.run_id === entry.id),
@@ -458,7 +475,9 @@ export function Runs() {
             />
             显示已停止参与候选
           </label>
-          <span className="muted">{visibleRuns.length + starts.length} 个候选</span>
+          <span className="muted">
+            {visibleRuns.length + starts.length} 个候选
+          </span>
         </div>
       </div>
       <div className="runs-layout">
@@ -546,10 +565,12 @@ export function Runs() {
             <CandidateDetail
               key={selected.run_id}
               run={selected}
+              stopApplied={stopApplied(selected.run_id)}
               stopControl={
                 <StopCandidate
                   run={selected}
                   pending={stopPending(selected)}
+                  applied={stopApplied(selected.run_id) && participating(selected)}
                   onRequest={(envelope) => {
                     setParams({ task: selectedTask, run: envelope.target_id });
                     setPending({ envelope, epoch: selectionEpoch.current });

@@ -302,7 +302,12 @@ it("cancels a queued command before its original lock is acquired after switchin
   let first = true;
   vi.stubGlobal("navigator", {
     locks: {
-      request: async (_key: string, work: () => unknown) => {
+      request: async (
+        _key: string,
+        options: LockOptions | (() => unknown),
+        callback?: () => unknown,
+      ) => {
+        const work = typeof options === "function" ? options : callback!;
         if (first) {
           first = false;
           await new Promise<void>((done) => {
@@ -325,7 +330,13 @@ it("cancels a queued command before its original lock is acquired after switchin
 
 it("cancels a switch during journal persistence without leaving an unsent request for replay", async () => {
   vi.stubGlobal("navigator", {
-    locks: { request: async (_id: string, work: () => unknown) => work() },
+    locks: {
+      request: async (
+        _id: string,
+        options: LockOptions | (() => unknown),
+        work?: () => unknown,
+      ) => (typeof options === "function" ? options : work!)(),
+    },
   });
   setJournalHome("cancel-during-persistence");
   const api = new Api(identity(a), "csrf", "cancel-during-persistence");
@@ -347,7 +358,13 @@ it("cancels a switch during journal persistence without leaving an unsent reques
 
 it("reads an original envelope after native restart and never replays it into the new instance", async () => {
   vi.stubGlobal("navigator", {
-    locks: { request: async (_id: string, work: () => unknown) => work() },
+    locks: {
+      request: async (
+        _id: string,
+        options: LockOptions | (() => unknown),
+        work?: () => unknown,
+      ) => (typeof options === "function" ? options : work!)(),
+    },
   });
   const old = new Api(identity(a), "csrf");
   const envelope = old.envelope("start_task", "1", 1, {});

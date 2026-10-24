@@ -26,7 +26,7 @@ func (p *runtimeProjectPort) maintenanceCommand(ctx context.Context, in httpcont
 	if p.actor == nil || p.config.runtimeMaintenance == nil || p.stopping.Load() {
 		return out, projectStoppingError()
 	}
-	e := p.actor.Call(ctx, func() error {
+	e := p.actor.Call(ctx, func(ctx context.Context) error {
 		raw, _ := json.Marshal(in)
 		old, found, e := p.store.LookupCommand(ctx, p.config.Identity(), in.RequestID)
 		if e != nil {

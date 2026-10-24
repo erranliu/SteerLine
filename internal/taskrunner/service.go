@@ -193,6 +193,9 @@ func (s *Service) Reconcile(ctx context.Context) error {
 	}
 	var failures []error
 	for _, c := range rows {
+		if ctx.Err() != nil {
+			break
+		}
 		if c.SubmitState == "cancelled" || c.SubmitState == "rejected" && c.RunID == "" {
 			continue
 		}

@@ -27,8 +27,8 @@ func (s *SQLiteStore) StopRunnerCandidate(ctx context.Context, project, id strin
 			result = c
 			return errAtomicReplay
 		}
-		if c.Revision != expected {
-			return nativeErr("stale_version", "candidate changed before withdrawal")
+		if expected == 0 || expected > c.Revision {
+			return nativeErr("stale_version", "withdrawal observation is ahead of the candidate")
 		}
 		if c.Participation != "active" || c.StopRequested {
 			return nativeErr("candidate_ended", "candidate has already ended")
@@ -47,12 +47,13 @@ func (s *SQLiteStore) StopRunnerCandidate(ctx context.Context, project, id strin
 				c.Actions[i].State = "cancelled"
 			}
 		}
+		currentRevision := c.Revision
 		c.Revision++
 		body, err := json.Marshal(c)
 		if err != nil {
 			return err
 		}
-		written, err := tx.tx.ExecContext(ctx, `UPDATE runner_candidates SET revision=?,payload=? WHERE project_identity=? AND candidate_id=? AND revision=?`, c.Revision, body, project, id, expected)
+		written, err := tx.tx.ExecContext(ctx, `UPDATE runner_candidates SET revision=?,payload=? WHERE project_identity=? AND candidate_id=? AND revision=?`, c.Revision, body, project, id, currentRevision)
 		if err := requireIdentityWrite(written, err, "stale_version: candidate changed"); err != nil {
 			return err
 		}

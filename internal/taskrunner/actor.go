@@ -3,6 +3,7 @@ package taskrunner
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
@@ -35,7 +36,7 @@ type ActorOptions struct {
 }
 
 type actorCall struct {
-	run    func() error
+	run    func(context.Context) error
 	result chan error
 }
 type Actor struct {
@@ -47,6 +48,11 @@ type Actor struct {
 	mu               sync.Mutex
 	ctx              context.Context
 	calls            chan actorCall
+	workMu           sync.Mutex
+	workContext      context.Context
+	cancelWork       context.CancelFunc
+	controlPending   bool
+	wakeup           chan struct{}
 }
 
 func NewActor(options ActorOptions) (*Actor, error) {
@@ -73,7 +79,41 @@ func NewActor(options ActorOptions) (*Actor, error) {
 	if viewerAvailable {
 		checkpoint.Service.Capabilities = append(checkpoint.Service.Capabilities, "open_native_session")
 	}
-	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall)}, nil
+	return &Actor{State: reconstruction.RuntimeFromCheckpoint(checkpoint, options.Mode, true, 0), options: options, calls: make(chan actorCall), wakeup: make(chan struct{}, 1)}, nil
+}
+
+func (a *Actor) ControlWakeup() <-chan struct{} { return a.wakeup }
+
+// NotifyControl only interrupts caller-side waiting. The actor still validates
+// the immutable inbox before withdrawing any candidate.
+func (a *Actor) NotifyControl() {
+	a.workMu.Lock()
+	a.controlPending = true
+	if a.cancelWork != nil {
+		a.cancelWork()
+	}
+	a.workMu.Unlock()
+	select {
+	case a.wakeup <- struct{}{}:
+	default:
+	}
+}
+
+func (a *Actor) RunWork(ctx context.Context, run func(context.Context) error) error {
+	work, cancel := context.WithCancel(ctx)
+	a.workMu.Lock()
+	a.workContext, a.cancelWork = work, cancel
+	if a.controlPending {
+		cancel()
+	}
+	a.workMu.Unlock()
+	defer func() {
+		cancel()
+		a.workMu.Lock()
+		a.workContext, a.cancelWork = nil, nil
+		a.workMu.Unlock()
+	}()
+	return run(work)
 }
 
 func (a *Actor) InstanceID() string { return a.State.Service.InstanceID }
@@ -106,16 +146,23 @@ func (a *Actor) Initialize(ctx context.Context, _ context.CancelFunc) error {
 	}
 	return nil
 }
-func (a *Actor) Signals() <-chan actorCall                             { return a.calls }
-func (a *Actor) HistoryErrors() <-chan error                           { return nil }
-func (a *Actor) WaitSources()                                          {}
-func (a *Actor) HandleSignal(call actorCall) error                     { call.result <- call.run(); return nil }
+func (a *Actor) Signals() <-chan actorCall   { return a.calls }
+func (a *Actor) HistoryErrors() <-chan error { return nil }
+func (a *Actor) WaitSources()                {}
+func (a *Actor) HandleSignal(call actorCall) error {
+	ctx := a.workContext
+	if ctx == nil {
+		ctx = a.ctx
+	}
+	call.result <- call.run(ctx)
+	return nil
+}
 func (a *Actor) HandleHistoryError(_ context.Context, err error) error { return err }
 func (a *Actor) PollHistory(context.Context)                           {}
 
 // Call serializes service-owned HTTP commands with actor ticks. Cancellation
 // after dispatch never guesses whether its durable command was committed.
-func (a *Actor) Call(ctx context.Context, run func() error) error {
+func (a *Actor) Call(ctx context.Context, run func(context.Context) error) error {
 	if a.ctx == nil {
 		return errors.New("task service actor has not started")
 	}
@@ -155,10 +202,14 @@ func (a *Actor) TickTask(ctx context.Context, _ context.CancelFunc) error {
 	return a.observeError(ctx, a.options.Tasks.Dispatch(ctx))
 }
 func (a *Actor) TickControl(ctx context.Context, _ context.CancelFunc) error {
+	a.workMu.Lock()
+	a.controlPending = false
+	a.workMu.Unlock()
 	ids, err := a.options.Host.ControlRequestIDs()
 	if err != nil {
 		return err
 	}
+	var requests []api.ControlRequest
 	for _, id := range ids {
 		if receipt, err := a.options.Host.ReadControlReceipt(id); err == nil && receipt != nil {
 			continue
@@ -170,23 +221,52 @@ func (a *Actor) TickControl(ctx context.Context, _ context.CancelFunc) error {
 		if request.Action == "stop_service" {
 			continue
 		}
+		requests = append(requests, request)
+	}
+	sort.SliceStable(requests, func(i, j int) bool {
+		return requests[i].Action == "stop_candidate" && requests[j].Action != "stop_candidate"
+	})
+	var failures []error
+	for _, request := range requests {
+		a.workMu.Lock()
+		urgent := a.controlPending
+		a.workMu.Unlock()
+		if urgent && request.Action != "stop_candidate" {
+			break // let the scheduler reload the newly published stop first
+		}
+		id := request.RequestID
 		requestFileDigest := a.options.Host.ControlRequestDigest(id)
 		if !validControlDigest(requestFileDigest) {
-			return errors.New("original host control request digest is unavailable")
+			failures = append(failures, errors.New("original host control request digest is unavailable"))
+			continue
 		}
-		receipt, err := a.options.Control(ctx, request)
+		var receipt api.ControlReceipt
+		var err error
+		if request.Action == "stop_candidate" {
+			budget, cancel := context.WithTimeout(ctx, 5*time.Second)
+			receipt, err = a.options.Control(budget, request)
+			cancel()
+		} else {
+			err = a.RunWork(ctx, func(work context.Context) error {
+				var e error
+				receipt, e = a.options.Control(work, request)
+				return e
+			})
+		}
 		if err != nil {
-			return err
+			failures = append(failures, err)
+			continue
 		}
 		if a.options.Host.ControlRequestDigest(id) != requestFileDigest {
-			return errors.New("host control request changed while applying its original command")
+			failures = append(failures, errors.New("host control request changed while applying its original command"))
+			continue
 		}
 		receipt.RequestDigest = requestFileDigest
 		if err := a.options.Host.WriteControlReceipt(receipt); err != nil {
-			return err
+			failures = append(failures, err)
 		}
 	}
-	return a.publish(ctx)
+	return a.observeError(ctx, errors.Join(failures...))
 }
 func (a *Actor) TickPR(ctx context.Context) error {
 	snapshot, err := a.options.Store.ReadRunnerSnapshot(ctx, a.options.Tasks.Project)
@@ -196,6 +276,9 @@ func (a *Actor) TickPR(ctx context.Context) error {
 	delivered := map[string]bool{}
 	var failures []error
 	for _, c := range snapshot.Candidates {
+		if ctx.Err() != nil {
+			break
+		}
 		task := snapshot.Graph.ByID[c.TaskID]
 		if delivered[c.TaskID] || task.Status != "in_progress" || c.StopRequested || c.Participation != "active" || c.Projection == nil || c.Projection.PR == nil {
 			continue
@@ -221,6 +304,9 @@ func (a *Actor) observeError(ctx context.Context, err error) error {
 		a.State.Service.Error = &message
 	}
 	a.mu.Unlock()
+	if a.ctx != nil {
+		ctx = a.ctx
+	}
 	return a.publish(ctx)
 }
 func (a *Actor) publish(ctx context.Context) error {
@@ -248,27 +334,27 @@ func (a *Actor) Heartbeat() error {
 // ExecuteTaskMutation uses the same caller actor as candidate and DAG updates.
 // Once dispatched, cancellation leaves the original durable receipt queryable.
 func (a *Actor) ExecuteTaskMutation(ctx context.Context, run func(context.Context) error) error {
-	return a.Call(ctx, func() error {
+	return a.Call(ctx, func(work context.Context) error {
 		a.mu.Lock()
 		ready := a.State.Service.Ready
 		a.mu.Unlock()
 		if !ready || a.ctx.Err() != nil {
 			return errors.New("project actor is not accepting task commands")
 		}
-		err := run(a.ctx)
+		err := run(work)
 		return errors.Join(err, a.publish(a.ctx))
 	})
 }
 
 func (a *Actor) Discard(ctx context.Context, requestID string, intent taskmodel.DiscardIntent) (taskmodel.TaskDiscardReceipt, error) {
 	var receipt taskmodel.TaskDiscardReceipt
-	err := a.Call(ctx, func() error {
+	err := a.Call(ctx, func(work context.Context) error {
 		store, ok := a.options.Store.(DiscardStore)
 		if !ok {
 			return errors.New("task discard store is unavailable")
 		}
 		var err error
-		receipt, err = a.options.Tasks.Discard(ctx, store, requestID, intent)
+		receipt, err = a.options.Tasks.Discard(work, store, requestID, intent)
 		return err
 	})
 	return receipt, err

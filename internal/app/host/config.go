@@ -39,6 +39,7 @@ type Config struct {
 	ValidateNativeStore     func(context.Context, Config) error
 	EnsureRunDirOutsideRepo func(context.Context, Config) error
 	ControlValidation       ControlValidationPort
+	ControlPublished        func(string)
 }
 
 func (c Config) Identity() string           { return c.RepositoryIdentity }
