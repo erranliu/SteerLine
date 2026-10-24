@@ -44,4 +44,8 @@ SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地�
 
 需要 Windows、Go、Git、Python、gh 和已登录的本机 Codex；原生认证必须可访问 `erranliu/SteerlineTest`。入口建立独立 clone/home/任务及 loopback Git，固定原项目的三个 Python 程序，真实生成测试安排后让 worker 执行一次原程序；不启动样本 101–105，不发布 PR。默认每阶段六秒，核对六个 API 状态与同版本 Runner 原始快照、实际失败子进程和最终原报告，再停止原 Run 并验证资源清理。测试使用 `gpt-6-luna` / `medium`，会消耗模型。测试由 `e2e` build tag 隔离，普通 Go Full 不包含此项；显式编译后若未注入项目参数会跳过，不能计为本专项通过。
 
-入口输出 `result.json`、`test.log` 和 `reports/scenarios/testing.project-progress-local-codex/`，其中保留 `source.json`、`initial-binding.json`、`runner-*.json`、`api-observations.json`、`original-run.json`、`worker-program-sha256.json`、`original-reports/`、原 stop 请求/回执、`stopped-run.json`、`proof.json` 及 `scenario.json`。只有实际执行通过且清理完整才写总结果通过；它尚未登记为统一受管测试，不导出 `go.full` 或其他 L4 项通过。该入口验证本机 Runner/Codex 与真实 SteerLine API，远端执行、浏览器展示和安装环境另行验证。
+入口输出 `result.json`、`test.log` 和 `reports/scenarios/testing.project-progress-local-codex/`，其中保留 `source.json`、`initial-binding.json`、`runner-*.json`、`api-observations.json`、`original-run.json`、`worker-program-sha256.json`、`original-reports/`、原 stop 请求/回执、`stopped-run.json`、`proof.json` 及 `scenario.json`。只有实际执行通过且清理完整才写总结果通过；它尚未登记为统一受管测试，不导出 `go.full` 或其他 L4 项通过。
+
+远端及连续浏览器联验在同一入口追加 `-RemoteProfile <公开执行配置JSON绝对路径>`。文件是一项完整 execution profile，必须明确使用 `orca-terminal` / `orca_environment`、现有 Orca CLI 和远端 Codex；不复制认证或安装状态。需要 Node/npm、Edge、远端注册的 SteerlineTest 仓库及 Python。自动材料生成仍使用本机默认模型，任务执行显式选择远端 profile。入口在 GitHub 推送本次随机 base ref，仅在远端根仓 fetch 此 ref，核对根工作区未变；原 Runner 负责创建、执行和停止实际 worker。
+
+远端模式每阶段十五秒，使用同一 Edge 页面连续观察 0→1→2→1→2→3，核对 DOM 完成项、计数、版本与相同版本的原 Runner 快照；观察期间不得刷新或导航。远端原报告和程序由独占诊断终端只读取得，终端必须关闭；驱动不修改进度、不向原 worker 输入。证据在 `reports/scenarios/testing.project-progress-orca-browser/`，另存 `remote-target.json`、`remote-fetch.json`、`remote-source.json`、Orca 公开回执，以及 `browser/observations.json`、六张截图和 Playwright trace。原 Run 停止后先核对调用方已观察同一原候选的 stopped 投影，再关闭调用方并结算自有 base 删除。此项会构建 Web，不与其他 Web 安装/构建并发；不覆盖安装版或 Task 18。

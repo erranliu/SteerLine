@@ -112,6 +112,9 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 	if id == "workflow.local-codex-audited" {
 		timeout = 20 * time.Minute
 	}
+	if id == "testing.project-progress-orca-browser" {
+		timeout = 20 * time.Minute
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}
 	t.Cleanup(s.cleanup)
@@ -217,6 +220,10 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 	}
 	root := filepath.Join(s.Root, relativeRoot, name)
 	p := &Project{Scenario: s, Name: name, Root: root, Home: filepath.Join(root, "home"), Repo: filepath.Join(root, "repo"), Remote: filepath.Join(root, "remotes", "e2e", "project.git"), Config: filepath.Join(root, "home", "etc", "SteerLine.json"), Database: filepath.Join(root, "home", "state", "steerline.db"), Provider: filepath.Join(root, "provider.json"), Executable: executable, Tasks: map[string]Task{}}
+	// Orca resolves its registered repository by the caller repository basename.
+	if s.ID == "testing.project-progress-orca-browser" {
+		p.Repo = filepath.Join(root, "SteerlineTest")
+	}
 	p.BaseBranch = "main"
 	s.projects = append(s.projects, p)
 	s.register("project", root, 0)

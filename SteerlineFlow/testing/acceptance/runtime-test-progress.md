@@ -94,3 +94,46 @@ retry 原报告记录真实输入 42/41/42、子进程退出 0/1/0、实际观�
 最终原始根 `C:/SteerlineDebug/progress-live-0ddf/run-06/`，读取 `result.json` / `test.log`，以及 `reports/scenarios/testing.project-progress-local-codex/` 内的 `source.json`、`initial-binding.json`、`runner-001.json` 至 `runner-006.json`、`api-observations.json`、`original-run.json`、`worker-program-sha256.json`、`original-reports/`、`stop-request-*.json` / `stop-response-*.json`、`stopped-run.json`、`proof.json`、`scenario.json`。最终测试源码由 `e2e` build tag 隔离，普通 Go Full 不会混入本专项的显式环境跳过。
 
 最终 SteerLine 固定 L1/L2 均通过，分别在同 scope 的 `validation-l1-settlement/summary.json`、`validation-l2-settlement/summary.json`；带 e2e tag 的入口编译检查通过，不带 tag 的普通测试列表不包含本专项。文档链接与 diff 检查通过。以上真实链只覆盖本地 Runner/Codex 和正式 API，不覆盖远端传输、浏览器或安装环境。
+
+## 真实远端 Runner 与连续 Edge 联验
+
+2026-10-24 后续使用 `codex/remote-progress-browser`，基线 `d0eba187` 加本次验收驱动。固定独立 Runner 仍为 `aea8abe` / `0.2.0-progress-aea8abe`，EXE SHA256 `a169e827027e9db0b386b008441848026408948831a5b2b28027f6473303391a`；不替换安装版。公开远端 profile 取自既有 `orca-remote-desktop64g`，环境 `e68f4edf-8a83-42c2-a9da-6d404d3aa3d8`，runtime `f8616747-34af-4543-8487-ec6b5d8de4ff`，任务执行 `gpt-6-luna` / `high`、`orca_terminal_v3`。自动材料生成仍使用本机默认 profile；不能据此声称材料生成也在远端。
+
+调用方建立独立 home/clone/任务，在 GitHub 推送随机自有 base，只将此 ref fetch 到远端已注册 SteerlineTest 仓库，核对根 HEAD/status 未变。原 Runner 创建实际远端 worktree、注入唯一进度文件并收集原字节。驱动只读取公开单文件快照、正式 API 和真实页面；只读原程序/报告的诊断终端独占创建并精确关闭，不向原 worker 输入、不写进度或恢复旧候选证据链。Edge 使用同一已授权页面，每阶段十五秒，记录 DOM 测试 ID/状态/计数/版本、截图和 trace；观察中不导航或刷新。
+
+失败均保留在 `C:/SteerlineDebug/progress-remote-browser-0ddf/`：
+
+- `attempt-01`：独立 Windows PowerShell 按系统编码读取含中文的 UTF-8 profile，JSON 解析失败，尚未建任务或远端资源。入口改为显式 UTF-8。
+- `attempt-02`：Edge 已打开，原 Runner 按调用方仓库目录名 `repo` 匹配远端注册仓库而拒绝执行；总失败、清理完整。独立远端夹具目录名现为实际注册的 `SteerlineTest`，不修改远端注册或其它仓库。
+- `attempt-03`：实际远端 Codex 运行原入口，退出 1，`ModuleNotFoundError: steerline_reports`；原脚本均存在，页面保持 0/3、版本 1，未误计完成。只读诊断确认嵌入式 Python 3.13.1 的 `python313._pth` 使 `isolated=1` / `safe_path=True`，搜索路径不含脚本目录。该轮总失败、资源清理完整；诊断终端均有 ptyKilled=true。原程序启动前失败，未产生 summary，不补造报告。
+
+SteerlineTest 在独立 clone 的修正提交 `1c162851cce442f6d685a7147688f253bdce34f2` 让四个报告入口按 __file__ 加载自身 tools 目录，不改远端 Python 安装或环境策略；新增 L4 回归以 `-I` 从其它目录启动四入口。此固定干净提交的 `python -I tools/test-project.py --level L1/L2/L4` 分别实际 5/1/20 项通过、0 跳过。原根 `C:/SteerlineDebug/progress-remote-browser-0ddf/project-fix/`，报告分别在 `.steerrunner/artifacts/l1-76121eabf0e64dd489f5362219f1a014/`、`l2-719189417d804f38bf102e45b59a276e/`、`l4-042d1670a0b643628f2c34740bb3fb5f/`；原控制台日志在 scope 的 `project-L1-isolated.log` 等文件。
+
+`attempt-04` 的原远端程序已实际通过三项，运行 75.70 秒，前后同 fixture `150cb7e32ab8f7a89cebb4b74ce35f59b0e384c8` 且 clean；retry 退出 0/1/0、字段 true/false/true。API/Runner 完整观察版本 1–6；Edge 连续截图保存至版本 5，trace 和实际 HTTP 响应已显示版本 6、3/3。驱动在一次读取后用异步 locator 重新断言旧完成数，恰遇页面更新，将正确的新页面误判超时；整体失败、清理完整，不改写该轮通过。驱动现同步断言同一次 DOM 读取的版本、三行和计数，避免跨观察竞态。
+
+`attempt-05` 的连续 Edge 测试完整通过：六状态版本 1–6，无刷新/导航，Runner 快照到 DOM 的观察差为 2.022/3.268/3.106/3.104/3.256/3.599 秒。三份原报告 passed/complete，retry 实际退出 0/1/0；原 workspace 同 fixture `84bb8bf2e71c9f4f4077a9560bb88c6765120c03` 且 clean，程序摘要一致，native final verified。已取得原 Run `86c479e9f8b5d3af71adb2817d37134e` 的 stop_status=stopped，诊断终端 ptyKilled=true。关闭调用方后，原通用驱动对候选最后投影的检查超时，因此总结果仍失败、最终清理完整。后续在关闭前等待调用方观察同一原 Run 的 stopped 投影，并增加调用方最终原始快照留存，不跳过原收尾检查。
+
+这一轮最终截图还保留了 Orca 原生状态订阅的短暂 transport unavailable 告警；单文件测试进度仍持续更新，之后原生查询已核实 final。它不代表所有原生状态流故障矩阵通过。Runner 的 stopped 证明仅覆盖原终端；不声明已核验远端全部后台进程或撤销执行主机凭证。
+
+最终 `attempt-06` 整体通过，268.74 秒，`result.json` / `scenario.json` 同时确认 passed=true、exit_code=0、cleanup_complete=true，无 context/cleanup 错误。实际命令：
+
+```powershell
+./scripts/test-project-progress-live.ps1 -ProjectRepository C:/SteerlineDebug/progress-remote-browser-0ddf/project-fix -ProjectCommit 1c162851cce442f6d685a7147688f253bdce34f2 -SteerRunnerExe C:/SteerlineDebug/progress-live-0ddf/runner/steerrunner.exe -OutRoot C:/SteerlineDebug/progress-remote-browser-0ddf/attempt-06 -RemoteProfile C:/SteerlineDebug/progress-remote-browser-0ddf/remote-profile.json
+```
+
+原 candidate `f37c3ffb18064c3ca0b5659d2641aa01`，Run `dda2a4e0ff1b798d465bde8261f033a4`，input_digest `88f0056c6190e0af68e074b1e0a422c10ec0ff6027e60e39111446cc7c2c121a`；fixture `6baeeb889e61271daf5e5a0474140ca878656f1e`。实际远端 worktree 为 `C:/Users/Administrator/orca/workspaces/SteerlineTest/sl-1-dda2a4e0ff1b798d465bde8261f033a4`。原程序运行 75.68 秒，三项 passed/complete，退出 0，前后同 fixture 且 clean；三份程序内容摘要与固定项目提交相同（仅规范 Git 检出行尾）。retry 真实输入 42/41/42、退出 0/1/0、字段 true/false/true，文件往返验证 1024 字节，两类资源均确认删除。
+
+| 版本 | roundtrip / retry / cleanup | 页面完成数 | Runner 快照到 DOM 观察差（秒） |
+| --- | --- | --- | --- |
+| 1 | false / false / false | 0 | 2.760 |
+| 2 | true / false / false | 1 | 3.353 |
+| 3 | true / true / false | 2 | 3.491 |
+| 4 | true / false / false | 1 | 3.678 |
+| 5 | true / true / false | 2 | 3.439 |
+| 6 | true / true / true | 3 | 3.549 |
+
+真实同一 Edge 页面完整通过，观察期间 document 请求为 0；逐测试 ID 和同版本原 Runner 字节比对，完成数与行状态一致，截图已人工核对失败和最终通过。延迟按同机 Runner observed_at 与浏览器观察时间计算，不能当作远端文件实际落盘到页面的完整延迟保证。native final verified，来源 `orca.terminal.native-state-reply.v1`。原 stop 首次明确 stale_revision、零接受，刷新同一 Run 后第二请求接受；原 Run stop_status=stopped，再取得同一绑定的调用方 stopped 投影，随后关闭服务，关闭后的原数据库投影检查也通过。诊断终端确认关闭，自有 GitHub base 已删除；远端 worktree/证据沿 Runner 保留策略，不声称清除了远端所有文件或后台进程。
+
+最终原始根 `C:/SteerlineDebug/progress-remote-browser-0ddf/attempt-06/`：总结果 `result.json`、`test.log`，延迟 `browser-latency.json`；场景目录 `reports/scenarios/testing.project-progress-orca-browser/` 的 `proof.json`、`source.json`、原绑定、六份 `runner-*.json`、`api-observations.json`、`browser/observations.json`、六张截图及 trace、原 native Run、`remote-source.json`、`worker-program-sha256.json`、`original-reports/`、stop 请求/回执、`stopped-run.json`、`caller-stop-candidate.json`、`caller-final-workflow.json`、`scenario.json`。这些是本次真实证据，不据前轮功能通过改写前轮总失败。
+
+最终固定 SteerLine L1/L2 均通过：同 scope 的 `validation-l1-native-stop/summary.json`、`validation-l2-native-stop/summary.json`；L2 清理完整。Web build、实际 Edge、实际远端原程序及带 e2e tag 编译均通过；普通 Go Full 未执行。使用 Orca CLI 公共接口定位及诊断，未修改 Runner、远端解释器安装、本机安装版、原 SteerlineTest 维护 checkout 或 Task 18；Plan 自动自定义目标仍不在本次范围。
