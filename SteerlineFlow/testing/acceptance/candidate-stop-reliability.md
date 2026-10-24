@@ -77,3 +77,13 @@ Web 原 owner 内有界并发核实、锁+网络预算、单请求合并及只�
 按用户要求在实施后完成一次代码自审，覆盖停止准入与事务、通知/取消/单 actor 调度、原请求恢复和身份绑定、HTTP 请求仲裁、浏览器锁/超时/核实调度及界面终态收敛。确认一处恢复路径校验缺口：外层回执缺失时读取 Command.Result，没有检查协议版本与终态值；现已复用既有协议版本和终态规则补齐，新增损坏版本/状态反例。定向 app 回归 `diagnostics/audit-20261024T234042196Z/summary.json` 通过。
 
 本轮未发现其他阻断项；没有引入新状态机、持久轮询记录或第二套业务写入口。整理两处前端 import/格式后，提交源码再运行固定 L1/L2，干净受测提交及导出记录在后续条目登记。真实浏览器 CSR-M01 仍未验，安装现场不在本 PR 的执行范围。
+
+### 干净提交验证
+
+受测源码为 `d1b55b687cc155b59c22bf8a0a48e8a5faad205f`。固定 L1/L2 开始与结束时源码干净；由正式 record 入口导出 [Git 测试历史](../records/d1b55b687cc155b59c22bf8a0a48e8a5faad205f.json)，后续提交仅补本记录和导出的 JSON，不冒充验证后续文档提交。
+
+- L1：`test-results/L1/pr-20261024T234121050Z/summary.json`，passed/complete，准备 0.435 秒、执行 6.825 秒。
+- L2：`test-results/L2/pr-20261024T234120699Z/summary.json`，passed，准备 15.397 秒、执行 82.266 秒；scenario passed=true、cleanup_complete=true、无清理错误。
+- Web：`diagnostics/web-pr-20261024T234203526Z/tests.log`，29 文件、195 项全部通过；同目录 `build.log`，TypeScript/Vite 构建通过。
+
+上述路径仍以 `C:/SteerlineDebug/wt-83d4-candidate-stop/` 为根。审计修复只补严丢失回执恢复的协议校验；L3 恢复及核心 owner 回归沿用前表的独立原始证据，未把它们导出为该干净 SHA 的历史结果。
