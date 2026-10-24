@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +22,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
+	"github.com/google/uuid"
 )
 
 // Explicit live acceptance, invoked only by scripts/test-project-progress-live.ps1.
@@ -32,10 +35,15 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 	if !filepath.IsAbs(source) {
 		t.Fatal("project source must be absolute")
 	}
-	s := NewScenario(t, "testing.project-progress-local-codex")
+	scenarioID := "testing.project-progress-local-codex"
+	if os.Getenv("STEERLINE_PROGRESS_REMOTE_PROFILE") != "" {
+		scenarioID = "testing.project-progress-orca-browser"
+	}
+	s := NewScenario(t, scenarioID)
 	p := s.NewLiveProject("steerlinetest", "local-codex")
-	// Writable native sessions authenticate the real repository identity. Git
-	// transport stays on the owned loopback remote; publication is not requested.
+	remote := loadProgressRemote(s, p)
+	// Writable native sessions authenticate the real repository identity. Local
+	// transport uses loopback; remote execution gets an owned GitHub base ref.
 	p.RemoteURL = githubURL
 	p.git(p.Repo, "remote", "set-url", "origin", p.RemoteURL)
 	provider, err := controlled.Read(p.Provider)
@@ -44,8 +52,11 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 	s.Must(controlled.Write(p.Provider, provider))
 	commit := p.git(source, "rev-parse", "--verify", os.Getenv("STEERLINE_PROGRESS_COMMIT")+"^{commit}")
 	p.git(p.Repo, "fetch", "--quiet", source, commit)
-	p.git(p.Repo, "checkout", "--quiet", "-b", "progress-live", "FETCH_HEAD")
 	p.BaseBranch = "progress-live"
+	if remote != nil {
+		p.BaseBranch = "codex/e2e/" + strings.ReplaceAll(uuid.NewString(), "-", "") + "/" + s.ID + "/base"
+	}
+	p.git(p.Repo, "checkout", "--quiet", "-b", p.BaseBranch, "FETCH_HEAD")
 	// Keep the actual project's versioned programs unchanged in this independent checkout.
 	programs := []string{"tools/test-runtime-progress.py", "tools/runtime_progress.py", "tools/steerline_reports.py"}
 	programDigests := map[string]string{}
@@ -61,6 +72,10 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 	keys := []string{"demo.progress.roundtrip", "demo.progress.retry", "demo.progress.cleanup"}
 	spec := "# Live project progress acceptance\n\nThis is a test-only task, not a sample implementation. Do not edit tracked files, commit, push, create a PR, or publish. Read the original Plan and run its exact existing Python test entry once. Do not set STEERLINE_PROGRESS_FILE: Runner already injects it. After the program exits, summarize actual evidence and finish BLOCKED because publication is intentionally not authorized. No questions or additional work are needed.\n"
 	plan := "# Live project progress plan\n\nExactly these three mandatory automatic L4 tests must be selected: demo.progress.roundtrip, demo.progress.retry, demo.progress.cleanup. Run `python tools/test-runtime-progress.py --out .steerrunner/artifacts/live-progress` exactly once in implement.execute. Keep the default six-second observation windows. Its own real subprocess negative assertion must stay incomplete until the corrected retry passes. Do not manufacture or edit progress or reports. No changes, implementation commit or publication are requested. The external acceptance reads public Runner snapshots and SteerLine API while this program executes, then stops the original Run.\n"
+	if remote != nil {
+		plan = strings.ReplaceAll(plan, "--out .steerrunner/artifacts/live-progress", "--pause-seconds 15 --out .steerrunner/artifacts/live-progress")
+		plan = strings.ReplaceAll(plan, "Keep the default six-second observation windows.", "Keep the fifteen-second observation windows so the same real browser can observe each transition. Wait for this foreground command to exit; if the shell tool returns a running session, poll that exact session without restarting the command. Do not detach it.")
+	}
 	for path, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": spec, "SteerlineFlow/plans/task.plan.md": plan} {
 		s.Must(os.WriteFile(filepath.Join(p.Repo, filepath.FromSlash(path)), []byte(body), 0600))
 	}
@@ -86,8 +101,25 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 	profile["workflow"] = map[string]any{"id": "development", "version": 2, "prompt_overrides": map[string]string{
 		"publish": `This is a progress-only acceptance. Publication is not authorized. Do not execute any commands or query any provider. Return exactly {"outcome":"blocked","summary":"Progress-only acceptance; publication intentionally not authorized","blocker":{"category":"prerequisite","action":"publish","error":"Publication intentionally not authorized"}}.`,
 	}}
+	if remote != nil {
+		remote.Profile["id"] = "orca-progress"
+		remote.Profile["workflow"] = profile["workflow"]
+		catalog["execution_profiles"] = append(catalog["execution_profiles"].([]any), remote.Profile)
+		p.Driver.Profile = "orca-progress"
+		provider.GitURL = githubURL
+		provider.BaseBranch = p.BaseBranch
+		s.Must(controlled.Write(p.Provider, provider))
+		p.git(p.Repo, "config", "credential.helper", "!gh auth git-credential")
+		p.RealPR, p.DefaultBranch = true, "main"
+		s.register("github-base-branch", p.BaseBranch, 0)
+		profile = remote.Profile
+	}
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
 	p.git(p.Repo, "push", "--quiet", provider.GitURL, p.BaseBranch)
+	if remote != nil {
+		remote.Fetch(s, p, head)
+		p.Chain = "orca-remote"
+	}
 	s.Must(controlled.Write(filepath.Join(s.Output, "source.json"), map[string]any{"repository": source, "source_commit": commit, "fixture_commit": head, "program_sha256": programDigests, "program_digest_normalization": "CRLF to LF only; original Git blobs checked before dispatch", "runner": catalog["runner"], "profile": profile}))
 	p.CreateTasks()
 	public, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
@@ -104,6 +136,7 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 	service, err := runner.ServiceStatus(s.Context)
 	s.Must(err)
 	runner.InstanceID = service.InstanceID
+	browser := startProgressBrowser(s, p)
 	p.Claim("a")
 	var candidateID, runID, digest string
 	s.Wait("original real candidate binding", func() (bool, error) {
@@ -120,11 +153,18 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 		}
 		return false, nil
 	})
+	if browser != nil {
+		browser.Bind(s, id, p.Tasks["a"].ID, candidateID)
+	}
 	// Preserve original public facts and reports before scenario cleanup even if
 	// a later assertion fails. Never turn a diagnostic-copy failure into a pass.
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+		caller, callerErr := driver.ReadWorkflow(ctx, p.Database, p.ProjectID)
+		if err := controlled.Write(filepath.Join(s.Output, "caller-final-workflow.json"), map[string]any{"snapshot": caller, "error": fmt.Sprint(callerErr)}); err != nil {
+			t.Error(err)
+		}
 		observed, err := runner.Inspect(ctx, "run-id", runID, false)
 		if err != nil || observed.Run == nil {
 			return // A successful body already retained evidence before stopping.
@@ -132,7 +172,20 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 		if err := controlled.Write(filepath.Join(s.Output, "cleanup-run.json"), observed.Run); err != nil {
 			t.Error(err)
 		}
-		reports := filepath.Join(observed.Run.Execution.Workspace, ".steerrunner", "artifacts", "live-progress")
+		workspace := observed.Run.Execution.Workspace
+		if workspace == "" {
+			return // Execution was rejected before an original workspace existed.
+		}
+		if remote != nil {
+			if _, err := os.Stat(filepath.Join(s.Output, "original-reports")); err == nil {
+				return
+			}
+			workspace = remote.Capture(s, p, *observed.Run, false)
+			if workspace == "" {
+				return
+			}
+		}
+		reports := filepath.Join(workspace, ".steerrunner", "artifacts", "live-progress")
 		if _, err := os.Stat(reports); err == nil {
 			destination := filepath.Join(s.Output, "original-reports")
 			if _, err := os.Stat(destination); os.IsNotExist(err) {
@@ -168,7 +221,7 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 				}
 			}
 			reports := filepath.Join(observed.Run.Execution.Workspace, ".steerrunner", "artifacts", "live-progress")
-			if raw, err := os.ReadFile(filepath.Join(reports, "summary.json")); err == nil {
+			if raw, err := readLocalProgressSummary(remote, reports); err == nil {
 				var summary struct {
 					Passed bool `json:"passed"`
 				}
@@ -241,6 +294,9 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 		}
 		return matched == len(expected), nil
 	})
+	if browser != nil {
+		browser.Verify(s, rawByVersion)
+	}
 	var original runnercontract.Run
 	s.Wait("real native final and original project reports", func() (bool, error) {
 		observed, err := runner.Inspect(s.Context, "run-id", runID, false)
@@ -254,11 +310,18 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 		}
 		return original.Final != nil && original.Final.Verified && original.Final.Source != "", nil
 	})
-	if original.Execution.Protocol != "local_codex_app_server_v1" || original.Execution.Backend != "local" {
+	if remote == nil && (original.Execution.Protocol != "local_codex_app_server_v1" || original.Execution.Backend != "local") {
 		t.Fatal("native execution binding differs", original.Execution)
 	}
+	if remote != nil && (original.Execution.Backend != "orca" || original.Execution.Protocol != "orca_terminal_v3") {
+		t.Fatal("remote native execution binding differs", original.Execution)
+	}
 	s.Must(controlled.Write(filepath.Join(s.Output, "original-run.json"), original))
-	reports := filepath.Join(original.Execution.Workspace, ".steerrunner", "artifacts", "live-progress")
+	evidenceWorkspace := original.Execution.Workspace
+	if remote != nil {
+		evidenceWorkspace = remote.Capture(s, p, original, true)
+	}
+	reports := filepath.Join(evidenceWorkspace, ".steerrunner", "artifacts", "live-progress")
 	body, err = os.ReadFile(filepath.Join(reports, "summary.json"))
 	s.Must(err)
 	var summary struct {
@@ -276,7 +339,7 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 	}
 	workerRawDigests := map[string]string{}
 	for _, path := range programs {
-		raw, err := os.ReadFile(filepath.Join(original.Execution.Workspace, filepath.FromSlash(path)))
+		raw, err := os.ReadFile(filepath.Join(evidenceWorkspace, filepath.FromSlash(path)))
 		s.Must(err)
 		workerRawDigests[path] = testmanagement.ContentDigest(raw)
 		canonical := testmanagement.ContentDigest(bytes.ReplaceAll(raw, []byte("\r\n"), []byte("\n")))
@@ -333,9 +396,36 @@ func TestSteerlineTestLiveProgress(t *testing.T) {
 		}
 		return observed.Run.StopStatus == "stopped", nil
 	})
+	// Let the live caller consume the independently requested native stop before
+	// closing its polling loop. Preserve the same original candidate binding.
+	callerStopCtx, callerStopCancel := context.WithTimeout(s.Context, 30*time.Second)
+	defer callerStopCancel()
+	s.Wait("caller observes original native stop", func() (bool, error) {
+		if err := callerStopCtx.Err(); err != nil {
+			t.Fatal("caller stop projection did not settle:", err)
+		}
+		state, err := p.SnapshotContext(callerStopCtx)
+		if err != nil {
+			return false, err
+		}
+		for _, candidate := range state.Runner.Candidates {
+			if candidate.ID == candidateID {
+				s.Must(controlled.Write(filepath.Join(s.Output, "caller-stop-candidate.json"), candidate))
+				if candidate.RunID != runID || candidate.InputDigest != digest {
+					t.Fatal("caller original binding changed during native stop")
+				}
+				return candidate.Projection != nil && candidate.Projection.StopStatus == "stopped", nil
+			}
+		}
+		return false, nil
+	})
 	p.StopService()
 	p.WaitStoppedCandidates()
-	s.Must(controlled.Write(filepath.Join(s.Output, "proof.json"), map[string]any{"passed": true, "source_commit": commit, "fixture_commit": head, "candidate_id": candidateID, "run_id": runID, "input_digest": digest, "native_source": original.Final.Source, "observed_states": expected, "observed_count": len(observations), "final_api": view, "scope": "real local Runner and Codex execute unchanged SteerlineTest programs; live public Runner and SteerLine API; loopback Git, no publication"}))
+	scope := "real local Runner and Codex execute unchanged SteerlineTest programs; live public Runner and SteerLine API; loopback Git, no publication"
+	if remote != nil {
+		scope = "real remote Orca/Codex executes unchanged SteerlineTest programs; Runner single-file snapshots, SteerLine API and one continuous Edge page; owned GitHub base only, no publication"
+	}
+	s.Must(controlled.Write(filepath.Join(s.Output, "proof.json"), map[string]any{"passed": true, "source_commit": commit, "fixture_commit": head, "candidate_id": candidateID, "run_id": runID, "input_digest": digest, "native_source": original.Final.Source, "observed_states": expected, "observed_count": len(observations), "final_api": view, "scope": scope}))
 	s.Must(s.FinishBody())
 }
 
