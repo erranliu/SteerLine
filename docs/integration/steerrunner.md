@@ -1,5 +1,8 @@
 # SteerRunner 依赖与运行
 
+2026-10-24：候选测试汇报改用 [progress-file 单文件通道](runtime-progress.md)，调用方冻结布尔字段、独立保存快照并解释展示。候选侧原 R2 收集、workspace-git 当前通过判定和自动转测试历史已移除；下文 2026-10-20 的 R2 接入只记录历史版本。独立标准报告与显式登记保留。安装及旧现场不自动迁移。
+
+
 执行页“用量与费用”消费 Runner #47 / `61d9317524b56f148b2b31e2f23a4acc1de58081` 的 `run-usage`、`estimate-run-cost`，以同一用量快照估算候选累计主会话费用。页面不触发日志补采或执行输入；缺价表仍显示 Token，未知不显示零，部分费用标记“已计价部分”。当前资格为 Orca 本机 Codex/Pi/DSH 和远端 Codex；`codex-app-server` 与远端 Pi/DSH 未由本次接入扩展。接入与测试范围见[Plan](../../SteerlineFlow/plans/run-usage-cost-ui.plan.md)和[验收](../../SteerlineFlow/testing/acceptance/run-usage-cost-ui.md)。
 
 `execution.json` 的可选顶层 `pricing_policy` 为 Runner 所在机器上的绝对 JSON 文件路径，例如 `"pricing_policy": "C:/MySteerLine/pricing-policy.json"`。价表使用所选 Runner 发布的 `run-pricing-policy/v1`，明确 ID、版本、来源、币种、生效区间和模型费率；不内置价格、不联网抓价。金额是 token 的 API 等价估算，不是实际扣费，排除订阅/credits 结算与工具/外部 API 附加费。价表在估价时由 Runner 独立读取，刷新可以按新策略重算，用量事实不变；设置或更换文件路径需保存配置并显式重启 SteerLine。
@@ -34,7 +37,7 @@ SteerLine 为 Runner 指定本地卷根下的短目录：Windows 为 `<drive>:\s
 
 新提交的恢复、回答和反馈需要当前公开 revision 的显式授权。兼容服务重启保留 Runner 原授权、会话与等待状态，可补收原结果并接续已证明未发送的后继，不因重启批量 resume；原资源丢失、不兼容、业务阻断和显式 stop 仍按原门槛处理。SteerLine 不自动生成新的 submit/reply/resume；旧调用方 pending 控制撤回，unknown 只查原 request_id。Runner 已受理且绑定原问题/执行范围的未发送答案按原授权对账，旧 epoch 或错范围仍需人工确认。不能换 ID 重发未知操作。详见[换代恢复契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md)。
 
-交付摘要只读取已有 Run 投影和原命令回执，分别展示受理、原生结果、业务阶段、PR 与资源停止；命令 completed、pr_ready 和 resources_settled 不能互相替代。刷新不发送输入，不创建资源；完整 environment-check、纯 validate 和 R2 收集按需使用，Run 内的权限/来源/发布门槛保持。摘要实现与验收见[可靠性交付简化](../../SteerlineFlow/testing/acceptance/reliable-delivery-simplification.md)。
+交付摘要只读取已有 Run 投影和原命令回执，分别展示受理、原生结果、业务阶段、PR 与资源停止；命令 completed、pr_ready 和 resources_settled 不能互相替代。刷新不发送输入，不创建资源；完整 environment-check 和纯 validate 按需使用，候选测试进度由独立 progress-file 查询同步，Run 内的权限/来源/发布门槛保持。摘要实现与验收见[可靠性交付简化](../../SteerlineFlow/testing/acceptance/reliable-delivery-simplification.md)。
 
 原生查看通过 `open-native-session --run-id R --attempt-id A --session-id S --generation G` 调用；只有 Runner 发布的 `native_session_viewer.adapters` 中相应 adapter 可用时启用按钮。原服务负责私有 binding 和实时进程/thread/workspace 核验，调用方不读取这些私有材料。详情与本次构建/验证范围见[原会话查看验收](../../SteerlineFlow/testing/acceptance/native-session-viewer.md)。
 

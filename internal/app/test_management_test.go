@@ -40,6 +40,6 @@ func TestTMPlanTestsRequiresPublicReports(t *testing.T) {
 	}
 }
 
-func (s tmSnapshotStore) Evidence(context.Context, string, string) (testmodel.Evidence, error) {
-	return testmodel.Evidence{}, testmanagement.ErrNotFound
+func (s tmSnapshotStore) Progress(context.Context, string, string) (testmodel.Progress, error) {
+	return testmodel.Progress{}, testmanagement.ErrNotFound
 }

@@ -80,12 +80,13 @@ type Publication struct {
 	Settings   json.RawMessage `json:"settings"`
 }
 type RunInput struct {
-	Title       string            `json:"title"`
-	NamePrefix  string            `json:"name_prefix,omitempty"`
-	Correlation map[string]string `json:"correlation,omitempty"`
-	Repository  Repository        `json:"repository"`
-	Documents   Documents         `json:"documents"`
-	Workflow    Workflow          `json:"workflow"`
-	Execution   ExecutionInput    `json:"execution"`
-	Publication Publication       `json:"publication"`
+	ProgressFile *ProgressFileInput `json:"progress_file,omitempty"`
+	Title        string             `json:"title"`
+	NamePrefix   string             `json:"name_prefix,omitempty"`
+	Correlation  map[string]string  `json:"correlation,omitempty"`
+	Repository   Repository         `json:"repository"`
+	Documents    Documents          `json:"documents"`
+	Workflow     Workflow           `json:"workflow"`
+	Execution    ExecutionInput     `json:"execution"`
+	Publication  Publication        `json:"publication"`
 }

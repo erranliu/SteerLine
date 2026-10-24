@@ -19,7 +19,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/runtimeprogress"
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
+	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
 type e2eScenario struct {
@@ -485,7 +487,17 @@ func runE2E(opts options) (code int) {
 		raw = converted
 		g.Summary = testfeedback.Parse(raw, g.ExitCode)
 		groups[i] = &g
-		return checkE2EGroup(g, packages[pkg], out)
+		groupErr := checkE2EGroup(g, packages[pkg], out)
+		if groupErr == nil {
+			values := map[string]bool{}
+			for _, entry := range packages[pkg] {
+				values[testmanagement.ProgressKey(entry.ID)] = true
+			}
+			if e := runtimeprogress.Update(context.Background(), values, true); e != nil {
+				fmt.Fprintln(os.Stderr, "runtime progress unavailable:", e)
+			}
+		}
+		return groupErr
 	})
 	for _, g := range groups {
 		if g != nil {

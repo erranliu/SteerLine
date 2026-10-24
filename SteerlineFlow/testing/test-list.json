@@ -132,8 +132,8 @@
       "level": "L4",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.management-local-codex",
-      "check": "真实自动生成保存系统安排，原干净 Run 实际执行先通过再失败的测试程序，经 Runner artifacts、Git、API 和浏览器核对原报告及绑定；停止和资源清理完整。",
-      "note": "共享源码 Web 构建目录，必须串行；需要固定 Runner、本机 Codex 登录、Node/npm/Edge，消耗真实模型；隔离包不发布 PR。"
+      "check": "真实自动生成保存系统安排，原干净 Run 实际执行先通过再失败的测试程序，经 Runner progress-file、API 和浏览器核对通过/重跑未完成进度、独立版本及原绑定，原报告独立保存；停止和资源清理完整。",
+      "note": "共享源码 Web 构建目录，必须串行；需要固定 Runner、本机 Codex 登录、PowerShell 7、Node/npm/Edge，消耗真实模型；隔离包不发布 PR。"
     },
     {
       "id": "testing.records",
@@ -152,6 +152,14 @@
       "command": "go run ./cmd/test-feedback -level=L4 -suite=workflow -env=live -scenario=workflow.local-codex-audited",
       "check": "使用两个显式模型完成实现、两轮审计、发布与真实 PR 合并；核对正式产品详情中的模型/材料/审计来源、唯一交付与后继 ready 未启动，清理完整。",
       "note": "L4 真实审计专项，单独精确选择；固定 Runner、两个不同的显式模型及 SteerlineTest GitHub 写权限，消耗模型并创建/合并专属 PR。"
+    },
+    {
+      "id": "testing.runtime-progress",
+      "name": "运行时单文件测试进度",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -env=controlled -scenario=testing.runtime-progress",
+      "check": "独立 home/repo/SQLite 与公开 Runner fixture；固定测试字段初始化、通过/重跑清零、非法内容及传输异常保留快照、重启续读、原业务 revision/输入不变、不产生 managed 历史、停止及资源清理完整。可与独立场景并行，总并发最多二。"
     }
   ]
 }

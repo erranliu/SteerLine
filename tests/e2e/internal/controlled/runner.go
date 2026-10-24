@@ -3,6 +3,7 @@ package controlled
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -20,11 +21,12 @@ import (
 // RunnerFixture is a scripted public CLI peer. It owns no agent, transport,
 // workflow or native recovery state. Calls are evidence of caller side effects.
 type RunnerFixture struct {
-	Providers map[string]string                 `json:"providers"`
-	Runs      map[string]runnercontract.Run     `json:"runs"`
-	Requests  map[string]runnercontract.Command `json:"requests"`
-	Bodies    map[string]string                 `json:"bodies"`
-	Calls     []string                          `json:"calls"`
+	Progress  map[string]runnercontract.ProgressFile `json:"progress"`
+	Providers map[string]string                      `json:"providers"`
+	Runs      map[string]runnercontract.Run          `json:"runs"`
+	Requests  map[string]runnercontract.Command      `json:"requests"`
+	Bodies    map[string]string                      `json:"bodies"`
+	Calls     []string                               `json:"calls"`
 }
 
 func RunnerCLI(args []string) (bool, error) {
@@ -71,7 +73,7 @@ func RunnerCLI(args []string) (bool, error) {
 	case "version", "capabilities", "service":
 		os.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "caller-fixture-v1")
 		return protocol.RunRunnerServiceFixture(), nil
-	case "submit", "inspect", "open-native-session", "events", "reply", "resume", "stop":
+	case "progress-file", "submit", "inspect", "open-native-session", "events", "reply", "resume", "stop":
 	default:
 		return false, nil
 	}
@@ -108,7 +110,7 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	var request runnercontract.Request
 	var id any
-	if args[0] != "inspect" && args[0] != "events" && args[0] != "open-native-session" {
+	if args[0] != "progress-file" && args[0] != "inspect" && args[0] != "events" && args[0] != "open-native-session" {
 		if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
 			return true, err
 		}
@@ -151,6 +153,21 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	s.Calls = append(s.Calls, strings.Join(args[:1], " "))
 	runID := argument(args, "--run-id")
+	if args[0] == "progress-file" {
+		p, ok := s.Progress[runID]
+		if !ok {
+			return respond(nil, "run_not_found")
+		}
+		if raw, err := os.ReadFile(filepath.Join(stateDir, runID+"-progress.json")); err == nil {
+			if json.Unmarshal(raw, &p) != nil {
+				return respond(nil, "invalid_fixture")
+			}
+		}
+		if s.Runs[runID].StopStatus == "stopped" {
+			p.CollectionStatus = "closed"
+		}
+		return respond(p, "")
+	}
 	if args[0] == "submit" {
 		if previous, ok := s.Requests[request.RequestID]; ok {
 			if s.Bodies[request.RequestID] != string(request.Input) {
@@ -218,6 +235,19 @@ func RunnerCLI(args []string) (bool, error) {
 			run.StopStatus = "stopped"
 			run.Final = &source
 			run.NewInputsAllowed = false
+		}
+		if input.ProgressFile != nil {
+			body, err := base64.StdEncoding.Strict().DecodeString(input.ProgressFile.InitialContentBase64)
+			if err != nil {
+				return true, err
+			}
+			hash := sha256.Sum256(body)
+			now := time.Now().UTC()
+			if s.Progress == nil {
+				s.Progress = map[string]runnercontract.ProgressFile{}
+			}
+			encoded := input.ProgressFile.InitialContentBase64
+			s.Progress[runID] = runnercontract.ProgressFile{Contract: runnercontract.ProgressContract, RunID: runID, Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(body), SHA256: hex.EncodeToString(hash[:]), CollectionStatus: "observing"}
 		}
 		s.Runs[runID] = run
 		s.Providers[runID] = providerPath

@@ -7,7 +7,7 @@ import (
 
 const RulesPath = "SteerlineFlow/testing.md"
 const CataloguePath = "SteerlineFlow/testing/test-list.json"
-const TestingInstructions = "测试安排已固定。仅按 Plan 执行登记入口，不自动增加测试。提交被测代码后再执行需计当前通过的测试。运行内用入口已有 -out 参数将证据写到 .steerrunner/artifacts/<唯一执行ID>/ 新目录，目录须由项目 ignore 排除。入口程序输出 managed-*.json 及 summary.json，完整写入后原子发布 managed 报告；不要手写 Agent 自述测试结果。格式与定义摘要按项目测试规范；入口不支持时保留未完成。不得修改已固定测试定义或安排来制造通过。"
+const TestingInstructions = "测试安排已固定。仅按 Plan 执行登记入口，不自动增加或修改测试。运行时环境变量 STEERLINE_PROGRESS_FILE 指向本次唯一进度文件，内容为 test.<测试ID> 到布尔值的 JSON 对象。使用项目正式 tools/report-progress.ps1 或入口共用写入逻辑；开始或重跑先将对应字段置 false，完整通过（实际选择非零、无失败/意外跳过且清理核验通过）才置 true；失败、跳过、未完成不得置 true。并行写入须加锁合并并原子替换，不覆盖其它字段。原始日志及报告仍按项目入口保存，无需为候选采集生成 managed 报告；不要用 Agent 自述替代入口汇报。进度文件缺失或入口尚不支持时保留未完成，不修改固定测试定义或安排来制造通过。"
 
 // TestingContext is inline caller data inside the frozen prompt, never a file.
 func TestingContext(snapshot []byte) string {

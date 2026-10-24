@@ -1,15 +1,8 @@
-import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { projectQueries } from "../../shared/api/queries";
 import type { Candidate } from "../../shared/api/types";
 
-export type TestResult = {
-  test_id: string;
-  status: string;
-  message: string;
-  log: string;
-};
 export type TestRow = {
   id: string;
   name: string;
@@ -18,32 +11,29 @@ export type TestRow = {
   command: string;
   check: string;
   status: string;
-  message?: string;
-  log?: string;
-  history: TestResult[];
 };
 export type PlanTestsView = {
  material_status?:string;
  association_available?:boolean;
+  progress_version?: number;
+  observed_at?: string;
+  collection_status?: string;
   commit?: string;
   status: string;
   diagnostic?: string;
   plan_path: string;
   total: number;
   passed: number;
-  failed: number;
   pending: number;
   rows: TestRow[];
 };
 const labels: Record<string, string> = {
   passed: "通过",
-  failed: "失败",
-  incomplete: "未完成",
-  pending: "待验证",
+  pending: "未完成",
   stale: "待复验",
 };
 export function PlanTests({ run }: { run: Candidate }) {
-  const { api, online, identity } = useWorkspace();
+  const { api, online } = useWorkspace();
   const result = useQuery({
     ...projectQueries(api).planTests(run),
     enabled: online,
@@ -87,36 +77,20 @@ export function PlanTests({ run }: { run: Candidate }) {
           ) : (
             <p>
               共 {view.total} 项 ·{" "}
-              {online && !result.error ? "通过" : "上次通过"} {view.passed} ·
-              失败 {view.failed} · 待验证 {view.pending}
+              {online && !result.error && (!view.diagnostic || !view.progress_version) ? "已通过" : "上次通过"} {view.passed} · 未完成 {view.pending}
             </p>
           )}
+          {view.observed_at && <p className="muted">进度版本 {view.progress_version} · 上次观察 {new Date(view.observed_at).toLocaleString()}</p>}
+          {view.collection_status === "closed" && <p className="muted">本次运行的进度采集已结束，保留最终快照。</p>}
           {view.rows.map((row) => (
             <details key={row.id} className="test-plan-row">
               <summary>
                 {row.name} · {row.level} / {row.environment} ·{" "}
                 {labels[row.status] || "待核实"}
               </summary>
-              <p className="muted">{row.id} · <Link to={"/projects/"+identity.project_id+"/tests?test="+encodeURIComponent(row.id)}>查看测试记录</Link></p>
+              <p className="muted">{row.id}</p>
               <pre>{row.command}</pre>
               <p>{row.check}</p>
-              {row.message && <p>{row.message}</p>}
-              {row.log && (
-                <p className="muted">
-                  证据引用：<code>{row.log}</code>
-                </p>
-              )}
-              {row.history.length > 0 && (
-                <details>
-                  <summary>历史结果（{row.history.length}）</summary>
-                  {row.history.map((item, i) => (
-                    <p key={i}>
-                      {labels[item.status] || item.status} · {item.message}{" "}
-                      <code>{item.log}</code>
-                    </p>
-                  ))}
-                </details>
-              )}
             </details>
           ))}
         </>

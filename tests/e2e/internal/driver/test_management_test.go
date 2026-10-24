@@ -14,7 +14,7 @@ import (
 func TestTMFixtureProgramEmitsActualPassAndFailure(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join("..", "..", "..", "..", "debug-template", "projects", "SteerlineTest")
-	for _, p := range []string{"test-marker.ps1", ".gitignore", "SteerlineFlow/testing/test-list.json"} {
+	for _, p := range []string{"test-marker.ps1", "tools/testing/RuntimeProgress.ps1", ".gitignore", "SteerlineFlow/testing/test-list.json"} {
 		b, e := os.ReadFile(filepath.Join(source, p))
 		if e != nil {
 			t.Fatal(e)
@@ -39,6 +39,11 @@ func TestTMFixtureProgramEmitsActualPassAndFailure(t *testing.T) {
 	if e := json.Unmarshal(raw, &catalog); e != nil {
 		t.Fatal(e)
 	}
+	progressPath := filepath.Join(t.TempDir(), "progress.bin")
+	t.Setenv("STEERLINE_PROGRESS_FILE", progressPath)
+	if err := os.WriteFile(progressPath, []byte(`{"test.fixture.marker":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	var reportIDs []string
 	for _, phase := range []string{"pass", "fail"} {
 		input := "fixture-ok"
@@ -52,7 +57,7 @@ func TestTMFixtureProgramEmitsActualPassAndFailure(t *testing.T) {
 		if e := os.WriteFile(filepath.Join(artifacts, "fixture-input.txt"), []byte(input), 0600); e != nil {
 			t.Fatal(e)
 		}
-		c := exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "./test-marker.ps1", "-Out", ".steerrunner/artifacts/"+phase)
+		c := exec.Command("pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "./test-marker.ps1", "-Out", ".steerrunner/artifacts/"+phase)
 		c.Dir = root
 		b, e := c.CombinedOutput()
 		if phase == "pass" && e != nil || phase == "fail" && (c.ProcessState == nil || c.ProcessState.ExitCode() != 1) {
@@ -72,6 +77,11 @@ func TestTMFixtureProgramEmitsActualPassAndFailure(t *testing.T) {
 		summary, e := os.ReadFile(filepath.Join(artifacts, phase, "summary.json"))
 		if e != nil || !strings.Contains(string(summary), input) {
 			t.Fatal(string(summary), e)
+		}
+		progress, e := os.ReadFile(progressPath)
+		var fields map[string]bool
+		if e != nil || json.Unmarshal(progress, &fields) != nil || fields["test.fixture.marker"] != (phase == "pass") {
+			t.Fatal("real assertion did not drive progress", string(progress), e)
 		}
 		reportIDs = append(reportIDs, r.ID)
 	}

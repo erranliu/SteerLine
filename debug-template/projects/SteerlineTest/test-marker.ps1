@@ -1,5 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$Out, [string]$InputPath = '')
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'tools/testing/RuntimeProgress.ps1')
+Set-RuntimeProgress -Name test.fixture.marker -Completed $false -IfDeclared
 $recordID=[Guid]::NewGuid().ToString('N')
 $started=[DateTime]::UtcNow.ToString('o')
 $repository=(& git rev-parse --path-format=absolute --git-common-dir).Trim()
@@ -30,8 +32,9 @@ $summaryPath=Join-Path $Out 'summary.json'
 $summaryBytes=[IO.File]::ReadAllBytes($summaryPath)
 $summaryHasher=[Security.Cryptography.SHA256]::Create()
 try {$summaryDigest=([BitConverter]::ToString($summaryHasher.ComputeHash($summaryBytes))).Replace('-','').ToLowerInvariant()} finally {$summaryHasher.Dispose()}
-$report=[ordered]@{id=$recordID;started_at=$started;finished_at=[DateTime]::UtcNow.ToString('o');definition=$ordered;command="powershell -File test-marker.ps1 -Out $Out -InputPath $inputPath";repository=$repository;branch=$branch;evidence=@{path='summary.json';bytes=(Get-Item -LiteralPath $summaryPath).Length;sha256=$summaryDigest};sequence=[uint64][DateTime]::UtcNow.Ticks;selection=@('fixture.marker');environment='isolated';definitions=@{'fixture.marker'=$digest};before_commit=$beforeCommit;after_commit=$afterCommit;before_clean=[bool]$beforeClean;after_clean=[bool]$afterClean;results=@(@{test_id='fixture.marker';status=$status;message=$message;log='summary.json'})}
+$report=[ordered]@{id=$recordID;started_at=$started;finished_at=[DateTime]::UtcNow.ToString('o');definition=$ordered;command="pwsh -File test-marker.ps1 -Out $Out -InputPath $inputPath";repository=$repository;branch=$branch;evidence=@{path='summary.json';bytes=(Get-Item -LiteralPath $summaryPath).Length;sha256=$summaryDigest};sequence=[uint64][DateTime]::UtcNow.Ticks;selection=@('fixture.marker');environment='isolated';definitions=@{'fixture.marker'=$digest};before_commit=$beforeCommit;after_commit=$afterCommit;before_clean=[bool]$beforeClean;after_clean=[bool]$afterClean;results=@(@{test_id='fixture.marker';status=$status;message=$message;log='summary.json'})}
 $pending=Join-Path $Out '.managed.tmp'
 [IO.File]::WriteAllText($pending,($report|ConvertTo-Json -Depth 8),$utf8)
 Move-Item -LiteralPath $pending -Destination (Join-Path $Out 'managed-fixture.marker.json')
+Set-RuntimeProgress -Name test.fixture.marker -Completed $passed -IfDeclared
 if($passed){exit 0}else{exit 1}

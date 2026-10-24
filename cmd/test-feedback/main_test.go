@@ -1,10 +1,17 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// Fixture executions inside this test binary must not report to an outer Run.
+func TestMain(m *testing.M) {
+	_ = os.Unsetenv("STEERLINE_PROGRESS_FILE")
+	os.Exit(m.Run())
+}
 
 func TestFilterGeneratedRunOutputPreservesOtherValidationChanges(t *testing.T) {
 	repoRoot := t.TempDir()

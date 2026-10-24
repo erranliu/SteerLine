@@ -14,6 +14,7 @@ import (
 // Only repository documents are paths. System results belong to the immutable
 // request's prompt context; Runner never has to create a pretend reference file.
 func (c Config) prepareTestPlan(_ context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (json.RawMessage, error) {
+	run.ProgressFile = nil
 	if len(work.FrozenTestPlan) == 0 {
 		raw, _ := json.Marshal(testmanagement.Snapshot{Status: "missing", PlanPath: work.Contract.PlanRef.Path, Commit: work.Contract.PlanRef.Commit, Diagnostic: "候选尚未绑定系统测试安排", Definitions: []testmanagement.Definition{}})
 		return raw, nil
@@ -21,6 +22,18 @@ func (c Config) prepareTestPlan(_ context.Context, work taskmodel.FixedWork, run
 	if c.runtimeCatalog == nil {
 		return nil, errors.New("所选Runner未提供执行提示正文，无法绑定系统测试安排")
 	}
+	var plan testmanagement.Snapshot
+	if err := json.Unmarshal(work.FrozenTestPlan, &plan); err != nil {
+		return nil, err
+	}
+	if err := c.runtimeCatalog.ValidateProgress(); err != nil {
+		return nil, err
+	}
+	progress, err := testmanagement.InitialProgress(plan)
+	if err != nil {
+		return nil, err
+	}
+	run.ProgressFile = progress
 	workflow, e := c.runtimeCatalog.WithPromptContext(run.Workflow, testmodel.TestingContext(work.FrozenTestPlan))
 	if e != nil {
 		return nil, fmt.Errorf("所选Runner无法绑定系统测试安排：%w", e)

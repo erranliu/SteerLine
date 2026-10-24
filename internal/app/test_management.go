@@ -17,7 +17,7 @@ import (
 
 type testManagementStore interface {
 	testmanagement.GenerationStore
-	testmanagement.EvidenceStore
+	testmanagement.ProgressStore
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
 type testManagementPort struct {
@@ -25,7 +25,7 @@ type testManagementPort struct {
 	history     *testmanagement.RecordSnapshot
 	service     *testmanagement.GenerationService
 	store       testManagementStore
-	evidence    *testmanagement.EvidenceService
+	progress    *testmanagement.ProgressService
 	maintenance *projectMaintenance
 }
 
@@ -50,35 +50,10 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 	m := newProjectMaintenance(c, nil)
 	s.ReadCommitted = m.read
 	s.VerifyBinding = func(g testmanagement.Generation) error { return verifyGenerationTakeover(g, cli) }
-	var evidenceChecked bool
-	evidence := &testmanagement.EvidenceService{Project: c.Identity(), Store: store, Runner: cli, Admit: func(ctx context.Context) error {
-		if admit != nil {
-			if err := admit(ctx); err != nil {
-				return err
-			}
-		}
-		if !evidenceChecked {
-			v, err := cli.Version(ctx)
-			if err != nil {
-				return err
-			}
-			cat, err := cli.Catalog(ctx, v)
-			if err != nil {
-				return err
-			}
-			if err = cat.ValidateEvidence(); err != nil {
-				return err
-			}
-			evidenceChecked = true
-		}
-		return nil
-	}}
-	port := &testManagementPort{service: s, store: store, evidence: evidence, maintenance: c.runtimeMaintenance}
+	port := &testManagementPort{service: s, store: store, maintenance: c.runtimeMaintenance}
+	port.progress = &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}
 	if port.maintenance != nil {
 		port.maintenance.tests = port
-		evidence.AllowCollect = func(ctx context.Context, c runnerstate.Candidate) bool {
-			return port.maintenance.freshness(ctx, c) == "current"
-		}
 	}
 	return port
 }
@@ -125,7 +100,6 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 	encode := func(v testmanagement.View) (json.RawMessage, error) {
 		if freshness != "current" {
 			v.Passed = 0
-			v.Failed = 0
 			v.Pending = 0
 			v.Diagnostic = "当前测试关联不可用：" + freshness + "；以下为原候选历史"
 			for i := range v.Rows {
@@ -138,26 +112,19 @@ func (p *testManagementPort) PlanTests(ctx context.Context, id string) (json.Raw
 			AssociationAvailable bool   `json:"association_available"`
 		}{v, freshness, freshness == "current"})
 	}
-	evidence, readErr := p.store.Evidence(ctx, p.service.Project, id)
+	progress, readErr := p.store.Progress(ctx, p.service.Project, id)
 	if readErr != nil && !errors.Is(readErr, testmanagement.ErrNotFound) {
 		return nil, readErr
 	}
 	if errors.Is(readErr, testmanagement.ErrNotFound) {
-		v := testmanagement.Project(s, nil, "", false, false)
-		if s.Status == "ready" && len(s.Definitions) > 0 {
-			v.Diagnostic = "尚无已核实的程序测试报告"
-		}
-		return encode(v)
+		progress.Diagnostic = "尚未收到本次运行的测试进度"
+	} else if progress.RunID != c.RunID || progress.InputDigest != c.InputDigest {
+		return nil, errors.New("test progress candidate association differs")
 	}
-	if evidence.RunID != c.RunID || evidence.InputDigest != c.InputDigest {
-		return nil, errors.New("test report candidate association differs")
-	}
-	if c.Participation == "abandoned" {
-		evidence.Git.Verified = false
-	}
-	v := testmanagement.EvidenceView(s, evidence, time.Now().UTC())
+	v := testmanagement.ProgressView(s, progress)
 	return encode(v)
 }
+
 func (p *testManagementPort) close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -165,12 +132,12 @@ func (p *testManagementPort) close() error {
 }
 
 func (p *testManagementPort) observe(ctx context.Context) error {
+	// Progress remains observable when generation or material refresh fails.
+	progressErr := p.progress.Observe(ctx)
 	observationErr := p.service.Observe(ctx)
-	if observationErr == nil && p.maintenance != nil {
-		observationErr = p.maintenance.refresh(ctx)
+	var maintenanceErr error
+	if p.maintenance != nil {
+		maintenanceErr = p.maintenance.refresh(ctx)
 	}
-	if observationErr == nil {
-		observationErr = p.evidence.Observe(ctx)
-	}
-	return observationErr
+	return errors.Join(progressErr, observationErr, maintenanceErr)
 }
