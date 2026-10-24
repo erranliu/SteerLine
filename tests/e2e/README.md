@@ -35,3 +35,13 @@ Windows/amd64、Go/Git、已登录本机 Codex、固定独立 Runner EXE。交�
 新增、改级、改环境或改变主要断言时，同步实现、manifest、分级列表、JSON 和选择/并行/证据校验。各场景说明独有覆盖和清理所有权；L3 不共享可变产物，无顺序依赖。测试只消费依赖公开边界，不在调用方重建 Runner 内部流程。历史 Spec/Plan/验收按冻结定义读取，当前命令以本指南和分级清单为准。
 
 测试管理真实专项使用 PowerShell 7 的正式进度写入器，核对 Runner 单文件快照及 API/浏览器的通过、重跑未完成状态；原 managed 报告仅作为独立原始记录，不要求候选收集。真实模型专项仍需显式选择，不以受控联验替代。
+
+SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地进度链：
+
+```powershell
+./scripts/test-project-progress-live.ps1 -ProjectRepository C:/Projects/SteerlineTest -ProjectCommit <完整提交SHA> -SteerRunnerExe <固定Runner绝对路径> -OutRoot C:/SteerlineDebug/<本次全新scope>
+```
+
+需要 Windows、Go、Git、Python、gh 和已登录的本机 Codex；原生认证必须可访问 `erranliu/SteerlineTest`。入口建立独立 clone/home/任务及 loopback Git，固定原项目的三个 Python 程序，真实生成测试安排后让 worker 执行一次原程序；不启动样本 101–105，不发布 PR。默认每阶段六秒，核对六个 API 状态与同版本 Runner 原始快照、实际失败子进程和最终原报告，再停止原 Run 并验证资源清理。测试使用 `gpt-6-luna` / `medium`，会消耗模型。测试由 `e2e` build tag 隔离，普通 Go Full 不包含此项；显式编译后若未注入项目参数会跳过，不能计为本专项通过。
+
+入口输出 `result.json`、`test.log` 和 `reports/scenarios/testing.project-progress-local-codex/`，其中保留 `source.json`、`initial-binding.json`、`runner-*.json`、`api-observations.json`、`original-run.json`、`worker-program-sha256.json`、`original-reports/`、原 stop 请求/回执、`stopped-run.json`、`proof.json` 及 `scenario.json`。只有实际执行通过且清理完整才写总结果通过；它尚未登记为统一受管测试，不导出 `go.full` 或其他 L4 项通过。该入口验证本机 Runner/Codex 与真实 SteerLine API，远端执行、浏览器展示和安装环境另行验证。

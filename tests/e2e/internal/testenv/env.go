@@ -106,7 +106,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
+	if id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "testing.project-progress-local-codex" || id == "recovery.waiting-merge-restart" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
 		timeout = 10 * time.Minute
 	}
 	if id == "workflow.local-codex-audited" {
