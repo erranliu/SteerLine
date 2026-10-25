@@ -280,6 +280,7 @@ export interface StoredRequest {
   created_at: string;
   response?: Receipt;
   error?: string;
+  checked_at?: string;
 }
 export interface BodyRef {
   execution_id: string;

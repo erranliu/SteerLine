@@ -42,40 +42,58 @@ export function useOriginalRequests(api: Api, online: boolean) {
   useEffect(() => {
     if (!online) return;
     const controller = new AbortController();
+    const inflight = new Set<string>();
+    const next = new Map<string, { at: number; attempts: number }>();
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
         const pending = (await listRequests()).filter(
           (row) =>
             row.envelope.project_id === identity.project_id &&
-            (!row.response ||
-              ["submitted", "accepted", "outcome_unknown"].includes(
-                row.response.status,
-              )),
+            !["applied", "rejected"].includes(row.response?.status ?? ""),
         );
+        if (controller.signal.aborted) return;
         for (const row of pending) {
-          if (controller.signal.aborted) return;
-          try {
-            const result = await api.reconcile(row.envelope, controller.signal);
-            if (controller.signal.aborted) return;
-            if (receiptChanged(row.response, result))
-              void invalidateCommand(queries, api.home, row.envelope);
-            else
+          const id = row.envelope.request_id;
+          if (inflight.size >= 3) break;
+          if (inflight.has(id) || (next.get(id)?.at ?? 0) > Date.now())
+            continue;
+          inflight.add(id);
+          void api
+            .reconcile(row.envelope, controller.signal)
+            .then((result) => {
+              if (
+                !controller.signal.aborted &&
+                receiptChanged(row.response, result)
+              )
+                void invalidateCommand(queries, api.home, row.envelope);
+            })
+            .catch(() => {
+              // Api preserves the request and its own verification diagnostic.
+            })
+            .finally(() => {
+              inflight.delete(id);
+              if (controller.signal.aborted) return;
+              const attempts = next.get(id)?.attempts ?? 0;
+              next.set(id, {
+                at:
+                  Date.now() +
+                  [2000, 5000, 10000, 30000][Math.min(attempts, 3)],
+                attempts: attempts + 1,
+              });
               void queries.invalidateQueries({
                 queryKey: [api.home, "local-requests"],
               });
-          } catch {
-            /* unknown stays in journal */
-          }
+            });
         }
       } catch {
-        // The journal query displays storage errors; keep this loop bounded.
+        // Storage errors are surfaced by the journal query.
       } finally {
         if (!controller.signal.aborted)
-          timer = setTimeout(() => void poll(), 2000);
+          timer = setTimeout(() => void poll(), 500);
       }
     };
-    void poll().catch(() => {});
+    void poll();
     return () => {
       controller.abort();
       clearTimeout(timer);

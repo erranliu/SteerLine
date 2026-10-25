@@ -145,7 +145,12 @@ export async function recordResult(
         old.response?.status === "applied" ||
         old.response?.status === "rejected";
       if (!terminal)
-        store.put({ ...old, response: response ?? old.response, error });
+        store.put({
+          ...old,
+          response: response ?? old.response,
+          error,
+          checked_at: new Date().toISOString(),
+        });
       done();
     };
   });

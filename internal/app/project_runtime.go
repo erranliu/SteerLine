@@ -161,6 +161,11 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeTests = r.tests
 	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
+	r.hostConfig.ControlPublished = func(action string) {
+		if action == "stop_candidate" {
+			service.NotifyControl()
+		}
+	}
 	r.config.runtimeHost = &r.hostConfig
 	r.product, retErr = openServiceProjectClientWithCommands(ctx, r.config, service, func(context.Context) (productclient.TaskCommands, error) {
 		return &runtimeTaskCommands{clientTaskCommands: newClientTaskCommands(r.store, r.config), service: service}, nil
@@ -259,7 +264,11 @@ func (p *runtimeProjectPort) Task(ctx context.Context, method, route string, bod
 			return p.testing(ctx, method, route, body)
 		}
 		var out any
-		e := p.actor.Call(ctx, func() error { var err error; out, err = p.testing(ctx, method, route, body); return err })
+		e := p.actor.Call(ctx, func(ctx context.Context) error {
+			var err error
+			out, err = p.testing(ctx, method, route, body)
+			return err
+		})
 		return out, e
 	}
 	if method == "GET" {

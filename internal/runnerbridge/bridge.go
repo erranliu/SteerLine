@@ -131,12 +131,28 @@ func (b *Bridge) save(ctx context.Context, c *Candidate, events ...runnerclient.
 
 // Step advances a bounded amount of caller bookkeeping. It never recreates a
 // native session or generates a workflow prompt, answer or resume.
-func (b *Bridge) Step(ctx context.Context, project, id string) error {
+func (b *Bridge) Step(ctx context.Context, project, id string) (resultErr error) {
 	key := project + "\x00" + id
 	entry, _ := b.locks.LoadOrStore(key, &sync.Mutex{})
 	gate := entry.(*sync.Mutex)
 	gate.Lock()
 	defer gate.Unlock()
+	defer func() {
+		if ctx.Err() == nil {
+			return
+		}
+		// Interrupting a CLI wait cannot grant another submission. Freeze only
+		// uncertain inputs of this candidate, using the existing recovery flags;
+		// untouched pending authorizations of other candidates remain untouched.
+		checkpoint, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		current, err := b.Store.Candidate(checkpoint, project, id)
+		if err == nil {
+			observeUnknownInputs(&current)
+			err = b.save(checkpoint, &current)
+		}
+		resultErr = errors.Join(resultErr, err)
+	}()
 	c, err := b.Store.Candidate(ctx, project, id)
 	if err != nil {
 		return err
@@ -314,19 +330,25 @@ func (b *Bridge) RecoverInputs(ctx context.Context, project, id string) error {
 		if c.SubmitState == "pending" {
 			c.SubmitState = "cancelled"
 		}
-		if c.SubmitState == "unknown" {
-			c.SubmitObserveOnly = true
-		}
 	}
 	for i := range c.Actions {
 		if c.Actions[i].State == "pending" {
 			c.Actions[i].State = "cancelled"
 		}
+	}
+	observeUnknownInputs(&c)
+	return b.save(ctx, &c)
+}
+
+func observeUnknownInputs(c *Candidate) {
+	if c.RunID == "" && c.SubmitState == "unknown" {
+		c.SubmitObserveOnly = true
+	}
+	for i := range c.Actions {
 		if c.Actions[i].State == "unknown" {
 			c.Actions[i].ObserveOnly = true
 		}
 	}
-	return b.save(ctx, &c)
 }
 
 // VerifyBinding checks original public facts before the reconstructed runtime

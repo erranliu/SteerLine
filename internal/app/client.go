@@ -1,9 +1,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -53,6 +55,7 @@ func openServiceProjectClientWithCommands(ctx context.Context, config Config, se
 		}
 		resources.Discard = &clientDiscardCommands{service: service}
 		resources.Tests = bound.runtimeTests
+		resources.Control = clientControl{config: bound, store: store}
 		if store != nil {
 			checks := newEnvironmentCheckPort(bound, store)
 			if service != nil {
@@ -326,7 +329,10 @@ func (r *clientReader) DatabaseVersion(ctx context.Context) (string, uint64, err
 // These compile-time assertions keep the injected port tied to real consumers.
 var _ productclient.Reader = (*clientReader)(nil)
 
-type clientControl struct{ config Config }
+type clientControl struct {
+	config Config
+	store  *sqlite.SQLiteStore // borrowed from the running project, when available
+}
 
 func (r clientControl) Submit(ctx context.Context, in productapi.ControlInput) (productapi.ControlRequest, error) {
 	if err := ctx.Err(); err != nil {
@@ -365,7 +371,60 @@ func (r clientControl) Receipt(ctx context.Context, id string) (*productapi.Cont
 	if err != nil {
 		return nil, err
 	}
-	return steerline.ReadVerifiedControlReceipt(hostConfig, id)
+	receipt, err := steerline.ReadVerifiedControlReceipt(hostConfig, id)
+	if !os.IsNotExist(err) {
+		return receipt, err
+	}
+	request, fileDigest, readErr := steerline.ReadControlRequestWithDigest(hostConfig, id)
+	if readErr != nil {
+		return nil, readErr
+	}
+	if request.RepositoryIdentity != r.config.Identity() {
+		return nil, errors.New("control request project identity does not match")
+	}
+	if request.Action != "stop_candidate" {
+		return nil, err
+	}
+	store := r.store
+	if store == nil {
+		store, readErr = sqlite.OpenSQLiteReader(filepath.Join(r.config.RunDir, "steerline.db"))
+		if readErr != nil {
+			return nil, readErr
+		}
+		defer store.Close()
+	}
+	command, found, readErr := store.LookupCommand(ctx, r.config.Identity(), id)
+	if readErr != nil {
+		return nil, readErr
+	}
+	if !found {
+		return nil, err
+	}
+	body, _ := json.Marshal(request)
+	if command.Kind != "runner_control" || !bytes.Equal(command.Payload, body) {
+		return nil, errors.New("original stop command differs from its immutable request")
+	}
+	if len(command.Result) > 0 {
+		var saved productapi.ControlReceipt
+		if json.Unmarshal(command.Result, &saved) != nil || saved.Version != steerline.ControlProtocolVersion || !taskrunner.TerminalControlStatus(saved.Status) || saved.RequestID != id || saved.InstanceID != request.InstanceID || saved.Action != request.Action || saved.RequestDigest != taskrunner.RequestDigest(*request) {
+			return nil, errors.New("original stop result identity differs")
+		}
+		saved.RequestDigest = fmt.Sprintf("%x", fileDigest)
+		return &saved, nil
+	}
+	payload, readErr := taskrunner.DecodeControlPayload(*request)
+	if readErr != nil {
+		return nil, readErr
+	}
+	candidate, readErr := store.Candidate(ctx, r.config.Identity(), payload.RunID)
+	if readErr != nil {
+		return nil, readErr
+	}
+	w := candidate.Withdrawal
+	if candidate.TaskID != payload.TaskID || !w.Matches(id, payload.ExpectedRunRevision, request.RequestedBy) {
+		return nil, err
+	}
+	return &productapi.ControlReceipt{Version: 1, RequestID: id, RequestDigest: fmt.Sprintf("%x", fileDigest), InstanceID: request.InstanceID, Action: request.Action, Status: "applied", RequestedBy: request.RequestedBy, SubmittedAt: request.CreatedAt, CompletedAt: &w.At, RunID: candidate.ID, RunRevision: candidate.Revision}, nil
 }
 
 func (r clientControl) Request(ctx context.Context, id string) (*productapi.ControlRequest, error) {

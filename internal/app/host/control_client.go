@@ -83,7 +83,7 @@ func SubmitControlTargeted(c Config, action string, payload any, requestedBy, re
 	if expectedInstance != "" && rt.Service.InstanceID != expectedInstance {
 		return productapi.ControlRequest{}, errors.New("stale_instance: service instance changed; refresh before submitting")
 	}
-	if expectedRevision != nil && action != "stop_service" && rt.Control.Revision != *expectedRevision {
+	if expectedRevision != nil && action != "stop_service" && action != "stop_candidate" && rt.Control.Revision != *expectedRevision {
 		return productapi.ControlRequest{}, errors.New("stale_revision: control state changed; refresh before submitting")
 	}
 	return submitControlSnapshotWithID(c, rt, action, payload, requestedBy, requestID)
@@ -135,6 +135,9 @@ func SubmitControlInbox(c Config, input productapi.ControlInput) (productapi.Con
 	if err := publishControlRequest(c.RunDir, request); err != nil {
 		return productapi.ControlRequest{}, err
 	}
+	if c.ControlPublished != nil {
+		c.ControlPublished(request.Action)
+	}
 	return request, nil
 }
 
@@ -176,6 +179,9 @@ func submitControlSnapshotWithID(c Config, rt *reconstructiontypes.Runtime, acti
 	if err := publishControlRequest(c.RunDir, req); err != nil {
 		return productapi.ControlRequest{}, err
 	}
+	if c.ControlPublished != nil {
+		c.ControlPublished(req.Action)
+	}
 	return req, nil
 }
 
@@ -183,11 +189,12 @@ func submitControlSnapshotWithID(c Config, rt *reconstructiontypes.Runtime, acti
 // when a client reopens and needs to distinguish an unpublished request from a
 // request whose receipt has not arrived yet.
 func ReadControlRequest(c Config, id string) (*productapi.ControlRequest, error) {
-	req, _, err := readControlRequestForClient(c, id)
+	req, _, err := ReadControlRequestWithDigest(c, id)
 	return req, err
 }
 
-func readControlRequestForClient(c Config, id string) (*productapi.ControlRequest, [sha256.Size]byte, error) {
+// ReadControlRequestWithDigest verifies the original request and returns its file digest.
+func ReadControlRequestWithDigest(c Config, id string) (*productapi.ControlRequest, [sha256.Size]byte, error) {
 	if !controlIDPattern.MatchString(id) {
 		return nil, [sha256.Size]byte{}, errors.New("request ID must be 32 lowercase hexadecimal characters")
 	}
@@ -244,7 +251,7 @@ func ReadControlReceipt(c Config, id string) (*productapi.ControlReceipt, error)
 // A caller must not present or act on a terminal result that names a different
 // action, instance or request digest under the same path ID.
 func ReadVerifiedControlReceipt(c Config, id string) (*productapi.ControlReceipt, error) {
-	req, requestFileDigest, err := readControlRequestForClient(c, id)
+	req, requestFileDigest, err := ReadControlRequestWithDigest(c, id)
 	if err != nil {
 		return nil, err
 	}

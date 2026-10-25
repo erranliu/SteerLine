@@ -523,7 +523,7 @@ it("stops an unknown candidate from its heading using a fixed confirmation and w
   w.client.clear();
 });
 
-it("rechecks remaining participants and frozen versions while confirmation is open", () => {
+it("rechecks remaining participants while accepting observation version growth", () => {
   const w = stopWorkspace();
   fireEvent.click(screen.getByRole("button", { name: "停止参与" }));
   w.update({ snapshot: w.state([w.runs[0]]) });
@@ -535,9 +535,9 @@ it("rechecks remaining participants and frozen versions while confirmation is op
     snapshot: w.state([{ ...w.runs[0], control_revision: 99 }, w.runs[1]]),
   });
   expect(
-    screen.getByText("候选或服务状态已变化，请取消后重新确认"),
-  ).toBeVisible();
-  expect(screen.getByRole("button", { name: "确认停止" })).toBeDisabled();
+    screen.queryByText("候选或服务状态已变化，请取消后重新确认"),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "确认停止" })).toBeEnabled();
   fireEvent.click(screen.getByRole("button", { name: "取消" }));
   expect(w.submit).not.toHaveBeenCalled();
   w.client.clear();
@@ -586,5 +586,53 @@ it("shows offline and capability reasons and preserves selection on a rejected s
   await waitFor(() =>
     expect(screen.getByRole("button", { name: "确认停止" })).toBeEnabled(),
   );
+  w.client.clear();
+});
+
+it("releases pending stop on its later rejected receipt", async () => {
+  const w = stopWorkspace();
+  w.submit.mockImplementation(async (envelope) =>
+    receipt(envelope, "submitted"),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "停止参与" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认停止" }));
+  await waitFor(() =>
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+  );
+  expect(screen.getByRole("button", { name: "停止参与" })).toBeDisabled();
+  const envelope = w.submit.mock.calls[0][0];
+  w.update({
+    requests: [
+      {
+        envelope,
+        created_at: "now",
+        response: {
+          ...receipt(envelope, "rejected"),
+          code: "last_candidate",
+          diagnostic: "last participant",
+        },
+      },
+    ],
+  });
+  await waitFor(() =>
+    expect(screen.getByRole("button", { name: "停止参与" })).toBeEnabled(),
+  );
+  expect(w.submit).toHaveBeenCalledTimes(1);
+  w.client.clear();
+});
+
+it("separates applied stop from a delayed candidate snapshot", async () => {
+  const w = stopWorkspace();
+  w.submit.mockImplementation(async (envelope) => receipt(envelope, "applied"));
+  fireEvent.click(screen.getByRole("button", { name: "停止参与" }));
+  fireEvent.click(screen.getByRole("button", { name: "确认停止" }));
+  await waitFor(() =>
+    expect(screen.getByText(/停止已生效，列表刷新中/)).toBeVisible(),
+  );
+  expect(
+    screen.queryByText("停止请求待核实，请在操作回执中查询原请求"),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "停止参与" })).toBeDisabled();
+  expect(w.submit).toHaveBeenCalledTimes(1);
   w.client.clear();
 });

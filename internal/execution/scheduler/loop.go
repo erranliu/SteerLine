@@ -27,6 +27,13 @@ type Scheduler[T any] interface {
 	EndActor(error) error
 }
 
+// InterruptibleControl lets a durable control wake the same serial actor while
+// it is waiting on external work. The wakeup itself grants no business action.
+type InterruptibleControl interface {
+	ControlWakeup() <-chan struct{}
+	RunWork(context.Context, func(context.Context) error) error
+}
+
 func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string) (retErr error) {
 	if mode != "manual" && mode != "auto" {
 		return errors.New("dispatch mode must be manual or auto")
@@ -89,7 +96,31 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 	if err := actor.Initialize(ctx, cancel); err != nil {
 		return err
 	}
+	var wakeup <-chan struct{}
+	work := func(run func(context.Context) error) error { return run(ctx) }
+	if control, ok := any(actor).(InterruptibleControl); ok {
+		wakeup = control.ControlWakeup()
+		work = func(run func(context.Context) error) error {
+			err := control.RunWork(ctx, run)
+			if ctx.Err() == nil && cancellationOnly(err) {
+				return nil
+			}
+			return err
+		}
+	}
+	if err := actor.TickControl(ctx, cancel); err != nil {
+		return err
+	}
 	for {
+		// Drain an urgent control before selecting another ordinary tick.
+		select {
+		case <-wakeup:
+			if err := actor.TickControl(ctx, cancel); err != nil {
+				return err
+			}
+			continue
+		default:
+		}
 		select {
 		case <-ctx.Done():
 			return nil
@@ -100,23 +131,27 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 				return err
 			}
 		case message := <-actor.Signals():
-			if err := actor.HandleSignal(message); err != nil {
+			if err := work(func(context.Context) error { return actor.HandleSignal(message) }); err != nil {
 				return err
 			}
 		case <-decisionTick.C:
-			if err := actor.TickDecision(ctx); err != nil {
+			if err := work(actor.TickDecision); err != nil {
 				return err
 			}
 		case <-taskTick.C:
-			if err := actor.TickTask(ctx, cancel); err != nil {
+			if err := work(func(ctx context.Context) error { return actor.TickTask(ctx, cancel) }); err != nil {
 				return err
 			}
 		case <-controlTick.C:
 			if err := actor.TickControl(ctx, cancel); err != nil {
 				return err
 			}
+		case <-wakeup:
+			if err := actor.TickControl(ctx, cancel); err != nil {
+				return err
+			}
 		case <-prTick.C:
-			if err := actor.TickPR(ctx); err != nil {
+			if err := work(actor.TickPR); err != nil {
 				return err
 			}
 		}

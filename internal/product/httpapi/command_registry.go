@@ -26,6 +26,43 @@ type commandRegistry struct {
 	readiness         *readinessState
 	records           requestRecordAccess
 	mu                sync.Locker
+	requestGates      map[string]*requestGate
+}
+
+type requestGate struct {
+	busy  chan struct{}
+	users int
+}
+
+// Arbitration is per immutable request. A slow unrelated command cannot hold
+// up stop publication; cancelled waiters leave no background lock acquisition.
+func (c *commandRegistry) lockRequest(ctx context.Context, id string) (func(), error) {
+	c.mu.Lock()
+	if c.requestGates == nil {
+		c.requestGates = make(map[string]*requestGate)
+	}
+	gate := c.requestGates[id]
+	if gate == nil {
+		gate = &requestGate{busy: make(chan struct{}, 1)}
+		c.requestGates[id] = gate
+	}
+	gate.users++
+	c.mu.Unlock()
+	releaseUser := func() {
+		c.mu.Lock()
+		gate.users--
+		if gate.users == 0 {
+			delete(c.requestGates, id)
+		}
+		c.mu.Unlock()
+	}
+	select {
+	case gate.busy <- struct{}{}:
+		return func() { <-gate.busy; releaseUser() }, nil
+	case <-ctx.Done():
+		releaseUser()
+		return nil, ctx.Err()
+	}
 }
 
 func newCommandRegistry(options Options, ports Ports, readiness *readinessState, records requestRecordAccess) *commandRegistry {
@@ -45,8 +82,16 @@ func (c *commandRegistry) registerRecord(record requestRecord) error {
 }
 
 func (c *commandRegistry) Submit(ctx context.Context, envelope CommandEnvelope, caller string) (CommandResponse, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	if envelope.Action == "stop_candidate" {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 10*time.Second)
+		defer cancel()
+	}
+	unlock, err := c.lockRequest(ctx, envelope.RequestID)
+	if err != nil {
+		return CommandResponse{}, err
+	}
+	defer unlock()
 	if isEnvironmentCheckAction(envelope.Action) {
 		return c.submitEnvironment(ctx, envelope)
 	}
@@ -169,6 +214,8 @@ func (c *commandRegistry) rejectRegistered(record *requestRecord, envelope Comma
 }
 
 func (c *commandRegistry) Read(ctx context.Context, requestID string) (CommandResponse, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	var original *CommandEnvelope
 	var storedResponse *CommandResponse
 	var originalRecord *requestRecord

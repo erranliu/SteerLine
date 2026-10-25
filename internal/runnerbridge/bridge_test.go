@@ -331,3 +331,33 @@ func TestCandidateWithdrawal(t *testing.T) {
 }
 
 func mustJSON(value any) []byte { body, _ := json.Marshal(value); return body }
+
+type cancelledSubmitCLI struct {
+	*fixtureCLI
+	cancel context.CancelFunc
+}
+
+func (c *cancelledSubmitCLI) Submit(ctx context.Context, r runnerclient.Request) (runnerclient.Receipt, error) {
+	c.submits++
+	c.cancel()
+	return runnerclient.Receipt{}, ctx.Err()
+}
+func TestCandidateStopReliabilityCancelledSubmissionIsObservationOnly(t *testing.T) {
+	b, s, f := setup()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cli := &cancelledSubmitCLI{fixtureCLI: f, cancel: cancel}
+	b.Client = func(string) CLI { return cli }
+	if err := b.Step(ctx, "project", "candidate"); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if !s.value.SubmitObserveOnly || s.value.SubmitState != "unknown" {
+		t.Fatal("cancelled request could be dispatched again", s.value)
+	}
+	if err := b.Step(context.Background(), "project", "candidate"); err != nil {
+		t.Fatal(err)
+	}
+	if f.submits != 1 {
+		t.Fatal("interrupted input resent", f.submits)
+	}
+}

@@ -112,7 +112,12 @@ beforeEach(async () => {
   Object.defineProperty(navigator, "locks", {
     configurable: true,
     value: {
-      request: (name: string, work: () => Promise<unknown>) => {
+      request: (
+        name: string,
+        options: LockOptions | (() => Promise<unknown>),
+        callback?: () => Promise<unknown>,
+      ) => {
+        const work = typeof options === "function" ? options : callback!;
         const next = (locks.get(name) ?? Promise.resolve())
           .catch(() => {})
           .then(work);
@@ -127,6 +132,7 @@ describe("immutable browser requests", () => {
   it.each([
     ["start_environment_check", "command_not_found"],
     ["stop_environment_check", "command_not_found"],
+    ["stop_candidate", "command_not_found"],
     ["start_environment_check", "request_not_found"],
     ["stop_environment_check", "request_not_found"],
   ])(
@@ -389,4 +395,121 @@ it("sends independently confirmed candidates concurrently while preserving same-
     envelope.request_id,
   ]);
   expect(fetch).toHaveBeenCalledTimes(2);
+});
+
+it("bounds original-query lock waiting and preserves the uncertain stop", async () => {
+  envelope.action = "stop_candidate";
+  await journal.saveRequest(envelope);
+  Object.defineProperty(navigator, "locks", {
+    configurable: true,
+    value: {
+      request: (_id: string, options: LockOptions) =>
+        new Promise((_resolve, reject) => {
+          options.signal!.addEventListener(
+            "abort",
+            () => reject(options.signal!.reason),
+            { once: true },
+          );
+        }),
+    },
+  });
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    const pending = api.reconcile(envelope);
+    const rejection = expect(pending).rejects.toThrow("核实超时");
+    await vi.advanceTimersByTimeAsync(5001);
+    await rejection;
+    expect(fetch).not.toHaveBeenCalled();
+    const row = await journal.requestByID(envelope.request_id);
+    expect(row?.response).toBeUndefined();
+    expect(row?.error).toContain("核实超时");
+    expect(row?.checked_at).toBeTruthy();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("bounds a hung GET, shares its original query, and never resends stop", async () => {
+  envelope.action = "stop_candidate";
+  await journal.saveRequest(envelope);
+  Object.defineProperty(navigator, "locks", {
+    configurable: true,
+    value: {
+      request: (_id: string, _options: LockOptions, work: () => unknown) =>
+        work(),
+    },
+  });
+  let entered!: () => void;
+  const started = new Promise<void>((done) => {
+    entered = done;
+  });
+  const fetch = vi.fn(
+    (_path: string, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal!.addEventListener(
+          "abort",
+          () => reject(init.signal!.reason),
+          { once: true },
+        );
+        entered();
+      }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    const pending = api.reconcile(envelope);
+    const rejection = expect(pending).rejects.toThrow("核实超时");
+    const duplicate = expect(api.reconcile(envelope)).rejects.toThrow(
+      "核实超时",
+    );
+    await started;
+    await vi.advanceTimersByTimeAsync(5001);
+    await Promise.all([rejection, duplicate]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it("keeps a timed-out stop POST uncertain without sending another command", async () => {
+  envelope.action = "stop_candidate";
+  Object.defineProperty(navigator, "locks", {
+    configurable: true,
+    value: {
+      request: (_id: string, _options: LockOptions, work: () => unknown) =>
+        work(),
+    },
+  });
+  let entered!: () => void;
+  const started = new Promise<void>((done) => {
+    entered = done;
+  });
+  const fetch = vi.fn(
+    (_path: string, init: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init.signal!.addEventListener(
+          "abort",
+          () => reject(init.signal!.reason),
+          { once: true },
+        );
+        entered();
+      }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    const result = expect(api.submit(envelope)).rejects.toThrow("核实超时");
+    await started;
+    await vi.advanceTimersByTimeAsync(10001);
+    await result;
+    const row = await journal.requestByID(envelope.request_id);
+    expect(row?.envelope).toEqual(envelope);
+    expect(row?.response).toBeUndefined();
+    expect(row?.error).toContain("超时");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.useRealTimers();
+  }
 });

@@ -67,3 +67,7 @@ type Withdrawal struct {
 	RequestedBy      string    `json:"requested_by"`
 	At               time.Time `json:"at"`
 }
+
+func (w *Withdrawal) Matches(requestID string, revision uint64, requestedBy string) bool {
+	return w != nil && w.RequestID == requestID && w.ExpectedRevision == revision && w.RequestedBy == requestedBy
+}

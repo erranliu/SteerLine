@@ -301,7 +301,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	m := r.config.runtimeMaintenance
 	_, err = m.check(ctx)
 	require(t, err)
-	require(t, r.port.actor.Call(ctx, func() error {
+	require(t, r.port.actor.Call(ctx, func(ctx context.Context) error {
 		graph, e := r.store.TaskGraphSnapshot(ctx, c.Identity())
 		if e != nil {
 			return e
