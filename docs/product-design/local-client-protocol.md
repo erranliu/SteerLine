@@ -1,5 +1,7 @@
 # 本机客户端协议
 
+准备查询等待随原候选 `runner_delivery.execution_wait` 返回完整公开对象或显式 null，契约为 `steerrunner-execution-wait/v1`，字段见[Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)。原 activity 流把 `execution_wait_changed` 投影为 `kind=execution_wait`，`meta.execution_wait` 保留对象/null；无新路由、命令或计时事件。等待字段仅展示，操作仍使用原候选/Runner revision 与控制资格；查询异常保留最后已知内容并标不可核实。
+
 应用 v2 是当前产品的本机入口，Web 为唯一交互前端。`httpcontract` 的项目 DTO/信封、`httpapi` 的查询/命令处理与 `product/api` 用例保持原事务和资格规则；共享后端在进程内调用项目端口，不启动项目 HTTP listener 或通过回环 HTTP 转发。下表保留项目端口的逻辑路由；外部路径统一在 `/v2/application/projects/{project_id}` 下。
 
 ## 发现、连接和身份

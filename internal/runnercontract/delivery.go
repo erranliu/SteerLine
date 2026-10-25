@@ -6,6 +6,7 @@ import "time"
 // Run snapshot and independently observed command receipts. It is not a CLI
 // lifecycle state, persisted authority or permission to send input.
 type DeliveryObservation struct {
+	ExecutionWait    *ExecutionWait       `json:"execution_wait"`
 	Available        bool                 `json:"available"`
 	RunID            string               `json:"run_id,omitempty"`
 	Revision         uint64               `json:"revision"`

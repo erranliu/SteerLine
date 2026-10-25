@@ -35,6 +35,14 @@ func (c Client) Inspect(ctx context.Context, selector, id string, refresh bool) 
 		return Inspection{}, err
 	}
 	var result Inspection
+	var raw struct {
+		Run json.RawMessage `json:"run"`
+	}
+	if json.Unmarshal(response.Data, &raw) == nil && len(raw.Run) != 0 && string(raw.Run) != "null" {
+		if err := c.validateRunWait(raw.Run); err != nil {
+			return Inspection{}, waitFailure(err)
+		}
+	}
 	if json.Unmarshal(response.Data, &result) != nil || result.Run != nil && (result.Run.RunID == "" || result.Run.Revision == 0) || selector == "run-id" && (result.Run == nil || result.Run.RunID != id) || selector == "request-id" && (result.Command == nil || result.Command.RequestID != id) || selector == "command-id" && (result.Command == nil || result.Command.CommandID != id) || result.Command != nil && result.Command.RunID != nil && (result.Run == nil || result.Run.RunID != *result.Command.RunID) {
 		return Inspection{}, &Failure{Code: "runner_unavailable", Message: "Runner inspection identity could not be verified", Exit: 4}
 	}
@@ -54,6 +62,9 @@ func (c Client) Events(ctx context.Context, id, after string) (EventPage, error)
 		return EventPage{}, &Failure{Code: "runner_unavailable", Message: "Runner event page is invalid", Exit: 4}
 	}
 	for _, event := range result.Events {
+		if err := c.validateWaitEvent(event); err != nil {
+			return EventPage{}, waitFailure(err)
+		}
 		if event.EventID == "" || event.RunID != id || event.Revision == 0 {
 			return EventPage{}, &Failure{Code: "runner_unavailable", Message: "Runner event identity is invalid", Exit: 4}
 		}

@@ -1,0 +1,186 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Execution preparation wait",
+  "oneOf": [
+    {
+      "type": "null"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract",
+        "operation_id",
+        "query",
+        "stage",
+        "reason_code",
+        "calls_started",
+        "max_calls",
+        "diagnostic",
+        "next_attempt_at",
+        "started_at",
+        "updated_at",
+        "deadline_at"
+      ],
+      "properties": {
+        "contract": {
+          "const": "steerrunner-execution-wait/v1"
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "query": {
+          "enum": [
+            "repository_inventory",
+            "runtime_status"
+          ]
+        },
+        "stage": {
+          "enum": [
+            "queue",
+            "calling",
+            "backoff",
+            "exhausted"
+          ]
+        },
+        "reason_code": {
+          "enum": [
+            "orca_cli_busy",
+            "orca_query_running",
+            "orca_query_transient",
+            "wait_budget_exhausted",
+            "query_attempts_exhausted"
+          ]
+        },
+        "calls_started": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "max_calls": {
+          "const": 5
+        },
+        "diagnostic": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "next_attempt_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "deadline_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "queue"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "const": "orca_cli_busy"
+              },
+              "next_attempt_at": {
+                "type": "null"
+              },
+              "calls_started": {
+                "maximum": 4
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "calling"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "const": "orca_query_running"
+              },
+              "next_attempt_at": {
+                "type": "null"
+              },
+              "calls_started": {
+                "minimum": 1,
+                "maximum": 5
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "backoff"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "const": "orca_query_transient"
+              },
+              "next_attempt_at": {
+                "type": "string"
+              },
+              "calls_started": {
+                "minimum": 1,
+                "maximum": 4
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "stage": {
+                "const": "exhausted"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reason_code": {
+                "enum": [
+                  "wait_budget_exhausted",
+                  "query_attempts_exhausted"
+                ]
+              },
+              "next_attempt_at": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

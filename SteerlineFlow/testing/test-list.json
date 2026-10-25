@@ -1,6 +1,15 @@
 {
   "tests": [
     {
+      "id": "recovery.runner-wait-retry",
+      "name": "Runner 准备读取等待与恢复展示",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.runner-wait-retry",
+      "check": "真实 SteerLine/Git/SQLite/HTTP 与公开 Runner fixture：queue/calling/backoff/耗尽/清除、宿主重启原 Run/Attempt/期限不变、活动留存，零额外提交/答案/resume，原恢复/取消资格、唯一交付、终态停止和清理完整。",
+      "note": "独立 home/repo/DB/provider/端口/证据；无真实 Orca 或模型，不证明 Runner 的原生重试资格。"
+    },
+    {
       "id": "l1.minimum",
       "name": "固定 L1 最小集合",
       "level": "L1",

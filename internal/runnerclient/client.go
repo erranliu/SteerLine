@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 const Protocol = "steerrunner-cli/v1"
@@ -43,6 +44,7 @@ type Failure struct {
 func (f *Failure) Error() string { return f.Code + ": " + f.Message }
 
 type Client struct {
+	executionWaitSchema   *jsonschema.Schema
 	Takeover              *runnercontract.TakeoverReport
 	InstanceID            string
 	BuildVersion          string

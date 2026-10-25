@@ -34,6 +34,14 @@
     "env": "controlled"
   },
   {
+    "id": "recovery.runner-wait-retry",
+    "level": "L3",
+    "suite": "recovery",
+    "package": "./tests/e2e/suites/recovery",
+    "test": "TestRunnerWaitRetry",
+    "env": "controlled"
+  },
+  {
     "id": "runtime.service-lifecycle",
     "level": "L3",
     "suite": "runtime",

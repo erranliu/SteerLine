@@ -40,6 +40,10 @@ func (c Config) runnerPublication() runnerclient.Publication {
 func runnerTaskService(config Config, connection taskrunner.Store, cli runnerclient.Client) *taskrunner.Service {
 	service := &taskrunner.Service{Project: config.Identity(), Claimant: config.Claimant, StateDir: cli.StateDir, DefaultProfile: config.RunnerExecution.DefaultProfile, Profiles: config.RunnerExecution.taskProfiles(config.Repository, config.runnerPublication()), Tasks: NewTaskService(connection, config), Store: connection}
 	service.RunnerBuild = cli.BuildPin()
+	for id, profile := range service.Profiles {
+		profile.UnavailableReason = config.runtimeCatalog.ExecutionWaitUnavailable(profile.Input.Execution)
+		service.Profiles[id] = profile
+	}
 	service.PrepareTestPlan = config.prepareTestPlan
 	service.Bridge = &runnerbridge.Bridge{Store: connection, Client: func(string) runnerbridge.CLI { return cli }}
 	git := commandRunner{Dir: config.Repository, Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), ProcessHost: config.ProcessHost}

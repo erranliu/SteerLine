@@ -21,12 +21,13 @@ import (
 // RunnerFixture is a scripted public CLI peer. It owns no agent, transport,
 // workflow or native recovery state. Calls are evidence of caller side effects.
 type RunnerFixture struct {
-	Progress  map[string]runnercontract.ProgressFile `json:"progress"`
-	Providers map[string]string                      `json:"providers"`
-	Runs      map[string]runnercontract.Run          `json:"runs"`
-	Requests  map[string]runnercontract.Command      `json:"requests"`
-	Bodies    map[string]string                      `json:"bodies"`
-	Calls     []string                               `json:"calls"`
+	WaitEvents []runnercontract.Event                 `json:"wait_events,omitempty"`
+	Progress   map[string]runnercontract.ProgressFile `json:"progress"`
+	Providers  map[string]string                      `json:"providers"`
+	Runs       map[string]runnercontract.Run          `json:"runs"`
+	Requests   map[string]runnercontract.Command      `json:"requests"`
+	Bodies     map[string]string                      `json:"bodies"`
+	Calls      []string                               `json:"calls"`
 }
 
 func RunnerCLI(args []string) (bool, error) {
@@ -73,7 +74,7 @@ func RunnerCLI(args []string) (bool, error) {
 	case "version", "capabilities", "service":
 		os.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "caller-fixture-v1")
 		return protocol.RunRunnerServiceFixture(), nil
-	case "progress-file", "submit", "inspect", "open-native-session", "events", "reply", "resume", "stop":
+	case "progress-file", "submit", "inspect", "open-native-session", "events", "observe", "reply", "resume", "stop":
 	default:
 		return false, nil
 	}
@@ -110,7 +111,7 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	var request runnercontract.Request
 	var id any
-	if args[0] != "progress-file" && args[0] != "inspect" && args[0] != "events" && args[0] != "open-native-session" {
+	if args[0] != "progress-file" && args[0] != "inspect" && args[0] != "events" && args[0] != "observe" && args[0] != "open-native-session" {
 		if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
 			return true, err
 		}
@@ -256,7 +257,7 @@ func RunnerCLI(args []string) (bool, error) {
 		s.Bodies[request.RequestID] = string(request.Input)
 		return respond(map[string]any{"command_id": cmd.CommandID, "run_id": runID, "receipt_status": "accepted", "action_status": "completed"}, "")
 	}
-	if args[0] == "inspect" {
+	if args[0] == "inspect" || args[0] == "observe" {
 		var cmd *runnercontract.Command
 		if requestID := argument(args, "--request-id"); requestID != "" {
 			v, ok := s.Requests[requestID]
@@ -277,6 +278,27 @@ func RunnerCLI(args []string) (bool, error) {
 		provider, err := Read(providerPath)
 		if err != nil {
 			return true, err
+		}
+		beforeWait, _ := json.Marshal(run.ExecutionWait)
+		run.ExecutionWait = provider.PreparationWait.Clone()
+		if run.StopStatus == "stopped" {
+			run.ExecutionWait = nil
+		}
+		afterWait, _ := json.Marshal(run.ExecutionWait)
+		if string(beforeWait) != string(afterWait) {
+			run.Revision++
+			run.Status, run.Phase, run.ResumeRequired = "running", "running", false
+			run.Controls.CanResume = false
+			if run.StopStatus == "stopped" {
+				run.Status, run.Phase = "stopped", "stopped"
+			}
+			if run.ExecutionWait != nil {
+				run.Status, run.Step, run.Phase = "queued", "implement.execute", "execution_wait"
+				if run.ExecutionWait.Stage == "exhausted" {
+					run.Status, run.Phase, run.ResumeRequired, run.Controls.CanResume = "blocked", "operation_rejected", true, true
+				}
+			}
+			s.WaitEvents = append(s.WaitEvents, runnercontract.Event{EventID: fmt.Sprintf("wait-%s-%d", runID, run.Revision), RunID: runID, Revision: run.Revision, Type: "execution_wait_changed", ExecutionWait: afterWait, AttemptID: run.Execution.AttemptID, CreatedAt: time.Now().UTC()})
 		}
 		if run.StopStatus != "stopped" && !provider.Hold {
 			if run.PR == nil {
@@ -319,6 +341,9 @@ func RunnerCLI(args []string) (bool, error) {
 			}
 		}
 		s.Runs[runID] = run
+		if args[0] == "observe" {
+			return respond(map[string]any{"contract": "steerrunner-run-observation/v1", "run": run, "event_page": s.eventPage(run, argument(args, "--after"))}, "")
+		}
 		return respond(runnercontract.Inspection{Command: cmd, Run: &run}, "")
 	}
 	run, ok := s.Runs[runID]
@@ -334,19 +359,7 @@ func RunnerCLI(args []string) (bool, error) {
 		return respond(map[string]any{"run_id": runID, "attempt_id": run.Execution.AttemptID, "session_id": run.Execution.SessionID, "generation": run.Execution.Generation, "opened": true}, "")
 	}
 	if args[0] == "events" {
-		// Deliberately opaque to the caller: scripted canonical finals suffice
-		// to exercise public projection without simulating workflow execution.
-		page := runnercontract.EventPage{NextCursor: "waiting", Events: []runnercontract.Event{}}
-		if argument(args, "--after") != "fixture-end" && run.PR != nil {
-			for i := 1; i <= 3; i++ {
-				f := runnercontract.Final{CommandID: fmt.Sprintf("final-%s-%d", runID, i), AttemptID: run.Execution.AttemptID, SessionID: run.Execution.SessionID, TurnID: strconv.Itoa(i), NativeOutcome: "succeeded", Verified: true, Source: "fixture", ItemID: strconv.Itoa(i), Text: []string{"Controlled implementation result", "Controlled report result", "Controlled candidate pushed and PR created"}[i-1]}
-				page.Events = append(page.Events, runnercontract.Event{EventID: fmt.Sprintf("event-%s-%d", runID, i), RunID: runID, Revision: run.Revision, Type: "final", CommandID: f.CommandID, AttemptID: f.AttemptID, Final: &f, CreatedAt: time.Now().UTC()})
-			}
-		}
-		if run.PR != nil {
-			page.NextCursor = "fixture-end"
-		}
-		return respond(page, "")
+		return respond(s.eventPage(run, argument(args, "--after")), "")
 	}
 	if previous, ok := s.Requests[request.RequestID]; ok {
 		if s.Bodies[request.RequestID] != string(request.Input) {
@@ -366,6 +379,11 @@ func RunnerCLI(args []string) (bool, error) {
 		run.Revision++
 	}
 	if args[0] == "stop" {
+		if run.ExecutionWait != nil {
+			run.ExecutionWait = nil
+			s.WaitEvents = append(s.WaitEvents, runnercontract.Event{EventID: fmt.Sprintf("wait-%s-%d", runID, run.Revision+1), RunID: runID, Revision: run.Revision + 1, Type: "execution_wait_changed", ExecutionWait: json.RawMessage("null"), AttemptID: run.Execution.AttemptID, CreatedAt: time.Now().UTC()})
+		}
+		run.Status, run.Phase = "stopped", "stopped"
 		run.StopStatus = "stopped"
 		run.NewInputsAllowed = false
 		run.Controls = runnercontract.Controls{}
@@ -419,7 +437,37 @@ func prepareFixturePR(path string, s *State, repo, branch string) (model.PRInfo,
 // public capability even when the helper is built directly rather than packaged.
 func controlledCapabilities() map[string]any {
 	caps := protocol.RunnerServiceCapabilities("caller-fixture-v1")
+	caps["run_observation"] = map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100}
+	caps["configuration_schemas"].(map[string]any)["adapters"].(map[string]any)["orca-terminal"] = map[string]string{"type": "object"}
+	caps["workflows"].([]any)[0].(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}
 	caps["workflows"] = append(caps["workflows"].([]any), map[string]any{"id": "generate", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{}})
 	caps["configuration_schemas"].(map[string]any)["generate_input"] = map[string]any{"type": "object", "required": []string{"workflow", "execution", "generate"}}
 	return caps
+}
+
+// eventPage reads the scripted events under the same fixture lock as the Run.
+func (s RunnerFixture) eventPage(run runnercontract.Run, after string) runnercontract.EventPage {
+	page := runnercontract.EventPage{NextCursor: "waiting", Events: []runnercontract.Event{}}
+	if after != "fixture-end" && len(s.WaitEvents) != 0 {
+		start := 0
+		if strings.HasPrefix(after, "wait-page-") {
+			start, _ = strconv.Atoi(strings.TrimPrefix(after, "wait-page-"))
+		}
+		for i, event := range s.WaitEvents {
+			if i >= start && event.RunID == run.RunID {
+				page.Events = append(page.Events, event)
+			}
+		}
+		page.NextCursor = fmt.Sprintf("wait-page-%d", len(s.WaitEvents))
+	}
+	if after != "fixture-end" && run.PR != nil {
+		for i := 1; i <= 3; i++ {
+			f := runnercontract.Final{CommandID: fmt.Sprintf("final-%s-%d", run.RunID, i), AttemptID: run.Execution.AttemptID, SessionID: run.Execution.SessionID, TurnID: strconv.Itoa(i), NativeOutcome: "succeeded", Verified: true, Source: "fixture", ItemID: strconv.Itoa(i), Text: []string{"Controlled implementation result", "Controlled report result", "Controlled candidate pushed and PR created"}[i-1]}
+			page.Events = append(page.Events, runnercontract.Event{EventID: fmt.Sprintf("event-%s-%d", run.RunID, i), RunID: run.RunID, Revision: run.Revision, Type: "final", CommandID: f.CommandID, AttemptID: f.AttemptID, Final: &f, CreatedAt: time.Now().UTC()})
+		}
+	}
+	if run.PR != nil {
+		page.NextCursor = "fixture-end"
+	}
+	return page
 }

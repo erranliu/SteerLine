@@ -32,6 +32,7 @@ func (c Client) WithCatalog(catalog *Catalog) Client {
 	if catalog == nil {
 		return c
 	}
+	c.executionWaitSchema = catalog.executionWaitSchema
 	c.NativeSessionAdapters = append([]string(nil), catalog.Capabilities.NativeSessionViewer.Adapters...)
 	u, p := catalog.Capabilities.RunUsage, catalog.Capabilities.RunCost
 	c.RunUsageSupported = u != nil && u.Schema == "run-usage/v1" && u.QueryOnly

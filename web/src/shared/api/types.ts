@@ -116,9 +116,24 @@ export interface Decision {
     options: { ID: string; Label: string; Detail: string }[];
   };
 }
+export interface ExecutionWait {
+  contract: "steerrunner-execution-wait/v1";
+  operation_id: string;
+  query: "repository_inventory" | "runtime_status";
+  stage: "queue" | "calling" | "backoff" | "exhausted";
+  reason_code: "orca_cli_busy" | "orca_query_running" | "orca_query_transient" | "wait_budget_exhausted" | "query_attempts_exhausted";
+  started_at: string;
+  updated_at: string;
+  deadline_at: string;
+  calls_started: number;
+  max_calls: number;
+  next_attempt_at: string | null;
+  diagnostic: string;
+}
 export interface Candidate {
  material_status?: "current" | "outdated" | "unknown";
   runner_delivery?: {
+	 execution_wait: ExecutionWait | null;
     available: boolean;
     run_id?: string;
     revision: number;
@@ -228,7 +243,7 @@ export interface Candidate {
   };
 }
 export interface ServicePage {
-  service: { instance_id: string; ready: boolean; capabilities: string[] };
+  service: { instance_id: string; ready: boolean; capabilities: string[]; error?: string | null };
   runs: Candidate[] | null;
   control: {
     revision: number;

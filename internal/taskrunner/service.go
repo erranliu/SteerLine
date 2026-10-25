@@ -33,8 +33,9 @@ type Store interface {
 	CommitRunnerTaskResult(context.Context, storageports.RunnerResult) (taskmodel.TaskDeliveryReceipt, error)
 }
 type Profile struct {
-	ID, Name string
-	Input    runnerclient.RunInput
+	ID, Name          string
+	UnavailableReason string
+	Input             runnerclient.RunInput
 }
 type Service struct {
 	Project, Claimant, StateDir, DefaultProfile string
@@ -110,6 +111,9 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	profile, ok := s.Profiles[profileID]
 	if !ok {
 		return runnerbridge.Candidate{}, failure("profile_not_found", "selected Runner profile is unavailable")
+	}
+	if profile.UnavailableReason != "" {
+		return runnerbridge.Candidate{}, failure("unsupported_capability", profile.UnavailableReason)
 	}
 	if profile.Input.Workflow.ID == "" || profile.Input.Workflow.Version <= 0 {
 		return runnerbridge.Candidate{}, failure("invalid_profile", "execution preset must select a published workflow explicitly")

@@ -2,6 +2,8 @@
 
 候选停止可靠受理与核实（2026-10-25，自审收敛后实施）：[Spec](candidate-stop-reliability.spec.md) · [Plan](../plans/candidate-stop-reliability.plan.md) · [专属验收](../testing/acceptance/candidate-stop-reliability.md)。停止不因无关候选/派发版本增长失效，原请求/退出事实恢复、原 actor 及时让路、有界独立核实及失败/未知/快照刷新分开呈现；保留最后一个、交付竞争和资源边界。不改 roadmap 或安装现场。
 
+Runner 准备查询等待与执行页展示（2026-10-25，调用方实施、远端真机及回归通过）：[Spec](runner-wait-retry.spec.md) · [Plan](../plans/runner-wait-retry.plan.md) · [专属验收](../testing/acceptance/runner-wait-retry.md)。Runner 独立实现两项准备读取的有界等待/重试与最小公开契约；本仓消费原投影/活动并展示，未知副作用保持原规则。正式 schema 的 L1/L2/L3、Web 及远端 Orca 同候选恢复/停止已核实；历史告警、失败轮和未验边界分别留证，不恢复生产现场或部署。
+
 项目更新与候选版本收敛（2026-10-21，已实施）：[Spec](project-maintenance-simplification.spec.md) · [Plan](../plans/project-maintenance-simplification.plan.md) · [专属验收](../testing/acceptance/project-maintenance-simplification.md) · [长期设计](../../docs/product-design/project-maintenance.md)。远端/本地提交与PR、日志及一键快进，材料自动跟随、Plan变化自动生成系统测试安排；每个新候选固定最新版本，旧候选过期保留且禁用当前测试关联，其PR合入仍可完成任务。取代下述上一批人工确认/应用及Task级冻结；实际验证见专属验收，不改roadmap。
 
 项目基线与材料统一维护（2026-10-21）：[Spec](project-maintenance.spec.md) · [Plan](../plans/project-maintenance.plan.md) · [专属验收](../testing/acceptance/project-maintenance.md) · [长期设计](../../docs/product-design/project-maintenance.md)。初始化/基线/局部共用规则和维护流程，后台检测零自动生成，生成先审阅再显式应用，首次启动冻结远端最新代码与同版本材料。当前已替换任务材料登记即永久固定、生成自动保存及缺材料仅提示的旧行为；验证归专属记录，不改历史验收或 roadmap。项目添加的最终登记/建库继续后置，消费本批共用检查能力。

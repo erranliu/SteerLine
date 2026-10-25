@@ -7,3 +7,5 @@ When a later input requests publication, use ordinary Git and gh commands to pus
 ## Test plan
 
 Read result.txt back and compare its UTF-8 bytes with the expected marker, branch name and LF line endings.
+
+No automated tests from the project catalogue are required for this isolated fixture. Verify the file bytes and local commit as described above; the caller's live acceptance separately checks waiting, recovery and resource settlement.

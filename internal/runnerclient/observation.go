@@ -28,11 +28,22 @@ func (c Client) Observe(ctx context.Context, id, after string) (RunObservation, 
 		return RunObservation{}, err
 	}
 	var result RunObservation
+	var raw struct {
+		Run json.RawMessage `json:"run"`
+	}
+	if json.Unmarshal(response.Data, &raw) == nil {
+		if err := c.validateRunWait(raw.Run); err != nil {
+			return RunObservation{}, waitFailure(err)
+		}
+	}
 	if json.Unmarshal(response.Data, &result) != nil || result.Contract != RunObservationContract || result.Run.RunID != id || result.Run.Revision == 0 || result.EventPage.Events == nil || len(result.EventPage.Events) > 100 || result.EventPage.NextCursor == "" || result.EventPage.HasMore && len(result.EventPage.Events) == 0 || len(result.EventPage.Events) > 0 && result.EventPage.NextCursor == after {
 		return RunObservation{}, &Failure{Code: "runner_unavailable", Message: "Runner observation identity or event page is invalid", Exit: 4}
 	}
 	seen := map[string]bool{}
 	for _, event := range result.EventPage.Events {
+		if err := c.validateWaitEvent(event); err != nil {
+			return RunObservation{}, waitFailure(err)
+		}
 		if event.EventID == "" || seen[event.EventID] || event.RunID != id || event.Revision == 0 || event.Revision > result.Run.Revision {
 			return RunObservation{}, &Failure{Code: "runner_unavailable", Message: "Runner event exceeds its bound snapshot", Exit: 4}
 		}

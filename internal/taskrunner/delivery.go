@@ -31,6 +31,7 @@ func deliveryObservation(c runnerstate.Candidate) *runnercontract.DeliveryObserv
 		return v
 	}
 	v.Available, v.RunID, v.Revision = true, r.RunID, r.Revision
+	v.ExecutionWait = r.ExecutionWait.Clone()
 	v.Step, v.Status, v.Phase, v.Diagnostic = r.Step, r.Status, r.Phase, r.Diagnostic
 	v.NativeOutcome = r.Execution.NativeOutcome
 	if r.Final != nil && r.Final.AttemptID == r.Execution.AttemptID && r.Final.SessionID == r.Execution.SessionID && r.Final.TurnID == r.Execution.TurnID && r.Final.TurnID != "" {
