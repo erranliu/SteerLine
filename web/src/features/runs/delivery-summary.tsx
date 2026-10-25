@@ -1,4 +1,5 @@
 import type { Candidate } from "../../shared/api/types";
+import { ExecutionWaitSummary, preparationWait } from "./execution-wait";
 
 const names: Record<string, string> = {
   accepted: "已受理",
@@ -27,9 +28,10 @@ const label = (value?: string) => (value ? names[value] || value : "未核实");
 
 // Pure rendering from one observed Run snapshot. No fetching, command dispatch
 // or completion authority is attached to this display.
-export function DeliverySummary({ run }: { run: Candidate }) {
+export function DeliverySummary({ run, stale = false, sampledAt }: { run: Candidate; stale?: boolean; sampledAt?: string }) {
   const v = run.runner_delivery;
   if (!v) return null;
+  const wait = preparationWait(run);
   const actions = v.available
     ? [
         v.controls.can_reply && "回答",
@@ -43,6 +45,7 @@ export function DeliverySummary({ run }: { run: Candidate }) {
   return (
     <section className="settings-panel" aria-label="交付进度">
       <h3>交付进度</h3>
+      {wait && <ExecutionWaitSummary key={run.run_id + "/" + run.execution_id} wait={wait} stale={stale} sampledAt={sampledAt} />}
       <p>请求受理 · {label(v.submission)}</p>
       {v.available ? (
         <>

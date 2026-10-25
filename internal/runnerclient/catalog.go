@@ -13,8 +13,9 @@ import (
 )
 
 type Capabilities struct {
-	ProgressFile       *ProgressCapability `json:"progress_file,omitempty"`
-	ProgressFileSchema json.RawMessage     `json:"progress_file_schema,omitempty"`
+	ExecutionWait      *ExecutionWaitCapability `json:"execution_wait,omitempty"`
+	ProgressFile       *ProgressCapability      `json:"progress_file,omitempty"`
+	ProgressFileSchema json.RawMessage          `json:"progress_file_schema,omitempty"`
 	RunUsage           *struct {
 		Schema    string `json:"schema"`
 		QueryOnly bool   `json:"query_only"`
@@ -61,6 +62,8 @@ type Capabilities struct {
 	} `json:"configuration_schemas"`
 }
 type Catalog struct {
+	executionWaitSchema     *jsonschema.Schema
+	executionWaitError      error
 	generate                *jsonschema.Schema
 	Capabilities            Capabilities
 	adapters, providers     map[string]*jsonschema.Schema
@@ -124,6 +127,7 @@ func (c Client) Catalog(ctx context.Context, version Version) (*Catalog, error) 
 
 func compileCatalog(caps Capabilities) (*Catalog, error) {
 	result := &Catalog{Capabilities: caps, adapters: map[string]*jsonschema.Schema{}, providers: map[string]*jsonschema.Schema{}}
+	result.compileExecutionWait()
 	seen := map[string]bool{}
 	for _, workflow := range caps.Workflows {
 		key := fmt.Sprintf("%s/%d", workflow.ID, workflow.Version)

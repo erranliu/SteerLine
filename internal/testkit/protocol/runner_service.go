@@ -197,6 +197,7 @@ func RunRunnerServiceFixture() bool {
 func RunnerServiceCapabilities(version string) map[string]any {
 	digest := strings.Repeat("a", 64)
 	return map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
+		"execution_wait":        RunnerExecutionWaitCapability(),
 		"progress_file":         map[string]any{"contract": "steerrunner-progress-file/v1", "command": "progress-file --run-id R --json", "submit_property": "progress_file", "environment_variable": "STEERLINE_PROGRESS_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256"},
 		"progress_file_schema":  map[string]any{"$id": "steerrunner-progress-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-progress-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"type": "string"}}},
 		"native_session_viewer": map[string]any{"adapters": []string{"codex-app-server"}},

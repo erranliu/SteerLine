@@ -114,6 +114,18 @@ func (q Service) readRunnerActivity(ctx context.Context, run, execution, attempt
 		if event.Transition != nil {
 			v = runnerWorkflowActivity(v, *event.Transition)
 		}
+		if event.Type == "execution_wait_changed" {
+			wait, err := event.Wait()
+			if err != nil {
+				return batch, err
+			}
+			v.Kind, v.Title = "execution_wait", "准备查询等待已解除"
+			if wait != nil {
+				v.Title = map[string]string{"queue": "等待 Orca 调用通道", "calling": "正在查询 Orca", "backoff": "正在重试准备查询", "exhausted": "准备查询等待已耗尽"}[wait.Stage]
+				v.Detail = wait.Diagnostic
+			}
+			v.Meta = map[string]any{"execution_wait": wait}
+		}
 		payload, marshalErr := json.Marshal(v)
 		if marshalErr != nil {
 			return batch, marshalErr

@@ -526,6 +526,7 @@ func projectPresentation(c Config) productapi.ProjectPresentation {
 		f := executionmodel.RunnerProfileDisplay(p.ID, p.Name, p.Digest(), runnerclient.RunInput{Execution: p.Execution, Workflow: p.Workflow})
 		f.AcceptedConfigVersion = c.LoadedConfigDigest()
 		view := query.Profile(*f)
+		view.UnavailableReason = c.runtimeCatalog.ExecutionWaitUnavailable(p.Execution)
 		view.Details = append(view.Details, "SteerRunner "+c.RunnerExecution.Runner.Version, "CLI: "+runnerclient.Protocol)
 		result.Profiles = append(result.Profiles, view)
 	}

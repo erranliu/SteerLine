@@ -1,7 +1,10 @@
 // Package runnercontract contains caller-owned values of the public CLI contract.
 package runnercontract
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // These values are the public CLI contract, owned by the caller. There is no
 // Go module dependency on the independently versioned Runner implementation.
@@ -70,6 +73,7 @@ type Controls struct {
 	Reason       string `json:"reason"`
 }
 type Run struct {
+	ExecutionWait    *ExecutionWait    `json:"execution_wait"`
 	Closed           bool              `json:"closed"`
 	ContentResult    *ContentResult    `json:"content_result,omitempty"`
 	Correlation      map[string]string `json:"correlation,omitempty"`
@@ -142,15 +146,16 @@ type Inspection struct {
 	Run     *Run     `json:"run"`
 }
 type Event struct {
-	Transition *WorkflowTransition `json:"transition,omitempty"`
-	EventID    string              `json:"event_id"`
-	RunID      string              `json:"run_id"`
-	Revision   uint64              `json:"revision"`
-	Type       string              `json:"type"`
-	CommandID  string              `json:"command_id"`
-	AttemptID  string              `json:"attempt_id"`
-	Final      *Final              `json:"final"`
-	CreatedAt  time.Time           `json:"created_at"`
+	ExecutionWait json.RawMessage     `json:"execution_wait,omitempty"`
+	Transition    *WorkflowTransition `json:"transition,omitempty"`
+	EventID       string              `json:"event_id"`
+	RunID         string              `json:"run_id"`
+	Revision      uint64              `json:"revision"`
+	Type          string              `json:"type"`
+	CommandID     string              `json:"command_id"`
+	AttemptID     string              `json:"attempt_id"`
+	Final         *Final              `json:"final"`
+	CreatedAt     time.Time           `json:"created_at"`
 }
 type EventPage struct {
 	Events     []Event `json:"events"`

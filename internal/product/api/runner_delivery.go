@@ -2,9 +2,26 @@ package api
 
 import "time"
 
+// ExecutionWaitSummary contains only public display values, not owner handles.
+type ExecutionWaitSummary struct {
+	Contract      string     `json:"contract"`
+	OperationID   string     `json:"operation_id"`
+	Query         string     `json:"query"`
+	Stage         string     `json:"stage"`
+	ReasonCode    string     `json:"reason_code"`
+	StartedAt     time.Time  `json:"started_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	DeadlineAt    time.Time  `json:"deadline_at"`
+	CallsStarted  int        `json:"calls_started"`
+	MaxCalls      int        `json:"max_calls"`
+	NextAttemptAt *time.Time `json:"next_attempt_at"`
+	Diagnostic    string     `json:"diagnostic"`
+}
+
 // RunnerDeliverySummary is a read-only display DTO. It has no owner bindings,
 // stored lifecycle state or execution capabilities.
 type RunnerDeliverySummary struct {
+	ExecutionWait    *ExecutionWaitSummary  `json:"execution_wait"`
 	Available        bool                   `json:"available"`
 	RunID            string                 `json:"run_id,omitempty"`
 	Revision         uint64                 `json:"revision"`

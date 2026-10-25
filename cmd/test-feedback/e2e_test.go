@@ -232,7 +232,7 @@ func TestL3AndL4SelectDisjointRegisteredContent(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string][]string{
-		"L3": {"recovery.waiting-merge-restart", "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects"},
+		"L3": {"recovery.waiting-merge-restart", "recovery.runner-wait-retry", "runtime.service-lifecycle", "runtime.dual-home-operation", "runtime.shared-runner-projects"},
 		"L4": {"runtime.source-build-isolation", "runtime.path-isolation", "runtime.service-write-isolation", "runtime.dual-home-isolation", "runtime.project-maintenance"},
 	}
 	for level, ids := range want {

@@ -6,6 +6,7 @@ import { DeliverySummary } from "./delivery-summary";
 
 afterEach(cleanup);
 const observation: NonNullable<Candidate["runner_delivery"]> = {
+  execution_wait: null,
   available: true,
   run_id: "original",
   revision: 12,

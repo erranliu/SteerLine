@@ -10,6 +10,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/taskrunner"
+	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 func TestRunnerDeliveryReadProjection(t *testing.T) {
@@ -17,6 +18,10 @@ func TestRunnerDeliveryReadProjection(t *testing.T) {
 		t.Run(status, func(t *testing.T) {
 			r := &runnercontract.Run{RunID: "runner", Revision: 12, InputDigest: "fixed", Status: status, Step: "audit.code", Phase: "original_phase", Diagnostic: "original diagnostic", Controls: runnercontract.Controls{CanStop: true}, Execution: runnercontract.Execution{AttemptID: "attempt", SessionID: "session", TurnID: "turn", NativeOutcome: "succeeded"}, Final: &runnercontract.Final{AttemptID: "attempt", SessionID: "session", TurnID: "turn", Verified: true}, ContentResult: &runnercontract.ContentResult{Status: "succeeded"}, PR: &runnercontract.PRFact{State: "open"}}
 			r.ContentResult.Source = *r.Final
+			r.ExecutionWait = protocol.RunnerExecutionWait(time.Now().UTC())
+			r.ExecutionWait.Stage, r.ExecutionWait.ReasonCode, r.ExecutionWait.CallsStarted = "backoff", "orca_query_transient", 1
+			next := r.ExecutionWait.StartedAt.Add(time.Second)
+			r.ExecutionWait.NextAttemptAt = &next
 			checkedAt := time.Date(2026, 10, 21, 1, 2, 3, 0, time.UTC)
 			r.PR.CheckedAt = checkedAt
 			if status == "reconciling" {
@@ -31,6 +36,14 @@ func TestRunnerDeliveryReadProjection(t *testing.T) {
 				t.Fatalf("independent facts lost or completion inferred: %+v", v)
 			}
 			v.Commands[1].ActionStatus = "consumer mutation"
+			if v.ExecutionWait == nil || v.ExecutionWait.OperationID != r.ExecutionWait.OperationID || v.ExecutionWait.NextAttemptAt == nil {
+				t.Fatal("original wait observation lost", v.ExecutionWait)
+			}
+			*v.ExecutionWait.NextAttemptAt = next.Add(time.Hour)
+			v.ExecutionWait.Stage = "consumer mutation"
+			if rt.Runs[0].RunnerDelivery.ExecutionWait.Stage != "backoff" || !rt.Runs[0].RunnerDelivery.ExecutionWait.NextAttemptAt.Equal(next) {
+				t.Fatal("wait response aliases sampled view")
+			}
 			if v.PRCheckedAt == nil || !v.PRCheckedAt.Equal(checkedAt) {
 				t.Fatal("original PR observation time lost", v.PRCheckedAt)
 			}

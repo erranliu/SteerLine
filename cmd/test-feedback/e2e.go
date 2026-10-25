@@ -551,7 +551,7 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
 		// Heavy isolation/native restart has a 10m body; its parent must not
 		// cut the selected scene at the ordinary 6m package bound.
-		if entry.ID == "recovery.waiting-merge-restart" || entry.ID == "runtime.project-maintenance" {
+		if entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.runner-wait-retry" || entry.ID == "runtime.project-maintenance" {
 			minutes += 12
 		} else {
 			minutes += 6

@@ -186,13 +186,16 @@ func TestTRQueryBrowserRoutesAndReadOnlyBoundary(t *testing.T) {
 	}
 	cookie, _ := login(t, s)
 	base := "/api/v2/application/projects/" + client.identity.ProjectID
-	for _, path := range []string{"/tests/catalogue", "/tests/records?test_id=rules&outcome=failed", "/tests/records/" + strings.Repeat("a", 32), "/tests/records/" + strings.Repeat("a", 32) + "/evidence"} {
+	for _, path := range []string{"/tests/catalogue", "/tests/records?test_id=rules&outcome=failed", "/tests/records/" + strings.Repeat("a", 32)} {
 		if w := request(s, "GET", base+path, "", cookie, ""); w.Code != 200 || client.route != "/projects/"+client.identity.ProjectID+path {
 			t.Fatal("record query not forwarded", w.Code, w.Body.String(), client.route)
 		}
 		if w := request(s, "GET", base+path, "", nil, ""); w.Code != 401 {
 			t.Fatal("record query bypassed authentication", w.Code)
 		}
+	}
+	if w := request(s, "GET", base+"/tests/records/"+strings.Repeat("a", 32)+"/evidence", "", cookie, ""); w.Code != 404 {
+		t.Fatal("removed candidate evidence route was forwarded", w.Code)
 	}
 	if w := request(s, "POST", base+"/tests/records", "{}", cookie, ""); w.Code < 400 || client.calls != 0 {
 		t.Fatal("record query created work", w.Code, client.calls)

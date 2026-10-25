@@ -12,10 +12,12 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 )
 
 type State struct {
+	PreparationWait *runnercontract.ExecutionWait    `json:"preparation_wait,omitempty"`
 	Requests        map[string]string                `json:"requests,omitempty"`
 	LocalRepository string                           `json:"local_repository,omitempty"`
 	Marker          int                              `json:"marker,omitempty"`

@@ -69,6 +69,9 @@ func (b *Bridge) observe(ctx context.Context, cli snapshotCLI, c *Candidate) err
 		return err
 	}
 	for _, event := range result.EventPage.Events {
+		if _, err := event.Wait(); err != nil {
+			return err
+		}
 		if event.EventID == "" || event.RunID != c.RunID || event.Revision == 0 || event.Revision > result.Run.Revision {
 			return errors.New("Runner events exceed its observed projection")
 		}
@@ -304,6 +307,9 @@ func (b *Bridge) Step(ctx context.Context, project, id string) (resultErr error)
 		return err
 	}
 	for _, event := range page.Events {
+		if _, err := event.Wait(); err != nil {
+			return err
+		}
 		if event.Revision > latest.Run.Revision {
 			return errors.New("Runner events exceed its observed projection")
 		}
@@ -391,6 +397,9 @@ func (b *Bridge) VerifyBinding(ctx context.Context, project, id string) error {
 }
 
 func bind(c *Candidate, r runnerclient.Run) error {
+	if err := r.ExecutionWait.Validate(); err != nil {
+		return err
+	}
 	if project := r.Correlation["steerline_project"]; project != "" && project != c.Project {
 		return errors.New("Runner Run belongs to another project")
 	}

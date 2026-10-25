@@ -13,6 +13,7 @@ import { candidateState, participating } from "./state";
 import { LastMessage } from "./last-message";
 import { RunnerWorkflow } from "./runner-workflow";
 import { DeliverySummary } from "./delivery-summary";
+import { executionWaitTitle, preparationWait } from "./execution-wait";
 import { PlanTests } from "./plan-tests";
 import { CandidateDocuments } from "./candidate-documents";
 import { nativeSessionReason } from "./native-session";
@@ -240,7 +241,7 @@ function CandidateDetail({
         <span className="branch-name">{run.worktree_branch}</span>
       </div>
       <RunnerWorkflow run={run} />
-      <DeliverySummary run={run} />
+      <DeliverySummary run={run} stale={!online || !!snapshot?.connection.snapshot.error || !!snapshot?.connection.snapshot.page?.service.error} sampledAt={snapshot?.connection.snapshot.sampled_at} />
       <CandidateDocuments run={run} />
       <PlanTests run={run} />
       {run.recovery_required && (
@@ -521,6 +522,7 @@ export function Runs() {
                 <span>候选 C{r.candidate_number || "—"}</span>
                 <strong>{r.execution_profile?.name || r.agent}</strong>
                 <Status value={candidateState(r)} />
+                {preparationWait(r) && <span className="muted">{executionWaitTitle(preparationWait(r)!)}</span>}
               </button>
             ))}
             {pendingCandidates.map((entry) => (
