@@ -1,6 +1,6 @@
 # Plan：Runner 准备查询等待与执行页展示
 
-日期：2026-10-25。状态：调用方已实施，Runner #57 已合入；正式构建的远端 Orca 真机联验、原 Run 停止/宿主结算及最终回归通过，进入提交 PR 阶段。历史告警、失败轮和未验条件见[Spec](../spec/runner-wait-retry.spec.md)及[专属验收](../testing/acceptance/runner-wait-retry.md)。不执行 roadmap，不恢复 Task 18，不部署。
+日期：2026-10-25。状态：调用方已实施，Runner #57 已合入；正式构建的远端 Orca 真机联验、原 Run 停止/宿主结算及最终回归通过，已提交 [PR #393](https://github.com/erranliu/SteerLine/pull/393)，不自动合并。历史告警、失败轮和未验条件见[Spec](../spec/runner-wait-retry.spec.md)及[专属验收](../testing/acceptance/runner-wait-retry.md)。不执行 roadmap，不恢复 Task 18，不部署。
 
 ## 1. 依赖与实施顺序
 

@@ -143,3 +143,5 @@ L3 使用真实本仓服务/Git/SQLite/HTTP、脚本化公开 Runner peer。依�
 最终回归：L1 `test-results/L1/20261025T0531-fixture-final` passed/complete，准备 0.70s、执行 7.32s；L2 `test-results/L2/20261025T0531-fixture-final` passed/cleanup_complete，准备 14.49s、执行/清理 82.92s。L3 `test-results/L3/20261025T0520-main` 仅选 recovery.runner-wait-retry，passed/cleanup_complete，准备 23.94s、执行/清理 210.97s；owner `diagnostics/owner-main-20261025T0520` 的 52 项及 Web `diagnostics/web-main-20261025T0520` 的 build/200 项组件/server 检查通过。模板补充仅为测试说明，产品程序代码与该轮 L3/owner/Web 相同；真实第 06 轮使用补充后的模板。
 
 SLW-A01–A06 的上述自动/controlled/真实远端范围分别通过，未把受控 backoff/耗尽/坏对象/宿主重启当作真实故障矩阵。真实 Web 服务进程重启未取得通过（有原驱动失败记录），实际 browser 文档重开已验；本机 Orca、上游完整 Controlled/L2/local+remote 原生矩阵、Go Full 及人工 SLW-M01 均不宣称通过。前述 HTTP 边界/launcher 基线和历史 Defender 有效排除项不可读限制继续保留。定时任务保持 PAUSED，不自动合并最终 SteerLine PR。
+
+交付：实现提交 `1f966e76c6fbe24193703f0f764d8c09e7acc87f` 已推送 `codex/runner-wait-retry-ui`，创建并附加 [SteerLine PR #393](https://github.com/erranliu/SteerLine/pull/393)，目标 main，创建后状态 OPEN/MERGEABLE；未自动合并或部署。最后文档更新只登记交付，不改变受测程序。链接与差异空白检查通过，Git 中 Go 源文件的 LF 规范化字节经 gofmt 检查无差异；Windows 工作区 CRLF 不当作格式缺陷。
