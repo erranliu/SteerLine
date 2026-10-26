@@ -268,13 +268,15 @@ it("shows server candidates after restart without restoring obsolete journal car
   const { confirm, client, submit } = setup(true, requests);
   await screen.findByText("旧候选活动");
   expect(document.querySelectorAll(".candidate-card")).toHaveLength(1);
-  expect(screen.getAllByText("1 个候选")).toHaveLength(2);
+  expect(screen.getByText("1 个候选")).toBeVisible();
+  expect(screen.getByText("全部：1 个任务 / 1 个候选")).toBeVisible();
   expect(screen.queryByText("新候选")).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "新增并行候选" })).toBeEnabled();
   expect(submit).not.toHaveBeenCalled();
   await confirm();
   expect(document.querySelectorAll(".candidate-card")).toHaveLength(2);
-  expect(screen.getAllByText("2 个候选")).toHaveLength(2);
+  expect(screen.getByText("2 个候选")).toBeVisible();
+  expect(screen.getByText("全部：1 个任务 / 2 个候选")).toBeVisible();
   expect(submit).toHaveBeenCalledTimes(1);
   client.clear();
 });

@@ -1,6 +1,14 @@
 import { it, expect } from "vitest";
-import { candidateState, stopReason, businessOpen } from "./state";
-import type { Candidate } from "../../shared/api/types";
+import {
+  candidateState,
+  stopReason,
+  businessOpen,
+  candidateFacets,
+  matchesCandidate,
+  optionalAnswer,
+  candidateStatuses,
+} from "./state";
+import type { Candidate, Task } from "../../shared/api/types";
 const base = {
   task_id: "task",
   run_id: "a",
@@ -121,4 +129,111 @@ it("keeps participation, delivery and raw observation independent", () => {
     "停止待核实",
   );
   expect(businessOpen({ ...base, task_status: "discarded" })).toBe(false);
+});
+
+it("matches running and asynchronous pending questions independently, including optional answers", () => {
+  const run = {
+    ...base,
+    workflow_status: "running",
+    execution_status: "running",
+    decision: {
+      status: "pending",
+      request: { interaction_kind: "async", blocks_progress: false },
+    },
+  } as Candidate;
+  expect(candidateFacets(run)).toEqual(["running", "waiting_for_input"]);
+  expect(matchesCandidate(run, "running")).toBe(true);
+  expect(matchesCandidate(run, "waiting_for_input")).toBe(true);
+  expect(optionalAnswer(run)).toBe(true);
+  expect(
+    candidateFacets({
+      ...run,
+      decision: { ...run.decision!, status: "answered" },
+    }),
+  ).toEqual(["running"]);
+  expect(
+    optionalAnswer({
+      ...run,
+      decision: {
+        ...run.decision!,
+        request: { ...run.decision!.request, blocks_progress: true },
+      },
+    }),
+  ).toBe(false);
+});
+
+it("keeps optional merge feedback out of pending answers and exposes recovery without hiding execution", () => {
+  expect(
+    candidateFacets({
+      ...base,
+      decision: {
+        status: "pending",
+        request: {
+          interaction_kind: "business_feedback",
+          blocks_progress: false,
+        },
+      },
+    } as Candidate),
+  ).toEqual(["waiting_for_merge"]);
+  const running = {
+    ...base,
+    execution_status: "running",
+    workflow_status: "running",
+  };
+  for (const change of [
+    { workflow_status: "blocked" },
+    { execution_status: "failed" },
+    { recovery_required: true },
+    { runner_delivery: { resume_required: true } },
+    { environment_blocker: { fact: { Reason: "missing" } } },
+  ]) {
+    expect(
+      matchesCandidate(
+        { ...running, ...change } as Candidate,
+        "needs_attention",
+      ),
+    ).toBe(true);
+  }
+  expect(candidateFacets({ ...running, recovery_required: true })).toEqual([
+    "running",
+    "needs_attention",
+  ]);
+  expect(
+    candidateFacets({ ...running, workflow_status: "reconciling" }),
+  ).toEqual(["running"]);
+});
+
+it.each([
+  { participation: "abandoned" },
+  { participation: "completed" },
+  { delivery_outcome: "winner" },
+  { task_status: "closed" },
+  { task_status: "discarded" },
+  { stop_requested: true },
+])("keeps ended or stopping candidates out of current facets: %j", (change) => {
+  const run = {
+    ...base,
+    execution_status: "running",
+    workflow_status: "waiting_input",
+    recovery_required: true,
+    ...change,
+  };
+  expect(candidateFacets(run)).toEqual([]);
+  expect(matchesCandidate(run, "all")).toBe(true);
+});
+
+it("uses known task delivery to exclude stale candidate observations from current filters", () => {
+  const run = {
+    ...base,
+    execution_status: "running",
+    workflow_status: "waiting_input",
+  };
+  for (const task of [
+    { status: "closed" },
+    { status: "discarded" },
+    { delivery: { workflow_run_id: "winner" } },
+  ]) {
+    expect(candidateFacets(run, task as Task)).toEqual([]);
+    expect(candidateStatuses(run, task as Task)).toEqual(["historical"]);
+  }
 });
