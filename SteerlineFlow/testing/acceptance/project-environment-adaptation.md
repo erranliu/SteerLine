@@ -2,7 +2,34 @@
 
 2026-10-26。归属[Spec](../../spec/project-environment-adaptation.spec.md) / [Plan](../../plans/project-environment-adaptation.plan.md)。SteerLine调用方已实施，受控与真实分别记录；不纳入roadmap，不修改Runner或安装现场。
 
-## 本轮：result仅结束后封存一次
+## 当前：rebase及合入版Runner集成
+
+已rebase到SteerLine `origin/main`的`2c1cd9682b3e421f21b5935ccd73a06624015e42`。功能提交为`d53f89f3`，合入版契约/受控EXE接线提交为`c02a3f1207010e68b73aa79d5bdae9f50eb7384d`；下表测试均在该干净代码提交执行，后续仅提交本段验收及接入文档。分支为`codex/project-environment-adaptation`，没有推送、创建PR或部署。
+
+三处rebase冲突均保留双方必要内容：验收索引合并；Config保留startup缓存与环境端口；原启动收尾保留主干双并发准备、锁后复核及顺序collect，并在已有collect中补环境原stop。既有actor五秒辅助预算内轮换测试/环境观察先后，避免持续慢查询饿死环境停止与期限；未新增调度框架。
+
+Runner固定已合入主干`74d594c5f00e32e97d2ee911db5ac787302022bc`（通过fetch取得）。从该提交git archive到仓库外构建，不切换或修改另一聊天的Runner工作树，也不使用安装版。版本`0.2.0-dev.3-r2`；EXE SHA256为`d5b01edd4ac291a8ef1c750c59be2e2f29cdb6fd3d45907ad598aa9757f83f5a`，resource digest为`d5fd5e0303b1ad9c7333acb9b82f18f246e83b71e1edca83ddfb7d5c54004041`。独立EXE、源码归档与native fixture摘要见外部`diagnostics/merged-runner-02/build-identity.json`。首次archive命令参数错误未进入构建；原目录保留，第二个新目录完成固定源码提取和构建。
+
+新增校验合入版公开机器字段`collection=end_only`、`query_reads_file=false`，持续观察或查询读文件的构建明确拒绝。本仓schema fixture与实际EXE公开schema按JSON结构完全一致；文本原始SHA差异来自CRLF/LF，不以字节摘要误判JSON契约。
+
+下表报告均相对 `C:/SteerlineDebug/wt-4b14-environment-adaptation/`：
+
+| 当前验证 | 报告 | 事实 |
+| --- | --- | --- |
+| 真实Runner EXE/客户端/适配模块 | `diagnostics/rebased-contract-01/summary.json` | 142项通过、0跳过；包括原先未提供EXE而跳过的公开check/full-binding测试，以及新result完整回传测试 |
+| 项目/准入/原生命周期及主干启动回归 | `diagnostics/rebased-owner-01/summary.json` | 13项通过、0跳过；Git/SQLite/API、三轮、二态、原stop/takeover、缓存/锁后复核及并行准备失败释放原锁 |
+| 辅助观察轮转回归 | `diagnostics/rebased-auxiliary-01/summary.json` | 3项通过、0跳过；辅助阶段/生成/进度遇到取消或超时仍推进后继观察 |
+| 固定L1 | `test-results/L1/rebased-01/summary.json` | 通过，准备0.3秒、执行12.5秒 |
+| 完整受控L2 | `test-results/L2/rebased-01/summary.json` | 通过且cleanup_complete=true；准备20.8秒、执行65.1秒 |
+| Web | `diagnostics/rebased-web-01/` | 构建通过、31文件/225前端测试通过、103项HTTP/Web服务器测试通过，均无跳过 |
+
+新`TestProjectEnvironmentExecutionPublishedResultRoundTrip`使用SteerLine正式客户端和固定Runner EXE，只有原生协议生产者使用Runner自己的`tests/helpers/native`。真实独立Git、服务及Run完成：公开schema/capability/原实例核验→双文件submit→运行中result pending且无内容、progress独立→明确stop→确认stopped→closed/version=1，任意原字节/base64/长度/SHA一致→修改原文件后查询不刷新→按原实例service stop且resources_settled。最终Run ID为`a2b8d70fac141bf7f2237c9163befe08`；这些操作不启动真实模型或创建PR，不能给项目授予环境ready。
+
+Web服务器原报告为`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261026T060614.129193200Z/summary.json`，由外层server-tests.log定位。早期单独公开EXE试跑见`diagnostics/rebased-public-runner-01/summary.json`，最终以干净c02a提交的整包回归为准。
+
+**已消除的前置缺口**：固定合入版Runner EXE、实际公开capabilities/schema及结果采集/回传/收尾已完成联验，不能继续沿用前序“缺双通道EXE”的原因。**仍未执行的业务验收**：真实远端Agent执行项目完整L2+完整PR。本仓当前尚无Git内正式`SteerlineFlow/environment.md`和`verify-environment.ps1/.sh`，也未为真实目标指定已核实的验证base/远端配置；本轮没有临时编造材料、降低门槛或改判ready。用户项目的完整业务验收仍按Spec要求执行，不把本次受控producer和受控PR事实当真实通过。
+
+## 前轮：result仅结束后封存一次
 
 按用户提供的Runner `docs/spec/runtime-result-file.spec.md` 2026-10-26最终快照稿修订Spec/Plan并实施。只读来源为 `C:/Users/lmas1/.codex/worktrees/2c8e/SteerRunner`，HEAD为`5df57b69e98382abcd63676b04a73079fd939fa6`加该工作树未提交修订；不是首轮调查的旧Runner目录。复制其公开schema作为本仓受控fixture，`internal/runnerclient/testdata/result-file.schema.json` SHA256为`d226fae7a0d8c95e14c3bbed8afb7708cf9f15f0bc833ea7e2a9059fbe45f2ed`。没有修改Runner或声称该工作树EXE已完成真实联验。
 
