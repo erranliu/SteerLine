@@ -51,3 +51,13 @@
 原 worker 还曾误判未安装 SDK，下载官方安装脚本并在自身 TEMP 安装 SDK8.0.427，使用子进程 PATH；独立只读查证机器原有 SDK8.0.426 自 10 月 23 日已存在。父调试进程没有安装 SDK，没有追认环境不变或用该轮计通过。后续仅提出现有 SDK8.0.426 的子进程 PATH 绑定，不改全局环境、原 profile/home/pin 或失败报告；新 Runner 字节及该独立环境例外须完成资格后取得未来新轮明确批准，尚未启用。
 
 原 Run/宿主已停止，public offline resources_settled=true，完整精确 owned native census0 / truncated=false / omittedHosts 为空，本地 home/bin 进程0。没有重发 submit/reply/resume，没有改写进度或私有 Runner 数据库。证据在 scope 下 `candidate-01/checks-verified.json`、`verification-20261026T1150-reports/`、`verification-20261026T1155-inputs/`、`diagnostics/native-attribution-20261026T1125/`、`diagnostics/sdk-install-variance-2026-10-26T10-57-53-639Z/` 及 `cleanup-blocked-20261026T1200/result.json`。原 dirty 代码身份差异、clean 发布 head / 完整 MagicPotion / 人工业务未验边界保留。
+
+## 新 Runner / 现有 SDK 授权与测试安排遗漏
+
+用户后续明确允许新 Runner 和现有 SDK8.0.426 子进程 PATH 绑定，授权独立保存为 `wire-sdk-authorization-20261026T1400.json`；未修改旧授权、原 home/pin 或失败报告。Runner PR62 已由用户合并，独立 API 确认 merge commit `9acd5649187a1a4035f1d901479b84c1fb0b49e4`。真实复验继续固定已批准的原代干净构建源 `7c0df6cafb050f294e7066dfdeb896424fe78230`，EXE SHA256 `00051e332f19805db1f814069c98da48be7411b8b2799955283bc3ee81edca0d`，不把 merge commit 冒充原构建来源。
+
+新增普通 clone/home 的 `wire-01` 通过公开 presentation 固定 SDK 方案 digest `38f094bff5f739c9be7705bb785fb17accd978e203e5c54e05db5a771565f09b`，原 profiles/default/Unity 方案全部保留。但是系统只生成四结构，外部严格必跑门禁在第一次 Task18 start 前拒绝。通过正式维护入口取消原生成并核实 stopped 后，只重生成一次；该原始结果仍缺 L1/L2，没有继续反复抽样、手工补 ID 或启动不完整轮次。这个 home 已正常停止，offline resources_settled=true，没有 Task18 业务候选、业务 submit 或原生 worker。原拒绝、生成、回执与停机证据均保留于 `wire-01/`，不计完整通过。
+
+生成提示原来强调“最小必要入口”，没有明确项目规范中的固定必跑优先于 Plan 仅列出的定向项。本次在同一 Caller 修复中明确先保留规范必跑，再追加 Plan 定向项；不在通用产品硬编码目标项目 ID，不修改原测试清单、Plan、业务合同或严格复验门禁。只有 Plan 和规范均允许例外时才返回空安排。提示修正不等于模型已正确选择，后续新现场仍须核实公开原安排包含 L1/L2、四结构及全部 extra。
+
+主线干净受测源 `384e12cb84658eb7e00d169d7c8a14d10719472a` 与独立原代干净源 `8205bf0e725c8bdf7c2a1cafae3685de567da152` 的本次生成提示 product patch-id 均为 `84c1c71088a4dd8257876132803fb0c847695103`。两个代际 testmanagement/runnerclient owner、固定 L1 和 L2 已通过，L2 cleanup_complete=true；原代正式调试包生成另以 `validation-required-original-01/result.json` 为准。原 Caller42 源码和旧包保留。完整真实进度复验仍为0/2，不将材料生成、组件通过或历史8/8算作发布通过。后续使用新的普通 clone/home，任何已初始化失败现场均不换包或改 pin。
