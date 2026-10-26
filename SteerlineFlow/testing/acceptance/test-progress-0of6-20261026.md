@@ -26,3 +26,15 @@
 为复验用户指定的原现场，另用普通独立源码 clone，从原 Caller `57623186b63c16be2a5748665e63d52ae615adbf` 只追加同一修复及断言维护，干净受测源 `42c16465`。主干修复 `24daeeb8` 与原 Caller 修复 `440110fb` 的 stable patch ID 均为 `425e3082cff59b8e6dd39389e2d6576c4fa3d659`，原固定 Runner f3、模型、原合同及已批准 Unity 绑定保持。`original-caller-fix-equivalence.json` 保存来源证明；`validation-05-original-caller/` 及后续 `live-01/`、`live-02/` 单独登记。该原代际复验不证明 main 新环境适配门禁已通过，也不提供产品运行时回退路径。
 
 关联：[Spec](../../spec/runtime-test-progress.spec.md)、[Plan](../../plans/runtime-test-progress.plan.md)、[接入说明](../../../docs/integration/runtime-progress.md)。
+
+## 原代际 live-01 与后续候选 Runner
+
+`live-01` 的原 Run `3808918f4de62554116d03ce354545d4` / Attempt `3e8a3e01bdba5f013a348fe3cabd09c7` 已独立核实原 L1 的 11 个 XML 成员、原 L2 两个各一成员的 XML batch、四个结构检查 exit0，以及原 plan、输入、case receipt、清理和实际 Unity 版本；没有重跑 Unity 冒充原报告。原登记入口已接入正式 writer：开始或重跑置 false，完整 managed 报告和原结果/输入/清理通过才置 true。远端 writer 仅多出空行，其余源码逐行等同正式 writer；父调试进程未写进度。
+
+公开原始进度 version11 为恰好六个声明的 true 布尔字段，无 publication 对象；194 字节，SHA256 `71585b019da15301909af3407ce5d3bee8651b9c8612fec1beb19d4adfd4e7a7`。API 和独立目检截图均显示 6/6。前序 Incomplete / 结构失败报告保留。L1 与 L2 的 dirty codeIdentity 分别为 `afe:c2ad5a...` 和 `afe:c2e04f...`，不能宣称同一最终源码或 clean 发布 head 已通过。
+
+原 f3 Runner 随后停在缺少原输入归属证明：原生 main 已 done、空 prompt、完整同根 hook 元数据，但漏掉 working 时现有独立原输入查询仅接受 thin 元数据。没有真实 PR，故本轮完整复验不通过，连续数仍为 0。原 Run/宿主均按公开控制停止，offline resources_settled=true，完整精确 owned native census0、truncated=false、omittedHosts 为空，本地 home/bin 进程0；原工作区/报告保留。证据为 scope 下 `live-01/checks-verified.json`、`verification-20261026T0915-inputs/`、`diagnostics/report-transfer-recovery-2026-10-26T09-10-56-017Z/` 和 `cleanup-blocked-20261026T0920/`。
+
+独立 Runner 修复见 [SteerRunner PR62](https://github.com/erranliu/SteerRunner/pull/62)：复用原 terminal 围栏和唯一完整原输入证明，在稳定完整元数据下补证，不新增状态/协议/重放，不虚构 working。主线受测源码 `8eda1434` 正式 L1 702 顶层+29扩展通过；原代候选 `8e1ce9f9` 正式 L1 675顶层+29扩展通过，两个代际 owner 均通过，同形测试在旧 f3 失败。stable patch-id 均为 `6c2ff4585680000f87e68df9fef2686c980331b4`。
+
+用户已明确允许未来新轮使用候选 Runner，原代候选 EXE SHA256 为 `30b3bc832a123427b9494675b242351df975e99994e5688121ef185b4055355c`。另存授权 `runner-pin-authorization-20261026T0930.json`，用原干净 Caller42c16465 及该 Runner 重新通过正式生成入口建立独立包 `candidate-caller-packages/dev-20261026-173725-42c16465`；未来 `candidate-01/02` 采用新普通 clone/home 和独立固定，原 home/pin 不变。原模型、环境 profile、合同、base、L1/L2/四结构及 extra 检查要求保持。仍需两次真实发布前后/closed 采集、原报告、UI 与资源清理完整合格；原 6/6 或 Runner-only 历史成功不计入。
