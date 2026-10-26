@@ -41,3 +41,12 @@
 | `real-warm-serial-final.json` | 三 EXE，`-SerialBuild` | 33.56s；依赖安装跳过。 |
 
 快照与随后串行重建的 SteerLine/Web EXE SHA256 一致。A 的实际收益明确：依赖不变时省去本次约 49 秒安装；B 的并行时序已验证，但两次复测总耗时均约 33 秒，不能把较早 54→29 秒全部归因于并行或承诺稳定百分比。Go/前端阶段本身也受缓存、磁盘和机器争用影响；首次安装仍需执行 npm ci。未测真实安装环境的端到端部署耗时，保留约定核验和 ready 等待。
+
+## 提交 PR 前更新主干与复验
+
+用户随后授权提 PR。分支 `codex/build-deploy-efficiency` 更新到主干 `80f98a37b55ebcf0376a355027dda0bb04f1bda5`（启动性能优化已合入），只解决验收 README 同位置新增导航的冲突，保留两项记录；另清理提取脚本末尾空白。受测干净代码提交为 `2fc450c507982054326e2e75c6831cf48aaa4fb2`，补测命令如下，两个 summary 的 worktree_status 均为 clean：
+
+- `go run ./cmd/test-feedback -level=L1 -out C:\SteerlineDebug\wt-0e4a-build-efficiency\test-results\L1\pr-rebase-2fc450c5`：passed=true，准备 0.89s、执行 15.13s。
+- `go run ./cmd/test-feedback -level=L2 -out C:\SteerlineDebug\wt-0e4a-build-efficiency\test-results\L2\pr-rebase-2fc450c5`：passed=true，准备 28.20s、执行 142.79s，场景 cleanup_complete=true、cleanup_errors=null。
+
+两个报告均通过 `go run ./cmd/test-feedback record -report-dir <对应报告绝对目录>` 导出到 [该受测提交的 Git 测试历史](../records/2fc450c507982054326e2e75c6831cf48aaa4fb2.json)。`git diff origin/main...HEAD --check` 与导航检查通过；更新主干后的导航检查为 581 文件 / 3638 链接零错误。此次补验同样没有部署真实安装环境。
