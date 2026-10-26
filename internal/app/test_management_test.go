@@ -43,3 +43,38 @@ func TestTMPlanTestsRequiresPublicReports(t *testing.T) {
 func (s tmSnapshotStore) Progress(context.Context, string, string) (testmodel.Progress, error) {
 	return testmodel.Progress{}, testmanagement.ErrNotFound
 }
+
+type auxiliaryObservationStore struct {
+	testManagementStore
+	cancel      context.CancelFunc
+	generations int
+}
+
+func (s *auxiliaryObservationStore) RunnerCandidates(context.Context, string, string) ([]runnerstate.Candidate, error) {
+	if s.cancel != nil {
+		s.cancel()
+	}
+	return nil, errors.New("progress unavailable")
+}
+
+func (s *auxiliaryObservationStore) Generations(context.Context, string) ([]testmanagement.Generation, error) {
+	s.generations++
+	return nil, errors.New("generation unavailable")
+}
+
+func TestTMAuxiliaryStagesAdvanceAfterCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	store := &auxiliaryObservationStore{cancel: cancel}
+	p := &testManagementPort{
+		progress: &testmanagement.ProgressService{Store: store},
+		service:  &testmanagement.GenerationService{Store: store},
+	}
+	if err := p.observe(ctx); !errors.Is(err, context.Canceled) || store.generations != 0 {
+		t.Fatal("cancelled stage did not yield", err, store.generations)
+	}
+	store.cancel = nil
+	if err := p.observe(context.Background()); err == nil || store.generations != 1 {
+		t.Fatal("next stage was starved or its error hidden", err, store.generations)
+	}
+}

@@ -41,6 +41,38 @@ type progressFixture struct {
 	calls    int
 }
 
+type slowProgressRunner struct {
+	seen []string
+}
+
+func (r *slowProgressRunner) ProgressFile(ctx context.Context, id string) (runnercontract.ProgressFile, error) {
+	r.seen = append(r.seen, id)
+	if id == "run-a" {
+		<-ctx.Done()
+		return runnercontract.ProgressFile{}, ctx.Err()
+	}
+	return progressSample(id, `{"test.one":true}`, 1), nil
+}
+
+func TestProgressObserveNextDoesNotStarveAfterTimeout(t *testing.T) {
+	plan, _ := json.Marshal(Snapshot{Status: "ready", Definitions: []Definition{{ID: "one"}}})
+	m := &progressMemory{rows: map[string]model.Progress{}}
+	for _, id := range []string{"a", "b"} {
+		m.candidates = append(m.candidates, runnerstate.Candidate{ID: id, RunID: "run-" + id, InputDigest: "input", TestPlan: plan})
+	}
+	r := &slowProgressRunner{}
+	s := &ProgressService{Store: m, Runner: r}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	_ = s.ObserveNext(ctx)
+	if err := s.ObserveNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(r.seen) != 2 || r.seen[0] != "run-a" || r.seen[1] != "run-b" || !m.rows["b"].Completed["test.one"] {
+		t.Fatal("slow progress read starved another candidate", r.seen)
+	}
+}
+
 func (f *progressFixture) ProgressFile(_ context.Context, id string) (runnercontract.ProgressFile, error) {
 	f.calls++
 	return f.values[id], f.failures[id]

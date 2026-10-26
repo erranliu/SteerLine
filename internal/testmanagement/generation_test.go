@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -62,6 +64,7 @@ func (m *memoryGenerations) SaveGeneration(_ context.Context, r Generation, expe
 
 type generationCLI struct {
 	submits, stops int
+	inspects       int
 	lost           bool
 	hidden         bool
 	request        runnerclient.Request
@@ -80,6 +83,7 @@ func (f *generationCLI) Submit(_ context.Context, r runnerclient.Request) (runne
 	return runnerclient.Receipt{RunID: f.run.RunID, CommandID: "submit-command", ReceiptStatus: "accepted"}, nil
 }
 func (f *generationCLI) Inspect(_ context.Context, selector, id string, _ bool) (runnerclient.Inspection, error) {
+	f.inspects++
 	if f.hidden {
 		return runnerclient.Inspection{}, nil
 	}
@@ -91,6 +95,75 @@ func (f *generationCLI) Inspect(_ context.Context, selector, id string, _ bool) 
 		return runnerclient.Inspection{}, errors.New("wrong original request")
 	}
 	return runnerclient.Inspection{Run: &copy, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, CommandID: "submit-command", RunID: &copy.RunID}}, nil
+}
+
+func TestTMGenerationTerminalObservation(t *testing.T) {
+	for _, state := range []string{"generated", "failed", "invalid", "cancelled"} {
+		for _, stopped := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/stopped=%t", state, stopped), func(t *testing.T) {
+				s, m, f, in := generationFixture(t)
+				r, err := s.Generate(context.Background(), in)
+				if err != nil {
+					t.Fatal(err)
+				}
+				r.State, r.Cancelled = state, state == "cancelled"
+				r.Projection = &runnercontract.Run{RunID: r.RunID, Revision: 1}
+				if stopped {
+					r.Projection.StopStatus = "stopped"
+				}
+				m.rows[r.Project+r.ID] = r
+				before, _ := json.Marshal(r)
+				for range 2 {
+					if err := s.Observe(context.Background()); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if stopped {
+					after, _ := json.Marshal(m.rows[r.Project+r.ID])
+					if f.inspects != 0 || f.stops != 0 || string(before) != string(after) {
+						t.Fatal("settled history was queried or changed", f.inspects, f.stops)
+					}
+				} else if f.inspects == 0 {
+					t.Fatal("unverified resource stop was no longer observed")
+				}
+			})
+		}
+	}
+}
+
+type slowGenerationCLI struct {
+	GenerationRunner
+	seen []string
+}
+
+func (f *slowGenerationCLI) Inspect(ctx context.Context, _, id string, _ bool) (runnerclient.Inspection, error) {
+	f.seen = append(f.seen, id)
+	if id == "run-a" {
+		<-ctx.Done()
+		return runnerclient.Inspection{}, ctx.Err()
+	}
+	return runnerclient.Inspection{}, errors.New("independent query failed")
+}
+
+func TestTMGenerationObserveNextDoesNotStarveAfterTimeout(t *testing.T) {
+	s, m, _, _ := generationFixture(t)
+	for _, id := range []string{"a", "b"} {
+		r := Generation{ID: id, Project: s.Project, Revision: 1, State: "accepted", RunID: "run-" + id, InputDigest: "input"}
+		m.rows[r.Project+r.ID] = r
+	}
+	f := &slowGenerationCLI{}
+	s.Runner = f
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if err := s.ObserveNext(ctx); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatal("slow query did not respect the slice", err)
+	}
+	if err := s.ObserveNext(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(f.seen, ",") != "run-a,run-b" || m.rows[s.Project+"b"].Diagnostic == "" {
+		t.Fatal("slow generation starved the next record", f.seen)
+	}
 }
 func (f *generationCLI) Call(_ context.Context, command string, args []string, r *runnerclient.Request) (runnerclient.Response, error) {
 	if command != "stop" || len(args) != 2 || args[1] != f.run.RunID {

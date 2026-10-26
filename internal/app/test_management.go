@@ -21,12 +21,13 @@ type testManagementStore interface {
 	Candidate(context.Context, string, string) (runnerstate.Candidate, error)
 }
 type testManagementPort struct {
-	historyMu   sync.Mutex
-	history     *testmanagement.RecordSnapshot
-	service     *testmanagement.GenerationService
-	store       testManagementStore
-	progress    *testmanagement.ProgressService
-	maintenance *projectMaintenance
+	nextObservation int // auxiliary stages are serialized by the project actor
+	historyMu       sync.Mutex
+	history         *testmanagement.RecordSnapshot
+	service         *testmanagement.GenerationService
+	store           testManagementStore
+	progress        *testmanagement.ProgressService
+	maintenance     *projectMaintenance
 }
 
 func newTestManagementPort(c Config, store testManagementStore, cli runnerclient.Client, admit func(context.Context) error) *testManagementPort {
@@ -132,12 +133,19 @@ func (p *testManagementPort) close() error {
 }
 
 func (p *testManagementPort) observe(ctx context.Context) error {
-	// Progress remains observable when generation or material refresh fails.
-	progressErr := p.progress.Observe(ctx)
-	observationErr := p.service.Observe(ctx)
-	var maintenanceErr error
+	stages := []func(context.Context) error{p.progress.ObserveNext, p.service.ObserveNext}
 	if p.maintenance != nil {
-		maintenanceErr = p.maintenance.refresh(ctx)
+		stages = append(stages, p.maintenance.refresh)
 	}
-	return errors.Join(progressErr, observationErr, maintenanceErr)
+	var failures []error
+	for range stages {
+		if ctx.Err() != nil {
+			return errors.Join(append(failures, ctx.Err())...)
+		}
+		index := p.nextObservation % len(stages)
+		// Advance before the call so a timeout cannot starve the next stage.
+		p.nextObservation = (index + 1) % len(stages)
+		failures = append(failures, stages[index](ctx))
+	}
+	return errors.Join(failures...)
 }

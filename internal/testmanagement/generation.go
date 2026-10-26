@@ -51,6 +51,7 @@ type GenerationService struct {
 	VerifyBinding       func(Generation) error
 	Queue               *GenerationQueue
 	mu                  sync.Mutex
+	nextObservation     int
 	ReadCommitted       func(context.Context, string, string) ([]byte, error)
 }
 
@@ -263,19 +264,42 @@ func (s *GenerationService) dispatch(ctx context.Context, r Generation) (Generat
 	return r, submitErr
 }
 func (s *GenerationService) Observe(ctx context.Context) error {
+	return s.observeRows(ctx, false)
+}
+
+// ObserveNext bounds actor work to one unsettled generation per tick.
+func (s *GenerationService) ObserveNext(ctx context.Context) error {
+	return s.observeRows(ctx, true)
+}
+
+func (s *GenerationService) observeRows(ctx context.Context, one bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rows, err := s.Store.Generations(ctx, s.Project)
 	if err != nil {
 		return err
 	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].CreatedAt.Before(rows[j].CreatedAt) })
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].CreatedAt.Equal(rows[j].CreatedAt) {
+			return rows[i].ID < rows[j].ID
+		}
+		return rows[i].CreatedAt.Before(rows[j].CreatedAt)
+	})
+	pending := make([]Generation, 0, len(rows))
 	for _, r := range rows {
 		s.queue().Update(r)
+		if r.State != "rejected" && !generationObservationComplete(r) {
+			pending = append(pending, r)
+		}
 	}
-	for _, r := range rows {
-		if r.State == "rejected" {
-			continue
+	if one && len(pending) > 0 {
+		index := s.nextObservation % len(pending)
+		s.nextObservation = (index + 1) % len(pending)
+		pending = pending[index : index+1]
+	}
+	for _, r := range pending {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
 		var e error
 		if r.Unsubmitted() {
@@ -304,7 +328,19 @@ func (s *GenerationService) Observe(ctx context.Context) error {
 	}
 	return nil
 }
+
+func generationObservationComplete(r Generation) bool {
+	switch r.State {
+	case "generated", "failed", "invalid", "cancelled", "rejected":
+		return r.Settled()
+	}
+	return false
+}
+
 func (s *GenerationService) observe(ctx context.Context, r Generation) (Generation, error) {
+	if generationObservationComplete(r) {
+		return r, nil
+	}
 	before, _ := json.Marshal(r)
 	if r.Runner != s.Build {
 		if s.VerifyBinding == nil {
@@ -313,9 +349,6 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 		if err := s.VerifyBinding(r); err != nil {
 			return r, err
 		}
-	}
-	if r.State == "generated" && !r.Cancelled && r.Projection != nil && r.Projection.StopStatus == "stopped" {
-		return r, nil
 	}
 	selector, id := "run-id", r.RunID
 	if id == "" || r.InputDigest == "" {
