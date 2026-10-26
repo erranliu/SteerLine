@@ -40,6 +40,7 @@ export function AppShell({
         tests: "测试管理",
         settings: "配置",
         "environment-checks": "环境检查",
+        environment: "项目环境适配",
       }[location.pathname.split("/").pop() ?? ""] ?? "规划与执行");
   return (
     <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>

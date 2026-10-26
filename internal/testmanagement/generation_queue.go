@@ -40,6 +40,31 @@ func NewGenerationQueue(limit int) *GenerationQueue {
 
 func generationKey(g Generation) string { return g.Project + "\n" + g.ID }
 
+// Track and TryAcquire share only the home quota, not generation domain state.
+func (q *GenerationQueue) Track(project, id string, created time.Time, active bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.entries[project+"\n"+id] = generationSlot{created: created, active: active}
+}
+func (q *GenerationQueue) Release(project, id string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	delete(q.entries, project+"\n"+id)
+}
+func (q *GenerationQueue) TryAcquire(project, id string, created time.Time) bool {
+	key := project + "\n" + id
+	q.mu.Lock()
+	if entry, ok := q.entries[key]; ok && entry.active {
+		q.mu.Unlock()
+		return true
+	}
+	if _, ok := q.entries[key]; !ok {
+		q.entries[key] = generationSlot{created: created}
+	}
+	q.mu.Unlock()
+	return q.acquire(Generation{Project: project, ID: id})
+}
+
 // Update runs under the project's generation lock, or during startup census
 // before any project can submit. Unknown submissions retain their slots.
 func (q *GenerationQueue) Update(g Generation) {

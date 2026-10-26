@@ -97,6 +97,20 @@ CLI 通过项目选择访问原任务用例：POST `/task-batch-validation`、`/
 Web 只提供受限 `/api/v2/application/projects…` 同源转接；不代理管理/CLI 专有路由。浏览器会话绑定 home/Web 实例，原生 `/native/identity`、`/native/backend`、`/native/shutdown` 使用独立 launcher Bearer，无 Origin，浏览器 cookie 不能停服。Web 可独立重启，重新 open 授权后只读重连；原信封仍按原实例/请求查询。见[Web 指南](../../web/README.md)、[统一启动 Spec](../../SteerlineFlow/spec/unified-startup.spec.md)。
 
 
+## 项目环境适配
+
+同一项目根提供 `GET /environment/options`（远端配置二态/原因及本地生成配置）、`GET /environment`（最近20条活动摘要）及 `GET /environment/{id}`（原活动完整轮次、两通道快照、脚本报告、Agent排障回复或生成文本）。读取不执行环境脚本、不启动Agent。长Agent回复节选标明截断，原内容保留在原Run。
+
+`POST /commands` 使用以下动作；均沿原项目actor、认证及命令journal，不使用图/控制revision。
+
+| action | target_id / expected_version | payload |
+| --- | --- | --- |
+| `environment_start` | 当前project_id / 1 | `{profile_id,round_timeout_seconds}`，正整数秒；首次加两次重试，每轮同预算 |
+| `environment_generate` | 当前project_id / 1 | `{profile_id,round_timeout_seconds:0}`，选本地Codex只读生成配置；输出准备文档/脚本/gaps，生成不授予准入 |
+| `environment_stop` | 原活动id / 活动revision | `{}`，只处理原活动，取消后零新轮次 |
+
+回执的 `environment` 为活动投影，`applied` 仅表示命令持久受理；任务资格只认环境查询的ready。结果不明时通过原 `GET /commands/{request_id}` 核实，浏览器不因command_not_found补交；重复完整原信封返回原受理记录，变更原信封拒绝。progress持续提供进度，独立result-file仅在原Run结束且停止后封存一次；pr_ready触发停止，不决定ready。result版本0表示未成功采集，closed/0须保留采集diagnostic；closed/1才有最终文件，封存后不刷新。progress及Agent回复不决定ready，Runner停止与最终报告/PR未核实仍阻断新任务。详见[适配Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)。
+
 ## 独立环境检查
 
 沿同一项目根提供 `GET /environment-checks/options`（预填/机制能力）、`GET /environment-checks`（本仓历史）与 `GET /environment-checks/{key}`（原请求公开快照/离线缓存）。这些查询不启动服务、Agent 或清理，不要求创建 Task；原命令查询只 inspect 该请求，详情在无未知操作时按可信 check_id 查询。start/stop 复用当前项目持有的原 Runner 实例准入，检查入口不重启 daemon。报告保留 Runner 的源时间、revision、结论和资源状态，读取时间不能冒充新检查时间。

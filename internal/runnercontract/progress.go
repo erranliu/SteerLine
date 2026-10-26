@@ -3,6 +3,12 @@ package runnercontract
 import "time"
 
 const ProgressContract = "steerrunner-progress-file/v1"
+const ResultContract = "steerrunner-result-file/v1"
+
+// Wire fields are shared, but result has a separate contract: pending version 0,
+// then one permanent closed snapshot (version 1 on success, 0 on failure).
+type ResultFile = ProgressFile
+
 const MaxProgressBytes = 64 << 10
 
 type ProgressFileInput struct {
