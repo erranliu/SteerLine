@@ -39,6 +39,11 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	if run.ProgressFile == nil {
 		t.Fatal("progress was not frozen with candidate")
 	}
+	for _, key := range []string{"implement.report", "publish", "publish.report"} {
+		if !strings.HasSuffix(run.Workflow.PromptOverrides[key], testmodel.TestingReadOnlyInstructions) {
+			t.Fatal("report/publication can overwrite test progress", key)
+		}
+	}
 	initial, err := base64.StdEncoding.DecodeString(run.ProgressFile.InitialContentBase64)
 	require(t, err)
 	if string(initial) != `{"test.one":false}` {
