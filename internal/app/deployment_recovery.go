@@ -130,7 +130,7 @@ func admitDeploymentRecovery(ctx context.Context, candidate string) (*Deployment
 	}
 	var record installedDeployment
 	if err = localservice.ReadPrivateJSON(filepath.Join(home, "deployment.json"), &record, 64<<10); err != nil {
-		return fail(err)
+		return fail(fmt.Errorf("read installed deployment record %s: %w", filepath.Join(home, "deployment.json"), err))
 	}
 	if !runnerbinding.SamePath(record.Home, home) {
 		return fail(errors.New("installed deployment belongs to another home"))

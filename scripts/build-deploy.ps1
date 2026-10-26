@@ -16,22 +16,13 @@ $RunnerRepo = [IO.Path]::GetFullPath($RunnerRepo)
 $InstallHome = [IO.Path]::GetFullPath($InstallHome)
 . (Join-Path $PSScriptRoot 'deployment-stop.ps1')
 . (Join-Path $PSScriptRoot 'deployment-runner.ps1')
+. (Join-Path $PSScriptRoot 'deployment-files.ps1')
 . (Join-Path $PSScriptRoot 'build-timing.ps1')
 
 function Within([string]$Root, [string]$Path) {
     $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
     $valuePath = [IO.Path]::GetFullPath($Path).TrimEnd('\','/')
     return $valuePath.Equals($rootPath, [StringComparison]::OrdinalIgnoreCase) -or $valuePath.StartsWith($rootPath + '\', [StringComparison]::OrdinalIgnoreCase)
-}
-function Assert-Plain([string]$Path) {
-    $cursor = [IO.Path]::GetFullPath($Path)
-    while ($cursor) {
-        $item = Get-Item -LiteralPath $cursor -Force -ErrorAction SilentlyContinue
-        if ($item -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -or $item.LinkType -eq 'HardLink')) { throw "Linked deployment path: $cursor" }
-        $parent = [IO.Path]::GetDirectoryName($cursor)
-        if ($parent -eq $cursor) { break }
-        $cursor = $parent
-    }
 }
 function Invoke-Checked([string]$Exe, [string[]]$Arguments) {
     & $Exe @Arguments
@@ -56,12 +47,6 @@ function Install-Executable([string]$Exe, [string]$Target) {
         Write-Output "Windows has not released the installation file; retry $attempt/4."
         Start-Sleep -Seconds 1
     }
-}
-function Write-JSON([string]$Path, $Value) {
-    Assert-Plain $Path
-    $temporary = $Path + '.' + [Guid]::NewGuid().ToString('N') + '.tmp'
-    [IO.File]::WriteAllText($temporary, ($Value | ConvertTo-Json -Depth 50), [Text.UTF8Encoding]::new($false))
-    Move-Item -LiteralPath $temporary -Destination $Path -Force
 }
 function Wait-Ready([string]$Exe) {
     $deadline = [DateTime]::UtcNow.AddSeconds(180)
@@ -195,7 +180,7 @@ try {
     $record = [ordered]@{ created_at=[DateTime]::UtcNow.ToString('o'); home=$InstallHome; steerline_source=(& git -C $sourceRoot rev-parse HEAD); steerline_source_dirty=(-not [string]::IsNullOrWhiteSpace((& git -C $sourceRoot status --porcelain | Out-String))); runner_source=$version.data.source_commit; runner_version=$version.data.version; files=@{} }
     foreach ($name in @('steerline.exe','steerline-web.exe','steerrunner.exe')) { $record.files[$name] = (Get-FileHash -LiteralPath (Join-Path $bin $name) -Algorithm SHA256).Hash.ToLowerInvariant() }
     Write-JSON (Join-Path $package 'deployment.json') $record
-    Write-JSON (Join-Path $InstallHome 'deployment.json') $record
+    Write-JSON (Join-Path $InstallHome 'deployment.json') $record -Private
     if (-not $NoStart) {
         Next-DeploymentStage 'deploy.start'
         Invoke-Checked $installed @('start')
