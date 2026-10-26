@@ -8,12 +8,18 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
+type ResultCapability struct {
+	ProgressCapability
+	Collection     string `json:"collection"`
+	QueryReadsFile *bool  `json:"query_reads_file"`
+}
+
 func (c *Catalog) ValidateResult() error {
 	if c == nil || c.Capabilities.ResultFile == nil {
 		return errors.New("Runner result-file capability unavailable")
 	}
 	p := c.Capabilities.ResultFile
-	if p.Contract != runnercontract.ResultContract || p.Command != "result-file --run-id R --json" || p.SubmitProperty != "result_file" || p.EnvironmentVariable != "STEERLINE_RESULT_FILE" || p.MaxBytes != runnercontract.MaxProgressBytes || p.Encoding != "base64" || p.Digest != "sha256" {
+	if p.Contract != runnercontract.ResultContract || p.Command != "result-file --run-id R --json" || p.SubmitProperty != "result_file" || p.EnvironmentVariable != "STEERLINE_RESULT_FILE" || p.MaxBytes != runnercontract.MaxProgressBytes || p.Encoding != "base64" || p.Digest != "sha256" || p.Collection != "end_only" || p.QueryReadsFile == nil || *p.QueryReadsFile {
 		return errors.New("Runner result-file capability is incomplete")
 	}
 	var doc struct {

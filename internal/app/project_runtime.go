@@ -186,7 +186,14 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.environment.service.Admit = service.VerifyRunnerAdmission
 	r.config.runtimeTests = r.tests
+	// The actor's shared five-second budget must not let a slow test query
+	// starve environment cancellation/deadlines on every tick.
+	environmentFirst := false
 	service.ObserveAuxiliary = func(ctx context.Context) error {
+		environmentFirst = !environmentFirst
+		if environmentFirst {
+			return errors.Join(r.environment.service.Observe(ctx), r.tests.observe(ctx))
+		}
 		return errors.Join(r.tests.observe(ctx), r.environment.service.Observe(ctx))
 	}
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)

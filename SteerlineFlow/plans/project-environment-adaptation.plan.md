@@ -14,6 +14,8 @@
 
 Runner 双通道是本次指定的已实现前提，本 Plan 不再分为“现在开发/等待 Runner 研发”两套。上游提示词、项目报告schema、状态/预算/有限失效规则和页面可直接实施；接线使用所选实际构建的公开契约/fixture，真实联验时固定EXE与远端身份。核对构建资格不等于新增Runner需求；不满足时明确拒绝，不旁路本机代跑或读取私有文件。取消旧版远端无模型命令及可信进程退出证明前置；不扩展artifacts、通用workflow、context、任意文件或全Agent矩阵。
 
+主干集成固定Runner已合入提交`74d594c5f00e32e97d2ee911db5ac787302022bc`，读取其公开`collection=end_only`和`query_reads_file=false`，不依赖持续观察版本。保留SteerLine主干的双并发启动准备/锁后复核与候选优先同步；既有五秒辅助观察预算内轮换测试/环境的先后，避免环境停止和期限长期饥饿，不另建调度框架。
+
 ## 2. 实施顺序
 
 1. **双通道消费与业务格式。** 保留result_file输入和result-file查询，按公开final-only schema/capability核对。复用字节校验，result仅接受disabled/pending/closed及0/1版本，closed/0保留失败diagnostic，封存后不刷新。删除连续版本/观察状态逻辑，不增加采集或恢复框架。项目报告schema仍由SteerLine固定：本轮/源码/脚本关联、completed、完整L2结果、同一PR/检查审核/合并/脚本清理。进度不决定ready，最终报告缺失/超限不降级。完成门槛PEA-A03/A05的正反fixture；不把文件完整性当进程证明。
@@ -32,6 +34,8 @@ Runner 双通道是本次指定的已实现前提，本 Plan 不再分为“现�
 | PEA-A01 | 所属generation/app单测 `TestProjectEnvironmentGeneration*` | 步骤2后；真实Git材料/有限路径/提示词、双通道写入要求、缺口、无L3强制/自动通过/Agent伪报告要求 |
 | PEA-A02/A04/A06 | SQLite/taskrunner/app `TestProjectEnvironmentAdmission*`、`TestProjectEnvironmentRetry*` | 步骤3–5后；跨项目同目标已有任务/适配的双向竞态、事务回滚、占用恢复，三轮/截止不重置、有限失效与普通提交区分 |
 | PEA-A03/A05 | runnerclient/业务owner `TestProjectEnvironmentExecution*` | 步骤1/4后；result仅0/1及三种状态，空文件/封存失败诊断/摘要/缺失/超限/互串/旧轮/半文件；运行中结果不可见而pr_ready仍触发stop，waiting_input不提前停止，先stop后唯一封存报告；封存不刷新，查询故障/重启、未知/取消/超时零重发，失败仅在资源安全且预算内新建Run |
+| PEA-A03/A05 公开EXE | `TestProjectEnvironmentExecutionPublishedResultRoundTrip`、既有`TestRunnerFullBindingPublicCLI`及`TestEnvironmentCheckPublishedContract` | rebase/接入后；显式STEERRUNNER_EXE、STEERRUNNER_VERSION、STEERRUNNER_SHA256及Runner自身构建的STEERRUNNER_NATIVE_FIXTURE，隔离Git/服务/home；核对公开schema/capability与原实例围栏，实际提交→pending→明确stop→closed/1字节/摘要→封存不刷新→resources_settled。native为受控协议fixture，不代表真实Agent/PR |
+| 启动冲突回归 | app `TestStartupQueries*`、`TestStartupParallelRecoveryFailureReleasesAllProjectLocks`及`TestProjectEnvironmentExecutionLifecycle*` | rebase后；启动缓存不绕过所有权/数据库/远端校验，双并发准备失败释放所有原锁，环境原stop/takeover未漏枚举 |
 | PEA-A07 受控 | app/HTTP组合 `TestProjectEnvironmentWorkflow*` | 步骤6；实际Git/SQLite/项目API+同版双通道/PR fixture，合法Run材料覆写、失败→独立新轮→完整L2/PR→pr_ready触发原stop→核实停止/唯一封存结果→ready→新候选；耗尽阻断，无重复发布 |
 | PEA-A01/A02/A06/A07 Web | `web/src/features/environment-checks/project-environment.test.tsx`、现有原请求及项目切换测试 | 步骤5–6；二态、轮次/期限、进度与报告区分、Agent排障回复、只读历史、停止和原请求核实；真实浏览器另验 |
 | 全部回归 | `go run ./cmd/test-feedback -level=L1 -out <out>`；`go run ./cmd/test-feedback -level=L2 -out <out>`；相关 owner 与 Web tests/build | 实现完成后；受控固定集和必要定向项，不默认 Full/全L3/全L4 |

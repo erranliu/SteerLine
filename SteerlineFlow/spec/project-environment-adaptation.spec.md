@@ -65,6 +65,8 @@ SteerLine内置版本化上游提示词；环境模块独立构造generate输入
 
 progress持续观察，result只在原执行结束且生产者停止后封存一次，查询不读取远端文件。两份快照分别核验contract、原Run、base64/长度/SHA256，不能比较两通道版本或拼接内容。result仅接受disabled/pending/closed、version=0/1；version=1只能是closed且包含完整字节，真实空文件仍为version=1；closed且version=0必须有失败diagnostic，没有内容。result沿公开64KiB上限，超限/缺失/格式错误保持未就绪，不退回progress、Agent final、stdout或artifacts。封存成功或失败后都保存原事实，同一Run不等待新版本、不重采、不resume刷新；字节校验可复用，不共用progress观察生命周期。
 
+所选构建还须明示公开capability `collection=end_only`及`query_reads_file=false`；缺失或相反语义拒绝适配，不解释自由文本能力描述。
+
 结果内容由 SteerLine 单独定义和校验，不进入 Runner schema：版本、本次活动/轮次、受测提交和固定脚本摘要、completed、实际 L2 ID 集合与各项 `test_id/status/message`、同一 PR 的 URL/base/head/必需检查与审核结论/merged/merge_commit、本次脚本资源清理结论及失败原因。项状态沿用 passed/failed/incomplete，空必需项或未执行不能填通过。业务格式可先在本仓固定，不依赖新增命令或进程接口。
 
 通过要求：先依据原Run的既有流程状态发起停止并核实收尾，再取得closed/version=1的唯一封存报告；其本轮关联完整、L2集合与预期完全一致且全部passed、完整PR及脚本资源清理通过才置ready。脚本必须在返回前原子写完最终报告。pr_ready仅触发停止，不证明通过；不能等待运行中的result来决定停止。无法确认最终内容、停止或资源状态仍未就绪。普通Runner命令accepted、进度全绿、completed=true、文件摘要或Agent总结都不能单独置ready。

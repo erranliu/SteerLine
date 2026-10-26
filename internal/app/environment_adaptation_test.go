@@ -41,7 +41,8 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	require(t, e)
 	var caps runnerclient.Capabilities
 	require(t, json.Unmarshal(raw, &caps))
-	caps.ResultFile = &runnerclient.ProgressCapability{Contract: runnercontract.ResultContract, Command: "result-file --run-id R --json", SubmitProperty: "result_file", EnvironmentVariable: "STEERLINE_RESULT_FILE", MaxBytes: 65536, Encoding: "base64", Digest: "sha256"}
+	readsFile := false
+	caps.ResultFile = &runnerclient.ResultCapability{ProgressCapability: runnerclient.ProgressCapability{Contract: runnercontract.ResultContract, Command: "result-file --run-id R --json", SubmitProperty: "result_file", EnvironmentVariable: "STEERLINE_RESULT_FILE", MaxBytes: 65536, Encoding: "base64", Digest: "sha256"}, Collection: "end_only", QueryReadsFile: &readsFile}
 	caps.ResultFileSchema, e = os.ReadFile("../runnerclient/testdata/result-file.schema.json")
 	require(t, e)
 	c.runtimeCatalog, e = runnerclient.CompileCatalog(caps)

@@ -67,7 +67,8 @@ func TestProjectEnvironmentExecutionCapabilityGate(t *testing.T) {
 	if c.ValidateResult() == nil {
 		t.Fatal("missing capability accepted")
 	}
-	c.Capabilities.ResultFile = &ProgressCapability{Contract: runnercontract.ResultContract, Command: "result-file --run-id R --json", SubmitProperty: "result_file", EnvironmentVariable: "STEERLINE_RESULT_FILE", MaxBytes: 65536, Encoding: "base64", Digest: "sha256"}
+	readsFile := false
+	c.Capabilities.ResultFile = &ResultCapability{ProgressCapability: ProgressCapability{Contract: runnercontract.ResultContract, Command: "result-file --run-id R --json", SubmitProperty: "result_file", EnvironmentVariable: "STEERLINE_RESULT_FILE", MaxBytes: 65536, Encoding: "base64", Digest: "sha256"}, Collection: "end_only", QueryReadsFile: &readsFile}
 	raw, e := os.ReadFile("testdata/result-file.schema.json")
 	if e != nil {
 		t.Fatal(e)
@@ -83,6 +84,16 @@ func TestProjectEnvironmentExecutionCapabilityGate(t *testing.T) {
 		}
 	}
 	c.Capabilities.ResultFileSchema = raw
+	c.Capabilities.ResultFile.Collection = "continuous"
+	if c.ValidateResult() == nil {
+		t.Fatal("continuous result capability accepted")
+	}
+	c.Capabilities.ResultFile.Collection = "end_only"
+	readsFile = true
+	if c.ValidateResult() == nil {
+		t.Fatal("file-reading query capability accepted")
+	}
+	readsFile = false
 	c.Capabilities.ResultFile.EnvironmentVariable = "STEERLINE_PROGRESS_FILE"
 	if c.ValidateResult() == nil {
 		t.Fatal("channel variable alias accepted")
