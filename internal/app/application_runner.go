@@ -24,6 +24,7 @@ import (
 // repeat, with the same request ID; a failed final read can be read again.
 type applicationRunner struct {
 	generations       *testmanagement.GenerationQueue
+	environments      *environmentAdmission
 	client            runnerclient.Client
 	info              runnerclient.ServiceInfo
 	attempted         bool
@@ -43,6 +44,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	}
 	limit, _ := executionconfig.GenerateConcurrency(g.MaxGenerateConcurrency)
 	r.generations = testmanagement.NewGenerationQueue(limit)
+	r.environments = &environmentAdmission{projects: map[string]Config{}}
 	if err := runnerstatepath.Validate(home); err != nil {
 		return err
 	}

@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+项目远端环境适配（2026-10-26，调用方已实施）：[Spec](project-environment-adaptation.spec.md) · [Plan](../plans/project-environment-adaptation.plan.md) · [专属验收](../testing/acceptance/project-environment-adaptation.md)。既有远端Agent执行项目脚本，双通道独立回传；三轮、单轮期限和二态准入，完整L2+同一验证PR合并及原Run收尾才ready。固定base、唯一publish入口、目标准入和独立生成用例按审计收敛；不新增通用框架。受控与真实联验分别记录，未部署。
+
 候选停止可靠受理与核实（2026-10-25，自审收敛后实施）：[Spec](candidate-stop-reliability.spec.md) · [Plan](../plans/candidate-stop-reliability.plan.md) · [专属验收](../testing/acceptance/candidate-stop-reliability.md)。停止不因无关候选/派发版本增长失效，原请求/退出事实恢复、原 actor 及时让路、有界独立核实及失败/未知/快照刷新分开呈现；保留最后一个、交付竞争和资源边界。不改 roadmap 或安装现场。
 
 Runner 准备查询等待与执行页展示（2026-10-25，调用方实施、远端真机及回归通过）：[Spec](runner-wait-retry.spec.md) · [Plan](../plans/runner-wait-retry.plan.md) · [专属验收](../testing/acceptance/runner-wait-retry.md)。Runner 独立实现两项准备读取的有界等待/重试与最小公开契约；本仓消费原投影/活动并展示，未知副作用保持原规则。正式 schema 的 L1/L2/L3、Web 及远端 Orca 同候选恢复/停止已核实；历史告警、失败轮和未验边界分别留证，不恢复生产现场或部署。

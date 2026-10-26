@@ -13,6 +13,8 @@ import (
 )
 
 type Capabilities struct {
+	ResultFile         *ResultCapability        `json:"result_file,omitempty"`
+	ResultFileSchema   json.RawMessage          `json:"result_file_schema,omitempty"`
 	ExecutionWait      *ExecutionWaitCapability `json:"execution_wait,omitempty"`
 	ProgressFile       *ProgressCapability      `json:"progress_file,omitempty"`
 	ProgressFileSchema json.RawMessage          `json:"progress_file_schema,omitempty"`

@@ -284,6 +284,7 @@ export function invalidateCommand(
       )
         return false;
       const resource = String(key[3]);
+      if (action.startsWith("environment_")) return resource === "environment";
       if (
         action === "start_environment_check" ||
         action === "stop_environment_check"

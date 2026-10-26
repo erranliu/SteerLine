@@ -130,6 +130,9 @@ beforeEach(async () => {
 afterEach(() => vi.unstubAllGlobals());
 describe("immutable browser requests", () => {
   it.each([
+    ["environment_start", "command_not_found"],
+    ["environment_generate", "command_not_found"],
+    ["environment_stop", "command_not_found"],
     ["start_environment_check", "command_not_found"],
     ["stop_environment_check", "command_not_found"],
     ["stop_candidate", "command_not_found"],

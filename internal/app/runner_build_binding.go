@@ -18,6 +18,9 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 		return err
 	}
 	pin := cli.BuildPin()
+	if err := verifyEnvironmentBindings(ctx, c, store, cli); err != nil {
+		return err
+	}
 	compatible := cli.Takeover != nil && runnerbinding.Compatible(*cli.Takeover, pin)
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {

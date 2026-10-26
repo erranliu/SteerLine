@@ -34,6 +34,15 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		return err
 	}
 	project := c.Identity()
+	environments, err := reader.Environments(ctx, project)
+	if err != nil {
+		return err
+	}
+	for _, r := range environments {
+		if r.Project != project || canonicalPath(r.Build.StateDir) != canonicalPath(runnerstatepath.Directory(c.runnerHome())) {
+			return errors.New("persisted environment belongs to another Runner directory")
+		}
+	}
 	if state.Graph.Authority.ProjectIdentity != project {
 		return errors.New("persisted task snapshot belongs to another project")
 	}

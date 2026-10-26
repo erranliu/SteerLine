@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"time"
 
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -61,6 +63,39 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			}
 			return connection.ReserveRunnerCandidate(ctx, w, c, candidate)
 		}
+	}
+	previous := service.ReserveExecution
+	service.ReserveExecution = func(ctx context.Context, w taskmodel.FixedWork, candidate runnerbridge.Candidate, alternate bool) error {
+		reserve := func() error {
+			if previous != nil {
+				return previous(ctx, w, candidate, alternate)
+			}
+			return connection.ReserveRunnerCandidate(ctx, w, candidate, alternate)
+		}
+		var input runnercontract.RunInput
+		if err := json.Unmarshal(candidate.Submit.Input, &input); err != nil {
+			return err
+		}
+		target := env.Target(input.Execution)
+		if target == "" {
+			return reserve()
+		}
+		if config.runtimeEnvironment == nil || config.runtimeEnvironmentAdmission == nil {
+			return errors.New("环境未就绪：远端适配门禁不可用")
+		}
+		a := config.runtimeEnvironmentAdmission
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		if err := (appConfigVerifier{project: config.projectPath, global: config.executionPath, digest: config.configDigest}).VerifyCurrentConfig(); err != nil {
+			return err
+		}
+		if err := a.check(ctx, target, "", false); err != nil {
+			return err
+		}
+		if _, err := config.runtimeEnvironment.readyFor(ctx, candidate.ProfileID, candidate.BaseRevision); err != nil {
+			return err
+		}
+		return reserve()
 	}
 	return service
 }
