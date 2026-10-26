@@ -6,64 +6,131 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 // The home is owned and no project actors have started. Take the usual project
 // locks only while preserving the caller's existing durable stop outbox. Runner
 // remains the only execution-state authority and admits stops before workers.
 func (d *ApplicationDirectory) prepareRunnerStops(ctx context.Context, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
-	var pending []runnercontract.PendingStop
-	for _, entry := range d.entries {
-		if entry.ref.RunDir == "" {
-			if entry.view.RuntimeState == "failed" {
-				return nil, errors.New("Runner startup cannot inspect an unresolved project census")
+	started := time.Now()
+	defer func() { fmt.Fprintf(os.Stderr, "startup recovery preparation elapsed=%s\n", time.Since(started)) }()
+	type prepared struct {
+		config  Config
+		store   *sqlite.SQLiteStore
+		release func()
+		err     error
+	}
+	preparedProjects := make([]prepared, len(d.entries))
+	// Projects have passed the common-dir/run-dir conflict census. Only their
+	// local preparation runs concurrently; takeover and stop outbox decisions
+	// below still use one original Runner client in deterministic project order.
+	slots := make(chan struct{}, 2)
+	var wg sync.WaitGroup
+	for i, entry := range d.entries {
+		wg.Add(1)
+		go func(i int, entry *catalogEntry) {
+			defer wg.Done()
+			p := &preparedProjects[i]
+			select {
+			case slots <- struct{}{}:
+			case <-ctx.Done():
+				p.err = ctx.Err()
+				return
 			}
+			defer func() { <-slots }()
+			if entry.ref.RunDir == "" {
+				if entry.view.RuntimeState == "failed" {
+					p.err = errors.New("Runner startup cannot inspect an unresolved project census")
+				}
+				return
+			}
+			if _, err := os.Stat(filepath.Join(entry.ref.RunDir, "steerline.db")); os.IsNotExist(err) {
+				return
+			} else if err != nil {
+				p.err = err
+				return
+			}
+			p.config, p.err = loadConfigSnapshotWithQueries(entry.ref.ConfigPath, entry.data, d.global, nil, false, newStartupQueries(ctx))
+			if p.err != nil {
+				return
+			}
+			p.config.runtimeGenerations = d.runner.generations
+			p.store, p.release, p.err = openStartupStopStore(ctx, &p.config)
+		}(i, entry)
+	}
+	wg.Wait()
+	defer func() {
+		for i := range preparedProjects {
+			if preparedProjects[i].release != nil {
+				preparedProjects[i].release()
+			}
+		}
+	}()
+	var pending []runnercontract.PendingStop
+	for i, entry := range d.entries {
+		p := &preparedProjects[i]
+		if p.err != nil {
+			return nil, fmt.Errorf("%s startup recovery: %w", entry.view.ConfigID, p.err)
+		}
+		if p.store == nil {
 			continue
 		}
-		if _, err := os.Stat(filepath.Join(entry.ref.RunDir, "steerline.db")); os.IsNotExist(err) {
-			continue
-		} else if err != nil {
-			return nil, err
-		}
-		c, err := loadConfigSnapshot(entry.ref.ConfigPath, entry.data, d.global, nil, false)
-		if err != nil {
-			return nil, err
-		}
-		c.runtimeGenerations = d.runner.generations
-		stops, err := prepareProjectRunnerStops(ctx, &c, cli)
+		stops, err := collectProjectRunnerStops(ctx, &p.config, p.store, cli)
 		if err != nil {
 			return nil, fmt.Errorf("%s startup recovery: %w", entry.view.ConfigID, err)
 		}
 		pending = append(pending, stops...)
+		c := p.config
+		c.finishStartupQueries()
+		entry.startupConfig = &c
 	}
 	return pending, nil
 }
 
 func prepareProjectRunnerStops(ctx context.Context, c *Config, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
-	if err := c.ResolveIdentity(ctx); err != nil {
+	store, release, err := openStartupStopStore(ctx, c)
+	if err != nil {
 		return nil, err
+	}
+	defer release()
+	return collectProjectRunnerStops(ctx, c, store, cli)
+}
+
+func openStartupStopStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, func(), error) {
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return nil, nil, err
 	}
 	repoLock, err := host.LockRepository(c.Identity())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	defer repoLock.Close()
 	runLock, err := host.LockRepository(c.RunDir)
 	if err != nil {
-		return nil, err
+		repoLock.Close()
+		return nil, nil, err
 	}
-	defer runLock.Close()
+	if c.startup != nil {
+		c.resetStartupQueries(ctx)
+	}
 	store, err := OpenNativeTaskCommandStore(ctx, c)
 	if err != nil {
-		return nil, err
+		runLock.Close()
+		repoLock.Close()
+		return nil, nil, err
 	}
-	defer store.Close()
+	return store, func() { _ = store.Close(); runLock.Close(); repoLock.Close() }, nil
+}
+
+func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQLiteStore, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
 	if c.runtimeGenerations != nil {
 		rows, err := store.Generations(ctx, c.Identity())
 		if err != nil {

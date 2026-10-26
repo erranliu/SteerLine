@@ -22,10 +22,11 @@ import (
 
 type catalogEntry struct {
 	*catalogProject
-	port        *runtimeProjectPort
-	result      contract.ProjectShutdown
-	resultReady bool
-	runtime     *ProjectRuntime
+	port          *runtimeProjectPort
+	result        contract.ProjectShutdown
+	resultReady   bool
+	runtime       *ProjectRuntime
+	startupConfig *Config // decoded once during recovery; queries never cross ownership phases
 }
 
 // ApplicationDirectory owns the frozen configuration collection and independent
@@ -40,6 +41,7 @@ type ApplicationDirectory struct {
 	cancel            context.CancelFunc
 	done              chan struct{}
 	started, stopping bool
+	startedAt         time.Time
 	doneOnce          sync.Once
 	runner            applicationRunner
 }
@@ -65,6 +67,7 @@ func (d *ApplicationDirectory) Start() {
 		return
 	}
 	d.started = true
+	d.startedAt = time.Now()
 	go d.run()
 }
 func (d *ApplicationDirectory) run() {
@@ -156,6 +159,7 @@ func (d *ApplicationDirectory) run() {
 	}
 	d.mu.RUnlock()
 	if eligible && d.ctx.Err() == nil {
+		runnerStarted := time.Now()
 		var global RunnerExecutionConfig
 		err := decodeStrictJSON(d.global, &global)
 		if err == nil {
@@ -173,6 +177,7 @@ func (d *ApplicationDirectory) run() {
 			}
 			d.mu.Unlock()
 		}
+		fmt.Fprintf(os.Stderr, "startup Runner preparation elapsed=%s error=%v\n", time.Since(runnerStarted), err)
 	}
 	var wg sync.WaitGroup
 	slots := make(chan struct{}, 8)
@@ -344,6 +349,9 @@ func (d *ApplicationDirectory) publish(e *catalogEntry, port *runtimeProjectPort
 		e.view.RuntimeState = "stopping"
 		e.view.Online = false
 	} else {
+		if e.view.RuntimeState != "ready" {
+			fmt.Fprintf(os.Stderr, "project %s ready elapsed=%s\n", e.view.ConfigID, time.Since(d.startedAt))
+		}
 		e.view.RuntimeState = "ready"
 		e.view.Online = true
 	}
