@@ -15,6 +15,8 @@ const labels: Record<string, string> = {
   dependency_blocked: "依赖阻塞",
   waiting_for_merge: "待合并",
   waiting_for_input: "待回答",
+  needs_attention: "需处理",
+  historical: "历史候选",
   waiting_pr: "待合并",
   answer_saved: "答案已保存",
   reply_accepted: "输入已接受",

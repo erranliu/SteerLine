@@ -3,13 +3,26 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Activity as ActivityIcon, Layers } from "lucide-react";
 import { useWorkspace } from "../../app/context";
-import type { Candidate, Envelope, Receipt } from "../../shared/api/types";
+import type {
+  Candidate,
+  Envelope,
+  Receipt,
+  Task,
+} from "../../shared/api/types";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
-import { SafeLink, Status, short } from "../../shared/ui/status";
+import { SafeLink, Status, short, label } from "../../shared/ui/status";
 import { TaskDetail } from "../tasks/task-detail";
 import { Answer, draftKey } from "./answer";
-import { candidateState, participating } from "./state";
+import {
+  candidateStatuses,
+  participating,
+  candidateFacets,
+  candidateFilters,
+  matchesCandidate,
+  optionalAnswer,
+  type CandidateFilter,
+} from "./state";
 import { LastMessage } from "./last-message";
 import { RunnerWorkflow } from "./runner-workflow";
 import { DeliverySummary } from "./delivery-summary";
@@ -164,12 +177,28 @@ function Output({ run }: { run: Candidate }) {
     </section>
   );
 }
+function CandidateStatuses({ run, task }: { run: Candidate; task?: Task }) {
+  const states = candidateStatuses(run, task);
+  return (
+    <span className="candidate-statuses">
+      {states.map((state) => (
+        <Status key={state} value={state} />
+      ))}
+      {states.includes("waiting_for_input") && optionalAnswer(run) && (
+        <span className="muted">可稍后回答</span>
+      )}
+    </span>
+  );
+}
+
 function CandidateDetail({
   run,
+  task,
   stopControl,
   stopApplied = false,
 }: {
   run: Candidate;
+  task?: Task;
   stopControl: React.ReactNode;
   stopApplied?: boolean;
 }) {
@@ -186,7 +215,7 @@ function CandidateDetail({
           </div>
           <h2>{run.title}</h2>
           <div className="actions">
-            <Status value={candidateState(run)} />
+            <CandidateStatuses run={run} task={task} />
             <span className="muted">
               {run.workflow_stage} · {run.workflow_status}
             </span>
@@ -241,7 +270,15 @@ function CandidateDetail({
         <span className="branch-name">{run.worktree_branch}</span>
       </div>
       <RunnerWorkflow run={run} />
-      <DeliverySummary run={run} stale={!online || !!snapshot?.connection.snapshot.error || !!snapshot?.connection.snapshot.page?.service.error} sampledAt={snapshot?.connection.snapshot.sampled_at} />
+      <DeliverySummary
+        run={run}
+        stale={
+          !online ||
+          !!snapshot?.connection.snapshot.error ||
+          !!snapshot?.connection.snapshot.page?.service.error
+        }
+        sampledAt={snapshot?.connection.snapshot.sampled_at}
+      />
       <CandidateDocuments run={run} />
       <PlanTests run={run} />
       {run.recovery_required && (
@@ -302,7 +339,7 @@ export function Runs() {
   const [params, setParams] = useSearchParams();
   const taskID = params.get("task") ?? "";
   const runID = params.get("run") ?? "";
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<CandidateFilter>("all");
   const [showStopped, setShowStopped] = useState(false);
   const page = snapshot?.connection.snapshot.page;
   const runs = page?.runs ?? [];
@@ -344,9 +381,10 @@ export function Runs() {
     (entry) => entry.taskID === selectedTask,
   );
   const selectedStart = pendingCandidates.find((entry) => entry.id === runID);
-  const selectedDependencyReason = taskDependencyReason(
-    tasks.data?.tasks.find((task) => task.task_id === selectedTask),
+  const selectedTaskRecord = tasks.data?.tasks.find(
+    (task) => task.task_id === selectedTask,
   );
+  const selectedDependencyReason = taskDependencyReason(selectedTaskRecord);
   const requested = runID
     ? taskCandidates.find((r) => r.run_id === runID)
     : taskCandidates[0];
@@ -358,24 +396,91 @@ export function Runs() {
     !showStopped && requested?.participation === "abandoned" && !awaitingStop
       ? candidates[0]
       : requested;
-  const visible =
-    tasks.data?.tasks.filter(
-      (t) =>
-        filter === "all" ||
-        visibleRuns.some(
-          (r) =>
-            (r.domain_task_id || r.task_id) === t.task_id &&
-            candidateState(r) === filter,
-        ),
-    ) ?? [];
-  const chooseTask = (id: string) => {
+  const groups = (tasks.data?.tasks ?? []).map((task) => {
+    const candidates = visibleRuns.filter(
+      (run) => (run.domain_task_id || run.task_id) === task.task_id,
+    );
+    const pending = starts.filter((entry) => entry.taskID === task.task_id);
+    const matching = (value: CandidateFilter) =>
+      candidates
+        .filter((run) => matchesCandidate(run, value, task))
+        .sort(
+          (a, b) =>
+            a.candidate_number - b.candidate_number ||
+            a.run_id.localeCompare(b.run_id),
+        );
+    const counts = new Map<string, number>();
+    for (const run of candidates) {
+      const facets = candidateFacets(run, task);
+      const states = facets.length
+        ? facets.map(label)
+        : candidateStatuses(run, task).map(label);
+      for (const state of states)
+        counts.set(state, (counts.get(state) ?? 0) + 1);
+    }
+    for (const entry of pending)
+      counts.set(entry.status, (counts.get(entry.status) ?? 0) + 1);
+    return {
+      task,
+      matching,
+      count: candidates.length + pending.length,
+      summary: [...counts]
+        .sort(([a], [b]) => {
+          const order: string[] = candidateFilters.map(([, title]) => title);
+          const rank = (state: string) =>
+            order.includes(state) ? order.indexOf(state) : order.length;
+          return rank(a) - rank(b) || a.localeCompare(b);
+        })
+        .map(([state, count]) => `${state} ${count}`)
+        .join(" · "),
+    };
+  });
+  const visible = groups.filter(
+    (group) => filter === "all" || group.matching(filter).length > 0,
+  );
+  const filterCounts = (value: CandidateFilter) => {
+    const matching = groups.filter(
+      (group) => value === "all" || group.matching(value).length > 0,
+    );
+    return `${matching.length} 个任务 / ${matching.reduce((count, group) => count + (value === "all" ? group.count : group.matching(value).length), 0)} 个候选`;
+  };
+  const chooseTask = (id: string, value = filter) => {
     selectionEpoch.current++;
-    setParams({ task: id });
+    const next = groups
+      .find((group) => group.task.task_id === id)
+      ?.matching(value)[0];
+    setParams(next ? { task: id, run: next.run_id } : { task: id });
+  };
+  const applyFilter = (value: CandidateFilter) => {
+    setFilter(value);
+    if (value === "all") return;
+    const matching = groups.filter((group) => group.matching(value).length > 0);
+    const next =
+      matching.find((group) => group.task.task_id === selectedTask) ??
+      matching[0];
+    if (
+      next &&
+      (!selected ||
+        !matchesCandidate(selected, value, next.task) ||
+        next.task.task_id !== selectedTask)
+    ) {
+      chooseTask(next.task.task_id, value);
+    }
   };
   const chooseRun = (id: string) => {
     selectionEpoch.current++;
     setParams({ task: selectedTask, run: id });
   };
+  // Fix the initial candidate identity so snapshot reordering cannot switch the
+  // output or answer editor. Later filter changes navigate only on user action.
+  useEffect(() => {
+    if (!runID && selected) {
+      setParams(
+        { task: selectedTask, run: selected.run_id },
+        { replace: true },
+      );
+    }
+  }, [runID, selected?.run_id, selectedTask, setParams]);
   useEffect(() => {
     if (!pending) return;
     const receipt =
@@ -438,18 +543,16 @@ export function Runs() {
         <Layers className="heading-icon" size={30} />
       </div>
       <div className="toolbar">
-        <div className="segmented">
-          {[
-            ["all", "全部"],
-            ["running", "运行中"],
-            ["waiting_for_input", "待回答"],
-            ["waiting_for_merge", "待合并"],
-          ].map(([value, title]) => (
+        <div className="segmented execution-filters" aria-label="候选状态筛选">
+          {candidateFilters.map(([value, title]) => (
             <Button
               key={value}
               size="sm"
+              aria-label={title}
+              aria-pressed={filter === value}
+              title={`${title}：${filterCounts(value)}`}
               variant={filter === value ? "default" : "ghost"}
-              onClick={() => setFilter(value)}
+              onClick={() => applyFilter(value)}
             >
               {title}
             </Button>
@@ -476,8 +579,9 @@ export function Runs() {
             />
             显示已停止参与候选
           </label>
-          <span className="muted">
-            {visibleRuns.length + starts.length} 个候选
+          <span className="muted" aria-live="polite">
+            {candidateFilters.find(([value]) => value === filter)?.[1]}：
+            {filterCounts(filter)}
           </span>
         </div>
       </div>
@@ -487,28 +591,41 @@ export function Runs() {
           {tasks.data?.tasks.length === 0 && (
             <div className="empty">还没有正式任务</div>
           )}
-          {visible.map((t) => (
+          {visible.map((group) => (
             <RunTask
-              key={t.task_id}
-              task={t}
-              selected={t.task_id === selectedTask}
-              onSelect={() => chooseTask(t.task_id)}
-              candidateCount={
-                visibleRuns.filter(
-                  (r) => (r.domain_task_id || r.task_id) === t.task_id,
-                ).length +
-                starts.filter((entry) => entry.taskID === t.task_id).length
+              key={group.task.task_id}
+              task={group.task}
+              selected={group.task.task_id === selectedTask}
+              onSelect={() => chooseTask(group.task.task_id)}
+              candidateCount={group.count}
+              summary={group.summary}
+              matchedCount={
+                filter === "all" ? undefined : group.matching(filter).length
               }
             />
           ))}
+          {!tasks.isPending &&
+            !tasks.error &&
+            tasks.data?.tasks.length !== 0 &&
+            visible.length === 0 && (
+              <p className="empty">没有符合筛选条件的任务</p>
+            )}
           {tasks.data?.has_more && (
             <p className="muted">
-              显示前 100 个任务，可从 DAG 详情定位后续任务。
+              仅筛选并统计前 100 个任务，可从 DAG 详情定位后续任务。
             </p>
           )}
           {tasks.error && <p className="notice amber">{String(tasks.error)}</p>}
         </aside>
         <section className="execution-panel">
+          {filter !== "all" &&
+            (selected || selectedStart) &&
+            (!selected ||
+              !matchesCandidate(selected, filter, selectedTaskRecord)) && (
+              <p className="notice amber" role="status">
+                当前候选已不符合筛选，保留当前查看内容。
+              </p>
+            )}
           <div className="candidate-strip">
             {candidates.map((r) => (
               <button
@@ -516,13 +633,26 @@ export function Runs() {
                 onClick={() => chooseRun(r.run_id)}
                 className={
                   "candidate-card " +
-                  (selected?.run_id === r.run_id ? "active" : "")
+                  (selected?.run_id === r.run_id ? "active " : "") +
+                  (filter !== "all" &&
+                  matchesCandidate(r, filter, selectedTaskRecord)
+                    ? "filter-match"
+                    : "")
                 }
+                aria-pressed={selected?.run_id === r.run_id}
               >
                 <span>候选 C{r.candidate_number || "—"}</span>
                 <strong>{r.execution_profile?.name || r.agent}</strong>
-                <Status value={candidateState(r)} />
-                {preparationWait(r) && <span className="muted">{executionWaitTitle(preparationWait(r)!)}</span>}
+                <CandidateStatuses run={r} task={selectedTaskRecord} />
+                {filter !== "all" &&
+                  matchesCandidate(r, filter, selectedTaskRecord) && (
+                    <span className="candidate-match">符合筛选</span>
+                  )}
+                {preparationWait(r) && (
+                  <span className="muted">
+                    {executionWaitTitle(preparationWait(r)!)}
+                  </span>
+                )}
               </button>
             ))}
             {pendingCandidates.map((entry) => (
@@ -567,12 +697,15 @@ export function Runs() {
             <CandidateDetail
               key={selected.run_id}
               run={selected}
+              task={selectedTaskRecord}
               stopApplied={stopApplied(selected.run_id)}
               stopControl={
                 <StopCandidate
                   run={selected}
                   pending={stopPending(selected)}
-                  applied={stopApplied(selected.run_id) && participating(selected)}
+                  applied={
+                    stopApplied(selected.run_id) && participating(selected)
+                  }
                   onRequest={(envelope) => {
                     setParams({ task: selectedTask, run: envelope.target_id });
                     setPending({ envelope, epoch: selectionEpoch.current });
