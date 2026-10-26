@@ -2,6 +2,9 @@ param(
     [string]$InstallHome = 'C:\SteerlineInstall',
     [string]$RunnerRepo = '',
     [switch]$UpdateRunner,
+    [switch]$ForceWebInstall,
+    [switch]$SerialBuild,
+    [string]$TimingPath = '',
     [switch]$NoStart,
     [switch]$NoPause
 )
@@ -13,6 +16,7 @@ $RunnerRepo = [IO.Path]::GetFullPath($RunnerRepo)
 $InstallHome = [IO.Path]::GetFullPath($InstallHome)
 . (Join-Path $PSScriptRoot 'deployment-stop.ps1')
 . (Join-Path $PSScriptRoot 'deployment-runner.ps1')
+. (Join-Path $PSScriptRoot 'build-timing.ps1')
 
 function Within([string]$Root, [string]$Path) {
     $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
@@ -88,36 +92,54 @@ New-Item -ItemType Directory -Path $InstallHome -Force | Out-Null
 $lockPath = Join-Path $InstallHome '.deploy.lock'
 Assert-Plain $lockPath
 $deploymentLock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+$timingID = [Guid]::NewGuid().ToString('N')
+if (-not $TimingPath) { $TimingPath = Join-Path $sourceRoot ('bin\deploy-timings\' + $timingID + '.json') }
+$TimingPath = [IO.Path]::GetFullPath($TimingPath)
+$buildTimingPath = Join-Path $sourceRoot ('bin\build-timings\' + $timingID + '.json')
+$buildSnapshot = Join-Path $sourceRoot ('bin\deploy-builds\' + $timingID)
+Initialize-BuildTiming 'build-deploy'
+$deploymentSucceeded = $false
+$package = $null
+$deploymentStage = $null
+function Next-DeploymentStage([string]$Name) {
+    if ($script:deploymentStage) { Complete-BuildStage $script:deploymentStage 'succeeded' }
+    $script:deploymentStage = Start-BuildStage $Name
+}
 try {
 
 # Complete all builds before stopping or replacing an installed component.
 Assert-Plain (Join-Path $InstallHome 'execution.json')
 Assert-Plain (Join-Path $InstallHome 'bin\steerrunner.exe')
+Next-DeploymentStage 'deploy.runner-selection'
 $runnerSelection = Get-DeploymentRunnerSelection $InstallHome ([bool]$UpdateRunner)
+$buildArguments = @{Web=$true; ForceWebInstall=[bool]$ForceWebInstall; SerialBuild=[bool]$SerialBuild; TimingPath=$buildTimingPath; StageDirectory=$buildSnapshot}
 if (-not $runnerSelection.Reuse) {
     if (-not (Test-Path -LiteralPath (Join-Path $RunnerRepo 'scripts\build.ps1'))) { throw 'RunnerRepo must contain the SteerRunner checkout.' }
-    Push-Location $RunnerRepo
-    try { & (Join-Path $RunnerRepo 'scripts\build.ps1'); if (-not $?) { throw 'Runner build failed.' } } finally { Pop-Location }
-    $runnerSource = Join-Path $RunnerRepo 'bin\steerrunner.exe'
+    $buildArguments.RunnerRepo = $RunnerRepo
+    $runnerSource = Join-Path $buildSnapshot 'steerrunner.exe'
 } else {
     $runnerSource = $runnerSelection.Executable
     Write-Output 'Reusing the installed, pinned Runner; building SteerLine and Web only.'
 }
+Next-DeploymentStage 'deploy.build'
 Push-Location $sourceRoot
-try { & (Join-Path $sourceRoot 'build.ps1') -Web; if (-not $?) { throw 'SteerLine/Web build failed.' } } finally { Pop-Location }
+try { & (Join-Path $sourceRoot 'build.ps1') @buildArguments; if (-not $?) { throw 'SteerLine/Web build failed.' } } finally { Pop-Location }
 
+Next-DeploymentStage 'deploy.stage-package'
 $stamp = [DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss') + '-' + [Guid]::NewGuid().ToString('N').Substring(0,8)
 $package = Join-Path $InstallHome ('deployments\' + $stamp)
 New-Item -ItemType Directory -Path $package -Force | Out-Null
 $bin = Join-Path $InstallHome 'bin'
 foreach ($name in @('steerline.exe','steerline-web.exe','steerrunner.exe')) { Assert-Plain (Join-Path $bin $name) }
-foreach ($pair in @(@('steerline.exe',$sourceRoot), @('steerline-web.exe',$sourceRoot))) {
-    $source = Join-Path $pair[1] ('bin\' + $pair[0])
+foreach ($pair in @(@('steerline.exe',$buildSnapshot), @('steerline-web.exe',$buildSnapshot))) {
+    $source = Join-Path $pair[1] $pair[0]
     Assert-Plain $source
     Copy-Item -LiteralPath $source -Destination (Join-Path $package $pair[0])
 }
 Copy-Item -LiteralPath $runnerSource -Destination (Join-Path $package 'steerrunner.exe')
 $runnerStage = Join-Path $package 'steerrunner.exe'
+Copy-Item -LiteralPath $buildTimingPath -Destination (Join-Path $package 'build-timings.json')
+Next-DeploymentStage 'deploy.runner-version-and-pin'
 $versionRaw = & $runnerStage version --json
 if ($LASTEXITCODE -ne 0) { throw 'Staged Runner cannot report its version.' }
 $version = $versionRaw | ConvertFrom-Json
@@ -125,8 +147,10 @@ if (-not $version.ok -or $version.protocol -ne 'steerrunner-cli/v1') { throw 'St
 $runnerHash = (Get-FileHash -LiteralPath $runnerStage -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($runnerSelection.Reuse -and ($runnerHash -ne $runnerSelection.SHA256 -or $version.data.version -ne $runnerSelection.Version)) { throw 'Staged Runner differs from its installed release pin.' }
 Assert-Plain (Join-Path $InstallHome 'application-api\runner-build.json')
+Next-DeploymentStage 'deploy.runner-takeover-preflight'
 $takeover = Assert-DeploymentRunnerBuild $InstallHome $runnerHash $runnerStage (Join-Path $package 'steerline.exe')
 if ($null -ne $takeover) { Write-JSON (Join-Path $package 'runner-takeover-preflight.json') $takeover }
+Next-DeploymentStage 'deploy.execution-config'
 $configPath = Join-Path $InstallHome 'execution.json'
 Assert-Plain $configPath
 if (Test-Path -LiteralPath $configPath) {
@@ -146,6 +170,7 @@ $savedHome = $env:STEERLINE_HOME
 try {
     $env:STEERLINE_HOME = $InstallHome
     $installed = Join-Path $bin 'steerline.exe'
+    Next-DeploymentStage 'deploy.stop-and-verify'
     if (Test-Path -LiteralPath $installed) {
         $verification = Stop-DeploymentApplication (Join-Path $package 'steerline.exe') $runnerStage -AllowRestart:$allowRestart
         if ($null -ne $verification) {
@@ -155,13 +180,16 @@ try {
     $owned = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('steerline.exe','steerline-web.exe','steerrunner.exe') -and $_.ExecutablePath -and (Within $bin $_.ExecutablePath) })
     if ($owned.Count) { throw 'Installed processes remain; preserve the original instance and inspect its shutdown result.' }
     Assert-Plain $bin
+    Next-DeploymentStage 'deploy.install-files'
     Install-Executable (Join-Path $package 'steerline.exe') (Join-Path $bin 'steerline.exe')
     Install-Executable (Join-Path $package 'steerline-web.exe') (Join-Path $bin 'steerline-web.exe')
     Assert-Plain (Join-Path $bin 'steerrunner.exe')
     Copy-Item -LiteralPath $runnerStage -Destination (Join-Path $bin 'steerrunner.exe') -Force
+    Next-DeploymentStage 'deploy.verify-installed-hashes'
     foreach ($name in @('steerline.exe','steerline-web.exe','steerrunner.exe')) {
         if ((Get-FileHash -LiteralPath (Join-Path $bin $name) -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath (Join-Path $package $name) -Algorithm SHA256).Hash) { throw "Installed executable differs from staged package: $name" }
     }
+    Next-DeploymentStage 'deploy.write-records'
     New-Item -ItemType Directory -Path (Join-Path $InstallHome 'etc') -Force | Out-Null
     Write-JSON $configPath $execution
     $record = [ordered]@{ created_at=[DateTime]::UtcNow.ToString('o'); home=$InstallHome; steerline_source=(& git -C $sourceRoot rev-parse HEAD); steerline_source_dirty=(-not [string]::IsNullOrWhiteSpace((& git -C $sourceRoot status --porcelain | Out-String))); runner_source=$version.data.source_commit; runner_version=$version.data.version; files=@{} }
@@ -169,10 +197,30 @@ try {
     Write-JSON (Join-Path $package 'deployment.json') $record
     Write-JSON (Join-Path $InstallHome 'deployment.json') $record
     if (-not $NoStart) {
+        Next-DeploymentStage 'deploy.start'
         Invoke-Checked $installed @('start')
+        Next-DeploymentStage 'deploy.wait-ready'
         Wait-Ready $installed
+    } else {
+        Add-SkippedBuildStage 'deploy.start-and-ready' 'NoStart requested'
     }
     Write-Output "Installed: $InstallHome"
     Write-Output "Build record: $package\deployment.json"
+    $deploymentSucceeded = $true
 } finally { $env:STEERLINE_HOME = $savedHome }
-} finally { $deploymentLock.Dispose() }
+} finally {
+    try {
+        if ($deploymentStage) {
+            $outcome = if ($deploymentSucceeded) { 'succeeded' } else { 'failed' }
+            Complete-BuildStage $deploymentStage $outcome
+        }
+        Import-BuildTiming $buildTimingPath
+        Assert-Plain $TimingPath
+        Write-BuildTiming $TimingPath $deploymentSucceeded
+        if ($package) {
+            $packageTiming = Join-Path $package 'timings.json'
+            Assert-Plain $packageTiming
+            if (-not $TimingPath.Equals($packageTiming, [StringComparison]::OrdinalIgnoreCase)) { Copy-Item -LiteralPath $TimingPath -Destination $packageTiming -Force }
+        }
+    } finally { $deploymentLock.Dispose() }
+}
