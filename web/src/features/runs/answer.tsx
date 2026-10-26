@@ -4,7 +4,7 @@ import { readDraft, writeDraft } from "../../shared/api/journal";
 import type { Candidate } from "../../shared/api/types";
 import { Button } from "../../shared/ui/button";
 import { Status } from "../../shared/ui/status";
-import { businessOpen, requiresAnswer } from "./state";
+import { businessOpen, requiresAnswer, optionalAnswer } from "./state";
 
 export function draftKey(project: string, instance: string, run: Candidate) {
   return [
@@ -125,7 +125,9 @@ export function Answer({ run }: { run: Candidate }) {
             ? "历史问题"
             : requiresAnswer(run)
               ? "需要你的决定"
-              : "追加反馈"}
+              : optionalAnswer(run)
+                ? "可稍后回答"
+                : "追加反馈"}
         </h3>
         <Status value={decision.status} />
       </div>
@@ -138,7 +140,9 @@ export function Answer({ run }: { run: Candidate }) {
           ? "候选已结束，问题与回答仅供回看。"
           : requiresAnswer(run)
             ? "回答后按原问题继续。"
-            : "可选反馈；等待 PR 合并不要求继续执行。"}
+            : optionalAnswer(run)
+              ? "当前执行可继续，方便时回答这个问题。"
+              : "可选反馈；等待 PR 合并不要求继续执行。"}
       </p>
       {decision.status === "pending" && businessOpen(run) && (
         <>

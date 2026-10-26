@@ -14,11 +14,15 @@ export function RunTask({
   task,
   selected,
   candidateCount,
+  summary,
+  matchedCount,
   onSelect,
 }: {
   task: Task;
   selected: boolean;
   candidateCount: number;
+  summary?: string;
+  matchedCount?: number;
   onSelect: () => void;
 }) {
   const reason = taskDependencyReason(task);
@@ -38,6 +42,12 @@ export function RunTask({
         <Status value={reason ? "dependency_blocked" : task.status} />
         <span className="muted">{candidateCount} 个候选</span>
       </div>
+      {summary && <span className="run-task-summary">{summary}</span>}
+      {matchedCount !== undefined && (
+        <span className="run-task-summary muted">
+          {matchedCount} / {candidateCount} 个候选命中
+        </span>
+      )}
       {reason && (
         <span className="run-task-blocker">
           <LockKeyhole size={12} aria-hidden="true" />

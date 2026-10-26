@@ -1,4 +1,71 @@
-import type { Candidate } from "../../shared/api/types";
+import type { Candidate, Task } from "../../shared/api/types";
+
+export const candidateFilters = [
+  ["all", "全部"],
+  ["running", "运行中"],
+  ["waiting_for_input", "待回答"],
+  ["waiting_for_merge", "待合并"],
+  ["needs_attention", "需处理"],
+] as const;
+export type CandidateFilter = (typeof candidateFilters)[number][0];
+
+// Execution, questions and recovery are independent facts. A running candidate
+// can still have an unanswered asynchronous question.
+function currentCandidate(run: Candidate, task?: Task) {
+  return (
+    participating(run) &&
+    !run.stop_requested &&
+    run.delivery_outcome !== "winner" &&
+    !task?.delivery &&
+    ![run.task_status, task?.status].some((status) =>
+      ["closed", "completed", "discarded"].includes(status ?? ""),
+    )
+  );
+}
+
+export function candidateFacets(
+  run: Candidate,
+  task?: Task,
+): CandidateFilter[] {
+  if (!currentCandidate(run, task)) return [];
+  const facets: CandidateFilter[] = [];
+  if (run.execution_status === "running") facets.push("running");
+  if (
+    requiresAnswer(run) ||
+    (businessOpen(run) &&
+      run.decision?.status === "pending" &&
+      run.decision.request.interaction_kind === "async")
+  )
+    facets.push("waiting_for_input");
+  if (waitingForMerge(run)) facets.push("waiting_for_merge");
+  if (
+    [run.workflow_status, run.execution_status].some((status) =>
+      ["blocked", "failed"].includes(status),
+    ) ||
+    run.recovery_required ||
+    run.runner_delivery?.resume_required ||
+    run.environment_blocker
+  )
+    facets.push("needs_attention");
+  return facets;
+}
+
+export function matchesCandidate(
+  run: Candidate,
+  filter: CandidateFilter,
+  task?: Task,
+) {
+  return filter === "all" || candidateFacets(run, task).includes(filter);
+}
+
+export function optionalAnswer(run: Candidate) {
+  return (
+    run.decision?.status === "pending" &&
+    run.decision.request.interaction_kind === "async" &&
+    !run.decision.request.blocks_progress &&
+    !requiresAnswer(run)
+  );
+}
 const actionableStates = new Set([
   "queued",
   "running",
@@ -45,6 +112,17 @@ export function candidateState(run: Candidate) {
   if (requiresAnswer(run)) return "waiting_for_input";
   if (waitingForMerge(run)) return "waiting_for_merge";
   return run.execution_status;
+}
+
+export function candidateStatuses(run: Candidate, task?: Task) {
+  const primary = candidateState(run);
+  if (
+    !currentCandidate(run, task) &&
+    !["abandoned", "delivered", "completed"].includes(primary)
+  ) {
+    return [run.stop_requested ? "stop_pending" : "historical"];
+  }
+  return [...new Set([primary, ...candidateFacets(run, task)])];
 }
 export function stopReason(run: Candidate, runs: Candidate[]) {
   if (!participating(run)) return "候选已结束，历史只读；资源保留";
