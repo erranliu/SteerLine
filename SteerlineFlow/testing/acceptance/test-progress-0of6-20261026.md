@@ -38,3 +38,16 @@
 独立 Runner 修复见 [SteerRunner PR62](https://github.com/erranliu/SteerRunner/pull/62)：复用原 terminal 围栏和唯一完整原输入证明，在稳定完整元数据下补证，不新增状态/协议/重放，不虚构 working。主线受测源码 `8eda1434` 正式 L1 702 顶层+29扩展通过；原代候选 `8e1ce9f9` 正式 L1 675顶层+29扩展通过，两个代际 owner 均通过，同形测试在旧 f3 失败。stable patch-id 均为 `6c2ff4585680000f87e68df9fef2686c980331b4`。
 
 用户已明确允许未来新轮使用候选 Runner，原代候选 EXE SHA256 为 `30b3bc832a123427b9494675b242351df975e99994e5688121ef185b4055355c`。另存授权 `runner-pin-authorization-20261026T0930.json`，用原干净 Caller42c16465 及该 Runner 重新通过正式生成入口建立独立包 `candidate-caller-packages/dev-20261026-173725-42c16465`；未来 `candidate-01/02` 采用新普通 clone/home 和独立固定，原 home/pin 不变。原模型、环境 profile、合同、base、L1/L2/四结构及 extra 检查要求保持。仍需两次真实发布前后/closed 采集、原报告、UI 与资源清理完整合格；原 6/6 或 Runner-only 历史成功不计入。
+
+
+## candidate-01：八项进度与原生输入换行
+
+用户批准的 `8e1ce9f` / `30b3bc...` Runner 新轮原 Run `0f5ba57d9803ed6eefd6fc4112bf716f`、Attempt `23dbf530f1b807550c948f410033b430` 实际绑定八项：L1、L2、Bingo、Group2099 及四项结构检查。全部逐字段匹配原 registry，未删除额外项。原 L1 XML 11 成员、L2 两个各一成员 batch、两项 L4 各一成员及四结构 exit0 均独立核验；canonical Test-ArchitectureResults 只读复核原四份 parent plan、五个 batch 的 XML、输入与清理通过，没有重跑 Unity。前序失败报告保留。
+
+原登记入口接入正式 writer，公开 version33 为恰好八个声明的 true 布尔字段，无 publication 元数据；302 字节，SHA256 `0a1b323fd2072babff36eb71e998194fa8162cd564be764ed9c034c00287a5fe`。API 与独立目检截图均为 8/8。这是发布前进度成功，不能代替真实发布或完整复验。
+
+实施原生完成后没有真实 PR。只读诊断发现 Windows CRLF paste 将每个 CR 变成额外 LF：9498 字节原逻辑提示含 57 个 CRLF，9497 字节 native transcript 与该 paste 转换逐字节相等；现有严格匹配期望 CRLF→单 LF 的 9440 字节。因此该轮完整链路失败、连续数仍为 0。Runner 追加修复在唯一发送前编译原 CRLF，不放宽历史正文匹配；沿同一 PR62 提交，完整新构建资格另行登记。
+
+原 worker 还曾误判未安装 SDK，下载官方安装脚本并在自身 TEMP 安装 SDK8.0.427，使用子进程 PATH；独立只读查证机器原有 SDK8.0.426 自 10 月 23 日已存在。父调试进程没有安装 SDK，没有追认环境不变或用该轮计通过。后续仅提出现有 SDK8.0.426 的子进程 PATH 绑定，不改全局环境、原 profile/home/pin 或失败报告；新 Runner 字节及该独立环境例外须完成资格后取得未来新轮明确批准，尚未启用。
+
+原 Run/宿主已停止，public offline resources_settled=true，完整精确 owned native census0 / truncated=false / omittedHosts 为空，本地 home/bin 进程0。没有重发 submit/reply/resume，没有改写进度或私有 Runner 数据库。证据在 scope 下 `candidate-01/checks-verified.json`、`verification-20261026T1150-reports/`、`verification-20261026T1155-inputs/`、`diagnostics/native-attribution-20261026T1125/`、`diagnostics/sdk-install-variance-2026-10-26T10-57-53-639Z/` 及 `cleanup-blocked-20261026T1200/result.json`。原 dirty 代码身份差异、clean 发布 head / 完整 MagicPotion / 人工业务未验边界保留。
