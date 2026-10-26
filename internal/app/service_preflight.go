@@ -9,7 +9,6 @@ import (
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
 func Preflight(ctx context.Context, c *Config, checkSkills bool) error {
@@ -39,12 +38,6 @@ func preflightNative(ctx context.Context, c *Config) error {
 		}
 	}
 	git := commandRunner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), ProcessHost: c.ProcessHost}
-	repository, err := workspace.ResolveRepository(ctx, c.WorkspaceGit(), c.Repository)
-	if err != nil {
-		return err
-	}
-	c.Repository = repository.Path
-
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return err
 	}
@@ -52,10 +45,10 @@ func preflightNative(ctx context.Context, c *Config) error {
 	if c.Claimant == "" {
 		c.Claimant = "steerline-" + shortHash(c.Identity())
 	}
-	if _, err = git.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+c.Branch); err != nil {
+	if _, err := git.Output(ctx, c.Git, "check-ref-format", "refs/heads/"+c.Branch); err != nil {
 		return err
 	}
-	remote, err := git.Output(ctx, c.Git, "config", "--get", "remote."+c.Remote+".url")
+	remote, err := c.startupGitOutput(ctx, "config", "--get", "remote."+c.Remote+".url")
 	if err != nil {
 		return err
 	}

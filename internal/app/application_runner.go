@@ -83,7 +83,9 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	r.client = cli
 	r.attempted = true
 	cli.UsagePolicy = append([]byte(nil), g.UsagePolicy...)
+	serviceStarted := time.Now()
 	info, err := cli.StartServiceWithStops(ctx, version, stops)
+	fmt.Fprintf(os.Stderr, "startup Runner service elapsed=%s error=%v\n", time.Since(serviceStarted), err)
 	r.info = info
 	if err != nil {
 		return err
@@ -95,7 +97,9 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	r.requestID = "sl-service-stop-" + info.InstanceID
 	r.stop = func(ctx context.Context) error { return cli.StopService(ctx, info.InstanceID, r.requestID) }
 	r.settle = func(ctx context.Context) error { return cli.VerifyServiceSettlement(ctx, info.InstanceID, r.requestID) }
+	catalogStarted := time.Now()
 	catalog, err := cli.Catalog(ctx, version)
+	fmt.Fprintf(os.Stderr, "startup Runner catalog elapsed=%s error=%v\n", time.Since(catalogStarted), err)
 	if err == nil {
 		cli = cli.WithCatalog(catalog)
 	}

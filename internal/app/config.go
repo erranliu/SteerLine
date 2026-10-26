@@ -17,7 +17,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	"github.com/erranliu/SteerLine/internal/execution/workspace"
 	"github.com/erranliu/SteerLine/internal/localservice"
 )
 
@@ -76,6 +75,10 @@ func loadConfig(path string, processHost executionbackend.ManagedProcessHost, re
 	return loadConfigSnapshot(path, projectBytes, globalBytes, processHost, requireSupport)
 }
 func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
+	return loadConfigSnapshotWithQueries(path, projectBytes, globalBytes, processHost, requireSupport, nil)
+}
+
+func loadConfigSnapshotWithQueries(path string, projectBytes, globalBytes []byte, processHost executionbackend.ManagedProcessHost, requireSupport bool, queries *startupQueries) (Config, error) {
 	input := defaultProjectConfigInput()
 	config := configFromProjectInput(input)
 	projectPath, err := filepath.Abs(path)
@@ -86,6 +89,7 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHo
 		return config, err
 	}
 	config = configFromProjectInput(input)
+	config.startup = queries
 	config.ConfigPath = projectPath
 	if config.TaskAuthority != "native" {
 		return config, errors.New("task_authority must be explicitly set to native; Beads is not supported")
@@ -122,7 +126,7 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHo
 		config.Repository = filepath.Join(base, config.Repository)
 	}
 	if config.RunDir == "" {
-		key, err := repositoryStateKey(config, processHost)
+		key, err := repositoryStateKey(&config)
 		if err != nil {
 			return config, fmt.Errorf("run_dir is required (cannot derive from repository identity: %w)", err)
 		}
@@ -131,7 +135,7 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHo
 		if !filepath.IsAbs(config.RunDir) {
 			config.RunDir = filepath.Join(base, config.RunDir)
 		}
-		if _, err := repositoryStateKey(config, processHost); err != nil {
+		if _, err := repositoryStateKey(&config); err != nil {
 			return config, err
 		}
 	}
@@ -170,18 +174,14 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHo
 
 func validateQueryProfiles(config Config) error { return config.RunnerExecution.Validate() }
 
-func repositoryStateKey(config Config, processHost executionbackend.ManagedProcessHost) (string, error) {
-	repository, err := workspace.ResolveRepository(context.Background(), workspace.Git{
-		Command: executionbackend.LaunchCommand{Executable: config.Git.Executable, Args: append([]string(nil), config.Git.Args...)},
-		Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), Start: processHost.StartManaged,
-	}, config.Repository)
-	if err != nil {
+func repositoryStateKey(config *Config) (string, error) {
+	if err := config.ResolveIdentity(context.Background()); err != nil {
 		return "", err
 	}
-	if repository.CommonDir == "" {
+	if config.Identity() == "" {
 		return "", errors.New("git returned an empty common directory")
 	}
-	return RepositoryStateKey(repository.CommonDir), nil
+	return RepositoryStateKey(config.Identity()), nil
 }
 
 func canonicalPath(value string) string {

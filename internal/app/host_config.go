@@ -130,8 +130,7 @@ func ensureRunDirOutsideRepository(ctx context.Context, config Config) error {
 	if applicationPathInside(repository, runDir) {
 		return errors.New("native state directory must be outside the repository")
 	}
-	runner := commandRunner{Dir: config.Repository, Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), ProcessHost: config.ProcessHost}
-	worktrees, err := runner.Output(ctx, config.Git, "worktree", "list", "--porcelain", "-z")
+	worktrees, err := config.startupGitOutput(ctx, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return errors.New("cannot verify native state against linked Git worktrees")
 	}

@@ -45,11 +45,25 @@ type ProjectRuntime struct {
 func (r *ProjectRuntime) prepare(ctx context.Context, home string, e *catalogEntry, global []byte) (err error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	stage := func(name string) { fmt.Fprintf(os.Stderr, "project %s startup: %s\n", e.view.ConfigID, name) }
+	started, previous := time.Now(), time.Now()
+	stage := func(name string) {
+		fmt.Fprintf(os.Stderr, "project %s startup: %s elapsed=%s previous=%s\n", e.view.ConfigID, name, time.Since(started), time.Since(previous))
+		previous = time.Now()
+	}
 	stage("load configuration")
-	c, err := loadConfigSnapshot(e.ref.ConfigPath, e.data, global, nil, true)
-	if err != nil {
-		return err
+	var c Config
+	defer func() { c.finishStartupQueries() }()
+	if e.startupConfig != nil {
+		c = *e.startupConfig
+		c.startup = newStartupQueries(ctx)
+		if err = c.ValidateProfiles(); err != nil {
+			return err
+		}
+	} else {
+		c, err = loadConfigSnapshotWithQueries(e.ref.ConfigPath, e.data, global, nil, true, newStartupQueries(ctx))
+		if err != nil {
+			return err
+		}
 	}
 	// Resolve again from the frozen bytes immediately before ownership is taken.
 	ref := e.ref
@@ -86,6 +100,9 @@ func (r *ProjectRuntime) prepare(ctx context.Context, home string, e *catalogEnt
 	if lockedRef.Identity != e.ref.Identity || canonicalConfigPath(lockedRef.RunDir) != canonicalConfigPath(e.ref.RunDir) {
 		return errors.New("project identity changed while acquiring locks")
 	}
+	// A new ownership boundary requires fresh Git evidence. Do not let pre-lock
+	// memoized queries authorize opening the active project writer.
+	c.resetStartupQueries(ctx)
 	// These gates may inspect execution tools but cannot initialize a project
 	// until both ownership locks have been obtained.
 	stage("execution preflight")
@@ -97,6 +114,8 @@ func (r *ProjectRuntime) prepare(ctx context.Context, home string, e *catalogEnt
 	if r.store, err = openOwnedNativeTaskCommandStore(ctx, &c); err != nil {
 		return err
 	}
+	c.finishStartupQueries()
+	stage("native storage ready")
 	logDir := filepath.Join(home, "logs", "projects")
 	if err = os.MkdirAll(logDir, 0700); err != nil {
 		return err

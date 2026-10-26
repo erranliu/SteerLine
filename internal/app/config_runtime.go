@@ -40,6 +40,10 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 	if c == nil {
 		return errors.New("application configuration is required")
 	}
+	ctx = c.queryContext(ctx)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if err := resolveCommand(&c.Git); err != nil {
 		return err
 	}
@@ -50,6 +54,11 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 			}
 		}
 	}
+	key := c.identityQueryKey()
+	if q := c.startup; q != nil && !q.closed && q.identityKey == key && (c.identity == "" || c.identity == q.identity) {
+		c.Repository, c.identity = q.repository, q.identity
+		return nil
+	}
 	repository, err := workspace.ResolveRepository(ctx, c.WorkspaceGit(), c.Repository)
 	if err != nil {
 		return err
@@ -59,6 +68,9 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 		return errors.New("configured repository identity changed after it was resolved")
 	}
 	c.identity, c.Repository = identity, repository.Path
+	if q := c.startup; q != nil && !q.closed {
+		q.identityKey, q.repository, q.identity = c.identityQueryKey(), c.Repository, identity
+	}
 
 	return nil
 }
