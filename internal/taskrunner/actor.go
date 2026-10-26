@@ -184,12 +184,19 @@ func (a *Actor) Call(ctx context.Context, run func(context.Context) error) error
 	}
 }
 func (a *Actor) TickDecision(ctx context.Context) error {
-	if a.ObserveAuxiliary != nil {
-		if err := a.ObserveAuxiliary(ctx); err != nil {
-			return a.observeError(ctx, err)
-		}
+	// Publish live candidates before spending time on auxiliary records. A failed
+	// auxiliary query must never suppress this tick's Runner observation.
+	reconcileErr := a.options.Tasks.Reconcile(ctx)
+	if err := a.observeError(ctx, reconcileErr); err != nil {
+		return err
 	}
-	return a.observeError(ctx, a.options.Tasks.Reconcile(ctx))
+	if a.ObserveAuxiliary != nil {
+		auxiliary, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := a.ObserveAuxiliary(auxiliary)
+		cancel()
+		return a.observeError(ctx, errors.Join(reconcileErr, err))
+	}
+	return nil
 }
 func (a *Actor) TickTask(ctx context.Context, _ context.CancelFunc) error {
 	snapshot, err := a.options.Store.ReadRunnerSnapshot(ctx, a.options.Tasks.Project)

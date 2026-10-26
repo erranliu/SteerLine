@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -135,8 +136,8 @@ func TestRunnerActorBindsReceiptToOriginalHostFile(t *testing.T) {
 			host.request = api.ControlRequest{RequestID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", InstanceID: actor.InstanceID(), Action: "pause_dispatch"}
 			err = actor.TickControl(context.Background(), func() {})
 			if changed {
-				if err == nil || host.receipt.RequestID != "" {
-					t.Fatal("changed original file received a verified receipt", err)
+				if err != nil || host.receipt.RequestID != "" || actor.State.Service.Error == nil || !strings.Contains(*actor.State.Service.Error, "host control request changed") {
+					t.Fatal("changed original file must retain a diagnostic without a verified receipt or service shutdown", err, actor.State.Service.Error)
 				}
 			} else if err != nil || host.receipt.RequestDigest != host.fileDigest || host.receipt.RequestDigest == taskrunner.RequestDigest(host.request) {
 				t.Fatal("host receipt used the parsed-value digest", host.receipt, err)

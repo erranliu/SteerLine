@@ -72,14 +72,25 @@ type ProgressRunner interface {
 }
 
 type ProgressService struct {
-	Project string
-	Store   ProgressStore
-	Runner  ProgressRunner
-	Admit   func(context.Context) error
-	mu      sync.Mutex
+	Project         string
+	Store           ProgressStore
+	Runner          ProgressRunner
+	Admit           func(context.Context) error
+	mu              sync.Mutex
+	nextObservation int
 }
 
 func (s *ProgressService) Observe(ctx context.Context) error {
+	return s.observeRows(ctx, false)
+}
+
+// ObserveNext gives each candidate a turn without scanning every progress file
+// before the actor can refresh live execution state again.
+func (s *ProgressService) ObserveNext(ctx context.Context) error {
+	return s.observeRows(ctx, true)
+}
+
+func (s *ProgressService) observeRows(ctx context.Context, one bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rows, err := s.Store.RunnerCandidates(ctx, s.Project, "")
@@ -87,7 +98,16 @@ func (s *ProgressService) Observe(ctx context.Context) error {
 		return err
 	}
 	var failures []error
-	for _, c := range rows {
+	start := 0
+	if one && len(rows) > 0 {
+		start = s.nextObservation % len(rows)
+	}
+	for offset := range rows {
+		if err := ctx.Err(); err != nil {
+			return errors.Join(append(failures, err)...)
+		}
+		index := (start + offset) % len(rows)
+		c := rows[index]
 		var plan Snapshot
 		if c.RunID == "" || c.InputDigest == "" || c.Participation == "abandoned" || json.Unmarshal(c.TestPlan, &plan) != nil || plan.Status != "ready" || len(plan.Definitions) == 0 {
 			continue
@@ -106,6 +126,9 @@ func (s *ProgressService) Observe(ctx context.Context) error {
 		if previous.Snapshot.CollectionStatus == "closed" && previous.Diagnostic == "" && progressTerminal(c) {
 			continue
 		}
+		if one {
+			s.nextObservation = (index + 1) % len(rows)
+		}
 		next := previous
 		callCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		err = s.observeCandidate(callCtx, &next, plan)
@@ -114,11 +137,17 @@ func (s *ProgressService) Observe(ctx context.Context) error {
 			next.Diagnostic = err.Error()
 		}
 		if reflect.DeepEqual(previous, next) {
+			if one {
+				break
+			}
 			continue
 		}
 		next.Revision++
 		if err = s.Store.SaveProgress(ctx, next, previous.Revision); err != nil {
 			failures = append(failures, err)
+		}
+		if one {
+			break
 		}
 	}
 	return errors.Join(failures...)

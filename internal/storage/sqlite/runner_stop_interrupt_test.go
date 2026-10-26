@@ -62,9 +62,10 @@ func (h *stopHost) WriteControlReceipt(r api.ControlReceipt) error {
 
 type blockedObservation struct {
 	runnerbridge.CLI
-	run     runnerclient.Run
-	entered chan struct{}
-	once    sync.Once
+	run       runnerclient.Run
+	entered   chan struct{}
+	once      sync.Once
+	immediate bool
 }
 
 func (c *blockedObservation) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
@@ -72,6 +73,9 @@ func (c *blockedObservation) Inspect(context.Context, string, string, bool) (run
 }
 func (*blockedObservation) SupportsObservation() bool { return true }
 func (c *blockedObservation) Observe(ctx context.Context, _, _ string) (runnerclient.RunObservation, error) {
+	if c.immediate {
+		return runnerclient.RunObservation{Contract: runnerclient.RunObservationContract, Run: c.run, EventPage: runnerclient.EventPage{Events: []runnerclient.Event{}, NextCursor: "next"}}, nil
+	}
 	c.once.Do(func() { close(c.entered) })
 	<-ctx.Done()
 	return runnerclient.RunObservation{}, ctx.Err()
@@ -111,6 +115,7 @@ func testBlockedCandidateStop(t *testing.T, mode string) {
 	}})
 	require(t, err)
 	if mode == "generation" {
+		cli.immediate = true
 		actor.ObserveAuxiliary = func(ctx context.Context) error {
 			cli.once.Do(func() { close(cli.entered) })
 			<-ctx.Done()
