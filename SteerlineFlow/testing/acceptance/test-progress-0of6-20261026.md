@@ -2,6 +2,8 @@
 
 用户要求修复后连续两次真实复验通过再告知。范围是原登记测试、进度写入/采集/页面、真实发布和资源清理；完整 MagicPotion 专项、人工业务验收及 clean 发布 head 测试资格不由此推导。
 
+截至 2026-10-27 03:00：`qualified-01` 完整通过并发布 PR427；`qualified-02` 的完整 EditMode 失败，未发布 PR，已停止并结算资源，连续通过数归零。进度正确保留 6/7，尚未完成连续两次复验。
+
 ## 原始故障与边界
 
 原候选 `1af016d628b355e048bb101b47012557`、Runner Run `596b316d8e877daed36279206054f05a` 的原六项执行报告已独立通过，但页面为 0/6，公开接口诊断“进度字段与本次固定测试安排不一致”。公开 Runner `progress-file` 取回的 closed 原始字节为六个 false 测试字段及一个 publication 对象，版本 2、563 字节、SHA256 `d55158423d8617396f6a753ee034e0dead0e237049d611a11779973b4db9d9d6`。原项目固定 base 没有共用进度写入器，原提示却仅要求使用该工具，缺失时保留未完成；后续非测试步骤也未收到该文件的业务边界。严格解析拒绝混合对象符合契约，不能靠忽略字段或模型 final 填回通过。
@@ -61,3 +63,31 @@
 生成提示原来强调“最小必要入口”，没有明确项目规范中的固定必跑优先于 Plan 仅列出的定向项。本次在同一 Caller 修复中明确先保留规范必跑，再追加 Plan 定向项；不在通用产品硬编码目标项目 ID，不修改原测试清单、Plan、业务合同或严格复验门禁。只有 Plan 和规范均允许例外时才返回空安排。提示修正不等于模型已正确选择，后续新现场仍须核实公开原安排包含 L1/L2、四结构及全部 extra。
 
 主线干净受测源 `384e12cb84658eb7e00d169d7c8a14d10719472a` 与独立原代干净源 `8205bf0e725c8bdf7c2a1cafae3685de567da152` 的本次生成提示 product patch-id 均为 `84c1c71088a4dd8257876132803fb0c847695103`。两个代际 testmanagement/runnerclient owner、固定 L1 和 L2 已通过，L2 cleanup_complete=true；原代正式调试包生成另以 `validation-required-original-01/result.json` 为准。原 Caller42 源码和旧包保留。完整真实进度复验仍为0/2，不将材料生成、组件通过或历史8/8算作发布通过。后续使用新的普通 clone/home，任何已初始化失败现场均不换包或改 pin。
+
+## qualified-01：首轮完整通过
+
+2026-10-27 首轮使用原代 Caller `8205bf0e`、已批准 Runner `7c0df6ca` / SHA256 `00051e...` 和既有 SDK8.0.426 子进程 PATH 方案，独立准入记录为 `qualified-caller-wire-sdk-admission-20261026T1430.json`。原 profiles 及 Unity 方案保留。公开 SDK 方案 digest 为 `38f094bff5f739c9be7705bb785fb17accd978e203e5c54e05db5a771565f09b`；每个新 home 在唯一业务提交前分别冻结实际配置和首次接纳的 Run/Attempt。
+
+首轮实际选择九项：L1、L2、Bingo UI 打开、Bingo 奖励/购买/重启/重复确认、Group2099 共存和四结构。原 Run `2a5ca45b65aa402d5ded6ab5c95f2f35` / Attempt `6ff6c14964fc2f349a388bc78249f526` 的原 worker 在发布前重跑最终所选 Unity 入口；五份 parent plan、六个 XML batch 均独立核验，L1 11 成员、L2 两个各一成员 batch、三个活动入口各一成员，无失败或跳过，原输入及 cleanup 通过。四结构原报告 exit0。父调试进程仅对原产物运行 canonical 只读核验，没有重跑 Unity。
+
+真实 [PR427](http://192.168.0.66:3000/zymobile/merge-h-308-code/pulls/427) 的仓库、base `AIRefactor`、head `1be62312c58b4f88bb0cf0ab74d01247b330d813`、远端 HEAD 及完整 51 个变更文件均独立核验，保持 open/unmerged。正式 writer 是第 51 个文件，SHA256 `d39d89f2f3353116c7f507da998f518a27564aa418082faba9a20b68755bfcb4`；原入口按原结果驱动字段。公开 native session 完整读取只有 READY、原实施和原发布输入，没有额外业务输入、手填运行时标志或 SDK 安装事件。
+
+发布后及原 Run 停止后的 API/独立目检页面均为 9/9。closed version26、339 字节、SHA256 `2ff4c8be73c5368d0cee44b91af2492a6a241d146c9fe630236bd344981f2707`，恰好九个 true 布尔字段，没有 publication 元数据。随后原宿主正常停止，offline resources_settled=true，完整精确 owned native census0 / truncated=false / omittedHosts 为空，本地 home/bin 进程0。记录 `qualified-01/chain-result.json`，至此连续通过 1/2，没有提前通知完成。
+
+原最终测试记录的 dirty codeIdentity 均为 `afe:ff8ed63b91f0862b6fc5bbdb0673440b5c914e4478863bb4556d29f1676844cd`，另一次工作区身份重建为 `afe:2a93b43bb95c1bfbdcad8347bdc8a2a667e3fdb13ef83c2e7d2b1731ded3ec57`，差异原因未独立确定。它们不证明 clean 发布 head、完整 MagicPotion 或人工业务验收。原终端及宿主资源结算通过，也不等于任意脱离终端的后台进程或执行机凭据已撤销。
+
+证据位于 `qualified-01/verification-20261027T0025-reports/`、`verification-20261027T0045-inputs-03/`、`diagnostics/native-public-session-20261027T0040/`、两次截图 `observations/2026-10-26T16-21-55-336Z/` 和 `16-40-09-092Z/`、`cleanup-20261027T0050/result.json`。原始传输失败和 PR 文件分页不足均保留；后续完整传输有 SHA 核验，未以截断内容补造业务通过。
+
+## qualified-02：完整 EditMode 失败，连续数归零
+
+第二轮仍使用同一已批准 Caller/Runner/SDK 代际，新 home 实际冻结七项：L1、L2、完整 `editmode.run` 和四结构。没有删除额外 EditMode、缩小 Filter/Category 或降低通过要求。原 Run `0752a85a0e8a67197c4466ab077d4296` / Attempt `6964e6330b1118e2d900995af5290ec5` 只有唯一 accepted submit `e9b9edb41ffe082745ad644163ac7a33` / command `157b38afb532c0c677a713b264c90910`。
+
+原七份最终 managed 报告及其关联 summary 的字节、SHA 和 frozen definition 已独立核实：L1、L2、四结构报告为 passed，EditMode 为 failed。完整 EditMode 原入口退出码 2，Filter 和 Category 均为空；原 XML `Test-Log/editmode/1cf2b749ceb149bba36da8b94c2885e4/results.xml` 有 3578 个实际成员：3534 通过、11 失败、33 跳过，SHA256 `2021fb0bc7db19ea364d68d5a9ebfd6b1d05b7e580d5aebe0bed3b35b2e5af64`。失败包括 MagicPotion BP 消费断言、schedule inventory 清单差异、资源夹具目录、GamePreferences 和 StartupConfig；跳过项包括需 Source 资源或单独新 Editor 执行的 Explicit/Ignore 用例。未将这些失败统一归因为已证实的基线故障。
+
+公开 version29、220 字节、SHA256 `f05d6be153a65da9090ce39a8f7bdda514b341b78eb618e7aab34fe16cbb46c7` 恰好七个布尔字段：六项 true、EditMode false，无 publication 元数据，API 和独立目检页面一致为 6/7。这次未完成与真实报告一致，不能手填第七项或当成原 0/6 复发。原实施 final 已取得验证；进入发布后原 start_turn 因 `Remote Orca runtime closed the connection` 被拒绝，未创建 PR，也未 resume/reply/重放。
+
+该轮完整复验失败，连续通过数从 1 归零；尚未达到用户要求的连续两次通过。保留原 worktree、所有失败和跳过报告，不启动第三轮原样补测。负向原始核验为 `qualified-02/blocked-checks-verified.json`，原报告及 XML 属性/失败成员只读采集在 `verification-20261027T0305-blocked-reports-02/remote-report-evidence.json`；原完整 XML 留在原工作区。第一次全 XML 传输被远端连接中断，保留 `verification-20261027T0255-blocked-reports/` 和 ptyKilled 证明；第二次只读取得原 SHA、完整统计及所有失败/跳过成员，没有重跑测试。
+
+唯一原 Run stop 已接纳并核实 stopped / new_inputs_allowed=false。首个停止驱动在进度仍为 observing 的短暂窗口要求立即 closed 而中止；原失败保留，后续仅延续只读确认，不重发 stop。进度随后 closed 且版本/字节/SHA 不变，API 和独立目检仍为 6/7；宿主正常停止，offline resources_settled=true，完整精确 owned native census0 / truncated=false / omittedHosts 为空，本地 home/bin 进程0。证据为 `cleanup-blocked-20261027T0305/`、`cleanup-completion-20261027T0310/result.json`、closed 截图 `observations/2026-10-26T19-00-19-730Z/task18-progress.png` 和 `chain-result.json`。没有活动 Task18 Run，没有热换包、恢复原轮或新增业务轮。
+
+后续阻塞是原业务项目完整 EditMode 的断言、夹具和显式独立执行准备，另有发布阶段的远端连接拒绝。现有固定测试/不删项/不缩小范围约束下不能将这些改成通过，也不能用重复抽样选择另一套测试绕过。本次先保留明确负向证据及完整清理，是否扩展到这些业务测试问题另待用户明确方向；本 Caller 修复保持 draft，未部署或合并。
