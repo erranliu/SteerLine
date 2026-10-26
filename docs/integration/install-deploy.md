@@ -8,7 +8,7 @@
 
 双击 SteerLine 仓库根目录 `build-deploy.bat`。已有安装默认复用 `execution.json` 固定的 Runner EXE，只构建 SteerLine 和 Web；首次安装或显式 `-UpdateRunner` 才从相邻 `..\SteerRunner` 源码构建 Runner。构建成功后停止应用，校验停止或同构建重启资格，安装 EXE 并重新启动。每次记录保存在 `<home>\deployments\<时间-随机ID>\deployment.json`，最新记录为 `<home>\deployment.json`，包含源码版本和三个 EXE 的实际摘要。
 
-需要 Windows、PowerShell 5.1、Go、Git、Node/npm；使用本仓当前工作区，显式构建 Runner 时才读取其源码工作区，不自动 pull/rebase/checkout。构建包括 Web 的 npm ci/build。运行已安装程序不需要 Go、Node 或 Python；实际任务仍需配置所引用的 Git、Codex、gh 和已有机器登录。构建源中允许未提交修改，部署记录标明 dirty；源码与构建依赖变更应先做必要验证。
+需要 Windows、PowerShell 5.1、Go、Git、Node/npm；使用本仓当前工作区，显式构建 Runner 时才读取其源码工作区，不自动 pull/rebase/checkout。构建检查 Web 依赖并执行前端构建，依赖未变时复用安装结果。运行已安装程序不需要 Go、Node 或 Python；实际任务仍需配置所引用的 Git、Codex、gh 和已有机器登录。构建源中允许未提交修改，部署记录标明 dirty；源码与构建依赖变更应先做必要验证。
 
 ```powershell
 # 自动化调用，不等待按键
@@ -19,7 +19,19 @@
 .\build-deploy-all.bat -NoPause
 # 覆盖源码位置或目标安装目录
 .\build-deploy.bat -RunnerRepo C:\Project\SteerRunner -InstallHome C:\SteerlineInstall -NoPause
+# 强制重新安装 Web 依赖；不改变 Runner 选择
+.\build-deploy.bat -ForceWebInstall -NoPause
+# 串行构建，用于诊断或与默认并行模式比较
+.\build-deploy-all.bat -SerialBuild -NoPause
 ```
+
+默认并行执行前端依赖检查/安装及 `tsc + vite` 与 Go 流水线；Go 内仍按 Runner（如选择）、SteerLine、Web EXE 串行，Web EXE 必须等前端完成。任一分支失败均不进入部署，已启动的前端分支完成后才释放构建锁，避免后台继续改写输出。`build.ps1` 持有源码 `bin/.build.lock`，需要构建 Runner 时另持有其 `bin/.steerline-build.lock`；同一源码的重复调用直接报锁冲突。其他直接运行 npm、Go 或 Runner 自身脚本的入口不参与这些锁，仍须遵循[共享构建路径串行约束](../../SteerlineFlow/paths.md)。
+
+依赖成功标记位于 `web/node_modules/.steerline-install.json`。只有 package/锁文件、Node/npm、平台、有效 npm 配置及 npmrc 内容一致，npm 的隐藏安装锁摘要、其中的包目录和构建工具仍存在时才复用。安装失败不留成功标记；缺失或失效时重新执行 `npm ci`。这不是逐文件完整性校验；手工改坏某个依赖文件时使用 `-ForceWebInstall`。首次使用该机制也会安装一次。npm 配置仅在内存中参与哈希，计时报告不保存配置值或凭据。
+
+每个阶段打印执行/跳过、原因、耗时和失败状态；JSON 的总耗时是实际墙钟时间，并行阶段耗时不能直接相加。构建报告默认在源码 `bin/build-timings/<随机ID>.json`，部署报告在 `bin/deploy-timings/<随机ID>.json`；`-TimingPath <绝对路径>` 可指定当前入口的报告位置。部署包另保存 `build-timings.json` 和 `timings.json`，分别定位依赖检查/安装、前端、三个 Go 构建、接管预检、停机核验、安装、启动及 ready 等待。失败也写报告；早于构建锁或安装锁取得前的拒绝不保证生成报告。
+
+部署使用构建锁内生成的独立 `bin/deploy-builds/<随机ID>/` 快照，防止构建锁释放后另一调用改写源码 bin 中待部署的 EXE。这些目录只含构建产物，可在相关调用结束后手工清理。只验证构建而不部署时使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Web`；它同样支持 `-ForceWebInstall`、`-SerialBuild`、`-RunnerRepo` 和 `-TimingPath`，不会停止或更新安装版。
 
 脚本只停止与更新显式目标安装目录，拒绝与源码、保留的旧安装目录 `C:\SteerlineRuntime` 或调试目录重叠。所需 EXE 全部准备成功后才停止服务；停止及同构建重启资格均无法核实，或仍有目标进程时不替换。Windows 短暂占用已停机的 EXE 时，仅对文件安装最多重试四次，每次前确认目标未重新运行；不重试任务操作。部署过程持有独占锁；失败保留构建包与错误，不宣称自动回滚。替换中途失败时先修复再重跑，不能仅凭某个 EXE 存在判断整包成功。默认启动后继续等候全部项目 ready，不能仅凭宿主启动成功报告完成。
 

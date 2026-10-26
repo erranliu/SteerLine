@@ -147,6 +147,8 @@ go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=ru
 
 源码同一 checkout 的 `web/node_modules/`、`web/server/dist/` 和 `bin/` 是共享可写构建位置，因此同一源码目录的包生成、Web 安装/构建及相关 L4 场景须串行。生成结束、构建输出已复制到独立包后，才按资源约束并行运行；独立输出目录本身不证明并行安全。
 
+`build.ps1` 内部允许前端流水线与 Go 流水线重叠；两个前端构建仍不能共用以上路径。该入口持有 `bin/.build.lock`，显式构建 Runner 时另持有 Runner 源码的 `bin/.steerline-build.lock`，锁只覆盖遵循该入口的调用，其他 npm/Go/调试生成器仍按上段串行。部署在锁内冻结 `bin/deploy-builds/<随机ID>/` 产物快照。构建/部署分阶段报告默认分别为 `bin/build-timings/<随机ID>.json`、`bin/deploy-timings/<随机ID>.json`，可用各入口的 `-TimingPath` 显式指向本任务仓库外 diagnostics；部署包内另存 `build-timings.json`、`timings.json`。这些计时不作为已登记测试通过报告。
+
 生成器 release-id 精确到秒，重复包路径会拒绝。不同 scope 中同秒生成的 release-id 仍可能相同，而 live 的 GitHub base 默认取 `codex/debug/<release-id>/base`；并行真实演示前还须确认 manifest 中实际 base_branch 不冲突，双项目第二分支另带 `-b`。发现重复时重新生成独立包，不手改已初始化包的身份或复用原远端资源。
 
 ## 应用 home、Runner 与临时现场
