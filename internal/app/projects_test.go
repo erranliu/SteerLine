@@ -79,7 +79,7 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	must := []string{"start.bat", "stop.bat", "README.txt"}
+	must := []string{"start.bat", "restart.bat", "stop.bat", "README.txt"}
 	got := map[string]bool{}
 	for _, p := range written {
 		got[filepath.Base(p)] = true
@@ -98,6 +98,13 @@ func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	}
 	if !strings.Contains(string(window), `"%~dp0bin\steerline.exe" start`) || !strings.Contains(string(window), "\r\n") {
 		t.Fatalf("invalid unified launcher: %s", window)
+	}
+	restart, e := os.ReadFile(filepath.Join(home, "restart.bat"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	if !strings.Contains(string(restart), `"%~dp0bin\steerline.exe" restart %*`) || !strings.Contains(string(restart), "\r\n") {
+		t.Fatalf("invalid unified restart launcher: %s", restart)
 	}
 
 	if len(written) != len(must) {

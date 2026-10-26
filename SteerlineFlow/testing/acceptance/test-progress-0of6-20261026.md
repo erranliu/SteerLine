@@ -15,4 +15,6 @@
 - 定向回归执行内联源码，覆盖项目无工具、重跑 false、其它字段保留和 publication 拒绝，并验证实施/发布/报告权限隔离及原用户提示保留。
 - 固定 L1/L2、两次真实远端复验和清理尚待完成；当前连续通过 0，不把原 Runner 链路两次通过或已有报告计入本次。
 
+首轮完整 affected-owner 回归在 `validation-01/owners.log` 发现两个主干已有断言失败：HTTP consumer 边界尚未允许纯值配置/公开协议包，以及 launcher 列表仍遗漏已实现的 restart.bat。用主干基线 `0ab5e3a59077776fd2969a7941590b1467cf94ba` 的独立导出源码定向复现相同两项失败，证据 `baseline-two-failures.log/json`。维护为精确允许两个不持有执行资源的共享值包、继续检查它们的完整依赖闭包；launcher 检查增加 restart 文件及其真实命令/CRLF。没有放宽任何测试进度、Unity、Run 身份或真实复验门槛；原失败保留，后续验证使用新目录。
+
 关联：[Spec](../../spec/runtime-test-progress.spec.md)、[Plan](../../plans/runtime-test-progress.plan.md)、[接入说明](../../../docs/integration/runtime-progress.md)。
