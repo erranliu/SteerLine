@@ -10,7 +10,7 @@ $fixtureHome = Join-Path ([IO.Path]::GetTempPath()) ('steerline-deploy-pipeline-
 foreach ($directory in @((Join-Path $source 'scripts'), (Join-Path $source 'examples'), (Join-Path $runner 'scripts'), $fixtureHome)) {
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
 }
-foreach ($name in @('build-deploy.ps1','deployment-stop.ps1','deployment-runner.ps1','build-timing.ps1')) {
+foreach ($name in @('build-deploy.ps1','deployment-stop.ps1','deployment-runner.ps1','deployment-files.ps1','build-timing.ps1')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $source 'scripts')
 }
 [IO.File]::WriteAllText((Join-Path $runner 'scripts\build.ps1'), "throw 'Runner must be selected through build.ps1.'")
@@ -97,6 +97,12 @@ function Run-Deploy([string]$Name,[bool]$ShouldSucceed=$true,[string[]]$Extra=@(
     Assert (($code -eq 0) -eq $ShouldSucceed) "$Name unexpected exit $code; inspect $events"
     $result=Get-Content -LiteralPath $report -Raw | ConvertFrom-Json
     Assert ($result.succeeded -eq $ShouldSucceed) "$Name timing outcome incorrect"
+    if ($ShouldSucceed) {
+        $acl = Get-Acl -LiteralPath (Join-Path $fixtureHome 'deployment.json')
+        $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+        $rules = @($acl.GetAccessRules($true, $true, [Security.Principal.SecurityIdentifier]))
+        Assert ($acl.AreAccessRulesProtected -and $acl.GetOwner([Security.Principal.SecurityIdentifier]) -eq $sid -and $rules.Count -eq 1 -and $rules[0].IdentityReference -eq $sid -and $rules[0].FileSystemRights -eq [Security.AccessControl.FileSystemRights]::FullControl -and -not $rules[0].IsInherited) "$Name wrote a deployment record rejected by private lifecycle readers"
+    }
     Assert (@($result.stages | Where-Object name -eq 'fixture.build').Count -eq 1) "$Name omitted imported build timings"
     $checks.Add($Name)
     return $result
