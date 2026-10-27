@@ -64,3 +64,13 @@ PR399 从 `484925e8` rebase 到最新 `origin/main` `02a8e1e7`，新 head `cf62f
 使用 Runner 参考构建源 ffb9c510、版本 `0.2.0-dev.3-r3`、EXE SHA256 `a745ab738152e974850cbaca7851fb13c0d33cd08a915cda555f1ae465556347`，正式入口分别生成当前 PR 包 `packages-main/dev-20261027-162933-cf62f4fd` 和原复验代际包 `packages-original/dev-20261027-162933-8205bf0e`，均位于上述 post66 根且 ready/clean。这是同一已验产品源码的构建，不冒充 merge commit 重新构建；Runner 的原生探针使用 test EXE，也不冒充该 Runner EXE 的完整业务资格。旧包、home 和接受 pin 均未替换。
 
 原业务 base485d 不含当前 main 新环境适配所需的 `SteerlineFlow/environment.md`。原进度两轮继续按已冻结 Caller8205 的独立复验代际进行，与当前 PR 构建及新环境资格分开；这不是产品运行时回退路径。Runner 负责原生输入实现，本会话不追加其逻辑、探针或重发。PR399 暂不计连续两轮完成、不自动合并或部署；后续原始进度结果仍按逐轮完整证据登记。
+
+## 后续增量与当前结论
+
+rebase 后真实复验又确认两项调用方增量：Plan 自身必跑项必须与规范要求先取并集；部分接线项目必须逐个固定 ID 核对真实入口，不能仅凭 helper 存在判兼容。两项均为生成/执行指令约束，不硬编码项目 ID，不改解析、安排、进度或通过标准。业务八项原报告通过但原进度6/8的负例保持不变；确定性项目入口缺口已提交 [PR435](http://192.168.0.66:3000/zymobile/merge-h-308-code/pulls/435)，等待审阅合入后才选新实际基线。
+
+新增的 HTTP 回执快照修复属于 SteerLine 本地命令持久化，不涉及 Runner 原生输入。原生产读者持有完整旧快照时，原子发布新 outcome/discovery 必须成功；读者继续看到旧完整字节，后续读取看到新完整字节。源码 `a1583ee6` 保留原公开格式、envelope/digest、私有 ACL、regular/reparse 限制和有界失败；持续排他句柄仍报错，不添加兼容实现、copy/delete 回退或业务命令重试。Windows 路径按 UTF-16 编码并包含终止符；反例、首次编码失败及 Unicode 回归均保留。实现依据为 [FILE_RENAME_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info) 与 [FILE_RENAME_INFORMATION](https://github.com/MicrosoftDocs/windows-driver-docs-ddi/blob/staging/wdk-ddi-src/content/ntifs/ns-ntifs-_file_rename_information.md) 的公开契约，不修改进程权限或全局配置。
+
+最终主 PR 与对应原 Caller 源 `07fcb905` 的七 owner、固定 L1/L2、受控进度和宿主生命周期均有实际通过报告；main 首次组合 L3 的维护 GET 超时及随后同来源隔离通过分开保留，原因未确认。owner原生 opt-in分别跳过3/2项，不作为原生资格。详见[复验记录](test-progress-0of6-20261026.md)的精确路径、源码和未验范围。
+
+当前审查没有新增阻塞代码发现；原约定连续两轮仍未完成，PR399继续草稿。没有自动合入、部署或在 SteerLine 新增终端粘贴/输入/启动确认实现。真实业务修复 PR435 的协议42+15项通过不冒充 Unity业务、clean发布head或完整人工验收；其合入和后续新基线两轮仍待完成。

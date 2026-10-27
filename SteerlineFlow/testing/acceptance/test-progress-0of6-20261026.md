@@ -141,3 +141,31 @@ PR399 已解决与当前 main 的唯一边界测试冲突，保留主线更严�
 生成提示原本先强调规范必跑，再按 Plan/影响选定向项，对 Plan 自身的必跑表约束不足。新增提示明确规范与 Plan 必跑项先取并集、不得以业务回归替代结构/资源契约，最后逐项核对；不硬编码项目 ID、不新增解析器或手工改写安排。当前 PR 干净产品源 `e87f04b8fc843c10c510a3f7db5396d25fa28607` 与新原代际 `3d42de02758f6de2c86c6d4a698a0eea3c22f317` 只含相同提示增量。
 
 两套受影响 owner 和固定 L1 通过；owner 原生 opt-in 分别跳过3项和2项，不算原生资格。当前 PR 固定 L2 通过且 cleanup_complete=true。原代际首次固定 L2 在请求回执原子 rename 出现 AccessDenied，失败且清理通过；同一干净源码的独立完整 L2 随后通过且清理通过，未确定首次文件访问失败根因。原报告为 `validation-plan-required-main-01/`、`validation-plan-required-original-01/`、`validation-plan-required-original-L2-02/`，组合核验 `validation-plan-required-original-qualified.json`，均位于上述任务根。新提示仅完成组件资格，模型是否保留全部必跑项及真实两轮仍待新现场验证，连续计数从0开始；历史成功与失败不覆盖，Runner 不再修改。
+
+## Plan 必跑修复后：八项报告通过、进度6/8的真实负例
+
+`planrequired-01` 使用干净原 Caller `3d42de02758f6de2c86c6d4a698a0eea3c22f317` 的正式新包、同一 PR66 Runner 和真实 base485d。原安排保留 L1/L2、两个 Bingo extra 和四结构，共八项；全部 definition（含 note）与冻结清单一致。唯一 candidate `e922387aa7a461ac065ca935e0598f48`，Run `ec9a82b1523b4ef62b3ce289849285f3` / Attempt `cc837d85c7d8e8611e07d64f95ff9f8f`，sole submit `054ba288ac8c722991b13a4a4f9191e1` / command `bb22dd26b9ecd88682adca230d326c2c`，由公开事件及原 command 查询核实。没有 parent 额外输入、补 Enter、重发或手写进度。
+
+最终八份原 managed/summary 及四结构 exit0 全部核实；四个原父计划、五批 XML（11/1/1/1/1）均 Passed，无 skipped。四个 PlayFlow 的原 input/cleanup 均 Passed、externalRequests0，coverage为7/6/3/2。所有原计划 codeIdentity 为 `485d88bad9081d3fd8d892116569f763038f7b7e:8518a2957d9898b7d0df27d5dca12bc7318e611456ec4d96c56bd62d6376e621`，仍是原 dirty 工作来源，不冒充 clean 发布 head 重跑或完整 MagicPotion/人工验收。早先编译 Incomplete 保留，最终通过来自原 worker 修复后的真实重跑；parent 仅用原 canonical validator 只读核验。
+
+真实 [PR434](http://192.168.0.66:3000/zymobile/merge-h-308-code/pulls/434) 保持 open/unmerged，head `24c8499f55f2ab3c6962dabde26e52916cac778c`；API 分页20文件与实际 remote HEAD 一致。公开进度 version11、296字节、SHA256 `a383ea22dfae154f239b256373bd466045069b6c74899c986f58f1e31de08991`，精确八个布尔字段，六 true、两个 Bingo false，无 publication。发布后和原 Run stop 后 closed API/UI 均独立目检6/8；因此整链失败、连续数仍为0，不能把报告通过改写成进度通过。
+
+原入口只为 L1/L2 聚合项设置运行时名称，具名 Case 报告虽通过却没有进度更新。原 worker 的公开完整会话为初始化、实施、发布三条输入；它只核对 helper 存在及 dot-source，没有逐 ID 覆盖核对。新增通用提示要求逐 ID 检查真实入口，不以部分兼容代替全部兼容。主 PR 增量 `4a132d0d122dc03945fdba830b484922825f8b86`，对应原代际 `2bca6d6fa53a81ba41afcb3f3fe4dc2fdec911e8`；不硬编码业务 ID、不从旧报告回填。
+
+项目正式入口的确定性缺口另提交 [PR435](http://192.168.0.66:3000/zymobile/merge-h-308-code/pulls/435)，head `762348072aed3659a8c65f944715e7bec3cba436`，base485d，八个变更文件，无清单/断言/通过标准变化。共享 managed 发布入口在选择时清零，按本次最终已持久报告的状态及完整 scope 更新已声明字段，删除包装器的粗粒度成功覆盖。具名 Case、Unit、生命周期与既有 L1/L2/EditMode/结构入口使用同一结果边界。旧入口在新增回归中失败；修复后现有报告协议42项加新增进度协议15项断言通过，均为独占协议夹具、未执行 Unity。该项目 PR 的审阅合入是选择新真实业务基线的前置，不自动合并，也不在未合入来源上声称两轮完成。
+
+证据根 `C:/SteerlineDebug/wt-507e-progress-0of6/planrequired-01/`：`blocked-checks-verified.json`、`chain-result.json`、两个 evidence-index、`diagnostics/native-public-session-final-20261027T101149235738Z/`、`cleanup-progress-gap/result.json`。原 Run stopped/new_inputs_allowed=false 后才停止宿主；offline resources_settled=true、完整 owned native0/truncated=false/omittedHosts为空、本地 home/bin0。closed截图为 `observations/2026-10-27T10-18-49-517Z/task18-progress.png`，已目检。没有再次停止或启动旧现场。采集自身的参数预算/引用失败、早期报告传输失败及其成功的原始只读相对路径传输均单独保留，不当作业务失败，也不重跑 Unity。
+
+## Windows 回执快照更新修复与组件收尾
+
+逐 ID 提示验证再次出现 `request_receipt_persist_failed`，根因类别可确定性复现：旧 `os.ReadFile` 不共享删除；即使读者共享删除，旧 `os.Rename` 的 Windows MoveFileEx 仍不能在原读者持有期间替换目标。生产读取改用现有私有快照入口；写入使用按句柄的 snapshot-preserving rename，保留私有 ACL、原大小/schema/envelope核对、原有有界 sharing/access 错误预算。持续排他句柄仍失败且保留旧完整记录，不复制/删除回退、不重试业务动作或扩大权限。没有追溯证明每次历史 AccessDenied 的具体持锁进程，不能宣称所有文件访问失败均已根治。
+
+干净受测产品为主 PR `a1583ee61bd2e9fa77cfd82a22dd6147cc054e24`，原代际 `07fcb905eb2310fae40946a19269b186159c3eae`；对应同一四文件回执快照补丁和相同逐 ID 提示。证据：
+
+- `C:/SteerlineDebug/wt-507e-pr399-receipt-snapshot/` 保留原读者/原写者两种失败反例、真实 held reader 更新、原/新完整快照、Unicode目标、ACL及持久排他失败检查。首次仅改读者和缺少 NUL 的写者试验失败均保留；最终四 owner 通过。
+- `validation-receipt-main-01/`：七 owner 完成、239 passed/3原生 opt-in skip、无失败；固定 L1/L2 通过，L2 cleanup=true；L3宿主生命周期通过，进度场景 maintenance GET 超时且清理通过。
+- `validation-receipt-followup-02/main-progress/`：同一干净主 PR 的隔离进度场景通过，cleanup=true。初始超时原因未确定，不以此覆盖原失败。
+- followup原代际 owner 的包装脚本把 `-out` 放在 `--` 后，Go 拒绝参数，未完成测试；失败日志保留。改为正式参数顺序后执行独立新输出，不重复该调用。
+- `validation-receipt-original-03/`：原代际七 owner 完成、204 passed/2原生 opt-in skip、无失败；固定 L1/L2、分别隔离的进度和宿主生命周期 L3 全部通过，所有 E2E cleanup=true，最终 source/head仍固定干净。跳过项不是原生资格，受控场景没有模型或 Unity请求。
+
+这些组件通过不计入原业务两轮。当前无活动 Task18 Run、定时任务或子代理；PR399 保持草稿。待 PR435 审阅合入后核实实际目标提交，以新的正式独立包/home/接受 pin 恢复原全部实际安排检查及两轮完整验收；旧报告、构建和运行身份不热换、不重放。主线新环境代际仍单列未验。
