@@ -169,3 +169,5 @@ PR399 已解决与当前 main 的唯一边界测试冲突，保留主线更严�
 - `validation-receipt-original-03/`：原代际七 owner 完成、204 passed/2原生 opt-in skip、无失败；固定 L1/L2、分别隔离的进度和宿主生命周期 L3 全部通过，所有 E2E cleanup=true，最终 source/head仍固定干净。跳过项不是原生资格，受控场景没有模型或 Unity请求。
 
 这些组件通过不计入原业务两轮。当前无活动 Task18 Run、定时任务或子代理；PR399 保持草稿。待 PR435 审阅合入后核实实际目标提交，以新的正式独立包/home/接受 pin 恢复原全部实际安排检查及两轮完整验收；旧报告、构建和运行身份不热换、不重放。主线新环境代际仍单列未验。
+
+本轮最终使用正式 `new-debug-release.ps1 -SteerRunnerExe <PR66参考构建>` 生成两套新的 ready/clean 包，证据根为 `C:/SteerlineDebug/wt-507e-pr399-receipt-packages/`：当前 PR 包 `packages-main/dev-20261027-191003-72dccdbb`（源码72dccdbb，运行时代码与受测a1583ee6相同），原 Caller 包 `packages-original/dev-20261027-191107-07fcb905`。两份 manifest 都固定 Runner产品ffb9c510/版本0.2.0-dev.3-r3/EXE SHA256 a745ab738152e974850cbaca7851fb13c0d33cd08a915cda555f1ae465556347。这里只构建，没有启动包、模型或 Unity，没有热换旧包。后续文档提交不是重测或重构建来源。受控构建进程 census 为0；业务负例的停止/资源结算仍以原 cleanup 记录为准。
