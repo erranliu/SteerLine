@@ -97,3 +97,29 @@
 用户已批准业务修复、确认两项废弃 Stage33 检查无效，并合并 PR428；上述“待用户方向”为原 qualified-02 停止时的历史状态。按用户随后恢复原进度复验的要求，已建立全新 post428-01 并接纳10项原安排，连续数仍未达2/2。原 home、输入、失败及清理事实不变。
 
 PR399 已解决与当前 main 的唯一边界测试冲突，保留主线更严格限制。新的组件、固定 L1/L2 和受控进度验证及未验边界见[合入审计](pr399-merge-review-20261027.md)；原代际 Caller 的真实链不作为当前 main 新环境代际的证明，PR 保持草稿。
+
+## 2026-10-27 最新职责划分与暂停现场
+
+用户明确将 Orca → Codex 的输入投递、提交及启动确认交由 SteerRunner 对话，等待 [PR66](https://github.com/erranliu/SteerRunner/pull/66) 完成独立验收并合入。此前本地修复、失败探针、构建和清理记录全部保留；最小探针通过不构成 SteerLine 原生联验通过，也不计入原约定连续两轮。本会话不再重复这部分实现，不在 SteerLine 增加粘贴识别、终端发送或启动确认逻辑。
+
+调整分工时，最新 `segmentfixed-01` 的原 Caller start 请求已接纳，故仅收尾这个新现场，没有重启或重复停止历史现场。身份及固定产物如下：
+
+| 项目 | 原始值 |
+| --- | --- |
+| Candidate / Caller request | `3e2d6eeb87f074853cdaa1a1b2b744f5` |
+| Runner Run / Attempt | `2a550e2c3ee3ab3501506d3f3757d558` / `00004d24fadf25e8725b248e06fcdf89` |
+| Runner instance / state-dir | `f53b9d51aad5967c60ecc030ffc03aad` / `C:/slr/egsih62doo6g36sus5gefloed4` |
+| Caller source / package | `8205bf0e725c8bdf7c2a1cafae3685de567da152` / `segmentfix-caller-packages/dev-20261027-153401-8205bf0e` |
+| 原固定 Runner 构建源 / SHA256 | `dacd91518473bacc1f8e41fbd2627c6305d44740` / `96800b5fca6a8580aab4b560a15d8a9d294183e6d23016355547309c76d0290c` |
+| 实际业务 base | `485d88bad9081d3fd8d892116569f763038f7b7e`；原合同 digest 仍为 `51da15701f56ee129ebf21624ac258764ded1d69437bc6cd32b9e3008fdc5724` |
+| SDK profile / config SHA256 | `38f094bff5f739c9be7705bb785fb17accd978e203e5c54e05db5a771565f09b` / `8ad8380235d0717510e5ae1b8651f33d6ba4a98e2cc79c0246b2654a1ff2c6b9` |
+
+原安排实际为10项：L1、L2、完整 EditMode、Bingo 奖励/购买/重启/重复确认、Group2099、checkpoint 重启恢复及四结构。全部保留，未过滤完整 EditMode 或其它 extra。暂停前没有已核实的原生启动、实施完成或发布结果；不能据此宣称从未执行任何原生内容，也不把行政暂停诊断成业务测试失败。
+
+按原 Run 公开 stop/CAS 停止，核实 stopped / new_inputs_allowed=false 后才正常停止宿主。closed version1 为388字节，SHA256 `14f4a07d820263e82fd5e68c7094fd39db544c982e21cb7600c13ff88321e9ad`，恰好10个原声明布尔字段且均为 false，没有 publication 元数据。API 和独立目检的停止后截图一致为0/10，没有真实 PR。本轮不计通过，连续数保持0。
+
+原宿主 clean，公开 offline resources_settled=true，精确 owned native census0 / truncated=false / omittedHosts为空，本地 home/bin 进程0。只读 CIM 复核本会话根目录可执行进程为空，已登记验证、探针、打包、clone 和 startup owner 均已结束；startup owner 自然结束，没有再次停止。原终端停止不代表任意脱离终端的后台进程或执行机凭据已经撤销。
+
+证据根为 `C:/SteerlineDebug/wt-507e-progress-0of6/`：`segmentfixed-01/profile-acceptance.json`、`material-admission.json`、`pause-startup-owner-20261027.json`、`pause-cleanup-20261027T1545/result.json`、closed 截图 `observations/2026-10-27T07-43-15-823Z/task18-progress.png` 及根目录 `paused-owned-resource-census-20261027T1545.json`。原构建、正式包、旧接受 pin、失败和停止记录均不覆盖；当前无活动业务复验，定时任务已取消。
+
+后续仅在用户告知 PR66 合入后核对实际合入提交、Runner 自身验收结果及对应构建，再用正式入口生成全新独立调试包，不热替换旧运行。恢复时仍须完整验证原始报告、全部实际安排检查、进度/API/UI、真实发布和资源结算，连续两轮目标不变。PR399 的独立代码审计及受控验证已经完成，当前仅完成文档/资源收尾后进入等待；不创建子代理，不向其它 session 发消息，不合并或部署。
