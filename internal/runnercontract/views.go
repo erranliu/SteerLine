@@ -73,6 +73,7 @@ type Controls struct {
 	Reason       string `json:"reason"`
 }
 type Run struct {
+	RepositorySource *RepositorySource `json:"repository_source,omitempty"`
 	ExecutionWait    *ExecutionWait    `json:"execution_wait"`
 	Closed           bool              `json:"closed"`
 	ContentResult    *ContentResult    `json:"content_result,omitempty"`

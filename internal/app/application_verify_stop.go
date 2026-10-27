@@ -260,6 +260,13 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	if err != nil {
 		return proof, err
 	}
+	roadmaps, err := reader.Roadmaps(ctx, c.Identity())
+	if err != nil {
+		return proof, err
+	}
+	for _, r := range roadmaps {
+		generations = append(generations, roadmapBinding(r))
+	}
 	if interrupted {
 		if len(takeover) != 1 || takeover[0] == nil {
 			return proof, errors.New("interrupted recovery requires original-record takeover evidence")

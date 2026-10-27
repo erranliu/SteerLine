@@ -35,6 +35,7 @@ export function AppShell({
   const title = location.pathname.endsWith("/execution-configs")
     ? "执行方案配置"
     : ({
+        roadmaps:"Roadmap 草稿",
         dag: "任务 DAG",
         runs: "执行与待处理",
         tests: "测试管理",
@@ -54,6 +55,7 @@ export function AppShell({
         <nav aria-label="主导航">
           {projectId ? (
             <>
+              <NavLink aria-label="Roadmap 草稿" to={"/projects/"+projectId+"/roadmaps"}><GitBranch size={17}/><span>Roadmap 草稿</span></NavLink>
               <NavLink aria-label="任务 DAG" to={`/projects/${projectId}/dag`}>
                 <GitBranch size={17} />
                 <span>任务 DAG</span>

@@ -82,7 +82,7 @@ Web 将完整原信封保存在现有 IndexedDB；服务端的原请求记录仍
 
 公开 stop_service action/capability 已退役，不映射为全局停机；旧原请求结果仍可只读查询。关闭浏览器不停止业务。
 
-本协议不提供 SSE、离线查询进程、完整原始过程阅读器、规划 handler 或通用 artifact DTO。
+本协议不提供 SSE、离线查询进程、完整原始过程阅读器或通用 artifact DTO。Roadmap 提供专用只读查询及沿原命令仲裁的转正动作，见 [Roadmap 转正](roadmap-promotion.md)。
 
 ## 应用入口与浏览器转接
 

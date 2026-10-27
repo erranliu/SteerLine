@@ -49,3 +49,13 @@ SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地�
 远端及连续浏览器联验在同一入口追加 `-RemoteProfile <公开执行配置JSON绝对路径>`。文件是一项完整 execution profile，必须明确使用 `orca-terminal` / `orca_environment`、现有 Orca CLI 和远端 Codex；不复制认证或安装状态。需要 Node/npm、Edge、远端注册的 SteerlineTest 仓库及 Python。自动材料生成仍使用本机默认模型，任务执行显式选择远端 profile。入口在 GitHub 推送本次随机 base ref，仅在远端根仓 fetch 此 ref，核对根工作区未变；原 Runner 负责创建、执行和停止实际 worker。
 
 远端模式每阶段十五秒，使用同一 Edge 页面连续观察 0→1→2→1→2→3，核对 DOM 完成项、计数、版本与相同版本的原 Runner 快照；观察期间不得刷新或导航。远端原报告和程序由独占诊断终端只读取得，终端必须关闭；驱动不修改进度、不向原 worker 输入。证据在 `reports/scenarios/testing.project-progress-orca-browser/`，另存 `remote-target.json`、`remote-fetch.json`、`remote-source.json`、Orca 公开回执，以及 `browser/observations.json`、六张截图和 Playwright trace。原 Run 停止后先核对调用方已观察同一原候选的 stopped 投影，再关闭调用方并结算自有 base 删除。此项会构建 Web，不与其他 Web 安装/构建并发；不覆盖安装版或 Task 18。
+
+## Roadmap 浏览器与真实文档 PR 专项
+
+```powershell
+./scripts/test-roadmap-browser-live.ps1 -SteerRunnerExe <固定Runner绝对路径> -OutRoot C:/SteerlineDebug/<本次全新scope>
+```
+
+独立 L4 live 专项，未登记到统一受管场景；需要 Windows、Go、Git、Node/npm、Edge、gh、已登录本机 Codex 和 `erranliu/SteerlineTest` 写权限。固定 Runner 必须支持 generate 仓库输入。入口在全新私有目录构建 Go/Web，准备随机专属 base，浏览器从 Markdown 解析、确认、真实文档生成、正文审阅修改，到真实 GitHub 文档 PR 发布合并及入 DAG 编号。它会消耗模型并写外部测试仓库，不能与其他 Web 构建并发。
+
+Playwright `roadmap-live.spec.ts` 通过正式页面和 HTTP 原信封验证刷新不重发、提前零任务、原发布/入图请求重放、防重复映射、DAG 及来源导航；不模拟 API/Runner/provider。自动派发保持关闭。失败保留 trace、截图、原信封及原记录，不自动重跑。`result.json` 只有浏览器全部断言及正常停服/公开 verify-stop、进程/监听清理、原 PR 对账和自有远端分支清理都完成才通过。只删除本轮 head/base，核对默认分支提交未变；保留真实 PR。证据目录仅当前用户可读，认证不写入共享文档。

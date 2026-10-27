@@ -178,6 +178,9 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	instance := service.InstanceID()
 	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.config.runtimeTests = r.tests
+	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
+	r.tests.roadmaps = r.config.runtimeRoadmaps
 	service.ObserveAuxiliary = r.tests.observe
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
@@ -222,6 +225,13 @@ func (r *ProjectRuntime) close() {
 		if r.port != nil {
 			r.port.StopAccepting()
 			r.port.drain()
+		}
+		if r.config.runtimeRoadmaps != nil {
+			stopCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if err := r.config.runtimeRoadmaps.service.Close(stopCtx); err != nil && r.log != nil {
+				fmt.Fprintf(r.log, "roadmap generation stop remains unverified: %v\n", err)
+			}
+			cancel()
 		}
 		if r.tests != nil {
 			if err := r.tests.close(); err != nil && r.log != nil {
@@ -268,6 +278,9 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 		return httpcontract.CommandResponse{}, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(in.Action, "roadmap_") {
+		return p.Server.CommandRoadmap(ctx, in, p)
+	}
 	if strings.HasPrefix(in.Action, "maintenance_") {
 		return p.maintenanceCommand(ctx, in)
 	}
@@ -373,6 +386,12 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return nil, err
 	}
 	defer p.users.RUnlock()
+	if strings.HasPrefix(route, "/roadmaps") {
+		if p.config.runtimeRoadmaps == nil {
+			return nil, errors.New("roadmap unavailable")
+		}
+		return p.config.runtimeRoadmaps.read(ctx, route, values)
+	}
 	if strings.HasPrefix(route, "/runs/") && strings.HasSuffix(route, "/documents") && strings.Count(route, "/") == 3 {
 		if len(values) != 0 {
 			return nil, errors.New("document query does not accept parameters")
@@ -388,6 +407,13 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.maintenanceRead(ctx, route, values.Get("page"), values.Get("scope"))
 	}
 	if strings.HasPrefix(route, "/commands/") {
+		if p.config.runtimeRoadmaps != nil {
+			if r, e := p.roadmapReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
+				return nil, e
+			} else if r != nil {
+				return r, nil
+			}
+		}
 		if r, e := p.maintenanceReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
 			return nil, e
 		} else if r != nil {

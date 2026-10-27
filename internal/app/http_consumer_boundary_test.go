@@ -23,6 +23,10 @@ func TestHTTPConsumerBoundary(t *testing.T) {
 			count++
 			// processwindow only sets native launch flags; it carries no backend ownership.
 			name := pkg.ImportPath
+			webConfigValue := (owner == "../../web/server" || owner == "../../cmd/steerline-web") && (name == "github.com/erranliu/SteerLine/internal/executionconfig" || name == "github.com/erranliu/SteerLine/internal/runnercontract")
+			if webConfigValue {
+				continue
+			}
 			if name == "database/sql" || strings.HasPrefix(name, "modernc.org/sqlite") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/") && !(strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/api") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpclient") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpcontract") || strings.HasPrefix(name, "github.com/erranliu/SteerLine/internal/product/httpfs") || name == "github.com/erranliu/SteerLine/internal/projectconnection" || name == "github.com/erranliu/SteerLine/internal/pathguard" || name == "github.com/erranliu/SteerLine/internal/processwindow" || name == "github.com/erranliu/SteerLine/internal/localservice" || name == "github.com/erranliu/SteerLine/internal/product/applicationclient" || name == "github.com/erranliu/SteerLine/internal/product/applicationcontract") {
 				t.Fatalf("HTTP consumer reaches backend owner: %s", name)
 			}

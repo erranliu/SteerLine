@@ -461,6 +461,9 @@ func TestTM07StorageBoundary(t *testing.T) {
 	}{
 		{"adapter_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/execution/adapters/codex\"\n", "storage sqlite forbidden dependency"},
 		{"application_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/app\"\n", "storage sqlite forbidden dependency"},
+		{"roadmap_service_in_storage", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/roadmap\"\n", "storage sqlite forbidden dependency"},
+		{"roadmap_values_in_storage", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/roadmap/model\"\n", ""},
+		{"roadmap_service_in_values", "internal/roadmap/model", "package model\nimport _ \"" + module + "/internal/roadmap\"\n", "pure ownership dependency"},
 		{"product_DTO_alias", "internal/storage/sqlite", "package sqlite\nimport api \"" + module + "/internal/product/api\"\ntype Filter = api.ConversationFilter\n", "storage sqlite forbidden dependency"},
 		{"product_DTO_in_read_port", "internal/storage/ports", "package ports\nimport api \"" + module + "/internal/product/api\"\ntype Body = api.ConversationBodyRef\n", "pure ownership dependency"},
 		{"query_use_case", "internal/storage/sqlite", "package sqlite\nimport productquery \"" + productQuery + "\"\nvar _ = productquery.NewService\n", "storage sqlite forbidden dependency"},

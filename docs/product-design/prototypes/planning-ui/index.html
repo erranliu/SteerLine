@@ -13,7 +13,7 @@ body { margin: 0; padding: 16px; }
 </style>
 </head>
 <body>
-<div id="sl-viz" data-page="plan" data-density="comfortable" data-layout="context" data-dialog="none" data-session="current" data-review-state="ready" data-run="decision" aria-label="SteerLine 第二阶段页面预览">
+<div id="sl-viz" data-page="roadmap" data-density="comfortable" data-layout="context" data-dialog="none" data-session="current" data-review-state="ready" data-run="decision" aria-label="SteerLine 第二阶段页面预览">
   <style>
     #sl-viz {
       color-scheme: light dark;
@@ -376,6 +376,17 @@ body { margin: 0; padding: 16px; }
 @media(max-width:560px) { #sl-viz .selection-fields { grid-template-columns: minmax(0,1fr); } #sl-viz .settings-form-head { flex-wrap: wrap; } }
 
 #sl-viz[data-page="promotion"] .screen-promotion { display: block; }
+#sl-viz .roadmap-analysis, #sl-viz .runner-capabilities { padding: 20px; border-top: 1px solid var(--sl-border); }
+#sl-viz .runner-capabilities { border: 1px solid var(--sl-border); border-radius: 8px; margin: 18px 0; background: var(--sl-soft); }
+#sl-viz .roadmap-analysis h2, #sl-viz .runner-capabilities h2 { font-size: 16px; margin-bottom: 10px; }
+#sl-viz .runner-capabilities p, #sl-viz .roadmap-analysis > p { font-size: 12px; line-height: 1.8; margin: 10px 0; }
+#sl-viz .prototype-scenarios { margin-top: 18px; font-size: 12px; }
+#sl-viz .prototype-scenarios .human-check { margin: 10px 0; }
+#sl-viz .dag-context-nodes { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+#sl-viz .dag-context-node { padding: 10px; border: 1px solid var(--sl-border); border-radius: 7px; font-size: 12px; line-height: 1.7; }
+#sl-viz .draft-task-card .source-evidence { color: var(--sl-muted); font-size: 11px; margin-top: 8px; }
+#sl-viz textarea[readonly] { cursor: text; }
+
 #sl-viz .draft-workspace { display: grid; grid-template-columns: 210px minmax(0,1fr) 280px; min-height: 640px; }
 #sl-viz .draft-library { border-right: 1px solid var(--sl-border); background: var(--sl-surface); padding: 12px; }
 #sl-viz .draft-directory { margin-top: 20px; font-size: 11px; color: var(--sl-muted); overflow-wrap: anywhere; }
@@ -639,10 +650,9 @@ body { margin: 0; padding: 16px; }
     <div class="shell">
       <aside class="side" aria-label="SteerLine 导航">
         <nav class="nav-list" aria-label="页面">
-          <button type="button" class="nav-item active cursor-interaction" data-nav="plan"><span class="nav-label"><span class="nav-glyph">▣</span>规划工作台</span></button>
           <button class="nav-item" data-nav="blueprints"><span class="nav-label"><span class="nav-glyph">◇</span>版本蓝图</span></button>
           <button class="nav-item" data-nav="long-documents"><span class="nav-label"><span class="nav-glyph">▤</span>长期文档</span></button>
-          <button type="button" class="nav-item cursor-interaction" data-nav="roadmap"><span class="nav-label"><span class="nav-glyph">≡</span>Roadmap 草稿</span></button>
+          <button type="button" class="nav-item active cursor-interaction" data-nav="roadmap"><span class="nav-label"><span class="nav-glyph">≡</span>Roadmap 草稿</span></button>
           <button type="button" class="nav-item cursor-interaction" data-nav="dag"><span class="nav-label"><span class="nav-glyph">◇</span>任务 DAG</span></button>
           <button type="button" class="nav-item cursor-interaction" data-nav="runs"><span class="nav-label"><span class="nav-glyph">▶</span>执行与待处理</span><span class="nav-count">2</span></button>
           <button type="button" class="nav-item" data-nav="acceptance"><span class="nav-label"><span class="nav-glyph">✓</span>验收管理</span><span class="nav-count"></span></button>
@@ -651,45 +661,40 @@ body { margin: 0; padding: 16px; }
           <button class="nav-item" data-nav="bugs"><span class="nav-label"><span class="nav-glyph">⚑</span>Bug 管理</span></button>
         </nav>
         <div class="settings-entry"><button class="nav-item" data-nav="settings"><span class="nav-label"><span class="nav-glyph">⚙</span>设置</span></button></div>
-        <div class="side-footer">本机服务 · 当前项目<br>任务与执行独立于规划会话</div>
+        <div class="side-footer">本机服务 · 当前项目<br>读取草稿 · 解析依赖 · 确认转正</div>
       </aside>
 
       <main class="main">
-        <section class="screen screen-plan" aria-label="规划工作台">
- <div class="page-head"><div><h1 data-plan-title></h1><p class="sub">对话仅维护 Roadmap 草稿；正式 Spec + Plan 由草稿转正固定流程生成。</p></div><div class="button-row"><button class="sl-button" data-action="new-session">＋ 新 session</button><button class="sl-button" data-action="view-drafts">查看关联草稿</button></div></div>
- <div class="planning-target"><label for="planning-draft">当前操作草稿</label><select id="planning-draft" data-planning-draft></select><span class="small muted" data-planning-draft-path></span></div>
- <div class="plan-grid"><aside class="planning-sessions" aria-label="规划工作台内部 session 切换"><div class="side-label">规划 sessions</div><div data-session-list></div></aside>
-  <div class="conversation"><div class="planning-messages" data-planning-messages><div class="message user"><div class="who">你 · 当前 session</div><p>完善执行界面的 roadmap 草稿，先把任务编号和依赖关系记录下来。</p></div><div class="message agent"><div class="who">Codex · 规划 Agent</div><p>当前草稿有两个已占号任务，还没有进入 DAG。可以在草稿中细化目标、约束和验收要求。正式 Spec + Plan 由草稿转正固定流程生成。</p></div></div><div class="composer"><textarea aria-label="向规划 Agent 输入消息" placeholder="讨论 Roadmap 草稿的目标、细节约束、测试和拟议依赖…"></textarea><div class="composer-bottom"><span class="small muted">Enter 换行 · 点击发送</span><button class="sl-button primary" data-action="send">发送</button></div></div></div>
-  <aside class="context"><div class="context-body"><h3>关联草稿</h3><p class="sub" data-planning-context></p><div class="rule-row"><span class="file-link" data-planning-json-path></span></div><p class="small muted" data-planning-task-count></p><div class="button-row" style="margin-top:12px"><button class="sl-button" data-action="agent-update-draft">演示：Agent 更新正文</button><button class="sl-button" data-action="agent-add-draft-task">演示：Agent 新增任务</button></div><div class="callout" style="margin-top:16px">本工作台仅维护 Roadmap 草稿 Markdown 和 JSON，对话不能直接生成或写入正式 Spec / Plan。请在草稿转正固定流程中生成、审阅和发布。</div></div></aside>
- </div>
-</section>
-
-
         <section class="screen screen-roadmap" aria-label="Roadmap 草稿">
- <div class="page-head"><div><h1>Roadmap 草稿</h1><p class="sub">多目录草稿 · Markdown 与 JSON 配对 · 已占号任务不自动入 DAG</p></div><button class="sl-button primary" data-action="new-roadmap-draft">＋ 新建草稿</button></div>
+ <div class="page-head"><div><h1>Roadmap 草稿</h1><p class="sub">读取已有 Markdown → Runner generate 识别任务与已有 DAG 依赖 → 确认 → 生成 Spec / Plan → 发布入图</p></div><button class="sl-button" data-action="refresh-roadmap">刷新 Markdown</button></div>
  <div class="draft-workspace">
-  <aside class="draft-library"><div class="button-row"><button class="filter active" data-draft-filter="active">未归档</button><button class="filter" data-draft-filter="archived">已归档</button></div><div data-draft-library></div></aside>
-  <div class="draft-document"><div class="draft-heading"><div><h2 data-draft-title></h2><p class="sub" data-draft-path></p></div><span class="status" data-draft-state></span></div><div class="context-tabs"><button class="context-tab active" data-draft-tab="document">草稿正文</button><button class="context-tab" data-draft-tab="json">任务 JSON</button></div>
-   <div data-draft-document-panel><label class="field-label" for="draft-body">Markdown 草稿 · 可继续编辑</label><textarea id="draft-body" data-draft-body rows="17"></textarea><div class="button-row" style="margin-top:10px"><button class="sl-button" data-action="save-roadmap-document">保存草稿正文</button><button class="sl-button" data-action="plan-current-draft">在规划工作台讨论</button></div></div>
-   <div data-draft-json-panel hidden><p class="sub">稳定关联来自 JSON；执行状态按 Task ID 查询正式 DAG。</p><pre class="json-preview" data-draft-json></pre></div><p class="receipt" data-draft-receipt role="status"></p>
+  <aside class="draft-library"><div class="side-label">仓库 Markdown · 演示</div><div data-draft-library></div><p class="sub">草稿在外部维护，本版仅阅读与转正。无需提供 JSON。</p></aside>
+  <div class="draft-document"><div class="draft-heading"><div><h2 data-draft-title></h2><p class="sub" data-draft-path></p></div><span class="status" data-draft-state></span></div>
+   <div class="context-tabs"><button class="context-tab active" data-draft-tab="document">Markdown 原文</button><button class="context-tab" data-draft-tab="json">SteerLine 生成的 JSON</button></div>
+   <div data-draft-document-panel><label class="field-label" for="draft-body">Markdown 来源快照 · 只读</label><textarea id="draft-body" data-draft-body rows="21" readonly></textarea><p class="sub">原文由外部编辑。刷新读取最新内容，不改写已确认的转正快照。</p></div>
+   <div data-draft-json-panel hidden><p class="sub">解析结果由 SteerLine 校验和保存；确认后仍使用 Roadmap 内部代号；正式编号在入 DAG 时分配。JSON 不是输入，也不保存实时执行状态。</p><pre class="json-preview" data-draft-json></pre></div>
+   <p class="receipt" data-draft-receipt role="status"></p>
+   <details class="prototype-scenarios"><summary>演示场景</summary><label class="human-check"><input type="checkbox" data-parse-ambiguity> 下次解析返回待澄清依赖</label><label class="human-check"><input type="checkbox" data-parse-failure> 下次 Runner 解析失败一次</label><button class="sl-button" data-action="simulate-external-markdown">演示：外部文件更新待刷新</button><p class="sub">仅修改页面内的来源示例；不提供草稿编辑功能，不读写真实仓库。</p></details>
   </div>
-  <aside class="draft-task-panel"><h3>草稿关联任务</h3><p class="sub" data-draft-progress></p><div data-draft-task-list></div><button class="sl-button" data-action="add-draft-task">＋ 草稿任务 · 占号</button>
-   <form class="draft-task-form" data-draft-task-form hidden><h3 data-draft-task-form-title></h3><label class="field-label" for="draft-task-name">任务名称</label><input id="draft-task-name" data-draft-task-name required><p class="sub">此处维护草稿任务约束。正式 Spec 路径和正文由转正流程生成。</p><label class="field-label" for="draft-task-deps">拟议前置编号 · 逗号分隔</label><input id="draft-task-deps" data-draft-task-deps placeholder="8, 91"><div class="draft-test-plan"><label class="field-label">草稿测试约束 · 正式 Plan 由固定流程生成</label><p class="sub">L1 固定必选；按任务追加 L2 / L3 或规划入口扩展。L4 只能在测试管理中人工触发，Plan 不自动选取执行。</p><div data-draft-task-tests></div></div><p class="validation-message" data-draft-task-error></p><div class="button-row"><button class="sl-button primary" type="button" data-action="save-draft-task">保存任务</button><button class="sl-button" type="button" data-action="cancel-draft-task">取消</button></div></form>
-   <div class="draft-promotion-actions"><button class="sl-button primary" data-action="promote-draft">转正 · 固定流程</button><button class="sl-button" data-action="archive-draft">归档 Markdown 与 JSON</button><p class="sub" data-archive-reason></p><p class="sub">转正后原草稿保留。全部任务完成且 execution-map 同步后才可归档。</p></div>
+  <aside class="draft-task-panel"><h3>任务与依赖解析</h3><p class="sub" data-draft-progress></p><p class="callout" data-parse-status role="status"></p><div class="button-row"><button class="sl-button primary" data-action="parse-roadmap">Runner generate · 解析任务与依赖</button><button class="sl-button" data-action="resume-roadmap-parse" hidden>查询原解析结果 · 演示</button></div><p class="sub">保留 Markdown 的任务代号与拟议依赖；Runner 结合已有任务 / DAG 核对，并列出建议变化。内部代号不等于正式编号。</p><div data-draft-task-list></div>
+   <div class="draft-promotion-actions"><button class="sl-button primary" data-action="confirm-roadmap-parse">确认任务与依赖</button><button class="sl-button primary" data-action="promote-draft">生成 Spec / Plan →</button><p class="sub" data-parse-confirmation></p><p class="sub">确认与生成文档均不分配正式编号；文档合并后，入 DAG 时分配并转换依赖。自动派发开启时，新任务就绪后可能启动。</p></div>
   </aside>
  </div>
+ <div class="roadmap-analysis"><h2>已有 DAG 与拟议依赖</h2><p class="sub" data-parse-basis></p><div data-parse-existing></div><div class="table-scroll"><table class="prototype-table"><thead><tr><th>Roadmap 内部代号</th><th>草稿原有依赖</th><th>Runner 核对后的依赖</th><th>建议变化 / 待澄清</th></tr></thead><tbody data-parse-dependencies></tbody></table></div><p class="callout" data-parse-overlap></p><details><summary>本次 Runner generate 输入 / 结果记录 · 演示</summary><pre class="json-preview" data-parse-request></pre></details></div>
 </section>
 <section class="screen screen-promotion" aria-label="草稿转正固定流程">
- <div class="page-head"><div><h1>草稿转正</h1><p class="sub">规范必读 · 代码调查 · Spec + Plan 生成 / 审阅 · 文档 PR · 正式 DAG</p></div><button class="sl-button" data-nav="roadmap">返回草稿</button></div>
+ <div class="page-head"><div><h1>草稿转正</h1><p class="sub">任务与已有 DAG 依赖已确认 · 代码调查与文档生成 · 审阅发布 · 正式入图</p></div><button class="sl-button" data-nav="roadmap">返回草稿</button></div>
  <div class="promotion-body"><div class="callout" data-promotion-context></div><div class="promotion-steps" data-promotion-steps></div><p class="validation-message" data-promotion-status role="status"></p>
    <div class="generation-rule-bar"><div><strong>正式文档生成规范</strong><p class="sub" data-generation-rule-status></p></div><div class="button-row"><button class="sl-button" data-action="open-flow-documents">查看与维护流程文档 ↗</button></div></div>
- <div class="generation-controls"><p class="sub">固定草稿与代码基线后，先读取规范、调查现有代码并整体规划，再生成 Spec + Plan。正式文档只在此流程生成。</p><label class="small"><input type="checkbox" data-generation-rule-fault> 演示：规范读取失败一次</label><label class="small"><input type="checkbox" data-generation-clarification> 演示：发现关键需求矛盾</label><div class="button-row"><button class="sl-button primary" data-action="generate-formal-documents">生成 Spec + Plan · 固定流程</button><button class="sl-button" data-action="retry-generation-rule" hidden>重试本次规范读取</button><button class="sl-button" data-action="regenerate-formal-documents">按当前草稿与最新版规范重新生成</button></div></div>
+ <section class="runner-capabilities" aria-label="Runner 文档生成能力需求"><h2>Runner 能力边界</h2><p><strong>解析阶段：复用现有 generate/1</strong>，以 Markdown 与已有任务 / DAG 材料作为输入，返回结构化任务及依赖建议。</p><p><strong>文档阶段：已接入 generate/1 的固定仓库版本扩展。</strong> 生产页面核对所选构建的 capability/schema；本原型仍只演示，不调用服务。</p><div class="table-scroll"><table class="prototype-table"><thead><tr><th>文档生成所需能力</th><th>交付要求</th></tr></thead><tbody><tr><td>固定仓库上下文与只读代码调查</td><td>绑定仓库、分支和完整提交，读取代码 / 契约 / 测试，返回实际查阅位置与依据。通过 generate.repository 固定本地 Git 完整提交；manifest 表示可用版本，调查引用另行核对。</td></tr><tr><td>批量任务整体设计</td><td>消费已确认拆分与依赖，明确共享修改、所有者和交接条件；发现依赖调整时返回问题，重新确认后再生成。</td></tr><tr><td>多文档结构化输出</td><td>返回逐任务 Spec / Plan、必要验收材料、文件路径与正文及生成依据，由 SteerLine 校验、审阅和发布。</td></tr></tbody></table></div><p class="sub">请求持久化、查询原结果、停止和中断恢复复用既有 Runner 调用机制。新能力不承担 Task / DAG 写入。</p><label class="human-check"><input type="checkbox" data-document-capability checked> 演示：所选 Runner 支持固定版本文档生成（取消可模拟缺能力）</label><p class="receipt" data-document-capability-status></p></section>
+ <div class="generation-controls"><p class="sub">消费已确认任务与依赖，固定代码基线和规范，再调查代码、整体规划、生成文档。发现拆分 / 依赖变化须返回解析阶段重新确认。</p><label class="small"><input type="checkbox" data-generation-rule-fault> 演示：规范读取失败一次</label><label class="small"><input type="checkbox" data-generation-clarification> 演示：发现关键需求矛盾</label><div class="button-row"><button class="sl-button primary" data-action="generate-formal-documents">生成 Spec + Plan · 固定流程</button><button class="sl-button" data-action="retry-generation-rule" hidden>重试本次规范读取</button><button class="sl-button" data-action="regenerate-formal-documents">按已确认任务与最新版规范重新生成</button></div></div>
  <div class="generation-workspace"><aside class="generation-task-list" data-generation-task-list></aside><div class="generation-document"><div class="button-row"><h2 data-generation-document-title>待生成正式文档</h2><button class="filter" data-generation-document="spec">Spec</button><button class="filter" data-generation-document="plan">Plan</button></div><p class="sub" data-generation-document-meta></p><pre class="json-preview" data-generation-document-preview></pre><details><summary>正文修改差异</summary><pre class="json-preview" data-generation-document-diff></pre></details><div data-generation-document-edit hidden><label class="field-label" for="generation-document-body">受控修改 · 仅修改当前生成结果</label><textarea id="generation-document-body" data-generation-document-body rows="16"></textarea><div class="button-row"><button class="sl-button" data-action="save-generated-document">保存修改并重新核对</button><button class="sl-button" data-action="cancel-generated-document">取消</button></div></div><button class="sl-button" data-action="edit-generated-document">在转正流程内修改正文</button></div><aside class="generation-evidence"><h3>设计依据与规范核对</h3><div data-generation-evidence></div></aside></div>
 
-  <div class="promotion-columns"><div><h2>依赖复核与 execution-map 差异</h2><p class="sub" data-promotion-review></p><div class="table-scroll"><table class="prototype-table"><thead><tr><th>沿用编号</th><th>任务 / Spec</th><th>拟议前置</th><th>放置位置</th></tr></thead><tbody data-promotion-preview></tbody></table></div><pre class="json-preview" data-promotion-map-diff></pre></div><aside class="callout"><h3>执行事实 · 演示</h3><div data-promotion-facts></div></aside></div>
-  <div class="test-full-panel"><h2>转正固定的 Plan 测试关联</h2><div data-promotion-test-links></div></div>
-  <div class="promotion-controls"><label class="human-check"><input type="checkbox" data-promotion-fault><span>演示：文档已合并，创建 DAG 时中断一次</span></label><div class="button-row"><button class="sl-button primary" data-action="confirm-promotion">确认文档并发布转正 · 演示</button><button class="sl-button primary" data-action="resume-promotion" hidden>继续原转正流程</button><button class="sl-button" data-action="review-new-snapshot" hidden>补充草稿后重新生成</button><button class="sl-button" data-action="view-promoted-dag" hidden>查看正式 DAG</button></div></div>
-  <details style="margin:14px 0"><summary>待发布任务 JSON 关联</summary><pre class="json-preview" data-promotion-generated-json></pre></details><details style="margin:14px 0"><summary>本草稿的生成记录历史</summary><div data-promotion-generation-history></div></details><div class="promotion-log" data-promotion-log></div><p class="sub">本页模拟 PR 与合并，不连接 Git 或服务。已合并快照继续原入图操作，不重复提 PR。</p>
+  <div class="promotion-columns"><div><h2>依赖复核与 execution-map 差异</h2><p class="sub" data-promotion-review></p><div class="table-scroll"><table class="prototype-table"><thead><tr><th>Roadmap 内部代号</th><th>任务 / Spec</th><th>拟议前置</th><th>放置位置</th></tr></thead><tbody data-promotion-preview></tbody></table></div><pre class="json-preview" data-promotion-map-diff></pre></div><aside class="callout"><h3>执行事实 · 演示</h3><div data-promotion-facts></div></aside></div>
+  <div class="test-full-panel"><h2>生成 Plan 中的测试安排 · 演示</h2><p class="sub">仅展示文档安排；后续执行使用现有测试生成机制，不在此运行测试或增加统一测试门槛。</p><div data-promotion-test-links></div></div>
+  <div class="promotion-controls"><label class="human-check"><input type="checkbox" data-promotion-fault><span>演示：整批入图已提交，返回回执时中断一次</span></label><div class="button-row"><button class="sl-button primary" data-action="confirm-promotion">确认文档并发布 PR · 演示</button><button class="sl-button primary" data-action="admit-roadmap" hidden>正式入 DAG · 分配编号</button><button class="sl-button primary" data-action="resume-promotion" hidden>继续原转正流程</button><button class="sl-button" data-action="review-new-snapshot" hidden>返回草稿重新解析与确认</button><button class="sl-button" data-action="view-promoted-dag" hidden>查看正式 DAG</button></div></div>
+  <section class="roadmap-analysis"><h2>Roadmap 内部代号 → 正式任务编号</h2><p class="sub">正式编号在入 DAG 的同一批次事务中分配，与全部 Task、依赖和原请求映射一并保存；整批提交或整批回滚。未入图任务保持内部代号；原 Markdown 与已发布 Spec / Plan 不回填编号。</p><div class="table-scroll"><table class="prototype-table"><thead><tr><th>Roadmap / 内部代号</th><th>正式编号</th><th>转换后的前置</th><th>状态</th></tr></thead><tbody data-admission-mapping></tbody></table></div><details><summary>SteerLine 保存的入图映射 JSON</summary><pre class="json-preview" data-admission-json></pre></details></section>
+  <details style="margin:14px 0"><summary>文档 PR 中的 JSON · 使用内部代号</summary><pre class="json-preview" data-promotion-generated-json></pre></details><details style="margin:14px 0"><summary>本草稿的生成记录历史</summary><div data-promotion-generation-history></div></details><div class="promotion-log" data-promotion-log></div><p class="sub">本页模拟 PR 与合并，不连接 Git 或服务。已合并快照继续原入图操作，不重复提 PR。</p>
  </div>
 </section>
 
@@ -890,7 +895,6 @@ body { margin: 0; padding: 16px; }
 
 <div class="spec-rule-backdrop" hidden><section class="spec-rule-modal" role="dialog" aria-modal="true" aria-labelledby="spec-rule-title" tabindex="-1"><div class="drawer-head"><div><h2 id="spec-rule-title">Spec / Plan 生成规范</h2><p class="sub" data-spec-rule-meta></p></div><button class="sl-button" data-action="close-spec-rule">关闭</button></div><div class="drawer-body"><pre class="json-preview" data-spec-rule-preview></pre><div data-spec-rule-editor hidden><label class="field-label" for="spec-rule-body">维护流程规范 · 页面内演示</label><textarea id="spec-rule-body" data-spec-rule-body rows="19"></textarea><p class="sub">实际规范维护在仓库文件中完成。此编辑只更新页面演示版本，不写入磁盘，不改写已有流程的规范快照。</p></div><p class="validation-message" data-spec-rule-error role="status"></p></div><div class="drawer-footer"><button class="sl-button" data-action="close-spec-rule">关闭</button><button class="sl-button primary" data-action="save-spec-rule">保存规范演示版本</button></div></section></div>
 
-<div class="modal-backdrop" role="presentation"><section class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="sl-new-session-title"><h2 id="sl-new-session-title" data-planning-modal-title>新建规划 session</h2><p class="sub">独立对话与输入草稿，操作指定的 roadmap 文档。</p><label class="field-label" for="session-draft-choice">关联草稿</label><select id="session-draft-choice" data-session-draft-choice></select><div data-new-draft-fields hidden><label class="field-label" for="new-draft-title">草稿名称</label><input id="new-draft-title" data-new-draft-title placeholder="例如：执行体验改进"><label class="field-label" for="new-draft-dir">Roadmap 目录</label><select id="new-draft-dir" data-new-draft-dir><option value="SteerlineFlow/Roadmap/drafts/ui">界面规划 / SteerlineFlow/Roadmap/drafts/ui</option><option value="SteerlineFlow/Roadmap/drafts/runtime">执行规划 / SteerlineFlow/Roadmap/drafts/runtime</option></select><label class="field-label" for="new-draft-file">文件名 · Markdown 与 JSON 同名</label><input id="new-draft-file" data-new-draft-file placeholder="留空使用 draft-序号"></div><p class="validation-message" data-new-draft-error></p><div class="modal-actions"><button class="sl-button" data-action="dismiss-session">取消</button><button class="sl-button primary" data-action="start-session">创建</button></div></section></div>
 
   </div>
   <div class="sr-only" aria-live="polite" id="sl-live"></div>
@@ -1288,11 +1292,7 @@ body { margin: 0; padding: 16px; }
     '7':makeTestPlan(7,'SteerlineFlow/plans/native-task.plan.md',['L1-MIN']),
     '8':makeTestPlan(8,'SteerlineFlow/plans/task-dag.plan.md',['L1-MIN','L2-SMOKE','L3-TASK']),
     '9':makeTestPlan(9,'SteerlineFlow/plans/native-ui.plan.md',['L1-MIN','L2-SMOKE']),
-    '11':makeTestPlan(11,'SteerlineFlow/plans/task-relations.plan.md',['L1-MIN']),
-    '91':makeTestPlan(91,'SteerlineFlow/plans/candidate-display.plan.md',['L1-MIN','L2-SMOKE','L3-FEEDBACK']),
-    '92':makeTestPlan(92,'SteerlineFlow/plans/live-output.plan.md',['L1-MIN','L3-FEEDBACK']),
-    '93':makeTestPlan(93,'SteerlineFlow/plans/candidate-control.plan.md',['L1-MIN','L3-CONTROL'],['L3-CONTROL']),
-    '94':makeTestPlan(94,'SteerlineFlow/plans/execution-sync.plan.md',['L1-MIN','L2-SMOKE','L3-TASK'])
+    '11':makeTestPlan(11,'SteerlineFlow/plans/task-relations.plan.md',['L1-MIN'])
   };
   Object.values(tasks).forEach(t=>t.testPlan=copyObject(draftTestPlans[t.id]));
   const initialVersionCoverage={};Object.values(tasks).filter(t=>t.delivery).forEach(t=>{const c=t.candidates.find(c=>c.id===t.delivery);initialVersionCoverage[t.id]={candidate:c.id,sha:c.commitSha};});Object.values(tasks).forEach(t=>t.candidates.filter(c=>c.commitSha).forEach(c=>c.versionCoverage={...copyObject(initialVersionCoverage),[t.id]:{candidate:c.id,sha:c.commitSha}}));
@@ -1430,10 +1430,10 @@ body { margin: 0; padding: 16px; }
     selectedManagedSuite=id;testLevel=suiteById(id).level;testView='runs';testSearch='';Object.assign(recordFilters,{outcome:'all',retest:'all',environment:'all',source:'',from:'',to:''});q('[data-test-search]').value='';navigate('tests');
   }
   function validatePromotionTests(flow){
-    const reasons=[];flow.snapshot.tasks.forEach(t=>{const p=flow.generatedTestPlans?.[String(t.task_id)];if(!p?.path){reasons.push('#'+t.task_id+' 缺少 Plan 测试计划');return;}if(!p.requirements.some(r=>r.id==='L1-MIN'))reasons.push('#'+t.task_id+' 未包含必须的 L1 最小集');p.requirements.forEach(r=>{const s=suiteById(r.id);if(s?.level==='L4')reasons.push('#'+t.task_id+' L4 只能人工触发，不能纳入 Plan 自动测试');else if(!s||s.version!==r.version||r.cases.some(id=>!s.cases.includes(id)))reasons.push('#'+t.task_id+' 测试关联无效：'+r.id);else if(s.lifecycle==='planned'&&(!p.extensions.includes(s.id)||s.ownerTask!==String(t.task_id)))reasons.push('#'+t.task_id+' 尚未安排测试入口扩展：'+s.id);});});return reasons.join('；');
+    const reasons=[];flow.snapshot.tasks.forEach(t=>{const p=flow.generatedTestPlans?.[t.ref];if(!p?.path){reasons.push(t.ref+' 缺少 Plan 测试计划');return;}p.requirements.forEach(r=>{const suite=suiteById(r.id);if(!suite||suite.version!==r.version||r.cases.some(id=>!suite.cases.includes(id)))reasons.push(t.ref+' 测试关联无效：'+r.id);});});return reasons.join('；');
   }
   function renderPromotionTests(){
-    const flow=activeFlow;if(!flow)return;q('[data-promotion-test-links]').innerHTML=flow.snapshot.tasks.map(t=>{const p=flow.generatedTestPlans?.[String(t.task_id)]||flow.snapshot.testPlans[String(t.task_id)];return `<div class="test-plan-row"><strong>#${t.task_id} · ${p?.path?esc(p.path)+' / v'+p.version:'草稿测试约束 · 待生成正式 Plan'}</strong><p>${p?p.requirements.map(r=>esc(r.id+' / '+suiteById(r.id).level+' / v'+r.version+' / '+r.cases.join(', '))).join('<br>'):'缺少固定测试关联'}</p>${p?.extensions.length?'<p>实施步骤须补齐长期入口：'+p.extensions.map(esc).join('、')+'</p>':''}</div>`;}).join('');
+    const flow=activeFlow;if(!flow)return;q('[data-promotion-test-links]').innerHTML=flow.snapshot.tasks.map(t=>{const p=flow.generatedTestPlans?.[t.ref];return '<div class="test-plan-row"><strong>'+esc(t.ref)+' · '+(p?.path?esc(p.path):'尚未生成正式 Plan')+'</strong><p>'+(p?p.requirements.map(r=>esc(r.id+' / '+suiteById(r.id).level+' / '+r.cases.join(', '))).join('<br>'):'等待正式文档生成，当前没有 Plan 测试安排。')+'</p></div>';}).join('');
   }
   function handleTestManagementAction(button){
     if(button.dataset.recordEvidence){const preview=q('[data-evidence-preview="'+button.dataset.recordEvidence+'"]');preview.hidden=!preview.hidden;button.textContent=preview.hidden?'查看证据摘要 · 演示':'收起证据摘要';return true;}
@@ -1630,97 +1630,101 @@ body { margin: 0; padding: 16px; }
     return false;
   }
 
-  let mainBranch='main', mapRevision=128, nextDraftTask=95, nextDraft=1, flowCounter=1;
-  let selectedDraft='draft-ui', draftFilter='active', draftTab='document', dagView='graph', modalOrigin='session', modalTrigger=null, editingDraftTask=null;
-  const draftTask=(task_id,title,spec,depends_on=[])=>({task_id,title,spec,depends_on});
+  let mainBranch='main', mapRevision=128, nextFormalTask=91, flowCounter=1, parseCounter=1;
+  let selectedDraft='draft-ui', draftTab='document', dagView='graph';
   const drafts={
-    'draft-ui':{id:'draft-ui',name:'执行界面改进',path:'SteerlineFlow/Roadmap/drafts/ui/execution-ui.md',revision:1,archived:false,body:'# 执行界面改进\n\n目标：同任务多候选并行与实时输出。\n\n## 草稿任务\n\n- #91 多候选执行展示\n- #92 实时输出与候选反馈\n\n任务已占号，尚未进入 DAG。Spec 可在规划中补齐。',tasks:[draftTask(91,'多候选执行展示',null),draftTask(92,'实时输出与候选反馈',null,[91])]},
-    'draft-runtime':{id:'draft-runtime',name:'执行控制改进',path:'SteerlineFlow/Roadmap/drafts/runtime/execution-control.md',revision:1,archived:false,body:'# 执行控制改进\n\n目标：在现有任务调度之后补齐执行控制。\n\n- #93 候选执行控制：依赖正式任务 #8\n- #94 执行状态同步：依赖 #93\n\n草稿约束已明确，可进入固定流程生成正式 Spec + Plan。',tasks:[draftTask(93,'候选执行控制',null,[8]),draftTask(94,'执行状态同步',null,[93])]},
-    'draft-foundation':{id:'draft-foundation',name:'任务调度基础',path:'SteerlineFlow/Roadmap/drafts/runtime/task-foundation.md',revision:2,archived:false,body:'# 任务调度基础\n\n本文保留原规划。三个任务已进入正式 DAG；当前状态从中心读取。\n\n- #7 原生任务模型\n- #8 固定依赖调度\n- #9 原生接入',tasks:[draftTask(7,'原生任务模型','SteerlineFlow/spec/native-task.spec.md'),draftTask(8,'固定依赖调度','SteerlineFlow/spec/task-dag.spec.md',[7]),draftTask(9,'原生接入','SteerlineFlow/spec/native-ui.spec.md',[8])]},
-    'draft-archive':{id:'draft-archive',name:'历史模型探索',path:'SteerlineFlow/Roadmap/archive/runtime/model-exploration.md',revision:1,archived:true,body:'# 历史模型探索\n\n全部任务完成后，Markdown 与 JSON 一起归档。',tasks:[draftTask(7,'原生任务模型','SteerlineFlow/spec/native-task.spec.md')]}
+    'draft-ui':{id:'draft-ui',name:'执行界面改进',path:'SteerlineFlow/Roadmap/drafts/ui/execution-ui.md',revision:1,body:'# 执行界面改进\n\n## 目标\n在已有固定依赖调度上展示同任务多候选和实时输出。\n\n### T1 多候选执行展示\n展示各候选独立状态、参数和输出入口。复用已有任务查询，不重建调度。\n前置：已有正式任务 #8 固定依赖调度。\n\n### T2 实时输出与候选反馈\n展示候选增量输出和独立反馈归属。\n前置：本 Roadmap T1。\n',tasks:[],formalMapping:{},parsing:null},
+    'draft-runtime':{id:'draft-runtime',name:'执行控制改进',path:'SteerlineFlow/Roadmap/drafts/runtime/execution-control.md',revision:1,body:'# 执行控制改进\n\n## 目标\n沿用现有任务调度，补齐执行控制与同步。内部代号仅在本 Roadmap 内有效。\n\n### T1 候选执行控制\n在已有固定依赖调度之后支持控制单候选，保持任务与执行状态职责。\n\n### T2 执行状态同步\n将执行观察与任务状态分别展示。\n前置：本 Roadmap T1。\n',tasks:[],formalMapping:{},parsing:null},
+    'draft-foundation':{id:'draft-foundation',name:'任务调度基础',path:'SteerlineFlow/Roadmap/drafts/runtime/task-foundation.md',revision:2,body:'# 任务调度基础\n\n## 目标\n核对当前已交付能力，避免重复建任务。\n\n### T1 原生任务模型\n定义任务身份；对应已有正式任务 #7。\n\n### T2 固定依赖调度\n对应已有正式任务 #8。\n前置：本 Roadmap T1。\n\n### T3 原生接入\n对应已有正式任务 #9。\n前置：本 Roadmap T2。\n',tasks:[],formalMapping:{},parsing:null}
   };
-  const mapEntries={}; const promotionFlows={}; let activeFlow=null;
+  const mapEntries={}, promotionFlows={}; let activeFlow=null;
   Object.values(tasks).forEach(t=>{
     t.base='main';t.spec='SteerlineFlow/spec/'+t.ref+'.spec.md';t.sourceDraft=t.id==='11'?null:'draft-foundation';t.mapSync=t.delivery?'synced':null;
     mapEntries[t.id]={id:t.id,name:t.name,spec:t.spec,depends:[...t.depends],base:t.base,sourceDraft:t.sourceDraft};
   });
-  const sidecarPath=d=>d.path.replace(/\.md$/,'.json');
-  const sidecar=d=>({version:1,draft_id:d.id,document:d.path.split('/').at(-1),tasks:d.tasks.map(t=>{const formal=tasks[String(t.task_id)],p=draftTestPlans[String(t.task_id)];return {...t,spec:formal?.spec||null,depends_on:[...t.depends_on],plan:formal?.testPlan?.path||null,test_constraints:p?{revision:p.version,required:p.requirements,extensions:p.extensions}:null};})});
-  const formalCount=d=>d.tasks.filter(t=>tasks[String(t.task_id)]).length;
-  const doneCount=d=>d.tasks.filter(t=>tasks[String(t.task_id)]?.delivery).length;
-  const archiveReady=d=>d.tasks.length>0&&d.tasks.every(t=>{const formal=tasks[String(t.task_id)];return formal?.delivery&&formal.mapSync==='synced';});
+  // All parsing and Runner calls below are deterministic page-only demonstrations.
+  const demoDigest=text=>{let h=2166136261;for(const c of text)h=Math.imul(h^c.charCodeAt(0),16777619);return 'demo-'+(h>>>0).toString(16).padStart(8,'0');};
+  const currentGraph=()=>Object.values(tasks).map(t=>({id:t.id,title:t.name,depends_on:[...t.depends],spec:t.spec,goal:t.specText||t.name}));
+  const graphDigest=()=>demoDigest(JSON.stringify(currentGraph()));
+  const parseCurrent=d=>!!d.parsing&&d.parsing.sourceDigest===demoDigest(d.body)&&d.parsing.graphDigest===graphDigest();
+  const formalID=(d,ref)=>d.formalMapping?.[ref]||null;
+  const formalCount=d=>Object.values(d.formalMapping).filter(id=>tasks[id]).length;
+  const doneCount=d=>Object.values(d.formalMapping).filter(id=>tasks[id]?.delivery).length;
+  const sidecar=d=>d.parsing?{version:2,roadmap_id:d.id,source:{path:d.path,revision:d.parsing.revision,digest:d.parsing.sourceDigest},parse_request:d.parsing.id,workflow:'generate/1',existing_dag_digest:d.parsing.graphDigest,confirmed:d.parsing.state==='confirmed',tasks:d.parsing.state==='confirmed'?d.tasks:d.parsing.result,formal_mapping:{...d.formalMapping},questions:d.parsing.questions}:null;
+  const dependencyLabels=t=>[...t.local_deps.map(ref=>'本 Roadmap '+ref),...t.external_deps.map(id=>'正式 #'+id)];
+  const documentKey=t=>({'多候选执行展示':'candidate-display','实时输出与候选反馈':'live-output','候选执行控制':'candidate-control','执行状态同步':'execution-sync'}[t.title]||t.ref.toLowerCase()+'-proposal');
   function draftState(d){
-    if(d.archived)return '已归档';
-    const flow=promotionFlows[d.id];if(flow&&['awaiting-generation','reading-rule','investigating-code','generating-docs','reviewing','review','publishing','merging','creating','partial','paused'].includes(flow.stage))return flow.stage==='partial'?'文档已合并 · 入图待完成':'转正流程进行中';
-    return archiveReady(d)?'全部完成 · 可归档':formalCount(d)===d.tasks.length&&d.tasks.length?'已纳入执行':'规划中';
+    const f=promotionFlows[d.id];if(f&&f.stage==='done')return '已转正';if(f)return f.stage==='admission-unknown'?'入图回执待核实 · 查询原请求':f.stage==='awaiting-admission'?'文档已合并 · 待入 DAG 分配编号':'转正记录已保留';
+    if(!d.parsing)return '待读取解析';if(!parseCurrent(d))return '来源 / DAG 已变化 · 待重新解析';
+    return {parsing:'Runner 解析中',paused:'解析观察中断',failed:'解析失败',blocked:'待澄清',review:'待确认任务与依赖',confirmed:'已确认 · 待生成文档'}[d.parsing.state];
   }
   function renderRoadmap(){
-    const d=drafts[selectedDraft];if(!d)return;
-    qa('[data-draft-filter]').forEach(b=>b.classList.toggle('active',b.dataset.draftFilter===draftFilter));
-    const visible=Object.values(drafts).filter(d=>d.archived===(draftFilter==='archived'));
-    const directories=[...new Set(visible.map(d=>d.path.slice(0,d.path.lastIndexOf('/'))))];
-    q('[data-draft-library]').innerHTML=directories.map(dir=>`<div class="draft-directory">${esc(dir)}</div>${visible.filter(d=>d.path.startsWith(dir+'/')).map(d=>`<button class="draft-library-item ${d.id===selectedDraft?'selected':''}" data-roadmap-draft="${d.id}"><strong>${esc(d.name)}</strong><span>${d.tasks.length} 项任务 · ${formalCount(d)} 项正式 · ${doneCount(d)} 项完成</span><span>${esc(draftState(d))}</span></button>`).join('')}`).join('')||'<p class="sub">当前没有草稿。</p>';
-    q('[data-draft-title]').textContent=d.name;q('[data-draft-path]').textContent=d.path+' · '+d.id+' · 草稿 v'+d.revision;q('[data-draft-state]').textContent=draftState(d);
-    q('[data-draft-body]').value=d.editBody??d.body;q('[data-draft-body]').readOnly=d.archived;q('label[for="draft-body"]').textContent=d.archived?'Markdown 草稿 · 已归档，只读':'Markdown 草稿 · 可继续编辑';
-    q('[data-draft-json]').textContent=JSON.stringify(sidecar(d),null,2);
+    const d=drafts[selectedDraft],p=d.parsing,f=promotionFlows[d.id];if(!d)return;
+    const dirs=[...new Set(Object.values(drafts).map(d=>d.path.slice(0,d.path.lastIndexOf('/'))))];
+    q('[data-draft-library]').innerHTML=dirs.map(dir=>'<div class="draft-directory">'+esc(dir)+'</div>'+Object.values(drafts).filter(d=>d.path.slice(0,d.path.lastIndexOf('/'))===dir).map(d=>'<button class="draft-library-item '+(d.id===selectedDraft?'selected':'')+'" data-roadmap-draft="'+d.id+'"><strong>'+esc(d.name)+'</strong><span>'+esc(draftState(d))+'</span></button>').join('')).join('');
+    q('[data-draft-title]').textContent=d.name;q('[data-draft-path]').textContent=d.path+' · 来源 v'+d.revision+' · '+demoDigest(d.body);
+    q('[data-draft-state]').textContent=draftState(d);q('[data-draft-body]').value=d.body;
+    q('[data-draft-json]').textContent=p?JSON.stringify(sidecar(d),null,2):'尚未解析。无需提供 JSON；Runner 返回结果后由 SteerLine 校验与保存。';
     q('[data-draft-document-panel]').hidden=draftTab!=='document';q('[data-draft-json-panel]').hidden=draftTab!=='json';qa('[data-draft-tab]').forEach(b=>b.classList.toggle('active',b.dataset.draftTab===draftTab));
-    q('[data-draft-progress]').textContent=`${formalCount(d)} / ${d.tasks.length} 已入 DAG · ${doneCount(d)} / ${d.tasks.length} 已交付`;
-    q('[data-draft-task-list]').innerHTML=d.tasks.map(t=>{
-      const formal=tasks[String(t.task_id)];return `<div class="draft-task-card"><strong>#${t.task_id} ${esc(formal?.name||t.title)}</strong><div>${formal?'正式任务 · '+esc(summary(formal)):'草稿任务 · 已占号 · 未入 DAG'}</div><span class="file-link">${formal?esc(formal.spec):'正式 Spec + Plan：待转正固定流程生成'}</span><p class="sub">拟议前置：${t.depends_on.length?'#'+t.depends_on.join('、#'):'无'}</p><div class="button-row">${formal?`<button class="sl-button" data-open-formal-task="${t.task_id}">查看 DAG</button>`:!d.archived?`<button class="sl-button" data-edit-draft-task="${t.task_id}">完善草稿约束</button>`:''}</div></div>`;
-    }).join('')||'<p class="sub" style="margin:16px 0">尚未创建任务，可先讨论目标。</p>';
-    const pending=d.tasks.some(t=>!tasks[String(t.task_id)]), flow=promotionFlows[d.id];
-    q('[data-action="promote-draft"]').textContent=flow&&flow.stage==='done'&&!pending?'查看转正记录':flow&&flow.stage!=='done'&&flow.stage!=='blocked'?'查看原转正流程':'转正 · 固定流程';
-    const viewingFlow=flow&&(!pending||flow.stage!=='done');q('[data-action="promote-draft"]').disabled=d.archived?!flow:!viewingFlow&&(!connected||!pending);
-    q('[data-action="archive-draft"]').disabled=d.archived||!connected||!archiveReady(d);
-    q('[data-action="add-draft-task"]').disabled=d.archived;
-    q('[data-action="save-roadmap-document"]').disabled=d.archived;
-    q('[data-archive-reason]').textContent=d.archived?'Markdown 与 JSON 已成对归档。':archiveReady(d)?'全部任务完成且已同步，可以归档。':'仍有草稿、未完成任务或待同步记录，暂不能归档。';
-    q('[data-draft-receipt]').textContent=d.receipt||'';
+    q('[data-draft-progress]').textContent=p?'识别 '+p.result.length+' 项 · '+formalCount(d)+' 项已入图 · '+doneCount(d)+' 项交付':'没有预置任务 JSON，先从 Markdown 识别任务。';
+    const states={parsing:'已提交 Runner generate/1，正在识别任务并分析与已有 DAG 的依赖（演示）。',paused:'观察中断，重连后查询原解析请求，不重复提交。',failed:'Runner 解析失败（演示），可显式重新解析。',blocked:'待澄清：依赖 / 任务存在问题，请在外部补充 Markdown 后刷新并重新解析。',review:'解析完成，尚未确认；请审阅下方依赖与原文依据。',confirmed:'任务与依赖已确认，结构化 JSON 由 SteerLine 保存。'};
+    q('[data-parse-status]').textContent=f?.pr?(f.stage==='done'?'本次转正已完成，任务已纳入 DAG；原解析快照和 Markdown 保留。':'文档发布 / 入图按已确认快照继续；草稿来源保持只读。'):p?(!parseCurrent(d)?'Markdown 或已有 DAG 已变化，请重新解析并确认。':states[p.state]):'读取 Markdown 后，通过 Runner generate 同时解析任务和依赖。';
+    q('[data-draft-task-list]').innerHTML=p?.result.map(t=>{const id=formalID(d,t.ref)||t.existing_task_id;return '<div class="draft-task-card" data-source-ref="'+esc(t.ref)+'"><strong>'+esc(t.ref+' · '+t.title)+'</strong><p>'+esc(t.goal)+'</p><p class="sub">'+(t.ref_origin==='markdown'?'沿用草稿内部代号':'Runner 建议的临时内部代号')+' · '+(id?'对应正式 #'+id:'未入 DAG，无正式编号')+'</p><p class="source-evidence">原文依据：'+esc(t.evidence)+'</p>'+(id?'<button class="sl-button" data-open-formal-task="'+id+'">查看正式 #'+id+'</button>':'')+'</div>';}).join('')||'<p class="sub">解析结果将在这里展示。</p>';
+    q('[data-action="parse-roadmap"]').disabled=!connected||!!p&&['parsing','paused'].includes(p.state)||!!f?.pr;
+    q('[data-action="parse-roadmap"]').textContent=p?'Runner generate · 重新解析任务与依赖':'Runner generate · 解析任务与依赖';
+    q('[data-action="resume-roadmap-parse"]').hidden=p?.state!=='paused';q('[data-action="resume-roadmap-parse"]').disabled=!connected;
+    q('[data-action="confirm-roadmap-parse"]').disabled=!connected||p?.state!=='review'||!parseCurrent(d);
+    q('[data-action="promote-draft"]').textContent=f?'查看原转正流程 →':'生成 Spec / Plan →';
+    q('[data-action="promote-draft"]').disabled=!f&&(!connected||p?.state!=='confirmed'||!parseCurrent(d)||!d.tasks.some(t=>!formalID(d,t.ref)));
+    q('[data-parse-confirmation]').textContent=p?.state==='confirmed'?'已确认 '+d.tasks.length+' 项任务及依赖，仍使用 Roadmap 内部代号；新编号仅在入 DAG 时分配。':p?.questions.length?p.questions.join('；'):'确认只固定内部代号、任务范围与依赖，不分配正式编号。';
+    q('[data-action="refresh-roadmap"]').disabled=!connected;q('[data-draft-receipt]').textContent=d.receipt||'';
+    q('[data-parse-basis]').textContent=p?'解析请求 '+p.id+' · Markdown v'+p.revision+' · 已有 DAG '+p.graphDigest+' · '+(parseCurrent(d)?'与当前输入一致':'输入已变化，旧结果仅供查看'):'解析前展示当前已有 DAG；解析后展示本次实际输入快照。';
+    q('[data-parse-existing]').innerHTML='<div class="dag-context-nodes">'+(p?p.graph:currentGraph()).map(t=>'<div class="dag-context-node"><button class="sl-button ghost" data-open-formal-task="'+t.id+'">#'+t.id+' '+esc(t.title)+'</button><p>前置：'+(t.depends_on.length?'#'+t.depends_on.join('、#'):'无')+'</p></div>').join('')+'</div>';
+    q('[data-parse-dependencies]').innerHTML=p?.result.map(t=>{const original=dependencyLabels({local_deps:t.original_local_deps,external_deps:t.original_external_deps});return '<tr><td>'+esc(t.ref+' '+t.title)+(t.existing_task_id?' · 已有正式 #'+t.existing_task_id:'')+'</td><td>'+esc(original.join('、')||'未写明')+'</td><td>'+esc(dependencyLabels(t).join('、')||'无')+'</td><td>'+esc(t.reason)+(p.questions.length?'<p>'+esc(p.questions.join('；'))+'</p>':'')+'</td></tr>';}).join('')||'<tr><td colspan="4">尚无解析结果。草稿可以自行分析依赖，Runner 在解析阶段结合已有 DAG 核对并提出建议。</td></tr>';
+    q('[data-parse-overlap]').textContent=p?p.overlap:'解析同时检查与已有任务的重复、范围重叠及待澄清内容。';
+    q('[data-parse-request]').textContent=p?JSON.stringify({request:p.id,workflow:'generate/1',mode:'read_only',materials:{markdown:{path:d.path,revision:p.revision,body:p.markdown},existing_tasks:p.graph},output:{tasks:p.result,questions:p.questions},state:p.state},null,2):'尚未提交。所有 Runner 调用、内容与编号均为页面内演示。';
   }
-  function selectRoadmapDraft(id){selectedDraft=id;draftFilter=drafts[id].archived?'archived':'active';editingDraftTask=null;q('[data-draft-task-form]').hidden=true;renderRoadmap();}
-  function renderPlanningContext(){
-    const s=sessions[activeSession],d=drafts[s.draftId];
-    q('[data-planning-draft]').innerHTML=Object.values(drafts).filter(d=>!d.archived||d.id===s.draftId).map(d=>`<option value="${d.id}" ${d.id===s.draftId?'selected':''}>${esc(d.name)}${d.archived?' · 已归档':''}</option>`).join('');
-    q('[data-planning-draft-path]').textContent=d.path+' · v'+d.revision;q('[data-planning-context]').textContent=d.name+' · '+d.id;
-    q('[data-planning-json-path]').textContent=sidecarPath(d);q('[data-planning-task-count]').textContent=d.tasks.length+' 项关联任务 · '+formalCount(d)+' 项正式';
-    q('[data-action="agent-update-draft"]').disabled=d.archived;q('[data-action="agent-add-draft-task"]').disabled=d.archived;
+  function selectRoadmapDraft(id){selectedDraft=id;renderRoadmap();}
+  function parseRoadmap(){
+    const d=drafts[selectedDraft];if(!connected||promotionFlows[d.id]?.pr||['parsing','paused'].includes(d.parsing?.state))return;
+    const existing=promotionFlows[d.id];if(existing&&existing.stage!=='done'){existing.superseded=true;promotionLog(existing,'用户重新解析 Markdown，未发布的生成结果已被替代。');}
+    delete promotionFlows[d.id];if(activeFlow===existing)activeFlow=null;
+    const p={id:'parse-'+parseCounter++,revision:d.revision,sourceDigest:demoDigest(d.body),markdown:d.body,graphDigest:graphDigest(),graph:copyObject(currentGraph()),result:[],questions:[],state:'parsing',overlap:'正在核对已有任务范围。',ambiguity:q('[data-parse-ambiguity]').checked,failure:q('[data-parse-failure]').checked};
+    q('[data-parse-ambiguity]').checked=false;q('[data-parse-failure]').checked=false;d.parsing=p;d.tasks=[];d.receipt='已提交 '+p.id+'（演示）；尚未分配新任务编号、生成正式文档或入图。';renderRoadmap();
+    setTimeout(()=>finishRoadmapParse(d,p),650);
   }
-  function openPlanningModal(origin,trigger){
-    modalOrigin=origin;modalTrigger=trigger;root.dataset.dialog='new-session';
-    q('[data-planning-modal-title]').textContent=origin==='draft'?'新建 Roadmap 草稿':'新建规划 session';
-    q('[data-session-draft-choice]').innerHTML=(origin==='draft'?'':Object.values(drafts).filter(d=>!d.archived).map(d=>`<option value="${d.id}" ${d.id===sessions[activeSession].draftId?'selected':''}>关联：${esc(d.name)}</option>`).join(''))+'<option value="__new">创建新的草稿文档</option>';
-    if(origin==='draft')q('[data-session-draft-choice]').value='__new';
-    q('[data-new-draft-fields]').hidden=q('[data-session-draft-choice]').value!=='__new';
-    q('[data-new-draft-title]').value='';q('[data-new-draft-file]').value='';q('[data-new-draft-error]').textContent='';q('[data-action="dismiss-session"]').focus();
+  function finishRoadmapParse(d,p){
+    if(d.parsing!==p)return;if(!connected){p.state='paused';renderRoadmap();return;}
+    if(p.failure){p.failure=false;p.state='failed';p.overlap='解析失败，未获得可确认结果。';renderRoadmap();return;}
+    const sections=[...p.markdown.matchAll(/^### (?:([A-Z]+\d+)\s+)?(.+)\n([\s\S]*?)(?=^### |(?![\s\S]))/gm)];
+    const explicitRefs=new Set(sections.map(m=>m[1]).filter(Boolean));let suggested=1;
+    p.result=sections.map(m=>{while(explicitRefs.has('T'+suggested))suggested++;const ref=m[1]||'T'+suggested++;explicitRefs.add(ref);return {ref,ref_origin:m[1]?'markdown':'suggested',title:m[2].trim(),goal:m[3].split('\n').filter(Boolean)[0]||m[2].trim(),evidence:m[0].trim(),original_local_deps:[],original_external_deps:[],local_deps:[],external_deps:[],existing_task_id:null,reason:'草稿已有依赖与正式 DAG 一致，建议保留（模拟 Runner 核对）。'};});
+    p.result.forEach(t=>{
+      const dependencies=t.evidence.split('\n').filter(line=>/^前置[:：]/.test(line)).join('\n');
+      t.original_external_deps=[...new Set([...dependencies.matchAll(/已有(?:正式)?任务 #(\d+)/g)].map(m=>Number(m[1])))];
+      t.original_local_deps=[...new Set([...dependencies.matchAll(/本\s+Roadmap\s+([A-Z]+\d+)/g)].map(m=>m[1]))];
+      t.local_deps=[...t.original_local_deps];t.external_deps=[...t.original_external_deps];
+      const existing=t.evidence.match(/对应已有正式任务 #(\d+)/)?.[1];
+      if(existing){if(p.graph.some(task=>task.id===existing))t.existing_task_id=existing;else p.questions.push(t.ref+' 对应的正式任务不存在。');}
+      // This fixture simulates the model noticing an omitted formal prerequisite.
+      if(t.title==='候选执行控制'&&!t.external_deps.includes(8)){t.external_deps.push(8);t.reason='建议补充正式 #8：草稿目标要求在固定依赖调度之后控制候选，但任务前置未明确写出。需用户确认，不改写 Markdown。';}
+      if(t.external_deps.some(id=>!p.graph.some(task=>task.id===String(id))))p.questions.push(t.ref+' 引用了不存在的正式任务。');
+      if(t.local_deps.some(ref=>!p.result.some(task=>task.ref===ref)))p.questions.push(t.ref+' 引用了不存在的 Roadmap 内部代号。');
+    });
+    if(new Set(p.result.map(t=>t.ref)).size!==p.result.length)p.questions.push('Roadmap 内部代号重复，请在外部明确身份。');
+    if(!p.result.length)p.questions.push('未能确定独立任务，请在外部补充目标、任务范围与依赖。');
+    if(p.ambiguity)p.questions.push('T1 与已有 #8 的控制范围有歧义，无法确定应新增任务还是补充已有任务；请外部澄清后重新解析。');
+    const visited=new Set(),visiting=new Set();function visit(t){if(visiting.has(t.ref))return false;if(visited.has(t.ref))return true;visiting.add(t.ref);for(const ref of t.local_deps){const dep=p.result.find(task=>task.ref===ref);if(!dep||!visit(dep))return false;}visiting.delete(t.ref);visited.add(t.ref);return true;}
+    if(p.result.some(t=>!visit(t)))p.questions.push('批内任务依赖存在环或引用缺失。');
+    const reused=p.result.filter(t=>t.existing_task_id);
+    p.overlap=p.questions.length?'发现待澄清问题，不能确认或继续生成文档。':reused.length?'识别到 '+reused.length+' 项对应已有正式任务，复用原身份，不重复创建。':'任务保留所属 Roadmap 内部代号，已有依赖和 Runner 建议分别展示；本例暂无重复覆盖（演示）。';
+    p.state=p.questions.length?'blocked':'review';renderRoadmap();
   }
-  function closePlanningModal(){root.dataset.dialog='none';if(modalTrigger?.isConnected)modalTrigger.focus();}
-  function createDraftFromModal(){
-    const name=q('[data-new-draft-title]').value.trim(),file=q('[data-new-draft-file]').value.trim()||'draft-'+nextDraft,dir=q('[data-new-draft-dir]').value;
-    if(!name){q('[data-new-draft-error]').textContent='请填写草稿名称。';return null;}
-    if(!/^[a-zA-Z0-9_-]+$/.test(file)){q('[data-new-draft-error]').textContent='文件名使用字母、数字、短横线或下划线。';return null;}
-    const path=dir+'/'+file+'.md';if(Object.values(drafts).some(d=>d.path===path)){q('[data-new-draft-error]').textContent='此目录已有同名草稿，请换一个文件名。';return null;}
-    const id='draft-created-'+nextDraft++;drafts[id]={id,name,path,revision:1,archived:false,body:'# '+name+'\n\n## 目标\n\n在规划工作台继续讨论。\n\n## 草稿任务\n',tasks:[]};return id;
-  }
-  function allocateDraftTask(d,name,spec=null,depends=[]){const t=draftTask(nextDraftTask++,name,spec,depends);d.tasks.push(t);d.body+='\n- #'+t.task_id+' '+name;d.revision++;d.editBody=undefined;return t;}
-  function openDraftTaskEditor(id=null){
-    const d=drafts[selectedDraft];if(d.archived)return;editingDraftTask=id;
-    const t=id?d.tasks.find(t=>t.task_id===Number(id)):null;if(t&&tasks[String(t.task_id)])return;
-    q('[data-draft-task-form]').hidden=false;q('[data-draft-task-form-title]').textContent=t?'完善 #'+t.task_id:'创建草稿任务 · 自动占号';
-    q('[data-draft-task-name]').value=t?.title||'';q('[data-draft-task-deps]').value=t?.depends_on.join(', ')||'';q('[data-draft-task-error]').textContent='';const testPlan=t?draftTestPlans[String(t.task_id)]:null;q('[data-draft-task-tests]').innerHTML=managedSuites.filter(planSelectableSuite).map(s=>`<label class="human-check"><input type="checkbox" data-draft-suite="${s.id}" ${s.id==='L1-MIN'||testPlan?.requirements.some(r=>r.id===s.id)?'checked':''} ${s.id==='L1-MIN'||s.lifecycle==='planned'&&s.ownerTask!==String(t?.task_id||nextDraftTask)?'disabled':''}><span>${esc(s.id+' / '+s.level)}${s.lifecycle==='planned'?' · 本任务须扩展':''}</span></label>`).join('');q('[data-draft-task-name]').focus();
-  }
-  function saveDraftTask(){
-    const d=drafts[selectedDraft],name=q('[data-draft-task-name]').value.trim(),spec=null,raw=q('[data-draft-task-deps]').value.trim();
-    const error=q('[data-draft-task-error]');if(d.archived){error.textContent='已归档草稿只读。';return;}
-    if(!name){error.textContent='请填写任务名称。';return;}
-    if(raw&&!/^\d+(\s*[,，]\s*\d+)*$/.test(raw)){error.textContent='前置填写任务编号，使用逗号分隔。';return;}
-    const deps=raw?[...new Set(raw.split(/[,，]/).map(Number))]:[],known=new Set([...Object.keys(tasks).map(Number),...Object.values(drafts).flatMap(d=>d.tasks.map(t=>t.task_id))]);
-    if(deps.some(id=>!known.has(id))){error.textContent='前置编号尚未创建。';return;}
-    if(editingDraftTask&&deps.includes(Number(editingDraftTask))){error.textContent='任务不能依赖自己。';return;}
-    if(editingDraftTask){const t=d.tasks.find(t=>t.task_id===Number(editingDraftTask));if(tasks[String(t.task_id)]){error.textContent='任务已正式入图，不能从草稿修改。';return;}Object.assign(t,{title:name,spec,depends_on:deps});d.body=d.body.replace(new RegExp('(^|\\n)- #'+t.task_id+' [^\\n]*'),(_,prefix)=>prefix+'- #'+t.task_id+' '+name);d.revision++;}
-    else{const created=allocateDraftTask(d,name,spec,deps);editingDraftTask=String(created.task_id);}
-    const planPath=draftTestPlans[String(editingDraftTask)]?.path||'',ids=qa('[data-draft-suite]').filter(el=>el.checked&&planSelectableSuite(suiteById(el.dataset.draftSuite))).map(el=>el.dataset.draftSuite),previousTestPlan=draftTestPlans[String(editingDraftTask)],nextTestPlan=makeTestPlan(editingDraftTask,planPath,ids,ids.filter(id=>suiteById(id).lifecycle==='planned'));
-    if(nextTestPlan&&previousTestPlan)nextTestPlan.version=JSON.stringify([nextTestPlan.path,nextTestPlan.requirements,nextTestPlan.extensions])===JSON.stringify([previousTestPlan.path,previousTestPlan.requirements,previousTestPlan.extensions])?previousTestPlan.version:previousTestPlan.version+1;draftTestPlans[String(editingDraftTask)]=nextTestPlan;
-    d.receipt='已保存 Markdown / JSON 的任务关联。编号是演示占号，不写入仓库计数器。';q('[data-draft-task-form]').hidden=true;editingDraftTask=null;renderRoadmap();renderPlanningContext();
+  function confirmRoadmapParse(){
+    const d=drafts[selectedDraft],p=d.parsing;if(!connected||p?.state!=='review'||!parseCurrent(d))return;
+    d.tasks=p.result.map(t=>({ref:t.ref,title:t.title,document_key:documentKey(t),local_deps:[...t.local_deps],external_deps:[...t.external_deps],existing_task_id:t.existing_task_id,source_evidence:t.evidence}));
+    p.result.filter(t=>t.existing_task_id).forEach(t=>d.formalMapping[t.ref]=t.existing_task_id);
+    p.state='confirmed';d.receipt='已确认任务与依赖，并保存内部代号 JSON（演示）。'+(d.tasks.some(t=>!formalID(d,t.ref))?'未分配任何新正式编号；文档生成与发布继续使用内部代号。':'全部任务已有正式身份，无需重复转正。');renderRoadmap();
   }
   function renderDynamicDag(){
     const depth=(t,seen=new Set())=>{if(seen.has(t.id))return 0;const next=new Set([...seen,t.id]);return t.depends.length?1+Math.max(...t.depends.map(id=>tasks[id]?depth(tasks[id],next):0)):0;};
@@ -1731,7 +1735,7 @@ body { margin: 0; padding: 16px; }
   function renderExecutionMap(){
     q('[data-execution-map-version]').textContent='SteerlineFlow/Roadmap/execution-map.md · v'+mapRevision+' · '+new Set(Object.values(mapEntries).map(e=>e.sourceDraft).filter(Boolean)).size+' 份来源草稿';
     q('[data-execution-map-rows]').innerHTML=Object.values(mapEntries).map(e=>{const t=tasks[e.id],d=drafts[e.sourceDraft];return `<tr><td>${t?`<button data-task="${e.id}">#${e.id} ${esc(e.name)}</button>`:'#'+e.id+' '+esc(e.name)}</td><td>${e.depends.length?'#'+e.depends.join('、#'):'无'}</td><td>${t?esc(summary(t)):'文档已合并 · 入图待完成'}<p class="sub">${t?.delivery?(t.mapSync==='synced'?'execution-map 已同步':t.mapSync==='failed'?'同步失败 · 待处理':'execution-map 同步中'):''}</p></td><td>${d?`<button data-open-source-draft="${d.id}">${esc(d.name)}</button>`:'人工创建'}<p class="sub">主分支：${esc(e.base)}</p></td></tr>`;}).join('');
-    const t=tasks[selectedTask];q('[data-task-source]').innerHTML=t.sourceDraft?`<button class="sl-button" data-open-source-draft="${t.sourceDraft}">来源草稿：${esc(drafts[t.sourceDraft].name)}</button>`:'人工创建的正式任务';
+    const t=tasks[selectedTask];q('[data-task-source]').innerHTML=t.sourceDraft?'<button class="sl-button" data-open-source-draft="'+t.sourceDraft+'" data-source-local="'+(t.sourceLocalRef||'')+'">来源草稿：'+esc(drafts[t.sourceDraft].name)+(t.sourceLocalRef?' / '+esc(t.sourceLocalRef):'')+'</button>':'人工创建的正式任务';
     q('[data-task-sync]').textContent='固定主分支：'+t.base+(t.delivery?' · '+(t.mapSync==='synced'?'execution-map 已同步':t.mapSync==='failed'?'execution-map 同步失败':'execution-map 同步中'):'');
     q('[data-action="sync-execution-map"]').hidden=!t.delivery||t.mapSync==='synced';
     q('[data-action="sync-execution-map"]').disabled=!connected;
@@ -1741,7 +1745,7 @@ body { margin: 0; padding: 16px; }
     setTimeout(()=>{t.mapSync=connected?'synced':'failed';if(t.mapSync==='synced')mapRevision++;renderExecutionMap();renderRoadmap();},500);
   }
   function promotionLog(flow,text){flow.logs.push(clock()+' · '+text);}
-  const specRules={'SteerlineFlow/spec/SpecGuide.md':{path:'SteerlineFlow/spec/SpecGuide.md',revision:1,body:"# Spec / Plan 生成规范\n\n本规范用于 SteerLine 产品的 Roadmap 草稿转正流程。规划工作台的对话只维护 Roadmap 草稿及其任务约束；正式 Spec / Plan 由固定转正流程生成、审阅和发布。它不替代仓库开发中的 AGENTS.md 或用户直接授权的普通开发流程。\n\n## 先固定输入，再设计\n\n- 读取本规范全文，并记录实际读取的路径与版本。文件缺失或读取失败时停止生成。\n- 固定 Roadmap Markdown / JSON、待转正任务、任务编号、代码基线及规范版本。变化后的输入通过明确的重新生成操作采用，不悄悄替换已有结果。\n- 先列出任务目标、行为边界、约束、待澄清问题和验收要求。有关键矛盾或未决范围时先补充草稿，不用推测填成正式契约。\n\n## 警惕过度设计\n\n- 默认选择满足当前确认需求的简洁设计，不为假设中的未来需求增加框架、扩展层或配置组合。\n- 不为凑并行数量拆分任务；每个任务应有独立成果、清晰职责和最小通过条件。\n- 未发布项目默认不为旧数据、配置或协议新增兼容、迁移、双写或回退路径，除非任务明确要求。\n\n## 先查现有代码，再做整合与整体规划\n\n- 新功能设计前阅读相关现有代码、调用入口、状态模型、契约、测试及其实际消费者；记录查看的位置和结论。\n- 优先复用或调整现有实现。说明保留、整合、替换及删除的部分，避免在旁边新增一套重复能力。\n- 多个相关任务先形成整体整合安排，再生成各任务 Spec / Plan。明确共用语义、修改所有者、依赖及真实交接条件，避免多个任务分别重建相同模块。\n\n## 执行链路与桥接必须显式且必要\n\n- 不隐式增加第二套执行链路、独立状态来源或不同的业务准入规则。\n- 确实需要多路径时，明确各路径的职责、选择条件、统一的业务事实与维护代价；不能用实现方便代替必要性。\n- 不引入没有必要的桥接、适配、转发、包装或重复状态。确需新增时写清现有入口为何无法承担、最小职责以及消费者。\n- 不以临时演示数据或 Agent 自述宣称真实接口、运行能力、权限、测试或交付事实已经存在。\n\n## Spec 和 Plan 分工\n\n- Spec 明确目标、当前行为与预期行为、范围、非目标、契约、状态与交付要求，以及验收项和通过条件。\n- Plan 明确代码整合步骤、涉及位置、依赖与前置、必要能力补齐、测试和交付安排。不得另立与 Spec 矛盾的第二套行为。\n- 自动与人工验收分别安排；人工项标明参与窗口及真实阻塞范围。验收要求和实时结果分开，结果不回写为 Plan 的状态表。\n- Plan 必须包含最小必要的测试计划：验收项 ID / 专属文档、长期测试级别与组 / 场景、环境、命令、执行时点、通过条件及证据登记位置。\n- 自动验收全部映射到可执行安排；缺驱动、入口或环境能力时规划最小补齐步骤或明确前置。不默认扩大到 Full、全部 live 或无关回归。\n- 新增或扩展长期 L1–L4 流程时明确稳定入口与登记安排；L3 是可并行常规测试，L4 是不可并行及边界情况测试，Plan 不自动选取 L4，只能人工触发。临时开发测试不替代长期测试证据。\n\n## 审阅与发布\n\n- 审阅时展示现有代码调查、复用 / 整合方式、执行链路变化、桥接必要性、跨任务安排及测试验收覆盖。\n- 生成正文可在转正流程内受控修改；修改后重新核对规范、依赖及 Spec / Plan 一致性，取消此前确认。\n- 审阅确认后，正式文档随 Roadmap / JSON / execution-map 文档 PR 发布。核实合入主分支后，才以固定文档版本创建正式 DAG。\n- 规范可以维护并随 Git 版本管理。已生成操作保留所用内容快照；更新规范不自动覆盖正在审阅或已发布的文档。\n"}};
+  const specRules={'SteerlineFlow/spec/SpecGuide.md':{path:'SteerlineFlow/spec/SpecGuide.md',revision:1,body:"# Spec / Plan 生成规范\n\n本规范用于 SteerLine 产品的 Roadmap 草稿转正流程。本版读取外部维护的 Roadmap Markdown，经 Runner generate 解析任务与已有 DAG 依赖，用户确认后再生成、审阅和发布正式 Spec / Plan。它不替代仓库开发中的 AGENTS.md 或用户直接授权的普通开发流程。\n\n## 先固定输入，再设计\n\n- 读取本规范全文，并记录实际读取的路径与版本。文件缺失或读取失败时停止生成。\n- 固定 Roadmap Markdown / JSON、待转正任务、Roadmap 内部代号及依赖、代码基线及规范版本。变化后的输入通过明确的重新生成操作采用，不悄悄替换已有结果。\n- 先列出任务目标、行为边界、约束、待澄清问题和验收要求。有关键矛盾或未决范围时先补充草稿，不用推测填成正式契约。\n\n## 警惕过度设计\n\n- 默认选择满足当前确认需求的简洁设计，不为假设中的未来需求增加框架、扩展层或配置组合。\n- 不为凑并行数量拆分任务；每个任务应有独立成果、清晰职责和最小通过条件。\n- 未发布项目默认不为旧数据、配置或协议新增兼容、迁移、双写或回退路径，除非任务明确要求。\n\n## 先查现有代码，再做整合与整体规划\n\n- 新功能设计前阅读相关现有代码、调用入口、状态模型、契约、测试及其实际消费者；记录查看的位置和结论。\n- 优先复用或调整现有实现。说明保留、整合、替换及删除的部分，避免在旁边新增一套重复能力。\n- 多个相关任务先形成整体整合安排，再生成各任务 Spec / Plan。明确共用语义、修改所有者、依赖及真实交接条件，避免多个任务分别重建相同模块。\n\n## 执行链路与桥接必须显式且必要\n\n- 不隐式增加第二套执行链路、独立状态来源或不同的业务准入规则。\n- 确实需要多路径时，明确各路径的职责、选择条件、统一的业务事实与维护代价；不能用实现方便代替必要性。\n- 不引入没有必要的桥接、适配、转发、包装或重复状态。确需新增时写清现有入口为何无法承担、最小职责以及消费者。\n- 不以临时演示数据或 Agent 自述宣称真实接口、运行能力、权限、测试或交付事实已经存在。\n\n## Spec 和 Plan 分工\n\n- Spec 明确目标、当前行为与预期行为、范围、非目标、契约、状态与交付要求，以及验收项和通过条件。\n- Plan 明确代码整合步骤、涉及位置、依赖与前置、必要能力补齐、测试和交付安排。不得另立与 Spec 矛盾的第二套行为。\n- 自动与人工验收分别安排；人工项标明参与窗口及真实阻塞范围。验收要求和实时结果分开，结果不回写为 Plan 的状态表。\n- Plan 必须包含最小必要的测试计划：验收项 ID / 专属文档、长期测试级别与组 / 场景、环境、命令、执行时点、通过条件及证据登记位置。\n- 自动验收全部映射到可执行安排；缺驱动、入口或环境能力时规划最小补齐步骤或明确前置。不默认扩大到 Full、全部 live 或无关回归。\n- 新增或扩展长期 L1–L4 流程时明确稳定入口与登记安排；L3 是可并行常规测试，L4 是不可并行及边界情况测试，Plan 不自动选取 L4，只能人工触发。临时开发测试不替代长期测试证据。\n\n## 审阅与发布\n\n- 审阅时展示现有代码调查、复用 / 整合方式、执行链路变化、桥接必要性、跨任务安排及测试验收覆盖。\n- 生成正文可在转正流程内受控修改；修改后重新核对规范、依赖及 Spec / Plan 一致性，取消此前确认。\n- 审阅确认后，正式文档随 SteerLine 生成的 JSON / execution-map 文档 PR 发布，来源 Markdown 保持只读。核实合入主分支后，才以固定文档版本创建正式 DAG，并在入图时分配正式编号、保存内部代号映射。文档使用稳定路径，不回填正式编号。\n- 规范可以维护并随 Git 版本管理。已生成操作保留所用内容快照；更新规范不自动覆盖正在审阅或已发布的文档。\n"}};
   const specRulePath='SteerlineFlow/spec/SpecGuide.md';
   let specRuleOpen=false,specRuleEditing=false,specRuleReturnFocus=null,specRuleViewed=null;
   let generationSelectedTask=null,generationDocumentTab='spec',generationEditing=false;
@@ -1771,37 +1775,42 @@ body { margin: 0; padding: 16px; }
       case 'save-spec-rule':{if(!connected||!specRuleEditing||!specRuleViewed)return true;const body=q('[data-spec-rule-body]').value.trim();if(!body){q('[data-spec-rule-error]').textContent='规范正文不能为空。';return true;}const current=latestFlowRule(specRuleViewed.id);if(!current||current.revision!==specRuleViewed.revision){q('[data-spec-rule-error]').textContent='规范版本已变化，请重新打开最新版本维护。';return true;}const updated={...current,body,revision:current.revision+1};if(current.id==='spec-guide')specRules[current.path]=updated;else longDocumentById(current.id).maintainedRule=updated;recordLongDocumentRuleMaintenance(updated);closeSpecRule();renderLongDocuments();return true;}
       case 'generate-formal-documents':if(root.dataset.page==='promotion'&&connected&&activeFlow?.stage==='awaiting-generation'&&activeFlow.norm){activeFlow.normFault=q('[data-generation-rule-fault]').checked;q('[data-generation-rule-fault]').checked=false;activeFlow.clarification=q('[data-generation-clarification]').checked;generationStep(activeFlow,'reading-rule');}return true;
       case 'retry-generation-rule':if(root.dataset.page==='promotion'&&connected&&activeFlow?.ruleRead==='failed'&&!activeFlow.pr)generationStep(activeFlow,'reading-rule');return true;
-      case 'regenerate-formal-documents':if(root.dataset.page==='promotion'&&connected&&activeFlow&&!activeFlow.pr&&!activeFlow.merged){selectedDraft=activeFlow.snapshot.draftId;beginPromotion(true);if(activeFlow.norm){activeFlow.normFault=q('[data-generation-rule-fault]').checked;q('[data-generation-rule-fault]').checked=false;activeFlow.clarification=q('[data-generation-clarification]').checked;generationStep(activeFlow,'reading-rule');}}return true;
+      case 'regenerate-formal-documents':if(root.dataset.page==='promotion'&&connected&&activeFlow&&!activeFlow.pr&&!activeFlow.merged){selectedDraft=activeFlow.snapshot.draftId;beginPromotion(true);if(activeFlow?.stage==='awaiting-generation'&&activeFlow.norm){activeFlow.normFault=q('[data-generation-rule-fault]').checked;q('[data-generation-rule-fault]').checked=false;activeFlow.clarification=q('[data-generation-clarification]').checked;generationStep(activeFlow,'reading-rule');}}return true;
       case 'edit-generated-document':{if(!['review','blocked'].includes(activeFlow?.stage)||activeFlow.pr)return true;const doc=activeFlow.documents[generationSelectedTask]?.[generationDocumentTab];if(!doc)return true;generationEditing=true;q('[data-generation-document-body]').value=doc.body;renderGenerationDocuments(activeFlow);return true;}
       case 'cancel-generated-document':generationEditing=false;renderGenerationDocuments(activeFlow);return true;
       case 'save-generated-document':{if(!['review','blocked'].includes(activeFlow?.stage)||activeFlow.pr)return true;const doc=activeFlow.documents[generationSelectedTask]?.[generationDocumentTab],body=q('[data-generation-document-body]').value.trim();if(!doc||!body){q('[data-generation-document-meta]').textContent='正文不能为空。';return true;}doc.body=body;activeFlow.documents[generationSelectedTask].revision++;if(generationDocumentTab==='plan')activeFlow.generatedTestPlans[generationSelectedTask].version++;generationEditing=false;activeFlow.approved=false;reviewPromotion(activeFlow);return true;}
     }
     return false;
   }
-  function generatedDocPaths(t,plan){const planPath=plan?.path||'SteerlineFlow/plans/task-'+t.task_id+'.plan.md';return {spec:planPath.replace('/plans/','/spec/').replace(/\.plan\.md$/,'.spec.md'),plan:planPath};}
+  function generatedDocPaths(flow,t){
+    const directory=flow.snapshot.draftId.replace(/^draft-/,'')+'/'+t.document_key;
+    return {spec:'SteerlineFlow/spec/'+directory+'.spec.md',plan:'SteerlineFlow/plans/'+directory+'.plan.md',acceptance:'SteerlineFlow/testing/acceptance/'+directory+'.md'};
+  }
   function generateTaskDocuments(flow,t){
-    const id=String(t.task_id),preference=flow.snapshot.testPlans[id],paths=generatedDocPaths(t,preference),p=preference?copyObject(preference):makeTestPlan(id,paths.plan,['L1-MIN']);p.path=paths.plan;p.version=p.version||1;
-    const ownership='任务 #'+id+' 负责本范围实现；共用契约与修改顺序按本批整体安排协调。';
-    const spec='# Task #'+id+' · '+t.title+' · Spec\n\n## 目标与边界\n\n'+t.title+'。以固定 Roadmap 草稿中的目标、约束及依赖为需求依据。\n\n## 草稿约束依据\n\n'+flow.snapshot.markdown+'\n\n## 现有代码与整合\n\n'+flow.investigation.reuse+'\n\n查阅（演示）：'+flow.investigation.files.join('、')+'。\n\n'+ownership+'\n\n## 执行链路与桥接\n\n沿用现有产品客户端和业务事实入口，不隐式增加第二套执行链路或重复状态。当前范围无需新增桥接；如发现确有必要，返回草稿明确职责与依据后重新生成。\n\n## 验收要求\n\n'+p.requirements.map((r,n)=>'- T'+id+'-A'+(n+1)+'：'+r.id+' / '+r.cases.join(', ')+' 验证对应行为，通过条件按任务专属验收约定。').join('\n')+'\n\n任务专属验收：SteerlineFlow/testing/acceptance/task-'+id+'.md。人工项记录窗口与阻塞范围，不把非阻塞补验串入无关执行。\n\n## 生成依据\n\n规范 '+flow.norm.path+' / v'+flow.norm.revision+'；代码基线 '+flow.snapshot.codeSHA+'。无旧版兼容默认要求，避免过度设计。';
-    const plan='# Task #'+id+' · '+t.title+' · Plan\n\n## 实施与整体整合\n\n1. 按固定 Spec 和本次规范核对现有调用入口与消费者。\n2. '+flow.investigation.reuse+'\n3. '+ownership+'\n4. 补齐所选长期场景、执行必要验证并登记任务专属验收证据。\n5. 提交 PR；核实合并后同步 execution-map 与 DAG。\n\n## 测试计划 · PR 前\n\n| 自动验收项 | 长期级别 / 组 / 场景 | 环境 | 命令 | 时点 / 通过条件 | 证据登记 |\n| --- | --- | --- | --- | --- | --- |\n'+p.requirements.map((r,n)=>{const s=suiteById(r.id);return '| T'+id+'-A'+(n+1)+' / SteerlineFlow/testing/acceptance/task-'+id+'.md | '+s.level+' / '+r.id+' / '+r.cases.join(', ')+' | '+(s.runtime?'与修复提交相同 SHA 的独立环境':'脚本 / 纯代码')+' | '+s.command+' | PR 前，全部所需场景通过 | SteerlineFlow/testing/acceptance/task-'+id+'.md / 固定提交报告 |';}).join('\n')+'\n\n'+(p.extensions.length?'## 长期入口扩展\n\n本任务实施中落实 '+p.extensions.join(', ')+' 的入口、场景与登记，准备相同提交的可用环境后执行。\n\n':'')+'## 最小验证与人工安排\n\n未选的 L2 / L3 不默认追加；按实际范围说明必要性。L3 为可并行常规测试；L4 为不可并行及边界情况测试，不纳入 Plan 自动选取执行，只能人工触发。人工项单列窗口和真实阻塞范围，临时开发测试不替代长期测试证据，长期不保留的临时内容在交付前清理。\n\n## 固定生成依据\n\n'+flow.norm.path+' / v'+flow.norm.revision+' · 草稿 v'+flow.snapshot.revision+' · 代码 '+flow.snapshot.codeSHA;
-    p.documentText=plan;flow.generatedTestPlans[id]=p;return {task:id,revision:1,spec:{path:paths.spec,body:spec},plan:{path:paths.plan,body:plan},original:{spec,plan}};
+    const paths=generatedDocPaths(flow,t),p=makeTestPlan(t.ref,paths.plan,['L1-MIN']);
+    const identity=flow.snapshot.draftId+'/'+t.ref,dependencies=dependencyLabels(t).join('、')||'无';
+    const basis='Roadmap '+flow.snapshot.name+' / '+t.ref+'；规范 '+flow.norm.path+' / v'+flow.norm.revision+'；代码 '+flow.snapshot.codeSHA;
+    const spec='# '+t.title+' · Spec\n\n## 目标与边界\n\n'+t.title+'。本任务在 '+identity+' 中定义。正式编号在入 DAG 时分配。\n\n## 依赖\n\n'+dependencies+'。内部引用以所属 Roadmap 为范围，正式依赖保留现有编号。\n\n## 草稿约束依据\n\n'+flow.snapshot.markdown+'\n\n## 现有代码与整合\n\n'+flow.investigation.reuse+'\n\n查阅（演示）：'+flow.investigation.files.join('、')+'。\n\n'+flow.investigation.overall+'\n\n## 验收要求\n\n'+p.requirements.map((r,n)=>'- '+identity+'-A'+(n+1)+'：'+r.id+' / '+r.cases.join(', ')+'，按任务专属验收要求核对。').join('\n')+'\n\n验收材料：'+paths.acceptance+'。人工项另列窗口与实际阻塞范围。\n\n## 生成依据\n\n'+basis+'。文档路径独立于正式编号；入图后不重命名或回填编号。';
+    const plan='# '+t.title+' · Plan\n\n## 实施与整体整合\n\n1. 核对 '+identity+' 的固定 Spec、范围与依赖：'+dependencies+'。\n2. '+flow.investigation.reuse+'\n3. '+flow.investigation.overall+'\n4. 完成实现及必要验证，将证据记录在 '+paths.acceptance+'。\n\n## 测试计划\n\n| 验收项 | 测试 / 场景 | 环境与命令 | 通过条件 | 证据 |\n| --- | --- | --- | --- | --- |\n'+p.requirements.map((r,n)=>{const suite=suiteById(r.id);return '| '+identity+'-A'+(n+1)+' | '+r.id+' / '+r.cases.join(', ')+' | 脚本环境 / '+suite.command+' | 所需场景通过 | '+paths.acceptance+' |';}).join('\n')+'\n\n测试级别按项目当前规范安排，本原型不增加统一测试门槛。人工验收单列参与窗口及阻塞范围。\n\n## 文档身份与依赖\n\n'+identity+'；'+dependencies+'。正式入 DAG 后由 SteerLine 保存内部代号到正式编号的映射，文档正文与路径保持不变。\n\n## 固定生成依据\n\n'+basis;
+    p.documentText=plan;flow.generatedTestPlans[t.ref]=p;
+    return {roadmap_id:flow.snapshot.draftId,local_ref:t.ref,revision:1,spec:{path:paths.spec,body:spec},plan:{path:paths.plan,body:plan},original:{spec,plan}};
   }
   function generationStep(flow,stage){
-    if(flow.pr||flow.merged)return;if(!connected){flow.stage='paused';flow.pauseStep='generation:'+stage;renderPromotion();return;}
+    if(flow.pr||flow.merged||flow.superseded)return;if(!q('[data-document-capability]').checked){flow.reason='文档生成所需 Runner 能力待接入，尚未发起生成。';renderPromotion();return;}if(!connected){flow.stage='paused';flow.pauseStep='generation:'+stage;renderPromotion();return;}
     if(!flow.norm?.body){flow.stage='blocked';flow.reason='规范文件缺失或未取得内容，不能生成。请维护设置后明确重新生成。';renderPromotion();return;}
     flow.stage=stage;flow.pauseStep='generation:'+stage;if(stage==='reading-rule')flow.ruleRead='reading';promotionLog(flow,{'reading-rule':'正在读取固定规范全文：'+flow.norm.path+' / v'+flow.norm.revision,'investigating-code':'正在调查固定代码基线的入口、状态与消费者（演示）。','generating-docs':'按整体整合安排生成每个任务的 Spec + Plan（演示）。'}[stage]);renderPromotion();
     const operation=flow.generationOperation=(flow.generationOperation||0)+1;
     setTimeout(()=>{
-      if(flow.generationOperation!==operation)return;if(!connected){flow.stage='paused';flow.pauseStep='generation:'+stage;renderPromotion();return;}
+      if(flow.generationOperation!==operation||flow.superseded)return;if(!connected){flow.stage='paused';flow.pauseStep='generation:'+stage;renderPromotion();return;}
       if(stage==='reading-rule'){
         if(flow.normFault){flow.normFault=false;flow.ruleRead='failed';flow.stage='blocked';flow.reason='本次规范读取失败（演示），没有生成正式文档。可重试相同规范快照。';renderPromotion();return;}
         flow.ruleRead='read';longDocumentGenerationInputs(flow);promotionLog(flow,'已读固定规范全文 '+flow.norm.path+' / v'+flow.norm.revision+'（演示），作为本次生成输入。');generationStep(flow,'investigating-code');
       }else if(stage==='investigating-code'){
-        flow.investigation={files:['internal/product/query/tasks.go','internal/console/view_tasks.go','internal/console/recent_activity.go','docs/product-design/prototypes/planning-ui/index.html'],reuse:'优先整合现有任务查询、展示与活动入口，明确必要调整及消费者；不并排建立另一套查询 / 执行机制。',overall:'先核对本批任务的共同语义与依赖；展示、控制与状态同步沿用同一业务事实，按任务所有者和明确交接安排修改。',chain:'沿用现有执行路径，未新增隐式链路。',bridge:'当前方案无需新增桥接；必要变化须明确职责及依据。',normApplied:flow.norm.body};
-        if(flow.clarification){flow.stage='blocked';flow.reason='演示：草稿同时要求“沿用现有状态”与“另建独立状态”，关键范围矛盾。请补充草稿后明确重新生成。';promotionLog(flow,flow.reason);renderPromotion();return;}
+        flow.investigation={files:['internal/task/model','internal/product/api','web/src/features/runs','docs/product-design/prototypes/planning-ui/index.html'],reuse:'优先整合现有任务查询、展示与活动入口，明确必要调整及消费者；不并排建立另一套查询 / 执行机制。',overall:'先核对本批任务的共同语义与依赖；展示、控制与状态同步沿用同一业务事实，按任务所有者和明确交接安排修改。',chain:'沿用现有执行路径，未新增隐式链路。',bridge:'当前方案无需新增桥接；必要变化须明确职责及依据。',normApplied:flow.norm.body};
+        if(flow.clarification){flow.stage='blocked';flow.reason='演示：草稿同时要求“沿用现有状态”与“另建独立状态”，关键范围矛盾。请在外部补充草稿后刷新，重新解析并确认任务与依赖。';promotionLog(flow,flow.reason);renderPromotion();return;}
         generationStep(flow,'generating-docs');
       }else{
-        flow.documents={};flow.generatedTestPlans={};flow.snapshot.tasks.forEach(t=>flow.documents[String(t.task_id)]=generateTaskDocuments(flow,t));promotionLog(flow,'已生成 Spec / Plan 正文、任务专属验收引用与长期测试安排；尚未发布或入 DAG。');reviewPromotion(flow);
+        flow.documents={};flow.generatedTestPlans={};flow.snapshot.tasks.forEach(t=>flow.documents[t.ref]=generateTaskDocuments(flow,t));promotionLog(flow,'已生成 Spec / Plan 正文、任务专属验收引用与长期测试安排；尚未发布或入 DAG。');reviewPromotion(flow);
       }
     },260);
   }
@@ -1809,13 +1818,13 @@ body { margin: 0; padding: 16px; }
   function renderGenerationDocuments(flow){
     if(!flow)return;
     const latest=latestSpecRule();q('[data-generation-rule-status]').textContent=(flow.norm?flow.norm.path+' · 本次 v'+flow.norm.revision+' · '+({unread:'待读取',reading:'读取中',failed:'读取失败',read:'已读取全文'}[flow.ruleRead]||'待读取'):'未取得规范：'+flow.snapshot.rulePath)+(latest&&flow.norm&&latest.revision!==flow.norm.revision?' · 最新 v'+latest.revision+'，本次仍使用原快照':'');
-    q('[data-action="generate-formal-documents"]').disabled=!connected||flow.stage!=='awaiting-generation'||!flow.norm;q('[data-action="retry-generation-rule"]').hidden=flow.ruleRead!=='failed';q('[data-action="retry-generation-rule"]').disabled=!connected||!!flow.pr;
-    q('[data-action="regenerate-formal-documents"]').disabled=!connected||!!flow.pr||flow.merged||['reading-rule','investigating-code','generating-docs','reviewing'].includes(flow.stage);
+    q('[data-action="generate-formal-documents"]').disabled=!connected||flow.stage!=='awaiting-generation'||!flow.norm||!q('[data-document-capability]').checked;q('[data-action="retry-generation-rule"]').hidden=flow.ruleRead!=='failed';q('[data-action="retry-generation-rule"]').disabled=!connected||!!flow.pr||!q('[data-document-capability]').checked;
+    q('[data-action="regenerate-formal-documents"]').disabled=!connected||!!flow.pr||flow.merged||!q('[data-document-capability]').checked||!parseCurrent(drafts[flow.snapshot.draftId])||['reading-rule','investigating-code','generating-docs','reviewing'].includes(flow.stage);
     q('[data-generation-rule-fault]').disabled=flow.stage!=='awaiting-generation';q('[data-generation-clarification]').disabled=flow.stage!=='awaiting-generation'&&flow.stage!=='blocked';
-    if(!flow.snapshot.tasks.some(t=>String(t.task_id)===generationSelectedTask))generationSelectedTask=String(flow.snapshot.tasks[0]?.task_id);
-    q('[data-generation-task-list]').innerHTML=flow.snapshot.tasks.map(t=>'<button class="test-suite-row '+(String(t.task_id)===generationSelectedTask?'selected':'')+'" data-generation-task="'+t.task_id+'"><strong>#'+t.task_id+' '+esc(t.title)+'</strong><span>'+(flow.documents[String(t.task_id)]?'Spec + Plan 已生成 · v'+flow.documents[String(t.task_id)].revision:'待固定流程生成')+'</span></button>').join('');
+    if(!flow.snapshot.tasks.some(t=>t.ref===generationSelectedTask))generationSelectedTask=flow.snapshot.tasks[0]?.ref;
+    q('[data-generation-task-list]').innerHTML=flow.snapshot.tasks.map(t=>'<button class="test-suite-row '+(t.ref===generationSelectedTask?'selected':'')+'" data-generation-task="'+esc(t.ref)+'"><strong>'+esc(t.ref+' '+t.title)+'</strong><span>'+(flow.documents[t.ref]?'Spec + Plan 已生成 · v'+flow.documents[t.ref].revision:'待固定流程生成')+'</span></button>').join('');
     const generated=flow.documents[generationSelectedTask],doc=generated?.[generationDocumentTab];qa('[data-generation-document]').forEach(b=>b.classList.toggle('active',b.dataset.generationDocument===generationDocumentTab));
-    q('[data-generation-document-title]').textContent=generated?'#'+generationSelectedTask+' · '+generationDocumentTab.toUpperCase():'待生成正式文档';q('[data-generation-document-meta]').textContent=doc?doc.path+' · 生成结果 v'+generated.revision+' · '+flow.id:'先完成规范读取与代码调查。';q('[data-generation-document-preview]').textContent=doc?.body||'此处仅预览转正流程生成的正文。草稿约束不会被当成已发布 Spec / Plan。';q('[data-generation-document-preview]').hidden=generationEditing;q('[data-generation-document-diff]').textContent=doc?generatedDocumentDiff(generated.original[generationDocumentTab],doc.body):'待生成正式正文。';
+    q('[data-generation-document-title]').textContent=generated?generationSelectedTask+' · '+generationDocumentTab.toUpperCase():'待生成正式文档';q('[data-generation-document-meta]').textContent=doc?doc.path+' · 生成结果 v'+generated.revision+' · '+flow.id:'先完成规范读取与代码调查。';q('[data-generation-document-preview]').textContent=doc?.body||'此处仅预览转正流程生成的正文。草稿约束不会被当成已发布 Spec / Plan。';q('[data-generation-document-preview]').hidden=generationEditing;q('[data-generation-document-diff]').textContent=doc?generatedDocumentDiff(generated.original[generationDocumentTab],doc.body):'待生成正式正文。';
     q('[data-generation-document-edit]').hidden=!generationEditing;q('[data-action="edit-generated-document"]').hidden=generationEditing;q('[data-action="edit-generated-document"]').disabled=!connected||!doc||!['review','blocked'].includes(flow.stage)||!!flow.pr;q('[data-action="save-generated-document"]').disabled=!connected;
     q('[data-action="confirm-promotion"]').disabled=!connected||generationEditing;
     const evidence=flow.investigation;q('[data-generation-evidence]').innerHTML=evidence?'<div class="callout"><strong>现有代码调查 · 演示</strong><p>'+evidence.files.map(esc).join('<br>')+'</p></div><div class="callout"><strong>复用与整合</strong><p>'+esc(evidence.reuse)+'</p></div><div class="callout"><strong>跨任务整体安排</strong><p>'+esc(evidence.overall)+'</p></div><p>'+esc(evidence.chain)+'</p><p>'+esc(evidence.bridge)+'</p><p>规范内容依据：本次 v'+flow.norm.revision+'，全文已固定。</p><p>核对结果：'+esc(flow.stage==='blocked'?flow.reason:flow.stage==='review'?'规范 / 文档 / 测试 / 依赖核对通过，等待审阅确认。':'按当前阶段核对。')+'</p>':'<p class="sub">读取规范后调查代码，不能跳过调查直接生成正式契约。</p>';
@@ -1823,100 +1832,118 @@ body { margin: 0; padding: 16px; }
   }
 
   function beginPromotion(force=false){
-    const d=drafts[selectedDraft];if(d.archived){const historical=promotionFlows[d.id];if(historical){activeFlow=historical;navigate('promotion');}return;}
-    const existing=promotionFlows[d.id];if(existing?.pr&&!['done'].includes(existing.stage)){activeFlow=existing;navigate('promotion');return;}if(!force&&existing&&(existing.stage!=='done'||!d.tasks.some(t=>!tasks[String(t.task_id)]))){activeFlow=existing;navigate('promotion');return;}
-    if(!connected)return;const pending=d.tasks.filter(t=>!tasks[String(t.task_id)]);if(!pending.length){d.receipt='没有待转正的草稿任务。';renderRoadmap();return;}
-    const snapshot={draftId:d.id,name:d.name,path:d.path,revision:d.revision,markdown:d.body,json:copyObject(sidecar(d)),tasks:copyObject(pending),branch:mainBranch,codeSHA:branchHead(mainBranch).sha,rulePath:specRulePath,mapRevision,testPlans:copyObject(Object.fromEntries(pending.map(t=>[String(t.task_id),draftTestPlans[String(t.task_id)]||null])))};
-    const flow={id:'promotion-'+flowCounter++,snapshot,norm:latestSpecRule()?copyObject(latestSpecRule()):null,ruleRead:'unread',stage:'awaiting-generation',step:0,logs:[],pr:null,merged:false,created:[],fault:false,pauseStep:null,reviewOrder:[],reason:'',documents:{},generatedTestPlans:{},approved:false};
-    promotionFlows[d.id]=flow;promotionHistory.push(flow);activeFlow=flow;generationSelectedTask=String(pending[0].task_id);generationEditing=false;promotionLog(flow,'固定 Roadmap / JSON / 代码基线与规范内容版本。等待受控生成，不要求草稿先有 Spec。');navigate('promotion');
+    const d=drafts[selectedDraft],existing=promotionFlows[d.id];
+    if(existing?.pr||!force&&existing){activeFlow=existing;navigate('promotion');return;}
+    if(!connected||d.parsing?.state!=='confirmed'||!parseCurrent(d)){d.receipt='请先解析 Markdown，并确认任务及已有 DAG 依赖。';renderRoadmap();return;}
+    const pending=d.tasks.filter(t=>!formalID(d,t.ref));if(!pending.length){d.receipt='全部识别任务已存在，无需重复创建。';renderRoadmap();return;}
+    if(existing){existing.superseded=true;promotionLog(existing,'显式采用最新版规范重新生成，原未发布结果保留为历史。');}
+    const snapshot={draftId:d.id,name:d.name,path:d.path,revision:d.revision,markdown:d.body,json:copyObject(sidecar(d)),tasks:copyObject(pending),branch:mainBranch,codeSHA:branchHead(mainBranch).sha,rulePath:specRulePath,mapRevision,parseRequest:d.parsing.id,parsedDagDigest:d.parsing.graphDigest,sourceDigest:d.parsing.sourceDigest,existingMapping:copyObject(d.formalMapping)};
+    const flow={id:'promotion-'+flowCounter++,snapshot,norm:latestSpecRule()?copyObject(latestSpecRule()):null,ruleRead:'unread',stage:'awaiting-generation',step:0,logs:[],pr:null,merged:false,created:[],fault:false,pauseStep:null,mapping:{},reviewOrder:[],reason:'',documents:{},generatedTestPlans:{},approved:false};
+    promotionFlows[d.id]=flow;promotionHistory.push(flow);activeFlow=flow;generationSelectedTask=pending[0].ref;generationEditing=false;
+    promotionLog(flow,'消费已确认解析 '+snapshot.parseRequest+'，固定任务与已有 DAG 依赖、来源 Markdown、代码基线和规范。JSON 由 SteerLine 生成，原 Markdown 保持只读。');navigate('promotion');
   }
   function reviewPromotion(flow){
-    if(!connected){flow.stage='paused';flow.pauseStep='generation:review';promotionLog(flow,'连接中断，保留原文档与规范快照等待核对。');renderPromotion();return;}
-    const entries=flow.snapshot.tasks,ids=new Set(entries.map(t=>t.task_id));let reason='';
-    if(flow.ruleRead!=='read'||!flow.investigation)reason='未完成规范全文读取或代码调查。';
-    const unresolved=entries.flatMap(t=>t.depends_on.filter(id=>!ids.has(id)&&!tasks[String(id)]).map(id=>'#'+t.task_id+' 依赖尚未正式入图的 #'+id));if(unresolved.length)reason+=(reason?'；':'')+unresolved.join('；');
-    const ordered=[],remaining=[...entries];while(remaining.length){const at=remaining.findIndex(t=>t.depends_on.every(id=>!ids.has(id)||ordered.some(o=>o.task_id===id)));if(at<0){reason+=(reason?'；':'')+'草稿依赖存在环';break;}const t=remaining.splice(at,1)[0],doc=flow.documents[String(t.task_id)];ordered.push({...t,spec:doc?.spec.path||null});}
-    entries.forEach(t=>{const doc=flow.documents[String(t.task_id)];if(!doc?.spec.body||!doc?.plan.body)reason+=(reason?'；':'')+'#'+t.task_id+' 未生成完整 Spec + Plan';else if(!doc.spec.body.includes('## 目标与边界')||!doc.plan.body.includes('## 测试计划'))reason+=(reason?'；':'')+'#'+t.task_id+' 正文缺少目标边界或测试计划';if(doc)flow.generatedTestPlans[String(t.task_id)].documentText=doc.plan.body;});
-    const testReason=validatePromotionTests(flow);if(testReason)reason+=(reason?'；':'')+testReason;flow.reviewOrder=ordered;flow.reason=reason;flow.stage=reason?'blocked':'review';flow.step=2;flow.approved=false;flow.pauseStep=null;
-    promotionLog(flow,reason?'规范 / 文档 / 依赖核对未通过：'+reason:'已核对 Spec / Plan、规范依据、依赖与长期测试安排。等待人工审阅确认。');renderPromotion();renderRoadmap();
+    if(!connected){flow.stage='paused';flow.pauseStep='generation:review';promotionLog(flow,'连接中断，保留原文档和内部代号快照。');renderPromotion();return;}
+    const entries=flow.snapshot.tasks,refs=new Set(entries.map(t=>t.ref));let reason='';
+    if(flow.snapshot.parsedDagDigest!==graphDigest())reason='已有 DAG 已变化，请返回草稿重新解析与确认。';
+    if(flow.ruleRead!=='read'||!flow.investigation)reason+=(reason?'；':'')+'未完成规范全文读取或代码调查。';
+    entries.forEach(t=>{
+      if(t.external_deps.some(id=>!tasks[String(id)])||t.local_deps.some(ref=>!refs.has(ref)&&!tasks[flow.snapshot.existingMapping[ref]]))reason+=(reason?'；':'')+t.ref+' 依赖未解析或尚未正式入图。';
+      const doc=flow.documents[t.ref];if(!doc?.spec.body||!doc?.plan.body)reason+=(reason?'；':'')+t.ref+' 未生成完整 Spec + Plan';else if(!doc.spec.body.includes('## 目标与边界')||!doc.plan.body.includes('## 测试计划'))reason+=(reason?'；':'')+t.ref+' 正文缺少目标边界或测试计划';
+      if(doc)flow.generatedTestPlans[t.ref].documentText=doc.plan.body;
+    });
+    const ordered=[],remaining=[...entries];while(remaining.length){const at=remaining.findIndex(t=>t.local_deps.every(ref=>!refs.has(ref)||ordered.some(o=>o.ref===ref)));if(at<0){reason+=(reason?'；':'')+'草稿依赖存在环';break;}const t=remaining.splice(at,1)[0];ordered.push({...t,spec:flow.documents[t.ref]?.spec.path||null});}
+    const testReason=validatePromotionTests(flow);if(testReason)reason+=(reason?'；':'')+testReason;
+    flow.reviewOrder=ordered;flow.reason=reason;flow.stage=reason?'blocked':'review';flow.approved=false;flow.pauseStep=null;
+    promotionLog(flow,reason?'文档 / 依赖核对未通过：'+reason:'已核对文档和内部代号依赖。等待审阅发布，尚未分配正式编号。');renderPromotion();renderRoadmap();
   }
   function renderPromotion(){
     const flow=activeFlow;if(!flow)return;const s=flow.snapshot,currentDraft=drafts[s.draftId];
-    q('[data-promotion-context]').textContent=`${s.name} · 固定草稿 v${s.revision} / 当前 v${currentDraft.revision} · 主分支 ${s.branch} · 代码 ${s.codeSHA} · ${flow.id}`;
-    const steps=['固定输入','读取规范','调查代码 / 整体规划','生成 Spec + Plan','审阅确认','文档 PR / 合并','创建 DAG','完成'],at={ 'awaiting-generation':0,'reading-rule':1,'investigating-code':2,'generating-docs':3,review:4,reviewing:4,blocked:flow.documents&&Object.keys(flow.documents).length?4:flow.ruleRead==='read'?2:1,publishing:5,merging:5,creating:6,partial:6,done:7,paused:flow.merged?6:flow.pr?5:flow.ruleRead==='read'?3:1 }[flow.stage];
+    q('[data-promotion-context]').textContent=`${s.name} · 固定草稿 v${s.revision} / 当前 v${currentDraft.revision} · 已确认解析 ${s.parseRequest} · 主分支 ${s.branch} · 代码 ${s.codeSHA} · ${flow.id}`;
+    const steps=['读取 Markdown','generate 解析任务 / 已有 DAG 依赖','确认任务与依赖','读取规范','调查代码 / 整体规划','生成 Spec + Plan','审阅文档','文档 PR / 合并','创建 DAG','完成'],at=2+{ 'awaiting-generation':1,'reading-rule':1,'investigating-code':2,'generating-docs':3,review:4,reviewing:4,blocked:flow.documents&&Object.keys(flow.documents).length?4:flow.ruleRead==='read'?2:1,publishing:5,merging:5,creating:6,'awaiting-admission':6,'admission-unknown':6,done:7,paused:flow.merged?6:flow.pr?5:flow.ruleRead==='read'?3:1 }[flow.stage];
     q('[data-promotion-steps]').innerHTML=steps.map((label,i)=>`<span class="promotion-step ${i<at?'done':i===at?'current':''}">${i<at?'✓ ':''}${label}</span>`).join('');
-    const status={'awaiting-generation':flow.norm?'输入已固定。请通过固定流程生成正式 Spec + Plan。':'规范文件缺失，请配置有效规范后明确重新生成。','reading-rule':'正在读取本次固定规范全文…','investigating-code':'正在调查现有代码并做整体整合安排…','generating-docs':'正在生成 Spec + Plan 正文与测试安排…',blocked:'流程等待处理：'+flow.reason,review:'核对通过。请审阅正式文档、设计依据及执行位置，再确认发布。',publishing:'正在创建正式文档 PR…',merging:'正在合并并核实固定目标主分支…',creating:'文档已合并，正在创建正式 DAG…',partial:'文档已合并，DAG 部分创建。继续原操作，不重新生成文档。',paused:'观察中断。重连后沿原规范、文档和步骤继续。',done:'转正完成：正式 Spec / Plan 已合并，任务已入 DAG。原草稿保留。'};
-    q('[data-promotion-status]').textContent=status[flow.stage];renderGenerationDocuments(flow);renderPromotionTests();
-    q('[data-promotion-review]').textContent='正式文档与 DAG 位置分别审阅；生成结果尚未发布时可以受控修改并重新核对。';
-    q('[data-promotion-preview]').innerHTML=(flow.reviewOrder.length?flow.reviewOrder:s.tasks).map(t=>`<tr><td>#${t.task_id}</td><td>${esc(t.title)}<p class="sub">${esc(flow.documents[String(t.task_id)]?.spec.path||'待流程生成')}</p></td><td>${t.depends_on.length?'#'+t.depends_on.join('、#'):'无'}</td><td>${t.depends_on.length?'位于 #'+t.depends_on.join('、#')+' 之后':'独立任务，可与既有任务并行'}</td></tr>`).join('');
-    q('[data-promotion-map-diff]').textContent='# execution-map.md · 审阅后的正式文档关联\n'+(flow.reviewOrder.length?flow.reviewOrder:s.tasks).map(t=>'+ #'+t.task_id+' '+t.title+' | 前置 '+(t.depends_on.join(', ')||'无')+' | Spec '+(flow.documents[String(t.task_id)]?.spec.path||'待生成')+' | 来源 '+s.draftId).join('\n');
-    q('[data-promotion-facts]').innerHTML=`<div class="rule-row">规范：${flow.norm?'固定 v'+flow.norm.revision:'缺失'}</div><div class="rule-row">正式文档：${Object.keys(flow.documents).length} / ${s.tasks.length} 组</div><div class="rule-row">文档 PR：${flow.pr?esc(flow.pr)+'（演示）':'尚未创建'}</div><div class="rule-row">合并目标：${esc(s.branch)}</div><div class="rule-row">合并核实：${flow.merged?'已核实（演示）':'尚未核实'}</div><div class="rule-row">DAG 已创建：${flow.created.length} / ${s.tasks.length}</div><div class="rule-row">原草稿：保留</div>`;
-    const publishedJSON=copyObject(s.json);publishedJSON.tasks=publishedJSON.tasks.map(t=>{const doc=flow.documents[String(t.task_id)];return doc?{...t,spec:doc.spec.path,plan:doc.plan.path,formal_generation:{operation:flow.id,normPath:flow.norm.path,normRevision:flow.norm.revision,documentRevision:doc.revision,codeSHA:s.codeSHA}}:t;});flow.publishedJSON=publishedJSON;q('[data-promotion-generated-json]').textContent=JSON.stringify(publishedJSON,null,2);
+    const status={'awaiting-generation':flow.norm?'输入已固定。请通过固定流程生成正式 Spec + Plan。':'规范文件缺失，请配置有效规范后明确重新生成。','reading-rule':'正在读取本次固定规范全文…','investigating-code':'正在调查现有代码并做整体整合安排…','generating-docs':'正在生成 Spec + Plan 正文与测试安排…',blocked:'流程等待处理：'+flow.reason,review:'核对通过。请审阅正式文档、设计依据及执行位置，再确认发布。',publishing:'正在创建正式文档 PR…',merging:'正在合并并核实固定目标主分支…','awaiting-admission':'文档已合并，尚未分配新正式编号。点击正式入 DAG 时分配编号并转换依赖。',creating:'正在入 DAG、分配正式编号并保存依赖映射…','admission-unknown':'整批入图请求已提交，回执待核实。查询原请求恢复映射，不重复分配编号。',paused:'观察中断。重连后沿原内部代号、文档和步骤继续。',done:'转正完成：正式 Spec / Plan 已合并，任务已入 DAG。原草稿保留。'};
+    q('[data-promotion-status]').textContent=flow.stage==='awaiting-generation'&&!q('[data-document-capability]').checked?'任务与依赖已确认。文档生成所需 Runner 能力待接入，可开启演示开关预览后续交互。':status[flow.stage];
+    q('[data-document-capability-status]').textContent=q('[data-document-capability]').checked?'未来文档能力演示已开启；不代表当前 Runner 已接入。':'待 Runner 能力设计与接入。可开启演示开关预览后续交互。';
+    q('[data-document-capability]').disabled=['reading-rule','investigating-code','generating-docs','publishing','merging','creating'].includes(flow.stage)||!!flow.pr;renderGenerationDocuments(flow);renderPromotionTests();
+    q('[data-promotion-review]').textContent='任务与已有 DAG 依赖来自已确认解析；此处复核文档及放置位置。改变拆分或依赖须返回重新解析与确认。';
+    q('[data-promotion-preview]').innerHTML=(flow.reviewOrder.length?flow.reviewOrder:s.tasks).map(t=>'<tr><td>'+esc(s.draftId+'/'+t.ref)+'</td><td>'+esc(t.title)+'<p class="sub">'+esc(flow.documents[t.ref]?.spec.path||'待流程生成')+'</p></td><td>'+esc(dependencyLabels(t).join('、')||'无')+'</td><td>确认的依赖位置；入 DAG 时转换为正式关系</td></tr>').join('');
+    q('[data-promotion-map-diff]').textContent='# execution-map.md · 入图前使用 Roadmap 内部身份\n'+(flow.reviewOrder.length?flow.reviewOrder:s.tasks).map(t=>'+ '+s.draftId+'/'+t.ref+' '+t.title+' | 前置 '+(dependencyLabels(t).join(', ')||'无')+' | Spec '+(flow.documents[t.ref]?.spec.path||'待生成')).join('\n');
+    q('[data-promotion-facts]').innerHTML='<div class="rule-row">文档：'+Object.keys(flow.documents).length+' / '+s.tasks.length+' 组</div><div class="rule-row">文档 PR：'+esc(flow.pr||'尚未创建')+'</div><div class="rule-row">合并核实：'+(flow.merged?'已核实（演示）':'尚未核实')+'</div><div class="rule-row">DAG 已创建：'+(flow.stage==='admission-unknown'?'待核实':flow.created.length+' / '+s.tasks.length)+'</div><div class="rule-row">新正式编号：'+(flow.stage==='admission-unknown'?'原请求结果待核实':Object.keys(flow.mapping).length?'入图时已分配 '+Object.keys(flow.mapping).length+' 个':'尚未分配')+'</div><div class="rule-row">原 Markdown / 文档路径：保持不变</div>';
+    const publishedJSON=copyObject(s.json);publishedJSON.tasks=publishedJSON.tasks.map(t=>{const doc=flow.documents[t.ref];return doc?{...t,spec:doc.spec.path,plan:doc.plan.path,formal_generation:{operation:flow.id,normPath:flow.norm.path,normRevision:flow.norm.revision,documentRevision:doc.revision,codeSHA:s.codeSHA}}:t;});
+    flow.publishedJSON=publishedJSON;q('[data-promotion-generated-json]').textContent=JSON.stringify(publishedJSON,null,2);
+    q('[data-admission-mapping]').innerHTML=s.tasks.map(t=>{const id=flow.stage==='admission-unknown'?null:flow.mapping[t.ref];const dependencies=[...t.external_deps.map(String),...t.local_deps.map(ref=>flow.mapping[ref]||s.existingMapping[ref])];return '<tr><td>'+esc(s.draftId+'/'+t.ref)+'</td><td>'+(id?'<button data-open-formal-task="'+id+'">#'+id+'</button>':(flow.stage==='admission-unknown'?'原请求待核实':'入 DAG 时分配'))+'</td><td>'+(id?esc(dependencies.length?'#'+dependencies.join('、#'):'无'):esc(dependencyLabels(t).join('、')||'无'))+'</td><td>'+(id?'已入 DAG':flow.stage==='admission-unknown'?'结果未知，查询原请求':'未入图 · 内部代号')+'</td></tr>';}).join('');
+    q('[data-admission-json]').textContent=JSON.stringify({roadmap_id:s.draftId,operation:flow.id,status:flow.stage==='admission-unknown'?'unknown':flow.stage,formal_mapping:flow.stage==='admission-unknown'?null:flow.mapping},null,2);
+    q('[data-action="admit-roadmap"]').hidden=flow.stage!=='awaiting-admission';q('[data-action="admit-roadmap"]').disabled=!connected;
     q('[data-promotion-generation-history]').innerHTML=promotionHistory.filter(f=>f.snapshot.draftId===s.draftId).map(f=>'<div class="test-record">'+f.id+' · 草稿 v'+f.snapshot.revision+' · 规范 '+(f.norm?'v'+f.norm.revision:'缺失')+' · '+Object.keys(f.documents).length+' 组文档 · '+esc(f.pr||'未发布')+'</div>').join('');
     q('[data-action="confirm-promotion"]').hidden=flow.stage!=='review';q('[data-action="confirm-promotion"]').disabled=!connected||generationEditing;
-    q('[data-action="resume-promotion"]').hidden=!['partial','paused'].includes(flow.stage);q('[data-action="resume-promotion"]').disabled=!connected;
+    q('[data-action="resume-promotion"]').hidden=!['admission-unknown','paused'].includes(flow.stage);q('[data-action="resume-promotion"]').disabled=!connected;
     q('[data-action="review-new-snapshot"]').hidden=flow.stage!=='blocked'||flow.ruleRead==='failed';q('[data-action="review-new-snapshot"]').disabled=!connected||!!flow.pr;
-    q('[data-action="view-promoted-dag"]').hidden=!['partial','done'].includes(flow.stage);q('[data-promotion-fault]').disabled=flow.stage!=='review';q('[data-promotion-log]').innerHTML=flow.logs.map(line=>'<div>'+esc(line)+'</div>').join('');
+    q('[data-action="view-promoted-dag"]').hidden=flow.stage!=='done';q('[data-promotion-fault]').disabled=flow.stage!=='review';q('[data-promotion-log]').innerHTML=flow.logs.map(line=>'<div>'+esc(line)+'</div>').join('');
   }
 
   function advancePromotion(flow,step){
-    if(!connected){flow.stage='paused';flow.pauseStep=step;promotionLog(flow,'连接中断，保留原 PR / 入图操作。');renderPromotion();return;}
-    if(step===3){flow.stage='publishing';flow.step=3;if(!flow.pr){flow.pr='文档 PR #'+(200+Number(flow.id.split('-').at(-1)));promotionLog(flow,'已创建 '+flow.pr+'，包含正式 Spec / Plan / roadmap / JSON / execution-map 的固定快照。');recordExperiencePromotionPR(flow,false);}renderPromotion();setTimeout(()=>advancePromotion(flow,4),450);}
-    if(step===4){flow.stage='merging';flow.step=4;renderPromotion();setTimeout(()=>{
+    if(flow.superseded)return;if(!connected){flow.stage='paused';flow.pauseStep=step;promotionLog(flow,'连接中断，保留原 PR / 入图请求和已分配映射。');renderPromotion();return;}
+    if(step===3&&flow.snapshot.parsedDagDigest!==graphDigest()){flow.stage='blocked';flow.approved=false;flow.reason='已有 DAG 已变化，请返回草稿重新解析并确认。';renderPromotion();return;}
+    if(step===3){flow.stage='publishing';if(!flow.pr){flow.pr='文档 PR #'+(200+Number(flow.id.split('-').at(-1)));promotionLog(flow,'发布使用内部代号的 Spec / Plan、JSON 和清单；尚未分配正式编号。');recordExperiencePromotionPR(flow,false);}renderPromotion();setTimeout(()=>advancePromotion(flow,4),450);}
+    if(step===4){flow.stage='merging';renderPromotion();setTimeout(()=>{
       if(!connected){flow.stage='paused';flow.pauseStep=4;renderPromotion();return;}
-      if(!flow.merged){flow.merged=true;recordExperiencePromotionPR(flow,true);mapRevision++;flow.reviewOrder.forEach(t=>mapEntries[String(t.task_id)]={id:String(t.task_id),name:t.title,spec:t.spec,depends:t.depends_on.map(String),base:flow.snapshot.branch,sourceDraft:flow.snapshot.draftId});promotionLog(flow,'已核实文档 PR 合并到 '+flow.snapshot.branch+'，使用合并后的 execution-map 入图。');}
-      advancePromotion(flow,5);
+      if(!flow.merged){flow.merged=true;recordExperiencePromotionPR(flow,true);promotionLog(flow,'文档合并已核实，保留内部代号。等待正式入 DAG，当前尚未分配新编号。');}
+      flow.stage='awaiting-admission';flow.pauseStep=5;renderRoadmap();renderPromotion();
     },450);}
-    if(step===5){flow.stage='creating';flow.step=5;const remaining=flow.reviewOrder.filter(t=>!flow.created.includes(String(t.task_id)));
-      const batch=flow.fault&&remaining.length>1?remaining.slice(0,1):remaining;
-      batch.forEach(t=>{const id=String(t.task_id);if(!flow.approved||!flow.documents[id]?.spec.body||!flow.documents[id]?.plan.body)return;if(!tasks[id])tasks[id]={id,name:t.title,spec:t.spec,ref:t.spec,depends:t.depends_on.map(String),base:flow.snapshot.branch,sourceDraft:flow.snapshot.draftId,promotionId:flow.id,testPlan:copyObject(flow.generatedTestPlans[id]),specText:flow.documents[id].spec.body,generation:{operation:flow.id,normPath:flow.norm.path,normRevision:flow.norm.revision,codeSHA:flow.snapshot.codeSHA},candidates:[],delivery:null,mapSync:null};flow.created.push(id);});
-      if(flow.fault&&flow.created.length<flow.reviewOrder.length){flow.fault=false;flow.stage='partial';promotionLog(flow,'入图中断：已创建 '+flow.created.join(', ')+'，其余保留原操作待继续。');}
-      else{flow.stage='done';flow.step=6;promotionLog(flow,'正式 DAG 核对完成，沿用原任务编号。原草稿继续保留。');autoDispatchReady();}
+    if(step===5){
+      if(!flow.merged||!flow.approved)return;flow.stage='creating';
+      const remaining=flow.reviewOrder.filter(t=>!flow.created.includes(t.ref));
+      const plannedMapping={...flow.mapping},staged=[];let next=nextFormalTask;
+      // Simulate a single Task batch transaction: validation/numbering are staged,
+      // then all Tasks, dependencies, mappings and the original receipt commit.
+      for(const t of remaining){
+        const doc=flow.documents[t.ref];
+        const depends=[...t.external_deps.map(String),...t.local_deps.map(ref=>plannedMapping[ref]||flow.snapshot.existingMapping[ref])];
+        if(!doc?.spec.body||!doc?.plan.body||depends.some(id=>!id||!tasks[id]&&!staged.some(item=>item.id===id))){
+          flow.stage='admission-unknown';promotionLog(flow,'整批入图条件未核实，未提交任何新 Task 或编号；保留原请求查询。');renderPromotion();return;
+        }
+        while(tasks[String(next)])next++;const id=String(next++);plannedMapping[t.ref]=id;
+        const testPlan={...copyObject(flow.generatedTestPlans[t.ref]),task:id};
+        staged.push({id,local:t.ref,task:{id,name:t.title,spec:doc.spec.path,ref:doc.spec.path,depends:[...new Set(depends)],base:flow.snapshot.branch,sourceDraft:flow.snapshot.draftId,sourceLocalRef:t.ref,promotionId:flow.id,testPlan,specText:doc.spec.body,generation:{operation:flow.id,normPath:flow.norm.path,normRevision:flow.norm.revision,codeSHA:flow.snapshot.codeSHA},candidates:[],delivery:null,mapSync:null}});
+      }
+      if(staged.length){
+        staged.forEach(item=>{tasks[item.id]=item.task;drafts[flow.snapshot.draftId].formalMapping[item.local]=item.id;
+          mapEntries[item.id]={id:item.id,name:item.task.name,spec:item.task.spec,depends:item.task.depends,base:flow.snapshot.branch,sourceDraft:flow.snapshot.draftId,sourceLocalRef:item.local};
+          promotionLog(flow,'整批入图：'+flow.snapshot.draftId+'/'+item.local+' → #'+item.id+'；正式前置 '+(item.task.depends.length?'#'+item.task.depends.join('、#'):'无')+'。');
+        });
+        flow.mapping=plannedMapping;flow.created=flow.reviewOrder.map(t=>t.ref);nextFormalTask=next;mapRevision++;
+      }
+      if(flow.fault){flow.fault=false;flow.stage='admission-unknown';promotionLog(flow,'演示：整批事务已提交，页面回执丢失；查询原请求取得原映射，不重提或重新分配。');}
+      else{flow.stage='done';promotionLog(flow,'已核实整批入图回执及原编号映射。原 Markdown、已发布文档和路径保持不变。');autoDispatchReady();}
       renderTaskSurfaces();renderExecution();renderRoadmap();renderPromotion();
     }
   }
   function handlePlanningAction(button){
     const action=button.dataset.action,d=drafts[selectedDraft];
     if(button.dataset.roadmapDraft){selectRoadmapDraft(button.dataset.roadmapDraft);return true;}
-    if(button.dataset.draftFilter){draftFilter=button.dataset.draftFilter;const first=Object.values(drafts).find(d=>d.archived===(draftFilter==='archived'));if(first)selectRoadmapDraft(first.id);else renderRoadmap();return true;}
     if(button.dataset.draftTab){draftTab=button.dataset.draftTab;renderRoadmap();return true;}
-    if(button.dataset.editDraftTask){openDraftTaskEditor(button.dataset.editDraftTask);return true;}
     if(button.dataset.openFormalTask){selectTask(button.dataset.openFormalTask);navigate('dag');return true;}
-    if(button.dataset.openSourceDraft){selectRoadmapDraft(button.dataset.openSourceDraft);navigate('roadmap');return true;}
+    if(button.dataset.openSourceDraft){selectRoadmapDraft(button.dataset.openSourceDraft);navigate('roadmap');const target=qa('[data-source-ref]').find(el=>el.dataset.sourceRef===button.dataset.sourceLocal);if(target)target.scrollIntoView({block:'center'});return true;}
     if(button.dataset.dagView){dagView=button.dataset.dagView;renderDynamicDag();renderExecutionMap();return true;}
     switch(action){
       case 'save-project-branch':{if(!connected)return true;const value=q('[data-project-main-branch]').value.trim();if(!value||!/^[a-zA-Z0-9][a-zA-Z0-9._\/-]*$/.test(value)||value.includes('..')||value.includes('//')||value.endsWith('/')||value.endsWith('.lock')){q('[data-project-branch-receipt]').textContent='请填写有效的主分支名称。';return true;}mainBranch=value;q('[data-project-branch-receipt]').textContent='主分支已保存：'+mainBranch+'。只影响后续转正和新任务。';return true;}
-      case 'new-session':openPlanningModal('session',button);return true;
-      case 'new-roadmap-draft':openPlanningModal('draft',button);return true;
-      case 'dismiss-session':closePlanningModal();return true;
-      case 'start-session':{let id=q('[data-session-draft-choice]').value;if(id==='__new'){id=createDraftFromModal();if(!id)return true;}closePlanningModal();if(modalOrigin==='session'){const sid='session-'+sessionCounter++;sessions[sid]={name:'规划 · '+drafts[id].name,draftId:id,messages:'<div class="callout">新对话已建立，当前操作 '+esc(drafts[id].path)+'。旧对话和输入保留在原 session。</div>',draft:''};activeSession=sid;renderSessions();q('.composer textarea').focus();}else{selectRoadmapDraft(id);navigate('roadmap');}return true;}
-      case 'view-drafts':selectRoadmapDraft(sessions[activeSession].draftId);navigate('roadmap');return true;
-      case 'plan-current-draft':{const existing=Object.entries(sessions).find(([,s])=>s.draftId===selectedDraft);if(existing)activeSession=existing[0];else{activeSession='session-'+sessionCounter++;sessions[activeSession]={name:'规划 · '+d.name,draftId:d.id,messages:'<div class="callout">当前讨论草稿：'+esc(d.path)+'</div>',draft:''};}renderSessions();navigate('plan');return true;}
-      case 'save-roadmap-document':if(!d.archived){d.body=q('[data-draft-body]').value;d.editBody=undefined;d.revision++;d.receipt='草稿正文已保存为 v'+d.revision+'。既有转正快照与正式任务不受修改影响。';renderRoadmap();renderPlanningContext();}return true;
-      case 'add-draft-task':openDraftTaskEditor();return true;
-      case 'save-draft-task':saveDraftTask();return true;
-      case 'cancel-draft-task':q('[data-draft-task-form]').hidden=true;editingDraftTask=null;return true;
+      case 'refresh-roadmap':if(connected){if(d.externalBody){d.body=d.externalBody;delete d.externalBody;d.revision++;d.receipt='已读取外部更新 v'+d.revision+'，旧解析 / 生成快照保留；重新解析并确认后才能采用新内容。';}else d.receipt='已重新读取 Markdown，内容未变化（演示）。';renderRoadmap();}return true;
+      case 'simulate-external-markdown':d.externalBody=d.body+'\n## 外部新增约束\n候选实时输出需要保留独立滚动位置（演示外部编辑）。\n';d.receipt='模拟外部 Markdown 已更新，点击“刷新 Markdown”读取；本页没有编辑原文。';renderRoadmap();return true;
+      case 'parse-roadmap':parseRoadmap();return true;
+      case 'resume-roadmap-parse':if(connected&&d.parsing?.state==='paused'){d.parsing.state='parsing';renderRoadmap();setTimeout(()=>finishRoadmapParse(d,d.parsing),350);}return true;
+      case 'confirm-roadmap-parse':confirmRoadmapParse();return true;
       case 'promote-draft':beginPromotion();return true;
-      case 'review-new-snapshot':selectedDraft=activeFlow.snapshot.draftId;beginPromotion(true);return true;
+      case 'review-new-snapshot':selectedDraft=activeFlow.snapshot.draftId;navigate('roadmap');drafts[selectedDraft].receipt='请在外部补充 Markdown，刷新后重新解析与确认。';renderRoadmap();return true;
+      case 'admit-roadmap':if(activeFlow?.stage==='awaiting-admission'&&connected)advancePromotion(activeFlow,5);return true;
       case 'confirm-promotion':if(activeFlow?.stage==='review'&&connected&&!generationEditing){activeFlow.approved=true;activeFlow.fault=q('[data-promotion-fault]').checked;advancePromotion(activeFlow,3);}return true;
-      case 'resume-promotion':if(activeFlow&&connected){if(activeFlow.stage==='partial')advancePromotion(activeFlow,5);else if(String(activeFlow.pauseStep).startsWith('generation:')){const step=activeFlow.pauseStep.slice('generation:'.length);if(step==='review')reviewPromotion(activeFlow);else generationStep(activeFlow,step);}else advancePromotion(activeFlow,activeFlow.stage==='partial'?5:activeFlow.pauseStep||5);}return true;
-      case 'view-promoted-dag':{const id=activeFlow.created[0];if(id)selectTask(id);dagView='graph';navigate('dag');return true;}
+      case 'resume-promotion':if(activeFlow&&connected){if(activeFlow.stage==='admission-unknown')advancePromotion(activeFlow,5);else if(String(activeFlow.pauseStep).startsWith('generation:')){const step=activeFlow.pauseStep.slice('generation:'.length);if(step==='review')reviewPromotion(activeFlow);else generationStep(activeFlow,step);}else advancePromotion(activeFlow,activeFlow.pauseStep||5);}return true;
+      case 'view-promoted-dag':{const id=activeFlow.mapping[activeFlow.created[0]];if(id)selectTask(id);dagView='graph';navigate('dag');return true;}
       case 'sync-execution-map':if(connected&&tasks[selectedTask].delivery)scheduleMapSync(tasks[selectedTask]);return true;
-      case 'archive-draft':if(!d.archived&&connected&&archiveReady(d)){d.archived=true;d.path=d.path.replace('/drafts/','/archive/');d.receipt='全部任务已完成且同步，Markdown 与 JSON 成对归档，draft_id 保持不变。';draftFilter='archived';renderRoadmap();renderPlanningContext();renderExecutionMap();}return true;
-      case 'agent-update-draft':{const d=drafts[sessions[activeSession].draftId];if(!d.archived){d.body+='\n\n## Agent 补充（演示）\n\n每个候选保持独立执行参数与反馈归属。';d.revision++;d.editBody=undefined;sessions[activeSession].messages+='<div class="message agent"><div class="who">Codex · 演示</div><p>已更新当前草稿正文；JSON 任务关联保持原编号，正式 DAG 未改变。</p></div>';renderSessions();}return true;}
-      case 'agent-add-draft-task':{const d=drafts[sessions[activeSession].draftId];if(!d.archived){const t=allocateDraftTask(d,'规划补充任务 '+nextDraftTask);sessions[activeSession].messages+='<div class="message agent"><div class="who">Codex · 演示</div><p>已创建草稿任务 #'+t.task_id+' 并写入同名 JSON。未提供 Spec，尚未进入 DAG。</p></div>';renderSessions();}return true;}
-      case 'send':{const s=sessions[activeSession],text=s.draft.trim();if(!text||answerComposing)return true;const d=drafts[s.draftId];const asksDraft=/roadmap.*草稿|草稿.*roadmap|禁止|不能|不得|不允许/i.test(text);const asksPromotion=!asksDraft&&/转正|合并.*PR|创建.*DAG|(?:生成|编写|输出|写出|创建|保存).{0,24}(?:正式|spec|plan|规格文档|实施计划)|(?:spec|plan).{0,12}(?:生成|保存)/i.test(text);let response;if(asksPromotion)response='规划对话只能生成 Roadmap 草稿，不能直接生成或写入正式 Spec / Plan。请查看关联草稿，在草稿转正固定流程中生成；本次未创建正式文档、任务或 PR。';else if(d.archived)response='当前草稿已归档，只读讨论。创建新草稿后可以继续规划。';else{d.body+='\n\n## 本轮规划补充（演示）\n\n'+text;d.revision++;d.editBody=undefined;response='已将讨论补充到 '+d.path+' 的草稿正文。编号、拟议依赖与测试约束可继续在关联 JSON 中完善；正式 Spec / Plan 仅由固定流程生成。';}s.messages+=`<div class="message user"><div class="who">你 · ${esc(clock())}</div><p>${esc(text)}</p></div><div class="message agent"><div class="who">Codex · 演示回复</div><p>${esc(response)}</p></div>`;s.draft='';renderSessions();return true;}
     }
     return false;
   }
 
-  const initialMessages=q('[data-planning-messages]').innerHTML;
-  const sessions={current:{name:'执行界面改进',draftId:'draft-ui',messages:initialMessages,draft:''},history:{name:'执行控制改进',draftId:'draft-runtime',messages:'<div class="message agent"><div class="who">Codex · 规划 Agent</div><p>当前草稿已细化需求与测试约束，正式 Spec + Plan 通过草稿页的固定转正流程生成。</p></div>',draft:''}};
-  let activeSession='current',sessionCounter=1;
-  function renderSessions(){
-    q('[data-session-list]').innerHTML=Object.entries(sessions).map(([id,s])=>`<button class="session-row ${id===activeSession?'selected':''}" data-planning-session="${id}"><div>${esc(s.name)}</div><div class="muted">${esc(drafts[s.draftId].name)} · ${id===activeSession?'当前':'点击切换'}</div></button>`).join('');
-    q('[data-plan-title]').textContent=sessions[activeSession].name;q('[data-planning-messages]').innerHTML=sessions[activeSession].messages;q('.composer textarea').value=sessions[activeSession].draft;renderPlanningContext();
-  }
   // Experience release fixtures. Git ancestry and provider PR facts are simulated.
   const experienceSHA=n=>(n.toString(16).padStart(7,'0')+'0123456789abcdef0123456789abcdef012').slice(0,40);
   const experiencePRs=[
@@ -2002,7 +2029,7 @@ body { margin: 0; padding: 16px; }
     const p=experiencePRs.find(p=>p.id===id);if(p.status==='merged')return;
     const ancestors=experiencePRs.filter(p=>p.status==='merged'&&p.branch===branch).map(p=>p.sha),head=branchHead(branch);
     head.sha=((0xd1c2d30+debugMainRevision++).toString(16)+'abcdef0123456789abcdef0123456789abc').slice(0,40);
-    Object.assign(p,{status:'merged',sha:head.sha,ancestors,change:'更新 '+flow.snapshot.name+' 的 roadmap 与 execution-map，正式纳入任务 '+flow.snapshot.tasks.map(t=>'#'+t.task_id).join('、')+'。',guide:'查看 Roadmap 草稿与任务 DAG，核对新增正式任务的位置及依赖。'});renderExperience();
+    Object.assign(p,{status:'merged',sha:head.sha,ancestors,change:'更新 '+flow.snapshot.name+' 的文档及内部代号清单，待正式入图的任务 '+flow.snapshot.tasks.map(t=>flow.snapshot.draftId+'/'+t.ref).join('、')+'。',guide:'查看 Roadmap 草稿与任务 DAG，查看发布文档与后续正式入图映射。'});renderExperience();
   }
   function recordExperienceMergedPR(t,c){
     const id=(c.pr||'task-'+t.id).replace(/^#/,'');let p=experiencePRs.find(p=>p.id===id);const branch=t.base||mainBranch;
@@ -2270,6 +2297,7 @@ body { margin: 0; padding: 16px; }
   }
 
   function navigate(page){
+    if(page==='plan'||page==='promotion'&&!activeFlow)page='roadmap';
     if(documentStructureOpen)closeDocumentStructure();if(projectVisionOpen)closeProjectVision();if(specRuleOpen)closeSpecRule();if(settingsTask)closeSettings();if(debugModalOpen)closeDebugCreate();root.dataset.dialog='none';root.dataset.page=page;
     qa('.nav-item[data-nav]').forEach(el=>el.classList.toggle('active',el.dataset.nav===page));
     if(page==='runs'){renderTaskSurfaces();renderExecution();}if(page==='dag')renderTaskSurfaces();if(page==='settings')renderGlobalSettings();if(page==='roadmap')renderRoadmap();if(page==='promotion')renderPromotion();if(page==='acceptance')renderAcceptance();if(page==='tests')renderTestManagement();if(page==='experience')renderExperience();if(page==='bugs')renderBugManagement();if(page==='blueprints')renderBlueprints();if(page==='long-documents')renderLongDocuments();live.textContent='已切换页面';
@@ -2311,14 +2339,13 @@ body { margin: 0; padding: 16px; }
     if(e.target.matches('[data-bug-supplement]'))bugIssue(selectedBug).supplement=e.target.value;
     if(e.target.matches('[data-bug-manual]')){const r=bugCurrent(bugIssue(selectedBug));if(r)r.manual[e.target.dataset.bugManual]=e.target.value;}
     if(e.target.matches('[data-test-search]')){testSearch=e.target.value;renderTestManagement();}
-    if(e.target.matches('.composer textarea'))sessions[activeSession].draft=e.target.value;
     if(e.target.matches('[data-answer]')&&current())current().draft=e.target.value;
-    if(e.target.matches('[data-draft-body]'))drafts[selectedDraft].editBody=e.target.value;
     if(e.target.matches('[data-acceptance-manual-field]')){const a=acceptanceItems.find(a=>a.id===selectedAcceptance);if(a)a.manual[e.target.dataset.acceptanceManualField]=e.target.value;}
   });
   root.addEventListener('toggle',e=>{if(e.target.matches('details[data-record-id]')&&e.target.open)expandedTestRecord=e.target.dataset.recordId;},true);
   root.addEventListener('compositionstart',()=>answerComposing=true);root.addEventListener('compositionend',()=>answerComposing=false);
   root.addEventListener('change',e=>{
+    if(e.target.matches('[data-document-capability]')&&activeFlow)renderPromotion();
     if(e.target.matches('[data-bug-filter]')){bugFilter=e.target.value;renderBugManagement();}
     if(e.target.matches('[data-bug-manual]')){const r=bugCurrent(bugIssue(selectedBug));if(r)r.manual[e.target.dataset.bugManual]=e.target.value;}
     if(e.target.matches('[data-experience-pr]')){experienceCreatePR=e.target.value;renderExperienceCreate();}
@@ -2332,8 +2359,6 @@ body { margin: 0; padding: 16px; }
     if(e.target.matches('[data-acceptance-filter]')){acceptanceFilters[e.target.dataset.acceptanceFilter]=e.target.value;renderAcceptance(true);}
     if(e.target.matches('[data-acceptance-manual-field]')){const a=acceptanceItems.find(a=>a.id===selectedAcceptance);if(a)a.manual[e.target.dataset.acceptanceManualField]=e.target.value;}
     if(e.target.matches('[data-acceptance-auto-outcome]')){const a=acceptanceItems.find(a=>a.id===selectedAcceptance);if(a)a.autoOutcome=e.target.value;}
-    if(e.target.matches('[data-planning-draft]')){sessions[activeSession].draftId=e.target.value;renderSessions();}
-    if(e.target.matches('[data-session-draft-choice]'))q('[data-new-draft-fields]').hidden=e.target.value!=='__new';
     if(e.target.matches('[data-auto-dispatch]')){if(!connected){e.target.checked=autoDispatch;return;}autoDispatch=e.target.checked;const count=autoDispatchReady();q('[data-project-dispatch-receipt]').textContent=autoDispatch?'自动派发已开启'+(count?' · 已为 '+count+' 个就绪任务启动默认候选':''):'自动派发已关闭 · 现有执行继续';renderTaskSurfaces();renderExecution();}
     if(e.target.matches('[data-parallel-count]')){const count=Number(e.target.value);pendingSelections=Array.from({length:count},(_,i)=>pendingSelections[i]||blankSelection());refreshSettings();}
     if(e.target.matches('[data-selection-field]')){const scope=e.target.closest('[data-selection-scope]').dataset.selectionScope,field=e.target.dataset.selectionField,s=scope==='global'?globalDraft:pendingSelections[Number(scope.slice('candidate-'.length))];updateSelection(s,field,e.target.value);updateEditor(scope,s,field);if(scope==='global'){q('[data-global-settings-receipt]').textContent='';validateGlobalDefault();}else{q(`[data-candidate-selection-summary="${Number(scope.slice('candidate-'.length))}"]`).textContent=selectionLabel(s);validateSettings();}}
@@ -2354,7 +2379,6 @@ body { margin: 0; padding: 16px; }
     if(button.dataset.runTask){selectTask(button.dataset.runTask);return;}
     if(button.dataset.candidate){selectedCandidate=button.dataset.candidate;renderExecution();return;}
     if(button.dataset.runFilter){filter=button.dataset.runFilter;const first=Object.values(tasks).find(t=>matches(t,filter));if(first&&!matches(tasks[selectedTask],filter))selectTask(first.id);renderTaskSurfaces();return;}
-    if(button.dataset.planningSession){activeSession=button.dataset.planningSession;renderSessions();return;}
     const c=current(),t=tasks[selectedTask];
     if(['simulate-finish','simulate-delivery','confirm-abandon'].includes(button.dataset.action))bugScheduleSoon();
     switch(button.dataset.action){
@@ -2380,8 +2404,8 @@ body { margin: 0; padding: 16px; }
 
   q('[data-output-stream]').addEventListener('scroll',()=>{const c=current(),el=q('[data-output-stream]');if(c&&c.follow&&el.scrollHeight-el.clientHeight-el.scrollTop>30){c.follow=false;q('[data-action="follow-output"]').textContent='继续跟随';}});
   root.addEventListener('keydown',e=>{
-    if(e.key==='Escape'){if(documentStructureOpen){closeDocumentStructure();return;}if(projectVisionOpen){closeProjectVision();return;}if(specRuleOpen){closeSpecRule();return;}if(debugModalOpen){closeDebugCreate();return;}if(settingsTask){closeSettings();return;}if(root.dataset.dialog==='new-session'){closePlanningModal();}}
-    const dialog=documentStructureOpen?q('.document-structure-modal'):projectVisionOpen?q('.project-vision-modal'):specRuleOpen?q('.spec-rule-modal'):debugModalOpen?q('.debug-environment-modal'):settingsTask?q('.execution-drawer'):root.dataset.dialog==='new-session'?q('.sl-modal'):null;
+    if(e.key==='Escape'){if(documentStructureOpen){closeDocumentStructure();return;}if(projectVisionOpen){closeProjectVision();return;}if(specRuleOpen){closeSpecRule();return;}if(debugModalOpen){closeDebugCreate();return;}if(settingsTask){closeSettings();return;}}
+    const dialog=documentStructureOpen?q('.document-structure-modal'):projectVisionOpen?q('.project-vision-modal'):specRuleOpen?q('.spec-rule-modal'):debugModalOpen?q('.debug-environment-modal'):settingsTask?q('.execution-drawer'):null;
     if(dialog&&e.key==='Tab'){const focusables=[...dialog.querySelectorAll('button:not(:disabled),select:not(:disabled),input:not(:disabled),textarea:not(:disabled)')].filter(el=>el.getClientRects().length);const first=focusables[0],last=focusables.at(-1);if(e.shiftKey&&(document.activeElement===first||document.activeElement===dialog)){e.preventDefault();last.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
   });
   const phrases=['我正在核对依赖的真实交付状态，避免把某个候选的运行结束当作任务完成。','接下来检查并行候选的隔离：每个工作区、问题、答案和 PR 都属于原候选。','我会检查界面切换期间的晚到响应，确保输出和回答仍然归属正确的候选。'];
@@ -2399,8 +2423,7 @@ body { margin: 0; padding: 16px; }
     }));
     if(root.dataset.page==='runs')renderOutput();
   },1500);
-  root.addEventListener('submit',e=>{if(e.target.matches('[data-draft-task-form]')){e.preventDefault();saveDraftTask();}});
-  renderSessions();renderTaskSurfaces();renderExecution();renderRoadmap();renderAcceptance();setTimeout(()=>triggerExecutionAcceptance(tasks['8']),100);
+  renderTaskSurfaces();renderExecution();renderRoadmap();renderAcceptance();setTimeout(()=>triggerExecutionAcceptance(tasks['8']),100);
 })();
 
 </script>

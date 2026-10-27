@@ -4,14 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
-	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
+	"os"
 	"testing"
 	"time"
 )
 
 func TestExecutionWaitCapabilityAndResponse(t *testing.T) {
 	var caps Capabilities
-	raw, _ := json.Marshal(protocol.RunnerExecutionWaitCapability())
+	schema, err := os.ReadFile("../testkit/protocol/testdata/execution-wait.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := json.Marshal(map[string]any{"contract": runnercontract.ExecutionWaitContract, "same_snapshot": true, "run_property": "execution_wait", "schema": json.RawMessage(schema)})
 	_ = json.Unmarshal(raw, &caps.ExecutionWait)
 	cat := &Catalog{Capabilities: caps}
 	// New Orca admission also requires the original atomic observation path.
@@ -35,7 +39,8 @@ func TestExecutionWaitCapabilityAndResponse(t *testing.T) {
 	c.RunObservation = true
 	for _, mode := range []string{"queue", "null", "missing", "bad-stage", "bad-event"} {
 		t.Run(mode, func(t *testing.T) {
-			wait := protocol.RunnerExecutionWait(time.Now().UTC())
+			at := time.Now().UTC()
+			wait := &runnercontract.ExecutionWait{Contract: runnercontract.ExecutionWaitContract, OperationID: "original-preparation", Query: "repository_inventory", Stage: "queue", ReasonCode: "orca_cli_busy", StartedAt: at, UpdatedAt: at, DeadlineAt: at.Add(90 * time.Second), MaxCalls: 5, Diagnostic: "Orca CLI channel is busy."}
 			view := map[string]any{"run_id": "original", "revision": 3, "execution_wait": wait}
 			if mode == "null" {
 				view["execution_wait"] = nil

@@ -89,7 +89,9 @@ func (s *SQLiteStore) SaveGeneration(ctx context.Context, r testmodel.Generation
 		if old.Inputs != r.Inputs || old.PlanText != r.PlanText || len(old.Result) > 0 && !bytes.Equal(old.Result, r.Result) {
 			return errors.New("immutable generation input/result changed")
 		}
-		if old.Command != r.Command || !reflect.DeepEqual(old.Request, r.Request) || !reflect.DeepEqual(old.Runner, r.Runner) || old.Target != r.Target || !reflect.DeepEqual(old.Sources, r.Sources) || !reflect.DeepEqual(old.Catalogue, r.Catalogue) || old.RunID != "" && old.RunID != r.RunID || old.InputDigest != "" && old.InputDigest != r.InputDigest || old.Cancelled && !r.Cancelled || old.StopID != "" && old.StopID != r.StopID || old.StopRequest != nil && !reflect.DeepEqual(old.StopRequest, r.StopRequest) {
+		stopChanged := old.StopRequest != nil && !reflect.DeepEqual(old.StopRequest, r.StopRequest)
+		stopRetried := old.StopState == "rejected" && r.StopState == "unknown" && r.StopRequest != nil && old.StopRequest != nil && r.StopRequest.RequestID != old.StopRequest.RequestID
+		if old.Command != r.Command || !reflect.DeepEqual(old.Request, r.Request) || !reflect.DeepEqual(old.Runner, r.Runner) || old.Target != r.Target || !reflect.DeepEqual(old.Sources, r.Sources) || !reflect.DeepEqual(old.Catalogue, r.Catalogue) || old.RunID != "" && old.RunID != r.RunID || old.InputDigest != "" && old.InputDigest != r.InputDigest || old.Cancelled && !r.Cancelled || old.StopID != "" && old.StopID != r.StopID || stopChanged && !stopRetried {
 			return errors.New("immutable generation association changed")
 		}
 	}

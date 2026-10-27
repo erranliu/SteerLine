@@ -22,6 +22,7 @@
 | [项目结构与纳管核验（方案）](project-structure.md) | 文档角色/路径清单、只读固定版本核验、纳管与执行资格边界；尚无核验器 |
 | [本机客户端协议 v1](local-client-protocol.md) | 现有回环协议与公共查询/命令接口 |
 | [规划界面原型参考](../../SteerlineFlow/archive/design/planning-ui.md) | 早期 Web 规划方案；部分构想未交付，不产生当前任务/前置 |
+| [Roadmap 读取与转正](roadmap-promotion.md) | 只读 Markdown、Runner 解析、内部代号确认、文档能力前置与 Task 事务内入图编号 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |
 
 Web 是当前唯一交互前端；旧任务 #91 交付 HTTP 客户端基线，之后 TUI 已按[退役 Spec](../../SteerlineFlow/spec/tui-retirement.spec.md)删除。早期 TUI/规划界面文档已移至[设计归档](../../SteerlineFlow/archive/design/README.md)，实现与验收状态以当前 Spec 和专属验收为准。

@@ -56,6 +56,10 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 }
 
 var nativeTaskSchema = []string{
+	`CREATE TABLE roadmaps (project_identity TEXT NOT NULL, roadmap_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,roadmap_id))`,
+	`CREATE TABLE roadmap_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, roadmap_id TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,roadmap_id) REFERENCES roadmaps(project_identity,roadmap_id))`,
+	`CREATE TABLE task_number_sequences (repository TEXT PRIMARY KEY, next_id INTEGER NOT NULL CHECK(next_id>=0))`,
+	`CREATE TABLE roadmap_task_sources (project_identity TEXT NOT NULL, roadmap_id TEXT NOT NULL, local_key TEXT NOT NULL, task_id TEXT NOT NULL, request_id TEXT NOT NULL, PRIMARY KEY(project_identity,roadmap_id,local_key), UNIQUE(project_identity,task_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
 	`CREATE TABLE maintenance_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, digest TEXT NOT NULL, result BLOB NOT NULL, PRIMARY KEY(project_identity,request_id))`,
 	`CREATE TABLE project_materials (project_identity TEXT NOT NULL, task_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,task_id))`,
 	`CREATE TABLE maintenance_settings (project_identity TEXT PRIMARY KEY, profile TEXT NOT NULL, observation BLOB, generation_batch BLOB)`,

@@ -140,10 +140,15 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 			c.runtimeGenerations.Update(g)
 		}
 	}
+	roadmapStops, err := prepareRoadmapStops(ctx, c, store, cli)
+	if err != nil {
+		return nil, err
+	}
 	generationStops, err := prepareGenerationStops(ctx, store, c.Identity(), cli)
 	if err != nil {
 		return nil, err
 	}
+	generationStops = append(generationStops, roadmapStops...)
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {
 		return nil, err

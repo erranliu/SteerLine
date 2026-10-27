@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight, Play, Plus } from "lucide-react";
 import { useWorkspace } from "../../app/context";
+import {RoadmapTaskSource} from "../roadmaps/roadmaps";
 import {TaskMaterials} from "./task-materials";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
@@ -149,7 +150,8 @@ export function TaskDetail({
       <div className="detail-section">
         <h3>任务文档</h3>
         <p className="path">{task.spec_path || "未关联规格"}</p>
-        <TaskMaterials id={id}/>
+        <RoadmapTaskSource task={id}/>
+      <TaskMaterials id={id}/>
         <p className="muted">
           Task v{task.version} · 图 v{detail.data?.graph_revision}
         </p>

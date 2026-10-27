@@ -45,6 +45,7 @@ type Config struct {
 	runtimeCatalog     *runnerclient.Catalog
 	runtimeMaintenance *projectMaintenance
 	runtimeTests       api.TestManagementPort
+	runtimeRoadmaps    *roadmapPort
 	startup            *startupQueries
 
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`

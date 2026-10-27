@@ -71,6 +71,53 @@ type generationCLI struct {
 	run            runnerclient.Run
 }
 
+type racingGenerationStop struct {
+	*generationCLI
+	unknown  bool
+	requests []runnercontract.Request
+}
+
+func (f *racingGenerationStop) Call(ctx context.Context, command string, args []string, r *runnerclient.Request) (runnerclient.Response, error) {
+	f.requests = append(f.requests, *r)
+	if len(f.requests) == 1 {
+		f.run.Revision++
+		return runnerclient.Response{}, &runnerclient.Failure{Code: "stale_revision", Unknown: f.unknown}
+	}
+	var input struct {
+		Revision uint64 `json:"expected_revision"`
+	}
+	_ = json.Unmarshal(r.Input, &input)
+	if input.Revision != f.run.Revision || r.RequestID == f.requests[0].RequestID {
+		return runnerclient.Response{}, errors.New("replacement stop did not observe the rejected original")
+	}
+	f.run.StopStatus = "stopped"
+	return f.generationCLI.Call(ctx, command, args, r)
+}
+
+func TestTMGenerationCloseReconcilesDefinitiveStopRevisionRace(t *testing.T) {
+	for _, unknown := range []bool{false, true} {
+		t.Run(fmt.Sprint(unknown), func(t *testing.T) {
+			s, m, original, in := generationFixture(t)
+			f := &racingGenerationStop{generationCLI: original, unknown: unknown}
+			s.Runner = f
+			if _, err := s.Generate(context.Background(), in); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+			defer cancel()
+			err := s.Close(ctx)
+			r, _ := m.Generation(context.Background(), s.Project, in.RequestID)
+			if unknown {
+				if err == nil || len(f.requests) != 1 || r.StopRequest == nil || r.StopRequest.RequestID != f.requests[0].RequestID {
+					t.Fatal("uncertain stop was replaced or declared settled", err, r, f.requests)
+				}
+			} else if err != nil || len(f.requests) != 2 || r.Projection == nil || r.Projection.StopStatus != "stopped" {
+				t.Fatal("rejected stop did not settle before close", err, r, f.requests)
+			}
+		})
+	}
+}
+
 func (f *generationCLI) Submit(_ context.Context, r runnerclient.Request) (runnerclient.Receipt, error) {
 	f.submits++
 	f.request = r

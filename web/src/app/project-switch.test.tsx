@@ -145,6 +145,26 @@ afterEach(() => {
   setJournalHome("");
 });
 
+it("recognizes direct roadmap routes, keeps the page when switching projects, and restores its exact return target", async () => {
+  mock();
+  const original = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation((...args) =>
+    String(args[0]).endsWith("/roadmaps")
+      ? Promise.resolve(Response.json({ sources: [], records: [], profiles: [], documents_available: false, documents_reason: "" }))
+      : original(...args),
+  );
+  mount(`/projects/${a}/roadmaps?source=draft-a`);
+  await screen.findByRole("heading", { name: "Roadmap 草稿" });
+  expect(screen.getByRole("combobox", { name: "当前项目" })).toHaveValue(a);
+  fireEvent.change(screen.getByRole("combobox", { name: "当前项目" }), { target: { value: b } });
+  await waitFor(() => expect(screen.getByTestId("location")).toHaveTextContent(`/projects/${b}/roadmaps`));
+  await screen.findByRole("heading", { name: "Roadmap 草稿" });
+  fireEvent.click(screen.getByRole("link", { name: "执行方案配置" }));
+  await waitFor(() => expect(screen.getByRole("link", { name: "返回项目" })).toHaveAttribute("href", `/projects/${b}/roadmaps`));
+  fireEvent.click(screen.getByRole("link", { name: "返回项目" }));
+  await screen.findByRole("heading", { name: "Roadmap 草稿" });
+});
+
 it("cancels the old project's pending preload and never installs its late response in the new cache", async () => {
   mock();
   const original = vi.mocked(fetch).getMockImplementation()!;

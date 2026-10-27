@@ -52,3 +52,12 @@ Runner 远端机制已随主干 `d4969d0`（PR #18）合入，其独立验收见
 
 
 原生结果契约：execution.native_outcome / final.native_outcome 为 succeeded、failed、cancelled、unknown 或 unreported。unreported 表示接口未提供 outcome，不表示底层成功；只有 Runner 已核实原回合、完整结果及既有业务门后才能推进状态。SteerLine 原样保存/传递；任务状态、可用操作及 PR 事实仍由 Runner 给出，部署仍看 resources_settled。显式 unknown、失败、取消、未知输入不放行；历史记录不重新分类或自动恢复。CLI 结构/version v1 不变，不新增消费端容错开关。
+
+
+## Roadmap 固定版本文档生成（2026-10-27）
+
+已接入 Runner aa8c392f9798d05184788d83947dd7bf4afc75a6 的 generate/1 扩展。输入 generate.repository={local_path,commit}；Runner 从已有本地 Git 对象提供固定提交的只读快照，不采用脏工作树。公开 capabilities.generate / configuration_schemas.generate_input 判断能力，结果仍由 inspect 的 content_result.json 交付；Run 与结果均有 repository_source（commit/tree/files/blob/sha256/size_bytes）。manifest 证明可用文件版本，不证明模型逐文件已读或推论正确。
+
+整个 JSON 上限 1 MiB，无分页；SteerLine 固定内部代号和语义文档路径，校验完整文件集、原文/确认摘要、代码提交及调查引用。原请求、停止/资源结算和接管沿既有机制；文档生成不创建 Task/Candidate、不分配编号、不写 Git/PR。规范/版本缺失或结果不完整保持阻断。
+
+真实接入构建和本机 Codex 验证见 [Roadmap 验收](../../SteerlineFlow/testing/acceptance/roadmap-promotion.md)。使用时在本环境 execution.json 选择支持该 capability 的 Runner EXE，并核对实际版本与 SHA；不修改安装版或复用旧服务现场。流程与 API 见 [产品设计](../product-design/roadmap-promotion.md)。

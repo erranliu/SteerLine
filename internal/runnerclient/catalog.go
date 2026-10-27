@@ -13,6 +13,7 @@ import (
 )
 
 type Capabilities struct {
+	Generate           *GenerateCapability      `json:"generate,omitempty"`
 	ExecutionWait      *ExecutionWaitCapability `json:"execution_wait,omitempty"`
 	ProgressFile       *ProgressCapability      `json:"progress_file,omitempty"`
 	ProgressFileSchema json.RawMessage          `json:"progress_file_schema,omitempty"`

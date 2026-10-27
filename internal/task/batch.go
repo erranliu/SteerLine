@@ -57,6 +57,42 @@ func (c Commands) CreateTaskBatch(ctx context.Context, data []byte, requestID st
 	if err != nil {
 		return taskmodel.TaskBatchReceipt{}, err
 	}
+	return c.createTaskBatch(ctx, batch, canonicalPayload, requestID, expectedAuthorityVersion, requestedBy, "")
+}
+
+// AdmitRoadmap assigns numbers only in the Task batch write transaction.
+func (c Commands) AdmitRoadmap(ctx context.Context, roadmapID string, batch taskmodel.TaskBatchInput, requestID string, expected uint64, requestedBy string) (taskmodel.TaskBatchReceipt, error) {
+	if err := c.validateInput(); err != nil {
+		return taskmodel.TaskBatchReceipt{}, err
+	}
+	if roadmapID == "" || len(batch.Tasks) == 0 {
+		return taskmodel.TaskBatchReceipt{}, taskError("invalid_batch", "roadmap identity and tasks are required")
+	}
+	for _, t := range batch.Tasks {
+		if t.TaskID != 0 {
+			return taskmodel.TaskBatchReceipt{}, taskError("invalid_batch", "roadmap input cannot allocate task numbers")
+		}
+	}
+	raw, err := json.Marshal(struct {
+		Roadmap string
+		Batch   taskmodel.TaskBatchInput
+	}{roadmapID, batch})
+	if err != nil {
+		return taskmodel.TaskBatchReceipt{}, err
+	}
+	canonical, err := taskmodel.CanonicalJSON(raw)
+	if err != nil {
+		return taskmodel.TaskBatchReceipt{}, err
+	}
+	return c.createTaskBatch(ctx, batch, canonical, requestID, expected, requestedBy, roadmapID)
+}
+
+type roadmapBatchTx interface {
+	AllocateTaskNumbers(context.Context, string, int) ([]int64, error)
+	PutRoadmapTaskSource(context.Context, string, string, string, string, string) error
+}
+
+func (c Commands) createTaskBatch(ctx context.Context, batch taskmodel.TaskBatchInput, canonicalPayload []byte, requestID string, expectedAuthorityVersion uint64, requestedBy, roadmapID string) (taskmodel.TaskBatchReceipt, error) {
 	store := c.Store
 	if store == nil || c.Input.Project == "" || batch.ProjectID != c.Input.Project {
 		return taskmodel.TaskBatchReceipt{}, taskError("authority_mismatch", "batch project_id, command target and configured project must match")
@@ -72,15 +108,24 @@ func (c Commands) CreateTaskBatch(ctx context.Context, data []byte, requestID st
 	} else if found {
 		return replayTaskBatch(existing, canonicalPayload, batch.ProjectID, requestedBy)
 	}
-	validation, err := c.ValidateTaskBatch(ctx, data)
-	if err != nil {
-		return taskmodel.TaskBatchReceipt{}, err
-	}
-	if !validation.Valid {
-		return taskmodel.TaskBatchReceipt{}, taskmodel.BatchValidationError(validation.Issues, validation.Cycle)
-	}
-	if validation.AuthorityVersion != expectedAuthorityVersion {
-		return taskmodel.TaskBatchReceipt{}, taskError("stale_version", fmt.Sprintf("expected authority version %d, sampled %d", expectedAuthorityVersion, validation.AuthorityVersion))
+	var err error
+	if roadmapID == "" {
+		validation, e := c.ValidateTaskBatch(ctx, canonicalPayload)
+		if e != nil {
+			return taskmodel.TaskBatchReceipt{}, e
+		}
+		if !validation.Valid {
+			return taskmodel.TaskBatchReceipt{}, taskmodel.BatchValidationError(validation.Issues, validation.Cycle)
+		}
+		if validation.AuthorityVersion != expectedAuthorityVersion {
+			return taskmodel.TaskBatchReceipt{}, taskError("stale_version", "authority changed")
+		}
+	} else {
+		for _, t := range batch.Tasks {
+			if e := (Service{Input: c.Input, Documents: c.Documents}).VerifyContractFiles(ctx, t.Contract); e != nil {
+				return taskmodel.TaskBatchReceipt{}, e
+			}
+		}
 	}
 	payloadDigest := digestCanonical(canonicalPayload)
 	var receipt taskmodel.TaskBatchReceipt
@@ -101,6 +146,20 @@ func (c Commands) CreateTaskBatch(ctx context.Context, data []byte, requestID st
 		}
 		if graph.Authority.AuthorityVersion != expectedAuthorityVersion {
 			return taskError("stale_version", fmt.Sprintf("expected authority version %d, found %d", expectedAuthorityVersion, graph.Authority.AuthorityVersion))
+		}
+		if roadmapID != "" {
+			allocator, ok := tx.(roadmapBatchTx)
+			if !ok {
+				return errors.New("roadmap batch transaction unavailable")
+			}
+			ids, e := allocator.AllocateTaskNumbers(ctx, c.Input.Project, len(batch.Tasks))
+			if e != nil {
+				return e
+			}
+			batch.Tasks = append([]taskmodel.TaskBatchTask(nil), batch.Tasks...)
+			for i := range batch.Tasks {
+				batch.Tasks[i].TaskID = ids[i]
+			}
 		}
 		issues, cycle := c.validateTaskBatchAgainstGraph(ctx, batch, graph, false)
 		if len(issues) > 0 {
@@ -131,6 +190,11 @@ func (c Commands) CreateTaskBatch(ctx context.Context, data []byte, requestID st
 			}
 			if e = tx.PutTaskContract(c.Input.Project, id, input.Contract); e != nil {
 				return e
+			}
+			if roadmapID != "" {
+				if e = tx.(roadmapBatchTx).PutRoadmapTaskSource(ctx, c.Input.Project, roadmapID, input.LocalKey, id, requestID); e != nil {
+					return e
+				}
 			}
 			body, _ := json.Marshal(map[string]any{"batch_id": batchID, "local_key": input.LocalKey, "task_id": id, "contract_digest": input.Contract.Digest, "payload_digest": payloadDigest})
 			if _, e = tx.AppendEvent(Event{ProjectIdentity: c.Input.Project, TaskID: id, ExternalSource: "native-task-command", ExternalID: requestID + ":" + input.LocalKey, Type: "task.created", ReceivedAt: createdAt, Payload: body}); e != nil {

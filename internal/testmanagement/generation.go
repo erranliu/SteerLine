@@ -375,7 +375,7 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 	r.Diagnostic = run.Diagnostic
 	if r.Cancelled {
 		r.State = "cancelled"
-		if r.StopRequest == nil && run.StopStatus != "stopped" {
+		if (r.StopRequest == nil || r.StopState == "rejected") && run.StopStatus != "stopped" {
 			body, _ := json.Marshal(map[string]any{"expected_revision": run.Revision})
 			r.StopRequest = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: randomID(), Input: body}
 			r.StopState = "unknown"
@@ -394,6 +394,12 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 				r.StopState = "accepted"
 			} else {
 				r.Diagnostic = callErr.Error()
+				var failure *runnerclient.Failure
+				if errors.As(callErr, &failure) && !failure.Unknown && failure.Code == "stale_revision" {
+					// This envelope was definitively rejected. Re-observe before
+					// preparing another stop; uncertain envelopes remain immutable.
+					r.StopState = "rejected"
+				}
 			}
 		}
 	} else if result := run.ContentResult; r.State != "generated" && result != nil {
@@ -454,6 +460,8 @@ func (s *GenerationService) Stop(ctx context.Context, id, stopID string) (Genera
 	return s.observe(ctx, r)
 }
 func (s *GenerationService) Close(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
 	rows, err := s.Store.Generations(ctx, s.Project)
 	if err != nil {
 		return err
@@ -465,12 +473,21 @@ func (s *GenerationService) Close(ctx context.Context) error {
 		if r.Projection != nil && r.Projection.StopStatus == "stopped" {
 			continue
 		}
-		if _, e := s.Stop(ctx, r.ID, func() string {
+		r, e := s.Stop(ctx, r.ID, func() string {
 			if r.StopID != "" {
 				return r.StopID
 			}
 			return randomID()
-		}()); e != nil {
+		}())
+		for e == nil && !r.Unsubmitted() && (r.Projection == nil || r.Projection.StopStatus != "stopped") {
+			select {
+			case <-ctx.Done():
+				e = ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+				r, e = s.observe(ctx, r)
+			}
+		}
+		if e != nil {
 			err = errors.Join(err, fmt.Errorf("generation %s: %w", r.ID, e))
 		}
 	}

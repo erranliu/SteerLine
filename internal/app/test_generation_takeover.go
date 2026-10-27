@@ -84,7 +84,7 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 		if !g.Cancelled || !bound || g.Projection != nil && g.Projection.StopStatus == "stopped" {
 			continue
 		}
-		if g.StopRequest == nil {
+		if g.StopRequest == nil || g.StopState == "rejected" {
 			body, _ := json.Marshal(map[string]uint64{"expected_revision": item.Revision})
 			g.StopRequest = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: fmt.Sprintf("sl-generation-stop-%s-%d", g.ID, g.Revision), Input: body}
 			g.StopState = "unknown"
