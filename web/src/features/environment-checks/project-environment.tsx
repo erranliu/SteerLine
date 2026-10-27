@@ -29,6 +29,7 @@ type Round = {
   result?: Snapshot;
   report?: {
     completed: boolean;
+    checks: { id: string; status: string; message: string }[];
     l2: { test_id: string; status: string; message: string }[];
     pr: {
       url: string;
@@ -306,6 +307,13 @@ export function ProjectEnvironment() {
                   {a.report && (
                     <div>
                       <p>{a.report.message}</p>
+                      <h4>环境要求检查</h4>
+                      {a.report.checks.map((c) => (
+                        <p key={c.id}>
+                          {c.id} · {c.status === "passed" ? "通过" : c.status === "failed" ? "不通过" : "未验证"} · {c.message}
+                        </p>
+                      ))}
+                      <h4>L2 验收</h4>
                       {a.report.l2.map((t) => (
                         <p key={t.test_id}>
                           {t.test_id} · {t.status} · {t.message}

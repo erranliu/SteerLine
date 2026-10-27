@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,6 +130,10 @@ func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) 
 	candidate := runnerbridge.Candidate{ProfileID: "remote", Submit: runnerclient.Request{Input: input}}
 	if e = service.ReserveExecution(ctx, taskmodel.FixedWork{}, candidate, false); e == nil || !strings.Contains(e.Error(), "环境未就绪") {
 		t.Fatal("unadapted remote reached reservation", e)
+	}
+	var denial *taskmodel.Error
+	if !errors.As(e, &denial) || denial.Code != "environment_not_ready" {
+		t.Fatal("environment denial must produce a terminal control receipt", e)
 	}
 	// Two starts contend on the same public target; exactly one durable record.
 	var wg sync.WaitGroup

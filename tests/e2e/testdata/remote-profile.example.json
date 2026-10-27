@@ -1,0 +1,22 @@
+{
+  "id": "orca-remote-desktop64g",
+  "name": "Desktop 64G L4",
+  "execution": {
+    "adapter": "orca-terminal",
+    "target": {
+      "kind": "orca_environment",
+      "environment": "00000000-0000-0000-0000-000000000000"
+    },
+    "settings": {
+      "transport": { "executable": "C:/Tools/Orca/orca.exe", "wait_timeout": "40s" },
+      "agent_launch": {
+        "executable": "C:/Tools/Codex/codex.exe",
+        "args": ["--no-daemon"],
+        "model": "gpt-6-luna",
+        "reasoning_effort": "high"
+      },
+      "access_mode": "full_access"
+    }
+  },
+  "workflow": { "id": "development", "version": 2 }
+}

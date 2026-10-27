@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 // CleanupRunner first fences the original service (including any in-flight
@@ -173,6 +174,20 @@ func MainRunnerCleanup(args []string) error {
 	candidates, err := ReadOriginalOperations(ctx, filepath.Join(hc.RunDir, "steerline.db"), c.Identity())
 	if err != nil {
 		return err
+	}
+	reader, err := sqlite.OpenSQLiteReader(filepath.Join(hc.RunDir, "steerline.db"))
+	if err != nil {
+		return err
+	}
+	activities, err := reader.Environments(ctx, c.Identity())
+	reader.Close()
+	if err != nil {
+		return err
+	}
+	for _, activity := range activities {
+		for _, round := range activity.Rounds {
+			candidates = append(candidates, runnerstate.Candidate{Project: activity.Project, RunID: round.RunID, Submit: round.Request, SubmitState: round.Submission, Projection: round.Run})
+		}
 	}
 	err = CleanupRunner(ctx, app.GlobalExecutionConfigPath(), runnerstatepath.Directory(app.HomeDir()), candidates)
 	if encodeErr := json.NewEncoder(os.Stdout).Encode(map[string]any{"confirmed": err == nil, "error": fmt.Sprint(err)}); encodeErr != nil {

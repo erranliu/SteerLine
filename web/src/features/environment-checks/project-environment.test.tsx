@@ -141,6 +141,7 @@ it("shows the original intranet PR link without promoting an unfinished activity
   Object.assign(record.rounds[0], {
     report: {
       completed: true,
+      checks: [{ id: "git", status: "passed", message: "Git available" }, { id: "unity.editor", status: "failed", message: "UNITY_EDITOR_PATH is not set" }],
       message: "等待收尾",
       l2: [{ test_id: "one", status: "passed", message: "" }],
       pr: {
@@ -156,6 +157,8 @@ it("shows the original intranet PR link without promoting an unfinished activity
     await screen.findByRole("link", { name: "http://gitea.local/pulls/1" }),
   ).toHaveAttribute("href", "http://gitea.local/pulls/1");
   expect(screen.getByText("远端一 · 环境未就绪")).toBeVisible();
+  expect(screen.getByText("git · 通过 · Git available")).toBeVisible();
+  expect(screen.getByText("unity.editor · 不通过 · UNITY_EDITOR_PATH is not set")).toBeVisible();
 });
 
 it("exports the script under its declared path even when prose mentions another interpreter", async () => {

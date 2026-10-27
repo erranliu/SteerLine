@@ -137,7 +137,7 @@ func read(t *testing.T, s *env.Service, id string) env.Record {
 }
 func report(r env.Record, remote *runner, pass bool) env.Report {
 	a := r.Rounds[len(r.Rounds)-1]
-	p := env.Report{Version: 1, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, L2: []env.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
+	p := env.Report{Version: 1, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, Checks: []env.Check{{ID: "tool", Status: "passed", Message: "required version available"}}, L2: []env.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
 	if pass {
 		p.PR = env.PR{URL: "https://git/validation/pulls/1", Base: "validation", Head: remote.run.Execution.Branch, ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("c", 40), CleanupCompleted: true}
 	} else {
@@ -276,6 +276,50 @@ func TestProjectEnvironmentExecutionWaitingInputDoesNotStop(t *testing.T) {
 	observe(t, s)
 	if remote.stops != 1 || read(t, s, r.ID).Status() != "ready" {
 		t.Fatal("completed execution failed to stop and seal")
+	}
+}
+
+func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testing.T) {
+	s, remote, store, _ := setup(t)
+	r := start(t, s)
+	for round := 1; round <= 3; round++ {
+		observe(t, s)
+		r = read(t, s, r.ID)
+		p := report(r, remote, false)
+		p.Checks = []env.Check{{ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}}
+		for i := range p.L2 {
+			p.L2[i].Status = "incomplete"
+			p.L2[i].Message = "environment requirements failed; L2 not executed"
+		}
+		p.PR.CleanupCompleted = true
+		setReport(remote, p)
+		remote.run.Status = "waiting_input"
+		remote.run.Final = &runnercontract.Final{Verified: true, Text: `{"outcome":"blocked"}`}
+		observe(t, s)
+		observe(t, s)
+		s = &env.Service{Project: s.Project, Store: store, Runner: remote, Prepare: s.Prepare, Now: s.Now}
+		got := read(t, s, r.ID)
+		last := got.Rounds[round-1]
+		if last.Report == nil || last.Report.Checks[0].Status != "passed" || last.Report.Checks[1].Status != "failed" || got.Status() != "not_ready" {
+			t.Fatal("lost mixed requirement results or admitted failure", got)
+		}
+	}
+	if got := read(t, s, r.ID); got.State != "failed" || !got.Settled() || remote.submits != 3 {
+		t.Fatal("requirement checks changed the three-round budget", got.State, remote.submits)
+	}
+}
+
+func TestProjectEnvironmentIncompleteScriptPreservesExecutionFailure(t *testing.T) {
+	s, remote, _, _ := setup(t)
+	r := start(t, s)
+	observe(t, s)
+	remote.run.Status = "failed"
+	remote.run.Diagnostic = "native readiness unavailable; no input was sent"
+	observe(t, s)
+	observe(t, s)
+	got := read(t, s, r.ID)
+	if got.Status() != "not_ready" || !strings.Contains(got.Diagnostic, "验收脚本未完成") || !strings.Contains(got.Diagnostic, "native readiness unavailable") {
+		t.Fatal("incomplete initial report hid the execution failure", got.Diagnostic)
 	}
 }
 

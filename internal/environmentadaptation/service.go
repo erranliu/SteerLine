@@ -153,7 +153,7 @@ func (s *Service) appendRound(r *Record) {
 	input.NamePrefix = "sl-env"
 	input.Title = "环境适配: " + r.Profile
 	input.Correlation = map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": fmt.Sprint(n)}
-	initial, _ := json.Marshal(Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, L2: []Item{}})
+	initial, _ := json.Marshal(Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []Check{}, L2: []Item{}})
 	input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}
 	progress := map[string]bool{"pr": false}
 	for _, id := range r.Prepared.L2 {
@@ -161,9 +161,9 @@ func (s *Service) appendRound(r *Record) {
 	}
 	raw, _ := json.Marshal(progress)
 	input.ProgressFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(raw)}
-	meta := fmt.Sprintf("\n本次活动%s，轮次%d，固定源码%s，脚本SHA256=%s。结果文件初始JSON提供关联字段，脚本须保留并在返回前原子写完最终报告。Runner仅在原执行结束且停止后封存一次结果；不要等待回传再结束，不要用resume刷新结果。前轮问题：%s\n", r.ID, n, r.Prepared.Commit, r.Prepared.ScriptDigest, r.Diagnostic)
+	meta := fmt.Sprintf("\n本次活动%s，轮次%d，固定源码%s，脚本Git blob SHA256=%s（固定提交中的原始blob字节；工作区CRLF转换不代表脚本变更）。结果文件初始JSON提供关联字段，脚本须保留并在返回前原子写完最终报告。Runner仅在原执行结束且停止后封存一次结果；不要等待回传再结束，不要用resume刷新结果。前轮问题：%s\n", r.ID, n, r.Prepared.Commit, r.Prepared.ScriptDigest, r.Diagnostic)
 	input.Workflow.PromptOverrides = map[string]string{
-		"implement.execute": "按真实环境准备文档准备。仅执行固定验收脚本prepare阶段，跑完整L2；禁止创建PR、修改标准或手写通过报告。prepare失败脚本必须写最终失败报告，并报告阻断；成功才声明实施及必要验证已完成。" + meta,
+		"implement.execute": "项目文档声明环境要求，用户负责在远端预先准备工具、环境变量和PATH。只按文档执行固定验收脚本prepare阶段，逐项检查所有要求并保留通过、不通过及未验证原因；不要在首项失败后省略其余独立检查。禁止搜索安装路径、安装/修复依赖、修改环境变量/PATH、Git配置或受测标准，也不询问用户路径。只能读取文档指定的变量或命令入口；不满足由脚本写最终失败报告并返回blocked。要求全满足才运行原完整L2。此阶段禁止创建PR或手写验收报告；成功才声明实施及必要验证已完成。" + meta,
 		"publish":           "仅在prepare完整L2通过后执行同一验收脚本publish阶段，这是唯一PR创建入口。使用固定publication base和实际当前分支head，提交专属验证改动，完成必需检查/审核、真实合并和脚本资源清理，再原子写STEERLINE_RESULT_FILE最终报告。未知先查询原PR，不重建；报告原PR URL。不要删除Runner持有工作区/分支或预设验证base。" + meta,
 	}
 	body, _ := json.Marshal(input)
@@ -334,7 +334,7 @@ func (s *Service) observe(ctx context.Context, r *Record) error {
 	if due {
 		a.TimedOut = true
 	}
-	terminal := run.Closed || run.Status == "pr_ready" || run.Status == "completed" || run.Status == "stopped" || run.Status == "failed" || run.Status == "cancelled" || run.StopStatus == "stopped"
+	terminal := run.Closed || run.Status == "pr_ready" || run.Status == "completed" || run.Status == "stopped" || run.Status == "failed" || run.Status == "cancelled" || run.StopStatus == "stopped" || r.Kind == "adaptation" && run.Status == "waiting_input" && run.Final != nil && run.Final.Verified
 	stop := r.Cancelled || due || terminal || r.Generation != nil || r.Kind == "generation" && run.ContentResult != nil
 	if stop && run.StopStatus != "stopped" {
 		if due {
@@ -407,6 +407,11 @@ func (s *Service) observe(ctx context.Context, r *Record) error {
 				a.Report, e = ParseReport(raw, *r, *a)
 				if e != nil {
 					a.Diagnostic = e.Error()
+				} else if !a.Report.Completed {
+					a.Diagnostic = "验收脚本未完成，不能判定环境通过"
+					if run.Diagnostic != "" {
+						a.Diagnostic += "：" + run.Diagnostic
+					}
 				} else {
 					a.Diagnostic = a.Report.Message
 				}

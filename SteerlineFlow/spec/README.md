@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+L4远端测试与64G共享配置（2026-10-26，已接线）：[Spec](l4-remote-tests.spec.md) · [Plan](../plans/l4-remote-tests.plan.md) · [专属验收](../testing/acceptance/l4-remote-tests.md)。三项登记L4共用既有格式profile与执行器；目录已真机通过，进度/308因受测提交缺环境材料尚未完成真实业务验收，不继承历史独立入口通过。
+
 项目远端环境适配（2026-10-26，调用方已实施）：[Spec](project-environment-adaptation.spec.md) · [Plan](../plans/project-environment-adaptation.plan.md) · [专属验收](../testing/acceptance/project-environment-adaptation.md)。既有远端Agent执行项目脚本，双通道独立回传；三轮、单轮期限和二态准入，完整L2+同一验证PR合并及原Run收尾才ready。固定base、唯一publish入口、目标准入和独立生成用例按审计收敛；不新增通用框架。受控与真实联验分别记录，未部署。
 
 候选停止可靠受理与核实（2026-10-25，自审收敛后实施）：[Spec](candidate-stop-reliability.spec.md) · [Plan](../plans/candidate-stop-reliability.plan.md) · [专属验收](../testing/acceptance/candidate-stop-reliability.md)。停止不因无关候选/派发版本增长失效，原请求/退出事实恢复、原 actor 及时让路、有界独立核实及失败/未知/快照刷新分开呈现；保留最后一个、交付竞争和资源边界。不改 roadmap 或安装现场。

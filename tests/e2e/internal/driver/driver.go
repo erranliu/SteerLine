@@ -157,7 +157,7 @@ func MainControl(args []string) error {
 	if *action != "resume_dispatch" && *action != "start_task" && *action != "start_candidate" {
 		return fmt.Errorf("unsupported E2E control action")
 	}
-	if *expectedStatus != "applied" && !(*action == "start_task" && (*expectedStatus == "failed" || *expectedStatus == "indeterminate")) {
+	if *expectedStatus != "applied" && !(*action == "start_task" && (*expectedStatus == "rejected" || *expectedStatus == "failed" || *expectedStatus == "indeterminate")) {
 		return fmt.Errorf("unsupported E2E control status expectation")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)

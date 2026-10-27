@@ -81,7 +81,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			return reserve()
 		}
 		if config.runtimeEnvironment == nil || config.runtimeEnvironmentAdmission == nil {
-			return errors.New("环境未就绪：远端适配门禁不可用")
+			return &taskmodel.Error{Code: "environment_not_ready", Message: "环境未就绪：远端适配门禁不可用"}
 		}
 		a := config.runtimeEnvironmentAdmission
 		a.mu.Lock()
@@ -90,10 +90,10 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			return err
 		}
 		if err := a.check(ctx, target, "", false); err != nil {
-			return err
+			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 		}
 		if _, err := config.runtimeEnvironment.readyFor(ctx, candidate.ProfileID, candidate.BaseRevision); err != nil {
-			return err
+			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 		}
 		return reserve()
 	}
