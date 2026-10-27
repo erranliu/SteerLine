@@ -123,3 +123,21 @@ PR399 已解决与当前 main 的唯一边界测试冲突，保留主线更严�
 证据根为 `C:/SteerlineDebug/wt-507e-progress-0of6/`：`segmentfixed-01/profile-acceptance.json`、`material-admission.json`、`pause-startup-owner-20261027.json`、`pause-cleanup-20261027T1545/result.json`、closed 截图 `observations/2026-10-27T07-43-15-823Z/task18-progress.png` 及根目录 `paused-owned-resource-census-20261027T1545.json`。原构建、正式包、旧接受 pin、失败和停止记录均不覆盖；当前无活动业务复验，定时任务已取消。
 
 后续仅在用户告知 PR66 合入后核对实际合入提交、Runner 自身验收结果及对应构建，再用正式入口生成全新独立调试包，不热替换旧运行。恢复时仍须完整验证原始报告、全部实际安排检查、进度/API/UI、真实发布和资源结算，连续两轮目标不变。PR399 的独立代码审计及受控验证已经完成，当前仅完成文档/资源收尾后进入等待；不创建子代理，不向其它 session 发消息，不合并或部署。
+
+## PR66 合入后：完整首轮与第二轮材料准入失败
+
+用户告知 PR66 已合入后，实际 merge、受测产品及构建、PR399 rebase 与正式新包见[合入审计](pr399-merge-review-20261027.md)。本轮 Runner 产品源 `ffb9c510280d470e064e48770b8eea30174d82c4` / EXE SHA256 `a745ab738152e974850cbaca7851fb13c0d33cd08a915cda555f1ae465556347`，Caller8205，实际业务 base485d；旧现场均未恢复或热换。
+
+`merged66-01` 实际只安排 L1、L2 与四项结构检查，六项 definition 包括 note 与原 registry 完全相同。原 Run `cc0c0701fb3b978ab568f982c787ae89` / Attempt `47f10062ba94ffbe132d9724ba9131e4`，唯一 submit `bc120ef4be8128c9393b4e83cd0fe20a` / command `9bd405cb13dea2d2a59638ede9d86cd5` 已由公开事件及同 command inspect 核实。原生完整公开会话为初始化、原实施、原发布三条输入，原实施及发布 final 均核实，没有 parent 补发、补 Enter、手填进度或 SDK 安装。
+
+最终六份原 managed/summary 字节和 SHA、四结构 exit0、L1/L2 两个原父计划及三个 XML 批次均通过独立核验。XML 实际为11、1、1个 Passed，无 skipped；两个 PlayFlow receipt 的业务覆盖、输入核验和清理均 Passed、externalRequests0。只读调用原 canonical validator，未由 parent 重跑 Unity。两份原计划 codeIdentity 均为 `485d88bad9081d3fd8d892116569f763038f7b7e:056d1daf8ce255d52cb7e0982b7d62fdfbdfbc1690c8815a3b0d0a55ac2cd431`，发布后的按 execution base 重建身份一致；仍保留原报告 before/after dirty，不升级为 clean 发布 head 重跑或完整业务/人工验收。
+
+真实 [PR433](http://192.168.0.66:3000/zymobile/merge-h-308-code/pulls/433) open/unmerged，base AIRefactor，head `f552c0ddfc23cc4f94dad356b2568e6091988095`；独立 Gitea API 五个变更文件及实际 remote HEAD 一致。RuntimeProgress.ps1 已在 base 中，发布 head 上仍存在且与正式源码等价，未因它不在五个变更中而判缺失。首次采集 PowerShell 数组容器计数错误保留，原 JSON 完整五项，后用原 JSON 与实际 head 内容纠正。
+
+原进度 version19、194字节、SHA256 `71585b019da15301909af3407ce5d3bee8651b9c8612fec1beb19d4adfd4e7a7`，恰好六个 true，无 publication 元数据；发布后及原 Run stop 后的 closed API/UI 均独立目检6/6。先核实 stopped / new_inputs_allowed=false，再正常停止宿主；offline resources_settled=true、完整 owned native census0 / truncated=false / omittedHosts为空、本地 home/bin 进程0。证据根 `C:/SteerlineDebug/wt-507e-progress-0of6/merged66-01/`：`checks-verified.json`、`chain-result.json`、report/input-evidence-index、`diagnostics/native-public-session-final-20261027T091028672Z/`、截图 `observations/2026-10-27T09-02-36-321Z/` 与 `09-12-44-466Z/`、`cleanup-merged66-01/result.json`。首轮真实通过不提前宣称2/2。
+
+`merged66-02` 使用同一原代际和 Runner、新 clone/home，自动原安排保留 L1、L2 及三项活动 extra，却遗漏 Plan 明确映射的四项结构检查。门禁在 `start_task` 前拒绝，公开 valid/connected 快照 runs=null、slot_occupied=false；没有 Task18 Run、submit 或 Unity 业务执行。没有删去 extra、手工补结构项、重生成或第三轮原样抽样。保留 `materials-4.json` 与 startup-result，正常停止生成宿主、offline settled、本地 home/bin 进程0，见 `pre-admission-cleanup-02/result.json` 和 `chain-result.json`。首次收尾脚本未处理公开空 runs 的 null 表示，在 stop 前失败；原失败保留，后续脚本先验证有效快照再完成唯一 stop，没有重放旧停止。
+
+生成提示原本先强调规范必跑，再按 Plan/影响选定向项，对 Plan 自身的必跑表约束不足。新增提示明确规范与 Plan 必跑项先取并集、不得以业务回归替代结构/资源契约，最后逐项核对；不硬编码项目 ID、不新增解析器或手工改写安排。当前 PR 干净产品源 `e87f04b8fc843c10c510a3f7db5396d25fa28607` 与新原代际 `3d42de02758f6de2c86c6d4a698a0eea3c22f317` 只含相同提示增量。
+
+两套受影响 owner 和固定 L1 通过；owner 原生 opt-in 分别跳过3项和2项，不算原生资格。当前 PR 固定 L2 通过且 cleanup_complete=true。原代际首次固定 L2 在请求回执原子 rename 出现 AccessDenied，失败且清理通过；同一干净源码的独立完整 L2 随后通过且清理通过，未确定首次文件访问失败根因。原报告为 `validation-plan-required-main-01/`、`validation-plan-required-original-01/`、`validation-plan-required-original-L2-02/`，组合核验 `validation-plan-required-original-qualified.json`，均位于上述任务根。新提示仅完成组件资格，模型是否保留全部必跑项及真实两轮仍待新现场验证，连续计数从0开始；历史成功与失败不覆盖，Runner 不再修改。
