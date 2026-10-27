@@ -91,3 +91,9 @@
 唯一原 Run stop 已接纳并核实 stopped / new_inputs_allowed=false。首个停止驱动在进度仍为 observing 的短暂窗口要求立即 closed 而中止；原失败保留，后续仅延续只读确认，不重发 stop。进度随后 closed 且版本/字节/SHA 不变，API 和独立目检仍为 6/7；宿主正常停止，offline resources_settled=true，完整精确 owned native census0 / truncated=false / omittedHosts 为空，本地 home/bin 进程0。证据为 `cleanup-blocked-20261027T0305/`、`cleanup-completion-20261027T0310/result.json`、closed 截图 `observations/2026-10-26T19-00-19-730Z/task18-progress.png` 和 `chain-result.json`。没有活动 Task18 Run，没有热换包、恢复原轮或新增业务轮。
 
 后续阻塞是原业务项目完整 EditMode 的断言、夹具和显式独立执行准备，另有发布阶段的远端连接拒绝。现有固定测试/不删项/不缩小范围约束下不能将这些改成通过，也不能用重复抽样选择另一套测试绕过。本次先保留明确负向证据及完整清理，是否扩展到这些业务测试问题另待用户明确方向；本 Caller 修复保持 draft，未部署或合并。
+
+## 2026-10-27 后续交付与 PR399 合入审计
+
+用户已批准业务修复、确认两项废弃 Stage33 检查无效，并合并 PR428；上述“待用户方向”为原 qualified-02 停止时的历史状态。按用户随后恢复原进度复验的要求，已建立全新 post428-01 并接纳10项原安排，连续数仍未达2/2。原 home、输入、失败及清理事实不变。
+
+PR399 已解决与当前 main 的唯一边界测试冲突，保留主线更严格限制。新的组件、固定 L1/L2 和受控进度验证及未验边界见[合入审计](pr399-merge-review-20261027.md)；原代际 Caller 的真实链不作为当前 main 新环境代际的证明，PR 保持草稿。
