@@ -52,3 +52,15 @@ PR428 已确认合入 AIRefactor `485d88bad9081d3fd8d892116569f763038f7b7e`。�
 本次只读复核 GitHub：PR399 仍为 open/draft，head `2445e501d1ce099665d3f9f90b4944cb41e9cd2d`，base `02a8e1e77ff4e14840e81943180e0590b33b28f9`，mergeable=true。运行时代码仍为已审查及受测的 ed03cc6a，没有新的代码增量或阻塞代码发现。14个变更文件仍属于进度写入器、提示/安排、测试及文档；本会话未在 SteerLine 增加原生粘贴、终端发送或启动确认实现。
 
 独立事项盘点：冲突、定向审计、固定 L1/L2、三项受影响 app 及独立进度 L3 已完成，保留上表实际结果，不重跑。较广 app incomplete 与首次 L3 超时仍保留为未覆盖范围和原因未定的历史风险，不能改写为通过或已修复。当前不扩展到无关功能或额外全量测试；文档及资源收尾完成后等待 PR66。PR399 继续保持草稿，不合并、部署或声称当前 main 新环境代际已取得原生资格。
+
+## PR66 合入后的 rebase 与接线核实
+
+用户随后告知 PR66 已合入并要求 rebase、完成收尾。独立 API 确认 PR66 实际 merge commit 为 `e588b8e64cdac013d6b0c4985baabbc15b3fc18e`，merged_at 为 `2026-10-27T08:19:47Z`。合入树与原 PR head `f2b32c332fc60ca5483b958ac53435f82207c5f8` 完全一致；与 Runner 干净受测产品源 `ffb9c510280d470e064e48770b8eea30174d82c4` 直接比较仅有七个验收文档/证据文件差异。没有把 GitHub 的三点比较结果当作两个提交的直接树差异。
+
+PR399 从 `484925e8` rebase 到最新 `origin/main` `02a8e1e7`，新 head `cf62f4fd7ffa2550b32a7519a896794ee64c63a8`。重放历史断言维护时再次保留 main 的 Web 宿主限定。rebase 前后完整文件树均为 `655e7eb8c3bc04e3a7ce1d231d25e978cabd75d5`，没有运行时代码变化；以精确旧 head 的 force-with-lease 更新了原 PR，未覆盖其它更新。
+
+针对新固定 Runner 补跑此前因未提供 EXE 而跳过的 `TestEnvironmentCheckPublishedContract` 和 `TestRunnerFullBindingPublicCLI`，实际两项通过，无 skip，耗时9.851秒；只使用独立 idle service 与公开 CLI，不启动模型或 Unity。原报告为 `C:/SteerlineDebug/wt-507e-pr399-post66/runner-public-contract-01/summary.json`，干净来源 cf62f4fd。已有 L1/L2、受控进度及 owner 回归未重复执行，原失败和未验范围不变。
+
+使用 Runner 参考构建源 ffb9c510、版本 `0.2.0-dev.3-r3`、EXE SHA256 `a745ab738152e974850cbaca7851fb13c0d33cd08a915cda555f1ae465556347`，正式入口分别生成当前 PR 包 `packages-main/dev-20261027-162933-cf62f4fd` 和原复验代际包 `packages-original/dev-20261027-162933-8205bf0e`，均位于上述 post66 根且 ready/clean。这是同一已验产品源码的构建，不冒充 merge commit 重新构建；Runner 的原生探针使用 test EXE，也不冒充该 Runner EXE 的完整业务资格。旧包、home 和接受 pin 均未替换。
+
+原业务 base485d 不含当前 main 新环境适配所需的 `SteerlineFlow/environment.md`。原进度两轮继续按已冻结 Caller8205 的独立复验代际进行，与当前 PR 构建及新环境资格分开；这不是产品运行时回退路径。Runner 负责原生输入实现，本会话不追加其逻辑、探针或重发。PR399 暂不计连续两轮完成、不自动合并或部署；后续原始进度结果仍按逐轮完整证据登记。
