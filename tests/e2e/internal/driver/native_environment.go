@@ -21,10 +21,19 @@ func (c *Client) Environment(base []string) []string {
 	}
 	var result []string
 	count := 0
+	var project struct {
+		PR struct {
+			TokenEnv string `json:"token_env"`
+		} `json:"pr"`
+	}
+	if raw, err := os.ReadFile(c.Config); err == nil {
+		_ = json.Unmarshal(raw, &project)
+	}
+	tokenKey := strings.ToUpper(project.PR.TokenEnv)
 	for _, entry := range base {
 		key, value, _ := strings.Cut(entry, "=")
 		upper := strings.ToUpper(key)
-		if strings.HasPrefix(upper, "STEERLINE_") || upper == "CODEX_HOME" || upper == "TEMP" || upper == "TMP" || upper == "GOFLAGS" || upper == "GIT_TERMINAL_PROMPT" {
+		if strings.HasPrefix(upper, "STEERLINE_") && upper != tokenKey || upper == "CODEX_HOME" || upper == "TEMP" || upper == "TMP" || upper == "GOFLAGS" || upper == "GIT_TERMINAL_PROMPT" {
 			continue
 		}
 		if upper == "GIT_CONFIG_COUNT" {

@@ -1,15 +1,36 @@
-﻿param(
+param(
     [Parameter(Mandatory)][string]$SteerRunnerExe,
-    [string]$OrcaEnvironment = '',
+    [string]$RemoteProfile = '',
+    [string]$OutRoot = '',
     [switch]$LocalOrca,
     [switch]$IndependentProcess
 )
 $ErrorActionPreference = 'Stop'
+if (!$LocalOrca) {
+    if (!$RemoteProfile) { $RemoteProfile=$env:STEERLINE_L4_REMOTE_PROFILE }
+    if (!$RemoteProfile -or !$OutRoot) { throw 'Remote directory L4 requires -RemoteProfile (or STEERLINE_L4_REMOTE_PROFILE) and a new absolute -OutRoot' }
+    if (!$IndependentProcess) {
+        . (Join-Path $PSScriptRoot 'independent-test.ps1')
+        Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments @('-SteerRunnerExe',$SteerRunnerExe,'-RemoteProfile',$RemoteProfile,'-OutRoot',$OutRoot) -Timeout ([TimeSpan]::FromMinutes(25))
+        return
+    }
+    $env:STEERLINE_L4_REMOTE_PROFILE=$RemoteProfile
+    $env:STEERRUNNER_EXE=$SteerRunnerExe
+    Push-Location ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')))
+    try {
+        $ErrorActionPreference='Continue'
+        & go @('run','./cmd/test-feedback','-level=L4','-suite=configuration','-env=live','-scenario=configuration.execution-profiles-orca',('-out='+$OutRoot)) 2>&1 | ForEach-Object { $_.ToString() }
+        $testExit=$LASTEXITCODE
+        $ErrorActionPreference='Stop'
+        if($testExit){throw 'Remote directory L4 failed'}
+    } finally { Pop-Location }
+    return
+}
 $PSDefaultParameterValues=@{'Out-File:Encoding'='utf8'}
 if (-not $IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
     $driverArgs = @('-SteerRunnerExe', $SteerRunnerExe)
-    if($LocalOrca) { $driverArgs += '-LocalOrca' } elseif($OrcaEnvironment) { $driverArgs += @('-OrcaEnvironment',$OrcaEnvironment) } else { throw 'Select -LocalOrca or -OrcaEnvironment' }
+    $driverArgs += '-LocalOrca'
     Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $driverArgs -Timeout ([TimeSpan]::FromMinutes(15))
     return
 }
@@ -26,7 +47,7 @@ $evidence = Join-Path $package.root 'evidence\native-discovery'
 New-Item -ItemType Directory -Path $evidence | Out-Null
 $env:STEERLINE_HOME = Join-Path $package.root 'home'
 $env:STEERLINE_CONFIG_WEB = Join-Path $package.root 'bin\steerline-web.exe'
-$env:STEERLINE_CONFIG_REMOTE = $OrcaEnvironment
+$env:STEERLINE_CONFIG_REMOTE = ''
 $env:STEERLINE_CONFIG_LOCAL_ORCA = if($LocalOrca) { '1' } else { '' }
 $env:STEERLINE_WEB_EVIDENCE = Join-Path $evidence 'browser'
 $cli = Join-Path $package.root 'bin\steerline.exe'

@@ -98,3 +98,13 @@ Web服务器原始报告为 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-fe
 `diagnostics/owner-regression-01` 扩大回归出现既有 `TestRunnerActorBindsReceiptToOriginalHostFile/changed` 失败。在未修改HEAD的git archive隔离副本中，以 `diagnostics/baseline-host-binding-01/report/summary.json` 复现相同断言，source.json保存归档来源/SHA256。本次没有修改该actor或旧测试。确认基线失败后停止继续执行与功能无关的app全集；宽报告为 **incomplete**，不能声称owner全集通过，所需定向owner另按上表记账。
 
 最终文档检查：582份Markdown、3650条本地导航链接，0错误；git diff --check及变更Go文件gofmt检查通过。这些检查不代替产品或真机通过。
+
+
+## 用户准备环境、只检测要求的收敛验收
+
+2026-10-26。环境文档改为用户准备要求，Agent只使用约定变量/PATH执行固定脚本，不自动发现或修复。新增checks逐项passed/failed/incomplete及原因，独立于L2/PR；检查未全通过不授予ready。三轮只重验。适配Run等待输入且原最终回复已核实时停止封存，不等待用户在Run内准备环境；未核实回复和单个turn结束不决定通过。
+
+`C:/SteerlineDebug/wt-4b14-environment-requirements/diagnostics/final-owner-01/`：37项所属测试通过、零跳过；包含混合结果、三轮及重启不重置、未完成初始报告保留Run错误。固定L1/L2的final-02及Web构建、225条前端/HTTP owner通过。项目脚本正向prepare和混合失败分支均实际执行。真实308已取得两轮5通过/4不通过/2未验证的封存报告；第三轮Orca连接未就绪，完整L4失败，未把它当作环境项不通过或完整产品验收通过。版本、原身份、清理及未验边界见[L4专属记录](l4-remote-tests.md)最新小节。
+
+
+后续最低版本与真机重试：308 Python/pytest从精确基线收敛为>=3.12/>=8.4.1，原pytest适配器真实收集校验；新上游提示词避免把CI基线误作精确固定。`C:/SteerlineDebug/wt-4b14-environment-requirements/test-results/L4/308-02/`正式负向L4 passed=true、cleanup_complete=true，三轮均7通过/2不通过/2未验证，原Run停止及唯一封存、前后拒绝准入、独立无PR和自动清理均通过，未复现前次Orca超时。机器仍not_ready，完整L2/真实PR正向尚未执行；详见[L4专属记录](l4-remote-tests.md)“最低版本与Orca重试验收”。本轮固定L1/L2 version-01通过。

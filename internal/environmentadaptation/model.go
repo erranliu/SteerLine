@@ -181,6 +181,11 @@ type Item struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
 }
+type Check struct {
+	ID      string `json:"id"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
 type PR struct {
 	URL              string `json:"url"`
 	Base             string `json:"base"`
@@ -193,15 +198,16 @@ type PR struct {
 	OutcomeUnknown   bool   `json:"outcome_unknown"`
 }
 type Report struct {
-	Version      int    `json:"version"`
-	ActivityID   string `json:"activity_id"`
-	Round        int    `json:"round"`
-	Commit       string `json:"source_commit"`
-	ScriptDigest string `json:"script_digest"`
-	Completed    bool   `json:"completed"`
-	L2           []Item `json:"l2"`
-	PR           PR     `json:"pr"`
-	Message      string `json:"message"`
+	Version      int     `json:"version"`
+	ActivityID   string  `json:"activity_id"`
+	Round        int     `json:"round"`
+	Commit       string  `json:"source_commit"`
+	ScriptDigest string  `json:"script_digest"`
+	Completed    bool    `json:"completed"`
+	Checks       []Check `json:"checks"`
+	L2           []Item  `json:"l2"`
+	PR           PR      `json:"pr"`
+	Message      string  `json:"message"`
 }
 
 func ParseReport(raw []byte, r Record, a Round) (*Report, error) {
@@ -214,6 +220,16 @@ func ParseReport(raw []byte, r Record, a Round) (*Report, error) {
 	}
 	if !p.Completed {
 		return &p, nil
+	}
+	if len(p.Checks) == 0 {
+		return nil, errors.New("report must include environment requirement checks")
+	}
+	seen := map[string]bool{}
+	for _, check := range p.Checks {
+		if strings.TrimSpace(check.ID) == "" || seen[check.ID] || (check.Status != "passed" && check.Status != "failed" && check.Status != "incomplete") || strings.TrimSpace(check.Message) == "" {
+			return nil, errors.New("invalid, duplicate or unexplained environment requirement check")
+		}
+		seen[check.ID] = true
 	}
 	if len(p.L2) != len(r.Prepared.L2) || len(p.L2) == 0 {
 		return nil, errors.New("report must include the entire L2 selection")
@@ -234,8 +250,13 @@ func ParseReport(raw []byte, r Record, a Round) (*Report, error) {
 	return &p, nil
 }
 func (p Report) Passed(base, head string) bool {
-	if !p.Completed || len(p.L2) == 0 {
+	if !p.Completed || len(p.Checks) == 0 || len(p.L2) == 0 {
 		return false
+	}
+	for _, check := range p.Checks {
+		if check.Status != "passed" {
+			return false
+		}
 	}
 	for _, i := range p.L2 {
 		if i.Status != "passed" {

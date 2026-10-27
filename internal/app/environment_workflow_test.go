@@ -60,6 +60,7 @@ func (f *environmentWorkflowPeer) Call(_ context.Context, command string, _ []st
 		f.run = runnercontract.Run{RunID: fmt.Sprintf("env-run-%d", f.submits), Revision: 1, Status: "failed", InputDigest: env.Digest(q.Input), Correlation: input.Correlation, Execution: runnercontract.Execution{Branch: fmt.Sprintf("env-head-%d", f.submits)}}
 		f.run.Final = &runnercontract.Final{Text: "fixture native explanation", Verified: true}
 		report.Completed = true
+		report.Checks = []env.Check{{ID: "tool", Status: "passed", Message: "required version available"}}
 		report.L2 = []env.Item{{ID: "one", Status: "failed", Message: "fixture tool absent"}}
 		report.Message = "fixture prepare failed"
 		if f.submits == 2 {

@@ -33,7 +33,7 @@ Runner 双通道是本次指定的已实现前提，本 Plan 不再分为“现�
 | --- | --- | --- |
 | PEA-A01 | 所属generation/app单测 `TestProjectEnvironmentGeneration*` | 步骤2后；真实Git材料/有限路径/提示词、双通道写入要求、缺口、无L3强制/自动通过/Agent伪报告要求 |
 | PEA-A02/A04/A06 | SQLite/taskrunner/app `TestProjectEnvironmentAdmission*`、`TestProjectEnvironmentRetry*` | 步骤3–5后；跨项目同目标已有任务/适配的双向竞态、事务回滚、占用恢复，三轮/截止不重置、有限失效与普通提交区分 |
-| PEA-A03/A05 | runnerclient/业务owner `TestProjectEnvironmentExecution*` | 步骤1/4后；result仅0/1及三种状态，空文件/封存失败诊断/摘要/缺失/超限/互串/旧轮/半文件；运行中结果不可见而pr_ready仍触发stop，waiting_input不提前停止，先stop后唯一封存报告；封存不刷新，查询故障/重启、未知/取消/超时零重发，失败仅在资源安全且预算内新建Run |
+| PEA-A03/A05 | runnerclient/业务owner `TestProjectEnvironmentExecution*` | 步骤1/4后；result仅0/1及三种状态，空文件/封存失败诊断/摘要/缺失/超限/互串/旧轮/半文件；运行中结果不可见而pr_ready仍触发stop，未核实waiting_input不提前停止；已核实的适配阻断回复触发原stop并封存失败报告，先stop后唯一封存报告；封存不刷新，查询故障/重启、未知/取消/超时零重发，失败仅在资源安全且预算内新建Run |
 | PEA-A03/A05 公开EXE | `TestProjectEnvironmentExecutionPublishedResultRoundTrip`、既有`TestRunnerFullBindingPublicCLI`及`TestEnvironmentCheckPublishedContract` | rebase/接入后；显式STEERRUNNER_EXE、STEERRUNNER_VERSION、STEERRUNNER_SHA256及Runner自身构建的STEERRUNNER_NATIVE_FIXTURE，隔离Git/服务/home；核对公开schema/capability与原实例围栏，实际提交→pending→明确stop→closed/1字节/摘要→封存不刷新→resources_settled。native为受控协议fixture，不代表真实Agent/PR |
 | 启动冲突回归 | app `TestStartupQueries*`、`TestStartupParallelRecoveryFailureReleasesAllProjectLocks`及`TestProjectEnvironmentExecutionLifecycle*` | rebase后；启动缓存不绕过所有权/数据库/远端校验，双并发准备失败释放所有原锁，环境原stop/takeover未漏枚举 |
 | PEA-A07 受控 | app/HTTP组合 `TestProjectEnvironmentWorkflow*` | 步骤6；实际Git/SQLite/项目API+同版双通道/PR fixture，合法Run材料覆写、失败→独立新轮→完整L2/PR→pr_ready触发原stop→核实停止/唯一封存结果→ready→新候选；耗尽阻断，无重复发布 |
@@ -52,3 +52,7 @@ Go 定向项使用 `go run ./cmd/test-feedback -out <out> -- <实际所属包> -
 交付包含SteerLine代码、提示词模板、项目报告/脚本约定、双通道消费、具体生命周期接线和验证记录。不修改Runner、不新增通用框架，不将项目L2 fixture通过冒充真实PR完成；具体实现和联验事实只登记专属验收。
 
 实现使用 `internal/environmentadaptation`、app的环境端口/准入及具体生命周期接线、项目SQLite记录和既有命令journal。固定验证base先核对，单脚本分prepare/publish，home目标准入锁独立于服务锁/生成配额，生成用例不进入Plan专用GenerationService。这五项审计收敛不再引出通用registry、文件平台或工作流引擎。
+
+用户职责收敛：项目声明工具变量/PATH及版本要求，用户预先准备；Agent只执行固定脚本。报告新增具体checks列表，沿原UI展示分项通过/不通过/未验证。混合结果整体not_ready，三轮只重验不修复；已核实的适配阻断回复触发停止后封存。补充混合结果/预算/准入及实际64G只检测验收，不新增检查框架或Runner接口。
+
+版本要求按用户确认改为最低兼容边界：308 Python >=3.12、pytest >=8.4.1；复用原pytest_adapter.py收集注册测试核对实际适配能力，不复制测试发现逻辑。Unity项目明确锁定版本不变。用新源码SHA/新输出重试64G L4，保留前次native状态流超时及未发送输入事实，不重放旧请求或改机器配置。

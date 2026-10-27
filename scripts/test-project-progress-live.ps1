@@ -4,13 +4,38 @@ param(
     [Parameter(Mandatory)][string]$SteerRunnerExe,
     [Parameter(Mandatory)][string]$OutRoot,
     [string]$RemoteProfile = '',
+    [switch]$Local,
+    [ValidateRange(1,2147483647)][int]$RoundTimeoutSeconds = 900,
     [switch]$IndependentProcess
 )
 $ErrorActionPreference='Stop'
+if ($Local -and $RemoteProfile) { throw 'Choose either -Local or -RemoteProfile' }
+if (!$Local -and !$RemoteProfile) { $RemoteProfile=$env:STEERLINE_L4_REMOTE_PROFILE }
+if (!$Local -and !$RemoteProfile) { throw 'Remote progress requires the shared RemoteProfile; choose -Local explicitly for the standalone local test' }
+if ($RemoteProfile) {
+    if (!$IndependentProcess) {
+        . (Join-Path $PSScriptRoot 'independent-test.ps1')
+        Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments @('-ProjectRepository',$ProjectRepository,'-ProjectCommit',$ProjectCommit,'-SteerRunnerExe',$SteerRunnerExe,'-OutRoot',$OutRoot,'-RemoteProfile',$RemoteProfile,'-RoundTimeoutSeconds',"$RoundTimeoutSeconds") -Timeout ([TimeSpan]::FromSeconds(3*[double]$RoundTimeoutSeconds+2400))
+        return
+    }
+    $env:STEERLINE_L4_REMOTE_PROFILE=$RemoteProfile
+    $env:STEERRUNNER_EXE=$SteerRunnerExe
+    $env:STEERLINE_PROGRESS_PROJECT=$ProjectRepository
+    $env:STEERLINE_PROGRESS_COMMIT=$ProjectCommit
+    $env:STEERLINE_L4_ROUND_TIMEOUT_SECONDS="$RoundTimeoutSeconds"
+    Push-Location ([IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..')))
+    try {
+        $ErrorActionPreference='Continue'
+        & go @('run','./cmd/test-feedback','-level=L4','-suite=testing','-env=live','-scenario=testing.project-progress-orca-browser',('-out='+$OutRoot)) 2>&1 | ForEach-Object { $_.ToString() }
+        $testExit=$LASTEXITCODE
+        $ErrorActionPreference='Stop'
+        if($testExit){throw 'Remote progress L4 failed'}
+    } finally { Pop-Location }
+    return
+}
 if (!$IndependentProcess) {
     . (Join-Path $PSScriptRoot 'independent-test.ps1')
-    $arguments=@('-ProjectRepository',$ProjectRepository,'-ProjectCommit',$ProjectCommit,'-SteerRunnerExe',$SteerRunnerExe,'-OutRoot',$OutRoot)
-    if($RemoteProfile){$arguments+=@('-RemoteProfile',$RemoteProfile)}
+    $arguments=@('-ProjectRepository',$ProjectRepository,'-ProjectCommit',$ProjectCommit,'-SteerRunnerExe',$SteerRunnerExe,'-OutRoot',$OutRoot,'-Local')
     Invoke-IndependentTest -ScriptPath $PSCommandPath -TestArguments $arguments -Timeout ([TimeSpan]::FromMinutes(30))
     return
 }
@@ -37,29 +62,6 @@ try {
     if ($LASTEXITCODE) { throw 'Live acceptance build failed.' }
     $scenario='testing.project-progress-local-codex'
     $testTimeout='14m'
-    if($RemoteProfile){
-        if(![IO.Path]::IsPathRooted($RemoteProfile)){throw 'RemoteProfile must be absolute.'}
-        $profile=Get-Content -LiteralPath $RemoteProfile -Encoding utf8 -Raw|ConvertFrom-Json
-        if($profile.execution.adapter -ne 'orca-terminal' -or $profile.execution.target.kind -ne 'orca_environment'){throw 'RemoteProfile must select an explicit Orca environment.'}
-        Push-Location (Join-Path $sourceRoot 'web')
-        try {
-            if(!(Test-Path 'node_modules/@playwright/test/cli.js')){
-                & npm.cmd ci *> (Join-Path $scope 'web-install.log')
-                if($LASTEXITCODE){throw 'Web dependency installation failed.'}
-            }
-            & npm.cmd run build *> (Join-Path $scope 'web-build.log')
-            if($LASTEXITCODE){throw 'Web build failed.'}
-        } finally {Pop-Location}
-        & go build -tags=webui -o (Join-Path $scope 'bin/steerline-web.exe') ./cmd/steerline-web
-        if($LASTEXITCODE){throw 'Web executable build failed.'}
-        $env:STEERLINE_PROGRESS_REMOTE_PROFILE=$RemoteProfile
-        $env:STEERLINE_PROGRESS_WEB=Join-Path $scope 'bin/steerline-web.exe'
-        $scenario='testing.project-progress-orca-browser'
-        $testTimeout='24m'
-    } else {
-        $env:STEERLINE_PROGRESS_REMOTE_PROFILE=$null
-        $env:STEERLINE_PROGRESS_WEB=$null
-    }
     $env:STEERLINE_E2E_RUN=@{Root=$sourceRoot;Binary=(Join-Path $scope 'bin/steerline.exe');Helper=(Join-Path $scope 'bin/helper.exe');Runner=$SteerRunnerExe;Output=(Join-Path $scope 'reports');Scratch=(Join-Path $scope 'scratch');AuthHome=$nativeHome;Level='L4';SourceCommit=$sourceCommit;SourceDirty=$sourceDirty}|ConvertTo-Json -Compress
     $env:STEERLINE_PROGRESS_PROJECT=$ProjectRepository
     $env:STEERLINE_PROGRESS_COMMIT=$ProjectCommit

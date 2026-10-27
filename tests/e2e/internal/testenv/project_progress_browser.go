@@ -23,8 +23,11 @@ type progressBrowser struct {
 
 func startProgressBrowser(s *Scenario, p *Project) *progressBrowser {
 	web := os.Getenv("STEERLINE_PROGRESS_WEB")
+	if s.Run.Remote != nil {
+		web = s.Run.Web
+	}
 	if web == "" {
-		if os.Getenv("STEERLINE_PROGRESS_REMOTE_PROFILE") != "" {
+		if s.Run.Remote != nil {
 			s.t.Fatal("remote progress acceptance requires a real browser")
 		}
 		return nil
@@ -55,7 +58,7 @@ func startProgressBrowser(s *Scenario, p *Project) *progressBrowser {
 	s.Must(os.MkdirAll(b.Output, 0700))
 	cmd := p.Command(node, cli, "test", "tests/project-progress-live.spec.ts")
 	cmd.Dir = filepath.Join(s.Run.Root, "web")
-	cmd.Env = append(cmd.Env, "STEERLINE_PROGRESS_WEB="+web, "STEERLINE_PROGRESS_HOME="+p.Home, "STEERLINE_PROGRESS_TARGET="+b.Target, "STEERLINE_WEB_EVIDENCE="+b.Output)
+	cmd.Env = append(cmd.Env, "STEERLINE_PROGRESS_WEB="+web, "STEERLINE_PROGRESS_HOME="+p.Home, "STEERLINE_PROGRESS_SCENARIO_ROOT="+s.Root, "STEERLINE_PROGRESS_TARGET="+b.Target, "STEERLINE_WEB_EVIDENCE="+b.Output)
 	b.Process = s.start(cmd, "progress-browser")
 	s.Wait("one authorized Edge page before dispatch", func() (bool, error) {
 		select {

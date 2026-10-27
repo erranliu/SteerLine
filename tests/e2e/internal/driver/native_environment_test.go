@@ -40,3 +40,16 @@ func TestNativeEnvironmentUsesExistingHomeWithoutCopyingCredentials(t *testing.T
 		t.Fatal("external native authentication changed")
 	}
 }
+
+func TestNativeEnvironmentPreservesOnlyConfiguredProviderReference(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "project.json")
+	if err := os.WriteFile(config, []byte(`{"pr":{"token_env":"STEERLINE_GITEA_TOKEN"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	c := Client{Home: root, NativeHome: filepath.Join(root, "native"), Config: config}
+	env := strings.Join(c.Environment([]string{"STEERLINE_GITEA_TOKEN=fixture-secret", "STEERLINE_OTHER_TOKEN=other", "STEERLINE_HOME=installation"}), "\n")
+	if !strings.Contains(env, "STEERLINE_GITEA_TOKEN=fixture-secret") || strings.Contains(env, "STEERLINE_OTHER_TOKEN") || strings.Contains(env, "installation") {
+		t.Fatal("configured provider reference lost or unrelated environment inherited")
+	}
+}

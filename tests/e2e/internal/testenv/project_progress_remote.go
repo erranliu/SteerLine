@@ -28,19 +28,16 @@ import (
 type progressRemote struct {
 	Profile                                            map[string]any
 	Executable, Environment, Runtime, Repository, Root string
+	Args                                               []string
 	sequence                                           int
 }
 
 func loadProgressRemote(s *Scenario, p *Project) *progressRemote {
-	path := os.Getenv("STEERLINE_PROGRESS_REMOTE_PROFILE")
-	if path == "" {
+	if s.Run.Remote == nil {
 		return nil
 	}
-	if !filepath.IsAbs(path) {
-		s.t.Fatal("remote profile must be absolute")
-	}
 	r := &progressRemote{}
-	raw, err := os.ReadFile(path)
+	raw, err := json.Marshal(s.Run.Remote.Profile)
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &r.Profile))
 	execution, ok := r.Profile["execution"].(map[string]any)
@@ -61,6 +58,15 @@ func loadProgressRemote(s *Scenario, p *Project) *progressRemote {
 		s.t.Fatal("remote transport missing")
 	}
 	r.Executable, _ = transport["executable"].(string)
+	if args, ok := transport["args"].([]any); ok {
+		for _, arg := range args {
+			value, ok := arg.(string)
+			if !ok {
+				s.t.Fatal("invalid Orca transport arguments")
+			}
+			r.Args = append(r.Args, value)
+		}
+	}
 	if r.Environment == "" || !filepath.IsAbs(r.Executable) {
 		s.t.Fatal("remote transport/environment must be explicit")
 	}
@@ -76,7 +82,7 @@ func loadProgressRemote(s *Scenario, p *Project) *progressRemote {
 	s.Must(err)
 	s.Must(json.Unmarshal(body, &list))
 	for _, repo := range list.Repos {
-		if strings.EqualFold(strings.TrimSuffix(repo.Identity.URL, ".git"), strings.TrimSuffix(githubURL, ".git")) {
+		if strings.EqualFold(strings.TrimSuffix(repo.Identity.URL, ".git"), strings.TrimSuffix(p.RemoteURL, ".git")) {
 			if r.Repository != "" {
 				s.t.Fatal("remote repository identity is ambiguous")
 			}
@@ -84,7 +90,7 @@ func loadProgressRemote(s *Scenario, p *Project) *progressRemote {
 		}
 	}
 	if r.Repository == "" {
-		s.t.Fatal("SteerlineTest is not registered on the selected remote host")
+		s.t.Fatal("project repository is not registered on the selected remote host")
 	}
 	s.Must(controlled.Write(filepath.Join(s.Output, "remote-target.json"), map[string]any{"environment": r.Environment, "runtime": r.Runtime, "repository": r.Repository, "root": r.Root, "profile": r.Profile}))
 	return r
@@ -92,7 +98,7 @@ func loadProgressRemote(s *Scenario, p *Project) *progressRemote {
 
 func (r *progressRemote) Call(ctx context.Context, s *Scenario, p *Project, args ...string) (json.RawMessage, error) {
 	r.sequence++
-	cmd := exec.Command(r.Executable, append(args, "--environment", r.Environment, "--json")...)
+	cmd := exec.Command(r.Executable, append(append(append([]string{}, r.Args...), args...), "--environment", r.Environment, "--json")...)
 	cmd.Env = p.Driver.Environment(os.Environ())
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -133,7 +139,7 @@ func psProgressLiteral(value string) string { return "'" + strings.ReplaceAll(va
 // never writes the progress file or sends input to the original worker terminal.
 func (r *progressRemote) Shell(ctx context.Context, s *Scenario, p *Project, workspace, script string) (json.RawMessage, error) {
 	nonce := strings.ReplaceAll(uuid.NewString(), "-", "")
-	body := "$ErrorActionPreference='Stop'; try { $value=& {\n" + script + "\n}; $result=@{passed=$true;value=$value} } catch { $result=@{passed=$false;error=$_.Exception.Message} }; " +
+	body := "$ErrorActionPreference='Stop'; $PSDefaultParameterValues=@{'Get-Content:Encoding'='UTF8'}; try { $value=& {\n" + script + "\n}; $result=@{passed=$true;value=$value} } catch { $result=@{passed=$false;error=$_.Exception.Message} }; " +
 		"$encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($result|ConvertTo-Json -Depth 12 -Compress))); $index=0; for($offset=0;$offset -lt $encoded.Length;$offset+=512){ Write-Output ('SLP_" + nonce + ":'+$index+':'+$encoded.Substring($offset,[Math]::Min(512,$encoded.Length-$offset))); $index++ }; Write-Output ('SLE_" + nonce + ":'+$index)"
 	words := utf16.Encode([]rune(body))
 	encoded := make([]byte, len(words)*2)
