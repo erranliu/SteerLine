@@ -1,6 +1,6 @@
 # 文档归档
 
-最近整理：2026-10-21；此前归档自 2026-10-06 起。已完成规划退出活动 roadmap，已执行 Spec 与 Plan 成对保存；退役或被替代的资料单独标明，避免把未验收历史范围当作当前待办或支持声明。
+最近整理：2026-10-27；此前归档自 2026-10-06 起。已完成规划退出活动 roadmap，已执行 Spec 与 Plan 成对保存；退役或被替代的资料单独标明，避免把未验收历史范围当作当前待办或支持声明。
 
 | 内容 | 入口 | 使用边界 |
 | --- | --- | --- |
@@ -16,6 +16,10 @@
 当前验收摘要及历史证据取证入口见 [验收入口](../testing/acceptance/README.md)，任务身份仍在 [task-ids/](../Roadmap/task-ids)。导航链接已适配新位置；历史命令、Canonical Spec 路径、SHA 和 JSON 回执不批量重写。固定契约仍读取其原 commit 的原路径。
 
 [当前文档](../../docs/README.md) · [剩余规划](../Roadmap/drafts/roadmap.md) · [当前规格](../spec/README.md)
+
+## 2026-10-27 整理范围
+
+归档已被后续方案部分替代的项目维护 [Spec](spec/completed/project-maintenance.spec.md) 与 [Plan](spec/completed/project-maintenance.plan.md)；保留[原验收](../testing/acceptance/project-maintenance.md)，当前规则见[项目维护设计](../../docs/product-design/project-maintenance.md)。
 
 ## 2026-10-21 整理范围
 

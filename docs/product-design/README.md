@@ -1,6 +1,6 @@
 # 产品设计
 
-本目录维护长期有效的具体产品设计，按职责和功能命名，不按交付阶段或 PR 编号分类。当前执行支持范围包括本地 Codex 与远端 Orca environment；本机 Orca 路径已放弃。已实现契约与拟议设计分开说明，文档本身不证明平台验收通过，也不改变中心固定 Task。
+本目录维护长期有效的具体产品设计，按职责和功能命名，不按交付阶段或 PR 编号分类。当前配置范围包括本地 Codex、Windows/amd64 本机 Orca 与远端 Orca environment；具体组合和验收范围见[执行方案](execution-profiles.md)。已实现契约与拟议设计分开说明，文档本身不证明平台验收通过，也不改变中心固定 Task。
 
 | 设计 | 内容与边界 |
 | --- | --- |
@@ -13,7 +13,7 @@
 | [会话事件](conversation-events.md) | 来源、规范事件、完整正文、分页、采集与展示 |
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |
 | [已退役的执行控制台](../../SteerlineFlow/archive/design/execution-console.md) | TUI 的历史布局与操作记录；当前使用 Web |
-| [Runner 协作契约](../../SteerlineFlow/spec/runner-collaboration.spec.md) | 当前 development/1 与 development-audited/1、执行预设/冻结及跨仓交接；迁出前 [PR 流程](../../SteerlineFlow/spec/worker-pr-flow.spec.md)保留历史追溯 |
+| [Runner 协作契约](../../SteerlineFlow/spec/runner-collaboration.spec.md) | 所选 Runner 构建的公开 workflow、执行预设/冻结及跨仓交接；迁出前 [PR 流程](../../SteerlineFlow/spec/worker-pr-flow.spec.md)保留历史追溯 |
 | [客户端与 Go 服务边界](planning-architecture.md) | Web/应用/项目 HTTP 边界及历史 #91 追溯 |
 | [Web 前端技术方案](web-frontend.md) | 已确认技术栈与首批 DAG/执行页；独立 web 工程及浏览器接入契约见普通开发 Spec/Plan，实际结果归专属验收 |
 | [项目管理与统一 Web 入口](project-management.md) | 独立 Web/已有项目切换及统一启动宿主已交付；添加/结构核验/纳管后置，仍有独立 Spec/Plan |

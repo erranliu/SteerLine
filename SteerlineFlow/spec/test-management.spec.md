@@ -68,7 +68,7 @@ SteerLine 调查基线 `4c5409f398585b9fd3623d625d4e2d0563efec13`。实施固定
 
 ### 3.2 Plan 测试安排
 
-2026-10-21 当前维护规则见[项目维护 Spec](project-maintenance.spec.md)：初始化/基线/局部共用材料规则，首次启动固定最新代码与同 commit 材料；缺失/无效或必要核对未完成阻断相关首次启动，有效空安排允许。后续候选保留唯一 Task 快照；不增加测试通过/PR/Delivery 门禁。原 TM 历史验收不因此重标，本次差异归 PM 专属验收。
+历史批次维护规则见[项目维护 Spec](../archive/spec/completed/project-maintenance.spec.md)：初始化/基线/局部共用材料规则，首次启动固定最新代码与同 commit 材料；缺失/无效或必要核对未完成阻断相关首次启动，有效空安排允许。后续候选保留唯一 Task 快照；不增加测试通过/PR/Delivery 门禁。原 TM 历史验收不因此重标，本次差异归 PM 专属验收。
 
 `<name>.plan.md` 对应同目录 `<name>.tests.json`，固定结构：
 
@@ -86,7 +86,7 @@ SteerLine 调查基线 `4c5409f398585b9fd3623d625d4e2d0563efec13`。实施固定
 
 ## 4. generate/1 生成用例
 
-当前入口调整：统一维护复用原请求/profile/公开 Runner/取消接管；单 Plan/单次结果先保存为待审阅输出，CLI/Web 显式单文件应用后才写文件。新增 `tests apply`，不保留自动保存旁路，不建批量/多文件事务。完整契约见[维护 Spec](project-maintenance.spec.md#生成控制与产品入口)。
+历史入口调整（后续已由[项目更新与候选版本收敛](project-maintenance-simplification.spec.md)替代，当前行为见[项目维护设计](../../docs/product-design/project-maintenance.md)）：统一维护复用原请求/profile/公开 Runner/取消接管；单 Plan/单次结果先保存为待审阅输出，CLI/Web 显式单文件应用后才写文件。新增 `tests apply`，不保留自动保存旁路，不建批量/多文件事务。完整契约见[维护 Spec](../archive/spec/completed/project-maintenance.spec.md#生成控制与产品入口)。
 
 提供项目级 CLI `steerline tests generate -project <id> -plan <repo-relative.plan.md> -execution-profile <local-profile> -request-id <id>`；用 `steerline tests generation -project <id> -request-id <id>` 查原操作，`steerline tests stop-generation -project <id> -request-id <new-id> -generation-id <original-id>` 显式停止。请求号为 32 位小写十六进制；参数与 CLI 帮助及测试保持一致。
 

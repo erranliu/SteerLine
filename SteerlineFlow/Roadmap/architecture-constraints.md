@@ -4,11 +4,11 @@
 
 ## 第一阶段平台范围
 
-第一阶段历史目标包含本地 Codex、本机 Orca 与远端路径交付；当前执行范围为本地 Codex 与远端 Orca environment，本机 Orca 路径已放弃。实际能力、固定构建与验证范围按[Runner 接入](../../docs/integration/steerrunner.md)及其专属验收核对，历史目标不代表当前支持或已验收。
+第一阶段历史目标包含本地 Codex、本机 Orca 与远端路径交付；后续已纳入 Windows/amd64 本机 Orca 配置，具体组合见[执行方案](../../docs/product-design/execution-profiles.md)；迁出前本机编排已退役。实际能力、固定构建与验证范围按[Runner 接入](../../docs/integration/steerrunner.md)及其专属验收核对，历史目标不代表当前支持或已验收。
 
 ## 长期双执行路径
 
-本地 Codex 与远端 Orca 是由 Runner 提供的执行路径。backend、agent、execution target 和协议版本分开；具体适配器及协议能力以 Runner 公开契约为准。远端路径不能把本地路径用作远程故障的隐式替代。规划中的执行支持与实际验收分别判断。
+本地 Codex、本机 Orca 和远端 Orca 是由 Runner 提供的执行路径，具体组合以所选构建的公开能力为准。backend、agent、execution target 和协议版本分开；具体适配器及协议能力以 Runner 公开契约为准。远端路径不能把本地路径用作远程故障的隐式替代。规划中的执行支持与实际验收分别判断。
 
 ## 业务权威与执行边界
 

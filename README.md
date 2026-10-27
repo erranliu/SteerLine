@@ -2,7 +2,7 @@
 
 SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 roadmap 组织规划、任务依赖与 AI 执行，让人掌握产品目标、关键决策和 PR 合并。
 
-长期目标是让 AI 能自主完成普通人需要长期借助 AI 才能开发的复杂软件项目。项目目前尚未发布。当前接入本地 Codex 与远端 Orca environment，本机 Orca 路径已放弃；具体已验范围见各项验收记录。
+长期目标是让 AI 能自主完成普通人需要长期借助 AI 才能开发的复杂软件项目。项目目前尚未发布。当前配置覆盖本地 Codex、Windows/amd64 本机 Orca 和远端 Orca environment；实际执行资格及已验范围以所选 Runner 和各项验收记录为准。
 
 [文档入口](docs/README.md) · [产品愿景](SteerlineFlow/Roadmap/product-vision.md) · [RoadmapGuide](SteerlineFlow/Roadmap/RoadmapGuide.md) · [正式执行清单](SteerlineFlow/Roadmap/execution-map.md) · [当前代码架构图](docs/architecture/current-code-architecture.md) · [测试总入口](SteerlineFlow/testing.md)
 
@@ -12,7 +12,7 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 ## 测试
 
-日常最小入口为 `go run ./cmd/test-feedback -level=L1`。Full、定向回归、L2/L3/L4 与测试环境统一见[测试指南](SteerlineFlow/testing.md)；完整 L2 会消耗模型 token 并创建、合并真实测试 PR，L3/L4 使用隔离的受控夹具。
+日常最小入口为 `go run ./cmd/test-feedback -level=L1`。Full、定向回归、L2/L3/L4 与测试环境统一见[测试指南](SteerlineFlow/testing.md)；L2 是不调用模型或真实 GitHub 的受控交付冒烟；L3/L4 按场景使用受控或真实环境，真实链的权限与成本见测试指南。
 
 ## 构建
 
