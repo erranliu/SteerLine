@@ -171,3 +171,21 @@ PR399 已解决与当前 main 的唯一边界测试冲突，保留主线更严�
 这些组件通过不计入原业务两轮。当前无活动 Task18 Run、定时任务或子代理；PR399 保持草稿。待 PR435 审阅合入后核实实际目标提交，以新的正式独立包/home/接受 pin 恢复原全部实际安排检查及两轮完整验收；旧报告、构建和运行身份不热换、不重放。主线新环境代际仍单列未验。
 
 本轮最终使用正式 `new-debug-release.ps1 -SteerRunnerExe <PR66参考构建>` 生成两套新的 ready/clean 包，证据根为 `C:/SteerlineDebug/wt-507e-pr399-receipt-packages/`：当前 PR 包 `packages-main/dev-20261027-191003-72dccdbb`（源码72dccdbb，运行时代码与受测a1583ee6相同），原 Caller 包 `packages-original/dev-20261027-191107-07fcb905`。两份 manifest 都固定 Runner产品ffb9c510/版本0.2.0-dev.3-r3/EXE SHA256 a745ab738152e974850cbaca7851fb13c0d33cd08a915cda555f1ae465556347。这里只构建，没有启动包、模型或 Unity，没有热换旧包。后续文档提交不是重测或重构建来源。受控构建进程 census 为0；业务负例的停止/资源结算仍以原 cleanup 记录为准。
+
+## 2026-10-28 PR435 合入后：九项进度通过，发布输入未确认
+
+按用户明确要求正常合并 PR435，实际 merge 为 `3b59842c3343ce92ef900cc66aeffc7ebb26e2e7`，父提交为485d和原 head76234807，merged_at为 `2026-10-28T06:10:08+08:00`。原清单、断言和通过条件不变。两项服务器 CI 在获取 actions/setup-dotnet 时鉴权失败、未进入项目步骤，原日志保留于 `pr435-merge-20261028/`，不声称服务器 CI 通过。用户随后恢复复验，以实际合入提交作为新执行 base；原合同 digest 和 registry 身份保持冻结。
+
+新 `entryfixed-01` 使用原 Caller `07fcb905eb2310fae40946a19269b186159c3eae` 的正式 ready/clean 包 `dev-20261027-191107-07fcb905` 和上述固定 Runner ffb9c510 / a745ab73 构建。首次 clone 因本地已存在 AIRefactor 而退出，失败保留；只在同一普通 clone 正常切换并快进目标分支，没有重复 clone、业务 start 或 submit。实际九项是 L1、L2、四结构、Bingo UI、Bingo 奖励/购买/重启/重复确认、Group2099共存，definition（含 note）全部严格等于原 registry；没有删除 extra 或缩小测试。
+
+唯一 candidate `cbad26c0f90646efb54c515e19da4251`，Run `600d14e87929e5555c74675b56cde86a` / Attempt `219608c2f90445b83698824345efa5fe`，sole submit `fbf69cf0a00a9cc729b65635cc9ac09b` / command `479f1c30a561cdb08bb256bfb1c5c63e`，由公开事件和原 command inspect 核实。原 worker 实施并修复 Group2099 去重后，九份最终原 managed/summary 全部通过；早先失败、Incomplete 和未安排报告不覆盖。五个原 parent、六批 XML 成员数为11/1/1/1/1/1，全部 Passed、无 skipped；五个 PlayFlow receipt 覆盖7/6/3/2/2、输入和 cleanup 均 Passed、externalRequests0。父进程只读调用原 canonical validator，未重跑 Unity。
+
+正式入口及 writer 与执行 base 的原源码一致，171条公开原生工具调用中涉及进度的两条仅为只读检查，没有 parent 手填字段或 worker 手动运行进度标志命令。原计划和最终工作区 identity 一致为 `3b59842c3343ce92ef900cc66aeffc7ebb26e2e7:31630975b47fe0512d0d4ebcf6b6e30d42c5df83ae3cfd13f87c635b7fec4ee2`，仍为未发布 dirty 工作来源。公开原进度 version30、339字节、SHA256 `2ff4c8be73c5368d0cee44b91af2492a6a241d146c9fe630236bd344981f2707`，恰好九个 true 布尔字段，无 publication 元数据；API和独立目检一致9/9。本轮已证明原 extra 漏回写问题在这一固定来源和实际选择上得到修复，不外推全部活动或主线新环境资格。
+
+整链仍未通过：Runner 在 `publish.execute` 的唯一 start_turn `bbe27895a8d0e57683d4201371a55d48` 为 outcome_unknown，诊断是没有已核实 acceptance receipt、未重发。原生界面显示 `[Pasted Content 3427 chars]` 仍在草稿；完整公开 native session 四页、相同 provider/main，仅有初始化和原实施两条 user，没有接纳的发布输入。UI记录 Orca 命令 context deadline exceeded / unexpected end of JSON input；尚未证明具体投递或提交根因，不能据此声称 Runner 某一内部路径已定位。Gitea state=all、limit50完整六页254条查询没有本轮分支对应 PR。没有补 Enter、重发、手工发布或放宽确认，不能以9/9代替真实发布。
+
+随后只停止该原 Run 一次，核实 stopped / new_inputs_allowed=false，等到 collection closed，再截取并独立目检9/9、无PR的停止后页面；版本/字节/SHA不变。正常停止宿主后，offline resources_settled=true，完整精确 owned native census0 / truncated=false / omittedHosts为空，本地 home/bin进程0。两次原报告/输入采集的临时 PTY 均确认 ptyKilled。原 Run 和宿主已完整结算，不恢复旧现场；第二轮未 clone、准备或启动，连续数仍为0/2。终端清理仍不宣称任意脱离进程或执行机凭据已撤销。
+
+证据根 `C:/SteerlineDebug/wt-507e-progress-0of6/entryfixed-01/`：`blocked-checks-verified.json`、`chain-result.json`、report/input-evidence-index、`verification-20261027T232418439Z-blocked-reports/`、`verification-20261027T232747678Z-blocked-inputs-02/`、`diagnostics/native-public-session-unconfirmed-publish-20261027T232229307663Z/`、`publication-pr-query-complete.json`、`cleanup-blocked-publication/result.json`、`closed-ui-reviewed.json`。原与 closed 截图分别为 `observations/2026-10-27T23-18-28-157Z/`、`2026-10-27T23-36-51-528Z/`。首次采集器命令类型筛选错误保留为自身失败，修正后只读原产物，不当作业务失败或通过。
+
+按既定职责，后续发布输入的提交/接受确认需 Runner 侧修复并独立验收；本会话不增加原生输入逻辑，也不发跨会话消息。取得实际合格新构建后再做正式新包与新现场准入，原目标仍为两次连续完整整链；当前保持等待、PR399草稿，无定时任务、子代理、合并或部署。clean发布head测试、完整MagicPotion/人工验收及当前main新环境代际原生资格仍未获得。
