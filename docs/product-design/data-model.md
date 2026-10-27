@@ -6,7 +6,7 @@ SteerLine 尚未发布。项目显式使用 task_authority=native 与 workflow_p
 
 ## 权威与身份
 
-SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、测试生成原请求与结果、候选测试进度投影及自身服务 checkpoint；候选侧旧 R2 产物收集已移除，独立测试报告按[报告约定](../../SteerlineFlow/testing/reports.md)登记。当前 schema 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
+SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、Roadmap 来源/解析/文档及编号映射、测试生成原请求与结果、候选测试进度投影及自身服务 checkpoint；候选侧旧 R2 产物收集已移除，独立测试报告按[报告约定](../../SteerlineFlow/testing/reports.md)登记。当前 schema 33 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
 
 Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、原生资源、问题、输入、恢复与停止事实。SteerLine 不读该库、原生 codec、IPC 或私有日志；只消费固定 EXE 公布的 CLI/Run/事件。
 
@@ -64,3 +64,11 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 
 环境检查另存 environment_checks / environment_check_requests：项目、原 start/stop、固定 Runner pin、公开输入/首个权威摘要和最近快照；本地 CAS revision 与 Runner revision 分开。它们不生成 Task、候选、交付或新的执行状态权威，亦不推进任务数据库 revision。结果未知只读原请求，reset 必须保留未知操作及未结算资源的恢复记录。[接入规格](../../SteerlineFlow/spec/environment-check.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/environment-check.md)分别定义行为与实际前置状态。
+
+## Roadmap 规划与入图
+
+`roadmaps` 保存来源字节/摘要、已有 Task/DAG 材料、确认及原 Runner 请求；`roadmap_requests` 固定原操作关联。业务结构为 [roadmap/model](../../internal/roadmap/model)，读取与内容调用为 [roadmap](../../internal/roadmap)；SQLite 不依赖 Runner 调用用例。解析和确认不创建 Task/Candidate、不分配正式编号。
+
+`task_number_sequences` 按仓库权威在 Task 批次事务内递增，扫描已存在的历史 Task 后取最大值之后的编号，不回收、不补洞。`roadmap_task_sources` 约束项目内来源/内部代号和正式 Task 的唯一映射；编号、Task/Contract、DAG、来源映射、原批次回执同事务提交或回滚。另一个草稿的 T1 有独立来源身份。正式文档路径及原 Markdown 不因编号而改写。schema 32 不迁移旧开发库。
+
+文档发布先核实原固定 PR 和实际合并，再进入 Task 事务。文档生成记录通过 purpose=documents、parent_id 关联原确认，冻结 commit/tree、规范和原请求，复用同一内容生命周期；2026-10-27 已完成真实 Runner 文档生成与隔离发布/入图验证。接口、恢复及当前边界见 [Roadmap 转正](roadmap-promotion.md)。

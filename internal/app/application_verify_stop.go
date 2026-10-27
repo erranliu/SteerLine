@@ -260,6 +260,13 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	if err != nil {
 		return proof, err
 	}
+	roadmaps, err := reader.Roadmaps(ctx, c.Identity())
+	if err != nil {
+		return proof, err
+	}
+	for _, r := range roadmaps {
+		generations = append(generations, roadmapBinding(r))
+	}
 	environments, err := reader.Environments(ctx, c.Identity())
 	if err != nil {
 		return proof, err

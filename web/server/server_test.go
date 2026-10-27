@@ -147,6 +147,25 @@ func TestWebAuthenticationAndOriginalForwarding(t *testing.T) {
 	}
 }
 
+func TestRoadmapBrowserRoutes(t *testing.T) {
+	s, client := fixture(t)
+	if w := request(s, "GET", "/projects/"+client.identity.ProjectID+"/roadmaps?source="+strings.Repeat("b", 32), "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {
+		t.Fatal("direct or refreshed roadmap URL did not serve SPA", w.Code, w.Body.String())
+	}
+	cookie, csrf := login(t, s)
+	base := "/api/v2/application/projects/" + client.identity.ProjectID
+	for _, path := range []string{"/roadmaps", "/roadmaps/" + strings.Repeat("a", 32), "/roadmaps/sources/" + strings.Repeat("b", 32)} {
+		if w := request(s, "GET", base+path, "", cookie, ""); w.Code != 200 || client.route != "/projects/"+client.identity.ProjectID+path {
+			t.Fatal("roadmap read was not forwarded", w.Code, w.Body.String(), client.route)
+		}
+	}
+	e := httpcontract.CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: client.identity.ProjectID, InstanceID: client.identity.InstanceID, Action: "roadmap_parse", TargetID: strings.Repeat("b", 32), ExpectedVersion: 1, Payload: json.RawMessage(`{}`)}
+	body, _ := json.Marshal(e)
+	if w := request(s, "POST", base+"/commands", string(body), cookie, csrf); w.Code != 200 || client.envelope.Action != "roadmap_parse" {
+		t.Fatal("roadmap original envelope was not forwarded", w.Code, w.Body.String())
+	}
+}
+
 func TestEnvironmentCheckBrowserRoutes(t *testing.T) {
 	s, client := fixture(t)
 	if w := request(s, "GET", "/projects/"+client.identity.ProjectID+"/environment-checks", "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {

@@ -68,20 +68,30 @@ func (q *GenerationQueue) TryAcquire(project, id string, created time.Time) bool
 // Update runs under the project's generation lock, or during startup census
 // before any project can submit. Unknown submissions retain their slots.
 func (q *GenerationQueue) Update(g Generation) {
+	q.UpdateContent(g.Project, g.ID, g.CreatedAt, !g.Unsubmitted(), g.Settled())
+}
+
+// UpdateContent admits another content purpose into the same home-wide budget.
+// The caller owns its durable record; this queue never stores business payloads.
+func (q *GenerationQueue) UpdateContent(project, id string, created time.Time, active, settled bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	key := generationKey(g)
-	if g.Settled() {
+	key := project + "\n" + id
+	if settled {
 		delete(q.entries, key)
 		return
 	}
-	q.entries[key] = generationSlot{created: g.CreatedAt, active: !g.Unsubmitted()}
+	q.entries[key] = generationSlot{created: created, active: active}
 }
 
 func (q *GenerationQueue) acquire(g Generation) bool {
+	return q.AcquireContent(g.Project, g.ID)
+}
+
+func (q *GenerationQueue) AcquireContent(project, id string) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	key := generationKey(g)
+	key := project + "\n" + id
 	entry, ok := q.entries[key]
 	if !ok || entry.active {
 		return false

@@ -1,5 +1,7 @@
 # 当前代码架构
 
+2026-10-26 Roadmap 增量：`internal/roadmap` 通过公开 generate/1 解析只读 Markdown 与既有图，`internal/roadmap/model` 承载纯值与校验；SQLite 仅依赖后者。解析和测试生成共用 home 额度，停止/接管复用原内容请求证明。`app/roadmap_publication.go` 负责文档专属 Git/provider 编排，`internal/task` 在既有批次事务分配正式编号及写图。2026-10-27 已按 Runner generate/1 固定仓库扩展接通文档生成，两类内容记录复用同一生命周期，见 [设计](../product-design/roadmap-promotion.md)及[验收](../../SteerlineFlow/testing/acceptance/roadmap-promotion.md)。
+
 2026-10-21 Web执行配置增量：Web独立负责目录探测和execution.json条件保存，Go执行服务只消费配置并投影原加载摘要；Runner不新增接口。实现与验证见[专属验收](../../SteerlineFlow/testing/acceptance/web-execution-config.md)。
 
 2026-10-20 调用方边界增量：[本轮收口](../../SteerlineFlow/testing/acceptance/architecture-boundary-consolidation.md)将候选停止信封准备统一到 runnerbridge、公开 takeover 类型与校验归 runnercontract、调用方绑定规则归纯 runnerbinding；修复 processwindow 的 HTTP 基础设施窄依赖并增加调用方 owner 守卫。下述历史轮次与未实施建议按其各自范围理解。

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
-	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"testing"
 	"time"
 )
@@ -14,7 +14,8 @@ func TestPreparationWaitObservationPreservesOriginalCandidate(t *testing.T) {
 	s.value.RunID, s.value.SubmitState, s.value.InputDigest = "run", "accepted", "input"
 	f := &snapshotFixture{fixtureCLI: plain}
 	b.Client = func(string) CLI { return f }
-	wait := protocol.RunnerExecutionWait(time.Now().UTC())
+	at := time.Now().UTC()
+	wait := &runnercontract.ExecutionWait{Contract: runnercontract.ExecutionWaitContract, OperationID: "original-preparation", Query: "repository_inventory", Stage: "queue", ReasonCode: "orca_cli_busy", StartedAt: at, UpdatedAt: at, DeadlineAt: at.Add(90 * time.Second), MaxCalls: 5, Diagnostic: "Orca CLI channel is busy."}
 	for i, stage := range []string{"queue", "calling", "backoff", "exhausted", "cleared"} {
 		r := plain.run
 		r.Revision = uint64(i + 1)

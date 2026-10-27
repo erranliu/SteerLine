@@ -65,3 +65,13 @@ SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地�
 PowerShell薄入口分别为`test-execution-profile-discovery.ps1`、`test-project-progress-live.ps1`和`test-project-environment-live.ps1`；显式`-RemoteProfile`优先于环境变量，参数向上表单向映射。进度参数沿用`-ProjectRepository/-ProjectCommit`，308使用`-ProjectConfig/-ProjectCommit`，两者`-RoundTimeoutSeconds`必须为正，默认分别900/1200秒；正式Go入口要求显式预算。外围期限容纳三轮和30分钟准备/观察/收尾，包装器额外留10分钟；不修改业务三轮预算。
 
 两项目环境文档须包含一个`steerline-pr-acceptance` JSON段：`{"required_checks":[],"minimum_approvals":0,"l2_summary":".steerrunner/artifacts/environment-l2/summary.json"}`，值须按项目真实规则填写，无检查/审核要求才能使用空数组/零。与`steerline-environment`、配套prepare/publish脚本一起由现有上游提示词维护到受测Git提交；不能运行时生成通过脚本。驱动只改夹具文档中的专属验证base，并把源码与base都固定到最终夹具SHA。验证PR不合入业务分支；检查/审核通过由provider只读核对，原项目完整L2明细独立保留。材料生成不是每次测试的强制步骤，缺材料须先由项目正常维护完成，再选新SHA复验。
+
+## Roadmap 浏览器与真实文档 PR 专项
+
+```powershell
+./scripts/test-roadmap-browser-live.ps1 -SteerRunnerExe <固定Runner绝对路径> -OutRoot C:/SteerlineDebug/<本次全新scope>
+```
+
+独立 L4 live 专项，未登记到统一受管场景；需要 Windows、Go、Git、Node/npm、Edge、gh、已登录本机 Codex 和 `erranliu/SteerlineTest` 写权限。固定 Runner 必须支持 generate 仓库输入。入口在全新私有目录构建 Go/Web，准备随机专属 base，浏览器从 Markdown 解析、确认、真实文档生成、正文审阅修改，到真实 GitHub 文档 PR 发布合并及入 DAG 编号。它会消耗模型并写外部测试仓库，不能与其他 Web 构建并发。
+
+Playwright `roadmap-live.spec.ts` 通过正式页面和 HTTP 原信封验证刷新不重发、提前零任务、原发布/入图请求重放、防重复映射、DAG 及来源导航；不模拟 API/Runner/provider。自动派发保持关闭。失败保留 trace、截图、原信封及原记录，不自动重跑。`result.json` 只有浏览器全部断言及正常停服/公开 verify-stop、进程/监听清理、原 PR 对账和自有远端分支清理都完成才通过。只删除本轮 head/base，核对默认分支提交未变；保留真实 PR。证据目录仅当前用户可读，认证不写入共享文档。

@@ -47,6 +47,7 @@ type Config struct {
 	runtimeTests                api.TestManagementPort
 	runtimeEnvironmentAdmission *environmentAdmission
 	runtimeEnvironment          *environmentPort
+	runtimeRoadmaps             *roadmapPort
 	startup                     *startupQueries
 
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`

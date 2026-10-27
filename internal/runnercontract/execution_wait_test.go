@@ -1,15 +1,14 @@
-package runnercontract_test
+package runnercontract
 
 import (
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
-	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"testing"
 	"time"
 )
 
 func TestExecutionWaitContract(t *testing.T) {
-	base := protocol.RunnerExecutionWait(time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC))
+	at := time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC)
+	base := &ExecutionWait{Contract: ExecutionWaitContract, OperationID: "original-preparation", Query: "repository_inventory", Stage: "queue", ReasonCode: "orca_cli_busy", StartedAt: at, UpdatedAt: at, DeadlineAt: at.Add(90 * time.Second), MaxCalls: 5, Diagnostic: "Orca CLI channel is busy."}
 	for _, mode := range []string{"queue", "calling", "backoff", "exhausted", "missing", "null-count", "unknown-field", "wrong-reason", "long-window", "late-retry", "duplicate"} {
 		t.Run(mode, func(t *testing.T) {
 			w := base.Clone()
@@ -45,7 +44,7 @@ func TestExecutionWaitContract(t *testing.T) {
 			if mode == "duplicate" {
 				raw = append([]byte(`{"calls_started":1,`), raw[1:]...)
 			}
-			var got runnercontract.ExecutionWait
+			var got ExecutionWait
 			err := json.Unmarshal(raw, &got)
 			valid := mode == "queue" || mode == "calling" || mode == "backoff" || mode == "exhausted"
 			if (err == nil) != valid {
@@ -54,7 +53,7 @@ func TestExecutionWaitContract(t *testing.T) {
 		})
 	}
 	for _, raw := range []json.RawMessage{nil, []byte("null")} {
-		e := runnercontract.Event{Type: "execution_wait_changed", ExecutionWait: raw}
+		e := Event{Type: "execution_wait_changed", ExecutionWait: raw}
 		_, err := e.Wait()
 		if (err == nil) != (raw != nil) {
 			t.Fatal("absent and cleared event confused", err)

@@ -5,7 +5,33 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestRoadmapSharesGenerationQueueWithTests(t *testing.T) {
+	queue := NewGenerationQueue(1)
+	now := time.Now().UTC()
+	test := Generation{ID: "tests", Project: "a", Submission: "pending", CreatedAt: now}
+	queue.Update(test)
+	queue.UpdateContent("b", "roadmap:parse", now.Add(time.Second), false, false)
+	if queue.AcquireContent("b", "roadmap:parse") || !queue.acquire(test) {
+		t.Fatal("Roadmap bypassed earlier test generation")
+	}
+	// An unknown test submit still occupies the only shared slot.
+	if queue.AcquireContent("b", "roadmap:parse") {
+		t.Fatal("shared budget exceeded")
+	}
+	queue.UpdateContent("a", "tests", now, true, true)
+	if !queue.AcquireContent("b", "roadmap:parse") {
+		t.Fatal("settled test did not release shared slot")
+	}
+	test.ID = "later"
+	test.CreatedAt = now.Add(2 * time.Second)
+	queue.Update(test)
+	if queue.acquire(test) {
+		t.Fatal("test bypassed active Roadmap")
+	}
+}
 
 func TestGenerationQueueSharedLimitAndFIFO(t *testing.T) {
 	ctx := context.Background()

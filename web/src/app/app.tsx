@@ -26,6 +26,7 @@ import { useApplicationProjects } from "./use-application-projects";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
 import { useCandidateStarts } from "./use-candidate-starts";
+const Roadmaps = lazy(()=>import("../features/roadmaps/roadmaps").then(module=>({default:module.Roadmaps})));
 const Tests = lazy(() =>
   import("../features/tests/tests").then((module) => ({
     default: module.Tests,
@@ -177,6 +178,7 @@ export function Workspace({
         <Dispatch />
         <Suspense fallback={<div className="empty">正在加载页面…</div>}>
           <Routes>
+            <Route path={"/projects/"+identity.project_id+"/roadmaps"} element={<Roadmaps key={api.home+identity.project_id+identity.instance_id}/>}/>
             <Route
               path={"/projects/" + identity.project_id + "/environment"}
               element={

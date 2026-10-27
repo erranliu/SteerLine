@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
@@ -141,4 +142,23 @@ func (a taskPredecessorTx) RecordPredecessorAudit(v taskapp.Command) error {
 		return &taskmodel.Error{Code: "invalid_batch", Message: "audit requires an accepted predecessor command"}
 	}
 	return a.tx.RecordPredecessorAudit(storedTaskCommand(v))
+}
+
+func (a taskBatchTx) AllocateTaskNumbers(ctx context.Context, project string, count int) ([]int64, error) {
+	p, ok := a.tx.(interface {
+		AllocateTaskNumbers(context.Context, string, int) ([]int64, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("task allocator unavailable")
+	}
+	return p.AllocateTaskNumbers(ctx, project, count)
+}
+func (a taskBatchTx) PutRoadmapTaskSource(ctx context.Context, project, roadmap, key, id, request string) error {
+	p, ok := a.tx.(interface {
+		PutRoadmapTaskSource(context.Context, string, string, string, string, string) error
+	})
+	if !ok {
+		return fmt.Errorf("task source transaction unavailable")
+	}
+	return p.PutRoadmapTaskSource(ctx, project, roadmap, key, id, request)
 }

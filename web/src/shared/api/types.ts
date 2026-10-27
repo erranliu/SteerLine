@@ -277,6 +277,7 @@ export interface Envelope {
   payload: Record<string, unknown>;
 }
 export interface Receipt {
+ roadmap?: unknown;
   environment?: unknown;
  maintenance?: unknown;
   request_id: string;

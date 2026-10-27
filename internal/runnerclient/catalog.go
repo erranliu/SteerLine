@@ -13,6 +13,7 @@ import (
 )
 
 type Capabilities struct {
+	Generate           *GenerateCapability      `json:"generate,omitempty"`
 	ResultFile         *ResultCapability        `json:"result_file,omitempty"`
 	ResultFileSchema   json.RawMessage          `json:"result_file_schema,omitempty"`
 	ExecutionWait      *ExecutionWaitCapability `json:"execution_wait,omitempty"`
