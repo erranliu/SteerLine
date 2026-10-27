@@ -25,12 +25,16 @@ import (
 	"github.com/erranliu/SteerLine/internal/taskrunner"
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
+	"github.com/erranliu/SteerLine/internal/testkit/remotetest"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, SourceCommit, SourceDirty, ExecutionModel, AuditModel string }
+type Run struct {
+	Root, Binary, Helper, Runner, Output, Scratch, AuthHome, Level, SourceCommit, SourceDirty, ExecutionModel, AuditModel, Web string
+	Remote                                                                                                                     *remotetest.Input
+}
 type Scenario struct {
 	LiveProof            *testfeedback.LiveDeliveryProof
 	TestingProof         *testfeedback.TestManagementProof
@@ -112,8 +116,8 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 	if id == "workflow.local-codex-audited" {
 		timeout = 20 * time.Minute
 	}
-	if id == "testing.project-progress-orca-browser" {
-		timeout = 20 * time.Minute
+	if run.Remote != nil {
+		timeout = run.Remote.Timeout(id)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}
@@ -709,12 +713,14 @@ func (s *Scenario) cleanup() {
 			}
 		}
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 90*time.Second)
-		project := p.ProjectID
-		if project == "" {
-			project = strings.ToLower(filepath.Clean(filepath.Join(p.Repo, ".git")))
-		}
-		_, readErr := driver.ReadWorkflow(cleanupCtx, p.Database, project)
-		if readErr == nil {
+		_, databaseErr := os.Stat(p.Database)
+		var readErr error
+		if os.IsNotExist(databaseErr) {
+			// Startup can fail before creating a project database, after the
+			// home's Runner service was already started. Fence that exact home.
+			readErr = driver.CleanupRunner(cleanupCtx, filepath.Join(p.Home, "execution.json"), runnerstatepath.Directory(p.Home), nil)
+		} else {
+			// Environment preparation may precede the first native task graph.
 			readErr = p.Driver.CleanupOwnedRunner(cleanupCtx, s.Run.Helper)
 		}
 		cleanupCancel()
@@ -745,6 +751,9 @@ func (s *Scenario) cleanup() {
 	preserveScratch := false
 	for _, p := range s.projects {
 		preserveScratch = preserveScratch || p.RemoteCleanupFailed || p.RunnerCleanupFailed
+		if p.RemoteCleanupFailed {
+			failures = append(failures, "remote cleanup unverified; retain original refs and scratch")
+		}
 	}
 	if !preserveScratch {
 		if err := RemoveOwned(s.Run.Scratch, s.Root); err != nil {
@@ -756,6 +765,21 @@ func (s *Scenario) cleanup() {
 	}
 	worker := "controlled"
 	provider := "controlled"
+	if s.Run.Remote != nil {
+		worker = "orca-remote"
+		if s.ID == remotetest.Discovery {
+			worker = "orca-remote catalog (no business Run)"
+			provider = "none (catalog only)"
+		}
+		if s.Run.Remote.ProjectConfig != nil {
+			var config struct {
+				PR struct{ Kind, Repository string }
+			}
+			if err := json.Unmarshal(s.Run.Remote.ProjectConfig, &config); err == nil {
+				provider = config.PR.Kind + "/" + config.PR.Repository
+			}
+		}
+	}
 	if s.ID == "testing.management-local-codex" {
 		worker = "local-codex"
 		provider = "github/" + githubRepository + " (owned base only)"

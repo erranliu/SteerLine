@@ -39,16 +39,32 @@ Windows/amd64、Go/Git、已登录本机 Codex、固定独立 Runner EXE。交�
 SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地进度链：
 
 ```powershell
-./scripts/test-project-progress-live.ps1 -ProjectRepository C:/Projects/SteerlineTest -ProjectCommit <完整提交SHA> -SteerRunnerExe <固定Runner绝对路径> -OutRoot C:/SteerlineDebug/<本次全新scope>
+./scripts/test-project-progress-live.ps1 -Local -ProjectRepository C:/Projects/SteerlineTest -ProjectCommit <完整提交SHA> -SteerRunnerExe <固定Runner绝对路径> -OutRoot C:/SteerlineDebug/<本次全新scope>
 ```
 
 需要 Windows、Go、Git、Python、gh 和已登录的本机 Codex；原生认证必须可访问 `erranliu/SteerlineTest`。入口建立独立 clone/home/任务及 loopback Git，固定原项目的三个 Python 程序，真实生成测试安排后让 worker 执行一次原程序；不启动样本 101–105，不发布 PR。默认每阶段六秒，核对六个 API 状态与同版本 Runner 原始快照、实际失败子进程和最终原报告，再停止原 Run 并验证资源清理。测试使用 `gpt-6-luna` / `medium`，会消耗模型。测试由 `e2e` build tag 隔离，普通 Go Full 不包含此项；显式编译后若未注入项目参数会跳过，不能计为本专项通过。
 
 入口输出 `result.json`、`test.log` 和 `reports/scenarios/testing.project-progress-local-codex/`，其中保留 `source.json`、`initial-binding.json`、`runner-*.json`、`api-observations.json`、`original-run.json`、`worker-program-sha256.json`、`original-reports/`、原 stop 请求/回执、`stopped-run.json`、`proof.json` 及 `scenario.json`。只有实际执行通过且清理完整才写总结果通过；它尚未登记为统一受管测试，不导出 `go.full` 或其他 L4 项通过。
 
-远端及连续浏览器联验在同一入口追加 `-RemoteProfile <公开执行配置JSON绝对路径>`。文件是一项完整 execution profile，必须明确使用 `orca-terminal` / `orca_environment`、现有 Orca CLI 和远端 Codex；不复制认证或安装状态。需要 Node/npm、Edge、远端注册的 SteerlineTest 仓库及 Python。自动材料生成仍使用本机默认模型，任务执行显式选择远端 profile。入口在 GitHub 推送本次随机 base ref，仅在远端根仓 fetch 此 ref，核对根工作区未变；原 Runner 负责创建、执行和停止实际 worker。
+远端模式不加`-Local`，使用下面的共享profile并委托正式L4，不因缺配置退回本机。需要 Node/npm、Edge、远端注册的 SteerlineTest 仓库及 Python。自动测试材料生成仍使用本机默认模型；环境材料须已在所选提交中，先在隔离home经完整L2+专属真实PR正式获得ready，才开始远端进度任务。入口在 GitHub 推送本次随机源码和验证base ref，仅在远端根仓fetch源码ref，核对根工作区未变；原 Runner负责创建、执行和停止实际worker。
 
-远端模式每阶段十五秒，使用同一 Edge 页面连续观察 0→1→2→1→2→3，核对 DOM 完成项、计数、版本与相同版本的原 Runner 快照；观察期间不得刷新或导航。远端原报告和程序由独占诊断终端只读取得，终端必须关闭；驱动不修改进度、不向原 worker 输入。证据在 `reports/scenarios/testing.project-progress-orca-browser/`，另存 `remote-target.json`、`remote-fetch.json`、`remote-source.json`、Orca 公开回执，以及 `browser/observations.json`、六张截图和 Playwright trace。原 Run 停止后先核对调用方已观察同一原候选的 stopped 投影，再关闭调用方并结算自有 base 删除。此项会构建 Web，不与其他 Web 安装/构建并发；不覆盖安装版或 Task 18。
+远端模式每阶段十五秒，使用同一 Edge 页面连续观察 0→1→2→1→2→3，核对 DOM 完成项、计数、版本与相同版本的原 Runner 快照；观察期间不得刷新或导航。远端原报告和程序由独占诊断终端只读取得，终端必须关闭；驱动不修改进度、不向原 worker 输入。证据在`<out>/scenarios/testing.project-progress-orca-browser/`，另存`remote-target.json`、`remote-fetch.json`、`remote-source.json`、Orca公开回执，以及`browser/observations.json`、六张截图和Playwright trace。原Run停止后先核对调用方已观察同一原候选的stopped投影，再关闭调用方并结算自有base删除。进度任务主体不发布PR，前置环境适配的PR另记账。此项会构建Web，不与其他Web安装/构建并发；不覆盖安装版或Task 18。
+
+## 共享64G配置的三项远端L4
+
+复制并填写[profile示例](testdata/remote-profile.example.json)，实际非秘密机器配置固定在`C:/SteerlineTestConfig/l4-remote-profile.json`。它就是现有`executionconfig.Profile`，只放稳定environment ID、本机Orca路径、远端长期安装的Codex路径、模型/effort、权限及development/2；不放项目、Run、临时runtime或凭据正文。当前64G为`e68f4edf-8a83-42c2-a9da-6d404d3aa3d8`。三个入口只读一次并把同一execution摘要冻结进`remote-input.json`和E2E信封；不读取安装home作为运行回退。维护机器时更新此独立文件，不自动同步安装配置。
+
+| ID / suite | 正式入口专属环境变量 | 前置与验收 |
+| --- | --- | --- |
+| `configuration.execution-profiles-orca` / configuration | 无项目变量 | Web/Node/Edge、本机目录工具；真实本机及64G Agent/模型/effort目录与来源、冻结配置，零业务Run |
+| `testing.project-progress-orca-browser` / testing | `STEERLINE_PROGRESS_PROJECT`、`STEERLINE_PROGRESS_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS` | 原SteerlineTest clone/完整SHA、GitHub权限、已提交环境材料；先正式适配ready，再完成原六状态和连续Edge验收 |
+| `testing.project-environment-orca` / testing | `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS` | 308既有格式项目配置（repository/AIRefactor/remote/PR）、完整SHA、Git环境材料、远端Unity/Android资源/Gitea权限；按变量/PATH逐项只检测；就绪须完整L2+真实PR，未就绪须三轮混合checks/停止封存、独立无PR及前后拒绝准入 |
+
+三项共同显式设置`STEERLINE_L4_REMOTE_PROFILE`和固定`STEERRUNNER_EXE`，正式命令为`go run ./cmd/test-feedback -level=L4 -suite=<上表suite> -env=live -scenario=<上表ID> -out <全新绝对目录>`。专属输入也冻结到同一信封，子进程过滤STEERLINE变量不会丢参。缺配置、错目标、缺材料、skip、证据缺失及清理未知都不能通过。
+
+PowerShell薄入口分别为`test-execution-profile-discovery.ps1`、`test-project-progress-live.ps1`和`test-project-environment-live.ps1`；显式`-RemoteProfile`优先于环境变量，参数向上表单向映射。进度参数沿用`-ProjectRepository/-ProjectCommit`，308使用`-ProjectConfig/-ProjectCommit`，两者`-RoundTimeoutSeconds`必须为正，默认分别900/1200秒；正式Go入口要求显式预算。外围期限容纳三轮和30分钟准备/观察/收尾，包装器额外留10分钟；不修改业务三轮预算。
+
+两项目环境文档须包含一个`steerline-pr-acceptance` JSON段：`{"required_checks":[],"minimum_approvals":0,"l2_summary":".steerrunner/artifacts/environment-l2/summary.json"}`，值须按项目真实规则填写，无检查/审核要求才能使用空数组/零。与`steerline-environment`、配套prepare/publish脚本一起由现有上游提示词维护到受测Git提交；不能运行时生成通过脚本。驱动只改夹具文档中的专属验证base，并把源码与base都固定到最终夹具SHA。验证PR不合入业务分支；检查/审核通过由provider只读核对，原项目完整L2明细独立保留。材料生成不是每次测试的强制步骤，缺材料须先由项目正常维护完成，再选新SHA复验。
 
 ## Roadmap 浏览器与真实文档 PR 专项
 

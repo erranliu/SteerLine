@@ -84,6 +84,10 @@ func (d *ApplicationDirectory) prepareRunnerStops(ctx context.Context, cli *runn
 		if p.store == nil {
 			continue
 		}
+		p.config.runtimeEnvironmentAdmission = d.runner.environments
+		if d.runner.environments != nil {
+			d.runner.environments.register(p.config)
+		}
 		stops, err := collectProjectRunnerStops(ctx, &p.config, p.store, cli)
 		if err != nil {
 			return nil, fmt.Errorf("%s startup recovery: %w", entry.view.ConfigID, err)
@@ -131,6 +135,10 @@ func openStartupStopStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, 
 }
 
 func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQLiteStore, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
+	environmentStops, err := prepareEnvironmentStops(ctx, *c, store, cli)
+	if err != nil {
+		return nil, err
+	}
 	if c.runtimeGenerations != nil {
 		rows, err := store.Generations(ctx, c.Identity())
 		if err != nil {
@@ -149,6 +157,7 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 		return nil, err
 	}
 	generationStops = append(generationStops, roadmapStops...)
+	generationStops = append(generationStops, environmentStops...)
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {
 		return nil, err

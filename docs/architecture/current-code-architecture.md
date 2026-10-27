@@ -8,7 +8,7 @@
 
 核对日期：2026-10-19；前四轮已随 PR #350 合入 `64f91853`，本页包含基于该主干的第五轮宿主契约归位。本页按生产代码与 `go list` 的实际依赖维护，区分进程调用、Go 包依赖和资源所有权。原始核对见[架构解耦审视](../../SteerlineFlow/testing/acceptance/architecture-decoupling-review.md)，实现与验证见[第一轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round1.md)、[第二轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round2.md)、[第三轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round3.md)、[第四轮](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round4.md)、[PR #350 复审](../../SteerlineFlow/testing/acceptance/architecture-decoupling-pr350-review.md)及[第五轮验收](../../SteerlineFlow/testing/acceptance/architecture-decoupling-round5.md)；其余建议尚未实施。
 
-SteerLine 保留 Task/DAG、候选参与关系与唯一 TaskDelivery，执行已迁到独立 SteerRunner。两者只通过固定 EXE 的 `steerrunner-cli/v1` 协作；SteerLine 不导入 Runner Go 包，不读取其 codec、IPC、数据库或原生日志。当前接入本机 Codex 和远端 Orca environment；各构建/平台的已验与未验范围见[Runner 接入](../integration/steerrunner.md)及专属验收，不以适配器存在推定通过。Web 为唯一交互前端，TUI 已按[退役决策](../../SteerlineFlow/testing/acceptance/tui-retirement.md)移除。
+SteerLine 保留 Task/DAG、候选参与关系与唯一 TaskDelivery，执行已迁到独立 SteerRunner。两者只通过固定 EXE 的 `steerrunner-cli/v1` 协作；SteerLine 不导入 Runner Go 包，不读取其 codec、IPC、数据库或原生日志。配置覆盖本机 Codex、Windows/amd64 本机 Orca 和远端 Orca environment；各构建/平台的已验与未验范围见[Runner 接入](../integration/steerrunner.md)及专属验收，不以适配器存在推定通过。Web 为唯一交互前端，TUI 已按[退役决策](../../SteerlineFlow/testing/acceptance/tui-retirement.md)移除。
 
 ## 进程与运行边界
 
@@ -47,7 +47,7 @@ flowchart TB
     end
     RC -->|启动固定 EXE 的短命 CLI| RunnerCLI[SteerRunner CLI 子进程]
     RunnerCLI --> Runner[home 共享 SteerRunner 常驻服务]
-    Runner --> Native[本机 Codex / 远端 Orca environment]
+    Runner --> Native[本机 Codex / 本机或远端 Orca]
     Runner --> PR[PR 平台 / Git]
     Runner --> RunnerState[(home 短目录中的各 Run 状态 / 工作区 / 日志)]
 ```
@@ -147,14 +147,14 @@ flowchart LR
 | `internal/app/host` | SteerLine 服务身份、锁、控制文件、进程观察、心跳、调度和退出观察；不持有 Runner 执行状态机，不导入 SQLite 实现。 |
 | `internal/hostcontract` | checkpoint schema 21、宿主服务/控制状态及回执、仓库绑定、进程身份/观察端口的唯一纯值所有者；只依赖标准库和公开 Runner 构建 pin，不持有数据库、进程句柄或最终关闭能力。 |
 | `internal/task` / `task/model` | 固定契约、任务输入、DAG、依赖、资格、项目权威、交付记录/证据、交付回执和验证规则；任务纯模型只依赖标准库。 |
-| `internal/taskrunner` | Task actor、候选共同 base、固定材料、控制/输入校验、候选派发、核验交付与释放后继；通过公开 Runner 事实投影展示。 |
+| `internal/taskrunner` | Task actor、各候选独立 base 与固定材料、控制/输入校验、候选派发、核验交付与释放后继；通过公开 Runner 事实投影展示。 |
 | `internal/runnerbridge` | 原请求 outbox、Run/PR/分支绑定、事件游标与副本、停止义务和重启旧输入围栏；唯一构造/保存候选 stop 信封，正常对账和启动前准备复用，不创建原生会话或选择 workflow 下一步。 |
 | `internal/runnerclient` | 固定 EXE/实例 SHA 校验、CLI 子进程、严格 JSON/退出码、公开 schema 与能力验证；不读 Runner 私有实现。 |
 | `internal/runnercontract` / `runnerstate` | 公开协议值及 SteerLine caller 参与关系；无 SQL、native owner 或具体传输实现。 |
 | `internal/runnerbinding` | 纯调用方 Run/input、原 submit request_digest、Check 和构建/目录匹配。启动准入与离线重启分别保持原前置；不操作锁/store/进程，不新增输入授权。公开 takeover 报告/逐项校验归 runnercontract；部署 `verify-runner-takeover` 复用 runnerclient 的同一公开验证。 |
 | `internal/environmentcheck` | 环境检查请求、报告、显式停止与原请求对账；使用独立 Store/Runner 端口，不推进 Task/DAG。 |
-| `internal/storage/ports` / `sqlite` | Task/DAG、候选/outbox/公开事件副本、唯一交付、环境检查、测试生成记录及 service checkpoint；当前 `SchemaVersion = 26`，格式唯一定位见[数据模型](../product-design/data-model.md#当前格式来源)，不提供旧格式迁移。所有读取均返回存储/领域事实，无产品包依赖；活动记录流持有读事务，使用者必须关闭。 |
-| `internal/testmanagement` / `model` | 测试清单/安排、generate/1、原候选 Runner R2 产物收集和纯结果汇总；model 仅持有定义/生成/证据记录，SQLite 只依赖 model。生成和收集借用 home Runner 客户端及项目 tick；原请求先保存，未知只对账，报告不可变保存并结合公开 Git 观察投影。无独立 Agent 运行时，结果见专属验收。 |
+| `internal/storage/ports` / `sqlite` | Task/DAG、候选/outbox/公开事件副本、唯一交付、环境检查、测试生成记录及 service checkpoint；当前 `SchemaVersion = 32`，格式唯一定位见[数据模型](../product-design/data-model.md#当前格式来源)，不提供旧格式迁移。所有读取均返回存储/领域事实，无产品包依赖；活动记录流持有读事务，使用者必须关闭。 |
+| `internal/testmanagement` / `model` | 测试清单/安排、generate/1 和生成记录；model 保存定义及生成事实，SQLite 只依赖 model。生成借用 home Runner 客户端及项目 tick，原请求先保存，未知只对账；候选测试进度通过 progress-file 读取，旧 R2 收集已移除。独立报告按[报告约定](../../SteerlineFlow/testing/reports.md)登记，无独立 Agent 运行时。 |
 | `internal/execution/model` / `backend` / `agentlaunch` | 仍被使用的候选/正文/活动展示、配置及进程执行端口；TaskDelivery/项目权威/交付回执、checkpoint 控制回执、进程身份与观察端口已迁出，没有原生 worker 状态转移。 |
 | `internal/execution/reconstruction` / `hostport` | 运行视图从 `hostcontract` checkpoint 和独立 Task 权威生成；不再依赖存储端口。宿主控制传输仍复用产品请求/回执和活动展示值；真实候选来自公开 Runner facts，不重建原生执行现场。 |
 | `internal/execution/workspace` / `publication` / `process` / `scheduler` | 调用方仓库身份解析、发布配置校验、SteerLine 自身进程/文件能力和 actor 调度；无 native worktree 生命周期或 PR provider 查询实现。 |

@@ -35,8 +35,8 @@ export function SettingsPage({
             能力，查看检查历史和待处理资源。
           </p>
           {activeProject ? (
-            <NavLink to={`/projects/${activeProject}/environment-checks`}>
-              打开环境检查 →
+            <NavLink to={`/projects/${activeProject}/environment`}>
+              打开项目环境适配 →
             </NavLink>
           ) : (
             <p className="muted">选择项目后可检查其运行环境。</p>

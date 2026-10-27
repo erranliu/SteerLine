@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
 	"github.com/erranliu/SteerLine/internal/environmentcheck"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
@@ -17,6 +18,7 @@ import (
 type environmentCheckPort struct {
 	service    *environmentcheck.Service
 	repository string
+	admission  *environmentAdmission
 }
 
 func newEnvironmentCheckPort(c Config, store environmentcheck.Store) *environmentCheckPort {
@@ -79,7 +81,7 @@ func newEnvironmentCheckPort(c Config, store environmentcheck.Store) *environmen
 		publication := c.runnerPublication()
 		return runnerclient.CheckInput{Repository: runnerclient.Repository{URL: remote, LocalPath: c.Repository, Remote: c.Remote, BaseBranch: c.Branch, BaseRevision: strings.TrimSpace(string(base))}, Execution: execution, Publication: &publication, Correlation: map[string]string{"project": c.Identity()}}, nil
 	}
-	return &environmentCheckPort{service: s, repository: c.Repository}
+	return &environmentCheckPort{service: s, repository: c.Repository, admission: c.runtimeEnvironmentAdmission}
 }
 
 // Projection is explicit at the application boundary; HTTP never imports the
@@ -127,6 +129,33 @@ func (p *environmentCheckPort) EnvironmentCheckRequest(ctx context.Context, id s
 	return projectEnvironmentCheck(r)
 }
 func (p *environmentCheckPort) SubmitEnvironmentCheck(ctx context.Context, c api.EnvironmentCheckCommand) (api.EnvironmentCheckRecord, error) {
+	if c.Action == environmentcheck.StartAction && p.admission != nil {
+		if _, e := p.service.Store.CheckRequest(ctx, p.service.Project, c.RequestID); errors.Is(e, environmentcheck.ErrNotFound) {
+			var payload environmentcheck.StartPayload
+			if e = json.Unmarshal(c.Payload, &payload); e != nil {
+				return api.EnvironmentCheckRecord{}, e
+			}
+			var target string
+			if payload.Execution != nil {
+				target = env.Target(*payload.Execution)
+			} else {
+				for _, profile := range p.service.Profiles {
+					if profile.ID == payload.ProfileID {
+						target = env.Target(profile.Execution)
+					}
+				}
+			}
+			if target != "" {
+				p.admission.mu.Lock()
+				defer p.admission.mu.Unlock()
+				if e = p.admission.check(ctx, target, "", false); e != nil {
+					return api.EnvironmentCheckRecord{}, e
+				}
+			}
+		} else if e != nil {
+			return api.EnvironmentCheckRecord{}, e
+		}
+	}
 	r, err := p.service.Submit(ctx, environmentcheck.Command(c))
 	view, projectionErr := projectEnvironmentCheck(r)
 	return view, errors.Join(publicCheckError(err), projectionErr)

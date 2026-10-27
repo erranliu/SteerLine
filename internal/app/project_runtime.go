@@ -36,6 +36,7 @@ type ProjectRuntime struct {
 	log               io.WriteCloser
 	store             *sqlite.SQLiteStore
 	tests             *testManagementPort
+	environment       *environmentPort
 	product           *productclient.Client
 	port              *runtimeProjectPort
 	closeOnce         sync.Once
@@ -157,6 +158,12 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	r.config.runtimeRunner = &runner.client
 	r.config.runtimeGenerations = runner.generations
 	r.config.runtimeCatalog = runner.catalog
+	r.config.runtimeEnvironmentAdmission = runner.environments
+	if runner.environments != nil {
+		runner.environments.register(r.config)
+	}
+	r.environment = newEnvironmentPort(r.config, r.store, runner.client, nil)
+	r.config.runtimeEnvironment = r.environment
 	if retErr = bindRunnerBuild(ctx, r.config, r.store); retErr != nil {
 		return
 	}
@@ -177,11 +184,21 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	}
 	instance := service.InstanceID()
 	r.tests = newTestManagementPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
+	r.environment.service.Admit = service.VerifyRunnerAdmission
 	r.config.runtimeTests = r.tests
 	r.config.runtimeRoadmaps = newRoadmapPort(r.config, r.store, runner.client, service.VerifyRunnerAdmission)
 	r.config.runtimeRoadmaps.mutateTask = service.ExecuteTaskMutation
 	r.tests.roadmaps = r.config.runtimeRoadmaps
-	service.ObserveAuxiliary = r.tests.observe
+	// The actor's shared five-second budget must not let a slow test query
+	// starve environment cancellation/deadlines on every tick.
+	environmentFirst := false
+	service.ObserveAuxiliary = func(ctx context.Context) error {
+		environmentFirst = !environmentFirst
+		if environmentFirst {
+			return errors.Join(r.environment.service.Observe(ctx), r.tests.observe(ctx))
+		}
+		return errors.Join(r.tests.observe(ctx), r.environment.service.Observe(ctx))
+	}
 	fmt.Fprintf(r.log, "runtime instance=%s executable=%s home=%s config=%s source_commit=%s source_dirty=%s\n", instance, r.hostConfig.RuntimeExecutable, r.hostConfig.RuntimeHome, r.hostConfig.RuntimeConfig, r.hostConfig.SourceCommit, r.hostConfig.SourceDirty)
 	r.hostConfig.ControlPublished = func(action string) {
 		if action == "stop_candidate" {
@@ -238,6 +255,13 @@ func (r *ProjectRuntime) close() {
 				fmt.Fprintf(r.log, "test generation stop remains unverified: %v\n", err)
 			}
 		}
+		if r.environment != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			if err := r.environment.service.Close(ctx); err != nil && r.log != nil {
+				fmt.Fprintf(r.log, "environment stop remains unverified: %v\n", err)
+			}
+			cancel()
+		}
 		if r.port != nil {
 			r.localErr = errors.Join(r.localErr, r.port.Server.Close(context.Background()))
 		}
@@ -283,6 +307,9 @@ func (p *runtimeProjectPort) Command(ctx context.Context, in httpcontract.Comman
 	}
 	if strings.HasPrefix(in.Action, "maintenance_") {
 		return p.maintenanceCommand(ctx, in)
+	}
+	if strings.HasPrefix(in.Action, "environment_") {
+		return p.environmentCommand(ctx, in)
 	}
 	return p.Server.Command(ctx, in)
 }
@@ -392,6 +419,12 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		}
 		return p.config.runtimeRoadmaps.read(ctx, route, values)
 	}
+	if route == "/environment" || strings.HasPrefix(route, "/environment/") {
+		if len(values) != 0 {
+			return nil, errors.New("environment query accepts no parameters")
+		}
+		return p.environmentRead(ctx, route)
+	}
 	if strings.HasPrefix(route, "/runs/") && strings.HasSuffix(route, "/documents") && strings.Count(route, "/") == 3 {
 		if len(values) != 0 {
 			return nil, errors.New("document query does not accept parameters")
@@ -413,6 +446,11 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 			} else if r != nil {
 				return r, nil
 			}
+		}
+		if r, e := p.environmentReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
+			return nil, e
+		} else if r != nil {
+			return r, nil
 		}
 		if r, e := p.maintenanceReceipt(ctx, strings.TrimPrefix(route, "/commands/")); e != nil {
 			return nil, e

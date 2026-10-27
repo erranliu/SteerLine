@@ -169,6 +169,33 @@
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -env=controlled -scenario=testing.runtime-progress",
       "check": "独立 home/repo/SQLite 与公开 Runner fixture；固定测试字段初始化、通过/重跑清零、非法内容及传输异常保留快照、重启续读、原业务 revision/输入不变、不产生 managed 历史、停止及资源清理完整。可与独立场景并行，总并发最多二。"
+    },
+    {
+      "id": "configuration.execution-profiles-orca",
+      "name": "64G真实执行目录",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=configuration -env=live -scenario=configuration.execution-profiles-orca",
+      "check": "真实Web本机/64G远端目录与来源，冻结profile_id/transport、零业务Run及资源结算",
+      "note": "共同显式设置STEERRUNNER_EXE和STEERLINE_L4_REMOTE_PROFILE绝对路径；共享既有executionconfig.Profile的64G配置，live单项串行，源码Web构建串行，独立home/Git/DB/新-out。缺输入/材料、skip、目标错配或清理未知均不通过，无安装/本机回退。Windows/Go/Git、Node/npm/Edge及本机目录工具；不需要项目、Unity、L2/PR材料或模型业务登录，不提交业务Run。"
+    },
+    {
+      "id": "testing.project-progress-orca-browser",
+      "name": "64G真实远端进度及连续浏览器",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-progress-orca-browser",
+      "check": "SteerlineTest正式适配前置后，原Python程序与同一Edge连续0→1→2→1→2→3，DOM/API/Runner同版本，原Run/诊断终端停止及清理",
+      "note": "共同显式设置STEERRUNNER_EXE和STEERLINE_L4_REMOTE_PROFILE绝对路径；共享既有executionconfig.Profile的64G配置，live单项串行，源码Web构建串行，独立home/Git/DB/新-out。缺输入/材料、skip、目标错配或清理未知均不通过，无安装/本机回退。另设STEERLINE_PROGRESS_PROJECT绝对clone、STEERLINE_PROGRESS_COMMIT完整SHA、STEERLINE_L4_ROUND_TIMEOUT_SECONDS正秒数；SteerlineTest原Python程序、已提交环境文档/脚本及PR规则、GitHub权限，先在本次home完整L2+专属真实PR适配ready。三轮总预算外加观察/收尾；任务主体不发布PR，同一Edge连续六状态并保留原字节和报告。"
+    },
+    {
+      "id": "testing.project-environment-orca",
+      "name": "308真实远端环境适配",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-orca",
+      "check": "固定原AIRefactor/夹具提交；按项目声明变量/PATH只检测不修复，逐项保留通过/不通过/未验证。满足时完整L2+真实Gitea PR及准入；未满足时三轮原Run停止封存、混合checks及L2/PR未执行、前后均拒绝准入，独立核实无PR，均须完整清理",
+      "note": "共同显式设置STEERRUNNER_EXE和STEERLINE_L4_REMOTE_PROFILE绝对路径；共享既有executionconfig.Profile的64G配置，live单项串行，源码Web构建串行，独立home/Git/DB/新-out。缺输入/材料、skip、目标错配或清理未知均不通过，无安装/本机回退。另设STEERLINE_L4_PROJECT_CONFIG绝对测试配置（既有repository/branch=AIRefactor/remote/PR格式）、STEERLINE_L4_PROJECT_COMMIT完整SHA、STEERLINE_L4_ROUND_TIMEOUT_SECONDS正秒数；308环境材料须已在该Git提交中，远端Unity2022.3.62f2/Android版本化资源和Gitea权限。源码分支及验证base固定到最终夹具SHA；最多三轮，不缩L2，不合入业务主分支，封存成功前零派发，通过后仅运行并停止一个准入探针；真实未就绪也是有效负向验收，但必须有三轮独立Run的完整封存混合结果、前后拒绝及独立无PR证据，不等同于ready。"
     }
   ]
 }

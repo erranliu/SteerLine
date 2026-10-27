@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "steerrunner-result-file/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract",
+    "run_id",
+    "version",
+    "encoding",
+    "size_bytes",
+    "collection_status"
+  ],
+  "properties": {
+    "contract": {
+      "const": "steerrunner-result-file/v1"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "encoding": {
+      "const": "base64"
+    },
+    "content_base64": {
+      "type": "string",
+      "contentEncoding": "base64",
+      "maxLength": 87384
+    },
+    "size_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65536
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "collection_status": {
+      "enum": [
+        "disabled",
+        "pending",
+        "closed"
+      ]
+    },
+    "diagnostic": {
+      "enum": [
+        "binding_invalid",
+        "workspace_unavailable",
+        "directory_unavailable",
+        "file_missing",
+        "read_failed",
+        "size_exceeded",
+        "file_changing",
+        "initialization_unverified",
+        "transport_unavailable"
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "version": {
+            "minimum": 1
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "content_base64",
+          "sha256",
+          "observed_at"
+        ],
+        "properties": {
+          "collection_status": {
+            "const": "closed"
+          }
+        }
+      },
+      "else": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "content_base64"
+              ]
+            },
+            {
+              "required": [
+                "sha256"
+              ]
+            },
+            {
+              "required": [
+                "observed_at"
+              ]
+            }
+          ]
+        },
+        "properties": {
+          "size_bytes": {
+            "const": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "collection_status": {
+            "const": "closed"
+          },
+          "version": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "diagnostic"
+        ]
+      }
+    }
+  ],
+  "description": "Final-only opaque file snapshot; collected after original execution ends and producers stop. No running collection or reads on query. First seal is permanent, including failure."
+}

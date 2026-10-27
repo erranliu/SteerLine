@@ -37,16 +37,18 @@ type ProjectConfigInput struct {
 // decode through ProjectConfigInput; catalog, directory, process host and file
 // identity are added by app composition.
 type Config struct {
-	RunnerExecution    RunnerExecutionConfig `json:"-"`
-	ConfigPath         string                `json:"-"`
-	runtimeHost        *host.Config
-	runtimeGenerations *testmanagement.GenerationQueue
-	runtimeRunner      *runnerclient.Client
-	runtimeCatalog     *runnerclient.Catalog
-	runtimeMaintenance *projectMaintenance
-	runtimeTests       api.TestManagementPort
-	runtimeRoadmaps    *roadmapPort
-	startup            *startupQueries
+	RunnerExecution             RunnerExecutionConfig `json:"-"`
+	ConfigPath                  string                `json:"-"`
+	runtimeHost                 *host.Config
+	runtimeGenerations          *testmanagement.GenerationQueue
+	runtimeRunner               *runnerclient.Client
+	runtimeCatalog              *runnerclient.Catalog
+	runtimeMaintenance          *projectMaintenance
+	runtimeTests                api.TestManagementPort
+	runtimeEnvironmentAdmission *environmentAdmission
+	runtimeEnvironment          *environmentPort
+	runtimeRoadmaps             *roadmapPort
+	startup                     *startupQueries
 
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`
 

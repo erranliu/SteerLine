@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
+import { isAbsolute, relative } from "node:path";
 
 test("native.discovery: Web-owned local and paired remote catalogs", async ({
   page,
@@ -8,10 +9,20 @@ test("native.discovery: Web-owned local and paired remote catalogs", async ({
   const binary = process.env.STEERLINE_CONFIG_WEB;
   const environment = process.env.STEERLINE_CONFIG_REMOTE;
   const localOrca = process.env.STEERLINE_CONFIG_LOCAL_ORCA === "1";
+  const scope = process.env.STEERLINE_CONFIG_SCOPE;
+  const home = process.env.STEERLINE_HOME;
+  const isolated = !!(
+    scope &&
+    home &&
+    isAbsolute(scope) &&
+    relative(scope, home) &&
+    !relative(scope, home).startsWith("..") &&
+    !isAbsolute(relative(scope, home))
+  );
   if (
     !binary ||
     (!environment && !localOrca) ||
-    !process.env.STEERLINE_HOME?.startsWith("C:\\SteerlineDebug\\")
+    (!home?.startsWith("C:\\SteerlineDebug\\") && !isolated)
   )
     throw new Error("new debug package driver required");
   const url = new URL(
@@ -42,6 +53,23 @@ test("native.discovery: Web-owned local and paired remote catalogs", async ({
   const snapshot = await (
     await page.request.get(url.origin + "/api/web/execution-config")
   ).json();
+  const remoteProfile = process.env.STEERLINE_CONFIG_PROFILE;
+  let effectiveExecution: unknown;
+  if (remoteProfile) {
+    const saved = snapshot.config.execution_profiles.find(
+      (p: any) => p.id === remoteProfile,
+    );
+    expect(saved?.execution.adapter).toBe("orca-terminal");
+    expect(saved?.execution.target).toEqual({
+      kind: "orca_environment",
+      environment,
+    });
+    const frozen = JSON.parse(
+      readFileSync(process.env.STEERLINE_CONFIG_FROZEN_INPUT!, "utf8"),
+    );
+    expect(saved.execution).toEqual(frozen.profile.execution);
+    effectiveExecution = saved.execution;
+  }
   expect(snapshot.writable).toBe(false);
   const session = await (
     await page.request.get(url.origin + "/auth/status")
@@ -64,6 +92,7 @@ test("native.discovery: Web-owned local and paired remote catalogs", async ({
       JSON.stringify(
         {
           scope: "catalog only; no execution authorization asserted",
+          effective_execution: effectiveExecution,
           queries: methods,
         },
         null,
@@ -120,12 +149,23 @@ test("native.discovery: Web-owned local and paired remote catalogs", async ({
   const environments = await query({
     kind: "environments",
     host: "orca_environment",
+    profile_id: process.env.STEERLINE_CONFIG_PROFILE,
   });
   expect(
     environments.environments.some(
       (e: any) => e.id === environment || e.name === environment,
     ),
   ).toBe(true);
+  const agents = await query({
+    kind: "agents",
+    host: "orca_environment",
+    adapter: "orca-terminal",
+    environment,
+    profile_id: remoteProfile,
+  });
+  expect(agents.state, agents.diagnostic).toBe("ready");
+  expect(agents.origin).toBe("registered");
+  expect(agents.agents.some((a: any) => a.id === "codex")).toBe(true);
   let remote: any;
   for (let i = 0; i < 3; i++) {
     remote = await query({
@@ -135,6 +175,7 @@ test("native.discovery: Web-owned local and paired remote catalogs", async ({
       environment,
       agent: "codex",
       refresh: true,
+      profile_id: process.env.STEERLINE_CONFIG_PROFILE,
     });
     if (remote.state !== "in_progress") break;
   }

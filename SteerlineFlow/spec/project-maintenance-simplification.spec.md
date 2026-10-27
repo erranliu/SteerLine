@@ -20,7 +20,7 @@
 | Task 唯一执行快照、全部候选共用 base/契约 | 每个候选独立冻结 base、完整契约和测试快照；取消跨候选同 base/同契约限制 |
 | 过期与测试关联尚无独立表达；交付读取 Task 快照 | 过期独立于执行和参与状态；交付读取所选候选快照，保留旧版 PR 的完成资格 |
 
-替换上述行为的[原 Spec](project-maintenance.spec.md)和[原 Plan](../plans/project-maintenance.plan.md)保留原交付版本与验收事实；本次不是给旧流程再叠加一个入口。项目添加/结构纳管继续后置。
+替换上述行为的[原 Spec](../archive/spec/completed/project-maintenance.spec.md)和[原 Plan](../archive/spec/completed/project-maintenance.plan.md)保留原交付版本与验收事实；本次不是给旧流程再叠加一个入口。项目添加/结构纳管继续后置。
 
 ## 行为契约
 

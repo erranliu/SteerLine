@@ -21,6 +21,7 @@ import { short } from "../shared/ui/status";
 import { SettingsPage } from "../features/settings/settings";
 import { Operations } from "./operations";
 import { ExecutionConfigs } from "../features/execution-configs/execution-configs";
+import { ProjectEnvironment } from "../features/environment-checks/project-environment";
 import { useApplicationProjects } from "./use-application-projects";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
@@ -178,6 +179,14 @@ export function Workspace({
         <Suspense fallback={<div className="empty">正在加载页面…</div>}>
           <Routes>
             <Route path={"/projects/"+identity.project_id+"/roadmaps"} element={<Roadmaps key={api.home+identity.project_id+identity.instance_id}/>}/>
+            <Route
+              path={"/projects/" + identity.project_id + "/environment"}
+              element={
+                <ProjectEnvironment
+                  key={identity.project_id + identity.instance_id}
+                />
+              }
+            />
             <Route
               path={"/projects/" + identity.project_id + "/tests"}
               element={<Tests />}

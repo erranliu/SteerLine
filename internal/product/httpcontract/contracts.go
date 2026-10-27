@@ -84,6 +84,7 @@ type CommandEnvelope struct {
 
 type CommandResponse struct {
 	Roadmap          json.RawMessage             `json:"roadmap,omitempty"`
+	Environment      json.RawMessage             `json:"environment,omitempty"`
 	Maintenance      json.RawMessage             `json:"maintenance,omitempty"`
 	EnvironmentCheck *api.EnvironmentCheckRecord `json:"environment_check,omitempty"`
 	RequestID        string                      `json:"request_id"`

@@ -21,6 +21,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/runtimeprogress"
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
+	"github.com/erranliu/SteerLine/internal/testkit/remotetest"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
@@ -142,9 +143,20 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 
 func e2eEnvironment(base []string, config string) []string {
 	var result []string
+	var frozen struct{ Remote *remotetest.Input }
+	_ = json.Unmarshal([]byte(config), &frozen)
+	var project struct {
+		PR struct {
+			TokenEnv string `json:"token_env"`
+		} `json:"pr"`
+	}
+	if frozen.Remote != nil {
+		_ = json.Unmarshal(frozen.Remote.ProjectConfig, &project)
+	}
+	tokenKey := strings.ToUpper(project.PR.TokenEnv)
 	for _, v := range base {
 		key := strings.ToUpper(strings.SplitN(v, "=", 2)[0])
-		if strings.HasPrefix(key, "STEERLINE_") || key == "GOFLAGS" {
+		if strings.HasPrefix(key, "STEERLINE_") && key != tokenKey || key == "GOFLAGS" {
 			continue
 		}
 		result = append(result, v)
@@ -163,6 +175,7 @@ func runE2E(opts options) (code int) {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
+	var remoteInput *remotetest.Input
 	executionModel, auditModel := "", ""
 	for _, entry := range selected {
 		if entry.ID == "workflow.local-codex-audited" {
@@ -197,7 +210,7 @@ func runE2E(opts options) (code int) {
 		coverage = "full-L2"
 	}
 	if opts.e2eEnv == "live" {
-		note = "real Runner/local Codex; isolated test resources and explicit external effects"
+		note = "real Runner/explicit execution profile; isolated test resources and explicit external effects"
 	}
 
 	report := e2eReport{Scope: "e2e", Coverage: coverage, Level: opts.level, Env: opts.e2eEnv, Selected: selected, Builds: map[string]string{}, Errors: []string{}, Started: time.Now().UTC().Format(time.RFC3339Nano), Environment: collectEnvironment(opts.cacheCondition, note, out, nil)}
@@ -246,6 +259,19 @@ func runE2E(opts options) (code int) {
 		}
 	}()
 	fail := func(err error) int { report.Errors = append(report.Errors, err.Error()); return 1 }
+	// Preserve prerequisite failures in the same managed report as execution
+	// failures, before building or creating any project/remote resources.
+	for _, entry := range selected {
+		if remotetest.Selected(entry.ID) {
+			remoteInput, err = remotetest.Load(entry.ID, os.Getenv)
+			if err != nil {
+				return fail(err)
+			}
+			if os.Getenv("STEERRUNNER_EXE") == "" {
+				return fail(errors.New("remote L4 requires explicit STEERRUNNER_EXE"))
+			}
+		}
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer cancel()
 	// The parent must include every selected scene's existing body/cleanup
@@ -255,6 +281,9 @@ func runE2E(opts options) (code int) {
 		window, err := time.ParseDuration(e2ePackageGoTimeout([]e2eScenario{entry}))
 		if err != nil {
 			return fail(err)
+		}
+		if remoteInput != nil {
+			window = remoteInput.Timeout(entry.ID) + 5*time.Minute
 		}
 		budget += window
 	}
@@ -266,6 +295,11 @@ func runE2E(opts options) (code int) {
 	buildDir := filepath.Join(out, "build")
 	if err := os.MkdirAll(buildDir, 0700); err != nil {
 		return fail(err)
+	}
+	if remoteInput != nil {
+		if err := writeJSON(filepath.Join(out, "remote-input.json"), remoteInput); err != nil {
+			return fail(err)
+		}
 	}
 	sourceCommit, err := e2eCommandOutput(root, "git", "rev-parse", "HEAD")
 	if err != nil {
@@ -345,7 +379,28 @@ func runE2E(opts options) (code int) {
 	if err != nil {
 		return fail(err)
 	}
-	config, err := json.Marshal(map[string]string{"ExecutionModel": executionModel, "AuditModel": auditModel, "Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
+	web := ""
+	if remoteInput != nil && selected[0].ID != remotetest.Environment {
+		web = filepath.Join(buildDir, "steerline-web.exe")
+		for i, args := range [][]string{{"npm.cmd", "--prefix", "web", "run", "build"}, {"go", "build", "-tags=webui", "-o", web, "./cmd/steerline-web"}} {
+			cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+			cmd.Dir = root
+			output, err := cmd.CombinedOutput()
+			if e := os.WriteFile(filepath.Join(buildDir, fmt.Sprintf("remote-web-%d.log", i)), output, 0600); e != nil {
+				return fail(e)
+			}
+			if err != nil {
+				return fail(fmt.Errorf("remote Web build: %w", err))
+			}
+		}
+		data, err := os.ReadFile(web)
+		if err != nil {
+			return fail(err)
+		}
+		sum := sha256.Sum256(data)
+		report.Builds[web] = hex.EncodeToString(sum[:])
+	}
+	config, err := json.Marshal(map[string]any{"Remote": remoteInput, "Web": web, "ExecutionModel": executionModel, "AuditModel": auditModel, "Root": root, "Binary": binary, "Helper": helper, "Runner": runnerPath, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}
@@ -434,6 +489,9 @@ func runE2E(opts options) (code int) {
 			tests = append(tests, e.Test)
 		}
 		timeout := e2ePackageGoTimeout(packages[pkg])
+		if remoteInput != nil {
+			timeout = (remoteInput.Timeout(packages[pkg][0].ID) + 5*time.Minute).String()
+		}
 		importPath := strings.TrimSuffix(corePackage, "/internal/app/host") + "/" + strings.TrimPrefix(pkg, "./")
 		parallelism := e2ePackageParallelism(packages[pkg])
 		if packageWorkers > 1 {
@@ -628,6 +686,12 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 			}
 			continue
 		}
+		if remotetest.Selected(e.ID) {
+			if err := checkRemoteEvidence(e.ID, filepath.Join(out, "scenarios", e.ID)); err != nil {
+				return err
+			}
+			continue
+		}
 		if e.Env == "live" {
 			if !supportedLiveScenario(e) || evidence.Live == nil || e.ID == "workflow.local-codex-audited" && evidence.Live.Audited == nil {
 				return fmt.Errorf("unsupported live chain or missing delivery proof: %s", e.ID)
@@ -642,6 +706,9 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 }
 
 func supportedLiveScenario(e e2eScenario) bool {
+	if e.Chain == "orca-remote" && e.Level == "L4" {
+		return (e.ID == remotetest.Discovery && e.Suite == "configuration" || (e.ID == remotetest.Progress || e.ID == remotetest.Environment) && e.Suite == "testing") && e.Package == "./tests/e2e/remote"
+	}
 	return e.Chain == "local-codex" && (e.ID == "testing.management-local-codex" && e.Level == "L4" && e.Suite == "testing" || e.ID == "smoke.local-codex" && e.Level == "L4" || e.ID == "workflow.local-codex-audited" && e.Level == "L4" && e.Suite == "workflow")
 }
 

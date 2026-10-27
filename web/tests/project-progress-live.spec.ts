@@ -6,11 +6,13 @@ import { dirname, resolve, join } from "node:path";
 test("remote Runner progress updates one live SteerLine page", async ({ page }, testInfo) => {
   const web = process.env.STEERLINE_PROGRESS_WEB!;
   const home = process.env.STEERLINE_PROGRESS_HOME!;
+  const scenarioRoot = process.env.STEERLINE_PROGRESS_SCENARIO_ROOT!;
   const targetFile = process.env.STEERLINE_PROGRESS_TARGET!;
   const output = process.env.STEERLINE_WEB_EVIDENCE!;
-  if (!web || !home || !targetFile || !output) throw new Error("explicit isolated progress browser inputs required");
+  if (!web || !home || !scenarioRoot || !targetFile || !output) throw new Error("explicit isolated progress browser inputs required");
   const root = resolve(dirname(web), "..");
-  if (!root.toLowerCase().startsWith("c:\\steerlinedebug\\") || !resolve(home).toLowerCase().startsWith(root.toLowerCase() + "\\")) {
+  const homeRoot = resolve(scenarioRoot);
+  if (!root.toLowerCase().startsWith("c:\\steerlinedebug\\") || !resolve(home).toLowerCase().startsWith(homeRoot.toLowerCase() + "\\")) {
     throw new Error("browser must use the test-owned home and executable");
   }
   const save = (name: string, value: unknown) => {

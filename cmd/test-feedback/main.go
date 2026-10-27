@@ -16,6 +16,7 @@ import (
 	"time"
 
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
+	"github.com/erranliu/SteerLine/internal/testkit/remotetest"
 )
 
 type options struct {
@@ -318,7 +319,9 @@ func parseOptions(args []string) (options, error) {
 		}
 		live := opts.level == "L4" && opts.e2eEnv == "live" && (opts.suite == "smoke" && opts.scenario == "smoke.local-codex" ||
 			opts.suite == "workflow" && opts.scenario == "workflow.local-codex-audited" ||
-			opts.suite == "testing" && opts.scenario == "testing.management-local-codex")
+			opts.suite == "testing" && opts.scenario == "testing.management-local-codex" ||
+			opts.suite == "configuration" && opts.scenario == remotetest.Discovery ||
+			opts.suite == "testing" && (opts.scenario == remotetest.Progress || opts.scenario == remotetest.Environment))
 		if localGo {
 			if opts.e2eEnv != "isolated" {
 				return opts, fmt.Errorf("L4 go.full requires isolated environment")

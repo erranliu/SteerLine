@@ -16,7 +16,7 @@
 
 [第二阶段原型](prototypes/planning-ui/index.html)是单文件 HTML/CSS/JavaScript 演示，约 390 KB，没有前端构建工程。它已经覆盖规划工作台、版本蓝图、长期文档、Roadmap 草稿、DAG、执行、验收、测试、体验版本、Bug 和设置。交互细节见[原型说明](prototypes/planning-ui/README.md)和[归档的界面设计](../../SteerlineFlow/archive/design/planning-ui.md)。原型是产品参考，正式页面仍需按真实能力和契约接入。
 
-仓库当前文档和相关 Git 历史未找到已确认的 React/Vue/Vite 等 Web 技术栈。历史客户端方案为 C# / WinUI 3，工程已由 #91 删除，见[源码索引](../architecture/current-code-architecture.md)。当前可复用成果是 Go 产品接口、本机 HTTP 协议和已交付的 Web 前端；客户端边界见[规划架构](planning-architecture.md)，已有路由见[本机客户端协议](local-client-protocol.md)。
+方案调查时尚未找到已确认的 Web 技术栈；当前工程已采用下表的技术栈。历史客户端方案为 C# / WinUI 3，工程已由 #91 删除，见[源码索引](../architecture/current-code-architecture.md)。当前可复用成果是 Go 产品接口、本机 HTTP 协议和已交付的 Web 前端；客户端边界见[规划架构](planning-architecture.md)，已有路由见[本机客户端协议](local-client-protocol.md)。
 
 ## 已确认技术栈
 
@@ -42,7 +42,7 @@
 
 现有 `httpapi.Server.ServeHTTP` 拒绝所有非空 Origin；协议要求读取受当前 Windows 用户保护的 discovery/credential 文件。浏览器不能直接复用 TUI 的文件发现与凭证读取，单纯增加 Vite proxy 不能构成正式浏览器认证方案。
 
-`steerline-web.exe` 提供浏览器 handler、静态页面和同源 API；`steerline.exe serve-app` 拥有配置目录和受限项目路由，通过既有 native HTTP 客户端访问原项目服务。应用服务无项目数据库或调度器，Web、应用服务与项目服务分别正常停止。浏览器会话绑定 home/Web 实例，项目 URL 使用 `/projects/{id}/dag|runs|settings`，项目切换不改变原命令信封。
+`steerline-web.exe` 提供浏览器 handler、静态页面和同源 API；共享 `steerline.exe serve` 承载应用目录及各项目运行时，Web 通过受限应用 API 访问项目。Web 可独立重启，应用停止协调所有项目及共享 Runner。浏览器会话绑定 home/Web 实例，项目 URL 使用 `/projects/{id}/dag|runs|settings`，项目切换不改变原命令信封。
 
 浏览器入口遵循以下契约；路由、配置及实现细节归上述 Spec/Plan：
 
@@ -60,7 +60,7 @@
 
 Query key 包含项目、服务实例以及相应 Task/Run/Execution/Attempt 等身份；晚到响应只更新原 key，不覆盖当前选择。业务资格以 Go 返回及提交时的复核为准，前端禁用按钮只是交互提示。断线时展示最后观察时间，查询缓存不表示服务仍在线。
 
-所有业务变更禁用自动重试，提交前先在 IndexedDB 保存完整、不可变的原 request_id/目标/版本/payload；保存失败不能发送。未知结果查询原 ID，只有权威 command_not_found 才按原信封补交；不得换 ID、换版本或借 Query 自动重试重放。跨标签页及刷新恢复需要在客户端请求层统一处理，组件不各自实现发送恢复。
+所有业务变更禁用自动重试，提交前先在 IndexedDB 保存完整、不可变的原 request_id/目标/版本/payload；保存失败不能发送。未知结果查询原 ID；部分动作在同一实例收到权威 command_not_found 后可按原信封补交，候选停止、环境检查、项目维护和环境适配动作只对账，不自动补交；不得换 ID、换版本或借 Query 自动重试重放。跨标签页及刷新恢复需要在客户端请求层统一处理，组件不各自实现发送恢复。
 
 输入草稿绑定原候选和 Decision；中文 IME 组词、Enter 换行与显式提交分别处理。文档和 Agent 正文按不可信内容安全渲染，首期不执行原始 HTML。可持久草稿与信封不是业务权威，不保存宿主原生凭证。
 

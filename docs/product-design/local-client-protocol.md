@@ -76,7 +76,7 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 {"code":"command_not_found","reason":"the project database and control request authority contain no record for this request_id","request_id":"0123456789abcdef0123456789abcdef"}
 ```
 
-发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；权威 `command_not_found` 才能按原完整 envelope、原 ID、原 payload 和原版本补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `application-commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
+发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；对于允许补交的动作，同一实例返回权威 `command_not_found` 后才可按原完整 envelope、原 ID、原 payload 和原版本补交；候选停止、环境检查、项目维护与环境适配等动作只对账，浏览器不自动补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `application-commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
 
 Web 将完整原信封保存在现有 IndexedDB；服务端的原请求记录仍是跨动作仲裁。原生查看器的未知结果不得重放。
 
@@ -96,6 +96,20 @@ CLI 通过项目选择访问原任务用例：POST `/task-batch-validation`、`/
 
 Web 只提供受限 `/api/v2/application/projects…` 同源转接；不代理管理/CLI 专有路由。浏览器会话绑定 home/Web 实例，原生 `/native/identity`、`/native/backend`、`/native/shutdown` 使用独立 launcher Bearer，无 Origin，浏览器 cookie 不能停服。Web 可独立重启，重新 open 授权后只读重连；原信封仍按原实例/请求查询。见[Web 指南](../../web/README.md)、[统一启动 Spec](../../SteerlineFlow/spec/unified-startup.spec.md)。
 
+
+## 项目环境适配
+
+同一项目根提供 `GET /environment/options`（远端配置二态/原因及本地生成配置）、`GET /environment`（最近20条活动摘要）及 `GET /environment/{id}`（原活动完整轮次、两通道快照、脚本报告、Agent排障回复或生成文本）。读取不执行环境脚本、不启动Agent。长Agent回复节选标明截断，原内容保留在原Run。
+
+`POST /commands` 使用以下动作；均沿原项目actor、认证及命令journal，不使用图/控制revision。
+
+| action | target_id / expected_version | payload |
+| --- | --- | --- |
+| `environment_start` | 当前project_id / 1 | `{profile_id,round_timeout_seconds}`，正整数秒；首次加两次重试，每轮同预算 |
+| `environment_generate` | 当前project_id / 1 | `{profile_id,round_timeout_seconds:0}`，选本地Codex只读生成配置；输出准备文档/脚本/gaps，生成不授予准入 |
+| `environment_stop` | 原活动id / 活动revision | `{}`，只处理原活动，取消后零新轮次 |
+
+回执的 `environment` 为活动投影，`applied` 仅表示命令持久受理；任务资格只认环境查询的ready。结果不明时通过原 `GET /commands/{request_id}` 核实，浏览器不因command_not_found补交；重复完整原信封返回原受理记录，变更原信封拒绝。progress持续提供进度，独立result-file仅在原Run结束且停止后封存一次；pr_ready触发停止，不决定ready。result版本0表示未成功采集，closed/0须保留采集diagnostic；closed/1才有最终文件，封存后不刷新。progress及Agent回复不决定ready，Runner停止与最终报告/PR未核实仍阻断新任务。详见[适配Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)。
 
 ## 独立环境检查
 

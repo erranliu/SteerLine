@@ -52,7 +52,7 @@ W18 停服取证修复：停机前的候选投影不能证明停机后的资源�
 
 2026-10-19 原生初始化停止补充（W03/W05–W07/W18，E04/E05，V01/V06/V07）：Runner #31 / SteerLine #355 已将 Orca 远端切换为 profile v4 的直接原生执行，远端不再部署 helper 或固定控制终端。初始化已绑定原 runtime/worktree/terminal/incarnation 而尚未确认 agent ready 时，显式停止仍按该原身份核验完整终端清单；无业务 turn 的初始化允许 branch 元数据暂空，明确错分支/工作区/path 或身份冲突继续阻断。服务换代零自动输入/替换会话。离线只读 `stop_evidence_scope=orca_terminal` 仅描述原终端，不证明全 OS 树或执行主机登录撤销；旧 helper Run 不降级为新原生证明，未核实仍阻断。Runner 的 `SteerlineFlow/plans/initialization-stop.plan.md` 和 `SteerlineFlow/testing/acceptance/initialization-stop.md` 维护两个原生 L3 case 的新验证及历史 helper 结果，不把旧构建通过继承给当前方案。
 
-测试所有者按 [测试精简 Spec](../../SteerlineFlow/spec/runner-test-convergence.spec.md)收敛：W02–W16/W18 执行专项由 Runner 验证；W01、W12 调用方授权、W17 及迟到接受/停止义务由 SteerLine 验证。SteerLine 的完整 L2 仍用本机 Codex 实际走通实现、报告、发布和真实 PR 合并/交付；原生恢复/沙箱/Orca 不再在 SteerLine 重复建设矩阵。节点、异常和恢复规则不变，具体状态见[专属验收](../../SteerlineFlow/testing/acceptance/runner-test-convergence.md)。
+测试所有者按 [测试精简 Spec](../../SteerlineFlow/spec/runner-test-convergence.spec.md)收敛：W02–W16/W18 执行专项由 Runner 验证；W01、W12 调用方授权、W17 及迟到接受/停止义务由 SteerLine 验证。当前 L2 为不调用真实模型或 GitHub 的受控交付冒烟；真实 Codex 实现、发布与 PR 合并按需选择 [L4 live](../../SteerlineFlow/testing/l4.md)。原生恢复/沙箱/Orca 不再在 SteerLine 重复建设矩阵。节点、异常和恢复规则不变，具体状态见[专属验收](../../SteerlineFlow/testing/acceptance/runner-test-convergence.md)。
 
 ## 职责与规则归属
 
@@ -349,7 +349,7 @@ UI 至少能区分“准备工作区”“启动代理”“初始化中”“�
 
 ### Runner 内容流程与测试管理接入（按 2026-10-21 记录校准）
 
-[统一 Spec](../../SteerlineFlow/spec/test-management.spec.md) / [Plan](../../SteerlineFlow/plans/test-management.plan.md)已接 generate/1、R2 公开产物及 Git 观察、生成对象兼容接管和启动前 stop 清单；TM-A01–A08 自动结果与固定版本见[专属验收](../../SteerlineFlow/testing/acceptance/test-management.md)，TM-M01 人工后置。原 tick 自动保存测试安排的行为已由[项目维护](project-maintenance.md)替换为只保存生成结果、先审阅再显式应用文件。conversation 操作仍留待规划台；原生执行归 Runner，不新增 Agent 运行时或第二套状态机。
+[测试管理 Spec](../../SteerlineFlow/spec/test-management.spec.md) / [Plan](../../SteerlineFlow/plans/test-management.plan.md)的原版本验收见[专属记录](../../SteerlineFlow/testing/acceptance/test-management.md)，TM-M01 人工后置。后续[项目维护](project-maintenance.md)改为自动生成并保存系统测试安排；候选测试进度改用 [progress-file](../integration/runtime-progress.md)，旧 R2 候选产物收集已移除。conversation 操作仍留待规划台；原生执行归 Runner，不新增 Agent 运行时或第二套状态机。
 
 | 节点 / 异常 / 验证 | 本次调用方差异与缺口 |
 | --- | --- |
@@ -419,7 +419,7 @@ W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow
 | --- | --- | --- |
 | 持久化副作用和并发 | ReliableExecution 的事实/身份/对账规则、actor 生命周期 Operation、异步回执提交、原身份/版本守卫、first-wins | 按本矩阵检查各入口是否共享同一异常分类，不新增平行规则 |
 | 工作区和环境准备 | 固定工作区意图、准备总期限、blocker、nonce 与探针核验 | 部分现场或后端没有准备记录；不能默认所有执行已具备统一准备路径 |
-| Runner 状态目录 | SteerLine 以完整应用 run-dir 派生本地卷根短目录；查询、准备、停服及重置共用；路径/别名/隔离已做定向验证 | 旧目录不迁移；安装现场原候选保持旧绑定。当前部署与验证状态见[短目录验收](../../SteerlineFlow/testing/acceptance/runner-short-state-path.md) |
+| Runner 状态目录 | SteerLine 以规范绝对 home 派生应用共享的本地卷根短目录；查询、准备、停服及重置共用；路径/别名/隔离已做定向验证 | 旧目录不迁移；安装现场原候选保持旧绑定。当前部署与验证状态见[短目录验收](../../SteerlineFlow/testing/acceptance/runner-short-state-path.md) |
 | Orca 显式启动 | 原唯一终端、启动操作、未知发送不重发；Runner `d4969d0` 的可信 helper 路径会提交绑定原 app-server/session、权限、配置、helper SHA 和期限的准备回执后才输入 | SteerLine 调试接线见[专属验收](../../SteerlineFlow/testing/acceptance/orca-runtime-wiring.md)；缺 helper 仍拒绝。有限启动重试及替代 provider/terminal 的原会话恢复不由本次接线新增 |
 | Runner 跨仓交接 | 新 application 对 accepted+ResourcePending 继续核验原 Operation；准备超时撤销输入，迟到就绪不自动续跑；caller 重启撤回未消费授权，未知旧控制只查原 ID | SteerLine app/查询已切换到 taskrunner/runnerbridge/runnerclient，旧执行 owner 和无消费者端口已删除；实际原生交付/恢复范围按专属验收判断，远端未验/失败不因源码清理转为通过 |
 | Ready 与业务开始 | 原生主 agent/会话就绪读取、输入基线、接受/started/working/done 取证 | 初始化与业务基线要完整分开；初始化期间 provider 变化可能过早进入业务会话冲突 |

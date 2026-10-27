@@ -137,5 +137,32 @@
     "package": "./tests/e2e/suites/testing",
     "test": "TestRuntimeProgress",
     "env": "controlled"
+  },
+  {
+    "id": "configuration.execution-profiles-orca",
+    "level": "L4",
+    "suite": "configuration",
+    "package": "./tests/e2e/remote",
+    "test": "TestRemoteExecutionProfiles",
+    "env": "live",
+    "chain": "orca-remote"
+  },
+  {
+    "id": "testing.project-progress-orca-browser",
+    "level": "L4",
+    "suite": "testing",
+    "package": "./tests/e2e/remote",
+    "test": "TestRemoteProjectProgress",
+    "env": "live",
+    "chain": "orca-remote"
+  },
+  {
+    "id": "testing.project-environment-orca",
+    "level": "L4",
+    "suite": "testing",
+    "package": "./tests/e2e/remote",
+    "test": "TestRemoteProjectEnvironment",
+    "env": "live",
+    "chain": "orca-remote"
   }
 ]

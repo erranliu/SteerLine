@@ -160,3 +160,19 @@ Web 已开放生成、独立请求历史/停止、代码提交/整体设计/调�
 最终 PR merge commit=`b78746c19bc9d9a64d6b50bd911394ce638f8603`，文档 head=`944a3c3b174059fe9e5c2e02a0e1fda9d5d15f8b`；实际冻结源码与三个 EXE 摘要保留在该轮 evidence/build.json。测试生成的任务留在隔离 SQLite，自动派发关闭、无正式执行候选；测试 PR 保留，只有本轮专属远端 refs 被删除。
 
 本次不覆盖人工 RP-M01、真实 Gitea、最大规模仓库/文档原生现场、强杀故障矩阵或安装部署，不把两任务 GitHub 场景扩写为这些范围通过。
+
+### 提 PR 前同步主分支验证（2026-10-27）
+
+功能提交 `227e23ee` 后同步 `origin/main=3ca70df63c677657cc617ddf4557a79844e4fc7b`。冲突处理保留主分支项目环境适配的命令、只读路由、辅助观察、takeover/正常停服与 result-file 能力，并保留 Roadmap 对应分支；两类业务共用原请求空间及内容队列。主分支已使用 schema 32，本功能的新增表组合改用 schema 33，按未发布项目规则拒绝旧开发库，不添加迁移或兼容读取。
+
+同步后在相同工作树执行：
+
+| 范围 | 结果 | 相对证据路径 |
+| --- | --- | --- |
+| 固定 L1 / L2 | passed=true | test-results/L1/pr-main-20261027-a/summary.json、test-results/L2/pr-main-20261027-a/summary.json |
+| Roadmap / SQLite / Task / Runner / HTTP 定向 | 37项通过、0 skip | diagnostics/pr-main-20261027-a/summary.json |
+| 主分支环境适配准入、命令及恢复定向 | 9项通过、0 skip | diagnostics/pr-environment-20261027-a/summary.json |
+| 前端与构建 | 32文件233项通过；tsc及Vite构建通过 | 本聊天实际 npm test / npm run build 输出 |
+| 文档 | 594文件3755个本地链接，0错误；git diff --check通过 | 本聊天实际静态检查输出 |
+
+前述真实 Runner/Codex/Edge/GitHub #685 整链属于同步主分支之前的固定源码现场。本次同步后重跑上述受控回归与 Web 构建，未把旧真实链标记为同步后的重新执行；原证据及未验范围保留。

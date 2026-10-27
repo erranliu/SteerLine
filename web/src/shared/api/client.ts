@@ -343,7 +343,8 @@ export class Api {
         envelope.action !== "stop_candidate" &&
         envelope.action !== "start_environment_check" &&
         envelope.action !== "stop_environment_check" &&
-        !envelope.action.startsWith("maintenance_")
+        !envelope.action.startsWith("maintenance_") &&
+        !envelope.action.startsWith("environment_")
       ) {
         signal?.throwIfAborted();
         if (envelope.instance_id !== this.identity.instance_id)

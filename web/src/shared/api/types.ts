@@ -278,6 +278,7 @@ export interface Envelope {
 }
 export interface Receipt {
  roadmap?: unknown;
+  environment?: unknown;
  maintenance?: unknown;
   request_id: string;
   project_id: string;

@@ -267,6 +267,53 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	for _, r := range roadmaps {
 		generations = append(generations, roadmapBinding(r))
 	}
+	environments, err := reader.Environments(ctx, c.Identity())
+	if err != nil {
+		return proof, err
+	}
+	for _, r := range environments {
+		for _, a := range r.Rounds {
+			if unsubmittedEnvironment(a) {
+				continue
+			}
+			if restartPin != nil {
+				if !interrupted && runnerbinding.SameBuild(r.Build, *restartPin) {
+					continue
+				}
+				var report *runnercontract.TakeoverReport
+				if len(takeover) > 0 {
+					report = takeover[0]
+				}
+				if report == nil {
+					cli := runnerclient.Client{Executable: restartPin.Executable, StateDir: restartPin.StateDir, SHA256: restartPin.SHA256, BuildVersion: restartPin.Version, ResourceDigest: restartPin.ResourceDigest}
+					v, e := cli.VerifyTakeover(ctx)
+					if e != nil {
+						return proof, e
+					}
+					report = &v
+				}
+				if _, ok := environmentTakeover(*report, r, a); !ok {
+					return proof, errors.New("original environment Run/input differs from takeover evidence")
+				}
+			} else {
+				if canonicalPath(r.Build.StateDir) != canonicalPath(runnerProof.StateDir) {
+					return proof, errors.New("environment Runner namespace differs")
+				}
+				found := false
+				for _, run := range runnerProof.Runs {
+					if run.RunID == a.RunID && a.RunID != "" && a.InputDigest != "" && run.InputDigest == a.InputDigest && run.ResourcesSettled {
+						found = true
+					}
+				}
+				if !found {
+					return proof, errors.New("original environment resource settlement unverified")
+				}
+				if r.Kind == "adaptation" && !r.Settled() {
+					return proof, errors.New("environment report/PR settlement unverified; preserve original records")
+				}
+			}
+		}
+	}
 	if interrupted {
 		if len(takeover) != 1 || takeover[0] == nil {
 			return proof, errors.New("interrupted recovery requires original-record takeover evidence")
