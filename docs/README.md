@@ -1,6 +1,6 @@
 # 文档入口
 
-SteerLine 的整体职责、具体产品设计、后续规划、执行契约与验证证据分别维护。当前通过独立 SteerRunner 接入本地 Codex 和远端 Orca environment，本机 Orca 路径已放弃。实际验证按专属验收中的固定构建与范围判断；规划与原型的拟议设计不表示已经交付。
+SteerLine 的整体职责、具体产品设计、后续规划、执行契约与验证证据分别维护。当前通过独立 SteerRunner 接入本地 Codex、Windows/amd64 本机 Orca 和远端 Orca environment；具体组合及执行资格见[执行方案](product-design/execution-profiles.md)。实际验证按专属验收中的固定构建与范围判断；规划与原型的拟议设计不表示已经交付。
 
 | 阅读目的 | 入口 |
 | --- | --- |

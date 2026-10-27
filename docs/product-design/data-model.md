@@ -1,12 +1,12 @@
 # 任务、执行与交付数据模型
 
-SteerLine 与 SteerRunner 分别单写自己的 SQLite。当前只验本机 Codex；用户已取消本机与远端 Orca 的本次验收。历史 Orca 结果保留，不推断为通过。repository 的 remote 指 Git 托管来源。
+SteerLine 与 SteerRunner 分别单写自己的 SQLite。各执行路径的验证按固定构建和专属验收分别判断；历史 Orca 结果不自动覆盖当前 Runner 或其他场景。repository 的 remote 指 Git 托管来源。
 
 SteerLine 尚未发布。项目显式使用 task_authority=native 与 workflow_protocol=worker-flow-v2，全局执行配置为格式 3；旧数据库、配置和内部执行格式直接拒绝，不迁移、双写、回填或回退。
 
 ## 权威与身份
 
-SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、测试生成原请求与结果、原候选测试收集请求及不可变产物和自身服务 checkpoint。schema 27 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
+SteerLine 自有库保存 Task、固定 TaskContract、DAG、候选参与关系、原 CLI outbox、公开 Runner 事件副本、唯一 TaskDelivery、测试生成原请求与结果、候选测试进度投影及自身服务 checkpoint；候选侧旧 R2 产物收集已移除，独立测试报告按[报告约定](../../SteerlineFlow/testing/reports.md)登记。当前 schema 不含旧 WorkflowRun/Execution/Attempt/Decision/Operation 或原生会话写表。测试生成记录不创建 Candidate/Task；候选 payload 另固定 Plan 测试快照。产品仍使用的纯值声明不构成执行写权。
 
 Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、原生资源、问题、输入、恢复与停止事实。SteerLine 不读该库、原生 codec、IPC 或私有日志；只消费固定 EXE 公布的 CLI/Run/事件。
 
@@ -36,7 +36,7 @@ CLI 请求 ID 和正文不可变，同 ID 换正文冲突。SteerLine 保存原 
 
 公开 Runner 事件按候选绑定、事件 ID、游标和版本事务保存。完整 final 保留来源、原 session/turn/item/Attempt 与正文 hash；重复事件去重，冲突拒绝。缺 final 不推进业务，日志和模型总结不能代替来源核验。正文分页读取只读副本。
 
-Runner 状态使用[短目录规则](../integration/steerrunner.md)：Windows 为本地卷根 `slr/<128-bit base32 key>`，key 绑定含 home 的完整项目 run-dir；候选保存准确 state-dir。材料、缓存、工作区和日志仍按项目独立，业务库继续在原 home。旧 `run-dir/runner` 不迁移或兼容读取。重置须先证明 Runner 服务退出及原 Run 停止，只清理本项目摘要目录，不用父进程死亡或窗口关闭代替停止。
+Runner 状态使用[短目录规则](../integration/steerrunner.md)：Windows 为本地卷根 `slr/<128-bit base32 key>`，key 绑定规范绝对 home，同一 home 的项目共用一个 Runner 服务和 state-dir；候选保存准确 state-dir，业务库按项目隔离。旧 `run-dir/runner` 不迁移或兼容读取。整包重置须核对全部项目及相关 Run、检查和生成对象的结算，只清理该 home 的准确摘要目录，不用父进程死亡或窗口关闭代替停止。
 
 ## PR 与交付
 
@@ -50,7 +50,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 | 格式/权威 | 当前值或归属 | 源码 |
 | --- | --- | --- |
-| Task SQLite | schema 27 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| Task SQLite | schema 32 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
 | Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
 | TaskContract / DAG | 契约结构为 taskcontract 纯值；校验/DAG 归 task/model | [task/model](../../internal/task/model) |

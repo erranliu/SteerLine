@@ -10,11 +10,11 @@ Runner 准备查询等待与执行页展示（2026-10-25，调用方实施、远
 
 项目更新与候选版本收敛（2026-10-21，已实施）：[Spec](project-maintenance-simplification.spec.md) · [Plan](../plans/project-maintenance-simplification.plan.md) · [专属验收](../testing/acceptance/project-maintenance-simplification.md) · [长期设计](../../docs/product-design/project-maintenance.md)。远端/本地提交与PR、日志及一键快进，材料自动跟随、Plan变化自动生成系统测试安排；每个新候选固定最新版本，旧候选过期保留且禁用当前测试关联，其PR合入仍可完成任务。取代下述上一批人工确认/应用及Task级冻结；实际验证见专属验收，不改roadmap。
 
-项目基线与材料统一维护（2026-10-21）：[Spec](project-maintenance.spec.md) · [Plan](../plans/project-maintenance.plan.md) · [专属验收](../testing/acceptance/project-maintenance.md) · [长期设计](../../docs/product-design/project-maintenance.md)。初始化/基线/局部共用规则和维护流程，后台检测零自动生成，生成先审阅再显式应用，首次启动冻结远端最新代码与同版本材料。当前已替换任务材料登记即永久固定、生成自动保存及缺材料仅提示的旧行为；验证归专属记录，不改历史验收或 roadmap。项目添加的最终登记/建库继续后置，消费本批共用检查能力。
+项目基线与材料统一维护的[原 Spec](../archive/spec/completed/project-maintenance.spec.md) · [原 Plan](../archive/spec/completed/project-maintenance.plan.md)已归档；[原验收](../testing/acceptance/project-maintenance.md)保留。人工审阅/应用与 Task 级共同冻结等规则已由上方收敛方案替代，当前行为见[长期设计](../../docs/product-design/project-maintenance.md)。
 
-Web 执行配置管理与能力探测（2026-10-21，按确认原型实施）：[Spec](web-execution-config.spec.md) · [Plan](../plans/web-execution-config.plan.md) · [专属验收](../testing/acceptance/web-execution-config.md)。Web 前后端直接查询 Codex/Orca，管理全局预设及条件保存；保存后显式重启生效。Go 执行服务只消费配置和投影加载摘要，Runner 不新增探测接口；实现与验证范围登记于专属验收，不修改 roadmap。本机 Orca 已实现；目录查询统一本机/远端Orca能力，与执行支持组合分开。provider凭据由原Agent管理，Pi按已有目录筛选Provider；验证见专属验收。
+Web 执行配置管理与能力探测（2026-10-21，按确认原型实施）：[Spec](web-execution-config.spec.md) · [Plan](../plans/web-execution-config.plan.md) · [专属验收](../testing/acceptance/web-execution-config.md)。Web 前后端直接查询 Codex/Orca，管理全局预设及条件保存；保存后显式重启生效。Go 执行服务只消费配置和投影加载摘要，Runner 不新增探测接口；实现与验证范围登记于专属验收，不修改 roadmap。Web 保留本机和远端 Orca 的目录查询与配置能力；目录可见不证明执行可用，执行组合和验证范围见专属验收。provider凭据由原Agent管理，Pi按已有目录筛选Provider；验证见专属验收。
 
-Runner generate/1 对接与最简测试管理（自动项通过，人工待验）：[Spec](test-management.spec.md) · [Plan](../plans/test-management.plan.md) · [专属验收](../testing/acceptance/test-management.md)。公开产物收集、当前 Git 核验、生成对象兼容接管及真实结果闭环已接入；TM-A04/TM-A08 等实际版本与结果以专属记录为准，TM-M01 后置。生成先审阅再显式应用等后续变更归[项目维护](../../docs/product-design/project-maintenance.md)，原固定版本证据保持。不增加 Task 字段/测试门禁或 conversation 操作。
+Runner generate/1 对接与最简测试管理（自动项通过，人工待验）：[Spec](test-management.spec.md) · [Plan](../plans/test-management.plan.md) · [专属验收](../testing/acceptance/test-management.md)。原版本的候选产物收集和 Git 当前性判定已移除，候选测试进度改用 progress-file；生成对象兼容接管及原版本真实结果见验收；TM-A04/TM-A08 等实际版本与结果以专属记录为准，TM-M01 后置。原审阅及显式应用流程已被后续自动生成方案替代，当前规则归[项目维护](../../docs/product-design/project-maintenance.md)，原固定版本证据保持。不增加 Task 字段/测试门禁或 conversation 操作。
 
 应用级共享 SteerRunner 服务（2026-10-19，已实施）：[Spec](shared-runner-service.spec.md) · [Plan](../plans/shared-runner-service.plan.md) · [专属验收](../testing/acceptance/shared-runner-service.md)。每个 SteerLine home 共用一个 Runner，服务所有权上移到应用；覆盖跨项目请求身份、环境检查、停机证明、换代与整包 reset，仅修改 SteerLine。固定 L1、定向反例、两个 L3 及新包真实空闲拓扑验证通过，人工体验待验；后续[闪窗修复](../testing/acceptance/startup-console-windows.md)已有独立记录，不修改 roadmap。
 
@@ -28,7 +28,7 @@ SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，已授权实
 
 执行权限与 Git 环境检查接入（已实现，正式公开契约已对齐）：[Spec](environment-check.spec.md) · [Plan](../plans/environment-check.plan.md) · [本仓验收与审查记录](../testing/acceptance/environment-check.md)。caller/HTTP/Web 自动验证及固定版本本机 full_access 真实正例已有记录，启动配置与报告刷新修复已合入；原生正例仅证明记录中的源码/Runner 版本和模式，不代表全部权限、远端或恢复组合通过。SLEC-M01 完整人工体验仍待安排，Runner 其余专项归其独立 SREC 验收；构建及业务资源后置，不改 roadmap。
 
-SteerRunner 拆分后的测试精简（2026-10-15，普通开发，已实施）：[Spec](runner-test-convergence.spec.md) · [Plan](../plans/runner-test-convergence.plan.md) · [专属验收](../testing/acceptance/runner-test-convergence.md)。执行专项归 Runner；L2 保留本机 Codex 真实实现、报告、发布、SteerlineTest PR 合并和 Task 交付全流程，不改 roadmap。
+SteerRunner 拆分后的测试精简（2026-10-15，普通开发，已实施）：[Spec](runner-test-convergence.spec.md) · [Plan](../plans/runner-test-convergence.plan.md) · [专属验收](../testing/acceptance/runner-test-convergence.md)。原版本执行专项归 Runner；当前 L2 已调整为受控交付冒烟，真实链按现行[测试指南](../testing.md)选择。
 
 TUI 退役与 Web 唯一交互前端（普通开发）：[Spec](tui-retirement.spec.md) · [Plan](../plans/tui-retirement.plan.md) · [专属验收](../testing/acceptance/tui-retirement.md)。2026-10-15 按用户授权实施，实时结果归专属验收；包含默认 Web 调试包、共用代码保留与 TUI 专属测试清理，不改 roadmap。
 
@@ -70,7 +70,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 已交付规格归档
 
-控制台主界面、四批产品精简和迁出前 Worker 三层重构已交付，其 Spec/Plan 与原版本验收由[已交付归档](../archive/spec/completed/README.md#2026-10-21-补充归档)承接。三层重构经 PR #313 合入，执行实现随后迁至独立 Runner；长期流程规则继续维护于 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)。已退役的 TUI 和本机 Orca 方案不再列作当前实施或补验入口。
+控制台主界面、四批产品精简和迁出前 Worker 三层重构已交付，其 Spec/Plan 与原版本验收由[已交付归档](../archive/spec/completed/README.md#2026-10-21-补充归档)承接。三层重构经 PR #313 合入，执行实现随后迁至独立 Runner；长期流程规则继续维护于 [Worker 生命周期](../../docs/product-design/worker-lifecycle.md)。已退役的 TUI 和迁出前本机 Orca 方案不再列作当前实施或补验入口；后续本机 Orca 配置范围见[执行配置](web-execution-config.spec.md)。
 
 ## 旧 Orca 编排身份残留清理（普通开发规格）
 
@@ -119,7 +119,7 @@ SSE 前的 Web 查询优化（2026-10-15，用户已授权实施）：统一 Que
 
 ## 退役 Orca 方案
 
-本机 Orca 已放弃；supervised、worker-start、Dispatch 和本机输入/就绪方案见[退役规格](../archive/spec/retired/README.md#2026-10-21-orca-历史方案归档)及[原验收](../testing/acceptance/archive/README.md#退役-orca-方案与原版本证据)。历史失败、取消和未验仍保留，不计入当前远端路径已验范围。远端接入与构建要求见 [Runner 接入](../../docs/integration/steerrunner.md)。
+迁出前本机 Orca 编排已退役；supervised、worker-start、Dispatch 和当时的本机输入/就绪方案见[退役规格](../archive/spec/retired/README.md#2026-10-21-orca-历史方案归档)及[原验收](../testing/acceptance/archive/README.md#退役-orca-方案与原版本证据)。历史失败、取消和未验仍保留，不计入当前远端路径已验范围。远端接入与构建要求见 [Runner 接入](../../docs/integration/steerrunner.md)。
 
 ## Codex / Orca 断连恢复规划
 

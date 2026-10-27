@@ -2,7 +2,7 @@
 
 `index.html` 是可直接用浏览器打开的单文件交互原型，无构建步骤或外部脚本依赖，长页直接滚动。用于讨论页面结构、文案和状态流转；页面内的任务、回执、文档校验结果都是演示数据，按钮不连接 SteerLine 服务或 Codex。
 
-原型用于讨论交互，不代表已经交付的能力。2026-10-23 测试管理页已按用户确认收敛为只读 Git 测试历史；其契约见[测试记录 Spec](../../../../SteerlineFlow/spec/test-records.spec.md)、[Plan](../../../../SteerlineFlow/plans/test-records.plan.md)与[专属验收](../../../../SteerlineFlow/testing/acceptance/git-test-records.md)。其他分页保留早期规划演示，以各自当前 Spec 为准；[归档界面设计](../../../../SteerlineFlow/archive/design/planning-ui.md)仅供历史参考。
+原型用于讨论交互，不代表已经交付的能力。2026-10-23 测试管理页已按用户确认收敛为只读 Git 测试历史；其契约见[测试记录 Spec](../../../../SteerlineFlow/spec/test-records.spec.md)、[Plan](../../../../SteerlineFlow/plans/test-records.plan.md)与[专属验收](../../../../SteerlineFlow/testing/acceptance/git-test-records.md)。其他分页保留早期规划演示，HTML 内嵌文档、测试命令、路径与状态均为历史演示快照，不是当前规范或可执行指南；以各自当前 Spec 和测试指南为准；[归档界面设计](../../../../SteerlineFlow/archive/design/planning-ui.md)仅供历史参考。
 
 ## 本轮交互
 

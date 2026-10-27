@@ -4,6 +4,10 @@
 
 当前剩余任务见[Spec 索引](../../../spec/README.md)，当前接口见[代码架构](../../../../docs/architecture/current-code-architecture.md)。仍适用的 local 定向验收留在活动 Spec 索引，本机 Orca 旧方案见[退役规格](../retired/README.md)；归档不宣告远端流程、旧故障矩阵或未测平台已经通过。
 
+## 2026-10-27 补充归档
+
+项目基线与材料统一维护的 [Spec](project-maintenance.spec.md) 和 [Plan](project-maintenance.plan.md)保留原交付范围；人工应用及 Task 级共同冻结等行为已被[后续方案](../../../spec/project-maintenance-simplification.spec.md)替代。[原验收](../../../testing/acceptance/project-maintenance.md)仍保留未验与历史证据。
+
 ## 交付依据
 
 | 系列 | 已合入 PR / 当前证据 |

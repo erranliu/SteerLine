@@ -76,7 +76,7 @@ POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `
 {"code":"command_not_found","reason":"the project database and control request authority contain no record for this request_id","request_id":"0123456789abcdef0123456789abcdef"}
 ```
 
-发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；权威 `command_not_found` 才能按原完整 envelope、原 ID、原 payload 和原版本补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `application-commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
+发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；对于允许补交的动作，同一实例返回权威 `command_not_found` 后才可按原完整 envelope、原 ID、原 payload 和原版本补交；候选停止、环境检查、项目维护与环境适配等动作只对账，浏览器不自动补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `application-commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
 
 Web 将完整原信封保存在现有 IndexedDB；服务端的原请求记录仍是跨动作仲裁。原生查看器的未知结果不得重放。
 
