@@ -59,4 +59,3 @@ Validate the affected prompt/model/runnerclient owners, fixed L1/L2 and controll
 
 
 2026-10-28 latest retest: repaired caller completed one genuine10/10 chain/PR438. The next scope's nine original checks and progress passed, but native publication PowerShell process creation failed before commit/push/PR; full chain failed and consecutive count resets0/2. Both scopes are stopped/settled. Preserve exact [acceptance evidence](../testing/acceptance/test-progress-0of6-20261026.md), keep PR399 DRAFT, and wait for an independently qualified minimal process-start fix before new formal packages/homes. No extra worker input or unchanged third business round; all original pass criteria remain.
-

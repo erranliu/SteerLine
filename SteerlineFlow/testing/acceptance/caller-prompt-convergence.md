@@ -1,5 +1,31 @@
 # 调用方提示词收敛验收记录
 
+## 2026-10-28 最新 main rebase 与完整 L2/L3 复验
+
+本次按用户要求 rebase 到 `origin/main` 的 `82161c42e925d81f705c4e0496b47e293897db5b`，随后重跑目录内全部 L2/L3，发现失败后直接修复。下方“前次文档驱动实施记录”中的旧基线、局部验证与失败状态保留历史，以本节为最新结果。
+
+rebase 冲突保留 main 的 Plan 历史，并把 PR399 的新增执行约束迁入唯一完整规则文件：允许规范必需的环境/输入/输出参数，但不得缩小测试选择；只报告当前步骤事实，不因索要未来 PR URL 阻断报告。`internal/prompts/materials/testing.md` 的 LF UTF-8 字节从 2720 增至 2963（+243），9 个短模板未变；同步规则摘要与既有快照测试，不恢复已移除的内联长指令。
+
+受测源码为干净提交 `82b3158dfef9d07a9a8dc423c51785999934c3e7`，Windows/amd64、Go 1.26.4。以下证据相对独立根 `C:/SteerlineDebug/wt-2352-all-l2-l3/`；L2/L3 选择集合逐项等于目录内对应级别的完整集合，均为 controlled，零跳过，`cleanup_complete=true`。L3 最多两个场景并发。
+
+| 最终复验 | 结果 | 准备 / 执行秒数 | 原始 summary |
+| --- | --- | --- | --- |
+| 全部 L2 | `smoke.delivery`，1/1 通过 | 15.591 / 85.452 | `test-results/L2/20261028T134428036Z-final/summary.json` |
+| 全部 L3 | 7/7 通过 | 28.746 / 534.644 | `test-results/L3/20261028T133535726Z-all-after-fixes/summary.json` |
+| L1 | 85 pass / 0 skip | 0.415 / 11.931 | `test-results/L1/20261028T134648591Z-final/summary.json` |
+| PR 元数据关联回归 | 11 pass / 0 skip | — / 18.984 | `diagnostics/20261028T134648384Z-baseline-regression/summary.json` |
+
+L3 包括 `configuration.execution-profiles`、`recovery.runner-wait-retry`、`recovery.waiting-merge-restart`、`runtime.dual-home-operation`、`runtime.service-lifecycle`、`runtime.shared-runner-projects`、`testing.runtime-progress`。正式 L1/L2/L3 报告已通过原 `test-feedback record` 导出到[受测提交的 Git 测试历史](../records/82b3158dfef9d07a9a8dc423c51785999934c3e7.json)。后续提交仅补本节与该记录，不改变受测代码。
+
+两次完整 L3 的失败原报告和原生导出均保留，不覆盖为通过：
+
+- `test-results/L3/20261028T125150367Z-5e298df6/summary.json`，源码 `ddb3f4e064c92bcb52800b1928f9513cf73013f8`：远端重试夹具缺结果文件能力及环境就绪前提；原始场景为 6 pass / 1 fail，管理汇总为 5 pass / 1 fail / 1 incomplete（同包合并恢复场景）。[原生失败记录](../records/ddb3f4e064c92bcb52800b1928f9513cf73013f8.json)保留该状态。修复受控能力声明和真实 Git 固定材料，通过公开 `environment_start` 完成原 Run 停止、v1 结果封存、报告通过与环境准入，再启动重试任务；不写数据库绕过生产门禁。保留重启、重试耗尽、零额外业务输入与取消断言；夹具报告只证明 controlled 流程，不计原生环境资格。
+- `test-results/L3/20261028T130910070Z-full-final/summary.json`，源码 `0e39cf9a303768df26db7dc509c85b51ba7eb433`：6 pass / 1 fail，进度场景在自动材料准备查询阶段超时，[原生失败记录](../records/0e39cf9a303768df26db7dc509c85b51ba7eb433.json)保留。确定性回归进一步复现 GitHub PR 关联查询会绕过所选自定义 provider、从 PATH 调用 `gh` 的缺陷：修复前两个边界子例失败，修复后通过。现在仅配置为 `gh`/`gh.exe` 的 provider 执行该能力，并使用配置的完整 executable；不支持的自定义 provider 保留原诊断，Gitea 路径不变。定向回归覆盖真实 Git 基线比较/阻断、Gitea 关联及命令选择边界。自动材料等待同时保留最近成功轮询，便于定位后续准备问题。
+
+两项修复各自定向复验后，在同一干净源码上重新执行上述完整 L2/L3，全部通过。Web 测试前置依赖安装及构建通过；未执行 L4、真实模型/Orca、部署或合并，不将 controlled 通过升级为原生资格或完整 Full 验收。
+
+## 前次文档驱动实施记录（历史）
+
 关联 [Spec](../../spec/caller-prompt-convergence.spec.md) / [Plan](../../plans/caller-prompt-convergence.plan.md)。2026-10-28 按用户授权，在 PR407 固定模板机制上整合 PR406 的文档驱动修订。PR406 参考版本为 `e6b97c354f5467d7e847dadeb3d497a2ceca8f0b`；已对 `origin/main` 执行 rebase，基线仍为 `a5c12eafcb2bf6e442de07ded2c6fd4affeb9541`，无新增提交需要重放。未合并 PR406/407、修改 Runner 或部署。
 
 本轮受测为 `345887d1d98224195a44b7744655c10420e3f221` 加本 PR 工作树，原 summary 保留源码状态；不冒充干净提交或真实 Agent 资格。Windows/amd64、Go 1.26.4，独立证据根 `C:/SteerlineDebug/wt-2352-document-driven/`。初次治理及 PR405 的结果保留历史，不继承其通过结论。
