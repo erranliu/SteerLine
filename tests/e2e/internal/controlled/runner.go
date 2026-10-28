@@ -1,12 +1,15 @@
 package controlled
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -511,35 +514,70 @@ func (s RunnerFixture) eventPage(run runnercontract.Run, after string) runnercon
 
 // Public repository snapshot behavior for this scripted caller peer only.
 func fixtureRepository(repo runnercontract.GenerateRepository) ([]runnercontract.Document, *runnercontract.RepositorySource, error) {
-	git := func(args ...string) ([]byte, error) {
+	gitInput := func(input string, args ...string) ([]byte, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		return exec.CommandContext(ctx, "git", append([]string{"-C", repo.LocalPath}, args...)...).Output()
+		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repo.LocalPath}, args...)...)
+		cmd.Stdin = strings.NewReader(input)
+		return cmd.Output()
 	}
-	tree, err := git("rev-parse", repo.Commit+"^{tree}")
+	tree, err := gitInput("", "rev-parse", repo.Commit+"^{tree}")
 	if err != nil {
 		return nil, nil, err
 	}
 	source := &runnercontract.RepositorySource{LocalPath: repo.LocalPath, Commit: repo.Commit, Tree: strings.TrimSpace(string(tree))}
-	materials := []runnercontract.Document{}
-	entries, err := git("ls-tree", "-r", repo.Commit)
+	entries, err := gitInput("", "ls-tree", "-r", "-z", repo.Commit)
 	if err != nil {
 		return nil, nil, err
 	}
-	for _, line := range strings.Split(strings.TrimSpace(string(entries)), "\n") {
-		meta, path, ok := strings.Cut(line, "\t")
+	type entry struct{ path, blob string }
+	objects := []entry{}
+	var batch strings.Builder
+	for _, raw := range bytes.Split(entries, []byte{0}) {
+		if len(raw) == 0 {
+			continue
+		}
+		meta, path, ok := strings.Cut(string(raw), "\t")
 		fields := strings.Fields(meta)
 		if !ok || len(fields) != 3 || fields[0] != "100644" && fields[0] != "100755" {
 			return nil, nil, fmt.Errorf("unsupported fixture source entry")
 		}
-		body, e := git("cat-file", "blob", fields[2])
-		if e != nil {
-			return nil, nil, e
+		objects = append(objects, entry{path, fields[2]})
+		batch.WriteString(fields[2] + "\n")
+	}
+	// Read all original objects in one process. Per-file Git processes held the
+	// shared fixture lock long enough for another project's CLI call to expire.
+	raw, err := gitInput(batch.String(), "cat-file", "--batch")
+	if err != nil {
+		return nil, nil, err
+	}
+	reader := bufio.NewReader(bytes.NewReader(raw))
+	materials := []runnercontract.Document{}
+	for _, object := range objects {
+		header, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, nil, err
+		}
+		fields := strings.Fields(header)
+		if len(fields) != 3 || fields[0] != object.blob || fields[1] != "blob" {
+			return nil, nil, fmt.Errorf("invalid fixture batch object")
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil || size < 0 || size > len(raw) {
+			return nil, nil, fmt.Errorf("invalid fixture batch size")
+		}
+		body := make([]byte, size)
+		if _, err = io.ReadFull(reader, body); err != nil {
+			return nil, nil, err
+		}
+		end, err := reader.ReadByte()
+		if err != nil || end != '\n' {
+			return nil, nil, fmt.Errorf("invalid fixture batch terminator")
 		}
 		hash := sha256.Sum256(body)
-		source.Files = append(source.Files, runnercontract.RepositoryFile{Path: path, Blob: fields[2], SHA256: hex.EncodeToString(hash[:]), SizeBytes: len(body)})
+		source.Files = append(source.Files, runnercontract.RepositoryFile{Path: object.path, Blob: object.blob, SHA256: hex.EncodeToString(hash[:]), SizeBytes: len(body)})
 		text := string(body)
-		materials = append(materials, runnercontract.Document{Path: path, Content: &text, Kind: "inline"})
+		materials = append(materials, runnercontract.Document{Path: object.path, Content: &text, Kind: "inline"})
 	}
 	return materials, source, nil
 }

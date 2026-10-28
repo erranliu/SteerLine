@@ -41,6 +41,12 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
  expect(initial.remote.sha).toBeTruthy();
  expect(initial.remote.time).toBeTruthy();
  expect(initial.tasks.find((t:any)=>t.task_id==="1").generation_id).toBeTruthy();
+ // Establish the other project's completed initial state before changing this
+ // project. Task/material observations are asynchronous after task creation.
+ await expect.poll(async()=>{
+  const value=await otherGet();
+  return value.tasks.length===2&&value.tasks.every((t:any)=>t.status==="ready"&&t.generation_id);
+ },{timeout:90000}).toBeTruthy();
  const originalOther=await otherGet();
  await expect(section.getByLabel("维护范围")).toHaveCount(0);
  await expect(section.getByRole("button",{name:"应用已审阅内容"})).toHaveCount(0);
