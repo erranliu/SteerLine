@@ -10,6 +10,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
+	"github.com/erranliu/SteerLine/internal/testmanagement"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 
@@ -76,7 +77,16 @@ func (p *Project) observeAuditedProduct(expected runnerstate.Candidate, final bo
 	matched := 0
 	for _, ref := range []struct{ path, commit, digest string }{{contract.SpecRef.Path, contract.SpecRef.Commit, contract.SpecRef.SHA256}, {contract.PlanRef.Path, contract.PlanRef.Commit, contract.PlanRef.SHA256}} {
 		for _, material := range run.Materials {
-			if material.Kind == "git" && material.Path == ref.path && material.Commit == ref.commit && material.Digest == ref.digest {
+			if material.Kind == "worktree" && material.Path == ref.path && material.Commit == ref.commit && material.Digest == "" {
+				// v2 exposes worktree paths, not copied Git documents. Verify
+				// the frozen caller hash against the actual original Git bytes.
+				if final {
+					body, err := s.RunCommand(p.Command("git", "-C", p.Repo, "show", ref.commit+":"+ref.path), "audited-material-"+filepath.Base(ref.path))
+					s.Must(err)
+					if testmanagement.ContentDigest(body) != ref.digest {
+						s.t.Fatal("original committed material hash differs", ref.path)
+					}
+				}
 				matched++
 				break
 			}
