@@ -143,6 +143,12 @@ func DecodeDocuments(r Record, raw []byte, source *runnercontract.RepositorySour
 	if strings.TrimSpace(out.Design) == "" || len(out.Investigation) == 0 {
 		return r, errors.New("缺少整体设计与代码调查依据")
 	}
+	for _, guideline := range r.Materials {
+		f, ok := files[strings.ToLower(guideline.Path)]
+		if !ok || f.Path != guideline.Path || guideline.Content == nil || f.SHA256 != Digest([]byte(*guideline.Content)) || f.SizeBytes != len(*guideline.Content) {
+			return r, fmt.Errorf("生成规范不属于固定版本：%s", guideline.Path)
+		}
+	}
 	for _, ref := range out.Investigation {
 		f, ok := files[strings.ToLower(ref.Path)]
 		if !ok || f.Path != ref.Path || ref.SHA256 != f.SHA256 || strings.TrimSpace(ref.Reason) == "" {

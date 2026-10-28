@@ -218,11 +218,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 		for _, r := range rows {
 			if r.Kind == "adaptation" && len(r.Rounds) > 0 {
 				last := r.Rounds[len(r.Rounds)-1]
-				fact, _ := json.Marshal(struct {
-					Profile    string
-					Diagnostic string
-					Report     *env.Report
-				}{r.Profile, r.Diagnostic, last.Report})
+				fact := env.PreviousFacts(r, last)
 				if len(fact) > 65536 {
 					return out, errors.New("上轮失败摘要超限，请先精简失败报告")
 				}

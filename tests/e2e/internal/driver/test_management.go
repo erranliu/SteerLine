@@ -354,11 +354,18 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	}
 	sum := sha256.Sum256(expectedSnapshot)
 	snapshotDigest := hex.EncodeToString(sum[:])
-	testContext := testmanagementmodel.TestingContext(expectedSnapshot)
+	referencedWriter := false
+	for _, value := range original.Materials {
+		referencedWriter = referencedWriter || value.Path == testmanagementmodel.WriterPath
+	}
+	testContext := testmanagementmodel.TestingContextWithWriter(expectedSnapshot, referencedWriter)
 	if !strings.Contains(original.Workflow.PromptOverrides["implement.execute"], testContext) {
 		return errors.New("Runner did not freeze exact system test prompt")
 	}
 	expectedPaths := map[string]bool{material.Contract.SpecRef.Path: false, material.Contract.PlanRef.Path: false, testmanagement.RulesPath: false, testmanagement.CataloguePath: false}
+	if referencedWriter {
+		expectedPaths[testmanagementmodel.WriterPath] = false
+	}
 	for _, value := range original.Materials {
 		if _, ok := expectedPaths[value.Path]; !ok {
 			return errors.New("nonexistent system document reference")

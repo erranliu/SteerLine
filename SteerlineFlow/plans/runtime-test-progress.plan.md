@@ -17,3 +17,5 @@
 | 整体 | `l1.minimum`、`smoke.delivery`；isolated/controlled | 最终实现执行固定 L1/L2；零选择、跳过、超时及清理不明不通过 |
 
 命令与结果登记在[专属验收](../testing/acceptance/runtime-test-progress.md)，每次使用新输出目录，首轮失败保留。Runner 自身真实远端 L3 资格以其原验收为准，不将本仓 controlled 联验当成新的远端业务执行证明。
+
+2026-10-28 提示及写入器分发由[调用方收敛 Plan](caller-prompt-convergence.plan.md)继续实现：完整冻结安排不变，执行提示紧凑投影、固定文件逐项核验、同源 writer 路径引用与缺失/不同源完整内联；同步扩展原 `testing.runtime-progress` 场景。原历史结果不变，本轮证据见[独立验收](../testing/acceptance/caller-prompt-convergence.md)。

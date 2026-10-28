@@ -24,8 +24,9 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 		}
 		t.Run(choice.ID, func(t *testing.T) {
 			context := `frozen system context {"tests":["one"]}`
+			readOnly := "test progress is read-only in this step"
 			in := Workflow{ID: choice.ID, Version: choice.Version, PromptOverrides: map[string]string{"publish": "User publish", "implement.report": "User report"}}
-			got, e := cat.WithPromptContext(in, context)
+			got, e := cat.WithTestProgressContext(in, context, readOnly)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -35,11 +36,20 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 			if choice.ID == "development-audited" && !strings.HasSuffix(got.PromptOverrides["audit.code"], context) {
 				t.Fatal("audit context omitted")
 			}
-			if got.PromptOverrides["publish"] != "User publish" || got.PromptOverrides["implement.report"] != "User report" || len(in.PromptOverrides) != 2 {
+			if got.PromptOverrides["publish"] != "User publish\n\n"+readOnly || got.PromptOverrides["implement.report"] != "User report\n\n"+readOnly || len(in.PromptOverrides) != 2 {
 				t.Fatal("other prompts or profile mutated")
 			}
+			for _, state := range choice.States {
+				if state.Contract != "publication" && state.Kind != "report" || state.PromptKey == "" {
+					continue
+				}
+				body := got.PromptOverrides[state.PromptKey]
+				if !strings.HasSuffix(body, readOnly) || strings.Contains(body, context) {
+					t.Fatal("test writer leaked into publication/report turn", state.PromptKey, body)
+				}
+			}
 			in.PromptOverrides["implement.execute"] = "User implementation"
-			custom, e := cat.WithPromptContext(in, context)
+			custom, e := cat.WithTestProgressContext(in, context, readOnly)
 			if e != nil || custom.PromptOverrides["implement.execute"] != "User implementation\n\n"+context {
 				t.Fatal("configured prompt replaced", e)
 			}
@@ -50,13 +60,13 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 			broken := choice
 			broken.States = map[string]runnercontract.WorkflowPrompt{"implement.execute": choice.States["implement.execute"]}
 			cat := &Catalog{Capabilities: Capabilities{Workflows: []runnercontract.WorkflowChoice{broken}}}
-			if _, e := cat.WithPromptContext(Workflow{ID: choice.ID, Version: choice.Version}, "data"); e == nil {
+			if _, e := cat.WithTestProgressContext(Workflow{ID: choice.ID, Version: choice.Version}, "data", "read-only"); e == nil {
 				t.Fatal("missing audited prompt accepted")
 			}
 		}
 	}
 	incomplete := &Catalog{Capabilities: Capabilities{Workflows: []runnercontract.WorkflowChoice{{ID: "development", Version: 2, PromptSteps: []string{"implement.execute"}}}}}
-	if _, e = incomplete.WithPromptContext(Workflow{ID: "development", Version: 2}, "data"); e == nil {
+	if _, e = incomplete.WithTestProgressContext(Workflow{ID: "development", Version: 2}, "data", "read-only"); e == nil {
 		t.Fatal("missing published body accepted")
 	}
 }

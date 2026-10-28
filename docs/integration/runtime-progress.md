@@ -8,6 +8,10 @@ SteerLine 从冻结安排生成 `test.<test_id>: false` 对象，base64 编码�
 {"test.l1.minimum":false,"test.smoke.delivery":true}
 ```
 
+候选完整安排仍随原请求持久保存，进度字段、API 展示和存储核验以它为权威。实施/审计提示使用保持顺序的完整 ID 列表、Plan/commit、原安排及原快照摘要；准备阶段从固定 Git 提交读取 Plan、测试规范和清单，逐项核对完整定义（含 note），再要求执行步骤读取这些真实工作区文件。缺少必需材料或定义不一致时在提交前拒绝，不重新选择测试。
+
+正式写入器与固定提交中的 `tools/testing/RuntimeProgress.ps1` 仅在 CRLF/LF 等价时才引用真实项目路径；缺失或不同源时，提示仍提供完整正式源码和接线要求。每个实施/审计步骤独立取得所需材料，逐 ID 核对真实入口，不以 helper 存在证明入口已接线。发布和只读报告只接收不得写进度的边界，不接收写入器。新模板仅作用于新操作，原请求观察/恢复不重渲染或重发。详见[调用方收敛 Spec](../../SteerlineFlow/spec/caller-prompt-convergence.spec.md)。
+
 ## 写入入口
 
 ```powershell

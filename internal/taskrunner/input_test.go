@@ -61,7 +61,7 @@ func TestRunnerNativeAnswersPreserveQuestionsAndCallerInput(t *testing.T) {
 	}
 	run := &runnerclient.Run{RunID: "original", Revision: 7, Question: &q, Controls: runnerclient.Controls{CanReply: true}}
 	candidate := runnerbridge.Candidate{ID: "candidate", Revision: 3, Participation: "active", Projection: run}
-	answer := api.DecisionAnswer{RunID: candidate.ID, DecisionID: q.ID, ExpectedRunRevision: 3, ExpectedDecisionVersion: 7, Answers: map[string][]string{"color": {"red"}, "details": {"because"}}}
+	answer := api.DecisionAnswer{RunID: candidate.ID, DecisionID: q.ID, ExpectedRunRevision: 3, ExpectedDecisionVersion: 7, Answers: map[string][]string{"color": {"red"}, "details": {"原始回答\n保留 Unicode、空格  和标点。"}}}
 	d := Decision(run)
 	if !strings.Contains(d.Request.Context, "color: Choose color") || !strings.Contains(d.Request.Context, "red: Red") {
 		t.Fatal("question IDs/options hidden", d)
@@ -69,6 +69,16 @@ func TestRunnerNativeAnswersPreserveQuestionsAndCallerInput(t *testing.T) {
 	command, raw, err := InputForAnswer(candidate, answer)
 	if err != nil || command != "reply" || !strings.Contains(string(raw), `Red`) || answer.Answers["color"][0] != "red" {
 		t.Fatal("answer changed or original map mutated", string(raw), err, answer)
+	}
+	var envelope struct {
+		Text string `json:"text"`
+	}
+	if json.Unmarshal(raw, &envelope) != nil {
+		t.Fatal("invalid reply")
+	}
+	var delivered map[string][]string
+	if json.Unmarshal([]byte(envelope.Text), &delivered) != nil || delivered["details"][0] != answer.Answers["details"][0] {
+		t.Fatal("Unicode/free text changed")
 	}
 	for _, invalid := range []map[string][]string{{"color": {"blue"}, "details": {"why"}}, {"color": {"red"}}, {"color": {"red"}, "wrong": {"why"}}, {"color": {"red"}, "details": {" "}}} {
 		bad := answer

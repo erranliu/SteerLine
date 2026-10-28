@@ -18,7 +18,7 @@ Runner 自有库保存 Run、冻结材料、workflow 输入/结果、Attempt、�
 
 ## 固定契约与领取
 
-当前规则（2026-10-21）：[项目基线与材料维护](project-maintenance.md)将项目最新材料与各候选执行快照分别保存。`project_materials` 保存远端解析后的全部引用、内容摘要、生成输入摘要及系统 Generation；`maintenance_settings` 保存一次性生成方案与最近远端观察，`maintenance_requests` 保存原快进事实。每个新候选 fresh fetch 后绑定同 commit 的代码、材料及已就绪测试安排，预留事务重核材料/生成摘要并原子保存候选与 outbox。候选 payload 保存完整独立 Contract、base、MaterialDigest 和系统测试快照（在原 submit 的执行提示正文中绑定）。原号重放保持原版本；内容变化只标记旧候选过期，不修改其参与状态或原执行。已删除 Task 唯一快照和人工批准/文件应用权威，无旧库迁移。Generation 保存不可变输入与系统结果，不创建 Task/Candidate、不写旁置安排文件。
+当前规则（2026-10-21）：[项目基线与材料维护](project-maintenance.md)将项目最新材料与各候选执行快照分别保存。`project_materials` 保存远端解析后的全部引用、内容摘要、生成输入摘要及系统 Generation；`maintenance_settings` 保存一次性生成方案与最近远端观察，`maintenance_requests` 保存原快进事实。每个新候选 fresh fetch 后绑定同 commit 的代码、材料及已就绪测试安排，预留事务重核材料/生成摘要并原子保存候选与 outbox。候选 payload 保存完整独立 Contract、base、MaterialDigest 和系统测试快照（原 submit 的执行提示绑定经固定来源核对的 ID/来源/摘要视图；完整定义及 note 保存在原候选）。原号重放保持原版本；内容变化只标记旧候选过期，不修改其参与状态或原执行。已删除 Task 唯一快照和人工批准/文件应用权威，无旧库迁移。Generation 保存不可变输入与系统结果，不创建 Task/Candidate、不写旁置安排文件。
 
 TaskContract 固定目标仓库、remote、base 分支及 Spec/Plan/其他材料的 commit、路径和 SHA-256。启动前核对 Task 版本、DAG 就绪、authority、图版本、目标仓库及前置合并是否进入当前 base；最终领取事务再次进行同图 CAS。领取与完整 CLI outbox 一次提交，失败零派发。正常 implement/report/publish 不创建额外 DAG Task。
 

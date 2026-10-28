@@ -85,14 +85,23 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		Analysis  *model.Analysis  `json:"analysis"`
 		Existing  []model.Existing `json:"existing"`
 	}{r.Source.Digest, r.ConfirmedDigest, r.Analysis, r.Existing})
-	materials := append([]runnercontract.Document(nil), fixed.Materials...)
-	materials = append(materials, runnercontract.Document{Kind: "inline", Path: r.Source.Path, Content: &r.Source.Body},
-		runnercontract.Document{Kind: "inline", Path: "confirmed-planning.json", Content: stringPointer(string(planning))})
+	// Full guideline bytes stay in the frozen record for provenance validation.
+	// The model reads the same bytes in its existing repository snapshot.
+	guides := make([]model.Investigation, 0, len(fixed.Materials))
+	for _, material := range fixed.Materials {
+		if material.Kind != "inline" || material.Content == nil || strings.TrimSpace(*material.Content) == "" {
+			return r, errors.New("固定生成规范内容缺失")
+		}
+		guides = append(guides, model.Investigation{Path: material.Path, SHA256: model.Digest([]byte(*material.Content)), Reason: "必读生成规范"})
+	}
+	guideJSON, _ := json.Marshal(guides)
+	materials := []runnercontract.Document{{Kind: "inline", Path: r.Source.Path, Content: &r.Source.Body},
+		{Kind: "inline", Path: "confirmed-planning.json", Content: stringPointer(string(planning))}}
 	input := runnercontract.GenerateRunInput{Title: "Roadmap Spec / Plan: " + r.Source.Path,
 		Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
 		Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
 		Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit},
-			Instruction: DocumentInstruction, Materials: materials, OutputSchema: model.DocumentSchema(r)}}
+			Instruction: DocumentInstruction + "\n先从固定仓库提交 " + r.CodeCommit + " 读取全部下列规范（路径与原始内容 SHA256）：" + string(guideJSON), Materials: materials, OutputSchema: model.DocumentSchema(r)}}
 	if err = catalog.ValidateRepositoryGenerate(input); err != nil {
 		return r, err
 	}
@@ -111,7 +120,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 	return s.dispatch(ctx, r)
 }
 
-const DocumentInstruction = "依据完整内联规范、原 Markdown 和已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，再做整批设计并生成所有新任务的完整中文 Spec、Plan 和专属验收材料。先阅读 SpecGuide 与测试规范，引用实际调查文件的仓库相对路径，investigation.sha256 使用固定快照文件内容的 SHA-256。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、具体实施和测试命令/环境/通过条件/证据位置；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。"
+const DocumentInstruction = "依据固定仓库规范、完整内联原 Markdown 和已确认任务/依赖，实际只读调查当前固定代码快照中的相关源码、契约、消费者和测试，再做整批设计并生成所有新任务的完整中文 Spec、Plan 和专属验收材料。先阅读 SpecGuide 与测试规范，引用实际调查文件的仓库相对路径，investigation.sha256 使用固定快照文件内容的 SHA-256。已有正式任务只作引用；保留所有内部代号、任务范围和依赖，不分配新正式编号，不创建 Task/Candidate，不执行实现或测试，不写文件、Git 或 PR。Spec 写清目标、范围、行为契约及验收要求，Plan 写清复用与整合、修改所有者、依赖交接、具体实施和测试命令/环境/通过条件/证据位置；验收材料区分自动与人工且结果均为未验。每份正文应含标题及完整章节，不使用 TODO、占位正文或声称测试已通过。默认简洁设计，不为未来增添兼容、双写或第二套执行链路。发现需要改变任务拆分、范围或依赖，返回 questions 和空 documents，不能暗改已确认规划。路径和文件集严格按 output_schema 返回，正文完整，不输出代码围栏或解释。整个最终 JSON 限 1 MiB，超出时明确失败，不缩略正文伪装完成。"
 
 func sameRepositoryPath(a, b string) bool {
 	return strings.EqualFold(strings.TrimRight(strings.ReplaceAll(a, "\\", "/"), "/"), strings.TrimRight(strings.ReplaceAll(b, "\\", "/"), "/"))
