@@ -643,6 +643,14 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 		if c.Projection == nil {
 			return false, nil
 		}
+		if (p.Scenario.ID == "smoke.local-codex" || p.Scenario.ID == "workflow.local-codex-audited") && phase != "waiting_decision" && (c.Projection.Status == "waiting_input" || c.Projection.Status == "blocked" || c.Projection.Status == "failed") {
+			p.Record("blocked", snap)
+			conversation, readErr := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, p.ProjectID, c.ID, c.RunID)
+			if readErr == nil {
+				p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-blocked-conversation.json"), conversation))
+			}
+			p.Scenario.t.Fatal("live fixture requires no supplemental input: ", c.Projection.Diagnostic, readErr)
+		}
 		if p.Scenario.ID == "workflow.local-codex-audited" {
 			p.observeAuditedProduct(c, false)
 			if c.Projection.Status == "blocked" || c.Projection.Status == "failed" {
