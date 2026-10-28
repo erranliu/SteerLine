@@ -40,12 +40,12 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &catalog))
 	catalog["default_execution_profile"] = chain
-	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 1}}}
+	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 2}}}
 	if s.ID == "workflow.local-codex-audited" {
 		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
 		profile["name"] = "Real E2E audited preset"
 		profile["execution"].(map[string]any)["settings"].(map[string]string)["model"] = s.Run.ExecutionModel
-		profile["workflow"] = map[string]any{"id": "development-audited", "version": 1, "audit_model": map[string]string{"model": s.Run.AuditModel, "reasoning_effort": "high"}}
+		profile["workflow"] = map[string]any{"id": "development-audited", "version": 2, "audit_model": map[string]string{"model": s.Run.AuditModel, "reasoning_effort": "high"}}
 		p.AuditObservations = map[string]string{}
 	}
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))

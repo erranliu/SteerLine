@@ -1,0 +1,38 @@
+{
+  "runs": [
+    {
+      "at": "2026-10-28T15:13:05.634287Z",
+      "results": [
+        {
+          "test_id": "runtime.project-maintenance",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-28T15:16:18.8830059Z",
+      "results": [
+        {
+          "test_id": "configuration.execution-profiles-orca",
+          "level": "L4",
+          "environment": "live",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-28T15:18:21.8394505Z",
+      "results": [
+        {
+          "test_id": "smoke.local-codex",
+          "level": "L4",
+          "environment": "live",
+          "status": "failed",
+          "note": "场景断言失败"
+        }
+      ]
+    }
+  ]
+}
