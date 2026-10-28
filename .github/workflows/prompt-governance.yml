@@ -1,0 +1,36 @@
+name: Prompt governance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prompt-governance:
+    name: prompt-governance
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+      - name: Fixed L1 including prompt snapshots and source boundary
+        shell: pwsh
+        run: |
+          $slPromptReport = Join-Path $env:RUNNER_TEMP 'steerline-prompt-governance'
+          go run ./cmd/test-feedback -level=L1 -out $slPromptReport
+          $slPromptExit = $LASTEXITCODE
+          $slPromptSummary = Join-Path $slPromptReport 'summary.json'
+          if (Test-Path -LiteralPath $slPromptSummary) {
+            Get-Content -LiteralPath $slPromptSummary -Raw
+          }
+          exit $slPromptExit

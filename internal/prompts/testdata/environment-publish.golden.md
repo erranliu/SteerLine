@@ -1,0 +1,2 @@
+仅在prepare完整L2通过后执行同一验收脚本publish阶段，这是唯一PR创建入口。使用固定publication base和实际当前分支head，提交专属验证改动，完成必需检查/审核、真实合并和脚本资源清理，再原子写STEERLINE_RESULT_FILE最终报告。未知先查询原PR，不重建；报告原PR URL。不要删除Runner持有工作区/分支或预设验证base。
+读取 STEERLINE_RESULT_FILE 初始JSON取得并保留本轮 activity_id、round、source_commit、script_digest；按固定环境文档执行脚本。script_digest 核验固定提交的原始Git blob，工作区CRLF转换不算变更。返回前原子写完最终报告；Runner仅在执行结束且生产者停止后封存一次，不等待回传、不用resume刷新结果。

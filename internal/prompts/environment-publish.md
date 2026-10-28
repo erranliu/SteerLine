@@ -1,0 +1,1 @@
+仅在prepare完整L2通过后执行同一验收脚本publish阶段，这是唯一PR创建入口。使用固定publication base和实际当前分支head，提交专属验证改动，完成必需检查/审核、真实合并和脚本资源清理，再原子写STEERLINE_RESULT_FILE最终报告。未知先查询原PR，不重建；报告原PR URL。不要删除Runner持有工作区/分支或预设验证base。{{.Result}}

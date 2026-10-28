@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"sort"
 	"strings"
 	"time"
@@ -209,7 +210,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 		materials = append(materials, runnercontract.Document{Kind: "inline", Path: path, Content: &text})
 	}
 	public, _ := json.Marshal(p.config.runnerPublication())
-	instruction := env.MaterialPrompt + "\n固定项目提交：" + commit + "\n业务主分支（不能作为验证base）：" + p.config.Branch + "\n公开PR配置：" + string(public) + "\n只依据实际提供的材料，未给出的源码/脚本必须列gaps。"
+	var previous json.RawMessage
 	if p.store != nil {
 		rows, e := p.store.Environments(ctx, p.config.Identity())
 		if e != nil {
@@ -222,10 +223,14 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 				if len(fact) > 65536 {
 					return out, errors.New("上轮失败摘要超限，请先精简失败报告")
 				}
-				instruction += "\n最近适配事实（只供修订材料，不代表通过）：" + string(fact)
+				previous = fact
 				break
 			}
 		}
+	}
+	instruction, err := prompts.EnvironmentGenerate(commit, p.config.Branch, public, previous)
+	if err != nil {
+		return out, err
 	}
 	out = runnercontract.GenerateRunInput{Title: "项目环境准备文档与验收脚本", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Generate: runnercontract.GenerateInput{Instruction: instruction, Materials: materials, OutputSchema: json.RawMessage(env.GenerationSchema)}}
 	if p.config.runtimeCatalog == nil {

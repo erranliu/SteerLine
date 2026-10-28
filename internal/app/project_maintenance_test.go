@@ -14,7 +14,6 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
-	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -291,7 +290,7 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(snapshot) == 0 || len(run.Documents.References) != 2 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testmodel.TestingContext(snapshot)) {
+	if len(snapshot) == 0 || len(run.Documents.References) != 2 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, false)) {
 		t.Fatal("compact system context not frozen")
 	}
 	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: b, TestPlan: snapshot}

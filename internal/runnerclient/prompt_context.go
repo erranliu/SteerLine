@@ -2,6 +2,7 @@ package runnerclient
 
 import (
 	"errors"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"strings"
 )
@@ -9,8 +10,8 @@ import (
 // WithTestProgressContext preserves published/user prompts. Only implementation
 // and audit execution receive the frozen tests and writer; report/publication
 // turns receive a read-only boundary for the test-owned progress channel.
-func (c *Catalog) WithTestProgressContext(input Workflow, context, readOnly string) (Workflow, error) {
-	if c == nil || context == "" || readOnly == "" {
+func (c *Catalog) WithTestProgressContext(input Workflow, snapshot []byte, referencedWriter bool) (Workflow, error) {
+	if c == nil || len(snapshot) == 0 {
 		return input, errors.New("published workflow prompt context is unavailable")
 	}
 	var choice *runnercontract.WorkflowChoice
@@ -49,11 +50,11 @@ func (c *Catalog) WithTestProgressContext(input Workflow, context, readOnly stri
 		if body == "" {
 			body = state.Prompt
 		}
-		addition := readOnly
-		if writesTests {
-			addition = context
+		assembled, err := prompts.TestingStep(body, snapshot, referencedWriter, writesTests)
+		if err != nil {
+			return input, err
 		}
-		out.PromptOverrides[state.PromptKey] = body + "\n\n" + addition
+		out.PromptOverrides[state.PromptKey] = assembled
 		implementation = implementation || writesTests && state.Contract == "implementation"
 		audit = audit || writesTests && state.Contract == "audit"
 	}

@@ -16,6 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	pmm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
@@ -358,7 +359,10 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	for _, value := range original.Materials {
 		referencedWriter = referencedWriter || value.Path == testmanagementmodel.WriterPath
 	}
-	testContext := testmanagementmodel.TestingContextWithWriter(expectedSnapshot, referencedWriter)
+	testContext, e := prompts.TestingContext(expectedSnapshot, referencedWriter)
+	if e != nil {
+		return e
+	}
 	if !strings.Contains(original.Workflow.PromptOverrides["implement.execute"], testContext) {
 		return errors.New("Runner did not freeze exact system test prompt")
 	}

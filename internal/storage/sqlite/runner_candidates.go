@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"path/filepath"
 	"strings"
 
@@ -168,7 +169,10 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 				referencedWriter = true
 			}
 		}
-		context := testmodel.TestingContextWithWriter(c.TestPlan, referencedWriter)
+		context, err := prompts.TestingContext(c.TestPlan, referencedWriter)
+		if err != nil {
+			return nativeErr("contract_mismatch", err.Error())
+		}
 		bound := false
 		for _, body := range input.Workflow.PromptOverrides {
 			if context != "" && strings.Contains(body, context) {

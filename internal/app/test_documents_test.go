@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
@@ -33,7 +34,7 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	run := callerTestRun()
 	got, e := c.prepareTestPlan(context.Background(), work, &run)
 	require(t, e)
-	if string(got) != string(raw) || len(run.Documents.References) != 2 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testmodel.TestingContext(raw)) {
+	if string(got) != string(raw) || len(run.Documents.References) != 2 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, raw, false)) {
 		t.Fatal("system context was not frozen", run)
 	}
 	if run.ProgressFile == nil {
@@ -111,13 +112,13 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 			require(t, err)
 			referenced := mode == "same" || mode == "crlf"
 			body := run.Workflow.PromptOverrides["implement.execute"]
-			if string(full) != string(work.FrozenTestPlan) || !strings.Contains(body, testmodel.TestingContextWithWriter(full, referenced)) {
+			if string(full) != string(work.FrozenTestPlan) || !strings.Contains(body, testPromptContext(t, full, referenced)) {
 				t.Fatal("frozen arrangement or source changed")
 			}
 			if strings.Contains(body, progresstools.PowerShellWriter) == referenced {
 				t.Fatal("wrong writer distribution", mode)
 			}
-			if !strings.Contains(run.Workflow.PromptOverrides["publish"], testmodel.TestingReadOnlyInstructions) || strings.Contains(run.Workflow.PromptOverrides["publish"], "Set-RuntimeProgress") {
+			if !strings.Contains(run.Workflow.PromptOverrides["publish"], testReadOnlyPrompt(t)) || strings.Contains(run.Workflow.PromptOverrides["publish"], "Set-RuntimeProgress") {
 				t.Fatal("publication got writer")
 			}
 			if referenced && len(run.Documents.References) != 3 || !referenced && len(run.Documents.References) != 2 {
@@ -168,4 +169,21 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testPromptContext(t *testing.T, snapshot []byte, referenced bool) string {
+	t.Helper()
+	body, err := prompts.TestingContext(snapshot, referenced)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+func testReadOnlyPrompt(t *testing.T) string {
+	t.Helper()
+	body, err := prompts.TestingReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
 }

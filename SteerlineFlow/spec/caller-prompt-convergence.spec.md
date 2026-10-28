@@ -19,7 +19,7 @@
 | [documents.go](../../internal/testmanagement/model/documents.go)、[test_documents.go](../../internal/app/test_documents.go) | `TestingContext` 内联完整 frozen arrangement、规则及 PowerShell 源码。不含安排已5397个UTF-8字节，其中写入器3253字节；entryfixed-01实际调用方实施正文9902字节，安排占4402字节 | 减少重复数据与已可读取的同源源码 |
 | [prompt_context.go](../../internal/runnerclient/prompt_context.go) | 保留公开或用户步骤正文，按实施/审计与发布/报告追加不同上下文 | 保留当前组合契约，仅精简本仓追加内容 |
 | [generation.go](../../internal/testmanagement/generation.go) | 988字节选择指令，Plan、规范和清单各以inline材料提供 | 精简重述，不移除唯一材料渠道 |
-| [environment_adaptation.go](../../internal/app/environment_adaptation.go)、[materials.md](../../internal/environmentadaptation/prompts/materials.md)、[service.go](../../internal/environmentadaptation/service.go) | 环境生成固定说明5919字节；前轮报告/诊断继续拼入指令；两阶段重复附带关联元数据 | 保留生成和验收契约，去除重复事实及与阶段无关的信息 |
+| [environment_adaptation.go](../../internal/app/environment_adaptation.go)、[环境模板](../../internal/prompts/environment-generate.md)、[service.go](../../internal/environmentadaptation/service.go) | 环境生成固定说明5919字节；前轮报告/诊断继续拼入指令；两阶段重复附带关联元数据 | 保留生成和验收契约，去除重复事实及与阶段无关的信息 |
 | [roadmap_documents.go](../../internal/app/roadmap_documents.go)、[documents.go](../../internal/roadmap/documents.go)、[generation.go](../../internal/roadmap/generation.go) | 规范、原Markdown、确认结果和任务图内联；文档生成已经提供固定代码快照 | 仅对现有可读取固定快照中的重复材料改为引用 |
 | [input.go](../../internal/taskrunner/input.go) | 回答包含原用户文字、选项或结构化答案 | 保持完整语义，不把必要用户输入当冗余压缩 |
 

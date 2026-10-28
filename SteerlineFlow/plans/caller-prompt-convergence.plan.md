@@ -1,5 +1,7 @@
 # SteerLine 调用方提示词收敛 Plan
 
+后续固定说明已按[提示词管理方案](prompt-governance.plan.md)迁入 `internal/prompts/`；本文旧实现路径保留收敛阶段的调查/实施定位，当前模板维护见[维护说明](../../docs/prompt-governance.md)。
+
 关联 [Spec](../spec/caller-prompt-convergence.spec.md)。设计随 PR404 合入后，用户已授权本次实现及规定回归；实际结果见独立验收，原 Task18 业务复验仍不在本次范围。现有Runner契约已足以完成本范围，不等待其workflow声明/输入预算修改。
 
 ## 实现整合

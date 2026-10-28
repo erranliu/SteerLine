@@ -4,20 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
-
-	progresstools "github.com/erranliu/SteerLine/tools"
 )
-
-func TestInlineProgressWriterForProjectWithoutHelper(t *testing.T) {
-	raw := []byte(`{"status":"ready","plan_path":"task.plan.md","commit":"fixed","definitions":[{"id":"one"}]}`)
-	body := TestingContext(raw)
-	if !strings.Contains(body, progresstools.PowerShellWriter) || !strings.Contains(body, "入口开始调用 Set-RuntimeProgress") || !strings.Contains(body, "逐项核对") {
-		t.Fatal("missing complete writer or per-entry wiring contract")
-	}
-	if strings.Contains(TestingReadOnlyInstructions, progresstools.PowerShellWriter) || !strings.Contains(TestingReadOnlyInstructions, "不得写入") {
-		t.Fatal("read-only boundary lost")
-	}
-}
 
 func TestCallerPromptConvergenceCompactArrangement(t *testing.T) {
 	full := Snapshot{Status: "ready", PlanPath: "task.plan.md", Commit: strings.Repeat("a", 40), Digest: strings.Repeat("b", 64), Definitions: []Definition{
@@ -26,18 +13,19 @@ func TestCallerPromptConvergenceCompactArrangement(t *testing.T) {
 	}}
 	raw, _ := json.Marshal(full)
 	original := string(raw)
-	referenced := TestingContextWithWriter(raw, true)
-	inline := TestingContext(raw)
-	if !strings.Contains(referenced, `"tests":["z.last","a.first"]`) || !strings.Contains(referenced, full.Digest) || !strings.Contains(referenced, full.Commit) || strings.Contains(referenced, full.Definitions[0].Note) {
+	facts, err := TestingFacts(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(facts), `"tests":["z.last","a.first"]`) || !strings.Contains(string(facts), full.Commit) || !strings.Contains(string(facts), full.Digest) || strings.Contains(string(facts), full.Definitions[0].Note) || len(facts) >= len(raw) {
 		t.Fatal("compact view changed IDs/order/identity or duplicated definitions")
 	}
-	if string(raw) != original || strings.Contains(referenced, progresstools.PowerShellWriter) || !strings.Contains(inline, progresstools.PowerShellWriter) {
-		t.Fatal("snapshot or writer source changed")
+	if string(raw) != original {
+		t.Fatal("snapshot mutated")
 	}
-	beforeWriter := strings.Replace(ProgressWriterContext(false), "固定版本缺少或不同源的写入器不能直接沿用；将", "写入器缺失时将", 1)
-	before := len("SteerLine 执行绑定测试安排（系统数据，不是文件路径）：\n" + string(raw) + "\n" + TestingInstructions + beforeWriter)
-	if len(referenced) >= before || len(inline) >= before {
-		t.Fatal("redundant long arrangement did not shrink")
+	for _, invalid := range [][]byte{nil, []byte("{"), []byte(`{"status":"missing"}`)} {
+		if _, err := TestingFacts(invalid); err == nil {
+			t.Fatal("invalid snapshot accepted")
+		}
 	}
-	t.Logf("UTF-8 arrangement sample: before=%d helper=%d no-helper=%d; full snapshot=%d unchanged", before, len(referenced), len(inline), len(raw))
 }

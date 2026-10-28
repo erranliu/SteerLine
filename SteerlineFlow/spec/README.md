@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+固定提示词管理与变更门禁（2026-10-28，已实施）：[Spec](prompt-governance.spec.md) · [Plan](../plans/prompt-governance.plan.md) · [审计与验收](../testing/acceptance/prompt-governance.md)。固定文件、小型集中组装、有限源码守卫和黄金样本已接入；定向核心、L1/L2/runtime-progress L3 通过。完整 owner 边界存在已复现的基线失败，未放宽规则；原生 CI 配置已交付，远端保护未启用/未验。
+
 Roadmap Markdown 解析与转正（2026-10-27，已实现并验证）：[Spec](roadmap-promotion.spec.md) · [Plan](../plans/roadmap-promotion.plan.md) · [专属验收计划](../testing/acceptance/roadmap-promotion.md)。只读草稿，经 Runner generate 核对内部任务及已有 DAG 依赖；确认、生成和发布文档全程使用 Roadmap 内部代号，正式入图时才在 Task 批次事务内分配编号和保存映射。文档生成的 Runner 新能力单列为前置；本仓接线及受控验证已实施，已接入固定版本文档生成；真实 Codex 与隔离发布/入图通过，正式浏览器和真实 GitHub 文档 PR 全链及资源清理通过。
 
 L4远端测试与64G共享配置（2026-10-26，已接线）：[Spec](l4-remote-tests.spec.md) · [Plan](../plans/l4-remote-tests.plan.md) · [专属验收](../testing/acceptance/l4-remote-tests.md)。三项登记L4共用既有格式profile与执行器；目录已真机通过，进度/308因受测提交缺环境材料尚未完成真实业务验收，不继承历史独立入口通过。

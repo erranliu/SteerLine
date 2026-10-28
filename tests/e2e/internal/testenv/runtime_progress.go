@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
@@ -63,12 +64,20 @@ func RuntimeProgress(s *Scenario) {
 			referenced = referenced || ref.Path == testmodel.WriterPath
 		}
 		body := input.Workflow.PromptOverrides["implement.execute"]
-		if len(frozen.Definitions) != 1 || frozen.Definitions[0] != definition || !strings.Contains(body, testmodel.TestingContextWithWriter(c.TestPlan, referenced)) || strings.Contains(body, definition.Note) {
+		context, err := prompts.TestingContext(c.TestPlan, referenced)
+		if err != nil {
+			return false, err
+		}
+		if len(frozen.Definitions) != 1 || frozen.Definitions[0] != definition || !strings.Contains(body, context) || strings.Contains(body, definition.Note) {
 			return false, fmt.Errorf("compact input lost frozen definition or step boundary")
 		}
 		// This controlled peer publishes implementation only. Full published
 		// execute/report/publication isolation is exercised by the catalog owner.
-		if publication, exists := input.Workflow.PromptOverrides["publish"]; exists && !strings.Contains(publication, testmodel.TestingReadOnlyInstructions) {
+		readOnly, err := prompts.TestingReadOnly()
+		if err != nil {
+			return false, err
+		}
+		if publication, exists := input.Workflow.PromptOverrides["publish"]; exists && !strings.Contains(publication, readOnly) {
 			return false, fmt.Errorf("publication lost read-only boundary")
 		}
 		return true, nil

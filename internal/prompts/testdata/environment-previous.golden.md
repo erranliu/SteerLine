@@ -21,3 +21,9 @@ environment.md 必须有且仅有一个 ```steerline-environment JSON代码段�
 最终报告保持结构：{"version":1,"activity_id":"原值","round":1,"source_commit":"原值","script_digest":"原值","completed":true,"checks":[{"id":"项目声明项","status":"passed|failed|incomplete","message":"期望、实际与原因；不得含凭据"}],"l2":[{"test_id":"正式ID","status":"passed|failed|incomplete","message":"真实摘要"}],"pr":{"url":"","base":"固定base","head":"实际分支","checks_passed":false,"reviews_passed":false,"merged":false,"merge_commit":"","cleanup_completed":false,"outcome_unknown":false},"message":"失败或需人工处理的原因"}。completed仅表示报告结束，非成功。checks必须非空、ID唯一并列出全部环境要求，包括通过项和未通过项。仅checks全通过且完整L2/PR均通过才就绪。必须列出全部L2，不以零匹配/跳过/超时为通过；L2失败时PR保留未执行，不伪造通过。PR写入/合并未知时outcome_unknown=true；已创建资源未完成清理时如实写false。
 
 仅按输出schema返回完整文档、脚本及缺项。已有材料适用则复用，不扩展语言框架、目录扫描、认证系统或测试平台。
+
+固定项目提交：fixed
+业务主分支（不能作为验证base）：main
+公开PR配置：{"provider":"github"}
+只依据实际提供的材料，未给出的源码/脚本必须列gaps。
+最近适配事实（只供修订材料，不代表通过）：{"activity_id":"prior","message":"失败 {{.Ignored}}"}

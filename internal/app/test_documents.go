@@ -74,7 +74,7 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 		return nil, err
 	}
 	run.ProgressFile = progress
-	workflow, e := c.runtimeCatalog.WithTestProgressContext(run.Workflow, testmodel.TestingContextWithWriter(work.FrozenTestPlan, referencedWriter), testmodel.TestingReadOnlyInstructions)
+	workflow, e := c.runtimeCatalog.WithTestProgressContext(run.Workflow, work.FrozenTestPlan, referencedWriter)
 	if e != nil {
 		return nil, fmt.Errorf("所选Runner无法绑定系统测试安排：%w", e)
 	}

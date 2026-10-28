@@ -13,7 +13,7 @@ go run ./cmd/test-feedback -level=L2
 
 | 级别 | 本项目内容 | 环境与选择 |
 | --- | --- | --- |
-| [L1](testing/l1.md) | 一个最小单元/集成集合 | 隔离 Go 测试，无模型；不再累积各功能的完整 owner 回归。 |
+| [L1](testing/l1.md) | 一个最小单元/集成集合 | 隔离 Go 测试，无模型；包含固定提示词正文/参数和有限源码约束，不累积各功能完整 owner 回归。 |
 | [L2](testing/l2.md) | 一个受控核心交付冒烟 | 真实 SteerLine/Git/SQLite，公开 Runner/PR fixture；不需要真实 Runner、模型或 GitHub。 |
 | [L3](testing/l3.md) | 可并行功能流程 | controlled，资源隔离，总并发最多二；按受影响 ID 选择。 |
 | [L4](testing/l4.md) | 边界、不可并行功能、真实链和 Go 测试集 | controlled/live/isolated；live 必须单独精确选择，按需运行。 |
