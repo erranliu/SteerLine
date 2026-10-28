@@ -48,3 +48,10 @@ PR399 的冲突处理、代码审计、固定 L1/L2、受影响 owner 和独立�
 组件验证中重复出现 Windows 回执原子更新被读取句柄阻塞，修复私有快照读取及保留旧读者的原子替换。先以实际生产读取入口保持旧句柄、更新完整回执做失败反例，再验证原/新快照、不可变 envelope、私有 ACL、Unicode 路径及持久排他锁仍失败。执行 httpapi/httpfs/localservice/httpclient 与原测试 owner、固定 L1/L2、受控进度和宿主生命周期回归。该修复不重试业务命令、不改变请求身份或回执 schema，不实现原生终端输入/启动确认。源码和每次实际结果见上述复验记录及[合入审计](../testing/acceptance/pr399-merge-review-20261027.md)。
 
 2026-10-28，按用户要求合并 PR435 后，以实际 base3b59842c、新 `entryfixed-01` 和正式原Caller07fcb905包复验。实际九项原报告、六批非零无skip XML、输入/清理与正式入口 writer 已独立核实；原始及停止后 closed 进度/API/UI均9/9。发布 start_turn 没有已核实接受回执，完整原生会话仍只有初始化/实施输入、发布内容停在草稿且没有真实PR，因此整链失败、连续数0/2。原Run、宿主和拥有资源已完整结算，第二轮未启动。详细身份、原失败、报告/SHA、UI及清理见[复验记录](../testing/acceptance/test-progress-0of6-20261026.md)。等待Runner职责内的后续发布输入修复与独立资格后，才使用正式新包/新现场恢复两次完整链，不补Enter/重发/放宽确认，也不在SteerLine重复实现原生输入。
+
+
+## 2026-10-28 caller boundary repair after Runner69 retest
+
+The first new original run reached six Passed managed reports and one Incomplete full EditMode entry: the original entry required prepared input locations, but the literal command prohibition prevented supplying them. Its verified implementation report then requested a PR URL before publication. Repair the two existing caller instructions only: allow documented required execution-location arguments without narrowing tests, and report only current-step facts without demanding a future PR. Preserve frozen definitions and all original failure records; do not reply to or resume the old Run.
+
+Validate the affected prompt/model/runnerclient owners, fixed L1/L2 and controlled progress scenario from clean source. Use fresh official packages and homes with the same merged Runner69 for subsequent native qualification; no hot replacement, new Runner implementation, manual progress or weakened pass criteria. Two genuine complete chains still start from zero.

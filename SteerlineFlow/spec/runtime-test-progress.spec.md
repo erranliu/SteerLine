@@ -18,6 +18,10 @@
 
 2026-10-28 调用方提示收敛：完整安排保留为权威，执行提示改为经固定来源核对的 ID/来源/摘要视图；同源 writer 仅引用真实固定文件，缺失/不同源仍完整内联。实施/审计负责逐入口接线，发布/报告保持只读，原请求不重渲染；具体约束及验证归[本次 Spec](caller-prompt-convergence.spec.md)和[验收](../testing/acceptance/caller-prompt-convergence.md)。
 
+## Execution parameters and report-stage facts (2026-10-28)
+
+Frozen test definitions, entrypoints, selection and pass criteria remain unchanged. Required environment/input/output location arguments documented by the original entry may be prepared and supplied; they must not narrow test selection or replace the entry. Read-only implementation reports preserve the original result contract but must not require a PR URL or other fact belonging to an unexecuted publication step. Missing real prerequisites still remain incomplete, not passed.
+
 ## 产品与清理
 
 执行页展示本次安排的已通过/未完成、最后观察和同步异常。false 不区分失败与尚未执行，不推导额外状态。材料过期按既有当前性规则展示历史。
