@@ -118,7 +118,7 @@ git rev-parse HEAD
 	planPath := filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.plan.md")
 	planBody, readErr := os.ReadFile(planPath)
 	s.Must(readErr)
-	s.Must(os.WriteFile(planPath, append(planBody, []byte("\nThe committed test catalogue is {\"tests\":[]}; this fixture's automatic arrangement must also be {\"tests\":[]}. Verifying the repository-root result.txt is a manual implementation check, not a registered test ID. Local checks and external harness acceptance remain required.\n")...), 0600))
+	s.Must(os.WriteFile(planPath, append(planBody, []byte("\nNo automated tests are required for this fixture. The committed test catalogue is {\"tests\":[]}; this fixture's automatic arrangement must also be {\"tests\":[]}. Verifying the repository-root result.txt is a manual implementation check, not a registered test ID. Local checks and external harness acceptance remain required.\n")...), 0600))
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
