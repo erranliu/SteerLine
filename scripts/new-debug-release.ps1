@@ -206,10 +206,10 @@ try {
     }
     $manifest.web_projects = $WebProjects
     $manifest.project_maintenance = [bool]$ProjectMaintenance
-    $promptFixtureCapabilities = Get-Content -LiteralPath (Join-Path $repo 'internal/runnerclient/testdata/content-capabilities.json') -Raw | ConvertFrom-Json -AsHashtable
-    $promptFixtureRepository = Get-Content -LiteralPath (Join-Path $repo 'internal/runnerclient/testdata/generate-repository-capability.json') -Raw | ConvertFrom-Json -AsHashtable
-    $promptFixtureCapabilities['generate'] = $promptFixtureRepository.generate
-    $promptFixtureCapabilities.configuration_schemas['generate_input'] = $promptFixtureRepository.generate_input
+    $promptFixtureCapabilities = Get-Content -LiteralPath (Join-Path $repo 'internal/runnerclient/testdata/content-capabilities.json') -Raw | ConvertFrom-Json
+    $promptFixtureRepository = Get-Content -LiteralPath (Join-Path $repo 'internal/runnerclient/testdata/generate-repository-capability.json') -Raw | ConvertFrom-Json
+    $promptFixtureCapabilities | Add-Member -MemberType NoteProperty -Name generate -Value $promptFixtureRepository.generate -Force
+    $promptFixtureCapabilities.configuration_schemas | Add-Member -MemberType NoteProperty -Name generate_input -Value $promptFixtureRepository.generate_input -Force
     [IO.File]::WriteAllText((Join-Path $target 'seed/runner-content-capabilities.json'), ($promptFixtureCapabilities | ConvertTo-Json -Depth 100), $utf8)
     Write-Manifest
     $manifest.template_sha256 = $templateHashes

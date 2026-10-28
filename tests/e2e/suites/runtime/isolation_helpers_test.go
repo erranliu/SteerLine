@@ -159,15 +159,15 @@ func withJunction(t *testing.T, s *testenv.Scenario, project *testenv.Project, p
 
 func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project, installed *testenv.Project, powershell string, evidence map[string]any) {
 	t.Helper()
-	// Keep the temporary clone path short enough that git status can inspect
-	// every tracked file on Windows, including deeply nested acceptance fixtures.
+	// Configure only this owned clone for tracked acceptance paths that exceed
+	// Windows' legacy path limit; leave the user's Git configuration unchanged.
 	sourceRoot := filepath.Join(s.Root, "source-build")
 	if _, err := os.Stat(sourceRoot); !os.IsNotExist(err) {
 		t.Fatalf("direct build source clone already exists: %s", sourceRoot)
 	}
 	// Use the same isolated Git configuration as the direct build command, so
 	// checkout line endings and the later source-dirty probe agree.
-	cloneCommand := project.Command("git", "clone", "--local", "--no-hardlinks", s.Run.Root, sourceRoot)
+	cloneCommand := project.Command("git", "clone", "--local", "--no-hardlinks", "-c", "core.longpaths=true", s.Run.Root, sourceRoot)
 	cloneCommand.Dir = s.Root
 	cloneOutput, err := s.RunCommand(cloneCommand, "clone-source-for-direct-build")
 	if err != nil {

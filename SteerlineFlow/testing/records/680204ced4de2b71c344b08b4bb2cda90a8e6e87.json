@@ -1,0 +1,51 @@
+{
+  "runs": [
+    {
+      "at": "2026-10-28T14:35:42.4294032Z",
+      "results": [
+        {
+          "test_id": "runtime.dual-home-isolation",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "incomplete",
+          "note": "场景证据、执行集合或清理核验不完整"
+        },
+        {
+          "test_id": "runtime.path-isolation",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "incomplete",
+          "note": "场景证据、执行集合或清理核验不完整"
+        },
+        {
+          "test_id": "runtime.project-maintenance",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "incomplete",
+          "note": "测试报告缺失或不完整"
+        },
+        {
+          "test_id": "runtime.service-write-isolation",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "incomplete",
+          "note": "场景证据、执行集合或清理核验不完整"
+        },
+        {
+          "test_id": "runtime.source-build-isolation",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "failed",
+          "note": "场景断言失败"
+        },
+        {
+          "test_id": "testing.records",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "incomplete",
+          "note": "测试报告缺失或不完整"
+        }
+      ]
+    }
+  ]
+}
