@@ -283,13 +283,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 		s.Must(os.MkdirAll(filepath.Dir(path), 0700))
 		s.Must(os.WriteFile(path, raw, 0600))
 	}
-	rules, err := prompts.TestingRules()
-	s.Must(err)
-	for path, body := range map[string][]byte{"SteerlineFlow/testing/runtime-progress.md": rules, "tools/testing/RuntimeProgress.ps1": []byte(progresstools.PowerShellWriter)} {
-		target := filepath.Join(p.Repo, path)
-		s.Must(os.MkdirAll(filepath.Dir(target), 0700))
-		s.Must(os.WriteFile(target, body, 0600))
-	}
+	p.prepareTestProtocol()
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "E2E project and contracts")
 	p.git(p.Repo, "push", "--quiet", "origin", "main")
@@ -319,6 +313,17 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 		s.t.Fatalf("home did not expose project state: %s", rawHome)
 	}
 	return p
+}
+
+func (p *Project) prepareTestProtocol() {
+	s := p.Scenario
+	rules, err := prompts.TestingRules()
+	s.Must(err)
+	for path, body := range map[string][]byte{"SteerlineFlow/testing/runtime-progress.md": rules, "tools/testing/RuntimeProgress.ps1": []byte(progresstools.PowerShellWriter)} {
+		target := filepath.Join(p.Repo, path)
+		s.Must(os.MkdirAll(filepath.Dir(target), 0700))
+		s.Must(os.WriteFile(target, body, 0600))
+	}
 }
 
 // NewHomeForProject binds the same Git clone to another independent home.
