@@ -1,0 +1,22 @@
+{
+  "runs": [
+    {
+      "at": "2026-10-28T14:49:35.5233925Z",
+      "results": [
+        {
+          "test_id": "runtime.project-maintenance",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "failed",
+          "note": "场景断言失败"
+        },
+        {
+          "test_id": "testing.records",
+          "level": "L4",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

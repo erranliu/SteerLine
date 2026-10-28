@@ -19,7 +19,14 @@ import (
 
 // Every model-visible reference must already be a verified regular Git file.
 // The immutable database snapshot remains the original arrangement authority.
-func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (json.RawMessage, error) {
+func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (snapshot json.RawMessage, preparationErr error) {
+	// These checks only read pinned materials, before candidate reservation or
+	// Runner submission. Reject a definite preparation failure with a receipt.
+	defer func() {
+		if preparationErr != nil {
+			preparationErr = &taskmodel.Error{Code: "test_materials_not_ready", Message: preparationErr.Error()}
+		}
+	}()
 	run.ProgressFile = nil
 	if len(work.FrozenTestPlan) == 0 {
 		raw, _ := json.Marshal(testmanagement.Snapshot{Status: "missing", PlanPath: work.Contract.PlanRef.Path, Commit: work.Contract.PlanRef.Commit, Diagnostic: "候选尚未绑定系统测试安排", Definitions: []testmanagement.Definition{}})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -189,8 +190,10 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 			}
 			next.FrozenTestPlan, _ = json.Marshal(snap)
 			run := callerTestRun()
-			if _, err := m.config.prepareTestPlan(ctx, next, &run); err == nil {
-				t.Fatal("invalid pinned source accepted", mode)
+			_, err := m.config.prepareTestPlan(ctx, next, &run)
+			var rejected *taskmodel.Error
+			if !errors.As(err, &rejected) || rejected.Code != "test_materials_not_ready" {
+				t.Fatal("invalid pinned source must produce a rejected task receipt", mode, err)
 			}
 		})
 	}
