@@ -1,8 +1,59 @@
 # 调用方提示词收敛验收记录
 
-## 2026-10-29 全部 L4 复验（进行中）
+## 2026-10-29 全部 L4 执行结果
 
-用户要求运行机器清单全部 13 项 L4，并沿前轮授权修复失败。本轮证据根为 `C:/SteerlineDebug/wt-2352-all-l4/`，固定独立 Runner 为 `diagnostics/inputs-20261028T1402Z/steerrunner.exe`：产品源 `62a35bce94de248e83fc2c09ce4f7ad34af5228d`、版本 `0.2.0-dev.3-r3`、SHA256 `3b9ee831c11695bb046dca55bae02da6cd11a3d1ede6cd3f22511080fa655917`。原调用和补测各用新目录，已封存的原 Run 不追加业务输入。此节暂为过程记录，不表示全部 L4 通过；最终结果尚待补齐。
+本轮按机器清单调用全部 13 项登记 L4 正式入口；按各 ID 最近一次受管报告，10 项通过、0 项失败、3 项不完整。整体不能登记为全部通过。两个远端场景未完成前置，Go 全集还发生挂起，跳过项按既有规则保留。最终 Go 全集源为 `67c03655e86fa3a05f6fc826a640b0c44fd437fc`；最后的受控补测源为 `a86e6ef96917d25f726f478ecffc3718057d75c7`；不同阶段的完整受测来源见表，不将早期版本当作同一提交全集证明。
+
+证据根为 `C:/SteerlineDebug/wt-2352-all-l4/`，下表路径均相对此根。固定独立 Runner 为 `diagnostics/inputs-20261028T1402Z/steerrunner.exe`：源 `62a35bce94de248e83fc2c09ce4f7ad34af5228d`、版本 `0.2.0-dev.3-r3`、SHA256 `3b9ee831c11695bb046dca55bae02da6cd11a3d1ede6cd3f22511080fa655917`。没有修改该依赖源码。初始输入及最终 13 项定义分别保存在该 inputs 目录原 `inputs.json` 和 `final-selected-definitions-67c03655.json`，不覆盖原快照。
+
+| ID | 受管结果 | 源码 | 原始 summary |
+| --- | --- | --- | --- |
+| `go.full` | 不完整 | `67c03655` | `test-results/L4/20261028T181317986Z-go-full-boundaries/summary.json` |
+| `runtime.dual-home-isolation` | 通过 | `a86e6ef9` | `test-results/L4/20261028T173612639Z-controlled-five-complete/summary.json` |
+| `runtime.path-isolation` | 通过 | `a86e6ef9` | `test-results/L4/20261028T173612639Z-controlled-five-complete/summary.json` |
+| `runtime.project-maintenance` | 通过 | `a86e6ef9` | `test-results/L4/20261028T172825364Z-maintenance-own-baseline/summary.json` |
+| `runtime.service-write-isolation` | 通过 | `a86e6ef9` | `test-results/L4/20261028T173612639Z-controlled-five-complete/summary.json` |
+| `runtime.source-build-isolation` | 通过 | `a86e6ef9` | `test-results/L4/20261028T173612639Z-controlled-five-complete/summary.json` |
+| `smoke.local-codex` | 通过 | `abe1f0ad` | `test-results/L4/20261028T161220507Z-live-snapshot-identity/summary.json` |
+| `testing.management-local-codex` | 通过 | `2d91e9eb` | `test-results/L4/20261028T164156384Z-management-fixed-materials/summary.json` |
+| `testing.records` | 通过 | `a86e6ef9` | `test-results/L4/20261028T173612639Z-controlled-five-complete/summary.json` |
+| `workflow.local-codex-audited` | 通过 | `2d91e9eb` | `test-results/L4/20261028T163423665Z-audited-worktree/summary.json` |
+| `configuration.execution-profiles-orca` | 通过 | `b8e48689` | `test-results/L4/20261028T151507877Z-remote-discovery/summary.json` |
+| `testing.project-progress-orca-browser` | 不完整 | `2d91e9eb` | `test-results/L4/20261028T164637621Z-remote-progress/summary.json` |
+| `testing.project-environment-orca` | 不完整 | `2d91e9eb` | `test-results/L4/20261028T164931097Z-remote-environment/summary.json` |
+
+通过项均有完整清理证据。最近报告及覆盖核对的可重算索引为 `diagnostics/final-l4-run-index.json`；它仅索引上述原报告，不生成新的测试通过结论。正式报告通过原 `test-feedback record` 按受测 SHA 导出到 [Git 测试历史](../records/)，包含原失败与补测；最终代码记录为 [67c03655](../records/67c03655e86fa3a05f6fc826a640b0c44fd437fc.json)。
+
+### 三项未通过的边界
+
+- `testing.project-progress-orca-browser`：固定 SteerlineTest 源 `8855502c8d65ddf92363549ba7e93f05471c3667` 缺 `SteerlineFlow/environment-execution.md`，`environment_start` 在创建活动或 Run 前明确拒绝；原程序与连续六状态浏览器验收未执行。符合当前 Spec 的缺材料阻断，但不算此 L4 通过。
+- `testing.project-environment-orca`：308 原源 `76919e3a0c31da73b48de282cf108e2d614b9244`，本次夹具源 `5d2713f3734dbfdca041fd72e87c11f74f82d9ad`。生成前置的原请求 `42c3a959d5f083ee8f1e10a906acbf58` 经公开 CLI 查询为 `request_not_found`，Caller 保留未知状态。只读核对固定 Git 树为 16,287 文件、390,779,400 字节，确定超出所选 Runner 公布的 4,096 文件 / 64 MiB 上限；该前置无法完成，已通过原应用 stop 结束本次场景。不是环境检测/L2/PR 通过，也不是三轮负向验收。原停止原因及能力对照保存在 `diagnostics/20261028T1656Z-308-capability-stop/` 与 `diagnostics/20261028T1656Z-308-generate-capability.json`。两个项目材料仍须走正常 Git 准备；当前 Spec 也仍阻断缺少完整前轮报告正式供给的新环境轮次。
+- `go.full`：实际 Go 结果为 1308 pass / 0 fail / 7 skip，准备 9.425 秒、执行 1973.137 秒。原进程在 `TestLocalOrcaCatalog/seed` 挂起，超过十分钟无后续事件；经核对本次 PID/路径/父命令后对独立 Go 进程组发诊断中断结束，但未取得可用栈。因此还缺两个测试终态及最后两包的本轮终态，不能把本轮理解为仅因 skip 未通过。独立 seed 100 次、本机完整序列 20 次、整个 discovery 包 10 次均通过（`diagnostics/20261028T184011479Z-orca-seed-timeout/`、`diagnostics/20261028T184055968Z-orca-sequence-timeout/`、`diagnostics/20261028T184359980Z-discovery-package-timeout/`）；未复现即未确认根因，不宣称挂起已修。被中断未执行的 executionconfig/nativequery 两包补测通过：`diagnostics/20261028T184955562Z-remaining-web-packages/summary.json`。这些定向结果不替代完整 go.full。诊断信号身份记录为 `diagnostics/20261028T1846Z-live-discovery-stack-signal.json`。跳过明细见下方。
+
+两项远端原报告均保留 `cleanup_complete=false` / 受管 incomplete。随后只读确认 Caller 零环境活动、零候选，按公开原请求/Runner 停止证明及 provider 分页读取核对零专属 PR，再以冻结 SHA lease 删除各自两个专属 refs；保留原现场与原失败报告。补充清理证据分别为 `diagnostics/20261028T165118058Z-remote-progress-supplemental-cleanup.json`、`diagnostics/20261028T165855120302Z-remote-environment-supplemental-cleanup.json`；补充证据不改写原测试结果。
+
+### Go 全集跳过明细
+
+- `github.com/erranliu/SteerLine/internal/app/host/TestBackgroundConsoleProbe`
+- `github.com/erranliu/SteerLine/internal/app/host/TestDesktopOpenHelper`
+- `github.com/erranliu/SteerLine/internal/execution/process/TestProcessHostCommandHelper`
+- `github.com/erranliu/SteerLine/tests/e2e/internal/driver/TestDebugReleaseRuntime`
+- `github.com/erranliu/SteerLine/tests/e2e/internal/driver/TestDebugReleaseSharedRunnerService`
+- `github.com/erranliu/SteerLine/tests/e2e/internal/driver/TestDebugReleaseWebProjects`
+- `github.com/erranliu/SteerLine/tests/e2e/internal/driver/TestDebugTestManagementOwnedBranchCleanup`
+
+### 已修复的失效点与验证
+
+- 初次 Go 全集发现 SQLite 持久化反向依赖环境服务，六个架构断言失败。抽出既有纯值到 `environmentadaptation/model`，存储仅依赖值模型；没有兼容别名、SQL 迁移或第二套环境状态。全集最终结果以上述原报告为准。
+- a86e6ef9 的完整 Go 全集另发现两个 E2E 结构门禁失败：远端共享测试支持未登记具名 owner、远端夹具直接导入 app 实现包。精确登记 cmd/test-feedback 与 testenv 两个 owner，补正反例拒绝其他包；配置解码放回既有 driver，provider 查询仅接收 PR 纯值。主边界及 E2E 边界完整回归通过，保留原失败，不禁用检查或开放全局依赖。
+- Windows 夹具 stdout 的同步管道写入会阻塞；改用临时文件捕获。调试生成器修复 PowerShell 5 JSON/UTF-8 读取，隔离源码 clone 启用局部 longpaths。生成夹具在自己的正常 Git 提交前准备正式协议、writer 与安排；移除 writer BOM 差异。生产缺材料错误在预留前返回明确拒绝，不再让 start 控制一直 pending。
+- 真实交付夹具使用已发布 `development/2`，按实际可选报告采集可信 final；真实 Git 产物、原 Run/候选/来源、精确 merged PR、唯一 TaskDelivery 和后继 ready 未启动断言保留。审计使用 `development-audited/2` 的一次代码审计与必要修复，产品 API/UI 完整保留实施结果来源、修复数量/明细、遗留项和审计前后 Git 提交。未知数量不补零、不自行生成 pass。正式产品结果与原 Runner 公开观察逐项对照，材料按 worktree 引用和原固定 Git 字节核验。真实测试 PR [686](https://github.com/erranliu/SteerlineTest/pull/686)、[688](https://github.com/erranliu/SteerlineTest/pull/688) 在失败清理中关闭，[687](https://github.com/erranliu/SteerlineTest/pull/687)、[689](https://github.com/erranliu/SteerlineTest/pull/689) 成功合并交付；均为专属测试资源。
+- 维护复验发现第二项目未完成初始维护即被采为隔离基线，且逐文件 Git 读取会占用共享 fixture 锁。改用 `cat-file --batch` 保留原 Git 字节，添加 UTF-8/CRLF、二进制、空文件、工作区被改及缺提交回归；先经另一项目自己的 `maintenance_check` 建立完整基线，再保留原 commit/generation IDs 隔离比较。中间只等待基线的失败也保留；最终原浏览器断言、reset、停止与结算通过。原 2d91e9eb 的失败包停止成功但生成结算未核实，仍保留原证据，不改为通过。
+- 公开 result-file 专项原先依赖协议夹具识别业务提示词而超时；改用该夹具既有 held Turn 内容模式，专门验证原始二进制结果、独立进度、停止后封存与迟到写入不刷新。三个公开 Runner 契约专项全部通过：`diagnostics/20261028T172030158Z-public-runner-held-turn/summary.json`；它们使用同源协议夹具，不作真实 Agent 权限证明。审计页面 17 项单测、TypeScript 检查及各正式浏览器场景的 Web 构建通过。
+
+最终固定回归为 L1 `test-results/L1/20261028T181315851Z-boundaries-final/summary.json`、L2 `test-results/L2/20261028T181327062Z-boundaries-final/summary.json`，均通过且零跳过；受影响 L3 `testing.runtime-progress` 为 `test-results/L3/20261028T172518742Z-final-required/summary.json`，通过、零跳过、完整清理（源码 f4b05bc2，后续只调整维护夹具初始化、配置解码的 test driver 接口与测试边界）。本节不把上述登记测试的通过扩大为全部 CPC 逐文件原生阅读资格；真实读取行为与远端三轮链仍按各自验收范围取证。独立审核及远端保护接入仍待对应验收。
+
+### 实际正文差异与字节数
 
 真实交付在源码 `d87769c3dacddbeee5e442b8c949f903a7a11bb5` 上遇到模型输入等待：模型把调用方原快照摘要与运行时进度文件原始字节摘要比较，因不符而停止。原报告 `test-results/L4/20261028T155629518Z-live-v2-evidence/summary.json` 保留失败及完整清理，[原生记录](../records/d87769c3dacddbeee5e442b8c949f903a7a11bb5.json)未改写为通过。未向旧 Run 补充解释或手填进度。
 
@@ -17,9 +68,9 @@
 
 其余短模板与完整规则未改。完整规则本次 SHA256 为 `587708f00a71eb6a992072c5b12c5aa7f92ed327e2c614e11e33fa4e2e604542`；字节差异证据为 `diagnostics/inputs-20261028T1402Z/snapshot-identity-rule-change.json`。更新正文样本与规则摘要只触发显式审阅，不代表独立批准；本轮仍需独立审核，不合并或修改远端保护。
 
-## 2026-10-28 最新 main rebase 与完整 L2/L3 复验
+## 2026-10-28 main rebase 与完整 L2/L3 复验（前轮）
 
-本次按用户要求 rebase 到 `origin/main` 的 `82161c42e925d81f705c4e0496b47e293897db5b`，随后重跑目录内全部 L2/L3，发现失败后直接修复。下方“前次文档驱动实施记录”中的旧基线、局部验证与失败状态保留历史，以本节为最新结果。
+本次按用户要求 rebase 到 `origin/main` 的 `82161c42e925d81f705c4e0496b47e293897db5b`，随后重跑目录内全部 L2/L3，发现失败后直接修复。下方“前次文档驱动实施记录”中的旧基线、局部验证与失败状态保留历史，以本节为该轮结果。
 
 rebase 冲突保留 main 的 Plan 历史，并把 PR399 的新增执行约束迁入唯一完整规则文件：允许规范必需的环境/输入/输出参数，但不得缩小测试选择；只报告当前步骤事实，不因索要未来 PR URL 阻断报告。`internal/prompts/materials/testing.md` 的 LF UTF-8 字节从 2720 增至 2963（+243），9 个短模板未变；同步规则摘要与既有快照测试，不恢复已移除的内联长指令。
 
