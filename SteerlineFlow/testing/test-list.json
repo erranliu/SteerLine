@@ -132,7 +132,7 @@
       "level": "L4",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=smoke -env=live -scenario=smoke.local-codex",
-      "check": "运行真实 Runner/Codex 实现、报告和发布，核对三个 final、真实产物及精确 merged PR、唯一交付和未启动后继，清理完整。",
+      "check": "运行真实 Runner/Codex 实现、报告和发布，核对 development/2 实施/发布的可信 final（可选报告按实际执行核对）、真实产物及精确 merged PR、唯一交付和未启动后继，清理完整。",
       "note": "L4 真实交付专项，单独精确选择；固定 Runner、本机 Codex 登录及 SteerlineTest GitHub 写权限，消耗模型并创建/合并本次专属 PR；资源清理须验证。"
     },
     {

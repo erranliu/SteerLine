@@ -176,6 +176,7 @@ func LiveDelivery(s *Scenario, chain string) {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &selection))
 	proof := &testfeedback.LiveDeliveryProof{RunnerVersion: selection.Runner.Version, RunnerSHA256: selection.Runner.SHA256, RunID: c.RunID, CandidateID: c.ID, FinalSources: sources(s, p, c.ID, c.RunID), ArtifactCommit: pr.HeadRevision, Artifact: artifact, PRURL: facts.URL, Repository: facts.Repository, Base: facts.BaseBranch, Head: facts.HeadBranch, HeadSHA: facts.HeadRevision, Merged: facts.Merged, DeliveryCount: len(done.Runner.Graph.Deliveries)}
+	proof.WorkflowID, proof.WorkflowVersion = c.Projection.Workflow.ID, c.Projection.Workflow.Version
 	if s.ID == "workflow.local-codex-audited" {
 		proof.Audited = &testfeedback.AuditedWorkflowProof{ExecutionModel: s.Run.ExecutionModel, AuditModel: s.Run.AuditModel, Stages: p.AuditObservations}
 	}
