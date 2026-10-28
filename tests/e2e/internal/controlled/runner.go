@@ -24,6 +24,7 @@ import (
 type RunnerFixture struct {
 	WaitEvents []runnercontract.Event                 `json:"wait_events,omitempty"`
 	Progress   map[string]runnercontract.ProgressFile `json:"progress"`
+	Results    map[string]runnercontract.ResultFile   `json:"results"`
 	Providers  map[string]string                      `json:"providers"`
 	Runs       map[string]runnercontract.Run          `json:"runs"`
 	Requests   map[string]runnercontract.Command      `json:"requests"`
@@ -64,6 +65,7 @@ func RunnerCLI(args []string) (bool, error) {
 			data["version"] = "caller-fixture-v1"
 			data["resource_version"] = 1
 			advertiseRepository(data)
+			advertiseResult(data)
 			data["resource_digest"] = strings.Repeat("a", 64)
 			return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": "steerrunner-cli/v1", "ok": true, "request_id": nil, "data": data, "error": nil})
 		}
@@ -76,7 +78,7 @@ func RunnerCLI(args []string) (bool, error) {
 	case "version", "capabilities", "service":
 		os.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "caller-fixture-v1")
 		return protocol.RunRunnerServiceFixture(), nil
-	case "progress-file", "submit", "inspect", "open-native-session", "events", "observe", "reply", "resume", "stop":
+	case "progress-file", "result-file", "submit", "inspect", "open-native-session", "events", "observe", "reply", "resume", "stop":
 	default:
 		return false, nil
 	}
@@ -113,7 +115,7 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	var request runnercontract.Request
 	var id any
-	if args[0] != "progress-file" && args[0] != "inspect" && args[0] != "events" && args[0] != "observe" && args[0] != "open-native-session" {
+	if args[0] != "progress-file" && args[0] != "result-file" && args[0] != "inspect" && args[0] != "events" && args[0] != "observe" && args[0] != "open-native-session" {
 		if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
 			return true, err
 		}
@@ -156,6 +158,13 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	s.Calls = append(s.Calls, strings.Join(args[:1], " "))
 	runID := argument(args, "--run-id")
+	if args[0] == "result-file" {
+		result, ok := s.Results[runID]
+		if !ok {
+			return respond(nil, "run_not_found")
+		}
+		return respond(result, "")
+	}
 	if args[0] == "progress-file" {
 		p, ok := s.Progress[runID]
 		if !ok {
@@ -259,6 +268,16 @@ func RunnerCLI(args []string) (bool, error) {
 			}
 			encoded := input.ProgressFile.InitialContentBase64
 			s.Progress[runID] = runnercontract.ProgressFile{Contract: runnercontract.ProgressContract, RunID: runID, Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(body), SHA256: hex.EncodeToString(hash[:]), CollectionStatus: "observing"}
+		}
+		if input.Correlation["environment_activity"] != "" && input.ResultFile != nil {
+			result, err := scriptedEnvironment(input, &run)
+			if err != nil {
+				return true, err
+			}
+			if s.Results == nil {
+				s.Results = map[string]runnercontract.ResultFile{}
+			}
+			s.Results[runID] = result
 		}
 		s.Runs[runID] = run
 		s.Providers[runID] = providerPath
@@ -450,9 +469,16 @@ func controlledCapabilities() map[string]any {
 	caps["run_observation"] = map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100}
 	caps["configuration_schemas"].(map[string]any)["adapters"].(map[string]any)["orca-terminal"] = map[string]string{"type": "object"}
 	caps["workflows"].([]any)[0].(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}
+	development := map[string]any{}
+	for key, value := range caps["workflows"].([]any)[0].(map[string]any) {
+		development[key] = value
+	}
+	development["version"] = 2
+	caps["workflows"] = append(caps["workflows"].([]any), development)
 	caps["workflows"] = append(caps["workflows"].([]any), map[string]any{"id": "generate", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{}})
 	caps["configuration_schemas"].(map[string]any)["generate_input"] = map[string]any{"type": "object", "required": []string{"workflow", "execution", "generate"}}
 	advertiseRepository(caps)
+	advertiseResult(caps)
 	return caps
 }
 

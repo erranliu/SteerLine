@@ -7,7 +7,7 @@
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.runner-wait-retry",
       "check": "真实 SteerLine/Git/SQLite/HTTP 与公开 Runner fixture：queue/calling/backoff/耗尽/清除、宿主重启原 Run/Attempt/期限不变、活动留存，零额外提交/答案/resume，原恢复/取消资格、唯一交付、终态停止和清理完整。",
-      "note": "独立 home/repo/DB/provider/端口/证据；无真实 Orca 或模型，不证明 Runner 的原生重试资格。"
+      "note": "独立 home/repo/DB/provider/端口/证据；无真实 Orca 或模型，不证明 Runner 的原生重试资格。；远端等待夹具先经公开 environment_start 和已停止 Run 的 closed 结果取得 ready，不跳过环境准入，不证明真实环境或 PR"
     },
     {
       "id": "l1.minimum",

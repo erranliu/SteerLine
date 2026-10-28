@@ -1,0 +1,53 @@
+{
+  "runs": [
+    {
+      "at": "2026-10-28T13:00:54.9939189Z",
+      "results": [
+        {
+          "test_id": "configuration.execution-profiles",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "passed"
+        },
+        {
+          "test_id": "recovery.runner-wait-retry",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "failed",
+          "note": "场景断言失败"
+        },
+        {
+          "test_id": "recovery.waiting-merge-restart",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "incomplete",
+          "note": "场景证据、执行集合或清理核验不完整"
+        },
+        {
+          "test_id": "runtime.dual-home-operation",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "passed"
+        },
+        {
+          "test_id": "runtime.service-lifecycle",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "passed"
+        },
+        {
+          "test_id": "runtime.shared-runner-projects",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "passed"
+        },
+        {
+          "test_id": "testing.runtime-progress",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}
