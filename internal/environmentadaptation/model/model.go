@@ -1,5 +1,5 @@
-// Package environmentadaptation owns project environment policy, never native execution.
-package environmentadaptation
+// Package model defines environment records and their value validation without service dependencies.
+package model
 
 import (
 	"bytes"
@@ -269,3 +269,5 @@ func (p Report) Passed(base, head string) bool {
 	u, e := url.ParseRequestURI(p.PR.URL)
 	return e == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http") && !p.PR.OutcomeUnknown && p.PR.Base == base && head != "" && p.PR.Head == head && p.PR.ChecksPassed && p.PR.ReviewsPassed && p.PR.Merged && regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(p.PR.MergeCommit) && p.PR.CleanupCompleted
 }
+
+func DigestJSON(v any) string { b, _ := json.Marshal(v); return Digest(b) }

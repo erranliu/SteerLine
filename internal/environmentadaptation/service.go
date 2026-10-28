@@ -6,19 +6,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"strings"
 	"sync"
 	"time"
 
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 type Store interface {
-	Environments(context.Context, string) ([]Record, error)
-	Environment(context.Context, string, string) (Record, error)
-	SaveEnvironment(context.Context, Record, uint64) error
+	Environments(context.Context, string) ([]envmodel.Record, error)
+	Environment(context.Context, string, string) (envmodel.Record, error)
+	SaveEnvironment(context.Context, envmodel.Record, uint64) error
 }
 type Runner interface {
 	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
@@ -31,12 +32,12 @@ type Service struct {
 	Store             Store
 	Runner            Runner
 	Build             runnercontract.BuildPin
-	Prepare           func(context.Context, string) (Prepared, error)
+	Prepare           func(context.Context, string) (envmodel.Prepared, error)
 	PrepareGeneration func(context.Context, string) (runnercontract.GenerateRunInput, error)
 	Admit             func(context.Context) error
 	WithTarget        func(context.Context, string, string, func() error) error
-	AcquireGeneration func(Record) bool
-	ReleaseGeneration func(Record)
+	AcquireGeneration func(envmodel.Record) bool
+	ReleaseGeneration func(envmodel.Record)
 	Now               func() time.Time
 	mu                sync.Mutex
 }
@@ -47,7 +48,7 @@ func (s *Service) now() time.Time {
 	}
 	return time.Now().UTC()
 }
-func (s *Service) save(ctx context.Context, r *Record) error {
+func (s *Service) save(ctx context.Context, r *envmodel.Record) error {
 	old := r.Revision
 	r.Revision++
 	if e := s.Store.SaveEnvironment(ctx, *r, old); e != nil {
@@ -56,14 +57,14 @@ func (s *Service) save(ctx context.Context, r *Record) error {
 	}
 	return nil
 }
-func (s *Service) original(ctx context.Context, id string, raw json.RawMessage) (Record, error) {
+func (s *Service) original(ctx context.Context, id string, raw json.RawMessage) (envmodel.Record, error) {
 	a, e := runnercontract.CanonicalJSON(raw)
 	if e != nil {
-		return Record{}, e
+		return envmodel.Record{}, e
 	}
 	rows, e := s.Store.Environments(ctx, s.Project)
 	if e != nil {
-		return Record{}, e
+		return envmodel.Record{}, e
 	}
 	for _, r := range rows {
 		for _, q := range r.Requests {
@@ -79,23 +80,23 @@ func (s *Service) original(ctx context.Context, id string, raw json.RawMessage) 
 			}
 		}
 	}
-	return Record{}, ErrNotFound
+	return envmodel.Record{}, envmodel.ErrNotFound
 }
-func (s *Service) Start(ctx context.Context, id string, original json.RawMessage, in Start, generation bool) (Record, error) {
+func (s *Service) Start(ctx context.Context, id string, original json.RawMessage, in envmodel.Start, generation bool) (envmodel.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !IDPattern.MatchString(id) || !json.Valid(original) || in.Profile == "" {
-		return Record{}, errors.New("invalid environment request/profile")
+	if !envmodel.IDPattern.MatchString(id) || !json.Valid(original) || in.Profile == "" {
+		return envmodel.Record{}, errors.New("invalid environment request/profile")
 	}
-	if old, e := s.original(ctx, id, original); !errors.Is(e, ErrNotFound) {
+	if old, e := s.original(ctx, id, original); !errors.Is(e, envmodel.ErrNotFound) {
 		return old, e
 	}
 	if s.Admit != nil {
 		if e := s.Admit(ctx); e != nil {
-			return Record{}, e
+			return envmodel.Record{}, e
 		}
 	}
-	r := Record{ID: id, Project: s.Project, Profile: in.Profile, Build: s.Build, CreatedAt: s.now(), State: "queued", Requests: []Request{{ID: id, Original: original, Action: "start"}}, Rounds: []Round{}}
+	r := envmodel.Record{ID: id, Project: s.Project, Profile: in.Profile, Build: s.Build, CreatedAt: s.now(), State: "queued", Requests: []envmodel.Request{{ID: id, Original: original, Action: "start"}}, Rounds: []envmodel.Round{}}
 	if generation {
 		if s.PrepareGeneration == nil {
 			return r, errors.New("environment generation unavailable")
@@ -111,7 +112,7 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 		r.Kind = "generation"
 		r.Execution = input.Execution
 		raw, _ := json.Marshal(input)
-		r.Rounds = []Round{{Number: 1, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: ID(), Input: raw}, Submission: "pending", Deadline: s.now().Add(time.Hour)}}
+		r.Rounds = []envmodel.Round{{Number: 1, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: raw}, Submission: "pending", Deadline: s.now().Add(time.Hour)}}
 		if e := s.save(ctx, &r); e != nil {
 			return r, e
 		}
@@ -128,7 +129,7 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 	r.Prepared = prepared
 	r.Execution = prepared.Input.Execution
 	r.TimeoutSeconds = in.TimeoutSeconds
-	if Target(r.Execution) == "" || r.Execution.Adapter != "orca-terminal" {
+	if envmodel.Target(r.Execution) == "" || r.Execution.Adapter != "orca-terminal" {
 		return r, errors.New("environment adaptation requires a remote Orca profile")
 	}
 	create := func() error {
@@ -137,7 +138,7 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 			return e
 		}
 		for _, old := range rows {
-			if old.Kind == "adaptation" && Target(old.Execution) == Target(r.Execution) && !old.Settled() {
+			if old.Kind == "adaptation" && envmodel.Target(old.Execution) == envmodel.Target(r.Execution) && !old.Settled() {
 				return errors.New("original environment activity remains unsettled")
 			}
 		}
@@ -147,13 +148,13 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 		return s.save(ctx, &r)
 	}
 	if s.WithTarget != nil {
-		e = s.WithTarget(ctx, Target(r.Execution), r.Project+"\n"+r.ID, create)
+		e = s.WithTarget(ctx, envmodel.Target(r.Execution), r.Project+"\n"+r.ID, create)
 	} else {
 		e = create()
 	}
 	return r, e
 }
-func (s *Service) appendRound(r *Record) error {
+func (s *Service) appendRound(r *envmodel.Record) error {
 	if len(r.Rounds) > 0 {
 		r.State = "failed"
 		return errors.New("材料准备不足：前轮完整报告没有正式渠道供新轮次工作区读取；未创建下一 Run")
@@ -163,7 +164,7 @@ func (s *Service) appendRound(r *Record) error {
 	input.NamePrefix = "sl-env"
 	input.Title = "环境适配: " + r.Profile
 	input.Correlation = map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": fmt.Sprint(n)}
-	initial, _ := json.Marshal(Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []Check{}, L2: []Item{}})
+	initial, _ := json.Marshal(envmodel.Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []envmodel.Check{}, L2: []envmodel.Item{}})
 	input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}
 	progress := map[string]bool{"pr": false}
 	for _, id := range r.Prepared.L2 {
@@ -181,17 +182,17 @@ func (s *Service) appendRound(r *Record) error {
 	}
 	input.Workflow.PromptOverrides = map[string]string{"implement.execute": prepare, "publish": publish}
 	body, _ := json.Marshal(input)
-	r.Rounds = append(r.Rounds, Round{Number: n, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: ID(), Input: body}, Submission: "pending", Deadline: s.now().Add(time.Duration(r.TimeoutSeconds) * time.Second)})
+	r.Rounds = append(r.Rounds, envmodel.Round{Number: n, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}, Submission: "pending", Deadline: s.now().Add(time.Duration(r.TimeoutSeconds) * time.Second)})
 	r.State = "running"
 	return nil
 }
-func (s *Service) Stop(ctx context.Context, id, request string, revision uint64, original json.RawMessage) (Record, error) {
+func (s *Service) Stop(ctx context.Context, id, request string, revision uint64, original json.RawMessage) (envmodel.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !IDPattern.MatchString(request) || !json.Valid(original) {
-		return Record{}, errors.New("invalid stop request")
+	if !envmodel.IDPattern.MatchString(request) || !json.Valid(original) {
+		return envmodel.Record{}, errors.New("invalid stop request")
 	}
-	if old, e := s.original(ctx, request, original); !errors.Is(e, ErrNotFound) {
+	if old, e := s.original(ctx, request, original); !errors.Is(e, envmodel.ErrNotFound) {
 		return old, e
 	}
 	r, e := s.Store.Environment(ctx, s.Project, id)
@@ -204,7 +205,7 @@ func (s *Service) Stop(ctx context.Context, id, request string, revision uint64,
 	if r.Settled() {
 		return r, errors.New("environment activity already settled")
 	}
-	r.Requests = append(r.Requests, Request{ID: request, Original: original, Action: "stop"})
+	r.Requests = append(r.Requests, envmodel.Request{ID: request, Original: original, Action: "stop"})
 	r.Cancelled = true
 	r.State = "stopping"
 	e = s.save(ctx, &r)
@@ -235,7 +236,7 @@ func (s *Service) Observe(ctx context.Context) error {
 	}
 	return errors.Join(all...)
 }
-func (s *Service) observe(ctx context.Context, r *Record) error {
+func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 	if len(r.Rounds) == 0 {
 		return errors.New("environment activity has no original operation")
 	}
@@ -325,10 +326,10 @@ func (s *Service) observe(ctx context.Context, r *Record) error {
 			a.Diagnostic = "材料生成或原生结果来源未核实：" + result.Diagnostic
 		}
 		if result := run.ContentResult; result != nil && result.Status == "succeeded" && result.Source.Verified && result.Source.NativeOutcome == "succeeded" && result.Source.CommandID != "" && result.Source.TurnID != "" {
-			var g Generated
-			if e := Decode(run.ContentResult.JSON, &g); e != nil {
+			var g envmodel.Generated
+			if e := envmodel.Decode(run.ContentResult.JSON, &g); e != nil {
 				a.Diagnostic = e.Error()
-			} else if _, e := ParseManifest([]byte(g.Document)); e != nil {
+			} else if _, e := envmodel.ParseManifest([]byte(g.Document)); e != nil {
 				a.Diagnostic = e.Error()
 			} else if strings.TrimSpace(g.Script) == "" || g.Gaps == nil {
 				a.Diagnostic = "生成脚本为空"
@@ -375,13 +376,13 @@ func (s *Service) observe(ctx context.Context, r *Record) error {
 		}
 		if a.Stop == nil {
 			body, _ := json.Marshal(map[string]uint64{"expected_revision": run.Revision})
-			a.Stop = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: ID(), Input: body}
+			a.Stop = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}
 			a.StopState = "pending"
 		}
 		if a.StopState == "rejected" {
 			a.RejectedStops = append(a.RejectedStops, *a.Stop)
 			body, _ := json.Marshal(map[string]uint64{"expected_revision": run.Revision})
-			a.Stop = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: ID(), Input: body}
+			a.Stop = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}
 			a.StopState = "pending"
 		}
 		if a.StopState == "pending" {
@@ -437,7 +438,7 @@ func (s *Service) observe(ctx context.Context, r *Record) error {
 			if a.Result.Version == 0 {
 				a.Diagnostic = "最终结果采集失败（同一Run不再采集）：" + a.Result.Diagnostic
 			} else {
-				a.Report, e = ParseReport(raw, *r, *a)
+				a.Report, e = envmodel.ParseReport(raw, *r, *a)
 				if e != nil {
 					a.Diagnostic = e.Error()
 				} else if !a.Report.Completed {
@@ -455,8 +456,8 @@ func (s *Service) observe(ctx context.Context, r *Record) error {
 	}
 	return s.save(ctx, r)
 }
-func DigestJSON(v any) string { b, _ := json.Marshal(v); return Digest(b) }
-func (s *Service) next(ctx context.Context, r *Record) error {
+
+func (s *Service) next(ctx context.Context, r *envmodel.Record) error {
 	a := r.Rounds[len(r.Rounds)-1]
 	r.Diagnostic = a.Diagnostic
 	// Before publish, the existing development workflow proves no PR stage
@@ -487,7 +488,7 @@ func (s *Service) next(ctx context.Context, r *Record) error {
 		r.Diagnostic = ""
 	} else if a.Submission == "rejected" {
 		r.State = "failed"
-	} else if len(r.Rounds) < MaxRounds {
+	} else if len(r.Rounds) < envmodel.MaxRounds {
 		if err := s.appendRound(r); err != nil {
 			r.Diagnostic = err.Error()
 		}
@@ -496,7 +497,7 @@ func (s *Service) next(ctx context.Context, r *Record) error {
 	}
 	return s.finish(ctx, r)
 }
-func (s *Service) finish(ctx context.Context, r *Record) error {
+func (s *Service) finish(ctx context.Context, r *envmodel.Record) error {
 	e := s.save(ctx, r)
 	if e == nil && r.Kind == "generation" && r.Settled() && s.ReleaseGeneration != nil {
 		s.ReleaseGeneration(*r)

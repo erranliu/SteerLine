@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/environmentcheck"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"

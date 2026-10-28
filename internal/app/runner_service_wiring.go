@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"

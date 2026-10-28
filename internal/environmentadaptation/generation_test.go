@@ -8,22 +8,23 @@ import (
 	"testing"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 func TestCallerPromptConvergencePreviousFacts(t *testing.T) {
-	p := &env.Report{ActivityID: "original", Round: 2, Commit: "fixed", ScriptDigest: "script", Message: "original diagnosis",
-		Checks: []env.Check{{ID: "ok", Status: "passed", Message: strings.Repeat("successful detail", 500)}, {ID: "bad", Status: "failed", Message: "完整失败原因\n不可截断"}, {ID: "pending", Status: "incomplete", Message: "缺依赖未执行"}},
-		L2:     []env.Item{{ID: "passed", Status: "passed", Message: strings.Repeat("passed detail", 500)}, {ID: "failed", Status: "failed", Message: "独立断言失败"}},
-		PR:     env.PR{URL: "https://host/pull/1", Base: "validation", Head: "original", OutcomeUnknown: true, CleanupCompleted: false}}
-	r := env.Record{ID: "original", Profile: "remote", Diagnostic: p.Message}
-	a := env.Round{Number: 2, Report: p}
+	p := &envmodel.Report{ActivityID: "original", Round: 2, Commit: "fixed", ScriptDigest: "script", Message: "original diagnosis",
+		Checks: []envmodel.Check{{ID: "ok", Status: "passed", Message: strings.Repeat("successful detail", 500)}, {ID: "bad", Status: "failed", Message: "完整失败原因\n不可截断"}, {ID: "pending", Status: "incomplete", Message: "缺依赖未执行"}},
+		L2:     []envmodel.Item{{ID: "passed", Status: "passed", Message: strings.Repeat("passed detail", 500)}, {ID: "failed", Status: "failed", Message: "独立断言失败"}},
+		PR:     envmodel.PR{URL: "https://host/pull/1", Base: "validation", Head: "original", OutcomeUnknown: true, CleanupCompleted: false}}
+	r := envmodel.Record{ID: "original", Profile: "remote", Diagnostic: p.Message}
+	a := envmodel.Round{Number: 2, Report: p}
 	original, _ := json.Marshal(p)
 	got := env.PreviousFacts(r, a)
 	var view struct {
-		Activity string      `json:"activity_id"`
-		Round    int         `json:"round"`
-		Report   *env.Report `json:"report"`
+		Activity string           `json:"activity_id"`
+		Round    int              `json:"round"`
+		Report   *envmodel.Report `json:"report"`
 	}
 	if err := json.Unmarshal(got, &view); err != nil {
 		t.Fatal(err)
@@ -38,7 +39,7 @@ func TestCallerPromptConvergencePreviousFacts(t *testing.T) {
 	if string(got) != string(env.PreviousFacts(r, a)) {
 		t.Fatal("nondeterministic projection")
 	}
-	nilReport := env.PreviousFacts(env.Record{ID: "no-report", Diagnostic: "failed before report"}, env.Round{Number: 3})
+	nilReport := env.PreviousFacts(envmodel.Record{ID: "no-report", Diagnostic: "failed before report"}, envmodel.Round{Number: 3})
 	if !strings.Contains(string(nilReport), "failed before report") || !strings.Contains(string(nilReport), `"report":null`) {
 		t.Fatal("missing report hidden")
 	}
@@ -57,16 +58,16 @@ func TestCallerPromptConvergenceStageContextAndFrozenRecovery(t *testing.T) {
 		t.Fatal("phase identity lost")
 	}
 	for _, step := range []string{"implement.execute", "publish"} {
-		if !strings.Contains(input.Workflow.PromptOverrides[step], env.ExecutionRulesPath) || strings.Contains(input.Workflow.PromptOverrides[step], r.Prepared.ScriptDigest) {
+		if !strings.Contains(input.Workflow.PromptOverrides[step], envmodel.ExecutionRulesPath) || strings.Contains(input.Workflow.PromptOverrides[step], r.Prepared.ScriptDigest) {
 			t.Fatal("duplicated identity or missing read instruction")
 		}
 	}
 	original := string(r.Rounds[0].Request.Input)
 	// Recreate the service with a different preparation function. Observing an
 	// already frozen operation must never render a new request or submit again.
-	s.Prepare = func(_ context.Context, _ string) (env.Prepared, error) {
+	s.Prepare = func(_ context.Context, _ string) (envmodel.Prepared, error) {
 		t.Fatal("reprepared frozen request")
-		return env.Prepared{}, nil
+		return envmodel.Prepared{}, nil
 	}
 	if err := s.Observe(ctx); err != nil {
 		t.Fatal(err)
@@ -86,7 +87,7 @@ func TestCallerPromptConvergenceStageContextAndFrozenRecovery(t *testing.T) {
 		t.Fatal("missing previous-report channel did not block a new Run", next)
 	}
 }
-func mustReportJSON(t *testing.T, r *env.Report) []byte {
+func mustReportJSON(t *testing.T, r *envmodel.Report) []byte {
 	t.Helper()
 	b, e := json.Marshal(r)
 	if e != nil {

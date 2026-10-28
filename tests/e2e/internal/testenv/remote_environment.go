@@ -13,7 +13,7 @@ import (
 	"time"
 
 	app "github.com/erranliu/SteerLine/internal/app"
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"

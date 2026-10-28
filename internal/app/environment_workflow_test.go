@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"

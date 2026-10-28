@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,8 @@ import (
 	"time"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -30,19 +31,19 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	t.Setenv("GIT_CONFIG_COUNT", "1")
 	t.Setenv("GIT_CONFIG_KEY_0", "url."+filepath.ToSlash(origin)+".insteadOf")
 	t.Setenv("GIT_CONFIG_VALUE_0", "https://github.com/owner/repo.git")
-	files := map[string]string{env.DocumentPath: "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"environment-validation\",\"dependencies\":[\"go.mod\"]}\n```\n", "scripts/verify-environment.ps1": "param($Phase)\n# fixture only\n", "go.mod": "module example.invalid/fixture\n", "SteerlineFlow/testing.md": "# Rules\nL2 + PR\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L2","environment":"controlled","command":"go test ./...","check":"passes"}]}`}
+	files := map[string]string{envmodel.DocumentPath: "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"environment-validation\",\"dependencies\":[\"go.mod\"]}\n```\n", "scripts/verify-environment.ps1": "param($Phase)\n# fixture only\n", "go.mod": "module example.invalid/fixture\n", "SteerlineFlow/testing.md": "# Rules\nL2 + PR\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L2","environment":"controlled","command":"go test ./...","check":"passes"}]}`}
 	executionRules, e := prompts.EnvironmentExecutionRules()
 	require(t, e)
 	generationRules, e := prompts.EnvironmentGenerationRules()
 	require(t, e)
-	files[env.ExecutionRulesPath] = string(executionRules)
-	files[env.GenerationRulesPath] = string(generationRules)
+	files[envmodel.ExecutionRulesPath] = string(executionRules)
+	files[envmodel.GenerationRulesPath] = string(generationRules)
 	public, _ := json.Marshal(c.runnerPublication())
 	contextBody, _ := json.Marshal(struct {
 		Publication json.RawMessage `json:"publication"`
 		Previous    json.RawMessage `json:"previous"`
 	}{public, nil})
-	files[env.GenerationContextPath] = string(contextBody)
+	files[envmodel.GenerationContextPath] = string(contextBody)
 	for name, body := range files {
 		path := filepath.Join(c.Repository, name)
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))
@@ -75,7 +76,7 @@ func TestProjectEnvironmentGenerationPinnedMaterialsAndSeparateUseCase(t *testin
 	p, _, _ := environmentFixture(t)
 	input, e := p.prepareGeneration(context.Background(), "fixture")
 	require(t, e)
-	if input.Workflow.ID != "generate" || len(input.Generate.Materials) != 0 || input.Generate.Repository == nil || !strings.Contains(input.Generate.Instruction, env.GenerationRulesPath) || !strings.Contains(input.Generate.Instruction, env.GenerationContextPath) {
+	if input.Workflow.ID != "generate" || len(input.Generate.Materials) != 0 || input.Generate.Repository == nil || !strings.Contains(input.Generate.Instruction, envmodel.GenerationRulesPath) || !strings.Contains(input.Generate.Instruction, envmodel.GenerationContextPath) {
 		t.Fatal("generation did not reference pinned actual files")
 	}
 	source := appRepositoryManifest(t, *input.Generate.Repository)
@@ -88,8 +89,8 @@ func TestProjectEnvironmentGenerationPinnedMaterialsAndSeparateUseCase(t *testin
 func TestCallerPromptConvergenceEnvironmentMaterialPreparation(t *testing.T) {
 	p, c, store := environmentFixture(t)
 	ctx := context.Background()
-	report := &env.Report{Message: "original diagnosis", Checks: []env.Check{{ID: "passed", Status: "passed", Message: strings.Repeat("complete successful detail;", 300)}, {ID: "failed", Status: "failed", Message: "完整失败原因"}}, L2: []env.Item{{ID: "one", Status: "incomplete", Message: "not executed"}}, PR: env.PR{OutcomeUnknown: true}}
-	r := env.Record{ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", State: "failed", Diagnostic: "original failure", Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Report: report, Settled: true}}}
+	report := &envmodel.Report{Message: "original diagnosis", Checks: []envmodel.Check{{ID: "passed", Status: "passed", Message: strings.Repeat("complete successful detail;", 300)}, {ID: "failed", Status: "failed", Message: "完整失败原因"}}, L2: []envmodel.Item{{ID: "one", Status: "incomplete", Message: "not executed"}}, PR: envmodel.PR{OutcomeUnknown: true}}
+	r := envmodel.Record{ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", State: "failed", Diagnostic: "original failure", Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Report: report, Settled: true}}}
 	require(t, store.SaveEnvironment(ctx, r, 0))
 	if _, err := p.prepareGeneration(ctx, "fixture"); err == nil || !strings.Contains(err.Error(), "完整前轮事实") {
 		t.Fatal("stale prepared context accepted", err)
@@ -105,19 +106,19 @@ func TestCallerPromptConvergenceEnvironmentMaterialPreparation(t *testing.T) {
 		fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "prepare fixed material")
 		fixtureGit(t, c.Repository, "push", "origin", "main")
 	}
-	require(t, os.WriteFile(filepath.Join(c.Repository, env.GenerationContextPath), body, 0600))
+	require(t, os.WriteFile(filepath.Join(c.Repository, envmodel.GenerationContextPath), body, 0600))
 	commit()
 	in, err := p.prepareGeneration(ctx, "fixture")
 	require(t, err)
 	if in.Generate.Repository == nil || len(in.Generate.Materials) != 0 {
 		t.Fatal("prepared report expanded into prompt")
 	}
-	actual, err := p.read(ctx, in.Generate.Repository.Commit, env.GenerationContextPath)
+	actual, err := p.read(ctx, in.Generate.Repository.Commit, envmodel.GenerationContextPath)
 	require(t, err)
 	if string(actual) != string(body) || !strings.Contains(string(actual), report.Checks[0].Message) {
 		t.Fatal("complete previous report not available in pinned file")
 	}
-	require(t, os.WriteFile(filepath.Join(c.Repository, env.ExecutionRulesPath), []byte("changed report contract"), 0600))
+	require(t, os.WriteFile(filepath.Join(c.Repository, envmodel.ExecutionRulesPath), []byte("changed report contract"), 0600))
 	commit()
 	if _, err = p.prepareGeneration(ctx, "fixture"); err == nil || !strings.Contains(err.Error(), "不同源") {
 		t.Fatal("changed fixed rules accepted", err)
@@ -132,7 +133,7 @@ func TestProjectEnvironmentAdmissionFixedBaseAndFiniteFreshness(t *testing.T) {
 	fixtureGit(t, c.Repository, "push", "origin", "HEAD:refs/heads/environment-validation")
 	prepared, e := p.prepare(ctx, "remote")
 	require(t, e)
-	r := env.Record{ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Settled: true}}}
+	r := envmodel.Record{ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Settled: true}}}
 	require(t, store.SaveEnvironment(ctx, r, 0))
 	if _, e = p.ready(ctx, "remote"); e != nil {
 		t.Fatal(e)
@@ -192,9 +193,9 @@ func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			id := env.ID()
-			err := c.runtimeEnvironmentAdmission.adapt(ctx, env.Target(prepared.Input.Execution), id, func() error {
-				return store.SaveEnvironment(ctx, env.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, State: "running", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "pending"}}}, 0)
+			id := envmodel.ID()
+			err := c.runtimeEnvironmentAdmission.adapt(ctx, envmodel.Target(prepared.Input.Execution), id, func() error {
+				return store.SaveEnvironment(ctx, envmodel.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, State: "running", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Submission: "pending"}}}, 0)
 			})
 			if err == nil {
 				mu.Lock()
@@ -210,7 +211,7 @@ func TestProjectEnvironmentAdmissionReservationAndConcurrentStart(t *testing.T) 
 	rebuilt := &environmentAdmission{}
 	rebuilt.register(c)
 	rebuilt.mu.Lock()
-	e = rebuilt.check(ctx, env.Target(prepared.Input.Execution), "", false)
+	e = rebuilt.check(ctx, envmodel.Target(prepared.Input.Execution), "", false)
 	rebuilt.mu.Unlock()
 	if e == nil {
 		t.Fatal("restart lost durable occupancy")
@@ -232,15 +233,15 @@ func TestProjectEnvironmentAdmissionAcrossProjectsUsesPublicTarget(t *testing.T)
 	require(t, e)
 	require(t, reader.Close())
 	p.config.runtimeEnvironmentAdmission.register(other)
-	id := env.ID()
-	require(t, store.SaveEnvironment(ctx, env.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: profile.Execution, State: "running", Requests: []env.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "unknown"}}}, 0))
+	id := envmodel.ID()
+	require(t, store.SaveEnvironment(ctx, envmodel.Record{ID: id, Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: profile.Execution, State: "running", Requests: []envmodel.Request{{ID: id, Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Submission: "unknown"}}}, 0))
 	accepted := false
 	a := p.config.runtimeEnvironmentAdmission
-	if e = a.adapt(ctx, env.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }); e == nil || accepted {
+	if e = a.adapt(ctx, envmodel.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }); e == nil || accepted {
 		t.Fatal("other project's original unknown activity did not block shared target")
 	}
 	profile.Execution.Target.Environment = "different-public-target"
-	require(t, a.adapt(ctx, env.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }))
+	require(t, a.adapt(ctx, envmodel.Target(profile.Execution), other.Identity()+"\n"+id, func() error { accepted = true; return nil }))
 	if !accepted {
 		t.Fatal("unrelated public target was blocked")
 	}

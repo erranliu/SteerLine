@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"sort"
 	"strings"
 	"time"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -35,8 +36,8 @@ func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Cl
 		s.WithTarget = c.runtimeEnvironmentAdmission.adapt
 	}
 	if q := c.runtimeGenerations; q != nil {
-		s.AcquireGeneration = func(r env.Record) bool { return q.TryAcquire(r.Project, "environment:"+r.ID, r.CreatedAt) }
-		s.ReleaseGeneration = func(r env.Record) { q.Release(r.Project, "environment:"+r.ID) }
+		s.AcquireGeneration = func(r envmodel.Record) bool { return q.TryAcquire(r.Project, "environment:"+r.ID, r.CreatedAt) }
+		s.ReleaseGeneration = func(r envmodel.Record) { q.Release(r.Project, "environment:"+r.ID) }
 	}
 	return p
 }
@@ -56,20 +57,20 @@ func (p *environmentPort) read(ctx context.Context, commit, path string) ([]byte
 	reader := taskDocuments{repository: p.config.Repository, git: p.config.Git, timeout: positiveDuration(p.config.CommandTimeout, 30*time.Second), processHost: p.config.ProcessHost}
 	return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
 }
-func (p *environmentPort) prepare(ctx context.Context, id string) (env.Prepared, error) {
+func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prepared, error) {
 	return p.material(ctx, id, true)
 }
-func (p *environmentPort) material(ctx context.Context, id string, checkBase bool) (env.Prepared, error) {
+func (p *environmentPort) material(ctx context.Context, id string, checkBase bool) (envmodel.Prepared, error) {
 	return p.materialAt(ctx, id, "", checkBase)
 }
-func (p *environmentPort) materialAt(ctx context.Context, id, commit string, checkBase bool) (env.Prepared, error) {
-	var out env.Prepared
+func (p *environmentPort) materialAt(ctx context.Context, id, commit string, checkBase bool) (envmodel.Prepared, error) {
+	var out envmodel.Prepared
 	c := p.config
 	profile, e := c.RunnerExecution.Profile(id, "")
 	if e != nil {
 		return out, e
 	}
-	if env.Target(profile.Execution) == "" || profile.Execution.Adapter != "orca-terminal" {
+	if envmodel.Target(profile.Execution) == "" || profile.Execution.Adapter != "orca-terminal" {
 		return out, errors.New("请选择远端Orca执行配置")
 	}
 	if c.runtimeCatalog == nil {
@@ -87,11 +88,11 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 			return out, e
 		}
 	}
-	document, e := p.read(ctx, commit, env.DocumentPath)
+	document, e := p.read(ctx, commit, envmodel.DocumentPath)
 	if e != nil {
 		return out, fmt.Errorf("环境准备文档缺失：%w", e)
 	}
-	manifest, e := env.ParseManifest(document)
+	manifest, e := envmodel.ParseManifest(document)
 	if e != nil {
 		return out, e
 	}
@@ -134,7 +135,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 		return out, errors.New("项目未登记可执行L2，不能判定环境通过")
 	}
 	sort.Strings(ids)
-	executionRules, e := p.read(ctx, commit, env.ExecutionRulesPath)
+	executionRules, e := p.read(ctx, commit, envmodel.ExecutionRulesPath)
 	if e != nil {
 		return out, fmt.Errorf("材料准备不足：环境执行规则不可读：%w", e)
 	}
@@ -145,18 +146,18 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 	if !prompts.SameRules(executionRules, expectedRules) {
 		return out, errors.New("材料准备不足：环境执行规则不同源")
 	}
-	files := map[string]string{env.ExecutionRulesPath: env.Digest(executionRules), env.DocumentPath: env.Digest(document), manifest.Script: env.Digest(script)}
+	files := map[string]string{envmodel.ExecutionRulesPath: envmodel.Digest(executionRules), envmodel.DocumentPath: envmodel.Digest(document), manifest.Script: envmodel.Digest(script)}
 	deps := append([]string{"SteerlineFlow/testing.md"}, manifest.Dependencies...)
 	for _, path := range deps {
 		b, e := p.read(ctx, commit, path)
 		if e != nil {
 			return out, fmt.Errorf("环境依据文件%s不可读：%w", path, e)
 		}
-		files[path] = env.Digest(b)
+		files[path] = envmodel.Digest(b)
 	}
 	publication := c.runnerPublication()
 	publication.BaseBranch = manifest.ValidationBase
-	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Repository: runnercontract.Repository{URL: "", LocalPath: c.Repository, Remote: c.Remote, BaseBranch: manifest.ValidationBase, BaseRevision: commit}, Publication: publication, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: env.DocumentPath}, Plan: runnercontract.Document{Path: manifest.Script}, References: []runnercontract.Document{{Path: env.ExecutionRulesPath}, {Path: "SteerlineFlow/testing.md"}, {Path: "SteerlineFlow/testing/test-list.json"}}}}
+	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Repository: runnercontract.Repository{URL: "", LocalPath: c.Repository, Remote: c.Remote, BaseBranch: manifest.ValidationBase, BaseRevision: commit}, Publication: publication, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath}, Plan: runnercontract.Document{Path: manifest.Script}, References: []runnercontract.Document{{Path: envmodel.ExecutionRulesPath}, {Path: "SteerlineFlow/testing.md"}, {Path: "SteerlineFlow/testing/test-list.json"}}}}
 	input.Repository.URL, e = c.TaskRepositoryTarget(ctx)
 	if e != nil {
 		return out, e
@@ -174,7 +175,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 		Execution   runnercontract.ExecutionInput
 		Repository  []string
 	}{files, definitions, publication, profile.Execution, []string{input.Repository.URL, c.Remote, c.Branch}})
-	out = env.Prepared{Commit: commit, Inputs: env.Digest(basis), ScriptDigest: env.Digest(script), Manifest: manifest, L2: ids, Input: input}
+	out = envmodel.Prepared{Commit: commit, Inputs: envmodel.Digest(basis), ScriptDigest: envmodel.Digest(script), Manifest: manifest, L2: ids, Input: input}
 	return out, nil
 }
 func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (runnercontract.GenerateRunInput, error) {
@@ -191,10 +192,10 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 	if e != nil {
 		return out, e
 	}
-	paths := []string{env.GenerationRulesPath, env.ExecutionRulesPath, env.GenerationContextPath, "README.md", "SteerlineFlow/testing.md", "SteerlineFlow/testing/test-list.json", env.DocumentPath, "go.mod", "package.json", "pyproject.toml", "requirements.txt", "scripts/verify-environment.ps1", "scripts/verify-environment.sh"}
-	required := map[string]bool{env.GenerationRulesPath: true, env.ExecutionRulesPath: true, env.GenerationContextPath: true, "SteerlineFlow/testing.md": true, "SteerlineFlow/testing/test-list.json": true}
-	if document, e := p.read(ctx, commit, env.DocumentPath); e == nil {
-		if manifest, e := env.ParseManifest(document); e == nil {
+	paths := []string{envmodel.GenerationRulesPath, envmodel.ExecutionRulesPath, envmodel.GenerationContextPath, "README.md", "SteerlineFlow/testing.md", "SteerlineFlow/testing/test-list.json", envmodel.DocumentPath, "go.mod", "package.json", "pyproject.toml", "requirements.txt", "scripts/verify-environment.ps1", "scripts/verify-environment.sh"}
+	required := map[string]bool{envmodel.GenerationRulesPath: true, envmodel.ExecutionRulesPath: true, envmodel.GenerationContextPath: true, "SteerlineFlow/testing.md": true, "SteerlineFlow/testing/test-list.json": true}
+	if document, e := p.read(ctx, commit, envmodel.DocumentPath); e == nil {
+		if manifest, e := envmodel.ParseManifest(document); e == nil {
 			paths = append(paths, manifest.Dependencies...)
 			for _, path := range manifest.Dependencies {
 				required[path] = true
@@ -238,7 +239,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 			}
 		}
 	}
-	rules, err := p.read(ctx, commit, env.GenerationRulesPath)
+	rules, err := p.read(ctx, commit, envmodel.GenerationRulesPath)
 	if err != nil {
 		return out, err
 	}
@@ -249,7 +250,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 	if !prompts.SameRules(rules, expectedRules) {
 		return out, errors.New("材料准备不足：环境生成规则不同源")
 	}
-	executionRules, err := p.read(ctx, commit, env.ExecutionRulesPath)
+	executionRules, err := p.read(ctx, commit, envmodel.ExecutionRulesPath)
 	if err != nil {
 		return out, err
 	}
@@ -267,7 +268,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 	if err != nil {
 		return out, err
 	}
-	contextFile, err := p.read(ctx, commit, env.GenerationContextPath)
+	contextFile, err := p.read(ctx, commit, envmodel.GenerationContextPath)
 	if err != nil {
 		return out, err
 	}
@@ -285,26 +286,26 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 	return out, p.config.runtimeCatalog.ValidateRepositoryGenerate(out)
 }
 
-func (p *environmentPort) ready(ctx context.Context, id string) (env.Record, error) {
+func (p *environmentPort) ready(ctx context.Context, id string) (envmodel.Record, error) {
 	return p.readyFor(ctx, id, "")
 }
-func (p *environmentPort) readyFor(ctx context.Context, id, candidateCommit string) (env.Record, error) {
+func (p *environmentPort) readyFor(ctx context.Context, id, candidateCommit string) (envmodel.Record, error) {
 	prepared, e := p.material(ctx, id, false)
 	if e != nil {
-		return env.Record{}, fmt.Errorf("环境未就绪：%w", e)
+		return envmodel.Record{}, fmt.Errorf("环境未就绪：%w", e)
 	}
 	if candidateCommit != "" && candidateCommit != prepared.Commit {
 		candidate, e := p.materialAt(ctx, id, candidateCommit, false)
 		if e != nil {
-			return env.Record{}, fmt.Errorf("环境未就绪：候选固定环境材料不可核实：%w", e)
+			return envmodel.Record{}, fmt.Errorf("环境未就绪：候选固定环境材料不可核实：%w", e)
 		}
 		if candidate.Inputs != prepared.Inputs {
-			return env.Record{}, errors.New("环境未就绪：候选固定提交的环境材料与当前依据不同")
+			return envmodel.Record{}, errors.New("环境未就绪：候选固定提交的环境材料与当前依据不同")
 		}
 	}
 	rows, e := p.store.Environments(ctx, p.config.Identity())
 	if e != nil {
-		return env.Record{}, e
+		return envmodel.Record{}, e
 	}
 	for _, r := range rows {
 		if r.Kind == "adaptation" && r.Profile == id {
@@ -314,5 +315,5 @@ func (p *environmentPort) readyFor(ctx context.Context, id, candidateCommit stri
 			return r, nil
 		}
 	}
-	return env.Record{}, errors.New("环境未就绪：尚未适配当前远端配置")
+	return envmodel.Record{}, errors.New("环境未就绪：尚未适配当前远端配置")
 }

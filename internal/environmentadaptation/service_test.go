@@ -12,6 +12,7 @@ import (
 	"time"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -40,7 +41,7 @@ func (r *runner) Call(_ context.Context, command string, _ []string, q *runnercl
 		r.submits++
 		var input runnercontract.RunInput
 		_ = json.Unmarshal(q.Input, &input)
-		r.run = &runnercontract.Run{RunID: fmt.Sprint("run-", r.submits), Revision: 1, Status: "running", InputDigest: env.Digest(q.Input), Correlation: input.Correlation, Execution: runnercontract.Execution{Branch: fmt.Sprint("head-", r.submits)}}
+		r.run = &runnercontract.Run{RunID: fmt.Sprint("run-", r.submits), Revision: 1, Status: "running", InputDigest: envmodel.Digest(q.Input), Correlation: input.Correlation, Execution: runnercontract.Execution{Branch: fmt.Sprint("head-", r.submits)}}
 		if input.ResultFile != nil {
 			r.body, _ = base64.StdEncoding.DecodeString(input.ResultFile.InitialContentBase64)
 		}
@@ -86,7 +87,7 @@ func snapshot(contract, run string, body []byte, version uint64, closed bool) ru
 	if closed {
 		status = "closed"
 	}
-	return runnercontract.ProgressFile{Contract: contract, RunID: run, Version: version, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(body), SHA256: env.Digest(body), CollectionStatus: status}
+	return runnercontract.ProgressFile{Contract: contract, RunID: run, Version: version, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(body), SHA256: envmodel.Digest(body), CollectionStatus: status}
 }
 func (r *runner) ProgressFile(context.Context, string) (runnercontract.ProgressFile, error) {
 	return snapshot(runnercontract.ProgressContract, r.run.RunID, []byte(`{"test.one":true,"test.two":true,"pr":true}`), 99, false), nil
@@ -113,21 +114,21 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	t.Cleanup(func() { store.Close() })
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
-	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (env.Prepared, error) {
-		return env.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: env.Manifest{ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}}}}, nil
+	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
+		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}}}}, nil
 	}}
 	return service, remote, store, &now
 }
-func start(t *testing.T, s *env.Service) env.Record {
+func start(t *testing.T, s *env.Service) envmodel.Record {
 	t.Helper()
-	id := env.ID()
-	r, e := s.Start(ctx, id, json.RawMessage(`{"original":true}`), env.Start{Profile: "remote", TimeoutSeconds: 60}, false)
+	id := envmodel.ID()
+	r, e := s.Start(ctx, id, json.RawMessage(`{"original":true}`), envmodel.Start{Profile: "remote", TimeoutSeconds: 60}, false)
 	if e != nil {
 		t.Fatal(e)
 	}
 	return r
 }
-func read(t *testing.T, s *env.Service, id string) env.Record {
+func read(t *testing.T, s *env.Service, id string) envmodel.Record {
 	t.Helper()
 	r, e := s.Store.Environment(ctx, s.Project, id)
 	if e != nil {
@@ -135,11 +136,11 @@ func read(t *testing.T, s *env.Service, id string) env.Record {
 	}
 	return r
 }
-func report(r env.Record, remote *runner, pass bool) env.Report {
+func report(r envmodel.Record, remote *runner, pass bool) envmodel.Report {
 	a := r.Rounds[len(r.Rounds)-1]
-	p := env.Report{Version: 1, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, Checks: []env.Check{{ID: "tool", Status: "passed", Message: "required version available"}}, L2: []env.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
+	p := envmodel.Report{Version: 1, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, Checks: []envmodel.Check{{ID: "tool", Status: "passed", Message: "required version available"}}, L2: []envmodel.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
 	if pass {
-		p.PR = env.PR{URL: "https://git/validation/pulls/1", Base: "validation", Head: remote.run.Execution.Branch, ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("c", 40), CleanupCompleted: true}
+		p.PR = envmodel.PR{URL: "https://git/validation/pulls/1", Base: "validation", Head: remote.run.Execution.Branch, ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("c", 40), CleanupCompleted: true}
 	} else {
 		p.L2[1].Status = "failed"
 		p.L2[1].Message = "missing tool"
@@ -147,7 +148,7 @@ func report(r env.Record, remote *runner, pass bool) env.Report {
 	}
 	return p
 }
-func setReport(remote *runner, p env.Report) {
+func setReport(remote *runner, p envmodel.Report) {
 	remote.body, _ = json.Marshal(p)
 	remote.run.Status = "pr_ready"
 	if p.PR.URL == "" {
@@ -237,7 +238,7 @@ func TestProjectEnvironmentExecutionUnknownNeverResubmits(t *testing.T) {
 	if remote.stops != 1 || r.Status() == "ready" || r.Settled() || r.State != "unverified" {
 		t.Fatal("unknown report/PR must block new work", r.State)
 	}
-	if _, e := s.Start(ctx, env.ID(), json.RawMessage(`{}`), env.Start{Profile: "remote", TimeoutSeconds: 60}, false); e == nil {
+	if _, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{Profile: "remote", TimeoutSeconds: 60}, false); e == nil {
 		t.Fatal("new activity overlapped original unknown")
 	}
 }
@@ -286,7 +287,7 @@ func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testi
 		observe(t, s)
 		r = read(t, s, r.ID)
 		p := report(r, remote, false)
-		p.Checks = []env.Check{{ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}}
+		p.Checks = []envmodel.Check{{ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}}
 		for i := range p.L2 {
 			p.L2[i].Status = "incomplete"
 			p.L2[i].Message = "environment requirements failed; L2 not executed"
@@ -396,7 +397,7 @@ func TestProjectEnvironmentExecutionReadOutageCannotSuspendOriginalStop(t *testi
 			observe(t, s)
 			if cancelled {
 				r = read(t, s, r.ID)
-				_, e := s.Stop(ctx, r.ID, env.ID(), r.Revision, json.RawMessage(`{}`))
+				_, e := s.Stop(ctx, r.ID, envmodel.ID(), r.Revision, json.RawMessage(`{}`))
 				if e != nil {
 					t.Fatal(e)
 				}
@@ -429,19 +430,19 @@ func TestProjectEnvironmentExecutionReportStrictness(t *testing.T) {
 	if badURL.Passed("validation", remote.run.Execution.Branch) {
 		t.Fatal("PR URL without host accepted")
 	}
-	for _, change := range []func(*env.Report){func(p *env.Report) { p.PR.ChecksPassed = false }, func(p *env.Report) { p.PR.ReviewsPassed = false }, func(p *env.Report) { p.PR.Merged = false }, func(p *env.Report) { p.PR.CleanupCompleted = false }, func(p *env.Report) { p.PR.OutcomeUnknown = true }, func(p *env.Report) { p.PR.Head = "other" }, func(p *env.Report) { p.PR.Base = "main" }, func(p *env.Report) { p.PR.MergeCommit = "missing" }} {
+	for _, change := range []func(*envmodel.Report){func(p *envmodel.Report) { p.PR.ChecksPassed = false }, func(p *envmodel.Report) { p.PR.ReviewsPassed = false }, func(p *envmodel.Report) { p.PR.Merged = false }, func(p *envmodel.Report) { p.PR.CleanupCompleted = false }, func(p *envmodel.Report) { p.PR.OutcomeUnknown = true }, func(p *envmodel.Report) { p.PR.Head = "other" }, func(p *envmodel.Report) { p.PR.Base = "main" }, func(p *envmodel.Report) { p.PR.MergeCommit = "missing" }} {
 		p := good
 		change(&p)
 		if p.Passed("validation", remote.run.Execution.Branch) {
 			t.Fatal("incomplete PR admitted")
 		}
 	}
-	for _, change := range []func(*env.Report){func(p *env.Report) { p.Round++ }, func(p *env.Report) { p.ScriptDigest = "other" }, func(p *env.Report) { p.L2 = p.L2[:1] }, func(p *env.Report) { p.L2[1].ID = "one" }} {
+	for _, change := range []func(*envmodel.Report){func(p *envmodel.Report) { p.Round++ }, func(p *envmodel.Report) { p.ScriptDigest = "other" }, func(p *envmodel.Report) { p.L2 = p.L2[:1] }, func(p *envmodel.Report) { p.L2[1].ID = "one" }} {
 		p := good
-		p.L2 = append([]env.Item{}, good.L2...)
+		p.L2 = append([]envmodel.Item{}, good.L2...)
 		change(&p)
 		b, _ := json.Marshal(p)
-		if _, e := env.ParseReport(b, r, r.Rounds[0]); e == nil {
+		if _, e := envmodel.ParseReport(b, r, r.Rounds[0]); e == nil {
 			t.Fatal("invalid report accepted", string(b))
 		}
 	}
@@ -455,12 +456,12 @@ func TestProjectEnvironmentExecutionReportStrictness(t *testing.T) {
 func TestProjectEnvironmentAdmissionImmutableOriginalAndDeadline(t *testing.T) {
 	s, remote, store, now := setup(t)
 	r := start(t, s)
-	if _, e := s.Start(ctx, r.ID, json.RawMessage(`{"original":false}`), env.Start{Profile: "remote", TimeoutSeconds: 60}, false); e == nil {
+	if _, e := s.Start(ctx, r.ID, json.RawMessage(`{"original":false}`), envmodel.Start{Profile: "remote", TimeoutSeconds: 60}, false); e == nil {
 		t.Fatal("changed original accepted")
 	}
 	altered := r
 	altered.Revision++
-	altered.Rounds = append([]env.Round{}, r.Rounds...)
+	altered.Rounds = append([]envmodel.Round{}, r.Rounds...)
 	altered.Rounds[0].Deadline = altered.Rounds[0].Deadline.Add(time.Second)
 	if store.SaveEnvironment(ctx, altered, r.Revision) == nil {
 		t.Fatal("deadline mutation persisted")
@@ -476,11 +477,11 @@ func TestProjectEnvironmentAdmissionImmutableOriginalAndDeadline(t *testing.T) {
 func TestProjectEnvironmentRetryTimeoutInput(t *testing.T) {
 	s, _, _, now := setup(t)
 	for _, seconds := range []int{0, -1, int(int64(^uint64(0) >> 1))} {
-		if _, e := s.Start(ctx, env.ID(), json.RawMessage(`{}`), env.Start{Profile: "remote", TimeoutSeconds: seconds}, false); e == nil {
+		if _, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{Profile: "remote", TimeoutSeconds: seconds}, false); e == nil {
 			t.Fatal("invalid/overflowing timeout accepted", seconds)
 		}
 	}
-	r, e := s.Start(ctx, env.ID(), json.RawMessage(`{}`), env.Start{Profile: "remote", TimeoutSeconds: 90000}, false)
+	r, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{Profile: "remote", TimeoutSeconds: 90000}, false)
 	if e != nil {
 		t.Fatal("arbitrary one-day limit", e)
 	}
@@ -491,7 +492,7 @@ func TestProjectEnvironmentRetryTimeoutInput(t *testing.T) {
 func TestProjectEnvironmentExecutionCancellationDoesNotDispatch(t *testing.T) {
 	s, remote, _, _ := setup(t)
 	r := start(t, s)
-	_, e := s.Stop(ctx, r.ID, env.ID(), r.Revision, json.RawMessage(`{}`))
+	_, e := s.Stop(ctx, r.ID, envmodel.ID(), r.Revision, json.RawMessage(`{}`))
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -542,7 +543,7 @@ func TestProjectEnvironmentExecutionTimeoutAndCancelDuringPrepare(t *testing.T) 
 			remote.resultDiagnostic = "file_missing"
 			if cancel {
 				r = read(t, s, r.ID)
-				_, e := s.Stop(ctx, r.ID, env.ID(), r.Revision, json.RawMessage(`{}`))
+				_, e := s.Stop(ctx, r.ID, envmodel.ID(), r.Revision, json.RawMessage(`{}`))
 				if e != nil {
 					t.Fatal(e)
 				}
@@ -572,14 +573,14 @@ func TestProjectEnvironmentGenerationNativeResultAndQuota(t *testing.T) {
 				return runnercontract.GenerateRunInput{Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}}, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: "fixture", Commit: strings.Repeat("a", 40)}, Materials: []runnercontract.Document{}}}, nil
 			}
 			acquired, released := 0, 0
-			s.AcquireGeneration = func(env.Record) bool { acquired++; return true }
-			s.ReleaseGeneration = func(env.Record) { released++ }
-			r, e := s.Start(ctx, env.ID(), json.RawMessage(`{}`), env.Start{Profile: "local"}, true)
+			s.AcquireGeneration = func(envmodel.Record) bool { acquired++; return true }
+			s.ReleaseGeneration = func(envmodel.Record) { released++ }
+			r, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{Profile: "local"}, true)
 			if e != nil {
 				t.Fatal(e)
 			}
 			observe(t, s)
-			generated := env.Generated{Document: "```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.sh\",\"interpreter\":\"bash\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```", Script: "echo fixture", Gaps: []string{}}
+			generated := envmodel.Generated{Document: "```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.sh\",\"interpreter\":\"bash\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```", Script: "echo fixture", Gaps: []string{}}
 			body, _ := json.Marshal(generated)
 			source := &runnercontract.RepositorySource{LocalPath: "fixture", Commit: strings.Repeat("a", 40), Tree: strings.Repeat("b", 40)}
 			remote.run.RepositorySource = source

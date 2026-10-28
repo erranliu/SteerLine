@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"

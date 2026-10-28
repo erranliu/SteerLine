@@ -19,7 +19,7 @@ import (
 	"time"
 
 	app "github.com/erranliu/SteerLine/internal/app"
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"

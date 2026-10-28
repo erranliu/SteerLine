@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/erranliu/SteerLine/internal/prompts"
