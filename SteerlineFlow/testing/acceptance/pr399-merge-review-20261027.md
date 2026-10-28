@@ -76,3 +76,31 @@ rebase 后真实复验又确认两项调用方增量：Plan 自身必跑项必�
 当前审查没有新增阻塞代码发现；原约定连续两轮仍未完成，PR399继续草稿。没有自动合入、部署或在 SteerLine 新增终端粘贴/输入/启动确认实现。真实业务修复 PR435 的协议42+15项通过不冒充 Unity业务、clean发布head或完整人工验收；其合入和后续新基线两轮仍待完成。
 
 2026-10-28 最新结果：PR435 已按用户明确指令正常合入，实际3b59842c。正式原Caller07fcb905包上的新entryfixed-01保留全部九项，原报告/输入/cleanup、正式entry writer、原始与closed进度/API/UI9/9均已独立核实；但后续发布输入未确认接受、停留原生草稿，没有真实PR。原Run/宿主/拥有资源已完整结算，第二轮未启动、连续数0/2。代码未变化，本次只更新验收和等待边界，不重复已完成受控回归。详见[本轮证据](test-progress-0of6-20261026.md#2026-10-28-pr435-合入后九项进度通过发布输入未确认)。PR399保持草稿；Runner输入职责不迁入SteerLine，clean发布head/完整业务/人工和当前main新环境原生资格仍未验。
+
+
+## 2026-10-28 merged Runner69 retest
+
+The user requested a new PR399 retest after the Runner fixes merged. Runner PR68 actually merged as `6d5db39f761f886b29f49f8a2f6d62d4580a5cdc`; PR69 merged as `62a35bce94de248e83fc2c09ce4f7ad34af5228d`. PR69 removes caller/total text budgets, retaining the Runner-owned 1000 UTF-8-byte cap. It does not reinterpret historical unknown deliveries as successful.
+
+PR399 was rebased onto main `a5c12eafcb2bf6e442de07ded2c6fd4affeb9541`. Clean runtime source is `3c0841ad3d5783e33a03c03ab30be6279edf2649`. Conflicts preserve main's PR405 compact prompt construction, pinned writer verification, full frozen definitions, Plan/guide mandatory union and per-ID entry coverage. The remaining production delta is the Windows private receipt/discovery snapshot fix; no terminal input, paste or start confirmation logic was added. Historical records remain intact.
+
+New evidence root: `C:/SteerlineDebug/wt-507e-pr399-retest-20261028/`.
+
+| Verification | Actual result / original report |
+| --- | --- |
+| Fixed L1 | Passed, `test-results/L1-01/summary.json` |
+| Fixed L2 | Passed, cleanup complete, `test-results/L2-01/summary.json` |
+| Controlled progress L3 | Passed, cleanup complete, `test-results/progress-L3-02/summary.json`; original progress/reset/error/recovery/restart/closed assertions retained |
+| Windows receipt/discovery owners | Both complete without failure or skip, `diagnostics/http-snapshots-01/summary.json` |
+| Affected app assertions | Passed, `diagnostics/app-affected-01/summary.json`; not the previously incomplete whole app package |
+| New Runner public contracts | Two selected tests passed without skip, `diagnostics/public-runner-contract-01/summary.json`; idle isolated service, no model/Unity |
+
+The first new L3 invocation was rejected by argument parsing before execution. The explicit argv invocation above passed; this is not a product failure or automatic test retry. Previous maintenance-GET timeout and broad-app incomplete records remain historical failures/unqualified scopes, not erased.
+
+Runner was built from a new ordinary clean clone of exact merged PR69. `runner-build/steerrunner.exe.build.json` binds source `62a35bce94de248e83fc2c09ce4f7ad34af5228d`, source digest `248c7702ac1a37f160aefc46ed00df877f85c06781b9e597339170d2acaf722c`, EXE SHA256 `3b9ee831c11695bb046dca55bae02da6cd11a3d1ede6cd3f22511080fa655917`. This session did not rerun Runner's full formal L1 or claim a new long-input native qualification. Runner's published PR68 two-input probe and PR69 controlled results are kept distinct from SteerLine acceptance.
+
+Official fresh packages are `packages-main/dev-20261028-172937-3c0841ad` and `packages-original/dev-20261028-173043-07fcb905`, both ready/clean and pinned to that Runner. No old package/home/build pin was replaced. The latter preserves the original Caller cohort `07fcb905`; it does not qualify current-main environment/result-file admission.
+
+The first new business scope `C:/SteerlineDebug/wt-507e-progress-0of6/runner69-01/` retains execution base `3b59842c3343ce92ef900cc66aeffc7ebb26e2e7`, the original contract and unchanged registry. Its admission is `runner69-progress-admission-20261028.json` in the parent root. Two consecutive full original report/progress/API/UI/publication/cleanup chains remain required; controlled tests, package readiness and Runner probes count as zero such chains. No automatic merge, deployment, scheduling, subagents or cross-session messages.
+
+Startup-driver failures are preserved independently: the first WMI invocation was rejected before process creation; corrected creation ran exactly one preflight. The long fixed SDK/hash marker wrapped on the terminal display, causing the old observation script to miss it. The original preflight actually completed with matching hashes/SDK and its sole PTY was closed. A single continuation validates those original bytes across display wrapping without rerunning preflight or any business input. No Runner input/completion rule was changed.
