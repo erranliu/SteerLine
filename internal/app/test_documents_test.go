@@ -41,7 +41,7 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 		t.Fatal("progress was not frozen with candidate")
 	}
 	for _, key := range []string{"implement.report", "publish", "publish.report"} {
-		if !strings.HasSuffix(run.Workflow.PromptOverrides[key], testmodel.TestingReadOnlyInstructions) {
+		if !strings.HasSuffix(run.Workflow.PromptOverrides[key], testReadOnlyPrompt(t)) {
 			t.Fatal("report/publication can overwrite test progress", key)
 		}
 	}
