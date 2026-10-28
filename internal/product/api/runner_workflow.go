@@ -17,23 +17,38 @@ type RunnerMaterialSummary struct {
 type RunnerAuditSummary struct {
 	Model           string              `json:"model"`
 	ReasoningEffort string              `json:"reasoning_effort"`
-	RepairCount     uint64              `json:"repair_count"`
 	Results         []RunnerAuditResult `json:"results"`
 }
-
 type RunnerAuditResult struct {
-	Step                  string          `json:"step"`
-	SourceReportCommandID string          `json:"source_report_command_id"`
-	CommandID             string          `json:"command_id"`
-	TurnID                string          `json:"turn_id"`
-	Verdict               string          `json:"verdict,omitempty"`
-	Findings              []RunnerFinding `json:"findings,omitempty"`
-	Failure               string          `json:"failure,omitempty"`
+	Step                 string                 `json:"step"`
+	SourceResultID       string                 `json:"source_result_id"`
+	ImplementationSource RunnerAuditSource      `json:"implementation_source"`
+	ResultID             string                 `json:"result_id"`
+	CommandID            string                 `json:"command_id"`
+	TurnID               string                 `json:"turn_id"`
+	PreHead              string                 `json:"pre_head,omitempty"`
+	PostHead             string                 `json:"post_head,omitempty"`
+	FixedCount           *int                   `json:"fixed_count,omitempty"`
+	FixedIssues          []RunnerFixedIssue     `json:"fixed_issues"`
+	RemainingIssues      []RunnerRemainingIssue `json:"remaining_issues"`
+	Failure              string                 `json:"failure,omitempty"`
 }
-
-type RunnerFinding struct {
+type RunnerAuditSource struct {
+	SessionID    string `json:"session_id,omitempty"`
+	CommandID    string `json:"command_id"`
+	TurnID       string `json:"turn_id"`
+	AttemptID    string `json:"attempt_id"`
+	InputVersion uint64 `json:"input_version"`
+	FinalDigest  string `json:"final_digest"`
+}
+type RunnerFixedIssue struct {
 	Severity string `json:"severity"`
-	Message  string `json:"message"`
-	Path     string `json:"path,omitempty"`
-	Line     int    `json:"line,omitempty"`
+	Issue    string `json:"issue"`
+	Repair   string `json:"repair"`
+	Evidence string `json:"evidence"`
+}
+type RunnerRemainingIssue struct {
+	Severity string `json:"severity"`
+	Issue    string `json:"issue"`
+	Reason   string `json:"reason"`
 }

@@ -159,7 +159,7 @@
       "level": "L4",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=workflow -env=live -scenario=workflow.local-codex-audited",
-      "check": "使用两个显式模型完成实现、两轮审计、发布与真实 PR 合并；核对正式产品详情中的模型/材料/审计来源、唯一交付与后继 ready 未启动，清理完整。",
+      "check": "使用两个显式模型完成 development-audited/2 实现、一次代码审计与必要修复、发布与真实 PR 合并；核对正式产品详情中的模型/材料/实施结果来源、修复数量与明细、审计前后 Git 提交、唯一交付与后继 ready 未启动，清理完整。",
       "note": "L4 真实审计专项，单独精确选择；固定 Runner、两个不同的显式模型及 SteerlineTest GitHub 写权限，消耗模型并创建/合并专属 PR。"
     },
     {

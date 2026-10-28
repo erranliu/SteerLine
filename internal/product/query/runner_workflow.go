@@ -12,11 +12,25 @@ func runnerWorkflow(r *CandidateView, p *api.CandidateSummary) {
 		p.Materials = append(p.Materials, api.RunnerMaterialSummary{Kind: m.Kind, Path: m.Path, Commit: m.Commit, Digest: m.Digest})
 	}
 	if a := r.Audit; a != nil {
-		p.Audit = &api.RunnerAuditSummary{Model: a.Model, ReasoningEffort: a.ReasoningEffort, RepairCount: a.RepairCount, Results: []api.RunnerAuditResult{}}
+		p.Audit = &api.RunnerAuditSummary{Model: a.Model, ReasoningEffort: a.ReasoningEffort, Results: []api.RunnerAuditResult{}}
 		for _, result := range a.Results {
-			v := api.RunnerAuditResult{Step: result.Step, SourceReportCommandID: result.SourceReportCommandID, CommandID: result.CommandID, TurnID: result.TurnID, Verdict: result.Verdict, Failure: result.Failure}
-			for _, f := range result.Findings {
-				v.Findings = append(v.Findings, api.RunnerFinding{Severity: f.Severity, Message: f.Message, Path: f.Path, Line: f.Line})
+			s := result.ImplementationSource
+			v := api.RunnerAuditResult{Step: result.Step, SourceResultID: result.SourceResultID, ImplementationSource: api.RunnerAuditSource{SessionID: s.SessionID, CommandID: s.CommandID, TurnID: s.TurnID, AttemptID: s.AttemptID, InputVersion: s.InputVersion, FinalDigest: s.FinalDigest}, ResultID: result.ResultID, CommandID: result.CommandID, TurnID: result.TurnID, PreHead: result.PreHead, PostHead: result.PostHead, Failure: result.Failure}
+			if result.FixedCount != nil {
+				count := *result.FixedCount
+				v.FixedCount = &count
+			}
+			if result.FixedIssues != nil {
+				v.FixedIssues = make([]api.RunnerFixedIssue, 0, len(result.FixedIssues))
+			}
+			for _, f := range result.FixedIssues {
+				v.FixedIssues = append(v.FixedIssues, api.RunnerFixedIssue{Severity: f.Severity, Issue: f.Issue, Repair: f.Repair, Evidence: f.Evidence})
+			}
+			if result.RemainingIssues != nil {
+				v.RemainingIssues = make([]api.RunnerRemainingIssue, 0, len(result.RemainingIssues))
+			}
+			for _, f := range result.RemainingIssues {
+				v.RemainingIssues = append(v.RemainingIssues, api.RunnerRemainingIssue{Severity: f.Severity, Issue: f.Issue, Reason: f.Reason})
 			}
 			p.Audit.Results = append(p.Audit.Results, v)
 		}

@@ -366,7 +366,13 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	if !strings.Contains(original.Workflow.PromptOverrides["implement.execute"], testContext) {
 		return errors.New("Runner did not freeze exact system test prompt")
 	}
+	arrangementPath, e := testmanagement.ArrangementPath(material.Contract.PlanRef.Path)
+	if e != nil {
+		return e
+	}
 	expectedPaths := map[string]bool{material.Contract.SpecRef.Path: false, material.Contract.PlanRef.Path: false, testmanagement.RulesPath: false, testmanagement.CataloguePath: false}
+	expectedPaths[arrangementPath] = false
+	expectedPaths[testmanagementmodel.ProtocolPath] = false
 	if referencedWriter {
 		expectedPaths[testmanagementmodel.WriterPath] = false
 	}

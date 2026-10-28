@@ -114,26 +114,42 @@ type Material struct {
 type Audit struct {
 	Model           string        `json:"model"`
 	ReasoningEffort string        `json:"reasoning_effort"`
-	RepairCount     uint64        `json:"repair_count"`
 	Results         []AuditResult `json:"results"`
 }
-
 type AuditResult struct {
-	Step                  string    `json:"step"`
-	SourceReportCommandID string    `json:"source_report_command_id"`
-	CommandID             string    `json:"command_id"`
-	TurnID                string    `json:"turn_id"`
-	Verdict               string    `json:"verdict,omitempty"`
-	Findings              []Finding `json:"findings,omitempty"`
-	Failure               string    `json:"failure,omitempty"`
+	Step                 string           `json:"step"`
+	SourceResultID       string           `json:"source_result_id"`
+	ImplementationSource AuditSource      `json:"implementation_source"`
+	ResultID             string           `json:"result_id"`
+	CommandID            string           `json:"command_id"`
+	TurnID               string           `json:"turn_id"`
+	PreHead              string           `json:"pre_head,omitempty"`
+	PostHead             string           `json:"post_head,omitempty"`
+	FixedCount           *int             `json:"fixed_count,omitempty"`
+	FixedIssues          []FixedIssue     `json:"fixed_issues"`
+	RemainingIssues      []RemainingIssue `json:"remaining_issues"`
+	Failure              string           `json:"failure,omitempty"`
+}
+type AuditSource struct {
+	SessionID    string `json:"session_id,omitempty"`
+	CommandID    string `json:"command_id"`
+	TurnID       string `json:"turn_id"`
+	AttemptID    string `json:"attempt_id"`
+	InputVersion uint64 `json:"input_version"`
+	FinalDigest  string `json:"final_digest"`
+}
+type FixedIssue struct {
+	Severity string `json:"severity"`
+	Issue    string `json:"issue"`
+	Repair   string `json:"repair"`
+	Evidence string `json:"evidence"`
+}
+type RemainingIssue struct {
+	Severity string `json:"severity"`
+	Issue    string `json:"issue"`
+	Reason   string `json:"reason"`
 }
 
-type Finding struct {
-	Severity string `json:"severity"`
-	Message  string `json:"message"`
-	Path     string `json:"path,omitempty"`
-	Line     int    `json:"line,omitempty"`
-}
 type Command struct {
 	CommandID     string  `json:"command_id"`
 	RequestID     string  `json:"request_id"`

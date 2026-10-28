@@ -1,6 +1,7 @@
 package testenv
 
 import (
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -46,7 +47,7 @@ func (p *Project) observeAuditedProduct(expected runnerstate.Candidate, final bo
 		}
 		return
 	}
-	if run.RunnerWorkflow.ID != "development-audited" || run.RunnerWorkflow.Version != 1 || run.WorkflowVersion != "1" || run.ExecutionProfile == nil || run.ExecutionProfile.Name != "Real E2E audited preset" {
+	if run.RunnerWorkflow.ID != "development-audited" || run.RunnerWorkflow.Version != 2 || run.WorkflowVersion != "2" || run.ExecutionProfile == nil || run.ExecutionProfile.Name != "Real E2E audited preset" {
 		s.t.Fatal("product preset/workflow differs", run)
 	}
 	if run.ExecutionProfile.ExecutionModel != s.Run.ExecutionModel || run.ExecutionProfile.ExecutionEffort != "medium" || run.ExecutionProfile.AuditModel != s.Run.AuditModel || run.ExecutionProfile.AuditEffort != "high" {
@@ -58,7 +59,7 @@ func (p *Project) observeAuditedProduct(expected runnerstate.Candidate, final bo
 	if run.RunID != expected.ID || run.ExecutionID != expected.RunID || expected.InputDigest != "" && run.InputDigest != expected.InputDigest || expected.Projection != nil && run.RunnerRevision < expected.Projection.Revision {
 		s.t.Fatal("public detail differs from original candidate/Run/revision", run, expected.ID, expected.RunID)
 	}
-	for _, step := range []string{"implement.execute", "audit.spec", "audit.code", "publish"} {
+	for _, step := range []string{"implement.execute", "audit.code.execute", "publish.execute"} {
 		if run.WorkflowStage != step || run.RequestedModel == "" {
 			continue
 		}
@@ -90,20 +91,13 @@ func (p *Project) observeAuditedProduct(expected runnerstate.Candidate, final bo
 		if run.Audit == nil || run.Audit.Model != s.Run.AuditModel || run.Audit.ReasoningEffort != "high" {
 			s.t.Fatal("product audit model missing", run.Audit)
 		}
-		passes := map[string]bool{}
-		source := ""
-		for _, r := range run.Audit.Results {
-			if r.Verdict != "pass" || r.Failure != "" || r.CommandID == "" || r.SourceReportCommandID == "" || r.TurnID == "" {
-				s.t.Fatal("audit result/source incomplete", r)
-			}
-			passes[r.Step] = true
-			if source != "" && source != r.SourceReportCommandID {
-				s.t.Fatal("mixed audit reports", run.Audit)
-			}
-			source = r.SourceReportCommandID
+		if len(run.Audit.Results) != 1 {
+			s.t.Fatal("one v2 code audit required", run.Audit)
 		}
-		if !passes["audit.spec"] || !passes["audit.code"] {
-			s.t.Fatal("both public audit results required", run.Audit)
+		r := run.Audit.Results[0]
+		src := r.ImplementationSource
+		if r.Step != "audit.code.execute" || r.Failure != "" || r.CommandID == "" || r.TurnID == "" || r.SourceResultID == "" || r.ResultID == "" || src.CommandID == "" || src.TurnID == "" || src.AttemptID == "" || src.InputVersion == 0 || src.FinalDigest == "" || r.PreHead == "" || r.PostHead == "" || r.FixedCount == nil || *r.FixedCount != len(r.FixedIssues) || len(r.RemainingIssues) != 0 {
+			s.t.Fatal("v2 code audit result/source incomplete", r)
 		}
 		p.AuditObservations["audit-results"] = "verified"
 		cli := runnerclient.Client{Executable: s.Run.Runner, SHA256: expected.RunnerBuild.SHA256, StateDir: expected.StateDir}
@@ -112,6 +106,13 @@ func (p *Project) observeAuditedProduct(expected runnerstate.Candidate, final bo
 		if comparison.Run == nil || comparison.Run.InputDigest != run.InputDigest || comparison.Run.Workflow.ID != run.RunnerWorkflow.ID || comparison.Run.Audit == nil || comparison.Run.Audit.Model != run.Audit.Model {
 			s.t.Fatal("Runner comparison differs from public product", comparison)
 		}
+		originalAudit, err := json.Marshal(comparison.Run.Audit)
+		s.Must(err)
+		publicAudit, err := json.Marshal(run.Audit)
+		s.Must(err)
+		if string(originalAudit) != string(publicAudit) {
+			s.t.Fatal("public audit differs from original Runner observation", string(originalAudit), string(publicAudit))
+		}
 		s.Must(controlled.Write(filepath.Join(s.Output, "audited-runner-comparison.json"), comparison))
 		task, err := client.ShowTask(s.Context, p.Tasks["a"].ID)
 		s.Must(err)
@@ -119,7 +120,7 @@ func (p *Project) observeAuditedProduct(expected runnerstate.Candidate, final bo
 			s.t.Fatal("public task detail missing")
 		}
 		for _, history := range task.Tasks[0].WorkflowRuns {
-			if history.WorkflowRunID == run.RunID && history.ExecutionID == run.ExecutionID && history.FlowRef == "development-audited" && history.WorkflowVersion == 1 && history.ExecutionProfile != nil && history.ExecutionProfile.Name == run.ExecutionProfile.Name {
+			if history.WorkflowRunID == run.RunID && history.ExecutionID == run.ExecutionID && history.FlowRef == "development-audited" && history.WorkflowVersion == 2 && history.ExecutionProfile != nil && history.ExecutionProfile.Name == run.ExecutionProfile.Name {
 				p.AuditObservations["history"] = "verified"
 			}
 		}
