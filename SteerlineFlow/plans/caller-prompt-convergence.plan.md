@@ -32,4 +32,4 @@
 
 逐项检查：是否只是移动inline字段、是否误删必要材料、是否仍重复内联同一快照规范、是否把派生摘要当原报告、是否跳过完整安排核验、是否错误省略缺失writer，以及是否引入Runner新能力或预算前置。对必要大输入如实保留，不为数字目标削弱语义。
 
-操作、重试和恢复沿[既有生命周期](../../docs/product-design/worker-lifecycle.md)，本次不新增变化。完成实现后将实际commit、调用方组成字节数、报告与清理结果写入[独立验收](../testing/acceptance/caller-prompt-convergence.md)；本次设计文档不改变PR399既有复验结论或Runner阻塞状态。
+操作、重试和恢复沿[既有生命周期](../../docs/product-design/worker-lifecycle.md)，本次不新增变化。完成实现后将实际commit、调用方组成字节数、报告与清理结果写入[独立验收](../testing/acceptance/caller-prompt-convergence.md)；本次实现与回归不改变PR399既有复验结论或Runner阻塞状态。

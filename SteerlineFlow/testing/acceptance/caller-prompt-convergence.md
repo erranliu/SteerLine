@@ -1,6 +1,6 @@
 # 调用方提示词收敛验收记录
 
-关联 [Spec](../../spec/caller-prompt-convergence.spec.md) / [Plan](../../plans/caller-prompt-convergence.plan.md)。2026-10-28 用户授权实现；定向检查及 L3 已通过，最终干净提交的 L1/L2 待执行，不以本记录代替报告。
+关联 [Spec](../../spec/caller-prompt-convergence.spec.md) / [Plan](../../plans/caller-prompt-convergence.plan.md)。2026-10-28 用户授权实现；**自动验收已通过**。实现提交为 `210790fa4f721db67cbad3dcbec7794f1e4f2bfe`，在同一干净提交上完成最终 L1/L2/L3，零失败、零意外跳过，E2E 清理完整。
 
 ## 实现与范围
 
@@ -12,13 +12,13 @@
 
 | 验收项 | 已验证范围 | 当前结果 |
 | --- | --- | --- |
-| CPC-A01 | 完整快照不改、有序 ID、定义/note/digest/Plan/commit 不一致及必需文件缺失拒绝、mutable checkout 不影响固定来源 | 定向及 L3 通过 |
-| CPC-A02 | 无 helper 完整源码、同源/LF/CRLF 路径引用、不同源完整内联、逐入口约束；SQLite 拒绝错误 writer 分发；公开/用户正文保持、发布/报告只读 | 定向通过 |
-| CPC-A03 | 测试材料和输出 schema 保持；Roadmap 非快照原文和确认输入完整，规范 manifest 缺失/错摘要拒绝，真实 Git 受控文档生成/发布/入图链保持；环境 Report 结构说明完整 | 定向通过 |
-| CPC-A04 | 长成功明细投影、全部检查/L2 的 ID/状态、完整失败/incomplete 原因、PR URL/未知/清理、无报告诊断、原报告不变及确定性；prepare 保留诊断，publish 不重复前轮问题 | 定向通过 |
-| CPC-A05 | Unicode、多问题/选项/自由文字原样传递；已冻结环境请求不重准备/重发；原候选 CAS/恢复、L3 重启不增加业务输入 | 定向及 L3 通过 |
-| CPC-A06 | 同材料 UTF-8 组成测量、有/无 writer、多 ID 长 note、长前轮报告及固定仓库规范；必要大输入保留 | 测量通过 |
-| 固定回归 | L1 `l1.minimum`、L2 `smoke.delivery` | 待执行 |
+| CPC-A01 | 完整快照不改、有序 ID、定义/note/digest/Plan/commit 不一致及必需文件缺失拒绝、mutable checkout 不影响固定来源 | 已验收 |
+| CPC-A02 | 无 helper 完整源码、同源/LF/CRLF 路径引用、不同源完整内联、逐入口约束；SQLite 拒绝错误 writer 分发；公开/用户正文保持、发布/报告只读 | 已验收 |
+| CPC-A03 | 测试材料和输出 schema 保持；Roadmap 非快照原文和确认输入完整，规范 manifest 缺失/错摘要拒绝，真实 Git 受控文档生成/发布/入图链保持；环境 Report 结构说明完整 | 已验收 |
+| CPC-A04 | 长成功明细投影、全部检查/L2 的 ID/状态、完整失败/incomplete 原因、PR URL/未知/清理、无报告诊断、原报告不变及确定性；prepare 保留诊断，publish 不重复前轮问题 | 已验收 |
+| CPC-A05 | Unicode、多问题/选项/自由文字原样传递；已冻结环境请求不重准备/重发；原候选 CAS/恢复、L3 重启不增加业务输入 | 已验收 |
+| CPC-A06 | 同材料 UTF-8 组成测量、有/无 writer、多 ID 长 note、长前轮报告及固定仓库规范；必要大输入保留 | 已验收 |
+| 固定回归 | L1 `l1.minimum`、L2 `smoke.delivery` | 已验收 |
 
 独立证据根：`C:/SteerlineDebug/cpc-9588/`。每次命令的完整参数及受测源码状态见该次 summary，原始日志不进仓库：
 
@@ -28,7 +28,8 @@
 - `diagnostics/answers-01/summary.json`：原生答案完整性用例通过，2.532 秒。
 - `diagnostics/semantics-01/summary.json`、`diagnostics/measure-02/summary.json`：原安排、完整 writer、前轮事实、阶段身份/冻结恢复及最终安排测量通过。
 - `test-results/L3/progress-03/summary.json`：`-level=L3 -suite=testing -env=controlled -scenario=testing.runtime-progress`，1 场景通过，`cleanup_complete=true`；准备 16.292 秒、执行 126.479 秒。新增紧凑输入到候选检查，保留原进度/重跑/格式错误/断连恢复/重启/原输入和清理检查。该次在提交前工作树执行。
-- `python scripts/check_doc_links.py`：597 文件、3781 本地链接、0 错误；`git diff --check` 通过。
+- 同一干净提交的最终回归：`test-results/L1/final-01/summary.json`（44 pass / 0 skip，准备 0.546 秒、执行 10.123 秒）、`test-results/L2/final-01/summary.json`（`smoke.delivery` 通过、cleanup 完整，准备 14.542 秒、执行 99.831 秒）、`test-results/L3/final-01/summary.json`（`testing.runtime-progress` 通过、cleanup 完整，准备 17.702 秒、执行 132.549 秒）。正式报告已通过原 `test-feedback record` 导出到[受测提交的 Git 历史](../records/210790fa4f721db67cbad3dcbec7794f1e4f2bfe.json)；后续仅补验收说明及测试记录，不改受测实现。
+- `python scripts/check_doc_links.py`：597 文件、本地链接、0 错误；`git diff --check` 通过。
 
 ## 实际减量
 
@@ -40,6 +41,8 @@
 | 同一安排；缺 helper | 10893 | 6004 | 仍完整提供正式 3253 字节 writer 及接线要求，不为减量省源码 |
 | 测试选择指令 | 988 | 415 | 规范与 Plan 必跑并集、影响追加、空选择例外、原 schema 和全部 inline 材料 |
 | 环境生成固定说明（Git blob LF） | 5896 | 5570 | 完整环境 Report 字段/语义、L2、真实 PR、用户准备及清理约束 |
+| 环境 prepare 指令；同一活动/轮次/源码/摘要/失败原因 | 1228 | 1102 | 身份由原结果初始 JSON 提供，完整失败原因仍在 prepare |
+| 环境 publish 指令；同一材料 | 994 | 788 | 保留本阶段约束，关联字段由原初始 JSON 提供 |
 | 长前轮原报告 / 派生事实 | 15675 | 740 | 全部 ID/状态、完整失败/未完成原因、来源与 PR 事实；原报告未改写 |
 | Roadmap 规范相关正文 + inline | 1319 + 10344 | 1917 + 0 | 规范完整固定仓库内容/来源校验；原 Markdown、确认规划仍完整 inline |
 
