@@ -10,6 +10,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	task "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -53,7 +54,10 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 		raw, _ := json.Marshal(input)
 		candidate := runnerstate.Candidate{Project: project, TaskID: record.TaskID, ID: strings.Repeat(string("abcdef0"[i]), 32), Revision: 1, Explicit: true, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "test", ContractDigest: c.Digest, MaterialDigest: material.Digest, BaseRevision: commit, Participation: "active", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "submit-" + commit, Input: raw}}
 		candidate.TestPlan, _ = json.Marshal(testmanagement.Snapshot{Status: "ready", PlanPath: c.PlanRef.Path, Commit: commit, GenerationID: material.GenerationID, Inputs: material.Inputs, Definitions: definitions})
-		input.Workflow.PromptOverrides = map[string]string{"implement.execute": testPromptContext(t, candidate.TestPlan, false)}
+		for _, path := range []string{testmodel.CataloguePath, testmodel.RulesPath, testmodel.ProtocolPath, testmodel.WriterPath, mustArrangement(t, c.PlanRef.Path)} {
+			input.Documents.References = append(input.Documents.References, runnerclient.Document{Path: path})
+		}
+		input.Workflow.PromptOverrides = map[string]string{"implement.execute": testPromptContext(t, candidate.TestPlan, true)}
 		candidate.Submit.Input, _ = json.Marshal(input)
 		if i == 0 {
 			bad := material

@@ -46,7 +46,7 @@ var quickOwnerCases = []struct {
 	Tests       []string
 }{
 	{"quick-owner-catalogue", "github.com/erranliu/SteerLine/cmd/test-feedback", []string{"TestTMRegisteredCatalogueMatchesExecutableManifest", "TestScenarioContentListMatchesRegisteredIDsAndLevels", "TestRegisteredCommandsSelectExactlyTheirDefinitions"}},
-	{"quick-owner-prompts", "github.com/erranliu/SteerLine/internal/prompts", []string{"TestPromptGovernanceGolden", "TestPromptGovernanceRejectsInvalidInputs", "TestInlineProgressWriterForProjectWithoutHelper"}},
+	{"quick-owner-prompts", "github.com/erranliu/SteerLine/internal/prompts", []string{"TestPromptGovernanceGolden", "TestPromptGovernanceRejectsInvalidInputs", "TestInlineProgressWriterForProjectWithoutHelper", "TestDocumentDrivenRuleCopies"}},
 	{"quick-owner-prompt-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestPromptGovernanceSourceBoundary"}},
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -145,17 +146,44 @@ func roadmapPromotionChain(t *testing.T, live bool) {
 	c.runtimeMaintenance = newProjectMaintenance(c, store)
 	port := &roadmapPort{config: c, store: store}
 	configurePromotionGeneration(t, port, live)
-	code := fixtureGit(t, c.Repository, "rev-parse", "HEAD")
+	var code string
 	sourceBody := "# Arithmetic roadmap\nT1: Add a pure Sum(a,b int) int function in package logic; Sum(2,3)=5. Scope is only integer arithmetic and unit tests.\nT2: Add Difference(a,b int) int implemented using Sum(a,-b); Difference(5,2)=3. Depends on T1. Do not implement the functions during planning."
 	sourcePath := roadmap.Root + "publish.md"
 	sourceFile := filepath.Join(c.Repository, filepath.FromSlash(sourcePath))
 	require(t, os.MkdirAll(filepath.Dir(sourceFile), 0700))
 	require(t, os.WriteFile(sourceFile, []byte(sourceBody), 0600))
+	parseRules, e := prompts.RoadmapParseRules()
+	require(t, e)
+	docRules, e := prompts.RoadmapDocumentRules()
+	require(t, e)
+	existingGraph, e := port.graph(ctx)
+	require(t, e)
+	graphRaw, e := json.Marshal(existingGraph)
+	require(t, e)
+	for path, body := range map[string][]byte{roadmapservice.GraphPath: graphRaw, roadmapservice.MappingPath: []byte(`{}`), roadmapservice.ParseRulesPath: parseRules, roadmapservice.DocumentRulesPath: docRules} {
+		require(t, os.WriteFile(filepath.Join(c.Repository, path), body, 0600))
+	}
+	fixtureGit(t, c.Repository, "add", ".")
+	fixtureGit(t, c.Repository, "commit", "-qm", "prepare original parse materials")
+	fixtureGit(t, c.Repository, "push", "origin", "main")
 	source, e := port.source(ctx, sourcePath)
 	require(t, e)
 	parsed := promotionAction(t, port, "roadmap_parse", source.ID, strings.Repeat("a", 32), 1, roadmapservice.ParseInput{RequestID: strings.Repeat("a", 32), Path: sourcePath, Digest: source.Digest, Profile: "fixture"})
 	parsed = awaitPromotion(t, port, parsed, "review")
 	parent := promotionAction(t, port, "roadmap_confirm", parsed.ID, strings.Repeat("1", 32), parsed.Revision, struct{}{})
+	// Explicit normal Git preparation, outside all production commands.
+	planning, e := json.Marshal(struct {
+		Source    string             `json:"source_digest"`
+		Confirmed string             `json:"confirmed_digest"`
+		Analysis  *roadmap.Analysis  `json:"analysis"`
+		Existing  []roadmap.Existing `json:"existing"`
+	}{parent.Source.Digest, parent.ConfirmedDigest, parent.Analysis, parent.Existing})
+	require(t, e)
+	require(t, os.WriteFile(filepath.Join(c.Repository, roadmapservice.PlanningPath), planning, 0600))
+	fixtureGit(t, c.Repository, "add", ".")
+	fixtureGit(t, c.Repository, "commit", "-qm", "prepare confirmed planning material")
+	fixtureGit(t, c.Repository, "push", "origin", "main")
+	code = fixtureGit(t, c.Repository, "rev-parse", "HEAD")
 	require(t, os.WriteFile(filepath.Join(c.Repository, "logic.go"), []byte("dirty worktree must not enter the fixed snapshot"), 0600))
 	r := promotionAction(t, port, "roadmap_generate_documents", parent.ID, strings.Repeat("2", 32), parent.Revision, struct{}{})
 	r = awaitPromotion(t, port, r, "documents-review")

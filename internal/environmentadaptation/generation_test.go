@@ -32,8 +32,8 @@ func TestCallerPromptConvergencePreviousFacts(t *testing.T) {
 		t.Fatal("fact projection lost identity/failure/PR facts")
 	}
 	after, _ := json.Marshal(p)
-	if string(after) != string(original) || len(got) >= len(original) {
-		t.Fatal("source mutated or redundancy retained")
+	if string(after) != string(original) || string(mustReportJSON(t, view.Report)) != string(original) {
+		t.Fatal("complete original report was lost or mutated")
 	}
 	if string(got) != string(env.PreviousFacts(r, a)) {
 		t.Fatal("nondeterministic projection")
@@ -57,7 +57,7 @@ func TestCallerPromptConvergenceStageContextAndFrozenRecovery(t *testing.T) {
 		t.Fatal("phase identity lost")
 	}
 	for _, step := range []string{"implement.execute", "publish"} {
-		if !strings.Contains(input.Workflow.PromptOverrides[step], "初始JSON") || strings.Contains(input.Workflow.PromptOverrides[step], r.Prepared.ScriptDigest) {
+		if !strings.Contains(input.Workflow.PromptOverrides[step], env.ExecutionRulesPath) || strings.Contains(input.Workflow.PromptOverrides[step], r.Prepared.ScriptDigest) {
 			t.Fatal("duplicated identity or missing read instruction")
 		}
 	}
@@ -82,13 +82,15 @@ func TestCallerPromptConvergenceStageContextAndFrozenRecovery(t *testing.T) {
 	observe(t, s)
 	observe(t, s)
 	next := read(t, s, r.ID)
-	if len(next.Rounds) != 2 {
-		t.Fatal("failed round did not retain retry")
+	if len(next.Rounds) != 1 || next.State != "failed" || !strings.Contains(next.Diagnostic, "材料准备不足") || remote.submits != 1 {
+		t.Fatal("missing previous-report channel did not block a new Run", next)
 	}
-	if err := json.Unmarshal(next.Rounds[1].Request.Input, &input); err != nil {
-		t.Fatal(err)
+}
+func mustReportJSON(t *testing.T, r *env.Report) []byte {
+	t.Helper()
+	b, e := json.Marshal(r)
+	if e != nil {
+		t.Fatal(e)
 	}
-	if !strings.Contains(input.Workflow.PromptOverrides["implement.execute"], "前轮问题") || strings.Contains(input.Workflow.PromptOverrides["publish"], "前轮问题") {
-		t.Fatal("phase projection lost prepare diagnosis or repeated it in publish")
-	}
+	return b
 }

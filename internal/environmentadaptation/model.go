@@ -20,6 +20,9 @@ import (
 )
 
 const DocumentPath = "SteerlineFlow/environment.md"
+const GenerationRulesPath = "SteerlineFlow/environment-generation.md"
+const GenerationContextPath = "SteerlineFlow/environment-context.json"
+const ExecutionRulesPath = "SteerlineFlow/environment-execution.md"
 const MaxRounds = 3
 
 var ErrNotFound = errors.New("environment activity not found")

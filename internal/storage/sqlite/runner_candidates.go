@@ -201,6 +201,17 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 	if len(want) != 0 {
 		return nativeErr("contract_mismatch", "Runner input omits fixed task references")
 	}
+	if testingBound && testing.Status == "ready" {
+		arrangement, err := testmodel.ArrangementPath(testing.PlanPath)
+		if err != nil {
+			return nativeErr("contract_mismatch", err.Error())
+		}
+		for _, path := range []string{testmodel.RulesPath, testmodel.CataloguePath, testmodel.WriterPath, testmodel.ProtocolPath, arrangement} {
+			if !seenRefs[path] {
+				return nativeErr("contract_mismatch", "Runner input omits required prepared test file: "+path)
+			}
+		}
+	}
 	// Freeze the public naming hint with the authoritative candidate number,
 	// before the submission can be observed or sent by the bridge.
 	freezeNumber := func(number int) error {

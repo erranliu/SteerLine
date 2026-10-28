@@ -2,7 +2,9 @@ package taskrunner
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
@@ -201,6 +203,14 @@ func InputForAnswer(candidate runnerbridge.Candidate, answer api.DecisionAnswer)
 	}
 	if strings.TrimSpace(text) == "" {
 		return "", nil, failure("invalid_request", "reply text cannot be empty")
+	}
+	// Count the complete text actually delivered, including multi-question JSON
+	// and resolved option labels, but not the transport envelope's metadata.
+	if !utf8.ValidString(text) {
+		return "", nil, failure("invalid_request", "reply text must be valid UTF-8")
+	}
+	if len(text) > 2000 {
+		return "", nil, failure("answer_too_large", fmt.Sprintf("完整回答为 %d 个 UTF-8 字节，上限 2000；未投递，请缩短原回答", len(text)))
 	}
 	body, _ := json.Marshal(struct {
 		Revision   uint64 `json:"expected_revision"`

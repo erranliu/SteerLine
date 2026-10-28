@@ -4,6 +4,8 @@
 
 ## 实施步骤
 
+后续已授权整合 [文档驱动修订](caller-prompt-convergence.plan.md)，下列范围以该修订的新请求边界为准；初次等价迁移的通过记录保留历史。
+
 ### 1. 固定现有正文和接线
 
 核对 Spec 调查表中的生产者与指令写入点，以现有消费者测试捕获同一合成输入的待提交请求。固定文字、动态事实、外部正文和正式资产分别确认来源；客户端展示文字和 schema 不顺带迁移。首轮以等价迁移为默认，必要编码/分隔变化逐项说明，不夹带新业务规则。
@@ -12,7 +14,7 @@
 
 ### 2. 增加一个小型 prompts 包
 
-在 `internal/prompts/` 直接嵌入按用途的 Markdown，用少量 Go 函数绑定文件并复用私有渲染辅助函数。参数复用原事实投影和必要结构，缺失必需值、模板解析失败在提交前返回错误；数据不二次解释，外部正文不改写。
+在 `internal/prompts/` 直接嵌入按用途的 Markdown，用少量 Go 函数绑定文件并复用私有渲染辅助函数。参数仅保留少量定位及标量；完整规则放在 `internal/prompts/materials/`，缺失必需值、模板解析失败在提交前返回错误；数据不二次解释，外部正文不改写。
 
 不建 catalog、用途/参数 schema、动态注册表、片段图、组件身份和通用来源类型；只有已经重复且需要同步的文字才提取一个私有片段。组装包不持业务状态、不调用 Git/数据库/Runner；不让叶模型依赖 prompts/app，不为格式化复制一套领域模型。writer 源码继续使用现有正式资产。
 
@@ -20,12 +22,12 @@
 
 | 所有者 | 最小改动 |
 | --- | --- |
-| testmanagement/model、testmanagement | 将固定指令迁出 `internal/testmanagement/model/documents.go` 和 `generation.go`，模型保留原安排事实投影/引用规则；生成流程使用 prompts，完整材料和 schema 不变。 |
+| testmanagement/model、testmanagement | 将固定指令迁出 `internal/testmanagement/model/documents.go` 和 `generation.go`，模型保留完整安排及固定文件核验；生成流程使用 prompts，完整材料改由原固定仓库读取，schema 保留结构，不夹带原文。 |
 | app、runnerclient | `internal/app/test_documents.go` 保留固定材料、writer 同源核验；`internal/runnerclient/prompt_context.go` 保留 Runner 步骤与原正文选择，调用集中组合函数，适配点不再拼固定规则。 |
 | sqlite | `internal/storage/sqlite/runner_candidates.go` 的 `ReserveRunnerCandidate` 仅适配迁出的同一渲染调用，保留原安排/正文和 writer 模式核验、幂等冲突。普通读取及 `SaveCandidate` 的冻结比较保持原机制；不增加正文解析或新的恢复验证层。 |
-| environmentadaptation、app | 迁移 `internal/environmentadaptation/prompts/materials.md` 及 `internal/app/environment_adaptation.go`、`internal/environmentadaptation/service.go` 的固定文字。prepare/publish 继续覆盖指定步骤；原事实投影、三轮/期限、初始结果、封存和准入不变。组装错误通过准备入口返回。 |
+| environmentadaptation、app | 迁移 `internal/environmentadaptation/prompts/materials.md` 及 `internal/app/environment_adaptation.go`、`internal/environmentadaptation/service.go` 的固定文字。prepare/publish 继续覆盖指定步骤；完整原报告、期限、初始结果、封存和准入保持；缺少前轮报告正式供给渠道时不创建下一 Run，依文档驱动修订登记缺口。组装错误通过准备入口返回。 |
 | roadmap | 迁出 `internal/roadmap/generation.go`、`documents.go` 的 Parse/Document 固定说明，保留原材料、固定规范来源、快照资格及 schema。 |
-| 原回答 | `internal/taskrunner/input.go` 不改写；用既有用例确认原用户、多题及选项完整。 |
+| 原回答 | `internal/taskrunner/input.go` 保留原用户、多题及选项语义；依文档驱动修订在投递前拒绝完整文本超过 2000 UTF-8 字节。 |
 
 删除迁出的常量/旧文件和多余组装函数，不保留第二条正文生成路径或兼容包装。每个用途从原始正文组装一次，用实际请求测试防重复；不实现运行时重复文本识别。
 

@@ -86,19 +86,35 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		Analysis  *model.Analysis  `json:"analysis"`
 		Existing  []model.Existing `json:"existing"`
 	}{r.Source.Digest, r.ConfirmedDigest, r.Analysis, r.Existing})
-	// Full guideline bytes stay in the frozen record for provenance validation.
-	// The model reads the same bytes in its existing repository snapshot.
-	guides := make([]model.Investigation, 0, len(fixed.Materials))
+	// Guideline bytes remain internal provenance, never model inline materials.
 	for _, material := range fixed.Materials {
-		if material.Kind != "inline" || material.Content == nil || strings.TrimSpace(*material.Content) == "" {
+		if material.Content == nil || strings.TrimSpace(*material.Content) == "" {
 			return r, errors.New("固定生成规范内容缺失")
 		}
-		guides = append(guides, model.Investigation{Path: material.Path, SHA256: model.Digest([]byte(*material.Content)), Reason: "必读生成规范"})
+		if _, err := s.fixedFile(ctx, r.CodeCommit, material.Path, []byte(*material.Content), false); err != nil {
+			return r, err
+		}
 	}
-	guideJSON, _ := json.Marshal(guides)
-	materials := []runnercontract.Document{{Kind: "inline", Path: r.Source.Path, Content: &r.Source.Body},
-		{Kind: "inline", Path: "confirmed-planning.json", Content: stringPointer(string(planning))}}
-	instruction, err := prompts.RoadmapDocuments(r.CodeCommit, guideJSON)
+	for _, item := range []struct {
+		path     string
+		expected []byte
+	}{{r.Source.Path, []byte(r.Source.Body)}, {PlanningPath, planning}} {
+		file, err := s.fixedFile(ctx, r.CodeCommit, item.path, item.expected, false)
+		if err != nil {
+			return r, err
+		}
+		r.Materials = append(r.Materials, file)
+	}
+	rules, err := prompts.RoadmapDocumentRules()
+	if err != nil {
+		return r, err
+	}
+	file, err := s.fixedFile(ctx, r.CodeCommit, DocumentRulesPath, rules, true)
+	if err != nil {
+		return r, err
+	}
+	r.Materials = append(r.Materials, file)
+	instruction, err := prompts.RoadmapDocuments(r.CodeCommit, r.Source.Path)
 	if err != nil {
 		return r, err
 	}
@@ -106,7 +122,7 @@ func (s *Service) GenerateDocuments(ctx context.Context, parent, request string,
 		Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": request},
 		Workflow:    runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution,
 		Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: r.CodeCommit},
-			Instruction: instruction, Materials: materials, OutputSchema: model.DocumentSchema(r)}}
+			Instruction: instruction, Materials: []runnercontract.Document{}, OutputSchema: model.DocumentSchema(r)}}
 	if err = catalog.ValidateRepositoryGenerate(input); err != nil {
 		return r, err
 	}

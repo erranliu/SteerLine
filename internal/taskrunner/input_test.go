@@ -115,3 +115,56 @@ func TestRunnerNativeAnswersPreserveQuestionsAndCallerInput(t *testing.T) {
 		t.Fatal(string(raw), err, answer)
 	}
 }
+
+func TestRunnerNativeAnswersUTF8Limit(t *testing.T) {
+	run := &runnerclient.Run{RunID: "original", Revision: 7, Status: "pr_ready", Controls: runnerclient.Controls{CanReply: true}}
+	candidate := runnerbridge.Candidate{ID: "candidate", Revision: 3, Participation: "active", Projection: run}
+	answer := api.DecisionAnswer{RunID: candidate.ID, DecisionID: Decision(run).ID, ExpectedRunRevision: 3, ExpectedDecisionVersion: 7}
+	for _, text := range []string{strings.Repeat("x", 1999), strings.Repeat("x", 2000), strings.Repeat("界", 666) + "ab", strings.Repeat("😀", 499) + "abcd"} {
+		answer.Note = text
+		command, raw, err := InputForAnswer(candidate, answer)
+		var delivered struct {
+			Text string `json:"text"`
+		}
+		if err != nil || command != "reply" || json.Unmarshal(raw, &delivered) != nil || delivered.Text != text {
+			t.Fatal("valid original answer changed", len(text), err)
+		}
+	}
+	for _, text := range []string{strings.Repeat("x", 2001), strings.Repeat("界", 667), strings.Repeat("😀", 501)} {
+		answer.Note = text
+		command, raw, err := InputForAnswer(candidate, answer)
+		if err == nil || command != "" || len(raw) != 0 || !strings.Contains(err.Error(), "2000") {
+			t.Fatal("oversized answer was prepared", len(text), err)
+		}
+	}
+	answer.Note = string([]byte{0xff})
+	if _, _, err := InputForAnswer(candidate, answer); err == nil {
+		t.Fatal("invalid UTF-8 accepted")
+	}
+	q := &runnerclient.Question{}
+	if err := json.Unmarshal([]byte(`{"id":"questions","native_questions":[{"id":"a","allow_free_text":true},{"id":"b","allow_free_text":true}]}`), q); err != nil {
+		t.Fatal(err)
+	}
+	run.Question = q
+	answer.DecisionID = q.ID
+	answer.Note = ""
+	for _, size := range []int{1999, 2000, 2001} {
+		values := map[string][]string{"a": {"one"}, "b": {""}}
+		base, _ := json.Marshal(values)
+		values["b"] = []string{strings.Repeat("x", size-len(base))}
+		answer.Answers = values
+		command, raw, err := InputForAnswer(candidate, answer)
+		if size > 2000 {
+			if err == nil || command != "" || raw != nil {
+				t.Fatal("multi-question total limit bypassed")
+			}
+			continue
+		}
+		var delivered struct {
+			Text string `json:"text"`
+		}
+		if err != nil || json.Unmarshal(raw, &delivered) != nil || len(delivered.Text) != size {
+			t.Fatal("complete multi-question answer changed", err)
+		}
+	}
+}

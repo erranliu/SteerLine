@@ -32,8 +32,11 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 	f.run = runnercontract.Run{RunID: q.RequestID, Revision: 1, Correlation: in.Correlation, Workflow: in.Workflow,
 		InputDigest: roadmap.Digest(q.Input), Status: "completed", StopStatus: "stopped"}
 	var result any
-	if in.Generate.Repository == nil {
-		body := *in.Generate.Materials[0].Content
+	r, err := f.port.store.Roadmap(ctx, f.port.config.Identity(), in.Correlation["steerline_roadmap_parse"])
+	require(f.t, err)
+	f.run.RepositorySource = appRepositoryManifest(f.t, *in.Generate.Repository)
+	if r.Purpose != "documents" {
+		body := r.Source.Body
 		result = roadmap.Analysis{Tasks: []roadmap.Node{
 			{Key: "T1", KeyOrigin: "markdown", Title: "Sum function", Goal: "Sum two integers", Scope: "Pure function", Acceptance: "Sum(2,3) equals 5", Evidence: strings.Split(body, "\n")[1], Original: roadmap.Dependencies{}, Proposed: roadmap.Dependencies{}},
 			{Key: "T2", KeyOrigin: "markdown", Title: "Difference function", Goal: "Subtract via Sum", Scope: "Pure function", Acceptance: "Difference(5,2) equals 3", Evidence: strings.Split(body, "\n")[2], Original: roadmap.Dependencies{Local: []string{"T1"}}, Proposed: roadmap.Dependencies{Local: []string{"T1"}}},
@@ -165,7 +168,7 @@ func configurePromotionGeneration(t *testing.T, port *roadmapPort, live bool) {
 	}
 	port.config.runtimeCatalog = catalog
 	port.service = &roadmapservice.Service{Project: port.config.Identity(), Repository: port.config.Repository, Store: port.store, Runner: runner, Build: build,
-		Source: port.source, Graph: port.graph, PrepareDocuments: port.documentContext,
+		Source: port.source, Graph: port.graph, PrepareDocuments: port.documentContext, ReadCommitted: port.config.runtimeMaintenance.read,
 		Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 			return execution, catalog, nil
 		}}

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -62,6 +63,7 @@ func RunnerCLI(args []string) (bool, error) {
 			}
 			data["version"] = "caller-fixture-v1"
 			data["resource_version"] = 1
+			advertiseRepository(data)
 			data["resource_digest"] = strings.Repeat("a", 64)
 			return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": "steerrunner-cli/v1", "ok": true, "request_id": nil, "data": data, "error": nil})
 		}
@@ -205,7 +207,15 @@ func RunnerCLI(args []string) (bool, error) {
 			// Scripted public result, not a native/model success claim.
 			selection := []string{}
 			noTests := false
-			for _, material := range generation.Generate.Materials {
+			materials := generation.Generate.Materials
+			if generation.Generate.Repository != nil {
+				var e error
+				materials, run.RepositorySource, e = fixtureRepository(*generation.Generate.Repository)
+				if e != nil {
+					return true, e
+				}
+			}
+			for _, material := range materials {
 				if material.Content == nil {
 					continue
 				}
@@ -231,7 +241,7 @@ func RunnerCLI(args []string) (bool, error) {
 			}
 			result, _ := json.Marshal(map[string]any{"tests": selection})
 			source := runnercontract.Final{CommandID: "fixture-content-" + request.RequestID, TurnID: "fixture-turn", Verified: true, NativeOutcome: "succeeded", Source: "caller-fixture"}
-			run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: result, Source: source}
+			run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: result, RepositorySource: run.RepositorySource, Source: source}
 			run.Status = "completed"
 			run.StopStatus = "stopped"
 			run.Final = &source
@@ -442,6 +452,7 @@ func controlledCapabilities() map[string]any {
 	caps["workflows"].([]any)[0].(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}
 	caps["workflows"] = append(caps["workflows"].([]any), map[string]any{"id": "generate", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{}})
 	caps["configuration_schemas"].(map[string]any)["generate_input"] = map[string]any{"type": "object", "required": []string{"workflow", "execution", "generate"}}
+	advertiseRepository(caps)
 	return caps
 }
 
@@ -470,4 +481,42 @@ func (s RunnerFixture) eventPage(run runnercontract.Run, after string) runnercon
 		page.NextCursor = "fixture-end"
 	}
 	return page
+}
+
+// Public repository snapshot behavior for this scripted caller peer only.
+func fixtureRepository(repo runnercontract.GenerateRepository) ([]runnercontract.Document, *runnercontract.RepositorySource, error) {
+	git := func(args ...string) ([]byte, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		return exec.CommandContext(ctx, "git", append([]string{"-C", repo.LocalPath}, args...)...).Output()
+	}
+	tree, err := git("rev-parse", repo.Commit+"^{tree}")
+	if err != nil {
+		return nil, nil, err
+	}
+	source := &runnercontract.RepositorySource{LocalPath: repo.LocalPath, Commit: repo.Commit, Tree: strings.TrimSpace(string(tree))}
+	materials := []runnercontract.Document{}
+	entries, err := git("ls-tree", "-r", repo.Commit)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(entries)), "\n") {
+		meta, path, ok := strings.Cut(line, "\t")
+		fields := strings.Fields(meta)
+		if !ok || len(fields) != 3 || fields[0] != "100644" && fields[0] != "100755" {
+			return nil, nil, fmt.Errorf("unsupported fixture source entry")
+		}
+		body, e := git("cat-file", "blob", fields[2])
+		if e != nil {
+			return nil, nil, e
+		}
+		hash := sha256.Sum256(body)
+		source.Files = append(source.Files, runnercontract.RepositoryFile{Path: path, Blob: fields[2], SHA256: hex.EncodeToString(hash[:]), SizeBytes: len(body)})
+		text := string(body)
+		materials = append(materials, runnercontract.Document{Path: path, Content: &text, Kind: "inline"})
+	}
+	return materials, source, nil
+}
+func advertiseRepository(caps map[string]any) {
+	caps["generate"] = map[string]any{"workflow": "generate/1", "result": "inspect/history: content_result.json", "source": "repository_source: commit/tree/files/blob/sha256/size_bytes", "max_result_utf8_bytes": 1048576, "output_schema": "caller_defined_json_schema_2020_12", "repository": map[string]any{"commit": "full_commit_object_id", "input_property": "generate.repository", "source": "existing_local_git_objects", "snapshot": "private_regular_files_without_git", "max_files": 4096, "max_bytes": 67108864, "max_manifest_bytes": 1048576}}
 }

@@ -26,6 +26,7 @@ func RuntimeProgress(s *Scenario) {
 	s.Must(controlled.Write(filepath.Join(p.Repo, "SteerlineFlow", "testing", "test-list.json"), testmanagement.Catalogue{Tests: []testmanagement.Definition{definition}}))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "testing.md"), []byte("Run exactly fixture.progress; passing assertions complete its progress field.\n"), 0600))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.plan.md"), []byte("# Progress plan\nRequires fixture.progress automatic assertions.\n"), 0600))
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow/plans/task.tests.json"), []byte(`{"tests":["fixture.progress"]}`), 0600))
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Progress fixture arrangement")
 	pushProvider, pushErr := controlled.Read(p.Provider)

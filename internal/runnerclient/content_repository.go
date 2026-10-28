@@ -2,7 +2,9 @@ package runnerclient
 
 import (
 	"errors"
+	"fmt"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"path/filepath"
 )
 
 // GenerateCapability mirrors the published generate capability, not a new workflow.
@@ -21,6 +23,34 @@ type GenerateCapability struct {
 	Source             string `json:"source"`
 	MaxResultUTF8Bytes int    `json:"max_result_utf8_bytes"`
 	OutputSchema       string `json:"output_schema"`
+}
+
+// VerifyRepositoryFiles consumes the existing public snapshot manifest. It is
+// availability/provenance evidence, never proof that a model read the files.
+func VerifyRepositoryFiles(source *runnercontract.RepositorySource, repository runnercontract.GenerateRepository, expected map[string]string) error {
+	if source == nil || source.Commit != repository.Commit || filepath.Clean(source.LocalPath) != filepath.Clean(repository.LocalPath) || source.Tree == "" {
+		return errors.New("fixed repository source identity is unverified")
+	}
+	seen := map[string]bool{}
+	matched := map[string]bool{}
+	for _, file := range source.Files {
+		if seen[file.Path] {
+			return errors.New("duplicate repository source file")
+		}
+		seen[file.Path] = true
+		if digest, ok := expected[file.Path]; ok {
+			if file.SHA256 != digest || file.Blob == "" || file.SizeBytes < 1 {
+				return fmt.Errorf("fixed source file differs: %s", file.Path)
+			}
+			matched[file.Path] = true
+		}
+	}
+	for path := range expected {
+		if !matched[path] {
+			return fmt.Errorf("fixed source file is absent: %s", path)
+		}
+	}
+	return nil
 }
 
 func (c *Catalog) RepositoryGenerationUnavailable() string {

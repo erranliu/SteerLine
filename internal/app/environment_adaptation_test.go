@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,6 +31,18 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	t.Setenv("GIT_CONFIG_KEY_0", "url."+filepath.ToSlash(origin)+".insteadOf")
 	t.Setenv("GIT_CONFIG_VALUE_0", "https://github.com/owner/repo.git")
 	files := map[string]string{env.DocumentPath: "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"environment-validation\",\"dependencies\":[\"go.mod\"]}\n```\n", "scripts/verify-environment.ps1": "param($Phase)\n# fixture only\n", "go.mod": "module example.invalid/fixture\n", "SteerlineFlow/testing.md": "# Rules\nL2 + PR\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L2","environment":"controlled","command":"go test ./...","check":"passes"}]}`}
+	executionRules, e := prompts.EnvironmentExecutionRules()
+	require(t, e)
+	generationRules, e := prompts.EnvironmentGenerationRules()
+	require(t, e)
+	files[env.ExecutionRulesPath] = string(executionRules)
+	files[env.GenerationRulesPath] = string(generationRules)
+	public, _ := json.Marshal(c.runnerPublication())
+	contextBody, _ := json.Marshal(struct {
+		Publication json.RawMessage `json:"publication"`
+		Previous    json.RawMessage `json:"previous"`
+	}{public, nil})
+	files[env.GenerationContextPath] = string(contextBody)
 	for name, body := range files {
 		path := filepath.Join(c.Repository, name)
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))
@@ -38,10 +51,7 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	fixtureGit(t, c.Repository, "add", ".")
 	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "environment materials")
 	fixtureGit(t, c.Repository, "push", "origin", "main")
-	raw, e := os.ReadFile("../runnerclient/testdata/content-capabilities.json")
-	require(t, e)
-	var caps runnerclient.Capabilities
-	require(t, json.Unmarshal(raw, &caps))
+	caps := promotionCatalog(t).Capabilities
 	readsFile := false
 	caps.ResultFile = &runnerclient.ResultCapability{ProgressCapability: runnerclient.ProgressCapability{Contract: runnercontract.ResultContract, Command: "result-file --run-id R --json", SubmitProperty: "result_file", EnvironmentVariable: "STEERLINE_RESULT_FILE", MaxBytes: 65536, Encoding: "base64", Digest: "sha256"}, Collection: "end_only", QueryReadsFile: &readsFile}
 	caps.ResultFileSchema, e = os.ReadFile("../runnerclient/testdata/result-file.schema.json")
@@ -65,13 +75,52 @@ func TestProjectEnvironmentGenerationPinnedMaterialsAndSeparateUseCase(t *testin
 	p, _, _ := environmentFixture(t)
 	input, e := p.prepareGeneration(context.Background(), "fixture")
 	require(t, e)
-	if input.Workflow.ID != "generate" || len(input.Generate.Materials) < 4 || !strings.Contains(input.Generate.Instruction, "完整L2") || !strings.Contains(input.Generate.Instruction, "STEERLINE_RESULT_FILE") {
-		t.Fatal("generation material contract missing")
+	if input.Workflow.ID != "generate" || len(input.Generate.Materials) != 0 || input.Generate.Repository == nil || !strings.Contains(input.Generate.Instruction, env.GenerationRulesPath) || !strings.Contains(input.Generate.Instruction, env.GenerationContextPath) {
+		t.Fatal("generation did not reference pinned actual files")
 	}
-	for _, m := range input.Generate.Materials {
-		if m.Content == nil || m.Kind != "inline" {
-			t.Fatal("generation must freeze actual bytes")
-		}
+	source := appRepositoryManifest(t, *input.Generate.Repository)
+	if err := runnerclient.VerifyRepositoryFiles(source, *input.Generate.Repository, nil); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+func TestCallerPromptConvergenceEnvironmentMaterialPreparation(t *testing.T) {
+	p, c, store := environmentFixture(t)
+	ctx := context.Background()
+	report := &env.Report{Message: "original diagnosis", Checks: []env.Check{{ID: "passed", Status: "passed", Message: strings.Repeat("complete successful detail;", 300)}, {ID: "failed", Status: "failed", Message: "完整失败原因"}}, L2: []env.Item{{ID: "one", Status: "incomplete", Message: "not executed"}}, PR: env.PR{OutcomeUnknown: true}}
+	r := env.Record{ID: env.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", State: "failed", Diagnostic: "original failure", Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Report: report, Settled: true}}}
+	require(t, store.SaveEnvironment(ctx, r, 0))
+	if _, err := p.prepareGeneration(ctx, "fixture"); err == nil || !strings.Contains(err.Error(), "完整前轮事实") {
+		t.Fatal("stale prepared context accepted", err)
+	}
+	public, _ := json.Marshal(c.runnerPublication())
+	body, err := json.Marshal(struct {
+		Publication json.RawMessage `json:"publication"`
+		Previous    json.RawMessage `json:"previous"`
+	}{public, env.PreviousFacts(r, r.Rounds[0])})
+	require(t, err)
+	commit := func() {
+		fixtureGit(t, c.Repository, "add", ".")
+		fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "prepare fixed material")
+		fixtureGit(t, c.Repository, "push", "origin", "main")
+	}
+	require(t, os.WriteFile(filepath.Join(c.Repository, env.GenerationContextPath), body, 0600))
+	commit()
+	in, err := p.prepareGeneration(ctx, "fixture")
+	require(t, err)
+	if in.Generate.Repository == nil || len(in.Generate.Materials) != 0 {
+		t.Fatal("prepared report expanded into prompt")
+	}
+	actual, err := p.read(ctx, in.Generate.Repository.Commit, env.GenerationContextPath)
+	require(t, err)
+	if string(actual) != string(body) || !strings.Contains(string(actual), report.Checks[0].Message) {
+		t.Fatal("complete previous report not available in pinned file")
+	}
+	require(t, os.WriteFile(filepath.Join(c.Repository, env.ExecutionRulesPath), []byte("changed report contract"), 0600))
+	commit()
+	if _, err = p.prepareGeneration(ctx, "fixture"); err == nil || !strings.Contains(err.Error(), "不同源") {
+		t.Fatal("changed fixed rules accepted", err)
 	}
 }
 func TestProjectEnvironmentAdmissionFixedBaseAndFiniteFreshness(t *testing.T) {

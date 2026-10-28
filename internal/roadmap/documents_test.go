@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"os"
 	"strings"
 	"testing"
@@ -64,6 +65,19 @@ func documentSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, mod
 		body := "fixed generation guidelines"
 		return model.DocumentContext{Commit: strings.Repeat("a", 40), Tree: strings.Repeat("b", 40), Materials: []runnercontract.Document{{Kind: "inline", Path: "SpecGuide.md", Content: &body}}}, nil
 	}
+	planning, _ := json.Marshal(struct {
+		Source    string           `json:"source_digest"`
+		Confirmed string           `json:"confirmed_digest"`
+		Analysis  *model.Analysis  `json:"analysis"`
+		Existing  []model.Existing `json:"existing"`
+	}{r.Source.Digest, r.ConfirmedDigest, r.Analysis, r.Existing})
+	rules, err := prompts.RoadmapDocumentRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.files[PlanningPath] = planning
+	f.files[DocumentRulesPath] = rules
+	f.files["SpecGuide.md"] = []byte("fixed generation guidelines")
 	return s, store, f, r
 }
 func documentResult(r model.Record) (model.GeneratedDocuments, *runnercontract.RepositorySource) {
@@ -99,9 +113,10 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	if input.Generate.Repository == nil || input.Generate.Repository.Commit != r.CodeCommit || input.Generate.Repository.LocalPath != s.Repository {
 		t.Fatal(input)
 	}
-	if len(input.Generate.Materials) != 2 || *input.Generate.Materials[0].Content != parent.Source.Body || !strings.Contains(input.Generate.Instruction, model.Digest([]byte(*r.Materials[0].Content))) || strings.Contains(input.Generate.Instruction, *r.Materials[0].Content) {
-		t.Fatal("guidelines duplicated or original input lost")
+	if len(input.Generate.Materials) != 0 || !strings.Contains(input.Generate.Instruction, PlanningPath) || strings.Contains(input.Generate.Instruction, parent.Source.Body) {
+		t.Fatal("materials expanded instead of referenced")
 	}
+
 	if _, err = s.GenerateDocuments(ctx, parent.ID, r.RequestID, parent.Revision); err != nil || f.submits != 2 {
 		t.Fatal("duplicate document submission", err, f.submits)
 	}

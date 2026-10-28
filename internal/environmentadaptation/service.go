@@ -104,6 +104,9 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 		if e != nil {
 			return r, e
 		}
+		if input.Generate.Repository == nil || len(input.Generate.Materials) != 0 {
+			return r, errors.New("材料准备不足：环境生成必须使用固定仓库文件，不能 inline")
+		}
 		input.Correlation = map[string]string{"environment_activity": id, "steerline_project": s.Project}
 		r.Kind = "generation"
 		r.Execution = input.Execution
@@ -151,6 +154,10 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 	return r, e
 }
 func (s *Service) appendRound(r *Record) error {
+	if len(r.Rounds) > 0 {
+		r.State = "failed"
+		return errors.New("材料准备不足：前轮完整报告没有正式渠道供新轮次工作区读取；未创建下一 Run")
+	}
 	n := len(r.Rounds) + 1
 	input := r.Prepared.Input
 	input.NamePrefix = "sl-env"
@@ -164,7 +171,7 @@ func (s *Service) appendRound(r *Record) error {
 	}
 	raw, _ := json.Marshal(progress)
 	input.ProgressFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(raw)}
-	prepare, err := prompts.EnvironmentPrepare(r.Diagnostic)
+	prepare, err := prompts.EnvironmentPrepare()
 	if err != nil {
 		return err
 	}
@@ -326,7 +333,25 @@ func (s *Service) observe(ctx context.Context, r *Record) error {
 			} else if strings.TrimSpace(g.Script) == "" || g.Gaps == nil {
 				a.Diagnostic = "生成脚本为空"
 			} else {
-				r.Generation = &g
+				var frozen runnercontract.GenerateRunInput
+				if e := json.Unmarshal(a.Request.Input, &frozen); e != nil {
+					return e
+				}
+				var sourceErr error
+				if frozen.Generate.Repository != nil {
+					left, _ := json.Marshal(result.RepositorySource)
+					right, _ := json.Marshal(run.RepositorySource)
+					if string(left) != string(right) {
+						sourceErr = errors.New("环境生成 Run/result 的固定来源不一致")
+					} else {
+						sourceErr = runnerclient.VerifyRepositoryFiles(result.RepositorySource, *frozen.Generate.Repository, nil)
+					}
+				}
+				if sourceErr != nil {
+					a.Diagnostic = sourceErr.Error()
+				} else {
+					r.Generation = &g
+				}
 			}
 		}
 	} else {
@@ -464,7 +489,7 @@ func (s *Service) next(ctx context.Context, r *Record) error {
 		r.State = "failed"
 	} else if len(r.Rounds) < MaxRounds {
 		if err := s.appendRound(r); err != nil {
-			return err
+			r.Diagnostic = err.Error()
 		}
 	} else {
 		r.State = "failed"

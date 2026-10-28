@@ -19,6 +19,7 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -28,6 +29,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/testkit/remotetest"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
+	progresstools "github.com/erranliu/SteerLine/tools"
 	"github.com/google/uuid"
 )
 
@@ -280,6 +282,13 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 		path := filepath.Join(p.Repo, "SteerlineFlow", directory, name)
 		s.Must(os.MkdirAll(filepath.Dir(path), 0700))
 		s.Must(os.WriteFile(path, raw, 0600))
+	}
+	rules, err := prompts.TestingRules()
+	s.Must(err)
+	for path, body := range map[string][]byte{"SteerlineFlow/testing/runtime-progress.md": rules, "tools/testing/RuntimeProgress.ps1": []byte(progresstools.PowerShellWriter)} {
+		target := filepath.Join(p.Repo, path)
+		s.Must(os.MkdirAll(filepath.Dir(target), 0700))
+		s.Must(os.WriteFile(target, body, 0600))
 	}
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "E2E project and contracts")

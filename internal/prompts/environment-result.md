@@ -1,2 +1,0 @@
-
-读取 STEERLINE_RESULT_FILE 初始JSON取得并保留本轮 activity_id、round、source_commit、script_digest；按固定环境文档执行脚本。script_digest 核验固定提交的原始Git blob，工作区CRLF转换不算变更。返回前原子写完最终报告；Runner仅在执行结束且生产者停止后封存一次，不等待回传、不用resume刷新结果。

@@ -1,1 +1,1 @@
-STEERLINE_PROGRESS_FILE 是本轮测试入口专用的 test.<测试ID> 布尔对象。本步骤不得写入、覆盖或追加此文件，不得加入 publication、PR 或报告字段，不得替测试入口补填通过。保持原步骤的回复和发布契约，通过原渠道报告结果及 PR URL。
+只报告或发布本步骤结果。先读取 SteerlineFlow/testing/runtime-progress.md 的只读边界；不得修改测试进度或替测试入口补填通过。

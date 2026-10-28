@@ -1,14 +1,75 @@
 # 调用方提示词收敛验收记录
 
-关联 [Spec](../../spec/caller-prompt-convergence.spec.md) / [Plan](../../plans/caller-prompt-convergence.plan.md)。2026-10-28 用户授权实现；**自动验收已通过**。实现提交为 `210790fa4f721db67cbad3dcbec7794f1e4f2bfe`，在同一干净提交上完成最终 L1/L2/L3，零失败、零意外跳过，E2E 清理完整。
+关联 [Spec](../../spec/caller-prompt-convergence.spec.md) / [Plan](../../plans/caller-prompt-convergence.plan.md)。2026-10-28 按用户授权，在 PR407 固定模板机制上整合 PR406 的文档驱动修订。PR406 参考版本为 `e6b97c354f5467d7e847dadeb3d497a2ceca8f0b`；已对 `origin/main` 执行 rebase，基线仍为 `a5c12eafcb2bf6e442de07ded2c6fd4affeb9541`，无新增提交需要重放。未合并 PR406/407、修改 Runner 或部署。
 
-## 实现与范围
+本轮受测为 `345887d1d98224195a44b7744655c10420e3f221` 加本 PR 工作树，原 summary 保留源码状态；不冒充干净提交或真实 Agent 资格。Windows/amd64、Go 1.26.4，独立证据根 `C:/SteerlineDebug/wt-2352-document-driven/`。初次治理及 PR405 的结果保留历史，不继承其通过结论。
+
+## 当前实现及边界
+
+9 个短模板仍从 `internal/prompts` 唯一组装；5 份完整规则保存在同包 `materials/`。新生成请求使用原 `generate.repository` 固定提交，`generate.materials` 为空；原 schema 字段结构及结果验证保留。Roadmap 的 evidence 原文行枚举已从 schema 移除，结果仍逐字对照原文，不从 schema 旁路传送原文。
+
+项目文件必须按正常 Git 流程准备，程序只核验，不导出或自动提交材料：测试 `.tests.json` 展开后逐项等于完整冻结定义及顺序；协议/writer 只允许 LF/CRLF 差异；Roadmap 原文、图、映射、确认规划逐字核对原权威；环境公开配置和完整前轮报告逐字对照 context JSON。详细固定路径和 JSON 格式见 Spec，不新增第二份安排权威、数据库字段、材料发布服务或临时仓库。
+
+环境报告字段只维护在 `environment-execution.md`，生成与执行均须核验/读取。全部成功、失败、incomplete、未知和清理事实完整保留。当前渠道不能把刚封存的完整报告送入下一 Run 的新工作区，因此原轮完成失败后保存准备不足并停止自动新轮次；首次完整成功仍可正常就绪。此缺口不是“三轮自动链通过”。
+
+用户回答按原通道发送，完整实际文本最多 2000 UTF-8 字节，多问题序列化后的文本合计；覆盖 1999/2000/2001、中文、emoji、选项及多题。超限返回实际字节和上限，未生成投递信封，不截断/摘要/转文件。已冻结请求仍按原身份观察、恢复和原 CAS，不重组装或重复提交。
+
+| 验收项 | 已验证范围 | 状态与未验边界 |
+| --- | --- | --- |
+| CPC-D01 | 实际请求无长规则/源码/原规划 inline；9 个短正文黄金样本及完整请求/schema 反例 | 受控已验；原 Runner/用户正文继续由原来源决定，不把 caller 统计当总模型输入 |
+| CPC-D02 | 真实固定 Git 文件、完整提交、规则/原文/确认数据一致、结果来源 manifest | 文件可用性/来源及受控读取已验；真实模型/远端 Agent 读取资格未验 |
+| CPC-D03 | 缺 commit/reader/文件、无权限、错误原文/图/映射/规则、过期 context、缺/变 writer 阻断 | 已验；准备不足反例不计为业务完整流程成功 |
+| CPC-D04 | 完整冻结安排/note/顺序、真实选择核验、步骤权限、原预留/CAS及进度恢复 | 已验受控链；未触碰旧现场 |
+| CPC-D05 | 真实 Git 受控 Roadmap 生成/发布/入图；完整前轮报告文件；环境首次成功与失败阻断 | 受控已验；项目材料须正常 Git 准备，自动下一轮完整报告通道仍缺失 |
+| CPC-D06 | 2000 字节边界、合法原回答、原冻结请求观察与恢复 | 已验 owner/受控；真实远端投递未验 |
+| CPC-D07 | 已支持条件、准备缺口、原报告和未验资格分别登记 | 已登记；独立审核与远端保护仍待对应验收 |
+
+## 正文变更与门禁
+
+同一合成输入比较 `345887d1` 的黄金样本与本轮短模板，单位 UTF-8 字节，仅统计 caller 新增正文：
+
+| 用途 | 原值 | 当前 |
+| --- | ---: | ---: |
+| 测试执行，同源 writer | 2183 | 458 |
+| 含用户原文的步骤组合 | 2211 | 486 |
+| 测试只读步骤 | 303 | 163 |
+| 测试安排生成 | 415 | 258 |
+| Roadmap 解析 | 765 | 245 |
+| Roadmap 文档生成 | 1478 | 343 |
+| 环境生成 | 5762 | 294 |
+| 环境 prepare | 1022 | 272 |
+| 环境 publish | 788 | 259 |
+
+缺 writer 的旧内联样本已删除，新操作直接准备不足。长规则以真实文件完整提供，当前 LF 资产分别为 testing 2720、roadmap-parse 766、roadmap-documents 1363、environment-generation 4731、environment-execution 2877 字节。前轮报告保持完整，不计为删除的信息。长规则使用测试内少量字节摘要快照触发显式审阅，不再复制正文，也不是运行时签名或预算；短模板仍逐字黄金比较。更新期望值不替代独立审核。
+
+## 自动验证与失败留痕
+
+以下路径均相对独立证据根；未导出 Git 测试历史：
+
+- `test-results/L1/20261028T195638654Z/summary.json`：固定 `l1.minimum` 通过，85 pass / 0 skip，准备 0.359 秒、执行 9.670 秒；包含规则字节快照、正文样本与有限源码守卫。
+- `test-results/L2/20261028T194844659Z/summary.json`：固定 `smoke.delivery` 通过，准备 15.849 秒、执行 93.904 秒，`cleanup_complete=true`。
+- `test-results/L3/20261028T194924885Z/summary.json`：`testing.runtime-progress` 通过，准备 15.353 秒、执行 122.348 秒，`cleanup_complete=true`；实际准备固定协议/writer/安排，保留原进度、重跑、错误、恢复/重启和输入不重复断言。
+- `diagnostics/20261028T195810260Z-owners-pass/summary.json`：prompts/taskrunner/testmanagement/roadmap/environmentadaptation/runnerclient/sqlite 完整 owner 回归通过，307 pass / 3 预期 opt-in skip，28.671 秒。三个真实公开环境/Runner 专项未执行，不算通过。
+- `diagnostics/20261028T195115621Z-app-verify/summary.json`：应用定向集 42 pass / 1 fail，376.743 秒；真实 Git Roadmap 全链及材料核验通过。唯一失败为旧环境用例仍期待自动第二轮就绪；已修正为首次成功准入、缺完整报告渠道拒绝新 Run 两条路径，`diagnostics/20261028T195605729Z-workflow/summary.json` 3 pass / 0 skip，58.454 秒。不能把前一失败报告记为全绿。
+- `diagnostics/20261028T195351573Z-materials/summary.json`：完整前轮报告固定文件、过期 context/被改规则拒绝及生成队列专项，3 pass / 0 skip，71.957 秒。
+- `diagnostics/20261028T200030406Z-frozen-recovery/summary.json`：为原已停止 Run 夹具正常 Git 准备协议及正式 writer 后，部署中断、Runner 替换/接管、启动取消 outbox 和原 Run 绑定回归通过，37 pass / 0 skip，280.188 秒；保留旧请求、身份和零额外业务投递检查。
+- `diagnostics/20261028T195419564Z-final-owners/summary.json`：扩到既有结构检查的定向运行整体失败，225 pass / 1 skip / 2 fail；两项为 `TestTM04ExecutionBoundary` 及其 `repository_all_tags_windows_linux` 子项，仍是未改动的 `sqlite/environments.go -> environmentadaptation` 禁止依赖。已在首次治理的 main 基线快照与修订版本双向复现，原证据见 [治理验收](prompt-governance.md)。本次有限提示词守卫/L1 通过，不声称完整架构门禁全绿。
+
+本轮早期编译/夹具不完整、缺文件和旧预期失败的原报告均保留在 diagnostics，未覆盖或自动重试。后续按具体失败修正并使用新目录复验；冻结请求恢复的早期缺协议失败已通过正常 Git 夹具准备修复，结果见上项。启动器的 `TestInstallLaunchersWritesCRLF` 在未改的 main 快照上也失败（期望写出文件数与现有四个文件不符），基线复现为 `diagnostics/20261028T200101353Z-baseline-launcher/summary.json`，13.394 秒；该问题不在本次提示词范围，不宣称全 app / Full 通过。
+
+现有调试包装的受控 Runner seed 已组合既有公开 repository capability/schema，避免包内夹具继续声明旧 inline-only 输入；仅做公开夹具适配，PowerShell 语法解析通过，未执行新的调试发布或部署。
+
+未开展真实模型、Orca/Unity 探针、业务 PR、原 Task18 两轮、旧运行注入、跨会话消息或子代理。未启用 GitHub 必需检查/独立审批保护；合入前仍需独立审核，不以本聊天自查替代。
+
+以下各节均为 PR405 已交付范围的历史记录，原失败、证据位置及未验边界不覆盖。
+
+## PR405 第一阶段实现与范围（历史）
 
 实现基于 main `ab66befe2ae4bf13de3e580d62ca2e39d51c84df`；PR399 调查版本为 `48ad01467976aff768c11f5deaaf521efbe717ee`。仅整合本次需要的完整 writer、逐 ID 接线约束、发布/报告只读边界及规范/Plan 必跑并集，不合入 PR399 其他业务改动。未修改 Runner、存储 schema、模型执行入口、预算、旧运行或安装现场。
 
 完整安排仍原样保存，紧凑提示包括有序 ID、来源、定义摘要和原快照摘要；准备阶段从固定 Git blob 核对 Plan、规范、逐项完整定义及 note。writer 只允许 CRLF/LF 等价，缺失或不同源仍完整内联。Roadmap 规范正文保留在冻结记录用于 manifest 校验，模型通过既有固定仓库读取；原 Markdown、确认规划及其他生成的必要 inline 材料不变。环境派生事实仅省去成功项冗长 message，原报告及全部失败、未完成、PR 未知/清理事实保留；阶段从原结果初始 JSON 取关联字段。
 
-## 自动验收
+## PR405 自动验收（历史）
 
 | 验收项 | 已验证范围 | 当前结果 |
 | --- | --- | --- |
@@ -31,7 +92,7 @@
 - 同一干净提交的最终回归：`test-results/L1/final-01/summary.json`（44 pass / 0 skip，准备 0.546 秒、执行 10.123 秒）、`test-results/L2/final-01/summary.json`（`smoke.delivery` 通过、cleanup 完整，准备 14.542 秒、执行 99.831 秒）、`test-results/L3/final-01/summary.json`（`testing.runtime-progress` 通过、cleanup 完整，准备 17.702 秒、执行 132.549 秒）。正式报告已通过原 `test-feedback record` 导出到[受测提交的 Git 历史](../records/210790fa4f721db67cbad3dcbec7794f1e4f2bfe.json)；后续仅补验收说明及测试记录，不改受测实现。
 - `python scripts/check_doc_links.py`：597 文件、本地链接、0 错误；`git diff --check` 通过。
 
-## 实际减量
+## PR405 实际减量（历史）
 
 以下为组件的 UTF-8 字节，不是最终模型总输入或投递稳定性结论。测试安排/选择/环境提示以前述 PR399 固定 Git blob 为比较基线；Roadmap 用 main 固定规范。未重复计算请求 JSON 中的持久化副本。
 
@@ -48,7 +109,7 @@
 
 规范 5919 的历史工作区数字与本次 Git blob LF 的 5896 区别来自行尾，未据此虚报语义减量。小安排或缺 helper 项目仍可能有较大输入，不设比例门禁。测量脚本与固定来源/组成保存在 `diagnostics/measurements/measure.py`、`components.json`，安排/报告合成夹具及测量日志见对应 Go 用例。
 
-## 原失败与边界
+## PR405 原失败与边界（历史）
 
 - `generation-01` 的新增测试误调用不存在的 `Tick`，改为正式 `Observe` 后完整环境 owner 补测通过；保留原编译失败日志。
 - L3 首次参数未经 PowerShell 字面引用，在参数校验阶段退出，未执行场景。正式调用对含点号参数加引号。

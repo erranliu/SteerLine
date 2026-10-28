@@ -16,7 +16,7 @@
 - 进度观察独立于生成结果和材料刷新错误；不发送 submit/reply/resume，不改变 Runner 或 Task 业务终态。
 - 系统测试安排生成提示先保留项目规范和 Plan 各自明确要求的必跑入口并取并集，再按实际影响追加相关定向项；Plan 的必跑表、验收映射和提交前要求不能降为可选项，也不能用业务回归替代结构或资源契约检查。不能把 Plan 未重复列出 L1/L2 或“最小验证”理解为取消规范要求。不在通用代码中硬编码业务项目的测试 ID，不手工改写模型原安排或补造执行结果。
 
-2026-10-28 调用方提示收敛：完整安排保留为权威，执行提示改为经固定来源核对的 ID/来源/摘要视图；同源 writer 仅引用真实固定文件，缺失/不同源仍完整内联。实施/审计负责逐入口接线，发布/报告保持只读，原请求不重渲染；具体约束及验证归[本次 Spec](caller-prompt-convergence.spec.md)和[验收](../testing/acceptance/caller-prompt-convergence.md)。
+2026-10-28 调用方提示收敛：完整安排保留为权威，执行提示只引用经固定来源核对的真实安排/协议与同源 writer 文件，缺失/不同源在投递前阻断、无 inline 兜底。实施/审计负责逐入口接线，发布/报告保持只读，原请求不重渲染；具体约束及验证归[本次 Spec](caller-prompt-convergence.spec.md)和[验收](../testing/acceptance/caller-prompt-convergence.md)。
 
 ## Execution parameters and report-stage facts (2026-10-28)
 
