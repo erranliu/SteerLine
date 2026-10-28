@@ -39,7 +39,8 @@ func (p *roadmapPort) documentContext(ctx context.Context, r roadmap.Record) (ro
 		text := string(body)
 		result.Materials = append(result.Materials, runnercontract.Document{Kind: "inline", Path: name, Commit: result.Commit, Content: &text})
 	}
-	// Inline content is frozen by Runner; its schema requires no independent commit field.
+	// Retain exact guideline bytes in the record; the model reads the pinned
+	// repository copy, whose manifest must later match these bytes.
 	for i := range result.Materials {
 		result.Materials[i].Commit = ""
 	}

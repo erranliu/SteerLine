@@ -23,6 +23,18 @@ type Definition struct {
 type Catalogue struct {
 	Tests []Definition `json:"tests"`
 }
+
+// Snapshot is the complete frozen arrangement; prompt views never replace it.
+type Snapshot struct {
+	GenerationID string       `json:"generation_id,omitempty"`
+	Inputs       string       `json:"inputs,omitempty"`
+	Status       string       `json:"status"`
+	Diagnostic   string       `json:"diagnostic,omitempty"`
+	PlanPath     string       `json:"plan_path"`
+	Commit       string       `json:"commit"`
+	Definitions  []Definition `json:"definitions"`
+	Digest       string       `json:"digest,omitempty"`
+}
 type GenerateCommand struct {
 	RequestID string `json:"request_id"`
 	Plan      string `json:"plan"`

@@ -1,6 +1,6 @@
 你负责为当前项目生成或维护两份配套的Git文件：SteerlineFlow/environment.md 和 scripts/verify-environment.ps1（pwsh）或 scripts/verify-environment.sh（bash）。只生成内容，不执行、提交或合并。
 
-目标是远端环境能执行项目完整L2及完整真实PR。工具版本默认声明最低兼容要求，不把CI示例版本直接变成精确相等门禁；只有项目明确的引擎、资源格式或锁定依赖约束才固定版本。更高版本仍须通过原工具适配器及真实测试，不能仅凭版本号宣称全面兼容。复用提供的正式测试清单和入口；不选择Task子集、不要求全L3/Full，不跳过/模拟必需环节。缺少源码、依赖、凭据引用或PR规则时写gaps，不发明已验证的能力或无条件通过脚本。
+验证目标：远端完整L2和真实PR，复用正式清单及入口，不选Task子集、不要求全L3/Full、不跳过或模拟必需环节。版本默认最低兼容，不把CI示例变成精确门禁；仅明确的引擎、资源格式、锁定依赖约束固定版本。更高版本仍须通过原适配器与真实测试。缺源码、依赖、凭据引用或PR规则写gaps，不编造已验证能力或无条件通过脚本。
 
 已有准备说明、测试入口和PR工具时，environment.md只做固定元数据、引用及缺口补充，verify-environment只薄调用原程序、核验原报告并转换双文件结果，不复制实现或另建测试/认证框架。沿用已有Orca配对和仓库remote身份，不要求本机与远端路径相同。普通任务的PR发布规则保持原意；环境验收的合并授权只作用于专属验证base，文档须明确这一差异。
 
@@ -14,10 +14,10 @@ environment.md 必须有且仅有一个 ```steerline-environment JSON代码段�
 
 文档用一个 ```steerline-pr-acceptance JSON代码段记录真实PR规则和完整L2原始summary相对路径：{"required_checks":["项目必需检查名"],"minimum_approvals":0,"l2_summary":".steerrunner/artifacts/environment-l2/summary.json"}。示例值必须按项目实际规则替换，无必需检查才用空数组；不能假定验证base继承业务分支保护。完整L2原入口须把原报告写到该固定、Git忽略的相对路径，保留项目原格式和全部明细，以供真实L4独立核验；不可用包装器自述通过代替原报告。无法获知规则时写gaps，不猜测为零。
 
-两个文件路径只读环境变量：STEERLINE_PROGRESS_FILE供布尔进度（更新声明过的test.<id>及pr）；STEERLINE_RESULT_FILE供最终JSON。先读取结果初始JSON保留本轮关联字段，初始化内容由SteerLine提供。每份文件采用同目录临时文件+完整刷新+原子替换；不要让被调用测试入口并发覆盖最终报告。报告最多64KiB，完整日志留在远端，输出精简真实失败原因且不含凭据。
+路径仅取环境变量：STEERLINE_PROGRESS_FILE更新已声明的test.<id>及pr布尔进度；STEERLINE_RESULT_FILE写最终JSON，先读取并保留SteerLine初始化的关联字段。均用同目录临时文件、完整刷新、原子替换；测试入口不得并发覆盖最终报告。报告最多64KiB，完整日志留远端，失败原因真实精简、不含凭据。
 
 脚本必须在返回前写完最终报告。Runner只在原执行结束且生产者停止后封存一次result，运行中不回传报告；不要等待回传才结束，不要通过resume或修改已封存文件刷新结果。文件采集失败由Runner单独报告，不得据此伪造业务通过。
 
 最终报告保持结构：{"version":1,"activity_id":"原值","round":1,"source_commit":"原值","script_digest":"原值","completed":true,"checks":[{"id":"项目声明项","status":"passed|failed|incomplete","message":"期望、实际与原因；不得含凭据"}],"l2":[{"test_id":"正式ID","status":"passed|failed|incomplete","message":"真实摘要"}],"pr":{"url":"","base":"固定base","head":"实际分支","checks_passed":false,"reviews_passed":false,"merged":false,"merge_commit":"","cleanup_completed":false,"outcome_unknown":false},"message":"失败或需人工处理的原因"}。completed仅表示报告结束，非成功。checks必须非空、ID唯一并列出全部环境要求，包括通过项和未通过项。仅checks全通过且完整L2/PR均通过才就绪。必须列出全部L2，不以零匹配/跳过/超时为通过；L2失败时PR保留未执行，不伪造通过。PR写入/合并未知时outcome_unknown=true；已创建资源未完成清理时如实写false。
 
-仅返回匹配约定输出schema的JSON：document为完整准备文档文本，script为完整脚本文本，gaps为缺项字符串数组。已有材料仍适用时保持简洁，不扩展脚本语言框架、目录扫描、认证系统或测试平台。
+仅按输出schema返回完整文档、脚本及缺项。已有材料适用则复用，不扩展语言框架、目录扫描、认证系统或测试平台。

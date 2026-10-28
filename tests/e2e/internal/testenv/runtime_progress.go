@@ -8,16 +8,19 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 )
 
 // RuntimeProgress verifies caller persistence and its public query independently of native final.
 func RuntimeProgress(s *Scenario) {
 	p := s.NewProject("progress")
 	definition := testmanagement.Definition{ID: "fixture.progress", Name: "Controlled progress", Level: "L1", Environment: "isolated", Command: "fixture assertion", Check: "nonzero actual assertion"}
+	definition.Note = strings.Repeat("完整固定入口约束；", 100)
 	s.Must(os.MkdirAll(filepath.Join(p.Repo, "SteerlineFlow", "testing"), 0700))
 	s.Must(controlled.Write(filepath.Join(p.Repo, "SteerlineFlow", "testing", "test-list.json"), testmanagement.Catalogue{Tests: []testmanagement.Definition{definition}}))
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "testing.md"), []byte("Run exactly fixture.progress; passing assertions complete its progress field.\n"), 0600))
@@ -50,6 +53,23 @@ func RuntimeProgress(s *Scenario) {
 		}
 		if input.ProgressFile == nil {
 			return false, fmt.Errorf("missing runtime progress input")
+		}
+		var frozen testmanagement.Snapshot
+		if err = json.Unmarshal(c.TestPlan, &frozen); err != nil {
+			return false, err
+		}
+		referenced := false
+		for _, ref := range input.Documents.References {
+			referenced = referenced || ref.Path == testmodel.WriterPath
+		}
+		body := input.Workflow.PromptOverrides["implement.execute"]
+		if len(frozen.Definitions) != 1 || frozen.Definitions[0] != definition || !strings.Contains(body, testmodel.TestingContextWithWriter(c.TestPlan, referenced)) || strings.Contains(body, definition.Note) {
+			return false, fmt.Errorf("compact input lost frozen definition or step boundary")
+		}
+		// This controlled peer publishes implementation only. Full published
+		// execute/report/publication isolation is exercised by the catalog owner.
+		if publication, exists := input.Workflow.PromptOverrides["publish"]; exists && !strings.Contains(publication, testmodel.TestingReadOnlyInstructions) {
+			return false, fmt.Errorf("publication lost read-only boundary")
 		}
 		return true, nil
 	})

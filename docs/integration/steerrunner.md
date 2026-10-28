@@ -1,5 +1,8 @@
 # SteerRunner 依赖与运行
 
+
+2026-10-28 调用方提示收敛沿现有接口实现：执行安排仅内联固定 ID/来源/摘要，完整安排仍冻结保存；writer 同源时引用真实固定文件，否则完整内联，发布/报告保持只读。Roadmap 文档生成从既有 `generate.repository` 快照读取规范，提交路径/commit/SHA256 并核验返回 manifest，原 Markdown 和确认规划保持完整 inline；其他生成不增加仓库能力前置。环境生成仅投影前轮成功项的冗长说明，失败/未完成/未知事实及原报告保持，阶段身份从既有结果初始 JSON 读取。原请求恢复不重渲染或重发；[设计与边界](../../SteerlineFlow/spec/caller-prompt-convergence.spec.md)、[实际验收](../../SteerlineFlow/testing/acceptance/caller-prompt-convergence.md)。
+
 2026-10-26：项目环境适配已接入Runner主干`74d594c5f00e32e97d2ee911db5ac787302022bc`的最终result快照。要求独立`steerrunner-result-file/v1`、公开`collection=end_only`及`query_reads_file=false`；progress原契约不变。环境适配在pr_ready等原流程状态触发stop，确认停止后验收唯一closed快照；closed/version=0保留采集失败原因，不能刷新或放行。固定EXE公开接口和受控Run回传/结算、L1/L2及Web已验证；真实远端L2+完整PR业务验收单独安排，详见[环境适配验收](../../SteerlineFlow/testing/acceptance/project-environment-adaptation.md)。
 
 2026-10-25：调用方已接入准备查询等待 `steerrunner-execution-wait/v1`。新 Orca 候选要求 `capabilities.execution_wait` 的公开 nullable schema 及原 `run_observation` 同快照能力；不足时仅该 profile 不可启动，原候选读取/停止和其它 adapter 依原资格。原 Run 对象或显式 null 随 controls/revision/事件原子保存，经 `runner_delivery.execution_wait` 展示。SteerLine 不重试 Orca CLI，也不从显示时间推导 blocked 或自动 resume。Runner #57 已合入 `5df57b6`，fixture 已固定其正式 schema；正常正式构建已通过扫描/只读与原触发路径受控复验，历史 Defender 告警单列保留；后续固定 Runner 与远端 Orca 的同候选等待、恢复和停止联验已通过，完整 Web 进程重启等限制仍见专属验收。具体范围见[Spec](../../SteerlineFlow/spec/runner-wait-retry.spec.md)和[验收](../../SteerlineFlow/testing/acceptance/runner-wait-retry.md)。

@@ -46,6 +46,12 @@ func (f *promotionRunner) Submit(ctx context.Context, q runnercontract.Request) 
 		blob := fixtureGit(f.t, f.port.config.Repository, "rev-parse", r.CodeCommit+":logic.go")
 		src := &runnercontract.RepositorySource{LocalPath: in.Generate.Repository.LocalPath, Commit: r.CodeCommit, Tree: r.RepositoryTree,
 			Files: []runnercontract.RepositoryFile{{Path: "logic.go", Blob: blob, SHA256: roadmap.Digest(text), SizeBytes: len(text)}}}
+		for _, guide := range r.Materials {
+			body, e := f.port.config.runtimeMaintenance.read(ctx, r.CodeCommit, guide.Path)
+			require(f.t, e)
+			blob := fixtureGit(f.t, f.port.config.Repository, "rev-parse", r.CodeCommit+":"+guide.Path)
+			src.Files = append(src.Files, runnercontract.RepositoryFile{Path: guide.Path, Blob: blob, SHA256: roadmap.Digest(body), SizeBytes: len(body)})
+		}
 		f.run.RepositorySource = src
 		out := roadmap.GeneratedDocuments{SourceDigest: r.Source.Digest, ConfirmedDigest: r.ConfirmedDigest, CodeCommit: r.CodeCommit,
 			Design: "Reuse package logic; T2 follows T1.", Investigation: []roadmap.Investigation{{Path: "logic.go", SHA256: roadmap.Digest(text), Reason: "Pure logic owner"}}, Questions: []string{}, Documents: roadmap.PlannedDocuments(r)}

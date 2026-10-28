@@ -1,6 +1,6 @@
 # SteerLine 调用方提示词收敛 Plan
 
-关联 [Spec](../spec/caller-prompt-convergence.spec.md)。本次仅编写设计文档；实现、组件回归和业务复验未启动。现有Runner契约已足以完成本范围，不等待其workflow声明/输入预算修改。
+关联 [Spec](../spec/caller-prompt-convergence.spec.md)。设计随 PR404 合入后，用户已授权本次实现及规定回归；实际结果见独立验收，原 Task18 业务复验仍不在本次范围。现有Runner契约已足以完成本范围，不等待其workflow声明/输入预算修改。
 
 ## 实现整合
 
@@ -15,7 +15,7 @@
 
 ## 最小验证计划
 
-本轮文档只执行链接和差异检查。下表为后续实施安排，不表示已运行。原始结果使用 [路径清单](../paths.md) 的独立 `C:/SteerlineDebug/<scope-id>/`；各次正式调用使用新的输出叶目录，报告身份读取实际stdout，不覆盖旧结果。
+本次按下表实施与验证，实际执行状态、结果和证据在独立验收登记，不以计划表示已通过。原始结果使用 [路径清单](../paths.md) 的独立 `C:/SteerlineDebug/<scope-id>/`；各次正式调用使用新的输出叶目录，报告身份读取实际stdout，不覆盖旧结果。
 
 | 验收 | 范围 / 环境 | 命令或最小补齐 | 时点与通过条件 |
 | --- | --- | --- | --- |
@@ -32,4 +32,4 @@
 
 逐项检查：是否只是移动inline字段、是否误删必要材料、是否仍重复内联同一快照规范、是否把派生摘要当原报告、是否跳过完整安排核验、是否错误省略缺失writer，以及是否引入Runner新能力或预算前置。对必要大输入如实保留，不为数字目标削弱语义。
 
-操作、重试和恢复沿[既有生命周期](../../docs/product-design/worker-lifecycle.md)，本次不新增变化。完成实现后将实际commit、调用方组成字节数、报告与清理结果写入[独立验收](../testing/acceptance/caller-prompt-convergence.md)；本次设计文档不改变PR399既有复验结论或Runner阻塞状态。
+操作、重试和恢复沿[既有生命周期](../../docs/product-design/worker-lifecycle.md)，本次不新增变化。完成实现后将实际commit、调用方组成字节数、报告与清理结果写入[独立验收](../testing/acceptance/caller-prompt-convergence.md)；本次实现与回归不改变PR399既有复验结论或Runner阻塞状态。

@@ -69,6 +69,9 @@ func documentSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, mod
 func documentResult(r model.Record) (model.GeneratedDocuments, *runnercontract.RepositorySource) {
 	source := &runnercontract.RepositorySource{LocalPath: "", Commit: r.CodeCommit, Tree: r.RepositoryTree,
 		Files: []runnercontract.RepositoryFile{{Path: "code.go", Blob: strings.Repeat("d", 40), SHA256: strings.Repeat("e", 64), SizeBytes: 7}}}
+	for _, m := range r.Materials {
+		source.Files = append(source.Files, runnercontract.RepositoryFile{Path: m.Path, Blob: strings.Repeat("d", 40), SHA256: model.Digest([]byte(*m.Content)), SizeBytes: len(*m.Content)})
+	}
 	out := model.GeneratedDocuments{SourceDigest: r.Source.Digest, ConfirmedDigest: r.ConfirmedDigest, CodeCommit: r.CodeCommit,
 		Design: "Reuse the existing owner; no second workflow.", Investigation: []model.Investigation{{Path: "code.go", SHA256: strings.Repeat("e", 64), Reason: "Existing implementation"}},
 		Questions: []string{}, Documents: model.PlannedDocuments(r)}
@@ -95,6 +98,9 @@ func TestRoadmapRepositoryDocumentsLifecycle(t *testing.T) {
 	}
 	if input.Generate.Repository == nil || input.Generate.Repository.Commit != r.CodeCommit || input.Generate.Repository.LocalPath != s.Repository {
 		t.Fatal(input)
+	}
+	if len(input.Generate.Materials) != 2 || *input.Generate.Materials[0].Content != parent.Source.Body || !strings.Contains(input.Generate.Instruction, model.Digest([]byte(*r.Materials[0].Content))) || strings.Contains(input.Generate.Instruction, *r.Materials[0].Content) {
+		t.Fatal("guidelines duplicated or original input lost")
 	}
 	if _, err = s.GenerateDocuments(ctx, parent.ID, r.RequestID, parent.Revision); err != nil || f.submits != 2 {
 		t.Fatal("duplicate document submission", err, f.submits)
@@ -142,6 +148,10 @@ func TestRoadmapDocumentOutputRejectsMismatchesAndSupportsQuestions(t *testing.T
 		},
 		func(_ *model.GeneratedDocuments, src *runnercontract.RepositorySource) {
 			src.Commit = strings.Repeat("f", 40)
+		},
+		func(_ *model.GeneratedDocuments, src *runnercontract.RepositorySource) { src.Files = src.Files[:1] },
+		func(_ *model.GeneratedDocuments, src *runnercontract.RepositorySource) {
+			src.Files[1].SHA256 = strings.Repeat("f", 64)
 		},
 	} {
 		out, src := documentResult(r)

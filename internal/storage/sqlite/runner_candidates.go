@@ -162,9 +162,16 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 	}
 	testingBound := len(c.TestPlan) > 0 && json.Unmarshal(c.TestPlan, &testing) == nil && testing.PlanPath == work.Contract.PlanRef.Path && testing.Commit == work.Contract.PlanRef.Commit
 	if testingBound && testing.Status == "ready" {
+		referencedWriter := false
+		for _, doc := range input.Documents.References {
+			if doc.Path == testmodel.WriterPath {
+				referencedWriter = true
+			}
+		}
+		context := testmodel.TestingContextWithWriter(c.TestPlan, referencedWriter)
 		bound := false
 		for _, body := range input.Workflow.PromptOverrides {
-			if strings.Contains(body, testmodel.TestingContext(c.TestPlan)) {
+			if context != "" && strings.Contains(body, context) {
 				bound = true
 			}
 		}

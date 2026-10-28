@@ -6,11 +6,11 @@ import (
 	"strings"
 )
 
-// WithPromptContext keeps the selected build's published instructions and user
-// overrides, adding caller data only to implementation/audit execution prompts.
-// No workflow transition, report or publication instructions are replaced.
-func (c *Catalog) WithPromptContext(input Workflow, context string) (Workflow, error) {
-	if c == nil || context == "" {
+// WithTestProgressContext preserves published/user prompts. Only implementation
+// and audit execution receive the frozen tests and writer; report/publication
+// turns receive a read-only boundary for the test-owned progress channel.
+func (c *Catalog) WithTestProgressContext(input Workflow, context, readOnly string) (Workflow, error) {
+	if c == nil || context == "" || readOnly == "" {
 		return input, errors.New("published workflow prompt context is unavailable")
 	}
 	var choice *runnercontract.WorkflowChoice
@@ -32,9 +32,10 @@ func (c *Catalog) WithPromptContext(input Workflow, context string) (Workflow, e
 	implementation := false
 	audit := false
 	for _, state := range choice.States {
-		if state.Kind != "execute" || (state.Contract != "implementation" && state.Contract != "audit") {
+		if state.Kind != "execute" && state.Kind != "report" {
 			continue
 		}
+		writesTests := state.Kind == "execute" && (state.Contract == "implementation" || state.Contract == "audit")
 		allowed := false
 		for _, key := range choice.PromptSteps {
 			if key == state.PromptKey {
@@ -48,9 +49,13 @@ func (c *Catalog) WithPromptContext(input Workflow, context string) (Workflow, e
 		if body == "" {
 			body = state.Prompt
 		}
-		out.PromptOverrides[state.PromptKey] = body + "\n\n" + context
-		implementation = implementation || state.Contract == "implementation"
-		audit = audit || state.Contract == "audit"
+		addition := readOnly
+		if writesTests {
+			addition = context
+		}
+		out.PromptOverrides[state.PromptKey] = body + "\n\n" + addition
+		implementation = implementation || writesTests && state.Contract == "implementation"
+		audit = audit || writesTests && state.Contract == "audit"
 	}
 	if !implementation || choice.AuditModelRequired && !audit {
 		return input, errors.New("selected Runner does not publish implementation prompt bodies")
