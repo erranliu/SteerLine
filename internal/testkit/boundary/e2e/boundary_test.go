@@ -153,20 +153,26 @@ func TestProductionHasNoTestDependencies(t *testing.T) {
 	}
 }
 
-func TestProductionSourcesUseOnlyOwnedTestkitSupport(t *testing.T) {
+func toolTestkitAllowed(importer, dependency string) bool {
 	process := module + "/internal/testkit/process"
+	remote := module + "/internal/testkit/remotetest"
 	feedback := module + "/internal/testkit/feedback"
 	allowed := map[string]map[string]bool{
 		module + "/cmd/test-feedback": {
 			feedback: true,
+			remote:   true,
 			process:  true,
 		},
 		// Controlled external CLI fixtures share protocol behavior with integration.
 		module + "/tests/e2e/internal/controlled": {process: true, module + "/internal/testkit/protocol": true},
 		// The debug driver publishes the test-management proof consumed by feedback.
-		module + "/tests/e2e/internal/driver":     {process: true, feedback: true},
-		module + "/tests/e2e/internal/testenv":    {process: true, feedback: true},
+		module + "/tests/e2e/internal/driver":  {process: true, feedback: true},
+		module + "/tests/e2e/internal/testenv": {process: true, feedback: true, remote: true},
 	}
+	return allowed[importer][dependency]
+}
+
+func TestProductionSourcesUseOnlyOwnedTestkitSupport(t *testing.T) {
 	var failures []string
 	walkGoSources(t, repositoryRoot(t), func(path, importer string, file *ast.File) {
 		if strings.HasSuffix(path, "_test.go") {
@@ -181,7 +187,7 @@ func TestProductionSourcesUseOnlyOwnedTestkitSupport(t *testing.T) {
 			if under(dependency, module+"/tests") && !(under(importer, module+"/tests/e2e") && under(dependency, module+"/tests/e2e/internal")) {
 				failures = append(failures, filepath.ToSlash(path)+" -> "+dependency)
 			}
-			if under(dependency, module+"/internal/testkit") && !allowed[importer][dependency] {
+			if under(dependency, module+"/internal/testkit") && !toolTestkitAllowed(importer, dependency) {
 				failures = append(failures, filepath.ToSlash(path)+" -> "+dependency)
 			}
 		}
@@ -189,6 +195,25 @@ func TestProductionSourcesUseOnlyOwnedTestkitSupport(t *testing.T) {
 	if len(failures) > 0 {
 		sort.Strings(failures)
 		t.Fatalf("production source has a testkit/tests dependency outside its named tool owner:\n%s", strings.Join(failures, "\n"))
+	}
+}
+
+func TestRemoteTestSupportHasOnlyNamedToolOwners(t *testing.T) {
+	dependency := module + "/internal/testkit/remotetest"
+	for _, owner := range []string{"/cmd/test-feedback", "/tests/e2e/internal/testenv"} {
+		if !toolTestkitAllowed(module+owner, dependency) {
+			t.Fatal("named tool owner rejected", owner)
+		}
+	}
+	for _, owner := range []string{"/cmd/steerline", "/internal/app", "/internal/product/query", "/tests/e2e/live", "/tests/e2e/internal/driver", "/cmd/test-feedback/unnamed"} {
+		if toolTestkitAllowed(module+owner, dependency) {
+			t.Fatal("unnamed owner accepted", owner)
+		}
+	}
+	for _, owner := range []string{"/cmd/test-feedback", "/tests/e2e/internal/testenv"} {
+		if toolTestkitAllowed(module+owner, module+"/internal/testkit/unowned") {
+			t.Fatal("arbitrary support package accepted", owner)
+		}
 	}
 }
 

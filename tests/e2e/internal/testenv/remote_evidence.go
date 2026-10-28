@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	app "github.com/erranliu/SteerLine/internal/app"
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
@@ -50,8 +50,8 @@ func (p *Project) environmentRules() remotePRRules {
 }
 
 // This is read-only HTTP evidence. It cannot create, approve or merge a PR.
-func (p *Project) providerRead(config app.ProjectConfigInput, path string, target any) error {
-	if config.PR.BaseURL == "https://github.com" {
+func (p *Project) providerRead(config executionmodel.PRProviderConfig, path string, target any) error {
+	if config.BaseURL == "https://github.com" {
 		raw, err := p.gh(p.Scenario.Context, "api", path)
 		if err != nil {
 			return err
@@ -60,11 +60,11 @@ func (p *Project) providerRead(config app.ProjectConfigInput, path string, targe
 	}
 	ctx, cancel := context.WithTimeout(p.Scenario.Context, 30*time.Second)
 	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(config.PR.BaseURL, "/")+"/api/v1/"+path, nil)
+	request, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(config.BaseURL, "/")+"/api/v1/"+path, nil)
 	if err != nil {
 		return err
 	}
-	if token := os.Getenv(config.PR.TokenEnv); token != "" {
+	if token := os.Getenv(config.TokenEnv); token != "" {
 		request.Header.Set("Authorization", "token "+token)
 	}
 	client := &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("provider redirect refused") }}
@@ -88,10 +88,10 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 	s := p.Scenario
 	rules := p.environmentRules()
 	last := record.Rounds[len(record.Rounds)-1]
-	var config app.ProjectConfigInput
 	raw, err := os.ReadFile(p.Config)
 	s.Must(err)
-	s.Must(json.Unmarshal(raw, &config))
+	config, err := driver.DecodeProjectConfig(raw)
+	s.Must(err)
 	number, err := strconv.Atoi(filepath.Base(last.Report.PR.URL))
 	s.Must(err)
 	root := "repos/" + config.PR.Repository
@@ -109,7 +109,7 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 			Login string `json:"login"`
 		} `json:"user"`
 	}
-	s.Must(p.providerRead(config, root+"/pulls/"+strconv.Itoa(number), &pr))
+	s.Must(p.providerRead(config.PR, root+"/pulls/"+strconv.Itoa(number), &pr))
 	if !pr.Merged || pr.Merge != last.Report.PR.MergeCommit || pr.Base.Ref != record.Prepared.Manifest.ValidationBase || pr.Head.Ref != last.Report.PR.Head || pr.Head.SHA == "" {
 		s.t.Fatal("real provider PR differs from sealed script report")
 	}
@@ -122,7 +122,7 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 		var branch struct {
 			Protected bool `json:"protected"`
 		}
-		s.Must(p.providerRead(config, root+"/branches/"+url.PathEscape(sourceBranch), &branch))
+		s.Must(p.providerRead(config.PR, root+"/branches/"+url.PathEscape(sourceBranch), &branch))
 		if branch.Protected {
 			var policy struct {
 				RequiredStatusChecks struct {
@@ -132,7 +132,7 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 					Count int `json:"required_approving_review_count"`
 				} `json:"required_pull_request_reviews"`
 			}
-			s.Must(p.providerRead(config, root+"/branches/"+url.PathEscape(sourceBranch)+"/protection", &policy))
+			s.Must(p.providerRead(config.PR, root+"/branches/"+url.PathEscape(sourceBranch)+"/protection", &policy))
 			if policy.RequiredPullRequestReviews.Count > rules.MinimumApprovals {
 				s.t.Fatal("project rules omit required approvals")
 			}
@@ -153,7 +153,7 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 			Checks    []string `json:"status_check_contexts"`
 			Approvals int      `json:"required_approvals"`
 		}
-		s.Must(p.providerRead(config, root+"/branch_protections?limit=100", &policies))
+		s.Must(p.providerRead(config.PR, root+"/branch_protections?limit=100", &policies))
 		if len(policies) >= 100 {
 			s.t.Fatal("branch policy evidence may be truncated")
 		}
@@ -189,7 +189,7 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 				Status  string `json:"status"`
 			} `json:"statuses"`
 		}
-		s.Must(p.providerRead(config, root+"/commits/"+pr.Head.SHA+"/status", &status))
+		s.Must(p.providerRead(config.PR, root+"/commits/"+pr.Head.SHA+"/status", &status))
 		for _, required := range rules.RequiredChecks {
 			passed := false
 			for _, st := range status.Statuses {
@@ -211,7 +211,7 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 				Login string `json:"login"`
 			} `json:"user"`
 		}
-		s.Must(p.providerRead(config, root+"/pulls/"+strconv.Itoa(number)+"/reviews?limit=100&per_page=100", &reviews))
+		s.Must(p.providerRead(config.PR, root+"/pulls/"+strconv.Itoa(number)+"/reviews?limit=100&per_page=100", &reviews))
 		if len(reviews) >= 100 {
 			s.t.Fatal("PR review evidence may be truncated")
 		}
@@ -286,12 +286,12 @@ func (p *Project) verifyUnreadyEnvironmentEvidence(record env.Record) {
 			s.t.Fatal("unready requirements produced unexpected PR effects")
 		}
 	}
-	var config app.ProjectConfigInput
 	raw, err := os.ReadFile(p.Config)
 	s.Must(err)
-	s.Must(json.Unmarshal(raw, &config))
+	config, err := driver.DecodeProjectConfig(raw)
+	s.Must(err)
 	var prs []json.RawMessage
-	s.Must(p.providerRead(config, "repos/"+config.PR.Repository+"/pulls?state=all&limit=50&base_branch="+url.QueryEscape(record.Prepared.Manifest.ValidationBase), &prs))
+	s.Must(p.providerRead(config.PR, "repos/"+config.PR.Repository+"/pulls?state=all&limit=50&base_branch="+url.QueryEscape(record.Prepared.Manifest.ValidationBase), &prs))
 	if len(prs) != 0 {
 		s.t.Fatal("requirements failed but a validation PR exists")
 	}
