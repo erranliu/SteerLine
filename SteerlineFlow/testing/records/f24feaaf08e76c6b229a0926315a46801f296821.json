@@ -1,0 +1,16 @@
+{
+  "runs": [
+    {
+      "at": "2026-10-28T14:20:55.6358186Z",
+      "results": [
+        {
+          "test_id": "go.full",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "failed",
+          "note": "测试集存在实际断言失败；完整性与原始错误见 summary.json"
+        }
+      ]
+    }
+  ]
+}
