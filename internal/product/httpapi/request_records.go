@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	fs "github.com/erranliu/SteerLine/internal/product/httpfs"
 )
 
 // requestRecord is the private HTTP arbitration format. Product authority
@@ -107,12 +109,20 @@ func (record requestRecord) response() CommandResponse {
 		Diagnostic: record.Response.Diagnostic, SampledAt: record.Response.SampledAt}
 }
 
+// Receipt readers must retain their complete snapshot without excluding the
+// owner's atomic outcome replacement on Windows.
+func openRequestRecordSnapshot(path string) (*os.File, error) {
+	return fs.OpenPrivateSnapshot(path)
+}
+
 func readRequestRecord(path string) (requestRecord, error) {
 	var record requestRecord
-	if err := verifyPrivateFile(path); err != nil {
+	file, err := openRequestRecordSnapshot(path)
+	if err != nil {
 		return record, err
 	}
-	data, err := os.ReadFile(path)
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxRequestRecordBytes+1))
 	if err != nil {
 		return record, err
 	}

@@ -24,6 +24,8 @@ SteerLine 从冻结安排生成 `test.<test_id>: false` 对象，base64 编码�
 
 SteerLine `cmd/test-feedback` 的 L1、L2、L3 和 L4 使用原真实 summary/场景清理校验决定 true。通用 Go 与 PowerShell 写者使用相同文件和锁协议。业务项目采用相同脚本，由实际入口的选择、用例、输入和清理核验结果驱动，不由模型填报测试通过。
 
+系统在实施/审计执行提示中附带与本仓入口同源的 PowerShell 7 写入器源码。固定项目版本尚未接入时，由实施步骤先把它接入原登记入口，再运行测试；不假定目标项目已有 `tools/report-progress.ps1`。真实报告和通过条件仍由原入口判定，接入失败不能事后手填完成。发布及只读报告步骤收到独立的文件只读约束，原发布指令和 PR 回复契约保留，禁止向测试对象追加 `publication` 等元数据。
+
 ## 记录及部署边界
 
 候选不再调用 R2 artifacts 或 workspace-git，不要求 managed 报告及其 summary 字节预算。原项目日志仍保存，独立 `test-feedback record` 沿主干机制将标准报告导出为 Git JSON，历史页只读已核实主分支；布尔进度不会自动生成详细历史。
@@ -33,3 +35,5 @@ SteerLine `cmd/test-feedback` 的 L1、L2、L3 和 L4 使用原真实 summary/�
 Plan 自定义目标声明/解析/注入暂未实现，首期固定测试字段。后续扩展仍由 SteerLine 定义语义，Runner 通道保持不变。
 
 [Spec](../../SteerlineFlow/spec/runtime-test-progress.spec.md)、[Plan](../../SteerlineFlow/plans/runtime-test-progress.plan.md)、[验收](../../SteerlineFlow/testing/acceptance/runtime-test-progress.md)。
+
+2026-10-26 原 Task18 第二轮显示 0/6 的修复与新两轮复验单独登记在[后续验收](../../SteerlineFlow/testing/acceptance/test-progress-0of6-20261026.md)，原轮次结果保持不变。

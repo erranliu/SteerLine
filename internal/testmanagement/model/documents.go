@@ -11,11 +11,11 @@ import (
 
 const RulesPath = "SteerlineFlow/testing.md"
 const CataloguePath = "SteerlineFlow/testing/test-list.json"
-const TestingInstructions = "测试安排已固定。仅按 Plan 执行登记入口，不自动增加或修改测试。运行时环境变量 STEERLINE_PROGRESS_FILE 指向本次唯一测试进度文件，只允许固定安排声明的 test.<测试ID> 布尔字段；不得加入 publication、PR、报告或其它字段，也不得将它用于最终回复。开始或重跑先将对应字段置 false，完整通过（实际选择非零、无失败/意外跳过且输入和清理核验通过）才置 true；失败、跳过、未完成不得置 true。并行写入须加锁合并并原子替换，不覆盖其它字段。原始日志及报告仍按项目入口保存，不要用 Agent 自述或单独一个命令 exit 0 替代入口的完整核验。执行前逐项核对固定安排中每个测试 ID 与其真实入口的进度接线；写入器文件已存在或只有部分入口已接线，都不代表其它 ID 已汇报。未接线的原入口先补齐开始/重跑清零及完整成功分支的写入，再实际执行该入口；按它在固定安排中对应的 ID 汇报，不遗漏定向或聚合入口。不修改固定测试定义、选择、命令或通过要求。进度文件缺失或接入失败应明确报告并保留未完成，不能读取既往报告后补写或事后手填 true。"
+const TestingInstructions = "测试安排已固定。仅按 Plan 执行登记入口，不自动增加或修改测试。运行时环境变量 STEERLINE_PROGRESS_FILE 指向本次唯一测试进度文件，只允许固定安排声明的 test.<测试ID> 布尔字段；不得加入 publication、PR、报告或其它字段，也不得将它用于最终回复。开始或重跑先将对应字段置 false，完整通过（实际选择非零、无失败/意外跳过且输入和清理核验通过）才置 true；失败、跳过、未完成不得置 true。并行写入须加锁合并并原子替换，不覆盖其它字段。原始日志及报告仍按项目入口保存，不要用 Agent 自述或单独一个命令 exit 0 替代入口的完整核验。执行前逐项核对固定安排中每个测试 ID 与其真实入口的进度接线；写入器文件已存在或只有部分入口已接线，都不代表其它 ID 已汇报。未接线的原入口先补齐开始/重跑清零及完整成功分支的写入，再实际执行该入口；按它在固定安排中对应的 ID 汇报，不遗漏定向或聚合入口。不修改固定测试定义、选择或通过要求。保留登记入口与测试语义；允许按入口文档准备并传入必需的环境、输入、输出定位参数，不得借参数缩窄测试选择。进度文件缺失或接入失败应明确报告并保留未完成，不能读取既往报告后补写或事后手填 true。"
 
 // Report/publication turns must not interpret Runner's optional opaque report
 // channel as a destination for their own JSON. It is owned by the test entries.
-const TestingReadOnlyInstructions = "STEERLINE_PROGRESS_FILE 是本轮测试入口专用的 test.<测试ID> 布尔对象。本步骤不得写入、覆盖或追加此文件，不得加入 publication、PR 或报告字段，不得替测试入口补填通过。保持原步骤的回复和发布契约，通过原渠道报告结果及 PR URL。"
+const TestingReadOnlyInstructions = "STEERLINE_PROGRESS_FILE 是本轮测试入口专用的 test.<测试ID> 布尔对象。本步骤不得写入、覆盖或追加此文件，不得加入 publication、PR 或报告字段，不得替测试入口补填通过。保持原步骤的回复和发布契约，只报告本步骤已有事实；尚未发生的发布不需要 PR URL，不得因此阻塞当前步骤或向用户索取未来结果。"
 
 // WriterPath is a real project file, never a synthesized document.
 const WriterPath = "tools/testing/RuntimeProgress.ps1"

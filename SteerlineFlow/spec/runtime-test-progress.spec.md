@@ -9,11 +9,18 @@
 - 文件为最多 64 KiB 的 UTF-8 JSON 布尔对象，字段必须完整对应冻结安排，拒绝重复、未知、缺失字段和 null/非布尔值。首次仅支持测试字段，Plan 目标解析及自动注入延后。
 - 入口开始或重跑时先清零对应字段；只有完整非零选择、实际断言、输入及清理核验通过才写 true。失败、跳过、Listed、EmptyShard、部分选择和前置失败不完成。不会根据 Agent final 判通过。
 - 写入方使用同目录字节锁、合并和原子替换；不得丢失其它字段。未注入环境变量时独立运行不要求服务。显式脚本拒绝未声明字段，自动入口忽略未列入本次安排的测试。
+- 实施/审计执行提示携带正式共用写入器源码，供尚未接入的固定项目版本接入原登记入口；不假定项目已存在该工具。发布和只读报告步骤不得写入测试进度或追加 publication/PR 等字段，仍通过原步骤契约报告结果。不放宽冻结字段解析，也不从最终回复推断通过。
+- 实施前逐项核对冻结安排中每个 ID 的真实入口接线。仅存在写入器、dot-source 或部分聚合项接线不能证明全部入口兼容；缺口须在原入口补齐开始清零及原结果核验后的完成更新，再真实执行，不重放旧报告回填。
 - 文件采集版本独立于候选和业务 Run revision。调用方核验原 Run、规范 base64、长度、SHA256、时间和单调版本。同版本内容变化或旧版本拒绝覆盖。
 - 持久化最新传输快照、最后有效业务字段及其版本/时间。传输失败或格式无效时保留最后有效结果，并显示同步诊断；恢复后继续接受新快照。终态快照可查询且不重新读取已 closed 来源。
 - 进度观察独立于生成结果和材料刷新错误；不发送 submit/reply/resume，不改变 Runner 或 Task 业务终态。
+- 系统测试安排生成提示先保留项目规范和 Plan 各自明确要求的必跑入口并取并集，再按实际影响追加相关定向项；Plan 的必跑表、验收映射和提交前要求不能降为可选项，也不能用业务回归替代结构或资源契约检查。不能把 Plan 未重复列出 L1/L2 或“最小验证”理解为取消规范要求。不在通用代码中硬编码业务项目的测试 ID，不手工改写模型原安排或补造执行结果。
 
 2026-10-28 调用方提示收敛：完整安排保留为权威，执行提示改为经固定来源核对的 ID/来源/摘要视图；同源 writer 仅引用真实固定文件，缺失/不同源仍完整内联。实施/审计负责逐入口接线，发布/报告保持只读，原请求不重渲染；具体约束及验证归[本次 Spec](caller-prompt-convergence.spec.md)和[验收](../testing/acceptance/caller-prompt-convergence.md)。
+
+## Execution parameters and report-stage facts (2026-10-28)
+
+Frozen test definitions, entrypoints, selection and pass criteria remain unchanged. Required environment/input/output location arguments documented by the original entry may be prepared and supplied; they must not narrow test selection or replace the entry. Read-only implementation reports preserve the original result contract but must not require a PR URL or other fact belonging to an unexecuted publication step. Missing real prerequisites still remain incomplete, not passed.
 
 ## 产品与清理
 

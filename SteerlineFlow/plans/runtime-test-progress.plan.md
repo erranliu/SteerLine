@@ -19,3 +19,42 @@
 命令与结果登记在[专属验收](../testing/acceptance/runtime-test-progress.md)，每次使用新输出目录，首轮失败保留。Runner 自身真实远端 L3 资格以其原验收为准，不将本仓 controlled 联验当成新的远端业务执行证明。
 
 2026-10-28 提示及写入器分发由[调用方收敛 Plan](caller-prompt-convergence.plan.md)继续实现：完整冻结安排不变，执行提示紧凑投影、固定文件逐项核验、同源 writer 路径引用与缺失/不同源完整内联；同步扩展原 `testing.runtime-progress` 场景。原历史结果不变，本轮证据见[独立验收](../testing/acceptance/caller-prompt-convergence.md)。
+## 2026-10-26 后续修复
+
+原 Task18 第二轮 0/6 已取回公开 closed 原始快照：六个 false 字段之外还包含 publication 对象；固定项目版本的原入口未接入写入器。修复由调用方在实施/审计提示中提供同源写入器供原入口接线，并在发布/报告提示中保留原契约、追加测试进度只读约束。严格字段解析及历史原报告不改。
+
+定向测试覆盖缺少工具项目执行内联写入器、失败重跑清零、拒绝 publication 字段、原提示/用户覆盖保留及步骤写权限隔离；随后运行固定 L1/L2。用户要求的两次真实复验须使用新 home/候选，强制 L1/L2 与原四结构及所有额外选项，独立核实原始报告、公开进度和页面一致、真实 PR 与完整资源清理；只有这些都通过才累计。结果见[后续验收](../testing/acceptance/test-progress-0of6-20261026.md)。
+
+新环境预执行门禁再次发现模型只选四结构，遗漏项目规范必跑 L1/L2。修正正式生成提示的优先级，明确规范必跑与 Plan 定向项取并集，只有规范允许且 Plan 明确无需自动测试时才允许空安排。原 Plan/测试清单及 Run 冻结规则不变；先跑受影响 testmanagement owner、固定 L1/L2，再在新普通 clone/home 通过原严格材料门禁后发起唯一业务请求。提示修正及组件通过不等于真实安排合格，仍以公开原安排和完整真实执行复验判断。
+
+2026-10-27 实际结果：`qualified-01` 九项原报告、发布后/closed 进度、API/UI、真实 PR427 和资源结算完整通过；随后 `qualified-02` 保留额外完整 EditMode，原入口 exit2、11 失败和 33 跳过，进度正确保持 6/7，发布操作另被远端连接拒绝。原 Run/宿主已停止结算，连续数归零。不得删去额外项或换一套安排重复抽样；用户随后批准业务断言/夹具/隔离修复并合并 PR428，现已从合并目标恢复两个全新轮次，结果待独立核实。详细原证据、两个源码代际及未验边界见上述后续验收。
+
+2026-10-27，PR399 合入当前 main 并解决唯一 HTTP 边界冲突，保留主线较严格的宿主限定；代码审计、真实执行结果、首轮受控超时/独立复核及暂缓合入建议见[合入审计](../testing/acceptance/pr399-merge-review-20261027.md)。代码/受控验证不替代尚未完成的原生连续两轮，也不冒充新主线代际远端资格。
+
+## 2026-10-27 职责分离与暂停
+
+用户将 Orca → Codex 输入投递、提交和启动确认交由 SteerRunner 对话负责，等待 [PR66](https://github.com/erranliu/SteerRunner/pull/66) 独立验收并合入。本会话不再实现或补充原生粘贴识别、终端输入、启动确认逻辑，不补 Enter、重发输入或放宽确认条件。依赖该链路的业务复验已暂停；定时任务已取消，不新建或恢复。
+
+PR399 的冲突处理、代码审计、固定 L1/L2、受影响 owner 和独立受控进度复核已有原报告；代码未变化时不重复这些工作。当前独立收尾是保存资源结算、职责边界及验收说明。无其他已明确授权的独立实现待办，完成文档后进入等待。
+
+用户告知 PR66 合入后，先核对实际合入提交、Runner 自身验收结果及对应构建，再通过正式生成入口创建新的独立调试包。保留旧 home、构建和接受 pin，不热替换旧运行。随后恢复两轮连续完整复验，保留全部实际安排检查和通过标准，逐轮验证原始报告、进度/API/UI、真实发布与完整清理。Runner 最小探针不计入两轮结果；当前连续数仍为0。
+
+用户现已告知 PR66 合入；实际合入、受测产品/构建对应、PR399 rebase 的完整树一致性、两项补充公开 EXE 契约检查及两个全新正式包均已核实，见[合入审计](../testing/acceptance/pr399-merge-review-20261027.md)。后续原进度复验使用 `merged66-` 独立前缀，保留原 Caller8205、合同、业务 base、SDK/native/model/profile 和全部实际安排。当前 main 的新环境材料/准入仍单列未验，不用原代际通过替代；首轮完整通过且结算后才创建第二轮。禁止旧现场恢复、未改变失败链的重复抽样，以及任何原生输入绕过。
+
+`merged66-01` 六项原报告、原生实施/发布、PR433、进度/API/UI 和完整清理均已核实；`merged66-02` 在业务提交前因原生成结果遗漏 Plan 明确要求的四项结构检查而被门禁拒绝，没有 Task18 Run。保留失败材料及停止结算，不重抽或手工补项。发现生成提示只强调规范必跑、将 Plan 项留给影响分析；补充明确两处必跑要求先取并集、再选影响项，不增加项目 ID、解析器或安排改写。当前 PR 产品源 e87f04b8 与新原代际 3d42de02 使用相同提示变更，分别执行 owner 和固定 L1/L2；原代际首次 L2 的回执 rename AccessDenied 失败及随后独立通过均保留。新源码的连续两轮重新从0累计，原成功不冒充新源码通过。详细报告与后续包、现场见[复验记录](../testing/acceptance/test-progress-0of6-20261026.md)。
+
+`planrequired-01` 保留实际八项原报告，均通过且发布 PR434，但两个额外 Bingo 检查没有入口回写，公开及 closed 进度正确保留 6/8，整链不通过；原 Run、宿主和拥有资源已完整停止结算。补充每 ID 真实入口覆盖要求，不能因 helper 存在而跳过核对，也不能由调用方手写 true。已证实的业务入口缺口另在独立项目源码修复，原现场及 PR434 不修改；合入后的新实际基线仍需原报告、API/UI、发布及清理全链复验，连续数为0。
+
+组件验证中重复出现 Windows 回执原子更新被读取句柄阻塞，修复私有快照读取及保留旧读者的原子替换。先以实际生产读取入口保持旧句柄、更新完整回执做失败反例，再验证原/新快照、不可变 envelope、私有 ACL、Unicode 路径及持久排他锁仍失败。执行 httpapi/httpfs/localservice/httpclient 与原测试 owner、固定 L1/L2、受控进度和宿主生命周期回归。该修复不重试业务命令、不改变请求身份或回执 schema，不实现原生终端输入/启动确认。源码和每次实际结果见上述复验记录及[合入审计](../testing/acceptance/pr399-merge-review-20261027.md)。
+
+2026-10-28，按用户要求合并 PR435 后，以实际 base3b59842c、新 `entryfixed-01` 和正式原Caller07fcb905包复验。实际九项原报告、六批非零无skip XML、输入/清理与正式入口 writer 已独立核实；原始及停止后 closed 进度/API/UI均9/9。发布 start_turn 没有已核实接受回执，完整原生会话仍只有初始化/实施输入、发布内容停在草稿且没有真实PR，因此整链失败、连续数0/2。原Run、宿主和拥有资源已完整结算，第二轮未启动。详细身份、原失败、报告/SHA、UI及清理见[复验记录](../testing/acceptance/test-progress-0of6-20261026.md)。等待Runner职责内的后续发布输入修复与独立资格后，才使用正式新包/新现场恢复两次完整链，不补Enter/重发/放宽确认，也不在SteerLine重复实现原生输入。
+
+
+## 2026-10-28 caller boundary repair after Runner69 retest
+
+The first new original run reached six Passed managed reports and one Incomplete full EditMode entry: the original entry required prepared input locations, but the literal command prohibition prevented supplying them. Its verified implementation report then requested a PR URL before publication. Repair the two existing caller instructions only: allow documented required execution-location arguments without narrowing tests, and report only current-step facts without demanding a future PR. Preserve frozen definitions and all original failure records; do not reply to or resume the old Run.
+
+Validate the affected prompt/model/runnerclient owners, fixed L1/L2 and controlled progress scenario from clean source. Use fresh official packages and homes with the same merged Runner69 for subsequent native qualification; no hot replacement, new Runner implementation, manual progress or weakened pass criteria. Two genuine complete chains still start from zero.
+
+
+2026-10-28 latest retest: repaired caller completed one genuine10/10 chain/PR438. The next scope's nine original checks and progress passed, but native publication PowerShell process creation failed before commit/push/PR; full chain failed and consecutive count resets0/2. Both scopes are stopped/settled. Preserve exact [acceptance evidence](../testing/acceptance/test-progress-0of6-20261026.md), keep PR399 DRAFT, and wait for an independently qualified minimal process-start fix before new formal packages/homes. No extra worker input or unchanged third business round; all original pass criteria remain.

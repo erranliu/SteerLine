@@ -1,0 +1,37 @@
+{
+  "runs": [
+    {
+      "at": "2026-10-28T09:27:23.5045356Z",
+      "results": [
+        {
+          "test_id": "l1.minimum",
+          "level": "L1",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-28T09:30:41.9426562Z",
+      "results": [
+        {
+          "test_id": "smoke.delivery",
+          "level": "L2",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-28T09:32:11.7688873Z",
+      "results": [
+        {
+          "test_id": "testing.runtime-progress",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    }
+  ]
+}

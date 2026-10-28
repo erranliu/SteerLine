@@ -17,13 +17,13 @@ import (
 
 const fileAllAccess = windows.ACCESS_MASK(0x1F01FF)
 
-// Windows may exclude replacement while a short-lived reader/scanner has the
-// destination open. Retry only known sharing/access failures, preserving atomic
-// replacement and returning persistent permission failures unchanged.
+// Replace using Windows' snapshot-preserving rename semantics. MoveFileEx (as
+// used by os.Rename) still excludes an open destination even when its readers
+// share deletion. Persistent sharing/permission failures remain bounded errors.
 func ReplacePrivateFile(source, target string) error {
 	var err error
 	for attempt := 0; attempt < 40; attempt++ {
-		err = os.Rename(source, target)
+		err = renamePrivateSnapshot(source, target)
 		if err == nil || (!errors.Is(err, windows.ERROR_SHARING_VIOLATION) && !errors.Is(err, windows.ERROR_ACCESS_DENIED)) {
 			return err
 		}
@@ -32,6 +32,62 @@ func ReplacePrivateFile(source, target string) error {
 		}
 	}
 	return err
+}
+
+type privateRenameInfo struct {
+	flags         uint32
+	rootDirectory windows.Handle
+	fileNameBytes uint32
+	fileName      [1]uint16
+}
+
+func renamePrivateSnapshot(source, target string) error {
+	rename := func() error {
+		if source == "" || target == "" {
+			return os.ErrInvalid
+		}
+		from, err := windows.UTF16PtrFromString(source)
+		if err != nil {
+			return err
+		}
+		handle, err := windows.CreateFile(from, windows.DELETE|windows.SYNCHRONIZE,
+			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
+			nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
+		if err != nil {
+			return err
+		}
+		defer windows.CloseHandle(handle)
+		var file windows.ByHandleFileInformation
+		if err = windows.GetFileInformationByHandle(handle, &file); err != nil {
+			return err
+		}
+		if file.FileAttributes&(windows.FILE_ATTRIBUTE_REPARSE_POINT|windows.FILE_ATTRIBUTE_DIRECTORY) != 0 {
+			return errors.New("linked/nonregular private rename source")
+		}
+		absolute, err := filepath.Abs(target)
+		if err != nil {
+			return err
+		}
+		name, err := windows.UTF16FromString(absolute)
+		if err != nil {
+			return err
+		}
+		var layout privateRenameInfo
+		offset := unsafe.Offsetof(layout.fileName)
+		nameBytes := (len(name) - 1) * 2
+		// The Win32 FILE_RENAME_INFO name is NUL-terminated; its byte count
+		// excludes that terminator. Keep both representations complete.
+		buffer := make([]byte, int(offset)+len(name)*2)
+		info := (*privateRenameInfo)(unsafe.Pointer(&buffer[0]))
+		info.flags = windows.FILE_RENAME_REPLACE_IF_EXISTS | windows.FILE_RENAME_POSIX_SEMANTICS
+		info.fileNameBytes = uint32(nameBytes)
+		copy(unsafe.Slice(&info.fileName[0], len(name)), name)
+		return windows.SetFileInformationByHandle(handle, windows.FileRenameInfoEx, &buffer[0], uint32(len(buffer)))
+	}
+	if err := rename(); err != nil {
+		return &os.LinkError{Op: "rename", Old: source, New: target, Err: err}
+	}
+	return nil
 }
 
 // Discovery is atomically replaced while clients observe startup/ready state.
