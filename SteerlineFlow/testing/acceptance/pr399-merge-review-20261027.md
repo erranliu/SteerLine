@@ -1,5 +1,7 @@
 # PR399 冲突解决与合入审计
 
+Latest verified result (2026-10-28): the repaired caller completed one full10/10 chain and PR438; the following scope passed all9 original checks but native publication process creation failed, so consecutive count is0/2. Both original Runs/hosts are stopped and fully settled. PR399 remains draft. See the final blocked-publication section below.
+
 2026-10-27，用户要求解决 [PR399](https://github.com/erranliu/SteerLine/pull/399) 冲突并审计是否适合合入。审查针对进度修复增量，不将新主分支的 roadmap、部署与远端环境功能重新算作本 PR 新增功能。
 
 ## 结论
@@ -123,3 +125,10 @@ The captured report input exposes an ambiguity in the caller's shared read-only 
 Clean main source `5497414b7eb326cd416714bc049810a89b82a66d` and fresh original source `d6450072a4c3d9f2b99cdfbadb47d39083f95be5` contain exactly equal repaired instruction values. Both affected owners and fixed L1/L2 passed; main controlled progress L3 passed, cleanup complete. Full app and current-main native environment/result-file qualification are not claimed. Original summaries and literal-equivalence proof are in `C:/SteerlineDebug/wt-507e-pr399-retest-20261028/boundary-main-01/`, `boundary-original-01/` and `caller-boundary-equivalence.json`.
 
 New official ready/clean packages are `packages-boundary-main/dev-20261028-181939-5497414b` and `packages-boundary-original/dev-20261028-181955-d6450072` under that root; all four EXEs match their manifests, same Runner69 SHA256 3b9ee831c11695bb046dca55bae02da6cd11a3d1ede6cd3f22511080fa655917. Fresh `callerfix69-01` is the next qualification scope, authorized by the original repair/retest request and gated by `callerfix69-progress-admission-20261028.json`. The previous scope remains stopped/immutable, counter0/2. Only two fresh complete genuine report/progress/API/UI/publication/cleanup chains qualify delivery; no merge/deployment/scheduling/subagents/cross-session messages.
+
+
+## 2026-10-28 final retest status: native publication process-start blocker
+
+The repaired caller completed one full10/10 original chain with real PR438 and full cleanup. The second scope's nine original reports, six nonzero XML batches, exact progress/API/UI and rerun clearing were independently verified; native publication preflight then failed to create WindowsApps PowerShell (-1073283067 / FormatMessageW317), so there was no commit, push or PR. The original report's done/empty outputs was correctly rejected; the chain is not passed and consecutive count resets0/2.
+
+Both original Runs/hosts are stopped and fully settled; no parent supplemental input, business retry, publication or Runner repair occurred. PR399's code/controlled gates remain as documented, but the agreed live delivery gate is still incomplete, so keep DRAFT. The native process-start cause is unconfirmed and belongs to isolated Runner/Orca/Codex environment diagnosis. Full exact evidence, qualification limits and preserved own collector failures are in the [latest acceptance](test-progress-0of6-20261026.md). No automatic merge or deployment.
