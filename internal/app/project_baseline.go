@@ -361,14 +361,15 @@ func (m *projectMaintenance) commitPullRequests(ctx context.Context, sha string)
 	defer cancel()
 	config := m.config.PR
 	host := strings.TrimRight(config.BaseURL, "/")
-	if config.Kind == "command" && host == "https://github.com" {
+	cli := strings.ToLower(filepath.Base(config.Query.Executable))
+	if config.Kind == "command" && host == "https://github.com" && (cli == "gh" || cli == "gh.exe") {
 		env := map[string]string{}
 		if config.TokenEnv != "" {
 			if token := os.Getenv(config.TokenEnv); token != "" {
 				env["GH_TOKEN"] = token
 			}
 		}
-		raw, e := (commandRunner{Dir: m.config.Repository, Timeout: 5 * time.Second, ProcessHost: m.config.ProcessHost, Env: env}).Output(ctx, backend.Command{Executable: "gh"}, "api", "--hostname", "github.com", "repos/"+config.Repository+"/commits/"+sha+"/pulls", "--jq", ".[].html_url")
+		raw, e := (commandRunner{Dir: m.config.Repository, Timeout: 5 * time.Second, ProcessHost: m.config.ProcessHost, Env: env}).Output(ctx, backend.Command{Executable: config.Query.Executable}, "api", "--hostname", "github.com", "repos/"+config.Repository+"/commits/"+sha+"/pulls", "--jq", ".[].html_url")
 		if e != nil {
 			return urls, "关联PR查询失败；Git版本信息仍可使用"
 		}

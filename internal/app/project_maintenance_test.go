@@ -582,6 +582,35 @@ func TestPMSBaselineGiteaPRMetadata(t *testing.T) {
 	}
 }
 
+type metadataCommandProbe struct {
+	backend.ManagedProcessHost
+	commands []string
+}
+
+func (p *metadataCommandProbe) StartManaged(command *exec.Cmd) (backend.StopHandle, error) {
+	p.commands = append(p.commands, command.Path)
+	return nil, fmt.Errorf("metadata process intercepted")
+}
+func TestPMSMetadataHonorsConfiguredCommand(t *testing.T) {
+	for _, executable := range []string{"controlled-provider", filepath.Join(t.TempDir(), "gh.exe")} {
+		t.Run(filepath.Base(executable), func(t *testing.T) {
+			probe := &metadataCommandProbe{}
+			m := &projectMaintenance{config: Config{ProcessHost: probe, PR: executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "e2e/project", Query: backend.Command{Executable: executable}}}}
+			urls, diagnostic := m.commitPullRequests(context.Background(), strings.Repeat("a", 40))
+			if len(urls) != 0 || diagnostic == "" {
+				t.Fatal("unsupported/failed metadata query was reported as no PR")
+			}
+			if executable == "controlled-provider" {
+				if len(probe.commands) != 0 {
+					t.Fatal("custom provider escaped to an unconfigured CLI", probe.commands)
+				}
+			} else if len(probe.commands) != 1 || probe.commands[0] != executable {
+				t.Fatal("selected GitHub executable was replaced", probe.commands)
+			}
+		})
+	}
+}
+
 func (s *pmsStore) GenerationBatch(context.Context, string) (pm.GenerationBatch, error) {
 	return s.batch, nil
 }

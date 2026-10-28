@@ -581,6 +581,9 @@ func WaitFixtureMaterials(ctx context.Context, home string, identity httpcontrac
 		if e := client.Get(ctx, "/projects/"+identity.ProjectID+"/maintenance", &view); e != nil {
 			return false, e
 		}
+		if e := controlled.Write(filepath.Join(out, "automatic-material-latest.json"), view); e != nil {
+			return false, e
+		}
 		for _, m := range view.Tasks {
 			if m.Contract.PlanRef.Path != plan {
 				continue
