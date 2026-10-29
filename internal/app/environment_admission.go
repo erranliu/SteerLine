@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 

@@ -2,6 +2,8 @@ package testmanagement
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,6 +71,7 @@ type generationCLI struct {
 	hidden         bool
 	request        runnerclient.Request
 	run            runnerclient.Run
+	files          map[string][]byte
 }
 
 type racingGenerationStop struct {
@@ -124,6 +127,14 @@ func (f *generationCLI) Submit(_ context.Context, r runnerclient.Request) (runne
 	var input runnercontract.GenerateRunInput
 	_ = json.Unmarshal(r.Input, &input)
 	f.run = runnerclient.Run{RunID: "original-run", Revision: 1, Workflow: input.Workflow, Correlation: input.Correlation, InputDigest: "original-input"}
+	if input.Generate.Repository != nil {
+		source := &runnercontract.RepositorySource{LocalPath: input.Generate.Repository.LocalPath, Commit: input.Generate.Repository.Commit, Tree: strings.Repeat("b", 40)}
+		for path, body := range f.files {
+			h := sha256.Sum256(body)
+			source.Files = append(source.Files, runnercontract.RepositoryFile{Path: path, Blob: strings.Repeat("c", 40), SHA256: hex.EncodeToString(h[:]), SizeBytes: len(body)})
+		}
+		f.run.RepositorySource = source
+	}
 	if f.lost {
 		return runnerclient.Receipt{}, &runnerclient.Failure{Unknown: true, Code: "request_outcome_unknown"}
 	}
@@ -228,7 +239,7 @@ func (f *generationCLI) Call(_ context.Context, command string, args []string, r
 func (f *generationCLI) finish(result string) {
 	f.run.Revision++
 	f.run.StopStatus = "stopped"
-	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: json.RawMessage(result), Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", TurnID: "turn"}}
+	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: json.RawMessage(result), RepositorySource: f.run.RepositorySource, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", TurnID: "turn"}}
 }
 func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *generationCLI, GenerateCommand) {
 	t.Helper()
@@ -256,16 +267,87 @@ func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *g
 	if err = json.Unmarshal(capsRaw, &caps); err != nil {
 		t.Fatal(err)
 	}
+	repoCap, err := os.ReadFile("../runnerclient/testdata/generate-repository-capability.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture struct {
+		Generate *runnerclient.GenerateCapability `json:"generate"`
+		Input    json.RawMessage                  `json:"generate_input"`
+	}
+	if err = json.Unmarshal(repoCap, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	caps.Generate = fixture.Generate
+	caps.ConfigurationSchemas.GenerateInput = fixture.Input
 	catalog, err := runnerclient.CompileCatalog(caps)
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := &memoryGenerations{rows: map[string]Generation{}}
-	f := &generationCLI{}
-	s := &GenerationService{Project: "project", Repository: root, Store: m, Runner: f, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
+	files := map[string][]byte{}
+	for _, path := range []string{"SteerlineFlow/plans/task.plan.md", RulesPath, CataloguePath} {
+		body, e := os.ReadFile(filepath.Join(root, path))
+		if e != nil {
+			t.Fatal(e)
+		}
+		files[path] = body
+	}
+	f := &generationCLI{files: files}
+	s := &GenerationService{Project: "project", Repository: root, ReadCommitted: func(_ context.Context, commit, path string) ([]byte, error) {
+		body, ok := files[path]
+		if !ok {
+			return nil, os.ErrNotExist
+		}
+		return append([]byte(nil), body...), nil
+	}, Store: m, Runner: f, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		return runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only","model":"test-model"}`)}, catalog, nil
 	}}
-	return s, m, f, GenerateCommand{RequestID: strings.Repeat("a", 32), Plan: "SteerlineFlow/plans/task.plan.md", Profile: "local"}
+	return s, m, f, GenerateCommand{RequestID: strings.Repeat("a", 32), Plan: "SteerlineFlow/plans/task.plan.md", Profile: "local", Commit: strings.Repeat("a", 40)}
+}
+
+func TestDocumentDrivenTestingGeneration(t *testing.T) {
+	for _, mode := range []string{"ready", "no-commit", "no-reader", "missing", "unreadable"} {
+		t.Run(mode, func(t *testing.T) {
+			s, store, peer, in := generationFixture(t)
+			switch mode {
+			case "no-commit":
+				in.Commit = ""
+			case "no-reader":
+				s.ReadCommitted = nil
+			case "missing":
+				delete(peer.files, RulesPath)
+			case "unreadable":
+				s.ReadCommitted = func(context.Context, string, string) ([]byte, error) { return nil, os.ErrPermission }
+			}
+			_, err := s.Generate(context.Background(), in)
+			if mode != "ready" {
+				if err == nil || peer.submits != 0 || len(store.rows) != 0 {
+					t.Fatal("unprepared materials submitted", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var request runnercontract.GenerateRunInput
+			if err = json.Unmarshal(peer.request.Input, &request); err != nil {
+				t.Fatal(err)
+			}
+			if request.Generate.Repository == nil || request.Generate.Repository.Commit != in.Commit || len(request.Generate.Materials) != 0 || strings.Contains(string(peer.request.Input), string(peer.files[in.Plan])) {
+				t.Fatal("original materials expanded into request")
+			}
+			peer.finish(`{"tests":["unit.rules"]}`)
+			peer.run.ContentResult.RepositorySource = nil
+			if err = s.Observe(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			r, _ := store.Generation(context.Background(), s.Project, in.RequestID)
+			if r.State != "invalid" {
+				t.Fatal("missing public snapshot proof accepted", r.State)
+			}
+		})
+	}
 }
 func TestTMGenerationSaveAndReplay(t *testing.T) {
 	s, _, f, in := generationFixture(t)

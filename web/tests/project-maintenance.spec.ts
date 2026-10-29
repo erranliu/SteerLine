@@ -24,12 +24,12 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
  await page.getByRole("combobox",{name:"当前项目"}).selectOption(project);
  const get=async(path:string)=>{const r=await page.request.get(new URL(prefix+path,page.url()).href);expect(r.ok(),await r.text()).toBeTruthy();return r.json()};
  const otherGet=async()=> (await page.request.get(new URL("/api/v2/application/projects/"+other.project_id+"/maintenance",page.url()).href)).json();
- const call=async(action:string,target:string,payload:object={})=>page.evaluate(async({prefix,action,target,payload})=>{
+ const call=async(action:string,target:string,payload:object={},projectPrefix=prefix)=>page.evaluate(async({prefix,action,target,payload})=>{
   const auth=await(await fetch("/auth/status")).json();
   const identity=await(await fetch(prefix+"/identity")).json();
   const r=await fetch(prefix+"/commands",{method:"POST",headers:{"Content-Type":"application/json","X-CSRF-Token":auth.csrf_token},body:JSON.stringify({request_id:crypto.randomUUID().replaceAll("-",""),project_id:identity.project_id,instance_id:identity.instance_id,action,target_id:target,expected_version:1,payload})});
   if(!r.ok)throw new Error(await r.text());return r.json();
- },{prefix,action,target,payload});
+ },{prefix:projectPrefix,action,target,payload});
  const section=page.getByRole("region",{name:"项目维护"});
  await section.getByRole("button",{name:/项目维护/}).click();
  await section.getByRole("button",{name:"检查更新",exact:true}).click();
@@ -41,6 +41,13 @@ test("runtime.project-maintenance: automatic materials, independent candidates a
  expect(initial.remote.sha).toBeTruthy();
  expect(initial.remote.time).toBeTruthy();
  expect(initial.tasks.find((t:any)=>t.task_id==="1").generation_id).toBeTruthy();
+ expect((await call("maintenance_check",other.project_id,{},"/api/v2/application/projects/"+other.project_id)).status).toBe("applied");
+ // Establish the other project's completed initial state before changing this
+ // project. Task/material observations are asynchronous after task creation.
+ await expect.poll(async()=>{
+  const value=await otherGet();
+  return value.tasks.length===2&&value.tasks.every((t:any)=>t.status==="ready"&&t.generation_id);
+ },{timeout:90000}).toBeTruthy();
  const originalOther=await otherGet();
  await expect(section.getByLabel("维护范围")).toHaveCount(0);
  await expect(section.getByRole("button",{name:"应用已审阅内容"})).toHaveCount(0);

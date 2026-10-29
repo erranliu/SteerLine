@@ -7,7 +7,7 @@
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.runner-wait-retry",
       "check": "真实 SteerLine/Git/SQLite/HTTP 与公开 Runner fixture：queue/calling/backoff/耗尽/清除、宿主重启原 Run/Attempt/期限不变、活动留存，零额外提交/答案/resume，原恢复/取消资格、唯一交付、终态停止和清理完整。",
-      "note": "独立 home/repo/DB/provider/端口/证据；无真实 Orca 或模型，不证明 Runner 的原生重试资格。"
+      "note": "独立 home/repo/DB/provider/端口/证据；无真实 Orca 或模型，不证明 Runner 的原生重试资格。；远端等待夹具先经公开 environment_start 和已停止 Run 的 closed 结果取得 ready，不跳过环境准入，不证明真实环境或 PR"
     },
     {
       "id": "l1.minimum",
@@ -15,7 +15,7 @@
       "level": "L1",
       "environment": "isolated",
       "command": "go run ./cmd/test-feedback -level=L1",
-      "check": "固定最小任务规则、公开契约、持久化与依赖边界、清单一致性全部执行，终态完整、断言通过、无意外跳过。",
+      "check": "固定最小任务规则、公开契约、持久化与依赖边界、提示词正文/参数及源码约束、清单一致性全部执行，终态完整、断言通过、无意外跳过。",
       "note": "固定单一最小集，目标总耗时 1 分钟内；任务规则、公开 Runner 契约、最小持久化和依赖边界、清单一致性。专项回归按影响使用 L4 go.full 或 owner 定向命令。"
     },
     {
@@ -132,7 +132,7 @@
       "level": "L4",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=smoke -env=live -scenario=smoke.local-codex",
-      "check": "运行真实 Runner/Codex 实现、报告和发布，核对三个 final、真实产物及精确 merged PR、唯一交付和未启动后继，清理完整。",
+      "check": "运行真实 Runner/Codex 实现、报告和发布，核对 development/2 实施/发布的可信 final（可选报告按实际执行核对）、真实产物及精确 merged PR、唯一交付和未启动后继，清理完整。",
       "note": "L4 真实交付专项，单独精确选择；固定 Runner、本机 Codex 登录及 SteerlineTest GitHub 写权限，消耗模型并创建/合并本次专属 PR；资源清理须验证。"
     },
     {
@@ -159,7 +159,7 @@
       "level": "L4",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=workflow -env=live -scenario=workflow.local-codex-audited",
-      "check": "使用两个显式模型完成实现、两轮审计、发布与真实 PR 合并；核对正式产品详情中的模型/材料/审计来源、唯一交付与后继 ready 未启动，清理完整。",
+      "check": "使用两个显式模型完成 development-audited/2 实现、一次代码审计与必要修复、发布与真实 PR 合并；核对正式产品详情中的模型/材料/实施结果来源、修复数量与明细、审计前后 Git 提交、唯一交付与后继 ready 未启动，清理完整。",
       "note": "L4 真实审计专项，单独精确选择；固定 Runner、两个不同的显式模型及 SteerlineTest GitHub 写权限，消耗模型并创建/合并专属 PR。"
     },
     {

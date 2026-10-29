@@ -18,7 +18,8 @@
 
 命令与结果登记在[专属验收](../testing/acceptance/runtime-test-progress.md)，每次使用新输出目录，首轮失败保留。Runner 自身真实远端 L3 资格以其原验收为准，不将本仓 controlled 联验当成新的远端业务执行证明。
 
-2026-10-28 提示及写入器分发由[调用方收敛 Plan](caller-prompt-convergence.plan.md)继续实现：完整冻结安排不变，执行提示紧凑投影、固定文件逐项核验、同源 writer 路径引用与缺失/不同源完整内联；同步扩展原 `testing.runtime-progress` 场景。原历史结果不变，本轮证据见[独立验收](../testing/acceptance/caller-prompt-convergence.md)。
+2026-10-28 提示及写入器分发由[调用方收敛 Plan](caller-prompt-convergence.plan.md)继续实现：完整冻结安排不变，执行提示只保留引用和少量定位参数、固定安排/协议逐项核验、同源 writer 路径引用与缺失/不同源投递前阻断；同步扩展原 `testing.runtime-progress` 场景。原历史结果不变，本轮证据见[独立验收](../testing/acceptance/caller-prompt-convergence.md)。
+
 ## 2026-10-26 后续修复
 
 原 Task18 第二轮 0/6 已取回公开 closed 原始快照：六个 false 字段之外还包含 publication 对象；固定项目版本的原入口未接入写入器。修复由调用方在实施/审计提示中提供同源写入器供原入口接线，并在发布/报告提示中保留原契约、追加测试进度只读约束。严格字段解析及历史原报告不改。

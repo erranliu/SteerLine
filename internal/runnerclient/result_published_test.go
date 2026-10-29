@@ -53,6 +53,10 @@ func TestProjectEnvironmentExecutionPublishedResultRoundTrip(t *testing.T) {
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("CODEX_HOME", state)
 	t.Setenv("STEERRUNNER_FIXTURE_STATE", state)
+	// This contract exercises collection during a held native Turn. It does
+	// not ask the protocol fixture to recognize or implement business prompts.
+	t.Setenv("STEERRUNNER_CONTENT_FIXTURE", "1")
+	check(os.WriteFile(filepath.Join(state, "content-final"), []byte("controlled held Turn"), 0600))
 	provider := filepath.Join(root, "provider.json")
 	t.Setenv("STEERRUNNER_FIXTURE_PROVIDER", provider)
 	check(os.WriteFile(filepath.Join(state, "hold-turn"), []byte("hold"), 0600))

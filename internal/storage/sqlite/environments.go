@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 )
 
 func readEnvironment(ctx context.Context, db schemaQuery, project, id string) (env.Record, error) {

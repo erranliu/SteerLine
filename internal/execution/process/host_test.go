@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -13,20 +12,21 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func TestProcessHostCommandHelper(t *testing.T) {
-	if !slices.Contains(os.Args, "-test.run=^TestProcessHostCommandHelper$") {
-		t.Skip("subprocess helper")
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "--process-host-fixture" {
+		time.Sleep(200 * time.Millisecond)
+		fmt.Println("command completed")
+		fmt.Println("routing=" + os.Getenv("ORCA_ENVIRONMENT"))
+		fmt.Println("kept=" + os.Getenv("STEERLINE_VIEWER_TEST_KEEP"))
+		os.Exit(0)
 	}
-	time.Sleep(200 * time.Millisecond)
-	fmt.Println("command completed")
-	fmt.Println("routing=" + os.Getenv("ORCA_ENVIRONMENT"))
-	fmt.Println("kept=" + os.Getenv("STEERLINE_VIEWER_TEST_KEEP"))
+	os.Exit(m.Run())
 }
 
 func TestProcessHostBlocksAmbientRoutingOnly(t *testing.T) {
 	t.Setenv("ORCA_ENVIRONMENT", "foreign-host")
 	t.Setenv("STEERLINE_VIEWER_TEST_KEEP", "original")
-	out, err := New(5*time.Second).OutputCommand(context.Background(), executionbackend.LaunchCommand{Executable: os.Args[0], Args: []string{"-test.run=^TestProcessHostCommandHelper$"}, BlockedEnvironment: []string{"orca_environment"}})
+	out, err := New(5*time.Second).OutputCommand(context.Background(), executionbackend.LaunchCommand{Executable: os.Args[0], Args: []string{"--process-host-fixture"}, BlockedEnvironment: []string{"orca_environment"}})
 	if err != nil || strings.Contains(string(out), "foreign-host") || !strings.Contains(string(out), "kept=original") || os.Getenv("ORCA_ENVIRONMENT") != "foreign-host" {
 		t.Fatalf("routing filtering changed parent/unrelated environment: %s / %v", out, err)
 	}
@@ -37,7 +37,7 @@ func TestProcessHostOperationBudget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	command := executionbackend.LaunchCommand{Executable: executable, Args: []string{"-test.run=^TestProcessHostCommandHelper$"}}
+	command := executionbackend.LaunchCommand{Executable: executable, Args: []string{"--process-host-fixture"}}
 	for _, scenario := range []string{"explicit_budget", "default_budget", "parent_cancel"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"os"
 	"path/filepath"
 	"strings"
@@ -202,6 +203,7 @@ type roadmapRunner struct {
 	run                      runnercontract.Run
 	submits, stops, inspects int
 	lost, hidden             bool
+	files                    map[string][]byte
 }
 
 type racingRoadmapStop struct {
@@ -256,6 +258,13 @@ func (f *roadmapRunner) Submit(_ context.Context, r runnercontract.Request) (run
 	var in runnercontract.GenerateRunInput
 	_ = json.Unmarshal(r.Input, &in)
 	f.run = runnercontract.Run{RunID: "original-run", Revision: 1, Workflow: in.Workflow, Correlation: in.Correlation, InputDigest: "original-input"}
+	if in.Generate.Repository != nil {
+		source := &runnercontract.RepositorySource{LocalPath: in.Generate.Repository.LocalPath, Commit: in.Generate.Repository.Commit, Tree: strings.Repeat("b", 40)}
+		for path, body := range f.files {
+			source.Files = append(source.Files, runnercontract.RepositoryFile{Path: path, Blob: strings.Repeat("c", 40), SHA256: model.Digest(body), SizeBytes: len(body)})
+		}
+		f.run.RepositorySource = source
+	}
 	if f.lost {
 		return runnerclient.Receipt{}, &runnerclient.Failure{Unknown: true}
 	}
@@ -270,6 +279,11 @@ func (f *roadmapRunner) Inspect(_ context.Context, selector, id string, _ bool) 
 		return runnerclient.Inspection{}, errors.New("replacement request observed")
 	}
 	r := f.run
+	if r.ContentResult != nil && r.ContentResult.RepositorySource == nil {
+		copy := *r.ContentResult
+		copy.RepositorySource = r.RepositorySource
+		r.ContentResult = &copy
+	}
 	return runnerclient.Inspection{Run: &r, Command: &runnerclient.Command{Command: "submit", RequestID: f.request.RequestID, RunID: &r.RunID}}, nil
 }
 func (f *roadmapRunner) Call(_ context.Context, command string, args []string, _ *runnercontract.Request) (runnerclient.Response, error) {
@@ -294,15 +308,74 @@ func generationSetup(t *testing.T) (*Service, *memoryRoadmaps, *roadmapRunner, P
 	if e != nil {
 		t.Fatal(e)
 	}
+	catalog = repositoryCatalog(t, catalog)
 	store := &memoryRoadmaps{rows: map[string]model.Stored{}}
 	runner := &roadmapRunner{}
 	source := sampleSource()
-	s := &Service{Project: "p", Store: store, Runner: runner, Source: func(context.Context, string) (model.Source, error) { return source, nil }, Graph: func(context.Context) ([]model.Existing, error) {
+	source.Head = strings.Repeat("a", 40)
+	graph, _ := json.Marshal([]model.Existing{{ID: "8", Title: "调度", Predecessors: []string{}}})
+	rules, e := prompts.RoadmapParseRules()
+	if e != nil {
+		t.Fatal(e)
+	}
+	files := map[string][]byte{source.Path: []byte(source.Body), GraphPath: graph, MappingPath: []byte(`{}`), ParseRulesPath: rules}
+	runner.files = files
+	s := &Service{Project: "p", Repository: t.TempDir(), ReadCommitted: func(_ context.Context, commit, path string) ([]byte, error) {
+		body, ok := files[path]
+		if !ok {
+			return nil, os.ErrNotExist
+		}
+		return append([]byte(nil), body...), nil
+	}, Store: store, Runner: runner, Source: func(context.Context, string) (model.Source, error) { return source, nil }, Graph: func(context.Context) ([]model.Existing, error) {
 		return []model.Existing{{ID: "8", Title: "调度", Predecessors: []string{}}}, nil
 	}, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		return runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only","model":"test-model"}`)}, catalog, nil
 	}}
 	return s, store, runner, ParseInput{RequestID: strings.Repeat("a", 32), Path: source.Path, Digest: source.Digest, Profile: "local"}
+}
+
+func TestDocumentDrivenRoadmapMaterials(t *testing.T) {
+	for _, mode := range []string{"ready", "missing", "wrong-original", "wrong-graph", "wrong-mapping", "wrong-rules", "unreadable"} {
+		t.Run(mode, func(t *testing.T) {
+			s, store, peer, in := generationSetup(t)
+			switch mode {
+			case "missing":
+				delete(peer.files, ParseRulesPath)
+			case "wrong-original":
+				peer.files[in.Path] = []byte("same path, different original")
+			case "wrong-graph":
+				peer.files[GraphPath] = []byte(`[]`)
+			case "wrong-mapping":
+				peer.files[MappingPath] = []byte(`{"Alpha":"99"}`)
+			case "wrong-rules":
+				peer.files[ParseRulesPath] = []byte("changed rules")
+			case "unreadable":
+				s.ReadCommitted = func(context.Context, string, string) ([]byte, error) { return nil, os.ErrPermission }
+			}
+			_, err := s.Parse(context.Background(), in)
+			if mode != "ready" {
+				if err == nil || peer.submits != 0 || len(store.rows) != 0 {
+					t.Fatal("unprepared materials submitted", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var request runnercontract.GenerateRunInput
+			if err = json.Unmarshal(peer.request.Input, &request); err != nil {
+				t.Fatal(err)
+			}
+			if request.Generate.Repository == nil || len(request.Generate.Materials) != 0 {
+				t.Fatal("repository materials missing")
+			}
+			for _, line := range strings.Split(sampleSource().Body, "\n") {
+				if strings.Contains(string(peer.request.Input), line) {
+					t.Fatal("source hidden in instruction/schema", line)
+				}
+			}
+		})
+	}
 }
 func TestRoadmapGenerateDurableRequestUnknownAndConfirm(t *testing.T) {
 	s, store, f, in := generationSetup(t)

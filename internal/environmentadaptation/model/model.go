@@ -1,10 +1,11 @@
-// Package environmentadaptation owns project environment policy, never native execution.
-package environmentadaptation
+// Package model defines environment records and their value validation without service dependencies.
+package model
 
 import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,9 @@ import (
 )
 
 const DocumentPath = "SteerlineFlow/environment.md"
+const GenerationRulesPath = "SteerlineFlow/environment-generation.md"
+const GenerationContextPath = "SteerlineFlow/environment-context.json"
+const ExecutionRulesPath = "SteerlineFlow/environment-execution.md"
 const MaxRounds = 3
 
 var ErrNotFound = errors.New("environment activity not found")
@@ -210,11 +214,41 @@ type Report struct {
 	Message      string  `json:"message"`
 }
 
+// RoundFile carries the unchanged report and optional read-only input facts.
+// Scripts may preserve those facts; they never become report/history authority.
+type RoundFile struct {
+	Report
+	Previous json.RawMessage `json:"previous,omitempty"`
+}
+
 func ParseReport(raw []byte, r Record, a Round) (*Report, error) {
-	var p Report
-	if e := Decode(raw, &p); e != nil {
+	var file RoundFile
+	if e := Decode(raw, &file); e != nil {
 		return nil, e
 	}
+	if file.Previous != nil {
+		var input runnercontract.RunInput
+		if json.Unmarshal(a.Request.Input, &input) != nil || input.ResultFile == nil {
+			return nil, errors.New("previous facts have no frozen input file")
+		}
+		initial, e := base64.StdEncoding.Strict().DecodeString(input.ResultFile.InitialContentBase64)
+		if e != nil {
+			return nil, e
+		}
+		var frozen RoundFile
+		if e := Decode(initial, &frozen); e != nil {
+			return nil, e
+		}
+		got, e := runnercontract.CanonicalJSON(file.Previous)
+		if e != nil {
+			return nil, e
+		}
+		want, e := runnercontract.CanonicalJSON(frozen.Previous)
+		if e != nil || !bytes.Equal(got, want) {
+			return nil, errors.New("previous facts differ from the frozen initial file")
+		}
+	}
+	p := file.Report
 	if p.Version != 1 || p.ActivityID != r.ID || p.Round != a.Number || p.Commit != r.Prepared.Commit || p.ScriptDigest != r.Prepared.ScriptDigest {
 		return nil, errors.New("report differs from original round/materials")
 	}
@@ -266,3 +300,5 @@ func (p Report) Passed(base, head string) bool {
 	u, e := url.ParseRequestURI(p.PR.URL)
 	return e == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http") && !p.PR.OutcomeUnknown && p.PR.Base == base && head != "" && p.PR.Head == head && p.PR.ChecksPassed && p.PR.ReviewsPassed && p.PR.Merged && regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(p.PR.MergeCommit) && p.PR.CleanupCompleted
 }
+
+func DigestJSON(v any) string { b, _ := json.Marshal(v); return Digest(b) }

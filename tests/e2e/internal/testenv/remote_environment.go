@@ -12,8 +12,7 @@ import (
 	"testing"
 	"time"
 
-	app "github.com/erranliu/SteerLine/internal/app"
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
@@ -138,8 +137,8 @@ func RunRemoteEnvironment(t *testing.T) {
 		t.Fatal("formal remote L4 input required")
 	}
 	in := s.Run.Remote
-	var config app.ProjectConfigInput
-	s.Must(json.Unmarshal(in.ProjectConfig, &config))
+	config, err := driver.DecodeProjectConfig(in.ProjectConfig)
+	s.Must(err)
 	p := &Project{Scenario: s, Name: "308", Root: filepath.Join(s.Root, "308"), Home: filepath.Join(s.Root, "308", "home"), Repo: filepath.Join(s.Root, "308", "merge-h-308-code"), Config: filepath.Join(s.Root, "308", "home", "etc", "308.json"), Provider: filepath.Join(s.Root, "308", "provider.json"), Executable: s.Run.Binary, Chain: "orca-remote", Tasks: map[string]Task{}}
 	s.projects = append(s.projects, p)
 	s.register("project", p.Root, 0)
@@ -151,7 +150,7 @@ func RunRemoteEnvironment(t *testing.T) {
 	s.Must(controlled.Write(p.Provider, controlled.State{}))
 	clone := exec.Command("git", "clone", "--no-hardlinks", "--no-checkout", in.Project, p.Repo)
 	clone.Env = p.Driver.Environment(os.Environ())
-	_, err := s.RunCommandFor(clone, "308-clone", 10*time.Minute)
+	_, err = s.RunCommandFor(clone, "308-clone", 10*time.Minute)
 	s.Must(err)
 	if p.git(p.Repo, "rev-parse", in.Commit+"^{commit}") != in.Commit {
 		t.Fatal("308 source commit differs")

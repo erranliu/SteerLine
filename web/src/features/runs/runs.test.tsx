@@ -46,7 +46,7 @@ it("shows frozen parameters and public audit sources without inventing a pass", 
       unavailable_reason: "",
       details: ["请求执行模型：execution-model · medium"],
     },
-    runner_workflow: { id: "development-audited", version: 1 },
+    runner_workflow: { id: "development-audited", version: 2 },
     requested_model: "audit-model",
     requested_reasoning_effort: "high",
     materials: [
@@ -60,33 +60,48 @@ it("shows frozen parameters and public audit sources without inventing a pass", 
     audit: {
       model: "audit-model",
       reasoning_effort: "high",
-      repair_count: 1,
       results: [
         {
-          step: "audit.code",
-          source_report_command_id: "original-report",
+          step: "audit.code.execute",
+          source_result_id: "implementation-result",
+          implementation_source: {
+            command_id: "implementation-command",
+            turn_id: "implementation-turn",
+            attempt_id: "attempt",
+            input_version: 1,
+            final_digest: "source-digest",
+          },
+          result_id: "audit-result",
+          pre_head: "pre-head",
+          post_head: "post-head",
           command_id: "audit-command",
           turn_id: "original-turn",
           failure: "原结果未核实",
-          findings: [
-            { severity: "P2", message: "审计发现", path: "file.go", line: 3 },
+          fixed_issues: [
+            {
+              severity: "P2",
+              issue: "审计发现",
+              repair: "修复",
+              evidence: "验证",
+            },
           ],
+          remaining_issues: [],
         },
       ],
     },
   };
   const view = render(<RunnerWorkflow run={candidate} />);
   expect(screen.getByText("冻结方案 · 原冻结方案")).toBeVisible();
-  expect(screen.getByText("Workflow · development-audited/1")).toBeVisible();
+  expect(screen.getByText("Workflow · development-audited/2")).toBeVisible();
   expect(
     screen.getByText("当前轮次请求模型 · audit-model · high"),
   ).toBeVisible();
-  expect(screen.getByText("audit.code · 尚无结论")).toBeVisible();
+  expect(screen.getByText("audit.code.execute · 未核实")).toBeVisible();
   expect(screen.getByText("原结果未核实")).toBeVisible();
   fireEvent.click(screen.getByText("结果来源"));
   expect(
     screen.getByText(
-      /报告 original-report · 命令 audit-command · 轮次 original-turn/,
+      /实施结果 implementation-result · 命令 audit-command · 轮次 original-turn/,
     ),
   ).toBeVisible();
   view.rerender(
@@ -96,24 +111,39 @@ it("shows frozen parameters and public audit sources without inventing a pass", 
         audit: {
           ...candidate.audit,
           results: [
-            { ...candidate.audit.results[0], verdict: "pass", failure: "" },
+            { ...candidate.audit.results[0], fixed_count: 1, failure: "" },
           ],
         },
       }}
     />,
   );
-  expect(screen.getByText("audit.code · pass")).toBeVisible();
+  expect(screen.getByText("audit.code.execute · 已采集")).toBeVisible();
+  expect(screen.getByText("修复数量 · 1")).toBeVisible();
+  view.rerender(
+    <RunnerWorkflow
+      run={{
+        ...candidate,
+        audit: {
+          ...candidate.audit,
+          results: [{ ...candidate.audit.results[0], failure: "" }],
+        },
+      }}
+    />,
+  );
+  expect(screen.getByText("audit.code.execute · 尚无完整结果")).toBeVisible();
   view.rerender(
     <RunnerWorkflow
       run={{
         ...candidate,
         audit: undefined,
-        runner_workflow: { id: "development", version: 1 },
+        runner_workflow: { id: "development", version: 2 },
       }}
     />,
   );
   expect(screen.queryByText("Runner 审计观察")).not.toBeInTheDocument();
-  expect(screen.queryByText("audit.code · pass")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("audit.code.execute · 已采集"),
+  ).not.toBeInTheDocument();
 });
 
 it("keeps cached output visible while refreshing and stops polling the hidden output tab", async () => {

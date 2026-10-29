@@ -1,7 +1,7 @@
 # SteerRunner 依赖与运行
 
 
-2026-10-28 调用方提示收敛沿现有接口实现：执行安排仅内联固定 ID/来源/摘要，完整安排仍冻结保存；writer 同源时引用真实固定文件，否则完整内联，发布/报告保持只读。Roadmap 文档生成从既有 `generate.repository` 快照读取规范，提交路径/commit/SHA256 并核验返回 manifest，原 Markdown 和确认规划保持完整 inline；其他生成不增加仓库能力前置。环境生成仅投影前轮成功项的冗长说明，失败/未完成/未知事实及原报告保持，阶段身份从既有结果初始 JSON 读取。原请求恢复不重渲染或重发；[设计与边界](../../SteerlineFlow/spec/caller-prompt-convergence.spec.md)、[实际验收](../../SteerlineFlow/testing/acceptance/caller-prompt-convergence.md)。
+2026-10-28 调用方提示词改为短指令与固定文档：新请求仅保留动作、引用及少量参数，完整安排、规则、原文和报告通过既有固定仓库/工作区读取；缺文件或版本不符在投递前阻断，无 inline 兜底。generate 使用固定 `generate.repository` 且 materials 为空；schema 仅保留结构，结果仍核对原文和 manifest。完整冻结安排与原报告保存在原 owner；环境下一轮缺少完整报告到新工作区的正式渠道时停止创建新 Run。用户完整回答最多 2000 UTF-8 字节，超限拒绝；旧请求仅观察原冻结输入。[设计与供给边界](../../SteerlineFlow/spec/caller-prompt-convergence.spec.md)、[实际验收](../../SteerlineFlow/testing/acceptance/caller-prompt-convergence.md)。
 
 2026-10-26：项目环境适配已接入Runner主干`74d594c5f00e32e97d2ee911db5ac787302022bc`的最终result快照。要求独立`steerrunner-result-file/v1`、公开`collection=end_only`及`query_reads_file=false`；progress原契约不变。环境适配在pr_ready等原流程状态触发stop，确认停止后验收唯一closed快照；closed/version=0保留采集失败原因，不能刷新或放行。固定EXE公开接口和受控Run回传/结算、L1/L2及Web已验证；真实远端L2+完整PR业务验收单独安排，详见[环境适配验收](../../SteerlineFlow/testing/acceptance/project-environment-adaptation.md)。
 

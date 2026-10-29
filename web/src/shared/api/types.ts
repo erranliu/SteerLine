@@ -60,14 +60,16 @@ export interface Task {
     blocker: string;
   }[];
   successors: string[];
-  workflow_runs: {
-    participation: string;
-    submission_status: string;
-    stop_requested: boolean;
-    workflow_run_id: string;
-    task_id: string;
-    candidate_number: number;
-  }[] | null;
+  workflow_runs:
+    | {
+        participation: string;
+        submission_status: string;
+        stop_requested: boolean;
+        workflow_run_id: string;
+        task_id: string;
+        candidate_number: number;
+      }[]
+    | null;
   delivery?: { pr_url: string; workflow_run_id: string; merged_at: string };
   stop_pending?: string[];
 }
@@ -121,7 +123,12 @@ export interface ExecutionWait {
   operation_id: string;
   query: "repository_inventory" | "runtime_status";
   stage: "queue" | "calling" | "backoff" | "exhausted";
-  reason_code: "orca_cli_busy" | "orca_query_running" | "orca_query_transient" | "wait_budget_exhausted" | "query_attempts_exhausted";
+  reason_code:
+    | "orca_cli_busy"
+    | "orca_query_running"
+    | "orca_query_transient"
+    | "wait_budget_exhausted"
+    | "query_attempts_exhausted";
   started_at: string;
   updated_at: string;
   deadline_at: string;
@@ -131,9 +138,9 @@ export interface ExecutionWait {
   diagnostic: string;
 }
 export interface Candidate {
- material_status?: "current" | "outdated" | "unknown";
+  material_status?: "current" | "outdated" | "unknown";
   runner_delivery?: {
-	 execution_wait: ExecutionWait | null;
+    execution_wait: ExecutionWait | null;
     available: boolean;
     run_id?: string;
     revision: number;
@@ -176,20 +183,34 @@ export interface Candidate {
   audit?: {
     model: string;
     reasoning_effort: string;
-    repair_count: number;
     results: {
       step: string;
-      source_report_command_id: string;
+      source_result_id: string;
+      implementation_source: {
+        session_id?: string;
+        command_id: string;
+        turn_id: string;
+        attempt_id: string;
+        input_version: number;
+        final_digest: string;
+      };
+      result_id: string;
       command_id: string;
       turn_id: string;
-      verdict?: string;
+      pre_head?: string;
+      post_head?: string;
+      fixed_count?: number;
+      fixed_issues:
+        | {
+            severity: string;
+            issue: string;
+            repair: string;
+            evidence: string;
+          }[]
+        | null;
+      remaining_issues:
+        { severity: string; issue: string; reason: string }[] | null;
       failure?: string;
-      findings?: {
-        severity: string;
-        message: string;
-        path?: string;
-        line?: number;
-      }[];
     }[];
   };
   runner_state_dir?: string;
@@ -243,7 +264,12 @@ export interface Candidate {
   };
 }
 export interface ServicePage {
-  service: { instance_id: string; ready: boolean; capabilities: string[]; error?: string | null };
+  service: {
+    instance_id: string;
+    ready: boolean;
+    capabilities: string[];
+    error?: string | null;
+  };
   runs: Candidate[] | null;
   control: {
     revision: number;
@@ -277,9 +303,9 @@ export interface Envelope {
   payload: Record<string, unknown>;
 }
 export interface Receipt {
- roadmap?: unknown;
+  roadmap?: unknown;
   environment?: unknown;
- maintenance?: unknown;
+  maintenance?: unknown;
   request_id: string;
   project_id: string;
   instance_id: string;

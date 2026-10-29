@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
@@ -16,9 +17,16 @@ import (
 	"unicode/utf8"
 )
 
-// Only repository documents are paths. System results belong to the immutable
-// request's prompt context; Runner never has to create a pretend reference file.
-func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (json.RawMessage, error) {
+// Every model-visible reference must already be a verified regular Git file.
+// The immutable database snapshot remains the original arrangement authority.
+func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, run *runnerclient.RunInput) (snapshot json.RawMessage, preparationErr error) {
+	// These checks only read pinned materials, before candidate reservation or
+	// Runner submission. Reject a definite preparation failure with a receipt.
+	defer func() {
+		if preparationErr != nil {
+			preparationErr = &taskmodel.Error{Code: "test_materials_not_ready", Message: preparationErr.Error()}
+		}
+	}()
 	run.ProgressFile = nil
 	if len(work.FrozenTestPlan) == 0 {
 		raw, _ := json.Marshal(testmanagement.Snapshot{Status: "missing", PlanPath: work.Contract.PlanRef.Path, Commit: work.Contract.PlanRef.Commit, Diagnostic: "候选尚未绑定系统测试安排", Definitions: []testmanagement.Definition{}})
@@ -64,8 +72,33 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 			return nil, fmt.Errorf("固定测试定义与原安排不一致：%s", d.ID)
 		}
 	}
+	arrangementPath, err := testmanagement.ArrangementPath(plan.PlanPath)
+	if err != nil {
+		return nil, err
+	}
+	arrangement, err := read(arrangementPath)
+	if err != nil {
+		return nil, fmt.Errorf("材料准备不足：固定测试安排 %s 不可读：%w", arrangementPath, err)
+	}
+	if err = testmodel.ValidateArrangement(plan, arrangement, catalogue); err != nil {
+		return nil, err
+	}
+	rules, err := read(testmodel.ProtocolPath)
+	if err != nil {
+		return nil, fmt.Errorf("材料准备不足：执行协议 %s 不可读：%w", testmodel.ProtocolPath, err)
+	}
+	expectedRules, err := prompts.TestingRules()
+	if err != nil {
+		return nil, err
+	}
+	if !prompts.SameRules(rules, expectedRules) {
+		return nil, errors.New("材料准备不足：固定执行协议与正式规则不同源")
+	}
 	writer, writerErr := read(testmodel.WriterPath)
 	referencedWriter := writerErr == nil && bytes.Equal(bytes.ReplaceAll(writer, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll([]byte(progresstools.PowerShellWriter), []byte("\r\n"), []byte("\n")))
+	if !referencedWriter {
+		return nil, errors.New("材料准备不足：固定提交缺少同源 writer，不支持内联兜底")
+	}
 	if err := c.runtimeCatalog.ValidateProgress(); err != nil {
 		return nil, err
 	}
@@ -74,7 +107,7 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 		return nil, err
 	}
 	run.ProgressFile = progress
-	workflow, e := c.runtimeCatalog.WithTestProgressContext(run.Workflow, testmodel.TestingContextWithWriter(work.FrozenTestPlan, referencedWriter), testmodel.TestingReadOnlyInstructions)
+	workflow, e := c.runtimeCatalog.WithTestProgressContext(run.Workflow, work.FrozenTestPlan, referencedWriter)
 	if e != nil {
 		return nil, fmt.Errorf("所选Runner无法绑定系统测试安排：%w", e)
 	}
@@ -86,7 +119,7 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 	for _, ref := range run.Documents.References {
 		seen[ref.Path] = true
 	}
-	paths := []string{testmanagement.CataloguePath, testmanagement.RulesPath}
+	paths := []string{testmanagement.CataloguePath, testmanagement.RulesPath, arrangementPath, testmodel.ProtocolPath}
 	if referencedWriter {
 		paths = append(paths, testmodel.WriterPath)
 	}

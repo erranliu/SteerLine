@@ -12,29 +12,27 @@ import (
 	b "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func TestDesktopOpenHelper(t *testing.T) {
-	if !slices.Contains(os.Args, "-test.run=^TestDesktopOpenHelper$") {
-		t.Skip("subprocess helper")
-	}
+func desktopOpenFixture() {
 	marker := os.Args[len(os.Args)-1]
 	if slices.Contains(os.Args, "--child") {
 		time.Sleep(250 * time.Millisecond)
-		if err := os.WriteFile(marker, []byte("desktop survived"), 0600); err != nil {
-			t.Fatal(err)
+		if os.WriteFile(marker, []byte("desktop survived"), 0600) != nil {
+			os.Exit(1)
 		}
-		return
+		os.Exit(0)
 	}
 	if os.Getenv("STEERLINE_DESKTOP_TEST_ROUTE") != "" {
-		t.Fatal("desktop launcher inherited remote routing")
+		os.Exit(2)
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=^TestDesktopOpenHelper$", "--", "--child", marker)
+	cmd := exec.Command(os.Args[0], "--desktop-open-fixture", "--child", marker)
 	hideDesktopLauncher(cmd)
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
+	if cmd.Start() != nil {
+		os.Exit(1)
 	}
-	if err := cmd.Process.Release(); err != nil {
-		t.Fatal(err)
+	if cmd.Process.Release() != nil {
+		os.Exit(1)
 	}
+	os.Exit(0)
 }
 
 func TestDesktopOpenPreservesDesktopAfterLauncherExit(t *testing.T) {
@@ -46,7 +44,7 @@ func TestDesktopOpenPreservesDesktopAfterLauncherExit(t *testing.T) {
 			environment = append(environment, entry)
 		}
 	}
-	_, err := OutputDesktopOpen(context.Background(), b.LaunchCommand{Executable: os.Args[0], Args: []string{"-test.run=^TestDesktopOpenHelper$", "--", marker}, Timeout: 5 * time.Second}, environment)
+	_, err := OutputDesktopOpen(context.Background(), b.LaunchCommand{Executable: os.Args[0], Args: []string{"--desktop-open-fixture", marker}, Timeout: 5 * time.Second}, environment)
 	if err != nil {
 		t.Fatal(err)
 	}

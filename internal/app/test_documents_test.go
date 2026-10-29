@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
@@ -33,14 +35,14 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	run := callerTestRun()
 	got, e := c.prepareTestPlan(context.Background(), work, &run)
 	require(t, e)
-	if string(got) != string(raw) || len(run.Documents.References) != 2 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testmodel.TestingContext(raw)) {
+	if string(got) != string(raw) || len(run.Documents.References) != 5 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, raw, true)) {
 		t.Fatal("system context was not frozen", run)
 	}
 	if run.ProgressFile == nil {
 		t.Fatal("progress was not frozen with candidate")
 	}
 	for _, key := range []string{"implement.report", "publish", "publish.report"} {
-		if !strings.HasSuffix(run.Workflow.PromptOverrides[key], testmodel.TestingReadOnlyInstructions) {
+		if !strings.HasSuffix(run.Workflow.PromptOverrides[key], testReadOnlyPrompt(t)) {
 			t.Fatal("report/publication can overwrite test progress", key)
 		}
 	}
@@ -88,9 +90,14 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 	for _, mode := range []string{"missing", "same", "crlf", "different"} {
 		t.Run(mode, func(t *testing.T) {
 			path := filepath.Join(m.config.Repository, testmodel.WriterPath)
+			defer func() {
+				pmGit(t, m.config.Repository, "restore", "--", testmodel.CataloguePath)
+				_ = os.WriteFile(path, []byte(progresstools.PowerShellWriter), 0600)
+			}()
 			require(t, os.MkdirAll(filepath.Dir(path), 0700))
 			switch mode {
 			case "missing":
+				require(t, os.Remove(path))
 			case "same":
 				require(t, os.WriteFile(path, []byte(progresstools.PowerShellWriter), 0600))
 			case "crlf":
@@ -108,32 +115,38 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 			require(t, os.WriteFile(filepath.Join(m.config.Repository, testmodel.CataloguePath), []byte("uncommitted invalid catalogue"), 0600))
 			run := callerTestRun()
 			full, err := m.config.prepareTestPlan(ctx, work, &run)
-			require(t, err)
 			referenced := mode == "same" || mode == "crlf"
-			body := run.Workflow.PromptOverrides["implement.execute"]
-			if string(full) != string(work.FrozenTestPlan) || !strings.Contains(body, testmodel.TestingContextWithWriter(full, referenced)) {
-				t.Fatal("frozen arrangement or source changed")
-			}
-			if strings.Contains(body, progresstools.PowerShellWriter) == referenced {
-				t.Fatal("wrong writer distribution", mode)
-			}
-			if !strings.Contains(run.Workflow.PromptOverrides["publish"], testmodel.TestingReadOnlyInstructions) || strings.Contains(run.Workflow.PromptOverrides["publish"], "Set-RuntimeProgress") {
-				t.Fatal("publication got writer")
-			}
-			if referenced && len(run.Documents.References) != 3 || !referenced && len(run.Documents.References) != 2 {
-				t.Fatal("writer path not bound")
+			if !referenced {
+				if err == nil {
+					t.Fatal("missing or changed writer accepted")
+				}
+			} else {
+				require(t, err)
+				body := run.Workflow.PromptOverrides["implement.execute"]
+				if string(full) != string(work.FrozenTestPlan) || !strings.Contains(body, testPromptContext(t, full, referenced)) {
+					t.Fatal("frozen arrangement or source changed")
+				}
+				if strings.Contains(body, progresstools.PowerShellWriter) == referenced {
+					t.Fatal("wrong writer distribution", mode)
+				}
+				if !strings.Contains(run.Workflow.PromptOverrides["publish"], testReadOnlyPrompt(t)) || strings.Contains(run.Workflow.PromptOverrides["publish"], "Set-RuntimeProgress") {
+					t.Fatal("publication got writer")
+				}
+				if len(run.Documents.References) != 5 {
+					t.Fatal("writer path not bound")
+				}
 			}
 			// Restore only our own fixture files before the next commit.
 			pmGit(t, m.config.Repository, "restore", "--", testmodel.CataloguePath)
 			if mode == "missing" {
-				require(t, os.Remove(path))
+				require(t, os.WriteFile(path, []byte(progresstools.PowerShellWriter), 0600))
 			} else {
 				pmGit(t, m.config.Repository, "restore", "--", testmodel.WriterPath)
 			}
 		})
 	}
 	work := callerFrozenWork(t, m, store.contract)
-	for _, mode := range []string{"digest", "definition", "note", "commit", "plan-digest", "missing-rules", "missing-catalogue"} {
+	for _, mode := range []string{"digest", "definition", "note", "commit", "plan-digest", "missing-protocol", "wrong-protocol", "missing-arrangement", "wrong-arrangement", "missing-rules", "missing-catalogue"} {
 		t.Run(mode, func(t *testing.T) {
 			next := work
 			var snap testmanagement.Snapshot
@@ -152,20 +165,53 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 			case "plan-digest":
 				next.Contract.PlanRef.SHA256 = strings.Repeat("0", 64)
 			default:
+				pmGit(t, m.config.Repository, "restore", "--source", store.contract.PlanRef.Commit, "--staged", "--worktree", "--", ".")
 				path := testmodel.RulesPath
 				if mode == "missing-catalogue" {
 					path = testmodel.CataloguePath
 				}
-				pmGit(t, m.config.Repository, "rm", path)
+				switch mode {
+				case "missing-protocol", "wrong-protocol":
+					path = testmodel.ProtocolPath
+				case "missing-arrangement", "wrong-arrangement":
+					arrangement, err := testmodel.ArrangementPath(snap.PlanPath)
+					require(t, err)
+					path = arrangement
+				}
+				if strings.HasPrefix(mode, "wrong-") {
+					require(t, os.WriteFile(filepath.Join(m.config.Repository, path), []byte(`{"tests":[]}`), 0600))
+					pmGit(t, m.config.Repository, "add", ".")
+				} else {
+					pmGit(t, m.config.Repository, "rm", path)
+				}
 				pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "-qm", mode)
 				snap.Commit = pmGit(t, m.config.Repository, "rev-parse", "HEAD")
 				next.Contract.PlanRef.Commit = snap.Commit
 			}
 			next.FrozenTestPlan, _ = json.Marshal(snap)
 			run := callerTestRun()
-			if _, err := m.config.prepareTestPlan(ctx, next, &run); err == nil {
-				t.Fatal("invalid pinned source accepted", mode)
+			_, err := m.config.prepareTestPlan(ctx, next, &run)
+			var rejected *taskmodel.Error
+			if !errors.As(err, &rejected) || rejected.Code != "test_materials_not_ready" {
+				t.Fatal("invalid pinned source must produce a rejected task receipt", mode, err)
 			}
 		})
 	}
+}
+
+func testPromptContext(t *testing.T, snapshot []byte, referenced bool) string {
+	t.Helper()
+	body, err := prompts.TestingContext(snapshot, referenced)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+func testReadOnlyPrompt(t *testing.T) string {
+	t.Helper()
+	body, err := prompts.TestingReadOnly()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
 }

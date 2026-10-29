@@ -9,6 +9,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +26,15 @@ import (
 func TestLocalOrcaCatalog(t *testing.T) {
 	for _, mode := range []string{"probe", "seed", "missing", "empty", "in-progress", "unsupported", "changed-runtime", "wrong-id", "wrong-protocol", "metadata-runtime", "invalid", "oversize", "disconnect", "cancel"} {
 		t.Run(mode, func(t *testing.T) {
+			// RPCs have their own 3 s/5 s deadlines. Also bound fixture shutdown
+			// so a stuck Close/Wait preserves all goroutine stacks in Full.
+			watchdog := time.AfterFunc(20*time.Second, func() {
+				stack := make([]byte, 1<<20)
+				stack = stack[:runtime.Stack(stack, true)]
+				os.Stderr.Write(stack)
+				panic("local Orca catalog fixture did not finish: " + mode)
+			})
+			defer watchdog.Stop()
 			home := t.TempDir()
 			data := t.TempDir()
 			endpoint := `\\.\pipe\sl-web-catalog-` + uuid.NewString()

@@ -28,8 +28,9 @@ type ContentResult struct {
 // RepositorySource is the Runner's fixed Git-object snapshot manifest. It
 // describes available files, not proof that the model read every file.
 type GenerateRepository struct {
-	LocalPath string `json:"local_path"`
-	Commit    string `json:"commit"`
+	LocalPath string   `json:"local_path"`
+	Commit    string   `json:"commit"`
+	Paths     []string `json:"paths,omitempty"`
 }
 type RepositoryFile struct {
 	Path      string `json:"path"`

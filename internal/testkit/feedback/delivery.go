@@ -19,6 +19,8 @@ type LiveDeliveryProof struct {
 	Audited            *AuditedWorkflowProof `json:"audited,omitempty"`
 	RunnerVersion      string                `json:"runner_version"`
 	RunnerSHA256       string                `json:"runner_sha256"`
+	WorkflowID         string                `json:"workflow_id"`
+	WorkflowVersion    int                   `json:"workflow_version"`
 	RunID              string                `json:"run_id"`
 	CandidateID        string                `json:"candidate_id"`
 	FinalSources       []FinalSource         `json:"final_sources"`
@@ -45,8 +47,12 @@ func (p LiveDeliveryProof) Validate() error {
 	if p.RunnerVersion == "" || !hex(p.RunnerSHA256, 64) || p.RunID == "" || p.CandidateID == "" {
 		return errors.New("live Runner identity missing")
 	}
-	if p.Audited == nil && len(p.FinalSources) != 3 || p.Audited != nil && len(p.FinalSources) < 5 {
-		return errors.New("three public stage finals required")
+	wantWorkflow, minimumFinals := "development", 2
+	if p.Audited != nil {
+		wantWorkflow, minimumFinals = "development-audited", 3
+	}
+	if p.WorkflowID != wantWorkflow || p.WorkflowVersion != 2 || len(p.FinalSources) < minimumFinals {
+		return errors.New("published v2 workflow and its required public finals missing")
 	}
 	seen := map[string]bool{}
 	for _, source := range p.FinalSources {
@@ -86,7 +92,7 @@ func (p AuditedWorkflowProof) Validate() error {
 	if p.ExecutionModel == "" || p.AuditModel == "" || p.ExecutionModel == p.AuditModel {
 		return errors.New("distinct audited model parameters missing")
 	}
-	for _, step := range []string{"implement.execute", "audit.spec", "audit.code", "publish"} {
+	for _, step := range []string{"implement.execute", "audit.code.execute", "publish.execute"} {
 		model := p.ExecutionModel
 		if strings.HasPrefix(step, "audit.") {
 			model = p.AuditModel

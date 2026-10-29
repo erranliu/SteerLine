@@ -1,13 +1,17 @@
 package controlled
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -23,6 +27,7 @@ import (
 type RunnerFixture struct {
 	WaitEvents []runnercontract.Event                 `json:"wait_events,omitempty"`
 	Progress   map[string]runnercontract.ProgressFile `json:"progress"`
+	Results    map[string]runnercontract.ResultFile   `json:"results"`
 	Providers  map[string]string                      `json:"providers"`
 	Runs       map[string]runnercontract.Run          `json:"runs"`
 	Requests   map[string]runnercontract.Command      `json:"requests"`
@@ -62,6 +67,8 @@ func RunnerCLI(args []string) (bool, error) {
 			}
 			data["version"] = "caller-fixture-v1"
 			data["resource_version"] = 1
+			advertiseRepository(data)
+			advertiseResult(data)
 			data["resource_digest"] = strings.Repeat("a", 64)
 			return true, json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": "steerrunner-cli/v1", "ok": true, "request_id": nil, "data": data, "error": nil})
 		}
@@ -74,7 +81,7 @@ func RunnerCLI(args []string) (bool, error) {
 	case "version", "capabilities", "service":
 		os.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "caller-fixture-v1")
 		return protocol.RunRunnerServiceFixture(), nil
-	case "progress-file", "submit", "inspect", "open-native-session", "events", "observe", "reply", "resume", "stop":
+	case "progress-file", "result-file", "submit", "inspect", "open-native-session", "events", "observe", "reply", "resume", "stop":
 	default:
 		return false, nil
 	}
@@ -111,7 +118,7 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	var request runnercontract.Request
 	var id any
-	if args[0] != "progress-file" && args[0] != "inspect" && args[0] != "events" && args[0] != "observe" && args[0] != "open-native-session" {
+	if args[0] != "progress-file" && args[0] != "result-file" && args[0] != "inspect" && args[0] != "events" && args[0] != "observe" && args[0] != "open-native-session" {
 		if err := json.NewDecoder(os.Stdin).Decode(&request); err != nil {
 			return true, err
 		}
@@ -154,6 +161,13 @@ func RunnerCLI(args []string) (bool, error) {
 	}
 	s.Calls = append(s.Calls, strings.Join(args[:1], " "))
 	runID := argument(args, "--run-id")
+	if args[0] == "result-file" {
+		result, ok := s.Results[runID]
+		if !ok {
+			return respond(nil, "run_not_found")
+		}
+		return respond(result, "")
+	}
 	if args[0] == "progress-file" {
 		p, ok := s.Progress[runID]
 		if !ok {
@@ -205,7 +219,15 @@ func RunnerCLI(args []string) (bool, error) {
 			// Scripted public result, not a native/model success claim.
 			selection := []string{}
 			noTests := false
-			for _, material := range generation.Generate.Materials {
+			materials := generation.Generate.Materials
+			if generation.Generate.Repository != nil {
+				var e error
+				materials, run.RepositorySource, e = fixtureRepository(*generation.Generate.Repository)
+				if e != nil {
+					return true, e
+				}
+			}
+			for _, material := range materials {
 				if material.Content == nil {
 					continue
 				}
@@ -231,7 +253,7 @@ func RunnerCLI(args []string) (bool, error) {
 			}
 			result, _ := json.Marshal(map[string]any{"tests": selection})
 			source := runnercontract.Final{CommandID: "fixture-content-" + request.RequestID, TurnID: "fixture-turn", Verified: true, NativeOutcome: "succeeded", Source: "caller-fixture"}
-			run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: result, Source: source}
+			run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: result, RepositorySource: run.RepositorySource, Source: source}
 			run.Status = "completed"
 			run.StopStatus = "stopped"
 			run.Final = &source
@@ -249,6 +271,16 @@ func RunnerCLI(args []string) (bool, error) {
 			}
 			encoded := input.ProgressFile.InitialContentBase64
 			s.Progress[runID] = runnercontract.ProgressFile{Contract: runnercontract.ProgressContract, RunID: runID, Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(body), SHA256: hex.EncodeToString(hash[:]), CollectionStatus: "observing"}
+		}
+		if input.Correlation["environment_activity"] != "" && input.ResultFile != nil {
+			result, err := scriptedEnvironment(input, &run)
+			if err != nil {
+				return true, err
+			}
+			if s.Results == nil {
+				s.Results = map[string]runnercontract.ResultFile{}
+			}
+			s.Results[runID] = result
 		}
 		s.Runs[runID] = run
 		s.Providers[runID] = providerPath
@@ -440,8 +472,16 @@ func controlledCapabilities() map[string]any {
 	caps["run_observation"] = map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100}
 	caps["configuration_schemas"].(map[string]any)["adapters"].(map[string]any)["orca-terminal"] = map[string]string{"type": "object"}
 	caps["workflows"].([]any)[0].(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}
+	development := map[string]any{}
+	for key, value := range caps["workflows"].([]any)[0].(map[string]any) {
+		development[key] = value
+	}
+	development["version"] = 2
+	caps["workflows"] = append(caps["workflows"].([]any), development)
 	caps["workflows"] = append(caps["workflows"].([]any), map[string]any{"id": "generate", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{}})
 	caps["configuration_schemas"].(map[string]any)["generate_input"] = map[string]any{"type": "object", "required": []string{"workflow", "execution", "generate"}}
+	advertiseRepository(caps)
+	advertiseResult(caps)
 	return caps
 }
 
@@ -470,4 +510,87 @@ func (s RunnerFixture) eventPage(run runnercontract.Run, after string) runnercon
 		page.NextCursor = "fixture-end"
 	}
 	return page
+}
+
+// Public repository snapshot behavior for this scripted caller peer only.
+func fixtureRepository(repo runnercontract.GenerateRepository) ([]runnercontract.Document, *runnercontract.RepositorySource, error) {
+	gitInput := func(input string, args ...string) ([]byte, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "git", append([]string{"-C", repo.LocalPath}, args...)...)
+		cmd.Stdin = strings.NewReader(input)
+		return cmd.Output()
+	}
+	tree, err := gitInput("", "rev-parse", repo.Commit+"^{tree}")
+	if err != nil {
+		return nil, nil, err
+	}
+	source := &runnercontract.RepositorySource{LocalPath: repo.LocalPath, Commit: repo.Commit, Tree: strings.TrimSpace(string(tree))}
+	entries, err := gitInput("", "ls-tree", "-r", "-z", repo.Commit)
+	if err != nil {
+		return nil, nil, err
+	}
+	selected := map[string]bool{}
+	for _, path := range repo.Paths {
+		selected[path] = true
+	}
+	type entry struct{ path, blob string }
+	objects := []entry{}
+	var batch strings.Builder
+	for _, raw := range bytes.Split(entries, []byte{0}) {
+		if len(raw) == 0 {
+			continue
+		}
+		meta, path, ok := strings.Cut(string(raw), "\t")
+		if repo.Paths != nil && !selected[path] {
+			continue
+		}
+		fields := strings.Fields(meta)
+		if !ok || len(fields) != 3 || fields[0] != "100644" && fields[0] != "100755" {
+			return nil, nil, fmt.Errorf("unsupported fixture source entry")
+		}
+		objects = append(objects, entry{path, fields[2]})
+		batch.WriteString(fields[2] + "\n")
+	}
+	if repo.Paths != nil && len(objects) != len(selected) {
+		return nil, nil, fmt.Errorf("selected fixture file is missing")
+	}
+	// Read all original objects in one process. Per-file Git processes held the
+	// shared fixture lock long enough for another project's CLI call to expire.
+	raw, err := gitInput(batch.String(), "cat-file", "--batch")
+	if err != nil {
+		return nil, nil, err
+	}
+	reader := bufio.NewReader(bytes.NewReader(raw))
+	materials := []runnercontract.Document{}
+	for _, object := range objects {
+		header, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, nil, err
+		}
+		fields := strings.Fields(header)
+		if len(fields) != 3 || fields[0] != object.blob || fields[1] != "blob" {
+			return nil, nil, fmt.Errorf("invalid fixture batch object")
+		}
+		size, err := strconv.Atoi(fields[2])
+		if err != nil || size < 0 || size > len(raw) {
+			return nil, nil, fmt.Errorf("invalid fixture batch size")
+		}
+		body := make([]byte, size)
+		if _, err = io.ReadFull(reader, body); err != nil {
+			return nil, nil, err
+		}
+		end, err := reader.ReadByte()
+		if err != nil || end != '\n' {
+			return nil, nil, fmt.Errorf("invalid fixture batch terminator")
+		}
+		hash := sha256.Sum256(body)
+		source.Files = append(source.Files, runnercontract.RepositoryFile{Path: object.path, Blob: object.blob, SHA256: hex.EncodeToString(hash[:]), SizeBytes: len(body)})
+		text := string(body)
+		materials = append(materials, runnercontract.Document{Path: object.path, Content: &text, Kind: "inline"})
+	}
+	return materials, source, nil
+}
+func advertiseRepository(caps map[string]any) {
+	caps["generate"] = map[string]any{"workflow": "generate/1", "result": "inspect/history: content_result.json", "source": "repository_source: commit/tree/files/blob/sha256/size_bytes", "max_result_utf8_bytes": 1048576, "output_schema": "caller_defined_json_schema_2020_12", "repository": map[string]any{"commit": "full_commit_object_id", "input_property": "generate.repository", "source": "existing_local_git_objects", "snapshot": "private_regular_files_without_git", "selection": "explicit_file_paths_or_whole_tree", "max_files": 4096, "max_bytes": 67108864, "max_manifest_bytes": 1048576}}
 }

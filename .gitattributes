@@ -3,3 +3,8 @@ docs/validation/test-execution-diagnosis/probes/*.patch whitespace=-blank-at-eol
 docs/validation/test-execution-diagnosis/reduction-audit/*.patch whitespace=-blank-at-eol,-space-before-tab
 # Raw terminal diagnostics preserve padded screen rows verbatim.
 docs/validation/product-simplification-01-console/*.txt whitespace=-blank-at-eol,-space-before-tab
+
+# Fixed prompts have deterministic LF; fixtures preserve intentional user CRLF.
+internal/prompts/*.md text eol=lf
+internal/prompts/materials/*.md text eol=lf
+internal/prompts/testdata/*.golden.md -text whitespace=cr-at-eol

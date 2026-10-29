@@ -19,6 +19,7 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -28,6 +29,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/testkit/remotetest"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
+	progresstools "github.com/erranliu/SteerLine/tools"
 	"github.com/google/uuid"
 )
 
@@ -281,6 +283,7 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 		s.Must(os.MkdirAll(filepath.Dir(path), 0700))
 		s.Must(os.WriteFile(path, raw, 0600))
 	}
+	p.prepareTestProtocol()
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "E2E project and contracts")
 	p.git(p.Repo, "push", "--quiet", "origin", "main")
@@ -310,6 +313,17 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 		s.t.Fatalf("home did not expose project state: %s", rawHome)
 	}
 	return p
+}
+
+func (p *Project) prepareTestProtocol() {
+	s := p.Scenario
+	rules, err := prompts.TestingRules()
+	s.Must(err)
+	for path, body := range map[string][]byte{"SteerlineFlow/testing/runtime-progress.md": rules, "tools/testing/RuntimeProgress.ps1": []byte(progresstools.PowerShellWriter)} {
+		target := filepath.Join(p.Repo, path)
+		s.Must(os.MkdirAll(filepath.Dir(target), 0700))
+		s.Must(os.WriteFile(target, body, 0600))
+	}
 }
 
 // NewHomeForProject binds the same Git clone to another independent home.
@@ -628,6 +642,14 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 		}
 		if c.Projection == nil {
 			return false, nil
+		}
+		if (p.Scenario.ID == "smoke.local-codex" || p.Scenario.ID == "workflow.local-codex-audited") && phase != "waiting_decision" && (c.Projection.Status == "waiting_input" || c.Projection.Status == "blocked" || c.Projection.Status == "failed") {
+			p.Record("blocked", snap)
+			conversation, readErr := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, p.ProjectID, c.ID, c.RunID)
+			if readErr == nil {
+				p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-blocked-conversation.json"), conversation))
+			}
+			p.Scenario.t.Fatal("live fixture requires no supplemental input: ", c.Projection.Diagnostic, readErr)
 		}
 		if p.Scenario.ID == "workflow.local-codex-audited" {
 			p.observeAuditedProduct(c, false)

@@ -1,0 +1,1 @@
+先读取固定提交 {{.Commit}} 的 {{.Source}}、SteerlineFlow/Roadmap/document-rules.md、SteerlineFlow/Roadmap/confirmed-planning.json、SteerlineFlow/spec/SpecGuide.md、SteerlineFlow/testing.md 和 SteerlineProjectGuideDoc/spec-plan-guidelines.md，调查同一代码快照并生成完整 Spec/Plan/验收材料。只返回原 schema 结果。

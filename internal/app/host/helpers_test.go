@@ -15,6 +15,9 @@ func require(t *testing.T, err error) {
 	}
 }
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "--desktop-open-fixture" {
+		desktopOpenFixture()
+	}
 	for i, arg := range os.Args {
 		if arg != "--fake" {
 			continue

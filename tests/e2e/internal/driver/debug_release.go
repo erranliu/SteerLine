@@ -19,10 +19,13 @@ import (
 	app "github.com/erranliu/SteerLine/internal/app"
 	host "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
+	testmanagementmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	progresstools "github.com/erranliu/SteerLine/tools"
 
 	"github.com/google/uuid"
 )
@@ -309,6 +312,22 @@ func (d *debugRelease) git(args ...string) (string, error) {
 
 func (d *debugRelease) initialize() error {
 	if _, err := os.Stat(filepath.Join(d.repo, ".git")); os.IsNotExist(err) {
+		rules, err := prompts.TestingRules()
+		if err != nil {
+			return err
+		}
+		for path, body := range map[string][]byte{
+			testmanagementmodel.ProtocolPath: rules,
+			testmanagementmodel.WriterPath:   []byte(progresstools.PowerShellWriter),
+		} {
+			path = filepath.Join(d.repo, filepath.FromSlash(path))
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				return err
+			}
+			if err := os.WriteFile(path, body, 0600); err != nil {
+				return err
+			}
+		}
 		for _, args := range [][]string{{"init", "--quiet", "-b", d.base}, {"config", "user.name", "SteerLine Debug"}, {"config", "user.email", "debug@example.invalid"}, {"config", "commit.gpgsign", "false"}, {"config", "core.autocrlf", "false"}, {"config", "core.hooksPath", filepath.Join(d.home, "hooks")}, {"config", "gc.auto", "0"}, {"remote", "add", "origin", debugRemote}, {"add", "."}, {"commit", "--quiet", "-m", "SteerlineTest debug fixture"}} {
 			if _, err := d.git(args...); err != nil {
 				return err

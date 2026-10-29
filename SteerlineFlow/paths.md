@@ -22,6 +22,9 @@
 | 路径 | 职责 / 读取者 |
 | --- | --- |
 | `AGENTS.md` | 当前项目规则及按需读取入口。 |
+| `internal/prompts/*.md`、`internal/prompts/prompts.go` | SteerLine 固定模型指令的唯一文件来源及小型组装入口；原业务事实、材料和 Runner 正文各保留原权威。 |
+| `internal/prompts/testdata/*.golden.md`、`internal/testkit/boundary/prompts.go` | 实际调用方正文期望值及有限源码约束；通过现有 L1/owner 测试执行，不保存某次运行报告。 |
+| `docs/prompt-governance.md`、`.github/workflows/prompt-governance.yml` | 提示词变更说明、原生测试 job 与保护接入边界；远端是否生效另按专属验收核实。 |
 | `SteerlineProjectGuideDoc/` | SteerLine 统一提供的固定规范；本项目流程定制归 SteerlineFlow。 |
 | `SteerlineFlow/README.md`、`SteerlineFlow/paths.md` | 流程内容索引与本路径清单。 |
 | `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan；执行时还须固定实际 commit。 |

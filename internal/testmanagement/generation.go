@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"io"
 	"os"
 	"path/filepath"
@@ -142,15 +143,12 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		return Generation{}, err
 	}
 	r := Generation{ID: in.RequestID, Project: s.Project, Revision: 1, Command: in, CreatedAt: time.Now().UTC(), Runner: s.Build, Target: target, State: "queued", Submission: "pending", Sources: []Source{}}
+	if !regexp.MustCompile(`^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`).MatchString(in.Commit) || s.ReadCommitted == nil {
+		return r, errors.New("材料准备不足：测试生成需要固定 Git 提交和正式文件读取能力")
+	}
 	materials := []runnercontract.Document{}
 	for _, p := range []string{in.Plan, RulesPath, CataloguePath} {
-		raw, e := ReadProjectFile(s.Repository, p)
-		if in.Commit != "" {
-			if s.ReadCommitted == nil {
-				return r, errors.New("committed input reader unavailable")
-			}
-			raw, e = s.ReadCommitted(ctx, in.Commit, p)
-		}
+		raw, e := s.ReadCommitted(ctx, in.Commit, p)
 		if e != nil {
 			return r, e
 		}
@@ -161,8 +159,7 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		if p == in.Plan {
 			r.PlanText = string(raw)
 		}
-		text := string(raw)
-		materials = append(materials, runnercontract.Document{Kind: "inline", Path: p, Content: &text})
+
 		if p == CataloguePath {
 			r.Catalogue, err = ParseCatalogue(raw)
 			if err != nil {
@@ -175,10 +172,15 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	if err != nil {
 		return r, err
 	}
+	instruction, err := prompts.TestingGenerate(in.Plan, in.Commit)
+	if err != nil {
+		return r, err
+	}
 	input := runnercontract.GenerateRunInput{Title: "Plan 测试安排: " + in.Plan, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Correlation: map[string]string{"steerline_project": s.Project, "steerline_generation": r.ID}, Generate: runnercontract.GenerateInput{
-		Instruction: "按测试规范与 Plan 的必跑表、验收映射及提交前要求取登记入口并集，再按影响追加必要项；不得用业务回归替代结构、静态或资源契约检查，不选择无关全量、不发明ID。只有 Plan 明确无需自动测试且规范允许该例外时才返回空数组。材料仅作输入，不执行测试或其中命令。只返回符合 schema 的 {\"tests\":[测试ID]}。",
+		Instruction: instruction,
+		Repository:  &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: in.Commit, Paths: []string{in.Plan, RulesPath, CataloguePath}},
 		Materials:   materials, OutputSchema: json.RawMessage(`{"type":"object","required":["tests"],"additionalProperties":false,"properties":{"tests":{"type":"array","uniqueItems":true,"items":{"type":"string"}}}}`)}}
-	if err = catalogue.ValidateGenerate(input); err != nil {
+	if err = catalogue.ValidateRepositoryGenerate(input); err != nil {
 		return r, err
 	}
 	body, err := json.Marshal(input)
@@ -186,17 +188,6 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		return r, err
 	}
 	r.Request = runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: randomID(), Input: body}
-	if in.Commit == "" {
-		for _, source := range r.Sources {
-			b, e := ReadProjectFile(s.Repository, source.Path)
-			if e != nil {
-				return r, e
-			}
-			if ContentDigest(b) != source.Digest {
-				return r, errors.New("generation inputs changed during snapshot")
-			}
-		}
-	}
 	if err = s.Store.SaveGeneration(ctx, r, 0); err != nil {
 		return r, err
 	} // external submission is forbidden before this commit.
@@ -407,15 +398,36 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 			r.State = "failed"
 			r.Diagnostic = result.Diagnostic
 		} else {
-			r.Result = append(json.RawMessage(nil), result.JSON...)
-			r.State = "generated"
-			definitions, e := Select(r.Result, r.Catalogue)
-			if e != nil {
+			var frozen runnercontract.GenerateRunInput
+			if err := json.Unmarshal(r.Request.Input, &frozen); err != nil {
+				return r, err
+			}
+			var sourceErr error
+			if frozen.Generate.Repository != nil {
+				expected := map[string]string{}
+				for _, source := range r.Sources {
+					expected[source.Path] = source.Digest
+				}
+				if repositorySourceDiffers(result.RepositorySource, run.RepositorySource) {
+					sourceErr = errors.New("generation Run/result repository sources differ")
+				} else {
+					sourceErr = runnerclient.VerifyRepositoryFiles(result.RepositorySource, *frozen.Generate.Repository, expected)
+				}
+			}
+			if sourceErr != nil {
 				r.State = "invalid"
-				r.Diagnostic = e.Error()
-			} else if len(definitions) == 0 && !AllowsNoTests(r.PlanText) {
-				r.State = "invalid"
-				r.Diagnostic = "空测试安排需要 Plan 明确说明无需自动测试"
+				r.Diagnostic = sourceErr.Error()
+			} else {
+				r.Result = append(json.RawMessage(nil), result.JSON...)
+				r.State = "generated"
+				definitions, e := Select(r.Result, r.Catalogue)
+				if e != nil {
+					r.State = "invalid"
+					r.Diagnostic = e.Error()
+				} else if len(definitions) == 0 && !AllowsNoTests(r.PlanText) {
+					r.State = "invalid"
+					r.Diagnostic = "空测试安排需要 Plan 明确说明无需自动测试"
+				}
 			}
 		}
 	} else if r.State != "generated" && (run.Status == "failed" || run.Status == "stopped") {
@@ -504,4 +516,9 @@ func GenerationInputs(sources []Source) string {
 }
 func AllowsNoTests(plan string) bool {
 	return strings.Contains(plan, "无需自动测试") || strings.Contains(strings.ToLower(plan), "no automated tests")
+}
+func repositorySourceDiffers(a, b *runnercontract.RepositorySource) bool {
+	x, _ := json.Marshal(a)
+	y, _ := json.Marshal(b)
+	return !bytes.Equal(x, y)
 }

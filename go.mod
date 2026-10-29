@@ -1,15 +1,15 @@
 module github.com/erranliu/SteerLine
 
-go 1.24.2
+go 1.26.0
 
 require (
-	github.com/Microsoft/go-winio v0.6.2
+	github.com/Microsoft/go-winio v0.6.3-0.20260925173824-7e8af9b09c4b
 	github.com/coder/websocket v1.8.14
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-runewidth v0.0.19
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3
 	golang.org/x/crypto v0.44.0
-	golang.org/x/sys v0.38.0
+	golang.org/x/sys v0.48.0
 	modernc.org/sqlite v1.40.1
 )
 

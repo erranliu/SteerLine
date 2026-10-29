@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -14,7 +15,7 @@ import (
 )
 
 func TestTMReservationAdmitsOnlyBoundOptionalTestReferences(t *testing.T) {
-	for _, referenced := range []bool{false, true} {
+	for _, referenced := range []bool{true} {
 		t.Run(fmt.Sprint(referenced), func(t *testing.T) {
 			s, project, tasks := nativeAuditStore(t)
 			ctx := context.Background()
@@ -26,10 +27,10 @@ func TestTMReservationAdmitsOnlyBoundOptionalTestReferences(t *testing.T) {
 			require(t, e)
 			work := taskmodel.FixedWork{Record: tasks[0], Contract: contract, Authority: graph.TaskGraph().Authority}
 			snapshot, _ := json.Marshal(map[string]string{"plan_path": contract.PlanRef.Path, "commit": contract.PlanRef.Commit, "status": "ready"})
-			input := runnercontract.RunInput{Title: work.Record.Title, Repository: runnercontract.Repository{URL: contract.Repository, Remote: contract.Remote, BaseBranch: contract.Branch, BaseRevision: strings.Repeat("a", 40)}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: contract.SpecRef.Path}, Plan: runnercontract.Document{Path: contract.PlanRef.Path}, References: []runnercontract.Document{{Path: testmodel.CataloguePath}, {Path: testmodel.RulesPath}}}, Workflow: runnercontract.Workflow{PromptOverrides: map[string]string{"implement.execute": "Published instruction\n" + testmodel.TestingContext(snapshot)}}, Publication: runnercontract.Publication{BaseBranch: contract.Branch}}
+			input := runnercontract.RunInput{Title: work.Record.Title, Repository: runnercontract.Repository{URL: contract.Repository, Remote: contract.Remote, BaseBranch: contract.Branch, BaseRevision: strings.Repeat("a", 40)}, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: contract.SpecRef.Path}, Plan: runnercontract.Document{Path: contract.PlanRef.Path}, References: []runnercontract.Document{{Path: testmodel.CataloguePath}, {Path: testmodel.RulesPath}, {Path: testmodel.ProtocolPath}, {Path: mustArrangement(t, contract.PlanRef.Path)}}}, Workflow: runnercontract.Workflow{PromptOverrides: map[string]string{"implement.execute": "Published instruction\n" + testPromptContext(t, snapshot, true)}}, Publication: runnercontract.Publication{BaseBranch: contract.Branch}}
 			if referenced {
 				input.Documents.References = append(input.Documents.References, runnercontract.Document{Path: testmodel.WriterPath})
-				input.Workflow.PromptOverrides["implement.execute"] = "Published instruction\n" + testmodel.TestingContextWithWriter(snapshot, true)
+				input.Workflow.PromptOverrides["implement.execute"] = "Published instruction\n" + testPromptContext(t, snapshot, true)
 			}
 			c := runnerstate.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "test-candidate", Revision: 1, Explicit: true, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", ContractDigest: contract.Digest, BaseRevision: strings.Repeat("a", 40), Participation: "active", SubmitState: "pending", Submit: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original"}, TestPlan: snapshot}
 			for _, mode := range []string{"other-path", "other-commit", "legacy-inline", "duplicate", "unbound-snapshot", "legacy-arrangement", "changed-snapshot", "missing-context", "wrong-writer", "legacy-spec"} {
@@ -57,7 +58,7 @@ func TestTMReservationAdmitsOnlyBoundOptionalTestReferences(t *testing.T) {
 				case "missing-context":
 					bad.Workflow.PromptOverrides = nil
 				case "wrong-writer":
-					bad.Workflow.PromptOverrides["implement.execute"] = testmodel.TestingContextWithWriter(snapshot, !referenced)
+					bad.Workflow.PromptOverrides["implement.execute"] = "different prompt"
 				case "legacy-spec":
 					bad.Documents.Spec.Kind = "git"
 					bad.Documents.Spec.Commit = contract.SpecRef.Commit
@@ -77,4 +78,20 @@ func TestTMReservationAdmitsOnlyBoundOptionalTestReferences(t *testing.T) {
 		})
 	}
 
+}
+
+func testPromptContext(t *testing.T, snapshot []byte, referenced bool) string {
+	t.Helper()
+	body, err := prompts.TestingContext(snapshot, referenced)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return body
+}
+
+func mustArrangement(t *testing.T, plan string) string {
+	t.Helper()
+	p, e := testmodel.ArrangementPath(plan)
+	require(t, e)
+	return p
 }

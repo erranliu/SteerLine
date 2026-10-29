@@ -206,7 +206,11 @@ try {
     }
     $manifest.web_projects = $WebProjects
     $manifest.project_maintenance = [bool]$ProjectMaintenance
-    Copy-Item -LiteralPath (Join-Path $repo 'internal/runnerclient/testdata/content-capabilities.json') -Destination (Join-Path $target 'seed/runner-content-capabilities.json')
+    $promptFixtureCapabilities = [IO.File]::ReadAllText((Join-Path $repo 'internal/runnerclient/testdata/content-capabilities.json')) | ConvertFrom-Json
+    $promptFixtureRepository = [IO.File]::ReadAllText((Join-Path $repo 'internal/runnerclient/testdata/generate-repository-capability.json')) | ConvertFrom-Json
+    $promptFixtureCapabilities | Add-Member -MemberType NoteProperty -Name generate -Value $promptFixtureRepository.generate -Force
+    $promptFixtureCapabilities.configuration_schemas | Add-Member -MemberType NoteProperty -Name generate_input -Value $promptFixtureRepository.generate_input -Force
+    [IO.File]::WriteAllText((Join-Path $target 'seed/runner-content-capabilities.json'), ($promptFixtureCapabilities | ConvertTo-Json -Depth 100), $utf8)
     Write-Manifest
     $manifest.template_sha256 = $templateHashes
     $manifest.generator_sha256 = (Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()

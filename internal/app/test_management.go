@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
@@ -49,8 +51,10 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 		catalog, err := cli.Catalog(ctx, v)
 		return e, catalog, err
 	}
-	m := newProjectMaintenance(c, nil)
-	s.ReadCommitted = m.read
+	s.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
+		reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
+		return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
+	}
 	s.VerifyBinding = func(g testmanagement.Generation) error { return verifyGenerationTakeover(g, cli) }
 	port := &testManagementPort{service: s, store: store, maintenance: c.runtimeMaintenance}
 	port.progress = &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}

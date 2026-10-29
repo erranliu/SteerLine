@@ -39,6 +39,7 @@ func TestRunnerWaitRetry(t *testing.T) {
 		config["execution_profiles"] = append(profiles, profile)
 		p.Driver.Profile = "controlled-orca"
 		s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), config))
+		p.PrepareControlledRemoteEnvironment("controlled-orca")
 		return p
 	}
 	setWait := func(p *testenv.Project, w *runnercontract.ExecutionWait, hold bool) {

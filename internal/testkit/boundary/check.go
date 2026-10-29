@@ -77,15 +77,17 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
 	case module + "/internal/runnerstate":
 		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/taskcontract"
-	case module + "/internal/testmanagement/model", module + "/internal/roadmap/model":
+	case module + "/internal/testmanagement/model", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model":
 		return dependency == module+"/internal/runnercontract"
+	case module + "/internal/prompts":
+		return dependency == module+"/internal/testmanagement/model" || dependency == module+"/internal/runnercontract" || dependency == module+"/tools"
 	case module + "/internal/storage/ports":
 		return dependency == module+"/internal/runnercontract" || dependency == module+"/internal/runnerstate" || dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == hostContract
 	}
 	return false
 }
 
-var purePackages = []string{module + "/internal/roadmap/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/prompts", module + "/tools", module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model", module + "/internal/executionconfig", module + "/internal/taskcontract", module + "/internal/projectmaintenance", module + "/internal/projectmaintenance/model", module + "/internal/testmanagement/model", module + "/internal/runnerbinding", hostContract, module + "/internal/runnercontract", module + "/internal/runnerstate", module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", execution + "/agentlaunch", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -236,7 +238,7 @@ func callerImportAllowed(owner, dep string) bool {
 	case module + "/internal/processwindow":
 		return dep == "golang.org/x/sys/windows"
 	case module + "/internal/runnerclient":
-		return dep == module+"/internal/runnercontract" || dep == module+"/internal/processwindow" || dep == "github.com/santhosh-tekuri/jsonschema/v6"
+		return dep == module+"/internal/runnercontract" || dep == module+"/internal/processwindow" || dep == module+"/internal/prompts" || dep == "github.com/santhosh-tekuri/jsonschema/v6"
 	case module + "/internal/runnerbridge", module + "/internal/environmentcheck":
 		return dep == module+"/internal/runnerclient" || dep == module+"/internal/runnercontract" || dep == module+"/internal/runnerstate"
 	case module + "/internal/runnerbinding":
@@ -259,6 +261,9 @@ func callerClosureAllowed(owner, dep string) bool {
 		return dep == module+"/internal/runnerstate"
 	}
 	if owner == module+"/internal/runnerclient" || owner == module+"/internal/runnerbridge" || owner == module+"/internal/environmentcheck" {
+		if dep == module+"/internal/prompts" || dep == module+"/internal/testmanagement/model" || dep == module+"/tools" {
+			return true
+		}
 		if dep == module+"/internal/processwindow" || dep == "golang.org/x/sys/windows" || dep == "github.com/santhosh-tekuri/jsonschema/v6" || strings.HasPrefix(dep, "github.com/santhosh-tekuri/jsonschema/v6/") || strings.HasPrefix(dep, "golang.org/x/text/") {
 			return true
 		}
@@ -436,8 +441,9 @@ func storageSQLiteImportAllowed(dependency string) bool {
 		module + "/internal/execution/backend", module + "/internal/execution/model",
 		module + "/internal/storage/ports", module + "/internal/task/model",
 		module + "/internal/testmanagement/model",
+		module + "/internal/prompts",
 		module + "/internal/projectmaintenance/model",
-		module + "/internal/roadmap/model",
+		module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model",
 	} {
 		if dependency == allowed {
 			return true
@@ -492,11 +498,12 @@ func ScanSource(root string) (Report, error) {
 		if purePackage(pkg) {
 			report.PureFiles[pkg]++
 		}
-		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ParseComments)
 		if err != nil {
 			return err
 		}
 		if !strings.HasSuffix(entry.Name(), "_test.go") {
+			checkPromptSource(&report, filepath.ToSlash(rel)+"/"+entry.Name(), parsed)
 			for _, decl := range parsed.Decls {
 				names := []string{}
 				switch d := decl.(type) {

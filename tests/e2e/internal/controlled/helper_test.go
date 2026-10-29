@@ -2,31 +2,34 @@ package controlled
 
 import (
 	"encoding/json"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
-	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
 
 func TestDirectControlledHelperAdvertisesGeneration(t *testing.T) {
-	reader, writer, err := os.Pipe()
+	capture, err := os.CreateTemp(t.TempDir(), "capabilities-*.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer reader.Close()
+	defer capture.Close()
 	previous := os.Stdout
-	os.Stdout = writer
+	os.Stdout = capture
 	handled, callErr := RunnerCLI([]string{"capabilities", "--offline", "--json"})
 	os.Stdout = previous
-	writer.Close()
 	if !handled || callErr != nil {
 		t.Fatal("direct helper capabilities unavailable", handled, callErr)
 	}
-	raw, err := io.ReadAll(reader)
+	if _, err = capture.Seek(0, io.SeekStart); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(capture)
 	if err != nil {
 		t.Fatal(err)
 	}

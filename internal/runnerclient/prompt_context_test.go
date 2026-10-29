@@ -2,6 +2,7 @@ package runnerclient
 
 import (
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"os"
 	"strings"
@@ -23,10 +24,17 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 			continue
 		}
 		t.Run(choice.ID, func(t *testing.T) {
-			context := `frozen system context {"tests":["one"]}`
-			readOnly := "test progress is read-only in this step"
+			snapshot := []byte(`{"status":"ready","plan_path":"task.plan.md","commit":"fixed","definitions":[{"id":"one"}]}`)
+			context, err := prompts.TestingContext(snapshot, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			readOnly, err := prompts.TestingReadOnly()
+			if err != nil {
+				t.Fatal(err)
+			}
 			in := Workflow{ID: choice.ID, Version: choice.Version, PromptOverrides: map[string]string{"publish": "User publish", "implement.report": "User report"}}
-			got, e := cat.WithTestProgressContext(in, context, readOnly)
+			got, e := cat.WithTestProgressContext(in, snapshot, true)
 			if e != nil {
 				t.Fatal(e)
 			}
@@ -49,7 +57,7 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 				}
 			}
 			in.PromptOverrides["implement.execute"] = "User implementation"
-			custom, e := cat.WithTestProgressContext(in, context, readOnly)
+			custom, e := cat.WithTestProgressContext(in, snapshot, true)
 			if e != nil || custom.PromptOverrides["implement.execute"] != "User implementation\n\n"+context {
 				t.Fatal("configured prompt replaced", e)
 			}
@@ -60,13 +68,13 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 			broken := choice
 			broken.States = map[string]runnercontract.WorkflowPrompt{"implement.execute": choice.States["implement.execute"]}
 			cat := &Catalog{Capabilities: Capabilities{Workflows: []runnercontract.WorkflowChoice{broken}}}
-			if _, e := cat.WithTestProgressContext(Workflow{ID: choice.ID, Version: choice.Version}, "data", "read-only"); e == nil {
+			if _, e := cat.WithTestProgressContext(Workflow{ID: choice.ID, Version: choice.Version}, []byte(`{"status":"ready"}`), false); e == nil {
 				t.Fatal("missing audited prompt accepted")
 			}
 		}
 	}
 	incomplete := &Catalog{Capabilities: Capabilities{Workflows: []runnercontract.WorkflowChoice{{ID: "development", Version: 2, PromptSteps: []string{"implement.execute"}}}}}
-	if _, e = incomplete.WithTestProgressContext(Workflow{ID: "development", Version: 2}, "data", "read-only"); e == nil {
+	if _, e = incomplete.WithTestProgressContext(Workflow{ID: "development", Version: 2}, []byte(`{"status":"ready"}`), false); e == nil {
 		t.Fatal("missing published body accepted")
 	}
 }

@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
@@ -27,9 +27,10 @@ import (
 // Scripted public Runner/PR peer. This proves caller orchestration, not native
 // Agent execution, a real PR, or the independently shipped Runner collector.
 type environmentWorkflowPeer struct {
-	run     runnercontract.Run
-	result  []byte
-	submits int
+	run           runnercontract.Run
+	result        []byte
+	submits       int
+	succeedsFirst bool
 }
 
 type environmentReserveProbe struct {
@@ -63,7 +64,7 @@ func (f *environmentWorkflowPeer) Call(_ context.Context, command string, _ []st
 		report.Checks = []env.Check{{ID: "tool", Status: "passed", Message: "required version available"}}
 		report.L2 = []env.Item{{ID: "one", Status: "failed", Message: "fixture tool absent"}}
 		report.Message = "fixture prepare failed"
-		if f.submits == 2 {
+		if f.succeedsFirst || f.submits == 2 {
 			f.run.Status = "pr_ready"
 			report.Message = ""
 			report.L2[0].Status = "passed"
@@ -104,81 +105,89 @@ func (f *environmentWorkflowPeer) ResultFile(context.Context, string) (runnercon
 }
 
 func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
-	port, c, store := environmentFixture(t)
-	fixtureGit(t, c.Repository, "push", "origin", "HEAD:refs/heads/environment-validation")
-	peer := &environmentWorkflowPeer{}
-	port.service.Runner = peer
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	taskService := runnerTaskService(c, store, runnerclient.Client{})
-	actor, e := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: taskService, Store: store, Host: host.NewServiceHost(host.Config{RunDir: c.RunDir, ProcessFacts: executionprocess.NewServiceFacts()}, "off", io.Discard, nil), Repository: hostcontract.Repository{Identity: c.Identity()}, Mode: "manual", Heartbeat: time.Second, Control: func(context.Context, api.ControlRequest) (api.ControlReceipt, error) {
-		return api.ControlReceipt{}, nil
-	}})
-	require(t, e)
-	require(t, actor.BeginActor(ctx))
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		for {
-			select {
-			case call := <-actor.Signals():
-				_ = actor.HandleSignal(call)
-			case <-ctx.Done():
-				return
+	for _, pass := range []bool{false, true} {
+		t.Run(fmt.Sprint(pass), func(t *testing.T) {
+			port, c, store := environmentFixture(t)
+			fixtureGit(t, c.Repository, "push", "origin", "HEAD:refs/heads/environment-validation")
+			peer := &environmentWorkflowPeer{succeedsFirst: pass}
+			port.service.Runner = peer
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			taskService := runnerTaskService(c, store, runnerclient.Client{})
+			actor, e := taskrunner.NewActor(taskrunner.ActorOptions{Tasks: taskService, Store: store, Host: host.NewServiceHost(host.Config{RunDir: c.RunDir, ProcessFacts: executionprocess.NewServiceFacts()}, "off", io.Discard, nil), Repository: hostcontract.Repository{Identity: c.Identity()}, Mode: "manual", Heartbeat: time.Second, Control: func(context.Context, api.ControlRequest) (api.ControlReceipt, error) {
+				return api.ControlReceipt{}, nil
+			}})
+			require(t, e)
+			require(t, actor.BeginActor(ctx))
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				for {
+					select {
+					case call := <-actor.Signals():
+						_ = actor.HandleSignal(call)
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
+			defer func() { cancel(); <-done }()
+			runtime := &runtimeProjectPort{actor: actor, config: c, store: store, instance: actor.InstanceID()}
+			payload, _ := json.Marshal(env.Start{Profile: "remote", TimeoutSeconds: 60})
+			request := httpcontract.CommandEnvelope{RequestID: env.ID(), ProjectID: httpcontract.ProjectID(c.Identity()), InstanceID: actor.InstanceID(), Action: "environment_start", TargetID: httpcontract.ProjectID(c.Identity()), ExpectedVersion: 1, Payload: payload}
+			out, e := runtime.Command(ctx, request)
+			require(t, e)
+			if out.Status != "applied" {
+				t.Fatal(out)
 			}
-		}
-	}()
-	defer func() { cancel(); <-done }()
-	runtime := &runtimeProjectPort{actor: actor, config: c, store: store, instance: actor.InstanceID()}
-	payload, _ := json.Marshal(env.Start{Profile: "remote", TimeoutSeconds: 60})
-	request := httpcontract.CommandEnvelope{RequestID: env.ID(), ProjectID: httpcontract.ProjectID(c.Identity()), InstanceID: actor.InstanceID(), Action: "environment_start", TargetID: httpcontract.ProjectID(c.Identity()), ExpectedVersion: 1, Payload: payload}
-	out, e := runtime.Command(ctx, request)
-	require(t, e)
-	if out.Status != "applied" {
-		t.Fatal(out)
-	}
-	again, e := runtime.Command(ctx, request)
-	require(t, e)
-	if again.Status != "applied" {
-		t.Fatal(again)
-	}
-	for i := 0; i < 6; i++ {
-		require(t, port.service.Observe(ctx))
-	}
-	saved, e := store.Environment(ctx, c.Identity(), request.RequestID)
-	require(t, e)
-	if saved.Status() != "ready" || len(saved.Rounds) != 2 || peer.submits != 2 || saved.Rounds[0].Report.L2[0].Status != "failed" {
-		t.Fatal("caller retry/settlement failed", saved.State, peer.submits)
-	}
-	value, e := runtime.Read(ctx, "/environment/"+saved.ID, nil)
-	require(t, e)
-	raw, _ := json.Marshal(value)
-	if strings.Contains(string(raw), "agent_launch") || strings.Contains(string(raw), "initial_content_base64") || !strings.Contains(string(raw), "\"report\"") || !strings.Contains(string(raw), "\"result\"") || !strings.Contains(string(raw), "fixture native explanation") {
-		t.Fatal("public view leaked frozen input or lost report")
-	}
-	if _, e = port.ready(ctx, "remote"); e != nil {
-		t.Fatal("passing report did not admit new remote work", e)
-	}
-	probe := &environmentReserveProbe{SQLiteStore: store}
-	gate := runnerTaskService(c, probe, runnerclient.Client{})
-	profile, e := c.RunnerExecution.Profile("remote", "")
-	require(t, e)
-	input, _ := json.Marshal(runnercontract.RunInput{Execution: profile.Execution})
-	require(t, gate.ReserveExecution(ctx, taskmodel.FixedWork{}, runnerbridge.Candidate{ProfileID: "remote", Submit: runnerclient.Request{Input: input}}, false))
-	if probe.reservations != 1 {
-		t.Fatal("ready remote did not reach the common reservation boundary")
-	}
-	request.Payload = json.RawMessage(`{"profile_id":"remote","round_timeout_seconds":90}`)
-	if _, e = runtime.Command(ctx, request); e == nil {
-		t.Fatal("same request ID changed original input")
-	}
-	receipt, e := runtime.Read(ctx, "/commands/"+saved.ID, nil)
-	require(t, e)
-	if receipt == nil {
-		t.Fatal("original request receipt missing")
-	}
-	if peer.submits != 2 {
-		t.Fatal("receipt query/repeat command resubmitted")
+			again, e := runtime.Command(ctx, request)
+			require(t, e)
+			if again.Status != "applied" {
+				t.Fatal(again)
+			}
+			for i := 0; i < 6; i++ {
+				require(t, port.service.Observe(ctx))
+			}
+			saved, e := store.Environment(ctx, c.Identity(), request.RequestID)
+			require(t, e)
+			wantRounds := 1
+			if !pass {
+				wantRounds = 2
+			}
+			if len(saved.Rounds) != wantRounds || peer.submits != wantRounds || saved.Status() != "ready" || !pass && saved.Rounds[0].Report.L2[0].Status != "failed" {
+				t.Fatal("caller retry/settlement failed", saved.State, peer.submits)
+			}
+			value, e := runtime.Read(ctx, "/environment/"+saved.ID, nil)
+			require(t, e)
+			raw, _ := json.Marshal(value)
+			if strings.Contains(string(raw), "agent_launch") || strings.Contains(string(raw), "initial_content_base64") || !strings.Contains(string(raw), "\"report\"") || !strings.Contains(string(raw), "\"result\"") || !strings.Contains(string(raw), "fixture native explanation") {
+				t.Fatal("public view leaked frozen input or lost report")
+			}
+			if _, e = port.ready(ctx, "remote"); e != nil {
+				t.Fatal("environment readiness differs from complete sealed report", e)
+			}
+			probe := &environmentReserveProbe{SQLiteStore: store}
+			gate := runnerTaskService(c, probe, runnerclient.Client{})
+			profile, e := c.RunnerExecution.Profile("remote", "")
+			require(t, e)
+			input, _ := json.Marshal(runnercontract.RunInput{Execution: profile.Execution})
+			err := gate.ReserveExecution(ctx, taskmodel.FixedWork{}, runnerbridge.Candidate{ProfileID: "remote", Submit: runnerclient.Request{Input: input}}, false)
+			if err != nil || probe.reservations != 1 {
+				t.Fatal("ready/blocked environment crossed the wrong reservation boundary", err)
+			}
+			request.Payload = json.RawMessage(`{"profile_id":"remote","round_timeout_seconds":90}`)
+			if _, e = runtime.Command(ctx, request); e == nil {
+				t.Fatal("same request ID changed original input")
+			}
+			receipt, e := runtime.Read(ctx, "/commands/"+saved.ID, nil)
+			require(t, e)
+			if receipt == nil {
+				t.Fatal("original request receipt missing")
+			}
+			if peer.submits != wantRounds {
+				t.Fatal("receipt query/repeat command resubmitted")
+			}
+		})
 	}
 }
 

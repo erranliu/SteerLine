@@ -8,13 +8,14 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
-	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
+	progresstools "github.com/erranliu/SteerLine/tools"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -180,6 +181,7 @@ type pmsCLI struct {
 	request runnerclient.Request
 	run     runnerclient.Run
 	lost    bool
+	t       *testing.T
 }
 
 func (f *pmsCLI) Submit(_ context.Context, r runnerclient.Request) (runnerclient.Receipt, error) {
@@ -188,6 +190,9 @@ func (f *pmsCLI) Submit(_ context.Context, r runnerclient.Request) (runnerclient
 	var in runnercontract.GenerateRunInput
 	_ = json.Unmarshal(r.Input, &in)
 	f.run = runnerclient.Run{RunID: fmt.Sprint("generation-", f.submits), Revision: 1, Workflow: in.Workflow, Correlation: in.Correlation, InputDigest: fmt.Sprint("input-", f.submits)}
+	if in.Generate.Repository != nil {
+		f.run.RepositorySource = appRepositoryManifest(f.t, *in.Generate.Repository)
+	}
 	if f.lost {
 		return runnerclient.Receipt{}, &runnerclient.Failure{Unknown: true}
 	}
@@ -203,7 +208,7 @@ func (f *pmsCLI) Call(context.Context, string, []string, *runnerclient.Request) 
 func (f *pmsCLI) finish() {
 	f.run.Revision++
 	f.run.StopStatus = "stopped"
-	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: json.RawMessage(`{"tests":["one"]}`), Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", TurnID: "turn"}}
+	f.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: json.RawMessage(`{"tests":["one"]}`), RepositorySource: f.run.RepositorySource, Source: runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", TurnID: "turn"}}
 }
 func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	t.Helper()
@@ -215,6 +220,11 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	pmGit(t, repo, "config", "user.name", "PM test")
 	pmGit(t, repo, "config", "user.email", "pm@example.invalid")
 	files := map[string]string{"task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "SteerlineFlow/testing.md": "# Testing\nRules\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
+	rules, err := prompts.TestingRules()
+	require(t, err)
+	files["SteerlineFlow/testing/runtime-progress.md"] = string(rules)
+	files["tools/testing/RuntimeProgress.ps1"] = progresstools.PowerShellWriter
+	files["task.tests.json"] = `{"tests":["one"]}`
 	for name, body := range files {
 		p := filepath.Join(repo, name)
 		if e := os.MkdirAll(filepath.Dir(p), 0700); e != nil {
@@ -234,19 +244,8 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	store := &pmsStore{graph: storageports.TaskGraphSnapshot{Tasks: []taskmodel.TaskRecord{task}}, contract: c, materials: map[string]pm.Material{}, generations: map[string]testmanagement.Generation{}, receipts: map[string]json.RawMessage{}, candidates: map[string]runnerstate.Candidate{}}
 	profile := RunnerProfile{ID: "local", Name: "Local", Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"read_only"}`)}}
 	m := newProjectMaintenance(Config{Repository: repo, Remote: "origin", Branch: "main", Git: backend.Command{Executable: "git"}, ProcessHost: resourceprocess.New(time.Minute), RunnerExecution: RunnerExecutionConfig{DefaultProfile: "local", Profiles: []RunnerProfile{profile}}}, store)
-	cli := &pmsCLI{}
-	caps, err := os.ReadFile("../runnerclient/testdata/content-capabilities.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var published runnerclient.Capabilities
-	if e := json.Unmarshal(caps, &published); e != nil {
-		t.Fatal(e)
-	}
-	cat, e := runnerclient.CompileCatalog(published)
-	if e != nil {
-		t.Fatal(e)
-	}
+	cli := &pmsCLI{t: t}
+	cat := promotionCatalog(t)
 	service := &testmanagement.GenerationService{Project: m.config.Identity(), Repository: repo, Store: store, Runner: cli, ReadCommitted: m.read, Prepare: func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error) {
 		return profile.Execution, cat, nil
 	}}
@@ -291,7 +290,7 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(snapshot) == 0 || len(run.Documents.References) != 2 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testmodel.TestingContext(snapshot)) {
+	if len(snapshot) == 0 || len(run.Documents.References) != 5 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
 		t.Fatal("compact system context not frozen")
 	}
 	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: b, TestPlan: snapshot}
@@ -343,8 +342,8 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if _, e = m.candidateDocuments(ctx, candidate.ID); e != nil {
 		t.Fatal(e)
 	}
-	if _, e = os.Stat(filepath.Join(m.config.Repository, "task.tests.json")); !os.IsNotExist(e) {
-		t.Fatal("generation wrote repository")
+	if raw, e := os.ReadFile(filepath.Join(m.config.Repository, "task.tests.json")); e != nil || string(raw) != `{"tests":["one"]}` {
+		t.Fatal("generation changed prepared repository material", e)
 	}
 	m.mu.Lock()
 	m.observation.Diagnostic = "offline"
@@ -578,6 +577,35 @@ func TestPMSBaselineGiteaPRMetadata(t *testing.T) {
 				}
 			} else if len(urls) != 0 || diagnostic == "" {
 				t.Fatal("provider failure was reported as no PR", urls, diagnostic)
+			}
+		})
+	}
+}
+
+type metadataCommandProbe struct {
+	backend.ManagedProcessHost
+	commands []string
+}
+
+func (p *metadataCommandProbe) StartManaged(command *exec.Cmd) (backend.StopHandle, error) {
+	p.commands = append(p.commands, command.Path)
+	return nil, fmt.Errorf("metadata process intercepted")
+}
+func TestPMSMetadataHonorsConfiguredCommand(t *testing.T) {
+	for _, executable := range []string{"controlled-provider", filepath.Join(t.TempDir(), "gh.exe")} {
+		t.Run(filepath.Base(executable), func(t *testing.T) {
+			probe := &metadataCommandProbe{}
+			m := &projectMaintenance{config: Config{ProcessHost: probe, PR: executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "e2e/project", Query: backend.Command{Executable: executable}}}}
+			urls, diagnostic := m.commitPullRequests(context.Background(), strings.Repeat("a", 40))
+			if len(urls) != 0 || diagnostic == "" {
+				t.Fatal("unsupported/failed metadata query was reported as no PR")
+			}
+			if executable == "controlled-provider" {
+				if len(probe.commands) != 0 {
+					t.Fatal("custom provider escaped to an unconfigured CLI", probe.commands)
+				}
+			} else if len(probe.commands) != 1 || probe.commands[0] != executable {
+				t.Fatal("selected GitHub executable was replaced", probe.commands)
 			}
 		})
 	}

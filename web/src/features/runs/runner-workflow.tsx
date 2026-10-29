@@ -26,27 +26,50 @@ export function RunnerWorkflow({ run }: { run: Candidate }) {
             审计请求模型 · {run.audit.model || "由 Runner 决定"} ·{" "}
             {run.audit.reasoning_effort || "由 Runner 决定"}
           </p>
-          <p>修复次数 · {run.audit.repair_count}</p>
           {!run.audit.results?.length && <p className="muted">尚无审计结果</p>}
           {run.audit.results?.map((result) => (
             <article key={result.command_id + result.step}>
               <p>
-                {result.step} · {result.verdict || "尚无结论"}
+                {result.step} ·{" "}
+                {result.failure
+                  ? "未核实"
+                  : result.fixed_count == null
+                    ? "尚无完整结果"
+                    : "已采集"}
               </p>
               {result.failure && (
                 <p className="notice amber">{result.failure}</p>
               )}
-              {result.findings?.map((finding, i) => (
+              {result.fixed_count != null && (
+                <p>修复数量 · {result.fixed_count}</p>
+              )}
+              {result.fixed_issues?.map((issue, i) => (
                 <p key={i}>
-                  {finding.severity} · {finding.message} {finding.path}
-                  {finding.line ? ":" + finding.line : ""}
+                  {issue.severity} · {issue.issue} · 修复：{issue.repair} ·
+                  验证：{issue.evidence}
+                </p>
+              ))}
+              {result.remaining_issues?.map((issue, i) => (
+                <p key={i}>
+                  {issue.severity} · {issue.issue} · 未解决：{issue.reason}
                 </p>
               ))}
               <details>
                 <summary>结果来源</summary>
                 <p>
-                  报告 {result.source_report_command_id} · 命令{" "}
-                  {result.command_id} · 轮次 {result.turn_id}
+                  实施结果 {result.source_result_id} · 命令 {result.command_id}{" "}
+                  · 轮次 {result.turn_id}
+                </p>
+                <p>
+                  实施命令 {result.implementation_source.command_id} · 轮次{" "}
+                  {result.implementation_source.turn_id} · 尝试{" "}
+                  {result.implementation_source.attempt_id} · 输入版本{" "}
+                  {result.implementation_source.input_version} · 摘要{" "}
+                  {result.implementation_source.final_digest}
+                </p>
+                <p>
+                  审计结果 {result.result_id} · Git {result.pre_head} →{" "}
+                  {result.post_head}
                 </p>
               </details>
             </article>

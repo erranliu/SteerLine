@@ -40,12 +40,12 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &catalog))
 	catalog["default_execution_profile"] = chain
-	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 1}}}
+	catalog["execution_profiles"] = []any{map[string]any{"id": chain, "name": "Real E2E " + chain, "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 2}}}
 	if s.ID == "workflow.local-codex-audited" {
 		profile := catalog["execution_profiles"].([]any)[0].(map[string]any)
 		profile["name"] = "Real E2E audited preset"
 		profile["execution"].(map[string]any)["settings"].(map[string]string)["model"] = s.Run.ExecutionModel
-		profile["workflow"] = map[string]any{"id": "development-audited", "version": 1, "audit_model": map[string]string{"model": s.Run.AuditModel, "reasoning_effort": "high"}}
+		profile["workflow"] = map[string]any{"id": "development-audited", "version": 2, "audit_model": map[string]string{"model": s.Run.AuditModel, "reasoning_effort": "high"}}
 		p.AuditObservations = map[string]string{}
 	}
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), catalog))
@@ -118,7 +118,11 @@ git rev-parse HEAD
 	planPath := filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.plan.md")
 	planBody, readErr := os.ReadFile(planPath)
 	s.Must(readErr)
-	s.Must(os.WriteFile(planPath, append(planBody, []byte("\nNo automated tests are registered for this caller fixture. Existing local checks and external harness acceptance remain required.\n")...), 0600))
+	s.Must(os.WriteFile(planPath, append(planBody, []byte("\nNo automated tests are required for this fixture. The committed test catalogue is {\"tests\":[]}; this fixture's automatic arrangement must also be {\"tests\":[]}. Verifying the repository-root result.txt is a manual implementation check, not a registered test ID. Local checks and external harness acceptance remain required.\n")...), 0600))
+	arrangement, readErr := os.ReadFile(filepath.Join(s.Run.Root, "tests", "e2e", "testdata", "tasks", "task.tests.json"))
+	s.Must(readErr)
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow", "plans", "task.tests.json"), arrangement, 0600))
+	p.prepareTestProtocol()
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
@@ -172,6 +176,7 @@ func LiveDelivery(s *Scenario, chain string) {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &selection))
 	proof := &testfeedback.LiveDeliveryProof{RunnerVersion: selection.Runner.Version, RunnerSHA256: selection.Runner.SHA256, RunID: c.RunID, CandidateID: c.ID, FinalSources: sources(s, p, c.ID, c.RunID), ArtifactCommit: pr.HeadRevision, Artifact: artifact, PRURL: facts.URL, Repository: facts.Repository, Base: facts.BaseBranch, Head: facts.HeadBranch, HeadSHA: facts.HeadRevision, Merged: facts.Merged, DeliveryCount: len(done.Runner.Graph.Deliveries)}
+	proof.WorkflowID, proof.WorkflowVersion = c.Projection.Workflow.ID, c.Projection.Workflow.Version
 	if s.ID == "workflow.local-codex-audited" {
 		proof.Audited = &testfeedback.AuditedWorkflowProof{ExecutionModel: s.Run.ExecutionModel, AuditModel: s.Run.AuditModel, Stages: p.AuditObservations}
 	}

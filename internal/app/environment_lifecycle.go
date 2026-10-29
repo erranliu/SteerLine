@@ -6,12 +6,13 @@ import (
 	"errors"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
-func environmentTakeover(proof runnercontract.TakeoverReport, r env.Record, a env.Round) (runnercontract.TakeoverItem, bool) {
+func environmentTakeover(proof runnercontract.TakeoverReport, r envmodel.Record, a envmodel.Round) (runnercontract.TakeoverItem, bool) {
 	if canonicalPath(r.Build.StateDir) != canonicalPath(proof.StateDir) {
 		return runnercontract.TakeoverItem{}, false
 	}
@@ -29,7 +30,7 @@ func environmentTakeover(proof runnercontract.TakeoverReport, r env.Record, a en
 	}
 	return runnercontract.TakeoverItem{}, false
 }
-func unsubmittedEnvironment(a env.Round) bool {
+func unsubmittedEnvironment(a envmodel.Round) bool {
 	return a.RunID == "" && (a.Submission == "pending" || a.Submission == "rejected" || a.Submission == "cancelled")
 }
 func verifyEnvironmentBindings(ctx context.Context, c Config, store env.Store, cli runnerclient.Client) error {
@@ -118,7 +119,7 @@ func prepareEnvironmentStops(ctx context.Context, c Config, store env.Store, cli
 					a.RejectedStops = append(a.RejectedStops, *a.Stop)
 				}
 				body, _ := json.Marshal(map[string]uint64{"expected_revision": item.Revision})
-				a.Stop = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: env.ID(), Input: body}
+				a.Stop = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}
 				a.StopState = "unknown"
 				changed = true
 			}
