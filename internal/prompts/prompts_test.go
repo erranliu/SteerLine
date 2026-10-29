@@ -105,7 +105,7 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		{"roadmap-parse", "c1452c0d591caf5cf6f3db0f4d156c2e1a4451c797e96837c0afb1d6699463e6", RoadmapParseRules},
 		{"roadmap-documents", "0c84c0ce636e4c7ca8c9f0b80cf8bdf41bbd2ecb588ea225fb10fa4bb88f2f71", RoadmapDocumentRules},
 		{"environment-generation", "ac40d5c1377ecc292d35e73b7ec13d86c20fde65fc983fb8cdbe6d9f877a9256", EnvironmentGenerationRules},
-		{"environment-execution", "d8389c654c64a0058feb5be288ccdf77628f61183396e3e7d42479d5e7014b8a", EnvironmentExecutionRules},
+		{"environment-execution", "06378bc4ec3ee2122fbb2bdf6813021821c5bf5c0a65f7020597cf8404554c2a", EnvironmentExecutionRules},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

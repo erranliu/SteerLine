@@ -164,10 +164,7 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 	if n > 1 {
 		previous = PreviousFacts(*r, r.Rounds[n-2])
 	}
-	initial, err := json.Marshal(struct {
-		envmodel.Report
-		Previous json.RawMessage `json:"previous,omitempty"`
-	}{envmodel.Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []envmodel.Check{}, L2: []envmodel.Item{}}, previous})
+	initial, err := json.Marshal(envmodel.RoundFile{envmodel.Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []envmodel.Check{}, L2: []envmodel.Item{}}, previous})
 	if err != nil {
 		return err
 	}

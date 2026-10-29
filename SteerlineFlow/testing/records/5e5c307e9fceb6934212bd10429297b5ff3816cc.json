@@ -1,0 +1,49 @@
+{
+  "runs": [
+    {
+      "at": "2026-10-29T01:32:19.5296016Z",
+      "results": [
+        {
+          "test_id": "l1.minimum",
+          "level": "L1",
+          "environment": "isolated",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-29T01:33:58.5704287Z",
+      "results": [
+        {
+          "test_id": "smoke.delivery",
+          "level": "L2",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-29T01:36:20.3024875Z",
+      "results": [
+        {
+          "test_id": "testing.runtime-progress",
+          "level": "L3",
+          "environment": "controlled",
+          "status": "passed"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-29T01:55:14.1685286Z",
+      "results": [
+        {
+          "test_id": "go.full",
+          "level": "L4",
+          "environment": "isolated",
+          "status": "incomplete",
+          "note": "测试报告缺失或不完整"
+        }
+      ]
+    }
+  ]
+}

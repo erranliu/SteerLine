@@ -223,3 +223,11 @@ L3 包括 `configuration.execution-profiles`、`recovery.runner-wait-retry`、`r
 - 诊断失败 `20261029T011802274Z-snapshot-and-rounds` 保留旧schema夹具和旧一轮断言失败；`20261029T012342138Z-contracts-repaired` 剩余公开流程/超时断言已由上述专项修复复验。`20261029T012937261Z-selection-and-boundaries` 与 `20261029T013047438Z-selected-manifest` 通过。未将诊断中的缺原生pin skip计为正式通过。
 
 最终L1/L2/L3和13项L4尚在执行，不能复用上一轮10/13声明本轮已通过；实际结果、清理和原生历史将在执行后登记。依赖PR未合并，不更新安装包或旧Run。
+
+### 全集挂起修复首次正式复验与结果文件接线修正
+
+干净提交 `5e5c307e9fceb6934212bd10429297b5ff3816cc`：L1 `20261029T013208909Z-repairs`、L2 `20261029T013223588Z-repairs`、L3 `20261029T013414952Z-runtime-progress`、L4 go.full `20261029T013549377Z-go-full` 均通过。Full准备10.4秒、执行1153.3秒，**1342测试通过、0失败、0测试skip**；已越过原挂起场景并完成所有组。四份报告已通过原生record命令导出Git历史，未将无测试文件的包当测试skip。GitHub prompt-governance run40801141541通过。
+
+预查原项目脚本发现其会原样保存初始JSON的previous。独立 `diagnostics/previous-metadata-repro/test.log` overlay复现 `unknown field previous`，冻结全集源码没有修改。`fixed-test.log` 验证修复及环境owner通过：以RoundFile承载原Report+只读输入元数据，保留时逐值对照本轮冻结初始文件，修改/未知字段仍拒绝；previous不进入Report领域对象。没有改原项目脚本、标准或宽松解码。
+
+本轮最终规则资产 `environment-execution.md` 为 **2877→3530 UTF-8/LF字节（+653）**，其中已提交阶段2877→3249；最终新增只读元数据保留及冻结核对说明，替换两处“最终报告只使用正式字段”为“报告字段不变，previous仅作输入元数据”。SHA256 `06378bc4ec3ee2122fbb2bdf6813021821c5bf5c0a65f7020597cf8404554c2a`。九项短模板仍无变化。该次正式修正后会重新固定源码与项目材料，重跑L1/L2和全部L4；上面的通过只属于5e5c307e。

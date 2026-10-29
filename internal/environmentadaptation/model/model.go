@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -213,11 +214,41 @@ type Report struct {
 	Message      string  `json:"message"`
 }
 
+// RoundFile carries the unchanged report and optional read-only input facts.
+// Scripts may preserve those facts; they never become report/history authority.
+type RoundFile struct {
+	Report
+	Previous json.RawMessage `json:"previous,omitempty"`
+}
+
 func ParseReport(raw []byte, r Record, a Round) (*Report, error) {
-	var p Report
-	if e := Decode(raw, &p); e != nil {
+	var file RoundFile
+	if e := Decode(raw, &file); e != nil {
 		return nil, e
 	}
+	if file.Previous != nil {
+		var input runnercontract.RunInput
+		if json.Unmarshal(a.Request.Input, &input) != nil || input.ResultFile == nil {
+			return nil, errors.New("previous facts have no frozen input file")
+		}
+		initial, e := base64.StdEncoding.Strict().DecodeString(input.ResultFile.InitialContentBase64)
+		if e != nil {
+			return nil, e
+		}
+		var frozen RoundFile
+		if e := Decode(initial, &frozen); e != nil {
+			return nil, e
+		}
+		got, e := runnercontract.CanonicalJSON(file.Previous)
+		if e != nil {
+			return nil, e
+		}
+		want, e := runnercontract.CanonicalJSON(frozen.Previous)
+		if e != nil || !bytes.Equal(got, want) {
+			return nil, errors.New("previous facts differ from the frozen initial file")
+		}
+	}
+	p := file.Report
 	if p.Version != 1 || p.ActivityID != r.ID || p.Round != a.Number || p.Commit != r.Prepared.Commit || p.ScriptDigest != r.Prepared.ScriptDigest {
 		return nil, errors.New("report differs from original round/materials")
 	}
