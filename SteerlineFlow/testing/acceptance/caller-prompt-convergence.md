@@ -247,3 +247,31 @@ L3 包括 `configuration.execution-profiles`、`recovery.runner-wait-retry`、`r
 全集 `test-results/L4/20261029T031034768Z-go-full-final` 完成原始执行：1337通过、6失败、0测试skip，执行1441.6秒，原complete=false如实保留并已原生导出。单一根因是新model_test外部包对本模型包的自导入被纯模型依赖边界拒绝，触发5个owner断言及其父项计数；修正为同包测试，元数据保留/篡改/未知字段断言不变，生产实现未改。`diagnostics/20261029T033705744Z-pure-model-owner` 的全部相关边界及模型反例通过，继续L1/L2和全量Go复验。
 
 测试期间PR407已在f55ac94e合并（377eb7a3），Runner PR71已在a03e30e合并（af29ee47）。main后续新增TTY实现7617cddc，不属于本轮冻结f55/d4d的真实链输入；本批结果不作为新TTY流程的live验收。本跟进差异只补空安排、纯模型测试归属及原生测试记录，保留各报告实际源码身份，不覆盖主线TTY规则。
+
+## 最终交付：全部登记L4已取得通过（2026-10-29）
+
+剩余三项完成：go-winio上游关闭竞态修复及100次压力复验、真实项目固定材料准备、Runner公开paths选择原始Git文件快照。Runner PR71及主要实现PR407已合并，后续测试接线与记录见 [PR409](https://github.com/erranliu/SteerLine/pull/409)。现有容量限制、原始材料和项目测试标准保持；不启用旧输入重渲染或inline兜底。
+
+最终Go全集 `2598e52abbec8c76764021bb565427959aadf50a` **1343通过、0失败、0测试skip**，原complete=true、passed=true，准备9.5秒、执行1331.1秒；原挂起命名管道场景及此前失败的全部架构断言均通过。该提交L1 `20261029T033923345Z-model-owner`、L2 `20261029T033937394Z-model-owner` 同样通过；此前受影响L3 runtime-progress在5e5c307e通过，后续仅测试接线/归属调整。所有实际报告已通过原生record导出，无覆盖旧失败或跨提交伪装。
+
+矩阵逐项对照当前机器清单，13个L4 ID全部有对应通过报告。源码按实际执行分别为f55ac94e（11项）、d4d348c0（308）、2598e52a（最终Go全集）；后续提交只修正测试归属和归档，不声称所有场景在同一SHA执行。独立汇总 `C:/SteerlineDebug/wt-2352-l4-repair/diagnostics/final-l4-matrix.json` 只索引原始报告，非第二套结果权威。
+
+| L4 ID | 实际源码 | 原始报告目录（均在scope/test-results/L4/下） |
+| --- | --- | --- |
+| `configuration.execution-profiles-orca` | `f55ac94e` | `20261029T023251030Z-remote-catalog/summary.json` |
+| `go.full` | `2598e52a` | `20261029T034212584Z-go-full-owner-final/summary.json` |
+| `runtime.dual-home-isolation` | `f55ac94e` | `20261029T020009969Z-controlled-six/summary.json` |
+| `runtime.path-isolation` | `f55ac94e` | `20261029T020009969Z-controlled-six/summary.json` |
+| `runtime.project-maintenance` | `f55ac94e` | `20261029T020009969Z-controlled-six/summary.json` |
+| `runtime.service-write-isolation` | `f55ac94e` | `20261029T020009969Z-controlled-six/summary.json` |
+| `runtime.source-build-isolation` | `f55ac94e` | `20261029T020009969Z-controlled-six/summary.json` |
+| `smoke.local-codex` | `f55ac94e` | `20261029T021616144Z-smoke-local/summary.json` |
+| `testing.management-local-codex` | `f55ac94e` | `20261029T022131230Z-management-local/summary.json` |
+| `testing.project-environment-orca` | `d4d348c0` | `20261029T025840573Z-remote-308/summary.json` |
+| `testing.project-progress-orca-browser` | `f55ac94e` | `20261029T023410799Z-remote-progress/summary.json` |
+| `testing.records` | `f55ac94e` | `20261029T020009969Z-controlled-six/summary.json` |
+| `workflow.local-codex-audited` | `f55ac94e` | `20261029T022646365Z-audited-local/summary.json` |
+
+全部E2E通过记录的cleanup_complete=true。真实测试PR690/691以及远端环境验证PR692经独立provider查询确认正常合并，目标均为本次随机隔离base/head；进度任务主体无业务发布。308为三轮**负向验收通过**：环境仍not_ready（Unity/.NET等要求未满足），完整L2未执行原因、各轮停止封存、无PR及前后准入拒绝均核实，不能宣称308环境已就绪。首次308失败保留原cleanup=false，后续零PR/零活动与SHA lease清理证明独立保存，持久备份refs仍保留。
+
+提示词改动的实际正文/字节及独立审核边界沿前文；本跟进没有新的短模板或规则正文变化。主线在测试期间另合入TTY实现7617cddc，本批冻结版本的live结果不替代新TTY流程验收，也不覆盖其实现。当前跟进PR继续走原生prompt-governance检查并等待独立审核，不合并或部署。
