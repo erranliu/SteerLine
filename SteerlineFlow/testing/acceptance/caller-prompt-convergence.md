@@ -239,3 +239,11 @@ L3 包括 `configuration.execution-profiles`、`recovery.runner-wait-retry`、`r
 308 `test-results/L4/20261029T024335786Z-remote-308`：原大仓库的真实模型自动材料生成已成功，调用方只读证明生成原结果为 `{tests:[]}`，但准入探针未提交对应固定空安排，先被test_materials_not_ready拒绝，尚未执行环境门禁，不能算308通过。修正仅在该隔离探针提交前提供task.tests.json空选择，完全匹配原Plan“无自动测试”和原生成结果；308环境验收原完整L1/L2/脚本/标准保持。失败summary及原cleanup=false保留，补充清理核验另记diagnostics/308-first-failure-*.json，不改写原失败。
 
 调用方SQLite只读证据：0候选、0环境活动，原生成Run已有runner-cleanup confirmed。旧测试ref先保留并核验provider/原SHA，后续用全新隔离现场复验308及最终全集；最终通过不能由上述材料生成成功推定。
+
+### 308正式完成、全集结构失败与测试归属修正
+
+`diagnostics/308-repair-l4-index.json` 的308在d4d348c0通过（681.86秒，cleanup_complete=true）。真实自动生成按原390,779,400字节/16,287文件提交内的必要文件读取，不再越过快照限额；后续三轮均真实停止封存。活动终态failed/not_ready是环境要求未满足的预期负向结果，不是L4失败；完整L2保持三ID `l2.smoke`、`smoke.startup.first_map`、`stable.core_merge_three`，未执行时如实incomplete、无PR且前后准入拒绝。完整前轮事实通过初始结果文件到第二/第三轮，未改原脚本或标准。旧609b测试ref已在零PR/零候选/零环境活动及Runner收尾证明后，以原SHA lease清理；完整对象另存独立本地备份ref，补充 `308-first-failure-cleanup.json` 为true，原失败summary仍为false。
+
+全集 `test-results/L4/20261029T031034768Z-go-full-final` 完成原始执行：1337通过、6失败、0测试skip，执行1441.6秒，原complete=false如实保留并已原生导出。单一根因是新model_test外部包对本模型包的自导入被纯模型依赖边界拒绝，触发5个owner断言及其父项计数；修正为同包测试，元数据保留/篡改/未知字段断言不变，生产实现未改。`diagnostics/20261029T033705744Z-pure-model-owner` 的全部相关边界及模型反例通过，继续L1/L2和全量Go复验。
+
+测试期间PR407已在f55ac94e合并（377eb7a3），Runner PR71已在a03e30e合并（af29ee47）。main后续新增TTY实现7617cddc，不属于本轮冻结f55/d4d的真实链输入；本批结果不作为新TTY流程的live验收。本跟进差异只补空安排、纯模型测试归属及原生测试记录，保留各报告实际源码身份，不覆盖主线TTY规则。
