@@ -231,3 +231,11 @@ L3 包括 `configuration.execution-profiles`、`recovery.runner-wait-retry`、`r
 预查原项目脚本发现其会原样保存初始JSON的previous。独立 `diagnostics/previous-metadata-repro/test.log` overlay复现 `unknown field previous`，冻结全集源码没有修改。`fixed-test.log` 验证修复及环境owner通过：以RoundFile承载原Report+只读输入元数据，保留时逐值对照本轮冻结初始文件，修改/未知字段仍拒绝；previous不进入Report领域对象。没有改原项目脚本、标准或宽松解码。
 
 本轮最终规则资产 `environment-execution.md` 为 **2877→3530 UTF-8/LF字节（+653）**，其中已提交阶段2877→3249；最终新增只读元数据保留及冻结核对说明，替换两处“最终报告只使用正式字段”为“报告字段不变，previous仅作输入元数据”。SHA256 `06378bc4ec3ee2122fbb2bdf6813021821c5bf5c0a65f7020597cf8404554c2a`。九项短模板仍无变化。该次正式修正后会重新固定源码与项目材料，重跑L1/L2和全部L4；上面的通过只属于5e5c307e。
+
+### f55ac94e 最终L4批次与308夹具修正
+
+`diagnostics/remaining-l4-index.json` 对应六项受控、真实冒烟、测试管理、审计、远端目录和远端进度共11项L4通过，受测提交均为f55ac94e，清理完整；L1/L2同提交通过。正式记录已原生导出。真实测试PR690/691及远端环境验证PR692均正常合并，准确隔离base/head经provider核验；远端进度自身不发布业务PR。新材料提交为SteerlineTest `d1a64bd6d6f4c85e08fe529b0ed812b0ca6f4bb6`、308 `6e2948eb5e08ac2ddbfbe4842a83ecfc7219dee1`，Runner固定a03e30e/d56116...，完整身份见外部inputs/frozen-inputs.json。
+
+308 `test-results/L4/20261029T024335786Z-remote-308`：原大仓库的真实模型自动材料生成已成功，调用方只读证明生成原结果为 `{tests:[]}`，但准入探针未提交对应固定空安排，先被test_materials_not_ready拒绝，尚未执行环境门禁，不能算308通过。修正仅在该隔离探针提交前提供task.tests.json空选择，完全匹配原Plan“无自动测试”和原生成结果；308环境验收原完整L1/L2/脚本/标准保持。失败summary及原cleanup=false保留，补充清理核验另记diagnostics/308-first-failure-*.json，不改写原失败。
+
+调用方SQLite只读证据：0候选、0环境活动，原生成Run已有runner-cleanup confirmed。旧测试ref先保留并核验provider/原SHA，后续用全新隔离现场复验308及最终全集；最终通过不能由上述材料生成成功推定。
