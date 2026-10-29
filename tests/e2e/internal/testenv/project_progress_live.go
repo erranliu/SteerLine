@@ -90,6 +90,7 @@ func RunProjectProgress(t *testing.T) {
 	for path, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": spec, "SteerlineFlow/plans/task.plan.md": plan} {
 		s.Must(os.WriteFile(filepath.Join(p.Repo, filepath.FromSlash(path)), []byte(body), 0600))
 	}
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow/plans/task.tests.json"), []byte(`{"tests":["demo.progress.roundtrip","demo.progress.retry","demo.progress.cleanup"]}`), 0600))
 	agentPath := filepath.Join(p.Repo, "AGENTS.md")
 	agents, err := os.ReadFile(agentPath)
 	s.Must(err)
@@ -98,7 +99,7 @@ func RunProjectProgress(t *testing.T) {
 	if remote != nil {
 		validationBase = p.bindValidationBase()
 	}
-	p.git(p.Repo, "add", "--", "AGENTS.md", "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md")
+	p.git(p.Repo, "add", "--", "AGENTS.md", "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json")
 	if remote != nil {
 		p.git(p.Repo, "add", "--", env.DocumentPath)
 	}

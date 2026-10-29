@@ -150,7 +150,11 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			}
 			saved, e := store.Environment(ctx, c.Identity(), request.RequestID)
 			require(t, e)
-			if len(saved.Rounds) != 1 || peer.submits != 1 || pass && saved.Status() != "ready" || !pass && (saved.Status() != "not_ready" || saved.State != "failed" || saved.Rounds[0].Report.L2[0].Status != "failed" || !strings.Contains(saved.Diagnostic, "材料准备不足")) {
+			wantRounds := 1
+			if !pass {
+				wantRounds = 2
+			}
+			if len(saved.Rounds) != wantRounds || peer.submits != wantRounds || saved.Status() != "ready" || !pass && saved.Rounds[0].Report.L2[0].Status != "failed" {
 				t.Fatal("caller retry/settlement failed", saved.State, peer.submits)
 			}
 			value, e := runtime.Read(ctx, "/environment/"+saved.ID, nil)
@@ -159,7 +163,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			if strings.Contains(string(raw), "agent_launch") || strings.Contains(string(raw), "initial_content_base64") || !strings.Contains(string(raw), "\"report\"") || !strings.Contains(string(raw), "\"result\"") || !strings.Contains(string(raw), "fixture native explanation") {
 				t.Fatal("public view leaked frozen input or lost report")
 			}
-			if _, e = port.ready(ctx, "remote"); (e == nil) != pass {
+			if _, e = port.ready(ctx, "remote"); e != nil {
 				t.Fatal("environment readiness differs from complete sealed report", e)
 			}
 			probe := &environmentReserveProbe{SQLiteStore: store}
@@ -168,7 +172,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			require(t, e)
 			input, _ := json.Marshal(runnercontract.RunInput{Execution: profile.Execution})
 			err := gate.ReserveExecution(ctx, taskmodel.FixedWork{}, runnerbridge.Candidate{ProfileID: "remote", Submit: runnerclient.Request{Input: input}}, false)
-			if pass && (err != nil || probe.reservations != 1) || !pass && (err == nil || probe.reservations != 0) {
+			if err != nil || probe.reservations != 1 {
 				t.Fatal("ready/blocked environment crossed the wrong reservation boundary", err)
 			}
 			request.Payload = json.RawMessage(`{"profile_id":"remote","round_timeout_seconds":90}`)
@@ -180,7 +184,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			if receipt == nil {
 				t.Fatal("original request receipt missing")
 			}
-			if peer.submits != 1 {
+			if peer.submits != wantRounds {
 				t.Fatal("receipt query/repeat command resubmitted")
 			}
 		})

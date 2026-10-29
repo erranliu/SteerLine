@@ -203,6 +203,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 		}
 	}
 	materials := []runnercontract.Document{}
+	selected := []string{}
 	total := 0
 	seen := map[string]bool{}
 	for _, path := range paths {
@@ -217,6 +218,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 			}
 			continue
 		}
+		selected = append(selected, path)
 		total += len(b)
 		if total > 1<<20 {
 			return out, errors.New("环境生成材料超限，请精简项目说明")
@@ -279,7 +281,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 	if err != nil {
 		return out, err
 	}
-	out = runnercontract.GenerateRunInput{Title: "项目环境准备文档与验收脚本", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: p.config.Repository, Commit: commit}, Instruction: instruction, Materials: materials, OutputSchema: json.RawMessage(env.GenerationSchema)}}
+	out = runnercontract.GenerateRunInput{Title: "项目环境准备文档与验收脚本", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: p.config.Repository, Commit: commit, Paths: selected}, Instruction: instruction, Materials: materials, OutputSchema: json.RawMessage(env.GenerationSchema)}}
 	if p.config.runtimeCatalog == nil {
 		return out, errors.New("Runner能力目录不可用")
 	}

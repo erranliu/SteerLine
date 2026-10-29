@@ -58,7 +58,7 @@ try {
     $env:STEERLINE_DEBUG_SECOND_TEST_ROOT = $second.root
     Push-Location $repo
     try {
-        & go test ./tests/e2e/internal/driver -run '^TestDebugRelease(Runtime|WebProjects)$' -count=1 -timeout=20m -v *> (Join-Path $first.root 'evidence\runtime-test.log')
+        & go test -tags=e2e ./tests/e2e/internal/driver -run '^TestDebugRelease(Runtime|WebProjects)$' -count=1 -timeout=20m -v *> (Join-Path $first.root 'evidence\runtime-test.log')
         if ($LASTEXITCODE -ne 0) { throw "Runtime tests failed: $($first.root)\evidence\runtime-test.log" }
     } finally { Pop-Location }
     $refused = $false

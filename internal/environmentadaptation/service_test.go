@@ -194,7 +194,7 @@ func TestProjectEnvironmentExecutionOnlySealedReportDeterminesAdmission(t *testi
 	observe(t, s)
 	observe(t, s)
 	r = read(t, s, r.ID)
-	if r.Status() == "ready" || len(r.Rounds) != 1 {
+	if r.Status() == "ready" || len(r.Rounds) != 2 {
 		t.Fatal("ignored final report", r.State, len(r.Rounds))
 	}
 }
@@ -211,11 +211,11 @@ func TestProjectEnvironmentRetryBudgetSurvivesRestart(t *testing.T) {
 		r = read(t, s, r.ID)
 		s = &env.Service{Project: s.Project, Store: store, Runner: remote, Prepare: s.Prepare, Now: func() time.Time { return *now }}
 	}
-	if remote.submits != 1 || len(r.Rounds) != 1 || r.State != "failed" || r.Status() != "not_ready" || !r.Rounds[0].Deadline.Equal(firstDeadline) {
+	if remote.submits != 3 || len(r.Rounds) != 3 || r.State != "failed" || r.Status() != "not_ready" || !r.Rounds[0].Deadline.Equal(firstDeadline) {
 		t.Fatalf("budget reset: %+v", r)
 	}
 	observe(t, s)
-	if remote.submits != 1 {
+	if remote.submits != 3 {
 		t.Fatal("fourth submission")
 	}
 }
@@ -283,7 +283,7 @@ func TestProjectEnvironmentExecutionWaitingInputDoesNotStop(t *testing.T) {
 func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testing.T) {
 	s, remote, store, _ := setup(t)
 	r := start(t, s)
-	for round := 1; round <= 1; round++ {
+	for round := 1; round <= 3; round++ {
 		observe(t, s)
 		r = read(t, s, r.ID)
 		p := report(r, remote, false)
@@ -305,8 +305,8 @@ func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testi
 			t.Fatal("lost mixed requirement results or admitted failure", got)
 		}
 	}
-	if got := read(t, s, r.ID); got.State != "failed" || !got.Settled() || remote.submits != 1 {
-		t.Fatal("missing report channel did not block retry", got.State, remote.submits)
+	if got := read(t, s, r.ID); got.State != "failed" || !got.Settled() || remote.submits != 3 {
+		t.Fatal("three-round requirement failure did not settle", got.State, remote.submits)
 	}
 }
 
@@ -558,7 +558,7 @@ func TestProjectEnvironmentExecutionTimeoutAndCancelDuringPrepare(t *testing.T) 
 					t.Fatal("cancelled prepare could not settle", r.State)
 				}
 			} else {
-				if len(r.Rounds) != 1 || r.Rounds[0].TimedOut != true || r.Status() == "ready" {
+				if len(r.Rounds) != 2 || r.Rounds[0].TimedOut != true || r.Status() == "ready" {
 					t.Fatal("timeout failed to consume round", r.State)
 				}
 			}

@@ -530,6 +530,10 @@ func fixtureRepository(repo runnercontract.GenerateRepository) ([]runnercontract
 	if err != nil {
 		return nil, nil, err
 	}
+	selected := map[string]bool{}
+	for _, path := range repo.Paths {
+		selected[path] = true
+	}
 	type entry struct{ path, blob string }
 	objects := []entry{}
 	var batch strings.Builder
@@ -538,12 +542,18 @@ func fixtureRepository(repo runnercontract.GenerateRepository) ([]runnercontract
 			continue
 		}
 		meta, path, ok := strings.Cut(string(raw), "\t")
+		if repo.Paths != nil && !selected[path] {
+			continue
+		}
 		fields := strings.Fields(meta)
 		if !ok || len(fields) != 3 || fields[0] != "100644" && fields[0] != "100755" {
 			return nil, nil, fmt.Errorf("unsupported fixture source entry")
 		}
 		objects = append(objects, entry{path, fields[2]})
 		batch.WriteString(fields[2] + "\n")
+	}
+	if repo.Paths != nil && len(objects) != len(selected) {
+		return nil, nil, fmt.Errorf("selected fixture file is missing")
 	}
 	// Read all original objects in one process. Per-file Git processes held the
 	// shared fixture lock long enough for another project's CLI call to expire.
@@ -582,5 +592,5 @@ func fixtureRepository(repo runnercontract.GenerateRepository) ([]runnercontract
 	return materials, source, nil
 }
 func advertiseRepository(caps map[string]any) {
-	caps["generate"] = map[string]any{"workflow": "generate/1", "result": "inspect/history: content_result.json", "source": "repository_source: commit/tree/files/blob/sha256/size_bytes", "max_result_utf8_bytes": 1048576, "output_schema": "caller_defined_json_schema_2020_12", "repository": map[string]any{"commit": "full_commit_object_id", "input_property": "generate.repository", "source": "existing_local_git_objects", "snapshot": "private_regular_files_without_git", "max_files": 4096, "max_bytes": 67108864, "max_manifest_bytes": 1048576}}
+	caps["generate"] = map[string]any{"workflow": "generate/1", "result": "inspect/history: content_result.json", "source": "repository_source: commit/tree/files/blob/sha256/size_bytes", "max_result_utf8_bytes": 1048576, "output_schema": "caller_defined_json_schema_2020_12", "repository": map[string]any{"commit": "full_commit_object_id", "input_property": "generate.repository", "source": "existing_local_git_objects", "snapshot": "private_regular_files_without_git", "selection": "explicit_file_paths_or_whole_tree", "max_files": 4096, "max_bytes": 67108864, "max_manifest_bytes": 1048576}}
 }

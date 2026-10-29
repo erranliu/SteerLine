@@ -155,16 +155,26 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 	return r, e
 }
 func (s *Service) appendRound(r *envmodel.Record) error {
-	if len(r.Rounds) > 0 {
-		r.State = "failed"
-		return errors.New("材料准备不足：前轮完整报告没有正式渠道供新轮次工作区读取；未创建下一 Run")
-	}
 	n := len(r.Rounds) + 1
 	input := r.Prepared.Input
 	input.NamePrefix = "sl-env"
 	input.Title = "环境适配: " + r.Profile
 	input.Correlation = map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": fmt.Sprint(n)}
-	initial, _ := json.Marshal(envmodel.Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []envmodel.Check{}, L2: []envmodel.Item{}})
+	var previous json.RawMessage
+	if n > 1 {
+		previous = PreviousFacts(*r, r.Rounds[n-2])
+	}
+	initial, err := json.Marshal(struct {
+		envmodel.Report
+		Previous json.RawMessage `json:"previous,omitempty"`
+	}{envmodel.Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []envmodel.Check{}, L2: []envmodel.Item{}}, previous})
+	if err != nil {
+		return err
+	}
+	if len(initial) > runnercontract.MaxProgressBytes {
+		r.State = "failed"
+		return errors.New("材料准备不足：完整前轮报告与本轮身份超过结果文件上限；未创建下一 Run")
+	}
 	input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}
 	progress := map[string]bool{"pr": false}
 	for _, id := range r.Prepared.L2 {

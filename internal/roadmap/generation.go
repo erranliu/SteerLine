@@ -162,8 +162,12 @@ func (s *Service) Parse(ctx context.Context, in ParseInput) (model.Record, error
 	if e != nil {
 		return model.Record{}, e
 	}
+	paths := []string{}
+	for _, material := range materials {
+		paths = append(paths, material.Path)
+	}
 	input := runnercontract.GenerateRunInput{Title: "Roadmap 任务及依赖解析: " + source.Path, Correlation: map[string]string{"steerline_project": s.Project, "steerline_roadmap_parse": in.RequestID}, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Generate: runnercontract.GenerateInput{
-		Instruction: instruction, Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: source.Head}, Materials: []runnercontract.Document{}, OutputSchema: ParseSchema(),
+		Instruction: instruction, Repository: &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: source.Head, Paths: paths}, Materials: []runnercontract.Document{}, OutputSchema: ParseSchema(),
 	}}
 	if e = catalog.ValidateRepositoryGenerate(input); e != nil {
 		return model.Record{}, e

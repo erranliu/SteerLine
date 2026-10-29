@@ -210,3 +210,16 @@ L3 包括 `configuration.execution-profiles`、`recovery.runner-wait-retry`、`r
 - `test-results/L3/progress-02` 的新增断言错误要求只发布 implementation 的受控 peer 也提供 publish 提示，等待超时；原产品候选实际已正常接受。改为核对已发布步骤，完整发布/报告权限隔离由真实 workflow 形状的 owner fixture 验证。该次失败且 cleanup 完整；新现场 `progress-03` 已通过。
 
 本次没有新增人工必验项，未执行真实模型、Orca、Unity、真实业务 PR 或原 Task18 两轮。受控/静态结果不声称模型实际阅读、真实发布或输入投递稳定性通过。原现场及历史验收保持原状。
+
+## 2026-10-29 剩余三项修复（复验中）
+
+当前用户授权补齐材料、修复全集挂起及308上限后重跑全部L4。新证据scope为 `C:/SteerlineDebug/wt-2352-l4-repair`，旧现场及失败均保留。
+
+- Go全集根因：`diagnostics/20261029T010756642Z-local-catalog-stress` 在disconnect模式捕获 `win32PipeListener.Close` 等doneCh而listenerRoutine仍等新连接，确认go-winio丢失关闭信号。固定上游 `7e8af9b09c4b3e8da1a8ba080484c8a84b71354a`（PR388），依赖要求Go1.26/x/sys0.48；100次目录场景压力复验 `20261029T011539238Z-catalog-fixed-stress` 58.438秒通过。
+- 308：独立Runner [PR71](https://github.com/erranliu/SteerRunner/pull/71)，源码 `a03e30efdee964b1702332e1ec241bde9481db08`。公开paths选择原始文件，容量限制不提高。contracts/resources/workspace/application/integration定向通过；日志 `diagnostics/runner-selected-final.log`、`runner-recovery-selected.log`。调用方测试安排/环境/解析使用完整材料选择，源码调查保留整仓；显式manifest必须精确匹配。
+- 同源材料通过正常Git准备：SteerlineTest克隆 `projects/SteerlineTest` 新提交 `268db75d9fcf872f21fa553ed9452ac0ddeba601`（原8855502）；308克隆 `projects/308` 新提交 `97106b9b4d8fc872d0b0acc170ddb8b3449a5d62`（原76919e3）。只加正式规则和writer，原脚本/测试标准未改。进度L4夹具提交前写原三ID固定安排。
+- 前轮报告复用原结果文件initial JSON的previous字段；不新增RPC/材料发布器/业务仓库自动提交。完整64KiB边界、三轮/重启、取消和未知结果保持；`20261029T012717337Z-round-budgets` 与 `20261029T012829629Z-workflow-round-retry` 已通过。超限不创建下一Run，保留完整原报告。
+- 固定短模板9项正文均无变化。`environment-execution.md` UTF-8/LF **2877→3249（+372）**，两个阶段新增相同一句：若初始JSON含previous，完整读取报告/诊断，不省略失败/清理，最终报告仍只用原字段。SHA256 `d8389c654c64a0058feb5be288ccdf77628f61183396e3e7d42479d5e7014b8a`。业务原因是使用既有文件渠道恢复三轮完整重验，规则副本由新项目提交提供；黄金摘要只触发审核，不代替独立PR审批。
+- 诊断失败 `20261029T011802274Z-snapshot-and-rounds` 保留旧schema夹具和旧一轮断言失败；`20261029T012342138Z-contracts-repaired` 剩余公开流程/超时断言已由上述专项修复复验。`20261029T012937261Z-selection-and-boundaries` 与 `20261029T013047438Z-selected-manifest` 通过。未将诊断中的缺原生pin skip计为正式通过。
+
+最终L1/L2/L3和13项L4尚在执行，不能复用上一轮10/13声明本轮已通过；实际结果、清理和原生历史将在执行后登记。依赖PR未合并，不更新安装包或旧Run。

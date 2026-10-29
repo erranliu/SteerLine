@@ -1,5 +1,5 @@
 {
-  "source_commit": "aa8c392f9798d05184788d83947dd7bf4afc75a6",
+  "source_commit": "a03e30efdee964b1702332e1ec241bde9481db08",
   "generate": {
     "max_result_utf8_bytes": 1048576,
     "output_schema": "caller_defined_json_schema_2020_12",
@@ -10,6 +10,7 @@
       "max_bytes": 67108864,
       "max_files": 4096,
       "max_manifest_bytes": 1048576,
+      "selection": "explicit_file_paths_or_whole_tree",
       "snapshot": "private_regular_files_without_git",
       "source": "existing_local_git_objects",
       "unsupported": [
@@ -794,6 +795,16 @@
               "local_path": {
                 "minLength": 1,
                 "type": "string"
+              },
+              "paths": {
+                "items": {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 4096,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
               }
             },
             "required": [

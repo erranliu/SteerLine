@@ -32,19 +32,13 @@ func init() {
 			fmt.Print(`{"protocol":"steerrunner-cli/v1","ok":true,"request_id":null,"data":{},"error":null}`)
 			os.Exit(0)
 		}
+		dir, err := os.Getwd()
+		if err != nil {
+			os.Exit(2)
+		}
+		fmt.Print(dir)
+		os.Exit(0)
 	}
-}
-
-func TestBackgroundConsoleProbe(t *testing.T) {
-	if os.Getenv("STEERLINE_BACKGROUND_CONSOLE_PROBE") == "" {
-		t.Skip("child probe")
-	}
-	dir, err := os.Getwd()
-	if err != nil {
-		os.Exit(2)
-	}
-	fmt.Print(dir)
-	os.Exit(0)
 }
 
 // Exercise the real callers: a hidden console still fails this test. Checking
@@ -71,7 +65,7 @@ func TestBackgroundCommandsNoConsole(t *testing.T) {
 			dir := t.TempDir()
 			marker := filepath.Join(dir, "console.txt")
 			t.Setenv("STEERLINE_BACKGROUND_CONSOLE_PROBE", marker)
-			command := backend.LaunchCommand{Executable: os.Args[0], Args: []string{"-test.run=^TestBackgroundConsoleProbe$"}, WorkingDirectory: dir, Timeout: 5 * time.Second}
+			command := backend.LaunchCommand{Executable: os.Args[0], Args: []string{"--background-console-probe"}, WorkingDirectory: dir, Timeout: 5 * time.Second}
 			ctx := context.Background()
 			var err error
 			switch caller {

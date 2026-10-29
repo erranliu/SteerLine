@@ -6,7 +6,7 @@
 
 调用方单次指令仅保留当前动作、必读材料引用、少量本轮参数、结果提交位置和简短完成要求。完整测试安排、写入器源码、报告格式、环境要求、原Markdown、确认规划及历史失败由真实可读的固定材料承载，Agent先读取再执行。
 
-本次不建设统一workflow/提示词供应预算；用户回答单独遵守已确认的2000个UTF-8字节限制。只使用当前Runner已公开、已支持的文件/固定快照读取能力，不依赖Runner修改，不新建私有传输、临时服务、通用材料分发框架或第二条模型执行链路。无法通过现有能力提供材料的流程保持准备不足，不声称全部流程已可无条件切换。
+本次不建设统一workflow/提示词供应预算；用户回答单独遵守已确认的2000个UTF-8字节限制。使用Runner公开文件/固定快照读取能力；2026-10-29用户授权解决308快照上限，增加公开 generate.repository.paths 明确文件选择，不新建私有传输、临时服务、通用材料分发框架或第二条模型执行链路。无法通过现有能力提供材料的流程保持准备不足，不声称全部流程已可无条件切换。
 
 不修改Runner原生输入、粘贴、提交、启动确认或重试，不改变其现有workflow/正文覆盖契约。原Task18、构建、旧请求/Run/输入/接受pin/报告保持原样，业务复验继续等待；不恢复旧现场、定时任务，不创建子代理，不发送跨会话消息，不合并或部署。
 
@@ -32,10 +32,10 @@
 | 流程 | 固定项目材料及核验 |
 | --- | --- |
 | 测试执行 | Plan 同名 `.tests.json` 沿用既有 `{tests:[ID]}` 格式；与完整清单展开后须逐项等于原冻结定义和顺序。另需 `SteerlineFlow/testing/runtime-progress.md`（正式规则副本）及同源 writer；不存在 commit 自引用或第二份可编辑安排。 |
-| 测试安排生成 | 固定 commit 的 Plan、测试规范和清单，通过原 `generate.repository` 读取；未提供 commit、能力或固定文件即阻断。 |
+| 测试安排生成 | 固定 commit 的 Plan、测试规范和清单，通过 `generate.repository.paths` 明确选择这三个完整文件读取；未提供 commit、能力或固定文件即阻断。 |
 | Roadmap | 原 Markdown 必须与固定 Git 字节一致；`SteerlineFlow/Roadmap/existing-task-graph.json`、`existing-roadmap-source-map.json` 分别与原任务图/映射的完整 JSON 一致；文档生成另需 `confirmed-planning.json` 与原确认数据一致。格式沿用原 inline 数据，不新增材料 manifest/发布接口。规则副本为同目录 `parse-rules.md`、`document-rules.md`。 |
 | 环境生成 | 固定 `SteerlineFlow/environment-generation.md` 与 `environment-execution.md` 规则/报告契约副本，以及 `SteerlineFlow/environment-context.json` 中的公开 publication 配置与完整前轮事实；须与当前程序原记录一致，不以成功项压缩投影替代。 |
-| 环境执行 | 固定 `SteerlineFlow/environment-execution.md`、原 environment.md、脚本与结果初始 JSON。当前正式渠道不能把刚结束一轮的完整报告交给下一轮的新工作区；这种新轮次须准备不足而终止，不宣称原三轮自动链已验。 |
+| 环境执行 | 固定 `SteerlineFlow/environment-execution.md`、原 environment.md、脚本与结果初始 JSON。复用正式 `result_file.initial_content_base64` 文件渠道，在下一轮初始JSON的 previous 字段提供完整前轮报告及诊断；原三轮上限、封存/PR安全核验保持。总初始JSON超过既有64KiB上限时，在新Run创建前明确准备不足，不截断或摘要。 |
 
 上述动态 JSON 只由正常 Git 准备提供，程序只读取并对照原权威，不自动导出、提交或用当前文件覆盖固定版本。没有这些真实文件的项目会出现明确准备不足；这是本修订接受的行为变化。规则副本只允许 CRLF/LF 差异，原动态 JSON/Markdown 则逐字核对；不为通过测试新增生产复制通道。
 
@@ -90,3 +90,9 @@ Agent必须先读取该步骤的必需材料。manifest或准备核验只证明�
 ## 交付
 
 实施安排见[Plan](../plans/caller-prompt-convergence.plan.md)，本修订状态及PR405历史结果见[验收记录](../testing/acceptance/caller-prompt-convergence.md)。本次保留 internal/prompts 的唯一固定文字入口；完整规则存为该目录下 materials 的固定材料，短模板只引用项目固定文件。实现及缺口逐项记入验收，不安排原业务两轮。
+
+## 2026-10-29 L4 修复边界
+
+生成快照的可选 paths 是原提交内精确普通文件清单，非目录或通配符；4096文件/64MiB/1MiB manifest 上限按实际选择执行，不自动扩大或回退整仓。测试安排生成选择原Plan、规范和完整清单；环境生成选择实际核实的完整规则、上下文、项目声明与依赖。Roadmap解析选择其完整输入；需要调查源码的文档生成保留整仓模式，不能因材料选择丢失相关源码。原commit/root tree及逐文件blob/SHA256/size保持，返回manifest须精确匹配显式清单。
+
+远端L4使用本任务独立的真实项目克隆，通过正常Git提交准备同源规则、writer及固定安排；不改原脚本、程序、测试定义和标准，不注入旧工作区。前轮报告只进入原结果文件的初始JSON，不渲染进指令；执行Agent先完整读取，最终报告字段和原停止/封存流程保持。未知PR/未清理资源仍阻断下一轮。旧持久化请求不重新构造。

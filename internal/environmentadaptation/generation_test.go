@@ -83,8 +83,29 @@ func TestCallerPromptConvergenceStageContextAndFrozenRecovery(t *testing.T) {
 	observe(t, s)
 	observe(t, s)
 	next := read(t, s, r.ID)
-	if len(next.Rounds) != 1 || next.State != "failed" || !strings.Contains(next.Diagnostic, "材料准备不足") || remote.submits != 1 {
-		t.Fatal("missing previous-report channel did not block a new Run", next)
+	if len(next.Rounds) != 2 || next.State != "running" || remote.submits != 1 {
+		t.Fatal("next round was not prepared after settlement", next)
+	}
+	var second runnercontract.RunInput
+	if err := json.Unmarshal(next.Rounds[1].Request.Input, &second); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := base64.StdEncoding.DecodeString(second.ResultFile.InitialContentBase64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var file struct {
+		Previous json.RawMessage `json:"previous"`
+		Round    int             `json:"round"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatal(err)
+	}
+	if file.Round != 2 || string(file.Previous) != string(env.PreviousFacts(next, next.Rounds[0])) {
+		t.Fatalf("complete previous report differs: %s", raw)
+	}
+	if strings.Contains(second.Workflow.PromptOverrides["implement.execute"], "previous") {
+		t.Fatal("previous report leaked into instruction")
 	}
 }
 func mustReportJSON(t *testing.T, r *envmodel.Report) []byte {
@@ -94,4 +115,24 @@ func mustReportJSON(t *testing.T, r *envmodel.Report) []byte {
 		t.Fatal(e)
 	}
 	return b
+}
+
+func TestProjectEnvironmentPreviousFileLimitDoesNotTruncateOrSubmit(t *testing.T) {
+	s, remote, _, _ := setup(t)
+	r := start(t, s)
+	observe(t, s)
+	p := report(r, remote, false)
+	original, _ := json.Marshal(p)
+	p.Message = strings.Repeat("x", runnercontract.MaxProgressBytes-len(original)-16)
+	body, _ := json.Marshal(p)
+	if len(body) >= runnercontract.MaxProgressBytes {
+		t.Fatal("fixture report already exceeds original file limit")
+	}
+	setReport(remote, p)
+	observe(t, s)
+	observe(t, s)
+	got := read(t, s, r.ID)
+	if got.State != "failed" || !got.Settled() || len(got.Rounds) != 1 || remote.submits != 1 || !strings.Contains(got.Diagnostic, "上限") || got.Rounds[0].Report.Message != p.Message {
+		t.Fatal("oversized next initial file was truncated or submitted", got.State, got.Diagnostic)
+	}
 }

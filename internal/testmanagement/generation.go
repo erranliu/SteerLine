@@ -178,7 +178,7 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	}
 	input := runnercontract.GenerateRunInput{Title: "Plan 测试安排: " + in.Plan, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Correlation: map[string]string{"steerline_project": s.Project, "steerline_generation": r.ID}, Generate: runnercontract.GenerateInput{
 		Instruction: instruction,
-		Repository:  &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: in.Commit},
+		Repository:  &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: in.Commit, Paths: []string{in.Plan, RulesPath, CataloguePath}},
 		Materials:   materials, OutputSchema: json.RawMessage(`{"type":"object","required":["tests"],"additionalProperties":false,"properties":{"tests":{"type":"array","uniqueItems":true,"items":{"type":"string"}}}}`)}}
 	if err = catalogue.ValidateRepositoryGenerate(input); err != nil {
 		return r, err
