@@ -138,7 +138,7 @@ func read(t *testing.T, s *env.Service, id string) envmodel.Record {
 }
 func report(r envmodel.Record, remote *runner, pass bool) envmodel.Report {
 	a := r.Rounds[len(r.Rounds)-1]
-	p := envmodel.Report{Version: 1, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, Checks: []envmodel.Check{{ID: "tool", Status: "passed", Message: "required version available"}}, L2: []envmodel.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
+	p := envmodel.Report{Version: 1, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, Checks: []envmodel.Check{{ID: "terminal.tty", Status: "passed", Message: "controlled current TTY fixture; not native qualification"}}, L2: []envmodel.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
 	if pass {
 		p.PR = envmodel.PR{URL: "https://git/validation/pulls/1", Base: "validation", Head: remote.run.Execution.Branch, ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("c", 40), CleanupCompleted: true}
 	} else {
@@ -183,6 +183,27 @@ func TestProjectEnvironmentExecutionFinalSnapshotAndBinaryAdmission(t *testing.T
 	r = read(t, s, r.ID)
 	if r.Status() != "ready" || !r.Settled() || remote.submits != 1 {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestProjectEnvironmentDoesNotAdmitGreenL2AndPRWithoutTTY(t *testing.T) {
+	for _, status := range []string{"missing", "failed", "incomplete"} {
+		t.Run(status, func(t *testing.T) {
+			s, remote, _, _ := setup(t)
+			r := start(t, s)
+			observe(t, s)
+			p := report(r, remote, true)
+			p.Checks = []envmodel.Check{{ID: "git", Status: "passed", Message: "available"}}
+			if status != "missing" {
+				p.Checks = append(p.Checks, envmodel.Check{ID: "terminal.tty", Status: status, Message: "original tool could not verify TTY"})
+			}
+			setReport(remote, p)
+			observe(t, s)
+			observe(t, s)
+			if got := read(t, s, r.ID); got.Status() == "ready" || got.Rounds[0].Report == nil {
+				t.Fatal("TTY-negative sealed facts were lost or admitted", got.Status())
+			}
+		})
 	}
 }
 func TestProjectEnvironmentExecutionOnlySealedReportDeterminesAdmission(t *testing.T) {

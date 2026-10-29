@@ -27,6 +27,7 @@
 | `docs/prompt-governance.md`、`.github/workflows/prompt-governance.yml` | 提示词变更说明、原生测试 job 与保护接入边界；远端是否生效另按专属验收核实。 |
 | `SteerlineProjectGuideDoc/` | SteerLine 统一提供的固定规范；本项目流程定制归 SteerlineFlow。 |
 | `SteerlineFlow/README.md`、`SteerlineFlow/paths.md` | 流程内容索引与本路径清单。 |
+| `SteerlineFlow/environment.md`、`SteerlineFlow/environment-execution.md`、`scripts/verify-environment.ps1` | 项目环境要求、同版本Agent执行规则及验收入口；`-Phase tty`只做最小终端检测，prepare/publish沿同一Agent的TTY工具链执行。材料存在不等于环境已通过。 |
 | `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan；执行时还须固定实际 commit。 |
 | `SteerlineFlow/Roadmap/execution-map.md` | 已确认任务、依赖、执行及验收汇总。 |
 | `SteerlineFlow/Roadmap/RoadmapGuide.md` | 本项目定制的 roadmap 维护规则。 |

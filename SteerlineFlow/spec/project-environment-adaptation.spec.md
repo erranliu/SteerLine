@@ -36,6 +36,8 @@ SteerLine 调查 HEAD 为 `57623186b63c16be2a5748665e63d52ae615adbf`。`internal
 
 项目固定入口为 `SteerlineFlow/environment.md` 与 `scripts/verify-environment.ps1` 或 `scripts/verify-environment.sh`，按项目目标平台选定一种入口。文档包含一个固定机器段，只声明版本、相对脚本路径、解释器、预先存在的验证base及有限的依赖文件路径；不从散文猜命令，不做全仓影响分析。两件材料由同一次生成形成配套内容，经正常审阅和 Git 流程维护，在同一正式提交固定后才能用于适配。首版不建设任意语言脚本框架或多文件应用事务。
 
+TTY为必需环境条件，最终checks须含通过的`terminal.tty`，缺失、失败或未验证不得ready。沿既有Runner远端Agent链路，由同一个Agent使用实际`exec_command(tty:true)`调用最小TTY入口及prepare/publish，检查启动、标记输出和退出状态；脚本核对当前进程stdin/stdout未重定向，不启动嵌套Agent。普通shell/Orca终端成功不能替代。最小入口不执行L1/L2或发布，不能单独使环境ready；工具未启动时保留原错误、缺报告不通过。脚本的终端检查是执行证据，不宣称能防止同权限Agent伪造，原始工具调用仍须独立核对。
+
 SteerLine内置版本化上游提示词；环境模块独立构造generate输入、解析两份材料和缺口，只复用Runner客户端及home生成配额。不得向Plan专用GenerationService加入环境kind分支、改变其.tests.json/测试清单语义或提炼通用文档框架。生成不要求待适配远端就绪，输出可预览/导出，经正常Git审阅入库，不自动合入或恢复旧apply服务。
 
 提示词输入为实际项目源码/相关入口、测试规范及完整清单、构建与依赖/服务/配置说明、Git/PR provider 与发布/审核要求、已有两份材料；维护时附相关适配失败事实。需要的文件缺失或超出本次材料范围时明确列缺口，不假装读过。提示词和实际输入/输出保存来源和摘要，生成结果不证明环境通过。
