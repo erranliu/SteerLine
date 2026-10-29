@@ -4,6 +4,8 @@
 
 ## 1. 最小整合与前置
 
+2026-10-29补充：统一生成/执行规则及SteerLine项目材料新增必需TTY检测，沿既有远端Agent编排，无嵌套Agent、Runner终端逻辑或能力平台。报告只有包含通过的terminal.tty才可ready；脚本提供不跑业务的tty阶段，prepare/publish各自现场检查。定向验证使用`go test ./internal/environmentadaptation/... ./internal/prompts`、环境workflow受控用例及`python scripts/test-environment-tty.py`；后者在隔离Git及工具桩中验证重定向失败、旧通过不可复用、L2/发布零调用和双文件保持false。提交前运行固定L1及受控L2，不运行Full、真实Agent/Unity或真实环境PR。正向TTY、完整远端环境及真实PR仍待独立验收，不能由夹具或文档存在标为通过。
+
 | 位置 | 实施时的最小整合 |
 | --- | --- |
 | `internal/runnercontract`、`internal/runnerclient/progress.go` / catalog / client | 按已实现的公开 result-file 契约补 caller 字段、校验及查询封装；与 progress 独立保存，不增加远端命令或环境专用 Runner 接口 |

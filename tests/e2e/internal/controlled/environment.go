@@ -44,7 +44,7 @@ func scriptedEnvironment(input runnercontract.RunInput, run *runnercontract.Run)
 		return runnercontract.ResultFile{}, fmt.Errorf("controlled environment requires a versioned L2 selection")
 	}
 	report.Completed = true
-	report.Checks = []env.Check{{ID: "controlled-peer", Status: "passed", Message: "scripted fixture only; no native validation"}}
+	report.Checks = []env.Check{{ID: "terminal.tty", Status: "passed", Message: "scripted fixture only; no native validation"}}
 	report.PR = env.PR{URL: "https://example.invalid/environment/" + run.RunID, Base: input.Publication.BaseBranch, Head: run.Execution.Branch, ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("f", 40), CleanupCompleted: true}
 	body, err := json.Marshal(report)
 	if err != nil {

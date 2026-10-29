@@ -287,10 +287,17 @@ func (p Report) Passed(base, head string) bool {
 	if !p.Completed || len(p.Checks) == 0 || len(p.L2) == 0 {
 		return false
 	}
+	tty := false
 	for _, check := range p.Checks {
 		if check.Status != "passed" {
 			return false
 		}
+		if check.ID == "terminal.tty" {
+			tty = true
+		}
+	}
+	if !tty {
+		return false
 	}
 	for _, i := range p.L2 {
 		if i.Status != "passed" {
