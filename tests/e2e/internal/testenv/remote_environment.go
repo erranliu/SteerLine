@@ -163,11 +163,11 @@ func runProjectEnvironment(t *testing.T, id string) {
 	p.BaseBranch = "codex/e2e/" + strings.ReplaceAll(uuid.NewString(), "-", "") + "/" + s.ID + "/base"
 	p.git(p.Repo, "-c", "filter.lfs.process=", "-c", "filter.lfs.smudge=", "-c", "filter.lfs.required=false", "checkout", "-b", p.BaseBranch, in.Commit)
 	base := p.bindValidationBase()
-	for file, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": "# Remote admission probe\nDo not implement, commit, push or publish. Remain blocked awaiting the caller's explicit stop.\n\n## Acceptance\nThe caller verifies the original Run binding, then explicitly stops it. No implementation or publication is authorized.\n", "SteerlineFlow/plans/task.plan.md": "# Remote admission probe\nRead the bound Spec. No implementation or publication is authorized; await explicit stop.\n\nNo automated tests are registered for this caller probe. Environment validation was completed separately.\n"} {
+	for file, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": "# Remote admission probe\nDo not implement, commit, push or publish. Remain blocked awaiting the caller's explicit stop.\n\n## Acceptance\nThe caller verifies the original Run binding, then explicitly stops it. No implementation or publication is authorized.\n", "SteerlineFlow/plans/task.tests.json": `{"tests":[]}`, "SteerlineFlow/plans/task.plan.md": "# Remote admission probe\nRead the bound Spec. No implementation or publication is authorized; await explicit stop.\n\nNo automated tests are registered for this caller probe. Environment validation was completed separately.\n"} {
 		s.Must(os.MkdirAll(filepath.Dir(filepath.Join(p.Repo, file)), 0700))
 		s.Must(os.WriteFile(filepath.Join(p.Repo, file), []byte(body), 0600))
 	}
-	p.git(p.Repo, "add", "--", env.DocumentPath, "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md")
+	p.git(p.Repo, "add", "--", env.DocumentPath, "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json")
 	p.git(p.Repo, "commit", "--quiet", "--allow-empty", "-m", "Freeze isolated environment validation base")
 	fixture := p.git(p.Repo, "rev-parse", "HEAD")
 	config.Repository, config.RunDir, config.Branch, config.Remote = p.Repo, "", p.BaseBranch, "origin"
