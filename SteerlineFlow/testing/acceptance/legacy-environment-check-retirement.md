@@ -85,4 +85,22 @@ A07核对静态公开信封及无三个旧capability键、Catalog绑定原实例
 
 源码及模型正文在最终批次期间无后续行为修改；唯一A07静态argv修复由该独立真实测试和增量复审覆盖。owner明确排除的另外两项原生外部前置测试仍归原验收，不计为本次通过。原失败和未复现超时均按上节保留，未覆盖或改写。未部署安装环境。
 
-最终证据独立复核由 `/root/legacy_retirement_review` 完成：重新计算7份原始summary的SHA均匹配，owner586项、生命周期45项、Web221项及server104项、固定L1全部6组、L2、三项L3和A07均实际通过、零测试skip；L2/L3清理完整。当前源码与最终快照、37个保护文件与开工基线均无差异，未发现确定问题，本次退役范围验收通过。文档收口脚本的错误目标写入被沙箱在打开前拒绝，修复为只允许工作区写入；A07原始summary SHA仍为 `07c12971f15a378829d6d876f1d2f677280e51e8743fa4c0e4ac5ef102714586`，证据未受影响。此结论不涵盖模型/真实PR、三条原生准备、其他原生专项、Runner全仓验收或安装部署。
+2026-10-29固定快照的最终证据独立复核由 `/root/legacy_retirement_review` 完成：重新计算7份原始summary的SHA均匹配，owner586项、生命周期45项、Web221项及server104项、固定L1全部6组、L2、三项L3和A07均实际通过、零测试skip；L2/L3清理完整。当时源码与最终快照、37个保护文件与开工基线均无差异，未发现确定问题，本次退役范围验收通过。文档收口脚本的错误目标写入被沙箱在打开前拒绝，修复为只允许工作区写入；A07原始summary SHA仍为 `07c12971f15a378829d6d876f1d2f677280e51e8743fa4c0e4ac5ef102714586`，证据未受影响。此结论不涵盖模型/真实PR、三条原生准备、其他原生专项、Runner全仓验收或安装部署。
+
+## 2026-10-30 PR 清理复审
+
+PR完整范围包含此前未提交的readiness及旧Check退役，未仅提交删除片段。复审发现 `environmentPort.ready/readyFor` 只剩测试消费者，已删除这两个生产包装，六处测试直接使用正式 `admission(..., false)`，原成功/失败及候选材料拒绝断言保留；其余旧名称仅为负例、通用checkpoint、历史及承载新页面的目录。readiness验收文档已区分材料子目录和原现场的任务证据根。
+
+实现提交 `a4be7228` 无冲突合入main `a7ec835a`，受测源码提交 `e8997a0dbcad190e73958586210d8da74c5dcda4`。上游纯模型测试归属修复、远端probe显式空测试安排及历史记录保留。`/root/legacy_retirement_review` 与 `/root/readiness_review` 独立批准该源码完整PR及合并增量，未发现其他确定问题；固定提示词实际正文与镜像的范围和字节仍为4257→4263、5488→5500，批准未依赖黄金摘要更新。
+
+下表证据根为 `C:/SteerlineDebug/wt-5069-readiness-check-pr-audit/`，原报告不改写。后续只追加本文与PR说明，不改受测行为。
+
+| 验证 | 实际结果 | 原始报告 |
+| --- | --- | --- |
+| 合并后L1 | passed | `test-results/L1/c0ad4a930f7c484ea6a8371a379df1ba/summary.json` |
+| 合并后L2 | passed、正式场景清理完整 | `test-results/L2/af6eba48f03942559af831b3e0a89be7/summary.json` |
+| 环境app定向 | 16项通过，0skip | `diagnostics/environment-increment-78f022459606451a9bc6c219808d2f55/summary.json` |
+| 环境model/service、prompts、remotetest、test-feedback | 211项通过，0skip | `diagnostics/model-prompts-tools-85d90a7754e24951bc885fa04e362583/summary.json` |
+| 额外e2e标签testenv包 | 11通过、1失败、1跳过，complete=true；不登记整包通过 | `diagnostics/e2e-owner-b76465bf1daf4241a89bfb0979543a3e/summary.json` |
+
+额外失败为 `TestTwoProjectsIsolateTasksGitAndCleanup`：maintenance HTTP查询达到场景期限，根因尚未确定，不据此认定目标环境缺少能力。该报告与此前同类超时均保留，不删除断言、不转换成通过。PR据此以草稿提交，保留待验证状态；此前586项owner、Web、三项L3及真实空闲Runner联验仍属于各自冻结快照，不重标为新提交全量通过。三条原生准备的既有失败结论不变，未部署安装环境。
