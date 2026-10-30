@@ -11,8 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 )
 
 func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
@@ -45,14 +47,23 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	b.CreateTasks()
 	a.StartService()
 	b.StartService()
-	a.StopService()
-	b.StopService()
 	ap, err := a.Driver.Tasks(s.Context)
 	s.Must(err)
 	bp, err := b.Driver.Tasks(s.Context)
 	s.Must(err)
 	if ap.ProjectID == bp.ProjectID || ap.DatabaseID == bp.DatabaseID || a.Home == b.Home || a.Provider == b.Provider || len(ap.Tasks) != 2 || len(bp.Tasks) != 2 {
 		t.Fatal("projects share identity or task state")
+	}
+	a.StopService()
+	b.StopService()
+	// Freeze B's writer before comparing its database revision across A's cleanup.
+	// Task CLI reads above require the live application; these snapshots use the
+	// same explicit project/database through the existing product read contract.
+	beforeView, err := driver.ReadProjectView(s.Context, b.Database, b.ProjectID)
+	s.Must(err)
+	s.Must(beforeView.TaskError)
+	if beforeView.Tasks == nil || beforeView.Tasks.DatabaseID != bp.DatabaseID {
+		t.Fatal("stopped B snapshot lost the original database identity")
 	}
 	before := b.git(b.Repo, "rev-parse", "HEAD")
 	s.Must(os.WriteFile(filepath.Join(a.Repo, "only-a.txt"), []byte("isolated"), 0600))
@@ -67,6 +78,8 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	if other.Marker != 0 || b.git(b.Repo, "rev-parse", "HEAD") != before {
 		t.Fatal("A changed B's state")
 	}
+	s.Must(a.Driver.CleanupOwnedRunner(s.Context, s.Run.Helper))
+	s.Must(runnerstatepath.RemoveStopped(a.Home))
 	stopCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
 	defer stop()
 	s.Must(a.GitServer.Stop(stopCtx))
@@ -74,9 +87,10 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	if b.git(b.Repo, "rev-parse", "HEAD") != before {
 		t.Fatal("A cleanup damaged B")
 	}
-	bp2, err := b.Driver.Tasks(s.Context)
+	afterView, err := driver.ReadProjectView(s.Context, b.Database, b.ProjectID)
 	s.Must(err)
-	if bp2.DatabaseID != bp.DatabaseID || bp2.DatabaseRevision != bp.DatabaseRevision {
+	s.Must(afterView.TaskError)
+	if afterView.Tasks == nil || afterView.Tasks.DatabaseID != beforeView.Tasks.DatabaseID || afterView.Tasks.DatabaseRevision != beforeView.Tasks.DatabaseRevision {
 		t.Fatal("A cleanup changed B's database")
 	}
 	// A path escape is rejected and leaves the other project intact.
