@@ -1,6 +1,6 @@
 # 环境检测发布范围收敛验收
 
-2026-10-30。[Spec](../../spec/environment-publication-scope.spec.md) · [Plan](../../plans/environment-publication-scope.plan.md)。用户确认先收缩脚本到正常交付需要的能力、再重跑本机Codex；实施及本机Codex正式L4已通过，不改Runner权限，不部署安装环境。本机Orca等Runner修复；远端重连后正式续验在Codex原生启动超时阻断，见末节。
+2026-10-30。[Spec](../../spec/environment-publication-scope.spec.md) · [Plan](../../plans/environment-publication-scope.plan.md)。用户确认先收缩脚本到正常交付需要的能力、再重跑本机Codex；实施及本机Codex正式L4已通过，不改Runner权限，不部署安装环境。本机Orca等Runner修复；远端重连后的首次续验在Codex启动超时阻断，再试取得脚本负结果但默认TTY仍失败、严格流程未通过，见末节。
 
 ## 已实施边界
 
@@ -113,3 +113,22 @@ Error: account/read failed during TUI bootstrap: account/read failed: workspace 
 最终实际before/after正文、模板/渲染黄金样本分别计字节的账本在本证据根 `diagnostics/publish-short-final-5a7e2cf137574f63b2e1f3b0d09a8097/`。独立审阅者先批准实际diff和260→260字节值，再更新黄金样本，不能用期望值更新替代批准。早期 `diagnostics/publish-short-prompt-1072c19486fd4fb0b345e7c1e1422110/` 仍保留：其中黄金样本更新误带末尾LF，首轮 `diagnostics/prompt-owner-7a92971319224f2cb94a70ffdddc212a/` 正确报expected260/rendered259；已仅恢复原黄金样本无末尾换行约定，未改生产render或放宽断言。完整环境owner `diagnostics/environment-owner-caf385e10dce4a258c45bf4ca8d2f836/` 70项通过、零跳过。模板/接线复验与固定L1/完整L2另取独立目录；本次早于修正的远端失败不是新短指令的原生验收，远端仍未ready。
 
 最终模板/固定材料/app材料接线复验 `diagnostics/prompt-owner-final-677b10da1fbf47e68624aff85613a3b6/` 27项通过、零跳过。固定干净提交 `ba857494` 的L1 `test-results/L1/publish-instruction-a886fc2897504dd39978a0e832d5bd1b/` 通过；完整L2 `test-results/L2/publish-instruction-0e261517f20740d39b6b80b6c666ca9d/` 通过、清理完整，受管报告before/after提交相同且均clean。独立审阅者 `/root/publication_scope_review` 已批准固定四文件diff、实际正文、最终字节约定、受控回归与原远端事实边界，无剩余确定问题或新增结构债；随后仅补验收结果文档。原PR412已由外部合入，本增量通过独立后续PR维护，不改写原失败或声称已修复远端启动。
+
+### 用户要求再试：取得负向检测，但严格TTY链仍未通过
+
+用户明确要求“再试”后，新建原活动而非恢复旧Run。证据仍在本远端scope，固定干净源码 `21cf5ebc6b4d8f4926a01ed976b5a1f60561c77d`、原308材料/Runner/profile/1200秒预算不变；输入为 `diagnostics/retry-inputs-cdf9c74cd38643e4a3938835056c1b8a/`。正式入口同上，实际新报告 `test-results/L4/308-retry-0232248593014011857f738d084934eb/summary.json`，passed=false、原cleanup_complete=false，scratch保留。原活动 `be3974f767d8442e834f8e247446dfbf`，夹具 `ad6751665710d50ff5f3192929ac756aef69e479`；原注册根工作区未变，准备前派发仍被门禁拒绝。
+
+| 原轮次 / Run | 原执行及封存事实 | 可得结论 |
+| --- | --- | --- |
+| 1 / `f150dce3fa1fc9a756886578a960fbd0` | 已越过此前bootstrap超时并执行检测任务。原终端先出现两次CreateProcessW启动失败（含最小TTY入口），Agent经cmd.exe /c启动pwsh探针及prepare，脚本返回1并写report2 completed=true；13项为8通过、3失败、2未完成。原Run stopped、result closed，SHA256 `0553ccfb60d35170f37522f072892ed68eeefe792283ef05b3dcc0da9a158514` | 脚本的负向观察可保留；按“工具无法启动即报告阻断”规则，此轮失败后换启动封装继续执行不算严格流程遵守，不能宣称链路通过 |
+| 2 / `e4fe66d63b918543035f9290dd01eac5` | 原verified final报告exec_command TTY入口CreateProcessW失败，OS Error -1073283067 / FormatMessageW 317；未改启动封装继续，prepare/L1/L2/PR未执行。该错误码来源为已核实身份的final，未独立取得完整工具参数/错误回执。原Run stopped、result closed，SHA256 `b5b18078f1aee1b71a9c9691214421228bdb782d50ccef8d679d438923a9d943`，正文仍为初始completed=false | 保持unverified/not_ready；不能将round1 previous中的checks当作本轮结果，不能认定检测完成 |
+
+Round1封存脚本的具体缺项为 `STEERLINE_GITEA_LOGIN` 未配置、`UNITY_EDITOR_PATH` 未设置、当前进程PATH无法解析dotnet；Android模块和Unity许可因此未验证。PowerShell 7.6.9、Git LFS、longpaths、固定源码/干净工作区、Python 3.13.1、pytest 9.1.1及原适配器分类收集、299个Bundle字节校验与脚本进程TTY检查通过。L1/L2未执行，三项L2均incomplete，零PR；不证明机器未安装Unity/.NET或登录失效。原报告不是模型总结替代品，但也不能弥补原TTY启动路径失败后的执行违规。
+
+原公开终端证据 `diagnostics/retry-terminal-a5dece8be79f47e2898ad71d912609dd/{list,read}.json` 精确绑定runtime、handle/incarnation与原Run；`retry-run-05b48ce681a24d088360e1ba5818343b.json`、`retry-second-run-5c06341c98404c58a95f6e3125ad870e.json` 保留两个原Run的公开final与身份。`retry-activity-3373801090934df8a2f9845c25503dce.json` 和 `retry-activity-bea2902c3760463ca62605cb57a7454e.json` 是原caller只读观察；最终以场景environment-proof.json中各轮封存报告为准。终端TUI未展示完整exec_command参数JSON，因此只确认脚本自身stdin/stdout均未重定向，不用Agent自述证明tty:true flag；cmd.exe本身并非违规依据，违规点是工具启动失败后没有按规则立即阻断。此口径已获 `/root/publication_scope_review` 独立复核。
+
+第二轮停止封存后活动进入unverified，不会继续第三轮。经原environment_stop请求 `18308fd0cce5d534d780ef340ed40714` applied后最终cancelled，只有上述两轮，不声称完成三轮负向验收。原回执在 `diagnostics/retry-stop-b2203f43767c4831894e484536136712/`；观察器其后project_unavailable仍为原应用已停止，不等于停止失败。原Runner cleanup confirmed=true；`diagnostics/retry-ref-cleanup-51cf53bf84f546e694914ca66618ab1b/` 独立核实两个精确Gitea base无PR、两个原生分支均未发布，在原Run停止后按夹具SHA租约删除本轮source/validation两条自有ref。原报告和scratch不改写，收尾范围仍仅原Orca终端，不扩大为detached进程/主机凭据证明。
+
+本次仅复测并补证据，未改实现、固定规则、项目要求或目标配置，未部署。远端检测尚不能认定严格稳定；默认TTY启动失败与脚本已检出的三个配置缺项分别处理，不能通过放宽规则、只补变量或采用首轮替代封装结果将整链标为通过。
+
+两份续验文档及原始两轮/停止/补充清理证据已获 `/root/publication_scope_review` 最终只读审核批准，无剩余确定事实缺陷。纯文档收尾检查：616份Markdown/3907条本地链接零错误，测试清单/场景登记一致性两项通过，git diff --check通过；本次未改实现，不重跑或借用L1/L2结果声称远端通过。
