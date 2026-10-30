@@ -264,7 +264,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 	var stop driver.CandidateCommand
 	for _, candidate := range current.Runner.Candidates {
 		if candidate.RunID == admitted {
-			stop = driver.CandidateCommand{Action: "stop_candidate", RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RunID: candidate.ID, RunRevision: candidate.Revision}
+			stop = driver.CandidateCommand{Action: "stop_candidate", RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), TaskID: candidate.TaskID, RunID: candidate.ID, RunRevision: candidate.Revision}
 		}
 	}
 	if stop.RunID == "" {

@@ -42,7 +42,23 @@ ready须原Runner的provider、仓库及head仓库、URL/base/head/SHA、可用P
 | 固定L1通过 | `test-results/L1/final-bef65cfe7f964bacb574b88698ab80ef/` |
 | 完整L2通过、清理完整 | `test-results/L2/final-d1bd11863367415990712d7a96a3c3d2/` |
 | 正式L3准备门禁通过313.57秒、清理完整 | `test-results/L3/readiness-0177b0c1b59e44c4b59a5fb0a58a459f/` |
+| 固定干净实现d9d71198的L1、完整L2通过，L2清理完整 | `test-results/L1/fixed-658f13295a3e45b6b36268b1bc7ce302/`、`test-results/L2/fixed-6a1f2d73adc94f7392f67ac5ca419eef/` |
 
 早期编译暴露cmd/test-feedback仍消费旧合并字段，已同步独立验证器；早期owner断言仍期待在原PR身份丢失后开第二轮，现改为保持unverified且禁止重复发布，并新增真实事实冲突反例。未删除TTY/L2或身份断言，不把编译失败计入通过。实际修改前后字节/SHA账本在 `diagnostics/material-edits/bytes.json`；项目固定提交及语法检查在 `diagnostics/project-validation/fixed-projects.json`。
 
-本机Codex真实L4尚待最终结果；不从上述受控通过推断原生ready。未修改安装环境或Runner权限，旧失败记录继续保留。
+## 真实本机Codex续验
+
+两次均固定干净实现 `d9d71198329da62759379e4b3c1bea0c1c00593e`、原full_access profile及原独立Runner SHA256 `7b57b06472ae7c36befa71222cdc6e61f7bc2fda410adee6d6aaf32e58fdc2b5`，未改账号、代理、PATH或工具。原生检测已证明ready，正式L4的后续准入/停止失败仍分别保留，不把局部通过写成整体验证通过。
+
+| 正式L4原报告 | 环境检测与外部PR结果 | 整体结果与收尾 |
+| --- | --- | --- |
+| `test-results/L4/codex-publication-14129cb5d0df4c43ba0752b86c8c44e2/` | 原活动6337eeb9042c43d6a1c3e0c9fc3dad5c、Run31b57c0454ca0fa1bad443360a812453，一轮ready，实际TTY/L1/完整L2/原PR发布和停止封存通过；[PR696](https://github.com/erranliu/SteerlineTest/pull/696)由外部精确合并，原403未再出现 | 整体failed，准入探针缺项目版本化runtime-progress.md，零探针Run；cleanup_complete=true |
+| `test-results/L4/codex-materials-a0afc567a5274fe6bd5fb2de24f7f3ac/` | 一轮ready；[PR697](https://github.com/erranliu/SteerlineTest/pull/697)由外部精确合并；补齐材料后原start_task创建实际Runc0b27815b7565f5475d9e487966371f9 | 整体failed，测试驱动原stop_candidate信封漏TaskID，CLI在提交前拒绝；原Runner随后经公开cleanup confirmed=true，原summary保留cleanup_complete=false与scratch，外部ref补证另存 |
+
+材料缺口经正常Git修复：SteerlineTest新增同源 `SteerlineFlow/testing/runtime-progress.md` 及 `tools/testing/RuntimeProgress.ps1`，308新增协议，既有writer未改。新增均0→3196 UTF-8 LF字节；协议SHA256 `587708f00a71eb6a992072c5b12c5aa7f92ed327e2c614e11e33fa4e2e604542`、writer `d39d89f2f3353116c7f507da998f518a27564aa418082faba9a20b68755bfcb4`。独立审阅者逐字核对权威源后批准；原未存在的文件没有运行时inline兜底。账本 `diagnostics/project-validation/runtime-materials-lf.json` 明确LF与磁盘字节：308既有writer正文3196、CRLF磁盘3253，未改变。
+
+最新项目固定提交：SteerlineTest `20610e10285d9ab9bb4ea3be0c07410158692fc0`（PR695），原完整L1五项/L2一项通过且零跳过，原报告为独立clone `.steerrunner/artifacts/runtime-materials-257904f6ccf44ffb858ecfcbbe28ed63-l1`、`-l2`；308 `ab3ff27eb1dd8a902258a8fbac6feb1bbabf50a6`（PR441），语法检查通过、未本机执行Unity/L1/L2。两材料PR均未自动合入。
+
+第二次现场补充清理证据为 `diagnostics/second-native-ref-cleanup-369112a9e794410aba9c5afe771a07b8/`：原PR697精确身份/合并核实、准入source base无PR、原Runner清理confirmed后，按原SHA租约原子删除三条自有ref，另核实准入Run的远端分支不存在。原失败报告和scratch保留，未将补证回写为原清理通过。
+
+测试驱动只补停止信封中同一个原candidate.TaskID，原candidate.ID/revision/request和停止断言不变，生产代码未因此更改。此修正已获独立复核批准；固定新实现后另跑L1/L2及真实L4，不覆盖前两次失败。未修改安装环境或Runner权限。
