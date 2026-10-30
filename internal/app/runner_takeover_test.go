@@ -59,12 +59,12 @@ func TestTakeoverKeepsFrozenCandidatesAndRequiresOriginalRequestDigest(t *testin
 	c := Config{executionPath: filepath.Join(home, "execution.json")}
 	c.RunnerExecution.Runner = runnerclient.Selection{Executable: current.Executable, Version: current.Version, SHA256: current.SHA256}
 	cp := &hostcontract.ServiceCheckpoint{Service: hostcontract.ServiceState{RunnerBuild: &current}}
-	require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, nil, current, &proof))
+	require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, current, &proof))
 	if !bytes.Equal(before, mustJSON(candidate)) {
 		t.Fatal("takeover rewrote original build or PR/stop facts")
 	}
 	proof.Items[0].InputDigest = "foreign"
-	if matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, nil, current, &proof) == nil {
+	if matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, current, &proof) == nil {
 		t.Fatal("foreign input accepted")
 	}
 	unknown := candidate

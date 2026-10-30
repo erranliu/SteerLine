@@ -36,6 +36,7 @@ func TestRunnerControlRecoversCommittedStartAfterReceiptLoss(t *testing.T) {
 		baseCalls++
 		return strings.Repeat("c", 40), nil
 	}}
+	prepareFixtureServiceEnvironment(t, s, svc)
 	resolve := func(string, string) (string, error) { return "live", nil }
 	controls := taskrunner.Controls{Tasks: svc, Store: s, ResolveProfile: resolve}
 	now := time.Now().UTC()

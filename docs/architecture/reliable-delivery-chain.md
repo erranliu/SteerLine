@@ -83,7 +83,7 @@ sequenceDiagram
 | TaskDelivery / ResultReceipt | 业务交付已提交，同一合法重试返回原结果 | 所有兄弟执行及原生资源已经停止 |
 | 项目 checkpoint 与 LocalClosed/LocksReleased | 固定项目的配置/宿主绑定和本地关闭记录 | 记录外的实际锁已释放，或远端 worker 已退出 |
 | Runner `last_shutdown` | 核对原实例、stop request、目录与构建后的服务退出/结算结果 | 只见 `not_running` 就能证明所有原生资源已经停止 |
-| `service verify-stopped` | 当前格式下按原 Run/Check/input 核对的离线资源结算证明 | 业务成功、创建替代执行或迁移旧数据的授权 |
+| `service verify-stopped` | 当前格式下按原 Run/input 核对的离线资源结算证明 | 业务成功、创建替代执行或迁移旧数据的授权 |
 | `service verify-takeover` | 候选程序对原记录的 compatible/read_only 资格 | 原服务已退出；read_only 获得新输入或停止权限 |
 | `verify-restart` | 原宿主/项目/Runner 服务退出及所需绑定与候选资格成立 | `resources_settled=false` 已变成 true |
 | 部署 manifest 与 shutdown-verification | 构建包字节、来源和此次替换依据可追溯 | Runner 兼容就代表 SteerLine 自身数据库格式兼容 |
@@ -132,7 +132,7 @@ sequenceDiagram
 
 相关入口为 [应用启动和停止](../../internal/app/application_start.go)、[共享 Runner](../../internal/app/application_runner.go)、[启动停止义务](../../internal/app/runner_takeover.go)、[Generation 停止义务](../../internal/app/test_generation_takeover.go)、[离线核验](../../internal/app/application_verify_stop.go)、[中断恢复](../../internal/app/deployment_recovery.go)及[隔离调试包 reset](../../tests/e2e/internal/driver/debug_reset.go)。
 
-环境检查和测试安排生成没有 TaskDelivery，但同样需要保留原 request/Check 或 Generation/Run/input 绑定，纳入共享服务和 reset 的资源核对。生成结果还要核对来源、输入材料和目标文件摘要，防止覆盖用户随后修改的文件；生成完成、保存成功、资源已停止分别判断。可以复用相同取证机制，不能因它们不属于 Task 候选而跳过。
+环境检查和测试安排生成没有 TaskDelivery，但同样需要保留原活动或 Generation 与 request/Run/input 绑定，纳入共享服务和 reset 的资源核对。生成结果还要核对来源、输入材料和目标文件摘要，防止覆盖用户随后修改的文件；生成完成、保存成功、资源已停止分别判断。可以复用相同取证机制，不能因它们不属于 Task 候选而跳过。
 
 ## 当前部署为什么会出现多轮核验
 
@@ -195,7 +195,7 @@ flowchart TD
 
 审计基线的 [Client.call](../../internal/runnerclient/client.go) 对已绑定实例的多数命令先调用 [ValidateInstance](../../internal/runnerclient/binding.go)，内部再执行一次 service status，随后真正命令还会带 `--expected-instance-id`。两次 CLI 都散列所选 EXE。审计基线中，已绑定 Run、没有待处理控制/停止的 `Bridge.Step` 仍执行 inspect、events、inspect；按这条静态成功分支，形成三次预查询加三次实际命令，合计六次 CLI 调用和六次 EXE 校验。其他入口可能再有准入查询；这不是运行时采样结果。
 
-Runner `8261310d` 的 `internal/host/client.go` 与 `internal/host/server.go` 已在连接及服务处理时核对 expected instance；`internal/cli/cli.go` 在携带该参数时禁止 submit/check 隐式启动服务。独立前置查询不是抵抗“查询之后实例又变化”的最终保障，实际命令中的实例围栏才是。
+Runner `8261310d` 的 `internal/host/client.go` 与 `internal/host/server.go` 已在连接及服务处理时核对 expected instance；`internal/cli/cli.go` 在携带该参数时禁止 submit 隐式启动服务（原版本另含已退役 Check）。独立前置查询不是抵抗“查询之后实例又变化”的最终保障，实际命令中的实例围栏才是。
 
 首版选定“实际受理前校验完整绑定”，不采用仅在响应后比较身份的方案。Runner 公开命令增加一个完整期望绑定：instance、规范化 state-dir、EXE SHA、version、resource digest 与协议；来自已验证的 ProjectRuntime 固定客户端，不从本次发现文件改写。缺任一必需字段即拒绝该模式，不退化成仅传 instance。
 
@@ -319,7 +319,7 @@ SteerLine 与 Runner 各自持久化原请求是跨权威边界的必要安排�
 | 停止受理、输入撤销与资源停止 | 接受 stop 不代表所有原生资源已退出 | 统一展示各项事实，不合并为无来源的 stopped |
 | 在线兼容预检、停机后最终核验、writer lease 准入 | 三者对应不同时间和写入边界 | 复用不可变部分，不跨可变窗口缓存放行 |
 | TaskDelivery 与终态停止义务同事务 | 防止 Task 已结束但丢失停止责任，尤其是迟到受理 | 资源停止可异步，义务保存不能后置 |
-| reset 前全体资源核验 | 删除未知请求/Run/Check/Generation 会失去恢复关联 | 不用部署 restartable 证明代替删除资格 |
+| reset 前全体资源核验 | 删除未知请求/Run/环境活动/Generation 会失去恢复关联 | 不用部署 restartable 证明代替删除资格 |
 
 遇到不可观测的原生创建、缺失来源或真实身份冲突时，简化用户入口可以给出一个明确阻断原因和可执行下一步，但不能通过重试、清库或标记成功消除未知。
 
@@ -369,6 +369,6 @@ SteerLine 与 Runner 各自持久化原请求是跨权威边界的必要安排�
 | 实例、构建及接管 | [runnerclient](../../internal/runnerclient/client.go)、[runnerbinding](../../internal/runnerbinding/takeover.go)、[兼容接管契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md) |
 | 启停、离线与中断恢复 | [application_start](../../internal/app/application_start.go)、[verify-stop/restart](../../internal/app/application_verify_stop.go)、[deployment recovery](../../internal/app/deployment_recovery.go) |
 | 部署脚本、当前操作与实测范围 | [build-deploy](../../scripts/build-deploy.ps1)、[安装部署](../integration/install-deploy.md)、[中断恢复验收](../../SteerlineFlow/testing/acceptance/deployment-interrupted-recovery.md) |
-| 辅助执行及 reset | [环境检查](../../internal/environmentcheck/service.go)、[测试生成](../../internal/testmanagement/generation.go)、[调试包 reset](../../tests/e2e/internal/driver/debug_reset.go) |
+| 辅助执行及 reset | [项目环境准备](../../internal/environmentadaptation/service.go)、[测试生成](../../internal/testmanagement/generation.go)、[调试包 reset](../../tests/e2e/internal/driver/debug_reset.go) |
 
 现有验证范围按各专属验收判断；本文的源码分析与简化建议不扩大本机或 Orca 原生资格，也不把部署回执、测试报告或人工验收互相替代。

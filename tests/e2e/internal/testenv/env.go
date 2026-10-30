@@ -55,6 +55,7 @@ type Scenario struct {
 }
 
 type Project struct {
+	orcaEvidence                                                                      *orcaTarget
 	AuditObservations                                                                 map[string]string
 	RemoteCleanupFailed                                                               bool
 	RunnerCleanupFailed                                                               bool
@@ -112,7 +113,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "testing.project-progress-local-codex" || id == "recovery.waiting-merge-restart" || id == "recovery.runner-wait-retry" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
+	if id == "testing.project-environment-readiness" || id == "configuration.execution-profiles" || id == "runtime.project-maintenance" || id == "testing.management-local-codex" || id == "testing.project-progress-local-codex" || id == "recovery.waiting-merge-restart" || id == "recovery.runner-wait-retry" || id == "smoke.local-codex" || id == "workflow.local-codex-audited" {
 		timeout = 10 * time.Minute
 	}
 	if id == "workflow.local-codex-audited" {

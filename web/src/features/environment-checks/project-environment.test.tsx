@@ -9,7 +9,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
-function fixture(online = true, send = vi.fn().mockResolvedValue(true)) {
+function fixture(online = true, send = vi.fn().mockResolvedValue(true), emptyHistory = false) {
   const api = new Api(identity, "csrf", "home");
   const round = {
     number: 1,
@@ -54,13 +54,29 @@ function fixture(online = true, send = vi.fn().mockResolvedValue(true)) {
                 id: "remote",
                 name: "远端一",
                 status: "not_ready",
+                stage: "blocked",
+                environment_key: "e".repeat(64),
+                current_revision: 2,
                 reason: "缺少工具",
+              },
+            ],
+            environments: [
+              {
+                environment_key: "e".repeat(64),
+                name: "远端一",
+                status: "not_ready",
+                stage: "blocked",
+                reason: "缺少工具",
+                current_revision: 2,
+                document_path: "SteerlineFlow/environment.md",
+                activity_id: record.id,
+                profiles: [{ id: "remote", name: "远端一" }],
               },
             ],
             generators: [{ id: "local", name: "本地生成" }],
           }
         : path === "/environment"
-          ? { records: [{ ...record, rounds: [] }] }
+          ? { records: emptyHistory ? [] : [{ ...record, rounds: [] }] }
           : record) as never,
   );
   mountFeature(<ProjectEnvironment />, api, testClient(), online, { send });
@@ -68,7 +84,7 @@ function fixture(online = true, send = vi.fn().mockResolvedValue(true)) {
 }
 it("keeps progress separate from binary admission and stops the exact original activity", async () => {
   const { send, record } = fixture();
-  expect(await screen.findByText("远端一 · 环境未就绪")).toBeVisible();
+  expect(await screen.findByText("远端一 · 阻断")).toBeVisible();
   fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
   expect(await screen.findByText(/Run original-run/)).toBeVisible();
   expect(screen.getByText(/进度文件（不作为验收结论）/)).toBeVisible();
@@ -98,7 +114,7 @@ it("shows a final collection failure without promoting binary admission", async 
   fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
   fireEvent.click(await screen.findByText(/验收结果文件/));
   expect(await screen.findByText("结果采集诊断：file_missing")).toBeVisible();
-  expect(screen.getByText("远端一 · 环境未就绪")).toBeVisible();
+  expect(screen.getByText("远端一 · 阻断")).toBeVisible();
 });
 it("freezes the selected profile and timeout and prevents duplicate clicks", async () => {
   let finish!: (v: boolean) => void;
@@ -109,14 +125,14 @@ it("freezes the selected profile and timeout and prevents duplicate clicks", asy
       }),
   );
   fixture(true, send);
-  await screen.findByText("远端一 · 环境未就绪");
-  fireEvent.change(screen.getByLabelText("适配配置"), {
+  await screen.findByText("远端一 · 阻断");
+  fireEvent.change(screen.getByLabelText("验收执行方案"), {
     target: { value: "remote" },
   });
   fireEvent.change(screen.getByLabelText("每轮总超时（秒）"), {
     target: { value: "120" },
   });
-  const start = screen.getByRole("button", { name: "开始适配" });
+  const start = screen.getByRole("button", { name: "2. 开始验收 / 重新准备" });
   fireEvent.click(start);
   fireEvent.click(start);
   expect(send).toHaveBeenCalledTimes(1);
@@ -124,14 +140,21 @@ it("freezes the selected profile and timeout and prevents duplicate clicks", asy
     "environment_start",
     identity.project_id,
     1,
-    { profile_id: "remote", round_timeout_seconds: 120 },
+    {
+      profile_id: "remote",
+      round_timeout_seconds: 120,
+      expected_current_revision: 2,
+    },
   );
   finish(true);
 });
 it("keeps history readable while offline and disables mutations", async () => {
   fixture(false);
-  await screen.findByText("远端一 · 环境未就绪");
-  expect(screen.getByRole("button", { name: "开始适配" })).toBeDisabled();
+  fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
+  await screen.findByText(/Run original-run/);
+  expect(
+    screen.getByRole("button", { name: "2. 开始验收 / 重新准备" }),
+  ).toBeDisabled();
   expect(screen.getByRole("button", { name: "生成文档和脚本" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "停止原活动" })).toBeDisabled();
 });
@@ -141,7 +164,14 @@ it("shows the original intranet PR link without promoting an unfinished activity
   Object.assign(record.rounds[0], {
     report: {
       completed: true,
-      checks: [{ id: "git", status: "passed", message: "Git available" }, { id: "unity.editor", status: "failed", message: "UNITY_EDITOR_PATH is not set" }],
+      checks: [
+        { id: "git", status: "passed", message: "Git available" },
+        {
+          id: "unity.editor",
+          status: "failed",
+          message: "UNITY_EDITOR_PATH is not set",
+        },
+      ],
       message: "等待收尾",
       l2: [{ test_id: "one", status: "passed", message: "" }],
       pr: {
@@ -156,9 +186,11 @@ it("shows the original intranet PR link without promoting an unfinished activity
   expect(
     await screen.findByRole("link", { name: "http://gitea.local/pulls/1" }),
   ).toHaveAttribute("href", "http://gitea.local/pulls/1");
-  expect(screen.getByText("远端一 · 环境未就绪")).toBeVisible();
+  expect(screen.getByText("远端一 · 阻断")).toBeVisible();
   expect(screen.getByText("git · 通过 · Git available")).toBeVisible();
-  expect(screen.getByText("unity.editor · 不通过 · UNITY_EDITOR_PATH is not set")).toBeVisible();
+  expect(
+    screen.getByText("unity.editor · 不通过 · UNITY_EDITOR_PATH is not set"),
+  ).toBeVisible();
 });
 
 it("exports the script under its declared path even when prose mentions another interpreter", async () => {
@@ -195,4 +227,21 @@ it("exports the script under its declared path even when prose mentions another 
   fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
   fireEvent.click(await screen.findByRole("button", { name: "导出验收脚本" }));
   expect(names).toEqual(["verify-environment.sh"]);
+});
+
+it("shows the selected current report even outside the recent history window", async () => {
+ const {send,record}=fixture(true,vi.fn().mockResolvedValue(true),true);
+ fireEvent.click(await screen.findByRole("button",{name:"查看当前验收"}));
+ expect(await screen.findByText(/Run original-run/)).toBeVisible();
+ fireEvent.click(screen.getByRole("button",{name:"停止原活动"}));
+ await waitFor(()=>expect(send).toHaveBeenCalledWith("environment_stop",record.id,record.revision,{}));
+});
+
+it("invalidates only the selected project context with its displayed current revision",async()=>{
+ const {send}=fixture();
+ await screen.findByText("远端一 · 阻断");
+ fireEvent.change(screen.getByLabelText("验收执行方案"),{target:{value:"remote"}});
+ fireEvent.change(screen.getByLabelText("环境失效原因"),{target:{value:"机器已重建"}});
+ fireEvent.click(screen.getByRole("button",{name:"标记当前项目环境失效"}));
+ await waitFor(()=>expect(send).toHaveBeenCalledWith("environment_invalidate",identity.project_id,1,{environment_key:"e".repeat(64),expected_current_revision:2,reason:"机器已重建"}));
 });

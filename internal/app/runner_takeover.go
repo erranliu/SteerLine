@@ -168,15 +168,6 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 			need = true
 		}
 	}
-	checks, err := store.Checks(ctx, c.Identity())
-	if err != nil {
-		return nil, err
-	}
-	for _, check := range checks {
-		if check.Selection.SHA256 != cli.SHA256 || check.ResourceDigest != cli.ResourceDigest {
-			need = true
-		}
-	}
 	if !need {
 		return generationStops, nil
 	}
@@ -189,11 +180,6 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 	}
 	if !runnerbinding.Compatible(*cli.Takeover, cli.BuildPin()) {
 		return nil, errors.New("original Runner state is incompatible")
-	}
-	for _, check := range checks {
-		if !runnerbinding.Check(*cli.Takeover, check) {
-			return nil, errors.New("original environment check differs from takeover proof")
-		}
 	}
 	pending := generationStops
 	bridge := &runnerbridge.Bridge{Store: store}

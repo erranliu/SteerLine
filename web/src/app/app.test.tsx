@@ -29,6 +29,7 @@ import {
 } from "../test/workspace";
 
 function workspaceRead(api: Api, path: string): unknown {
+  if (path === "/environment/options") return { profiles: [], environments: [], generators: [] };
   if (path === "/snapshot") return makeSnapshot(api);
   if (path === "/presentation")
     return { presentation: { profiles: [], default_profile_id: "" } };
@@ -88,7 +89,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
   const view = render(mount(false));
   expect(get).not.toHaveBeenCalled();
   view.rerender(mount(true));
-  await screen.findByText("服务已连接", { exact: true });
+  await screen.findByText("服务在线", { exact: true });
   await waitFor(() =>
     expect(get.mock.calls.some(([path]) => path.startsWith("/tasks?"))).toBe(
       true,
@@ -122,7 +123,7 @@ it("preloads only after connection verification, shares presentation in StrictMo
         path === "/snapshot" ||
         path === "/presentation" ||
         path === "/tasks?limit=100&cursor=" ||
-        path === "/maintenance",
+        path === "/maintenance" || path === "/environment/options",
     ),
   ).toBe(true);
   client.clear();
@@ -147,7 +148,7 @@ it("removes duplicated profiles from configuration and scopes manual refresh", a
   expect(await screen.findByLabelText("生成最大并发数")).toHaveValue(5);
   expect(screen.queryByText("当前服务已加载方案")).not.toBeInTheDocument();
   expect(screen.queryByText("全局执行配置")).not.toBeInTheDocument();
-  await screen.findByText("服务已连接", { exact: true });
+  await screen.findByText("服务在线", { exact: true });
   fireEvent.click(screen.getByRole("button", { name: "刷新查询" }));
   expect(refreshConnection).toHaveBeenCalledTimes(1);
   expect(client.getQueryState(other)?.isInvalidated).toBe(false);
@@ -270,7 +271,7 @@ it("disables commands when offline even while paused queries retain a successful
   });
   mountWorkspace(api, client);
   await waitFor(() =>
-    expect(screen.getByText("服务已连接", { exact: true })).toBeVisible(),
+    expect(screen.getByText("服务在线", { exact: true })).toBeVisible(),
   );
   expect(screen.getByRole("button", { name: "暂停派发" })).toBeEnabled();
   act(() => onlineManager.setOnline(false));

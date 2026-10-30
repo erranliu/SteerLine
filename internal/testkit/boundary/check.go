@@ -221,7 +221,7 @@ func httpConsumerPackage(pkg string) bool {
 // rather than relying on whichever application happens to consume them today.
 func callerOwner(pkg string) bool {
 	switch pkg {
-	case module + "/internal/processwindow", module + "/internal/runnerclient", module + "/internal/runnerbridge", module + "/internal/environmentcheck", module + "/internal/runnerbinding":
+	case module + "/internal/processwindow", module + "/internal/runnerclient", module + "/internal/runnerbridge", module + "/internal/runnerbinding":
 		return true
 	}
 	return false
@@ -239,7 +239,7 @@ func callerImportAllowed(owner, dep string) bool {
 		return dep == "golang.org/x/sys/windows"
 	case module + "/internal/runnerclient":
 		return dep == module+"/internal/runnercontract" || dep == module+"/internal/processwindow" || dep == module+"/internal/prompts" || dep == "github.com/santhosh-tekuri/jsonschema/v6"
-	case module + "/internal/runnerbridge", module + "/internal/environmentcheck":
+	case module + "/internal/runnerbridge":
 		return dep == module+"/internal/runnerclient" || dep == module+"/internal/runnercontract" || dep == module+"/internal/runnerstate"
 	case module + "/internal/runnerbinding":
 		return dep == module+"/internal/runnercontract" || dep == module+"/internal/runnerstate"
@@ -260,7 +260,7 @@ func callerClosureAllowed(owner, dep string) bool {
 	if owner == module+"/internal/runnerbinding" {
 		return dep == module+"/internal/runnerstate"
 	}
-	if owner == module+"/internal/runnerclient" || owner == module+"/internal/runnerbridge" || owner == module+"/internal/environmentcheck" {
+	if owner == module+"/internal/runnerclient" || owner == module+"/internal/runnerbridge" {
 		if dep == module+"/internal/prompts" || dep == module+"/internal/testmanagement/model" || dep == module+"/tools" {
 			return true
 		}

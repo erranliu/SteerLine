@@ -20,6 +20,7 @@ type Store interface {
 	Environments(context.Context, string) ([]envmodel.Record, error)
 	Environment(context.Context, string, string) (envmodel.Record, error)
 	SaveEnvironment(context.Context, envmodel.Record, uint64) error
+	StartEnvironment(context.Context, envmodel.Record, uint64) error
 }
 type Runner interface {
 	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
@@ -129,8 +130,8 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 	r.Prepared = prepared
 	r.Execution = prepared.Input.Execution
 	r.TimeoutSeconds = in.TimeoutSeconds
-	if envmodel.Target(r.Execution) == "" || r.Execution.Adapter != "orca-terminal" {
-		return r, errors.New("environment adaptation requires a remote Orca profile")
+	if _, err := envmodel.Key(r.Execution); err != nil {
+		return r, errors.New("environment adaptation requires a supported execution profile")
 	}
 	create := func() error {
 		rows, e := s.Store.Environments(ctx, s.Project)
@@ -145,7 +146,8 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 		if err := s.appendRound(&r); err != nil {
 			return err
 		}
-		return s.save(ctx, &r)
+		r.Revision = 1
+		return s.Store.StartEnvironment(ctx, r, in.ExpectedCurrentRevision)
 	}
 	if s.WithTarget != nil {
 		e = s.WithTarget(ctx, envmodel.Target(r.Execution), r.Project+"\n"+r.ID, create)
@@ -375,7 +377,7 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 	if due {
 		a.TimedOut = true
 	}
-	terminal := run.Closed || run.Status == "pr_ready" || run.Status == "completed" || run.Status == "stopped" || run.Status == "failed" || run.Status == "cancelled" || run.StopStatus == "stopped" || r.Kind == "adaptation" && run.Status == "waiting_input" && run.Final != nil && run.Final.Verified
+	terminal := run.Closed || run.Status == "pr_ready" || run.Status == "completed" || run.Status == "stopped" || run.Status == "failed" || run.Status == "cancelled" || run.StopStatus == "stopped" || r.Kind == "adaptation" && (run.Status == "waiting_input" || run.Status == "blocked") && run.Final != nil && run.Final.Verified
 	stop := r.Cancelled || due || terminal || r.Generation != nil || r.Kind == "generation" && run.ContentResult != nil
 	if stop && run.StopStatus != "stopped" {
 		if due {

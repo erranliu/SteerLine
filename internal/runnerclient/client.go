@@ -74,7 +74,7 @@ func (b *bounded) Write(value []byte) (int, error) {
 }
 func mutation(command string) bool {
 	switch command {
-	case "submit", "reply", "resume", "stop", "service stop", "environment-check start", "environment-check stop":
+	case "submit", "reply", "resume", "stop", "service stop":
 		return true
 	}
 	return false
@@ -103,8 +103,6 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 	}
 	argv := []string{}
 	switch command {
-	case "environment-check start", "environment-check inspect", "environment-check stop":
-		argv = append(argv, "environment-check", command[len("environment-check "):])
 	case "service start", "service status", "service stop", "service verify-stopped", "service verify-takeover":
 		argv = append(argv, "service", command[len("service "):])
 	case "result-file", "progress-file", "version", "capabilities", "submit", "inspect", "observe", "last-message", "open-native-session", "events", "reply", "resume", "stop", "run-usage", "estimate-run-cost":
@@ -176,9 +174,6 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 			return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Native viewer may have opened; do not replay the operation", Exit: 6, Unknown: true}
 		}
 		if mutation(command) || startup != nil {
-			if command == "environment-check start" || command == "environment-check stop" {
-				return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Inspect the original environment-check request ID; do not replay it", Exit: 6, Unknown: true}
-			}
 			return Response{}, &Failure{Code: "request_outcome_unknown", Message: "Inspect or retry the original request ID and unchanged input", Exit: 6, Unknown: true}
 		}
 		return Response{}, &Failure{Code: "runner_unavailable", Message: "Runner query response is unavailable", Exit: 4}

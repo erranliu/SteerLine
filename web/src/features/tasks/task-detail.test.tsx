@@ -83,6 +83,7 @@ function setup({
   unavailableDefault = false,
   count = 1,
   firstStart = false,
+  environmentReady = true,
 } = {}) {
   const api = new Api(
     { project_id: "candidate-project", instance_id: "instance" } as Identity,
@@ -156,7 +157,14 @@ function setup({
     async (path) =>
       (path === "/presentation"
         ? { presentation: { default_profile_id: "default", profiles } }
-        : taskPage) as never,
+        : path === "/environment/options"
+          ? {
+              profiles: profiles.map((p) => ({ id: p.id, status: environmentReady ? "ready" : "not_ready", reason: "环境尚未验收" })),
+              environments: [],
+              generators: [],
+              default_profile_id: "default",
+            }
+          : taskPage) as never,
   );
   const start = vi.fn().mockReturnValue("new-candidate");
   const workspace = {
@@ -279,4 +287,12 @@ it("keeps first startup using the selected profile", async () => {
       3,
     ),
   );
+});
+
+it("blocks a new start for an online service with an unprepared environment", async () => {
+ const {start}=setup({firstStart:true,environmentReady:false});
+ fireEvent.click(await screen.findByRole("button",{name:"手动启动"}));
+ expect(await screen.findByRole("button",{name:"确认启动"})).toBeDisabled();
+ expect(screen.getByRole("link",{name:"前往环境准备"})).toHaveAttribute("href","/projects/candidate-project/environment");
+ expect(start).not.toHaveBeenCalled();
 });

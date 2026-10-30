@@ -20,10 +20,10 @@ func TestTakeoverCallerBindingPolicies(t *testing.T) {
 	c := runnerstate.Candidate{ID: "candidate", StateDir: dir, RunnerBuild: old, RunID: "run", InputDigest: "input", PRURL: "original-pr", StopRequested: true}
 	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", Compatible: true, StateDir: dir, CandidateSHA256: current.SHA256, Items: []runnercontract.TakeoverItem{{ID: "run", Kind: "run", InputDigest: "input", Status: "read_only", Revision: 7}}}
 	before, _ := json.Marshal(c)
-	if err := ValidateBuildBindings(current, &proof, []runnerstate.Candidate{c}, nil); err != nil {
+	if err := ValidateBuildBindings(current, &proof, []runnerstate.Candidate{c}); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateRestartBindings(current, &proof, []runnerstate.Candidate{c}, nil); err != nil {
+	if err := ValidateRestartBindings(current, &proof, []runnerstate.Candidate{c}); err != nil {
 		t.Fatal(err)
 	}
 	if item, ok := Candidate(proof, c); !ok || item.Status != "read_only" {
@@ -45,7 +45,7 @@ func TestTakeoverCallerBindingPolicies(t *testing.T) {
 			case "proof_sha":
 				report.CandidateSHA256 = "foreign"
 			}
-			if ValidateBuildBindings(current, &report, []runnerstate.Candidate{other}, nil) == nil {
+			if ValidateBuildBindings(current, &report, []runnerstate.Candidate{other}) == nil {
 				t.Fatal("foreign binding admitted")
 			}
 		})
@@ -54,51 +54,20 @@ func TestTakeoverCallerBindingPolicies(t *testing.T) {
 	unknown.RunID = ""
 	unknown.InputDigest = ""
 	unknown.Submit = runnercontract.Request{Protocol: "steerrunner-cli/v1", RequestID: "lost-submit", Input: json.RawMessage(`{"n":1234567890123456789}`)}
-	if ValidateBuildBindings(current, &proof, []runnerstate.Candidate{unknown}, nil) != nil {
+	if ValidateBuildBindings(current, &proof, []runnerstate.Candidate{unknown}) != nil {
 		t.Fatal("project admission changed unbound observe-only policy")
 	}
-	if ValidateRestartBindings(current, &proof, []runnerstate.Candidate{unknown}, nil) == nil {
+	if ValidateRestartBindings(current, &proof, []runnerstate.Candidate{unknown}) == nil {
 		t.Fatal("offline restart accepted missing original envelope proof")
 	}
 	proof.Items[0].RequestID = unknown.Submit.RequestID
 	proof.Items[0].RequestDigest = runnercontract.RequestDigest("submit", "", unknown.Submit)
-	if ValidateRestartBindings(current, &proof, []runnerstate.Candidate{unknown}, nil) != nil {
+	if ValidateRestartBindings(current, &proof, []runnerstate.Candidate{unknown}) != nil {
 		t.Fatal("accepted original request not matched")
 	}
 	unknown.Submit.Input = json.RawMessage(`{"n":1234567890123456790}`)
 	if _, ok := Candidate(proof, unknown); ok {
 		t.Fatal("changed original envelope matched")
-	}
-}
-
-func TestTakeoverCheckBindings(t *testing.T) {
-	dir := t.TempDir()
-	c := runnerstate.EnvironmentCheckRecord{StateDir: dir, CheckID: "check", Report: &runnercontract.Check{InputDigest: "original"}}
-	proof := runnercontract.TakeoverReport{StateDir: dir, Items: []runnercontract.TakeoverItem{{ID: "check", Kind: "check", Status: "read_only", InputDigest: "original"}}}
-	if !Check(proof, c) {
-		t.Fatal("original check not matched")
-	}
-	c.Report.InputDigest = "foreign"
-	if Check(proof, c) {
-		t.Fatal("foreign input matched")
-	}
-	c.CheckID = ""
-	c.Report = nil
-	c.Operations = []runnerstate.EnvironmentCheckOperation{{Status: "outcome_unknown", Request: runnercontract.Request{Protocol: "steerrunner-cli/v1", RequestID: "lost-check", Input: json.RawMessage(`{"access":"sandbox"}`)}}}
-	proof.Items[0].RequestID = c.Operations[0].Request.RequestID
-	proof.Items[0].RequestDigest = runnercontract.RequestDigest("environment-check start", "", c.Operations[0].Request)
-	if !Check(proof, c) {
-		t.Fatal("original lost check request not matched")
-	}
-	c.StateDir = filepath.Join(dir, "foreign")
-	if Check(proof, c) {
-		t.Fatal("foreign check directory matched")
-	}
-	c.StateDir = dir
-	c.Operations[0].Status = "rejected"
-	proof.Items = nil
-	if !Check(proof, c) {
-		t.Fatal("never-created rejected check needs native state")
 	}
 }
 

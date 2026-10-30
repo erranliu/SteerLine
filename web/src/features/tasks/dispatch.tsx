@@ -1,8 +1,14 @@
+import { NavLink } from "react-router-dom";
+import { useEnvironmentReadiness } from "../environment-checks/use-readiness";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { Pause, Play } from "lucide-react";
 export function Dispatch() {
-  const { online, snapshot, send, busy } = useWorkspace();
+  const { online, snapshot, send, busy, identity } = useWorkspace();
+  const preparation = useEnvironmentReadiness();
+  const selected = preparation.data?.profiles?.find(
+    (p) => p.id === preparation.data?.default_profile_id,
+  );
   const page = snapshot?.connection.snapshot.page;
   if (!page) return null;
   const { control } = page;
@@ -62,6 +68,14 @@ export function Dispatch() {
           {control.dispatch_paused ? "恢复派发" : "暂停派发"}
         </Button>
       </div>
+      {selected?.status !== "ready" && (
+        <p className="muted">
+          默认执行环境阻断：{selected?.reason || "环境准备状态尚未核实"} ·{" "}
+          <NavLink to={`/projects/${identity.project_id}/environment`}>
+            前往准备
+          </NavLink>
+        </p>
+      )}
       {control.blockers?.length > 0 && (
         <p className="muted">
           {control.blockers.map((b) => b.Reason).join("；")}

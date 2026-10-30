@@ -14,7 +14,7 @@ import (
 
 // ValidateBuildBindings is project admission after the selected transport has
 // been verified. A never-bound submit keeps its original observe-only policy.
-func ValidateBuildBindings(pin runnercontract.BuildPin, proof *runnercontract.TakeoverReport, candidates []runnerstate.Candidate, checks []runnerstate.EnvironmentCheckRecord) error {
+func ValidateBuildBindings(pin runnercontract.BuildPin, proof *runnercontract.TakeoverReport, candidates []runnerstate.Candidate) error {
 	compatible := proof != nil && Compatible(*proof, pin)
 	for _, candidate := range candidates {
 		if SameBuild(candidate.RunnerBuild, pin) {
@@ -29,14 +29,14 @@ func ValidateBuildBindings(pin runnercontract.BuildPin, proof *runnercontract.Ta
 			}
 		}
 	}
-	return validateChecks(pin, proof, compatible, checks, "runner_build_changed: original environment check takeover is unverified")
+	return nil
 }
 
 // ValidateRestartBindings uses the ORIGINAL home/checkpoint pin. A report from
 // the separately verified candidate may prove earlier builds without rewriting
 // that pin. Unlike project admission, an unbound cross-build submit needs its
 // accepted original request digest to establish offline restart eligibility.
-func ValidateRestartBindings(pin runnercontract.BuildPin, proof *runnercontract.TakeoverReport, candidates []runnerstate.Candidate, checks []runnerstate.EnvironmentCheckRecord) error {
+func ValidateRestartBindings(pin runnercontract.BuildPin, proof *runnercontract.TakeoverReport, candidates []runnerstate.Candidate) error {
 	for _, candidate := range candidates {
 		bound := SameBuild(candidate.RunnerBuild, pin)
 		if proof != nil {
@@ -46,15 +46,6 @@ func ValidateRestartBindings(pin runnercontract.BuildPin, proof *runnercontract.
 		}
 		if !bound || !SamePath(candidate.StateDir, pin.StateDir) || candidate.RunID != "" && candidate.InputDigest == "" {
 			return errors.New("restart candidate differs from the original Runner build or directory")
-		}
-	}
-	return validateChecks(pin, proof, proof != nil, checks, "restart environment check differs from the original Runner build or directory")
-}
-
-func validateChecks(pin runnercontract.BuildPin, proof *runnercontract.TakeoverReport, compatible bool, checks []runnerstate.EnvironmentCheckRecord, message string) error {
-	for _, check := range checks {
-		if !SameCheckBuild(check, pin) && (!compatible || !Check(*proof, check)) {
-			return errors.New(message)
 		}
 	}
 	return nil
@@ -78,10 +69,6 @@ func Compatible(proof runnercontract.TakeoverReport, pin runnercontract.BuildPin
 	return proof.Validate(pin.StateDir, pin.SHA256) == nil && proof.CandidateSHA256 == pin.SHA256 && SamePath(proof.StateDir, pin.StateDir)
 }
 
-func SameCheckBuild(c runnerstate.EnvironmentCheckRecord, pin runnercontract.BuildPin) bool {
-	return c.Selection.SHA256 == pin.SHA256 && c.Selection.Version == pin.Version && SamePath(c.Selection.Executable, pin.Executable) && c.ResourceDigest == pin.ResourceDigest && SamePath(c.StateDir, pin.StateDir)
-}
-
 // Candidate matches only original Run/input or the accepted submit envelope.
 // Callers separately enforce directory/build admission and read-only authority.
 func Candidate(proof runnercontract.TakeoverReport, c runnerstate.Candidate) (runnercontract.TakeoverItem, bool) {
@@ -98,23 +85,4 @@ func Candidate(proof runnercontract.TakeoverReport, c runnerstate.Candidate) (ru
 		}
 	}
 	return runnercontract.TakeoverItem{}, false
-}
-
-func Check(proof runnercontract.TakeoverReport, c runnerstate.EnvironmentCheckRecord) bool {
-	if !SamePath(c.StateDir, proof.StateDir) {
-		return false
-	}
-	for _, item := range proof.Items {
-		if item.Kind != "check" || item.Status != "compatible" && item.Status != "read_only" {
-			continue
-		}
-		if c.CheckID != "" && c.Report != nil && item.ID == c.CheckID && item.InputDigest == c.Report.InputDigest {
-			return true
-		}
-		if c.CheckID == "" && len(c.Operations) > 0 && item.RequestID == c.Operations[0].Request.RequestID && item.RequestDigest == runnercontract.RequestDigest("environment-check start", "", c.Operations[0].Request) {
-			return true
-		}
-	}
-	// Explicitly rejected, never-created checks have no native state to adopt.
-	return c.CheckID == "" && len(c.Operations) > 0 && c.Operations[0].Status == "rejected"
 }

@@ -74,7 +74,7 @@ Runner 前置支持/未支持组合的事实由 SREC acceptance 提供；本仓�
 
 ### 来源与证据
 
-初轮公开拟议样例（后续修订见本轮复审）：[v1.json](../../../internal/testkit/checkfixture/v1.json)，SHA256 `45ab5b50d5e6444781b3a01c257900d264eff6594b73d16c3c83f5c1eff1563b`。样例 source 明确为 SteerLine 提议，**非 Runner 已发布或 Controlled 核验样例**；其中 resource_digest、身份、命令/检查 ID 与失败报告均为测试数据，无真实权限含义。CLI 使用编译的 Go 测试 EXE，不能登记为真实 Runner 构建。
+初轮公开拟议样例（后续修订见本轮复审）：[v1.json](https://github.com/erranliu/SteerLine/blob/7617cddc7efac5716c8c38bb63a0157a100acac0/internal/testkit/checkfixture/v1.json)，SHA256 `45ab5b50d5e6444781b3a01c257900d264eff6594b73d16c3c83f5c1eff1563b`。样例 source 明确为 SteerLine 提议，**非 Runner 已发布或 Controlled 核验样例**；其中 resource_digest、身份、命令/检查 ID 与失败报告均为测试数据，无真实权限含义。CLI 使用编译的 Go 测试 EXE，不能登记为真实 Runner 构建。
 
 Windows/amd64、Go 1.26.4；临时 Git/SQLite 仅使用测试夹具，不访问安装目录。主要回归命令：
 
@@ -108,7 +108,7 @@ Web 3 文件 / 38 项通过（含本功能 7 项、Query 定向失效和既有 j
 | --- | --- | --- |
 | P1 | 浏览器通用 reconcile 在 command_not_found 时自动 POST，环境检查意外继承了补交路径 | start_environment_check / stop_environment_check 在不存在、断连和未知时均只查询原 ID；重复 submit 原信封也只对账。client.test.ts 新增两动作 × 两种不存在码，断言零 POST，并保留旧 Task 的既有补交行为 |
 | P1 | 检查专用 PrepareEnvironmentChecks 可重启常驻 Runner，绕过项目冻结的原实例，使既有 Admit/Shutdown/Settlement 仍指向旧实例 | 删除专用服务启动方法；新检查写请求复用 [原实例准入](../../../internal/taskrunner/actor.go)，无 Task/DAG 资格操作。GET/原请求恢复不要求新输入准入；准入失败零 start/stop，既有 shutdown/settlement 继续负责同一实例 |
-| P1 / P2 | 读取原 stop 先轮询 start 等全部历史命令，旧 start 查询失败会阻塞 stop 对账；每轮查询成本随历史操作数增长 | [caller 刷新](../../../internal/environmentcheck/service.go)改为原命令只查该 request_id；详情优先查唯一未知操作，已绑定后只按 check_id 读快照。测试让旧 start 查询失败，确认 stop 可独立恢复且后续每轮仅一次 check 查询、零写派发 |
+| P1 / P2 | 读取原 stop 先轮询 start 等全部历史命令，旧 start 查询失败会阻塞 stop 对账；每轮查询成本随历史操作数增长 | [caller 刷新](https://github.com/erranliu/SteerLine/blob/7617cddc7efac5716c8c38bb63a0157a100acac0/internal/environmentcheck/service.go)改为原命令只查该 request_id；详情优先查唯一未知操作，已绑定后只按 check_id 读快照。测试让旧 start 查询失败，确认 stop 可独立恢复且后续每轮仅一次 check 查询、零写派发 |
 | P1 | 新检查重复读取 Git remote，绕过已有静态目标绑定与非秘密 URL 校验，可能把错仓库或内嵌凭据写进公开输入/历史 | 复用 [TaskRepositoryTarget](../../../internal/app/task_repository_target.go)，只做现有静态项目目标装配，不调用 Task 资格或原生权限测试。应用测试确认 publication 错配及 URL 内嵌凭据均拒绝，错误与返回输入不携带伪造 token |
 | P2 | 高 revision 报告可改变冻结必需项集合；JSON 相等比较经过 float64 会把相邻大整数视为相同不可变输入 | 拒绝必需项集合漂移，允许集合相同的排序变化；使用 UseNumber 保持整数精度。caller/SQLite 新增反例；仍直接保留 Runner 的 unverified/failed 等结论，不根据部分证据重算权限通过 |
 | P2 | HTTP 仲裁文件丢失但领域原绑定仍在时，同信封重交被当成冲突；stop 的 null payload 被当成空对象 | 返回原绑定回执且零新提交；不同信封同 ID 继续冲突；stop 严格要求 `{}`。HTTP 定向用例覆盖 |
@@ -116,7 +116,7 @@ Web 3 文件 / 38 项通过（含本功能 7 项、Query 定向失效和既有 j
 
 职责结论：保留独立的小型 caller 请求/绑定/缓存用例及既有 SQLite/HTTP/browser journal；没有新增通用 outbox、调度器、worker 状态机、事件流或自动审批。原生执行、认证、沙箱/全访问映射、检查取证、分项结论与资源收尾仍由 Runner 单写。已移除本仓额外常驻服务启动与历史命令全量轮询；公开 DTO 的 JSON 投影用于现有纯依赖边界，不放宽架构守卫。
 
-本轮拟议 fixture 将按 check_id 的 command:null 纳入 schema，与 Runner 草稿的可空 command 约定一致。当前 [v1.json](../../../internal/testkit/checkfixture/v1.json) SHA256 `aedfcaf6c2899e4a9feabb7dfb43cb881193572bce7175b38a6d9ab9b64c9092`；初轮记录的旧 hash 只代表当时样例。本轮仍非 Runner 正式发布/Controlled 样例，SLEC-A01 的真实契约核对、SREC/SA 原生前置及 M01 不据此签收。
+本轮拟议 fixture 将按 check_id 的 command:null 纳入 schema，与 Runner 草稿的可空 command 约定一致。当前 [v1.json](https://github.com/erranliu/SteerLine/blob/7617cddc7efac5716c8c38bb63a0157a100acac0/internal/testkit/checkfixture/v1.json) SHA256 `aedfcaf6c2899e4a9feabb7dfb43cb881193572bce7175b38a6d9ab9b64c9092`；初轮记录的旧 hash 只代表当时样例。本轮仍非 Runner 正式发布/Controlled 样例，SLEC-A01 的真实契约核对、SREC/SA 原生前置及 M01 不据此签收。
 
 ### 本轮测试计划与结果登记
 

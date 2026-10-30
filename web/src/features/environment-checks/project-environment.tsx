@@ -1,11 +1,10 @@
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { NavLink } from "react-router-dom";
 import { useWorkspace } from "../../app/context";
 import { usePageVisible } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
 
-type Profile = { id: string; name: string; status: string; reason: string };
+import { environmentStage, useEnvironmentReadiness } from "./use-readiness";
 type Snapshot = {
   version: number;
   collection_status: string;
@@ -89,16 +88,7 @@ export function ProjectEnvironment() {
     identity.instance_id,
     "environment",
   ];
-  const options = useQuery({
-    queryKey: [...scope, "options"],
-    queryFn: ({ signal }) =>
-      api.get<{ profiles: Profile[]; generators: Profile[] }>(
-        "/environment/options",
-        signal,
-      ),
-    retry: false,
-    refetchInterval: visible ? 15000 : false,
-  });
+  const options = useEnvironmentReadiness();
   const history = useQuery({
     queryKey: [...scope, "records"],
     queryFn: ({ signal }) =>
@@ -107,6 +97,8 @@ export function ProjectEnvironment() {
     refetchInterval: visible ? 3000 : false,
   });
   const [profile, setProfile] = useState("");
+  const [invalidateReason, setInvalidateReason] = useState("");
+  const chosen = options.data?.profiles.find((p) => p.id === profile);
   const [generator, setGenerator] = useState("");
   const [timeout, setTimeout] = useState(3600);
   const [selected, setSelected] = useState("");
@@ -142,32 +134,64 @@ export function ProjectEnvironment() {
       setSubmitting(false);
     }
   };
+  const records = history.data?.records ?? [];
+  const displayed = detail.data && selected === detail.data.id && !records.some(r => r.id === selected)
+    ? [detail.data, ...records] : records;
   return (
     <div className="settings-page">
-      <h1>项目环境适配</h1>
+      <h1>项目环境准备</h1>
       <p>
-        远端配置通过完整 L2 和完整
+        目标环境通过完整 L2 和完整
         PR，且原执行收尾核实后，才允许执行新任务。每次最多三轮；状态仅为可执行任务或环境未就绪。
       </p>
       <section className="settings-panel">
-        <h2>远端配置</h2>
+        <h2>材料 → 用户准备 → 验收 → 结果</h2>
+        <p>
+          服务在线仅表示可接收操作。先阅读项目准备清单，在实际执行账号下准备工具、变量和权限，再明确开始完整
+          L2 与真实验证 PR 验收；生成材料或基础检查不会授予任务资格。
+        </p>
         {options.error && <p role="alert">{String(options.error)}</p>}
-        {options.data?.profiles.map((p) => (
-          <article key={p.id}>
+        {options.data?.environments?.map((e) => (
+          <article key={e.environment_key || e.profiles[0]?.id}>
             <strong>
-              {p.name} · {p.status === "ready" ? "可执行任务" : "环境未就绪"}
+              {e.name} · {environmentStage[e.stage] ?? "准备状态待核实"}
             </strong>
-            <p>{p.reason}</p>
+            <p>{e.reason}</p>
+            <p>执行方案：{e.profiles.map((p) => p.name).join("、")}</p>
+            {e.source_commit && <p>材料来源：{e.source_commit}</p>}
+            <details>
+              <summary>1. 阅读项目准备清单 · {e.document_path}</summary>
+              <pre>
+                {e.document ||
+                  "材料缺失，请先生成、审阅并提交准备文档与验收脚本。"}
+              </pre>
+            </details>
+            {e.activity_id && (
+              <Button
+                variant="ghost"
+                onClick={() => setSelected(e.activity_id!)}
+              >
+                查看当前验收
+              </Button>
+            )}
+            {e.last_passed_activity_id && (
+              <Button
+                variant="ghost"
+                onClick={() => setSelected(e.last_passed_activity_id!)}
+              >
+                查看历史通过报告
+              </Button>
+            )}
           </article>
         ))}
         <label>
-          适配配置
+          验收执行方案
           <select
-            aria-label="适配配置"
+            aria-label="验收执行方案"
             value={profile}
             onChange={(e) => setProfile(e.target.value)}
           >
-            <option value="">选择远端配置</option>
+            <option value="">选择本机或远端执行方案</option>
             {options.data?.profiles.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -190,7 +214,7 @@ export function ProjectEnvironment() {
             !online ||
             busy ||
             submitting ||
-            !profile ||
+            !chosen ||
             !Number.isInteger(timeout) ||
             timeout < 1
           }
@@ -198,10 +222,38 @@ export function ProjectEnvironment() {
             void command("environment_start", identity.project_id, 1, {
               profile_id: profile,
               round_timeout_seconds: timeout,
+              expected_current_revision: chosen!.current_revision,
             })
           }
         >
-          开始适配
+          2. 开始验收 / 重新准备
+        </Button>
+        <label>
+          环境变化或失效原因
+          <input
+            aria-label="环境失效原因"
+            value={invalidateReason}
+            onChange={(e) => setInvalidateReason(e.target.value)}
+            maxLength={4096}
+          />
+        </label>
+        <Button
+          disabled={
+            !online ||
+            busy ||
+            submitting ||
+            !chosen?.environment_key ||
+            !invalidateReason.trim()
+          }
+          onClick={() =>
+            void command("environment_invalidate", identity.project_id, 1, {
+              environment_key: chosen!.environment_key,
+              expected_current_revision: chosen!.current_revision,
+              reason: invalidateReason,
+            })
+          }
+        >
+          标记当前项目环境失效
         </Button>
         <Button variant="ghost" onClick={refresh}>
           刷新环境
@@ -244,7 +296,8 @@ export function ProjectEnvironment() {
         <h2>适配与生成历史</h2>
         {history.error && <p role="alert">{String(history.error)}</p>}
         <p className="muted">最近 20 条活动，展开后查询原活动文件和报告。</p>
-        {history.data?.records.map((summary) => {
+        {selected && detail.error && <p role="alert">{String(detail.error)}</p>}
+        {displayed.map((summary) => {
           const r =
             selected === summary.id && detail.data ? detail.data : summary;
           return (
@@ -310,7 +363,13 @@ export function ProjectEnvironment() {
                       <h4>环境要求检查</h4>
                       {a.report.checks.map((c) => (
                         <p key={c.id}>
-                          {c.id} · {c.status === "passed" ? "通过" : c.status === "failed" ? "不通过" : "未验证"} · {c.message}
+                          {c.id} ·{" "}
+                          {c.status === "passed"
+                            ? "通过"
+                            : c.status === "failed"
+                              ? "不通过"
+                              : "未验证"}{" "}
+                          · {c.message}
                         </p>
                       ))}
                       <h4>L2 验收</h4>
@@ -394,9 +453,6 @@ export function ProjectEnvironment() {
           );
         })}
       </section>
-      <NavLink to={`/projects/${identity.project_id}/environment-checks`}>
-        基础环境检查与历史 →
-      </NavLink>
     </div>
   );
 }

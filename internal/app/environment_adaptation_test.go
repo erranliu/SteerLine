@@ -134,8 +134,8 @@ func TestProjectEnvironmentAdmissionFixedBaseAndFiniteFreshness(t *testing.T) {
 	prepared, e := p.prepare(ctx, "remote")
 	require(t, e)
 	r := envmodel.Record{ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: "remote", Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Settled: true}}}
-	require(t, store.SaveEnvironment(ctx, r, 0))
-	if _, e = p.ready(ctx, "remote"); e != nil {
+	require(t, store.StartEnvironment(ctx, r, 0))
+	if _, _, e = p.admission(ctx, "remote", "", false); e != nil {
 		t.Fatal(e)
 	}
 	// Source moves beyond the old validation base, but registered environment
@@ -144,7 +144,7 @@ func TestProjectEnvironmentAdmissionFixedBaseAndFiniteFreshness(t *testing.T) {
 	fixtureGit(t, c.Repository, "add", ".")
 	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "ordinary change")
 	fixtureGit(t, c.Repository, "push", "origin", "main")
-	if _, e = p.ready(ctx, "remote"); e != nil {
+	if _, _, e = p.admission(ctx, "remote", "", false); e != nil {
 		t.Fatal("ordinary commit invalidated ready", e)
 	}
 	if _, e = p.prepare(ctx, "remote"); e == nil {
@@ -154,7 +154,7 @@ func TestProjectEnvironmentAdmissionFixedBaseAndFiniteFreshness(t *testing.T) {
 	fixtureGit(t, c.Repository, "add", ".")
 	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "dependency change")
 	fixtureGit(t, c.Repository, "push", "origin", "main")
-	if _, e = p.ready(ctx, "remote"); e == nil {
+	if _, _, e = p.admission(ctx, "remote", "", false); e == nil {
 		t.Fatal("registered dependency change ignored")
 	}
 	changedCommit := fixtureGit(t, c.Repository, "rev-parse", "HEAD")
@@ -162,10 +162,10 @@ func TestProjectEnvironmentAdmissionFixedBaseAndFiniteFreshness(t *testing.T) {
 	fixtureGit(t, c.Repository, "add", ".")
 	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "restore registered environment inputs")
 	fixtureGit(t, c.Repository, "push", "origin", "main")
-	if _, e = p.ready(ctx, "remote"); e != nil {
+	if _, _, e = p.admission(ctx, "remote", "", false); e != nil {
 		t.Fatal("restored unchanged environment basis should remain ready", e)
 	}
-	if _, e = p.readyFor(ctx, "remote", changedCommit); e == nil || !strings.Contains(e.Error(), "候选固定提交") {
+	if _, _, e = p.admission(ctx, "remote", changedCommit, false); e == nil || !strings.Contains(e.Error(), "候选固定提交") {
 		t.Fatal("candidate with other frozen environment inputs admitted", e)
 	}
 }

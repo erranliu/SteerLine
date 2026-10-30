@@ -235,7 +235,7 @@ func TestDeploymentRestartCandidateBindingsPreserveOriginalState(t *testing.T) {
 	for _, status := range []string{"outcome_unknown", "accepted", "rejected"} {
 		candidate := runnerstate.Candidate{ID: "candidate", RunnerBuild: pin, StateDir: pin.StateDir, RunID: "original", InputDigest: strings.Repeat("c", 64), SubmitState: status, PRURL: "https://github.com/owner/repo/pull/1", Diagnostic: "Original resource remains unverified"}
 		original := mustJSON(candidate)
-		require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, nil, pin))
+		require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, pin))
 		if !bytes.Equal(original, mustJSON(candidate)) {
 			t.Fatal("restart rewrote candidate facts")
 		}
@@ -246,19 +246,14 @@ func TestDeploymentRestartCandidateBindingsPreserveOriginalState(t *testing.T) {
 		} {
 			bad := candidate
 			alter(&bad)
-			if matchRestartBindings(c, cp, []runnerstate.Candidate{bad}, nil, pin) == nil {
+			if matchRestartBindings(c, cp, []runnerstate.Candidate{bad}, pin) == nil {
 				t.Fatal("restart accepted a different original binding")
 			}
 		}
 	}
 	unknown := runnerstate.Candidate{ID: "unknown-submit", RunnerBuild: pin, StateDir: pin.StateDir, SubmitState: "outcome_unknown"}
-	require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{unknown}, nil, pin))
-	check := runnerstate.EnvironmentCheckRecord{Selection: runnerstate.EnvironmentRunnerPin(c.RunnerExecution.Runner), StateDir: pin.StateDir, ResourceDigest: pin.ResourceDigest}
-	require(t, matchRestartBindings(c, cp, nil, []runnerstate.EnvironmentCheckRecord{check}, pin))
-	check.ResourceDigest = strings.Repeat("e", 64)
-	if matchRestartBindings(c, cp, nil, []runnerstate.EnvironmentCheckRecord{check}, pin) == nil {
-		t.Fatal("restart accepted a foreign environment check")
-	}
+	require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{unknown}, pin))
+
 }
 
 func TestDeploymentCandidateVerificationKeepsOriginalBinding(t *testing.T) {

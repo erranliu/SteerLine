@@ -39,7 +39,7 @@ Runner 内部操作有显式链路配置时按其契约执行，未显式指定�
 
 ## 权限与登录
 
-[环境检查接入 Spec](../../SteerlineFlow/spec/environment-check.spec.md) / [Plan](../../SteerlineFlow/plans/environment-check.plan.md)已对齐 Runner 正式公开契约，消费 `execution.settings.access_mode=sandbox|full_access`，缺省 sandbox；检查与业务启动使用同源冻结模式。caller/HTTP/Web 自动验证及固定版本本机 full_access 真机正例见[专属验收](../../SteerlineFlow/testing/acceptance/environment-check.md)，完整人工体验仍待安排；其余权限、远端和恢复组合分别核验。认证类型和准备由 Runner 原 owner 决定；主动 Agent 检查不替代业务无模型确定性预检，历史报告不替代新工作区核验，SteerLine 不生成原生权限参数或增加登录回退。
+项目环境准备采用[当前准备流程](../../SteerlineFlow/spec/project-environment-readiness.spec.md)：项目提供版本化文档和脚本，SteerLine 通过普通 Run 提示词驱动执行并读取最终 result，按项目×环境判定资格。执行权限仍来自同源冻结 profile，由 Runner 的普通执行契约处理。旧 Runner 专用 Check 接入[已退役](../../SteerlineFlow/spec/legacy-environment-check-retirement.spec.md)，不要求独立检查能力或保留旧模式入口；历史通过范围只归原版本验收。
 
 本机 Codex 的固定原生权限资源、MXC AppContainer、Git 管理根及临时目录规则由 Runner 管理。原生拒绝与未核实事实如实记录；SteerLine 不扩大写根、不添加权限回退，也不代代理发布。
 

@@ -79,16 +79,15 @@ func loadConfigSnapshot(path string, projectBytes, globalBytes []byte, processHo
 }
 
 func loadConfigSnapshotWithQueries(path string, projectBytes, globalBytes []byte, processHost executionbackend.ManagedProcessHost, requireSupport bool, queries *startupQueries) (Config, error) {
-	input := defaultProjectConfigInput()
+	input, err := DecodeProjectConfigInput(projectBytes)
 	config := configFromProjectInput(input)
+	if err != nil {
+		return config, err
+	}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return config, err
 	}
-	if err = decodeStrictJSON(projectBytes, &input); err != nil {
-		return config, err
-	}
-	config = configFromProjectInput(input)
 	config.startup = queries
 	config.ConfigPath = projectPath
 	if config.TaskAuthority != "native" {

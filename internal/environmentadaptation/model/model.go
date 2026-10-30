@@ -50,7 +50,7 @@ func Decode(b []byte, out any) error {
 	return d.Decode(out)
 }
 func Target(e runnercontract.ExecutionInput) string {
-	if e.Target.Kind != "orca_environment" {
+	if (e.Adapter != "codex-app-server" && e.Adapter != "orca-terminal") || (e.Target.Kind != "local" && e.Target.Kind != "orca_environment") || e.Target.Kind == "local" && e.Target.Environment != "" || e.Target.Kind == "orca_environment" && (e.Adapter != "orca-terminal" || e.Target.Environment == "") {
 		return ""
 	}
 	b, _ := json.Marshal(struct {
@@ -115,8 +115,9 @@ type Prepared struct {
 	Input        runnercontract.RunInput `json:"input"`
 }
 type Start struct {
-	Profile        string `json:"profile_id"`
-	TimeoutSeconds int    `json:"round_timeout_seconds"`
+	Profile                 string `json:"profile_id"`
+	ExpectedCurrentRevision uint64 `json:"expected_current_revision"`
+	TimeoutSeconds          int    `json:"round_timeout_seconds"`
 }
 type Request struct {
 	ID       string          `json:"request_id"`

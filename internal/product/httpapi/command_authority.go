@@ -16,26 +16,6 @@ import (
 )
 
 func (s *commandRegistry) lookupAuthoritative(ctx context.Context, requestID string, original *CommandEnvelope, record *requestRecord) (CommandResponse, error) {
-	if s.environmentChecks != nil {
-		if original != nil && isEnvironmentCheckAction(original.Action) {
-			return s.readEnvironment(ctx, *original, record)
-		}
-		if original == nil {
-			if check, err := s.environmentChecks.EnvironmentCheckRequest(ctx, requestID); err == nil {
-				for _, op := range check.Operations {
-					if op.RequestID == requestID {
-						var envelope CommandEnvelope
-						if json.Unmarshal(op.Original, &envelope) == nil && envelope.RequestID == requestID && envelope.ProjectID == ProjectID(s.projectIdentity) && check.Project == s.projectIdentity && isEnvironmentCheckAction(envelope.Action) {
-							return environmentResponse(envelope, check), nil
-						}
-					}
-				}
-				return CommandResponse{}, &protocolError{status: 409, code: "request_id_conflict", reason: "invalid original check association"}
-			} else if !environmentNotFound(err) {
-				return CommandResponse{}, err
-			}
-		}
-	}
 	if original != nil && original.Action == "open_native_session" && record != nil && record.Response != nil {
 		return record.response(), nil
 	}

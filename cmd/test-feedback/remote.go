@@ -100,7 +100,7 @@ func checkRemoteEvidence(id, out string) error {
 		}
 		// The same project must have passed its own formal adaptation first.
 		return checkSealedEnvironment(read, frozen.ExecutionDigest, source.Fixture)
-	case remotetest.Environment:
+	case remotetest.Environment, remotetest.LocalEnvironment:
 		var admission struct {
 			Before        bool   `json:"before_rejected"`
 			AfterRejected bool   `json:"after_rejected"`
@@ -117,7 +117,10 @@ func checkRemoteEvidence(id, out string) error {
 			return errors.New("308 binary admission/original source proof incomplete")
 		}
 		if admission.AfterRejected && admission.Run == "" {
-			return checkUnreadyEnvironment(read, frozen.ExecutionDigest, admission.Fixture)
+			if err := checkUnreadyEnvironment(read, frozen.ExecutionDigest, admission.Fixture); err != nil {
+				return err
+			}
+			return errors.New("native environment positive readiness not passed; negative audit is not a positive L4 pass")
 		}
 		if admission.AfterRejected || admission.Run == "" {
 			return errors.New("308 admission outcome is contradictory")

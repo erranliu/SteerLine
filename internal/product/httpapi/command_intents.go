@@ -96,9 +96,6 @@ func validateActionEnvelope(envelope CommandEnvelope) error {
 }
 
 func parseActionEnvelope(envelope CommandEnvelope) (parsed actionPayload, err error) {
-	if isEnvironmentCheckAction(envelope.Action) {
-		return parsed, validateEnvironmentEnvelope(envelope)
-	}
 	switch envelope.Action {
 	case "answer_decision":
 		payload := &parsed.answer

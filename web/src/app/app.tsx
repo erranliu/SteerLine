@@ -21,21 +21,21 @@ import { short } from "../shared/ui/status";
 import { SettingsPage } from "../features/settings/settings";
 import { Operations } from "./operations";
 import { ExecutionConfigs } from "../features/execution-configs/execution-configs";
+import { EnvironmentSummary } from "../features/environment-checks/use-readiness";
 import { ProjectEnvironment } from "../features/environment-checks/project-environment";
 import { useApplicationProjects } from "./use-application-projects";
 import { useWorkspaceConnection } from "./use-workspace-connection";
 import { useOriginalRequests } from "./use-original-requests";
 import { useCandidateStarts } from "./use-candidate-starts";
-const Roadmaps = lazy(()=>import("../features/roadmaps/roadmaps").then(module=>({default:module.Roadmaps})));
+const Roadmaps = lazy(() =>
+  import("../features/roadmaps/roadmaps").then((module) => ({
+    default: module.Roadmaps,
+  })),
+);
 const Tests = lazy(() =>
   import("../features/tests/tests").then((module) => ({
     default: module.Tests,
   })),
-);
-const EnvironmentChecks = lazy(() =>
-  import("../features/environment-checks/environment-checks").then(
-    (module) => ({ default: module.EnvironmentChecks }),
-  ),
 );
 const Dag = lazy(() =>
   import("../features/tasks/dag").then((module) => ({ default: module.Dag })),
@@ -121,9 +121,8 @@ export function Workspace({
         connection={
           <div className="connection">
             <span className={"connection-dot " + (online ? "" : "offline")} />
-            <span aria-live="polite">
-              {online ? "服务已连接" : "连接待核实"}
-            </span>
+            <span aria-live="polite">{online ? "服务在线" : "连接待核实"}</span>
+            <EnvironmentSummary />
             <span className="instance-label">
               {short(identity.instance_id)}
             </span>
@@ -178,7 +177,14 @@ export function Workspace({
         <Dispatch />
         <Suspense fallback={<div className="empty">正在加载页面…</div>}>
           <Routes>
-            <Route path={"/projects/"+identity.project_id+"/roadmaps"} element={<Roadmaps key={api.home+identity.project_id+identity.instance_id}/>}/>
+            <Route
+              path={"/projects/" + identity.project_id + "/roadmaps"}
+              element={
+                <Roadmaps
+                  key={api.home + identity.project_id + identity.instance_id}
+                />
+              }
+            />
             <Route
               path={"/projects/" + identity.project_id + "/environment"}
               element={
@@ -190,10 +196,6 @@ export function Workspace({
             <Route
               path={"/projects/" + identity.project_id + "/tests"}
               element={<Tests />}
-            />
-            <Route
-              path={"/projects/" + identity.project_id + "/environment-checks"}
-              element={<EnvironmentChecks />}
             />
             <Route
               path={"/projects/" + identity.project_id + "/dag"}

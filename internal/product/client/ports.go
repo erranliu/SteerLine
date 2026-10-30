@@ -61,7 +61,6 @@ type DecisionPort interface {
 // Close releases client-owned resources; it must not stop a worker or service.
 type Resources struct {
 	Tests                               api.TestManagementPort
-	EnvironmentChecks                   api.EnvironmentCheckPort
 	Project                             api.ProjectRef
 	DefaultRequestedBy, DefaultAnswerer string
 	OpenReader                          func(context.Context) (Reader, error)

@@ -60,14 +60,22 @@ func (s *SQLiteStore) SaveEnvironment(ctx context.Context, r env.Record, expecte
 	if s.readOnly {
 		return errors.New("SQLite reader is read-only")
 	}
-	if !env.IDPattern.MatchString(r.ID) || r.Project == "" || r.Revision != expected+1 || len(r.Requests) == 0 || (r.Kind != "adaptation" && r.Kind != "generation") || len(r.Rounds) > env.MaxRounds {
-		return errors.New("invalid environment activity")
-	}
 	tx, e := s.db.BeginTx(ctx, nil)
 	if e != nil {
 		return e
 	}
 	defer tx.Rollback()
+	if err := saveEnvironmentTx(ctx, tx, r, expected); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func saveEnvironmentTx(ctx context.Context, tx *sql.Tx, r env.Record, expected uint64) error {
+	if !env.IDPattern.MatchString(r.ID) || r.Project == "" || r.Revision != expected+1 || len(r.Requests) == 0 || (r.Kind != "adaptation" && r.Kind != "generation") || len(r.Rounds) > env.MaxRounds {
+		return errors.New("invalid environment activity")
+	}
+
 	old, e := readEnvironment(ctx, tx, r.Project, r.ID)
 	if expected == 0 {
 		if !errors.Is(e, env.ErrNotFound) {
@@ -143,5 +151,5 @@ func (s *SQLiteStore) SaveEnvironment(ctx context.Context, r env.Record, expecte
 			return errors.New("request_conflict: environment request already bound")
 		}
 	}
-	return tx.Commit()
+	return nil
 }

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -114,20 +115,25 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 	t.Helper()
 	rules, err := prompts.TestingRules()
 	require(t, err)
+	environmentRules, err := prompts.EnvironmentExecutionRules()
+	require(t, err)
 	for name, body := range map[string]string{
 		"SteerlineFlow/spec/task.spec.md":           "# Spec\n\n## Acceptance\n\nFrozen task.\n",
 		"SteerlineFlow/plans/task.plan.md":          "# Plan\n\nFrozen implementation plan. No automated tests are required for this stopped Run fixture.\n",
 		"SteerlineFlow/testing.md":                  "# Testing\nStopped public Run fixture.\n",
-		"SteerlineFlow/testing/test-list.json":      `{"tests":[]}`,
-		"SteerlineFlow/plans/task.tests.json":       `{"tests":[]}`,
+		"SteerlineFlow/testing/test-list.json":      `{"tests":[{"id":"one","name":"One","level":"L2","environment":"controlled","command":"go test ./...","check":"passes"}]}`,
+		"SteerlineFlow/plans/task.tests.json":       `{"tests":["one"]}`,
 		"SteerlineFlow/testing/runtime-progress.md": string(rules),
 		"tools/testing/RuntimeProgress.ps1":         progresstools.PowerShellWriter,
+		envmodel.DocumentPath:                       "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"environment-validation\",\"dependencies\":[]}\n```\n",
+		envmodel.ExecutionRulesPath:                 string(environmentRules),
+		"scripts/verify-environment.ps1":            "param($Phase)\n# Lifecycle fixture only.\n",
 	} {
 		path := filepath.Join(c.Repository, filepath.FromSlash(name))
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))
 		require(t, os.WriteFile(path, []byte(body), 0600))
 	}
-	fixtureGit(t, c.Repository, "add", "SteerlineFlow", "tools")
+	fixtureGit(t, c.Repository, "add", "SteerlineFlow", "tools", "scripts")
 	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "frozen task references")
 	// Keep the configured repository identity while routing fixture fetches to
 	// a real isolated bare remote, never to the placeholder GitHub repository.
@@ -159,7 +165,7 @@ func testRuntimeReplacement(t *testing.T, restart bool, invalid ...bool) {
 	require(t, os.WriteFile(path, mustJSON(state), 0600))
 	// All commands use the bound public process client; no business invocation
 	// may reach the idle CLI after replacement, including observation/control.
-	for _, command := range []string{"submit", "reply", "resume", "environment-check start", "inspect"} {
+	for _, command := range []string{"submit", "reply", "resume", "stop", "inspect"} {
 		request := &runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "new-" + command, Input: json.RawMessage(`{}`)}
 		if command == "inspect" {
 			request = nil
@@ -187,10 +193,6 @@ func testRuntimeReplacement(t *testing.T, restart bool, invalid ...bool) {
 	}
 	if old.runner.client.InstanceID != a || old.runner.info.InstanceID != a {
 		t.Fatal("old binding was mutated")
-	}
-	_, err = old.product.SubmitEnvironmentCheck(context.Background(), api.EnvironmentCheckCommand{RequestID: strings.Repeat("9", 32), Action: api.StartEnvironmentCheck, TargetID: c.Identity(), Payload: json.RawMessage(`{"profile_id":"fixture","access_mode":"sandbox"}`), Original: json.RawMessage(`{"request_id":"99999999999999999999999999999999"}`)})
-	if err == nil || !strings.Contains(err.Error(), "restart SteerLine explicitly") {
-		t.Fatal("project check was not fenced", err)
 	}
 	if err = old.runner.stop(context.Background()); err == nil {
 		t.Fatal("A stop was accepted for B")
@@ -248,10 +250,8 @@ func testRuntimeReplacement(t *testing.T, restart bool, invalid ...bool) {
 	}
 	bound, err := current.config.runnerClient(context.Background())
 	require(t, err)
-	checkRunner, err := newEnvironmentCheckPort(current.config, current.store).service.Open(context.Background(), current.config.RunnerExecution.Runner)
-	require(t, err)
-	if bound.InstanceID != b || checkRunner.(runnerclient.Client).InstanceID != b || old.config.runtimeRunner.InstanceID != a {
-		t.Fatal("product/check/client bindings diverged after restart")
+	if bound.InstanceID != b || old.config.runtimeRunner.InstanceID != a {
+		t.Fatal("product/client bindings diverged after restart")
 	}
 	require(t, current.runner.client.ValidateInstance(context.Background()))
 	if current.config.RunnerExecution.Profiles[0].Name != "New preset name" {
@@ -339,6 +339,12 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 		}
 		return m.refresh(ctx)
 	}))
+	// This lifecycle-only prerequisite supplies stored qualification with the
+	// actual material/build basis and no external preparation execution. It is
+	// not evidence that preparation ran; the formal readiness L3 covers that.
+	prepared, err := r.config.runtimeEnvironment.materialAt(ctx, c.RunnerExecution.DefaultProfile, base, false)
+	require(t, err)
+	require(t, r.store.StartEnvironment(ctx, envmodel.Record{ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: c.RunnerExecution.DefaultProfile, Execution: prepared.Input.Execution, Build: r.runner.client.BuildPin(), Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{}}, 0))
 	_, err = r.product.SubmitControl(ctx, api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.Repeat("7", 32), RequestedBy: "fixture"})
 	require(t, err)
 	wait, cancel := context.WithTimeout(ctx, 8*time.Second)

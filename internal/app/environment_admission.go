@@ -12,7 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
-// One home-owned mutex covers only new remote work reservations. Durable
+// One home-owned mutex covers only new target work reservations. Durable
 // project records, rather than an in-memory busy flag, own the occupancy.
 type environmentAdmission struct {
 	mu       sync.Mutex
@@ -46,31 +46,10 @@ func (a *environmentAdmission) check(ctx context.Context, target, owner string, 
 		for _, r := range rows {
 			if r.Kind == "adaptation" && r.Project+"\n"+r.ID != owner && env.Target(r.Execution) == target && !r.Settled() {
 				reader.Close()
-				return errors.New("环境未就绪：该远端仍有未核实的环境适配")
+				return errors.New("环境未就绪：该目标环境仍有未核实的环境适配")
 			}
 		}
 		if tasks {
-			checks, e := reader.Checks(ctx, c.Identity())
-			if e != nil {
-				reader.Close()
-				return e
-			}
-			for _, check := range checks {
-				if env.Target(check.Input.Execution) != target {
-					continue
-				}
-				if len(check.Operations) > 0 && check.Operations[0].Status == "rejected" {
-					continue
-				}
-				unverified := check.Report == nil || check.Report.CleanupStatus != "completed"
-				for _, op := range check.Operations {
-					unverified = unverified || op.Status == "outcome_unknown"
-				}
-				if unverified {
-					reader.Close()
-					return errors.New("原基础环境检查及其资源尚未核实，不能开始适配")
-				}
-			}
 			snapshot, e := reader.ReadRunnerSnapshot(ctx, c.Identity())
 			if e != nil {
 				reader.Close()
@@ -87,7 +66,7 @@ func (a *environmentAdmission) check(ctx context.Context, target, owner string, 
 				}
 				if env.Target(input.Execution) == target {
 					reader.Close()
-					return errors.New("该远端仍有未停止的原任务，不能开始环境适配")
+					return errors.New("该目标环境仍有未停止的原任务，不能开始环境适配")
 				}
 			}
 		}

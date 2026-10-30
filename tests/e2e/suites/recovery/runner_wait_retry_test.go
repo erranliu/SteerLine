@@ -35,11 +35,11 @@ func TestRunnerWaitRetry(t *testing.T) {
 			profile[key] = value
 		}
 		profile["id"] = "controlled-orca"
-		profile["execution"] = map[string]any{"adapter": "orca-terminal", "target": map[string]string{"kind": "orca_environment", "environment": "controlled-peer"}, "settings": map[string]any{}}
+		profile["execution"] = map[string]any{"adapter": "orca-terminal", "target": map[string]string{"kind": "orca_environment", "environment": "controlled-peer"}, "settings": map[string]any{"agent_launch": map[string]any{"executable": "codex"}}}
 		config["execution_profiles"] = append(profiles, profile)
 		p.Driver.Profile = "controlled-orca"
 		s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), config))
-		p.PrepareControlledRemoteEnvironment("controlled-orca")
+		p.PrepareControlledEnvironment("controlled-orca")
 		return p
 	}
 	setWait := func(p *testenv.Project, w *runnercontract.ExecutionWait, hold bool) {

@@ -1,5 +1,8 @@
 # Plan：执行权限与 Git 环境检查接入
 
+> 2026-10-29 已退役：本文件保留原版本方案作历史追溯，不代表当前要求。当前项目环境准备使用普通 Run/result；删除范围与验证见[退役 Spec](../spec/legacy-environment-check-retirement.spec.md)及其 Plan/验收。
+
+
 日期：2026-10-16。SteerLine 实现安排与交付边界；按已合入 Runner `ea1bfd982c63818de02870c70fa2f7b1c9f258b2` 完成正式契约接入。[Spec](../spec/environment-check.spec.md) · [本仓专属验收](../testing/acceptance/environment-check.md)。本 Plan 只安排 SteerLine；Runner 前置已拆到 `C:/Project/SteerRunner/docs/spec/environment-check.spec.md` / `.plan.md` 及独立 acceptance，无 Task ID、不改 execution-map。
 
 ## 1. 前置与复用

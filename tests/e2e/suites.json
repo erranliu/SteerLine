@@ -164,5 +164,22 @@
     "test": "TestRemoteProjectEnvironment",
     "env": "live",
     "chain": "orca-remote"
+  },
+  {
+    "id": "testing.project-environment-readiness",
+    "level": "L3",
+    "suite": "testing",
+    "package": "./tests/e2e/suites/testing",
+    "test": "TestProjectEnvironmentReadiness",
+    "env": "controlled"
+  },
+  {
+    "id": "testing.project-environment-local",
+    "level": "L4",
+    "suite": "testing",
+    "package": "./tests/e2e/remote",
+    "test": "TestLocalProjectEnvironment",
+    "env": "live",
+    "chain": "local-environment"
   }
 ]

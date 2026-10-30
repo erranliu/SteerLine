@@ -115,7 +115,7 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
-		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}}}}, nil
+		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
 	}}
 	return service, remote, store, &now
 }
@@ -328,6 +328,26 @@ func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testi
 	}
 	if got := read(t, s, r.ID); got.State != "failed" || !got.Settled() || remote.submits != 3 {
 		t.Fatal("three-round requirement failure did not settle", got.State, remote.submits)
+	}
+}
+
+func TestProjectEnvironmentBlockedFinalStopsOnlyWhenVerified(t *testing.T) {
+	s, remote, _, _ := setup(t)
+	r := start(t, s)
+	observe(t, s)
+	setReport(remote, report(r, remote, false))
+	remote.run.Status = "blocked"
+	remote.run.Final = &runnercontract.Final{Verified: false}
+	observe(t, s)
+	if remote.stops != 0 || remote.resultReads != 0 {
+		t.Fatal("unverified blocked turn must remain open")
+	}
+	remote.run.Final.Verified = true
+	observe(t, s)
+	observe(t, s)
+	got := read(t, s, r.ID)
+	if remote.stops != 1 || got.Status() == "ready" || got.Rounds[0].Report == nil || got.Rounds[0].Result.CollectionStatus != "closed" {
+		t.Fatal("verified blocked final must stop and seal the original failed round")
 	}
 }
 

@@ -166,34 +166,20 @@ func TestRoadmapBrowserRoutes(t *testing.T) {
 	}
 }
 
-func TestEnvironmentCheckBrowserRoutes(t *testing.T) {
+func TestLegacyCheckRetirementBrowserRoutes(t *testing.T) {
 	s, client := fixture(t)
-	if w := request(s, "GET", "/projects/"+client.identity.ProjectID+"/environment-checks", "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {
-		t.Fatal("direct check URL did not serve SPA", w.Code, w.Body.String())
+	base := "/projects/" + client.identity.ProjectID
+	if w := request(s, "GET", base+"/environment", "", nil, ""); w.Code != 200 || !strings.Contains(w.Body.String(), "real build") {
+		t.Fatal("environment deep link did not serve SPA", w.Code, w.Body.String())
 	}
-	cookie, csrf := login(t, s)
-	base := "/api/v2/application/projects/" + client.identity.ProjectID
+	if w := request(s, "GET", base+"/environment-checks", "", nil, ""); w.Code != 404 {
+		t.Fatal("retired browser route remains", w.Code)
+	}
+	cookie, _ := login(t, s)
 	for _, path := range []string{"/environment-checks/options", "/environment-checks", "/environment-checks/" + strings.Repeat("a", 32)} {
-		if w := request(s, "GET", base+path, "", cookie, ""); w.Code != 200 || client.route != "/projects/"+client.identity.ProjectID+path {
-			t.Fatal("check read was not forwarded", w.Code, w.Body.String(), client.route)
-		}
-	}
-	e := httpcontract.CommandEnvelope{RequestID: strings.Repeat("a", 32), ProjectID: client.identity.ProjectID, InstanceID: client.identity.InstanceID, Action: "start_environment_check", TargetID: client.identity.ProjectID, Payload: json.RawMessage(`{"profile_id":"fixture","access_mode":"full_access"}`)}
-	for _, action := range []string{"start_environment_check", "stop_environment_check"} {
-		e.Action = action
-		if action == "stop_environment_check" {
-			e.RequestID = strings.Repeat("b", 32)
-			e.TargetID = strings.Repeat("a", 32)
-			e.ExpectedVersion = 3
-			e.Payload = json.RawMessage(`{}`)
-		}
-		body, _ := json.Marshal(e)
 		before := client.calls
-		if w := request(s, "POST", base+"/commands", string(body), cookie, ""); w.Code != 403 || client.calls != before {
-			t.Fatal("check mutation bypassed CSRF")
-		}
-		if w := request(s, "POST", base+"/commands", string(body), cookie, csrf); w.Code != 200 || client.calls != before+1 || client.envelope.Action != e.Action || client.envelope.TargetID != e.TargetID || client.envelope.ExpectedVersion != e.ExpectedVersion || string(client.envelope.Payload) != string(e.Payload) {
-			t.Fatal("check authorization changed", w.Code, client.envelope)
+		if w := request(s, "GET", "/api/v2/application"+base+path, "", cookie, ""); w.Code != 404 || client.calls != before {
+			t.Fatal("retired read was forwarded", w.Code, client.route)
 		}
 	}
 }

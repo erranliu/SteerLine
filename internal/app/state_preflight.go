@@ -51,14 +51,5 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 			return errors.New("persisted Runner candidate has a different caller or state directory binding")
 		}
 	}
-	checks, err := reader.Checks(ctx, project)
-	if err != nil {
-		return err
-	}
-	for _, check := range checks {
-		if check.Project != project || canonicalPath(check.StateDir) != canonicalPath(runnerstatepath.Directory(c.runnerHome())) {
-			return errors.New("persisted check belongs to another Runner directory")
-		}
-	}
 	return nil
 }

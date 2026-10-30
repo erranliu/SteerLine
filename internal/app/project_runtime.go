@@ -170,10 +170,8 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	if retErr = runner.validateProject(r.config); retErr != nil {
 		return
 	}
-	if retErr = newEnvironmentCheckPort(r.config, r.store).service.VerifyBindings(ctx); retErr != nil {
-		return result, fmt.Errorf("original Runner check binding remains unverified: %w", retErr)
-	}
 	r.config.runtimeMaintenance = newProjectMaintenance(r.config, r.store)
+	r.environment.config.runtimeMaintenance = r.config.runtimeMaintenance
 	maintenanceDone = make(chan struct{})
 	go func() { defer close(maintenanceDone); r.config.runtimeMaintenance.observe(ctx) }()
 	hostPort := host.NewServiceHost(r.hostConfig, "off", r.log, serviceActivityFormatter{})

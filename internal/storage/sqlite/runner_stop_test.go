@@ -36,7 +36,7 @@ func candidateStopFixture(t *testing.T) (*SQLiteStore, string, func(string, bool
 		input := runnerclient.RunInput{Title: record.Title, Repository: runnerclient.Repository{URL: contract.Repository, Remote: contract.Remote, BaseBranch: contract.Branch, BaseRevision: strings.Repeat("a", 40)}, Documents: runnerclient.Documents{Spec: runnerclient.Document{Path: contract.SpecRef.Path}, Plan: runnerclient.Document{Path: contract.PlanRef.Path}}, Publication: runnerclient.Publication{Provider: "gitea", Repository: "Org/Repo", BaseBranch: contract.Branch, Settings: json.RawMessage(`{"base_url":"https://example.invalid"}`)}}
 		raw, _ := json.Marshal(input)
 		c := runnerbridge.Candidate{Project: project, TaskID: record.TaskID, ID: id, Revision: 1, Explicit: true, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", ContractDigest: contract.Digest, BaseRevision: input.Repository.BaseRevision, Participation: "active", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "submit-" + id, Input: raw}}
-		require(t, s.ReserveRunnerCandidate(ctx, taskmodel.FixedWork{Record: record, Contract: contract, Authority: graph.TaskGraph().Authority}, c, extra))
+		require(t, reserveFixtureCandidate(t, s, ctx, taskmodel.FixedWork{Record: record, Contract: contract, Authority: graph.TaskGraph().Authority}, c, extra))
 		c, err = s.Candidate(ctx, project, id)
 		require(t, err)
 		return c

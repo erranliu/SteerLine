@@ -6,9 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -49,7 +46,8 @@ func (p *Project) environmentRules() remotePRRules {
 	return rules
 }
 
-// This is read-only HTTP evidence. It cannot create, approve or merge a PR.
+// Provider evidence uses existing authenticated CLIs for read-only API calls.
+// It cannot create, approve or merge a PR.
 func (p *Project) providerRead(config executionmodel.PRProviderConfig, path string, target any) error {
 	if config.BaseURL == "https://github.com" {
 		raw, err := p.gh(p.Scenario.Context, "api", path)
@@ -58,26 +56,20 @@ func (p *Project) providerRead(config executionmodel.PRProviderConfig, path stri
 		}
 		return json.Unmarshal(raw, target)
 	}
-	ctx, cancel := context.WithTimeout(p.Scenario.Context, 30*time.Second)
-	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, "GET", strings.TrimRight(config.BaseURL, "/")+"/api/v1/"+path, nil)
+	remote, err := url.Parse(p.RemoteURL)
 	if err != nil {
 		return err
 	}
-	if token := os.Getenv(config.TokenEnv); token != "" {
-		request.Header.Set("Authorization", "token "+token)
-	}
-	client := &http.Client{Transport: &http.Transport{Proxy: nil}, CheckRedirect: func(*http.Request, []*http.Request) error { return errors.New("provider redirect refused") }}
-	defer client.CloseIdleConnections()
-	response, err := client.Do(request)
+	provider, err := url.Parse(config.BaseURL)
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
-	if response.StatusCode != 200 {
-		return fmt.Errorf("provider evidence GET returned %d", response.StatusCode)
+	if remote.Host == "" || !strings.EqualFold(remote.Host, provider.Host) {
+		return errors.New("configured Gitea evidence provider differs from the original Git host")
 	}
-	raw, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	// Use the project's existing authenticated provider CLI, just as GitHub
+	// evidence uses gh. No credential extraction or weaker permission fallback.
+	raw, err := p.Driver.RunHelper(p.Scenario.Context, "tea", "api", "--method", "GET", "--repo", p.Repo, path)
 	if err != nil {
 		return err
 	}
@@ -116,7 +108,9 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 	// Explicitly verify the original branch's rules; a new base inherits nothing.
 	sourceBranch := "main"
 	if s.Run.Remote.ProjectConfig != nil {
-		sourceBranch = "AIRefactor"
+		original, err := driver.DecodeProjectConfig(s.Run.Remote.ProjectConfig)
+		s.Must(err)
+		sourceBranch = original.Branch
 	}
 	if config.PR.BaseURL == "https://github.com" {
 		var branch struct {
@@ -236,22 +230,31 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 			s.t.Fatal("required independent PR approvals missing")
 		}
 	}
-	r := loadProgressRemote(s, p)
+	managed := s.ID == "testing.project-environment-orca" || s.Run.Remote.L2Verification == "managed-powershell"
 	script := `$path=Join-Path (Get-Location) '` + strings.ReplaceAll(rules.L2Summary, "'", "''") + `';$text=[IO.File]::ReadAllText($path);if($text.Length -gt 65536){throw 'L2 summary exceeds evidence bound'};$summary=$text|ConvertFrom-Json;`
 	validators := []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"}
-	if s.ID == "testing.project-environment-orca" {
+	if managed {
 		validators = []string{"SteerlineFlow/testing/test-list.json", "tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"}
 	}
 	for _, path := range validators {
 		blob := p.git(p.Repo, "rev-parse", record.Prepared.Commit+":"+path)
 		script += "$blob=(& git hash-object --path " + psProgressLiteral(path) + " " + psProgressLiteral(path) + "|Out-String).Trim();if($LASTEXITCODE -or $blob -cne " + psProgressLiteral(blob) + "){throw 'original L2 validator changed'};"
 	}
-	if s.ID == "testing.project-environment-orca" {
+	if managed {
 		script += `. ./tools/testing/ExecutionPlan.ps1;. ./tools/testing/ManagedReports.ps1;$output=Split-Path $path -Parent;$plan=Get-Content -Raw -LiteralPath (Join-Path $output 'plan.json')|ConvertFrom-Json;if($plan.level -cne 'L2' -or $summary.level -cne 'L2' -or $summary.result -cne 'Passed' -or $plan.shardCount -ne 1 -or $plan.selection.caseId -or $plan.selection.group -or $plan.selection.tag){throw 'not complete project L2'};$definitions=@((Get-Content -Raw ./SteerlineFlow/testing/test-list.json|ConvertFrom-Json).tests|Where-Object level -CEQ 'L2');$selected=@{};foreach($d in $definitions){$selected[$d.id]=$d};$verified=@(Get-ManagedArchitectureResults @{selected=$selected;output=$output} $summary $plan L2);if(!$verified.Count -or $verified.Count -ne $definitions.Count -or @($verified|Where-Object status -CNE 'passed').Count){throw 'original XML/input/cleanup evidence failed'};@{passed=$true;cleanup_complete=$true;level='L2';original_summary=$summary;original_summary_sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash;selected_ids=@($definitions.id);project_verification=@($verified|ForEach-Object {@{test_id=$_.id;status=$_.status}})}`
 	} else {
 		script += `$definitions=@((Get-Content -Raw ./SteerlineFlow/testing/test-list.json|ConvertFrom-Json).tests|Where-Object level -CEQ 'L2');$verified=@($summary.results);if(!$summary.passed -or !$summary.complete -or $summary.exit_code -ne 0 -or !$summary.before_clean -or !$summary.after_clean -or $verified.Count -ne $definitions.Count -or @($summary.details.skipped).Count -or $summary.details.tests_run -le 0){throw 'not complete original project L2'};foreach($d in $definitions){$matches=@($verified|Where-Object test_id -CEQ $d.id);if($matches.Count -ne 1 -or $matches[0].status -cne 'passed' -or $d.id -cnotin @($summary.selection)){throw 'original L2 item not passed'}};@{passed=$true;cleanup_complete=$true;level='L2';original_summary=$summary;original_summary_sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash;selected_ids=@($definitions.id);project_verification=$verified}`
 	}
-	summary, err := r.Shell(s.Context, s, p, last.Run.Execution.Workspace, script)
+	var summary []byte
+	if s.Run.Remote.Profile.Execution.Adapter == "codex-app-server" {
+		cmd, buildErr := localCodexEnvironmentEvidenceCommand(s.Run.Remote.Profile.Execution, last.Run.Execution.Workspace, script)
+		s.Must(buildErr)
+		cmd.Env = p.Driver.Environment(os.Environ())
+		summary, err = s.RunCommandFor(cmd, "local-l2-evidence", 2*time.Minute)
+	} else {
+		r := loadOrcaTarget(s, p)
+		summary, err = r.Shell(s.Context, s, p, last.Run.Execution.Workspace, script)
+	}
 	s.Must(err)
 	// The untouched original summary is retained for project-specific checks.
 	var l2 struct {
@@ -291,7 +294,7 @@ func (p *Project) verifyUnreadyEnvironmentEvidence(record env.Record) {
 	config, err := driver.DecodeProjectConfig(raw)
 	s.Must(err)
 	var prs []json.RawMessage
-	s.Must(p.providerRead(config.PR, "repos/"+config.PR.Repository+"/pulls?state=all&limit=50&base_branch="+url.QueryEscape(record.Prepared.Manifest.ValidationBase), &prs))
+	s.Must(p.providerRead(config.PR, validationPullsPath(config.PR.BaseURL, config.PR.Repository, record.Prepared.Manifest.ValidationBase), &prs))
 	if len(prs) != 0 {
 		s.t.Fatal("requirements failed but a validation PR exists")
 	}

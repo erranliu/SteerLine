@@ -8,12 +8,8 @@ import (
 	"testing"
 	"time"
 
-	contract "github.com/erranliu/SteerLine/internal/product/applicationcontract"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
-	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
-	"github.com/erranliu/SteerLine/internal/testkit/checkfixture"
 )
 
 func TestSharedRunnerBuildPinBeforeService(t *testing.T) {
@@ -43,50 +39,6 @@ func TestSharedRunnerBuildPinBeforeService(t *testing.T) {
 	if bindApplicationRunnerBuild(other, pin) == nil {
 		t.Fatal("existing state adopted without original pin")
 	}
-}
-
-func TestSharedRunnerCheckBindingFailureIsProjectLocal(t *testing.T) {
-	c, _ := nativeTaskFixture(t)
-	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
-	ctx := context.Background()
-	require(t, os.MkdirAll(EtcDir(), 0700))
-	require(t, os.WriteFile(filepath.Join(EtcDir(), "one.json"), projectConfigJSON(t, c), 0600))
-	second := c
-	second.Repository = filepath.Join(t.TempDir(), "second")
-	fixtureGit(t, HomeDir(), "clone", "--quiet", "--no-hardlinks", c.Repository, second.Repository)
-	fixtureGit(t, second.Repository, "remote", "set-url", "origin", "https://github.com/owner/repo.git")
-	second.RunDir = ""
-	require(t, os.WriteFile(filepath.Join(EtcDir(), "two.json"), projectConfigJSON(t, second), 0600))
-	cli, _, err := c.RunnerExecution.Runner.Open(ctx, runnerstatepath.Directory(c.runnerHome()), 5*time.Second)
-	require(t, err)
-	require(t, bindApplicationRunnerBuild(c.runnerHome(), cli.BuildPin()))
-	require(t, runnerstatepath.Prepare(c.runnerHome()))
-	f := checkfixture.Load()
-	record := runnerstate.EnvironmentCheckRecord{StateDir: cli.StateDir, Project: c.Identity(), ID: strings.Repeat("1", 32), Revision: 1, Selection: runnerstate.EnvironmentRunnerPin(c.RunnerExecution.Runner), ResourceDigest: f.ResourceDigest, Input: f.Input, Capabilities: runnercontract.CheckCapabilities(f.Capabilities), CheckID: f.Inspection.Check.CheckID, Report: f.Inspection.Check, CreatedAt: time.Now().UTC(), Operations: []runnerstate.EnvironmentCheckOperation{{RequestID: strings.Repeat("1", 32), Status: "applied"}}}
-	reader, err := OpenNativeTaskProject(ctx, &c)
-	require(t, err)
-	require(t, reader.Close())
-	store, err := OpenNativeTaskCommandStore(ctx, &c)
-	require(t, err)
-	require(t, store.SaveCheck(ctx, record, 0))
-	require(t, store.Close())
-	f.Inspection.Check.CheckID = "foreign-check"
-	require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-check-fixture.json"), mustJSON(f.Inspection), 0600))
-	d := NewApplicationDirectory(c.runnerHome())
-	defer d.Close()
-	d.Start()
-	cat := switchCatalog(t, d, func(v contract.Catalog) bool {
-		return len(v.Projects) == 2 && v.Projects[0].RuntimeState != "starting" && v.Projects[1].RuntimeState != "starting"
-	})
-	if cat.Projects[0].Online || !strings.Contains(cat.Projects[0].Diagnostic, "check binding") || !cat.Projects[1].Online {
-		t.Fatal("unverified check opened project or stopped sibling", cat)
-	}
-	info, err := cli.ServiceStatus(ctx)
-	require(t, err)
-	if info.Status != "ready" || info.InstanceID != d.runner.info.InstanceID {
-		t.Fatal("project check failure replaced/stopped shared service", info)
-	}
-	require(t, d.Close())
 }
 
 func TestSharedRunnerCloseDuringUnknownStart(t *testing.T) {
@@ -128,32 +80,6 @@ func TestSharedRunnerCloseDuringUnknownStart(t *testing.T) {
 	require(t, err)
 	require(t, cli.StopService(context.Background(), info.InstanceID, "fixture-final-stop"))
 	require(t, cli.VerifyServiceSettlement(context.Background(), info.InstanceID, "fixture-final-stop"))
-}
-
-func TestSharedRunnerOfflineChecksKeepOriginalBinding(t *testing.T) {
-	dir := t.TempDir()
-	proof := runnerclient.StoppedVerification{StateDir: dir, ResourcesSettled: true, Checks: []runnerclient.StoppedCheck{{CheckID: "original", InputDigest: "digest", ResourcesSettled: true}}}
-	check := runnerstate.EnvironmentCheckRecord{StateDir: dir, CheckID: "original", Report: &runnercontract.Check{InputDigest: "digest"}}
-	require(t, matchStoppedChecks([]runnerstate.EnvironmentCheckRecord{check}, proof))
-	for _, alter := range []func(*runnerstate.EnvironmentCheckRecord){
-		func(c *runnerstate.EnvironmentCheckRecord) { c.StateDir += "-other" },
-		func(c *runnerstate.EnvironmentCheckRecord) { c.CheckID = "missing" },
-		func(c *runnerstate.EnvironmentCheckRecord) { c.Report = nil },
-		func(c *runnerstate.EnvironmentCheckRecord) { c.CheckID = ""; c.Operations = nil },
-		func(c *runnerstate.EnvironmentCheckRecord) {
-			c.CheckID = ""
-			c.Operations = []runnerstate.EnvironmentCheckOperation{{Status: "outcome_unknown"}}
-		},
-	} {
-		bad := check
-		alter(&bad)
-		if matchStoppedChecks([]runnerstate.EnvironmentCheckRecord{bad}, proof) == nil {
-			t.Fatal("unverified check accepted", bad)
-		}
-	}
-	check.CheckID = ""
-	check.Operations = []runnerstate.EnvironmentCheckOperation{{Status: "rejected"}}
-	require(t, matchStoppedChecks([]runnerstate.EnvironmentCheckRecord{check}, proof))
 }
 
 func TestSharedRunnerRejectsBuildBeforeStart(t *testing.T) {

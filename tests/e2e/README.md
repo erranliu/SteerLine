@@ -75,3 +75,16 @@ PowerShell薄入口分别为`test-execution-profile-discovery.ps1`、`test-proje
 独立 L4 live 专项，未登记到统一受管场景；需要 Windows、Go、Git、Node/npm、Edge、gh、已登录本机 Codex 和 `erranliu/SteerlineTest` 写权限。固定 Runner 必须支持 generate 仓库输入。入口在全新私有目录构建 Go/Web，准备随机专属 base，浏览器从 Markdown 解析、确认、真实文档生成、正文审阅修改，到真实 GitHub 文档 PR 发布合并及入 DAG 编号。它会消耗模型并写外部测试仓库，不能与其他 Web 构建并发。
 
 Playwright `roadmap-live.spec.ts` 通过正式页面和 HTTP 原信封验证刷新不重发、提前零任务、原发布/入图请求重放、防重复映射、DAG 及来源导航；不模拟 API/Runner/provider。自动派发保持关闭。失败保留 trace、截图、原信封及原记录，不自动重跑。`result.json` 只有浏览器全部断言及正常停服/公开 verify-stop、进程/监听清理、原 PR 对账和自有远端分支清理都完成才通过。只删除本轮 head/base，核对默认分支提交未变；保留真实 PR。证据目录仅当前用户可读，认证不写入共享文档。
+
+
+## 本机环境准备 L4
+
+`testing.project-environment-local` 复用同一环境准备/双通道/完整 L2/真实 PR/准入探针及清理驱动。本机 Codex 与本机 Orca 是不同环境；本机/远端 Orca 的外部取证也统一走绑定原目标的公开 repo/terminal create/read/close，只有 Codex 可直接读取原 Run 工作区。按本机 Codex、Orca 分别固定输入执行。显式设置 `STEERLINE_L4_LOCAL_PROFILE` 为独立 `executionconfig.Profile` 文件（local target、development/2），另设 `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERRUNNER_EXE`、正数 `STEERLINE_L4_ROUND_TIMEOUT_SECONDS`。拒绝远端 target，不读取安装 home；本机权限、登录、项目约定工具和 PR 权限由用户预先准备。项目配置可选其真实源码分支，完整 SHA 及版本化材料必须可读取；执行规则须与当前构建同源。只复用受测提交已有的 Python（test-project/project_checks/steerline_reports）或 PowerShell（run-tests/ExecutionPlan/ManagedReports）完整原验证器，自动唯一识别；未知格式或两套歧义在创建现场前阻断，不降级为只信摘要。正式入口：
+
+```powershell
+go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-local -out <全新绝对目录>
+```
+
+live 精确单项串行。仅完整正向通过才能记该本机路径可用；负向阻断、缺输入/材料/能力或资源未知均不得算通过。两种本机 profile 的证据分别记录，不从另一模型/目标推断通过。
+
+本机/远端 Orca 共用正向通过标准：只有正式环境 ready（实际TTY、完整L2、真实PR和原Run收尾全部核实）才算对应 L4 通过。三轮失败仍保存原报告、零派发及无PR证据，然后将正式L4标为失败；不因远端场景而将负向审计算作通过。

@@ -609,7 +609,7 @@ func e2ePackageGoTimeout(entries []e2eScenario) string {
 		// Ordinary controlled/native business is 5m plus independent cleanup.
 		// Heavy isolation/native restart has a 10m body; its parent must not
 		// cut the selected scene at the ordinary 6m package bound.
-		if entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.runner-wait-retry" || entry.ID == "runtime.project-maintenance" {
+		if entry.ID == "testing.project-environment-readiness" || entry.ID == "recovery.waiting-merge-restart" || entry.ID == "recovery.runner-wait-retry" || entry.ID == "runtime.project-maintenance" {
 			minutes += 12
 		} else {
 			minutes += 6
@@ -677,6 +677,22 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 		if err = json.Unmarshal(raw, &evidence); err != nil || evidence.ID != e.ID || !evidence.Passed || !evidence.Cleanup || len(evidence.Resources) == 0 {
 			return fmt.Errorf("invalid or incomplete evidence for %s", e.ID)
 		}
+		if e.ID == "testing.project-environment-readiness" {
+			var proof struct {
+				Projects, Contexts, Candidates int
+				Missing                        bool `json:"missing_rejected"`
+				Isolated                       bool
+				Invalidated                    bool `json:"invalidated_rejected"`
+				Delivery                       bool `json:"original_delivery"`
+			}
+			raw, err := os.ReadFile(filepath.Join(out, "scenarios", e.ID, "readiness-proof.json"))
+			if err != nil {
+				return err
+			}
+			if json.Unmarshal(raw, &proof) != nil || proof.Projects != 2 || proof.Contexts != 2 || proof.Candidates != 2 || !proof.Missing || !proof.Isolated || !proof.Invalidated || !proof.Delivery {
+				return errors.New("missing project/environment qualification and original delivery proof")
+			}
+		}
 		if e.ID == "testing.management-local-codex" {
 			if evidence.Testing == nil {
 				return errors.New("missing test management proof")
@@ -706,6 +722,9 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 }
 
 func supportedLiveScenario(e e2eScenario) bool {
+	if e.ID == remotetest.LocalEnvironment {
+		return e.Level == "L4" && e.Suite == "testing" && e.Package == "./tests/e2e/remote" && e.Chain == "local-environment"
+	}
 	if e.Chain == "orca-remote" && e.Level == "L4" {
 		return (e.ID == remotetest.Discovery && e.Suite == "configuration" || (e.ID == remotetest.Progress || e.ID == remotetest.Environment) && e.Suite == "testing") && e.Package == "./tests/e2e/remote"
 	}

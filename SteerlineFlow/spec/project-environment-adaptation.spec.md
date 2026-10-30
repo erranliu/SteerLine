@@ -16,7 +16,7 @@ Runner 不解析环境适配文档或文件内容，不判断 L2、PR 或环境�
 
 ## 2. 调查基线与前置
 
-SteerLine 调查 HEAD 为 `57623186b63c16be2a5748665e63d52ae615adbf`。`internal/app/environment_checks.go` / `internal/environmentcheck` 当前消费专用 check/v1，仅保存检查原请求和公开报告，不是项目环境准备或任务准入。`internal/taskrunner/service.go` 集中选择 profile 和预留候选，`ReserveRunnerCandidate` 是最终写入边界。项目维护已按[当前收敛 Spec](project-maintenance-simplification.spec.md)自动生成系统测试安排，不能复活其前版通用审阅/apply 入口，也不能将现有单 Plan 生成误称为已支持双文件生成。
+SteerLine 调查 HEAD 为 `57623186b63c16be2a5748665e63d52ae615adbf`。调查时的 `internal/app/environment_checks.go` / `internal/environmentcheck` 消费专用 check/v1；该独立旧功能现已[退役](legacy-environment-check-retirement.spec.md)，不属于本流程。`internal/taskrunner/service.go` 集中选择 profile 和预留候选，`ReserveRunnerCandidate` 是最终写入边界。项目维护已按[当前收敛 Spec](project-maintenance-simplification.spec.md)自动生成系统测试安排，不能复活其前版通用审阅/apply 入口，也不能将现有单 Plan 生成误称为已支持双文件生成。
 
 前序Runner只读基线`5df57b69e98382abcd63676b04a73079fd939fa6`已有远端development Run和progress-file，旧版远端无模型命令要求撤销。result-file按用户提供的Runner `docs/spec/runtime-result-file.spec.md` 2026-10-26最终快照修订稿接入：保留`result_file.initial_content_base64`、`STEERLINE_RESULT_FILE`、`result-file --run-id R --json`，仅结束后封存一次，progress原契约不变。实际接入核对所选构建公开schema/capabilities、提交及EXE SHA，不新增Runner需求。本前提不代表真实联验已通过；构建不具备对应双通道契约则明确拒绝，不能改走终端文本或旧check/v1。
 
@@ -24,13 +24,9 @@ SteerLine 调查 HEAD 为 `57623186b63c16be2a5748665e63d52ae615adbf`。`internal
 
 ## 3. 二态执行资格
 
-以“项目身份 × 远端执行配置”为范围，执行资格只有 `ready`（环境已就绪）和 `not_ready`（环境未就绪）。绑定配置ID及execution摘要；共享占用键仅用已公开的adapter+target.kind+target.environment，不发现主机/归并别名。远端重建或环境名改指机器后须显式重新适配，不承诺自动识别未公开的主机替换。不同项目/配置不自动共用通过结果。
+资格范围、当前引用、失效及新候选统一门禁由 [项目 × 环境准备状态 Spec](project-environment-readiness.spec.md) 取代本节原 profile/完整 execution 绑定规则。本机 Codex、Orca 与远端 Orca 均须准备；环境键仅去除约定的四个模型字段，原 Run 仍冻结完整 execution。当前选择/失效单独持久，原活动仍唯一保存执行状态，不能从最近成功历史回退。原请求重放、结果读取、停止与已授权交付沿原事实，不被新门禁阻断。准备及生成自身不依赖 ready。
 
-未适配、材料缺失/无效、适配中、失败、取消、超时、结果未核实和预算耗尽均为 not_ready；流程进度单独显示，不成为第三种资格。启动新适配时先撤销原 ready。分项结果用于排障，不生成能力标签、任务分类或自动改投建议。
-
-所有使用该远端配置的新任务/新候选入口共用门槛：在实际预留与保存提交意图前校验 ready 及适用依据，事务内复核，失效则零新派发。原请求重放先返回原事实；原候选结果读取、停止、既有交付不受此门槛阻断，不借适配强行中断或重开业务任务。本机执行不纳入本期门槛。适配和生成操作本身不依赖 ready，避免循环前置。
-
-同home仅增加按公开目标键的窄准入占用对象：适配开始时核对已登记项目活动Run/未知写操作，拒绝与其并发；持有适配占用时阻止同键的新候选。各项目原持久记录是事实来源，启动先重建占用再开放新作业；不借用Runner服务启停锁或生成队列，不建调度平台、主机发现、跨库事务或全机锁。跨home/外部工具不在互斥保证内，占用不新增第三种环境资格。
+本规范其余固定材料、TTY、三轮预算、完整 L2/PR、双通道及收尾契约保持，适用于选定目标环境；历史远端验收范围不扩大为本机已验证。
 
 ## 4. 项目材料与稳定生成
 
@@ -103,7 +99,7 @@ ready仅比较项目/配置/execution、两份材料、正式L2定义/入口、�
 
 首版列表显示最近20条活动，按原ID查询完整轮次/文件/生成结果，完整历史仍保留在项目库。Agent回复和原Run说明仅供排障，不作为验收报告；长回复显示有标记的节选。公开HTTP动作及输入输出见[本地客户端协议](../../docs/product-design/local-client-protocol.md)。
 
-现有环境检查的通用基础能力、原历史及原操作读取/收尾保留；本期远端项目级 L2/PR 准入统一使用适配结果，不把旧 check/v1 报告转换为 ready，不为旧数据回填或新增兼容旁路。
+项目级 L2/PR 准入统一使用适配结果，普通 Run 的原请求/停止/结算保持；旧 Check 业务及历史读取入口已退役，不转换为 ready，不为旧数据回填或新增兼容旁路。
 
 环境生成和适配Run分别列入现有具体生命周期入口：启动原请求/Run核验、兼容构建接管、service-start前stop outbox、应用/项目关闭、离线verify-stopped、调试reset与项目状态清理。复用既有逐类型登记方式补本类型，不增加通用registry；未结算原操作阻止破坏性清理，不能因不属于Candidate或旧Generation而漏掉。
 

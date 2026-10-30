@@ -471,13 +471,9 @@ func controlledCapabilities() map[string]any {
 	caps := protocol.RunnerServiceCapabilities("caller-fixture-v1")
 	caps["run_observation"] = map[string]any{"contract": "steerrunner-run-observation/v1", "same_snapshot": true, "max_events": 100}
 	caps["configuration_schemas"].(map[string]any)["adapters"].(map[string]any)["orca-terminal"] = map[string]string{"type": "object"}
-	caps["workflows"].([]any)[0].(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}
-	development := map[string]any{}
-	for key, value := range caps["workflows"].([]any)[0].(map[string]any) {
-		development[key] = value
+	for _, workflow := range caps["workflows"].([]any) {
+		workflow.(map[string]any)["supported_adapters"] = []string{"codex-app-server", "orca-terminal"}
 	}
-	development["version"] = 2
-	caps["workflows"] = append(caps["workflows"].([]any), development)
 	caps["workflows"] = append(caps["workflows"].([]any), map[string]any{"id": "generate", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{}})
 	caps["configuration_schemas"].(map[string]any)["generate_input"] = map[string]any{"type": "object", "required": []string{"workflow", "execution", "generate"}}
 	advertiseRepository(caps)

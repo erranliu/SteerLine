@@ -64,12 +64,12 @@ func TestTMReservationAdmitsOnlyBoundOptionalTestReferences(t *testing.T) {
 					bad.Documents.Spec.Commit = contract.SpecRef.Commit
 				}
 				next.Submit.Input, _ = json.Marshal(bad)
-				if s.ReserveRunnerCandidate(ctx, work, next, false) == nil {
+				if reserveFixtureCandidate(t, s, ctx, work, next, false) == nil {
 					t.Fatalf("accepted %s", mode)
 				}
 			}
 			c.Submit.Input, _ = json.Marshal(input)
-			require(t, s.ReserveRunnerCandidate(ctx, work, c, false))
+			require(t, reserveFixtureCandidate(t, s, ctx, work, c, false))
 			saved, e := s.Candidate(ctx, project, c.ID)
 			require(t, e)
 			if string(saved.TestPlan) != string(snapshot) {

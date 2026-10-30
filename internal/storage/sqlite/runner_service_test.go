@@ -56,6 +56,7 @@ func TestRunnerPresetFreeze(t *testing.T) {
 			return strings.Repeat("c", 40), nil
 		},
 	}
+	prepareFixtureServiceEnvironment(t, s, &svc)
 	svc.PrepareTestPlan = func(_ context.Context, _ taskmodel.FixedWork, run *runnerclient.RunInput) (json.RawMessage, error) {
 		promptCalls++
 		run.Workflow.PromptOverrides = map[string]string{"implement.execute": "Frozen system test context"}

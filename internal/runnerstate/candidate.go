@@ -4,6 +4,7 @@ package runnerstate
 
 import (
 	"encoding/json"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/taskcontract"
 	"time"
@@ -22,6 +23,7 @@ type Action struct {
 }
 
 type Candidate struct {
+	Environment       *envmodel.Admission       `json:"environment,omitempty"`
 	Contract          taskcontract.TaskContract `json:"contract"`
 	MaterialDigest    string                    `json:"material_digest"`
 	TestPlan          json.RawMessage           `json:"test_plan,omitempty"`

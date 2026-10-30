@@ -63,7 +63,7 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 			bad := material
 			bad.Status = "pending"
 			require(t, s.SaveMaterial(ctx, project, bad))
-			if e = s.ReserveRunnerCandidate(ctx, work, candidate, false); e == nil {
+			if e = reserveFixtureCandidate(t, s, ctx, work, candidate, false); e == nil {
 				t.Fatal("unready generation reserved")
 			}
 			g, e := s.TaskGraphSnapshot(ctx, project)
@@ -74,7 +74,7 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 			require(t, s.SaveMaterial(ctx, project, material))
 			first, firstWork = candidate, work
 		}
-		require(t, s.ReserveRunnerCandidate(ctx, work, candidate, i > 0))
+		require(t, reserveFixtureCandidate(t, s, ctx, work, candidate, i > 0))
 		latest, latestWork = candidate, work
 	}
 	// Four further candidates on the latest version are allowed; the sixth is not.
@@ -82,7 +82,7 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 		next := latest
 		next.ID = fmt.Sprintf("%032x", 100+i)
 		next.Submit.RequestID = "submit-" + next.ID
-		e := s.ReserveRunnerCandidate(ctx, latestWork, next, true)
+		e := reserveFixtureCandidate(t, s, ctx, latestWork, next, true)
 		if i < 4 {
 			require(t, e)
 		} else if e == nil {
@@ -91,7 +91,7 @@ func TestPMSCandidateSnapshotCASVersionsAndReplay(t *testing.T) {
 	}
 
 	// Seven historical versions do not consume the five-current-version limit.
-	require(t, s.ReserveRunnerCandidate(ctx, firstWork, first, false))
+	require(t, reserveFixtureCandidate(t, s, ctx, firstWork, first, false))
 	saved, e := s.Candidate(ctx, project, first.ID)
 	require(t, e)
 	if saved.Contract.PlanRef.Commit != first.BaseRevision || saved.MaterialDigest != first.MaterialDigest || saved.Number != 1 {

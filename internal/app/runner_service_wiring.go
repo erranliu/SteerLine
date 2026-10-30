@@ -64,6 +64,15 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			return connection.ReserveRunnerCandidate(ctx, w, c, candidate)
 		}
 	}
+	service.CheckExecution = func(ctx context.Context, id string, refresh bool) error {
+		if config.runtimeEnvironment == nil {
+			return &taskmodel.Error{Code: "environment_not_ready", Message: "项目环境准备门禁不可用"}
+		}
+		if _, _, err := config.runtimeEnvironment.admission(ctx, id, "", refresh); err != nil {
+			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
+		}
+		return nil
+	}
 	previous := service.ReserveExecution
 	service.ReserveExecution = func(ctx context.Context, w taskmodel.FixedWork, candidate runnerbridge.Candidate, alternate bool) error {
 		reserve := func() error {
@@ -76,13 +85,15 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		if err := json.Unmarshal(candidate.Submit.Input, &input); err != nil {
 			return err
 		}
-		target := env.Target(input.Execution)
-		if target == "" {
-			return reserve()
-		}
 		if config.runtimeEnvironment == nil || config.runtimeEnvironmentAdmission == nil {
-			return &taskmodel.Error{Code: "environment_not_ready", Message: "环境未就绪：远端适配门禁不可用"}
+			return &taskmodel.Error{Code: "environment_not_ready", Message: "项目环境准备门禁不可用"}
 		}
+		proof, _, err := config.runtimeEnvironment.admission(ctx, candidate.ProfileID, candidate.BaseRevision, false)
+		if err != nil {
+			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
+		}
+		candidate.Environment = &proof
+		target := env.Target(input.Execution)
 		a := config.runtimeEnvironmentAdmission
 		a.mu.Lock()
 		defer a.mu.Unlock()
@@ -92,9 +103,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		if err := a.check(ctx, target, "", false); err != nil {
 			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 		}
-		if _, err := config.runtimeEnvironment.readyFor(ctx, candidate.ProfileID, candidate.BaseRevision); err != nil {
-			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
-		}
+
 		return reserve()
 	}
 	return service

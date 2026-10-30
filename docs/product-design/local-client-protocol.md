@@ -99,22 +99,19 @@ Web 只提供受限 `/api/v2/application/projects…` 同源转接；不代理�
 
 ## 项目环境适配
 
-同一项目根提供 `GET /environment/options`（远端配置二态/原因及本地生成配置）、`GET /environment`（最近20条活动摘要）及 `GET /environment/{id}`（原活动完整轮次、两通道快照、脚本报告、Agent排障回复或生成文本）。读取不执行环境脚本、不启动Agent。长Agent回复节选标明截断，原内容保留在原Run。
+同一项目根提供 `GET /environment/options`（profiles 与去重 environments 的环境键、当前引用 revision/activity、二态/阶段/原因、材料与历史通过入口，及本地生成配置）、`GET /environment`（最近20条活动摘要）及 `GET /environment/{id}`（原活动完整轮次、两通道快照、脚本报告、Agent排障回复或生成文本）。读取不执行环境脚本、不启动Agent。长Agent回复节选标明截断，原内容保留在原Run。
 
 `POST /commands` 使用以下动作；均沿原项目actor、认证及命令journal，不使用图/控制revision。
 
 | action | target_id / expected_version | payload |
 | --- | --- | --- |
-| `environment_start` | 当前project_id / 1 | `{profile_id,round_timeout_seconds}`，正整数秒；首次加两次重试，每轮同预算 |
+| `environment_start` | 当前project_id / 1 | `{profile_id,round_timeout_seconds,expected_current_revision}`，正整数秒；首次加两次重试，每轮同预算 |
+| `environment_invalidate` | 当前project_id / 1 | `{environment_key,expected_current_revision,reason}`，仅失效本项目组合；引用和原命令回执原子提交 |
 | `environment_generate` | 当前project_id / 1 | `{profile_id,round_timeout_seconds:0}`，选本地Codex只读生成配置；输出准备文档/脚本/gaps，生成不授予准入 |
 | `environment_stop` | 原活动id / 活动revision | `{}`，只处理原活动，取消后零新轮次 |
 
-回执的 `environment` 为活动投影，`applied` 仅表示命令持久受理；任务资格只认环境查询的ready。结果不明时通过原 `GET /commands/{request_id}` 核实，浏览器不因command_not_found补交；重复完整原信封返回原受理记录，变更原信封拒绝。progress持续提供进度，独立result-file仅在原Run结束且停止后封存一次；pr_ready触发停止，不决定ready。result版本0表示未成功采集，closed/0须保留采集diagnostic；closed/1才有最终文件，封存后不刷新。progress及Agent回复不决定ready，Runner停止与最终报告/PR未核实仍阻断新任务。详见[适配Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)。
+回执的 `environment` 为活动投影，`applied` 仅表示命令持久受理；任务资格由当前引用与原活动及材料依据共同决定，查询仅投影。开始/失效的 expected_current_revision 必填，缺行初值 0，不能代替原活动 revision；生成不选择当前引用。本机与远端均受门禁，失效只阻断新候选。结果不明时通过原 `GET /commands/{request_id}` 核实，浏览器不因command_not_found补交；重复完整原信封返回原受理记录，变更原信封拒绝。progress持续提供进度，独立result-file仅在原Run结束且停止后封存一次；pr_ready触发停止，不决定ready。result版本0表示未成功采集，closed/0须保留采集diagnostic；closed/1才有最终文件，封存后不刷新。progress及Agent回复不决定ready，Runner停止与最终报告/PR未核实仍阻断新任务。详见[适配Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)。
 
-## 独立环境检查
+## 旧 Runner Check 接入退役
 
-沿同一项目根提供 `GET /environment-checks/options`（预填/机制能力）、`GET /environment-checks`（本仓历史）与 `GET /environment-checks/{key}`（原请求公开快照/离线缓存）。这些查询不启动服务、Agent 或清理，不要求创建 Task；原命令查询只 inspect 该请求，详情在无未知操作时按可信 check_id 查询。start/stop 复用当前项目持有的原 Runner 实例准入，检查入口不重启 daemon。报告保留 Runner 的源时间、revision、结论和资源状态，读取时间不能冒充新检查时间。
-
-`POST /commands` 新动作 `start_environment_check`：target_id 为项目 project_id、expected_version=0，payload 为 `{profile_id,access_mode}` 或 `{execution,access_mode}`。access_mode 必须为 sandbox/full_access；后者由用户明确选择。`stop_environment_check`：target_id 为原 start 的 32 位 key、expected_version 为原生 report.revision，payload `{}`。二者不使用图/控制 revision；不会修改执行方案或业务权限。
-
-原请求在同一仲裁 namespace 中登记，SQLite 另存绑定与公开快照；`environment_check` 为完整查询投影，仲裁文件仍仅存小型结果摘要。applied 表示命令已确认受理，执行/能力/资源状态见报告。环境检查原写结果未知即只读原 ID，即使 command_not_found/request_not_found 也不补交 POST；同 ID/信封的重复 POST 从原绑定取回结果，不重派，包含 transport 仲裁文件丢失而领域绑定仍在的情形；即使本地绑定提交失败也不以新 ID 补发。尚无可信 check_id/revision 时不能 stop；原 stop 未核实或同 revision 不能再次派发收尾。细节与 Runner 发布前置见 [Spec](../../SteerlineFlow/spec/environment-check.spec.md)。
+旧 `environment-checks` 查询、start/stop 动作和专用投影已删除，不保留兼容入口。环境准备使用上节项目环境活动：项目文档/脚本由普通 Run 执行，Runner 封存 result，SteerLine 判定准备资格。Runner 不承担环境检测业务。[退役规格](../../SteerlineFlow/spec/legacy-environment-check-retirement.spec.md)与[验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)记录实际范围。
