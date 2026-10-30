@@ -29,7 +29,7 @@ execution SHA256 `38d86dbf7fc486ff4c487aaf70fa1f6dea6173fdff72945a474ae1aa502ecb
 
 | 范围 | 原始报告/日志 | 结果 |
 | --- | --- | --- |
-| SteerLine真实pwsh项目脚本 | `diagnostics/script-owner-034bb0116f2542a18c1b1c05d11636a3/test.log` | 5个方法（含多组非法输入子例）全通过，未执行Git/环境探测/测试/认证或PR |
+| SteerLine真实pwsh项目脚本 | `diagnostics/script-owner-034bb0116f2542a18c1b1c05d11636a3/test.log` | 5个方法（含多组非法输入子例）通过；零外部工具调用仅指新增tty-failure场景。原非TTY场景使用隔离Git/伪工具，仍拒绝完整测试和发布 |
 | 完整环境owner | `diagnostics/negative-budget-8221337cd7c44e0ea9597d42d5491794/` | 71项通过、零跳过；新增三轮TTY负报告各原Run停止/结果closed，最终failed/not_ready/settled，无人工取消或第四轮 |
 | 固定提示词/远端输入/正式报告验证器 | `diagnostics/contracts-b46a600260d94d51907b333a8dc0e6ff/` | 156项通过、零跳过 |
 | 308项目真实pwsh报告入口 | `diagnostics/308-script-owner-1e8bba2079cd45068ace12da564b581c/test.log` | 5方法全通过；13个原要求ID均保留，未启动Unity |
@@ -38,6 +38,24 @@ SteerlineTest独立clone `C:/SteerlineDebug/wt-5069-environment-publication-scop
 
 308独立clone同sources下308，固定材料提交 `1c25de58c87b99f44f9fc43f61de09444ba4391d`；仅报告入口/AST/diff验证，未在本机运行Unity/L1/L2。两个项目均未自动合并，未改用户环境配置。
 
-## 待验范围
+## 固定回归与项目PR
 
-固定SteerLine提交的L1、完整L2和受影响readiness L3继续执行。TFR-A04真实远端尚未开始：材料发布前发现台式机64G的Orca再次remote_runtime_unavailable，Gitea192.168.0.66:3000 API超时/EOF、Git空响应，已告知用户恢复连接；不替换远端目标或绕过原注册repo/terminal链。连接恢复后固定新308提交/原Runner/profile，以新正式L4原报告核实三轮负报告正常结束与原Run/自有ref清理；环境not_ready不冒充正向L4通过。
+固定干净源码 `d92784f5e52c8c90eb34eda718a5bef69007d023` 的L1 `test-results/L1/fixed-a5d56372100e43f38973479eb5ebac01/` 通过；完整L2 `test-results/L2/fixed-406b5fcfc8504f50a7167d2a45e6c3d3/` 和readiness L3 `test-results/L3/readiness-b6a02517dd7e4f86b87aa1d36db88836/` 均通过且清理完整。独立审阅者已核对相同干净提交、managed摘要及SHA，未发现新增代码问题。对应Go测试的字节/SHA补充账本为 `diagnostics/owner-test-bytes.json`；不是新增正文批准的替代品。
+
+新项目材料为[SteerlineTest PR703](https://github.com/erranliu/SteerlineTest/pull/703)和[308 PR442](http://192.168.0.66:3000/zymobile/merge-h-308-code/pulls/442)，固定提交如上，未自动合并。应用附件工具不接受HTTP Gitea URL，普通链接保留；这不影响原PR已成功创建。主仓沿[PR413](https://github.com/erranliu/SteerLine/pull/413)维护，原生验收不足时保持草稿。
+
+## TFR-A04真实远端已尝试，受理回执阻断
+
+材料发布前曾出现Orca断连及Gitea超时/EOF，原只读前置 `diagnostics/live-preflight-6eeac7823c5c456ea9eddfd8774ec3e1/` 保存Orca失联/Gitea已恢复的原回执。用户明确恢复连接后，核实同一environment `e68f4edf-8a83-42c2-a9da-6d404d3aa3d8`、runtime `64bdec68-d3ed-4216-a894-0cc143ed4653`、原308注册仓库及Gitea1.27.1。固定输入 `diagnostics/live-inputs-1ce210223a114596a6d69badfe6060b7/manifest.json`：SteerLine d92784f5、308 1c25de58c8、原full_access/gpt-6-luna high/development2 profile、独立Runner SHA256 `7b57b06472ae7c36befa71222cdc6e61f7bc2fda410adee6d6aaf32e58fdc2b5`、1200秒轮次预算，没有更改Runner或目标配置。
+
+实际正式命令：`go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-orca -out C:/SteerlineDebug/wt-5069-tty-failure-report/test-results/L4/remote-negative-472afe0c10bf400ea1f3c042ef9e1b96`，通过manifest显式设置原五项环境变量。原summary passed=false，场景cleanup_complete=false、scratch保留，受管记录不改写。准备前门禁拒绝、固定夹具 `9e7e39c86ce28b7b124f13c604140f4b85a4e9e2` 及原注册根工作区未变已核实。
+
+原活动 `98a1a8ba871248c68d35d306c8a20a48`、Run `48cfdf179ecba234f61ba1b71e40aa67` 在输入阶段持续operation_outcome_unknown：`Original input has no verified acceptance receipt; no input was resent`。原公开inspect为turn_started=false、turn_id为空、无final，can_reply/can_resume均false，仅can_stop=true。精确绑定的原终端仍停在初始化READY，输入区域存在业务草稿，未观察到已启动的检测任务。原回执为 `diagnostics/original-run-10d6fe66e87041cba5dde0014dab0ec1.json`、`original-run-be1819689604401589a5b7acd26aea32.json` 及 `original-terminal-b64157800a5d46f991a832e787b70aa1/{list,read}.json`；不从尚无业务输出推断原写入必然零受理，不重发、直接发送或恢复未知输入。
+
+这是TTY检测前的输入受理链阻断，没有本轮TTY失败或新tty-failure入口已执行的证据，不能据此判定报告入口成功或目标工具缺失。控制仅允许停止后，经原environment_stop请求 `e48fd442e1881bbd56822170228372b0` applied，最终cancelled、仅一轮、原Run stopped；result-file/v1 closed，SHA256 `7da4d4a3f4e5ac2845d244ebf703f91f5a761304d1789996891cb5af59e22bfe`，内容仍初始report2 completed=false、checks/l2为空。原停止回执在 `diagnostics/original-input-unknown-stop-b6fa6308065c4d51a84a8a6c66e9e603/`，观察器随后project_unavailable是原应用已被测试器关闭，不是停止命令失败。
+
+原场景 `308-runner-cleanup.json` confirmed=true；`diagnostics/original-ref-cleanup-bf2aaee65c154b6f8ddda920c20db20c/` 独立核实两个精确Gitea base无PR、原生分支未发布，按原夹具SHA租约原子删除source/validation两条自有ref，未改原失败summary或scratch。Runner结算仍仅确认原Orca终端，明确未验证或撤销detached进程/执行主机凭据，不能扩大保证。
+
+TFR-A01–A03已通过；TFR-A04本次验收失败（检测输入尚未核实受理，新报告入口原生分支未验）。未通过换路径、代写result或伪造TTY故障补证，未修改/重建Runner或部署安装。通用输入受理链恢复后，仍需新独立现场实测原三轮负报告正常结束；受控通过不能代替该原生证据。
+
+最终独立审阅者已核对原Run/input_digest/attempt/generation/session、terminal runtime/handle/incarnation、原初始result逐字节及摘要、正式summary与managed绑定、停止回执及补充清理，批准事实和未验边界；原生失败不改写。619份Markdown/3915条本地链接零错误，测试清单/场景一致性两项通过，diff检查通过。收尾仅补验收文档，已验实现不再变化。
