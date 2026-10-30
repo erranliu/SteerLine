@@ -1,5 +1,9 @@
-param([Parameter(Mandatory)][ValidateSet('tty','prepare','publish')][string]$Phase)
+param(
+    [Parameter(Mandatory)][ValidateSet('tty','prepare','publish','tty-failure')][string]$Phase,
+    [string]$FailureReason
+)
 $ErrorActionPreference='Stop'
+if ($Phase -ne 'tty-failure' -and $PSBoundParameters.ContainsKey('FailureReason')) { throw 'FailureReason is only accepted by tty-failure' }
 . (Join-Path $PSScriptRoot 'environment-tty.ps1')
 if ($Phase -eq 'tty') {
     $tty = Get-EnvironmentTTYCheck
@@ -15,6 +19,7 @@ foreach($path in @($env:STEERLINE_PROGRESS_FILE,$env:STEERLINE_RESULT_FILE)) {
 $report=Get-Content -Raw -LiteralPath $env:STEERLINE_RESULT_FILE|ConvertFrom-Json
 $definitions=@((Get-Content -Raw SteerlineFlow/testing/test-list.json|ConvertFrom-Json).tests|Where-Object level -CEQ L2)
 $manifest=[regex]::Match((Get-Content -Raw SteerlineFlow/environment.md),'(?s)```steerline-environment\r?\n(.*?)\r?\n```').Groups[1].Value|ConvertFrom-Json
+$environmentCheckIds = @('terminal.tty','powershell','git','go','github.auth','source.clean')
 function Write-Atomic($Value,[string]$Path) {
     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($Value|ConvertTo-Json -Depth 20 -Compress))
     if($bytes.Length -gt 65536){throw 'Channel report exceeds 64 KiB'}
@@ -29,7 +34,9 @@ function Set-Progress {
     Write-Atomic $progress $env:STEERLINE_PROGRESS_FILE
 }
 function Invoke-GitValue {$Arguments=$args;$value=@(& git @Arguments);if($LASTEXITCODE){throw ('Git failed: '+$Arguments[0])};return ($value -join "`n").Trim()}
-function Check([string]$Id,[scriptblock]$Probe) {try {$message=[string](& $Probe);$report.checks+=@{id=$Id;status='passed';message=$message}}catch {$report.checks+=@{id=$Id;status='failed';message=$_.Exception.Message}}}
+function Check([string]$Id,[scriptblock]$Probe) {
+    if ($Id -cnotin $environmentCheckIds) { throw 'Undeclared environment check' }
+try {$message=[string](& $Probe);$report.checks+=@{id=$Id;status='passed';message=$message}}catch {$report.checks+=@{id=$Id;status='failed';message=$_.Exception.Message}}}
 function Invoke-GhValue {$Arguments=$args;$value=@(& gh @Arguments);if($LASTEXITCODE){throw ('GitHub command failed: '+$Arguments[0])};return ($value -join "`n")}
 function Verify-L2 {
     $output = Join-Path $root '.steerrunner/artifacts/environment-l2'
@@ -47,6 +54,15 @@ function Verify-L2 {
     }
 }
 
+if ($Phase -eq 'tty-failure') {
+    $originalProgress = Get-Content -Raw -LiteralPath $env:STEERLINE_PROGRESS_FILE | ConvertFrom-Json -AsHashtable
+    $report = Set-EnvironmentTTYFailureReport -Report $report -Progress $originalProgress -CheckIds $environmentCheckIds -L2Ids @($definitions.id) -FailureReason $FailureReason
+    Set-Progress
+    Save-Result
+    [Console]::Error.WriteLine($report.message)
+    exit 1
+}
+
 try {
     if($report.version -ne 2 -or $report.activity_id -notmatch '^[a-f0-9]{32}$' -or $report.round -notin 1,2,3 -or !$definitions.Count){throw 'Invalid original environment input'}
     $head=Invoke-GitValue @('branch','--show-current');$base=[string]$manifest.validation_base
@@ -61,6 +77,7 @@ try {
         Check 'go' {$v=& go version;if($LASTEXITCODE -or $v -notmatch 'go(\d+\.\d+(?:\.\d+)?)' -or [version]$Matches[1] -lt [version]'1.26.0'){throw 'PATH go >=1.26.0 required'};[string]$v}
         Check 'github.auth' {$login=Invoke-GhValue @('api','user','--jq','.login');'GitHub authenticated as '+$login.Trim()}
         Check 'source.clean' {if((Invoke-GitValue @('rev-parse','HEAD')) -cne $report.source_commit -or (Invoke-GitValue @('status','--porcelain'))){throw 'Fixed source must be clean; no automatic restore is performed'};'HEAD matches fixed source; worktree clean'}
+        if (@($report.checks).Count -ne $environmentCheckIds.Count) { throw 'Environment check declarations differ from actual probes' }
         if(@($report.checks|Where-Object status -CNE 'passed').Count){throw ('Environment requirements not met: '+(@($report.checks|Where-Object status -CNE 'passed'|ForEach-Object {$_.id+': '+$_.message}) -join '; '))}
         & go run ./cmd/test-feedback -level=L1 -out .steerrunner/artifacts/environment-l1
         if($LASTEXITCODE){throw 'Original L1 failed; see environment-l1/summary.json'}

@@ -391,6 +391,43 @@ func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testi
 	}
 }
 
+func TestProjectEnvironmentTTYFailureReportSettlesOriginalBudget(t *testing.T) {
+	s, remote, store, _ := setup(t)
+	r := start(t, s)
+	for round := 1; round <= envmodel.MaxRounds; round++ {
+		observe(t, s)
+		r = read(t, s, r.ID)
+		p := report(r, remote, false)
+		p.Checks = []envmodel.Check{
+			{ID: "terminal.tty", Status: "failed", Message: "original TTY process creation failed"},
+			{ID: "git", Status: "incomplete", Message: "not verified after TTY prerequisite failure"},
+		}
+		for i := range p.L2 {
+			p.L2[i].Status, p.L2[i].Message = "incomplete", "not executed after TTY prerequisite failure"
+		}
+		p.PR.CleanupCompleted = true
+		setReport(remote, p)
+		remote.run.Status = "waiting_input"
+		remote.run.Final = &runnercontract.Final{Verified: true, Text: `{"outcome":"blocked"}`}
+		observe(t, s)
+		observe(t, s)
+		s = &env.Service{Project: s.Project, Store: store, Runner: remote, Prepare: s.Prepare, Now: s.Now}
+		got := read(t, s, r.ID)
+		last := got.Rounds[round-1]
+		if got.State == "unverified" || got.Status() != "not_ready" || !last.Settled || last.Report == nil || !last.Report.Completed || last.Report.Checks[0].Status != "failed" || last.Result == nil || last.Result.CollectionStatus != "closed" || last.Run == nil || last.Run.StopStatus != "stopped" || last.Run.PR != nil {
+			t.Fatalf("TTY failure did not close its original round without admission: %+v", got)
+		}
+	}
+	got := read(t, s, r.ID)
+	if got.State != "failed" || !got.Settled() || got.Cancelled || len(got.Rounds) != envmodel.MaxRounds || remote.submits != envmodel.MaxRounds {
+		t.Fatalf("known TTY failures required cancellation or reset budget: %+v", got)
+	}
+	observe(t, s)
+	if remote.submits != envmodel.MaxRounds {
+		t.Fatal("known failure created a fourth Run")
+	}
+}
+
 func TestProjectEnvironmentBlockedFinalStopsOnlyWhenVerified(t *testing.T) {
 	s, remote, _, _ := setup(t)
 	r := start(t, s)

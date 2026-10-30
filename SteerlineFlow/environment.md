@@ -43,6 +43,19 @@ pwsh -NoProfile -File scripts/verify-environment.ps1 -Phase tty
 
 prepare/publish只读取Runner注入的`STEERLINE_PROGRESS_FILE`和`STEERLINE_RESULT_FILE`，保留原活动、轮次、源码和脚本摘要，原子写结果。TTY成功只是一项必需条件，不替代完整L2、真实PR、原Run收尾及结果封存；缺报告、未停止或清理未核实均不能ready。文档及脚本存在不表示当前机器已经通过环境验收。
 
+## TTY前置失败只记录
+
+TTY工具明确未启动，或纯最小探针已结束且明确失败时，保留原工具错误，不换封装重跑检测。若原Agent仍有可用工具，可仅为记录失败使用普通工具（允许tty:false或其他shell）调用：
+
+```powershell
+pwsh -NoProfile -File scripts/verify-environment.ps1 -Phase tty-failure -FailureReason '原工具错误，不含凭据'
+```
+
+此入口不运行TTY探针、prepare、测试、认证或PR，只用原子写入记录terminal.tty=failed、缺失项incomplete，保留原活动/轮次/源码/脚本摘要、previous及同轮已有事实；不得新增passed。入口退出1表示负结果已写，核对result的completed=true和原身份后返回blocked，不因退出1重跑。completed只表示报告完成，环境仍not_ready。
+
+入口只接受初始空报告，或同轮已完成且脚本自有清理已确认的报告；PR URL/head_revision、发布未知、PR进度true、部分报告或非法输入均拒绝，不能清除已有发布事实。超时/受理未知、prepare可能仍有生产者或测试进程时不使用此入口，沿原停止/对账处理。全部工具不可用则保留原未完成报告，不手写result。正常tty/prepare/publish仍只能通过真实TTY执行。
+
+
 ## 发布验收边界
 
 环境报告version=2。目标Agent只验证工具、TTY、完整L2、专属提交/push和原PR创建/查询，记录原URL、base/head及head_revision。分支策略核实、必要检查/审核、精确PR合并及远端测试资源清理由外部交付或L4驱动承担；Agent不查询保护策略或合并PR，不把未执行动作写成通过。ready表示执行及发布能力通过；外部L4闭环结果独立记录，不回写已封存result。

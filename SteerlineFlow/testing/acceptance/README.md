@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+TTY前置失败报告收尾（2026-10-30，实施及脚本/owner验证通过）：[专属验收](environment-tty-failure-report.md)。项目脚本纯失败入口保留原身份/同轮事实，未知生产者或发布事实拒绝覆盖；不改Runner或状态机。三项目脚本及受控三轮收口已验，固定回归及远端实测继续；远端临时离线不算实测通过，不部署。
+
 环境检测按正常发布能力收敛（2026-10-30，实施及本机Codex真实L4通过）：[专属验收](environment-publication-scope.md)。Agent只验执行和PR发布，外部L4负责规则/精确合并；report2、原PR绑定、派发门禁、原Run停止及完整清理已核实。本机Orca待Runner修复；远端再试取得脚本三个配置缺项，但默认TTY启动仍失败、首轮换封装继续不算严格流程通过，第二轮未执行检测；失败与原Run收尾分别保留，不改Runner权限或部署安装环境。
 
 旧 Runner Check 接入退役（2026-10-29，实施与验收完成）：[专属验收](legacy-environment-check-retirement.md)。旧消费者退出，普通Run/result准备与派发门禁保留；完整owner、Web、L1/L2、三条L3、独立Runner真实契约和独立复审通过。原生准备的既有未通过项仍归原验收，未部署安装环境。
