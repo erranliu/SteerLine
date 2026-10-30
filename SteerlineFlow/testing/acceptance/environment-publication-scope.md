@@ -54,6 +54,7 @@ ready须原Runner的provider、仓库及head仓库、URL/base/head/SHA、可用P
 | --- | --- | --- |
 | `test-results/L4/codex-publication-14129cb5d0df4c43ba0752b86c8c44e2/` | 原活动6337eeb9042c43d6a1c3e0c9fc3dad5c、Run31b57c0454ca0fa1bad443360a812453，一轮ready，实际TTY/L1/完整L2/原PR发布和停止封存通过；[PR696](https://github.com/erranliu/SteerlineTest/pull/696)由外部精确合并，原403未再出现 | 整体failed，准入探针缺项目版本化runtime-progress.md，零探针Run；cleanup_complete=true |
 | `test-results/L4/codex-materials-a0afc567a5274fe6bd5fb2de24f7f3ac/` | 一轮ready；[PR697](https://github.com/erranliu/SteerlineTest/pull/697)由外部精确合并；补齐材料后原start_task创建实际Runc0b27815b7565f5475d9e487966371f9 | 整体failed，测试驱动原stop_candidate信封漏TaskID，CLI在提交前拒绝；原Runner随后经公开cleanup confirmed=true，原summary保留cleanup_complete=false与scratch，外部ref补证另存 |
+| `test-results/L4/codex-stop-b4a05ba287bb42d994f724783c747dc7/`（固定实现5632650a） | 一轮ready；[PR698](https://github.com/erranliu/SteerlineTest/pull/698)外部精确合并；原准入Run482971610a56e18c79c73244873cf4a7实际启动 | 整体failed；补TaskID后的stop_candidate被last_candidate规则拒绝，原Runner后续cleanup confirmed=true，原summary保留cleanup_complete=false。说明驱动误把停止原生执行当作退出唯一候选，不能放宽生产规则使其通过 |
 
 材料缺口经正常Git修复：SteerlineTest新增同源 `SteerlineFlow/testing/runtime-progress.md` 及 `tools/testing/RuntimeProgress.ps1`，308新增协议，既有writer未改。新增均0→3196 UTF-8 LF字节；协议SHA256 `587708f00a71eb6a992072c5b12c5aa7f92ed327e2c614e11e33fa4e2e604542`、writer `d39d89f2f3353116c7f507da998f518a27564aa418082faba9a20b68755bfcb4`。独立审阅者逐字核对权威源后批准；原未存在的文件没有运行时inline兜底。账本 `diagnostics/project-validation/runtime-materials-lf.json` 明确LF与磁盘字节：308既有writer正文3196、CRLF磁盘3253，未改变。
 
@@ -61,4 +62,4 @@ ready须原Runner的provider、仓库及head仓库、URL/base/head/SHA、可用P
 
 第二次现场补充清理证据为 `diagnostics/second-native-ref-cleanup-369112a9e794410aba9c5afe771a07b8/`：原PR697精确身份/合并核实、准入source base无PR、原Runner清理confirmed后，按原SHA租约原子删除三条自有ref，另核实准入Run的远端分支不存在。原失败报告和scratch保留，未将补证回写为原清理通过。
 
-测试驱动只补停止信封中同一个原candidate.TaskID，原candidate.ID/revision/request和停止断言不变，生产代码未因此更改。此修正已获独立复核批准；固定新实现后另跑L1/L2及真实L4，不覆盖前两次失败。未修改安装环境或Runner权限。
+第一次驱动修正只补原candidate.TaskID，未解决停止动作选错的问题。最终复用原progress L4的公开Runner停止循环，提为testenv内部窄helper；保留原Run/input_digest、五次结构化stale_revision零受理刷新上限、原请求/回执日志、未知不重发及原Run stopped核验。环境探针保留唯一candidate active，caller核对原candidate/Run/digest及stopped投影；不新增生产接口、第二候选或停止状态机。此实际diff已获独立复核批准。原生progress调用复用helper且原日志名和请求ID保持，定向tagged testenv11项通过。固定后再跑L1/L2与独立L4，前三次失败不覆盖。未修改安装环境或Runner权限。

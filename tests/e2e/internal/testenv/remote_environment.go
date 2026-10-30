@@ -239,7 +239,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 		t.Fatal("native environment remains not_ready; negative evidence was preserved and does not count as a positive L4 pass")
 	}
 	p.Claim("a")
-	var admitted string
+	var admitted, admittedCandidate, admittedDigest string
 	s.Wait("ready candidate actual Run", func() (bool, error) {
 		snap, e := p.Snapshot()
 		if e != nil {
@@ -249,6 +249,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 			if c.RunID != "" {
 				p.verifyRemoteExecution(c.Submit.Input)
 				admitted = c.RunID
+				admittedCandidate, admittedDigest = c.ID, c.InputDigest
 				return true, nil
 			}
 		}
@@ -259,36 +260,19 @@ func runProjectEnvironment(t *testing.T, id string) {
 	service, err := runner.ServiceStatus(s.Context)
 	s.Must(err)
 	runner.InstanceID = service.InstanceID
-	current, err := p.Snapshot()
-	s.Must(err)
-	var stop driver.CandidateCommand
-	for _, candidate := range current.Runner.Candidates {
-		if candidate.RunID == admitted {
-			stop = driver.CandidateCommand{Action: "stop_candidate", RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), TaskID: candidate.TaskID, RunID: candidate.ID, RunRevision: candidate.Revision}
-		}
-	}
-	if stop.RunID == "" {
-		t.Fatal("original admission candidate binding lost")
-	}
-	s.Must(controlled.Write(filepath.Join(s.Output, "admission-stop.json"), stop))
-	stopReceipt, err := p.Driver.Candidate(s.Context, s.Run.Helper, stop)
-	s.Must(err)
-	s.Must(controlled.Write(filepath.Join(s.Output, "admission-stop-receipt.json"), stopReceipt))
-	if stopReceipt.Control == nil || stopReceipt.Control.Status != "applied" {
-		t.Fatal("original candidate stop was not applied", stopReceipt)
-	}
-	s.Wait("admission probe stopped", func() (bool, error) {
-		v, e := runner.Inspect(s.Context, "run-id", admitted, false)
-		return e == nil && v.Run.StopStatus == "stopped", e
-	})
+	s.stopOriginalRun(runner, admitted, admittedDigest, "admission-")
 	s.Wait("caller observed original admission probe stop", func() (bool, error) {
 		state, e := p.Snapshot()
 		if e != nil {
 			return false, e
 		}
 		for _, c := range state.Runner.Candidates {
-			if c.RunID == admitted && c.Projection != nil && c.Projection.StopStatus == "stopped" {
-				return true, nil
+			if c.ID == admittedCandidate {
+				if c.RunID != admitted || c.InputDigest != admittedDigest || c.Participation != "active" {
+					t.Fatal("native stop changed the original participating candidate binding")
+				}
+				s.Must(controlled.Write(filepath.Join(s.Output, "admission-stopped-candidate.json"), c))
+				return c.Projection != nil && c.Projection.StopStatus == "stopped", nil
 			}
 		}
 		return false, nil

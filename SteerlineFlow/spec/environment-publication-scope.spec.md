@@ -18,7 +18,7 @@
 
 本机 Codex、本机 Orca、远端 Orca 共用上述生产判定。本机/远端 Orca 的原 L2 文件取证仍同一公开 repo/terminal 流程，仅 Codex 可直读原工作区。
 
-外部驱动先核对封存报告、原 PR 的仓库/base/head/SHA，再核实项目源码分支实际规则、所需 checks/独立审核；不提供审核批准或绕过保护。之后使用既有 provider 身份合并这个精确 PR，绑定预期 head SHA，并只读核实合并提交。未知合并不重复写，保留原 PR 和资源。结果、原 L2、准入探针、Run 停止、PR 和专属 ref 清理全部核实才记正式 L4 通过。
+外部驱动先核对封存报告、原 PR 的仓库/base/head/SHA，再核实项目源码分支实际规则、所需 checks/独立审核；不提供审核批准或绕过保护。之后使用既有 provider 身份合并这个精确 PR，绑定预期 head SHA，并只读核实合并提交。未知合并不重复写，保留原 PR 和资源。准入探针经公开Runner停止原Run，并让caller核对原candidate/Run/input_digest和stopped投影；保留唯一candidate的active参与关系，不使用退出候选命令或增加第二候选规避业务规则。结果、原 L2、准入探针、Run 停止、PR 和专属 ref 清理全部核实才记正式 L4 通过。
 
 ## 验收
 
