@@ -1,6 +1,6 @@
 # 环境检测发布范围收敛验收
 
-2026-10-30。[Spec](../../spec/environment-publication-scope.spec.md) · [Plan](../../plans/environment-publication-scope.plan.md)。用户确认先收缩脚本到正常交付需要的能力、再重跑本机Codex；实施及本机Codex正式L4已通过，不改Runner权限，不部署安装环境。本机Orca等Runner修复，远端连接未恢复不重跑。
+2026-10-30。[Spec](../../spec/environment-publication-scope.spec.md) · [Plan](../../plans/environment-publication-scope.plan.md)。用户确认先收缩脚本到正常交付需要的能力、再重跑本机Codex；实施及本机Codex正式L4已通过，不改Runner权限，不部署安装环境。本机Orca等Runner修复；远端重连后正式续验在Codex原生启动超时阻断，见末节。
 
 ## 已实施边界
 
@@ -85,3 +85,29 @@ ready须原Runner的provider、仓库及head仓库、URL/base/head/SHA、可用P
 本机Codex在现有权限与工具配置下已证明所需执行/发布能力可用；此前403发生于额外分支策略请求，未保留原HTTP响应体，具体代理归因仍仅为源码推断，不把本次通过当作其来源证明。结论仅覆盖固定项目提交与本机Codex环境；308 Unity、本机Orca及远端Orca未因此获得ready。未部署安装环境，材料PR695/441与主PR412未自动合并。
 
 最终独立只读审阅者 `/root/publication_scope_review` 已复核固定源码L1/完整L2/正式L4原报告、原result摘要及PR/准入/停止/清理证据和本轮验收正文，批准且无剩余确定缺陷；四份失败记录继续保持失败。收尾仅提交验收文档，不再修改已验实现。
+
+## 远端Orca重连后续验
+
+2026-10-30，用户要求核查远端检测并明确已重新连接。新增证据根 `C:/SteerlineDebug/wt-5069-orca-remote-check/`，不覆盖上述本机通过或历史远端失败。断连原证据为 `diagnostics/connection-fee5d913ad1f489396b02327eed5e630/`：原environment的repo list/status均返回remote_runtime_unavailable，已经在工具沙箱外复核。重连后同一environment `e68f4edf-8a83-42c2-a9da-6d404d3aa3d8` 的公开repo list恢复，绑定runtime `3ef455fc-27dd-435f-b43f-1537eb0ea19b`、308仓库 `59f29cc4-7282-47f4-9929-e8fe97fe1628` / `D:/Projects/merge-h-308-code`。
+
+本轮固定干净SteerLine `096a837980573fc167356c0dbc6722ca2029dc8a`、308材料 `ab3ff27eb1dd8a902258a8fbac6feb1bbabf50a6`，沿原远端profile、development/2、full_access、gpt-6-luna/high及1200秒轮次预算。独立Runner EXE SHA256仍为 `7b57b06472ae7c36befa71222cdc6e61f7bc2fda410adee6d6aaf32e58fdc2b5`，version及离线capabilities原回执保留于 `diagnostics/live-inputs-eb190dab15b943bfafc67b8f4a75b887/`，同目录manifest固定原配置。正式命令为 `go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-orca -out C:/SteerlineDebug/wt-5069-orca-remote-check/test-results/L4/308-reconnected-a6f4672f8cdd40c5847bedc96772fc91`，显式使用manifest中的Runner/profile/项目配置/SHA/预算五项变量。
+
+结论为**执行通道失败，尚未运行项目检测**。原正式报告 `test-results/L4/308-reconnected-a6f4672f8cdd40c5847bedc96772fc91/summary.json` passed=false，原场景cleanup_complete=false与scratch保留，不事后改写。准备前派发门禁拒绝通过；同一公开repo/terminal链核实夹具 `379dc1637927a5a0dabf150c4f027e06f99be8de`，原注册根HEAD/状态未变。原活动 `c27f2d0ee4f04d66ad2d67bc36a4acfa`、Run `f045e3198bac656a70d1fe8635a24c3e` 受理并创建原工作区，但远端Codex在TUI bootstrap退出，原终端错误为：
+
+```text
+Error: account/read failed during TUI bootstrap: account/read failed: workspace routing discovery timed out (code -32603)
+```
+
+直接证据为 `diagnostics/original-run-ba0227362074426cb8419e3238c66a2a.json`、`original-terminal-list-b638507768f84228975df1a1b1a82e39.json`、`original-terminal-read-e16b09596e2e46c4988a44e5a0ffc3d2.json`，均为原公开接口只读回执；runtime、terminal handle `term_804b9725-ba5f-465c-bdbb-41cfa1a0537b`、incarnation `fe7b2779-6435-4ccf-975c-37d62a81f84a` 与原Run session一致。原terminal read显示启动错误后回到PowerShell提示符；terminal本身为running仅表示壳PTY仍在，不能当作Codex仍在执行。原Run turn_started=false、turn_id为空、final不可用；TTY、prepare、完整L2、PR均未执行。未绕过Runner直接跑脚本、改shell/profile、重发或恢复业务输入，不能将错误解释成Unity/Python等项目能力缺失，亦未复验此前TTY故障是否消除。
+
+确认启动阻断后，经正式environment_stop原请求 `2e25367b86f7e932a5b916693f8560ff` applied，只取消这一原活动，未开第二轮或新活动绕过预算。停止请求及原回执在 `diagnostics/startup-blocked-stop-6f3e1e6784c844099c4d608823b79fd1/`（沿用诊断工具原permission-failure-*文件名，不表示本次是权限错误）。观察器随后project_unavailable/stopped是测试器已关闭原应用；停止结算以原environment-proof为准：state=cancelled、一轮、原Run stopped，result-file/v1 closed，SHA256 `93213b4650335e5ff231359e79155d436e968056c389e197866d33e11c879e2c`；report2仅初始completed=false、checks/l2为空，不算检测完成或三轮验收。
+
+原场景 `308-runner-cleanup.json` confirmed=true。独立补充清理 `diagnostics/original-ref-cleanup-de63885f89f645be8991240de80fd868/` 查询两个精确Gitea base均无PR、原生执行分支从未发布；原Run停止后，按夹具SHA租约原子删除本轮source/validation两条自有ref并核实不存在。原正式报告及scratch保持失败。Runner的公开结算仅确认原Orca终端停止，明确未验证或撤销detached background processes / execution-host credentials，不扩大为整台远端主机清理证明。
+
+上述远端运行未修改实现或项目材料，不部署安装环境。远端连接已恢复，但Codex原生启动仍阻断；需要先查明远端Codex的workspace routing discovery超时，再以新独立现场验证脚本。现有事实不能证明登录失效，也不能据此改检测标准或Runner权限。本轮独立审阅者 `/root/publication_scope_review` 已批准原生证据和上述事实/收尾边界。
+
+### 续验中发现的发布短提示词一致性修正
+
+独立复核发现已合入的完整规则与 `internal/prompts/environment-publish.md` 短指令仍有职责冲突：后者保留旧“核实原 PR、检查/审核、合并及资源清理”。这是收缩发布范围的遗漏，不是本次bootstrap超时的原因；原Run还未执行publish。按原Spec仅将该句改为“核实原 PR 发布身份及脚本自有资源清理”，同句更新对应可读黄金样本；固定材料读取、prepare完整通过前置、原子报告及原PR URL保留，无新规则、inline兜底或接线变更。短模板UTF-8 LF **260→260字节**，实际渲染正文及无末尾换行黄金样本 **259→259字节**；短模板文件SHA256由 `0bf5359610974f4395e98f09528d970704a4e7e9c6f743922e27d4db83f157ca` 变为 `3b88a840a05b1896988953065110fcd1f7cf8d98b42785dc319d3dd5043a974e`。
+
+最终实际before/after正文、模板/渲染黄金样本分别计字节的账本在本证据根 `diagnostics/publish-short-final-5a7e2cf137574f63b2e1f3b0d09a8097/`。独立审阅者先批准实际diff和260→260字节值，再更新黄金样本，不能用期望值更新替代批准。早期 `diagnostics/publish-short-prompt-1072c19486fd4fb0b345e7c1e1422110/` 仍保留：其中黄金样本更新误带末尾LF，首轮 `diagnostics/prompt-owner-7a92971319224f2cb94a70ffdddc212a/` 正确报expected260/rendered259；已仅恢复原黄金样本无末尾换行约定，未改生产render或放宽断言。完整环境owner `diagnostics/environment-owner-caf385e10dce4a258c45bf4ca8d2f836/` 70项通过、零跳过。模板/接线复验与固定L1/完整L2另取独立目录；本次早于修正的远端失败不是新短指令的原生验收，远端仍未ready。
