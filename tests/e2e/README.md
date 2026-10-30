@@ -87,4 +87,6 @@ go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.
 
 live 精确单项串行。仅完整正向通过才能记该本机路径可用；负向阻断、缺输入/材料/能力或资源未知均不得算通过。两种本机 profile 的证据分别记录，不从另一模型/目标推断通过。
 
-本机/远端 Orca 共用正向通过标准：只有正式环境 ready（实际TTY、完整L2、真实PR和原Run收尾全部核实）才算对应 L4 通过。三轮失败仍保存原报告、零派发及无PR证据，然后将正式L4标为失败；不因远端场景而将负向审计算作通过。
+本机/远端 Orca 共用正向通过标准：只有正式环境ready（实际TTY、完整L2、原PR发布及原Run收尾）且外部规则、精确合并、清理均核实，才算对应L4通过。三轮失败仍保存原报告、零派发及无PR证据，然后将正式L4标为失败；不因远端场景而将负向审计算作通过。
+
+环境报告version2只证明Agent执行及PR发布；分支规则、checks/审核、精确PR合并由外部L4驱动核实。外部合并意图先持久化，未知只读对账、不重复合并；原封存result不回写。完整标准见[发布验收规格](../../SteerlineFlow/spec/environment-publication-scope.spec.md)。

@@ -69,8 +69,8 @@ func (f *environmentWorkflowPeer) Call(_ context.Context, command string, _ []st
 			report.Message = ""
 			report.L2[0].Status = "passed"
 			report.L2[0].Message = ""
-			report.PR = env.PR{URL: "https://example.invalid/pulls/2", Base: input.Publication.BaseBranch, Head: f.run.Execution.Branch, ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("f", 40), CleanupCompleted: true}
-			f.run.PR = &runnercontract.PRFact{URL: report.PR.URL, HeadBranch: report.PR.Head, BaseBranch: report.PR.Base, Merged: true}
+			report.PR = env.PR{URL: "https://example.invalid/pulls/2", Base: input.Publication.BaseBranch, Head: f.run.Execution.Branch, HeadRevision: strings.Repeat("f", 40), CleanupCompleted: true}
+			f.run.PR = &runnercontract.PRFact{State: "open", URL: report.PR.URL, HeadBranch: report.PR.Head, BaseBranch: report.PR.Base, Provider: input.Publication.Provider, Repository: input.Publication.Repository, HeadRepository: input.Publication.Repository, HeadRevision: report.PR.HeadRevision}
 		}
 		f.result, _ = json.Marshal(report)
 	}

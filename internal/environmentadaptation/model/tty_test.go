@@ -10,7 +10,7 @@ import (
 func TestEnvironmentReadinessRequiresCurrentTTYResult(t *testing.T) {
 	for _, status := range []string{"missing", "failed", "incomplete", "passed"} {
 		t.Run(status, func(t *testing.T) {
-			r := env.Report{Completed: true, Checks: []env.Check{{ID: "git", Status: "passed"}}, L2: []env.Item{{ID: "l2", Status: "passed"}}, PR: env.PR{URL: "https://example.invalid/repo/pulls/1", Base: "validation", Head: "head", ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("c", 40), CleanupCompleted: true}}
+			r := env.Report{Version: env.ReportVersion, Completed: true, Checks: []env.Check{{ID: "git", Status: "passed"}}, L2: []env.Item{{ID: "l2", Status: "passed"}}, PR: env.PR{URL: "https://example.invalid/repo/pulls/1", Base: "validation", Head: "head", HeadRevision: strings.Repeat("c", 40), CleanupCompleted: true}}
 			if status != "missing" {
 				r.Checks = append(r.Checks, env.Check{ID: "terminal.tty", Status: status})
 			}

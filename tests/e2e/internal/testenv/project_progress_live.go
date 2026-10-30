@@ -6,13 +6,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -390,51 +388,7 @@ func RunProjectProgress(t *testing.T) {
 	s.Must(os.CopyFS(filepath.Join(s.Output, "original-reports"), os.DirFS(reports)))
 	// This acceptance owns a still-active workflow, rather than a delivered PR.
 	// Settle its original Run explicitly before shutting down the caller service.
-	accepted := false
-	for attempt := 0; attempt < 5; attempt++ {
-		observed, err := runner.Inspect(s.Context, "run-id", runID, false)
-		s.Must(err)
-		if observed.Run == nil || observed.Run.RunID != runID || observed.Run.InputDigest != digest {
-			t.Fatal("original Run identity lost before stop")
-		}
-		if observed.Run.StopStatus == "stopped" {
-			accepted = true
-			break
-		}
-		revision := observed.Run.Revision
-		body, err := json.Marshal(map[string]uint64{"expected_revision": revision})
-		s.Must(err)
-		request := runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "progress-stop-" + runID + "-" + strconv.FormatUint(revision, 10), Input: body}
-		s.Must(controlled.Write(filepath.Join(s.Output, fmt.Sprintf("stop-request-%d.json", attempt)), request))
-		response, err := runner.Call(s.Context, "stop", []string{"--run-id", runID}, &request)
-		s.Must(controlled.Write(filepath.Join(s.Output, fmt.Sprintf("stop-response-%d.json", attempt)), map[string]any{"response": response, "error": fmt.Sprint(err)}))
-		if err == nil {
-			accepted = true
-			break
-		}
-		// Refresh only after a structured zero-acceptance CAS rejection.
-		var rejected *runnerclient.Failure
-		if !errors.As(err, &rejected) || rejected.Code != "stale_revision" || rejected.Unknown {
-			s.Must(err)
-		}
-	}
-	if !accepted {
-		t.Fatal("original Run stop remained stale")
-	}
-	s.Wait("original public Run native stop settlement", func() (bool, error) {
-		observed, err := runner.Inspect(s.Context, "run-id", runID, false)
-		if err != nil || observed.Run == nil {
-			return false, err
-		}
-		s.Must(controlled.Write(filepath.Join(s.Output, "stopped-run.json"), observed.Run))
-		if observed.Run.RunID != runID || observed.Run.InputDigest != digest {
-			t.Fatal("original Run identity changed during stop")
-		}
-		if observed.Run.StopStatus == "unknown" || observed.Run.StopStatus == "unsupported" {
-			t.Fatal("original native stop remains unverified", observed.Run.StopStatus)
-		}
-		return observed.Run.StopStatus == "stopped", nil
-	})
+	s.stopOriginalRun(runner, runID, digest, "")
 	// Let the live caller consume the independently requested native stop before
 	// closing its polling loop. Preserve the same original candidate binding.
 	callerStopCtx, callerStopCancel := context.WithTimeout(s.Context, 30*time.Second)

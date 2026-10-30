@@ -115,7 +115,7 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
-		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
+		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Publication: runnercontract.Publication{Provider: "gitea", Repository: "validation", BaseBranch: "validation"}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
 	}}
 	return service, remote, store, &now
 }
@@ -138,9 +138,9 @@ func read(t *testing.T, s *env.Service, id string) envmodel.Record {
 }
 func report(r envmodel.Record, remote *runner, pass bool) envmodel.Report {
 	a := r.Rounds[len(r.Rounds)-1]
-	p := envmodel.Report{Version: 1, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, Checks: []envmodel.Check{{ID: "terminal.tty", Status: "passed", Message: "controlled current TTY fixture; not native qualification"}}, L2: []envmodel.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
+	p := envmodel.Report{Version: envmodel.ReportVersion, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, Checks: []envmodel.Check{{ID: "terminal.tty", Status: "passed", Message: "controlled current TTY fixture; not native qualification"}}, L2: []envmodel.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
 	if pass {
-		p.PR = envmodel.PR{URL: "https://git/validation/pulls/1", Base: "validation", Head: remote.run.Execution.Branch, ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("c", 40), CleanupCompleted: true}
+		p.PR = envmodel.PR{URL: "https://git/validation/pulls/1", Base: "validation", Head: remote.run.Execution.Branch, HeadRevision: strings.Repeat("c", 40), CleanupCompleted: true}
 	} else {
 		p.L2[1].Status = "failed"
 		p.L2[1].Message = "missing tool"
@@ -150,6 +150,9 @@ func report(r envmodel.Record, remote *runner, pass bool) envmodel.Report {
 }
 func setReport(remote *runner, p envmodel.Report) {
 	remote.body, _ = json.Marshal(p)
+	if p.PR.URL != "" {
+		remote.run.PR = &runnercontract.PRFact{State: "open", URL: p.PR.URL, Provider: "gitea", Repository: "validation", HeadRepository: "validation", BaseBranch: p.PR.Base, HeadBranch: p.PR.Head, HeadRevision: p.PR.HeadRevision}
+	}
 	remote.run.Status = "pr_ready"
 	if p.PR.URL == "" {
 		remote.run.Status = "failed"
@@ -215,8 +218,65 @@ func TestProjectEnvironmentExecutionOnlySealedReportDeterminesAdmission(t *testi
 	observe(t, s)
 	observe(t, s)
 	r = read(t, s, r.ID)
-	if r.Status() == "ready" || len(r.Rounds) != 2 {
+	// The Runner has already observed a PR. A final report that drops its
+	// identity must retain that obligation, not open a second publication round.
+	if r.Status() == "ready" || r.State != "unverified" || len(r.Rounds) != 1 {
 		t.Fatal("ignored final report", r.State, len(r.Rounds))
+	}
+}
+
+func TestEnvironmentPublicationRequiresOriginalRunnerFacts(t *testing.T) {
+	for _, kind := range []string{"unmerged", "closed", "missing_state", "empty_query_error", "missing", "query_error", "provider", "repository", "head_repository", "url", "base", "head", "revision"} {
+		t.Run(kind, func(t *testing.T) {
+			s, remote, _, _ := setup(t)
+			r := start(t, s)
+			observe(t, s)
+			setReport(remote, report(r, remote, true))
+			switch kind {
+			case "closed":
+				remote.run.PR.State = "closed"
+			case "missing_state":
+				remote.run.PR.State = ""
+			case "empty_query_error":
+				p := report(r, remote, true)
+				p.PR = envmodel.PR{CleanupCompleted: true}
+				remote.body, _ = json.Marshal(p)
+				remote.run.PR.URL = ""
+				remote.run.PR.QueryError = "original PR query unavailable"
+			case "missing":
+				remote.run.PR = nil
+			case "query_error":
+				remote.run.PR.QueryError = "original read unavailable"
+			case "provider":
+				remote.run.PR.Provider = "other"
+			case "repository":
+				remote.run.PR.Repository = "other/repo"
+			case "head_repository":
+				remote.run.PR.HeadRepository = "other/repo"
+			case "url":
+				remote.run.PR.URL += "2"
+			case "base":
+				remote.run.PR.BaseBranch = "main"
+			case "head":
+				remote.run.PR.HeadBranch = "other"
+			case "revision":
+				remote.run.PR.HeadRevision = strings.Repeat("d", 40)
+			}
+			for i := 0; i < 4; i++ {
+				observe(t, s)
+			}
+			got := read(t, s, r.ID)
+			if kind == "unmerged" {
+				if got.Status() != "ready" || remote.run.PR.Merged {
+					t.Fatal("publication requires an Agent merge", got.State)
+				}
+			} else if got.State != "unverified" || got.Status() == "ready" {
+				t.Fatal("unverified PR facts admitted", got.State)
+			}
+			if remote.submits != 1 || len(got.Rounds) != 1 {
+				t.Fatal("PR uncertainty created another Run")
+			}
+		})
 	}
 }
 func TestProjectEnvironmentRetryBudgetSurvivesRestart(t *testing.T) {
@@ -471,7 +531,7 @@ func TestProjectEnvironmentExecutionReportStrictness(t *testing.T) {
 	if badURL.Passed("validation", remote.run.Execution.Branch) {
 		t.Fatal("PR URL without host accepted")
 	}
-	for _, change := range []func(*envmodel.Report){func(p *envmodel.Report) { p.PR.ChecksPassed = false }, func(p *envmodel.Report) { p.PR.ReviewsPassed = false }, func(p *envmodel.Report) { p.PR.Merged = false }, func(p *envmodel.Report) { p.PR.CleanupCompleted = false }, func(p *envmodel.Report) { p.PR.OutcomeUnknown = true }, func(p *envmodel.Report) { p.PR.Head = "other" }, func(p *envmodel.Report) { p.PR.Base = "main" }, func(p *envmodel.Report) { p.PR.MergeCommit = "missing" }} {
+	for _, change := range []func(*envmodel.Report){func(p *envmodel.Report) { p.PR.CleanupCompleted = false }, func(p *envmodel.Report) { p.PR.OutcomeUnknown = true }, func(p *envmodel.Report) { p.PR.Head = "other" }, func(p *envmodel.Report) { p.PR.Base = "main" }, func(p *envmodel.Report) { p.PR.HeadRevision = "missing" }} {
 		p := good
 		change(&p)
 		if p.Passed("validation", remote.run.Execution.Branch) {

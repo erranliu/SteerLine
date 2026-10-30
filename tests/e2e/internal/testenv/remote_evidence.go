@@ -29,6 +29,23 @@ type remotePRRules struct {
 	L2Summary        string   `json:"l2_summary"`
 }
 
+type environmentPR struct {
+	Merged bool   `json:"merged"`
+	Merge  string `json:"merge_commit_sha"`
+	State  string `json:"state"`
+	URL    string `json:"html_url"`
+	Base   struct {
+		Ref string `json:"ref"`
+	} `json:"base"`
+	Head struct {
+		Ref string `json:"ref"`
+		SHA string `json:"sha"`
+	} `json:"head"`
+	User struct {
+		Login string `json:"login"`
+	} `json:"user"`
+}
+
 func (p *Project) environmentRules() remotePRRules {
 	s := p.Scenario
 	doc, err := os.ReadFile(filepath.Join(p.Repo, env.DocumentPath))
@@ -87,22 +104,9 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 	number, err := strconv.Atoi(filepath.Base(last.Report.PR.URL))
 	s.Must(err)
 	root := "repos/" + config.PR.Repository
-	var pr struct {
-		Merged bool   `json:"merged"`
-		Merge  string `json:"merge_commit_sha"`
-		Base   struct {
-			Ref string `json:"ref"`
-		} `json:"base"`
-		Head struct {
-			Ref string `json:"ref"`
-			SHA string `json:"sha"`
-		} `json:"head"`
-		User struct {
-			Login string `json:"login"`
-		} `json:"user"`
-	}
+	var pr environmentPR
 	s.Must(p.providerRead(config.PR, root+"/pulls/"+strconv.Itoa(number), &pr))
-	if !pr.Merged || pr.Merge != last.Report.PR.MergeCommit || pr.Base.Ref != record.Prepared.Manifest.ValidationBase || pr.Head.Ref != last.Report.PR.Head || pr.Head.SHA == "" {
+	if pr.URL != last.Report.PR.URL || pr.Base.Ref != record.Prepared.Manifest.ValidationBase || pr.Head.Ref != last.Report.PR.Head || pr.Head.SHA != last.Report.PR.HeadRevision {
 		s.t.Fatal("real provider PR differs from sealed script report")
 	}
 	// Explicitly verify the original branch's rules; a new base inherits nothing.
@@ -177,58 +181,15 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 	}
 	if len(rules.RequiredChecks) > 0 {
 		var status struct {
-			Statuses []struct {
-				Context string `json:"context"`
-				State   string `json:"state"`
-				Status  string `json:"status"`
-			} `json:"statuses"`
+			Statuses []environmentStatus `json:"statuses"`
 		}
 		s.Must(p.providerRead(config.PR, root+"/commits/"+pr.Head.SHA+"/status", &status))
-		for _, required := range rules.RequiredChecks {
-			passed := false
-			for _, st := range status.Statuses {
-				if st.Context == required {
-					passed = st.State == "success" || st.Status == "success"
-					break
-				}
-			}
-			if !passed {
-				s.t.Fatal("required PR check not passed", required)
-			}
-		}
+		s.Must(requireEnvironmentChecks(rules.RequiredChecks, status.Statuses))
 	}
 	if rules.MinimumApprovals > 0 {
-		var reviews []struct {
-			State     string `json:"state"`
-			Dismissed bool   `json:"dismissed"`
-			User      struct {
-				Login string `json:"login"`
-			} `json:"user"`
-		}
+		var reviews []environmentReview
 		s.Must(p.providerRead(config.PR, root+"/pulls/"+strconv.Itoa(number)+"/reviews?limit=100&per_page=100", &reviews))
-		if len(reviews) >= 100 {
-			s.t.Fatal("PR review evidence may be truncated")
-		}
-		latest := map[string]bool{}
-		for _, review := range reviews {
-			if review.User.Login != "" && review.User.Login != pr.User.Login {
-				switch strings.ToUpper(review.State) {
-				case "APPROVED":
-					latest[review.User.Login] = !review.Dismissed
-				case "CHANGES_REQUESTED", "REQUEST_CHANGES", "DISMISSED":
-					latest[review.User.Login] = false
-				}
-			}
-		}
-		count := 0
-		for _, approved := range latest {
-			if approved {
-				count++
-			}
-		}
-		if count < rules.MinimumApprovals {
-			s.t.Fatal("required independent PR approvals missing")
-		}
+		s.Must(requireEnvironmentReviews(rules.MinimumApprovals, pr.User.Login, reviews))
 	}
 	managed := s.ID == "testing.project-environment-orca" || s.Run.Remote.L2Verification == "managed-powershell"
 	script := `$path=Join-Path (Get-Location) '` + strings.ReplaceAll(rules.L2Summary, "'", "''") + `';$text=[IO.File]::ReadAllText($path);if($text.Length -gt 65536){throw 'L2 summary exceeds evidence bound'};$summary=$text|ConvertFrom-Json;`
@@ -270,6 +231,25 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 		s.t.Fatal("original complete L2 summary did not pass/clean up")
 	}
 	s.Must(controlled.Write(filepath.Join(s.Output, "original-l2-summary.json"), json.RawMessage(summary)))
+	pr, err = settleEnvironmentPublication(filepath.Join(s.Output, "environment-pr-merge-intent.json"), last.Report.PR,
+		func() (environmentPR, error) {
+			var current environmentPR
+			err := p.providerRead(config.PR, root+"/pulls/"+strconv.Itoa(number), &current)
+			return current, err
+		}, func() error {
+			if config.PR.BaseURL == "https://github.com" {
+				_, err := p.gh(s.Context, "pr", "merge", last.Report.PR.URL, "--repo", config.PR.Repository, "--merge", "--match-head-commit", last.Report.PR.HeadRevision)
+				return err
+			}
+			body, _ := json.Marshal(map[string]any{"do": "merge", "head_commit_id": last.Report.PR.HeadRevision, "delete_branch_after_merge": false})
+			path := filepath.Join(s.Output, "environment-pr-merge-body.json")
+			if err := os.WriteFile(path, body, 0600); err != nil {
+				return err
+			}
+			_, err := p.Driver.RunHelper(s.Context, "tea", "api", "--method", "POST", "--repo", p.Repo, "--data", "@"+path, root+"/pulls/"+strconv.Itoa(number)+"/merge")
+			return err
+		})
+	s.Must(err)
 	s.Must(controlled.Write(filepath.Join(s.Output, "provider-pr-proof.json"), map[string]any{"pr": pr, "rules": rules, "required_checks_verified": true, "required_reviews_verified": true, "execution_digest": s.Run.Remote.ExecutionDigest}))
 }
 
@@ -285,7 +265,7 @@ func (p *Project) verifyUnreadyEnvironmentEvidence(record env.Record) {
 		if !round.Report.Completed {
 			s.t.Fatalf("round %d did not complete its requirement checks: %s", round.Number, round.Run.Diagnostic)
 		}
-		if round.Report.PR.URL != "" || round.Report.PR.Merged || round.Report.PR.OutcomeUnknown || !round.Report.PR.CleanupCompleted {
+		if round.Report.PR.URL != "" || round.Report.PR.OutcomeUnknown || !round.Report.PR.CleanupCompleted {
 			s.t.Fatal("unready requirements produced unexpected PR effects")
 		}
 	}
