@@ -170,3 +170,35 @@ Web前几轮分别暴露新 GET 在连接核验前启动、旧mock无readiness�
 远程 Orca 正式执行 `test-results/L4/orca-remote-unified-900d93908e7f43eeb412407128422a13/`：同一公开 repo/terminal 取证链核实固定 fixture `c9511d85bd82f88e4205598ecd7fb224f0b5cc0a`、注册根 HEAD/状态不变。原活动 `5cbd074d9b234e4fa46e9f3489aecbb0`、原 Run `6df90914a2ad7c6d59284403e2d39bd8` 取得真实原生身份，`turn_started=true`。已核实身份的原 Agent 原生 final 报告：其 `exec_command(tty:true)` 启动 pwsh TTY 探针时，CreateProcess 返回 `OS Error -1073283067`，prepare、完整 L2 及 PR 均未执行。未另取原工具错误回执，final verified 仅核实该报告的来源，不能当作 TTY 检测通过或错误原因的独立证明。结果仍为初始内容、closed/version1、completed=false，不能判 ready；原 Run stopped，未发送额外 reply/resume 或替代 shell。保存 `original-tty-blocked.json`，正式 environment_stop 回执 applied 后原活动 cancelled/settled，只有一轮，未声称完整三轮。辅助观察器随后遇到 project_unavailable 是测试器已停止该应用，不能误报停止命令失败。
 
 该远端正式 summary 仍 passed=false/cleanup_complete=false；`308-runner-cleanup.json` confirmed 后测试器按原流程移除已结算 namespace，`original-base-pr-reconciliation.json` 独立核实该 Gitea base 无 PR，`post-run-cleanup.json` 另记只删除两条精确 fixture 租约 ref。原 Runner 明确收尾范围为原 Orca 终端，未核实或撤销 detached background processes / execution-host credentials；补证保留这一限制，不把它扩大成全部远端主机资源均已核验。材料、原失败报告、停止回执和 scratch 均保留；未安装工具、修改目标环境配置、切换路径或部署安装环境。
+
+## 2026-10-30 合入后续验与测试收尾修正
+
+本节证据根为 `C:/SteerlineDebug/wt-5069-environment-native-validation/`，与上述历史现场分开。受测主干为 `d9350d5ced1f866e505d4bf36e4ffec76b7c16c8`（PR410 已合入）；固定独立 Runner 0.2.0-dev.4 的 EXE SHA256 为 `7b57b06472ae7c36befa71222cdc6e61f7bc2fda410adee6d6aaf32e58fdc2b5`，资源摘要为 `2db7c54cc80821239b0d2b59a00f9378c718086b824d5770ea90a730bb7a1068`。独立 profile、原项目配置、固定 SHA 和每轮预算冻结于 `diagnostics/inputs-bdde0b0742ac41fa918ea429a0f1a73e/manifest.json`；项目仍分别使用上述已审核材料提交，不运行时改写检测标准。
+
+| 原生路径 / 正式报告目录（相对此节证据根） | 已核实结果与分类 |
+| --- | --- |
+| 本机 Codex：`test-results/L4/codex-local-5ad8365cda0a479ab646d110944a3c21/` | 三轮真实 TTY、L1、完整 L2 通过；原发布脚本查询 `repos/erranliu/SteerlineTest/branches/main` 返回403，未创建 PR。原 Run 分别为 `d794ca877162332d6b9a8b39eec8d26f`、`89944ce8b60388f73cc5c6f71399fe73`、`991da603bc12275d180206eeeb342bfa`，均 settled；活动 failed/not_ready、正式 L4 失败，清理完整。属于权限/执行链阻断，不能据此判项目工具能力不足或 ready。 |
+| 远程 Orca：`test-results/L4/orca-remote-471fbd0f68044d2f879674a0c46afc33/` | 第一次公开 `repo list` 即返回 `remote_runtime_unavailable`，未 Fetch、创建业务 Run 或进入项目检测；正式 L4 失败。外部只读 Orca status 同样失败，本机 Orca ready；固定地址 `192.168.0.56:6768` TCP 可连接，仍不能证明 Orca 会话可用，具体连接失败原因未定位。 |
+| 本机 Orca：`test-results/L4/orca-local-c67284d1b30f4f279154de8278e1fbcf/` | 原 Run `d89a14fcb36845ccfbcff1af0f5eb366` 在 preparation_blocked、turn_started=false，公开诊断为 `remote_sandbox_authentication_unsupported`；正式停止已受理、Runner 清理 confirmed。按用户要求暂停该路径，等待 Runner 通用本机/远端 Orca 链路修复合入；本会话未修改 Runner 行为。 |
+
+`diagnostics/chain-diagnosis-c25f823a9b8c497fa89b86a5802df135/` 保存公开连接状态及调用方现有 gh 查询成功（main protected=false），未提取、复制或切换凭据。只读 Runner 源码发现其 GitHub broker 的允许列表没有 branch 查询，吻合 Agent 的403；原 HTTP 响应来源未独立保留，因此将 broker 归因保留为源码推断，不能写成已证实的远端仓库权限不足，也不在 SteerLine 放宽规则或绕过代理。
+
+远端连接失败前发布的两条 ref，以及本机 Orca 已停止现场的两条 ref，分别经 provider 精确 base 查询无 PR、原 SHA 核对后，以 `--atomic` 和逐 ref `--force-with-lease` 删除；证据为 `diagnostics/owned-ref-cleanup-6d84eeec97bc4603ab004b297e82a55e/`。保留原 summary、停止回执和 scratch，未将原 `cleanup_complete=false` 或正式失败报告改成通过；补证仅结算这四条自有 ref，不扩大原 Runner 的远端资源核验范围。
+
+额外 owner 用例 `TestTwoProjectsIsolateTasksGitAndCleanup` 的历史 maintenance 超时未在保留现场的复现中重现；两个项目材料均自动 ready，不能把该历史失败称为已定位或已修复。此次进一步暴露并修正三处测试生命周期错误：
+
+- 原测试停应用后继续在线 `task list`，必然丢失 discovery；现在在线读取身份和任务数，再正式停止两边。
+- 仅延后停服会让 B 自身后台事务改变全库 revision，不能据此归因 A 清理；现在复用现有 `driver.ReadProjectView` 对原 project/database 做停服后前后快照，保留 DatabaseID、DatabaseRevision 不变断言。
+- A home 原先早于 Runner 最终清理删除；现在先经过原 `CleanupOwnedRunner` / `RemoveStopped`，再停止 GitServer、删除 A。GitServer 的独立30秒期限在 Runner 结算后创建。
+
+没有新生产 API、离线业务接口、测试专用 ready 旁路或兼容路径；5分钟场景期限、任务数、身份、Git/provider、数据库不变及越界删除断言均保留。固定提示词和项目材料正文无 diff，UTF-8 字节数前后相同；本次只改测试生命周期，不宣称修复环境检测能力。临时诊断复制原用例，仅改测试名和产物根以保留现场，已从测试包移除。
+
+| 验证 | 本节证据根下的原始报告 |
+| --- | --- |
+| 保留现场复现：材料 ready 后暴露停服后在线读取失败；未算通过 | `diagnostics/maintenance-repro-8079e53b665541839c1cd06d2b6a9dd6/` |
+| 中间修改暴露 B 在线 revision 变化及 A 提前删除；未算通过 | `diagnostics/testenv-fixed-52f590bf1b624056b5f2bb947aea9f10/` |
+| 最终原用例通过，原5分钟期限，108.97秒、零跳过 | `diagnostics/testenv-offline-a01419369a4940a391acd5527a8d60a2/` |
+| 固定 L1 通过 | `test-results/L1/followup-842ac2cea88043b4af6aacfafd3ed454/` |
+| 固定完整 L2 通过，交付92.23秒、清理完整 | `test-results/L2/followup-693310bd767d47c3923c9c47d3bea55f/` |
+
+独立只读审阅者 `/root/native_followup_review` 已核对当前代码、定向/L1/完整L2原报告及本节验收记录，最终复审通过；其指出的停止期限创建顺序已修正。文档链接613份/3896条/0错误，diff空白检查通过。本次未部署安装环境、改远端机器配置或重发业务请求；三条真实正向 ready 仍未闭合。
