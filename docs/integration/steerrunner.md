@@ -44,14 +44,14 @@ SteerLine 为 Runner 指定本地卷根下的短目录：Windows 为 `<drive>:\s
 
 新提交的恢复、回答和反馈需要当前公开 revision 的显式授权。兼容服务重启保留 Runner 原授权、会话与等待状态，可补收原结果并接续已证明未发送的后继，不因重启批量 resume；原资源丢失、不兼容、业务阻断和显式 stop 仍按原门槛处理。SteerLine 不自动生成新的 submit/reply/resume；旧调用方 pending 控制撤回，unknown 只查原 request_id。Runner 已受理且绑定原问题/执行范围的未发送答案按原授权对账，旧 epoch 或错范围仍需人工确认。不能换 ID 重发未知操作。详见[换代恢复契约](../../SteerlineFlow/spec/service-generation-recovery.spec.md)。
 
-交付摘要只读取已有 Run 投影和原命令回执，分别展示受理、原生结果、业务阶段、PR 与资源停止；命令 completed、pr_ready 和 resources_settled 不能互相替代。刷新不发送输入，不创建资源；完整 environment-check 和纯 validate 按需使用，候选测试进度由独立 progress-file 查询同步，Run 内的权限/来源/发布门槛保持。摘要实现与验收见[可靠性交付简化](../../SteerlineFlow/testing/acceptance/reliable-delivery-simplification.md)。
+交付摘要只读取已有 Run 投影和原命令回执，分别展示受理、原生结果、业务阶段、PR 与资源停止；命令 completed、pr_ready 和 resources_settled 不能互相替代。刷新不发送输入，不创建资源；项目环境准备通过普通 Run/result，纯 validate 按需使用，候选测试进度由独立 progress-file 查询同步，Run 内的权限/来源/发布门槛保持。摘要实现与验收见[可靠性交付简化](../../SteerlineFlow/testing/acceptance/reliable-delivery-simplification.md)。
 
 原生查看通过 `open-native-session --run-id R --attempt-id A --session-id S --generation G` 调用；只有 Runner 发布的 `native_session_viewer.adapters` 中相应 adapter 可用时启用按钮。原服务负责私有 binding 和实时进程/thread/workspace 核验，调用方不读取这些私有材料。详情与本次构建/验证范围见[原会话查看验收](../../SteerlineFlow/testing/acceptance/native-session-viewer.md)。
 
 绑定运行时的业务和查询使用 `--expected-instance-id`，必须选择发布 `instance_binding.expected_instance_id: true` 的 Runner。该参数是实际请求的前置，不能用先查询 status 代替；绑定调用不会隐式启动替代服务。显式重启 SteerLine 后先只读核对原 Run/输入或原 submit 请求，再开放准入。原 pending 输入撤销，unknown 输入只读对账，不自动重发。该增量随两仓协作 PR 同步交付，旧构建不能用于新调用方联验。
 远端 Orca 使用执行主机已有 Codex/Git/gh 登录，通过原生 Orca 链路启动，不部署或运行 SteerRunner helper。远端 agent_launch 的 runtime_executable/runtime_sha256 键（含空值）被公开 schema 拒绝；本机 Orca 受管实现仍可使用 helper。模型、effort、access_mode 只承诺按冻结配置传递。
 
-调试生成器远端入口使用 -Orca -OrcaEnvironment <environment>，可传 -AgentExecutable/-AgentModel/-AgentReasoningEffort，不传 helper 参数。完整远端环境检查为 unsupported，不阻断普通 Run。service verify-stopped 的逐 Run stop_evidence_scope=orca_terminal 由 Runner 只读推导；SteerLine 展示该字段，部署继续只依据 resources_settled，旧未知仍阻断。见[本次接入验收](../../SteerlineFlow/testing/acceptance/orca-remote-native.md)。
+调试生成器远端入口使用 -Orca -OrcaEnvironment <environment>，可传 -AgentExecutable/-AgentModel/-AgentReasoningEffort，不传 helper 参数。旧 Runner 专用 Check 已退役；远端项目准备与本机 Orca 使用同一普通 Run/result 执行、判定和取证流程，本机 Codex 可读取原工作区。service verify-stopped 的逐 Run stop_evidence_scope=orca_terminal 由 Runner 只读推导；SteerLine 展示该字段，部署继续只依据 resources_settled，旧未知仍阻断。见[本次接入验收](../../SteerlineFlow/testing/acceptance/orca-remote-native.md)。
 
 Runner 远端机制已随主干 `d4969d0`（PR #18）合入，其独立验收见 [Orca 远端记录](https://github.com/erranliu/SteerRunner/blob/d4969d0/docs/acceptance/orca-remote-20261017.md)。SteerLine 产品接线的本次结果独立登记在[专属验收](../../SteerlineFlow/testing/acceptance/orca-runtime-wiring.md)，不以 Runner 独立结果替代产品验证或改写旧安装候选。
 

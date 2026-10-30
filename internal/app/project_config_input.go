@@ -93,3 +93,12 @@ func defaultProjectConfigInput() ProjectConfigInput {
 		Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m",
 	}
 }
+
+// DecodeProjectConfigInput is the single decoder for the on-disk project
+// value, including defaults. Adapters must not serialize omitted fields as
+// zero values and thereby override those defaults on the next load.
+func DecodeProjectConfigInput(raw []byte) (ProjectConfigInput, error) {
+	input := defaultProjectConfigInput()
+	err := decodeStrictJSON(raw, &input)
+	return input, err
+}

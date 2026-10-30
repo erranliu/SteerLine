@@ -396,19 +396,9 @@ W/E/V 编号及既有异常、重试和输入恢复语义不变；上表明确�
 
 2026-10-16 执行域遗留清理删除本仓无生产消费者的旧生命周期端口、原生事件处理、候选辅助规则和状态转移函数，以及对应专属测试。产品读取仍使用的值类型和编解码保留；W01–W18、E01–E07、V01–V08 的语义、调用方输入/恢复围栏和交付事务均不变。验证及保留边界见[专属验收](../../SteerlineFlow/testing/acceptance/execution-legacy-cleanup.md)。
 
-### 执行权限与 Git 环境检查的差异及缺口（2026-10-16）
+### 项目环境准备与普通执行的边界
 
-本轮按用户授权实现 [SteerLine 接入 Spec](../../SteerlineFlow/spec/environment-check.spec.md) / [Plan](../../SteerlineFlow/plans/environment-check.plan.md) 的 caller/HTTP/Web；[本仓验收](../../SteerlineFlow/testing/acceptance/environment-check.md)区分调用方自动结果、真实 Runner 契约前置和人工待验。Runner 前置已拆到其仓库 `SteerlineFlow/spec/environment-check.spec.md` / `.plan.md` 与专属 SREC 验收，由 Runner 维护权限和检查契约；本仓不重复定义。检查复用本文件节点/异常语义，不运行 development 的 W15–W17，也不另建 worker 状态机。统一规则的拟议增量与缺口如下：
-
-| 节点 / 异常 / 验证 | 拟议差异与待补能力 |
-| --- | --- |
-| W03 / E03 / V01 | Runner 准备沙箱或使用用户明确选择的完全访问，两种模式均无需审批；检查与普通执行共用权限编译、冻结和实际上下文。拒绝自动审核依赖、临时提权和失败切换模式；完全访问不等于 OS 管理员权限 |
-| W06–W07 / E05–E06 / V02 | 业务同权限确定性预检不增加模型轮次；独立主动检查才增加 Agent 实测。sandbox 复用有效 SA 准备，全访问由本功能补同模式预检、不伪造 MXC。缺原生认证/预检/取证机制为 unsupported；已有机制而缺现场凭据/权限/事实则失败或未核实，模型或全访问不能绕过 |
-| W08–W14 / E04/E07 / V03/V06/V08 | 检查输入与业务输入隔离；原请求未知、迟到和重启零自动输入不变。不把一个模型回合当原子操作；每次外部写动作须有原意图/目标/结算，同轮重复/丢回执不靠提示词去重，不伪造 Task/Candidate |
-| W18 / E04–E05 / V07 | 独立检查会话/工作区/引用/PR 纳入原资源 owner 与服务停服结算；能力结果和清理结果分别保存。按 owned 身份及引用 SHA 清理，不删除冲突或无关资源，不以取消受理证明已停止 |
-| W07 验证边界 | 历史检查不替代新业务工作区的准备核验；本期只检查执行权限与 Git/必需 PR，构建、测试和业务资源后置为项目定制用例 |
-
-Runner 负责以上执行专项（其 SREC-A01–A06），SteerLine 负责原请求与公开报告的项目隔离、绑定及展示（本仓 SLEC-A01–A04）。按实际支持的目标/模式分别交付，远端待前置不冒充已通过，也不阻断可用本机接入；真实发布/集成仍须复用 SA 的最终提交与自身交付门槛已满足。首期三命令、inspect 快照、stop 统一收尾，无独立事件/清理接口；回执/失败报告/单调 revision 由 Runner 公开契约统一，边界 canary 留原生专项验收。本仓原请求持久化、零重派、版本/上下文保护及展示已接入；本轮复审补充 V03/V06/V08：浏览器对账不存在也不自动补发，原 stop 的核验不依赖旧 start，检查写请求复用原实例准入且不能另启常驻 Runner。该准入不执行 Task/DAG 资格核验；Runner 原生权限、SA 正例/L2 与远端机制未在本仓实现或验收，不改写其他工作树的历史结果。
+项目提供版本化环境检测文档和脚本，SteerLine 以固定提示词提交普通 Run，Agent 按文档执行脚本，Runner 沿通用契约封存并读取 result，SteerLine 判定项目×环境的准备资格。Runner 不提供环境检测专用行为。原 Run/input/request、未知不重派、停止与资源结算沿本文件规则，新资格与失效规则见[准备规格](../../SteerlineFlow/spec/project-environment-readiness.spec.md)。旧专用 Check 请求/报告/资源模型已[退役](../../SteerlineFlow/spec/legacy-environment-check-retirement.spec.md)；原版本验收只作历史证据。
 
 W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow stage/status/diagnostic 的真实变化，SteerLine 只投影公开事件。当前可见执行可额外只读查询一条最佳努力消息摘要及通知观察时间；消息缺失、读取错误或页面刷新均不改变执行事实、允许动作、输入授权或恢复资格。V04/V06 增量覆盖白名单/身份隔离、查询零输入、切换与后台取消；自动/人工结果见[专属验收](../../SteerlineFlow/testing/acceptance/execution-observability.md)。
 

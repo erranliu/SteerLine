@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/executionconfig"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
@@ -94,7 +95,11 @@ func TestRemoteL4FrozenConfigurationAndInputs(t *testing.T) {
 func projectFixture(t *testing.T) (string, string) {
 	t.Helper()
 	repo := t.TempDir()
-	for path, body := range map[string]string{"SteerlineFlow/environment.md": "```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```\n", "scripts/verify-environment.ps1": "throw 'fixture only'\n"} {
+	rules, err := prompts.EnvironmentExecutionRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range map[string]string{"SteerlineFlow/environment-execution.md": string(rules), "SteerlineFlow/environment.md": "```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```\n", "scripts/verify-environment.ps1": "throw 'fixture only'\n"} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		if e := os.MkdirAll(filepath.Dir(full), 0700); e != nil {
 			t.Fatal(e)
@@ -130,5 +135,95 @@ func TestRemoteL4RejectsWrongTargetAndMissingInputs(t *testing.T) {
 	}
 	if _, err := Load(Discovery, func(string) string { return "relative.json" }); err == nil {
 		t.Fatal("relative shared profile accepted")
+	}
+}
+
+func TestLocalEnvironmentL4FrozenProfileAndTarget(t *testing.T) {
+	path, p := profileFixture(t)
+	p.Execution.Target = runnercontract.ExecutionTarget{Kind: "local"}
+	repo, commit := projectFixture(t)
+	for _, path := range []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"} {
+		full := filepath.Join(repo, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte("committed original verifier fixture"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, args := range [][]string{{"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "project verifier"}} {
+		if raw, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatal(err, string(raw))
+		}
+	}
+	rawCommit, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit = strings.TrimSpace(string(rawCommit))
+	config := filepath.Join(t.TempDir(), "project.json")
+	raw, _ := json.Marshal(map[string]string{"repository": repo, "branch": "main", "task_authority": "native"})
+	if err := os.WriteFile(config, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	vars := map[string]string{"STEERLINE_L4_LOCAL_PROFILE": path, "STEERLINE_L4_PROJECT_CONFIG": config, "STEERLINE_L4_PROJECT_COMMIT": commit, "STEERLINE_L4_ROUND_TIMEOUT_SECONDS": "900"}
+	get := func(key string) string { return vars[key] }
+	for _, adapter := range []string{"orca-terminal", "codex-app-server"} {
+		p.Execution.Adapter = adapter
+		if adapter == "codex-app-server" {
+			p.Execution.Settings = json.RawMessage(`{"executable":"codex","model":"selected"}`)
+		}
+		raw, _ = json.Marshal(p)
+		if err := os.WriteFile(path, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		in, err := Load(LocalEnvironment, get)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if in.ExecutionDigest != Digest(p.Execution) || in.Commit != commit || in.Project != repo {
+			t.Fatal("local input was not frozen")
+		}
+	}
+	p.Execution.Target = runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8"}
+	raw, _ = json.Marshal(p)
+	_ = os.WriteFile(path, raw, 0600)
+	if _, err := Load(LocalEnvironment, get); err == nil {
+		t.Fatal("local driver accepted remote target")
+	}
+	delete(vars, "STEERLINE_L4_LOCAL_PROFILE")
+	if _, err := Load(LocalEnvironment, get); err == nil {
+		t.Fatal("missing local profile passed")
+	}
+}
+
+func TestLocalEnvironmentL4RejectsUnknownAndAmbiguousL2Verifiers(t *testing.T) {
+	fixtures := map[string][]byte{}
+	show := func(path string) ([]byte, error) {
+		if raw, ok := fixtures[path]; ok {
+			return raw, nil
+		}
+		return nil, os.ErrNotExist
+	}
+	if _, err := environmentL2Verification(show); err == nil {
+		t.Fatal("unknown report format accepted")
+	}
+	for _, path := range []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"} {
+		fixtures[path] = []byte("original")
+	}
+	format, err := environmentL2Verification(show)
+	if err != nil || format != "python" {
+		t.Fatal(format, err)
+	}
+	for _, path := range []string{"tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"} {
+		fixtures[path] = []byte("original")
+	}
+	if _, err := environmentL2Verification(show); err == nil {
+		t.Fatal("ambiguous original verifier accepted")
+	}
+	delete(fixtures, "tools/test-project.py")
+	format, err = environmentL2Verification(show)
+	if err != nil || format != "managed-powershell" {
+		t.Fatal(format, err)
 	}
 }

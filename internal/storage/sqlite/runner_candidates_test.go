@@ -46,9 +46,9 @@ func TestRunnerCandidateReservationAndProjection(t *testing.T) {
 	payload, _ := json.Marshal(fixed)
 	c := runnerbridge.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "candidate", Revision: 1, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "fixture", ContractDigest: contract.Digest, BaseRevision: strings.Repeat("a", 40), Participation: "active", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "original-request", Input: payload}}
 	c.Explicit = true
-	require(t, s.ReserveRunnerCandidate(ctx, work, c, false))
+	require(t, reserveFixtureCandidate(t, s, ctx, work, c, false))
 	// The original request remains replayable after its task version advances.
-	require(t, s.ReserveRunnerCandidate(ctx, work, c, false))
+	require(t, reserveFixtureCandidate(t, s, ctx, work, c, false))
 	graph, err = s.TaskGraphSnapshot(ctx, project)
 	require(t, err)
 	if graph.ByID[c.TaskID].Status != "in_progress" || graph.ByID[c.TaskID].Claimant != "fixture" {
@@ -65,7 +65,7 @@ func TestRunnerCandidateReservationAndProjection(t *testing.T) {
 	second.ID, second.Submit.RequestID = "candidate-two", "second-request"
 	claimedWork := work
 	claimedWork.Record, claimedWork.Authority = graph.ByID[c.TaskID], graph.TaskGraph().Authority
-	require(t, s.ReserveRunnerCandidate(ctx, claimedWork, second, true))
+	require(t, reserveFixtureCandidate(t, s, ctx, claimedWork, second, true))
 	second, err = s.Candidate(ctx, project, second.ID)
 	require(t, err)
 	var secondInput runnerclient.RunInput
@@ -74,7 +74,7 @@ func TestRunnerCandidateReservationAndProjection(t *testing.T) {
 		t.Fatal("second candidate used an ID or stale number for its name", second, secondInput)
 	}
 	// Replay after another allocation must reuse the first number and exact bytes.
-	require(t, s.ReserveRunnerCandidate(ctx, work, c, false))
+	require(t, reserveFixtureCandidate(t, s, ctx, work, c, false))
 	replayed, err := s.Candidate(ctx, project, c.ID)
 	require(t, err)
 	if digestValue(saved) != digestValue(replayed) {

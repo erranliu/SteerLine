@@ -1,5 +1,8 @@
 # 产品读取、命令入口与 Web 容器重构 Spec
 
+2026-10-29：本文涉及的旧 Runner Check 专属 submit/文件已按[退役规格](legacy-environment-check-retirement.spec.md)删除，相关分析只作原版本历史；普通命令仲裁和 native viewer 的边界仍有效。
+
+
 2026-10-16，完成审计后，用户授权实施并提 PR；本 Spec 的 A/B/C 范围已落地，自动/人工结果以专属验收为准。审计基线 `57fadfce9390982748d5ff39e6e378c47f0cf5fc`，包含已合并的应用/项目生命周期收拢。配套 [Plan](../plans/product-read-command-web-refactor.plan.md) 与[专属验收](../testing/acceptance/product-read-command-web-refactor.md)。普通开发，不占 Task ID，不修改 roadmap。
 
 ## 1. 审计结论
@@ -29,7 +32,7 @@
 
 [command_registry.go](../../internal/product/httpapi/command_registry.go) 已是一个实例内的请求仲裁 owner，request_records.go 是唯一文件记录 owner；应保留，不再造第二个中心。实际问题是 validateActionEnvelope、mapIntent、dispatch、matchesCommand/matchesControl 分散解释同一 action；answer_decision、discard_task 和控制载荷在正常路径多次解码、重复构造。
 
-普通 Submit、[环境检查 submitEnvironment](../../internal/product/httpapi/environment_checks.go) 与 OpenNative 的顺序刻意不同：普通命令可持久化拒绝，环境检查先验证再登记，原生窗口必须先保存 outcome_unknown 才执行副作用。它们共用请求 ID 命名空间和锁，不等于必须共用受理流程。重复查询、注册后的重新读取、派发前的新鲜资格核验也不是可直接删除的重复代码。
+普通 Submit、[环境检查 submitEnvironment](https://github.com/erranliu/SteerLine/blob/7617cddc7efac5716c8c38bb63a0157a100acac0/internal/product/httpapi/environment_checks.go) 与 OpenNative 的顺序刻意不同：普通命令可持久化拒绝，环境检查先验证再登记，原生窗口必须先保存 outcome_unknown 才执行副作用。它们共用请求 ID 命名空间和锁，不等于必须共用受理流程。重复查询、注册后的重新读取、派发前的新鲜资格核验也不是可直接删除的重复代码。
 
 现有 command_boundary、reconciliation、API 测试已覆盖并发同 ID、跨 action 冲突、注册窗口竞争、固定映射与权威回执。架构守卫有部分按 command_registry.go 文件名生效，拆文件时必须防止绕过。
 

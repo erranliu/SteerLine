@@ -20,10 +20,10 @@ func (offlineDirectory) Catalog(context.Context) (contract.Catalog, error) {
 	return contract.Catalog{Projects: []contract.Project{}}, nil
 }
 
-func TestEnvironmentCheckReadRoutes(t *testing.T) {
+func TestLegacyCheckRetirementReadRoutes(t *testing.T) {
 	for _, path := range []string{"environment-checks", "environment-checks/options", "environment-checks/" + strings.Repeat("a", 32)} {
-		if !httpcontract.AllowedProjectRead("/" + path) {
-			t.Fatal("check read route not forwarded", path)
+		if httpcontract.AllowedProjectRead("/" + path) {
+			t.Fatal("retired check route still forwarded", path)
 		}
 	}
 	for _, path := range []string{"environment-checks/start", "environment-checks/stop", "environment-checks/cleanup", "environment-checks/../tasks"} {

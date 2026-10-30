@@ -252,10 +252,6 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	if !interrupted && (snapshot.Checkpoint.Service.Status != "stopped" || snapshot.Checkpoint.Service.Ready) {
 		return proof, errors.New("original stopped project checkpoint or frozen configuration differs")
 	}
-	checks, err := reader.Checks(ctx, c.Identity())
-	if err != nil {
-		return proof, err
-	}
 	generations, err := reader.Generations(ctx, c.Identity())
 	if err != nil {
 		return proof, err
@@ -326,11 +322,6 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 				return proof, errors.New("interrupted candidate is absent or its original input differs")
 			}
 		}
-		for _, check := range checks {
-			if !runnerbinding.Check(*takeover[0], check) {
-				return proof, errors.New("interrupted check differs from takeover evidence")
-			}
-		}
 	}
 	if restartPin != nil {
 		cli := runnerclient.Client{Executable: restartPin.Executable, StateDir: restartPin.StateDir, SHA256: restartPin.SHA256, BuildVersion: restartPin.Version, ResourceDigest: restartPin.ResourceDigest}
@@ -393,11 +384,6 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 					needsProof = true
 				}
 			}
-			for _, check := range checks {
-				if check.Selection.SHA256 != restartPin.SHA256 || check.ResourceDigest != restartPin.ResourceDigest {
-					needsProof = true
-				}
-			}
 			if needsProof {
 				cli, err := c.runnerClient(ctx)
 				if err != nil {
@@ -410,7 +396,7 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 				takeover = []*runnercontract.TakeoverReport{&report}
 			}
 		}
-		return proof, matchRestartBindings(c, snapshot.Checkpoint, snapshot.Candidates, checks, *restartPin, takeover...)
+		return proof, matchRestartBindings(c, snapshot.Checkpoint, snapshot.Candidates, *restartPin, takeover...)
 	}
 	if canonicalConfigPath(runnerProof.StateDir) != canonicalConfigPath(runnerstatepath.Directory(c.runnerHome())) {
 		return proof, errors.New("shared Runner directory changed")
@@ -418,13 +404,10 @@ func verifyProjectOfflineMode(ctx context.Context, c Config, p contract.ProjectS
 	if err = matchStoppedCandidates(snapshot.Candidates, runnerProof); err != nil {
 		return proof, err
 	}
-	if err = matchStoppedChecks(checks, runnerProof); err != nil {
-		return proof, err
-	}
 	return proof, nil
 }
 
-func matchRestartBindings(c Config, cp *hostcontract.ServiceCheckpoint, candidates []runnerstate.Candidate, checks []runnerstate.EnvironmentCheckRecord, pin runnercontract.BuildPin, takeover ...*runnercontract.TakeoverReport) error {
+func matchRestartBindings(c Config, cp *hostcontract.ServiceCheckpoint, candidates []runnerstate.Candidate, pin runnercontract.BuildPin, takeover ...*runnercontract.TakeoverReport) error {
 	var proof *runnercontract.TakeoverReport
 	if len(takeover) > 0 {
 		proof = takeover[0]
@@ -433,31 +416,7 @@ func matchRestartBindings(c Config, cp *hostcontract.ServiceCheckpoint, candidat
 	if selected.SHA256 != pin.SHA256 || selected.Version != pin.Version || canonicalConfigPath(selected.Executable) != canonicalConfigPath(pin.Executable) || canonicalConfigPath(pin.StateDir) != canonicalConfigPath(runnerstatepath.Directory(c.runnerHome())) || cp == nil || cp.Service.RunnerBuild == nil || !runnerbinding.SameBuild(*cp.Service.RunnerBuild, pin) {
 		return errors.New("restart project or checkpoint differs from the original Runner build")
 	}
-	return runnerbinding.ValidateRestartBindings(pin, proof, candidates, checks)
-}
-
-func matchStoppedChecks(checks []runnerstate.EnvironmentCheckRecord, runnerProof runnerclient.StoppedVerification) error {
-	byCheck := map[string]runnerclient.StoppedCheck{}
-	for _, v := range runnerProof.Checks {
-		byCheck[v.CheckID] = v
-	}
-	for _, check := range checks {
-		if canonicalConfigPath(check.StateDir) != canonicalConfigPath(runnerProof.StateDir) {
-			return errors.New("check belongs to another Runner directory")
-		}
-		if check.CheckID == "" {
-			if len(check.Operations) == 0 || check.Operations[0].Status != "rejected" {
-				return errors.New("original check submission remains unverified")
-			}
-			continue
-		}
-		v, ok := byCheck[check.CheckID]
-		if !ok || check.Report == nil || check.Report.InputDigest == "" || v.InputDigest != check.Report.InputDigest {
-			return errors.New("original check resource proof is absent or differs")
-		}
-	}
-
-	return nil
+	return runnerbinding.ValidateRestartBindings(pin, proof, candidates)
 }
 
 func verifyStoppedCheckpoint(cp *hostcontract.ServiceCheckpoint, digest string, p contract.ProjectShutdown, id contract.Identity) error {

@@ -1,5 +1,8 @@
 # Spec：执行权限与 Git 环境检查接入
 
+> 2026-10-29 已退役：本文件保留原版本方案作历史追溯，不代表当前要求。当前项目环境准备使用普通 Run/result；删除范围与验证见[退役 Spec](../spec/legacy-environment-check-retirement.spec.md)及其 Plan/验收。
+
+
 日期：2026-10-16。状态：SteerLine caller/HTTP/Web 对齐 Runner 已合入 check/v1 契约，固定 EXE 集成结果见验收。[Plan](../plans/environment-check.plan.md) · [本仓专属验收与审查记录](../testing/acceptance/environment-check.md)。普通开发，无 Task ID，不改 roadmap/execution-map。
 
 ## 1. 目标与规格所有权
@@ -73,7 +76,7 @@ Runner 实现的内部准备、模型轮次数、预算、Git/PR 对象守卫和
 
 - `internal/environmentcheck` 只负责原请求、绑定及公开报告缓存；纯记录由 `internal/runnerstate` 定义。`internal/app/environment_checks.go` 注入固定 EXE 和同项目 SQLite，复用已有 TaskRepositoryTarget 的静态仓库/发布目标/非秘密 URL 校验，装配实际 Publication 与本地已存在的目标 base commit。此复用不包含 Task 领取或 DAG 资格。读取本地 Git 元数据不证明远端权限；未取得来源 commit 时明确拒绝，不偷偷 fetch 或换成 HEAD。
 - `product/api` 的公开投影保留 Runner 文档为 JSON，不依赖 Runner 进程客户端；应用装配处完成投影。HTTP 继续使用既有项目认证、请求 ID 仲裁及 readiness，环境检查不进入 Task/control 用例。
-- 消费 `capabilities.environment_check.contract=steerrunner-environment-check/v1` 和 `targets(adapter/target/access_modes/mechanism/platform)`，只允许 implemented 组合；schema 从同一 capabilities 的 `environment_check_schema` 读取并冻结，使用其 `$defs/input|receipt|inspection`，不远程加载引用。报告原样消费 `input/actual/result/cleanup_status/items[].required/allowed_actions`，资源完成以 `cleanup_status=completed` 为准，stop 权限以 `allowed_actions` 为准。资源摘要仍由 Runner 提供。Check DTO 见[公开值](../../internal/runnercontract/environment_check.go)；[公开同版样例](../../internal/testkit/checkfixture/published-v1.json)直接冻结 Runner 内嵌发布数据，[caller fixture](../../internal/testkit/checkfixture/v1.json)只派生测试上下文与失败报告，不是原生资格证据。删除旧草稿字段，不新增兼容回退。
+- 消费 `capabilities.environment_check.contract=steerrunner-environment-check/v1` 和 `targets(adapter/target/access_modes/mechanism/platform)`，只允许 implemented 组合；schema 从同一 capabilities 的 `environment_check_schema` 读取并冻结，使用其 `$defs/input|receipt|inspection`，不远程加载引用。报告原样消费 `input/actual/result/cleanup_status/items[].required/allowed_actions`，资源完成以 `cleanup_status=completed` 为准，stop 权限以 `allowed_actions` 为准。资源摘要仍由 Runner 提供。Check DTO 见[公开值](https://github.com/erranliu/SteerLine/blob/7617cddc7efac5716c8c38bb63a0157a100acac0/internal/runnercontract/environment_check.go)；[公开同版样例](https://github.com/erranliu/SteerLine/blob/7617cddc7efac5716c8c38bb63a0157a100acac0/internal/testkit/checkfixture/published-v1.json)直接冻结 Runner 内嵌发布数据，[caller fixture](https://github.com/erranliu/SteerLine/blob/7617cddc7efac5716c8c38bb63a0157a100acac0/internal/testkit/checkfixture/v1.json)只派生测试上下文与失败报告，不是原生资格证据。删除旧草稿字段，不新增兼容回退。
 - `GET /environment-checks/options` 提供预填与能力；`GET /environment-checks` 只读本仓历史；`GET /environment-checks/{key}` 在有未知操作时只 inspect 该原请求，已取得绑定后按 check_id 读快照，离线保留源时间与诊断。key 是原 start 的 32 位 request_id，与原生 check_id 分开。无额外 events、cleanup 或启动型 GET。
 - `POST /commands` 的 `start_environment_check` target 为本项目 project_id、expected_version=0，payload 为 `{profile_id,access_mode}` 或 `{execution,access_mode}`；stop_environment_check target 为本地 key，expected_version 为显示时的 Runner report.revision、payload 为 `{}`。两者不带 task/control/graph revision。command receipt 的 applied 只表示原写请求已确认受理，不代表 Agent 已执行或能力通过。
 - SQLite schema 22 新增 environment_checks 与 environment_check_requests，保存固定身份、原请求与缓存；CAS 不改变 Task/DAG/database_revision。schema 21 直接拒绝，不迁移。调试 reset 在检查资源未结算或任何原操作未知时保留恢复记录；已证明安全时按请求关联→检查记录顺序清除本包状态。

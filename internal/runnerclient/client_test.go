@@ -163,7 +163,7 @@ func TestRunnerPresetFreeze(t *testing.T) {
 		t.Setenv("STEERLINE_RACE_MARKER", filepath.Join(dir, "replacement"))
 		t.Setenv("STEERLINE_RACE_BUSINESS", business)
 		c := Client{Executable: exe, StateDir: dir, InstanceID: "A", ResourceDigest: "resources", Timeout: 5 * time.Second}
-		for _, command := range []string{"submit", "reply", "resume", "environment-check start", "inspect"} {
+		for _, command := range []string{"submit", "reply", "resume", "stop", "inspect"} {
 			var request *Request
 			if command != "inspect" {
 				request = &Request{Protocol: Protocol, RequestID: "original-" + strings.ReplaceAll(command, " ", "-"), Input: json.RawMessage(`{}`)}

@@ -341,8 +341,6 @@ export class Api {
         error instanceof ApiError &&
         error.code === "command_not_found" &&
         envelope.action !== "stop_candidate" &&
-        envelope.action !== "start_environment_check" &&
-        envelope.action !== "stop_environment_check" &&
         !envelope.action.startsWith("maintenance_") &&
         !envelope.action.startsWith("environment_")
       ) {

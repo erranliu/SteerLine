@@ -12,6 +12,7 @@ import (
 func TestDeliverySmoke(t *testing.T) {
 	env := testenv.NewScenario(t, "smoke.delivery")
 	p := env.NewProject("delivery")
+	p.PrepareControlledEnvironment("controlled")
 	p.CreateTasks()
 	p.StartService()
 	p.Claim("a")

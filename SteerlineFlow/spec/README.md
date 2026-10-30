@@ -1,5 +1,9 @@
 # 当前 Spec 与 Plan
 
+旧 Runner Check 接入退役（2026-10-29，实施与验收完成）：[Spec](legacy-environment-check-retirement.spec.md) · [Plan](../plans/legacy-environment-check-retirement.plan.md) · [验收](../testing/acceptance/legacy-environment-check-retirement.md)。旧业务/存储/入口及生命周期耦合已删除，当前普通Run/result准备与派发门禁保留；真实新Runner契约、受控回归及独立复审通过。无旧格式兼容，未部署。
+
+项目 × 环境准备状态与统一派发门禁（2026-10-29，实施及受控验证完成）：[Spec](project-environment-readiness.spec.md) · [Plan](../plans/project-environment-readiness.plan.md) · [验收与审计](../testing/acceptance/project-environment-readiness.md)。派生环境键、当前活动引用与派发门禁已实现；三条原生路径已执行但未正向通过，检测通道失败与环境能力结论分别记录，不因旧Check退役改写结果。未部署安装环境。
+
 固定提示词管理与变更门禁（2026-10-28，已实施）：[Spec](prompt-governance.spec.md) · [Plan](../plans/prompt-governance.plan.md) · [审计与验收](../testing/acceptance/prompt-governance.md)。固定文件、小型集中组装、有限源码守卫和黄金样本已接入；定向核心、L1/L2/runtime-progress L3 通过。完整 owner 边界存在已复现的基线失败，未放宽规则；原生 CI 配置已交付，远端保护未启用/未验。
 
 Roadmap Markdown 解析与转正（2026-10-27，已实现并验证）：[Spec](roadmap-promotion.spec.md) · [Plan](../plans/roadmap-promotion.plan.md) · [专属验收计划](../testing/acceptance/roadmap-promotion.md)。只读草稿，经 Runner generate 核对内部任务及已有 DAG 依赖；确认、生成和发布文档全程使用 Roadmap 内部代号，正式入图时才在 Task 批次事务内分配编号和保存映射。文档生成的 Runner 新能力单列为前置；本仓接线及受控验证已实施，已接入固定版本文档生成；真实 Codex 与隔离发布/入图通过，正式浏览器和真实 GitHub 文档 PR 全链及资源清理通过。
@@ -30,7 +34,7 @@ SteerLine / SteerRunner 协作与多 Workflow 接入（2026-10-17，已授权实
 
 应用与项目生命周期收拢（2026-10-16，普通开发，按审计收窄并实施）：[Spec](application-project-lifecycle.spec.md) · [Plan](../plans/application-project-lifecycle.plan.md) · [验收](../testing/acceptance/application-project-lifecycle.md)。删除旧启动链，统一项目资源 owner、部分启动收尾和进程内调用排空；保留原停机/失败策略，不改 roadmap。
 
-执行权限与 Git 环境检查接入（已实现，正式公开契约已对齐）：[Spec](environment-check.spec.md) · [Plan](../plans/environment-check.plan.md) · [本仓验收与审查记录](../testing/acceptance/environment-check.md)。caller/HTTP/Web 自动验证及固定版本本机 full_access 真实正例已有记录，启动配置与报告刷新修复已合入；原生正例仅证明记录中的源码/Runner 版本和模式，不代表全部权限、远端或恢复组合通过。SLEC-M01 完整人工体验仍待安排，Runner 其余专项归其独立 SREC 验收；构建及业务资源后置，不改 roadmap。
+执行权限与 Git 环境检查接入（已退役；以下为历史版本范围）：[Spec](environment-check.spec.md) · [Plan](../plans/environment-check.plan.md) · [本仓验收与审查记录](../testing/acceptance/environment-check.md)。caller/HTTP/Web 自动验证及固定版本本机 full_access 真实正例已有记录，启动配置与报告刷新修复已合入；原生正例仅证明记录中的源码/Runner 版本和模式，不代表全部权限、远端或恢复组合通过。SLEC-M01 完整人工体验仍待安排，Runner 其余专项归其独立 SREC 验收；构建及业务资源后置，不改 roadmap。
 
 SteerRunner 拆分后的测试精简（2026-10-15，普通开发，已实施）：[Spec](runner-test-convergence.spec.md) · [Plan](../plans/runner-test-convergence.plan.md) · [专属验收](../testing/acceptance/runner-test-convergence.md)。原版本执行专项归 Runner；当前 L2 已调整为受控交付冒烟，真实链按现行[测试指南](../testing.md)选择。
 

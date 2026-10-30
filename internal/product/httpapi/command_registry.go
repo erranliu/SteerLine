@@ -15,18 +15,17 @@ import (
 // commandRegistry owns one request-ID namespace across normal commands and
 // native-viewer operations. It has no HTTP request/response or Server access.
 type commandRegistry struct {
-	environmentChecks api.EnvironmentCheckPort
-	projectIdentity   string
-	instanceID        string
-	capabilities      []string
-	query             ProjectQueryPort
-	commands          CommandPort
-	authority         AuthorityPort
-	nativeViewer      NativeSessionPort
-	readiness         *readinessState
-	records           requestRecordAccess
-	mu                sync.Locker
-	requestGates      map[string]*requestGate
+	projectIdentity string
+	instanceID      string
+	capabilities    []string
+	query           ProjectQueryPort
+	commands        CommandPort
+	authority       AuthorityPort
+	nativeViewer    NativeSessionPort
+	readiness       *readinessState
+	records         requestRecordAccess
+	mu              sync.Locker
+	requestGates    map[string]*requestGate
 }
 
 type requestGate struct {
@@ -66,7 +65,7 @@ func (c *commandRegistry) lockRequest(ctx context.Context, id string) (func(), e
 }
 
 func newCommandRegistry(options Options, ports Ports, readiness *readinessState, records requestRecordAccess) *commandRegistry {
-	return &commandRegistry{environmentChecks: environmentPort(ports.Query), projectIdentity: options.ProjectIdentity, instanceID: options.InstanceID,
+	return &commandRegistry{projectIdentity: options.ProjectIdentity, instanceID: options.InstanceID,
 		capabilities: append([]string(nil), options.Capabilities...), query: ports.Query, commands: ports.Commands,
 		authority: ports.Authority, nativeViewer: ports.NativeViewer, readiness: readiness, records: records, mu: &sync.Mutex{}}
 }
@@ -92,9 +91,6 @@ func (c *commandRegistry) Submit(ctx context.Context, envelope CommandEnvelope, 
 		return CommandResponse{}, err
 	}
 	defer unlock()
-	if isEnvironmentCheckAction(envelope.Action) {
-		return c.submitEnvironment(ctx, envelope)
-	}
 	canonical, err := json.Marshal(envelope)
 	if err != nil {
 		return CommandResponse{}, &protocolError{status: http.StatusBadRequest, code: "request_invalid", reason: err.Error()}

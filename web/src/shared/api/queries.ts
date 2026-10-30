@@ -3,10 +3,6 @@ import type { Api } from "./client";
 import type { RunUsageView } from "./run-usage";
 import type { PlanTestsView } from "../../features/runs/plan-tests";
 import type {
-  CheckCatalog,
-  CheckRecord,
-} from "../../features/environment-checks/types";
-import type {
   Activity,
   LastMessageView,
   Candidate,
@@ -104,31 +100,6 @@ export function projectQueries(api: Api) {
         queryFn: ({ signal }) =>
           api.get<PlanTestsView>(
             "/runs/" + encodeURIComponent(run.run_id) + "/tests",
-            signal,
-          ),
-      }),
-    checkOptions: () =>
-      queryOptions({
-        ...defaults,
-        staleTime: 60000,
-        queryKey: [...scope, "check-options"],
-        queryFn: ({ signal }) =>
-          api.get<CheckCatalog>("/environment-checks/options", signal),
-      }),
-    checks: () =>
-      queryOptions({
-        ...defaults,
-        queryKey: [...scope, "checks"],
-        queryFn: ({ signal }) =>
-          api.get<{ checks: CheckRecord[] }>("/environment-checks", signal),
-      }),
-    check: (id: string) =>
-      queryOptions({
-        ...defaults,
-        queryKey: [...scope, "check", id],
-        queryFn: ({ signal }) =>
-          api.get<{ check: CheckRecord }>(
-            "/environment-checks/" + encodeURIComponent(id),
             signal,
           ),
       }),
@@ -285,11 +256,6 @@ export function invalidateCommand(
         return false;
       const resource = String(key[3]);
       if (action.startsWith("environment_")) return resource === "environment";
-      if (
-        action === "start_environment_check" ||
-        action === "stop_environment_check"
-      )
-        return resource === "checks" || resource === "check";
       if (taskActions.has(action)) return taskResources.has(resource);
       if (affectsOutput && typeof runID === "string" && runID) {
         return (

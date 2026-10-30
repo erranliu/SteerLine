@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight, Play, Plus } from "lucide-react";
+import { useEnvironmentReadiness } from "../environment-checks/use-readiness";
 import { useWorkspace } from "../../app/context";
-import {RoadmapTaskSource} from "../roadmaps/roadmaps";
-import {TaskMaterials} from "./task-materials";
+import { RoadmapTaskSource } from "../roadmaps/roadmaps";
+import { TaskMaterials } from "./task-materials";
 import { projectQueries } from "../../shared/api/queries";
 import { Button } from "../../shared/ui/button";
 import { participating } from "../runs/state";
@@ -19,6 +20,7 @@ export function TaskDetail({
 }) {
   const { api, online, snapshot, candidateStarts } = useWorkspace();
   const navigate = useNavigate();
+  const environment = useEnvironmentReadiness();
   const [starting, setStarting] = useState(false);
   const [profile, setProfile] = useState("");
   const detail = useQuery({
@@ -51,9 +53,19 @@ export function TaskDetail({
     (candidates.length > 0 ||
       pendingStarts.some((entry) => entry.participating));
   const participatingIDs = new Set([
-    ...candidates.filter(run=>participating(run)&&run.material_status!=="outdated").map((run) => run.run_id),
+    ...candidates
+      .filter((run) => participating(run) && run.material_status !== "outdated")
+      .map((run) => run.run_id),
     ...(task?.workflow_runs
-      ?.filter((run) => run.participation === "active" && !candidates.some(c=>c.run_id===run.workflow_run_id&&c.material_status==="outdated"))
+      ?.filter(
+        (run) =>
+          run.participation === "active" &&
+          !candidates.some(
+            (c) =>
+              c.run_id === run.workflow_run_id &&
+              c.material_status === "outdated",
+          ),
+      )
       .map((run) => run.workflow_run_id) ?? []),
     ...pendingStarts
       .filter((entry) => entry.participating)
@@ -106,7 +118,12 @@ export function TaskDetail({
     !selected || selected.unavailable_reason
       ? selected?.unavailable_reason || "没有可用执行方案"
       : "";
-  const reason = startReason || profileReason;
+  const preparation = environment.data?.profiles?.find((p) => p.id === chosen);
+  const environmentReason =
+    preparation?.status === "ready"
+      ? ""
+      : preparation?.reason || "环境准备状态尚未核实";
+  const reason = startReason || profileReason || environmentReason;
   if (!task)
     return (
       <div className="empty">
@@ -150,8 +167,8 @@ export function TaskDetail({
       <div className="detail-section">
         <h3>任务文档</h3>
         <p className="path">{task.spec_path || "未关联规格"}</p>
-        <RoadmapTaskSource task={id}/>
-      <TaskMaterials id={id}/>
+        <RoadmapTaskSource task={id} />
+        <TaskMaterials id={id} />
         <p className="muted">
           Task v{task.version} · 图 v{detail.data?.graph_revision}
         </p>
@@ -220,6 +237,11 @@ export function TaskDetail({
             </p>
           ))}
           {reason && <p className="muted">{reason}</p>}
+          {environmentReason && (
+            <Link to={`/projects/${api.identity.project_id}/environment`}>
+              前往环境准备
+            </Link>
+          )}
           <div className="actions">
             <Button onClick={() => setStarting(false)}>取消</Button>
             <Button

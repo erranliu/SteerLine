@@ -75,7 +75,7 @@ function setup(existing = false, requests: StoredRequest[] = []) {
   client.setQueryData(options.presentation().queryKey, presentation);
   vi.spyOn(api, "get").mockImplementation(
     async (path) =>
-      (path === "/presentation"
+      (path === "/environment/options" ? { profiles: [{ id: "one", status: "ready" },{id:"orca-remote-desktop64g-xhigh",status:"ready"}], environments: [] } : path === "/presentation"
         ? presentation
         : path.includes("/activity?")
           ? {

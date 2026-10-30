@@ -56,6 +56,7 @@ func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 }
 
 var nativeTaskSchema = []string{
+	`CREATE TABLE project_environment_current (project_identity TEXT NOT NULL, environment_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,environment_key))`,
 	`CREATE TABLE roadmaps (project_identity TEXT NOT NULL, roadmap_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,roadmap_id))`,
 	`CREATE TABLE roadmap_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, roadmap_id TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,roadmap_id) REFERENCES roadmaps(project_identity,roadmap_id))`,
 	`CREATE TABLE task_number_sequences (repository TEXT PRIMARY KEY, next_id INTEGER NOT NULL CHECK(next_id>=0))`,
@@ -68,8 +69,6 @@ var nativeTaskSchema = []string{
 	`CREATE TABLE test_generations (project_identity TEXT NOT NULL, generation_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,generation_id))`,
 	`CREATE TABLE candidate_progress ( project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,
 	`CREATE TABLE test_generation_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, generation_id TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,generation_id) REFERENCES test_generations(project_identity,generation_id))`,
-	`CREATE TABLE environment_checks (project_identity TEXT NOT NULL, check_key TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity,check_key))`,
-	`CREATE TABLE environment_check_requests (project_identity TEXT NOT NULL, request_id TEXT NOT NULL, check_key TEXT NOT NULL, PRIMARY KEY(project_identity,request_id), FOREIGN KEY(project_identity,check_key) REFERENCES environment_checks(project_identity,check_key))`,
 	`CREATE TABLE runner_candidates (project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, task_id TEXT NOT NULL, revision INTEGER NOT NULL CHECK(revision>0), request_id TEXT NOT NULL, run_id TEXT NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity,candidate_id), UNIQUE(project_identity,candidate_id,task_id), UNIQUE(project_identity,request_id), FOREIGN KEY(project_identity,task_id) REFERENCES tasks(project_identity,task_id))`,
 	`CREATE UNIQUE INDEX runner_candidate_run ON runner_candidates(project_identity,run_id) WHERE run_id<>''`,
 	`CREATE TABLE runner_events (seq INTEGER PRIMARY KEY AUTOINCREMENT, project_identity TEXT NOT NULL, candidate_id TEXT NOT NULL, event_id TEXT NOT NULL, payload BLOB NOT NULL, UNIQUE(project_identity,candidate_id,event_id), FOREIGN KEY(project_identity,candidate_id) REFERENCES runner_candidates(project_identity,candidate_id))`,

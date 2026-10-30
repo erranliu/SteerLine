@@ -194,8 +194,26 @@
       "level": "L4",
       "environment": "live",
       "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-orca",
-      "check": "固定原AIRefactor/夹具提交；按项目声明变量/PATH只检测不修复，逐项保留通过/不通过/未验证。满足时完整L2+真实Gitea PR及准入；未满足时三轮原Run停止封存、混合checks及L2/PR未执行、前后均拒绝准入，独立核实无PR，均须完整清理",
-      "note": "共同显式设置STEERRUNNER_EXE和STEERLINE_L4_REMOTE_PROFILE绝对路径；共享既有executionconfig.Profile的64G配置，live单项串行，源码Web构建串行，独立home/Git/DB/新-out。缺输入/材料、skip、目标错配或清理未知均不通过，无安装/本机回退。另设STEERLINE_L4_PROJECT_CONFIG绝对测试配置（既有repository/branch=AIRefactor/remote/PR格式）、STEERLINE_L4_PROJECT_COMMIT完整SHA、STEERLINE_L4_ROUND_TIMEOUT_SECONDS正秒数；308环境材料须已在该Git提交中，远端Unity2022.3.62f2/Android版本化资源和Gitea权限。源码分支及验证base固定到最终夹具SHA；最多三轮，不缩L2，不合入业务主分支，封存成功前零派发，通过后仅运行并停止一个准入探针；真实未就绪也是有效负向验收，但必须有三轮独立Run的完整封存混合结果、前后拒绝及独立无PR证据，不等同于ready。"
+      "check": "固定原AIRefactor/夹具提交；按项目声明变量/PATH只检测不修复，逐项保留通过/不通过/未验证。满足时完整L2+真实Gitea PR及准入；未满足时三轮原Run停止封存、混合checks及L2/PR未执行、前后均拒绝准入，独立核实无PR，均须完整清理；not_ready负向审计保留证据，但正式L4只在完整正向ready后通过",
+      "note": "共同显式设置STEERRUNNER_EXE和STEERLINE_L4_REMOTE_PROFILE绝对路径；共享既有executionconfig.Profile的64G配置，live单项串行，源码Web构建串行，独立home/Git/DB/新-out。缺输入/材料、skip、目标错配或清理未知均不通过，无安装/本机回退。另设STEERLINE_L4_PROJECT_CONFIG绝对测试配置（既有repository/branch=AIRefactor/remote/PR格式）、STEERLINE_L4_PROJECT_COMMIT完整SHA、STEERLINE_L4_ROUND_TIMEOUT_SECONDS正秒数；308环境材料须已在该Git提交中，远端Unity2022.3.62f2/Android版本化资源和Gitea权限。源码分支及验证base固定到最终夹具SHA；最多三轮，不缩L2，不合入业务主分支，封存成功前零派发，通过后仅运行并停止一个准入探针；真实未就绪保留三轮独立Run的完整封存混合结果、前后拒绝及独立无PR证据，但不记正式L4通过；本机/远端Orca共用执行、判定及绑定原目标的repo/terminal外部取证流程。"
+    },
+    {
+      "id": "testing.project-environment-readiness",
+      "name": "项目环境准备与派发门禁",
+      "level": "L3",
+      "environment": "controlled",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=testing -env=controlled -scenario=testing.project-environment-readiness",
+      "check": "两项目两环境经正式准备，只放行对应组合；缺准备与失效拒绝不新增候选，原候选交付保持，完整停止清理",
+      "note": "独立 home/Git/SQLite/provider；公开 Runner fixture 和正式 environment_start，禁止直接写 ready；不代表原生环境通过。新 -out，L3 总并发不超过二。"
+    },
+    {
+      "id": "testing.project-environment-local",
+      "name": "本机 Codex/Orca 环境准备",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-local",
+      "check": "正式本机准备完整 L2、双通道及同一真实 PR，准备前拒绝、通过后单一准入探针及原停止、资源清理；不接受负向结果作为正向通过",
+      "note": "固定 STEERLINE_L4_LOCAL_PROFILE 绝对独立 profile 文件（local Codex/Orca，development/2）；STEERLINE_L4_PROJECT_CONFIG 绝对项目配置、STEERLINE_L4_PROJECT_COMMIT 完整 SHA、STEERRUNNER_EXE 独立固定 EXE、STEERLINE_L4_ROUND_TIMEOUT_SECONDS 正秒数。按 Codex 与 Orca 分别执行取证，不使用安装 home。版本化环境文档/脚本、完整 L2 与 PR 规则须齐全，专属验证 base 不合入业务主分支；缺能力/输入、零命中、skip 或清理未知不通过。live 精确单项串行，新 -out。 固定提交中的环境执行规则须与当前构建同源；只支持项目已有的 Python test-project/project_checks/steerline_reports 或 PowerShell run-tests/ExecutionPlan/ManagedReports 完整原验证器，唯一识别；未知或歧义在现场创建前阻断。 本机Codex与本机Orca分别准备；只有Codex可直接读原工作区，Orca本机/远端严格共用repo/terminal取证与正向通过判定。"
     }
   ]
 }

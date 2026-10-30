@@ -70,8 +70,8 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 	if e != nil {
 		return out, e
 	}
-	if envmodel.Target(profile.Execution) == "" || profile.Execution.Adapter != "orca-terminal" {
-		return out, errors.New("请选择远端Orca执行配置")
+	if _, e := envmodel.Key(profile.Execution); e != nil {
+		return out, e
 	}
 	if c.runtimeCatalog == nil {
 		return out, errors.New("Runner能力目录不可用")
@@ -168,13 +168,17 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 	if e = c.runtimeCatalog.ValidatePublication(publication); e != nil {
 		return out, e
 	}
+	preparationContext, e := envmodel.Context(profile.Execution)
+	if e != nil {
+		return out, e
+	}
 	basis, _ := json.Marshal(struct {
 		Files       map[string]string
 		Tests       []testmanagement.Definition
 		Publication runnercontract.Publication
 		Execution   runnercontract.ExecutionInput
 		Repository  []string
-	}{files, definitions, publication, profile.Execution, []string{input.Repository.URL, c.Remote, c.Branch}})
+	}{files, definitions, publication, preparationContext, []string{input.Repository.URL, c.Remote, c.Branch}})
 	out = envmodel.Prepared{Commit: commit, Inputs: envmodel.Digest(basis), ScriptDigest: envmodel.Digest(script), Manifest: manifest, L2: ids, Input: input}
 	return out, nil
 }
@@ -288,34 +292,78 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, id string) (run
 	return out, p.config.runtimeCatalog.ValidateRepositoryGenerate(out)
 }
 
-func (p *environmentPort) ready(ctx context.Context, id string) (envmodel.Record, error) {
-	return p.readyFor(ctx, id, "")
-}
-func (p *environmentPort) readyFor(ctx context.Context, id, candidateCommit string) (envmodel.Record, error) {
-	prepared, e := p.material(ctx, id, false)
-	if e != nil {
-		return envmodel.Record{}, fmt.Errorf("环境未就绪：%w", e)
+// observedSource is query-only: fetch belongs to explicit prepare/start or the
+// existing project maintenance observation, never the environment page poll.
+func (p *environmentPort) observedSource(ctx context.Context) (string, error) {
+	if m := p.config.runtimeMaintenance; m != nil {
+		observation := m.current()
+		if observation.Diagnostic != "" {
+			return "", errors.New(observation.Diagnostic)
+		}
+		if observation.Commit != "" {
+			return observation.Commit, nil
+		}
 	}
-	if candidateCommit != "" && candidateCommit != prepared.Commit {
-		candidate, e := p.materialAt(ctx, id, candidateCommit, false)
-		if e != nil {
-			return envmodel.Record{}, fmt.Errorf("环境未就绪：候选固定环境材料不可核实：%w", e)
+	raw, err := p.git().Output(ctx, p.config.Git, "rev-parse", "--verify", "refs/remotes/"+p.config.Remote+"/"+p.config.Branch+"^{commit}")
+	return strings.TrimSpace(string(raw)), err
+}
+func (p *environmentPort) current(ctx context.Context, id string) (envmodel.Current, envmodel.Record, error) {
+	profile, err := p.config.RunnerExecution.Profile(id, "")
+	if err != nil {
+		return envmodel.Current{}, envmodel.Record{}, err
+	}
+	key, err := envmodel.Key(profile.Execution)
+	if err != nil {
+		return envmodel.Current{}, envmodel.Record{}, err
+	}
+	current, err := p.store.CurrentEnvironment(ctx, p.config.Identity(), key)
+	if errors.Is(err, envmodel.ErrNotFound) {
+		return envmodel.Current{Project: p.config.Identity(), Key: key}, envmodel.Record{}, nil
+	}
+	if err != nil {
+		return current, envmodel.Record{}, err
+	}
+	if current.ActivityID == "" {
+		return current, envmodel.Record{}, nil
+	}
+	record, err := p.store.Environment(ctx, p.config.Identity(), current.ActivityID)
+	return current, record, err
+}
+func (p *environmentPort) admission(ctx context.Context, id, candidateCommit string, refresh bool) (envmodel.Admission, envmodel.Record, error) {
+	current, record, err := p.current(ctx, id)
+	if err != nil {
+		return envmodel.Admission{}, record, err
+	}
+	if _, err := envmodel.Qualify(current, record, record.Prepared.Inputs); err != nil {
+		return envmodel.Admission{}, record, err
+	}
+	var commit string
+	if refresh {
+		if maintenance := p.config.runtimeMaintenance; maintenance != nil {
+			observation, readErr := maintenance.check(ctx)
+			commit, err = observation.Commit, readErr
+		} else {
+			commit, err = p.source(ctx)
+		}
+	} else {
+		commit, err = p.observedSource(ctx)
+	}
+	if err != nil {
+		return envmodel.Admission{}, record, err
+	}
+	prepared, err := p.materialAt(ctx, id, commit, false)
+	if err != nil {
+		return envmodel.Admission{}, record, err
+	}
+	if candidateCommit != "" && candidateCommit != commit {
+		candidate, err := p.materialAt(ctx, id, candidateCommit, false)
+		if err != nil {
+			return envmodel.Admission{}, record, err
 		}
 		if candidate.Inputs != prepared.Inputs {
-			return envmodel.Record{}, errors.New("环境未就绪：候选固定提交的环境材料与当前依据不同")
+			return envmodel.Admission{}, record, errors.New("环境未就绪：候选固定提交的环境材料与当前依据不同")
 		}
 	}
-	rows, e := p.store.Environments(ctx, p.config.Identity())
-	if e != nil {
-		return envmodel.Record{}, e
-	}
-	for _, r := range rows {
-		if r.Kind == "adaptation" && r.Profile == id {
-			if r.Status() != "ready" || r.Prepared.Inputs != prepared.Inputs {
-				return r, errors.New("环境未就绪：请完成当前项目和配置的适配")
-			}
-			return r, nil
-		}
-	}
-	return envmodel.Record{}, errors.New("环境未就绪：尚未适配当前远端配置")
+	proof, err := envmodel.Qualify(current, record, prepared.Inputs)
+	return proof, record, err
 }

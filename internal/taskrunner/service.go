@@ -49,6 +49,7 @@ type Service struct {
 	ReserveExecution                            func(context.Context, taskmodel.FixedWork, runnerbridge.Candidate, bool) error
 	PrepareExecution                            func(context.Context, taskmodel.FixedWork, bool) (taskmodel.FixedWork, string, error)
 	PrepareTestPlan                             func(context.Context, taskmodel.FixedWork, *runnerclient.RunInput) (json.RawMessage, error)
+	CheckExecution                              func(context.Context, string, bool) error
 	mu                                          sync.Mutex
 }
 type Start struct {
@@ -120,6 +121,9 @@ func (s *Service) Start(ctx context.Context, input Start) (runnerbridge.Candidat
 	}
 	if profile.Input.Workflow.ID == "generate" || profile.Input.Workflow.ID == "conversation" {
 		return runnerbridge.Candidate{}, failure("invalid_profile", "content workflows cannot execute a development task")
+	}
+	if err := s.checkExecution(ctx, profileID, true); err != nil {
+		return runnerbridge.Candidate{}, err
 	}
 	var base string
 	if s.PrepareExecution != nil {
@@ -237,7 +241,21 @@ func (s *Service) Stop(ctx context.Context, candidate string, revision uint64, r
 	})
 	return result, err
 }
+func (s *Service) checkExecution(ctx context.Context, profile string, refresh bool) error {
+	if s.CheckExecution == nil {
+		return failure("environment_not_ready", "项目环境准备门禁不可用")
+	}
+	return s.CheckExecution(ctx, profile, refresh)
+}
+
 func (s *Service) Dispatch(ctx context.Context) error {
+	if err := s.checkExecution(ctx, s.DefaultProfile, false); err != nil {
+		var blocked *taskmodel.Error
+		if errors.As(err, &blocked) && blocked.Code == "environment_not_ready" {
+			return nil
+		}
+		return err
+	}
 	ready, err := s.Tasks.Ready(ctx, s.Project)
 	if err != nil {
 		return err

@@ -10,7 +10,6 @@ import (
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -80,9 +79,42 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 				e = errors.New("environment target/version differs")
 				break
 			}
+			var shape map[string]json.RawMessage
+			if in.Action == "environment_start" && (json.Unmarshal(in.Payload, &shape) != nil || shape["expected_current_revision"] == nil || string(shape["expected_current_revision"]) == "null") {
+				e = errors.New("expected_current_revision is required")
+				break
+			}
 			var start env.Start
 			if e = decodeStrictJSON(in.Payload, &start); e == nil {
 				r, e = s.Start(ctx, in.RequestID, raw, start, in.Action == "environment_generate")
+			}
+		case "environment_invalidate":
+			if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
+				e = errors.New("environment target/version differs")
+				break
+			}
+			var invalidate struct {
+				Key      string  `json:"environment_key"`
+				Revision *uint64 `json:"expected_current_revision"`
+				Reason   string  `json:"reason"`
+			}
+			if e = decodeStrictJSON(in.Payload, &invalidate); e != nil {
+				break
+			}
+			if invalidate.Revision == nil || !p.config.runtimeEnvironment.supportsEnvironment(invalidate.Key) {
+				e = errors.New("invalid current environment target/version")
+				break
+			}
+			out.Status = "applied"
+			old.Status = "applied"
+			old.UpdatedAt = time.Now().UTC()
+			old.Result, _ = json.Marshal(out)
+			e = p.config.runtimeEnvironment.store.InvalidateEnvironment(ctx, p.config.Identity(), invalidate.Key, invalidate.Reason, *invalidate.Revision, old)
+			if e == nil {
+				return nil
+			}
+			if p.reconcileInvalidationFailure(ctx, old, &out, e) {
+				return nil
 			}
 		case "environment_stop":
 			var empty struct{}
@@ -180,31 +212,32 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string) 
 		return map[string]any{"records": out}, nil
 	}
 	if route == "/environment/options" {
-		profiles := []any{}
-		for _, profile := range p.config.RunnerExecution.Profiles {
-			if env.Target(profile.Execution) == "" {
-				continue
-			}
-			r, e := port.ready(ctx, profile.ID)
-			reason := ""
-			if e != nil {
-				reason = e.Error()
-			}
-			status := "not_ready"
-			if e == nil {
-				status = "ready"
-			}
-			profiles = append(profiles, map[string]any{"id": profile.ID, "name": profile.Name, "status": status, "reason": reason, "activity_id": r.ID})
-		}
-		generators := []any{}
-		for _, profile := range p.config.RunnerExecution.Profiles {
-			if _, e := runnerclient.GenerationExecution(profile.Execution); e == nil {
-				generators = append(generators, map[string]string{"id": profile.ID, "name": profile.Name})
-			}
-		}
-		return map[string]any{"profiles": profiles, "generators": generators}, nil
+		return port.readinessOptions(ctx)
 	}
+
 	id := strings.TrimPrefix(route, "/environment/")
 	r, e := port.store.Environment(ctx, p.config.Identity(), id)
 	return publicEnvironment(r), e
+}
+
+// Reconcile only the original invalidation receipt after an uncertain storage
+// outcome. Never overwrite a possibly committed applied receipt with rejected.
+func (p *runtimeProjectPort) reconcileInvalidationFailure(ctx context.Context, original storageports.CommandRecord, out *httpcontract.CommandResponse, cause error) bool {
+	readCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
+	defer cancel()
+	saved, found, readErr := p.store.LookupCommand(readCtx, original.ProjectIdentity, original.IdempotencyKey)
+	if readErr == nil && found && saved.Status == "applied" && bytes.Equal(saved.Payload, original.Payload) && len(saved.Result) > 0 {
+		if json.Unmarshal(saved.Result, out) == nil {
+			return true
+		}
+		readErr = errors.New("original invalidation receipt is malformed")
+	}
+	var storageErr *storageports.StorageError
+	if readErr != nil || errors.As(cause, &storageErr) || errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
+		out.Status = "outcome_unknown"
+		out.Code = "environment_outcome_unknown"
+		out.Diagnostic = "原环境失效操作结果待核实；只查询原请求，不重新提交"
+		return true
+	}
+	return false
 }

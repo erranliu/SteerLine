@@ -32,7 +32,7 @@ func TestRunnerApplicationSnapshotSharesTransactionAcrossWriterCommit(t *testing
 	input := runnerclient.RunInput{Title: tasks[0].Title, Repository: runnerclient.Repository{URL: contract.Repository, Remote: contract.Remote, BaseBranch: contract.Branch, BaseRevision: base}, Documents: runnerclient.Documents{Spec: runnerclient.Document{Path: contract.SpecRef.Path}, Plan: runnerclient.Document{Path: contract.PlanRef.Path}}, Publication: runnerclient.Publication{BaseBranch: contract.Branch}}
 	body, _ := json.Marshal(input)
 	candidate := runnerbridge.Candidate{Project: project, TaskID: tasks[0].TaskID, ID: "snapshot-candidate", Revision: 1, Explicit: true, StateDir: filepath.Join(t.TempDir(), "runner"), Claimant: "operator", ContractDigest: contract.Digest, BaseRevision: base, Participation: "active", SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnerclient.Protocol, RequestID: "snapshot-submit", Input: body}}
-	require(t, writer.ReserveRunnerCandidate(ctx, taskmodel.FixedWork{Record: tasks[0], Contract: contract, Authority: graph.TaskGraph().Authority}, candidate, false))
+	require(t, reserveFixtureCandidate(t, writer, ctx, taskmodel.FixedWork{Record: tasks[0], Contract: contract, Authority: graph.TaskGraph().Authority}, candidate, false))
 	oldCheckpoint, err := writer.SaveCheckpoint(ctx, hostcontract.ServiceCheckpoint{SchemaVersion: hostcontract.ServiceCheckpointSchema, Service: hostcontract.ServiceState{InstanceID: "old-instance", Status: "running", ProcessIdentity: &hostcontract.ProcessIdentity{PID: 41, Created: "old-process"}, RunnerBuild: &runnercontract.BuildPin{SHA256: "old-build"}}, Repository: hostcontract.Repository{Identity: project}})
 	require(t, err)
 	var sequence int

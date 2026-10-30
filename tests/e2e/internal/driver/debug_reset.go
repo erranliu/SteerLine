@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -21,7 +20,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
-var debugHistory = []string{"environment_check_requests", "environment_checks", "test_generation_requests", "test_generations", "candidate_progress", "maintenance_requests", "project_materials", "task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
+var debugHistory = []string{"test_generation_requests", "test_generations", "candidate_progress", "maintenance_requests", "project_materials", "task_deliveries", "task_results", "runner_events", "runner_candidates", "task_audits", "events", "commands", "projection"}
 
 func (d *debugRelease) reset(check bool) error {
 	scopes := []*debugRelease{d}
@@ -129,10 +128,7 @@ func (d *debugRelease) resetState(check bool, proof runnerclient.StoppedVerifica
 	for _, r := range proof.Runs {
 		byRun[r.RunID] = r
 	}
-	byCheck := map[string]runnerclient.StoppedCheck{}
-	for _, c := range proof.Checks {
-		byCheck[c.CheckID] = c
-	}
+
 	generations, err := tx.QueryContext(ctx, "SELECT payload FROM test_generations WHERE project_identity=?", project)
 	if err != nil {
 		return err
@@ -154,31 +150,6 @@ func (d *debugRelease) resetState(check bool, proof runnerclient.StoppedVerifica
 		err = generations.Err()
 	}
 	generations.Close()
-	if err != nil {
-		return err
-	}
-	checks, err := tx.QueryContext(ctx, "SELECT payload FROM environment_checks WHERE project_identity=?", project)
-	if err != nil {
-		return err
-	}
-	for checks.Next() {
-		var raw []byte
-		var record runnerstate.EnvironmentCheckRecord
-		if err = checks.Scan(&raw); err != nil {
-			break
-		}
-		if err = json.Unmarshal(raw, &record); err != nil {
-			break
-		}
-		err = environmentCheckResetSafety(record, stateDir, byCheck)
-		if err != nil {
-			break
-		}
-	}
-	if err == nil {
-		err = checks.Err()
-	}
-	checks.Close()
 	if err != nil {
 		return err
 	}
@@ -345,30 +316,6 @@ func generationResetSafety(g testmanagement.Generation, project, stateDir string
 	return nil
 }
 
-func environmentCheckResetSafety(record runnerstate.EnvironmentCheckRecord, stateDir string, byCheck map[string]runnerclient.StoppedCheck) error {
-	if !strings.EqualFold(filepath.Clean(record.StateDir), filepath.Clean(stateDir)) {
-		return errors.New("environment check belongs to another Runner directory")
-	}
-	if len(record.Operations) == 0 {
-		return errors.New("environment check intent is incomplete")
-	}
-	if record.CheckID == "" && record.Operations[0].Status != "rejected" {
-		return errors.New("environment check submission is unverified; preserve original request")
-	}
-	if record.CheckID != "" {
-		v, ok := byCheck[record.CheckID]
-		if !ok || !v.ResourcesSettled || record.Report == nil || record.Report.InputDigest == "" || record.Report.InputDigest != v.InputDigest {
-			return errors.New("original environment check resource proof is absent or differs")
-		}
-	}
-	for _, op := range record.Operations {
-		if op.Status == "outcome_unknown" {
-			return errors.New("environment check operation is unverified; preserve original request")
-		}
-	}
-	return nil
-}
-
 // Verify the whole service before any project transaction, even if no task DB exists.
 func (d *debugRelease) verifySharedRunnerReset() (runnerclient.StoppedVerification, error) {
 	var proof runnerclient.StoppedVerification
@@ -396,7 +343,7 @@ func (d *debugRelease) verifySharedRunnerReset() (runnerclient.StoppedVerificati
 		return proof, errors.New("shared Runner must be stopped before resetting any project")
 	}
 	if _, err := os.Stat(cli.StateDir); os.IsNotExist(err) {
-		return runnerclient.StoppedVerification{StateDir: cli.StateDir, ResourcesSettled: true, Runs: []runnerclient.StoppedRun{}, Checks: []runnerclient.StoppedCheck{}}, nil
+		return runnerclient.StoppedVerification{StateDir: cli.StateDir, ResourcesSettled: true, Runs: []runnerclient.StoppedRun{}}, nil
 	}
 	return cli.VerifyStopped(ctx)
 }

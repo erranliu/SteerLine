@@ -13,6 +13,7 @@ func TestWaitingMergeRestart(t *testing.T) {
 	t.Parallel()
 	env := testenv.NewScenario(t, "recovery.waiting-merge-restart")
 	p := env.NewProject("recovery")
+	p.PrepareControlledEnvironment("controlled")
 	p.CreateTasks()
 	p.StartService()
 	p.Claim("a")

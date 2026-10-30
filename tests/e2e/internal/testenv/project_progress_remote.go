@@ -25,37 +25,33 @@ import (
 	"github.com/google/uuid"
 )
 
-type progressRemote struct {
-	Profile                                            map[string]any
-	Executable, Environment, Runtime, Repository, Root string
-	Args                                               []string
-	sequence                                           int
-}
-
-func loadProgressRemote(s *Scenario, p *Project) *progressRemote {
+func loadOrcaTarget(s *Scenario, p *Project) *orcaTarget {
 	if s.Run.Remote == nil {
 		return nil
 	}
-	r := &progressRemote{}
+	if p.orcaEvidence != nil {
+		return p.orcaEvidence
+	}
+	r := &orcaTarget{}
 	raw, err := json.Marshal(s.Run.Remote.Profile)
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &r.Profile))
 	execution, ok := r.Profile["execution"].(map[string]any)
 	if !ok || execution["adapter"] != "orca-terminal" {
-		s.t.Fatal("requires explicit remote Orca execution")
+		s.t.Fatal("requires explicit Orca execution")
 	}
 	target, ok := execution["target"].(map[string]any)
-	if !ok || target["kind"] != "orca_environment" {
-		s.t.Fatal("local execution cannot qualify this test")
+	if !ok || (target["kind"] != "local" && target["kind"] != "orca_environment") {
+		s.t.Fatal("requires an explicit local or remote Orca target")
 	}
 	r.Environment, _ = target["environment"].(string)
 	settings, ok := execution["settings"].(map[string]any)
 	if !ok {
-		s.t.Fatal("remote settings missing")
+		s.t.Fatal("Orca settings missing")
 	}
 	transport, ok := settings["transport"].(map[string]any)
 	if !ok {
-		s.t.Fatal("remote transport missing")
+		s.t.Fatal("Orca transport missing")
 	}
 	r.Executable, _ = transport["executable"].(string)
 	if args, ok := transport["args"].([]any); ok {
@@ -67,8 +63,8 @@ func loadProgressRemote(s *Scenario, p *Project) *progressRemote {
 			r.Args = append(r.Args, value)
 		}
 	}
-	if r.Environment == "" || !filepath.IsAbs(r.Executable) {
-		s.t.Fatal("remote transport/environment must be explicit")
+	if !filepath.IsAbs(r.Executable) || target["kind"] == "orca_environment" && r.Environment == "" || target["kind"] == "local" && r.Environment != "" {
+		s.t.Fatal("Orca transport and target must be explicit and consistent")
 	}
 	var list struct {
 		Repos []struct {
@@ -84,21 +80,22 @@ func loadProgressRemote(s *Scenario, p *Project) *progressRemote {
 	for _, repo := range list.Repos {
 		if strings.EqualFold(strings.TrimSuffix(repo.Identity.URL, ".git"), strings.TrimSuffix(p.RemoteURL, ".git")) {
 			if r.Repository != "" {
-				s.t.Fatal("remote repository identity is ambiguous")
+				s.t.Fatal("Orca repository identity is ambiguous")
 			}
 			r.Repository, r.Root = repo.ID, repo.Path
 		}
 	}
 	if r.Repository == "" {
-		s.t.Fatal("project repository is not registered on the selected remote host")
+		s.t.Fatal("project repository is not registered on the selected Orca host")
 	}
 	s.Must(controlled.Write(filepath.Join(s.Output, "remote-target.json"), map[string]any{"environment": r.Environment, "runtime": r.Runtime, "repository": r.Repository, "root": r.Root, "profile": r.Profile}))
+	p.orcaEvidence = r
 	return r
 }
 
-func (r *progressRemote) Call(ctx context.Context, s *Scenario, p *Project, args ...string) (json.RawMessage, error) {
+func (r *orcaTarget) Call(ctx context.Context, s *Scenario, p *Project, args ...string) (json.RawMessage, error) {
 	r.sequence++
-	cmd := exec.Command(r.Executable, append(append(append([]string{}, r.Args...), args...), "--environment", r.Environment, "--json")...)
+	cmd := exec.Command(r.Executable, r.commandArgs(args...)...)
 	cmd.Env = p.Driver.Environment(os.Environ())
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -128,7 +125,7 @@ func (r *progressRemote) Call(ctx context.Context, s *Scenario, p *Project, args
 		r.Runtime = envelope.Meta.Runtime
 	}
 	if r.Runtime == "" || envelope.Meta.Runtime != r.Runtime {
-		return nil, errors.New("remote runtime identity changed")
+		return nil, errors.New("Orca runtime identity changed")
 	}
 	return envelope.Result, nil
 }
@@ -137,7 +134,7 @@ func psProgressLiteral(value string) string { return "'" + strings.ReplaceAll(va
 
 // An owned diagnostic shell reads only this test's references and reports. It
 // never writes the progress file or sends input to the original worker terminal.
-func (r *progressRemote) Shell(ctx context.Context, s *Scenario, p *Project, workspace, script string) (json.RawMessage, error) {
+func (r *orcaTarget) Shell(ctx context.Context, s *Scenario, p *Project, workspace, script string) (json.RawMessage, error) {
 	nonce := strings.ReplaceAll(uuid.NewString(), "-", "")
 	body := "$ErrorActionPreference='Stop'; $PSDefaultParameterValues=@{'Get-Content:Encoding'='UTF8'}; try { $value=& {\n" + script + "\n}; $result=@{passed=$true;value=$value} } catch { $result=@{passed=$false;error=$_.Exception.Message} }; " +
 		"$encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($result|ConvertTo-Json -Depth 12 -Compress))); $index=0; for($offset=0;$offset -lt $encoded.Length;$offset+=512){ Write-Output ('SLP_" + nonce + ":'+$index+':'+$encoded.Substring($offset,[Math]::Min(512,$encoded.Length-$offset))); $index++ }; Write-Output ('SLE_" + nonce + ":'+$index)"
@@ -147,7 +144,7 @@ func (r *progressRemote) Shell(ctx context.Context, s *Scenario, p *Project, wor
 		binary.LittleEndian.PutUint16(encoded[i*2:], v)
 	}
 	selector := "id:" + r.Repository + "::" + strings.ReplaceAll(workspace, "\\", "/")
-	raw, err := r.Call(ctx, s, p, "terminal", "create", "--worktree", selector, "--title", "SteerLine progress evidence "+nonce[:8], "--command", "powershell.exe -NoProfile -NonInteractive -EncodedCommand "+base64.StdEncoding.EncodeToString(encoded))
+	raw, err := r.Call(ctx, s, p, "terminal", "create", "--worktree", selector, "--title", "SteerLine progress evidence "+nonce[:8], "--command", "pwsh -NoProfile -NonInteractive -EncodedCommand "+base64.StdEncoding.EncodeToString(encoded))
 	if err != nil {
 		return nil, err
 	}
@@ -251,14 +248,14 @@ func (r *progressRemote) Shell(ctx context.Context, s *Scenario, p *Project, wor
 	}
 }
 
-func (r *progressRemote) Fetch(s *Scenario, p *Project, head string) {
+func (r *orcaTarget) Fetch(s *Scenario, p *Project, head string) {
 	script := "$root=" + psProgressLiteral(r.Root) + "; $ref=" + psProgressLiteral("refs/remotes/origin/"+p.BaseBranch) + "; $before=(& git -C $root rev-parse HEAD|Out-String).Trim(); if($LASTEXITCODE){throw 'original root HEAD unavailable'}; $statusBefore=(& git -C $root status --porcelain|Out-String); if($LASTEXITCODE){throw 'original root status unavailable'}; $ErrorActionPreference='Continue'; $fetch=@(& git -C $root fetch --no-tags origin " + psProgressLiteral("refs/heads/"+p.BaseBranch+":refs/remotes/origin/"+p.BaseBranch) + " 2>&1); $fetchExit=$LASTEXITCODE; $ErrorActionPreference='Stop'; if($fetchExit){throw 'owned base fetch failed'}; $actual=(& git -C $root rev-parse $ref|Out-String).Trim(); if($LASTEXITCODE -or $actual -cne " + psProgressLiteral(head) + "){throw 'remote owned base differs'}; $after=(& git -C $root rev-parse HEAD|Out-String).Trim(); $statusAfter=(& git -C $root status --porcelain|Out-String); if($before -cne $after -or $statusBefore -cne $statusAfter){throw 'registered root worktree changed'}; @{commit=$actual;original_root_unchanged=$true;head=$after}"
 	raw, err := r.Shell(s.Context, s, p, r.Root, script)
 	s.Must(err)
 	s.Must(os.WriteFile(filepath.Join(s.Output, "remote-fetch.json"), raw, 0600))
 }
 
-func (r *progressRemote) Capture(s *Scenario, p *Project, run runnercontract.Run, required bool) string {
+func (r *orcaTarget) Capture(s *Scenario, p *Project, run runnercontract.Run, required bool) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	script := `$files=@{}; $paths=@('tools/test-runtime-progress.py','tools/runtime_progress.py','tools/steerline_reports.py'); $reports=Join-Path (Get-Location) '.steerrunner/artifacts/live-progress'; if(Test-Path -LiteralPath $reports){ foreach($file in @(Get-ChildItem -LiteralPath $reports -File -Filter '*.json')) { $paths+=('.steerrunner/artifacts/live-progress/'+$file.Name) } }; foreach($path in $paths){ $bytes=[IO.File]::ReadAllBytes((Join-Path (Get-Location) $path)); if($bytes.Length -gt 65536){throw 'original file exceeds evidence bound'}; $files[$path]=[Convert]::ToBase64String($bytes) }; $head=(& git rev-parse HEAD|Out-String).Trim(); if($LASTEXITCODE){throw 'original HEAD unavailable'}; $status=@(& git status --porcelain); if($LASTEXITCODE){throw 'original status unavailable'}; @{workspace=(Get-Location).Path;head=$head;clean=($status.Count -eq 0);files=$files}`
@@ -303,7 +300,7 @@ func (r *progressRemote) Capture(s *Scenario, p *Project, run runnercontract.Run
 	return root
 }
 
-func readLocalProgressSummary(remote *progressRemote, reports string) ([]byte, error) {
+func readLocalProgressSummary(remote *orcaTarget, reports string) ([]byte, error) {
 	if remote != nil {
 		return nil, os.ErrNotExist
 	}

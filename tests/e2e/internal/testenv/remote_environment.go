@@ -60,10 +60,14 @@ func (p *Project) bindValidationBase() string {
 }
 
 func (p *Project) ensureRemoteReady(seconds int) env.Record {
-	return p.checkRemoteEnvironment(seconds, false)
+	record := p.checkRemoteEnvironment(seconds)
+	if record.Status() != "ready" {
+		p.Scenario.t.Fatal("project environment did not pass native readiness")
+	}
+	return record
 }
 
-func (p *Project) checkRemoteEnvironment(seconds int, allowUnready bool) env.Record {
+func (p *Project) checkRemoteEnvironment(seconds int) env.Record {
 	s := p.Scenario
 	p.StartService()
 	public, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
@@ -98,17 +102,14 @@ func (p *Project) checkRemoteEnvironment(seconds int, allowUnready bool) env.Rec
 		if err == nil {
 			_ = controlled.Write(filepath.Join(s.Output, "environment-latest.json"), view)
 		}
-		if err == nil && view.Settled && view.Status != "ready" && !allowUnready {
-			s.t.Fatalf("environment not ready: %s: %s", view.State, view.Diagnostic)
-		}
-		return err == nil && view.Settled && (allowUnready || view.Status == "ready"), err
+		return err == nil && view.Settled, err
 	})
 	reader, err := sqlite.OpenSQLiteReader(p.Database)
 	s.Must(err)
 	defer reader.Close()
 	r, err := reader.Environment(s.Context, p.ProjectID, id)
 	s.Must(err)
-	if (!allowUnready && r.Status() != "ready") || len(r.Rounds) == 0 || len(r.Rounds) > 3 {
+	if len(r.Rounds) == 0 || len(r.Rounds) > 3 {
 		s.t.Fatal("invalid ready/budget evidence")
 	}
 	if r.Prepared.Commit != p.git(p.Repo, "rev-parse", "HEAD") {
@@ -131,15 +132,17 @@ func (p *Project) checkRemoteEnvironment(seconds int, allowUnready bool) env.Rec
 	return r
 }
 
-func RunRemoteEnvironment(t *testing.T) {
-	s := NewScenario(t, remotetest.Environment)
+func RunRemoteEnvironment(t *testing.T) { runProjectEnvironment(t, remotetest.Environment) }
+func RunLocalEnvironment(t *testing.T)  { runProjectEnvironment(t, remotetest.LocalEnvironment) }
+func runProjectEnvironment(t *testing.T, id string) {
+	s := NewScenario(t, id)
 	if s.Run.Remote == nil {
 		t.Fatal("formal remote L4 input required")
 	}
 	in := s.Run.Remote
 	config, err := driver.DecodeProjectConfig(in.ProjectConfig)
 	s.Must(err)
-	p := &Project{Scenario: s, Name: "308", Root: filepath.Join(s.Root, "308"), Home: filepath.Join(s.Root, "308", "home"), Repo: filepath.Join(s.Root, "308", "merge-h-308-code"), Config: filepath.Join(s.Root, "308", "home", "etc", "308.json"), Provider: filepath.Join(s.Root, "308", "provider.json"), Executable: s.Run.Binary, Chain: "orca-remote", Tasks: map[string]Task{}}
+	p := &Project{Scenario: s, Name: "308", Root: filepath.Join(s.Root, "308"), Home: filepath.Join(s.Root, "308", "home"), Repo: filepath.Join(s.Root, "308", "merge-h-308-code"), Config: filepath.Join(s.Root, "308", "home", "etc", "308.json"), Provider: filepath.Join(s.Root, "308", "provider.json"), Executable: s.Run.Binary, Chain: "environment-live", Tasks: map[string]Task{}}
 	s.projects = append(s.projects, p)
 	s.register("project", p.Root, 0)
 	for _, dir := range []string{p.Root, filepath.Join(p.Home, "etc"), filepath.Join(p.Home, "temp"), filepath.Join(p.Home, "codex")} {
@@ -167,9 +170,6 @@ func RunRemoteEnvironment(t *testing.T) {
 	p.git(p.Repo, "add", "--", env.DocumentPath, "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md")
 	p.git(p.Repo, "commit", "--quiet", "--allow-empty", "-m", "Freeze isolated environment validation base")
 	fixture := p.git(p.Repo, "rev-parse", "HEAD")
-	t.Cleanup(func() { p.cleanupRemoteValidation(base) })
-	s.Must(controlled.Write(filepath.Join(s.Output, "remote-ref-intent.json"), map[string]any{"source_branch": p.BaseBranch, "validation_base": base, "commit": fixture}))
-	p.git(p.Repo, "push", "origin", "HEAD:refs/heads/"+p.BaseBranch, "HEAD:refs/heads/"+base)
 	config.Repository, config.RunDir, config.Branch, config.Remote = p.Repo, "", p.BaseBranch, "origin"
 	config.Git.Executable = "git"
 	config.Git.Args = nil
@@ -178,7 +178,7 @@ func RunRemoteEnvironment(t *testing.T) {
 	s.Must(err)
 	codex, err := driver.CodexExecutable("codex")
 	s.Must(err)
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": "local-codex", "execution_profiles": []any{map[string]any{"id": "local-codex", "name": "Local material generation", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 2}}, in.Profile}}))
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": "material-generation", "execution_profiles": []any{map[string]any{"id": "material-generation", "name": "Local material generation", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 2}}, in.Profile}}))
 	raw, err := p.Driver.Run(s.Context, "home", "-config", p.Config)
 	s.Must(err)
 	for _, line := range strings.Split(string(raw), "\n") {
@@ -189,13 +189,18 @@ func RunRemoteEnvironment(t *testing.T) {
 	if !filepath.IsAbs(p.Database) {
 		t.Fatal("project database identity unavailable")
 	}
+	t.Cleanup(func() { p.cleanupRemoteValidation(base) })
+	s.Must(controlled.Write(filepath.Join(s.Output, "remote-ref-intent.json"), map[string]any{"source_branch": p.BaseBranch, "validation_base": base, "commit": fixture}))
+	p.git(p.Repo, "push", "origin", "HEAD:refs/heads/"+p.BaseBranch, "HEAD:refs/heads/"+base)
 	if !strings.HasPrefix(p.git(p.Repo, "ls-remote", "origin", "refs/heads/"+p.BaseBranch), fixture+"\t") {
 		t.Fatal("308 test source tip changed")
 	}
 	s.Must(controlled.Write(filepath.Join(s.Output, "source.json"), map[string]any{"source_commit": in.Commit, "fixture_commit": fixture, "source_branch": p.BaseBranch, "validation_base": base, "execution_digest": in.ExecutionDigest}))
 	// Runner locates the actual remote repository using its registered identity.
-	r := loadProgressRemote(s, p)
-	r.Fetch(s, p, fixture)
+	if in.Profile.Execution.Adapter == "orca-terminal" {
+		r := loadOrcaTarget(s, p)
+		r.Fetch(s, p, fixture)
+	}
 	p.CreateTasks()
 	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "resume_dispatch", ""))
 	deniedRaw, err := p.Driver.RunHelper(s.Context, s.Run.Helper, "control", "-config", p.Config, "-action", "start_task", "-task-id", p.Tasks["a"].ID, "-profile", p.Driver.Profile, "-expected-status", "rejected")
@@ -213,7 +218,7 @@ func RunRemoteEnvironment(t *testing.T) {
 			t.Fatal("unready project dispatched a remote Run")
 		}
 	}
-	activity := p.checkRemoteEnvironment(in.RoundSeconds, true)
+	activity := p.checkRemoteEnvironment(in.RoundSeconds)
 	if activity.Status() != "ready" {
 		raw, err := p.Driver.RunHelper(s.Context, s.Run.Helper, "control", "-config", p.Config, "-action", "start_task", "-task-id", p.Tasks["a"].ID, "-profile", p.Driver.Profile, "-expected-status", "rejected")
 		s.Must(err)
@@ -231,7 +236,7 @@ func RunRemoteEnvironment(t *testing.T) {
 		s.Must(controlled.Write(filepath.Join(s.Output, "admission-proof.json"), map[string]any{"before_rejected": true, "after_rejected": true, "after_run_id": "", "stopped": true, "execution_digest": in.ExecutionDigest, "source_commit": in.Commit, "fixture_commit": fixture}))
 		s.Must(s.FinishBody())
 		p.StopService()
-		return
+		t.Fatal("native environment remains not_ready; negative evidence was preserved and does not count as a positive L4 pass")
 	}
 	p.Claim("a")
 	var admitted string

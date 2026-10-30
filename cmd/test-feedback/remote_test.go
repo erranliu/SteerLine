@@ -67,7 +67,7 @@ func TestRemoteL4KeepsOnlyConfiguredProviderCredentialReference(t *testing.T) {
 }
 
 func TestRemoteL4RequiresLinkedSealedL2AndPR(t *testing.T) {
-	report := env.Report{Version: 1, ActivityID: "activity", Round: 1, Commit: "fixture", ScriptDigest: strings.Repeat("a", 64), Completed: true, Checks: []env.Check{{ID: "tool", Status: "passed", Message: "available"}}, L2: []env.Item{{ID: "l2.a", Status: "passed"}}, PR: env.PR{URL: "https://example.invalid/repo/pull/1", Base: "owned-base", Head: "owned-head", ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("b", 40), CleanupCompleted: true}}
+	report := env.Report{Version: 1, ActivityID: "activity", Round: 1, Commit: "fixture", ScriptDigest: strings.Repeat("a", 64), Completed: true, Checks: []env.Check{{ID: "tool", Status: "passed", Message: "available"}, {ID: "terminal.tty", Status: "passed", Message: "actual TTY"}}, L2: []env.Item{{ID: "l2.a", Status: "passed"}}, PR: env.PR{URL: "https://example.invalid/repo/pull/1", Base: "owned-base", Head: "owned-head", ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("b", 40), CleanupCompleted: true}}
 	raw, _ := json.Marshal(report)
 	encoded := base64.StdEncoding.EncodeToString(raw)
 	sum := sha256.Sum256(raw)

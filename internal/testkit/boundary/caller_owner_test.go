@@ -19,7 +19,7 @@ func writeCallerSource(t *testing.T, root, file, source string) {
 }
 
 func TestCallerOwnerBoundary(t *testing.T) {
-	for _, owner := range []string{"processwindow", "runnerclient", "runnerbridge", "environmentcheck", "runnerbinding"} {
+	for _, owner := range []string{"processwindow", "runnerclient", "runnerbridge", "runnerbinding"} {
 		for _, dep := range []string{"database/sql", storageSQLite, module + "/internal/product/api", module + "/internal/app", module + "/internal/taskrunner"} {
 			t.Run(owner+"/"+dep, func(t *testing.T) {
 				root := t.TempDir()

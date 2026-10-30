@@ -79,7 +79,7 @@ func (s *SQLiteStore) SaveCandidate(ctx context.Context, c runnerstate.Candidate
 		if old.TaskID != c.TaskID || old.StateDir != c.StateDir || old.Explicit != c.Explicit || old.Number != c.Number || old.Claimant != c.Claimant || old.ContractDigest != c.ContractDigest || old.BaseRevision != c.BaseRevision || digestValue(old.Submit) != digestValue(c.Submit) || old.RunID != "" && old.RunID != c.RunID || old.InputDigest != "" && old.InputDigest != c.InputDigest || old.Branch != "" && old.Branch != c.Branch || old.PRURL != "" && old.PRURL != c.PRURL || old.StopRequested && !c.StopRequested || old.SubmitObserveOnly && !c.SubmitObserveOnly || old.Participation != c.Participation {
 			return nativeErr("immutable_task", "candidate update changed a frozen task association")
 		}
-		if digestValue(old.Contract) != digestValue(c.Contract) || old.MaterialDigest != c.MaterialDigest || !bytes.Equal(old.TestPlan, c.TestPlan) || old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
+		if digestValue(old.Contract) != digestValue(c.Contract) || old.MaterialDigest != c.MaterialDigest || !bytes.Equal(old.TestPlan, c.TestPlan) || digestValue(old.Environment) != digestValue(c.Environment) || old.StartDigest != c.StartDigest || old.ProfileID != c.ProfileID || old.ProfileName != c.ProfileName || old.ProfileDigest != c.ProfileDigest || old.RunnerBuild != c.RunnerBuild || !old.CreatedAt.Equal(c.CreatedAt) {
 			return nativeErr("immutable_task", "candidate update changed its original start identity")
 		}
 		if digestValue(old.Withdrawal) != digestValue(c.Withdrawal) {
@@ -230,13 +230,16 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 			if err := freezeNumber(previous.Number); err != nil {
 				return err
 			}
-			if digestValue(previous.Contract) != digestValue(c.Contract) || previous.MaterialDigest != c.MaterialDigest || !bytes.Equal(previous.TestPlan, c.TestPlan) || previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
+			if digestValue(previous.Contract) != digestValue(c.Contract) || previous.MaterialDigest != c.MaterialDigest || !bytes.Equal(previous.TestPlan, c.TestPlan) || previous.TaskID != c.TaskID || digestValue(previous.Submit) != digestValue(c.Submit) || previous.BaseRevision != c.BaseRevision || previous.ContractDigest != c.ContractDigest || previous.Claimant != c.Claimant || previous.Explicit != c.Explicit || previous.StateDir != c.StateDir || digestValue(previous.Environment) != digestValue(c.Environment) || previous.StartDigest != c.StartDigest || previous.ProfileID != c.ProfileID || previous.ProfileName != c.ProfileName || previous.ProfileDigest != c.ProfileDigest || previous.RunnerBuild != c.RunnerBuild || !previous.CreatedAt.Equal(c.CreatedAt) {
 				return nativeErr("idempotency_conflict", "candidate ID belongs to another original request")
 			}
 			return errAtomicReplay
 		}
 		if !errors.Is(lookupErr, sql.ErrNoRows) {
 			return lookupErr
+		}
+		if err := verifyCandidateEnvironment(ctx, tx.tx, c.Project, c.Environment, input.Execution); err != nil {
+			return err
 		}
 		graph, err := tx.TaskGraphSnapshot(ctx, c.Project)
 		if err != nil {

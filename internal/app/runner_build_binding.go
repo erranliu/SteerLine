@@ -35,11 +35,7 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 			return errors.New("runner_build_changed: restore the original Runner to reconcile/stop its resources; a new build requires a fresh environment")
 		}
 	}
-	checks, err := store.Checks(ctx, c.Identity())
-	if err != nil {
-		return err
-	}
-	if err := runnerbinding.ValidateBuildBindings(pin, cli.Takeover, snapshot.Candidates, checks); err != nil {
+	if err := runnerbinding.ValidateBuildBindings(pin, cli.Takeover, snapshot.Candidates); err != nil {
 		return err
 	}
 	generations, err := store.Generations(ctx, c.Identity())

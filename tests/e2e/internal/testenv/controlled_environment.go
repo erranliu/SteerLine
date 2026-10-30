@@ -18,9 +18,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// PrepareControlledRemoteEnvironment prepares versioned fixture files and uses
+// PrepareControlledEnvironment prepares versioned fixture files and uses
 // the public adaptation command. It never writes readiness into caller storage.
-func (p *Project) PrepareControlledRemoteEnvironment(profile string) {
+func (p *Project) WriteControlledEnvironment() string {
 	s := p.Scenario
 	s.t.Helper()
 	if p.Chain != "" || s.Run.Remote != nil {
@@ -42,11 +42,19 @@ func (p *Project) PrepareControlledRemoteEnvironment(profile string) {
 		s.Must(os.WriteFile(target, body, 0600))
 	}
 	p.git(p.Repo, "add", ".")
-	p.git(p.Repo, "commit", "--quiet", "-m", "Prepare controlled environment admission")
+	if p.git(p.Repo, "status", "--porcelain") != "" {
+		p.git(p.Repo, "commit", "--quiet", "-m", "Prepare controlled environment admission")
+	}
 	provider, err := controlled.Read(p.Provider)
 	s.Must(err)
 	p.git(p.Repo, "push", "--quiet", provider.GitURL, "main", "HEAD:refs/heads/"+base)
-	commit := p.git(p.Repo, "rev-parse", "HEAD")
+	return p.git(p.Repo, "rev-parse", "HEAD")
+}
+
+func (p *Project) PrepareControlledEnvironment(profile string) {
+	s := p.Scenario
+	const base = "fixture-environment-validation"
+	commit := p.WriteControlledEnvironment()
 	p.StartService()
 	project, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
 	s.Must(err)
@@ -56,7 +64,13 @@ func (p *Project) PrepareControlledRemoteEnvironment(profile string) {
 	defer client.Close()
 	identity := project.Identity()
 	id := strings.ReplaceAll(uuid.NewString(), "-", "")
-	payload, _ := json.Marshal(env.Start{Profile: profile, TimeoutSeconds: 90})
+	revision := uint64(0)
+	for _, option := range p.EnvironmentOptions() {
+		if option.ID == profile {
+			revision = option.CurrentRevision
+		}
+	}
+	payload, _ := json.Marshal(env.Start{Profile: profile, TimeoutSeconds: 90, ExpectedCurrentRevision: revision})
 	request := httpcontract.CommandEnvelope{RequestID: id, ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "environment_start", TargetID: string(identity.ProjectID), ExpectedVersion: 1, Payload: payload}
 	prefix := "/projects/" + string(identity.ProjectID)
 	var response httpcontract.CommandResponse

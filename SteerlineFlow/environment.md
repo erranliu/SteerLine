@@ -1,6 +1,6 @@
-# SteerLine 远端环境要求与验收
+# SteerLine 执行环境要求与验收
 
-环境检测由既有 Runner 远端 Agent 调用本项目入口，不由脚本再启动 Agent。环境适配遵循[项目环境适配规范](spec/project-environment-adaptation.spec.md)；业务测试入口及通过标准仍见[测试指南](testing.md)。
+环境检测由既有 Runner 目标 Agent 调用本项目入口，不由脚本再启动 Agent。环境适配遵循[项目环境适配规范](spec/project-environment-adaptation.spec.md)；业务测试入口及通过标准仍见[测试指南](testing.md)。
 
 ```steerline-environment
 {"version":1,"script":"scripts/verify-environment.ps1","interpreter":"pwsh","validation_base":"codex/environment-validation/steerline","dependencies":["scripts/environment-tty.ps1","go.mod","go.sum","SteerlineFlow/testing/l1.md","SteerlineFlow/testing/l2.md","tests/e2e/suites.json","cmd/test-feedback/managed.go"]}
@@ -14,7 +14,7 @@
 
 | 必需项 | 约定入口与验证 |
 | --- | --- |
-| TTY | 同一远端 Agent 的 `exec_command(tty:true)`；实际命令启动、stdin/stdout均未重定向、输出`STEERLINE_TTY_OK`、退出0 |
+| TTY | 同一目标 Agent 的 `exec_command(tty:true)`；实际命令启动、stdin/stdout均未重定向、输出`STEERLINE_TTY_OK`、退出0 |
 | PowerShell | PATH中的`pwsh` 7或更高版本 |
 | Git | PATH中的`git`，既有仓库认证及用户提交身份；不交互登录或修改Git配置 |
 | Go | PATH中的`go`，版本至少1.26.0，模块依赖已准备好 |

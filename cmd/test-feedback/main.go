@@ -321,7 +321,7 @@ func parseOptions(args []string) (options, error) {
 			opts.suite == "workflow" && opts.scenario == "workflow.local-codex-audited" ||
 			opts.suite == "testing" && opts.scenario == "testing.management-local-codex" ||
 			opts.suite == "configuration" && opts.scenario == remotetest.Discovery ||
-			opts.suite == "testing" && (opts.scenario == remotetest.Progress || opts.scenario == remotetest.Environment))
+			opts.suite == "testing" && (opts.scenario == remotetest.Progress || opts.scenario == remotetest.Environment || opts.scenario == remotetest.LocalEnvironment))
 		if localGo {
 			if opts.e2eEnv != "isolated" {
 				return opts, fmt.Errorf("L4 go.full requires isolated environment")

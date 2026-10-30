@@ -51,7 +51,7 @@ func RunProjectProgress(t *testing.T) {
 	// Writable native sessions authenticate the real repository identity. Local
 	// transport uses loopback; remote execution gets an owned GitHub base ref.
 	p.RemoteURL = githubURL
-	remote := loadProgressRemote(s, p)
+	remote := loadOrcaTarget(s, p)
 	p.git(p.Repo, "remote", "set-url", "origin", p.RemoteURL)
 	provider, err := controlled.Read(p.Provider)
 	s.Must(err)

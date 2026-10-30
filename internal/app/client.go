@@ -57,11 +57,6 @@ func openServiceProjectClientWithCommands(ctx context.Context, config Config, se
 		resources.Tests = bound.runtimeTests
 		resources.Control = clientControl{config: bound, store: store}
 		if store != nil {
-			checks := newEnvironmentCheckPort(bound, store)
-			if service != nil {
-				checks.service.Admit = service.VerifyRunnerAdmission
-			}
-			resources.EnvironmentChecks = checks
 			resources.OpenReader = func(ctx context.Context) (productclient.Reader, error) {
 				if err := ctx.Err(); err != nil {
 					return nil, err

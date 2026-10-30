@@ -20,7 +20,7 @@ func RunRunnerServiceFixture() bool {
 	}
 	args := os.Args[1:]
 	command := args[0]
-	if (command == "service" || command == "environment-check") && len(args) > 1 {
+	if command == "service" && len(args) > 1 {
 		command += " " + args[1]
 	}
 	var stateDir string
@@ -46,11 +46,6 @@ func RunRunnerServiceFixture() bool {
 		if err != nil || json.Unmarshal(raw, &data) != nil {
 			panic("missing public takeover fixture")
 		}
-	case "environment-check inspect":
-		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-check-fixture.json"))
-		if err != nil || json.Unmarshal(raw, &data) != nil {
-			panic("invalid public check fixture")
-		}
 	case "service verify-stopped":
 		var info map[string]any
 		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-fixture.json"))
@@ -72,7 +67,7 @@ func RunRunnerServiceFixture() bool {
 				runs = append(runs, map[string]any{"run_id": id, "input_digest": run["input_digest"], "resources_settled": true})
 			}
 		}
-		data = map[string]any{"state_dir": stateDir, "resources_settled": true, "runs": runs, "checks": []any{}}
+		data = map[string]any{"state_dir": stateDir, "resources_settled": true, "runs": runs}
 	case "version":
 		data = map[string]any{"version": version, "protocols": []string{"steerrunner-cli/v1"}, "resource_version": 1, "resource_digest": digest}
 	case "capabilities":
@@ -200,8 +195,13 @@ func RunnerServiceCapabilities(version string) map[string]any {
 		"execution_wait":        RunnerExecutionWaitCapability(),
 		"progress_file":         map[string]any{"contract": "steerrunner-progress-file/v1", "command": "progress-file --run-id R --json", "submit_property": "progress_file", "environment_variable": "STEERLINE_PROGRESS_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256"},
 		"progress_file_schema":  map[string]any{"$id": "steerrunner-progress-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-progress-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"type": "string"}}},
+		"result_file":           map[string]any{"contract": "steerrunner-result-file/v1", "command": "result-file --run-id R --json", "submit_property": "result_file", "environment_variable": "STEERLINE_RESULT_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256", "collection": "end_only", "query_reads_file": false},
+		"result_file_schema":    map[string]any{"$id": "steerrunner-result-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-result-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer", "minimum": 0, "maximum": 1}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"enum": []string{"disabled", "pending", "closed"}}}},
 		"native_session_viewer": map[string]any{"adapters": []string{"codex-app-server"}},
 		"instance_binding":      map[string]bool{"expected_instance_id": true},
-		"workflows":             []any{map[string]any{"id": "development", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"implement.execute", "implement.report", "publish", "publish.report"}, "states": map[string]any{"implement.execute": map[string]any{"kind": "execute", "contract": "implementation", "prompt_key": "implement.execute", "prompt": "Fixture implementation instruction."}}}},
+		"workflows": []any{
+			map[string]any{"id": "development", "version": 1, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"implement.execute", "implement.report", "publish", "publish.report"}, "states": map[string]any{"implement.execute": map[string]any{"kind": "execute", "contract": "implementation", "prompt_key": "implement.execute", "prompt": "Fixture implementation instruction."}}},
+			map[string]any{"id": "development", "version": 2, "supported_adapters": []string{"codex-app-server"}, "prompt_steps": []string{"prepare", "publish"}},
+		},
 		"configuration_schemas": map[string]any{"version": 1, "workflow": map[string]any{"type": "object"}, "run_configuration": map[string]any{"type": "object"}, "adapters": map[string]any{"codex-app-server": map[string]string{"type": "object"}}, "providers": map[string]any{"command": map[string]string{"type": "object"}}}}
 }

@@ -1,4 +1,4 @@
-// Package remotetest contains the single input snapshot for the three remote L4 tests.
+// Package remotetest contains the single input snapshot for the explicit execution profiles for environment and remote L4 tests.
 package remotetest
 
 import (
@@ -15,12 +15,14 @@ import (
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/executionconfig"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
 const Discovery = "configuration.execution-profiles-orca"
 const Progress = "testing.project-progress-orca-browser"
 const Environment = "testing.project-environment-orca"
+const LocalEnvironment = "testing.project-environment-local"
 
 type Input struct {
 	Profile         executionconfig.Profile `json:"profile"`
@@ -28,10 +30,13 @@ type Input struct {
 	Project         string                  `json:"project,omitempty"`
 	Commit          string                  `json:"commit,omitempty"`
 	ProjectConfig   json.RawMessage         `json:"project_config,omitempty"`
+	L2Verification  string                  `json:"l2_verification,omitempty"`
 	RoundSeconds    int                     `json:"round_seconds,omitempty"`
 }
 
-func Selected(id string) bool { return id == Discovery || id == Progress || id == Environment }
+func Selected(id string) bool {
+	return id == Discovery || id == Progress || id == Environment || id == LocalEnvironment
+}
 
 // Load is called once, by test-feedback before builds or fixture creation.
 // Children receive this value in STEERLINE_E2E_RUN, never the source file path.
@@ -39,9 +44,13 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	if !Selected(id) {
 		return nil, nil
 	}
-	path := getenv("STEERLINE_L4_REMOTE_PROFILE")
+	profileVariable := "STEERLINE_L4_REMOTE_PROFILE"
+	if id == LocalEnvironment {
+		profileVariable = "STEERLINE_L4_LOCAL_PROFILE"
+	}
+	path := getenv(profileVariable)
 	if !filepath.IsAbs(path) {
-		return nil, errors.New("STEERLINE_L4_REMOTE_PROFILE must be an absolute profile path")
+		return nil, fmt.Errorf("%s must be an absolute profile path", profileVariable)
 	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -55,23 +64,32 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	if err = executionconfig.Validate(3, p.ID, []executionconfig.Profile{p}); err != nil {
 		return nil, err
 	}
-	if p.Execution.Adapter != "orca-terminal" || p.Execution.Target.Kind != "orca_environment" || !regexp.MustCompile(`^[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$`).MatchString(p.Execution.Target.Environment) || p.Workflow.ID != "development" || p.Workflow.Version != 2 {
-		return nil, errors.New("remote L4 requires an explicit Orca environment and development/2")
-	}
-	var settings struct {
-		Transport struct {
-			Executable string `json:"executable"`
-		} `json:"transport"`
-		AgentLaunch struct {
-			Executable string `json:"executable"`
-			Model      string `json:"model"`
-		} `json:"agent_launch"`
-	}
-	if json.Unmarshal(p.Execution.Settings, &settings) != nil || !filepath.IsAbs(settings.Transport.Executable) || settings.AgentLaunch.Executable == "" || settings.AgentLaunch.Model == "" {
-		return nil, errors.New("remote profile requires explicit Orca executable and remote Agent executable/model")
-	}
-	if info, e := os.Stat(settings.Transport.Executable); e != nil || !info.Mode().IsRegular() {
-		return nil, errors.New("configured Orca executable unavailable")
+	if id == LocalEnvironment {
+		if p.Execution.Target.Kind != "local" || p.Execution.Target.Environment != "" || (p.Execution.Adapter != "codex-app-server" && p.Execution.Adapter != "orca-terminal") || p.Workflow.ID != "development" || p.Workflow.Version != 2 {
+			return nil, errors.New("local environment L4 requires an explicit local Codex/Orca profile and development/2")
+		}
+		if _, err := env.Key(p.Execution); err != nil {
+			return nil, err
+		}
+	} else {
+		if p.Execution.Adapter != "orca-terminal" || p.Execution.Target.Kind != "orca_environment" || !regexp.MustCompile(`^[a-fA-F0-9]{8}(?:-[a-fA-F0-9]{4}){3}-[a-fA-F0-9]{12}$`).MatchString(p.Execution.Target.Environment) || p.Workflow.ID != "development" || p.Workflow.Version != 2 {
+			return nil, errors.New("remote L4 requires an explicit Orca environment and development/2")
+		}
+		var settings struct {
+			Transport struct {
+				Executable string `json:"executable"`
+			} `json:"transport"`
+			AgentLaunch struct {
+				Executable string `json:"executable"`
+				Model      string `json:"model"`
+			} `json:"agent_launch"`
+		}
+		if json.Unmarshal(p.Execution.Settings, &settings) != nil || !filepath.IsAbs(settings.Transport.Executable) || settings.AgentLaunch.Executable == "" || settings.AgentLaunch.Model == "" {
+			return nil, errors.New("remote profile requires explicit Orca executable and remote Agent executable/model")
+		}
+		if info, e := os.Stat(settings.Transport.Executable); e != nil || !info.Mode().IsRegular() {
+			return nil, errors.New("configured Orca executable unavailable")
+		}
 	}
 	in.ExecutionDigest = Digest(p.Execution)
 	if id == Discovery {
@@ -97,7 +115,7 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 			Branch        string `json:"branch"`
 			TaskAuthority string `json:"task_authority"`
 		}
-		if json.Unmarshal(in.ProjectConfig, &project) != nil || project.Branch != "AIRefactor" || project.TaskAuthority != "native" {
+		if json.Unmarshal(in.ProjectConfig, &project) != nil || project.Branch == "" || id != LocalEnvironment && project.Branch != "AIRefactor" || project.TaskAuthority != "native" {
 			return nil, errors.New("308 project config must select AIRefactor and explicit native task authority")
 		}
 		in.Project, in.Commit = project.Repository, getenv("STEERLINE_L4_PROJECT_COMMIT")
@@ -132,7 +150,57 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	if len(script) == 0 {
 		return nil, errors.New("committed environment script is empty")
 	}
+	rules, err := show(env.ExecutionRulesPath)
+	if err != nil {
+		return nil, err
+	}
+	expectedRules, err := prompts.EnvironmentExecutionRules()
+	if err != nil {
+		return nil, err
+	}
+	if !prompts.SameRules(rules, expectedRules) {
+		return nil, errors.New("pinned project environment execution rules differ from this build; maintain and commit the same-version material before live validation")
+	}
+	if id == LocalEnvironment {
+		in.L2Verification, err = environmentL2Verification(show)
+		if err != nil {
+			return nil, err
+		}
+	}
 	return in, nil
+}
+
+// These are the two existing project verifiers reused by the live driver.
+// Fail before fixture creation for unknown or ambiguous report formats.
+func environmentL2Verification(show func(string) ([]byte, error)) (string, error) {
+	formats := []struct {
+		name  string
+		paths []string
+	}{
+		{"python", []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"}},
+		{"managed-powershell", []string{"SteerlineFlow/testing/test-list.json", "tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"}},
+	}
+	found := ""
+	for _, format := range formats {
+		complete := true
+		for _, path := range format.paths {
+			raw, err := show(path)
+			if err != nil || len(raw) == 0 {
+				complete = false
+				break
+			}
+		}
+		if complete {
+			if found != "" {
+				return "", errors.New("ambiguous original project L2 verifier")
+			}
+			found = format.name
+		}
+	}
+	if found == "" {
+		return "", errors.New("local environment L4 requires an existing committed Python or managed PowerShell project L2 verifier")
+	}
+	return found, nil
 }
 
 func Digest(execution runnercontract.ExecutionInput) string {

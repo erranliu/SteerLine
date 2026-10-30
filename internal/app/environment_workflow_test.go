@@ -135,6 +135,21 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			runtime := &runtimeProjectPort{actor: actor, config: c, store: store, instance: actor.InstanceID()}
 			payload, _ := json.Marshal(env.Start{Profile: "remote", TimeoutSeconds: 60})
 			request := httpcontract.CommandEnvelope{RequestID: env.ID(), ProjectID: httpcontract.ProjectID(c.Identity()), InstanceID: actor.InstanceID(), Action: "environment_start", TargetID: httpcontract.ProjectID(c.Identity()), ExpectedVersion: 1, Payload: payload}
+			for _, invalid := range []string{`{"profile_id":"remote","round_timeout_seconds":60}`, `{"profile_id":"remote","round_timeout_seconds":60,"expected_current_revision":null}`} {
+				bad := request
+				bad.RequestID = env.ID()
+				bad.Payload = json.RawMessage(invalid)
+				receipt, err := runtime.Command(ctx, bad)
+				require(t, err)
+				if receipt.Status != "rejected" || peer.submits != 0 {
+					t.Fatal("missing current revision reached Runner", receipt)
+				}
+				rows, err := store.Environments(ctx, c.Identity())
+				require(t, err)
+				if len(rows) != 0 {
+					t.Fatal("invalid start selected activity")
+				}
+			}
 			out, e := runtime.Command(ctx, request)
 			require(t, e)
 			if out.Status != "applied" {
@@ -163,7 +178,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			if strings.Contains(string(raw), "agent_launch") || strings.Contains(string(raw), "initial_content_base64") || !strings.Contains(string(raw), "\"report\"") || !strings.Contains(string(raw), "\"result\"") || !strings.Contains(string(raw), "fixture native explanation") {
 				t.Fatal("public view leaked frozen input or lost report")
 			}
-			if _, e = port.ready(ctx, "remote"); e != nil {
+			if _, _, e = port.admission(ctx, "remote", "", false); e != nil {
 				t.Fatal("environment readiness differs from complete sealed report", e)
 			}
 			probe := &environmentReserveProbe{SQLiteStore: store}
