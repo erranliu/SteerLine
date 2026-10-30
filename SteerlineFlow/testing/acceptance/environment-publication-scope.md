@@ -1,6 +1,6 @@
 # 环境检测发布范围收敛验收
 
-2026-10-30。[Spec](../../spec/environment-publication-scope.spec.md) · [Plan](../../plans/environment-publication-scope.plan.md)。用户确认先收缩脚本到正常交付需要的能力、再重跑本机Codex；不改Runner权限，不部署安装环境。本机Orca等Runner修复，远端连接未恢复不重跑。
+2026-10-30。[Spec](../../spec/environment-publication-scope.spec.md) · [Plan](../../plans/environment-publication-scope.plan.md)。用户确认先收缩脚本到正常交付需要的能力、再重跑本机Codex；实施及本机Codex正式L4已通过，不改Runner权限，不部署安装环境。本机Orca等Runner修复，远端连接未恢复不重跑。
 
 ## 已实施边界
 
@@ -70,3 +70,18 @@ ready须原Runner的provider、仓库及head仓库、URL/base/head/SHA、可用P
 第四次失败说明候选RunID可先于caller的InputDigest/Projection出现。等待条件改为与既有progress L4完全一致：三者齐备才记录原绑定并停止；非空守卫、原Run/digest/active/stopped断言保持。此单行实际diff经独立复核批准后固定提交，再独立补测；不改变生产逻辑或将失败现场冒充通过。
 
 第四次现场清理补证为 `diagnostics/native-ref-cleanup-b183061efbce4c2880afbc8fdc124935/`：核实原PR700精确已合并、原Runner资源confirmed、准入source无PR及准入远端分支不存在后，以原SHA租约原子删除三条自有ref；原失败报告与scratch保持原样。
+
+## 最终真实本机Codex通过
+
+固定干净源码 `edb20d721342409aa77acbe3ef24f0a109ff5d4b`、SteerlineTest `20610e10285d9ab9bb4ea3be0c07410158692fc0`，沿用原profile/Runner/900秒预算，输入在 `diagnostics/live-inputs-42fde6c89f8c445ab3038cce45e49d92/manifest.json`。实际命令为 `go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-local -out C:/SteerlineDebug/wt-5069-environment-publication-scope/test-results/L4/codex-bound-stop-8df423d78e4c40e3ba79df31c4af1e98`，通过固定manifest显式设置五项环境变量，非默认安装配置。
+
+- 同提交L1通过：`test-results/L1/binding-4b42531d557d4f2bb243358fb02f0152/`；完整L2通过、清理完整：`test-results/L2/binding-8413fa3244b245ab979aa6769171e847/`。
+- 正式L4原报告 `test-results/L4/codex-bound-stop-8df423d78e4c40e3ba79df31c4af1e98/summary.json`，passed=true；受管报告确认before/after提交相同、源码均干净。实际场景passed=true、cleanup_complete=true，无清理错误。
+- 原活动 `7327c4728d5147e2ad694418d1331e51` 一轮ready，原环境Run `3da5efe29a5f851b462ceb8e7f76e074`。六项检查含实际TTY、原L1及完整L2通过且零跳过。result-file/v1已closed，正文为report2，SHA256 `2fe1382922fa58aea584fbfee1c1e72400c0256908702690ccecfe54d74f53f3`；原Run stop_status=stopped。
+- [验证PR701](https://github.com/erranliu/SteerlineTest/pull/701)由Agent真实发布，head `92fefc73fc02dfdfd34709da8cce2460d293b737`。外部驱动读取原规则（required_checks为空、最低审批数0）、核实原完整L2，再以预期head合并；merge commit `0971dedd56cdd607adfb6c14664c114ea935779f`，不合入业务main，不回写原result。
+- 准备前start_task被environment_not_ready拒绝、零候选Run；ready后实际准入Run `5be6a6a8901445aea6e4f64d25b848bc`，唯一candidate `e697c4ceb09e44f08d095b7575138821`，input_digest `c291d3848f75745c1ee0ae886bc68a3e9a5ff24629f88ba6610c64c717d0cc42`。公开停止前四次均为结构化stale_revision零受理，刷新原Run revision后第五次受理；没有未知重发或扩大五次上限。原Run stopped且caller核对同candidate/Run/digest/active/stopped，原请求与回执保留为admission-stop-request/response-0至4.json。
+- 同一场景内 `308-runner-cleanup.json` confirmed=true、`remote-ref-cleanup.json` confirmed=true，四条自有source/validation/环境Run/准入Run分支均核实清理；无需事后补证。此前四份失败报告及其独立补充清理证据原样保留。
+
+本机Codex在现有权限与工具配置下已证明所需执行/发布能力可用；此前403发生于额外分支策略请求，未保留原HTTP响应体，具体代理归因仍仅为源码推断，不把本次通过当作其来源证明。结论仅覆盖固定项目提交与本机Codex环境；308 Unity、本机Orca及远端Orca未因此获得ready。未部署安装环境，材料PR695/441与主PR412未自动合并。
+
+最终独立只读审阅者 `/root/publication_scope_review` 已复核固定源码L1/完整L2/正式L4原报告、原result摘要及PR/准入/停止/清理证据和本轮验收正文，批准且无剩余确定缺陷；四份失败记录继续保持失败。收尾仅提交验收文档，不再修改已验实现。
