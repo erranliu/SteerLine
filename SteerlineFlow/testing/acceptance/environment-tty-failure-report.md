@@ -2,6 +2,18 @@
 
 2026-10-30，用户授权修改并实测。[Spec](../../spec/environment-tty-failure-report.spec.md) · [Plan](../../plans/environment-tty-failure-report.plan.md)。普通开发，不部署安装环境，不修改Runner、caller状态机或报告版本。历史远端未完成报告保留于[原验收](environment-publication-scope.md)，不改写为通过。
 
+## 两条链路签收（2026-10-30）
+
+用户确认本机Codex、远端Orca检测流程验收完成，并决定本轮不继续追查Runner通用输入提交问题。签收按各自固定受测版本及实际正/负向范围登记，不把环境检测有效完成等同于环境ready。
+
+| 链路 | 流程验收 | 环境结论及证据 |
+| --- | --- | --- |
+| 本机Codex | 完成，正向完整链 | SteerLine `edb20d721342409aa77acbe3ef24f0a109ff5d4b`、SteerlineTest `20610e10285d9ab9bb4ea3be0c07410158692fc0` 的正式L4 passed=true/cleanup_complete=true，TTY、完整L2、原PR发布/外部精确合并、ready后准入及停止均通过；详见[原固定版本验收](environment-publication-scope.md)。本次新增tty-failure原生分支在远端验证，不宣称已在本机Codex重跑 |
+| 远端Orca | 完成，真实三轮负向闭环；TFR-A04通过 | SteerLine `861698809bbcd6164587709973731596fa350f24`、308 `1c25de58c87b99f44f9fc43f61de09444ba4391d`；三轮TTY均明确失败，原报告completed=true、原Run停止/结果closed、正常failed/not_ready/settled、无PR、准入拒绝及清理通过；完整L2/发布未执行，正向L4保持passed=false |
+| 本机Orca | 未完成 | 仍保留原Runner本机前置阻断，不借用上述两条链路的结果；见[原始记录](project-environment-readiness.md) |
+
+Runner后续修复通常不要求SteerLine代码改动，但可通过正式真实L4验证集成效果；本次没有接入或验证尚未交付的Runner修复。以下实现、受控验证及早期原生失败均保留，最新三轮证据见末节。
+
 ## 已实施及审核
 
 同一项目脚本新增tty-failure入口，只记录已明确结束的TTY前置失败；在Git/Check/L2之前分流，复用原双文件原子writer。普通工具仅可调用此记录入口，不重跑探测、测试或发布。报告固定terminal.tty=failed、缺项incomplete，保留原身份/previous/同轮事实。初始空报告或同轮已完成且自有清理确认才可使用；发布事实/未知、PR进度、部分报告及非法字段/状态/ID/进度在写任一文件前拒绝。全部工具不可用或执行受理未知继续保留未完成，不伪造结算。正常三轮预算/停止封存/派发门禁保持。
@@ -44,7 +56,7 @@ SteerlineTest独立clone `C:/SteerlineDebug/wt-5069-environment-publication-scop
 
 新项目材料为[SteerlineTest PR703](https://github.com/erranliu/SteerlineTest/pull/703)和[308 PR442](http://192.168.0.66:3000/zymobile/merge-h-308-code/pulls/442)，固定提交如上，未自动合并。应用附件工具不接受HTTP Gitea URL，普通链接保留；这不影响原PR已成功创建。主仓沿[PR413](https://github.com/erranliu/SteerLine/pull/413)维护，原生验收不足时保持草稿。
 
-## TFR-A04真实远端已尝试，受理回执阻断
+## TFR-A04早期真实远端失败记录：受理回执阻断
 
 材料发布前曾出现Orca断连及Gitea超时/EOF，原只读前置 `diagnostics/live-preflight-6eeac7823c5c456ea9eddfd8774ec3e1/` 保存Orca失联/Gitea已恢复的原回执。用户明确恢复连接后，核实同一environment `e68f4edf-8a83-42c2-a9da-6d404d3aa3d8`、runtime `64bdec68-d3ed-4216-a894-0cc143ed4653`、原308注册仓库及Gitea1.27.1。固定输入 `diagnostics/live-inputs-1ce210223a114596a6d69badfe6060b7/manifest.json`：SteerLine d92784f5、308 1c25de58c8、原full_access/gpt-6-luna high/development2 profile、独立Runner SHA256 `7b57b06472ae7c36befa71222cdc6e61f7bc2fda410adee6d6aaf32e58fdc2b5`、1200秒轮次预算，没有更改Runner或目标配置。
 
@@ -56,6 +68,26 @@ SteerlineTest独立clone `C:/SteerlineDebug/wt-5069-environment-publication-scop
 
 原场景 `308-runner-cleanup.json` confirmed=true；`diagnostics/original-ref-cleanup-bf2aaee65c154b6f8ddda920c20db20c/` 独立核实两个精确Gitea base无PR、原生分支未发布，按原夹具SHA租约原子删除source/validation两条自有ref，未改原失败summary或scratch。Runner结算仍仅确认原Orca终端，明确未验证或撤销detached进程/执行主机凭据，不能扩大保证。
 
-TFR-A01–A03已通过；TFR-A04本次验收失败（检测输入尚未核实受理，新报告入口原生分支未验）。未通过换路径、代写result或伪造TTY故障补证，未修改/重建Runner或部署安装。通用输入受理链恢复后，仍需新独立现场实测原三轮负报告正常结束；受控通过不能代替该原生证据。
+该次TFR-A01–A03已通过；TFR-A04尝试失败（检测输入尚未核实受理，新报告入口当时未验）。未通过换路径、代写result或伪造TTY故障补证，未修改/重建Runner或部署安装。原失败保持；随后新独立现场已完成三轮负报告，见下一节。
 
 最终独立审阅者已核对原Run/input_digest/attempt/generation/session、terminal runtime/handle/incarnation、原初始result逐字节及摘要、正式summary与managed绑定、停止回执及补充清理，批准事实和未验边界；原生失败不改写。619份Markdown/3915条本地链接零错误，测试清单/场景一致性两项通过，diff检查通过。收尾仅补验收文档，已验实现不再变化。
+
+## TFR-A04真实三轮负向闭环通过
+
+新证据根 `C:/SteerlineDebug/wt-5069-native-input-repro/`。完整汇总 `diagnostics/reproduction-summary-20261030.json`；正式原报告 `test-results/L4/formal-01-b6504501b54b41dcb6504af0a4faa041/summary.json`，场景 `scenarios/testing.project-environment-orca/`。SteerLine固定干净提交86169880，308材料固定1c25de58c8，夹具 `3978ffb965ff441aa107064413c8d2e3c60a0b3b`。沿用原独立Runner EXE SHA256 `7b57b06472ae7c36befa71222cdc6e61f7bc2fda410adee6d6aaf32e58fdc2b5`、原full_access/gpt-6-luna high/development2 profile、1200秒轮次预算及同一远端runtime `64bdec68-d3ed-4216-a894-0cc143ed4653`，未换传输路径或修改目标配置。
+
+实际命令：`go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-orca -out C:/SteerlineDebug/wt-5069-native-input-repro/test-results/L4/formal-01-b6504501b54b41dcb6504af0a4faa041`。一次正式活动 `84e4aa565d694e0ca2eda630dca3de43` 自动产生三个独立原生Run/终端，不是三次完整L4调用。
+
+| 轮次 / 原Run | 原result SHA256 |
+| --- | --- |
+| 1 / `2890eb5afdaaf0f76d8cf1918a452324` | `79dfe060c17069956abab95bd21675e5c862a71fad4cb137c2c3bd8d5e16e2e5` |
+| 2 / `516f94a9efa2e0941b37361b8d26f04e` | `b9dcc26162d82e5107d7e756036177097fa034d80838d69285d481ab4330be96` |
+| 3 / `29f9878e8f7888b0cbf24a26faac758f` | `3eb6189b7dc7eac5cc43bafc888ca3c2a14481060960efff52ea80b77acf7356` |
+
+三轮均核实turn_started=true，真实TTY最小入口在进程启动前返回CreateProcessW / OS error -1073283067。Agent遵守固定规则，不换封装重跑检测，仅调用原项目tty-failure入口记录失败；每轮report2 completed=true、terminal.tty=failed，其余12项检查及3项L2均incomplete，PR为空、outcome_unknown=false、cleanup_completed=true。原Run均stopped、result-file/v1均closed、round settled=true、timed_out=false。汇总逐份复算原base64正文SHA及关联身份，与typed report共同字段一致；第二、三轮raw额外保留previous，不将其误判为正文冲突。
+
+`environment-proof.json` 记录三轮预算正常终结，最终failed/not_ready/settled，没有人工取消或第四轮。`provider-pr-proof.json` 独立核实无PR；`admission-proof.json` 核实准备前后均environment_not_ready拒绝、零准入Run。`308-runner-cleanup.json` confirmed=true、`remote-ref-cleanup.json` confirmed=true，场景cleanup_complete=true且无清理错误。清理保证仍受Runner原终端结算边界约束，不扩展为远端主机全部detached进程或凭据撤销。
+
+正式summary/managed/scenario仍passed=false，原命令exit1，因为目标环境未ready；不改写为正向L4通过。本轮已满足Spec/Plan允许的TFR-A04负报告闭环通过条件，用户据此签收远端检测流程。原输入受理未知持续阻断本轮0/3复现，但不证明历史问题已修复；离线快照比较不是原生重复。按用户决定停止追查该Runner问题，不将其列为两条已验流程的待办。本机Orca、远端正向完整L2/PR及未来Runner修复集成仍不继承本次通过。
+
+本次签收及新原生证据经 `/root/acceptance_closure_review` 独立只读复核通过，核对本机固定正向报告、远端managed/summary、三轮raw正文及SHA、停止、无PR、门禁和清理，无确定事实问题。仅修改四份验收记录，619份Markdown/3921条本地链接零错误，测试清单/场景一致性两项通过，git diff --check通过；未修改实现、固定提示词、项目材料或测试定义。

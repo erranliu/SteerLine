@@ -1,12 +1,12 @@
 # 验收流程与记录
 
-TTY前置失败报告收尾（2026-10-30，实施、受控及固定回归通过，原生验收受阻）：[专属验收](environment-tty-failure-report.md)。项目脚本纯失败入口保留原身份/同轮事实，未知生产者或发布事实拒绝覆盖；不改Runner或状态机。三项目脚本、受控三轮、L1/完整L2/readiness L3通过；真实远端恢复连接后仍在原输入受理未知阻断，未执行新入口，原失败/停止/补充清理均保留，不部署。
+TTY前置失败报告收尾（2026-10-30，实施及远端真实三轮负向闭环验收完成）：[专属验收及两条链路签收](environment-tty-failure-report.md)。本机Codex正向流程、远端Orca负向检测流程按各自固定受测版本完成验收；远端TTY失败，环境仍not_ready，正式正向L4仍passed=false。新入口三轮均完成负报告、正常停止封存、预算终结、无PR、门禁及清理。本机Orca仍未验；历史输入受理未知问题保留，用户决定不继续追查，不部署。
 
-环境检测按正常发布能力收敛（2026-10-30，实施及本机Codex真实L4通过）：[专属验收](environment-publication-scope.md)。Agent只验执行和PR发布，外部L4负责规则/精确合并；report2、原PR绑定、派发门禁、原Run停止及完整清理已核实。本机Orca待Runner修复；远端再试取得脚本三个配置缺项，但默认TTY启动仍失败、首轮换封装继续不算严格流程通过，第二轮未执行检测；失败与原Run收尾分别保留，不改Runner权限或部署安装环境。
+环境检测按正常发布能力收敛（2026-10-30，本机Codex正向流程验收完成）：[专属验收](environment-publication-scope.md)。Agent只验执行和PR发布，外部L4负责规则/精确合并；report2、原PR绑定、派发门禁、原Run停止及完整清理已核实。远端Orca后续负向闭环签收见[TTY收尾验收](environment-tty-failure-report.md)，早期失败保留；本机Orca仍待Runner修复，不改Runner权限或部署安装环境。
 
 旧 Runner Check 接入退役（2026-10-29，实施与验收完成）：[专属验收](legacy-environment-check-retirement.md)。旧消费者退出，普通Run/result准备与派发门禁保留；完整owner、Web、L1/L2、三条L3、独立Runner真实契约和独立复审通过。原生准备的既有未通过项仍归原验收，未部署安装环境。
 
-项目 × 环境准备状态与统一派发门禁（2026-10-29，实施及受控验证完成）：[专属验收与审计](project-environment-readiness.md)。两项目材料已维护并合并，三条原生路径已执行但未正向通过；检测通道失败与环境能力结论分别记录。旧Check退役不改变原结论，未部署。
+项目 × 环境准备状态与统一派发门禁（2026-10-30，本机Codex与远端Orca检测流程验收完成）：[专属验收与审计](project-environment-readiness.md)。本机Codex已有完整正向L4；远端Orca已完成真实三轮TTY负向检测，环境仍not_ready并阻断派发。本机Orca仍未验；各阶段失败和固定版本证据分别保留，未部署。
 
 固定提示词管理与变更门禁（2026-10-28，仓库实现已完成）：[审计与验收](prompt-governance.md)，记录一处错误前提及四类过度设计的收窄；核心定向、L1/L2/runtime-progress L3 通过，完整边界的既有失败已按原 HEAD 独立复现，远端保护未启用/未验。不进入 roadmap 执行队列。
 
