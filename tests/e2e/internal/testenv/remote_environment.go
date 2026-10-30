@@ -246,7 +246,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 			return false, e
 		}
 		for _, c := range snap.Runner.Candidates {
-			if c.RunID != "" {
+			if c.RunID != "" && c.InputDigest != "" && c.Projection != nil {
 				p.verifyRemoteExecution(c.Submit.Input)
 				admitted = c.RunID
 				admittedCandidate, admittedDigest = c.ID, c.InputDigest
