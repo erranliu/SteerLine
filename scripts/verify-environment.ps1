@@ -25,7 +25,7 @@ function Save-Result {Write-Atomic $report $env:STEERLINE_RESULT_FILE}
 function Set-Progress {
     $progress=Get-Content -Raw -LiteralPath $env:STEERLINE_PROGRESS_FILE|ConvertFrom-Json -AsHashtable
     foreach($item in $report.l2){$key='test.'+$item.test_id;if(!$progress.ContainsKey($key)){throw 'Undeclared L2 progress field'};$progress[$key]=$item.status -ceq 'passed'}
-    $progress.pr=[bool]($report.pr.merged -and $report.pr.cleanup_completed -and !$report.pr.outcome_unknown)
+    $progress.pr=[bool]($report.pr.url -and $report.pr.head_revision -and $report.pr.cleanup_completed -and !$report.pr.outcome_unknown)
     Write-Atomic $progress $env:STEERLINE_PROGRESS_FILE
 }
 function Invoke-GitValue {$Arguments=$args;$value=@(& git @Arguments);if($LASTEXITCODE){throw ('Git failed: '+$Arguments[0])};return ($value -join "`n").Trim()}
@@ -48,7 +48,7 @@ function Verify-L2 {
 }
 
 try {
-    if($report.version -ne 1 -or $report.activity_id -notmatch '^[a-f0-9]{32}$' -or $report.round -notin 1,2,3 -or !$definitions.Count){throw 'Invalid original environment input'}
+    if($report.version -ne 2 -or $report.activity_id -notmatch '^[a-f0-9]{32}$' -or $report.round -notin 1,2,3 -or !$definitions.Count){throw 'Invalid original environment input'}
     $head=Invoke-GitValue @('branch','--show-current');$base=[string]$manifest.validation_base
     if(!$head -or $base -in @('main','master') -or $head -in @('main','master',$base)){throw 'Validation requires an isolated base and original Runner head'}
     $report.pr.base=$base;$report.pr.head=$head
@@ -76,13 +76,7 @@ try {
     Save-Result
     if ($tty.status -cne 'passed') { throw $tty.message }
     Verify-L2
-    if($report.pr.merged){Write-Output $report.pr.url;exit 0}
     if($report.pr.outcome_unknown){throw 'Original publication outcome unknown; reconcile the original PR, do not repeat writes'}
-    $policy=Invoke-GhValue @('api','repos/erranliu/SteerLine/branches/main')|ConvertFrom-Json
-    if($policy.protected){throw 'Source branch policy changed; maintain the project PR rules before validation'}
-    $rules = @(Invoke-GhValue @('api','repos/erranliu/SteerLine/rulesets') | ConvertFrom-Json)
-    $validationPolicy = Invoke-GhValue @('api',('repos/erranliu/SteerLine/branches/'+[uri]::EscapeDataString($base))) | ConvertFrom-Json
-    if ($rules.Count -or $validationPolicy.protected) { throw 'Validation PR rules require maintenance; do not bypass checks or reviews' }
     $probe='SteerlineFlow/testing/validation/'+$report.activity_id+'-'+$report.round+'.md'
     $revision=Invoke-GitValue @('rev-parse','HEAD')
     if($revision -ceq $report.source_commit){
@@ -102,12 +96,9 @@ try {
     if(!$prs.Count){$report.pr.url=(Invoke-GhValue @('pr','create','--repo','erranliu/SteerLine','--base',$base,'--head',$head,'--title',('Environment validation '+$report.activity_id),'--body','Isolated project environment validation. Complete original L1/L2 ran in the assigned remote worktree.')).Trim();Save-Result}
     else {$report.pr.url=$prs[0].url;Save-Result}
     $pr=Invoke-GhValue @('pr','view',$report.pr.url,'--repo','erranliu/SteerLine','--json','url,state,baseRefName,headRefName,headRefOid,mergeCommit')|ConvertFrom-Json
-    if($pr.baseRefName -cne $base -or $pr.headRefName -cne $head -or $pr.headRefOid -cne $revision){throw 'Original PR identity differs'}
-    if($pr.state -ceq 'OPEN'){Invoke-GhValue @('pr','merge',$report.pr.url,'--repo','erranliu/SteerLine','--merge','--match-head-commit',$revision)|Out-Null}
-    $pr=Invoke-GhValue @('pr','view',$report.pr.url,'--repo','erranliu/SteerLine','--json','url,state,baseRefName,headRefName,headRefOid,mergeCommit')|ConvertFrom-Json
-    if($pr.state -cne 'MERGED' -or !$pr.mergeCommit.oid -or $pr.headRefOid -cne $revision -or $pr.baseRefName -cne $base -or $pr.headRefName -cne $head){throw 'Original PR merge not verified'}
-    $report.pr.checks_passed=$true;$report.pr.reviews_passed=$true;$report.pr.merged=$true;$report.pr.merge_commit=$pr.mergeCommit.oid;$report.pr.cleanup_completed=$true;$report.pr.outcome_unknown=$false
-    $report.completed=$true;$report.message='Original complete L2 and isolated real PR merge verified; no script-owned live resources';Set-Progress;Save-Result
+    if($pr.state -cnotin @('OPEN','MERGED') -or $pr.baseRefName -cne $base -or $pr.headRefName -cne $head -or $pr.headRefOid -cne $revision){throw 'Original PR identity differs'}
+    $report.pr.head_revision=$revision;$report.pr.cleanup_completed=$true;$report.pr.outcome_unknown=$false
+    $report.completed=$true;$report.message='Original complete L2 and original PR publication verified; no script-owned live resources';Set-Progress;Save-Result
     Write-Output $report.pr.url
 } catch {
     $report.completed=$true;$report.message=$_.Exception.Message

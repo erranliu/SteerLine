@@ -1,5 +1,7 @@
 # 验收流程与记录
 
+环境检测按正常发布能力收敛（2026-10-30）：[专属验收](environment-publication-scope.md)。Agent只验执行和PR发布，外部L4负责规则/精确合并；report2和原PR绑定、受控回归与真实复验分别记录，不改Runner权限或部署安装环境。
+
 旧 Runner Check 接入退役（2026-10-29，实施与验收完成）：[专属验收](legacy-environment-check-retirement.md)。旧消费者退出，普通Run/result准备与派发门禁保留；完整owner、Web、L1/L2、三条L3、独立Runner真实契约和独立复审通过。原生准备的既有未通过项仍归原验收，未部署安装环境。
 
 项目 × 环境准备状态与统一派发门禁（2026-10-29，实施及受控验证完成）：[专属验收与审计](project-environment-readiness.md)。两项目材料已维护并合并，三条原生路径已执行但未正向通过；检测通道失败与环境能力结论分别记录。旧Check退役不改变原结论，未部署。

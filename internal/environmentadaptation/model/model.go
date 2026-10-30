@@ -25,6 +25,7 @@ const GenerationRulesPath = "SteerlineFlow/environment-generation.md"
 const GenerationContextPath = "SteerlineFlow/environment-context.json"
 const ExecutionRulesPath = "SteerlineFlow/environment-execution.md"
 const MaxRounds = 3
+const ReportVersion = 2
 
 var ErrNotFound = errors.New("environment activity not found")
 var IDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
@@ -195,10 +196,7 @@ type PR struct {
 	URL              string `json:"url"`
 	Base             string `json:"base"`
 	Head             string `json:"head"`
-	ChecksPassed     bool   `json:"checks_passed"`
-	ReviewsPassed    bool   `json:"reviews_passed"`
-	Merged           bool   `json:"merged"`
-	MergeCommit      string `json:"merge_commit"`
+	HeadRevision     string `json:"head_revision"`
 	CleanupCompleted bool   `json:"cleanup_completed"`
 	OutcomeUnknown   bool   `json:"outcome_unknown"`
 }
@@ -250,7 +248,7 @@ func ParseReport(raw []byte, r Record, a Round) (*Report, error) {
 		}
 	}
 	p := file.Report
-	if p.Version != 1 || p.ActivityID != r.ID || p.Round != a.Number || p.Commit != r.Prepared.Commit || p.ScriptDigest != r.Prepared.ScriptDigest {
+	if p.Version != ReportVersion || p.ActivityID != r.ID || p.Round != a.Number || p.Commit != r.Prepared.Commit || p.ScriptDigest != r.Prepared.ScriptDigest {
 		return nil, errors.New("report differs from original round/materials")
 	}
 	if !p.Completed {
@@ -306,7 +304,7 @@ func (p Report) Passed(base, head string) bool {
 		}
 	}
 	u, e := url.ParseRequestURI(p.PR.URL)
-	return e == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http") && !p.PR.OutcomeUnknown && p.PR.Base == base && head != "" && p.PR.Head == head && p.PR.ChecksPassed && p.PR.ReviewsPassed && p.PR.Merged && regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(p.PR.MergeCommit) && p.PR.CleanupCompleted
+	return p.Version == ReportVersion && e == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http") && !p.PR.OutcomeUnknown && p.PR.Base == base && head != "" && p.PR.Head == head && regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(p.PR.HeadRevision) && p.PR.CleanupCompleted
 }
 
 func DigestJSON(v any) string { b, _ := json.Marshal(v); return Digest(b) }

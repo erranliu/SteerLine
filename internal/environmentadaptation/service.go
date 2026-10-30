@@ -166,7 +166,7 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 	if n > 1 {
 		previous = PreviousFacts(*r, r.Rounds[n-2])
 	}
-	initial, err := json.Marshal(envmodel.RoundFile{envmodel.Report{Version: 1, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []envmodel.Check{}, L2: []envmodel.Item{}}, previous})
+	initial, err := json.Marshal(envmodel.RoundFile{envmodel.Report{Version: envmodel.ReportVersion, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []envmodel.Check{}, L2: []envmodel.Item{}}, previous})
 	if err != nil {
 		return err
 	}
@@ -473,7 +473,7 @@ func (s *Service) next(ctx context.Context, r *envmodel.Record) error {
 	// was dispatched. A stopped/cancelled prepare need not invent a report.
 	beforePR := a.Run != nil && a.Run.PR == nil && (a.Run.Phase == "implement" || strings.HasPrefix(a.Run.Step, "implement.")) && (a.Report == nil || a.Report.PR.URL == "" && !a.Report.PR.OutcomeUnknown)
 	safePR := a.Report != nil && a.Report.Completed && !a.Report.PR.OutcomeUnknown && (a.Report.PR.URL == "" || a.Report.PR.CleanupCompleted)
-	if a.Run != nil && a.Run.PR != nil && (a.Report == nil || a.Run.PR.URL != a.Report.PR.URL) {
+	if (a.Report != nil && a.Report.PR.URL != "" || a.Run != nil && a.Run.PR != nil) && !verifiedPublication(r.Prepared.Input.Publication, a) {
 		safePR = false
 	}
 	if !safePR && (r.Cancelled || a.TimedOut) && beforePR {
@@ -505,6 +505,17 @@ func (s *Service) next(ctx context.Context, r *envmodel.Record) error {
 		r.State = "failed"
 	}
 	return s.finish(ctx, r)
+}
+
+// The script reports publication; the original Runner observation independently
+// binds it to the frozen repository and exact revision. Missing facts stay
+// unverified rather than opening another round that could publish a second PR.
+func verifiedPublication(target runnercontract.Publication, a envmodel.Round) bool {
+	if a.Report == nil || a.Run == nil || a.Run.PR == nil {
+		return false
+	}
+	p, fact := a.Report.PR, a.Run.PR
+	return fact.QueryError == "" && (fact.State == "open" || fact.Merged || fact.State == "merged") && target.Provider != "" && fact.Provider == target.Provider && target.Repository != "" && fact.Repository == target.Repository && fact.HeadRepository == target.Repository && fact.URL == p.URL && fact.BaseBranch == target.BaseBranch && p.Base == target.BaseBranch && fact.HeadBranch == a.Run.Execution.Branch && p.Head == fact.HeadBranch && p.HeadRevision != "" && fact.HeadRevision == p.HeadRevision
 }
 func (s *Service) finish(ctx context.Context, r *envmodel.Record) error {
 	e := s.save(ctx, r)

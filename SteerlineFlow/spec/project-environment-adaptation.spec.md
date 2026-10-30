@@ -1,5 +1,7 @@
 # Spec：项目远端环境适配
 
+2026-10-30：报告及PR验收范围由[发布能力规格](environment-publication-scope.spec.md)替代，旧合并字段不再使用。
+
 2026-10-26。状态：按五项审计收敛实施，并按Runner result最终快照四点适配修订；实际通过及未验范围只见专属验收。本次按用户指定前提：Runner已实现独立双通道，progress持续观察，result仅结束后封存一次；SteerLine复用既有远端Agent执行链路。通过标准为项目完整L2+完整PR，不以全部L3为门槛。普通开发，不分配roadmap Task ID，不修改execution-map。[Plan](../plans/project-environment-adaptation.plan.md) · [专属验收](../testing/acceptance/project-environment-adaptation.md)。
 
 ## 1. 目标与所有权

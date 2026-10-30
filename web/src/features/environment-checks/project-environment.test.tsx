@@ -176,7 +176,7 @@ it("shows the original intranet PR link without promoting an unfinished activity
       l2: [{ test_id: "one", status: "passed", message: "" }],
       pr: {
         url: "http://gitea.local/pulls/1",
-        merged: true,
+        head_revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         cleanup_completed: true,
         outcome_unknown: false,
       },

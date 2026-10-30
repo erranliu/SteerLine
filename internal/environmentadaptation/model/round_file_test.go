@@ -9,7 +9,7 @@ import (
 
 func TestEnvironmentRoundFileRetainsVerifiedInputMetadata(t *testing.T) {
 	previous := json.RawMessage(`{"profile":"remote","report":{"message":"完整原失败","checks":[{"id":"git","status":"passed","message":"original successful check"}]}}`)
-	report := Report{Version: 1, ActivityID: "activity", Round: 2, Commit: "fixed", ScriptDigest: "script", Completed: true, Checks: []Check{{ID: "tool", Status: "failed", Message: "current failure"}}, L2: []Item{{ID: "one", Status: "incomplete", Message: "requirements failed"}}}
+	report := Report{Version: ReportVersion, ActivityID: "activity", Round: 2, Commit: "fixed", ScriptDigest: "script", Completed: true, Checks: []Check{{ID: "tool", Status: "failed", Message: "current failure"}}, L2: []Item{{ID: "one", Status: "incomplete", Message: "requirements failed"}}}
 	body, _ := json.Marshal(struct {
 		Report
 		Previous json.RawMessage `json:"previous"`

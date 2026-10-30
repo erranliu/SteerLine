@@ -1,5 +1,7 @@
 # Spec：项目 × 环境准备状态与统一派发门禁
 
+2026-10-30 发布验收边界由[补充规格](environment-publication-scope.spec.md)替代；Agent只验执行及发布，外部L4负责规则/合并。
+
 2026-10-29。状态：实施与受控验证完成；原生三路径已执行但未正向通过，阻断和独立复审见验收。旧Check退役不改变原生结论。[Plan](../plans/project-environment-readiness.plan.md) · [验收与审计记录](../testing/acceptance/project-environment-readiness.md)。普通开发，不分配任务编号、不修改 roadmap、不操作安装现场。
 
 ## 1. 目标与现有实现
@@ -84,7 +86,7 @@
 2. 沿已有生成/更新入口预览、导出准备文档和验收脚本及缺口，经正常Git审阅提交。缺文件或规则不同源明确报告准备不足，不在业务代码内联补材料，生成成功不授予资格。
 3. 页面读取固定文档，说明实际账号的工具入口、变量、依赖/服务和许可要求；用户在外部完成准备。阅读或勾选清单不新增持久状态，也不增加“已准备”人工批准入口。
 4. 用户点击既有“开始验收/重新准备”提交明确授权，页面说明真实L2/验证PR和模型/外部副作用；无需再增加前置确认命令。冻结本次原profile/完整execution/材料/期限，通过原Runner路径执行固定prepare/publish，不在SteerLine代跑shell。
-5. 原执行停止后取得唯一result最终快照。同轮checks（含TTY）、完整L2、同一真实验证PR的检查/审核/合并和清理、原Run收尾均通过后，原活动才能ready；进度、Agent final、PR ready、completed或基础check不能替代。
+5. 原执行停止后取得唯一result最终快照。同轮checks（含TTY）、完整L2、同一真实验证PR的发布身份及脚本资源清理、原Run收尾均通过后，原活动才能ready；进度、Agent final、PR ready、completed或基础check不能替代。
 6. 失败显示具体未通过/未验证项和下一步；继续原首次加最多两次有界重验，不修环境、不跨轮拼通过项，未知先查原请求。预算用尽后由用户处理环境并显式重新准备，旧记录保留。
 
 本机 Orca 与远端 Orca 的执行、ready 判定及外部取证使用同一流程；外部取证统一经绑定目标的 Orca 公开 repo/terminal 创建、读取和关闭，不因本机直接读取文件。差异仅为明确 target/目标选择器。本机 Codex 独立验收，外部取证可直接读取该原 Run 的工作区，不能把 Codex 的资格借给 Orca。

@@ -45,7 +45,7 @@ func scriptedEnvironment(input runnercontract.RunInput, run *runnercontract.Run)
 	}
 	report.Completed = true
 	report.Checks = []env.Check{{ID: "terminal.tty", Status: "passed", Message: "scripted fixture only; no native validation"}}
-	report.PR = env.PR{URL: "https://example.invalid/environment/" + run.RunID, Base: input.Publication.BaseBranch, Head: run.Execution.Branch, ChecksPassed: true, ReviewsPassed: true, Merged: true, MergeCommit: strings.Repeat("f", 40), CleanupCompleted: true}
+	report.PR = env.PR{URL: "https://example.invalid/environment/" + run.RunID, Base: input.Publication.BaseBranch, Head: run.Execution.Branch, HeadRevision: strings.Repeat("f", 40), CleanupCompleted: true}
 	body, err := json.Marshal(report)
 	if err != nil {
 		return runnercontract.ResultFile{}, err
@@ -55,7 +55,7 @@ func scriptedEnvironment(input runnercontract.RunInput, run *runnercontract.Run)
 	now := time.Now().UTC()
 	run.Status, run.Phase, run.StopStatus, run.NewInputsAllowed = "completed", "publish", "stopped", false
 	run.Controls = runnercontract.Controls{}
-	run.PR = &runnercontract.PRFact{URL: report.PR.URL, BaseBranch: report.PR.Base, HeadBranch: report.PR.Head, Merged: true}
+	run.PR = &runnercontract.PRFact{State: "open", URL: report.PR.URL, BaseBranch: report.PR.Base, HeadBranch: report.PR.Head, Provider: input.Publication.Provider, Repository: input.Publication.Repository, HeadRepository: input.Publication.Repository, HeadRevision: report.PR.HeadRevision}
 	return runnercontract.ResultFile{Contract: runnercontract.ResultContract, RunID: run.RunID, Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(body), SHA256: hex.EncodeToString(hash[:]), CollectionStatus: "closed"}, nil
 }
 

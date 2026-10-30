@@ -32,7 +32,7 @@ type Round = {
     l2: { test_id: string; status: string; message: string }[];
     pr: {
       url: string;
-      merged: boolean;
+      head_revision: string;
       cleanup_completed: boolean;
       outcome_unknown: boolean;
     };
@@ -394,8 +394,8 @@ export function ProjectEnvironment() {
                         ·{" "}
                         {a.report.pr.outcome_unknown
                           ? "结果未知"
-                          : a.report.pr.merged
-                            ? "已合并"
+                          : a.report.pr.url && a.report.pr.head_revision
+                            ? "已发布"
                             : "未完成"}{" "}
                         ·{" "}
                         {a.report.pr.cleanup_completed

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -170,7 +171,7 @@ func checkUnreadyEnvironment(read func(string, any) error, digest, fixture strin
 		if err != nil {
 			return err
 		}
-		if !report.Completed || report.PR.URL != "" || report.PR.Merged || report.PR.ChecksPassed || report.PR.ReviewsPassed || report.PR.OutcomeUnknown || !report.PR.CleanupCompleted || report.PR.Base == "" || report.PR.Head != round.Run.Execution.Branch {
+		if !report.Completed || report.PR.URL != "" || report.PR.HeadRevision != "" || report.PR.OutcomeUnknown || !report.PR.CleanupCompleted || report.PR.Base == "" || report.PR.Head != round.Run.Execution.Branch {
 			return errors.New("failed requirements produced unexpected PR effects")
 		}
 		passed, unmet := 0, 0
@@ -233,7 +234,7 @@ func checkSealedEnvironment(read func(string, any) error, digest, fixture string
 	if err = json.Unmarshal(raw, &report); err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(report, proof.Report) || report.Version != 1 || len(report.ScriptDigest) != 64 || report.ActivityID != proof.Activity || report.Commit != proof.Source || report.Round != proof.Rounds || !report.Passed(report.PR.Base, proof.Run.Execution.Branch) {
+	if !reflect.DeepEqual(report, proof.Report) || report.Version != env.ReportVersion || len(report.ScriptDigest) != 64 || report.ActivityID != proof.Activity || report.Commit != proof.Source || report.Round != proof.Rounds || !report.Passed(report.PR.Base, proof.Run.Execution.Branch) {
 		return errors.New("sealed environment report differs or did not pass")
 	}
 	want := map[string]bool{}
@@ -256,7 +257,8 @@ func checkSealedEnvironment(read func(string, any) error, digest, fixture string
 		PR struct {
 			Merged bool
 			Merge  string `json:"merge_commit_sha"`
-			Head   struct{ Ref string }
+			URL    string `json:"html_url"`
+			Head   struct{ Ref, SHA string }
 			Base   struct{ Ref string }
 		}
 		Checks  bool   `json:"required_checks_verified"`
@@ -266,7 +268,7 @@ func checkSealedEnvironment(read func(string, any) error, digest, fixture string
 	if err := read("provider-pr-proof.json", &provider); err != nil {
 		return err
 	}
-	if !provider.PR.Merged || provider.PR.Merge != report.PR.MergeCommit || provider.PR.Head.Ref != report.PR.Head || provider.PR.Base.Ref != report.PR.Base || !provider.Checks || !provider.Reviews || provider.Digest != digest {
+	if !provider.PR.Merged || !regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(provider.PR.Merge) || provider.PR.URL != report.PR.URL || provider.PR.Head.Ref != report.PR.Head || provider.PR.Head.SHA != report.PR.HeadRevision || provider.PR.Base.Ref != report.PR.Base || !provider.Checks || !provider.Reviews || provider.Digest != digest {
 		return errors.New("independent provider PR proof differs")
 	}
 	var summary struct {
