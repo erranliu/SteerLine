@@ -47,33 +47,43 @@ type Source struct {
 	TextDigest string `json:"text_digest"`
 }
 type Generation struct {
-	Inputs      string                  `json:"inputs"`
-	PlanText    string                  `json:"plan_text"`
-	ID          string                  `json:"id"`
-	Project     string                  `json:"project"`
-	Revision    uint64                  `json:"revision"`
-	Command     GenerateCommand         `json:"command"`
-	CreatedAt   time.Time               `json:"created_at"`
-	Runner      runnercontract.BuildPin `json:"runner"`
-	Request     runnercontract.Request  `json:"runner_request"`
-	Sources     []Source                `json:"sources"`
-	Target      string                  `json:"target"`
-	Catalogue   Catalogue               `json:"catalogue"`
-	RunID       string                  `json:"run_id,omitempty"`
-	InputDigest string                  `json:"input_digest,omitempty"`
-	Projection  *runnercontract.Run     `json:"report,omitempty"`
-	State       string                  `json:"state"`
-	Submission  string                  `json:"submission,omitempty"`
-	Diagnostic  string                  `json:"diagnostic,omitempty"`
-	Result      json.RawMessage         `json:"result,omitempty"`
-	Cancelled   bool                    `json:"cancelled"`
-	StopID      string                  `json:"stop_id,omitempty"`
-	StopRequest *runnercontract.Request `json:"stop_request,omitempty"`
-	StopState   string                  `json:"stop_state,omitempty"`
+	Inputs               string                  `json:"inputs"`
+	PlanText             string                  `json:"plan_text"`
+	ID                   string                  `json:"id"`
+	Project              string                  `json:"project"`
+	Revision             uint64                  `json:"revision"`
+	Command              GenerateCommand         `json:"command"`
+	CreatedAt            time.Time               `json:"created_at"`
+	Runner               runnercontract.BuildPin `json:"runner"`
+	Request              runnercontract.Request  `json:"runner_request"`
+	Sources              []Source                `json:"sources"`
+	Target               string                  `json:"target"`
+	Catalogue            Catalogue               `json:"catalogue"`
+	RunID                string                  `json:"run_id,omitempty"`
+	InputDigest          string                  `json:"input_digest,omitempty"`
+	Projection           *runnercontract.Run     `json:"report,omitempty"`
+	State                string                  `json:"state"`
+	Submission           string                  `json:"submission,omitempty"`
+	Diagnostic           string                  `json:"diagnostic,omitempty"`
+	SubmissionDiagnostic string                  `json:"submission_diagnostic,omitempty"`
+	Result               json.RawMessage         `json:"result,omitempty"`
+	Cancelled            bool                    `json:"cancelled"`
+	StopID               string                  `json:"stop_id,omitempty"`
+	StopRequest          *runnercontract.Request `json:"stop_request,omitempty"`
+	StopState            string                  `json:"stop_state,omitempty"`
 }
 
 // Pending is a durable outbox that has never entered Runner.Submit.
 func (g Generation) Unsubmitted() bool { return g.Submission == "pending" }
+
+// Retain the submission cause independently from the latest lookup failure.
+// Once the original Run is verified, normal current diagnostics take priority.
+func (g Generation) DiagnosticText() string {
+	if g.State == "unknown" && (g.RunID == "" || g.InputDigest == "") && g.SubmissionDiagnostic != "" && g.SubmissionDiagnostic != g.Diagnostic {
+		return "原提交：" + g.SubmissionDiagnostic + "；当前观察：" + g.Diagnostic
+	}
+	return g.Diagnostic
+}
 
 func (g Generation) Settled() bool {
 	return g.Unsubmitted() && g.Cancelled || g.State == "rejected" && g.RunID == "" || g.Projection != nil && g.Projection.StopStatus == "stopped"

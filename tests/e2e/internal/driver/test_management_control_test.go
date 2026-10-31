@@ -10,9 +10,11 @@ import (
 )
 
 type tmReceiptFailurePort struct {
-	submits int
-	query   string
-	err     error
+	submits   int
+	query     string
+	err       error
+	status    string
+	waitError error
 }
 
 func (p *tmReceiptFailurePort) SubmitControl(context.Context, api.ControlInput) (api.ControlRequest, error) {
@@ -22,7 +24,27 @@ func (p *tmReceiptFailurePort) SubmitControl(context.Context, api.ControlInput) 
 
 func (p *tmReceiptFailurePort) WaitControl(_ context.Context, id string, _ time.Duration) (*api.ControlReceipt, error) {
 	p.query = id
-	return &api.ControlReceipt{RequestID: id, Status: "applied"}, nil
+	status := p.status
+	if status == "" {
+		status = "applied"
+	}
+	return &api.ControlReceipt{RequestID: id, Status: status}, p.waitError
+}
+
+func TestTMControlReceiptFailurePreservesRejectionAndUnknown(t *testing.T) {
+	for _, status := range []string{"rejected", "indeterminate"} {
+		t.Run(status, func(t *testing.T) {
+			p := &tmReceiptFailurePort{status: status, err: &httpclient.ClientError{Status: 503, Code: "request_receipt_persist_failed"}}
+			r, err := tmControl(context.Background(), p, t.TempDir(), "original", api.ControlInput{RequestID: "same-request", Action: api.StartTask})
+			if err != nil || r.Status != status || p.submits != 1 || p.query != "same-request" {
+				t.Fatal(r, err, p)
+			}
+		})
+	}
+	p := &tmReceiptFailurePort{err: &httpclient.ClientError{Status: 503, Code: "request_receipt_persist_failed"}, waitError: context.DeadlineExceeded}
+	if _, err := tmControl(context.Background(), p, t.TempDir(), "original", api.ControlInput{RequestID: "same-request", Action: api.StartTask}); err == nil || p.submits != 1 {
+		t.Fatal("unknown receipt was hidden or action repeated", err, p)
+	}
 }
 
 func TestTMControlReceiptFailureQueriesOriginalWithoutResubmit(t *testing.T) {

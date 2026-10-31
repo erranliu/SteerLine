@@ -4,6 +4,8 @@ package httpfs
 
 import (
 	"encoding/json"
+	"errors"
+	"golang.org/x/sys/windows"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,6 +15,56 @@ import (
 
 	wire "github.com/erranliu/SteerLine/internal/product/httpcontract"
 )
+
+// Reproduce destination exclusion without the retry wrapper, retain both
+// complete files on failure, then publish the same source once the holder exits.
+func TestPrivateSnapshotTargetExclusionIdentifiesPublishFailure(t *testing.T) {
+	root := t.TempDir()
+	if err := EnsurePrivateDirectory(root); err != nil {
+		t.Fatal(err)
+	}
+	write := func(body string) string {
+		f, err := CreatePrivateTemp(root, ".discovery-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = f.WriteString(body); err != nil {
+			f.Close()
+			t.Fatal(err)
+		}
+		if err = f.Close(); err != nil {
+			t.Fatal(err)
+		}
+		return f.Name()
+	}
+	path := filepath.Join(root, "receipt.json")
+	if err := renamePrivateSnapshot(write("original"), path); err != nil {
+		t.Fatal(err)
+	}
+	blocker, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Close()
+	source := write("completed")
+	err = renamePrivateSnapshot(source, path)
+	if err == nil || !strings.Contains(err.Error(), "publish rename target (FileRenameInfoEx)") || (!errors.Is(err, windows.ERROR_ACCESS_DENIED) && !errors.Is(err, windows.ERROR_SHARING_VIOLATION)) {
+		t.Fatalf("expected target exclusion, got %v", err)
+	}
+	t.Logf("held non-delete-sharing target: %v", err)
+	if raw, err := os.ReadFile(path); err != nil || string(raw) != "original" {
+		t.Fatal("failed rename changed previous receipt", err)
+	}
+	if err = blocker.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = renamePrivateSnapshot(source, path); err != nil {
+		t.Fatal("same source failed after holder released", err)
+	}
+	if err = VerifyPrivateFile(path); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestDiscoveryReaderAllowsAtomicReplacement(t *testing.T) {
 	root := t.TempDir()

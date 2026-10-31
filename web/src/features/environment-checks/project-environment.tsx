@@ -1,10 +1,16 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { usePageVisible } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
 
-import { environmentStage, useEnvironmentReadiness } from "./use-readiness";
+import {
+  EnvironmentObservation,
+  useEnvironmentReadiness,
+  type Environment,
+} from "./use-readiness";
+import { Link, useSearchParams } from "react-router-dom";
+import { EnvironmentCard } from "./environment-card";
 type Snapshot = {
   version: number;
   collection_status: string;
@@ -96,11 +102,10 @@ export function ProjectEnvironment() {
     retry: false,
     refetchInterval: visible ? 3000 : false,
   });
-  const [profile, setProfile] = useState("");
-  const [invalidateReason, setInvalidateReason] = useState("");
-  const chosen = options.data?.profiles.find((p) => p.id === profile);
+  const [params] = useSearchParams();
+  const profile = params.get("profile") || "";
+  const task = params.get("task");
   const [generator, setGenerator] = useState("");
-  const [timeout, setTimeout] = useState(3600);
   const [selected, setSelected] = useState("");
   const pending = useRef(false);
   const [submitting, setSubmitting] = useState(false);
@@ -127,140 +132,94 @@ export function ProjectEnvironment() {
     pending.current = true;
     setSubmitting(true);
     try {
-      await send(action, target, version, payload);
+      const applied = await send(action, target, version, payload);
       refresh();
+      if (applied && action === "environment_start") {
+        const refreshed = await options.refetch();
+        const activity = refreshed.data?.profiles.find(
+          (p) => p.id === payload.profile_id,
+        )?.activity_id;
+        if (activity) setSelected(activity);
+      }
     } finally {
       pending.current = false;
       setSubmitting(false);
     }
   };
   const records = history.data?.records ?? [];
-  const displayed = detail.data && selected === detail.data.id && !records.some(r => r.id === selected)
-    ? [detail.data, ...records] : records;
+  const displayed =
+    detail.data &&
+    selected === detail.data.id &&
+    !records.some((r) => r.id === selected)
+      ? [detail.data, ...records]
+      : records;
+  const focusProfile = options.data?.profiles.find((p) => p.id === profile);
+  useEffect(() => {
+    const node = document.getElementById(
+      `environment-${focusProfile?.environment_key || profile}`,
+    );
+    node?.scrollIntoView?.({ block: "nearest" });
+    node?.focus();
+  }, [focusProfile?.environment_key, profile]);
+  useEffect(() => {
+    if (!selected) return;
+    const node = document.getElementById(`activity-${selected}`);
+    node?.scrollIntoView?.({ block: "nearest" });
+    node?.focus();
+  }, [selected, detail.data?.id]);
+  const groups = new Map<string, Environment[]>();
+  for (const e of options.data?.environments || []) {
+    const key = JSON.stringify([e.target.kind, e.target.environment || ""]);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(e);
+  }
+  const material =
+    options.data?.environments.find((e) => e.document) ||
+    options.data?.environments[0];
+  const returnParams = new URLSearchParams();
+  if (task) returnParams.set("task", task);
+  if (profile) returnParams.set("start_profile", profile);
   return (
-    <div className="settings-page">
-      <h1>项目环境准备</h1>
+    <div className="settings-page environment-page">
+      <h1>运行环境</h1>
       <p>
-        目标环境通过完整 L2 和完整
-        PR，且原执行收尾核实后，才允许执行新任务。每次最多三轮；状态仅为可执行任务或环境未就绪。
+        每个项目独立验收执行环境；能力目录可见不等于验收通过。通过检查、完整
+        L2、PR 发布核实及执行收尾后，才获得新任务的环境资格。
       </p>
-      <section className="settings-panel">
-        <h2>材料 → 用户准备 → 验收 → 结果</h2>
-        <p>
-          服务在线仅表示可接收操作。先阅读项目准备清单，在实际执行账号下准备工具、变量和权限，再明确开始完整
-          L2 与真实验证 PR 验收；生成材料或基础检查不会授予任务资格。
-        </p>
-        {options.error && <p role="alert">{String(options.error)}</p>}
-        {options.data?.environments?.map((e) => (
-          <article key={e.environment_key || e.profiles[0]?.id}>
-            <strong>
-              {e.name} · {environmentStage[e.stage] ?? "准备状态待核实"}
-            </strong>
-            <p>{e.reason}</p>
-            <p>执行方案：{e.profiles.map((p) => p.name).join("、")}</p>
-            {e.source_commit && <p>材料来源：{e.source_commit}</p>}
-            <details>
-              <summary>1. 阅读项目准备清单 · {e.document_path}</summary>
-              <pre>
-                {e.document ||
-                  "材料缺失，请先生成、审阅并提交准备文档与验收脚本。"}
-              </pre>
-            </details>
-            {e.activity_id && (
-              <Button
-                variant="ghost"
-                onClick={() => setSelected(e.activity_id!)}
-              >
-                查看当前验收
-              </Button>
-            )}
-            {e.last_passed_activity_id && (
-              <Button
-                variant="ghost"
-                onClick={() => setSelected(e.last_passed_activity_id!)}
-              >
-                查看历史通过报告
-              </Button>
-            )}
-          </article>
-        ))}
-        <label>
-          验收执行方案
-          <select
-            aria-label="验收执行方案"
-            value={profile}
-            onChange={(e) => setProfile(e.target.value)}
-          >
-            <option value="">选择本机或远端执行方案</option>
-            {options.data?.profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          每轮总超时（秒）
-          <input
-            aria-label="每轮总超时（秒）"
-            type="number"
-            min={1}
-            value={timeout}
-            onChange={(e) => setTimeout(Number(e.target.value))}
-          />
-        </label>
-        <Button
-          disabled={
-            !online ||
-            busy ||
-            submitting ||
-            !chosen ||
-            !Number.isInteger(timeout) ||
-            timeout < 1
-          }
-          onClick={() =>
-            void command("environment_start", identity.project_id, 1, {
-              profile_id: profile,
-              round_timeout_seconds: timeout,
-              expected_current_revision: chosen!.current_revision,
-            })
-          }
-        >
-          2. 开始验收 / 重新准备
-        </Button>
-        <label>
-          环境变化或失效原因
-          <input
-            aria-label="环境失效原因"
-            value={invalidateReason}
-            onChange={(e) => setInvalidateReason(e.target.value)}
-            maxLength={4096}
-          />
-        </label>
-        <Button
-          disabled={
-            !online ||
-            busy ||
-            submitting ||
-            !chosen?.environment_key ||
-            !invalidateReason.trim()
-          }
-          onClick={() =>
-            void command("environment_invalidate", identity.project_id, 1, {
-              environment_key: chosen!.environment_key,
-              expected_current_revision: chosen!.current_revision,
-              reason: invalidateReason,
-            })
-          }
-        >
-          标记当前项目环境失效
-        </Button>
-        <Button variant="ghost" onClick={refresh}>
-          刷新环境
-        </Button>
-      </section>
-      <section className="settings-panel">
-        <h2>生成项目准备材料</h2>
+      {task && (
+        <Link to={`/projects/${identity.project_id}/runs?${returnParams}`}>
+          返回任务
+        </Link>
+      )}
+      <EnvironmentObservation />
+      {options.error && <p role="alert">{String(options.error)}</p>}
+      {profile && options.verified && !focusProfile && (
+        <p role="alert">原执行方案已不存在或不属于开发方案，请重新选择。</p>
+      )}
+      <section className="settings-panel" id="environment-materials">
+        <h2>项目准备材料</h2>
+        <p>先阅读清单，在实际执行账号下准备工具、变量和权限，再开始验收。</p>
+        {material && (
+          <p className="path">
+            {material.document_path} ·{" "}
+            {material.script_path || "验收脚本见准备文档"}
+          </p>
+        )}
+        {material?.source_commit && <p>材料来源：{material.source_commit}</p>}
+        <details>
+          <summary>阅读项目准备清单</summary>
+          <pre>
+            {material?.document ||
+              "材料缺失或尚未读取，请核实后生成、审阅并提交准备文档与验收脚本。"}
+          </pre>
+        </details>
+        <h3>生成或更新材料</h3>
+        {options.verified && !options.data?.generators.length && (
+          <p>
+            尚无本地生成方案。
+            <Link to="/settings/execution-configs">配置生成方案</Link>
+          </p>
+        )}
         <p>
           生成准备文档与验收脚本后，审阅并通过项目正常 Git
           流程维护；生成成功不会获得任务准入。
@@ -292,8 +251,53 @@ export function ProjectEnvironment() {
           生成文档和脚本
         </Button>
       </section>
+      {options.verified && !options.data?.environments.length && (
+        <p>
+          尚无开发执行方案。
+          <Link to="/settings/execution-configs">配置执行方案</Link>
+        </p>
+      )}
+      <section className="settings-panel" aria-label="执行环境">
+        <h2>项目执行环境</h2>
+        <Button variant="ghost" onClick={refresh}>
+          刷新环境
+        </Button>
+        {!options.verified && (
+          <p>
+            当前观察未核实，新验收和失效操作暂不可提交；已有活动仍可独立查看和停止。
+          </p>
+        )}
+        {[...groups].map(([key, environments]) => (
+          <section
+            key={key}
+            aria-label={
+              environments[0].target.kind === "local"
+                ? "本机"
+                : environments[0].name
+            }
+          >
+            <h2>
+              {environments[0].target.kind === "local"
+                ? "本机"
+                : environments[0].name}
+            </h2>
+            {environments.map((e) => (
+              <EnvironmentCard
+                key={`${e.environment_key || e.profiles[0]?.id}:${profile}`}
+                environment={e}
+                project={identity.project_id}
+                defaultProfile={options.data!.default_profile_id}
+                preferred={profile}
+                disabled={!options.verified || busy || submitting}
+                command={command}
+                onActivity={setSelected}
+              />
+            ))}
+          </section>
+        ))}
+      </section>
       <section className="settings-panel">
-        <h2>适配与生成历史</h2>
+        <h2>验收与材料生成历史</h2>
         {history.error && <p role="alert">{String(history.error)}</p>}
         <p className="muted">最近 20 条活动，展开后查询原活动文件和报告。</p>
         {selected && detail.error && <p role="alert">{String(detail.error)}</p>}
@@ -301,9 +305,14 @@ export function ProjectEnvironment() {
           const r =
             selected === summary.id && detail.data ? detail.data : summary;
           return (
-            <article className="profile" key={r.id}>
+            <article
+              className="profile"
+              key={r.id}
+              id={`activity-${r.id}`}
+              tabIndex={-1}
+            >
               <h3>
-                {r.kind === "generation" ? "材料生成" : "环境适配"} ·{" "}
+                {r.kind === "generation" ? "材料生成" : "环境验收"} ·{" "}
                 {r.profile_id} · {r.status === "ready" ? "验收通过" : r.state}
               </h3>
               <p>
@@ -327,36 +336,6 @@ export function ProjectEnvironment() {
                     {a.timed_out && " · 已超时"}
                   </p>
                   <p>{a.diagnostic}</p>
-                  {a.run?.summary && <p>原执行说明：{a.run.summary}</p>}
-                  {a.run?.diagnostic && <p>{a.run.diagnostic}</p>}
-                  {a.run?.agent_reply && (
-                    <details>
-                      <summary>
-                        Agent 回复（
-                        {a.run.agent_reply_verified
-                          ? "原生来源已核实"
-                          : "来源未核实"}
-                        ，仅供排障）
-                      </summary>
-                      <pre>{a.run.agent_reply}</pre>
-                    </details>
-                  )}
-                  <details>
-                    <summary>
-                      进度文件（不作为验收结论）· v{a.progress?.version ?? 0}
-                    </summary>
-                    <pre>{content(a.progress)}</pre>
-                  </details>
-                  <details>
-                    <summary>
-                      验收结果文件（停止后封存一次）· v{a.result?.version ?? 0}{" "}
-                      · {a.result?.collection_status ?? "等待停止后取得"}
-                    </summary>
-                    {a.result?.diagnostic && (
-                      <p>结果采集诊断：{a.result.diagnostic}</p>
-                    )}
-                    <pre>{content(a.result)}</pre>
-                  </details>
                   {a.report && (
                     <div>
                       <p>{a.report.message}</p>
@@ -404,6 +383,40 @@ export function ProjectEnvironment() {
                       </p>
                     </div>
                   )}
+                  <details>
+                    <summary>原执行文件与技术详情</summary>
+                    {a.run?.summary && <p>原执行说明：{a.run.summary}</p>}
+                    {a.run?.diagnostic && <p>{a.run.diagnostic}</p>}
+                    {a.run?.agent_reply && (
+                      <details>
+                        <summary>
+                          Agent 回复（
+                          {a.run.agent_reply_verified
+                            ? "原生来源已核实"
+                            : "来源未核实"}
+                          ，仅供排障）
+                        </summary>
+                        <pre>{a.run.agent_reply}</pre>
+                      </details>
+                    )}
+                    <details>
+                      <summary>
+                        进度文件（不作为验收结论）· v{a.progress?.version ?? 0}
+                      </summary>
+                      <pre>{content(a.progress)}</pre>
+                    </details>
+                    <details>
+                      <summary>
+                        验收结果文件（停止后封存一次）· v
+                        {a.result?.version ?? 0} ·{" "}
+                        {a.result?.collection_status ?? "等待停止后取得"}
+                      </summary>
+                      {a.result?.diagnostic && (
+                        <p>结果采集诊断：{a.result.diagnostic}</p>
+                      )}
+                      <pre>{content(a.result)}</pre>
+                    </details>
+                  </details>
                 </section>
               ))}
               {r.generated && (

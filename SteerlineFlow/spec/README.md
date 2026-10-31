@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+执行方案与项目运行环境界面梳理（2026-10-31，审计收窄后实施）：[Spec](runtime-environment-ui.spec.md) · [Plan](../plans/runtime-environment-ui.plan.md) · [专属验收计划](../testing/acceptance/runtime-environment-ui.md)。明确全局方案/项目环境职责、五类事实与六阶段、卡片内验收/失效及任务定向准备与返回；保留原环境资格和生命周期，不进入 roadmap。
+
 旧 Runner Check 接入退役（2026-10-29，实施与验收完成）：[Spec](legacy-environment-check-retirement.spec.md) · [Plan](../plans/legacy-environment-check-retirement.plan.md) · [验收](../testing/acceptance/legacy-environment-check-retirement.md)。旧业务/存储/入口及生命周期耦合已删除，当前普通Run/result准备与派发门禁保留；真实新Runner契约、受控回归及独立复审通过。无旧格式兼容，未部署。
 
 项目 × 环境准备状态与统一派发门禁（2026-10-29，实施及受控验证完成）：[Spec](project-environment-readiness.spec.md) · [Plan](../plans/project-environment-readiness.plan.md) · [验收与审计](../testing/acceptance/project-environment-readiness.md)。派生环境键、当前活动引用与派发门禁已实现；三条原生路径已执行但未正向通过，检测通道失败与环境能力结论分别记录，不因旧Check退役改写结果。未部署安装环境。

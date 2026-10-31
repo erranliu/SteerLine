@@ -1463,6 +1463,17 @@ textarea {
   display: grid;
   gap: 18px;
 }
+
+.environment-page { min-width: 0; }
+.environment-page .environment-card { border: 1px solid var(--color-border, #32473a); border-radius: 8px; padding: 16px; margin: 14px 0; scroll-margin-top: 20px; }
+.environment-page article:focus { outline: 2px solid var(--color-primary, #78d7b5); outline-offset: 3px; }
+.environment-page p, .environment-page h3, .environment-page code, .environment-page .path { overflow-wrap: anywhere; }
+.environment-page pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; }
+.environment-page details { margin: 14px 0; min-width: 0; }
+.environment-page summary { cursor: pointer; }
+.environment-page label { display: grid; gap: 6px; margin: 12px 0; }
+.environment-page select, .environment-page input { width: 100%; min-width: 0; padding: 8px; border: 1px solid #32473a; border-radius: 5px; background: #101614; color: inherit; }
+.environment-page .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .configuration-panels .settings-panel {
   margin: 0;
 }

@@ -108,10 +108,8 @@ func RunnerCLI(args []string) (bool, error) {
 	defer os.Remove(lockPath)
 	path := filepath.Join(stateDir, "caller-fixture.json")
 	s := RunnerFixture{Runs: map[string]runnercontract.Run{}, Requests: map[string]runnercontract.Command{}, Bodies: map[string]string{}}
-	if raw, err := os.ReadFile(path); err == nil {
-		if err = json.Unmarshal(raw, &s); err != nil {
-			return true, err
-		}
+	if err := readRunnerFixture(path, &s); err != nil {
+		return true, err
 	}
 	if s.Providers == nil {
 		s.Providers = map[string]string{}
@@ -426,6 +424,22 @@ func RunnerCLI(args []string) (bool, error) {
 	s.Requests[request.RequestID] = cmd
 	s.Bodies[request.RequestID] = string(request.Input)
 	return respond(map[string]any{"command_id": cmd.CommandID, "run_id": runID, "receipt_status": "accepted", "action_status": "completed"}, "")
+}
+
+// Only an absent file means a new fixture. In particular, a sharing or ACL
+// failure must never reset accepted requests and overwrite the original state.
+func readRunnerFixture(path string, state *RunnerFixture) error {
+	raw, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("read original Runner fixture: %w", err)
+	}
+	if err := json.Unmarshal(raw, state); err != nil {
+		return fmt.Errorf("decode original Runner fixture: %w", err)
+	}
+	return nil
 }
 
 func hasArgument(args []string, want string) bool {

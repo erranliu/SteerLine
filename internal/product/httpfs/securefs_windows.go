@@ -54,12 +54,12 @@ func renamePrivateSnapshot(source, target string) error {
 			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE,
 			nil, windows.OPEN_EXISTING, windows.FILE_FLAG_OPEN_REPARSE_POINT, 0)
 		if err != nil {
-			return err
+			return fmt.Errorf("open rename source: %w", err)
 		}
 		defer windows.CloseHandle(handle)
 		var file windows.ByHandleFileInformation
 		if err = windows.GetFileInformationByHandle(handle, &file); err != nil {
-			return err
+			return fmt.Errorf("inspect rename source: %w", err)
 		}
 		if file.FileAttributes&(windows.FILE_ATTRIBUTE_REPARSE_POINT|windows.FILE_ATTRIBUTE_DIRECTORY) != 0 {
 			return errors.New("linked/nonregular private rename source")
@@ -82,7 +82,10 @@ func renamePrivateSnapshot(source, target string) error {
 		info.flags = windows.FILE_RENAME_REPLACE_IF_EXISTS | windows.FILE_RENAME_POSIX_SEMANTICS
 		info.fileNameBytes = uint32(nameBytes)
 		copy(unsafe.Slice(&info.fileName[0], len(name)), name)
-		return windows.SetFileInformationByHandle(handle, windows.FileRenameInfoEx, &buffer[0], uint32(len(buffer)))
+		if err := windows.SetFileInformationByHandle(handle, windows.FileRenameInfoEx, &buffer[0], uint32(len(buffer))); err != nil {
+			return fmt.Errorf("publish rename target (FileRenameInfoEx): %w", err)
+		}
+		return nil
 	}
 	if err := rename(); err != nil {
 		return &os.LinkError{Op: "rename", Old: source, New: target, Err: err}

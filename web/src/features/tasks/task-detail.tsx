@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowUpRight, Play, Plus } from "lucide-react";
-import { useEnvironmentReadiness } from "../environment-checks/use-readiness";
+import {
+  environmentLink,
+  environmentStage,
+  useEnvironmentReadiness,
+} from "../environment-checks/use-readiness";
 import { useWorkspace } from "../../app/context";
 import { RoadmapTaskSource } from "../roadmaps/roadmaps";
 import { TaskMaterials } from "./task-materials";
@@ -21,8 +25,11 @@ export function TaskDetail({
   const { api, online, snapshot, candidateStarts } = useWorkspace();
   const navigate = useNavigate();
   const environment = useEnvironmentReadiness();
-  const [starting, setStarting] = useState(false);
-  const [profile, setProfile] = useState("");
+  const [params] = useSearchParams();
+  const restored =
+    params.get("task") === id ? params.get("start_profile") || "" : "";
+  const [starting, setStarting] = useState(!!restored);
+  const [profile, setProfile] = useState(restored);
   const detail = useQuery({
     ...projectQueries(api).task(id),
     enabled: online,
@@ -119,8 +126,9 @@ export function TaskDetail({
       ? selected?.unavailable_reason || "没有可用执行方案"
       : "";
   const preparation = environment.data?.profiles?.find((p) => p.id === chosen);
-  const environmentReason =
-    preparation?.status === "ready"
+  const environmentReason = !environment.verified
+    ? "运行环境状态待核实"
+    : preparation?.status === "ready"
       ? ""
       : preparation?.reason || "环境准备状态尚未核实";
   const reason = startReason || profileReason || environmentReason;
@@ -222,6 +230,11 @@ export function TaskDetail({
             value={chosen}
             onChange={(e) => setProfile(e.target.value)}
           >
+            {chosen && !selected && (
+              <option value={chosen}>
+                {chosen} · 原方案已不存在，请重新选择
+              </option>
+            )}
             {profiles.map((p) => (
               <option key={p.id} value={p.id} disabled={!!p.unavailable_reason}>
                 {p.name} · {p.host}/{p.agent}
@@ -236,9 +249,16 @@ export function TaskDetail({
               {d}
             </p>
           ))}
+          <p>
+            对应运行环境：
+            {environment.verified
+              ? environmentStage[preparation?.stage || ""] ||
+                (preparation?.status === "ready" ? "已就绪" : "待核实")
+              : "当前待核实"}
+          </p>
           {reason && <p className="muted">{reason}</p>}
           {environmentReason && (
-            <Link to={`/projects/${api.identity.project_id}/environment`}>
+            <Link to={environmentLink(api.identity.project_id, chosen, id)}>
               前往环境准备
             </Link>
           )}

@@ -182,13 +182,17 @@ func MainControl(args []string) error {
 		payload.ExpectedGraphRevision = snapshot.NativeTasks.GraphRevision
 	}
 
-	request, err := product.SubmitControl(ctx, productapi.ControlInput{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), Action: productapi.ControlAction(*action), Payload: payload, RequestedBy: "e2e", InstanceID: *expectedInstance})
+	input := productapi.ControlInput{RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), Action: productapi.ControlAction(*action), Payload: payload, RequestedBy: "e2e", InstanceID: *expectedInstance}
+	// Request expiration guards admission in the product. A verified applying
+	// reservation is already durable; completion can arrive after that deadline.
+	submitErr, err := submitOriginalControl(ctx, product, input)
 	if err != nil {
 		return err
 	}
-	// Request expiration guards admission in the product. A verified applying
-	// reservation is already durable; completion can arrive after that deadline.
-	receipt, err := product.WaitControl(ctx, request.RequestID, 100*time.Millisecond)
+	if submitErr != nil {
+		fmt.Fprintf(os.Stderr, "original control submission %s: %v; querying same request\n", input.RequestID, submitErr)
+	}
+	receipt, err := product.WaitControl(ctx, input.RequestID, 100*time.Millisecond)
 	if err != nil {
 		return err
 	}

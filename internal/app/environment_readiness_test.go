@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -143,6 +144,13 @@ func TestProjectEnvironmentReadinessLocalAndModelGrouping(t *testing.T) {
 	require(t, json.Unmarshal(raw, &options))
 	if len(options.Environments) != 1 || len(options.Profiles) != 2 || options.Profiles[1].Status != "ready" {
 		t.Fatal(string(raw))
+	}
+	view := options.Environments[0]
+	if view.Target != local.Execution.Target || view.Adapter != local.Execution.Adapter || !view.ActivitySettled || view.ScriptPath == "" {
+		t.Fatalf("missing original display facts: %s", raw)
+	}
+	if strings.Contains(string(raw), `"settings"`) || strings.Contains(string(raw), `"executable"`) {
+		t.Fatalf("execution settings exposed: %s", raw)
 	}
 	saved, err := store.Environment(ctx, c.Identity(), record.ID)
 	require(t, err)
