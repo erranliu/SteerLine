@@ -78,6 +78,26 @@ func prepareGenerationStops(ctx context.Context, store generationStartupStore, p
 			continue
 		}
 		item, bound := generationTakeover(*cli.Takeover, g)
+		if !bound && g.Cancelled && g.RunID == "" && g.InputDigest == "" && g.Submission == "started" && cli.Takeover.InstanceID == "" {
+			// An online request_not_found can race an in-flight submit. Only the
+			// public offline report, obtained under Runner's writer lease before
+			// this home starts any actors, can close this missing original intent.
+			if canonicalPath(g.Runner.StateDir) != canonicalPath(cli.Takeover.StateDir) || g.Request.RequestID == "" {
+				return nil, errors.New("cancelled generation namespace/request is unverified")
+			}
+			for _, original := range cli.Takeover.Items {
+				if original.Kind != "run" || original.RequestID == "" || original.RequestDigest == "" || original.RequestID == g.Request.RequestID {
+					return nil, errors.New("cancelled generation absence is unverified or its original request differs")
+				}
+			}
+			g.State = "rejected"
+			g.Diagnostic = "原测试生成已取消；停服后的公开接管核验确认原提交未被受理，可以重试生成"
+			g.Revision++
+			if err := store.SaveGeneration(ctx, g, g.Revision-1); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if !bound && g.RunID != "" {
 			return nil, errors.New("generation is absent from original takeover proof")
 		}

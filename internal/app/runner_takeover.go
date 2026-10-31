@@ -139,6 +139,16 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 	if err != nil {
 		return nil, err
 	}
+	roadmapStops, err := prepareRoadmapStops(ctx, c, store, cli)
+	if err != nil {
+		return nil, err
+	}
+	generationStops, err := prepareGenerationStops(ctx, store, c.Identity(), cli)
+	if err != nil {
+		return nil, err
+	}
+	// Startup reconciliation may have settled a cancelled, never-accepted
+	// generation. Rebuild quota from those final records rather than stale rows.
 	if c.runtimeGenerations != nil {
 		rows, err := store.Generations(ctx, c.Identity())
 		if err != nil {
@@ -147,14 +157,6 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 		for _, g := range rows {
 			c.runtimeGenerations.Update(g)
 		}
-	}
-	roadmapStops, err := prepareRoadmapStops(ctx, c, store, cli)
-	if err != nil {
-		return nil, err
-	}
-	generationStops, err := prepareGenerationStops(ctx, store, c.Identity(), cli)
-	if err != nil {
-		return nil, err
 	}
 	generationStops = append(generationStops, roadmapStops...)
 	generationStops = append(generationStops, environmentStops...)
