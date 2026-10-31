@@ -125,7 +125,7 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 		"SteerlineFlow/plans/task.tests.json":       `{"tests":["one"]}`,
 		"SteerlineFlow/testing/runtime-progress.md": string(rules),
 		"tools/testing/RuntimeProgress.ps1":         progresstools.PowerShellWriter,
-		envmodel.DocumentPath:                       "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"environment-validation\",\"dependencies\":[]}\n```\n",
+		envmodel.DocumentPath:                       "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"powershell.exe\",\"validation_base\":\"environment-validation\",\"dependencies\":[]}\n```\n",
 		envmodel.ExecutionRulesPath:                 string(environmentRules),
 		"scripts/verify-environment.ps1":            "param($Phase)\n# Lifecycle fixture only.\n",
 	} {

@@ -3,6 +3,9 @@ param(
     [string]$FailureReason
 )
 $ErrorActionPreference='Stop'
+[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+$OutputEncoding=[Console]::OutputEncoding
+$PSDefaultParameterValues=@{'Get-Content:Encoding'='UTF8'}
 if ($Phase -ne 'tty-failure' -and $PSBoundParameters.ContainsKey('FailureReason')) { throw 'FailureReason is only accepted by tty-failure' }
 . (Join-Path $PSScriptRoot 'environment-tty.ps1')
 if ($Phase -eq 'tty') {
@@ -24,11 +27,17 @@ function Write-Atomic($Value,[string]$Path) {
     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($Value|ConvertTo-Json -Depth 20 -Compress))
     if($bytes.Length -gt 65536){throw 'Channel report exceeds 64 KiB'}
     $temporary=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
-    try {$stream=[IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$stream.Write($bytes);$stream.Flush($true)}finally{$stream.Dispose()};[IO.File]::Move($temporary,$Path,$true)}finally{if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary}}
+    try {$stream=[IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()};[IO.File]::Replace($temporary,$Path,[NullString]::Value)}finally{if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary}}
 }
 function Save-Result {Write-Atomic $report $env:STEERLINE_RESULT_FILE}
+function Read-Progress {
+    $value=Get-Content -Encoding UTF8 -Raw -LiteralPath $env:STEERLINE_PROGRESS_FILE|ConvertFrom-Json
+    $progress=@{}
+    foreach($property in $value.PSObject.Properties){$progress[$property.Name]=$property.Value}
+    return $progress
+}
 function Set-Progress {
-    $progress=Get-Content -Raw -LiteralPath $env:STEERLINE_PROGRESS_FILE|ConvertFrom-Json -AsHashtable
+    $progress=Read-Progress
     foreach($item in $report.l2){$key='test.'+$item.test_id;if(!$progress.ContainsKey($key)){throw 'Undeclared L2 progress field'};$progress[$key]=$item.status -ceq 'passed'}
     $progress.pr=[bool]($report.pr.url -and $report.pr.head_revision -and $report.pr.cleanup_completed -and !$report.pr.outcome_unknown)
     Write-Atomic $progress $env:STEERLINE_PROGRESS_FILE
@@ -48,14 +57,15 @@ function Verify-L2 {
         $items = @($managed.results | Where-Object test_id -CEQ $definition.id)
         $evidence = $managed.evidence
         $raw = [IO.File]::ReadAllBytes((Join-Path $output 'summary.json'))
-        $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($raw)).ToLowerInvariant()
+        $hash=[Security.Cryptography.SHA256]::Create()
+        try { $digest=([BitConverter]::ToString($hash.ComputeHash($raw))).Replace('-','').ToLowerInvariant() } finally { $hash.Dispose() }
         if ($items.Count -ne 1 -or $items[0].status -cne 'passed' -or @($summary.selected_scenarios | Where-Object id -CEQ $definition.id).Count -ne 1 -or @($managed.selection).Count -ne 1 -or $managed.selection[0] -cne $definition.id -or $managed.before_commit -cne $report.source_commit -or $managed.after_commit -cne $report.source_commit -or !$managed.before_clean -or !$managed.after_clean -or $evidence.path -cne 'summary.json' -or $evidence.bytes -ne $raw.Length -or $evidence.sha256 -cne $digest) { throw 'Original managed L2 source/summary/status binding failed' }
         $report.l2 += @{test_id=$definition.id;status='passed';message='Original complete L2 managed report and cleanup verified'}
     }
 }
 
 if ($Phase -eq 'tty-failure') {
-    $originalProgress = Get-Content -Raw -LiteralPath $env:STEERLINE_PROGRESS_FILE | ConvertFrom-Json -AsHashtable
+    $originalProgress = Read-Progress
     $report = Set-EnvironmentTTYFailureReport -Report $report -Progress $originalProgress -CheckIds $environmentCheckIds -L2Ids @($definitions.id) -FailureReason $FailureReason
     Set-Progress
     Save-Result
@@ -72,7 +82,7 @@ try {
         $report.completed=$false;$report.l2=@($definitions|ForEach-Object {@{test_id=$_.id;status='incomplete';message='Not executed'}})
         $report.pr.cleanup_completed=$true;$report.checks=@();Set-Progress;Save-Result
         Check 'terminal.tty' { Assert-EnvironmentTTY }
-        Check 'powershell' {if($PSVersionTable.PSVersion.Major -lt 7){throw 'PowerShell 7+ required'};'PowerShell '+$PSVersionTable.PSVersion}
+        Check 'powershell' {'PowerShell '+$PSVersionTable.PSVersion}
         Check 'git' {Invoke-GitValue @('--version')}
         Check 'go' {$v=& go version;if($LASTEXITCODE -or $v -notmatch 'go(\d+\.\d+(?:\.\d+)?)' -or [version]$Matches[1] -lt [version]'1.26.0'){throw 'PATH go >=1.26.0 required'};[string]$v}
         Check 'github.auth' {$login=Invoke-GhValue @('api','user','--jq','.login');'GitHub authenticated as '+$login.Trim()}

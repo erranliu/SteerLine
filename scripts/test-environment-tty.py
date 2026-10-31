@@ -11,13 +11,22 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-PWSH = shutil.which('pwsh')
+POWERSHELL = shutil.which('powershell.exe')
+
+
+def without_pwsh():
+    env = dict(os.environ)
+    env['PATH'] = os.pathsep.join(p for p in env.get('PATH', '').split(os.pathsep)
+                                   if p and not (Path(p) / 'pwsh.exe').exists() and not (Path(p) / 'pwsh').exists())
+    if shutil.which('pwsh', path=env['PATH']):
+        raise AssertionError('PowerShell 7 leaked into the test PATH')
+    return env
 
 
 class EnvironmentTTYTests(unittest.TestCase):
     def run_entry(self, root, phase, env=None, extra=()):
-        return subprocess.run([PWSH, '-NoProfile', '-File', str(root / 'scripts/verify-environment.ps1'), '-Phase', phase, *extra],
-                              capture_output=True, text=True, encoding='utf-8', env=env, timeout=30)
+        return subprocess.run([POWERSHELL, '-NoProfile', '-File', str(root / 'scripts/verify-environment.ps1'), '-Phase', phase, *extra],
+                              capture_output=True, text=True, encoding='utf-8', env=env or without_pwsh(), timeout=30)
 
     def test_probe_rejects_redirected_process_without_channels_or_tests(self):
         p = self.run_entry(ROOT, 'tty')
@@ -52,7 +61,7 @@ class EnvironmentTTYTests(unittest.TestCase):
                     body += 'if "%~1"=="version" (echo go version go1.26.4 windows/amd64 & exit /b 0)\r\n'
                 body += 'exit /b 1\r\n'
                 (shim / (name + '.cmd')).write_text(body)
-            env = dict(os.environ)
+            env = without_pwsh()
             env['PATH'] = str(shim) + os.pathsep + env['PATH']
             env.pop('UNITY_EDITOR_PATH', None)
             env['STEERLINE_GITEA_LOGIN'] = 'fixture-not-a-real-login'
@@ -102,7 +111,7 @@ class EnvironmentTTYTests(unittest.TestCase):
             marker = parent / 'unexpected-tool.txt'
             for name in ('git', 'go', 'gh', 'tea', 'python', 'dotnet', 'Unity'):
                 (tools / (name + '.cmd')).write_text(f'@echo off\r\necho {name}>>"{marker}"\r\nexit /b 99\r\n')
-            env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
+            env = dict(without_pwsh(), PATH=str(tools) + os.pathsep + without_pwsh()['PATH'],
                        STEERLINE_RESULT_FILE=str(parent / 'result.json'), STEERLINE_PROGRESS_FILE=str(parent / 'progress.json'))
             report = {'version': 2, 'activity_id': 'a' * 32, 'round': 2, 'source_commit': 'c' * 40,
                       'script_digest': 'd' * 64, 'completed': False, 'checks': [], 'l2': [], 'message': '',
@@ -200,6 +209,6 @@ class EnvironmentTTYTests(unittest.TestCase):
 
 
 if __name__ == '__main__':
-    if not PWSH:
-        raise SystemExit('PowerShell 7 is required; this check must not silently skip')
+    if not POWERSHELL:
+        raise SystemExit('Windows PowerShell 5.1 is required; this check must not silently skip')
     unittest.main()

@@ -165,7 +165,7 @@ func (r *orcaTarget) Shell(ctx context.Context, s *Scenario, p *Project, workspa
 		binary.LittleEndian.PutUint16(encoded[i*2:], v)
 	}
 	selector := "id:" + r.Repository + "::" + strings.ReplaceAll(workspace, "\\", "/")
-	raw, err := r.Call(ctx, s, p, "terminal", "create", "--worktree", selector, "--title", "SteerLine progress evidence "+nonce[:8], "--command", "pwsh -NoProfile -NonInteractive -EncodedCommand "+base64.StdEncoding.EncodeToString(encoded))
+	raw, err := r.Call(ctx, s, p, "terminal", "create", "--worktree", selector, "--title", "SteerLine progress evidence "+nonce[:8], "--command", "powershell.exe -NoProfile -NonInteractive -EncodedCommand "+base64.StdEncoding.EncodeToString(encoded))
 	if err != nil {
 		return nil, err
 	}

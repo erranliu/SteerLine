@@ -3,7 +3,7 @@
 环境检测由既有 Runner 目标 Agent 调用本项目入口，不由脚本再启动 Agent。环境适配遵循[项目环境适配规范](spec/project-environment-adaptation.spec.md)；业务测试入口及通过标准仍见[测试指南](testing.md)。
 
 ```steerline-environment
-{"version":1,"script":"scripts/verify-environment.ps1","interpreter":"pwsh","validation_base":"codex/environment-validation/steerline","dependencies":["scripts/environment-tty.ps1","go.mod","go.sum","SteerlineFlow/testing/l1.md","SteerlineFlow/testing/l2.md","tests/e2e/suites.json","cmd/test-feedback/managed.go"]}
+{"version":1,"script":"scripts/verify-environment.ps1","interpreter":"powershell.exe","validation_base":"codex/environment-validation/steerline","dependencies":["scripts/environment-tty.ps1","go.mod","go.sum","SteerlineFlow/testing/l1.md","SteerlineFlow/testing/l2.md","tests/e2e/suites.json","cmd/test-feedback/managed.go"]}
 ```
 
 ```steerline-pr-acceptance
@@ -15,7 +15,7 @@
 | 必需项 | 约定入口与验证 |
 | --- | --- |
 | TTY | 同一目标 Agent 的 `exec_command(tty:true)`；实际命令启动、stdin/stdout均未重定向、输出`STEERLINE_TTY_OK`、退出0 |
-| PowerShell | PATH中的`pwsh` 7或更高版本 |
+| PowerShell | Windows 自带的 `powershell.exe`（5.1）；检测脚本不依赖 PowerShell 7 |
 | Git | PATH中的`git`，既有仓库认证及用户提交身份；不交互登录或修改Git配置 |
 | Go | PATH中的`go`，版本至少1.26.0，模块依赖已准备好 |
 | GitHub | PATH中的`gh`，既有登录能访问erranliu/SteerLine及完成专属验证base的PR；不复制凭据 |
@@ -28,7 +28,7 @@
 先以真实`exec_command(tty:true)`执行：
 
 ```powershell
-pwsh -NoProfile -File scripts/verify-environment.ps1 -Phase tty
+powershell.exe -NoProfile -File scripts/verify-environment.ps1 -Phase tty
 ```
 
 最小入口只检查当前进程终端、输出JSON和标记，不执行测试或PR。必须核对实际工具启动、输出及退出状态；普通shell或Orca能打开不算通过。工具未启动、失败、超时或未验证均阻断，不允许切换`tty:false`替代或手写检测成功。
@@ -48,7 +48,7 @@ prepare/publish只读取Runner注入的`STEERLINE_PROGRESS_FILE`和`STEERLINE_RE
 TTY工具明确未启动，或纯最小探针已结束且明确失败时，保留原工具错误，不换封装重跑检测。若原Agent仍有可用工具，可仅为记录失败使用普通工具（允许tty:false或其他shell）调用：
 
 ```powershell
-pwsh -NoProfile -File scripts/verify-environment.ps1 -Phase tty-failure -FailureReason '原工具错误，不含凭据'
+powershell.exe -NoProfile -File scripts/verify-environment.ps1 -Phase tty-failure -FailureReason '原工具错误，不含凭据'
 ```
 
 此入口不运行TTY探针、prepare、测试、认证或PR，只用原子写入记录terminal.tty=failed、缺失项incomplete，保留原活动/轮次/源码/脚本摘要、previous及同轮已有事实；不得新增passed。入口退出1表示负结果已写，核对result的completed=true和原身份后返回blocked，不因退出1重跑。completed只表示报告完成，环境仍not_ready。
