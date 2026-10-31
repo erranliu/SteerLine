@@ -118,7 +118,7 @@ try {
     if($changed.Count -ne 1 -or $changed[0] -cne $probe -or (Invoke-GitValue @('status','--porcelain'))){throw 'Validation commit changed anything besides its own probe'}
     $report.pr.outcome_unknown=$true;$report.pr.cleanup_completed=$false;Save-Result
     Invoke-GitValue @('push','origin',('HEAD:refs/heads/'+$head))|Out-Null
-    $prs=@(Invoke-GhValue @('pr','list','--repo','erranliu/SteerLine','--base',$base,'--head',$head,'--state','all','--json','number,url')|ConvertFrom-Json)
+    $prs=@((Invoke-GhValue @('pr','list','--repo','erranliu/SteerLine','--base',$base,'--head',$head,'--state','all','--json','number,url')|ConvertFrom-Json))
     if($prs.Count -gt 1){throw 'Multiple PRs for the original validation head'}
     if(!$prs.Count){$report.pr.url=(Invoke-GhValue @('pr','create','--repo','erranliu/SteerLine','--base',$base,'--head',$head,'--title',('Environment validation '+$report.activity_id),'--body','Isolated project environment validation. Complete original L1/L2 ran in the assigned remote worktree.')).Trim();Save-Result}
     else {$report.pr.url=$prs[0].url;Save-Result}

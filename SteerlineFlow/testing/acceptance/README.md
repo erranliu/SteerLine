@@ -1,6 +1,6 @@
 # 验收流程与记录
 
-环境检测 PowerShell 5.1 基线（2026-10-31，代码及受控回归通过，真实续验待重启）：[实现、配置及验收边界](environment-powershell-baseline.md)。三仓移除检测闭包内 PS7 要求；当前根仓 L1/L2 通过，308 Unity 业务测试缺许可证。用户批准的 pwsh 别名关闭及原 PATH 恢复已完成；当前 Orca 仍继承旧环境，正常重启被自动审批阻断，尚未完成新配置真实验收，不登记 ready，不部署。
+环境检测 PowerShell 5.1 基线（2026-10-31，真实 prepare 已通过，发布数组兼容修复待续验）：[实现、配置及验收边界](environment-powershell-baseline.md)。三仓移除检测闭包内 PS7 要求；根仓 L1/L2 通过，308 Unity 业务测试缺许可证。别名关闭、原 PATH 恢复和用户批准的正常重启已完成；真实 TTY/PS5/完整 L1/L2 通过后暴露空 PR 列表适配缺陷，最小修复及七类原发布块回归已完成。完整原生验收尚未完成，不登记 ready，不部署。
 
 本机Orca环境检测续验（2026-10-31，真实三轮负向流程验收完成）：[实际执行与配置](local-orca-environment-20261031.md)。既有runtime配置与独立注册已跑通；项目端补齐pwsh不可解析时的纯失败记录。三轮原负报告完成、原Run停止/result封存、无PR、前后派发拒绝及清理均核实。环境仍not_ready，原正向L4保持passed=false；未改Runner源码、PATH或安装环境，未重启Orca。
 
