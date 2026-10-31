@@ -99,7 +99,7 @@ func projectFixture(t *testing.T) (string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for path, body := range map[string]string{"SteerlineFlow/environment-execution.md": string(rules), "SteerlineFlow/environment.md": "```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```\n", "scripts/verify-environment.ps1": "throw 'fixture only'\n"} {
+	for path, body := range map[string]string{"SteerlineFlow/environment-execution.md": string(rules), "SteerlineFlow/environment.md": "```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"powershell.exe\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```\n", "scripts/verify-environment.ps1": "throw 'fixture only'\n"} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		if e := os.MkdirAll(filepath.Dir(full), 0700); e != nil {
 			t.Fatal(e)

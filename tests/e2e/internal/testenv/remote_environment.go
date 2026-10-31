@@ -163,7 +163,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 	p.BaseBranch = "codex/e2e/" + strings.ReplaceAll(uuid.NewString(), "-", "") + "/" + s.ID + "/base"
 	p.git(p.Repo, "-c", "filter.lfs.process=", "-c", "filter.lfs.smudge=", "-c", "filter.lfs.required=false", "checkout", "-b", p.BaseBranch, in.Commit)
 	base := p.bindValidationBase()
-	for file, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": "# Remote admission probe\nDo not implement, commit, push or publish. Remain blocked awaiting the caller's explicit stop.\n\n## Acceptance\nThe caller verifies the original Run binding, then explicitly stops it. No implementation or publication is authorized.\n", "SteerlineFlow/plans/task.tests.json": `{"tests":[]}`, "SteerlineFlow/plans/task.plan.md": "# Remote admission probe\nRead the bound Spec. No implementation or publication is authorized; await explicit stop.\n\nNo automated tests are registered for this caller probe. Environment validation was completed separately.\n"} {
+	for file, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": "# Remote admission probe\nDo not implement, commit, push or publish. Remain blocked awaiting the caller's explicit stop.\n\n## Acceptance\nThe caller verifies the original Run binding, then explicitly stops it. No implementation or publication is authorized.\n", "SteerlineFlow/plans/task.tests.json": `{"tests":[]}`, "SteerlineFlow/plans/task.plan.md": "# Remote admission probe\nRead the bound Spec. No implementation or publication is authorized; await explicit stop.\n\nNo automated tests are registered for this caller probe. The required test arrangement for this admission probe is {\"tests\":[]}. Environment validation is owned by the separate caller flow.\n"} {
 		s.Must(os.MkdirAll(filepath.Dir(filepath.Join(p.Repo, file)), 0700))
 		s.Must(os.WriteFile(filepath.Join(p.Repo, file), []byte(body), 0600))
 	}
@@ -240,16 +240,25 @@ func runProjectEnvironment(t *testing.T, id string) {
 	}
 	p.Claim("a")
 	var admitted, admittedCandidate, admittedDigest string
+	var probe admissionProbe
 	s.Wait("ready candidate actual Run", func() (bool, error) {
 		snap, e := p.Snapshot()
 		if e != nil {
 			return false, e
 		}
 		for _, c := range snap.Runner.Candidates {
-			if c.RunID != "" && c.InputDigest != "" && c.Projection != nil {
+			if c.TaskID != p.Tasks["a"].ID || c.Participation != "active" {
+				continue
+			}
+			started, err := probe.observe(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if started {
 				p.verifyRemoteExecution(c.Submit.Input)
 				admitted = c.RunID
 				admittedCandidate, admittedDigest = c.ID, c.InputDigest
+				s.Must(controlled.Write(filepath.Join(s.Output, "admission-started-run.json"), c.Projection))
 				return true, nil
 			}
 		}

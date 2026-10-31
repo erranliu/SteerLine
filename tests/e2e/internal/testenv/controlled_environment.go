@@ -31,7 +31,7 @@ func (p *Project) WriteControlledEnvironment() string {
 	rules, err := prompts.EnvironmentExecutionRules()
 	s.Must(err)
 	for path, body := range map[string][]byte{
-		env.DocumentPath:                   []byte("# Controlled environment\n```steerline-environment\n{\"version\":1,\"script\":\"" + script + "\",\"interpreter\":\"pwsh\",\"validation_base\":\"" + base + "\",\"dependencies\":[]}\n```\n"),
+		env.DocumentPath:                   []byte("# Controlled environment\n```steerline-environment\n{\"version\":1,\"script\":\"" + script + "\",\"interpreter\":\"powershell.exe\",\"validation_base\":\"" + base + "\",\"dependencies\":[]}\n```\n"),
 		script:                             []byte("throw 'Scripted public peer fixture; native execution is forbidden'\n"),
 		env.ExecutionRulesPath:             rules,
 		"SteerlineFlow/plans/task.plan.md": []byte("# Controlled recovery plan\nNo automated tests are required for this task. The catalogue's fixture.environment entry belongs to the separate scripted environment prerequisite. Recovery assertions are owned by the external E2E harness.\n"),

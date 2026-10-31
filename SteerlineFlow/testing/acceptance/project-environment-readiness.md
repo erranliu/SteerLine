@@ -1,10 +1,12 @@
 # 验收与文档审计：项目 × 环境准备状态与统一派发门禁
 
-2026-10-29。实施与受控自动验证完成；两个项目的同版本材料已维护、独立审核并经用户批准合并，三条原生路径均已实际执行但未正向通过，明确阻断如下。[Spec](../../spec/project-environment-readiness.spec.md) · [Plan/执行命令](../../plans/project-environment-readiness.plan.md)。当前聊天按用户授权实施、测试和独立复审；未部署安装环境，未分配 Roadmap 任务编号。
+2026-10-30最新签收：用户确认本机Codex、远端Orca两条检测流程验收完成；本机Codex按固定受测版本完整正向L4通过，远端Orca按新固定版本完成真实三轮TTY负向闭环，环境仍not_ready，正式正向L4不改写。2026-10-31本机Orca也已完成真实三轮负向流程验收，环境pwsh不可解析、仍not_ready；原报告/停止/门禁/清理均核实，正向L4不改写，见[最新续验](local-orca-environment-20261031.md)。权威汇总及原始证据见[两条链路签收](environment-tty-failure-report.md)，本机正向细节见[发布范围验收](environment-publication-scope.md)。Runner通用输入提交问题本轮不继续追查；未部署安装环境。
+
+以下保留2026-10-29阶段记录：实施与受控自动验证完成；两个项目的同版本材料已维护、独立审核并经用户批准合并，当时三条原生路径均已实际执行但未正向通过，明确阻断如下。[Spec](../../spec/project-environment-readiness.spec.md) · [Plan/执行命令](../../plans/project-environment-readiness.plan.md)。当前聊天按用户授权实施、测试和独立复审；未分配 Roadmap 任务编号。
 
 调查源码 `7617cddc7efac5716c8c38bb63a0157a100acac0`。不继承历史环境适配、安装ready或任务恢复的功能通过结论。
 
-## 检测流程结果与环境结论
+## 2026-10-29阶段性检测流程结果与环境结论
 
 `not_ready` 只表示尚无充分资格、须阻断派发，不等于已证明环境缺少能力。必须分别判断检测流程是否成功完成、环境要求是否被有效检查。有效执行并取得原始失败证据的具体检查项，才可认定该项要求不满足；检测器、Runner 接线、原生工具或取证失败时，未完成项保持未验证，不能归因于目标环境缺工具/依赖。
 

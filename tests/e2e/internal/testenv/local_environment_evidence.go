@@ -16,7 +16,7 @@ func localCodexEnvironmentEvidenceCommand(execution runnercontract.ExecutionInpu
 	if !filepath.IsAbs(workspace) {
 		return nil, errors.New("original local Run workspace must be absolute")
 	}
-	command := exec.Command("pwsh", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop';$PSDefaultParameterValues=@{'Get-Content:Encoding'='UTF8'};$value=& {\n"+script+"\n};$value|ConvertTo-Json -Depth 12 -Compress")
+	command := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "$ErrorActionPreference='Stop';[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false);$PSDefaultParameterValues=@{'Get-Content:Encoding'='UTF8'};$value=& {\n"+script+"\n};$value|ConvertTo-Json -Depth 12 -Compress")
 	command.Dir = workspace
 	return command, nil
 }

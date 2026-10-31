@@ -101,11 +101,11 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		name, sha256 string
 		read         func() ([]byte, error)
 	}{
-		{"testing", "587708f00a71eb6a992072c5b12c5aa7f92ed327e2c614e11e33fa4e2e604542", TestingRules},
+		{"testing", "e499f40f543ae1bfddb98ee5024f74eb0d46354392cf6794d34b8b204b6d25f3", TestingRules},
 		{"roadmap-parse", "c1452c0d591caf5cf6f3db0f4d156c2e1a4451c797e96837c0afb1d6699463e6", RoadmapParseRules},
 		{"roadmap-documents", "0c84c0ce636e4c7ca8c9f0b80cf8bdf41bbd2ecb588ea225fb10fa4bb88f2f71", RoadmapDocumentRules},
-		{"environment-generation", "fe987ed7dba8957d9ba55d1e3efb05ac596d1ace3372430360a5f7e15c78728b", EnvironmentGenerationRules},
-		{"environment-execution", "7da6fd6727babcd01cac71d32c72cdde45dfb0e9e3a71e527387ebca0b364d2c", EnvironmentExecutionRules},
+		{"environment-generation", "59230d4b02723693737acb97f82867c39b3388ed201f4893043900048559dc85", EnvironmentGenerationRules},
+		{"environment-execution", "a3f872c1164543002318d90badf46db5094277de6b3b19eb367d89a5e909bd9a", EnvironmentExecutionRules},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

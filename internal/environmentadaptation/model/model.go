@@ -93,7 +93,7 @@ func ParseManifest(document []byte) (Manifest, error) {
 	if e := Decode(b[:end], &m); e != nil {
 		return m, e
 	}
-	if m.Version != 1 || (m.Script != "scripts/verify-environment.ps1" && m.Script != "scripts/verify-environment.sh") || (m.Script == "scripts/verify-environment.ps1" && m.Interpreter != "pwsh") || (m.Script == "scripts/verify-environment.sh" && m.Interpreter != "bash") || strings.TrimSpace(m.ValidationBase) == "" {
+	if m.Version != 1 || (m.Script != "scripts/verify-environment.ps1" && m.Script != "scripts/verify-environment.sh") || (m.Script == "scripts/verify-environment.ps1" && m.Interpreter != "powershell.exe") || (m.Script == "scripts/verify-environment.sh" && m.Interpreter != "bash") || strings.TrimSpace(m.ValidationBase) == "" {
 		return m, errors.New("invalid script, interpreter or pre-existing validation base")
 	}
 	seen := map[string]bool{}

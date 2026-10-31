@@ -1,5 +1,12 @@
-param([Parameter(Mandatory)][ValidateSet('tty','prepare','publish')][string]$Phase)
+param(
+    [Parameter(Mandatory)][ValidateSet('tty','prepare','publish','tty-failure')][string]$Phase,
+    [string]$FailureReason
+)
 $ErrorActionPreference='Stop'
+[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
+$OutputEncoding=[Console]::OutputEncoding
+$PSDefaultParameterValues=@{'Get-Content:Encoding'='UTF8'}
+if ($Phase -ne 'tty-failure' -and $PSBoundParameters.ContainsKey('FailureReason')) { throw 'FailureReason is only accepted by tty-failure' }
 . (Join-Path $PSScriptRoot 'environment-tty.ps1')
 if ($Phase -eq 'tty') {
     $tty = Get-EnvironmentTTYCheck
@@ -15,21 +22,30 @@ foreach($path in @($env:STEERLINE_PROGRESS_FILE,$env:STEERLINE_RESULT_FILE)) {
 $report=Get-Content -Raw -LiteralPath $env:STEERLINE_RESULT_FILE|ConvertFrom-Json
 $definitions=@((Get-Content -Raw SteerlineFlow/testing/test-list.json|ConvertFrom-Json).tests|Where-Object level -CEQ L2)
 $manifest=[regex]::Match((Get-Content -Raw SteerlineFlow/environment.md),'(?s)```steerline-environment\r?\n(.*?)\r?\n```').Groups[1].Value|ConvertFrom-Json
+$environmentCheckIds = @('terminal.tty','powershell','git','go','github.auth','source.clean')
 function Write-Atomic($Value,[string]$Path) {
     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($Value|ConvertTo-Json -Depth 20 -Compress))
     if($bytes.Length -gt 65536){throw 'Channel report exceeds 64 KiB'}
     $temporary=$Path+'.'+[guid]::NewGuid().ToString('N')+'.tmp'
-    try {$stream=[IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$stream.Write($bytes);$stream.Flush($true)}finally{$stream.Dispose()};[IO.File]::Move($temporary,$Path,$true)}finally{if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary}}
+    try {$stream=[IO.File]::Open($temporary,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None);try{$stream.Write($bytes,0,$bytes.Length);$stream.Flush($true)}finally{$stream.Dispose()};[IO.File]::Replace($temporary,$Path,[NullString]::Value)}finally{if(Test-Path -LiteralPath $temporary){Remove-Item -LiteralPath $temporary}}
 }
 function Save-Result {Write-Atomic $report $env:STEERLINE_RESULT_FILE}
+function Read-Progress {
+    $value=Get-Content -Encoding UTF8 -Raw -LiteralPath $env:STEERLINE_PROGRESS_FILE|ConvertFrom-Json
+    $progress=@{}
+    foreach($property in $value.PSObject.Properties){$progress[$property.Name]=$property.Value}
+    return $progress
+}
 function Set-Progress {
-    $progress=Get-Content -Raw -LiteralPath $env:STEERLINE_PROGRESS_FILE|ConvertFrom-Json -AsHashtable
+    $progress=Read-Progress
     foreach($item in $report.l2){$key='test.'+$item.test_id;if(!$progress.ContainsKey($key)){throw 'Undeclared L2 progress field'};$progress[$key]=$item.status -ceq 'passed'}
     $progress.pr=[bool]($report.pr.url -and $report.pr.head_revision -and $report.pr.cleanup_completed -and !$report.pr.outcome_unknown)
     Write-Atomic $progress $env:STEERLINE_PROGRESS_FILE
 }
 function Invoke-GitValue {$Arguments=$args;$value=@(& git @Arguments);if($LASTEXITCODE){throw ('Git failed: '+$Arguments[0])};return ($value -join "`n").Trim()}
-function Check([string]$Id,[scriptblock]$Probe) {try {$message=[string](& $Probe);$report.checks+=@{id=$Id;status='passed';message=$message}}catch {$report.checks+=@{id=$Id;status='failed';message=$_.Exception.Message}}}
+function Check([string]$Id,[scriptblock]$Probe) {
+    if ($Id -cnotin $environmentCheckIds) { throw 'Undeclared environment check' }
+try {$message=[string](& $Probe);$report.checks+=@{id=$Id;status='passed';message=$message}}catch {$report.checks+=@{id=$Id;status='failed';message=$_.Exception.Message}}}
 function Invoke-GhValue {$Arguments=$args;$value=@(& gh @Arguments);if($LASTEXITCODE){throw ('GitHub command failed: '+$Arguments[0])};return ($value -join "`n")}
 function Verify-L2 {
     $output = Join-Path $root '.steerrunner/artifacts/environment-l2'
@@ -41,10 +57,20 @@ function Verify-L2 {
         $items = @($managed.results | Where-Object test_id -CEQ $definition.id)
         $evidence = $managed.evidence
         $raw = [IO.File]::ReadAllBytes((Join-Path $output 'summary.json'))
-        $digest = [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($raw)).ToLowerInvariant()
+        $hash=[Security.Cryptography.SHA256]::Create()
+        try { $digest=([BitConverter]::ToString($hash.ComputeHash($raw))).Replace('-','').ToLowerInvariant() } finally { $hash.Dispose() }
         if ($items.Count -ne 1 -or $items[0].status -cne 'passed' -or @($summary.selected_scenarios | Where-Object id -CEQ $definition.id).Count -ne 1 -or @($managed.selection).Count -ne 1 -or $managed.selection[0] -cne $definition.id -or $managed.before_commit -cne $report.source_commit -or $managed.after_commit -cne $report.source_commit -or !$managed.before_clean -or !$managed.after_clean -or $evidence.path -cne 'summary.json' -or $evidence.bytes -ne $raw.Length -or $evidence.sha256 -cne $digest) { throw 'Original managed L2 source/summary/status binding failed' }
         $report.l2 += @{test_id=$definition.id;status='passed';message='Original complete L2 managed report and cleanup verified'}
     }
+}
+
+if ($Phase -eq 'tty-failure') {
+    $originalProgress = Read-Progress
+    $report = Set-EnvironmentTTYFailureReport -Report $report -Progress $originalProgress -CheckIds $environmentCheckIds -L2Ids @($definitions.id) -FailureReason $FailureReason
+    Set-Progress
+    Save-Result
+    [Console]::Error.WriteLine($report.message)
+    exit 1
 }
 
 try {
@@ -56,11 +82,12 @@ try {
         $report.completed=$false;$report.l2=@($definitions|ForEach-Object {@{test_id=$_.id;status='incomplete';message='Not executed'}})
         $report.pr.cleanup_completed=$true;$report.checks=@();Set-Progress;Save-Result
         Check 'terminal.tty' { Assert-EnvironmentTTY }
-        Check 'powershell' {if($PSVersionTable.PSVersion.Major -lt 7){throw 'PowerShell 7+ required'};'PowerShell '+$PSVersionTable.PSVersion}
+        Check 'powershell' {'PowerShell '+$PSVersionTable.PSVersion}
         Check 'git' {Invoke-GitValue @('--version')}
         Check 'go' {$v=& go version;if($LASTEXITCODE -or $v -notmatch 'go(\d+\.\d+(?:\.\d+)?)' -or [version]$Matches[1] -lt [version]'1.26.0'){throw 'PATH go >=1.26.0 required'};[string]$v}
         Check 'github.auth' {$login=Invoke-GhValue @('api','user','--jq','.login');'GitHub authenticated as '+$login.Trim()}
         Check 'source.clean' {if((Invoke-GitValue @('rev-parse','HEAD')) -cne $report.source_commit -or (Invoke-GitValue @('status','--porcelain'))){throw 'Fixed source must be clean; no automatic restore is performed'};'HEAD matches fixed source; worktree clean'}
+        if (@($report.checks).Count -ne $environmentCheckIds.Count) { throw 'Environment check declarations differ from actual probes' }
         if(@($report.checks|Where-Object status -CNE 'passed').Count){throw ('Environment requirements not met: '+(@($report.checks|Where-Object status -CNE 'passed'|ForEach-Object {$_.id+': '+$_.message}) -join '; '))}
         & go run ./cmd/test-feedback -level=L1 -out .steerrunner/artifacts/environment-l1
         if($LASTEXITCODE){throw 'Original L1 failed; see environment-l1/summary.json'}
@@ -82,8 +109,16 @@ try {
     if($revision -ceq $report.source_commit){
         if(Invoke-GitValue @('status','--porcelain')){throw 'Unexpected tracked or untracked changes before publication'}
         [IO.Directory]::CreateDirectory((Split-Path $probe -Parent))|Out-Null
-        [IO.File]::WriteAllText((Join-Path $root $probe),"Environment validation $($report.activity_id), round $($report.round), source $($report.source_commit).`n",[Text.UTF8Encoding]::new($false))
+        $probeBody="Environment validation $($report.activity_id), round $($report.round), source $($report.source_commit)."
+        [IO.File]::WriteAllText((Join-Path $root $probe),($probeBody+"`n"),[Text.UTF8Encoding]::new($false))
         Invoke-GitValue @('add','--',$probe)|Out-Null
+        $staged=@((Invoke-GitValue @('diff','--cached','--name-only')) -split "`n")
+        $stagedDiff=Invoke-GitValue @('diff','--cached','--',$probe)
+        if($staged.Count -ne 1 -or $staged[0] -cne $probe -or !$stagedDiff){throw 'Staged diff must contain only the exact current validation probe'}
+        $stagedBody=@(& git show (':'+$probe))
+        if($LASTEXITCODE -ne 0 -or $stagedBody.Count -ne 1 -or $stagedBody[0] -cne $probeBody){throw 'Staged diff must contain only the exact current validation probe'}
+        Invoke-GitValue @('diff','--cached','--check')|Out-Null
+        Write-Output $stagedDiff
         Invoke-GitValue @('commit','-m','Validate remote project environment')|Out-Null
         $revision=Invoke-GitValue @('rev-parse','HEAD')
     }
@@ -91,7 +126,7 @@ try {
     if($changed.Count -ne 1 -or $changed[0] -cne $probe -or (Invoke-GitValue @('status','--porcelain'))){throw 'Validation commit changed anything besides its own probe'}
     $report.pr.outcome_unknown=$true;$report.pr.cleanup_completed=$false;Save-Result
     Invoke-GitValue @('push','origin',('HEAD:refs/heads/'+$head))|Out-Null
-    $prs=@(Invoke-GhValue @('pr','list','--repo','erranliu/SteerLine','--base',$base,'--head',$head,'--state','all','--json','number,url')|ConvertFrom-Json)
+    $prs=@((Invoke-GhValue @('pr','list','--repo','erranliu/SteerLine','--base',$base,'--head',$head,'--state','all','--json','number,url')|ConvertFrom-Json))
     if($prs.Count -gt 1){throw 'Multiple PRs for the original validation head'}
     if(!$prs.Count){$report.pr.url=(Invoke-GhValue @('pr','create','--repo','erranliu/SteerLine','--base',$base,'--head',$head,'--title',('Environment validation '+$report.activity_id),'--body','Isolated project environment validation. Complete original L1/L2 ran in the assigned remote worktree.')).Trim();Save-Result}
     else {$report.pr.url=$prs[0].url;Save-Result}

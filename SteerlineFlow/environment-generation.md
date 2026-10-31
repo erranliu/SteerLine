@@ -1,4 +1,4 @@
-你负责为当前项目生成或维护两份配套的Git文件：SteerlineFlow/environment.md 和 scripts/verify-environment.ps1（pwsh）或 scripts/verify-environment.sh（bash）。只生成内容，不执行、提交或合并。
+你负责为当前项目生成或维护两份配套的Git文件：SteerlineFlow/environment.md 和 scripts/verify-environment.ps1（Windows PowerShell 5.1，powershell.exe）或 scripts/verify-environment.sh（bash）。只生成内容，不执行、提交或合并。Windows脚本全流程使用powershell.exe和Windows PowerShell 5.1可用的语法/.NET接口，不要求安装PowerShell 7、不搜索或自动切换解释器；原正式L1/L2入口及进度写入器也须满足此要求。
 
 验证目标：目标环境完整L2和真实PR，复用正式清单及入口，不选Task子集、不要求全L3/Full、不跳过或模拟必需环节。版本默认最低兼容，不把CI示例变成精确门禁；仅明确的引擎、资源格式、锁定依赖约束固定版本。更高版本仍须通过原适配器与真实测试。缺源码、依赖、凭据引用或PR规则写gaps，不编造已验证能力或无条件通过脚本。
 
@@ -6,11 +6,13 @@
 
 TTY是必需环境能力。环境验证由Runner启动的同一目标Agent编排，不由脚本再启动Agent。文档必须要求Agent通过真实exec_command(tty:true)调用检测入口，核实启动成功、输出STEERLINE_TTY_OK和退出0；脚本检查实际进程stdin/stdout均未重定向，并在checks写terminal.tty。普通shell、Orca终端可打开、tty:false成功和模型自述均不能替代；失败、超时、工具未启动或无法核实保持failed/incomplete并阻断完整L2与PR。提供不跑业务测试的最小TTY入口；prepare及publish仍现场检测，不复用其他Run或旧探针。辅助脚本列入dependencies，执行规则、文档和脚本须配套维护；不得安装修复、自动降级或手写通过。
 
-environment.md 必须有且仅有一个 ```steerline-environment JSON代码段：{"version":1,"script":"scripts/verify-environment.ps1","interpreter":"pwsh","validation_base":"项目已预先存在的验证分支","dependencies":["项目依赖锁文件等有限真实相对路径"]}。bash脚本相应更换路径和解释器。文档写清工具、服务、非秘密配置/凭据引用、持久准备与新工作区初始化、命令、故障和人工处理。验证base由项目正常Git流程预先维护，不能是业务主分支；不得自动建删base。
+同一脚本还须提供tty-failure纯失败记录入口（PowerShell为-Phase tty-failure -FailureReason '原工具错误'，bash提供文档声明的等义参数）。仅在TTY工具明确未启动，或纯最小探针已结束且明确失败时，Agent可用已有普通工具调用此入口；这不是替代检测，禁止因此运行tty/prepare/publish或修环境。固定写terminal.tty=failed，原错误非空、有界、不含凭据；保留原关联字段、previous及同轮已有检查/L2事实，缺失项补incomplete，不新增或提升passed。输入只允许初始空报告（checks/l2空、进度全false）或同轮completed=true且自有清理已确认的报告；已有PR URL/head_revision、outcome_unknown或PR进度true、部分报告、非法字段/ID/状态/进度均在改任一文件前拒绝。正常检查与记录入口共用同一声明ID集合。复用原原子写入，报告completed=true、无发布动作、进度保持原已验证事实；退出1表示负结果已记录，不能当作TTY通过。超时/受理未知或仍可能有生产者时不可借此声称结算；全部工具不可用保留未完成报告，不手写兜底。
+
+environment.md 必须有且仅有一个 ```steerline-environment JSON代码段：{"version":1,"script":"scripts/verify-environment.ps1","interpreter":"powershell.exe","validation_base":"项目已预先存在的验证分支","dependencies":["项目依赖锁文件等有限真实相对路径"]}。bash脚本相应更换路径和解释器。文档写清工具、服务、非秘密配置/凭据引用、持久准备与新工作区初始化、命令、故障和人工处理。验证base由项目正常Git流程预先维护，不能是业务主分支；不得自动建删base。
 
 项目文档声明要求，用户在目标环境预先安装工具并配置环境变量/PATH，实际执行进程必须能读取。Agent只执行固定脚本验收，不搜索安装目录/注册表，不安装、修复依赖或设置环境变量/Git配置，不要求用户现场提供路径。工具入口只能使用文档声明的变量或PATH命令；不提供固定安装路径或自动发现回退。脚本逐项检查所有独立要求，一项失败仍继续其余检查；缺少依赖而无法核实的项标incomplete并解释，不冒充通过。
 
-同一个脚本接受prepare/publish阶段。prepare先检测环境要求，全部满足后才验证完整L2，不创建PR；失败原子写最终报告。publish仅在prepare完整通过时，使用Runner固定publication base和git branch --show-current所得head，提交专属验证改动、push、创建并查询唯一原PR、核实URL/base/head及验证提交完整SHA（head_revision），完成脚本自有临时资源清理。分支策略核实、检查/审核和合并由外部交付或L4驱动负责；Agent不执行这些管理操作，PR保留给原外部所有者。未知操作先查询原PR，禁止重新创建。禁止Agent修改受测实现/验收标准或手写通过报告；不删除Runner仍持有的工作区/分支和预期安装成果。
+同一个脚本接受prepare/publish阶段。prepare先检测环境要求，全部满足后才验证完整L2，不创建PR；失败原子写最终报告。publish仅在prepare完整通过时，使用Runner固定publication base和git branch --show-current所得head，提交专属验证改动、push、创建并查询唯一原PR、核实URL/base/head及验证提交完整SHA（head_revision），完成脚本自有临时资源清理。任何提交前必须核验非空暂存diff：暂存路径只能是本轮验证改动，正文须符合本轮固定输入，并通过git diff --cached --check；不满足立即失败且不commit。分支策略核实、检查/审核和合并由外部交付或L4驱动负责；Agent不执行这些管理操作，PR保留给原外部所有者。未知操作先查询原PR，禁止重新创建。禁止Agent修改受测实现/验收标准或手写通过报告；不删除Runner仍持有的工作区/分支和预期安装成果。
 
 脚本摘要针对固定提交的原始Git blob字节，不能以Windows工作区CRLF转换判为材料变更。缺失版本化文件或LFS内容时报告未满足，不能自行恢复、改源码标准、借其他活动结果或修改注册仓库的业务checkout。
 

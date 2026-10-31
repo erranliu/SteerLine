@@ -31,7 +31,7 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	t.Setenv("GIT_CONFIG_COUNT", "1")
 	t.Setenv("GIT_CONFIG_KEY_0", "url."+filepath.ToSlash(origin)+".insteadOf")
 	t.Setenv("GIT_CONFIG_VALUE_0", "https://github.com/owner/repo.git")
-	files := map[string]string{envmodel.DocumentPath: "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"pwsh\",\"validation_base\":\"environment-validation\",\"dependencies\":[\"go.mod\"]}\n```\n", "scripts/verify-environment.ps1": "param($Phase)\n# fixture only\n", "go.mod": "module example.invalid/fixture\n", "SteerlineFlow/testing.md": "# Rules\nL2 + PR\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L2","environment":"controlled","command":"go test ./...","check":"passes"}]}`}
+	files := map[string]string{envmodel.DocumentPath: "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"powershell.exe\",\"validation_base\":\"environment-validation\",\"dependencies\":[\"go.mod\"]}\n```\n", "scripts/verify-environment.ps1": "param($Phase)\n# fixture only\n", "go.mod": "module example.invalid/fixture\n", "SteerlineFlow/testing.md": "# Rules\nL2 + PR\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L2","environment":"controlled","command":"go test ./...","check":"passes"}]}`}
 	executionRules, e := prompts.EnvironmentExecutionRules()
 	require(t, e)
 	generationRules, e := prompts.EnvironmentGenerationRules()
