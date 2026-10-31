@@ -56,7 +56,20 @@ generation 的后置守卫正文为 7279→7476 字节，SHA256 `59230d4b0272369
 
 完整最终代码/材料差异及双 SHA/字节账本 `diagnostics/ps51-review-b36cdccdc87d4d2f963ef2ec1c4eb188/` 已独立复算 54 行、零差异；其后只有本验收导航和记录更新。原发布守卫 13 子场景及材料收口分别经独立审查，原始审核账本 `ps51-review-bfbc3cdb4c004e85a8206008bdeb772a/`、`ps51-review-619961dcfbd64d469d148132a5e67d73/`、黄金同步后的 `ps51-review-774aa4cb37c041c6ba3329792ef7a197/` 保留。
 
-早期较宽 Go 取证包调用含 50 pass、1 live skip、1 failure：`TestTwoProjectsIsolateTasksGitAndCleanup` 在 StopService 后读取 Tasks 时缺 discovery.json。原日志为 `diagnostics/ps51-evidence-f75d2343b21e4eb4a03441c8dd38552d/`；未证明其为基线问题，不声明整包通过。上表 42 项为精确受影响范围。
+早期较宽 Go 取证包调用含 50 pass、1 live skip、1 failure：`TestTwoProjectsIsolateTasksGitAndCleanup` 在 StopService 后读取 Tasks 时缺 discovery.json。原日志为 `diagnostics/ps51-evidence-f75d2343b21e4eb4a03441c8dd38552d/`；合并前已用固定 main/PR 独立副本证明该失败为主干既有问题，详见下节。不声明整包通过，上表 42 项仍为精确受影响范围。
+
+### PR #413 合并前基线对照
+
+2026-10-31，按用户确认的收口方案，对两个独立、干净、无 Git alternates 的源码 clone 串行执行同一条命令：`go run ./cmd/test-feedback -out <本次独立报告目录> -- -tags=e2e ./tests/e2e/internal/testenv -run=^TestTwoProjectsIsolateTasksGitAndCleanup$ -count=1 -timeout=6m`。未使用安装环境或旧测试现场。
+
+| 固定版本 | 实际结果 |
+| --- | --- |
+| main `befa8a0f6f2705bafb144b002eeb8947446ba5b3` | 1 项执行、1 项失败、0 跳过；`env_test.go:51` 的原 `task list` 返回缺少 `application-api/discovery.json`，命令退出 1 |
+| PR #413 `90d2887a1e891d7f2e99b840a3262f0b18f0d536` | 同一项、同一行、同一缺文件错误，1 项失败、0 跳过；命令退出 1 |
+
+根因是既有测试先对两个项目调用 StopService，再通过在线 CLI 查询任务；在线查询必须连接当前 home 的应用端点，正常停服会移除 discovery.json。测试及其项目启动/停止 helper、CLI driver、task 命令、应用客户端入口/连接与端点关闭共七个相关源码文件在两个版本逐字节一致。此次确认是主干既有测试前提错误，不是本 PR 引入的环境检测回归；按用户确认的方案登记后移除合并阻断，既有测试本身尚未修复。
+
+原始报告保留于证据根的 `diagnostics/pr413-isolation-comparison-aa3951eb9ccd4485a620fc126146c0b8/`：`main/summary.json`、`pr413/summary.json` 及各自 go-test.jsonl 为两次真实失败；comparison.json 固定来源、时间与退出码，closure.json 核验唯一失败、零跳过和七个文件字节/SHA。此次仅完成基线归因，不改生产代码、测试预期或原失败记录，不将任一次失败登记为通过，也不补称整个 Go 包通过。后续提交只更新本验收记录及导航。
 
 ## 真实本机 Orca：原失败与配置生效边界
 
