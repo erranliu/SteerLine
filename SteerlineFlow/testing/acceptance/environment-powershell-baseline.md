@@ -4,6 +4,8 @@
 
 当前结论：本机 Orca 正向完整 L4 已通过独立复审，单轮 ready、真实 PowerShell 5.1/TTY、完整 L1/L2、真实 PR #720、准备前派发拒绝与 ready 后实际准入、原 Run 正常停止及本轮资源清理全部核实。用户批准的别名关闭、原 PATH 恢复及正常重启已完成；没有修改 Runner 源码或部署安装环境。本结论针对下文固定候选版本与独立验收现场，不改写安装环境的项目状态，不借用本机 Codex/远端 Orca 历史结果。
 
+合并前定位的既有双项目隔离测试随后按用户要求修复：公开查询保持在线，删除 A 前核实原 Runner 清理，B 的完整任务页保持不变。干净提交 `7c0010d9` 上两项相关测试各连续两轮、正式 L1/L2 均通过，见下文修复记录；原基线失败仍保留。
+
 ## 实现及审查
 
 Windows `.ps1` 材料和 manifest 明确使用 `powershell.exe`；移除 PS7 版本门槛及其专属 JSON、摘要、文件 API。共享进度 writer 保留严格 UTF-8、布尔对象、Ordinal 唯一键、锁、合并及原子替换，以有界正则校验协议输入，再解码单个字符串 token。不存在第二套 writer 或自动解释器回退。308 范围限于环境检测与完整 L1/L2 必经脚本，不改其他发布工具的基线。
@@ -67,9 +69,27 @@ generation 的后置守卫正文为 7279→7476 字节，SHA256 `59230d4b0272369
 | main `befa8a0f6f2705bafb144b002eeb8947446ba5b3` | 1 项执行、1 项失败、0 跳过；`env_test.go:51` 的原 `task list` 返回缺少 `application-api/discovery.json`，命令退出 1 |
 | PR #413 `90d2887a1e891d7f2e99b840a3262f0b18f0d536` | 同一项、同一行、同一缺文件错误，1 项失败、0 跳过；命令退出 1 |
 
-根因是既有测试先对两个项目调用 StopService，再通过在线 CLI 查询任务；在线查询必须连接当前 home 的应用端点，正常停服会移除 discovery.json。测试及其项目启动/停止 helper、CLI driver、task 命令、应用客户端入口/连接与端点关闭共七个相关源码文件在两个版本逐字节一致。此次确认是主干既有测试前提错误，不是本 PR 引入的环境检测回归；按用户确认的方案登记后移除合并阻断，既有测试本身尚未修复。
+根因是既有测试先对两个项目调用 StopService，再通过在线 CLI 查询任务；在线查询必须连接当前 home 的应用端点，正常停服会移除 discovery.json。测试及其项目启动/停止 helper、CLI driver、task 命令、应用客户端入口/连接与端点关闭共七个相关源码文件在两个版本逐字节一致。该次归因确认是主干既有测试前提错误，不是本 PR 引入的环境检测回归；当时按用户确认的方案登记后移除合并阻断，既有测试尚未修复。随后用户明确要求修好该测试，结果见下节。
 
-原始报告保留于证据根的 `diagnostics/pr413-isolation-comparison-aa3951eb9ccd4485a620fc126146c0b8/`：`main/summary.json`、`pr413/summary.json` 及各自 go-test.jsonl 为两次真实失败；comparison.json 固定来源、时间与退出码，closure.json 核验唯一失败、零跳过和七个文件字节/SHA。此次仅完成基线归因，不改生产代码、测试预期或原失败记录，不将任一次失败登记为通过，也不补称整个 Go 包通过。后续提交只更新本验收记录及导航。
+原始报告保留于证据根的 `diagnostics/pr413-isolation-comparison-aa3951eb9ccd4485a620fc126146c0b8/`：`main/summary.json`、`pr413/summary.json` 及各自 go-test.jsonl 为两次真实失败；comparison.json 固定来源、时间与退出码，closure.json 核验唯一失败、零跳过和七个文件字节/SHA。该次仅完成基线归因，不改生产代码、测试预期或原失败记录，不将任一次失败登记为通过，也不补称整个 Go 包通过。归因提交 `6ef2c7f8` 只更新本验收记录及导航。
+
+### 隔离测试时序修复及补测
+
+用户随后要求修复测试并更新 PR #413，保持不合并、不部署。修复只涉及 `TestTwoProjectsIsolateTasksGitAndCleanup`：两个 home 在线时读取原任务页；仅 A 正常停服，调用现有 `CleanupOwnedRunner` 验证原 Runner 结算并移除其短目录，再停原 Git server、删除 A；B 保持在线完成隔离断言及路径越界拒绝后才正常停服。原项目身份、两任务、Git/provider 隔离和路径保护断言保留，并确认任务页无截断。
+
+首轮只移动停服位置的版本仍失败：`diagnostics/pr413-isolation-timing-4c4047d4df594a518006909abf8b4a45/` 原 summary/JSONL 记录 B 的总数据库 revision 不相等，以及删除 A 后最终清理无法读取其 execution.json。SQLite 每次成功写事务递增总 revision，在线 checkpoint 也包含其中，故最终检查改为 revision 不倒退，另复制原观察页仅归一化 DatabaseRevision/SampledAt，再对整个 TaskPage 作 DeepEqual，核对全部身份、图版本、任务内容、能力和分页；原观察值不改写。A 的公开清理在删除 home 前执行，使用独立 90 秒上下文，不改共享清理实现。
+
+首轮自有 A 的遗留命名空间 `C:/slr/d6wpf7jcmbft6zdxnu2zklxwci` 已通过同源 controlled-helper 的公开 ServiceStatus/VerifyServiceSettlement 核实原 SHA、not_running 和 ResourcesSettled，再由原 RemoveStopped 移除；原失败目录的 orphan-inspection.json、orphan-cleanup.json 保留核验与 removed=true。未借用旧 d117/cab021 现场或它们的清理授权。
+
+最终代码固定为干净提交 `7c0010d9e7ec7e1a4cb40ba06111a3bc8aac57be`。env_test.go 的 UTF-8 LF 正文由 4172→5131 字节，SHA256 `49cc44db222aa617651def24d63809b8e42e48e57959e786805b2bfac4b3e2ba`；实际 diff、业务原因及字节由原独立审阅者核实批准。没有修改生产代码、固定提示词、黄金样本、测试 ID/级别或场景选择。
+
+| 本次固定源码验证 | 实际结果与原始位置 |
+| --- | --- |
+| 两项 owner，各两轮 | `go run ./cmd/test-feedback -out <全新目录> -- -tags=e2e ./tests/e2e/internal/testenv -run=^Test(TwoProjectsIsolateTasksGitAndCleanup\|PartialPreparationCleanupKeepsEvidence)$ -count=2 -timeout=10m`；`diagnostics/pr413-isolation-fixed-b77c9b507cda47cb82ecbfc6b2cc3f4a/` 原 JSONL 确认两方法各 run/pass 两次，共四次执行，零失败/跳过。B 在线 revision 实际为 592→746、568→712，完整任务页保持不变；最终清理无错误 |
+| 正式 L1 | `test-results/L1/pr413-isolation-f2595cc71b9a4e75a0f97aef6308d21c/`；完整通过，零失败/跳过 |
+| 正式 L2 | `test-results/L2/pr413-isolation-edcab766f66d436a8f80bc716709ade5/`；原 smoke.delivery、受管报告通过，cleanup_complete=true，无清理错误，零失败/跳过 |
+
+以上三个原 summary 均绑定同一干净提交；owner 目录 verification.json 汇总原事件计数、两轮 revision 和正式结果，原 summary/JSONL 不覆盖。本次只验证两项 owner 及正式 L1/L2，不补称整个 e2e/testenv 包或重新执行真实 L4；此前真实本机 Orca 结论继续对应其原固定版本。
 
 ## 真实本机 Orca：原失败与配置生效边界
 
