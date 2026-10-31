@@ -240,16 +240,25 @@ func runProjectEnvironment(t *testing.T, id string) {
 	}
 	p.Claim("a")
 	var admitted, admittedCandidate, admittedDigest string
+	var probe admissionProbe
 	s.Wait("ready candidate actual Run", func() (bool, error) {
 		snap, e := p.Snapshot()
 		if e != nil {
 			return false, e
 		}
 		for _, c := range snap.Runner.Candidates {
-			if c.RunID != "" && c.InputDigest != "" && c.Projection != nil {
+			if c.TaskID != p.Tasks["a"].ID || c.Participation != "active" {
+				continue
+			}
+			started, err := probe.observe(c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if started {
 				p.verifyRemoteExecution(c.Submit.Input)
 				admitted = c.RunID
 				admittedCandidate, admittedDigest = c.ID, c.InputDigest
+				s.Must(controlled.Write(filepath.Join(s.Output, "admission-started-run.json"), c.Projection))
 				return true, nil
 			}
 		}
