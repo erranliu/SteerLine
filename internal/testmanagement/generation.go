@@ -206,6 +206,9 @@ func (s *GenerationService) dispatch(ctx context.Context, r Generation) (Generat
 	if !r.Unsubmitted() || r.Cancelled {
 		return r, nil
 	}
+	if err := ctx.Err(); err != nil {
+		return r, err
+	}
 	// No Run exists to take over for an unsent request. A different build must
 	// not execute it and then leave the new Run bound to the old build pin.
 	if r.Runner != s.Build {
@@ -236,7 +239,15 @@ func (s *GenerationService) dispatch(ctx context.Context, r Generation) (Generat
 		s.Queue.Update(r)
 		return r, err
 	}
-	receipt, submitErr := s.Runner.Submit(ctx, r.Request)
+	// The tick can expire immediately after the ambiguity boundary commits.
+	// If Submit was never called, there is no external operation to reconcile.
+	var receipt runnerclient.Receipt
+	submitErr := ctx.Err()
+	if submitErr == nil {
+		receipt, submitErr = s.Runner.Submit(ctx, r.Request)
+	} else {
+		r.State = "rejected"
+	}
 	if submitErr != nil {
 		r.Diagnostic = submitErr.Error()
 		r.SubmissionDiagnostic = r.Diagnostic
@@ -249,8 +260,12 @@ func (s *GenerationService) dispatch(ctx context.Context, r Generation) (Generat
 		r.State = "accepted"
 	}
 	r.Revision++
-	if err := s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
-		return r, err
+	// Persist the actual receipt/cause even when the caller's observation slice
+	// has expired. This bounded local write never extends the external call.
+	saveCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := s.Store.SaveGeneration(saveCtx, r, r.Revision-1); err != nil {
+		return r, errors.Join(submitErr, err)
 	}
 	s.Queue.Update(r)
 	return r, submitErr
