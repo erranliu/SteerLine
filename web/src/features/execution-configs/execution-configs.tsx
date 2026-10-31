@@ -593,39 +593,62 @@ export function ExecutionConfigs({
               <span>已保存方案</span>
               <span>{base.config.execution_profiles.length}</span>
             </div>
-            {base.config.execution_profiles.map((p) => (
-              <button
-                type="button"
-                key={p.id}
-                className={
-                  "sl-profile " + (draft.id === p.id ? "selected" : "")
-                }
-                aria-pressed={draft.id === p.id}
-                disabled={saving}
-                onClick={() => go(() => select(p))}
-              >
-                <span className="sl-profile-name">
-                  {p.name}
-                  {p.id === base.config.default_execution_profile && (
-                    <span className="sl-tag">默认</span>
-                  )}
-                </span>
-                <span className="sl-profile-meta">
-                  {remote(p) ? <Server /> : <Monitor />}
-                  {hostName(p)} ·{" "}
-                  {p.execution.adapter === "orca-terminal"
-                    ? "Orca / " + agentOf(p)
-                    : "Codex"}
-                </span>
-                <span className="sl-profile-meta">
-                  {String(values(p).model ?? "原生默认")} /{" "}
-                  {String(values(p).reasoning_effort ?? "默认")}
-                </span>
-                {p.workflow.id === "development-audited" && (
-                  <span className="sl-profile-meta">审计开发流程</span>
-                )}
-              </button>
-            ))}
+            {[
+              ...new Set(
+                base.config.execution_profiles.map((p) =>
+                  JSON.stringify([
+                    p.execution.target.kind,
+                    p.execution.target.environment || "",
+                  ]),
+                ),
+              ),
+            ].map((target) => {
+              const profiles = base.config.execution_profiles.filter(
+                (p) =>
+                  JSON.stringify([
+                    p.execution.target.kind,
+                    p.execution.target.environment || "",
+                  ]) === target,
+              );
+              return (
+                <section key={target} aria-label={hostName(profiles[0])}>
+                  <h3 className="sl-host-heading">{hostName(profiles[0])}</h3>
+                  {profiles.map((p) => (
+                    <button
+                      type="button"
+                      key={p.id}
+                      className={
+                        "sl-profile " + (draft.id === p.id ? "selected" : "")
+                      }
+                      aria-pressed={draft.id === p.id}
+                      disabled={saving}
+                      onClick={() => go(() => select(p))}
+                    >
+                      <span className="sl-profile-name">
+                        {p.name}
+                        {p.id === base.config.default_execution_profile && (
+                          <span className="sl-tag">默认</span>
+                        )}
+                      </span>
+                      <span className="sl-profile-meta">
+                        {remote(p) ? <Server /> : <Monitor />}
+                        {hostName(p)} ·{" "}
+                        {p.execution.adapter === "orca-terminal"
+                          ? "Orca / " + agentOf(p)
+                          : "Codex"}
+                      </span>
+                      <span className="sl-profile-meta">
+                        {String(values(p).model ?? "原生默认")} /{" "}
+                        {String(values(p).reasoning_effort ?? "默认")}
+                      </span>
+                      {p.workflow.id === "development-audited" && (
+                        <span className="sl-profile-meta">审计开发流程</span>
+                      )}
+                    </button>
+                  ))}
+                </section>
+              );
+            })}
           </aside>
           <section className="sl-editor" aria-label="执行方案编辑器">
             <div className="sl-editor-head">
@@ -902,7 +925,7 @@ export function ExecutionConfigs({
                     onClick={() => setRefresh((r) => r + 1)}
                   >
                     <RefreshCw />
-                    重新探测
+                    刷新能力目录
                   </button>
                 </div>
                 {catalog?.context_unverified && (

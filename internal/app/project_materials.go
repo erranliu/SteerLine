@@ -121,7 +121,7 @@ func (m *projectMaintenance) refresh(ctx context.Context) error {
 			if chosen.Cancelled {
 				material.Status = "cancelled"
 			}
-			material.Diagnostic = chosen.Diagnostic
+			material.Diagnostic = chosen.DiagnosticText()
 			if chosen.State == "generated" {
 				definitions, err := testmanagement.Select(chosen.Result, chosen.Catalogue)
 				if err == nil && (len(definitions) > 0 || testmanagement.AllowsNoTests(chosen.PlanText)) {

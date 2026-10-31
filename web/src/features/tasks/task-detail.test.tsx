@@ -159,7 +159,11 @@ function setup({
         ? { presentation: { default_profile_id: "default", profiles } }
         : path === "/environment/options"
           ? {
-              profiles: profiles.map((p) => ({ id: p.id, status: environmentReady ? "ready" : "not_ready", reason: "环境尚未验收" })),
+              profiles: profiles.map((p) => ({
+                id: p.id,
+                status: environmentReady ? "ready" : "not_ready",
+                reason: "环境尚未验收",
+              })),
               environments: [],
               generators: [],
               default_profile_id: "default",
@@ -290,9 +294,14 @@ it("keeps first startup using the selected profile", async () => {
 });
 
 it("blocks a new start for an online service with an unprepared environment", async () => {
- const {start}=setup({firstStart:true,environmentReady:false});
- fireEvent.click(await screen.findByRole("button",{name:"手动启动"}));
- expect(await screen.findByRole("button",{name:"确认启动"})).toBeDisabled();
- expect(screen.getByRole("link",{name:"前往环境准备"})).toHaveAttribute("href","/projects/candidate-project/environment");
- expect(start).not.toHaveBeenCalled();
+  const { start } = setup({ firstStart: true, environmentReady: false });
+  fireEvent.click(await screen.findByRole("button", { name: "手动启动" }));
+  expect(
+    await screen.findByRole("button", { name: "确认启动" }),
+  ).toBeDisabled();
+  expect(screen.getByRole("link", { name: "前往环境准备" })).toHaveAttribute(
+    "href",
+    "/projects/candidate-project/environment?profile=default&task=38",
+  );
+  expect(start).not.toHaveBeenCalled();
 });

@@ -239,6 +239,7 @@ func (s *GenerationService) dispatch(ctx context.Context, r Generation) (Generat
 	receipt, submitErr := s.Runner.Submit(ctx, r.Request)
 	if submitErr != nil {
 		r.Diagnostic = submitErr.Error()
+		r.SubmissionDiagnostic = r.Diagnostic
 		var failure *runnerclient.Failure
 		if errors.As(submitErr, &failure) && !failure.Unknown {
 			r.State = "rejected"

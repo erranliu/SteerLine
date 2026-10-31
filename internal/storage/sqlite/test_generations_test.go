@@ -39,6 +39,8 @@ func TestGQDurableBatchAndSubmissionBoundary(t *testing.T) {
 	g.Revision++
 	g.State = "unknown"
 	g.Submission = "started"
+	g.Diagnostic = "request_not_found"
+	g.SubmissionDiagnostic = "original submit outcome unknown"
 	if err = s.SaveGeneration(ctx, g, 1); err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +58,15 @@ func TestGQDurableBatchAndSubmissionBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer s.Close()
+	persisted, err := s.Generation(ctx, "project", "generation")
+	if err != nil || persisted.SubmissionDiagnostic != "original submit outcome unknown" || persisted.Diagnostic != "request_not_found" {
+		t.Fatal("original submit and latest observation diagnostics were conflated", persisted, err)
+	}
+	persisted.Revision++
+	persisted.SubmissionDiagnostic = "replacement cause"
+	if err = s.SaveGeneration(ctx, persisted, persisted.Revision-1); err == nil {
+		t.Fatal("original submission failure was rewritten")
+	}
 	got, err := s.GenerationBatch(ctx, "project")
 	if err != nil || got.ID != batch.ID || len(got.Items) != 1 || !got.CompletedAt.Equal(now) || s.MaterialProfile(ctx, "project") != "local" {
 		t.Fatal(got, err)

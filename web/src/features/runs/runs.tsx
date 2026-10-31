@@ -476,7 +476,12 @@ export function Runs() {
   useEffect(() => {
     if (!runID && selected) {
       setParams(
-        { task: selectedTask, run: selected.run_id },
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.set("task", selectedTask);
+          next.set("run", selected.run_id);
+          return next;
+        },
         { replace: true },
       );
     }

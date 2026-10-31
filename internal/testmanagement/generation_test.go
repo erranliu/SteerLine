@@ -424,6 +424,43 @@ func TestTMGenerationPersistenceAndUnknown(t *testing.T) {
 		t.Fatalf("duplicated action %+v", f)
 	}
 }
+
+type missingOriginalGeneration struct{ *generationCLI }
+
+func (f missingOriginalGeneration) Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error) {
+	return runnerclient.Inspection{}, &runnerclient.Failure{Code: "request_not_found"}
+}
+
+func TestTMGenerationUnknownPreservesSubmissionCause(t *testing.T) {
+	s, m, f, in := generationFixture(t)
+	f.lost = true
+	s.Runner = missingOriginalGeneration{f}
+	ctx := context.Background()
+	if _, err := s.Generate(ctx, in); err == nil {
+		t.Fatal("missing original submit failure")
+	}
+	before, err := m.Generation(ctx, s.Project, in.RequestID)
+	if err != nil || before.Diagnostic == "" {
+		t.Fatal(before, err)
+	}
+	for i := 0; i < 3; i++ {
+		if err := s.Observe(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	after, err := m.Generation(ctx, s.Project, in.RequestID)
+	if err != nil || after.SubmissionDiagnostic != before.Diagnostic || !strings.Contains(after.Diagnostic, "request_not_found") || !strings.Contains(after.DiagnosticText(), before.Diagnostic) || after.State != "unknown" || f.submits != 1 {
+		t.Fatalf("observation: original=%q current=%q state=%s submits=%d err=%v", after.SubmissionDiagnostic, after.Diagnostic, after.State, f.submits, err)
+	}
+	s.Runner = f
+	if err := s.Observe(ctx); err != nil {
+		t.Fatal(err)
+	}
+	after, err = m.Generation(ctx, s.Project, in.RequestID)
+	if err != nil || after.DiagnosticText() != "" || after.SubmissionDiagnostic != before.Diagnostic || after.RunID == "" || f.submits != 1 {
+		t.Fatalf("reconciled original: diagnostic=%q submit=%q run=%s submits=%d err=%v", after.DiagnosticText(), after.SubmissionDiagnostic, after.RunID, f.submits, err)
+	}
+}
 func TestTMGenerationChangesAndRestart(t *testing.T) {
 	s, m, f, in := generationFixture(t)
 	ctx := context.Background()

@@ -14,6 +14,11 @@ export type EnvironmentProfile = {
   activity_id?: string;
 };
 export type Environment = {
+  target: { kind: string; environment?: string };
+  adapter: string;
+  agent: string;
+  activity_settled: boolean;
+  script_path?: string;
   environment_key: string;
   name: string;
   profiles: EnvironmentProfile[];
@@ -35,17 +40,17 @@ export type EnvironmentOptions = {
 };
 export const environmentStage: Record<string, string> = {
   unprepared: "未准备",
-  awaiting_user: "待用户准备/验收",
+  awaiting_user: "待准备与验收",
   verifying: "验收中",
   ready: "已就绪",
-  blocked: "阻断",
+  blocked: "验收阻断",
   stale: "已失效",
 };
 
 export function useEnvironmentReadiness() {
   const { api, identity, online } = useWorkspace();
   const visible = usePageVisible();
-  return useQuery({
+  const query = useQuery({
     queryKey: [
       api.home,
       identity.project_id,
@@ -59,16 +64,48 @@ export function useEnvironmentReadiness() {
     retry: false,
     refetchInterval: visible ? 15000 : false,
   });
+  return { ...query, verified: online && query.isSuccess && !query.isError };
 }
+
+export function environmentLink(
+  project: string,
+  profile?: string,
+  task?: string,
+) {
+  const params = new URLSearchParams();
+  if (profile) params.set("profile", profile);
+  if (task) params.set("task", task);
+  return `/projects/${project}/environment${params.size ? "?" + params : ""}`;
+}
+
+export function EnvironmentObservation() {
+  const readiness = useEnvironmentReadiness();
+  if (readiness.verified) return null;
+  return (
+    <p role="status" className="notice amber">
+      {readiness.data ? "上次已知状态，当前待核实" : "运行环境状态待核实"}
+      {!!readiness.dataUpdatedAt &&
+        ` · 最后成功观察 ${new Date(readiness.dataUpdatedAt).toLocaleString()}`}
+    </p>
+  );
+}
+
 export function EnvironmentSummary() {
   const { identity } = useWorkspace();
   const readiness = useEnvironmentReadiness();
   const environments = readiness.data?.environments;
   return (
     <NavLink to={`/projects/${identity.project_id}/environment`}>
-      {environments
-        ? `环境已准备 ${environments.filter((e) => e.status === "ready").length}/${environments.length}`
-        : "环境准备状态待核实"}
+      {!environments ? (
+        "运行环境状态待核实"
+      ) : (
+        <>
+          {!readiness.verified && "上次结果 · 当前待核实 · "}
+          {environments.length
+            ? `运行环境已就绪 ${environments.filter((e) => e.status === "ready").length}/${environments.length}`
+            : "尚无开发执行方案"}
+        </>
+      )}
     </NavLink>
   );
 }

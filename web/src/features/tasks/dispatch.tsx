@@ -1,5 +1,8 @@
 import { NavLink } from "react-router-dom";
-import { useEnvironmentReadiness } from "../environment-checks/use-readiness";
+import {
+  environmentLink,
+  useEnvironmentReadiness,
+} from "../environment-checks/use-readiness";
 import { useWorkspace } from "../../app/context";
 import { Button } from "../../shared/ui/button";
 import { Pause, Play } from "lucide-react";
@@ -16,7 +19,6 @@ export function Dispatch() {
   return (
     <div className="dispatch-bar">
       <div>
-        <span className="connection-dot" />
         <strong>当前项目派发</strong>
         <span className="muted">
           {control.dispatch_paused
@@ -68,10 +70,15 @@ export function Dispatch() {
           {control.dispatch_paused ? "恢复派发" : "暂停派发"}
         </Button>
       </div>
-      {selected?.status !== "ready" && (
+      <p className="muted">默认执行方案：{selected?.name || "尚未核实"}</p>
+      {(!preparation.verified || selected?.status !== "ready") && (
         <p className="muted">
-          默认执行环境阻断：{selected?.reason || "环境准备状态尚未核实"} ·{" "}
-          <NavLink to={`/projects/${identity.project_id}/environment`}>
+          默认执行环境阻断：
+          {!preparation.verified
+            ? "当前状态待核实"
+            : selected?.reason || "环境准备状态尚未核实"}{" "}
+          ·{" "}
+          <NavLink to={environmentLink(identity.project_id, selected?.id)}>
             前往准备
           </NavLink>
         </p>
