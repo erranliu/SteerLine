@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 本机Codex | 完成，正向完整链 | SteerLine `edb20d721342409aa77acbe3ef24f0a109ff5d4b`、SteerlineTest `20610e10285d9ab9bb4ea3be0c07410158692fc0` 的正式L4 passed=true/cleanup_complete=true，TTY、完整L2、原PR发布/外部精确合并、ready后准入及停止均通过；详见[原固定版本验收](environment-publication-scope.md)。本次新增tty-failure原生分支在远端验证，不宣称已在本机Codex重跑 |
 | 远端Orca | 完成，真实三轮负向闭环；TFR-A04通过 | SteerLine `861698809bbcd6164587709973731596fa350f24`、308 `1c25de58c87b99f44f9fc43f61de09444ba4391d`；三轮TTY均明确失败，原报告completed=true、原Run停止/结果closed、正常failed/not_ready/settled、无PR、准入拒绝及清理通过；完整L2/发布未执行，正向L4保持passed=false |
-| 本机Orca | 未完成 | 仍保留原Runner本机前置阻断，不借用上述两条链路的结果；见[原始记录](project-environment-readiness.md) |
+| 本机Orca | 未完成 | 2026-10-31补齐既有runtime配置及独立注册后已实际调用TTY入口，但找不到pwsh且报告未完成；见[最新续验](local-orca-environment-20261031.md)。此前前置阻断保留为历史，不借用其他链路结果 |
 
 Runner后续修复通常不要求SteerLine代码改动，但可通过正式真实L4验证集成效果；本次没有接入或验证尚未交付的Runner修复。以下实现、受控验证及早期原生失败均保留，最新三轮证据见末节。
 

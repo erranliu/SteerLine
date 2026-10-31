@@ -1,6 +1,6 @@
 # 环境检测发布范围收敛验收
 
-2026-10-30。[Spec](../../spec/environment-publication-scope.spec.md) · [Plan](../../plans/environment-publication-scope.plan.md)。用户确认先收缩脚本到正常交付需要的能力、再重跑本机Codex；实施及本机Codex正式L4已通过，不改Runner权限，不部署安装环境。用户现已签收本机Codex正向流程、远端Orca负向检测流程；远端最新三轮负报告/封存/门禁/清理完成，环境仍not_ready，见[两条链路签收](environment-tty-failure-report.md)。本机Orca仍等Runner修复。下文保留远端早期启动超时、TTY失败及严格流程未通过的原始历史，不据此覆盖后续验收，也不将历史失败改写为通过。
+2026-10-30。[Spec](../../spec/environment-publication-scope.spec.md) · [Plan](../../plans/environment-publication-scope.plan.md)。用户确认先收缩脚本到正常交付需要的能力、再重跑本机Codex；实施及本机Codex正式L4已通过，不改Runner权限，不部署安装环境。用户现已签收本机Codex正向流程、远端Orca负向检测流程；远端最新三轮负报告/封存/门禁/清理完成，环境仍not_ready，见[两条链路签收](environment-tty-failure-report.md)。本机Orca已按既有runtime配置进入真实工具执行，当前pwsh缺项及未完成报告见[最新续验](local-orca-environment-20261031.md)，尚未通过。下文保留远端早期启动超时、TTY失败及严格流程未通过的原始历史，不据此覆盖后续验收，也不将历史失败改写为通过。
 
 ## 已实施边界
 
