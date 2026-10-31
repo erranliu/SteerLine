@@ -1,14 +1,14 @@
 # 验收流程与记录
 
-本机Orca环境检测续验（2026-10-31，尚未通过）：[实际执行与配置](local-orca-environment-20261031.md)。不改Runner，补齐显式runtime配置与独立项目注册后，原Run已实际执行TTY入口；Agent工具环境找不到pwsh，报告未完成。已正常停止封存并补充核实自有资源清理；用户确认有效not_ready也可验收，现修复项目端失败报告收尾后继续负向闭环，不为达到ready而重启Orca，不部署。
+本机Orca环境检测续验（2026-10-31，真实三轮负向流程验收完成）：[实际执行与配置](local-orca-environment-20261031.md)。既有runtime配置与独立注册已跑通；项目端补齐pwsh不可解析时的纯失败记录。三轮原负报告完成、原Run停止/result封存、无PR、前后派发拒绝及清理均核实。环境仍not_ready，原正向L4保持passed=false；未改Runner源码、PATH或安装环境，未重启Orca。
 
-TTY前置失败报告收尾（2026-10-30，实施及远端真实三轮负向闭环验收完成）：[专属验收及两条链路签收](environment-tty-failure-report.md)。本机Codex正向流程、远端Orca负向检测流程按各自固定受测版本完成验收；远端TTY失败，环境仍not_ready，正式正向L4仍passed=false。新入口三轮均完成负报告、正常停止封存、预算终结、无PR、门禁及清理。本机Orca仍未验；历史输入受理未知问题保留，用户决定不继续追查，不部署。
+TTY前置失败报告收尾（2026-10-30，实施及远端真实三轮负向闭环验收完成）：[专属验收及两条链路签收](environment-tty-failure-report.md)。本机Codex正向流程、远端Orca负向检测流程按各自固定受测版本完成验收；远端TTY失败，环境仍not_ready，正式正向L4仍passed=false。新入口三轮均完成负报告、正常停止封存、预算终结、无PR、门禁及清理。本机Orca后续三轮负向流程完成，见上述续验；历史输入受理未知问题保留，用户决定不继续追查，不部署。
 
-环境检测按正常发布能力收敛（2026-10-30，本机Codex正向流程验收完成）：[专属验收](environment-publication-scope.md)。Agent只验执行和PR发布，外部L4负责规则/精确合并；report2、原PR绑定、派发门禁、原Run停止及完整清理已核实。远端Orca后续负向闭环签收见[TTY收尾验收](environment-tty-failure-report.md)，早期失败保留；本机Orca最新状态见上述续验，尚未通过，不部署安装环境。
+环境检测按正常发布能力收敛（2026-10-30，本机Codex正向流程验收完成）：[专属验收](environment-publication-scope.md)。Agent只验执行和PR发布，外部L4负责规则/精确合并；report2、原PR绑定、派发门禁、原Run停止及完整清理已核实。远端Orca后续负向闭环签收见[TTY收尾验收](environment-tty-failure-report.md)，早期失败保留；本机Orca负向流程已完成、环境仍not_ready，见上述续验，不部署安装环境。
 
 旧 Runner Check 接入退役（2026-10-29，实施与验收完成）：[专属验收](legacy-environment-check-retirement.md)。旧消费者退出，普通Run/result准备与派发门禁保留；完整owner、Web、L1/L2、三条L3、独立Runner真实契约和独立复审通过。原生准备的既有未通过项仍归原验收，未部署安装环境。
 
-项目 × 环境准备状态与统一派发门禁（2026-10-30，本机Codex与远端Orca检测流程验收完成）：[专属验收与审计](project-environment-readiness.md)。本机Codex已有完整正向L4；远端Orca已完成真实三轮TTY负向检测，环境仍not_ready并阻断派发。本机Orca仍未验；各阶段失败和固定版本证据分别保留，未部署。
+项目 × 环境准备状态与统一派发门禁（2026-10-30，本机Codex与远端Orca检测流程验收完成）：[专属验收与审计](project-environment-readiness.md)。本机Codex已有完整正向L4；远端Orca已完成真实三轮TTY负向检测，环境仍not_ready并阻断派发。本机Orca后续三轮负向流程完成；各阶段失败和固定版本证据分别保留，未部署。
 
 固定提示词管理与变更门禁（2026-10-28，仓库实现已完成）：[审计与验收](prompt-governance.md)，记录一处错误前提及四类过度设计的收窄；核心定向、L1/L2/runtime-progress L3 通过，完整边界的既有失败已按原 HEAD 独立复现，远端保护未启用/未验。不进入 roadmap 执行队列。
 

@@ -1,10 +1,10 @@
 # 本机 Orca 环境检测续验
 
-2026-10-31，用户要求先不改 Runner，准备本机 Orca 配置并实际验收；不部署安装环境。本轮尚未通过环境检测验收，不能登记 ready，也不能借用本机 Codex 或远端 Orca 的签收。
+2026-10-31，用户要求先不改 Runner，准备本机 Orca 配置并实际验收；不部署安装环境。真实三轮负向检测流程验收完成；环境仍为 not_ready，不登记 ready，也不借用本机 Codex 或远端 Orca 的结果。用户明确正确 not_ready 可通过流程验收；原正向 L4 报告保持失败。
 
 ## 固定输入与配置
 
-证据根为 `C:/SteerlineDebug/wt-5069-local-orca-environment/`，以下现场路径相对此根。正式复测固定 SteerLine 干净提交 `0e6e433115ae875528d5b7f6ca993a6e4128108c`、SteerlineTest 材料 `b012d0ae4ade12a41dc47cf8571b45a42fc6a968`。本机 profile 为 local / orca-terminal / full_access / gpt-6-luna medium / development 2，每轮 1200 秒，明确配置既有 `runtime_executable` 与 SHA。输入清单为 `diagnostics/inputs-matched-86839340fb9348458dc1d4f73398f956/manifest.json`。
+证据根为 `C:/SteerlineDebug/wt-5069-local-orca-environment/`，以下现场路径相对此根。首次注册修复后的复测固定 SteerLine `0e6e433115ae875528d5b7f6ca993a6e4128108c`、SteerlineTest `b012d0ae4ade12a41dc47cf8571b45a42fc6a968`；最终负向闭环固定干净 SteerLine `5da9357dc3d8c480994ce36bb4060c5b7d1d5c5f`、SteerlineTest `868b2e7fc6808a404eff8ddcb823a4395c2e7c9a`。本机 profile 为 local / orca-terminal / full_access / gpt-6-luna medium / development 2，每轮 1200 秒，明确配置既有 `runtime_executable` 与 SHA。输入清单为 `diagnostics/inputs-matched-86839340fb9348458dc1d4f73398f956/manifest.json`。
 
 Runner 使用已提交源码 `cf29e1484f38b8e98e87e1c6505cdc96da8cbdb4` 的独立干净构建，不新增 Runner 源码修改；版本 0.2.0-dev.4、resource_version 3、state/v5。EXE SHA256 为 `f8d3c6a38d6381a5ac788070566e1189a3584f0bd767b0ca15bc8d66174a0a5c`；既有 helper SHA256 为 `1320bf201492994da04991c0118549f0648b99d6ca1df99d966d6b72903cf7e9`。包目录 `packages/committed-cf29-4b2d0273e81543bf8ef39b571168c203/` 保存实际 build metadata。没有使用另一工作区尚未提交的本机/远端统一实现。
 
@@ -43,8 +43,33 @@ Runner 使用已提交源码 `cf29e1484f38b8e98e87e1c6505cdc96da8cbdb4` 的独�
 
 两类问题分别登记：Agent 的实际工具环境不能解析 pwsh，是已检测到的环境配置缺项；Agent 没有调用 tty-failure 收尾，原报告仍未完成，是本次检测流程未完整验收。此轮只有一轮，人工停止，不声称三轮负向闭环通过。正式 L4 保持 passed=false/cleanup_complete=false，补充清理不覆盖原报告。
 
-## 待应用的配置与未验边界
+## 未应用的可选启动配置
 
 主机存在真实 PowerShell 7.6.9，原 Agent 工具调用观察到 pwsh 不可解析。PATH 继承与 WindowsApps 别名过滤是原因推断；本轮未采集实际 Agent PATH，也未以 cf29 源码冒充复用 helper 的原实现证明。当前准备了一份独立 Orca 启动配置，位于 `diagnostics/orca-launch-configuration-6cd53f7dd5894a6e95285f50fec1b020/`。配置固定真实二进制及 SHA，脚本只调整 Orca 进程及后代 PATH，启动后恢复调用方 PATH；拒绝在已有 Orca 进程时运行，不自行结束其他会话，不永久修改用户 PATH。
 
-`validation.json` 记录真实二进制启动及脚本解析通过，未保存版本输出；尚未应用启动配置或重启 Orca。用户随后明确有效 not_ready 也可完成流程验收，因此不为达到 ready 而重启 Orca，启动配置只作可选准备。当前正修复项目端 pwsh 缺失时的负报告收尾，再以新独立现场核验完整负向闭环；不把 completed=false 算通过。当前证据只证明既有 local runtime 配置可进入真实 Agent 工具执行，不证明环境 ready，也不证明必须修改 Runner。
+`validation.json` 记录真实二进制启动及脚本解析通过，未保存版本输出；尚未应用启动配置或重启 Orca。用户随后明确有效 not_ready 也可完成流程验收，因此不为达到 ready 而重启 Orca，启动配置只作可选准备。随后仅修复项目端负报告收尾并完成下节真实闭环；没有应用 PATH 配置或重启 Orca，不把前述 completed=false 算通过。既有 local runtime 配置可进入真实 Agent 工具执行，不证明环境 ready，也不证明必须修改 Runner。
+
+
+## 项目端失败记录修复与真实负向闭环
+
+SteerlineTest 的同一 verify 脚本及项目文档现在明确：原 pwsh 命令不可解析且纯最小探针已结束时，允许通过已有 `powershell.exe` 仅调用 `-Phase tty-failure`。Windows PowerShell 5.1 不执行替代探测、prepare、测试、认证或 PR；正常就绪仍要求 pwsh 7+、真实 TTY 和原完整 L2。脚本显式读取 UTF8，进度对象转字典使用两个引擎共有接口，同一原子 writer 使用共有三参数 Stream.Write 和 File.Replace；没有第二套 writer、旧数据迁移或重试降级。
+
+完整差异/字节与 SHA 账本为 `diagnostics/project-negative-recorder-review/`。独立审核批准三文件精确内容：environment.md 6242→7035 字节，verify-environment.ps1 11748→11953，test-environment-tty.py 14115→16814。固定 execution/generation 正文、Runner、权限、报告版本与检测标准不变，仅此受测项目增加明确记录入口。真实 PS7 原边界和 PS5 无 pwsh PATH/非 Git/伪工具零调用/UTF8 原身份及 previous/未知发布拒绝测试共6方法通过；原日志在项目 clone `.steerrunner/artifacts/ps51-negative-fixed-cb79d5adfbbe4eb582f956d9834b3b15/test.log`。首次 Replace 的 `$null` 参数绑定失败保留于 `ps51-negative-22f7eab08ee347848184f07f029ae158`，修正为 NullString 后补测，不改写失败。
+
+固定项目提交868b2e7的原 L1 五项/L2 一项完整通过、零跳过、干净来源，报告 `.steerrunner/artifacts/ps51-negative-6b4542b2c3de4aadaa988b4aa04e7b0f-l1`、`-l2`。这些是项目修复回归，不冒充目标 Agent 内执行过 L2。
+
+最终原输入清单 `diagnostics/inputs-negative-ec0d61cb34924237bc0fff7fe28fc4e8/manifest.json`；正式报告 `test-results/L4/negative-complete-7808a4b72da44217a19a48a9589b0ee7/`，场景仍为 testing.project-environment-local、原入口/参数形式不变。单次原活动 `6fd437d9f62541b494fcb60e77b78407` 自动走完三轮；固定夹具 `eda830b05b2398f0a7fb8a5a2fac373814975d0c`，不是三次手工重跑或人工取消。
+
+| 轮次 / 原 Run | 原 result 字节数 | 原 result SHA256 |
+| --- | --- | --- |
+| 1 / `93d3e342970be4f08e0268be4c72600a` | 1224 | `61be8aafb355469cbc9a0d09fcb39c8721f25e4eaf5ad65330db73d18d0ee9d4` |
+| 2 / `40009db504415096e1d74789ce460eb3` | 2840 | `1ca82d22a4468b9a8a38d0cbf28a59e8534f1c33f8445b46a7cc0a54c84633fb` |
+| 3 / `35042f98f635a8fb8cfafd8a31cdc40e` | 2844 | `f065d69f4e4a56f12fdd723d02a248ee5118bb5fd520f659bce62e9d15a1ecb2` |
+
+三轮均实际调用最小 TTY 入口并观察到 pwsh 不可解析，随后仅调用同一项目失败记录入口，未修工具或 PATH、未重跑探测、未执行 prepare/L1/L2/发布脚本。第二、三轮通用结果整理曾返回 done，通用工作流因此发出 publish 提示；Agent 读取原负报告后拒绝实际发布脚本，不将收到提示描述为执行过发布。原报告均 completed=true、terminal.tty=failed，其余5项 check 及 demo.l2.smoke 均 incomplete；PR 字段为空、outcome_unknown=false、cleanup_completed=true，不新增 passed。
+
+逐轮原 result 均 closed、Run stopped、round settled=true、timed_out=false。raw 正文与 typed report 一致，原初始身份及冻结 previous 逐值保留；本次派生逐字节核验记录为 `diagnostics/negative-flow-verification-20261031.json`。最终 environment-proof/environment-latest 为 failed/not_ready/settled。provider-pr-proof 核实无 PR；admission-proof 核实准备前后均 environment_not_ready 拒绝、没有准入 Run。308-runner-cleanup、remote-ref-cleanup、orca-local-registration-cleanup 全部 confirmed=true；原三工作区一次删除后异步结算、仅本次 setup 撤销。撤销登记阶段不删源文件，随后场景正常清理自有 scratch；两个用户既有登记保留。scenario cleanup_complete=true、cleanup_errors=null。
+
+原 summary/managed/scenario 仍 passed=false、命令 exit1，代表正向环境资格未通过；按用户确认的口径，本次完整真实负报告/停止/门禁/清理满足负向检测流程验收。结果封存保证不扩大到全部进度快照：最终 proof 中第二、三轮缓存 progress 状态仍为 observing，字段值均 false；报告 result 的 closed 与原 Run 停止单独核实。原生正向完整 L2/发布/ready、其他项目环境和未来 Runner 版本不继承本次结果。全程未部署安装环境。
+
+最终独立审阅者 `/root/local_orca_registration_review` 已核对三轮原正文/冻结输入/SHA、实际终端、原停止/无PR/派发拒绝、异步工作区清理及五份验收表述，批准本机Orca有效not_ready闭环。补充只读 `diagnostics/final-ref-absence.json` 核实全部五条精确自有远端ref已不存在；不覆盖正式报告。

@@ -1,6 +1,6 @@
 # 验收与文档审计：项目 × 环境准备状态与统一派发门禁
 
-2026-10-30最新签收：用户确认本机Codex、远端Orca两条检测流程验收完成；本机Codex按固定受测版本完整正向L4通过，远端Orca按新固定版本完成真实三轮TTY负向闭环，环境仍not_ready，正式正向L4不改写。本机Orca最新续验已进入真实工具执行，但pwsh缺项且报告未完成，见[2026-10-31续验](local-orca-environment-20261031.md)，仍未通过。权威汇总及原始证据见[两条链路签收](environment-tty-failure-report.md)，本机正向细节见[发布范围验收](environment-publication-scope.md)。Runner通用输入提交问题本轮不继续追查；未部署安装环境。
+2026-10-30最新签收：用户确认本机Codex、远端Orca两条检测流程验收完成；本机Codex按固定受测版本完整正向L4通过，远端Orca按新固定版本完成真实三轮TTY负向闭环，环境仍not_ready，正式正向L4不改写。2026-10-31本机Orca也已完成真实三轮负向流程验收，环境pwsh不可解析、仍not_ready；原报告/停止/门禁/清理均核实，正向L4不改写，见[最新续验](local-orca-environment-20261031.md)。权威汇总及原始证据见[两条链路签收](environment-tty-failure-report.md)，本机正向细节见[发布范围验收](environment-publication-scope.md)。Runner通用输入提交问题本轮不继续追查；未部署安装环境。
 
 以下保留2026-10-29阶段记录：实施与受控自动验证完成；两个项目的同版本材料已维护、独立审核并经用户批准合并，当时三条原生路径均已实际执行但未正向通过，明确阻断如下。[Spec](../../spec/project-environment-readiness.spec.md) · [Plan/执行命令](../../plans/project-environment-readiness.plan.md)。当前聊天按用户授权实施、测试和独立复审；未分配 Roadmap 任务编号。
 
