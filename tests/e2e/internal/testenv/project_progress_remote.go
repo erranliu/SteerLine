@@ -78,12 +78,33 @@ func loadOrcaTarget(s *Scenario, p *Project) *orcaTarget {
 	s.Must(err)
 	s.Must(json.Unmarshal(body, &list))
 	for _, repo := range list.Repos {
-		if strings.EqualFold(strings.TrimSuffix(repo.Identity.URL, ".git"), strings.TrimSuffix(p.RemoteURL, ".git")) {
+		if r.matchesRepository(repo.Path, repo.Identity.URL, p.Repo, p.RemoteURL) {
 			if r.Repository != "" {
 				s.t.Fatal("Orca repository identity is ambiguous")
 			}
 			r.Repository, r.Root = repo.ID, repo.Path
 		}
+	}
+	if r.Repository == "" && r.Environment == "" {
+		// A local Run selects its exact caller-owned clone, not another checkout
+		// with the same remote. Register only this isolated source; cleanup removes
+		// only this new setup after the original Runner resources have settled.
+		body, err = r.Call(s.Context, s, p, "repo", "add", "--path", p.Repo)
+		s.Must(err)
+		var added struct {
+			Repo struct {
+				ID, Path string
+				Identity struct {
+					URL string `json:"remoteUrl"`
+				} `json:"gitRemoteIdentity"`
+			} `json:"repo"`
+		}
+		s.Must(json.Unmarshal(body, &added))
+		if added.Repo.ID == "" || !r.matchesRepository(added.Repo.Path, added.Repo.Identity.URL, p.Repo, p.RemoteURL) {
+			s.t.Fatal("new local Orca registration differs from the isolated source")
+		}
+		r.Repository, r.Root, r.ownedLocalSetup = added.Repo.ID, added.Repo.Path, true
+		p.orcaEvidence = r
 	}
 	if r.Repository == "" {
 		s.t.Fatal("project repository is not registered on the selected Orca host")

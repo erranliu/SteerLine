@@ -284,6 +284,15 @@ func (p *Project) verifyUnreadyEnvironmentEvidence(record env.Record) {
 func (p *Project) cleanupRemoteValidation(base string) {
 	s := p.Scenario
 	p.RemoteCleanupFailed = true
+	ownedWorkspaces := map[string]string{}
+	defer func() {
+		if !p.RemoteCleanupFailed && p.orcaEvidence != nil && p.orcaEvidence.ownedLocalSetup {
+			if err := p.orcaEvidence.cleanupLocalRegistration(s, p, ownedWorkspaces); err != nil {
+				p.RemoteCleanupFailed = true
+				s.t.Error("own local Orca registration cleanup unverified:", err)
+			}
+		}
+	}()
 	p.StopService()
 	// Failure/unverified records retain the exact refs instead of hiding an
 	// unknown PR or deleting branches still held by Runner.
@@ -333,6 +342,9 @@ func (p *Project) cleanupRemoteValidation(base string) {
 		for _, round := range activity.Rounds {
 			if round.Run != nil && round.Run.Execution.Branch != "" {
 				refs[round.Run.Execution.Branch] = true
+				if round.Run.Execution.Workspace != "" {
+					ownedWorkspaces[round.Run.Execution.Workspace] = round.Run.Execution.Branch
+				}
 			}
 		}
 	}
@@ -350,6 +362,9 @@ func (p *Project) cleanupRemoteValidation(base string) {
 		}
 		if candidate.Branch != "" {
 			refs[candidate.Branch] = true
+		}
+		if candidate.Projection != nil && candidate.Projection.Execution.Workspace != "" && candidate.Projection.Execution.Branch != "" {
+			ownedWorkspaces[candidate.Projection.Execution.Workspace] = candidate.Projection.Execution.Branch
 		}
 	}
 	for ref := range refs {
