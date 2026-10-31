@@ -8,9 +8,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
@@ -45,14 +47,16 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	b.CreateTasks()
 	a.StartService()
 	b.StartService()
-	a.StopService()
-	b.StopService()
+	// Task reads use the public application endpoint, so keep both hosts online.
 	ap, err := a.Driver.Tasks(s.Context)
 	s.Must(err)
 	bp, err := b.Driver.Tasks(s.Context)
 	s.Must(err)
 	if ap.ProjectID == bp.ProjectID || ap.DatabaseID == bp.DatabaseID || a.Home == b.Home || a.Provider == b.Provider || len(ap.Tasks) != 2 || len(bp.Tasks) != 2 {
 		t.Fatal("projects share identity or task state")
+	}
+	if ap.HasMore || bp.HasMore || ap.NextCursor != "" || bp.NextCursor != "" {
+		t.Fatal("fixture task pages must be complete")
 	}
 	before := b.git(b.Repo, "rev-parse", "HEAD")
 	s.Must(os.WriteFile(filepath.Join(a.Repo, "only-a.txt"), []byte("isolated"), 0600))
@@ -67,6 +71,12 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	if other.Marker != 0 || b.git(b.Repo, "rev-parse", "HEAD") != before {
 		t.Fatal("A changed B's state")
 	}
+	// Stop only A before deleting its resources; B must remain queryable.
+	a.StopService()
+	cleanupCtx, cleanupCancel := context.WithTimeout(s.Context, 90*time.Second)
+	defer cleanupCancel()
+	s.Must(a.Driver.CleanupOwnedRunner(cleanupCtx, run.Helper))
+	s.Must(runnerstatepath.RemoveStopped(a.Home))
 	stopCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
 	defer stop()
 	s.Must(a.GitServer.Stop(stopCtx))
@@ -76,13 +86,22 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	}
 	bp2, err := b.Driver.Tasks(s.Context)
 	s.Must(err)
-	if bp2.DatabaseID != bp.DatabaseID || bp2.DatabaseRevision != bp.DatabaseRevision {
-		t.Fatal("A cleanup changed B's database")
+	if bp2.DatabaseRevision < bp.DatabaseRevision {
+		t.Fatal("B's database revision moved backwards")
 	}
+	// Online checkpoint writes advance the database revision without changing tasks.
+	unchanged := bp2
+	unchanged.DatabaseRevision = bp.DatabaseRevision
+	unchanged.SampledAt = bp.SampledAt
+	if !reflect.DeepEqual(unchanged, bp) {
+		t.Fatalf("A cleanup changed B's task page: before=%+v after=%+v", bp, bp2)
+	}
+	t.Logf("B stayed online with unchanged task facts: database revision %d -> %d", bp.DatabaseRevision, bp2.DatabaseRevision)
 	// A path escape is rejected and leaves the other project intact.
 	if RemoveOwned(s.Root, runDir) == nil {
 		t.Fatal("deletion escaped scenario root")
 	}
+	b.StopService()
 }
 
 func TestPartialPreparationCleanupKeepsEvidence(t *testing.T) {
