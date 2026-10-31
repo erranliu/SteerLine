@@ -109,8 +109,16 @@ try {
     if($revision -ceq $report.source_commit){
         if(Invoke-GitValue @('status','--porcelain')){throw 'Unexpected tracked or untracked changes before publication'}
         [IO.Directory]::CreateDirectory((Split-Path $probe -Parent))|Out-Null
-        [IO.File]::WriteAllText((Join-Path $root $probe),"Environment validation $($report.activity_id), round $($report.round), source $($report.source_commit).`n",[Text.UTF8Encoding]::new($false))
+        $probeBody="Environment validation $($report.activity_id), round $($report.round), source $($report.source_commit)."
+        [IO.File]::WriteAllText((Join-Path $root $probe),($probeBody+"`n"),[Text.UTF8Encoding]::new($false))
         Invoke-GitValue @('add','--',$probe)|Out-Null
+        $staged=@((Invoke-GitValue @('diff','--cached','--name-only')) -split "`n")
+        $stagedDiff=Invoke-GitValue @('diff','--cached','--',$probe)
+        if($staged.Count -ne 1 -or $staged[0] -cne $probe -or !$stagedDiff){throw 'Staged diff must contain only the exact current validation probe'}
+        $stagedBody=@(& git show (':'+$probe))
+        if($LASTEXITCODE -ne 0 -or $stagedBody.Count -ne 1 -or $stagedBody[0] -cne $probeBody){throw 'Staged diff must contain only the exact current validation probe'}
+        Invoke-GitValue @('diff','--cached','--check')|Out-Null
+        Write-Output $stagedDiff
         Invoke-GitValue @('commit','-m','Validate remote project environment')|Out-Null
         $revision=Invoke-GitValue @('rev-parse','HEAD')
     }

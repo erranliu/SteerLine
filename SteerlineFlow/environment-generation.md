@@ -12,7 +12,7 @@ environment.md 必须有且仅有一个 ```steerline-environment JSON代码段�
 
 项目文档声明要求，用户在目标环境预先安装工具并配置环境变量/PATH，实际执行进程必须能读取。Agent只执行固定脚本验收，不搜索安装目录/注册表，不安装、修复依赖或设置环境变量/Git配置，不要求用户现场提供路径。工具入口只能使用文档声明的变量或PATH命令；不提供固定安装路径或自动发现回退。脚本逐项检查所有独立要求，一项失败仍继续其余检查；缺少依赖而无法核实的项标incomplete并解释，不冒充通过。
 
-同一个脚本接受prepare/publish阶段。prepare先检测环境要求，全部满足后才验证完整L2，不创建PR；失败原子写最终报告。publish仅在prepare完整通过时，使用Runner固定publication base和git branch --show-current所得head，提交专属验证改动、push、创建并查询唯一原PR、核实URL/base/head及验证提交完整SHA（head_revision），完成脚本自有临时资源清理。分支策略核实、检查/审核和合并由外部交付或L4驱动负责；Agent不执行这些管理操作，PR保留给原外部所有者。未知操作先查询原PR，禁止重新创建。禁止Agent修改受测实现/验收标准或手写通过报告；不删除Runner仍持有的工作区/分支和预期安装成果。
+同一个脚本接受prepare/publish阶段。prepare先检测环境要求，全部满足后才验证完整L2，不创建PR；失败原子写最终报告。publish仅在prepare完整通过时，使用Runner固定publication base和git branch --show-current所得head，提交专属验证改动、push、创建并查询唯一原PR、核实URL/base/head及验证提交完整SHA（head_revision），完成脚本自有临时资源清理。任何提交前必须核验非空暂存diff：暂存路径只能是本轮验证改动，正文须符合本轮固定输入，并通过git diff --cached --check；不满足立即失败且不commit。分支策略核实、检查/审核和合并由外部交付或L4驱动负责；Agent不执行这些管理操作，PR保留给原外部所有者。未知操作先查询原PR，禁止重新创建。禁止Agent修改受测实现/验收标准或手写通过报告；不删除Runner仍持有的工作区/分支和预期安装成果。
 
 脚本摘要针对固定提交的原始Git blob字节，不能以Windows工作区CRLF转换判为材料变更。缺失版本化文件或LFS内容时报告未满足，不能自行恢复、改源码标准、借其他活动结果或修改注册仓库的业务checkout。
 

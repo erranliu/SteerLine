@@ -76,8 +76,89 @@ $value=@{report=$report;error=$failure;pushes=$script:pushes;snapshots=$script:s
 [IO.File]::WriteAllText($Result,($value|ConvertTo-Json -Depth 10),[Text.UTF8Encoding]::new($false))
 '''
 
+PROBE_HARNESS = r'''
+param([string]$Entry,[string]$Fixture,[string]$Result)
+$ErrorActionPreference='Stop'
+if($PSVersionTable.PSVersion.Major -ne 5 -or $PSVersionTable.PSVersion.Minor -ne 1){throw 'Real PS5.1 required'}
+Set-Location -LiteralPath $Fixture
+$tokens=$null;$errors=$null
+$ast=[Management.Automation.Language.Parser]::ParseFile($Entry,[ref]$tokens,[ref]$errors)
+if($errors.Count){throw 'Original script syntax invalid'}
+$node=$ast.Find({param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Invoke-GitValue'},$true)
+Invoke-Expression $node.Extent.Text
+$original=[IO.File]::ReadAllText($Entry)
+$start=$original.IndexOf("    $"+'revision=Invoke-GitValue')
+$end=$original.IndexOf("    $"+'changed=@(',$start)
+if($start -lt 0 -or $end -lt $start){throw 'Original probe commit block missing'}
+$block=$original.Substring($start,$end-$start)
+$script:commits=0
+function git {
+    $parameters=@($args|ForEach-Object{$_})
+    if($parameters[0] -ceq 'commit'){$script:commits++}
+    if($env:PROBE_CASE -ceq 'check-error' -and ($parameters -join ' ') -ceq 'diff --cached --check'){$global:LASTEXITCODE=17;return}
+    & $env:PROBE_GIT @parameters
+    $exit=$LASTEXITCODE
+    if($exit -eq 0 -and $parameters[0] -ceq 'add'){
+        switch($env:PROBE_CASE){
+            'extra' {[IO.File]::WriteAllText((Join-Path $Fixture 'foreign.txt'),'foreign');& $env:PROBE_GIT add -- foreign.txt|Out-Null;$exit=$LASTEXITCODE}
+            'empty' {& $env:PROBE_GIT reset --quiet HEAD;$exit=$LASTEXITCODE}
+            'altered' {[IO.File]::WriteAllText((Join-Path $Fixture $parameters[-1]),'altered');& $env:PROBE_GIT add -- $parameters[-1]|Out-Null;$exit=$LASTEXITCODE}
+            'padded' {$path=Join-Path $Fixture $parameters[-1];[IO.File]::WriteAllText($path,(' '+[IO.File]::ReadAllText($path)));& $env:PROBE_GIT add -- $parameters[-1]|Out-Null;$exit=$LASTEXITCODE}
+        }
+    }
+    $global:LASTEXITCODE=$exit
+}
+$root=$Fixture;$report=@{activity_id=('a'*32);round=1;source_commit=$env:PROBE_SOURCE}
+$probe='SteerlineFlow/testing/validation/'+$report.activity_id+'-1.md'
+$failure=''
+try {& ([scriptblock]::Create($block))} catch {$failure=$_.Exception.Message}
+$head=(& $env:PROBE_GIT rev-parse HEAD).Trim()
+[IO.File]::WriteAllText($Result,(@{error=$failure;commits=$script:commits;head=$head}|ConvertTo-Json),[Text.UTF8Encoding]::new($false))
+'''
+
 
 class PublicationTests(unittest.TestCase):
+    def test_original_probe_checks_index_before_commit(self):
+        git = shutil.which('git')
+        self.assertIsNotNone(git)
+        for case in ('valid', 'extra', 'empty', 'altered', 'padded', 'check-error'):
+            with self.subTest(case=case), tempfile.TemporaryDirectory(prefix='environment-probe-') as tmp:
+                fixture = Path(tmp)
+                repo = fixture / 'source'
+                subprocess.run([git, 'init', '-b', 'codex/probe-fixture', str(repo)], check=True, capture_output=True)
+                for key, value in (('user.name', 'Fixture'), ('user.email', 'fixture@example.invalid'), ('core.autocrlf', 'false')):
+                    subprocess.run([git, '-C', str(repo), 'config', key, value], check=True, capture_output=True)
+                (repo / 'base.txt').write_text('fixture\n')
+                subprocess.run([git, '-C', str(repo), 'add', '.'], check=True, capture_output=True)
+                subprocess.run([git, '-C', str(repo), 'commit', '-m', 'fixture'], check=True, capture_output=True)
+                source = subprocess.check_output([git, '-C', str(repo), 'rev-parse', 'HEAD'], text=True).strip()
+                harness, result_file = fixture / 'fixture.ps1', fixture / 'result.json'
+                harness.write_text(PROBE_HARNESS, encoding='utf-8')
+                env = dict(os.environ, PROBE_CASE=case, PROBE_GIT=git, PROBE_SOURCE=source)
+                env['PATH'] = os.pathsep.join(p for p in env.get('PATH', '').split(os.pathsep)
+                                            if p and not (Path(p) / 'pwsh.exe').exists() and not (Path(p) / 'pwsh').exists())
+                self.assertIsNone(shutil.which('pwsh', path=env['PATH']))
+                p = subprocess.run([POWERSHELL, '-NoProfile', '-File', str(harness),
+                                    str(ROOT / 'scripts/verify-environment.ps1'), str(repo), str(result_file)],
+                                   cwd=repo, capture_output=True, text=True, encoding='utf-8', env=env, timeout=20)
+                self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
+                result = json.loads(result_file.read_text(encoding='utf-8'))
+                if case == 'valid':
+                    self.assertFalse(result['error'], result)
+                    self.assertEqual(result['commits'], 1)
+                    self.assertNotEqual(result['head'], source)
+                    changed = subprocess.check_output([git, '-C', str(repo), 'diff', '--name-only', source, 'HEAD'], text=True).strip()
+                    self.assertEqual(changed, 'SteerlineFlow/testing/validation/' + 'a' * 32 + '-1.md')
+                else:
+                    self.assertTrue(result['error'], result)
+                    if case == 'check-error':
+                        self.assertIn('Git failed:', result['error'])
+                        self.assertIn('--check', result['error'])
+                    else:
+                        self.assertEqual(result['error'], 'Staged diff must contain only the exact current validation probe')
+                    self.assertEqual(result['commits'], 0)
+                    self.assertEqual(result['head'], source)
+
     def test_original_publication_list_and_identity(self):
         for case in ('empty', 'existing', 'multiple', 'wrong-base', 'wrong-head', 'wrong-revision', 'query-error'):
             with self.subTest(case=case), tempfile.TemporaryDirectory(prefix='environment-publication-') as tmp:

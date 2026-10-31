@@ -37,6 +37,8 @@ powershell.exe -NoProfile -File scripts/verify-environment.ps1 -Phase tty
 
 仅prepare完整通过才执行`-Phase publish`，同样要求TTY。它在原Runner head提交专属验证文档，完成真实push、唯一PR创建/查询及身份核验，目标只能是文档声明的专属验证base，禁止main/master。外部写入前保存未知状态；未知操作只查询原分支/原PR，不能重新执行写入。脚本不删除Runner持有的分支或工作区。
 
+提交前，固定脚本核验暂存diff非空、暂存区仅含本轮探针且正文与本轮activity/round/source一致，并执行`git diff --cached --check`；输出原暂存diff后才commit。任何核验失败均不提交。
+
 ## 材料固定与未就绪条件
 
 固定验证base必须由项目维护者通过正常Git流程预先创建并更新到包含当前正式源码；脚本及环境活动不会创建、恢复或删除它。本次材料PR不执行验证base创建或合并；缺少base保持not_ready。环境执行规则按同版本SteerLine规范保存为`SteerlineFlow/environment-execution.md`后才能适配。
