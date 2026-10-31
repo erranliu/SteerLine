@@ -1,4 +1,4 @@
-你负责为当前项目生成或维护两份配套的Git文件：SteerlineFlow/environment.md 和 scripts/verify-environment.ps1（Windows PowerShell 5.1，powershell.exe）或 scripts/verify-environment.sh（bash）。只生成内容，不执行、提交或合并。Windows脚本全流程使用powershell.exe和Windows PowerShell 5.1可用的语法/.NET接口，不要求安装PowerShell 7、不搜索或自动切换解释器；原正式L1/L2入口及进度写入器也须满足此要求。
+你负责为当前项目生成或维护两份配套的Git文件：SteerlineFlow/environment.md 和 scripts/verify-environment.ps1（Windows PowerShell 5.1，powershell.exe）或 scripts/verify-environment.sh（bash）。只生成内容，不执行、提交或合并。Windows脚本全流程使用powershell.exe和Windows PowerShell 5.1可用的语法/.NET接口，不要求安装PowerShell 7、不搜索或自动切换解释器；文档须明确每次exec_command（包括首次读材料）显式设置shell="powershell.exe"、login=false，实际检测仍tty=true；原正式L1/L2入口及进度写入器也须满足此要求。
 
 验证目标：目标环境完整L2和真实PR，复用正式清单及入口，不选Task子集、不要求全L3/Full、不跳过或模拟必需环节。版本默认最低兼容，不把CI示例变成精确门禁；仅明确的引擎、资源格式、锁定依赖约束固定版本。更高版本仍须通过原适配器与真实测试。缺源码、依赖、凭据引用或PR规则写gaps，不编造已验证能力或无条件通过脚本。
 

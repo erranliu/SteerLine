@@ -2,6 +2,8 @@
 
 环境检测由既有 Runner 目标 Agent 调用本项目入口，不由脚本再启动 Agent。环境适配遵循[项目环境适配规范](spec/project-environment-adaptation.spec.md)；业务测试入口及通过标准仍见[测试指南](testing.md)。
 
+Windows 上读取材料及调用下列脚本的 `exec_command` 均显式设置 `shell="powershell.exe"`、`login=false`；最小 TTY、prepare、publish 使用 `tty=true`。失败记录仅按本页条件允许 `tty=false`，仍使用同一声明的 shell。下列命令填写工具的 `cmd` 字段。
+
 ```steerline-environment
 {"version":1,"script":"scripts/verify-environment.ps1","interpreter":"powershell.exe","validation_base":"codex/environment-validation/steerline","dependencies":["scripts/environment-tty.ps1","go.mod","go.sum","SteerlineFlow/testing/l1.md","SteerlineFlow/testing/l2.md","tests/e2e/suites.json","cmd/test-feedback/managed.go"]}
 ```
@@ -45,7 +47,7 @@ prepare/publish只读取Runner注入的`STEERLINE_PROGRESS_FILE`和`STEERLINE_RE
 
 ## TTY前置失败只记录
 
-TTY工具明确未启动，或纯最小探针已结束且明确失败时，保留原工具错误，不换封装重跑检测。若原Agent仍有可用工具，可仅为记录失败使用普通工具（允许tty:false或其他shell）调用：
+TTY工具明确未启动，或纯最小探针已结束且明确失败时，保留原工具错误，不换封装重跑检测。若原Agent仍有可用工具，可仅为记录失败使用普通工具（允许tty:false，Windows显式使用powershell.exe宿主）调用：
 
 ```powershell
 powershell.exe -NoProfile -File scripts/verify-environment.ps1 -Phase tty-failure -FailureReason '原工具错误，不含凭据'
