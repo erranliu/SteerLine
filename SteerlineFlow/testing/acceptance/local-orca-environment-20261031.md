@@ -1,5 +1,7 @@
 # 本机 Orca 环境检测续验
 
+本文保留原固定版本的负向续验。后续移除 PS7 要求、恢复配置并完成本机 Orca 正向完整 L4，见 [PowerShell 5.1 基线最终验收](environment-powershell-baseline.md)；不将本文历史 not_ready 读成新版本结论。
+
 2026-10-31，用户要求先不改 Runner，准备本机 Orca 配置并实际验收；不部署安装环境。真实三轮负向检测流程验收完成；环境仍为 not_ready，不登记 ready，也不借用本机 Codex 或远端 Orca 的结果。用户明确正确 not_ready 可通过流程验收；原正向 L4 报告保持失败。
 
 ## 固定输入与配置
