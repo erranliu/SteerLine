@@ -224,3 +224,10 @@ V05 使用相同本机脚本摘要 `482420f4…a25e6`，检查 powershell、git�
 admission-proof.json 记录准备前拒绝、ready后实际Run `5b70fa2a771df024987859c61a1f639b` 启动且停止；remote-ref-cleanup.json 核实source/validation/环境Run/准入Run四个本轮refs均清理，308-runner-cleanup.json confirmed=true且未保留活动工作区。较早失败的本地现场作为证据保留，不当作活动资源残留或新版本通过。
 
 所有新增正文/接线/测试资产和最后规范性文档均由 `/root/prompt_review` 独立只读审核；发现的协议前置、重复引用、缓存及默认目录/Spec状态残留已修复并复审批准。指南7983字节/hash不变。最终固定L1/L2收尾结果另在下段登记；M01人工体验仍后置。整个项目初始化适配未实现、未部署安装环境、未合入业务main或自动合并功能PR。本轮已转到独立分支 codex/environment-requirements-decoupling；此前PR416已合并，不修改其历史正文。
+
+
+### 最终固定回归与交付
+
+干净源码提交 `39e84418`（包含全部已审代码/规范，功能最终接线为 bbd69edd）运行固定 L1/05、L2/03，均通过，L2 TestDeliverySmoke 134.70秒且cleanup_complete=true。没有跳过、零命中或未知清理算作通过。最终完整正文/实际接线差异和21份字节账本位于本范围 prompt-review/final-02/actual-text-and-wiring.diff、bytes.json；actual-reading-references.json 直接从 V02/V05 原请求提取23→5引用，对应相同19项运行依赖，实际调用方 prepare 正文均447字节，未增加或藏入规则。
+
+当前全部受影响自动验证完成：最终固定L1/L2、owner、Web229项及构建/HTTP、浏览器两场景、两项目/自定义目录受控L3、真实G02两目标生成及V05同字节本机闭环均通过。各报告保持各自冻结源码/原始选择，不改写前述失败或将旧版本结果当作新提交重跑。最后仅补本段记录及状态导航，按纯文档检查处理。M01人工体验继续后置；项目初始化适配功能未实现，未部署安装现场。

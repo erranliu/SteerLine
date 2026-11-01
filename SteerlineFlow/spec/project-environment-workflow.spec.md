@@ -1,6 +1,6 @@
 # Spec：按项目 × 运行机 × 链路组织环境准备
 
-2026-11-01 修订。状态：用户已授权实施环境准备解耦，实现与真实G/V完成，最终固定回归收尾；整个项目初始化适配不在本轮。[实施 Plan](../plans/project-environment-workflow.plan.md) · [项目环境接口适配指导草稿](../../SteerlineProjectGuideDoc/environment-adaptation.md) · [此前实际审计与验收](../testing/acceptance/project-environment-workflow.md)。此前界面及目标绑定版本的 A01–A13 自动验收已完成，M01 待走查；其证据不证明本次修订通过。不修改安装现场，不进入 roadmap。
+2026-11-01 修订。状态：用户已授权实施环境准备解耦，已实施，自动验收完成，M01人工体验后置；整个项目初始化适配不在本轮。[实施 Plan](../plans/project-environment-workflow.plan.md) · [项目环境接口适配指导草稿](../../SteerlineProjectGuideDoc/environment-adaptation.md) · [此前实际审计与验收](../testing/acceptance/project-environment-workflow.md)。此前界面及目标绑定版本的 A01–A13 自动验收已完成，M01 待走查；其证据不证明本次修订通过。不修改安装现场，不进入 roadmap。
 
 ## 1. 问题与目标
 

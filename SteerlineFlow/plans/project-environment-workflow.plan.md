@@ -1,6 +1,6 @@
 # Plan：按项目 × 运行机 × 链路组织环境准备
 
-2026-11-01 收简稿。[Spec](../spec/project-environment-workflow.spec.md) · [适配指导草稿](../../SteerlineProjectGuideDoc/environment-adaptation.md) · [此前验收](../testing/acceptance/project-environment-workflow.md)。用户已授权本轮实施环境准备流程解耦，工程验证进行中；项目初始化适配不做，不维护安装现场。普通开发，不启动 roadmap。
+2026-11-01 实施稿（自动验收完成，M01人工体验后置）。[Spec](../spec/project-environment-workflow.spec.md) · [适配指导草稿](../../SteerlineProjectGuideDoc/environment-adaptation.md) · [此前验收](../testing/acceptance/project-environment-workflow.md)。用户已授权本轮实施环境准备流程解耦，工程验证进行中；项目初始化适配不做，不维护安装现场。普通开发，不启动 roadmap。
 
 ## 1. 差距、范围与最小交付
 
@@ -137,4 +137,4 @@ R1 以 R0 确定的材料职责为前提；R2 依赖 R1，R3 审核 R1/R2 的实
 
 ## 8. 本轮实施状态
 
-用户已授权实施 R1–R5 的环境准备解耦，R0 的整个项目初始化接线不做。上一节“仅文档”的结论属于设计审阅时点；本版已修改实际消费者、协议和界面，最终指导7983字节、SHA256 `d56cdd2c1fdc26b52da1e3a85f950cbf128a799bcdba90ad5ccae204d868fa2a`。当前正文/接线经 `/root/prompt_review` 独立批准，实际差异、字节账本、问题修复和新测试结果统一见[专属验收 §10](../testing/acceptance/project-environment-workflow.md#10-环境要求与调用协议解耦实施2026-11-01)。工程owner、受控/Web及新版真实G02/V05已通过，最终固定回归收尾；旧G09/V05仅为此前版本历史。
+用户已授权实施 R1–R5 的环境准备解耦，R0 的整个项目初始化接线不做。上一节“仅文档”的结论属于设计审阅时点；本版已修改实际消费者、协议和界面，最终指导7983字节、SHA256 `d56cdd2c1fdc26b52da1e3a85f950cbf128a799bcdba90ad5ccae204d868fa2a`。当前正文/接线经 `/root/prompt_review` 独立批准，实际差异、字节账本、问题修复和新测试结果统一见[专属验收 §10](../testing/acceptance/project-environment-workflow.md#10-环境要求与调用协议解耦实施2026-11-01)。工程owner、受控/Web、新版真实G02/V05及最终固定L1/L2已通过；旧G09/V05仅为此前版本历史。
