@@ -146,8 +146,21 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	if !regexp.MustCompile(`^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`).MatchString(in.Commit) || s.ReadCommitted == nil {
 		return r, errors.New("材料准备不足：测试生成需要固定 Git 提交和正式文件读取能力")
 	}
+	entry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) { return s.ReadCommitted(ctx, in.Commit, path) })
+	if err != nil {
+		return r, err
+	}
+	r.ProjectEntry = entry
+	paths := []string{}
+	seenPaths := map[string]bool{}
+	for _, path := range append([]string{in.Plan, model.ProtocolPath}, entry.Paths()...) {
+		if !seenPaths[path] {
+			paths = append(paths, path)
+			seenPaths[path] = true
+		}
+	}
 	materials := []runnercontract.Document{}
-	for _, p := range []string{in.Plan, RulesPath, CataloguePath} {
+	for _, p := range paths {
 		raw, e := s.ReadCommitted(ctx, in.Commit, p)
 		if e != nil {
 			return r, e
@@ -155,12 +168,21 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 		if len(raw) == 0 || len(raw) > MaxDocumentBytes || !utf8.Valid(raw) {
 			return r, fmt.Errorf("invalid bounded UTF-8 input: %s", p)
 		}
+		if p == model.ProtocolPath {
+			expected, err := prompts.TestingRules()
+			if err != nil {
+				return r, err
+			}
+			if !prompts.SameRules(raw, expected) {
+				return r, errors.New("材料准备不足：固定测试协议不同源")
+			}
+		}
 		r.Sources = append(r.Sources, Source{Path: p, Digest: ContentDigest(raw), TextDigest: pm.TextDigest(raw)})
 		if p == in.Plan {
 			r.PlanText = string(raw)
 		}
 
-		if p == CataloguePath {
+		if p == entry.TestingCatalogue {
 			r.Catalogue, err = ParseCatalogue(raw)
 			if err != nil {
 				return r, err
@@ -172,13 +194,13 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	if err != nil {
 		return r, err
 	}
-	instruction, err := prompts.TestingGenerate(in.Plan, in.Commit)
+	instruction, err := prompts.TestingGenerate(in.Plan, in.Commit, entry)
 	if err != nil {
 		return r, err
 	}
 	input := runnercontract.GenerateRunInput{Title: "Plan 测试安排: " + in.Plan, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Correlation: map[string]string{"steerline_project": s.Project, "steerline_generation": r.ID}, Generate: runnercontract.GenerateInput{
 		Instruction: instruction,
-		Repository:  &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: in.Commit, Paths: []string{in.Plan, RulesPath, CataloguePath}},
+		Repository:  &runnercontract.GenerateRepository{LocalPath: s.Repository, Commit: in.Commit, Paths: paths},
 		Materials:   materials, OutputSchema: json.RawMessage(`{"type":"object","required":["tests"],"additionalProperties":false,"properties":{"tests":{"type":"array","uniqueItems":true,"items":{"type":"string"}}}}`)}}
 	if err = catalogue.ValidateRepositoryGenerate(input); err != nil {
 		return r, err

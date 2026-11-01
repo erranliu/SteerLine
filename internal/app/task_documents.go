@@ -53,7 +53,7 @@ func (a taskDocuments) readCommittedFile(ctx context.Context, commit, name strin
 	}
 	meta := strings.Fields(string(parts[0]))
 	if len(meta) != 3 || meta[1] != "blob" || (meta[0] != "100644" && meta[0] != "100755") {
-		return nil, taskDocumentError("contract references must resolve to regular committed files, not links or directories")
+		return nil, &nonRegularCommittedFileError{taskDocumentError("contract references must resolve to regular committed files, not links or directories")}
 	}
 	body, err := r.Output(ctx, a.git, "cat-file", "blob", meta[2])
 	if err != nil {
@@ -70,3 +70,7 @@ func taskPayloadDigest(body []byte) string {
 }
 
 func (a taskDocuments) RepositoryTarget(ctx context.Context) (string, error) { return a.target(ctx) }
+
+type nonRegularCommittedFileError struct{ error }
+
+func (e *nonRegularCommittedFileError) Unwrap() error { return e.error }

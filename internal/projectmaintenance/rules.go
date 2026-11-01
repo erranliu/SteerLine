@@ -4,6 +4,7 @@ package projectmaintenance
 import (
 	"fmt"
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"unicode/utf8"
 )
@@ -28,12 +29,30 @@ func GenerationSources(plan string, r Reader) ([]tm.Source, error) {
 		return nil, e
 	}
 	sources := []tm.Source{}
-	for _, path := range []string{plan, tm.RulesPath, tm.CataloguePath} {
+	entry, e := pm.ReadProjectEntry(r)
+	if e != nil {
+		return nil, e
+	}
+	seen := map[string]bool{}
+	for _, path := range append([]string{plan, tm.ProtocolPath}, entry.Paths()...) {
+		if seen[path] {
+			continue
+		}
+		seen[path] = true
 		b, e := Read(r, path)
 		if e != nil {
 			return nil, e
 		}
-		if path == tm.CataloguePath {
+		if path == tm.ProtocolPath {
+			expected, err := prompts.TestingRules()
+			if err != nil {
+				return nil, err
+			}
+			if !prompts.SameRules(b, expected) {
+				return nil, fmt.Errorf("fixed testing protocol differs: %s", path)
+			}
+		}
+		if path == entry.TestingCatalogue {
 			if _, e = tm.ParseCatalogue(b); e != nil {
 				return nil, e
 			}

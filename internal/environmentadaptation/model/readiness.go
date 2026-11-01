@@ -80,10 +80,10 @@ func Qualify(current Current, record Record, basis string) (Admission, error) {
 		return fail("当前准备引用与原活动不符")
 	}
 	if record.Status() != "ready" {
-		return fail("当前验收未通过或原执行尚未结算")
+		return fail("当前项目检测未就绪或原执行尚未结算")
 	}
 	if basis == "" || record.Prepared.Inputs != basis {
-		return fail("准备依据已变化，须重新验收")
+		return fail("准备依据已变化，须重新检测")
 	}
 	return Admission{Key: current.Key, Revision: current.Revision, ActivityID: record.ID, Basis: basis}, nil
 }
@@ -96,22 +96,22 @@ func View(current Current, record Record, basis string, materialError error) (st
 	case record.ID != "" && !record.Settled():
 		reason = record.Diagnostic
 		if strings.TrimSpace(reason) == "" {
-			reason = "原验收正在执行或停止待核实"
+			reason = "原检测正在执行或停止待核实"
 		}
 		return status, "verifying", reason
 	case current.ActivityID == "":
 		if materialError != nil {
 			return status, "unprepared", materialError.Error()
 		}
-		return status, "awaiting_user", "请按项目清单准备环境并开始验收"
+		return status, "awaiting_user", "请按项目要求准备环境并开始检测"
 	case record.Status() != "ready":
-		return status, "blocked", "当前验收未通过：" + record.Diagnostic
+		return status, "blocked", "当前检测未就绪：" + record.Diagnostic
 	case materialError != nil:
 		return status, "blocked", materialError.Error()
 	default:
 		if _, err := Qualify(current, record, basis); err != nil {
 			return status, "stale", err.Error()
 		}
-		return "ready", "ready", "当前项目环境已通过验收"
+		return "ready", "ready", "项目报告环境就绪，原调用已结算"
 	}
 }

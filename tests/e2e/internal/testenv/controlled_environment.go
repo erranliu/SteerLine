@@ -10,11 +10,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/google/uuid"
 )
@@ -27,29 +25,16 @@ func (p *Project) WriteControlledEnvironment() string {
 	if p.Chain != "" || s.Run.Remote != nil {
 		s.t.Fatal("controlled environment helper cannot prepare a live project")
 	}
-	const base = "fixture-environment-validation"
 	profiles := p.environmentProfiles()
 	files := map[string][]byte{}
 	for _, profile := range profiles {
 		key, err := env.Key(profile.Execution)
 		s.Must(err)
 		script := env.ScriptPath(key, "ps1")
-		manifest, err := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: key, Script: script, Interpreter: "powershell.exe", ValidationBase: base, Dependencies: []string{}})
+		manifest, err := json.Marshal(env.Manifest{Version: 4, EnvironmentKey: key, Script: script, Interpreter: "powershell.exe", Dependencies: []string{}})
 		s.Must(err)
 		files[env.DocumentPath(key)] = []byte("# Controlled environment\n```steerline-environment\n" + string(manifest) + "\n```\n")
 		files[script] = []byte("throw 'Scripted public peer fixture; native execution is forbidden'\n")
-	}
-	rules, err := prompts.EnvironmentExecutionRules()
-	s.Must(err)
-	generationRules, err := prompts.EnvironmentGenerationRules()
-	s.Must(err)
-	for path, body := range map[string][]byte{
-		env.GenerationRulesPath:            generationRules,
-		env.ExecutionRulesPath:             rules,
-		"SteerlineFlow/plans/task.plan.md": []byte("# Controlled recovery plan\nNo automated tests are required for this task. The catalogue's fixture.environment entry belongs to the separate scripted environment prerequisite. Recovery assertions are owned by the external E2E harness.\n"),
-		testmanagement.CataloguePath:       []byte(`{"tests":[{"id":"fixture.environment","name":"Controlled environment prerequisite","level":"L2","environment":"controlled","command":"controlled peer assertion","check":"scripted sealed report"}]}`),
-	} {
-		files[path] = body
 	}
 	for path, body := range files {
 		target := filepath.Join(p.Repo, path)
@@ -62,84 +47,23 @@ func (p *Project) WriteControlledEnvironment() string {
 	}
 	provider, err := controlled.Read(p.Provider)
 	s.Must(err)
-	p.git(p.Repo, "push", "--quiet", provider.GitURL, "main", "HEAD:refs/heads/"+base)
+	p.git(p.Repo, "push", "--quiet", provider.GitURL, "main")
 	return p.git(p.Repo, "rev-parse", "HEAD")
 }
 
-func (p *Project) GenerateControlledEnvironment(profile string) string {
-	s := p.Scenario
-	if p.Chain != "" || s.Run.Remote != nil {
-		s.t.Fatal("controlled generation is not native proof")
-	}
-	key := p.environmentKey(profile)
-	project, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
-	s.Must(err)
-	defer project.Close()
-	client, err := applicationclient.Open(s.Context, p.Home)
-	s.Must(err)
-	defer client.Close()
-	prefix := "/projects/" + string(project.Identity().ProjectID)
-	var material struct {
-		Expected string `json:"expected_context"`
-	}
-	s.Must(client.Get(s.Context, prefix+"/environment/materials?environment_key="+key, &material))
-	if material.Expected == "" {
-		s.t.Fatal("missing bootstrap context")
-	}
-	path := filepath.Join(p.Repo, env.GenerationContextPath(key))
-	s.Must(os.MkdirAll(filepath.Dir(path), 0700))
-	s.Must(os.WriteFile(path, []byte(material.Expected), 0600))
-	commit := func(message string) {
-		p.git(p.Repo, "add", ".")
-		p.git(p.Repo, "commit", "--quiet", "--allow-empty", "-m", message)
-		provider, err := controlled.Read(p.Provider)
-		s.Must(err)
-		p.git(p.Repo, "push", "--quiet", provider.GitURL, "main", "HEAD:refs/heads/fixture-environment-validation")
-	}
-	commit("Pin controlled generation target context")
-	response := p.EnvironmentCommand("environment_generate", env.Generate{TargetKey: key, Profile: "controlled"})
-	if response.Status != "applied" {
-		s.t.Fatal("controlled generation rejected", response)
-	}
-	var record struct {
-		ID, State string
-		Settled   bool
-		Generated *env.Generated `json:"generated"`
-	}
-	s.Must(json.Unmarshal(response.Environment, &record))
-	id := record.ID
-	s.Wait("controlled target generation settled", func() (bool, error) {
-		err := client.Get(s.Context, prefix+"/environment/"+id, &record)
-		if err == nil && record.Settled && record.State != "generated" {
-			s.t.Fatal("controlled generation failed", record.State)
-		}
-		return err == nil && record.Settled && record.State == "generated", err
-	})
-	if record.Generated == nil {
-		s.t.Fatal("controlled generation missing output")
-	}
-	manifest, err := env.ParseManifest([]byte(record.Generated.Document))
-	s.Must(err)
-	if manifest.EnvironmentKey != key {
-		s.t.Fatal("controlled generation switched target")
-	}
-	s.Must(os.WriteFile(filepath.Join(p.Repo, env.DocumentPath(key)), []byte(record.Generated.Document), 0600))
-	s.Must(os.WriteFile(filepath.Join(p.Repo, manifest.Script), []byte(record.Generated.Script), 0600))
-	commit("Review controlled generation output")
-	return env.Digest([]byte(record.Generated.Script))
-}
-
 func (p *Project) PrepareControlledEnvironment(profile string) {
-	p.validateControlledEnvironment(profile, p.WriteControlledEnvironment(), "")
+	p.validateControlledEnvironment(profile, p.WriteControlledEnvironment())
 }
 
-func (p *Project) ValidateGeneratedControlledEnvironment(profile, scriptDigest string) {
-	p.validateControlledEnvironment(profile, p.git(p.Repo, "rev-parse", "HEAD"), scriptDigest)
+func (p *Project) ValidateDeclaredControlledEnvironment(profile string) {
+	p.validateControlledEnvironment(profile, p.git(p.Repo, "rev-parse", "HEAD"))
 }
 
-func (p *Project) validateControlledEnvironment(profile, commit, expectedScriptDigest string) {
+func (p *Project) validateControlledEnvironment(profile, commit string) {
 	s := p.Scenario
-	const base = "fixture-environment-validation"
+	script, err := os.ReadFile(filepath.Join(p.Repo, env.ScriptPath(p.environmentKey(profile), "ps1")))
+	s.Must(err)
+	expectedScriptDigest := env.Digest(script)
 	p.StartService()
 	project, err := applicationclient.OpenProject(s.Context, p.Home, filepath.Base(p.Config))
 	s.Must(err)
@@ -195,7 +119,7 @@ func (p *Project) validateControlledEnvironment(profile, commit, expectedScriptD
 		Data struct{ Run runnercontract.Run }
 	}
 	s.Must(json.Unmarshal(raw, &observed))
-	if round.Result.CollectionStatus != "closed" || round.Result.Version != 1 || observed.Data.Run.StopStatus != "stopped" || round.Report.Commit != commit || !round.Report.Passed(base, observed.Data.Run.Execution.Branch) {
+	if round.Result.CollectionStatus != "closed" || round.Result.Version != 1 || observed.Data.Run.StopStatus != "stopped" || round.Report.Commit != commit || !round.Report.Passed() {
 		s.t.Fatal("unverified controlled adaptation provenance")
 	}
 	s.Must(controlled.Write(filepath.Join(s.Output, p.Name+"-environment-proof.json"), view))

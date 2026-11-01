@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -244,7 +246,11 @@ func (f *generationCLI) finish(result string) {
 func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *generationCLI, GenerateCommand) {
 	t.Helper()
 	root := t.TempDir()
-	for p, text := range map[string]string{"SteerlineFlow/plans/task.plan.md": "# Plan\n验证规则。", RulesPath: "# 测试规范\n最小验证。"} {
+	rules, err := prompts.TestingRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, text := range map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, "SteerlineFlow/testing/runtime-progress.md": string(rules), "SteerlineFlow/plans/task.plan.md": "# Plan\n验证规则。", RulesPath: "# 测试规范\n最小验证。"} {
 		if err := os.MkdirAll(filepath.Dir(filepath.Join(root, p)), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -286,7 +292,7 @@ func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *g
 	}
 	m := &memoryGenerations{rows: map[string]Generation{}}
 	files := map[string][]byte{}
-	for _, path := range []string{"SteerlineFlow/plans/task.plan.md", RulesPath, CataloguePath} {
+	for _, path := range []string{"SteerlineFlow/plans/task.plan.md", RulesPath, CataloguePath, "SteerlineFlow/environment-project.json", "SteerlineFlow/testing/runtime-progress.md"} {
 		body, e := os.ReadFile(filepath.Join(root, path))
 		if e != nil {
 			t.Fatal(e)
@@ -307,10 +313,12 @@ func generationFixture(t *testing.T) (*GenerationService, *memoryGenerations, *g
 }
 
 func TestDocumentDrivenTestingGeneration(t *testing.T) {
-	for _, mode := range []string{"ready", "no-commit", "no-reader", "missing", "unreadable"} {
+	for _, mode := range []string{"ready", "no-commit", "no-reader", "missing", "unreadable", "different-protocol"} {
 		t.Run(mode, func(t *testing.T) {
 			s, store, peer, in := generationFixture(t)
 			switch mode {
+			case "different-protocol":
+				peer.files["SteerlineFlow/testing/runtime-progress.md"] = []byte("different protocol")
 			case "no-commit":
 				in.Commit = ""
 			case "no-reader":
@@ -515,5 +523,29 @@ func TestTMGenerationCompatibleBuildObservesOriginalWithoutResubmit(t *testing.T
 	saved, _ := m.Generation(context.Background(), s.Project, in.RequestID)
 	if checks == 0 || f.submits != 1 || saved.State != "generated" || saved.Runner != original.Runner || saved.RunID != original.RunID {
 		t.Fatal(saved, f.submits, checks)
+	}
+}
+
+func TestTMGenerationUsesDeclaredSourcesWithoutLegacyFiles(t *testing.T) {
+	s, _, peer, in := generationFixture(t)
+	for old, path := range map[string]string{RulesPath: "quality/policy.md", CataloguePath: "quality/cases.json"} {
+		peer.files[path] = peer.files[old]
+		delete(peer.files, old)
+	}
+	peer.files[pm.ProjectEntryPath] = []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`)
+	r, err := s.Generate(context.Background(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.ProjectEntry.TestingCatalogue != "quality/cases.json" {
+		t.Fatal("wrong frozen source", r.ProjectEntry)
+	}
+	var request runnercontract.GenerateRunInput
+	if err := json.Unmarshal(peer.request.Input, &request); err != nil {
+		t.Fatal(err)
+	}
+	paths := strings.Join(request.Generate.Repository.Paths, " ")
+	if !strings.Contains(paths, "quality/cases.json") || !strings.Contains(paths, "quality/policy.md") || strings.Contains(paths, CataloguePath) || strings.Contains(paths, RulesPath) || !strings.Contains(request.Generate.Instruction, "quality/cases.json") {
+		t.Fatal("fixed source leaked", paths, request.Generate.Instruction)
 	}
 }

@@ -82,3 +82,23 @@ func TestTRQueryOnlyCommittedGitHistoryAndDeletion(t *testing.T) {
 		t.Fatal("deleted detail retained")
 	}
 }
+
+func TestTRCatalogueUsesDeclaredCustomSource(t *testing.T) {
+	repo := t.TempDir()
+	pmGit(t, repo, "init", "--initial-branch=main")
+	for path, body := range map[string]string{pm.ProjectEntryPath: `{"version":1,"requirements":[],"testing_catalogue":"quality/cases.json"}`, "quality/cases.json": `{"tests":[{"id":"custom.l2","name":"Custom","level":"L2","environment":"controlled","command":"original-test","check":"passed"}]}`} {
+		full := filepath.Join(repo, path)
+		require(t, os.MkdirAll(filepath.Dir(full), 0700))
+		require(t, os.WriteFile(full, []byte(body), 0600))
+	}
+	pmGit(t, repo, "add", ".")
+	pmGit(t, repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "custom project source")
+	m := newProjectMaintenance(Config{Repository: repo, Git: backend.Command{Executable: "git"}, ProcessHost: resourceprocess.New(time.Minute)}, nil)
+	m.observation = pm.Observation{Commit: pmGit(t, repo, "rev-parse", "HEAD")}
+	p := &testManagementPort{maintenance: m, service: &testmanagement.GenerationService{Project: repo}}
+	raw, err := p.TestCatalogue(context.Background())
+	require(t, err)
+	if !strings.Contains(string(raw), `"path":"quality/cases.json"`) || !strings.Contains(string(raw), `"id":"custom.l2"`) || !strings.Contains(string(raw), `"current":true`) {
+		t.Fatal("different catalogue consumed", string(raw))
+	}
+}

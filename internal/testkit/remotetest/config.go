@@ -2,6 +2,7 @@
 package remotetest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -17,27 +18,26 @@ import (
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
+	progresstools "github.com/erranliu/SteerLine/tools"
 )
 
 const Discovery = "configuration.execution-profiles-orca"
 const Progress = "testing.project-progress-orca-browser"
 const Environment = "testing.project-environment-orca"
 const LocalEnvironment = "testing.project-environment-local"
-const Generation = "testing.project-environment-generation"
 
 type Input struct {
-	GenerationTarget *executionconfig.Profile `json:"generation_target,omitempty"`
-	Profile          executionconfig.Profile  `json:"profile"`
-	ExecutionDigest  string                   `json:"execution_digest"`
-	Project          string                   `json:"project,omitempty"`
-	Commit           string                   `json:"commit,omitempty"`
-	ProjectConfig    json.RawMessage          `json:"project_config,omitempty"`
-	L2Verification   string                   `json:"l2_verification,omitempty"`
-	RoundSeconds     int                      `json:"round_seconds,omitempty"`
+	Profile         executionconfig.Profile `json:"profile"`
+	ExecutionDigest string                  `json:"execution_digest"`
+	Project         string                  `json:"project,omitempty"`
+	Commit          string                  `json:"commit,omitempty"`
+	ProjectConfig   json.RawMessage         `json:"project_config,omitempty"`
+	RoundSeconds    int                     `json:"round_seconds,omitempty"`
 }
 
 func Selected(id string) bool {
-	return id == Discovery || id == Progress || id == Environment || (id == LocalEnvironment || id == Generation)
+	return id == Discovery || id == Progress || id == Environment || id == LocalEnvironment
 }
 
 // Load is called once, by test-feedback before builds or fixture creation.
@@ -47,7 +47,7 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 		return nil, nil
 	}
 	profileVariable := "STEERLINE_L4_REMOTE_PROFILE"
-	if id == LocalEnvironment || id == Generation {
+	if id == LocalEnvironment {
 		profileVariable = "STEERLINE_L4_LOCAL_PROFILE"
 	}
 	path := getenv(profileVariable)
@@ -66,7 +66,7 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	if err = executionconfig.Validate(3, p.ID, []executionconfig.Profile{p}); err != nil {
 		return nil, err
 	}
-	if id == LocalEnvironment || id == Generation {
+	if id == LocalEnvironment {
 		if p.Execution.Target.Kind != "local" || p.Execution.Target.Environment != "" || (p.Execution.Adapter != "codex-app-server" && p.Execution.Adapter != "orca-terminal") || p.Workflow.ID != "development" || p.Workflow.Version != 2 {
 			return nil, errors.New("local environment L4 requires an explicit local Codex/Orca profile and development/2")
 		}
@@ -93,33 +93,7 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 			return nil, errors.New("configured Orca executable unavailable")
 		}
 	}
-	if id == Generation {
-		if p.Execution.Adapter != "codex-app-server" {
-			return nil, errors.New("generation L4 requires local Codex")
-		}
-		remotePath := getenv("STEERLINE_L4_REMOTE_PROFILE")
-		if !filepath.IsAbs(remotePath) {
-			return nil, errors.New("STEERLINE_L4_REMOTE_PROFILE must describe the generation target")
-		}
-		raw, err := os.ReadFile(remotePath)
-		if err != nil {
-			return nil, err
-		}
-		var target executionconfig.Profile
-		if err := executionconfig.Decode(raw, &target); err != nil {
-			return nil, err
-		}
-		if err := executionconfig.Validate(3, target.ID, []executionconfig.Profile{target}); err != nil {
-			return nil, err
-		}
-		if target.ID == p.ID || target.Execution.Adapter != "orca-terminal" || target.Execution.Target.Kind != "orca_environment" {
-			return nil, errors.New("generation requires a distinct remote Orca target")
-		}
-		if _, err := env.Key(target.Execution); err != nil {
-			return nil, err
-		}
-		in.GenerationTarget = &target
-	}
+
 	in.ExecutionDigest = Digest(p.Execution)
 	if id == Discovery {
 		return in, nil
@@ -144,8 +118,8 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 			Branch        string `json:"branch"`
 			TaskAuthority string `json:"task_authority"`
 		}
-		if json.Unmarshal(in.ProjectConfig, &project) != nil || project.Branch == "" || id != LocalEnvironment && id != Generation && project.Branch != "AIRefactor" || project.TaskAuthority != "native" {
-			return nil, errors.New("308 project config must select AIRefactor and explicit native task authority")
+		if json.Unmarshal(in.ProjectConfig, &project) != nil || project.Branch == "" || project.TaskAuthority != "native" {
+			return nil, errors.New("project config must select an explicit branch and native task authority")
 		}
 		in.Project, in.Commit = project.Repository, getenv("STEERLINE_L4_PROJECT_COMMIT")
 	}
@@ -164,9 +138,7 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 		}
 		return raw, nil
 	}
-	if id == Generation {
-		return in, nil
-	}
+
 	key, err := env.Key(in.Profile.Execution)
 	if err != nil {
 		return nil, err
@@ -179,6 +151,7 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	script, err := show(manifest.Script)
 	if err != nil {
 		return nil, err
@@ -186,57 +159,37 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	if len(script) == 0 {
 		return nil, errors.New("committed environment script is empty")
 	}
-	rules, err := show(env.ExecutionRulesPath)
-	if err != nil {
-		return nil, err
-	}
-	expectedRules, err := prompts.EnvironmentExecutionRules()
-	if err != nil {
-		return nil, err
-	}
-	if !prompts.SameRules(rules, expectedRules) {
-		return nil, errors.New("pinned project environment execution rules differ from this build; maintain and commit the same-version material before live validation")
-	}
-	if id == LocalEnvironment || id == Generation {
-		in.L2Verification, err = environmentL2Verification(show)
-		if err != nil {
+	for _, path := range manifest.Dependencies {
+		if _, err := show(path); err != nil {
 			return nil, err
 		}
 	}
-	return in, nil
-}
+	if id != Progress {
+		return in, nil
+	}
 
-// These are the two existing project verifiers reused by the live driver.
-// Fail before fixture creation for unknown or ambiguous report formats.
-func environmentL2Verification(show func(string) ([]byte, error)) (string, error) {
-	formats := []struct {
-		name  string
-		paths []string
-	}{
-		{"python", []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"}},
-		{"managed-powershell", []string{"SteerlineFlow/testing/test-list.json", "tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"}},
+	// The live harness also starts a Task admission probe. Its fixed testing
+	// protocol/writer are test prerequisites, not environment requirement sources.
+	testingRules, err := show(tm.ProtocolPath)
+	if err != nil {
+		return nil, fmt.Errorf("admission probe testing protocol: %w", err)
 	}
-	found := ""
-	for _, format := range formats {
-		complete := true
-		for _, path := range format.paths {
-			raw, err := show(path)
-			if err != nil || len(raw) == 0 {
-				complete = false
-				break
-			}
-		}
-		if complete {
-			if found != "" {
-				return "", errors.New("ambiguous original project L2 verifier")
-			}
-			found = format.name
-		}
+	expectedTesting, err := prompts.TestingRules()
+	if err != nil {
+		return nil, err
 	}
-	if found == "" {
-		return "", errors.New("local environment L4 requires an existing committed Python or managed PowerShell project L2 verifier")
+	if !prompts.SameRules(testingRules, expectedTesting) {
+		return nil, errors.New("admission probe testing protocol differs from this build; adopt same-version material before live validation")
 	}
-	return found, nil
+	writer, err := show(tm.WriterPath)
+	if err != nil {
+		return nil, fmt.Errorf("admission probe writer: %w", err)
+	}
+	if !bytes.Equal(bytes.ReplaceAll(writer, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll([]byte(progresstools.PowerShellWriter), []byte("\r\n"), []byte("\n"))) {
+		return nil, errors.New("admission probe writer differs from this build")
+	}
+
+	return in, nil
 }
 
 func Digest(execution runnercontract.ExecutionInput) string {
@@ -249,9 +202,7 @@ func Digest(execution runnercontract.ExecutionInput) string {
 }
 
 func (in *Input) Timeout(id string) time.Duration {
-	if id == Generation {
-		return 150 * time.Minute
-	}
+
 	if id == Discovery {
 		return 15 * time.Minute
 	}

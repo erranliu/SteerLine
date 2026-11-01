@@ -19,6 +19,14 @@ func TestMain(m *testing.M) {
 		_ = os.WriteFile(os.Getenv("STEERLINE_RUNNER_CLI_CALL"), append([]byte(strings.Join(os.Args[1:], "\n")+"\n--stdin--\n"), body...), 0600)
 		var request Request
 		_ = json.Unmarshal(body, &request)
+		if mode == "startup-inspect" {
+			if len(os.Args) > 2 && os.Args[1] == "service" && os.Args[2] == "status" {
+				fmt.Print(os.Getenv("STEERLINE_STARTUP_STATUS"))
+			} else {
+				fmt.Print(os.Getenv("STEERLINE_STARTUP_INSPECTION"))
+			}
+			os.Exit(0)
+		}
 
 		if mode == "instance-race" {
 			if len(os.Args) > 2 && os.Args[1] == "service" && os.Args[2] == "status" {

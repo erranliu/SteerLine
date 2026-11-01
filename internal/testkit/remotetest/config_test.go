@@ -13,6 +13,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
+	progresstools "github.com/erranliu/SteerLine/tools"
 )
 
 func profileFixture(t *testing.T) (string, executionconfig.Profile) {
@@ -96,13 +98,13 @@ func TestRemoteL4FrozenConfigurationAndInputs(t *testing.T) {
 func projectFixture(t *testing.T, execution runnercontract.ExecutionInput) (string, string) {
 	t.Helper()
 	repo := t.TempDir()
-	rules, err := prompts.EnvironmentExecutionRules()
+	testingRules, err := prompts.TestingRules()
 	if err != nil {
 		t.Fatal(err)
 	}
 	key, _ := env.Key(execution)
-	manifest, _ := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
-	for path, body := range map[string]string{"SteerlineFlow/environment-execution.md": string(rules), env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
+	manifest, _ := json.Marshal(env.Manifest{Version: 4, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", Dependencies: []string{}})
+	for path, body := range map[string]string{tm.ProtocolPath: string(testingRules), tm.WriterPath: progresstools.PowerShellWriter, "SteerlineFlow/environment-project.json": `{"version":1,"requirements":[],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		if e := os.MkdirAll(filepath.Dir(full), 0700); e != nil {
 			t.Fatal(e)
@@ -144,111 +146,57 @@ func TestRemoteL4RejectsWrongTargetAndMissingInputs(t *testing.T) {
 func TestLocalEnvironmentL4FrozenProfileAndTarget(t *testing.T) {
 	path, p := profileFixture(t)
 	p.Execution.Target = runnercontract.ExecutionTarget{Kind: "local"}
-	repo, commit := projectFixture(t, p.Execution)
-	for _, path := range []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"} {
-		full := filepath.Join(repo, path)
-		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(full, []byte("committed original verifier fixture"), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	for _, args := range [][]string{{"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "project verifier"}} {
-		if raw, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
-			t.Fatal(err, string(raw))
-		}
-	}
-	rawCommit, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
-	if err != nil {
+	b, _ := json.Marshal(p)
+	if err := os.WriteFile(path, b, 0600); err != nil {
 		t.Fatal(err)
 	}
-	commit = strings.TrimSpace(string(rawCommit))
+	repo, commit := projectFixture(t, p.Execution)
 	config := filepath.Join(t.TempDir(), "project.json")
-	raw, _ := json.Marshal(map[string]string{"repository": repo, "branch": "main", "task_authority": "native"})
-	if err := os.WriteFile(config, raw, 0600); err != nil {
+	b, _ = json.Marshal(map[string]string{"repository": repo, "branch": "project-owned-source", "task_authority": "native"})
+	if err := os.WriteFile(config, b, 0600); err != nil {
 		t.Fatal(err)
 	}
 	vars := map[string]string{"STEERLINE_L4_LOCAL_PROFILE": path, "STEERLINE_L4_PROJECT_CONFIG": config, "STEERLINE_L4_PROJECT_COMMIT": commit, "STEERLINE_L4_ROUND_TIMEOUT_SECONDS": "900"}
-	get := func(key string) string { return vars[key] }
-	for _, adapter := range []string{"orca-terminal", "codex-app-server"} {
-		p.Execution.Adapter = adapter
-		if adapter == "codex-app-server" {
-			p.Execution.Settings = json.RawMessage(`{"executable":"codex","model":"selected"}`)
-		}
-		key, _ := env.Key(p.Execution)
-		manifest, _ := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
-		for name, body := range map[string]string{env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
-			full := filepath.Join(repo, filepath.FromSlash(name))
-			if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(full, []byte(body), 0600); err != nil {
-				t.Fatal(err)
-			}
-		}
-		for _, args := range [][]string{{"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "per-context fixture"}} {
-			if output, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
-				t.Fatal(err, string(output))
-			}
-		}
-		rawCommit, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
-		if err != nil {
-			t.Fatal(err)
-		}
-		commit = strings.TrimSpace(string(rawCommit))
-		vars["STEERLINE_L4_PROJECT_COMMIT"] = commit
-		raw, _ = json.Marshal(p)
-		if err := os.WriteFile(path, raw, 0600); err != nil {
-			t.Fatal(err)
-		}
-		in, err := Load(LocalEnvironment, get)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if in.ExecutionDigest != Digest(p.Execution) || in.Commit != commit || in.Project != repo {
-			t.Fatal("local input was not frozen")
-		}
+	in, err := Load(LocalEnvironment, func(k string) string { return vars[k] })
+	if err != nil || in.Profile.Execution.Target.Kind != "local" || in.Commit != commit {
+		t.Fatal(in, err)
 	}
-	p.Execution.Target = runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8"}
-	raw, _ = json.Marshal(p)
-	_ = os.WriteFile(path, raw, 0600)
-	if _, err := Load(LocalEnvironment, get); err == nil {
-		t.Fatal("local driver accepted remote target")
+	if Selected("testing.project-environment-generation") {
+		t.Fatal("retired generation is still selected")
 	}
-	delete(vars, "STEERLINE_L4_LOCAL_PROFILE")
-	if _, err := Load(LocalEnvironment, get); err == nil {
-		t.Fatal("missing local profile passed")
+	p.Execution.Target = runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}
+	b, _ = json.Marshal(p)
+	_ = os.WriteFile(path, b, 0600)
+	if _, err := Load(LocalEnvironment, func(k string) string { return vars[k] }); err == nil {
+		t.Fatal("local detection accepted another target")
 	}
 }
 
-func TestLocalEnvironmentL4RejectsUnknownAndAmbiguousL2Verifiers(t *testing.T) {
-	fixtures := map[string][]byte{}
-	show := func(path string) ([]byte, error) {
-		if raw, ok := fixtures[path]; ok {
-			return raw, nil
-		}
-		return nil, os.ErrNotExist
-	}
-	if _, err := environmentL2Verification(show); err == nil {
-		t.Fatal("unknown report format accepted")
-	}
-	for _, path := range []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"} {
-		fixtures[path] = []byte("original")
-	}
-	format, err := environmentL2Verification(show)
-	if err != nil || format != "python" {
-		t.Fatal(format, err)
-	}
-	for _, path := range []string{"tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"} {
-		fixtures[path] = []byte("original")
-	}
-	if _, err := environmentL2Verification(show); err == nil {
-		t.Fatal("ambiguous original verifier accepted")
-	}
-	delete(fixtures, "tools/test-project.py")
-	format, err = environmentL2Verification(show)
-	if err != nil || format != "managed-powershell" {
-		t.Fatal(format, err)
+func TestEnvironmentL4RejectsStaleAdmissionMaterialsBeforeFixture(t *testing.T) {
+	for _, path := range []string{tm.ProtocolPath, tm.WriterPath} {
+		t.Run(path, func(t *testing.T) {
+			profilePath, profile := profileFixture(t)
+			raw, _ := json.Marshal(profile)
+			if err := os.WriteFile(profilePath, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			repo, _ := projectFixture(t, profile.Execution)
+			if err := os.WriteFile(filepath.Join(repo, path), []byte("old fixed material"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, args := range [][]string{{"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "stale material"}} {
+				if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+					t.Fatal(err, string(out))
+				}
+			}
+			commit, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			vars := map[string]string{"STEERLINE_L4_REMOTE_PROFILE": profilePath, "STEERLINE_PROGRESS_PROJECT": repo, "STEERLINE_PROGRESS_COMMIT": strings.TrimSpace(string(commit)), "STEERLINE_L4_ROUND_TIMEOUT_SECONDS": "900"}
+			if _, err := Load(Progress, func(k string) string { return vars[k] }); err == nil || !strings.Contains(err.Error(), "admission probe") {
+				t.Fatal("stale admission material reached fixture preparation", err)
+			}
+		})
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"strings"
 	"text/template"
@@ -40,12 +41,6 @@ func renderText(name, source string, data any) (string, error) {
 func TestingRules() ([]byte, error)         { return files.ReadFile("materials/testing.md") }
 func RoadmapParseRules() ([]byte, error)    { return files.ReadFile("materials/roadmap-parse.md") }
 func RoadmapDocumentRules() ([]byte, error) { return files.ReadFile("materials/roadmap-documents.md") }
-func EnvironmentGenerationRules() ([]byte, error) {
-	return files.ReadFile("materials/environment-generation.md")
-}
-func EnvironmentExecutionRules() ([]byte, error) {
-	return files.ReadFile("materials/environment-execution.md")
-}
 
 // SameRules tolerates only checkout line endings on fixed rule copies.
 // Dynamic data and original Markdown must instead match their original bytes.
@@ -53,11 +48,15 @@ func SameRules(actual, expected []byte) bool {
 	return len(actual) > 0 && bytes.Equal(bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll(expected, []byte("\r\n"), []byte("\n")))
 }
 
-func TestingGenerate(plan, commit string) (string, error) {
-	if plan == "" || commit == "" {
+func TestingGenerate(plan, commit string, project pm.ProjectEntry) (string, error) {
+	if plan == "" || commit == "" || project.Version != 1 {
 		return "", errors.New("fixed Plan and commit are required")
 	}
-	return render("testing-generate", struct{ Plan, Commit string }{plan, commit})
+	projectRaw, _ := json.Marshal(project)
+	if _, err := pm.ParseProjectEntry(projectRaw); err != nil {
+		return "", err
+	}
+	return render("testing-generate", struct{ Plan, Commit, ProjectFiles string }{plan, commit, strings.Join(project.Paths(), "、")})
 }
 func TestingReadOnly() (string, error) { return render("testing-readonly", nil) }
 func TestingContext(snapshot []byte, preparedWriter bool) (string, error) {
@@ -68,15 +67,19 @@ func TestingContext(snapshot []byte, preparedWriter bool) (string, error) {
 	if err := json.Unmarshal(snapshot, &plan); err != nil {
 		return "", err
 	}
-	if plan.Status != "ready" || plan.Commit == "" {
+	if plan.Status != "ready" || plan.Commit == "" || plan.Project.Version != 1 {
 		return "", errors.New("ready frozen test arrangement is required")
+	}
+	projectRaw, _ := json.Marshal(plan.Project)
+	if _, err := pm.ParseProjectEntry(projectRaw); err != nil {
+		return "", err
 	}
 	arrangement, err := testmodel.ArrangementPath(plan.PlanPath)
 	if err != nil {
 		return "", err
 	}
 	sum := sha256.Sum256(snapshot)
-	return render("testing-execute", struct{ Plan, Arrangement, Commit, Digest, Snapshot string }{plan.PlanPath, arrangement, plan.Commit, plan.Digest, hex.EncodeToString(sum[:])})
+	return render("testing-execute", struct{ Plan, Arrangement, Commit, Digest, Snapshot, ProjectFiles string }{plan.PlanPath, arrangement, plan.Commit, plan.Digest, hex.EncodeToString(sum[:]), strings.Join(plan.Project.Paths(), "、")})
 }
 func TestingStep(body string, snapshot []byte, preparedWriter, writesTests bool) (string, error) {
 	if body == "" {
@@ -94,23 +97,11 @@ func TestingStep(body string, snapshot []byte, preparedWriter, writesTests bool)
 	}
 	return render("testing-step", struct{ Body, Context string }{body, context})
 }
-func EnvironmentGenerate(commit, contextPath, documentPath, scriptPath string) (string, error) {
-	if commit == "" || contextPath == "" || documentPath == "" || scriptPath == "" {
-		return "", errors.New("fixed environment commit is required")
+func EnvironmentInvoke(interpreter, script string) (string, error) {
+	if script == "" || (interpreter != "powershell.exe" && interpreter != "bash") {
+		return "", errors.New("fixed environment invocation is required")
 	}
-	return render("environment-generate", struct{ Commit, ContextPath, DocumentPath, ScriptPath string }{commit, contextPath, documentPath, scriptPath})
-}
-func EnvironmentPrepare(documentPath, scriptPath string) (string, error) {
-	if documentPath == "" || scriptPath == "" {
-		return "", errors.New("environment material paths required")
-	}
-	return render("environment-prepare", struct{ DocumentPath, ScriptPath string }{documentPath, scriptPath})
-}
-func EnvironmentPublish(documentPath, scriptPath string) (string, error) {
-	if documentPath == "" || scriptPath == "" {
-		return "", errors.New("environment material paths required")
-	}
-	return render("environment-publish", struct{ DocumentPath, ScriptPath string }{documentPath, scriptPath})
+	return render("environment-invoke", struct{ Interpreter, Script string }{interpreter, script})
 }
 func RoadmapParse(source, commit string) (string, error) {
 	if source == "" || commit == "" {

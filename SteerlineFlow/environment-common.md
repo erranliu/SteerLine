@@ -1,5 +1,7 @@
 # SteerLine 公共执行环境要求
 
+> 2026-11-01：本文环境检查/生成/发布及旧结果格式定义已由[项目检测与结果消费规格](spec/project-environment-workflow.spec.md)取代；保留历史设计与验收追溯，不作为当前调用前置。
+
 环境检测由既有 Runner 目标 Agent 调用本项目入口，不由脚本再启动 Agent。环境适配遵循[项目环境适配规范](spec/project-environment-adaptation.spec.md)；业务测试入口及通过标准仍见[测试指南](testing.md)。
 
 本文件维护项目公共要求，供各环境专属文档显式引用，不是环境验收入口。先在运行环境页选定项目 × 运行机 × 链路，生成并审阅 `SteerlineFlow/environments/<完整环境键>/environment.md` 与同目录脚本。专属文档使用 manifest version=2，声明 environment_key、同目录脚本、解释器、验证 base 和有限依赖；不得直接使用旧全局入口。

@@ -1,5 +1,7 @@
 # Spec：执行方案与项目运行环境界面梳理
 
+> 2026-11-01：本文环境检查/生成/发布及旧结果格式定义已由[项目检测与结果消费规格](project-environment-workflow.spec.md)取代；保留历史设计与验收追溯，不作为当前调用前置。
+
 2026-10-31。状态：2026-10-31 经用户要求审计并收窄后实施。[Plan](../plans/runtime-environment-ui.plan.md) · [专属验收计划](../testing/acceptance/runtime-environment-ui.md)。普通开发，不分配任务编号、不进入 roadmap。
 
 ## 1. 问题、目标与现行规则

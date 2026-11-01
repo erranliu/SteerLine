@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"path/filepath"
 	"strings"
@@ -154,6 +155,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		}
 	}
 	var testing struct {
+		Project      pm.ProjectEntry        `json:"project"`
 		GenerationID string                 `json:"generation_id"`
 		Inputs       string                 `json:"inputs"`
 		Definitions  []testmodel.Definition `json:"definitions"`
@@ -190,7 +192,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		}
 		seenRefs[doc.Path] = true
 		ref, ok := want[doc.Path]
-		if !ok && testingBound && testmodel.TestReference(doc, testing.PlanPath, testing.Commit, testing.Status == "ready") {
+		if !ok && testingBound && testmodel.TestReference(doc, testing.PlanPath, testing.Commit, testing.Status == "ready", testing.Project) {
 			continue
 		}
 		if !ok || !matches(doc, ref) {
@@ -206,7 +208,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if err != nil {
 			return nativeErr("contract_mismatch", err.Error())
 		}
-		for _, path := range []string{testmodel.RulesPath, testmodel.CataloguePath, testmodel.WriterPath, testmodel.ProtocolPath, arrangement} {
+		for _, path := range append(testing.Project.Paths(), testmodel.WriterPath, testmodel.ProtocolPath, arrangement) {
 			if !seenRefs[path] {
 				return nativeErr("contract_mismatch", "Runner input omits required prepared test file: "+path)
 			}
@@ -338,7 +340,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 				return nativeErr("materials_changed", "generation is no longer ready")
 			}
 			definitions, e := testmodel.Select(generation.Result, generation.Catalogue)
-			if e != nil || digestValue(definitions) != digestValue(testing.Definitions) {
+			if e != nil || digestValue(definitions) != digestValue(testing.Definitions) || digestValue(generation.ProjectEntry) != digestValue(testing.Project) {
 				return nativeErr("contract_mismatch", "generated test definitions differ from frozen input")
 			}
 

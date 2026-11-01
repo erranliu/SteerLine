@@ -16,11 +16,6 @@ import (
 
 // Frozen Runner inputs and execution settings stay in storage, not browser DTOs.
 func publicEnvironment(r env.Record) any {
-	var generated map[string]any
-	if r.Generation != nil {
-		manifest, _ := env.ParseManifest([]byte(r.Generation.Document))
-		generated = map[string]any{"document": r.Generation.Document, "script": r.Generation.Script, "gaps": r.Generation.Gaps, "script_path": manifest.Script}
-	}
 	rounds := []any{}
 	for _, a := range r.Rounds {
 		var run any
@@ -33,9 +28,9 @@ func publicEnvironment(r env.Record) any {
 			}
 			run = map[string]any{"status": a.Run.Status, "stop_status": a.Run.StopStatus, "phase": a.Run.Phase, "step": a.Run.Step, "summary": environmentExcerpt(a.Run.Summary), "diagnostic": environmentExcerpt(a.Run.Diagnostic), "agent_reply": environmentExcerpt(reply), "agent_reply_verified": verified}
 		}
-		rounds = append(rounds, map[string]any{"number": a.Number, "deadline": a.Deadline, "run_id": a.RunID, "submission": a.Submission, "settled": a.Settled, "timed_out": a.TimedOut, "diagnostic": a.Diagnostic, "progress": a.Progress, "result": a.Result, "report": a.Report, "run": run})
+		rounds = append(rounds, map[string]any{"number": a.Number, "deadline": a.Deadline, "run_id": a.RunID, "submission": a.Submission, "settled": a.Settled, "timed_out": a.TimedOut, "diagnostic": a.Diagnostic, "result": a.Result, "report": a.Report, "run": run})
 	}
-	return map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "created_at": r.CreatedAt, "diagnostic": r.Diagnostic, "rounds": rounds, "generated": generated, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.ScriptDigest, "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
+	return map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "created_at": r.CreatedAt, "diagnostic": r.Diagnostic, "rounds": rounds, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.ScriptDigest, "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
 }
 func environmentExcerpt(s string) string {
 	r := []rune(s)
@@ -75,7 +70,7 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 		s := p.config.runtimeEnvironment.service
 		var r env.Record
 		switch in.Action {
-		case "environment_start", "environment_generate":
+		case "environment_start":
 			if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
 				e = errors.New("environment target/version differs")
 				break
@@ -85,17 +80,11 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 				e = errors.New("expected_current_revision is required")
 				break
 			}
-			if in.Action == "environment_generate" {
-				var generate env.Generate
-				if e = decodeStrictJSON(in.Payload, &generate); e == nil {
-					r, e = s.Generate(ctx, in.RequestID, raw, generate)
-				}
-			} else {
-				var start env.Start
-				if e = decodeStrictJSON(in.Payload, &start); e == nil {
-					r, e = s.Start(ctx, in.RequestID, raw, start)
-				}
+			var start env.Start
+			if e = decodeStrictJSON(in.Payload, &start); e == nil {
+				r, e = s.Start(ctx, in.RequestID, raw, start)
 			}
+
 		case "environment_invalidate":
 			if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
 				e = errors.New("environment target/version differs")
@@ -261,9 +250,6 @@ func (p *runtimeProjectPort) reconcileInvalidationFailure(ctx context.Context, o
 }
 
 func environmentRecordKey(r env.Record) string {
-	if r.Kind == "generation" {
-		return r.TargetKey
-	}
 	key, _ := env.Key(r.Execution)
 	return key
 }

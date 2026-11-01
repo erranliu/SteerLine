@@ -28,7 +28,7 @@ const optionsKey = [
 
 it("binds each card's invalidation to its own key and revision and shares only the material document", async () => {
   const { client, send } = fixture();
-  await screen.findByText("Orca · Codex · 验收阻断");
+  await screen.findByText("Orca · Codex · 检测阻断");
   const options = structuredClone(
     client.getQueryData<EnvironmentOptions>(optionsKey)!,
   );
@@ -65,7 +65,7 @@ it("binds each card's invalidation to its own key and revision and shares only t
 
 it("marks cached ready as unverified after query failure, blocks a new operation and preserves original stop", async () => {
   const { client, api, send, record } = fixture();
-  await screen.findByText("Orca · Codex · 验收阻断");
+  await screen.findByText("Orca · Codex · 检测阻断");
   const options = structuredClone(
     client.getQueryData<EnvironmentOptions>(optionsKey)!,
   );
@@ -82,9 +82,9 @@ it("marks cached ready as unverified after query failure, blocks a new operation
   });
   await client.refetchQueries({ queryKey: optionsKey });
   expect(await screen.findByText(/上次已知状态，当前待核实/)).toBeVisible();
-  fireEvent.click(screen.getByText("重新验收", { selector: "summary" }));
-  expect(screen.getByRole("button", { name: "提交验收" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "停止原活动" }));
+  fireEvent.click(screen.getByText("重新检测", { selector: "summary" }));
+  expect(screen.getByRole("button", { name: "提交检测" })).toBeDisabled();
+  fireEvent.click(await screen.findByRole("button", { name: "停止原活动" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "environment_stop",
@@ -98,7 +98,7 @@ it("marks cached ready as unverified after query failure, blocks a new operation
 
 it("keeps a stale unsettled activity visible and never starts a replacement", async () => {
   const { client, send } = fixture();
-  await screen.findByText("Orca · Codex · 验收阻断");
+  await screen.findByText("Orca · Codex · 检测阻断");
   const options = structuredClone(
     client.getQueryData<EnvironmentOptions>(optionsKey)!,
   );
@@ -107,9 +107,11 @@ it("keeps a stale unsettled activity visible and never starts a replacement", as
     activity_settled: false,
   });
   client.setQueryData(optionsKey, options);
-  fireEvent.click(await screen.findByText("重新验收", { selector: "summary" }));
-  expect(screen.getByRole("button", { name: "提交验收" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "停止原活动" })).toBeEnabled();
+  fireEvent.click(await screen.findByText("重新检测", { selector: "summary" }));
+  expect(screen.getByRole("button", { name: "提交检测" })).toBeDisabled();
+  expect(
+    await screen.findByRole("button", { name: "停止原活动" }),
+  ).toBeEnabled();
   expect(send).not.toHaveBeenCalled();
 });
 
@@ -133,13 +135,13 @@ it("requires a choice for a shared environment without a default and rejects an 
   });
   client.setQueryData(optionsKey, options);
   fireEvent.click(await screen.findByRole("button", { name: /环境 ffffffff/ }));
-  fireEvent.click(await screen.findByText("重新验收", { selector: "summary" }));
-  expect(screen.getByLabelText("验收所用方案")).toHaveValue("");
-  expect(screen.getByRole("button", { name: "提交验收" })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("验收所用方案"), {
+  fireEvent.click(await screen.findByText("重新检测", { selector: "summary" }));
+  expect(screen.getByLabelText("检测所用方案")).toHaveValue("");
+  expect(screen.getByRole("button", { name: "提交检测" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("检测所用方案"), {
     target: { value: "another" },
   });
-  expect(screen.getByRole("button", { name: "提交验收" })).toBeEnabled();
+  expect(screen.getByRole("button", { name: "提交检测" })).toBeEnabled();
   expect(send).not.toHaveBeenCalled();
 });
 
@@ -150,7 +152,7 @@ it("locates the linked profile and returns to the original task without executin
     false,
     "/projects/project/environment?profile=remote&task=38",
   );
-  expect(await screen.findByLabelText("验收所用方案")).toHaveValue("remote");
+  expect(await screen.findByLabelText("检测所用方案")).toHaveValue("remote");
   expect(screen.getByRole("link", { name: "返回任务" })).toHaveAttribute(
     "href",
     "/projects/project/runs?task=38&start_profile=remote",
@@ -234,7 +236,6 @@ function fixture(
                 profiles: [{ id: "remote", name: "远端一" }],
               },
             ],
-            generators: [{ id: "local", name: "本地生成" }],
           }
         : path.startsWith("/environment/materials")
           ? {
@@ -242,12 +243,6 @@ function fixture(
                 "SteerlineFlow/environments/" +
                 "e".repeat(64) +
                 "/environment.md",
-              context_path:
-                "SteerlineFlow/environments/" +
-                "e".repeat(64) +
-                "/environment-context.json",
-              expected_context: '{"version":1}',
-              generation_ready: true,
               document: "Only selected target requirements",
             }
           : path.split("?")[0] === "/environment"
@@ -269,18 +264,17 @@ function fixture(
 }
 it("keeps progress separate from binary admission and stops the exact original activity", async () => {
   const { send, record } = fixture();
-  expect(await screen.findByText("Orca · Codex · 验收阻断")).toBeVisible();
+  expect(await screen.findByText("Orca · Codex · 检测阻断")).toBeVisible();
   fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
   expect(await screen.findByText(/Run original-run/)).toBeVisible();
   fireEvent.click(screen.getByText("原执行文件与技术详情"));
-  expect(screen.getByText(/进度文件（不作为验收结论）/)).toBeVisible();
-  expect(screen.getByText(/验收结果文件/)).toBeVisible();
+  expect(screen.getByText(/检测结果文件/)).toBeVisible();
   expect(screen.getByText(/停止后封存一次/)).toBeVisible();
   expect(screen.getByText("原执行说明：缺少必需工具")).toBeVisible();
   expect(
     screen.getByText(/Agent 回复（原生来源已核实，仅供排障）/),
   ).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "停止原活动" }));
+  fireEvent.click(await screen.findByRole("button", { name: "停止原活动" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "environment_stop",
@@ -299,9 +293,9 @@ it("shows a final collection failure without promoting binary admission", async 
   });
   fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
   fireEvent.click(await screen.findByText("原执行文件与技术详情"));
-  fireEvent.click(await screen.findByText(/验收结果文件/));
+  fireEvent.click(await screen.findByText(/检测结果文件/));
   expect(await screen.findByText("结果采集诊断：file_missing")).toBeVisible();
-  expect(screen.getByText("Orca · Codex · 验收阻断")).toBeVisible();
+  expect(screen.getByText("Orca · Codex · 检测阻断")).toBeVisible();
 });
 it("freezes the selected profile and timeout and prevents duplicate clicks", async () => {
   let finish!: (v: boolean) => void;
@@ -312,15 +306,15 @@ it("freezes the selected profile and timeout and prevents duplicate clicks", asy
       }),
   );
   fixture(true, send);
-  await screen.findByText("Orca · Codex · 验收阻断");
-  fireEvent.click(screen.getByText("重新验收", { selector: "summary" }));
-  fireEvent.change(screen.getByLabelText("验收所用方案"), {
+  await screen.findByText("Orca · Codex · 检测阻断");
+  fireEvent.click(screen.getByText("重新检测", { selector: "summary" }));
+  fireEvent.change(screen.getByLabelText("检测所用方案"), {
     target: { value: "remote" },
   });
-  fireEvent.change(screen.getByLabelText("每轮总超时（秒）"), {
+  fireEvent.change(screen.getByLabelText("本次检测总超时（秒）"), {
     target: { value: "120" },
   });
-  const start = screen.getByRole("button", { name: "提交验收" });
+  const start = screen.getByRole("button", { name: "提交检测" });
   fireEvent.click(start);
   fireEvent.click(start);
   expect(send).toHaveBeenCalledTimes(1);
@@ -343,7 +337,7 @@ it("keeps history readable while offline and disables mutations", async () => {
   fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
   await screen.findByText(/Run original-run/);
   expect(
-    screen.queryByRole("button", { name: "提交验收" }),
+    screen.queryByRole("button", { name: "提交检测" }),
   ).not.toBeInTheDocument();
   expect(
     screen.queryByRole("button", { name: "生成文档和脚本" }),
@@ -351,81 +345,11 @@ it("keeps history readable while offline and disables mutations", async () => {
   expect(screen.getByRole("button", { name: "停止原活动" })).toBeDisabled();
 });
 
-it("shows the original intranet PR link without promoting an unfinished activity", async () => {
-  const { record } = fixture();
-  Object.assign(record.rounds[0], {
-    report: {
-      completed: true,
-      checks: [
-        { id: "git", status: "passed", message: "Git available" },
-        {
-          id: "unity.editor",
-          status: "failed",
-          message: "UNITY_EDITOR_PATH is not set",
-        },
-      ],
-      message: "等待收尾",
-      l2: [{ test_id: "one", status: "passed", message: "" }],
-      pr: {
-        url: "http://gitea.local/pulls/1",
-        head_revision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        cleanup_completed: true,
-        outcome_unknown: false,
-      },
-    },
-  });
-  fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
-  expect(
-    await screen.findByRole("link", { name: "http://gitea.local/pulls/1" }),
-  ).toHaveAttribute("href", "http://gitea.local/pulls/1");
-  expect(screen.getByText("Orca · Codex · 验收阻断")).toBeVisible();
-  expect(screen.getByText("git · 通过 · Git available")).toBeVisible();
-  expect(
-    screen.getByText("unity.editor · 不通过 · UNITY_EDITOR_PATH is not set"),
-  ).toBeVisible();
-});
-
-it("exports the script under its declared path even when prose mentions another interpreter", async () => {
-  const OriginalURL = URL;
-  vi.stubGlobal(
-    "URL",
-    class extends OriginalURL {
-      static createObjectURL() {
-        return "blob:fixture";
-      }
-      static revokeObjectURL() {}
-    },
-  );
-  const names: string[] = [];
-  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
-    this: HTMLAnchorElement,
-  ) {
-    names.push(this.download);
-  });
-  const { record } = fixture();
-  Object.assign(record, {
-    kind: "generation",
-    state: "generated",
-    settled: true,
-    profile_id: "local",
-    generated: {
-      document:
-        'PowerShell verify-environment.ps1 is not selected.\n```steerline-environment\n{"version":1,"script":"scripts/verify-environment.sh","interpreter":"bash","validation_base":"validation","dependencies":[]}\n```',
-      script: "#!/usr/bin/env bash\n",
-      gaps: ["fixture only"],
-      script_path: "scripts/verify-environment.sh",
-    },
-  });
-  fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
-  fireEvent.click(await screen.findByRole("button", { name: "导出验收脚本" }));
-  expect(names).toEqual(["verify-environment.sh"]);
-});
-
 it("shows the selected current report even outside the recent history window", async () => {
   const { send, record } = fixture(true, vi.fn().mockResolvedValue(true), true);
-  fireEvent.click(await screen.findByRole("button", { name: "查看当前验收" }));
+  fireEvent.click(await screen.findByRole("button", { name: "查看当前检测" }));
   expect(await screen.findByText(/Run original-run/)).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "停止原活动" }));
+  fireEvent.click(await screen.findByRole("button", { name: "停止原活动" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "environment_stop",
@@ -438,7 +362,7 @@ it("shows the selected current report even outside the recent history window", a
 
 it("invalidates only the selected project context with its displayed current revision", async () => {
   const { send } = fixture();
-  await screen.findByText("Orca · Codex · 验收阻断");
+  await screen.findByText("Orca · Codex · 检测阻断");
   fireEvent.click(screen.getByText("标记失效", { selector: "summary" }));
   fireEvent.change(screen.getByLabelText("环境失效原因"), {
     target: { value: "机器已重建" },
@@ -458,47 +382,9 @@ it("invalidates only the selected project context with its displayed current rev
   );
 });
 
-it("generates selected remote materials with an independently selected local model", async () => {
-  const { send, client } = fixture();
-  await screen.findByText("Orca · Codex · 验收阻断");
-  const options = structuredClone(
-    client.getQueryData<EnvironmentOptions>(optionsKey)!,
-  );
-  options.generators.push({
-    id: "local-high",
-    name: "Local high",
-    model: "model-b",
-    reasoning_effort: "high",
-  });
-  client.setQueryData(optionsKey, options);
-  fireEvent.click(
-    screen.getByText("生成或更新准备材料", { selector: "summary" }),
-  );
-  await screen.findByRole("option", { name: /Local high/ });
-  fireEvent.change(screen.getByLabelText("生成所用方案"), {
-    target: { value: "local-high" },
-  });
-  const button = screen.getByRole("button", { name: "生成文档和脚本" });
-  await waitFor(() => expect(button).toBeEnabled());
-  fireEvent.click(button);
-  await waitFor(() =>
-    expect(send).toHaveBeenCalledWith(
-      "environment_generate",
-      identity.project_id,
-      1,
-      {
-        target_environment_key: "e".repeat(64),
-        generator_profile_id: "local-high",
-      },
-    ),
-  );
-  expect(
-    screen.getByRole("region", { name: "当前准备对象" }),
-  ).toHaveTextContent("远端一");
-});
 it("keeps model schemes inside operations and changes the history filter with the environment", async () => {
   const { api, client, send } = fixture();
-  await screen.findByText("Orca · Codex · 验收阻断");
+  await screen.findByText("Orca · Codex · 检测阻断");
   const options = structuredClone(
     client.getQueryData<EnvironmentOptions>(optionsKey)!,
   );
@@ -529,6 +415,61 @@ it("keeps model schemes inside operations and changes the history filter with th
     ),
   );
   expect(screen.getByText(/共用方案：Different model/)).toBeVisible();
-  expect(screen.getByRole("option", { name: "Different model · model-c · high" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("option", { name: "Different model · model-c · high" }),
+  ).toBeInTheDocument();
   expect(send).not.toHaveBeenCalled();
+});
+
+it("shows project failure and opaque diagnostics without reviewing their contents", async () => {
+  const { record, send } = fixture();
+  Object.assign(record.rounds[0], {
+    report: {
+      completed: true,
+      ready: false,
+      message: "服务连接失败：database unavailable",
+      details: {
+        project_checks: [{ id: "business-only", status: "passed" }],
+        report_url: "http://gitea.local/pulls/1",
+      },
+    },
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
+  expect(
+    await screen.findByText("服务连接失败：database unavailable"),
+  ).toBeVisible();
+  expect(screen.getByText("项目结论：未就绪")).toBeVisible();
+  fireEvent.click(screen.getByText("项目诊断明细"));
+  expect(screen.getByText(/business-only/)).toBeVisible();
+  expect(
+    screen.queryByRole("link", { name: "http://gitea.local/pulls/1" }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText("Orca · Codex · 检测阻断")).toBeVisible();
+  expect(send).not.toHaveBeenCalled();
+});
+it("keeps a project ready report separate from unsettled platform qualification", async () => {
+  const { record } = fixture();
+  Object.assign(record.rounds[0], {
+    report: {
+      completed: true,
+      ready: true,
+      message: "project decided ready",
+      details: {
+        checks: [{ status: "failed", format: "opaque-project-diagnostic" }],
+      },
+    },
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
+  expect(await screen.findByText("项目结论：已就绪")).toBeVisible();
+  expect(screen.getByText("Orca · Codex · 检测阻断")).toBeVisible();
+  fireEvent.click(screen.getByText("项目诊断明细"));
+  expect(screen.getByText(/opaque-project-diagnostic/)).toBeVisible();
+});
+it("provides project interface guidance without generation or protocol synchronization actions", async () => {
+  fixture();
+  await screen.findByText("Orca · Codex · 检测阻断");
+  expect(screen.queryByText("生成或更新准备材料")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /生成文档|导出.*上下文|同步协议/ }),
+  ).not.toBeInTheDocument();
 });

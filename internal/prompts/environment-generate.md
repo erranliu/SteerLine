@@ -1,1 +1,0 @@
-先读取固定提交 {{.Commit}} 的 SteerlineFlow/environment-generation.md、SteerlineFlow/environment-execution.md、{{.ContextPath}}、项目测试规范/清单及依赖文件，为上下文绑定的目标环境生成 {{.DocumentPath}} 和 {{.ScriptPath}}.ps1 或 {{.ScriptPath}}.sh（按项目声明平台选择），并报告真实缺口。生成所用模型不改变材料目标。只返回原 schema 结果，不执行或发布。

@@ -20,7 +20,7 @@
 | [提示组合](../../internal/runnerclient/prompt_context.go)、[候选存储](../../internal/storage/sqlite/runner_candidates.go) | 组合调用方上下文并核验原输入 | 保留冻结/CAS边界，核验引用及实际材料，不只查路径存在 |
 | [测试安排生成](../../internal/testmanagement/generation.go) | Plan、规范和清单仍inline | Agent读取同版本完整文件 |
 | [Roadmap解析](../../internal/roadmap/generation.go)、[文档生成](../../internal/roadmap/documents.go) | 规范已改引用；原文、任务图和确认结果仍inline | 原始输入均有可读固定文件，不能用同名快照文件冒充不同原文 |
-| [环境生成](../../internal/app/environment_adaptation.go)、[生成规则](../../internal/prompts/materials/environment-generation.md)、[适配步骤](../../internal/environmentadaptation/service.go) | 长规则、派生前轮事实仍入指令 | 规则、原报告和阶段资料归文件，指令只引用 |
+| [环境调用](../../internal/app/environment_adaptation.go)、[调用短提示](../../internal/prompts/environment-invoke.md)、[调用接线](../../internal/environmentadaptation/service.go) | 旧生成/阶段编排已退役 | 项目自行检测，平台只调用并消费结果，指令只引用 |
 | [用户回答](../../internal/taskrunner/input.go) | 按原问题/选项/原回答回复 | 原通道传递，超出2000个UTF-8字节拒绝，不转文件 |
 
 历史同源helper样本2260字节、缺helper样本6004字节和环境规则5570字节，只说明旧方案仍保留长内容，不是本修订体积目标或通过证明。
@@ -34,7 +34,7 @@
 | 测试执行 | Plan 同名 `.tests.json` 沿用既有 `{tests:[ID]}` 格式；与完整清单展开后须逐项等于原冻结定义和顺序。另需 `SteerlineFlow/testing/runtime-progress.md`（正式规则副本）及同源 writer；不存在 commit 自引用或第二份可编辑安排。 |
 | 测试安排生成 | 固定 commit 的 Plan、测试规范和清单，通过 `generate.repository.paths` 明确选择这三个完整文件读取；未提供 commit、能力或固定文件即阻断。 |
 | Roadmap | 原 Markdown 必须与固定 Git 字节一致；`SteerlineFlow/Roadmap/existing-task-graph.json`、`existing-roadmap-source-map.json` 分别与原任务图/映射的完整 JSON 一致；文档生成另需 `confirmed-planning.json` 与原确认数据一致。格式沿用原 inline 数据，不新增材料 manifest/发布接口。规则副本为同目录 `parse-rules.md`、`document-rules.md`。 |
-| 环境生成 | 固定 `SteerlineFlow/environment-generation.md` 与 `environment-execution.md` 规则/报告契约副本，以及 `SteerlineFlow/environment-context.json` 中的公开 publication 配置与完整前轮事实；须与当前程序原记录一致，不以成功项压缩投影替代。 |
+| 环境调用 | 按[当前环境边界](project-environment-workflow.spec.md)，只调用项目自有检测入口一次，结果通过原 Runner 封存；不复制平台规则，不要求 publication、生成上下文或项目内部检查格式。 |
 | 环境执行 | 固定 `SteerlineFlow/environment-execution.md`、原 environment.md、脚本与结果初始 JSON。复用正式 `result_file.initial_content_base64` 文件渠道，在下一轮初始JSON的 previous 字段提供完整前轮报告及诊断；原三轮上限、封存/PR安全核验保持。总初始JSON超过既有64KiB上限时，在新Run创建前明确准备不足，不截断或摘要。 |
 
 上述动态 JSON 只由正常 Git 准备提供，程序只读取并对照原权威，不自动导出、提交或用当前文件覆盖固定版本。没有这些真实文件的项目会出现明确准备不足；这是本修订接受的行为变化。规则副本只允许 CRLF/LF 差异，原动态 JSON/Markdown 则逐字核对；不为通过测试新增生产复制通道。

@@ -15,6 +15,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	pmm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -337,7 +338,11 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	ownedHead = original.Execution.Branch
 	proof.CandidateRun = original.RunID
 	// Verify latest public worktree paths and the exact frozen prompt context.
-	catalogueText, e := d.git("show", head+":SteerlineFlow/testing/test-list.json")
+	projectEntry, e := pm.ReadProjectEntry(func(path string) ([]byte, error) { text, err := d.git("show", head+":"+path); return []byte(text), err })
+	if e != nil {
+		return e
+	}
+	catalogueText, e := d.git("show", head+":"+projectEntry.TestingCatalogue)
 	if e != nil {
 		return e
 	}
@@ -349,7 +354,7 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	if e != nil {
 		return e
 	}
-	expectedSnapshot, e := json.Marshal(testmanagement.Snapshot{GenerationID: generation.ID, Inputs: material.Inputs, Status: "ready", PlanPath: material.Contract.PlanRef.Path, Commit: material.Commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)})
+	expectedSnapshot, e := json.Marshal(testmanagement.Snapshot{Project: projectEntry, GenerationID: generation.ID, Inputs: material.Inputs, Status: "ready", PlanPath: material.Contract.PlanRef.Path, Commit: material.Commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)})
 	if e != nil {
 		return e
 	}
@@ -370,7 +375,10 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	if e != nil {
 		return e
 	}
-	expectedPaths := map[string]bool{material.Contract.SpecRef.Path: false, material.Contract.PlanRef.Path: false, testmanagement.RulesPath: false, testmanagement.CataloguePath: false}
+	expectedPaths := map[string]bool{material.Contract.SpecRef.Path: false, material.Contract.PlanRef.Path: false}
+	for _, path := range projectEntry.Paths() {
+		expectedPaths[path] = false
+	}
 	expectedPaths[arrangementPath] = false
 	expectedPaths[testmanagementmodel.ProtocolPath] = false
 	if referencedWriter {

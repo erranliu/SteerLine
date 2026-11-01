@@ -13,7 +13,7 @@
 | [测试上下文](../../internal/testmanagement/model/documents.go)、[安排生成](../../internal/testmanagement/generation.go) | 迁出固定指令，保留完整安排及固定材料核验。 |
 | [工作流追加](../../internal/runnerclient/prompt_context.go) | 保留 Runner 步骤选择，把固定上下文的组合集中到 prompts。 |
 | [候选存储](../../internal/storage/sqlite/runner_candidates.go) | `ReserveRunnerCandidate` 在创建/幂等预留时核验正文绑定；普通读取不渲染，`SaveCandidate` 已比较原请求与安排的不可变性。本次只适配迁出的渲染调用，不新建恢复解析协议。 |
-| [环境模板](../../internal/prompts/environment-generate.md)、[生成接线](../../internal/app/environment_adaptation.go)、[阶段接线](../../internal/environmentadaptation/service.go) | 合并文件模板和代码内追加的固定说明；保留 prepare/publish 的现有覆盖语义。 |
+| [环境调用模板](../../internal/prompts/environment-invoke.md)、[调用接线](../../internal/environmentadaptation/service.go) | 环境新边界已由 project-environment-workflow.spec.md 取代旧生成/prepare/publish，固定短提示只调用项目自有入口一次。 |
 | [Roadmap 解析](../../internal/roadmap/generation.go)、[文档生成](../../internal/roadmap/documents.go) | 迁出固定文字，保持原规范快照、材料和 schema。 |
 | [源码守卫](../../internal/testkit/boundary/check.go)、[测试入口](../testing.md) | 复用现有边界扫描与 L1/L2，不另建检查执行系统。 |
 

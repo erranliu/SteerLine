@@ -1,5 +1,7 @@
 # 项目 × 运行机 × 链路环境准备：审计与验收安排
 
+> 当前边界与结果见文末“2026-11-01 项目检测闭环与平台结果消费”段。此前 manifest3、生成和 L2/PR 验收均为历史，不继承到本轮新接口。
+
 2026-10-31。普通开发，无 Task ID。[Spec](../../spec/project-environment-workflow.spec.md) · [Plan](../../plans/project-environment-workflow.plan.md)。状态：代码与界面已实施，自动工程验收PEW-A01–A13全部通过；真实生成G09和正式本机验收V05及完整清理已核实。PEW-M01人工体验待走查。不进入 roadmap，不修改安装现场。2026-11-01用户后续要求提交功能PR；不部署或自动合并。
 
 调查源码：`e1968de2d8031c834bb5f35dff8a37a0a41b6a62`，实施阶段的验证基于其上的未提交工作树，实际diff/源码状态由各次报告保存。第 1 节是文档阶段本聊天自审；后续提示词及接线按 AGENTS.md 要求由独立只读子代理 `prompt_review` 审核，见第 7 节，不混同两种审计。
@@ -160,3 +162,158 @@ admission-proof.json记录before_rejected=true、after_run_id=39a46de4fa7cc5dd42
 该干净代码提交重新执行固定L1和L2，均passed且清理通过，证据分别为原scope下pr-submit-20261101/L1/01/summary.json、pr-submit-20261101/L2/01/summary.json。文档检查632份Markdown、3987个本地链接，0错误；git diff --check通过。前节Web、浏览器、owner、受控L3和真实G09/V05保留各自冻结源码及原报告，不改写为本次整合版本的重新运行结果。固定提示词最终正文、字节数与独立批准内容未改变。
 
 随后仅补充本节整合记录提交；本次发布范围为功能分支和PR，不部署安装环境、不自动合并main，M01仍待人工体验。
+
+
+## 10. 环境要求与调用协议解耦实施（2026-11-01）
+
+用户授权按修订 Spec/Plan 实施，本轮不实现整个项目初始化适配。基线 752b1ed1df4e745c663fb2453ec029798d435d62；新证据范围为 `C:/SteerlineDebug/wt-68d4-project-environment-workflow/requirements-decoupling/`。前节 G09/V05 仍是旧格式历史，本轮不能沿用。
+
+项目入口 version1 仅定位公共材料及唯一正式测试清单；环境文档 manifest3 唯一声明 required_checks/gaps，生成结果 gaps 严格投影同一文档。材料查询和验收直接读取固定 Git 文档，空生成历史不影响缺口阻断；目标事实只在原活动/请求冻结。新环境或旧失效产物按固定源码调查，有效材料按有限引用更新；调查实际整树普通 blob 总字节保持原1 MiB限制。项目初始化入口仍不提供，未部署安装现场。测试安排、候选、记录及 roadmap 规范消费者共用入口，不保留固定项目政策/清单回退。
+
+### 实际正文与批准
+
+业务原因是去掉 SteerLine 内部项目工具/版本/材料目录政策及 Git context 提交前置，保留通用生成和执行/报告协议。TTY 失败入口的严格原报告守卫从生成规则移至执行协议，仍完整保留；语言实现方式由项目负责。完整差异、每份 UTF-8 字节及 SHA256 见本范围 `prompt-review/final-01/actual-text.diff`、`bytes.json`，新指导/协议全文也保存在该目录，不用摘要或黄金样本替代正文审核。
+
+| 正文 | 原字节 → 本版字节 |
+| --- | --- |
+| 环境生成规则及同源镜像 | 10055 → 3862 |
+| 环境执行规则及同源镜像 | 5501 → 6683 |
+| 测试执行规则及同源镜像 | 3229 → 3256（本仓库正式镜像新增 3256） |
+| 项目适配指导 | 0 → 7983（设计上一稿 7892） |
+| 环境生成短模板 / 实际代表请求 | 440 → 675 / 812 → 1018 |
+| 测试生成短模板 / 代表请求 | 262 → 266 / 258 → 328 |
+| 测试执行短模板 / reference / step 样本 | 423 → 377 / 464 → 484 / 492 → 512 |
+| roadmap 文档短模板 / 代表请求 | 351 → 398 / 343 → 390 |
+
+生成两份完整协议总计 15556 → 10545 字节；调查另读完整7983字节指导，合计18528字节，项目实际源码/政策另按固定快照记录；正常更新不加载指导。验收仅加载6683字节执行协议和正式运行依据，不重复生成规则/指导。新增指导承担实际调查到项目接口的二级职责，不成为另一份项目要求。
+
+`/root/prompt_review` 独立只读核验实际正文、接线、资产、样本和守卫后批准当前定版。审核发现并修复：测试安排新生成缺同源校验、roadmap 短模板仍指旧政策、调查源码未计整树限额。新请求严格阻断不同源协议，原冻结请求重放不重构；调查按同提交普通 blob 实际大小计限额。固定模板 LF、含用户 CRLF 样本保留；三套镜像逐字节相同。批准覆盖当前正文/所审接线，不代替工程或真实验收。
+
+### 当前工程证据
+
+本范围 diagnostics/core-02、core-03、protocol-04、storage-02、app-02、app-03、source-bounds-01、contracts-final-01、catalogue-01 均通过，分别覆盖领域生命周期、协议同源、持久化不可变、自定义来源、冷启动 gaps、旧失效材料调查、真实源码限额及路由。默认固定 L1/01、L2/01 通过，L2 清理完成；web-02 完整构建/客户端/HTTP及 browser-01 两场景通过，补充环境界面16项通过。最终新增自定义目录受控场景及真实 G/V 尚在推进，完成后另记。
+
+原失败完整保留：core-01/app-01 为未同步入口/检查集合的旧夹具，prompts-01 为本地写入 CRLF 触发正文摘要，e2e-owners-01 为 driver DTO 与内部快照字段错配，storage-01 为旧报告/验证器夹具未声明入口；均修对应来源/夹具后在新目录验证。web-01 发现 unknown 条件渲染不能作为 ReactNode，显式判断非空后完整 web-02 通过。e2e-owners-02 的两项目维护查询超时，其他 owner 通过；最终协议守卫版本 isolation-03 定向复验146.237秒通过，未延长期限或改写原失败，原超时的唯一根因未确认。
+
+
+补充工程收口：实现固定为 e6a5bb20751915e94995942396fc3b7d57c81ab6；最终两个测试夹具修复为 ca944cd868ca195cbd42c46144e8533ca1fd5999、0087b2cf（完整提交可由 Git 解析）。L1/02、L2/02 在干净实现提交运行且通过，L2 清理完整。Web 最终 web-04 的31文件/229用例、构建和HTTP通过；web-03 曾因已有用例在异步历史返回前立即查询停止按钮而失败，改 await findByRole 等待原内容，原停止命令/禁用和副作用断言不变；补充独立审阅通过。
+
+L3/readiness-01 默认目录闭环通过；readiness-02 因夹具未使用导入编译失败；readiness-03 在自定义目录下揭出 scriptedEnvironment 仍读旧固定清单，原启动结果未知并最终超时，原失败和清理保持。ca944cd8 将该模拟端改为同一 BaseRevision 的入口/清单读取，不提供回退，独立批准后 L3/readiness-04 两项目/自定义目录生成、采用、完整受控验收、候选准入、失效隔离及全部清理通过，未延长预算。模拟证据不声明原生环境或真实 PR。
+
+另补充 diagnostics/e2e-final-01 共25项原始证据/真实夹具 owner 通过。移除 context 步骤后，真实 G 的采用夹具仍假定输出父目录已存在；0087b2cf 仅在校验目标及 manifest 后为原字节落盘创建独立 clone 内本键目录，已独立批准，不修改模型输出/标准。已启动的旧编译 G 轮次保持原结果，修复版本另目录复验。
+
+本范围 L4/generation-01：首个本机原生内容结果通过格式/来源/目标/投影校验，之后旧编译夹具在新目录落盘失败；停止及 Runner 清理 confirmed=true，原生成/请求/输出完整保留。未执行远端生成或本机验收，不记 G 完整通过。采用0087b2cf修复后新目录重新测试，不手改原生成字节。
+
+
+### 最终真实 G/V 与后续修复
+
+本范围 G02 两目标实际生成通过（L4/generation-02，1358.967秒，cleanup_complete=true）。两个目标均为 manifest3、gaps=[]；原请求/来源/内容结果、停止和清理证据齐全，未授予 ready，未执行远端验收。原生成 Git 留存提交 `0ec457fe91366d1cb11c28e3f72f711ad74669eb`；本机脚本27758字节，SHA256 `482420f4aa328f879cd8e58482ca1bca6eb83c5a0d95391149fcfeca602a25e6`，PowerShell5.1静态语法通过；远端脚本30717字节。两目标各自检查来自项目政策，未恢复内部固定项目工具清单。
+
+G02 原留存不动。为准入探针，在独立 verification-source-02 clone 正常 Git 采用同版本固定测试协议，提交 `44236738f72b82b0aa14b067b3679b5e86a1de06` 仅改变 `SteerlineFlow/testing/runtime-progress.md`，原生成文档、脚本 Git blob 及 writer 均不变，见 inputs/verification-source-protocol-adoption.json。正常 Windows CRLF 检出与原 blob 已分别核验，不把检出转换当作生成修改。V 的既有夹具另将 validation_base 绑定本轮专属分支并准备禁止实现的 Task 探针，经正常 Git 固定；脚本始终为 G02 原字节。
+
+| 本范围 V 轮次 | 原结果、修复及清理 |
+| --- | --- |
+| verification-01 | 原测试源码的测试协议副本未同源，Task材料准备正确拒绝，未启动环境Run/候选/测试生成。补测试侧 preflight，在创建现场/refs前检查准入探针协议和writer；生成夹具同步准备当前测试协议，不新增生产环境要求。原失败保留，零活动/无PR/Runner停止及两个refs原SHA lease清理见 remote-ref-cleanup-followup.json。 |
+| verification-02 | 23个阅读引用中的重复运行辅助路径使固定Runner正文达到1574/1000B，在发送Agent前阻断；调用方447B无额度，未执行环境脚本。通过原公开environment_stop受理停止，原Run stopped/result closed、零候选/无PR。保留全部manifest依赖的读取/哈希/缺失守卫和完整Git工作区，仅不把每个helper再列为阅读引用，引用降为5；标准与预算均未放宽。两个自有refs精确lease删除，Runner head从未推送，跟进证据保留。 |
+| verification-03 | 测试生成在CLI启动前被明确拒绝，未产生环境Run/候选，未分配原RunID；原根因未完全确认。固定CLI后续只读启动正常，两个自有refs精确lease清理，原失败不改写。 |
+| verification-04 | 原测试生成submit结果未知且request_not_found，不重发。通过原正式取消请求和正常停服收尾；公开离线verify-takeover在原namespace/同固定构建上compatible=true、instance_id空、items=[]，证明原请求未被接受，零环境Run/候选；原取消、失败、离线报告及两个refs精确清理证据保留。 |
+| verification-05 | 在最终缓存/引用接线上完整正向通过（413.709秒，cleanup_complete=true），首轮六项检查及完整L2 passed，原Run stopped/result closed、原PR身份和独立L2/规则核验通过，实际准入Run启动/停止与全部资源清理完成。 |
+
+重复读取接线也已修复：材料评估与测试生成现在复用原同请求 `commit:path` immutable blob 缓存；不增加缓存层、不跨请求或提交复用、不扩大共享5秒tick/Runner预算。新反例及 diagnostics/shared-read-cache-01 通过；diagnostics/runtime-dependency-refs-01 验证运行helper不重复阅读引用，但改变仍使依据失效、缺失仍阻断，自定义政策/清单引用保持。V03/V04 原CLI错误不能据此推断唯一根因已全部确认；新的实际运行结果独立记录。
+
+V05 使用相同本机脚本摘要 `482420f4…a25e6`，检查 powershell、git、python、github.auth、source.clean、terminal.tty 全passed；全部正式L2 `demo.l2.smoke` 为真实非零通过，原始摘要与明细在 original-l2-summary.json。原环境Run为 `087e598cd9d05b36554c8c9e72be64e5`；验证PR [SteerlineTest#740](https://github.com/erranliu/SteerlineTest/pull/740)，head=`b3bd09d3b524655e5397168a2feefbb3c7686939`、merge=`60c6992a40fc177b8657be364eb6c165a81cc1bd`，base仅为 `codex/e2e/904ee323a47d4d7f9d32f1d62a823f24/testing.project-environment-local/validation/testing.project-environment-local/base`。外部合并未回写原封存报告。
+
+admission-proof.json 记录准备前拒绝、ready后实际Run `5b70fa2a771df024987859c61a1f639b` 启动且停止；remote-ref-cleanup.json 核实source/validation/环境Run/准入Run四个本轮refs均清理，308-runner-cleanup.json confirmed=true且未保留活动工作区。较早失败的本地现场作为证据保留，不当作活动资源残留或新版本通过。
+
+所有新增正文/接线/测试资产和最后规范性文档均由 `/root/prompt_review` 独立只读审核；发现的协议前置、重复引用、缓存及默认目录/Spec状态残留已修复并复审批准。指南7983字节/hash不变。最终固定L1/L2收尾结果另在下段登记；M01人工体验仍后置。整个项目初始化适配未实现、未部署安装环境、未合入业务main或自动合并功能PR。本轮已转到独立分支 codex/environment-requirements-decoupling；此前PR416已合并，不修改其历史正文。
+
+
+### 最终固定回归与交付
+
+干净源码提交 `39e84418`（包含全部已审代码/规范，功能最终接线为 bbd69edd）运行固定 L1/05、L2/03，均通过，L2 TestDeliverySmoke 134.70秒且cleanup_complete=true。没有跳过、零命中或未知清理算作通过。最终完整正文/实际接线差异和21份字节账本位于本范围 prompt-review/final-02/actual-text-and-wiring.diff、bytes.json；actual-reading-references.json 直接从 V02/V05 原请求提取23→5引用，对应相同19项运行依赖，实际调用方 prepare 正文均447字节，未增加或藏入规则。
+
+当前全部受影响自动验证完成：最终固定L1/L2、owner、Web229项及构建/HTTP、浏览器两场景、两项目/自定义目录受控L3、真实G02两目标生成及V05同字节本机闭环均通过。各报告保持各自冻结源码/原始选择，不改写前述失败或将旧版本结果当作新提交重跑。最后仅补本段记录及状态导航，按纯文档检查处理。M01人工体验继续后置；项目初始化适配功能未实现，未部署安装现场。
+
+### 提 PR 前审计与回归
+
+用户要求“审计后提pr”。本轮复核项目入口到环境生成/验收、测试安排/候选/记录及 roadmap 的同提交来源，检查 manifest3 的唯一检查/gaps 权威、运行依赖哈希与资格失效、持久化不可改绑、查询无副作用及请求级缓存边界，未发现新的可执行 P0–P2 问题。`/root/prompt_review` 对 `752b1ed..c8de8beb` 的实际正文、接线、相关资产/测试和规范再次独立只读审核并批准，21项字节账本及三套协议镜像匹配，未放宽 CI/源码守卫或用黄金样本代替批准。
+
+整合最新 `origin/main`（54720d30）后提交为 `40852fe3115bae651673e4e2b9c8ad7f23b83c5a`；其 Git tree 与已审 c8de8beb 完全相同，均为 `79c28d14dab74d281815bd80db9506196fdbac12`。在该干净源码重跑本范围 `pr-audit-01/L1/01`、`pr-audit-01/L2/01`：固定 L1 执行8.55秒通过，固定 L2 的 TestDeliverySmoke 101.14秒通过、cleanup_complete=true，无跳过或零命中。Markdown 634文件/3997本地链接零错误，`git diff --check` 通过。随后仅补本段审计/证据记录，不改正文或运行时接线；项目初始化和M01人工体验边界保持，不部署或自动合并功能PR。
+
+## 2026-11-01 项目检测闭环与平台结果消费
+
+本轮用户授权修订失效撤销、稳定调用字段和最小调用约定后实施；核实旧 Runner 不支持无发布可写单次调用与最终封存后，另明确授权“允许最小扩展 SteerRunner，不增加新框架”并要求在 worktree 执行。项目初始化适配未实现，未维护安装现场或合并业务主分支。
+
+生产边界已改为 manifest4 自有入口与有限显式依赖 → execute/1 调用一次 → version3 最终结果。项目自行定义、执行、诊断和判定，平台不读取测试清单推导检测要求，不复制/校验平台协议，不编排 tty/prepare/publish 或 L2/PR，不按明细重新裁决 ready。保留原请求对账、原 Run 停止/封存与当前引用/候选事务。失败原因必须可读，任意 JSON details 仅有界保存和安全展示。
+
+依据覆盖完整环境文档、入口、显式依赖、非模型 execution、全部固定稳定调用字段及接口版本；不含活动/Run/request/revision/时间/临时路径/源提交自身。无关提交或模型变化不机械失效，原结果仍绑定原提交。确认材料变更/非法/删除后持久撤销 Current，递增 revision，回退原字节不复活；读取故障仅阻断。原维护观察 pending 时最终预留也拒绝，迟到撤销与成功不能覆盖新引用。SQLite 唯一格式39，无旧版兼容/迁移。
+
+Runner 独立 worktree `C:/Users/lmas1/.codex/worktrees/runner-project-detection/SteerRunner`，分支 codex/project-detection-execute，提交 `eed760d2331d73cac1ef1f1c3df05c233add5f75`；原 `C:/Project/SteerRunner` 工作区保持。最终干净 EXE 在下述范围 runner/final，SHA256 `2d9f261d09837ba0bfa5017aa0fbc969edf729d1f88e98f67750c9f5cf57189a`。execute/1 只发送一次明确覆盖，不要求 publication，没有审计/发布/项目策略/环境知识；额外输入/恢复拒绝、提问或 stop 永久关闭；沿用工作区、适配器、可信 final、原停止和结果封存。SteerLine 在旧 Runner 能力不足时提交前拒绝，无空 PR 或伪成功兜底。
+
+### 实际正文与独立审核
+
+旧环境生成/准备/发布短模板675/260/262字节及完整生成/执行规则3862/6683字节删除。新环境短模板412字节，代表实际请求466字节，SHA256 `d84781af6aa0835aca77d74e04b8067acf2d3a348a1037b44658d2da4972e98b`。Runner 默认 execute 正文69字节，prompts.json 1088→1174字节；正式请求仍要求唯一非空调用方覆盖。项目指导7983→8741字节，SHA256 `2e5b01b228d16bda8b64601d28bcfc015f5730c6e7d0859211a7928d64a99059`。
+
+`/root/prompt_review` 独立只读审阅两仓实际正文、资产/schema、接线、对应测试和守卫并批准，后续规范与取证器增量也分别复审通过，无剩余可执行 P0–P2。黄金样本更新未代替批准。审核修复了单次执行追加输入/恢复、观察 pending 期间最终准入竞争、failed Run 不能被 ready 覆盖、探针不得替换项目声明依据（含 Windows 大小写别名）。实际 Git 正文差异、字节账本和 Runner 差异在本范围 prompt-review/final；不把指导设计或历史批准当新真实测试证明。
+
+### 验证范围与原失败
+
+本轮证据根 `C:/SteerlineDebug/wt-68d4-project-environment-workflow/result-consumption/`，每次独立新 out，失败未覆盖。
+
+| 证据 | 实际结果与范围 |
+| --- | --- |
+| Runner L1/01 | 正式 L1 passed，原配置/catalog/framework及单次执行/停止/拒绝额外输入测试；应用全包594.546秒、coverage71.6%；现场opt-in跳过沿原分层约定，不代表原生全矩阵通过 |
+| runner/result-file-01 | 正式 TestSRResultFile exit_code0，原最终快照/原停止公开回归通过；最终公开能力描述增量后 workflow/resources 全包再次通过 |
+| L1/03、L2/01 | SteerLine 固定最小代码检查与受控核心交付冒烟 passed；L2无真实模型/业务PR副作用 |
+| L3/readiness-03 | 两项目/两目标与自定义测试目录，通过公开检测获得资格、隔离、失效、真实候选门禁及原任务交付/清理，受控passed313.42秒；不作为原生执行证明 |
+| web-03 | 构建、31文件/228客户端测试与HTTP/服务端检查通过；界面移除环境生成/协议同步/平台业务判定，原原因和任意明细安全展示 |
+| diagnostics/core-02、contracts-02、review-fixes-01及后续定向 | 原环境owner、存储、公开合同、路径/信封/未知/超时/重启、持久撤销与候选竞争；review-fixes-01仅cmd夹具编译误写失败，其余已执行owner通过，后续独立修复再验 |
+| L4/local-04 | **最终真实本机正向 passed**，173.12秒，cleanup_complete=true；源项目只有自有环境文档/入口/依赖，无平台协议副本、测试清单或PR要求；额外Task探针材料只在测试clone提交且不得改变项目声明依据。一次检测报告ready，原Run completed/verified native succeeded/stopped、result closed，准备前拒绝、准备后单一真实Task Run启动并停止，全部自有refs/workspace清理 |
+
+local-04 项目源提交 `cd79eeaeaf94afdeb607c23fef18192c21124a58`；项目实际检测 PowerShell5+ 与 Git，另报告非必需诊断 status=failed/required=false，平台消费 ready=true，不据明细重判或访问证据。原始结果/原执行/实际准入及清理分别保存在 environment-proof.json、admission-proof.json、remote-ref-cleanup.json，不改写封存结果。
+
+原失败保留：contracts-01/web-01 中旧测试 execution 未显式声明 access_mode，已按真实schema修夹具，未放宽 schema；L3/readiness-02 缺受控execute能力声明，已补同一公开契约；L1/01与review-fixes-01有测试夹具字段误写编译失败，修正后重验。local-01 项目脚本 File.Replace(null)在PowerShell5失败，入口退出1、报告未完成，平台正确不准入并完成原停止/封存/自有ref清理；正常Git修复项目脚本后选择新SHA。local-02/03 的真实主体已ready/准入/清理，但包装器误对排版后请求重算字节摘要、以RawMessage字节比较报告副本而汇总失败；修复后保留原轮次/Run摘要和投影一致、原结果字节SHA核验，报告副本只作JSON规范化等价比较；MarshalIndent反例先失败后通过，独立复审批准后local-04正式通过。历史失败不能改成通过。
+
+较宽 diagnostics/owners-final-01 达到测试进程12分钟上限，不能称整包通过；同时发现旧任务材料夹具缺access_mode，已修并定向通过。按当前实际编译文件列出app111个顶层测试，原报告已通过83项，其余28项（含失败/未完成项）在diagnostics/app-remaining-01补跑；不重复已通过集合，不延长产品期限，最终覆盖与负向真实结果另记收尾。此处不把不完整报告或零匹配算通过。
+
+本机/远端 Orca 的新 execute 原生矩阵未重跑，仅声明本轮受控/契约覆盖和上述本机 Codex 原生目标；M01人工体验后置。项目误报ready或漏声明依赖的业务正确性由项目负责，平台不提供独立复核保证。
+
+### 真实负结果核对
+
+`L4/local-negative-01` 使用项目正常Git提交 `e918ddad3e6d9b3f6518d8941bc17929f773641b`，明确声明不可满足的PowerShell999+前置。原Run `247eb31c1f09fa186a8cb73ac423c0b9` completed/verified native succeeded/stopped，result closed，项目 completed=true/ready=false，原因“Project requires PowerShell 999+ and Git CLI”原样保留；准备前后均拒绝，after_run_id为空，没有Task候选，原活动一次调用、自有两ref清理confirmed=true。
+
+该入口按设计是正向可用性场景，因此正式summary passed=false，原负向结果不能改成正向通过。`diagnostics/native-negative-recheck-01` 用当前正式checkRemoteEvidence只读核对原信封、摘要、最终原字节、前后准入及scenario/ref清理，得到唯一预期的“negative audit is not a positive L4 pass”，诊断测试通过。检查源码与日志随证据保存，临时工作区测试文件已删除；没有新增常驻命令或框架，不改写原结果。
+
+最终 `diagnostics/final-contracts-01` 五个相关包/包组全回归 passed31.954秒，覆盖JSON格式化等价、错原输入摘要/Run投影拒绝、单次报告及封存、Current持久撤销和原候选事务。固定L1/03 passed（准备0.4/执行13.0秒）；L4/local-04正式summary preparation12.689/执行173.786秒、passed=true/cleanup_complete=true。M01和Orca原生范围仍按前述记录，不扩大通过声明。
+
+### 最终 owner 收尾与交付状态
+
+app-remaining-01实际执行28项后25项通过，另3个Task文档/提示词收敛测试共享fixture仍缺显式access_mode。仅把 callerTestRun 改成 full_access，原正文、缺材料/同源writer拒绝和全部断言保持；`/root/prompt_review` 独立核验该行并批准。`diagnostics/app-schema-fixtures-final` 三项重跑passed75.984秒。依据当前 Go build 的TestGoFiles/XTestGoFiles提取111个顶层测试，三份原报告的通过并集为111/111，缺失0；账本在 diagnostics/app-final-coverage.json。原宽包失败/12分钟超时与补跑失败仍保留，未声称它们单独整包通过。受影响taskrunner、runnerbridge、runnerclient、存储和cmd包在原宽包或最终包回归中完整通过，未发生零命中或未知项转通过。
+
+本轮实施及所选本机自动验证完成；PEW-A01–A18按上述领域/应用/存储/受控/Web/实际本机调用和独立审核覆盖，D01链接/UTF-8/diff检查通过。Orca原生、M01人工体验继续明确未验/后置，不将旧G/V、模拟peer或本机Codex结果外推。Spec/Plan/指导已同步最终边界和Runner授权/能力，不增加文件层或框架，不实施项目初始化适配，不部署、不合并业务主分支。
+
+### 两仓提 PR 前独立审计（2026-11-01）
+
+用户要求本轮审计通过后两仓提PR、不得合并。重新核对最终源码、当前主干及全部PR职责：项目只维护并执行自有检测闭环，平台只验证调用/原身份/信封、停止封存和资格依据，不复核业务检查，未发现剩余可执行P0–P2。另修正项目规范的旧句“环境与任务共用清单”，明确Task来源独立，环境可按项目需要显式声明为依赖；索引也不再把已交付的接口指导只称设计稿。两处实际文档增量经独立审核批准，分别10014/3281字节；环境调用短模板412字节、代表请求466字节、指导8741字节保持。
+
+SteerLine整合main=1f2618da（仅README）；Runner在原独立worktree整合main=8bed4c4，四处冲突保留主干PendingResume取消、best-effort结果初始化和execute一次关闭，不恢复退役层。`/root/prompt_review` 再次只读核验相对最新main的实际正文、接线和资产并批准；manual pause不授权execute新输入，stop优先仍可收尾，初始化与业务成功分离。
+
+证据范围 `result-consumption/pr-audit-02/`：SteerLine固定L1/01 passed（准备0.5/执行9.7秒），固定L2/01 passed/cleanup_complete=true；Runner正式L1/01 passed，728项Go测试与29项终端扩展，应用包551.027秒、coverage74.6%，原生opt-in/子进程角色跳过按既有分层列出，不当作原生全矩阵通过。独立整合前后的SingleExecution/manual/workflow/result-file组件回归应用包34.032秒通过。
+
+新干净Runner pin源码 `50f12791abd28e241298643b2ceb0b510899d370`，source_digest `cc89825927cec77174d04e4bffc91955d13c818b5928bef7bfb44ae0324fc201`，EXE SHA256 `f247b1332fb4e5f24aea92db8f9c14dcf044fb0c783a5996ee75e13ed97a570c`。SteerLine/L4/local-01在该v7新pin真实通过，准备14.673秒/执行175.960秒、cleanup_complete=true；一次项目调用、原Run completed/verified native succeeded/stopped、result closed，readytrue即使非必需details标failed仍不复核，准备前拒绝/准备后真实Task准入与原停止，以及全部自有refs清理。原Run为 `6aac98781a86c699d3fc226cc0fd607e`。随后仅文档/验收提交，生产源码相同；前轮原生负结果及全部失败继续保留，不把旧pin证据当作此新pin重跑。
+
+完整PR相对main的提示词/样本/组装及指导24项字节账本在 pr-all-prompt-guidance-bytes.json / pr-prompt-bytes.md。相对main两份环境完整规则10055/5501字节均删除；任务测试完整规则3229→3256字节及对应writer规则仍仅用于原Task职责，不重建环境前置。项目初始化、Orca新增execute原生矩阵和M01边界保持；不部署、不合并功能PR，不开启自动合并。
+
+### PR 复审发现与修复（2026-11-01）
+
+PR #417 / Runner #79 后续复审确认三项问题：冻结 A 后新基线观察与 Current 选择存在竞态；取消后的同构建冷恢复调用已退役 takeover；已受理 stop 被迟到 final 的自动关闭覆盖。原确定性失败和真实 v7 退役命令拒绝记录保留在 `result-consumption/pr-review-03/`，不以旧测试通过覆盖它们。
+
+本轮修复沿既有 owner：Current 选择复用目标锁→基线观察门禁→存储事务；Runner 公开 `inspect --offline` 持原 writer 租约读取当前格式快照、不启动 worker；SteerLine 核对原 Run/请求/输入和最新 revision，在 worker 前受理必要 stop。原 stop 未拒绝不得更换，明确拒绝先持久记录再保留历史/重建；冷查询确认原提交缺失与暖查询缺失分开处理。已 Closed 的原 Run 不注入新 stop，继续原结算而不提前 Settled。Runner 保留原 PendingStop，拒绝不同的新 stop。跨构建明确阻断，不恢复 takeover、迁移或项目内部编排。
+
+独立 `/root/prompt_review` 逐项审阅最终代码、正文、接线、测试和能力资产并批准，无剩余可复现 P0–P2。环境短提示412→412字节、代表请求466→466字节、Runner prompts.json1174→1174字节逐字节相同；指导8741→8982字节，新增取消恢复不重调项目、原构建收尾、项目不参与 stop。两份 capabilities 样本各增加142字节，仅声明只读冷查询事实。黄金样本未替代批准。
+
+证据根 `C:/SteerlineDebug/wt-68d4-project-environment-workflow/result-consumption/pr-fixes-04/`：`startup-stops-03` passed18项、`client-and-startup-03`通过冷/暖查询及恢复负例；`runner/cold-public-recovery`通过原四种内容恢复；`runner/single-cold-stop-02`公共 EXE 与受控原生进程通过19.08秒，原提交/Run 由公开冷查询找回、原 stop 在 worker 前受理、仅一次业务输入、原回执完成且最终文件 closed。这两项恢复测试使用提交前 dirty 构建，与后述新 pin 生产 source_digest 相同，不能当作新 pin 或真实模型的冷恢复实跑。新增测试首轮编译错误及旧 stop 替换拒绝日志均保留，修正后新目录补测。
+
+SteerLine 正式 `SteerLine/L1` passed（准备0.376/执行9.376秒）、L2 passed（17.171/130.278秒）、受控 L3 两项目环境流程 passed（8.423/369.218秒），后两项 cleanup_complete=true。宽 owner `line-owners` 105项通过，但8分钟包预算在既有 TestRunnerPresetFreeze 结束前耗尽，原报告保持 incomplete；唯一未完成函数在 `preset-freeze` 单独通过130.339秒，不宣称原整包报告通过。
+
+新干净 Runner pin 源码 `9fd309ffcdfd5c435b8806c6b15712f30579b140`，source_digest `318c6fbc2fbaace541e240c843cbf7a1cb658e1adbf02d028e90b172c110f349`，EXE SHA256 `9a0d638479aa5e32599f868d114b0472b09d7f3a3a1116edf3b00c1b5d9ac5a9`。Line 生产修复提交 `4bdeeca2c59450564d6d5f5454c1b44b55ead2fe` 在该 pin 执行真实本机 `SteerLine/L4` passed（准备21.712/执行267.119秒），cleanup_complete=true；项目自有检测一次调用、原生可信成功/停止/封存、实际 Task 准入/停止及自有 refs 清理。未重跑 Orca 新 execute 原生矩阵或真人 M01，前轮原生负例不冒充新 pin 重跑。字节账本和全文差异在 `prompt-and-contract-delta.json/.diff`。

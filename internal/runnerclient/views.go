@@ -3,6 +3,7 @@ package runnerclient
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
@@ -18,12 +19,42 @@ type Event = runnercontract.Event
 type EventPage = runnercontract.EventPage
 
 func (c Client) Inspect(ctx context.Context, selector, id string, refresh bool) (Inspection, error) {
+	return c.inspect(ctx, selector, id, refresh, false)
+}
+
+// InspectBeforeStart never starts a service. A cold query is explicitly leased
+// by Runner and can prove absence of an original submit before stop injection.
+func (c Client) InspectBeforeStart(ctx context.Context, selector, id string) (Inspection, bool, error) {
+	info, err := c.ServiceStatus(ctx)
+	if err != nil {
+		return Inspection{}, false, err
+	}
+	switch info.Status {
+	case "ready":
+		if err = c.validateStartedService(info, Version{Version: c.BuildVersion, ResourceDigest: c.ResourceDigest}); err != nil {
+			return Inspection{}, false, err
+		}
+		c.InstanceID = info.InstanceID
+		value, err := c.inspect(ctx, selector, id, false, false)
+		return value, false, err
+	case "not_running":
+		c.InstanceID = ""
+		value, err := c.inspect(ctx, selector, id, false, true)
+		return value, true, err
+	default:
+		return Inspection{}, false, errors.New("original Runner ownership/startup is unverified")
+	}
+}
+func (c Client) inspect(ctx context.Context, selector, id string, refresh, offline bool) (Inspection, error) {
 	switch selector {
 	case "run-id", "request-id", "command-id":
 	default:
 		return Inspection{}, &Failure{Code: "invalid_arguments", Message: "Invalid inspection selector", Exit: 2}
 	}
 	args := []string{"--" + selector, id}
+	if offline {
+		args = append(args, "--offline")
+	}
 	if refresh {
 		if selector != "run-id" {
 			return Inspection{}, &Failure{Code: "invalid_arguments", Message: "PR refresh requires Run identity", Exit: 2}

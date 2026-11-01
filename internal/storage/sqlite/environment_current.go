@@ -145,3 +145,28 @@ func verifyCandidateEnvironment(ctx context.Context, tx *sql.Tx, project string,
 	}
 	return nil
 }
+
+// RevokeEnvironmentBasis is an observed-material revocation, not a user command.
+// The original reference must still match; a late observation cannot revoke a new check.
+func (s *SQLiteStore) RevokeEnvironmentBasis(ctx context.Context, project, key, activity, reason string, expected uint64) error {
+	if !validEnvironmentKey(key) || activity == "" || reason == "" {
+		return errors.New("invalid environment basis revocation")
+	}
+	return s.transactSQLite(ctx, func(tx *sqliteTx) error {
+		current, err := readEnvironmentCurrent(ctx, tx.tx, project, key)
+		if err != nil {
+			return err
+		}
+		if current.Revision != expected || current.ActivityID != activity {
+			return errors.New("stale_revision: environment reference changed during observation")
+		}
+		if current.Invalidated {
+			return nil
+		}
+		current.Revision++
+		current.Invalidated = true
+		current.Reason = reason
+		current.UpdatedAt = time.Now().UTC()
+		return writeEnvironmentCurrent(ctx, tx.tx, current, expected)
+	})
+}

@@ -172,6 +172,7 @@ func (r *ProjectRuntime) Run(parent context.Context, home string, e *catalogEntr
 	}
 	r.config.runtimeMaintenance = newProjectMaintenance(r.config, r.store)
 	r.environment.config.runtimeMaintenance = r.config.runtimeMaintenance
+	r.config.runtimeMaintenance.environmentObservation = r.environment.observeBasis
 	maintenanceDone = make(chan struct{})
 	go func() { defer close(maintenanceDone); r.config.runtimeMaintenance.observe(ctx) }()
 	hostPort := host.NewServiceHost(r.hostConfig, "off", r.log, serviceActivityFormatter{})

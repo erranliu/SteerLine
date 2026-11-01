@@ -133,3 +133,55 @@ func TestProjectEnvironmentExecutionFinalResultStates(t *testing.T) {
 		t.Fatal("failed seal with bytes accepted")
 	}
 }
+
+func TestProjectEnvironmentRejectsRunnerWithoutSingleExecution(t *testing.T) {
+	raw, err := os.ReadFile("testdata/workflow-capabilities.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var caps Capabilities
+	if err = json.Unmarshal(raw, &caps); err != nil {
+		t.Fatal(err)
+	}
+	e := ExecutionInput{Adapter: "codex-app-server", Target: ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"model":"explicit","access_mode":"full_access"}`)}
+	cat, err := compileCatalog(caps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = cat.ValidateEnvironmentExecution(e); err != nil {
+		t.Fatal(err)
+	}
+	minimum := cat.Capabilities.OfflineInspect
+	for _, change := range []func(){
+		func() { cat.Capabilities.OfflineInspect = nil },
+		func() { cat.Capabilities.OfflineInspect.Command = "inspect" },
+		func() { cat.Capabilities.OfflineInspect.ReadOnly = false },
+		func() { cat.Capabilities.OfflineInspect.WriterAbsent = false },
+		func() { cat.Capabilities.OfflineInspect.StartsWorkers = nil },
+		func() { yes := true; cat.Capabilities.OfflineInspect.StartsWorkers = &yes },
+	} {
+		copy := *minimum
+		cat.Capabilities.OfflineInspect = &copy
+		change()
+		if cat.ValidateEnvironmentExecution(e) == nil {
+			t.Fatal("unverified startup query capability accepted")
+		}
+	}
+	cat.Capabilities.OfflineInspect = minimum
+	cat.Capabilities.ResultFile.Supported.Workflows = []string{"development/2"}
+	if cat.ValidateEnvironmentExecution(e) == nil {
+		t.Fatal("old publishing result capability accepted")
+	}
+	cat.Capabilities.ResultFile.Supported.Workflows = []string{"execute/1"}
+	for i, w := range cat.Capabilities.Workflows {
+		if w.ID == "execute" {
+			closed := w.States["closed"]
+			closed.Kind = "execute"
+			w.States["closed"] = closed
+			cat.Capabilities.Workflows[i] = w
+		}
+	}
+	if cat.ValidateEnvironmentExecution(e) == nil {
+		t.Fatal("nonterminal extra execution accepted")
+	}
+}

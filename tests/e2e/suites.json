@@ -181,14 +181,5 @@
     "test": "TestLocalProjectEnvironment",
     "env": "live",
     "chain": "local-environment"
-  },
-  {
-    "id": "testing.project-environment-generation",
-    "level": "L4",
-    "suite": "testing",
-    "package": "./tests/e2e/remote",
-    "test": "TestProjectEnvironmentGeneration",
-    "env": "live",
-    "chain": "local-environment-generation"
   }
 ]

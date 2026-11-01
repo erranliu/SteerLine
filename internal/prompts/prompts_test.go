@@ -3,31 +3,29 @@ package prompts
 import (
 	"crypto/sha256"
 	"fmt"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"os"
 	"strings"
 	"testing"
 )
 
-const testSnapshot = `{"status":"ready","plan_path":"task.plan.md","commit":"fixed","digest":"digest","generation_id":"generation","inputs":"inputs","definitions":[{"id":"z.last"},{"id":"a.first"}]}`
+var testProject = pm.ProjectEntry{Version: 1, Requirements: []string{"quality/policy.md"}, TestingCatalogue: "quality/catalogue.json"}
+
+const testSnapshot = `{"project":{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/catalogue.json"},"status":"ready","plan_path":"task.plan.md","commit":"fixed","digest":"digest","generation_id":"generation","inputs":"inputs","definitions":[{"id":"z.last"},{"id":"a.first"}]}`
 
 func TestPromptGovernanceGolden(t *testing.T) {
 	cases := []struct {
 		name   string
 		render func() (string, error)
 	}{
-		{"testing-generate", func() (string, error) { return TestingGenerate("task.plan.md", "fixed") }},
+		{"testing-generate", func() (string, error) { return TestingGenerate("task.plan.md", "fixed", testProject) }},
 		{"testing-reference", func() (string, error) { return TestingContext([]byte(testSnapshot), true) }},
 		{"testing-readonly", TestingReadOnly},
 		{"testing-step", func() (string, error) {
 			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true, true)
 		}},
-		{"environment-generate", func() (string, error) {
-			return EnvironmentGenerate("fixed", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/environment-context.json", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/environment.md", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment")
-		}},
-		{"environment-prepare", func() (string, error) {
-			return EnvironmentPrepare("SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/environment.md", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment.ps1")
-		}}, {"environment-publish", func() (string, error) {
-			return EnvironmentPublish("SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/environment.md", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment.ps1")
+		{"environment-invoke", func() (string, error) {
+			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment.ps1")
 		}},
 		{"roadmap-parse", func() (string, error) { return RoadmapParse("roadmap.md", "fixed") }},
 		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md") }},
@@ -86,8 +84,9 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
 		{"missing-field", func() (string, error) { return renderText("bad", "{{.Missing}}", struct{}{}) }},
 		{"bad-snapshot", func() (string, error) { return TestingContext([]byte(`{"status":"missing"}`), true) }},
 		{"missing-body", func() (string, error) { return TestingStep("", []byte(testSnapshot), true, true) }},
-		{"missing-commit", func() (string, error) { return EnvironmentGenerate("", "", "", "") }},
-		{"missing-plan", func() (string, error) { return TestingGenerate("", "fixed") }},
+		{"missing-entry", func() (string, error) { return EnvironmentInvoke("powershell.exe", "") }},
+		{"unsupported-interpreter", func() (string, error) { return EnvironmentInvoke("other", "entry") }},
+		{"missing-plan", func() (string, error) { return TestingGenerate("", "fixed", testProject) }},
 		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md") }},
 		{"missing-roadmap-source", func() (string, error) { return RoadmapParse("", "fixed") }},
 	}
@@ -107,11 +106,9 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		name, sha256 string
 		read         func() ([]byte, error)
 	}{
-		{"testing", "e499f40f543ae1bfddb98ee5024f74eb0d46354392cf6794d34b8b204b6d25f3", TestingRules},
+		{"testing", "75671b11e26c540791678c1593c3b14ed4161ba53b721d8758ae8c9c1eba937a", TestingRules},
 		{"roadmap-parse", "c1452c0d591caf5cf6f3db0f4d156c2e1a4451c797e96837c0afb1d6699463e6", RoadmapParseRules},
 		{"roadmap-documents", "0c84c0ce636e4c7ca8c9f0b80cf8bdf41bbd2ecb588ea225fb10fa4bb88f2f71", RoadmapDocumentRules},
-		{"environment-generation", "9cc9000977a36f1b0c7b477f6e8c94aff43452c129acb48dcb2b50530da2799c", EnvironmentGenerationRules},
-		{"environment-execution", "63468d146069a9ea0959c0eb454f07933db1576874d412cd2c24a54d5001c055", EnvironmentExecutionRules},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

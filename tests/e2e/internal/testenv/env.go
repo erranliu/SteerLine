@@ -318,13 +318,21 @@ func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project 
 
 func (p *Project) prepareTestProtocol() {
 	s := p.Scenario
-	rules, err := prompts.TestingRules()
+	files, err := testProtocolMaterials()
 	s.Must(err)
-	for path, body := range map[string][]byte{"SteerlineFlow/testing/runtime-progress.md": rules, "tools/testing/RuntimeProgress.ps1": []byte(progresstools.PowerShellWriter)} {
+	for path, body := range files {
 		target := filepath.Join(p.Repo, path)
 		s.Must(os.MkdirAll(filepath.Dir(target), 0700))
 		s.Must(os.WriteFile(target, body, 0600))
 	}
+}
+
+func testProtocolMaterials() (map[string][]byte, error) {
+	rules, err := prompts.TestingRules()
+	if err != nil {
+		return nil, err
+	}
+	return map[string][]byte{"SteerlineFlow/environment-project.json": []byte(`{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`), "SteerlineFlow/testing/runtime-progress.md": rules, "tools/testing/RuntimeProgress.ps1": []byte(progresstools.PowerShellWriter)}, nil
 }
 
 // NewHomeForProject binds the same Git clone to another independent home.

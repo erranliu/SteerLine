@@ -59,24 +59,22 @@ func (f *environmentWorkflowPeer) Call(_ context.Context, command string, _ []st
 			return runnerclient.Response{}, e
 		}
 		f.run = runnercontract.Run{RunID: fmt.Sprintf("env-run-%d", f.submits), Revision: 1, Status: "failed", InputDigest: env.Digest(q.Input), Correlation: input.Correlation, Execution: runnercontract.Execution{Branch: fmt.Sprintf("env-head-%d", f.submits)}}
-		f.run.Final = &runnercontract.Final{Text: "fixture native explanation", Verified: true}
+		f.run.Status = "completed"
+		f.run.Final = &runnercontract.Final{Text: "fixture native explanation", Verified: true, NativeOutcome: "succeeded", CommandID: "original-command", SessionID: "original-session", TurnID: "original-turn"}
 		report.Completed = true
-		report.Checks = []env.Check{{ID: "terminal.tty", Status: "passed", Message: "controlled current TTY fixture; not native qualification"}}
-		report.L2 = []env.Item{{ID: "one", Status: "failed", Message: "fixture tool absent"}}
-		report.Message = "fixture prepare failed"
-		if f.succeedsFirst || f.submits == 2 {
-			f.run.Status = "pr_ready"
-			report.Message = ""
-			report.L2[0].Status = "passed"
-			report.L2[0].Message = ""
-			report.PR = env.PR{URL: "https://example.invalid/pulls/2", Base: input.Publication.BaseBranch, Head: f.run.Execution.Branch, HeadRevision: strings.Repeat("f", 40), CleanupCompleted: true}
-			f.run.PR = &runnercontract.PRFact{State: "open", URL: report.PR.URL, HeadBranch: report.PR.Head, BaseBranch: report.PR.Base, Provider: input.Publication.Provider, Repository: input.Publication.Repository, HeadRepository: input.Publication.Repository, HeadRevision: report.PR.HeadRevision}
+		report.Ready = f.succeedsFirst
+		report.Message = "project detection finished"
+		if !report.Ready {
+			report.Message = "fixture tool absent"
 		}
+		report.Details = json.RawMessage(`{"checks":[{"status":"failed"}],"format":"project-owned"}`)
 		f.result, _ = json.Marshal(report)
 	}
 	if command == "stop" {
 		f.run.StopStatus = "stopped"
-		f.run.Status = "stopped"
+		if f.run.Status != "completed" && f.run.Status != "failed" {
+			f.run.Status = "stopped"
+		}
 		f.run.Revision++
 	}
 	return runnerclient.Response{}, nil
@@ -104,7 +102,7 @@ func (f *environmentWorkflowPeer) ResultFile(context.Context, string) (runnercon
 	return f.file(runnercontract.ResultContract, f.result, 1), nil
 }
 
-func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
+func TestProjectEnvironmentWorkflowPublicCommandsAndSingleInvocation(t *testing.T) {
 	for _, pass := range []bool{false, true} {
 		t.Run(fmt.Sprint(pass), func(t *testing.T) {
 			port, c, store := environmentFixture(t)
@@ -167,11 +165,8 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			saved, e := store.Environment(ctx, c.Identity(), request.RequestID)
 			require(t, e)
 			wantRounds := 1
-			if !pass {
-				wantRounds = 2
-			}
-			if len(saved.Rounds) != wantRounds || peer.submits != wantRounds || saved.Status() != "ready" || !pass && saved.Rounds[0].Report.L2[0].Status != "failed" {
-				t.Fatal("caller retry/settlement failed", saved.State, peer.submits)
+			if len(saved.Rounds) != 1 || peer.submits != 1 || (saved.Status() == "ready") != pass || saved.Rounds[0].Report.Ready != pass {
+				t.Fatal("single invocation result consumption failed", saved.State, peer.submits)
 			}
 			value, e := runtime.Read(ctx, "/environment/"+saved.ID, nil)
 			require(t, e)
@@ -179,7 +174,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			if strings.Contains(string(raw), "agent_launch") || strings.Contains(string(raw), "initial_content_base64") || !strings.Contains(string(raw), "\"report\"") || !strings.Contains(string(raw), "\"result\"") || !strings.Contains(string(raw), "fixture native explanation") {
 				t.Fatal("public view leaked frozen input or lost report")
 			}
-			if _, _, e = port.admission(ctx, "remote", "", false); e != nil {
+			if _, _, e = port.admission(ctx, "remote", "", false); (e == nil) != pass {
 				t.Fatal("environment readiness differs from complete sealed report", e)
 			}
 			probe := &environmentReserveProbe{SQLiteStore: store}
@@ -188,7 +183,7 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			require(t, e)
 			input, _ := json.Marshal(runnercontract.RunInput{Execution: profile.Execution})
 			err := gate.ReserveExecution(ctx, taskmodel.FixedWork{}, runnerbridge.Candidate{ProfileID: "remote", Submit: runnerclient.Request{Input: input}}, false)
-			if err != nil || probe.reservations != 1 {
+			if (err == nil) != pass || (probe.reservations == 1) != pass {
 				t.Fatal("ready/blocked environment crossed the wrong reservation boundary", err)
 			}
 			request.Payload = json.RawMessage(`{"profile_id":"remote","round_timeout_seconds":90}`)
@@ -204,23 +199,5 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 				t.Fatal("receipt query/repeat command resubmitted")
 			}
 		})
-	}
-}
-
-func TestProjectEnvironmentGenerationExportUsesMachineMetadata(t *testing.T) {
-	key := strings.Repeat("a", 64)
-	document := environmentFixtureDocument(key, "sh", "validation", []string{})
-	raw, e := json.Marshal(publicEnvironment(env.Record{Kind: "generation", State: "generated", Generation: &env.Generated{Document: document, Script: "#!/usr/bin/env bash\n", Gaps: []string{}}}))
-	require(t, e)
-	var result struct {
-		Generated struct {
-			ScriptPath string `json:"script_path"`
-			Document   string `json:"document"`
-			Script     string `json:"script"`
-		} `json:"generated"`
-	}
-	require(t, json.Unmarshal(raw, &result))
-	if result.Generated.ScriptPath != env.ScriptPath(key, "sh") || result.Generated.Document != document || result.Generated.Script == "" {
-		t.Fatal("export inferred a path from prose or lost paired content")
 	}
 }

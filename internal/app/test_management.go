@@ -52,6 +52,9 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 		return e, catalog, err
 	}
 	s.ReadCommitted = func(ctx context.Context, commit, path string) ([]byte, error) {
+		if c.runtimeMaintenance != nil {
+			return c.runtimeMaintenance.read(ctx, commit, path)
+		}
 		reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
 		return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
 	}

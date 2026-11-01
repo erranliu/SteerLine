@@ -89,5 +89,5 @@ type RunInput struct {
 	Documents    Documents          `json:"documents"`
 	Workflow     Workflow           `json:"workflow"`
 	Execution    ExecutionInput     `json:"execution"`
-	Publication  Publication        `json:"publication"`
+	Publication  Publication        `json:"publication,omitzero"`
 }

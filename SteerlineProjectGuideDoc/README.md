@@ -29,3 +29,4 @@ SteerLine 目前尚未发布，正逐步完善从规划到交付的流程。上�
 - [受管理项目规范](project-standards.md)：了解项目文档结构和维护职责。
 - [Spec 与 Plan 编写规范](spec-plan-guidelines.md)：了解怎样描述需求及实施安排。
 - [测试架构规范](testing-architecture.md)：了解测试分级、内容清单和验证原则。
+- [项目环境接口适配指导](environment-adaptation.md)：说明项目自有检测接口、环境要求与生成侧自检的边界；项目初始化适配功能待实现。

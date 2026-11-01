@@ -13,11 +13,135 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
-func TestProjectEnvironmentExecutionLifecycleTakeoverAndStartupStop(t *testing.T) {
-	for _, kind := range []string{"adaptation", "generation"} {
+func TestProjectEnvironmentSameBuildStartupStops(t *testing.T) {
+	for _, scenario := range []string{"new-stop", "original-stop", "absent-stale-stop", "absent-current-stop", "unknown-submit", "cold-unaccepted-submit", "warm-unaccepted-submit", "foreign-input", "foreign-correlation", "foreign-build", "foreign-stop", "already-stopped", "closed-pending", "closed-rejected-stop"} {
+		t.Run(scenario, func(t *testing.T) {
+			ctx := context.Background()
+			store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
+			require(t, err)
+			defer store.Close()
+			build := runnercontract.BuildPin{StateDir: filepath.Join(t.TempDir(), "runner"), SHA256: strings.Repeat("c", 64), Version: "current", ResourceDigest: strings.Repeat("d", 64)}
+			r := env.Record{ID: env.ID(), Project: "project", Revision: 1, Kind: "adaptation", Build: build, Cancelled: true, State: "stopping", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "accepted", RunID: "original-run", InputDigest: "original-input", Run: &runnercontract.Run{RunID: "original-run", Revision: 3, InputDigest: "original-input"}, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-submit", Input: json.RawMessage(`{"title":"original"}`)}}}}
+			if scenario == "foreign-build" {
+				r.Build.SHA256 = strings.Repeat("a", 64)
+			}
+			if strings.Contains(scenario, "submit") {
+				r.Rounds[0].RunID = ""
+				r.Rounds[0].InputDigest = ""
+				r.Rounds[0].Run = nil
+				r.Rounds[0].Submission = "unknown"
+			}
+			if strings.Contains(scenario, "stop") && scenario != "new-stop" && scenario != "already-stopped" {
+				revision := 3
+				if scenario == "absent-current-stop" {
+					revision = 9
+				}
+				body, _ := json.Marshal(map[string]int{"expected_revision": revision})
+				r.Rounds[0].Stop = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-stop", Input: body}
+				r.Rounds[0].StopState = "unknown"
+			}
+			if scenario == "closed-rejected-stop" {
+				r.Rounds[0].StopState = "rejected"
+			}
+			require(t, store.SaveEnvironment(ctx, r, 0))
+			run := runnercontract.Run{RunID: "original-run", Revision: 9, InputDigest: "original-input", Status: "running", Correlation: map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": "1"}}
+			if scenario == "foreign-input" {
+				run.InputDigest = "other"
+			}
+			if scenario == "foreign-correlation" {
+				run.Correlation["environment_activity"] = "other"
+			}
+			if scenario == "already-stopped" {
+				run.Status = "completed"
+				run.StopStatus = "stopped"
+				run.Closed = true
+			}
+			if strings.HasPrefix(scenario, "closed-") {
+				run.Closed, run.StopStatus = true, "pending"
+			}
+			calls := 0
+			query := func(_ context.Context, selector, id string) (runnerclient.Inspection, bool, error) {
+				calls++
+				missing := func() (runnerclient.Inspection, bool, error) {
+					return runnerclient.Inspection{}, scenario != "warm-unaccepted-submit", &runnerclient.Failure{Code: "request_not_found", Exit: 5}
+				}
+				if selector == "run-id" {
+					if id != run.RunID {
+						t.Fatal(id)
+					}
+					return runnerclient.Inspection{Run: &run}, true, nil
+				}
+				if id == "original-submit" {
+					if strings.Contains(scenario, "unaccepted") {
+						return missing()
+					}
+					return runnerclient.Inspection{Run: &run, Command: &runnerclient.Command{RequestID: id, Command: "submit", RunID: &run.RunID}}, true, nil
+				}
+				if scenario == "original-stop" || scenario == "foreign-stop" {
+					target := run.RunID
+					if scenario == "foreign-stop" {
+						target = "foreign"
+					}
+					return runnerclient.Inspection{Command: &runnerclient.Command{RequestID: id, Command: "stop", RunID: &target, ActionStatus: "pending", ReceiptStatus: "accepted"}}, true, nil
+				}
+				return missing()
+			}
+			c := Config{identity: r.Project}
+			stops, err := prepareEnvironmentStopsWith(ctx, c, store, build, query)
+			bad := strings.HasPrefix(scenario, "foreign") || scenario == "warm-unaccepted-submit"
+			if bad {
+				if err == nil {
+					t.Fatal("unverified original accepted")
+				}
+				if scenario == "foreign-build" && calls != 0 {
+					t.Fatal("queried another build")
+				}
+				return
+			}
+			require(t, err)
+			saved, err := store.Environment(ctx, r.Project, r.ID)
+			require(t, err)
+			if scenario == "cold-unaccepted-submit" {
+				if len(stops) != 0 || saved.State != "cancelled" || !saved.Rounds[0].Settled {
+					t.Fatal(saved)
+				}
+				return
+			}
+			if scenario == "already-stopped" || strings.HasPrefix(scenario, "closed-") {
+				if len(stops) != 0 || saved.Rounds[0].Settled {
+					t.Fatal("startup forged final report settlement", saved)
+				}
+				if !reflect.DeepEqual(saved.Rounds[0].Stop, r.Rounds[0].Stop) || saved.Rounds[0].StopState != r.Rounds[0].StopState {
+					t.Fatal("closed run replaced original stop history")
+				}
+				return
+			}
+			if len(stops) != 1 || stops[0].RunID != run.RunID {
+				t.Fatal(stops)
+			}
+			if scenario == "original-stop" || scenario == "absent-current-stop" {
+				if !reflect.DeepEqual(stops[0].Request, *r.Rounds[0].Stop) {
+					t.Fatal("original stop rewritten")
+				}
+			} else if string(stops[0].Request.Input) != `{"expected_revision":9}` {
+				t.Fatal("stale Line snapshot revision used", stops)
+			}
+			if scenario == "absent-stale-stop" && len(saved.Rounds[0].RejectedStops) != 1 {
+				t.Fatal("lost original stop history")
+			}
+			again, err := prepareEnvironmentStopsWith(ctx, c, store, build, query)
+			require(t, err)
+			if !reflect.DeepEqual(stops, again) {
+				t.Fatal("restart replaced original envelope", stops, again)
+			}
+		})
+	}
+}
+
+func TestProjectEnvironmentRejectsCrossBuildTakeover(t *testing.T) {
+	for _, kind := range []string{"adaptation"} {
 		t.Run(kind, func(t *testing.T) {
 			ctx := context.Background()
 			store, e := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
@@ -27,25 +151,18 @@ func TestProjectEnvironmentExecutionLifecycleTakeoverAndStartupStop(t *testing.T
 			old := cli.BuildPin()
 			old.SHA256 = strings.Repeat("a", 64)
 			r := env.Record{ID: env.ID(), Project: "project", Revision: 1, Kind: kind, Build: old, Cancelled: true, State: "stopping", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "accepted", RunID: "original-run", InputDigest: "original-input", Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-submit", Input: json.RawMessage(`{"title":"original"}`)}}}}
-			if kind == "generation" {
-				r.TargetExecution = runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"fixture"}`)}
-				r.TargetKey, _ = env.Key(r.TargetExecution)
-				r.GenerationContext = json.RawMessage(`{"version":1}`)
-			}
+
 			require(t, store.SaveEnvironment(ctx, r, 0))
 			proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{Kind: "run", ID: "original-run", InputDigest: "original-input", Revision: 9, Status: "compatible"}}}
 			cli.Takeover = &proof
-			c := Config{identity: "project", runtimeGenerations: testmanagement.NewGenerationQueue(1)}
+			c := Config{identity: "project"}
 			stops, e := prepareEnvironmentStops(ctx, c, store, &cli)
-			require(t, e)
-			again, e := prepareEnvironmentStops(ctx, c, store, &cli)
-			require(t, e)
-			if len(stops) != 1 || !reflect.DeepEqual(stops, again) || string(stops[0].Request.Input) != `{"expected_revision":9}` {
-				t.Fatal("original stop lost", stops, again)
+			if e == nil || !strings.Contains(e.Error(), "cross-build takeover is unsupported") || len(stops) != 0 {
+				t.Fatal("legacy proof enabled cross-build takeover", stops, e)
 			}
 			saved, e := store.Environment(ctx, r.Project, r.ID)
 			require(t, e)
-			if saved.Build != old || !reflect.DeepEqual(saved.Rounds[0].Request, r.Rounds[0].Request) || saved.Rounds[0].StopState != "unknown" {
+			if saved.Build != old || !reflect.DeepEqual(saved.Rounds[0].Request, r.Rounds[0].Request) || saved.Rounds[0].Stop != nil {
 				t.Fatal("original pin/input rewritten")
 			}
 			for _, change := range []func(*runnercontract.TakeoverReport){func(p *runnercontract.TakeoverReport) { p.Items[0].InputDigest = "foreign" }, func(p *runnercontract.TakeoverReport) { p.StateDir = t.TempDir() }, func(p *runnercontract.TakeoverReport) { p.Items[0].Status = "read_only" }} {
@@ -56,18 +173,6 @@ func TestProjectEnvironmentExecutionLifecycleTakeoverAndStartupStop(t *testing.T
 				if _, e := prepareEnvironmentStops(ctx, c, store, &cli); e == nil {
 					t.Fatal("accepted foreign original execution")
 				}
-			}
-			a := r.Rounds[0]
-			a.RunID = ""
-			a.InputDigest = ""
-			proof.Items[0].RequestID = a.Request.RequestID
-			proof.Items[0].RequestDigest = runnercontract.RequestDigest("submit", "", a.Request)
-			if _, ok := environmentTakeover(proof, r, a); !ok {
-				t.Fatal("lost submit receipt cannot bind original request")
-			}
-			a.Request.Input = json.RawMessage(`{"title":"replacement"}`)
-			if _, ok := environmentTakeover(proof, r, a); ok {
-				t.Fatal("changed original input matched")
 			}
 		})
 	}

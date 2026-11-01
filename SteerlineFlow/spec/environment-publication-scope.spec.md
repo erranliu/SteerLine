@@ -1,5 +1,7 @@
 # Spec：环境检测按正常发布能力验收
 
+> 2026-11-01：本文环境检查/生成/发布及旧结果格式定义已由[项目检测与结果消费规格](project-environment-workflow.spec.md)取代；保留历史设计与验收追溯，不作为当前调用前置。
+
 2026-10-30。用户已确认实施；[Plan](../plans/environment-publication-scope.plan.md)。本规格替代[项目准备规格](project-environment-readiness.spec.md)及[原适配规格](project-environment-adaptation.spec.md)中要求检测 Agent 自行查询分支保护、完成审核和合并的条款。项目 × 环境门禁、TTY、完整 L2、三轮预算、原请求及停止封存规则保持。
 
 ## 目标与边界

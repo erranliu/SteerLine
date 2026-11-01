@@ -219,7 +219,7 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	pmGit(t, root, "clone", remote, repo)
 	pmGit(t, repo, "config", "user.name", "PM test")
 	pmGit(t, repo, "config", "user.email", "pm@example.invalid")
-	files := map[string]string{"task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "SteerlineFlow/testing.md": "# Testing\nRules\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
+	files := map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, "task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "SteerlineFlow/testing.md": "# Testing\nRules\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
 	rules, err := prompts.TestingRules()
 	require(t, err)
 	files["SteerlineFlow/testing/runtime-progress.md"] = string(rules)
@@ -285,12 +285,12 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if e != nil || b != first.Commit || fixed.MaterialDigest != first.Digest {
 		t.Fatal("latest freeze", fixed, b, e)
 	}
-	run := runnerclient.RunInput{Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}
+	run := runnerclient.RunInput{Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}
 	snapshot, e := m.config.prepareTestPlan(ctx, fixed, &run)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(snapshot) == 0 || len(run.Documents.References) != 5 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
+	if len(snapshot) == 0 || len(run.Documents.References) != 6 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
 		t.Fatal("compact system context not frozen")
 	}
 	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: b, TestPlan: snapshot}
@@ -617,4 +617,55 @@ func (s *pmsStore) GenerationBatch(context.Context, string) (pm.GenerationBatch,
 func (s *pmsStore) SaveGenerationBatch(_ context.Context, _ string, b pm.GenerationBatch) error {
 	s.batch = b
 	return nil
+}
+
+func TestPMSGenerationSharesPinnedReadCacheWithoutCrossRequestReuse(t *testing.T) {
+	m, _, _ := pmsFixture(t)
+	ctx := materialReads(context.Background())
+	commit := pmGit(t, m.config.Repository, "rev-parse", "HEAD")
+	path := "SteerlineFlow/testing.md"
+	expected, err := m.read(ctx, commit, path)
+	require(t, err)
+	c := m.config
+	c.runtimeMaintenance = m
+	c.Git.Executable = filepath.Join(t.TempDir(), "unavailable-git.exe")
+	m.config.Git = c.Git
+	port := newTestManagementPort(c, nil, runnerclient.Client{}, nil)
+	got, err := port.service.ReadCommitted(ctx, commit, path)
+	require(t, err)
+	if string(got) != string(expected) {
+		t.Fatal("generation reread or changed pinned policy")
+	}
+	if _, err := port.service.ReadCommitted(materialReads(context.Background()), commit, path); err == nil {
+		t.Fatal("immutable cache leaked into another request")
+	}
+	if _, err := port.service.ReadCommitted(ctx, strings.Repeat("f", 40), path); err == nil {
+		t.Fatal("cache replaced another source commit")
+	}
+}
+
+func TestPMReservationRejectsPendingEnvironmentObservation(t *testing.T) {
+	m, _, _ := pmsFixture(t)
+	ctx := context.Background()
+	before, err := m.check(ctx)
+	require(t, err)
+	// Preflight approved this baseline before a new observation began.
+	reservations := 0
+	require(t, m.reserveBaseline(before.Commit, func() error { reservations++; return nil }))
+	entered, release := make(chan struct{}), make(chan struct{})
+	m.environmentObservation = func(context.Context, string) error { close(entered); <-release; return nil }
+	finished := make(chan error, 1)
+	go func() { _, err := m.check(ctx); finished <- err }()
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("observation did not enter revocation callback")
+	}
+	err = m.reserveBaseline(before.Commit, func() error { reservations++; return nil })
+	close(release)
+	require(t, <-finished)
+	if err == nil || reservations != 1 {
+		t.Fatal("pending observation admitted an old preflight", err, reservations)
+	}
+	require(t, m.reserveBaseline(before.Commit, func() error { reservations++; return nil }))
 }

@@ -197,6 +197,35 @@
         }
       },
       "initial": "implement.execute"
+    },
+    {
+      "id": "execute",
+      "version": 1,
+      "description": "Execute one caller operation in a fixed writable worktree, without publication.",
+      "supported_adapters": [
+        "codex-app-server",
+        "orca-terminal"
+      ],
+      "audit_model_required": false,
+      "prompt_steps": [
+        "execute"
+      ],
+      "states": {
+        "closed": {
+          "policy_slots": [],
+          "kind": "terminal"
+        },
+        "execute": {
+          "policy_slots": [],
+          "kind": "execute",
+          "contract": "final",
+          "prompt_key": "execute",
+          "prompt": "执行调用方指定的操作一次，保留原始结果与失败。",
+          "model_role": "execution",
+          "next": "closed"
+        }
+      },
+      "initial": "execute"
     }
   ],
   "configuration_schemas": {
@@ -630,6 +659,20 @@
                       "codex-app-server",
                       "orca-terminal"
                     ]
+                  },
+                  "settings": {
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "full_access"
+                            ]
+                          }
+                        }
+                      }
+                    ]
                   }
                 }
               },
@@ -668,41 +711,114 @@
           "then": {
             "properties": {
               "execution": {
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "adapter": {
+                          "const": "codex-app-server"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "settings": {
+                          "properties": {
+                            "model": {
+                              "minLength": 1,
+                              "not": {
+                                "pattern": "[\u0000-\u001f-]"
+                              },
+                              "pattern": "^\\S(?:.*\\S)?$",
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "model"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "adapter": {
+                          "const": "orca-terminal"
+                        }
+                      }
+                    },
+                    "then": {
+                      "properties": {
+                        "settings": {
+                          "properties": {
+                            "agent": {
+                              "const": "codex"
+                            },
+                            "agent_launch": {
+                              "properties": {
+                                "model": {
+                                  "minLength": 1,
+                                  "not": {
+                                    "pattern": "[\u0000-\u001f-]"
+                                  },
+                                  "pattern": "^\\S(?:.*\\S)?$",
+                                  "type": "string"
+                                },
+                                "runtime_executable": {
+                                  "minLength": 1,
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model",
+                                "runtime_executable"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "agent_launch"
+                          ]
+                        },
+                        "target": {
+                          "additionalProperties": false,
+                          "properties": {
+                            "environment": {
+                              "const": ""
+                            },
+                            "kind": {
+                              "const": "local"
+                            }
+                          },
+                          "required": [
+                            "kind"
+                          ],
+                          "type": "object"
+                        }
+                      }
+                    }
+                  }
+                ],
                 "properties": {
                   "adapter": {
                     "enum": [
-                      "codex-app-server"
+                      "codex-app-server",
+                      "orca-terminal"
                     ]
                   },
                   "settings": {
-                    "properties": {
-                      "model": {
-                        "minLength": 1,
-                        "not": {
-                          "pattern": "[\u0000-\u001f-]"
-                        },
-                        "pattern": "^\\S(?:.*\\S)?$",
-                        "type": "string"
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "full_access"
+                            ]
+                          }
+                        }
                       }
-                    },
-                    "required": [
-                      "model"
                     ]
-                  },
-                  "target": {
-                    "additionalProperties": false,
-                    "properties": {
-                      "environment": {
-                        "const": ""
-                      },
-                      "kind": {
-                        "const": "local"
-                      }
-                    },
-                    "required": [
-                      "kind"
-                    ],
-                    "type": "object"
                   }
                 }
               },
@@ -724,6 +840,178 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "conversation"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "access_mode": {
+                        "const": "read_only"
+                      }
+                    },
+                    "required": [
+                      "access_mode"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": false
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "generate"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server"
+                    ]
+                  },
+                  "settings": {
+                    "properties": {
+                      "access_mode": {
+                        "const": "read_only"
+                      }
+                    },
+                    "required": [
+                      "access_mode"
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": false
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "execute"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workflow": {
+                "required": [
+                  "prompt_overrides"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "workflow": {
+                "properties": {
+                  "id": {
+                    "const": "execute"
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "execution": {
+                "properties": {
+                  "adapter": {
+                    "enum": [
+                      "codex-app-server",
+                      "orca-terminal"
+                    ]
+                  },
+                  "settings": {
+                    "allOf": [
+                      {},
+                      {
+                        "properties": {
+                          "access_mode": {
+                            "enum": [
+                              "full_access"
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              "workflow": {
+                "properties": {
+                  "prompt_overrides": {
+                    "minProperties": 1,
+                    "propertyNames": {
+                      "enum": [
+                        "execute"
+                      ]
+                    },
+                    "required": [
+                      "execute"
+                    ]
+                  }
+                }
+              }
+            }
+          }
         }
       ],
       "properties": {
@@ -740,45 +1028,16 @@
                   "additionalProperties": false,
                   "properties": {
                     "access_mode": {
-                      "default": "sandbox",
-                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "description": "Explicit permission mode. Development requires full_access; local content requires read_only.",
                       "enum": [
-                        "",
-                        "sandbox",
-                        "full_access"
+                        "full_access",
+                        "read_only"
                       ]
                     },
                     "executable": {
                       "default": "codex.exe",
                       "minLength": 1,
                       "type": "string"
-                    },
-                    "github_auth": {
-                      "additionalProperties": false,
-                      "description": "Execution-host GitHub App key reference. Runner requests one repository, contents/PR write only. Never embed a key or token.",
-                      "properties": {
-                        "app_id": {
-                          "minimum": 1,
-                          "type": "integer"
-                        },
-                        "installation_id": {
-                          "minimum": 1,
-                          "type": "integer"
-                        },
-                        "private_key_env": {
-                          "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "app_id",
-                        "installation_id",
-                        "private_key_env"
-                      ],
-                      "type": [
-                        "object",
-                        "null"
-                      ]
                     },
                     "model": {
                       "minLength": 1,
@@ -801,6 +1060,9 @@
                       ]
                     }
                   },
+                  "required": [
+                    "access_mode"
+                  ],
                   "type": "object"
                 },
                 "target": {
@@ -871,9 +1133,6 @@
                                 }
                               ]
                             }
-                          },
-                          "github_auth": {
-                            "type": "null"
                           }
                         }
                       }
@@ -1004,55 +1263,12 @@
                           }
                         }
                       }
-                    },
-                    {
-                      "if": {
-                        "properties": {
-                          "agent": {
-                            "not": {
-                              "const": "codex"
-                            }
-                          }
-                        },
-                        "required": [
-                          "agent"
-                        ]
-                      },
-                      "then": {
-                        "not": {
-                          "required": [
-                            "github_auth"
-                          ]
-                        }
-                      }
-                    },
-                    {
-                      "if": {
-                        "required": [
-                          "github_auth"
-                        ]
-                      },
-                      "then": {
-                        "properties": {
-                          "agent_launch": {
-                            "required": [
-                              "runtime_executable"
-                            ]
-                          }
-                        },
-                        "required": [
-                          "agent_launch"
-                        ]
-                      }
                     }
                   ],
                   "properties": {
                     "access_mode": {
-                      "default": "sandbox",
-                      "description": "Frozen explicit permission mode. Both modes use native never; no approval or fallback.",
+                      "description": "Explicit permission mode. Development requires full_access; local content requires read_only.",
                       "enum": [
-                        "",
-                        "sandbox",
                         "full_access"
                       ]
                     },
@@ -1104,30 +1320,6 @@
                       },
                       "type": "object"
                     },
-                    "github_auth": {
-                      "additionalProperties": false,
-                      "description": "Execution-host GitHub App key reference. Runner requests one repository, contents/PR write only. Never embed a key or token.",
-                      "properties": {
-                        "app_id": {
-                          "minimum": 1,
-                          "type": "integer"
-                        },
-                        "installation_id": {
-                          "minimum": 1,
-                          "type": "integer"
-                        },
-                        "private_key_env": {
-                          "pattern": "^[A-Z][A-Z0-9_]{0,127}$",
-                          "type": "string"
-                        }
-                      },
-                      "required": [
-                        "app_id",
-                        "installation_id",
-                        "private_key_env"
-                      ],
-                      "type": "object"
-                    },
                     "transport": {
                       "additionalProperties": false,
                       "properties": {
@@ -1152,6 +1344,9 @@
                       "type": "object"
                     }
                   },
+                  "required": [
+                    "access_mode"
+                  ],
                   "type": "object"
                 },
                 "target": {
@@ -1218,7 +1413,8 @@
                         "implement.execute",
                         "implement.report",
                         "publish",
-                        "publish.report"
+                        "publish.report",
+                        "execute"
                       ]
                     }
                   }
@@ -1250,9 +1446,54 @@
                   "audit_model"
                 ]
               }
+            },
+            {
+              "else": {
+                "else": {
+                  "properties": {
+                    "version": {
+                      "const": 2
+                    }
+                  }
+                },
+                "if": {
+                  "properties": {
+                    "id": {
+                      "const": "execute"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "version": {
+                      "const": 1
+                    }
+                  }
+                }
+              },
+              "if": {
+                "properties": {
+                  "id": {
+                    "enum": [
+                      "conversation",
+                      "generate"
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "prompt_overrides": {
+                    "maxProperties": 0
+                  },
+                  "version": {
+                    "const": 1
+                  }
+                }
+              }
             }
           ],
-          "description": "Audited workflow additionally requires local codex-app-server and an explicit execution.settings.model. Omitted audit effort inherits the normalized execution effort.",
+          "description": "Audited workflow requires managed Codex with two explicit, different models. Orca uses execution.settings.agent_launch.model and the trusted execution-host runtime. Omitted audit effort inherits the normalized execution effort.",
           "properties": {
             "audit_model": {
               "additionalProperties": false,
@@ -1285,7 +1526,10 @@
             "id": {
               "enum": [
                 "development",
-                "development-audited"
+                "development-audited",
+                "conversation",
+                "generate",
+                "execute"
               ]
             },
             "prompt_overrides": {
@@ -1297,7 +1541,10 @@
               "type": "object"
             },
             "version": {
-              "const": 2
+              "enum": [
+                1,
+                2
+              ]
             }
           },
           "required": [
@@ -2372,7 +2619,8 @@
                     "implement.execute",
                     "implement.report",
                     "publish",
-                    "publish.report"
+                    "publish.report",
+                    "execute"
                   ]
                 }
               }
@@ -2404,9 +2652,54 @@
               "audit_model"
             ]
           }
+        },
+        {
+          "else": {
+            "else": {
+              "properties": {
+                "version": {
+                  "const": 2
+                }
+              }
+            },
+            "if": {
+              "properties": {
+                "id": {
+                  "const": "execute"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "version": {
+                  "const": 1
+                }
+              }
+            }
+          },
+          "if": {
+            "properties": {
+              "id": {
+                "enum": [
+                  "conversation",
+                  "generate"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "prompt_overrides": {
+                "maxProperties": 0
+              },
+              "version": {
+                "const": 1
+              }
+            }
+          }
         }
       ],
-      "description": "Audited workflow additionally requires local codex-app-server and an explicit execution.settings.model. Omitted audit effort inherits the normalized execution effort.",
+      "description": "Audited workflow requires managed Codex with two explicit, different models. Orca uses execution.settings.agent_launch.model and the trusted execution-host runtime. Omitted audit effort inherits the normalized execution effort.",
       "properties": {
         "audit_model": {
           "additionalProperties": false,
@@ -2439,7 +2732,10 @@
         "id": {
           "enum": [
             "development",
-            "development-audited"
+            "development-audited",
+            "conversation",
+            "generate",
+            "execute"
           ]
         },
         "prompt_overrides": {
@@ -2451,7 +2747,10 @@
           "type": "object"
         },
         "version": {
-          "const": 2
+          "enum": [
+            1,
+            2
+          ]
         }
       },
       "required": [
@@ -2561,5 +2860,192 @@
         }
       }
     ]
+  },
+  "result_file": {
+    "collection": "end_only",
+    "command": "result-file --run-id R --json",
+    "contract": "steerrunner-result-file/v1",
+    "delivery": "final-only: at most one snapshot after original execution ended and producers stopped; no running collection or query reads; bounded by 2 seconds and lifecycle deadline; failed seal is final; resume never refreshes",
+    "diagnostics": [
+      "binding_invalid",
+      "workspace_unavailable",
+      "directory_unavailable",
+      "file_missing",
+      "read_failed",
+      "size_exceeded",
+      "file_changing",
+      "initialization_unverified",
+      "transport_unavailable"
+    ],
+    "digest": "sha256",
+    "encoding": "base64",
+    "environment_variable": "STEERLINE_RESULT_FILE",
+    "max_bytes": 65536,
+    "path_boundary": "fixed original host/worktree/relative file; no arbitrary caller paths or directory scan; adversarial link replacement races are outside this contract",
+    "query_reads_file": false,
+    "retention": "sealed success or failure retained after stop and restart; state-dir required",
+    "statuses": [
+      "disabled",
+      "pending",
+      "closed"
+    ],
+    "submit_property": "result_file",
+    "supported": {
+      "adapters": [
+        "codex-app-server",
+        "orca-terminal"
+      ],
+      "target_kinds": [
+        "local",
+        "orca_environment"
+      ],
+      "workflows": [
+        "development/2",
+        "development-audited/2",
+        "execute/1"
+      ]
+    },
+    "version": "0 until successful seal, then 1 forever; does not change Run revision"
+  },
+  "result_file_schema": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "steerrunner-result-file/v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "contract",
+      "run_id",
+      "version",
+      "encoding",
+      "size_bytes",
+      "collection_status"
+    ],
+    "properties": {
+      "contract": {
+        "const": "steerrunner-result-file/v1"
+      },
+      "run_id": {
+        "type": "string"
+      },
+      "version": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "observed_at": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "encoding": {
+        "const": "base64"
+      },
+      "content_base64": {
+        "type": "string",
+        "contentEncoding": "base64",
+        "maxLength": 87384
+      },
+      "size_bytes": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 65536
+      },
+      "sha256": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{64}$"
+      },
+      "collection_status": {
+        "enum": [
+          "disabled",
+          "pending",
+          "closed"
+        ]
+      },
+      "diagnostic": {
+        "enum": [
+          "binding_invalid",
+          "workspace_unavailable",
+          "directory_unavailable",
+          "file_missing",
+          "read_failed",
+          "size_exceeded",
+          "file_changing",
+          "initialization_unverified",
+          "transport_unavailable"
+        ]
+      }
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "version": {
+              "minimum": 1
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "content_base64",
+            "sha256",
+            "observed_at"
+          ],
+          "properties": {
+            "collection_status": {
+              "const": "closed"
+            }
+          }
+        },
+        "else": {
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "content_base64"
+                ]
+              },
+              {
+                "required": [
+                  "sha256"
+                ]
+              },
+              {
+                "required": [
+                  "observed_at"
+                ]
+              }
+            ]
+          },
+          "properties": {
+            "size_bytes": {
+              "const": 0
+            }
+          }
+        }
+      },
+      {
+        "if": {
+          "properties": {
+            "collection_status": {
+              "const": "closed"
+            },
+            "version": {
+              "const": 0
+            }
+          }
+        },
+        "then": {
+          "required": [
+            "diagnostic"
+          ]
+        }
+      }
+    ],
+    "description": "Final-only opaque file snapshot; collected after original execution ends and producers stop. No running collection or reads on query. First seal is permanent, including failure."
+  },
+  "offline_inspect": {
+    "command": "inspect --offline",
+    "read_only": true,
+    "writer_absent": true,
+    "starts_workers": false
   }
 }

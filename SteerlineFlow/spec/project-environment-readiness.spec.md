@@ -1,5 +1,7 @@
 # Spec：项目 × 环境准备状态与统一派发门禁
 
+> 2026-11-01：本文环境检查/生成/发布及旧结果格式定义已由[项目检测与结果消费规格](project-environment-workflow.spec.md)取代；保留历史设计与验收追溯，不作为当前调用前置。
+
 2026-10-30 发布验收边界由[补充规格](environment-publication-scope.spec.md)替代；Agent只验执行及发布，外部L4负责规则/合并。
 
 2026-10-29。状态：实施与受控验证完成；原生三路径已执行但未正向通过，阻断和独立复审见验收。旧Check退役不改变原生结论。[Plan](../plans/project-environment-readiness.plan.md) · [验收与审计记录](../testing/acceptance/project-environment-readiness.md)。普通开发，不分配任务编号、不修改 roadmap、不操作安装现场。

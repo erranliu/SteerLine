@@ -5,6 +5,7 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"time"
 )
@@ -26,14 +27,15 @@ type Catalogue struct {
 
 // Snapshot is the complete frozen arrangement; prompt views never replace it.
 type Snapshot struct {
-	GenerationID string       `json:"generation_id,omitempty"`
-	Inputs       string       `json:"inputs,omitempty"`
-	Status       string       `json:"status"`
-	Diagnostic   string       `json:"diagnostic,omitempty"`
-	PlanPath     string       `json:"plan_path"`
-	Commit       string       `json:"commit"`
-	Definitions  []Definition `json:"definitions"`
-	Digest       string       `json:"digest,omitempty"`
+	Project      pm.ProjectEntry `json:"project"`
+	GenerationID string          `json:"generation_id,omitempty"`
+	Inputs       string          `json:"inputs,omitempty"`
+	Status       string          `json:"status"`
+	Diagnostic   string          `json:"diagnostic,omitempty"`
+	PlanPath     string          `json:"plan_path"`
+	Commit       string          `json:"commit"`
+	Definitions  []Definition    `json:"definitions"`
+	Digest       string          `json:"digest,omitempty"`
 }
 type GenerateCommand struct {
 	RequestID string `json:"request_id"`
@@ -47,6 +49,7 @@ type Source struct {
 	TextDigest string `json:"text_digest"`
 }
 type Generation struct {
+	ProjectEntry         pm.ProjectEntry         `json:"project_entry"`
 	Inputs               string                  `json:"inputs"`
 	PlanText             string                  `json:"plan_text"`
 	ID                   string                  `json:"id"`
