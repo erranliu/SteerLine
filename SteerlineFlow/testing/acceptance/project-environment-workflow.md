@@ -162,7 +162,7 @@ admission-proof.json记录before_rejected=true、after_run_id=39a46de4fa7cc5dd42
 随后仅补充本节整合记录提交；本次发布范围为功能分支和PR，不部署安装环境、不自动合并main，M01仍待人工体验。
 
 
-## 10. 环境要求与调用协议解耦实施（2026-11-01，验证进行中）
+## 10. 环境要求与调用协议解耦实施（2026-11-01）
 
 用户授权按修订 Spec/Plan 实施，本轮不实现整个项目初始化适配。基线 752b1ed1df4e745c663fb2453ec029798d435d62；新证据范围为 `C:/SteerlineDebug/wt-68d4-project-environment-workflow/requirements-decoupling/`。前节 G09/V05 仍是旧格式历史，本轮不能沿用。
 
@@ -201,3 +201,26 @@ L3/readiness-01 默认目录闭环通过；readiness-02 因夹具未使用导入
 另补充 diagnostics/e2e-final-01 共25项原始证据/真实夹具 owner 通过。移除 context 步骤后，真实 G 的采用夹具仍假定输出父目录已存在；0087b2cf 仅在校验目标及 manifest 后为原字节落盘创建独立 clone 内本键目录，已独立批准，不修改模型输出/标准。已启动的旧编译 G 轮次保持原结果，修复版本另目录复验。
 
 本范围 L4/generation-01：首个本机原生内容结果通过格式/来源/目标/投影校验，之后旧编译夹具在新目录落盘失败；停止及 Runner 清理 confirmed=true，原生成/请求/输出完整保留。未执行远端生成或本机验收，不记 G 完整通过。采用0087b2cf修复后新目录重新测试，不手改原生成字节。
+
+
+### 最终真实 G/V 与后续修复
+
+本范围 G02 两目标实际生成通过（L4/generation-02，1358.967秒，cleanup_complete=true）。两个目标均为 manifest3、gaps=[]；原请求/来源/内容结果、停止和清理证据齐全，未授予 ready，未执行远端验收。原生成 Git 留存提交 `0ec457fe91366d1cb11c28e3f72f711ad74669eb`；本机脚本27758字节，SHA256 `482420f4aa328f879cd8e58482ca1bca6eb83c5a0d95391149fcfeca602a25e6`，PowerShell5.1静态语法通过；远端脚本30717字节。两目标各自检查来自项目政策，未恢复内部固定项目工具清单。
+
+G02 原留存不动。为准入探针，在独立 verification-source-02 clone 正常 Git 采用同版本固定测试协议，提交 `44236738f72b82b0aa14b067b3679b5e86a1de06` 仅改变 `SteerlineFlow/testing/runtime-progress.md`，原生成文档、脚本 Git blob 及 writer 均不变，见 inputs/verification-source-protocol-adoption.json。正常 Windows CRLF 检出与原 blob 已分别核验，不把检出转换当作生成修改。V 的既有夹具另将 validation_base 绑定本轮专属分支并准备禁止实现的 Task 探针，经正常 Git 固定；脚本始终为 G02 原字节。
+
+| 本范围 V 轮次 | 原结果、修复及清理 |
+| --- | --- |
+| verification-01 | 原测试源码的测试协议副本未同源，Task材料准备正确拒绝，未启动环境Run/候选/测试生成。补测试侧 preflight，在创建现场/refs前检查准入探针协议和writer；生成夹具同步准备当前测试协议，不新增生产环境要求。原失败保留，零活动/无PR/Runner停止及两个refs原SHA lease清理见 remote-ref-cleanup-followup.json。 |
+| verification-02 | 23个阅读引用中的重复运行辅助路径使固定Runner正文达到1574/1000B，在发送Agent前阻断；调用方447B无额度，未执行环境脚本。通过原公开environment_stop受理停止，原Run stopped/result closed、零候选/无PR。保留全部manifest依赖的读取/哈希/缺失守卫和完整Git工作区，仅不把每个helper再列为阅读引用，引用降为5；标准与预算均未放宽。两个自有refs精确lease删除，Runner head从未推送，跟进证据保留。 |
+| verification-03 | 测试生成在CLI启动前被明确拒绝，未产生环境Run/候选，未分配原RunID；原根因未完全确认。固定CLI后续只读启动正常，两个自有refs精确lease清理，原失败不改写。 |
+| verification-04 | 原测试生成submit结果未知且request_not_found，不重发。通过原正式取消请求和正常停服收尾；公开离线verify-takeover在原namespace/同固定构建上compatible=true、instance_id空、items=[]，证明原请求未被接受，零环境Run/候选；原取消、失败、离线报告及两个refs精确清理证据保留。 |
+| verification-05 | 在最终缓存/引用接线上完整正向通过（413.709秒，cleanup_complete=true），首轮六项检查及完整L2 passed，原Run stopped/result closed、原PR身份和独立L2/规则核验通过，实际准入Run启动/停止与全部资源清理完成。 |
+
+重复读取接线也已修复：材料评估与测试生成现在复用原同请求 `commit:path` immutable blob 缓存；不增加缓存层、不跨请求或提交复用、不扩大共享5秒tick/Runner预算。新反例及 diagnostics/shared-read-cache-01 通过；diagnostics/runtime-dependency-refs-01 验证运行helper不重复阅读引用，但改变仍使依据失效、缺失仍阻断，自定义政策/清单引用保持。V03/V04 原CLI错误不能据此推断唯一根因已全部确认；新的实际运行结果独立记录。
+
+V05 使用相同本机脚本摘要 `482420f4…a25e6`，检查 powershell、git、python、github.auth、source.clean、terminal.tty 全passed；全部正式L2 `demo.l2.smoke` 为真实非零通过，原始摘要与明细在 original-l2-summary.json。原环境Run为 `087e598cd9d05b36554c8c9e72be64e5`；验证PR [SteerlineTest#740](https://github.com/erranliu/SteerlineTest/pull/740)，head=`b3bd09d3b524655e5397168a2feefbb3c7686939`、merge=`60c6992a40fc177b8657be364eb6c165a81cc1bd`，base仅为 `codex/e2e/904ee323a47d4d7f9d32f1d62a823f24/testing.project-environment-local/validation/testing.project-environment-local/base`。外部合并未回写原封存报告。
+
+admission-proof.json 记录准备前拒绝、ready后实际Run `5b70fa2a771df024987859c61a1f639b` 启动且停止；remote-ref-cleanup.json 核实source/validation/环境Run/准入Run四个本轮refs均清理，308-runner-cleanup.json confirmed=true且未保留活动工作区。较早失败的本地现场作为证据保留，不当作活动资源残留或新版本通过。
+
+所有新增正文/接线/测试资产和最后规范性文档均由 `/root/prompt_review` 独立只读审核；发现的协议前置、重复引用、缓存及默认目录/Spec状态残留已修复并复审批准。指南7983字节/hash不变。最终固定L1/L2收尾结果另在下段登记；M01人工体验仍后置。整个项目初始化适配未实现、未部署安装环境、未合入业务main或自动合并功能PR。本轮已转到独立分支 codex/environment-requirements-decoupling；此前PR416已合并，不修改其历史正文。

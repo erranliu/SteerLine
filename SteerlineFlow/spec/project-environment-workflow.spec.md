@@ -1,6 +1,6 @@
 # Spec：按项目 × 运行机 × 链路组织环境准备
 
-2026-11-01 修订。状态：用户已授权实施环境准备解耦，工程验证进行中；整个项目初始化适配不在本轮。[实施 Plan](../plans/project-environment-workflow.plan.md) · [项目环境接口适配指导草稿](../../SteerlineProjectGuideDoc/environment-adaptation.md) · [此前实际审计与验收](../testing/acceptance/project-environment-workflow.md)。此前界面及目标绑定版本的 A01–A13 自动验收已完成，M01 待走查；其证据不证明本次修订通过。不修改安装现场，不进入 roadmap。
+2026-11-01 修订。状态：用户已授权实施环境准备解耦，实现与真实G/V完成，最终固定回归收尾；整个项目初始化适配不在本轮。[实施 Plan](../plans/project-environment-workflow.plan.md) · [项目环境接口适配指导草稿](../../SteerlineProjectGuideDoc/environment-adaptation.md) · [此前实际审计与验收](../testing/acceptance/project-environment-workflow.md)。此前界面及目标绑定版本的 A01–A13 自动验收已完成，M01 待走查；其证据不证明本次修订通过。不修改安装现场，不进入 roadmap。
 
 ## 1. 问题与目标
 
@@ -209,7 +209,7 @@ testing_catalogue 是整个项目唯一正式清单路径，沿现有格式解�
 
 每个环境的 environment.md 是本环境唯一验收要求契约：正文逐项说明平台、工具/版本、服务/权限、非秘密引用、准备方式和每个业务检查 ID 对应的期望与检测入口；唯一机器段索引同一组 ID，脚本只实现这些要求。公共文档可明确引用，公共入口和脚本不能另列一套标准；引用存在冲突则报告缺口，不由模型自行选宽松项。不同环境拥有各自适用集合，不要求为别的平台填通过占位项。
 
-机器段采用尚未实施的 manifest version=3，在原 version/environment_key/script/interpreter/validation_base/dependencies 上增加 required_checks 和 gaps；检查及阻断缺口都由同一文档声明：
+机器段采用本轮实现的 manifest version=3，在原 version/environment_key/script/interpreter/validation_base/dependencies 上增加 required_checks 和 gaps；检查及阻断缺口都由同一文档声明：
 
 ```json
 {
@@ -326,4 +326,4 @@ SteerLine 产品只消费本规范报告协议及 Runner/PR 身份事实，不�
 
 ## 9. 本轮交付范围
 
-本轮交付 Spec、Plan 和项目环境接口适配指导草稿及导航，供用户审阅；不修改功能代码、现有模型提示词/接线、测试实现或安装现场，不提交/推送本轮修订。指导草稿的独立审阅不等于正式运行接线批准。此前实现已按后续授权提交到功能 PR，本稿不宣称它已符合新边界。后续获准实施再按 Plan 修改正式资产/代码、审核最终实际正文及验证；项目初始化适配完整功能另行设计实施。测试项目专属 refs/PR/精确合并仅用于隔离验收，不作用于业务主分支，不部署或自动合并功能 PR。
+本轮按用户授权实施环境准备解耦，交付项目入口/manifest3 消费、按实际来源生成/修复及验收、共享测试来源、界面与对应协议/测试；工程和真实验收结果按[专属验收](../testing/acceptance/project-environment-workflow.md)分别登记。最终实际正文与接线须独立审核，不能用设计稿或黄金样本更新替代批准。整个项目初始化适配功能仍未实现，不新增初始化按钮、API 或自动纳管流程。测试项目专属 refs/PR/精确合并仅用于已授权隔离验收，不作用于业务主分支，不部署或自动合并功能 PR。
