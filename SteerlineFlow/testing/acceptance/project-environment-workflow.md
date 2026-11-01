@@ -231,3 +231,9 @@ admission-proof.json 记录准备前拒绝、ready后实际Run `5b70fa2a771df024
 干净源码提交 `39e84418`（包含全部已审代码/规范，功能最终接线为 bbd69edd）运行固定 L1/05、L2/03，均通过，L2 TestDeliverySmoke 134.70秒且cleanup_complete=true。没有跳过、零命中或未知清理算作通过。最终完整正文/实际接线差异和21份字节账本位于本范围 prompt-review/final-02/actual-text-and-wiring.diff、bytes.json；actual-reading-references.json 直接从 V02/V05 原请求提取23→5引用，对应相同19项运行依赖，实际调用方 prepare 正文均447字节，未增加或藏入规则。
 
 当前全部受影响自动验证完成：最终固定L1/L2、owner、Web229项及构建/HTTP、浏览器两场景、两项目/自定义目录受控L3、真实G02两目标生成及V05同字节本机闭环均通过。各报告保持各自冻结源码/原始选择，不改写前述失败或将旧版本结果当作新提交重跑。最后仅补本段记录及状态导航，按纯文档检查处理。M01人工体验继续后置；项目初始化适配功能未实现，未部署安装现场。
+
+### 提 PR 前审计与回归
+
+用户要求“审计后提pr”。本轮复核项目入口到环境生成/验收、测试安排/候选/记录及 roadmap 的同提交来源，检查 manifest3 的唯一检查/gaps 权威、运行依赖哈希与资格失效、持久化不可改绑、查询无副作用及请求级缓存边界，未发现新的可执行 P0–P2 问题。`/root/prompt_review` 对 `752b1ed..c8de8beb` 的实际正文、接线、相关资产/测试和规范再次独立只读审核并批准，21项字节账本及三套协议镜像匹配，未放宽 CI/源码守卫或用黄金样本代替批准。
+
+整合最新 `origin/main`（54720d30）后提交为 `40852fe3115bae651673e4e2b9c8ad7f23b83c5a`；其 Git tree 与已审 c8de8beb 完全相同，均为 `79c28d14dab74d281815bd80db9506196fdbac12`。在该干净源码重跑本范围 `pr-audit-01/L1/01`、`pr-audit-01/L2/01`：固定 L1 执行8.55秒通过，固定 L2 的 TestDeliverySmoke 101.14秒通过、cleanup_complete=true，无跳过或零命中。Markdown 634文件/3997本地链接零错误，`git diff --check` 通过。随后仅补本段审计/证据记录，不改正文或运行时接线；项目初始化和M01人工体验边界保持，不部署或自动合并功能PR。
