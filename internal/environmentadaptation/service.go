@@ -33,7 +33,7 @@ type Service struct {
 	Build      runnercontract.BuildPin
 	Prepare    func(context.Context, string) (envmodel.Prepared, error)
 	Admit      func(context.Context) error
-	WithTarget func(context.Context, string, string, func() error) error
+	WithTarget func(context.Context, string, string, string, func() error) error
 	Now        func() time.Time
 	mu         sync.Mutex
 }
@@ -128,7 +128,7 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 		return s.Store.StartEnvironment(ctx, r, in.ExpectedCurrentRevision)
 	}
 	if s.WithTarget != nil {
-		e = s.WithTarget(ctx, envmodel.Target(r.Execution), r.Project+"\n"+r.ID, create)
+		e = s.WithTarget(ctx, envmodel.Target(r.Execution), r.Project+"\n"+r.ID, r.Prepared.Commit, create)
 	} else {
 		e = create()
 	}

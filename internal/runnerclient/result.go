@@ -91,6 +91,13 @@ func (c Client) ResultFile(ctx context.Context, run string) (runnercontract.Resu
 
 // ValidateEnvironmentExecution consumes the Runner's generic one-shot contract.
 func (c *Catalog) ValidateEnvironmentExecution(e runnercontract.ExecutionInput) error {
+	if c == nil || c.Capabilities.OfflineInspect == nil {
+		return errors.New("Runner未公布启动前只读查询能力")
+	}
+	q := c.Capabilities.OfflineInspect
+	if q.Command != "inspect --offline" || !q.ReadOnly || !q.WriterAbsent || q.StartsWorkers == nil || *q.StartsWorkers {
+		return errors.New("Runner启动前只读查询能力不完整")
+	}
 	if err := c.ValidateResult(); err != nil {
 		return err
 	}

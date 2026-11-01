@@ -151,6 +151,23 @@ func TestProjectEnvironmentRejectsRunnerWithoutSingleExecution(t *testing.T) {
 	if err = cat.ValidateEnvironmentExecution(e); err != nil {
 		t.Fatal(err)
 	}
+	minimum := cat.Capabilities.OfflineInspect
+	for _, change := range []func(){
+		func() { cat.Capabilities.OfflineInspect = nil },
+		func() { cat.Capabilities.OfflineInspect.Command = "inspect" },
+		func() { cat.Capabilities.OfflineInspect.ReadOnly = false },
+		func() { cat.Capabilities.OfflineInspect.WriterAbsent = false },
+		func() { cat.Capabilities.OfflineInspect.StartsWorkers = nil },
+		func() { yes := true; cat.Capabilities.OfflineInspect.StartsWorkers = &yes },
+	} {
+		copy := *minimum
+		cat.Capabilities.OfflineInspect = &copy
+		change()
+		if cat.ValidateEnvironmentExecution(e) == nil {
+			t.Fatal("unverified startup query capability accepted")
+		}
+	}
+	cat.Capabilities.OfflineInspect = minimum
 	cat.Capabilities.ResultFile.Supported.Workflows = []string{"development/2"}
 	if cat.ValidateEnvironmentExecution(e) == nil {
 		t.Fatal("old publishing result capability accepted")

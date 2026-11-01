@@ -26,8 +26,18 @@ func newEnvironmentPort(c Config, store *sqlite.SQLiteStore, cli runnerclient.Cl
 	s := &env.Service{Project: c.Identity(), Store: store, Runner: cli, Build: cli.BuildPin(), Admit: admit}
 	p.service = s
 	s.Prepare = p.prepare
-	if c.runtimeEnvironmentAdmission != nil {
-		s.WithTarget = c.runtimeEnvironmentAdmission.adapt
+	s.WithTarget = func(ctx context.Context, target, owner, commit string, create func() error) error {
+		selectCurrent := func() error {
+			if maintenance := p.config.runtimeMaintenance; maintenance != nil {
+				return maintenance.reserveBaseline(commit, create)
+			}
+			return create()
+		}
+		// Match candidate admission's target -> baseline -> storage lock order.
+		if admission := p.config.runtimeEnvironmentAdmission; admission != nil {
+			return admission.adapt(ctx, target, owner, selectCurrent)
+		}
+		return selectCurrent()
 	}
 	return p
 }

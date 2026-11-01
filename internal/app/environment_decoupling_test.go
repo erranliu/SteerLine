@@ -111,3 +111,61 @@ func TestEnvironmentKnownDeletedDependencyPermanentlyRevokes(t *testing.T) {
 		t.Fatal("deleted dependency did not revoke")
 	}
 }
+
+func TestEnvironmentStartRejectsPendingOrSupersededBaseline(t *testing.T) {
+	for _, phase := range []string{"observation-pending", "new-baseline-published"} {
+		t.Run(phase, func(t *testing.T) {
+			ctx := context.Background()
+			p, c, store := environmentFixture(t)
+			m := newProjectMaintenance(c, nil)
+			p.config.runtimeMaintenance = m
+			m.environmentObservation = p.observeBasis
+			prepared, err := p.prepare(ctx, "remote")
+			require(t, err)
+			var expected uint64
+			if phase == "observation-pending" {
+				old := seedDetectedEnvironment(t, p, "remote")
+				current, err := store.CurrentEnvironment(ctx, old.Project, mustEnvironmentKey(t, old.Execution))
+				require(t, err)
+				expected = current.Revision
+			}
+			// The original operation already froze A; pause before selecting Current.
+			p.service.Prepare = func(context.Context, string) (envmodel.Prepared, error) { return prepared, nil }
+			require(t, os.WriteFile(filepath.Join(c.Repository, "go.mod"), []byte("module newer.invalid\n"), 0600))
+			commitEnvironmentMaterials(t, c)
+			var finish chan error
+			var release chan struct{}
+			if phase == "observation-pending" {
+				entered := make(chan struct{})
+				release = make(chan struct{})
+				m.environmentObservation = func(ctx context.Context, commit string) error {
+					close(entered)
+					<-release
+					return p.observeBasis(ctx, commit)
+				}
+				finish = make(chan error, 1)
+				go func() { _, err := m.check(ctx); finish <- err }()
+				select {
+				case <-entered:
+				case <-time.After(10 * time.Second):
+					t.Fatal("observation did not reach environment callback")
+				}
+			} else {
+				_, err = m.check(ctx)
+				require(t, err)
+			}
+			id := envmodel.ID()
+			_, startErr := p.service.Start(ctx, id, json.RawMessage(`{}`), envmodel.Start{EnvironmentKey: mustEnvironmentKey(t, prepared.Input.Execution), Profile: "remote", ExpectedCurrentRevision: expected, TimeoutSeconds: 60})
+			if release != nil {
+				close(release)
+				require(t, <-finish)
+			}
+			if startErr == nil {
+				t.Fatal("a prepared old baseline became current after a newer observation began")
+			}
+			if _, err := store.Environment(ctx, c.Identity(), id); !errors.Is(err, envmodel.ErrNotFound) {
+				t.Fatal("rejected stale start left an activity", err)
+			}
+		})
+	}
+}

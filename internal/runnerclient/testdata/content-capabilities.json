@@ -6653,5 +6653,11 @@
       }
     ],
     "description": "Final-only opaque file snapshot; collected after original execution ends and producers stop. No running collection or reads on query. First seal is permanent, including failure."
+  },
+  "offline_inspect": {
+    "command": "inspect --offline",
+    "read_only": true,
+    "writer_absent": true,
+    "starts_workers": false
   }
 }
