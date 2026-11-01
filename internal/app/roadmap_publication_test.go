@@ -31,6 +31,8 @@ func roadmapPromotionChain(t *testing.T, live bool) {
 	// own managed-test framework with unavailable linked prerequisites.
 	rules := map[string]string{
 		"SteerlineFlow/spec/SpecGuide.md":                  "# Spec / Plan 生成规范\n实际读取当前固定版本 logic.go 和 go.mod，按已确认任务与依赖生成完整中文 Spec、Plan、专属验收文件。内部代号不等于正式编号。先整体说明复用、修改所有者和依赖，再逐任务写文档；有关键问题才返回问题。只需读取本文件、testing.md 和 spec-plan-guidelines.md，三份均为本项目完整规范，不引用其他规范。",
+		"SteerlineFlow/environment-project.json":           `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`,
+		"SteerlineFlow/testing/test-list.json":             `{"tests":[]}`,
 		"SteerlineFlow/testing.md":                         "# Arithmetic 测试规范\n项目已有 go.mod。各任务在已有 logic 包新增纯函数与 Go 单元测试，最终验证 go test ./... 和 go vet ./...。计划中写明命令、输入输出断言和证据位置，当前结果均为未验。本项目不使用 SteerLine 仓库的 cmd/test-feedback、L1/L2 或 managed 测试清单，也不需要新增测试基础设施。",
 		"SteerlineProjectGuideDoc/spec-plan-guidelines.md": "# Spec / Plan 编写规范\nSpec 写目标、范围、接口行为、非目标和通过条件；Plan 写具体代码修改、既有模块复用、T1 到 T2 交接、单元测试安排、命令和证据。每个任务生成独立验收文件，自动验收描述必须可执行，纯函数无需人工 UI 体验。禁止兼容层、发布系统或额外任务。",
 		"go.mod": "module example.invalid/arithmetic\n\ngo 1.24.2\n",

@@ -320,7 +320,7 @@ func (p *Project) prepareTestProtocol() {
 	s := p.Scenario
 	rules, err := prompts.TestingRules()
 	s.Must(err)
-	for path, body := range map[string][]byte{"SteerlineFlow/testing/runtime-progress.md": rules, "tools/testing/RuntimeProgress.ps1": []byte(progresstools.PowerShellWriter)} {
+	for path, body := range map[string][]byte{"SteerlineFlow/environment-project.json": []byte(`{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`), "SteerlineFlow/testing/runtime-progress.md": rules, "tools/testing/RuntimeProgress.ps1": []byte(progresstools.PowerShellWriter)} {
 		target := filepath.Join(p.Repo, path)
 		s.Must(os.MkdirAll(filepath.Dir(target), 0700))
 		s.Must(os.WriteFile(target, body, 0600))

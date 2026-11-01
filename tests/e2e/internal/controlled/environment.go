@@ -15,24 +15,12 @@ import (
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
 
-func scriptedEnvironmentGeneration(materials []runnercontract.Document) ([]byte, error) {
-	for _, material := range materials {
-		if material.Content == nil || !strings.HasSuffix(material.Path, "/environment-context.json") {
-			continue
-		}
-		var context struct {
-			Key string `json:"environment_key"`
-		}
-		if err := json.Unmarshal([]byte(*material.Content), &context); err != nil {
-			return nil, err
-		}
-		if !env.ValidKey(context.Key) || material.Path != env.GenerationContextPath(context.Key) {
-			return nil, fmt.Errorf("wrong controlled generation target")
-		}
-		manifest, _ := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: context.Key, Script: env.ScriptPath(context.Key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "fixture-environment-validation", Dependencies: []string{}})
-		return json.Marshal(env.Generated{Document: "# Controlled environment\n```steerline-environment\n" + string(manifest) + "\n```\n", Script: "throw 'Scripted public peer fixture; native execution is forbidden'\n", Gaps: []string{}})
+func scriptedEnvironmentGeneration(key string) ([]byte, error) {
+	if !env.ValidKey(key) {
+		return nil, fmt.Errorf("controlled generation requires frozen target identity")
 	}
-	return nil, fmt.Errorf("controlled generation requires pinned target context")
+	manifest, _ := json.Marshal(env.Manifest{Version: 3, RequiredChecks: []string{}, Gaps: []string{}, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "fixture-environment-validation", Dependencies: []string{}})
+	return json.Marshal(env.Generated{Document: "# Controlled environment\n```steerline-environment\n" + string(manifest) + "\n```\n", Script: "throw 'Scripted public peer fixture; native execution is forbidden'\n", Gaps: []string{}})
 }
 
 // This public peer scripts a sealed adaptation result so recovery tests can

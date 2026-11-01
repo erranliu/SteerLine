@@ -1,142 +1,138 @@
 # Plan：按项目 × 运行机 × 链路组织环境准备
 
-2026-10-31。对应 [Spec](../spec/project-environment-workflow.spec.md) · [审计与专属验收](../testing/acceptance/project-environment-workflow.md)。状态：已按用户后续授权实施，自动工程验收完成，人工体验M01待走查。普通开发由当前聊天执行，不启动 roadmap，不部署安装环境。
+2026-11-01 收简稿。[Spec](../spec/project-environment-workflow.spec.md) · [适配指导草稿](../../SteerlineProjectGuideDoc/environment-adaptation.md) · [此前验收](../testing/acceptance/project-environment-workflow.md)。用户已授权本轮实施环境准备流程解耦，工程验证进行中；项目初始化适配不做，不维护安装现场。普通开发，不启动 roadmap。
 
-## 1. 基线、范围与交付
+## 1. 差距、范围与最小交付
 
-调查源码为 `e1968de2d8031c834bb5f35dff8a37a0a41b6a62`。实施前重新固定实际源码 SHA、Spec/Plan 版本及 Runner 公开契约；不得将本轮文档检查视为实现通过。
+基线 `752b1ed1df4e745c663fb2453ec029798d435d62`，既有功能 PR [#416](https://github.com/erranliu/SteerLine/pull/416)。旧 G09/V05 和 10055 字节规则的结果只属于原版本，不覆盖本稿。
 
-本次同时修改目标材料归属、生成请求绑定和界面，不能按只读 UI 工作处理。交付按环境派生的固定材料目录、分离的生成/验收输入、受控材料读取与历史查询、所选环境工作区，以及受影响提示词/夹具和验证。环境键算法、ready 判定、原三轮预算、同目标占用、Task 门禁和 Runner 接口不重建。
+本次收简后的用户流程是“选项目/环境 → 首次适配一次生成配套草稿 → 整体审阅并一次 Git 固定 → 用户准备 → 调用验收”。产品仍按项目×运行机×链路管理资格，保留模型操作参数、三轮预算、同目标占用、未知只对账和 Task 准入事务。
 
-本聊天对初稿的审计和修订见专属验收第 1 节。固定模型正文与接线已修改并独立审核，最终差异、字节数、批准及运行结果见专属验收第 7 节，不用文档自审代替正文审核。
-
-## 2. 变更落点
-
-| 现有归属 | 计划变更 |
+| 材料/事实 | 唯一职责 |
 | --- | --- |
-| `internal/environmentadaptation/model` | 复用原 Key/Context，集中按完整键派生材料路径；manifest version2 严格绑定键、脚本与依赖；分别定义 Generate/Start 输入及目标来源字段 |
-| `internal/app/environment_adaptation.go`、`environment_readiness.go` | 统一构造目标公开事实、期望上下文及有限准备依据；生成选择与目标环境分离；所选环境读取，不再返回所有环境的整份文档 |
-| `internal/environmentadaptation/service.go`、`generation.go` | 在原请求冻结/观察流程中保存不可变生成目标及来源；输出验证后才标 generated；保留原配额、取消、未知和停止义务 |
-| `internal/storage/sqlite/environments.go` 及当前引用相关测试 | 校验新增目标来源的不可变性、键与 execution 一致性；持久 payload 按项目规则升版；历史筛选在截断前，不能过滤生命周期全量扫描 |
-| `internal/app/environment_routes.go`、应用端口、`internal/product/httpcontract/routes.go`、应用 HTTP/客户端及 `web/server` | 新材料只读路由、历史 environment_key 查询参数、独立严格生成 payload 与验收目标复核，贯通 allowlist 和代理 |
-| `internal/prompts/*.md`、`materials/*`、`prompts.go`、对应黄金样本/正式镜像 | 将固定全局路径改为从目标键派生的文件引用；修改 manifest 及输出约束，固定规则仍只由同包组装；禁止业务代码补规则 |
-| `web/src/features/environment-checks` 及对应样式、任务准备链接 | 运行机/链路选择区、所选环境详情、生成与验收各自的方案选择、上下文导出、材料预览及本环境历史；保持任务返回和原独立停止 |
-| `tests/e2e/internal/testenv`、`internal/driver`、`internal/testkit/remotetest`、调试模板/初始化与 owner 夹具 | 将旧固定路径、manifest、命令负载和真实证据定位改为从原 Go 键入口得到的路径；受控数据不冒充真实 ready |
-| 测试清单、现行操作文档及 Spec 导航 | 新真实生成场景登记；同步布局、接口和验收边界，保留旧版本历史证据 |
+| 通用指导及生成/执行/报告协议 | SteerLine 提供调查方法和调用契约，无项目工具默认政策 |
+| 项目入口 environment-project.json | 定位公共政策及唯一正式测试清单，不列环境检查或生成参考 |
+| 本键 environment.md + 验收脚本 | 文档唯一声明要求、checks 和阻断 gaps，脚本实现；运行补充文件只用 dependencies，验收不依赖生成记录 |
+| 原活动/请求 | 冻结源提交、读取文件及少量公开目标事实；不要求项目维护 input/context 或先提交输入 |
 
-不新增通用文档平台、环境注册中心、任意文件导出接口或替代执行适配器。完整 execution 留在原内部冻结记录，公开查询和 Git 上下文均使用显式允许字段；未知 settings 只参与原键，不透传。
+首次初始化适配是未来能力，本轮只定义整体输入/输出及无预提交的边界。现阶段可由用户/授权 Agent 一次准备草稿，不要求先接受中间材料。日常更新也整体展示标准与脚本差异，正式采用后再验收；不禁止生成标准变更草稿，但禁止脚本执行时改标准。
 
-## 3. 实施顺序
+## 2. 实施 owner
 
-### P1：对象、材料及固定上下文，覆盖 A01、A03–A05
+| owner | 变更 |
+| --- | --- |
+| SteerlineProjectGuideDoc 及导航 | 收简指导，保留实际调查→项目接口二级关系；正式接线前统一现有规范/添加项目方案的旧入口表述 |
+| 项目材料公共解析、internal/environmentadaptation/model | 项目入口纯解析共用；manifest3 增 required_checks/gaps，删除独立 input；文档直接决定是否有阻断缺口 |
+| internal/app 环境材料/适配/资格 owner | 删除硬编码项目路径、context 文件匹配与预提交守卫；从正式文档取标准，目标事实只在受理时冻结 |
+| internal/environmentadaptation 与 SQLite | 保存唯一标准来源/目标事实和原请求不可变绑定，严格检查报告；必要格式换代，不兼容或迁移旧安装数据 |
+| internal/testmanagement、app 的 test_documents/project_materials/test_records/维护 | 共用项目入口及同提交正式清单，覆盖快照、引用 allowlist、任务准入和记录，不保留第二清单 |
+| internal/prompts、协议镜像/schema/样本 | 固定规则只保留协议；同包短指令仅接受定位事实，删除 context 必读和项目工具实现细节 |
+| HTTP/客户端/Web、testenv/driver/夹具 | 去掉 context 导出/提交操作，显示整体草稿；测试项目专属原始报告解析与生产 owner 隔离 |
 
-1. 在原纯模型包集中实现严格完整键校验及 document/script/context 路径，调用方共用。manifest version2 接收预期键并校验 script 精确路径、解释器及依赖；禁止引用其他环境专属目录、绝对路径、路径穿越和未知字段。维持原只读 Git regular blob 读取及原字节摘要，不接受 symlink/LFS 指针当文件正文。
-2. 对生成与验收分别定义输入类型，生成仅 target_environment_key 与 generator_profile_id；验收为 environment_key、profile_id、round_timeout_seconds、expected_current_revision。HTTP 外层项目/version 沿原语义；JSON 缺失/null/未知字段分别明确拒绝。
-3. 在原 app owner 定义唯一公开事实构造函数和确定性上下文编码：version=1、project_identity、environment_key、execution、publication、previous；execution 仅用公开 target/adapter/Agent/入口/权限事实，publication 仅用公开目标和非秘密引用。原始 args、env 值、transport/settings 和认证正文不导出。项目固定提交和文件摘要留在回包/活动中，不写入文件自身；无前轮为 null。
-4. 前轮按同项目同键最近已结算有轮次验收活动选择，复用完整 PreviousFacts；不选运行中活动。期望上下文预览不得依赖待生成输出，缺同源规则或测试输入则列具体前置。严格核对导出后已提交文件；source commit 由原 repository 入口冻结，不做自引用校验。
-5. 原 materialAt、查询和候选依据读取共同使用选中环境路径，只把该环境正式文件、共享规则/测试/明确依赖纳入原依据。生成上下文、模型和其他环境文件不纳入 ready 依据。
+不新建材料服务、注册表、生成参考配置、要求继承引擎或 Runner 能力契约。manifest3 与报告 version2 分别处理，统一项目入口不改变测试清单格式或选择规则。
 
-完成条件：路径/manifest/公开事实/首次导出及 A/B 依据隔离的 owner 正反例通过。此时不以临时兼容读取旧文件来过渡。
+## 3. 步骤与完成条件
 
-### P2：原生成活动、请求及查询，覆盖 A02–A06、A08–A09
+### R0：指导与首次适配的整体边界（D01、A11/A16 的指导审阅）
 
-1. 重构现有 PrepareGeneration 的具体输入，独立解析目标开发环境与生成方案。目标仅由加载配置及原键核验；生成 execution 沿 GenerationExecution 的本机 Codex read_only 投影和原 Runner catalog 验证，不借目标权限或扩展远端 generate。
-2. 保持先查原信封/活动再验证新请求的顺序。保存目标键、目标内部上下文及公开来源摘要、源提交、生成完整 execution 和原 Runner 请求；SQLite 对新增绑定实施与原 execution/Prepared 相同的不可变检查。generation 不写当前资格引用，不占用验收轮次，不改旧 ready。
-3. 固定材料集合使用同源共享规则、所选 context、正式测试规范/清单及有限源码/依赖；environment.md 和 verify 脚本只在存在时读取为参考，不作为首次生成前置。材料总字节上限沿原 1 MiB；缺必读项具体阻断，不补 inline 正文。
-4. 在原生成观察收尾中严格校验结果结构及所选环境 manifest/路径。错误输出保留原 Run/final 与诊断，活动失败而非 generated；合法 gaps 保留并可见。停止、结算及配额释放仍按原执行事实，解析失败不能冒充资源已停。
-5. 新增 `GET /environment/materials?environment_key=…`，提供所选正式材料、生成前置诊断、期望上下文字节/路径/摘要及观察来源；仅原项目提交观察，零 fetch/执行/写入。options 仅含列表及公开生成方案字段。
-6. `/environment?environment_key=…` 在原项目记录中先筛选再取20；无筛选保持项目摘要入口。环境过滤不可用于 Observe、原请求查找、启动 census、pending stops 或 reset，旧目标移除后依然可按原 ID 观察/停止。材料查询和历史都贯通原端口、共享 allowlist、应用 HTTP、客户端、Web 代理，未知/重复/非法查询参数按固定契约拒绝。
-7. 只变更活动 payload 和必要格式版本，不建第二份 ready 或新注册表；同步当前 SchemaVersion 及格式单一来源说明，旧格式明确拒绝，不迁移现有安装库。
+交付收简指导：真实项目调查后一次形成入口、环境要求文档/检查声明及脚本，缺失的必要公共说明/协议副本也作为同一草稿包处理。无需环境 ready、input/context 或任何中间提交；指导不自动注入日常验收。
 
-完成条件：原请求重放/冲突、错目标零提交、不可变更新、原配额/未知/取消及20条截断反例通过，HTTP 全路径可达且公开 DTO 无原 settings。
+不在本次实现初始化按钮、调查器、落盘/发布或纳管 API。未来初始化接线须核验已有只读渠道能共同提供完整指导/协议与固定项目快照；不能假定 Runner 有跨来源文件/临时快照覆盖能力，不能用内联规则或要求项目预提交材料兜底。此依赖及具体接线/验证归未来初始化 Plan。本轮独立审阅指导草稿；正式实际模型接线再审核最终正文、样本和渠道。
 
-### P3：固定正文、正式材料及所有读取者，覆盖 A03–A06、A11–A13
+### R1：唯一要求文档及共享测试来源（A03–A06、A14、A15、A17）
 
-1. 在 `internal/prompts` 更新 environment-generate/prepare/publish 固定短模板，仅接收原提交、目标键及集中派生路径等少量定位事实；完整行为仍在 materials 的生成/执行规则。更新同源镜像、生成输出约束、manifest2 声明和实际请求断言。
-2. 记录每份固定正文及代表请求的修改前后原字节、UTF-8 字节数和完整 diff，说明替换旧路径与目标不明规则的业务依据。独立审阅者检查实际正文、路径、允许字段和接线后批准；有修改则对最终版本重新审核。不得用黄金样本或摘要快照更新代替批准。此审核是必要交付项，实际独立批准及版本见专属验收第7节，文档自审不能替代它。
-3. 修改 app/model/storage/HTTP owner 夹具、controlled_environment、native_environment、remote_environment 和外部 PR/L2 取证读取者。准备文档、脚本、PR acceptance 段都从同一键目录读取，项目完整 L2 及原验证 base/PR/SHA/清理标准保持。
-4. 调试包按最终冻结 execution 先调用原 Go 键/路径函数，再在独立包项目初始化中准备版本化夹具；可在原 debug-helper 初始化落点补具体逻辑，不在 PowerShell 重写哈希算法。模板保留可复用的项目入口/脚本资产，不能硬编码安装机目录摘要。夹具提交只属于独立测试项目，不成为生产运行时自动写仓库能力。
-5. 根项目示例、调试说明和客户端协议同步新文件布局、命令和查询参数。清理当前消费者对旧全局 DocumentPath/GenerationContextPath 的执行依赖；历史 Spec/验收及冻结旧输入保持原文，不批量替换历史记录。新 Run 缺新格式即阻断，无旧路径 fallback。
+1. 项目入口 version1 仅保留 version/requirements/testing_catalogue；manifest3 增 required_checks 和显式 gaps 数组，检查/阻断标准只在环境文档。删除 input、跨文件检查集合对账和 context Git 字节匹配。生成结果顶层 gaps 只能逐项等于文档投影，不是另一来源。
+2. 从同一正式 environment.md 冻结全部业务 checks，追加 terminal.tty；拒绝漏/重复/未知/failed/incomplete。运行依赖唯一补充清单为 dependencies，公共政策或辅助工具被实际引用就按运行依据计入，纯调查来源不计入。
+3. 环境验收、测试安排生成/固定校验、任务材料/准入、记录/页面共用项目入口及同受测提交；替换原固定项目路径和短指令，保留独立的固定测试执行/进度协议。缺实际正式清单/L2 时如实阻断，不以另一清单或空清单兜底。
+4. 复用原 regular blob、路径/重复 JSON 键/字段与限额检查。正文/脚本/机器段必须配套，检查声明只存在文档，manifest2 不兼容；保留原 1 MiB/Runner 快照/64 KiB 报告限制，不加任意新限额。
 
-P3 依赖 P1 的固定格式及 P2 的实际接线，完成后才运行真实生成或验收，防止用未受审提示词开展 live 验证。
+5. 材料查询、开始验收和候选准入直接从固定文档检查 gaps，非空/缺字段/格式错即阻断，不查询原生成记录补资格；环境文档改变为有缺口时也不沿用旧 ready。缺口解决后正常 Git 更新并重新验收；目标工具尚未准备按现场 checks 检测，不误判为无法开始检测的标准缺口。
 
-### P4：所选环境工作区，覆盖 A01–A02、A06–A10
+完成条件：不同项目/链路可采用不同文档和检查集合；旧固定路径及 input/context 均不存在时可读取正式接口。坏格式、错误路径、缺依赖及真实缺口有明确诊断，不让模型补通过。
 
-1. 页面先按运行机列链路，按任务 profile 或有效默认定位，普通无定位时要求选择；保留原 profile/task 返回路径。所选环境由原完整键标识，列表不展示模型级条目。
-2. 详情按状态→材料与要求→用户准备→验收→结果/历史组织。调用新材料 Query，key 包含 home/project/instance/environment_key；读取失败和生成输入待维护分别展示。期望上下文可预览/导出，文档/脚本不存在仍可引导首次生成，导出操作不写库或自动提交。
-3. 生成区固定显示材料目标，单独选本机生成方案；验收区只选本环境方案并显示模型/强度、超时、三轮预算及真实副作用。禁止目标随生成模型变化，保留原双击/pending/原请求核实，不新造命令仲裁器。
-4. 切环境清除本次未提交表单及旧详情选择；进行中的命令继续归原对象，不能通过切换或返回重发。切 home/project/instance 丢弃旧观察与操作草稿；迟到回执只更新原目标查询，不抢当前选择。
-5. 本环境最近历史与“项目全部活动”分开，过滤先于截断；列表外原报告仍按 ID 可达。结果层级及原技术文件折叠保持。options 故障不封死独立可核实活动的停止；失效与停止分别使用原 current/activity revision。
-6. 宽窄屏、键盘焦点、长名称及缓存观察时间沿现行界面验证。任务和派发面板继续使用原资格，不引入全局生成选择、浏览器持久状态或自动改默认。
+### R2：事实冻结、请求与资格（A02–A09、A15、A17）
 
-P4 依赖 P2 的协议和 P3 的文案/输出约束。先补 owner 功能断言，再串行进行浏览器和生产构建。
+1. 把目标公开事实作为原活动/信封数据冻结，用同包短指令的少量参数引用项目/键、adapter/target、明确平台/入口、结构化权限和公开发布目标；不提供 Git context 路径，不透传 settings/凭据，不把长报告或规则塞进指令/schema。
+2. 材料查询只返回正式文件/来源、缺项和只读目标预览；删除 expected_context/context_digest 及导出/提交守卫。缺正式文档仍可定位目标/查看适配入口；未来无项目入口的首次整体适配只按 R0 设计，不冒充本次已实现。
+3. 原生成入口内明确两种读取方式：本环境无文档时，以完整指导/协议和固定源码调查实际程序，支持 Runner 已有整树快照或核验充足的显式文件集，不只给入口/清单；已有有效文档且引用足够时按有限引用更新。不增加模式配置、流程服务或用户前置。首次整个项目缺入口的初始化仍归 R0 未来范围，不冒充已实现；原渠道无法提供完整必读文件时明确能力缺口，不内联或预提交兜底。
 
-### P5：验证、真实闭环与交付记录，覆盖全部 A 项及 M01 安排
+4. 旧脚本/依赖删除或改名、旧文档机器段错误时，保存可读原文、缺失路径和源摘要，自动用同一固定源码调查修复。越界/其他环境引用不解引用，不自动降原标准；新请求实际必读的完整协议/指导、核验源码及项目政策/正式定义缺失仍阻断，未知事实写文档 gaps。生成不要求旧接口先通过；验收仍严格要求正式依赖齐全且 gaps 为空。
+5. 资格依据按 Spec §5.2：本环境文档（含 checks/gaps）/脚本、执行协议、实际公共/运行依赖、全部 L2、规范项目入口及原执行/发布上下文；无 input 或生成状态资格，生成参考/指导/模型不计入。A/B、公共依赖变化和原候选事务保持。
+6. 原请求重放先读冻结信封，再验证新配置；事实、来源和检查绑定不可变。历史完整报告保留回看，不再强制送入生成短指令；验收后继轮初始文件的完整 previous、原停止和封存义务不变。必要时统一持久格式升版，无双版本读路径。
 
-复用现有 readiness 受控场景补足两环境生成→正常 Git 固定→验收→只放行对应组合；不得直接写 ready 或把 fixture 生成算真实生成。补真实生成专项后执行固定 L1/L2、受影响 Web、受控 L3 及最小 live 范围。失败保留首轮证据，修复后新目录补测，不扩大轮次或改标准。
+完成条件：一次受理即可冻结事实，不要求用户 Git 提交事实；原配额/预算/未知/取消/停止保持，生成不授予或撤销 ready。
 
-实现完成时同步 Spec/Plan/专属验收的状态和准确范围，M01 单独安排。没有实际产品验证不能登记已验收；真实生成/新材料路径失败属于工程未完成，不能转写成人工体验待验。
+### R3：协议/输出及独立审核（A06、A11、A16）
+
+同步环境与受影响测试安排短指令、完整协议、输出 schema、正式镜像和请求样本。要求/脚本配套输出供整体审阅，标准变化有明确 diff，运行时只执行已采用文档，不另维护脚本标准。删除旧 context 引用、完整历史塞入生成输入和项目版本/工具实现政策；少量动态事实不包含固定行为规则，generate.materials 不内联完整材料。
+
+SteerLine 只限定既有 ps1/powershell.exe、sh/bash 调用协议；Runner 核验其实际执行/workflow/通道能力，解释器和工具版本由项目目标现场检查。记录每份正文/实际请求完整 diff、前后 UTF-8 字节及所有必读协议总量和去向，独立审核最终正文/接线/测试资产；原批准和黄金样本更新不替代批准。先获批准再开展新版真实生成/验收。
+
+### R4：界面与外部消费者（A01、A07、A09、A10、A14、A15、A18）
+
+界面保留选环境和各自模型操作，移除 context 预提交，显示一个配套草稿包、来源和正常 Git 采用路径。正式材料的缺口从 environment.md 投影，无历史生成记录也可显示/阻断；旧接口待修与机器未满足分别说明。调查/按引用更新由原操作处理，不新加按钮；切换/迟到/双击/缓存和停止守卫不变。
+
+测试夹具在独立 clone 一次形成入口、文档/检查和脚本，不人为设置 input/context 前置提交；正式 G/V 绑定同一实际生成字节。按场景显式隔离已有 Python/PowerShell 原报告校验器，维护自定义目录下真实工具/格式与 hash，错格式拒绝；不新增产品报告注册表，也不运行模型生成的自证脚本。
+
+### R5：验证与交付（全部受影响 A 项，M01 后置）
+
+受控/owner 验证无 input/context 前置的配套生成/正式采用，项目与环境隔离、唯一清单、检查精确集合及原生命周期。未来首次整个项目适配尚未实装时，仅 D01 审阅其整体草稿契约，不把 fixture 或手工准备算作自动初始化通过。
+
+必须补三组反例：仅有项目入口/清单而无环境文档时，实际生成输入还包含指导和可调查的源码；旧依赖删除/改名或坏机器段时可调查输出修复草稿，但原材料仍不能验收；带非空 gaps 的同一 Git 文档在没有原生成记录的新 home/人工材料场景也零 Runner 验收提交，清空后仍须完整 checks/L2/PR。另核验真正必读依据缺失仍阻断、非法旧路径不读取、缺目标工具仍可检测失败，防止放宽安全或用新阻断替代现场检测。
+
+独立批准后，复用真实生成场景为本机/远端两个目标输出文档/脚本，远端只生成；将有效输出整体一次 Git 固定，再以相同本机字节完成 TTY/完整 L2/唯一原 PR、外部核验、准入探针和全部清理。失败保留原证据，修生成来源后另目录补测，不手改输出/扩大预算。登记 A14–A18 及受影响 A01–A13 新版本结果，原 G09/V05 保持历史结论。
+
+R1 以 R0 确定的材料职责为前提；R2 依赖 R1，R3 审核 R1/R2 的实际接线，R4 依赖最终材料/协议，R5 在 R1–R4 和独立批准后执行。本轮已获用户实施授权，工程验证进行中；R0 的整个项目初始化接线仍留未来。
 
 ## 4. 验证入口与证据
 
-遵循[测试指南](../testing.md)、[路径清单](../paths.md)及[验收流程](../testing/acceptance/README.md)。建议独占 scope 为 `C:/SteerlineDebug/wt-68d4-project-environment-workflow/`；每次调用取新的绝对输出目录，命令中的 `<新…目录>` 在执行前替换并登记原命令。诊断日志放 diagnostics，正式输出按 L1–L4 分层，保留失败、补测和资源清理位置。
+遵循[测试指南](../testing.md)、[路径清单](../paths.md)与[验收流程](../testing/acceptance/README.md)。实施时固定新的源码 SHA、协议版本和实际命令。独立 scope 继续为 `C:/SteerlineDebug/wt-68d4-project-environment-workflow/`，本次另取 `requirements-decoupling` 子范围，每个命令使用新绝对 out；日志、失败及清理证据不覆盖此前输出。
 
-以下为实施验证安排，实际结果见专属记录。扩展测试沿原 owner 文件；新增真实生成场景已实装登记，不以命令文本或规划代替执行证据。
-
-| Spec 项 | 步骤与主要验证 |
-| --- | --- |
-| PEW-A01、PEW-A02、PEW-A03、PEW-A04、PEW-A05、PEW-A06 | P1–P4 的 model/app/service/storage、正文及 Web owner；生成目标、首次材料和依据隔离 |
-| PEW-A07、PEW-A09、PEW-A10 | P2/P4 的请求重放、协议、Web 和浏览器；串对象、先筛后限、旧目标、窄屏与查询故障 |
-| PEW-A08、PEW-A12 | P2/P3/P5 的原生命周期 owner、正式 readiness L3；预算、未知、门禁及全闭环 |
-| PEW-A11 | P3 的提示词自动项、字节账本及独立实际正文批准 |
-| PEW-A13 | P5 的真实生成新场景及新格式本机正式验收，G/V 分别留证 |
-| PEW-M01 | P5 后的人工体验，参与人与窗口待安排 |
-
-| 时点 / 性质 | 验收与最小入口 | 通过条件及登记 |
+| 时点 / 验收映射 | 最小入口与环境 | 通过条件 |
 | --- | --- | --- |
-| 本轮及最终文档检查 | `python scripts/check_doc_links.py`、`git diff --check`；新增文件另查 UTF-8 和空白；脚本核对 PEW-A01–A13/M01 在三文档映射 | 零坏链接，ID 完整；只记文档检查 |
-| P1–P3 后，model/service 自动 | `go run ./cmd/test-feedback -out <新diagnostics目录> -- ./internal/environmentadaptation/... -count=1` | 键/路径/manifest2/合法输出、坏目标及路径、首次生成、原预算/TTY/PR/封存回归非零命中 |
-| P1–P3 后，app/storage 自动 | 分别用 test-feedback 新 out 执行 `./internal/app -run 'Test.*Environment' -count=1`、`./internal/storage/sqlite -run 'Test.*Environment' -count=1` | 在原文件扩展导出白名单、自引用排除、同键来源、原信封重放、来源不可变、依据隔离、20条截断及只读零调用断言；该表达式也覆盖 TestCallerPromptConvergenceEnvironmentMaterialPreparation；日志与结果登记专属验收 |
-| P2 后，协议自动 | test-feedback 新 out：`./internal/product/applicationhttp ./internal/product/applicationclient ./web/server -count=1` | 材料路由及查询贯通、认证/allowlist 保持、非法路径/参数拒绝，未运行产品的 UI fixture 不冒充真实 API |
-| P3 后，正文与独立审核 | `go test ./internal/prompts -count=1 -v`；实际 owner 请求断言；原文 diff/字节账本及最终独立批准 | PEW-A11 分自动与独立审核两部分留证；生成/执行规则同源，缺文件不 inline，最终实际请求目标与路径正确 |
-| P3 后，外部读取及登记自动 | test-feedback 新 out：`./tests/e2e/internal/testenv ./tests/e2e/internal/driver -tags=e2e -count=1`；另取新 out 跑 `./internal/testkit/remotetest ./cmd/test-feedback -count=1` | 原 PR/L2/工作区证据仍绑定同 Run/键，Codex/Orca 外部读取边界不变；新场景清单/等级匹配 |
-| P4 后，Web 定向自动 | `npm --prefix web test -- src/features/environment-checks/project-environment.test.tsx src/features/tasks/task-detail.test.tsx src/features/runs/runs.test.tsx src/app/project-switch.test.tsx` | 选目标、独立模型选择、导出/错误输出、切换/迟到/双击及任务返回行为正确；新增测试实装后非零命中 |
-| P4 后，Web/HTTP及生产构建 | `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-web.ps1 -EvidenceDir <新Web目录>` | 构建、全部 Web 及原 HTTP owner 通过；按脚本实际返回定位 server 受管报告 |
-| P4 后，受控浏览器自动 | `npm --prefix web run test:e2e -- configuration-navigation.spec.ts`；设 `STEERLINE_WEB_EVIDENCE=<新browser目录>`，finally 恢复原值 | 扩展原场景覆盖 PEW-A01/A02/A07/A09/A10，真实渲染宽窄屏/键盘/环境切换；list 日志、trace 和截图存独立目录 |
-| P5，受控全链自动 | `go run ./cmd/test-feedback -level=L3 -suite=testing -env=controlled -scenario=testing.project-environment-readiness -out <新L3目录>` | 扩展既有场景覆盖 PEW-A04/A05/A08/A09/A12；两个项目/环境、先拒绝后准备再派发、失效及完整停止；正式调用不直接写库 |
-| 代码修改后及交付前，固定回归 | `go run ./cmd/test-feedback -level=L1 -out <新L1目录>`；`go run ./cmd/test-feedback -level=L2 -out <新L2目录>` | 固定 `l1.minimum` / `smoke.delivery` 完整通过；skip/零命中/未知清理不通过；正文/夹具变化后按最终版本运行 |
-| 独立正文审核后，真实生成自动 | 已实装 `testing.project-environment-generation`（L4/live/testing），入口 `go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-generation -out <新L4目录>` | PEW-A13-G：原生本机 Codex 给本机和远端两个不同目标生成有效材料；原请求、Git上下文、输出目标/路径、gaps 和停止结算核实，目标远端零验收/零派发，无须远端连接或 ready |
-| 真实生成后，真实验收自动 | 既有 `testing.project-environment-local`：`go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-local -out <新L4目录>` | PEW-A13-V：使用前一场景的有效本机生成输出，经正常 Git 固定后完整 TTY/L2/真实原 PR发布，外部原规则/精确合并取证、准入探针和全部清理；生成缺陷须修生成来源，不手写通过脚本 |
-| 可用构建后，后置人工 | PEW-M01 按专属验收走查，参与人与窗口待安排 | 能分清准备对象/生成位置/验收模型、找到要求和失败原因；单独登记，不覆盖 A 项失败 |
+| 当前设计修订；D01 | `python scripts/check_doc_links.py`、`git diff --check`；新增指导另查 UTF-8、正文及字节账本，独立只读审阅 | 导航/链接/空白零错误，A14–A18/D01 有映射；一次配套生成/采用、单一要求来源、二级职责与未来能力边界一致；只记文档与指导审阅，不算业务验收 |
+| R1/R2；A03–A06、A08、A14、A15、A17 | `go run ./cmd/test-feedback -out <新diagnostics目录> -- ./internal/environmentadaptation/... -count=1`；本地 owner | manifest3/checks/gaps、冷启动无生成记录也阻断、空 gaps 不授 ready、路径边界、现场失败、原 L2/TTY/PR/封存及依据隔离正反例 |
+| R1/R2；A02–A06、A09、A14、A15、A17 | 分别用 test-feedback 新 out 跑 `./internal/app -run 'Test.*Environment' -count=1`、`./internal/storage/sqlite -run 'Test.*Environment' -count=1` | 首环境调查的实际输入含源码/指导，旧依赖删除/改名可修而验收仍拒绝，核心依据缺失/危险引用阻断；另测同提交冻结、零副作用、不可变与重放，新用例须被选择器命中 |
+| R1/R2；A14、A17 | test-feedback 新 out：`./internal/testmanagement/... -count=1`，再单独新 out 跑 `./internal/app -run 'Test.*(TestManagement|TestDocument|TestRecord|ProjectMaintenance|Environment)' -count=1` | 测试安排/材料/记录及环境消费同提交唯一清单，旧固定项目路径缺失可用；实施时核对每类新增用例非零命中，缺失则显式补原 owner 选择器 |
+| R2/R4；A07、A09、A15 | test-feedback 新 out：`./internal/product/applicationhttp ./internal/product/applicationclient ./web/server -count=1` | 材料来源贯通现有路由；认证、allowlist、严格参数和查询边界保持 |
+| R3；A11、A16 | `go test ./internal/prompts -count=1 -v`、实际 app 请求断言，以及最终独立正文审核 | 实际 diff/字节及总量/内容去向完整，只有协议同源；无项目路径清单、版本政策或 inline 兜底 |
+| R3/R4；A13、A14、A18 | test-feedback 新 out：`./tests/e2e/internal/testenv ./tests/e2e/internal/driver -tags=e2e -count=1`；另取新 out 跑 `./internal/testkit/remotetest ./cmd/test-feedback -count=1` | 项目材料按声明读取；场景专属校验器对自定义目录原始报告独立核验，错格式/改工具拒绝，原 PR/L2/Run 身份及清单匹配保持 |
+| R4；A01、A06、A07、A09、A10、A14、A15 | 直接在 PowerShell 7 运行 `./scripts/test-web.ps1 -EvidenceDir <新Web目录>`；扩展既有 environment owner 用例 | Web/HTTP/构建通过；无生成历史也显示正式文档缺口，区分旧接口失效/标准未知/现场工具不满足，无串对象或新增操作步骤 |
+| R4；A01、A07、A10 | `npm --prefix web run test:e2e -- configuration-navigation.spec.ts`，`STEERLINE_WEB_EVIDENCE` 指向新 browser 目录 | 宽窄屏、键盘、环境切换与要求来源显示；finally 恢复环境变量，保留截图/trace |
+| R5；A04、A05、A08、A12、A14、A17、A18 | `go run ./cmd/test-feedback -level=L3 -suite=testing -env=controlled -scenario 'testing.project-environment-readiness' -out <新L3目录>` | 两项目/环境和自定义路径闭环、前后准入及失效隔离；不直接写 ready，不将 fixture 当真实生成 |
+| 代码修改后及交付前；全部受影响自动项 | 分别运行 `go run ./cmd/test-feedback -level=L1 -out <新L1目录>`、`go run ./cmd/test-feedback -level=L2 -out <新L2目录>` | 固定 l1.minimum、smoke.delivery 完整通过，无 skip/零命中/未知清理；新增场景若需登记则同步清单及执行器，不默认跑 Full |
+| 独立批准后 R5；A13-G、A18 | `go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario 'testing.project-environment-generation' -out <新L4目录>` | 实际两个目标生成，项目材料无旧路径依赖，原始输入/输出、Git、gaps 和停止证据齐备 |
+| G 完成并 Git 固定后；A13-V、A18 | `go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario 'testing.project-environment-local' -out <新L4目录>` | 用相同生成字节完成 TTY/完整 L2/原 PR/外部核验/准入/清理，未扩大到远端验收 |
+| 可用构建后；M01 | 按原专属验收安排用户走查，参与窗口待安排 | 能指出准备对象、项目要求来源、生成/验收模型及下一步，人工结果单独登记 |
 
-每个 owner 命令单独调用并检查退出码，不能用后一个命令成功掩盖前一个失败。
+逐个检查实际命令退出码与命中用例，不用下一命令成功掩盖失败。Web 构建、原始 npm、调试包及同源码 live 串行；L3 总并发不超过二。当前实施已进入运行时正文、接线及消费者修改，按上表执行工程检查、最终独立审核及新版真实 G/V；不以早先设计审阅代替。
 
-原始 Web 构建、npm 运行、调试包生成及同一源码的相关 L4 串行执行。L3 遵守总并发上限二；live 精确选择且单项串行。预先检查工具和输入，不能把超时、skip、缺证据或 fixture 通过算成 live 通过。
+## 5. 真实验证与授权边界
 
-## 5. 真实链前置与新增场景
+复用独立 STEERRUNNER_EXE、本机/远端目标 profile、专属项目配置及完整源码 SHA、原正轮次超时/一小时生成期限和三轮预算。正式输入是已知项目源码与实际政策，目标事实由原请求冻结；不预先创建或提交 input/context。真实验收前正常维护验证 base 包含采用的材料，不能将它提前成为生成步骤。
 
-新增真实生成场景已在 `tests/e2e/remote` 和现有 testenv owner 落地，复用公开环境命令、generate 查询和原 Run 停止，不新增脚本直接调用模型的旁路。同步 `tests/e2e/suites.json`、`SteerlineFlow/testing/test-list.json`、`testing/l4.md`、执行器及对应清单测试；各次真实结果见专属验收，不以入口存在代替通过。
+只用独立 home/clone/数据库，保留输出与失败现场。专属测试 refs/PR/精确合并按此前用户明确授权的测试项目和范围，不操作业务主分支、不部署或自动合并功能 PR。本机 Codex 的结果不扩大为所有链路、报告格式或未来初始化已通过。
 
-最小输入使用既有变量：固定独立 `STEERRUNNER_EXE`、本机 Codex `STEERLINE_L4_LOCAL_PROFILE`、远端目标描述 `STEERLINE_L4_REMOTE_PROFILE`、专属项目 `STEERLINE_L4_PROJECT_CONFIG` 及完整 `STEERLINE_L4_PROJECT_COMMIT`。新增生成场景将本机 profile 同时用于生成与本机目标，远端 profile 只用于加载并核对第二目标的公开事实；不调用其实际远端。两条目标按部署支持的原配置格式读取，不复制认证到项目或 Git。
+## 6. 完成条件
 
-生成前只在独立 clone 中维护共享同源规则和两个目标的固定上下文，项目已有正式测试及依赖；然后由产品实际生成。生成后审阅合法输出和 gaps，通过测试项目正常 Git 流程提交，再记录用于本机验收的最终完整 SHA；不得通过改验收标准弥补生成失败。验收还须预备包含最终源码的专属验证 base、原 PR provider 权限及 L2 所需工具。环境路径按当前 profile 的原键计算，不能复用另一包路径摘要。
+本轮交付环境准备解耦实现，须有全部受影响自动项、最终正文/接线独立批准及新版本真实 G/V；未来初始化功能另行实现验收。D01、历史通过或人工体验均不替代缺失工程证据。
 
-本机真实验收另设正的 `STEERLINE_L4_ROUND_TIMEOUT_SECONDS`，沿原预算而非人为延长；真实生成保留原一小时活动期限和 home 生成配额，不新增超时策略。测试只使用独立 home、clone、数据库、固定 Runner 及专属测试 refs，不改安装目录、共享业务 checkout 或业务主分支。
+## 7. 本轮指导正文与独立审阅
 
-Orca 本机/远端使用共同材料路径/格式读取和公开协议，由 owner 与受控反例覆盖；本次最小 live 结论只包含实际执行的 Codex，不自动宣称 Orca 新材料已原生验收。若实施改变 Orca 专属外部取证行为或执行契约，再先补其明确 live 验收，不以扩大全部模型矩阵替代定向验证。
+此前收简稿为 6667 字节，SHA256 `b5468e0f1a63bf0cc7e6e89be5c5bdda32692fab71f3a00cbb45303bc2893887`，其独立通过仅覆盖旧稿。本轮修复三处流程耦合：在同一文档明确阻断 gaps 及顶层投影，首份环境材料调查完整源码，旧失效引用作为修复事实而非生成前置。新增内容没有移到另一份配置/文件，未增加模式配置、服务或框架。
 
-## 6. 完成界限
+实际正文变化集中于指南的调查步骤、环境文档职责、缺口独立阻断和自动调用段：增加旧依赖删除/改名及危险引用处理，区分真正必读依据与待修旧接口；明确新 home/人工材料无需生成记录，目标工具未准备仍可现场检测。新增 1225 UTF-8 字节的业务原因是使生成、材料采用与验收各自有完整依据和守卫，未复写项目工具政策或报告 schema。
 
-全部 PEW-A01–A13 按专属文档登记最终实际结果；A11 独立批准、A13 真实生成和验收分别记录。缺工具、原生能力或外部权限时准确登记待验及阻塞范围，不降级为人工体验或历史继承。M01 可在自动项完成后安排，不用其后置掩盖已知工程失败。
+| 文件 | 相对基线 HEAD 的 UTF-8 字节 | 本轮实际正文 SHA256 |
+| --- | --- | --- |
+| `SteerlineProjectGuideDoc/environment-adaptation.md` | 0 → 7892（上一稿 6667 → 7892） | `9f6fd073fccbb570df19cbe552a069875f26861d492bf701f7d9a5f1e9f3009d` |
+| `SteerlineProjectGuideDoc/README.md` | 3102 → 3319，本轮未再改 | `9104f26e918426adcf2088ed82771eba65159687fd689bcdf746db463e910a52` |
 
-本Plan原实施范围不包含外部通知、功能代码发布或安装部署。2026-11-01用户后续明确要求提交PR，现授权本次实现提交、推送独立分支和创建功能PR；不包含部署或自动合并。独立验收中明确列出的材料提交、专属验证 refs/PR 与精确合并仅用于 A13-V，不作用于业务主分支。涉及额外外部现场维护时按实际用户授权处理。
+新文件全文即相对基线的实际新增差异，README 仍用普通 Git diff 审阅。独立只读审阅者 `/root/prompt_review` 已核验上述最终正文/hash，并审核 Spec、Plan 及验收映射：通过，无阻断问题。确认缺口由 Git 文档独立判定、首环境调查材料完整、旧接口失效可修而验收不降级，未增加文件层/配置/框架，原事实冻结及生命周期保持。旧稿批准不覆盖本版；本次批准只限设计/指导及导航，正式接线仍须审核最终实际请求。
 
-## 7. 实装中的验证收口
+本轮文档检查为 633 文件、3993 本地链接、0 错误；空白/UTF-8、含 gaps 的 manifest3 示例、未增加 input/context 的最小布局及 A01–A18/D01 映射通过。未改变运行时提示词/样本/请求或产品代码，未运行业务模型/产品测试，不把文档检查算业务通过。
 
-真实 G 首轮完成，但原始项目输入存在缺口，具体报告保留在专属验收。按其事实补齐了固定 Python 测试辅助源码、项目协议及公共要求的有限清单；没有增加目录扫描、命令猜测或旧格式读取。公共要求使用 `SteerlineFlow/environment-common.md`，生成执行仍使用新键目录，根 `environment.md` 只作人工文档导航。
 
-固定规则明确原生快照按契约无 .git、来源由公开固定提交绑定，区分普通 publication base 与独立 validation base；旧环境入口接口由新生成脚本适配，不能改测试标准或伪造通过。实际正文、字节和源码守卫精确登记调整均已独立审核。G 的最终源码另以本次输出目录下的独立 clone 留存，供 V 固定相同生成字节，不能因正常临时现场清理而丢失输入。
+## 8. 本轮实施状态
 
-PowerShell 执行带点的 scenario ID 时使用 `-scenario 'testing.project-environment-readiness'` 等显式引用形式，防止本机 PowerShell 将未引用的 `-scenario=testing.xxx` 拆成两个参数。Web 原检查脚本在 PowerShell 7 宿主执行，以避免 PS5.1 将成功回执的 stderr 转成终止异常；项目运行脚本仍遵守 Windows PowerShell 5.1 基线。
-
-实现及自动工程验收已完成：最终10055字节规则经独立批准，G09两目标生成与V05本机完整正向流程通过，原失败与资源收尾见专属验收第8节。M01保持后置人工体验，不部署。
+用户已授权实施 R1–R5 的环境准备解耦，R0 的整个项目初始化接线不做。上一节“仅文档”的结论属于设计审阅时点；本版已修改实际消费者、协议和界面，最终指导7983字节、SHA256 `d56cdd2c1fdc26b52da1e3a85f950cbf128a799bcdba90ad5ccae204d868fa2a`。当前正文/接线经 `/root/prompt_review` 独立批准，实际差异、字节账本、问题修复和新测试结果统一见[专属验收 §10](../testing/acceptance/project-environment-workflow.md#10-环境要求与调用协议解耦实施2026-11-01验证进行中)。工程验证及新版真实 G/V 进行中，旧 G09/V05 不作为本轮通过。

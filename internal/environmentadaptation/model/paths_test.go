@@ -10,7 +10,7 @@ import (
 
 func TestEnvironmentMaterialManifestRejectsCrossTargetAndGenerationDependencies(t *testing.T) {
 	key := strings.Repeat("a", 64)
-	base := model.Manifest{Version: 2, EnvironmentKey: key, Script: model.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}}
+	base := model.Manifest{Version: 3, RequiredChecks: []string{}, Gaps: []string{}, EnvironmentKey: key, Script: model.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}}
 	parse := func(m model.Manifest) error {
 		body, _ := json.Marshal(m)
 		_, err := model.ParseManifest([]byte("```steerline-environment\n" + string(body) + "\n```"))

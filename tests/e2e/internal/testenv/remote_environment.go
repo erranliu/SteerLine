@@ -141,7 +141,7 @@ func (p *Project) checkRemoteEnvironment(seconds int) env.Record {
 		s.t.Fatal("missing stopped final report")
 	}
 	// Retain only caller-owned/public evidence, never Runner private storage.
-	s.Must(controlled.Write(filepath.Join(s.Output, "environment-proof.json"), map[string]any{"execution_digest": s.Run.Remote.ExecutionDigest, "source_commit": r.Prepared.Commit, "activity_id": id, "state": r.State, "rounds": len(r.Rounds), "round_details": r.Rounds, "run_id": last.RunID, "run": last.Run, "result": last.Result, "report": last.Report, "l2_ids": r.Prepared.L2, "round_timeout_seconds": seconds}))
+	s.Must(controlled.Write(filepath.Join(s.Output, "environment-proof.json"), map[string]any{"execution_digest": s.Run.Remote.ExecutionDigest, "source_commit": r.Prepared.Commit, "activity_id": id, "state": r.State, "rounds": len(r.Rounds), "round_details": r.Rounds, "run_id": last.RunID, "run": last.Run, "result": last.Result, "report": last.Report, "l2_ids": r.Prepared.L2, "manifest": r.Prepared.Manifest, "round_timeout_seconds": seconds}))
 	if r.Status() == "ready" {
 		p.verifyEnvironmentEvidence(r)
 	} else {

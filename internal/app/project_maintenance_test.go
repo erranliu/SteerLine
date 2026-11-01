@@ -219,7 +219,7 @@ func pmsFixture(t *testing.T) (*projectMaintenance, *pmsStore, *pmsCLI) {
 	pmGit(t, root, "clone", remote, repo)
 	pmGit(t, repo, "config", "user.name", "PM test")
 	pmGit(t, repo, "config", "user.email", "pm@example.invalid")
-	files := map[string]string{"task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "SteerlineFlow/testing.md": "# Testing\nRules\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
+	files := map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, "task.spec.md": "# Spec\n## Acceptance\nOne\n", "task.plan.md": "# Plan\nTest one\n", "SteerlineFlow/testing.md": "# Testing\nRules\n", "SteerlineFlow/testing/test-list.json": `{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"passes"}]}`}
 	rules, err := prompts.TestingRules()
 	require(t, err)
 	files["SteerlineFlow/testing/runtime-progress.md"] = string(rules)
@@ -290,7 +290,7 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if len(snapshot) == 0 || len(run.Documents.References) != 5 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
+	if len(snapshot) == 0 || len(run.Documents.References) != 6 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, snapshot, true)) {
 		t.Fatal("compact system context not frozen")
 	}
 	candidate := runnerstate.Candidate{ID: "original", TaskID: "101", MaterialDigest: first.Digest, Contract: fixed.Contract, BaseRevision: b, TestPlan: snapshot}

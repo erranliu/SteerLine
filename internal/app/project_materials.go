@@ -268,7 +268,7 @@ func (m *projectMaintenance) prepareLatest(ctx context.Context, w taskmodel.Fixe
 	w.ConfirmedDigest = w.Contract.Digest
 	w.Contract = material.Contract
 	w.MaterialDigest = material.Digest
-	w.FrozenTestPlan, e = json.Marshal(testmanagement.Snapshot{Status: "ready", GenerationID: g.ID, Inputs: material.Inputs, PlanPath: w.Contract.PlanRef.Path, Commit: material.Commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)})
+	w.FrozenTestPlan, e = json.Marshal(testmanagement.Snapshot{Project: g.ProjectEntry, Status: "ready", GenerationID: g.ID, Inputs: material.Inputs, PlanPath: w.Contract.PlanRef.Path, Commit: material.Commit, Definitions: definitions, Digest: testmanagement.Digest(definitions)})
 	if e != nil {
 		return w, "", e
 	}
@@ -301,7 +301,13 @@ func (m *projectMaintenance) candidateDocuments(ctx context.Context, id string) 
 	files := []file{}
 	refs := append([]taskmodel.FileReference{c.Contract.SpecRef, c.Contract.PlanRef}, c.Contract.CommonRefs...)
 	refs = append(refs, c.Contract.AcceptanceRefs...)
-	refs = append(refs, taskmodel.FileReference{Path: testmanagement.RulesPath, Commit: c.BaseRevision}, taskmodel.FileReference{Path: testmanagement.CataloguePath, Commit: c.BaseRevision})
+	entry, readErr := pmm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, c.BaseRevision, path) })
+	if readErr != nil {
+		return nil, readErr
+	}
+	for _, path := range entry.Paths() {
+		refs = append(refs, taskmodel.FileReference{Path: path, Commit: c.BaseRevision})
+	}
 	seen := map[string]bool{}
 	for _, r := range refs {
 		if seen[r.Path] {
@@ -356,7 +362,13 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 	files := []document{}
 	refs := append([]taskmodel.FileReference{latest.Contract.SpecRef, latest.Contract.PlanRef}, latest.Contract.CommonRefs...)
 	refs = append(refs, latest.Contract.AcceptanceRefs...)
-	refs = append(refs, taskmodel.FileReference{Path: testmanagement.RulesPath}, taskmodel.FileReference{Path: testmanagement.CataloguePath})
+	entry, readErr := pmm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, latest.Commit, path) })
+	if readErr != nil {
+		return nil, readErr
+	}
+	for _, path := range entry.Paths() {
+		refs = append(refs, taskmodel.FileReference{Path: path})
+	}
 	seen := map[string]bool{}
 	for _, ref := range refs {
 		if ref.Path == "" || seen[ref.Path] {

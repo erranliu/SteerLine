@@ -158,14 +158,15 @@ func checkRemoteEvidence(id, out string) error {
 // A correct mixed failure report is a valid negative L4 outcome, never ready.
 func checkUnreadyEnvironment(read func(string, any) error, digest, fixture string) error {
 	var proof struct {
-		Digest   string      `json:"execution_digest"`
-		Source   string      `json:"source_commit"`
-		Activity string      `json:"activity_id"`
-		State    string      `json:"state"`
-		Rounds   int         `json:"rounds"`
-		Details  []env.Round `json:"round_details"`
-		Report   env.Report  `json:"report"`
-		L2       []string    `json:"l2_ids"`
+		Digest   string       `json:"execution_digest"`
+		Source   string       `json:"source_commit"`
+		Activity string       `json:"activity_id"`
+		State    string       `json:"state"`
+		Rounds   int          `json:"rounds"`
+		Details  []env.Round  `json:"round_details"`
+		Report   env.Report   `json:"report"`
+		L2       []string     `json:"l2_ids"`
+		Manifest env.Manifest `json:"manifest"`
 	}
 	if err := read("environment-proof.json", &proof); err != nil {
 		return err
@@ -190,7 +191,7 @@ func checkUnreadyEnvironment(read func(string, any) error, digest, fixture strin
 		if err != nil {
 			return err
 		}
-		record := env.Record{ID: proof.Activity, Prepared: env.Prepared{Commit: fixture, ScriptDigest: proof.Report.ScriptDigest, L2: proof.L2}}
+		record := env.Record{ID: proof.Activity, Prepared: env.Prepared{Commit: fixture, ScriptDigest: proof.Report.ScriptDigest, L2: proof.L2, Manifest: proof.Manifest}}
 		report, err := env.ParseReport(raw, record, round)
 		if err != nil {
 			return err

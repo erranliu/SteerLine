@@ -32,6 +32,17 @@ func TestProjectEnvironmentReadiness(t *testing.T) {
 		profile["execution"] = map[string]any{"adapter": "orca-terminal", "target": map[string]string{"kind": "orca_environment", "environment": "controlled-peer"}, "settings": map[string]any{"agent_launch": map[string]any{"executable": "codex"}}}
 		config["execution_profiles"] = append(profiles, profile)
 		s.Must(controlled.Write(path, config))
+
+		if project == q {
+			for old, next := range map[string]string{"SteerlineFlow/testing.md": "quality/policy.md", "SteerlineFlow/testing/test-list.json": "quality/catalogue.json"} {
+				raw, err := os.ReadFile(filepath.Join(project.Repo, old))
+				s.Must(err)
+				s.Must(os.MkdirAll(filepath.Join(project.Repo, "quality"), 0700))
+				s.Must(os.WriteFile(filepath.Join(project.Repo, next), raw, 0600))
+				s.Must(os.Remove(filepath.Join(project.Repo, old)))
+			}
+			s.Must(os.WriteFile(filepath.Join(project.Repo, "SteerlineFlow/environment-project.json"), []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/catalogue.json"}`), 0600))
+		}
 		project.WriteControlledEnvironment()
 		project.CreateTasks()
 		project.StartService()

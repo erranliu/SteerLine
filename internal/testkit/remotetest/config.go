@@ -15,6 +15,7 @@ import (
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/executionconfig"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -179,6 +180,12 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := manifest.Ready(); err != nil {
+		return nil, err
+	}
+	if _, err := pm.ReadProjectEntry(show); err != nil {
+		return nil, err
+	}
 	script, err := show(manifest.Script)
 	if err != nil {
 		return nil, err
@@ -209,12 +216,16 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 // These are the two existing project verifiers reused by the live driver.
 // Fail before fixture creation for unknown or ambiguous report formats.
 func environmentL2Verification(show func(string) ([]byte, error)) (string, error) {
+	entry, err := pm.ReadProjectEntry(show)
+	if err != nil {
+		return "", err
+	}
 	formats := []struct {
 		name  string
 		paths []string
 	}{
-		{"python", []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"}},
-		{"managed-powershell", []string{"SteerlineFlow/testing/test-list.json", "tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"}},
+		{"python", []string{entry.TestingCatalogue, "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"}},
+		{"managed-powershell", []string{entry.TestingCatalogue, "tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"}},
 	}
 	found := ""
 	for _, format := range formats {

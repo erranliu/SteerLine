@@ -81,7 +81,15 @@ func RunEnvironmentGeneration(t *testing.T) {
 		p.git(p.Repo, "push", bare, "HEAD:refs/heads/"+p.BaseBranch)
 		return p.git(p.Repo, "rev-parse", "HEAD")
 	}
-	commit("Prepare same-version generation rules")
+	guide, e := os.ReadFile(filepath.Join(s.Run.Root, "SteerlineProjectGuideDoc/environment-adaptation.md"))
+	s.Must(e)
+	guidePath := filepath.Join(p.Repo, "SteerlineProjectGuideDoc/environment-adaptation.md")
+	s.Must(os.MkdirAll(filepath.Dir(guidePath), 0700))
+	s.Must(os.WriteFile(guidePath, guide, 0600))
+	// This is the test project's explicit source declaration, not a product fallback.
+	entry := []byte(`{"version":1,"requirements":["SteerlineFlow/environment-common.md","SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`)
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "SteerlineFlow/environment-project.json"), entry, 0600))
+	generationSource := commit("Prepare isolated project sources and protocols")
 	p.git(p.Repo, "push", bare, "HEAD:refs/heads/"+validationBase)
 	raw, err := p.Driver.Run(s.Context, "home", "-config", p.Config)
 	s.Must(err)
@@ -119,17 +127,15 @@ func RunEnvironmentGeneration(t *testing.T) {
 		}
 		keys = append(keys, key)
 		var material struct {
-			Expected string `json:"expected_context"`
-			Path     string `json:"context_path"`
+			Facts json.RawMessage `json:"target_facts"`
+			Ready bool            `json:"generation_ready"`
 		}
 		s.Must(client.Get(s.Context, prefix+"/environment/materials?environment_key="+key, &material))
-		if material.Path != model.GenerationContextPath(key) || material.Expected == "" {
-			t.Fatal("bootstrap target context absent")
+		if len(material.Facts) == 0 || !material.Ready {
+			t.Fatal("bootstrap target facts or source unavailable")
 		}
-		s.Must(os.MkdirAll(filepath.Dir(filepath.Join(p.Repo, material.Path)), 0700))
-		s.Must(os.WriteFile(filepath.Join(p.Repo, material.Path), []byte(material.Expected), 0600))
 	}
-	generationSource := commit("Pin target-specific generation contexts")
+
 	proof := []map[string]any{}
 	for _, key := range keys {
 		response := p.EnvironmentCommand("environment_generate", model.Generate{TargetKey: key, Profile: in.Profile.ID})

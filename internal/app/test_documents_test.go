@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	projectmodel "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -35,7 +36,7 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 	run := callerTestRun()
 	got, e := c.prepareTestPlan(context.Background(), work, &run)
 	require(t, e)
-	if string(got) != string(raw) || len(run.Documents.References) != 5 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, raw, true)) {
+	if string(got) != string(raw) || len(run.Documents.References) != 6 || !strings.Contains(run.Workflow.PromptOverrides["implement.execute"], testPromptContext(t, raw, true)) {
 		t.Fatal("system context was not frozen", run)
 	}
 	if run.ProgressFile == nil {
@@ -71,11 +72,13 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 
 func callerFrozenWork(t *testing.T, m *projectMaintenance, contract taskmodel.TaskContract) taskmodel.FixedWork {
 	t.Helper()
-	body, err := m.read(context.Background(), contract.PlanRef.Commit, testmodel.CataloguePath)
+	entry, err := projectmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(context.Background(), contract.PlanRef.Commit, path) })
+	require(t, err)
+	body, err := m.read(context.Background(), contract.PlanRef.Commit, entry.TestingCatalogue)
 	require(t, err)
 	catalogue, err := testmanagement.ParseCatalogue(body)
 	require(t, err)
-	snap := testmanagement.Snapshot{Status: "ready", PlanPath: contract.PlanRef.Path, Commit: contract.PlanRef.Commit, GenerationID: "original", Definitions: catalogue.Tests, Digest: testmanagement.Digest(catalogue.Tests)}
+	snap := testmanagement.Snapshot{Project: entry, Status: "ready", PlanPath: contract.PlanRef.Path, Commit: contract.PlanRef.Commit, GenerationID: "original", Definitions: catalogue.Tests, Digest: testmanagement.Digest(catalogue.Tests)}
 	raw, err := json.Marshal(snap)
 	require(t, err)
 	return taskmodel.FixedWork{FrozenTestPlan: raw, Contract: contract}
@@ -132,7 +135,7 @@ func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {
 				if !strings.Contains(run.Workflow.PromptOverrides["publish"], testReadOnlyPrompt(t)) || strings.Contains(run.Workflow.PromptOverrides["publish"], "Set-RuntimeProgress") {
 					t.Fatal("publication got writer")
 				}
-				if len(run.Documents.References) != 5 {
+				if len(run.Documents.References) != 6 {
 					t.Fatal("writer path not bound")
 				}
 			}
@@ -214,4 +217,28 @@ func testReadOnlyPrompt(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return body
+}
+
+func TestTMCommittedPlanUsesSameCustomProjectSources(t *testing.T) {
+	m, store, _ := pmsFixture(t)
+	for old, path := range map[string]string{testmodel.RulesPath: "quality/policy.md", testmodel.CataloguePath: "quality/cases.json"} {
+		body, err := os.ReadFile(filepath.Join(m.config.Repository, old))
+		require(t, err)
+		require(t, os.MkdirAll(filepath.Join(m.config.Repository, "quality"), 0700))
+		require(t, os.WriteFile(filepath.Join(m.config.Repository, path), body, 0600))
+		require(t, os.Remove(filepath.Join(m.config.Repository, old)))
+	}
+	require(t, os.WriteFile(filepath.Join(m.config.Repository, projectmodel.ProjectEntryPath), []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`), 0600))
+	pmGit(t, m.config.Repository, "add", ".")
+	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "-qm", "custom sources")
+	contract := store.contract
+	contract.PlanRef.Commit = pmGit(t, m.config.Repository, "rev-parse", "HEAD")
+	work := callerFrozenWork(t, m, contract)
+	run := callerTestRun()
+	_, err := m.config.prepareTestPlan(context.Background(), work, &run)
+	require(t, err)
+	refs, _ := json.Marshal(run.Documents.References)
+	if !strings.Contains(string(refs), "quality/cases.json") || strings.Contains(string(refs), testmodel.CataloguePath) || strings.Contains(string(refs), testmodel.RulesPath) {
+		t.Fatal("candidate used another source", string(refs))
+	}
 }

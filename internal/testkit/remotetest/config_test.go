@@ -101,8 +101,8 @@ func projectFixture(t *testing.T, execution runnercontract.ExecutionInput) (stri
 		t.Fatal(err)
 	}
 	key, _ := env.Key(execution)
-	manifest, _ := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
-	for path, body := range map[string]string{"SteerlineFlow/environment-execution.md": string(rules), env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
+	manifest, _ := json.Marshal(env.Manifest{Version: 3, RequiredChecks: []string{}, Gaps: []string{}, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
+	for path, body := range map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":[],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, "SteerlineFlow/environment-execution.md": string(rules), env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		if e := os.MkdirAll(filepath.Dir(full), 0700); e != nil {
 			t.Fatal(e)
@@ -177,7 +177,7 @@ func TestLocalEnvironmentL4FrozenProfileAndTarget(t *testing.T) {
 			p.Execution.Settings = json.RawMessage(`{"executable":"codex","model":"selected"}`)
 		}
 		key, _ := env.Key(p.Execution)
-		manifest, _ := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
+		manifest, _ := json.Marshal(env.Manifest{Version: 3, RequiredChecks: []string{}, Gaps: []string{}, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
 		for name, body := range map[string]string{env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
 			full := filepath.Join(repo, filepath.FromSlash(name))
 			if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
@@ -223,7 +223,7 @@ func TestLocalEnvironmentL4FrozenProfileAndTarget(t *testing.T) {
 }
 
 func TestLocalEnvironmentL4RejectsUnknownAndAmbiguousL2Verifiers(t *testing.T) {
-	fixtures := map[string][]byte{}
+	fixtures := map[string][]byte{"SteerlineFlow/environment-project.json": []byte(`{"version":1,"requirements":[],"testing_catalogue":"quality/original-tests.json"}`)}
 	show := func(path string) ([]byte, error) {
 		if raw, ok := fixtures[path]; ok {
 			return raw, nil
@@ -233,7 +233,7 @@ func TestLocalEnvironmentL4RejectsUnknownAndAmbiguousL2Verifiers(t *testing.T) {
 	if _, err := environmentL2Verification(show); err == nil {
 		t.Fatal("unknown report format accepted")
 	}
-	for _, path := range []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"} {
+	for _, path := range []string{"quality/original-tests.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"} {
 		fixtures[path] = []byte("original")
 	}
 	format, err := environmentL2Verification(show)

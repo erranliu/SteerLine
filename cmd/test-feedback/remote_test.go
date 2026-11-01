@@ -75,7 +75,7 @@ func TestRemoteL4RequiresLinkedSealedL2AndPR(t *testing.T) {
 	result := runnercontract.ResultFile{Contract: runnercontract.ResultContract, RunID: "run", Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(raw), SHA256: hex.EncodeToString(sum[:]), CollectionStatus: "closed"}
 	for _, change := range []string{"valid", "wrong-source", "fourth-round", "unsealed", "missing-l2", "failed-l2", "unmerged-pr", "wrong-machine"} {
 		t.Run(change, func(t *testing.T) {
-			proof := map[string]any{"execution_digest": "digest", "source_commit": "fixture", "activity_id": "activity", "rounds": 1, "run_id": "run", "run": runnercontract.Run{RunID: "run", StopStatus: "stopped", Execution: runnercontract.Execution{Branch: "owned-head"}}, "result": result, "report": report, "l2_ids": []string{"l2.a"}}
+			proof := map[string]any{"execution_digest": "digest", "source_commit": "fixture", "activity_id": "activity", "rounds": 1, "run_id": "run", "run": runnercontract.Run{RunID: "run", StopStatus: "stopped", Execution: runnercontract.Execution{Branch: "owned-head"}}, "result": result, "report": report, "l2_ids": []string{"l2.a"}, "manifest": env.Manifest{RequiredChecks: []string{"git", "unity.editor"}}}
 			summary := map[string]any{"passed": true, "cleanup_complete": true, "level": "L2", "selected_ids": []string{"l2.a"}, "project_verification": []any{map[string]any{"test_id": "l2.a", "status": "passed"}}}
 			pr := map[string]any{"merged": true, "merge_commit_sha": strings.Repeat("c", 40), "html_url": report.PR.URL, "head": map[string]string{"ref": "owned-head", "sha": report.PR.HeadRevision}, "base": map[string]string{"ref": "owned-base"}}
 			provider := map[string]any{"pr": pr, "required_checks_verified": true, "required_reviews_verified": true, "execution_digest": "digest"}
@@ -122,12 +122,12 @@ func TestRemoteL4AcceptsOnlyOriginalMixedUnreadyEvidence(t *testing.T) {
 			var last env.Report
 			for i := 1; i <= 3; i++ {
 				runID := "run-" + strings.Repeat("r", i)
-				last = env.Report{Version: env.ReportVersion, ActivityID: "activity", Round: i, Commit: "fixture", ScriptDigest: strings.Repeat("a", 64), Completed: true, Checks: []env.Check{{ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}}, L2: []env.Item{{ID: "l2.a", Status: "incomplete", Message: "requirements unmet"}}, PR: env.PR{Base: "owned-base", Head: "owned-head", CleanupCompleted: true}}
+				last = env.Report{Version: env.ReportVersion, ActivityID: "activity", Round: i, Commit: "fixture", ScriptDigest: strings.Repeat("a", 64), Completed: true, Checks: []env.Check{{ID: "terminal.tty", Status: "passed", Message: "TTY verified"}, {ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}}, L2: []env.Item{{ID: "l2.a", Status: "incomplete", Message: "requirements unmet"}}, PR: env.PR{Base: "owned-base", Head: "owned-head", CleanupCompleted: true}}
 				if change == "all-green" {
-					last.Checks[1].Status = "passed"
+					last.Checks[2].Status = "passed"
 				}
 				if change == "duplicate-check" {
-					last.Checks[1].ID = "git"
+					last.Checks[2].ID = "git"
 				}
 				raw, _ := json.Marshal(last)
 				encoded := base64.StdEncoding.EncodeToString(raw)
@@ -143,7 +143,7 @@ func TestRemoteL4AcceptsOnlyOriginalMixedUnreadyEvidence(t *testing.T) {
 			if change == "missing-round" {
 				details = details[:2]
 			}
-			proof := map[string]any{"execution_digest": digest, "source_commit": "fixture", "activity_id": "activity", "state": "failed", "rounds": 3, "round_details": details, "report": last, "l2_ids": []string{"l2.a"}}
+			proof := map[string]any{"execution_digest": digest, "source_commit": "fixture", "activity_id": "activity", "state": "failed", "rounds": 3, "round_details": details, "report": last, "l2_ids": []string{"l2.a"}, "manifest": env.Manifest{RequiredChecks: []string{"git", "unity.editor"}}}
 			provider := map[string]any{"no_pr": change != "pr-created", "validation_base": "owned-base", "execution_digest": digest}
 			if change == "wrong-machine" {
 				provider["execution_digest"] = "wrong"

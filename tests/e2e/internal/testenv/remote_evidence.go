@@ -17,6 +17,7 @@ import (
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
@@ -191,21 +192,26 @@ func (p *Project) verifyEnvironmentEvidence(record env.Record) {
 		s.Must(p.providerRead(config.PR, root+"/pulls/"+strconv.Itoa(number)+"/reviews?limit=100&per_page=100", &reviews))
 		s.Must(requireEnvironmentReviews(rules.MinimumApprovals, pr.User.Login, reviews))
 	}
+	entry, entryErr := pm.ReadProjectEntry(func(path string) ([]byte, error) {
+		return []byte(p.git(p.Repo, "show", record.Prepared.Commit+":"+path)), nil
+	})
+	s.Must(entryErr)
 	managed := s.ID == "testing.project-environment-orca" || s.Run.Remote.L2Verification == "managed-powershell"
 	script := `$path=Join-Path (Get-Location) '` + strings.ReplaceAll(rules.L2Summary, "'", "''") + `';$text=[IO.File]::ReadAllText($path);if($text.Length -gt 65536){throw 'L2 summary exceeds evidence bound'};$summary=$text|ConvertFrom-Json;`
-	validators := []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"}
+	validators := []string{entry.TestingCatalogue, "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"}
 	if managed {
-		validators = []string{"SteerlineFlow/testing/test-list.json", "tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"}
+		validators = []string{entry.TestingCatalogue, "tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1"}
 	}
 	for _, path := range validators {
 		blob := p.git(p.Repo, "rev-parse", record.Prepared.Commit+":"+path)
 		script += "$blob=(& git hash-object --path " + psProgressLiteral(path) + " " + psProgressLiteral(path) + "|Out-String).Trim();if($LASTEXITCODE -or $blob -cne " + psProgressLiteral(blob) + "){throw 'original L2 validator changed'};"
 	}
+	script += "$cataloguePath=" + psProgressLiteral(entry.TestingCatalogue) + ";"
 	script += originalEnvironmentSummaryDigestScript
 	if managed {
-		script += `. ./tools/testing/ExecutionPlan.ps1;. ./tools/testing/ManagedReports.ps1;$output=Split-Path $path -Parent;$plan=Get-Content -Raw -LiteralPath (Join-Path $output 'plan.json')|ConvertFrom-Json;if($plan.level -cne 'L2' -or $summary.level -cne 'L2' -or $summary.result -cne 'Passed' -or $plan.shardCount -ne 1 -or $plan.selection.caseId -or $plan.selection.group -or $plan.selection.tag){throw 'not complete project L2'};$definitions=@((Get-Content -Raw ./SteerlineFlow/testing/test-list.json|ConvertFrom-Json).tests|Where-Object level -CEQ 'L2');$selected=@{};foreach($d in $definitions){$selected[$d.id]=$d};$verified=@(Get-ManagedArchitectureResults @{selected=$selected;output=$output} $summary $plan L2);if(!$verified.Count -or $verified.Count -ne $definitions.Count -or @($verified|Where-Object status -CNE 'passed').Count){throw 'original XML/input/cleanup evidence failed'};@{passed=$true;cleanup_complete=$true;level='L2';original_summary=$summary;original_summary_sha256=$summarySHA;selected_ids=@($definitions.id);project_verification=@($verified|ForEach-Object {@{test_id=$_.id;status=$_.status}})}`
+		script += `. ./tools/testing/ExecutionPlan.ps1;. ./tools/testing/ManagedReports.ps1;$output=Split-Path $path -Parent;$plan=Get-Content -Raw -LiteralPath (Join-Path $output 'plan.json')|ConvertFrom-Json;if($plan.level -cne 'L2' -or $summary.level -cne 'L2' -or $summary.result -cne 'Passed' -or $plan.shardCount -ne 1 -or $plan.selection.caseId -or $plan.selection.group -or $plan.selection.tag){throw 'not complete project L2'};$definitions=@((Get-Content -Raw -LiteralPath $cataloguePath|ConvertFrom-Json).tests|Where-Object level -CEQ 'L2');$selected=@{};foreach($d in $definitions){$selected[$d.id]=$d};$verified=@(Get-ManagedArchitectureResults @{selected=$selected;output=$output} $summary $plan L2);if(!$verified.Count -or $verified.Count -ne $definitions.Count -or @($verified|Where-Object status -CNE 'passed').Count){throw 'original XML/input/cleanup evidence failed'};@{passed=$true;cleanup_complete=$true;level='L2';original_summary=$summary;original_summary_sha256=$summarySHA;selected_ids=@($definitions.id);project_verification=@($verified|ForEach-Object {@{test_id=$_.id;status=$_.status}})}`
 	} else {
-		script += `$definitions=@((Get-Content -Raw ./SteerlineFlow/testing/test-list.json|ConvertFrom-Json).tests|Where-Object level -CEQ 'L2');$verified=@($summary.results);if(!$summary.passed -or !$summary.complete -or $summary.exit_code -ne 0 -or !$summary.before_clean -or !$summary.after_clean -or $verified.Count -ne $definitions.Count -or @($summary.details.skipped).Count -or $summary.details.tests_run -le 0){throw 'not complete original project L2'};foreach($d in $definitions){$matches=@($verified|Where-Object test_id -CEQ $d.id);if($matches.Count -ne 1 -or $matches[0].status -cne 'passed' -or $d.id -cnotin @($summary.selection)){throw 'original L2 item not passed'}};@{passed=$true;cleanup_complete=$true;level='L2';original_summary=$summary;original_summary_sha256=$summarySHA;selected_ids=@($definitions.id);project_verification=$verified}`
+		script += `$definitions=@((Get-Content -Raw -LiteralPath $cataloguePath|ConvertFrom-Json).tests|Where-Object level -CEQ 'L2');$verified=@($summary.results);if(!$summary.passed -or !$summary.complete -or $summary.exit_code -ne 0 -or !$summary.before_clean -or !$summary.after_clean -or $verified.Count -ne $definitions.Count -or @($summary.details.skipped).Count -or $summary.details.tests_run -le 0){throw 'not complete original project L2'};foreach($d in $definitions){$matches=@($verified|Where-Object test_id -CEQ $d.id);if($matches.Count -ne 1 -or $matches[0].status -cne 'passed' -or $d.id -cnotin @($summary.selection)){throw 'original L2 item not passed'}};@{passed=$true;cleanup_complete=$true;level='L2';original_summary=$summary;original_summary_sha256=$summarySHA;selected_ids=@($definitions.id);project_verification=$verified}`
 	}
 	var summary []byte
 	if s.Run.Remote.Profile.Execution.Adapter == "codex-app-server" {

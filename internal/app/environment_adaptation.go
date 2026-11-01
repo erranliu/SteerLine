@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,6 +11,7 @@ import (
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation"
 	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -100,6 +100,9 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 	if e != nil {
 		return out, e
 	}
+	if e := manifest.Ready(); e != nil {
+		return out, e
+	}
 	if strings.EqualFold(manifest.ValidationBase, c.Branch) {
 		return out, errors.New("验证base不能是业务主分支")
 	}
@@ -119,7 +122,11 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 	if e != nil {
 		return out, e
 	}
-	catalogueRaw, e := p.read(ctx, commit, "SteerlineFlow/testing/test-list.json")
+	entry, e := p.projectEntryAt(ctx, commit)
+	if e != nil {
+		return out, e
+	}
+	catalogueRaw, e := p.read(ctx, commit, entry.TestingCatalogue)
 	if e != nil {
 		return out, e
 	}
@@ -151,7 +158,7 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 		return out, errors.New("材料准备不足：环境执行规则不同源")
 	}
 	files := map[string]string{envmodel.ExecutionRulesPath: envmodel.Digest(executionRules), envmodel.DocumentPath(key): envmodel.Digest(document), manifest.Script: envmodel.Digest(script)}
-	deps := append([]string{"SteerlineFlow/testing.md"}, manifest.Dependencies...)
+	deps := append(append([]string{}, entry.Requirements...), manifest.Dependencies...)
 	for _, path := range deps {
 		b, e := p.read(ctx, commit, path)
 		if e != nil {
@@ -161,7 +168,14 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 	}
 	publication := c.runnerPublication()
 	publication.BaseBranch = manifest.ValidationBase
-	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Repository: runnercontract.Repository{URL: "", LocalPath: c.Repository, Remote: c.Remote, BaseBranch: manifest.ValidationBase, BaseRevision: commit}, Publication: publication, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath(key)}, Plan: runnercontract.Document{Path: manifest.Script}, References: []runnercontract.Document{{Path: envmodel.ExecutionRulesPath}, {Path: "SteerlineFlow/testing.md"}, {Path: "SteerlineFlow/testing/test-list.json"}}}}
+	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Repository: runnercontract.Repository{URL: "", LocalPath: c.Repository, Remote: c.Remote, BaseBranch: manifest.ValidationBase, BaseRevision: commit}, Publication: publication, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath(key)}, Plan: runnercontract.Document{Path: manifest.Script}, References: []runnercontract.Document{{Path: envmodel.ExecutionRulesPath}, {Path: pm.ProjectEntryPath}, {Path: entry.TestingCatalogue}}}}
+	referenceSet := map[string]bool{envmodel.DocumentPath(key): true, manifest.Script: true, envmodel.ExecutionRulesPath: true, pm.ProjectEntryPath: true, entry.TestingCatalogue: true}
+	for _, path := range deps {
+		if !referenceSet[path] {
+			input.Documents.References = append(input.Documents.References, runnercontract.Document{Path: path})
+			referenceSet[path] = true
+		}
+	}
 	input.Repository.URL, e = c.TaskRepositoryTarget(ctx)
 	if e != nil {
 		return out, e
@@ -177,12 +191,13 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 		return out, e
 	}
 	basis, _ := json.Marshal(struct {
+		Entry       pm.ProjectEntry
 		Files       map[string]string
 		Tests       []testmanagement.Definition
 		Publication runnercontract.Publication
 		Execution   runnercontract.ExecutionInput
 		Repository  []string
-	}{files, definitions, publication, preparationContext, []string{input.Repository.URL, c.Remote, c.Branch}})
+	}{entry, files, definitions, publication, preparationContext, []string{input.Repository.URL, c.Remote, c.Branch}})
 	out = envmodel.Prepared{Commit: commit, Inputs: envmodel.Digest(basis), ScriptDigest: envmodel.Digest(script), Manifest: manifest, L2: ids, Input: input}
 	return out, nil
 }
@@ -196,7 +211,7 @@ func (p *environmentPort) prepareGeneration(ctx context.Context, in envmodel.Gen
 	if err != nil {
 		return prepared, err
 	}
-	body, err := p.read(ctx, out.Generate.Repository.Commit, envmodel.GenerationContextPath(in.TargetKey))
+	body, err := p.generationContext(ctx, in.TargetKey)
 	if err != nil {
 		return prepared, err
 	}
@@ -222,76 +237,19 @@ func (p *environmentPort) generationInput(ctx context.Context, in envmodel.Gener
 	if e != nil {
 		return out, e
 	}
-	paths := []string{envmodel.GenerationRulesPath, envmodel.ExecutionRulesPath, envmodel.GenerationContextPath(key), "README.md", ".gitignore", ".gitattributes", "SteerlineFlow/environment-common.md", "scripts/verify-environment.ps1", "scripts/environment-tty.ps1", "publish.ps1", "tools/test-project.py", "tools/project_checks.py", "tools/runtime_progress.py", "tools/test-runtime-progress.py", "tools/test-native-evidence.py", "tools/verify-native-evidence.py", "tools/steerline-pr-provider.py", "tools/steerline_reports.py", "tools/run-tests.ps1", "tools/testing/ExecutionPlan.ps1", "tools/testing/ManagedReports.ps1", "SteerlineFlow/testing.md", "SteerlineFlow/testing/l1.md", "SteerlineFlow/testing/l2.md", "SteerlineFlow/testing/runtime-progress.md", "SteerlineFlow/protocols/test-results.md", "SteerlineFlow/paths.md", "SteerlineFlow/steerline.md", "SteerlineProjectGuideDoc/testing-architecture.md", "SteerlineFlow/testing/test-list.json", envmodel.DocumentPath(key), "go.mod", "package.json", "pyproject.toml", "requirements.txt", envmodel.ScriptPath(key, "ps1"), envmodel.ScriptPath(key, "sh")}
-	required := map[string]bool{envmodel.GenerationRulesPath: true, envmodel.ExecutionRulesPath: true, envmodel.GenerationContextPath(key): true, "SteerlineFlow/testing.md": true, "SteerlineFlow/testing/test-list.json": true}
-	if document, e := p.read(ctx, commit, envmodel.DocumentPath(key)); e == nil {
-		if manifest, e := envmodel.ParseManifest(document); e == nil && manifest.EnvironmentKey == key {
-			paths = append(paths, manifest.Dependencies...)
-			for _, path := range manifest.Dependencies {
-				required[path] = true
-			}
-		}
+	selected, survey, e := p.generationFiles(ctx, commit, key)
+	if e != nil {
+		return out, e
+	}
+	facts, e := p.generationContext(ctx, key)
+	if e != nil {
+		return out, e
+	}
+	instruction, e := prompts.EnvironmentGenerate(commit, string(facts), envmodel.DocumentPath(key), envmodel.MaterialDirectory(key)+"/verify-environment", survey)
+	if e != nil {
+		return out, e
 	}
 	materials := []runnercontract.Document{}
-	selected := []string{}
-	total := 0
-	seen := map[string]bool{}
-	for _, path := range paths {
-		if seen[path] {
-			continue
-		}
-		seen[path] = true
-		b, e := p.read(ctx, commit, path)
-		if e != nil {
-			if required[path] {
-				return out, e
-			}
-			continue
-		}
-		selected = append(selected, path)
-		total += len(b)
-		if total > 1<<20 {
-			return out, errors.New("环境生成材料超限，请精简项目说明")
-		}
-
-	}
-	contextBody, err := p.generationContext(ctx, key)
-	if err != nil {
-		return out, err
-	}
-	rules, err := p.read(ctx, commit, envmodel.GenerationRulesPath)
-	if err != nil {
-		return out, err
-	}
-	expectedRules, err := prompts.EnvironmentGenerationRules()
-	if err != nil {
-		return out, err
-	}
-	if !prompts.SameRules(rules, expectedRules) {
-		return out, errors.New("材料准备不足：环境生成规则不同源")
-	}
-	executionRules, err := p.read(ctx, commit, envmodel.ExecutionRulesPath)
-	if err != nil {
-		return out, err
-	}
-	expectedExecutionRules, err := prompts.EnvironmentExecutionRules()
-	if err != nil {
-		return out, err
-	}
-	if !prompts.SameRules(executionRules, expectedExecutionRules) {
-		return out, errors.New("材料准备不足：环境报告/执行规则不同源")
-	}
-	contextFile, err := p.read(ctx, commit, envmodel.GenerationContextPath(key))
-	if err != nil {
-		return out, err
-	}
-	if !bytes.Equal(contextFile, contextBody) {
-		return out, errors.New("材料准备不足：环境上下文文件与原公开配置/完整前轮事实不符")
-	}
-	instruction, err := prompts.EnvironmentGenerate(commit, envmodel.GenerationContextPath(key), envmodel.DocumentPath(key), envmodel.MaterialDirectory(key)+"/verify-environment")
-	if err != nil {
-		return out, err
-	}
 	out = runnercontract.GenerateRunInput{Title: "项目环境准备文档与验收脚本", Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Execution: execution, Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: p.config.Repository, Commit: commit, Paths: selected}, Instruction: instruction, Materials: materials, OutputSchema: json.RawMessage(env.GenerationSchema)}}
 	if p.config.runtimeCatalog == nil {
 		return out, errors.New("Runner能力目录不可用")

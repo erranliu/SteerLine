@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -28,7 +29,12 @@ func (p *roadmapPort) documentContext(ctx context.Context, r roadmap.Record) (ro
 		return result, err
 	}
 	result.Tree = strings.TrimSpace(string(tree))
-	for _, name := range []string{"SteerlineFlow/spec/SpecGuide.md", "SteerlineFlow/testing.md", "SteerlineProjectGuideDoc/spec-plan-guidelines.md"} {
+	entry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, result.Commit, path) })
+	if err != nil {
+		return result, err
+	}
+	names := append([]string{"SteerlineFlow/spec/SpecGuide.md", "SteerlineProjectGuideDoc/spec-plan-guidelines.md"}, entry.Paths()...)
+	for _, name := range names {
 		body, err := m.read(ctx, result.Commit, name)
 		if err != nil {
 			return result, errors.New("固定版本缺少必需生成规范：" + name)

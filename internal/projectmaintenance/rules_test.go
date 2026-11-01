@@ -2,12 +2,17 @@ package projectmaintenance
 
 import (
 	"errors"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"testing"
 )
 
 func TestPMSMaterialInputsDoNotRequireArrangement(t *testing.T) {
-	files := map[string][]byte{"SteerlineFlow/plans/task.plan.md": []byte("# Plan\nTest one\n"), tm.RulesPath: []byte("# Rules\n"), tm.CataloguePath: []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)}
+	rules, err := prompts.TestingRules()
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string][]byte{"SteerlineFlow/environment-project.json": []byte(`{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`), "SteerlineFlow/testing/runtime-progress.md": rules, "SteerlineFlow/plans/task.plan.md": []byte("# Plan\nTest one\n"), tm.RulesPath: []byte("# Rules\n"), tm.CataloguePath: []byte(`{"tests":[{"id":"one","name":"One","level":"L1","environment":"isolated","command":"test","check":"pass"}]}`)}
 	read := func(path string) ([]byte, error) {
 		v, ok := files[path]
 		if !ok {
@@ -16,7 +21,7 @@ func TestPMSMaterialInputsDoNotRequireArrangement(t *testing.T) {
 		return v, nil
 	}
 	sources, e := GenerationSources("SteerlineFlow/plans/task.plan.md", read)
-	if e != nil || len(sources) != 3 {
+	if e != nil || len(sources) != 5 {
 		t.Fatal(sources, e)
 	}
 	before := sources[0].TextDigest

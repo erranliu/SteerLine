@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/url"
 	"regexp"
@@ -71,6 +72,8 @@ type Manifest struct {
 	Interpreter    string   `json:"interpreter"`
 	ValidationBase string   `json:"validation_base"`
 	Dependencies   []string `json:"dependencies"`
+	RequiredChecks []string `json:"required_checks"`
+	Gaps           []string `json:"gaps"`
 }
 
 func ParseManifest(document []byte) (Manifest, error) {
@@ -92,18 +95,39 @@ func ParseManifest(document []byte) (Manifest, error) {
 	if e := Decode(b[:end], &m); e != nil {
 		return m, e
 	}
-	if m.Version != 2 || !ValidKey(m.EnvironmentKey) || m.Dependencies == nil || (m.Script != ScriptPath(m.EnvironmentKey, "ps1") && m.Script != ScriptPath(m.EnvironmentKey, "sh")) || (strings.HasSuffix(m.Script, ".ps1") && m.Interpreter != "powershell.exe") || (strings.HasSuffix(m.Script, ".sh") && m.Interpreter != "bash") || strings.TrimSpace(m.ValidationBase) == "" {
+	if m.Version != 3 || !ValidKey(m.EnvironmentKey) || m.Dependencies == nil || m.RequiredChecks == nil || m.Gaps == nil || (m.Script != ScriptPath(m.EnvironmentKey, "ps1") && m.Script != ScriptPath(m.EnvironmentKey, "sh")) || (strings.HasSuffix(m.Script, ".ps1") && m.Interpreter != "powershell.exe") || (strings.HasSuffix(m.Script, ".sh") && m.Interpreter != "bash") || strings.TrimSpace(m.ValidationBase) == "" {
 		return m, errors.New("invalid script, interpreter or pre-existing validation base")
+	}
+	for _, items := range [][]string{m.RequiredChecks, m.Gaps} {
+		seen := map[string]bool{}
+		for _, item := range items {
+			if strings.TrimSpace(item) == "" || strings.TrimSpace(item) != item || seen[item] {
+				return m, errors.New("environment checks and gaps require unique nonempty values")
+			}
+			seen[item] = true
+		}
+	}
+	for _, id := range m.RequiredChecks {
+		if id == "terminal.tty" {
+			return m, errors.New("terminal.tty is reserved by the execution protocol")
+		}
 	}
 	seen := map[string]bool{}
 	for _, p := range m.Dependencies {
-		if !fs.ValidPath(p) || strings.ContainsAny(p, "\\:\x00") || seen[p] || p == GenerationContextPath(m.EnvironmentKey) || p == GenerationRulesPath || strings.HasPrefix(p, "SteerlineFlow/environments/") && !strings.HasPrefix(p, MaterialDirectory(m.EnvironmentKey)+"/") {
+		if !fs.ValidPath(p) || p == "." || strings.ContainsAny(p, "\\:\x00*?[]") || seen[p] || p == m.Script || p == DocumentPath(m.EnvironmentKey) || p == "SteerlineProjectGuideDoc/environment-adaptation.md" || p == "SteerlineFlow/environment-project.json" || p == GenerationContextPath(m.EnvironmentKey) || p == GenerationRulesPath || strings.HasPrefix(p, "SteerlineFlow/environments/") && !strings.HasPrefix(p, MaterialDirectory(m.EnvironmentKey)+"/") {
 			return m, errors.New("dependencies require unique repository-relative files")
 		}
 		seen[p] = true
 	}
 	sort.Strings(m.Dependencies)
 	return m, nil
+}
+
+func (m Manifest) Ready() error {
+	if len(m.Gaps) != 0 {
+		return fmt.Errorf("环境要求尚有阻断缺口：%s", strings.Join(m.Gaps, "；"))
+	}
+	return nil
 }
 
 type Prepared struct {
@@ -271,9 +295,16 @@ func ParseReport(raw []byte, r Record, a Round) (*Report, error) {
 	if len(p.Checks) == 0 {
 		return nil, errors.New("report must include environment requirement checks")
 	}
+	wantChecks := map[string]bool{"terminal.tty": true}
+	for _, id := range r.Prepared.Manifest.RequiredChecks {
+		wantChecks[id] = true
+	}
+	if len(p.Checks) != len(wantChecks) {
+		return nil, errors.New("report must include the exact declared environment checks")
+	}
 	seen := map[string]bool{}
 	for _, check := range p.Checks {
-		if strings.TrimSpace(check.ID) == "" || seen[check.ID] || (check.Status != "passed" && check.Status != "failed" && check.Status != "incomplete") || strings.TrimSpace(check.Message) == "" {
+		if !wantChecks[check.ID] || seen[check.ID] || (check.Status != "passed" && check.Status != "failed" && check.Status != "incomplete") || strings.TrimSpace(check.Message) == "" {
 			return nil, errors.New("invalid, duplicate or unexplained environment requirement check")
 		}
 		seen[check.ID] = true

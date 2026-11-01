@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -124,7 +125,7 @@ func (s *Service) start(ctx context.Context, id string, original json.RawMessage
 			return r, errors.New("材料准备不足：环境生成必须使用固定仓库文件，不能 inline")
 		}
 		r.Prepared.Commit = input.Generate.Repository.Commit
-		input.Correlation = map[string]string{"environment_activity": id, "steerline_project": s.Project}
+		input.Correlation = map[string]string{"environment_activity": id, "steerline_project": s.Project, "environment_key": key}
 		r.Kind = "generation"
 		r.Execution = input.Execution
 		raw, _ := json.Marshal(input)
@@ -365,6 +366,8 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 				a.Diagnostic = "生成文档格式或目标不符"
 			} else if strings.TrimSpace(g.Script) == "" || g.Gaps == nil || len(g.Document) > 262144 || len(g.Script) > 262144 {
 				a.Diagnostic = "生成脚本为空"
+			} else if !slices.Equal(g.Gaps, manifest.Gaps) {
+				a.Diagnostic = "生成缺口与环境文档不一致"
 			} else {
 				var frozen runnercontract.GenerateRunInput
 				if e := json.Unmarshal(a.Request.Input, &frozen); e != nil {

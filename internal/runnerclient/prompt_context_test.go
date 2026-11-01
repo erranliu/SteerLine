@@ -24,7 +24,7 @@ func TestPMSWorktreePromptContext(t *testing.T) {
 			continue
 		}
 		t.Run(choice.ID, func(t *testing.T) {
-			snapshot := []byte(`{"status":"ready","plan_path":"task.plan.md","commit":"fixed","definitions":[{"id":"one"}]}`)
+			snapshot := []byte(`{"project":{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"},"status":"ready","plan_path":"task.plan.md","commit":"fixed","definitions":[{"id":"one"}]}`)
 			context, err := prompts.TestingContext(snapshot, true)
 			if err != nil {
 				t.Fatal(err)

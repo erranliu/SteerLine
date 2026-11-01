@@ -84,7 +84,7 @@ it("marks cached ready as unverified after query failure, blocks a new operation
   expect(await screen.findByText(/上次已知状态，当前待核实/)).toBeVisible();
   fireEvent.click(screen.getByText("重新验收", { selector: "summary" }));
   expect(screen.getByRole("button", { name: "提交验收" })).toBeDisabled();
-  fireEvent.click(screen.getByRole("button", { name: "停止原活动" }));
+  fireEvent.click(await screen.findByRole("button", { name: "停止原活动" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "environment_stop",
@@ -109,7 +109,9 @@ it("keeps a stale unsettled activity visible and never starts a replacement", as
   client.setQueryData(optionsKey, options);
   fireEvent.click(await screen.findByText("重新验收", { selector: "summary" }));
   expect(screen.getByRole("button", { name: "提交验收" })).toBeDisabled();
-  expect(screen.getByRole("button", { name: "停止原活动" })).toBeEnabled();
+  expect(
+    await screen.findByRole("button", { name: "停止原活动" }),
+  ).toBeEnabled();
   expect(send).not.toHaveBeenCalled();
 });
 
@@ -242,11 +244,7 @@ function fixture(
                 "SteerlineFlow/environments/" +
                 "e".repeat(64) +
                 "/environment.md",
-              context_path:
-                "SteerlineFlow/environments/" +
-                "e".repeat(64) +
-                "/environment-context.json",
-              expected_context: '{"version":1}',
+              target_facts: { version: 1 },
               generation_ready: true,
               document: "Only selected target requirements",
             }
@@ -280,7 +278,7 @@ it("keeps progress separate from binary admission and stops the exact original a
   expect(
     screen.getByText(/Agent 回复（原生来源已核实，仅供排障）/),
   ).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "停止原活动" }));
+  fireEvent.click(await screen.findByRole("button", { name: "停止原活动" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "environment_stop",
@@ -425,7 +423,7 @@ it("shows the selected current report even outside the recent history window", a
   const { send, record } = fixture(true, vi.fn().mockResolvedValue(true), true);
   fireEvent.click(await screen.findByRole("button", { name: "查看当前验收" }));
   expect(await screen.findByText(/Run original-run/)).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "停止原活动" }));
+  fireEvent.click(await screen.findByRole("button", { name: "停止原活动" }));
   await waitFor(() =>
     expect(send).toHaveBeenCalledWith(
       "environment_stop",
@@ -529,6 +527,42 @@ it("keeps model schemes inside operations and changes the history filter with th
     ),
   );
   expect(screen.getByText(/共用方案：Different model/)).toBeVisible();
-  expect(screen.getByRole("option", { name: "Different model · model-c · high" })).toBeInTheDocument();
+  expect(
+    screen.getByRole("option", { name: "Different model · model-c · high" }),
+  ).toBeInTheDocument();
+  expect(send).not.toHaveBeenCalled();
+});
+
+it("shows formal blocking gaps without a generation history or a context commit step", async () => {
+  const { client, send } = fixture(true, vi.fn(), true);
+  await screen.findByText("Orca · Codex · 验收阻断");
+  client.setQueryData(
+    [...optionsKey.slice(0, -1), "materials", "e".repeat(64)],
+    {
+      document_path:
+        "SteerlineFlow/environments/" + "e".repeat(64) + "/environment.md",
+      document: "Project-owned requirements",
+      target_facts: { environment_key: "e".repeat(64) },
+      gaps: ["runtime version is unknown"],
+      verification_diagnostic:
+        "环境要求尚有阻断缺口：runtime version is unknown",
+      generation_ready: true,
+    },
+  );
+  expect(
+    await screen.findByText(/环境要求尚有阻断缺口：runtime version is unknown/),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: /导出.*上下文|提交.*上下文/ }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(
+    screen.getByText("生成或更新准备材料", { selector: "summary" }),
+  );
+  expect(screen.getByText("本次目标事实（受理时固定）")).toBeVisible();
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: "生成文档和脚本" }),
+    ).toBeEnabled(),
+  );
   expect(send).not.toHaveBeenCalled();
 });

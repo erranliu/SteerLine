@@ -136,8 +136,9 @@ function EnvironmentWorkspace() {
         document?: string;
         script_path?: string;
         source_commit?: string;
-        context_path: string;
-        expected_context: string;
+        target_facts: unknown;
+        gaps?: string[];
+        verification_diagnostic?: string;
         generation_ready: boolean;
         generation_diagnostic?: string;
       }>(`/environment/materials?environment_key=${environmentKey}`, signal),
@@ -351,6 +352,9 @@ function EnvironmentWorkspace() {
             {material?.source_commit && (
               <p>材料来源：{material.source_commit}</p>
             )}
+            {material?.verification_diagnostic && (
+              <p role="status">{material.verification_diagnostic}</p>
+            )}
             <details>
               <summary>阅读项目准备清单</summary>
               <pre>
@@ -363,21 +367,10 @@ function EnvironmentWorkspace() {
               {material?.generation_diagnostic && (
                 <p role="status">{material.generation_diagnostic}</p>
               )}
-              {material?.expected_context && (
+              {material?.target_facts != null && (
                 <details>
-                  <summary>本环境生成输入（按正常 Git 流程维护）</summary>
-                  <p className="path">{material.context_path}</p>
-                  <pre>{material.expected_context}</pre>
-                  <Button
-                    onClick={() =>
-                      download(
-                        "environment-context.json",
-                        material.expected_context,
-                      )
-                    }
-                  >
-                    导出本环境上下文
-                  </Button>
+                  <summary>本次目标事实（受理时固定）</summary>
+                  <pre>{JSON.stringify(material.target_facts, null, 2)}</pre>
                 </details>
               )}
 

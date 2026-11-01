@@ -27,12 +27,13 @@
 | `docs/prompt-governance.md`、`.github/workflows/prompt-governance.yml` | 提示词变更说明、原生测试 job 与保护接入边界；远端是否生效另按专属验收核实。 |
 | `SteerlineProjectGuideDoc/` | SteerLine 统一提供的固定规范；本项目流程定制归 SteerlineFlow。 |
 | `SteerlineFlow/README.md`、`SteerlineFlow/paths.md` | 流程内容索引与本路径清单。 |
-| `SteerlineFlow/environments/<完整环境键>/environment.md`、同目录 `verify-environment.ps1/sh` 及 `environment-context.json` | 所选环境的准备文档、固定脚本及生成上下文；共享规则为 `SteerlineFlow/environment-generation.md` / `environment-execution.md`，公共要求为 `SteerlineFlow/environment-common.md`，根 `environment.md` 仅作人工导航。`-Phase tty`只做最小终端检测，prepare/publish沿同一Agent的TTY工具链执行。材料存在不等于环境已通过。 |
+| `SteerlineFlow/environments/<完整环境键>/environment.md`、同目录 `verify-environment.ps1/sh` | 所选环境唯一要求/检查/gaps 文档及配套脚本（manifest3）；生成、执行协议为 `SteerlineFlow/environment-generation.md` / `environment-execution.md`，公开目标事实在原请求冻结，不要求 Git context。`-Phase tty`只做最小终端检测，prepare/publish沿同一Agent的TTY工具链执行。材料存在不等于环境已通过。 |
 | `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan；执行时还须固定实际 commit。 |
 | `SteerlineFlow/Roadmap/execution-map.md` | 已确认任务、依赖、执行及验收汇总。 |
 | `SteerlineFlow/Roadmap/RoadmapGuide.md` | 本项目定制的 roadmap 维护规则。 |
 | `SteerlineFlow/Roadmap/drafts/`、`SteerlineFlow/Roadmap/task-ids/` | 候选讨论与永久任务身份；身份分配不等于执行授权。 |
-| `SteerlineFlow/testing.md`、`SteerlineFlow/testing/test-list.json` | 程序固定读取的测试规范和机器定义。与 Plan 一起作为系统测试安排的输入。 |
+| `SteerlineFlow/environment-project.json` | version1 入口，仅定位项目公共要求与唯一正式测试清单；环境、测试安排、候选及记录共用同提交来源，不定义环境检查。 |
+| `SteerlineFlow/testing.md`、`SteerlineFlow/testing/test-list.json` | 本仓库入口声明的测试规范和机器定义，其他受管项目可声明自己的实际路径。与 Plan 及固定测试协议一起作为系统测试安排输入。 |
 | `SteerlineFlow/testing/l1.md` 至 `l4.md` | 可读测试列表；ID、级别、环境及入口须与清单一致。 |
 | `SteerlineFlow/testing/reports.md` | 报告格式、Git 历史导出和读取规则；不是某次原始报告。 |
 | `SteerlineFlow/testing/records/<完整受测 SHA>.json` | 按受测提交保存的简洁历史，随 PR 合入；SteerLine 只读已核实主分支中的文件，删除文件可清理页面历史。 |

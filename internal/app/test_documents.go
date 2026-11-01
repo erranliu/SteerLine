@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	progresstools "github.com/erranliu/SteerLine/tools"
+	"reflect"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -46,7 +48,14 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 	read := func(path string) ([]byte, error) {
 		return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: plan.Commit, SHA256: strings.Repeat("0", 64)})
 	}
-	for _, path := range []string{plan.PlanPath, testmodel.RulesPath} {
+	entry, e := pm.ReadProjectEntry(read)
+	if e != nil {
+		return nil, e
+	}
+	if !reflect.DeepEqual(entry, plan.Project) {
+		return nil, errors.New("固定项目测试来源与原安排不一致")
+	}
+	for _, path := range append([]string{plan.PlanPath}, entry.Paths()...) {
 		body, err := read(path)
 		if err != nil {
 			return nil, err
@@ -55,7 +64,7 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 			return nil, fmt.Errorf("固定测试材料无效或摘要不符：%s", path)
 		}
 	}
-	rawCatalogue, err := read(testmodel.CataloguePath)
+	rawCatalogue, err := read(entry.TestingCatalogue)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +128,7 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 	for _, ref := range run.Documents.References {
 		seen[ref.Path] = true
 	}
-	paths := []string{testmanagement.CataloguePath, testmanagement.RulesPath, arrangementPath, testmodel.ProtocolPath}
+	paths := append(entry.Paths(), arrangementPath, testmodel.ProtocolPath)
 	if referencedWriter {
 		paths = append(paths, testmodel.WriterPath)
 	}

@@ -63,7 +63,7 @@ func TestEnvironmentContextExportDoesNotExposeUnknownSettings(t *testing.T) {
 	}
 	value, err := p.materials(context.Background(), key)
 	require(t, err)
-	if value.(map[string]any)["expected_context"] == "" {
+	if value.(map[string]any)["target_facts"] == nil || value.(map[string]any)["expected_context"] != nil {
 		t.Fatal("missing output prevented context export")
 	}
 }

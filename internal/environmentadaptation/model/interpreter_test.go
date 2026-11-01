@@ -22,7 +22,7 @@ func TestManifestDeclaresWindowsPowerShellOrBash(t *testing.T) {
 	} {
 		t.Run(tc.script+"-"+tc.interpreter, func(t *testing.T) {
 			key := strings.Repeat("a", 64)
-			doc := fmt.Sprintf("```steerline-environment\n{\"version\":2,\"environment_key\":%q,\"script\":%q,\"interpreter\":%q,\"validation_base\":\"validation\",\"dependencies\":[]}\n```", key, env.ScriptPath(key, tc.script), tc.interpreter)
+			doc := fmt.Sprintf("```steerline-environment\n{\"version\":3,\"required_checks\":[],\"gaps\":[],\"environment_key\":%q,\"script\":%q,\"interpreter\":%q,\"validation_base\":\"validation\",\"dependencies\":[]}\n```", key, env.ScriptPath(key, tc.script), tc.interpreter)
 			_, err := env.ParseManifest([]byte(doc))
 			if (err == nil) != tc.valid {
 				t.Fatalf("valid=%v err=%v", tc.valid, err)

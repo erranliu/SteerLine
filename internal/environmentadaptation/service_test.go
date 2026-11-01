@@ -115,7 +115,7 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
-		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 2, EnvironmentKey: serviceEnvironmentKey(), Script: envmodel.ScriptPath(serviceEnvironmentKey(), "ps1"), ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Publication: runnercontract.Publication{Provider: "gitea", Repository: "validation", BaseBranch: "validation"}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
+		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 3, RequiredChecks: []string{}, Gaps: []string{}, EnvironmentKey: serviceEnvironmentKey(), Script: envmodel.ScriptPath(serviceEnvironmentKey(), "ps1"), ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Publication: runnercontract.Publication{Provider: "gitea", Repository: "validation", BaseBranch: "validation"}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
 	}}
 	return service, remote, store, &now
 }
@@ -189,10 +189,20 @@ func TestProjectEnvironmentExecutionFinalSnapshotAndBinaryAdmission(t *testing.T
 	}
 }
 
+func declareChecks(s *env.Service, ids ...string) {
+	original := s.Prepare
+	s.Prepare = func(ctx context.Context, id string) (envmodel.Prepared, error) {
+		p, e := original(ctx, id)
+		p.Manifest.RequiredChecks = append([]string{}, ids...)
+		return p, e
+	}
+}
+
 func TestProjectEnvironmentDoesNotAdmitGreenL2AndPRWithoutTTY(t *testing.T) {
 	for _, status := range []string{"missing", "failed", "incomplete"} {
 		t.Run(status, func(t *testing.T) {
 			s, remote, _, _ := setup(t)
+			declareChecks(s, "git")
 			r := start(t, s)
 			observe(t, s)
 			p := report(r, remote, true)
@@ -203,7 +213,7 @@ func TestProjectEnvironmentDoesNotAdmitGreenL2AndPRWithoutTTY(t *testing.T) {
 			setReport(remote, p)
 			observe(t, s)
 			observe(t, s)
-			if got := read(t, s, r.ID); got.Status() == "ready" || got.Rounds[0].Report == nil {
+			if got := read(t, s, r.ID); got.Status() == "ready" || status != "missing" && got.Rounds[0].Report == nil {
 				t.Fatal("TTY-negative sealed facts were lost or admitted", got.Status())
 			}
 		})
@@ -363,12 +373,13 @@ func TestProjectEnvironmentExecutionWaitingInputDoesNotStop(t *testing.T) {
 
 func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testing.T) {
 	s, remote, store, _ := setup(t)
+	declareChecks(s, "git", "unity.editor")
 	r := start(t, s)
 	for round := 1; round <= 3; round++ {
 		observe(t, s)
 		r = read(t, s, r.ID)
 		p := report(r, remote, false)
-		p.Checks = []envmodel.Check{{ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}}
+		p.Checks = []envmodel.Check{{ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}, {ID: "terminal.tty", Status: "passed", Message: "actual target TTY"}}
 		for i := range p.L2 {
 			p.L2[i].Status = "incomplete"
 			p.L2[i].Message = "environment requirements failed; L2 not executed"
@@ -393,6 +404,7 @@ func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testi
 
 func TestProjectEnvironmentTTYFailureReportSettlesOriginalBudget(t *testing.T) {
 	s, remote, store, _ := setup(t)
+	declareChecks(s, "git")
 	r := start(t, s)
 	for round := 1; round <= envmodel.MaxRounds; round++ {
 		observe(t, s)
@@ -704,8 +716,9 @@ func TestProjectEnvironmentExecutionTimeoutAndCancelDuringPrepare(t *testing.T) 
 	}
 }
 func TestProjectEnvironmentGenerationNativeResultAndQuota(t *testing.T) {
-	for _, verified := range []bool{false, true} {
-		t.Run(fmt.Sprint(verified), func(t *testing.T) {
+	for _, mode := range []string{"unverified", "verified", "mismatched-gaps"} {
+		verified := mode != "unverified"
+		t.Run(mode, func(t *testing.T) {
 			s, remote, _, _ := setup(t)
 			s.PrepareGeneration = func(context.Context, envmodel.Generate) (envmodel.GenerationPrepared, error) {
 				prepared, _ := s.Prepare(ctx, "remote")
@@ -719,7 +732,10 @@ func TestProjectEnvironmentGenerationNativeResultAndQuota(t *testing.T) {
 				t.Fatal(e)
 			}
 			observe(t, s)
-			generated := envmodel.Generated{Document: fmt.Sprintf("```steerline-environment\n{\"version\":2,\"environment_key\":%q,\"script\":%q,\"interpreter\":\"bash\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```", serviceEnvironmentKey(), envmodel.ScriptPath(serviceEnvironmentKey(), "sh")), Script: "echo fixture", Gaps: []string{}}
+			generated := envmodel.Generated{Document: fmt.Sprintf("```steerline-environment\n{\"version\":3,\"required_checks\":[],\"gaps\":[],\"environment_key\":%q,\"script\":%q,\"interpreter\":\"bash\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```", serviceEnvironmentKey(), envmodel.ScriptPath(serviceEnvironmentKey(), "sh")), Script: "echo fixture", Gaps: []string{}}
+			if mode == "mismatched-gaps" {
+				generated.Gaps = []string{"not in document"}
+			}
 			body, _ := json.Marshal(generated)
 			source := &runnercontract.RepositorySource{LocalPath: "fixture", Commit: strings.Repeat("a", 40), Tree: strings.Repeat("b", 40)}
 			remote.run.RepositorySource = source
@@ -727,7 +743,7 @@ func TestProjectEnvironmentGenerationNativeResultAndQuota(t *testing.T) {
 			observe(t, s)
 			observe(t, s)
 			r = read(t, s, r.ID)
-			if (r.State == "generated") != verified || r.Status() != "not_ready" || acquired != 1 || released != 1 {
+			if (r.State == "generated") != (verified && mode != "mismatched-gaps") || r.Status() != "not_ready" || acquired != 1 || released != 1 {
 				t.Fatal("generation/source/quota contract", r.State, acquired, released)
 			}
 		})

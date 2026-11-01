@@ -18,6 +18,7 @@ import (
 	"time"
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	protocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
@@ -225,6 +226,16 @@ func RunnerCLI(args []string) (bool, error) {
 					return true, e
 				}
 			}
+			var entry pm.ProjectEntry
+			for _, material := range materials {
+				if material.Path == pm.ProjectEntryPath && material.Content != nil {
+					var e error
+					entry, e = pm.ParseProjectEntry([]byte(*material.Content))
+					if e != nil {
+						return true, e
+					}
+				}
+			}
 			for _, material := range materials {
 				if material.Content == nil {
 					continue
@@ -232,7 +243,7 @@ func RunnerCLI(args []string) (bool, error) {
 				if strings.HasSuffix(material.Path, ".plan.md") && (strings.Contains(strings.ToLower(*material.Content), "no automated tests") || strings.Contains(*material.Content, "无需自动测试")) {
 					noTests = true
 				}
-				if material.Path == "SteerlineFlow/testing/test-list.json" {
+				if material.Path == entry.TestingCatalogue {
 					var catalog struct {
 						Tests []struct {
 							ID string `json:"id"`
@@ -251,7 +262,7 @@ func RunnerCLI(args []string) (bool, error) {
 			}
 			result, _ := json.Marshal(map[string]any{"tests": selection})
 			if input.Correlation["environment_activity"] != "" {
-				result, err = scriptedEnvironmentGeneration(materials)
+				result, err = scriptedEnvironmentGeneration(input.Correlation["environment_key"])
 				if err != nil {
 					return true, err
 				}

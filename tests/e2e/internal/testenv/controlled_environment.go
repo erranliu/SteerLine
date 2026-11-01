@@ -10,11 +10,11 @@ import (
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
-	"github.com/erranliu/SteerLine/internal/testmanagement"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/google/uuid"
 )
@@ -29,12 +29,14 @@ func (p *Project) WriteControlledEnvironment() string {
 	}
 	const base = "fixture-environment-validation"
 	profiles := p.environmentProfiles()
+	entry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) { return os.ReadFile(filepath.Join(p.Repo, path)) })
+	s.Must(err)
 	files := map[string][]byte{}
 	for _, profile := range profiles {
 		key, err := env.Key(profile.Execution)
 		s.Must(err)
 		script := env.ScriptPath(key, "ps1")
-		manifest, err := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: key, Script: script, Interpreter: "powershell.exe", ValidationBase: base, Dependencies: []string{}})
+		manifest, err := json.Marshal(env.Manifest{Version: 3, RequiredChecks: []string{}, Gaps: []string{}, EnvironmentKey: key, Script: script, Interpreter: "powershell.exe", ValidationBase: base, Dependencies: []string{}})
 		s.Must(err)
 		files[env.DocumentPath(key)] = []byte("# Controlled environment\n```steerline-environment\n" + string(manifest) + "\n```\n")
 		files[script] = []byte("throw 'Scripted public peer fixture; native execution is forbidden'\n")
@@ -47,7 +49,7 @@ func (p *Project) WriteControlledEnvironment() string {
 		env.GenerationRulesPath:            generationRules,
 		env.ExecutionRulesPath:             rules,
 		"SteerlineFlow/plans/task.plan.md": []byte("# Controlled recovery plan\nNo automated tests are required for this task. The catalogue's fixture.environment entry belongs to the separate scripted environment prerequisite. Recovery assertions are owned by the external E2E harness.\n"),
-		testmanagement.CataloguePath:       []byte(`{"tests":[{"id":"fixture.environment","name":"Controlled environment prerequisite","level":"L2","environment":"controlled","command":"controlled peer assertion","check":"scripted sealed report"}]}`),
+		entry.TestingCatalogue:             []byte(`{"tests":[{"id":"fixture.environment","name":"Controlled environment prerequisite","level":"L2","environment":"controlled","command":"controlled peer assertion","check":"scripted sealed report"}]}`),
 	} {
 		files[path] = body
 	}
@@ -80,15 +82,13 @@ func (p *Project) GenerateControlledEnvironment(profile string) string {
 	defer client.Close()
 	prefix := "/projects/" + string(project.Identity().ProjectID)
 	var material struct {
-		Expected string `json:"expected_context"`
+		Facts json.RawMessage `json:"target_facts"`
+		Ready bool            `json:"generation_ready"`
 	}
 	s.Must(client.Get(s.Context, prefix+"/environment/materials?environment_key="+key, &material))
-	if material.Expected == "" {
-		s.t.Fatal("missing bootstrap context")
+	if len(material.Facts) == 0 || !material.Ready {
+		s.t.Fatal("missing frozen target facts or project sources")
 	}
-	path := filepath.Join(p.Repo, env.GenerationContextPath(key))
-	s.Must(os.MkdirAll(filepath.Dir(path), 0700))
-	s.Must(os.WriteFile(path, []byte(material.Expected), 0600))
 	commit := func(message string) {
 		p.git(p.Repo, "add", ".")
 		p.git(p.Repo, "commit", "--quiet", "--allow-empty", "-m", message)
@@ -96,7 +96,6 @@ func (p *Project) GenerateControlledEnvironment(profile string) string {
 		s.Must(err)
 		p.git(p.Repo, "push", "--quiet", provider.GitURL, "main", "HEAD:refs/heads/fixture-environment-validation")
 	}
-	commit("Pin controlled generation target context")
 	response := p.EnvironmentCommand("environment_generate", env.Generate{TargetKey: key, Profile: "controlled"})
 	if response.Status != "applied" {
 		s.t.Fatal("controlled generation rejected", response)
