@@ -291,3 +291,15 @@ local-04 项目源提交 `cd79eeaeaf94afdeb607c23fef18192c21124a58`；项目实�
 app-remaining-01实际执行28项后25项通过，另3个Task文档/提示词收敛测试共享fixture仍缺显式access_mode。仅把 callerTestRun 改成 full_access，原正文、缺材料/同源writer拒绝和全部断言保持；`/root/prompt_review` 独立核验该行并批准。`diagnostics/app-schema-fixtures-final` 三项重跑passed75.984秒。依据当前 Go build 的TestGoFiles/XTestGoFiles提取111个顶层测试，三份原报告的通过并集为111/111，缺失0；账本在 diagnostics/app-final-coverage.json。原宽包失败/12分钟超时与补跑失败仍保留，未声称它们单独整包通过。受影响taskrunner、runnerbridge、runnerclient、存储和cmd包在原宽包或最终包回归中完整通过，未发生零命中或未知项转通过。
 
 本轮实施及所选本机自动验证完成；PEW-A01–A18按上述领域/应用/存储/受控/Web/实际本机调用和独立审核覆盖，D01链接/UTF-8/diff检查通过。Orca原生、M01人工体验继续明确未验/后置，不将旧G/V、模拟peer或本机Codex结果外推。Spec/Plan/指导已同步最终边界和Runner授权/能力，不增加文件层或框架，不实施项目初始化适配，不部署、不合并业务主分支。
+
+### 两仓提 PR 前独立审计（2026-11-01）
+
+用户要求本轮审计通过后两仓提PR、不得合并。重新核对最终源码、当前主干及全部PR职责：项目只维护并执行自有检测闭环，平台只验证调用/原身份/信封、停止封存和资格依据，不复核业务检查，未发现剩余可执行P0–P2。另修正项目规范的旧句“环境与任务共用清单”，明确Task来源独立，环境可按项目需要显式声明为依赖；索引也不再把已交付的接口指导只称设计稿。两处实际文档增量经独立审核批准，分别10014/3281字节；环境调用短模板412字节、代表请求466字节、指导8741字节保持。
+
+SteerLine整合main=1f2618da（仅README）；Runner在原独立worktree整合main=8bed4c4，四处冲突保留主干PendingResume取消、best-effort结果初始化和execute一次关闭，不恢复退役层。`/root/prompt_review` 再次只读核验相对最新main的实际正文、接线和资产并批准；manual pause不授权execute新输入，stop优先仍可收尾，初始化与业务成功分离。
+
+证据范围 `result-consumption/pr-audit-02/`：SteerLine固定L1/01 passed（准备0.5/执行9.7秒），固定L2/01 passed/cleanup_complete=true；Runner正式L1/01 passed，728项Go测试与29项终端扩展，应用包551.027秒、coverage74.6%，原生opt-in/子进程角色跳过按既有分层列出，不当作原生全矩阵通过。独立整合前后的SingleExecution/manual/workflow/result-file组件回归应用包34.032秒通过。
+
+新干净Runner pin源码 `50f12791abd28e241298643b2ceb0b510899d370`，source_digest `cc89825927cec77174d04e4bffc91955d13c818b5928bef7bfb44ae0324fc201`，EXE SHA256 `f247b1332fb4e5f24aea92db8f9c14dcf044fb0c783a5996ee75e13ed97a570c`。SteerLine/L4/local-01在该v7新pin真实通过，准备14.673秒/执行175.960秒、cleanup_complete=true；一次项目调用、原Run completed/verified native succeeded/stopped、result closed，readytrue即使非必需details标failed仍不复核，准备前拒绝/准备后真实Task准入与原停止，以及全部自有refs清理。原Run为 `6aac98781a86c699d3fc226cc0fd607e`。随后仅文档/验收提交，生产源码相同；前轮原生负结果及全部失败继续保留，不把旧pin证据当作此新pin重跑。
+
+完整PR相对main的提示词/样本/组装及指导24项字节账本在 pr-all-prompt-guidance-bytes.json / pr-prompt-bytes.md。相对main两份环境完整规则10055/5501字节均删除；任务测试完整规则3229→3256字节及对应writer规则仍仅用于原Task职责，不重建环境前置。项目初始化、Orca新增execute原生矩阵和M01边界保持；不部署、不合并功能PR，不开启自动合并。

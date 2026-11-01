@@ -102,6 +102,8 @@ R0 实际核实旧固定 EXE（e78c0db6，SHA256 `326c467d0ce650aca28c54a4f1b68d
 
 Runner 独立 worktree 为 `C:/Users/lmas1/.codex/worktrees/runner-project-detection/SteerRunner`、分支 codex/project-detection-execute，提交 `eed760d2331d73cac1ef1f1c3df05c233add5f75`；原 C:/Project/SteerRunner 未修改。新增通用 execute/1：普通可写工作区、唯一调用方 execute 正文、原可信 final、停止及 result_file 最终封存；没有 publication/审计/发布/项目策略或环境检测知识，不接受 progress 或多轮控制，提问/stop 永久关闭，未知仅原身份对账。沿用既有引擎、适配器和结果 owner，不新增框架。
 
-最终干净 Runner 构建在 result-consumption/runner/final，source_dirty=false，SHA256 `2d9f261d09837ba0bfa5017aa0fbc969edf729d1f88e98f67750c9f5cf57189a`。SteerLine 只在实际能力公布 execute/1、原执行适配器/目标及最终 result_file 支持时提交，旧固定 Runner 明确在提交前拒绝。
+实施轮冻结 Runner 构建在 result-consumption/runner/final，source_dirty=false，SHA256 `2d9f261d09837ba0bfa5017aa0fbc969edf729d1f88e98f67750c9f5cf57189a`。SteerLine 只在实际能力公布 execute/1、原执行适配器/目标及最终 result_file 支持时提交，旧固定 Runner 明确在提交前拒绝。
 
 固定 SteerLine L1/02、L2/01、受控环境 L3/readiness-03、最终 Web/web-03 已通过；Runner 正式 L1/01、TestSRResultFile 公开封存及最终公开契约定向回归通过。受影响 owner 全回归、真实本机正负/清理、原失败和后置人工体验状态以[本轮验收](../testing/acceptance/project-environment-workflow.md)最新段为准，不把受控结果当原生证明。项目初始化未实现；未部署或合并业务主分支。
+
+提交前按用户要求重新审计并整合最新主干：SteerLine main=1f2618da，Runner main=8bed4c4。Runner当前调用验证pin为50f12791、SHA256 f247b1332fb4e5f24aea92db8f9c14dcf044fb0c783a5996ee75e13ed97a570c，保留主干v7有界对账及best-effort文件初始化。独立复审实际整合差异通过，正式Runner L1（728+29）、SteerLine L1/L2与新pin真实本机L4均通过并清理完整。项目规范中“环境共用Task清单”的旧表述已修并独立审核；无新框架或业务检查前置。当前PR结果以验收文末为准，不把前轮pin外推，用户仅授权提两仓PR、不得合并。
