@@ -60,7 +60,7 @@ simulate 使用包内 helper 模拟 app-server/PR 事实，同时执行真实 Gi
 
 ## 安装版更新
 
-双击仓库根目录 `build-deploy.bat`：先完成构建，再通过正式 stop 结算并停止目标安装版，替换三个 EXE、刷新 Runner 固定版本与 SHA256，最后启动。停止失败则不替换；应用当前停机格式使用一份共享 Runner 结算和各项目本地关闭/锁结果，缺证据均失败。当前 Runner 使用 state/v7，旧状态须由原版本收尾并使用新 home；未来格式/契约兼容且已排空后可继续使用原 v7 目录，不接管活动任务。正常更新保留项目配置、任务库和执行配置中的 profiles，不自动迁移旧 schema。此操作独立于调试环境生成，不用调试包接管安装版活动执行。首次跨 schema 的任务定义迁移与历史留档见[迁移验收](../SteerlineFlow/testing/acceptance/install-cutover-20261015.md)。
+双击仓库根目录 `build-deploy.bat`：先完成构建，再通过正式 stop 结算并停止目标安装版，替换三个 EXE、刷新 Runner 固定版本与 SHA256，最后启动。停止失败则不替换；应用当前停机格式使用一份共享 Runner 结算和各项目本地关闭/锁结果，缺证据均失败。当前 Runner 使用 state/v8，旧状态须由原版本收尾并使用新 home；未来格式/契约兼容且已排空后可继续使用原 v8 目录，不接管活动任务。正常更新保留项目配置、任务库和执行配置中的 profiles，不自动迁移旧 schema。此操作独立于调试环境生成，不用调试包接管安装版活动执行。首次跨 schema 的任务定义迁移与历史留档见[迁移验收](../SteerlineFlow/testing/acceptance/install-cutover-20261015.md)。
 
 ## 独立 Web 与双项目包
 

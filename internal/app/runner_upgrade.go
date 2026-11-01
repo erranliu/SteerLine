@@ -31,7 +31,7 @@ func VerifyRunnerUpgrade(ctx context.Context, home, executable, sha string) (Run
 	var pin runnercontract.BuildPin
 	err := localservice.ReadPrivateJSON(filepath.Join(home, "application-api", "runner-build.json"), &pin, 64<<10)
 	if err == nil && !runnerbinding.SamePath(pin.StateDir, result.StateDir) {
-		return result, errors.New("Runner state format changed to v7; drain the original installation with its original executable, then deploy to a fresh InstallHome; no migration or automatic cleanup is supported")
+		return result, errors.New("Runner state format changed to v8; drain the original installation with its original executable, then deploy to a fresh InstallHome; no migration or automatic cleanup is supported")
 	}
 	if err != nil && !os.IsNotExist(err) {
 		return result, err
@@ -47,7 +47,7 @@ func VerifyRunnerUpgrade(ctx context.Context, home, executable, sha string) (Run
 	}
 	recovery := catalog.Capabilities.Recovery
 	if recovery == nil || recovery.StateFormat != runnerclient.StateFormat || !recovery.SameBuildRestart || recovery.ResourceRebuild || recovery.Upgrade == "" {
-		return result, errors.New("selected Runner must publish the v7 restart and drain-before-upgrade contract")
+		return result, errors.New("selected Runner must publish the v8 restart and drain-before-upgrade contract")
 	}
 	if err == nil && pin.SHA256 != sha {
 		original := runnerclient.Client{Executable: pin.Executable, SHA256: pin.SHA256, StateDir: pin.StateDir}

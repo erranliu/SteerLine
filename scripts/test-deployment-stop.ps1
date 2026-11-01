@@ -91,7 +91,7 @@ try {
         $global:LASTEXITCODE = [int]$script:upgradeFail
         if ($script:upgradeFail) { return }
         $sha = if ($script:upgradeWrongTarget) { 'foreign' } else { 'a'*64 }
-        @{candidate_sha256=$sha;state_dir=$script:upgradeDir;home=$fixtureRoot;contract='steerline-runner-upgrade/v1';state_format='steerrunner-state/v7'} | ConvertTo-Json -Compress
+        @{candidate_sha256=$sha;state_dir=$script:upgradeDir;home=$fixtureRoot;contract='steerline-runner-upgrade/v1';state_format='steerrunner-state/v8'} | ConvertTo-Json -Compress
     }
     @{sha256=$hash;state_dir=$script:upgradeDir} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureRoot 'application-api\runner-build.json') -Encoding UTF8
     $proof = Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) 'staged-runner' 'Invoke-UpgradeFixture'
