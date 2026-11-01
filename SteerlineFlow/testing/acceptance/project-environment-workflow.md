@@ -303,3 +303,17 @@ SteerLine整合main=1f2618da（仅README）；Runner在原独立worktree整合ma
 新干净Runner pin源码 `50f12791abd28e241298643b2ceb0b510899d370`，source_digest `cc89825927cec77174d04e4bffc91955d13c818b5928bef7bfb44ae0324fc201`，EXE SHA256 `f247b1332fb4e5f24aea92db8f9c14dcf044fb0c783a5996ee75e13ed97a570c`。SteerLine/L4/local-01在该v7新pin真实通过，准备14.673秒/执行175.960秒、cleanup_complete=true；一次项目调用、原Run completed/verified native succeeded/stopped、result closed，readytrue即使非必需details标failed仍不复核，准备前拒绝/准备后真实Task准入与原停止，以及全部自有refs清理。原Run为 `6aac98781a86c699d3fc226cc0fd607e`。随后仅文档/验收提交，生产源码相同；前轮原生负结果及全部失败继续保留，不把旧pin证据当作此新pin重跑。
 
 完整PR相对main的提示词/样本/组装及指导24项字节账本在 pr-all-prompt-guidance-bytes.json / pr-prompt-bytes.md。相对main两份环境完整规则10055/5501字节均删除；任务测试完整规则3229→3256字节及对应writer规则仍仅用于原Task职责，不重建环境前置。项目初始化、Orca新增execute原生矩阵和M01边界保持；不部署、不合并功能PR，不开启自动合并。
+
+### PR 复审发现与修复（2026-11-01）
+
+PR #417 / Runner #79 后续复审确认三项问题：冻结 A 后新基线观察与 Current 选择存在竞态；取消后的同构建冷恢复调用已退役 takeover；已受理 stop 被迟到 final 的自动关闭覆盖。原确定性失败和真实 v7 退役命令拒绝记录保留在 `result-consumption/pr-review-03/`，不以旧测试通过覆盖它们。
+
+本轮修复沿既有 owner：Current 选择复用目标锁→基线观察门禁→存储事务；Runner 公开 `inspect --offline` 持原 writer 租约读取当前格式快照、不启动 worker；SteerLine 核对原 Run/请求/输入和最新 revision，在 worker 前受理必要 stop。原 stop 未拒绝不得更换，明确拒绝先持久记录再保留历史/重建；冷查询确认原提交缺失与暖查询缺失分开处理。已 Closed 的原 Run 不注入新 stop，继续原结算而不提前 Settled。Runner 保留原 PendingStop，拒绝不同的新 stop。跨构建明确阻断，不恢复 takeover、迁移或项目内部编排。
+
+独立 `/root/prompt_review` 逐项审阅最终代码、正文、接线、测试和能力资产并批准，无剩余可复现 P0–P2。环境短提示412→412字节、代表请求466→466字节、Runner prompts.json1174→1174字节逐字节相同；指导8741→8982字节，新增取消恢复不重调项目、原构建收尾、项目不参与 stop。两份 capabilities 样本各增加142字节，仅声明只读冷查询事实。黄金样本未替代批准。
+
+证据根 `C:/SteerlineDebug/wt-68d4-project-environment-workflow/result-consumption/pr-fixes-04/`：`startup-stops-03` passed18项、`client-and-startup-03`通过冷/暖查询及恢复负例；`runner/cold-public-recovery`通过原四种内容恢复；`runner/single-cold-stop-02`公共 EXE 与受控原生进程通过19.08秒，原提交/Run 由公开冷查询找回、原 stop 在 worker 前受理、仅一次业务输入、原回执完成且最终文件 closed。这两项恢复测试使用提交前 dirty 构建，与后述新 pin 生产 source_digest 相同，不能当作新 pin 或真实模型的冷恢复实跑。新增测试首轮编译错误及旧 stop 替换拒绝日志均保留，修正后新目录补测。
+
+SteerLine 正式 `SteerLine/L1` passed（准备0.376/执行9.376秒）、L2 passed（17.171/130.278秒）、受控 L3 两项目环境流程 passed（8.423/369.218秒），后两项 cleanup_complete=true。宽 owner `line-owners` 105项通过，但8分钟包预算在既有 TestRunnerPresetFreeze 结束前耗尽，原报告保持 incomplete；唯一未完成函数在 `preset-freeze` 单独通过130.339秒，不宣称原整包报告通过。
+
+新干净 Runner pin 源码 `9fd309ffcdfd5c435b8806c6b15712f30579b140`，source_digest `318c6fbc2fbaace541e240c843cbf7a1cb658e1adbf02d028e90b172c110f349`，EXE SHA256 `9a0d638479aa5e32599f868d114b0472b09d7f3a3a1116edf3b00c1b5d9ac5a9`。Line 生产修复提交 `4bdeeca2c59450564d6d5f5454c1b44b55ead2fe` 在该 pin 执行真实本机 `SteerLine/L4` passed（准备21.712/执行267.119秒），cleanup_complete=true；项目自有检测一次调用、原生可信成功/停止/封存、实际 Task 准入/停止及自有 refs 清理。未重跑 Orca 新 execute 原生矩阵或真人 M01，前轮原生负例不冒充新 pin 重跑。字节账本和全文差异在 `prompt-and-contract-delta.json/.diff`。
