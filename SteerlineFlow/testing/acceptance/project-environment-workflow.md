@@ -152,3 +152,11 @@ provider-pr-proof.json核实PR https://github.com/erranliu/SteerlineTest/pull/72
 admission-proof.json记录before_rejected=true、after_run_id=39a46de4fa7cc5dd429d93663ef22e49、stopped=true；另有实际候选和原Run的启动/停止快照。remote-ref-cleanup.json对本轮source、validation、环境Run head、准入Run head四个拥有的ref核实清理；308-runner-cleanup.json confirmed=true、retained_for_remote_evidence=false，场景清理无错误。较早失败轮次的本地现场/证据按原记录保留，不混同活动或远端资源残留。
 
 因此A13-G与A13-V均通过，自动工程验收完成；真实结论仅覆盖本轮Sol本机生成和Luna本机验收，不宣称Orca本机/远端原生正向验收通过。M01保持后置人工体验。功能代码随后按2026-11-01用户要求提交PR；仍未部署安装现场，业务main未写入。
+
+## 9. PR提交前整合验证（2026-11-01）
+
+用户要求“提pr”后，创建codex/project-environment-workflow分支并整合最新main 967af588（包含生成提交恢复修复#415）。唯一冲突位于验收README的顶部导航，保留两项记录；没有业务代码冲突。整合后的实现提交为7481b3cc4ecc29e1a436df5694089ee4fddaa5a2。
+
+该干净代码提交重新执行固定L1和L2，均passed且清理通过，证据分别为原scope下pr-submit-20261101/L1/01/summary.json、pr-submit-20261101/L2/01/summary.json。文档检查632份Markdown、3987个本地链接，0错误；git diff --check通过。前节Web、浏览器、owner、受控L3和真实G09/V05保留各自冻结源码及原报告，不改写为本次整合版本的重新运行结果。固定提示词最终正文、字节数与独立批准内容未改变。
+
+随后仅补充本节整合记录提交；本次发布范围为功能分支和PR，不部署安装环境、不自动合并main，M01仍待人工体验。
