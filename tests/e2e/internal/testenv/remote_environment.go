@@ -38,7 +38,7 @@ func (p *Project) verifyRemoteExecution(raw json.RawMessage) {
 func (p *Project) bindValidationBase() string {
 	s := p.Scenario
 	_ = p.environmentRules()
-	path := filepath.Join(p.Repo, env.DocumentPath)
+	path := filepath.Join(p.Repo, env.DocumentPath(p.environmentKey(p.Driver.Profile)))
 	raw, err := os.ReadFile(path)
 	s.Must(err)
 	manifest, err := env.ParseManifest(raw)
@@ -81,7 +81,7 @@ func (p *Project) checkRemoteEnvironment(seconds int) env.Record {
 	defer client.Close()
 	prefix := "/projects/" + string(identity.ProjectID)
 	id := strings.ReplaceAll(uuid.NewString(), "-", "")
-	payload, _ := json.Marshal(env.Start{Profile: p.Driver.Profile, TimeoutSeconds: seconds})
+	payload, _ := json.Marshal(env.Start{EnvironmentKey: p.environmentKey(p.Driver.Profile), Profile: p.Driver.Profile, TimeoutSeconds: seconds})
 	request := httpcontract.CommandEnvelope{RequestID: id, ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "environment_start", TargetID: string(identity.ProjectID), ExpectedVersion: 1, Payload: payload}
 	var response httpcontract.CommandResponse
 	s.Must(controlled.Write(filepath.Join(s.Output, "environment-start.json"), request))
@@ -101,6 +101,24 @@ func (p *Project) checkRemoteEnvironment(seconds int) env.Record {
 		err := client.Get(s.Context, prefix+"/environment/"+id, &view)
 		if err == nil {
 			_ = controlled.Write(filepath.Join(s.Output, "environment-latest.json"), view)
+		}
+		if err == nil && view.State == "unverified" {
+			reader, readErr := sqlite.OpenSQLiteReader(p.Database)
+			if readErr != nil {
+				return false, readErr
+			}
+			original, readErr := reader.Environment(s.Context, p.ProjectID, id)
+			reader.Close()
+			if readErr != nil {
+				return false, readErr
+			}
+			if len(original.Rounds) > 0 {
+				last := original.Rounds[len(original.Rounds)-1]
+				if last.Settled && last.Run != nil && last.Run.StopStatus == "stopped" && last.Result != nil && last.Result.CollectionStatus == "closed" {
+					s.Must(controlled.Write(filepath.Join(s.Output, "environment-unverified.json"), original))
+					s.t.Fatal("original Run stopped and result permanently sealed, but readiness remains unverified:", view.Diagnostic)
+				}
+			}
 		}
 		return err == nil && view.Settled, err
 	})
@@ -167,7 +185,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 		s.Must(os.MkdirAll(filepath.Dir(filepath.Join(p.Repo, file)), 0700))
 		s.Must(os.WriteFile(filepath.Join(p.Repo, file), []byte(body), 0600))
 	}
-	p.git(p.Repo, "add", "--", env.DocumentPath, "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json")
+	p.git(p.Repo, "add", "--", env.DocumentPath(p.environmentKey(p.Driver.Profile)), "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json")
 	p.git(p.Repo, "commit", "--quiet", "--allow-empty", "-m", "Freeze isolated environment validation base")
 	fixture := p.git(p.Repo, "rev-parse", "HEAD")
 	config.Repository, config.RunDir, config.Branch, config.Remote = p.Repo, "", p.BaseBranch, "origin"
@@ -176,9 +194,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 	s.Must(controlled.Write(p.Config, config))
 	selection, err := driver.RunnerSelection(s.Run.Runner)
 	s.Must(err)
-	codex, err := driver.CodexExecutable("codex")
-	s.Must(err)
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": "material-generation", "execution_profiles": []any{map[string]any{"id": "material-generation", "name": "Local material generation", "execution": map[string]any{"adapter": "codex-app-server", "target": map[string]string{"kind": "local"}, "settings": map[string]string{"executable": codex, "model": "gpt-6-luna", "reasoning_effort": "medium"}}, "workflow": map[string]any{"id": "development", "version": 2}}, in.Profile}}))
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 3, "runner": selection, "default_execution_profile": in.Profile.ID, "execution_profiles": []any{in.Profile}}))
 	raw, err := p.Driver.Run(s.Context, "home", "-config", p.Config)
 	s.Must(err)
 	for _, line := range strings.Split(string(raw), "\n") {

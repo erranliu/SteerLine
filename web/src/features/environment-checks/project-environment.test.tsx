@@ -39,6 +39,7 @@ it("binds each card's invalidation to its own key and revision and shares only t
     profiles: [{ ...options.profiles[0], id: "second", name: "另一权限方案" }],
   });
   client.setQueryData(optionsKey, options);
+  fireEvent.click(await screen.findByRole("button", { name: /环境 ffffffff/ }));
   const card = (await screen.findByText(/共用方案：另一权限方案/)).closest(
     "article",
   )!;
@@ -74,7 +75,7 @@ it("marks cached ready as unverified after query failure, blocks a new operation
   vi.mocked(api.get).mockImplementation(async (path) => {
     if (path === "/environment/options") throw new Error("options unavailable");
     return (
-      path === "/environment"
+      path.split("?")[0] === "/environment"
         ? { records: [{ ...record, rounds: [] }] }
         : record
     ) as never;
@@ -131,10 +132,11 @@ it("requires a choice for a shared environment without a default and rejects an 
     name: "另一模型",
   });
   client.setQueryData(optionsKey, options);
+  fireEvent.click(await screen.findByRole("button", { name: /环境 ffffffff/ }));
   fireEvent.click(await screen.findByText("重新验收", { selector: "summary" }));
-  expect(screen.getByLabelText("验收执行方案")).toHaveValue("");
+  expect(screen.getByLabelText("验收所用方案")).toHaveValue("");
   expect(screen.getByRole("button", { name: "提交验收" })).toBeDisabled();
-  fireEvent.change(screen.getByLabelText("验收执行方案"), {
+  fireEvent.change(screen.getByLabelText("验收所用方案"), {
     target: { value: "another" },
   });
   expect(screen.getByRole("button", { name: "提交验收" })).toBeEnabled();
@@ -148,7 +150,7 @@ it("locates the linked profile and returns to the original task without executin
     false,
     "/projects/project/environment?profile=remote&task=38",
   );
-  expect(await screen.findByLabelText("验收执行方案")).toHaveValue("remote");
+  expect(await screen.findByLabelText("验收所用方案")).toHaveValue("remote");
   expect(screen.getByRole("link", { name: "返回任务" })).toHaveAttribute(
     "href",
     "/projects/project/runs?task=38&start_profile=remote",
@@ -203,6 +205,7 @@ function fixture(
     async (path) =>
       (path === "/environment/options"
         ? {
+            default_profile_id: "remote",
             profiles: [
               {
                 id: "remote",
@@ -233,9 +236,23 @@ function fixture(
             ],
             generators: [{ id: "local", name: "本地生成" }],
           }
-        : path === "/environment"
-          ? { records: emptyHistory ? [] : [{ ...record, rounds: [] }] }
-          : record) as never,
+        : path.startsWith("/environment/materials")
+          ? {
+              document_path:
+                "SteerlineFlow/environments/" +
+                "e".repeat(64) +
+                "/environment.md",
+              context_path:
+                "SteerlineFlow/environments/" +
+                "e".repeat(64) +
+                "/environment-context.json",
+              expected_context: '{"version":1}',
+              generation_ready: true,
+              document: "Only selected target requirements",
+            }
+          : path.split("?")[0] === "/environment"
+            ? { records: emptyHistory ? [] : [{ ...record, rounds: [] }] }
+            : record) as never,
   );
   const client = testClient();
   mountFeature(
@@ -297,7 +314,7 @@ it("freezes the selected profile and timeout and prevents duplicate clicks", asy
   fixture(true, send);
   await screen.findByText("Orca · Codex · 验收阻断");
   fireEvent.click(screen.getByText("重新验收", { selector: "summary" }));
-  fireEvent.change(screen.getByLabelText("验收执行方案"), {
+  fireEvent.change(screen.getByLabelText("验收所用方案"), {
     target: { value: "remote" },
   });
   fireEvent.change(screen.getByLabelText("每轮总超时（秒）"), {
@@ -312,6 +329,7 @@ it("freezes the selected profile and timeout and prevents duplicate clicks", asy
     identity.project_id,
     1,
     {
+      environment_key: "e".repeat(64),
       profile_id: "remote",
       round_timeout_seconds: 120,
       expected_current_revision: 2,
@@ -321,12 +339,15 @@ it("freezes the selected profile and timeout and prevents duplicate clicks", asy
 });
 it("keeps history readable while offline and disables mutations", async () => {
   fixture(false);
+  fireEvent.click(screen.getByRole("button", { name: "项目全部活动" }));
   fireEvent.click(await screen.findByRole("button", { name: "查看活动详情" }));
   await screen.findByText(/Run original-run/);
   expect(
     screen.queryByRole("button", { name: "提交验收" }),
   ).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "生成文档和脚本" })).toBeDisabled();
+  expect(
+    screen.queryByRole("button", { name: "生成文档和脚本" }),
+  ).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "停止原活动" })).toBeDisabled();
 });
 
@@ -435,4 +456,79 @@ it("invalidates only the selected project context with its displayed current rev
       },
     ),
   );
+});
+
+it("generates selected remote materials with an independently selected local model", async () => {
+  const { send, client } = fixture();
+  await screen.findByText("Orca · Codex · 验收阻断");
+  const options = structuredClone(
+    client.getQueryData<EnvironmentOptions>(optionsKey)!,
+  );
+  options.generators.push({
+    id: "local-high",
+    name: "Local high",
+    model: "model-b",
+    reasoning_effort: "high",
+  });
+  client.setQueryData(optionsKey, options);
+  fireEvent.click(
+    screen.getByText("生成或更新准备材料", { selector: "summary" }),
+  );
+  await screen.findByRole("option", { name: /Local high/ });
+  fireEvent.change(screen.getByLabelText("生成所用方案"), {
+    target: { value: "local-high" },
+  });
+  const button = screen.getByRole("button", { name: "生成文档和脚本" });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  await waitFor(() =>
+    expect(send).toHaveBeenCalledWith(
+      "environment_generate",
+      identity.project_id,
+      1,
+      {
+        target_environment_key: "e".repeat(64),
+        generator_profile_id: "local-high",
+      },
+    ),
+  );
+  expect(
+    screen.getByRole("region", { name: "当前准备对象" }),
+  ).toHaveTextContent("远端一");
+});
+it("keeps model schemes inside operations and changes the history filter with the environment", async () => {
+  const { api, client, send } = fixture();
+  await screen.findByText("Orca · Codex · 验收阻断");
+  const options = structuredClone(
+    client.getQueryData<EnvironmentOptions>(optionsKey)!,
+  );
+  options.environments.push({
+    ...options.environments[0],
+    environment_key: "f".repeat(64),
+    profiles: [
+      {
+        ...options.profiles[0],
+        id: "alternate-model",
+        name: "Different model",
+        model: "model-c",
+        reasoning_effort: "high",
+      },
+    ],
+  });
+  client.setQueryData(optionsKey, options);
+  const chooser = screen.getByRole("region", { name: "选择运行机与链路" });
+  expect(chooser).not.toHaveTextContent("Different model");
+  expect(chooser).not.toHaveTextContent("model-c");
+  fireEvent.click(
+    await within(chooser).findByRole("button", { name: /环境 ffffffff/ }),
+  );
+  await waitFor(() =>
+    expect(api.get).toHaveBeenCalledWith(
+      "/environment?environment_key=" + "f".repeat(64),
+      expect.anything(),
+    ),
+  );
+  expect(screen.getByText(/共用方案：Different model/)).toBeVisible();
+  expect(screen.getByRole("option", { name: "Different model · model-c · high" })).toBeInTheDocument();
+  expect(send).not.toHaveBeenCalled();
 });

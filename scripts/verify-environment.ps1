@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory)][ValidateSet('tty','prepare','publish','tty-failure')][string]$Phase,
-    [string]$FailureReason
+    [string]$FailureReason,
+    [string]$EnvironmentDocument
 )
 $ErrorActionPreference='Stop'
 [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false)
@@ -21,7 +22,8 @@ foreach($path in @($env:STEERLINE_PROGRESS_FILE,$env:STEERLINE_RESULT_FILE)) {
 }
 $report=Get-Content -Raw -LiteralPath $env:STEERLINE_RESULT_FILE|ConvertFrom-Json
 $definitions=@((Get-Content -Raw SteerlineFlow/testing/test-list.json|ConvertFrom-Json).tests|Where-Object level -CEQ L2)
-$manifest=[regex]::Match((Get-Content -Raw SteerlineFlow/environment.md),'(?s)```steerline-environment\r?\n(.*?)\r?\n```').Groups[1].Value|ConvertFrom-Json
+if (!$EnvironmentDocument) { throw 'EnvironmentDocument must name the selected environment document' }
+$manifest=[regex]::Match((Get-Content -Raw -LiteralPath $EnvironmentDocument),'(?s)```steerline-environment\r?\n(.*?)\r?\n```').Groups[1].Value|ConvertFrom-Json
 $environmentCheckIds = @('terminal.tty','powershell','git','go','github.auth','source.clean')
 function Write-Atomic($Value,[string]$Path) {
     $bytes=[Text.UTF8Encoding]::new($false).GetBytes(($Value|ConvertTo-Json -Depth 20 -Compress))

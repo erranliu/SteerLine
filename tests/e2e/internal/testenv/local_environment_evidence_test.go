@@ -1,12 +1,37 @@
 package testenv
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestLocalEnvironmentEvidenceHashesOriginalBytesWithoutModuleAutoload(t *testing.T) {
+	root := t.TempDir()
+	body := []byte("{\"source\":\"原始\"}\r\n")
+	path := filepath.Join(root, "summary.json")
+	if err := os.WriteFile(path, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	execution := runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}}
+	cmd, err := localCodexEnvironmentEvidenceCommand(execution, root, `$PSModuleAutoloadingPreference='None';$path='`+strings.ReplaceAll(path, "'", "''")+`';`+originalEnvironmentSummaryDigestScript+`@{sha256=$summarySHA}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := cmd.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result struct{ SHA256 string }
+	if json.Unmarshal(raw, &result) != nil || result.SHA256 != fmt.Sprintf("%X", sha256.Sum256(body)) {
+		t.Fatalf("original UTF-8/CRLF bytes were not preserved: %s", raw)
+	}
+}
 
 func TestLocalEnvironmentEvidenceReadsOnlyOriginalWorkspace(t *testing.T) {
 	root := t.TempDir()

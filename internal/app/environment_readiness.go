@@ -13,6 +13,8 @@ import (
 type environmentProfileView struct {
 	ID              string `json:"id"`
 	Name            string `json:"name"`
+	Model           string `json:"model,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 	Key             string `json:"environment_key"`
 	Status          string `json:"status"`
 	Stage           string `json:"stage"`
@@ -51,8 +53,9 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 	}
 	commit, sourceErr := p.observedSource(ctx)
 	for _, profile := range p.config.RunnerExecution.Profiles {
+		model, effort := environmentProfileModel(profile.Execution)
 		if _, err := runnerclient.GenerationExecution(profile.Execution); err == nil {
-			generators = append(generators, map[string]string{"id": profile.ID, "name": profile.Name})
+			generators = append(generators, map[string]string{"id": profile.ID, "name": profile.Name, "model": model, "reasoning_effort": effort, "execution_location": "本机 Codex"})
 		}
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
@@ -64,7 +67,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 		}
 		if index, ok := groups[group]; ok {
 			first := environments[index]
-			v := environmentProfileView{ID: profile.ID, Name: profile.Name, Key: key, Status: first.Status, Stage: first.Stage, Reason: first.Reason, CurrentRevision: first.CurrentRevision, ActivityID: first.ActivityID}
+			v := environmentProfileView{ID: profile.ID, Name: profile.Name, Model: model, ReasoningEffort: effort, Key: key, Status: first.Status, Stage: first.Stage, Reason: first.Reason, CurrentRevision: first.CurrentRevision, ActivityID: first.ActivityID}
 			profiles = append(profiles, v)
 			environments[index].Profiles = append(environments[index].Profiles, v)
 			continue
@@ -81,12 +84,12 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 		if readErr != nil || keyErr != nil {
 			status, stage, reason = "not_ready", "blocked", materialErr.Error()
 		}
-		v := environmentProfileView{ID: profile.ID, Name: profile.Name, Key: key, Status: status, Stage: stage, Reason: reason, CurrentRevision: current.Revision, ActivityID: current.ActivityID}
+		v := environmentProfileView{ID: profile.ID, Name: profile.Name, Model: model, ReasoningEffort: effort, Key: key, Status: status, Stage: stage, Reason: reason, CurrentRevision: current.Revision, ActivityID: current.ActivityID}
 		name := profile.Execution.Target.Environment
 		if name == "" {
 			name = "本机 · " + profile.Execution.Adapter
 		}
-		item := environmentView{Key: key, Name: name, Profiles: []environmentProfileView{v}, Status: status, Stage: stage, Reason: reason, CurrentRevision: current.Revision, ActivityID: current.ActivityID, SourceCommit: commit, DocumentPath: env.DocumentPath}
+		item := environmentView{Key: key, Name: name, Profiles: []environmentProfileView{v}, Status: status, Stage: stage, Reason: reason, CurrentRevision: current.Revision, ActivityID: current.ActivityID, SourceCommit: commit, DocumentPath: env.DocumentPath(key)}
 		item.Target = profile.Execution.Target
 		item.Adapter = profile.Execution.Adapter
 		item.ActivitySettled = record.ID == "" || record.Settled()
@@ -97,14 +100,6 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			_ = json.Unmarshal(profile.Execution.Settings, &display)
 		}
 		item.Agent = display.Agent
-		if sourceErr == nil {
-			if document, err := p.read(ctx, commit, env.DocumentPath); err == nil {
-				item.Document = string(document)
-				if manifest, err := env.ParseManifest(document); err == nil {
-					item.ScriptPath = manifest.Script
-				}
-			}
-		}
 		for _, old := range rows {
 			if old.Status() != "ready" {
 				continue
@@ -120,6 +115,22 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 		environments = append(environments, item)
 	}
 	return map[string]any{"profiles": profiles, "environments": environments, "generators": generators, "default_profile_id": p.config.RunnerExecution.DefaultProfile}, nil
+}
+
+func environmentProfileModel(execution runnercontract.ExecutionInput) (string, string) {
+	var settings struct {
+		Model       string `json:"model"`
+		Effort      string `json:"reasoning_effort"`
+		AgentLaunch struct {
+			Model  string `json:"model"`
+			Effort string `json:"reasoning_effort"`
+		} `json:"agent_launch"`
+	}
+	_ = json.Unmarshal(execution.Settings, &settings)
+	if execution.Adapter == "orca-terminal" {
+		return settings.AgentLaunch.Model, settings.AgentLaunch.Effort
+	}
+	return settings.Model, settings.Effort
 }
 
 func (p *environmentPort) supportsEnvironment(key string) bool {

@@ -6,6 +6,7 @@ import { Button } from "../../shared/ui/button";
 
 import {
   EnvironmentObservation,
+  environmentStage,
   useEnvironmentReadiness,
   type Environment,
 } from "./use-readiness";
@@ -86,6 +87,14 @@ function download(name: string, body: string) {
   URL.revokeObjectURL(url);
 }
 export function ProjectEnvironment() {
+  const { api, identity } = useWorkspace();
+  return (
+    <EnvironmentWorkspace
+      key={`${api.home}:${identity.project_id}:${identity.instance_id}`}
+    />
+  );
+}
+function EnvironmentWorkspace() {
   const { api, identity, online, busy, send } = useWorkspace();
   const visible = usePageVisible();
   const scope = [
@@ -95,10 +104,22 @@ export function ProjectEnvironment() {
     "environment",
   ];
   const options = useEnvironmentReadiness();
+  const [environmentKey, setEnvironmentKey] = useState("");
+  const [allActivities, setAllActivities] = useState(false);
+  const activeKey = useRef(environmentKey);
+  activeKey.current = environmentKey;
+  const initialized = useRef(false);
   const history = useQuery({
-    queryKey: [...scope, "records"],
+    queryKey: [...scope, "records", environmentKey, allActivities],
     queryFn: ({ signal }) =>
-      api.get<{ records: Record[] }>("/environment", signal),
+      api.get<{ records: Record[] }>(
+        "/environment" +
+          (!allActivities && environmentKey
+            ? `?environment_key=${environmentKey}`
+            : ""),
+        signal,
+      ),
+    enabled: allActivities || !!environmentKey,
     retry: false,
     refetchInterval: visible ? 3000 : false,
   });
@@ -106,6 +127,23 @@ export function ProjectEnvironment() {
   const profile = params.get("profile") || "";
   const task = params.get("task");
   const [generator, setGenerator] = useState("");
+  const materialQuery = useQuery({
+    queryKey: [...scope, "materials", environmentKey],
+    enabled: online && !!environmentKey,
+    queryFn: ({ signal }) =>
+      api.get<{
+        document_path: string;
+        document?: string;
+        script_path?: string;
+        source_commit?: string;
+        context_path: string;
+        expected_context: string;
+        generation_ready: boolean;
+        generation_diagnostic?: string;
+      }>(`/environment/materials?environment_key=${environmentKey}`, signal),
+    retry: false,
+    refetchInterval: visible ? 15000 : false,
+  });
   const [selected, setSelected] = useState("");
   const pending = useRef(false);
   const [submitting, setSubmitting] = useState(false);
@@ -120,6 +158,7 @@ export function ProjectEnvironment() {
   const refresh = () => {
     void options.refetch();
     void history.refetch();
+    if (environmentKey) void materialQuery.refetch();
     if (selected) void detail.refetch();
   };
   const command = async (
@@ -131,6 +170,7 @@ export function ProjectEnvironment() {
     if (pending.current) return;
     pending.current = true;
     setSubmitting(true);
+    const commandEnvironment = environmentKey;
     try {
       const applied = await send(action, target, version, payload);
       refresh();
@@ -139,7 +179,8 @@ export function ProjectEnvironment() {
         const activity = refreshed.data?.profiles.find(
           (p) => p.id === payload.profile_id,
         )?.activity_id;
-        if (activity) setSelected(activity);
+        if (activity && activeKey.current === commandEnvironment)
+          setSelected(activity);
       }
     } finally {
       pending.current = false;
@@ -155,12 +196,49 @@ export function ProjectEnvironment() {
       : records;
   const focusProfile = options.data?.profiles.find((p) => p.id === profile);
   useEffect(() => {
+    if (initialized.current || !options.verified) return;
+    initialized.current = true;
+    const initial = profile
+      ? focusProfile
+      : options.data?.profiles.find(
+          (p) => p.id === options.data?.default_profile_id,
+        );
+    if (initial) setEnvironmentKey(initial.environment_key);
+  }, [options.verified, options.data, profile, focusProfile]);
+  const environment = environmentKey
+    ? options.data?.environments.find(
+        (e) => e.environment_key === environmentKey,
+      )
+    : undefined;
+  const projectName =
+    identity.repository_identity
+      .replace(/\\/g, "/")
+      .split("/")
+      .filter((p) => p && p !== ".git")
+      .at(-1) || "当前项目";
+  const chooseEnvironment = (key: string) => {
+    setEnvironmentKey(key);
+    setSelected("");
+    setGenerator("");
+    setAllActivities(false);
+  };
+  const material = materialQuery.data;
+  useEffect(() => {
+    if (generator || !options.verified) return;
+    const generators = options.data?.generators ?? [];
+    const preferred =
+      generators.length === 1
+        ? generators[0]
+        : generators.find((g) => g.id === options.data?.default_profile_id);
+    if (preferred) setGenerator(preferred.id);
+  }, [generator, options.verified, options.data]);
+  useEffect(() => {
     const node = document.getElementById(
       `environment-${focusProfile?.environment_key || profile}`,
     );
     node?.scrollIntoView?.({ block: "nearest" });
     node?.focus();
-  }, [focusProfile?.environment_key, profile]);
+  }, [focusProfile?.environment_key, profile, environmentKey]);
   useEffect(() => {
     if (!selected) return;
     const node = document.getElementById(`activity-${selected}`);
@@ -173,15 +251,15 @@ export function ProjectEnvironment() {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(e);
   }
-  const material =
-    options.data?.environments.find((e) => e.document) ||
-    options.data?.environments[0];
   const returnParams = new URLSearchParams();
   if (task) returnParams.set("task", task);
   if (profile) returnParams.set("start_profile", profile);
   return (
     <div className="settings-page environment-page">
       <h1>运行环境</h1>
+      <Button variant="ghost" onClick={refresh}>
+        刷新环境
+      </Button>
       <p>
         每个项目独立验收执行环境；能力目录可见不等于验收通过。通过检查、完整
         L2、PR 发布核实及执行收尾后，才获得新任务的环境资格。
@@ -196,108 +274,194 @@ export function ProjectEnvironment() {
       {profile && options.verified && !focusProfile && (
         <p role="alert">原执行方案已不存在或不属于开发方案，请重新选择。</p>
       )}
-      <section className="settings-panel" id="environment-materials">
-        <h2>项目准备材料</h2>
-        <p>先阅读清单，在实际执行账号下准备工具、变量和权限，再开始验收。</p>
-        {material && (
-          <p className="path">
-            {material.document_path} ·{" "}
-            {material.script_path || "验收脚本见准备文档"}
-          </p>
-        )}
-        {material?.source_commit && <p>材料来源：{material.source_commit}</p>}
-        <details>
-          <summary>阅读项目准备清单</summary>
-          <pre>
-            {material?.document ||
-              "材料缺失或尚未读取，请核实后生成、审阅并提交准备文档与验收脚本。"}
-          </pre>
-        </details>
-        <h3>生成或更新材料</h3>
-        {options.verified && !options.data?.generators.length && (
-          <p>
-            尚无本地生成方案。
-            <Link to="/settings/execution-configs">配置生成方案</Link>
-          </p>
-        )}
-        <p>
-          生成准备文档与验收脚本后，审阅并通过项目正常 Git
-          流程维护；生成成功不会获得任务准入。
-        </p>
-        <label>
-          生成配置
-          <select
-            aria-label="生成配置"
-            value={generator}
-            onChange={(e) => setGenerator(e.target.value)}
-          >
-            <option value="">选择本地生成配置</option>
-            {options.data?.generators.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button
-          disabled={!online || busy || submitting || !generator}
-          onClick={() =>
-            void command("environment_generate", identity.project_id, 1, {
-              profile_id: generator,
-              round_timeout_seconds: 0,
-            })
-          }
-        >
-          生成文档和脚本
-        </Button>
+      <section className="settings-panel" aria-label="选择运行机与链路">
+        <h2>选择运行机与链路</h2>
+        {[...groups].map(([key, environments]) => (
+          <section key={key}>
+            <h3>
+              {environments[0].target.kind === "local"
+                ? "本机"
+                : environments[0].name}
+            </h3>
+            <div className="actions">
+              {environments.map((e) => (
+                <Button
+                  key={e.environment_key || e.profiles[0]?.id}
+                  variant={
+                    environmentKey === e.environment_key ? "default" : "ghost"
+                  }
+                  aria-pressed={
+                    !!environmentKey && environmentKey === e.environment_key
+                  }
+                  disabled={!e.environment_key}
+                  onClick={() => chooseEnvironment(e.environment_key)}
+                >
+                  {e.adapter === "codex-app-server"
+                    ? "Codex 直连"
+                    : `Orca → ${e.agent || "Codex"}`}{" "}
+                  · 环境 {e.environment_key.slice(0, 8)} ·{" "}
+                  {environmentStage[e.stage] ?? "状态待核实"}
+                </Button>
+              ))}
+            </div>
+          </section>
+        ))}
       </section>
+      {environmentKey && !environment && options.verified && (
+        <p role="alert">
+          原环境已不在当前配置中，请重新选择；项目全部活动仍可查看。
+        </p>
+      )}
+      {!environment && (
+        <p>请选择当前项目的运行机与链路，再生成材料或开始验收。</p>
+      )}
       {options.verified && !options.data?.environments.length && (
         <p>
           尚无开发执行方案。
           <Link to="/settings/execution-configs">配置执行方案</Link>
         </p>
       )}
-      <section className="settings-panel" aria-label="执行环境">
-        <h2>项目执行环境</h2>
-        <Button variant="ghost" onClick={refresh}>
-          刷新环境
-        </Button>
-        {!options.verified && (
-          <p>
-            当前观察未核实，新验收和失效操作暂不可提交；已有活动仍可独立查看和停止。
+      {environment && (
+        <section aria-label="当前准备对象">
+          <h2>
+            {projectName} /{" "}
+            {environment.target.kind === "local" ? "本机" : environment.name} /{" "}
+            {environment.adapter === "codex-app-server"
+              ? "Codex 直连"
+              : `Orca → ${environment.agent || "Codex"}`}
+          </h2>
+          <p role="status">
+            {environmentStage[environment.stage] ?? "状态待核实"} ·{" "}
+            {environment.reason}
           </p>
-        )}
-        {[...groups].map(([key, environments]) => (
-          <section
-            key={key}
-            aria-label={
-              environments[0].target.kind === "local"
-                ? "本机"
-                : environments[0].name
-            }
-          >
-            <h2>
-              {environments[0].target.kind === "local"
-                ? "本机"
-                : environments[0].name}
-            </h2>
-            {environments.map((e) => (
-              <EnvironmentCard
-                key={`${e.environment_key || e.profiles[0]?.id}:${profile}`}
-                environment={e}
-                project={identity.project_id}
-                defaultProfile={options.data!.default_profile_id}
-                preferred={profile}
-                disabled={!options.verified || busy || submitting}
-                command={command}
-                onActivity={setSelected}
-              />
-            ))}
+          <section className="settings-panel" id="environment-materials">
+            <h2>准备要求与材料</h2>
+            {materialQuery.isError && (
+              <p role="alert">材料观察待核实：{String(materialQuery.error)}</p>
+            )}
+            <p>
+              先阅读清单，在实际执行账号下准备工具、变量和权限，再开始验收。
+            </p>
+            {material && (
+              <p className="path">
+                {material.document_path} ·{" "}
+                {material.script_path || "验收脚本见准备文档"}
+              </p>
+            )}
+            {material?.source_commit && (
+              <p>材料来源：{material.source_commit}</p>
+            )}
+            <details>
+              <summary>阅读项目准备清单</summary>
+              <pre>
+                {material?.document ||
+                  "材料缺失或尚未读取，请核实后生成、审阅并提交准备文档与验收脚本。"}
+              </pre>
+            </details>
+            <details key={environmentKey}>
+              <summary>生成或更新准备材料</summary>
+              {material?.generation_diagnostic && (
+                <p role="status">{material.generation_diagnostic}</p>
+              )}
+              {material?.expected_context && (
+                <details>
+                  <summary>本环境生成输入（按正常 Git 流程维护）</summary>
+                  <p className="path">{material.context_path}</p>
+                  <pre>{material.expected_context}</pre>
+                  <Button
+                    onClick={() =>
+                      download(
+                        "environment-context.json",
+                        material.expected_context,
+                      )
+                    }
+                  >
+                    导出本环境上下文
+                  </Button>
+                </details>
+              )}
+
+              {options.verified && !options.data?.generators.length && (
+                <p>
+                  尚无本地生成方案。
+                  <Link to="/settings/execution-configs">配置生成方案</Link>
+                </p>
+              )}
+              <p>
+                生成准备文档与验收脚本后，审阅并通过项目正常 Git
+                流程维护；生成成功不会获得任务准入。
+              </p>
+              <label>
+                生成所用方案
+                <select
+                  aria-label="生成所用方案"
+                  value={generator}
+                  onChange={(e) => setGenerator(e.target.value)}
+                >
+                  <option value="">选择本机生成方案</option>
+                  {options.data?.generators.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {[
+                        p.name,
+                        p.execution_location,
+                        p.model,
+                        p.reasoning_effort,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Button
+                disabled={
+                  !online ||
+                  !options.verified ||
+                  busy ||
+                  submitting ||
+                  !generator ||
+                  !materialQuery.isSuccess ||
+                  materialQuery.isError ||
+                  !material?.generation_ready
+                }
+                onClick={() =>
+                  void command("environment_generate", identity.project_id, 1, {
+                    target_environment_key: environmentKey,
+                    generator_profile_id: generator,
+                  })
+                }
+              >
+                生成文档和脚本
+              </Button>
+            </details>
           </section>
-        ))}
-      </section>
+
+          <p>
+            在此运行机的实际执行账号下，按本环境要求准备工具、依赖、变量及权限，然后运行验收。
+          </p>
+          <EnvironmentCard
+            key={`${environmentKey}:${profile}`}
+            environment={environment}
+            project={identity.project_id}
+            defaultProfile={options.data!.default_profile_id}
+            preferred={profile}
+            disabled={!options.verified || busy || submitting}
+            command={command}
+            onActivity={setSelected}
+          />
+        </section>
+      )}
+      <Button
+        variant="ghost"
+        onClick={() => {
+          setAllActivities(!allActivities);
+          setSelected("");
+        }}
+      >
+        {allActivities ? "返回本环境历史" : "项目全部活动"}
+      </Button>
       <section className="settings-panel">
-        <h2>验收与材料生成历史</h2>
+        <h2>{allActivities ? "项目全部活动" : "本环境历史"}</h2>
         {history.error && <p role="alert">{String(history.error)}</p>}
         <p className="muted">最近 20 条活动，展开后查询原活动文件和报告。</p>
         {selected && detail.error && <p role="alert">{String(detail.error)}</p>}
@@ -421,6 +585,10 @@ export function ProjectEnvironment() {
               ))}
               {r.generated && (
                 <div>
+                  <p>
+                    生成完成，产品未自动提交；请按正常 Git
+                    流程维护，正式材料以项目提交为准。
+                  </p>
                   <p>
                     缺项：
                     {r.generated.gaps.join("；") || "无已报告缺项，仍须审阅"}

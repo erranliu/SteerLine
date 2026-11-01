@@ -214,6 +214,15 @@
       "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-local",
       "check": "正式本机准备完整 L2、双通道及同一真实 PR 发布，外部驱动独立核实规则并合并精确 PR，准备前拒绝、通过后单一准入探针及原停止、资源清理；不接受负向结果作为正向通过",
       "note": "固定 STEERLINE_L4_LOCAL_PROFILE 绝对独立 profile 文件（local Codex/Orca，development/2）；STEERLINE_L4_PROJECT_CONFIG 绝对项目配置、STEERLINE_L4_PROJECT_COMMIT 完整 SHA、STEERRUNNER_EXE 独立固定 EXE、STEERLINE_L4_ROUND_TIMEOUT_SECONDS 正秒数。按 Codex 与 Orca 分别执行取证，不使用安装 home。版本化环境文档/脚本、完整 L2 与 PR 规则须齐全，专属验证 base 不合入业务主分支；缺能力/输入、零命中、skip 或清理未知不通过。live 精确单项串行，新 -out。 固定提交中的环境执行规则须与当前构建同源；只支持项目已有的 Python test-project/project_checks/steerline_reports 或 PowerShell run-tests/ExecutionPlan/ManagedReports 完整原验证器，唯一识别；未知或歧义在现场创建前阻断。 本机Codex与本机Orca分别准备；只有Codex可直接读原工作区，Orca本机/远端严格共用repo/terminal取证与正向通过判定。"
+    },
+    {
+      "id": "testing.project-environment-generation",
+      "name": "按目标环境真实生成准备材料",
+      "level": "L4",
+      "environment": "live",
+      "command": "go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-generation",
+      "check": "固定本机 Codex 为本机和远端两个目标运行真实 generate，首次上下文经 Git 固定，输出 manifest2/脚本目标和来源正确；生成不授予 ready，原 Run 全部停止结算，输出经测试项目正常 Git 提交并记录 SHA。",
+      "note": "单项串行，新 -out；STEERRUNNER_EXE、STEERLINE_L4_LOCAL_PROFILE（本机 Codex）、STEERLINE_L4_REMOTE_PROFILE（仅远端目标描述，不要求连接/ready）、STEERLINE_L4_PROJECT_CONFIG、STEERLINE_L4_PROJECT_COMMIT、正 STEERLINE_L4_ROUND_TIMEOUT_SECONDS 显式输入。独立 clone/home/DB及本地 bare 源，不修改安装或业务 refs；需要本机原生登录。缺输入/skip/零匹配/未知结算不通过。生成只读，不创建 PR；输出供独立的 project-environment-local 新材料真实验收，不能据生成宣称环境已就绪。"
     }
   ]
 }

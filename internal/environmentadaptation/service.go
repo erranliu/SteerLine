@@ -34,7 +34,7 @@ type Service struct {
 	Runner            Runner
 	Build             runnercontract.BuildPin
 	Prepare           func(context.Context, string) (envmodel.Prepared, error)
-	PrepareGeneration func(context.Context, string) (runnercontract.GenerateRunInput, error)
+	PrepareGeneration func(context.Context, envmodel.Generate) (envmodel.GenerationPrepared, error)
 	Admit             func(context.Context) error
 	WithTarget        func(context.Context, string, string, func() error) error
 	AcquireGeneration func(envmodel.Record) bool
@@ -83,7 +83,15 @@ func (s *Service) original(ctx context.Context, id string, raw json.RawMessage) 
 	}
 	return envmodel.Record{}, envmodel.ErrNotFound
 }
-func (s *Service) Start(ctx context.Context, id string, original json.RawMessage, in envmodel.Start, generation bool) (envmodel.Record, error) {
+func (s *Service) Start(ctx context.Context, id string, original json.RawMessage, in envmodel.Start) (envmodel.Record, error) {
+	return s.start(ctx, id, original, in, nil)
+}
+
+func (s *Service) Generate(ctx context.Context, id string, original json.RawMessage, in envmodel.Generate) (envmodel.Record, error) {
+	return s.start(ctx, id, original, envmodel.Start{Profile: in.Profile}, &in)
+}
+
+func (s *Service) start(ctx context.Context, id string, original json.RawMessage, in envmodel.Start, generation *envmodel.Generate) (envmodel.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !envmodel.IDPattern.MatchString(id) || !json.Valid(original) || in.Profile == "" {
@@ -98,17 +106,24 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 		}
 	}
 	r := envmodel.Record{ID: id, Project: s.Project, Profile: in.Profile, Build: s.Build, CreatedAt: s.now(), State: "queued", Requests: []envmodel.Request{{ID: id, Original: original, Action: "start"}}, Rounds: []envmodel.Round{}}
-	if generation {
+	if generation != nil {
 		if s.PrepareGeneration == nil {
 			return r, errors.New("environment generation unavailable")
 		}
-		input, e := s.PrepareGeneration(ctx, in.Profile)
+		prepared, e := s.PrepareGeneration(ctx, *generation)
 		if e != nil {
 			return r, e
 		}
+		input := prepared.Input
+		key, e := envmodel.Key(prepared.Target)
+		if e != nil || key != generation.TargetKey || !envmodel.ValidKey(key) || !json.Valid(prepared.Context) {
+			return r, errors.New("generation target/context differs")
+		}
+		r.TargetKey, r.TargetExecution, r.GenerationContext = key, prepared.Target, prepared.Context
 		if input.Generate.Repository == nil || len(input.Generate.Materials) != 0 {
 			return r, errors.New("材料准备不足：环境生成必须使用固定仓库文件，不能 inline")
 		}
+		r.Prepared.Commit = input.Generate.Repository.Commit
 		input.Correlation = map[string]string{"environment_activity": id, "steerline_project": s.Project}
 		r.Kind = "generation"
 		r.Execution = input.Execution
@@ -129,6 +144,10 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 	r.Kind = "adaptation"
 	r.Prepared = prepared
 	r.Execution = prepared.Input.Execution
+	key, keyErr := envmodel.Key(r.Execution)
+	if keyErr != nil || key != in.EnvironmentKey {
+		return r, errors.New("selected environment and execution profile differ")
+	}
 	r.TimeoutSeconds = in.TimeoutSeconds
 	if _, err := envmodel.Key(r.Execution); err != nil {
 		return r, errors.New("environment adaptation requires a supported execution profile")
@@ -181,11 +200,15 @@ func (s *Service) appendRound(r *envmodel.Record) error {
 	}
 	raw, _ := json.Marshal(progress)
 	input.ProgressFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(raw)}
-	prepare, err := prompts.EnvironmentPrepare()
+	key, err := envmodel.Key(r.Execution)
 	if err != nil {
 		return err
 	}
-	publish, err := prompts.EnvironmentPublish()
+	prepare, err := prompts.EnvironmentPrepare(envmodel.DocumentPath(key), r.Prepared.Manifest.Script)
+	if err != nil {
+		return err
+	}
+	publish, err := prompts.EnvironmentPublish(envmodel.DocumentPath(key), r.Prepared.Manifest.Script)
 	if err != nil {
 		return err
 	}
@@ -338,9 +361,9 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 			var g envmodel.Generated
 			if e := envmodel.Decode(run.ContentResult.JSON, &g); e != nil {
 				a.Diagnostic = e.Error()
-			} else if _, e := envmodel.ParseManifest([]byte(g.Document)); e != nil {
-				a.Diagnostic = e.Error()
-			} else if strings.TrimSpace(g.Script) == "" || g.Gaps == nil {
+			} else if manifest, e := envmodel.ParseManifest([]byte(g.Document)); e != nil || manifest.EnvironmentKey != r.TargetKey {
+				a.Diagnostic = "生成文档格式或目标不符"
+			} else if strings.TrimSpace(g.Script) == "" || g.Gaps == nil || len(g.Document) > 262144 || len(g.Script) > 262144 {
 				a.Diagnostic = "生成脚本为空"
 			} else {
 				var frozen runnercontract.GenerateRunInput

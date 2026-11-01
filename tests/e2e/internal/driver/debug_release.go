@@ -316,9 +316,19 @@ func (d *debugRelease) initialize() error {
 		if err != nil {
 			return err
 		}
+		environmentRules, err := prompts.EnvironmentExecutionRules()
+		if err != nil {
+			return err
+		}
+		generationRules, err := prompts.EnvironmentGenerationRules()
+		if err != nil {
+			return err
+		}
 		for path, body := range map[string][]byte{
-			testmanagementmodel.ProtocolPath: rules,
-			testmanagementmodel.WriterPath:   []byte(progresstools.PowerShellWriter),
+			"SteerlineFlow/environment-execution.md":  environmentRules,
+			"SteerlineFlow/environment-generation.md": generationRules,
+			testmanagementmodel.ProtocolPath:          rules,
+			testmanagementmodel.WriterPath:            []byte(progresstools.PowerShellWriter),
 		} {
 			path = filepath.Join(d.repo, filepath.FromSlash(path))
 			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {

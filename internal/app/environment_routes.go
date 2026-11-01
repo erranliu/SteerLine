@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
 	"strings"
 	"time"
 
@@ -34,7 +35,7 @@ func publicEnvironment(r env.Record) any {
 		}
 		rounds = append(rounds, map[string]any{"number": a.Number, "deadline": a.Deadline, "run_id": a.RunID, "submission": a.Submission, "settled": a.Settled, "timed_out": a.TimedOut, "diagnostic": a.Diagnostic, "progress": a.Progress, "result": a.Result, "report": a.Report, "run": run})
 	}
-	return map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "state": r.State, "status": r.Status(), "settled": r.Settled(), "created_at": r.CreatedAt, "diagnostic": r.Diagnostic, "rounds": rounds, "generated": generated, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.ScriptDigest, "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
+	return map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "created_at": r.CreatedAt, "diagnostic": r.Diagnostic, "rounds": rounds, "generated": generated, "source_commit": r.Prepared.Commit, "script_digest": r.Prepared.ScriptDigest, "inputs": r.Prepared.Inputs, "round_timeout_seconds": r.TimeoutSeconds}
 }
 func environmentExcerpt(s string) string {
 	r := []rune(s)
@@ -84,9 +85,16 @@ func (p *runtimeProjectPort) environmentCommand(ctx context.Context, in httpcont
 				e = errors.New("expected_current_revision is required")
 				break
 			}
-			var start env.Start
-			if e = decodeStrictJSON(in.Payload, &start); e == nil {
-				r, e = s.Start(ctx, in.RequestID, raw, start, in.Action == "environment_generate")
+			if in.Action == "environment_generate" {
+				var generate env.Generate
+				if e = decodeStrictJSON(in.Payload, &generate); e == nil {
+					r, e = s.Generate(ctx, in.RequestID, raw, generate)
+				}
+			} else {
+				var start env.Start
+				if e = decodeStrictJSON(in.Payload, &start); e == nil {
+					r, e = s.Start(ctx, in.RequestID, raw, start)
+				}
 			}
 		case "environment_invalidate":
 			if in.TargetID != in.ProjectID || in.ExpectedVersion != 1 {
@@ -192,10 +200,17 @@ func (p *runtimeProjectPort) environmentReceipt(ctx context.Context, id string) 
 	}
 	return &out, nil
 }
-func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string) (any, error) {
+func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, values url.Values) (any, error) {
 	port := p.config.runtimeEnvironment
 	if port == nil {
 		return nil, errors.New("project environment unavailable")
+	}
+	key := values.Get("environment_key")
+	if len(values) > 0 && (len(values) != 1 || len(values["environment_key"]) != 1 || !env.ValidKey(key) || route != "/environment" && route != "/environment/materials") {
+		return nil, errors.New("invalid environment query")
+	}
+	if route == "/environment/materials" {
+		return port.materials(ctx, key)
 	}
 	if route == "/environment" {
 		rows, e := port.store.Environments(ctx, p.config.Identity())
@@ -204,10 +219,13 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string) 
 		}
 		out := []any{}
 		for _, r := range rows {
+			if key != "" && environmentRecordKey(r) != key {
+				continue
+			}
 			if len(out) == 20 {
 				break
 			}
-			out = append(out, map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "state": r.State, "status": r.Status(), "settled": r.Settled(), "diagnostic": r.Diagnostic, "rounds": []any{}})
+			out = append(out, map[string]any{"id": r.ID, "revision": r.Revision, "kind": r.Kind, "profile_id": r.Profile, "environment_key": environmentRecordKey(r), "state": r.State, "status": r.Status(), "settled": r.Settled(), "diagnostic": r.Diagnostic, "rounds": []any{}})
 		}
 		return map[string]any{"records": out}, nil
 	}
@@ -240,4 +258,12 @@ func (p *runtimeProjectPort) reconcileInvalidationFailure(ctx context.Context, o
 		return true
 	}
 	return false
+}
+
+func environmentRecordKey(r env.Record) string {
+	if r.Kind == "generation" {
+		return r.TargetKey
+	}
+	key, _ := env.Key(r.Execution)
+	return key
 }

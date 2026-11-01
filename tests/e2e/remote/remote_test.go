@@ -12,3 +12,5 @@ func TestRemoteProjectProgress(t *testing.T)    { testenv.RunProjectProgress(t) 
 func TestRemoteProjectEnvironment(t *testing.T) { testenv.RunRemoteEnvironment(t) }
 
 func TestLocalProjectEnvironment(t *testing.T) { testenv.RunLocalEnvironment(t) }
+
+func TestProjectEnvironmentGeneration(t *testing.T) { testenv.RunEnvironmentGeneration(t) }

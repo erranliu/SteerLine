@@ -115,14 +115,14 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
-		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Publication: runnercontract.Publication{Provider: "gitea", Repository: "validation", BaseBranch: "validation"}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
+		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 2, EnvironmentKey: serviceEnvironmentKey(), Script: envmodel.ScriptPath(serviceEnvironmentKey(), "ps1"), ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Publication: runnercontract.Publication{Provider: "gitea", Repository: "validation", BaseBranch: "validation"}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
 	}}
 	return service, remote, store, &now
 }
 func start(t *testing.T, s *env.Service) envmodel.Record {
 	t.Helper()
 	id := envmodel.ID()
-	r, e := s.Start(ctx, id, json.RawMessage(`{"original":true}`), envmodel.Start{Profile: "remote", TimeoutSeconds: 60}, false)
+	r, e := s.Start(ctx, id, json.RawMessage(`{"original":true}`), envmodel.Start{EnvironmentKey: serviceEnvironmentKey(), Profile: "remote", TimeoutSeconds: 60})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -319,7 +319,7 @@ func TestProjectEnvironmentExecutionUnknownNeverResubmits(t *testing.T) {
 	if remote.stops != 1 || r.Status() == "ready" || r.Settled() || r.State != "unverified" {
 		t.Fatal("unknown report/PR must block new work", r.State)
 	}
-	if _, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{Profile: "remote", TimeoutSeconds: 60}, false); e == nil {
+	if _, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{EnvironmentKey: serviceEnvironmentKey(), Profile: "remote", TimeoutSeconds: 60}); e == nil {
 		t.Fatal("new activity overlapped original unknown")
 	}
 }
@@ -594,7 +594,7 @@ func TestProjectEnvironmentExecutionReportStrictness(t *testing.T) {
 func TestProjectEnvironmentAdmissionImmutableOriginalAndDeadline(t *testing.T) {
 	s, remote, store, now := setup(t)
 	r := start(t, s)
-	if _, e := s.Start(ctx, r.ID, json.RawMessage(`{"original":false}`), envmodel.Start{Profile: "remote", TimeoutSeconds: 60}, false); e == nil {
+	if _, e := s.Start(ctx, r.ID, json.RawMessage(`{"original":false}`), envmodel.Start{EnvironmentKey: serviceEnvironmentKey(), Profile: "remote", TimeoutSeconds: 60}); e == nil {
 		t.Fatal("changed original accepted")
 	}
 	altered := r
@@ -615,11 +615,11 @@ func TestProjectEnvironmentAdmissionImmutableOriginalAndDeadline(t *testing.T) {
 func TestProjectEnvironmentRetryTimeoutInput(t *testing.T) {
 	s, _, _, now := setup(t)
 	for _, seconds := range []int{0, -1, int(int64(^uint64(0) >> 1))} {
-		if _, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{Profile: "remote", TimeoutSeconds: seconds}, false); e == nil {
+		if _, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{EnvironmentKey: serviceEnvironmentKey(), Profile: "remote", TimeoutSeconds: seconds}); e == nil {
 			t.Fatal("invalid/overflowing timeout accepted", seconds)
 		}
 	}
-	r, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{Profile: "remote", TimeoutSeconds: 90000}, false)
+	r, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{EnvironmentKey: serviceEnvironmentKey(), Profile: "remote", TimeoutSeconds: 90000})
 	if e != nil {
 		t.Fatal("arbitrary one-day limit", e)
 	}
@@ -707,18 +707,19 @@ func TestProjectEnvironmentGenerationNativeResultAndQuota(t *testing.T) {
 	for _, verified := range []bool{false, true} {
 		t.Run(fmt.Sprint(verified), func(t *testing.T) {
 			s, remote, _, _ := setup(t)
-			s.PrepareGeneration = func(context.Context, string) (runnercontract.GenerateRunInput, error) {
-				return runnercontract.GenerateRunInput{Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}}, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: "fixture", Commit: strings.Repeat("a", 40)}, Materials: []runnercontract.Document{}}}, nil
+			s.PrepareGeneration = func(context.Context, envmodel.Generate) (envmodel.GenerationPrepared, error) {
+				prepared, _ := s.Prepare(ctx, "remote")
+				return envmodel.GenerationPrepared{Target: prepared.Input.Execution, Context: json.RawMessage(`{}`), Input: runnercontract.GenerateRunInput{Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}}, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: "fixture", Commit: strings.Repeat("a", 40)}}}}, nil
 			}
 			acquired, released := 0, 0
 			s.AcquireGeneration = func(envmodel.Record) bool { acquired++; return true }
 			s.ReleaseGeneration = func(envmodel.Record) { released++ }
-			r, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{Profile: "local"}, true)
+			r, e := s.Generate(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Generate{TargetKey: serviceEnvironmentKey(), Profile: "local"})
 			if e != nil {
 				t.Fatal(e)
 			}
 			observe(t, s)
-			generated := envmodel.Generated{Document: "```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.sh\",\"interpreter\":\"bash\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```", Script: "echo fixture", Gaps: []string{}}
+			generated := envmodel.Generated{Document: fmt.Sprintf("```steerline-environment\n{\"version\":2,\"environment_key\":%q,\"script\":%q,\"interpreter\":\"bash\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```", serviceEnvironmentKey(), envmodel.ScriptPath(serviceEnvironmentKey(), "sh")), Script: "echo fixture", Gaps: []string{}}
 			body, _ := json.Marshal(generated)
 			source := &runnercontract.RepositorySource{LocalPath: "fixture", Commit: strings.Repeat("a", 40), Tree: strings.Repeat("b", 40)}
 			remote.run.RepositorySource = source
@@ -731,4 +732,9 @@ func TestProjectEnvironmentGenerationNativeResultAndQuota(t *testing.T) {
 			}
 		})
 	}
+}
+
+func serviceEnvironmentKey() string {
+	key, _ := envmodel.Key(runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)})
+	return key
 }

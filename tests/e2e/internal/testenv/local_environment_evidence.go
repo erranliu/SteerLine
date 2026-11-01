@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 )
 
+// Hash the untouched file bytes on the PS5.1 baseline without module autoloading.
+const originalEnvironmentSummaryDigestScript = `$hasher=[Security.Cryptography.SHA256]::Create();try{$summarySHA=([BitConverter]::ToString($hasher.ComputeHash([IO.File]::ReadAllBytes($path)))).Replace('-','')}finally{$hasher.Dispose()};`
+
 // Only the sealed original local workspace is read; this never opens an Orca
 // terminal, runs L2 again, or substitutes the caller's repository for the Run.
 func localCodexEnvironmentEvidenceCommand(execution runnercontract.ExecutionInput, workspace, script string) (*exec.Cmd, error) {

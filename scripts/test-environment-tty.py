@@ -25,7 +25,7 @@ def without_pwsh():
 
 class EnvironmentTTYTests(unittest.TestCase):
     def run_entry(self, root, phase, env=None, extra=()):
-        return subprocess.run([POWERSHELL, '-NoProfile', '-File', str(root / 'scripts/verify-environment.ps1'), '-Phase', phase, *extra],
+        return subprocess.run([POWERSHELL, '-NoProfile', '-File', str(root / 'scripts/verify-environment.ps1'), '-Phase', phase, '-EnvironmentDocument', str(root / 'SteerlineFlow/environment.md'), *extra],
                               capture_output=True, text=True, encoding='utf-8', env=env or without_pwsh(), timeout=30)
 
     def test_probe_rejects_redirected_process_without_channels_or_tests(self):

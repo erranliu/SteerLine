@@ -117,6 +117,7 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 	require(t, err)
 	environmentRules, err := prompts.EnvironmentExecutionRules()
 	require(t, err)
+	key, _ := envmodel.Key(c.RunnerExecution.Profiles[0].Execution)
 	for name, body := range map[string]string{
 		"SteerlineFlow/spec/task.spec.md":           "# Spec\n\n## Acceptance\n\nFrozen task.\n",
 		"SteerlineFlow/plans/task.plan.md":          "# Plan\n\nFrozen implementation plan. No automated tests are required for this stopped Run fixture.\n",
@@ -125,15 +126,15 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 		"SteerlineFlow/plans/task.tests.json":       `{"tests":["one"]}`,
 		"SteerlineFlow/testing/runtime-progress.md": string(rules),
 		"tools/testing/RuntimeProgress.ps1":         progresstools.PowerShellWriter,
-		envmodel.DocumentPath:                       "# Environment\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"powershell.exe\",\"validation_base\":\"environment-validation\",\"dependencies\":[]}\n```\n",
+		envmodel.DocumentPath(key):                  environmentFixtureDocument(key, "ps1", "environment-validation", []string{}),
 		envmodel.ExecutionRulesPath:                 string(environmentRules),
-		"scripts/verify-environment.ps1":            "param($Phase)\n# Lifecycle fixture only.\n",
+		envmodel.ScriptPath(key, "ps1"):             "param($Phase)\n# Lifecycle fixture only.\n",
 	} {
 		path := filepath.Join(c.Repository, filepath.FromSlash(name))
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))
 		require(t, os.WriteFile(path, []byte(body), 0600))
 	}
-	fixtureGit(t, c.Repository, "add", "SteerlineFlow", "tools", "scripts")
+	fixtureGit(t, c.Repository, "add", "SteerlineFlow", "tools")
 	fixtureGit(t, c.Repository, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "frozen task references")
 	// Keep the configured repository identity while routing fixture fetches to
 	// a real isolated bare remote, never to the placeholder GitHub repository.

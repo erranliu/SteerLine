@@ -725,6 +725,12 @@ func (s *Scenario) cleanup() {
 		}
 	}
 	cleanedHomes := map[string]bool{}
+	preserveRunnerHomes := map[string]bool{}
+	for _, p := range s.projects {
+		if p.RemoteCleanupFailed {
+			preserveRunnerHomes[p.Home] = true
+		}
+	}
 	for _, p := range s.projects {
 		if p.Driver.Binary == "" || cleanedHomes[p.Home] {
 			continue
@@ -751,13 +757,13 @@ func (s *Scenario) cleanup() {
 			p.RunnerCleanupFailed = true
 			failures = append(failures, "original Runner cleanup: "+readErr.Error())
 		}
-		if readErr == nil {
+		if readErr == nil && !preserveRunnerHomes[p.Home] {
 			if err := runnerstatepath.RemoveStopped(p.Home); err != nil {
 				p.RunnerCleanupFailed = true
 				failures = append(failures, "Runner directory cleanup: "+err.Error())
 			}
 		}
-		_ = controlled.Write(filepath.Join(s.Output, p.Name+"-runner-cleanup.json"), map[string]any{"confirmed": readErr == nil, "error": fmt.Sprint(readErr)})
+		_ = controlled.Write(filepath.Join(s.Output, p.Name+"-runner-cleanup.json"), map[string]any{"confirmed": readErr == nil, "error": fmt.Sprint(readErr), "retained_for_remote_evidence": preserveRunnerHomes[p.Home]})
 	}
 	for _, f := range s.files {
 		if err := f.Close(); err != nil {

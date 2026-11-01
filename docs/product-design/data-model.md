@@ -50,7 +50,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 | 格式/权威 | 当前值或归属 | 源码 |
 | --- | --- | --- |
-| Task SQLite | schema 36 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| Task SQLite | schema 37 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
 | Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
 | TaskContract / DAG | 契约结构为 taskcontract 纯值；校验/DAG 归 task/model | [task/model](../../internal/task/model) |
@@ -63,7 +63,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 节点和异常规则见[生命周期](worker-lifecycle.md)，配置见[执行方案](execution-profiles.md)，实际通过/未验见[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)。历史 Spec 的迁出前源码链接固定在原 Git 提交，只作追溯。
 
 
-项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 36 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-readiness.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
+项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；生成活动另冻结材料目标、目标 execution 和公开生成上下文，更新时不得改变。资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 37 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-readiness.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
 
 ## Roadmap 规划与入图
 
