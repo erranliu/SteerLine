@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-const StateFormat = "steerrunner-state/v7"
+const StateFormat = "steerrunner-state/v8"
 
 // VerifyDrained is a cold, public query. Service exit alone does not prove that
 // business input, native resources and outstanding controls have been settled.

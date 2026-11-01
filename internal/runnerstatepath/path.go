@@ -20,7 +20,7 @@ import (
 // to a 128-bit key. Home depth and repository names cannot lengthen this path.
 // It performs no I/O and never adopts or moves an old Runner directory.
 func Directory(home string) string {
-	identity := "steerline/shared-runner/v7\x00" + filepath.Clean(home)
+	identity := "steerline/shared-runner/v8\x00" + filepath.Clean(home)
 	root := filepath.Join(os.TempDir(), "slr")
 	if runtime.GOOS == "windows" {
 		identity = strings.ToLower(identity)

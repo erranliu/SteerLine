@@ -19,8 +19,8 @@ function Get-DeploymentRunnerSelection([string]$InstallDirectory, [bool]$UpdateR
 
 function Assert-DeploymentRunnerBuild([string]$InstallDirectory, [string]$SHA256, [string]$CandidateExecutable, [string]$VerifierCLI) {
     $raw = & $VerifierCLI verify-runner-upgrade --home $InstallDirectory --runner-exe $CandidateExecutable --runner-sha256 $SHA256 --json
-    if ($LASTEXITCODE -ne 0) { throw 'Runner upgrade preflight failed; installed service and files were preserved. Drain the original installation first; v7 requires a fresh InstallHome for old state.' }
+    if ($LASTEXITCODE -ne 0) { throw 'Runner upgrade preflight failed; installed service and files were preserved. Drain the original installation first; v8 requires a fresh InstallHome for old state.' }
     $proof = $raw | ConvertFrom-Json -ErrorAction Stop
-    if ($null -eq $proof -or $proof.contract -ne 'steerline-runner-upgrade/v1' -or $proof.home -ne $InstallDirectory -or $proof.candidate_sha256 -ne $SHA256 -or $proof.state_format -ne 'steerrunner-state/v7' -or -not [IO.Path]::IsPathRooted($proof.state_dir)) { throw 'Runner upgrade result differs from the staged invocation; installed service and files were preserved.' }
+    if ($null -eq $proof -or $proof.contract -ne 'steerline-runner-upgrade/v1' -or $proof.home -ne $InstallDirectory -or $proof.candidate_sha256 -ne $SHA256 -or $proof.state_format -ne 'steerrunner-state/v8' -or -not [IO.Path]::IsPathRooted($proof.state_dir)) { throw 'Runner upgrade result differs from the staged invocation; installed service and files were preserved.' }
     return $proof
 }

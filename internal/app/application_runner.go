@@ -58,7 +58,7 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	}
 	recovery := offline.Capabilities.Recovery
 	if recovery == nil || recovery.StateFormat != runnerclient.StateFormat || !recovery.SameBuildRestart || recovery.ResourceRebuild {
-		return errors.New("selected Runner must support state/v7 and same-build restart without resource reconstruction")
+		return errors.New("selected Runner must support state/v8 and same-build restart without resource reconstruction")
 	}
 	if err = bindApplicationRunnerBuild(ctx, home, cli); err != nil {
 		return err

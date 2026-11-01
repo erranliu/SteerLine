@@ -18,7 +18,7 @@
 
 SteerLine 只通过 `steerrunner-cli/v1` 调用独立 EXE。Runner 同一个 EXE 提供短命 CLI 与常驻服务；CLI 连接同一 state-dir 的现有实例，读请求不自动启动服务。任务、DAG、候选参与及 TaskDelivery 留在 SteerLine。
 
-当前对接 Runner state/v7：同构建重启只重连原资源；换构建前由原版本排空业务、原生资源及未完成控制。不再调用已删除的 verify-takeover，也不维护旧兼容矩阵。启动前取消通过公开 inspect（冷态使用 --offline）核对原 Run/input/request，再提交原 pending_stops 信封；原资源丢失或未知结果耗尽后显示人工处理，显式 resume 只对账。v6 及更早格式保留原安装收尾，使用新的应用 home 与 v7 派生目录，不迁移旧状态。未来兼容且已排空时可复用同一目录，历史构建摘要不决定逐 Run 业务权限。部署步骤见[安装更新](install-deploy.md#同构建更新与重启)。此前服务换代/接管 Spec 和下文 A/B 结果仅是历史记录。
+当前对接 Runner state/v8：同构建重启只重连原资源；换构建前由原版本排空业务、原生资源及未完成控制。不再调用已删除的 verify-takeover，也不维护旧兼容矩阵。启动前取消通过公开 inspect（冷态使用 --offline）核对原 Run/input/request，再提交原 pending_stops 信封；原资源丢失或未知结果耗尽后显示人工处理，显式 resume 只对账。v7 及更早格式保留原安装收尾，使用新的应用 home 与 v8 派生目录，不迁移旧状态。未来兼容且已排空时可复用同一目录，历史构建摘要不决定逐 Run 业务权限。部署步骤见[安装更新](install-deploy.md#同构建更新与重启)。此前服务换代/接管 Spec 和下文 A/B 结果仅是历史记录。
 
 开发候选在预留事务内分配页面显示的候选序号，并将 `name_prefix`（C1 为 `sl-<task_id>`，C2 起为 `sl-<task_id>-c<Number>`）与最终 submit 一起冻结。Runner 将其作为通用命名标识，Orca worktree 使用 `<name_prefix>-<Runner Run ID>`；未提供时前缀为 `sr`。该字段不从 correlation 推导，也不改变原资源绑定或分支规则；需要发布了此字段/schema 的 Runner 构建，两仓验证见[专属验收](../../SteerlineFlow/testing/acceptance/runner-name-prefix.md)。
 
