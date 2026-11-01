@@ -148,13 +148,13 @@ func TestDeploymentInterruptedRecovery(t *testing.T) {
 	info.LastShutdown.ResourcesSettled = false
 	info.LastShutdown.Diagnostic = "original native resources remain unverified"
 	require(t, os.WriteFile(infoPath, mustJSON(info), 0600))
-	takeoverPath := filepath.Join(runnerDir, "idle-takeover-fixture.json")
-	takeover := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: runnerDir, CandidateSHA256: global.Runner.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{
-		{ID: candidate.RunID, Kind: "run", Revision: 1, InputDigest: candidate.InputDigest, Status: "compatible"},
-		{ID: generation.RunID, Kind: "run", Revision: 1, InputDigest: generation.InputDigest, Status: "compatible"},
-	}}
-	require(t, os.WriteFile(takeoverPath, mustJSON(takeover), 0600))
-	paths := []string{GlobalExecutionConfigPath(), configPath, filepath.Join(backend.dir, "instance.json"), filepath.Join(backend.dir, "launch.json"), filepath.Join(backend.dir, "shutdown.json"), filepath.Join(backend.dir, "runner-build.json"), filepath.Join(HomeDir(), "deployment.json"), infoPath, takeoverPath, web.exe}
+	inspectionsPath := filepath.Join(runnerDir, "idle-inspections-fixture.json")
+	inspections := map[string]any{
+		candidate.RunID:  runnerclient.Inspection{Run: &runnercontract.Run{RunID: candidate.RunID, InputDigest: candidate.InputDigest, Revision: 1}},
+		generation.RunID: runnerclient.Inspection{Run: &runnercontract.Run{RunID: generation.RunID, InputDigest: generation.InputDigest, Revision: 1}},
+	}
+	require(t, os.WriteFile(inspectionsPath, mustJSON(inspections), 0600))
+	paths := []string{GlobalExecutionConfigPath(), configPath, filepath.Join(backend.dir, "instance.json"), filepath.Join(backend.dir, "launch.json"), filepath.Join(backend.dir, "shutdown.json"), filepath.Join(backend.dir, "runner-build.json"), filepath.Join(HomeDir(), "deployment.json"), infoPath, inspectionsPath, web.exe}
 	baseline := map[string][]byte{}
 	for _, path := range paths {
 		baseline[path], err = os.ReadFile(path)
@@ -318,16 +318,14 @@ func TestDeploymentInterruptedRecovery(t *testing.T) {
 			case "removed-project":
 				require(t, os.Remove(configPath))
 			case "incompatible", "missing-run", "wrong-input":
-				var bad runnercontract.TakeoverReport
-				require(t, json.Unmarshal(mustJSON(takeover), &bad))
-				if fault == "incompatible" {
-					bad.Compatible = false
-				} else if fault == "missing-run" {
-					bad.Items = []runnercontract.TakeoverItem{}
+				bad := map[string]any{}
+				require(t, json.Unmarshal(mustJSON(inspections), &bad))
+				if fault == "wrong-input" {
+					bad[candidate.RunID] = runnerclient.Inspection{Run: &runnercontract.Run{RunID: candidate.RunID, InputDigest: "foreign", Revision: 1}}
 				} else {
-					bad.Items[0].InputDigest = "foreign"
+					delete(bad, candidate.RunID)
 				}
-				require(t, os.WriteFile(takeoverPath, mustJSON(bad), 0600))
+				require(t, os.WriteFile(inspectionsPath, mustJSON(bad), 0600))
 			}
 			if release != nil {
 				defer release()

@@ -52,17 +52,16 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	if err != nil {
 		return err
 	}
-	var old runnercontract.BuildPin
-	if readErr := localservice.ReadPrivateJSON(filepath.Join(home, "application-api", "runner-build.json"), &old, 64<<10); readErr == nil && !runnerbinding.SameBuild(old, cli.BuildPin()) {
-		proof, proofErr := cli.VerifyTakeover(ctx)
-		if proofErr != nil {
-			return proofErr
-		}
-		status, statusErr := cli.ServiceStatus(ctx)
-		if statusErr != nil || status.Status != "not_running" && status.ExecutableSHA256 != cli.SHA256 {
-			return errors.New("original Runner service must exit before compatible build takeover")
-		}
-		cli.Takeover = &proof
+	offline, err := cli.OfflineCatalog(ctx, version)
+	if err != nil {
+		return err
+	}
+	recovery := offline.Capabilities.Recovery
+	if recovery == nil || recovery.StateFormat != runnerclient.StateFormat || !recovery.SameBuildRestart || recovery.ResourceRebuild {
+		return errors.New("selected Runner must support state/v7 and same-build restart without resource reconstruction")
+	}
+	if err = bindApplicationRunnerBuild(ctx, home, cli); err != nil {
+		return err
 	}
 	var stops []runnercontract.PendingStop
 	for _, collect := range prepare {
@@ -71,13 +70,6 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 			return collectErr
 		}
 		stops = append(stops, pending...)
-	}
-	var proofs []runnercontract.TakeoverReport
-	if cli.Takeover != nil {
-		proofs = append(proofs, *cli.Takeover)
-	}
-	if err = bindApplicationRunnerBuild(home, cli.BuildPin(), proofs...); err != nil {
-		return err
 	}
 	if err = runnerstatepath.Prepare(home); err != nil {
 		return err
@@ -109,20 +101,24 @@ func (r *applicationRunner) start(ctx context.Context, g RunnerExecutionConfig, 
 	return err
 }
 
-// The caller holds the home lease. A changed transport pin requires fresh public
-// compatibility evidence; original candidate/check pins remain immutable.
-func bindApplicationRunnerBuild(home string, pin runnercontract.BuildPin, proofs ...runnercontract.TakeoverReport) error {
+// The home lease protects the pin update. A changed build may only reuse a
+// compatible namespace after the old resources and controls have been drained.
+func bindApplicationRunnerBuild(ctx context.Context, home string, cli runnerclient.Client) error {
+	pin := cli.BuildPin()
 	dir := filepath.Join(home, "application-api")
 	var old runnercontract.BuildPin
 	err := localservice.ReadPrivateJSON(filepath.Join(dir, "runner-build.json"), &old, 64<<10)
 	if err == nil {
-		if !runnerbinding.SameBuild(old, pin) {
-			if len(proofs) != 1 || !runnerbinding.Compatible(proofs[0], pin) || canonicalPath(old.StateDir) != canonicalPath(pin.StateDir) {
-				return errors.New("runner_build_changed: compatible takeover evidence is required")
-			}
-			return localservice.Write(dir, "runner-build.json", pin)
+		if !runnerbinding.SamePath(old.StateDir, pin.StateDir) {
+			return errors.New("Runner state format changed; drain the original installation with its original executable and use a fresh application home; no migration is supported")
 		}
-		return nil
+		if runnerbinding.SameBuild(old, pin) {
+			return nil
+		}
+		if err := cli.VerifyDrained(ctx); err != nil {
+			return err
+		}
+		return localservice.Write(dir, "runner-build.json", pin)
 	}
 	if !os.IsNotExist(err) {
 		return err

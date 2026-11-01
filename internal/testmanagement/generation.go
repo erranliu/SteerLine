@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/prompts"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"io"
 	"os"
 	"path/filepath"
@@ -49,7 +50,6 @@ type GenerationService struct {
 	Build               runnercontract.BuildPin
 	Prepare             func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error)
 	Admit               func(context.Context) error
-	VerifyBinding       func(Generation) error
 	Queue               *GenerationQueue
 	mu                  sync.Mutex
 	nextObservation     int
@@ -233,15 +233,8 @@ func (s *GenerationService) dispatch(ctx context.Context, r Generation) (Generat
 	}
 	// No Run exists to take over for an unsent request. A different build must
 	// not execute it and then leave the new Run bound to the old build pin.
-	if r.Runner != s.Build {
-		r.State = "rejected"
-		r.Diagnostic = "排队期间 Runner 构建已变化，请一键生成或重试以使用当前构建"
-		r.Revision++
-		if err := s.Store.SaveGeneration(ctx, r, r.Revision-1); err != nil {
-			return r, err
-		}
-		s.queue().Update(r)
-		return r, nil
+	if !runnerbinding.SamePath(r.Runner.StateDir, s.Build.StateDir) {
+		return r, errors.New("original Runner namespace differs")
 	}
 	if s.Admit != nil {
 		if err := s.Admit(ctx); err != nil {
@@ -371,13 +364,8 @@ func (s *GenerationService) observe(ctx context.Context, r Generation) (Generati
 		return r, nil
 	}
 	before, _ := json.Marshal(r)
-	if r.Runner != s.Build {
-		if s.VerifyBinding == nil {
-			return r, errors.New("original generation Runner build/namespace differs")
-		}
-		if err := s.VerifyBinding(r); err != nil {
-			return r, err
-		}
+	if !runnerbinding.SamePath(r.Runner.StateDir, s.Build.StateDir) {
+		return r, errors.New("original Runner namespace differs")
 	}
 	selector, id := "run-id", r.RunID
 	if id == "" || r.InputDigest == "" {

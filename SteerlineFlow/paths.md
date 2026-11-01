@@ -163,7 +163,7 @@ go run ./cmd/test-feedback -level=L4 -suite=runtime -env=controlled -scenario=ru
 | `<home>/etc/*.json`、`<home>/execution.json`、`<home>/web.json` | 项目列表、固定执行配置及 Web 地址；调试包 home 独立。 |
 | `<home>/state/<project-state-key>/steerline.db` | 项目业务状态。state-key 由业务 Git common dir 派生，由程序核验，不手填一个任意 run_dir。 |
 | `<home>/application-api/`、`<home>/ui/web/`、`<home>/logs/` | 应用/Web 身份、控制与日志现场；经原应用入口观察和停止，不当作第二业务权威。 |
-| `<home所在盘>:\slr\<home-key>/` | Windows 的应用级共享 Runner 短目录，按规范化 home 派生；同 home 多项目共用，换 home 派生新目录。非 Windows 为 `<系统临时目录>/slr/<home-key>/`。实际位置从运行信息读取，不手拼哈希或读取 Runner 私有库。 |
+| `<home所在盘>:\slr\<home-key>/` | Windows 的应用级共享 Runner 短目录，按规范化 home 及固定 v7 身份派生（与旧 v1 命名空间分离，不自动采用旧 pin/目录）；同 home 多项目共用，换 home 派生新目录。非 Windows 为 `<系统临时目录>/slr/<home-key>/`。实际位置从运行信息读取，不手拼哈希或读取 Runner 私有库。 |
 | `<系统临时目录>/steerline-e2e-*/<scenario-id>/` | E2E 可写 scratch，与长期报告根分开。资源清理未核实时执行器保留现场并在 summary 记录路径；不能只删报告而丢失现场定位。 |
 | `<系统临时目录>/sl-test-*/` | Go 分组使用的独占短临时 home/TMP，执行器负责清理；原日志仍在本次输出根。 |
 | `<TEMP>/steerline-native-test-<UUID>/` | 独立进程包装器使用环境变量 `TEMP`，保存 `test.log`、`result.json` 等代理输出；实际测试报告仍读其命令返回路径。 |

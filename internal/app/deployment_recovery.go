@@ -186,9 +186,15 @@ func admitDeploymentRecovery(ctx context.Context, candidate string) (*Deployment
 	if err != nil {
 		return fail(err)
 	}
-	takeover, err := selected.VerifyTakeover(ctx)
-	if err != nil {
-		return fail(err)
+	// An interrupted same-build service can reconnect its original resources.
+	// A different build must wait for explicit draining by the original version.
+	if sha != pin.SHA256 {
+		if err := original.VerifyDrained(ctx); err != nil {
+			return fail(err)
+		}
+		if err := selected.VerifyDrained(ctx); err != nil {
+			return fail(err)
+		}
 	}
 	expected := map[string]bool{}
 	for _, entry := range catalog.entries {
@@ -205,7 +211,7 @@ func admitDeploymentRecovery(ctx context.Context, candidate string) (*Deployment
 		}
 		expected[key] = true
 		p := contract.ProjectShutdown{ConfigID: entry.view.ConfigID, ProjectID: httpcontract.ProjectID(c.Identity())}
-		if _, err = verifyProjectOfflineMode(ctx, c, p, *b.Identity, runnerclient.StoppedVerification{}, &pin, true, &takeover); err != nil {
+		if _, err = verifyProjectOfflineMode(ctx, c, p, *b.Identity, runnerclient.StoppedVerification{}, &pin, true); err != nil {
 			return fail(fmt.Errorf("%s: %w", p.ConfigID, err))
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/erranliu/SteerLine/internal/prompts"
+	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"sync"
 	"time"
 
@@ -44,7 +45,6 @@ type Service struct {
 	Prepare             func(context.Context, string) (runnercontract.ExecutionInput, *runnerclient.Catalog, error)
 	PrepareDocuments    func(context.Context, model.Record) (model.DocumentContext, error)
 	ReadCommitted       func(context.Context, string, string) ([]byte, error)
-	VerifyBinding       func(model.Record) error
 	Admit               func(context.Context) error
 	mu                  sync.Mutex
 	next                int
@@ -187,10 +187,8 @@ func (s *Service) dispatch(ctx context.Context, r model.Record) (model.Record, e
 	if r.Submission != "pending" || r.Cancelled {
 		return r, nil
 	}
-	if r.Runner != s.Build {
-		r.State = "rejected"
-		r.Diagnostic = "排队期间 Runner 构建已变化，请显式重新解析"
-		return s.save(ctx, r)
+	if !runnerbinding.SamePath(r.Runner.StateDir, s.Build.StateDir) {
+		return r, errors.New("original Runner namespace differs")
 	}
 	if s.Admit != nil {
 		if e := s.Admit(ctx); e != nil {
@@ -267,13 +265,8 @@ func (s *Service) Observe(ctx context.Context, id string) (model.Record, error) 
 	return s.observe(ctx, r)
 }
 func (s *Service) observe(ctx context.Context, r model.Record) (model.Record, error) {
-	if r.Runner != s.Build {
-		if s.VerifyBinding == nil {
-			return r, errors.New("原 Runner 构建尚未核实")
-		}
-		if e := s.VerifyBinding(r); e != nil {
-			return r, e
-		}
+	if !runnerbinding.SamePath(r.Runner.StateDir, s.Build.StateDir) {
+		return r, errors.New("original Runner namespace differs")
 	}
 	selector, id := "run-id", r.RunID
 	if id == "" || r.InputDigest == "" {

@@ -82,15 +82,6 @@ func TestLegacyCheckRetirementPublishedContract(t *testing.T) {
 			t.Error("empty contract check created a Run", proof)
 			return
 		}
-		takeover, err := cli.VerifyTakeover(stopCtx)
-		if err != nil {
-			t.Error(err)
-			return
-		}
-		if len(takeover.Items) != 0 {
-			t.Error("empty contract check has takeover resources", takeover)
-			return
-		}
 		if err := runnerstatepath.RemoveStopped(home); err != nil {
 			t.Error(err)
 		}

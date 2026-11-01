@@ -181,7 +181,7 @@ func prepareApplicationDeployment(ctx context.Context, runner string, goal Deplo
 		if result.Stopped != nil || result.Restart != nil && result.Restart.RunnerService.ResourcesSettled {
 			result.Facts.NativeResources = "verified"
 		}
-		if result.Restart != nil && result.Restart.Takeover != nil {
+		if result.Restart != nil && result.Restart.CandidateBuild != nil {
 			result.Facts.Compatibility = "verified"
 		}
 	}

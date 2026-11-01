@@ -30,9 +30,9 @@ class Fixture {
         string home=Environment.GetEnvironmentVariable("STEERLINE_HOME");
         switch(args[0]) {
             case "version": Json(new {ok=true,protocol="steerrunner-cli/v1",data=new {version="fixture-v1",source_commit="fixture"}}); return 0;
-            case "verify-runner-takeover":
+            case "verify-runner-upgrade":
                 if(mode=="preflight") return 7;
-                Json(new {candidate_sha256=Get(args,"--runner-sha256"),state_dir=Get(args,"--state-dir")}); return 0;
+                Json(new {contract="steerline-runner-upgrade/v1",home=Get(args,"--home"),candidate_sha256=Get(args,"--runner-sha256"),state_format="steerrunner-state/v7",state_dir=Path.Combine(Get(args,"--home"),"runner-state")}); return 0;
             case "prepare-deployment":
                 if(mode=="stop") return 8;
                 string digest;

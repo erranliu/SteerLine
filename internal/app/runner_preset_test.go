@@ -74,15 +74,18 @@ func TestRunnerPresetFreeze(t *testing.T) {
 		changed.Runner.Version = "unit-next-build"
 		t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", changed.Runner.Version)
 		require(t, os.WriteFile(GlobalExecutionConfigPath(), mustJSON(changed), 0600))
-		// Current generations allow proven compatible takeover; express an
-		// explicit public rejection rather than the retired unconditional gate.
-		rejected := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: original.runner.client.StateDir, CandidateSHA256: changed.Runner.SHA256, Compatible: false, Items: []runnercontract.TakeoverItem{}}
-		require(t, os.WriteFile(filepath.Join(original.runner.client.StateDir, "idle-takeover-fixture.json"), mustJSON(rejected), 0600))
+		// An unknown namespace is an incompatible state-format boundary.
+		var oldPin runnercontract.BuildPin
+		require(t, json.Unmarshal(originalPin, &oldPin))
+		oldPin.StateDir += "-v6"
+		require(t, os.WriteFile(pinPath, mustJSON(oldPin), 0600))
+		originalPin, err = os.ReadFile(pinPath)
+		require(t, err)
 		next := NewApplicationDirectory(HomeDir())
 		next.Start()
 		defer next.Close()
 		cat := switchCatalog(t, next, func(c contract.Catalog) bool { return len(c.Projects) == 1 && c.Projects[0].RuntimeState == "failed" })
-		if cat.Projects[0].Online || !strings.Contains(cat.Projects[0].Diagnostic, "takeover") {
+		if cat.Projects[0].Online || !strings.Contains(cat.Projects[0].Diagnostic, "state format changed") {
 			t.Fatal("incompatible takeover was not rejected", cat)
 		}
 		currentPin, err := os.ReadFile(pinPath)

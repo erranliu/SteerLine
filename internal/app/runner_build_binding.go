@@ -11,7 +11,7 @@ import (
 
 // bindRunnerBuild checks project snapshots against the application's shared client.
 // The home-wide current build gate has already run before service start;
-// original candidate/check build facts remain immutable after takeover.
+// original build facts remain immutable and never grant per-Run authority.
 func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) error {
 	cli, err := c.runnerClient(ctx)
 	if err != nil {
@@ -21,7 +21,6 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 	if err := verifyEnvironmentBindings(ctx, c, store, cli); err != nil {
 		return err
 	}
-	compatible := cli.Takeover != nil && runnerbinding.Compatible(*cli.Takeover, pin)
 	snapshot, err := store.ReadRunnerSnapshot(ctx, c.Identity())
 	if err != nil {
 		return err
@@ -30,12 +29,10 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 	if snapshot.Checkpoint != nil {
 		checkpoint = *snapshot.Checkpoint
 	}
-	if checkpoint.Service.RunnerBuild != nil {
-		if !runnerbinding.SameBuild(*checkpoint.Service.RunnerBuild, pin) && (!compatible || canonicalPath(checkpoint.Service.RunnerBuild.StateDir) != canonicalPath(pin.StateDir)) {
-			return errors.New("runner_build_changed: restore the original Runner to reconcile/stop its resources; a new build requires a fresh environment")
-		}
+	if checkpoint.Service.RunnerBuild != nil && !runnerbinding.SamePath(checkpoint.Service.RunnerBuild.StateDir, pin.StateDir) {
+		return errors.New("project belongs to another Runner namespace; use a fresh application home")
 	}
-	if err := runnerbinding.ValidateBuildBindings(pin, cli.Takeover, snapshot.Candidates); err != nil {
+	if err := runnerbinding.ValidateBuildBindings(pin, snapshot.Candidates); err != nil {
 		return err
 	}
 	generations, err := store.Generations(ctx, c.Identity())
@@ -43,10 +40,8 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 		return err
 	}
 	for _, g := range generations {
-		if !runnerbinding.SameBuild(g.Runner, pin) {
-			if err := verifyGenerationTakeover(g, cli); err != nil {
-				return err
-			}
+		if !g.Unsubmitted() && !runnerbinding.SamePath(g.Runner.StateDir, pin.StateDir) {
+			return errors.New("generation Runner namespace differs")
 		}
 	}
 	roadmaps, err := store.Roadmaps(ctx, c.Identity())
@@ -54,16 +49,8 @@ func bindRunnerBuild(ctx context.Context, c Config, store *sqlite.SQLiteStore) e
 		return err
 	}
 	for _, r := range roadmaps {
-		if r.ObservationComplete() || r.Submission == "pending" {
-			continue
-		}
-		if !runnerbinding.SameBuild(r.Runner, pin) {
-			if cli.Takeover == nil {
-				return errors.New("Roadmap 原请求接管证明不可用")
-			}
-			if err := verifyRoadmapTakeover(r, *cli.Takeover); err != nil {
-				return err
-			}
+		if r.Submission != "pending" && !runnerbinding.SamePath(r.Runner.StateDir, pin.StateDir) {
+			return errors.New("Roadmap Runner namespace differs")
 		}
 	}
 	if checkpoint.Service.RunnerBuild != nil && runnerbinding.SameBuild(*checkpoint.Service.RunnerBuild, pin) {

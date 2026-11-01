@@ -15,8 +15,8 @@ import (
 func TestSharedRunnerBuildPinBeforeService(t *testing.T) {
 	home := t.TempDir()
 	pin := runnercontract.BuildPin{Executable: filepath.Join(home, "runner.exe"), SHA256: strings.Repeat("a", 64), Version: "test", ResourceDigest: strings.Repeat("b", 64), StateDir: runnerstatepath.Directory(home)}
-	require(t, bindApplicationRunnerBuild(home, pin))
-	require(t, bindApplicationRunnerBuild(home, pin))
+	require(t, bindTestRunnerPin(home, pin))
+	require(t, bindTestRunnerPin(home, pin))
 	if _, err := os.Stat(pin.StateDir); !os.IsNotExist(err) {
 		t.Fatal("build gate created Runner state", err)
 	}
@@ -24,7 +24,7 @@ func TestSharedRunnerBuildPinBeforeService(t *testing.T) {
 	require(t, err)
 	changed := pin
 	changed.SHA256 = strings.Repeat("c", 64)
-	if bindApplicationRunnerBuild(home, changed) == nil {
+	if bindTestRunnerPin(home, changed) == nil {
 		t.Fatal("changed build accepted")
 	}
 	after, err := os.ReadFile(filepath.Join(home, "application-api", "runner-build.json"))
@@ -36,7 +36,7 @@ func TestSharedRunnerBuildPinBeforeService(t *testing.T) {
 	pin.StateDir = runnerstatepath.Directory(other)
 	require(t, runnerstatepath.Prepare(other))
 	t.Cleanup(func() { _ = runnerstatepath.RemoveStopped(other) })
-	if bindApplicationRunnerBuild(other, pin) == nil {
+	if bindTestRunnerPin(other, pin) == nil {
 		t.Fatal("existing state adopted without original pin")
 	}
 }
@@ -89,7 +89,7 @@ func TestSharedRunnerRejectsBuildBeforeStart(t *testing.T) {
 	require(t, err)
 	pin := cli.BuildPin()
 	pin.ResourceDigest = strings.Repeat("f", 64)
-	require(t, bindApplicationRunnerBuild(c.runnerHome(), pin))
+	require(t, bindTestRunnerPin(c.runnerHome(), pin))
 	var owner applicationRunner
 	if owner.start(context.Background(), c.RunnerExecution, c.runnerHome(), time.Second) == nil || owner.attempted {
 		t.Fatal("wrong build reached service start")
@@ -117,4 +117,5 @@ func TestSharedRunnerCatalogFailureStillClosesAdoptedInstance(t *testing.T) {
 	if !adopted.result().Settled() {
 		t.Fatal("known shared instance was abandoned after catalog failure", adopted.result())
 	}
+
 }

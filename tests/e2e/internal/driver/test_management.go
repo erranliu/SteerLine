@@ -31,7 +31,7 @@ import (
 
 // testManagement drives only public application/Runner operations and the fixture's
 // actual assertion program. No result JSON is synthesized by this driver or an agent.
-func (d *debugRelease) testManagement(source, runnerCandidate string) (result error) {
+func (d *debugRelease) testManagement(source string) (result error) {
 	if !filepath.IsAbs(source) {
 		return errors.New("test management source must be absolute")
 	}
@@ -237,31 +237,6 @@ func (d *debugRelease) testManagement(source, runnerCandidate string) (result er
 	proof.GenerationSource = gen.Run.Final.Source
 	if err = controlled.Write(filepath.Join(out, "generation-run.json"), gen); err != nil {
 		return err
-	}
-	if runnerCandidate != "" {
-		if err = p.Close(); err != nil {
-			return err
-		}
-		runner, err = d.tmGenerationTakeover(ctx, out, runnerCandidate, generation, *gen.Run, runner)
-		if err != nil {
-			return err
-		}
-		proof.RunnerSHA256 = runner.SHA256
-		err = tmPoll(ctx, func() (bool, error) {
-			p, err = applicationclient.OpenProject(ctx, d.home, id.ProjectID)
-			return err == nil, nil
-		})
-		if err != nil {
-			return err
-		}
-		defer p.Close()
-		current, err := p.TestGeneration(ctx, request)
-		if err != nil || current.ID != generation.ID || current.RunID != generation.RunID || current.State != "generated" || string(current.Result) != string(generation.Result) {
-			return fmt.Errorf("generation changed across compatible takeover: %+v: %w", current, err)
-		}
-		if err = controlled.Write(filepath.Join(out, "generation-after-takeover.json"), current); err != nil {
-			return err
-		}
 	}
 	resumed, err := tmControl(ctx, p, out, "resume", api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.ReplaceAll(uuid.NewString(), "-", ""), RequestedBy: "testing-driver"})
 	if err != nil {

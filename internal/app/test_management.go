@@ -58,7 +58,6 @@ func newTestManagementPort(c Config, store testManagementStore, cli runnerclient
 		reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
 		return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
 	}
-	s.VerifyBinding = func(g testmanagement.Generation) error { return verifyGenerationTakeover(g, cli) }
 	port := &testManagementPort{service: s, store: store, maintenance: c.runtimeMaintenance}
 	port.progress = &testmanagement.ProgressService{Project: c.Identity(), Store: store, Runner: cli, Admit: admit}
 	if port.maintenance != nil {
