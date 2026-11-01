@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,22 +24,18 @@ type Store interface {
 type Runner interface {
 	Call(context.Context, string, []string, *runnerclient.Request) (runnerclient.Response, error)
 	Inspect(context.Context, string, string, bool) (runnerclient.Inspection, error)
-	ProgressFile(context.Context, string) (runnercontract.ProgressFile, error)
 	ResultFile(context.Context, string) (runnercontract.ResultFile, error)
 }
 type Service struct {
-	Project           string
-	Store             Store
-	Runner            Runner
-	Build             runnercontract.BuildPin
-	Prepare           func(context.Context, string) (envmodel.Prepared, error)
-	PrepareGeneration func(context.Context, envmodel.Generate) (envmodel.GenerationPrepared, error)
-	Admit             func(context.Context) error
-	WithTarget        func(context.Context, string, string, func() error) error
-	AcquireGeneration func(envmodel.Record) bool
-	ReleaseGeneration func(envmodel.Record)
-	Now               func() time.Time
-	mu                sync.Mutex
+	Project    string
+	Store      Store
+	Runner     Runner
+	Build      runnercontract.BuildPin
+	Prepare    func(context.Context, string) (envmodel.Prepared, error)
+	Admit      func(context.Context) error
+	WithTarget func(context.Context, string, string, func() error) error
+	Now        func() time.Time
+	mu         sync.Mutex
 }
 
 func (s *Service) now() time.Time {
@@ -85,14 +79,6 @@ func (s *Service) original(ctx context.Context, id string, raw json.RawMessage) 
 	return envmodel.Record{}, envmodel.ErrNotFound
 }
 func (s *Service) Start(ctx context.Context, id string, original json.RawMessage, in envmodel.Start) (envmodel.Record, error) {
-	return s.start(ctx, id, original, in, nil)
-}
-
-func (s *Service) Generate(ctx context.Context, id string, original json.RawMessage, in envmodel.Generate) (envmodel.Record, error) {
-	return s.start(ctx, id, original, envmodel.Start{Profile: in.Profile}, &in)
-}
-
-func (s *Service) start(ctx context.Context, id string, original json.RawMessage, in envmodel.Start, generation *envmodel.Generate) (envmodel.Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !envmodel.IDPattern.MatchString(id) || !json.Valid(original) || in.Profile == "" {
@@ -107,34 +93,6 @@ func (s *Service) start(ctx context.Context, id string, original json.RawMessage
 		}
 	}
 	r := envmodel.Record{ID: id, Project: s.Project, Profile: in.Profile, Build: s.Build, CreatedAt: s.now(), State: "queued", Requests: []envmodel.Request{{ID: id, Original: original, Action: "start"}}, Rounds: []envmodel.Round{}}
-	if generation != nil {
-		if s.PrepareGeneration == nil {
-			return r, errors.New("environment generation unavailable")
-		}
-		prepared, e := s.PrepareGeneration(ctx, *generation)
-		if e != nil {
-			return r, e
-		}
-		input := prepared.Input
-		key, e := envmodel.Key(prepared.Target)
-		if e != nil || key != generation.TargetKey || !envmodel.ValidKey(key) || !json.Valid(prepared.Context) {
-			return r, errors.New("generation target/context differs")
-		}
-		r.TargetKey, r.TargetExecution, r.GenerationContext = key, prepared.Target, prepared.Context
-		if input.Generate.Repository == nil || len(input.Generate.Materials) != 0 {
-			return r, errors.New("材料准备不足：环境生成必须使用固定仓库文件，不能 inline")
-		}
-		r.Prepared.Commit = input.Generate.Repository.Commit
-		input.Correlation = map[string]string{"environment_activity": id, "steerline_project": s.Project, "environment_key": key}
-		r.Kind = "generation"
-		r.Execution = input.Execution
-		raw, _ := json.Marshal(input)
-		r.Rounds = []envmodel.Round{{Number: 1, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: raw}, Submission: "pending", Deadline: s.now().Add(time.Hour)}}
-		if e := s.save(ctx, &r); e != nil {
-			return r, e
-		}
-		return r, nil
-	}
 	if in.TimeoutSeconds <= 0 || int64(in.TimeoutSeconds) > int64(^uint64(0)>>1)/int64(time.Second) {
 		return r, errors.New("round_timeout_seconds must be positive and fit a duration")
 	}
@@ -177,45 +135,29 @@ func (s *Service) start(ctx context.Context, id string, original json.RawMessage
 	return r, e
 }
 func (s *Service) appendRound(r *envmodel.Record) error {
-	n := len(r.Rounds) + 1
+	if len(r.Rounds) != 0 {
+		return errors.New("detection is a single invocation")
+	}
 	input := r.Prepared.Input
 	input.NamePrefix = "sl-env"
-	input.Title = "环境适配: " + r.Profile
-	input.Correlation = map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": fmt.Sprint(n)}
-	var previous json.RawMessage
-	if n > 1 {
-		previous = PreviousFacts(*r, r.Rounds[n-2])
-	}
-	initial, err := json.Marshal(envmodel.RoundFile{envmodel.Report{Version: envmodel.ReportVersion, ActivityID: r.ID, Round: n, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Checks: []envmodel.Check{}, L2: []envmodel.Item{}}, previous})
+	input.Title = "项目环境检测: " + r.Profile
+	input.Correlation = map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": "1"}
+	initial, err := json.Marshal(envmodel.InitialReport(*r, 1))
 	if err != nil {
 		return err
-	}
-	if len(initial) > runnercontract.MaxProgressBytes {
-		r.State = "failed"
-		return errors.New("材料准备不足：完整前轮报告与本轮身份超过结果文件上限；未创建下一 Run")
 	}
 	input.ResultFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}
-	progress := map[string]bool{"pr": false}
-	for _, id := range r.Prepared.L2 {
-		progress["test."+id] = false
-	}
-	raw, _ := json.Marshal(progress)
-	input.ProgressFile = &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(raw)}
-	key, err := envmodel.Key(r.Execution)
+	input.ProgressFile = nil
+	instruction, err := prompts.EnvironmentInvoke(r.Prepared.Manifest.Interpreter, r.Prepared.Manifest.Script)
 	if err != nil {
 		return err
 	}
-	prepare, err := prompts.EnvironmentPrepare(envmodel.DocumentPath(key), r.Prepared.Manifest.Script)
+	input.Workflow.PromptOverrides = map[string]string{"execute": instruction}
+	body, err := json.Marshal(input)
 	if err != nil {
 		return err
 	}
-	publish, err := prompts.EnvironmentPublish(envmodel.DocumentPath(key), r.Prepared.Manifest.Script)
-	if err != nil {
-		return err
-	}
-	input.Workflow.PromptOverrides = map[string]string{"implement.execute": prepare, "publish": publish}
-	body, _ := json.Marshal(input)
-	r.Rounds = append(r.Rounds, envmodel.Round{Number: n, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}, Submission: "pending", Deadline: s.now().Add(time.Duration(r.TimeoutSeconds) * time.Second)})
+	r.Rounds = []envmodel.Round{{Number: 1, Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: envmodel.ID(), Input: body}, Submission: "pending", Deadline: s.now().Add(time.Duration(r.TimeoutSeconds) * time.Second)}}
 	r.State = "running"
 	return nil
 }
@@ -278,17 +220,14 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 		if r.Cancelled {
 			a.Settled = true
 			r.State = "cancelled"
-			return s.finish(ctx, r)
+			return s.save(ctx, r)
 		}
 		if !s.now().Before(a.Deadline) {
 			a.Settled = true
 			a.TimedOut = true
 			r.State = "failed"
 			r.Diagnostic = "轮次尚未发送即超时"
-			return s.finish(ctx, r)
-		}
-		if r.Kind == "generation" && s.AcquireGeneration != nil && !s.AcquireGeneration(*r) {
-			return nil
+			return s.save(ctx, r)
 		}
 		if s.Admit != nil {
 			if e := s.Admit(ctx); e != nil {
@@ -300,7 +239,7 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 			a.TimedOut = true
 			r.State = "failed"
 			r.Diagnostic = "轮次尚未发送即超时"
-			return s.finish(ctx, r)
+			return s.save(ctx, r)
 		}
 		a.Submission = "unknown"
 		if e := s.save(ctx, r); e != nil {
@@ -354,57 +293,12 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 	}
 	a.RunID, a.InputDigest, a.Run = run.RunID, run.InputDigest, run
 	a.Submission = "accepted"
-	if r.Kind == "generation" {
-		if result := run.ContentResult; result != nil && (result.Status != "succeeded" || !result.Source.Verified || result.Source.NativeOutcome != "succeeded" || result.Source.CommandID == "" || result.Source.TurnID == "") {
-			a.Diagnostic = "材料生成或原生结果来源未核实：" + result.Diagnostic
-		}
-		if result := run.ContentResult; result != nil && result.Status == "succeeded" && result.Source.Verified && result.Source.NativeOutcome == "succeeded" && result.Source.CommandID != "" && result.Source.TurnID != "" {
-			var g envmodel.Generated
-			if e := envmodel.Decode(run.ContentResult.JSON, &g); e != nil {
-				a.Diagnostic = e.Error()
-			} else if manifest, e := envmodel.ParseManifest([]byte(g.Document)); e != nil || manifest.EnvironmentKey != r.TargetKey {
-				a.Diagnostic = "生成文档格式或目标不符"
-			} else if strings.TrimSpace(g.Script) == "" || g.Gaps == nil || len(g.Document) > 262144 || len(g.Script) > 262144 {
-				a.Diagnostic = "生成脚本为空"
-			} else if !slices.Equal(g.Gaps, manifest.Gaps) {
-				a.Diagnostic = "生成缺口与环境文档不一致"
-			} else {
-				var frozen runnercontract.GenerateRunInput
-				if e := json.Unmarshal(a.Request.Input, &frozen); e != nil {
-					return e
-				}
-				var sourceErr error
-				if frozen.Generate.Repository != nil {
-					left, _ := json.Marshal(result.RepositorySource)
-					right, _ := json.Marshal(run.RepositorySource)
-					if string(left) != string(right) {
-						sourceErr = errors.New("环境生成 Run/result 的固定来源不一致")
-					} else {
-						sourceErr = runnerclient.VerifyRepositoryFiles(result.RepositorySource, *frozen.Generate.Repository, nil)
-					}
-				}
-				if sourceErr != nil {
-					a.Diagnostic = sourceErr.Error()
-				} else {
-					r.Generation = &g
-				}
-			}
-		}
-	} else {
-		if p, e := s.Runner.ProgressFile(ctx, a.RunID); e == nil {
-			if _, e = runnerclient.ValidateProgressFile(p, a.RunID); e == nil {
-				if a.Progress == nil || p.Version >= a.Progress.Version && p.SHA256 == a.Progress.SHA256 || p.Version > a.Progress.Version {
-					a.Progress = &p
-				}
-			}
-		}
-	}
 	due := !s.now().Before(a.Deadline)
 	if due {
 		a.TimedOut = true
 	}
-	terminal := run.Closed || run.Status == "pr_ready" || run.Status == "completed" || run.Status == "stopped" || run.Status == "failed" || run.Status == "cancelled" || run.StopStatus == "stopped" || r.Kind == "adaptation" && (run.Status == "waiting_input" || run.Status == "blocked") && run.Final != nil && run.Final.Verified
-	stop := r.Cancelled || due || terminal || r.Generation != nil || r.Kind == "generation" && run.ContentResult != nil
+	terminal := run.Closed || run.Status == "completed" || run.Status == "stopped" || run.Status == "failed" || run.Status == "cancelled" || run.StopStatus == "stopped" || r.Kind == "adaptation" && (run.Status == "waiting_input" || run.Status == "blocked") && run.Final != nil && run.Final.Verified
+	stop := r.Cancelled || due || terminal
 	if stop && run.StopStatus != "stopped" {
 		if due {
 			a.Diagnostic = "单轮期限已到，等待原执行停止核实"
@@ -495,60 +389,17 @@ func (s *Service) observe(ctx context.Context, r *envmodel.Record) error {
 func (s *Service) next(ctx context.Context, r *envmodel.Record) error {
 	a := r.Rounds[len(r.Rounds)-1]
 	r.Diagnostic = a.Diagnostic
-	// Before publish, the existing development workflow proves no PR stage
-	// was dispatched. A stopped/cancelled prepare need not invent a report.
-	beforePR := a.Run != nil && a.Run.PR == nil && (a.Run.Phase == "implement" || strings.HasPrefix(a.Run.Step, "implement.")) && (a.Report == nil || a.Report.PR.URL == "" && !a.Report.PR.OutcomeUnknown)
-	safePR := a.Report != nil && a.Report.Completed && !a.Report.PR.OutcomeUnknown && (a.Report.PR.URL == "" || a.Report.PR.CleanupCompleted)
-	if (a.Report != nil && a.Report.PR.URL != "" || a.Run != nil && a.Run.PR != nil) && !verifiedPublication(r.Prepared.Input.Publication, a) {
-		safePR = false
-	}
-	if !safePR && (r.Cancelled || a.TimedOut) && beforePR {
-		safePR = true
-	}
-	if r.Kind == "adaptation" && a.Submission != "rejected" && !safePR {
-		r.State = "unverified"
-		if r.Diagnostic == "" {
-			r.Diagnostic = "原报告/PR未核实，须先处理原资源；禁止开始新活动"
-		}
-	} else if r.Cancelled {
+	if r.Cancelled {
 		r.State = "cancelled"
-	} else if r.Kind == "generation" {
-		if r.Generation != nil && !a.TimedOut {
-			r.State = "generated"
-		} else {
-			r.State = "failed"
-		}
-	} else if !a.TimedOut && a.Report != nil && a.Run != nil && a.Report.Passed(r.Prepared.Manifest.ValidationBase, a.Run.Execution.Branch) {
+	} else if !a.TimedOut && a.Report != nil && a.Report.Passed() && envmodel.TrustedFinal(a) {
 		r.State = "ready"
-		r.Diagnostic = ""
-	} else if a.Submission == "rejected" {
-		r.State = "failed"
-	} else if len(r.Rounds) < envmodel.MaxRounds {
-		if err := s.appendRound(r); err != nil {
-			r.Diagnostic = err.Error()
-		}
 	} else {
 		r.State = "failed"
+		if r.Diagnostic == "" {
+			r.Diagnostic = "项目检测未就绪或原调用终态未核实"
+		}
 	}
-	return s.finish(ctx, r)
-}
-
-// The script reports publication; the original Runner observation independently
-// binds it to the frozen repository and exact revision. Missing facts stay
-// unverified rather than opening another round that could publish a second PR.
-func verifiedPublication(target runnercontract.Publication, a envmodel.Round) bool {
-	if a.Report == nil || a.Run == nil || a.Run.PR == nil {
-		return false
-	}
-	p, fact := a.Report.PR, a.Run.PR
-	return fact.QueryError == "" && (fact.State == "open" || fact.Merged || fact.State == "merged") && target.Provider != "" && fact.Provider == target.Provider && target.Repository != "" && fact.Repository == target.Repository && fact.HeadRepository == target.Repository && fact.URL == p.URL && fact.BaseBranch == target.BaseBranch && p.Base == target.BaseBranch && fact.HeadBranch == a.Run.Execution.Branch && p.Head == fact.HeadBranch && p.HeadRevision != "" && fact.HeadRevision == p.HeadRevision
-}
-func (s *Service) finish(ctx context.Context, r *envmodel.Record) error {
-	e := s.save(ctx, r)
-	if e == nil && r.Kind == "generation" && r.Settled() && s.ReleaseGeneration != nil {
-		s.ReleaseGeneration(*r)
-	}
-	return e
+	return s.save(ctx, r)
 }
 
 // Close persists cancellation before issuing native stops. It never clears facts.

@@ -20,8 +20,7 @@ func materialPath(key, name string) string {
 	return MaterialDirectory(key) + "/" + name
 }
 
-func DocumentPath(key string) string          { return materialPath(key, "environment.md") }
-func GenerationContextPath(key string) string { return materialPath(key, "environment-context.json") }
+func DocumentPath(key string) string { return materialPath(key, "environment.md") }
 func ScriptPath(key, extension string) string {
 	if extension != "ps1" && extension != "sh" {
 		return ""

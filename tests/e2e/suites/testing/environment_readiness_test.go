@@ -29,7 +29,7 @@ func TestProjectEnvironmentReadiness(t *testing.T) {
 			profile[key] = value
 		}
 		profile["id"] = "controlled-orca"
-		profile["execution"] = map[string]any{"adapter": "orca-terminal", "target": map[string]string{"kind": "orca_environment", "environment": "controlled-peer"}, "settings": map[string]any{"agent_launch": map[string]any{"executable": "codex"}}}
+		profile["execution"] = map[string]any{"adapter": "orca-terminal", "target": map[string]string{"kind": "orca_environment", "environment": "controlled-peer"}, "settings": map[string]any{"access_mode": "full_access", "agent_launch": map[string]any{"executable": "codex"}}}
 		config["execution_profiles"] = append(profiles, profile)
 		s.Must(controlled.Write(path, config))
 
@@ -54,10 +54,8 @@ func TestProjectEnvironmentReadiness(t *testing.T) {
 		}
 		project.Record("unprepared", before)
 	}
-	pDigest := p.GenerateControlledEnvironment("controlled")
-	qDigest := q.GenerateControlledEnvironment("controlled-orca")
-	p.ValidateGeneratedControlledEnvironment("controlled", pDigest)
-	q.ValidateGeneratedControlledEnvironment("controlled-orca", qDigest)
+	p.ValidateDeclaredControlledEnvironment("controlled")
+	q.ValidateDeclaredControlledEnvironment("controlled-orca")
 	// Ready only for the exact project/context combination, through the public query.
 	for _, project := range []*testenv.Project{p, q} {
 		ready := 0

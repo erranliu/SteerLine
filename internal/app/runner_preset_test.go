@@ -116,8 +116,6 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 	t.Helper()
 	rules, err := prompts.TestingRules()
 	require(t, err)
-	environmentRules, err := prompts.EnvironmentExecutionRules()
-	require(t, err)
 	key, _ := envmodel.Key(c.RunnerExecution.Profiles[0].Execution)
 	for name, body := range map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":["SteerlineFlow/testing.md"],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`,
 		"SteerlineFlow/spec/task.spec.md":           "# Spec\n\n## Acceptance\n\nFrozen task.\n",
@@ -128,7 +126,6 @@ func prepareStoppedRunRepository(t *testing.T, c Config) {
 		"SteerlineFlow/testing/runtime-progress.md": string(rules),
 		"tools/testing/RuntimeProgress.ps1":         progresstools.PowerShellWriter,
 		envmodel.DocumentPath(key):                  environmentFixtureDocument(key, "ps1", "environment-validation", []string{}),
-		envmodel.ExecutionRulesPath:                 string(environmentRules),
 		envmodel.ScriptPath(key, "ps1"):             "param($Phase)\n# Lifecycle fixture only.\n",
 	} {
 		path := filepath.Join(c.Repository, filepath.FromSlash(name))
@@ -344,7 +341,7 @@ func seedStoppedPublicRun(t *testing.T, r *ProjectRuntime, c Config) runnerstate
 	// This lifecycle-only prerequisite supplies stored qualification with the
 	// actual material/build basis and no external preparation execution. It is
 	// not evidence that preparation ran; the formal readiness L3 covers that.
-	prepared, err := r.config.runtimeEnvironment.materialAt(ctx, c.RunnerExecution.DefaultProfile, base, false)
+	prepared, err := r.config.runtimeEnvironment.materialAt(ctx, c.RunnerExecution.DefaultProfile, base)
 	require(t, err)
 	require(t, r.store.StartEnvironment(ctx, envmodel.Record{ID: envmodel.ID(), Project: c.Identity(), Revision: 1, Kind: "adaptation", Profile: c.RunnerExecution.DefaultProfile, Execution: prepared.Input.Execution, Build: r.runner.client.BuildPin(), Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{}}, 0))
 	_, err = r.product.SubmitControl(ctx, api.ControlInput{Action: api.ResumeDispatch, RequestID: strings.Repeat("7", 32), RequestedBy: "fixture"})

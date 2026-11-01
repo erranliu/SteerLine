@@ -24,13 +24,14 @@ type maintenanceStore interface {
 	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
 }
 type projectMaintenance struct {
-	tests       *testManagementPort
-	commitCache map[string]cachedBaselineCommit
-	config      Config
-	store       maintenanceStore
-	mu          sync.Mutex
-	observation pmm.Observation
-	checking    chan struct{}
+	environmentObservation func(context.Context, string) error
+	tests                  *testManagementPort
+	commitCache            map[string]cachedBaselineCommit
+	config                 Config
+	store                  maintenanceStore
+	mu                     sync.Mutex
+	observation            pmm.Observation
+	checking               chan struct{}
 }
 
 func newProjectMaintenance(c Config, s maintenanceStore) *projectMaintenance {
@@ -109,6 +110,9 @@ func (m *projectMaintenance) check(ctx context.Context) (pmm.Observation, error)
 				o.Rewritten = a != nil
 			}
 		}
+	}
+	if e == nil && m.environmentObservation != nil {
+		e = m.environmentObservation(ctx, o.Commit)
 	}
 	if e != nil {
 		o.Diagnostic = e.Error()
@@ -223,4 +227,15 @@ func (m *projectMaintenance) prepare(ctx context.Context, w taskmodel.FixedWork,
 
 func (m *projectMaintenance) view(ctx context.Context, mode, plan string) (any, error) {
 	return m.baselineView(ctx)
+}
+
+// reserveBaseline serializes final admission against the entire observation,
+// including environment-basis revocation before the new baseline is published.
+func (m *projectMaintenance) reserveBaseline(commit string, save func() error) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.checking != nil || m.observation.Commit != commit || m.observation.Diagnostic != "" {
+		return errors.New("baseline observation changed or pending before reservation; review again")
+	}
+	return save()
 }

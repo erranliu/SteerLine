@@ -52,7 +52,7 @@ flowchart TB
     Runner --> RunnerState[(home 短目录中的各 Run 状态 / 工作区 / 日志)]
 ```
 
-项目 Task SQLite 保存 SteerLine 的业务事实；Runner 短目录保存执行事实。候选保存公开 Runner 观察副本与精确 Run/state-dir 绑定，副本不能变成第二套执行状态机。环境准备由 `environmentadaptation` 以项目文档/脚本驱动普通 Run/result；SteerLine 判定项目×环境资格，不领取 Task 或进入任务 DAG，Runner 不感知环境检测业务。
+项目 Task SQLite 保存 SteerLine 的业务事实；Runner 短目录保存执行事实。候选保存公开 Runner 观察副本与精确 Run/state-dir 绑定，副本不能变成第二套执行状态机。环境准备由 `environmentadaptation` 以项目文档/脚本驱动普通 Run/result；项目完成检测闭环，SteerLine 核对结果信封与结算并消费项目结论授予项目×环境资格，不领取 Task 或进入任务 DAG，Runner 不感知环境检测业务。
 
 ## Go 包依赖与当前耦合
 
@@ -153,7 +153,7 @@ flowchart LR
 | `internal/runnercontract` / `runnerstate` | 公开协议值及 SteerLine caller 参与关系；无 SQL、native owner 或具体传输实现。 |
 | `internal/runnerbinding` | 纯调用方 Run/input、原 submit request_digest 和构建/目录匹配。启动准入与离线重启分别保持原前置；不操作锁/store/进程，不新增输入授权。公开 takeover 报告/逐项校验归 runnercontract；部署 `verify-runner-takeover` 复用 runnerclient 的同一公开验证。 |
 | `internal/environmentadaptation` | 项目环境活动、当前准备资格与材料依据；通过普通 Run/result 执行，沿原请求停止和对账，不推进 Task/DAG。 |
-| `internal/storage/ports` / `sqlite` | Task/DAG、候选/outbox/公开事件副本、唯一交付、项目环境准备活动/当前资格、测试生成记录及 service checkpoint；当前 `SchemaVersion = 38`，格式唯一定位见[数据模型](../product-design/data-model.md#当前格式来源)，不提供旧格式迁移。所有读取均返回存储/领域事实，无产品包依赖；活动记录流持有读事务，使用者必须关闭。 |
+| `internal/storage/ports` / `sqlite` | Task/DAG、候选/outbox/公开事件副本、唯一交付、项目环境准备活动/当前资格、测试生成记录及 service checkpoint；当前 `SchemaVersion = 39`，格式唯一定位见[数据模型](../product-design/data-model.md#当前格式来源)，不提供旧格式迁移。所有读取均返回存储/领域事实，无产品包依赖；活动记录流持有读事务，使用者必须关闭。 |
 | `internal/testmanagement` / `model` | 测试清单/安排、generate/1 和生成记录；model 保存定义及生成事实，SQLite 只依赖 model。生成借用 home Runner 客户端及项目 tick，原请求先保存，未知只对账；候选测试进度通过 progress-file 读取，旧 R2 收集已移除。独立报告按[报告约定](../../SteerlineFlow/testing/reports.md)登记，无独立 Agent 运行时。 |
 | `internal/execution/model` / `backend` / `agentlaunch` | 仍被使用的候选/正文/活动展示、配置及进程执行端口；TaskDelivery/项目权威/交付回执、checkpoint 控制回执、进程身份与观察端口已迁出，没有原生 worker 状态转移。 |
 | `internal/execution/reconstruction` / `hostport` | 运行视图从 `hostcontract` checkpoint 和独立 Task 权威生成；不再依赖存储端口。宿主控制传输仍复用产品请求/回执和活动展示值；真实候选来自公开 Runner facts，不重建原生执行现场。 |

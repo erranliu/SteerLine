@@ -2,7 +2,7 @@
 
 SteerLine 自身的固定行为说明统一放在 [internal/prompts](../internal/prompts/)，通过同包的小函数嵌入、渲染和组合。原业务 owner 校验事实、选择步骤及材料，适配点只传原正文和事实。不得在业务 Go 字符串、诊断参数或渲染后的正文中补固定规则。
 
-Runner 正文、用户覆盖/原回答、测试安排、规范、schema、报告和正式 writer 继续使用各自原来源。仅固定模板统一 UTF-8/LF；用户文字和资产不得被统一 trim 或改换行。新请求从固定仓库读取完整材料；项目按正常 Git 流程准备 [规则资产](../internal/prompts/materials/)和 [正式 writer](../tools/progress_assets.go)，程序核验同源后才提交，缺失或不符即准备不足，不内联补发。具体路径及动态材料格式见 [文档驱动 Spec](../SteerlineFlow/spec/caller-prompt-convergence.spec.md)。
+Runner 正文、用户覆盖/原回答、测试安排、规范、schema、报告和正式 writer 继续使用各自原来源。仅固定模板统一 UTF-8/LF；用户文字和资产不得被统一 trim 或改换行。新请求从固定仓库读取完整材料，缺材料阻断，不内联补发。[规则资产](../internal/prompts/materials/)由平台随对应能力交付；任务测试安排与[正式 writer](../tools/progress_assets.go)按原任务功能的固定来源核验。环境检测仅通过平台固定短提示调用项目入口，不要求项目复制或同源校验平台协议；项目负责检测闭环和结果，平台只核对信封与生命周期。具体路径及动态材料格式见 [文档驱动 Spec](../SteerlineFlow/spec/caller-prompt-convergence.spec.md)。
 
 ## 修改与本地检查
 

@@ -37,21 +37,14 @@ export type Environment = {
 export type EnvironmentOptions = {
   profiles: EnvironmentProfile[];
   environments: Environment[];
-  generators: {
-    id: string;
-    name: string;
-    model?: string;
-    reasoning_effort?: string;
-    execution_location?: string;
-  }[];
   default_profile_id: string;
 };
 export const environmentStage: Record<string, string> = {
   unprepared: "未准备",
-  awaiting_user: "待准备与验收",
-  verifying: "验收中",
+  awaiting_user: "待准备与检测",
+  verifying: "检测中",
   ready: "已就绪",
-  blocked: "验收阻断",
+  blocked: "检测阻断",
   stale: "已失效",
 };
 

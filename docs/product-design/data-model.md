@@ -50,7 +50,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 | 格式/权威 | 当前值或归属 | 源码 |
 | --- | --- | --- |
-| Task SQLite | schema 38 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| Task SQLite | schema 39 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 全局执行配置 | version 3，固定 Runner EXE/version/SHA | [app/runner_config.go](../../internal/app/runner_config.go) |
 | Runner 公开协议 | steerrunner-cli/v1 | [runnercontract](../../internal/runnercontract) |
 | TaskContract / DAG | 契约结构为 taskcontract 纯值；校验/DAG 归 task/model | [task/model](../../internal/task/model) |
@@ -63,7 +63,7 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 节点和异常规则见[生命周期](worker-lifecycle.md)，配置见[执行方案](execution-profiles.md)，实际通过/未验见[接入验收](../../SteerlineFlow/testing/acceptance/steerrunner-cutover.md)。历史 Spec 的迁出前源码链接固定在原 Git 提交，只作追溯。
 
 
-项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；生成活动另冻结材料目标、目标 execution 和公开生成上下文，更新时不得改变。资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 38 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-readiness.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
+项目环境活动与当前资格分别由 `project_environments`、`project_environment_current` 保存，绑定项目、环境键、版本化材料、原 Run/request/input 和最终 result；只保留一次检测，manifest4 描述调用，version3 结果包含不可改绑身份、ready/message 和不复核的可选 details。资格引用不成为第二套执行状态机。旧 Check 两张表和请求索引已删除，schema 39 沿唯一格式拒绝旧库，无读取或迁移分支。[当前规格](../../SteerlineFlow/spec/project-environment-workflow.spec.md)和[退役验收](../../SteerlineFlow/testing/acceptance/legacy-environment-check-retirement.md)定义保留边界与实际验证。
 
 ## Roadmap 规划与入图
 
@@ -73,6 +73,6 @@ Task 关闭、唯一 TaskDelivery、依赖后继释放和同组候选停止义�
 
 文档发布先核实原固定 PR 和实际合并，再进入 Task 事务。文档生成记录通过 purpose=documents、parent_id 关联原确认，冻结 commit/tree、规范和原请求，复用同一内容生命周期；2026-10-27 已完成真实 Runner 文档生成与隔离发布/入图验证。接口、恢复及当前边界见 [Roadmap 转正](roadmap-promotion.md)。
 
-环境报告version2仅保存原PR发布身份及head_revision；删除Agent审核/合并通过字段，外部L4闭环不回写封存报告。见[发布验收规格](../../SteerlineFlow/spec/environment-publication-scope.spec.md)。
+环境结果 version3 保存项目/环境/活动/轮次/来源提交/依据摘要及稳定调用上下文，项目完成后写 completed/ready/message 与可选 details。平台只验证信封与原执行结算，不解释业务明细；已确认依据变化持久撤销 Current，递增 revision，回退字节也不恢复资格。
 
-项目入口 version1 只声明公共材料和正式测试清单；测试生成及候选快照冻结解析后的入口，持久化拒绝改绑。环境 manifest3 的 required_checks/gaps 是检查及阻断的唯一来源；生成公开事实保存在原活动，不建立 Git context 或新版兼容读取。
+项目入口 version1 只声明公共材料和正式测试清单；测试生成及候选快照冻结解析后的入口，持久化拒绝改绑。环境 manifest4 只声明固定入口、解释器和有限依赖，不依赖该任务入口或测试目录。项目要求和检测由项目自己维护；平台不设置 required_checks/gaps 或生成活动。

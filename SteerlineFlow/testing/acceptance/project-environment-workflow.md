@@ -1,5 +1,7 @@
 # 项目 × 运行机 × 链路环境准备：审计与验收安排
 
+> 当前边界与结果见文末“2026-11-01 项目检测闭环与平台结果消费”段。此前 manifest3、生成和 L2/PR 验收均为历史，不继承到本轮新接口。
+
 2026-10-31。普通开发，无 Task ID。[Spec](../../spec/project-environment-workflow.spec.md) · [Plan](../../plans/project-environment-workflow.plan.md)。状态：代码与界面已实施，自动工程验收PEW-A01–A13全部通过；真实生成G09和正式本机验收V05及完整清理已核实。PEW-M01人工体验待走查。不进入 roadmap，不修改安装现场。2026-11-01用户后续要求提交功能PR；不部署或自动合并。
 
 调查源码：`e1968de2d8031c834bb5f35dff8a37a0a41b6a62`，实施阶段的验证基于其上的未提交工作树，实际diff/源码状态由各次报告保存。第 1 节是文档阶段本聊天自审；后续提示词及接线按 AGENTS.md 要求由独立只读子代理 `prompt_review` 审核，见第 7 节，不混同两种审计。
@@ -237,3 +239,55 @@ admission-proof.json 记录准备前拒绝、ready后实际Run `5b70fa2a771df024
 用户要求“审计后提pr”。本轮复核项目入口到环境生成/验收、测试安排/候选/记录及 roadmap 的同提交来源，检查 manifest3 的唯一检查/gaps 权威、运行依赖哈希与资格失效、持久化不可改绑、查询无副作用及请求级缓存边界，未发现新的可执行 P0–P2 问题。`/root/prompt_review` 对 `752b1ed..c8de8beb` 的实际正文、接线、相关资产/测试和规范再次独立只读审核并批准，21项字节账本及三套协议镜像匹配，未放宽 CI/源码守卫或用黄金样本代替批准。
 
 整合最新 `origin/main`（54720d30）后提交为 `40852fe3115bae651673e4e2b9c8ad7f23b83c5a`；其 Git tree 与已审 c8de8beb 完全相同，均为 `79c28d14dab74d281815bd80db9506196fdbac12`。在该干净源码重跑本范围 `pr-audit-01/L1/01`、`pr-audit-01/L2/01`：固定 L1 执行8.55秒通过，固定 L2 的 TestDeliverySmoke 101.14秒通过、cleanup_complete=true，无跳过或零命中。Markdown 634文件/3997本地链接零错误，`git diff --check` 通过。随后仅补本段审计/证据记录，不改正文或运行时接线；项目初始化和M01人工体验边界保持，不部署或自动合并功能PR。
+
+## 2026-11-01 项目检测闭环与平台结果消费
+
+本轮用户授权修订失效撤销、稳定调用字段和最小调用约定后实施；核实旧 Runner 不支持无发布可写单次调用与最终封存后，另明确授权“允许最小扩展 SteerRunner，不增加新框架”并要求在 worktree 执行。项目初始化适配未实现，未维护安装现场或合并业务主分支。
+
+生产边界已改为 manifest4 自有入口与有限显式依赖 → execute/1 调用一次 → version3 最终结果。项目自行定义、执行、诊断和判定，平台不读取测试清单推导检测要求，不复制/校验平台协议，不编排 tty/prepare/publish 或 L2/PR，不按明细重新裁决 ready。保留原请求对账、原 Run 停止/封存与当前引用/候选事务。失败原因必须可读，任意 JSON details 仅有界保存和安全展示。
+
+依据覆盖完整环境文档、入口、显式依赖、非模型 execution、全部固定稳定调用字段及接口版本；不含活动/Run/request/revision/时间/临时路径/源提交自身。无关提交或模型变化不机械失效，原结果仍绑定原提交。确认材料变更/非法/删除后持久撤销 Current，递增 revision，回退原字节不复活；读取故障仅阻断。原维护观察 pending 时最终预留也拒绝，迟到撤销与成功不能覆盖新引用。SQLite 唯一格式39，无旧版兼容/迁移。
+
+Runner 独立 worktree `C:/Users/lmas1/.codex/worktrees/runner-project-detection/SteerRunner`，分支 codex/project-detection-execute，提交 `eed760d2331d73cac1ef1f1c3df05c233add5f75`；原 `C:/Project/SteerRunner` 工作区保持。最终干净 EXE 在下述范围 runner/final，SHA256 `2d9f261d09837ba0bfa5017aa0fbc969edf729d1f88e98f67750c9f5cf57189a`。execute/1 只发送一次明确覆盖，不要求 publication，没有审计/发布/项目策略/环境知识；额外输入/恢复拒绝、提问或 stop 永久关闭；沿用工作区、适配器、可信 final、原停止和结果封存。SteerLine 在旧 Runner 能力不足时提交前拒绝，无空 PR 或伪成功兜底。
+
+### 实际正文与独立审核
+
+旧环境生成/准备/发布短模板675/260/262字节及完整生成/执行规则3862/6683字节删除。新环境短模板412字节，代表实际请求466字节，SHA256 `d84781af6aa0835aca77d74e04b8067acf2d3a348a1037b44658d2da4972e98b`。Runner 默认 execute 正文69字节，prompts.json 1088→1174字节；正式请求仍要求唯一非空调用方覆盖。项目指导7983→8741字节，SHA256 `2e5b01b228d16bda8b64601d28bcfc015f5730c6e7d0859211a7928d64a99059`。
+
+`/root/prompt_review` 独立只读审阅两仓实际正文、资产/schema、接线、对应测试和守卫并批准，后续规范与取证器增量也分别复审通过，无剩余可执行 P0–P2。黄金样本更新未代替批准。审核修复了单次执行追加输入/恢复、观察 pending 期间最终准入竞争、failed Run 不能被 ready 覆盖、探针不得替换项目声明依据（含 Windows 大小写别名）。实际 Git 正文差异、字节账本和 Runner 差异在本范围 prompt-review/final；不把指导设计或历史批准当新真实测试证明。
+
+### 验证范围与原失败
+
+本轮证据根 `C:/SteerlineDebug/wt-68d4-project-environment-workflow/result-consumption/`，每次独立新 out，失败未覆盖。
+
+| 证据 | 实际结果与范围 |
+| --- | --- |
+| Runner L1/01 | 正式 L1 passed，原配置/catalog/framework及单次执行/停止/拒绝额外输入测试；应用全包594.546秒、coverage71.6%；现场opt-in跳过沿原分层约定，不代表原生全矩阵通过 |
+| runner/result-file-01 | 正式 TestSRResultFile exit_code0，原最终快照/原停止公开回归通过；最终公开能力描述增量后 workflow/resources 全包再次通过 |
+| L1/03、L2/01 | SteerLine 固定最小代码检查与受控核心交付冒烟 passed；L2无真实模型/业务PR副作用 |
+| L3/readiness-03 | 两项目/两目标与自定义测试目录，通过公开检测获得资格、隔离、失效、真实候选门禁及原任务交付/清理，受控passed313.42秒；不作为原生执行证明 |
+| web-03 | 构建、31文件/228客户端测试与HTTP/服务端检查通过；界面移除环境生成/协议同步/平台业务判定，原原因和任意明细安全展示 |
+| diagnostics/core-02、contracts-02、review-fixes-01及后续定向 | 原环境owner、存储、公开合同、路径/信封/未知/超时/重启、持久撤销与候选竞争；review-fixes-01仅cmd夹具编译误写失败，其余已执行owner通过，后续独立修复再验 |
+| L4/local-04 | **最终真实本机正向 passed**，173.12秒，cleanup_complete=true；源项目只有自有环境文档/入口/依赖，无平台协议副本、测试清单或PR要求；额外Task探针材料只在测试clone提交且不得改变项目声明依据。一次检测报告ready，原Run completed/verified native succeeded/stopped、result closed，准备前拒绝、准备后单一真实Task Run启动并停止，全部自有refs/workspace清理 |
+
+local-04 项目源提交 `cd79eeaeaf94afdeb607c23fef18192c21124a58`；项目实际检测 PowerShell5+ 与 Git，另报告非必需诊断 status=failed/required=false，平台消费 ready=true，不据明细重判或访问证据。原始结果/原执行/实际准入及清理分别保存在 environment-proof.json、admission-proof.json、remote-ref-cleanup.json，不改写封存结果。
+
+原失败保留：contracts-01/web-01 中旧测试 execution 未显式声明 access_mode，已按真实schema修夹具，未放宽 schema；L3/readiness-02 缺受控execute能力声明，已补同一公开契约；L1/01与review-fixes-01有测试夹具字段误写编译失败，修正后重验。local-01 项目脚本 File.Replace(null)在PowerShell5失败，入口退出1、报告未完成，平台正确不准入并完成原停止/封存/自有ref清理；正常Git修复项目脚本后选择新SHA。local-02/03 的真实主体已ready/准入/清理，但包装器误对排版后请求重算字节摘要、以RawMessage字节比较报告副本而汇总失败；修复后保留原轮次/Run摘要和投影一致、原结果字节SHA核验，报告副本只作JSON规范化等价比较；MarshalIndent反例先失败后通过，独立复审批准后local-04正式通过。历史失败不能改成通过。
+
+较宽 diagnostics/owners-final-01 达到测试进程12分钟上限，不能称整包通过；同时发现旧任务材料夹具缺access_mode，已修并定向通过。按当前实际编译文件列出app111个顶层测试，原报告已通过83项，其余28项（含失败/未完成项）在diagnostics/app-remaining-01补跑；不重复已通过集合，不延长产品期限，最终覆盖与负向真实结果另记收尾。此处不把不完整报告或零匹配算通过。
+
+本机/远端 Orca 的新 execute 原生矩阵未重跑，仅声明本轮受控/契约覆盖和上述本机 Codex 原生目标；M01人工体验后置。项目误报ready或漏声明依赖的业务正确性由项目负责，平台不提供独立复核保证。
+
+### 真实负结果核对
+
+`L4/local-negative-01` 使用项目正常Git提交 `e918ddad3e6d9b3f6518d8941bc17929f773641b`，明确声明不可满足的PowerShell999+前置。原Run `247eb31c1f09fa186a8cb73ac423c0b9` completed/verified native succeeded/stopped，result closed，项目 completed=true/ready=false，原因“Project requires PowerShell 999+ and Git CLI”原样保留；准备前后均拒绝，after_run_id为空，没有Task候选，原活动一次调用、自有两ref清理confirmed=true。
+
+该入口按设计是正向可用性场景，因此正式summary passed=false，原负向结果不能改成正向通过。`diagnostics/native-negative-recheck-01` 用当前正式checkRemoteEvidence只读核对原信封、摘要、最终原字节、前后准入及scenario/ref清理，得到唯一预期的“negative audit is not a positive L4 pass”，诊断测试通过。检查源码与日志随证据保存，临时工作区测试文件已删除；没有新增常驻命令或框架，不改写原结果。
+
+最终 `diagnostics/final-contracts-01` 五个相关包/包组全回归 passed31.954秒，覆盖JSON格式化等价、错原输入摘要/Run投影拒绝、单次报告及封存、Current持久撤销和原候选事务。固定L1/03 passed（准备0.4/执行13.0秒）；L4/local-04正式summary preparation12.689/执行173.786秒、passed=true/cleanup_complete=true。M01和Orca原生范围仍按前述记录，不扩大通过声明。
+
+### 最终 owner 收尾与交付状态
+
+app-remaining-01实际执行28项后25项通过，另3个Task文档/提示词收敛测试共享fixture仍缺显式access_mode。仅把 callerTestRun 改成 full_access，原正文、缺材料/同源writer拒绝和全部断言保持；`/root/prompt_review` 独立核验该行并批准。`diagnostics/app-schema-fixtures-final` 三项重跑passed75.984秒。依据当前 Go build 的TestGoFiles/XTestGoFiles提取111个顶层测试，三份原报告的通过并集为111/111，缺失0；账本在 diagnostics/app-final-coverage.json。原宽包失败/12分钟超时与补跑失败仍保留，未声称它们单独整包通过。受影响taskrunner、runnerbridge、runnerclient、存储和cmd包在原宽包或最终包回归中完整通过，未发生零命中或未知项转通过。
+
+本轮实施及所选本机自动验证完成；PEW-A01–A18按上述领域/应用/存储/受控/Web/实际本机调用和独立审核覆盖，D01链接/UTF-8/diff检查通过。Orca原生、M01人工体验继续明确未验/后置，不将旧G/V、模拟peer或本机Codex结果外推。Spec/Plan/指导已同步最终边界和Runner授权/能力，不增加文件层或框架，不实施项目初始化适配，不部署、不合并业务主分支。

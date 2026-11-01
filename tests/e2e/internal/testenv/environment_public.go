@@ -5,22 +5,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
 	"github.com/google/uuid"
-	"net/url"
 	"path/filepath"
 	"strings"
 )
-
-func validationPullsPath(provider, repository, base string) string {
-	query := url.Values{"state": {"all"}}
-	if provider == "https://github.com" {
-		query.Set("per_page", "50")
-		query.Set("base", base)
-	} else {
-		query.Set("limit", "50")
-		query.Set("base_branch", base)
-	}
-	return "repos/" + repository + "/pulls?" + query.Encode()
-}
 
 type EnvironmentOption struct {
 	ID              string `json:"id"`

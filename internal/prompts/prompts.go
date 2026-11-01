@@ -41,12 +41,6 @@ func renderText(name, source string, data any) (string, error) {
 func TestingRules() ([]byte, error)         { return files.ReadFile("materials/testing.md") }
 func RoadmapParseRules() ([]byte, error)    { return files.ReadFile("materials/roadmap-parse.md") }
 func RoadmapDocumentRules() ([]byte, error) { return files.ReadFile("materials/roadmap-documents.md") }
-func EnvironmentGenerationRules() ([]byte, error) {
-	return files.ReadFile("materials/environment-generation.md")
-}
-func EnvironmentExecutionRules() ([]byte, error) {
-	return files.ReadFile("materials/environment-execution.md")
-}
 
 // SameRules tolerates only checkout line endings on fixed rule copies.
 // Dynamic data and original Markdown must instead match their original bytes.
@@ -103,26 +97,11 @@ func TestingStep(body string, snapshot []byte, preparedWriter, writesTests bool)
 	}
 	return render("testing-step", struct{ Body, Context string }{body, context})
 }
-func EnvironmentGenerate(commit, facts, documentPath, scriptPath string, survey bool) (string, error) {
-	if commit == "" || facts == "" || documentPath == "" || scriptPath == "" || !json.Valid([]byte(facts)) {
-		return "", errors.New("fixed environment commit is required")
+func EnvironmentInvoke(interpreter, script string) (string, error) {
+	if script == "" || (interpreter != "powershell.exe" && interpreter != "bash") {
+		return "", errors.New("fixed environment invocation is required")
 	}
-	return render("environment-generate", struct {
-		Commit, Facts, DocumentPath, ScriptPath string
-		Survey                                  bool
-	}{commit, facts, documentPath, scriptPath, survey})
-}
-func EnvironmentPrepare(documentPath, scriptPath string) (string, error) {
-	if documentPath == "" || scriptPath == "" {
-		return "", errors.New("environment material paths required")
-	}
-	return render("environment-prepare", struct{ DocumentPath, ScriptPath string }{documentPath, scriptPath})
-}
-func EnvironmentPublish(documentPath, scriptPath string) (string, error) {
-	if documentPath == "" || scriptPath == "" {
-		return "", errors.New("environment material paths required")
-	}
-	return render("environment-publish", struct{ DocumentPath, ScriptPath string }{documentPath, scriptPath})
+	return render("environment-invoke", struct{ Interpreter, Script string }{interpreter, script})
 }
 func RoadmapParse(source, commit string) (string, error) {
 	if source == "" || commit == "" {

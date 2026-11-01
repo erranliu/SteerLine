@@ -279,3 +279,32 @@ func prepareFixtureServiceEnvironment(t *testing.T, s *SQLiteStore, service *tas
 		return reserveFixtureCandidate(t, s, ctx, work, candidate, extra)
 	}
 }
+
+func TestProjectEnvironmentObservedRevocationCannotRevokeNewSelection(t *testing.T) {
+	ctx := context.Background()
+	s := openDomainTestStore(t)
+	old := readinessRecord("project")
+	old.State = "ready"
+	old.Rounds[0].Settled = true
+	require(t, s.StartEnvironment(ctx, old, 0))
+	key, _ := env.Key(old.Execution)
+	if s.RevokeEnvironmentBasis(ctx, "project", key, env.ID(), "changed", 1) == nil {
+		t.Fatal("foreign observation revoked original selection")
+	}
+	require(t, s.RevokeEnvironmentBasis(ctx, "project", key, old.ID, "changed", 1))
+	revoked, err := s.CurrentEnvironment(ctx, "project", key)
+	require(t, err)
+	if !revoked.Invalidated || revoked.Revision != 2 {
+		t.Fatal(revoked)
+	}
+	next := readinessRecord("project")
+	require(t, s.StartEnvironment(ctx, next, 2))
+	if s.RevokeEnvironmentBasis(ctx, "project", key, old.ID, "late old observation", 1) == nil {
+		t.Fatal("late observation revoked new check")
+	}
+	current, err := s.CurrentEnvironment(ctx, "project", key)
+	require(t, err)
+	if current.Invalidated || current.Revision != 3 || current.ActivityID != next.ID {
+		t.Fatal(current)
+	}
+}

@@ -172,5 +172,34 @@
       }
     },
     "initial": "execute"
+  },
+  {
+    "id": "execute",
+    "version": 1,
+    "description": "Execute one caller operation in a fixed writable worktree, without publication.",
+    "supported_adapters": [
+      "codex-app-server",
+      "orca-terminal"
+    ],
+    "audit_model_required": false,
+    "prompt_steps": [
+      "execute"
+    ],
+    "states": {
+      "closed": {
+        "policy_slots": [],
+        "kind": "terminal"
+      },
+      "execute": {
+        "policy_slots": [],
+        "kind": "execute",
+        "contract": "final",
+        "prompt_key": "execute",
+        "prompt": "执行调用方指定的操作一次，保留原始结果与失败。",
+        "model_role": "execution",
+        "next": "closed"
+      }
+    },
+    "initial": "execute"
   }
 ]

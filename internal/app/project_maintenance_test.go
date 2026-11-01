@@ -285,7 +285,7 @@ func TestPMSGenerationFreshnessAndCandidateVersions(t *testing.T) {
 	if e != nil || b != first.Commit || fixed.MaterialDigest != first.Digest {
 		t.Fatal("latest freeze", fixed, b, e)
 	}
-	run := runnerclient.RunInput{Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}
+	run := runnerclient.RunInput{Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}
 	snapshot, e := m.config.prepareTestPlan(ctx, fixed, &run)
 	if e != nil {
 		t.Fatal(e)
@@ -642,4 +642,30 @@ func TestPMSGenerationSharesPinnedReadCacheWithoutCrossRequestReuse(t *testing.T
 	if _, err := port.service.ReadCommitted(ctx, strings.Repeat("f", 40), path); err == nil {
 		t.Fatal("cache replaced another source commit")
 	}
+}
+
+func TestPMReservationRejectsPendingEnvironmentObservation(t *testing.T) {
+	m, _, _ := pmsFixture(t)
+	ctx := context.Background()
+	before, err := m.check(ctx)
+	require(t, err)
+	// Preflight approved this baseline before a new observation began.
+	reservations := 0
+	require(t, m.reserveBaseline(before.Commit, func() error { reservations++; return nil }))
+	entered, release := make(chan struct{}), make(chan struct{})
+	m.environmentObservation = func(context.Context, string) error { close(entered); <-release; return nil }
+	finished := make(chan error, 1)
+	go func() { _, err := m.check(ctx); finished <- err }()
+	select {
+	case <-entered:
+	case <-time.After(10 * time.Second):
+		t.Fatal("observation did not enter revocation callback")
+	}
+	err = m.reserveBaseline(before.Commit, func() error { reservations++; return nil })
+	close(release)
+	require(t, <-finished)
+	if err == nil || reservations != 1 {
+		t.Fatal("pending observation admitted an old preflight", err, reservations)
+	}
+	require(t, m.reserveBaseline(before.Commit, func() error { reservations++; return nil }))
 }

@@ -31,18 +31,11 @@ type Round = {
   settled: boolean;
   timed_out: boolean;
   diagnostic: string;
-  progress?: Snapshot;
   result?: Snapshot;
   report?: {
     completed: boolean;
-    checks: { id: string; status: string; message: string }[];
-    l2: { test_id: string; status: string; message: string }[];
-    pr: {
-      url: string;
-      head_revision: string;
-      cleanup_completed: boolean;
-      outcome_unknown: boolean;
-    };
+    ready: boolean;
+    details?: unknown;
     message: string;
   };
 };
@@ -56,12 +49,6 @@ type Record = {
   settled: boolean;
   diagnostic: string;
   rounds: Round[];
-  generated?: {
-    document: string;
-    script: string;
-    gaps: string[];
-    script_path: string;
-  };
 };
 function content(snapshot?: Snapshot) {
   try {
@@ -75,16 +62,6 @@ function content(snapshot?: Snapshot) {
   } catch {
     return "文件内容不可显示";
   }
-}
-function download(name: string, body: string) {
-  const url = URL.createObjectURL(
-    new Blob([body], { type: "text/plain;charset=utf-8" }),
-  );
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
 }
 export function ProjectEnvironment() {
   const { api, identity } = useWorkspace();
@@ -126,7 +103,6 @@ function EnvironmentWorkspace() {
   const [params] = useSearchParams();
   const profile = params.get("profile") || "";
   const task = params.get("task");
-  const [generator, setGenerator] = useState("");
   const materialQuery = useQuery({
     queryKey: [...scope, "materials", environmentKey],
     enabled: online && !!environmentKey,
@@ -136,11 +112,7 @@ function EnvironmentWorkspace() {
         document?: string;
         script_path?: string;
         source_commit?: string;
-        target_facts: unknown;
-        gaps?: string[];
-        verification_diagnostic?: string;
-        generation_ready: boolean;
-        generation_diagnostic?: string;
+        diagnostic?: string;
       }>(`/environment/materials?environment_key=${environmentKey}`, signal),
     retry: false,
     refetchInterval: visible ? 15000 : false,
@@ -220,19 +192,9 @@ function EnvironmentWorkspace() {
   const chooseEnvironment = (key: string) => {
     setEnvironmentKey(key);
     setSelected("");
-    setGenerator("");
     setAllActivities(false);
   };
   const material = materialQuery.data;
-  useEffect(() => {
-    if (generator || !options.verified) return;
-    const generators = options.data?.generators ?? [];
-    const preferred =
-      generators.length === 1
-        ? generators[0]
-        : generators.find((g) => g.id === options.data?.default_profile_id);
-    if (preferred) setGenerator(preferred.id);
-  }, [generator, options.verified, options.data]);
   useEffect(() => {
     const node = document.getElementById(
       `environment-${focusProfile?.environment_key || profile}`,
@@ -262,8 +224,7 @@ function EnvironmentWorkspace() {
         刷新环境
       </Button>
       <p>
-        每个项目独立验收执行环境；能力目录可见不等于验收通过。通过检查、完整
-        L2、PR 发布核实及执行收尾后，才获得新任务的环境资格。
+        项目自行检测所选环境并报告结论和原因。SteerLine 调用项目入口，核对结果归属与执行收尾后，消费项目结论授予新任务的环境资格。
       </p>
       {task && (
         <Link to={`/projects/${identity.project_id}/runs?${returnParams}`}>
@@ -314,7 +275,7 @@ function EnvironmentWorkspace() {
         </p>
       )}
       {!environment && (
-        <p>请选择当前项目的运行机与链路，再生成材料或开始验收。</p>
+        <p>请选择当前项目的运行机与链路，再开始项目环境检测。</p>
       )}
       {options.verified && !options.data?.environments.length && (
         <p>
@@ -341,96 +302,29 @@ function EnvironmentWorkspace() {
               <p role="alert">材料观察待核实：{String(materialQuery.error)}</p>
             )}
             <p>
-              先阅读清单，在实际执行账号下准备工具、变量和权限，再开始验收。
+              先阅读清单，在实际执行账号下准备工具、变量和权限，再开始检测。
             </p>
             {material && (
               <p className="path">
                 {material.document_path} ·{" "}
-                {material.script_path || "验收脚本见准备文档"}
+                {material.script_path || "检测脚本见准备文档"}
               </p>
             )}
             {material?.source_commit && (
               <p>材料来源：{material.source_commit}</p>
             )}
-            {material?.verification_diagnostic && (
-              <p role="status">{material.verification_diagnostic}</p>
-            )}
+            {material?.diagnostic && <p role="status">{material.diagnostic}</p>}
             <details>
               <summary>阅读项目准备清单</summary>
               <pre>
                 {material?.document ||
-                  "材料缺失或尚未读取，请核实后生成、审阅并提交准备文档与验收脚本。"}
+                  "检测接口尚未适配，请由项目维护要求说明和检测入口，再按正常 Git 流程采用。"}
               </pre>
-            </details>
-            <details key={environmentKey}>
-              <summary>生成或更新准备材料</summary>
-              {material?.generation_diagnostic && (
-                <p role="status">{material.generation_diagnostic}</p>
-              )}
-              {material?.target_facts != null && (
-                <details>
-                  <summary>本次目标事实（受理时固定）</summary>
-                  <pre>{JSON.stringify(material.target_facts, null, 2)}</pre>
-                </details>
-              )}
-
-              {options.verified && !options.data?.generators.length && (
-                <p>
-                  尚无本地生成方案。
-                  <Link to="/settings/execution-configs">配置生成方案</Link>
-                </p>
-              )}
-              <p>
-                生成准备文档与验收脚本后，审阅并通过项目正常 Git
-                流程维护；生成成功不会获得任务准入。
-              </p>
-              <label>
-                生成所用方案
-                <select
-                  aria-label="生成所用方案"
-                  value={generator}
-                  onChange={(e) => setGenerator(e.target.value)}
-                >
-                  <option value="">选择本机生成方案</option>
-                  {options.data?.generators.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {[
-                        p.name,
-                        p.execution_location,
-                        p.model,
-                        p.reasoning_effort,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Button
-                disabled={
-                  !online ||
-                  !options.verified ||
-                  busy ||
-                  submitting ||
-                  !generator ||
-                  !materialQuery.isSuccess ||
-                  materialQuery.isError ||
-                  !material?.generation_ready
-                }
-                onClick={() =>
-                  void command("environment_generate", identity.project_id, 1, {
-                    target_environment_key: environmentKey,
-                    generator_profile_id: generator,
-                  })
-                }
-              >
-                生成文档和脚本
-              </Button>
             </details>
           </section>
 
           <p>
-            在此运行机的实际执行账号下，按本环境要求准备工具、依赖、变量及权限，然后运行验收。
+            在此运行机的实际执行账号下，按本环境要求准备工具、依赖、变量及权限，然后运行检测。
           </p>
           <EnvironmentCard
             key={`${environmentKey}:${profile}`}
@@ -469,8 +363,8 @@ function EnvironmentWorkspace() {
               tabIndex={-1}
             >
               <h3>
-                {r.kind === "generation" ? "材料生成" : "环境验收"} ·{" "}
-                {r.profile_id} · {r.status === "ready" ? "验收通过" : r.state}
+                项目环境检测 · {r.profile_id} ·{" "}
+                {r.status === "ready" ? "检测通过" : r.state}
               </h3>
               <p>
                 <code>{r.id}</code>
@@ -496,47 +390,22 @@ function EnvironmentWorkspace() {
                   {a.report && (
                     <div>
                       <p>{a.report.message}</p>
-                      <h4>环境要求检查</h4>
-                      {a.report.checks.map((c) => (
-                        <p key={c.id}>
-                          {c.id} ·{" "}
-                          {c.status === "passed"
-                            ? "通过"
-                            : c.status === "failed"
-                              ? "不通过"
-                              : "未验证"}{" "}
-                          · {c.message}
-                        </p>
-                      ))}
-                      <h4>L2 验收</h4>
-                      {a.report.l2.map((t) => (
-                        <p key={t.test_id}>
-                          {t.test_id} · {t.status} · {t.message}
-                        </p>
-                      ))}
                       <p>
-                        PR：
-                        {/^(https?):\/\//.test(a.report.pr.url) ? (
-                          <a
-                            href={a.report.pr.url}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {a.report.pr.url}
-                          </a>
-                        ) : (
-                          a.report.pr.url || "尚未取得"
-                        )}{" "}
-                        ·{" "}
-                        {a.report.pr.outcome_unknown
-                          ? "结果未知"
-                          : a.report.pr.url && a.report.pr.head_revision
-                            ? "已发布"
-                            : "未完成"}{" "}
-                        ·{" "}
-                        {a.report.pr.cleanup_completed
-                          ? "脚本资源已清理"
-                          : "清理未完成"}
+                        项目结论：
+                        {a.report.completed
+                          ? a.report.ready
+                            ? "已就绪"
+                            : "未就绪"
+                          : "尚未完成"}
+                      </p>
+                      {a.report.details != null && (
+                        <details>
+                          <summary>项目诊断明细</summary>
+                          <pre>{JSON.stringify(a.report.details, null, 2)}</pre>
+                        </details>
+                      )}
+                      <p className="muted">
+                        以上为项目报告原文；平台不复核业务结论。当前资格以环境状态为准。
                       </p>
                     </div>
                   )}
@@ -558,13 +427,7 @@ function EnvironmentWorkspace() {
                     )}
                     <details>
                       <summary>
-                        进度文件（不作为验收结论）· v{a.progress?.version ?? 0}
-                      </summary>
-                      <pre>{content(a.progress)}</pre>
-                    </details>
-                    <details>
-                      <summary>
-                        验收结果文件（停止后封存一次）· v
+                        检测结果文件（停止后封存一次）· v
                         {a.result?.version ?? 0} ·{" "}
                         {a.result?.collection_status ?? "等待停止后取得"}
                       </summary>
@@ -576,43 +439,6 @@ function EnvironmentWorkspace() {
                   </details>
                 </section>
               ))}
-              {r.generated && (
-                <div>
-                  <p>
-                    生成完成，产品未自动提交；请按正常 Git
-                    流程维护，正式材料以项目提交为准。
-                  </p>
-                  <p>
-                    缺项：
-                    {r.generated.gaps.join("；") || "无已报告缺项，仍须审阅"}
-                  </p>
-                  <details>
-                    <summary>准备文档</summary>
-                    <pre>{r.generated.document}</pre>
-                  </details>
-                  <details>
-                    <summary>验收脚本</summary>
-                    <pre>{r.generated.script}</pre>
-                  </details>
-                  <Button
-                    onClick={() =>
-                      download("environment.md", r.generated!.document)
-                    }
-                  >
-                    导出准备文档
-                  </Button>
-                  <Button
-                    onClick={() =>
-                      download(
-                        r.generated!.script_path.split("/").pop()!,
-                        r.generated!.script,
-                      )
-                    }
-                  >
-                    导出验收脚本
-                  </Button>
-                </div>
-              )}
               {!r.settled && (
                 <Button
                   disabled={!online || busy || submitting}

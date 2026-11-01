@@ -11,11 +11,11 @@ export type EnvironmentCommand = (
 
 const nextStep: Record<string, string> = {
   unprepared: "查看准备要求，补齐或更新项目材料。",
-  awaiting_user: "在实际执行账号下准备工具、变量和权限，然后开始验收。",
-  verifying: "查看当前进度；原执行结算前不能再次验收。",
+  awaiting_user: "在实际执行账号下准备工具、变量和权限，然后开始检测。",
+  verifying: "查看当前进度；原执行结算前不能再次检测。",
   ready: "可以用于本项目的新任务，仍需满足任务的其他启动条件。",
-  blocked: "查看未通过或未核实项，处理具体原因后重新验收。",
-  stale: "查看失效原因，处理环境或材料变化后重新验收。",
+  blocked: "查看未通过或未核实项，处理具体原因后重新检测。",
+  stale: "查看失效原因，处理环境或材料变化后重新检测。",
 };
 
 export function EnvironmentCard({
@@ -78,7 +78,7 @@ export function EnvironmentCard({
         <a href="#environment-materials">查看准备要求</a>
         {e.activity_id && (
           <Button variant="ghost" onClick={() => onActivity(e.activity_id!)}>
-            查看当前验收
+            查看当前检测
           </Button>
         )}
         {e.last_passed_activity_id && (
@@ -95,31 +95,33 @@ export function EnvironmentCard({
       )}
       <details open={preferred && preferred === initial ? true : undefined}>
         <summary>
-          {e.stage === "ready" || e.activity_id ? "重新验收" : "开始验收"}
+          {e.stage === "ready" || e.activity_id ? "重新检测" : "开始检测"}
         </summary>
         <p>
-          验收会调用所选模型、运行完整 L2 并创建真实验证
-          PR；每次最多三轮。通过后供上述方案共用。重新开始即切断旧资格，失败不会恢复历史资格。
+          检测调用项目入口一次，由项目自行判定并报告是否就绪及原因。平台负责原执行结算和结果展示。
+          通过后供上述方案共用；重新开始即切断旧资格，失败不会恢复历史资格。
         </p>
         <label>
-          验收所用方案
+          检测所用方案
           <select
-            aria-label="验收所用方案"
+            aria-label="检测所用方案"
             value={profile}
             onChange={(event) => setProfile(event.target.value)}
           >
-            <option value="">选择本次验收方案</option>
+            <option value="">选择本次检测方案</option>
             {e.profiles.map((p) => (
               <option key={p.id} value={p.id}>
-                {[p.name, p.model, p.reasoning_effort].filter(Boolean).join(" · ")}
+                {[p.name, p.model, p.reasoning_effort]
+                  .filter(Boolean)
+                  .join(" · ")}
               </option>
             ))}
           </select>
         </label>
         <label>
-          每轮总超时（秒）
+          本次检测总超时（秒）
           <input
-            aria-label="每轮总超时（秒）"
+            aria-label="本次检测总超时（秒）"
             type="number"
             min={1}
             value={timeout}
@@ -144,7 +146,7 @@ export function EnvironmentCard({
             })
           }
         >
-          提交验收
+          提交检测
         </Button>
       </details>
       <details>

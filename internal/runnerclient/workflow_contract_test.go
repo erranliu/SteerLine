@@ -44,7 +44,7 @@ func TestRunnerWorkflowContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	e := ExecutionInput{Adapter: "codex-app-server", Target: ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"model":"explicit"}`)}
+	e := ExecutionInput{Adapter: "codex-app-server", Target: ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"model":"explicit","access_mode":"full_access"}`)}
 	for _, tc := range []struct {
 		name, raw string
 		valid     bool

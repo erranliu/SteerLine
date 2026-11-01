@@ -77,7 +77,7 @@ func TestWebExecutionConfigRoutes(t *testing.T) {
 	cookie, csrf := login(t, s)
 	exe, _ := os.Executable()
 	raw, _ := os.ReadFile(exe)
-	config := cfg.File[cfg.Pin]{Version: 3, Runner: cfg.Pin{Executable: exe, Version: "web-fixture", SHA256: cfg.Digest(raw)}, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "本机", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"model":"fixture-model","reasoning_effort":"high"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
+	config := cfg.File[cfg.Pin]{Version: 3, Runner: cfg.Pin{Executable: exe, Version: "web-fixture", SHA256: cfg.Digest(raw)}, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "本机", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"model":"fixture-model","reasoning_effort":"high","access_mode":"full_access"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
 	if err := localservice.WritePrivateFile(s.options.Home, "execution.json", config); err != nil {
 		t.Fatal(err)
 	}

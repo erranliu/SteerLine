@@ -76,10 +76,7 @@ func prepareEnvironmentStops(ctx context.Context, c Config, store env.Store, cli
 	}
 	need := false
 	for _, r := range rows {
-		if r.Kind == "generation" && !r.Settled() && c.runtimeGenerations != nil {
-			active := len(r.Rounds) > 0 && r.Rounds[0].Submission != "pending"
-			c.runtimeGenerations.Track(r.Project, "environment:"+r.ID, r.CreatedAt, active)
-		}
+
 		for _, a := range r.Rounds {
 			if !unsubmittedEnvironment(a) && (!runnerbinding.SameBuild(r.Build, cli.BuildPin()) || r.Cancelled && !a.Settled) {
 				need = true

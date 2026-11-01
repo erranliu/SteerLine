@@ -46,9 +46,9 @@ SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地�
 
 入口输出 `result.json`、`test.log` 和 `reports/scenarios/testing.project-progress-local-codex/`，其中保留 `source.json`、`initial-binding.json`、`runner-*.json`、`api-observations.json`、`original-run.json`、`worker-program-sha256.json`、`original-reports/`、原 stop 请求/回执、`stopped-run.json`、`proof.json` 及 `scenario.json`。只有实际执行通过且清理完整才写总结果通过；它尚未登记为统一受管测试，不导出 `go.full` 或其他 L4 项通过。
 
-远端模式不加`-Local`，使用下面的共享profile并委托正式L4，不因缺配置退回本机。需要 Node/npm、Edge、远端注册的 SteerlineTest 仓库及 Python。自动测试材料生成仍使用本机默认模型；环境材料须已在所选提交中，先在隔离home经完整L2+专属真实PR正式获得ready，才开始远端进度任务。入口在 GitHub 推送本次随机源码和验证base ref，仅在远端根仓fetch源码ref，核对根工作区未变；原 Runner负责创建、执行和停止实际worker。
+远端模式不加`-Local`，使用下面的共享profile并委托正式L4，不因缺配置退回本机。需要 Node/npm、Edge、远端注册的 SteerlineTest 仓库及 Python。自动测试材料生成仍使用本机默认模型；环境材料须已在所选提交中，先在隔离 home 调用项目入口并正式获得 ready，才开始远端进度任务。入口在 GitHub 推送本次随机源码 ref，仅在远端根仓fetch源码ref，核对根工作区未变；原 Runner负责创建、执行和停止实际worker。
 
-远端模式每阶段十五秒，使用同一 Edge 页面连续观察 0→1→2→1→2→3，核对 DOM 完成项、计数、版本与相同版本的原 Runner 快照；观察期间不得刷新或导航。远端原报告和程序由独占诊断终端只读取得，终端必须关闭；驱动不修改进度、不向原 worker 输入。证据在`<out>/scenarios/testing.project-progress-orca-browser/`，另存`remote-target.json`、`remote-fetch.json`、`remote-source.json`、Orca公开回执，以及`browser/observations.json`、六张截图和Playwright trace。原Run停止后先核对调用方已观察同一原候选的stopped投影，再关闭调用方并结算自有base删除。进度任务主体不发布PR，前置环境适配的PR另记账。此项会构建Web，不与其他Web安装/构建并发；不覆盖安装版或Task 18。
+远端模式每阶段十五秒，使用同一 Edge 页面连续观察 0→1→2→1→2→3，核对 DOM 完成项、计数、版本与相同版本的原 Runner 快照；观察期间不得刷新或导航。远端原报告和程序由独占诊断终端只读取得，终端必须关闭；驱动不修改进度、不向原 worker 输入。证据在`<out>/scenarios/testing.project-progress-orca-browser/`，另存`remote-target.json`、`remote-fetch.json`、`remote-source.json`、Orca公开回执，以及`browser/observations.json`、六张截图和Playwright trace。原Run停止后先核对调用方已观察同一原候选的stopped投影，再关闭调用方并清理自有源码 ref。进度任务主体不发布PR，项目内部产生的资源由项目自身管理。此项会构建Web，不与其他Web安装/构建并发；不覆盖安装版或Task 18。
 
 ## 共享64G配置的三项远端L4
 
@@ -58,13 +58,13 @@ SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地�
 | --- | --- | --- |
 | `configuration.execution-profiles-orca` / configuration | 无项目变量 | Web/Node/Edge、本机目录工具；真实本机及64G Agent/模型/effort目录与来源、冻结配置，零业务Run |
 | `testing.project-progress-orca-browser` / testing | `STEERLINE_PROGRESS_PROJECT`、`STEERLINE_PROGRESS_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS` | 原SteerlineTest clone/完整SHA、GitHub权限、已提交环境材料；先正式适配ready，再完成原六状态和连续Edge验收 |
-| `testing.project-environment-orca` / testing | `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS` | 308既有格式项目配置（repository/AIRefactor/remote/PR）、完整SHA、Git环境材料、远端Unity/Android资源/Gitea权限；按变量/PATH逐项只检测；就绪须完整L2+真实PR，未就绪须三轮混合checks/停止封存、独立无PR及前后拒绝准入 |
+| `testing.project-environment-orca` / testing | `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS` | 项目配置、完整 SHA、manifest4 项目环境文档/入口及显式依赖；核对一次调用、原 Run 停止/封存、最终结果绑定与准入，不复核项目内部检查 |
 
 三项共同显式设置`STEERLINE_L4_REMOTE_PROFILE`和固定`STEERRUNNER_EXE`，正式命令为`go run ./cmd/test-feedback -level=L4 -suite=<上表suite> -env=live -scenario=<上表ID> -out <全新绝对目录>`。专属输入也冻结到同一信封，子进程过滤STEERLINE变量不会丢参。缺配置、错目标、缺材料、skip、证据缺失及清理未知都不能通过。
 
-PowerShell薄入口分别为`test-execution-profile-discovery.ps1`、`test-project-progress-live.ps1`和`test-project-environment-live.ps1`；显式`-RemoteProfile`优先于环境变量，参数向上表单向映射。进度参数沿用`-ProjectRepository/-ProjectCommit`，308使用`-ProjectConfig/-ProjectCommit`，两者`-RoundTimeoutSeconds`必须为正，默认分别900/1200秒；正式Go入口要求显式预算。外围期限容纳三轮和30分钟准备/观察/收尾，包装器额外留10分钟；不修改业务三轮预算。
+PowerShell薄入口分别为`test-execution-profile-discovery.ps1`、`test-project-progress-live.ps1`和`test-project-environment-live.ps1`；显式`-RemoteProfile`优先于环境变量，参数向上表单向映射。进度参数沿用`-ProjectRepository/-ProjectCommit`，308使用`-ProjectConfig/-ProjectCommit`，两者`-RoundTimeoutSeconds`必须为正，默认分别900/1200秒；正式Go入口要求显式预算。外围期限容纳一次检测及准备/观察/收尾，包装器额外留10分钟；不自动重跑。
 
-两项目环境文档须包含一个`steerline-pr-acceptance` JSON段：`{"required_checks":[],"minimum_approvals":0,"l2_summary":".steerrunner/artifacts/environment-l2/summary.json"}`，值须按项目真实规则填写，无检查/审核要求才能使用空数组/零。与`steerline-environment`、配套prepare/publish脚本一起由现有上游提示词维护到受测Git提交；不能运行时生成通过脚本。驱动只改夹具文档中的专属验证base，并把源码与base都固定到最终夹具SHA。验证PR不合入业务分支；检查/审核通过由provider只读核对，原项目完整L2明细独立保留。材料生成不是每次测试的强制步骤，缺材料须先由项目正常维护完成，再选新SHA复验。
+环境材料由项目正常维护并提交，manifest4 仅声明入口、解释器和有限依赖。项目自行完成检测闭环，写入本次预置的 version3 结果；SteerLine 不复制协议、改写检测材料或核实内部 L2/PR/检查。缺材料须项目维护后选择新 SHA；初始化适配不在本轮。
 
 ## Roadmap 浏览器与真实文档 PR 专项
 
@@ -79,7 +79,7 @@ Playwright `roadmap-live.spec.ts` 通过正式页面和 HTTP 原信封验证刷�
 
 ## 本机环境准备 L4
 
-`testing.project-environment-local` 复用同一环境准备/双通道/完整 L2/真实 PR/准入探针及清理驱动。本机 Codex 与本机 Orca 是不同环境；本机/远端 Orca 的外部取证也统一走绑定原目标的公开 repo/terminal create/read/close，只有 Codex 可直接读取原 Run 工作区。按本机 Codex、Orca 分别固定输入执行。显式设置 `STEERLINE_L4_LOCAL_PROFILE` 为独立 `executionconfig.Profile` 文件（local target、development/2），另设 `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERRUNNER_EXE`、正数 `STEERLINE_L4_ROUND_TIMEOUT_SECONDS`。拒绝远端 target，不读取安装 home；本机权限、登录、项目约定工具和 PR 权限由用户预先准备。项目配置可选其真实源码分支，完整 SHA 及版本化材料必须可读取；执行规则须与当前构建同源。只复用受测提交已有的 Python（test-project/project_checks/steerline_reports）或 PowerShell（run-tests/ExecutionPlan/ManagedReports）完整原验证器，自动唯一识别；未知格式或两套歧义在创建现场前阻断，不降级为只信摘要。正式入口：
+`testing.project-environment-local` 复用相同的一次调用、最终结果绑定、准入探针及清理驱动。本机 Codex 与本机 Orca 是不同环境；所有目标均通过 Runner 公开结果通道取得封存报告。显式设置 `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS`、`STEERLINE_L4_REMOTE_PROFILE` 和固定 `STEERRUNNER_EXE`。必须支持 execute/1 与最终结果封存，受测提交包含 manifest4 文档、入口及依赖；不要求平台协议副本或测试目录。正式入口：
 
 ```powershell
 go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.project-environment-local -out <全新绝对目录>
@@ -87,6 +87,4 @@ go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario=testing.
 
 live 精确单项串行。仅完整正向通过才能记该本机路径可用；负向阻断、缺输入/材料/能力或资源未知均不得算通过。两种本机 profile 的证据分别记录，不从另一模型/目标推断通过。
 
-本机/远端 Orca 共用正向通过标准：只有正式环境ready（实际TTY、完整L2、原PR发布及原Run收尾）且外部规则、精确合并、清理均核实，才算对应L4通过。三轮失败仍保存原报告、零派发及无PR证据，然后将正式L4标为失败；不因远端场景而将负向审计算作通过。
-
-环境报告version2只证明Agent执行及PR发布；分支规则、checks/审核、精确PR合并由外部L4驱动核实。外部合并意图先持久化，未知只读对账、不重复合并；原封存result不回写。完整标准见[发布验收规格](../../SteerlineFlow/spec/environment-publication-scope.spec.md)。
+本机/远端共用标准：正式环境 ready、原 Run 已停止且结果封存、绑定和准入正确、清理完成。项目失败须显示原失败原因并拒绝准入，正式正向 L4 仍判失败；不把负向覆盖算作正向可用。项目结果可包含任意 JSON 详情，平台和外部驱动只检验信封、来源与结果消费，不重跑或复核项目检测。

@@ -6,7 +6,6 @@ import (
 	"errors"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
@@ -45,7 +44,6 @@ type environmentView struct {
 func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 	profiles := []environmentProfileView{}
 	environments := []environmentView{}
-	generators := []map[string]string{}
 	groups := map[string]int{}
 	rows, err := p.store.Environments(ctx, p.config.Identity())
 	if err != nil {
@@ -54,9 +52,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 	commit, sourceErr := p.observedSource(ctx)
 	for _, profile := range p.config.RunnerExecution.Profiles {
 		model, effort := environmentProfileModel(profile.Execution)
-		if _, err := runnerclient.GenerationExecution(profile.Execution); err == nil {
-			generators = append(generators, map[string]string{"id": profile.ID, "name": profile.Name, "model": model, "reasoning_effort": effort, "execution_location": "本机 Codex"})
-		}
+
 		if profile.Workflow.ID != "development" && profile.Workflow.ID != "development-audited" {
 			continue
 		}
@@ -76,7 +72,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 		materialErr := errors.Join(keyErr, readErr, sourceErr)
 		basis := ""
 		if materialErr == nil {
-			prepared, err := p.materialAt(ctx, profile.ID, commit, false)
+			prepared, err := p.materialAt(ctx, profile.ID, commit)
 			materialErr = err
 			basis = prepared.Inputs
 		}
@@ -114,7 +110,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 		groups[group] = len(environments)
 		environments = append(environments, item)
 	}
-	return map[string]any{"profiles": profiles, "environments": environments, "generators": generators, "default_profile_id": p.config.RunnerExecution.DefaultProfile}, nil
+	return map[string]any{"profiles": profiles, "environments": environments, "default_profile_id": p.config.RunnerExecution.DefaultProfile}, nil
 }
 
 func environmentProfileModel(execution runnercontract.ExecutionInput) (string, string) {

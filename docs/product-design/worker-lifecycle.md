@@ -398,7 +398,7 @@ W/E/V 编号及既有异常、重试和输入恢复语义不变；上表明确�
 
 ### 项目环境准备与普通执行的边界
 
-项目提供版本化环境检测文档和脚本，SteerLine 以固定提示词提交普通 Run，Agent 按文档执行脚本，Runner 沿通用契约封存并读取 result，SteerLine 判定项目×环境的准备资格。Runner 不提供环境检测专用行为。原 Run/input/request、未知不重派、停止与资源结算沿本文件规则，新资格与失效规则见[准备规格](../../SteerlineFlow/spec/project-environment-readiness.spec.md)。旧专用 Check 请求/报告/资源模型已[退役](../../SteerlineFlow/spec/legacy-environment-check-retirement.spec.md)；原版本验收只作历史证据。
+项目提供 manifest4 文档和检测入口，自行完成检测闭环并写 version3 最终结果。SteerLine 以固定短提示通过通用 execute/1 工作流调用一次；Runner 沿既有原生执行、停止和 result_file 封存，SteerLine 只校验信封/结算并消费项目 ready、原因和可选明细，不复核项目内部检查。Runner 不提供环境检测专用行为。原 Run/input/request、未知不重派、停止与资源结算沿本文件规则，新资格与持久撤销规则见[当前规格](../../SteerlineFlow/spec/project-environment-workflow.spec.md)。旧专用 Check 请求/报告/资源模型已[退役](../../SteerlineFlow/spec/legacy-environment-check-retirement.spec.md)；原版本验收只作历史证据。
 
 W11–W14 的展示与活动提示：Runner 随业务提交原子记录 workflow stage/status/diagnostic 的真实变化，SteerLine 只投影公开事件。当前可见执行可额外只读查询一条最佳努力消息摘要及通知观察时间；消息缺失、读取错误或页面刷新均不改变执行事实、允许动作、输入授权或恢复资格。V04/V06 增量覆盖白名单/身份隔离、查询零输入、切换与后台取消；自动/人工结果见[专属验收](../../SteerlineFlow/testing/acceptance/execution-observability.md)。
 

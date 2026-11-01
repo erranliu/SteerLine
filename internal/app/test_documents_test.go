@@ -84,7 +84,7 @@ func callerFrozenWork(t *testing.T, m *projectMaintenance, contract taskmodel.Ta
 	return taskmodel.FixedWork{FrozenTestPlan: raw, Contract: contract}
 }
 func callerTestRun() runnerclient.RunInput {
-	return runnerclient.RunInput{Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}
+	return runnerclient.RunInput{Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}
 }
 
 func TestCallerPromptConvergencePinnedInputsAndWriter(t *testing.T) {

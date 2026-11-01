@@ -261,12 +261,7 @@ func RunnerCLI(args []string) (bool, error) {
 				selection = []string{}
 			}
 			result, _ := json.Marshal(map[string]any{"tests": selection})
-			if input.Correlation["environment_activity"] != "" {
-				result, err = scriptedEnvironmentGeneration(input.Correlation["environment_key"])
-				if err != nil {
-					return true, err
-				}
-			}
+
 			source := runnercontract.Final{CommandID: "fixture-content-" + request.RequestID, TurnID: "fixture-turn", Verified: true, NativeOutcome: "succeeded", Source: "caller-fixture"}
 			run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: result, RepositorySource: run.RepositorySource, Source: source}
 			run.Status = "completed"

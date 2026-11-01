@@ -9,6 +9,11 @@ import (
 )
 
 type ResultCapability struct {
+	Supported struct {
+		Adapters    []string `json:"adapters"`
+		TargetKinds []string `json:"target_kinds"`
+		Workflows   []string `json:"workflows"`
+	} `json:"supported"`
 	ProgressCapability
 	Collection     string `json:"collection"`
 	QueryReadsFile *bool  `json:"query_reads_file"`
@@ -82,4 +87,33 @@ func (c Client) ResultFile(ctx context.Context, run string) (runnercontract.Resu
 	}
 	_, err = ValidateResultFile(out, run)
 	return out, err
+}
+
+// ValidateEnvironmentExecution consumes the Runner's generic one-shot contract.
+func (c *Catalog) ValidateEnvironmentExecution(e runnercontract.ExecutionInput) error {
+	if err := c.ValidateResult(); err != nil {
+		return err
+	}
+	contains := func(values []string, want string) bool {
+		for _, v := range values {
+			if v == want {
+				return true
+			}
+		}
+		return false
+	}
+	support := c.Capabilities.ResultFile.Supported
+	if !contains(support.Workflows, "execute/1") || !contains(support.Adapters, e.Adapter) || !contains(support.TargetKinds, e.Target.Kind) {
+		return errors.New("Runner未公布execute/1的目标执行及结果封存能力")
+	}
+	for _, w := range c.Capabilities.Workflows {
+		if w.ID == "execute" && w.Version == 1 && contains(w.SupportedAdapters, e.Adapter) {
+			s, ok := w.States["execute"]
+			closed, terminal := w.States["closed"]
+			if ok && s.Kind == "execute" && s.Contract == "final" && terminal && closed.Kind == "terminal" && !w.AuditModelRequired && len(w.States) == 2 {
+				return c.ValidateExecution(e)
+			}
+		}
+	}
+	return errors.New("Runner未公布无发布的单次执行工作流")
 }

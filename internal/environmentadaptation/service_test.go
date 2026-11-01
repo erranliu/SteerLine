@@ -59,7 +59,9 @@ func (r *runner) Call(_ context.Context, command string, _ []string, q *runnercl
 			return runnerclient.Response{}, &runnerclient.Failure{Code: "outcome_unknown", Unknown: true}
 		}
 		r.run.StopStatus = "stopped"
-		r.run.Status = "stopped"
+		if r.run.Status != "completed" && r.run.Status != "failed" {
+			r.run.Status = "stopped"
+		}
 		r.run.Revision++
 		if r.stopBody != nil {
 			r.body = r.stopBody
@@ -115,7 +117,7 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
-		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 3, RequiredChecks: []string{}, Gaps: []string{}, EnvironmentKey: serviceEnvironmentKey(), Script: envmodel.ScriptPath(serviceEnvironmentKey(), "ps1"), ValidationBase: "validation"}, L2: []string{"one", "two"}, Input: runnercontract.RunInput{Publication: runnercontract.Publication{Provider: "gitea", Repository: "validation", BaseBranch: "validation"}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
+		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 4, EnvironmentKey: serviceEnvironmentKey(), Script: envmodel.ScriptPath(serviceEnvironmentKey(), "ps1"), Interpreter: "powershell.exe", Dependencies: []string{}}, Input: runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
 	}}
 	return service, remote, store, &now
 }
@@ -137,26 +139,19 @@ func read(t *testing.T, s *env.Service, id string) envmodel.Record {
 	return r
 }
 func report(r envmodel.Record, remote *runner, pass bool) envmodel.Report {
-	a := r.Rounds[len(r.Rounds)-1]
-	p := envmodel.Report{Version: envmodel.ReportVersion, ActivityID: r.ID, Round: a.Number, Commit: r.Prepared.Commit, ScriptDigest: r.Prepared.ScriptDigest, Completed: true, Checks: []envmodel.Check{{ID: "terminal.tty", Status: "passed", Message: "controlled current TTY fixture; not native qualification"}}, L2: []envmodel.Item{{ID: "one", Status: "passed"}, {ID: "two", Status: "passed"}}}
-	if pass {
-		p.PR = envmodel.PR{URL: "https://git/validation/pulls/1", Base: "validation", Head: remote.run.Execution.Branch, HeadRevision: strings.Repeat("c", 40), CleanupCompleted: true}
-	} else {
-		p.L2[1].Status = "failed"
-		p.L2[1].Message = "missing tool"
+	p := envmodel.InitialReport(r, 1)
+	p.Completed = true
+	p.Ready = pass
+	p.Message = "project detection completed"
+	if !pass {
 		p.Message = "tool unavailable"
 	}
 	return p
 }
 func setReport(remote *runner, p envmodel.Report) {
 	remote.body, _ = json.Marshal(p)
-	if p.PR.URL != "" {
-		remote.run.PR = &runnercontract.PRFact{State: "open", URL: p.PR.URL, Provider: "gitea", Repository: "validation", HeadRepository: "validation", BaseBranch: p.PR.Base, HeadBranch: p.PR.Head, HeadRevision: p.PR.HeadRevision}
-	}
-	remote.run.Status = "pr_ready"
-	if p.PR.URL == "" {
-		remote.run.Status = "failed"
-	}
+	remote.run.Status = "completed"
+	remote.run.Final = &runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "original-command", SessionID: "original-session", TurnID: "original-turn"}
 }
 func observe(t *testing.T, s *env.Service) {
 	t.Helper()
@@ -189,36 +184,6 @@ func TestProjectEnvironmentExecutionFinalSnapshotAndBinaryAdmission(t *testing.T
 	}
 }
 
-func declareChecks(s *env.Service, ids ...string) {
-	original := s.Prepare
-	s.Prepare = func(ctx context.Context, id string) (envmodel.Prepared, error) {
-		p, e := original(ctx, id)
-		p.Manifest.RequiredChecks = append([]string{}, ids...)
-		return p, e
-	}
-}
-
-func TestProjectEnvironmentDoesNotAdmitGreenL2AndPRWithoutTTY(t *testing.T) {
-	for _, status := range []string{"missing", "failed", "incomplete"} {
-		t.Run(status, func(t *testing.T) {
-			s, remote, _, _ := setup(t)
-			declareChecks(s, "git")
-			r := start(t, s)
-			observe(t, s)
-			p := report(r, remote, true)
-			p.Checks = []envmodel.Check{{ID: "git", Status: "passed", Message: "available"}}
-			if status != "missing" {
-				p.Checks = append(p.Checks, envmodel.Check{ID: "terminal.tty", Status: status, Message: "original tool could not verify TTY"})
-			}
-			setReport(remote, p)
-			observe(t, s)
-			observe(t, s)
-			if got := read(t, s, r.ID); got.Status() == "ready" || status != "missing" && got.Rounds[0].Report == nil {
-				t.Fatal("TTY-negative sealed facts were lost or admitted", got.Status())
-			}
-		})
-	}
-}
 func TestProjectEnvironmentExecutionOnlySealedReportDeterminesAdmission(t *testing.T) {
 	s, remote, _, _ := setup(t)
 	r := start(t, s)
@@ -228,86 +193,23 @@ func TestProjectEnvironmentExecutionOnlySealedReportDeterminesAdmission(t *testi
 	observe(t, s)
 	observe(t, s)
 	r = read(t, s, r.ID)
-	// The Runner has already observed a PR. A final report that drops its
-	// identity must retain that obligation, not open a second publication round.
-	if r.Status() == "ready" || r.State != "unverified" || len(r.Rounds) != 1 {
+	// Only the stopped producer's sealed negative result is consumed; no retry.
+	if r.Status() == "ready" || r.State != "failed" || !r.Settled() || len(r.Rounds) != 1 {
 		t.Fatal("ignored final report", r.State, len(r.Rounds))
 	}
 }
 
-func TestEnvironmentPublicationRequiresOriginalRunnerFacts(t *testing.T) {
-	for _, kind := range []string{"unmerged", "closed", "missing_state", "empty_query_error", "missing", "query_error", "provider", "repository", "head_repository", "url", "base", "head", "revision"} {
-		t.Run(kind, func(t *testing.T) {
-			s, remote, _, _ := setup(t)
-			r := start(t, s)
-			observe(t, s)
-			setReport(remote, report(r, remote, true))
-			switch kind {
-			case "closed":
-				remote.run.PR.State = "closed"
-			case "missing_state":
-				remote.run.PR.State = ""
-			case "empty_query_error":
-				p := report(r, remote, true)
-				p.PR = envmodel.PR{CleanupCompleted: true}
-				remote.body, _ = json.Marshal(p)
-				remote.run.PR.URL = ""
-				remote.run.PR.QueryError = "original PR query unavailable"
-			case "missing":
-				remote.run.PR = nil
-			case "query_error":
-				remote.run.PR.QueryError = "original read unavailable"
-			case "provider":
-				remote.run.PR.Provider = "other"
-			case "repository":
-				remote.run.PR.Repository = "other/repo"
-			case "head_repository":
-				remote.run.PR.HeadRepository = "other/repo"
-			case "url":
-				remote.run.PR.URL += "2"
-			case "base":
-				remote.run.PR.BaseBranch = "main"
-			case "head":
-				remote.run.PR.HeadBranch = "other"
-			case "revision":
-				remote.run.PR.HeadRevision = strings.Repeat("d", 40)
-			}
-			for i := 0; i < 4; i++ {
-				observe(t, s)
-			}
-			got := read(t, s, r.ID)
-			if kind == "unmerged" {
-				if got.Status() != "ready" || remote.run.PR.Merged {
-					t.Fatal("publication requires an Agent merge", got.State)
-				}
-			} else if got.State != "unverified" || got.Status() == "ready" {
-				t.Fatal("unverified PR facts admitted", got.State)
-			}
-			if remote.submits != 1 || len(got.Rounds) != 1 {
-				t.Fatal("PR uncertainty created another Run")
-			}
-		})
-	}
-}
-func TestProjectEnvironmentRetryBudgetSurvivesRestart(t *testing.T) {
+func TestProjectEnvironmentSingleInvocationSurvivesRestart(t *testing.T) {
 	s, remote, store, now := setup(t)
 	r := start(t, s)
-	firstDeadline := r.Rounds[0].Deadline
-	for i := 1; i <= 3; i++ {
-		observe(t, s)
-		r = read(t, s, r.ID)
-		setReport(remote, report(r, remote, false))
-		observe(t, s)
-		observe(t, s)
-		r = read(t, s, r.ID)
-		s = &env.Service{Project: s.Project, Store: store, Runner: remote, Prepare: s.Prepare, Now: func() time.Time { return *now }}
-	}
-	if remote.submits != 3 || len(r.Rounds) != 3 || r.State != "failed" || r.Status() != "not_ready" || !r.Rounds[0].Deadline.Equal(firstDeadline) {
-		t.Fatalf("budget reset: %+v", r)
-	}
 	observe(t, s)
-	if remote.submits != 3 {
-		t.Fatal("fourth submission")
+	setReport(remote, report(r, remote, false))
+	observe(t, s)
+	s = &env.Service{Project: s.Project, Store: store, Runner: remote, Now: func() time.Time { return *now }, Prepare: s.Prepare}
+	observe(t, s)
+	r = read(t, s, r.ID)
+	if r.State != "failed" || !r.Settled() || len(r.Rounds) != 1 || remote.submits != 1 {
+		t.Fatal(r, remote.submits)
 	}
 }
 func TestProjectEnvironmentExecutionUnknownNeverResubmits(t *testing.T) {
@@ -326,11 +228,11 @@ func TestProjectEnvironmentExecutionUnknownNeverResubmits(t *testing.T) {
 	observe(t, s)
 	observe(t, s)
 	r = read(t, s, r.ID)
-	if remote.stops != 1 || r.Status() == "ready" || r.Settled() || r.State != "unverified" {
-		t.Fatal("unknown report/PR must block new work", r.State)
+	if remote.stops != 1 || r.Status() == "ready" || !r.Settled() || r.State != "failed" {
+		t.Fatal("known stopped original must settle without qualification", r.State)
 	}
-	if _, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{EnvironmentKey: serviceEnvironmentKey(), Profile: "remote", TimeoutSeconds: 60}); e == nil {
-		t.Fatal("new activity overlapped original unknown")
+	if _, e := s.Start(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Start{EnvironmentKey: serviceEnvironmentKey(), Profile: "remote", TimeoutSeconds: 60, ExpectedCurrentRevision: 1}); e != nil {
+		t.Fatal("explicit new detection rejected after original settled", e)
 	}
 }
 func TestProjectEnvironmentExecutionResultQueryFailureCannotAdmitBeforeSeal(t *testing.T) {
@@ -359,84 +261,16 @@ func TestProjectEnvironmentExecutionWaitingInputDoesNotStop(t *testing.T) {
 	observe(t, s)
 	setReport(remote, report(r, remote, true))
 	remote.run.Status = "waiting_input"
+	remote.run.Final = nil
 	observe(t, s)
 	if remote.stops != 0 || remote.resultReads != 0 || read(t, s, r.ID).Status() != "not_ready" {
 		t.Fatal("single turn or waiting input prematurely stopped/admitted")
 	}
-	remote.run.Status = "completed"
+	setReport(remote, report(r, remote, true))
 	observe(t, s)
 	observe(t, s)
 	if remote.stops != 1 || read(t, s, r.ID).Status() != "ready" {
 		t.Fatal("completed execution failed to stop and seal")
-	}
-}
-
-func TestProjectEnvironmentRequirementFailureKeepsMixedResultsAndBudget(t *testing.T) {
-	s, remote, store, _ := setup(t)
-	declareChecks(s, "git", "unity.editor")
-	r := start(t, s)
-	for round := 1; round <= 3; round++ {
-		observe(t, s)
-		r = read(t, s, r.ID)
-		p := report(r, remote, false)
-		p.Checks = []envmodel.Check{{ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}, {ID: "terminal.tty", Status: "passed", Message: "actual target TTY"}}
-		for i := range p.L2 {
-			p.L2[i].Status = "incomplete"
-			p.L2[i].Message = "environment requirements failed; L2 not executed"
-		}
-		p.PR.CleanupCompleted = true
-		setReport(remote, p)
-		remote.run.Status = "waiting_input"
-		remote.run.Final = &runnercontract.Final{Verified: true, Text: `{"outcome":"blocked"}`}
-		observe(t, s)
-		observe(t, s)
-		s = &env.Service{Project: s.Project, Store: store, Runner: remote, Prepare: s.Prepare, Now: s.Now}
-		got := read(t, s, r.ID)
-		last := got.Rounds[round-1]
-		if last.Report == nil || last.Report.Checks[0].Status != "passed" || last.Report.Checks[1].Status != "failed" || got.Status() != "not_ready" {
-			t.Fatal("lost mixed requirement results or admitted failure", got)
-		}
-	}
-	if got := read(t, s, r.ID); got.State != "failed" || !got.Settled() || remote.submits != 3 {
-		t.Fatal("three-round requirement failure did not settle", got.State, remote.submits)
-	}
-}
-
-func TestProjectEnvironmentTTYFailureReportSettlesOriginalBudget(t *testing.T) {
-	s, remote, store, _ := setup(t)
-	declareChecks(s, "git")
-	r := start(t, s)
-	for round := 1; round <= envmodel.MaxRounds; round++ {
-		observe(t, s)
-		r = read(t, s, r.ID)
-		p := report(r, remote, false)
-		p.Checks = []envmodel.Check{
-			{ID: "terminal.tty", Status: "failed", Message: "original TTY process creation failed"},
-			{ID: "git", Status: "incomplete", Message: "not verified after TTY prerequisite failure"},
-		}
-		for i := range p.L2 {
-			p.L2[i].Status, p.L2[i].Message = "incomplete", "not executed after TTY prerequisite failure"
-		}
-		p.PR.CleanupCompleted = true
-		setReport(remote, p)
-		remote.run.Status = "waiting_input"
-		remote.run.Final = &runnercontract.Final{Verified: true, Text: `{"outcome":"blocked"}`}
-		observe(t, s)
-		observe(t, s)
-		s = &env.Service{Project: s.Project, Store: store, Runner: remote, Prepare: s.Prepare, Now: s.Now}
-		got := read(t, s, r.ID)
-		last := got.Rounds[round-1]
-		if got.State == "unverified" || got.Status() != "not_ready" || !last.Settled || last.Report == nil || !last.Report.Completed || last.Report.Checks[0].Status != "failed" || last.Result == nil || last.Result.CollectionStatus != "closed" || last.Run == nil || last.Run.StopStatus != "stopped" || last.Run.PR != nil {
-			t.Fatalf("TTY failure did not close its original round without admission: %+v", got)
-		}
-	}
-	got := read(t, s, r.ID)
-	if got.State != "failed" || !got.Settled() || got.Cancelled || len(got.Rounds) != envmodel.MaxRounds || remote.submits != envmodel.MaxRounds {
-		t.Fatalf("known TTY failures required cancellation or reset budget: %+v", got)
-	}
-	observe(t, s)
-	if remote.submits != envmodel.MaxRounds {
-		t.Fatal("known failure created a fourth Run")
 	}
 }
 
@@ -500,7 +334,7 @@ func TestProjectEnvironmentExecutionFailedSealIsPermanentAcrossRestart(t *testin
 	observe(t, s)
 	observe(t, s)
 	r = read(t, s, r.ID)
-	if r.Status() != "not_ready" || r.State != "unverified" || r.Rounds[0].Report != nil || !strings.Contains(r.Diagnostic, "file_missing") {
+	if r.Status() != "not_ready" || r.State != "failed" || !r.Settled() || r.Rounds[0].Report != nil || !strings.Contains(r.Diagnostic, "file_missing") {
 		t.Fatal("failed seal lost its diagnostic or admitted", r)
 	}
 	s = &env.Service{Project: s.Project, Store: store, Runner: remote, Prepare: s.Prepare, Now: func() time.Time { return *now }}
@@ -566,41 +400,15 @@ func TestProjectEnvironmentExecutionReportStrictness(t *testing.T) {
 	s, remote, _, _ := setup(t)
 	r := start(t, s)
 	observe(t, s)
-	good := report(r, remote, true)
-	if !good.Passed("validation", remote.run.Execution.Branch) {
-		t.Fatal("complete report rejected")
-	}
-	httpReport := good
-	httpReport.PR.URL = "http://gitea.local/pulls/1"
-	if !httpReport.Passed("validation", remote.run.Execution.Branch) {
-		t.Fatal("configured intranet HTTP PR rejected")
-	}
-	badURL := good
-	badURL.PR.URL = "https://"
-	if badURL.Passed("validation", remote.run.Execution.Branch) {
-		t.Fatal("PR URL without host accepted")
-	}
-	for _, change := range []func(*envmodel.Report){func(p *envmodel.Report) { p.PR.CleanupCompleted = false }, func(p *envmodel.Report) { p.PR.OutcomeUnknown = true }, func(p *envmodel.Report) { p.PR.Head = "other" }, func(p *envmodel.Report) { p.PR.Base = "main" }, func(p *envmodel.Report) { p.PR.HeadRevision = "missing" }} {
-		p := good
-		change(&p)
-		if p.Passed("validation", remote.run.Execution.Branch) {
-			t.Fatal("incomplete PR admitted")
+	base := report(r, remote, true)
+	a := r.Rounds[0]
+	for _, mutate := range []func(*envmodel.Report){func(p *envmodel.Report) { p.Version = 2 }, func(p *envmodel.Report) { p.Project = "other" }, func(p *envmodel.Report) { p.EnvironmentKey = strings.Repeat("c", 64) }, func(p *envmodel.Report) { p.ActivityID = envmodel.ID() }, func(p *envmodel.Report) { p.Round++ }, func(p *envmodel.Report) { p.Commit = strings.Repeat("c", 40) }, func(p *envmodel.Report) { p.Inputs = "different" }, func(p *envmodel.Report) { p.Context.Target.Environment = "other" }, func(p *envmodel.Report) { p.Message = " " }} {
+		p := base
+		mutate(&p)
+		raw, _ := json.Marshal(p)
+		if _, e := envmodel.ParseReport(raw, r, a); e == nil {
+			t.Fatal("wrong identity accepted", string(raw))
 		}
-	}
-	for _, change := range []func(*envmodel.Report){func(p *envmodel.Report) { p.Round++ }, func(p *envmodel.Report) { p.ScriptDigest = "other" }, func(p *envmodel.Report) { p.L2 = p.L2[:1] }, func(p *envmodel.Report) { p.L2[1].ID = "one" }} {
-		p := good
-		p.L2 = append([]envmodel.Item{}, good.L2...)
-		change(&p)
-		b, _ := json.Marshal(p)
-		if _, e := envmodel.ParseReport(b, r, r.Rounds[0]); e == nil {
-			t.Fatal("invalid report accepted", string(b))
-		}
-	}
-	remote.body = []byte(`{"version":1`)
-	remote.run.StopStatus = "stopped"
-	observe(t, s)
-	if read(t, s, r.ID).State != "unverified" {
-		t.Fatal("partial JSON released")
 	}
 }
 func TestProjectEnvironmentAdmissionImmutableOriginalAndDeadline(t *testing.T) {
@@ -708,43 +516,9 @@ func TestProjectEnvironmentExecutionTimeoutAndCancelDuringPrepare(t *testing.T) 
 					t.Fatal("cancelled prepare could not settle", r.State)
 				}
 			} else {
-				if len(r.Rounds) != 2 || r.Rounds[0].TimedOut != true || r.Status() == "ready" {
+				if len(r.Rounds) != 1 || !r.Settled() || r.Rounds[0].TimedOut != true || r.Status() == "ready" {
 					t.Fatal("timeout failed to consume round", r.State)
 				}
-			}
-		})
-	}
-}
-func TestProjectEnvironmentGenerationNativeResultAndQuota(t *testing.T) {
-	for _, mode := range []string{"unverified", "verified", "mismatched-gaps"} {
-		verified := mode != "unverified"
-		t.Run(mode, func(t *testing.T) {
-			s, remote, _, _ := setup(t)
-			s.PrepareGeneration = func(context.Context, envmodel.Generate) (envmodel.GenerationPrepared, error) {
-				prepared, _ := s.Prepare(ctx, "remote")
-				return envmodel.GenerationPrepared{Target: prepared.Input.Execution, Context: json.RawMessage(`{}`), Input: runnercontract.GenerateRunInput{Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}}, Workflow: runnercontract.Workflow{ID: "generate", Version: 1}, Generate: runnercontract.GenerateInput{Repository: &runnercontract.GenerateRepository{LocalPath: "fixture", Commit: strings.Repeat("a", 40)}}}}, nil
-			}
-			acquired, released := 0, 0
-			s.AcquireGeneration = func(envmodel.Record) bool { acquired++; return true }
-			s.ReleaseGeneration = func(envmodel.Record) { released++ }
-			r, e := s.Generate(ctx, envmodel.ID(), json.RawMessage(`{}`), envmodel.Generate{TargetKey: serviceEnvironmentKey(), Profile: "local"})
-			if e != nil {
-				t.Fatal(e)
-			}
-			observe(t, s)
-			generated := envmodel.Generated{Document: fmt.Sprintf("```steerline-environment\n{\"version\":3,\"required_checks\":[],\"gaps\":[],\"environment_key\":%q,\"script\":%q,\"interpreter\":\"bash\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```", serviceEnvironmentKey(), envmodel.ScriptPath(serviceEnvironmentKey(), "sh")), Script: "echo fixture", Gaps: []string{}}
-			if mode == "mismatched-gaps" {
-				generated.Gaps = []string{"not in document"}
-			}
-			body, _ := json.Marshal(generated)
-			source := &runnercontract.RepositorySource{LocalPath: "fixture", Commit: strings.Repeat("a", 40), Tree: strings.Repeat("b", 40)}
-			remote.run.RepositorySource = source
-			remote.run.ContentResult = &runnercontract.ContentResult{Status: "succeeded", JSON: body, RepositorySource: source, Source: runnercontract.Final{Verified: verified, NativeOutcome: "succeeded", CommandID: "cmd", TurnID: "turn"}}
-			observe(t, s)
-			observe(t, s)
-			r = read(t, s, r.ID)
-			if (r.State == "generated") != (verified && mode != "mismatched-gaps") || r.Status() != "not_ready" || acquired != 1 || released != 1 {
-				t.Fatal("generation/source/quota contract", r.State, acquired, released)
 			}
 		})
 	}
@@ -753,4 +527,43 @@ func TestProjectEnvironmentGenerationNativeResultAndQuota(t *testing.T) {
 func serviceEnvironmentKey() string {
 	key, _ := envmodel.Key(runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)})
 	return key
+}
+
+func TestProjectEnvironmentConsumesReadyWithoutReviewingBusinessDetails(t *testing.T) {
+	for _, ready := range []bool{true, false} {
+		t.Run(fmt.Sprint(ready), func(t *testing.T) {
+			s, remote, _, _ := setup(t)
+			r := start(t, s)
+			observe(t, s)
+			p := report(r, remote, ready)
+			p.Details = json.RawMessage(`{"checks":[{"id":"project-only","status":"failed"}],"pr":{"url":"not-a-platform-requirement"}}`)
+			setReport(remote, p)
+			observe(t, s)
+			observe(t, s)
+			got := read(t, s, r.ID)
+			if (got.Status() == "ready") != ready || len(got.Rounds) != 1 || remote.submits != 1 || !sameProjectDetails(got.Rounds[0].Report.Details, p.Details) {
+				t.Fatal(got)
+			}
+		})
+	}
+}
+
+func sameProjectDetails(a, b json.RawMessage) bool {
+	ca, _ := runnercontract.CanonicalJSON(a)
+	cb, _ := runnercontract.CanonicalJSON(b)
+	return string(ca) == string(cb)
+}
+
+func TestProjectReadyCannotOverrideFailedNativeRun(t *testing.T) {
+	s, remote, _, _ := setup(t)
+	r := start(t, s)
+	observe(t, s)
+	setReport(remote, report(r, remote, true))
+	remote.run.Status = "failed"
+	observe(t, s)
+	observe(t, s)
+	saved := read(t, s, r.ID)
+	if !saved.Settled() || saved.Status() == "ready" || !saved.Rounds[0].Report.Ready {
+		t.Fatal("project ready overrode native failure", saved)
+	}
 }

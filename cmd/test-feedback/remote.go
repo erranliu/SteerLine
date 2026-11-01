@@ -1,12 +1,13 @@
 package main
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
-	"regexp"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -101,30 +102,6 @@ func checkRemoteEvidence(id, out string) error {
 		}
 		// The same project must have passed its own formal adaptation first.
 		return checkSealedEnvironment(read, frozen.ExecutionDigest, source.Fixture)
-	case remotetest.Generation:
-		var proof struct {
-			Source  string `json:"source_commit"`
-			Fixture string `json:"fixture_commit"`
-			Digest  string `json:"execution_digest"`
-			Only    bool   `json:"generation_only"`
-			Targets []struct {
-				Key      string `json:"target_environment_key"`
-				Activity string `json:"activity_id"`
-				Settled  bool   `json:"settled"`
-			} `json:"targets"`
-		}
-		if err := read("generation-proof.json", &proof); err != nil {
-			return err
-		}
-		if proof.Source != frozen.Commit || proof.Fixture == "" || proof.Digest != frozen.ExecutionDigest || !proof.Only || len(proof.Targets) != 2 || proof.Targets[0].Key == proof.Targets[1].Key {
-			return errors.New("native generation target/source proof incomplete")
-		}
-		for _, target := range proof.Targets {
-			if !env.ValidKey(target.Key) || target.Activity == "" || !target.Settled {
-				return errors.New("native generation did not settle exact target")
-			}
-		}
-		return nil
 	case remotetest.Environment, remotetest.LocalEnvironment:
 		var admission struct {
 			Before        bool   `json:"before_rejected"`
@@ -155,181 +132,73 @@ func checkRemoteEvidence(id, out string) error {
 	return errors.New("unsupported remote L4 scenario")
 }
 
-// A correct mixed failure report is a valid negative L4 outcome, never ready.
+// Environment evidence validates the transport/identity envelope, never project business details.
 func checkUnreadyEnvironment(read func(string, any) error, digest, fixture string) error {
-	var proof struct {
-		Digest   string       `json:"execution_digest"`
-		Source   string       `json:"source_commit"`
-		Activity string       `json:"activity_id"`
-		State    string       `json:"state"`
-		Rounds   int          `json:"rounds"`
-		Details  []env.Round  `json:"round_details"`
-		Report   env.Report   `json:"report"`
-		L2       []string     `json:"l2_ids"`
-		Manifest env.Manifest `json:"manifest"`
-	}
-	if err := read("environment-proof.json", &proof); err != nil {
-		return err
-	}
-	if proof.Digest != digest || fixture == "" || proof.Source != fixture || proof.State != "failed" || proof.Rounds != 3 || len(proof.Details) != 3 || proof.Activity == "" || len(proof.Report.ScriptDigest) != 64 {
-		return errors.New("unready environment source or original budget differs")
-	}
-	seenRuns := map[string]bool{}
-	for i, round := range proof.Details {
-		if round.Number != i+1 || !round.Settled || round.Run == nil || round.RunID == "" || round.RunID != round.Run.RunID || round.Run.StopStatus != "stopped" || round.Result == nil || round.Result.Version != 1 || round.Result.CollectionStatus != "closed" {
-			return errors.New("unready round lacks original stopped/sealed evidence")
-		}
-		if seenRuns[round.RunID] {
-			return errors.New("unready verification reused a Run")
-		}
-		seenRuns[round.RunID] = true
-		var input runnercontract.RunInput
-		if json.Unmarshal(round.Request.Input, &input) != nil || remotetest.Digest(input.Execution) != digest {
-			return errors.New("unready round execution differs")
-		}
-		raw, err := runnerclient.ValidateResultFile(*round.Result, round.RunID)
-		if err != nil {
-			return err
-		}
-		record := env.Record{ID: proof.Activity, Prepared: env.Prepared{Commit: fixture, ScriptDigest: proof.Report.ScriptDigest, L2: proof.L2, Manifest: proof.Manifest}}
-		report, err := env.ParseReport(raw, record, round)
-		if err != nil {
-			return err
-		}
-		if !report.Completed || report.PR.URL != "" || report.PR.HeadRevision != "" || report.PR.OutcomeUnknown || !report.PR.CleanupCompleted || report.PR.Base == "" || report.PR.Head != round.Run.Execution.Branch {
-			return errors.New("failed requirements produced unexpected PR effects")
-		}
-		passed, unmet := 0, 0
-		for _, check := range report.Checks {
-			if check.Status == "passed" {
-				passed++
-			} else {
-				unmet++
-			}
-		}
-		if passed == 0 || unmet == 0 {
-			return errors.New("mixed environment requirement results missing")
-		}
-		for _, item := range report.L2 {
-			if item.Status != "incomplete" {
-				return errors.New("unmet requirements unexpectedly executed L2")
-			}
-		}
-		if i == 2 && !reflect.DeepEqual(*report, proof.Report) {
-			return errors.New("last mixed report differs from sealed bytes")
-		}
-	}
-	var provider struct {
-		NoPR   bool   `json:"no_pr"`
-		Base   string `json:"validation_base"`
-		Digest string `json:"execution_digest"`
-	}
-	if err := read("provider-pr-proof.json", &provider); err != nil {
-		return err
-	}
-	if !provider.NoPR || provider.Digest != digest || provider.Base != proof.Report.PR.Base {
-		return errors.New("independent no-PR evidence differs")
-	}
-	return nil
+	return checkEnvironmentResult(read, digest, fixture, false)
 }
-
 func checkSealedEnvironment(read func(string, any) error, digest, fixture string) error {
+	return checkEnvironmentResult(read, digest, fixture, true)
+}
+func checkEnvironmentResult(read func(string, any) error, digest, fixture string, want bool) error {
 	var proof struct {
 		ExecutionDigest string                    `json:"execution_digest"`
 		Source          string                    `json:"source_commit"`
 		Activity        string                    `json:"activity_id"`
 		Rounds          int                       `json:"rounds"`
+		Details         []env.Round               `json:"round_details"`
 		RunID           string                    `json:"run_id"`
 		Run             runnercontract.Run        `json:"run"`
 		Result          runnercontract.ResultFile `json:"result"`
 		Report          env.Report                `json:"report"`
-		L2              []string                  `json:"l2_ids"`
 	}
 	if err := read("environment-proof.json", &proof); err != nil {
 		return err
 	}
-	if proof.ExecutionDigest != digest || proof.Activity == "" || proof.Source != fixture || fixture == "" || proof.Rounds < 1 || proof.Rounds > 3 || proof.RunID != proof.Run.RunID || proof.Run.StopStatus != "stopped" || proof.Result.CollectionStatus != "closed" || proof.Result.Version != 1 {
-		return errors.New("environment source/budget/stopped seal proof incomplete")
+	if proof.ExecutionDigest != digest || fixture == "" || proof.Source != fixture || proof.Activity == "" || proof.Rounds != 1 || len(proof.Details) != 1 {
+		return errors.New("environment source or single invocation proof differs")
 	}
+	a := proof.Details[0]
+	if !a.Settled || a.Number != 1 || a.Run == nil || a.RunID == "" || a.RunID != proof.RunID || a.RunID != a.Run.RunID || a.RunID != proof.Run.RunID || a.Run.StopStatus != "stopped" || a.Result == nil || a.Result.Version != 1 || a.Result.CollectionStatus != "closed" || !reflect.DeepEqual(*a.Result, proof.Result) || !reflect.DeepEqual(*a.Run, proof.Run) || a.InputDigest == "" || a.InputDigest != a.Run.InputDigest {
+		return errors.New("original detection was not stopped and sealed")
+	}
+	var input runnercontract.RunInput
+	if json.Unmarshal(a.Request.Input, &input) != nil || input.Workflow.ID != "execute" || input.Workflow.Version != 1 || input.ResultFile == nil || input.Publication.Provider != "" || remotetest.Digest(input.Execution) != digest {
+		return errors.New("detection invocation differs")
+	}
+	initial, err := base64.StdEncoding.Strict().DecodeString(input.ResultFile.InitialContentBase64)
+	if err != nil {
+		return err
+	}
+	var seed env.Report
+	if json.Unmarshal(initial, &seed) != nil {
+		return errors.New("original result identity missing")
+	}
+	if seed.ActivityID != proof.Activity || seed.Commit != fixture || seed.Inputs == "" || a.Run.Correlation["environment_activity"] != proof.Activity || a.Run.Correlation["steerline_project"] != seed.Project || a.Run.Correlation["environment_round"] != "1" {
+		return errors.New("original environment result binding differs")
+	}
+	record := env.Record{ID: seed.ActivityID, Project: seed.Project, Execution: input.Execution, Prepared: env.Prepared{Commit: seed.Commit, Inputs: seed.Inputs}}
 	raw, err := runnerclient.ValidateResultFile(proof.Result, proof.RunID)
 	if err != nil {
 		return err
 	}
-	var report env.Report
-	if err = json.Unmarshal(raw, &report); err != nil {
+	report, err := env.ParseReport(raw, record, a)
+	if err != nil {
 		return err
 	}
-	if !reflect.DeepEqual(report, proof.Report) || report.Version != env.ReportVersion || len(report.ScriptDigest) != 64 || report.ActivityID != proof.Activity || report.Commit != proof.Source || report.Round != proof.Rounds || !report.Passed(report.PR.Base, proof.Run.Execution.Branch) {
-		return errors.New("sealed environment report differs or did not pass")
-	}
-	want := map[string]bool{}
-	for _, id := range proof.L2 {
-		if want[id] || id == "" {
-			return errors.New("duplicate/empty L2 definition")
-		}
-		want[id] = true
-	}
-	if len(want) == 0 || len(want) != len(report.L2) {
-		return errors.New("incomplete L2 set")
-	}
-	for _, item := range report.L2 {
-		if !want[item.ID] {
-			return errors.New("L2 result differs")
-		}
-		delete(want, item.ID)
-	}
-	var provider struct {
-		PR struct {
-			Merged bool
-			Merge  string `json:"merge_commit_sha"`
-			URL    string `json:"html_url"`
-			Head   struct{ Ref, SHA string }
-			Base   struct{ Ref string }
-		}
-		Checks  bool   `json:"required_checks_verified"`
-		Reviews bool   `json:"required_reviews_verified"`
-		Digest  string `json:"execution_digest"`
-	}
-	if err := read("provider-pr-proof.json", &provider); err != nil {
+	// Evidence is formatted JSON; compare the original report semantically,
+	// while ValidateResultFile above still verifies its sealed raw bytes.
+	actual, _ := json.Marshal(report)
+	retained, _ := json.Marshal(proof.Report)
+	actual, err = runnercontract.CanonicalJSON(actual)
+	if err != nil {
 		return err
 	}
-	if !provider.PR.Merged || !regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(provider.PR.Merge) || provider.PR.URL != report.PR.URL || provider.PR.Head.Ref != report.PR.Head || provider.PR.Head.SHA != report.PR.HeadRevision || provider.PR.Base.Ref != report.PR.Base || !provider.Checks || !provider.Reviews || provider.Digest != digest {
-		return errors.New("independent provider PR proof differs")
-	}
-	var summary struct {
-		Passed       bool     `json:"passed"`
-		Cleanup      bool     `json:"cleanup_complete"`
-		Level        string   `json:"level"`
-		IDs          []string `json:"selected_ids"`
-		Verification []struct {
-			ID     string `json:"test_id"`
-			Status string `json:"status"`
-		} `json:"project_verification"`
-	}
-	if err := read("original-l2-summary.json", &summary); err != nil {
+	retained, err = runnercontract.CanonicalJSON(retained)
+	if err != nil {
 		return err
 	}
-	if !summary.Passed || !summary.Cleanup || summary.Level != "L2" || len(summary.IDs) != len(proof.L2) || len(summary.Verification) != len(proof.L2) {
-		return errors.New("original complete L2 evidence differs")
-	}
-	verified := map[string]bool{}
-	selected := map[string]bool{}
-	for _, id := range summary.IDs {
-		if selected[id] || id == "" {
-			return errors.New("invalid original L2 selection")
-		}
-		selected[id] = true
-	}
-	for _, item := range summary.Verification {
-		if item.Status != "passed" || item.ID == "" || verified[item.ID] {
-			return errors.New("original L2 item did not pass uniquely")
-		}
-		verified[item.ID] = true
-	}
-	for _, id := range proof.L2 {
-		if !verified[id] || !selected[id] {
-			return errors.New("original L2 item missing")
-		}
+	if !report.Completed || report.Ready != want || !bytes.Equal(actual, retained) || want && !env.TrustedFinal(a) {
+		return errors.New("final project result or native completion differs")
 	}
 	return nil
 }

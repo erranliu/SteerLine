@@ -3,14 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-
-	envmodel "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
-	"github.com/erranliu/SteerLine/internal/runnerclient"
+	"time"
 )
 
 func commitEnvironmentMaterials(t *testing.T, c Config) string {
@@ -21,141 +19,95 @@ func commitEnvironmentMaterials(t *testing.T, c Config) string {
 	return pmGit(t, c.Repository, "rev-parse", "HEAD")
 }
 
-func TestEnvironmentProjectSourcesUseCustomCatalogueWithoutLegacyFiles(t *testing.T) {
+func seedDetectedEnvironment(t *testing.T, p *environmentPort, profile string) envmodel.Record {
+	t.Helper()
+	prepared, e := p.prepare(context.Background(), profile)
+	require(t, e)
+	r := envmodel.Record{ID: envmodel.ID(), Project: p.config.Identity(), Revision: 1, Kind: "adaptation", Profile: profile, Execution: prepared.Input.Execution, Prepared: prepared, State: "ready", CreatedAt: time.Now().UTC(), Requests: []envmodel.Request{{ID: envmodel.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []envmodel.Round{{Number: 1, Settled: true}}}
+	require(t, p.store.StartEnvironment(context.Background(), r, 0))
+	return r
+}
+func TestEnvironmentDetectionNeedsNoProjectCatalogueOrPlatformCopies(t *testing.T) {
 	p, c, _ := environmentFixture(t)
-	for old, next := range map[string]string{"SteerlineFlow/testing.md": "quality/policy.md", "SteerlineFlow/testing/test-list.json": "quality/cases.json"} {
-		body, err := os.ReadFile(filepath.Join(c.Repository, old))
-		require(t, err)
-		require(t, os.MkdirAll(filepath.Join(c.Repository, "quality"), 0700))
-		require(t, os.WriteFile(filepath.Join(c.Repository, next), body, 0600))
-		require(t, os.Remove(filepath.Join(c.Repository, old)))
-	}
-	entry := pm.ProjectEntry{Version: 1, Requirements: []string{"quality/policy.md"}, TestingCatalogue: "quality/cases.json"}
-	body, _ := json.Marshal(entry)
-	require(t, os.WriteFile(filepath.Join(c.Repository, pm.ProjectEntryPath), body, 0600))
-	commit := commitEnvironmentMaterials(t, c)
-	prepared, err := p.materialAt(context.Background(), "fixture", commit, false)
-	require(t, err)
-	refs, _ := json.Marshal(prepared.Input.Documents.References)
-	if !strings.Contains(string(refs), "quality/cases.json") || !strings.Contains(string(refs), "quality/policy.md") || strings.Contains(string(refs), "SteerlineFlow/testing.md") || strings.Contains(string(refs), "SteerlineFlow/testing/test-list.json") {
-		t.Fatal("project sources were replaced by fixed paths", string(refs))
-	}
-	key, _ := envmodel.Key(c.RunnerExecution.Profiles[0].Execution)
-	in, err := p.generationInput(context.Background(), envmodel.Generate{TargetKey: key, Profile: "fixture"})
-	require(t, err)
-	if in.Generate.Repository.Paths == nil {
-		t.Fatal("valid explicit references unnecessarily surveyed source")
-	}
-}
-
-func TestEnvironmentBlockingGapsAreReadWithoutGenerationRecords(t *testing.T) {
-	_, c, _ := environmentFixture(t)
-	key, _ := envmodel.Key(c.RunnerExecution.Profiles[0].Execution)
-	manifest, err := envmodel.ParseManifest([]byte(environmentFixtureDocument(key, "ps1", "environment-validation", []string{"go.mod"})))
-	require(t, err)
-	manifest.Gaps = []string{"project runtime version is unknown"}
-	body, _ := json.Marshal(manifest)
-	require(t, os.WriteFile(filepath.Join(c.Repository, envmodel.DocumentPath(key)), []byte("# Manual project material\n```steerline-environment\n"+string(body)+"\n```\n"), 0600))
-	commit := commitEnvironmentMaterials(t, c)
-	// This owner has no store or generation history to consult.
-	cold := newEnvironmentPort(c, nil, runnerclient.Client{}, nil)
-	if _, err := cold.materialAt(context.Background(), "fixture", commit, false); err == nil || !strings.Contains(err.Error(), manifest.Gaps[0]) {
-		t.Fatal("standalone material failed to block", err)
-	}
-	value, err := cold.materials(context.Background(), key)
-	require(t, err)
-	got := value.(map[string]any)
-	if len(got["gaps"].([]string)) != 1 || got["verification_diagnostic"] == nil || got["expected_context"] != nil {
-		t.Fatal("blocking material depended on generation history", got)
-	}
-}
-
-func TestEnvironmentAdaptationRepairsObsoleteOutputsWithoutAcceptingThem(t *testing.T) {
-	for _, mode := range []string{"missing-document", "deleted-dependency", "deleted-script", "broken-manifest"} {
-		t.Run(mode, func(t *testing.T) {
-			p, c, _ := environmentFixture(t)
-			key, _ := envmodel.Key(c.RunnerExecution.Profiles[0].Execution)
-			switch mode {
-			case "missing-document":
-				require(t, os.Remove(filepath.Join(c.Repository, envmodel.DocumentPath(key))))
-			case "deleted-dependency":
-				require(t, os.Remove(filepath.Join(c.Repository, "go.mod")))
-			case "deleted-script":
-				require(t, os.Remove(filepath.Join(c.Repository, envmodel.ScriptPath(key, "ps1"))))
-			case "broken-manifest":
-				require(t, os.WriteFile(filepath.Join(c.Repository, envmodel.DocumentPath(key)), []byte("# Original requirements\n```steerline-environment\n{\"dependencies\":[\"../outside\"]}\n```\n"), 0600))
-			}
-			commit := commitEnvironmentMaterials(t, c)
-			in, err := p.generationInput(context.Background(), envmodel.Generate{TargetKey: key, Profile: "fixture"})
-			require(t, err)
-			if in.Generate.Repository.Paths != nil || !strings.Contains(in.Generate.Instruction, "SteerlineProjectGuideDoc/environment-adaptation.md") {
-				t.Fatal("repair did not receive actual source and guidance")
-			}
-			source := appRepositoryManifest(t, *in.Generate.Repository)
-			found := false
-			for _, file := range source.Files {
-				if file.Path == envmodel.DocumentPath(key) {
-					found = true
-				}
-				if strings.HasPrefix(file.Path, "../") {
-					t.Fatal("unsafe old reference followed")
-				}
-			}
-			if !found && mode != "missing-document" {
-				t.Fatal("original requirements lost during repair")
-			}
-			if _, err := p.materialAt(context.Background(), "fixture", commit, false); err == nil {
-				t.Fatal("invalid old runtime interface was admitted")
-			}
-		})
-	}
-}
-
-func TestEnvironmentSurveyBoundsActualSourceAndRequiresGuidance(t *testing.T) {
-	for _, mode := range []string{"oversized-source", "missing-guidance", "missing-policy"} {
-		t.Run(mode, func(t *testing.T) {
-			p, c, _ := environmentFixture(t)
-			key, _ := envmodel.Key(c.RunnerExecution.Profiles[0].Execution)
-			require(t, os.Remove(filepath.Join(c.Repository, envmodel.DocumentPath(key))))
-			switch mode {
-			case "oversized-source":
-				require(t, os.WriteFile(filepath.Join(c.Repository, "actual-source.txt"), []byte(strings.Repeat("x", 1<<20)), 0600))
-			case "missing-guidance":
-				require(t, os.Remove(filepath.Join(c.Repository, "SteerlineProjectGuideDoc/environment-adaptation.md")))
-			case "missing-policy":
-				require(t, os.Remove(filepath.Join(c.Repository, "SteerlineFlow/testing.md")))
-			}
-			commit := commitEnvironmentMaterials(t, c)
-			if _, _, err := p.generationFiles(context.Background(), commit, key); err == nil {
-				t.Fatal("unsafe survey was offered", mode)
-			}
-		})
-	}
-}
-
-func TestEnvironmentRuntimeDependenciesBindBasisWithoutExpandingReadingReferences(t *testing.T) {
-	p, c, _ := environmentFixture(t)
-	commit := pmGit(t, c.Repository, "rev-parse", "HEAD")
-	before, err := p.materialAt(context.Background(), "fixture", commit, false)
-	require(t, err)
-	for _, ref := range before.Input.Documents.References {
-		if ref.Path == "go.mod" {
-			t.Fatal("runtime helper repeated as Agent reading reference")
+	for _, path := range []string{"SteerlineFlow/environment-project.json", "SteerlineFlow/testing/test-list.json", "SteerlineFlow/environment-generation.md", "SteerlineFlow/environment-execution.md", "SteerlineProjectGuideDoc/environment-adaptation.md"} {
+		e := os.Remove(filepath.Join(c.Repository, path))
+		if e != nil && !errors.Is(e, os.ErrNotExist) {
+			t.Fatal(e)
 		}
 	}
-	if before.Manifest.Dependencies[0] != "go.mod" {
-		t.Fatal("runtime dependency removed from authority")
+	// Missing files are intentional; the fixture already commits only invocation files.
+	prepared, e := p.prepare(context.Background(), "remote")
+	require(t, e)
+	if prepared.Input.Workflow.ID != "execute" || prepared.Input.Publication.Provider != "" || len(prepared.Input.Documents.References) != 0 {
+		t.Fatal(prepared.Input)
 	}
-	require(t, os.WriteFile(filepath.Join(c.Repository, "go.mod"), []byte("module changed.invalid/runtime\n"), 0600))
-	commit = commitEnvironmentMaterials(t, c)
-	after, err := p.materialAt(context.Background(), "fixture", commit, false)
-	require(t, err)
-	if after.Inputs == before.Inputs {
-		t.Fatal("runtime dependency lost qualification binding")
+}
+func TestEnvironmentStableBasisExcludesUnrelatedCommitAndModel(t *testing.T) {
+	p, c, _ := environmentFixture(t)
+	before, e := p.prepare(context.Background(), "remote")
+	require(t, e)
+	require(t, os.WriteFile(filepath.Join(c.Repository, "unrelated.md"), []byte("notes"), 0600))
+	commitEnvironmentMaterials(t, c)
+	for i := range p.config.RunnerExecution.Profiles {
+		if p.config.RunnerExecution.Profiles[i].ID == "remote" {
+			p.config.RunnerExecution.Profiles[i].Execution.Settings = json.RawMessage(`{"agent_launch":{"executable":"codex","model":"different","reasoning_effort":"high"},"access_mode":"full_access"}`)
+		}
+	}
+	after, e := p.prepare(context.Background(), "remote")
+	require(t, e)
+	if before.Commit == after.Commit || before.Inputs != after.Inputs {
+		t.Fatal("ephemeral commit/model entered basis", before.Inputs, after.Inputs)
+	}
+}
+func TestEnvironmentRuntimeDependenciesBindBasisWithoutExpandingReadingReferences(t *testing.T) {
+	p, c, _ := environmentFixture(t)
+	before, e := p.prepare(context.Background(), "remote")
+	require(t, e)
+	if len(before.Input.Documents.References) != 0 || len(before.Manifest.Dependencies) != 1 {
+		t.Fatal(before)
+	}
+	require(t, os.WriteFile(filepath.Join(c.Repository, "go.mod"), []byte("module changed.invalid\n"), 0600))
+	commitEnvironmentMaterials(t, c)
+	after, e := p.prepare(context.Background(), "remote")
+	require(t, e)
+	if before.Inputs == after.Inputs {
+		t.Fatal("declared dependency ignored")
 	}
 	require(t, os.Remove(filepath.Join(c.Repository, "go.mod")))
-	commit = commitEnvironmentMaterials(t, c)
-	if _, err := p.materialAt(context.Background(), "fixture", commit, false); err == nil {
-		t.Fatal("missing runtime dependency accepted")
+	commitEnvironmentMaterials(t, c)
+	if _, e := p.prepare(context.Background(), "remote"); e == nil {
+		t.Fatal("missing declared dependency ignored")
+	}
+}
+func TestEnvironmentReadFailureDoesNotPersistRevocation(t *testing.T) {
+	p, _, store := environmentFixture(t)
+	r := seedDetectedEnvironment(t, p, "remote")
+	ctx := context.Background()
+	git := p.config.Git
+	p.config.Git.Executable = "missing-environment-git-command"
+	if e := p.observeBasis(ctx, r.Prepared.Commit); e == nil {
+		t.Fatal("read failure accepted")
+	}
+	current, e := store.CurrentEnvironment(ctx, r.Project, mustEnvironmentKey(t, r.Execution))
+	require(t, e)
+	if current.Invalidated || current.Revision != 1 {
+		t.Fatal("read outage revoked", current)
+	}
+	p.config.Git = git
+	require(t, p.observeBasis(ctx, r.Prepared.Commit))
+	if _, _, e := p.admission(ctx, "remote", "", false); e != nil {
+		t.Fatal(e)
+	}
+}
+func TestEnvironmentKnownDeletedDependencyPermanentlyRevokes(t *testing.T) {
+	p, c, store := environmentFixture(t)
+	r := seedDetectedEnvironment(t, p, "remote")
+	require(t, os.Remove(filepath.Join(c.Repository, "go.mod")))
+	commit := commitEnvironmentMaterials(t, c)
+	require(t, p.observeBasis(context.Background(), commit))
+	current, e := store.CurrentEnvironment(context.Background(), r.Project, mustEnvironmentKey(t, r.Execution))
+	require(t, e)
+	if !current.Invalidated {
+		t.Fatal("deleted dependency did not revoke")
 	}
 }

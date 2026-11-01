@@ -66,91 +66,62 @@ func TestRemoteL4KeepsOnlyConfiguredProviderCredentialReference(t *testing.T) {
 	}
 }
 
-func TestRemoteL4RequiresLinkedSealedL2AndPR(t *testing.T) {
-	report := env.Report{Version: env.ReportVersion, ActivityID: "activity", Round: 1, Commit: "fixture", ScriptDigest: strings.Repeat("a", 64), Completed: true, Checks: []env.Check{{ID: "tool", Status: "passed", Message: "available"}, {ID: "terminal.tty", Status: "passed", Message: "actual TTY"}}, L2: []env.Item{{ID: "l2.a", Status: "passed"}}, PR: env.PR{URL: "https://example.invalid/repo/pull/1", Base: "owned-base", Head: "owned-head", HeadRevision: strings.Repeat("b", 40), CleanupCompleted: true}}
-	raw, _ := json.Marshal(report)
-	encoded := base64.StdEncoding.EncodeToString(raw)
-	sum := sha256.Sum256(raw)
-	now := time.Now().UTC()
-	result := runnercontract.ResultFile{Contract: runnercontract.ResultContract, RunID: "run", Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(raw), SHA256: hex.EncodeToString(sum[:]), CollectionStatus: "closed"}
-	for _, change := range []string{"valid", "wrong-source", "fourth-round", "unsealed", "missing-l2", "failed-l2", "unmerged-pr", "wrong-machine"} {
+func TestRemoteL4OnlyConsumesBoundSealedProjectResult(t *testing.T) {
+	for _, change := range []string{"valid", "opaque-failed-detail", "wrong-source", "second-round", "unsealed", "wrong-machine", "wrong-inputs", "unverified-native", "wrong-input-digest", "wrong-run-projection"} {
 		t.Run(change, func(t *testing.T) {
-			proof := map[string]any{"execution_digest": "digest", "source_commit": "fixture", "activity_id": "activity", "rounds": 1, "run_id": "run", "run": runnercontract.Run{RunID: "run", StopStatus: "stopped", Execution: runnercontract.Execution{Branch: "owned-head"}}, "result": result, "report": report, "l2_ids": []string{"l2.a"}, "manifest": env.Manifest{RequiredChecks: []string{"git", "unity.editor"}}}
-			summary := map[string]any{"passed": true, "cleanup_complete": true, "level": "L2", "selected_ids": []string{"l2.a"}, "project_verification": []any{map[string]any{"test_id": "l2.a", "status": "passed"}}}
-			pr := map[string]any{"merged": true, "merge_commit_sha": strings.Repeat("c", 40), "html_url": report.PR.URL, "head": map[string]string{"ref": "owned-head", "sha": report.PR.HeadRevision}, "base": map[string]string{"ref": "owned-base"}}
-			provider := map[string]any{"pr": pr, "required_checks_verified": true, "required_reviews_verified": true, "execution_digest": "digest"}
+			execution := runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}
+			commit := strings.Repeat("a", 40)
+			r := env.Record{ID: env.ID(), Project: "project", Execution: execution, Prepared: env.Prepared{Commit: commit, Inputs: strings.Repeat("b", 64)}}
+			seed := env.InitialReport(r, 1)
+			initial, _ := json.Marshal(seed)
+			p := seed
+			p.Completed = true
+			p.Ready = true
+			p.Message = "project ready"
+			p.Details = json.RawMessage(`{"checks":[{"status":"failed"}],"project":"opaque"}`)
+			if change == "wrong-inputs" {
+				p.Inputs = "other"
+			}
+			body, _ := json.Marshal(p)
+			encoded := base64.StdEncoding.EncodeToString(body)
+			sum := sha256.Sum256(body)
+			now := time.Now().UTC()
+			result := runnercontract.ResultFile{Contract: runnercontract.ResultContract, RunID: "run", Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(body), SHA256: hex.EncodeToString(sum[:]), CollectionStatus: "closed"}
+			input := runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: execution, ResultFile: &runnercontract.ProgressFileInput{InitialContentBase64: base64.StdEncoding.EncodeToString(initial)}}
+			raw, _ := json.Marshal(input)
+			run := runnercontract.Run{RunID: "run", Status: "completed", InputDigest: env.Digest(raw), StopStatus: "stopped", Correlation: map[string]string{"steerline_project": r.Project, "environment_activity": r.ID, "environment_round": "1"}, Final: &runnercontract.Final{Verified: true, NativeOutcome: "succeeded", CommandID: "command", SessionID: "session", TurnID: "turn"}}
+			round := env.Round{Number: 1, Request: runnercontract.Request{Input: raw}, RunID: "run", InputDigest: run.InputDigest, Run: &run, Result: &result, Report: &p, Settled: true}
+			proof := map[string]any{"execution_digest": remotetest.Digest(execution), "source_commit": commit, "activity_id": r.ID, "rounds": 1, "round_details": []env.Round{round}, "run_id": "run", "run": run, "result": result, "report": p}
 			switch change {
 			case "wrong-source":
 				proof["source_commit"] = "other"
-			case "fourth-round":
-				proof["rounds"] = 4
+			case "second-round":
+				proof["rounds"] = 2
 			case "unsealed":
-				r := result
-				r.CollectionStatus = "pending"
-				proof["result"] = r
-			case "missing-l2":
-				summary["selected_ids"] = []string{}
-			case "failed-l2":
-				summary["project_verification"] = []any{map[string]any{"test_id": "l2.a", "status": "failed"}}
-			case "unmerged-pr":
-				pr["merged"] = false
+				result.CollectionStatus = "pending"
+				proof["result"] = result
 			case "wrong-machine":
-				provider["execution_digest"] = "other"
+				proof["execution_digest"] = "different"
+			case "wrong-input-digest":
+				round.InputDigest = "different"
+				proof["round_details"] = []env.Round{round}
+			case "wrong-run-projection":
+				copy := run
+				copy.Status = "failed"
+				proof["run"] = copy
+			case "unverified-native":
+				run.Final.Verified = false
+				proof["run"] = run
 			}
-			files := map[string]any{"environment-proof.json": proof, "original-l2-summary.json": summary, "provider-pr-proof.json": provider}
-			read := func(name string, out any) error {
-				data, e := json.Marshal(files[name])
-				if e != nil {
-					return e
+			read := func(name string, target any) error {
+				if name != "environment-proof.json" {
+					t.Fatal("business evidence was rechecked", name)
 				}
-				return json.Unmarshal(data, out)
+				b, _ := json.MarshalIndent(proof, "", "  ")
+				return json.Unmarshal(b, target)
 			}
-			err := checkSealedEnvironment(read, "digest", "fixture")
-			if (err == nil) != (change == "valid") {
-				t.Fatal(change, err)
-			}
-		})
-	}
-}
-
-func TestRemoteL4AcceptsOnlyOriginalMixedUnreadyEvidence(t *testing.T) {
-	execution := runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "desktop"}}
-	digest := remotetest.Digest(execution)
-	for _, change := range []string{"valid", "missing-round", "unsealed", "all-green", "pr-created", "wrong-machine", "duplicate-check"} {
-		t.Run(change, func(t *testing.T) {
-			details := []env.Round{}
-			var last env.Report
-			for i := 1; i <= 3; i++ {
-				runID := "run-" + strings.Repeat("r", i)
-				last = env.Report{Version: env.ReportVersion, ActivityID: "activity", Round: i, Commit: "fixture", ScriptDigest: strings.Repeat("a", 64), Completed: true, Checks: []env.Check{{ID: "terminal.tty", Status: "passed", Message: "TTY verified"}, {ID: "git", Status: "passed", Message: "Git available"}, {ID: "unity.editor", Status: "failed", Message: "UNITY_EDITOR_PATH is not set"}}, L2: []env.Item{{ID: "l2.a", Status: "incomplete", Message: "requirements unmet"}}, PR: env.PR{Base: "owned-base", Head: "owned-head", CleanupCompleted: true}}
-				if change == "all-green" {
-					last.Checks[2].Status = "passed"
-				}
-				if change == "duplicate-check" {
-					last.Checks[2].ID = "git"
-				}
-				raw, _ := json.Marshal(last)
-				encoded := base64.StdEncoding.EncodeToString(raw)
-				sum := sha256.Sum256(raw)
-				now := time.Now().UTC()
-				result := runnercontract.ResultFile{Contract: runnercontract.ResultContract, RunID: runID, Version: 1, ObservedAt: &now, Encoding: "base64", ContentBase64: &encoded, SizeBytes: len(raw), SHA256: hex.EncodeToString(sum[:]), CollectionStatus: "closed"}
-				if change == "unsealed" {
-					result.CollectionStatus = "pending"
-				}
-				input, _ := json.Marshal(runnercontract.RunInput{Execution: execution})
-				details = append(details, env.Round{Number: i, Settled: true, RunID: runID, Run: &runnercontract.Run{RunID: runID, StopStatus: "stopped", Execution: runnercontract.Execution{Branch: "owned-head"}}, Result: &result, Request: runnercontract.Request{Input: input}})
-			}
-			if change == "missing-round" {
-				details = details[:2]
-			}
-			proof := map[string]any{"execution_digest": digest, "source_commit": "fixture", "activity_id": "activity", "state": "failed", "rounds": 3, "round_details": details, "report": last, "l2_ids": []string{"l2.a"}, "manifest": env.Manifest{RequiredChecks: []string{"git", "unity.editor"}}}
-			provider := map[string]any{"no_pr": change != "pr-created", "validation_base": "owned-base", "execution_digest": digest}
-			if change == "wrong-machine" {
-				provider["execution_digest"] = "wrong"
-			}
-			files := map[string]any{"environment-proof.json": proof, "provider-pr-proof.json": provider}
-			read := func(name string, out any) error { raw, _ := json.Marshal(files[name]); return json.Unmarshal(raw, out) }
-			if err := checkUnreadyEnvironment(read, digest, "fixture"); (err == nil) != (change == "valid") {
+			err := checkSealedEnvironment(read, remotetest.Digest(execution), commit)
+			if (err == nil) != (change == "valid" || change == "opaque-failed-detail") {
 				t.Fatal(change, err)
 			}
 		})

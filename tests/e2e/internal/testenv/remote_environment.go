@@ -3,11 +3,12 @@
 package testenv
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -33,31 +34,8 @@ func (p *Project) verifyRemoteExecution(raw json.RawMessage) {
 	}
 }
 
-// Only rewrites the fixture's validation target, before its source commit is
-// frozen. The project's script and standards remain versioned original bytes.
-func (p *Project) bindValidationBase() string {
-	s := p.Scenario
-	_ = p.environmentRules()
-	path := filepath.Join(p.Repo, env.DocumentPath(p.environmentKey(p.Driver.Profile)))
-	raw, err := os.ReadFile(path)
-	s.Must(err)
-	manifest, err := env.ParseManifest(raw)
-	s.Must(err)
-	base := strings.TrimSuffix(p.BaseBranch, "/base") + "/validation/" + s.ID + "/base"
-	manifest.ValidationBase = base
-	fence := regexp.MustCompile("(?s)(```steerline-environment[\\t ]*\\r?\\n)(.*?)(\\r?\\n```)")
-	if len(fence.FindAllSubmatch(raw, -1)) != 1 {
-		s.t.Fatal("missing unique environment manifest")
-	}
-	data, err := json.Marshal(manifest)
-	s.Must(err)
-	raw = fence.ReplaceAllFunc(raw, func(old []byte) []byte {
-		parts := fence.FindSubmatch(old)
-		return append(append(append([]byte{}, parts[1]...), data...), parts[3]...)
-	})
-	s.Must(os.WriteFile(path, raw, 0600))
-	return base
-}
+// The harness owns only its isolated source branch; the detector has no platform validation base.
+func (p *Project) bindValidationBase() string { return p.BaseBranch }
 
 func (p *Project) ensureRemoteReady(seconds int) env.Record {
 	record := p.checkRemoteEnvironment(seconds)
@@ -81,7 +59,7 @@ func (p *Project) checkRemoteEnvironment(seconds int) env.Record {
 	defer client.Close()
 	prefix := "/projects/" + string(identity.ProjectID)
 	id := strings.ReplaceAll(uuid.NewString(), "-", "")
-	payload, _ := json.Marshal(env.Start{EnvironmentKey: p.environmentKey(p.Driver.Profile), Profile: p.Driver.Profile, TimeoutSeconds: seconds})
+	payload, _ := json.Marshal(env.Start{EnvironmentKey: p.environmentKey(p.Driver.Profile), Profile: p.Driver.Profile, TimeoutSeconds: seconds, ExpectedCurrentRevision: p.environmentCurrentRevision(p.Driver.Profile)})
 	request := httpcontract.CommandEnvelope{RequestID: id, ProjectID: identity.ProjectID, InstanceID: identity.InstanceID, Action: "environment_start", TargetID: string(identity.ProjectID), ExpectedVersion: 1, Payload: payload}
 	var response httpcontract.CommandResponse
 	s.Must(controlled.Write(filepath.Join(s.Output, "environment-start.json"), request))
@@ -127,7 +105,7 @@ func (p *Project) checkRemoteEnvironment(seconds int) env.Record {
 	defer reader.Close()
 	r, err := reader.Environment(s.Context, p.ProjectID, id)
 	s.Must(err)
-	if len(r.Rounds) == 0 || len(r.Rounds) > 3 {
+	if len(r.Rounds) != 1 {
 		s.t.Fatal("invalid ready/budget evidence")
 	}
 	if r.Prepared.Commit != p.git(p.Repo, "rev-parse", "HEAD") {
@@ -137,16 +115,12 @@ func (p *Project) checkRemoteEnvironment(seconds int) env.Record {
 		p.verifyRemoteExecution(round.Request.Input)
 	}
 	last := r.Rounds[len(r.Rounds)-1]
-	if last.Run == nil || last.Result == nil || last.Result.CollectionStatus != "closed" || last.Result.Version != 1 || last.Run.StopStatus != "stopped" || last.Report == nil || r.Status() == "ready" && !last.Report.Passed(r.Prepared.Manifest.ValidationBase, last.Run.Execution.Branch) {
+	if last.Run == nil || last.Result == nil || last.Result.CollectionStatus != "closed" || last.Result.Version != 1 || last.Run.StopStatus != "stopped" || last.Report == nil || r.Status() == "ready" && !last.Report.Passed() {
 		s.t.Fatal("missing stopped final report")
 	}
 	// Retain only caller-owned/public evidence, never Runner private storage.
-	s.Must(controlled.Write(filepath.Join(s.Output, "environment-proof.json"), map[string]any{"execution_digest": s.Run.Remote.ExecutionDigest, "source_commit": r.Prepared.Commit, "activity_id": id, "state": r.State, "rounds": len(r.Rounds), "round_details": r.Rounds, "run_id": last.RunID, "run": last.Run, "result": last.Result, "report": last.Report, "l2_ids": r.Prepared.L2, "manifest": r.Prepared.Manifest, "round_timeout_seconds": seconds}))
-	if r.Status() == "ready" {
-		p.verifyEnvironmentEvidence(r)
-	} else {
-		p.verifyUnreadyEnvironmentEvidence(r)
-	}
+	s.Must(controlled.Write(filepath.Join(s.Output, "environment-proof.json"), map[string]any{"execution_digest": s.Run.Remote.ExecutionDigest, "source_commit": r.Prepared.Commit, "activity_id": id, "state": r.State, "rounds": len(r.Rounds), "round_details": r.Rounds, "run_id": last.RunID, "run": last.Run, "result": last.Result, "report": last.Report, "manifest": r.Prepared.Manifest, "round_timeout_seconds": seconds}))
+
 	return r
 }
 
@@ -181,11 +155,19 @@ func runProjectEnvironment(t *testing.T, id string) {
 	p.BaseBranch = "codex/e2e/" + strings.ReplaceAll(uuid.NewString(), "-", "") + "/" + s.ID + "/base"
 	p.git(p.Repo, "-c", "filter.lfs.process=", "-c", "filter.lfs.smudge=", "-c", "filter.lfs.required=false", "checkout", "-b", p.BaseBranch, in.Commit)
 	base := p.bindValidationBase()
-	for file, body := range map[string]string{"SteerlineFlow/spec/task.spec.md": "# Remote admission probe\nDo not implement, commit, push or publish. Remain blocked awaiting the caller's explicit stop.\n\n## Acceptance\nThe caller verifies the original Run binding, then explicitly stops it. No implementation or publication is authorized.\n", "SteerlineFlow/plans/task.tests.json": `{"tests":[]}`, "SteerlineFlow/plans/task.plan.md": "# Remote admission probe\nRead the bound Spec. No implementation or publication is authorized; await explicit stop.\n\nNo automated tests are registered for this caller probe. The required test arrangement for this admission probe is {\"tests\":[]}. Environment validation is owned by the separate caller flow.\n"} {
-		s.Must(os.MkdirAll(filepath.Dir(filepath.Join(p.Repo, file)), 0700))
-		s.Must(os.WriteFile(filepath.Join(p.Repo, file), []byte(body), 0600))
+	// The separate Task admission probe owns its own minimal test materials.
+	// They are prepared only in this isolated clone, never required by detection.
+	probeFiles, err := testProtocolMaterials()
+	s.Must(err)
+	for file, body := range map[string]string{"SteerlineFlow/testing.md": "# Admission probe tests\nNo automated project tests are registered for this caller-only probe.\n", "SteerlineFlow/testing/test-list.json": `{"tests":[]}`, "SteerlineFlow/spec/task.spec.md": "# Remote admission probe\nDo not implement, commit, push or publish. Remain blocked awaiting the caller's explicit stop.\n\n## Acceptance\nThe caller verifies the original Run binding, then explicitly stops it. No implementation or publication is authorized.\n", "SteerlineFlow/plans/task.tests.json": `{"tests":[]}`, "SteerlineFlow/plans/task.plan.md": "# Remote admission probe\nRead the bound Spec. No implementation or publication is authorized; await explicit stop.\n\nNo automated tests are registered for this caller probe. The required test arrangement for this admission probe is {\"tests\":[]}. Environment validation is owned by the separate caller flow.\n"} {
+		probeFiles[file] = []byte(body)
 	}
-	p.git(p.Repo, "add", "--", env.DocumentPath(p.environmentKey(p.Driver.Profile)), "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json")
+	s.Must(p.validateEnvironmentProbeFiles(probeFiles))
+	for file, body := range probeFiles {
+		s.Must(os.MkdirAll(filepath.Dir(filepath.Join(p.Repo, file)), 0700))
+		s.Must(os.WriteFile(filepath.Join(p.Repo, file), body, 0600))
+	}
+	p.git(p.Repo, "add", "--", "SteerlineFlow/environment-project.json", "SteerlineFlow/testing.md", "SteerlineFlow/testing", "tools/testing/RuntimeProgress.ps1", "SteerlineFlow/spec/task.spec.md", "SteerlineFlow/plans/task.plan.md", "SteerlineFlow/plans/task.tests.json")
 	p.git(p.Repo, "commit", "--quiet", "--allow-empty", "-m", "Freeze isolated environment validation base")
 	fixture := p.git(p.Repo, "rev-parse", "HEAD")
 	config.Repository, config.RunDir, config.Branch, config.Remote = p.Repo, "", p.BaseBranch, "origin"
@@ -207,7 +189,7 @@ func runProjectEnvironment(t *testing.T, id string) {
 	}
 	t.Cleanup(func() { p.cleanupRemoteValidation(base) })
 	s.Must(controlled.Write(filepath.Join(s.Output, "remote-ref-intent.json"), map[string]any{"source_branch": p.BaseBranch, "validation_base": base, "commit": fixture}))
-	p.git(p.Repo, "push", "origin", "HEAD:refs/heads/"+p.BaseBranch, "HEAD:refs/heads/"+base)
+	p.git(p.Repo, "push", "origin", "HEAD:refs/heads/"+p.BaseBranch)
 	if !strings.HasPrefix(p.git(p.Repo, "ls-remote", "origin", "refs/heads/"+p.BaseBranch), fixture+"\t") {
 		t.Fatal("308 test source tip changed")
 	}
@@ -305,4 +287,52 @@ func runProjectEnvironment(t *testing.T, id string) {
 	s.Must(controlled.Write(filepath.Join(s.Output, "admission-proof.json"), map[string]any{"before_rejected": true, "after_run_id": admitted, "stopped": true, "execution_digest": in.ExecutionDigest, "source_commit": in.Commit, "fixture_commit": fixture}))
 	s.Must(s.FinishBody())
 	p.StopService()
+}
+
+func (p *Project) environmentCurrentRevision(profile string) uint64 {
+	for _, o := range p.EnvironmentOptions() {
+		if o.ID == profile {
+			return o.CurrentRevision
+		}
+	}
+	return 0
+}
+
+// Validate before any remote refs or Runner requests. Probe materials must not
+// alter any byte of the project's own declared environment basis.
+func (p *Project) validateEnvironmentProbeFiles(probe map[string][]byte) error {
+	key := p.environmentKey(p.Driver.Profile)
+	path := env.DocumentPath(key)
+	read := func(path string) ([]byte, error) {
+		return exec.Command("git", "-C", p.Repo, "show", "HEAD:"+path).Output()
+	}
+	document, err := read(path)
+	if err != nil {
+		return err
+	}
+	manifest, err := env.ParseManifest(document)
+	if err != nil {
+		return err
+	}
+	basis := map[string][]byte{path: document}
+	for _, path := range append([]string{manifest.Script}, manifest.Dependencies...) {
+		raw, err := read(path)
+		if err != nil {
+			return err
+		}
+		basis[path] = raw
+	}
+	return validateEnvironmentProbeFiles(basis, probe)
+}
+func validateEnvironmentProbeFiles(basis, probe map[string][]byte) error {
+	for path, original := range basis {
+		for proposedPath, proposed := range probe {
+			// Conservatively reject aliases on case-sensitive hosts too; the same
+			// source can be checked on Windows by the public live driver.
+			if strings.EqualFold(path, proposedPath) && !bytes.Equal(original, proposed) {
+				return fmt.Errorf("Task admission probe would replace declared environment basis %s", path)
+			}
+		}
+	}
+	return nil
 }

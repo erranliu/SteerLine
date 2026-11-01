@@ -722,9 +722,6 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 }
 
 func supportedLiveScenario(e e2eScenario) bool {
-	if e.ID == remotetest.Generation {
-		return e.Level == "L4" && e.Suite == "testing" && e.Package == "./tests/e2e/remote" && e.Chain == "local-environment-generation"
-	}
 	if e.ID == remotetest.LocalEnvironment {
 		return e.Level == "L4" && e.Suite == "testing" && e.Package == "./tests/e2e/remote" && e.Chain == "local-environment"
 	}

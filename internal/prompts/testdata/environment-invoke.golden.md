@@ -1,0 +1,1 @@
+在本次固定提交的工作区根，按参数数组调用 powershell.exe -NoProfile -NonInteractive -File SteerlineFlow/environments/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/verify-environment.ps1 一次；入口通过 STEERLINE_RESULT_FILE 读取关联信息并写最终结果。保留原始退出结果、失败及未知；不重跑、不修改材料、不代写报告。入口返回后直接结束本次调用，不追加发布步骤。

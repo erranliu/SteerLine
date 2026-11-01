@@ -72,13 +72,7 @@ func (s *SQLiteStore) SaveEnvironment(ctx context.Context, r env.Record, expecte
 }
 
 func saveEnvironmentTx(ctx context.Context, tx *sql.Tx, r env.Record, expected uint64) error {
-	if r.Kind == "generation" {
-		key, err := env.Key(r.TargetExecution)
-		if err != nil || !env.ValidKey(r.TargetKey) || key != r.TargetKey || !json.Valid(r.GenerationContext) {
-			return errors.New("invalid immutable generation target/context")
-		}
-	}
-	if !env.IDPattern.MatchString(r.ID) || r.Project == "" || r.Revision != expected+1 || len(r.Requests) == 0 || (r.Kind != "adaptation" && r.Kind != "generation") || len(r.Rounds) > env.MaxRounds {
+	if !env.IDPattern.MatchString(r.ID) || r.Project == "" || r.Revision != expected+1 || len(r.Requests) == 0 || r.Kind != "adaptation" || len(r.Rounds) > env.MaxRounds {
 		return errors.New("invalid environment activity")
 	}
 
@@ -94,7 +88,7 @@ func saveEnvironmentTx(ctx context.Context, tx *sql.Tx, r env.Record, expected u
 		if old.Revision != expected {
 			return errors.New("stale_revision: environment activity changed")
 		}
-		if old.TargetKey != r.TargetKey || env.DigestJSON(old.TargetExecution) != env.DigestJSON(r.TargetExecution) || env.DigestJSON(old.GenerationContext) != env.DigestJSON(r.GenerationContext) || old.Kind != r.Kind || old.Profile != r.Profile || old.Build != r.Build || !old.CreatedAt.Equal(r.CreatedAt) || old.TimeoutSeconds != r.TimeoutSeconds || env.DigestJSON(old.Execution) != env.DigestJSON(r.Execution) || env.DigestJSON(old.Prepared) != env.DigestJSON(r.Prepared) || len(r.Rounds) < len(old.Rounds) || len(r.Rounds) > len(old.Rounds)+1 || len(r.Requests) < len(old.Requests) || old.Cancelled && !r.Cancelled {
+		if old.Kind != r.Kind || old.Profile != r.Profile || old.Build != r.Build || !old.CreatedAt.Equal(r.CreatedAt) || old.TimeoutSeconds != r.TimeoutSeconds || env.DigestJSON(old.Execution) != env.DigestJSON(r.Execution) || env.DigestJSON(old.Prepared) != env.DigestJSON(r.Prepared) || len(r.Rounds) < len(old.Rounds) || len(r.Rounds) > len(old.Rounds)+1 || len(r.Requests) < len(old.Requests) || old.Cancelled && !r.Cancelled {
 			return errors.New("immutable environment activity changed")
 		}
 		for i, a := range old.Rounds {
