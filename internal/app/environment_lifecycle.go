@@ -13,27 +13,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
-// Existing shutdown verification consumes already supplied historical proofs.
-// Startup cancellation below never requests this retired cross-build protocol.
-func environmentTakeover(proof runnercontract.TakeoverReport, r envmodel.Record, a envmodel.Round) (runnercontract.TakeoverItem, bool) {
-	if canonicalPath(r.Build.StateDir) != canonicalPath(proof.StateDir) {
-		return runnercontract.TakeoverItem{}, false
-	}
-	for _, item := range proof.Items {
-		if item.Kind != "run" || item.Status != "compatible" {
-			continue
-		}
-		if a.RunID != "" {
-			if item.ID == a.RunID && a.InputDigest != "" && item.InputDigest == a.InputDigest {
-				return item, true
-			}
-		} else if item.RequestID == a.Request.RequestID && item.RequestDigest == runnercontract.RequestDigest("submit", "", a.Request) {
-			return item, true
-		}
-	}
-	return runnercontract.TakeoverItem{}, false
-}
-
 func unsubmittedEnvironment(a envmodel.Round) bool {
 	return a.RunID == "" && (a.Submission == "pending" || a.Submission == "rejected" || a.Submission == "cancelled")
 }
@@ -49,9 +28,6 @@ func verifyEnvironmentBindings(ctx context.Context, c Config, store env.Store, c
 		for _, a := range r.Rounds {
 			if unsubmittedEnvironment(a) {
 				continue
-			}
-			if !runnerbinding.SameBuild(r.Build, cli.BuildPin()) {
-				return errors.New("environment activity belongs to another Runner build; cross-build takeover is unsupported")
 			}
 			selector, id := "run-id", a.RunID
 			if id == "" {
@@ -88,8 +64,8 @@ func prepareEnvironmentStopsWith(ctx context.Context, c Config, store env.Store,
 			if unsubmittedEnvironment(*a) {
 				continue
 			}
-			if !runnerbinding.SameBuild(r.Build, build) {
-				return nil, errors.New("environment activity belongs to another Runner build; cross-build takeover is unsupported")
+			if !runnerbinding.SamePath(r.Build.StateDir, build.StateDir) {
+				return nil, errors.New("environment activity belongs to another Runner namespace")
 			}
 			if !r.Cancelled || a.Settled {
 				continue

@@ -72,7 +72,17 @@ type Controls struct {
 	CanStop      bool   `json:"can_stop"`
 	Reason       string `json:"reason"`
 }
+
+type Operation struct {
+	ID                 string `json:"operation_id"`
+	Action             string `json:"action"`
+	Status             string `json:"status"`
+	Diagnostic         string `json:"diagnostic,omitempty"`
+	OriginalDiagnostic string `json:"original_diagnostic,omitempty"`
+}
+
 type Run struct {
+	Operations       []Operation       `json:"operations"`
 	RepositorySource *RepositorySource `json:"repository_source,omitempty"`
 	ExecutionWait    *ExecutionWait    `json:"execution_wait"`
 	Closed           bool              `json:"closed"`

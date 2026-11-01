@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -21,14 +22,16 @@ func TestTMGenerationCancelledMissingSubmissionRequiresOfflineProof(t *testing.T
 			store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "state.db"))
 			require(t, err)
 			defer store.Close()
-			cli := runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner"), SHA256: strings.Repeat("a", 64), BuildVersion: "current", ResourceDigest: strings.Repeat("b", 64)}
+			cli := startupFixtureCLI(t)
 			g := testmanagement.Generation{ID: "original-generation", Project: "project", Revision: 1, Runner: cli.BuildPin(), Cancelled: true, State: "cancelled", Submission: "started", SubmissionDiagnostic: "original submit response unavailable", StopID: "original-stop", Request: runnercontract.Request{Protocol: runnerclient.Protocol, RequestID: "original-submit", Input: json.RawMessage(`{"title":"original"}`)}}
-			proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{}}
+			inspection := map[string]any{"fixture_error": "request_not_found"}
 			switch kind {
 			case "accepted-original":
-				proof.Items = []runnercontract.TakeoverItem{{Kind: "run", ID: "original-run", RequestID: g.Request.RequestID, RequestDigest: runnercontract.RequestDigest("submit", "", g.Request), Revision: 9, InputDigest: "original-input", Status: "compatible"}}
+				id := "original-run"
+				inspection = map[string]any{"run": runnercontract.Run{RunID: id, InputDigest: "original-input", Revision: 9, Correlation: map[string]string{"steerline_project": g.Project, "steerline_generation": g.ID}}, "command": runnercontract.Command{Command: "submit", RequestID: g.Request.RequestID, RunID: &id}}
 			case "online":
-				proof.InstanceID = "still-running"
+				cli.ResourceDigest = strings.Repeat("a", 64)
+				require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-fixture.json"), mustJSON(runnerclient.ServiceInfo{Protocol: runnerclient.Protocol, StateDir: cli.StateDir, Status: "ready", InstanceID: "online", Version: cli.BuildVersion, ResourceDigest: cli.ResourceDigest, ExecutableSHA256: cli.SHA256}), 0600))
 			case "active":
 				g.Cancelled, g.State = false, "unknown"
 			case "namespace":
@@ -36,12 +39,12 @@ func TestTMGenerationCancelledMissingSubmissionRequiresOfflineProof(t *testing.T
 			case "bound-run-missing":
 				g.RunID, g.InputDigest = "known-run", "known-input"
 			case "request-conflict":
-				proof.Items = []runnercontract.TakeoverItem{{Kind: "run", ID: "foreign-run", RequestID: g.Request.RequestID, RequestDigest: "foreign-digest", Revision: 1, InputDigest: "foreign-input", Status: "compatible"}}
+				inspection = map[string]any{"fixture_error": "request_conflict"}
 			case "incomplete-report":
-				proof.Items = []runnercontract.TakeoverItem{{Kind: "run", ID: "unbound-run", Revision: 1, InputDigest: "input", Status: "compatible"}}
+				inspection = map[string]any{"run": runnercontract.Run{RunID: "foreign", Revision: 1}}
 			}
+			require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-run-fixture.json"), mustJSON(inspection), 0600))
 			require(t, store.SaveGeneration(ctx, g, 0))
-			cli.Takeover = &proof
 			stops, err := prepareGenerationStops(ctx, store, g.Project, &cli)
 			if kind == "absent" {
 				require(t, err)

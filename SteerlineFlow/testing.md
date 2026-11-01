@@ -41,7 +41,7 @@ Full 仅指全部普通 Go 测试，已登记为 L4 `go.full`，不包含 e2e �
 
 结果和未验边界写入任务专属 [验收记录](testing/acceptance/README.md)，测试列表只说明测什么。报告格式、Git 历史导出和读取见 [报告约定](testing/reports.md)。历史验收沿用其冻结版本与当时级别，不代表当前代码通过。
 
-安装部署的历史生成记录接管修复见[专属验收](testing/acceptance/install-deployment-generation-20261022.md)：部署定向回归覆盖三代 Runner 构建及错误输入、命名空间、候选、缺失 Run 和只读证明；自动测试使用隔离现场，实际安装维护单独记录。
+当前 Runner v7 的升级、启动前取消及同构建重启回归见[专属验收](testing/acceptance/runner-v7-adaptation.md)：升级须先排空原业务、原生资源及未完成操作；旧目录不迁移，活动任务不跨构建接管。历史三代 Runner 接管修复仅按其[原验收版本](testing/acceptance/install-deployment-generation-20261022.md)追溯；自动测试使用隔离现场，实际安装维护单独记录。
 
 ## 维护
 

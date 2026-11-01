@@ -4,26 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
-
-// VerifyTakeover may run against the existing service or offline writer lease.
-// It never starts a service and does not replace current-instance verification.
-func (c Client) VerifyTakeover(ctx context.Context) (runnercontract.TakeoverReport, error) {
-	response, err := c.Call(ctx, "service verify-takeover", []string{"--candidate", c.Executable}, nil)
-	if err != nil {
-		return runnercontract.TakeoverReport{}, err
-	}
-	var report runnercontract.TakeoverReport
-	if json.Unmarshal(response.Data, &report) != nil {
-		return report, errors.New("Runner candidate takeover is unverified or incompatible")
-	}
-	if err := report.Validate(c.StateDir, c.SHA256); err != nil {
-		return report, err
-	}
-	return report, nil
-}
 
 // Stops are the caller's already durable envelopes. Runner commits them before
 // starting workers; an unknown reply must retain exactly these original inputs.

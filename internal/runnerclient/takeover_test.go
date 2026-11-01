@@ -35,32 +35,13 @@ func fixtureResponse(t *testing.T, data any) {
 	t.Setenv("STEERLINE_CHECK_RESPONSE", string(raw))
 }
 
-func TestTakeoverPublicContractRejectsChangedIdentityAndUnsupportedState(t *testing.T) {
+func TestRetiredTakeoverCannotBeInvoked(t *testing.T) {
 	c := takeoverCLI(t)
-	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: c.StateDir, CandidateSHA256: c.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{ID: "run", Kind: "run", Revision: 7, InputDigest: "original", Status: "compatible"}}}
-	fixtureResponse(t, proof)
-	if _, err := c.VerifyTakeover(context.Background()); err != nil {
-		t.Fatal(err)
+	if _, err := c.Call(context.Background(), "service verify-takeover", nil, nil); err == nil {
+		t.Fatal("retired command admitted")
 	}
-	for _, change := range []string{"hash", "directory", "status", "duplicate", "contract"} {
-		bad := proof
-		bad.Items = append([]runnercontract.TakeoverItem(nil), proof.Items...)
-		switch change {
-		case "hash":
-			bad.CandidateSHA256 = strings.Repeat("a", 64)
-		case "directory":
-			bad.StateDir += "other"
-		case "status":
-			bad.Items[0].Status = "unsupported"
-		case "duplicate":
-			bad.Items = append(bad.Items, bad.Items[0])
-		case "contract":
-			bad.Contract = "unknown"
-		}
-		fixtureResponse(t, bad)
-		if _, err := c.VerifyTakeover(context.Background()); err == nil {
-			t.Fatalf("accepted %s", change)
-		}
+	if _, err := os.Stat(os.Getenv("STEERLINE_RUNNER_CLI_CALL")); !os.IsNotExist(err) {
+		t.Fatal("retired command invoked executable")
 	}
 }
 

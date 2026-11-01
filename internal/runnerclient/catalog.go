@@ -18,7 +18,16 @@ type OfflineInspectCapability struct {
 	WriterAbsent  bool   `json:"writer_absent"`
 	StartsWorkers *bool  `json:"starts_workers"`
 }
+type RecoveryCapability struct {
+	StateFormat          string `json:"state_format"`
+	SameBuildRestart     bool   `json:"same_build_restart"`
+	ResourceRebuild      bool   `json:"resource_rebuild"`
+	Upgrade              string `json:"upgrade"`
+	ManualReconciliation string `json:"manual_reconciliation"`
+}
+
 type Capabilities struct {
+	Recovery           *RecoveryCapability       `json:"recovery,omitempty"`
 	OfflineInspect     *OfflineInspectCapability `json:"offline_inspect,omitempty"`
 	Generate           *GenerateCapability       `json:"generate,omitempty"`
 	ResultFile         *ResultCapability         `json:"result_file,omitempty"`
@@ -83,7 +92,16 @@ func (noSchemaReads) Load(string) (any, error) {
 }
 
 func (c Client) Catalog(ctx context.Context, version Version) (*Catalog, error) {
-	response, err := c.Call(ctx, "capabilities", nil, nil)
+	return c.catalog(ctx, version, nil)
+}
+
+func (c Client) OfflineCatalog(ctx context.Context, version Version) (*Catalog, error) {
+	c.InstanceID = ""
+	return c.catalog(ctx, version, []string{"--offline"})
+}
+
+func (c Client) catalog(ctx context.Context, version Version, args []string) (*Catalog, error) {
+	response, err := c.Call(ctx, "capabilities", args, nil)
 	if err != nil {
 		return nil, err
 	}

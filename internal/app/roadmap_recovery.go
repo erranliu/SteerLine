@@ -7,7 +7,6 @@ import (
 
 	roadmapservice "github.com/erranliu/SteerLine/internal/roadmap"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
-	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -18,15 +17,6 @@ import (
 // projection; Roadmap inputs/results are never persisted in test generation tables.
 func roadmapBinding(r roadmap.Record) testmanagement.Generation {
 	return testmanagement.Generation{ID: r.ID, Project: r.Project, Revision: r.Revision, Runner: r.Runner, Request: r.Request, Submission: r.Submission, State: r.State, RunID: r.RunID, InputDigest: r.InputDigest, Projection: r.Projection, Cancelled: r.Cancelled, StopRequest: r.StopRequest, CreatedAt: r.CreatedAt}
-}
-func verifyRoadmapTakeover(r roadmap.Record, proof runnercontract.TakeoverReport) error {
-	if r.Submission == "pending" || r.State == "rejected" && r.RunID == "" {
-		return nil
-	}
-	if _, ok := generationTakeover(proof, roadmapBinding(r)); !ok {
-		return errors.New("原 Roadmap 解析 Run/输入与接管证明不同")
-	}
-	return nil
 }
 func prepareRoadmapStops(ctx context.Context, c *Config, store *sqlite.SQLiteStore, cli *runnerclient.Client) ([]runnercontract.PendingStop, error) {
 	rows, e := store.Roadmaps(ctx, c.Identity())
@@ -41,28 +31,28 @@ func prepareRoadmapStops(ctx context.Context, c *Config, store *sqlite.SQLiteSto
 		if r.Submission == "pending" || r.State == "rejected" && r.RunID == "" || r.ObservationComplete() {
 			continue
 		}
-		if runnerbinding.SameBuild(r.Runner, cli.BuildPin()) && !r.Cancelled {
-			continue
-		}
-		if cli.Takeover == nil {
-			proof, e := cli.VerifyTakeover(ctx)
-			if e != nil {
-				return nil, e
-			}
-			cli.Takeover = &proof
-		}
-		if !runnerbinding.Compatible(*cli.Takeover, cli.BuildPin()) {
-			return nil, errors.New("Roadmap 原生成接管不兼容")
-		}
-		if e = verifyRoadmapTakeover(r, *cli.Takeover); e != nil {
-			return nil, e
-		}
 		if !r.Cancelled || r.Projection != nil && r.Projection.StopStatus == "stopped" {
 			continue
 		}
-		item, _ := generationTakeover(*cli.Takeover, roadmapBinding(r))
+		view, cold, err := inspectOriginalBeforeStart(ctx, *cli, r.Runner.StateDir, r.RunID, r.InputDigest, r.Request)
+		if err != nil {
+			var failure *runnerclient.Failure
+			if cold && r.RunID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
+				r.State, r.Submission = "rejected", "rejected"
+				r.Revision++
+				if err := store.SaveRoadmap(ctx, r, r.Revision-1); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			return nil, err
+		}
+		run := view.Run
+		if run.Correlation["steerline_project"] != r.Project || run.Correlation["steerline_roadmap_parse"] != r.ID {
+			return nil, errors.New("original Roadmap correlation differs")
+		}
 		if r.StopRequest == nil || r.StopState == "rejected" {
-			body, _ := json.Marshal(map[string]uint64{"expected_revision": item.Revision})
+			body, _ := json.Marshal(map[string]uint64{"expected_revision": run.Revision})
 			r.StopRequest = &runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: roadmapservice.Token(), Input: body}
 			r.StopState = "unknown"
 			r.Revision++
@@ -70,7 +60,7 @@ func prepareRoadmapStops(ctx context.Context, c *Config, store *sqlite.SQLiteSto
 				return nil, e
 			}
 		}
-		pending = append(pending, runnercontract.PendingStop{RunID: item.ID, Request: *r.StopRequest})
+		pending = append(pending, runnercontract.PendingStop{RunID: run.RunID, Request: *r.StopRequest})
 	}
 	return pending, nil
 }

@@ -4,7 +4,7 @@
 
 ## 从源码更新
 
-需要同时构建 SteerLine、Web 和 Runner 时，双击根目录 `build-deploy-all.bat`。该入口复用 `build-deploy.bat` 并固定传入 `-UpdateRunner`，其余参数原样转交，默认完成构建、部署和启动；换 Runner 构建须通过原状态的兼容接管核验。
+需要同时构建 SteerLine、Web 和 Runner 时，双击根目录 `build-deploy-all.bat`。该入口复用 `build-deploy.bat` 并固定传入 `-UpdateRunner`，其余参数原样转交，默认完成构建、部署和启动；换 Runner 构建前须用原版本排空业务、原生资源和未完成控制；v7 与旧目录不兼容。
 
 双击 SteerLine 仓库根目录 `build-deploy.bat`。已有安装默认复用 `execution.json` 固定的 Runner EXE，只构建 SteerLine 和 Web；首次安装或显式 `-UpdateRunner` 才从相邻 `..\SteerRunner` 源码构建 Runner。构建成功后停止应用，校验停止或同构建重启资格，安装 EXE 并重新启动。每次记录保存在 `<home>\deployments\<时间-随机ID>\deployment.json`，最新记录为 `<home>\deployment.json`，包含源码版本和三个 EXE 的实际摘要。
 
@@ -15,7 +15,7 @@
 .\build-deploy.bat -NoPause
 # 只更新，不启动
 .\build-deploy.bat -NoStart -NoPause
-# 显式构建 Runner，并核验原状态是否允许接管
+# 显式构建 Runner；要求原版本先排空，新候选声明 v7 契约
 .\build-deploy-all.bat -NoPause
 # 覆盖源码位置或目标安装目录
 .\build-deploy.bat -RunnerRepo C:\Project\SteerRunner -InstallHome C:\SteerlineInstall -NoPause
@@ -29,7 +29,7 @@
 
 依赖成功标记位于 `web/node_modules/.steerline-install.json`。只有 package/锁文件、Node/npm、平台、有效 npm 配置及 npmrc 内容一致，npm 的隐藏安装锁摘要、其中的包目录和构建工具仍存在时才复用。安装失败不留成功标记；缺失或失效时重新执行 `npm ci`。这不是逐文件完整性校验；手工改坏某个依赖文件时使用 `-ForceWebInstall`。首次使用该机制也会安装一次。npm 配置仅在内存中参与哈希，计时报告不保存配置值或凭据。
 
-每个阶段打印执行/跳过、原因、耗时和失败状态；JSON 的总耗时是实际墙钟时间，并行阶段耗时不能直接相加。构建报告默认在源码 `bin/build-timings/<随机ID>.json`，部署报告在 `bin/deploy-timings/<随机ID>.json`；`-TimingPath <绝对路径>` 可指定当前入口的报告位置。部署包另保存 `build-timings.json` 和 `timings.json`，分别定位依赖检查/安装、前端、三个 Go 构建、接管预检、停机核验、安装、启动及 ready 等待。失败也写报告；早于构建锁或安装锁取得前的拒绝不保证生成报告。
+每个阶段打印执行/跳过、原因、耗时和失败状态；JSON 的总耗时是实际墙钟时间，并行阶段耗时不能直接相加。构建报告默认在源码 `bin/build-timings/<随机ID>.json`，部署报告在 `bin/deploy-timings/<随机ID>.json`；`-TimingPath <绝对路径>` 可指定当前入口的报告位置。部署包另保存 `build-timings.json` 和 `timings.json`，分别定位依赖检查/安装、前端、三个 Go 构建、升级预检、停机核验、安装、启动及 ready 等待。失败也写报告；早于构建锁或安装锁取得前的拒绝不保证生成报告。
 
 部署使用构建锁内生成的独立 `bin/deploy-builds/<随机ID>/` 快照，防止构建锁释放后另一调用改写源码 bin 中待部署的 EXE。这些目录只含构建产物，可在相关调用结束后手工清理。只验证构建而不部署时使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Web`；它同样支持 `-ForceWebInstall`、`-SerialBuild`、`-RunnerRepo` 和 `-TimingPath`，不会停止或更新安装版。
 
@@ -46,22 +46,21 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 
 ## 同构建更新与重启
 
-显示更新不要求终止原 Orca 执行。同构建重启核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、原构建/冻结配置/checkpoint/候选/检查绑定，保留资源未结算诊断。换 Runner 构建时，候选通过公开 `service verify-takeover` 核验原状态，部署另行证明原服务退出与本地关闭；原 Run、输入、PR 与交付事实保留，资源未结算诊断不改成成功。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。实施与验证见[兼容接管 Plan](../../SteerlineFlow/plans/service-generation-recovery.plan.md)。
+同构建重启可保留原后台执行，核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、冻结配置、checkpoint 和 Run/input；资源未结算诊断保持。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。原资源丢失时，Runner 返回 `blocked/manual_intervention_required`，由用户显式 resume 做有界原操作只读对账；不重建资源或自动重发输入。
 
-首次从尚未提供 `service verify-takeover` 的旧 Runner 更新时，在线预检会返回 `service_unavailable: The service query response is unavailable.`，随后部署报告 `Candidate cannot verify original Runner contracts`。此时尚未停服或替换文件。先在普通桌面终端正常停止安装版，再重新执行完整部署，使候选在原写锁释放后走已有的离线兼容核验：
+当前 Runner 使用 `steerrunner-state/v7`，已删除 `service verify-takeover --candidate`，不支持跨构建活动任务接管。部署在停服及替换之前调用 `verify-runner-upgrade --home <InstallHome>`，核验候选公开的离线 capabilities；换构建还须核实原服务已退出、公开 verify-stopped 资源结算以及每个原 Run 的业务终态。`pr_ready`、仅停止服务或资源仍未知均不足以升级。该预检不自动停止 Run、不迁移或清空数据，也不是持续持有的 writer lease。
+
+共享短目录以规范化 home 和固定 v7 身份派生，同一 home 的项目仍共用一个 Runner。旧 `runner-build.json` 指向其他命名空间时明确阻断，并保留原 EXE、配置、数据库、任务和原目录。先用原安装版本处理、停止并核实全部旧资源，再部署到一个全新的、与原安装分离的 InstallHome，例如：
 
 ```powershell
-$env:STEERLINE_HOME='C:\SteerlineInstall'
-& "$env:STEERLINE_HOME\bin\steerline.exe" stop
-if ($LASTEXITCODE -ne 0) { throw '原安装停服未核实，保留现场并检查诊断。' }
-.\build-deploy-all.bat -NoPause
+.\build-deploy-all.bat -InstallHome C:\SteerlineInstallV7 -NoPause
 ```
 
-不删除 pin 或数据库来跳过核验；离线报告不兼容时仍不替换。本机首次更新的实际处理见[2026-10-20 部署记录](../../SteerlineFlow/testing/acceptance/install-runner-takeover-20261020.md)。
+新 home 不复制旧执行状态；按正式项目/任务入口重新配置。不要删除 pin 或旧数据库来绕过检查。未来格式/执行契约兼容且已排空的构建可继续使用同一 v7 目录查询历史，历史 Run 的构建摘要仅用于来源记录，不作为逐 Run 操作权限门禁。本次代码适配不自动执行安装维护。
 
 Runner 兼容不代表 SteerLine 自身数据库 schema 兼容。项目若报告 `unsupported SQLite schema`，按项目默认规则使用当前格式的新状态；脚本不会自动迁移或清空旧库。用户明确授权清理时，可归档旧状态，再通过正式任务 validate/create 入口在新库创建所需任务定义和依赖，不能直接改 schema 编号冒充升级。
 
-系统重启或宿主被中断后，最新宿主可能没有停机回执，或 `shutdown.json` 仍属于上一实例。部署由 Go prepare-deployment 按 update 目标组织停止、verify-restart 及必要时一次受控恢复：核实原宿主/Web/Runner 已退出、启动身份、原安装三个 EXE 摘要、Runner pin、冻结配置/checkpoint/项目集合、实际锁及原记录的候选接管证据，再使用原安装运行至全部项目 ready，正常停服并重新执行完整 `verify-restart`。通常直接重跑部署即可，无须手工恢复原版本。
+系统重启或宿主被中断后，最新宿主可能没有停机回执，或 `shutdown.json` 仍属于上一实例。部署由 Go prepare-deployment 按 update 目标组织停止、verify-restart 及必要时一次受控恢复：核实原宿主/Web/Runner 已退出、启动身份、原安装三个 EXE 摘要、Runner pin、冻结配置/checkpoint/项目集合、实际锁及原 Run/input 的公开离线查询，再使用原安装运行至全部项目 ready，正常停服并重新执行完整 `verify-restart`。通常直接重跑部署即可，无须手工恢复原版本。
 
 恢复全过程持有启动协调锁；不强杀、清库、改写原 Run/输入/PR 或循环重试。匹配当前实例的失败回执、未知创建、活动服务、文件/配置/身份变化或不兼容仍阻断替换。`resources_settled=false` 保持原事实，旧宿主、旧回执及旧 Runner 诊断随新的 `shutdown-verification.json` 保存。仅允许重启的部署路径使用此恢复，严格资源销毁路径不放宽。实现与隔离验证见[自动恢复验收](../../SteerlineFlow/testing/acceptance/deployment-interrupted-recovery.md)；此前人工恢复的现场证据见[2026-10-21 维护记录](../../SteerlineFlow/testing/acceptance/install-shutdown-recovery-20261021.md)。
 

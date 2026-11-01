@@ -19,20 +19,3 @@ func TestTakeoverWireIdentity(t *testing.T) {
 		t.Fatal("duplicate original stop admitted")
 	}
 }
-
-func TestTakeoverRequestDigestPreservesOriginalEnvelope(t *testing.T) {
-	r := Request{Protocol: "steerrunner-cli/v1", RequestID: "original", Input: json.RawMessage(`{"title":"original","n":1234567890123456789}`)}
-	digest := RequestDigest("submit", "", r)
-	r.Input = json.RawMessage(`{ "n":1234567890123456789, "title":"original" }`)
-	if digest == "" || RequestDigest("submit", "", r) != digest {
-		t.Fatal("canonical equivalent input changed digest")
-	}
-	r.Input = json.RawMessage(`{"title":"original","n":1234567890123456790}`)
-	if RequestDigest("submit", "", r) == digest {
-		t.Fatal("JSON number precision lost")
-	}
-	r.Input = json.RawMessage(`{"title":"original","n":1234567890123456789}`)
-	if RequestDigest("resume", "", r) == digest || RequestDigest("submit", "other", r) == digest {
-		t.Fatal("command/target identity lost")
-	}
-}

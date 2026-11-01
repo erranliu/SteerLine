@@ -80,32 +80,28 @@ try {
     if ((Get-DeploymentRunnerSelection $fixtureRoot $true).Reuse) { throw 'Explicit Runner build was ignored.' }
     New-Item -ItemType Directory -Path (Join-Path $fixtureRoot 'application-api') | Out-Null
     @{sha256=$hash} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureRoot 'application-api\runner-build.json') -Encoding UTF8
-    Assert-DeploymentRunnerBuild $fixtureRoot $hash
-    $failed = $false
-    try { Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) } catch { $failed = $true }
-    if (-not $failed) { throw 'A new Runner build was allowed to replace an existing runtime.' }
-    $script:takeoverDir = Join-Path $fixtureRoot 'original-runner-state'
-    $script:takeoverFail = $false
-    $script:takeoverWrongTarget = $false
-    $script:takeoverCalls = 0
-    function Invoke-TakeoverFixture {
-        $script:takeoverCalls++
-        $expected = 'verify-runner-takeover|--runner-exe|staged-runner|--runner-sha256|'+('a'*64)+'|--state-dir|'+$script:takeoverDir+'|--json'
-        if (($args -join '|') -ne $expected) { throw 'Online preflight did not delegate to the staged Go verifier with original binding.' }
-        $global:LASTEXITCODE = [int]$script:takeoverFail
-        if ($script:takeoverFail) { return }
-        $sha = if ($script:takeoverWrongTarget) { 'foreign' } else { 'a'*64 }
-        @{candidate_sha256=$sha;state_dir=$script:takeoverDir;contract='steerrunner-takeover/v1';compatible=$true;items=@()} | ConvertTo-Json -Compress
+    $script:upgradeDir = Join-Path $fixtureRoot 'original-runner-state'
+    $script:upgradeFail = $false
+    $script:upgradeWrongTarget = $false
+    $script:upgradeCalls = 0
+    function Invoke-UpgradeFixture {
+        $script:upgradeCalls++
+        $expected = 'verify-runner-upgrade|--home|'+$fixtureRoot+'|--runner-exe|staged-runner|--runner-sha256|'+('a'*64)+'|--json'
+        if (($args -join '|') -ne $expected) { throw 'Upgrade preflight did not delegate to the staged Go verifier with original binding.' }
+        $global:LASTEXITCODE = [int]$script:upgradeFail
+        if ($script:upgradeFail) { return }
+        $sha = if ($script:upgradeWrongTarget) { 'foreign' } else { 'a'*64 }
+        @{candidate_sha256=$sha;state_dir=$script:upgradeDir;home=$fixtureRoot;contract='steerline-runner-upgrade/v1';state_format='steerrunner-state/v7'} | ConvertTo-Json -Compress
     }
-    @{sha256=$hash;state_dir=$script:takeoverDir} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureRoot 'application-api\runner-build.json') -Encoding UTF8
-    $proof = Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) 'staged-runner' 'Invoke-TakeoverFixture'
-    if ($proof.candidate_sha256 -ne ('a'*64) -or $script:takeoverCalls -ne 1) { throw 'Online preflight did not consume Go proof.' }
+    @{sha256=$hash;state_dir=$script:upgradeDir} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $fixtureRoot 'application-api\runner-build.json') -Encoding UTF8
+    $proof = Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) 'staged-runner' 'Invoke-UpgradeFixture'
+    if ($proof.candidate_sha256 -ne ('a'*64) -or $script:upgradeCalls -ne 1) { throw 'Upgrade preflight did not consume Go proof.' }
     foreach ($rejection in @('failure','foreign')) {
-        $script:takeoverFail = $rejection -eq 'failure'
-        $script:takeoverWrongTarget = $rejection -eq 'foreign'
+        $script:upgradeFail = $rejection -eq 'failure'
+        $script:upgradeWrongTarget = $rejection -eq 'foreign'
         $failed = $false
-        try { Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) 'staged-runner' 'Invoke-TakeoverFixture' } catch { $failed = $true }
-        if (-not $failed) { throw "Online preflight accepted $rejection result." }
+        try { Assert-DeploymentRunnerBuild $fixtureRoot ('a'*64) 'staged-runner' 'Invoke-UpgradeFixture' } catch { $failed = $true }
+        if (-not $failed) { throw "Upgrade preflight accepted $rejection result." }
     }
     if ((Get-FileHash -LiteralPath $runner -Algorithm SHA256).Hash -ne $hash) { throw 'Preflight replaced the installed fixture.' }
     [IO.File]::WriteAllText($runner, 'different bytes')
@@ -118,4 +114,4 @@ try {
     if (-not $resolved.StartsWith($expectedPrefix,[StringComparison]::OrdinalIgnoreCase)) { throw 'Test cleanup escaped its temporary fixture root.' }
     Remove-Item -LiteralPath $resolved -Recurse -Force
 }
-Write-Output 'Passed: one Go preparation call, invocation/package binding, pinned Runner reuse, and takeover preflight gates.'
+Write-Output 'Passed: one Go preparation call, invocation/package binding, pinned Runner reuse, and upgrade preflight gates.'

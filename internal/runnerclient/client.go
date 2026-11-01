@@ -45,7 +45,6 @@ func (f *Failure) Error() string { return f.Code + ": " + f.Message }
 
 type Client struct {
 	executionWaitSchema   *jsonschema.Schema
-	Takeover              *runnercontract.TakeoverReport
 	InstanceID            string
 	BuildVersion          string
 	ResourceDigest        string
@@ -103,7 +102,7 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 	}
 	argv := []string{}
 	switch command {
-	case "service start", "service status", "service stop", "service verify-stopped", "service verify-takeover":
+	case "service start", "service status", "service stop", "service verify-stopped":
 		argv = append(argv, "service", command[len("service "):])
 	case "result-file", "progress-file", "version", "capabilities", "submit", "inspect", "observe", "last-message", "open-native-session", "events", "reply", "resume", "stop", "run-usage", "estimate-run-cost":
 		argv = append(argv, command)
@@ -118,7 +117,7 @@ func (c Client) call(ctx context.Context, command string, args []string, input *
 	}
 	argv = append(argv, args...)
 	argv = append(argv, "--json", "--protocol", Protocol)
-	if command != "version" {
+	if command != "version" && !(command == "capabilities" && len(args) == 1 && args[0] == "--offline") {
 		argv = append(argv, "--state-dir", c.StateDir)
 	}
 	var body []byte

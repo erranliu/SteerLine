@@ -18,18 +18,9 @@ function Get-DeploymentRunnerSelection([string]$InstallDirectory, [bool]$UpdateR
 }
 
 function Assert-DeploymentRunnerBuild([string]$InstallDirectory, [string]$SHA256, [string]$CandidateExecutable, [string]$VerifierCLI) {
-    $path = Join-Path $InstallDirectory 'application-api\runner-build.json'
-    if (Test-Path -LiteralPath $path) {
-        $pin = Get-Content -LiteralPath $path -Raw -Encoding UTF8 | ConvertFrom-Json -ErrorAction Stop
-        if (-not $pin.sha256 -or $pin.sha256 -ne $SHA256) {
-            if (-not $pin.sha256 -or -not $pin.state_dir -or -not [IO.Path]::IsPathRooted($pin.state_dir) -or -not $CandidateExecutable -or -not $VerifierCLI) { throw 'Runner build change requires original state binding and candidate takeover evidence; no installed service or file was changed.' }
-            $raw = & $VerifierCLI verify-runner-takeover --runner-exe $CandidateExecutable --runner-sha256 $SHA256 --state-dir $pin.state_dir --json
-            if ($LASTEXITCODE -ne 0) { throw 'Candidate cannot verify original Runner contracts; installed service and files were preserved.' }
-            $proof = $raw | ConvertFrom-Json -ErrorAction Stop
-            # Go validates the public report and every item. Only bind the
-            # returned result to this staged invocation here.
-            if ($null -eq $proof -or $proof.candidate_sha256 -ne $SHA256 -or $proof.state_dir -ne $pin.state_dir) { throw 'Candidate takeover result differs from the staged invocation; installed service and files were preserved.' }
-            return $proof
-        }
-    }
+    $raw = & $VerifierCLI verify-runner-upgrade --home $InstallDirectory --runner-exe $CandidateExecutable --runner-sha256 $SHA256 --json
+    if ($LASTEXITCODE -ne 0) { throw 'Runner upgrade preflight failed; installed service and files were preserved. Drain the original installation first; v7 requires a fresh InstallHome for old state.' }
+    $proof = $raw | ConvertFrom-Json -ErrorAction Stop
+    if ($null -eq $proof -or $proof.contract -ne 'steerline-runner-upgrade/v1' -or $proof.home -ne $InstallDirectory -or $proof.candidate_sha256 -ne $SHA256 -or $proof.state_format -ne 'steerrunner-state/v7' -or -not [IO.Path]::IsPathRooted($proof.state_dir)) { throw 'Runner upgrade result differs from the staged invocation; installed service and files were preserved.' }
+    return $proof
 }

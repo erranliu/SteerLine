@@ -41,11 +41,6 @@ func RunRunnerServiceFixture() bool {
 		_ = json.NewDecoder(os.Stdin).Decode(&request)
 	}
 	switch command {
-	case "service verify-takeover":
-		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-takeover-fixture.json"))
-		if err != nil || json.Unmarshal(raw, &data) != nil {
-			panic("missing public takeover fixture")
-		}
 	case "service verify-stopped":
 		var info map[string]any
 		raw, err := os.ReadFile(filepath.Join(stateDir, "idle-fixture.json"))
@@ -88,6 +83,27 @@ func RunRunnerServiceFixture() bool {
 		var inspection map[string]any
 		if json.Unmarshal(raw, &inspection) != nil {
 			panic("invalid public Run fixture")
+		}
+		if body, err := os.ReadFile(filepath.Join(stateDir, "idle-inspections-fixture.json")); err == nil {
+			var entries map[string]map[string]any
+			if json.Unmarshal(body, &entries) != nil {
+				panic("invalid inspection fixtures")
+			}
+			key := ""
+			for i, arg := range args {
+				if (arg == "--run-id" || arg == "--request-id") && i+1 < len(args) {
+					key = args[i+1]
+				}
+			}
+			selected, ok := entries[key]
+			if !ok {
+				selected = map[string]any{"fixture_error": "request_not_found"}
+			}
+			inspection = selected
+		}
+		if code, ok := inspection["fixture_error"].(string); ok {
+			_ = json.NewEncoder(os.Stdout).Encode(map[string]any{"protocol": "steerrunner-cli/v1", "ok": false, "request_id": nil, "data": nil, "error": map[string]string{"code": code, "message": "public inspection fixture"}})
+			os.Exit(5)
 		}
 		data = inspection
 		if command == "events" {
@@ -192,6 +208,7 @@ func RunRunnerServiceFixture() bool {
 func RunnerServiceCapabilities(version string) map[string]any {
 	digest := strings.Repeat("a", 64)
 	return map[string]any{"protocol": "steerrunner-cli/v1", "version": version, "resource_version": 1, "resource_digest": digest,
+		"recovery":              map[string]any{"state_format": "steerrunner-state/v7", "same_build_restart": true, "resource_rebuild": false, "upgrade": "drain original resources and controls"},
 		"execution_wait":        RunnerExecutionWaitCapability(),
 		"progress_file":         map[string]any{"contract": "steerrunner-progress-file/v1", "command": "progress-file --run-id R --json", "submit_property": "progress_file", "environment_variable": "STEERLINE_PROGRESS_FILE", "max_bytes": 65536, "encoding": "base64", "digest": "sha256"},
 		"progress_file_schema":  map[string]any{"$id": "steerrunner-progress-file/v1", "type": "object", "required": []string{"contract", "run_id", "version", "encoding", "size_bytes", "collection_status"}, "properties": map[string]any{"contract": map[string]any{"const": "steerrunner-progress-file/v1"}, "run_id": map[string]any{"type": "string"}, "version": map[string]any{"type": "integer"}, "encoding": map[string]any{"const": "base64"}, "size_bytes": map[string]any{"type": "integer"}, "collection_status": map[string]any{"type": "string"}}},

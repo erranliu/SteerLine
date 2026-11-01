@@ -10,10 +10,10 @@ import (
 	"time"
 
 	host "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
@@ -31,7 +31,7 @@ func (d *ApplicationDirectory) prepareRunnerStops(ctx context.Context, cli *runn
 	}
 	preparedProjects := make([]prepared, len(d.entries))
 	// Projects have passed the common-dir/run-dir conflict census. Only their
-	// local preparation runs concurrently; takeover and stop outbox decisions
+	// local preparation runs concurrently; stop outbox decisions
 	// below still use one original Runner client in deterministic project order.
 	slots := make(chan struct{}, 2)
 	var wg sync.WaitGroup
@@ -164,53 +164,42 @@ func collectProjectRunnerStops(ctx context.Context, c *Config, store *sqlite.SQL
 	if err != nil {
 		return nil, err
 	}
-	need := false
-	for _, candidate := range snapshot.Candidates {
-		if !runnerbinding.SameBuild(candidate.RunnerBuild, cli.BuildPin()) || candidate.StopRequested && !candidate.InputsRevoked {
-			need = true
-		}
+	candidateStops, err := prepareCandidateStops(ctx, snapshot.Candidates, store, *cli)
+	if err != nil {
+		return nil, err
 	}
-	if !need {
-		return generationStops, nil
-	}
-	if cli.Takeover == nil {
-		proof, err := cli.VerifyTakeover(ctx)
-		if err != nil {
-			return nil, err
-		}
-		cli.Takeover = &proof
-	}
-	if !runnerbinding.Compatible(*cli.Takeover, cli.BuildPin()) {
-		return nil, errors.New("original Runner state is incompatible")
-	}
-	pending := generationStops
+	return append(generationStops, candidateStops...), nil
+}
+
+func prepareCandidateStops(ctx context.Context, candidates []runnerstate.Candidate, store runnerbridge.Store, cli runnerclient.Client) ([]runnercontract.PendingStop, error) {
+	var pending []runnercontract.PendingStop
 	bridge := &runnerbridge.Bridge{Store: store}
-	for _, candidate := range snapshot.Candidates {
+	for _, candidate := range candidates {
 		if canonicalPath(candidate.StateDir) != canonicalPath(cli.StateDir) {
 			return nil, errors.New("candidate Runner directory changed")
-		}
-		item, bound := runnerbinding.Candidate(*cli.Takeover, candidate)
-		if candidate.RunID != "" && !bound {
-			return nil, errors.New("original candidate is absent or input digest differs from takeover proof")
 		}
 		if !candidate.StopRequested || candidate.InputsRevoked {
 			continue
 		}
-		if !bound {
-			if candidate.SubmitState == "pending" || candidate.SubmitState == "rejected" || candidate.SubmitState == "cancelled" {
+		if candidate.RunID == "" && (candidate.SubmitState == "pending" || candidate.SubmitState == "rejected" || candidate.SubmitState == "cancelled") {
+			continue
+		}
+		view, cold, err := inspectOriginalBeforeStart(ctx, cli, candidate.StateDir, candidate.RunID, candidate.InputDigest, candidate.Submit)
+		if err != nil {
+			var failure *runnerclient.Failure
+			if cold && candidate.RunID == "" && errors.As(err, &failure) && failure.Code == "request_not_found" {
+				if err := bridge.RecoverInputs(ctx, candidate.Project, candidate.ID); err != nil {
+					return nil, err
+				}
 				continue
 			}
-			// A request not present in the complete offline command projection
-			// stays observe-only. Starting workers cannot create its absent Run.
-			if candidate.RunID == "" {
-				continue
-			}
-			return nil, errors.New("original cancellation target is unverified")
+			return nil, err
 		}
-		if item.Status != "compatible" {
-			return nil, errors.New("read-only original Run cannot accept its pending stop")
+		run := view.Run
+		if project := run.Correlation["steerline_project"]; project != "" && project != candidate.Project {
+			return nil, errors.New("candidate belongs to another project")
 		}
-		stop, err := bridge.PrepareStartupStop(ctx, candidate, item.ID, item.Revision)
+		stop, err := bridge.PrepareStartupStop(ctx, candidate, run.RunID, run.Revision)
 		if err != nil {
 			return nil, err
 		}

@@ -3,84 +3,16 @@ package app
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/erranliu/SteerLine/internal/hostcontract"
-	"github.com/erranliu/SteerLine/internal/runnerbinding"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
-	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 )
-
-func TestSharedRunnerCompatibleBuildUsesPublicPreflight(t *testing.T) {
-	c, _ := nativeTaskFixture(t)
-	t.Setenv("STEERLINE_TEST_RUNNER_SERVICE_VERSION", "unit-fixture")
-	ctx := context.Background()
-	cli, _, err := c.RunnerExecution.Runner.Open(ctx, runnerstatepath.Directory(c.runnerHome()), 5*time.Second)
-	require(t, err)
-	old := cli.BuildPin()
-	old.SHA256 = strings.Repeat("b", 64)
-	old.Version = "original"
-	old.ResourceDigest = strings.Repeat("c", 64)
-	require(t, bindApplicationRunnerBuild(c.runnerHome(), old))
-	require(t, runnerstatepath.Prepare(c.runnerHome()))
-	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{}}
-	require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-takeover-fixture.json"), mustJSON(proof), 0600))
-	var owner applicationRunner
-	require(t, owner.start(ctx, c.RunnerExecution, c.runnerHome(), 5*time.Second))
-	defer owner.shutdown(ctx)
-	if owner.client.Takeover == nil || owner.client.SHA256 != cli.SHA256 || owner.info.ExecutableSHA256 != cli.SHA256 {
-		t.Fatal("compatible candidate was not bound to current service")
-	}
-	var current runnercontract.BuildPin
-	raw, err := os.ReadFile(filepath.Join(c.runnerHome(), "application-api", "runner-build.json"))
-	require(t, err)
-	require(t, json.Unmarshal(raw, &current))
-	if !runnerbinding.SameBuild(current, cli.BuildPin()) {
-		t.Fatal("current service pin was not updated")
-	}
-}
-
-func TestTakeoverKeepsFrozenCandidatesAndRequiresOriginalRequestDigest(t *testing.T) {
-	home := t.TempDir()
-	old := runnercontract.BuildPin{Executable: filepath.Join(home, "old.exe"), StateDir: runnerstatepath.Directory(home), SHA256: strings.Repeat("a", 64), Version: "original", ResourceDigest: strings.Repeat("b", 64)}
-	current := old
-	current.SHA256 = strings.Repeat("c", 64)
-	current.Version = "candidate"
-	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: current.StateDir, CandidateSHA256: current.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{ID: "original-run", Kind: "run", Revision: 7, InputDigest: "original-input", Status: "compatible"}}}
-	candidate := runnerstate.Candidate{ID: "candidate", StateDir: old.StateDir, RunnerBuild: old, RunID: "original-run", InputDigest: "original-input", PRURL: "https://example.invalid/pr/1", StopRequested: true}
-	before := mustJSON(candidate)
-	c := Config{executionPath: filepath.Join(home, "execution.json")}
-	c.RunnerExecution.Runner = runnerclient.Selection{Executable: current.Executable, Version: current.Version, SHA256: current.SHA256}
-	cp := &hostcontract.ServiceCheckpoint{Service: hostcontract.ServiceState{RunnerBuild: &current}}
-	require(t, matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, current, &proof))
-	if !bytes.Equal(before, mustJSON(candidate)) {
-		t.Fatal("takeover rewrote original build or PR/stop facts")
-	}
-	proof.Items[0].InputDigest = "foreign"
-	if matchRestartBindings(c, cp, []runnerstate.Candidate{candidate}, current, &proof) == nil {
-		t.Fatal("foreign input accepted")
-	}
-	unknown := candidate
-	unknown.RunID = ""
-	unknown.InputDigest = ""
-	unknown.Submit = runnercontract.Request{Protocol: runnerclient.Protocol, RequestID: "lost-submit", Input: json.RawMessage(`{"title":"original","n":1234567890123456789}`)}
-	proof.Items[0].RequestID = unknown.Submit.RequestID
-	proof.Items[0].RequestDigest = runnercontract.RequestDigest("submit", "", unknown.Submit)
-	if _, ok := runnerbinding.Candidate(proof, unknown); !ok {
-		t.Fatal("lost response could not correlate original accepted request")
-	}
-	unknown.Submit.Input = json.RawMessage(`{"title":"replacement","n":1234567890123456789}`)
-	if _, ok := runnerbinding.Candidate(proof, unknown); ok {
-		t.Fatal("changed envelope correlated by ID alone")
-	}
-}
 
 func TestStartupCancellationOutboxIsDurableBeforeRunnerStart(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
@@ -105,8 +37,8 @@ func TestStartupCancellationOutboxIsDurableBeforeRunnerStart(t *testing.T) {
 	require(t, store.Close())
 	cli := r.runner.client
 	cli.InstanceID = ""
-	proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{ID: candidate.RunID, Kind: "run", Revision: 7, InputDigest: candidate.InputDigest, Status: "compatible"}}}
-	cli.Takeover = &proof
+	view := runnercontract.Run{RunID: candidate.RunID, InputDigest: candidate.InputDigest, Revision: 7}
+	writeStartupInspection(t, cli, view, candidate.Submit.RequestID)
 	stops, err := prepareProjectRunnerStops(ctx, &c, &cli)
 	require(t, err)
 	if len(stops) != 1 || stops[0].RunID != candidate.RunID || string(stops[0].Request.Input) != `{"expected_revision":7}` {
@@ -129,5 +61,48 @@ func TestStartupCancellationOutboxIsDurableBeforeRunnerStart(t *testing.T) {
 	require(t, err)
 	if info.Status != "not_running" {
 		t.Fatal("outbox preparation started Runner")
+	}
+}
+
+type startupCandidateStore struct{ value runnerstate.Candidate }
+
+func (s *startupCandidateStore) Candidate(context.Context, string, string) (runnerstate.Candidate, error) {
+	return s.value, nil
+}
+func (s *startupCandidateStore) SaveCandidate(_ context.Context, c runnerstate.Candidate, expected uint64, _ []runnercontract.Event) error {
+	if expected != s.value.Revision {
+		return errors.New("stale candidate")
+	}
+	s.value = c
+	return nil
+}
+
+func TestStartupCancelledCandidateColdAbsenceNeverResubmits(t *testing.T) {
+	for _, cold := range []bool{true, false} {
+		t.Run(map[bool]string{true: "cold", false: "online"}[cold], func(t *testing.T) {
+			cli := startupFixtureCLI(t)
+			if !cold {
+				cli.ResourceDigest = strings.Repeat("a", 64)
+				require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-fixture.json"), mustJSON(runnerclient.ServiceInfo{Protocol: runnerclient.Protocol, StateDir: cli.StateDir, Status: "ready", InstanceID: "original", Version: cli.BuildVersion, ResourceDigest: cli.ResourceDigest, ExecutableSHA256: cli.SHA256}), 0600))
+			}
+			require(t, os.WriteFile(filepath.Join(cli.StateDir, "idle-run-fixture.json"), []byte(`{"fixture_error":"request_not_found"}`), 0600))
+			c := runnerstate.Candidate{ID: "candidate", Project: "project", Revision: 1, RunnerBuild: cli.BuildPin(), StateDir: cli.StateDir, SubmitState: "unknown", StopRequested: true, Submit: runnercontract.Request{Protocol: runnerclient.Protocol, RequestID: "original-submit"}}
+			s := &startupCandidateStore{value: c}
+			stops, err := prepareCandidateStops(context.Background(), []runnerstate.Candidate{c}, s, cli)
+			if cold {
+				require(t, err)
+				if !s.value.SubmitObserveOnly || s.value.SubmitState != "unknown" {
+					t.Fatal("cold missing submit regained dispatch authority", s.value)
+				}
+			} else if err == nil || s.value.Revision != c.Revision {
+				t.Fatal("online missing request was treated as final absence", err)
+			}
+			if len(stops) != 0 || s.value.RunID != "" || s.value.Submit.RequestID != c.Submit.RequestID {
+				t.Fatal("missing submit created Run/stop or changed original identity", stops, s.value)
+			}
+			if _, err := os.Stat(filepath.Join(cli.StateDir, "business-dispatch.log")); !os.IsNotExist(err) {
+				t.Fatal("pre-start inspection dispatched business")
+			}
+		})
 	}
 }
