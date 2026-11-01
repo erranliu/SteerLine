@@ -1,6 +1,6 @@
 # 项目环境接口适配指导
 
-2026-11-01 边界重修稿，**用户已授权实施，调用能力核实中**。以[环境 Spec](../SteerlineFlow/spec/project-environment-workflow.spec.md)及[Plan](../SteerlineFlow/plans/project-environment-workflow.plan.md)为准；现有程序及 PR #417 仍按旧协议运行。本稿不代表新调用接口已可用。整个项目初始化适配功能未实现，日常环境检测不负责生成或复核项目材料。
+本文说明 manifest 4 / result 3 的项目环境接口；契约以[环境 Spec](../SteerlineFlow/spec/project-environment-workflow.spec.md)为准，实施与实测范围见[验收记录](../SteerlineFlow/testing/acceptance/project-environment-workflow.md)。使用前核实实际部署的 SteerLine/Runner 支持该接口，不将源码或单一目标验收外推到其他安装/执行链。自动项目初始化适配功能未实现；当前仓库准备与自检步骤见[项目初始化指南](project-initialization.md)，日常环境检测不负责生成或复核项目材料。
 
 ## 两级职责
 
