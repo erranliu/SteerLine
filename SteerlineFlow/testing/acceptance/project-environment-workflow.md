@@ -192,3 +192,12 @@ admission-proof.json记录before_rejected=true、after_run_id=39a46de4fa7cc5dd42
 本范围 diagnostics/core-02、core-03、protocol-04、storage-02、app-02、app-03、source-bounds-01、contracts-final-01、catalogue-01 均通过，分别覆盖领域生命周期、协议同源、持久化不可变、自定义来源、冷启动 gaps、旧失效材料调查、真实源码限额及路由。默认固定 L1/01、L2/01 通过，L2 清理完成；web-02 完整构建/客户端/HTTP及 browser-01 两场景通过，补充环境界面16项通过。最终新增自定义目录受控场景及真实 G/V 尚在推进，完成后另记。
 
 原失败完整保留：core-01/app-01 为未同步入口/检查集合的旧夹具，prompts-01 为本地写入 CRLF 触发正文摘要，e2e-owners-01 为 driver DTO 与内部快照字段错配，storage-01 为旧报告/验证器夹具未声明入口；均修对应来源/夹具后在新目录验证。web-01 发现 unknown 条件渲染不能作为 ReactNode，显式判断非空后完整 web-02 通过。e2e-owners-02 的两项目维护查询超时，其他 owner 通过；最终协议守卫版本 isolation-03 定向复验146.237秒通过，未延长期限或改写原失败，原超时的唯一根因未确认。
+
+
+补充工程收口：实现固定为 e6a5bb20751915e94995942396fc3b7d57c81ab6；最终两个测试夹具修复为 ca944cd868ca195cbd42c46144e8533ca1fd5999、0087b2cf（完整提交可由 Git 解析）。L1/02、L2/02 在干净实现提交运行且通过，L2 清理完整。Web 最终 web-04 的31文件/229用例、构建和HTTP通过；web-03 曾因已有用例在异步历史返回前立即查询停止按钮而失败，改 await findByRole 等待原内容，原停止命令/禁用和副作用断言不变；补充独立审阅通过。
+
+L3/readiness-01 默认目录闭环通过；readiness-02 因夹具未使用导入编译失败；readiness-03 在自定义目录下揭出 scriptedEnvironment 仍读旧固定清单，原启动结果未知并最终超时，原失败和清理保持。ca944cd8 将该模拟端改为同一 BaseRevision 的入口/清单读取，不提供回退，独立批准后 L3/readiness-04 两项目/自定义目录生成、采用、完整受控验收、候选准入、失效隔离及全部清理通过，未延长预算。模拟证据不声明原生环境或真实 PR。
+
+另补充 diagnostics/e2e-final-01 共25项原始证据/真实夹具 owner 通过。移除 context 步骤后，真实 G 的采用夹具仍假定输出父目录已存在；0087b2cf 仅在校验目标及 manifest 后为原字节落盘创建独立 clone 内本键目录，已独立批准，不修改模型输出/标准。已启动的旧编译 G 轮次保持原结果，修复版本另目录复验。
+
+本范围 L4/generation-01：首个本机原生内容结果通过格式/来源/目标/投影校验，之后旧编译夹具在新目录落盘失败；停止及 Runner 清理 confirmed=true，原生成/请求/输出完整保留。未执行远端生成或本机验收，不记 G 完整通过。采用0087b2cf修复后新目录重新测试，不手改原生成字节。
