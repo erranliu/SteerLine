@@ -11,6 +11,7 @@ import (
 	"time"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
+	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
 )
@@ -34,7 +35,14 @@ func scriptedEnvironment(input runnercontract.RunInput, run *runnercontract.Run)
 	if err = json.Unmarshal(initial, &report); err != nil {
 		return runnercontract.ResultFile{}, err
 	}
-	raw, err := Git(context.Background(), input.Repository.LocalPath, "show", input.Repository.BaseRevision+":"+testmanagement.CataloguePath)
+	entry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) {
+		text, err := Git(context.Background(), input.Repository.LocalPath, "show", input.Repository.BaseRevision+":"+path)
+		return []byte(text), err
+	})
+	if err != nil {
+		return runnercontract.ResultFile{}, err
+	}
+	raw, err := Git(context.Background(), input.Repository.LocalPath, "show", input.Repository.BaseRevision+":"+entry.TestingCatalogue)
 	if err != nil {
 		return runnercontract.ResultFile{}, err
 	}
