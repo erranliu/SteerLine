@@ -618,3 +618,28 @@ func (s *pmsStore) SaveGenerationBatch(_ context.Context, _ string, b pm.Generat
 	s.batch = b
 	return nil
 }
+
+func TestPMSGenerationSharesPinnedReadCacheWithoutCrossRequestReuse(t *testing.T) {
+	m, _, _ := pmsFixture(t)
+	ctx := materialReads(context.Background())
+	commit := pmGit(t, m.config.Repository, "rev-parse", "HEAD")
+	path := "SteerlineFlow/testing.md"
+	expected, err := m.read(ctx, commit, path)
+	require(t, err)
+	c := m.config
+	c.runtimeMaintenance = m
+	c.Git.Executable = filepath.Join(t.TempDir(), "unavailable-git.exe")
+	m.config.Git = c.Git
+	port := newTestManagementPort(c, nil, runnerclient.Client{}, nil)
+	got, err := port.service.ReadCommitted(ctx, commit, path)
+	require(t, err)
+	if string(got) != string(expected) {
+		t.Fatal("generation reread or changed pinned policy")
+	}
+	if _, err := port.service.ReadCommitted(materialReads(context.Background()), commit, path); err == nil {
+		t.Fatal("immutable cache leaked into another request")
+	}
+	if _, err := port.service.ReadCommitted(ctx, strings.Repeat("f", 40), path); err == nil {
+		t.Fatal("cache replaced another source commit")
+	}
+}
