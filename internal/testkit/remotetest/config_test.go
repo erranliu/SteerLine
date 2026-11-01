@@ -13,6 +13,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
+	progresstools "github.com/erranliu/SteerLine/tools"
 )
 
 func profileFixture(t *testing.T) (string, executionconfig.Profile) {
@@ -100,9 +102,13 @@ func projectFixture(t *testing.T, execution runnercontract.ExecutionInput) (stri
 	if err != nil {
 		t.Fatal(err)
 	}
+	testingRules, err := prompts.TestingRules()
+	if err != nil {
+		t.Fatal(err)
+	}
 	key, _ := env.Key(execution)
 	manifest, _ := json.Marshal(env.Manifest{Version: 3, RequiredChecks: []string{}, Gaps: []string{}, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
-	for path, body := range map[string]string{"SteerlineFlow/environment-project.json": `{"version":1,"requirements":[],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, "SteerlineFlow/environment-execution.md": string(rules), env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
+	for path, body := range map[string]string{tm.ProtocolPath: string(testingRules), tm.WriterPath: progresstools.PowerShellWriter, "SteerlineFlow/environment-project.json": `{"version":1,"requirements":[],"testing_catalogue":"SteerlineFlow/testing/test-list.json"}`, "SteerlineFlow/environment-execution.md": string(rules), env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		if e := os.MkdirAll(filepath.Dir(full), 0700); e != nil {
 			t.Fatal(e)
@@ -250,5 +256,34 @@ func TestLocalEnvironmentL4RejectsUnknownAndAmbiguousL2Verifiers(t *testing.T) {
 	format, err = environmentL2Verification(show)
 	if err != nil || format != "managed-powershell" {
 		t.Fatal(format, err)
+	}
+}
+
+func TestEnvironmentL4RejectsStaleAdmissionMaterialsBeforeFixture(t *testing.T) {
+	for _, path := range []string{tm.ProtocolPath, tm.WriterPath} {
+		t.Run(path, func(t *testing.T) {
+			profilePath, profile := profileFixture(t)
+			raw, _ := json.Marshal(profile)
+			if err := os.WriteFile(profilePath, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			repo, _ := projectFixture(t, profile.Execution)
+			if err := os.WriteFile(filepath.Join(repo, path), []byte("old fixed material"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for _, args := range [][]string{{"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "stale material"}} {
+				if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+					t.Fatal(err, string(out))
+				}
+			}
+			commit, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+			if err != nil {
+				t.Fatal(err)
+			}
+			vars := map[string]string{"STEERLINE_L4_REMOTE_PROFILE": profilePath, "STEERLINE_PROGRESS_PROJECT": repo, "STEERLINE_PROGRESS_COMMIT": strings.TrimSpace(string(commit)), "STEERLINE_L4_ROUND_TIMEOUT_SECONDS": "900"}
+			if _, err := Load(Progress, func(k string) string { return vars[k] }); err == nil || !strings.Contains(err.Error(), "admission probe") {
+				t.Fatal("stale admission material reached fixture preparation", err)
+			}
+		})
 	}
 }

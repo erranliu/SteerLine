@@ -16,6 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/testkit/remotetest"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 )
@@ -59,7 +60,7 @@ func RunEnvironmentGeneration(t *testing.T) {
 	for _, asset := range []struct {
 		path string
 		read func() ([]byte, error)
-	}{{model.GenerationRulesPath, prompts.EnvironmentGenerationRules}, {model.ExecutionRulesPath, prompts.EnvironmentExecutionRules}} {
+	}{{model.GenerationRulesPath, prompts.EnvironmentGenerationRules}, {model.ExecutionRulesPath, prompts.EnvironmentExecutionRules}, {tm.ProtocolPath, prompts.TestingRules}} {
 		body, err := asset.read()
 		s.Must(err)
 		s.Must(os.MkdirAll(filepath.Dir(filepath.Join(p.Repo, asset.path)), 0700))

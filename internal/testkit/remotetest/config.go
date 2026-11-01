@@ -2,6 +2,7 @@
 package remotetest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,8 @@ import (
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
+	progresstools "github.com/erranliu/SteerLine/tools"
 )
 
 const Discovery = "configuration.execution-profiles-orca"
@@ -203,6 +206,27 @@ func Load(id string, getenv func(string) string) (*Input, error) {
 	}
 	if !prompts.SameRules(rules, expectedRules) {
 		return nil, errors.New("pinned project environment execution rules differ from this build; maintain and commit the same-version material before live validation")
+	}
+
+	// The live harness also starts a Task admission probe. Its fixed testing
+	// protocol/writer are test prerequisites, not environment requirement sources.
+	testingRules, err := show(tm.ProtocolPath)
+	if err != nil {
+		return nil, fmt.Errorf("admission probe testing protocol: %w", err)
+	}
+	expectedTesting, err := prompts.TestingRules()
+	if err != nil {
+		return nil, err
+	}
+	if !prompts.SameRules(testingRules, expectedTesting) {
+		return nil, errors.New("admission probe testing protocol differs from this build; adopt same-version material before live validation")
+	}
+	writer, err := show(tm.WriterPath)
+	if err != nil {
+		return nil, fmt.Errorf("admission probe writer: %w", err)
+	}
+	if !bytes.Equal(bytes.ReplaceAll(writer, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll([]byte(progresstools.PowerShellWriter), []byte("\r\n"), []byte("\n"))) {
+		return nil, errors.New("admission probe writer differs from this build")
 	}
 	if id == LocalEnvironment || id == Generation {
 		in.L2Verification, err = environmentL2Verification(show)
