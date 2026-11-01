@@ -170,7 +170,10 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string, che
 	publication.BaseBranch = manifest.ValidationBase
 	input := runnercontract.RunInput{Execution: profile.Execution, Workflow: runnercontract.Workflow{ID: "development", Version: 2}, Repository: runnercontract.Repository{URL: "", LocalPath: c.Repository, Remote: c.Remote, BaseBranch: manifest.ValidationBase, BaseRevision: commit}, Publication: publication, Documents: runnercontract.Documents{Spec: runnercontract.Document{Path: envmodel.DocumentPath(key)}, Plan: runnercontract.Document{Path: manifest.Script}, References: []runnercontract.Document{{Path: envmodel.ExecutionRulesPath}, {Path: pm.ProjectEntryPath}, {Path: entry.TestingCatalogue}}}}
 	referenceSet := map[string]bool{envmodel.DocumentPath(key): true, manifest.Script: true, envmodel.ExecutionRulesPath: true, pm.ProjectEntryPath: true, entry.TestingCatalogue: true}
-	for _, path := range deps {
+	// Runtime dependencies remain validated/hashed above and are available in
+	// the pinned worktree through the manifest. Agent reading references carry
+	// project policy, not a second listing of every runtime helper.
+	for _, path := range entry.Requirements {
 		if !referenceSet[path] {
 			input.Documents.References = append(input.Documents.References, runnercontract.Document{Path: path})
 			referenceSet[path] = true

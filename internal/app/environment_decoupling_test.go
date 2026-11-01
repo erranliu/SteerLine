@@ -132,3 +132,30 @@ func TestEnvironmentSurveyBoundsActualSourceAndRequiresGuidance(t *testing.T) {
 		})
 	}
 }
+
+func TestEnvironmentRuntimeDependenciesBindBasisWithoutExpandingReadingReferences(t *testing.T) {
+	p, c, _ := environmentFixture(t)
+	commit := pmGit(t, c.Repository, "rev-parse", "HEAD")
+	before, err := p.materialAt(context.Background(), "fixture", commit, false)
+	require(t, err)
+	for _, ref := range before.Input.Documents.References {
+		if ref.Path == "go.mod" {
+			t.Fatal("runtime helper repeated as Agent reading reference")
+		}
+	}
+	if before.Manifest.Dependencies[0] != "go.mod" {
+		t.Fatal("runtime dependency removed from authority")
+	}
+	require(t, os.WriteFile(filepath.Join(c.Repository, "go.mod"), []byte("module changed.invalid/runtime\n"), 0600))
+	commit = commitEnvironmentMaterials(t, c)
+	after, err := p.materialAt(context.Background(), "fixture", commit, false)
+	require(t, err)
+	if after.Inputs == before.Inputs {
+		t.Fatal("runtime dependency lost qualification binding")
+	}
+	require(t, os.Remove(filepath.Join(c.Repository, "go.mod")))
+	commit = commitEnvironmentMaterials(t, c)
+	if _, err := p.materialAt(context.Background(), "fixture", commit, false); err == nil {
+		t.Fatal("missing runtime dependency accepted")
+	}
+}
