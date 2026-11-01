@@ -199,6 +199,7 @@ func RunEnvironmentGeneration(t *testing.T) {
 		if manifest.EnvironmentKey != key {
 			t.Fatal("native output changed target")
 		}
+		s.Must(os.MkdirAll(filepath.Dir(filepath.Join(p.Repo, model.DocumentPath(key))), 0700))
 		s.Must(os.WriteFile(filepath.Join(p.Repo, model.DocumentPath(key)), []byte(activity.Generated.Document), 0600))
 		s.Must(os.WriteFile(filepath.Join(p.Repo, manifest.Script), []byte(activity.Generated.Script), 0600))
 		proof = append(proof, map[string]any{"target_environment_key": key, "activity_id": activity.ID, "settled": activity.Settled, "document_path": model.DocumentPath(key), "script_path": manifest.Script, "gaps": activity.Generated.Gaps})
