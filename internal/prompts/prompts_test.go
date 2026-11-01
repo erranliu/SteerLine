@@ -21,8 +21,14 @@ func TestPromptGovernanceGolden(t *testing.T) {
 		{"testing-step", func() (string, error) {
 			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true, true)
 		}},
-		{"environment-generate", func() (string, error) { return EnvironmentGenerate("fixed") }},
-		{"environment-prepare", EnvironmentPrepare}, {"environment-publish", EnvironmentPublish},
+		{"environment-generate", func() (string, error) {
+			return EnvironmentGenerate("fixed", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/environment-context.json", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/environment.md", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment")
+		}},
+		{"environment-prepare", func() (string, error) {
+			return EnvironmentPrepare("SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/environment.md", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment.ps1")
+		}}, {"environment-publish", func() (string, error) {
+			return EnvironmentPublish("SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/environment.md", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment.ps1")
+		}},
 		{"roadmap-parse", func() (string, error) { return RoadmapParse("roadmap.md", "fixed") }},
 		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md") }},
 	}
@@ -80,7 +86,7 @@ func TestPromptGovernanceRejectsInvalidInputs(t *testing.T) {
 		{"missing-field", func() (string, error) { return renderText("bad", "{{.Missing}}", struct{}{}) }},
 		{"bad-snapshot", func() (string, error) { return TestingContext([]byte(`{"status":"missing"}`), true) }},
 		{"missing-body", func() (string, error) { return TestingStep("", []byte(testSnapshot), true, true) }},
-		{"missing-commit", func() (string, error) { return EnvironmentGenerate("") }},
+		{"missing-commit", func() (string, error) { return EnvironmentGenerate("", "", "", "") }},
 		{"missing-plan", func() (string, error) { return TestingGenerate("", "fixed") }},
 		{"missing-roadmap-commit", func() (string, error) { return RoadmapDocuments("", "roadmap.md") }},
 		{"missing-roadmap-source", func() (string, error) { return RoadmapParse("", "fixed") }},
@@ -104,8 +110,8 @@ func TestDocumentDrivenRuleCopies(t *testing.T) {
 		{"testing", "e499f40f543ae1bfddb98ee5024f74eb0d46354392cf6794d34b8b204b6d25f3", TestingRules},
 		{"roadmap-parse", "c1452c0d591caf5cf6f3db0f4d156c2e1a4451c797e96837c0afb1d6699463e6", RoadmapParseRules},
 		{"roadmap-documents", "0c84c0ce636e4c7ca8c9f0b80cf8bdf41bbd2ecb588ea225fb10fa4bb88f2f71", RoadmapDocumentRules},
-		{"environment-generation", "59230d4b02723693737acb97f82867c39b3388ed201f4893043900048559dc85", EnvironmentGenerationRules},
-		{"environment-execution", "a3f872c1164543002318d90badf46db5094277de6b3b19eb367d89a5e909bd9a", EnvironmentExecutionRules},
+		{"environment-generation", "9cc9000977a36f1b0c7b477f6e8c94aff43452c129acb48dcb2b50530da2799c", EnvironmentGenerationRules},
+		{"environment-execution", "63468d146069a9ea0959c0eb454f07933db1576874d412cd2c24a54d5001c055", EnvironmentExecutionRules},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

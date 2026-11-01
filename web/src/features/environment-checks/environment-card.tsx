@@ -102,16 +102,16 @@ export function EnvironmentCard({
           PR；每次最多三轮。通过后供上述方案共用。重新开始即切断旧资格，失败不会恢复历史资格。
         </p>
         <label>
-          验收执行方案
+          验收所用方案
           <select
-            aria-label="验收执行方案"
+            aria-label="验收所用方案"
             value={profile}
             onChange={(event) => setProfile(event.target.value)}
           >
             <option value="">选择本次验收方案</option>
             {e.profiles.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name}
+                {[p.name, p.model, p.reasoning_effort].filter(Boolean).join(" · ")}
               </option>
             ))}
           </select>
@@ -137,6 +137,7 @@ export function EnvironmentCard({
           }
           onClick={() =>
             void command("environment_start", project, 1, {
+              environment_key: e.environment_key,
               profile_id: profile,
               round_timeout_seconds: timeout,
               expected_current_revision: e.current_revision,

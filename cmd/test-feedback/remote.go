@@ -101,6 +101,30 @@ func checkRemoteEvidence(id, out string) error {
 		}
 		// The same project must have passed its own formal adaptation first.
 		return checkSealedEnvironment(read, frozen.ExecutionDigest, source.Fixture)
+	case remotetest.Generation:
+		var proof struct {
+			Source  string `json:"source_commit"`
+			Fixture string `json:"fixture_commit"`
+			Digest  string `json:"execution_digest"`
+			Only    bool   `json:"generation_only"`
+			Targets []struct {
+				Key      string `json:"target_environment_key"`
+				Activity string `json:"activity_id"`
+				Settled  bool   `json:"settled"`
+			} `json:"targets"`
+		}
+		if err := read("generation-proof.json", &proof); err != nil {
+			return err
+		}
+		if proof.Source != frozen.Commit || proof.Fixture == "" || proof.Digest != frozen.ExecutionDigest || !proof.Only || len(proof.Targets) != 2 || proof.Targets[0].Key == proof.Targets[1].Key {
+			return errors.New("native generation target/source proof incomplete")
+		}
+		for _, target := range proof.Targets {
+			if !env.ValidKey(target.Key) || target.Activity == "" || !target.Settled {
+				return errors.New("native generation did not settle exact target")
+			}
+		}
+		return nil
 	case remotetest.Environment, remotetest.LocalEnvironment:
 		var admission struct {
 			Before        bool   `json:"before_rejected"`

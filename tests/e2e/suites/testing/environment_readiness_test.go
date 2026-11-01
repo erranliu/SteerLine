@@ -43,8 +43,10 @@ func TestProjectEnvironmentReadiness(t *testing.T) {
 		}
 		project.Record("unprepared", before)
 	}
-	p.PrepareControlledEnvironment("controlled")
-	q.PrepareControlledEnvironment("controlled-orca")
+	pDigest := p.GenerateControlledEnvironment("controlled")
+	qDigest := q.GenerateControlledEnvironment("controlled-orca")
+	p.ValidateGeneratedControlledEnvironment("controlled", pDigest)
+	q.ValidateGeneratedControlledEnvironment("controlled-orca", qDigest)
 	// Ready only for the exact project/context combination, through the public query.
 	for _, project := range []*testenv.Project{p, q} {
 		ready := 0

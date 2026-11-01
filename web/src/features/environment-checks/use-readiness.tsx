@@ -6,6 +6,8 @@ import { usePageVisible } from "../../shared/query-visibility";
 export type EnvironmentProfile = {
   id: string;
   name: string;
+  model?: string;
+  reasoning_effort?: string;
   environment_key: string;
   status: string;
   stage: string;
@@ -35,7 +37,13 @@ export type Environment = {
 export type EnvironmentOptions = {
   profiles: EnvironmentProfile[];
   environments: Environment[];
-  generators: { id: string; name: string }[];
+  generators: {
+    id: string;
+    name: string;
+    model?: string;
+    reasoning_effort?: string;
+    execution_location?: string;
+  }[];
   default_profile_id: string;
 };
 export const environmentStage: Record<string, string> = {

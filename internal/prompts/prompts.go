@@ -94,14 +94,24 @@ func TestingStep(body string, snapshot []byte, preparedWriter, writesTests bool)
 	}
 	return render("testing-step", struct{ Body, Context string }{body, context})
 }
-func EnvironmentGenerate(commit string) (string, error) {
-	if commit == "" {
+func EnvironmentGenerate(commit, contextPath, documentPath, scriptPath string) (string, error) {
+	if commit == "" || contextPath == "" || documentPath == "" || scriptPath == "" {
 		return "", errors.New("fixed environment commit is required")
 	}
-	return render("environment-generate", struct{ Commit string }{commit})
+	return render("environment-generate", struct{ Commit, ContextPath, DocumentPath, ScriptPath string }{commit, contextPath, documentPath, scriptPath})
 }
-func EnvironmentPrepare() (string, error) { return render("environment-prepare", nil) }
-func EnvironmentPublish() (string, error) { return render("environment-publish", nil) }
+func EnvironmentPrepare(documentPath, scriptPath string) (string, error) {
+	if documentPath == "" || scriptPath == "" {
+		return "", errors.New("environment material paths required")
+	}
+	return render("environment-prepare", struct{ DocumentPath, ScriptPath string }{documentPath, scriptPath})
+}
+func EnvironmentPublish(documentPath, scriptPath string) (string, error) {
+	if documentPath == "" || scriptPath == "" {
+		return "", errors.New("environment material paths required")
+	}
+	return render("environment-publish", struct{ DocumentPath, ScriptPath string }{documentPath, scriptPath})
+}
 func RoadmapParse(source, commit string) (string, error) {
 	if source == "" || commit == "" {
 		return "", errors.New("fixed roadmap source and commit are required")

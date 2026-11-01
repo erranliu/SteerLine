@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -53,7 +54,7 @@ func TestRemoteL4FrozenConfigurationAndInputs(t *testing.T) {
 		t.Fatal("missing project/budget accepted")
 	}
 	vars["STEERLINE_L4_ROUND_TIMEOUT_SECONDS"] = "1200"
-	repo, commit := projectFixture(t)
+	repo, commit := projectFixture(t, p.Execution)
 	vars["STEERLINE_PROGRESS_PROJECT"] = repo
 	vars["STEERLINE_PROGRESS_COMMIT"] = commit
 	in, err = Load(Progress, get)
@@ -92,14 +93,16 @@ func TestRemoteL4FrozenConfigurationAndInputs(t *testing.T) {
 	}
 }
 
-func projectFixture(t *testing.T) (string, string) {
+func projectFixture(t *testing.T, execution runnercontract.ExecutionInput) (string, string) {
 	t.Helper()
 	repo := t.TempDir()
 	rules, err := prompts.EnvironmentExecutionRules()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for path, body := range map[string]string{"SteerlineFlow/environment-execution.md": string(rules), "SteerlineFlow/environment.md": "```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.ps1\",\"interpreter\":\"powershell.exe\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```\n", "scripts/verify-environment.ps1": "throw 'fixture only'\n"} {
+	key, _ := env.Key(execution)
+	manifest, _ := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
+	for path, body := range map[string]string{"SteerlineFlow/environment-execution.md": string(rules), env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
 		full := filepath.Join(repo, filepath.FromSlash(path))
 		if e := os.MkdirAll(filepath.Dir(full), 0700); e != nil {
 			t.Fatal(e)
@@ -141,7 +144,7 @@ func TestRemoteL4RejectsWrongTargetAndMissingInputs(t *testing.T) {
 func TestLocalEnvironmentL4FrozenProfileAndTarget(t *testing.T) {
 	path, p := profileFixture(t)
 	p.Execution.Target = runnercontract.ExecutionTarget{Kind: "local"}
-	repo, commit := projectFixture(t)
+	repo, commit := projectFixture(t, p.Execution)
 	for _, path := range []string{"SteerlineFlow/testing/test-list.json", "tools/test-project.py", "tools/project_checks.py", "tools/steerline_reports.py"} {
 		full := filepath.Join(repo, path)
 		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
@@ -173,6 +176,28 @@ func TestLocalEnvironmentL4FrozenProfileAndTarget(t *testing.T) {
 		if adapter == "codex-app-server" {
 			p.Execution.Settings = json.RawMessage(`{"executable":"codex","model":"selected"}`)
 		}
+		key, _ := env.Key(p.Execution)
+		manifest, _ := json.Marshal(env.Manifest{Version: 2, EnvironmentKey: key, Script: env.ScriptPath(key, "ps1"), Interpreter: "powershell.exe", ValidationBase: "validation", Dependencies: []string{}})
+		for name, body := range map[string]string{env.DocumentPath(key): "```steerline-environment\n" + string(manifest) + "\n```\n", env.ScriptPath(key, "ps1"): "throw 'fixture only'\n"} {
+			full := filepath.Join(repo, filepath.FromSlash(name))
+			if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		for _, args := range [][]string{{"add", "."}, {"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-qm", "per-context fixture"}} {
+			if output, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+				t.Fatal(err, string(output))
+			}
+		}
+		rawCommit, err := exec.Command("git", "-C", repo, "rev-parse", "HEAD").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		commit = strings.TrimSpace(string(rawCommit))
+		vars["STEERLINE_L4_PROJECT_COMMIT"] = commit
 		raw, _ = json.Marshal(p)
 		if err := os.WriteFile(path, raw, 0600); err != nil {
 			t.Fatal(err)

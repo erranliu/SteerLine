@@ -20,9 +20,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
-const DocumentPath = "SteerlineFlow/environment.md"
 const GenerationRulesPath = "SteerlineFlow/environment-generation.md"
-const GenerationContextPath = "SteerlineFlow/environment-context.json"
 const ExecutionRulesPath = "SteerlineFlow/environment-execution.md"
 const MaxRounds = 3
 const ReportVersion = 2
@@ -68,6 +66,7 @@ func ExecutionDigest(e runnercontract.ExecutionInput) string {
 
 type Manifest struct {
 	Version        int      `json:"version"`
+	EnvironmentKey string   `json:"environment_key"`
 	Script         string   `json:"script"`
 	Interpreter    string   `json:"interpreter"`
 	ValidationBase string   `json:"validation_base"`
@@ -93,12 +92,12 @@ func ParseManifest(document []byte) (Manifest, error) {
 	if e := Decode(b[:end], &m); e != nil {
 		return m, e
 	}
-	if m.Version != 1 || (m.Script != "scripts/verify-environment.ps1" && m.Script != "scripts/verify-environment.sh") || (m.Script == "scripts/verify-environment.ps1" && m.Interpreter != "powershell.exe") || (m.Script == "scripts/verify-environment.sh" && m.Interpreter != "bash") || strings.TrimSpace(m.ValidationBase) == "" {
+	if m.Version != 2 || !ValidKey(m.EnvironmentKey) || m.Dependencies == nil || (m.Script != ScriptPath(m.EnvironmentKey, "ps1") && m.Script != ScriptPath(m.EnvironmentKey, "sh")) || (strings.HasSuffix(m.Script, ".ps1") && m.Interpreter != "powershell.exe") || (strings.HasSuffix(m.Script, ".sh") && m.Interpreter != "bash") || strings.TrimSpace(m.ValidationBase) == "" {
 		return m, errors.New("invalid script, interpreter or pre-existing validation base")
 	}
 	seen := map[string]bool{}
 	for _, p := range m.Dependencies {
-		if !fs.ValidPath(p) || strings.ContainsAny(p, "\\:\x00") || seen[p] {
+		if !fs.ValidPath(p) || strings.ContainsAny(p, "\\:\x00") || seen[p] || p == GenerationContextPath(m.EnvironmentKey) || p == GenerationRulesPath || strings.HasPrefix(p, "SteerlineFlow/environments/") && !strings.HasPrefix(p, MaterialDirectory(m.EnvironmentKey)+"/") {
 			return m, errors.New("dependencies require unique repository-relative files")
 		}
 		seen[p] = true
@@ -116,9 +115,21 @@ type Prepared struct {
 	Input        runnercontract.RunInput `json:"input"`
 }
 type Start struct {
+	EnvironmentKey          string `json:"environment_key"`
 	Profile                 string `json:"profile_id"`
 	ExpectedCurrentRevision uint64 `json:"expected_current_revision"`
 	TimeoutSeconds          int    `json:"round_timeout_seconds"`
+}
+
+type Generate struct {
+	TargetKey string `json:"target_environment_key"`
+	Profile   string `json:"generator_profile_id"`
+}
+
+type GenerationPrepared struct {
+	Input   runnercontract.GenerateRunInput
+	Target  runnercontract.ExecutionInput
+	Context json.RawMessage
 }
 type Request struct {
 	ID       string          `json:"request_id"`
@@ -149,22 +160,25 @@ type Generated struct {
 	Gaps     []string `json:"gaps"`
 }
 type Record struct {
-	ID             string                        `json:"id"`
-	Project        string                        `json:"project"`
-	Revision       uint64                        `json:"revision"`
-	Kind           string                        `json:"kind"`
-	Profile        string                        `json:"profile_id"`
-	Execution      runnercontract.ExecutionInput `json:"execution"`
-	Build          runnercontract.BuildPin       `json:"runner"`
-	CreatedAt      time.Time                     `json:"created_at"`
-	Requests       []Request                     `json:"requests"`
-	Prepared       Prepared                      `json:"prepared"`
-	TimeoutSeconds int                           `json:"round_timeout_seconds"`
-	Rounds         []Round                       `json:"rounds"`
-	State          string                        `json:"state"`
-	Diagnostic     string                        `json:"diagnostic,omitempty"`
-	Cancelled      bool                          `json:"cancelled"`
-	Generation     *Generated                    `json:"generated,omitempty"`
+	TargetKey         string                        `json:"target_environment_key,omitempty"`
+	TargetExecution   runnercontract.ExecutionInput `json:"target_execution,omitempty"`
+	GenerationContext json.RawMessage               `json:"generation_context,omitempty"`
+	ID                string                        `json:"id"`
+	Project           string                        `json:"project"`
+	Revision          uint64                        `json:"revision"`
+	Kind              string                        `json:"kind"`
+	Profile           string                        `json:"profile_id"`
+	Execution         runnercontract.ExecutionInput `json:"execution"`
+	Build             runnercontract.BuildPin       `json:"runner"`
+	CreatedAt         time.Time                     `json:"created_at"`
+	Requests          []Request                     `json:"requests"`
+	Prepared          Prepared                      `json:"prepared"`
+	TimeoutSeconds    int                           `json:"round_timeout_seconds"`
+	Rounds            []Round                       `json:"rounds"`
+	State             string                        `json:"state"`
+	Diagnostic        string                        `json:"diagnostic,omitempty"`
+	Cancelled         bool                          `json:"cancelled"`
+	Generation        *Generated                    `json:"generated,omitempty"`
 }
 
 func (r Record) Settled() bool {

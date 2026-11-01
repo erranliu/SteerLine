@@ -13,7 +13,7 @@ func promptSinkAllowed(file, function string) bool {
 	case "internal/testmanagement/generation.go:Generate",
 		"internal/roadmap/generation.go:Parse",
 		"internal/roadmap/documents.go:GenerateDocuments",
-		"internal/app/environment_adaptation.go:prepareGeneration",
+		"internal/app/environment_adaptation.go:generationInput",
 		"internal/environmentadaptation/service.go:appendRound",
 		"internal/runnerclient/prompt_context.go:WithTestProgressContext":
 		return true

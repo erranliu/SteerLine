@@ -27,6 +27,11 @@ func TestProjectEnvironmentExecutionLifecycleTakeoverAndStartupStop(t *testing.T
 			old := cli.BuildPin()
 			old.SHA256 = strings.Repeat("a", 64)
 			r := env.Record{ID: env.ID(), Project: "project", Revision: 1, Kind: kind, Build: old, Cancelled: true, State: "stopping", CreatedAt: time.Now().UTC(), Requests: []env.Request{{ID: env.ID(), Original: json.RawMessage(`{}`)}}, Rounds: []env.Round{{Number: 1, Submission: "accepted", RunID: "original-run", InputDigest: "original-input", Request: runnercontract.Request{Protocol: runnercontract.Protocol, RequestID: "original-submit", Input: json.RawMessage(`{"title":"original"}`)}}}}
+			if kind == "generation" {
+				r.TargetExecution = runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"executable":"fixture"}`)}
+				r.TargetKey, _ = env.Key(r.TargetExecution)
+				r.GenerationContext = json.RawMessage(`{"version":1}`)
+			}
 			require(t, store.SaveEnvironment(ctx, r, 0))
 			proof := runnercontract.TakeoverReport{Contract: "steerrunner-takeover/v1", StateDir: cli.StateDir, CandidateSHA256: cli.SHA256, Compatible: true, Items: []runnercontract.TakeoverItem{{Kind: "run", ID: "original-run", InputDigest: "original-input", Revision: 9, Status: "compatible"}}}
 			cli.Takeover = &proof

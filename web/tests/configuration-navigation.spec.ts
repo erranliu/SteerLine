@@ -56,6 +56,8 @@ test("runtime environments keep card actions, failed observations and task retur
   const profiles = ["default", "alternate"].map((id) => ({
     id,
     name: id,
+    model: id === "alternate" ? "model-high" : "model-default",
+    reasoning_effort: "high",
     host: "本机",
     agent: "codex",
     details: [],
@@ -152,7 +154,14 @@ test("runtime environments keep card actions, failed observations and task retur
         default_profile_id: "default",
         generators: [],
       };
-    } else if (path.endsWith("/environment")) data = { records: [] };
+    } else if (path.endsWith("/environment/materials"))
+      data = {
+        document_path: "SteerlineFlow/environments/selected/environment.md",
+        document: "Target requirements",
+        generation_ready: false,
+        generation_diagnostic: "生成输入待维护",
+      };
+    else if (path.endsWith("/environment")) data = { records: [] };
     else if (path.endsWith("/projects"))
       data = {
         projects: projects.map((id, i) => ({
@@ -221,17 +230,18 @@ test("runtime environments keep card actions, failed observations and task retur
     page.getByRole("heading", { name: "运行环境", exact: true }),
   ).toBeVisible();
   const first = page.locator(".environment-card").first();
-  await expect(first.getByLabel("验收执行方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("验收所用方案").locator("option:checked")).toHaveText("alternate · model-high · high");
   await expect(first).toBeFocused();
   await expect(page.getByText("阅读项目准备清单", { exact: true })).toHaveCount(
     1,
   );
   await page.reload();
-  await expect(first.getByLabel("验收执行方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
   await page.getByRole("link", { name: "返回任务", exact: true }).click();
   await expect(page.getByLabel("本次执行方案")).toHaveValue("alternate");
   await page.getByRole("link", { name: "前往环境准备", exact: true }).click();
-  await expect(first.getByLabel("验收执行方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
   environments[0].stage = "ready";
   environments[0].status = "ready";
   await page.getByRole("button", { name: "刷新环境" }).click();
@@ -244,7 +254,10 @@ test("runtime environments keep card actions, failed observations and task retur
     "未准备",
   ]) {
     await expect(
-      page.locator(".environment-card h3").filter({ hasText: label }),
+      page
+        .getByRole("region", { name: "选择运行机与链路" })
+        .getByRole("button")
+        .filter({ hasText: label }),
     ).toHaveCount(1);
   }
   failOptions = true;

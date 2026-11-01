@@ -122,11 +122,11 @@ func TestProjectEnvironmentReadinessLocalAndModelGrouping(t *testing.T) {
 	local.Workflow = runnercontract.Workflow{ID: "development", Version: 2}
 	local.ID = "local"
 	local.Name = "Local"
-	local.Execution.Settings = json.RawMessage(`{"executable":"codex","model":"one"}`)
+	local.Execution.Settings = json.RawMessage(`{"executable":"native-fixture","model":"one"}`)
 	other := local
 	other.ID = "local-high"
 	other.Name = "Local high"
-	other.Execution.Settings = json.RawMessage(`{"executable":"codex","model":"two","reasoning_effort":"high"}`)
+	other.Execution.Settings = json.RawMessage(`{"executable":"native-fixture","model":"two","reasoning_effort":"high"}`)
 	p.config.RunnerExecution.Profiles = []RunnerProfile{local, other}
 	prepared, err := p.prepare(ctx, "local")
 	require(t, err)
@@ -145,8 +145,11 @@ func TestProjectEnvironmentReadinessLocalAndModelGrouping(t *testing.T) {
 	if len(options.Environments) != 1 || len(options.Profiles) != 2 || options.Profiles[1].Status != "ready" {
 		t.Fatal(string(raw))
 	}
+	if options.Profiles[0].Model != "one" || options.Profiles[1].Model != "two" || options.Profiles[1].ReasoningEffort != "high" || options.Environments[0].Profiles[1].Model != "two" {
+		t.Fatalf("operation model facts were lost while grouping: %s", raw)
+	}
 	view := options.Environments[0]
-	if view.Target != local.Execution.Target || view.Adapter != local.Execution.Adapter || !view.ActivitySettled || view.ScriptPath == "" {
+	if view.Target != local.Execution.Target || view.Adapter != local.Execution.Adapter || !view.ActivitySettled || view.DocumentPath == "" {
 		t.Fatalf("missing original display facts: %s", raw)
 	}
 	if strings.Contains(string(raw), `"settings"`) || strings.Contains(string(raw), `"executable"`) {

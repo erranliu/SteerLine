@@ -418,10 +418,7 @@ func (p *runtimeProjectPort) Read(ctx context.Context, route string, values url.
 		return p.config.runtimeRoadmaps.read(ctx, route, values)
 	}
 	if route == "/environment" || strings.HasPrefix(route, "/environment/") {
-		if len(values) != 0 {
-			return nil, errors.New("environment query accepts no parameters")
-		}
-		return p.environmentRead(ctx, route)
+		return p.environmentRead(ctx, route, values)
 	}
 	if strings.HasPrefix(route, "/runs/") && strings.HasSuffix(route, "/documents") && strings.Count(route, "/") == 3 {
 		if len(values) != 0 {

@@ -133,7 +133,8 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 			}()
 			defer func() { cancel(); <-done }()
 			runtime := &runtimeProjectPort{actor: actor, config: c, store: store, instance: actor.InstanceID()}
-			payload, _ := json.Marshal(env.Start{Profile: "remote", TimeoutSeconds: 60})
+			key, _ := env.Key(c.RunnerExecution.Profiles[1].Execution)
+			payload, _ := json.Marshal(env.Start{EnvironmentKey: key, Profile: "remote", TimeoutSeconds: 60})
 			request := httpcontract.CommandEnvelope{RequestID: env.ID(), ProjectID: httpcontract.ProjectID(c.Identity()), InstanceID: actor.InstanceID(), Action: "environment_start", TargetID: httpcontract.ProjectID(c.Identity()), ExpectedVersion: 1, Payload: payload}
 			for _, invalid := range []string{`{"profile_id":"remote","round_timeout_seconds":60}`, `{"profile_id":"remote","round_timeout_seconds":60,"expected_current_revision":null}`} {
 				bad := request
@@ -207,7 +208,8 @@ func TestProjectEnvironmentWorkflowPublicCommandsAndRetry(t *testing.T) {
 }
 
 func TestProjectEnvironmentGenerationExportUsesMachineMetadata(t *testing.T) {
-	document := "PowerShell verify-environment.ps1 is not selected.\n```steerline-environment\n{\"version\":1,\"script\":\"scripts/verify-environment.sh\",\"interpreter\":\"bash\",\"validation_base\":\"validation\",\"dependencies\":[]}\n```"
+	key := strings.Repeat("a", 64)
+	document := environmentFixtureDocument(key, "sh", "validation", []string{})
 	raw, e := json.Marshal(publicEnvironment(env.Record{Kind: "generation", State: "generated", Generation: &env.Generated{Document: document, Script: "#!/usr/bin/env bash\n", Gaps: []string{}}}))
 	require(t, e)
 	var result struct {
@@ -218,7 +220,7 @@ func TestProjectEnvironmentGenerationExportUsesMachineMetadata(t *testing.T) {
 		} `json:"generated"`
 	}
 	require(t, json.Unmarshal(raw, &result))
-	if result.Generated.ScriptPath != "scripts/verify-environment.sh" || result.Generated.Document != document || result.Generated.Script == "" {
+	if result.Generated.ScriptPath != env.ScriptPath(key, "sh") || result.Generated.Document != document || result.Generated.Script == "" {
 		t.Fatal("export inferred a path from prose or lost paired content")
 	}
 }

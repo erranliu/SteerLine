@@ -99,15 +99,15 @@ Web 只提供受限 `/api/v2/application/projects…` 同源转接；不代理�
 
 ## 项目环境适配
 
-同一项目根提供 `GET /environment/options`（profiles 与去重 environments 的环境键、当前引用 revision/activity、二态/阶段/原因、材料与历史通过入口，及本地生成配置）、`GET /environment`（最近20条活动摘要）及 `GET /environment/{id}`（原活动完整轮次、两通道快照、脚本报告、Agent排障回复或生成文本）。读取不执行环境脚本、不启动Agent。长Agent回复节选标明截断，原内容保留在原Run。
+同一项目根提供 `GET /environment/options`（profiles 与去重 environments 的环境键、当前引用 revision/activity、二态/阶段/原因、材料与历史通过入口，及本机生成方案的公开模型参数；列表不返回所有材料正文）、`GET /environment/materials?environment_key=…`（所选环境材料、期望上下文预览/导出及固定输入诊断）、`GET /environment?environment_key=…`（先按键筛选、再取最近20条活动摘要；省略参数为项目全部活动最近20条）及 `GET /environment/{id}`（原活动完整轮次、两通道快照、脚本报告、Agent排障回复或生成文本）。读取不执行环境脚本、不启动Agent。长Agent回复节选标明截断，原内容保留在原Run。
 
 `POST /commands` 使用以下动作；均沿原项目actor、认证及命令journal，不使用图/控制revision。
 
 | action | target_id / expected_version | payload |
 | --- | --- | --- |
-| `environment_start` | 当前project_id / 1 | `{profile_id,round_timeout_seconds,expected_current_revision}`，正整数秒；首次加两次重试，每轮同预算 |
+| `environment_start` | 当前project_id / 1 | `{environment_key,profile_id,round_timeout_seconds,expected_current_revision}`，正整数秒；首次加两次重试，每轮同预算 |
 | `environment_invalidate` | 当前project_id / 1 | `{environment_key,expected_current_revision,reason}`，仅失效本项目组合；引用和原命令回执原子提交 |
-| `environment_generate` | 当前project_id / 1 | `{profile_id,round_timeout_seconds:0}`，选本地Codex只读生成配置；输出准备文档/脚本/gaps，生成不授予准入 |
+| `environment_generate` | 当前project_id / 1 | `{target_environment_key,generator_profile_id}`，明确材料目标并选本机Codex只读生成方案；输出准备文档/脚本/gaps，生成不授予准入 |
 | `environment_stop` | 原活动id / 活动revision | `{}`，只处理原活动，取消后零新轮次 |
 
 回执的 `environment` 为活动投影，`applied` 仅表示命令持久受理；任务资格由当前引用与原活动及材料依据共同决定，查询仅投影。开始/失效的 expected_current_revision 必填，缺行初值 0，不能代替原活动 revision；生成不选择当前引用。本机与远端均受门禁，失效只阻断新候选。结果不明时通过原 `GET /commands/{request_id}` 核实，浏览器不因command_not_found补交；重复完整原信封返回原受理记录，变更原信封拒绝。progress持续提供进度，独立result-file仅在原Run结束且停止后封存一次；pr_ready触发停止，不决定ready。result版本0表示未成功采集，closed/0须保留采集diagnostic；closed/1才有最终文件，封存后不刷新。progress及Agent回复不决定ready，Runner停止与最终报告/PR未核实仍阻断新任务。详见[适配Spec](../../SteerlineFlow/spec/project-environment-adaptation.spec.md)。
