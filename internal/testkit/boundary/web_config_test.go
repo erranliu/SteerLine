@@ -12,7 +12,8 @@ func TestWebExecutionConfigOwnership(t *testing.T) {
 		allowed         bool
 	}{
 		{"pure_web_values", "web/server/executionconfig/edge_plan9.go", "internal/executionconfig", true},
-		{"pure_developer_policy", "web/server/executionconfig/edge_plan9.go", "internal/developerconfig", true},
+		{"developer_configuration_editor", "web/server/executionconfig/store.go", "internal/developerconfig", true},
+		{"developer_configuration_in_other_web_file", "web/server/executionconfig/edge_plan9.go", "internal/developerconfig", false},
 		{"no_app_in_query", "web/server/discovery/edge_plan9.go", "internal/app", false},
 		{"no_runner_private", "web/server/discovery/edge_windows.go", "github.com/erranliu/SteerRunner/internal/execution/adapters/protocol/orca", false},
 		{"no_runner_client", "web/server/executionconfig/edge.go", "internal/runnerclient", false},
