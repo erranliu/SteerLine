@@ -40,3 +40,7 @@ SteerlineTest 准备分支材料提交 `16adfb2`，最终 PR head=`b378559a07666
 ## 系统回归
 
 固定 L1 `test-results/L1-final-20261102T185829182Z/summary.json`、固定 L2 `test-results/L2-20261102T185536183Z/summary.json`、前端全集 `test-results/web-20261102T185234758Z/summary.json`、HTTP登记集 `test-results/http-20261102T185420258Z/summary.json` 全部通过，生产前端构建通过。文档656文件/4078本地链接及diff检查通过。真实外部文档PR的合并、安装部署、业务执行不在本轮隔离验证通过范围内；当前项目材料PR本身是真实GitHub写入，保留待审阅状态。
+
+## Rebase 后最终回归
+
+本分支已 rebase 到 main `02285e1cb9b62564d37ee8a03a0f2f839af4c482`（环境页面精简），仅验收索引冲突，保留双方条目。精确受测提交 `fe57c6d22fc41dbb655cdb799244ab7b90fc5d24`，干净工作树；`test-results/L1-rebase-20261102-final/summary.json`、`L2-rebase-20261102-final/summary.json`、`web-rebase-20261102-final/summary.json`、`http-rebase-20261102-final/summary.json` 均通过，零意外 skip，生产前端构建通过。文档657文件/4079本地链接零错误，diff检查通过。本段为验证后文档登记，不变更受测业务；main 无 Roadmap 行为变化，未重复调用模型。
