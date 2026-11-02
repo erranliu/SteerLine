@@ -64,6 +64,23 @@ Spec/Plan 独立审计通过后实施。基线 `cf9346759a086d8c242d0b09c480fe98
 
 SEM-A01–A07 的所选自动验证与独立审核已完成：公共文件/请求路径、严格接口与缺材料阻断、链路独立 Current、共享依据撤销/回退、原生命周期与准入、PS5.1 七类结果及展示回归通过。L2 场景清理已核实。未提交或导出 Git 历史测试记录，dirty 工作区结果仅作为本次实现证据。
 
+## 提交前审计与 main 集成（2026-11-02）
+
+用户追加授权“审计后提pr”。新独立只读代理 pre_pr_audit 核对实现结束时41文件与 final-verified 字节/SHA账本零差异，核实四份正式通过报告，批准实现及提示词/接线变更提交 PR。该账本保留为初轮实现结束快照，不改写其原受测版本。
+
+随后将功能提交 rebase 到 main `02285e1cb9b62564d37ee8a03a0f2f839af4c482`（#434 环境页面精简），得到 `b1fb0b8e6893971c2ce8cd0c25e44e7a608936a1`。仅验收索引追加冲突，保留两边记录；两个 Web 测试自动合并。独立 range-diff 复审批准集成，公共路径生产代码/脚本/提示词维持原审字节，历史 created_at 与新页面行为保持。
+
+在该干净提交补验以下项目，原始报告仍位于本 scope：
+
+| 范围 | 输出 | 结果 |
+| --- | --- | --- |
+| app 环境材料/历史/配置/单次调用及共享资格、prompts 完整正文 | diagnostics/pre-pr-20261102T113846926Z-9e73d7a4f6594c02a05e2c1ec6b67bbe | passed，零跳过/零失败，212.843秒 |
+| web.unit | test-results/L4/pre-pr-20261102T113851523Z-a056d6af63d24ce1a7f4522f4fb68cfc | passed=true、complete=true，managed 为 passed |
+| L1 | test-results/L1/pre-pr-20261102T113913137Z-44506fe4af0449ce9441061d18826e2e | passed=true、complete=true，managed 为 passed |
+| L2 | test-results/L2/pre-pr-20261102T113929967Z-375d6e5c7b45419598fd57304ecbb7bf | passed=true，smoke.delivery 及 cleanup_complete=true |
+
+go.environment 全集360项的通过仍对应初轮基线加实现快照，不冒称在新 main 上完整重跑；集成变化通过上述定向 owner 和正式 Web/L1/L2 复验。PR 提交前正文/接线完整 diff 和 UTF-8 字节账本另存 diagnostics/pre-pr-review/。后续提交仅补本节和 Plan 的授权范围说明，不改运行代码或测试标准。
+
 ## 未验范围
 
 真实 Codex/Orca Runner 正负调用、远端实际工具及人工跨目标体验未执行；受控 owner、脚本直接执行不证明这些范围。安装现场和其他受管项目未改；旧 manifest4 项目须自行正常采用新材料，运行时无迁移/回退。
