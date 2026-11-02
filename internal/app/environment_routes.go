@@ -195,6 +195,9 @@ func (p *runtimeProjectPort) environmentRead(ctx context.Context, route string, 
 		return nil, errors.New("project environment unavailable")
 	}
 	key := values.Get("environment_key")
+	if route == "/environment/options" && len(values) == 1 && len(values["configuration"]) == 1 && values.Get("configuration") == "true" {
+		return port.configurationOptions(), nil
+	}
 	if len(values) > 0 && (len(values) != 1 || len(values["environment_key"]) != 1 || !env.ValidKey(key) || route != "/environment" && route != "/environment/materials") {
 		return nil, errors.New("invalid environment query")
 	}

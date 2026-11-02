@@ -51,6 +51,24 @@ export const environmentStage: Record<string, string> = {
 export function useEnvironmentReadiness() {
   const { api, identity, online } = useWorkspace();
   const visible = usePageVisible();
+  const configuration = useQuery({
+    queryKey: [
+      api.home,
+      identity.project_id,
+      identity.instance_id,
+      "environment",
+      "configuration",
+    ],
+    queryFn: ({ signal }) =>
+      api.get<EnvironmentOptions>(
+        "/environment/options?configuration=true",
+        signal,
+      ),
+    enabled: online,
+    retry: false,
+    // Loaded configuration is frozen for this project instance.
+    staleTime: Infinity,
+  });
   const query = useQuery({
     queryKey: [
       api.home,
@@ -65,7 +83,16 @@ export function useEnvironmentReadiness() {
     retry: false,
     refetchInterval: visible ? 15000 : false,
   });
-  return { ...query, verified: online && query.isSuccess && !query.isError };
+  return {
+    ...query,
+    data: query.data ?? configuration.data,
+    observed: !!query.data,
+    verified: online && query.isSuccess && !query.isError,
+    refetch: (...args: Parameters<typeof query.refetch>) => {
+      void configuration.refetch();
+      return query.refetch(...args);
+    },
+  };
 }
 
 export function environmentLink(
@@ -84,7 +111,9 @@ export function EnvironmentObservation() {
   if (readiness.verified) return null;
   return (
     <p role="status" className="notice amber">
-      {readiness.data ? "上次已知状态，当前待核实" : "项目运行环境状态待核实"}
+      {readiness.observed
+        ? "上次已知状态，当前待核实"
+        : "项目运行环境状态待核实"}
       {!!readiness.dataUpdatedAt &&
         ` · 最后成功观察 ${new Date(readiness.dataUpdatedAt).toLocaleString()}`}
     </p>
@@ -97,12 +126,12 @@ export function EnvironmentSummary() {
   const environments = readiness.data?.environments;
   return (
     <NavLink to={`/projects/${identity.project_id}/environment`}>
-      {!environments ? (
+      {!readiness.observed ? (
         "项目运行环境状态待核实"
       ) : (
         <>
           {!readiness.verified && "上次结果 · 当前待核实 · "}
-          {environments.length
+          {environments?.length
             ? `项目运行环境已就绪 ${environments.filter((e) => e.status === "ready").length}/${environments.length}`
             : "尚无开发执行方案"}
         </>
