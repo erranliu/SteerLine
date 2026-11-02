@@ -31,6 +31,8 @@ type EnvironmentAdmission struct {
 }
 
 type Candidate struct {
+	EnvironmentReadinessSkipped bool `json:"environment_readiness_skipped,omitempty"`
+
 	Environment       *EnvironmentAdmission     `json:"environment,omitempty"`
 	Contract          taskcontract.TaskContract `json:"contract"`
 	MaterialDigest    string                    `json:"material_digest"`

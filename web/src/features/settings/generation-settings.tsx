@@ -21,7 +21,8 @@ export function GenerationSettings({
   csrf,
   loadedDigest,
   applicationConnected,
-}: GenerationSettingsProps) {
+  onDirtyChange,
+}: GenerationSettingsProps & { onDirtyChange?: (dirty: boolean) => void }) {
   const api = useMemo(() => executionConfigAPI(csrf), [csrf]);
   const client = useQueryClient();
   const query = useQuery({
@@ -29,25 +30,24 @@ export function GenerationSettings({
     queryFn: ({ signal }) => api.read(signal),
     retry: false,
   });
-  const [base, setBase] = useState<ConfigSnapshot>();
-  const [limit, setLimit] = useState("");
+  const [draft, setDraft] = useState<{ base: ConfigSnapshot; limit: string }>();
+  const base = draft?.base ?? query.data;
+  const limit =
+    draft?.limit ?? String(base?.config.max_generate_concurrency ?? 5);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  useEffect(() => {
-    if (!base && query.data) {
-      setBase(query.data);
-      setLimit(String(query.data.config.max_generate_concurrency ?? 5));
-    }
-  }, [base, query.data]);
-  const dirty =
-    !!base && limit !== String(base.config.max_generate_concurrency ?? 5);
+  const dirty = !!draft;
   const valid = Number.isSafeInteger(Number(limit)) && Number(limit) > 0;
+  useEffect(() => {
+    onDirtyChange?.(dirty || saving);
+    return () => onDirtyChange?.(false);
+  }, [onDirtyChange, dirty, saving]);
   const pendingRestart =
     applicationConnected &&
     !!loadedDigest &&
-    !!base &&
-    loadedDigest !== base.saved_digest;
+    !!query.data &&
+    loadedDigest !== query.data.saved_digest;
 
   async function save() {
     if (!base || !dirty || !valid || !base.writable || saving) return;
@@ -60,9 +60,12 @@ export function GenerationSettings({
         { ...base.config, max_generate_concurrency: Number(limit) },
         base.saved_digest,
       );
-      setBase(result);
-      setLimit(String(result.config.max_generate_concurrency ?? 5));
+      await client.cancelQueries({
+        queryKey: [home, "execution-config"],
+        exact: true,
+      });
       client.setQueryData([home, "execution-config"], result);
+      setDraft(undefined);
       void client.invalidateQueries({
         queryKey: [home, "execution-config-status"],
       });
@@ -81,15 +84,14 @@ export function GenerationSettings({
   async function reload() {
     const result = await query.refetch();
     if (result.data && !result.error) {
-      setBase(result.data);
-      setLimit(String(result.data.config.max_generate_concurrency ?? 5));
+      setDraft(undefined);
       setError("");
       setNotice("");
     }
   }
   return (
     <section className="settings-panel" aria-label="生成并发设置">
-      <NavigationGuard dirty={dirty || saving} />
+      {!onDirtyChange && <NavigationGuard dirty={dirty || saving} />}
       <h2>项目维护</h2>
       <p className="muted">材料与测试安排生成使用以下并发上限。</p>
       <p className="settings-scope">所有项目共享</p>
@@ -121,7 +123,12 @@ export function GenerationSettings({
               value={limit}
               disabled={!base.writable || saving}
               onChange={(e) => {
-                setLimit(e.target.value);
+                setDraft(
+                  e.target.value ===
+                    String(base.config.max_generate_concurrency ?? 5)
+                    ? undefined
+                    : { base, limit: e.target.value },
+                );
                 setNotice("");
               }}
               aria-describedby="generate-concurrency-help"
@@ -143,7 +150,7 @@ export function GenerationSettings({
               variant="outline"
               disabled={saving || !dirty}
               onClick={() => {
-                setLimit(String(base.config.max_generate_concurrency ?? 5));
+                setDraft(undefined);
                 setError("");
                 setNotice("");
               }}

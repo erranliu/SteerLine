@@ -116,6 +116,7 @@ func loadConfigSnapshotWithQueries(path string, projectBytes, globalBytes []byte
 	}
 	config.ProcessHost = processHost
 	config.RunnerExecution = global
+	config.resolveCapabilities()
 	config.bindApplicationFiles(projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
 	base := filepath.Dir(projectPath)
 	if config.Repository == "" || config.Branch == "" {

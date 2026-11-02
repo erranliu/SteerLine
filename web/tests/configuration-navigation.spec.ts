@@ -45,6 +45,110 @@ test.afterAll(async () => {
   );
 });
 
+test("global developer switches preserve drafts, require restart and disappear in release builds", async ({
+  page,
+}, info) => {
+  let snapshot = structuredClone({
+    ...configSnapshot,
+    developer_available: true,
+  });
+  snapshot.config.developer = { skip_environment_readiness: false };
+  let loaded = "loaded";
+  let available = true;
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(String(error)));
+  await page.route("**/auth/status", (route) =>
+    route.fulfill({
+      json: {
+        csrf_token: "csrf",
+        identity: {
+          home_id: "developer-browser-home",
+          instance_id: "web",
+          ready: true,
+        },
+      },
+    }),
+  );
+  await page.route("**/api/**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    let data: unknown = {};
+    if (path === "/api/web/execution-config") {
+      if (route.request().method() === "PUT") {
+        expect(route.request().headers()["if-match"]).toBe(
+          '"' + snapshot.saved_digest + '"',
+        );
+        snapshot = {
+          ...snapshot,
+          config: route.request().postDataJSON(),
+          saved_digest: "saved",
+        };
+      }
+      data = { ...snapshot, developer_available: available };
+    } else if (path.endsWith("/status"))
+      data = { saved_digest: snapshot.saved_digest };
+    else if (path.endsWith("/projects"))
+      data = { projects: [], loaded_execution_digest: loaded };
+    else if (path.endsWith("/discover"))
+      data = {
+        state: "ready",
+        models: [],
+        environments: [],
+        context_unverified: true,
+      };
+    await route.fulfill({ json: data });
+  });
+  await page.goto(origin + "/settings");
+  const toggle = page.getByRole("switch", { name: "环境未就绪时阻止执行" });
+  await expect(toggle).toBeChecked();
+  await toggle.focus();
+  await page.keyboard.press("Space");
+  await expect(toggle).not.toBeChecked();
+  await expect(
+    page.getByText("当前生效状态：环境就绪阻塞已开启"),
+  ).toBeVisible();
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await expect(toggle).not.toBeChecked();
+  await page.getByRole("button", { name: "保存开发者配置" }).click();
+  await expect(
+    page.getByText("全局配置已保存，待重启生效", { exact: true }),
+  ).toBeVisible();
+  expect(snapshot.config.developer).toEqual({
+    skip_environment_readiness: true,
+  });
+  expect(snapshot.config.execution_profiles).toEqual(
+    configSnapshot.config.execution_profiles,
+  );
+  for (const width of [1440, 375]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: info.outputPath(`developer-${width}.png`),
+      fullPage: true,
+    });
+  }
+  loaded = snapshot.saved_digest;
+  await page.reload();
+  await expect(
+    page.getByText("当前生效状态：环境就绪阻塞已关闭"),
+  ).toBeVisible();
+  // The other editor must retain its unsaved protection with both panels mounted.
+  await page.getByLabel("生成最大并发数").fill("7");
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("link", { name: "执行方案配置", exact: true }).click();
+  await expect(page.getByLabel("生成最大并发数")).toHaveValue("7");
+  await page.getByRole("button", { name: "取消修改", exact: true }).click();
+  available = false;
+  await page.reload();
+  await expect(page.getByLabel("生成最大并发数")).toBeVisible();
+  await expect(page.getByRole("region", { name: "开发者配置" })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("runtime environments keep card actions, failed observations and task return scoped", async ({
   page,
 }, info) => {

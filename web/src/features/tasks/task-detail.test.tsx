@@ -84,6 +84,7 @@ function setup({
   count = 1,
   firstStart = false,
   environmentReady = true,
+  environmentRequired = true,
 } = {}) {
   const api = new Api(
     { project_id: "candidate-project", instance_id: "instance" } as Identity,
@@ -159,6 +160,7 @@ function setup({
         ? { presentation: { default_profile_id: "default", profiles } }
         : path === "/environment/options"
           ? {
+              environment_readiness_required: environmentRequired,
               profiles: profiles.map((p) => ({
                 id: p.id,
                 status: environmentReady ? "ready" : "not_ready",
@@ -304,4 +306,37 @@ it("blocks a new start for an online service with an unprepared environment", as
     "/projects/candidate-project/environment?profile=default&task=38",
   );
   expect(start).not.toHaveBeenCalled();
+});
+
+it.each([true, false])(
+  "allows a start with the developer gate disabled, firstStart=%s",
+  async (firstStart) => {
+    const { start } = setup({
+      firstStart,
+      environmentReady: false,
+      environmentRequired: false,
+    });
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: firstStart ? "手动启动" : "新增并行候选",
+      }),
+    );
+    await screen.findByText("环境就绪阻塞已关闭（开发者配置）");
+    expect(screen.getByRole("button", { name: "确认启动" })).toBeEnabled();
+    expect(screen.getByText(/对应项目运行环境：待核实/)).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "确认启动" }));
+    await waitFor(() => expect(start).toHaveBeenCalledTimes(1));
+  },
+);
+
+it("keeps profile availability checks when the developer gate is disabled", async () => {
+  setup({
+    firstStart: true,
+    environmentReady: false,
+    environmentRequired: false,
+    unavailableDefault: true,
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "手动启动" }));
+  await screen.findByText("环境就绪阻塞已关闭（开发者配置）");
+  expect(screen.getByRole("button", { name: "确认启动" })).toBeDisabled();
 });

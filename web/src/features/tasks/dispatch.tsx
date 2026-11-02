@@ -71,18 +71,22 @@ export function Dispatch() {
         </Button>
       </div>
       <p className="muted">默认执行方案：{selected?.name || "尚未核实"}</p>
-      {(!preparation.verified || selected?.status !== "ready") && (
-        <p className="muted">
-          默认执行环境阻断：
-          {!preparation.verified
-            ? "当前状态待核实"
-            : selected?.reason || "环境准备状态尚未核实"}{" "}
-          ·{" "}
-          <NavLink to={environmentLink(identity.project_id, selected?.id)}>
-            前往准备
-          </NavLink>
-        </p>
+      {!preparation.required && (
+        <p className="notice amber">环境就绪阻塞已关闭（开发者配置）</p>
       )}
+      {preparation.required &&
+        (!preparation.verified || selected?.status !== "ready") && (
+          <p className="muted">
+            默认执行环境阻断：
+            {!preparation.verified
+              ? "当前状态待核实"
+              : selected?.reason || "环境准备状态尚未核实"}{" "}
+            ·{" "}
+            <NavLink to={environmentLink(identity.project_id, selected?.id)}>
+              前往准备
+            </NavLink>
+          </p>
+        )}
       {control.blockers?.length > 0 && (
         <p className="muted">
           {control.blockers.map((b) => b.Reason).join("；")}

@@ -31,7 +31,7 @@
 
 每个阶段打印执行/跳过、原因、耗时和失败状态；JSON 的总耗时是实际墙钟时间，并行阶段耗时不能直接相加。构建报告默认在源码 `bin/build-timings/<随机ID>.json`，部署报告在 `bin/deploy-timings/<随机ID>.json`；`-TimingPath <绝对路径>` 可指定当前入口的报告位置。部署包另保存 `build-timings.json` 和 `timings.json`，分别定位依赖检查/安装、前端、三个 Go 构建、升级预检、停机核验、安装、启动及 ready 等待。失败也写报告；早于构建锁或安装锁取得前的拒绝不保证生成报告。
 
-部署使用构建锁内生成的独立 `bin/deploy-builds/<随机ID>/` 快照，防止构建锁释放后另一调用改写源码 bin 中待部署的 EXE。这些目录只含构建产物，可在相关调用结束后手工清理。只验证构建而不部署时使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Web`；它同样支持 `-ForceWebInstall`、`-SerialBuild`、`-RunnerRepo` 和 `-TimingPath`，不会停止或更新安装版。
+部署使用构建锁内生成的独立 `bin/deploy-builds/<随机ID>/` 快照，防止构建锁释放后另一调用改写源码 bin 中待部署的 EXE。这些目录只含构建产物，可在相关调用结束后手工清理。只验证构建而不部署时使用 `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1 -Web`；它同样支持 `-ForceWebInstall`、`-SerialBuild`、`-RunnerRepo` 和 `-TimingPath`，不会停止或更新安装版。增加 `-Release` 同时禁用两个产品 EXE 的[全局开发者配置](developer-config.md)能力。
 
 脚本只停止与更新显式目标安装目录，拒绝与源码、保留的旧安装目录 `C:\SteerlineRuntime` 或调试目录重叠。所需 EXE 全部准备成功后才停止服务；停止及同构建重启资格均无法核实，或仍有目标进程时不替换。Windows 短暂占用已停机的 EXE 时，仅对文件安装最多重试四次，每次前确认目标未重新运行；不重试任务操作。部署过程持有独占锁；失败保留构建包与错误，不宣称自动回滚。替换中途失败时先修复再重跑，不能仅凭某个 EXE 存在判断整包成功。默认启动后继续等候全部项目 ready，不能仅凭宿主启动成功报告完成。
 

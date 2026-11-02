@@ -42,6 +42,8 @@ type environmentView struct {
 }
 
 type environmentOptions struct {
+	ReadinessRequired bool `json:"environment_readiness_required"`
+
 	Profiles       []environmentProfileView `json:"profiles"`
 	Environments   []environmentView        `json:"environments"`
 	DefaultProfile string                   `json:"default_profile_id"`
@@ -144,7 +146,7 @@ func (p *environmentPort) optionsFor(environments []environmentView) environment
 			profiles = append(profiles, view)
 		}
 	}
-	return environmentOptions{Profiles: profiles, Environments: environments, DefaultProfile: p.config.RunnerExecution.DefaultProfile}
+	return environmentOptions{Profiles: profiles, Environments: environments, DefaultProfile: p.config.RunnerExecution.DefaultProfile, ReadinessRequired: p.config.environmentPolicy.RequireReadiness()}
 }
 
 func environmentProfileModel(execution runnercontract.ExecutionInput) (string, string) {

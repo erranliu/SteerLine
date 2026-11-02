@@ -1501,6 +1501,12 @@ textarea {
   background: #101614;
   color: #e5ede8;
 }
+.configuration-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  accent-color: #99e6c5;
+}
 @media (max-width: 620px) {
   .topbar {
     height: auto;

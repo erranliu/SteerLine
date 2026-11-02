@@ -105,7 +105,7 @@ func openNativeTaskProject(ctx context.Context, c *Config, owned, writable bool)
 	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
 		return nil, err
 	}
-	writer, err := sqlite.OpenSQLiteStore(path)
+	writer, err := sqlite.OpenSQLiteStoreWithAdmissionPolicy(path, c.environmentPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteS
 	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
 		return nil, err
 	}
-	writer, err := sqlite.OpenSQLiteStore(path)
+	writer, err := sqlite.OpenSQLiteStoreWithAdmissionPolicy(path, c.environmentPolicy)
 	if err != nil {
 		return nil, err
 	}

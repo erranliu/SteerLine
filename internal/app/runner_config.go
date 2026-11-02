@@ -14,6 +14,9 @@ type RunnerExecutionConfig executionconfig.File[runnerclient.Selection]
 type RunnerProfile = executionconfig.Profile
 
 func (g RunnerExecutionConfig) Validate() error {
+	if err := g.Developer.Validate(); err != nil {
+		return err
+	}
 	if g.Runner.Version == "" {
 		return errors.New("Runner version is required")
 	}
