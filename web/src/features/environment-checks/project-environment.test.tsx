@@ -25,6 +25,35 @@ const optionsKey = [
   "environment",
   "options",
 ];
+const remoteMachineID = "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8";
+
+it("uses the shared directory's readable machine name for both the chooser and selected target", async () => {
+  const { send } = fixture();
+  expect(
+    await screen.findByRole("heading", { name: "远程工作站" }),
+  ).toBeVisible();
+  expect(
+    within(screen.getByRole("region", { name: "当前准备对象" })).getByRole(
+      "heading",
+      { name: "repo / 远程工作站 / Orca → Codex" },
+    ),
+  ).toBeVisible();
+  expect(
+    screen.queryByText(remoteMachineID, { exact: false }),
+  ).not.toBeInTheDocument();
+  expect(send).not.toHaveBeenCalled();
+});
+
+it("keeps machine choices and project qualification available while the name directory is pending", async () => {
+  const { send } = fixture();
+  vi.mocked(fetch).mockImplementation(() => new Promise(() => {}));
+  expect(
+    await screen.findByRole("button", { name: /环境 eeeeeeee/ }),
+  ).toBeVisible();
+  fireEvent.click(await screen.findByText("重新检测", { selector: "summary" }));
+  expect(screen.getByRole("button", { name: "提交检测" })).toBeEnabled();
+  expect(send).not.toHaveBeenCalled();
+});
 
 it("binds each card's invalidation to its own key and revision and shares only the material document", async () => {
   const { client, send } = fixture();
@@ -170,6 +199,14 @@ function fixture(
   pendingReadiness = false,
   configurationFailure = false,
 ) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () =>
+      Response.json({
+        environments: [{ id: remoteMachineID, name: "远程工作站" }],
+      }),
+    ),
+  );
   const api = new Api(identity, "csrf", "home");
   const round = {
     number: 1,
@@ -232,7 +269,10 @@ function fixture(
               {
                 environment_key: "e".repeat(64),
                 name: "远端一",
-                target: { kind: "orca_environment", environment: "remote" },
+                target: {
+                  kind: "orca_environment",
+                  environment: remoteMachineID,
+                },
                 adapter: "orca-terminal",
                 agent: "Codex",
                 activity_settled: true,

@@ -24,6 +24,10 @@ import {
   type Catalog,
 } from "../../shared/api/execution-configs";
 import { NavigationGuard } from "../../shared/ui/navigation-guard";
+import {
+  executionTargetName,
+  useExecutionEnvironments,
+} from "../../shared/api/execution-environments";
 import "./execution-configs.css";
 
 const clone = <T,>(value: T): T => structuredClone(value);
@@ -84,12 +88,7 @@ export function ExecutionConfigs({
   const [pending, setPending] = useState<(() => void) | null>(null);
   const [deleting, setDeleting] = useState(false);
   const latest = useRef(0);
-  const environments = useQuery({
-    queryKey: [home, "execution-environments"],
-    queryFn: ({ signal }) =>
-      api.discover({ kind: "environments", host: "orca_environment" }, signal),
-    retry: false,
-  });
+  const environments = useExecutionEnvironments(home, csrf);
   useEffect(() => {
     if (!base && query.data) {
       setBase(query.data);
@@ -476,15 +475,7 @@ export function ExecutionConfigs({
       .catch((e) => setError(String(e)));
   }
   const hostName = (p: Profile) =>
-    !remote(p)
-      ? "本机"
-      : (environments.data?.environments?.find(
-          (e) =>
-            e.id === p.execution.target.environment ||
-            e.name === p.execution.target.environment,
-        )?.name ??
-        p.execution.target.environment ??
-        "远端机器");
+    executionTargetName(p.execution.target, environments.data?.environments);
   const queryTitle = loading
     ? "正在获取能力目录…"
     : manual

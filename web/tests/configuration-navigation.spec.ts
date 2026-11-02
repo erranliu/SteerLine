@@ -153,6 +153,7 @@ test("runtime environments keep card actions, failed observations and task retur
   page,
 }, info) => {
   const projects = ["a".repeat(64), "b".repeat(64)];
+  const remoteMachineID = "e68f4edf-8a83-42c2-a9da-6d404d3aa3d8";
   let failOptions = false;
   let holdQualification = false;
   let releaseQualification = () => {};
@@ -179,7 +180,10 @@ test("runtime environments keep card actions, failed observations and task retur
   const environments = stages.map((stage, i) => ({
     environment_key: String(i + 1).repeat(64),
     name: "本机",
-    target: { kind: "local" },
+    target:
+      i === 1
+        ? { kind: "orca_environment", environment: remoteMachineID }
+        : { kind: "local" },
     adapter: i === 0 ? "codex-app-server" : "orca-terminal",
     agent: "Codex",
     status: stage === "ready" ? "ready" : "not_ready",
@@ -228,6 +232,15 @@ test("runtime environments keep card actions, failed observations and task retur
       workflow_runs: [],
     };
     let data: unknown = {};
+    if (
+      path === "/api/web/execution-config/discover" &&
+      route.request().postDataJSON()?.kind === "environments"
+    ) {
+      await route.fulfill({
+        json: { environments: [{ id: remoteMachineID, name: "远程工作站" }] },
+      });
+      return;
+    }
     if (route.request().method() !== "GET") {
       writes.push(route.request().postDataJSON());
       await route.fulfill({
@@ -357,6 +370,9 @@ test("runtime environments keep card actions, failed observations and task retur
     page.getByRole("heading", { name: "项目运行环境", exact: true }),
   ).toBeVisible();
   const first = page.locator(".environment-card").first();
+  await expect(
+    page.getByRole("heading", { name: "远程工作站", exact: true }),
+  ).toBeVisible();
   await expect(
     page.getByRole("region", { name: "选择运行机与链路" }).getByRole("button"),
   ).toHaveCount(6);
