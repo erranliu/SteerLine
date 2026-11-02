@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
-	"os"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -75,7 +74,8 @@ func (p *roadmapPort) publicationPreview(ctx context.Context, r roadmap.Record) 
 	sort.Strings(keys)
 	for _, key := range keys {
 		old, err := p.config.runtimeMaintenance.read(ctx, r.CodeCommit, key)
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
+		var missing *missingCommittedFileError
+		if err != nil && !errors.As(err, &missing) {
 			return nil, err
 		}
 		out.Files = append(out.Files, change{key, string(old), files[key]})

@@ -2,6 +2,7 @@ package controlled
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -36,6 +37,11 @@ func TestFixtureRepositoryPreservesCommittedBytes(t *testing.T) {
 	git("add", ".")
 	git("commit", "-qm", "original bytes")
 	commit := git("rev-parse", "HEAD")
+	oid := git("rev-parse", commit+":binary.bin")
+	batch, err := gitBytes(context.Background(), root, strings.NewReader(oid+"\n"), "cat-file", "--batch")
+	if err != nil || !bytes.Equal(batch, append([]byte(oid+" blob 6\n"), append(files["binary.bin"], '\n')...)) {
+		t.Fatal("Git forwarding lost batch input or original bytes", batch, err)
+	}
 	for name := range files {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("uncommitted replacement"), 0600); err != nil {
 			t.Fatal(err)
