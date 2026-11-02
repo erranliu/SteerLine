@@ -113,3 +113,20 @@ npm --prefix web run test:e2e -- configuration-navigation.spec.ts --output <独�
 当前尚未部署该补丁，也未将源码/受控浏览器通过冒充安装版已更新或 SteerlineTest 的真实检测通过。文档链接检查为645个 Markdown、4039本地链接、0错误，diff 空白检查通过。所选 L1/L2、前端/HTTP/环境完整集及浏览器均已通过；环境完整集按固定入口串行运行，包含既有部署/重启/恢复与项目维护接线，原耗时如实保留，未放宽超时或缩窄选择。
 
 全部验证完成后，独立审核者再次只读核对最终 diff、验收记录和原报告，确认环境335项、前端231项（31文件）、HTTP104项、owner45项、L1/L2及清理状态相符，浏览器trace无错误且截图存在；无未解决阻塞项。
+
+## 8. 项目页显示可读远程机名称（2026-11-02）
+
+用户反馈远程机显示原始 UUID，而执行方案配置页已有可读名称。本轮只做前端显示适配：提取该页原有的全局远程机目录 Query 与名称解析，运行机分组和当前准备对象标题共用；目录按应用 home 共享，与项目和资格查询独立，远程目录迟滞不阻塞选择器或改变 verified。内部 target.environment、原环境键、方案与检测参数均不改；无新增名称配置、存储或后端查询。
+
+受测基线 `b3eb8b4b073d14d35fc245280646c1e48286c29e` 的 dirty 工作树；前序 PR #426 已合并为 `89130fbc25ed2c2224295d21f3b151baffa91de3`，fetch 确认其与该受测基线的树完全相同。证据根 `C:/SteerlineDebug/wt-68cd-readable-machine-names/`，各原报告保存实际源码状态。
+
+| 实际选择 | 结果 | 证据（相对根目录） |
+| --- | --- | --- |
+| `web.unit` | complete=true/passed=true，31文件233项、0失败/0跳过，执行28.9秒；包含 UUID→目录名称的两处标题，以及目录挂起不阻止列表或项目资格 | `test-results/L4/web-unit/summary.json` |
+| 固定 L1 | complete=true/passed=true，执行31.0秒 | `test-results/L1/initial/summary.json` |
+| 固定 L2 | passed=true/cleanup_complete=true，执行134.9秒 | `test-results/L2/initial/summary.json` |
+| Web 构建、浏览器 | 构建成功；原配置导航两场景通过，8.6秒；增加远程机目录可读名称断言，已查看资格挂起时仍显示名称的截图 | `diagnostics/browser/`，含 `configuration-visible-qualification-pending.png` 和 trace |
+
+仅修改前端名称显示和共享目录读取，后端、存储、HTTP/Runner 协议及项目资格依据未改，未重复无影响的 Go owner 全集。Spec §8 / Plan §6 已同步；没有修改固定提示词、模型材料或调用接线。没有部署或执行真实项目检测。
+
+本轮验证完成后独立只读审核通过：已核对共享目录按 home 复用、名称不参与 verified、ID/键/命令参数未变，以及233项前端、L1/L2及清理、浏览器trace和同树基线；无确认问题。

@@ -89,3 +89,7 @@
 先 rebase `origin/main`，再只读核对安装清单、进程构建和公开接口，区分部署落后与请求阻塞。修复原 options 组装：提取纯加载配置投影，通过同一路由的严格查询模式返回；前端沿原 Query scope 先显示配置，完整资格仍决定 verified，显式刷新覆盖两个查询。抽取原文档/manifest/脚本读取供预览和无当前检测状态共用，完整 basis 留在已有 ready 和检测入口；复用已有请求内 blob cache，并加入仓库身份，避免跨上下文重复读取。保持页面布局、项目键、准入、停止、提示词及 Runner 接线。
 
 新增 owner 与前端回归对应 Spec 第 7 节；定向 owner 先诊断，再执行 `web.unit`、`go.http`、`go.environment`、固定 L1/L2 和 Web 构建；输出根 `C:/SteerlineDebug/wt-68cd-environment-options-latency/`，每次调用使用独立叶目录，保留失败。文档链接与 diff 检查完成后独立审核修复，实际结果追加原验收记录。安装现场仅作只读诊断；源码修复通过不冒充安装版已更新或真实项目检测通过。
+
+## 6. 可读远程机名称的最小适配
+
+提取执行方案页已有的全局远程机目录 Query 和名称解析，项目环境页的分组及当前对象标题复用该实现；目录仍按应用 home 缓存，不扩项目接口或持久配置。仅有远程目标时查询目录，显式刷新时重查；名称请求不控制列表或 verified。新增 UUID→可读名称与目录挂起不影响资格的前端回归，并在原配置导航浏览器场景验证名称显示；执行 Web 构建、`web.unit`、固定 L1/L2及文档检查，证据根 `C:/SteerlineDebug/wt-68cd-readable-machine-names/`。不修改后端、HTTP/存储协议、环境依据或执行接线，不重复无影响的 Go owner 全集；结果归原专属验收。

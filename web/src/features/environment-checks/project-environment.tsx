@@ -3,6 +3,10 @@ import { useQuery } from "@tanstack/react-query";
 import { useWorkspace } from "../../app/context";
 import { usePageVisible } from "../../shared/query-visibility";
 import { Button } from "../../shared/ui/button";
+import {
+  executionTargetName,
+  useExecutionEnvironments,
+} from "../../shared/api/execution-environments";
 
 import {
   EnvironmentObservation,
@@ -81,6 +85,13 @@ function EnvironmentWorkspace() {
     "environment",
   ];
   const options = useEnvironmentReadiness();
+  const hasRemote =
+    options.data?.environments.some(
+      (e) => e.target.kind === "orca_environment",
+    ) ?? false;
+  const machines = useExecutionEnvironments(api.home, api.csrf, hasRemote);
+  const machineName = (e: Environment) =>
+    executionTargetName(e.target, machines.data?.environments);
   const [environmentKey, setEnvironmentKey] = useState("");
   const [allActivities, setAllActivities] = useState(false);
   const activeKey = useRef(environmentKey);
@@ -129,6 +140,7 @@ function EnvironmentWorkspace() {
     refetchInterval: visible && !!selected ? 3000 : false,
   });
   const refresh = () => {
+    if (hasRemote) void machines.refetch();
     void options.refetch();
     void history.refetch();
     if (environmentKey) void materialQuery.refetch();
@@ -224,7 +236,8 @@ function EnvironmentWorkspace() {
         刷新环境
       </Button>
       <p>
-        项目自行检测所选环境并报告结论和原因。SteerLine 调用项目入口，核对结果归属与执行收尾后，消费项目结论授予新任务的环境资格。
+        项目自行检测所选环境并报告结论和原因。SteerLine
+        调用项目入口，核对结果归属与执行收尾后，消费项目结论授予新任务的环境资格。
       </p>
       {task && (
         <Link to={`/projects/${identity.project_id}/runs?${returnParams}`}>
@@ -240,11 +253,7 @@ function EnvironmentWorkspace() {
         <h2>选择运行机与链路</h2>
         {[...groups].map(([key, environments]) => (
           <section key={key}>
-            <h3>
-              {environments[0].target.kind === "local"
-                ? "本机"
-                : environments[0].name}
-            </h3>
+            <h3>{machineName(environments[0])}</h3>
             <div className="actions">
               {environments.map((e) => (
                 <Button
@@ -286,8 +295,7 @@ function EnvironmentWorkspace() {
       {environment && (
         <section aria-label="当前准备对象">
           <h2>
-            {projectName} /{" "}
-            {environment.target.kind === "local" ? "本机" : environment.name} /{" "}
+            {projectName} / {machineName(environment)} /{" "}
             {environment.adapter === "codex-app-server"
               ? "Codex 直连"
               : `Orca → ${environment.agent || "Codex"}`}
@@ -297,7 +305,9 @@ function EnvironmentWorkspace() {
             {environment.reason}
           </p>
           <section className="settings-panel" id="environment-materials">
-            <Link to="/settings/execution-configs">查看全局执行配置与能力探测</Link>
+            <Link to="/settings/execution-configs">
+              查看全局执行配置与能力探测
+            </Link>
             <h2>准备要求与材料</h2>
             {materialQuery.isError && (
               <p role="alert">材料观察待核实：{String(materialQuery.error)}</p>
