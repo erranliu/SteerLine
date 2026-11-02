@@ -63,6 +63,7 @@ export function Workspace({
   connectionError?: unknown;
   onRefreshConnection?: () => void;
 }) {
+  const environmentPage = useLocation().pathname.endsWith("/environment");
   const { api, identity, snapshot, page, online, diagnostic, refresh } =
     useWorkspaceConnection({
       initial,
@@ -122,10 +123,12 @@ export function Workspace({
           <div className="connection">
             <span className={"connection-dot " + (online ? "" : "offline")} />
             <span aria-live="polite">{online ? "服务在线" : "连接待核实"}</span>
-            <EnvironmentSummary />
-            <span className="instance-label">
-              {short(identity.instance_id)}
-            </span>
+            {!environmentPage && <EnvironmentSummary />}
+            {!environmentPage && (
+              <span className="instance-label">
+                {short(identity.instance_id)}
+              </span>
+            )}
             <Button
               size="sm"
               variant="ghost"
@@ -137,7 +140,11 @@ export function Workspace({
           </div>
         }
       >
-        <ProjectMaintenance key={identity.project_id + identity.instance_id} />
+        {!environmentPage && (
+          <ProjectMaintenance
+            key={identity.project_id + identity.instance_id}
+          />
+        )}
         {!online && (
           <div className="notice amber" role="status">
             <strong>
@@ -157,8 +164,12 @@ export function Workspace({
         )}
         {error && (
           <div role="alert" className="notice amber">
-            <strong>操作结果未放行</strong>
-            <p>{error}</p>
+            <strong>
+              {environmentPage
+                ? "操作未完成，请查看操作结果或刷新重试。"
+                : "操作结果未放行"}
+            </strong>
+            {!environmentPage && <p>{error}</p>}
             <Button size="sm" onClick={clearError}>
               收起提示
             </Button>
@@ -174,7 +185,7 @@ export function Workspace({
             配置已保存，需重启 SteerLine 后才能启动新候选。已有执行保留原参数。
           </div>
         )}
-        <Dispatch />
+        {!environmentPage && <Dispatch />}
         <Suspense fallback={<div className="empty">正在加载页面…</div>}>
           <Routes>
             <Route
@@ -230,6 +241,7 @@ export function Workspace({
           </Routes>
         </Suspense>
         <Operations
+          compact={environmentPage}
           requests={(requests.data ?? []).filter(
             (r) => r.envelope.project_id === identity.project_id,
           )}
