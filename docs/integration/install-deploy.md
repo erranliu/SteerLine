@@ -4,7 +4,7 @@
 
 ## 从源码更新
 
-需要同时构建 SteerLine、Web 和 Runner 时，双击根目录 `build-deploy-all.bat`。该入口复用 `build-deploy.bat` 并固定传入 `-UpdateRunner`，其余参数原样转交，默认完成构建、部署和启动；换 Runner 构建前须用原版本排空业务、原生资源和未完成控制；v8 与旧目录不兼容。
+需要同时构建 SteerLine、Web 和 Runner 时，双击根目录 `build-deploy-all.bat`。该入口复用 `build-deploy.bat` 并固定传入 `-UpdateRunner`，其余参数原样转交，默认完成构建、部署和启动。构建成功后脚本自动通过正式入口停止原安装，再核验原业务、原生资源和未完成控制已排空，通过后才替换文件；无需预先手动停服。服务退出不等于业务终态，未排空时保留原文件并报出具体原因，不自动恢复、取消 Run 或清库；v8 与旧目录不兼容。
 
 双击 SteerLine 仓库根目录 `build-deploy.bat`。已有安装默认复用 `execution.json` 固定的 Runner EXE，只构建 SteerLine 和 Web；首次安装或显式 `-UpdateRunner` 才从相邻 `..\SteerRunner` 源码构建 Runner。构建成功后停止应用，校验停止或同构建重启资格，安装 EXE 并重新启动。每次记录保存在 `<home>\deployments\<时间-随机ID>\deployment.json`，最新记录为 `<home>\deployment.json`，包含源码版本和三个 EXE 的实际摘要。
 
@@ -15,7 +15,7 @@
 .\build-deploy.bat -NoPause
 # 只更新，不启动
 .\build-deploy.bat -NoStart -NoPause
-# 显式构建 Runner；要求原版本先排空，新候选声明 v8 契约
+# 显式构建 Runner；自动停服后校验排空，新候选须声明 v8 契约
 .\build-deploy-all.bat -NoPause
 # 覆盖源码位置或目标安装目录
 .\build-deploy.bat -RunnerRepo C:\Project\SteerRunner -InstallHome C:\SteerlineInstall -NoPause
@@ -42,13 +42,13 @@ $env:STEERLINE_HOME='C:\SteerlineInstall'
 & "$env:STEERLINE_HOME\bin\steerline.exe" status --json
 ```
 
-在有 kill-on-close Job 限制的自动化宿主中，直接启动可能明确拒绝常驻；请从普通桌面终端/安装目录启动，不关闭隔离检查或以前台服务冒充常驻成功。
+部署通过 Windows `Win32_Process.Create` 进程管理接口运行正式安装版 `start`，避免常驻服务继承部署宿主的 kill-on-close Job。启动代理显式保留调用者环境与目标 home、核对 Windows 用户，不将环境变量写入磁盘或命令行。部署包中的 `startup-<调用ID>.log/.json` 保存本次启动输出和退出码，启动返回成功后仍须全部项目 ready 才算部署完成；创建进程成功不等于部署成功。代理失败、超时或结果不匹配均失败，不自动重复启动。`-NoStart` 不创建启动代理。直接从其他自动化宿主调用 `start` 仍保留产品自身的生命周期检查。
 
 ## 同构建更新与重启
 
 同构建重启可保留原后台执行，核对原宿主/Web/Runner 服务退出、项目关闭/锁释放、冻结配置、checkpoint 和 Run/input；资源未结算诊断保持。`restart.bat` 或 `bin/steerline.exe restart --no-open` 使用相同规则。原资源丢失时，Runner 返回 `blocked/manual_intervention_required`，由用户显式 resume 做有界原操作只读对账；不重建资源或自动重发输入。
 
-当前 Runner 使用 `steerrunner-state/v8`，已删除 `service verify-takeover --candidate`，不支持跨构建活动任务接管。部署在停服及替换之前调用 `verify-runner-upgrade --home <InstallHome>`，核验候选公开的离线 capabilities；换构建还须核实原服务已退出、公开 verify-stopped 资源结算以及每个原 Run 的业务终态。`pr_ready`、仅停止服务或资源仍未知均不足以升级。该预检不自动停止 Run、不迁移或清空数据，也不是持续持有的 writer lease。
+当前 Runner 使用 `steerrunner-state/v8`，已删除 `service verify-takeover --candidate`，不支持跨构建活动任务接管。部署先构建、校验版本和执行配置，再通过 `prepare-deployment` 停服及核验，随后在替换之前调用 `verify-runner-upgrade --home <InstallHome>`，核验候选公开的离线 capabilities；换构建还须核实原服务已退出、公开 verify-stopped 资源结算以及每个原 Run 的业务终态。`pr_ready`、仅停止服务或资源仍未知均不足以升级。排空校验失败时原服务可能已停止，原 EXE、配置和数据库保持；按原诊断使用原版本处理未完成业务后重跑。该校验不自动停止 Run、不迁移或清空数据，也不是持续持有的 writer lease。
 
 共享短目录以规范化 home 和固定 v8 身份派生，同一 home 的项目仍共用一个 Runner。旧 `runner-build.json` 指向其他命名空间时明确阻断，并保留原 EXE、配置、数据库、任务和原目录。先用原安装版本处理、停止并核实全部旧资源，再部署到一个全新的、与原安装分离的 InstallHome，例如：
 

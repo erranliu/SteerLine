@@ -15,6 +15,7 @@ if (-not $RunnerRepo) { $RunnerRepo = Join-Path (Split-Path -Parent $sourceRoot)
 $RunnerRepo = [IO.Path]::GetFullPath($RunnerRepo)
 $InstallHome = [IO.Path]::GetFullPath($InstallHome)
 . (Join-Path $PSScriptRoot 'deployment-stop.ps1')
+. (Join-Path $PSScriptRoot 'deployment-start.ps1')
 . (Join-Path $PSScriptRoot 'deployment-runner.ps1')
 . (Join-Path $PSScriptRoot 'deployment-files.ps1')
 . (Join-Path $PSScriptRoot 'build-timing.ps1')
@@ -23,10 +24,6 @@ function Within([string]$Root, [string]$Path) {
     $rootPath = [IO.Path]::GetFullPath($Root).TrimEnd('\','/')
     $valuePath = [IO.Path]::GetFullPath($Path).TrimEnd('\','/')
     return $valuePath.Equals($rootPath, [StringComparison]::OrdinalIgnoreCase) -or $valuePath.StartsWith($rootPath + '\', [StringComparison]::OrdinalIgnoreCase)
-}
-function Invoke-Checked([string]$Exe, [string[]]$Arguments) {
-    & $Exe @Arguments
-    if ($LASTEXITCODE -ne 0) { throw "$Exe failed (exit $LASTEXITCODE)" }
 }
 function Install-Executable([string]$Exe, [string]$Target) {
     for ($attempt = 1; $attempt -le 5; $attempt++) {
@@ -132,9 +129,6 @@ if (-not $version.ok -or $version.protocol -ne 'steerrunner-cli/v1') { throw 'St
 $runnerHash = (Get-FileHash -LiteralPath $runnerStage -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($runnerSelection.Reuse -and ($runnerHash -ne $runnerSelection.SHA256 -or $version.data.version -ne $runnerSelection.Version)) { throw 'Staged Runner differs from its installed release pin.' }
 Assert-Plain (Join-Path $InstallHome 'application-api\runner-build.json')
-Next-DeploymentStage 'deploy.runner-upgrade-preflight'
-$upgrade = Assert-DeploymentRunnerBuild $InstallHome $runnerHash $runnerStage (Join-Path $package 'steerline.exe')
-Write-JSON (Join-Path $package 'runner-upgrade-preflight.json') $upgrade
 Next-DeploymentStage 'deploy.execution-config'
 $configPath = Join-Path $InstallHome 'execution.json'
 Assert-Plain $configPath
@@ -164,6 +158,11 @@ try {
     }
     $owned = @(Get-CimInstance Win32_Process | Where-Object { $_.Name -in @('steerline.exe','steerline-web.exe','steerrunner.exe') -and $_.ExecutablePath -and (Within $bin $_.ExecutablePath) })
     if ($owned.Count) { throw 'Installed processes remain; preserve the original instance and inspect its shutdown result.' }
+    # Drainage is a cold query: the original service must exit first. Go still
+    # verifies business terminal states, resources and outstanding controls.
+    Next-DeploymentStage 'deploy.runner-upgrade-preflight'
+    $upgrade = Assert-DeploymentRunnerBuild $InstallHome $runnerHash $runnerStage (Join-Path $package 'steerline.exe')
+    Write-JSON (Join-Path $package 'runner-upgrade-preflight.json') $upgrade
     Assert-Plain $bin
     Next-DeploymentStage 'deploy.install-files'
     Install-Executable (Join-Path $package 'steerline.exe') (Join-Path $bin 'steerline.exe')
@@ -183,7 +182,7 @@ try {
     Write-JSON (Join-Path $InstallHome 'deployment.json') $record -Private
     if (-not $NoStart) {
         Next-DeploymentStage 'deploy.start'
-        Invoke-Checked $installed @('start')
+        Start-DeploymentApplication $installed $InstallHome $package
         Next-DeploymentStage 'deploy.wait-ready'
         Wait-Ready $installed
     } else {
