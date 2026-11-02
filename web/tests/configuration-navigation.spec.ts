@@ -446,6 +446,12 @@ test("configuration navigation, unsaved history, shared concurrency and responsi
     "href",
     target,
   );
+  await page.locator("summary").filter({ hasText: "更多设置" }).click();
+  await expect(page.getByText("开发执行权限固定为完全访问。")).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "权限模式" })).toHaveCount(0);
+  await expect(
+    page.getByRole("option", { name: /Runner 默认|沙箱/ }),
+  ).toHaveCount(0);
   await page.screenshot({
     path: info.outputPath("profiles-desktop.png"),
     fullPage: true,
