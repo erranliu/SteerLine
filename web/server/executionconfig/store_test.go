@@ -49,6 +49,32 @@ func fixture(t *testing.T) (*Store, Config) {
 	return s, c
 }
 
+func TestDevelopmentCombinationProjectionUsesValidPermissionMode(t *testing.T) {
+	s, c := fixture(t)
+	snapshot, err := s.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Combinations) == 0 {
+		t.Fatal("no mapped development combinations")
+	}
+	for _, choice := range snapshot.Combinations {
+		if !choice.Supported || len(choice.Workflows) == 0 || len(choice.Efforts) == 0 {
+			t.Fatal("valid published combination was hidden", choice)
+		}
+	}
+	// The projection's sample must not supply defaults to actual saved profiles.
+	var settings map[string]any
+	if err := json.Unmarshal(c.Profiles[0].Execution.Settings, &settings); err != nil {
+		t.Fatal(err)
+	}
+	delete(settings, "access_mode")
+	c.Profiles[0].Execution.Settings, _ = json.Marshal(settings)
+	if _, err := s.Validate(context.Background(), encode(t, c)); err == nil {
+		t.Fatal("saved execution without explicit permission mode was accepted")
+	}
+}
+
 func TestEnvironmentProjectionSurvivesMetadataFailure(t *testing.T) {
 	s, _ := fixture(t)
 	s.ReadCatalog = func(context.Context, cfg.Pin) (*catalog, error) { return nil, errors.New("metadata unavailable") }

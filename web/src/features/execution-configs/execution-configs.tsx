@@ -295,7 +295,10 @@ export function ExecutionConfigs({
             execution: {
               adapter: "codex-app-server",
               target: { kind: "local" },
-              settings: { executable: localExecutable },
+              settings: {
+                access_mode: "full_access",
+                executable: localExecutable,
+              },
             },
             workflow: {
               id: "development",
@@ -338,7 +341,7 @@ export function ExecutionConfigs({
     if (chain === "codex-app-server") {
       settings = template
         ? clone(template.execution.settings)
-        : { executable: "codex.exe" };
+        : { access_mode: "full_access", executable: "codex.exe" };
       delete settings.model;
       delete settings.reasoning_effort;
     } else {
@@ -355,6 +358,7 @@ export function ExecutionConfigs({
       settings = template
         ? clone(template.execution.settings)
         : {
+            access_mode: "full_access",
             transport: clone(
               routeTemplate?.execution.settings.transport ?? {
                 executable: "orca.exe",

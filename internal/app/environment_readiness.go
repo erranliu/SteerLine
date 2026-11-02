@@ -41,7 +41,13 @@ type environmentView struct {
 	LastPassedActivity string                         `json:"last_passed_activity_id,omitempty"`
 }
 
-func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
+type environmentOptions struct {
+	Profiles       []environmentProfileView `json:"profiles"`
+	Environments   []environmentView        `json:"environments"`
+	DefaultProfile string                   `json:"default_profile_id"`
+}
+
+func (p *environmentPort) configurationOptions() environmentOptions {
 	// Configuration facts exist independently of project storage and materials.
 	environments := []environmentView{}
 	groups := map[string]int{}
@@ -55,7 +61,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			group = "unsupported:" + profile.ID
 		}
 		model, effort := environmentProfileModel(profile.Execution)
-		view := environmentProfileView{ID: profile.ID, Name: profile.Name, Model: model, ReasoningEffort: effort, Key: key}
+		view := environmentProfileView{ID: profile.ID, Name: profile.Name, Model: model, ReasoningEffort: effort, Key: key, Status: "not_ready", Stage: "unverified", Reason: "项目运行环境状态待核实"}
 		if index, ok := groups[group]; ok {
 			environments[index].Profiles = append(environments[index].Profiles, view)
 			continue
@@ -71,21 +77,32 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			_ = json.Unmarshal(profile.Execution.Settings, &display)
 		}
 		groups[group] = len(environments)
-		environments = append(environments, environmentView{Key: key, Name: name, Target: profile.Execution.Target, Adapter: profile.Execution.Adapter, Agent: display.Agent, Profiles: []environmentProfileView{view}, DocumentPath: env.DocumentPath(key)})
+		environments = append(environments, environmentView{Key: key, Name: name, Target: profile.Execution.Target, Adapter: profile.Execution.Adapter, Agent: display.Agent, Profiles: []environmentProfileView{view}, DocumentPath: env.DocumentPath(key), Status: view.Status, Stage: view.Stage, Reason: view.Reason})
 	}
+	return p.optionsFor(environments)
+}
+
+func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
+	ctx = materialReads(ctx)
+	environments := p.configurationOptions().Environments
 
 	rows, historyErr := p.store.Environments(ctx, p.config.Identity())
 	commit, sourceErr := p.observedSource(ctx)
-	byProfile := map[string]environmentProfileView{}
 	for i := range environments {
 		item := &environments[i]
 		id := item.Profiles[0].ID
 		current, record, readErr := p.current(ctx, id)
 		materialErr := errors.Join(historyErr, readErr, sourceErr)
 		basis := ""
-		if materialErr == nil {
-			prepared, err := p.materialAt(ctx, id, commit)
-			materialErr, basis = err, prepared.Inputs
+		if materialErr == nil && !current.Invalidated {
+			if current.ActivityID == "" {
+				// No qualification exists to compare. Validate the invocation only;
+				// start still validates every declared dependency before executing.
+				_, _, _, materialErr = p.invocationAt(ctx, item.Key, commit)
+			} else if record.Status() == "ready" {
+				prepared, err := p.materialAt(ctx, id, commit)
+				materialErr, basis = err, prepared.Inputs
+			}
 		}
 		item.Status, item.Stage, item.Reason = env.View(current, record, basis, materialErr)
 		if historyErr != nil || readErr != nil || item.Key == "" {
@@ -109,7 +126,16 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			v := &item.Profiles[j]
 			v.Status, v.Stage, v.Reason = item.Status, item.Stage, item.Reason
 			v.CurrentRevision, v.ActivityID = item.CurrentRevision, item.ActivityID
-			byProfile[v.ID] = *v
+		}
+	}
+	return p.optionsFor(environments), nil
+}
+
+func (p *environmentPort) optionsFor(environments []environmentView) environmentOptions {
+	byProfile := map[string]environmentProfileView{}
+	for _, item := range environments {
+		for _, profile := range item.Profiles {
+			byProfile[profile.ID] = profile
 		}
 	}
 	profiles := []environmentProfileView{}
@@ -118,7 +144,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			profiles = append(profiles, view)
 		}
 	}
-	return map[string]any{"profiles": profiles, "environments": environments, "default_profile_id": p.config.RunnerExecution.DefaultProfile}, nil
+	return environmentOptions{Profiles: profiles, Environments: environments, DefaultProfile: p.config.RunnerExecution.DefaultProfile}
 }
 
 func environmentProfileModel(execution runnercontract.ExecutionInput) (string, string) {

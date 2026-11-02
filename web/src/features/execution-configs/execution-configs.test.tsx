@@ -25,6 +25,7 @@ function fixture(
     defaults?: boolean;
     lost?: boolean;
     helper?: boolean;
+    helperAgent?: "codex" | "pi";
     piProviders?: boolean;
     remoteAgents?: boolean;
     remotePair?: boolean;
@@ -106,6 +107,7 @@ function fixture(
             adapter: "codex-app-server",
             target: { kind: "local" },
             settings: {
+              access_mode: "full_access",
               executable: "codex.exe",
               model: options.unknown ? "unconfirmed" : "large",
               reasoning_effort: "ultra",
@@ -129,10 +131,11 @@ function fixture(
         adapter: "orca-terminal",
         target: { kind: "local" },
         settings: {
-          agent: "codex",
+          access_mode: "full_access",
+          agent: options.helperAgent ?? "codex",
           transport: { executable: "orca.exe" },
           agent_launch: {
-            executable: "codex",
+            executable: options.helperAgent === "pi" ? "pi.cmd" : "codex",
             runtime_executable: "C:/deployment/helper.exe",
             runtime_sha256: "a".repeat(64),
           },
@@ -417,6 +420,32 @@ it("copies and deletes a saved non-default profile without deleting the default"
   expect(
     (writes[1] as ConfigSnapshot["config"]).default_execution_profile,
   ).toBe("local");
+});
+
+it("creates a local Orca Codex profile from a Pi-only local deployment with explicit development access", async () => {
+  const writes = fixture({ helper: true, helperAgent: "pi" });
+  await screen.findByDisplayValue("本机日常");
+  fireEvent.click(screen.getByRole("button", { name: "新建方案" }));
+  fireEvent.change(screen.getByLabelText("执行链路"), {
+    target: { value: "orca-terminal" },
+  });
+  await screen.findByRole("option", { name: "codex-local" });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  const created = (writes[0] as ConfigSnapshot["config"]).execution_profiles.at(-1)!;
+  expect(created.execution).toMatchObject({
+    adapter: "orca-terminal",
+    target: { kind: "local" },
+    settings: {
+      access_mode: "full_access",
+      agent: "codex",
+      agent_launch: {
+        executable: "codex", model: "codex-local",
+        runtime_executable: "C:/deployment/helper.exe",
+        runtime_sha256: "a".repeat(64),
+      },
+    },
+  });
 });
 
 it("maps local Orca agents, inherits deployment material and strips it remotely", async () => {

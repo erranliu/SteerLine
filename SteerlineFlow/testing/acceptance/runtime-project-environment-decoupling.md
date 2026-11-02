@@ -85,3 +85,31 @@ npm --prefix web run test:e2e -- configuration-navigation.spec.ts --output <独�
 修复后的 `diagnostics/20261102040715746-review-web/summary.json` 为完整 Web owner 58 项通过（17.6 秒）；`test-results/L1/20261102040715746-review/summary.json` complete=true/passed=true（执行16.3秒）。修复仅影响远端输入校验，前端/项目执行/停止协议未变，不重复无影响的浏览器与 L3。最终 L2 `test-results/L2/20261102040801730-review/summary.json` passed=true/cleanup_complete=true；所选验证与独立审核至此全部完成。
 
 最终结论：RPE-A01–A07 的所选 owner、Web、受控浏览器、L1/L2 和两项 L3 均已验证，独立审核问题已修复并复核闭合。目录观察与项目资格保持分层，无新增全局资格或持久对象；只读探测不被当作真实模型/原生执行成功。文档/清单静态检查通过；用户随后授权将实现、Spec/Plan 与本验收记录一起提交、推送并创建 PR，实际提交与 PR 身份以 Git/平台记录为准，未部署。
+
+## 7. 安装现场待核实与空选择器修复（2026-11-02）
+
+用户截图选择 SteerlineTest，项目实例 `ca22ffa8b6120d7253d64dd11417c4c5`，并非全局配置入口缺失。先 fetch/rebase 到 `origin/main` 的 `7d85a9e908102a4f12210bbba91408f39362e6a7`，无冲突。只读核对安装 deployment 清单及两个 EXE 构建信息：均为该 SHA、clean，已包含 PR #424 的解耦；不是漏部署或看错实例。
+
+公开 API 诊断：三个项目 snapshot 均在线且身份/配置匹配；全局执行配置约 0.06 秒返回，已加载与已保存摘要相等，有 3 个运行环境分组、7 个方案；SteerlineTest `/environment/options` 等待 45 秒仍无响应，而原活动列表约 0.76 秒返回空列表。该项目四个环境文档均存在，manifest4 每组约 50 个大量重叠的显式依赖。原 options 在返回配置之前逐组计算完整依据，每个文件又执行三次受管 Git 命令；材料预览同样重复全量读取。因此“待核实”是资格观察未返回，不能解释为运行机/链路不存在，也不能当作项目已检测失败。诊断未打印凭据、未修改项目材料、数据库或安装现场，未启动检测。
+
+修复对应新增 Spec §7 / Plan §5：启动配置轻量查询与完整资格查询分开返回，页面先显示配置；无当前检测只检查调用入口；已有 ready 和实际 prepare 保留完整依赖校验。材料预览移除未消费的 inputs 摘要，复用原入口读取；现有请求内 blob 缓存归入 Git 文档读取 owner，以仓库、固定提交、路径隔离。无持久资格缓存、兼容分支、状态表或新增 Runner 调用。
+
+本轮独立证据根：`C:/SteerlineDebug/wt-68cd-environment-options-latency/`；受测代码为上述主线 SHA 的 dirty 工作树，原始摘要保存实际源码状态。
+
+| 实际选择 | 结果 | 证据（相对根目录） |
+| --- | --- | --- |
+| 定向 owner：`./internal/app -run 'Environment|PMSGenerationShares' -count=1` | 45 项通过，494.9 秒；含配置查询无项目访问、无资格不读依赖但 prepare 拒绝缺失依赖，以及原 ready 依据/失效/占用/停止反例 | `diagnostics/owner-final/summary.json` |
+| `web.unit` | 31 文件、231 项完整通过，36.8 秒；挂起资格时配置可见、初次配置失败后显式恢复均覆盖 | `test-results/L4/web-confirmed/summary.json` |
+| `go.http` | complete=true/passed=true，59.8 秒 | `test-results/L4/http-final/summary.json` |
+| `go.environment` | complete=true/passed=true，4包335项终态、0失败/0跳过，1510.8秒；其中 app 1471.9秒 | `test-results/L4/environment-final/summary.json` |
+| 固定 L1 | complete=true/passed=true，最终执行32.3秒；初次报告另存 | `test-results/L1/confirmed/summary.json` |
+| 固定 L2 | passed=true/cleanup_complete=true，执行151.7秒；受控隔离现场 | `test-results/L2/initial/summary.json` |
+| Web 构建、浏览器 | `npm --prefix web run build` 成功；configuration-navigation.spec.ts 两场景通过，10.0秒 | `diagnostics/browser-final/`，含 `configuration-visible-qualification-pending.png` 和 trace；已查看截图，列表可见且检测禁用 |
+
+首轮前端全集失败于预加载请求白名单未含轻量查询，原断言同步后保留原报告 `test-results/L4/web-unit/`。第二轮失败于新增错误恢复测试的 fixture 未实际注入配置错误，补齐模拟后定向23项及上述完整231项通过，原报告 `test-results/L4/web-final/` 保留；未放宽生产状态或测试通过条件。早期 owner 诊断通过记录在 `diagnostics/owner-initial/`（407.4秒），不替代包含新增回归的 owner-final。
+
+独立子代理确认一项 P2：轻量请求初次失败后，显式刷新只刷新完整资格，列表仍可能为空。已修复为同时刷新配置与资格并保留完整资格的返回值，补挂起/失败恢复回归；同一审核者重新读取最终代码、Spec/Plan，确认 P2 闭合，未发现新增确认问题。没有修改提示词正文、模型材料、Runner 请求或执行接线。
+
+当前尚未部署该补丁，也未将源码/受控浏览器通过冒充安装版已更新或 SteerlineTest 的真实检测通过。文档链接检查为645个 Markdown、4039本地链接、0错误，diff 空白检查通过。所选 L1/L2、前端/HTTP/环境完整集及浏览器均已通过；环境完整集按固定入口串行运行，包含既有部署/重启/恢复与项目维护接线，原耗时如实保留，未放宽超时或缩窄选择。
+
+全部验证完成后，独立审核者再次只读核对最终 diff、验收记录和原报告，确认环境335项、前端231项（31文件）、HTTP104项、owner45项、L1/L2及清理状态相符，浏览器trace无错误且截图存在；无未解决阻塞项。

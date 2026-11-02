@@ -169,7 +169,7 @@ function EnvironmentWorkspace() {
       : records;
   const focusProfile = options.data?.profiles.find((p) => p.id === profile);
   useEffect(() => {
-    if (initialized.current || !options.verified) return;
+    if (initialized.current || !options.data) return;
     initialized.current = true;
     const initial = profile
       ? focusProfile

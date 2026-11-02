@@ -45,27 +45,8 @@ func (m *projectMaintenance) git(ctx context.Context, args ...string) ([]byte, e
 	return (commandRunner{Dir: m.config.Repository, Timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), ProcessHost: m.config.ProcessHost}).Output(ctx, m.config.Git, args...)
 }
 
-type materialReadKey struct{}
-
-// Each assessment uses one request-scoped cache of immutable Git blobs. It is
-// never shared between requests or used for mutable workspace files.
-func materialReads(ctx context.Context) context.Context {
-	return context.WithValue(ctx, materialReadKey{}, map[string][]byte{})
-}
 func (m *projectMaintenance) read(ctx context.Context, commit, path string) ([]byte, error) {
-	cache, _ := ctx.Value(materialReadKey{}).(map[string][]byte)
-	key := commit + ":" + path
-	if b, ok := cache[key]; ok {
-		return b, nil
-	}
-	if e := taskmodel.ValidateFileReference(taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)}); e != nil {
-		return nil, e
-	}
-	b, e := (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).readCommittedFile(ctx, commit, path)
-	if e == nil && cache != nil {
-		cache[key] = b
-	}
-	return b, e
+	return (taskDocuments{repository: m.config.Repository, git: m.config.Git, timeout: positiveDuration(m.config.CommandTimeout, 30*time.Second), processHost: m.config.ProcessHost}).ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: commit, SHA256: strings.Repeat("0", 64)})
 }
 func (m *projectMaintenance) current() pmm.Observation {
 	m.mu.Lock()

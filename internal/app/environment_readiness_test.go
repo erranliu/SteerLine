@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/erranliu/SteerLine/internal/executionconfig"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,54 @@ import (
 )
 
 type readinessTasks struct{ project string }
+
+func TestEnvironmentConfigurationQueryDoesNotTouchProject(t *testing.T) {
+	p, c, store := environmentFixture(t)
+	require(t, store.Close())
+	p.store = nil
+	p.config.Repository = filepath.Join(t.TempDir(), "absent-project")
+	p.config.Git.Executable = "missing-git"
+	c.runtimeEnvironment = p
+	port := &runtimeProjectPort{config: c}
+	value, err := port.environmentRead(context.Background(), "/environment/options", url.Values{"configuration": {"true"}})
+	require(t, err)
+	options := value.(environmentOptions)
+	if len(options.Profiles) != len(c.RunnerExecution.Profiles) || len(options.Environments) == 0 {
+		t.Fatal(options)
+	}
+	for _, item := range options.Environments {
+		if item.Status != "not_ready" || item.Stage != "unverified" || item.ActivityID != "" || item.CurrentRevision != 0 {
+			t.Fatal("configuration claimed project qualification", item)
+		}
+	}
+	for _, query := range []url.Values{{"configuration": {"false"}}, {"configuration": {"true", "true"}}, {"configuration": {"true"}, "extra": {"true"}}} {
+		if _, err := port.environmentRead(context.Background(), "/environment/options", query); err == nil {
+			t.Fatal("accepted invalid query", query)
+		}
+	}
+}
+
+func TestEnvironmentUnqualifiedQueryDoesNotReadDependencyBasis(t *testing.T) {
+	p, c, _ := environmentFixture(t)
+	profile, err := c.RunnerExecution.Profile("remote", "")
+	require(t, err)
+	key, err := env.Key(profile.Execution)
+	require(t, err)
+	path := filepath.Join(c.Repository, filepath.FromSlash(env.DocumentPath(key)))
+	document := environmentFixtureDocument(key, "ps1", "", []string{"missing-dependency.md"})
+	require(t, os.WriteFile(path, []byte(document), 0600))
+	commitEnvironmentMaterials(t, c)
+	value, err := p.readinessOptions(context.Background())
+	require(t, err)
+	for _, item := range value.(environmentOptions).Environments {
+		if item.Key == key && (item.Stage != "awaiting_user" || item.Status == "ready") {
+			t.Fatal(item)
+		}
+	}
+	if _, err := p.prepare(context.Background(), "remote"); err == nil || !strings.Contains(err.Error(), "missing-dependency.md") {
+		t.Fatal("start did not validate the full dependency basis", err)
+	}
+}
 
 func TestProjectEnvironmentConfigurationSurvivesProjectFailures(t *testing.T) {
 	for _, failure := range []string{"materials", "source", "storage"} {

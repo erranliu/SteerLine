@@ -214,14 +214,14 @@ func (c *catalog) project(doc any) {
 			if w.ID != "development" && w.ID != "development-audited" {
 				continue
 			}
-			settings := map[string]any{"model": "web-schema-model"}
+			settings := map[string]any{"access_mode": "full_access", "model": "web-schema-model"}
 			if choice.Adapter == "orca-terminal" {
 				launch := map[string]any{"model": "web-schema-model"}
 				if choice.Host == "local" {
 					launch["runtime_executable"] = "C:/deployment/steerrunner-agent.exe"
 					launch["runtime_sha256"] = strings.Repeat("a", 64)
 				}
-				settings = map[string]any{"agent": choice.Agent, "agent_launch": launch}
+				settings = map[string]any{"access_mode": "full_access", "agent": choice.Agent, "agent_launch": launch}
 			}
 			raw, _ := json.Marshal(settings)
 			p := cfg.Profile{Execution: runnercontract.ExecutionInput{Adapter: choice.Adapter, Target: runnercontract.ExecutionTarget{Kind: choice.Host}, Settings: raw}, Workflow: runnercontract.Workflow{ID: w.ID, Version: w.Version}}
