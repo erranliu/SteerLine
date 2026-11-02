@@ -21,3 +21,13 @@
 | 文档与差异 | `python scripts/check_doc_links.py`、`git diff --check` | 通过。 |
 
 本轮不执行真实模型/远端 PR，不将前一阶段用户授权的实际安装维护算作新脚本部署验收。Windows 进程管理接口不可用、启动用户不符或业务未排空时仍明确失败；不增加兼容、迁移、清库或绕过生命周期检查的路径。
+
+## PR 主干更新后复验
+
+提 PR 前无冲突更新到 `d9aa258d` 主干，受测代码提交为 `c730abe55eb697880d61383ee44fb99ec8719c8b`；两个正式 summary 均记录干净源码。下列路径仍相对同一证据根：
+
+- `diagnostics/pipeline-pr-c730abe5/result.json`：11 项部署场景再次通过；`diagnostics/stop-pr-c730abe5.log`：原停服脚本 exit 0。
+- `test-results/L1/pr-c730abe5-deps-ready/summary.json`：最新固定 L1（含前端）通过，准备 0.34s、执行 13.09s。
+- `test-results/L2/pr-c730abe5/summary.json`：固定 L2 通过，准备 8.61s、执行 112.86s，cleanup_complete=true、cleanup_errors=null。
+
+首次新基线 L1 位于 `test-results/L1/pr-c730abe5`，因新主干增加 Vitest 而本 worktree 缺依赖，报告为未完成；按新测试指南执行锁文件固定的 `npm --prefix web ci` 后在全新目录完整补验通过。原失败不覆盖、不计为通过。
