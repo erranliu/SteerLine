@@ -441,7 +441,6 @@ func storageSQLiteImportAllowed(dependency string) bool {
 		module + "/internal/execution/backend", module + "/internal/execution/model",
 		module + "/internal/storage/ports", module + "/internal/task/model",
 		module + "/internal/testmanagement/model",
-		module + "/internal/developerconfig",
 		module + "/internal/prompts",
 		module + "/internal/projectmaintenance/model",
 		module + "/internal/roadmap/model", module + "/internal/environmentadaptation/model",

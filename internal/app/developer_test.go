@@ -21,6 +21,7 @@ import (
 func TestDeveloperConfigurationOptions(t *testing.T) {
 	for _, skip := range []bool{false, true} {
 		p := &environmentPort{config: Config{RunnerExecution: RunnerExecutionConfig{Developer: developerconfig.Config{SkipEnvironmentReadiness: skip}}}}
+		p.config.resolveCapabilities()
 		options := p.configurationOptions()
 		if options.ReadinessRequired != !(skip && developerconfig.Available) {
 			t.Fatal("configuration-only response lost the frozen admission policy", options)
@@ -42,19 +43,23 @@ func TestDeveloperConfigurationLoad(t *testing.T) {
 		return
 	}
 	require(t, err)
-	if !developerconfig.Resolve(loaded.RunnerExecution.Developer).SkipEnvironmentReadiness() {
+	if loaded.environmentPolicy.RequireReadiness() {
 		t.Fatal("saved global switch was not loaded")
+	}
+	loaded.RunnerExecution.Developer.SkipEnvironmentReadiness = false
+	if loaded.environmentPolicy.RequireReadiness() || (&environmentPort{config: loaded}).configurationOptions().ReadinessRequired {
+		t.Fatal("loaded capability changed with raw developer configuration")
 	}
 	c.RunnerExecution.Developer.SkipEnvironmentReadiness = false
 	raw, err = json.Marshal(c.RunnerExecution)
 	require(t, err)
 	require(t, os.WriteFile(GlobalExecutionConfigPath(), raw, 0600))
-	if !developerconfig.Resolve(loaded.RunnerExecution.Developer).SkipEnvironmentReadiness() {
+	if loaded.environmentPolicy.RequireReadiness() {
 		t.Fatal("running configuration changed without restart")
 	}
 	reloaded, err := LoadConfig(c.ConfigPath)
 	require(t, err)
-	if developerconfig.Resolve(reloaded.RunnerExecution.Developer).SkipEnvironmentReadiness() {
+	if !reloaded.environmentPolicy.RequireReadiness() {
 		t.Fatal("restart did not restore default gate")
 	}
 }
@@ -64,6 +69,7 @@ func TestDeveloperReadinessService(t *testing.T) {
 	ctx := context.Background()
 	c.RunnerExecution.DefaultProfile = "remote"
 	c.RunnerExecution.Developer.SkipEnvironmentReadiness = true
+	c.resolveCapabilities()
 	probe := &environmentReserveProbe{SQLiteStore: store}
 	service := runnerTaskService(c, probe, runnerclient.Client{StateDir: filepath.Join(t.TempDir(), "runner")})
 	if err := service.CheckExecution(ctx, "remote", true); (err == nil) != developerconfig.Available {
@@ -75,6 +81,10 @@ func TestDeveloperReadinessService(t *testing.T) {
 	// A running service keeps its original policy if the source value changes.
 	c.RunnerExecution.Developer.SkipEnvironmentReadiness = false
 	require(t, service.CheckExecution(ctx, "remote", false))
+	// Later consumers of the same loaded config share its frozen capability.
+	unmodified := runnerTaskService(c, probe, runnerclient.Client{})
+	require(t, unmodified.CheckExecution(ctx, "remote", false))
+	c.resolveCapabilities()
 	strict := runnerTaskService(c, probe, runnerclient.Client{})
 	if err := strict.CheckExecution(ctx, "remote", false); err == nil {
 		t.Fatal("default did not restore gate")
@@ -108,6 +118,7 @@ func TestDeveloperReadinessService(t *testing.T) {
 	}
 	// Keep the environment report honest even while the gate is disabled.
 	p.config.RunnerExecution.Developer.SkipEnvironmentReadiness = true
+	p.config.resolveCapabilities()
 	value, err := p.readinessOptions(ctx)
 	require(t, err)
 	options := value.(environmentOptions)

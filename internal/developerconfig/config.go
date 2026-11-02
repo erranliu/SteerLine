@@ -1,5 +1,5 @@
 // Package developerconfig owns optional, home-wide development switches.
-// Callers resolve values once at composition and pass the immutable policy on.
+// Application composition maps these values to business-owned policies.
 package developerconfig
 
 import "errors"
@@ -15,16 +15,4 @@ func (c Config) Validate() error {
 		return errors.New("developer configuration is disabled in release builds; remove developer overrides")
 	}
 	return nil
-}
-
-type Policy struct {
-	skipEnvironmentReadiness bool
-}
-
-func Resolve(c Config) Policy {
-	return Policy{skipEnvironmentReadiness: Available && c.SkipEnvironmentReadiness}
-}
-
-func (p Policy) SkipEnvironmentReadiness() bool {
-	return Available && p.skipEnvironmentReadiness
 }

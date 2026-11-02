@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/developerconfig"
 
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -147,8 +146,7 @@ func (p *environmentPort) optionsFor(environments []environmentView) environment
 			profiles = append(profiles, view)
 		}
 	}
-	policy := developerconfig.Resolve(p.config.RunnerExecution.Developer)
-	return environmentOptions{Profiles: profiles, Environments: environments, DefaultProfile: p.config.RunnerExecution.DefaultProfile, ReadinessRequired: !policy.SkipEnvironmentReadiness()}
+	return environmentOptions{Profiles: profiles, Environments: environments, DefaultProfile: p.config.RunnerExecution.DefaultProfile, ReadinessRequired: p.config.environmentPolicy.RequireReadiness()}
 }
 
 func environmentProfileModel(execution runnercontract.ExecutionInput) (string, string) {

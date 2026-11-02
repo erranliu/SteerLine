@@ -246,7 +246,7 @@ func (s *SQLiteStore) ReserveRunnerCandidate(ctx context.Context, work taskmodel
 		if !errors.Is(lookupErr, sql.ErrNoRows) {
 			return lookupErr
 		}
-		c.EnvironmentReadinessSkipped = s.developer.SkipEnvironmentReadiness()
+		c.EnvironmentReadinessSkipped = !s.admission.RequireReadiness()
 		if c.EnvironmentReadinessSkipped {
 			c.Environment = nil
 		} else {

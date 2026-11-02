@@ -16,10 +16,10 @@
 
 | 项目 | 通过条件与入口 |
 | --- | --- |
-| DVC-A01 配置与加载 | 默认门禁开启；开发覆盖从全局文件加载；原快照不热变；重新加载恢复默认；`TestBuildPolicy`、`TestDeveloperConfigurationLoad`。 |
+| DVC-A01 配置与加载 | 默认门禁开启；开发覆盖从全局文件加载；原快照不热变；重新加载恢复默认；`TestBuildConfiguration`、`TestDeveloperConfigurationLoad`。 |
 | DVC-A02 全局条件保存 | 新 reader 读取同一全局值；保留执行方案；旧摘要写入拒绝；正常恢复开关；`TestDeveloperConfiguration`。 |
 | DVC-A03 服务入口 | 手动与自动达到材料准备、新候选达到预留；执行方案不可用和目标适配占用仍拒绝；真实环境不伪造 ready；`TestDeveloperReadinessService`。 |
-| DVC-A04 事务及重放 | 手动/自动/额外候选按 writer 策略放行；候选自称跳过不放行；版本仍拒绝；重启后新候选恢复门禁、原请求保留原事实；`TestDeveloperReadinessReservation`、`go.storage`。 |
+| DVC-A04 事务及重放 | 手动/自动/额外候选按 writer 策略放行；候选自称跳过不放行；版本仍拒绝；重启后新候选恢复门禁、原请求保留原事实；`TestReadinessAdmissionPolicyReservation`、`go.storage`。 |
 | DVC-A05 配置交互 | 默认开关、保留其他配置、冲突留稿、取消、响应丢失双向核实、只读、待重启及发布隐藏；同页双向连续保存使用新摘要，并行草稿保留原摘要，取消后使用最新已保存值；`web.unit`。 |
 | DVC-A06 浏览器 | 零项目配置、键盘开关、两个表单各自未保存保护、保存/重启显示、1440/375 宽度不溢出、发布隐藏；`configuration-navigation.spec.ts`，受控 API，不当作原生后端验收。 |
 | DVC-A07 发布能力 | `release` 标签下重复开发配置与事务验证；编辑文件不能启用；API validate/save 拒绝；双产品真实发布构建及 PS5.1 构建参数夹具。 |
@@ -95,3 +95,25 @@
 - 开发开关与上游环境资格不依赖项目测试的定向验证通过：`diagnostics/20261102T085321519Z-77d9811ac3b54f909eed050b991e6370/summary.json`。
 - 上游批量读取精确字节/进程数及原始失败原因两项通过：`diagnostics/20261102T085423050Z-d94e11e054e04773946dd2623807c35d/summary.json`。
 - 固定 L2 通过：`test-results/L2/20261102T085322937Z-9d4436da1612415199146fc2642ede55/summary.json`；受控场景及清理均完成。
+
+## 能力策略解耦
+
+按用户确认的小幅重构，在 `8768fa6d` 基础上移除开发者专用运行时 Policy。`app/capabilities.go` 在配置加载时，将开发者配置与发布构建能力一次映射为环境领域的 `AdmissionPolicy`；零值要求就绪检查。服务、writer 和查询响应共用冻结后的值，不再逐处解析开发者选项。SQLite 只依赖环境领域策略，边界测试明确拒绝 storage 重新导入 `developerconfig`。只有 writer 写入候选的跳过审计事实，原事务检查与重放处理保持不变。
+
+本轮不修改前端表单、不引入动态开关注册框架。release 限制由配置校验与应用组合层执行；通用领域策略和存储只消费受信策略。配置加载回归额外确认：修改内存中的原始开发者字段，也不会改变已加载策略及其查询响应；同一个加载配置后续组成的服务仍使用该策略。
+
+独立后端子代理只读复审未发现确认缺陷；其提醒的发布边界已明确写入集成文档。本轮证据仍相对 `C:\SteerlineDebug\wt-2c36-developer-config\`，报告中的源码为上述提交上的本轮工作树，不将旧树验证当作本轮验证：
+
+| 验证 | 结果与原报告 |
+| --- | --- |
+| 固定 L1 | 通过；`test-results/L1/20261102T090728751Z-46e8d259d01f4981b175e0fcdcde3294/summary.json`。 |
+| 固定 L2 | 通过；`test-results/L2/20261102T090732272Z-654bc443c27a4afea031df71b44b5b04/summary.json`；受控场景及清理均完成。 |
+| 存储 owner 全集 | 通过；`test-results/L4/20261102T090732647Z-704cdfca880141e7b8621ae566e1e28a/summary.json`。 |
+| HTTP owner 全集 | 通过；`test-results/L4/20261102T090829060Z-9677d08b642b41d0b79752d44b7da637/summary.json`。 |
+| 正常构建策略定向 | 5 包 30 终态通过，0 失败、0 skip；`diagnostics/20261102T090905921Z-af2fe7f1fd7b4ab19812d149e402902a/summary.json`。 |
+| release 构建策略定向 | 5 包 30 终态通过，0 失败、0 skip；`diagnostics/20261102T090940222Z-9ab619e16b554b83a9a50a4af09f7007/summary.json`。 |
+| 环境 owner 全集 | 完整通过，344 终态、0 失败、0 skip；`test-results/L4/20261102T091044022Z-c91a5cb4b6a24433973bfc24b63af060/summary.json`。 |
+
+前端源文件未修改，沿用前阶段冻结版本的 Web/浏览器证据；本轮不声称重新执行。初次六包定向诊断包含环境 model 包零匹配，未将该包记为受测通过；上表已改用五个实际匹配包的完整定向执行。
+
+文档本地链接检查通过（650 文件、4049 本地链接、0 错误）；`git diff --check` 通过。未修改固定提示词正文、规则材料或对应组装入口，未操作实际安装环境。

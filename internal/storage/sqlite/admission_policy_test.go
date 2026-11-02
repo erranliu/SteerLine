@@ -7,14 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/developerconfig"
+	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func TestDeveloperReadinessReservation(t *testing.T) {
+func TestReadinessAdmissionPolicyReservation(t *testing.T) {
 	for _, mode := range []string{"manual", "auto"} {
 		for _, skip := range []bool{false, true} {
 			t.Run(mode+"/skip="+map[bool]string{false: "false", true: "true"}[skip], func(t *testing.T) {
@@ -22,7 +22,7 @@ func TestDeveloperReadinessReservation(t *testing.T) {
 				s, project, tasks := nativeAuditStore(t)
 				path := s.path
 				require(t, s.Close())
-				s, err := OpenSQLiteStoreWithDeveloperPolicy(path, developerconfig.Resolve(developerconfig.Config{SkipEnvironmentReadiness: skip}))
+				s, err := OpenSQLiteStoreWithAdmissionPolicy(path, env.NewAdmissionPolicy(!skip))
 				require(t, err)
 				defer s.Close()
 				require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
@@ -45,7 +45,7 @@ func TestDeveloperReadinessReservation(t *testing.T) {
 					SubmitState: "pending", Submit: runnerclient.Request{Protocol: runnercontract.Protocol, RequestID: "developer-request", Input: raw}}
 				original := candidate
 				err = s.ReserveRunnerCandidate(ctx, work, candidate, false)
-				if !skip || !developerconfig.Available {
+				if !skip {
 					if err == nil || !strings.Contains(err.Error(), "environment_not_ready") {
 						t.Fatal("payload authorized a bypass without writer policy", err)
 					}

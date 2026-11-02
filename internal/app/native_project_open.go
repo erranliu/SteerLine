@@ -7,7 +7,6 @@ import (
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/developerconfig"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/pathguard"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -106,7 +105,7 @@ func openNativeTaskProject(ctx context.Context, c *Config, owned, writable bool)
 	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
 		return nil, err
 	}
-	writer, err := sqlite.OpenSQLiteStoreWithDeveloperPolicy(path, developerconfig.Resolve(c.RunnerExecution.Developer))
+	writer, err := sqlite.OpenSQLiteStoreWithAdmissionPolicy(path, c.environmentPolicy)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +166,7 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteS
 	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
 		return nil, err
 	}
-	writer, err := sqlite.OpenSQLiteStoreWithDeveloperPolicy(path, developerconfig.Resolve(c.RunnerExecution.Developer))
+	writer, err := sqlite.OpenSQLiteStoreWithAdmissionPolicy(path, c.environmentPolicy)
 	if err != nil {
 		return nil, err
 	}
