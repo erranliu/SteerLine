@@ -11,7 +11,7 @@
 
 ## 真实读取与版本
 
-SteerLine 受测基线 `7d85a9e908102a4f12210bbba91408f39362e6a7` 加本轮工作树；各 summary 保存完整 dirty 清单和命令。Runner 独立源码基线 `66cc0acf50b675c75458d9d6281139e16158a3a3` 加本轮修改；原 `C:\Project\SteerRunner` 未修改。受测 EXE 为 `bin/steerrunner-verified.exe`，SHA-256 `df27f15bc61767edcfdd6713b6572d5747d4889cfccaace8846d1dcef3dba9ec`，resource digest `a968df6ee06ae6a16650ed9f0eee3ab878e9406a4541ab44fa6548674161c707`。
+SteerLine 受测基线 `7d85a9e908102a4f12210bbba91408f39362e6a7` 加本轮工作树；各 summary 保存完整 dirty 清单和命令。Runner 独立源码基线 `66cc0acf50b675c75458d9d6281139e16158a3a3` 加本轮修改；原 `C:\Project\SteerRunner` 未修改。受测 EXE 为 `bin/steerrunner-verified.exe`，SHA-256 `df27f15bc61767edcfdd6713b6572d5747d4889cfccaace8846d1dcef3dba9ec`，resource digest `a968df6ee06ae6a16650ed9f0eee3ab878e9406a4541ab44fa6548674161c707`；同目录 `.exe.build.json` 固定生产源码摘要 `da646a2baebf1e1d3120c272cf139c3bd3d190fa5e9c6e6b9e4c38ed1ae91f88`。
 
 正式入口：`go run ./cmd/test-feedback -out <独立目录> -- -tags=e2e ./internal/app -run '^TestRoadmapLocalCodexPromotion$' -count=1 -timeout=20m`；设置上述 `STEERRUNNER_EXE` 与本轮 `STEERLINE_ROADMAP_EVIDENCE`。本机 Codex 使用原正式只读 generate，不替换模型。固定源码 commit=`388de15b257459f0134baba086775f1735520dba`，草稿在提交后仅工作树改为随机 `SumInput51fbe397`；解析 evidence 和生成正文实际含该标记，`source.modified=true`，证明采用本次上传文件而非 Git 旧草稿。
 
@@ -39,3 +39,9 @@ SteerLine 受测基线 `7d85a9e908102a4f12210bbba91408f39362e6a7` 加本轮工�
 - 初次本项目 L1 的 golden 尾换行和嵌套 Runner clone 源码扫描失败已保留；修正 golden 末尾换行及将 clone 移出源码树，没有改检查器。普通沙箱下 junction/Git 权限失败不算业务失败或通过，实际具备临时目录权限的独立复验见上述报告。
 
 用户与项目无需手写动态 JSON。安装版尚未部署；真实外部 PR、浏览器整链及后续业务实现不在本轮通过范围内。
+
+## PR 与最新主分支同步
+
+实现提交 `3d10e4c9`，配套 Runner 提交 `97680b81`；已创建 [SteerLine #430](https://github.com/erranliu/SteerLine/pull/430) 和 [Runner #89](https://github.com/erranliu/SteerRunner/pull/89)，两者保持草稿，等待配套能力及 Runner 既有完整 L1 问题处理。未合并或部署。
+
+SteerLine 同步 `origin/main=fd84478926bea32fbfa687ece56e931470924faf`，仅验收索引冲突，保留双方条目；合并提交 `3b3170361d6560724a4c73a4b67d367c49ddc3c1` 后固定 L1、L2、web.unit 全部通过，报告分别为 `test-results/L1/pr-main-20261102T160211942Z/summary.json`、`test-results/L2/pr-main-20261102T160207900Z/summary.json`、`test-results/web/pr-main-20261102T160234750Z/summary.json`。文档链接为 649 文件/4061 链接零错误。真实 Runner/Codex 链是同步前上述固定工作树的结果，未将其标为同步后重跑。
