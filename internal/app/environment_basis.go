@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
-	"os"
 )
 
 type invalidEnvironmentBasis struct{ error }
@@ -34,7 +33,8 @@ func (p *environmentPort) observeBasis(ctx context.Context, commit string) error
 		material, err := p.materialAt(ctx, profile.ID, commit)
 		var invalid *invalidEnvironmentBasis
 		var nonregular *nonRegularCommittedFileError
-		confirmed := errors.Is(err, os.ErrNotExist) || errors.As(err, &invalid) || errors.As(err, &nonregular)
+		var missing *missingCommittedFileError
+		confirmed := errors.As(err, &missing) || errors.As(err, &invalid) || errors.As(err, &nonregular)
 		if err != nil && !confirmed {
 			return err
 		}
