@@ -8,9 +8,9 @@ Push-Location $webTestRepo
 try {
     & npm --prefix web run build *> (Join-Path $EvidenceDir 'build.log')
     if ($LASTEXITCODE -ne 0) { throw 'Web build failed' }
-    & npm --prefix web test *> (Join-Path $EvidenceDir 'client-tests.log')
+    & go run ./cmd/test-feedback -level=L4 -suite=web -scenario web.unit -out (Join-Path $EvidenceDir 'web-unit') *> (Join-Path $EvidenceDir 'client-tests.log')
     if ($LASTEXITCODE -ne 0) { throw 'Web client tests failed' }
-    & go run ./cmd/test-feedback -- ./web/server ./internal/product/httpapi ./internal/product/httpclient -count=1 *> (Join-Path $EvidenceDir 'server-tests.log')
+    & go run ./cmd/test-feedback -level=L4 -suite=go -scenario go.http -out (Join-Path $EvidenceDir 'go-http') *> (Join-Path $EvidenceDir 'server-tests.log')
     if ($LASTEXITCODE -ne 0) { throw 'Web server tests failed' }
     if ($DebugConfig) {
         $savedWebConfig = $env:STEERLINE_WEB_CONFIG

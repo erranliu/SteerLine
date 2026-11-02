@@ -15,7 +15,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/applicationclient"
 	"github.com/erranliu/SteerLine/internal/product/httpcontract"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	pmm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
@@ -313,7 +313,7 @@ func (d *debugRelease) testManagement(source string) (result error) {
 	ownedHead = original.Execution.Branch
 	proof.CandidateRun = original.RunID
 	// Verify latest public worktree paths and the exact frozen prompt context.
-	projectEntry, e := pm.ReadProjectEntry(func(path string) ([]byte, error) { text, err := d.git("show", head+":"+path); return []byte(text), err })
+	projectEntry, e := testmanagementmodel.ReadProjectEntry(func(path string) ([]byte, error) { text, err := d.git("show", head+":"+path); return []byte(text), err })
 	if e != nil {
 		return e
 	}

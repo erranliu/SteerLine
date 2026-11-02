@@ -398,6 +398,7 @@ func syntheticQuickOwners(t *testing.T, root string) []scopedGroup {
 		}
 		groups = append(groups, scopedGroup{ID: owner.ID, Assigned: owner.Tests, Packages: []string{owner.Package}, StdoutLog: path, Summary: testfeedback.Parse([]byte(raw), 0)})
 	}
+	groups = append(groups, scopedGroup{ID: "quick-web", Summary: testfeedback.Summary{Passed: true, Complete: true, TestCount: 1}})
 	return groups
 }
 

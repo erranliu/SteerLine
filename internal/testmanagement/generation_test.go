@@ -7,13 +7,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
@@ -517,7 +517,7 @@ func TestTMGenerationUsesDeclaredSourcesWithoutLegacyFiles(t *testing.T) {
 		peer.files[path] = peer.files[old]
 		delete(peer.files, old)
 	}
-	peer.files[pm.ProjectEntryPath] = []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`)
+	peer.files[testmodel.ProjectEntryPath] = []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`)
 	r, err := s.Generate(context.Background(), in)
 	if err != nil {
 		t.Fatal(err)

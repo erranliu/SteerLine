@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	projectmodel "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -72,7 +72,7 @@ func TestTMCommittedPlanSnapshot(t *testing.T) {
 
 func callerFrozenWork(t *testing.T, m *projectMaintenance, contract taskmodel.TaskContract) taskmodel.FixedWork {
 	t.Helper()
-	entry, err := projectmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(context.Background(), contract.PlanRef.Commit, path) })
+	entry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(context.Background(), contract.PlanRef.Commit, path) })
 	require(t, err)
 	body, err := m.read(context.Background(), contract.PlanRef.Commit, entry.TestingCatalogue)
 	require(t, err)
@@ -228,7 +228,7 @@ func TestTMCommittedPlanUsesSameCustomProjectSources(t *testing.T) {
 		require(t, os.WriteFile(filepath.Join(m.config.Repository, path), body, 0600))
 		require(t, os.Remove(filepath.Join(m.config.Repository, old)))
 	}
-	require(t, os.WriteFile(filepath.Join(m.config.Repository, projectmodel.ProjectEntryPath), []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`), 0600))
+	require(t, os.WriteFile(filepath.Join(m.config.Repository, testmodel.ProjectEntryPath), []byte(`{"version":1,"requirements":["quality/policy.md"],"testing_catalogue":"quality/cases.json"}`), 0600))
 	pmGit(t, m.config.Repository, "add", ".")
 	pmGit(t, m.config.Repository, "-c", "commit.gpgsign=false", "commit", "-qm", "custom sources")
 	contract := store.contract

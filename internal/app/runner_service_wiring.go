@@ -14,6 +14,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnerbridge"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
+	"github.com/erranliu/SteerLine/internal/runnerstate"
 	"github.com/erranliu/SteerLine/internal/runnerstatepath"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -89,7 +90,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 		if err != nil {
 			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 		}
-		candidate.Environment = &proof
+		candidate.Environment = &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
 		target := executionconfig.Target(input.Execution)
 		a := config.runtimeEnvironmentAdmission
 		a.mu.Lock()

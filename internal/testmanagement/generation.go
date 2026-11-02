@@ -146,7 +146,7 @@ func (s *GenerationService) Generate(ctx context.Context, in GenerateCommand) (G
 	if !regexp.MustCompile(`^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$`).MatchString(in.Commit) || s.ReadCommitted == nil {
 		return r, errors.New("材料准备不足：测试生成需要固定 Git 提交和正式文件读取能力")
 	}
-	entry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) { return s.ReadCommitted(ctx, in.Commit, path) })
+	entry, err := model.ReadProjectEntry(func(path string) ([]byte, error) { return s.ReadCommitted(ctx, in.Commit, path) })
 	if err != nil {
 		return r, err
 	}

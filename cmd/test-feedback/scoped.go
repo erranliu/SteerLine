@@ -92,6 +92,7 @@ type scopedReport struct {
 	IntegrationPackage string        `json:"integration_package,omitempty"`
 	IntegrationTests   []string      `json:"enumerated_integration_tests,omitempty"`
 	AllPackages        []string      `json:"enumerated_packages"`
+	NoTestPackages     []string      `json:"packages_without_tests,omitempty"`
 	WeightSource       string        `json:"weight_source,omitempty"`
 	Groups             []scopedGroup `json:"groups"`
 	Complete           bool          `json:"complete"`
@@ -134,6 +135,10 @@ func runScoped(opts options) int {
 			return scopedSetupError(opts.out, &report, fmt.Errorf("list packages: %w", err))
 		}
 		report.AllPackages = packages
+		report.NoTestPackages, err = listNoTestPackages(ctx)
+		if err != nil {
+			return scopedSetupError(opts.out, &report, err)
+		}
 	}
 	var binary, coreDir, integrationBinary, integrationDir string
 	if !opts.quick && opts.workers == 3 {
@@ -162,6 +167,7 @@ func runScoped(opts options) int {
 		report.Groups = runQuickGroups(opts.workers, quickInvocations(opts), func(inv scopedInvocation) scopedGroup {
 			return runGroup(ctx, opts.out, inv.ID, "", inv.Command, inv.Assigned, inv.Packages, true)
 		})
+		report.Groups = append(report.Groups, runWebGroup(ctx, opts.out, "quick-web", quickWebFiles))
 	} else {
 		weights, e := loadWeights()
 		if e != nil {
@@ -320,6 +326,39 @@ func listPackages(ctx context.Context) ([]string, error) {
 		}
 	}
 	return packages, nil
+}
+
+func listNoTestPackages(ctx context.Context) ([]string, error) {
+	output, err := exec.CommandContext(ctx, "go", "list", "-f", "{{if not (or .TestGoFiles .XTestGoFiles)}}{{.ImportPath}}{{end}}", "./...").CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("enumerate packages without tests: %w: %s", err, output)
+	}
+	return strings.Fields(string(output)), nil
+}
+
+// Go emits package skip for [no test files]. These enumerated compile-only
+// packages are not skipped test coverage; an actual skipped test always fails.
+func skippedCoverage(report scopedReport, group scopedGroup) bool {
+	if group.Summary.SkippedTests > 0 {
+		return true
+	}
+	for _, pkg := range group.Summary.SkippedPackages {
+		known := false
+		for _, noTests := range report.NoTestPackages {
+			if pkg == noTests {
+				known = true
+			}
+		}
+		if !known {
+			return true
+		}
+		for _, test := range group.Summary.Tests {
+			if test.Package == pkg {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func prepareCore(ctx context.Context, out string) (string, string, error) {
@@ -538,12 +577,20 @@ func checkScopedCoverage(report scopedReport) []string {
 	seenOwnerTests := map[string]int{}
 	seenCore := map[string]int{}
 	seenIntegration := map[string]int{}
+	webGroups := 0
 	for _, group := range report.Groups {
 		if group.Error != "" {
 			failures = append(failures, group.ID+": "+group.Error)
 		}
-		if report.Scope == "quick" && (group.Summary.SkippedTests != 0 || len(group.Summary.SkippedPackages) != 0) {
-			failures = append(failures, group.ID+": quick coverage contains skipped tests or packages")
+		if skippedCoverage(report, group) {
+			failures = append(failures, group.ID+": coverage contains skipped tests or packages")
+		}
+		if group.ID == "quick-web" {
+			webGroups++
+			if !group.Summary.Passed || !group.Summary.Complete || group.Summary.TestCount == 0 {
+				failures = append(failures, "quick-web: failed, missing or incomplete native Vitest evidence")
+			}
+			continue
 		}
 		if group.ID == "quick-targeted" && group.Summary.TestCount == 0 {
 			failures = append(failures, "quick-targeted: no tests matched the explicit selection")
@@ -668,6 +715,9 @@ func checkScopedCoverage(report scopedReport) []string {
 			failures = append(failures, "other package set differs from enumeration")
 		}
 	} else {
+		if webGroups != 1 {
+			failures = append(failures, fmt.Sprintf("quick-web: executed %d groups, want 1", webGroups))
+		}
 		// Owners may partition one package into disjoint bounded invocations.
 		// Each assigned invocation must still supply its own package terminal.
 		expectedPackages := map[string]int{}

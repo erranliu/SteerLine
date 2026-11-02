@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+
 	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -48,7 +48,7 @@ func (c Config) prepareTestPlan(ctx context.Context, work taskmodel.FixedWork, r
 	read := func(path string) ([]byte, error) {
 		return reader.ReadCommittedRegularFile(ctx, taskmodel.FileReference{Path: path, Commit: plan.Commit, SHA256: strings.Repeat("0", 64)})
 	}
-	entry, e := pm.ReadProjectEntry(read)
+	entry, e := testmodel.ReadProjectEntry(read)
 	if e != nil {
 		return nil, e
 	}

@@ -93,7 +93,7 @@ func TestTMRegisteredCatalogueMatchesExecutableManifest(t *testing.T) {
 	if err = json.Unmarshal(manifestRaw, &manifest); err != nil {
 		t.Fatal(err)
 	}
-	if len(catalogue.Tests) != len(manifest)+2 {
+	if len(catalogue.Tests) != len(manifest)+1+len(localSuites) {
 		t.Fatal("catalogue and executable manifest differ")
 	}
 	byID := map[string]testmanagement.Definition{}
@@ -104,6 +104,12 @@ func TestTMRegisteredCatalogueMatchesExecutableManifest(t *testing.T) {
 		d, ok := byID[entry.ID]
 		if !ok || d.Level != entry.Level || d.Environment != entry.Env || !strings.Contains(d.Command, "-level="+entry.Level) {
 			t.Fatal("catalogue changed level/environment/command", entry.ID)
+		}
+	}
+	for _, def := range localSuites {
+		d, ok := byID[def.ID]
+		if !ok || d.Level != "L4" || d.Environment != "isolated" {
+			t.Fatal("local suite differs from catalogue", def.ID)
 		}
 	}
 }

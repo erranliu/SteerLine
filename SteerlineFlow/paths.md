@@ -69,7 +69,7 @@ C:\SteerlineDebug\<scope-id>\
 | `go run ./cmd/test-feedback` | 默认 `<系统临时目录>/steerline-test-feedback/<UTC纳秒时间>/`；`-out <绝对路径>` 精确指定本次根目录，放在 `--` 之前。实际执行接受不存在或已存在但为空的目录，拒绝非空目录。 |
 | `scripts/test-l2.ps1`、`test-live-delivery.ps1`、`test-audited-workflow.ps1` | `-OutDir` 直接传给该次 test-feedback；使用对应级别的独立叶目录。 |
 | `scripts/test-runtime-isolation.ps1` | 在 `-OutDir` 下再追加 `L3/` 或 `L4/`。给它一份独占的包装器调用目录，实际报告根为 `<OutDir>/<级别>/`，不要按其他脚本的语义推断。 |
-| `scripts/test-web.ps1` | `-EvidenceDir` 指定独占目录；默认 `<系统临时目录>/steerline-web-check-<时间>/`，保留 `build.log`、`client-tests.log`、`server-tests.log` 及实际产生的浏览器日志。该脚本的服务器测试另由 test-feedback 返回其报告路径，不能仅凭 server-tests.log 推断全部原始产物都在外层目录。 |
+| `scripts/test-web.ps1` | `-EvidenceDir` 指定独占目录；默认 `<系统临时目录>/steerline-web-check-<时间>/`，保留 `build.log`、`client-tests.log`、`server-tests.log` 及实际产生的浏览器日志。正式前端/HTTP 报告分别位于 EvidenceDir/web-unit 与 EvidenceDir/go-http，原始日志按各自 summary 定位。 |
 | `scripts/new-debug-release.ps1` | 默认 `C:\SteerlineDebug/<release-id>/`；本约定显式传 `-DebugRoot C:\SteerlineDebug\<scope-id>\packages`，返回本次包的精确 root。 |
 
 这些包装器有的另建原生进程代理目录，不能把代理日志当成业务报告。未支持输出参数的专项沿其现有真实输出路径登记，不能手工搬动活动现场来伪装成统一布局。
@@ -80,11 +80,12 @@ test-feedback 每次输出根统一以 `summary.json` 为结果入口；受管�
 
 | 范围 | 正常执行的稳定路径 |
 | --- | --- |
-| L1 | `summary.json`、`managed-l1.minimum.json`；各分组在 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`。 |
+| L1 | `summary.json`、`managed-l1.minimum.json`；Go 分组在 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`；`quick-web/vitest.json`、`quick-web/stdout.txt`、`quick-web/stderr.txt` 保留原生前端证据。 |
 | L2 | `summary.json`、`managed-smoke.delivery.json`、`build/frozen-binaries.json`、`scenarios/smoke.delivery/scenario.json`；包级原始日志见下方 E2E 树。 |
 | L3 | `summary.json`；每个实际选择的 ID 对应一份 `managed-<test-id>.json` 和 `scenarios/<scenario-id>/scenario.json`。 |
 | L4 E2E | 与 L3 相同；受控/真实环境及所选范围由原 summary 及冻结定义表达，不仅凭目录名判断。 |
 | L4 Go 全集 | `summary.json`、`managed-go.full.json`；分组原日志为 `<group-id>/test.jsonl`、`<group-id>/stderr.txt`。 |
+| L4 本地 owner/Web | `summary.json`、`managed-<test-id>.json`；Go 为 `go-owner/test.jsonl`、`go-owner/stderr.txt`，Web 为 `web-unit/vitest.json`、`stdout.txt`、`stderr.txt`（同在 web-unit 下）。 |
 | 定向 Go / build-only | `summary.json`、`go-test.jsonl`、`go-test.stderr.txt`；不生成完整登记测试集的通过报告，归 diagnostics。 |
 | `-summarize-log <原日志>` | 只读取已有 Go JSONL 并写 `summary.json`，其中 `source_json_log` 定位原日志；不执行测试、不复制原日志或生成受管报告，也不适用实际执行的非空目录检查。应显式选择独立的 diagnostics 叶目录以免覆盖旧摘要。 |
 

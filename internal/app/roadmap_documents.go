@@ -3,12 +3,12 @@ package app
 import (
 	"context"
 	"errors"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"os"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
-	pm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
 	roadmap "github.com/erranliu/SteerLine/internal/roadmap/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
@@ -29,7 +29,7 @@ func (p *roadmapPort) documentContext(ctx context.Context, r roadmap.Record) (ro
 		return result, err
 	}
 	result.Tree = strings.TrimSpace(string(tree))
-	entry, err := pm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, result.Commit, path) })
+	entry, err := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, result.Commit, path) })
 	if err != nil {
 		return result, err
 	}

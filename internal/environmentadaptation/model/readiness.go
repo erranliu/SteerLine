@@ -3,7 +3,6 @@ package model
 import (
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"strings"
 	"time"
 
@@ -12,7 +11,9 @@ import (
 
 // Context is solely a preparation projection. Never use it to construct a Run.
 func Context(execution runnercontract.ExecutionInput) (runnercontract.ExecutionInput, error) {
-	if executionconfig.Target(execution) == "" {
+	// Validate this model's accepted context without depending on the global
+	// configuration projection or constructing its target identity.
+	if (execution.Adapter != "codex-app-server" && execution.Adapter != "orca-terminal") || (execution.Target.Kind != "local" && execution.Target.Kind != "orca_environment") || execution.Target.Kind == "local" && execution.Target.Environment != "" || execution.Target.Kind == "orca_environment" && (execution.Adapter != "orca-terminal" || execution.Target.Environment == "") {
 		return execution, errors.New("unsupported environment execution target")
 	}
 	var settings map[string]json.RawMessage

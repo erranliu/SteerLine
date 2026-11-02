@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	tm "github.com/erranliu/SteerLine/internal/testmanagement/model"
 	"os"
@@ -69,9 +70,9 @@ func freezeManagedReports(opts options) (*managedRun, error) {
 	if opts.level == "L1" {
 		selected = []string{"l1.minimum"}
 		actualEnvironments["l1.minimum"] = "isolated"
-	} else if opts.level == "L4" && opts.suite == "go" {
-		selected = []string{"go.full"}
-		actualEnvironments["go.full"] = "isolated"
+	} else if def, ok := selectLocalSuite(opts); ok {
+		selected = []string{def.ID}
+		actualEnvironments[def.ID] = "isolated"
 	} else {
 		scenarios, e := selectE2E(root, opts)
 		if e != nil {
@@ -109,15 +110,15 @@ func freezeManagedReports(opts options) (*managedRun, error) {
 	return run, nil
 }
 
-// Existing execution and exit codes remain authoritative. This only emits a
-// small registered report beside the original summary/logs, even after failure.
-func writeManagedReports(opts options, before managedSource, sequence uint64) {
+// Preserve the execution result and report failures to the caller as well: a
+// successful process cannot hide incomplete coverage or a missing managed file.
+func writeManagedReports(opts options, before managedSource, sequence uint64) error {
 	if opts.level == "" || opts.buildOnly || opts.summarizeLog != "" || len(opts.goTestArgs) > 0 {
-		return
+		return nil
 	}
 	run := opts.managed
 	if run == nil {
-		return
+		return nil
 	}
 	index, actualEnvironments := run.definitions, run.environments
 	var selected []string
@@ -129,17 +130,20 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 	summaryRaw, readErr := os.ReadFile(filepath.Join(opts.out, "summary.json"))
 	var scoped scopedReport
 	var e2e e2eReport
-	scopedRun := opts.level == "L1" || opts.level == "L4" && opts.suite == "go"
+	localDef, local := selectLocalSuite(opts)
+	scopedRun := opts.level == "L1" || local
 	if scopedRun {
 		err = json.Unmarshal(summaryRaw, &scoped)
 	} else {
 		err = json.Unmarshal(summaryRaw, &e2e)
 	}
 	after := observeManagedSource()
+	var failures []error
 	for _, id := range selected {
 		d, ok := index[id]
 		if !ok {
 			fmt.Fprintln(os.Stderr, "registered test missing from catalogue:", id)
+			failures = append(failures, fmt.Errorf("unregistered test %s", id))
 			continue
 		}
 		status, message := "incomplete", "测试报告缺失或不完整"
@@ -147,7 +151,10 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 			if scopedRun {
 				expectedScope := "quick"
 				if opts.level == "L4" {
-					expectedScope = "full"
+					expectedScope = "local"
+					if localDef.ID == "go.full" {
+						expectedScope = "full"
+					}
 				}
 				count, valid, assertionFailed := 0, true, false
 				for _, group := range scoped.Groups {
@@ -155,7 +162,7 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 					for _, test := range group.Summary.Tests {
 						assertionFailed = assertionFailed || test.Status == "fail"
 					}
-					if !group.Summary.Complete || group.Summary.SkippedTests > 0 || len(group.Summary.SkippedPackages) > 0 {
+					if !group.Summary.Complete || skippedCoverage(scoped, group) {
 						valid = false
 					}
 				}
@@ -219,15 +226,30 @@ func writeManagedReports(opts options, before managedSource, sequence uint64) {
 				}
 			}
 		}
-		if e := runtimeprogress.Update(context.Background(), map[string]bool{testmanagement.ProgressKey(id): status == "passed"}, true); e != nil {
-			fmt.Fprintln(os.Stderr, "runtime progress unavailable:", e)
+		if status != "passed" {
+			failures = append(failures, fmt.Errorf("%s: %s", id, message))
 		}
 		report := testmanagement.Report{ID: run.ids[id], StartedAt: run.started, FinishedAt: time.Now().UTC(), Definition: d, Command: run.command, Repository: run.repository, Branch: run.branch, Evidence: tm.ReportEvidence{Path: "summary.json", Bytes: len(summaryRaw), SHA256: testmanagement.ContentDigest(summaryRaw)}, Sequence: sequence, Selection: []string{id}, Environment: actualEnvironments[id], Definitions: map[string]string{id: testmanagement.Digest(d)}, BeforeCommit: before.commit, AfterCommit: after.commit, BeforeClean: before.clean, AfterClean: after.clean, Results: []testmanagement.Result{{TestID: id, Status: status, Message: message, Log: "summary.json"}}}
-		if e := testmanagement.WriteRecordJSON(filepath.Join(opts.out, "managed-"+id+".json"), report); e != nil {
+		path := filepath.Join(opts.out, "managed-"+id+".json")
+		if e := testmanagement.WriteRecordJSON(path, report); e != nil {
 			fmt.Fprintln(os.Stderr, "write registered report:", e)
+			failures = append(failures, e)
+			if resetErr := runtimeprogress.Update(context.Background(), map[string]bool{testmanagement.ProgressKey(id): false}, true); resetErr != nil {
+				failures = append(failures, resetErr)
+			}
+			continue
+		}
+		// Publish completion only after its evidence is durable.
+		if e := runtimeprogress.Update(context.Background(), map[string]bool{testmanagement.ProgressKey(id): status == "passed"}, true); e != nil {
+			failures = append(failures, e)
+			report.Results[0].Status, report.Results[0].Message = "incomplete", "运行时进度写入失败："+e.Error()
+			if rewriteErr := testmanagement.WriteRecordJSON(path, report); rewriteErr != nil {
+				failures = append(failures, rewriteErr)
+			}
 		}
 	}
 	fmt.Fprintln(os.Stderr, "测试报告已保存；可用 test-feedback record -report-dir <目录> 写入 Git 历史文件。")
+	return errors.Join(failures...)
 }
 
 func managedReportSequence() uint64 { return uint64(time.Now().UnixNano()) }

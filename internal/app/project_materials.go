@@ -8,10 +8,12 @@ import (
 
 	pm "github.com/erranliu/SteerLine/internal/projectmaintenance"
 	pmm "github.com/erranliu/SteerLine/internal/projectmaintenance/model"
+	"github.com/erranliu/SteerLine/internal/prompts"
 	"github.com/erranliu/SteerLine/internal/runnerclient"
 	"github.com/erranliu/SteerLine/internal/runnerstate"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testmanagement"
+	testmodel "github.com/erranliu/SteerLine/internal/testmanagement/model"
 )
 
 type materialStore interface {
@@ -42,7 +44,11 @@ func (m *projectMaintenance) materialInput(ctx context.Context, task taskmodel.T
 		}
 		values = append(values, r.Path, pmm.TextDigest(b))
 	}
-	sources, e := pm.GenerationSources(contract.PlanRef.Path, func(path string) ([]byte, error) { return m.read(ctx, commit, path) })
+	protocol, e := prompts.TestingRules()
+	if e != nil {
+		return result, e
+	}
+	sources, e := pm.GenerationSources(contract.PlanRef.Path, func(path string) ([]byte, error) { return m.read(ctx, commit, path) }, protocol)
 	if e != nil {
 		return result, e
 	}
@@ -301,7 +307,7 @@ func (m *projectMaintenance) candidateDocuments(ctx context.Context, id string) 
 	files := []file{}
 	refs := append([]taskmodel.FileReference{c.Contract.SpecRef, c.Contract.PlanRef}, c.Contract.CommonRefs...)
 	refs = append(refs, c.Contract.AcceptanceRefs...)
-	entry, readErr := pmm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, c.BaseRevision, path) })
+	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, c.BaseRevision, path) })
 	if readErr != nil {
 		return nil, readErr
 	}
@@ -362,7 +368,7 @@ func (m *projectMaintenance) taskDocuments(ctx context.Context, id string) (any,
 	files := []document{}
 	refs := append([]taskmodel.FileReference{latest.Contract.SpecRef, latest.Contract.PlanRef}, latest.Contract.CommonRefs...)
 	refs = append(refs, latest.Contract.AcceptanceRefs...)
-	entry, readErr := pmm.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, latest.Commit, path) })
+	entry, readErr := testmodel.ReadProjectEntry(func(path string) ([]byte, error) { return m.read(ctx, latest.Commit, path) })
 	if readErr != nil {
 		return nil, readErr
 	}

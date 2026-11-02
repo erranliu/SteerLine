@@ -1,3 +1,5 @@
+//go:build runneracceptance
+
 package runnerclient
 
 import (
@@ -15,7 +17,7 @@ import (
 func TestLegacyCheckRetirementPublishedContract(t *testing.T) {
 	exe, version, sha := os.Getenv("STEERRUNNER_EXE"), os.Getenv("STEERRUNNER_VERSION"), os.Getenv("STEERRUNNER_SHA256")
 	if exe == "" || version == "" || sha == "" {
-		t.Skip("requires a pinned independent retired-Check Runner build")
+		t.Fatal("requires a pinned independent retired-Check Runner build")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()

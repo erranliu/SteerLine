@@ -23,6 +23,9 @@ func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
 	if e2ePackageGoTimeout([]e2eScenario{{Env: "live"}}) != "35m" {
 		t.Fatal("live package deadline changed")
 	}
+	if e2ePackageGoTimeout([]e2eScenario{{ID: "configuration.execution-profiles", Env: "controlled"}}) != "12m" {
+		t.Fatal("configuration parent clips its existing 10m body and cleanup")
+	}
 }
 
 func TestE2EParallelismOnlyAllowsIndependentRuntimeScenes(t *testing.T) {

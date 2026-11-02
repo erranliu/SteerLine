@@ -1,3 +1,5 @@
+//go:build runneracceptance
+
 package app
 
 import (
@@ -16,7 +18,7 @@ import (
 func TestPublishedRunnerApplicationLifecycle(t *testing.T) {
 	exe, version, sha := os.Getenv("STEERRUNNER_EXE"), os.Getenv("STEERRUNNER_VERSION"), os.Getenv("STEERRUNNER_SHA256")
 	if exe == "" || version == "" || sha == "" {
-		t.Skip("requires an independent pinned current-format Runner")
+		t.Fatal("requires an independent pinned current-format Runner")
 	}
 	home := t.TempDir()
 	g := RunnerExecutionConfig{Version: 3, Runner: runnerclient.Selection{Executable: exe, Version: version, SHA256: sha}, DefaultProfile: "idle", Profiles: []RunnerProfile{{ID: "idle", Name: "Idle", Execution: runnerclient.ExecutionInput{Adapter: "codex-app-server", Target: runnerclient.ExecutionTarget{Kind: "local"}, Settings: json.RawMessage(`{"access_mode":"full_access"}`)}, Workflow: runnerclient.Workflow{ID: "development", Version: 2}}}}
