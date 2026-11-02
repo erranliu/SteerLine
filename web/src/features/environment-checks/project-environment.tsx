@@ -365,7 +365,7 @@ function EnvironmentWorkspace() {
             >
               <h3>
                 项目环境检测 · {r.profile_id} ·{" "}
-                {r.status === "ready" ? "检测通过" : r.state}
+                {r.status === "ready" ? "检测完毕" : r.state}
               </h3>
               <p>
                 <code>{r.id}</code>

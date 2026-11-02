@@ -33,7 +33,7 @@ func Main(args []string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		cwd, _ := os.Getwd()
-		out, err := gitBytes(ctx, cwd, args[1:]...)
+		out, err := gitBytes(ctx, cwd, os.Stdin, args[1:]...)
 		if err == nil {
 			_, err = os.Stdout.Write(out)
 		}

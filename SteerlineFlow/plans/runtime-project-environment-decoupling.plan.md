@@ -48,6 +48,8 @@
 
 开发能力投影补齐公共 schema 的必填 `access_mode`；Web 新建及无匹配模板的链路切换也显式生成开发所需权限。增加能力组合正例、真实缺权限配置仍拒绝的反例，以及本机仅有 Pi 模板时新建 Orca＋Codex 的页面提交回归。以完整 Web 服务子包、`go.http`、`web.unit`、L1/L2及构建验证，独立证据根 `C:/SteerlineDebug/wt-68cd-combination-access-mode/`；不修改安装配置，不放宽真实保存或执行校验。
 
+权限界面精简移除下拉和专用设置函数，保留固定说明；链路构造公共路径和能力试样公共初始化各写入一次权限，不建通用权限抽象。显式选择开发工作流时设置 full_access，内容方案改名仍保留 read_only。增加页面及只读→开发转换回归，执行 web.unit、完整 Web 服务及 runnerclient owner、go.http、固定 L1/L2、构建与原配置导航浏览器场景；证据根 `C:/SteerlineDebug/wt-68cd-simplify-access-mode/`，原报告独立保留。实际结果归专属验收，完成后独立复审并提 PR，不操作安装配置。
+
 ### P3：项目层独立组装与最小页面适配（A04–A06）
 
 项目 options 先得到中性目标和方案元数据，再对每个原项目检测上下文计算材料/Current/资格。来源或材料失败仅附对应项目诊断，不能让已知目标消失。复用原环境服务与 Qualify，不把 Web discovery 注入后端任务准入，不新增全局资格门禁。

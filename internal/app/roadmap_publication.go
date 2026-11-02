@@ -178,7 +178,8 @@ func (p *roadmapPort) publicationFiles(ctx context.Context, r roadmap.Record) (m
 	}
 	out["SteerlineFlow/Roadmap/generated/"+r.Source.ID+".json"] = string(raw) + "\n"
 	old, e := p.config.runtimeMaintenance.read(ctx, r.CodeCommit, "SteerlineFlow/Roadmap/execution-map.md")
-	if e != nil && !errors.Is(e, os.ErrNotExist) {
+	var missing *missingCommittedFileError
+	if e != nil && !errors.As(e, &missing) {
 		return nil, e
 	}
 	var addition strings.Builder
@@ -257,11 +258,12 @@ func (p *roadmapPort) preparePublication(ctx context.Context, r *roadmap.Record)
 	sort.Strings(keys)
 	for _, name := range keys {
 		if name != "SteerlineFlow/Roadmap/execution-map.md" {
+			var missing *missingCommittedFileError
 			if old, e := m.read(ctx, pub.Base, name); e == nil {
 				if !ownedRoadmapMetadata(name, old, *r) {
 					return errors.New("拒绝覆盖已存在的无关文件：" + name)
 				}
-			} else if !errors.Is(e, os.ErrNotExist) {
+			} else if !errors.As(e, &missing) {
 				return e
 			}
 		}
