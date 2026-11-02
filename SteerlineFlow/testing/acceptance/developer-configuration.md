@@ -84,4 +84,14 @@
 | HTTP 全集 | 通过；`test-results/L4/20261102T083922778Z-9d2ff0dfddf74f158d9341c41688254d/summary.json`。 |
 | release 双产品构建 | 通过；`diagnostics/20261102T084328677Z-80438662dfdd4cb9b5054a8a0df2db1f/release-build.json`，同目录保留 EXE。 |
 | 开发双产品构建 | 通过；`diagnostics/20261102T084349619Z-195c6bed2f2b4ae69ad4284eb5de9f56/development-build.json`。源码 bin 保持开发构建。 |
-| 环境 owner 全集 | 当前 main 基线的正式运行正在执行，结束后登记；`test-results/L4/20261102T082642476Z-9ef09210f2f74d7a8f202e3b07586ae1/`。 |
+| Edge 浏览器 | 3/3 通过；`diagnostics/20261102T084451989Z-8fbfe740d9d2473aa47221de9c7dab2c/`，保留 trace 与宽窄屏截图。 |
+| 环境 owner 全集 | 在 `6eb03d21` 基线上的本功能修复树完整通过：4 包 338 终态、0 失败、0 skip，complete=true/passed=true，1442.429 秒；`test-results/L4/20261102T082642476Z-9ef09210f2f74d7a8f202e3b07586ae1/summary.json`。前述初次实现的失败与补验不改写。 |
+
+功能与审核修复已提交为 `53ab80f214cc92a4acf46dc9038b798c41e7388f`，创建 [PR #432](https://github.com/erranliu/SteerLine/pull/432)。PR 创建期间 main 又前进到 `82935861`（环境资格与项目测试解耦）；以 `6860d53a` 保留双方历史自动合并，无冲突，未手工更改本功能代码。两名子代理再次只读复核：策略加载、双响应字段、占用保护、预留/重放、两项 UI 修复及三项浏览器场景均未被合并覆盖，无新增发现。
+
+合并后的验证单独登记，不将上表旧树全集结果称作新树验证：
+
+- 固定 L1 通过：`test-results/L1/20261102T085322745Z-8c8ab1118c6e454aac7940c743e9c9b8/summary.json`。
+- 开发开关与上游环境资格不依赖项目测试的定向验证通过：`diagnostics/20261102T085321519Z-77d9811ac3b54f909eed050b991e6370/summary.json`。
+- 上游批量读取精确字节/进程数及原始失败原因两项通过：`diagnostics/20261102T085423050Z-d94e11e054e04773946dd2623807c35d/summary.json`。
+- 固定 L2 通过：`test-results/L2/20261102T085322937Z-9d4436da1612415199146fc2642ede55/summary.json`；受控场景及清理均完成。
