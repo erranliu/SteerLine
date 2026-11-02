@@ -26,7 +26,7 @@ func TestPromptGovernanceGolden(t *testing.T) {
 			return TestingStep("用户原文 {{.Ignore}}\r\n", []byte(testSnapshot), true, true)
 		}},
 		{"environment-invoke", func() (string, error) {
-			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/environments/"+strings.Repeat("a", 64)+"/verify-environment.ps1")
+			return EnvironmentInvoke("powershell.exe", "SteerlineFlow/scripts/verify-environment.ps1")
 		}},
 		{"roadmap-parse", func() (string, error) { return RoadmapParse("roadmap.md", "fixed") }},
 		{"roadmap-documents", func() (string, error) { return RoadmapDocuments("fixed", "roadmap.md") }},

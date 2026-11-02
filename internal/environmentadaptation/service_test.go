@@ -117,7 +117,7 @@ func setup(t *testing.T) (*env.Service, *runner, *sqlite.SQLiteStore, *time.Time
 	remote := &runner{}
 	now := time.Date(2026, 10, 26, 0, 0, 0, 0, time.UTC)
 	service := &env.Service{Project: "project", Store: store, Runner: remote, Now: func() time.Time { return now }, Prepare: func(context.Context, string) (envmodel.Prepared, error) {
-		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 4, EnvironmentKey: serviceEnvironmentKey(), Script: envmodel.ScriptPath(serviceEnvironmentKey(), "ps1"), Interpreter: "powershell.exe", Dependencies: []string{}}, Input: runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
+		return envmodel.Prepared{Commit: strings.Repeat("a", 40), Inputs: "basis", ScriptDigest: strings.Repeat("b", 64), Manifest: envmodel.Manifest{Version: 5, Script: envmodel.ScriptPath("ps1"), Interpreter: "powershell.exe", Dependencies: []string{}}, Input: runnercontract.RunInput{Workflow: runnercontract.Workflow{ID: "execute", Version: 1}, Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex"}}`)}}}, nil
 	}}
 	return service, remote, store, &now
 }

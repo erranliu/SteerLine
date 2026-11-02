@@ -1,5 +1,7 @@
 # Plan：项目检测闭环与平台结果消费
 
+2026-11-02 后续材料接线以[共用材料 Plan](shared-environment-materials.plan.md)为准：项目公共入口/manifest5，按链路保留原资格；下文已执行步骤保留原实施版本事实。
+
 2026-11-01 实施修订稿，**用户已授权修三处并开始实施，实现与所选本机自动验证完成，未验范围见验收记录**。[Spec](../spec/project-environment-workflow.spec.md) · [指导文档](../../SteerlineProjectGuideDoc/environment-adaptation.md) · [历史验收](../testing/acceptance/project-environment-workflow.md)。本轮按修订 Spec 实施环境调用与结果消费；不维护安装现场，不实现项目初始化适配，不启动 roadmap。
 
 ## 1. 基线与交付

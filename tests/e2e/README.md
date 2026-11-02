@@ -58,13 +58,13 @@ SteerlineTest 的原项目脚本可通过独立 owner 入口验证真实本地�
 | --- | --- | --- |
 | `configuration.execution-profiles-orca` / configuration | 无项目变量 | Web/Node/Edge、本机目录工具；真实本机及64G Agent/模型/effort目录与来源、冻结配置，零业务Run |
 | `testing.project-progress-orca-browser` / testing | `STEERLINE_PROGRESS_PROJECT`、`STEERLINE_PROGRESS_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS` | 原SteerlineTest clone/完整SHA、GitHub权限、已提交环境材料；先正式适配ready，再完成原六状态和连续Edge验收 |
-| `testing.project-environment-orca` / testing | `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS` | 项目配置、完整 SHA、manifest4 项目环境文档/入口及显式依赖；核对一次调用、原 Run 停止/封存、最终结果绑定与准入，不复核项目内部检查 |
+| `testing.project-environment-orca` / testing | `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS` | 项目配置、完整 SHA、manifest5 项目环境文档/入口及显式依赖；核对一次调用、原 Run 停止/封存、最终结果绑定与准入，不复核项目内部检查 |
 
 三项共同显式设置`STEERLINE_L4_REMOTE_PROFILE`和固定`STEERRUNNER_EXE`，正式命令为`go run ./cmd/test-feedback -level=L4 -suite=<上表suite> -env=live -scenario <上表ID> -out <全新绝对目录>`。专属输入也冻结到同一信封，子进程过滤STEERLINE变量不会丢参。缺配置、错目标、缺材料、skip、证据缺失及清理未知都不能通过。
 
 PowerShell薄入口分别为`test-execution-profile-discovery.ps1`、`test-project-progress-live.ps1`和`test-project-environment-live.ps1`；显式`-RemoteProfile`优先于环境变量，参数向上表单向映射。进度参数沿用`-ProjectRepository/-ProjectCommit`，308使用`-ProjectConfig/-ProjectCommit`，两者`-RoundTimeoutSeconds`必须为正，默认分别900/1200秒；正式Go入口要求显式预算。外围期限容纳一次检测及准备/观察/收尾，包装器额外留10分钟；不自动重跑。
 
-环境材料由项目正常维护并提交，manifest4 仅声明入口、解释器和有限依赖。项目自行完成检测闭环，写入本次预置的 version3 结果；SteerLine 不复制协议、改写检测材料或核实内部 L2/PR/检查。缺材料须项目维护后选择新 SHA；初始化适配不在本轮。
+环境材料由项目正常维护并提交，manifest5 仅声明入口、解释器和有限依赖。项目自行完成检测闭环，写入本次预置的 version3 结果；SteerLine 不复制协议、改写检测材料或核实内部 L2/PR/检查。缺材料须项目维护后选择新 SHA；初始化适配不在本轮。
 
 ## Roadmap 浏览器与真实文档 PR 专项
 
@@ -79,7 +79,7 @@ Playwright `roadmap-live.spec.ts` 通过正式页面和 HTTP 原信封验证刷�
 
 ## 本机环境准备 L4
 
-`testing.project-environment-local` 复用相同的一次调用、最终结果绑定、准入探针及清理驱动。本机 Codex 与本机 Orca 是不同环境；所有目标均通过 Runner 公开结果通道取得封存报告。显式设置 `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS`、`STEERLINE_L4_LOCAL_PROFILE` 和固定 `STEERRUNNER_EXE`。必须支持 execute/1 与最终结果封存，受测提交包含 manifest4 文档、入口及依赖；不要求平台协议副本或测试目录。正式入口：
+`testing.project-environment-local` 复用相同的一次调用、最终结果绑定、准入探针及清理驱动。本机 Codex 与本机 Orca 是不同环境；所有目标均通过 Runner 公开结果通道取得封存报告。显式设置 `STEERLINE_L4_PROJECT_CONFIG`、`STEERLINE_L4_PROJECT_COMMIT`、`STEERLINE_L4_ROUND_TIMEOUT_SECONDS`、`STEERLINE_L4_LOCAL_PROFILE` 和固定 `STEERRUNNER_EXE`。必须支持 execute/1 与最终结果封存，受测提交包含 manifest5 文档、入口及依赖；不要求平台协议副本或测试目录。正式入口：
 
 ```powershell
 go run ./cmd/test-feedback -level=L4 -suite=testing -env=live -scenario testing.project-environment-local -out <全新绝对目录>

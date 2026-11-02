@@ -2,6 +2,8 @@
 
 项目运行环境页面精简（2026-11-02）：[实现与验证](project-environment-ui-simplification.md)。合并状态和操作，准备要求/设置/历史默认折叠，只专门展示检测 ID；本页回执显示简短结果并保留原请求核实，后台记录继续保留。
 
+项目共用环境材料（2026-11-02）：[Spec/Plan 审计与实施验证](shared-environment-materials.md)，公共材料入口/manifest5，目标链路独立资格。
+
 全局开发者配置（2026-11-02）：[实现与验证](developer-configuration.md)。统一全局布尔开关、环境就绪门禁可关闭、不可变预留事实及发布构建集中禁用；保存后重启生效，真实检测结果和其他执行保护保留。
 
 Roadmap 材料自动准备（2026-11-02）：[专属验收](roadmap-material-preparation.md)，记录静态初始化、正式 file 输入、独立来源引用、未提交草稿真实转正与原请求/停止证据。

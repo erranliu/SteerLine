@@ -32,12 +32,8 @@ func environmentFixture(t *testing.T) (*environmentPort, Config, *sqlite.SQLiteS
 	t.Setenv("GIT_CONFIG_VALUE_0", "https://github.com/owner/repo.git")
 	c.RunnerExecution.Profiles = append(c.RunnerExecution.Profiles, RunnerProfile{ID: "remote", Name: "Remote", Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "remote-a"}, Settings: json.RawMessage(`{"agent_launch":{"executable":"codex","model":"selected"},"access_mode":"full_access"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}})
 	files := map[string]string{"go.mod": "module example.invalid/fixture\n"}
-	for _, profile := range c.RunnerExecution.Profiles {
-		k, _ := envmodel.Key(profile.Execution)
-		files[envmodel.DocumentPath(k)] = environmentFixtureDocument(k, "ps1", "environment-validation", []string{"go.mod"})
-		files[envmodel.ScriptPath(k, "ps1")] = "param($Phase)\n# fixture only\n"
-
-	}
+	files[envmodel.DocumentPath()] = environmentFixtureDocument("ps1", []string{"go.mod"})
+	files[envmodel.ScriptPath("ps1")] = "# fixture only\n"
 	for name, body := range files {
 		path := filepath.Join(c.Repository, name)
 		require(t, os.MkdirAll(filepath.Dir(path), 0700))
@@ -179,11 +175,11 @@ func TestProjectEnvironmentAdmissionAcrossProjectsUsesPublicTarget(t *testing.T)
 	}
 }
 
-func environmentFixtureDocument(key, extension, _ string, deps []string) string {
+func environmentFixtureDocument(extension string, deps []string) string {
 	interpreter := "powershell.exe"
 	if extension == "sh" {
 		interpreter = "bash"
 	}
-	body, _ := json.Marshal(envmodel.Manifest{Version: 4, EnvironmentKey: key, Script: envmodel.ScriptPath(key, extension), Interpreter: interpreter, Dependencies: deps})
+	body, _ := json.Marshal(envmodel.Manifest{Version: 5, Script: envmodel.ScriptPath(extension), Interpreter: interpreter, Dependencies: deps})
 	return "# Environment\n```steerline-environment\n" + string(body) + "\n```\n"
 }

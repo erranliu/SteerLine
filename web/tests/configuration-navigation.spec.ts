@@ -194,9 +194,9 @@ test("runtime environments keep card actions, failed observations and task retur
     activity_id: i === 0 ? "d".repeat(32) : undefined,
     profiles:
       i === 0 ? profiles : [{ id: `profile-${stage}`, name: `方案-${stage}` }],
-    document_path: `SteerlineFlow/environments/${String(i + 1).repeat(64)}/environment.md`,
+    document_path: "SteerlineFlow/environment.md",
     document: "共享的准备清单",
-    script_path: `SteerlineFlow/environments/${String(i + 1).repeat(64)}/verify-environment.ps1`,
+    script_path: "SteerlineFlow/scripts/verify-environment.ps1",
     source_commit: "c".repeat(40),
   }));
   await page.route("**/auth/status", (route) =>
@@ -296,7 +296,7 @@ test("runtime environments keep card actions, failed observations and task retur
       };
     } else if (path.endsWith("/environment/materials"))
       data = {
-        document_path: "SteerlineFlow/environments/selected/environment.md",
+        document_path: "SteerlineFlow/environment.md",
         document: "Target requirements",
         generation_ready: false,
         generation_diagnostic: "生成输入待维护",

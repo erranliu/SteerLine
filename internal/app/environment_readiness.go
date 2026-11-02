@@ -79,7 +79,7 @@ func (p *environmentPort) configurationOptions() environmentOptions {
 			_ = json.Unmarshal(profile.Execution.Settings, &display)
 		}
 		groups[group] = len(environments)
-		environments = append(environments, environmentView{Key: key, Name: name, Target: profile.Execution.Target, Adapter: profile.Execution.Adapter, Agent: display.Agent, Profiles: []environmentProfileView{view}, DocumentPath: env.DocumentPath(key), Status: view.Status, Stage: view.Stage, Reason: view.Reason})
+		environments = append(environments, environmentView{Key: key, Name: name, Target: profile.Execution.Target, Adapter: profile.Execution.Adapter, Agent: display.Agent, Profiles: []environmentProfileView{view}, DocumentPath: env.DocumentPath(), Status: view.Status, Stage: view.Stage, Reason: view.Reason})
 	}
 	return p.optionsFor(environments)
 }
@@ -100,7 +100,7 @@ func (p *environmentPort) readinessOptions(ctx context.Context) (any, error) {
 			if current.ActivityID == "" {
 				// No qualification exists to compare. Validate the invocation only;
 				// start still validates every declared dependency before executing.
-				_, _, _, materialErr = p.invocationAt(ctx, item.Key, commit)
+				_, _, _, materialErr = p.invocationAt(ctx, commit)
 			} else if record.Status() == "ready" {
 				prepared, err := p.materialAt(ctx, id, commit)
 				materialErr, basis = err, prepared.Inputs

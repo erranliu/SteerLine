@@ -5,7 +5,7 @@
 | 内容 | 入口与职责 |
 | --- | --- |
 | 流程路径 | [paths.md](paths.md)：流程定义位置、L1–L4 固定报告结构、仓库外测试/并行调试目录、应用与调度状态。 |
-| 远端环境 | [environment.md](environment.md)：项目必需工具、TTY及验收入口；[执行规则](environment-execution.md)由同版本SteerLine规范固定，未完成真实验收前保持未就绪。 |
+| 项目环境 | [environment.md](environment.md)：项目共用工具要求与检测入口；[公共材料规格](spec/shared-environment-materials.spec.md)定义按运行机和链路独立的资格；平台/Runner 负责执行与结果封存。 |
 | 任务需求 | [spec/](spec/README.md)：Spec、共同执行约束及任务资料索引。 |
 | 实现计划 | [plans/](plans/)：对应 Spec 的实现步骤和最小必要测试计划。 |
 | Roadmap | [RoadmapGuide](Roadmap/RoadmapGuide.md) 维护本项目规则；[execution-map](Roadmap/execution-map.md) 维护确认的范围、依赖和执行/验收汇总；草稿与永久任务身份分别在 `Roadmap/drafts/`、`Roadmap/task-ids/`。 |
