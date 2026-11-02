@@ -6,11 +6,11 @@ $source = Join-Path $OutDir 'source'
 $runner = Join-Path $OutDir 'runner'
 # The deploy script deliberately rejects C:\SteerlineDebug as an install home.
 # Only this owned temporary fixture is used; its EXEs simulate CLI responses.
-$fixtureHome = Join-Path ([IO.Path]::GetTempPath()) ('steerline-deploy-pipeline-'+[Guid]::NewGuid().ToString('N'))
+$fixtureHome = Join-Path ([IO.Path]::GetTempPath()) ("steerline-deploy-pipeline-"+[Guid]::NewGuid().ToString('N')+"-quote' __HOME__ & space")
 foreach ($directory in @((Join-Path $source 'scripts'), (Join-Path $source 'examples'), (Join-Path $runner 'scripts'), $fixtureHome)) {
     New-Item -ItemType Directory -Path $directory -Force | Out-Null
 }
-foreach ($name in @('build-deploy.ps1','deployment-stop.ps1','deployment-runner.ps1','deployment-files.ps1','build-timing.ps1')) {
+foreach ($name in @('build-deploy.ps1','deployment-stop.ps1','deployment-start.ps1','deployment-runner.ps1','deployment-files.ps1','build-timing.ps1')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination (Join-Path $source 'scripts')
 }
 [IO.File]::WriteAllText((Join-Path $runner 'scripts\build.ps1'), "throw 'Runner must be selected through build.ps1.'")
@@ -19,7 +19,10 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Web.Script.Serialization;
+using System.Runtime.InteropServices;
 class Fixture {
+    [DllImport("kernel32.dll")] static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
+    [DllImport("kernel32.dll")] static extern bool QueryInformationJobObject(IntPtr job, int kind, byte[] buffer, uint length, IntPtr returned);
     static string Get(string[] args, string key) { return args[Array.IndexOf(args,key)+1]; }
     static void Json(object value) { Console.WriteLine(new JavaScriptSerializer().Serialize(value)); }
     static int Main(string[] args) {
@@ -31,17 +34,27 @@ class Fixture {
         switch(args[0]) {
             case "version": Json(new {ok=true,protocol="steerrunner-cli/v1",data=new {version="fixture-v1",source_commit="fixture"}}); return 0;
             case "verify-runner-upgrade":
-                if(mode=="preflight") return 7;
+                if(mode=="preflight" || mode=="drain") return 7;
+                if(File.Exists(Path.Combine(Get(args,"--home"),"bin","steerline.exe")) && !File.Exists(Path.Combine(events,"stopped"))) return 11;
                 Json(new {contract="steerline-runner-upgrade/v1",home=Get(args,"--home"),candidate_sha256=Get(args,"--runner-sha256"),state_format="steerrunner-state/v8",state_dir=Path.Combine(Get(args,"--home"),"runner-state")}); return 0;
             case "prepare-deployment":
                 if(mode=="stop") return 8;
+                File.WriteAllText(Path.Combine(events,"stopped"),"original service exited");
                 string digest;
                 using(var hash=SHA256.Create()) digest=BitConverter.ToString(hash.ComputeHash(File.ReadAllBytes(Get(args,"--runner-exe")))).Replace("-","").ToLowerInvariant();
                 Json(new {contract="steerline-deployment-preparation/v1",home=home,goal=Get(args,"--goal"),invocation_id=Get(args,"--invocation-id"),package_sha256=Get(args,"--package-sha256"),outcome="prepared",verified_at="2026-10-26T00:00:00Z",verifier_sha256=digest}); return 0;
             case "install":
                 Directory.CreateDirectory(Path.Combine(home,"bin"));
                 File.Copy(System.Reflection.Assembly.GetExecutingAssembly().Location,Path.Combine(home,"bin",name),true); return 0;
-            case "start": return mode=="start" ? 9 : 0;
+            case "start":
+                bool inJob;
+                if(!IsProcessInJob(new IntPtr(-1),IntPtr.Zero,out inJob)) return 12;
+                if(inJob) {
+                    var limits=new byte[144];
+                    if(!QueryInformationJobObject(IntPtr.Zero,9,limits,(uint)limits.Length,IntPtr.Zero) || (BitConverter.ToUInt32(limits,16)&0x2000)!=0) return 13;
+                }
+                File.WriteAllText(Path.Combine(events,"startup-lifetime-verified"),"no kill-on-close Job");
+                return mode=="start" ? 9 : 0;
             case "status":
                 if(mode=="ready") Json(new {backend=new {state="ready"},web=new {state="ready"},degraded=true,projects=new[]{new {config_id="fixture",runtime_state="failed",online=false,diagnostic="injected failure"}}});
                 else Json(new {backend=new {state="ready"},web=new {state="ready"},degraded=false,projects=new object[0]});
@@ -67,6 +80,9 @@ try {
         foreach ($name in @('steerline.exe','steerline-web.exe','steerrunner.exe')) {
             Copy-Item -LiteralPath $env:SL_DEPLOY_EXE -Destination (Join-Path $StageDirectory $name)
         }
+        if ($env:SL_DEPLOY_RUNNER_CHANGE -eq '1') {
+            [IO.File]::AppendAllText((Join-Path $StageDirectory 'steerrunner.exe'), 'changed-runner-build')
+        }
     }
     $ok=$true
 } finally { Write-BuildTiming $TimingPath $ok }
@@ -80,7 +96,7 @@ if ($LASTEXITCODE) { throw 'Fixture git init failed.' }
 & git -C $source -c user.name=Fixture -c user.email=fixture@example.test commit --allow-empty -qm fixture
 if ($LASTEXITCODE) { throw 'Fixture git commit failed.' }
 $saved = @{}
-foreach ($key in @('SL_DEPLOY_EXE','SL_DEPLOY_EVENTS','SL_DEPLOY_FAIL','STEERLINE_HOME')) { $saved[$key]=[Environment]::GetEnvironmentVariable($key) }
+foreach ($key in @('SL_DEPLOY_EXE','SL_DEPLOY_EVENTS','SL_DEPLOY_FAIL','SL_DEPLOY_RUNNER_CHANGE','STEERLINE_HOME')) { $saved[$key]=[Environment]::GetEnvironmentVariable($key) }
 $checks = [Collections.Generic.List[string]]::new()
 function Assert([bool]$Value,[string]$Message) { if (-not $Value) { throw $Message } }
 function Run-Deploy([string]$Name,[bool]$ShouldSucceed=$true,[string[]]$Extra=@()) {
@@ -109,12 +125,18 @@ function Run-Deploy([string]$Name,[bool]$ShouldSucceed=$true,[string[]]$Extra=@(
 }
 try {
     $env:SL_DEPLOY_EXE=$fixtureExe
+    $env:SL_DEPLOY_RUNNER_CHANGE=''
+    $env:SL_DEPLOY_FAIL='preflight'
+    $null=Run-Deploy 'fresh-preflight-failure' $false @('-UpdateRunner')
+    $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
+    Assert (-not $calls.Contains(' prepare-deployment') -and -not $calls.Contains(' install')) 'Fresh preflight failure installed files.'
     $env:SL_DEPLOY_FAIL=''
     $null=Run-Deploy 'initial' $true @('-UpdateRunner','-ForceWebInstall','-SerialBuild')
     $forwarded=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'build-arguments.json') -Raw | ConvertFrom-Json
     Assert ($forwarded.web -and $forwarded.force -and $forwarded.serial -and $forwarded.runner -eq $runner) 'Build switches were not forwarded.'
     $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
     Assert ($calls.Contains(' start') -and $calls.Contains(' status --json')) 'Deployment omitted start/ready checks.'
+    Assert (Test-Path (Join-Path $env:SL_DEPLOY_EVENTS 'startup-lifetime-verified')) 'Startup inherited a kill-on-close Job or lost caller environment.'
     # Existing installation fixtures preserve custom profiles and use stop preparation.
     $config | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $fixtureHome 'execution.json')
     $normal=Run-Deploy 'reuse'
@@ -122,19 +144,30 @@ try {
     Assert (-not $forwarded.runner) 'Pinned Runner reuse rebuilt Runner source.'
     $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
     Assert ($calls.Contains(' prepare-deployment ')) 'Existing installation skipped stop verification.'
+    Assert ($calls.IndexOf(' prepare-deployment ') -lt $calls.IndexOf(' verify-runner-upgrade ')) 'Drainage was queried before automatic stop.'
     $preserved=Get-Content (Join-Path $fixtureHome 'execution.json') -Raw | ConvertFrom-Json
     Assert ($preserved.default_execution_profile -eq 'custom' -and $preserved.execution_profiles.Count -eq 2) 'Deployment changed profiles.'
+    $env:SL_DEPLOY_RUNNER_CHANGE='1'
+    $null=Run-Deploy 'runner-upgrade' $true @('-UpdateRunner')
+    $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
+    Assert ($calls.Contains('--goal replace') -and $calls.IndexOf(' prepare-deployment ') -lt $calls.IndexOf(' verify-runner-upgrade ') -and $calls.IndexOf(' verify-runner-upgrade ') -lt $calls.IndexOf(' install')) 'Runner upgrade did not stop, verify drainage, then install.'
+    Assert ((Get-FileHash (Join-Path $fixtureHome 'bin\steerrunner.exe')).Hash.ToLowerInvariant() -ne $sha) 'Runner upgrade fixture did not change the release.'
+    $env:SL_DEPLOY_RUNNER_CHANGE=''
     $null=Run-Deploy 'no-start' $true @('-NoStart')
     $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
     Assert (-not $calls.Contains(' start') -and -not $calls.Contains(' status')) 'NoStart started or checked readiness.'
-    foreach ($mode in @('build','stop','start','ready')) {
+    foreach ($mode in @('build','stop','start','ready','drain')) {
         $env:SL_DEPLOY_FAIL=$mode
-        $failed=Run-Deploy ($mode+'-failure') $false
+        $before=@{}
+        foreach ($name in @('steerline.exe','steerline-web.exe','steerrunner.exe','..\execution.json')) { $before[$name]=(Get-FileHash (Join-Path $fixtureHome ('bin\'+$name))).Hash }
+        $failed=Run-Deploy ($mode+'-failure') $false @('-UpdateRunner')
         Assert (@($failed.stages | Where-Object outcome -eq 'failed').Count -gt 0) "$mode failure missing failed timing"
-        if ($mode -in @('build','stop')) {
+        if ($mode -in @('build','stop','drain')) {
             $callsPath=Join-Path $env:SL_DEPLOY_EVENTS 'calls.log'
             $calls=if (Test-Path $callsPath) { Get-Content $callsPath -Raw } else { '' }
             Assert (-not $calls.Contains(' install')) "$mode failure installed files."
+            foreach ($name in $before.Keys) { Assert ((Get-FileHash (Join-Path $fixtureHome ('bin\'+$name))).Hash -eq $before[$name]) "$mode failure changed $name" }
+            if ($mode -eq 'drain') { Assert ($calls.Contains(' prepare-deployment') -and -not $calls.Contains(' start')) 'Drain failure did not stop first or restarted business.' }
         }
     }
     $env:SL_DEPLOY_FAIL='preflight'
@@ -142,7 +175,7 @@ try {
     @{sha256=('b'*64);state_dir=(Join-Path $fixtureHome 'original-state')} | ConvertTo-Json | Set-Content (Join-Path $fixtureHome 'application-api\runner-build.json')
     $null=Run-Deploy 'preflight-failure' $false
     $calls=Get-Content (Join-Path $env:SL_DEPLOY_EVENTS 'calls.log') -Raw
-    Assert (-not $calls.Contains(' prepare-deployment') -and -not $calls.Contains(' install')) 'Failed preflight stopped or installed files.'
+    Assert ($calls.Contains(' prepare-deployment') -and -not $calls.Contains(' install') -and -not $calls.Contains(' start')) 'Failed drainage verification installed files or restarted business.'
     @{passed=$true; fixture_home=$fixtureHome;checks=@($checks)} | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $OutDir 'result.json')
     Write-Host "Deployment pipeline fixture passed ($($checks.Count)); no real installation used; evidence: $OutDir"
 } finally {
