@@ -88,7 +88,7 @@ func (m *Manager) readEnvironments() ([]nativeEnvironment, error) {
 	}
 	return store.Environments, nil
 }
-func (m *Manager) environments(ctx context.Context, executable string) ([]Environment, error) {
+func (m *Manager) environments(ctx context.Context) ([]Environment, error) {
 	// Read the registered pairing directory without requiring Orca's local UI
 	// runtime to be online. Only display identities cross the browser boundary.
 	entries, err := m.readEnvironments()

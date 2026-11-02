@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"os"
 	"path/filepath"
 	"sync"
 
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 )
 
@@ -44,7 +44,7 @@ func (a *environmentAdmission) check(ctx context.Context, target, owner string, 
 			return e
 		}
 		for _, r := range rows {
-			if r.Kind == "adaptation" && r.Project+"\n"+r.ID != owner && env.Target(r.Execution) == target && !r.Settled() {
+			if r.Kind == "adaptation" && r.Project+"\n"+r.ID != owner && executionconfig.Target(r.Execution) == target && !r.Settled() {
 				reader.Close()
 				return errors.New("环境未就绪：该目标环境仍有未核实的环境适配")
 			}
@@ -64,7 +64,7 @@ func (a *environmentAdmission) check(ctx context.Context, target, owner string, 
 					reader.Close()
 					return e
 				}
-				if env.Target(input.Execution) == target {
+				if executionconfig.Target(input.Execution) == target {
 					reader.Close()
 					return errors.New("该目标环境仍有未停止的原任务，不能开始环境适配")
 				}

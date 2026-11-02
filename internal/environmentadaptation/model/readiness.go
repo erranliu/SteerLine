@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"strings"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 // Context is solely a preparation projection. Never use it to construct a Run.
 func Context(execution runnercontract.ExecutionInput) (runnercontract.ExecutionInput, error) {
-	if Target(execution) == "" {
+	if executionconfig.Target(execution) == "" {
 		return execution, errors.New("unsupported environment execution target")
 	}
 	var settings map[string]json.RawMessage

@@ -227,29 +227,29 @@ test("runtime environments keep card actions, failed observations and task retur
     `${origin}/projects/${projects[0]}/environment?profile=alternate&task=38`,
   );
   await expect(
-    page.getByRole("heading", { name: "运行环境", exact: true }),
+    page.getByRole("heading", { name: "项目运行环境", exact: true }),
   ).toBeVisible();
   const first = page.locator(".environment-card").first();
-  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
-  await expect(first.getByLabel("验收所用方案").locator("option:checked")).toHaveText("alternate · model-high · high");
+  await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("检测所用方案").locator("option:checked")).toHaveText("alternate · model-high · high");
   await expect(first).toBeFocused();
   await expect(page.getByText("阅读项目准备清单", { exact: true })).toHaveCount(
     1,
   );
   await page.reload();
-  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
   await page.getByRole("link", { name: "返回任务", exact: true }).click();
   await expect(page.getByLabel("本次执行方案")).toHaveValue("alternate");
   await page.getByRole("link", { name: "前往环境准备", exact: true }).click();
-  await expect(first.getByLabel("验收所用方案")).toHaveValue("alternate");
+  await expect(first.getByLabel("检测所用方案")).toHaveValue("alternate");
   environments[0].stage = "ready";
   environments[0].status = "ready";
   await page.getByRole("button", { name: "刷新环境" }).click();
   await expect(first.getByRole("heading")).toHaveText("Codex 直连 · 已就绪");
   for (const label of [
-    "待准备与验收",
-    "验收中",
-    "验收阻断",
+    "待准备与检测",
+    "检测中",
+    "检测阻断",
     "已失效",
     "未准备",
   ]) {
@@ -263,10 +263,10 @@ test("runtime environments keep card actions, failed observations and task retur
   failOptions = true;
   await page.getByRole("button", { name: "刷新环境" }).click();
   await expect(page.getByText(/上次已知状态，当前待核实/)).toBeVisible();
-  await expect(first.getByRole("button", { name: "提交验收" })).toBeDisabled();
+  await expect(first.getByRole("button", { name: "提交检测" })).toBeDisabled();
   failOptions = false;
   await page.getByRole("button", { name: "刷新环境" }).click();
-  await expect(first.getByRole("button", { name: "提交验收" })).toBeEnabled();
+  await expect(first.getByRole("button", { name: "提交检测" })).toBeEnabled();
   const invalidation = first.getByText("标记失效", { exact: true });
   await invalidation.focus();
   await page.keyboard.press("Enter");

@@ -7,7 +7,10 @@ import (
 	"errors"
 	"github.com/erranliu/SteerLine/internal/processwindow"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,8 +28,31 @@ type Process struct {
 	waitOnce sync.Once
 }
 
-func Start(ctx context.Context, executable string, args ...string) (*Process, error) {
+// Executable resolves metadata programs without searching the caller's cwd.
+func Executable(program string) (string, error) {
+	if filepath.IsAbs(program) {
+		return exec.LookPath(program)
+	}
+	if program == "" || strings.ContainsAny(program, `/\\:`) {
+		return "", errors.New("relative metadata program paths are unsupported")
+	}
+	for _, dir := range filepath.SplitList(os.Getenv("PATH")) {
+		if !filepath.IsAbs(dir) {
+			continue
+		}
+		if path, err := exec.LookPath(filepath.Join(dir, program)); err == nil && filepath.IsAbs(path) {
+			return path, nil
+		}
+	}
+	return "", errors.New("metadata program is unavailable in absolute PATH directories")
+}
+
+func Start(ctx context.Context, home, executable string, args ...string) (*Process, error) {
+	if !filepath.IsAbs(home) || !filepath.IsAbs(executable) {
+		return nil, errors.New("metadata query requires absolute home and executable paths")
+	}
 	cmd := exec.CommandContext(ctx, executable, args...)
+	cmd.Dir = home
 	processwindow.Hide(cmd)
 	cmd.WaitDelay = 5 * time.Second
 	p := &Process{cmd: cmd, done: make(chan struct{})}
@@ -81,8 +107,8 @@ func (p *Process) Close() error {
 	})
 	return result
 }
-func Run(ctx context.Context, executable string, args []string) (raw []byte, err error) {
-	p, err := Start(ctx, executable, args...)
+func Run(ctx context.Context, home, executable string, args []string) (raw []byte, err error) {
+	p, err := Start(ctx, home, executable, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -69,8 +69,8 @@
       "level": "L3",
       "environment": "controlled",
       "command": "go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled -scenario=runtime.shared-runner-projects",
-      "check": "同 home 两项目共用一个 Runner，相同产品请求号创建独立 Run；分别消费仓库/PR，整体重启保持绑定、零自动新输入，全体资源清理完整。",
-      "note": "独立 home、双项目 repo/DB/provider/端口及证据；runtime 包内并发二。"
+      "check": "同 home 两项目分别经公开项目检测取得资格后共用一个 Runner，相同产品请求号创建独立 Run；分别消费仓库/PR，整体重启保持绑定、零自动新输入，全体资源清理完整。",
+      "note": "独立 home、双项目 repo/DB/provider/端口及证据；两项目分别通过 environment_start 和原 Run 停止/结果封存，不直接写资格；runtime 包内并发二。"
     },
     {
       "id": "go.full",

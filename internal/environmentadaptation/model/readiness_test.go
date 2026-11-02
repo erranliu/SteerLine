@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"strings"
 	"testing"
 
@@ -38,7 +39,7 @@ func TestProjectEnvironmentReadinessContextKeepsOriginalAndGroupsModels(t *testi
 			t.Fatal("invalid settings accepted", settings)
 		}
 	}
-	if Target(original) == "" {
+	if executionconfig.Target(original) == "" {
 		t.Fatal("local target bypass")
 	}
 	changed = original
@@ -150,7 +151,7 @@ func TestProjectEnvironmentReadinessLocalAdaptersHaveSeparateQualification(t *te
 		t.Fatal(err)
 	}
 	other, err := Key(orca)
-	if err != nil || key == other || Target(codex) == Target(orca) {
+	if err != nil || key == other || executionconfig.Target(codex) == executionconfig.Target(orca) {
 		t.Fatal("local adapters shared environment or occupancy", err)
 	}
 	record := Record{ID: strings.Repeat("a", 32), Project: "project", Kind: "adaptation", Execution: codex, State: "ready", Prepared: Prepared{Inputs: "basis"}, Rounds: []Round{{Number: 1, Settled: true}}}

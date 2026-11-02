@@ -9,8 +9,8 @@ import (
 	"github.com/erranliu/SteerLine/web/server/nativequery"
 )
 
-func codexModels(ctx context.Context, executable string) (models []Model, version string, err error) {
-	p, err := nativequery.Start(ctx, executable, "app-server")
+func codexModels(ctx context.Context, home, executable string) (models []Model, version string, err error) {
+	p, err := nativequery.Start(ctx, home, executable, "app-server")
 	if err != nil {
 		return nil, "", err
 	}

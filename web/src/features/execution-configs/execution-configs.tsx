@@ -117,6 +117,7 @@ export function ExecutionConfigs({
       (p) =>
         p.execution.adapter === draft.execution.adapter &&
         p.execution.target.kind === draft.execution.target.kind &&
+        (p.execution.target.environment || "") === (draft.execution.target.environment || "") &&
         agentOf(p) === agentOf(draft),
     );
     let attempts = 0;
@@ -593,26 +594,14 @@ export function ExecutionConfigs({
               <span>已保存方案</span>
               <span>{base.config.execution_profiles.length}</span>
             </div>
-            {[
-              ...new Set(
-                base.config.execution_profiles.map((p) =>
-                  JSON.stringify([
-                    p.execution.target.kind,
-                    p.execution.target.environment || "",
-                  ]),
-                ),
-              ),
-            ].map((target) => {
-              const profiles = base.config.execution_profiles.filter(
-                (p) =>
-                  JSON.stringify([
-                    p.execution.target.kind,
-                    p.execution.target.environment || "",
-                  ]) === target,
+            {base.environments.map((environment) => {
+              const profiles = environment.profile_ids.map((id) =>
+                base.config.execution_profiles.find((p) => p.id === id)!,
               );
+              const target = JSON.stringify([environment.adapter, environment.target]);
               return (
                 <section key={target} aria-label={hostName(profiles[0])}>
-                  <h3 className="sl-host-heading">{hostName(profiles[0])}</h3>
+                  <h3 className="sl-host-heading">{hostName(profiles[0])} · {environment.adapter === "orca-terminal" ? "Orca" : "Codex"}</h3>
                   {profiles.map((p) => (
                     <button
                       type="button"

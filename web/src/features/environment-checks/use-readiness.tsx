@@ -84,7 +84,7 @@ export function EnvironmentObservation() {
   if (readiness.verified) return null;
   return (
     <p role="status" className="notice amber">
-      {readiness.data ? "上次已知状态，当前待核实" : "运行环境状态待核实"}
+      {readiness.data ? "上次已知状态，当前待核实" : "项目运行环境状态待核实"}
       {!!readiness.dataUpdatedAt &&
         ` · 最后成功观察 ${new Date(readiness.dataUpdatedAt).toLocaleString()}`}
     </p>
@@ -98,12 +98,12 @@ export function EnvironmentSummary() {
   return (
     <NavLink to={`/projects/${identity.project_id}/environment`}>
       {!environments ? (
-        "运行环境状态待核实"
+        "项目运行环境状态待核实"
       ) : (
         <>
           {!readiness.verified && "上次结果 · 当前待核实 · "}
           {environments.length
-            ? `运行环境已就绪 ${environments.filter((e) => e.status === "ready").length}/${environments.length}`
+            ? `项目运行环境已就绪 ${environments.filter((e) => e.status === "ready").length}/${environments.length}`
             : "尚无开发执行方案"}
         </>
       )}

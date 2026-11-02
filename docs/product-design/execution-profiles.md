@@ -18,6 +18,10 @@
 
 ## Web 配置管理
 
+运行环境是当前 home 下的运行机与链路配置目标，由原 `adapter/target` 表达；全局 Snapshot 按该目标派生分组，读取和能力探测不需要项目或项目接入材料。项目运行环境另按项目身份与非模型执行上下文检测并持有资格；目录成功不授予该资格，目录失败也不改写项目报告。保存配置和启动冻结配置仍沿原摘要/重启边界区分。具体边界见[解耦 Spec](../../SteerlineFlow/spec/runtime-project-environment-decoupling.spec.md)。
+
+元数据子进程使用应用 home 工作目录，程序解析不搜索项目 cwd 或相对 PATH 项；Orca 沿既有目录 RPC，不验证 profile 的启动参数、权限或 provider。目录缓存只反映已观察事实，未观察到的远端重启沿原 freshness/显式刷新表达。项目页面名称明确为“项目运行环境”，路由与检测操作保持。
+
 [Web 执行配置管理 Spec](../../SteerlineFlow/spec/web-execution-config.spec.md) / [Plan](../../SteerlineFlow/plans/web-execution-config.plan.md)规定执行方案管理入口 `/settings/execution-configs`（页面名称“执行方案配置”）：Web 前后端拥有能力目录查询、预设编辑/生成及 `execution.json` 条件保存；Codex/Orca 由 Web 后端直接查询。Go 执行服务只消费配置、独立校验并冻结参数，提供原加载文件摘要的只读投影；Runner 不新增探测接口。能力目录/缓存不是执行资格或第二配置来源。生成并发设置单独放在“配置”页（项目入口 `/projects/:id/settings`，无项目入口 `/settings`），仍保存于同一 execution.json、沿原条件写入与共享队列语义，不在执行方案编辑器重复展示。首版保存后沿既有正式重启流程生效，不热加载、不自动停服或改投；冻结调试包只读。边界与实际结果见[专属验收](../../SteerlineFlow/testing/acceptance/web-execution-config.md)。
 
 本机 Orca 新增设计使用 Web 自有 named pipe 目录客户端，配置仍是 `orca-terminal + target.local`；Go 执行服务只消费配置，Runner 不新增探测接口。本机受管 helper 路径/SHA 是部署模板输入，缺少时不得用目录查询或任意程序路径代替；远端仍拒绝本机 helper 字段。新增验收为 WEC-A10–A14/M02，不能继承前版本机 Orca 被拒绝的测试结论。

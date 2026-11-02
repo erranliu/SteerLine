@@ -135,6 +135,42 @@ func TestWebExecutionConfigRoutes(t *testing.T) {
 	if w.Code != 200 || backend.route != "" {
 		t.Fatal("configuration request reached execution service")
 	}
+	settings, _ := json.Marshal(map[string]string{"executable": exe, "model": "fixture-model", "access_mode": "full_access"})
+	config.Profiles[0].Execution.Settings = settings
+	if err := localservice.WritePrivateFile(s.options.Home, "execution.json", config); err != nil {
+		t.Fatal(err)
+	}
+	for _, phase := range []string{"no-projects", "failed-project", "no-project-materials"} {
+		if phase == "failed-project" {
+			if err := os.MkdirAll(filepath.Join(s.options.Home, "etc"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(s.options.Home, "etc", "failed.json"), []byte("invalid project configuration"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		backend.route = ""
+		w = request(s, "GET", path, "", cookie, "")
+		var snapshot struct {
+			Environments []cfg.Environment `json:"environments"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &snapshot); err != nil || w.Code != 200 || len(snapshot.Environments) != 1 || snapshot.Environments[0].ProfileIDs[0] != "local" {
+			t.Fatal(phase, w.Code, w.Body.String(), err)
+		}
+		w = request(s, "POST", path+"/discover", `{"kind":"models","host":"local","adapter":"codex-app-server","profile_id":"local"}`, cookie, csrf)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "fixture-model") || backend.route != "" {
+			t.Fatal(phase, "project-independent discovery failed", w.Code, w.Body.String(), backend.route)
+		}
+	}
+	for _, body := range []string{
+		`{"kind":"models","host":"local","adapter":"codex-app-server","profile_id":"missing"}`,
+		`{"kind":"models","host":"orca_environment","environment":"other","adapter":"orca-terminal","profile_id":"local"}`,
+		`{"kind":"models","host":"local","adapter":"codex-app-server","agent":"pi","profile_id":"local"}`,
+	} {
+		if got := request(s, "POST", path+"/discover", body, cookie, csrf); got.Code != 400 {
+			t.Fatal("wrong profile binding accepted", got.Code, got.Body.String())
+		}
+	}
 	for _, route := range []string{path + "/../projects", path + "/rpc", path + "?file=elsewhere"} {
 		w = request(s, "GET", route, "", cookie, "")
 		if w.Code == 200 {
