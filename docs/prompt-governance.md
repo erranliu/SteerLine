@@ -10,7 +10,7 @@ Runner 正文、用户覆盖/原回答、测试安排、规范、schema、报告
 2. 运行 `go test ./internal/prompts -count=1 -v`，核对 `testdata/*.golden.md` 的完整正文差异和 UTF-8 字节数；再按[测试指南](../SteerlineFlow/testing.md)运行正式 L1/L2 与受影响的 owner/L3。黄金样本没有自动接受/更新开关，修改期望值需显式审阅。
 3. 在 PR 写清业务依据、实际正文差异、字节数前后值和验证。增长说明替代了哪些旧规则；新增且无替代时说明原因。缩短、等长替换和测试/检查配置变化同样需要独立审核。
 
-短模板、完整规则和实际请求样本都是可读的 Git 文件。长规则使用测试内少量字节摘要快照触发显式审阅，不复制第二份正文、不作为运行时签名；正文仍审阅原文件的完整 Git 差异。新请求的 `generate.materials` 为空，通过原 `generate.repository` 提供固定文件；schema 不得夹带原文。冻结的完整测试安排和原报告仍保存在原 owner，仅在固定材料与其一致时引用。包含用户 CRLF 的黄金样本通过 [.gitattributes](../.gitattributes)保留字节，不能批量归一化样本。
+短模板、完整规则和实际请求样本都是可读的 Git 文件。长规则使用测试内少量字节摘要快照触发显式审阅，不复制第二份正文、不作为运行时签名；正文仍审阅原文件的完整 Git 差异。新请求不得用 inline materials 展开完整正文。固定源码/静态规则通过 `generate.repository` 提供；Roadmap 动态材料由 SteerLine 自动冻结，经 Runner 正式 `materials.kind=file` 私有文件渠道供给并核验独立 manifest，正文不渲染进提示词；schema 不得夹带原文。冻结的完整测试安排和原报告仍保存在原 owner，仅在固定材料与其一致时引用。包含用户 CRLF 的黄金样本通过 [.gitattributes](../.gitattributes)保留字节，不能批量归一化样本。
 
 [源码检查](../internal/testkit/boundary/prompts.go)只限制模板嵌入所有者、指令字段写入点和适配点直接内联/追加语法，包含非当前 build tag 文件。不追踪任意函数的语义；间接夹带行为要求靠实际请求断言和代码审核发现。
 

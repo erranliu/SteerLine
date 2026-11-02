@@ -155,6 +155,19 @@ func (s Stored) Value() Record {
 func Digest(b []byte) string                   { h := sha256.Sum256(b); return hex.EncodeToString(h[:]) }
 func ValueDigest(v any) string                 { b, _ := json.Marshal(v); return Digest(b) }
 func SourceID(project, relative string) string { return Digest([]byte(project + "\n" + relative))[:32] }
+
+// SameMarkdown tolerates checkout line endings only; it never rewrites either
+// source or its raw digest. Spaces, blank lines and the final newline still matter.
+func SameMarkdown(actual, expected []byte) bool {
+	return bytes.Equal(bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll(expected, []byte("\r\n"), []byte("\n")))
+}
+
+// SameContent checks the original snapshots before comparing their Markdown.
+func (s Source) SameContent(other Source) bool {
+	return s.Digest == Digest([]byte(s.Body)) && other.Digest == Digest([]byte(other.Body)) &&
+		SameMarkdown([]byte(s.Body), []byte(other.Body))
+}
+
 func SourcePath(relative string) bool {
 	return strings.HasPrefix(relative, Root) && strings.HasSuffix(strings.ToLower(relative), ".md") && path.Clean(relative) == relative && !strings.ContainsAny(relative, "\\:\x00")
 }
@@ -320,7 +333,7 @@ func Confirm(r Record, source Source, graph []Existing, request string) (Record,
 	if r.Analysis == nil || r.Cancelled || len(r.Analysis.Questions) > 0 || r.State != "review" {
 		return r, errors.New("解析尚未可确认或存在待澄清问题")
 	}
-	if source.Digest != r.Source.Digest || GraphDigest(graph) != r.GraphDigest {
+	if !source.SameContent(r.Source) || GraphDigest(graph) != r.GraphDigest {
 		return r, errors.New("Markdown 或已有任务/依赖材料已变化，请重新解析")
 	}
 	r.ConfirmedDigest = ValueDigest(r.Analysis)

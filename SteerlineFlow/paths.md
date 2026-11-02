@@ -31,6 +31,7 @@
 | `SteerlineFlow/spec/`、`SteerlineFlow/plans/` | 独立 Spec、实现 Plan；执行时还须固定实际 commit。 |
 | `SteerlineFlow/Roadmap/execution-map.md` | 已确认任务、依赖、执行及验收汇总。 |
 | `SteerlineFlow/Roadmap/RoadmapGuide.md` | 本项目定制的 roadmap 维护规则。 |
+| `SteerlineFlow/Roadmap/parse-rules.md`、`document-rules.md`、`SteerlineFlow/spec/SpecGuide.md` | `project prepare-roadmap` 显式初始化/检查的静态材料；规则和默认指南的唯一打包来源为 internal/prompts/materials，不在运行时补写。 |
 | `SteerlineFlow/Roadmap/drafts/`、`SteerlineFlow/Roadmap/task-ids/` | 候选讨论与永久任务身份；身份分配不等于执行授权。 |
 | `SteerlineFlow/environment-project.json` | version1 任务测试入口，仅定位任务测试公共要求与正式清单；测试安排、候选测试及记录共用同提交来源。环境检测不依赖此文件，项目可自行把它声明为环境依赖。 |
 | `SteerlineFlow/testing.md`、`SteerlineFlow/testing/test-list.json` | 本仓库入口声明的测试规范和机器定义，其他受管项目可声明自己的实际路径。与 Plan 及固定测试协议一起作为系统测试安排输入。 |
@@ -184,3 +185,7 @@ roadmap-runner 的仓库外状态目录约定为 `<CODEX_HOME>/task-state/roadma
 源码中的 `.evidence/` 是已忽略的本地临时证据区，不是本约定的仓库外并行调试根；新建持续现场使用上面的外部 scope。`SteerlineFlow/testing/acceptance/` 和 archive/ 也不放运行中的数据库、认证、服务锁或大体积原始现场。
 
 路径调整应同步本清单、调用说明、实际读取者和相关夹具。当前实现定位：[测试执行器](../cmd/test-feedback/main.go)、[分组日志](../cmd/test-feedback/scoped.go)、[E2E 输出](../cmd/test-feedback/e2e.go)、[受管报告](../cmd/test-feedback/managed.go)、[调试生成器](../scripts/new-debug-release.ps1)、[Runner 短目录](../internal/runnerstatepath/path.go)、[应用 home](../internal/app/config.go)。本次清单整理只统一显式路径和定位规则，不迁移已有运行现场或修改服务状态。
+
+## Roadmap 动态输入文件
+
+`roadmap-inputs/` 是 Runner file 材料的逻辑 namespace，不是项目必须维护的 Git 目录。原文、已有图/映射和确认规划由 SteerLine 冻结进原请求，Runner 保存为该 Run 私有普通文件并公开真实读取位置/摘要；静态规范/源码仍属于固定 Git manifest。动态材料不写项目、安装目录或共享临时文件；恢复只核验原快照，不从当前状态重建。详见[材料准备 Spec](spec/roadmap-material-preparation.spec.md)。

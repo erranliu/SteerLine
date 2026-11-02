@@ -374,7 +374,7 @@ func (p *roadmapPort) publish(ctx context.Context, r roadmap.Record, request, re
 	if err != nil {
 		return r, err
 	}
-	if source.Digest != r.Source.Digest || roadmap.GraphDigest(graph) != r.GraphDigest || baseline.Commit != r.CodeCommit {
+	if !source.SameContent(r.Source) || roadmap.GraphDigest(graph) != r.GraphDigest || baseline.Commit != r.CodeCommit {
 		return r, errors.New("来源、图材料或代码基线已变化，请重新核对生成文档")
 	}
 	r.Publication = &roadmap.Publication{RequestID: request, ReviewDigest: review, Branch: "codex/roadmap-" + r.ID, Base: r.CodeCommit, Merge: merge, State: "preparing"}

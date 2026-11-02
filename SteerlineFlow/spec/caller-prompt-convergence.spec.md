@@ -33,11 +33,11 @@
 | --- | --- |
 | 测试执行 | Plan 同名 `.tests.json` 沿用既有 `{tests:[ID]}` 格式；与完整清单展开后须逐项等于原冻结定义和顺序。另需 `SteerlineFlow/testing/runtime-progress.md`（正式规则副本）及同源 writer；不存在 commit 自引用或第二份可编辑安排。 |
 | 测试安排生成 | 固定 commit 的 Plan、测试规范和清单，通过 `generate.repository.paths` 明确选择这三个完整文件读取；未提供 commit、能力或固定文件即阻断。 |
-| Roadmap | 原 Markdown 必须与固定 Git 字节一致；`SteerlineFlow/Roadmap/existing-task-graph.json`、`existing-roadmap-source-map.json` 分别与原任务图/映射的完整 JSON 一致；文档生成另需 `confirmed-planning.json` 与原确认数据一致。格式沿用原 inline 数据，不新增材料 manifest/发布接口。规则副本为同目录 `parse-rules.md`、`document-rules.md`。 |
+| Roadmap | 2026-11-02 用户授权自动准备：静态 parse-rules.md、document-rules.md 和 SpecGuide 由显式项目准备交付；草稿、任务图、来源映射和确认规划由业务 owner 自动冻结，经 Runner 正式 file 材料提供，不要求用户创建 JSON。源码 Git manifest 与文件材料 manifest 独立严格核验；原文及原始摘要保留，内容比较只容许 LF/CRLF 差异。 |
 | 环境调用 | 按[当前环境边界](project-environment-workflow.spec.md)，只调用项目自有检测入口一次，结果通过原 Runner 封存；不复制平台规则，不要求 publication、生成上下文或项目内部检查格式。 |
 | 环境执行 | 固定 `SteerlineFlow/environment-execution.md`、原 environment.md、脚本与结果初始 JSON。复用正式 `result_file.initial_content_base64` 文件渠道，在下一轮初始JSON的 previous 字段提供完整前轮报告及诊断；原三轮上限、封存/PR安全核验保持。总初始JSON超过既有64KiB上限时，在新Run创建前明确准备不足，不截断或摘要。 |
 
-上述动态 JSON 只由正常 Git 准备提供，程序只读取并对照原权威，不自动导出、提交或用当前文件覆盖固定版本。没有这些真实文件的项目会出现明确准备不足；这是本修订接受的行为变化。规则副本只允许 CRLF/LF 差异，原动态 JSON/Markdown 则逐字核对；不为通过测试新增生产复制通道。
+2026-11-02 的 Roadmap 材料自动准备修订替代原先要求用户正常 Git 准备动态 JSON 的边界，见[专属 Spec](roadmap-material-preparation.spec.md)。动态文件由原业务快照生成并随原请求持久化，Runner 正式冻结为私有只读文件，不自动写业务仓库。静态规则仍需先准备并发布；缺能力、缺静态文件或文件 manifest 不符仍阻断，禁止回退到正文内联或重新构造旧请求。
 
 ### CPC-D01：任务指令与执行材料分离
 
@@ -57,7 +57,7 @@ Agent必须先读取该步骤的必需材料。manifest或准备核验只证明�
 
 文件缺失、版本不符、不可访问或现有能力没有正式读取渠道时，不发起依赖它的模型输入，沿原准备失败入口返回具体缺项和原因。不得回退大段inline、自动摘要、下载、补发多条输入或新增模型回合绕过。
 
-缺少或不同源的writer须先完成正式项目准备。用户或另行明确授权的正常Git流程可交付材料，本次不自动修改业务仓库、创建材料提交/PR或向旧工作区注入文件。系统生成安排、临时草稿、非快照原文同样需要真实供给；没有入口就是准备缺口，不得用假路径宣称支持。
+缺少或不同源的writer须先完成正式项目准备。用户或另行明确授权的正常Git流程可交付材料，Roadmap 静态材料通过用户显式初始化命令准备；动态材料只随新请求冻结，不写业务仓库或向旧工作区注入文件。系统生成安排、临时草稿、非快照原文同样需要真实供给；没有入口就是准备缺口，不得用假路径宣称支持。
 
 ### CPC-D04：测试完整性和步骤权限不变
 

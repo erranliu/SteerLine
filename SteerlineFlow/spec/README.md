@@ -1,5 +1,7 @@
 # 当前 Spec 与 Plan
 
+Roadmap 材料自动准备（2026-11-02，实施/验收中）：[Spec](roadmap-material-preparation.spec.md) · [Plan](../plans/roadmap-material-preparation.plan.md) · [验收](../testing/acceptance/roadmap-material-preparation.md)。静态规则显式初始化，动态原文/图/确认结果自动冻结，经 Runner file 材料交付，不要求用户手写 JSON；与 Git 源码分别核验。
+
 运行环境与项目运行环境最小解耦（2026-11-02，已实施，所选自动验证及独立审核通过）：[Spec](runtime-project-environment-decoupling.spec.md) · [Plan](../plans/runtime-project-environment-decoupling.plan.md) · [验收规划](../testing/acceptance/runtime-project-environment-decoupling.md)。抽离中性目标与分组，复用全局配置/能力探测，项目保留检测与资格；页面最小适配，不新增全局 ready、数据库、工作流或 Runner 协议。中性目标、全局探测/项目资格、元数据 cwd/程序解析及最小页面适配已验证；原失败/补验分别保留，不启动 roadmap。
 
 L1–L4 测试内容调整（2026-11-02，已实施并独立审核）：[Spec](test-content-alignment.spec.md) · [Plan](../plans/test-content-alignment.plan.md) · [初轮验收](../testing/acceptance/test-content-alignment.md) · [Full 续修验收](../testing/acceptance/go-full-repair.md)。保持现有分级，补齐 Web/owner 正式测试集、材料生成 L3、独立 Runner 专项及一致结果；原 Full 三类失败修复后71包1431测试终态全部通过、0实际测试skip，原断言/矩阵/schema保留；L1/L2及受影响L3通过。初轮失败独立保留，共享 Web 重型场景不改级。

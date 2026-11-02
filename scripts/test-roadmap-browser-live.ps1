@@ -100,6 +100,7 @@ try {
         [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($path))|Out-Null
         [IO.File]::WriteAllText($path,$item.Value,$taskUTF8)
     }
+    Invoke-TaskNative $taskBinary @('project','prepare-roadmap','-repository',$taskProject)|Out-File -LiteralPath (Join-Path $taskRoot 'evidence\prepare-roadmap.json')
     Invoke-TaskNative 'git' @('-C',$taskProject,'add','.')|Out-Null
     Invoke-TaskNative 'git' @('-C',$taskProject,'commit','-qm','Isolated roadmap browser fixture')|Out-Null
     $taskBaseCommit=Invoke-TaskNative 'git' @('-C',$taskProject,'rev-parse','HEAD')

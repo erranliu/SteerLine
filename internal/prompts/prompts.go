@@ -41,9 +41,11 @@ func renderText(name, source string, data any) (string, error) {
 func TestingRules() ([]byte, error)         { return files.ReadFile("materials/testing.md") }
 func RoadmapParseRules() ([]byte, error)    { return files.ReadFile("materials/roadmap-parse.md") }
 func RoadmapDocumentRules() ([]byte, error) { return files.ReadFile("materials/roadmap-documents.md") }
+func RoadmapSpecGuide() ([]byte, error)     { return files.ReadFile("materials/roadmap-spec-guide.md") }
 
 // SameRules tolerates only checkout line endings on fixed rule copies.
-// Dynamic data and original Markdown must instead match their original bytes.
+// Dynamic JSON must instead match its original bytes; Roadmap Markdown has its
+// own checkout-line-ending comparison without changing the original snapshots.
 func SameRules(actual, expected []byte) bool {
 	return len(actual) > 0 && bytes.Equal(bytes.ReplaceAll(actual, []byte("\r\n"), []byte("\n")), bytes.ReplaceAll(expected, []byte("\r\n"), []byte("\n")))
 }

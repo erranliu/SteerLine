@@ -9,6 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/erranliu/SteerLine/internal/pathguard"
 	"github.com/erranliu/SteerLine/internal/roadmap/model"
 )
 
@@ -21,7 +22,7 @@ func ReadRegular(repository, relative string) ([]byte, error) {
 	if e != nil {
 		return nil, e
 	}
-	resolved, e := filepath.EvalSymlinks(root)
+	resolved, e := pathguard.ResolveProspective(root)
 	if e != nil {
 		return nil, e
 	}
@@ -37,7 +38,7 @@ func ReadRegular(repository, relative string) ([]byte, error) {
 			return nil, errors.New("拒绝重定向项目文件")
 		}
 	}
-	actual, e := filepath.EvalSymlinks(target)
+	actual, e := pathguard.ResolveProspective(target)
 	if e != nil {
 		return nil, e
 	}
@@ -80,7 +81,7 @@ func ListSources(repository, project string) ([]model.Source, error) {
 		return out, nil
 	}
 	// Refuse an aliased root before WalkDir can enumerate outside the repository.
-	actual, e := filepath.EvalSymlinks(dir)
+	actual, e := pathguard.ResolveProspective(dir)
 	if e != nil {
 		return nil, e
 	}
@@ -88,7 +89,7 @@ func ListSources(repository, project string) ([]model.Source, error) {
 	if e != nil {
 		return nil, e
 	}
-	repo, e := filepath.EvalSymlinks(repository)
+	repo, e := pathguard.ResolveProspective(repository)
 	if e != nil {
 		return nil, e
 	}
@@ -106,7 +107,21 @@ func ListSources(repository, project string) ([]model.Source, error) {
 			}
 			return nil
 		}
-		if d.IsDir() || !strings.EqualFold(filepath.Ext(p), ".md") {
+		if d.IsDir() {
+			resolved, err := pathguard.ResolveProspective(p)
+			if err != nil {
+				return err
+			}
+			absolute, err := filepath.Abs(p)
+			if err != nil {
+				return err
+			}
+			if !strings.EqualFold(resolved, absolute) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.EqualFold(filepath.Ext(p), ".md") {
 			return nil
 		}
 		rel, e := filepath.Rel(repository, p)
