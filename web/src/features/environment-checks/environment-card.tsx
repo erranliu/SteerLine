@@ -9,14 +9,31 @@ export type EnvironmentCommand = (
   payload: { [key: string]: unknown },
 ) => Promise<void>;
 
-const nextStep: Record<string, string> = {
-  unprepared: "查看准备要求，补齐或更新项目材料。",
-  awaiting_user: "在实际执行账号下准备工具、变量和权限，然后开始检测。",
-  verifying: "查看当前进度；原执行结算前不能再次检测。",
-  ready: "可以用于本项目的新任务，仍需满足任务的其他启动条件。",
-  blocked: "查看未通过或未核实项，处理具体原因后重新检测。",
-  stale: "查看失效原因，处理环境或材料变化后重新检测。",
-};
+export function DetectionID({ id }: { id: string }) {
+  const [feedback, setFeedback] = useState("");
+  return (
+    <div className="detection-id">
+      <span>
+        检测 ID：<code>{id}</code>
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={async () => {
+          try {
+            await navigator.clipboard.writeText(id);
+            setFeedback("已复制");
+          } catch {
+            setFeedback("复制失败，请手动复制检测 ID");
+          }
+        }}
+      >
+        复制
+      </Button>
+      {feedback && <span role="status">{feedback}</span>}
+    </div>
+  );
+}
 
 export function EnvironmentCard({
   environment: e,
@@ -24,16 +41,23 @@ export function EnvironmentCard({
   defaultProfile,
   preferred,
   disabled,
+  stopDisabled,
+  activity,
   command,
-  onActivity,
 }: {
   environment: Environment;
   project: string;
   defaultProfile: string;
   preferred: string;
   disabled: boolean;
+  stopDisabled: boolean;
+  activity?: {
+    id: string;
+    revision: number;
+    settled: boolean;
+    created_at?: string;
+  };
   command: EnvironmentCommand;
-  onActivity: (id: string) => void;
 }) {
   const initial = e.profiles.some((p) => p.id === preferred)
     ? preferred
@@ -46,61 +70,24 @@ export function EnvironmentCard({
   const [timeout, setTimeout] = useState(3600);
   const [reason, setReason] = useState("");
   const chosen = e.profiles.find((p) => p.id === profile);
-  const unsettled = !!e.activity_id && !e.activity_settled;
-  const title =
-    e.adapter === "codex-app-server"
-      ? "Codex 直连"
-      : e.adapter === "orca-terminal"
-        ? `Orca · ${e.agent || "Codex"}`
-        : e.adapter;
+  const unsettled =
+    !!e.activity_id && (!e.activity_settled || activity?.settled === false);
+  const activityID = e.activity_id;
   return (
     <article
       className="environment-card"
       id={`environment-${e.environment_key || e.profiles[0]?.id}`}
       tabIndex={-1}
     >
-      <h3>
-        {title} · {environmentStage[e.stage] ?? "状态待核实"}
-      </h3>
-      <p>
-        共用方案：
-        {e.profiles
-          .map((p) => p.name + (p.id === defaultProfile ? "（默认）" : ""))
-          .join("、")}
-      </p>
-      <p className="muted">
-        环境 {e.environment_key?.slice(0, 10) || "不支持"} ·
-        资格仅适用于当前项目
-      </p>
-      <p>{e.reason}</p>
-      <p>下一步：{nextStep[e.stage] || "刷新并核实当前环境状态。"}</p>
-      <div className="actions">
-        <a href="#environment-materials">查看准备要求</a>
-        {e.activity_id && (
-          <Button variant="ghost" onClick={() => onActivity(e.activity_id!)}>
-            查看当前检测
-          </Button>
-        )}
-        {e.last_passed_activity_id && (
-          <Button
-            variant="ghost"
-            onClick={() => onActivity(e.last_passed_activity_id!)}
-          >
-            查看历史通过报告
-          </Button>
-        )}
-      </div>
-      {unsettled && (
-        <p role="status">原活动尚未结算，请查看进度或停止原活动。</p>
-      )}
-      <details open={preferred && preferred === initial ? true : undefined}>
-        <summary>
-          {e.stage === "ready" || e.activity_id ? "重新检测" : "开始检测"}
-        </summary>
-        <p>
-          检测调用项目入口一次，由项目自行判定并报告是否就绪及原因。平台负责原执行结算和结果展示。
-          通过后供上述方案共用；重新开始即切断旧资格，失败不会恢复历史资格。
+      <h2>{environmentStage[e.stage] ?? "状态待核实"}</h2>
+      {e.stage !== "ready" && e.reason && <p>{e.reason}</p>}
+      {activity?.created_at && (
+        <p className="muted">
+          最近检测：{new Date(activity.created_at).toLocaleString("zh-CN")}
         </p>
+      )}
+      {activityID && <DetectionID key={activityID} id={activityID} />}
+      {e.profiles.length > 1 && (
         <label>
           检测所用方案
           <select
@@ -118,6 +105,51 @@ export function EnvironmentCard({
             ))}
           </select>
         </label>
+      )}
+      <div className="actions">
+        {unsettled ? (
+          <Button
+            disabled={stopDisabled || !activity || activity.settled}
+            onClick={() =>
+              activity &&
+              void command(
+                "environment_stop",
+                activity.id,
+                activity.revision,
+                {},
+              )
+            }
+          >
+            停止检测
+          </Button>
+        ) : (
+          <Button
+            disabled={
+              disabled ||
+              !e.environment_key ||
+              !chosen ||
+              !Number.isInteger(timeout) ||
+              timeout < 1
+            }
+            onClick={() =>
+              void command("environment_start", project, 1, {
+                environment_key: e.environment_key,
+                profile_id: profile,
+                round_timeout_seconds: timeout,
+                expected_current_revision: e.current_revision,
+              })
+            }
+          >
+            {e.stage === "ready" || activityID ? "重新检测" : "开始检测"}
+          </Button>
+        )}
+      </div>
+      {unsettled && <p className="muted">本次检测结束前不能再次检测。</p>}
+      {e.stage === "ready" && (
+        <p className="muted">重新检测会使当前就绪状态失效。</p>
+      )}
+      <details>
+        <summary>更多设置</summary>
         <label>
           本次检测总超时（秒）
           <input
@@ -128,30 +160,6 @@ export function EnvironmentCard({
             onChange={(event) => setTimeout(Number(event.target.value))}
           />
         </label>
-        <Button
-          disabled={
-            disabled ||
-            unsettled ||
-            !e.environment_key ||
-            !chosen ||
-            !Number.isInteger(timeout) ||
-            timeout < 1
-          }
-          onClick={() =>
-            void command("environment_start", project, 1, {
-              environment_key: e.environment_key,
-              profile_id: profile,
-              round_timeout_seconds: timeout,
-              expected_current_revision: e.current_revision,
-            })
-          }
-        >
-          提交检测
-        </Button>
-      </details>
-      <details>
-        <summary>标记失效</summary>
-        <p>仅影响当前项目的这个执行环境，含上述共用方案；不会停止原执行。</p>
         <label>
           环境失效原因
           <input
@@ -162,6 +170,7 @@ export function EnvironmentCard({
           />
         </label>
         <Button
+          variant="ghost"
           disabled={disabled || !e.environment_key || !reason.trim()}
           onClick={() =>
             void command("environment_invalidate", project, 1, {
@@ -171,8 +180,9 @@ export function EnvironmentCard({
             })
           }
         >
-          标记当前项目环境失效
+          标记失效
         </Button>
+        <p className="muted">仅影响当前项目；不会停止正在进行的检测。</p>
       </details>
     </article>
   );

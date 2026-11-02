@@ -7,13 +7,58 @@ export function Operations({
   reconcile,
   reconciling,
   online,
+  compact = false,
 }: {
   requests: StoredRequest[];
   reconcile: (row: StoredRequest) => void;
   reconciling: boolean;
   online: boolean;
+  compact?: boolean;
 }) {
   const [copyFeedback, setCopyFeedback] = useState("");
+  if (compact) {
+    const rows = requests
+      .filter((r) => r.envelope.action.startsWith("environment_"))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const latest = rows.at(-1);
+    const pending = rows.filter(
+      (r) => !["applied", "rejected"].includes(r.response?.status ?? ""),
+    );
+    const displayed = rows.filter((r) => r === latest || pending.includes(r));
+    const actions: Record<string, string> = {
+      environment_start: "开始检测",
+      environment_stop: "停止检测",
+      environment_invalidate: "标记失效",
+    };
+    return displayed.length ? (
+      <section
+        className="environment-operation-results"
+        aria-label="操作结果"
+        aria-live="polite"
+      >
+        {displayed.map((row) => (
+          <p key={row.envelope.request_id}>
+            {actions[row.envelope.action] || "环境操作"}：
+            {row.response?.status === "applied"
+              ? "操作成功"
+              : row.response?.status === "rejected"
+                ? "操作未成功，请刷新后重试"
+                : "结果待核实"}
+            {pending.includes(row) && (
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={!online || reconciling}
+                onClick={() => reconcile(row)}
+              >
+                重新查询
+              </Button>
+            )}
+          </p>
+        ))}
+      </section>
+    ) : null;
+  }
   return requests.length ? (
     <details className="operations">
       <summary>

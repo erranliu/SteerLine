@@ -34,6 +34,7 @@ func TestEnvironmentHistoryFiltersBeforeTwentyAndKeepsRemovedTarget(t *testing.T
 	ctx := context.Background()
 	key, _ := model.Key(c.RunnerExecution.Profiles[0].Execution)
 	want := ""
+	wantCreatedAt := time.Time{}
 	for i := 0; i < 26; i++ {
 		profile := c.RunnerExecution.Profiles[1]
 		if i == 0 {
@@ -43,6 +44,7 @@ func TestEnvironmentHistoryFiltersBeforeTwentyAndKeepsRemovedTarget(t *testing.T
 		require(t, store.SaveEnvironment(ctx, r, 0))
 		if i == 0 {
 			want = r.ID
+			wantCreatedAt = r.CreatedAt
 		}
 	}
 	p.config.RunnerExecution.Profiles = nil
@@ -53,6 +55,15 @@ func TestEnvironmentHistoryFiltersBeforeTwentyAndKeepsRemovedTarget(t *testing.T
 	body, _ := json.Marshal(value)
 	if !strings.Contains(string(body), want) || strings.Count(string(body), `"id":`) != 1 {
 		t.Fatal("selected history lost before filtering", string(body))
+	}
+	var history struct {
+		Records []struct {
+			CreatedAt time.Time `json:"created_at"`
+		} `json:"records"`
+	}
+	require(t, json.Unmarshal(body, &history))
+	if len(history.Records) != 1 || !history.Records[0].CreatedAt.Equal(wantCreatedAt) {
+		t.Fatal("history lost original detection time", string(body))
 	}
 	if _, err := port.environmentRead(ctx, "/environment", url.Values{"environment_key": {key, key}}); err == nil {
 		t.Fatal("duplicate filter accepted")
