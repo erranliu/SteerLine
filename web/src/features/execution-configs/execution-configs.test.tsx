@@ -29,6 +29,7 @@ function fixture(
     piProviders?: boolean;
     remoteAgents?: boolean;
     remotePair?: boolean;
+    contentWorkflow?: boolean;
   } = {},
 ) {
   let saved: ConfigSnapshot = {
@@ -123,6 +124,11 @@ function fixture(
       ],
     },
   };
+  if (options.contentWorkflow) {
+    const p = saved.config.execution_profiles[0];
+    p.workflow = { id: "generate", version: 1 };
+    p.execution.settings.access_mode = "read_only";
+  }
   if (options.helper)
     saved.config.execution_profiles.push({
       id: "orca-template",
@@ -399,6 +405,59 @@ it("reconciles a lost save response before claiming the result", async () => {
   await screen.findByText("配置已保存，待重启生效");
   expect(writes).toHaveLength(1);
   expect(screen.getByLabelText("配置名称")).toHaveValue("回执丢失");
+});
+
+it("shows fixed development access without obsolete permission choices", async () => {
+  const writes = fixture();
+  await screen.findByLabelText("配置名称");
+  fireEvent.click(
+    screen.getByText("更多设置", { selector: "summary", exact: false }),
+  );
+  expect(screen.getByText("开发执行权限固定为完全访问。")).toBeVisible();
+  expect(
+    screen.queryByRole("combobox", { name: "权限模式" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("option", { name: /Runner 默认|沙箱/ }),
+  ).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("配置名称"), {
+    target: { value: "固定开发权限" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(
+    (writes[0] as ConfigSnapshot["config"]).execution_profiles[0].execution
+      .settings.access_mode,
+  ).toBe("full_access");
+});
+
+it("preserves read-only content settings until explicitly switching to development", async () => {
+  const writes = fixture({ contentWorkflow: true });
+  await screen.findByLabelText("配置名称");
+  fireEvent.change(screen.getByLabelText("配置名称"), {
+    target: { value: "内容方案" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(
+    (writes[0] as ConfigSnapshot["config"]).execution_profiles[0].execution
+      .settings.access_mode,
+  ).toBe("read_only");
+  await screen.findByText("配置已保存，待重启生效");
+  fireEvent.click(
+    screen.getByText("更多设置", { selector: "summary", exact: false }),
+  );
+  fireEvent.change(screen.getByLabelText("工作流"), {
+    target: { value: "development/2" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "保存配置" }));
+  await waitFor(() => expect(writes).toHaveLength(2));
+  expect(
+    (writes[1] as ConfigSnapshot["config"]).execution_profiles[0],
+  ).toMatchObject({
+    workflow: { id: "development", version: 2 },
+    execution: { settings: { access_mode: "full_access" } },
+  });
 });
 
 it("copies and deletes a saved non-default profile without deleting the default", async () => {

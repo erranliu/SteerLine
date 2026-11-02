@@ -310,16 +310,6 @@ export function ExecutionConfigs({
     select(p);
     setDefaultChoice(false);
   }
-  function patchSettings(patch: Partial<Settings>) {
-    if (draft)
-      setDraft({
-        ...draft,
-        execution: {
-          ...draft.execution,
-          settings: { ...draft.execution.settings, ...patch },
-        },
-      });
-  }
   function setMain(modelValue: string, effortValue?: string) {
     if (draft) setDraft(changeModel(draft, modelValue, effortValue));
   }
@@ -341,7 +331,7 @@ export function ExecutionConfigs({
     if (chain === "codex-app-server") {
       settings = template
         ? clone(template.execution.settings)
-        : { access_mode: "full_access", executable: "codex.exe" };
+        : { executable: "codex.exe" };
       delete settings.model;
       delete settings.reasoning_effort;
     } else {
@@ -358,7 +348,6 @@ export function ExecutionConfigs({
       settings = template
         ? clone(template.execution.settings)
         : {
-            access_mode: "full_access",
             transport: clone(
               routeTemplate?.execution.settings.transport ?? {
                 executable: "orca.exe",
@@ -384,6 +373,7 @@ export function ExecutionConfigs({
           settings.agent_launch.runtime_sha256 = source.runtime_sha256;
       }
     }
+    settings.access_mode = "full_access";
     const choice = base.combinations.find(
       (c) =>
         c.host === kind && c.adapter === chain && c.agent === selectedAgent,
@@ -1001,23 +991,10 @@ export function ExecutionConfigs({
                 <details className="sl-advanced">
                   <summary>
                     <ChevronRight />
-                    更多设置<span className="sl-help">权限与工作流</span>
+                    更多设置<span className="sl-help">工作流</span>
                   </summary>
+                  <p className="sl-help">开发执行权限固定为完全访问。</p>
                   <div className="sl-row">
-                    <div className="sl-field">
-                      <label htmlFor="execution-access">权限模式</label>
-                      <select
-                        id="execution-access"
-                        value={draft.execution.settings.access_mode ?? ""}
-                        onChange={(e) =>
-                          patchSettings({ access_mode: e.target.value })
-                        }
-                      >
-                        <option value="">Runner 默认</option>
-                        <option value="sandbox">沙箱</option>
-                        <option value="full_access">完全访问</option>
-                      </select>
-                    </div>
                     <div className="sl-field">
                       <label htmlFor="execution-workflow">工作流</label>
                       <select
@@ -1040,7 +1017,17 @@ export function ExecutionConfigs({
                             };
                           if (!w.audit_model_required)
                             delete workflow.audit_model;
-                          setDraft({ ...draft, workflow });
+                          setDraft({
+                            ...draft,
+                            execution: {
+                              ...draft.execution,
+                              settings: {
+                                ...draft.execution.settings,
+                                access_mode: "full_access",
+                              },
+                            },
+                            workflow,
+                          });
                         }}
                       >
                         <option
