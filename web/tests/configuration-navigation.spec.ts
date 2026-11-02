@@ -189,9 +189,9 @@ test("runtime environments keep card actions, failed observations and task retur
     activity_settled: true,
     profiles:
       i === 0 ? profiles : [{ id: `profile-${stage}`, name: `方案-${stage}` }],
-    document_path: "SteerlineFlow/environment.md",
+    document_path: `SteerlineFlow/environments/${String(i + 1).repeat(64)}/environment.md`,
     document: "共享的准备清单",
-    script_path: "scripts/verify-environment.ps1",
+    script_path: `SteerlineFlow/environments/${String(i + 1).repeat(64)}/verify-environment.ps1`,
     source_commit: "c".repeat(40),
   }));
   await page.route("**/auth/status", (route) =>

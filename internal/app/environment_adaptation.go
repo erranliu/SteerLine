@@ -11,7 +11,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"os"
 	"strings"
 	"time"
 )
@@ -80,6 +79,7 @@ func (p *environmentPort) prepare(ctx context.Context, id string) (envmodel.Prep
 	return p.materialAt(ctx, id, "")
 }
 func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (envmodel.Prepared, error) {
+	ctx = materialReads(ctx)
 	var out envmodel.Prepared
 	c := p.config
 	profile, e := c.RunnerExecution.Profile(id, "")
@@ -102,11 +102,13 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 	}
 	files := map[string]string{envmodel.DocumentPath(key): envmodel.Digest(document), manifest.Script: envmodel.Digest(script)}
 	total := len(document) + len(script)
+	reader := taskDocuments{repository: c.Repository, git: c.Git, timeout: positiveDuration(c.CommandTimeout, 30*time.Second), processHost: c.ProcessHost}
+	dependencies, e := reader.readCommittedFiles(ctx, commit, manifest.Dependencies)
+	if e != nil {
+		return out, fmt.Errorf("环境检测依据读取失败: %w", e)
+	}
 	for _, path := range manifest.Dependencies {
-		b, e := p.read(ctx, commit, path)
-		if e != nil {
-			return out, fmt.Errorf("环境依据 %s: %w", path, e)
-		}
+		b := dependencies[path]
 		total += len(b)
 		files[path] = envmodel.Digest(b)
 	}
@@ -144,7 +146,8 @@ func (p *environmentPort) materialAt(ctx context.Context, id, commit string) (en
 func (p *environmentPort) invocationAt(ctx context.Context, key, commit string) ([]byte, envmodel.Manifest, []byte, error) {
 	document, e := p.read(ctx, commit, envmodel.DocumentPath(key))
 	if e != nil {
-		if errors.Is(e, os.ErrNotExist) {
+		var missing *missingCommittedFileError
+		if errors.As(e, &missing) {
 			return nil, envmodel.Manifest{}, nil, fmt.Errorf("项目尚未接入检测，缺少环境文档：%w", e)
 		}
 		return nil, envmodel.Manifest{}, nil, e
