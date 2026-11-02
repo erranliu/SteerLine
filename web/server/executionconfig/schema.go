@@ -59,7 +59,7 @@ func (s *Store) contract(ctx context.Context, pin cfg.Pin) (*catalog, error) {
 	if s.catalog != nil && s.catalogPin == pin {
 		return s.catalog, nil
 	}
-	reader := readCatalog
+	reader := func(ctx context.Context, pin cfg.Pin) (*catalog, error) { return readCatalog(ctx, s.Home, pin) }
 	if s.ReadCatalog != nil {
 		reader = s.ReadCatalog
 	}
@@ -71,7 +71,7 @@ func (s *Store) contract(ctx context.Context, pin cfg.Pin) (*catalog, error) {
 	s.catalogPin = pin
 	return cat, nil
 }
-func readCatalog(ctx context.Context, pin cfg.Pin) (*catalog, error) {
+func readCatalog(ctx context.Context, home string, pin cfg.Pin) (*catalog, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	type metadata struct {
@@ -87,7 +87,7 @@ func readCatalog(ctx context.Context, pin cfg.Pin) (*catalog, error) {
 	}
 	read := func(args []string) (metadata, error) {
 		var result metadata
-		raw, err := nativequery.Run(ctx, pin.Executable, args)
+		raw, err := nativequery.Run(ctx, home, pin.Executable, args)
 		if err != nil {
 			return result, errors.New("Runner offline configuration contract is unavailable")
 		}

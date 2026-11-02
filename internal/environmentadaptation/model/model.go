@@ -43,16 +43,6 @@ func Decode(b []byte, out any) error {
 	d.DisallowUnknownFields()
 	return d.Decode(out)
 }
-func Target(e runnercontract.ExecutionInput) string {
-	if (e.Adapter != "codex-app-server" && e.Adapter != "orca-terminal") || (e.Target.Kind != "local" && e.Target.Kind != "orca_environment") || e.Target.Kind == "local" && e.Target.Environment != "" || e.Target.Kind == "orca_environment" && (e.Adapter != "orca-terminal" || e.Target.Environment == "") {
-		return ""
-	}
-	b, _ := json.Marshal(struct {
-		Adapter string
-		Target  runnercontract.ExecutionTarget
-	}{e.Adapter, e.Target})
-	return string(b)
-}
 func ExecutionDigest(e runnercontract.ExecutionInput) string {
 	b, _ := json.Marshal(e)
 	b, _ = runnercontract.CanonicalJSON(b)

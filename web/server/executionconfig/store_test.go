@@ -49,6 +49,15 @@ func fixture(t *testing.T) (*Store, Config) {
 	return s, c
 }
 
+func TestEnvironmentProjectionSurvivesMetadataFailure(t *testing.T) {
+	s, _ := fixture(t)
+	s.ReadCatalog = func(context.Context, cfg.Pin) (*catalog, error) { return nil, errors.New("metadata unavailable") }
+	snapshot, err := s.Snapshot(context.Background())
+	if err != nil || len(snapshot.Environments) != 1 || snapshot.Environments[0].ProfileIDs[0] != "local" || snapshot.Writable || snapshot.Reason != "metadata unavailable" {
+		t.Fatal(snapshot, err)
+	}
+}
+
 func TestGQConcurrencySaveAndValidation(t *testing.T) {
 	s, c := fixture(t)
 	ctx := context.Background()
@@ -234,7 +243,7 @@ func TestExecutionConfigSchemaAndPreservation(t *testing.T) {
 	// github_auth is no longer a run-configuration property; the rejection above
 	// must not be bypassed just because old adapter metadata listed it.
 	s, c = fixture(t)
-	c.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access","executable":"codex.exe","model":"EXAMPLE_KEY","reasoning_effort":"high"}`)
+	c.Profiles[0].Execution.Settings = json.RawMessage(`{"access_mode":"full_access","executable":"codex.exe","model":"EXAMPLE_KEY","reasoning_effort":"ultra"}`)
 	if err = localservice.WritePrivateFile(s.Home, "execution.json", c); err != nil {
 		t.Fatal(err)
 	}

@@ -40,7 +40,7 @@ export function AppShell({
         runs: "执行与待处理",
         tests: "测试管理",
         settings: "配置",
-        environment: "运行环境",
+        environment: "项目运行环境",
       }[location.pathname.split("/").pop() ?? ""] ?? "规划与执行");
   return (
     <div className={"app-shell " + (collapsed ? "sidebar-collapsed" : "")}>
@@ -77,11 +77,11 @@ export function AppShell({
                 )}
               </NavLink>
               <NavLink
-                aria-label="运行环境"
+                aria-label="项目运行环境"
                 to={`/projects/${projectId}/environment`}
               >
                 <Command size={17} />
-                <span>运行环境</span>
+                <span>项目运行环境</span>
               </NavLink>
               <NavLink
                 aria-label="测试管理"

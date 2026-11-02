@@ -38,9 +38,6 @@ func TestProjectEnvironmentReadinessContextKeepsOriginalAndGroupsModels(t *testi
 			t.Fatal("invalid settings accepted", settings)
 		}
 	}
-	if Target(original) == "" {
-		t.Fatal("local target bypass")
-	}
 	changed = original
 	changed.Target.Environment = "unexpected-local-alias"
 	if _, err := Key(changed); err == nil {
@@ -150,7 +147,7 @@ func TestProjectEnvironmentReadinessLocalAdaptersHaveSeparateQualification(t *te
 		t.Fatal(err)
 	}
 	other, err := Key(orca)
-	if err != nil || key == other || Target(codex) == Target(orca) {
+	if err != nil || key == other {
 		t.Fatal("local adapters shared environment or occupancy", err)
 	}
 	record := Record{ID: strings.Repeat("a", 32), Project: "project", Kind: "adaptation", Execution: codex, State: "ready", Prepared: Prepared{Inputs: "basis"}, Rounds: []Round{{Number: 1, Settled: true}}}

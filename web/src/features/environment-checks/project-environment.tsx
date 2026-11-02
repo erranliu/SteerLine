@@ -219,7 +219,7 @@ function EnvironmentWorkspace() {
   if (profile) returnParams.set("start_profile", profile);
   return (
     <div className="settings-page environment-page">
-      <h1>运行环境</h1>
+      <h1>项目运行环境</h1>
       <Button variant="ghost" onClick={refresh}>
         刷新环境
       </Button>
@@ -297,6 +297,7 @@ function EnvironmentWorkspace() {
             {environment.reason}
           </p>
           <section className="settings-panel" id="environment-materials">
+            <Link to="/settings/execution-configs">查看全局执行配置与能力探测</Link>
             <h2>准备要求与材料</h2>
             {materialQuery.isError && (
               <p role="alert">材料观察待核实：{String(materialQuery.error)}</p>

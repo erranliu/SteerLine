@@ -32,3 +32,7 @@
 2. Windows 私有快照先取得共享删除/替换句柄，再对同一句柄核验类型和完整私有 ACL；SID 级私有内核互斥体仅协调打开/发布，覆盖不同进程及路径别名，不在读取期间持锁。Unix 防符号链接、FIFO 非阻塞拒绝及已解绑 inode/多个硬链接边界分别回归，路径级校验不变。增加已打开文件与路径替换的确定性回归，原并发1000次发布断言保持。
 3. 正向配置夹具补 access_mode；保留可用 executable，并将已不被公开 run schema 接受的 github_auth 改为显式负例。可选字段保留用现行合法字段验证，保留原标记断言并增加完整 settings 字节相等断言；不放宽 schema。定向复验执行配置、httpfs、完整 boundary、projectmaintenance/testmanagement/prompts/SQLite 等 owner。
 4. 执行最终 L1/L2、受影响材料生成/环境准备 L3 及普通 go.full。Full 完整通过后，只因新修改/失败才重跑；原生 Runner/真实模型/安装及远端仍不执行。独立审核全部差异与提示词黄金正文、字节数，更新 [修复验收](../testing/acceptance/go-full-repair.md)，提交/推送同分支并更新 PR 描述。
+
+### 主干冲突续修
+
+用户追加要求解决 PR #423 与 main 的冲突。合入 `fea9df06`，保留主干中性目标/环境分组、公开双项目准备和新增测试，同时保留本 PR 四字段 DTO、强断言和命令修正。实际边界回归发现主干新增 model→executionconfig 不合法依赖；模型仅校验自己的输入形状，跨 owner 的目标表示断言移到 App 完整保留，中性 Target 仍归 executionconfig，扫描矩阵不改。独立审核冲突及补正；运行 L1/L2、边界/清单/配置及模型 owner、Web 全集、App 准入/分组和共享 Runner L3，原 Full 按原源码保留为历史，不冒称合并后全量通过。记录新失败与修正后结果再提交推送。

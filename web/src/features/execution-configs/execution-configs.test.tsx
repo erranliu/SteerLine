@@ -27,9 +27,11 @@ function fixture(
     helper?: boolean;
     piProviders?: boolean;
     remoteAgents?: boolean;
+    remotePair?: boolean;
   } = {},
 ) {
   let saved: ConfigSnapshot = {
+    environments: [],
     saved_digest: "old",
     writable: !options.readOnly,
     efforts: ["medium", "high", "ultra"],
@@ -143,6 +145,23 @@ function fixture(
     delete saved.config.execution_profiles[0].execution.settings
       .reasoning_effort;
   }
+  if (options.remotePair) {
+    for (const target of ["one", "two"]) saved.config.execution_profiles.push({
+      id: `remote-${target}`, name: `远端${target}方案`,
+      execution: {adapter: "orca-terminal", target: {kind: "orca_environment", environment: target}, settings: {agent: "codex", agent_launch: {model: "selected"}}},
+      workflow: {id: "development", version: 2},
+    });
+  }
+  const snapshot = () => {
+    const environments: ConfigSnapshot["environments"] = [];
+    for (const profile of saved.config.execution_profiles) {
+      let group = environments.find((g) => g.adapter === profile.execution.adapter &&
+        g.target.kind === profile.execution.target.kind && g.target.environment === profile.execution.target.environment);
+      if (!group) { group = {adapter: profile.execution.adapter, target: profile.execution.target, profile_ids: []}; environments.push(group); }
+      group.profile_ids.push(profile.id);
+    }
+    return {...saved, environments};
+  };
   const writes: unknown[] = [];
   vi.stubGlobal(
     "fetch",
@@ -259,9 +278,9 @@ function fixture(
           saved_digest: "new",
         };
         if (options.lost) throw new TypeError("lost response");
-        return response(saved);
+        return response(snapshot());
       }
-      return response(saved);
+      return response(snapshot());
     }),
   );
   const query = new QueryClient({
@@ -581,4 +600,18 @@ it("configuration reconciles a lost save response and disables writes in a froze
   fixture({ configuration: true, readOnly: true });
   expect(await screen.findByLabelText("生成最大并发数")).toBeDisabled();
   expect(screen.getByRole("button", { name: "保存生成并发" })).toBeDisabled();
+});
+
+it("binds discovery to the complete saved remote target", async () => {
+  fixture({remotePair: true});
+  fireEvent.click(await screen.findByRole("button", {name: /远端one方案/}));
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([, init]) => {
+    const q = init?.body && JSON.parse(String(init.body));
+    return q?.environment === "one" && q.profile_id === "remote-one";
+  })).toBe(true));
+  fireEvent.click(screen.getByRole("button", {name: /远端two方案/}));
+  await waitFor(() => expect(vi.mocked(fetch).mock.calls.some(([, init]) => {
+    const q = init?.body && JSON.parse(String(init.body));
+    return q?.environment === "two" && q.profile_id === "remote-two";
+  })).toBe(true));
 });

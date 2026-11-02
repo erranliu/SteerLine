@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"path/filepath"
 	"time"
 
-	env "github.com/erranliu/SteerLine/internal/environmentadaptation/model"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	"github.com/erranliu/SteerLine/internal/hostcontract"
 	api "github.com/erranliu/SteerLine/internal/product/api"
@@ -91,7 +91,7 @@ func runnerTaskService(config Config, connection taskrunner.Store, cli runnercli
 			return &taskmodel.Error{Code: "environment_not_ready", Message: err.Error()}
 		}
 		candidate.Environment = &runnerstate.EnvironmentAdmission{Key: proof.Key, Revision: proof.Revision, ActivityID: proof.ActivityID, Basis: proof.Basis}
-		target := env.Target(input.Execution)
+		target := executionconfig.Target(input.Execution)
 		a := config.runtimeEnvironmentAdmission
 		a.mu.Lock()
 		defer a.mu.Unlock()

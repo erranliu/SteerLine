@@ -72,3 +72,25 @@ Full 从 `2026-11-02T04:20:55.8480055Z` 到 `04:43:15.4657501Z`，原 summary �
 独立审核对全部实现、提示词实际正文及测试保护条件给出通过结论；专门快照审核确认路径别名、FIFO 及已解绑 inode 的发现均修正。最终只更新验收/导航及提交元数据，不再修改实现。固定正文与黄金样本零差异，原边界目录仍 diff 为空，原配置 schema 未改；不放宽断言，不忽略读错误。链接和 diff 检查在最终文档更新后复核，同分支提交/推送并更新 [PR #423](https://github.com/erranliu/SteerLine/pull/423)，初轮 Full failed 仍按原运行保留。
 
 本次未执行真实模型、原生 Runner result 专项、远端或安装变更；这些不属于普通 Go Full。没有合并 PR。
+
+## main 冲突解决（2026-11-02）
+
+用户追加要求解决冲突。以 `084ff0d8` 为本分支父提交，合入 main `fea9df0692192f0236121299d8233e1e6f5f957f`（PR #424）；保留双方历史，不改写已发布提交。五处冲突是两个索引 README、test-list.json、runner_service_wiring.go 和 executionconfig/store_test.go。前两者保留双方条目；清单保留 main 的公开环境准备说明与本分支空格 scenario；接线保留 runnerstate 四字段 DTO 和 main 的中性 executionconfig.Target；配置夹具同时保留新增元数据失败投影、合法 ultra、旧字段拒绝、负例深解码、program_read_only 及标记/完整字节断言。
+
+首次完整边界定向实际失败，目录 `20261102T052927.875040300Z`：7包401终态/0skip，6条失败均指向 main 新增的 environmentadaptation/model→executionconfig 生产/测试依赖。没有修改扫描矩阵：Context 只验证自身 adapter/target 形状，拒绝条件与中性 Target 保持一致，不构造全局目标身份；中性 Target 仍归 executionconfig。原模型 Key/Qualify 断言保留，两条跨 owner Target 断言完整迁入 App，新增九组明确接受/拒绝用例约束两个 owner 的输入边界。独立只读审核分别复核五处冲突和该补正，无剩余阻塞问题。
+
+本节报告均为上述父提交加合并工作树、dirty=true，输出叶目录仍以本文既有 test-feedback 临时根定位：
+
+| 合并后验证 | 结果 | 输出叶目录 |
+| --- | --- | --- |
+| 最终 L1 | passed/complete，120终态/0skip，准备1.152s、执行18.538s | `20261102T053350.299300100Z` |
+| 最终独立进程 L2 | passed/0skip，cleanup_complete=true；准备9.961s、执行115.757s | `20261102T053346.803194000Z` |
+| 原边界 + 环境模型 + 中性配置完整包 | passed，3包219终态/0skip，11.630s | `20261102T053310.559660000Z` |
+| App 原六项准入/分组/占用与配置独立性 | passed，9终态/0skip，139.678s | `20261102T053008.519714500Z` |
+| App 跨 owner 原断言及九组目标接受边界 | passed，1终态/0skip，4.609s | `20261102T053302.207431000Z` |
+| 正式 web.unit | passed/complete，229断言/0skip，31.504s | `20261102T052927.287488400Z` |
+| L3 runtime.shared-runner-projects | passed/0skip，cleanup_complete=true；准备12.454s、执行263.237s | `C:/Users/lmas1/AppData/Local/Temp/steerline-pr423-conflict-20261102-01/L3/` |
+
+首次7包定向中的执行器、中性配置、环境模型、Web配置/探测/nativequery六包通过，原JSONL保留；失败包修正后按上表另开目录复验。补正前 L1/L2 分别在 `20261102T052927.091595900Z`、`20261102T052927.264968100Z` 通过，后者清理完整；最终 L1/L2 按新源码另记，不以旧轮代替。全部 E2E 标签编译通过，不计场景通过。
+
+本次固定提示词10文件7,279→7,279、黄金样本7文件2,588→2,588、writer 3,717→3,717字节，正文差异均为零；组装/提示词测试/CI 相对父提交无新增 diff。依赖补正没有模型行为指令变化。Markdown 644文件/4038本地链接零错误、diff检查通过。上文1431终态的完整 Full 仍是合入 main 前的实际结果，本轮按合并影响补验上述集合，没有重跑 Full，也不宣称新合并版本全量通过。最终提交前核对远端 main 仍为上述 MERGE_HEAD，无未合并索引项；独立审核后同分支推送更新 PR #423，不合并 PR。

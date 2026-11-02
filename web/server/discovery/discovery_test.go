@@ -9,6 +9,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/runnercontract"
 	repository "github.com/erranliu/SteerLine/web/server/executionconfig"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -21,9 +22,24 @@ func TestMain(m *testing.M) {
 		nativeFixture()
 		os.Exit(0)
 	}
+	if len(os.Args) == 2 && os.Args[1] == "--discovery-query" {
+		manager := New(repository.New(os.Getenv("SL_DISCOVERY_HOME")))
+		result, err := manager.Query(context.Background(), Request{Kind: "models", Adapter: "codex-app-server", Host: "local", ProfileID: "local"})
+		manager.Close()
+		if err != nil {
+			os.Stderr.WriteString(err.Error())
+			os.Exit(2)
+		}
+		json.NewEncoder(os.Stdout).Encode(result)
+		os.Exit(0)
+	}
 	os.Exit(m.Run())
 }
 func nativeFixture() {
+	if log := os.Getenv("SL_DISCOVERY_CWD"); log != "" {
+		cwd, _ := os.Getwd()
+		_ = os.WriteFile(log, []byte(cwd), 0600)
+	}
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 	for scanner.Scan() {
@@ -76,6 +92,101 @@ func nativeFixture() {
 			os.Exit(3)
 		}
 		encoder.Encode(map[string]any{"id": *q.ID, "result": result})
+	}
+}
+
+func TestDiscoveryIndependentOfProjectCWD(t *testing.T) {
+	t.Setenv("SL_DISCOVERY_CHILD", "1")
+	t.Setenv("SL_DISCOVERY_MODE", "")
+	home := t.TempDir()
+	exe, _ := os.Executable()
+	programDir := t.TempDir()
+	program := filepath.Join(programDir, "metadata.exe")
+	raw, err := os.ReadFile(exe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(program, raw, 0700); err != nil {
+		t.Fatal(err)
+	}
+	parents := []string{t.TempDir(), t.TempDir()}
+	for _, parent := range parents {
+		// A different program in each project must never take precedence.
+		if err = os.WriteFile(filepath.Join(parent, "metadata.exe"), []byte("not a metadata program"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", "."+string(os.PathListSeparator)+programDir)
+	t.Setenv("SL_DISCOVERY_HOME", home)
+	log := filepath.Join(home, "query-cwd")
+	t.Setenv("SL_DISCOVERY_CWD", log)
+	for _, configured := range []string{program, "metadata.exe", "./metadata.exe"} {
+		settings, _ := json.Marshal(map[string]string{"executable": configured})
+		config := cfg.File[cfg.Pin]{Version: 3, DefaultProfile: "local", Profiles: []cfg.Profile{{ID: "local", Name: "Local", Execution: runnercontract.ExecutionInput{Adapter: "codex-app-server", Target: runnercontract.ExecutionTarget{Kind: "local"}, Settings: settings}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
+		if err = localservice.WritePrivateFile(home, "execution.json", config); err != nil {
+			t.Fatal(err)
+		}
+		key := ""
+		for _, parent := range parents {
+			cmd := exec.Command(exe, "--discovery-query")
+			cmd.Dir = parent
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("query: %s: %v", out, err)
+			}
+			var result Result
+			if err = json.Unmarshal(out, &result); err != nil {
+				t.Fatal(string(out), err)
+			}
+			if configured == "./metadata.exe" {
+				if result.State != "unavailable" || !strings.Contains(result.Diagnostic, "relative") {
+					t.Fatal(result)
+				}
+				continue
+			}
+			cwd, err := os.ReadFile(log)
+			if err != nil || !strings.EqualFold(string(cwd), home) || result.State != "ready" || len(result.Models) != 2 {
+				t.Fatal(string(cwd), result, err)
+			}
+			if key != "" && result.ContextKey != key {
+				t.Fatal("parent cwd changed catalog identity")
+			}
+			key = result.ContextKey
+		}
+	}
+}
+
+func TestDiscoveryRejectsForeignProfileTargetAndAgent(t *testing.T) {
+	home := t.TempDir()
+	config := cfg.File[cfg.Pin]{Version: 3, DefaultProfile: "remote", Profiles: []cfg.Profile{{ID: "remote", Name: "Remote", Execution: runnercontract.ExecutionInput{Adapter: "orca-terminal", Target: runnercontract.ExecutionTarget{Kind: "orca_environment", Environment: "one"}, Settings: json.RawMessage(`{"agent":"codex"}`)}, Workflow: runnercontract.Workflow{ID: "development", Version: 2}}}}
+	if err := localservice.WritePrivateFile(home, "execution.json", config); err != nil {
+		t.Fatal(err)
+	}
+	m := New(repository.New(home))
+	defer m.Close()
+	m.OrcaData = t.TempDir()
+	if err := os.WriteFile(filepath.Join(m.OrcaData, "orca-environments.json"), []byte(`{"version":1,"environments":[{"id":"unnamed","name":"","endpoints":[]}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"agents", "models"} {
+		q := Request{Kind: kind, Adapter: "orca-terminal", Host: "orca_environment"}
+		if _, err := m.Query(context.Background(), q); err == nil || !strings.Contains(err.Error(), "explicit environment") {
+			t.Fatal("empty selector reached an unnamed remote", q, err)
+		}
+	}
+	listing, err := m.Query(context.Background(), Request{Kind: "environments", Host: "orca_environment"})
+	if err != nil || len(listing.Environments) != 1 || listing.Environments[0].ID != "unnamed" {
+		t.Fatal("enumeration unexpectedly requires a selected remote", listing, err)
+	}
+	for _, q := range []Request{
+		{Kind: "models", Adapter: "orca-terminal", Host: "orca_environment", Environment: "one", Agent: "codex", ProfileID: "missing"},
+		{Kind: "models", Adapter: "orca-terminal", Host: "orca_environment", Environment: "two", Agent: "codex", ProfileID: "remote"},
+		{Kind: "models", Adapter: "orca-terminal", Host: "orca_environment", Environment: "one", Agent: "pi", ProfileID: "remote"},
+		{Kind: "models", Adapter: "codex-app-server", Host: "local", Agent: "codex", ProfileID: "remote"},
+	} {
+		if _, err := m.Query(context.Background(), q); err == nil {
+			t.Fatal("wrong binding accepted", q)
+		}
 	}
 }
 
@@ -155,7 +266,7 @@ func TestCodexCatalog(t *testing.T) {
 	t.Setenv("SL_DISCOVERY_LOG", log)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	models, version, err := codexModels(ctx, exe)
+	models, version, err := codexModels(ctx, t.TempDir(), exe)
 	if err != nil || len(models) != 2 || version != "fixture/1" || models[1].ID != "second" || models[0].Efforts[0].Value != "high" {
 		t.Fatal(models, version, err)
 	}
@@ -169,7 +280,7 @@ func TestCodexCatalog(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 350*time.Millisecond)
 			defer cancel()
 			started := time.Now()
-			_, _, err := codexModels(ctx, exe)
+			_, _, err := codexModels(ctx, t.TempDir(), exe)
 			if err == nil || time.Since(started) > 6*time.Second {
 				t.Fatal("invalid query or cleanup succeeded", err)
 			}
@@ -184,7 +295,7 @@ func TestEnvironmentDirectory(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(m.OrcaData, "orca-environments.json"), []byte(content), 0600); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := m.environments(context.Background(), "")
+	rows, err := m.environments(context.Background())
 	if err != nil || len(rows) != 1 || rows[0].ID != "stable" {
 		t.Fatal(rows, err)
 	}

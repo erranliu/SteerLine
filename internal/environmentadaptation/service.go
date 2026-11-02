@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/executionconfig"
 	"sync"
 	"time"
 
@@ -117,7 +118,7 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 			return e
 		}
 		for _, old := range rows {
-			if old.Kind == "adaptation" && envmodel.Target(old.Execution) == envmodel.Target(r.Execution) && !old.Settled() {
+			if old.Kind == "adaptation" && executionconfig.Target(old.Execution) == executionconfig.Target(r.Execution) && !old.Settled() {
 				return errors.New("original environment activity remains unsettled")
 			}
 		}
@@ -128,7 +129,7 @@ func (s *Service) Start(ctx context.Context, id string, original json.RawMessage
 		return s.Store.StartEnvironment(ctx, r, in.ExpectedCurrentRevision)
 	}
 	if s.WithTarget != nil {
-		e = s.WithTarget(ctx, envmodel.Target(r.Execution), r.Project+"\n"+r.ID, r.Prepared.Commit, create)
+		e = s.WithTarget(ctx, executionconfig.Target(r.Execution), r.Project+"\n"+r.ID, r.Prepared.Commit, create)
 	} else {
 		e = create()
 	}

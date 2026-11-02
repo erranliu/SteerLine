@@ -28,17 +28,17 @@ export function SettingsPage({
       </div>
       <div className="configuration-panels">
         <GenerationSettings {...settings} />
-        <section className="settings-panel" aria-label="运行环境">
-          <h2>运行环境</h2>
+        <section className="settings-panel" aria-label="项目运行环境">
+          <h2>项目运行环境</h2>
           <p className="muted">
             按执行环境准备项目依赖、运行验收，查看就绪状态与历史报告。
           </p>
           {activeProject ? (
             <NavLink to={`/projects/${activeProject}/environment`}>
-              打开运行环境 →
+              打开项目运行环境 →
             </NavLink>
           ) : (
-            <p className="muted">选择项目后可检查其运行环境。</p>
+            <p className="muted">选择项目后可检查项目运行环境。</p>
           )}
         </section>
         {api && (

@@ -1,6 +1,7 @@
 import type { ConfigSnapshot } from "../shared/api/execution-configs";
 
 export const configSnapshot: ConfigSnapshot = {
+  environments: [{adapter: "codex-app-server", target: {kind: "local"}, profile_ids: ["local"]}],
   saved_digest: "loaded",
   writable: true,
   efforts: [],

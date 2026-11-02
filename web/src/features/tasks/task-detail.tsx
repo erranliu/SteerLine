@@ -127,7 +127,7 @@ export function TaskDetail({
       : "";
   const preparation = environment.data?.profiles?.find((p) => p.id === chosen);
   const environmentReason = !environment.verified
-    ? "运行环境状态待核实"
+    ? "项目运行环境状态待核实"
     : preparation?.status === "ready"
       ? ""
       : preparation?.reason || "环境准备状态尚未核实";
@@ -250,7 +250,7 @@ export function TaskDetail({
             </p>
           ))}
           <p>
-            对应运行环境：
+            对应项目运行环境：
             {environment.verified
               ? environmentStage[preparation?.stage || ""] ||
                 (preparation?.status === "ready" ? "已就绪" : "待核实")
